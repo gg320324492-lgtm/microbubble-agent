@@ -1,0 +1,53 @@
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
+from datetime import datetime
+
+
+class MemberBase(BaseModel):
+    """成员基础信息"""
+    name: str
+    grade: Optional[str] = None
+    research_area: Optional[str] = None
+    skills: Optional[List[str]] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+
+
+class MemberCreate(MemberBase):
+    """创建成员"""
+    wechat_id: Optional[str] = None
+    role: str = "member"
+
+
+class MemberUpdate(BaseModel):
+    """更新成员"""
+    name: Optional[str] = None
+    grade: Optional[str] = None
+    research_area: Optional[str] = None
+    skills: Optional[List[str]] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    avatar: Optional[str] = None
+    is_active: Optional[bool] = None
+    role: Optional[str] = None
+
+
+class MemberResponse(MemberBase):
+    """成员响应"""
+    id: int
+    wechat_id: Optional[str] = None
+    avatar: Optional[str] = None
+    is_active: bool
+    role: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MemberList(BaseModel):
+    """成员列表"""
+    items: List[MemberResponse]
+    total: int

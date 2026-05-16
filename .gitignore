@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# 环境变量
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 数据目录
+data/
+logs/
+models/
+
+# Docker
+docker-compose.override.yml
+
+# 测试
+.coverage
+htmlcov/
+.pytest_cache/
+
+# 前端
+node_modules/
+web/dist/
+.webpack/
