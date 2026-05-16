@@ -47,7 +47,7 @@
       </el-form>
 
       <div class="login-footer">
-        <p>默认账号: wangtianzhi / 123456</p>
+        <p>请联系管理员获取账号密码</p>
       </div>
     </div>
   </div>

@@ -1,3 +1,4 @@
+import warnings
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -9,7 +10,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "MicroBubble Agent"
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
-    SECRET_KEY: str = "change-this-to-a-random-string"
+    SECRET_KEY: str = ""
 
     # 数据库
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/microbubble"

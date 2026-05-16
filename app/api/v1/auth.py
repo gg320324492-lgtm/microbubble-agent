@@ -1,6 +1,6 @@
 """认证相关API"""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -14,6 +14,7 @@ from app.core.security import (
     get_current_user,
     get_current_admin_user,
 )
+from app.core.rate_limit import login_limiter, get_client_ip
 from app.models.member import Member
 from app.schemas.auth import (
     LoginRequest,
@@ -30,34 +31,31 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """
-    用户登录
+async def login(
+    login_data: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """用户登录（5分钟内最多5次尝试）"""
+    client_ip = get_client_ip(request)
+    login_limiter.check(client_ip)
 
-    Args:
-        request: 登录请求（用户名和密码）
-        db: 数据库会话
-
-    Returns:
-        登录响应（包含访问令牌、刷新令牌和用户信息）
-
-    Raises:
-        HTTPException: 用户名或密码错误
-    """
     # 查询用户
     result = await db.execute(
-        select(Member).where(Member.username == request.username)
+        select(Member).where(Member.username == login_data.username)
     )
     user = result.scalar_one_or_none()
 
     # 验证用户存在且密码正确
     if not user or not user.password_hash:
+        login_limiter.record(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误"
         )
 
-    if not verify_password(request.password, user.password_hash):
+    if not verify_password(login_data.password, user.password_hash):
+        login_limiter.record(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误"

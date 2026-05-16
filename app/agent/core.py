@@ -11,6 +11,24 @@ from app.services.member_service import MemberService
 from app.services.meeting_service import MeetingService
 from app.services.project_service import ProjectService
 from app.services.knowledge_service import KnowledgeService
+from app.core.redis import session_store
+
+
+def _serialize_content(content) -> Any:
+    """将 Claude SDK content blocks 转为可 JSON 序列化的格式"""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        result = []
+        for block in content:
+            if hasattr(block, "model_dump"):
+                result.append(block.model_dump())
+            elif isinstance(block, dict):
+                result.append(block)
+            else:
+                result.append(str(block))
+        return result
+    return str(content)
 
 
 class MicroBubbleAgent:
@@ -21,7 +39,18 @@ class MicroBubbleAgent:
         self.model = "claude-sonnet-4-20250514"
         self.system_prompt = SYSTEM_PROMPT
         self.tools = TOOLS
-        self.sessions: Dict[str, List[Dict]] = {}
+        self._sessions: Dict[str, List[Dict]] = {}
+
+    async def _load_session(self, session_id: str) -> List[Dict]:
+        if session_id in self._sessions:
+            return self._sessions[session_id]
+        messages = await session_store.get_messages(session_id)
+        self._sessions[session_id] = messages
+        return messages
+
+    async def _save_session(self, session_id: str, messages: List[Dict]):
+        self._sessions[session_id] = messages
+        await session_store.save_messages(session_id, messages)
 
     async def chat(
         self,
@@ -31,39 +60,39 @@ class MicroBubbleAgent:
         db=None
     ) -> Dict[str, Any]:
         """与Agent对话"""
-        if session_id not in self.sessions:
-            self.sessions[session_id] = []
+        messages = await self._load_session(session_id)
 
         if history:
-            self.sessions[session_id] = history
+            messages = history
 
-        self.sessions[session_id].append({
-            "role": "user",
-            "content": message
-        })
+        messages.append({"role": "user", "content": message})
 
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=4096,
             system=self.system_prompt,
             tools=self.tools,
-            messages=self.sessions[session_id]
+            messages=messages
         )
 
-        result = await self._process_response(response, session_id, db)
+        result = await self._process_response(response, session_id, db, messages)
 
-        self.sessions[session_id].append({
+        messages.append({
             "role": "assistant",
-            "content": result["content_blocks"]
+            "content": _serialize_content(result["content_blocks"])
         })
 
-        if len(self.sessions[session_id]) > 20:
-            self.sessions[session_id] = self.sessions[session_id][-20:]
+        if len(messages) > 20:
+            messages = messages[-20:]
 
+        await self._save_session(session_id, messages)
         return result
 
-    async def _process_response(self, response, session_id: str, db=None) -> Dict[str, Any]:
+    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None) -> Dict[str, Any]:
         """处理Claude响应"""
+        if messages is None:
+            messages = await self._load_session(session_id)
+
         content = []
         tool_calls = []
         tool_results = []
@@ -87,10 +116,10 @@ class MicroBubbleAgent:
                     "content": json.dumps(result, ensure_ascii=False, default=str)
                 })
 
-            messages = list(self.sessions.get(session_id, []))
+            messages = list(messages)
             messages.append({
                 "role": "assistant",
-                "content": response.content
+                "content": _serialize_content(response.content)
             })
             messages.append({
                 "role": "user",
@@ -105,7 +134,7 @@ class MicroBubbleAgent:
                 messages=messages
             )
 
-            result = await self._process_response(follow_up, session_id, db)
+            result = await self._process_response(follow_up, session_id, db, messages)
             return {
                 "content": result["content"],
                 "content_blocks": result["content_blocks"],
@@ -370,20 +399,15 @@ class MicroBubbleAgent:
         db=None
     ):
         """流式对话"""
-        if session_id not in self.sessions:
-            self.sessions[session_id] = []
-
-        self.sessions[session_id].append({
-            "role": "user",
-            "content": message
-        })
+        messages = await self._load_session(session_id)
+        messages.append({"role": "user", "content": message})
 
         async with self.client.messages.stream(
             model=self.model,
             max_tokens=4096,
             system=self.system_prompt,
             tools=self.tools,
-            messages=self.sessions[session_id]
+            messages=messages
         ) as stream:
             full_text = ""
             tool_calls = []
@@ -422,8 +446,8 @@ class MicroBubbleAgent:
                     "content": json.dumps(result, ensure_ascii=False, default=str)
                 })
 
-            messages = list(self.sessions.get(session_id, []))
-            messages.append({"role": "assistant", "content": response.content})
+            messages = list(messages)
+            messages.append({"role": "assistant", "content": _serialize_content(response.content)})
             messages.append({"role": "user", "content": tool_results})
 
             follow_up = await self.client.messages.create(
@@ -441,25 +465,26 @@ class MicroBubbleAgent:
                     yield {"type": "text", "content": block.text}
 
             full_text += follow_text
-            self.sessions[session_id].append({
+            messages.append({
                 "role": "assistant",
-                "content": follow_up.content
+                "content": _serialize_content(follow_up.content)
             })
         else:
-            self.sessions[session_id].append({
+            messages.append({
                 "role": "assistant",
-                "content": response.content
+                "content": _serialize_content(response.content)
             })
 
-        if len(self.sessions[session_id]) > 20:
-            self.sessions[session_id] = self.sessions[session_id][-20:]
+        if len(messages) > 20:
+            messages = messages[-20:]
 
+        await self._save_session(session_id, messages)
         yield {"type": "done", "content": full_text}
 
     async def clear_session(self, session_id: str):
         """清除会话历史"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
+        self._sessions.pop(session_id, None)
+        await session_store.delete(session_id)
 
 
 agent = MicroBubbleAgent()

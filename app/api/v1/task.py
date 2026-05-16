@@ -84,12 +84,12 @@ async def list_tasks(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
-    # 获取总数
-    count_query = select(Task)
+    # 获取总数（用 COUNT 聚合，避免加载全部数据）
+    count_query = select(func.count(Task.id))
     if filters:
         count_query = count_query.where(and_(*filters))
     total_result = await db.execute(count_query)
-    total = len(total_result.scalars().all())
+    total = total_result.scalar() or 0
 
     return TaskList(items=tasks, total=total)
 
@@ -209,51 +209,56 @@ async def get_dashboard_stats(
     )
     task_priority_stats = {row[0]: row[1] for row in task_priority_result.all()}
 
-    # 项目进度统计
-    projects_result = await db.execute(select(Project))
-    projects = projects_result.scalars().all()
-
+    # 项目进度统计（单条 SQL 聚合，避免 N+1）
+    project_stats_result = await db.execute(
+        select(
+            Project.name,
+            func.count(Task.id).label("total_tasks"),
+            func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done_tasks")
+        ).outerjoin(Task, Task.project_id == Project.id)
+         .group_by(Project.id, Project.name)
+    )
     project_stats = []
-    for project in projects:
-        tasks_result = await db.execute(
-            select(Task).where(Task.project_id == project.id)
-        )
-        tasks = tasks_result.scalars().all()
-        total_tasks = len(tasks)
-        done_tasks = sum(1 for t in tasks if t.status == TaskStatus.DONE.value)
-        progress = round(done_tasks / total_tasks * 100) if total_tasks > 0 else 0
-
+    for row in project_stats_result.all():
+        total = row.total_tasks or 0
+        done = row.done_tasks or 0
         project_stats.append({
-            "name": project.name,
-            "total_tasks": total_tasks,
-            "done_tasks": done_tasks,
-            "progress": progress
+            "name": row.name,
+            "total_tasks": total,
+            "done_tasks": done,
+            "progress": round(done / total * 100) if total > 0 else 0
         })
 
-    # 成员任务统计
-    members_result = await db.execute(select(Member).where(Member.is_active == True))
-    members = members_result.scalars().all()
+    # 成员任务统计（单条 SQL 聚合，避免 N+1）
+    member_stats_result = await db.execute(
+        select(
+            Member.name,
+            func.count(Task.id).label("total"),
+            func.count(Task.id).filter(Task.status == TaskStatus.IN_PROGRESS.value).label("in_progress"),
+            func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done")
+        ).outerjoin(Task, Task.assignee_id == Member.id)
+         .where(Member.is_active == True)
+         .group_by(Member.id, Member.name)
+         .limit(10)
+    )
+    member_stats = [
+        {"name": row.name, "total": row.total or 0, "in_progress": row.in_progress or 0, "done": row.done or 0}
+        for row in member_stats_result.all()
+    ]
 
-    member_stats = []
-    for member in members[:10]:  # 只取前10个成员
-        tasks_result = await db.execute(
-            select(Task).where(Task.assignee_id == member.id)
+    # 总体统计（复用上面的聚合结果）
+    total_tasks = sum(s["total_tasks"] for s in project_stats)
+
+    # 逾期任务数（单独聚合）
+    overdue_result = await db.execute(
+        select(func.count(Task.id)).where(
+            and_(
+                Task.due_date < now,
+                Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
+            )
         )
-        tasks = tasks_result.scalars().all()
-        total_tasks = len(tasks)
-        in_progress = sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value)
-        done = sum(1 for t in tasks if t.status == TaskStatus.DONE.value)
-
-        member_stats.append({
-            "name": member.name,
-            "total": total_tasks,
-            "in_progress": in_progress,
-            "done": done
-        })
-
-    # 总体统计
-    all_tasks_result = await db.execute(select(Task))
-    all_tasks = all_tasks_result.scalars().all()
+    )
+    overdue_count = overdue_result.scalar() or 0
 
     return {
         "task_status": task_status_stats,
@@ -261,10 +266,10 @@ async def get_dashboard_stats(
         "project_stats": project_stats,
         "member_stats": member_stats,
         "summary": {
-            "total_tasks": len(all_tasks),
+            "total_tasks": total_tasks,
             "todo_tasks": task_status_stats.get("todo", 0),
             "in_progress_tasks": task_status_stats.get("in_progress", 0),
             "done_tasks": task_status_stats.get("done", 0),
-            "overdue_tasks": sum(1 for t in all_tasks if t.due_date and t.due_date < now and t.status not in [TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
+            "overdue_tasks": overdue_count
         }
     }

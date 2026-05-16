@@ -1,3 +1,5 @@
+import sys
+import warnings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -6,11 +8,23 @@ from sqlalchemy import text
 from app.config import settings
 from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat
 from app.core.database import engine, Base
+from app.core.redis import close_redis
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+
+    # SECRET_KEY 安全校验
+    if not settings.SECRET_KEY or settings.SECRET_KEY in (
+        "change-this-to-a-random-string", "secret", "your-secret-key"
+    ):
+        if settings.APP_ENV == "production":
+            print("ERROR: SECRET_KEY 未设置或使用了不安全的默认值，请在 .env 中配置 SECRET_KEY")
+            sys.exit(1)
+        else:
+            warnings.warn("SECRET_KEY 使用了不安全的默认值，生产环境请务必修改")
+
     # 启动时执行
     async with engine.begin() as conn:
         # 安装 pgvector 扩展（用于知识库向量搜索）
@@ -19,8 +33,9 @@ async def lifespan(app: FastAPI):
     print("数据库表创建完成")
     yield
     # 关闭时执行
+    await close_redis()
     await engine.dispose()
-    print("数据库连接已关闭")
+    print("数据库和 Redis 连接已关闭")
 
 
 app = FastAPI(
@@ -31,9 +46,17 @@ app = FastAPI(
 )
 
 # CORS配置
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+]
+if settings.APP_ENV == "production":
+    ALLOWED_ORIGINS.append("https://agent.mnb-lan.cn")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -14,24 +14,17 @@ psycopg2-binary==2.9.9
 redis==5.0.1
 celery==5.3.6
 
-# 对象存储
-minio==7.2.0
-
 # AI相关
 anthropic==0.18.0
-langchain==0.0.350
-langchain-anthropic==0.0.4
 
 # 语音识别
 faster-whisper==1.0.0
-pyannote-audio==3.1.1
 
 # 语音合成
 edge-tts==6.1.9
 
 # 向量数据库
 pgvector==0.2.4
-chromadb==0.4.22
 sentence-transformers==2.3.1
 
 # 数据处理
@@ -51,4 +44,3 @@ aiofiles==23.2.1
 # 测试
 pytest==7.4.3
 pytest-asyncio==0.23.2
-httpx==0.25.2

@@ -21,14 +21,14 @@
 
 ## 第三阶段：质量和安全
 
-- [ ] **Chat session 持久化** -- 当前 `self.sessions` 存内存，重启丢失（迁移到 Redis）
-- [ ] **修复 N+1 查询** -- `task.py:185` dashboard 统计逐个查成员，应用 `func.count()`
-- [ ] **清理无用依赖** -- langchain, chromadb, sentence-transformers, minio, pyannote 从未使用
-- [ ] **SECRET_KEY 启动校验** -- `config.py:12` 默认值不安全，应加启动检查
-- [ ] **初始化 Alembic 迁移** -- 当前用 `create_all()` 无法处理表结构变更
-- [ ] **收紧 CORS** -- `main.py:34` 当前 `allow_origins=["*"]`
-- [ ] **登录接口加限流** -- 防止暴力破解
-- [ ] **移除登录页硬编码账号** -- `LoginView.vue:49` 显示了默认密码
+- [x] **Chat session 持久化** -- 迁移到 Redis，`RedisSessionStore` 替代内存 dict，24小时 TTL
+- [x] **修复 N+1 查询** -- dashboard 统计改用 `func.count()` + `GROUP BY` 聚合查询
+- [x] **清理无用依赖** -- 移除 langchain, langchain-anthropic, chromadb, minio, pyannote-audio
+- [x] **SECRET_KEY 启动校验** -- 生产环境检测默认值，未配置则拒绝启动
+- [x] **初始化 Alembic 迁移** -- 创建 `alembic/` 目录、`env.py`（async）、初始迁移脚本
+- [x] **收紧 CORS** -- 替换 `allow_origins=["*"]` 为显式白名单
+- [x] **登录接口加限流** -- 滑动窗口限流器，5分钟内最多5次尝试，按 IP 限制
+- [x] **移除登录页硬编码账号** -- 改为"请联系管理员获取账号密码"
 
 ## 第四阶段：补全基础设施
 
@@ -145,3 +145,33 @@
 - `app/models/member.py` — 新增多平台身份字段（wechat_nickname/wechat_remark/personal_wechat_id/wechat_mobile）
 - `app/schemas/member.py` — MemberCreate/MemberUpdate/MemberResponse 包含新身份字段
 - `app/api/v1/member.py` — 创建成员支持新身份字段
+
+### Phase 3 (2026-05-17)
+
+| 问题 | 修复内容 |
+|------|---------|
+| Chat session 存内存 | 迁移到 Redis（`RedisSessionStore`），24小时 TTL，重启不丢失 |
+| dashboard N+1 查询 | 项目/成员统计改用 `func.count()` + `GROUP BY` 单条 SQL 聚合 |
+| 无用依赖 | 移除 langchain, langchain-anthropic, chromadb, minio, pyannote-audio，去重 httpx |
+| SECRET_KEY 不安全 | 生产环境检测默认值，未配置则 `sys.exit(1)`；开发环境 `warnings.warn` |
+| 无数据库迁移 | 初始化 Alembic，async env.py，初始迁移脚本含全部 9 张表 |
+| CORS 全开放 | 替换为显式白名单（localhost:5173/3000 + 生产域名） |
+| 登录无限流 | 滑动窗口限流器（`rate_limit.py`），5分钟/5次/IP，失败也计数 |
+| 登录页泄露密码 | 移除硬编码账号密码，改为"请联系管理员" |
+
+**新建文件：**
+- `app/core/rate_limit.py` — 滑动窗口限流器
+- `app/core/redis.py` — 扩展：新增 `RedisSessionStore` 类
+- `alembic.ini` — Alembic 配置
+- `alembic/env.py` — 异步迁移环境
+- `alembic/script.py.mako` — 迁移模板
+- `alembic/versions/001_initial.py` — 初始迁移（9张表 + pgvector 扩展）
+
+**修改文件：**
+- `app/config.py` — SECRET_KEY 默认值改为空字符串
+- `app/main.py` — SECRET_KEY 校验 + CORS 白名单 + Redis 关闭
+- `app/api/v1/auth.py` — 登录端点接入限流器
+- `app/api/v1/task.py` — dashboard 和 list 改用聚合查询
+- `app/agent/core.py` — session 迁移到 Redis（`_load_session`/`_save_session`）
+- `web/src/views/LoginView.vue` — 移除硬编码账号密码
+- `requirements.txt` — 移除 5 个无用依赖，去重 httpx
