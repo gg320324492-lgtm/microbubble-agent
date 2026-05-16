@@ -12,9 +12,10 @@ from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
 from app.agent.core import agent
-from app.core.database import get_db
+from app.core.database import get_db, async_session
 from app.core.security import get_current_user, decode_token
 from app.models.member import Member
+from app.models.meeting import Meeting
 
 router = APIRouter()
 
@@ -253,8 +254,27 @@ async def meeting_transcript_ws(
     except WebSocketDisconnect:
         result = await recorder_manager.stop_meeting_recording()
 
-        await websocket.send_json({
-            "type": "meeting_ended",
-            "meeting_id": meeting_id,
-            "duration": result.get("duration", 0) if result else 0
-        })
+        # 保存转写结果到会议记录
+        if result and result.get("transcript"):
+            try:
+                async with async_session() as db:
+                    from sqlalchemy import select
+                    meeting_result = await db.execute(
+                        select(Meeting).where(Meeting.id == meeting_id)
+                    )
+                    meeting = meeting_result.scalar_one_or_none()
+                    if meeting:
+                        meeting.transcript = result["transcript"]
+                        meeting.status = "completed"
+                        await db.commit()
+            except Exception as e:
+                print(f"保存会议转写失败: {e}")
+
+        try:
+            await websocket.send_json({
+                "type": "meeting_ended",
+                "meeting_id": meeting_id,
+                "duration": result.get("duration", 0) if result else 0
+            })
+        except Exception:
+            pass

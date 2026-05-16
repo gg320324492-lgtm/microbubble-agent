@@ -9,6 +9,7 @@ from app.core.security import get_current_user
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
 from app.models.project import Project
+from app.models.reminder import Reminder
 from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskList, TaskStats
 )
@@ -273,3 +274,23 @@ async def get_dashboard_stats(
             "overdue_tasks": overdue_count
         }
     }
+
+
+@router.get("/reminders/pending-count")
+async def get_pending_reminder_count(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取当前用户的待处理提醒数量"""
+    result = await db.execute(
+        select(func.count(Reminder.id))
+        .join(Task, Task.id == Reminder.task_id)
+        .where(
+            and_(
+                Task.assignee_id == current_user.id,
+                Reminder.status == "pending"
+            )
+        )
+    )
+    count = result.scalar() or 0
+    return {"count": count}

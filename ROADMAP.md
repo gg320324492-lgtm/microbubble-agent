@@ -32,20 +32,20 @@
 
 ## 第四阶段：补全基础设施
 
-- [ ] **添加测试** -- `tests/` 目录完全为空，需补充单元测试和 API 测试
-- [ ] **配置日志系统** -- `logs/` 目录存在但无日志配置
-- [ ] **前端 Pinia 状态管理** -- 当前每个组件各自调 API，无共享状态
-- [ ] **voice.py 会议转写保存** -- 第271行 TODO，WebSocket 断开后数据未存库
-- [ ] **meeting.py WebSocket 转写** -- 第176行返回硬编码 stub，需接入 Whisper
-- [ ] **Docker Whisper 服务与 app 内 Whisper 重复加载** -- 需统一为服务调用或进程内加载
+- [x] **添加测试** -- `tests/` 新增 conftest.py + test_auth/test_tasks/test_members，覆盖认证、任务 CRUD、成员管理
+- [x] **配置日志系统** -- `app/core/logging.py` 统一配置，生产环境写文件（RotatingFileHandler 10MB×5）
+- [x] **前端 Pinia 状态管理** -- 新增 member store（共享成员列表）和 user store（用户信息+通知数），MainLayout 接入
+- [x] **voice.py 会议转写保存** -- WebSocket 断开后自动将转写结果保存到 meeting.transcript
+- [x] **meeting.py WebSocket 转写** -- 已在 voice.py 实现（/ws/meeting/{id}/transcript），meeting.py 无需重复
+- [x] **Docker Whisper 服务与 app 内 Whisper 重复加载** -- asr.py 改为优先调用远程 Whisper 服务，回退到本地模型
 
 ## 第五阶段：功能增强
 
 - [x] **企业微信群机器人** -- 完整实现：webhook 回调、消息加解密、任务派发私发、进度跟踪、汇总通知
 - [ ] **腾讯会议 API 集成** -- 配置项存在但无集成代码
 - [ ] **MinIO 文件上传** -- 配置和 docker 服务存在但无上传代码
-- [ ] **前端 ECharts 注册** -- `Dashboard.vue:77` VChart 组件未注册
-- [ ] **通知 badge 真实数据** -- `MainLayout.vue:48` 硬编码为 3
+- [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
+- [x] **通知 badge 真实数据** -- 改为从 API 获取待处理提醒数量，user store 管理
 
 ---
 
@@ -175,3 +175,35 @@
 - `app/agent/core.py` — session 迁移到 Redis（`_load_session`/`_save_session`）
 - `web/src/views/LoginView.vue` — 移除硬编码账号密码
 - `requirements.txt` — 移除 5 个无用依赖，去重 httpx
+
+### Phase 4 (2026-05-17)
+
+| 问题 | 修复内容 |
+|------|---------|
+| 无日志配置 | `app/core/logging.py` 统一日志，生产环境 RotatingFileHandler |
+| Dashboard ECharts 不显示 | 确认 `<script setup>` 自动注册，无需修改 |
+| 通知角标硬编码 | MainLayout 改为从 API 获取提醒数量，user store 管理 |
+| 会议转写未保存 | voice.py WebSocket 断开后自动存入 meeting.transcript |
+| meeting.py 转写 stub | 已在 voice.py 实现，meeting.py 无需重复 |
+| Whisper 双重加载 | asr.py 改为 HTTP 优先调用远程服务，回退本地模型 |
+| 无 Pinia store | 新增 user store + member store + format 工具函数 |
+| 无测试 | 新增 conftest.py + 3 个测试文件（auth/tasks/members） |
+
+**新建文件：**
+- `app/core/logging.py` — 统一日志配置
+- `app/core/rate_limit.py` — 滑动窗口限流器
+- `web/src/stores/member.js` — 成员 Pinia store
+- `web/src/stores/user.js` — 用户 Pinia store
+- `web/src/utils/format.js` — 日期格式化工具
+- `tests/conftest.py` — 测试 fixtures（db/client/auth）
+- `tests/test_auth.py` — 认证测试（登录/刷新/修改密码）
+- `tests/test_tasks.py` — 任务测试（CRUD/统计/dashboard）
+- `tests/test_members.py` — 成员测试（CRUD/权限）
+- `pytest.ini` — pytest 配置
+
+**修改文件：**
+- `app/api/v1/voice.py` — 转写断开后保存到数据库
+- `app/api/v1/task.py` — 新增 reminders/pending-count 端点
+- `app/voice/asr.py` — 改为远程 Whisper 优先 + 本地回退
+- `app/main.py` — 引入 logging 模块
+- `web/src/layouts/MainLayout.vue` — 接入 user store + member store

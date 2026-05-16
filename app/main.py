@@ -1,6 +1,8 @@
 import sys
 import warnings
 from fastapi import FastAPI
+
+from app.core.logging import logger
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy import text

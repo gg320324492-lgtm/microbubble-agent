@@ -45,7 +45,7 @@
         </div>
 
         <div class="header-right">
-          <el-badge :value="3" :max="99" class="badge">
+          <el-badge :value="notificationCount" :max="99" class="badge" :hidden="notificationCount === 0">
             <el-icon size="20"><Bell /></el-icon>
           </el-badge>
 
@@ -79,15 +79,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
+import { useUserStore } from '@/stores/user'
+import { useMemberStore } from '@/stores/member'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const memberStore = useMemberStore()
 const isCollapse = ref(false)
-const userInfo = ref(null)
 
 const currentRoute = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
+const username = computed(() => userStore.username)
+const userRole = computed(() => userStore.userRole)
+const notificationCount = computed(() => userStore.notificationCount)
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
@@ -95,28 +100,13 @@ const menuRoutes = computed(() => {
 })
 
 onMounted(() => {
-  // 从localStorage获取用户信息
-  const info = localStorage.getItem('user_info')
-  if (info) {
-    userInfo.value = JSON.parse(info)
-  }
+  userStore.loadFromStorage()
+  userStore.fetchNotificationCount()
+  memberStore.fetchMembers()
 })
 
-// 获取用户名
-const username = computed(() => userInfo.value?.name || '用户')
-
-// 获取用户角色
-const userRole = computed(() => {
-  const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
-  return roleMap[userInfo.value?.role] || '成员'
-})
-
-// 退出登录
 const handleLogout = () => {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  localStorage.removeItem('user_info')
-  delete axios.defaults.headers.common['Authorization']
+  userStore.logout()
   ElMessage.success('已退出登录')
   router.push('/login')
 }

@@ -1,33 +1,47 @@
-"""语音识别模块 - 基于 faster-whisper"""
+"""语音识别模块 - 调用 Whisper 服务或本地模型"""
 
 import io
 import numpy as np
-from typing import Optional, Tuple
-from faster_whisper import WhisperModel
+from typing import Optional
+import httpx
 
 from app.config import settings
 
 
+WHISPER_SERVICE_URL = "http://whisper:8002"
+
+
 class SpeechRecognizer:
-    """语音识别服务"""
+    """语音识别服务 - 优先调用远程 Whisper 服务，回退到本地模型"""
 
     def __init__(self):
-        self.model = None
-        self._initialized = False
+        self._local_model = None
+        self._use_remote: Optional[bool] = None
 
-    def _init_model(self):
-        """延迟初始化模型"""
-        if self._initialized:
+    async def _check_remote(self) -> bool:
+        """检测远程 Whisper 服务是否可用"""
+        if self._use_remote is not None:
+            return self._use_remote
+        try:
+            async with httpx.AsyncClient(timeout=3) as client:
+                resp = await client.get(f"{WHISPER_SERVICE_URL}/health")
+                self._use_remote = resp.status_code == 200
+        except Exception:
+            self._use_remote = False
+        return self._use_remote
+
+    def _init_local_model(self):
+        """延迟加载本地 Whisper 模型"""
+        if self._local_model is not None:
             return
-
-        print(f"正在加载Whisper模型: {settings.WHISPER_MODEL_SIZE}")
-        self.model = WhisperModel(
+        from faster_whisper import WhisperModel
+        print(f"正在加载本地 Whisper 模型: {settings.WHISPER_MODEL_SIZE}")
+        self._local_model = WhisperModel(
             settings.WHISPER_MODEL_SIZE,
             device=settings.WHISPER_DEVICE,
             compute_type="float16" if settings.WHISPER_DEVICE == "cuda" else "int8"
         )
-        self._initialized = True
-        print("Whisper模型加载完成")
+        print("本地 Whisper 模型加载完成")
 
     async def transcribe(
         self,
@@ -35,127 +49,95 @@ class SpeechRecognizer:
         language: str = "zh",
         task: str = "transcribe"
     ) -> dict:
-        """
-        语音识别
+        """语音识别"""
+        if await self._check_remote():
+            return await self._transcribe_remote(audio_data, language, task)
+        return await self._transcribe_local(audio_data, language, task)
 
-        Args:
-            audio_data: 音频数据（支持wav, mp3, m4a等格式）
-            language: 语言代码，默认中文
-            task: 任务类型 - transcribe(转写) 或 translate(翻译)
-
-        Returns:
-            识别结果，包含文本、语言、时间段等信息
-        """
-        self._init_model()
-
-        # 将音频数据转换为numpy数组
-        audio_array = self._bytes_to_array(audio_data)
-
-        # 执行识别
-        segments, info = self.model.transcribe(
-            audio_array,
-            language=language,
-            task=task,
-            beam_size=5,
-            vad_filter=True,  # 启用VAD过滤静音
-            vad_parameters=dict(
-                min_silence_duration_ms=500
+    async def _transcribe_remote(self, audio_data: bytes, language: str, task: str) -> dict:
+        """调用远程 Whisper 服务"""
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                f"{WHISPER_SERVICE_URL}/transcribe",
+                files={"audio": ("audio.wav", audio_data, "audio/wav")},
+                data={"language": language, "task": task}
             )
-        )
+            resp.raise_for_status()
+            return resp.json()
 
-        # 收集结果
-        segments_list = []
-        full_text = ""
+    async def _transcribe_local(self, audio_data: bytes, language: str, task: str) -> dict:
+        """使用本地模型识别"""
+        import asyncio
 
-        for segment in segments:
-            segments_list.append({
-                "start": segment.start,
-                "end": segment.end,
-                "text": segment.text.strip()
-            })
-            full_text += segment.text
-
-        return {
-            "text": full_text.strip(),
-            "language": info.language,
-            "language_probability": info.language_probability,
-            "duration": info.duration,
-            "segments": segments_list
-        }
-
-    async def transcribe_stream(self, audio_chunk: bytes):
-        """
-        流式语音识别（用于实时转写）
-
-        Args:
-            audio_chunk: 音频数据块
-
-        Yields:
-            识别的文本片段
-        """
-        self._init_model()
-
-        # 将音频块转换为numpy数组
-        audio_array = self._bytes_to_array(audio_chunk)
-
-        # 执行识别
-        segments, _ = self.model.transcribe(
-            audio_array,
-            language="zh",
-            beam_size=5,
-            vad_filter=True
-        )
-
-        for segment in segments:
-            yield {
-                "start": segment.start,
-                "end": segment.end,
-                "text": segment.text.strip()
+        def _run():
+            self._init_local_model()
+            audio_array = self._bytes_to_array(audio_data)
+            segments, info = self._local_model.transcribe(
+                audio_array, language=language, task=task,
+                beam_size=5, vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500)
+            )
+            segments_list = []
+            full_text = ""
+            for segment in segments:
+                segments_list.append({
+                    "start": segment.start,
+                    "end": segment.end,
+                    "text": segment.text.strip()
+                })
+                full_text += segment.text
+            return {
+                "text": full_text.strip(),
+                "language": info.language,
+                "language_probability": info.language_probability,
+                "duration": info.duration,
+                "segments": segments_list
             }
 
-    def _bytes_to_array(self, audio_data: bytes) -> np.ndarray:
-        """
-        将音频字节数据转换为numpy数组
+        return await asyncio.to_thread(_run)
 
-        支持多种音频格式，自动使用ffmpeg转换
-        """
+    async def transcribe_stream(self, audio_chunk: bytes):
+        """流式语音识别（仅本地模型支持）"""
+        import asyncio
+
+        def _run():
+            self._init_local_model()
+            audio_array = self._bytes_to_array(audio_chunk)
+            segments, _ = self._local_model.transcribe(
+                audio_array, language="zh", beam_size=5, vad_filter=True
+            )
+            return [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segments]
+
+        for seg in await asyncio.to_thread(_run):
+            yield seg
+
+    def _bytes_to_array(self, audio_data: bytes) -> np.ndarray:
+        """将音频字节数据转换为numpy数组"""
         import subprocess
         import tempfile
         import os
+        import wave
 
-        # 写入临时文件
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp.write(audio_data)
             tmp_path = tmp.name
 
         try:
-            # 使用ffmpeg转换为wav格式
             output_path = tmp_path + ".converted.wav"
             subprocess.run([
                 "ffmpeg", "-i", tmp_path,
-                "-ar", "16000",  # 采样率16kHz
-                "-ac", "1",      # 单声道
-                "-f", "wav",
-                "-y",
-                output_path
+                "-ar", "16000", "-ac", "1", "-f", "wav", "-y", output_path
             ], capture_output=True, check=True)
 
-            # 读取wav文件
-            import wave
             with wave.open(output_path, "rb") as wf:
                 audio_array = np.frombuffer(
-                    wf.readframes(wf.getnframes()),
-                    dtype=np.int16
+                    wf.readframes(wf.getnframes()), dtype=np.int16
                 ).astype(np.float32) / 32768.0
-
             return audio_array
-
         finally:
-            # 清理临时文件
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
-            if os.path.exists(output_path):
-                os.unlink(output_path)
+            for p in [tmp_path, output_path]:
+                if os.path.exists(p):
+                    os.unlink(p)
 
 
 # 全局实例
