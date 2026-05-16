@@ -14,6 +14,9 @@ psycopg2-binary==2.9.9
 redis==5.0.1
 celery==5.3.6
 
+# 对象存储
+minio==7.2.0
+
 # AI相关
 anthropic==0.18.0
 

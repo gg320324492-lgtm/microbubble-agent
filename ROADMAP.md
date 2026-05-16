@@ -42,8 +42,8 @@
 ## 第五阶段：功能增强
 
 - [x] **企业微信群机器人** -- 完整实现：webhook 回调、消息加解密、任务派发私发、进度跟踪、汇总通知
-- [ ] **腾讯会议 API 集成** -- 配置项存在但无集成代码
-- [ ] **MinIO 文件上传** -- 配置和 docker 服务存在但无上传代码
+- [x] **腾讯会议 API 集成** -- 创建/查询/取消会议，可自动创建本地会议记录并关联
+- [x] **MinIO 文件上传** -- 通用上传 + 会议附件上传 + 删除，自动创建 bucket
 - [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
 - [x] **通知 badge 真实数据** -- 改为从 API 获取待处理提醒数量，user store 管理
 
@@ -207,3 +207,21 @@
 - `app/voice/asr.py` — 改为远程 Whisper 优先 + 本地回退
 - `app/main.py` — 引入 logging 模块
 - `web/src/layouts/MainLayout.vue` — 接入 user store + member store
+
+### Phase 5 (2026-05-17)
+
+| 功能 | 说明 |
+|------|------|
+| 腾讯会议 API | 创建/查询/取消会议，HMAC-SHA256 签名，可自动关联本地会议记录 |
+| MinIO 文件上传 | 通用上传（50MB 限制）+ 会议附件 + 删除，自动创建 bucket |
+| 企业微信群机器人 | 完整实现（已在 WeChat Bot 阶段完成） |
+
+**新建文件：**
+- `app/services/tencent_meeting_service.py` — 腾讯会议 API 客户端（HMAC-SHA256 签名）
+- `app/services/file_service.py` — MinIO 文件存储服务
+- `app/api/v1/tencent_meeting.py` — 腾讯会议 API 端点（创建/关联/查询/取消）
+- `app/api/v1/upload.py` — 文件上传 API 端点（通用/会议附件/删除）
+
+**修改文件：**
+- `app/main.py` — 注册 upload 和 tencent_meeting 路由
+- `requirements.txt` — 恢复 minio==7.2.0
