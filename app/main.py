@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.config import settings
-from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice
+from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat
 from app.core.database import engine, Base
 
 
@@ -48,6 +48,7 @@ app.include_router(member.router, prefix="/api/v1", tags=["成员"])
 app.include_router(project.router, prefix="/api/v1", tags=["项目"])
 app.include_router(knowledge.router, prefix="/api/v1", tags=["知识库"])
 app.include_router(voice.router, prefix="/api/v1", tags=["语音"])
+app.include_router(wechat.router, prefix="/api/v1", tags=["企业微信"])
 
 
 @app.get("/")

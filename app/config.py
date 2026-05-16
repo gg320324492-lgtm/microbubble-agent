@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     WECHAT_CORP_ID: str = ""
     WECHAT_AGENT_ID: str = ""
     WECHAT_SECRET: str = ""
+    WECHAT_CALLBACK_TOKEN: str = ""
+    WECHAT_ENCODING_AES_KEY: str = ""
 
     # Whisper
     WHISPER_MODEL_SIZE: str = "large-v3"

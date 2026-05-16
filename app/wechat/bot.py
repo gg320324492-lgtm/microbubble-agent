@@ -219,6 +219,20 @@ class WeChatBot:
             )
             return response.json()
 
+    async def reply_to_user(self, user_id: str, content: str, msg_type: str = "text") -> dict:
+        """
+        回复用户消息（别名，与 send_message 功能相同）
+
+        Args:
+            user_id: 用户ID
+            content: 消息内容
+            msg_type: 消息类型
+
+        Returns:
+            发送结果
+        """
+        return await self.send_message(user_id, content, msg_type)
+
 
 # 全局实例
 wechat_bot = WeChatBot()

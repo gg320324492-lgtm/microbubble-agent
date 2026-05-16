@@ -1,4 +1,5 @@
 from datetime import datetime
+from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
@@ -121,6 +122,7 @@ class ReminderService:
         }
 
 
+@shared_task(name="app.services.reminder_service.process_reminders_task")
 def process_reminders_task():
     """Celery task: 处理所有待发送提醒"""
     import asyncio

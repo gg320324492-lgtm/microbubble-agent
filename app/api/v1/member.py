@@ -33,6 +33,10 @@ async def create_member(
         phone=member_data.phone,
         bio=member_data.bio,
         wechat_id=member_data.wechat_id,
+        wechat_nickname=member_data.wechat_nickname,
+        wechat_remark=member_data.wechat_remark,
+        personal_wechat_id=member_data.personal_wechat_id,
+        wechat_mobile=member_data.wechat_mobile,
         role=member_data.role
     )
 

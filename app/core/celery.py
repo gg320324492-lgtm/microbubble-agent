@@ -23,7 +23,11 @@ celery_app.conf.update(
             "task": "app.services.reminder_service.process_reminders_task",
             "schedule": 60.0,
         },
+        "proactive-checks": {
+            "task": "app.wechat.scheduler.run_proactive_checks",
+            "schedule": 900.0,  # 每15分钟检查一次
+        },
     },
 )
 
-celery_app.autodiscover_tasks(["app.services"])
+celery_app.autodiscover_tasks(["app.services", "app.wechat"])

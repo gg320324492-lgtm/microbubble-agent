@@ -19,6 +19,10 @@ class MemberCreate(MemberBase):
     username: str
     password: Optional[str] = None
     wechat_id: Optional[str] = None
+    wechat_nickname: Optional[str] = None
+    wechat_remark: Optional[str] = None
+    personal_wechat_id: Optional[str] = None
+    wechat_mobile: Optional[str] = None
     role: str = "member"
 
 
@@ -34,12 +38,20 @@ class MemberUpdate(BaseModel):
     avatar: Optional[str] = None
     is_active: Optional[bool] = None
     role: Optional[str] = None
+    wechat_id: Optional[str] = None
+    wechat_nickname: Optional[str] = None
+    wechat_remark: Optional[str] = None
+    personal_wechat_id: Optional[str] = None
+    wechat_mobile: Optional[str] = None
 
 
 class MemberResponse(MemberBase):
     """成员响应"""
     id: int
     wechat_id: Optional[str] = None
+    wechat_nickname: Optional[str] = None
+    wechat_remark: Optional[str] = None
+    personal_wechat_id: Optional[str] = None
     avatar: Optional[str] = None
     is_active: bool
     role: str

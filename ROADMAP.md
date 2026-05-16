@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-16
+> 最后更新: 2026-05-17 (更新：WeChat Bot 被动监听 + 主动提醒 + 多信号身份识别)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -41,7 +41,7 @@
 
 ## 第五阶段：功能增强
 
-- [ ] **企业微信 webhook 接收** -- 当前只有推送，无法接收用户消息
+- [x] **企业微信群机器人** -- 完整实现：webhook 回调、消息加解密、任务派发私发、进度跟踪、汇总通知
 - [ ] **腾讯会议 API 集成** -- 配置项存在但无集成代码
 - [ ] **MinIO 文件上传** -- 配置和 docker 服务存在但无上传代码
 - [ ] **前端 ECharts 注册** -- `Dashboard.vue:77` VChart 组件未注册
@@ -110,3 +110,38 @@
 - `app/services/reminder_service.py` — 接入 wechat_bot 推送
 - `app/schemas/member.py` — MemberCreate 加 username/password 字段
 - `requirements.txt` — 加 pgvector==0.2.4
+
+### WeChat Bot (2026-05-17)
+
+| 功能 | 说明 |
+|------|------|
+| 消息加解密 | AES-256-CBC + PKCS7，支持 URL 验证和消息加解密 |
+| Webhook 回调 | GET 验证 + POST 接收，异步处理避免 5 秒超时 |
+| 任务派发 | 老师对话触发 → 创建任务 → 私发给每个负责人 |
+| 进度回复 | 学生回复"完成/进度50%/遇到问题" → 自动更新任务状态 |
+| 汇总通知 | 有问题转发老师，全员完成自动汇总通知 |
+| 群聊+私聊 | 群里 @机器人 或 私聊直接发消息均可触发 |
+| 多信号身份识别 | userid → wechat_id → 手机号 → 昵称模糊匹配，首次匹配自动绑定 |
+| 群聊被动监听 | 消息缓冲 + 关键词触发 → Claude 分析 → 自动提取任务/会议/决定 |
+| 主动提醒调度 | Celery 定时（15分钟）检查：即将到期、已逾期、未确认、即将开始的会议 |
+| 图片识别 | Claude Vision 分析图片消息，支持任务截图和人物识别 |
+
+**新建文件：**
+- `app/wechat/crypto.py` — 消息加解密（AES-CBC + 签名验证）
+- `app/wechat/handler.py` — 消息处理（任务回复识别 + Agent 对话 + 群聊被动监听）
+- `app/wechat/notifier.py` — 主动通知（任务分配/完成/问题/汇总）
+- `app/wechat/identity.py` — 多信号身份解析（userid/昵称/手机/微信号模糊匹配）
+- `app/wechat/analyzer.py` — 对话智能分析（Claude API 提取任务/会议/决定）
+- `app/wechat/scheduler.py` — 主动提醒调度器（Celery task，每15分钟执行）
+- `app/services/vision_service.py` — 视觉识别服务（Claude Vision 图片分析）
+- `app/api/v1/wechat.py` — Webhook 回调端点
+
+**修改文件：**
+- `app/config.py` — 新增 WECHAT_CALLBACK_TOKEN、WECHAT_ENCODING_AES_KEY
+- `app/main.py` — 注册 wechat 路由
+- `app/wechat/bot.py` — 新增 reply_to_user 方法
+- `app/core/celery.py` — 新增 proactive-checks 定时任务（每15分钟），autodiscover wechat 模块
+- `app/services/reminder_service.py` — 添加 `@shared_task` 装饰器
+- `app/models/member.py` — 新增多平台身份字段（wechat_nickname/wechat_remark/personal_wechat_id/wechat_mobile）
+- `app/schemas/member.py` — MemberCreate/MemberUpdate/MemberResponse 包含新身份字段
+- `app/api/v1/member.py` — 创建成员支持新身份字段
