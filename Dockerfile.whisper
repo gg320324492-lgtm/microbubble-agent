@@ -1,16 +1,13 @@
-FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
+FROM python:3.11-slim
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # 安装Python依赖
-COPY requirements.txt .
 RUN pip3 install --no-cache-dir faster-whisper==1.0.0
 
 # 创建模型目录
@@ -19,5 +16,5 @@ RUN mkdir -p /app/models
 # 暴露端口
 EXPOSE 8002
 
-# 启动命令
-CMD ["python3", "-m", "faster_whisper.server", "--host", "0.0.0.0", "--port", "8002", "--model", "large-v3"]
+# 启动命令 - 使用 base 模型（CPU模式，节省内存）
+CMD ["python3", "-m", "faster_whisper.server", "--host", "0.0.0.0", "--port", "8002", "--model", "base", "--device", "cpu"]
