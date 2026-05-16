@@ -13,6 +13,8 @@ from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
 from app.agent.core import agent
 from app.core.database import get_db
+from app.core.security import get_current_user, decode_token
+from app.models.member import Member
 
 router = APIRouter()
 
@@ -36,7 +38,8 @@ class ASRResponse(BaseModel):
 @router.post("/voice/asr", response_model=ASRResponse)
 async def speech_to_text(
     audio: UploadFile = File(...),
-    language: str = "zh"
+    language: str = "zh",
+    current_user: Member = Depends(get_current_user)
 ):
     """语音识别（ASR）"""
     if not audio.content_type.startswith("audio/"):
@@ -64,7 +67,10 @@ async def speech_to_text(
 
 
 @router.post("/voice/tts")
-async def text_to_speech(request: TTSRequest):
+async def text_to_speech(
+    request: TTSRequest,
+    current_user: Member = Depends(get_current_user)
+):
     """语音合成（TTS）"""
     try:
         audio_data = await tts_service.synthesize(
@@ -89,6 +95,7 @@ async def text_to_speech(request: TTSRequest):
 async def voice_chat(
     audio: UploadFile = File(...),
     session_id: str = "default",
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """语音对话（端到端）"""
@@ -132,7 +139,9 @@ async def voice_chat(
 
 
 @router.get("/voice/voices")
-async def get_voices():
+async def get_voices(
+    current_user: Member = Depends(get_current_user)
+):
     """获取可用语音列表"""
     return {
         "voices": tts_service.get_voice_options()
@@ -140,8 +149,18 @@ async def get_voices():
 
 
 @router.websocket("/ws/voice/{user_id}")
-async def voice_websocket(websocket: WebSocket, user_id: str):
+async def voice_websocket(websocket: WebSocket, user_id: str, token: str = ""):
     """实时语音对话WebSocket"""
+    # 认证：从query参数获取token
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
     await websocket.accept()
     session_id = f"voice_{user_id}"
 
@@ -191,9 +210,20 @@ async def voice_websocket(websocket: WebSocket, user_id: str):
 @router.websocket("/ws/meeting/{meeting_id}/transcript")
 async def meeting_transcript_ws(
     websocket: WebSocket,
-    meeting_id: int
+    meeting_id: int,
+    token: str = ""
 ):
     """会议实时转写WebSocket"""
+    # 认证：从query参数获取token
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
     await websocket.accept()
 
     recorder = await recorder_manager.start_meeting_recording(meeting_id)

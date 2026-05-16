@@ -4,6 +4,8 @@ from sqlalchemy import select
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.member import Member
 from app.models.project import Project, Milestone
 from app.schemas.project import (
     ProjectCreate, ProjectUpdate, ProjectResponse, ProjectList,
@@ -16,6 +18,7 @@ router = APIRouter()
 @router.post("/projects", response_model=ProjectResponse, status_code=201)
 async def create_project(
     project_data: ProjectCreate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """创建项目"""
@@ -40,6 +43,7 @@ async def list_projects(
     status: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """查询项目列表"""
@@ -61,6 +65,7 @@ async def list_projects(
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(
     project_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取项目详情"""
@@ -77,6 +82,7 @@ async def get_project(
 async def update_project(
     project_id: int,
     project_data: ProjectUpdate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """更新项目"""
@@ -99,6 +105,7 @@ async def update_project(
 async def create_milestone(
     project_id: int,
     milestone_data: MilestoneCreate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """创建里程碑"""
@@ -119,6 +126,7 @@ async def create_milestone(
 @router.get("/projects/{project_id}/milestones")
 async def list_milestones(
     project_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取项目里程碑"""
@@ -129,3 +137,20 @@ async def list_milestones(
     )
     milestones = result.scalars().all()
     return milestones
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+async def delete_project(
+    project_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """删除项目"""
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    await db.delete(project)
+    await db.commit()

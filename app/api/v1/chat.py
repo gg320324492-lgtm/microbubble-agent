@@ -6,6 +6,8 @@ import json
 
 from app.agent.core import agent
 from app.core.database import get_db
+from app.core.security import get_current_user, decode_token
+from app.models.member import Member
 
 router = APIRouter()
 
@@ -23,7 +25,11 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
+async def chat(
+    request: ChatRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """文字对话接口"""
     result = await agent.chat(
         message=request.message,
@@ -37,8 +43,18 @@ async def chat(request: ChatRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.websocket("/ws/chat/{user_id}")
-async def websocket_chat(websocket: WebSocket, user_id: str):
+async def websocket_chat(websocket: WebSocket, user_id: str, token: str = ""):
     """WebSocket实时对话"""
+    # 认证：从query参数获取token
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
     await websocket.accept()
     session_id = f"user_{user_id}"
 

@@ -5,6 +5,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
 from app.models.project import Project
@@ -18,6 +19,7 @@ router = APIRouter()
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
 async def create_task(
     task_data: TaskCreate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """创建任务"""
@@ -52,6 +54,7 @@ async def list_tasks(
     overdue: bool = False,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """查询任务列表"""
@@ -94,6 +97,7 @@ async def list_tasks(
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(
     task_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取任务详情"""
@@ -110,6 +114,7 @@ async def get_task(
 async def update_task(
     task_id: int,
     task_data: TaskUpdate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """更新任务"""
@@ -137,6 +142,7 @@ async def update_task(
 @router.delete("/tasks/{task_id}", status_code=204)
 async def delete_task(
     task_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """删除任务"""
@@ -154,6 +160,7 @@ async def delete_task(
 async def get_task_stats(
     project_id: Optional[int] = None,
     member_id: Optional[int] = None,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取任务统计"""
@@ -183,7 +190,10 @@ async def get_task_stats(
 
 
 @router.get("/dashboard/stats")
-async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
+async def get_dashboard_stats(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     """获取仪表盘统计数据"""
     now = datetime.utcnow()
 

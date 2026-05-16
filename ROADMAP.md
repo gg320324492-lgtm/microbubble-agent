@@ -12,12 +12,12 @@
 
 ## 第二阶段：补全缺失的 API
 
-- [ ] **给所有 API 路由加认证** -- `security.py` 写好了 `get_current_user`，但只有 auth 路由用了
-- [ ] **补 meeting PUT/DELETE 端点** -- 前端 `MeetingView.vue:324` 调用了但后端没有
-- [ ] **补 project DELETE 端点** -- 前端 `ProjectView.vue:282` 调用了但后端没有
-- [ ] **实现真正的语义搜索** -- `knowledge.py:118` 当前是 SQL LIKE + 硬编码相似度0.8
-- [ ] **取消注释微信通知** -- `reminder_service.py:53` 推送代码被注释
-- [ ] **补全 member 创建时的 password_hash** -- `POST /members` 未设置密码，新成员无法登录
+- [x] **给所有 API 路由加认证** -- 31个端点全部加了 `get_current_user`，WebSocket 从 query param 取 token
+- [x] **补 meeting PUT/DELETE 端点** -- `meeting.py` 新增 `PUT /meetings/{id}` 和 `DELETE /meetings/{id}`
+- [x] **补 project DELETE 端点** -- `project.py` 新增 `DELETE /projects/{id}`
+- [x] **实现真正的语义搜索** -- 接入 pgvector + text2vec-base-chinese，embedding_service.py 单例加载模型
+- [x] **取消注释微信通知** -- `reminder_service.py` 接入 `wechat_bot.send_message()`
+- [x] **补全 member 创建时的 password_hash** -- `MemberCreate` 加 username/password，创建时自动 hash
 
 ## 第三阶段：质量和安全
 
@@ -81,3 +81,32 @@
 - `app/models/meeting.py` — 补上 ARRAY 导入
 - `app/main.py` — 启动时初始化 pgvector 扩展
 - `app/services/reminder_service.py` — 添加 celery task 包装函数
+
+### Phase 2 (2026-05-16)
+
+| 问题 | 修复内容 |
+|------|---------|
+| 31个API端点无认证 | 全部加 `get_current_user`，DELETE /members 改用 `get_current_admin_user` |
+| WebSocket 无认证 | 新增 `get_current_user_ws`，WS 端点从 query param 校验 token |
+| meeting 缺 PUT/DELETE | 新增 `PUT /meetings/{id}` 和 `DELETE /meetings/{id}` |
+| project 缺 DELETE | 新增 `DELETE /projects/{id}` |
+| 语义搜索是假的 | 接入 pgvector + text2vec-base-chinese，cosine_distance 真实相似度 |
+| 微信通知被注释 | 接入 `wechat_bot.send_message()`，加异常守卫 |
+| 创建成员无密码 | `MemberCreate` 加 username/password，`get_password_hash` 自动 hash |
+
+**新建文件：**
+- `app/services/embedding_service.py` — 向量嵌入服务（单例模型加载 + 异步生成）
+
+**修改文件：**
+- `app/core/security.py` — 新增 `get_current_user_ws()` WebSocket 认证
+- `app/api/v1/member.py` — 全部端点加认证 + 创建成员支持密码
+- `app/api/v1/project.py` — 全部端点加认证 + 新增 DELETE 端点
+- `app/api/v1/meeting.py` — 全部端点加认证 + 新增 PUT/DELETE 端点
+- `app/api/v1/task.py` — 全部端点加认证
+- `app/api/v1/knowledge.py` — 全部端点加认证 + 语义搜索改用 service
+- `app/api/v1/chat.py` — POST + WebSocket 加认证
+- `app/api/v1/voice.py` — 全部端点加认证
+- `app/services/knowledge_service.py` — create/update 生成 embedding，search_semantic 改用 pgvector
+- `app/services/reminder_service.py` — 接入 wechat_bot 推送
+- `app/schemas/member.py` — MemberCreate 加 username/password 字段
+- `requirements.txt` — 加 pgvector==0.2.4

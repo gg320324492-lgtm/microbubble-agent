@@ -4,10 +4,13 @@ from sqlalchemy import select
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.member import Member
 from app.models.knowledge import Knowledge
 from app.schemas.knowledge import (
     KnowledgeCreate, KnowledgeUpdate, KnowledgeResponse, KnowledgeList
 )
+from app.services.knowledge_service import KnowledgeService
 
 router = APIRouter()
 
@@ -15,21 +18,20 @@ router = APIRouter()
 @router.post("/knowledge", response_model=KnowledgeResponse, status_code=201)
 async def create_knowledge(
     knowledge_data: KnowledgeCreate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """添加知识"""
-    knowledge = Knowledge(
+    service = KnowledgeService(db)
+    knowledge = await service.create_knowledge(
         title=knowledge_data.title,
         content=knowledge_data.content,
         category=knowledge_data.category,
         tags=knowledge_data.tags,
         source=knowledge_data.source,
-        source_type=knowledge_data.source_type
+        source_type=knowledge_data.source_type,
+        created_by=current_user.id
     )
-
-    db.add(knowledge)
-    await db.commit()
-    await db.refresh(knowledge)
     return knowledge
 
 
@@ -39,6 +41,7 @@ async def list_knowledge(
     keyword: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """查询知识库"""
@@ -65,6 +68,7 @@ async def list_knowledge(
 @router.get("/knowledge/{knowledge_id}", response_model=KnowledgeResponse)
 async def get_knowledge(
     knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取知识详情"""
@@ -81,27 +85,24 @@ async def get_knowledge(
 async def update_knowledge(
     knowledge_id: int,
     knowledge_data: KnowledgeUpdate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """更新知识"""
-    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
-    knowledge = result.scalar_one_or_none()
+    service = KnowledgeService(db)
+    update_data = knowledge_data.model_dump(exclude_unset=True)
+    knowledge = await service.update_knowledge(knowledge_id, **update_data)
 
     if not knowledge:
         raise HTTPException(status_code=404, detail="知识不存在")
 
-    update_data = knowledge_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(knowledge, field, value)
-
-    await db.commit()
-    await db.refresh(knowledge)
     return knowledge
 
 
 @router.delete("/knowledge/{knowledge_id}", status_code=204)
 async def delete_knowledge(
     knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """删除知识"""
@@ -120,23 +121,10 @@ async def semantic_search(
     query: str,
     category: Optional[str] = None,
     top_k: int = Query(5, ge=1, le=20),
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """语义搜索（RAG）"""
-    # 这里会调用向量数据库进行语义搜索
-    # 暂时返回关键词搜索结果
-    result = await db.execute(
-        select(Knowledge)
-        .where(Knowledge.content.contains(query))
-        .limit(top_k)
-    )
-    items = result.scalars().all()
-
-    return [
-        {
-            "content": item.content[:500],
-            "metadata": {"title": item.title, "category": item.category},
-            "score": 0.8  # 模拟相似度分数
-        }
-        for item in items
-    ]
+    service = KnowledgeService(db)
+    results = await service.search_semantic(query=query, top_k=top_k, category=category)
+    return results

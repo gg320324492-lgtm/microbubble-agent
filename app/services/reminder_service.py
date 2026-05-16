@@ -6,6 +6,7 @@ from typing import List
 from app.models.task import Task
 from app.models.member import Member
 from app.models.reminder import Reminder
+from app.wechat.bot import wechat_bot
 
 
 class ReminderService:
@@ -49,8 +50,12 @@ class ReminderService:
         # 格式化提醒消息
         message = self._format_reminder_message(task, member)
 
-        # 这里调用微信推送服务
-        # await wechat_service.send_message(member.wechat_id, message)
+        # 调用微信推送服务
+        if member.wechat_id:
+            try:
+                await wechat_bot.send_message(member.wechat_id, message)
+            except Exception as e:
+                print(f"微信推送失败: {e}")
 
         # 更新提醒状态
         reminder.status = "sent"

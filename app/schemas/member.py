@@ -16,6 +16,8 @@ class MemberBase(BaseModel):
 
 class MemberCreate(MemberBase):
     """创建成员"""
+    username: str
+    password: Optional[str] = None
     wechat_id: Optional[str] = None
     role: str = "member"
 

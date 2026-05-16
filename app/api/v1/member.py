@@ -4,6 +4,7 @@ from sqlalchemy import select
 from typing import Optional
 
 from app.core.database import get_db
+from app.core.security import get_password_hash, get_current_user, get_current_admin_user
 from app.models.member import Member
 from app.schemas.member import MemberCreate, MemberUpdate, MemberResponse, MemberList
 
@@ -13,11 +14,18 @@ router = APIRouter()
 @router.post("/members", response_model=MemberResponse, status_code=201)
 async def create_member(
     member_data: MemberCreate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """创建成员"""
+    existing = await db.execute(select(Member).where(Member.username == member_data.username))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="用户名已存在")
+
     member = Member(
         name=member_data.name,
+        username=member_data.username,
+        password_hash=get_password_hash(member_data.password) if member_data.password else None,
         grade=member_data.grade,
         research_area=member_data.research_area,
         skills=member_data.skills,
@@ -42,6 +50,7 @@ async def list_members(
     is_active: bool = True,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """查询成员列表"""
@@ -67,6 +76,7 @@ async def list_members(
 @router.get("/members/{member_id}", response_model=MemberResponse)
 async def get_member(
     member_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取成员详情"""
@@ -83,6 +93,7 @@ async def get_member(
 async def update_member(
     member_id: int,
     member_data: MemberUpdate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """更新成员"""
@@ -104,6 +115,7 @@ async def update_member(
 @router.delete("/members/{member_id}", status_code=204)
 async def delete_member(
     member_id: int,
+    current_user: Member = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
     """删除成员（软删除）"""

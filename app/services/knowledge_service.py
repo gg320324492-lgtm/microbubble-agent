@@ -3,6 +3,7 @@ from sqlalchemy import select, and_, or_
 from typing import List, Optional
 
 from app.models.knowledge import Knowledge
+from app.services.embedding_service import generate_embedding
 
 
 class KnowledgeService:
@@ -53,6 +54,9 @@ class KnowledgeService:
         created_by: Optional[int] = None
     ) -> Knowledge:
         """创建知识条目"""
+        text_for_embedding = f"{title}\n{content}"
+        embedding = await generate_embedding(text_for_embedding)
+
         knowledge = Knowledge(
             title=title,
             content=content,
@@ -60,7 +64,8 @@ class KnowledgeService:
             tags=tags,
             source=source,
             source_type=source_type,
-            created_by=created_by
+            created_by=created_by,
+            embedding=embedding
         )
         self.db.add(knowledge)
         await self.db.commit()
@@ -77,6 +82,11 @@ class KnowledgeService:
             if hasattr(knowledge, key) and value is not None:
                 setattr(knowledge, key, value)
 
+        # 标题或内容变更时重新生成embedding
+        if "title" in kwargs or "content" in kwargs:
+            text_for_embedding = f"{knowledge.title}\n{knowledge.content}"
+            knowledge.embedding = await generate_embedding(text_for_embedding)
+
         await self.db.commit()
         await self.db.refresh(knowledge)
         return knowledge
@@ -91,18 +101,33 @@ class KnowledgeService:
         await self.db.commit()
         return True
 
-    async def search_semantic(self, query: str, top_k: int = 5) -> List[dict]:
-        """语义搜索（暂用关键词匹配，后续接入 pgvector）"""
-        results = await self.get_knowledge_list(keyword=query)
+    async def search_semantic(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
+        """语义搜索 - 使用pgvector余弦距离"""
+        query_embedding = await generate_embedding(query)
+
+        stmt = select(
+            Knowledge,
+            Knowledge.embedding.cosine_distance(query_embedding).label("distance")
+        )
+
+        if category:
+            stmt = stmt.where(Knowledge.category == category)
+
+        stmt = stmt.order_by(Knowledge.embedding.cosine_distance(query_embedding))
+        stmt = stmt.limit(top_k)
+
+        result = await self.db.execute(stmt)
+        rows = result.all()
+
         return [
             {
-                "id": r.id,
-                "title": r.title,
-                "content": r.content[:500],
-                "category": r.category,
-                "tags": r.tags,
-                "source": r.source,
-                "score": 0.8
+                "id": row.Knowledge.id,
+                "title": row.Knowledge.title,
+                "content": row.Knowledge.content[:500],
+                "category": row.Knowledge.category,
+                "tags": row.Knowledge.tags,
+                "source": row.Knowledge.source,
+                "score": round(1.0 - row.distance, 4)
             }
-            for r in results[:top_k]
+            for row in rows
         ]

@@ -30,6 +30,7 @@ pyannote-audio==3.1.1
 edge-tts==6.1.9
 
 # 向量数据库
+pgvector==0.2.4
 chromadb==0.4.22
 sentence-transformers==2.3.1
 

@@ -5,6 +5,7 @@ from typing import Optional, List
 import json
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
 from app.schemas.meeting import (
@@ -18,6 +19,7 @@ router = APIRouter()
 @router.post("/meetings", response_model=MeetingResponse, status_code=201)
 async def create_meeting(
     meeting_data: MeetingCreate,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """创建会议"""
@@ -56,6 +58,7 @@ async def list_meetings(
     keyword: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """查询会议列表"""
@@ -81,6 +84,7 @@ async def list_meetings(
 @router.get("/meetings/{meeting_id}", response_model=MeetingResponse)
 async def get_meeting(
     meeting_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取会议详情"""
@@ -96,6 +100,7 @@ async def get_meeting(
 @router.get("/meetings/{meeting_id}/minutes", response_model=MeetingMinutes)
 async def get_meeting_minutes(
     meeting_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """获取会议纪要"""
@@ -120,6 +125,7 @@ async def get_meeting_minutes(
 @router.post("/meetings/{meeting_id}/generate-minutes")
 async def generate_meeting_minutes(
     meeting_id: int,
+    current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """生成会议纪要"""
@@ -155,3 +161,43 @@ async def generate_meeting_minutes(
     await db.commit()
 
     return {"message": "会议纪要生成成功", "minutes": response["content"]}
+
+
+@router.put("/meetings/{meeting_id}", response_model=MeetingResponse)
+async def update_meeting(
+    meeting_id: int,
+    meeting_data: MeetingUpdate,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新会议"""
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+
+    update_data = meeting_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(meeting, field, value)
+
+    await db.commit()
+    await db.refresh(meeting)
+    return meeting
+
+
+@router.delete("/meetings/{meeting_id}", status_code=204)
+async def delete_meeting(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """删除会议"""
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+
+    await db.delete(meeting)
+    await db.commit()
