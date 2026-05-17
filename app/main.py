@@ -54,7 +54,10 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
 ]
 if settings.APP_ENV == "production":
-    ALLOWED_ORIGINS.append("https://agent.mnb-lan.cn")
+    ALLOWED_ORIGINS.extend([
+        "http://agent.mnb-lab.cn",
+        "https://agent.mnb-lab.cn",
+    ])
 
 app.add_middleware(
     CORSMiddleware,
