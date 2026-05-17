@@ -5,6 +5,13 @@ WORKDIR /app
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    libavformat-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libswscale-dev \
+    libswresample-dev \
     libpq-dev \
     gcc \
     pkg-config \
