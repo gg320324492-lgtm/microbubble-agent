@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-17 (更新：核实各功能实际部署状态)
+> 最后更新: 2026-05-18 (更新：部署架构调整为云服务器+本地电脑 FRP 穿透方案)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -235,12 +235,38 @@
 
 ---
 
+## 部署架构（2026-05-18 确定）
+
+采用 **云服务器 + 本地电脑 FRP 穿透** 方案：
+
+```
+用户 → 云服务器 (Nginx + SSL + FRP 服务端) → FRP 隧道 → 本地电脑 (全部 Docker 服务 + GPU Whisper)
+```
+
+- **云服务器**（2核 2G）：只运行 Nginx 反向代理 + FRP 服务端，轻量无压力
+- **本地电脑**（有 GPU）：运行全部应用服务（app、PostgreSQL、Redis、MinIO、Whisper GPU、Celery）
+- **FRP 隧道**：本地 8000 端口穿透到云服务器，用户通过 `https://agent.mnb-lab.cn` 访问
+
 ## 待完成：生产部署与上线
+
+### 部署基础设施 ✅
+
+- [x] docker-compose.yml 添加 Nginx 服务 + app 端口映射
+- [x] 创建 Nginx 生产配置（HTTP/HTTPS，安全头，WebSocket 代理）
+- [x] 部署脚本：`deploy-cloud.sh`（云服务器）、`deploy-local.sh`（本地电脑）
+- [x] FRP 内网穿透配置（frps.toml / frpc.toml）
+- [x] Whisper 改为 GPU 模式（Dockerfile.whisper 支持环境变量配置）
+- [x] Claude API 支持代理地址（`CLAUDE_BASE_URL` 配置项）
+- [x] `.env.example` 补全 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
+- [ ] 配置 SSL 证书（`agent.mnb-lab.cn`）— 需在云服务器上运行 `setup-ssl.sh`
+- [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
+- [ ] 创建 CI/CD 流水线（GitHub Actions）
+- [ ] 编写部署文档（`docs/deploy.md`）
+- [ ] 生产环境加固：日志轮转、监控、备份脚本
 
 ### 企业微信部署
 
 - [ ] 修复 `handler.py:259` 运行时 bug（`notify_meeting_notification` 方法不存在）
-- [ ] `.env.example` 补全 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
 - [ ] 内存状态（`_pending_users` / `_group_buffers`）迁移到 Redis
 - [ ] 异常处理改用结构化日志（`app.core.logging`）
 - [ ] @提及检测改为匹配企业微信实际 XML 格式
@@ -254,14 +280,3 @@
 - [ ] Agent 的 `create_meeting` 工具集成腾讯会议 API
 - [ ] 添加错误重试和限流处理
 - [ ] 添加单元测试
-
-### 生产基础设施
-
-- [ ] docker-compose.yml 添加 web（前端）服务
-- [ ] 添加 Nginx 反向代理服务到 compose（含 SSL 终结）
-- [ ] 配置 SSL 证书（`agent.mnb-lab.cn`）
-- [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
-- [ ] 创建 CI/CD 流水线（GitHub Actions）
-- [ ] 编写部署文档（`docs/deploy.md`）
-- [ ] Whisper GPU 部署的 compose 变体
-- [ ] 生产环境加固：日志轮转、监控、备份脚本
