@@ -1,0 +1,20 @@
+# FRP 客户端配置 - 部署在本地电脑
+serverAddr = "agent.mnb-lab.cn"
+serverPort = 7000
+
+# 认证（必须与服务端一致）
+auth.method = "token"
+auth.token = "microbubble-frp-2026"
+
+# 日志
+log.to = "./frpc.log"
+log.level = "info"
+log.maxDays = 7
+
+# 代理规则：将本地 8000 端口映射到云服务器
+[[proxies]]
+name = "microbubble-app"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 8000
+remotePort = 8000
