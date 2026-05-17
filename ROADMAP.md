@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-17 (更新：WeChat Bot 被动监听 + 主动提醒 + 多信号身份识别)
+> 最后更新: 2026-05-17 (更新：核实各功能实际部署状态)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -32,7 +32,7 @@
 
 ## 第四阶段：补全基础设施
 
-- [x] **添加测试** -- `tests/` 新增 conftest.py + test_auth/test_tasks/test_members，覆盖认证、任务 CRUD、成员管理
+- [x] **添加测试** -- `tests/` 新增 conftest.py + test_auth/test_tasks/test_members，覆盖认证、任务 CRUD、成员管理（⚠️ 需真实 PostgreSQL+pgvector 环境才能运行，无 CI 流水线）
 - [x] **配置日志系统** -- `app/core/logging.py` 统一配置，生产环境写文件（RotatingFileHandler 10MB×5）
 - [x] **前端 Pinia 状态管理** -- 新增 member store（共享成员列表）和 user store（用户信息+通知数），MainLayout 接入
 - [x] **voice.py 会议转写保存** -- WebSocket 断开后自动将转写结果保存到 meeting.transcript
@@ -41,8 +41,8 @@
 
 ## 第五阶段：功能增强
 
-- [x] **企业微信群机器人** -- 完整实现：webhook 回调、消息加解密、任务派发私发、进度跟踪、汇总通知
-- [x] **腾讯会议 API 集成** -- 创建/查询/取消会议，可自动创建本地会议记录并关联
+- [ ] **企业微信群机器人** -- ⚠️ 代码完成，未部署。存在运行时 bug（`handler.py:259` 调用不存在的方法），.env.example 缺少 `WECHAT_CALLBACK_TOKEN`/`WECHAT_ENCODING_AES_KEY`，@提及检测硬编码不匹配实际格式，内存状态不持久化，异常处理用 `print()` 而非结构化日志
+- [ ] **腾讯会议 API 集成** -- ⚠️ 代码框架完成，无法实际使用。无真实 API 凭据，无 OAuth 用户认证，无 Webhook 回调端点，Agent 的 `create_meeting` 工具不调用腾讯 API，无测试覆盖
 - [x] **MinIO 文件上传** -- 通用上传 + 会议附件上传 + 删除，自动创建 bucket
 - [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
 - [x] **通知 badge 真实数据** -- 改为从 API 获取待处理提醒数量，user store 管理
@@ -111,20 +111,27 @@
 - `app/schemas/member.py` — MemberCreate 加 username/password 字段
 - `requirements.txt` — 加 pgvector==0.2.4
 
-### WeChat Bot (2026-05-17)
+### WeChat Bot (2026-05-17) -- ⚠️ 代码完成，未部署
 
-| 功能 | 说明 |
-|------|------|
-| 消息加解密 | AES-256-CBC + PKCS7，支持 URL 验证和消息加解密 |
-| Webhook 回调 | GET 验证 + POST 接收，异步处理避免 5 秒超时 |
-| 任务派发 | 老师对话触发 → 创建任务 → 私发给每个负责人 |
-| 进度回复 | 学生回复"完成/进度50%/遇到问题" → 自动更新任务状态 |
-| 汇总通知 | 有问题转发老师，全员完成自动汇总通知 |
-| 群聊+私聊 | 群里 @机器人 或 私聊直接发消息均可触发 |
-| 多信号身份识别 | userid → wechat_id → 手机号 → 昵称模糊匹配，首次匹配自动绑定 |
-| 群聊被动监听 | 消息缓冲 + 关键词触发 → Claude 分析 → 自动提取任务/会议/决定 |
-| 主动提醒调度 | Celery 定时（15分钟）检查：即将到期、已逾期、未确认、即将开始的会议 |
-| 图片识别 | Claude Vision 分析图片消息，支持任务截图和人物识别 |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 消息加解密 | AES-256-CBC + PKCS7，支持 URL 验证和消息加解密 | ✅ 代码完成 |
+| Webhook 回调 | GET 验证 + POST 接收，异步处理避免 5 秒超时 | ✅ 代码完成 |
+| 任务派发 | 老师对话触发 → 创建任务 → 私发给每个负责人 | ✅ 代码完成 |
+| 进度回复 | 学生回复"完成/进度50%/遇到问题" → 自动更新任务状态 | ✅ 代码完成 |
+| 汇总通知 | 有问题转发老师，全员完成自动汇总通知 | ✅ 代码完成 |
+| 群聊+私聊 | 群里 @机器人 或 私聊直接发消息均可触发 | ⚠️ @检测硬编码，不匹配实际企业微信格式 |
+| 多信号身份识别 | userid → wechat_id → 手机号 → 昵称模糊匹配，首次匹配自动绑定 | ✅ 代码完成 |
+| 群聊被动监听 | 消息缓冲 + 关键词触发 → Claude 分析 → 自动提取任务/会议/决定 | ✅ 代码完成 |
+| 主动提醒调度 | Celery 定时（15分钟）检查：即将到期、已逾期、未确认、即将开始的会议 | ✅ 代码完成 |
+| 图片识别 | Claude Vision 分析图片消息，支持任务截图和人物识别 | ✅ 代码完成 |
+
+**部署阻塞项：**
+1. `handler.py:259` 调用不存在的 `notifier.notify_meeting_notification()`，运行时会崩溃
+2. `.env.example` 缺少 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
+3. `_pending_users` / `_group_buffers` 为内存状态，容器重启丢失（需迁移到 Redis）
+4. 异常处理全部用 `print()`，需改用结构化日志
+5. Nginx 未配置微信 5 秒超时优化
 
 **新建文件：**
 - `app/wechat/crypto.py` — 消息加解密（AES-CBC + 签名验证）
@@ -210,11 +217,11 @@
 
 ### Phase 5 (2026-05-17)
 
-| 功能 | 说明 |
-|------|------|
-| 腾讯会议 API | 创建/查询/取消会议，HMAC-SHA256 签名，可自动关联本地会议记录 |
-| MinIO 文件上传 | 通用上传（50MB 限制）+ 会议附件 + 删除，自动创建 bucket |
-| 企业微信群机器人 | 完整实现（已在 WeChat Bot 阶段完成） |
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 腾讯会议 API | 创建/查询/取消会议，HMAC-SHA256 签名，可自动关联本地会议记录 | ⚠️ 代码完成，未部署（无凭据、无 OAuth、无 Webhook、Agent 未集成） |
+| MinIO 文件上传 | 通用上传（50MB 限制）+ 会议附件 + 删除，自动创建 bucket | ✅ 完成 |
+| 企业微信群机器人 | 完整实现（已在 WeChat Bot 阶段完成） | ⚠️ 代码完成，未部署（见 WeChat Bot 部署阻塞项） |
 
 **新建文件：**
 - `app/services/tencent_meeting_service.py` — 腾讯会议 API 客户端（HMAC-SHA256 签名）
@@ -225,3 +232,36 @@
 **修改文件：**
 - `app/main.py` — 注册 upload 和 tencent_meeting 路由
 - `requirements.txt` — 恢复 minio==7.2.0
+
+---
+
+## 待完成：生产部署与上线
+
+### 企业微信部署
+
+- [ ] 修复 `handler.py:259` 运行时 bug（`notify_meeting_notification` 方法不存在）
+- [ ] `.env.example` 补全 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
+- [ ] 内存状态（`_pending_users` / `_group_buffers`）迁移到 Redis
+- [ ] 异常处理改用结构化日志（`app.core.logging`）
+- [ ] @提及检测改为匹配企业微信实际 XML 格式
+- [ ] Nginx 配置微信 Webhook 5 秒超时优化
+
+### 腾讯会议部署
+
+- [ ] 申请并配置真实 API 凭据（`TENCENT_MEETING_APP_ID` / `TENCENT_MEETING_APP_SECRET`）
+- [ ] 实现 OAuth 用户级认证（部分 API 操作需要）
+- [ ] 添加 Webhook 回调端点（会议生命周期事件）
+- [ ] Agent 的 `create_meeting` 工具集成腾讯会议 API
+- [ ] 添加错误重试和限流处理
+- [ ] 添加单元测试
+
+### 生产基础设施
+
+- [ ] docker-compose.yml 添加 web（前端）服务
+- [ ] 添加 Nginx 反向代理服务到 compose（含 SSL 终结）
+- [ ] 配置 SSL 证书（`agent.mnb-lab.cn`）
+- [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
+- [ ] 创建 CI/CD 流水线（GitHub Actions）
+- [ ] 编写部署文档（`docs/deploy.md`）
+- [ ] Whisper GPU 部署的 compose 变体
+- [ ] 生产环境加固：日志轮转、监控、备份脚本

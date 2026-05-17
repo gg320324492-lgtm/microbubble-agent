@@ -29,6 +29,9 @@ data/
 logs/
 models/
 
+# SSL 证书
+nginx/ssl/
+
 # Docker
 docker-compose.override.yml
 
