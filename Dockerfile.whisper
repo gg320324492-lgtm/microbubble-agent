@@ -21,8 +21,12 @@ RUN pip3 install --no-cache-dir faster-whisper==1.0.0
 # 创建模型目录
 RUN mkdir -p /app/models
 
+# 环境变量（可通过 docker-compose 覆盖）
+ENV MODEL_SIZE=base
+ENV DEVICE=cpu
+
 # 暴露端口
 EXPOSE 8002
 
-# 启动命令 - 使用 base 模型（CPU模式，节省内存）
-CMD ["python3", "-m", "faster_whisper.server", "--host", "0.0.0.0", "--port", "8002", "--model", "base", "--device", "cpu"]
+# 启动命令 - 使用环境变量配置模型和设备
+CMD python3 -m faster_whisper.server --host 0.0.0.0 --port 8002 --model ${MODEL_SIZE} --device ${DEVICE}

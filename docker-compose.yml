@@ -19,8 +19,8 @@ services:
   # 主应用
   app:
     build: .
-    expose:
-      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
@@ -72,7 +72,7 @@ services:
     command: server /data --console-address ":9001"
     restart: unless-stopped
 
-  # Whisper语音识别服务 (CPU模式)
+  # Whisper语音识别服务 (GPU模式)
   whisper:
     build:
       context: .
@@ -81,7 +81,14 @@ services:
       - ./models:/app/models
     environment:
       - MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
-      - DEVICE=cpu
+      - DEVICE=${WHISPER_DEVICE:-cuda}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     restart: unless-stopped
 
   # Celery Worker (异步任务)
