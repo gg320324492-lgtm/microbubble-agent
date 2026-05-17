@@ -35,7 +35,10 @@ class MicroBubbleAgent:
     """微纳米气泡课题组Agent核心"""
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(api_key=settings.CLAUDE_API_KEY)
+        self.client = anthropic.AsyncAnthropic(
+            api_key=settings.CLAUDE_API_KEY,
+            base_url=settings.CLAUDE_BASE_URL or None,
+        )
         self.model = "claude-sonnet-4-20250514"
         self.system_prompt = SYSTEM_PROMPT
         self.tools = TOOLS

@@ -57,7 +57,10 @@ class ConversationAnalyzer:
     """对话智能分析器"""
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(api_key=settings.CLAUDE_API_KEY)
+        self.client = anthropic.AsyncAnthropic(
+            api_key=settings.CLAUDE_API_KEY,
+            base_url=settings.CLAUDE_BASE_URL or None,
+        )
         self.model = "claude-sonnet-4-20250514"
 
     async def analyze(self, messages: List[Dict[str, str]]) -> Dict:
