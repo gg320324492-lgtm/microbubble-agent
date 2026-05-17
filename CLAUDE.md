@@ -7,11 +7,11 @@
 - 后端: Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery
 - 前端: Vue 3 + Vite + Element Plus
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
-- 部署: Docker Compose (7 services: app, db, redis, minio, whisper, celery-worker, celery-beat)，web 前端服务未编排
+- 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 7 services + GPU Whisper)，通过 FRP 隧道连接
 
 ## 当前开发阶段
 
-项目处于**代码开发基本完成，生产部署待开始**阶段。Phase 1-4 代码已完成，Phase 5 部分完成（MinIO 文件上传已完成，企业微信和腾讯会议代码完成但未部署）。详见 `ROADMAP.md`。
+项目处于**部署进行中**阶段。Phase 1-4 代码已完成，Phase 5 部分完成。部署采用云服务器（Nginx+FRP）+ 本地电脑（Docker 全服务+GPU）的穿透架构。详见 `ROADMAP.md`。
 
 ## 关键架构决策
 
@@ -42,4 +42,6 @@
 - 登录页硬编码账号已移除，改为"请联系管理员获取账号密码"
 - Agent 的 `generate_project_plan` 工具会调用 Claude API 两次（生成计划 + 对话），注意 token 消耗
 - 企业微信和腾讯会议代码完成但未部署，存在已知 bug 和配置缺失（详见 ROADMAP.md）
-- 生产部署缺少：前端容器编排、Nginx 反向代理、SSL 证书、CI/CD 流水线（详见 ROADMAP.md 待完成部分）
+- 部署架构：云服务器跑 Nginx+FRP，本地电脑跑全部 Docker 服务，FRP 穿透 8000 端口
+- Claude API 使用代理地址（`CLAUDE_BASE_URL`），支持第三方 API 中转
+- 生产部署待完成：SSL 证书申请、企业微信 bug 修复、腾讯会议凭据配置（详见 ROADMAP.md）
