@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Claude API
     CLAUDE_API_KEY: str = ""
+    CLAUDE_BASE_URL: str = ""
 
     # 腾讯会议
     TENCENT_MEETING_APP_ID: str = ""

@@ -52,7 +52,10 @@ class VisionService:
         """
         import anthropic
 
-        client = anthropic.AsyncAnthropic(api_key=settings.CLAUDE_API_KEY)
+        client = anthropic.AsyncAnthropic(
+            api_key=settings.CLAUDE_API_KEY,
+            base_url=settings.CLAUDE_BASE_URL or None,
+        )
         image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
 
         response = await client.messages.create(
