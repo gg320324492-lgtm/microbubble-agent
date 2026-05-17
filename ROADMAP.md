@@ -259,17 +259,16 @@
 - [x] Claude API 支持代理地址（`CLAUDE_BASE_URL` 配置项）
 - [x] `.env.example` 补全 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
 
-### 云服务器部署（进行中）
+### 云服务器部署 ✅
 
 - [x] FRP 服务端安装（v0.61.1，已配置 systemd 自启动）
 - [x] FRP 服务端配置（端口 7000，token 认证）
 - [x] Nginx 安装
-- [ ] 前端构建 — ⏳ 服务器构建慢，改为本地构建 scp 上传（Git Bash SSH 连接超时，待解决）
-- [ ] Nginx 配置部署（HTTP 模式先跑通）
-- [ ] 防火墙配置（开放 80/443/7000 端口）
-- [ ] 恢复之前的网站配置（部署脚本可能覆盖了原有 Nginx 配置）
-- [ ] SSL 证书申请（`agent.mnb-lab.cn`）
-- [ ] Nginx 切换到 HTTPS 模式
+- [x] 前端构建并部署（本地构建 → 压缩 → 阿里云文件管理上传 → 服务器解压）
+- [x] Nginx 配置部署（更新已有 agent 配置，HTTPS + SSL 已有证书）
+- [x] 防火墙配置（开放 80/443/7000 端口）
+- [x] 恢复之前的网站配置 ✅
+- [x] SSL 证书（已有 Let's Encrypt 证书，直接复用）
 
 ### 本地电脑部署（进行中）
 
