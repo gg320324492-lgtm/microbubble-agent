@@ -249,7 +249,7 @@
 
 ## 待完成：生产部署与上线
 
-### 部署基础设施 ✅
+### 部署代码准备 ✅
 
 - [x] docker-compose.yml 添加 Nginx 服务 + app 端口映射
 - [x] 创建 Nginx 生产配置（HTTP/HTTPS，安全头，WebSocket 代理）
@@ -258,7 +258,28 @@
 - [x] Whisper 改为 GPU 模式（Dockerfile.whisper 支持环境变量配置）
 - [x] Claude API 支持代理地址（`CLAUDE_BASE_URL` 配置项）
 - [x] `.env.example` 补全 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
-- [ ] 配置 SSL 证书（`agent.mnb-lab.cn`）— 需在云服务器上运行 `setup-ssl.sh`
+
+### 云服务器部署（进行中）
+
+- [x] FRP 服务端安装（v0.61.1，已配置 systemd 自启动）
+- [x] FRP 服务端配置（端口 7000，token 认证）
+- [x] Nginx 安装
+- [x] 前端构建并上传（本地构建 scp 到服务器）
+- [ ] Nginx 配置部署（HTTP 模式先跑通）
+- [ ] 防火墙配置（开放 80/443/7000 端口）
+- [ ] 恢复之前的网站配置（部署脚本可能覆盖了原有 Nginx 配置）
+- [ ] SSL 证书申请（`agent.mnb-lab.cn`）
+- [ ] Nginx 切换到 HTTPS 模式
+
+### 本地电脑部署（未开始）
+
+- [ ] 安装 Docker Desktop
+- [ ] 配置 .env 文件（Claude API Key + 代理地址）
+- [ ] 运行 `deploy-local.sh`（Docker 全服务 + FRP 客户端）
+- [ ] 联调测试（通过域名访问，测试各功能）
+
+### 后续优化（低优先级）
+
 - [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
 - [ ] 创建 CI/CD 流水线（GitHub Actions）
 - [ ] 编写部署文档（`docs/deploy.md`）
