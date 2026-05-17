@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     libpq-dev \
     gcc \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装Python依赖
