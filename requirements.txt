@@ -18,7 +18,7 @@ celery==5.3.6
 minio==7.2.0
 
 # AI相关
-anthropic==0.18.0
+anthropic>=0.39.0
 
 # 语音识别
 faster-whisper==1.2.1
