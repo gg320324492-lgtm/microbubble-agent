@@ -248,6 +248,16 @@ async def meeting_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 await db.commit()
                 logger.info(f"本地会议 {meeting.id} 状态更新为 {new_status}")
 
+                # 会议结束时，如果有转写内容则自动分析
+                if event_type == "meeting_ended" and meeting.transcript:
+                    try:
+                        from app.services.meeting_service import MeetingService
+                        meeting_service = MeetingService(db)
+                        await meeting_service.process_meeting_transcript(meeting.id)
+                        logger.info(f"会议 {meeting.id} 结束，自动分析完成")
+                    except Exception as e:
+                        logger.error(f"会议自动分析失败: {e}", exc_info=True)
+
         return {"code": 0, "message": "ok"}
 
     except HTTPException:

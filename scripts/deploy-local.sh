@@ -177,6 +177,9 @@ EOF
     info "初始化数据库..."
     $COMPOSE_CMD exec -T app python scripts/init_db.py || warn "数据库可能已初始化"
 
+    info "运行数据库迁移..."
+    $COMPOSE_CMD exec -T app alembic upgrade head || warn "迁移可能已执行"
+
     echo ""
     info "服务状态:"
     $COMPOSE_CMD ps

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # Claude API
     CLAUDE_API_KEY: str = ""
     CLAUDE_BASE_URL: str = ""
+    CLAUDE_MODEL: str = ""  # 留空则使用各模块默认模型
 
     # 腾讯会议
     TENCENT_MEETING_SDK_ID: str = ""
@@ -42,6 +43,7 @@ class Settings(BaseSettings):
     WECHAT_ENCODING_AES_KEY: str = ""
     WECHAT_API_BASE_URL: str = "https://qyapi.weixin.qq.com"
     WECHAT_EXTERNAL_SENDER: str = ""  # 外部联系人消息的发送者（企业微信userid）
+    WECHAT_NOTIFY_CHAT_ID: str = ""  # 会议/任务通知推送的默认群聊ID
 
     # Whisper
     WHISPER_MODEL_SIZE: str = "large-v3"
