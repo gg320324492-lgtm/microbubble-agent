@@ -43,7 +43,7 @@
 
 - [x] **企业微信群机器人** -- 5 个部署阻塞项已全部修复（运行时 bug、配置补全、@提及检测、Redis 持久化、结构化日志），代码就绪待上线
 - [x] **微信互通（普通微信用户支持）** -- 课题组成员可用私人微信与机器人对话（私聊+群聊），无需下载企业微信。通过企业微信「微信互通」外部联系人功能实现
-- [ ] **腾讯会议 API 集成** -- ⚠️ 代码框架完成，无法实际使用。无真实 API 凭据，无 OAuth 用户认证，无 Webhook 回调端点，Agent 的 `create_meeting` 工具不调用腾讯 API，无测试覆盖
+- [x] **腾讯会议 API 集成** -- 签名算法修正、Agent `create_meeting` 自动创建线上会议、Webhook 回调端点、错误重试。需配置凭据后测试
 - [x] **MinIO 文件上传** -- 通用上传 + 会议附件上传 + 删除，自动创建 bucket
 - [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
 - [x] **通知 badge 真实数据** -- 改为从 API 获取待处理提醒数量，user store 管理
@@ -248,7 +248,7 @@
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| 腾讯会议 API | 创建/查询/取消会议，HMAC-SHA256 签名，可自动关联本地会议记录 | ⚠️ 代码完成，未部署（无凭据、无 OAuth、无 Webhook、Agent 未集成） |
+| 腾讯会议 API | 创建/查询/取消/结束会议，HMAC-SHA256 签名，Webhook 回调，Agent 自动创建线上会议，错误重试 | ✅ 代码完成，待配置凭据测试 |
 | MinIO 文件上传 | 通用上传（50MB 限制）+ 会议附件 + 删除，自动创建 bucket | ✅ 完成 |
 | 企业微信群机器人 | 完整实现（已在 WeChat Bot 阶段完成） | ⚠️ 代码完成，未部署（见 WeChat Bot 部署阻塞项） |
 
@@ -335,9 +335,12 @@
 
 ### 腾讯会议部署
 
-- [ ] 申请并配置真实 API 凭据（`TENCENT_MEETING_APP_ID` / `TENCENT_MEETING_APP_SECRET`）
-- [ ] 实现 OAuth 用户级认证（部分 API 操作需要）
-- [ ] 添加 Webhook 回调端点（会议生命周期事件）
-- [ ] Agent 的 `create_meeting` 工具集成腾讯会议 API
-- [ ] 添加错误重试和限流处理
-- [ ] 添加单元测试
+- [x] 修正签名算法（HMAC-SHA256，URI 加 openapi 前缀）
+- [x] 添加 `host.userid` 参数（创建会议必须）
+- [x] Agent `create_meeting` 工具集成腾讯会议 API（自动创建线上会议）
+- [x] 添加 Webhook 回调端点（`/api/v1/tencent-meeting/webhook`）
+- [x] 添加错误重试（3 次，指数退避）
+- [x] 新增 list/end 端点
+- [ ] 申请并配置真实 API 凭据（`TENCENT_MEETING_SDK_ID` / `TENCENT_MEETING_SDK_KEY` / `TENCENT_MEETING_USERID`）
+- [ ] 企业微信管理后台配置 Webhook 回调 URL
+- [ ] 凭据到位后端到端测试

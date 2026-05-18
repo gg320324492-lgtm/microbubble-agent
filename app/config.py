@@ -30,8 +30,9 @@ class Settings(BaseSettings):
     CLAUDE_BASE_URL: str = ""
 
     # 腾讯会议
-    TENCENT_MEETING_APP_ID: str = ""
-    TENCENT_MEETING_APP_SECRET: str = ""
+    TENCENT_MEETING_SDK_ID: str = ""
+    TENCENT_MEETING_SDK_KEY: str = ""
+    TENCENT_MEETING_USERID: str = ""  # 默认主持人企业用户ID
 
     # 企业微信
     WECHAT_CORP_ID: str = ""

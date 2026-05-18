@@ -333,7 +333,33 @@ class MicroBubbleAgent:
                     location=input_data.get("location"),
                     participant_ids=participant_ids
                 )
-                return {"status": "success", "meeting_id": meeting.id, "title": meeting.title}
+
+                result = {"status": "success", "meeting_id": meeting.id, "title": meeting.title}
+
+                # 如果腾讯会议已配置，自动创建线上会议
+                from app.services.tencent_meeting_service import tencent_meeting
+                if tencent_meeting.is_configured:
+                    try:
+                        start_ts = start_time.strftime("%Y-%m-%d %H:%M:%S")
+                        tm_result = await tencent_meeting.create_meeting(
+                            subject=input_data["title"],
+                            start_time=start_ts
+                        )
+                        meeting_info = tm_result.get("meeting_info", {})
+                        join_url = meeting_info.get("join_url", "")
+                        tm_meeting_id = meeting_info.get("meeting_id", "")
+                        if join_url:
+                            await meeting_svc.update_meeting(
+                                meeting.id,
+                                meeting_url=join_url,
+                                meeting_id=tm_meeting_id
+                            )
+                            result["join_url"] = join_url
+                            result["tencent_meeting_id"] = tm_meeting_id
+                    except Exception as e:
+                        logger.warning(f"创建腾讯会议失败（本地会议已创建）: {e}")
+
+                return result
 
             elif name == "query_projects":
                 proj_svc = ProjectService(db)
