@@ -123,11 +123,20 @@ const handleLogin = async () => {
 }
 
 .login-card {
-  width: 400px;
+  width: min(400px, 90vw);
   padding: 40px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    padding: 24px;
+  }
+  .login-header h1 {
+    font-size: 20px;
+  }
 }
 
 .login-header {

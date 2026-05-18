@@ -3,7 +3,7 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="searchName"
             placeholder="搜索成员姓名"
@@ -15,7 +15,7 @@
             </template>
           </el-input>
         </el-col>
-        <el-col :span="8">
+        <el-col :xs="12" :sm="12" :md="8">
           <el-select v-model="searchGrade" placeholder="年级" clearable>
             <el-option label="教授" value="教授" />
             <el-option label="博士后" value="博士后" />
@@ -26,7 +26,7 @@
             <el-option label="研三" value="研三" />
           </el-select>
         </el-col>
-        <el-col :span="8">
+        <el-col :xs="12" :sm="12" :md="8">
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             添加成员
@@ -101,7 +101,7 @@
     <el-dialog
       v-model="showCreateDialog"
       :title="editingMember ? '编辑成员' : '添加成员'"
-      width="500px"
+      :width="isMobile ? '90vw' : '500px'"
     >
       <el-form :model="memberForm" label-width="80px">
         <el-form-item label="姓名" required>
@@ -174,6 +174,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 
 const router = useRouter()
+const isMobile = ref(window.innerWidth <= 768)
 const members = ref([])
 const searchName = ref('')
 const searchGrade = ref('')
@@ -285,7 +286,7 @@ onMounted(() => {
 
 .member-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
 }
 

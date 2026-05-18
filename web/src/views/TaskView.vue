@@ -3,7 +3,7 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :span="6">
+        <el-col :xs="12" :sm="12" :md="6">
           <el-select v-model="filters.status" placeholder="任务状态" clearable>
             <el-option label="待办" value="todo" />
             <el-option label="进行中" value="in_progress" />
@@ -11,7 +11,7 @@
             <el-option label="已完成" value="done" />
           </el-select>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="12" :sm="12" :md="6">
           <el-select v-model="filters.assignee_id" placeholder="负责人" clearable>
             <el-option
               v-for="member in members"
@@ -21,14 +21,14 @@
             />
           </el-select>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="12" :sm="12" :md="6">
           <el-select v-model="filters.priority" placeholder="优先级" clearable>
             <el-option label="高" value="high" />
             <el-option label="中" value="medium" />
             <el-option label="低" value="low" />
           </el-select>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="12" :sm="12" :md="6">
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             创建任务
@@ -39,6 +39,7 @@
 
     <!-- 任务列表 -->
     <el-card class="task-list-card">
+      <div style="overflow-x: auto">
       <el-table :data="tasks" stripe style="width: 100%">
         <el-table-column prop="title" label="任务标题" min-width="200">
           <template #default="{ row }">
@@ -95,6 +96,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </div>
 
       <!-- 分页 -->
       <div class="pagination">
@@ -114,7 +116,7 @@
     <el-dialog
       v-model="showCreateDialog"
       :title="editingTask ? '编辑任务' : '创建任务'"
-      width="500px"
+      :width="isMobile ? '90vw' : '500px'"
     >
       <el-form :model="taskForm" label-width="80px">
         <el-form-item label="任务标题" required>
@@ -177,6 +179,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 
+const isMobile = ref(window.innerWidth <= 768)
 const tasks = ref([])
 const members = ref([])
 const total = ref(0)

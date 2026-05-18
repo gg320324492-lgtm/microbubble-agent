@@ -3,14 +3,14 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :span="8">
+        <el-col :xs="12" :sm="12" :md="8">
           <el-select v-model="filters.status" placeholder="项目状态" clearable>
             <el-option label="进行中" value="active" />
             <el-option label="已暂停" value="paused" />
             <el-option label="已完成" value="completed" />
           </el-select>
         </el-col>
-        <el-col :span="8" :offset="8">
+        <el-col :xs="12" :sm="12" :md="8">
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             创建项目
@@ -70,7 +70,7 @@
     </div>
 
     <!-- 创建项目对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建项目" width="500px">
+    <el-dialog v-model="showCreateDialog" title="创建项目" :width="isMobile ? '90vw' : '500px'">
       <el-form :model="projectForm" label-width="80px">
         <el-form-item label="项目名称" required>
           <el-input v-model="projectForm.name" placeholder="请输入项目名称" />
@@ -119,7 +119,7 @@
     </el-dialog>
 
     <!-- 项目详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="项目详情" width="700px">
+    <el-dialog v-model="showDetailDialog" title="项目详情" :width="isMobile ? '95vw' : '700px'">
       <div v-if="currentProject" class="project-detail">
         <h2>{{ currentProject.name }}</h2>
         <el-descriptions :column="2" border>
@@ -170,6 +170,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 
+const isMobile = ref(window.innerWidth <= 768)
 const projects = ref([])
 const members = ref([])
 const milestones = ref([])
@@ -327,7 +328,7 @@ onMounted(() => {
 
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
 }
 
