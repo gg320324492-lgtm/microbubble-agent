@@ -7,10 +7,13 @@
 - 会议前30分钟 → 提醒参会者
 """
 
+import logging
 from datetime import datetime, timedelta
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+
+logger = logging.getLogger("microbubble.wechat.scheduler")
 
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
@@ -72,7 +75,7 @@ class ProactiveScheduler:
                 await wechat_bot.send_message(member.wechat_id, content)
                 count += 1
             except Exception as e:
-                print(f"提醒失败 [{member.name}]: {e}")
+                logger.warning(f"提醒失败 [{member.name}]: {e}")
 
         return count
 
@@ -111,7 +114,7 @@ class ProactiveScheduler:
 
                 count += 1
             except Exception as e:
-                print(f"逾期提醒失败 [{member.name}]: {e}")
+                logger.warning(f"逾期提醒失败 [{member.name}]: {e}")
 
         return count
 
@@ -137,11 +140,11 @@ class ProactiveScheduler:
                 continue
 
             try:
-                content = f"📋 任务确认提醒\n\n📌 {task.title}\n⏰ 分配已超过24小时\n\n请回复"收到"确认，或说明情况。"
+                content = f"📋 任务确认提醒\n\n📌 {task.title}\n⏰ 分配已超过24小时\n\n请回复「收到」确认，或说明情况。"
                 await wechat_bot.send_message(member.wechat_id, content)
                 count += 1
             except Exception as e:
-                print(f"确认提醒失败 [{member.name}]: {e}")
+                logger.warning(f"确认提醒失败 [{member.name}]: {e}")
 
         return count
 
@@ -174,7 +177,7 @@ class ProactiveScheduler:
                                 await wechat_bot.send_message(member.wechat_id, content)
                                 count += 1
             except Exception as e:
-                print(f"会议提醒失败: {e}")
+                logger.warning(f"会议提醒失败: {e}")
 
         return count
 
@@ -191,7 +194,7 @@ def run_proactive_checks():
 
     async def _run():
         result = await scheduler.run_all_checks()
-        print(f"主动提醒完成: {result}")
+        logger.info(f"主动提醒完成: {result}")
         return result
 
     return asyncio.run(_run())

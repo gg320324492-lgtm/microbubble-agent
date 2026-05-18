@@ -1,9 +1,10 @@
 """企业微信消息处理模块 - 被动监听 + 主动分析 + 多模态"""
 
 import re
+import json
 import asyncio
+import logging
 from datetime import datetime, timedelta
-from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -15,22 +16,66 @@ from app.wechat.bot import wechat_bot
 from app.wechat.identity import identity_resolver
 from app.wechat.analyzer import analyzer
 from app.services.vision_service import vision_service
+from app.core.redis import get_redis
+
+logger = logging.getLogger("microbubble.wechat")
 
 
 class MessageHandler:
     """企业微信消息处理器"""
 
-    # 待绑定用户缓存
-    _pending_users: dict = {}
-
-    # 群聊消息缓冲区（被动监听用）
-    # key: chat_id, value: {"messages": [...], "last_analysis": datetime}
-    _group_buffers: dict = defaultdict(lambda: {"messages": [], "last_analysis": None})
-
     # 缓冲区配置
     BUFFER_MAX_MESSAGES = 10       # 消息数达到此值触发分析
     BUFFER_MAX_SECONDS = 300       # 或时间达到5分钟触发分析
     BUFFER_COOLDOWN = 60           # 分析冷却期（秒）
+    PENDING_USER_TTL = 1800        # 待绑定用户过期时间（30分钟）
+    GROUP_BUFFER_TTL = 600         # 群聊缓冲区过期时间（10分钟）
+
+    # ==================== Redis 状态管理 ====================
+
+    async def _get_pending_user(self, user_id: str) -> dict | None:
+        """从 Redis 获取待绑定用户状态"""
+        r = await get_redis()
+        data = await r.get(f"wechat:pending:{user_id}")
+        return json.loads(data) if data else None
+
+    async def _set_pending_user(self, user_id: str, state: dict) -> None:
+        """保存待绑定用户状态到 Redis"""
+        r = await get_redis()
+        await r.set(
+            f"wechat:pending:{user_id}",
+            json.dumps(state, ensure_ascii=False),
+            ex=self.PENDING_USER_TTL
+        )
+
+    async def _delete_pending_user(self, user_id: str) -> None:
+        """删除待绑定用户状态"""
+        r = await get_redis()
+        await r.delete(f"wechat:pending:{user_id}")
+
+    async def _get_group_buffer(self, chat_id: str) -> dict:
+        """从 Redis 获取群聊缓冲区"""
+        r = await get_redis()
+        data = await r.get(f"wechat:buffer:{chat_id}")
+        if data:
+            buf = json.loads(data)
+            if buf.get("last_analysis"):
+                buf["last_analysis"] = datetime.fromisoformat(buf["last_analysis"])
+            return buf
+        return {"messages": [], "last_analysis": None}
+
+    async def _save_group_buffer(self, chat_id: str, buffer: dict) -> None:
+        """保存群聊缓冲区到 Redis"""
+        r = await get_redis()
+        save_data = {
+            "messages": buffer["messages"],
+            "last_analysis": buffer["last_analysis"].isoformat() if buffer["last_analysis"] else None
+        }
+        await r.set(
+            f"wechat:buffer:{chat_id}",
+            json.dumps(save_data, ensure_ascii=False, default=str),
+            ex=self.GROUP_BUFFER_TTL
+        )
 
     async def handle_message(self, msg: dict, db: AsyncSession) -> None:
         """路由处理消息"""
@@ -102,7 +147,7 @@ class MessageHandler:
         - 距上次分析超过 BUFFER_MAX_SECONDS
         - 消息中包含关键词（任务、安排、决定等）
         """
-        buffer = self._group_buffers[chat_id]
+        buffer = await self._get_group_buffer(chat_id)
         buffer["messages"].append({
             "speaker": member.name,
             "speaker_id": member.id,
@@ -130,10 +175,12 @@ class MessageHandler:
 
         if should_analyze:
             await self._analyze_and_act(chat_id, db)
+        else:
+            await self._save_group_buffer(chat_id, buffer)
 
     async def _analyze_and_act(self, chat_id: str, db: AsyncSession) -> None:
         """分析缓冲区消息，提取行动项并执行"""
-        buffer = self._group_buffers[chat_id]
+        buffer = await self._get_group_buffer(chat_id)
         messages = buffer["messages"]
 
         if not messages:
@@ -145,9 +192,10 @@ class MessageHandler:
             if elapsed < self.BUFFER_COOLDOWN:
                 return
 
-        # 清空缓冲区
+        # 清空缓冲区并保存到 Redis
         buffer["messages"] = []
         buffer["last_analysis"] = datetime.utcnow()
+        await self._save_group_buffer(chat_id, buffer)
 
         try:
             # 调用分析器
@@ -176,7 +224,7 @@ class MessageHandler:
                 await self._auto_send_reminder(reminder, db)
 
         except Exception as e:
-            print(f"群聊分析失败: {e}")
+            logger.error("群聊分析失败", exc_info=True)
 
     async def _auto_create_task(self, task_info: dict, messages: list,
                                   chat_id: str, db: AsyncSession) -> None:
@@ -256,12 +304,15 @@ class MessageHandler:
             members = await identity_resolver.fuzzy_search(name, db)
             for m in members:
                 if m.wechat_id:
-                    await notifier.notify_meeting_notification(
-                        user_id=m.wechat_id,
-                        meeting_title=title,
-                        meeting_time=time,
-                        location=location
-                    )
+                    try:
+                        await wechat_bot.send_meeting_notification(
+                            user_id=m.wechat_id,
+                            meeting_title=title,
+                            meeting_time=time,
+                            location=location
+                        )
+                    except Exception as e:
+                        logger.warning(f"会议通知发送失败 [{m.name}]: {e}")
 
     async def _auto_send_reminder(self, reminder_info: dict, db: AsyncSession) -> None:
         """自动发送提醒"""
@@ -277,7 +328,7 @@ class MessageHandler:
                 try:
                     await wechat_bot.send_message(m.wechat_id, f"🔔 提醒：{content}")
                 except Exception as e:
-                    print(f"提醒发送失败 [{m.name}]: {e}")
+                    logger.warning(f"提醒发送失败 [{m.name}]: {e}")
 
     # ==================== 私聊处理 ====================
 
@@ -320,7 +371,7 @@ class MessageHandler:
             # 群聊回复
             await wechat_bot.send_to_group(chat_id, reply, msg_type="text")
         except Exception as e:
-            print(f"群聊 Agent 调用失败: {e}")
+            logger.error(f"群聊 Agent 调用失败: {e}", exc_info=True)
             await wechat_bot.send_to_group(chat_id, "处理消息时出错了，请稍后再试。")
 
     async def _handle_group_image(self, msg: dict, member: Member,
@@ -333,7 +384,7 @@ class MessageHandler:
                 analysis = await vision_service.analyze_image(image_data)
                 await wechat_bot.send_to_group(chat_id, f"📷 图片分析：\n{analysis}")
         except Exception as e:
-            print(f"群聊图片处理失败: {e}")
+            logger.error(f"群聊图片处理失败: {e}", exc_info=True)
 
     async def _handle_group_voice(self, msg: dict, member: Member,
                                     chat_id: str, db: AsyncSession) -> None:
@@ -371,7 +422,7 @@ class MessageHandler:
                 analysis = await vision_service.analyze_image(image_data)
                 await self._reply_text(user_id, f"📷 图片内容：\n{analysis}")
         except Exception as e:
-            print(f"图片处理失败: {e}")
+            logger.error(f"图片处理失败: {e}", exc_info=True)
             await self._reply_text(user_id, "图片处理出错了。")
 
     async def _handle_voice(self, msg: dict, member: Member, db: AsyncSession) -> None:
@@ -405,7 +456,7 @@ class MessageHandler:
             else:
                 await self._reply_text(user_id, "语音识别失败，请改用文字。")
         except Exception as e:
-            print(f"语音处理失败: {e}")
+            logger.error(f"语音处理失败: {e}", exc_info=True)
             await self._reply_text(user_id, "语音处理出错了。")
 
     # ==================== 工具方法 ====================
@@ -413,9 +464,16 @@ class MessageHandler:
     def _is_bot_mentioned(self, msg: dict) -> bool:
         """判断消息是否 @了机器人"""
         content = msg.get("Content", "")
-        # 企业微信群聊中，@机器人会在消息中包含特定标记
-        # 也可能通过 ChatId 和 AgentID 判断
-        return "@机器人" in content or "@小气" in content or msg.get("ChatId", "") == ""
+        # 企业微信 @应用 的实际格式:  @应用名 或 @应用名
+        # 同时检查 ToUserName 是否为 AgentID（另一种 @标识方式）
+        from app.config import settings
+        agent_id = msg.get("ToUserName", "")
+        return (
+            "@小气" in content
+            or "@机器人" in content
+            or " @" in content  # 企业微信 @分隔符（四角空格）
+            or (agent_id and settings.WECHAT_AGENT_ID and agent_id == settings.WECHAT_AGENT_ID)
+        )
 
     def _strip_bot_mention(self, content: str) -> str:
         """去掉 @机器人 前缀"""
@@ -428,7 +486,8 @@ class MessageHandler:
         if member:
             return member
 
-        if user_id in self._pending_users:
+        pending = await self._get_pending_user(user_id)
+        if pending:
             return None
 
         nickname = msg.get("NickName", "")
@@ -443,8 +502,9 @@ class MessageHandler:
     async def _handle_unknown_user(self, user_id: str, msg_type: str,
                                      msg: dict, db: AsyncSession) -> None:
         """未知用户自引导绑定"""
-        if user_id not in self._pending_users:
-            self._pending_users[user_id] = {"awaiting": True, "attempts": 0}
+        pending = await self._get_pending_user(user_id)
+        if not pending:
+            await self._set_pending_user(user_id, {"awaiting": True, "attempts": 0})
             await self._reply_text(user_id,
                 "你好！👋 我是小气，课题组的AI助手。\n\n"
                 "首次使用需要验证身份，请回复以下任一信息：\n"
@@ -459,22 +519,23 @@ class MessageHandler:
         if not content:
             return
 
-        self._pending_users[user_id]["attempts"] += 1
+        pending["attempts"] += 1
         member = await identity_resolver.resolve_multi_signal(
             nickname=content, mobile=content, db=db)
 
         if member:
             await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
-            del self._pending_users[user_id]
+            await self._delete_pending_user(user_id)
             await self._reply_text(user_id,
                 f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。")
             return
 
-        attempts = self._pending_users[user_id]["attempts"]
+        attempts = pending["attempts"]
         if attempts >= 3:
-            del self._pending_users[user_id]
+            await self._delete_pending_user(user_id)
             await self._reply_text(user_id, "多次匹配未成功，请联系管理员。")
         else:
+            await self._set_pending_user(user_id, pending)
             await self._reply_text(user_id,
                 f"未找到匹配信息（{attempts}/3），请确认后重试。")
 
@@ -567,7 +628,7 @@ class MessageHandler:
                 reply = reply[:1950] + "\n\n...(内容过长已截断)"
             await self._reply_text(user_id, reply)
         except Exception as e:
-            print(f"Agent 调用失败: {e}")
+            logger.error(f"Agent 调用失败: {e}", exc_info=True)
             await self._reply_text(user_id, "处理消息时出错了，请稍后再试。")
 
     async def _reply_text(self, user_id: str, content: str) -> None:
@@ -575,7 +636,7 @@ class MessageHandler:
         try:
             await wechat_bot.send_message(user_id, content, msg_type="text")
         except Exception as e:
-            print(f"回复消息失败: {e}")
+            logger.warning(f"回复消息失败: {e}")
 
 
 # 全局实例
