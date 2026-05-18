@@ -322,6 +322,17 @@
 - [x] @提及检测改为匹配企业微信实际格式（` @` 分隔符 + AgentID 匹配）
 - [x] Nginx 已满足 5 秒超时（异步 `asyncio.create_task` + 立即返回 success）
 
+### 微信互通部署（普通微信用户支持）
+
+- [ ] 企业微信管理后台创建机器人专属成员账号（如 `xiaoqi`）
+- [ ] 开通「客户联系」→ 将 `xiaoqi` 加入可使用范围
+- [ ] 创建「联系我」二维码（单人模式，选 `xiaoqi`）
+- [ ] 配置回调：勾选客户联系相关事件（`change_external_contact`、`change_external_chat`）
+- [ ] `.env` 配置 `WECHAT_EXTERNAL_SENDER=xiaoqi`
+- [ ] 运行数据库迁移：`alembic upgrade head`
+- [ ] 用普通微信扫码添加「小气」，测试私聊消息收发
+- [ ] 创建外部群，测试群聊消息收发
+
 ### 腾讯会议部署
 
 - [ ] 申请并配置真实 API 凭据（`TENCENT_MEETING_APP_ID` / `TENCENT_MEETING_APP_SECRET`）
