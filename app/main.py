@@ -28,9 +28,16 @@ async def lifespan(app: FastAPI):
             warnings.warn("SECRET_KEY 使用了不安全的默认值，生产环境请务必修改")
 
     # 启动时执行
+    # 先尝试安装 pgvector 扩展（单独事务，失败不影响后续操作）
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        print("pgvector 扩展已安装")
+    except Exception as e:
+        print(f"pgvector 扩展安装失败（可忽略，语义搜索将不可用）: {e}")
+
+    # 创建数据库表
     async with engine.begin() as conn:
-        # 安装 pgvector 扩展（用于知识库向量搜索）
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
     print("数据库表创建完成")
     yield
