@@ -23,6 +23,7 @@ class MemberCreate(MemberBase):
     wechat_remark: Optional[str] = None
     personal_wechat_id: Optional[str] = None
     wechat_mobile: Optional[str] = None
+    external_userid: Optional[str] = None
     role: str = "member"
 
 
@@ -43,6 +44,7 @@ class MemberUpdate(BaseModel):
     wechat_remark: Optional[str] = None
     personal_wechat_id: Optional[str] = None
     wechat_mobile: Optional[str] = None
+    external_userid: Optional[str] = None
 
 
 class MemberResponse(MemberBase):
@@ -52,6 +54,7 @@ class MemberResponse(MemberBase):
     wechat_nickname: Optional[str] = None
     wechat_remark: Optional[str] = None
     personal_wechat_id: Optional[str] = None
+    external_userid: Optional[str] = None
     avatar: Optional[str] = None
     is_active: bool
     role: str

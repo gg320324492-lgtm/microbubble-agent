@@ -2,10 +2,16 @@
 
 import httpx
 import json
-from typing import Optional
+import logging
+from typing import Optional, TYPE_CHECKING
 from datetime import datetime
 
 from app.config import settings
+
+if TYPE_CHECKING:
+    from app.models.member import Member
+
+logger = logging.getLogger("microbubble.wechat")
 
 
 class WeChatBot:
@@ -221,6 +227,158 @@ class WeChatBot:
                 json=data
             )
             return response.json()
+
+    async def send_to_external_user(
+        self,
+        external_userid: str,
+        content: str,
+        msg_type: str = "text"
+    ) -> dict:
+        """
+        发送消息给外部联系人（普通微信用户）
+
+        使用 /cgi-bin/externalcontact/message/send API
+
+        Args:
+            external_userid: 外部用户ID（wm 开头）
+            content: 消息内容
+            msg_type: 消息类型（text/markdown）
+
+        Returns:
+            发送结果
+        """
+        token = await self._get_access_token()
+        sender = settings.WECHAT_EXTERNAL_SENDER
+        if not sender:
+            logger.error("未配置 WECHAT_EXTERNAL_SENDER，无法发送外部联系人消息")
+            return {"errcode": -1, "errmsg": "未配置 WECHAT_EXTERNAL_SENDER"}
+
+        if msg_type == "text":
+            data = {
+                "chat_type": "single",
+                "external_userid": [external_userid],
+                "sender": sender,
+                "msg_type": "text",
+                "text": {
+                    "content": content
+                }
+            }
+        elif msg_type == "markdown":
+            # 外部联系人 API 不直接支持 markdown，降级为 text
+            data = {
+                "chat_type": "single",
+                "external_userid": [external_userid],
+                "sender": sender,
+                "msg_type": "text",
+                "text": {
+                    "content": content
+                }
+            }
+        else:
+            raise ValueError(f"不支持的消息类型: {msg_type}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.api_base}/cgi-bin/externalcontact/message/send?access_token={token}",
+                json=data
+            )
+            return response.json()
+
+    async def send_to_external_group(
+        self,
+        chat_id: str,
+        content: str,
+        msg_type: str = "text"
+    ) -> dict:
+        """
+        发送消息到外部群（包含普通微信用户的群）
+
+        使用 /cgi-bin/externalcontact/groupchat/send_chat_msg API
+
+        Args:
+            chat_id: 外部群聊ID
+            content: 消息内容
+            msg_type: 消息类型（text/markdown）
+
+        Returns:
+            发送结果
+        """
+        token = await self._get_access_token()
+
+        if msg_type == "text":
+            data = {
+                "chat_id": chat_id,
+                "msgtype": "text",
+                "text": {
+                    "content": content
+                }
+            }
+        else:
+            data = {
+                "chat_id": chat_id,
+                "msgtype": "text",
+                "text": {
+                    "content": content
+                }
+            }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{self.api_base}/cgi-bin/externalcontact/groupchat/send_chat_msg?access_token={token}",
+                json=data
+            )
+            return response.json()
+
+    async def smart_send(
+        self,
+        member: "Member",
+        content: str,
+        msg_type: str = "text"
+    ) -> dict:
+        """
+        智能发送：根据成员类型自动选择内部/外部 API
+
+        优先使用 external_userid（普通微信用户），否则用 wechat_id（企业微信用户）
+
+        Args:
+            member: 成员对象
+            content: 消息内容
+            msg_type: 消息类型
+
+        Returns:
+            发送结果
+        """
+        if member.external_userid:
+            return await self.send_to_external_user(member.external_userid, content, msg_type)
+        elif member.wechat_id:
+            return await self.send_message(member.wechat_id, content, msg_type)
+        else:
+            logger.warning(f"成员 {member.name} 无可用的微信标识，无法发送消息")
+            return {"errcode": -1, "errmsg": "无可用的微信标识"}
+
+    async def smart_send_to_group(
+        self,
+        chat_id: str,
+        content: str,
+        msg_type: str = "text"
+    ) -> dict:
+        """
+        智能群发：根据 chat_id 前缀自动选择内部群/外部群 API
+
+        外部群 chat_id 以 'wr' 开头，内部群使用 /cgi-bin/appchat/send
+
+        Args:
+            chat_id: 群聊ID
+            content: 消息内容
+            msg_type: 消息类型
+
+        Returns:
+            发送结果
+        """
+        if chat_id.startswith("wr"):
+            return await self.send_to_external_group(chat_id, content, msg_type)
+        else:
+            return await self.send_to_group(chat_id, content, msg_type)
 
     async def reply_to_user(self, user_id: str, content: str, msg_type: str = "text") -> dict:
         """

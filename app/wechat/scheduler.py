@@ -61,7 +61,7 @@ class ProactiveScheduler:
                 continue
 
             member = await db.get(Member, task.assignee_id)
-            if not member or not member.wechat_id:
+            if not member or (not member.wechat_id and not member.external_userid):
                 continue
 
             try:
@@ -72,7 +72,7 @@ class ProactiveScheduler:
                     time_text = f"还有{days_left}天到期"
 
                 content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {task.due_date.strftime('%Y-%m-%d')}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
-                await wechat_bot.send_message(member.wechat_id, content)
+                await wechat_bot.smart_send(member, content)
                 count += 1
             except Exception as e:
                 logger.warning(f"提醒失败 [{member.name}]: {e}")
@@ -97,20 +97,20 @@ class ProactiveScheduler:
                 continue
 
             member = await db.get(Member, task.assignee_id)
-            if not member or not member.wechat_id:
+            if not member or (not member.wechat_id and not member.external_userid):
                 continue
 
             try:
                 days_overdue = (datetime.utcnow() - task.due_date).days
                 content = f"⚠️ 任务逾期\n\n📌 {task.title}\n📅 已逾期{days_overdue}天\n📊 进度: {task.progress}%\n\n请尽快处理！"
-                await wechat_bot.send_message(member.wechat_id, content)
+                await wechat_bot.smart_send(member, content)
 
                 # 同时通知老师
                 if task.created_by:
                     creator = await db.get(Member, task.created_by)
-                    if creator and creator.wechat_id:
+                    if creator and (creator.wechat_id or creator.external_userid):
                         teacher_msg = f"⚠️ 任务逾期通知\n\n📌 {task.title}\n👤 负责人: {member.name}\n📅 已逾期{days_overdue}天\n📊 进度: {task.progress}%"
-                        await wechat_bot.send_message(creator.wechat_id, teacher_msg)
+                        await wechat_bot.smart_send(creator, teacher_msg)
 
                 count += 1
             except Exception as e:
@@ -136,12 +136,12 @@ class ProactiveScheduler:
         count = 0
         for task in tasks:
             member = await db.get(Member, task.assignee_id)
-            if not member or not member.wechat_id:
+            if not member or (not member.wechat_id and not member.external_userid):
                 continue
 
             try:
                 content = f"📋 任务确认提醒\n\n📌 {task.title}\n⏰ 分配已超过24小时\n\n请回复「收到」确认，或说明情况。"
-                await wechat_bot.send_message(member.wechat_id, content)
+                await wechat_bot.smart_send(member, content)
                 count += 1
             except Exception as e:
                 logger.warning(f"确认提醒失败 [{member.name}]: {e}")
@@ -173,8 +173,8 @@ class ProactiveScheduler:
                     for participant in meeting.participants:
                         if participant.member_id:
                             member = await db.get(Member, participant.member_id)
-                            if member and member.wechat_id:
-                                await wechat_bot.send_message(member.wechat_id, content)
+                            if member and (member.wechat_id or member.external_userid):
+                                await wechat_bot.smart_send(member, content)
                                 count += 1
             except Exception as e:
                 logger.warning(f"会议提醒失败: {e}")

@@ -28,6 +28,7 @@ Thumbs.db
 data/
 logs/
 models/
+!app/models/
 
 # SSL 证书
 nginx/ssl/

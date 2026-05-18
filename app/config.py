@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     WECHAT_CALLBACK_TOKEN: str = ""
     WECHAT_ENCODING_AES_KEY: str = ""
     WECHAT_API_BASE_URL: str = "https://qyapi.weixin.qq.com"
+    WECHAT_EXTERNAL_SENDER: str = ""  # 外部联系人消息的发送者（企业微信userid）
 
     # Whisper
     WHISPER_MODEL_SIZE: str = "large-v3"
