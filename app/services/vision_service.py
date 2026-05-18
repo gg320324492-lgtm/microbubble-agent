@@ -25,7 +25,7 @@ class VisionService:
 
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"https://qyapi.weixin.qq.com/cgi-bin/media/get",
+                    f"{settings.WECHAT_API_BASE_URL.rstrip('/')}/cgi-bin/media/get",
                     params={"access_token": token, "media_id": media_id}
                 )
                 if response.status_code == 200:

@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     WECHAT_SECRET: str = ""
     WECHAT_CALLBACK_TOKEN: str = ""
     WECHAT_ENCODING_AES_KEY: str = ""
+    WECHAT_API_BASE_URL: str = "https://qyapi.weixin.qq.com"
 
     # Whisper
     WHISPER_MODEL_SIZE: str = "large-v3"
