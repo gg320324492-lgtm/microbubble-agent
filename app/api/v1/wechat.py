@@ -1,6 +1,7 @@
 """企业微信 Webhook 回调端点"""
 
 import asyncio
+import logging
 from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
@@ -8,6 +9,8 @@ from app.config import settings
 from app.core.database import async_session
 from app.wechat.crypto import WXBizMsgCrypt
 from app.wechat.handler import message_handler
+
+logger = logging.getLogger("microbubble.wechat.api")
 
 router = APIRouter()
 
@@ -70,7 +73,7 @@ async def receive_message(
         return PlainTextResponse(content="success")
 
     except Exception as e:
-        print(f"处理企业微信消息失败: {e}")
+        logger.error(f"处理企业微信消息失败: {e}", exc_info=True)
         return PlainTextResponse(content="success")
 
 
@@ -80,4 +83,4 @@ async def _process_message(msg: dict):
         async with async_session() as db:
             await message_handler.handle_message(msg, db)
     except Exception as e:
-        print(f"异步处理消息失败: {e}")
+        logger.error(f"异步处理消息失败: {e}", exc_info=True)

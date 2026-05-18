@@ -8,6 +8,9 @@
 """
 
 import json
+import logging
+
+logger = logging.getLogger("microbubble.wechat.analyzer")
 import anthropic
 from typing import List, Dict, Optional
 from app.config import settings
@@ -100,7 +103,7 @@ class ConversationAnalyzer:
             return result
 
         except Exception as e:
-            print(f"对话分析失败: {e}")
+            logger.error(f"对话分析失败: {e}", exc_info=True)
             return {"is_actionable": False, "tasks": [], "meetings": [], "decisions": [], "reminders": []}
 
     async def analyze_single_message(self, speaker: str, content: str,
