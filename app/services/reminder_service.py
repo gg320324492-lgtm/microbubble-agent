@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,8 @@ from app.models.task import Task
 from app.models.member import Member
 from app.models.reminder import Reminder
 from app.wechat.bot import wechat_bot
+
+logger = logging.getLogger("microbubble.reminder")
 
 
 class ReminderService:
@@ -52,11 +55,11 @@ class ReminderService:
         message = self._format_reminder_message(task, member)
 
         # 调用微信推送服务
-        if member.wechat_id:
+        if member.wechat_id or member.external_userid:
             try:
-                await wechat_bot.send_message(member.wechat_id, message)
+                await wechat_bot.smart_send(member, message)
             except Exception as e:
-                print(f"微信推送失败: {e}")
+                logger.warning(f"微信推送失败: {e}")
 
         # 更新提醒状态
         reminder.status = "sent"

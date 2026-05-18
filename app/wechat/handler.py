@@ -88,6 +88,9 @@ class MessageHandler:
             await self._handle_event(msg, db)
             return
 
+        # 检测是否为外部用户（普通微信用户，external_userid 以 wm 开头）
+        self._is_external_user = user_id.startswith("wm")
+
         # 识别用户身份
         member = await self._identify_user(user_id, msg, db)
         if not member:
@@ -216,7 +219,7 @@ class MessageHandler:
             decisions = result.get("decisions", [])
             if decisions:
                 decision_text = "\n".join(f"• {d}" for d in decisions)
-                await wechat_bot.send_to_group(chat_id,
+                await wechat_bot.smart_send_to_group(chat_id,
                     f"📝 本次讨论决定：\n{decision_text}", msg_type="text")
 
             # 处理提醒
@@ -241,7 +244,7 @@ class MessageHandler:
         # 匹配负责人
         members = await identity_resolver.fuzzy_search(assignee_name, db)
         if not members:
-            await wechat_bot.send_to_group(chat_id,
+            await wechat_bot.smart_send_to_group(chat_id,
                 f"⚠️ 识别到任务「{title}」，但未找到成员「{assignee_name}」，请确认。")
             return
 
@@ -270,12 +273,12 @@ class MessageHandler:
 
         # 群里通知
         due_text = f"，截止 {due_date_str}" if due_date_str else ""
-        await wechat_bot.send_to_group(chat_id,
+        await wechat_bot.smart_send_to_group(chat_id,
             f"📋 已自动创建任务：\n📌 {title}\n👤 负责人：{assignee.name}{due_text}")
 
         # 私发负责人
         await notifier.notify_task_assigned(
-            user_id=assignee.wechat_id,
+            member=assignee,
             task_title=title,
             due_date=due_date_str or "待定",
             priority=priority,
@@ -296,21 +299,24 @@ class MessageHandler:
 
         # 群里确认
         participant_names = ", ".join(participants) if participants else "全员"
-        await wechat_bot.send_to_group(chat_id,
+        await wechat_bot.smart_send_to_group(chat_id,
             f"📅 会议安排已记录：\n📌 {title}\n⏰ {time}\n📍 {location or '待定'}\n👥 {participant_names}")
 
         # 私发参会者
         for name in participants:
             members = await identity_resolver.fuzzy_search(name, db)
             for m in members:
-                if m.wechat_id:
+                if m.wechat_id or m.external_userid:
                     try:
-                        await wechat_bot.send_meeting_notification(
-                            user_id=m.wechat_id,
-                            meeting_title=title,
-                            meeting_time=time,
-                            location=location
-                        )
+                        content = f"""📅 **会议通知**
+
+**主题**: {title}
+**时间**: {time}
+"""
+                        if location:
+                            content += f"**地点**: {location}\n"
+                        content += "\n请准时参加！"
+                        await wechat_bot.smart_send(m, content, msg_type="markdown")
                     except Exception as e:
                         logger.warning(f"会议通知发送失败 [{m.name}]: {e}")
 
@@ -324,9 +330,9 @@ class MessageHandler:
 
         members = await identity_resolver.fuzzy_search(person, db)
         for m in members:
-            if m.wechat_id:
+            if m.wechat_id or m.external_userid:
                 try:
-                    await wechat_bot.send_message(m.wechat_id, f"🔔 提醒：{content}")
+                    await wechat_bot.smart_send(m, f"🔔 提醒：{content}")
                 except Exception as e:
                     logger.warning(f"提醒发送失败 [{m.name}]: {e}")
 
@@ -369,10 +375,10 @@ class MessageHandler:
                 reply = reply[:1950] + "\n\n...(内容过长已截断)"
 
             # 群聊回复
-            await wechat_bot.send_to_group(chat_id, reply, msg_type="text")
+            await wechat_bot.smart_send_to_group(chat_id, reply, msg_type="text")
         except Exception as e:
             logger.error(f"群聊 Agent 调用失败: {e}", exc_info=True)
-            await wechat_bot.send_to_group(chat_id, "处理消息时出错了，请稍后再试。")
+            await wechat_bot.smart_send_to_group(chat_id, "处理消息时出错了，请稍后再试。")
 
     async def _handle_group_image(self, msg: dict, member: Member,
                                     chat_id: str, db: AsyncSession) -> None:
@@ -382,7 +388,7 @@ class MessageHandler:
             image_data = await vision_service.download_image(media_id)
             if image_data:
                 analysis = await vision_service.analyze_image(image_data)
-                await wechat_bot.send_to_group(chat_id, f"📷 图片分析：\n{analysis}")
+                await wechat_bot.smart_send_to_group(chat_id, f"📷 图片分析：\n{analysis}")
         except Exception as e:
             logger.error(f"群聊图片处理失败: {e}", exc_info=True)
 
@@ -412,12 +418,14 @@ class MessageHandler:
                 analysis = await vision_service.analyze_task_screenshot(image_data)
                 await self._reply_text(user_id, f"📷 图片分析：\n{analysis}")
                 if task.created_by:
-                    await notifier.notify_progress_update(
-                        teacher_id=str(task.created_by),
-                        task_title=task.title,
-                        member_name=member.name,
-                        progress_text=f"[图片] {analysis[:200]}"
-                    )
+                    teacher = await self._get_member_by_id(task.created_by, db)
+                    if teacher:
+                        await notifier.notify_progress_update(
+                            teacher=teacher,
+                            task_title=task.title,
+                            member_name=member.name,
+                            progress_text=f"[图片] {analysis[:200]}"
+                        )
             else:
                 analysis = await vision_service.analyze_image(image_data)
                 await self._reply_text(user_id, f"📷 图片内容：\n{analysis}")
@@ -482,9 +490,15 @@ class MessageHandler:
 
     async def _identify_user(self, user_id: str, msg: dict, db: AsyncSession) -> Member:
         """多信号识别用户"""
-        member = await identity_resolver.resolve(user_id, db)
-        if member:
-            return member
+        # 外部用户优先用 external_userid 查询
+        if self._is_external_user:
+            member = await identity_resolver.resolve_by_external_userid(user_id, db)
+            if member:
+                return member
+        else:
+            member = await identity_resolver.resolve(user_id, db)
+            if member:
+                return member
 
         pending = await self._get_pending_user(user_id)
         if pending:
@@ -494,7 +508,10 @@ class MessageHandler:
         if nickname:
             member = await identity_resolver.resolve_by_nickname(nickname, db)
             if member:
-                await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
+                if self._is_external_user:
+                    await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+                else:
+                    await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
                 return member
 
         return None
@@ -505,10 +522,17 @@ class MessageHandler:
         pending = await self._get_pending_user(user_id)
         if not pending:
             await self._set_pending_user(user_id, {"awaiting": True, "attempts": 0})
-            await self._reply_text(user_id,
-                "你好！👋 我是小气，课题组的AI助手。\n\n"
-                "首次使用需要验证身份，请回复以下任一信息：\n"
-                "• 你的姓名\n• 你的手机号\n• 你的企业微信昵称")
+            # 外部用户（普通微信）和内部用户（企业微信）显示不同提示
+            if self._is_external_user:
+                await self._reply_text(user_id,
+                    "你好！👋 我是小气，课题组的AI助手。\n\n"
+                    "首次使用需要验证身份，请回复以下任一信息：\n"
+                    "• 你的姓名\n• 你的手机号")
+            else:
+                await self._reply_text(user_id,
+                    "你好！👋 我是小气，课题组的AI助手。\n\n"
+                    "首次使用需要验证身份，请回复以下任一信息：\n"
+                    "• 你的姓名\n• 你的手机号\n• 你的企业微信昵称")
             return
 
         if msg_type != "text":
@@ -524,7 +548,10 @@ class MessageHandler:
             nickname=content, mobile=content, db=db)
 
         if member:
-            await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
+            if self._is_external_user:
+                await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+            else:
+                await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
             await self._delete_pending_user(user_id)
             await self._reply_text(user_id,
                 f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。")
@@ -543,7 +570,8 @@ class MessageHandler:
         """事件处理"""
         event = msg.get("Event", "")
         user_id = msg.get("FromUserName", "")
-        if event == "subscribe":
+        self._is_external_user = user_id.startswith("wm")
+        if event in ("subscribe", "enter_session"):
             await self._reply_text(user_id,
                 "欢迎使用小气！👋\n\n我是课题组的AI助手，可以帮你管理任务、查询信息、搜索知识库。\n\n首次使用请回复你的姓名来验证身份。")
 
@@ -555,12 +583,16 @@ class MessageHandler:
         if not task:
             return False
 
+        # 查找任务创建者（老师）
+        teacher = await self._get_member_by_id(task.created_by, db) if task.created_by else None
+
         if content_lower in ("完成", "已完成", "done", "完成了", "搞定了", "搞定"):
             task.status = TaskStatus.DONE.value
             task.progress = 100
             task.completed_at = datetime.utcnow()
             await db.commit()
-            await notifier.notify_task_completed(str(task.created_by), task.title, member.name)
+            if teacher:
+                await notifier.notify_task_completed(teacher, task.title, member.name)
             await self._check_all_completed(task, db)
             await self._reply_text(user_id, "✅ 已记录完成！辛苦了！")
             return True
@@ -577,7 +609,8 @@ class MessageHandler:
             if progress >= 100:
                 task.completed_at = datetime.utcnow()
             await db.commit()
-            await notifier.notify_progress_update(str(task.created_by), task.title, member.name, content)
+            if teacher:
+                await notifier.notify_progress_update(teacher, task.title, member.name, content)
             if progress >= 100:
                 await self._check_all_completed(task, db)
             await self._reply_text(user_id, f"📝 已更新进度为 {progress}%！")
@@ -587,7 +620,8 @@ class MessageHandler:
             task.status = TaskStatus.IN_PROGRESS.value
             task.progress = 50
             await db.commit()
-            await notifier.notify_progress_update(str(task.created_by), task.title, member.name, "进行中")
+            if teacher:
+                await notifier.notify_progress_update(teacher, task.title, member.name, "进行中")
             await self._reply_text(user_id, "📝 已更新为进行中，加油！")
             return True
 
@@ -595,7 +629,8 @@ class MessageHandler:
         if any(kw in content_lower for kw in problem_keywords):
             task.status = TaskStatus.BLOCKED.value
             await db.commit()
-            await notifier.notify_task_problem(str(task.created_by), task.title, member.name, content)
+            if teacher:
+                await notifier.notify_task_problem(teacher, task.title, member.name, content)
             await self._reply_text(user_id, "⚠️ 已记录问题并通知老师，请稍候。")
             return True
 
@@ -611,10 +646,19 @@ class MessageHandler:
         )
         return result.scalar_one_or_none()
 
+    async def _get_member_by_id(self, member_id: int, db: AsyncSession) -> Member | None:
+        """通过成员ID获取成员对象"""
+        result = await db.execute(
+            select(Member).where(Member.id == member_id, Member.is_active == True)
+        )
+        return result.scalar_one_or_none()
+
     async def _check_all_completed(self, task: Task, db: AsyncSession) -> None:
         """检查任务完成情况"""
         if task.created_by:
-            await notifier.notify_all_completed(str(task.created_by), task.title, "负责人已全部完成")
+            teacher = await self._get_member_by_id(task.created_by, db)
+            if teacher:
+                await notifier.notify_all_completed(teacher, task.title, "负责人已全部完成")
 
     async def _handle_general_chat(self, content: str, member: Member,
                                     user_id: str, db: AsyncSession) -> None:
@@ -632,9 +676,12 @@ class MessageHandler:
             await self._reply_text(user_id, "处理消息时出错了，请稍后再试。")
 
     async def _reply_text(self, user_id: str, content: str) -> None:
-        """私聊回复"""
+        """私聊回复（自动区分内部/外部用户）"""
         try:
-            await wechat_bot.send_message(user_id, content, msg_type="text")
+            if self._is_external_user:
+                await wechat_bot.send_to_external_user(user_id, content, msg_type="text")
+            else:
+                await wechat_bot.send_message(user_id, content, msg_type="text")
         except Exception as e:
             logger.warning(f"回复消息失败: {e}")
 

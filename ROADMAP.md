@@ -41,7 +41,8 @@
 
 ## 第五阶段：功能增强
 
-- [ ] **企业微信群机器人** -- ⚠️ 代码完成，未部署。存在运行时 bug（`handler.py:259` 调用不存在的方法），.env.example 缺少 `WECHAT_CALLBACK_TOKEN`/`WECHAT_ENCODING_AES_KEY`，@提及检测硬编码不匹配实际格式，内存状态不持久化，异常处理用 `print()` 而非结构化日志
+- [x] **企业微信群机器人** -- 5 个部署阻塞项已全部修复（运行时 bug、配置补全、@提及检测、Redis 持久化、结构化日志），代码就绪待上线
+- [x] **微信互通（普通微信用户支持）** -- 课题组成员可用私人微信与机器人对话（私聊+群聊），无需下载企业微信。通过企业微信「微信互通」外部联系人功能实现
 - [ ] **腾讯会议 API 集成** -- ⚠️ 代码框架完成，无法实际使用。无真实 API 凭据，无 OAuth 用户认证，无 Webhook 回调端点，Agent 的 `create_meeting` 工具不调用腾讯 API，无测试覆盖
 - [x] **MinIO 文件上传** -- 通用上传 + 会议附件上传 + 删除，自动创建 bucket
 - [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
@@ -126,12 +127,12 @@
 | 主动提醒调度 | Celery 定时（15分钟）检查：即将到期、已逾期、未确认、即将开始的会议 | ✅ 代码完成 |
 | 图片识别 | Claude Vision 分析图片消息，支持任务截图和人物识别 | ✅ 代码完成 |
 
-**部署阻塞项：**
-1. `handler.py:259` 调用不存在的 `notifier.notify_meeting_notification()`，运行时会崩溃
-2. `.env.example` 缺少 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`
-3. `_pending_users` / `_group_buffers` 为内存状态，容器重启丢失（需迁移到 Redis）
-4. 异常处理全部用 `print()`，需改用结构化日志
-5. Nginx 未配置微信 5 秒超时优化
+**~~部署阻塞项~~（已全部修复）：**
+1. ~~`handler.py:259` 调用不存在的 `notifier.notify_meeting_notification()`~~ → 改为 `wechat_bot.send_meeting_notification()`
+2. ~~`.env.example` 缺少 `WECHAT_CALLBACK_TOKEN` 和 `WECHAT_ENCODING_AES_KEY`~~ → 已补全
+3. ~~`_pending_users` / `_group_buffers` 为内存状态~~ → 已迁移到 Redis（自动过期）
+4. ~~异常处理全部用 `print()`~~ → 改用 `logging.getLogger("microbubble.wechat")`
+5. ~~Nginx 未配置微信 5 秒超时优化~~ → 异步 `asyncio.create_task` + 立即返回 success
 
 **新建文件：**
 - `app/wechat/crypto.py` — 消息加解密（AES-CBC + 签名验证）
@@ -152,6 +153,34 @@
 - `app/models/member.py` — 新增多平台身份字段（wechat_nickname/wechat_remark/personal_wechat_id/wechat_mobile）
 - `app/schemas/member.py` — MemberCreate/MemberUpdate/MemberResponse 包含新身份字段
 - `app/api/v1/member.py` — 创建成员支持新身份字段
+
+### 微信互通 (2026-05-18) -- 支持普通微信用户
+
+课题组成员可用私人微信与机器人对话，无需下载企业微信。通过企业微信「微信互通」外部联系人功能实现。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 外部用户识别 | 通过 `external_userid`（wm 开头）自动识别普通微信用户 | ✅ 完成 |
+| 双通道发送 | 内部用户走 `/cgi-bin/message/send`，外部用户走 `/cgi-bin/externalcontact/message/send` | ✅ 完成 |
+| 外部群聊 | 外部群（wr 开头）走 `/cgi-bin/externalcontact/groupchat/send_chat_msg` | ✅ 完成 |
+| 智能路由 | `smart_send()` / `smart_send_to_group()` 自动选择正确的 API | ✅ 完成 |
+| 身份绑定 | 外部用户首次使用时通过姓名/手机号自引导绑定 | ✅ 完成 |
+| 通知适配 | 任务提醒、会议通知、进度汇报等全部支持外部用户 | ✅ 完成 |
+
+**新建文件：**
+- `alembic/versions/002_add_external_userid.py` — 数据库迁移
+
+**修改文件：**
+- `app/models/member.py` — 新增 `external_userid` 列
+- `app/schemas/member.py` — 新增 `external_userid` 字段
+- `app/config.py` — 新增 `WECHAT_EXTERNAL_SENDER` 配置
+- `.env.example` — 新增 `WECHAT_EXTERNAL_SENDER`
+- `app/wechat/identity.py` — 新增 `resolve_by_external_userid()`，更新 `resolve_multi_signal()` 和 `bind_identity()`
+- `app/wechat/bot.py` — 新增 `send_to_external_user()`、`send_to_external_group()`、`smart_send()`、`smart_send_to_group()`
+- `app/wechat/handler.py` — 外部用户检测、身份解析、回复路由、群聊适配
+- `app/wechat/notifier.py` — 方法签名改为接收 `Member` 对象，使用 `smart_send()`
+- `app/wechat/scheduler.py` — 全部改用 `smart_send()` 支持外部用户
+- `app/services/reminder_service.py` — 改用 `smart_send()`，修复 `print()` 为结构化日志
 
 ### Phase 3 (2026-05-17)
 
