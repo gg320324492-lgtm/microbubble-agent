@@ -287,11 +287,11 @@
 
 ### 企业微信部署
 
-- [ ] 修复 `handler.py:259` 运行时 bug（`notify_meeting_notification` 方法不存在）
-- [ ] 内存状态（`_pending_users` / `_group_buffers`）迁移到 Redis
-- [ ] 异常处理改用结构化日志（`app.core.logging`）
-- [ ] @提及检测改为匹配企业微信实际 XML 格式
-- [ ] Nginx 配置微信 Webhook 5 秒超时优化
+- [x] 修复 `handler.py:259` 运行时 bug（改为 `wechat_bot.send_meeting_notification()`）
+- [x] 内存状态（`_pending_users` / `_group_buffers`）迁移到 Redis（自动过期）
+- [x] 异常处理改用结构化日志（`logging.getLogger("microbubble.wechat")`）
+- [x] @提及检测改为匹配企业微信实际格式（` @` 分隔符 + AgentID 匹配）
+- [x] Nginx 已满足 5 秒超时（异步 `asyncio.create_task` + 立即返回 success）
 
 ### 腾讯会议部署
 
