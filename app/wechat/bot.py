@@ -15,6 +15,7 @@ class WeChatBot:
         self.corp_id = settings.WECHAT_CORP_ID
         self.agent_id = settings.WECHAT_AGENT_ID
         self.secret = settings.WECHAT_SECRET
+        self.api_base = settings.WECHAT_API_BASE_URL.rstrip("/")
         self._access_token = None
         self._token_expires = None
 
@@ -25,7 +26,7 @@ class WeChatBot:
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                "https://qyapi.weixin.qq.com/cgi-bin/gettoken",
+                f"{self.api_base}/cgi-bin/gettoken",
                 params={
                     "corpid": self.corp_id,
                     "corpsecret": self.secret
@@ -85,7 +86,7 @@ class WeChatBot:
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={token}",
+                f"{self.api_base}/cgi-bin/message/send?access_token={token}",
                 json=data
             )
             return response.json()
@@ -216,7 +217,7 @@ class WeChatBot:
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"https://qyapi.weixin.qq.com/cgi-bin/appchat/send?access_token={token}",
+                f"{self.api_base}/cgi-bin/appchat/send?access_token={token}",
                 json=data
             )
             return response.json()
