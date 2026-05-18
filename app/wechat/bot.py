@@ -36,7 +36,9 @@ class WeChatBot:
             if data.get("errcode") == 0:
                 self._access_token = data["access_token"]
                 # 提前5分钟过期
-                self._token_expires = datetime.utcnow().timestamp() + data["expires_in"] - 300
+                self._token_expires = datetime.fromtimestamp(
+                    datetime.utcnow().timestamp() + data["expires_in"] - 300
+                )
                 return self._access_token
             else:
                 raise Exception(f"获取access_token失败: {data}")
