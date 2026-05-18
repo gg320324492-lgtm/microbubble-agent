@@ -1,9 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_, or_, text
 from typing import List, Optional
+import json
 
 from app.models.knowledge import Knowledge
-from app.services.embedding_service import generate_embedding
 
 
 class KnowledgeService:
@@ -54,9 +54,6 @@ class KnowledgeService:
         created_by: Optional[int] = None
     ) -> Knowledge:
         """创建知识条目"""
-        text_for_embedding = f"{title}\n{content}"
-        embedding = await generate_embedding(text_for_embedding)
-
         knowledge = Knowledge(
             title=title,
             content=content,
@@ -65,7 +62,6 @@ class KnowledgeService:
             source=source,
             source_type=source_type,
             created_by=created_by,
-            embedding=embedding
         )
         self.db.add(knowledge)
         await self.db.commit()
@@ -82,11 +78,6 @@ class KnowledgeService:
             if hasattr(knowledge, key) and value is not None:
                 setattr(knowledge, key, value)
 
-        # 标题或内容变更时重新生成embedding
-        if "title" in kwargs or "content" in kwargs:
-            text_for_embedding = f"{knowledge.title}\n{knowledge.content}"
-            knowledge.embedding = await generate_embedding(text_for_embedding)
-
         await self.db.commit()
         await self.db.refresh(knowledge)
         return knowledge
@@ -102,32 +93,68 @@ class KnowledgeService:
         return True
 
     async def search_semantic(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
-        """语义搜索 - 使用pgvector余弦距离"""
-        query_embedding = await generate_embedding(query)
+        """语义搜索 - 使用pgvector余弦距离（如果可用）"""
+        try:
+            # 检查 pgvector 扩展是否可用
+            check = await self.db.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'vector'"))
+            if not check.scalar():
+                # pgvector 不可用，回退到关键词搜索
+                return await self._search_keyword_fallback(query, top_k, category)
 
-        stmt = select(
-            Knowledge,
-            Knowledge.embedding.cosine_distance(query_embedding).label("distance")
-        )
+            from app.services.embedding_service import generate_embedding
+            query_embedding = await generate_embedding(query)
 
+            from pgvector.sqlalchemy import Vector
+            stmt = select(
+                Knowledge,
+                Knowledge.embedding.cosine_distance(query_embedding).label("distance")
+            )
+
+            if category:
+                stmt = stmt.where(Knowledge.category == category)
+
+            stmt = stmt.order_by(Knowledge.embedding.cosine_distance(query_embedding))
+            stmt = stmt.limit(top_k)
+
+            result = await self.db.execute(stmt)
+            rows = result.all()
+
+            return [
+                {
+                    "id": row.Knowledge.id,
+                    "title": row.Knowledge.title,
+                    "content": row.Knowledge.content[:500],
+                    "category": row.Knowledge.category,
+                    "tags": row.Knowledge.tags,
+                    "source": row.Knowledge.source,
+                    "score": round(1.0 - row.distance, 4)
+                }
+                for row in rows
+            ]
+        except Exception:
+            # pgvector 不可用，回退到关键词搜索
+            return await self._search_keyword_fallback(query, top_k, category)
+
+    async def _search_keyword_fallback(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
+        """关键词搜索回退"""
+        stmt = select(Knowledge).where(or_(
+            Knowledge.title.ilike(f"%{query}%"),
+            Knowledge.content.ilike(f"%{query}%")
+        ))
         if category:
             stmt = stmt.where(Knowledge.category == category)
-
-        stmt = stmt.order_by(Knowledge.embedding.cosine_distance(query_embedding))
         stmt = stmt.limit(top_k)
-
         result = await self.db.execute(stmt)
-        rows = result.all()
-
+        rows = result.scalars().all()
         return [
             {
-                "id": row.Knowledge.id,
-                "title": row.Knowledge.title,
-                "content": row.Knowledge.content[:500],
-                "category": row.Knowledge.category,
-                "tags": row.Knowledge.tags,
-                "source": row.Knowledge.source,
-                "score": round(1.0 - row.distance, 4)
+                "id": r.id,
+                "title": r.title,
+                "content": r.content[:500],
+                "category": r.category,
+                "tags": r.tags,
+                "source": r.source,
+                "score": 0.5
             }
-            for row in rows
+            for r in rows
         ]
