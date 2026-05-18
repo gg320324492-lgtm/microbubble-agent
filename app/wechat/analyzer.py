@@ -64,7 +64,7 @@ class ConversationAnalyzer:
             api_key=settings.CLAUDE_API_KEY,
             base_url=settings.CLAUDE_BASE_URL or None,
         )
-        self.model = "claude-sonnet-4-20250514"
+        self.model = settings.CLAUDE_MODEL or "claude-sonnet-4-20250514"
 
     async def analyze(self, messages: List[Dict[str, str]]) -> Dict:
         """
@@ -92,7 +92,12 @@ class ConversationAnalyzer:
                 messages=[{"role": "user", "content": f"请分析以下对话：\n\n{conversation}"}]
             )
 
-            text = response.content[0].text.strip()
+            # 兼容 ThinkingBlock + TextBlock 响应（如 mimo-v2.5）
+            text = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    text = block.text.strip()
+                    break
             # 尝试提取 JSON
             if text.startswith("```"):
                 text = text.split("```")[1]

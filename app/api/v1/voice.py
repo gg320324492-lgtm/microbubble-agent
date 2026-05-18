@@ -8,6 +8,7 @@ from typing import Optional
 import io
 import json
 
+import logging
 from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
@@ -16,6 +17,9 @@ from app.core.database import get_db, async_session
 from app.core.security import get_current_user, decode_token
 from app.models.member import Member
 from app.models.meeting import Meeting
+from app.services.meeting_service import MeetingService
+
+logger = logging.getLogger("microbubble.voice")
 
 router = APIRouter()
 
@@ -254,7 +258,8 @@ async def meeting_transcript_ws(
     except WebSocketDisconnect:
         result = await recorder_manager.stop_meeting_recording()
 
-        # 保存转写结果到会议记录
+        # 保存转写结果到会议记录，并自动分析
+        analysis_result = None
         if result and result.get("transcript"):
             try:
                 async with async_session() as db:
@@ -267,14 +272,25 @@ async def meeting_transcript_ws(
                         meeting.transcript = result["transcript"]
                         meeting.status = "completed"
                         await db.commit()
+
+                        # 自动分析转写内容，提取摘要、要点、任务
+                        try:
+                            meeting_service = MeetingService(db)
+                            analysis_result = await meeting_service.process_meeting_transcript(meeting_id)
+                            logger.info(f"会议 {meeting_id} 分析完成: {len(analysis_result.get('tasks_created', []))} 个任务已创建")
+                        except Exception as e:
+                            logger.error(f"会议转写分析失败: {e}", exc_info=True)
             except Exception as e:
-                print(f"保存会议转写失败: {e}")
+                logger.error(f"保存会议转写失败: {e}")
 
         try:
-            await websocket.send_json({
+            ended_msg = {
                 "type": "meeting_ended",
                 "meeting_id": meeting_id,
                 "duration": result.get("duration", 0) if result else 0
-            })
+            }
+            if analysis_result:
+                ended_msg["analysis"] = analysis_result
+            await websocket.send_json(ended_msg)
         except Exception:
             pass

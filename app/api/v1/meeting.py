@@ -11,6 +11,7 @@ from app.models.member import Member
 from app.schemas.meeting import (
     MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes
 )
+from app.services.meeting_service import MeetingService
 from app.agent.core import agent
 
 router = APIRouter()
@@ -161,6 +162,35 @@ async def generate_meeting_minutes(
     await db.commit()
 
     return {"message": "会议纪要生成成功", "minutes": response["content"]}
+
+
+@router.post("/meetings/{meeting_id}/analyze")
+async def analyze_meeting_transcript(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """分析会议转写内容，自动提取摘要、要点、决定和任务"""
+    meeting_service = MeetingService(db)
+    meeting = await meeting_service.get_meeting(meeting_id)
+
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+
+    if not meeting.transcript:
+        raise HTTPException(status_code=400, detail="会议转写内容为空，无法分析")
+
+    try:
+        result = await meeting_service.process_meeting_transcript(meeting_id)
+        return {
+            "message": "分析完成",
+            "summary": result["summary"],
+            "key_points": result["key_points"],
+            "decisions": result["decisions"],
+            "tasks_created": result["tasks_created"],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
 
 
 @router.put("/meetings/{meeting_id}", response_model=MeetingResponse)

@@ -47,6 +47,9 @@
 - [x] **MinIO 文件上传** -- 通用上传 + 会议附件上传 + 删除，自动创建 bucket
 - [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
 - [x] **通知 badge 真实数据** -- 改为从 API 获取待处理提醒数量，user store 管理
+- [x] **会议转写自动分析** -- 会议结束自动提取摘要/要点/决定/任务，任务自动创建并关联会议。WebSocket 转写断开和腾讯会议 Webhook 回调均触发分析，支持手动 `POST /meetings/{id}/analyze`
+- [x] **会议创建群聊通知** -- Agent 创建会议后自动推送通知到配置的群聊（`WECHAT_NOTIFY_CHAT_ID`），包含主题/时间/地点/参会人/会议链接
+- [x] **CLAUDE_MODEL 可配置** -- 新增 `CLAUDE_MODEL` 配置项，analyzer 和 summary 统一使用，兼容 mimo-v2.5 ThinkingBlock 响应
 
 ---
 
@@ -251,6 +254,9 @@
 | 腾讯会议 API | 创建/查询/取消/结束会议，HMAC-SHA256 签名，Webhook 回调，Agent 自动创建线上会议，错误重试 | ✅ 代码完成，待配置凭据测试 |
 | MinIO 文件上传 | 通用上传（50MB 限制）+ 会议附件 + 删除，自动创建 bucket | ✅ 完成 |
 | 企业微信群机器人 | 完整实现（已在 WeChat Bot 阶段完成） | ⚠️ 代码完成，未部署（见 WeChat Bot 部署阻塞项） |
+| 会议转写自动分析 | 转写结束自动调用 Claude 提取摘要/要点/决定，自动创建任务并关联会议，支持手动重新分析 | ✅ 完成 |
+| 会议创建群聊通知 | Agent 创建会议后自动推送通知到配置的群聊，含主题/时间/地点/参会人/链接 | ✅ 完成 |
+| CLAUDE_MODEL 可配置 | 新增配置项，兼容代理服务的 ThinkingBlock 响应 | ✅ 完成 |
 
 **新建文件：**
 - `app/services/tencent_meeting_service.py` — 腾讯会议 API 客户端（HMAC-SHA256 签名）
@@ -261,6 +267,13 @@
 **修改文件：**
 - `app/main.py` — 注册 upload 和 tencent_meeting 路由
 - `requirements.txt` — 恢复 minio==7.2.0
+- `app/services/meeting_service.py` — 新增 `process_meeting_transcript()`、`_generate_summary()`、`_auto_create_task_from_meeting()`
+- `app/api/v1/voice.py` — WebSocket 断开后自动触发会议分析
+- `app/api/v1/meeting.py` — 新增 `POST /meetings/{id}/analyze` 手动分析端点
+- `app/api/v1/tencent_meeting.py` — Webhook 会议结束时自动触发分析
+- `app/agent/core.py` — 会议创建后异步推送群聊通知，新增 logging
+- `app/wechat/analyzer.py` — 模型改为 `settings.CLAUDE_MODEL`，兼容 ThinkingBlock 响应
+- `app/config.py` — 新增 `CLAUDE_MODEL`、`WECHAT_NOTIFY_CHAT_ID`
 
 ---
 
@@ -331,7 +344,9 @@
 - [ ] `.env` 配置 `WECHAT_EXTERNAL_SENDER=xiaoqi`
 - [ ] 运行数据库迁移：`alembic upgrade head`
 - [ ] 用普通微信扫码添加「小气」，测试私聊消息收发
-- [ ] 创建外部群，测试群聊消息收发
+- [ ] 创建外部群，拉「小气」进群，测试群聊消息收发
+- [ ] 从日志获取群聊 `wr...` chat_id：`docker compose logs app | grep chat_id`
+- [ ] `.env` 配置 `WECHAT_NOTIFY_CHAT_ID=<wr...群聊ID>`（会议通知自动推送到该群）
 
 ### 腾讯会议部署
 
