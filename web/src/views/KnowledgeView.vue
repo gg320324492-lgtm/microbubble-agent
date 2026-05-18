@@ -3,7 +3,7 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="searchQuery"
             placeholder="搜索知识库..."
@@ -15,7 +15,7 @@
             </template>
           </el-input>
         </el-col>
-        <el-col :span="6">
+        <el-col :xs="12" :sm="12" :md="6">
           <el-select v-model="filterCategory" placeholder="分类" clearable>
             <el-option label="基础知识" value="基础" />
             <el-option label="实验方法" value="方法" />
@@ -23,7 +23,7 @@
             <el-option label="常见问题" value="FAQ" />
           </el-select>
         </el-col>
-        <el-col :span="10">
+        <el-col :xs="12" :sm="12" :md="10">
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             添加知识
@@ -115,7 +115,7 @@
     <el-dialog
       v-model="showCreateDialog"
       :title="editingKnowledge ? '编辑知识' : '添加知识'"
-      width="600px"
+      :width="isMobile ? '90vw' : '600px'"
     >
       <el-form :model="knowledgeForm" label-width="80px">
         <el-form-item label="标题" required>
@@ -163,7 +163,7 @@
     </el-dialog>
 
     <!-- AI问答对话框 -->
-    <el-dialog v-model="showSemanticSearch" title="AI智能问答" width="600px">
+    <el-dialog v-model="showSemanticSearch" title="AI智能问答" :width="isMobile ? '90vw' : '600px'">
       <div class="semantic-search">
         <el-input
           v-model="semanticQuery"
@@ -195,7 +195,7 @@
     </el-dialog>
 
     <!-- 知识详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="知识详情" width="600px">
+    <el-dialog v-model="showDetailDialog" title="知识详情" :width="isMobile ? '90vw' : '600px'">
       <div v-if="currentKnowledge" class="knowledge-detail">
         <h2>{{ currentKnowledge.title }}</h2>
         <div class="detail-meta">
@@ -229,6 +229,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 
+const isMobile = ref(window.innerWidth <= 768)
 const knowledgeList = ref([])
 const total = ref(0)
 const currentPage = ref(1)

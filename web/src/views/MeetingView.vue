@@ -3,7 +3,7 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-date-picker
             v-model="dateRange"
             type="daterange"
@@ -15,7 +15,7 @@
             @change="fetchMeetings"
           />
         </el-col>
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="keyword"
             placeholder="搜索会议主题"
@@ -27,7 +27,7 @@
             </template>
           </el-input>
         </el-col>
-        <el-col :span="8">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             创建会议
@@ -122,7 +122,7 @@
     </el-card>
 
     <!-- 创建会议对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建会议" width="500px">
+    <el-dialog v-model="showCreateDialog" title="创建会议" :width="isMobile ? '90vw' : '500px'">
       <el-form :model="meetingForm" label-width="80px">
         <el-form-item label="会议主题" required>
           <el-input v-model="meetingForm.title" placeholder="请输入会议主题" />
@@ -169,7 +169,7 @@
     </el-dialog>
 
     <!-- 实时转写对话框 -->
-    <el-dialog v-model="showTranscriptDialog" title="会议实时转写" width="800px" :close-on-click-modal="false">
+    <el-dialog v-model="showTranscriptDialog" title="会议实时转写" :width="isMobile ? '95vw' : '800px'" :close-on-click-modal="false">
       <div v-if="currentMeeting" class="transcript-dialog-content">
         <div class="meeting-info-bar">
           <h3>{{ currentMeeting.title }}</h3>
@@ -187,7 +187,7 @@
     </el-dialog>
 
     <!-- 会议纪要对话框 -->
-    <el-dialog v-model="showMinutesDialog" title="会议纪要" width="600px">
+    <el-dialog v-model="showMinutesDialog" title="会议纪要" :width="isMobile ? '90vw' : '600px'">
       <div v-if="currentMeeting" class="minutes-content">
         <h3>{{ currentMeeting.title }}</h3>
         <div class="minutes-time">
@@ -224,6 +224,7 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import LiveTranscript from '@/components/LiveTranscript.vue'
 
+const isMobile = ref(window.innerWidth <= 768)
 const meetings = ref([])
 const members = ref([])
 const total = ref(0)
@@ -507,5 +508,22 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   color: #303133;
+}
+
+@media (max-width: 768px) {
+  .meeting-item {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .meeting-time-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: unset;
+  }
+  .meeting-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
 }
 </style>

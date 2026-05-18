@@ -1,7 +1,17 @@
 <template>
   <el-container class="layout-container">
+    <!-- 移动端遮罩层 -->
+    <div
+      v-if="isMobile && showMobileMenu"
+      class="drawer-overlay"
+      @click="showMobileMenu = false"
+    />
+
     <!-- 侧边栏 -->
-    <el-aside :width="isCollapse ? '64px' : '220px'" class="aside">
+    <el-aside
+      :width="sidebarWidth"
+      :class="['aside', { 'mobile-drawer': isMobile }]"
+    >
       <div class="logo">
         <el-icon size="28"><Aim /></el-icon>
         <span v-show="!isCollapse" class="title">小气助手</span>
@@ -14,6 +24,7 @@
         background-color="#304156"
         text-color="#bfcbd9"
         active-text-color="#409eff"
+        @select="onMenuSelect"
       >
         <el-menu-item
           v-for="route in menuRoutes"
@@ -31,14 +42,11 @@
       <!-- 顶部栏 -->
       <el-header class="header">
         <div class="header-left">
-          <el-icon
-            class="collapse-btn"
-            @click="isCollapse = !isCollapse"
-          >
+          <el-icon class="collapse-btn" @click="toggleSidebar">
             <Fold v-if="!isCollapse" />
             <Expand v-else />
           </el-icon>
-          <el-breadcrumb separator="/">
+          <el-breadcrumb v-if="!isMobile" separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
             <el-breadcrumb-item>{{ currentTitle }}</el-breadcrumb-item>
           </el-breadcrumb>
@@ -52,7 +60,7 @@
           <el-dropdown>
             <div class="user-info">
               <el-avatar :size="32" icon="UserFilled" />
-              <div class="user-detail">
+              <div v-if="!isMobile" class="user-detail">
                 <span class="username">{{ username }}</span>
                 <span class="user-role">{{ userRole }}</span>
               </div>
@@ -68,7 +76,7 @@
       </el-header>
 
       <!-- 内容区 -->
-      <el-main class="main">
+      <el-main :class="['main', { 'mobile-main': isMobile }]">
         <router-view />
       </el-main>
     </el-container>
@@ -76,7 +84,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
@@ -86,7 +94,15 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const memberStore = useMemberStore()
-const isCollapse = ref(false)
+
+const isMobile = ref(window.innerWidth <= 768)
+const isCollapse = ref(window.innerWidth <= 768)
+const showMobileMenu = ref(false)
+
+const sidebarWidth = computed(() => {
+  if (isMobile.value) return showMobileMenu.value ? '220px' : '0px'
+  return isCollapse.value ? '64px' : '220px'
+})
 
 const currentRoute = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
@@ -99,10 +115,32 @@ const menuRoutes = computed(() => {
   return mainRoute?.children || []
 })
 
+const onResize = () => {
+  isMobile.value = window.innerWidth <= 768
+  if (!isMobile.value) showMobileMenu.value = false
+}
+
+const toggleSidebar = () => {
+  if (isMobile.value) {
+    showMobileMenu.value = !showMobileMenu.value
+  } else {
+    isCollapse.value = !isCollapse.value
+  }
+}
+
+const onMenuSelect = () => {
+  if (isMobile.value) showMobileMenu.value = false
+}
+
 onMounted(() => {
+  window.addEventListener('resize', onResize)
   userStore.loadFromStorage()
   userStore.fetchNotificationCount()
   memberStore.fetchMembers()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
 })
 
 const handleLogout = () => {
@@ -121,6 +159,25 @@ const handleLogout = () => {
   background-color: #304156;
   transition: width 0.3s;
   overflow: hidden;
+}
+
+.aside.mobile-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  height: 100vh;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+}
+
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1999;
 }
 
 .logo {
@@ -201,6 +258,10 @@ const handleLogout = () => {
   background-color: #f5f7fa;
   padding: 20px;
   overflow-y: auto;
+}
+
+.main.mobile-main {
+  padding: 12px;
 }
 
 :deep(.el-menu) {

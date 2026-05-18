@@ -20,7 +20,7 @@
 
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="stats-row">
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-icon" style="background: #409eff">
             <el-icon size="24"><List /></el-icon>
@@ -31,7 +31,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-icon" style="background: #67c23a">
             <el-icon size="24"><CircleCheck /></el-icon>
@@ -42,7 +42,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-icon" style="background: #e6a23c">
             <el-icon size="24"><Clock /></el-icon>
@@ -53,7 +53,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-icon" style="background: #f56c6c">
             <el-icon size="24"><Warning /></el-icon>
@@ -69,32 +69,32 @@
     <!-- 图表区域 -->
     <el-row :gutter="20" class="chart-row">
       <!-- 任务状态分布 -->
-      <el-col :span="8">
+      <el-col :xs="24" :sm="24" :md="8">
         <el-card class="chart-card">
           <template #header>
             <span>任务状态分布</span>
           </template>
-          <v-chart class="chart" :option="taskStatusOption" autoresize />
+          <v-chart :class="isMobile ? 'chart-mobile' : 'chart'" :option="taskStatusOption" autoresize />
         </el-card>
       </el-col>
 
       <!-- 任务优先级分布 -->
-      <el-col :span="8">
+      <el-col :xs="24" :sm="24" :md="8">
         <el-card class="chart-card">
           <template #header>
             <span>任务优先级分布</span>
           </template>
-          <v-chart class="chart" :option="taskPriorityOption" autoresize />
+          <v-chart :class="isMobile ? 'chart-mobile' : 'chart'" :option="taskPriorityOption" autoresize />
         </el-card>
       </el-col>
 
       <!-- 成员任务统计 -->
-      <el-col :span="8">
+      <el-col :xs="24" :sm="24" :md="8">
         <el-card class="chart-card">
           <template #header>
             <span>成员任务统计</span>
           </template>
-          <v-chart class="chart" :option="memberTaskOption" autoresize />
+          <v-chart :class="isMobile ? 'chart-mobile' : 'chart'" :option="memberTaskOption" autoresize />
         </el-card>
       </el-col>
     </el-row>
@@ -114,7 +114,7 @@
     <!-- 主要内容区 -->
     <el-row :gutter="20">
       <!-- 待办任务 -->
-      <el-col :span="12">
+      <el-col :xs="24" :sm="24" :md="12">
         <el-card class="content-card">
           <template #header>
             <div class="card-header">
@@ -151,7 +151,7 @@
       </el-col>
 
       <!-- 最近会议 -->
-      <el-col :span="12">
+      <el-col :xs="24" :sm="24" :md="12">
         <el-card class="content-card">
           <template #header>
             <div class="card-header">
@@ -189,7 +189,7 @@
     </el-row>
 
     <!-- 创建任务对话框 -->
-    <el-dialog v-model="showCreateTask" title="创建任务" width="500px">
+    <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'">
       <el-form :model="newTask" label-width="80px">
         <el-form-item label="任务标题" required>
           <el-input v-model="newTask.title" placeholder="请输入任务标题" />
@@ -268,6 +268,11 @@ const todoTasks = ref([])
 const recentMeetings = ref([])
 const members = ref([])
 const showCreateTask = ref(false)
+const isMobile = ref(window.innerWidth <= 768)
+
+window.addEventListener('resize', () => {
+  isMobile.value = window.innerWidth <= 768
+})
 
 const newTask = ref({
   title: '',
@@ -507,6 +512,29 @@ onMounted(() => {
   color: #fff;
 }
 
+@media (max-width: 768px) {
+  .welcome-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+  }
+  .welcome-text h1 {
+    font-size: 18px;
+  }
+  .stat-value {
+    font-size: 22px;
+  }
+  .stat-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .content-card {
+    height: auto;
+    margin-bottom: 12px;
+  }
+}
+
 .welcome-text h1 {
   font-size: 24px;
   margin-bottom: 8px;
@@ -574,6 +602,10 @@ onMounted(() => {
 
 .chart {
   height: 300px;
+}
+
+.chart-mobile {
+  height: 200px;
 }
 
 .chart-wide {

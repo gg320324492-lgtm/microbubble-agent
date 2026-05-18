@@ -270,12 +270,13 @@
 - [x] 恢复之前的网站配置 ✅
 - [x] SSL 证书（已有 Let's Encrypt 证书，直接复用）
 
-### 本地电脑部署（进行中）
+### 本地电脑部署 ✅
 
 - [x] 安装 Docker Desktop ✅
-- [ ] 配置 .env 文件（Claude API Key + 代理地址）
-- [ ] 运行 `deploy-local.sh`（Docker 全服务 + FRP 客户端）
-- [ ] 联调测试（通过域名访问，测试各功能）
+- [x] 配置 .env 文件（Claude API Key + 代理地址）
+- [x] Docker 全服务构建（app/db/redis/minio/celery-worker/celery-beat）
+- [x] FRP 客户端连接云服务器
+- [x] 通过域名访问测试（API 正常响应）
 
 ### 后续优化（低优先级）
 

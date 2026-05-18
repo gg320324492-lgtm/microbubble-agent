@@ -369,6 +369,28 @@ onMounted(() => {
   height: calc(100vh - 140px);
 }
 
+@media (max-width: 768px) {
+  .chat-container {
+    height: calc(100vh - 60px);
+  }
+  .message-content {
+    max-width: 85%;
+  }
+  .message-list {
+    padding: 12px;
+  }
+  .welcome-banner {
+    padding: 20px 12px;
+  }
+  .welcome-banner h2 {
+    font-size: 20px;
+  }
+  .quick-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
 .chat-card {
   height: 100%;
   display: flex;
