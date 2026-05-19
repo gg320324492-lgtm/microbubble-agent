@@ -388,22 +388,22 @@
 - [x] @提及检测改为匹配企业微信实际格式（` @` 分隔符 + AgentID 匹配）
 - [x] Nginx 已满足 5 秒超时（异步 `asyncio.create_task` + 立即返回 success）
 
-### 微信互通部署（普通微信用户支持） - ⏸️ 暂不需要
+### 微信互通部署（普通微信用户支持） - ✅ 已完成
 
 > **当前方案**：使用企业微信「微信插件」功能，成员只需注册一次企业微信，之后可在普通微信内与小气对话，无需额外配置。
 > **微信互通适用场景**：如有外部用户（不愿注册企业微信的人）需要联系小气，再启用此功能。
 
-**如需启用微信互通，配置步骤：**
+**微信互通配置步骤（已完成）：**
 
-- [ ] 企业微信管理后台创建机器人专属成员账号（如 `xiaoqi`）
-- [ ] 开通「客户联系」→ 将 `xiaoqi` 加入可使用范围
-- [ ] 创建「联系我」二维码（单人模式，选 `xiaoqi`）
-- [ ] 配置回调：勾选客户联系相关事件（`change_external_contact`、`change_external_chat`）
-- [ ] `.env` 配置 `WECHAT_EXTERNAL_SENDER=xiaoqi`
-- [ ] 运行数据库迁移：`alembic upgrade head`
-- [ ] 用普通微信扫码添加「小气」，测试私聊消息收发
-- [ ] 创建外部群，拉「小气」进群，测试群聊消息收发
-- [ ] 从日志获取群聊 `wr...` chat_id：`docker compose logs app | grep chat_id`
+- [x] 企业微信管理后台创建机器人专属成员账号（如 `xiaoqi`）
+- [x] 开通「客户联系」→ 将 `xiaoqi` 加入可使用范围
+- [x] 创建「联系我」二维码（单人模式，选 `xiaoqi`）
+- [x] 配置回调：勾选客户联系相关事件（`change_external_contact`、`change_external_chat`）
+- [x] `.env` 配置 `WECHAT_EXTERNAL_SENDER=xiaoqi`
+- [x] 运行数据库迁移：`alembic upgrade head`
+- [x] 用普通微信扫码添加「小气」，测试私聊消息收发
+- [x] 创建外部群，拉「小气」进群，测试群聊消息收发
+- [x] 从日志获取群聊 `wr...` chat_id：`docker compose logs app | grep chat_id`
 
 ### 腾讯会议部署
 
