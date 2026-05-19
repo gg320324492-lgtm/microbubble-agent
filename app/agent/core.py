@@ -1,4 +1,5 @@
 import anthropic
+import base64
 import json
 import logging
 from typing import List, Dict, Any, Optional
@@ -12,6 +13,7 @@ from app.services.member_service import MemberService
 from app.services.meeting_service import MeetingService
 from app.services.project_service import ProjectService
 from app.services.knowledge_service import KnowledgeService
+from app.services.search_service import search_service
 from app.core.redis import session_store
 
 logger = logging.getLogger("microbubble.agent")
@@ -42,7 +44,7 @@ class MicroBubbleAgent:
             api_key=settings.CLAUDE_API_KEY,
             base_url=settings.CLAUDE_BASE_URL or None,
         )
-        self.model = "mimo-v2.5"
+        self.model = settings.CLAUDE_MODEL or "mimo-v2.5"
         self.system_prompt = SYSTEM_PROMPT
         self.tools = TOOLS
         self._sessions: Dict[str, List[Dict]] = {}
@@ -63,7 +65,9 @@ class MicroBubbleAgent:
         message: str,
         session_id: str = "default",
         history: Optional[List[Dict]] = None,
-        db=None
+        db=None,
+        image_data: Optional[bytes] = None,
+        image_media_type: str = "image/png"
     ) -> Dict[str, Any]:
         """与Agent对话"""
         messages = await self._load_session(session_id)
@@ -71,7 +75,29 @@ class MicroBubbleAgent:
         if history:
             messages = history
 
-        messages.append({"role": "user", "content": message})
+        # 构建消息内容
+        if image_data:
+            # 包含图片的消息
+            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+            content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image_media_type,
+                        "data": image_b64
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": message
+                }
+            ]
+        else:
+            # 纯文本消息
+            content = message
+
+        messages.append({"role": "user", "content": content})
 
         response = await self.client.messages.create(
             model=self.model,
@@ -157,10 +183,21 @@ class MicroBubbleAgent:
 
     async def _execute_tool(self, name: str, input_data: Dict, db=None) -> Any:
         """执行工具调用，路由到对应 service 层"""
-        if db is None:
-            return {"status": "error", "message": "数据库连接不可用"}
-
         try:
+            # 联网搜索不需要数据库
+            if name == "web_search":
+                if not search_service.is_configured:
+                    return {"status": "error", "message": "网络搜索功能未配置（缺少 MIMO_API_KEY）"}
+                result = await search_service.search(
+                    query=input_data["query"],
+                    max_results=input_data.get("max_results", 5),
+                )
+                return result
+
+            # 其他工具需要数据库
+            if db is None:
+                return {"status": "error", "message": "数据库连接不可用"}
+
             if name == "create_task":
                 task_svc = TaskService(db)
                 assignee_id = None
@@ -450,11 +487,36 @@ class MicroBubbleAgent:
         self,
         message: str,
         session_id: str = "default",
-        db=None
+        db=None,
+        image_data: Optional[bytes] = None,
+        image_media_type: str = "image/png"
     ):
         """流式对话"""
         messages = await self._load_session(session_id)
-        messages.append({"role": "user", "content": message})
+
+        # 构建消息内容
+        if image_data:
+            # 包含图片的消息
+            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+            content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image_media_type,
+                        "data": image_b64
+                    }
+                },
+                {
+                    "type": "text",
+                    "text": message
+                }
+            ]
+        else:
+            # 纯文本消息
+            content = message
+
+        messages.append({"role": "user", "content": content})
 
         async with self.client.messages.stream(
             model=self.model,

@@ -19,6 +19,7 @@ minio==7.2.0
 
 # AI相关
 anthropic>=0.39.0
+openai>=1.0.0
 
 # 语音识别
 faster-whisper==1.2.1

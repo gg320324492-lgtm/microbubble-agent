@@ -685,6 +685,85 @@ class MessageHandler:
         except Exception as e:
             logger.warning(f"回复消息失败: {e}")
 
+    # ==================== 微信客服消息处理 ====================
+
+    async def handle_kf_message(self, msg: dict, db: AsyncSession) -> None:
+        """
+        处理微信客服消息
+
+        微信客服消息格式：
+        - MsgType: text/image/voice/video/file/location/link
+        - Content: 文本内容
+        - FromUserName: 外部用户ID (external_userid)
+        - CreateTime: 时间戳
+        - OpenKfId: 客服ID
+        """
+        msg_type = msg.get("MsgType", "")
+        user_id = msg.get("FromUserName", "")
+        content = msg.get("Content", "")
+        open_kfid = msg.get("OpenKfId", "")
+
+        logger.info(f"处理微信客服消息: user={user_id}, type={msg_type}, content={content[:50]}")
+
+        # 设置为外部用户
+        self._is_external_user = True
+
+        # 识别用户身份
+        member = await self._identify_user(user_id, msg, db)
+        if not member:
+            await self._handle_unknown_user(user_id, msg_type, msg, db)
+            return
+
+        # 处理文本消息
+        if msg_type == "text" and content:
+            # 检查是否是任务回复
+            task_reply = self._detect_task_reply(content)
+            if task_reply:
+                await self._handle_task_reply(member, task_reply, db)
+                return
+
+            # 调用 Agent 处理
+            await self._call_agent(user_id, content, member, db)
+        elif msg_type == "image":
+            # 图片消息处理
+            media_id = msg.get("MediaId", "")
+            if media_id:
+                await self._handle_image_message(user_id, media_id, member, db)
+        else:
+            await self._reply_text(user_id, f"暂不支持 {msg_type} 类型的消息，请发送文字或图片。")
+
+    async def _call_agent_for_kf(self, user_id: str, content: str, member: Member, db: AsyncSession) -> None:
+        """调用 Agent 处理微信客服消息"""
+        try:
+            session_id = f"kf:{user_id}"
+            result = await agent.chat(
+                message=f"[用户: {member.name}, 角色: {member.role}] {content}",
+                session_id=session_id,
+                db=db
+            )
+
+            reply = result.get("content", "抱歉，处理失败了。")
+            if len(reply) > 2000:
+                reply = reply[:1950] + "\n\n...(内容过长已截断)"
+
+            # 微信客服回复使用 kf_service
+            from app.wechat.kf_service import kf_service
+            await kf_service.send_msg(
+                open_kfid=self._current_kf_id if hasattr(self, '_current_kf_id') else "",
+                external_userid=user_id,
+                msg_type="text",
+                content=reply
+            )
+        except Exception as e:
+            logger.error(f"Agent 调用失败: {e}", exc_info=True)
+            from app.wechat.kf_service import kf_service
+            await kf_service.send_msg(
+                open_kfid=self._current_kf_id if hasattr(self, '_current_kf_id') else "",
+                external_userid=user_id,
+                msg_type="text",
+                content="处理消息时出错了，请稍后再试。"
+            )
+
 
 # 全局实例
 message_handler = MessageHandler()

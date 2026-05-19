@@ -66,7 +66,16 @@ class WXBizMsgCrypt:
         import xml.etree.ElementTree as ET
 
         root = ET.fromstring(post_data)
-        encrypt = root.find("Encrypt").text
+        encrypt_elem = root.find("Encrypt")
+        if encrypt_elem is None:
+            # 尝试带命名空间查找
+            for child in root:
+                if child.tag.endswith("Encrypt") or child.tag == "Encrypt":
+                    encrypt_elem = child
+                    break
+        if encrypt_elem is None:
+            raise ValueError(f"XML 中未找到 Encrypt 元素，XML 内容: {post_data[:500]}")
+        encrypt = encrypt_elem.text
 
         # 验证签名
         expected = self._sha1_sign(self.token, timestamp, nonce, encrypt)

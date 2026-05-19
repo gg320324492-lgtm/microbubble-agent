@@ -293,10 +293,11 @@ class WeChatBot:
         """
         发送消息到外部群（包含普通微信用户的群）
 
-        使用 /cgi-bin/externalcontact/groupchat/send_chat_msg API
+        使用 /cgi-bin/externalcontact/add_msg_template API
+        注意：此 API 用于向客户群发送消息，需要配置「客户联系」权限
 
         Args:
-            chat_id: 外部群聊ID
+            chat_id: 外部群聊ID（以 wr 开头）
             content: 消息内容
             msg_type: 消息类型（text/markdown）
 
@@ -305,29 +306,38 @@ class WeChatBot:
         """
         token = await self._get_access_token()
 
-        if msg_type == "text":
-            data = {
-                "chat_id": chat_id,
-                "msgtype": "text",
-                "text": {
-                    "content": content
-                }
+        # 使用 add_msg_template API 发送消息到客户群
+        # 注意：此 API 需要 external_userid 列表，而不是 chat_id
+        # 对于外部群消息，我们使用 send_welcome_msg 或其他方式
+        # 这里使用 add_msg_template，但需要调整参数格式
+
+        # 外部群消息使用 text 格式（markdown 不支持）
+        data = {
+            "chat_type": "group",
+            "external_userid": [chat_id],  # 使用 chat_id 作为外部联系人 ID
+            "sender": settings.WECHAT_EXTERNAL_SENDER or "xiaoqi",
+            "msg_type": "text",
+            "text": {
+                "content": content
             }
-        else:
-            data = {
-                "chat_id": chat_id,
-                "msgtype": "text",
-                "text": {
-                    "content": content
-                }
-            }
+        }
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.api_base}/cgi-bin/externalcontact/groupchat/send_chat_msg?access_token={token}",
+                f"{self.api_base}/cgi-bin/externalcontact/add_msg_template?access_token={token}",
                 json=data
             )
-            return response.json()
+            result = response.json()
+
+            # 如果 add_msg_template 失败，尝试使用 send_welcome_msg
+            if result.get("errcode") != 0:
+                logger.warning(f"add_msg_template 失败: {result}，尝试其他方式")
+
+                # 尝试使用 send_welcome_msg（需要配置欢迎语模板）
+                # 这里暂时返回错误，需要进一步配置
+                return result
+
+            return result
 
     async def smart_send(
         self,

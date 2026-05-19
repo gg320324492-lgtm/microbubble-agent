@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     CLAUDE_BASE_URL: str = ""
     CLAUDE_MODEL: str = ""  # 留空则使用各模块默认模型
 
+    # MiMo API (OpenAI 兼容)
+    MIMO_API_KEY: str = ""
+    MIMO_BASE_URL: str = "https://api.xiaomimimo.com/v1"
+    MIMO_MODEL: str = "mimo-v2.5"
+
     # 腾讯会议
     TENCENT_MEETING_SDK_ID: str = ""
     TENCENT_MEETING_SDK_KEY: str = ""
