@@ -4,17 +4,19 @@
 
 ## 功能特性
 
-- **智能对话** - 支持文字/语音/图片与Agent交互，多模态图片识别
+- **智能对话** - 支持文字/语音/图片/文件与Agent交互，多模态识别，拖拽上传
 - **联网搜索** - 搜狗微信+必应双引擎并发搜索，自动获取最新信息
 - **任务管理** - 创建、分配、追踪任务，智能提醒
 - **会议助手** - 自动旁听会议、实时转写、生成纪要、自动分析要点
 - **项目管理** - 课题管理、进度追踪、里程碑管理
-- **知识库** - 文献管理、实验记录、语义搜索（pgvector）
+- **知识库** - 文献管理、实验记录、语义搜索（pgvector），AI 自动分类标签，对话知识自动入库
+- **长期记忆** - 用户偏好记忆、对话摘要、知识图谱构建
 - **成员管理** - 课题组成员信息管理
 - **企业微信集成** - 群机器人对话、任务派发、进度回复、主动提醒
 - **微信插件支持** - 通过微信插件在普通微信内与机器人对话（需一次性注册企业微信）
 - **腾讯会议集成** - 自动创建线上会议、Webhook 回调、转写分析
-- **文件管理** - MinIO 文件上传，支持会议附件
+- **文件管理** - MinIO 文件上传，支持会议附件和对话文件
+- **自动部署** - GitHub Webhook 触发，push 后自动构建部署
 
 ## 开发工具
 
@@ -71,11 +73,19 @@ docker compose up -d
 ### 3. 云服务器部署
 
 ```bash
-# 上传前端构建产物
-# 配置 Nginx（参考 scripts/nginx.conf）
-# 启动 FRP 服务端
-sudo systemctl start frps
+# 首次部署
+sudo bash scripts/deploy-cloud.sh
+
+# 配置自动部署（GitHub Webhook）
+cp scripts/webhook.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable webhook && systemctl start webhook
+# 然后在 GitHub 仓库 Settings → Webhooks 添加:
+# URL: http://<服务器IP>:9000/webhook
+# Secret: microbubble-deploy-2026
+# Events: Just the push event
 ```
+
+配置完成后，每次 `git push` 到 main 分支会自动部署。
 
 ### 4. FRP 穿透配置
 
@@ -151,6 +161,7 @@ npm run dev
 ### 核心模块
 - `POST /api/v1/chat` - 智能对话（支持工具调用）
 - `POST /api/v1/chat/image` - 图片识别对话
+- `POST /api/v1/chat/file` - 文件对话（PDF/Word/Excel）
 - `WebSocket /api/v1/chat/ws` - 流式对话
 
 ### 业务模块
@@ -158,19 +169,22 @@ npm run dev
 - `GET/POST /api/v1/meetings` - 会议管理（含转写分析）
 - `GET/POST /api/v1/members` - 成员管理
 - `GET/POST /api/v1/projects` - 项目管理（含里程碑）
-- `GET/POST /api/v1/knowledge` - 知识库（语义搜索）
+- `GET/POST /api/v1/knowledge` - 知识库（语义搜索 + 文件上传）
+- `GET/POST /api/v1/memory` - 长期记忆管理
 
 ### 集成模块
 - `POST /api/v1/wechat/callback` - 企业微信回调
 - `POST /api/v1/tencent-meeting/webhook` - 腾讯会议回调
 - `POST /api/v1/upload` - 文件上传
 
-### Agent 工具（10个）
-- `create_task` / `query_tasks` - 任务管理
+### Agent 工具（14个）
+- `create_task` / `query_tasks` / `update_task` - 任务管理
 - `create_meeting` / `query_meetings` - 会议管理
-- `query_members` / `search_member` - 成员查询
-- `create_project` / `query_projects` - 项目管理
-- `search_knowledge` / `generate_project_plan` - 知识库和计划生成
+- `query_members` - 成员查询
+- `query_projects` / `generate_project_plan` - 项目管理
+- `search_knowledge` / `save_conversation_knowledge` - 知识库
+- `web_search` - 联网搜索
+- `save_memory` / `search_memory` / `forget_memory` - 长期记忆
 
 详细文档: https://agent.mnb-lab.cn/docs
 
@@ -178,11 +192,13 @@ npm run dev
 
 ✅ **已上线运行** - 核心功能全部完成，生产环境部署成功
 
-- Phase 1-5 代码已完成
+- Phase 1-6 代码全部完成
 - 云服务器部署成功（https://agent.mnb-lab.cn）
-- 前端图片识别功能已完成（支持文字+图片混合消息）
-- 企业微信图片处理已修复（使用 mimo-v2.5 多模态模型）
-- 微信互通功能暂不需要（当前使用微信插件方案，成员注册一次企业微信后可在普通微信内对话）
+- GitHub Webhook 自动部署已配置
+- 前端支持图片/文件上传、拖拽上传
+- 知识库支持 AI 自动分类标签、对话知识自动入库
+- 长期记忆系统已上线（用户偏好/对话摘要/知识图谱）
+- 微信互通功能暂不需要（当前使用微信插件方案）
 - 腾讯会议待配置 API 凭据
 
 详见 [ROADMAP.md](ROADMAP.md)
