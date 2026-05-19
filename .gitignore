@@ -45,3 +45,14 @@ htmlcov/
 node_modules/
 web/dist/
 .webpack/
+
+# FRP
+frpc
+frpc.exe
+*.log
+
+# Claude Code
+.claude/
+
+# 构建产物
+*.tar.gz
