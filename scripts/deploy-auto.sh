@@ -2,8 +2,6 @@
 # 自动部署脚本 — 由 webhook 触发
 # 拉取代码 → 构建前端 → 重载 Nginx
 
-set -e
-
 PROJECT_DIR="/opt/microbubble-agent"
 LOG_FILE="/var/log/webhook-deploy.log"
 
@@ -15,20 +13,34 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
-# 拉取最新代码
+# 拉取最新代码（重试3次，GitHub TLS 不稳定）
 log "git pull..."
-git pull origin main 2>&1 | while read line; do log "  $line"; done
+PULL_OK=0
+for i in 1 2 3; do
+    if git pull origin main >> "$LOG_FILE" 2>&1; then
+        PULL_OK=1
+        break
+    fi
+    log "  第${i}次 pull 失败，${i}秒后重试..."
+    sleep $i
+done
+
+if [ $PULL_OK -eq 0 ]; then
+    log "ERROR: git pull 失败，跳过本次部署"
+    log "========== 部署中止 =========="
+    exit 1
+fi
 
 # 构建前端
 log "npm install..."
 cd "$PROJECT_DIR/web"
-npm install --silent 2>&1 | tail -3 | while read line; do log "  $line"; done
+npm install --silent >> "$LOG_FILE" 2>&1
 
 log "npm run build..."
-npm run build 2>&1 | tail -5 | while read line; do log "  $line"; done
+npm run build >> "$LOG_FILE" 2>&1
 
 # 重载 Nginx
 log "nginx reload..."
-nginx -s reload 2>&1 | while read line; do log "  $line"; done
+nginx -s reload >> "$LOG_FILE" 2>&1
 
 log "========== 部署完成 =========="
