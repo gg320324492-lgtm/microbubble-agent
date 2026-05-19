@@ -1,0 +1,14 @@
+[Unit]
+Description=GitHub Webhook Deploy Service
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/microbubble-agent/scripts/webhook.py
+WorkingDirectory=/opt/microbubble-agent
+Restart=always
+RestartSec=5
+Environment=WEBHOOK_SECRET=microbubble-deploy-2026
+
+[Install]
+WantedBy=multi-user.target
