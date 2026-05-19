@@ -10,6 +10,12 @@ class TaskBase(BaseModel):
     priority: str = "medium"
 
 
+class ReminderItem(BaseModel):
+    """自定义提醒项"""
+    remind_at: datetime
+    remind_type: str = "wechat"
+
+
 class TaskCreate(TaskBase):
     """创建任务"""
     assignee_id: Optional[int] = None
@@ -17,6 +23,7 @@ class TaskCreate(TaskBase):
     due_date: Optional[datetime] = None
     tags: Optional[List[str]] = None
     dependencies: Optional[List[int]] = None
+    reminders: Optional[List[ReminderItem]] = None
 
 
 class TaskUpdate(BaseModel):

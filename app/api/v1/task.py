@@ -13,6 +13,7 @@ from app.models.reminder import Reminder
 from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse, TaskList, TaskStats
 )
+from app.services.task_service import TaskService
 
 router = APIRouter()
 
@@ -24,26 +25,32 @@ async def create_task(
     db: AsyncSession = Depends(get_db)
 ):
     """创建任务"""
-    # 查找负责人
-    assignee_id = None
-    if task_data.assignee_id:
-        assignee_id = task_data.assignee_id
+    is_admin = current_user.role in ("admin", "leader")
 
-    task = Task(
+    # 权限：普通成员只能给自己创建任务
+    if not is_admin:
+        if task_data.assignee_id and task_data.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="普通成员只能给自己创建任务")
+
+    task_svc = TaskService(db)
+
+    # 准备自定义提醒数据
+    reminders_data = None
+    if task_data.reminders:
+        reminders_data = [r.model_dump() for r in task_data.reminders]
+
+    task = await task_svc.create_task(
         title=task_data.title,
-        description=task_data.description,
-        assignee_id=assignee_id,
+        assignee_id=task_data.assignee_id,
         project_id=task_data.project_id,
         priority=task_data.priority,
         due_date=task_data.due_date,
+        description=task_data.description,
         tags=task_data.tags,
-        status=TaskStatus.TODO.value,
-        source="manual"
+        source="manual",
+        created_by=current_user.id,
+        reminders=reminders_data,
     )
-
-    db.add(task)
-    await db.commit()
-    await db.refresh(task)
     return task
 
 
@@ -59,10 +66,18 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db)
 ):
     """查询任务列表"""
-    query = select(Task)
+    is_admin = current_user.role in ("admin", "leader")
 
-    # 筛选条件
+    query = select(Task)
     filters = []
+
+    # 权限：普通成员只看自己创建的 + 自己负责的
+    if not is_admin:
+        filters.append(or_(
+            Task.created_by == current_user.id,
+            Task.assignee_id == current_user.id
+        ))
+
     if assignee_id:
         filters.append(Task.assignee_id == assignee_id)
     if status:
@@ -85,7 +100,7 @@ async def list_tasks(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
-    # 获取总数（用 COUNT 聚合，避免加载全部数据）
+    # 获取总数
     count_query = select(func.count(Task.id))
     if filters:
         count_query = count_query.where(and_(*filters))
@@ -108,6 +123,12 @@ async def get_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
+    # 权限：普通成员只能查看自己的任务
+    is_admin = current_user.role in ("admin", "leader")
+    if not is_admin:
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="无权查看此任务")
+
     return task
 
 
@@ -124,6 +145,15 @@ async def update_task(
 
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+
+    # 权限：普通成员只能编辑自己创建的任务
+    is_admin = current_user.role in ("admin", "leader")
+    if not is_admin:
+        if task.created_by != current_user.id:
+            raise HTTPException(status_code=403, detail="只能编辑自己创建的任务")
+        # 不能把任务分配给其他人
+        if task_data.assignee_id is not None and task_data.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="普通成员不能将任务分配给其他人")
 
     # 更新字段
     update_data = task_data.model_dump(exclude_unset=True)
@@ -153,6 +183,12 @@ async def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
+    # 权限：普通成员只能删除自己创建的任务
+    is_admin = current_user.role in ("admin", "leader")
+    if not is_admin:
+        if task.created_by != current_user.id:
+            raise HTTPException(status_code=403, detail="只能删除自己创建的任务")
+
     await db.delete(task)
     await db.commit()
 
@@ -165,12 +201,22 @@ async def get_task_stats(
     db: AsyncSession = Depends(get_db)
 ):
     """获取任务统计"""
+    is_admin = current_user.role in ("admin", "leader")
+
     query = select(Task)
 
     if project_id:
         query = query.where(Task.project_id == project_id)
-    if member_id:
-        query = query.where(Task.assignee_id == member_id)
+
+    if is_admin:
+        if member_id:
+            query = query.where(Task.assignee_id == member_id)
+    else:
+        # 普通成员只看自己的统计
+        query = query.where(or_(
+            Task.created_by == current_user.id,
+            Task.assignee_id == current_user.id
+        ))
 
     result = await db.execute(query)
     tasks = result.scalars().all()
@@ -197,27 +243,41 @@ async def get_dashboard_stats(
 ):
     """获取仪表盘统计数据"""
     now = datetime.utcnow()
+    is_admin = current_user.role in ("admin", "leader")
+
+    # 权限：普通成员只看自己的数据
+    if not is_admin:
+        task_filter = or_(
+            Task.created_by == current_user.id,
+            Task.assignee_id == current_user.id
+        )
+    else:
+        task_filter = None
 
     # 任务状态统计
-    task_status_result = await db.execute(
-        select(Task.status, func.count(Task.id)).group_by(Task.status)
-    )
+    status_query = select(Task.status, func.count(Task.id))
+    if task_filter is not None:
+        status_query = status_query.where(task_filter)
+    task_status_result = await db.execute(status_query.group_by(Task.status))
     task_status_stats = {row[0]: row[1] for row in task_status_result.all()}
 
     # 任务优先级统计
-    task_priority_result = await db.execute(
-        select(Task.priority, func.count(Task.id)).group_by(Task.priority)
-    )
+    priority_query = select(Task.priority, func.count(Task.id))
+    if task_filter is not None:
+        priority_query = priority_query.where(task_filter)
+    task_priority_result = await db.execute(priority_query.group_by(Task.priority))
     task_priority_stats = {row[0]: row[1] for row in task_priority_result.all()}
 
-    # 项目进度统计（单条 SQL 聚合，避免 N+1）
+    # 项目进度统计
+    project_query = select(
+        Project.name,
+        func.count(Task.id).label("total_tasks"),
+        func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done_tasks")
+    ).outerjoin(Task, Task.project_id == Project.id)
+    if task_filter is not None:
+        project_query = project_query.where(task_filter)
     project_stats_result = await db.execute(
-        select(
-            Project.name,
-            func.count(Task.id).label("total_tasks"),
-            func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done_tasks")
-        ).outerjoin(Task, Task.project_id == Project.id)
-         .group_by(Project.id, Project.name)
+        project_query.group_by(Project.id, Project.name)
     )
     project_stats = []
     for row in project_stats_result.all():
@@ -230,35 +290,36 @@ async def get_dashboard_stats(
             "progress": round(done / total * 100) if total > 0 else 0
         })
 
-    # 成员任务统计（单条 SQL 聚合，避免 N+1）
+    # 成员任务统计
+    member_query = select(
+        Member.name,
+        func.count(Task.id).label("total"),
+        func.count(Task.id).filter(Task.status == TaskStatus.IN_PROGRESS.value).label("in_progress"),
+        func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done")
+    ).outerjoin(Task, Task.assignee_id == Member.id).where(Member.is_active == True)
+    if task_filter is not None:
+        member_query = member_query.where(task_filter)
     member_stats_result = await db.execute(
-        select(
-            Member.name,
-            func.count(Task.id).label("total"),
-            func.count(Task.id).filter(Task.status == TaskStatus.IN_PROGRESS.value).label("in_progress"),
-            func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done")
-        ).outerjoin(Task, Task.assignee_id == Member.id)
-         .where(Member.is_active == True)
-         .group_by(Member.id, Member.name)
-         .limit(10)
+        member_query.group_by(Member.id, Member.name).limit(10)
     )
     member_stats = [
         {"name": row.name, "total": row.total or 0, "in_progress": row.in_progress or 0, "done": row.done or 0}
         for row in member_stats_result.all()
     ]
 
-    # 总体统计（复用上面的聚合结果）
+    # 总体统计
     total_tasks = sum(s["total_tasks"] for s in project_stats)
 
-    # 逾期任务数（单独聚合）
-    overdue_result = await db.execute(
-        select(func.count(Task.id)).where(
-            and_(
-                Task.due_date < now,
-                Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
-            )
+    # 逾期任务数
+    overdue_query = select(func.count(Task.id)).where(
+        and_(
+            Task.due_date < now,
+            Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
         )
     )
+    if task_filter is not None:
+        overdue_query = overdue_query.where(task_filter)
+    overdue_result = await db.execute(overdue_query)
     overdue_count = overdue_result.scalar() or 0
 
     return {

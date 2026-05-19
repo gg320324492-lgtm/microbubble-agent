@@ -91,8 +91,11 @@
 
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" @click="editTask(row)">编辑</el-button>
-            <el-button text type="danger" @click="deleteTask(row)">删除</el-button>
+            <template v-if="isAdmin || row.created_by === currentUserId">
+              <el-button text type="primary" @click="editTask(row)">编辑</el-button>
+              <el-button text type="danger" @click="deleteTask(row)">删除</el-button>
+            </template>
+            <span v-else class="no-permission">--</span>
           </template>
         </el-table-column>
       </el-table>
@@ -123,13 +126,16 @@
           <el-input v-model="taskForm.title" placeholder="请输入任务标题" />
         </el-form-item>
         <el-form-item label="负责人">
-          <el-select v-model="taskForm.assignee_id" placeholder="选择负责人" clearable>
+          <el-select v-if="isAdmin" v-model="taskForm.assignee_id" placeholder="选择负责人" clearable>
             <el-option
               v-for="member in members"
               :key="member.id"
               :label="member.name"
               :value="member.id"
             />
+          </el-select>
+          <el-select v-else v-model="taskForm.assignee_id" disabled>
+            <el-option :label="userStore.userInfo?.name" :value="currentUserId" />
           </el-select>
         </el-form-item>
         <el-form-item label="优先级">
@@ -156,6 +162,29 @@
             value-format="YYYY-MM-DD"
           />
         </el-form-item>
+        <el-form-item label="提醒设置">
+          <div v-for="(reminder, index) in taskForm.reminders" :key="index" class="reminder-item">
+            <el-date-picker
+              v-model="reminder.remind_at"
+              type="datetime"
+              placeholder="选择提醒时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              style="width: 200px"
+            />
+            <el-select v-model="reminder.remind_type" style="width: 90px; margin-left: 8px;">
+              <el-option label="微信" value="wechat" />
+              <el-option label="邮件" value="email" />
+            </el-select>
+            <el-button text type="danger" @click="taskForm.reminders.splice(index, 1)" style="margin-left: 4px;">
+              删除
+            </el-button>
+          </div>
+          <el-button text type="primary" @click="taskForm.reminders.push({ remind_at: '', remind_type: 'wechat' })">
+            + 添加提醒
+          </el-button>
+          <div class="reminder-hint">不设置则使用默认提醒（截止前2天 + 截止当天9点）</div>
+        </el-form-item>
         <el-form-item label="任务描述">
           <el-input
             v-model="taskForm.description"
@@ -174,10 +203,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const isAdmin = computed(() => {
+  const role = userStore.userInfo?.role
+  return role === 'admin' || role === 'leader'
+})
+const currentUserId = computed(() => userStore.userInfo?.id)
 
 const isMobile = ref(window.innerWidth <= 768)
 const tasks = ref([])
@@ -200,7 +237,8 @@ const taskForm = ref({
   priority: 'medium',
   status: 'todo',
   due_date: '',
-  description: ''
+  description: '',
+  reminders: []
 })
 
 // 获取任务列表
@@ -249,14 +287,18 @@ const saveTask = async () => {
     resetForm()
     fetchTasks()
   } catch (e) {
-    ElMessage.error('操作失败')
+    const msg = e.response?.data?.detail || '操作失败'
+    ElMessage.error(msg)
   }
 }
 
 // 编辑任务
 const editTask = (task) => {
   editingTask.value = task
-  taskForm.value = { ...task }
+  taskForm.value = {
+    ...task,
+    reminders: task.reminders ? [...task.reminders] : []
+  }
   showCreateDialog.value = true
 }
 
@@ -291,11 +333,12 @@ const toggleTaskStatus = async (task) => {
 const resetForm = () => {
   taskForm.value = {
     title: '',
-    assignee_id: null,
+    assignee_id: isAdmin.value ? null : currentUserId.value,
     priority: 'medium',
     status: 'todo',
     due_date: '',
-    description: ''
+    description: '',
+    reminders: []
   }
 }
 
@@ -380,5 +423,22 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.no-permission {
+  color: #c0c4cc;
+  font-size: 12px;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.reminder-hint {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 4px;
 }
 </style>
