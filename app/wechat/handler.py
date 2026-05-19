@@ -83,6 +83,8 @@ class MessageHandler:
         user_id = msg.get("FromUserName", "")
         chat_id = msg.get("ChatId", "")  # 群聊ID（私聊为空）
 
+        logger.info(f"收到消息: user_id={user_id}, msg_type={msg_type}, chat_id={chat_id}")
+
         # 事件处理
         if msg_type == "event":
             await self._handle_event(msg, db)
@@ -94,8 +96,11 @@ class MessageHandler:
         # 识别用户身份
         member = await self._identify_user(user_id, msg, db, is_external)
         if not member:
+            logger.info(f"用户未识别: user_id={user_id}, is_external={is_external}")
             await self._handle_unknown_user(user_id, msg_type, msg, db, is_external)
             return
+
+        logger.info(f"用户已识别: user_id={user_id}, member={member.name}, is_external={is_external}")
 
         # 判断是群聊还是私聊
         if chat_id:
@@ -502,6 +507,7 @@ class MessageHandler:
         if is_external:
             member = await identity_resolver.resolve_by_external_userid(user_id, db)
             if member:
+                logger.info(f"通过 external_userid 识别: user_id={user_id}, member={member.name}")
                 return member
         else:
             member = await identity_resolver.resolve(user_id, db)
@@ -510,18 +516,22 @@ class MessageHandler:
 
         pending = await self._get_pending_user(user_id)
         if pending:
+            logger.info(f"用户有 pending 状态: user_id={user_id}")
             return None
 
         nickname = msg.get("NickName", "")
+        logger.info(f"尝试昵称匹配: user_id={user_id}, nickname='{nickname}'")
         if nickname:
             member = await identity_resolver.resolve_by_nickname(nickname, db)
             if member:
+                logger.info(f"通过昵称识别: user_id={user_id}, member={member.name}")
                 if is_external:
                     await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
                 else:
                     await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
                 return member
 
+        logger.info(f"用户识别失败: user_id={user_id}, is_external={is_external}")
         return None
 
     async def _handle_unknown_user(self, user_id: str, msg_type: str,
@@ -546,10 +556,16 @@ class MessageHandler:
                 nickname=content, mobile=content, db=db)
 
             if member:
-                if is_external:
-                    await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
-                else:
-                    await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
+                try:
+                    if is_external:
+                        await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+                    else:
+                        await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
+                    logger.info(f"身份绑定成功: user_id={user_id}, member={member.name}, is_external={is_external}")
+                except Exception as e:
+                    logger.error(f"身份绑定失败: user_id={user_id}, member={member.name}, error={e}", exc_info=True)
+                    await self._reply_text(user_id, "身份绑定失败，请稍后重试。", is_external)
+                    return
                 await self._delete_pending_user(user_id)
                 await self._reply_text(user_id,
                     f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。", is_external)
@@ -572,7 +588,7 @@ class MessageHandler:
             if content:
                 member = await identity_resolver.resolve_by_name_or_mobile(content, db)
                 if member and member.external_userid:
-                    # 已验证用户，绑定新的 external_userid
+                    logger.info(f"已验证用户换设备识别: user_id={user_id}, member={member.name}")
                     await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
                     await self._reply_text(user_id,
                         f"✅ 识别到你了，{member.name}！现在可以直接发消息给我。", is_external)
