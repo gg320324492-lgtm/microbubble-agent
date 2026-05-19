@@ -529,52 +529,67 @@ class MessageHandler:
                                      is_external: bool = False) -> None:
         """未知用户自引导绑定"""
         pending = await self._get_pending_user(user_id)
-        if not pending:
-            await self._set_pending_user(user_id, {"awaiting": True, "attempts": 0})
-            # 外部用户（普通微信）和内部用户（企业微信）显示不同提示
-            if is_external:
+
+        # 有 pending 状态 → 验证流程
+        if pending:
+            if msg_type != "text":
+                await self._reply_text(user_id, "请发送文字消息来验证身份。", is_external)
+                return
+
+            content = msg.get("Content", "").strip()
+            if not content:
+                await self._reply_text(user_id, "请发送文字消息来验证身份。", is_external)
+                return
+
+            pending["attempts"] += 1
+            member = await identity_resolver.resolve_multi_signal(
+                nickname=content, mobile=content, db=db)
+
+            if member:
+                if is_external:
+                    await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+                else:
+                    await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
+                await self._delete_pending_user(user_id)
                 await self._reply_text(user_id,
-                    "你好！👋 我是小气，课题组的AI助手。\n\n"
-                    "首次使用需要验证身份，请回复以下任一信息：\n"
-                    "• 你的姓名\n• 你的手机号", is_external)
+                    f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。", is_external)
+                return
+
+            attempts = pending["attempts"]
+            if attempts >= 3:
+                await self._delete_pending_user(user_id)
+                await self._reply_text(user_id, "多次匹配未成功，请联系管理员。", is_external)
             else:
+                await self._set_pending_user(user_id, pending)
                 await self._reply_text(user_id,
-                    "你好！👋 我是小气，课题组的AI助手。\n\n"
-                    "首次使用需要验证身份，请回复以下任一信息：\n"
-                    "• 你的姓名\n• 你的手机号\n• 你的企业微信昵称", is_external)
+                    f"未找到匹配信息（{attempts}/3），请确认后重试。", is_external)
             return
 
-        if msg_type != "text":
-            await self._reply_text(user_id, "请发送文字消息来验证身份。", is_external)
-            return
+        # 无 pending 状态 → 首次接触
+        # 先检查是否是已验证用户换了设备/会话（通过姓名匹配已绑定的成员）
+        if is_external and msg_type == "text":
+            content = msg.get("Content", "").strip()
+            if content:
+                member = await identity_resolver.resolve_by_name_or_mobile(content, db)
+                if member and member.external_userid:
+                    # 已验证用户，绑定新的 external_userid
+                    await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+                    await self._reply_text(user_id,
+                        f"✅ 识别到你了，{member.name}！现在可以直接发消息给我。", is_external)
+                    return
 
-        content = msg.get("Content", "").strip()
-        if not content:
-            await self._reply_text(user_id, "请发送文字消息来验证身份。", is_external)
-            return
-
-        pending["attempts"] += 1
-        member = await identity_resolver.resolve_multi_signal(
-            nickname=content, mobile=content, db=db)
-
-        if member:
-            if is_external:
-                await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
-            else:
-                await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
-            await self._delete_pending_user(user_id)
+        # 真正的首次用户
+        await self._set_pending_user(user_id, {"awaiting": True, "attempts": 0})
+        if is_external:
             await self._reply_text(user_id,
-                f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。", is_external)
-            return
-
-        attempts = pending["attempts"]
-        if attempts >= 3:
-            await self._delete_pending_user(user_id)
-            await self._reply_text(user_id, "多次匹配未成功，请联系管理员。", is_external)
+                "你好！👋 我是小气，课题组的AI助手。\n\n"
+                "首次使用需要验证身份，请回复以下任一信息：\n"
+                "• 你的姓名\n• 你的手机号", is_external)
         else:
-            await self._set_pending_user(user_id, pending)
             await self._reply_text(user_id,
-                f"未找到匹配信息（{attempts}/3），请确认后重试。", is_external)
+                "你好！👋 我是小气，课题组的AI助手。\n\n"
+                "首次使用需要验证身份，请回复以下任一信息：\n"
+                "• 你的姓名\n• 你的手机号\n• 你的企业微信昵称", is_external)
 
     async def _handle_event(self, msg: dict, db: AsyncSession) -> None:
         """事件处理"""

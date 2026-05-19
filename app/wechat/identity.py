@@ -144,6 +144,29 @@ class IdentityResolver:
 
         return None
 
+    async def resolve_by_name_or_mobile(self, content: str, db: AsyncSession) -> Optional[Member]:
+        """
+        通过姓名或手机号匹配已绑定的成员
+
+        用于已验证用户换设备/会话后的快速识别。
+        只匹配已绑定过 external_userid 或 wechat_id 的成员（已验证用户）。
+        """
+        result = await db.execute(
+            select(Member).where(
+                Member.is_active == True,
+                or_(
+                    Member.external_userid.isnot(None),
+                    Member.wechat_id.isnot(None)
+                ),
+                or_(
+                    Member.name == content,
+                    Member.phone == content,
+                    Member.wechat_mobile == content
+                )
+            )
+        )
+        return result.scalars().first()
+
     async def fuzzy_search(self, keyword: str, db: AsyncSession) -> List[Member]:
         """
         模糊搜索成员（用于候选匹配）
