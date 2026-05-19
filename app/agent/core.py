@@ -186,8 +186,6 @@ class MicroBubbleAgent:
         try:
             # 联网搜索不需要数据库
             if name == "web_search":
-                if not search_service.is_configured:
-                    return {"status": "error", "message": "网络搜索功能未配置（缺少 MIMO_API_KEY）"}
                 result = await search_service.search(
                     query=input_data["query"],
                     max_results=input_data.get("max_results", 5),
@@ -542,9 +540,9 @@ class MicroBubbleAgent:
                         yield {"type": "text", "content": event.delta.text}
                     elif event.delta.type == "input_json_delta":
                         if tool_calls:
-                            tool_calls[-1]["input_json"] = getattr(event.delta, "partial_json", "")
+                            tool_calls[-1]["input_json"] = tool_calls[-1].get("input_json", "") + getattr(event.delta, "partial_json", "")
 
-            response = await stream.get_final_response()
+            response = await stream.get_final_message()
 
         if tool_calls:
             tool_results = []
