@@ -3,7 +3,12 @@
     <!-- 分类统计面板 -->
     <el-card v-if="statsData.total > 0" class="stats-card">
       <div class="stats-grid">
-        <div class="stat-item stat-total">
+        <div
+          class="stat-item stat-total"
+          :class="{ 'stat-active': filterCategory === '' }"
+          @click="filterCategory = ''"
+        >
+          <div class="stat-icon">📊</div>
           <div class="stat-number">{{ statsData.total }}</div>
           <div class="stat-label">全部</div>
         </div>
@@ -11,9 +16,10 @@
           v-for="(count, cat) in statsData.categories"
           :key="cat"
           class="stat-item"
-          :class="{ 'stat-active': filterCategory === cat }"
+          :class="['stat-' + getCategoryKey(cat), { 'stat-active': filterCategory === cat }]"
           @click="filterCategory = filterCategory === cat ? '' : cat"
         >
+          <div class="stat-icon">{{ getCategoryIcon(cat) }}</div>
           <div class="stat-number">{{ count }}</div>
           <div class="stat-label">{{ cat }}</div>
         </div>
@@ -62,16 +68,16 @@
 
     <!-- 分类标签 -->
     <div class="category-tags">
-      <el-tag
+      <span
         v-for="cat in categories"
         :key="cat.value"
-        :type="filterCategory === cat.value ? '' : 'info'"
-        :effect="filterCategory === cat.value ? 'dark' : 'plain'"
+        class="category-tag-item"
+        :class="{ 'category-tag-active': filterCategory === cat.value }"
         @click="filterCategory = filterCategory === cat.value ? '' : cat.value"
-        style="cursor: pointer"
       >
-        {{ cat.icon }} {{ cat.label }}
-      </el-tag>
+        <span class="category-tag-icon">{{ cat.icon }}</span>
+        <span class="category-tag-text">{{ cat.label }}</span>
+      </span>
     </div>
 
     <!-- 知识列表 -->
@@ -89,25 +95,28 @@
         >
           <div class="item-header">
             <div class="item-category">
-              <el-tag size="small" :type="getCategoryType(item.category)">
+              <span class="category-badge" :class="'cat-' + getCategoryKey(item.category)">
+                <span class="category-icon">{{ getCategoryIcon(item.category) }}</span>
                 {{ item.category || '未分类' }}
-              </el-tag>
+              </span>
             </div>
             <div class="item-tags">
-              <el-tag
-                v-for="tag in (item.tags || []).slice(0, 3)"
+              <span
+                v-for="tag in (item.tags || []).slice(0, 4)"
                 :key="tag"
-                size="small"
-                type="info"
-                style="margin-left: 4px"
+                class="tag-chip"
               >
                 {{ tag }}
-              </el-tag>
+              </span>
+              <span v-if="(item.tags || []).length > 4" class="tag-chip tag-more">
+                +{{ item.tags.length - 4 }}
+              </span>
             </div>
           </div>
 
           <h3 class="item-title">
             <el-icon v-if="item.file_path" style="margin-right: 4px; color: #409eff"><Document /></el-icon>
+            <span v-if="item.source_type === 'conversation'" class="conversation-badge" title="来自对话记录">💬</span>
             {{ item.title }}
           </h3>
           <p v-if="item.summary" class="item-summary">{{ item.summary }}</p>
@@ -230,36 +239,42 @@
       <div v-if="currentKnowledge" class="knowledge-detail">
         <h2>{{ currentKnowledge.title }}</h2>
         <div class="detail-meta">
-          <el-tag :type="getCategoryType(currentKnowledge.category)">
+          <span class="category-badge" :class="'cat-' + getCategoryKey(currentKnowledge.category)">
+            <span class="category-icon">{{ getCategoryIcon(currentKnowledge.category) }}</span>
             {{ currentKnowledge.category || '未分类' }}
-          </el-tag>
-          <span>{{ formatDate(currentKnowledge.created_at) }}</span>
+          </span>
+          <span class="detail-date">{{ formatDate(currentKnowledge.created_at) }}</span>
         </div>
-        <div class="detail-tags">
-          <el-tag
-            v-for="tag in (currentKnowledge.tags || [])"
+        <div v-if="currentKnowledge.tags && currentKnowledge.tags.length" class="detail-tags">
+          <span
+            v-for="tag in currentKnowledge.tags"
             :key="tag"
-            size="small"
-            style="margin: 4px"
+            class="tag-chip detail-tag"
           >
             {{ tag }}
-          </el-tag>
+          </span>
         </div>
         <div v-if="currentKnowledge.summary" class="detail-summary">
-          <strong>摘要：</strong>{{ currentKnowledge.summary }}
+          <div class="summary-label">AI 摘要</div>
+          <div class="summary-text">{{ currentKnowledge.summary }}</div>
         </div>
         <div class="detail-content">{{ currentKnowledge.content }}</div>
-        <div v-if="currentKnowledge.source" class="detail-source">
-          来源：{{ currentKnowledge.source }}
-        </div>
-        <div v-if="currentKnowledge.file_name" class="detail-source">
-          文件：{{ currentKnowledge.file_name }}
+        <div v-if="currentKnowledge.source || currentKnowledge.file_name || currentKnowledge.source_type === 'conversation'" class="detail-source">
+          <div v-if="currentKnowledge.source_type === 'conversation'" class="detail-conversation-source">
+            <span>💬</span> 来自对话记录，AI 自动提取
+          </div>
+          <div v-if="currentKnowledge.source && currentKnowledge.source_type !== 'conversation'">来源：{{ currentKnowledge.source }}</div>
+          <div v-if="currentKnowledge.file_name">文件：{{ currentKnowledge.file_name }}</div>
         </div>
       </div>
     </el-dialog>
 
     <!-- 文件上传对话框 -->
     <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'">
+      <div class="upload-ai-notice">
+        <el-icon size="16" color="#409eff"><MagicStick /></el-icon>
+        <span>上传后 AI 将自动分析内容，生成摘要、分类和标签</span>
+      </div>
       <el-form label-width="80px">
         <el-form-item label="标题">
           <el-input v-model="uploadTitle" placeholder="留空则使用文件名" />
@@ -282,7 +297,9 @@
       </el-upload>
       <template #footer>
         <el-button @click="showUploadDialog = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="handleUpload">上传</el-button>
+        <el-button type="primary" :loading="uploading" @click="handleUpload">
+          {{ uploading ? '分析中...' : '上传' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -483,6 +500,16 @@ const getCategoryType = (category) => {
   return map[category] || 'info'
 }
 
+const getCategoryIcon = (category) => {
+  const map = { '基础': '📚', '方法': '🔬', '文献': '📄', 'FAQ': '❓' }
+  return map[category] || '📁'
+}
+
+const getCategoryKey = (category) => {
+  const map = { '基础': 'base', '方法': 'method', '文献': 'literature', 'FAQ': 'faq' }
+  return map[category] || 'unknown'
+}
+
 watch(filterCategory, () => {
   currentPage.value = 1
   fetchKnowledge()
@@ -514,19 +541,26 @@ onMounted(() => {
 .stat-item {
   text-align: center;
   cursor: pointer;
-  padding: 8px 16px;
-  border-radius: 8px;
-  transition: background 0.2s;
+  padding: 12px 20px;
+  border-radius: 12px;
+  transition: all 0.2s;
   color: rgba(255, 255, 255, 0.8);
+  min-width: 80px;
 }
 
 .stat-item:hover,
 .stat-active {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 .stat-total {
   color: #fff;
+}
+
+.stat-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
 }
 
 .stat-number {
@@ -557,6 +591,46 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.category-tag-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+  color: #606266;
+}
+
+.category-tag-item:hover {
+  border-color: #409eff;
+  color: #409eff;
+  background: #f0f9ff;
+}
+
+.category-tag-active {
+  background: #409eff;
+  border-color: #409eff;
+  color: #fff;
+}
+
+.category-tag-active:hover {
+  background: #337ecc;
+  border-color: #337ecc;
+  color: #fff;
+}
+
+.category-tag-icon {
+  font-size: 16px;
+}
+
+.category-tag-text {
+  font-weight: 500;
+}
+
 .knowledge-list {
   display: flex;
   flex-direction: column;
@@ -582,12 +656,64 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.category-icon {
+  font-size: 13px;
+}
+
+.cat-base { background: #e8f4fd; color: #1a7fd4; }
+.cat-method { background: #e8f8e8; color: #2d8c2d; }
+.cat-literature { background: #fff3e0; color: #c77c00; }
+.cat-faq { background: #f3e8fd; color: #7b3fa0; }
+.cat-unknown { background: #f0f2f5; color: #909399; }
+
+.tag-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  background: #f0f2f5;
+  color: #606266;
+  margin-left: 4px;
+  transition: all 0.2s;
+}
+
+.tag-chip:hover {
+  background: #e0e2e5;
+  color: #303133;
+}
+
+.tag-more {
+  background: #e8f4fd;
+  color: #409eff;
 }
 
 .item-title {
   font-size: 16px;
   color: #303133;
   margin-bottom: 8px;
+}
+
+.conversation-badge {
+  display: inline-block;
+  margin-right: 4px;
+  font-size: 14px;
+  vertical-align: middle;
+  opacity: 0.8;
 }
 
 .item-content {
@@ -655,19 +781,67 @@ onMounted(() => {
   line-height: 1.6;
 }
 
+.upload-ai-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: #409eff;
+}
+
 .knowledge-detail h2 {
   margin-bottom: 16px;
+  color: #303133;
 }
 
 .detail-meta {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.detail-date {
+  font-size: 13px;
+  color: #909399;
 }
 
 .detail-tags {
   margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detail-tag {
+  font-size: 12px;
+}
+
+.detail-summary {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e8f4fd 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-left: 4px solid #409eff;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #409eff;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.summary-text {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #303133;
 }
 
 .detail-content {
@@ -675,6 +849,11 @@ onMounted(() => {
   line-height: 1.8;
   color: #303133;
   white-space: pre-wrap;
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .detail-source {
@@ -683,5 +862,16 @@ onMounted(() => {
   border-top: 1px solid #ebeef5;
   font-size: 13px;
   color: #909399;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-conversation-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #409eff;
+  font-weight: 500;
 }
 </style>

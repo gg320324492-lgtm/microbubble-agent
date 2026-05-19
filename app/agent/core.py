@@ -94,6 +94,80 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.error(f"后台记忆提取失败: {e}")
 
+    async def _extract_and_save_knowledge(self, user_id: int, messages: List[Dict], session_id: str):
+        """后台任务：从对话中提取有价值的知识存入知识库"""
+        from app.core.database import async_session
+        try:
+            # 构建对话文本
+            conversation = ""
+            for msg in messages[-10:]:
+                role = "用户" if msg.get("role") == "user" else "助手"
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    content = " ".join(
+                        b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+                    )
+                if content:
+                    conversation += f"{role}: {content}\n"
+
+            if len(conversation) < 100:
+                return
+
+            prompt = f"""分析以下对话，判断是否包含值得保存到知识库的专业知识。
+只保存：实验方法、研究发现、技术方案、经验总结、专业概念解释、操作步骤。
+不保存：闲聊、简单问答、临时性信息、任务安排、会议通知。
+
+对话内容:
+{conversation[:3000]}
+
+如果没有值得保存的知识，返回 {{"save": false}}
+如果有，返回严格的JSON格式（不要包含其他文字）：
+{{"save": true, "title": "知识标题", "content": "整理后的完整知识内容", "category": "基础/方法/文献/FAQ", "tags": ["标签1", "标签2"]}}"""
+
+            client = anthropic.AsyncAnthropic(
+                api_key=settings.CLAUDE_API_KEY,
+                base_url=settings.CLAUDE_BASE_URL or None,
+            )
+            response = await client.messages.create(
+                model=settings.CLAUDE_MODEL or "mimo-v2.5",
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            text_content = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    text_content = block.text
+                    break
+
+            text_content = text_content.strip()
+            if text_content.startswith("```"):
+                text_content = text_content.split("\n", 1)[-1]
+                if text_content.endswith("```"):
+                    text_content = text_content[:-3]
+                text_content = text_content.strip()
+
+            import json
+            result = json.loads(text_content)
+            if not result.get("save"):
+                return
+
+            async with async_session() as db:
+                from app.services.knowledge_service import KnowledgeService
+                kb_svc = KnowledgeService(db)
+                await kb_svc.create_from_conversation(
+                    title=result["title"],
+                    content=result["content"],
+                    category=result.get("category"),
+                    tags=result.get("tags", []),
+                    created_by=user_id,
+                    session_id=session_id,
+                )
+                logger.info(f"从对话中提取知识: {result['title']}(user_id={user_id})")
+        except json.JSONDecodeError:
+            logger.warning("知识提取返回非JSON格式")
+        except Exception as e:
+            logger.error(f"对话知识提取失败: {e}")
+
     async def chat(
         self,
         message: str,
@@ -157,10 +231,13 @@ class MicroBubbleAgent:
 
         await self._save_session(session_id, messages)
 
-        # 后台提取记忆
+        # 后台提取记忆 + 知识
         if user_id and db:
             asyncio.create_task(
                 self._extract_and_save_memories(user_id, messages, session_id)
+            )
+            asyncio.create_task(
+                self._extract_and_save_knowledge(user_id, messages, session_id)
             )
 
         return result
@@ -561,6 +638,17 @@ class MicroBubbleAgent:
                 if success:
                     return {"status": "success", "message": "记忆已遗忘"}
                 return {"status": "error", "message": "记忆不存在或无权操作"}
+
+            elif name == "save_conversation_knowledge":
+                kb_svc = KnowledgeService(db)
+                knowledge = await kb_svc.create_from_conversation(
+                    title=input_data["title"],
+                    content=input_data["content"],
+                    category=input_data.get("category"),
+                    tags=input_data.get("tags", []),
+                    created_by=user_id,
+                )
+                return {"status": "success", "knowledge_id": knowledge.id, "title": knowledge.title}
 
             else:
                 return {"status": "error", "message": f"未知工具: {name}"}

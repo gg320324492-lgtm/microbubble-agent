@@ -166,6 +166,34 @@ class KnowledgeService:
         except Exception as e:
             logger.error(f"后台分析失败(knowledge_id={knowledge_id}): {e}")
 
+    async def create_from_conversation(
+        self,
+        title: str,
+        content: str,
+        category: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        created_by: Optional[int] = None,
+        session_id: Optional[str] = None
+    ) -> Knowledge:
+        """从对话中创建知识条目"""
+        knowledge = Knowledge(
+            title=title,
+            content=content,
+            category=category,
+            tags=tags or [],
+            source=f"对话记录#{session_id}" if session_id else "对话记录",
+            source_type="conversation",
+            created_by=created_by,
+        )
+        self.db.add(knowledge)
+        await self.db.commit()
+        await self.db.refresh(knowledge)
+        # 后台生成嵌入（如果未提供分类则由 LLM 分析）
+        asyncio.create_task(
+            self._analyze_and_embed(knowledge.id, title, content)
+        )
+        return knowledge
+
     async def search_semantic(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
         """语义搜索 - 使用pgvector余弦距离（如果可用）"""
         try:

@@ -330,5 +330,35 @@ TOOLS = [
             },
             "required": ["memory_id"]
         }
+    },
+
+    # 对话知识保存工具
+    {
+        "name": "save_conversation_knowledge",
+        "description": "将对话中的重要知识保存到知识库。当对话中讨论了有价值的实验方法、研究发现、技术方案、经验总结等内容时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "知识标题，简洁概括"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "知识内容，完整的知识描述"
+                },
+                "category": {
+                    "type": "string",
+                    "enum": ["基础", "方法", "文献", "FAQ"],
+                    "description": "知识分类"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "标签列表"
+                }
+            },
+            "required": ["title", "content"]
+        }
     }
 ]
