@@ -54,7 +54,7 @@
 
         <div class="header-right">
           <el-badge :value="notificationCount" :max="99" class="badge" :hidden="notificationCount === 0">
-            <el-icon size="20"><Bell /></el-icon>
+            <el-icon size="20" class="bell-icon" @click="markAllRead"><Bell /></el-icon>
           </el-badge>
 
           <el-dropdown>
@@ -87,6 +87,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 
@@ -147,6 +148,16 @@ const handleLogout = () => {
   userStore.logout()
   ElMessage.success('已退出登录')
   router.push('/login')
+}
+
+const markAllRead = async () => {
+  if (notificationCount.value === 0) return
+  try {
+    await axios.post('/api/v1/reminders/mark-read')
+    userStore.notificationCount = 0
+  } catch {
+    // ignore
+  }
 }
 </script>
 
@@ -229,6 +240,15 @@ const handleLogout = () => {
 
 .badge {
   cursor: pointer;
+}
+
+.bell-icon {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.bell-icon:hover {
+  color: #409eff;
 }
 
 .user-info {

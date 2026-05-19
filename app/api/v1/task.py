@@ -294,3 +294,30 @@ async def get_pending_reminder_count(
     )
     count = result.scalar() or 0
     return {"count": count}
+
+
+@router.post("/reminders/mark-read")
+async def mark_reminders_read(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """标记当前用户所有待处理提醒为已读"""
+    from sqlalchemy import update
+    await db.execute(
+        update(Reminder)
+        .where(
+            Reminder.id.in_(
+                select(Reminder.id)
+                .join(Task, Task.id == Reminder.task_id)
+                .where(
+                    and_(
+                        Task.assignee_id == current_user.id,
+                        Reminder.status == "pending"
+                    )
+                )
+            )
+        )
+        .values(status="sent")
+    )
+    await db.commit()
+    return {"status": "success"}
