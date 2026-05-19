@@ -39,6 +39,17 @@ class MessageHandler:
         data = await r.get(f"wechat:pending:{user_id}")
         return json.loads(data) if data else None
 
+    async def _get_verified_user(self, user_id: str) -> int | None:
+        """从 Redis 获取已验证用户的 member_id"""
+        r = await get_redis()
+        data = await r.get(f"wechat:verified:{user_id}")
+        return int(data) if data else None
+
+    async def _save_verified_user(self, user_id: str, member_id: int) -> None:
+        """保存已验证用户到 Redis（7天过期）"""
+        r = await get_redis()
+        await r.set(f"wechat:verified:{user_id}", str(member_id), ex=86400 * 7)
+
     async def _set_pending_user(self, user_id: str, state: dict) -> None:
         """保存待绑定用户状态到 Redis"""
         r = await get_redis()
@@ -519,6 +530,7 @@ class MessageHandler:
             logger.info(f"用户有 pending 状态: user_id={user_id}")
             return None
 
+        # 通过昵称匹配
         nickname = msg.get("NickName", "")
         logger.info(f"尝试昵称匹配: user_id={user_id}, nickname='{nickname}'")
         if nickname:
@@ -527,9 +539,25 @@ class MessageHandler:
                 logger.info(f"通过昵称识别: user_id={user_id}, member={member.name}")
                 if is_external:
                     await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+                    await self._save_verified_user(user_id, member.id)
                 else:
                     await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
                 return member
+
+        # 兜底：通过 Redis 验证记录识别已验证用户
+        # 解决 WeChat 插件 external_userid 不一致导致绑定失效的问题
+        if is_external:
+            verified_member_id = await self._get_verified_user(user_id)
+            if verified_member_id:
+                from sqlalchemy import select
+                result = await db.execute(
+                    select(Member).where(Member.id == verified_member_id, Member.is_active == True)
+                )
+                member = result.scalar_one_or_none()
+                if member:
+                    logger.info(f"通过验证记录识别: user_id={user_id}, member={member.name}")
+                    await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
+                    return member
 
         logger.info(f"用户识别失败: user_id={user_id}, is_external={is_external}")
         return None
@@ -567,6 +595,8 @@ class MessageHandler:
                     await self._reply_text(user_id, "身份绑定失败，请稍后重试。", is_external)
                     return
                 await self._delete_pending_user(user_id)
+                # 保存验证记录到 Redis（7天有效），防止绑定丢失后重复验证
+                await self._save_verified_user(user_id, member.id)
                 await self._reply_text(user_id,
                     f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。", is_external)
                 return
