@@ -94,12 +94,13 @@ class MessageHandler:
         user_id = msg.get("FromUserName", "")
         chat_id = msg.get("ChatId", "")  # 群聊ID（私聊为空）
 
-        logger.info(f"收到消息: user_id={user_id}, msg_type={msg_type}, chat_id={chat_id}")
-        logger.info(f"消息完整字段: {list(msg.keys())}")
-        # 打印可能包含真实用户ID的字段
-        for key in ['SessionFrom', 'ExternalUserID', 'OpenKfId', 'ToUserName', 'FromUserName', 'NickName', 'CreateTime']:
-            if key in msg:
-                logger.info(f"  {key} = {msg[key]}")
+        print(f"[WECHAT] 收到消息: user_id={user_id}, msg_type={msg_type}, chat_id={chat_id}", flush=True)
+        print(f"[WECHAT] 消息完整字段: {list(msg.keys())}", flush=True)
+        for key in msg.keys():
+            val = msg[key]
+            if isinstance(val, str) and len(val) > 200:
+                val = val[:200] + "..."
+            print(f"[WECHAT]   {key} = {val}", flush=True)
 
         # 事件处理
         if msg_type == "event":
@@ -523,25 +524,26 @@ class MessageHandler:
         if is_external:
             member = await identity_resolver.resolve_by_external_userid(user_id, db)
             if member:
-                logger.info(f"通过 external_userid 识别: user_id={user_id}, member={member.name}")
+                print(f"[WECHAT] 通过 external_userid 识别: user_id={user_id}, member={member.name}", flush=True)
                 return member
         else:
             member = await identity_resolver.resolve(user_id, db)
             if member:
+                print(f"[WECHAT] 通过 wechat_id 识别: user_id={user_id}, member={member.name}", flush=True)
                 return member
 
         pending = await self._get_pending_user(user_id)
         if pending:
-            logger.info(f"用户有 pending 状态: user_id={user_id}")
+            print(f"[WECHAT] 用户有 pending 状态: user_id={user_id}", flush=True)
             return None
 
         # 通过昵称匹配
         nickname = msg.get("NickName", "")
-        logger.info(f"尝试昵称匹配: user_id={user_id}, nickname='{nickname}'")
+        print(f"[WECHAT] 尝试昵称匹配: user_id={user_id}, nickname='{nickname}'", flush=True)
         if nickname:
             member = await identity_resolver.resolve_by_nickname(nickname, db)
             if member:
-                logger.info(f"通过昵称识别: user_id={user_id}, member={member.name}")
+                print(f"[WECHAT] 通过昵称识别: user_id={user_id}, member={member.name}", flush=True)
                 if is_external:
                     await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
                     await self._save_verified_user(user_id, member.id)
@@ -550,7 +552,6 @@ class MessageHandler:
                 return member
 
         # 兜底：通过 Redis 验证记录识别已验证用户
-        # 解决 WeChat 插件 external_userid 不一致导致绑定失效的问题
         if is_external:
             verified_member_id = await self._get_verified_user(user_id)
             if verified_member_id:
@@ -560,11 +561,11 @@ class MessageHandler:
                 )
                 member = result.scalar_one_or_none()
                 if member:
-                    logger.info(f"通过验证记录识别: user_id={user_id}, member={member.name}")
+                    print(f"[WECHAT] 通过验证记录识别: user_id={user_id}, member={member.name}", flush=True)
                     await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
                     return member
 
-        logger.info(f"用户识别失败: user_id={user_id}, is_external={is_external}")
+        print(f"[WECHAT] 用户识别失败: user_id={user_id}, is_external={is_external}", flush=True)
         return None
 
     async def _handle_unknown_user(self, user_id: str, msg_type: str,
