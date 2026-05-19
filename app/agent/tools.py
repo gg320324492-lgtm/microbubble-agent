@@ -248,5 +248,25 @@ TOOLS = [
                 }
             }
         }
+    },
+
+    # 联网搜索工具
+    {
+        "name": "web_search",
+        "description": "搜索互联网获取最新信息。当用户询问最新新闻、实时信息、天气、网上资料、或知识库中找不到答案的问题时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "搜索查询关键词"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "返回结果数量，默认5"
+                }
+            },
+            "required": ["query"]
+        }
     }
 ]

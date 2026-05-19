@@ -129,31 +129,21 @@ async def seed_data():
                 bio="解析气泡溃灭过程的界面活化特征与·OH生成动力学"
             ),
             Member(
-                username="donghaoyu",
-                password_hash=default_password_hash,
-                name="董昊宇",
-                grade="研二",
-                research_area="农业应用",
-                skills=["农业应用", "水-土环境", "增效应用"],
-                role="member",
-                bio="探索微纳米气泡在农业水-土环境中的增效应用与评价方法"
-            ),
-            Member(
                 username="guanxiaowei",
                 password_hash=default_password_hash,
                 name="关小未",
                 grade="研二",
-                research_area="盐碱土改良",
-                skills=["盐碱土修复", "种养系统", "农业应用"],
+                research_area="鱼菜共生",
+                skills=["鱼菜共生", "水产养殖", "农业应用"],
                 role="member",
-                bio="关注盐碱土改良与高效种养场景中的微纳米气泡应用路径"
+                bio="研究微纳米气泡在鱼菜共生系统中的应用与优化"
             ),
             Member(
                 username="huxiaoqi",
                 password_hash=default_password_hash,
                 name="胡小琪",
                 grade="研二",
-                research_area="饮用水安全",
+                research_area="臭氧微纳米气泡对黑臭水体泥/水界面微生境修复机理研究",
                 skills=["消毒/抑菌", "微生物控制", "臭氧气泡"],
                 role="member",
                 bio="臭氧微纳米气泡对黑臭水体泥/水界面微生境修复机理研究"

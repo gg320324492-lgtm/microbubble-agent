@@ -82,6 +82,7 @@ services:
     environment:
       - MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
       - DEVICE=${WHISPER_DEVICE:-cuda}
+      - HF_ENDPOINT=${HF_ENDPOINT:-}
     deploy:
       resources:
         reservations:

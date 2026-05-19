@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-18 (更新：部署架构调整为云服务器+本地电脑 FRP 穿透方案)
+> 最后更新: 2026-05-19 (更新：新增第六阶段规划 - 联网搜索、长期记忆)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -50,6 +50,7 @@
 - [x] **会议转写自动分析** -- 会议结束自动提取摘要/要点/决定/任务，任务自动创建并关联会议。WebSocket 转写断开和腾讯会议 Webhook 回调均触发分析，支持手动 `POST /meetings/{id}/analyze`
 - [x] **会议创建群聊通知** -- Agent 创建会议后自动推送通知到配置的群聊（`WECHAT_NOTIFY_CHAT_ID`），包含主题/时间/地点/参会人/会议链接
 - [x] **CLAUDE_MODEL 可配置** -- 新增 `CLAUDE_MODEL` 配置项，analyzer 和 summary 统一使用，兼容 mimo-v2.5 ThinkingBlock 响应
+- [x] **前端图片识别** -- 主对话窗口支持图片上传和识别，使用 mimo-v2.5 多模态能力，支持图片+文字混合消息
 
 ---
 
@@ -128,7 +129,7 @@
 | 多信号身份识别 | userid → wechat_id → 手机号 → 昵称模糊匹配，首次匹配自动绑定 | ✅ 代码完成 |
 | 群聊被动监听 | 消息缓冲 + 关键词触发 → Claude 分析 → 自动提取任务/会议/决定 | ✅ 代码完成 |
 | 主动提醒调度 | Celery 定时（15分钟）检查：即将到期、已逾期、未确认、即将开始的会议 | ✅ 代码完成 |
-| 图片识别 | Claude Vision 分析图片消息，支持任务截图和人物识别 | ✅ 代码完成 |
+| 图片识别 | mimo-v2.5 多模态模型分析图片消息，支持任务截图和人物识别 | ✅ 代码完成，已修复 |
 
 **~~部署阻塞项~~（已全部修复）：**
 1. ~~`handler.py:259` 调用不存在的 `notifier.notify_meeting_notification()`~~ → 改为 `wechat_bot.send_meeting_notification()`
@@ -275,6 +276,37 @@
 - `app/wechat/analyzer.py` — 模型改为 `settings.CLAUDE_MODEL`，兼容 ThinkingBlock 响应
 - `app/config.py` — 新增 `CLAUDE_MODEL`、`WECHAT_NOTIFY_CHAT_ID`
 
+### 前端图片识别 (2026-05-19)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 图片上传 | 前端支持选择图片文件，预览后发送 | ✅ 完成 |
+| 多模态对话 | 使用 mimo-v2.5 模型分析图片内容，支持图片+文字混合消息 | ✅ 完成 |
+| 图片消息展示 | 消息列表支持显示图片，点击可全屏预览 | ✅ 完成 |
+| API 图片接口 | 新增 `POST /chat/image` 接口，支持 multipart/form-data 图片上传 | ✅ 完成 |
+| WebSocket 图片 | WebSocket 支持 base64 编码的图片消息 | ✅ 完成 |
+| 企业微信视觉 | vision_service 改用配置的模型（默认 mimo-v2.5） | ✅ 完成 |
+
+**修改文件：**
+- `app/agent/core.py` — `chat()` 和 `chat_stream()` 新增 `image_data` 和 `image_media_type` 参数，构建多模态消息
+- `app/api/v1/chat.py` — 新增 `POST /chat/image` 接口，WebSocket 支持图片消息
+- `app/services/vision_service.py` — `analyze_image()` 改用 `settings.CLAUDE_MODEL` 或 `mimo-v2.5`
+- `web/src/views/ChatView.vue` — 新增图片上传按钮、预览功能、图片消息展示、相关样式
+
+### 企业微信图片处理修复 (2026-05-19)
+
+| 问题 | 修复内容 |
+|------|---------|
+| 微信发送图片显示"图片处理出错了" | vision_service.py 添加异常处理和日志记录 |
+| 模型配置错误 | 改用 `settings.CLAUDE_MODEL or "mimo-v2.5"` 替代硬编码的 `claude-sonnet-4-20250514` |
+| media_type 硬编码 | 添加 `_detect_media_type()` 方法，根据图片魔数自动检测格式 |
+| Docker 容器代码未同步 | 重新构建镜像并重启容器 |
+
+**修改文件：**
+- `app/services/vision_service.py` — 添加 try/except 异常处理、结构化日志、更健壮的响应解析、自动检测 media_type
+
+**状态：** ✅ 已修复，图片识别功能正常工作
+
 ---
 
 ## 部署架构（2026-05-18 确定）
@@ -319,6 +351,8 @@
 - [x] Docker 全服务构建（app/db/redis/minio/celery-worker/celery-beat）
 - [x] FRP 客户端连接云服务器
 - [x] 通过域名访问测试（API 正常响应）
+- [x] Docker 数据迁移到 G 盘（释放 C 盘 68GB，通过符号链接无感迁移）
+- [x] 一键启动/停止/状态脚本（start.bat / stop.bat / status.bat）
 
 ### 后续优化（低优先级）
 
@@ -335,7 +369,12 @@
 - [x] @提及检测改为匹配企业微信实际格式（` @` 分隔符 + AgentID 匹配）
 - [x] Nginx 已满足 5 秒超时（异步 `asyncio.create_task` + 立即返回 success）
 
-### 微信互通部署（普通微信用户支持）
+### 微信互通部署（普通微信用户支持） - ⏸️ 暂不需要
+
+> **当前方案**：使用企业微信「微信插件」功能，成员只需注册一次企业微信，之后可在普通微信内与小气对话，无需额外配置。
+> **微信互通适用场景**：如有外部用户（不愿注册企业微信的人）需要联系小气，再启用此功能。
+
+**如需启用微信互通，配置步骤：**
 
 - [ ] 企业微信管理后台创建机器人专属成员账号（如 `xiaoqi`）
 - [ ] 开通「客户联系」→ 将 `xiaoqi` 加入可使用范围
@@ -359,3 +398,22 @@
 - [ ] 申请并配置真实 API 凭据（`TENCENT_MEETING_SDK_ID` / `TENCENT_MEETING_SDK_KEY` / `TENCENT_MEETING_USERID`）
 - [ ] 企业微信管理后台配置 Webhook 回调 URL
 - [ ] 凭据到位后端到端测试
+
+---
+
+## 第六阶段：功能增强（规划中）
+
+### 联网搜索
+
+- [ ] **Agent 工具集成联网搜索** -- 新增 `web_search` 工具，调用搜索 API（如 Bing/Google/SerpAPI）获取实时信息
+- [ ] **搜索结果摘要** -- 搜索结果由 LLM 整理后返回，避免直接返回原始网页内容
+- [ ] **搜索来源引用** -- 回复中附带信息来源链接，方便用户查证
+- [ ] **搜索权限控制** -- 可配置是否启用联网搜索，避免不必要的 API 调用消耗
+
+### 长期记忆
+
+- [ ] **用户偏好记忆** -- 记住用户的常用设置、偏好习惯（如常用搜索关键词、常用项目等）
+- [ ] **对话历史摘要** -- 定期将历史对话压缩为摘要存储，支持跨会话上下文延续
+- [ ] **知识图谱构建** -- 从对话中提取实体关系，构建课题组知识图谱（人员-项目-成果关联）
+- [ ] **记忆检索与更新** -- 新对话时自动检索相关记忆，支持用户手动纠正或遗忘特定记忆
+- [ ] **记忆存储方案** -- 使用 PostgreSQL 存储结构化记忆，pgvector 存储语义记忆，支持相似度检索

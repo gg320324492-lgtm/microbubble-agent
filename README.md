@@ -1,27 +1,45 @@
 # 微纳米气泡课题组智能Agent系统
 
-"小气" - 微纳米气泡课题组AI智能助手
+"小气" - 微纳米气泡课题组AI智能助手（约20人研究实验室）
 
 ## 功能特性
 
-- **智能对话** - 支持文字/语音与Agent交互
+- **智能对话** - 支持文字/语音/图片与Agent交互，多模态图片识别
 - **任务管理** - 创建、分配、追踪任务，智能提醒
-- **会议助手** - 自动旁听会议、实时转写、生成纪要
+- **会议助手** - 自动旁听会议、实时转写、生成纪要、自动分析要点
 - **项目管理** - 课题管理、进度追踪、里程碑管理
-- **知识库** - 文献管理、实验记录、AI问答
+- **知识库** - 文献管理、实验记录、语义搜索（pgvector）
 - **成员管理** - 课题组成员信息管理
+- **企业微信集成** - 群机器人对话、任务派发、进度回复、主动提醒
+- **微信插件支持** - 通过微信插件在普通微信内与机器人对话（需一次性注册企业微信）
+- **腾讯会议集成** - 自动创建线上会议、Webhook 回调、转写分析
+- **文件管理** - MinIO 文件上传，支持会议附件
 
 ## 技术栈
 
 | 组件 | 技术 |
 |------|------|
-| 后端 | FastAPI + SQLAlchemy + PostgreSQL |
-| 前端 | Vue 3 + Element Plus + Vite |
-| AI | Claude API |
-| 语音 | Whisper + Edge-TTS |
-| 缓存 | Redis |
+| 后端 | Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL |
+| 前端 | Vue 3 + Element Plus + Vite + Pinia |
+| AI | Claude API (支持代理地址) + mimo-v2.5 多模态 |
+| 语音 | faster-whisper (GPU) + Edge-TTS |
+| 向量搜索 | pgvector + text2vec-base-chinese |
+| 缓存 | Redis (Session + 微信状态) |
 | 存储 | MinIO |
-| 部署 | Docker Compose |
+| 任务队列 | Celery + Redis |
+| 部署 | Docker Compose + FRP 内网穿透 |
+
+## 部署架构
+
+采用 **云服务器 + 本地电脑 FRP 穿透** 方案：
+
+```
+用户 → 云服务器 (Nginx + SSL + FRP 服务端) → FRP 隧道 → 本地电脑 (全部 Docker 服务 + GPU Whisper)
+```
+
+- **云服务器**（2核 2G）：只运行 Nginx 反向代理 + FRP 服务端，轻量无压力
+- **本地电脑**（有 GPU）：运行全部应用服务（app、PostgreSQL、Redis、MinIO、Whisper GPU、Celery）
+- **FRP 隧道**：本地 8000 端口穿透到云服务器，用户通过 `https://agent.mnb-lab.cn` 访问
 
 ## 快速开始
 
@@ -30,49 +48,71 @@
 ```bash
 cp .env.example .env
 # 编辑 .env，填入你的配置
+# 必填项：CLAUDE_API_KEY、SECRET_KEY、数据库密码等
 ```
 
-### 2. 启动服务
+### 2. 本地电脑部署（一键脚本）
 
 ```bash
-# 开发模式
-docker-compose -f docker-compose.dev.yml up -d
+# Windows
+start.bat   # 启动所有服务
+stop.bat    # 停止所有服务
+status.bat  # 查看服务状态
 
-# 生产模式
-docker-compose up -d
+# 或手动启动
+docker compose up -d
 ```
 
-### 3. 初始化数据库
+### 3. 云服务器部署
 
 ```bash
-docker-compose exec app python scripts/init_db.py
+# 上传前端构建产物
+# 配置 Nginx（参考 scripts/nginx.conf）
+# 启动 FRP 服务端
+sudo systemctl start frps
 ```
 
-### 4. 访问系统
+### 4. FRP 穿透配置
 
-- Web界面: http://localhost
-- API文档: http://localhost:8000/docs
-- MinIO控制台: http://localhost:9001
+```bash
+# 本地电脑启动 FRP 客户端
+cd frp
+./frpc.exe -c frpc.toml
+```
+
+### 5. 访问系统
+
+- **生产环境**: https://agent.mnb-lab.cn
+- **本地开发**: http://localhost:5173 (前端) / http://localhost:8000 (API)
+- **API文档**: https://agent.mnb-lab.cn/docs
+- **MinIO控制台**: http://localhost:9001
 
 ## 项目结构
 
 ```
 microbubble-agent/
-├── app/                  # 后端应用
-│   ├── agent/           # AI Agent核心
-│   ├── api/             # API接口
-│   ├── core/            # 核心模块
-│   ├── models/          # 数据模型
-│   ├── schemas/         # Pydantic模型
-│   └── services/        # 业务服务
-├── web/                 # 前端应用
+├── app/                     # 后端应用
+│   ├── agent/              # AI Agent核心（工具调用、对话管理）
+│   ├── api/                # API接口（31个端点，全部带认证）
+│   │   └── v1/            # 版本化API
+│   ├── core/               # 核心模块（安全、Redis、Celery、日志、限流）
+│   ├── models/             # SQLAlchemy数据模型
+│   ├── schemas/            # Pydantic验证模型
+│   ├── services/           # 业务服务层（10个服务）
+│   ├── voice/              # 语音服务（ASR、TTS）
+│   └── wechat/             # 企业微信模块（消息、身份、分析、调度）
+├── web/                     # 前端应用
 │   └── src/
-│       ├── views/       # 页面组件
-│       ├── layouts/     # 布局组件
-│       └── router/      # 路由配置
-├── scripts/             # 脚本工具
-├── docker-compose.yml   # Docker编排
-└── .env.example         # 环境变量示例
+│       ├── views/          # 页面组件（含ChatView图片识别）
+│       ├── layouts/        # 布局组件
+│       ├── stores/         # Pinia状态管理
+│       └── router/         # 路由配置
+├── scripts/                 # 部署和工具脚本
+├── frp/                     # FRP内网穿透配置
+├── docker-compose.yml       # Docker编排（7个服务）
+├── Dockerfile.whisper       # Whisper GPU镜像
+├── alembic/                 # 数据库迁移
+└── .env.example             # 环境变量示例
 ```
 
 ## 开发指南
@@ -101,14 +141,46 @@ npm run dev
 
 ## API接口
 
-- `POST /api/v1/chat` - 对话接口
-- `GET/POST /api/v1/tasks` - 任务管理
-- `GET/POST /api/v1/meetings` - 会议管理
-- `GET/POST /api/v1/members` - 成员管理
-- `GET/POST /api/v1/projects` - 项目管理
-- `GET/POST /api/v1/knowledge` - 知识库
+所有接口均需 JWT 认证（除登录外）。
 
-详细文档: http://localhost:8000/docs
+### 核心模块
+- `POST /api/v1/chat` - 智能对话（支持工具调用）
+- `POST /api/v1/chat/image` - 图片识别对话
+- `WebSocket /api/v1/chat/ws` - 流式对话
+
+### 业务模块
+- `GET/POST /api/v1/tasks` - 任务管理（CRUD + 统计 + Dashboard）
+- `GET/POST /api/v1/meetings` - 会议管理（含转写分析）
+- `GET/POST /api/v1/members` - 成员管理
+- `GET/POST /api/v1/projects` - 项目管理（含里程碑）
+- `GET/POST /api/v1/knowledge` - 知识库（语义搜索）
+
+### 集成模块
+- `POST /api/v1/wechat/callback` - 企业微信回调
+- `POST /api/v1/tencent-meeting/webhook` - 腾讯会议回调
+- `POST /api/v1/upload` - 文件上传
+
+### Agent 工具（10个）
+- `create_task` / `query_tasks` - 任务管理
+- `create_meeting` / `query_meetings` - 会议管理
+- `query_members` / `search_member` - 成员查询
+- `create_project` / `query_projects` - 项目管理
+- `search_knowledge` / `generate_project_plan` - 知识库和计划生成
+
+详细文档: https://agent.mnb-lab.cn/docs
+
+## 当前状态
+
+✅ **已上线运行** - 核心功能全部完成，生产环境部署成功
+
+- Phase 1-5 代码已完成
+- 云服务器部署成功（https://agent.mnb-lab.cn）
+- 前端图片识别功能已完成（支持文字+图片混合消息）
+- 企业微信图片处理已修复（使用 mimo-v2.5 多模态模型）
+- 微信互通功能暂不需要（当前使用微信插件方案，成员注册一次企业微信后可在普通微信内对话）
+- 腾讯会议待配置 API 凭据
+
+详见 [ROADMAP.md](ROADMAP.md)
 
 ## 许可证
 

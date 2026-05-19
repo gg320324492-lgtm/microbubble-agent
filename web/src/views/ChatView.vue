@@ -74,8 +74,19 @@
           </el-avatar>
           <div class="message-content">
             <div class="message-bubble">
+              <!-- 图片消息 -->
+              <div v-if="msg.type === 'image'" class="image-message">
+                <img
+                  v-if="msg.imageUrl"
+                  :src="msg.imageUrl"
+                  alt="用户发送的图片"
+                  @click="previewImage(msg.imageUrl)"
+                />
+                <div v-if="msg.content !== '[图片]'" class="message-text" v-html="formatMessage(msg.content)"></div>
+              </div>
+
               <!-- 文字消息 -->
-              <div v-if="msg.type !== 'voice'" class="message-text" v-html="formatMessage(msg.content)"></div>
+              <div v-else-if="msg.type !== 'voice'" class="message-text" v-html="formatMessage(msg.content)"></div>
 
               <!-- 语音消息 -->
               <div v-else class="voice-message">
@@ -129,6 +140,18 @@
 
         <!-- 文字模式 -->
         <div v-else class="text-input-area">
+          <!-- 图片预览 -->
+          <div v-if="selectedImage" class="image-preview">
+            <img :src="imagePreviewUrl" alt="预览" />
+            <el-button
+              class="remove-image-btn"
+              :icon="Close"
+              circle
+              size="small"
+              @click="removeImage"
+            />
+          </div>
+
           <el-input
             v-model="inputText"
             placeholder="输入消息... (Enter发送，Shift+Enter换行)"
@@ -138,10 +161,30 @@
             @keydown="handleKeydown"
             :disabled="loading"
           />
+
+          <!-- 图片上传按钮 -->
+          <el-tooltip content="发送图片">
+            <el-button
+              circle
+              @click="triggerImageUpload"
+              :disabled="loading"
+            >
+              <el-icon><Picture /></el-icon>
+            </el-button>
+          </el-tooltip>
+
+          <input
+            ref="imageInputRef"
+            type="file"
+            accept="image/*"
+            style="display: none"
+            @change="handleImageSelect"
+          />
+
           <el-button
             type="primary"
             @click="sendMessage"
-            :disabled="!inputText.trim() || loading"
+            :disabled="(!inputText.trim() && !selectedImage) || loading"
             :loading="loading"
           >
             <el-icon><Promotion /></el-icon>
@@ -156,6 +199,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Close, Picture } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -164,10 +208,13 @@ import AudioPlayer from '@/components/AudioPlayer.vue'
 const messageListRef = ref(null)
 const voiceRecorderRef = ref(null)
 const audioPlayerRef = ref(null)
+const imageInputRef = ref(null)
 const inputText = ref('')
 const loading = ref(false)
 const voiceMode = ref(false)
 const sessionId = `user_${Date.now()}`
+const selectedImage = ref(null)
+const imagePreviewUrl = ref('')
 
 const messages = ref([
   {
@@ -178,28 +225,91 @@ const messages = ref([
   }
 ])
 
-// 发送文字消息
+// 触发图片上传
+const triggerImageUpload = () => {
+  imageInputRef.value?.click()
+}
+
+// 处理图片选择
+const handleImageSelect = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  // 检查文件类型
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+
+  // 检查文件大小（限制10MB）
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过10MB')
+    return
+  }
+
+  selectedImage.value = file
+  imagePreviewUrl.value = URL.createObjectURL(file)
+
+  // 清空input以允许重复选择同一文件
+  event.target.value = ''
+}
+
+// 移除选中的图片
+const removeImage = () => {
+  selectedImage.value = null
+  imagePreviewUrl.value = ''
+}
+
+// 发送消息（支持文字和图片）
 const sendMessage = async () => {
   const text = inputText.value.trim()
-  if (!text || loading.value) return
+  if ((!text && !selectedImage.value) || loading.value) return
+
+  // 构建用户消息内容
+  let userContent = text
+  let userMessageType = 'text'
+
+  if (selectedImage.value) {
+    userMessageType = 'image'
+    userContent = text ? `[图片] ${text}` : '[图片]'
+  }
 
   // 添加用户消息
   messages.value.push({
     role: 'user',
-    content: text,
+    content: userContent,
     timestamp: new Date(),
-    type: 'text'
+    type: userMessageType,
+    imageUrl: selectedImage.value ? imagePreviewUrl.value : null
   })
 
+  const currentImage = selectedImage.value
   inputText.value = ''
+  selectedImage.value = null
+  imagePreviewUrl.value = ''
   loading.value = true
   scrollToBottom()
 
   try {
-    const res = await axios.post('/api/v1/chat', {
-      message: text,
-      session_id: sessionId
-    })
+    let res
+
+    if (currentImage) {
+      // 发送图片消息
+      const formData = new FormData()
+      formData.append('message', text || '请描述这张图片')
+      formData.append('session_id', sessionId)
+      formData.append('image', currentImage)
+
+      res = await axios.post('/api/v1/chat/image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    } else {
+      // 发送文字消息
+      res = await axios.post('/api/v1/chat', {
+        message: text,
+        session_id: sessionId
+      })
+    }
 
     // 添加AI回复
     messages.value.push({
@@ -334,6 +444,13 @@ const playVoice = (msg) => {
   if (msg.audioUrl) {
     const audio = new Audio(msg.audioUrl)
     audio.play()
+  }
+}
+
+// 预览图片
+const previewImage = (url) => {
+  if (url) {
+    window.open(url, '_blank')
   }
 }
 
@@ -567,6 +684,45 @@ onMounted(() => {
 
 .text-input-area .el-input {
   flex: 1;
+}
+
+/* 图片预览 */
+.image-preview {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.image-preview img {
+  max-width: 120px;
+  max-height: 80px;
+  border-radius: 8px;
+  border: 2px solid #e4e7ed;
+  object-fit: cover;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #f56c6c !important;
+  border-color: #f56c6c !important;
+  color: #fff !important;
+}
+
+.remove-image-btn:hover {
+  background: #f78989 !important;
+  border-color: #f78989 !important;
+}
+
+/* 用户图片消息 */
+.user-message .image-message {
+  margin-bottom: 8px;
+}
+
+.user-message .image-message img {
+  max-width: 200px;
+  max-height: 150px;
+  border-radius: 8px;
 }
 
 .voice-input-area {
