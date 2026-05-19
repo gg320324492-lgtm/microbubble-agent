@@ -34,4 +34,10 @@ celery_app.conf.update(
     },
 )
 
-celery_app.autodiscover_tasks(["app.services", "app.wechat"])
+celery_app.autodiscover_tasks(
+    [
+        "app.services.reminder_service",
+        "app.wechat.scheduler",
+        "app.services.memory_service",
+    ]
+)

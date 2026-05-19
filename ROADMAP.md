@@ -48,7 +48,6 @@
 - [x] **前端 ECharts 注册** -- `<script setup>` 已自动注册，无需额外配置
 - [x] **通知 badge 真实数据** -- 改为从 API 获取待处理提醒数量，user store 管理
 - [x] **会议转写自动分析** -- 会议结束自动提取摘要/要点/决定/任务，任务自动创建并关联会议。WebSocket 转写断开和腾讯会议 Webhook 回调均触发分析，支持手动 `POST /meetings/{id}/analyze`
-- [x] **会议创建群聊通知** -- Agent 创建会议后自动推送通知到配置的群聊（`WECHAT_NOTIFY_CHAT_ID`），包含主题/时间/地点/参会人/会议链接
 - [x] **CLAUDE_MODEL 可配置** -- 新增 `CLAUDE_MODEL` 配置项，analyzer 和 summary 统一使用，兼容 mimo-v2.5 ThinkingBlock 响应
 - [x] **前端图片识别** -- 主对话窗口支持图片上传和识别，使用 mimo-v2.5 多模态能力，支持图片+文字混合消息
 
@@ -256,7 +255,6 @@
 | MinIO 文件上传 | 通用上传（50MB 限制）+ 会议附件 + 删除，自动创建 bucket | ✅ 完成 |
 | 企业微信群机器人 | 完整实现（已在 WeChat Bot 阶段完成） | ⚠️ 代码完成，未部署（见 WeChat Bot 部署阻塞项） |
 | 会议转写自动分析 | 转写结束自动调用 Claude 提取摘要/要点/决定，自动创建任务并关联会议，支持手动重新分析 | ✅ 完成 |
-| 会议创建群聊通知 | Agent 创建会议后自动推送通知到配置的群聊，含主题/时间/地点/参会人/链接 | ✅ 完成 |
 | CLAUDE_MODEL 可配置 | 新增配置项，兼容代理服务的 ThinkingBlock 响应 | ✅ 完成 |
 
 **新建文件：**
@@ -272,9 +270,8 @@
 - `app/api/v1/voice.py` — WebSocket 断开后自动触发会议分析
 - `app/api/v1/meeting.py` — 新增 `POST /meetings/{id}/analyze` 手动分析端点
 - `app/api/v1/tencent_meeting.py` — Webhook 会议结束时自动触发分析
-- `app/agent/core.py` — 会议创建后异步推送群聊通知，新增 logging
 - `app/wechat/analyzer.py` — 模型改为 `settings.CLAUDE_MODEL`，兼容 ThinkingBlock 响应
-- `app/config.py` — 新增 `CLAUDE_MODEL`、`WECHAT_NOTIFY_CHAT_ID`
+- `app/config.py` — 新增 `CLAUDE_MODEL`
 
 ### 前端图片识别 (2026-05-19)
 
@@ -406,7 +403,6 @@
 - [ ] 用普通微信扫码添加「小气」，测试私聊消息收发
 - [ ] 创建外部群，拉「小气」进群，测试群聊消息收发
 - [ ] 从日志获取群聊 `wr...` chat_id：`docker compose logs app | grep chat_id`
-- [ ] `.env` 配置 `WECHAT_NOTIFY_CHAT_ID=<wr...群聊ID>`（会议通知自动推送到该群）
 
 ### 腾讯会议部署
 

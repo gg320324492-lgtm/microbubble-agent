@@ -520,28 +520,6 @@ class MicroBubbleAgent:
                     except Exception as e:
                         logger.warning(f"创建腾讯会议失败（本地会议已创建）: {e}")
 
-                # 异步推送会议创建通知到群聊
-                if settings.WECHAT_NOTIFY_CHAT_ID:
-                    try:
-                        import asyncio
-                        from app.wechat.bot import wechat_bot
-                        participant_names = input_data.get("participants", [])
-                        time_str = start_time.strftime("%m月%d日 %H:%M")
-                        notify_content = f"📅 **新会议通知**\n\n**主题**: {meeting.title}\n**时间**: {time_str}"
-                        if meeting.location:
-                            notify_content += f"\n**地点**: {meeting.location}"
-                        if participant_names:
-                            notify_content += f"\n**参会人**: {', '.join(participant_names)}"
-                        if result.get("join_url"):
-                            notify_content += f"\n**会议链接**: {result['join_url']}"
-                        if meeting.description:
-                            notify_content += f"\n**议程**: {meeting.description}"
-                        asyncio.create_task(
-                            wechat_bot.send_to_group(settings.WECHAT_NOTIFY_CHAT_ID, notify_content, "markdown")
-                        )
-                    except Exception as e:
-                        logger.warning(f"推送会议通知到群聊失败: {e}")
-
                 return result
 
             elif name == "query_projects":

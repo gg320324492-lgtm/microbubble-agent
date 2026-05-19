@@ -115,7 +115,6 @@ if (-not (Test-Path ".env")) {
     Write-Host "    WECHAT_CALLBACK_TOKEN   = 回调 Token（企业微信后台设置）" -ForegroundColor White
     Write-Host "    WECHAT_ENCODING_AES_KEY = 回调 EncodingAESKey" -ForegroundColor White
     Write-Host "    WECHAT_EXTERNAL_SENDER  = 外部联系人发送者 userid" -ForegroundColor White
-    Write-Host "    WECHAT_NOTIFY_CHAT_ID   = 通知群聊 ID（wr 开头）" -ForegroundColor White
     Write-Host ""
     Write-Host "  腾讯会议配置（已部署则必填）：" -ForegroundColor White
     Write-Host "    TENCENT_MEETING_SDK_ID  = SDK ID" -ForegroundColor White
@@ -356,7 +355,6 @@ Write-Host "        WECHAT_SECRET           应用 Secret" -ForegroundColor Dark
 Write-Host "        WECHAT_CALLBACK_TOKEN   回调 Token" -ForegroundColor DarkGray
 Write-Host "        WECHAT_ENCODING_AES_KEY 回调 EncodingAESKey" -ForegroundColor DarkGray
 Write-Host "        WECHAT_EXTERNAL_SENDER  外部联系人发送者 userid" -ForegroundColor DarkGray
-Write-Host "        WECHAT_NOTIFY_CHAT_ID   通知群聊 ID" -ForegroundColor DarkGray
 Write-Host ""
 
 Write-Host "  [3] 腾讯会议 Webhook URL（无需修改）" -ForegroundColor White
