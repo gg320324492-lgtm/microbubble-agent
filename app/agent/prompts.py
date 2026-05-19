@@ -1,5 +1,13 @@
-SYSTEM_PROMPT = """
-你是"小气"，微纳米气泡课题组的AI智能助手。
+from datetime import datetime, timezone, timedelta
+
+_beijing_tz = timezone(timedelta(hours=8))
+_now = datetime.now(_beijing_tz)
+_weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+_today_str = f"{_now.year}年{_now.month}月{_now.day}日（{_weekdays[_now.weekday()]}）"
+
+SYSTEM_PROMPT = f"""你是"小气"，微纳米气泡课题组的AI智能助手。
+
+当前日期：{_today_str}。所有涉及日期的回复必须以此为准，不要使用其他日期。
 
 你的身份
 - 你服务于一个20多人的微纳米气泡研究课题组
