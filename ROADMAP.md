@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-19 (更新：Phase 6 全部完成 — 长期记忆 + 对话文件上传 + 知识库增强)
+> 最后更新: 2026-05-19 (更新：对话知识自动入库 + 前端体验优化)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -382,13 +382,6 @@
 - [x] Docker 数据迁移到 G 盘（释放 C 盘 68GB，通过符号链接无感迁移）
 - [x] 一键启动/停止/状态脚本（start.bat / stop.bat / status.bat）
 
-### 后续优化（低优先级）
-
-- [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
-- [ ] 创建 CI/CD 流水线（GitHub Actions）
-- [ ] 编写部署文档（`docs/deploy.md`）
-- [ ] 生产环境加固：日志轮转、监控、备份脚本
-
 ### 企业微信部署
 
 - [x] 修复 `handler.py:259` 运行时 bug（改为 `wechat_bot.send_meeting_notification()`）
@@ -497,3 +490,42 @@
 - `app/api/v1/knowledge.py` — 修复分页 total bug，新增 /upload 和 /stats 端点
 - `requirements.txt` — 新增 pdfplumber/python-docx/openpyxl
 - `web/src/views/KnowledgeView.vue` — 上传对话框、分类统计面板、文件图标、修复搜索结果显示
+
+### 对话知识自动入库 (2026-05-19)
+
+- [x] **对话知识提取工具** -- 新增 `save_conversation_knowledge` 工具，Agent 可主动将有价值的对话内容保存到知识库
+- [x] **后台自动提取** -- 每次对话结束后 LLM 自动分析内容，提取实验方法、研究发现、技术方案等专业知识
+- [x] **智能分类打标签** -- 提取的知识自动分类（基础/方法/文献/FAQ）并生成标签和摘要
+- [x] **对话来源标记** -- 知识库中来自对话的条目显示 💬 标记，详情页标注"来自对话记录，AI 自动提取"
+
+**修改文件：**
+- `app/agent/tools.py` — 新增 save_conversation_knowledge 工具定义
+- `app/agent/core.py` — 新增 `_extract_and_save_knowledge` 后台任务，chat() 中触发知识提取
+- `app/agent/prompts.py` — 系统提示词新增知识库保存规则
+- `app/services/knowledge_service.py` — 新增 `create_from_conversation()` 方法
+- `web/src/views/KnowledgeView.vue` — 对话来源标记样式
+
+### 前端体验优化 (2026-05-19)
+
+- [x] **知识库标签美化** -- 分类改为彩色徽章（蓝/绿/橙/紫），标签改为圆角药丸样式
+- [x] **分类统计增强** -- 统计面板增加 emoji 图标，点击支持筛选切换，hover 上浮动效
+- [x] **分类标签栏** -- 改为圆角药丸样式，选中态蓝色高亮
+- [x] **AI 摘要展示** -- 知识详情弹窗 AI 摘要区域独立展示（蓝色渐变背景 + 左侧边框）
+- [x] **文件上传提示** -- 上传对话框增加 AI 自动分析提示条
+- [x] **对话拖拽上传** -- 小气助手输入区域支持拖拽文件/图片上传，拖入时显示蓝色虚线边框
+- [x] **上传按钮优化** -- 上传按钮增加 hover 高亮，文件按钮 tooltip 补充格式说明
+
+**修改文件：**
+- `web/src/views/KnowledgeView.vue` — 标签/分类/统计面板/详情弹窗/上传对话框全面美化
+- `web/src/views/ChatView.vue` — 拖拽上传支持、Upload 图标导入、上传按钮样式
+
+---
+
+## 待完成
+
+### 后续优化（低优先级）
+
+- [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
+- [ ] 创建 CI/CD 流水线（GitHub Actions）
+- [ ] 编写部署文档（`docs/deploy.md`）
+- [ ] 生产环境加固：日志轮转、监控、备份脚本

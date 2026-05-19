@@ -148,7 +148,13 @@
         </div>
 
         <!-- 文字模式 -->
-        <div v-else class="text-input-area">
+        <div v-else class="text-input-area" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop" :class="{ 'drag-over': isDragging }">
+          <!-- 拖拽提示 -->
+          <div v-if="isDragging" class="drag-overlay">
+            <el-icon size="40" color="#409eff"><Upload /></el-icon>
+            <span>松开鼠标上传文件</span>
+          </div>
+
           <!-- 图片预览 -->
           <div v-if="selectedImage" class="image-preview">
             <img :src="imagePreviewUrl" alt="预览" />
@@ -191,17 +197,19 @@
               circle
               @click="triggerImageUpload"
               :disabled="loading"
+              class="upload-btn"
             >
               <el-icon><Picture /></el-icon>
             </el-button>
           </el-tooltip>
 
           <!-- 文件上传按钮 -->
-          <el-tooltip content="发送文件">
+          <el-tooltip content="发送文件 (PDF/Word/Excel/TXT)">
             <el-button
               circle
               @click="triggerFileUpload"
               :disabled="loading"
+              class="upload-btn"
             >
               <el-icon><Paperclip /></el-icon>
             </el-button>
@@ -241,7 +249,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Close, Picture, Paperclip, Document } from '@element-plus/icons-vue'
+import { Close, Picture, Paperclip, Document, Upload } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -260,6 +268,7 @@ const selectedImage = ref(null)
 const imagePreviewUrl = ref('')
 const selectedFile = ref(null)
 const filePreviewType = ref('') // 'image' or 'document'
+const isDragging = ref(false)
 
 const messages = ref([
   {
@@ -329,6 +338,38 @@ const handleFileSelect = (event) => {
 const removeFile = () => {
   selectedFile.value = null
   filePreviewType.value = ''
+}
+
+// 拖拽相关
+const onDragOver = () => {
+  isDragging.value = true
+}
+
+const onDragLeave = () => {
+  isDragging.value = false
+}
+
+const onDrop = (event) => {
+  isDragging.value = false
+  const files = event.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  const file = files[0]
+  if (file.type.startsWith('image/')) {
+    if (file.size > 10 * 1024 * 1024) {
+      ElMessage.error('图片大小不能超过10MB')
+      return
+    }
+    selectedImage.value = file
+    imagePreviewUrl.value = URL.createObjectURL(file)
+  } else {
+    if (file.size > 50 * 1024 * 1024) {
+      ElMessage.error('文件大小不能超过50MB')
+      return
+    }
+    selectedFile.value = file
+    filePreviewType.value = 'document'
+  }
 }
 
 // 发送消息（支持文字、图片和文件）
@@ -768,6 +809,36 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   align-items: flex-end;
+  position: relative;
+  min-height: 60px;
+  transition: all 0.2s;
+}
+
+.text-input-area.drag-over {
+  background: #f0f9ff;
+  border: 2px dashed #409eff;
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(240, 249, 255, 0.95);
+  border-radius: 12px;
+  z-index: 10;
+  font-size: 14px;
+  color: #409eff;
+}
+
+.upload-btn:hover {
+  color: #409eff;
+  border-color: #409eff;
 }
 
 .text-input-area .el-input {
