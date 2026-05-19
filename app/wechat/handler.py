@@ -89,24 +89,25 @@ class MessageHandler:
             return
 
         # 检测是否为外部用户（普通微信用户，external_userid 以 wm 开头）
-        self._is_external_user = user_id.startswith("wm")
+        is_external = user_id.startswith("wm")
 
         # 识别用户身份
-        member = await self._identify_user(user_id, msg, db)
+        member = await self._identify_user(user_id, msg, db, is_external)
         if not member:
-            await self._handle_unknown_user(user_id, msg_type, msg, db)
+            await self._handle_unknown_user(user_id, msg_type, msg, db, is_external)
             return
 
         # 判断是群聊还是私聊
         if chat_id:
-            await self._handle_group_message(msg, member, chat_id, db)
+            await self._handle_group_message(msg, member, chat_id, db, is_external)
         else:
-            await self._handle_private_message(msg, member, msg_type, db)
+            await self._handle_private_message(msg, member, msg_type, db, is_external)
 
     # ==================== 群聊处理 ====================
 
     async def _handle_group_message(self, msg: dict, member: Member,
-                                      chat_id: str, db: AsyncSession) -> None:
+                                      chat_id: str, db: AsyncSession,
+                                      is_external: bool = False) -> None:
         """
         群聊消息处理
 
@@ -130,11 +131,11 @@ class MessageHandler:
                 if await self._try_handle_task_reply(clean_content, member, user_id, db):
                     return
                 # Agent 对话（群聊回复也发到群里）
-                await self._handle_group_chat(clean_content, member, user_id, chat_id, db)
+                await self._handle_group_chat(clean_content, member, user_id, chat_id, db, is_external)
             elif msg_type == "image":
-                await self._handle_group_image(msg, member, chat_id, db)
+                await self._handle_group_image(msg, member, chat_id, db, is_external)
             elif msg_type == "voice":
-                await self._handle_group_voice(msg, member, chat_id, db)
+                await self._handle_group_voice(msg, member, chat_id, db, is_external)
         else:
             # 普通群聊消息 → 被动监听
             if msg_type == "text" and content:
@@ -339,7 +340,8 @@ class MessageHandler:
     # ==================== 私聊处理 ====================
 
     async def _handle_private_message(self, msg: dict, member: Member,
-                                        msg_type: str, db: AsyncSession) -> None:
+                                        msg_type: str, db: AsyncSession,
+                                        is_external: bool = False) -> None:
         """私聊消息处理"""
         user_id = msg.get("FromUserName", "")
 
@@ -349,27 +351,28 @@ class MessageHandler:
                 return
             if await self._try_handle_task_reply(content, member, user_id, db):
                 return
-            await self._handle_general_chat(content, member, user_id, db)
+            await self._handle_general_chat(content, member, user_id, db, is_external)
 
         elif msg_type == "image":
-            await self._handle_image(msg, member, db)
+            await self._handle_image(msg, member, db, is_external)
 
         elif msg_type == "voice":
-            await self._handle_voice(msg, member, db)
+            await self._handle_voice(msg, member, db, is_external)
 
         else:
-            await self._reply_text(user_id, f"暂不支持 {msg_type} 类型消息。")
+            await self._reply_text(user_id, f"暂不支持 {msg_type} 类型消息。", is_external)
 
     # ==================== 群聊 Agent 对话 ====================
 
     async def _handle_group_chat(self, content: str, member: Member,
-                                   user_id: str, chat_id: str, db: AsyncSession) -> None:
+                                   user_id: str, chat_id: str, db: AsyncSession,
+                                   is_external: bool = False) -> None:
         """群聊中 @机器人 的对话（回复到群里）"""
         session_id = f"wechat_group_{chat_id}"
 
         try:
             enriched_msg = f"[群聊, 用户: {member.name}, 角色: {member.role}] {content}"
-            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db)
+            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
             reply = result.get("content", "抱歉，处理失败了。")
             if len(reply) > 2000:
                 reply = reply[:1950] + "\n\n...(内容过长已截断)"
@@ -381,7 +384,8 @@ class MessageHandler:
             await wechat_bot.smart_send_to_group(chat_id, "处理消息时出错了，请稍后再试。")
 
     async def _handle_group_image(self, msg: dict, member: Member,
-                                    chat_id: str, db: AsyncSession) -> None:
+                                    chat_id: str, db: AsyncSession,
+                                    is_external: bool = False) -> None:
         """群聊图片处理"""
         media_id = msg.get("MediaId", "")
         try:
@@ -393,30 +397,32 @@ class MessageHandler:
             logger.error(f"群聊图片处理失败: {e}", exc_info=True)
 
     async def _handle_group_voice(self, msg: dict, member: Member,
-                                    chat_id: str, db: AsyncSession) -> None:
+                                    chat_id: str, db: AsyncSession,
+                                    is_external: bool = False) -> None:
         """群聊语音处理"""
         recognition = msg.get("Recognition", "")
         if recognition:
-            await self._handle_group_chat(recognition, member, msg.get("FromUserName", ""), chat_id, db)
+            await self._handle_group_chat(recognition, member, msg.get("FromUserName", ""), chat_id, db, is_external)
 
     # ==================== 图片/语音处理 ====================
 
-    async def _handle_image(self, msg: dict, member: Member, db: AsyncSession) -> None:
+    async def _handle_image(self, msg: dict, member: Member, db: AsyncSession,
+                             is_external: bool = False) -> None:
         """私聊图片处理"""
         user_id = msg.get("FromUserName", "")
         media_id = msg.get("MediaId", "")
 
-        await self._reply_text(user_id, "📷 收到图片，正在分析...")
+        await self._reply_text(user_id, "📷 收到图片，正在分析...", is_external)
         try:
             image_data = await vision_service.download_image(media_id)
             if not image_data:
-                await self._reply_text(user_id, "图片下载失败。")
+                await self._reply_text(user_id, "图片下载失败。", is_external)
                 return
 
             task = await self._get_active_task(member.id, db)
             if task:
                 analysis = await vision_service.analyze_task_screenshot(image_data)
-                await self._reply_text(user_id, f"📷 图片分析：\n{analysis}")
+                await self._reply_text(user_id, f"📷 图片分析：\n{analysis}", is_external)
                 if task.created_by:
                     teacher = await self._get_member_by_id(task.created_by, db)
                     if teacher:
@@ -428,12 +434,13 @@ class MessageHandler:
                         )
             else:
                 analysis = await vision_service.analyze_image(image_data)
-                await self._reply_text(user_id, f"📷 图片内容：\n{analysis}")
+                await self._reply_text(user_id, f"📷 图片内容：\n{analysis}", is_external)
         except Exception as e:
             logger.error(f"图片处理失败: {e}", exc_info=True)
-            await self._reply_text(user_id, "图片处理出错了。")
+            await self._reply_text(user_id, "图片处理出错了。", is_external)
 
-    async def _handle_voice(self, msg: dict, member: Member, db: AsyncSession) -> None:
+    async def _handle_voice(self, msg: dict, member: Member, db: AsyncSession,
+                             is_external: bool = False) -> None:
         """私聊语音处理"""
         user_id = msg.get("FromUserName", "")
         recognition = msg.get("Recognition", "")
@@ -442,16 +449,16 @@ class MessageHandler:
             msg_copy = dict(msg)
             msg_copy["MsgType"] = "text"
             msg_copy["Content"] = recognition
-            await self._handle_private_message(msg_copy, member, "text", db)
+            await self._handle_private_message(msg_copy, member, "text", db, is_external)
             return
 
-        await self._reply_text(user_id, "🎤 收到语音，正在识别...")
+        await self._reply_text(user_id, "🎤 收到语音，正在识别...", is_external)
         try:
             from app.voice.asr import asr_service
             media_id = msg.get("MediaId", "")
             voice_data = await vision_service.download_voice(media_id)
             if not voice_data:
-                await self._reply_text(user_id, "语音下载失败。")
+                await self._reply_text(user_id, "语音下载失败。", is_external)
                 return
 
             result = await asr_service.transcribe(audio_data=voice_data)
@@ -460,12 +467,12 @@ class MessageHandler:
                 msg_copy = dict(msg)
                 msg_copy["MsgType"] = "text"
                 msg_copy["Content"] = text
-                await self._handle_private_message(msg_copy, member, "text", db)
+                await self._handle_private_message(msg_copy, member, "text", db, is_external)
             else:
-                await self._reply_text(user_id, "语音识别失败，请改用文字。")
+                await self._reply_text(user_id, "语音识别失败，请改用文字。", is_external)
         except Exception as e:
             logger.error(f"语音处理失败: {e}", exc_info=True)
-            await self._reply_text(user_id, "语音处理出错了。")
+            await self._reply_text(user_id, "语音处理出错了。", is_external)
 
     # ==================== 工具方法 ====================
 
@@ -488,10 +495,11 @@ class MessageHandler:
         content = re.sub(r"@\S+\s*", "", content, count=1).strip()
         return content
 
-    async def _identify_user(self, user_id: str, msg: dict, db: AsyncSession) -> Member:
+    async def _identify_user(self, user_id: str, msg: dict, db: AsyncSession,
+                               is_external: bool = False) -> Member:
         """多信号识别用户"""
         # 外部用户优先用 external_userid 查询
-        if self._is_external_user:
+        if is_external:
             member = await identity_resolver.resolve_by_external_userid(user_id, db)
             if member:
                 return member
@@ -508,7 +516,7 @@ class MessageHandler:
         if nickname:
             member = await identity_resolver.resolve_by_nickname(nickname, db)
             if member:
-                if self._is_external_user:
+                if is_external:
                     await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
                 else:
                     await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
@@ -517,30 +525,32 @@ class MessageHandler:
         return None
 
     async def _handle_unknown_user(self, user_id: str, msg_type: str,
-                                     msg: dict, db: AsyncSession) -> None:
+                                     msg: dict, db: AsyncSession,
+                                     is_external: bool = False) -> None:
         """未知用户自引导绑定"""
         pending = await self._get_pending_user(user_id)
         if not pending:
             await self._set_pending_user(user_id, {"awaiting": True, "attempts": 0})
             # 外部用户（普通微信）和内部用户（企业微信）显示不同提示
-            if self._is_external_user:
+            if is_external:
                 await self._reply_text(user_id,
                     "你好！👋 我是小气，课题组的AI助手。\n\n"
                     "首次使用需要验证身份，请回复以下任一信息：\n"
-                    "• 你的姓名\n• 你的手机号")
+                    "• 你的姓名\n• 你的手机号", is_external)
             else:
                 await self._reply_text(user_id,
                     "你好！👋 我是小气，课题组的AI助手。\n\n"
                     "首次使用需要验证身份，请回复以下任一信息：\n"
-                    "• 你的姓名\n• 你的手机号\n• 你的企业微信昵称")
+                    "• 你的姓名\n• 你的手机号\n• 你的企业微信昵称", is_external)
             return
 
         if msg_type != "text":
-            await self._reply_text(user_id, "请发送文字消息来验证身份。")
+            await self._reply_text(user_id, "请发送文字消息来验证身份。", is_external)
             return
 
         content = msg.get("Content", "").strip()
         if not content:
+            await self._reply_text(user_id, "请发送文字消息来验证身份。", is_external)
             return
 
         pending["attempts"] += 1
@@ -548,32 +558,32 @@ class MessageHandler:
             nickname=content, mobile=content, db=db)
 
         if member:
-            if self._is_external_user:
+            if is_external:
                 await identity_resolver.bind_identity(member, external_userid=user_id, db=db)
             else:
                 await identity_resolver.bind_identity(member, wechat_userid=user_id, db=db)
             await self._delete_pending_user(user_id)
             await self._reply_text(user_id,
-                f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。")
+                f"✅ 身份验证成功！你好，{member.name}！\n\n现在可以直接发消息给我。", is_external)
             return
 
         attempts = pending["attempts"]
         if attempts >= 3:
             await self._delete_pending_user(user_id)
-            await self._reply_text(user_id, "多次匹配未成功，请联系管理员。")
+            await self._reply_text(user_id, "多次匹配未成功，请联系管理员。", is_external)
         else:
             await self._set_pending_user(user_id, pending)
             await self._reply_text(user_id,
-                f"未找到匹配信息（{attempts}/3），请确认后重试。")
+                f"未找到匹配信息（{attempts}/3），请确认后重试。", is_external)
 
     async def _handle_event(self, msg: dict, db: AsyncSession) -> None:
         """事件处理"""
         event = msg.get("Event", "")
         user_id = msg.get("FromUserName", "")
-        self._is_external_user = user_id.startswith("wm")
+        is_external = user_id.startswith("wm")
         if event in ("subscribe", "enter_session"):
             await self._reply_text(user_id,
-                "欢迎使用小气！👋\n\n我是课题组的AI助手，可以帮你管理任务、查询信息、搜索知识库。\n\n首次使用请回复你的姓名来验证身份。")
+                "欢迎使用小气！👋\n\n我是课题组的AI助手，可以帮你管理任务、查询信息、搜索知识库。\n\n首次使用请回复你的姓名来验证身份。", is_external)
 
     async def _try_handle_task_reply(self, content: str, member: Member,
                                       user_id: str, db: AsyncSession) -> bool:
@@ -661,24 +671,26 @@ class MessageHandler:
                 await notifier.notify_all_completed(teacher, task.title, "负责人已全部完成")
 
     async def _handle_general_chat(self, content: str, member: Member,
-                                    user_id: str, db: AsyncSession) -> None:
+                                    user_id: str, db: AsyncSession,
+                                    is_external: bool = False) -> None:
         """私聊通用对话"""
         session_id = f"wechat_{user_id}"
         try:
             enriched_msg = f"[用户: {member.name}, 角色: {member.role}] {content}"
-            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db)
+            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
             reply = result.get("content", "抱歉，处理失败了。")
             if len(reply) > 2000:
                 reply = reply[:1950] + "\n\n...(内容过长已截断)"
-            await self._reply_text(user_id, reply)
+            await self._reply_text(user_id, reply, is_external)
         except Exception as e:
             logger.error(f"Agent 调用失败: {e}", exc_info=True)
-            await self._reply_text(user_id, "处理消息时出错了，请稍后再试。")
+            await self._reply_text(user_id, "处理消息时出错了，请稍后再试。", is_external)
 
-    async def _reply_text(self, user_id: str, content: str) -> None:
+    async def _reply_text(self, user_id: str, content: str,
+                           is_external: bool = False) -> None:
         """私聊回复（自动区分内部/外部用户）"""
         try:
-            if self._is_external_user:
+            if is_external:
                 await wechat_bot.send_to_external_user(user_id, content, msg_type="text")
             else:
                 await wechat_bot.send_message(user_id, content, msg_type="text")
@@ -705,32 +717,26 @@ class MessageHandler:
 
         logger.info(f"处理微信客服消息: user={user_id}, type={msg_type}, content={content[:50]}")
 
-        # 设置为外部用户
-        self._is_external_user = True
+        # 微信客服消息始终为外部用户
+        is_external = True
 
         # 识别用户身份
-        member = await self._identify_user(user_id, msg, db)
+        member = await self._identify_user(user_id, msg, db, is_external)
         if not member:
-            await self._handle_unknown_user(user_id, msg_type, msg, db)
+            await self._handle_unknown_user(user_id, msg_type, msg, db, is_external)
             return
 
         # 处理文本消息
         if msg_type == "text" and content:
-            # 检查是否是任务回复
-            task_reply = self._detect_task_reply(content)
-            if task_reply:
-                await self._handle_task_reply(member, task_reply, db)
-                return
-
             # 调用 Agent 处理
-            await self._call_agent(user_id, content, member, db)
+            await self._call_agent_for_kf(user_id, content, member, db)
         elif msg_type == "image":
             # 图片消息处理
             media_id = msg.get("MediaId", "")
             if media_id:
-                await self._handle_image_message(user_id, media_id, member, db)
+                await self._handle_image(msg, member, db, is_external)
         else:
-            await self._reply_text(user_id, f"暂不支持 {msg_type} 类型的消息，请发送文字或图片。")
+            await self._reply_text(user_id, f"暂不支持 {msg_type} 类型的消息，请发送文字或图片。", is_external)
 
     async def _call_agent_for_kf(self, user_id: str, content: str, member: Member, db: AsyncSession) -> None:
         """调用 Agent 处理微信客服消息"""
@@ -739,7 +745,8 @@ class MessageHandler:
             result = await agent.chat(
                 message=f"[用户: {member.name}, 角色: {member.role}] {content}",
                 session_id=session_id,
-                db=db
+                db=db,
+                user_id=member.id
             )
 
             reply = result.get("content", "抱歉，处理失败了。")
