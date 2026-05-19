@@ -95,6 +95,11 @@ class MessageHandler:
         chat_id = msg.get("ChatId", "")  # 群聊ID（私聊为空）
 
         logger.info(f"收到消息: user_id={user_id}, msg_type={msg_type}, chat_id={chat_id}")
+        logger.info(f"消息完整字段: {list(msg.keys())}")
+        # 打印可能包含真实用户ID的字段
+        for key in ['SessionFrom', 'ExternalUserID', 'OpenKfId', 'ToUserName', 'FromUserName', 'NickName', 'CreateTime']:
+            if key in msg:
+                logger.info(f"  {key} = {msg[key]}")
 
         # 事件处理
         if msg_type == "event":
