@@ -54,6 +54,12 @@ const routes = [
         name: 'Knowledge',
         component: () => import('@/views/KnowledgeView.vue'),
         meta: { title: '知识库', icon: 'Document' }
+      },
+      {
+        path: 'memory',
+        name: 'Memory',
+        component: () => import('@/views/MemoryView.vue'),
+        meta: { title: '长期记忆', icon: 'Memo' }
       }
     ]
   }

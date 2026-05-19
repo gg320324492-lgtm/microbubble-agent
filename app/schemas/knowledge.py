@@ -30,6 +30,10 @@ class KnowledgeResponse(KnowledgeBase):
     id: int
     source: Optional[str] = None
     source_type: Optional[str] = None
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+    summary: Optional[str] = None
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -46,6 +50,10 @@ class KnowledgeList(BaseModel):
 
 class KnowledgeSearchResult(BaseModel):
     """知识搜索结果"""
+    id: int
+    title: str
     content: str
-    metadata: dict
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    source: Optional[str] = None
     score: float

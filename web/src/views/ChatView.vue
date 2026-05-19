@@ -85,6 +85,15 @@
                 <div v-if="msg.content !== '[图片]'" class="message-text" v-html="formatMessage(msg.content)"></div>
               </div>
 
+              <!-- 文件消息 -->
+              <div v-else-if="msg.type === 'file'" class="file-message">
+                <div class="file-attachment">
+                  <el-icon size="24" color="#409eff"><Document /></el-icon>
+                  <span class="file-attachment-name">{{ msg.fileName || '文件' }}</span>
+                </div>
+                <div v-if="msg.content && !msg.content.startsWith('[文件:')" class="message-text" v-html="formatMessage(msg.content)"></div>
+              </div>
+
               <!-- 文字消息 -->
               <div v-else-if="msg.type !== 'voice'" class="message-text" v-html="formatMessage(msg.content)"></div>
 
@@ -152,6 +161,20 @@
             />
           </div>
 
+          <!-- 文件预览 -->
+          <div v-if="selectedFile && filePreviewType === 'document'" class="file-preview">
+            <el-icon size="20" color="#409eff"><Document /></el-icon>
+            <span class="file-name">{{ selectedFile.name }}</span>
+            <span class="file-size">({{ (selectedFile.size / 1024).toFixed(0) }}KB)</span>
+            <el-button
+              class="remove-image-btn"
+              :icon="Close"
+              circle
+              size="small"
+              @click="removeFile"
+            />
+          </div>
+
           <el-input
             v-model="inputText"
             placeholder="输入消息... (Enter发送，Shift+Enter换行)"
@@ -173,6 +196,17 @@
             </el-button>
           </el-tooltip>
 
+          <!-- 文件上传按钮 -->
+          <el-tooltip content="发送文件">
+            <el-button
+              circle
+              @click="triggerFileUpload"
+              :disabled="loading"
+            >
+              <el-icon><Paperclip /></el-icon>
+            </el-button>
+          </el-tooltip>
+
           <input
             ref="imageInputRef"
             type="file"
@@ -181,10 +215,18 @@
             @change="handleImageSelect"
           />
 
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md"
+            style="display: none"
+            @change="handleFileSelect"
+          />
+
           <el-button
             type="primary"
             @click="sendMessage"
-            :disabled="(!inputText.trim() && !selectedImage) || loading"
+            :disabled="(!inputText.trim() && !selectedImage && !selectedFile) || loading"
             :loading="loading"
           >
             <el-icon><Promotion /></el-icon>
@@ -199,7 +241,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Close, Picture } from '@element-plus/icons-vue'
+import { Close, Picture, Paperclip, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -209,12 +251,15 @@ const messageListRef = ref(null)
 const voiceRecorderRef = ref(null)
 const audioPlayerRef = ref(null)
 const imageInputRef = ref(null)
+const fileInputRef = ref(null)
 const inputText = ref('')
 const loading = ref(false)
 const voiceMode = ref(false)
 const sessionId = `user_${Date.now()}`
 const selectedImage = ref(null)
 const imagePreviewUrl = ref('')
+const selectedFile = ref(null)
+const filePreviewType = ref('') // 'image' or 'document'
 
 const messages = ref([
   {
@@ -260,10 +305,36 @@ const removeImage = () => {
   imagePreviewUrl.value = ''
 }
 
-// 发送消息（支持文字和图片）
+// 触发文件上传
+const triggerFileUpload = () => {
+  fileInputRef.value?.click()
+}
+
+// 处理文件选择
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error('文件大小不能超过50MB')
+    return
+  }
+
+  selectedFile.value = file
+  filePreviewType.value = 'document'
+  event.target.value = ''
+}
+
+// 移除选中的文件
+const removeFile = () => {
+  selectedFile.value = null
+  filePreviewType.value = ''
+}
+
+// 发送消息（支持文字、图片和文件）
 const sendMessage = async () => {
   const text = inputText.value.trim()
-  if ((!text && !selectedImage.value) || loading.value) return
+  if ((!text && !selectedImage.value && !selectedFile.value) || loading.value) return
 
   // 构建用户消息内容
   let userContent = text
@@ -272,6 +343,9 @@ const sendMessage = async () => {
   if (selectedImage.value) {
     userMessageType = 'image'
     userContent = text ? `[图片] ${text}` : '[图片]'
+  } else if (selectedFile.value) {
+    userMessageType = 'file'
+    userContent = text ? `[文件: ${selectedFile.value.name}] ${text}` : `[文件: ${selectedFile.value.name}]`
   }
 
   // 添加用户消息
@@ -280,20 +354,34 @@ const sendMessage = async () => {
     content: userContent,
     timestamp: new Date(),
     type: userMessageType,
-    imageUrl: selectedImage.value ? imagePreviewUrl.value : null
+    imageUrl: selectedImage.value ? imagePreviewUrl.value : null,
+    fileName: selectedFile.value?.name || null
   })
 
   const currentImage = selectedImage.value
+  const currentFile = selectedFile.value
   inputText.value = ''
   selectedImage.value = null
   imagePreviewUrl.value = ''
+  selectedFile.value = null
+  filePreviewType.value = ''
   loading.value = true
   scrollToBottom()
 
   try {
     let res
 
-    if (currentImage) {
+    if (currentFile) {
+      // 发送文件消息
+      const formData = new FormData()
+      formData.append('message', text || '')
+      formData.append('session_id', sessionId)
+      formData.append('file', currentFile)
+
+      res = await axios.post('/api/v1/chat/file', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    } else if (currentImage) {
       // 发送图片消息
       const formData = new FormData()
       formData.append('message', text || '请描述这张图片')
@@ -320,7 +408,7 @@ const sendMessage = async () => {
     })
   } catch (e) {
     console.error('发送失败:', e)
-    ElMessage.error('发送失败，请重试')
+    ElMessage.error(e.response?.data?.detail || '发送失败，请重试')
     messages.value.push({
       role: 'assistant',
       content: '抱歉，我暂时无法回复，请稍后再试。',
@@ -712,6 +800,48 @@ onMounted(() => {
 .remove-image-btn:hover {
   background: #f78989 !important;
   border-color: #f78989 !important;
+}
+
+/* 文件预览 */
+.file-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f0f2f5;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.file-name {
+  font-size: 13px;
+  color: #303133;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 文件消息 */
+.file-message .file-attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f0f2f5;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.file-attachment-name {
+  font-size: 13px;
+  color: #303133;
 }
 
 /* 用户图片消息 */

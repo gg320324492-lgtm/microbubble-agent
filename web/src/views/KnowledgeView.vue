@@ -1,5 +1,25 @@
 <template>
   <div class="knowledge-view">
+    <!-- 分类统计面板 -->
+    <el-card v-if="statsData.total > 0" class="stats-card">
+      <div class="stats-grid">
+        <div class="stat-item stat-total">
+          <div class="stat-number">{{ statsData.total }}</div>
+          <div class="stat-label">全部</div>
+        </div>
+        <div
+          v-for="(count, cat) in statsData.categories"
+          :key="cat"
+          class="stat-item"
+          :class="{ 'stat-active': filterCategory === cat }"
+          @click="filterCategory = filterCategory === cat ? '' : cat"
+        >
+          <div class="stat-number">{{ count }}</div>
+          <div class="stat-label">{{ cat }}</div>
+        </div>
+      </div>
+    </el-card>
+
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
@@ -27,6 +47,10 @@
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             添加知识
+          </el-button>
+          <el-button @click="showUploadDialog = true">
+            <el-icon><Upload /></el-icon>
+            上传文件
           </el-button>
           <el-button @click="showSemanticSearch = true">
             <el-icon><MagicStick /></el-icon>
@@ -82,8 +106,12 @@
             </div>
           </div>
 
-          <h3 class="item-title">{{ item.title }}</h3>
-          <p class="item-content">{{ item.content.substring(0, 150) }}...</p>
+          <h3 class="item-title">
+            <el-icon v-if="item.file_path" style="margin-right: 4px; color: #409eff"><Document /></el-icon>
+            {{ item.title }}
+          </h3>
+          <p v-if="item.summary" class="item-summary">{{ item.summary }}</p>
+          <p v-else class="item-content">{{ item.content.substring(0, 150) }}...</p>
 
           <div class="item-footer">
             <span class="item-time">{{ formatDate(item.created_at) }}</span>
@@ -185,8 +213,11 @@
             class="result-item"
           >
             <div class="result-header">
-              <span class="result-title">{{ result.metadata?.title }}</span>
+              <span class="result-title">{{ result.title }}</span>
               <el-tag size="small">相似度: {{ (result.score * 100).toFixed(0) }}%</el-tag>
+            </div>
+            <div v-if="result.category" class="result-category">
+              <el-tag size="small" :type="getCategoryType(result.category)">{{ result.category }}</el-tag>
             </div>
             <div class="result-content">{{ result.content }}</div>
           </div>
@@ -214,11 +245,45 @@
             {{ tag }}
           </el-tag>
         </div>
+        <div v-if="currentKnowledge.summary" class="detail-summary">
+          <strong>摘要：</strong>{{ currentKnowledge.summary }}
+        </div>
         <div class="detail-content">{{ currentKnowledge.content }}</div>
         <div v-if="currentKnowledge.source" class="detail-source">
           来源：{{ currentKnowledge.source }}
         </div>
+        <div v-if="currentKnowledge.file_name" class="detail-source">
+          文件：{{ currentKnowledge.file_name }}
+        </div>
       </div>
+    </el-dialog>
+
+    <!-- 文件上传对话框 -->
+    <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'">
+      <el-form label-width="80px">
+        <el-form-item label="标题">
+          <el-input v-model="uploadTitle" placeholder="留空则使用文件名" />
+        </el-form-item>
+      </el-form>
+      <el-upload
+        ref="uploadRef"
+        drag
+        :auto-upload="false"
+        :limit="1"
+        accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md"
+        :on-change="onUploadFileChange"
+        :on-exceed="() => ElMessage.warning('只能上传一个文件')"
+      >
+        <el-icon class="el-icon--upload"><Upload /></el-icon>
+        <div class="el-upload__text">拖拽文件到此处，或 <em>点击选择</em></div>
+        <template #tip>
+          <div class="el-upload__tip">支持 PDF、Word、Excel、TXT、Markdown，最大 50MB</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="showUploadDialog = false">取消</el-button>
+        <el-button type="primary" :loading="uploading" @click="handleUpload">上传</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -226,6 +291,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 
@@ -239,10 +305,16 @@ const filterCategory = ref('')
 const showCreateDialog = ref(false)
 const showDetailDialog = ref(false)
 const showSemanticSearch = ref(false)
+const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
 const currentKnowledge = ref(null)
 const semanticQuery = ref('')
 const searchResults = ref([])
+const statsData = ref({ total: 0, categories: {} })
+const uploadTitle = ref('')
+const uploadFile = ref(null)
+const uploading = ref(false)
+const uploadRef = ref(null)
 
 const categories = [
   { value: '基础', label: '基础知识', icon: '📚' },
@@ -296,6 +368,7 @@ const saveKnowledge = async () => {
     editingKnowledge.value = null
     resetForm()
     fetchKnowledge()
+    fetchStats()
   } catch (e) {
     ElMessage.error('操作失败')
   }
@@ -315,6 +388,7 @@ const deleteKnowledge = async (item) => {
     await axios.delete(`/api/v1/knowledge/${item.id}`)
     ElMessage.success('知识删除成功')
     fetchKnowledge()
+    fetchStats()
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error('删除失败')
@@ -357,6 +431,50 @@ const resetForm = () => {
   }
 }
 
+// 获取统计
+const fetchStats = async () => {
+  try {
+    const res = await axios.get('/api/v1/knowledge/stats')
+    statsData.value = res.data
+  } catch (e) {
+    console.error('获取统计失败:', e)
+  }
+}
+
+// 上传文件变更
+const onUploadFileChange = (file) => {
+  uploadFile.value = file.raw
+}
+
+// 上传文件
+const handleUpload = async () => {
+  if (!uploadFile.value) {
+    ElMessage.warning('请选择文件')
+    return
+  }
+  uploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', uploadFile.value)
+    if (uploadTitle.value) formData.append('title', uploadTitle.value)
+
+    await axios.post('/api/v1/knowledge/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    ElMessage.success('文件上传成功，后台正在分析...')
+    showUploadDialog.value = false
+    uploadTitle.value = ''
+    uploadFile.value = null
+    if (uploadRef.value) uploadRef.value.clearFiles()
+    fetchKnowledge()
+    fetchStats()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '上传失败')
+  } finally {
+    uploading.value = false
+  }
+}
+
 // 辅助函数
 const formatDate = (date) => date ? dayjs(date).format('YYYY-MM-DD') : '-'
 
@@ -372,6 +490,7 @@ watch(filterCategory, () => {
 
 onMounted(() => {
   fetchKnowledge()
+  fetchStats()
 })
 </script>
 
@@ -380,6 +499,56 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.stats-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.stats-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  text-align: center;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: background 0.2s;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.stat-item:hover,
+.stat-active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.stat-total {
+  color: #fff;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.stat-label {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.item-summary {
+  font-size: 13px;
+  color: #909399;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
+.result-category {
+  margin-bottom: 8px;
 }
 
 .category-tags {

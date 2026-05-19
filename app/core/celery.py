@@ -27,6 +27,10 @@ celery_app.conf.update(
             "task": "app.wechat.scheduler.run_proactive_checks",
             "schedule": 900.0,  # 每15分钟检查一次
         },
+        "memory-maintenance": {
+            "task": "app.services.memory_service.maintenance_task",
+            "schedule": 3600.0,  # 每小时
+        },
     },
 )
 
