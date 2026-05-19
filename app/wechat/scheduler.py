@@ -4,7 +4,6 @@
 - 即将到期的任务 → 提醒负责人
 - 已逾期的任务 → 提醒负责人 + 老师
 - 未确认的任务 → 提醒确认
-- 会议前30分钟 → 提醒参会者
 """
 
 import logging
@@ -17,7 +16,6 @@ logger = logging.getLogger("microbubble.wechat.scheduler")
 
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
-from app.models.meeting import Meeting
 from app.models.reminder import Reminder
 from app.wechat.notifier import notifier
 from app.wechat.bot import wechat_bot
@@ -35,7 +33,6 @@ class ProactiveScheduler:
             results["due_soon"] = await self.check_due_soon(db)
             results["overdue"] = await self.check_overdue(db)
             results["unconfirmed"] = await self.check_unconfirmed(db)
-            results["upcoming_meetings"] = await self.check_upcoming_meetings(db)
 
         return results
 
@@ -145,39 +142,6 @@ class ProactiveScheduler:
                 count += 1
             except Exception as e:
                 logger.warning(f"确认提醒失败 [{member.name}]: {e}")
-
-        return count
-
-    async def check_upcoming_meetings(self, db: AsyncSession) -> int:
-        """检查30分钟内即将开始的会议"""
-        now = datetime.utcnow()
-        soon = now + timedelta(minutes=30)
-
-        result = await db.execute(
-            select(Meeting).where(
-                and_(
-                    Meeting.start_time <= soon,
-                    Meeting.start_time > now,
-                    Meeting.status != "cancelled"
-                )
-            )
-        )
-        meetings = result.scalars().all()
-
-        count = 0
-        for meeting in meetings:
-            try:
-                content = f"📅 会议提醒\n\n📌 {meeting.title}\n⏰ {meeting.start_time.strftime('%H:%M')}\n📍 {meeting.location or '未定'}\n\n请准时参加！"
-                # 通知参与者
-                if meeting.participants:
-                    for participant in meeting.participants:
-                        if participant.member_id:
-                            member = await db.get(Member, participant.member_id)
-                            if member and (member.wechat_id or member.external_userid):
-                                await wechat_bot.smart_send(member, content)
-                                count += 1
-            except Exception as e:
-                logger.warning(f"会议提醒失败: {e}")
 
         return count
 
