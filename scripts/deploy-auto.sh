@@ -13,16 +13,17 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
-# 拉取最新代码（重试3次，GitHub TLS 不稳定）
+# 拉取最新代码（重试3次）
 log "git pull..."
 PULL_OK=0
 for i in 1 2 3; do
+    log "  第${i}次尝试..."
     if git pull origin main >> "$LOG_FILE" 2>&1; then
         PULL_OK=1
+        log "  pull 成功"
         break
     fi
-    log "  第${i}次 pull 失败，${i}秒后重试..."
-    sleep $i
+    sleep $((i * 2))
 done
 
 if [ $PULL_OK -eq 0 ]; then
