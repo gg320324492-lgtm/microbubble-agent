@@ -1,4 +1,5 @@
 import anthropic
+import asyncio
 import base64
 import json
 import logging
@@ -60,6 +61,39 @@ class MicroBubbleAgent:
         self._sessions[session_id] = messages
         await session_store.save_messages(session_id, messages)
 
+    async def _build_system_prompt(self, user_id: Optional[int], query: str, db=None) -> str:
+        """构建系统提示词，注入相关长期记忆"""
+        if not user_id or not db:
+            return self.system_prompt
+        try:
+            from app.services.memory_service import MemoryService
+            mem_svc = MemoryService(db)
+            memories = await mem_svc.search_memories(user_id, query, top_k=5)
+            if not memories:
+                return self.system_prompt
+            memory_text = "\n".join(
+                f"- [{m['memory_type']}] {m['content']}" for m in memories
+            )
+            return f"{self.system_prompt}\n\n关于用户的长期记忆:\n{memory_text}"
+        except Exception as e:
+            logger.warning(f"构建记忆提示词失败: {e}")
+            return self.system_prompt
+
+    async def _extract_and_save_memories(self, user_id: int, messages: List[Dict], session_id: str):
+        """后台任务：从对话中提取记忆"""
+        from app.core.database import async_session
+        try:
+            async with async_session() as db:
+                from app.services.memory_service import MemoryService
+                mem_svc = MemoryService(db)
+                await mem_svc.extract_memories_from_conversation(
+                    user_id=user_id,
+                    messages=messages,
+                    session_id=session_id
+                )
+        except Exception as e:
+            logger.error(f"后台记忆提取失败: {e}")
+
     async def chat(
         self,
         message: str,
@@ -67,7 +101,8 @@ class MicroBubbleAgent:
         history: Optional[List[Dict]] = None,
         db=None,
         image_data: Optional[bytes] = None,
-        image_media_type: str = "image/png"
+        image_media_type: str = "image/png",
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """与Agent对话"""
         messages = await self._load_session(session_id)
@@ -99,15 +134,18 @@ class MicroBubbleAgent:
 
         messages.append({"role": "user", "content": content})
 
+        # 构建系统提示词（注入相关记忆）
+        system = await self._build_system_prompt(user_id, message, db)
+
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=4096,
-            system=self.system_prompt,
+            system=system,
             tools=self.tools,
             messages=messages
         )
 
-        result = await self._process_response(response, session_id, db, messages)
+        result = await self._process_response(response, session_id, db, messages, user_id=user_id)
 
         messages.append({
             "role": "assistant",
@@ -118,9 +156,16 @@ class MicroBubbleAgent:
             messages = messages[-20:]
 
         await self._save_session(session_id, messages)
+
+        # 后台提取记忆
+        if user_id and db:
+            asyncio.create_task(
+                self._extract_and_save_memories(user_id, messages, session_id)
+            )
+
         return result
 
-    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None) -> Dict[str, Any]:
+    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
         """处理Claude响应"""
         if messages is None:
             messages = await self._load_session(session_id)
@@ -141,7 +186,7 @@ class MicroBubbleAgent:
 
         if tool_calls:
             for call in tool_calls:
-                result = await self._execute_tool(call["name"], call["input"], db)
+                result = await self._execute_tool(call["name"], call["input"], db, user_id=user_id)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": call["id"],
@@ -158,6 +203,7 @@ class MicroBubbleAgent:
                 "content": tool_results
             })
 
+            # 后续调用使用基础系统提示词（避免重复注入记忆）
             follow_up = await self.client.messages.create(
                 model=self.model,
                 max_tokens=4096,
@@ -166,7 +212,7 @@ class MicroBubbleAgent:
                 messages=messages
             )
 
-            result = await self._process_response(follow_up, session_id, db, messages)
+            result = await self._process_response(follow_up, session_id, db, messages, user_id=user_id)
             return {
                 "content": result["content"],
                 "content_blocks": result["content_blocks"],
@@ -181,7 +227,7 @@ class MicroBubbleAgent:
             "tool_results": tool_results
         }
 
-    async def _execute_tool(self, name: str, input_data: Dict, db=None) -> Any:
+    async def _execute_tool(self, name: str, input_data: Dict, db=None, user_id: Optional[int] = None) -> Any:
         """执行工具调用，路由到对应 service 层"""
         try:
             # 联网搜索不需要数据库
@@ -474,6 +520,47 @@ class MicroBubbleAgent:
                     top_k=5
                 )
                 return {"status": "success", "results": results}
+
+            # 长期记忆工具
+            elif name == "save_memory":
+                if not user_id:
+                    return {"status": "error", "message": "无法识别用户身份"}
+                from app.services.memory_service import MemoryService
+                mem_svc = MemoryService(db)
+                memory = await mem_svc.save_memory(
+                    user_id=user_id,
+                    memory_type=input_data["memory_type"],
+                    content=input_data["content"],
+                    key=input_data.get("key"),
+                    importance=input_data.get("importance", 0.7),
+                )
+                return {"status": "success", "memory_id": memory.id, "type": memory.memory_type}
+
+            elif name == "search_memory":
+                if not user_id:
+                    return {"status": "error", "message": "无法识别用户身份"}
+                from app.services.memory_service import MemoryService
+                mem_svc = MemoryService(db)
+                results = await mem_svc.search_memories(
+                    user_id=user_id,
+                    query=input_data["query"],
+                    top_k=5,
+                    memory_type=input_data.get("memory_type")
+                )
+                return {"status": "success", "memories": results}
+
+            elif name == "forget_memory":
+                if not user_id:
+                    return {"status": "error", "message": "无法识别用户身份"}
+                from app.services.memory_service import MemoryService
+                mem_svc = MemoryService(db)
+                success = await mem_svc.forget_memory(
+                    user_id=user_id,
+                    memory_id=input_data["memory_id"]
+                )
+                if success:
+                    return {"status": "success", "message": "记忆已遗忘"}
+                return {"status": "error", "message": "记忆不存在或无权操作"}
 
             else:
                 return {"status": "error", "message": f"未知工具: {name}"}

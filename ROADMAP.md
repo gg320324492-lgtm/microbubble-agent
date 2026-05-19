@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-19 (更新：联网搜索功能完成)
+> 最后更新: 2026-05-19 (更新：Phase 6 全部完成 — 长期记忆 + 对话文件上传 + 知识库增强)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -429,7 +429,7 @@
 
 ---
 
-## 第六阶段：功能增强（规划中）
+## 第六阶段：功能增强
 
 ### 联网搜索
 
@@ -438,26 +438,62 @@
 - [x] **搜索来源引用** -- 回复中附带信息来源链接，方便用户查证
 - [x] **搜索权限控制** -- 搜索功能始终可用，无需额外配置
 
-### 长期记忆
+### 长期记忆 (2026-05-19)
 
-- [ ] **用户偏好记忆** -- 记住用户的常用设置、偏好习惯（如常用搜索关键词、常用项目等）
-- [ ] **对话历史摘要** -- 定期将历史对话压缩为摘要存储，支持跨会话上下文延续
-- [ ] **知识图谱构建** -- 从对话中提取实体关系，构建课题组知识图谱（人员-项目-成果关联）
-- [ ] **记忆检索与更新** -- 新对话时自动检索相关记忆，支持用户手动纠正或遗忘特定记忆
-- [ ] **记忆存储方案** -- 使用 PostgreSQL 存储结构化记忆，pgvector 存储语义记忆，支持相似度检索
+- [x] **用户偏好记忆** -- 记住用户的常用设置、偏好习惯，preference 类型按 key 去重
+- [x] **对话历史摘要** -- 对话结束后后台自动提取值得记忆的信息（偏好/实体/摘要）
+- [x] **知识图谱构建** -- 从对话中提取实体关系（人员-项目-成果），entity 类型存储
+- [x] **记忆检索与更新** -- 新对话自动检索相关记忆注入系统提示词，支持手动编辑/遗忘
+- [x] **记忆存储方案** -- PostgreSQL + pgvector 语义搜索，importance 衰减机制
 
-### 对话窗口文件上传
+**新建文件：**
+- `app/models/memory.py` — Memory 模型（preference/summary/entity 三种类型）
+- `app/services/memory_service.py` — 记忆 CRUD + 语义搜索 + LLM 自动提取
+- `app/api/v1/memory.py` — 记忆管理 API（列表/编辑/删除）
+- `alembic/versions/004_add_memory_table.py` — 数据库迁移
+- `web/src/views/MemoryView.vue` — 记忆管理前端页面
 
-- [ ] **前端文件上传组件** -- 对话窗口支持拖拽/点击上传图片、PDF、Word、Excel 等文件
-- [ ] **图片预览与发送** -- 上传图片后显示预览缩略图，支持多张图片同时发送
-- [ ] **文件内容提取** -- 后端解析 PDF/Word/Excel 文件内容，提取文本后发送给 Agent 分析
-- [ ] **文件对话上下文** -- 上传的文件内容自动注入对话上下文，支持基于文件内容的问答
-- [ ] **文件存储管理** -- 上传的文件存储到 MinIO，关联到对话 session，支持历史文件查看
+**修改文件：**
+- `app/models/__init__.py` — 注册 Memory 模型
+- `app/agent/tools.py` — 新增 save_memory/search_memory/forget_memory 三个工具
+- `app/agent/core.py` — chat() 新增 user_id 参数，记忆注入系统提示词，后台自动提取记忆
+- `app/agent/prompts.py` — 添加长期记忆使用规则
+- `app/api/v1/chat.py` — 所有端点传递 user_id 给 agent
+- `app/main.py` — 注册 memory 路由
+- `app/core/celery.py` — 新增 memory-maintenance 定时任务（每小时衰减重要性）
+- `web/src/router/index.js` — 新增 /memory 路由
 
-### 知识库增强
+### 对话窗口文件上传 (2026-05-19)
 
-- [ ] **知识库文件上传** -- 知识库页面新增上传按钮，支持拖拽上传 PDF/Word/TXT/Markdown 文件
-- [ ] **文件自动解析** -- 上传后自动提取文本内容，生成摘要和关键词
-- [ ] **智能分类分析** -- 使用 LLM 自动分析文件内容，自动归类到合适的分类（文献/实验记录/报告/笔记等）
-- [ ] **自动标签生成** -- 根据文件内容自动生成标签，支持手动修改标签
-- [ ] **分类统计面板** -- 知识库页面展示各分类文件数量统计，支持按分类筛选
+- [x] **前端文件上传组件** -- 对话窗口回形针按钮，支持上传图片、PDF、Word、Excel 等文件
+- [x] **图片预览与发送** -- 图片和文件分别显示预览，支持文件名和大小显示
+- [x] **文件内容提取** -- 后端 pdfplumber/python-docx/openpyxl 解析文件，提取文本发送给 Agent
+- [x] **文件对话上下文** -- 上传的文件内容自动注入对话上下文，支持基于文件内容的问答
+- [x] **文件存储管理** -- 上传的文件存储到 MinIO（chat/{session_id}/ 前缀），返回文件 URL
+
+**新建文件：**
+- `app/services/file_parser_service.py` — 文件内容提取服务（PDF/Word/Excel/TXT/Markdown）
+
+**修改文件：**
+- `app/api/v1/chat.py` — 新增 POST /chat/file 端点，ChatResponse 添加 file_url/file_name
+- `web/src/views/ChatView.vue` — 回形针按钮、文件预览、统一发送逻辑
+
+### 知识库增强 (2026-05-19)
+
+- [x] **知识库文件上传** -- 知识库页面新增上传按钮，支持拖拽上传 PDF/Word/TXT/Markdown 文件
+- [x] **文件自动解析** -- 上传后自动提取文本内容，后台生成摘要和关键词
+- [x] **智能分类分析** -- LLM 自动分析文件内容，自动归类到合适的分类
+- [x] **自动标签生成** -- 根据文件内容自动生成标签
+- [x] **分类统计面板** -- 知识库页面顶部展示各分类文件数量统计，支持点击筛选
+
+**新建文件：**
+- `app/services/llm_analysis_service.py` — LLM 内容分析服务（自动分类+标签+摘要）
+- `alembic/versions/003_knowledge_file_upload.py` — 知识表添加文件列
+
+**修改文件：**
+- `app/models/knowledge.py` — 新增 file_path/file_name/file_type/summary 列
+- `app/schemas/knowledge.py` — KnowledgeResponse 添加文件字段，修复 KnowledgeSearchResult
+- `app/services/knowledge_service.py` — 修复 embedding 自动生成 bug，新增 create_from_file()
+- `app/api/v1/knowledge.py` — 修复分页 total bug，新增 /upload 和 /stats 端点
+- `requirements.txt` — 新增 pdfplumber/python-docx/openpyxl
+- `web/src/views/KnowledgeView.vue` — 上传对话框、分类统计面板、文件图标、修复搜索结果显示

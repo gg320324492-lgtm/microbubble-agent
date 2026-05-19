@@ -20,6 +20,12 @@ class Knowledge(Base, TimestampMixin):
     source = Column(String(500))  # 来源链接或文件路径
     source_type = Column(String(50))  # paper/notes/sop/manual
 
+    # 文件上传
+    file_path = Column(String(500), nullable=True)  # MinIO object_name
+    file_name = Column(String(200), nullable=True)  # 原始文件名
+    file_type = Column(String(50), nullable=True)  # MIME 类型
+    summary = Column(Text, nullable=True)  # LLM 生成的摘要
+
     # 向量嵌入 (用于RAG检索，需要 pgvector 扩展)
     # 使用 LargeBinary 作为 fallback，pgvector 可用时会自动使用 Vector
     embedding = Column(LargeBinary, nullable=True)

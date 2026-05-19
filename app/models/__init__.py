@@ -4,6 +4,7 @@ from app.models.meeting import Meeting, MeetingParticipant
 from app.models.project import Project, Milestone
 from app.models.knowledge import Knowledge
 from app.models.reminder import Reminder
+from app.models.memory import Memory
 
 __all__ = [
     "Member",
@@ -14,5 +15,6 @@ __all__ = [
     "Project",
     "Milestone",
     "Knowledge",
-    "Reminder"
+    "Reminder",
+    "Memory"
 ]

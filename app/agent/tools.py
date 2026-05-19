@@ -268,5 +268,67 @@ TOOLS = [
             },
             "required": ["query"]
         }
+    },
+
+    # 长期记忆工具
+    {
+        "name": "save_memory",
+        "description": "保存重要信息到长期记忆。当用户表达偏好、提供重要信息、或你发现值得记住的内容时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "memory_type": {
+                    "type": "string",
+                    "enum": ["preference", "summary", "entity"],
+                    "description": "记忆类型：preference(偏好)/summary(摘要)/entity(实体关系)"
+                },
+                "key": {
+                    "type": "string",
+                    "description": "记忆键名（偏好类型建议填写）"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "记忆内容"
+                },
+                "importance": {
+                    "type": "number",
+                    "description": "重要性 0.0-1.0，默认0.7"
+                }
+            },
+            "required": ["memory_type", "content"]
+        }
+    },
+    {
+        "name": "search_memory",
+        "description": "搜索长期记忆。当需要回忆用户偏好、历史对话信息、实体关系时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "搜索内容"
+                },
+                "memory_type": {
+                    "type": "string",
+                    "enum": ["preference", "summary", "entity"],
+                    "description": "限定记忆类型（可选）"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "forget_memory",
+        "description": "遗忘特定记忆。当用户要求删除或纠正某条记忆时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "memory_id": {
+                    "type": "integer",
+                    "description": "记忆ID"
+                }
+            },
+            "required": ["memory_id"]
+        }
     }
 ]
