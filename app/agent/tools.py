@@ -32,6 +32,25 @@ TOOLS = [
                 "description": {
                     "type": "string",
                     "description": "任务详细描述"
+                },
+                "reminders": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "remind_at": {
+                                "type": "string",
+                                "description": "提醒时间，格式：YYYY-MM-DD HH:MM"
+                            },
+                            "remind_type": {
+                                "type": "string",
+                                "enum": ["wechat", "email"],
+                                "description": "提醒方式"
+                            }
+                        },
+                        "required": ["remind_at"]
+                    },
+                    "description": "自定义提醒时间列表（可选，不填则使用默认提醒：截止前2天+截止当天9点）"
                 }
             },
             "required": ["title"]

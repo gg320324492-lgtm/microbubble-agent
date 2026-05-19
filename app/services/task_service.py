@@ -23,7 +23,9 @@ class TaskService:
         due_date: Optional[datetime] = None,
         description: Optional[str] = None,
         tags: Optional[List[str]] = None,
-        source: str = "manual"
+        source: str = "manual",
+        created_by: Optional[int] = None,
+        reminders: Optional[List[dict]] = None,
     ) -> Task:
         """创建任务"""
         task = Task(
@@ -35,15 +37,25 @@ class TaskService:
             description=description,
             tags=tags,
             status=TaskStatus.TODO.value,
-            source=source
+            source=source,
+            created_by=created_by,
         )
 
         self.db.add(task)
         await self.db.commit()
         await self.db.refresh(task)
 
-        # 如果有截止日期，自动创建提醒
-        if due_date and assignee_id:
+        # 创建提醒
+        if reminders:
+            for r in reminders:
+                self.db.add(Reminder(
+                    task_id=task.id,
+                    remind_at=r["remind_at"],
+                    remind_type=r.get("remind_type", "wechat"),
+                    status="pending"
+                ))
+            await self.db.commit()
+        elif due_date and assignee_id:
             await self._create_default_reminders(task)
 
         return task

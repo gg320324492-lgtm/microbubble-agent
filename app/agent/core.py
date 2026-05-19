@@ -321,14 +321,26 @@ class MicroBubbleAgent:
 
             if name == "create_task":
                 task_svc = TaskService(db)
+                member_svc = MemberService(db)
+
+                # 权限检查
+                is_admin = False
+                if user_id:
+                    current_member = await member_svc.get_member(user_id)
+                    is_admin = current_member and current_member.role in ("admin", "leader")
+
                 assignee_id = None
                 if input_data.get("assignee_name"):
-                    member_svc = MemberService(db)
                     member = await member_svc.get_member_by_name(input_data["assignee_name"])
                     if member:
                         assignee_id = member.id
                     else:
                         return {"status": "error", "message": f"未找到成员: {input_data['assignee_name']}"}
+
+                # 权限：普通成员只能给自己创建任务
+                if not is_admin and assignee_id and user_id and assignee_id != user_id:
+                    return {"status": "error", "message": "普通成员只能给自己创建任务"}
+
                 project_id = None
                 if input_data.get("project_name"):
                     proj_svc = ProjectService(db)
@@ -340,6 +352,17 @@ class MicroBubbleAgent:
                 due_date = None
                 if input_data.get("due_date"):
                     due_date = datetime.strptime(input_data["due_date"], "%Y-%m-%d")
+
+                # 解析自定义提醒
+                reminders_data = None
+                if input_data.get("reminders"):
+                    reminders_data = []
+                    for r in input_data["reminders"]:
+                        reminders_data.append({
+                            "remind_at": datetime.strptime(r["remind_at"], "%Y-%m-%d %H:%M"),
+                            "remind_type": r.get("remind_type", "wechat")
+                        })
+
                 task = await task_svc.create_task(
                     title=input_data["title"],
                     assignee_id=assignee_id,
@@ -347,15 +370,24 @@ class MicroBubbleAgent:
                     priority=input_data.get("priority", "medium"),
                     due_date=due_date,
                     description=input_data.get("description"),
-                    source="ai"
+                    source="ai",
+                    created_by=user_id,
+                    reminders=reminders_data,
                 )
                 return {"status": "success", "task_id": task.id, "title": task.title}
 
             elif name == "query_tasks":
                 task_svc = TaskService(db)
+                member_svc = MemberService(db)
+
+                # 权限检查：普通成员只看自己的任务
+                is_admin = False
+                if user_id:
+                    current_member = await member_svc.get_member(user_id)
+                    is_admin = current_member and current_member.role in ("admin", "leader")
+
                 assignee_id = None
                 if input_data.get("assignee_name"):
-                    member_svc = MemberService(db)
                     member = await member_svc.get_member_by_name(input_data["assignee_name"])
                     if member:
                         assignee_id = member.id
@@ -367,6 +399,11 @@ class MicroBubbleAgent:
                         if p.name == input_data["project_name"]:
                             project_id = p.id
                             break
+
+                # 非管理员且未指定负责人时，只查自己的任务
+                if not is_admin and not assignee_id:
+                    assignee_id = user_id
+
                 tasks = await task_svc.get_tasks(
                     assignee_id=assignee_id,
                     status=input_data.get("status"),
@@ -392,14 +429,26 @@ class MicroBubbleAgent:
 
             elif name == "update_task":
                 task_svc = TaskService(db)
-                task = await task_svc.update_task_status(
+                task = await task_svc.get_task(input_data["task_id"])
+                if not task:
+                    return {"status": "error", "message": f"任务 {input_data['task_id']} 不存在"}
+
+                # 权限检查：普通成员只能编辑自己创建的任务
+                if user_id:
+                    member_svc = MemberService(db)
+                    current_member = await member_svc.get_member(user_id)
+                    is_admin = current_member and current_member.role in ("admin", "leader")
+                    if not is_admin and task.created_by != user_id:
+                        return {"status": "error", "message": "只能编辑自己创建的任务"}
+
+                updated = await task_svc.update_task_status(
                     task_id=input_data["task_id"],
                     status=input_data.get("status", "todo"),
                     progress=input_data.get("progress")
                 )
-                if task:
-                    return {"status": "success", "task_id": task.id, "new_status": task.status}
-                return {"status": "error", "message": f"任务 {input_data['task_id']} 不存在"}
+                if updated:
+                    return {"status": "success", "task_id": updated.id, "new_status": updated.status}
+                return {"status": "error", "message": f"任务 {input_data['task_id']} 更新失败"}
 
             elif name == "get_task_stats":
                 task_svc = TaskService(db)
@@ -640,7 +689,8 @@ class MicroBubbleAgent:
         session_id: str = "default",
         db=None,
         image_data: Optional[bytes] = None,
-        image_media_type: str = "image/png"
+        image_media_type: str = "image/png",
+        user_id: Optional[int] = None
     ):
         """流式对话"""
         messages = await self._load_session(session_id)
@@ -669,10 +719,12 @@ class MicroBubbleAgent:
 
         messages.append({"role": "user", "content": content})
 
+        system = await self._build_system_prompt(user_id, message, db) if user_id else self.system_prompt
+
         async with self.client.messages.stream(
             model=self.model,
             max_tokens=4096,
-            system=self.system_prompt,
+            system=system,
             tools=self.tools,
             messages=messages
         ) as stream:
@@ -706,7 +758,7 @@ class MicroBubbleAgent:
                         input_data = json.loads(call["input_json"])
                     except (json.JSONDecodeError, TypeError):
                         input_data = {}
-                result = await self._execute_tool(call["name"], input_data, db)
+                result = await self._execute_tool(call["name"], input_data, db, user_id=user_id)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": call["id"],
@@ -720,7 +772,7 @@ class MicroBubbleAgent:
             follow_up = await self.client.messages.create(
                 model=self.model,
                 max_tokens=4096,
-                system=self.system_prompt,
+                system=system,
                 tools=self.tools,
                 messages=messages
             )
