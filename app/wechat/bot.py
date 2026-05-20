@@ -4,7 +4,8 @@ import httpx
 import json
 import logging
 from typing import Optional, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, timedelta
+from app.models.base import utcnow
 
 from app.config import settings
 
@@ -27,7 +28,8 @@ class WeChatBot:
 
     async def _get_access_token(self) -> str:
         """获取access_token"""
-        if self._access_token and self._token_expires and datetime.utcnow() < self._token_expires:
+        now = utcnow()
+        if self._access_token and self._token_expires and now < self._token_expires:
             return self._access_token
 
         async with httpx.AsyncClient() as client:
@@ -43,9 +45,7 @@ class WeChatBot:
             if data.get("errcode") == 0:
                 self._access_token = data["access_token"]
                 # 提前5分钟过期
-                self._token_expires = datetime.fromtimestamp(
-                    datetime.utcnow().timestamp() + data["expires_in"] - 300
-                )
+                self._token_expires = now + timedelta(seconds=data["expires_in"] - 300)
                 return self._access_token
             else:
                 raise Exception(f"获取access_token失败: {data}")

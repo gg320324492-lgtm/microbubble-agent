@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from typing import Optional, List
 from datetime import datetime
+from app.models.base import utcnow
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -86,7 +87,7 @@ async def list_tasks(
         filters.append(Task.project_id == project_id)
     if overdue:
         filters.append(and_(
-            Task.due_date < datetime.utcnow(),
+            Task.due_date < utcnow(),
             Task.status.notin_(["done", "cancelled"])
         ))
 
@@ -162,7 +163,7 @@ async def update_task(
 
     # 如果标记为完成，设置完成时间
     if task_data.status == TaskStatus.DONE.value:
-        task.completed_at = datetime.utcnow()
+        task.completed_at = utcnow()
         task.progress = 100
 
     await db.commit()
@@ -221,7 +222,7 @@ async def get_task_stats(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
-    now = datetime.utcnow()
+    now = utcnow()
     stats = TaskStats(
         total=len(tasks),
         todo=sum(1 for t in tasks if t.status == TaskStatus.TODO.value),
@@ -242,7 +243,7 @@ async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db)
 ):
     """获取仪表盘统计数据"""
-    now = datetime.utcnow()
+    now = utcnow()
     is_admin = current_user.role in ("admin", "leader")
 
     # 权限：普通成员只看自己的数据

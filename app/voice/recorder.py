@@ -4,6 +4,7 @@ import io
 import wave
 import numpy as np
 from datetime import datetime
+from app.models.base import utcnow
 from typing import Optional, Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -47,7 +48,7 @@ class AudioRecorder:
             return
 
         self.audio_buffer = []
-        self.start_time = datetime.utcnow()
+        self.start_time = utcnow()
         self.status = RecordingStatus.RECORDING
         self.on_data_callback = on_data
 
@@ -103,7 +104,7 @@ class AudioRecorder:
             return 0.0
 
         if self.status == RecordingStatus.RECORDING:
-            return (datetime.utcnow() - self.start_time).total_seconds()
+            return (utcnow() - self.start_time).total_seconds()
 
         # 计算缓冲区中的音频时长
         total_bytes = sum(len(chunk) for chunk in self.audio_buffer)
@@ -150,14 +151,14 @@ class MeetingRecorder:
 
     async def start_recording(self):
         """开始会议录制"""
-        self.start_time = datetime.utcnow()
+        self.start_time = utcnow()
         self.recorder.start(on_data=self._on_audio_data)
         print(f"会议 {self.meeting_id} 开始录制")
 
     async def stop_recording(self) -> dict:
         """停止会议录制"""
         audio_data = self.recorder.stop()
-        end_time = datetime.utcnow()
+        end_time = utcnow()
 
         return {
             "meeting_id": self.meeting_id,
@@ -177,7 +178,7 @@ class MeetingRecorder:
         """添加转写条目"""
         self.transcript.append({
             **entry,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utcnow().isoformat()
         })
 
     def get_transcript_text(self) -> str:

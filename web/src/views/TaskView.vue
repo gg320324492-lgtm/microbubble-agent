@@ -156,10 +156,10 @@
         <el-form-item label="截止日期">
           <el-date-picker
             v-model="taskForm.due_date"
-            type="date"
-            placeholder="选择截止日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
+            type="datetime"
+            placeholder="选择截止日期和时间"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
           />
         </el-form-item>
         <el-form-item label="提醒设置">
@@ -369,7 +369,12 @@ const getStatusLabel = (status) => {
 }
 
 const formatDate = (date) => {
-  return date ? dayjs(date).format('YYYY-MM-DD') : '-'
+  if (!date) return '-'
+  const d = dayjs(date)
+  if (d.hour() !== 0 || d.minute() !== 0) {
+    return d.format('YYYY-MM-DD HH:mm')
+  }
+  return d.format('YYYY-MM-DD')
 }
 
 const isOverdue = (task) => {

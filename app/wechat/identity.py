@@ -57,11 +57,12 @@ class IdentityResolver:
         )
         return result.scalar_one_or_none()
 
-    async def resolve_by_nickname(self, nickname: str, db: AsyncSession) -> Optional[Member]:
+    async def resolve_by_nickname(self, nickname: str, db: AsyncSession) -> List[Member]:
         """
         通过昵称/备注名匹配用户
 
         匹配顺序：wechat_remark → wechat_nickname → name
+        返回列表，调用方需处理重名消歧
         """
         result = await db.execute(
             select(Member).where(
@@ -73,7 +74,7 @@ class IdentityResolver:
                 Member.is_active == True
             )
         )
-        return result.scalars().first()
+        return result.scalars().all()
 
     async def resolve_by_wechat_id(self, wechat_id: str, db: AsyncSession) -> Optional[Member]:
         """通过个人微信号匹配"""
@@ -138,9 +139,10 @@ class IdentityResolver:
                 return member
 
         if nickname:
-            member = await self.resolve_by_nickname(nickname, db)
-            if member:
-                return member
+            members = await self.resolve_by_nickname(nickname, db)
+            if len(members) == 1:
+                return members[0]
+            # len > 1 表示有歧义，返回 None 让调用方处理消歧
 
         return None
 
@@ -195,29 +197,36 @@ class IdentityResolver:
         wechat_remark: str = None,
         personal_wechat_id: str = None,
         mobile: str = None,
-        db: AsyncSession = None
+        db: AsyncSession = None,
+        force: bool = False
     ) -> Member:
         """
-        绑定用户身份信息（用于首次识别后自动绑定）
+        绑定用户身份信息
 
-        Returns:
-            更新后的 Member
+        Args:
+            force: True 时覆盖已有值，False 时仅填充空字段
         """
-        if wechat_userid and not member.wechat_id:
-            member.wechat_id = wechat_userid
-        if external_userid and not member.external_userid:
-            member.external_userid = external_userid
-        if wechat_nickname and not member.wechat_nickname:
-            member.wechat_nickname = wechat_nickname
-        if wechat_remark and not member.wechat_remark:
-            member.wechat_remark = wechat_remark
-        if personal_wechat_id and not member.personal_wechat_id:
-            member.personal_wechat_id = personal_wechat_id
-        if mobile and not member.phone:
-            member.phone = mobile
+        changed = False
 
-        await db.commit()
-        await db.refresh(member)
+        def _update(field_name: str, new_value: str):
+            nonlocal changed
+            if not new_value:
+                return
+            current = getattr(member, field_name)
+            if force or not current:
+                setattr(member, field_name, new_value)
+                changed = True
+
+        _update("wechat_id", wechat_userid)
+        _update("external_userid", external_userid)
+        _update("wechat_nickname", wechat_nickname)
+        _update("wechat_remark", wechat_remark)
+        _update("personal_wechat_id", personal_wechat_id)
+        _update("phone", mobile)
+
+        if changed:
+            await db.commit()
+            await db.refresh(member)
         return member
 
 

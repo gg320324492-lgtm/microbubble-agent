@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-19 (更新：对话知识自动入库 + 前端体验优化)
+> 最后更新: 2026-05-20 (更新：成员身份系统全面升级)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -502,6 +502,25 @@
 - `app/services/knowledge_service.py` — 新增 `create_from_conversation()` 方法
 - `web/src/views/KnowledgeView.vue` — 对话来源标记样式
 
+### 成员身份系统全面升级 (2026-05-20)
+
+| 问题 | 修复内容 |
+|------|---------|
+| 插件身份冲突 | 微信插件 `from_user` 是真实 ID 时用它识别，是 agent app name 时走验证流程，不绑定 agent ID |
+| 验证缓存 key 碰撞 | `_get_plugin_cache_key` 统一缓存 key 逻辑，`from_user` 是真实 ID 时用它做 key |
+| 群聊/私聊 user_id 错误 | `_handle_group_message` 和 `_handle_private_message` 改用 `msg["_resolved_user_id"]` |
+| bind_identity 永不覆盖 | 新增 `force` 参数，`True` 时覆盖已有值，`False` 时仅填充空字段 |
+| 重名返回任意匹配 | `resolve_by_nickname` 改为返回 `List[Member]`，多人同名时进入消歧流程 |
+| 验证缓存无失效 | 新增 `invalidate_verified_cache_for_member()`，验证成功/成员停用时清除旧缓存 |
+| kf_service open_kfid 未传递 | `_call_agent_for_kf` 增加 `open_kfid` 参数，移除无效的 `hasattr` 判断 |
+| _handle_event 未设 _reply_to | 事件处理也设置 `msg["_reply_to"]`，与 handle_message 一致 |
+
+**修改文件：**
+- `app/core/redis.py` — 新增 `invalidate_verified_cache_for_member()` 工具函数
+- `app/wechat/identity.py` — `resolve_by_nickname` 返回列表 + `bind_identity` 增加 `force` 参数
+- `app/wechat/handler.py` — 7 处改动（插件身份、缓存 key、群聊/私聊 user_id、重名消歧、事件回复、客服 open_kfid）
+- `app/api/v1/member.py` — 删除成员时清除验证缓存
+
 ### 前端体验优化 (2026-05-19)
 
 - [x] **知识库标签美化** -- 分类改为彩色徽章（蓝/绿/橙/紫），标签改为圆角药丸样式
@@ -515,6 +534,84 @@
 **修改文件：**
 - `web/src/views/KnowledgeView.vue` — 标签/分类/统计面板/详情弹窗/上传对话框全面美化
 - `web/src/views/ChatView.vue` — 拖拽上传支持、Upload 图标导入、上传按钮样式
+
+### 时间精度全面升级 (2026-05-20)
+
+将整个系统的时间处理从"天级"提升到"分钟级"，统一北京时间/UTC 时区处理。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 系统提示词注入精确时间 | `get_system_prompt()` 动态注入 `YYYY年M月D日 星期X HH:MM`，Agent 感知当前时间 | ✅ 完成 |
+| 用户消息注入时间标签 | 每条消息前加 `[当前时间: YYYY-MM-DD HH:MM]`，防止模型引用历史过期时间 | ✅ 完成 |
+| due_date 精度提升 | 工具描述改为 `YYYY-MM-DD HH:MM`，解析先尝试精确格式再 fallback 日期 | ✅ 完成 |
+| 提醒消息精确时间 | `_format_reminder_message` 用 `total_seconds()` 替代 `.days`，显示"还有X小时/分钟到期" | ✅ 完成 |
+| 时区统一 | 全局 `utcnow()` 返回 naive UTC，Agent 解析时先转北京时间再转 UTC 存储 | ✅ 完成 |
+| 默认提醒优化 | 根据距截止时间远近自适应：≤1h→1分钟后提醒，≤24h→提前30分钟，>24h→提前2天+2小时 | ✅ 完成 |
+| 前端 datetime 选择器 | Dashboard/TaskView 截止日期改为 `type="datetime"`，支持选择具体时间 | ✅ 完成 |
+
+**修改文件：**
+- `app/agent/prompts.py` — `get_system_prompt()` 动态注入当前时间
+- `app/agent/core.py` — 用户消息注入时间标签 + due_date/reminders 北京时间→UTC 转换 + `update_task` 支持 due_date
+- `app/agent/tools.py` — due_date/reminders 参数描述更新
+- `app/models/base.py` — `utcnow()` 改为 `datetime.now(timezone.utc).replace(tzinfo=None)`
+- `app/services/reminder_service.py` — `_format_reminder_message` 精确时间显示
+- `app/services/task_service.py` — `_create_default_reminders` 自适应提醒策略
+- `web/src/views/Dashboard.vue` — datetime 选择器 + 时间显示
+- `web/src/views/TaskView.vue` — datetime 选择器
+- 约 15 个文件的 `datetime.utcnow()` 替换为 `utcnow()`
+
+### Redis 精确提醒调度 (2026-05-20)
+
+使用 Redis 有序集合（ZSET）实现秒级精度的提醒调度，替代原来纯 DB 15 分钟轮询。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| Redis ZSET 调度 | 提醒创建时同步到 Redis ZSET，score 为 remind_at 时间戳 | ✅ 完成 |
+| 秒级精度检查 | Celery 每 10 秒扫描 Redis ZSET，获取 score ≤ 当前时间的提醒 | ✅ 完成 |
+| DB 兜底 | Redis 为空时从 DB 查询待发送提醒，自动同步到 Redis | ✅ 完成 |
+| 启动同步 | app 启动时自动将所有 pending 提醒从 DB 同步到 Redis | ✅ 完成 |
+| 批量清理 | 提醒处理后从 Redis 批量移除已发送的 ID | ✅ 完成 |
+
+**新建文件：**
+- `app/services/reminder_scheduler.py` — Redis 精确提醒调度器
+
+**修改文件：**
+- `app/services/task_service.py` — 创建提醒时同步到 Redis
+- `app/services/reminder_service.py` — `process_reminders()` 优先从 Redis 获取
+- `app/core/celery.py` — `check-reminders` 从 60 秒改为 10 秒
+- `app/main.py` — 启动时同步 pending 提醒到 Redis
+
+### Celery 任务连接池修复 (2026-05-20)
+
+修复 Celery worker 中 SQLAlchemy 和 Redis 的跨事件循环连接池冲突。
+
+| 问题 | 修复内容 |
+|------|---------|
+| SQLAlchemy "another operation is in progress" | 每个 Celery 任务创建独立 engine + `NullPool`，不复用全局连接池 |
+| Redis "Event loop is closed" | 每个 Celery 任务创建独立 Redis 客户端，通过 `redis_override` 参数传入 |
+| `beijing_tz` 未定义 | 移到 `due_date` 解析块之前，避免仅有 reminders 时 NameError |
+
+**修改文件：**
+- `app/services/reminder_service.py` — `process_reminders_task` 创建独立 engine + Redis，`process_reminders` 接受 `redis_override`
+- `app/wechat/scheduler.py` — `run_proactive_checks` 创建独立 engine，`run_all_checks` 接受 `db` 参数
+- `app/services/memory_service.py` — `maintenance_task` 创建独立 engine
+
+### 微信插件 UserId 自动绑定 (2026-05-20)
+
+修复微信插件用户 `wechat_id` 存储的是显示名而非 UserId 的问题。
+
+| 问题 | 修复内容 |
+|------|---------|
+| `wechat_id` 是显示名 | 识别到插件用户且 `from_user` 是真实 UserId 时，自动绑定到 `wechat_id` |
+| API 发送失败 | `errcode: 81013 "user & party & tag all invalid"` — `touser` 需要 UserId 而非显示名 |
+| 多处绑定逻辑 | 验证缓存识别、昵称匹配、handle_message 三处均加入插件用户绑定 |
+| 部分成员手动修复 | 通过企业微信 API 查询 UserId，修正张懿/耿嘉栋/张宏魁/吴孟铨的 `wechat_id` |
+
+**修改文件：**
+- `app/wechat/handler.py` — 三处添加插件用户 UserId 绑定逻辑
+- `app/services/reminder_service.py` — 发送失败时记录 API 响应详情
+
+**待解决：** 部分成员（如邓国祥）未在企业微信通讯录中，需在管理后台添加后才能接收提醒推送。
 
 ---
 

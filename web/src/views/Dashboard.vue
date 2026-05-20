@@ -214,10 +214,10 @@
         <el-form-item label="截止日期">
           <el-date-picker
             v-model="newTask.due_date"
-            type="date"
-            placeholder="选择截止日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
+            type="datetime"
+            placeholder="选择截止日期和时间"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
           />
         </el-form-item>
         <el-form-item label="任务描述">
@@ -467,7 +467,14 @@ const createTask = async () => {
 // 格式化函数
 const formatDate = (date) => {
   if (!date) return '无截止日期'
-  return dayjs(date).format('MM/DD')
+  const d = dayjs(date)
+  const now = dayjs()
+  const isSameYear = d.year() === now.year()
+  // 有时间信息（非00:00）则显示时间
+  if (d.hour() !== 0 || d.minute() !== 0) {
+    return isSameYear ? d.format('MM/DD HH:mm') : d.format('YY/MM/DD HH:mm')
+  }
+  return isSameYear ? d.format('MM/DD') : d.format('YY/MM/DD')
 }
 
 const formatDay = (date) => dayjs(date).format('MM/DD')

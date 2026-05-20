@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
 
+from app.models.base import utcnow
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.models.member import Member
 from app.models.reminder import Reminder
@@ -47,45 +48,91 @@ class TaskService:
 
         # 创建提醒
         if reminders:
+            created_reminders = []
             for r in reminders:
-                self.db.add(Reminder(
+                rem = Reminder(
                     task_id=task.id,
                     remind_at=r["remind_at"],
                     remind_type=r.get("remind_type", "wechat"),
                     status="pending"
-                ))
+                )
+                self.db.add(rem)
+                created_reminders.append(rem)
             await self.db.commit()
+            # 刷新获取 ID 后同步到 Redis
+            for rem in created_reminders:
+                await self.db.refresh(rem)
+            await self._sync_reminders_to_redis(created_reminders)
         elif due_date and assignee_id:
             await self._create_default_reminders(task)
 
         return task
 
     async def _create_default_reminders(self, task: Task):
-        """创建默认提醒"""
+        """创建默认提醒（根据距截止时间的远近自动调整）"""
         if not task.due_date:
             return
 
-        reminders = [
-            # 提前2天提醒
-            Reminder(
+        now = utcnow()
+        time_until_due = task.due_date - now
+        total_seconds = time_until_due.total_seconds()
+
+        reminders = []
+
+        if total_seconds <= 3600:
+            # 1小时内到期：1分钟后提醒（即时提醒场景）
+            reminders.append(Reminder(
+                task_id=task.id,
+                remind_at=now + timedelta(minutes=1),
+                remind_type="wechat",
+                status="pending"
+            ))
+        elif total_seconds <= 86400:
+            # 24小时内到期：提前30分钟提醒
+            remind_at = task.due_date - timedelta(minutes=30)
+            if remind_at > now:
+                reminders.append(Reminder(
+                    task_id=task.id,
+                    remind_at=remind_at,
+                    remind_type="wechat",
+                    status="pending"
+                ))
+        else:
+            # 超过24小时：提前2天 + 提前2小时
+            reminders.append(Reminder(
                 task_id=task.id,
                 remind_at=task.due_date - timedelta(days=2),
                 remind_type="wechat",
                 status="pending"
-            ),
-            # 当天提醒
-            Reminder(
+            ))
+            reminders.append(Reminder(
                 task_id=task.id,
-                remind_at=task.due_date.replace(hour=9, minute=0),
+                remind_at=task.due_date - timedelta(hours=2),
                 remind_type="wechat",
                 status="pending"
-            )
-        ]
+            ))
 
         for reminder in reminders:
             self.db.add(reminder)
 
         await self.db.commit()
+
+        # 刷新获取 ID 后同步到 Redis
+        for reminder in reminders:
+            await self.db.refresh(reminder)
+        await self._sync_reminders_to_redis(reminders)
+
+    async def _sync_reminders_to_redis(self, reminders: list):
+        """将提醒同步到 Redis 有序集合，实现秒级精确调度"""
+        try:
+            from app.services.reminder_scheduler import reminder_scheduler
+            for rem in reminders:
+                if rem.status == "pending" and rem.remind_at:
+                    ts = rem.remind_at.timestamp()
+                    await reminder_scheduler.add_reminder(rem.id, ts)
+        except Exception as e:
+            import logging
+            logging.getLogger("microbubble.task").warning(f"提醒同步到Redis失败: {e}")
 
     async def get_task(self, task_id: int) -> Optional[Task]:
         """获取任务"""
@@ -111,7 +158,7 @@ class TaskService:
             filters.append(Task.project_id == project_id)
         if overdue:
             filters.append(and_(
-                Task.due_date < datetime.utcnow(),
+                Task.due_date < utcnow(),
                 Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
             ))
 
@@ -138,10 +185,10 @@ class TaskService:
             task.progress = progress
 
         if status == TaskStatus.DONE.value:
-            task.completed_at = datetime.utcnow()
+            task.completed_at = utcnow()
             task.progress = 100
         elif status == TaskStatus.IN_PROGRESS.value and not task.started_at:
-            task.started_at = datetime.utcnow()
+            task.started_at = utcnow()
 
         await self.db.commit()
         await self.db.refresh(task)
@@ -160,5 +207,5 @@ class TaskService:
             "todo": sum(1 for t in tasks if t.status == TaskStatus.TODO.value),
             "in_progress": sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value),
             "done": sum(1 for t in tasks if t.status == TaskStatus.DONE.value),
-            "overdue": sum(1 for t in tasks if t.due_date and t.due_date < datetime.utcnow() and t.status != TaskStatus.DONE.value)
+            "overdue": sum(1 for t in tasks if t.due_date and t.due_date < utcnow() and t.status != TaskStatus.DONE.value)
         }

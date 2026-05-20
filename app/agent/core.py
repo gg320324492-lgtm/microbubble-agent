@@ -4,10 +4,11 @@ import base64
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from app.models.base import utcnow
 
 from app.config import settings
-from app.agent.prompts import SYSTEM_PROMPT
+from app.agent.prompts import get_system_prompt
 from app.agent.tools import TOOLS
 from app.services.task_service import TaskService
 from app.services.member_service import MemberService
@@ -46,7 +47,6 @@ class MicroBubbleAgent:
             base_url=settings.CLAUDE_BASE_URL or None,
         )
         self.model = settings.CLAUDE_MODEL or "mimo-v2.5"
-        self.system_prompt = SYSTEM_PROMPT
         self.tools = TOOLS
         self._sessions: Dict[str, List[Dict]] = {}
 
@@ -64,20 +64,20 @@ class MicroBubbleAgent:
     async def _build_system_prompt(self, user_id: Optional[int], query: str, db=None) -> str:
         """构建系统提示词，注入相关长期记忆"""
         if not user_id or not db:
-            return self.system_prompt
+            return get_system_prompt()
         try:
             from app.services.memory_service import MemoryService
             mem_svc = MemoryService(db)
             memories = await mem_svc.search_memories(user_id, query, top_k=5)
             if not memories:
-                return self.system_prompt
+                return get_system_prompt()
             memory_text = "\n".join(
                 f"- [{m['memory_type']}] {m['content']}" for m in memories
             )
-            return f"{self.system_prompt}\n\n关于用户的长期记忆:\n{memory_text}"
+            return f"{get_system_prompt()}\n\n关于用户的长期记忆:\n{memory_text}"
         except Exception as e:
             logger.warning(f"构建记忆提示词失败: {e}")
-            return self.system_prompt
+            return get_system_prompt()
 
     async def _extract_and_save_memories(self, user_id: int, messages: List[Dict], session_id: str):
         """后台任务：从对话中提取记忆"""
@@ -203,8 +203,11 @@ class MicroBubbleAgent:
                 }
             ]
         else:
-            # 纯文本消息
-            content = message
+            # 纯文本消息，注入当前时间（北京时间）
+            from datetime import timezone, timedelta
+            now = datetime.now(timezone(timedelta(hours=8)))
+            time_tag = f"[当前时间: {now.strftime('%Y-%m-%d %H:%M')}] "
+            content = time_tag + message
 
         messages.append({"role": "user", "content": content})
 
@@ -284,7 +287,7 @@ class MicroBubbleAgent:
             follow_up = await self.client.messages.create(
                 model=self.model,
                 max_tokens=4096,
-                system=self.system_prompt,
+                system=get_system_prompt(),
                 tools=self.tools,
                 messages=messages
             )
@@ -336,6 +339,9 @@ class MicroBubbleAgent:
                         assignee_id = member.id
                     else:
                         return {"status": "error", "message": f"未找到成员: {input_data['assignee_name']}"}
+                elif user_id:
+                    # 未指定负责人时默认为当前用户（"提醒我"场景）
+                    assignee_id = user_id
 
                 # 权限：普通成员只能给自己创建任务
                 if not is_admin and assignee_id and user_id and assignee_id != user_id:
@@ -350,16 +356,24 @@ class MicroBubbleAgent:
                             project_id = p.id
                             break
                 due_date = None
+                beijing_tz = timezone(timedelta(hours=8))
                 if input_data.get("due_date"):
-                    due_date = datetime.strptime(input_data["due_date"], "%Y-%m-%d")
+                    try:
+                        beijing_dt = datetime.strptime(input_data["due_date"], "%Y-%m-%d %H:%M")
+                    except ValueError:
+                        beijing_dt = datetime.strptime(input_data["due_date"], "%Y-%m-%d").replace(hour=18, minute=0)
+                    # 北京时间转UTC存储
+                    due_date = beijing_dt.replace(tzinfo=beijing_tz).astimezone(timezone.utc).replace(tzinfo=None)
 
                 # 解析自定义提醒
                 reminders_data = None
                 if input_data.get("reminders"):
                     reminders_data = []
                     for r in input_data["reminders"]:
+                        rem_beijing = datetime.strptime(r["remind_at"], "%Y-%m-%d %H:%M")
+                        rem_utc = rem_beijing.replace(tzinfo=beijing_tz).astimezone(timezone.utc).replace(tzinfo=None)
                         reminders_data.append({
-                            "remind_at": datetime.strptime(r["remind_at"], "%Y-%m-%d %H:%M"),
+                            "remind_at": rem_utc,
                             "remind_type": r.get("remind_type", "wechat")
                         })
 
@@ -420,7 +434,7 @@ class MicroBubbleAgent:
                             "status": t.status,
                             "priority": t.priority,
                             "assignee_id": t.assignee_id,
-                            "due_date": str(t.due_date) if t.due_date else None,
+                            "due_date": t.due_date.strftime("%Y-%m-%d %H:%M") if t.due_date else None,
                             "progress": t.progress
                         }
                         for t in tasks
@@ -447,6 +461,15 @@ class MicroBubbleAgent:
                     progress=input_data.get("progress")
                 )
                 if updated:
+                    # 更新截止日期（北京时间转UTC）
+                    if input_data.get("due_date"):
+                        try:
+                            new_due_beijing = datetime.strptime(input_data["due_date"], "%Y-%m-%d %H:%M")
+                        except ValueError:
+                            new_due_beijing = datetime.strptime(input_data["due_date"], "%Y-%m-%d").replace(hour=18, minute=0)
+                        beijing_tz = timezone(timedelta(hours=8))
+                        updated.due_date = new_due_beijing.replace(tzinfo=beijing_tz).astimezone(timezone.utc).replace(tzinfo=None)
+                        await db.commit()
                     return {"status": "success", "task_id": updated.id, "new_status": updated.status}
                 return {"status": "error", "message": f"任务 {input_data['task_id']} 更新失败"}
 
@@ -471,7 +494,7 @@ class MicroBubbleAgent:
                     "review": sum(1 for t in tasks if t.status == TaskStatus.REVIEW.value),
                     "done": sum(1 for t in tasks if t.status == TaskStatus.DONE.value),
                     "cancelled": sum(1 for t in tasks if t.status == TaskStatus.CANCELLED.value),
-                    "overdue": sum(1 for t in tasks if t.due_date and t.due_date < datetime.utcnow() and t.status not in [TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
+                    "overdue": sum(1 for t in tasks if t.due_date and t.due_date < utcnow() and t.status not in [TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
                 }
                 return {"status": "success", "stats": stats}
 
@@ -518,7 +541,7 @@ class MicroBubbleAgent:
                         {
                             "id": m.id,
                             "title": m.title,
-                            "start_time": str(m.start_time),
+                            "start_time": m.start_time.strftime("%Y-%m-%d %H:%M") if m.start_time else None,
                             "status": m.status,
                             "summary": m.summary
                         }
@@ -528,7 +551,9 @@ class MicroBubbleAgent:
 
             elif name == "create_meeting":
                 meeting_svc = MeetingService(db)
-                start_time = datetime.strptime(input_data["start_time"], "%Y-%m-%d %H:%M")
+                start_time_beijing = datetime.strptime(input_data["start_time"], "%Y-%m-%d %H:%M")
+                beijing_tz = timezone(timedelta(hours=8))
+                start_time = start_time_beijing.replace(tzinfo=beijing_tz).astimezone(timezone.utc).replace(tzinfo=None)
                 participant_ids = []
                 if input_data.get("participants"):
                     member_svc = MemberService(db)
@@ -603,7 +628,7 @@ class MicroBubbleAgent:
                 plan_response = await self.client.messages.create(
                     model=self.model,
                     max_tokens=4096,
-                    system=self.system_prompt,
+                    system=get_system_prompt(),
                     messages=[{"role": "user", "content": plan_prompt}]
                 )
                 plan_text = ""
@@ -714,12 +739,15 @@ class MicroBubbleAgent:
                 }
             ]
         else:
-            # 纯文本消息
-            content = message
+            # 纯文本消息，注入当前时间（北京时间）
+            from datetime import timezone, timedelta
+            now = datetime.now(timezone(timedelta(hours=8)))
+            time_tag = f"[当前时间: {now.strftime('%Y-%m-%d %H:%M')}] "
+            content = time_tag + message
 
         messages.append({"role": "user", "content": content})
 
-        system = await self._build_system_prompt(user_id, message, db) if user_id else self.system_prompt
+        system = await self._build_system_prompt(user_id, message, db) if user_id else get_system_prompt()
 
         async with self.client.messages.stream(
             model=self.model,

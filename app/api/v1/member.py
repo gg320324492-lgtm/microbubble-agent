@@ -131,3 +131,6 @@ async def delete_member(
 
     member.is_active = False
     await db.commit()
+
+    from app.core.redis import invalidate_verified_cache_for_member
+    await invalidate_verified_cache_for_member(member_id)

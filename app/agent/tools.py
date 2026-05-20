@@ -14,7 +14,7 @@ TOOLS = [
                 },
                 "assignee_name": {
                     "type": "string",
-                    "description": "负责人姓名"
+                    "description": "负责人姓名。不填则默认为当前用户自己（如'提醒我'场景无需填写）"
                 },
                 "project_name": {
                     "type": "string",
@@ -27,7 +27,7 @@ TOOLS = [
                 },
                 "due_date": {
                     "type": "string",
-                    "description": "截止日期，格式：YYYY-MM-DD"
+                    "description": "截止日期，格式：YYYY-MM-DD HH:MM（如 2026-05-20 17:30）。仅提供日期则默认为当天 18:00"
                 },
                 "description": {
                     "type": "string",
@@ -50,7 +50,7 @@ TOOLS = [
                         },
                         "required": ["remind_at"]
                     },
-                    "description": "自定义提醒时间列表（可选，不填则使用默认提醒：截止前2天+截止当天9点）"
+                    "description": "自定义提醒时间列表。重要：当用户要求在特定时间提醒（如'5分钟后提醒我'、'下午3点提醒我'），必须使用此参数设置精确的提醒时间，不要只设置due_date。不填则使用默认提醒策略。"
                 }
             },
             "required": ["title"]
@@ -103,7 +103,7 @@ TOOLS = [
                 },
                 "due_date": {
                     "type": "string",
-                    "description": "新的截止日期"
+                    "description": "新的截止日期，格式：YYYY-MM-DD HH:MM 或 YYYY-MM-DD"
                 }
             },
             "required": ["task_id"]
