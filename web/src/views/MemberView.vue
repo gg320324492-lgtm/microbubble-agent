@@ -168,14 +168,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { useMemberStore } from '@/stores/member'
 
 const router = useRouter()
+const memberStore = useMemberStore()
+const members = computed(() => memberStore.members)
+
 const isMobile = ref(window.innerWidth <= 768)
-const members = ref([])
 const searchName = ref('')
 const searchGrade = ref('')
 const showCreateDialog = ref(false)
@@ -192,17 +195,12 @@ const memberForm = ref({
   bio: ''
 })
 
-// 获取成员列表
-const fetchMembers = async () => {
-  try {
-    const params = {}
-    if (searchName.value) params.name = searchName.value
-    if (searchGrade.value) params.grade = searchGrade.value
-    const res = await axios.get('/api/v1/members', { params })
-    members.value = res.data.items || []
-  } catch (e) {
-    console.error('获取成员失败:', e)
-  }
+// 获取成员列表（使用 store）
+const fetchMembers = () => {
+  const params = {}
+  if (searchName.value) params.name = searchName.value
+  if (searchGrade.value) params.grade = searchGrade.value
+  return memberStore.fetchMembers(params)
 }
 
 // 保存成员

@@ -2,9 +2,9 @@
 
 import json
 import logging
-import anthropic
 
 from app.config import settings
+from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 logger = logging.getLogger("microbubble.llm_analysis")
 
@@ -25,34 +25,20 @@ class LLMAnalysisService:
     async def analyze_content(self, title: str, content: str) -> dict:
         """分析内容，返回 {summary, category, tags}"""
         try:
-            client = anthropic.AsyncAnthropic(
-                api_key=settings.CLAUDE_API_KEY,
-                base_url=settings.CLAUDE_BASE_URL or None,
-            )
+            client = get_anthropic_client()
             prompt = ANALYSIS_PROMPT.format(
                 title=title,
                 content=content[:3000]
             )
             response = await client.messages.create(
-                model=settings.CLAUDE_MODEL or "mimo-v2.5",
+                model=get_default_model(),
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}]
             )
             # 提取文本内容
-            text = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    text = block.text
-                    break
+            text = extract_text_from_response(response)
             # 解析 JSON
-            text = text.strip()
-            # 处理可能的 markdown 代码块包裹
-            if text.startswith("```"):
-                text = text.split("\n", 1)[-1]
-                if text.endswith("```"):
-                    text = text[:-3]
-                text = text.strip()
-            return json.loads(text)
+            return parse_llm_json(text)
         except json.JSONDecodeError as e:
             logger.warning(f"LLM 分析返回非 JSON 格式: {e}")
             return {}

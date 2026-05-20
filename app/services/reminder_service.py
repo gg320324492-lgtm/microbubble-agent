@@ -1,11 +1,11 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
 
-from app.models.base import utcnow
+from app.models.base import utcnow, BEIJING_TZ
 from app.models.task import Task
 from app.models.member import Member
 from app.models.reminder import Reminder
@@ -78,11 +78,10 @@ class ReminderService:
     def _format_reminder_message(self, task: Task, member: Member) -> str:
         """格式化提醒消息"""
         now = utcnow()
-        beijing_tz = timezone(timedelta(hours=8))
         if not task.due_date:
             return f"📋 任务提醒\n\n{member.name}，你好！\n📌 任务：{task.title}\n📊 进度：{task.progress}%"
 
-        due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
+        due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(BEIJING_TZ)
         diff = task.due_date - now
         total_seconds = diff.total_seconds()
 

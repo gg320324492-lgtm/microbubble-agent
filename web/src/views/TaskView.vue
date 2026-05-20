@@ -207,9 +207,14 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { formatDate } from '@/utils/format'
+import { getStatusType, getPriorityType, getStatusLabel, getPriorityLabel } from '@/utils/task'
 import { useUserStore } from '@/stores/user'
+import { useMemberStore } from '@/stores/member'
 
 const userStore = useUserStore()
+const memberStore = useMemberStore()
+const members = computed(() => memberStore.members)
 const isAdmin = computed(() => {
   const role = userStore.userInfo?.role
   return role === 'admin' || role === 'leader'
@@ -218,7 +223,6 @@ const currentUserId = computed(() => userStore.userInfo?.id)
 
 const isMobile = ref(window.innerWidth <= 768)
 const tasks = ref([])
-const members = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -257,15 +261,8 @@ const fetchTasks = async () => {
   }
 }
 
-// 获取成员列表
-const fetchMembers = async () => {
-  try {
-    const res = await axios.get('/api/v1/members')
-    members.value = res.data.items || []
-  } catch (e) {
-    console.error('获取成员失败:', e)
-  }
-}
+// 获取成员列表（使用 store）
+const fetchMembers = () => memberStore.fetchMembers()
 
 // 保存任务
 const saveTask = async () => {
@@ -343,39 +340,7 @@ const resetForm = () => {
 }
 
 // 辅助函数
-const getMemberName = (id) => {
-  const member = members.value.find(m => m.id === id)
-  return member ? member.name : '未分配'
-}
-
-const getPriorityType = (priority) => {
-  const map = { high: 'danger', medium: 'warning', low: 'info' }
-  return map[priority] || 'info'
-}
-
-const getPriorityLabel = (priority) => {
-  const map = { high: '高', medium: '中', low: '低' }
-  return map[priority] || priority
-}
-
-const getStatusType = (status) => {
-  const map = { todo: 'info', in_progress: 'warning', blocked: 'danger', done: 'success' }
-  return map[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const map = { todo: '待办', in_progress: '进行中', blocked: '阻塞', done: '已完成' }
-  return map[status] || status
-}
-
-const formatDate = (date) => {
-  if (!date) return '-'
-  const d = dayjs(date)
-  if (d.hour() !== 0 || d.minute() !== 0) {
-    return d.format('YYYY-MM-DD HH:mm')
-  }
-  return d.format('YYYY-MM-DD')
-}
+const getMemberName = (id) => memberStore.getMemberName(id)
 
 const isOverdue = (task) => {
   if (!task.due_date || task.status === 'done') return false
