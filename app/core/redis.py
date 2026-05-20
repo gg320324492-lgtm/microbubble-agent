@@ -23,7 +23,7 @@ async def close_redis():
 class RedisSessionStore:
     """基于 Redis 的会话存储，替代内存 dict"""
 
-    def __init__(self, prefix: str = "session", ttl: int = 86400):
+    def __init__(self, prefix: str = "session", ttl: int = 172800):
         self.prefix = prefix
         self.ttl = ttl
 
