@@ -447,13 +447,13 @@ class MicroBubbleAgent:
                 if not task:
                     return {"status": "error", "message": f"任务 {input_data['task_id']} 不存在"}
 
-                # 权限检查：普通成员只能编辑自己创建的任务
+                # 权限检查：普通成员只能编辑自己创建或被分配的任务
                 if user_id:
                     member_svc = MemberService(db)
                     current_member = await member_svc.get_member(user_id)
                     is_admin = current_member and current_member.role in ("admin", "leader")
-                    if not is_admin and task.created_by != user_id:
-                        return {"status": "error", "message": "只能编辑自己创建的任务"}
+                    if not is_admin and task.created_by != user_id and task.assignee_id != user_id:
+                        return {"status": "error", "message": "只能编辑自己创建或被分配的任务"}
 
                 updated = await task_svc.update_task_status(
                     task_id=input_data["task_id"],
