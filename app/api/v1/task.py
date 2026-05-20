@@ -147,11 +147,11 @@ async def update_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    # 权限：普通成员只能编辑自己创建的任务
+    # 权限：普通成员只能编辑自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        if task.created_by != current_user.id:
-            raise HTTPException(status_code=403, detail="只能编辑自己创建的任务")
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="只能编辑自己创建或被分配的任务")
         # 不能把任务分配给其他人
         if task_data.assignee_id is not None and task_data.assignee_id != current_user.id:
             raise HTTPException(status_code=403, detail="普通成员不能将任务分配给其他人")
@@ -184,11 +184,11 @@ async def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    # 权限：普通成员只能删除自己创建的任务
+    # 权限：普通成员只能删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        if task.created_by != current_user.id:
-            raise HTTPException(status_code=403, detail="只能删除自己创建的任务")
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="只能删除自己创建或被分配的任务")
 
     await db.delete(task)
     await db.commit()
