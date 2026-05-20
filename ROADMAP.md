@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-21 (更新：Agent 回复完整性优化)
+> 最后更新: 2026-05-21 (更新：代码质量审计 — 50+ 优化项)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -777,3 +777,134 @@
 **修改文件：**
 - `app/agent/prompts.py` — 回复质量要求新增完整性规则
 - `app/agent/core.py` — max_tokens 提升 + `_process_response()` 截断续写 + `_stream_continuation()` 方法
+
+### 代码质量优化 (2026-05-21 审计)
+
+全面代码审查发现 50+ 个问题，按优先级分 4 批执行。
+
+#### 第一批：无效代码清理（零风险）
+
+**后端未使用的导入（14 处）**
+
+- [ ] `app/config.py:1` — 移除 `import warnings`
+- [ ] `app/main.py:5` — 移除 `from app.core.logging import logger`（从未使用，用的 print）
+- [ ] `app/api/v1/voice.py:19` — 移除 `from app.models.meeting import Meeting`（动态导入已覆盖）
+- [ ] `app/services/file_parser_service.py:6` — 移除 `Dict` from typing import
+- [ ] `app/wechat/analyzer.py:15` — 移除 `Optional` from typing import
+- [ ] `app/wechat/crypto.py:6` — 移除 `import socket`
+- [ ] `app/voice/recorder.py:4` — 移除 `import numpy as np`
+- [ ] `app/whisper_server.py:3` — 移除 `import io`
+- [ ] `app/whisper_server.py:8` — 移除 `from fastapi.responses import JSONResponse`
+- [ ] `app/schemas/auth.py:5` — 移除 `from datetime import datetime`
+- [ ] `app/models/task.py:3` — 移除 `from datetime import datetime`
+
+**后端未使用的函数/类（13 处）**
+
+- [ ] `app/wechat/bot.py:123-150` — 移除 `send_task_reminder()`（无人调用，已用 smart_send 替代）
+- [ ] `app/wechat/bot.py:152-181` — 移除 `send_meeting_notification()`（无人调用）
+- [ ] `app/wechat/bot.py:183-209` — 移除 `send_meeting_minutes()`（无人调用）
+- [ ] `app/wechat/bot.py:416-428` — 移除 `reply_to_user()`（冗余别名）
+- [ ] `app/services/vision_service.py:152-157` — 移除 `identify_person_from_image()`（无人调用）
+- [ ] `app/core/security.py:181-200` — 移除 `require_role()`（无人调用，所有角色检查用 inline if）
+- [ ] `app/core/security.py:203-238` — 移除 `get_current_user_ws()`（无人调用，WebSocket 手动 decode_token）
+- [ ] `app/schemas/meeting.py:67-73` — 移除 `TranscriptEntry`（无人引用）
+- [ ] `app/services/search_service.py:20-22` — 移除 `is_configured` property（永远返回 True）
+- [ ] `app/voice/recorder.py:203-207` — 移除 `create_recorder()`/`get_recorder()`/`remove_recorder()`
+- [ ] `app/voice/recorder.py:118-120` — 移除 `get_audio_data()`
+- [ ] `app/voice/tts.py:114-126` — 移除 `get_voices()`
+
+**前端未使用的导入/变量/函数**
+
+- [ ] `web/src/views/MemberView.vue:172` — 移除 `ElMessageBox` 导入
+- [ ] `web/src/views/MeetingView.vue:323-331` — 移除未调用的 `startMeeting()` 函数
+- [ ] `web/src/components/VoiceRecorder.vue:56-57` — 移除未使用的 `audioContext` 和 `analyser` 变量
+- [ ] `web/src/stores/member.js:27-29` — 移除未调用的 `getMemberById()` 函数
+
+**未使用的依赖包**
+
+- [ ] `requirements.txt` — 移除 `openai>=1.0.0`（从未 import）
+- [ ] `requirements.txt` — 移除 `pandas==2.1.4`（从未 import）
+- [ ] `requirements.txt` — 移除 `matplotlib==3.8.2`（从未 import）
+- [ ] `requirements.txt` — 移除 `aiofiles==23.2.1`（从未 import）
+- [ ] `requirements.txt` — 移除 `bcrypt==4.0.1`（passlib[bcrypt] 已包含）
+- [ ] `requirements.txt` — 移除重复的 `pydantic==2.5.2`（pydantic[email] 已包含）
+- [ ] `requirements.txt` — 移除 `faster-whisper==1.2.1`（仅 whisper 容器使用，Dockerfile.whisper 已有）
+- [ ] `web/package.json` — 移除 `@vueuse/core`（从未 import，或保留用于 isMobile 统一）
+- [ ] `web/package.json` — 移除 `sass`（无 lang="scss" 使用）
+
+**过时的代码/注释**
+
+- [ ] `app/api/v1/chat.py:229` — "语音功能开发中..." 已过时，语音已实现，改为路由到 voice WebSocket
+- [ ] `app/voice/asr.py:182` — 误导性注释修正（AMR 格式处理逻辑描述不准确）
+
+#### 第二批：重复代码提取（低风险）
+
+**后端重复逻辑**
+
+- [ ] 北京时区常量 — 8+ 处 `timezone(timedelta(hours=8))` → 提取 `BEIJING_TZ` 到 `app/config.py`
+- [ ] Anthropic 客户端工厂 — 6 处重复实例化 → 提取 `get_anthropic_client()` 到 `app/core/llm.py`
+- [ ] LLM JSON 解析工具 — 4 处 markdown 代码块剥离 → 提取 `parse_llm_json()` 到 `app/core/llm.py`
+- [ ] `_postprocess_result` 完全重复 — `voice/asr.py` 和 `whisper_server.py` → 提取到 `app/voice/postprocess.py`
+- [ ] 任务通知逻辑重复 — `agent/core.py` 和 `api/v1/task.py` → 提取到通知辅助函数
+- [ ] Celery 任务样板代码 — 3 处 engine/session/asyncio.run → 提取到 `app/core/celery_helper.py`
+- [ ] 微信长文本分割 — 3 处相同分割逻辑 → 提取 `_split_long_text()` 辅助函数
+
+**前端重复逻辑**
+
+- [ ] `fetchMembers` 重复 — 5 个组件各自调 API → 改用 `useMemberStore`
+- [ ] `getMemberName` 重复 — 3 处相同查找逻辑 → 改用 `memberStore.getMemberName()`
+- [ ] `formatDate` 重复 — 6 个组件各自定义 → 统一使用 `utils/format.js`
+- [ ] `formatTime` 重复 — 3 个组件各自定义 → 提取到 `utils/format.js`
+- [ ] `isMobile` 重复 — 8 个组件独立定义 → 创建 `composables/useIsMobile.js` 统一管理
+- [ ] `getStatusType` 重复 — 3 个组件相同映射 → 提取到 `utils/task.js`
+- [ ] `getPriorityType` 重复 — 2 个组件相同映射 → 提取到 `utils/task.js`
+
+#### 第三批：配置优化（中等风险）
+
+**硬编码提取到 Settings**
+
+- [ ] `CLAUDE_MAX_TOKENS=8192` — `agent/core.py` 7 处
+- [ ] `SESSION_WINDOW_SIZE=30` — `agent/core.py:265`
+- [ ] `WHISPER_SERVICE_URL` — `voice/asr.py:12`
+- [ ] `CORS_ORIGINS` — `main.py:79-88`
+- [ ] `DB_POOL_SIZE=20, DB_MAX_OVERFLOW=10` — `core/database.py:10-11`
+- [ ] `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS` — `core/security.py:26-27`
+- [ ] `SESSION_TTL` — `core/redis.py:26`
+- [ ] `MAX_UPLOAD_SIZE_MB=50` — `knowledge.py:162`, `upload.py:23`
+
+**.env.example 补全**
+
+- [ ] 新增 `MIMO_API_KEY` / `MIMO_BASE_URL` / `MIMO_MODEL`
+- [ ] 新增 `MINIO_SECURE=false`
+- [ ] 新增 `HF_ENDPOINT=`（HuggingFace 镜像源，国内可设 hf-mirror.com）
+- [ ] 新增 `APP_ENV` 可选值说明（development/production）
+
+**Docker Compose 优化**
+
+- [ ] 移除 3 个 compose 文件中的 `version: '3.8'`（Compose V2 不需要）
+- [ ] `celery-worker`/`celery-beat` 添加 `depends_on` 的 `condition: service_healthy`
+- [ ] `celery-worker` 添加 `mem_limit: 512m`，`celery-beat` 添加 `mem_limit: 256m`
+- [ ] `whisper` 服务添加 `mem_limit`
+- [ ] `docker-compose.dev.yml` 改为 override 模式（减少与生产配置的重复）
+
+**Nginx 安全加固**
+
+- [ ] `nginx.conf` 添加 `server_tokens off`（隐藏版本号）
+- [ ] `default.conf` 的 `proxy_read_timeout` 从 5s 提升到 60s（适配 AI 长请求）
+- [ ] `default.conf` 添加限流配置（与 tunnel.conf 一致）
+
+**安全问题修复**
+
+- [ ] `scripts/deploy-local.sh:56` — 移除硬编码 API Key
+- [ ] `frp/frpc.toml:9` — 日志路径改为绝对路径，清理根目录 frpc.*.log
+- [ ] `scripts/webhook.service` — secret 改用 EnvironmentFile
+- [ ] `scripts/deploy-cloud.sh` — 移除无意义的 `ufw allow 7500/tcp`（dashboard 仅监听 127.0.0.1）
+
+#### 第四批：前端细节优化（低风险）
+
+- [ ] `Dashboard.vue` — 用 `useUserStore` 替代直接读 localStorage
+- [ ] `Dashboard.vue` — resize 监听器添加 `onUnmounted` 清理（防内存泄漏）
+- [ ] `LiveTranscript.vue:140` — WebSocket 协议 `ws://` → 根据 location.protocol 动态选择
+- [ ] axios `baseURL` 统一 — 配置 `/api/v1` 前缀，各处请求简化路径
+- [ ] `isMobile` 响应式修复 — 6 个组件不响应 resize → 统一用 composable 管理
+- [ ] `ProjectView.vue:257` — `// TODO: 编辑项目` 空分支，实现或移除

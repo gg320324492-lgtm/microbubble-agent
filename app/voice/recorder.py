@@ -2,7 +2,6 @@
 
 import io
 import wave
-import numpy as np
 from datetime import datetime
 from app.models.base import utcnow
 from typing import Optional, Callable
@@ -115,10 +114,6 @@ class AudioRecorder:
         )
         return duration
 
-    def get_audio_data(self) -> bytes:
-        """获取当前录制的音频数据"""
-        return b"".join(self.audio_buffer)
-
     def clear(self):
         """清空录音缓冲区"""
         self.audio_buffer = []
@@ -199,24 +194,6 @@ class RecorderManager:
     def __init__(self):
         self.recorders = {}
         self.active_meeting_recorder = None
-
-    def create_recorder(self, recorder_id: str) -> AudioRecorder:
-        """创建录音器"""
-        recorder = AudioRecorder()
-        self.recorders[recorder_id] = recorder
-        return recorder
-
-    def get_recorder(self, recorder_id: str) -> Optional[AudioRecorder]:
-        """获取录音器"""
-        return self.recorders.get(recorder_id)
-
-    def remove_recorder(self, recorder_id: str):
-        """移除录音器"""
-        if recorder_id in self.recorders:
-            recorder = self.recorders[recorder_id]
-            if recorder.status == RecordingStatus.RECORDING:
-                recorder.stop()
-            del self.recorders[recorder_id]
 
     async def start_meeting_recording(self, meeting_id: int) -> MeetingRecorder:
         """开始会议录制"""

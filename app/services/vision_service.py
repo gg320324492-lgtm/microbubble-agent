@@ -149,12 +149,6 @@ class VisionService:
             "这张图片是课题组任务相关的截图。请分析图片内容，提取任务信息（标题、负责人、截止日期、状态等）。如果是任务完成截图，请总结完成情况。"
         )
 
-    async def identify_person_from_image(self, image_data: bytes) -> str:
-        """从图片中识别人物（用于身份确认）"""
-        return await self.analyze_image(
-            image_data,
-            "这张图片中的人物是谁？请描述人物特征。如果是证件照或头像，请描述外貌特征。"
-        )
 
 
 # 全局实例

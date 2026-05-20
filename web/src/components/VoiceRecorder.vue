@@ -53,8 +53,6 @@ const recordingDuration = ref(0)
 let mediaRecorder = null
 let audioChunks = []
 let durationTimer = null
-let audioContext = null
-let analyser = null
 
 // 开始录音
 const startRecording = async () => {

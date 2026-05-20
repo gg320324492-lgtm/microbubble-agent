@@ -17,10 +17,6 @@ class SearchService:
         "Chrome/125.0.0.0 Safari/537.36"
     )
 
-    @property
-    def is_configured(self) -> bool:
-        return True
-
     async def search(
         self,
         query: str,

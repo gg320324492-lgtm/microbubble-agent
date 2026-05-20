@@ -19,10 +19,8 @@ minio==7.2.0
 
 # AI相关
 anthropic>=0.39.0
-openai>=1.0.0
 
 # 语音识别
-faster-whisper==1.2.1
 pilk>=1.2.0
 
 # 语音合成
@@ -33,9 +31,7 @@ pgvector==0.2.4
 sentence-transformers==2.3.1
 
 # 数据处理
-pandas==2.1.4
 numpy==1.26.2
-matplotlib==3.8.2
 
 # 文件解析
 pdfplumber==0.10.3
@@ -44,14 +40,11 @@ openpyxl==3.1.2
 
 # 工具库
 python-dotenv==1.0.0
-pydantic==2.5.2
 pydantic-settings==2.1.0
 pydantic[email]==2.5.2
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==4.0.1
 httpx==0.25.2
-aiofiles==23.2.1
 email-validator==2.1.0
 
 # 测试

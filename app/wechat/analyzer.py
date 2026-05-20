@@ -12,7 +12,7 @@ import logging
 
 logger = logging.getLogger("microbubble.wechat.analyzer")
 import anthropic
-from typing import List, Dict, Optional
+from typing import List, Dict
 from app.config import settings
 
 ANALYSIS_PROMPT = """你是课题组的AI助手，负责从对话中提取任务和行动项。

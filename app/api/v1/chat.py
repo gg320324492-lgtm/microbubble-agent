@@ -225,7 +225,7 @@ async def websocket_chat(websocket: WebSocket, user_id: str, token: str = ""):
                 elif msg_type == "voice":
                     await websocket.send_json({
                         "type": "text",
-                        "content": "语音功能开发中..."
+                        "content": "请通过语音输入区域发送语音消息，或直接输入文字。"
                     })
 
         except WebSocketDisconnect:

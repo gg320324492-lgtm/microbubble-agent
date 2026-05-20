@@ -111,20 +111,6 @@ class TextToSpeech:
             if chunk["type"] == "audio":
                 yield chunk["data"]
 
-    async def get_voices(self) -> list:
-        """获取可用语音列表"""
-        voices = await edge_tts.list_voices()
-        # 只返回中文语音
-        zh_voices = [v for v in voices if v["Locale"].startswith("zh-")]
-        return [
-            {
-                "name": v["ShortName"],
-                "gender": v["Gender"],
-                "locale": v["Locale"]
-            }
-            for v in zh_voices
-        ]
-
     def get_voice_options(self) -> list:
         """获取预设的语音选项"""
         return [

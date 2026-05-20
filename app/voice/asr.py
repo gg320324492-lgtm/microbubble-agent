@@ -179,8 +179,8 @@ class SpeechRecognizer:
             wav_data = await silk_to_wav(audio_data)
             return await self.transcribe(wav_data, language=language, skip_convert=True)
 
-        # AMR 格式：ffmpeg 转 WAV 后识别
-        logger.info("AMR 格式，ffmpeg 转 WAV 后识别")
+        # AMR 格式：通过 silk_to_wav 内部的 ffmpeg 转换为 WAV
+        logger.info("AMR 格式，通过 ffmpeg 转 WAV")
         wav_data = await silk_to_wav(audio_data)
         return await self.transcribe(wav_data, language=language, skip_convert=True)
 
