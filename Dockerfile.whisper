@@ -15,16 +15,23 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 安装Python依赖（使用预编译 wheel，避免 av 源码编译失败）
+# 安装Python依赖 + CUDA运行时库（通过pip安装，避免下载大CUDA镜像）
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir --prefer-binary faster-whisper==1.2.1 fastapi uvicorn python-multipart
+    pip3 install --no-cache-dir --prefer-binary \
+    faster-whisper==1.2.1 \
+    nvidia-cublas-cu12 \
+    nvidia-cuda-nvrtc-cu12 \
+    fastapi uvicorn python-multipart
+
+# 设置CUDA库路径
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib
 
 # 复制 Whisper 服务端代码
 COPY app/whisper_server.py .
 
 # 环境变量（可通过 docker-compose 覆盖）
-ENV MODEL_SIZE=base
-ENV DEVICE=cpu
+ENV MODEL_SIZE=large-v3
+ENV DEVICE=cuda
 
 # 暴露端口
 EXPOSE 8002
