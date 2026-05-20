@@ -1,6 +1,7 @@
 """语音识别模块 - 调用 Whisper 服务或本地模型"""
 
 import io
+import time
 import numpy as np
 from typing import Optional
 import httpx
@@ -10,6 +11,9 @@ from app.config import settings
 
 WHISPER_SERVICE_URL = "http://whisper:8002"
 
+# 领域提示词 - 帮助 Whisper 识别专业术语
+INITIAL_PROMPT = "微纳米气泡，zeta电位，表面活性剂，空化效应，气液界面，传质效率，溶解氧，粒径分布，含气量，界面张力"
+
 
 class SpeechRecognizer:
     """语音识别服务 - 优先调用远程 Whisper 服务，回退到本地模型"""
@@ -17,10 +21,11 @@ class SpeechRecognizer:
     def __init__(self):
         self._local_model = None
         self._use_remote: Optional[bool] = None
+        self._remote_check_time: float = 0
 
     async def _check_remote(self) -> bool:
-        """检测远程 Whisper 服务是否可用"""
-        if self._use_remote is not None:
+        """检测远程 Whisper 服务是否可用（60秒 TTL）"""
+        if self._use_remote is not None and time.time() - self._remote_check_time < 60:
             return self._use_remote
         try:
             async with httpx.AsyncClient(timeout=3) as client:
@@ -28,6 +33,7 @@ class SpeechRecognizer:
                 self._use_remote = resp.status_code == 200
         except Exception:
             self._use_remote = False
+        self._remote_check_time = time.time()
         return self._use_remote
 
     def _init_local_model(self):
@@ -47,35 +53,65 @@ class SpeechRecognizer:
         self,
         audio_data: bytes,
         language: str = "zh",
-        task: str = "transcribe"
+        task: str = "transcribe",
+        skip_convert: bool = False
     ) -> dict:
-        """语音识别"""
+        """语音识别
+
+        Args:
+            audio_data: 音频字节数据
+            language: 语言代码
+            task: 任务类型 (transcribe/translate)
+            skip_convert: 跳过 ffmpeg 转码（调用方已转为 16kHz WAV 时使用）
+        """
         if await self._check_remote():
             return await self._transcribe_remote(audio_data, language, task)
-        return await self._transcribe_local(audio_data, language, task)
+        return await self._transcribe_local(audio_data, language, task, skip_convert)
 
     async def _transcribe_remote(self, audio_data: bytes, language: str, task: str) -> dict:
         """调用远程 Whisper 服务"""
+        import logging
+        logger = logging.getLogger("microbubble.asr")
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(
                 f"{WHISPER_SERVICE_URL}/transcribe",
                 files={"audio": ("audio.wav", audio_data, "audio/wav")},
                 data={"language": language, "task": task}
             )
+            if resp.status_code != 200:
+                logger.error(f"Whisper 服务返回错误: status={resp.status_code}, body={resp.text[:500]}, audio_size={len(audio_data)}")
             resp.raise_for_status()
             return resp.json()
 
-    async def _transcribe_local(self, audio_data: bytes, language: str, task: str) -> dict:
+    async def _transcribe_local(self, audio_data: bytes, language: str, task: str, skip_convert: bool = False) -> dict:
         """使用本地模型识别"""
         import asyncio
 
         def _run():
             self._init_local_model()
-            audio_array = self._bytes_to_array(audio_data)
+            if skip_convert:
+                # 调用方已转为 16kHz WAV，直接读取
+                import wave
+                import tempfile
+                import os
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                    tmp.write(audio_data)
+                    tmp_path = tmp.name
+                try:
+                    with wave.open(tmp_path, "rb") as wf:
+                        audio_array = np.frombuffer(
+                            wf.readframes(wf.getnframes()), dtype=np.int16
+                        ).astype(np.float32) / 32768.0
+                finally:
+                    os.unlink(tmp_path)
+            else:
+                audio_array = self._bytes_to_array(audio_data)
+
             segments, info = self._local_model.transcribe(
                 audio_array, language=language, task=task,
-                beam_size=5, vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500)
+                beam_size=3, vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+                initial_prompt=INITIAL_PROMPT
             )
             segments_list = []
             full_text = ""
@@ -86,13 +122,14 @@ class SpeechRecognizer:
                     "text": segment.text.strip()
                 })
                 full_text += segment.text
-            return {
+            result = {
                 "text": full_text.strip(),
                 "language": info.language,
                 "language_probability": info.language_probability,
                 "duration": info.duration,
                 "segments": segments_list
             }
+            return _postprocess_result(result)
 
         return await asyncio.to_thread(_run)
 
@@ -104,12 +141,48 @@ class SpeechRecognizer:
             self._init_local_model()
             audio_array = self._bytes_to_array(audio_chunk)
             segments, _ = self._local_model.transcribe(
-                audio_array, language="zh", beam_size=5, vad_filter=True
+                audio_array, language="zh", beam_size=3, vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+                initial_prompt=INITIAL_PROMPT
             )
             return [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segments]
 
         for seg in await asyncio.to_thread(_run):
             yield seg
+
+    async def transcribe_wechat_voice(self, audio_data: bytes, language: str = "zh") -> dict:
+        """识别微信语音消息（自动检测 SILK/AMR/WAV 格式并转换为 WAV 后识别）
+
+        Args:
+            audio_data: 原始音频字节（可能是 SILK、AMR 或 WAV 格式）
+            language: 语言代码
+
+        Returns:
+            识别结果 dict，包含 text 字段
+        """
+        from app.voice.silk import silk_to_wav
+        import logging
+        logger = logging.getLogger("microbubble.asr")
+
+        # 检测格式
+        header = audio_data[:4] if len(audio_data) >= 4 else b''
+        logger.info(f"微信语音: size={len(audio_data)}, header={header.hex()}")
+
+        # WAV 格式直接识别
+        if header == b'RIFF':
+            logger.info("WAV 格式，直接识别")
+            return await self.transcribe(audio_data, language=language, skip_convert=True)
+
+        # SILK 格式：pilk 解码 → WAV
+        if header != b'#!AM':
+            logger.info("SILK 格式，pilk 解码为 WAV")
+            wav_data = await silk_to_wav(audio_data)
+            return await self.transcribe(wav_data, language=language, skip_convert=True)
+
+        # AMR 格式：ffmpeg 转 WAV 后识别
+        logger.info("AMR 格式，ffmpeg 转 WAV 后识别")
+        wav_data = await silk_to_wav(audio_data)
+        return await self.transcribe(wav_data, language=language, skip_convert=True)
 
     def _bytes_to_array(self, audio_data: bytes) -> np.ndarray:
         """将音频字节数据转换为numpy数组"""
@@ -138,6 +211,29 @@ class SpeechRecognizer:
             for p in [tmp_path, output_path]:
                 if os.path.exists(p):
                     os.unlink(p)
+
+
+def _postprocess_result(result: dict) -> dict:
+    """后处理识别结果：过滤低置信度 segment，去重"""
+    segments = result.get("segments", [])
+    if not segments:
+        return result
+
+    # 过滤 no_speech_prob > 0.8 的 segment（如果有该字段）
+    filtered = [s for s in segments if s.get("no_speech_prob", 0) < 0.8]
+
+    # 去重：连续重复文本只保留一次
+    deduped = []
+    for seg in filtered:
+        text = seg["text"].strip()
+        if text and (not deduped or text != deduped[-1]["text"].strip()):
+            deduped.append(seg)
+
+    # 重新拼接
+    final_text = "".join(s["text"] for s in deduped).strip()
+    result["text"] = final_text
+    result["segments"] = deduped
+    return result
 
 
 # 全局实例

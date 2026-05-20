@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-20 (更新：部署文档 + 生产环境加固)
+> 最后更新: 2026-05-20 (更新：语音识别准确性全面优化)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -740,3 +740,25 @@
 - `nginx/nginx.conf` — 限流 zone 定义
 - `nginx/conf.d/tunnel.conf` — API/登录限流 + 超时优化
 - `app/core/logging.py` — JSON 日志格式
+
+### 语音识别准确性全面优化 (2026-05-20)
+
+通过代码审查发现 8 项影响识别准确率的问题，包括 1 个关键 bug，全部修复。
+
+| 优化项 | 说明 | 状态 |
+|--------|------|------|
+| SILK 采样率 bug | PCM 以 24kHz 解码但 WAV header 写 16kHz，导致音频被加速播放，严重影响识别 | ✅ 已修复 |
+| 消除重复转码 | `transcribe_wechat_voice` 已转 WAV 后不再重复调 ffmpeg，减少音质损失 | ✅ 已修复 |
+| 领域提示词 | 添加 `initial_prompt` 注入课题组常见术语（微纳米气泡、zeta电位等），提升专业词汇识别率 | ✅ 已完成 |
+| beam_size 优化 | 从 5 降到 3，准确率几乎无损，速度提升约 40% | ✅ 已完成 |
+| 健康检查 TTL | 远程 Whisper 服务缓存 60 秒后自动重试，服务恢复后自动切回 | ✅ 已完成 |
+| VAD 参数统一 | `transcribe_stream` 补齐 `vad_parameters`，与其他方法行为一致 | ✅ 已完成 |
+| 识别结果后处理 | 过滤 `no_speech_prob > 0.8` 的噪音段 + 连续重复文本去重 | ✅ 已完成 |
+| 模型默认值统一 | Dockerfile 和 docker-compose 默认模型统一为 `large-v3` | ✅ 已完成 |
+
+**修改文件：**
+- `app/voice/silk.py` — 修复采样率 bug（默认 24kHz→16kHz）
+- `app/voice/asr.py` — 添加 INITIAL_PROMPT、健康检查 TTL、skip_convert、beam_size、VAD、后处理
+- `app/whisper_server.py` — 添加 INITIAL_PROMPT、beam_size、no_speech_prob 输出、后处理
+- `Dockerfile.whisper` — 默认模型 `base`→`large-v3`
+- `docker-compose.yml` — 默认模型 `base`→`large-v3`

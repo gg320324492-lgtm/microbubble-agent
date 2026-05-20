@@ -16,6 +16,9 @@ MODEL_SIZE = os.getenv("MODEL_SIZE", "large-v3")
 DEVICE = os.getenv("DEVICE", "cuda")
 COMPUTE_TYPE = "float16" if DEVICE == "cuda" else "int8"
 
+# 领域提示词 - 帮助 Whisper 识别专业术语
+INITIAL_PROMPT = "微纳米气泡，zeta电位，表面活性剂，空化效应，气液界面，传质效率，溶解氧，粒径分布，含气量，界面张力"
+
 # 加载模型
 print(f"正在加载Whisper模型: {MODEL_SIZE}")
 model = WhisperModel(MODEL_SIZE, device=DEVICE, compute_type=COMPUTE_TYPE)
@@ -60,9 +63,10 @@ async def transcribe(
             audio_array,
             language=language,
             task=task,
-            beam_size=5,
+            beam_size=3,
             vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500)
+            vad_parameters=dict(min_silence_duration_ms=500),
+            initial_prompt=INITIAL_PROMPT
         )
 
         # 收集结果
@@ -73,11 +77,12 @@ async def transcribe(
             segments_list.append({
                 "start": round(segment.start, 3),
                 "end": round(segment.end, 3),
-                "text": segment.text.strip()
+                "text": segment.text.strip(),
+                "no_speech_prob": round(segment.no_speech_prob, 3)
             })
             full_text += segment.text
 
-        return {
+        result = {
             "text": full_text.strip(),
             "language": info.language,
             "language_probability": round(info.language_probability, 3),
@@ -85,8 +90,37 @@ async def transcribe(
             "segments": segments_list
         }
 
+        # 后处理：过滤低置信度、去重
+        return _postprocess_result(result)
+
     except Exception as e:
+        import traceback
+        print(f"[WHISPER ERROR] 识别失败: {e}", flush=True)
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
+
+
+def _postprocess_result(result: dict) -> dict:
+    """后处理识别结果：过滤低置信度 segment，去重"""
+    segments = result.get("segments", [])
+    if not segments:
+        return result
+
+    # 过滤 no_speech_prob > 0.8 的 segment
+    filtered = [s for s in segments if s.get("no_speech_prob", 0) < 0.8]
+
+    # 去重：连续重复文本只保留一次
+    deduped = []
+    for seg in filtered:
+        text = seg["text"].strip()
+        if text and (not deduped or text != deduped[-1]["text"].strip()):
+            deduped.append(seg)
+
+    # 重新拼接
+    final_text = "".join(s["text"] for s in deduped).strip()
+    result["text"] = final_text
+    result["segments"] = deduped
+    return result
 
 
 def bytes_to_array(audio_data: bytes) -> np.ndarray:

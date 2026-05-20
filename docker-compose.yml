@@ -94,8 +94,11 @@ services:
       dockerfile: Dockerfile.whisper
     volumes:
       - ./models:/app/models
+      - ./models/hf_cache:/root/.cache/huggingface
+      - ./whisper_entrypoint.sh:/app/entrypoint.sh
+    entrypoint: ["bash", "/app/entrypoint.sh"]
     environment:
-      - MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
+      - MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
       - DEVICE=${WHISPER_DEVICE:-cuda}
       - HF_ENDPOINT=${HF_ENDPOINT:-}
     deploy:
