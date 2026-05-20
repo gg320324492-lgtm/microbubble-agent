@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-20 (更新：语音识别准确性全面优化)
+> 最后更新: 2026-05-21 (更新：Agent 回复完整性优化)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -762,3 +762,18 @@
 - `app/whisper_server.py` — 添加 INITIAL_PROMPT、beam_size、no_speech_prob 输出、后处理
 - `Dockerfile.whisper` — 默认模型 `base`→`large-v3`
 - `docker-compose.yml` — 默认模型 `base`→`large-v3`
+
+### Agent 回复完整性优化 (2026-05-21)
+
+解决 Agent 生成较长内容时（如段子集锦、长文列表等）回复被截断、内容说不全的问题。三管齐下：提示词约束 + token 提升 + 截断续写。
+
+| 优化项 | 说明 | 状态 |
+|--------|------|------|
+| 系统提示词约束 | 新增完整性规则：所有列表项/代码块/分段内容必须全部写完，严禁中途截断 | ✅ 完成 |
+| max_tokens 提升 | `chat()` 和 `chat_stream()` 的 4 处 API 调用从 4096 → 8192 | ✅ 完成 |
+| 截断自动续写 | `_process_response()` 检测 `stop_reason == "max_tokens"` 时自动追加续写请求（最多 3 次） | ✅ 完成 |
+| 流式续写 | `chat_stream()` 新增 `_stream_continuation()` 辅助方法，流式场景同样支持截断续写 | ✅ 完成 |
+
+**修改文件：**
+- `app/agent/prompts.py` — 回复质量要求新增完整性规则
+- `app/agent/core.py` — max_tokens 提升 + `_process_response()` 截断续写 + `_stream_continuation()` 方法

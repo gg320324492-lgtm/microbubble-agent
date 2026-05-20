@@ -249,7 +249,7 @@ class MicroBubbleAgent:
 
         response = await self.client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=8192,
             system=system,
             tools=self.tools,
             messages=messages
@@ -278,7 +278,7 @@ class MicroBubbleAgent:
 
         return result
 
-    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None, user_id: Optional[int] = None) -> Dict[str, Any]:
+    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None, user_id: Optional[int] = None, _continues_left: int = 3) -> Dict[str, Any]:
         """处理Claude响应"""
         if messages is None:
             messages = await self._load_session(session_id)
@@ -319,18 +319,41 @@ class MicroBubbleAgent:
             # 后续调用使用基础系统提示词（避免重复注入记忆）
             follow_up = await self.client.messages.create(
                 model=self.model,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=get_system_prompt(),
                 tools=self.tools,
                 messages=messages
             )
 
-            result = await self._process_response(follow_up, session_id, db, messages, user_id=user_id)
+            result = await self._process_response(follow_up, session_id, db, messages, user_id=user_id, _continues_left=_continues_left)
             return {
                 "content": result["content"],
                 "content_blocks": result["content_blocks"],
                 "tool_calls": tool_calls,
                 "tool_results": tool_results
+            }
+
+        # 截断检测：如果因 max_tokens 截断，自动续写
+        if response.stop_reason == "max_tokens" and _continues_left > 0:
+            logger.warning(f"回复因 max_tokens 截断，自动续写（剩余 {_continues_left} 次）")
+            messages = list(messages)
+            messages.append({"role": "assistant", "content": _serialize_content(response.content)})
+            messages.append({"role": "user", "content": "请继续上一条回复的内容，不要重复已经写过的部分。"})
+
+            continuation = await self.client.messages.create(
+                model=self.model,
+                max_tokens=8192,
+                system=get_system_prompt(),
+                tools=self.tools,
+                messages=messages
+            )
+
+            cont_result = await self._process_response(continuation, session_id, db, messages, user_id=user_id, _continues_left=_continues_left - 1)
+            return {
+                "content": "\n".join(content) + cont_result["content"],
+                "content_blocks": list(response.content) + list(cont_result["content_blocks"]),
+                "tool_calls": tool_calls + cont_result.get("tool_calls", []),
+                "tool_results": tool_results + cont_result.get("tool_results", [])
             }
 
         return {
@@ -872,7 +895,7 @@ class MicroBubbleAgent:
 
         async with self.client.messages.stream(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=8192,
             system=system,
             tools=self.tools,
             messages=messages
@@ -920,7 +943,7 @@ class MicroBubbleAgent:
 
             follow_up = await self.client.messages.create(
                 model=self.model,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=system,
                 tools=self.tools,
                 messages=messages
@@ -937,17 +960,64 @@ class MicroBubbleAgent:
                 "role": "assistant",
                 "content": _serialize_content(follow_up.content)
             })
+
+            # follow_up 截断续写
+            if follow_up.stop_reason == "max_tokens":
+                cont_text, cont_messages = await self._stream_continuation(messages, system)
+                full_text += cont_text
+                messages = cont_messages
         else:
             messages.append({
                 "role": "assistant",
                 "content": _serialize_content(response.content)
             })
 
+            # 流式响应截断续写
+            if response.stop_reason == "max_tokens":
+                cont_text, cont_messages = await self._stream_continuation(messages, system)
+                full_text += cont_text
+                messages = cont_messages
+                yield {"type": "text", "content": cont_text}
+
         if len(messages) > 30:
             messages = messages[-30:]
 
         await self._save_session(session_id, messages)
         yield {"type": "done", "content": full_text}
+
+    async def _stream_continuation(self, messages: List[Dict], system: str, _continues_left: int = 3) -> tuple:
+        """流式响应截断后的续写，返回 (续写文本, 更新后的messages)"""
+        if _continues_left <= 0:
+            return "", messages
+
+        logger.warning(f"流式回复因 max_tokens 截断，自动续写（剩余 {_continues_left} 次）")
+        messages = list(messages)
+        messages.append({"role": "user", "content": "请继续上一条回复的内容，不要重复已经写过的部分。"})
+
+        response = await self.client.messages.create(
+            model=self.model,
+            max_tokens=8192,
+            system=system,
+            tools=self.tools,
+            messages=messages
+        )
+
+        cont_text = ""
+        for block in response.content:
+            if block.type == "text":
+                cont_text += block.text
+
+        messages.append({
+            "role": "assistant",
+            "content": _serialize_content(response.content)
+        })
+
+        # 递归处理如果续写也被截断
+        if response.stop_reason == "max_tokens":
+            extra_text, messages = await self._stream_continuation(messages, system, _continues_left - 1)
+            cont_text += extra_text
+
+        return cont_text, messages
 
     async def clear_session(self, session_id: str):
         """清除会话历史"""
