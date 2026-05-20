@@ -21,7 +21,7 @@ celery_app.conf.update(
     beat_schedule={
         "check-reminders": {
             "task": "app.services.reminder_service.process_reminders_task",
-            "schedule": 60.0,
+            "schedule": 10.0,  # 每10秒检查一次，秒级精确提醒
         },
         "proactive-checks": {
             "task": "app.wechat.scheduler.run_proactive_checks",

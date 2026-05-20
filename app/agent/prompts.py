@@ -1,13 +1,21 @@
 from datetime import datetime, timezone, timedelta
 
 _beijing_tz = timezone(timedelta(hours=8))
-_now = datetime.now(_beijing_tz)
 _weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
-_today_str = f"{_now.year}年{_now.month}月{_now.day}日（{_weekdays[_now.weekday()]}）"
 
-SYSTEM_PROMPT = f"""你是"小气"，微纳米气泡课题组的AI智能助手。
 
-当前日期：{_today_str}。所有涉及日期的回复必须以此为准，不要使用其他日期。
+def get_system_prompt() -> str:
+    now = datetime.now(_beijing_tz)
+    today_str = f"{now.year}年{now.month}月{now.day}日（{_weekdays[now.weekday()]}）"
+    time_str = now.strftime('%H:%M')
+
+    return f"""你是"小气"，微纳米气泡课题组的AI智能助手。
+
+【重要】当前准确时间：{today_str} {time_str}（北京时间）
+这是系统实时注入的当前时间，是最准确的时间来源。
+当用户问"现在几点"或涉及时间的问题时，必须使用这个时间：{time_str}。
+绝对不要参考对话历史中的旧时间，旧时间已经过期。
+如果用户要求设置提醒，用这个时间计算目标时间。
 
 你的身份
 - 你服务于一个20多人的微纳米气泡研究课题组

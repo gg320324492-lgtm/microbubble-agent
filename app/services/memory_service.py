@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+from app.models.base import utcnow
 from typing import List, Optional, Dict
 
 from sqlalchemy import select, and_, or_, text, func, desc
@@ -114,7 +115,7 @@ class MemoryService:
             # 更新访问计数
             for row in rows:
                 row.Memory.access_count += 1
-                row.Memory.last_accessed_at = datetime.utcnow()
+                row.Memory.last_accessed_at = utcnow()
             await self.db.commit()
 
             return [
@@ -322,25 +323,34 @@ try:
     def maintenance_task():
         """每小时执行：衰减重要性，停用低重要性记忆"""
         import asyncio
-        asyncio.run(_maintenance_async())
-
-    async def _maintenance_async():
-        from app.core.database import async_session
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+        from sqlalchemy.pool import NullPool
         from sqlalchemy import update
-        async with async_session() as db:
-            # 衰减重要性 (×0.99)
-            await db.execute(
-                update(Memory)
-                .where(Memory.is_active == True)
-                .values(importance=Memory.importance * 0.99)
+        from app.config import settings
+
+        async def _run():
+            engine = create_async_engine(
+                settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+                poolclass=NullPool,
             )
-            # 停用低重要性记忆
-            await db.execute(
-                update(Memory)
-                .where(Memory.is_active == True, Memory.importance < 0.1)
-                .values(is_active=False)
-            )
-            await db.commit()
-            logger.info("记忆维护完成：重要性衰减 + 低重要性停用")
+            try:
+                async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+                async with async_session_factory() as db:
+                    await db.execute(
+                        update(Memory)
+                        .where(Memory.is_active == True)
+                        .values(importance=Memory.importance * 0.99)
+                    )
+                    await db.execute(
+                        update(Memory)
+                        .where(Memory.is_active == True, Memory.importance < 0.1)
+                        .values(is_active=False)
+                    )
+                    await db.commit()
+                    logger.info("记忆维护完成：重要性衰减 + 低重要性停用")
+            finally:
+                await engine.dispose()
+
+        asyncio.run(_run())
 except ImportError:
     pass  # Celery 不可用时跳过

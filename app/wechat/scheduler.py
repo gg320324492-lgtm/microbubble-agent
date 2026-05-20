@@ -8,6 +8,7 @@
 
 import logging
 from datetime import datetime, timedelta
+from app.models.base import utcnow
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -19,33 +20,27 @@ from app.models.member import Member
 from app.models.reminder import Reminder
 from app.wechat.notifier import notifier
 from app.wechat.bot import wechat_bot
-from app.core.database import async_session
-
-
 class ProactiveScheduler:
     """主动提醒调度器"""
 
-    async def run_all_checks(self):
+    async def run_all_checks(self, db: AsyncSession):
         """执行所有检查（由 Celery 定时调用）"""
         results = {}
-
-        async with async_session() as db:
-            results["due_soon"] = await self.check_due_soon(db)
-            results["overdue"] = await self.check_overdue(db)
-            results["unconfirmed"] = await self.check_unconfirmed(db)
-
+        results["due_soon"] = await self.check_due_soon(db)
+        results["overdue"] = await self.check_overdue(db)
+        results["unconfirmed"] = await self.check_unconfirmed(db)
         return results
 
     async def check_due_soon(self, db: AsyncSession) -> int:
         """检查即将到期的任务（明天截止），提醒负责人"""
-        tomorrow = datetime.utcnow() + timedelta(days=1)
+        tomorrow = utcnow() + timedelta(days=1)
         tomorrow_end = tomorrow.replace(hour=23, minute=59, second=59)
 
         result = await db.execute(
             select(Task).where(
                 and_(
                     Task.due_date <= tomorrow_end,
-                    Task.due_date > datetime.utcnow(),
+                    Task.due_date > utcnow(),
                     Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
                 )
             )
@@ -62,13 +57,17 @@ class ProactiveScheduler:
                 continue
 
             try:
-                days_left = (task.due_date - datetime.utcnow()).days
-                if days_left <= 0:
-                    time_text = "今天到期"
+                total_seconds = (task.due_date - utcnow()).total_seconds()
+                if total_seconds <= 0:
+                    time_text = "已到期"
+                elif total_seconds < 3600:
+                    time_text = f"还有{int(total_seconds // 60)}分钟到期"
+                elif total_seconds < 86400:
+                    time_text = f"还有{int(total_seconds // 3600)}小时到期"
                 else:
-                    time_text = f"还有{days_left}天到期"
+                    time_text = f"还有{int(total_seconds // 86400)}天到期"
 
-                content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {task.due_date.strftime('%Y-%m-%d')}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
+                content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {task.due_date.strftime('%Y-%m-%d %H:%M')}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
                 await wechat_bot.smart_send(member, content)
                 count += 1
             except Exception as e:
@@ -81,7 +80,7 @@ class ProactiveScheduler:
         result = await db.execute(
             select(Task).where(
                 and_(
-                    Task.due_date < datetime.utcnow(),
+                    Task.due_date < utcnow(),
                     Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
                 )
             )
@@ -98,15 +97,20 @@ class ProactiveScheduler:
                 continue
 
             try:
-                days_overdue = (datetime.utcnow() - task.due_date).days
-                content = f"⚠️ 任务逾期\n\n📌 {task.title}\n📅 已逾期{days_overdue}天\n📊 进度: {task.progress}%\n\n请尽快处理！"
+                total_seconds = (utcnow() - task.due_date).total_seconds()
+                hours_overdue = int(total_seconds // 3600)
+                if hours_overdue < 24:
+                    overdue_text = f"已逾期{hours_overdue}小时"
+                else:
+                    overdue_text = f"已逾期{hours_overdue // 24}天"
+                content = f"⚠️ 任务逾期\n\n📌 {task.title}\n📅 {overdue_text}\n📊 进度: {task.progress}%\n\n请尽快处理！"
                 await wechat_bot.smart_send(member, content)
 
                 # 同时通知老师
                 if task.created_by:
                     creator = await db.get(Member, task.created_by)
                     if creator and (creator.wechat_id or creator.external_userid):
-                        teacher_msg = f"⚠️ 任务逾期通知\n\n📌 {task.title}\n👤 负责人: {member.name}\n📅 已逾期{days_overdue}天\n📊 进度: {task.progress}%"
+                        teacher_msg = f"⚠️ 任务逾期通知\n\n📌 {task.title}\n👤 负责人: {member.name}\n📅 {overdue_text}\n📊 进度: {task.progress}%"
                         await wechat_bot.smart_send(creator, teacher_msg)
 
                 count += 1
@@ -117,7 +121,7 @@ class ProactiveScheduler:
 
     async def check_unconfirmed(self, db: AsyncSession) -> int:
         """检查未确认的任务（分配超过24小时未回复）"""
-        yesterday = datetime.utcnow() - timedelta(hours=24)
+        yesterday = utcnow() - timedelta(hours=24)
 
         result = await db.execute(
             select(Task).where(
@@ -155,10 +159,22 @@ scheduler = ProactiveScheduler()
 def run_proactive_checks():
     """Celery task: 执行主动提醒检查"""
     import asyncio
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+    from sqlalchemy.pool import NullPool
+    from app.config import settings
 
     async def _run():
-        result = await scheduler.run_all_checks()
-        logger.info(f"主动提醒完成: {result}")
-        return result
+        engine = create_async_engine(
+            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+            poolclass=NullPool,
+        )
+        try:
+            async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with async_session_factory() as db:
+                result = await scheduler.run_all_checks(db)
+                logger.info(f"主动提醒完成: {result}")
+                return result
+        finally:
+            await engine.dispose()
 
     return asyncio.run(_run())

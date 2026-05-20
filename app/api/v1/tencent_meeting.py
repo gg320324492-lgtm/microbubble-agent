@@ -7,6 +7,7 @@ from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from app.models.base import utcnow
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -97,7 +98,7 @@ async def create_and_link_meeting(
         # 创建本地会议记录
         meeting = Meeting(
             title=request.subject,
-            start_time=request.start_time or datetime.utcnow(),
+            start_time=request.start_time or utcnow(),
             end_time=request.end_time,
             meeting_url=join_url,
             meeting_id=meeting_id,

@@ -40,6 +40,27 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("数据库表创建完成")
+
+    # 启动时同步待发送提醒到 Redis（实现秒级精确提醒）
+    try:
+        from app.core.database import async_session
+        from app.models.reminder import Reminder
+        from app.services.reminder_scheduler import reminder_scheduler
+        from sqlalchemy import select
+        async with async_session() as db:
+            result = await db.execute(
+                select(Reminder).where(Reminder.status == "pending")
+            )
+            pending = result.scalars().all()
+            if pending:
+                await reminder_scheduler.sync_from_db([
+                    {"id": r.id, "remind_at_ts": r.remind_at.timestamp()}
+                    for r in pending
+                ])
+                print(f"已同步 {len(pending)} 条待发送提醒到 Redis")
+    except Exception as e:
+        print(f"提醒同步到 Redis 失败（可忽略）: {e}")
+
     yield
     # 关闭时执行
     await close_redis()

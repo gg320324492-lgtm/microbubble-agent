@@ -51,3 +51,17 @@ class RedisSessionStore:
 
 
 session_store = RedisSessionStore()
+
+
+async def invalidate_verified_cache_for_member(member_id: int) -> None:
+    """清除指向该 member_id 的所有 wechat:verified:* 缓存"""
+    r = await get_redis()
+    cursor = 0
+    while True:
+        cursor, keys = await r.scan(cursor=cursor, match="wechat:verified:*", count=100)
+        for key in keys:
+            val = await r.get(key)
+            if val and int(val) == member_id:
+                await r.delete(key)
+        if cursor == 0:
+            break
