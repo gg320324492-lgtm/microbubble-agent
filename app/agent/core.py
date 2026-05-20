@@ -1,12 +1,12 @@
-import anthropic
 import asyncio
 import base64
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from sqlalchemy import select
-from app.models.base import utcnow
+from app.models.base import utcnow, BEIJING_TZ
+from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 from app.config import settings
 from app.agent.prompts import get_system_prompt
@@ -43,11 +43,8 @@ class MicroBubbleAgent:
     """微纳米气泡课题组Agent核心"""
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(
-            api_key=settings.CLAUDE_API_KEY,
-            base_url=settings.CLAUDE_BASE_URL or None,
-        )
-        self.model = settings.CLAUDE_MODEL or "mimo-v2.5"
+        self.client = get_anthropic_client()
+        self.model = get_default_model()
         self.tools = TOOLS
         self._sessions: Dict[str, List[Dict]] = {}
 
@@ -157,30 +154,14 @@ class MicroBubbleAgent:
 如果有，返回严格的JSON格式（不要包含其他文字）：
 {{"save": true, "title": "知识标题", "content": "整理后的完整知识内容", "category": "基础/方法/文献/FAQ", "tags": ["标签1", "标签2"]}}"""
 
-            client = anthropic.AsyncAnthropic(
-                api_key=settings.CLAUDE_API_KEY,
-                base_url=settings.CLAUDE_BASE_URL or None,
-            )
+            client = get_anthropic_client()
             response = await client.messages.create(
-                model=settings.CLAUDE_MODEL or "mimo-v2.5",
+                model=get_default_model(),
                 max_tokens=800,
                 messages=[{"role": "user", "content": prompt}]
             )
-            text_content = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    text_content = block.text
-                    break
-
-            text_content = text_content.strip()
-            if text_content.startswith("```"):
-                text_content = text_content.split("\n", 1)[-1]
-                if text_content.endswith("```"):
-                    text_content = text_content[:-3]
-                text_content = text_content.strip()
-
-            import json
-            result = json.loads(text_content)
+            text_content = extract_text_from_response(response)
+            result = parse_llm_json(text_content)
             if not result.get("save"):
                 return
 
@@ -237,8 +218,7 @@ class MicroBubbleAgent:
             ]
         else:
             # 纯文本消息，注入当前时间（北京时间）
-            from datetime import timezone, timedelta
-            now = datetime.now(timezone(timedelta(hours=8)))
+            now = datetime.now(BEIJING_TZ)
             time_tag = f"[当前时间: {now.strftime('%Y-%m-%d %H:%M')}] "
             content = time_tag + message
 
@@ -412,7 +392,7 @@ class MicroBubbleAgent:
                             project_id = p.id
                             break
                 due_date = None
-                beijing_tz = timezone(timedelta(hours=8))
+                beijing_tz = BEIJING_TZ
                 if input_data.get("due_date"):
                     try:
                         beijing_dt = datetime.strptime(input_data["due_date"], "%Y-%m-%d %H:%M")
@@ -456,7 +436,7 @@ class MicroBubbleAgent:
 
                         due_date_str = ""
                         if due_date:
-                            beijing_tz_notify = timezone(timedelta(hours=8))
+                            beijing_tz_notify = BEIJING_TZ
                             due_date_beijing = due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz_notify)
                             due_date_str = due_date_beijing.strftime("%Y-%m-%d %H:%M")
 
@@ -586,7 +566,7 @@ class MicroBubbleAgent:
                             new_due_beijing = datetime.strptime(input_data["due_date"], "%Y-%m-%d %H:%M")
                         except ValueError:
                             new_due_beijing = datetime.strptime(input_data["due_date"], "%Y-%m-%d").replace(hour=18, minute=0)
-                        beijing_tz = timezone(timedelta(hours=8))
+                        beijing_tz = BEIJING_TZ
                         updated.due_date = new_due_beijing.replace(tzinfo=beijing_tz).astimezone(timezone.utc).replace(tzinfo=None)
                         await db.commit()
                     return {"status": "success", "task_id": updated.id, "new_status": updated.status}
@@ -671,7 +651,7 @@ class MicroBubbleAgent:
             elif name == "create_meeting":
                 meeting_svc = MeetingService(db)
                 start_time_beijing = datetime.strptime(input_data["start_time"], "%Y-%m-%d %H:%M")
-                beijing_tz = timezone(timedelta(hours=8))
+                beijing_tz = BEIJING_TZ
                 start_time = start_time_beijing.replace(tzinfo=beijing_tz).astimezone(timezone.utc).replace(tzinfo=None)
                 participant_ids = []
                 if input_data.get("participants"):
@@ -884,8 +864,7 @@ class MicroBubbleAgent:
             ]
         else:
             # 纯文本消息，注入当前时间（北京时间）
-            from datetime import timezone, timedelta
-            now = datetime.now(timezone(timedelta(hours=8)))
+            now = datetime.now(BEIJING_TZ)
             time_tag = f"[当前时间: {now.strftime('%Y-%m-%d %H:%M')}] "
             content = time_tag + message
 

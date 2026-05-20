@@ -6,6 +6,7 @@ import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from faster_whisper import WhisperModel
 import os
+from app.voice.postprocess import postprocess_result
 
 app = FastAPI(title="Whisper ASR Service")
 
@@ -89,36 +90,13 @@ async def transcribe(
         }
 
         # 后处理：过滤低置信度、去重
-        return _postprocess_result(result)
+        return postprocess_result(result)
 
     except Exception as e:
         import traceback
         print(f"[WHISPER ERROR] 识别失败: {e}", flush=True)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"识别失败: {str(e)}")
-
-
-def _postprocess_result(result: dict) -> dict:
-    """后处理识别结果：过滤低置信度 segment，去重"""
-    segments = result.get("segments", [])
-    if not segments:
-        return result
-
-    # 过滤 no_speech_prob > 0.8 的 segment
-    filtered = [s for s in segments if s.get("no_speech_prob", 0) < 0.8]
-
-    # 去重：连续重复文本只保留一次
-    deduped = []
-    for seg in filtered:
-        text = seg["text"].strip()
-        if text and (not deduped or text != deduped[-1]["text"].strip()):
-            deduped.append(seg)
-
-    # 重新拼接
-    final_text = "".join(s["text"] for s in deduped).strip()
-    result["text"] = final_text
-    result["segments"] = deduped
-    return result
 
 
 def bytes_to_array(audio_data: bytes) -> np.ndarray:

@@ -841,23 +841,23 @@
 
 **后端重复逻辑**
 
-- [ ] 北京时区常量 — 8+ 处 `timezone(timedelta(hours=8))` → 提取 `BEIJING_TZ` 到 `app/config.py`
-- [ ] Anthropic 客户端工厂 — 6 处重复实例化 → 提取 `get_anthropic_client()` 到 `app/core/llm.py`
-- [ ] LLM JSON 解析工具 — 4 处 markdown 代码块剥离 → 提取 `parse_llm_json()` 到 `app/core/llm.py`
-- [ ] `_postprocess_result` 完全重复 — `voice/asr.py` 和 `whisper_server.py` → 提取到 `app/voice/postprocess.py`
-- [ ] 任务通知逻辑重复 — `agent/core.py` 和 `api/v1/task.py` → 提取到通知辅助函数
-- [ ] Celery 任务样板代码 — 3 处 engine/session/asyncio.run → 提取到 `app/core/celery_helper.py`
-- [ ] 微信长文本分割 — 3 处相同分割逻辑 → 提取 `_split_long_text()` 辅助函数
+- [x] 北京时区常量 — 8+ 处 `timezone(timedelta(hours=8))` → 提取 `BEIJING_TZ` 到 `app/models/base.py`，替换 4 个文件 9 处
+- [x] Anthropic 客户端工厂 — 6 处重复实例化 → 提取 `get_anthropic_client()` 到 `app/core/llm.py`
+- [x] LLM JSON 解析工具 — 4 处 markdown 代码块剥离 → 提取 `parse_llm_json()` 和 `extract_text_from_response()` 到 `app/core/llm.py`
+- [x] `_postprocess_result` 完全重复 — `voice/asr.py` 和 `whisper_server.py` → 提取到 `app/voice/postprocess.py`
+- [ ] 任务通知逻辑重复 — `agent/core.py` 和 `api/v1/task.py` → 暂不提取（涉及业务逻辑，改动风险较高）
+- [ ] Celery 任务样板代码 — 3 处 engine/session/asyncio.run → 暂不提取（影响异步任务稳定性）
+- [x] 微信长文本分割 — 3 处相同分割逻辑 → 提取 `_split_long_text()` 辅助函数到 `app/wechat/handler.py`
 
 **前端重复逻辑**
 
-- [ ] `fetchMembers` 重复 — 5 个组件各自调 API → 改用 `useMemberStore`
-- [ ] `getMemberName` 重复 — 3 处相同查找逻辑 → 改用 `memberStore.getMemberName()`
-- [ ] `formatDate` 重复 — 6 个组件各自定义 → 统一使用 `utils/format.js`
-- [ ] `formatTime` 重复 — 3 个组件各自定义 → 提取到 `utils/format.js`
-- [ ] `isMobile` 重复 — 8 个组件独立定义 → 创建 `composables/useIsMobile.js` 统一管理
-- [ ] `getStatusType` 重复 — 3 个组件相同映射 → 提取到 `utils/task.js`
-- [ ] `getPriorityType` 重复 — 2 个组件相同映射 → 提取到 `utils/task.js`
+- [x] `fetchMembers` 重复 — 5 个组件各自调 API → 改用 `useMemberStore`
+- [x] `getMemberName` 重复 — 2 处相同查找逻辑 → 改用 `memberStore.getMemberName()`
+- [x] `formatDate` 重复 — 6 个组件各自定义 → 统一使用 `utils/format.js`（新增 formatRelativeTime/formatCompactDate）
+- [x] `formatTime` 重复 — 3 个组件各自定义 → 统一使用 `utils/format.js`
+- [ ] `isMobile` 重复 — 8 个组件独立定义 → 待后续统一（需决定是否保留 @vueuse/core）
+- [x] `getStatusType` 重复 — 3 个组件相同映射 → 提取到新建 `utils/task.js`
+- [x] `getPriorityType` 重复 — 2 个组件相同映射 → 提取到 `utils/task.js`
 
 #### 第三批：配置优化（中等风险）
 

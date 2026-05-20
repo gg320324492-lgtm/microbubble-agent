@@ -22,6 +22,36 @@ from app.core.redis import get_redis
 logger = logging.getLogger("microbubble.wechat")
 
 
+def _split_long_text(content: str, max_len: int = 2000) -> list:
+    """将长文本按段落切分，尽量在换行处断开
+
+    Args:
+        content: 要切分的文本
+        max_len: 每段最大字符数
+
+    Returns:
+        切分后的文本列表
+    """
+    if len(content) <= max_len:
+        return [content]
+
+    parts = []
+    remaining = content
+    while remaining:
+        if len(remaining) <= max_len:
+            parts.append(remaining)
+            break
+        # 在 max_len 范围内找最后一个换行符
+        cut = remaining.rfind('\n', 0, max_len)
+        if cut < max_len // 2:
+            # 换行位置太靠前，直接在 max_len 处截断
+            cut = max_len
+        parts.append(remaining[:cut])
+        remaining = remaining[cut:].lstrip('\n')
+
+    return parts
+
+
 class MessageHandler:
     """企业微信消息处理器"""
 
@@ -931,25 +961,7 @@ class MessageHandler:
             msg: 原始消息
             max_len: 每段最大字符数
         """
-        if len(content) <= max_len:
-            await self._reply_text(user_id, content, is_external, msg=msg)
-            return
-
-        # 按段落切分，尽量在换行处断开
-        parts = []
-        remaining = content
-        while remaining:
-            if len(remaining) <= max_len:
-                parts.append(remaining)
-                break
-            # 在 max_len 范围内找最后一个换行符
-            cut = remaining.rfind('\n', 0, max_len)
-            if cut < max_len // 2:
-                # 换行位置太靠前，直接在 max_len 处截断
-                cut = max_len
-            parts.append(remaining[:cut])
-            remaining = remaining[cut:].lstrip('\n')
-
+        parts = _split_long_text(content, max_len)
         for i, part in enumerate(parts):
             if i > 0:
                 await asyncio.sleep(0.5)
@@ -958,22 +970,7 @@ class MessageHandler:
     async def _reply_long_text_to_group(self, chat_id: str, content: str,
                                          max_len: int = 2000) -> None:
         """群聊长回复自动分段发送"""
-        if len(content) <= max_len:
-            await wechat_bot.smart_send_to_group(chat_id, content, msg_type="text")
-            return
-
-        parts = []
-        remaining = content
-        while remaining:
-            if len(remaining) <= max_len:
-                parts.append(remaining)
-                break
-            cut = remaining.rfind('\n', 0, max_len)
-            if cut < max_len // 2:
-                cut = max_len
-            parts.append(remaining[:cut])
-            remaining = remaining[cut:].lstrip('\n')
-
+        parts = _split_long_text(content, max_len)
         for i, part in enumerate(parts):
             if i > 0:
                 await asyncio.sleep(0.5)
@@ -1051,19 +1048,7 @@ class MessageHandler:
 
             from app.wechat.kf_service import kf_service
             # 长回复分段发送
-            max_len = 2000
-            parts = []
-            remaining = reply
-            while remaining:
-                if len(remaining) <= max_len:
-                    parts.append(remaining)
-                    break
-                cut = remaining.rfind('\n', 0, max_len)
-                if cut < max_len // 2:
-                    cut = max_len
-                parts.append(remaining[:cut])
-                remaining = remaining[cut:].lstrip('\n')
-
+            parts = _split_long_text(reply)
             for i, part in enumerate(parts):
                 if i > 0:
                     await asyncio.sleep(0.5)

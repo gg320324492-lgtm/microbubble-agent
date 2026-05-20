@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from typing import Optional, List
-from datetime import datetime
-from app.models.base import utcnow
+from datetime import datetime, timezone
+from app.models.base import utcnow, BEIJING_TZ
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -57,15 +57,13 @@ async def create_task(
     if task.assignee_id and task.assignee_id != current_user.id:
         try:
             from app.wechat.notifier import notifier
-            from datetime import timezone, timedelta
             import logging
             _notify_logger = logging.getLogger("microbubble.notify")
             assignee = await db.get(Member, task.assignee_id)
 
             due_date_str = ""
             if task.due_date:
-                beijing_tz = timezone(timedelta(hours=8))
-                due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
+                due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(BEIJING_TZ)
                 due_date_str = due_date_beijing.strftime("%Y-%m-%d %H:%M")
 
             # 通知负责人

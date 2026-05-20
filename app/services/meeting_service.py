@@ -10,6 +10,7 @@ from app.models.member import Member
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.wechat.analyzer import analyzer
 from app.wechat.identity import identity_resolver
+from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
 
 logger = logging.getLogger("microbubble.meeting_service")
 
@@ -191,24 +192,15 @@ class MeetingService:
     async def _generate_summary(self, transcript_text: str) -> str:
         """用 Claude 生成会议摘要"""
         try:
-            import anthropic
-            from app.config import settings
-
-            client = anthropic.AsyncAnthropic(
-                api_key=settings.CLAUDE_API_KEY,
-                base_url=settings.CLAUDE_BASE_URL or None,
-            )
-            model = settings.CLAUDE_MODEL or "claude-sonnet-4-20250514"
+            client = get_anthropic_client()
+            model = get_default_model()
             response = await client.messages.create(
                 model=model,
                 max_tokens=1024,
                 system="你是课题组AI助手，请用简洁的中文总结以下会议内容，200字以内。",
                 messages=[{"role": "user", "content": f"请总结以下会议转写内容：\n\n{transcript_text[:8000]}"}]
             )
-            for block in response.content:
-                if hasattr(block, "text"):
-                    return block.text.strip()
-            return ""
+            return extract_text_from_response(response)
         except Exception as e:
             logger.error(f"生成会议摘要失败: {e}")
             return ""

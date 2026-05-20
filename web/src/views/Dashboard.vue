@@ -242,6 +242,9 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { formatCompactDate, formatTime } from '@/utils/format'
+import { getStatusType, getPriorityType } from '@/utils/task'
+import { useMemberStore } from '@/stores/member'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -263,10 +266,12 @@ use([
   GridComponent
 ])
 
+const memberStore = useMemberStore()
+const members = computed(() => memberStore.members)
+
 const dashboardData = ref({})
 const todoTasks = ref([])
 const recentMeetings = ref([])
-const members = ref([])
 const showCreateTask = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 
@@ -435,15 +440,8 @@ const fetchRecentMeetings = async () => {
   }
 }
 
-// 获取成员列表
-const fetchMembers = async () => {
-  try {
-    const res = await axios.get('/api/v1/members')
-    members.value = res.data.items || []
-  } catch (e) {
-    console.error('获取成员失败:', e)
-  }
-}
+// 获取成员列表（使用 store）
+const fetchMembers = () => memberStore.fetchMembers()
 
 // 创建任务
 const createTask = async () => {
@@ -464,35 +462,14 @@ const createTask = async () => {
   }
 }
 
-// 格式化函数
-const formatDate = (date) => {
-  if (!date) return '无截止日期'
-  const d = dayjs(date)
-  const now = dayjs()
-  const isSameYear = d.year() === now.year()
-  // 有时间信息（非00:00）则显示时间
-  if (d.hour() !== 0 || d.minute() !== 0) {
-    return isSameYear ? d.format('MM/DD HH:mm') : d.format('YY/MM/DD HH:mm')
-  }
-  return isSameYear ? d.format('MM/DD') : d.format('YY/MM/DD')
-}
-
+// 辅助函数
+const formatDate = (date) => formatCompactDate(date, '无截止日期')
 const formatDay = (date) => dayjs(date).format('MM/DD')
 const formatHour = (date) => dayjs(date).format('HH:mm')
 
 const isOverdue = (date) => {
   if (!date) return false
   return dayjs(date).isBefore(dayjs())
-}
-
-const getPriorityType = (priority) => {
-  const map = { high: 'danger', medium: 'warning', low: 'info' }
-  return map[priority] || 'info'
-}
-
-const getStatusType = (status) => {
-  const map = { scheduled: 'info', recording: 'warning', completed: 'success' }
-  return map[status] || 'info'
 }
 
 onMounted(() => {

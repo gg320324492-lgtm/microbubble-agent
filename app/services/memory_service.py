@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from app.models.base import utcnow
+from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 from typing import List, Optional, Dict
 
 from sqlalchemy import select, and_, or_, text, func, desc
@@ -237,9 +238,7 @@ class MemoryService:
         session_id: str
     ):
         """从对话中提取值得记忆的信息"""
-        import anthropic
         import json
-        from app.config import settings
 
         # 构建对话文本
         conversation = ""
@@ -271,29 +270,14 @@ class MemoryService:
 ]"""
 
         try:
-            client = anthropic.AsyncAnthropic(
-                api_key=settings.CLAUDE_API_KEY,
-                base_url=settings.CLAUDE_BASE_URL or None,
-            )
+            client = get_anthropic_client()
             response = await client.messages.create(
-                model=settings.CLAUDE_MODEL or "mimo-v2.5",
+                model=get_default_model(),
                 max_tokens=1000,
                 messages=[{"role": "user", "content": prompt}]
             )
-            text_content = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    text_content = block.text
-                    break
-
-            text_content = text_content.strip()
-            if text_content.startswith("```"):
-                text_content = text_content.split("\n", 1)[-1]
-                if text_content.endswith("```"):
-                    text_content = text_content[:-3]
-                text_content = text_content.strip()
-
-            memories = json.loads(text_content)
+            text_content = extract_text_from_response(response)
+            memories = parse_llm_json(text_content)
             if not isinstance(memories, list):
                 return
 

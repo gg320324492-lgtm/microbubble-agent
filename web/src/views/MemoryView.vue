@@ -94,6 +94,7 @@ import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/format'
 
 const isMobile = ref(window.innerWidth <= 768)
 const memoryList = ref([])
@@ -168,7 +169,7 @@ const deleteMemory = async (item) => {
 }
 
 // 辅助函数
-const formatDate = (date) => date ? dayjs(date).format('YYYY-MM-DD HH:mm') : '-'
+const formatDate = (date) => formatDateTime(date)
 
 const getTypeTag = (type) => {
   const map = { preference: '', summary: 'success', entity: 'warning' }

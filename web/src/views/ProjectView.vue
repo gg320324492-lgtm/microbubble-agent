@@ -165,14 +165,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { formatDate } from '@/utils/format'
+import { useMemberStore } from '@/stores/member'
+
+const memberStore = useMemberStore()
+const members = computed(() => memberStore.members)
 
 const isMobile = ref(window.innerWidth <= 768)
 const projects = ref([])
-const members = ref([])
 const milestones = ref([])
 const showCreateDialog = ref(false)
 const showDetailDialog = ref(false)
@@ -200,15 +204,8 @@ const fetchProjects = async () => {
   }
 }
 
-// 获取成员列表
-const fetchMembers = async () => {
-  try {
-    const res = await axios.get('/api/v1/members')
-    members.value = res.data.items || []
-  } catch (e) {
-    console.error('获取成员失败:', e)
-  }
-}
+// 获取成员列表（使用 store）
+const fetchMembers = () => memberStore.fetchMembers()
 
 // 创建项目
 const createProject = async () => {
@@ -294,12 +291,7 @@ const deleteProject = async (project) => {
 }
 
 // 辅助函数
-const getMemberName = (id) => {
-  const member = members.value.find(m => m.id === id)
-  return member ? member.name : '未知'
-}
-
-const formatDate = (date) => date ? dayjs(date).format('YYYY-MM-DD') : '-'
+const getMemberName = (id) => memberStore.getMemberName(id)
 
 const getStatusType = (status) => {
   const map = { active: 'success', paused: 'warning', completed: 'info', archived: 'info' }

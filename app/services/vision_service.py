@@ -5,6 +5,7 @@ import httpx
 import logging
 from typing import Optional
 from app.config import settings
+from app.core.llm import get_anthropic_client, get_default_model
 
 logger = logging.getLogger("microbubble.vision")
 
@@ -85,18 +86,13 @@ class VisionService:
         Returns:
             分析结果文本
         """
-        import anthropic
-
         try:
-            client = anthropic.AsyncAnthropic(
-                api_key=settings.CLAUDE_API_KEY,
-                base_url=settings.CLAUDE_BASE_URL or None,
-            )
+            client = get_anthropic_client()
             image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
             media_type = self._detect_media_type(image_data)
 
             # 使用配置的模型，默认为 mimo-v2.5
-            model = settings.CLAUDE_MODEL or "mimo-v2.5"
+            model = get_default_model()
             logger.info(f"使用模型 {model} 分析图片, media_type={media_type}")
 
             response = await client.messages.create(

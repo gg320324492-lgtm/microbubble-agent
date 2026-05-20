@@ -7,6 +7,7 @@ from typing import Optional
 import httpx
 
 from app.config import settings
+from app.voice.postprocess import postprocess_result
 
 
 WHISPER_SERVICE_URL = "http://whisper:8002"
@@ -129,7 +130,7 @@ class SpeechRecognizer:
                 "duration": info.duration,
                 "segments": segments_list
             }
-            return _postprocess_result(result)
+            return postprocess_result(result)
 
         return await asyncio.to_thread(_run)
 
@@ -211,29 +212,6 @@ class SpeechRecognizer:
             for p in [tmp_path, output_path]:
                 if os.path.exists(p):
                     os.unlink(p)
-
-
-def _postprocess_result(result: dict) -> dict:
-    """后处理识别结果：过滤低置信度 segment，去重"""
-    segments = result.get("segments", [])
-    if not segments:
-        return result
-
-    # 过滤 no_speech_prob > 0.8 的 segment（如果有该字段）
-    filtered = [s for s in segments if s.get("no_speech_prob", 0) < 0.8]
-
-    # 去重：连续重复文本只保留一次
-    deduped = []
-    for seg in filtered:
-        text = seg["text"].strip()
-        if text and (not deduped or text != deduped[-1]["text"].strip()):
-            deduped.append(seg)
-
-    # 重新拼接
-    final_text = "".join(s["text"] for s in deduped).strip()
-    result["text"] = final_text
-    result["segments"] = deduped
-    return result
 
 
 # 全局实例

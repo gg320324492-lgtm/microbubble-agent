@@ -11,9 +11,9 @@ import json
 import logging
 
 logger = logging.getLogger("microbubble.wechat.analyzer")
-import anthropic
 from typing import List, Dict
 from app.config import settings
+from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 ANALYSIS_PROMPT = """你是课题组的AI助手，负责从对话中提取任务和行动项。
 
@@ -60,11 +60,8 @@ class ConversationAnalyzer:
     """对话智能分析器"""
 
     def __init__(self):
-        self.client = anthropic.AsyncAnthropic(
-            api_key=settings.CLAUDE_API_KEY,
-            base_url=settings.CLAUDE_BASE_URL or None,
-        )
-        self.model = settings.CLAUDE_MODEL or "claude-sonnet-4-20250514"
+        self.client = get_anthropic_client()
+        self.model = get_default_model()
 
     async def analyze(self, messages: List[Dict[str, str]]) -> Dict:
         """
@@ -93,18 +90,8 @@ class ConversationAnalyzer:
             )
 
             # 兼容 ThinkingBlock + TextBlock 响应（如 mimo-v2.5）
-            text = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    text = block.text.strip()
-                    break
-            # 尝试提取 JSON
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-
-            result = json.loads(text)
+            text = extract_text_from_response(response)
+            result = parse_llm_json(text)
             return result
 
         except Exception as e:

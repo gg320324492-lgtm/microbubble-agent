@@ -9,8 +9,8 @@
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from app.models.base import utcnow
+from datetime import datetime, timedelta
+from app.models.base import utcnow, BEIJING_TZ
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -88,7 +88,7 @@ class ProactiveScheduler:
                 else:
                     time_text = f"还有{int(total_seconds // 86400)}天到期"
 
-                beijing_tz = timezone(timedelta(hours=8))
+                beijing_tz = BEIJING_TZ
                 due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
                 due_date_str = due_date_beijing.strftime('%Y-%m-%d %H:%M')
 

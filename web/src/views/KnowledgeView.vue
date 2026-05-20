@@ -311,6 +311,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { formatDate } from '@/utils/format'
 
 const isMobile = ref(window.innerWidth <= 768)
 const knowledgeList = ref([])
@@ -493,8 +494,6 @@ const handleUpload = async () => {
 }
 
 // 辅助函数
-const formatDate = (date) => date ? dayjs(date).format('YYYY-MM-DD') : '-'
-
 const getCategoryType = (category) => {
   const map = { '基础': '', '方法': 'success', '文献': 'warning', 'FAQ': 'info' }
   return map[category] || 'info'

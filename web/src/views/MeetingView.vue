@@ -218,15 +218,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/format'
+import { getStatusType, getStatusLabel } from '@/utils/task'
+import { useMemberStore } from '@/stores/member'
 import LiveTranscript from '@/components/LiveTranscript.vue'
+
+const memberStore = useMemberStore()
+const members = computed(() => memberStore.members)
 
 const isMobile = ref(window.innerWidth <= 768)
 const meetings = ref([])
-const members = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
@@ -266,15 +271,8 @@ const fetchMeetings = async () => {
   }
 }
 
-// 获取成员列表
-const fetchMembers = async () => {
-  try {
-    const res = await axios.get('/api/v1/members')
-    members.value = res.data.items || []
-  } catch (e) {
-    console.error('获取成员失败:', e)
-  }
-}
+// 获取成员列表（使用 store）
+const fetchMembers = () => memberStore.fetchMembers()
 
 // 创建会议
 const createMeeting = async () => {
@@ -335,17 +333,7 @@ const generateMinutes = async (meeting) => {
 const formatMonth = (date) => dayjs(date).format('M月')
 const formatDay = (date) => dayjs(date).format('D')
 const formatHour = (date) => dayjs(date).format('HH:mm')
-const formatDate = (date) => dayjs(date).format('YYYY-MM-DD HH:mm')
-
-const getStatusType = (status) => {
-  const map = { scheduled: 'info', recording: 'warning', completed: 'success' }
-  return map[status] || 'info'
-}
-
-const getStatusLabel = (status) => {
-  const map = { scheduled: '待开始', recording: '录制中', completed: '已完成' }
-  return map[status] || status
-}
+const formatDate = (date) => formatDateTime(date)
 
 onMounted(() => {
   fetchMeetings()
