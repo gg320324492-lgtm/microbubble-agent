@@ -5,6 +5,7 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
+from sqlalchemy import select
 from app.models.base import utcnow
 
 from app.config import settings
@@ -443,6 +444,15 @@ class MicroBubbleAgent:
                     project_id=project_id,
                     overdue=input_data.get("overdue", False)
                 )
+
+                # 批量获取负责人姓名
+                assignee_ids = {t.assignee_id for t in tasks if t.assignee_id}
+                members_map = {}
+                if assignee_ids:
+                    from app.models.member import Member as _Member
+                    _result = await db.execute(select(_Member).where(_Member.id.in_(assignee_ids)))
+                    members_map = {m.id: m.name for m in _result.scalars().all()}
+
                 return {
                     "status": "success",
                     "count": len(tasks),
@@ -453,6 +463,7 @@ class MicroBubbleAgent:
                             "status": t.status,
                             "priority": t.priority,
                             "assignee_id": t.assignee_id,
+                            "assignee_name": members_map.get(t.assignee_id, "未分配") if t.assignee_id else "未分配",
                             "due_date": t.due_date.strftime("%Y-%m-%d %H:%M") if t.due_date else None,
                             "progress": t.progress
                         }
