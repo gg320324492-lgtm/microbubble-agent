@@ -156,13 +156,17 @@ class MessageHandler:
         print(f"[WECHAT] 用户已识别: user_id={user_id}, member={member.name}", flush=True)
         msg["_resolved_user_id"] = user_id
 
-        # 插件用户：如果 wechat_id 还是显示名，用真实 UserId 更新
-        if is_plugin and from_user_is_real_id and member.wechat_id == member.name:
-            try:
-                await identity_resolver.bind_identity(member, wechat_userid=from_user, db=db)
-                print(f"[WECHAT] 自动更新wechat_id: member={member.name}, {member.wechat_id}->{from_user}", flush=True)
-            except Exception as e:
-                logger.warning(f"自动更新wechat_id失败: {e}")
+        # 插件用户：如果 wechat_id 不是有效 userid（含中文/emoji等），用真实 UserId 更新
+        if is_plugin and from_user_is_real_id:
+            import re
+            wechat_id_is_valid = member.wechat_id and re.match(r'^[a-zA-Z0-9._-]+$', member.wechat_id)
+            if not wechat_id_is_valid:
+                try:
+                    old_id = member.wechat_id
+                    await identity_resolver.bind_identity(member, wechat_userid=from_user, db=db, force=True)
+                    print(f"[WECHAT] 自动更新wechat_id: member={member.name}, {old_id}->{from_user}", flush=True)
+                except Exception as e:
+                    logger.warning(f"自动更新wechat_id失败: {e}")
 
         # 判断是群聊还是私聊
         if chat_id:
@@ -376,15 +380,15 @@ class MessageHandler:
             for m in members:
                 if m.wechat_id or m.external_userid:
                     try:
-                        content = f"""📅 **会议通知**
+                        content = f"""📅 会议通知
 
-**主题**: {title}
-**时间**: {time}
+主题: {title}
+时间: {time}
 """
                         if location:
-                            content += f"**地点**: {location}\n"
+                            content += f"地点: {location}\n"
                         content += "\n请准时参加！"
-                        await wechat_bot.smart_send(m, content, msg_type="markdown")
+                        await wechat_bot.smart_send(m, content, msg_type="text")
                     except Exception as e:
                         logger.warning(f"会议通知发送失败 [{m.name}]: {e}")
 
@@ -611,9 +615,12 @@ class MessageHandler:
                     await self._save_verified_user(user_id, member.id)
                 elif from_user and user_id.startswith("wwd") and not from_user.startswith("wwd"):
                     # 插件用户：绑定真实 UserId
-                    if not member.wechat_id or member.wechat_id == member.name:
-                        await identity_resolver.bind_identity(member, wechat_userid=from_user, db=db)
-                        print(f"[WECHAT] 插件用户绑定UserId: member={member.name}, wechat_id={from_user}", flush=True)
+                    # 如果 wechat_id 为空，或者是昵称（含中文/emoji/特殊字符），则更新为真实 userid
+                    import re
+                    wechat_id_is_valid = member.wechat_id and re.match(r'^[a-zA-Z0-9._-]+$', member.wechat_id)
+                    if not wechat_id_is_valid:
+                        await identity_resolver.bind_identity(member, wechat_userid=from_user, db=db, force=True)
+                        print(f"[WECHAT] 插件用户绑定UserId: member={member.name}, wechat_id={member.wechat_id}->{from_user}", flush=True)
                 return member
             elif len(members) > 1:
                 candidates = "、".join(f"{m.name}({m.grade or '未知'})" for m in members[:5])

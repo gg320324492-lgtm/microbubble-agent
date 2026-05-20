@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -33,54 +33,56 @@ class ReminderService:
         return result.scalars().all()
 
     async def send_reminder(self, reminder: Reminder) -> bool:
-        """发送提醒"""
-        # 获取任务信息
+        """发送提醒，只在成功时标记为 sent"""
         task_result = await self.db.execute(
             select(Task).where(Task.id == reminder.task_id)
         )
         task = task_result.scalar_one_or_none()
 
         if not task or not task.assignee_id:
-            logger.warning(f"提醒 {reminder.id} 无法发送: task={reminder.task_id}, assignee_id={task.assignee_id if task else 'N/A'}")
+            logger.warning(f"提醒 {reminder.id} 无法发送: task不存在或无负责人")
             return False
 
-        # 获取成员信息
         member_result = await self.db.execute(
             select(Member).where(Member.id == task.assignee_id)
         )
         member = member_result.scalar_one_or_none()
 
         if not member:
+            logger.warning(f"提醒 {reminder.id} 无法发送: 成员不存在 id={task.assignee_id}")
             return False
 
-        # 格式化提醒消息
+        if not member.wechat_id and not member.external_userid:
+            logger.warning(f"提醒 {reminder.id} 无法发送: 成员 {member.name} 无微信标识")
+            return False
+
         message = self._format_reminder_message(task, member)
 
-        # 调用微信推送服务
-        if member.wechat_id or member.external_userid:
-            try:
-                result = await wechat_bot.smart_send(member, message)
-                errcode = result.get("errcode", -1) if isinstance(result, dict) else -1
-                if errcode != 0:
-                    logger.warning(f"微信推送返回错误: {result}, member={member.name}, wechat_id={member.wechat_id}, external_userid={member.external_userid}")
-                else:
-                    logger.info(f"微信推送成功: member={member.name}, wechat_id={member.wechat_id}")
-            except Exception as e:
-                logger.warning(f"微信推送失败: {e}")
+        try:
+            result = await wechat_bot.smart_send(member, message)
+            errcode = result.get("errcode", -1) if isinstance(result, dict) else -1
+            if errcode != 0:
+                logger.warning(f"微信推送返回错误: {result}, member={member.name}")
+                return False
+            logger.info(f"微信推送成功: member={member.name}")
+        except Exception as e:
+            logger.warning(f"微信推送失败: {e}")
+            return False
 
-        # 更新提醒状态
+        # 只有发送成功才标记
         reminder.status = "sent"
         reminder.sent_at = utcnow()
         await self.db.commit()
-
         return True
 
     def _format_reminder_message(self, task: Task, member: Member) -> str:
         """格式化提醒消息"""
         now = utcnow()
+        beijing_tz = timezone(timedelta(hours=8))
         if not task.due_date:
             return f"📋 任务提醒\n\n{member.name}，你好！\n📌 任务：{task.title}\n📊 进度：{task.progress}%"
 
+        due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
         diff = task.due_date - now
         total_seconds = diff.total_seconds()
 
@@ -115,7 +117,7 @@ class ReminderService:
 
 你有一个任务即将到期：
 📌 任务：{task.title}
-📅 截止：{task.due_date.strftime('%Y-%m-%d %H:%M')}
+📅 截止：{due_date_beijing.strftime('%Y-%m-%d %H:%M')}
 📊 状态：{status}
 📈 进度：{task.progress}%
 
