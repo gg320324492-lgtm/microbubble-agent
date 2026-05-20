@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-20 (更新：任务权限修复 + 提醒去重 + 管理员身份感知 + Agent回答准确性)
+> 最后更新: 2026-05-20 (更新：开发环境Docker配置 + GitHub Actions CI)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -652,9 +652,23 @@
 
 ## 待完成
 
+### 开发环境 Docker 配置 (2026-05-20)
+
+- [x] **docker-compose.dev.yml** -- 开发专用配置：app 热重载（`--reload`）、禁用 nginx/whisper、挂载 `./app` 目录
+- 使用方式：`docker compose -f docker-compose.dev.yml up -d`
+
+### GitHub Actions CI 流水线 (2026-05-20)
+
+- [x] **ci.yml** -- push/PR 到 main 时自动触发：flake8 语法检查 + Docker 构建测试
+- 不跑 pytest（需真实 PostgreSQL+pgvector），不做自动部署（已有 webhook 机制）
+
+**新建文件：**
+- `docker-compose.dev.yml` — 开发环境 Docker 配置
+- `.github/workflows/ci.yml` — GitHub Actions CI 流水线
+
+---
+
 ### 后续优化（低优先级）
 
-- [ ] 创建 `docker-compose.dev.yml`（README 中已引用但不存在）
-- [ ] 创建 CI/CD 流水线（GitHub Actions）
 - [ ] 编写部署文档（`docs/deploy.md`）
 - [ ] 生产环境加固：日志轮转、监控、备份脚本
