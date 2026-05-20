@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-20 (更新：成员身份系统全面升级)
+> 最后更新: 2026-05-20 (更新：任务权限修复 + 提醒去重 + 管理员身份感知 + Agent回答准确性)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -612,6 +612,41 @@
 - `app/services/reminder_service.py` — 发送失败时记录 API 响应详情
 
 **待解决：** 部分成员（如邓国祥）未在企业微信通讯录中，需在管理后台添加后才能接收提醒推送。
+
+### 任务权限修复 (2026-05-20)
+
+| 问题 | 修复内容 |
+|------|---------|
+| assignee 无法编辑自己的任务 | 权限检查从 `created_by` 扩展为 `created_by OR assignee_id` |
+| Agent 工具权限 | `_execute_tool` update_task 权限检查加入 `assignee_id` |
+| API 权限 | PUT/DELETE 端点同步修复 |
+
+**修改文件：**
+- `app/agent/core.py` — update_task 权限检查
+- `app/api/v1/task.py` — PUT/DELETE 端点权限检查
+
+### 主动提醒去重 (2026-05-20)
+
+| 问题 | 修复内容 |
+|------|---------|
+| 同一任务每15分钟重复提醒 | Redis SET 记录已提醒任务，24小时过期后才会再次提醒 |
+| check_due_soon/check_overdue/check_unconfirmed | 三个检查方法均加入去重逻辑 |
+| Celery Redis 连接 | 创建独立 Redis 客户端，与 reminder_service 同模式（NullPool） |
+
+**修改文件：**
+- `app/wechat/scheduler.py` — 新增 `_already_notified`/`_mark_notified` 方法，三个检查方法加去重，Celery task 传入 Redis 客户端
+
+### 管理员身份感知 + Agent 回答准确性 (2026-05-20)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 系统提示词注入用户身份 | 当前用户姓名+角色注入系统提示词，管理员权限可见 | ✅ 完成 |
+| query_tasks 返回真实人名 | 工具返回增加 `assignee_name` 字段，批量查询成员姓名映射 | ✅ 完成 |
+| 禁止编造人名 | 系统提示词约束：必须使用工具返回的真实姓名 | ✅ 完成 |
+
+**修改文件：**
+- `app/agent/core.py` — `_build_system_prompt` 注入用户身份，`query_tasks` 返回 `assignee_name`
+- `app/agent/prompts.py` — 回复格式增加人名约束
 
 ---
 
