@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-20 (更新：任务双向通知模式)
+> 最后更新: 2026-05-20 (更新：部署文档 + 生产环境加固)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -719,7 +719,24 @@
 
 ---
 
-### 后续优化（低优先级）
+### 部署文档 + 生产环境加固 (2026-05-20)
 
-- [ ] 编写部署文档（`docs/deploy.md`）
-- [ ] 生产环境加固：日志轮转、监控、备份脚本
+| 内容 | 说明 | 状态 |
+|------|------|------|
+| 部署文档 | `docs/deploy.md` 覆盖架构、云服务器/本地部署、企业微信配置、运维操作 | ✅ 完成 |
+| 数据库备份 | `scripts/backup_db.sh` pg_dump + gzip，保留 7 天，支持 cron 定时 | ✅ 完成 |
+| Docker 健康检查 | app/minio 添加 healthcheck，db/redis 已有 | ✅ 完成 |
+| Docker 资源限制 | app(512m)、db(512m)、redis(256m)、minio(256m) | ✅ 完成 |
+| Nginx 限流 | API 10r/s + 登录 5r/m，429 状态码 | ✅ 完成 |
+| Nginx 超时优化 | API 超时从 5s/30s 提升到 10s/120s，适配 AI 长请求 | ✅ 完成 |
+| JSON 日志 | 生产环境文件日志改为 JSON 格式，便于接入 ELK/Loki | ✅ 完成 |
+
+**新建文件：**
+- `docs/deploy.md` — 完整部署文档
+- `scripts/backup_db.sh` — 数据库备份脚本
+
+**修改文件：**
+- `docker-compose.yml` — 健康检查 + 资源限制
+- `nginx/nginx.conf` — 限流 zone 定义
+- `nginx/conf.d/tunnel.conf` — API/登录限流 + 超时优化
+- `app/core/logging.py` — JSON 日志格式
