@@ -31,6 +31,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    mem_limit: 512m
     restart: unless-stopped
 
   # PostgreSQL数据库
@@ -47,6 +54,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    mem_limit: 512m
     restart: unless-stopped
 
   # Redis缓存
@@ -59,6 +67,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    mem_limit: 256m
     restart: unless-stopped
 
   # MinIO对象存储
@@ -70,6 +79,12 @@ services:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio2026secure}
     command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 256m
     restart: unless-stopped
 
   # Whisper语音识别服务 (GPU模式)

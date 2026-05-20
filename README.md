@@ -219,6 +219,7 @@ npm run dev
 - Agent 回答准确性优化（query_tasks 返回真实负责人姓名，禁止编造人名）
 - 开发环境 Docker 配置（docker-compose.dev.yml，热重载，轻量化）
 - GitHub Actions CI 流水线（语法检查 + Docker 构建测试）
+- 部署文档已完善（docs/deploy.md），生产环境已加固（Docker 健康检查+资源限制、Nginx 限流、JSON 日志、数据库备份脚本）
 - 文件问答、会议助手等功能待实现（见"待实现功能"）
 
 ### 待解决问题
