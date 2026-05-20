@@ -97,6 +97,29 @@ class WeChatBot:
             )
             return response.json()
 
+    async def list_department_members(self, department_id: int = 1) -> list:
+        """获取部门成员列表，返回 [{userid, name, ...}]"""
+        token = await self._get_access_token()
+        all_members = []
+        fetch_child = 1  # 递归获取子部门
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self.api_base}/cgi-bin/user/list",
+                params={
+                    "access_token": token,
+                    "department_id": department_id,
+                    "fetch_child": fetch_child
+                }
+            )
+            data = response.json()
+            if data.get("errcode") == 0:
+                all_members = data.get("userlist", [])
+            else:
+                logger.warning(f"获取部门成员列表失败: {data}")
+
+        return all_members
+
     async def send_task_reminder(
         self,
         user_id: str,

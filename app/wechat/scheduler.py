@@ -9,7 +9,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.models.base import utcnow
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,7 +88,9 @@ class ProactiveScheduler:
                 else:
                     time_text = f"还有{int(total_seconds // 86400)}天到期"
 
-                content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {task.due_date.strftime('%Y-%m-%d %H:%M')}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
+                beijing_tz = timezone(timedelta(hours=8))
+                due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
+                content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {due_date_beijing.strftime('%Y-%m-%d %H:%M')}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
                 await wechat_bot.smart_send(member, content)
                 await self._mark_notified(redis_client, "due_soon", task.id)
                 count += 1
@@ -98,7 +100,7 @@ class ProactiveScheduler:
         return count
 
     async def check_overdue(self, db: AsyncSession, redis_client=None) -> int:
-        """检查已逾期的任务，提醒负责人 + 老师"""
+        """检查已逾期的任务，提醒负责人 + 通知创建人"""
         result = await db.execute(
             select(Task).where(
                 and_(
@@ -118,8 +120,6 @@ class ProactiveScheduler:
                 continue
 
             member = await db.get(Member, task.assignee_id)
-            if not member or (not member.wechat_id and not member.external_userid):
-                continue
 
             try:
                 total_seconds = (utcnow() - task.due_date).total_seconds()
@@ -128,20 +128,24 @@ class ProactiveScheduler:
                     overdue_text = f"已逾期{hours_overdue}小时"
                 else:
                     overdue_text = f"已逾期{hours_overdue // 24}天"
-                content = f"⚠️ 任务逾期\n\n📌 {task.title}\n📅 {overdue_text}\n📊 进度: {task.progress}%\n\n请尽快处理！"
-                await wechat_bot.smart_send(member, content)
 
-                # 同时通知老师
+                # 给负责人发通知
+                if member and (member.wechat_id or member.external_userid):
+                    content = f"⚠️ 任务逾期\n\n📌 {task.title}\n📅 {overdue_text}\n📊 进度: {task.progress}%\n\n请尽快处理！"
+                    await wechat_bot.smart_send(member, content)
+
+                # 通知创建人（无论负责人是否收到都通知）
                 if task.created_by:
                     creator = await db.get(Member, task.created_by)
                     if creator and (creator.wechat_id or creator.external_userid):
-                        teacher_msg = f"⚠️ 任务逾期通知\n\n📌 {task.title}\n👤 负责人: {member.name}\n📅 {overdue_text}\n📊 进度: {task.progress}%"
+                        assignee_name = member.name if member else "未知"
+                        teacher_msg = f"⚠️ 任务逾期通知\n\n📌 {task.title}\n👤 负责人: {assignee_name}\n📅 {overdue_text}\n📊 进度: {task.progress}%"
                         await wechat_bot.smart_send(creator, teacher_msg)
 
                 await self._mark_notified(redis_client, "overdue", task.id)
                 count += 1
             except Exception as e:
-                logger.warning(f"逾期提醒失败 [{member.name}]: {e}")
+                logger.warning(f"逾期提醒失败 [{task.title}]: {e}")
 
         return count
 

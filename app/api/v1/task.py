@@ -52,7 +52,142 @@ async def create_task(
         created_by=current_user.id,
         reminders=reminders_data,
     )
+
+    # 如果分配给了其他成员，立即通知
+    if task.assignee_id and task.assignee_id != current_user.id:
+        try:
+            from app.wechat.notifier import notifier
+            from datetime import timezone, timedelta
+            import logging
+            _notify_logger = logging.getLogger("microbubble.notify")
+            assignee = await db.get(Member, task.assignee_id)
+            if assignee and (assignee.wechat_id or assignee.external_userid):
+                due_date_str = ""
+                if task.due_date:
+                    beijing_tz = timezone(timedelta(hours=8))
+                    due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
+                    due_date_str = due_date_beijing.strftime("%Y-%m-%d %H:%M")
+                result = await notifier.notify_task_assigned(
+                    member=assignee,
+                    task_title=task.title,
+                    due_date=due_date_str,
+                    priority=task.priority,
+                    description=task.description or "",
+                    assigner=current_user.name
+                )
+                errcode = result.get("errcode", -1) if isinstance(result, dict) else -1
+                if errcode == 0:
+                    _notify_logger.info(f"任务分配通知成功: {assignee.name} <- {task.title}")
+                else:
+                    _notify_logger.warning(f"任务分配通知失败: errcode={errcode}, result={result}, assignee={assignee.name}")
+            else:
+                _notify_logger.warning(f"跳过通知: 成员 {assignee.name if assignee else task.assignee_id} 无微信标识")
+        except Exception as notify_err:
+            logging.getLogger("microbubble.notify").warning(f"任务分配通知异常: {notify_err}")
+
     return task
+
+
+@router.get("/debug/wechat-notify/{member_name}")
+async def debug_wechat_notify(
+    member_name: str,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """调试接口：测试给指定成员发送企业微信通知"""
+    import logging
+    logger = logging.getLogger("microbubble.debug")
+    results = {"steps": []}
+
+    # Step 1: 查找成员
+    result = await db.execute(select(Member).where(Member.name == member_name))
+    member = result.scalar_one_or_none()
+    if not member:
+        results["steps"].append({"step": "查找成员", "status": "FAIL", "detail": f"未找到成员: {member_name}"})
+        return results
+    results["steps"].append({"step": "查找成员", "status": "OK", "detail": f"id={member.id}, name={member.name}"})
+
+    # Step 2: 检查微信标识
+    results["steps"].append({
+        "step": "检查微信标识",
+        "status": "OK" if (member.wechat_id or member.external_userid) else "FAIL",
+        "detail": f"wechat_id={member.wechat_id}, external_userid={member.external_userid}"
+    })
+
+    if not member.wechat_id and not member.external_userid:
+        return results
+
+    # Step 3: 测试发送
+    try:
+        from app.wechat.bot import wechat_bot
+        test_msg = f"🔧 测试通知\n\n这是一条调试测试消息，发送给 {member.name}。\n如果你能看到这条消息，说明企业微信通知正常工作。"
+        send_result = await wechat_bot.smart_send(member, test_msg)
+        errcode = send_result.get("errcode", -1) if isinstance(send_result, dict) else -1
+        results["steps"].append({
+            "step": "发送测试消息",
+            "status": "OK" if errcode == 0 else "FAIL",
+            "detail": f"errcode={errcode}, result={send_result}"
+        })
+    except Exception as e:
+        results["steps"].append({"step": "发送测试消息", "status": "ERROR", "detail": str(e)})
+
+    return results
+
+
+@router.post("/debug/sync-wechat-ids")
+async def sync_wechat_ids(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """从企业微信API同步成员userid（仅管理员）"""
+    if current_user.role not in ("admin", "leader"):
+        raise HTTPException(status_code=403, detail="仅管理员可操作")
+
+    from app.wechat.bot import wechat_bot
+    import logging
+    logger = logging.getLogger("microbubble.sync")
+
+    # 从企业微信获取所有成员
+    wechat_members = await wechat_bot.list_department_members(department_id=1)
+    if not wechat_members:
+        return {"status": "error", "message": "获取企业微信成员列表失败，请检查 WECHAT_CORP_ID 和 WECHAT_SECRET 配置"}
+
+    # 构建 name -> userid 映射
+    wechat_map = {}
+    for wm in wechat_members:
+        name = wm.get("name", "")
+        userid = wm.get("userid", "")
+        if name and userid:
+            wechat_map[name] = userid
+
+    # 匹配并更新
+    result = await db.execute(select(Member).where(Member.is_active == True))
+    members = result.scalars().all()
+
+    updated = []
+    skipped = []
+    not_found = []
+
+    for member in members:
+        if member.wechat_id:
+            skipped.append(member.name)
+            continue
+        if member.name in wechat_map:
+            member.wechat_id = wechat_map[member.name]
+            updated.append(f"{member.name} -> {wechat_map[member.name]}")
+        else:
+            not_found.append(member.name)
+
+    await db.commit()
+
+    logger.info(f"同步完成: 更新{len(updated)}人, 跳过{len(skipped)}人, 未匹配{len(not_found)}人")
+    return {
+        "status": "success",
+        "updated": updated,
+        "skipped": skipped,
+        "not_found": not_found,
+        "wechat_total": len(wechat_members)
+    }
 
 
 @router.get("/tasks", response_model=TaskList)

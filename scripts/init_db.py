@@ -62,6 +62,19 @@ async def seed_data():
                 bio="副教授，课题组负责人，长期从事微纳米气泡技术研究与应用开发"
             ),
 
+            # 老师
+            Member(
+                username="yangxue",
+                password_hash=default_password_hash,
+                name="杨雪",
+                grade="老师",
+                research_area="",
+                skills=[],
+                role="member",
+                personal_wechat_id="YY",
+                bio=""
+            ),
+
             # 博士生
             Member(
                 username="zhaohangjia",

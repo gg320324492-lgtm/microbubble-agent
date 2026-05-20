@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-20 (更新：开发环境Docker配置 + GitHub Actions CI)
+> 最后更新: 2026-05-20 (更新：企业微信通知可靠化)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -387,6 +387,10 @@
 - [x] 异常处理改用结构化日志（`logging.getLogger("microbubble.wechat")`）
 - [x] @提及检测改为匹配企业微信实际格式（` @` 分隔符 + AgentID 匹配）
 - [x] Nginx 已满足 5 秒超时（异步 `asyncio.create_task` + 立即返回 success）
+- [x] 通知消息格式修复（markdown → text，插件端不支持 markdown 渲染）
+- [x] `wechat_id` 从昵称同步为真实 UserId（`list_department_members()` API）
+- [x] 通知代码独立 try/except + 结构化日志 + errcode 检查
+- [ ] 9 位成员未在企业微信通讯录中，需在管理后台添加后才能接收提醒推送
 
 ### 微信互通部署（普通微信用户支持） - ✅ 已完成
 
@@ -647,6 +651,37 @@
 **修改文件：**
 - `app/agent/core.py` — `_build_system_prompt` 注入用户身份，`query_tasks` 返回 `assignee_name`
 - `app/agent/prompts.py` — 回复格式增加人名约束
+
+### 企业微信通知可靠化 (2026-05-20)
+
+修复管理员通过 Agent/API 给成员分配任务后，成员收不到企业微信通知的问题。
+
+| 问题 | 修复内容 |
+|------|---------|
+| `wechat_id` 存的是昵称而非 UserId | 数据库 17/28 成员的 `wechat_id` 是显示名（如"流苏"），企业微信 API 要求 UserId（如"LiuSu"）。通过 `list_department_members()` API 同步真实 UserId |
+| 通知结果被静默丢弃 | `notify_task_assigned()` 返回值从未检查，WeChat API errcode 被忽略。添加独立 try/except + errcode 检查 + 结构化日志 |
+| 异常被 `_execute_tool` 大 try/except 吞掉 | 通知代码用独立 try/except 包裹，不影响任务创建返回值 |
+| markdown 格式不兼容 | `notifier.py` 所有方法从 `msg_type="markdown"` 改为 `msg_type="text"`，企业微信插件端不支持标准 `**bold**` 语法 |
+| 时区显示错误 | 提醒消息和任务通知的时间从 UTC 改为北京时间（UTC+8） |
+| `check_overdue` 跳过无 wechat_id 的成员 | 分离负责人和创建人通知逻辑，负责人无标识时仍通知创建人 |
+| `send_reminder` 静默标记已发送 | 重构为仅在实际发送成功后才标记 `status="sent"`，失败返回 False 供重试 |
+
+**新建文件/接口：**
+- `GET /api/v1/debug/wechat-notify/{member_name}` — 调试接口，测试给指定成员发送企业微信通知
+- `POST /api/v1/debug/sync-wechat-ids` — 管理员接口，从企业微信 API 同步成员 UserId
+
+**修改文件：**
+- `app/wechat/notifier.py` — 6 个通知方法全部从 markdown 改为 text 格式
+- `app/wechat/bot.py` — 新增 `list_department_members()` 方法
+- `app/wechat/handler.py` — 插件用户 `wechat_id` 自动修复（正则校验 + force 绑定）；会议通知改用 text 格式
+- `app/wechat/scheduler.py` — `check_overdue` 修复负责人/创建人独立通知；时区修正
+- `app/agent/core.py` — 通知代码独立 try/except + 日志 + errcode 检查
+- `app/api/v1/task.py` — 通知代码独立 try/except + 日志 + 调试接口
+- `app/services/reminder_service.py` — 时区修正 + 发送失败不标记已发送
+
+**验证结果：** 杨慈（wechat_id=LiuSu）成功收到任务分配通知和到期提醒。
+
+**待解决：** 9 位成员（邓国祥、董昊宇、宋洋、王书馨、李锐远、孟祥琪、吴怡霏、周之超、蒋芦笛）未在企业微信通讯录中或名称不匹配，需在管理后台添加后才能接收提醒推送。
 
 ---
 
