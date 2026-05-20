@@ -62,22 +62,41 @@ class MicroBubbleAgent:
         await session_store.save_messages(session_id, messages)
 
     async def _build_system_prompt(self, user_id: Optional[int], query: str, db=None) -> str:
-        """构建系统提示词，注入相关长期记忆"""
+        """构建系统提示词，注入用户身份和相关长期记忆"""
+        base = get_system_prompt()
+
         if not user_id or not db:
-            return get_system_prompt()
+            return base
+
+        parts = [base]
+
+        # 注入当前用户身份
+        try:
+            from app.models.member import Member
+            member = await db.get(Member, user_id)
+            if member:
+                role_map = {"admin": "管理员", "leader": "组长", "member": "普通成员"}
+                role_label = role_map.get(member.role, member.role)
+                parts.append(f"\n当前用户信息:\n- 姓名: {member.name}\n- 角色: {role_label}")
+                if member.role in ("admin", "leader"):
+                    parts.append("- 该用户拥有管理员权限，可以分配任务给任何人、管理所有成员和项目")
+        except Exception as e:
+            logger.warning(f"注入用户身份失败: {e}")
+
+        # 注入相关长期记忆
         try:
             from app.services.memory_service import MemoryService
             mem_svc = MemoryService(db)
             memories = await mem_svc.search_memories(user_id, query, top_k=5)
-            if not memories:
-                return get_system_prompt()
-            memory_text = "\n".join(
-                f"- [{m['memory_type']}] {m['content']}" for m in memories
-            )
-            return f"{get_system_prompt()}\n\n关于用户的长期记忆:\n{memory_text}"
+            if memories:
+                memory_text = "\n".join(
+                    f"- [{m['memory_type']}] {m['content']}" for m in memories
+                )
+                parts.append(f"\n关于用户的长期记忆:\n{memory_text}")
         except Exception as e:
             logger.warning(f"构建记忆提示词失败: {e}")
-            return get_system_prompt()
+
+        return "\n".join(parts)
 
     async def _extract_and_save_memories(self, user_id: int, messages: List[Dict], session_id: str):
         """后台任务：从对话中提取记忆"""
