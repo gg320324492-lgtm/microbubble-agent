@@ -379,5 +379,41 @@ TOOLS = [
             },
             "required": ["title", "content"]
         }
+    },
+
+    # 自定义指令工具
+    {
+        "name": "set_custom_instructions",
+        "description": "设置用户的自定义指令。当用户说'设置你的风格'、'以后回复要...'、'记住我的偏好'等个性化要求时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "instructions": {
+                    "type": "string",
+                    "description": "用户自定义指令内容，如'回复要简洁'、'用英文回复'、'多用表格'等"
+                }
+            },
+            "required": ["instructions"]
+        }
+    },
+
+    # 反馈工具
+    {
+        "name": "submit_feedback",
+        "description": "记录用户对回复的反馈。当用户说'没用'、'不对'、'很好'、'太棒了'等评价性内容时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rating": {
+                    "type": "integer",
+                    "description": "评分：1=很差, 2=较差, 3=一般, 4=较好, 5=很好"
+                },
+                "comment": {
+                    "type": "string",
+                    "description": "用户的反馈内容（可选）"
+                }
+            },
+            "required": ["rating"]
+        }
     }
 ]

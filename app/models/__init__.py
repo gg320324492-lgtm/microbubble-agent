@@ -5,6 +5,8 @@ from app.models.project import Project, Milestone
 from app.models.knowledge import Knowledge
 from app.models.reminder import Reminder
 from app.models.memory import Memory
+from app.models.feedback import Feedback
+from app.models.prompt_template import PromptTemplate
 
 __all__ = [
     "Member",
@@ -16,5 +18,7 @@ __all__ = [
     "Milestone",
     "Knowledge",
     "Reminder",
-    "Memory"
+    "Memory",
+    "Feedback",
+    "PromptTemplate",
 ]

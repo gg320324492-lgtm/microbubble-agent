@@ -64,7 +64,17 @@ class MicroBubbleAgent:
 
     async def _build_system_prompt(self, user_id: Optional[int], query: str, db=None) -> str:
         """构建系统提示词，注入用户身份和相关长期记忆"""
-        base = get_system_prompt()
+        # 尝试从数据库加载自定义模板
+        base = None
+        if db:
+            try:
+                from app.services.prompt_service import PromptTemplateService
+                svc = PromptTemplateService(db)
+                base = await svc.get_active_template("default")
+            except Exception:
+                pass
+        if not base:
+            base = get_system_prompt()
 
         if not user_id or not db:
             return base
@@ -81,6 +91,9 @@ class MicroBubbleAgent:
                 parts.append(f"\n当前用户信息:\n- 姓名: {member.name}\n- 角色: {role_label}")
                 if member.role in ("admin", "leader"):
                     parts.append("- 该用户拥有管理员权限，可以分配任务给任何人、管理所有成员和项目")
+                # 注入用户自定义指令
+                if member.custom_instructions:
+                    parts.append(f"\n用户自定义指令:\n{member.custom_instructions}")
         except Exception as e:
             logger.warning(f"注入用户身份失败: {e}")
 
@@ -249,8 +262,8 @@ class MicroBubbleAgent:
             "content": _serialize_content(result["content_blocks"])
         })
 
-        if len(messages) > 20:
-            messages = messages[-20:]
+        if len(messages) > 30:
+            messages = messages[-30:]
 
         await self._save_session(session_id, messages)
 
@@ -785,6 +798,31 @@ class MicroBubbleAgent:
                 )
                 return {"status": "success", "knowledge_id": knowledge.id, "title": knowledge.title}
 
+            elif name == "set_custom_instructions":
+                if not user_id:
+                    return {"status": "error", "message": "需要登录才能设置自定义指令"}
+                from app.models.member import Member
+                member = await db.get(Member, user_id)
+                if not member:
+                    return {"status": "error", "message": "用户不存在"}
+                instructions = input_data["instructions"][:2000]
+                member.custom_instructions = instructions
+                await db.commit()
+                return {"status": "success", "message": f"已保存你的自定义指令：{instructions[:100]}..."}
+
+            elif name == "submit_feedback":
+                from app.models.feedback import Feedback
+                fb = Feedback(
+                    user_id=user_id or 0,
+                    session_id=input_data.get("session_id"),
+                    rating=input_data["rating"],
+                    comment=input_data.get("comment"),
+                    agent_reply=input_data.get("agent_reply", "")[:500],
+                )
+                db.add(fb)
+                await db.commit()
+                return {"status": "success", "message": "感谢你的反馈！"}
+
             else:
                 return {"status": "error", "message": f"未知工具: {name}"}
 
@@ -905,8 +943,8 @@ class MicroBubbleAgent:
                 "content": _serialize_content(response.content)
             })
 
-        if len(messages) > 20:
-            messages = messages[-20:]
+        if len(messages) > 30:
+            messages = messages[-30:]
 
         await self._save_session(session_id, messages)
         yield {"type": "done", "content": full_text}

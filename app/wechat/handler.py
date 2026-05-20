@@ -445,11 +445,7 @@ class MessageHandler:
             enriched_msg = f"[群聊, 用户: {member.name}, 角色: {member.role}] {content}"
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
             reply = result.get("content", "抱歉，处理失败了。")
-            if len(reply) > 2000:
-                reply = reply[:1950] + "\n\n...(内容过长已截断)"
-
-            # 群聊回复
-            await wechat_bot.smart_send_to_group(chat_id, reply, msg_type="text")
+            await self._reply_long_text_to_group(chat_id, reply)
         except Exception as e:
             logger.error(f"群聊 Agent 调用失败: {e}", exc_info=True)
             await wechat_bot.smart_send_to_group(chat_id, "处理消息时出错了，请稍后再试。")
@@ -474,6 +470,23 @@ class MessageHandler:
         recognition = msg.get("Recognition", "")
         if recognition:
             await self._handle_group_chat(recognition, member, msg.get("FromUserName", ""), chat_id, db, is_external)
+            return
+
+        # ASR 回退：下载语音并用 Whisper 识别
+        media_id = msg.get("MediaId", "")
+        if not media_id:
+            return
+        try:
+            from app.voice.asr import asr_service
+            voice_data = await vision_service.download_voice(media_id)
+            if not voice_data:
+                return
+            result = await asr_service.transcribe_wechat_voice(voice_data)
+            text = result.get("text", "")
+            if text:
+                await self._handle_group_chat(text, member, msg.get("FromUserName", ""), chat_id, db, is_external)
+        except Exception as e:
+            logger.error(f"群聊语音ASR失败: {e}", exc_info=True)
 
     # ==================== 图片/语音处理 ====================
 
@@ -532,7 +545,7 @@ class MessageHandler:
                 await self._reply_text(user_id, "语音下载失败。", is_external, msg=msg)
                 return
 
-            result = await asr_service.transcribe(audio_data=voice_data)
+            result = await asr_service.transcribe_wechat_voice(audio_data=voice_data)
             text = result.get("text", "")
             if text:
                 msg_copy = dict(msg)
@@ -889,24 +902,14 @@ class MessageHandler:
             enriched_msg = f"[用户: {member.name}, 角色: {member.role}] {content}"
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
             reply = result.get("content", "抱歉，处理失败了。")
-            if len(reply) > 2000:
-                reply = reply[:1950] + "\n\n...(内容过长已截断)"
-            await self._reply_text(user_id, reply, is_external, msg=msg)
+            await self._reply_long_text(user_id, reply, is_external, msg=msg)
         except Exception as e:
             logger.error(f"Agent 调用失败: {e}", exc_info=True)
             await self._reply_text(user_id, "处理消息时出错了，请稍后再试。", is_external, msg=msg)
 
     async def _reply_text(self, user_id: str, content: str,
                            is_external: bool = False, msg: dict = None) -> None:
-        """私聊回复（自动区分内部/外部用户）
-
-        Args:
-            user_id: 用户ID（用于日志和标识）
-            content: 回复内容
-            is_external: 是否为外部用户
-            msg: 原始消息（用于获取 _reply_to）
-        """
-        # 微信插件用户：用应用ID回复（FromUserName），不用用户ID（ToUserName）
+        """私聊回复（自动区分内部/外部用户）"""
         target = (msg or {}).get("_reply_to", user_id)
         try:
             if is_external:
@@ -915,6 +918,66 @@ class MessageHandler:
                 await wechat_bot.send_message(target, content, msg_type="text")
         except Exception as e:
             logger.warning(f"回复消息失败: target={target}, {e}")
+
+    async def _reply_long_text(self, user_id: str, content: str,
+                                is_external: bool = False, msg: dict = None,
+                                max_len: int = 2000) -> None:
+        """长回复自动分段发送（微信单条消息上限约 2048 字符）
+
+        Args:
+            user_id: 用户ID
+            content: 回复内容
+            is_external: 是否为外部用户
+            msg: 原始消息
+            max_len: 每段最大字符数
+        """
+        if len(content) <= max_len:
+            await self._reply_text(user_id, content, is_external, msg=msg)
+            return
+
+        # 按段落切分，尽量在换行处断开
+        parts = []
+        remaining = content
+        while remaining:
+            if len(remaining) <= max_len:
+                parts.append(remaining)
+                break
+            # 在 max_len 范围内找最后一个换行符
+            cut = remaining.rfind('\n', 0, max_len)
+            if cut < max_len // 2:
+                # 换行位置太靠前，直接在 max_len 处截断
+                cut = max_len
+            parts.append(remaining[:cut])
+            remaining = remaining[cut:].lstrip('\n')
+
+        for i, part in enumerate(parts):
+            if i > 0:
+                await asyncio.sleep(0.5)
+            await self._reply_text(user_id, part, is_external, msg=msg)
+
+    async def _reply_long_text_to_group(self, chat_id: str, content: str,
+                                         max_len: int = 2000) -> None:
+        """群聊长回复自动分段发送"""
+        if len(content) <= max_len:
+            await wechat_bot.smart_send_to_group(chat_id, content, msg_type="text")
+            return
+
+        parts = []
+        remaining = content
+        while remaining:
+            if len(remaining) <= max_len:
+                parts.append(remaining)
+                break
+            cut = remaining.rfind('\n', 0, max_len)
+            if cut < max_len // 2:
+                cut = max_len
+            parts.append(remaining[:cut])
+            remaining = remaining[cut:].lstrip('\n')
+
+        for i, part in enumerate(parts):
+            if i > 0:
+                await asyncio.sleep(0.5)
+            await wechat_bot.smart_send_to_group(chat_id, part, msg_type="text")
 
     # ==================== 微信客服消息处理 ====================
 
@@ -947,10 +1010,25 @@ class MessageHandler:
 
         # 处理文本消息
         if msg_type == "text" and content:
-            # 调用 Agent 处理
             await self._call_agent_for_kf(user_id, content, member, db, open_kfid=open_kfid)
+        elif msg_type == "voice":
+            # 语音消息处理
+            media_id = msg.get("MediaId", "")
+            if media_id:
+                try:
+                    from app.voice.asr import asr_service
+                    voice_data = await vision_service.download_voice(media_id)
+                    if voice_data:
+                        result = await asr_service.transcribe_wechat_voice(voice_data)
+                        text = result.get("text", "")
+                        if text:
+                            await self._call_agent_for_kf(user_id, text, member, db, open_kfid=open_kfid)
+                        else:
+                            await self._reply_text(user_id, "语音识别失败，请改用文字。", is_external)
+                except Exception as e:
+                    logger.error(f"客服语音处理失败: {e}", exc_info=True)
+                    await self._reply_text(user_id, "语音处理出错了。", is_external)
         elif msg_type == "image":
-            # 图片消息处理
             media_id = msg.get("MediaId", "")
             if media_id:
                 await self._handle_image(msg, member, db, is_external)
@@ -970,16 +1048,31 @@ class MessageHandler:
             )
 
             reply = result.get("content", "抱歉，处理失败了。")
-            if len(reply) > 2000:
-                reply = reply[:1950] + "\n\n...(内容过长已截断)"
 
             from app.wechat.kf_service import kf_service
-            await kf_service.send_msg(
-                open_kfid=open_kfid,
-                external_userid=user_id,
-                msg_type="text",
-                content=reply
-            )
+            # 长回复分段发送
+            max_len = 2000
+            parts = []
+            remaining = reply
+            while remaining:
+                if len(remaining) <= max_len:
+                    parts.append(remaining)
+                    break
+                cut = remaining.rfind('\n', 0, max_len)
+                if cut < max_len // 2:
+                    cut = max_len
+                parts.append(remaining[:cut])
+                remaining = remaining[cut:].lstrip('\n')
+
+            for i, part in enumerate(parts):
+                if i > 0:
+                    await asyncio.sleep(0.5)
+                await kf_service.send_msg(
+                    open_kfid=open_kfid,
+                    external_userid=user_id,
+                    msg_type="text",
+                    content=part
+                )
         except Exception as e:
             logger.error(f"Agent 调用失败: {e}", exc_info=True)
             from app.wechat.kf_service import kf_service

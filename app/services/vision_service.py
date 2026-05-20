@@ -47,8 +47,20 @@ class VisionService:
             return None
 
     async def download_voice(self, media_id: str) -> Optional[bytes]:
-        """从企业微信下载语音"""
-        return await self.download_image(media_id)
+        """从企业微信下载语音（自动检测格式：SILK/AMR/WAV）"""
+        data = await self.download_image(media_id)
+        if data:
+            # 检测音频格式
+            if data[:4] == b'RIFF':
+                fmt = "WAV"
+            elif data[:4] == b'#!AM':
+                fmt = "AMR"
+            elif data[:4] == b'\x02#!':
+                fmt = "SILK"
+            else:
+                fmt = f"unknown({data[:4].hex()})"
+            logger.info(f"下载语音: media_id={media_id}, format={fmt}, size={len(data)} bytes")
+        return data
 
     def _detect_media_type(self, image_data: bytes) -> str:
         """根据图片魔数检测媒体类型"""

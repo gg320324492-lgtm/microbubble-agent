@@ -27,6 +27,7 @@ class Member(Base, TimestampMixin):
     bio = Column(Text)  # 个人简介
     is_active = Column(Boolean, default=True)
     role = Column(String(20), default="member")  # admin/leader/member
+    custom_instructions = Column(Text)  # 用户自定义指令
 
     # 关系
     assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assignee_id")
