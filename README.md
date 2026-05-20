@@ -74,6 +74,9 @@ status.bat  # 查看服务状态
 
 # 或手动启动
 docker compose up -d
+
+# 开发模式（热重载，改代码自动重启）
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 ### 3. 云服务器部署
