@@ -30,6 +30,36 @@ class WeChatNotifier:
 收到请回复"收到"，完成后请回复"已完成"。如有问题可直接说明。"""
         return await wechat_bot.smart_send(member, content, msg_type="text")
 
+    async def notify_task_assigned_to_creator(self, creator: "Member", task_title: str,
+                                               assignee_name: str, due_date: str,
+                                               priority: str) -> dict:
+        """通知创建人：任务已成功派发"""
+        priority_map = {"high": "🔴 高", "medium": "🟡 中", "low": "🟢 低"}
+        content = f"""📋 任务派发确认
+
+任务: {task_title}
+负责人: {assignee_name}
+截止: {due_date}
+优先级: {priority_map.get(priority, priority)}
+
+已通知该成员，请留意回复。"""
+        return await wechat_bot.smart_send(creator, content, msg_type="text")
+
+    async def notify_due_soon_to_creator(self, creator: "Member", task_title: str,
+                                          assignee_name: str, due_date: str,
+                                          time_left: str, progress: int) -> dict:
+        """通知创建人：某人负责的任务即将到期"""
+        content = f"""⏰ 任务即将到期
+
+任务: {task_title}
+负责人: {assignee_name}
+截止: {due_date}
+剩余: {time_left}
+进度: {progress}%
+
+请关注进展。"""
+        return await wechat_bot.smart_send(creator, content, msg_type="text")
+
     async def notify_task_completed(self, teacher: "Member", task_title: str,
                                      member_name: str, summary: str = "") -> dict:
         """通知老师：某人完成了任务"""
