@@ -50,7 +50,7 @@ class ProactiveScheduler:
         return results
 
     async def check_due_soon(self, db: AsyncSession, redis_client=None) -> int:
-        """检查即将到期的任务（明天截止），提醒负责人"""
+        """检查即将到期的任务（明天截止），提醒负责人 + 通知创建人"""
         tomorrow = utcnow() + timedelta(days=1)
         tomorrow_end = tomorrow.replace(hour=23, minute=59, second=59)
 
@@ -90,8 +90,28 @@ class ProactiveScheduler:
 
                 beijing_tz = timezone(timedelta(hours=8))
                 due_date_beijing = task.due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz)
-                content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {due_date_beijing.strftime('%Y-%m-%d %H:%M')}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
+                due_date_str = due_date_beijing.strftime('%Y-%m-%d %H:%M')
+
+                # 通知负责人
+                content = f"⏰ 任务提醒\n\n📌 {task.title}\n📅 截止: {due_date_str}\n⏳ {time_text}\n📊 进度: {task.progress}%\n\n请抓紧完成！"
                 await wechat_bot.smart_send(member, content)
+
+                # 通知创建人
+                if task.created_by and task.created_by != task.assignee_id:
+                    creator = await db.get(Member, task.created_by)
+                    if creator and (creator.wechat_id or creator.external_userid):
+                        try:
+                            await notifier.notify_due_soon_to_creator(
+                                creator=creator,
+                                task_title=task.title,
+                                assignee_name=member.name,
+                                due_date=due_date_str,
+                                time_left=time_text,
+                                progress=task.progress,
+                            )
+                        except Exception as e:
+                            logger.warning(f"创建人到期提醒失败 [{creator.name}]: {e}")
+
                 await self._mark_notified(redis_client, "due_soon", task.id)
                 count += 1
             except Exception as e:

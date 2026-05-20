@@ -409,7 +409,7 @@ class MicroBubbleAgent:
                     reminders=reminders_data,
                 )
 
-                # 如果分配给了其他成员，立即通知
+                # 如果分配给了其他成员，立即通知负责人 + 通知创建人确认
                 if assignee_id and user_id and assignee_id != user_id:
                     try:
                         from app.wechat.notifier import notifier
@@ -417,12 +417,15 @@ class MicroBubbleAgent:
                         _notify_logger = _logging.getLogger("microbubble.notify")
                         assignee_member = await member_svc.get_member(assignee_id)
                         creator_member = await member_svc.get_member(user_id)
+
+                        due_date_str = ""
+                        if due_date:
+                            beijing_tz_notify = timezone(timedelta(hours=8))
+                            due_date_beijing = due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz_notify)
+                            due_date_str = due_date_beijing.strftime("%Y-%m-%d %H:%M")
+
+                        # 通知负责人
                         if assignee_member and (assignee_member.wechat_id or assignee_member.external_userid):
-                            due_date_str = ""
-                            if due_date:
-                                beijing_tz_notify = timezone(timedelta(hours=8))
-                                due_date_beijing = due_date.replace(tzinfo=timezone.utc).astimezone(beijing_tz_notify)
-                                due_date_str = due_date_beijing.strftime("%Y-%m-%d %H:%M")
                             result = await notifier.notify_task_assigned(
                                 member=assignee_member,
                                 task_title=input_data["title"],
@@ -437,7 +440,23 @@ class MicroBubbleAgent:
                             else:
                                 _notify_logger.warning(f"任务分配通知失败: errcode={errcode}, result={result}, assignee={assignee_member.name}")
                         else:
-                            _notify_logger.warning(f"跳过通知: 成员 {assignee_member.name if assignee_member else assignee_id} 无微信标识")
+                            _notify_logger.warning(f"跳过负责人通知: {assignee_member.name if assignee_member else assignee_id} 无微信标识")
+
+                        # 通知创建人：任务已派发
+                        if creator_member and creator_member.id != assignee_id:
+                            if creator_member.wechat_id or creator_member.external_userid:
+                                result2 = await notifier.notify_task_assigned_to_creator(
+                                    creator=creator_member,
+                                    task_title=input_data["title"],
+                                    assignee_name=assignee_member.name if assignee_member else "未知",
+                                    due_date=due_date_str,
+                                    priority=input_data.get("priority", "medium"),
+                                )
+                                errcode2 = result2.get("errcode", -1) if isinstance(result2, dict) else -1
+                                if errcode2 == 0:
+                                    _notify_logger.info(f"派发确认通知成功: {creator_member.name} <- {input_data['title']}")
+                                else:
+                                    _notify_logger.warning(f"派发确认通知失败: errcode={errcode2}, result={result2}")
                     except Exception as notify_err:
                         import logging as _logging
                         _logging.getLogger("microbubble.notify").warning(f"任务分配通知异常: {notify_err}")
