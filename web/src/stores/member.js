@@ -24,9 +24,5 @@ export const useMemberStore = defineStore('member', () => {
     return m ? m.name : '未分配'
   }
 
-  function getMemberById(id) {
-    return members.value.find(m => m.id === id) || null
-  }
-
-  return { members, loading, fetchMembers, getMemberName, getMemberById }
+  return { members, loading, fetchMembers, getMemberName }
 })

@@ -64,9 +64,3 @@ class MeetingMinutes(BaseModel):
     next_meeting: Optional[str] = None
 
 
-class TranscriptEntry(BaseModel):
-    """转写条目"""
-    start: float
-    end: float
-    text: str
-    speaker: Optional[str] = None

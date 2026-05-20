@@ -319,17 +319,6 @@ const onTranscriptComplete = async (transcriptItems) => {
   fetchMeetings()
 }
 
-// 开始会议
-const startMeeting = async (meeting) => {
-  try {
-    await axios.put(`/api/v1/meetings/${meeting.id}`, { status: 'recording' })
-    ElMessage.success('会议已开始，正在录制中...')
-    fetchMeetings()
-  } catch (e) {
-    ElMessage.error('操作失败')
-  }
-}
-
 // 生成纪要
 const generateMinutes = async (meeting) => {
   try {

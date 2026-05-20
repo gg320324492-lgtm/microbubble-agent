@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
-    "@vueuse/core": "^10.7.0",
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
     "echarts": "^5.4.3",
@@ -21,7 +20,6 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",
-    "sass": "^1.69.5",
     "vite": "^8.0.13"
   }
 }

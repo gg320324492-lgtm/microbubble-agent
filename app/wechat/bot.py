@@ -1,10 +1,9 @@
 """企业微信机器人模块"""
 
 import httpx
-import json
 import logging
-from typing import Optional, TYPE_CHECKING
-from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
+from datetime import timedelta
 from app.models.base import utcnow
 
 from app.config import settings
@@ -119,94 +118,6 @@ class WeChatBot:
                 logger.warning(f"获取部门成员列表失败: {data}")
 
         return all_members
-
-    async def send_task_reminder(
-        self,
-        user_id: str,
-        task_title: str,
-        due_date: str,
-        status: str
-    ) -> dict:
-        """
-        发送任务提醒
-
-        Args:
-            user_id: 用户ID
-            task_title: 任务标题
-            due_date: 截止日期
-            status: 状态描述
-
-        Returns:
-            发送结果
-        """
-        content = f"""📋 **任务提醒**
-
-**任务**: {task_title}
-**截止**: {due_date}
-**状态**: {status}
-
-请及时处理！"""
-
-        return await self.send_message(user_id, content, msg_type="markdown")
-
-    async def send_meeting_notification(
-        self,
-        user_id: str,
-        meeting_title: str,
-        meeting_time: str,
-        location: Optional[str] = None
-    ) -> dict:
-        """
-        发送会议通知
-
-        Args:
-            user_id: 用户ID
-            meeting_title: 会议主题
-            meeting_time: 会议时间
-            location: 会议地点
-
-        Returns:
-            发送结果
-        """
-        content = f"""📅 **会议通知**
-
-**主题**: {meeting_title}
-**时间**: {meeting_time}
-"""
-        if location:
-            content += f"**地点**: {location}\n"
-
-        content += "\n请准时参加！"
-
-        return await self.send_message(user_id, content, msg_type="markdown")
-
-    async def send_meeting_minutes(
-        self,
-        user_id: str,
-        meeting_title: str,
-        summary: str
-    ) -> dict:
-        """
-        发送会议纪要
-
-        Args:
-            user_id: 用户ID
-            meeting_title: 会议主题
-            summary: 会议摘要
-
-        Returns:
-            发送结果
-        """
-        content = f"""📝 **会议纪要**
-
-**会议**: {meeting_title}
-
-**摘要**:
-{summary}
-
-详细内容请登录系统查看。"""
-
-        return await self.send_message(user_id, content, msg_type="markdown")
 
     async def send_to_group(
         self,
@@ -412,20 +323,6 @@ class WeChatBot:
             return await self.send_to_external_group(chat_id, content, msg_type)
         else:
             return await self.send_to_group(chat_id, content, msg_type)
-
-    async def reply_to_user(self, user_id: str, content: str, msg_type: str = "text") -> dict:
-        """
-        回复用户消息（别名，与 send_message 功能相同）
-
-        Args:
-            user_id: 用户ID
-            content: 消息内容
-            msg_type: 消息类型
-
-        Returns:
-            发送结果
-        """
-        return await self.send_message(user_id, content, msg_type)
 
 
 # 全局实例

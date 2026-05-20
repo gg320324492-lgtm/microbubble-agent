@@ -3,7 +3,6 @@
 import base64
 import hashlib
 import struct
-import socket
 import secrets
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend

@@ -5,7 +5,7 @@ from app.models.base import utcnow
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status, Query as QueryParam
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -178,61 +178,3 @@ async def get_current_admin_user(
     return current_user
 
 
-def require_role(*roles):
-    """
-    角色权限装饰器
-
-    Args:
-        roles: 允许的角色列表
-
-    Returns:
-        依赖函数
-    """
-    async def role_checker(
-        current_user: Member = Depends(get_current_user)
-    ) -> Member:
-        if current_user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"权限不足，需要以下角色之一: {', '.join(roles)}"
-            )
-        return current_user
-    return role_checker
-
-
-async def get_current_user_ws(
-    token: str = QueryParam(...),
-    db: AsyncSession = Depends(get_db)
-) -> Member:
-    """WebSocket认证 - 从query参数获取token"""
-    payload = decode_token(token)
-
-    if payload.get("type") != "access":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的令牌类型"
-        )
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的令牌"
-        )
-
-    result = await db.execute(select(Member).where(Member.id == int(user_id)))
-    user = result.scalar_one_or_none()
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户不存在"
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="用户已被禁用"
-        )
-
-    return user

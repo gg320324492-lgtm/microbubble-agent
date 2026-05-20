@@ -1,11 +1,9 @@
 """Whisper语音识别API服务"""
 
-import io
 import tempfile
 import subprocess
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
 from faster_whisper import WhisperModel
 import os
 

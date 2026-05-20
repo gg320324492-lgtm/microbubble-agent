@@ -3,7 +3,6 @@
 import asyncio
 import io
 import logging
-from typing import Dict
 
 logger = logging.getLogger("microbubble.file_parser")
 
