@@ -238,13 +238,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatCompactDate, formatTime } from '@/utils/format'
 import { getStatusType, getPriorityType } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
+import { useUserStore } from '@/stores/user'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -267,6 +268,7 @@ use([
 ])
 
 const memberStore = useMemberStore()
+const userStore = useUserStore()
 const members = computed(() => memberStore.members)
 
 const dashboardData = ref({})
@@ -275,8 +277,12 @@ const recentMeetings = ref([])
 const showCreateTask = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 
-window.addEventListener('resize', () => {
+const handleResize = () => {
   isMobile.value = window.innerWidth <= 768
+}
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
 })
 
 const newTask = ref({
@@ -288,10 +294,7 @@ const newTask = ref({
 })
 
 // 获取当前用户名
-const username = computed(() => {
-  const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
-  return userInfo.name || '用户'
-})
+const username = computed(() => userStore.username || '用户')
 
 // 任务状态图表配置
 const taskStatusOption = computed(() => {
@@ -477,6 +480,7 @@ onMounted(() => {
   fetchTodoTasks()
   fetchRecentMeetings()
   fetchMembers()
+  window.addEventListener('resize', handleResize)
 })
 </script>
 

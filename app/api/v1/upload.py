@@ -4,6 +4,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
+from app.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.member import Member
@@ -20,8 +21,8 @@ async def upload_file(
     current_user: Member = Depends(get_current_user)
 ):
     """通用文件上传"""
-    if file.size and file.size > 50 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="文件大小不能超过 50MB")
+    if file.size and file.size > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail=f"文件大小不能超过 {settings.MAX_UPLOAD_SIZE_MB}MB")
 
     file_data = await file.read()
     if len(file_data) == 0:

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, List
 
+from app.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.member import Member
@@ -159,8 +160,8 @@ async def upload_knowledge_file(
 
     # 读取文件
     file_data = await file.read()
-    if len(file_data) > 50 * 1024 * 1024:
-        raise HTTPException(400, "文件过大（最大 50MB）")
+    if len(file_data) > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+        raise HTTPException(400, f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
 
     # 提取文本
     from app.services.file_parser_service import file_parser_service

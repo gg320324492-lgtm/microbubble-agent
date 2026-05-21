@@ -137,7 +137,8 @@ const startTranscript = async () => {
     })
 
     // 建立WebSocket连接
-    const wsUrl = `ws://${window.location.host}/ws/meeting/${props.meetingId}/transcript`
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/meeting/${props.meetingId}/transcript`
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {

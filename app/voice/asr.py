@@ -10,7 +10,7 @@ from app.config import settings
 from app.voice.postprocess import postprocess_result
 
 
-WHISPER_SERVICE_URL = "http://whisper:8002"
+WHISPER_SERVICE_URL = settings.WHISPER_SERVICE_URL
 
 # 领域提示词 - 帮助 Whisper 识别专业术语
 INITIAL_PROMPT = "微纳米气泡，zeta电位，表面活性剂，空化效应，气液界面，传质效率，溶解氧，粒径分布，含气量，界面张力"

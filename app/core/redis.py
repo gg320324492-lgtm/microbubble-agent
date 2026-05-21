@@ -23,9 +23,9 @@ async def close_redis():
 class RedisSessionStore:
     """基于 Redis 的会话存储，替代内存 dict"""
 
-    def __init__(self, prefix: str = "session", ttl: int = 172800):
+    def __init__(self, prefix: str = "session", ttl: int = None):
         self.prefix = prefix
-        self.ttl = ttl
+        self.ttl = ttl if ttl is not None else settings.SESSION_TTL
 
     def _key(self, session_id: str) -> str:
         return f"{self.prefix}:{session_id}"
