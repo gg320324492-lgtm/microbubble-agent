@@ -784,58 +784,58 @@
 
 #### 第一批：无效代码清理（零风险）
 
-**后端未使用的导入（14 处）**
+**后端未使用的导入（11 处）✅**
 
-- [ ] `app/config.py:1` — 移除 `import warnings`
-- [ ] `app/main.py:5` — 移除 `from app.core.logging import logger`（从未使用，用的 print）
-- [ ] `app/api/v1/voice.py:19` — 移除 `from app.models.meeting import Meeting`（动态导入已覆盖）
-- [ ] `app/services/file_parser_service.py:6` — 移除 `Dict` from typing import
-- [ ] `app/wechat/analyzer.py:15` — 移除 `Optional` from typing import
-- [ ] `app/wechat/crypto.py:6` — 移除 `import socket`
-- [ ] `app/voice/recorder.py:4` — 移除 `import numpy as np`
-- [ ] `app/whisper_server.py:3` — 移除 `import io`
-- [ ] `app/whisper_server.py:8` — 移除 `from fastapi.responses import JSONResponse`
-- [ ] `app/schemas/auth.py:5` — 移除 `from datetime import datetime`
-- [ ] `app/models/task.py:3` — 移除 `from datetime import datetime`
+- [x] `app/config.py:1` — 移除 `import warnings`
+- [x] `app/main.py:5` — 移除 `from app.core.logging import logger`（从未使用，用的 print）
+- [x] `app/api/v1/voice.py:19` — 移除 `from app.models.meeting import Meeting`（动态导入已覆盖）
+- [x] `app/services/file_parser_service.py:6` — 移除 `Dict` from typing import
+- [x] `app/wechat/analyzer.py:15` — 移除 `Optional` from typing import
+- [x] `app/wechat/crypto.py:6` — 移除 `import socket`
+- [x] `app/voice/recorder.py:4` — 移除 `import numpy as np`
+- [x] `app/whisper_server.py:3` — 移除 `import io`
+- [x] `app/whisper_server.py:8` — 移除 `from fastapi.responses import JSONResponse`
+- [x] `app/schemas/auth.py:5` — 移除 `from datetime import datetime`
+- [x] `app/models/task.py:3` — 移除 `from datetime import datetime`
 
-**后端未使用的函数/类（13 处）**
+**后端未使用的函数/类（13 处）✅**
 
-- [ ] `app/wechat/bot.py:123-150` — 移除 `send_task_reminder()`（无人调用，已用 smart_send 替代）
-- [ ] `app/wechat/bot.py:152-181` — 移除 `send_meeting_notification()`（无人调用）
-- [ ] `app/wechat/bot.py:183-209` — 移除 `send_meeting_minutes()`（无人调用）
-- [ ] `app/wechat/bot.py:416-428` — 移除 `reply_to_user()`（冗余别名）
-- [ ] `app/services/vision_service.py:152-157` — 移除 `identify_person_from_image()`（无人调用）
-- [ ] `app/core/security.py:181-200` — 移除 `require_role()`（无人调用，所有角色检查用 inline if）
-- [ ] `app/core/security.py:203-238` — 移除 `get_current_user_ws()`（无人调用，WebSocket 手动 decode_token）
-- [ ] `app/schemas/meeting.py:67-73` — 移除 `TranscriptEntry`（无人引用）
-- [ ] `app/services/search_service.py:20-22` — 移除 `is_configured` property（永远返回 True）
-- [ ] `app/voice/recorder.py:203-207` — 移除 `create_recorder()`/`get_recorder()`/`remove_recorder()`
-- [ ] `app/voice/recorder.py:118-120` — 移除 `get_audio_data()`
-- [ ] `app/voice/tts.py:114-126` — 移除 `get_voices()`
+- [x] `app/wechat/bot.py:123-150` — 移除 `send_task_reminder()`（无人调用，已用 smart_send 替代）
+- [x] `app/wechat/bot.py:152-181` — 移除 `send_meeting_notification()`（无人调用）
+- [x] `app/wechat/bot.py:183-209` — 移除 `send_meeting_minutes()`（无人调用）
+- [x] `app/wechat/bot.py:416-428` — 移除 `reply_to_user()`（冗余别名）
+- [x] `app/services/vision_service.py:152-157` — 移除 `identify_person_from_image()`（无人调用）
+- [x] `app/core/security.py:181-200` — 移除 `require_role()`（无人调用，所有角色检查用 inline if）
+- [x] `app/core/security.py:203-238` — 移除 `get_current_user_ws()`（无人调用，WebSocket 手动 decode_token）
+- [x] `app/schemas/meeting.py:67-73` — 移除 `TranscriptEntry`（无人引用）
+- [x] `app/services/search_service.py:20-22` — 移除 `is_configured` property（永远返回 True）
+- [x] `app/voice/recorder.py:203-207` — 移除 `create_recorder()`/`get_recorder()`/`remove_recorder()`
+- [x] `app/voice/recorder.py:118-120` — 移除 `get_audio_data()`
+- [x] `app/voice/tts.py:114-126` — 移除 `get_voices()`
 
-**前端未使用的导入/变量/函数**
+**前端未使用的导入/变量/函数 ✅**
 
-- [ ] `web/src/views/MemberView.vue:172` — 移除 `ElMessageBox` 导入
-- [ ] `web/src/views/MeetingView.vue:323-331` — 移除未调用的 `startMeeting()` 函数
-- [ ] `web/src/components/VoiceRecorder.vue:56-57` — 移除未使用的 `audioContext` 和 `analyser` 变量
-- [ ] `web/src/stores/member.js:27-29` — 移除未调用的 `getMemberById()` 函数
+- [x] `web/src/views/MemberView.vue:172` — 移除 `ElMessageBox` 导入
+- [x] `web/src/views/MeetingView.vue:323-331` — 移除未调用的 `startMeeting()` 函数
+- [x] `web/src/components/VoiceRecorder.vue:56-57` — 移除未使用的 `audioContext` 和 `analyser` 变量
+- [x] `web/src/stores/member.js:27-29` — 移除未调用的 `getMemberById()` 函数
 
-**未使用的依赖包**
+**未使用的依赖包 ✅**
 
-- [ ] `requirements.txt` — 移除 `openai>=1.0.0`（从未 import）
-- [ ] `requirements.txt` — 移除 `pandas==2.1.4`（从未 import）
-- [ ] `requirements.txt` — 移除 `matplotlib==3.8.2`（从未 import）
-- [ ] `requirements.txt` — 移除 `aiofiles==23.2.1`（从未 import）
-- [ ] `requirements.txt` — 移除 `bcrypt==4.0.1`（passlib[bcrypt] 已包含）
-- [ ] `requirements.txt` — 移除重复的 `pydantic==2.5.2`（pydantic[email] 已包含）
-- [ ] `requirements.txt` — 移除 `faster-whisper==1.2.1`（仅 whisper 容器使用，Dockerfile.whisper 已有）
-- [ ] `web/package.json` — 移除 `@vueuse/core`（从未 import，或保留用于 isMobile 统一）
-- [ ] `web/package.json` — 移除 `sass`（无 lang="scss" 使用）
+- [x] `requirements.txt` — 移除 `openai>=1.0.0`（从未 import）
+- [x] `requirements.txt` — 移除 `pandas==2.1.4`（从未 import）
+- [x] `requirements.txt` — 移除 `matplotlib==3.8.2`（从未 import）
+- [x] `requirements.txt` — 移除 `aiofiles==23.2.1`（从未 import）
+- [x] `requirements.txt` — 移除 `bcrypt==4.0.1`（passlib[bcrypt] 已包含）
+- [x] `requirements.txt` — 移除重复的 `pydantic==2.5.2`（pydantic[email] 已包含）
+- [x] `requirements.txt` — 移除 `faster-whisper==1.2.1`（仅 whisper 容器使用，Dockerfile.whisper 已有）
+- [x] `web/package.json` — 移除 `@vueuse/core`（从未 import）
+- [x] `web/package.json` — 移除 `sass`（无 lang="scss" 使用）
 
-**过时的代码/注释**
+**过时的代码/注释 ✅**
 
-- [ ] `app/api/v1/chat.py:229` — "语音功能开发中..." 已过时，语音已实现，改为路由到 voice WebSocket
-- [ ] `app/voice/asr.py:182` — 误导性注释修正（AMR 格式处理逻辑描述不准确）
+- [x] `app/api/v1/chat.py:229` — "语音功能开发中..." 已过时，语音已实现，改为提示文字
+- [x] `app/voice/asr.py:182` — 误导性注释修正（AMR 格式处理逻辑描述不准确）
 
 #### 第二批：重复代码提取（低风险）
 
@@ -845,8 +845,8 @@
 - [x] Anthropic 客户端工厂 — 6 处重复实例化 → 提取 `get_anthropic_client()` 到 `app/core/llm.py`
 - [x] LLM JSON 解析工具 — 4 处 markdown 代码块剥离 → 提取 `parse_llm_json()` 和 `extract_text_from_response()` 到 `app/core/llm.py`
 - [x] `_postprocess_result` 完全重复 — `voice/asr.py` 和 `whisper_server.py` → 提取到 `app/voice/postprocess.py`
-- [ ] 任务通知逻辑重复 — `agent/core.py` 和 `api/v1/task.py` → 暂不提取（涉及业务逻辑，改动风险较高）
-- [ ] Celery 任务样板代码 — 3 处 engine/session/asyncio.run → 暂不提取（影响异步任务稳定性）
+- [ ] ~~任务通知逻辑重复~~ — `agent/core.py` 和 `api/v1/task.py` → 暂不提取（涉及业务逻辑，改动风险较高）
+- [ ] ~~Celery 任务样板代码~~ — 3 处 engine/session/asyncio.run → 暂不提取（影响异步任务稳定性）
 - [x] 微信长文本分割 — 3 处相同分割逻辑 → 提取 `_split_long_text()` 辅助函数到 `app/wechat/handler.py`
 
 **前端重复逻辑**
