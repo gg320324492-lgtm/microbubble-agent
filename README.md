@@ -221,9 +221,11 @@ npm run dev
 - Agent 回复完整性优化（系统提示词强制完整输出 + max_tokens 提升至 8192 + 截断自动续写机制）
 - 代码质量优化第一批（清理 25 处无效代码 + 9 个未使用依赖，净减 118 行）
 - 代码质量优化第二批（提取 7 处后端重复逻辑 + 7 处前端重复逻辑，新建 3 个共享模块，净减 57 行）
+- 代码质量优化第三批（10 个硬编码值提取到 Settings + .env.example 补全 + Docker/Nginx 优化 + 安全加固）
+- 代码质量优化第四批（Dashboard/UserStore/resize 清理 + LiveTranscript WebSocket 协议自适应）
 - 开发环境 Docker 配置（docker-compose.dev.yml，热重载，轻量化）
 - GitHub Actions CI 流水线（语法检查 + Docker 构建测试）
-- 部署文档已完善（docs/deploy.md），生产环境已加固（Docker 健康检查+资源限制、Nginx 限流、JSON 日志、数据库备份脚本）
+- 部署文档已完善（docs/deploy.md），生产环境已加固（Docker 健康检查+资源限制、Nginx 限流+server_tokens off、JSON 日志、数据库备份脚本）
 - 文件问答、会议助手等功能待实现（见"待实现功能"）
 
 ### 待解决问题
