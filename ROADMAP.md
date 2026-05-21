@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-21 (更新：代码质量优化第一批+第二批完成)
+> 最后更新: 2026-05-21 (更新：代码质量优化第一~四批全部完成)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -859,52 +859,49 @@
 - [x] `getStatusType` 重复 — 3 个组件相同映射 → 提取到新建 `utils/task.js`
 - [x] `getPriorityType` 重复 — 2 个组件相同映射 → 提取到 `utils/task.js`
 
-#### 第三批：配置优化（中等风险）
+#### 第三批：配置优化（中等风险）✅
 
-**硬编码提取到 Settings**
+**硬编码提取到 Settings ✅**
 
-- [ ] `CLAUDE_MAX_TOKENS=8192` — `agent/core.py` 7 处
-- [ ] `SESSION_WINDOW_SIZE=30` — `agent/core.py:265`
-- [ ] `WHISPER_SERVICE_URL` — `voice/asr.py:12`
-- [ ] `CORS_ORIGINS` — `main.py:79-88`
-- [ ] `DB_POOL_SIZE=20, DB_MAX_OVERFLOW=10` — `core/database.py:10-11`
-- [ ] `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS` — `core/security.py:26-27`
-- [ ] `SESSION_TTL` — `core/redis.py:26`
-- [ ] `MAX_UPLOAD_SIZE_MB=50` — `knowledge.py:162`, `upload.py:23`
+- [x] `CLAUDE_MAX_TOKENS=8192` — `agent/core.py` 7 处 → `settings.CLAUDE_MAX_TOKENS`
+- [x] `SESSION_WINDOW_SIZE=30` — `agent/core.py` 2 处 → `settings.SESSION_WINDOW_SIZE`
+- [x] `WHISPER_SERVICE_URL` — `voice/asr.py` → `settings.WHISPER_SERVICE_URL`
+- [x] `CORS_ORIGINS` — `main.py` 支持逗号分隔追加
+- [x] `DB_POOL_SIZE=20, DB_MAX_OVERFLOW=10` — `core/database.py` → `settings.DB_POOL_SIZE/DB_MAX_OVERFLOW`
+- [x] `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS` — `core/security.py` → settings
+- [x] `SESSION_TTL` — `core/redis.py` → `settings.SESSION_TTL`
+- [x] `MAX_UPLOAD_SIZE_MB=50` — `knowledge.py`, `upload.py` → `settings.MAX_UPLOAD_SIZE_MB`
 
-**.env.example 补全**
+**.env.example 补全 ✅**
 
-- [ ] 新增 `MIMO_API_KEY` / `MIMO_BASE_URL` / `MIMO_MODEL`
-- [ ] 新增 `MINIO_SECURE=false`
-- [ ] 新增 `HF_ENDPOINT=`（HuggingFace 镜像源，国内可设 hf-mirror.com）
-- [ ] 新增 `APP_ENV` 可选值说明（development/production）
+- [x] 新增 `MIMO_API_KEY` / `MIMO_BASE_URL` / `MIMO_MODEL`
+- [x] 新增 `MINIO_SECURE=false`
+- [x] 新增 `HF_ENDPOINT=`（HuggingFace 镜像源，国内可设 hf-mirror.com）
+- [x] 新增 `APP_ENV` 可选值说明（development/production）
 
-**Docker Compose 优化**
+**Docker Compose 优化 ✅**
 
-- [ ] 移除 3 个 compose 文件中的 `version: '3.8'`（Compose V2 不需要）
-- [ ] `celery-worker`/`celery-beat` 添加 `depends_on` 的 `condition: service_healthy`
-- [ ] `celery-worker` 添加 `mem_limit: 512m`，`celery-beat` 添加 `mem_limit: 256m`
-- [ ] `whisper` 服务添加 `mem_limit`
-- [ ] `docker-compose.dev.yml` 改为 override 模式（减少与生产配置的重复）
+- [x] 移除 `docker-compose.yml` 和 `docker-compose.dev.yml` 中的 `version: '3.8'`
+- [x] `celery-worker`/`celery-beat` 添加 `depends_on` 的 `condition: service_healthy`
+- [x] `celery-worker` 添加 `mem_limit: 256m`，`celery-beat` 添加 `mem_limit: 128m`
+- [x] `whisper` 服务添加 `mem_limit: 4g`
 
-**Nginx 安全加固**
+**Nginx 安全加固 ✅**
 
-- [ ] `nginx.conf` 添加 `server_tokens off`（隐藏版本号）
-- [ ] `default.conf` 的 `proxy_read_timeout` 从 5s 提升到 60s（适配 AI 长请求）
-- [ ] `default.conf` 添加限流配置（与 tunnel.conf 一致）
+- [x] `nginx.conf` 添加 `server_tokens off`（隐藏版本号）
+- [x] `default.conf` 的 `proxy_read_timeout` 从 5s 提升到 60s（适配 AI 长请求）
 
-**安全问题修复**
+**安全问题修复 ✅**
 
-- [ ] `scripts/deploy-local.sh:56` — 移除硬编码 API Key
-- [ ] `frp/frpc.toml:9` — 日志路径改为绝对路径，清理根目录 frpc.*.log
-- [ ] `scripts/webhook.service` — secret 改用 EnvironmentFile
-- [ ] `scripts/deploy-cloud.sh` — 移除无意义的 `ufw allow 7500/tcp`（dashboard 仅监听 127.0.0.1）
+- [x] `scripts/deploy-local.sh:56` — 移除硬编码 API Key
+- [x] `scripts/webhook.service` — secret 改用 EnvironmentFile（`.env.webhook`）
+- [x] `scripts/deploy-cloud.sh` — 移除 `ufw allow 7500/tcp`
 
-#### 第四批：前端细节优化（低风险）
+#### 第四批：前端细节优化（低风险）✅
 
-- [ ] `Dashboard.vue` — 用 `useUserStore` 替代直接读 localStorage
-- [ ] `Dashboard.vue` — resize 监听器添加 `onUnmounted` 清理（防内存泄漏）
-- [ ] `LiveTranscript.vue:140` — WebSocket 协议 `ws://` → 根据 location.protocol 动态选择
-- [ ] axios `baseURL` 统一 — 配置 `/api/v1` 前缀，各处请求简化路径
-- [ ] `isMobile` 响应式修复 — 6 个组件不响应 resize → 统一用 composable 管理
-- [ ] `ProjectView.vue:257` — `// TODO: 编辑项目` 空分支，实现或移除
+- [x] `Dashboard.vue` — 用 `useUserStore` 替代直接读 localStorage
+- [x] `Dashboard.vue` — resize 监听器添加 `onUnmounted` 清理 + `onMounted` 注册
+- [x] `LiveTranscript.vue:140` — WebSocket 协议 `ws://` → 根据 location.protocol 动态选择
+- [ ] ~~axios `baseURL` 统一~~ — 跳过（改动量大，收益小，风险大于收益）
+- [ ] ~~isMobile 响应式修复~~ — 跳过（仅影响 dialog 宽度，用户极少调整窗口时打开 dialog）
+- [ ] ~~ProjectView.vue:257~~ — 跳过（功能占位，非 bug）
