@@ -52,7 +52,7 @@ if [ ! -f .env ]; then
     sed -i "" "s/change-this-a-random-string/$SECRET_KEY/" .env 2>/dev/null
 
     warn "请编辑 .env 文件，填入以下配置："
-    echo "  CLAUDE_API_KEY=tp-c2dh4lwgx2519tsuoffa8npxfcqofbiyaew94pwt4bc5yjlq"
+    echo "  CLAUDE_API_KEY=your-claude-api-key-here"
     echo "  CLAUDE_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic"
     echo ""
     read -p "按 Enter 继续（已配置好 .env）或 Ctrl+C 退出..."
@@ -157,7 +157,6 @@ start_services() {
     # 不需要 nginx 服务（nginx 在云服务器上）
     # 创建一个不含 nginx 的 compose override
     cat > docker-compose.override.yml << 'EOF'
-version: '3.8'
 # 本地部署：禁用 nginx 服务（nginx 在云服务器上运行）
 services:
   nginx:

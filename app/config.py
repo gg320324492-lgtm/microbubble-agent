@@ -51,6 +51,28 @@ class Settings(BaseSettings):
     # Whisper
     WHISPER_MODEL_SIZE: str = "large-v3"
     WHISPER_DEVICE: str = "cuda"
+    WHISPER_SERVICE_URL: str = "http://whisper:8002"
+
+    # Claude 生成参数
+    CLAUDE_MAX_TOKENS: int = 8192
+    SESSION_WINDOW_SIZE: int = 30
+
+    # 数据库连接池
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 10
+
+    # JWT 令牌有效期
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24小时
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Redis 会话 TTL（秒）
+    SESSION_TTL: int = 172800  # 48小时
+
+    # 文件上传大小限制（MB）
+    MAX_UPLOAD_SIZE_MB: int = 50
+
+    # CORS 允许的源（逗号分隔，空则使用默认值）
+    CORS_ORIGINS: str = ""
 
     # 服务器
     HOST: str = "0.0.0.0"

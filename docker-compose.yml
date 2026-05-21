@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Nginx 反向代理 + 前端静态文件
   nginx:
@@ -108,6 +106,7 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
+    mem_limit: 4g
     restart: unless-stopped
 
   # Celery Worker (异步任务)
@@ -120,8 +119,11 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 256m
     restart: unless-stopped
 
   # Celery Beat (定时任务)
@@ -133,6 +135,9 @@ services:
     env_file:
       - .env
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 128m
     restart: unless-stopped

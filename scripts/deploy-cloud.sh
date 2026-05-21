@@ -168,10 +168,9 @@ setup_firewall() {
         ufw allow 80/tcp
         ufw allow 443/tcp
         ufw allow 7000/tcp
-        ufw allow 7500/tcp
         info "防火墙规则已添加"
     else
-        warn "未检测到 ufw，请手动开放端口: 80, 443, 7000, 7500"
+        warn "未检测到 ufw，请手动开放端口: 80, 443, 7000"
     fi
 }
 

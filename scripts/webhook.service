@@ -8,7 +8,7 @@ ExecStart=/usr/bin/python3 /opt/microbubble-agent/scripts/webhook.py
 WorkingDirectory=/opt/microbubble-agent
 Restart=always
 RestartSec=5
-Environment=WEBHOOK_SECRET=microbubble-deploy-2026
+EnvironmentFile=-/opt/microbubble-agent/.env.webhook
 
 [Install]
 WantedBy=multi-user.target

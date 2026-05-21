@@ -229,7 +229,7 @@ class MicroBubbleAgent:
 
         response = await self.client.messages.create(
             model=self.model,
-            max_tokens=8192,
+            max_tokens=settings.CLAUDE_MAX_TOKENS,
             system=system,
             tools=self.tools,
             messages=messages
@@ -242,8 +242,8 @@ class MicroBubbleAgent:
             "content": _serialize_content(result["content_blocks"])
         })
 
-        if len(messages) > 30:
-            messages = messages[-30:]
+        if len(messages) > settings.SESSION_WINDOW_SIZE:
+            messages = messages[-settings.SESSION_WINDOW_SIZE:]
 
         await self._save_session(session_id, messages)
 
@@ -299,7 +299,7 @@ class MicroBubbleAgent:
             # 后续调用使用基础系统提示词（避免重复注入记忆）
             follow_up = await self.client.messages.create(
                 model=self.model,
-                max_tokens=8192,
+                max_tokens=settings.CLAUDE_MAX_TOKENS,
                 system=get_system_prompt(),
                 tools=self.tools,
                 messages=messages
@@ -322,7 +322,7 @@ class MicroBubbleAgent:
 
             continuation = await self.client.messages.create(
                 model=self.model,
-                max_tokens=8192,
+                max_tokens=settings.CLAUDE_MAX_TOKENS,
                 system=get_system_prompt(),
                 tools=self.tools,
                 messages=messages
@@ -874,7 +874,7 @@ class MicroBubbleAgent:
 
         async with self.client.messages.stream(
             model=self.model,
-            max_tokens=8192,
+            max_tokens=settings.CLAUDE_MAX_TOKENS,
             system=system,
             tools=self.tools,
             messages=messages
@@ -922,7 +922,7 @@ class MicroBubbleAgent:
 
             follow_up = await self.client.messages.create(
                 model=self.model,
-                max_tokens=8192,
+                max_tokens=settings.CLAUDE_MAX_TOKENS,
                 system=system,
                 tools=self.tools,
                 messages=messages
@@ -958,8 +958,8 @@ class MicroBubbleAgent:
                 messages = cont_messages
                 yield {"type": "text", "content": cont_text}
 
-        if len(messages) > 30:
-            messages = messages[-30:]
+        if len(messages) > settings.SESSION_WINDOW_SIZE:
+            messages = messages[-settings.SESSION_WINDOW_SIZE:]
 
         await self._save_session(session_id, messages)
         yield {"type": "done", "content": full_text}
@@ -975,7 +975,7 @@ class MicroBubbleAgent:
 
         response = await self.client.messages.create(
             model=self.model,
-            max_tokens=8192,
+            max_tokens=settings.CLAUDE_MAX_TOKENS,
             system=system,
             tools=self.tools,
             messages=messages

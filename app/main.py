@@ -85,6 +85,8 @@ if settings.APP_ENV == "production":
         "http://agent.mnb-lab.cn",
         "https://agent.mnb-lab.cn",
     ])
+if settings.CORS_ORIGINS:
+    ALLOWED_ORIGINS.extend([o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()])
 
 app.add_middleware(
     CORSMiddleware,
