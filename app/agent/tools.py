@@ -156,6 +156,20 @@ TOOLS = [
         }
     },
     {
+        "name": "summarize_meeting_transcript",
+        "description": "对会议转录文字进行自动归纳总结，同时将总结存入 Agent 长期记忆。当用户提供会议转录文本、要求总结会议内容时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "transcript_text": {
+                    "type": "string",
+                    "description": "会议转录的完整文本内容（可以是纯文本或包含【发言人】格式的对话）"
+                }
+            },
+            "required": ["transcript_text"]
+        }
+    },
+    {
         "name": "create_meeting",
         "description": "创建会议。当用户要求预约会议、安排组会等时使用。",
         "input_schema": {

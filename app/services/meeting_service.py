@@ -189,7 +189,8 @@ class MeetingService:
             "tasks_created": tasks_created,
         }
 
-    async def _generate_summary(self, transcript_text: str) -> str:
+    @classmethod
+    async def _generate_summary(cls, transcript_text: str) -> str:
         """用 Claude 生成会议摘要"""
         try:
             client = get_anthropic_client()

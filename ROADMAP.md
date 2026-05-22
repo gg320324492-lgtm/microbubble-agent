@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-21 (更新：代码质量优化第一~四批全部完成)
+> 最后更新: 2026-05-22 (更新：Agent 会议转录总结工具)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -698,6 +698,23 @@
 - `app/agent/core.py` — 任务创建后增加创建人派发确认通知
 - `app/api/v1/task.py` — 同上
 - `app/wechat/scheduler.py` — `check_due_soon()` 增加创建人通知
+
+---
+
+## Agent 会议转录总结工具 (2026-05-22)
+
+用户可直接将会议转录文字发给小气助手，自动生成摘要、要点、决议，并永久存入 Agent 长期记忆（与项目记忆共用 `memories` 表）。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| `summarize_meeting_transcript` 工具 | Agent 新工具，对话中直接触发，无需 API | ✅ 完成 |
+| 会议总结存入记忆 | `memory_type="summary"`，与项目讨论共用语义搜索 | ✅ 完成 |
+| `_generate_summary` 类方法化 | 改为 `@classmethod` 供 Agent 工具直接调用 | ✅ 完成 |
+
+**修改文件：**
+- `app/agent/tools.py` — 新增 `summarize_meeting_transcript` 工具定义
+- `app/agent/core.py` — 新增工具处理器（生成摘要 + 提取行动项 + 存入记忆）
+- `app/services/meeting_service.py` — `_generate_summary` 改为类方法
 
 ---
 
