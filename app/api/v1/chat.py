@@ -7,6 +7,7 @@ import json
 from app.agent.core import agent
 from app.core.database import get_db
 from app.core.security import get_current_user, decode_token
+from app.core.redis import session_store
 from app.models.member import Member
 
 router = APIRouter()
@@ -24,6 +25,7 @@ class ChatResponse(BaseModel):
     session_id: str
     file_url: Optional[str] = None
     file_name: Optional[str] = None
+    is_brief: bool = False  # 是否为【简要】回复
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -41,7 +43,8 @@ async def chat(
     )
     return ChatResponse(
         content=result["content"],
-        session_id=request.session_id
+        session_id=request.session_id,
+        is_brief=True  # 【简要】回复标记
     )
 
 
@@ -78,7 +81,8 @@ async def chat_with_image(
     )
     return ChatResponse(
         content=result["content"],
-        session_id=session_id
+        session_id=session_id,
+        is_brief=True
     )
 
 
@@ -150,7 +154,8 @@ async def chat_with_file(
         content=result["content"],
         session_id=session_id,
         file_url=file_url,
-        file_name=filename
+        file_name=filename,
+        is_brief=True
     )
 
 
@@ -230,3 +235,19 @@ async def websocket_chat(websocket: WebSocket, user_id: str, token: str = ""):
 
         except WebSocketDisconnect:
             await agent.clear_session(session_id)
+
+
+@router.get("/chat/history/{session_id}")
+async def get_chat_history(
+    session_id: str,
+    after_index: int = 0,
+    current_user: Member = Depends(get_current_user)
+):
+    """获取会话历史，用于轮询【详细】回复"""
+    messages = await session_store.get_messages(session_id)
+    # 返回 after_index 之后的新消息
+    new_messages = messages[after_index:] if after_index < len(messages) else []
+    return {
+        "messages": new_messages,
+        "total": len(messages)
+    }

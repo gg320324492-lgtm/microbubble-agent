@@ -9,7 +9,7 @@ from app.models.base import utcnow, BEIJING_TZ
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 from app.config import settings
-from app.agent.prompts import get_system_prompt
+from app.agent.prompts import get_system_prompt, get_detail_prompt, _weekdays
 from app.agent.tools import TOOLS
 from app.services.task_service import TaskService
 from app.services.member_service import MemberService
@@ -182,6 +182,33 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.error(f"对话知识提取失败: {e}")
 
+    async def _generate_brief(self, messages: List[Dict], system: str) -> str:
+        """生成【简要】回复（带工具调用）"""
+        response = await self.client.messages.create(
+            model=self.model,
+            max_tokens=500,
+            system=system,
+            tools=self.tools,
+            messages=messages
+        )
+        # 处理工具调用（递归）
+        processed = await self._process_response(response, "", None, messages)
+        return processed.get("content", "")
+
+    async def _generate_detail(self, messages: List[Dict], system: str) -> str:
+        """生成【详细】回复（不带工具调用）"""
+        response = await self.client.messages.create(
+            model=self.model,
+            max_tokens=settings.CLAUDE_MAX_TOKENS,
+            system=system,
+            messages=messages
+        )
+        text = ""
+        for block in response.content:
+            if block.type == "text":
+                text += block.text
+        return text
+
     async def chat(
         self,
         message: str,
@@ -244,20 +271,22 @@ class MicroBubbleAgent:
         # 构建系统提示词（注入相关记忆）
         system = await self._build_system_prompt(user_id, message, db)
 
-        response = await self.client.messages.create(
-            model=self.model,
-            max_tokens=settings.CLAUDE_MAX_TOKENS,
-            system=system,
-            tools=self.tools,
-            messages=messages
-        )
+        # 并行发起两次调用（生成简要 + 生成详细）
+        # 注意：_generate_brief 内部已处理工具调用，直接返回内容
+        brief_task = asyncio.create_task(self._generate_brief(messages, system))
+        detail_task = asyncio.create_task(self._generate_detail(messages, system))
 
-        result = await self._process_response(response, session_id, db, messages, user_id=user_id)
+        # 先等简要完成，立即返回
+        brief_result = await brief_task
 
+        # 更新 messages（简要回复已由 _generate_brief 处理工具调用）
         messages.append({
             "role": "assistant",
-            "content": _serialize_content(result["content_blocks"])
+            "content": brief_result
         })
+
+        # 后台等待详细回复并追加
+        asyncio.create_task(self._append_detail(messages, session_id, db, user_id))
 
         if len(messages) > settings.SESSION_WINDOW_SIZE:
             messages = messages[-settings.SESSION_WINDOW_SIZE:]
@@ -273,7 +302,43 @@ class MicroBubbleAgent:
                 self._extract_and_save_knowledge(user_id, messages, session_id)
             )
 
-        return result
+        return {
+            "content": brief_result,
+            "content_blocks": [{"type": "text", "text": brief_result}],
+            "tool_calls": [],
+            "tool_results": []
+        }
+
+    async def _append_detail(self, messages: List[Dict], session_id: str, db, user_id: Optional[int]):
+        """后台任务：追加【详细】回复到会话"""
+        try:
+            # 获取带时间的详细 prompt
+            now = datetime.now(BEIJING_TZ)
+            today_str = f"{now.year}年{now.month}月{now.day}日（{_weekdays[now.weekday()]}）"
+            time_str = now.strftime('%H:%M')
+            system_detail = get_detail_prompt().format(today_str=today_str, time_str=time_str)
+
+            detail_response = await self.client.messages.create(
+                model=self.model,
+                max_tokens=settings.CLAUDE_MAX_TOKENS,
+                system=system_detail,
+                messages=messages
+            )
+
+            detail_text = ""
+            for block in detail_response.content:
+                if block.type == "text":
+                    detail_text += block.text
+
+            if detail_text:
+                # 保存详细回复到会话
+                await session_store.append_message(session_id, {
+                    "role": "assistant",
+                    "content": detail_text
+                })
+                logger.info(f"追加【详细】回复到会话 {session_id}")
+        except Exception as e:
+            logger.error(f"生成【详细】回复失败: {e}")
 
     async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None, user_id: Optional[int] = None, _continues_left: int = 3) -> Dict[str, Any]:
         """处理Claude响应"""

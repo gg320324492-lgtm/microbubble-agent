@@ -49,6 +49,17 @@ class RedisSessionStore:
         r = await get_redis()
         await r.delete(self._key(session_id))
 
+    async def append_message(self, session_id: str, message: Dict[str, Any]):
+        """追加单条消息到会话"""
+        r = await get_redis()
+        messages = await self.get_messages(session_id)
+        messages.append(message)
+        await r.set(
+            self._key(session_id),
+            json.dumps(messages, ensure_ascii=False, default=str),
+            ex=self.ttl
+        )
+
 
 session_store = RedisSessionStore()
 

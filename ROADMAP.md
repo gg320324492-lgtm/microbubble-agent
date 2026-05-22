@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-22 (更新：Agent 会议转录总结工具)
+> 最后更新: 2026-05-22 (更新：先简要后详细回复)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -794,6 +794,29 @@
 **修改文件：**
 - `app/agent/prompts.py` — 回复质量要求新增完整性规则
 - `app/agent/core.py` — max_tokens 提升 + `_process_response()` 截断续写 + `_stream_continuation()` 方法
+
+### 先简要后详细回复 (2026-05-22)
+
+用户提问时先快速返回【简要】核心结论，后台并行生成【详细】展开内容并自动追加到对话。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 两阶段并行调用 | 同时发起两次 API 调用（简要 + 详细），简要完成后立即返回 | ✅ 完成 |
+| 【简要】回复格式 | 系统提示词约束生成简短核心结论 | ✅ 完成 |
+| 【详细】回复格式 | 使用专用 prompt 生成详细展开内容 | ✅ 完成 |
+| 后台追加机制 | asyncio.create_task 并行执行，详细内容生成后追加到 Redis 会话 | ✅ 完成 |
+| 前端展开按钮 | 【简要】回复显示"点击查看详情"按钮 | ✅ 完成 |
+| 轮询检测 | 前端每 2 秒轮询 `/chat/history/{session_id}` 检测详细回复并追加 | ✅ 完成 |
+| API is_brief 标记 | ChatResponse 新增 `is_brief` 字段，前端据此显示展开按钮 | ✅ 完成 |
+
+**新建文件：**
+- `app/agent/prompts.py` — 新增 `get_brief_prompt()` 和 `get_detail_prompt()` 函数
+
+**修改文件：**
+- `app/agent/core.py` — 新增 `_generate_brief()`/`_generate_detail()`/`_append_detail()` 方法，chat() 改为两阶段调用
+- `app/core/redis.py` — 新增 `append_message()` 方法
+- `app/api/v1/chat.py` — ChatResponse 新增 `is_brief` 字段，新增 `/chat/history/{session_id}` 接口
+- `web/src/views/ChatView.vue` — 显示展开按钮、轮询检测详细回复并追加显示
 
 ### 代码质量优化 (2026-05-21 审计)
 
