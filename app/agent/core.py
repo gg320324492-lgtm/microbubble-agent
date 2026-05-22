@@ -661,16 +661,10 @@ class MicroBubbleAgent:
 
                 def format_by_member(task_list):
                     lines = []
-                    last_member = None
                     for item in task_list:
-                        if item["member"] != last_member:
-                            progress = f"- {item['progress']}%" if item["progress"] else ""
-                            due = f"截止{item['due_date']}" if item["due_date"] else ""
-                            lines.append(f"- {item['member']}：{item['title']} {progress} {due}".strip())
-                            last_member = item["member"]
-                        else:
-                            due = f"截止{item['due_date']}" if item["due_date"] else ""
-                            lines.append(f"         {item['title']} {due}".strip())
+                        progress = f"- {item['progress']}%" if item["progress"] else ""
+                        due = f"截止{item['due_date']}" if item["due_date"] else ""
+                        lines.append(f"- {item['member']}：{item['title']} {progress} {due}".strip())
                     return lines
 
                 lines = []
