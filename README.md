@@ -185,7 +185,7 @@ npm run dev
 - `POST /api/v1/tencent-meeting/webhook` - 腾讯会议回调
 - `POST /api/v1/upload` - 文件上传
 
-### Agent 工具（14个）
+### Agent 工具（15个）
 - `create_task` / `query_tasks` / `update_task` - 任务管理
 - `create_meeting` / `query_meetings` - 会议管理
 - `query_members` - 成员查询
@@ -193,6 +193,8 @@ npm run dev
 - `search_knowledge` / `save_conversation_knowledge` - 知识库
 - `web_search` - 联网搜索
 - `save_memory` / `search_memory` / `forget_memory` - 长期记忆
+- `summarize_meeting_transcript` - 会议转录总结
+- `query_all_member_tasks` - 全员任务状况（仅管理员/组长）
 
 详细文档: https://agent.mnb-lab.cn/docs
 

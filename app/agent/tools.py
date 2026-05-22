@@ -83,6 +83,15 @@ TOOLS = [
         }
     },
     {
+        "name": "query_all_member_tasks",
+        "description": "查询所有成员的任務状况，按状态分组显示（进行中/待办/已完成）。仅管理员或组长可用。当管理员或组长询问所有人的任務进度、团队任务分布时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
         "name": "update_task",
         "description": "更新任务状态。当用户要求标记任务完成、修改进度、延期等时使用。",
         "input_schema": {
