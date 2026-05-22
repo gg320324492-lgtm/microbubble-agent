@@ -728,11 +728,18 @@
 | `get_all_members_workload()` 方法 | TaskService 新增，按成员分组统计 | ✅ 完成 |
 | 固定格式输出 | 按状态分组：进行中→待办→已完成，固定三段结构 | ✅ 完成 |
 | 权限控制 | 仅 admin/leader 可查，普通成员返回权限错误 | ✅ 完成 |
+| 同人任务缩进显示 | 同一成员多条任务时，人名只显示一次，后续任务缩进对齐 | ✅ 完成 |
+| pgvector 扩展安装 | 自定义 Dockerfile.db 基于 postgres:16-alpine 安装 pgvector 0.7.0 | ✅ 完成 |
+| app 目录挂载 | docker-compose.yml app 服务添加 `./app:/app/app` volume，挂载本地代码 | ✅ 完成 |
+| _generate_brief 传 db 参数 | 修复"先简要后详细"模式下简要生成器无法访问数据库的问题 | ✅ 完成 |
 
 **修改文件：**
 - `app/agent/tools.py` — 新增 `query_all_member_tasks` 工具定义
-- `app/agent/core.py` — 新增工具处理器，格式化输出固定三段结构
+- `app/agent/core.py` — 新增工具处理器，格式化输出固定三段结构，同人任务缩进显示
 - `app/services/task_service.py` — 新增 `get_all_members_workload()` 方法
+- `app/agent/prompts.py` — 新增 Task Query Rules 强制 Agent 调用 query_all_member_tasks
+- `Dockerfile.db` — 新建，基于 postgres:16-alpine 安装 pgvector 0.7.0
+- `docker-compose.yml` — app 服务添加 `./app:/app/app` volume 挂载
 
 ---
 
