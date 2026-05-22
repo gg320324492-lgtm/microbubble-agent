@@ -200,22 +200,39 @@ class MicroBubbleAgent:
 
         # 构建消息内容
         if image_data:
-            # 包含图片的消息
-            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            content = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": image_media_type,
-                        "data": image_b64
+            use_mcp_vision = getattr(settings, 'VISION_USE_MCP', False)
+            if use_mcp_vision:
+                # MCP 模式：通过 MCP 获取图片描述，再用文本和 LLM 对话
+                image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+                from app.services.vision_service import VisionService
+                vision_svc = VisionService()
+                image_description = await vision_svc.analyze_image(
+                    image_data,
+                    f"请详细描述这张图片的内容，以便我回答用户关于这张图片的问题。用户的问题是：{message}"
+                )
+                # 图片转为文字描述发给 LLM（DeepSeek 等文本模型也能处理）
+                content = (
+                    f"[用户发送了一张图片，图片内容如下]\n"
+                    f"{image_description}\n"
+                    f"---\n用户消息: {message}"
+                )
+            else:
+                # 直接模式：图片 base64 发给多模态 LLM
+                image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+                content = [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image_media_type,
+                            "data": image_b64
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": message
                     }
-                },
-                {
-                    "type": "text",
-                    "text": message
-                }
-            ]
+                ]
         else:
             # 纯文本消息，注入当前时间（北京时间）
             now = datetime.now(BEIJING_TZ)
@@ -891,22 +908,39 @@ class MicroBubbleAgent:
 
         # 构建消息内容
         if image_data:
-            # 包含图片的消息
-            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            content = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": image_media_type,
-                        "data": image_b64
+            use_mcp_vision = getattr(settings, 'VISION_USE_MCP', False)
+            if use_mcp_vision:
+                # MCP 模式：通过 MCP 获取图片描述，再用文本和 LLM 对话
+                image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+                from app.services.vision_service import VisionService
+                vision_svc = VisionService()
+                image_description = await vision_svc.analyze_image(
+                    image_data,
+                    f"请详细描述这张图片的内容，以便我回答用户关于这张图片的问题。用户的问题是：{message}"
+                )
+                # 图片转为文字描述发给 LLM
+                content = (
+                    f"[用户发送了一张图片，图片内容如下]\n"
+                    f"{image_description}\n"
+                    f"---\n用户消息: {message}"
+                )
+            else:
+                # 直接模式：图片 base64 发给多模态 LLM
+                image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+                content = [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": image_media_type,
+                            "data": image_b64
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": message
                     }
-                },
-                {
-                    "type": "text",
-                    "text": message
-                }
-            ]
+                ]
         else:
             # 纯文本消息，注入当前时间（北京时间）
             now = datetime.now(BEIJING_TZ)
