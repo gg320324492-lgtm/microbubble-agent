@@ -648,6 +648,51 @@ class MicroBubbleAgent:
                     ]
                 }
 
+            elif name == "summarize_meeting_transcript":
+                from app.services.meeting_service import MeetingService
+                from app.services.memory_service import MemoryService
+                from app.wechat.analyzer import ConversationAnalyzer
+
+                if not user_id:
+                    return {"status": "error", "message": "无法识别用户身份"}
+
+                transcript_text = input_data["transcript_text"]
+
+                # 1. 生成摘要
+                summary = await MeetingService._generate_summary(None, transcript_text)
+
+                # 2. 提取关键信息和行动项
+                analyzer = ConversationAnalyzer()
+                analysis = await analyzer.extract_action_items(transcript_text)
+
+                key_points = []
+                for t in analysis.get("tasks", []):
+                    if t.get("title"):
+                        assignee = t.get("assignee_name", "")
+                        point = f"[任务] {t['title']}"
+                        if assignee:
+                            point += f" → {assignee}"
+                        key_points.append(point)
+                for d in analysis.get("decisions", []):
+                    key_points.append(f"[决定] {d}")
+
+                # 3. 存入 Agent 长期记忆（与项目记忆共用 memories 表）
+                memory_svc = MemoryService(db)
+                await memory_svc.save_memory(
+                    user_id=user_id,
+                    memory_type="summary",
+                    content=f"【会议总结】\n\n摘要：{summary}\n\n要点：{'；'.join(key_points)}\n\n原始转录：{transcript_text[:3000]}",
+                    importance=0.8
+                )
+
+                return {
+                    "status": "success",
+                    "summary": summary,
+                    "key_points": key_points,
+                    "decisions": analysis.get("decisions", []),
+                    "tasks": analysis.get("tasks", [])
+                }
+
             elif name == "create_meeting":
                 meeting_svc = MeetingService(db)
                 start_time_beijing = datetime.strptime(input_data["start_time"], "%Y-%m-%d %H:%M")
