@@ -110,6 +110,14 @@
                   style="display: none"
                 />
               </div>
+
+              <!-- 【简要】回复展开按钮 -->
+              <div v-if="msg.is_brief" class="detail-expand">
+                <el-button text type="primary" size="small" @click="expandDetail(index)">
+                  <el-icon><ArrowDown /></el-icon>
+                  点击查看详情
+                </el-button>
+              </div>
             </div>
             <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
           </div>
@@ -249,7 +257,7 @@
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Close, Picture, Paperclip, Document, Upload } from '@element-plus/icons-vue'
+import { Close, Picture, Paperclip, Document, Upload, ArrowDown } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -441,12 +449,20 @@ const sendMessage = async () => {
     }
 
     // 添加AI回复
+    const isBrief = res.data.is_brief === true
+    const briefIndex = messages.value.length
     messages.value.push({
       role: 'assistant',
       content: res.data.content,
       timestamp: new Date(),
-      type: 'text'
+      type: 'text',
+      is_brief: isBrief
     })
+
+    // 如果是【简要】回复，启动轮询获取【详细】
+    if (isBrief) {
+      startDetailPoll(sessionId, briefIndex)
+    }
   } catch (e) {
     console.error('发送失败:', e)
     ElMessage.error(e.response?.data?.detail || '发送失败，请重试')
@@ -603,6 +619,47 @@ const formatMessage = (text) => {
 // 格式化时间
 const formatTime = (timestamp) => {
   return dayjs(timestamp).format('HH:mm')
+}
+
+// 展开【详细】回复
+const expandDetail = (index) => {
+  // 【详细】回复会在后台生成后追加到 messages，
+  // 前端通过轮询检测新消息并自动展示
+  scrollToBottom()
+}
+
+// 轮询检测【详细】回复
+let detailPollInterval = null
+const startDetailPoll = (sessionId, lastBriefIndex) => {
+  stopDetailPoll()
+  detailPollInterval = setInterval(async () => {
+    try {
+      const res = await axios.get(`/api/v1/chat/history/${sessionId}?after_index=${lastBriefIndex}`)
+      if (res.data.messages && res.data.messages.length > 0) {
+        // 找到【详细】回复并追加
+        for (const msg of res.data.messages) {
+          if (msg.role === 'assistant' && !msg.is_brief) {
+            messages.value.push({
+              ...msg,
+              timestamp: new Date(),
+              type: 'text'
+            })
+          }
+        }
+        scrollToBottom()
+        stopDetailPoll()
+      }
+    } catch (e) {
+      // 忽略轮询错误
+    }
+  }, 2000) // 每2秒检测一次
+}
+
+const stopDetailPoll = () => {
+  if (detailPollInterval) {
+    clearInterval(detailPollInterval)
+    detailPollInterval = null
+  }
 }
 
 onMounted(() => {
@@ -971,5 +1028,13 @@ onMounted(() => {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* 【简要】展开按钮 */
+.detail-expand {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #ebeef5;
+  text-align: center;
 }
 </style>
