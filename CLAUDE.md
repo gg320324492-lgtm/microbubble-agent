@@ -15,7 +15,7 @@
 
 ## 关键架构决策
 
-- Agent 工具调用通过 `app/agent/core.py` 的 `_execute_tool` 方法路由到 service 层（14 个工具已全部接入）
+- Agent 工具调用通过 `app/agent/core.py` 的 `_execute_tool` 方法路由到 service 层（15 个工具已全部接入）
 - `chat()` 和 `chat_stream()` 接收 `db: AsyncSession` 参数，由 API 路由通过 `Depends(get_db)` 传入
 - 使用 `AsyncAnthropic` 客户端，不阻塞事件循环
 - **Agent 回复采用"先简要后详细"双层结构** — 两阶段并行调用，简要立即返回，详细后台追加

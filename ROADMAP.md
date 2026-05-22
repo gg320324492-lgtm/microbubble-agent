@@ -718,6 +718,24 @@
 
 ---
 
+## 全员任务状况格式化输出 (2026-05-22)
+
+解决 Agent 回答"给我说一下其他成员的任务状况"时输出格式不固定的问题，改为流程化固定格式输出。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| `query_all_member_tasks` 工具 | Agent 新工具，查询全员任务状况 | ✅ 完成 |
+| `get_all_members_workload()` 方法 | TaskService 新增，按成员分组统计 | ✅ 完成 |
+| 固定格式输出 | 按状态分组：进行中→待办→已完成，固定三段结构 | ✅ 完成 |
+| 权限控制 | 仅 admin/leader 可查，普通成员返回权限错误 | ✅ 完成 |
+
+**修改文件：**
+- `app/agent/tools.py` — 新增 `query_all_member_tasks` 工具定义
+- `app/agent/core.py` — 新增工具处理器，格式化输出固定三段结构
+- `app/services/task_service.py` — 新增 `get_all_members_workload()` 方法
+
+---
+
 ## 待完成
 
 ### 开发环境 Docker 配置 (2026-05-20)

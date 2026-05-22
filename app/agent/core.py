@@ -622,6 +622,79 @@ class MicroBubbleAgent:
                     ]
                 }
 
+            elif name == "query_all_member_tasks":
+                task_svc = TaskService(db)
+                member_svc = MemberService(db)
+
+                # 权限检查：仅管理员/组长可用
+                is_admin = False
+                if user_id:
+                    current_member = await member_svc.get_member(user_id)
+                    is_admin = current_member and current_member.role in ("admin", "leader")
+
+                if not is_admin:
+                    return {"status": "error", "message": "仅管理员或组长可以查看所有成员的任务状况"}
+
+                # 获取所有成员工作量
+                all_member_stats = await task_svc.get_all_members_workload()
+
+                # 按状态分组
+                in_progress_list = []
+                todo_list = []
+                done_list = []
+
+                for member_data in all_member_stats:
+                    member_name = member_data["member_name"]
+                    for task in member_data["tasks"]:
+                        task_info = {
+                            "member": member_name,
+                            "title": task.title,
+                            "progress": task.progress,
+                            "due_date": task.due_date.strftime("%Y-%m-%d") if task.due_date else None,
+                        }
+                        if task.status == "in_progress":
+                            in_progress_list.append(task_info)
+                        elif task.status == "todo":
+                            todo_list.append(task_info)
+                        elif task.status == "done":
+                            done_list.append(task_info)
+
+                # 构建固定格式输出
+                lines = []
+                lines.append("【进行中任务】（共 {} 个）".format(len(in_progress_list)))
+                if in_progress_list:
+                    for item in in_progress_list:
+                        due = f"- 截止{item['due_date']}" if item['due_date'] else ""
+                        lines.append(f"- {item['member']}：{item['title']} - {item['progress']}% {due}")
+                else:
+                    lines.append("- 无")
+
+                lines.append("")
+                lines.append("【待办任务】（共 {} 个）".format(len(todo_list)))
+                if todo_list:
+                    for item in todo_list:
+                        due = f"- 截止{item['due_date']}" if item['due_date'] else ""
+                        lines.append(f"- {item['member']}：{item['title']} {due}")
+                else:
+                    lines.append("- 无")
+
+                lines.append("")
+                lines.append("【已完成任务】（共 {} 个）".format(len(done_list)))
+                if done_list:
+                    for item in done_list:
+                        lines.append(f"- {item['member']}：{item['title']} ✅")
+                else:
+                    lines.append("- 无")
+
+                total = len(in_progress_list) + len(todo_list) + len(done_list)
+                lines.append("")
+                lines.append(f"共 {total} 个任务")
+
+                return {
+                    "status": "success",
+                    "formatted_text": "\n".join(lines)
+                }
+
             elif name == "update_task":
                 task_svc = TaskService(db)
                 task = await task_svc.get_task(input_data["task_id"])

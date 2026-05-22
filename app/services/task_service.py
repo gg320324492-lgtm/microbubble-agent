@@ -209,3 +209,31 @@ class TaskService:
             "done": sum(1 for t in tasks if t.status == TaskStatus.DONE.value),
             "overdue": sum(1 for t in tasks if t.due_date and t.due_date < utcnow() and t.status != TaskStatus.DONE.value)
         }
+
+    async def get_all_members_workload(self) -> List[dict]:
+        """获取所有成员的任務统计（按成员分组，供管理员使用）"""
+        # 获取所有活跃成员
+        result = await self.db.execute(
+            select(Member).where(Member.is_active == True)
+        )
+        members = result.scalars().all()
+
+        # 获取所有任务
+        all_tasks = await self.get_tasks()
+
+        # 按成员分组
+        member_stats = []
+        for member in members:
+            member_tasks = [t for t in all_tasks if t.assignee_id == member.id]
+            member_stats.append({
+                "member_id": member.id,
+                "member_name": member.name,
+                "role": member.role,
+                "tasks": member_tasks,
+                "total": len(member_tasks),
+                "todo": sum(1 for t in member_tasks if t.status == TaskStatus.TODO.value),
+                "in_progress": sum(1 for t in member_tasks if t.status == TaskStatus.IN_PROGRESS.value),
+                "done": sum(1 for t in member_tasks if t.status == TaskStatus.DONE.value),
+            })
+
+        return member_stats
