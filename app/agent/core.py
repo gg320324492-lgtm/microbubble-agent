@@ -182,7 +182,7 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.error(f"对话知识提取失败: {e}")
 
-    async def _generate_brief(self, messages: List[Dict], system: str) -> str:
+    async def _generate_brief(self, messages: List[Dict], system: str, db=None, user_id=None) -> str:
         """生成【简要】回复（带工具调用）"""
         response = await self.client.messages.create(
             model=self.model,
@@ -192,7 +192,7 @@ class MicroBubbleAgent:
             messages=messages
         )
         # 处理工具调用（递归）
-        processed = await self._process_response(response, "", None, messages)
+        processed = await self._process_response(response, "", db, messages, user_id=user_id)
         return processed.get("content", "")
 
     async def _generate_detail(self, messages: List[Dict], system: str) -> str:
@@ -273,7 +273,7 @@ class MicroBubbleAgent:
 
         # 并行发起两次调用（生成简要 + 生成详细）
         # 注意：_generate_brief 内部已处理工具调用，直接返回内容
-        brief_task = asyncio.create_task(self._generate_brief(messages, system))
+        brief_task = asyncio.create_task(self._generate_brief(messages, system, db, user_id))
         detail_task = asyncio.create_task(self._generate_detail(messages, system))
 
         # 先等简要完成，立即返回
@@ -638,7 +638,7 @@ class MicroBubbleAgent:
                 # 获取所有成员工作量
                 all_member_stats = await task_svc.get_all_members_workload()
 
-                # 按状态分组
+                # 按状态分组，按成员排序同人任务（第一人显示名，后续任务缩进）
                 in_progress_list = []
                 todo_list = []
                 done_list = []
@@ -659,30 +659,38 @@ class MicroBubbleAgent:
                         elif task.status == "done":
                             done_list.append(task_info)
 
-                # 构建固定格式输出
+                def format_by_member(task_list):
+                    lines = []
+                    last_member = None
+                    for item in task_list:
+                        if item["member"] != last_member:
+                            progress = f"- {item['progress']}%" if item["progress"] else ""
+                            due = f"截止{item['due_date']}" if item["due_date"] else ""
+                            lines.append(f"- {item['member']}：{item['title']} {progress} {due}".strip())
+                            last_member = item["member"]
+                        else:
+                            due = f"截止{item['due_date']}" if item["due_date"] else ""
+                            lines.append(f"         {item['title']} {due}".strip())
+                    return lines
+
                 lines = []
                 lines.append("【进行中任务】（共 {} 个）".format(len(in_progress_list)))
                 if in_progress_list:
-                    for item in in_progress_list:
-                        due = f"- 截止{item['due_date']}" if item['due_date'] else ""
-                        lines.append(f"- {item['member']}：{item['title']} - {item['progress']}% {due}")
+                    lines.extend(format_by_member(in_progress_list))
                 else:
                     lines.append("- 无")
 
                 lines.append("")
                 lines.append("【待办任务】（共 {} 个）".format(len(todo_list)))
                 if todo_list:
-                    for item in todo_list:
-                        due = f"- 截止{item['due_date']}" if item['due_date'] else ""
-                        lines.append(f"- {item['member']}：{item['title']} {due}")
+                    lines.extend(format_by_member(todo_list))
                 else:
                     lines.append("- 无")
 
                 lines.append("")
                 lines.append("【已完成任务】（共 {} 个）".format(len(done_list)))
                 if done_list:
-                    for item in done_list:
-                        lines.append(f"- {item['member']}：{item['title']} ✅")
+                    lines.extend(format_by_member(done_list))
                 else:
                     lines.append("- 无")
 

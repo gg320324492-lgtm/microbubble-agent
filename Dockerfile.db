@@ -1,0 +1,19 @@
+FROM postgres:16-alpine
+
+RUN apk add --no-cache \
+    gcc \
+    make \
+    libc-dev \
+    perl \
+    llvm19 \
+    clang19 \
+    && mkdir -p /tmp/pgvector \
+    && cd /tmp/pgvector \
+    && wget https://github.com/pgvector/pgvector/archive/refs/tags/v0.7.0.tar.gz -O v0.7.0.tar.gz \
+    && tar xzf v0.7.0.tar.gz \
+    && cd pgvector-0.7.0 \
+    && make \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/pgvector \
+    && apk del gcc make perl llvm19 clang19 libc-dev
