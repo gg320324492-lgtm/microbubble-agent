@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     MIMO_BASE_URL: str = "https://api.xiaomimimo.com/v1"
     MIMO_MODEL: str = "mimo-v2.5"
 
+    # Vision MCP 配置（DeepSeek 切换时使用）
+    VISION_USE_MCP: bool = False
+    VISION_MCP_TRANSPORT: str = "stdio"  # stdio 或 http
+    VISION_MCP_SERVER_CMD: str = "python -m mcp_server.server"
+    VISION_MCP_BASE_URL: str = "http://vision-mcp:8001"
+    VISION_MODEL: str = "mimo-v2.5"  # 视觉服务仍使用多模态模型
+
     # 腾讯会议
     TENCENT_MEETING_SDK_ID: str = ""
     TENCENT_MEETING_SDK_KEY: str = ""

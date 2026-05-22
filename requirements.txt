@@ -19,6 +19,7 @@ minio==7.2.0
 
 # AI相关
 anthropic>=0.39.0
+mcp>=0.9.0
 
 # 语音识别
 pilk>=1.2.0

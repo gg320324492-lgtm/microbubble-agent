@@ -1,4 +1,4 @@
-"""视觉识别服务 - 使用多模态模型处理图片消息"""
+"""视觉识别服务 - 支持多种后端（直接 API / MCP）"""
 
 import base64
 import httpx
@@ -11,7 +11,19 @@ logger = logging.getLogger("microbubble.vision")
 
 
 class VisionService:
-    """视觉识别服务"""
+    """视觉识别服务 - 支持直接 API 调用或 MCP 模式"""
+
+    def __init__(self):
+        self._use_mcp = getattr(settings, 'VISION_USE_MCP', False)
+        self._mcp_client = None
+
+    async def _get_mcp_client(self):
+        """懒加载 MCP 客户端"""
+        if self._mcp_client is None:
+            from app.mcp.client import vision_mcp_client
+            await vision_mcp_client.connect()
+            self._mcp_client = vision_mcp_client
+        return self._mcp_client
 
     async def download_image(self, media_id: str) -> Optional[bytes]:
         """
@@ -77,7 +89,7 @@ class VisionService:
 
     async def analyze_image(self, image_data: bytes, question: str = "描述这张图片的内容") -> str:
         """
-        使用多模态模型分析图片
+        使用多模态模型分析图片（直接 API 或 MCP 模式）
 
         Args:
             image_data: 图片二进制数据
@@ -86,13 +98,30 @@ class VisionService:
         Returns:
             分析结果文本
         """
+        image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+        media_type = self._detect_media_type(image_data)
+
+        if self._use_mcp:
+            return await self._analyze_via_mcp(image_b64, media_type, question)
+        else:
+            return await self._analyze_direct(image_data, image_b64, media_type, question)
+
+    async def _analyze_via_mcp(self, image_b64: str, media_type: str, question: str) -> str:
+        """通过 MCP 调用视觉服务"""
+        try:
+            client = await self._get_mcp_client()
+            return await client.analyze_image(image_b64, media_type, question)
+        except Exception as e:
+            logger.error(f"MCP 调用失败，回退到直接 API: {e}")
+            # MCP 失败时回退到直接 API
+            image_data = base64.standard_b64decode(image_b64)
+            return await self._analyze_direct(image_data, image_b64, media_type, question)
+
+    async def _analyze_direct(self, image_data: bytes, image_b64: str, media_type: str, question: str) -> str:
+        """直接调用视觉 API（Anthropic/GPT-4V 等）"""
         try:
             client = get_anthropic_client()
-            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            media_type = self._detect_media_type(image_data)
-
-            # 使用配置的模型，默认为 mimo-v2.5
-            model = get_default_model()
+            model = getattr(settings, 'VISION_MODEL', None) or get_default_model()
             logger.info(f"使用模型 {model} 分析图片, media_type={media_type}")
 
             response = await client.messages.create(
@@ -119,21 +148,16 @@ class VisionService:
 
             # 提取响应文本
             if response.content and len(response.content) > 0:
-                # 处理不同的响应格式
                 content_block = response.content[0]
                 if hasattr(content_block, 'text'):
                     return content_block.text
                 elif isinstance(content_block, dict) and 'text' in content_block:
                     return content_block['text']
                 else:
-                    # 尝试转换为字符串
                     return str(content_block)
 
             return "无法解析图片分析结果"
 
-        except anthropic.APIError as e:
-            logger.error(f"API 调用失败: {e}", exc_info=True)
-            raise Exception(f"AI 服务调用失败: {str(e)}")
         except Exception as e:
             logger.error(f"图片分析失败: {e}", exc_info=True)
             raise Exception(f"图片分析失败: {str(e)}")

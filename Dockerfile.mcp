@@ -1,0 +1,23 @@
+# Vision MCP Server Docker 镜像
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 安装依赖
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 安装 MCP
+RUN pip install --no-cache-dir mcp -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 复制 MCP 服务器代码
+COPY mcp_server/ ./mcp_server/
+COPY app/config.py ./app/config.py
+COPY app/services/vision_service.py ./app/services/vision_service.py
+COPY app/core/llm.py ./app/core/llm.py
+
+# 暴露端口（HTTP 模式时使用）
+EXPOSE 8001
+
+# 启动命令
+CMD ["python", "-m", "mcp_server.server"]

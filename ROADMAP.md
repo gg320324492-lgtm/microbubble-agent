@@ -871,7 +871,7 @@
 - [x] `fetchMembers` 重复 — 5 个组件各自调 API → 改用 `useMemberStore`
 - [x] `getMemberName` 重复 — 2 处相同查找逻辑 → 改用 `memberStore.getMemberName()`
 - [x] `formatDate` 重复 — 6 个组件各自定义 → 统一使用 `utils/format.js`（新增 formatRelativeTime/formatCompactDate）
-- [x] `formatTime` 重复 — 3 个组件各自定义 → 统一使用 `utils/format.js`
+- [x] `formatTime` 重复 — 3 处组件各自定义 → 统一使用 `utils/format.js`
 - [ ] `isMobile` 重复 — 8 个组件独立定义 → 待后续统一（需决定是否保留 @vueuse/core）
 - [x] `getStatusType` 重复 — 3 个组件相同映射 → 提取到新建 `utils/task.js`
 - [x] `getPriorityType` 重复 — 2 个组件相同映射 → 提取到 `utils/task.js`
@@ -922,3 +922,25 @@
 - [ ] ~~axios `baseURL` 统一~~ — 跳过（改动量大，收益小，风险大于收益）
 - [ ] ~~isMobile 响应式修复~~ — 跳过（仅影响 dialog 宽度，用户极少调整窗口时打开 dialog）
 - [ ] ~~ProjectView.vue:257~~ — 跳过（功能占位，非 bug）
+
+### MCP 视觉服务架构（2026-05-22）
+
+为切换到 DeepSeek 等不支持图片识别的文本模型，预先实现 MCP 架构解耦视觉能力。
+
+| 组件 | 说明 | 状态 |
+|------|------|------|
+| MCP 服务器 | stdio 传输的视觉分析 MCP Server | ✅ 完成 |
+| MCP 客户端 | VisionMCPClient，连接 MCP 服务器调用工具 | ✅ 完成 |
+| VisionService MCP 模式 | `VISION_USE_MCP=true` 时通过 MCP 调用视觉 | ✅ 完成 |
+| Agent MCP 视觉 | `chat()`/`chat_stream()` 检测到图片时走 MCP 描述→文本 | ✅ 完成 |
+| 配置项 | `VISION_USE_MCP`/`VISION_MCP_TRANSPORT`/`VISION_MCP_SERVER_CMD` | ✅ 完成 |
+| Docker 服务 | `vision-mcp` 服务接入 docker-compose | ✅ 完成 |
+
+**新建文件：**
+- `mcp_server/` — MCP 服务器包（server.py + tools/vision.py）
+- `app/mcp/client.py` — VisionMCPClient（stdio 传输）
+
+**切换 DeepSeek 步骤：**
+1. 确保 `vision-mcp` 容器运行中
+2. `.env` 设置 `VISION_USE_MCP=true`，`CLAUDE_MODEL=deepseek-xxx`
+3. 图片先通过 MCP 调用视觉服务获取描述，再以文本形式发给 DeepSeek
