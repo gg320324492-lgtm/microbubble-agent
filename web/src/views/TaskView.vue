@@ -150,9 +150,17 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="删除时间" width="160">
+            <el-table-column label="删除时间" width="140">
               <template #default="{ row }">
                 <span class="deleted-time">{{ formatDate(row.deleted_at) }}</span>
+              </template>
+            </el-table-column>
+
+            <el-table-column label="自动删除" width="120">
+              <template #default="{ row }">
+                <span :class="{ 'auto-delete-soon': getAutoDeleteDays(row.deleted_at) <= 1 }">
+                  {{ getAutoDeleteText(row.deleted_at) }}
+                </span>
               </template>
             </el-table-column>
 
@@ -478,6 +486,21 @@ const isOverdue = (task) => {
   return dayjs(task.due_date).isBefore(dayjs())
 }
 
+// 计算自动删除倒计时
+const getAutoDeleteDays = (deletedAt) => {
+  if (!deletedAt) return 99
+  const deleteDate = dayjs(deletedAt).add(3, 'day')
+  return deleteDate.diff(dayjs(), 'day')
+}
+
+const getAutoDeleteText = (deletedAt) => {
+  const daysLeft = getAutoDeleteDays(deletedAt)
+  if (daysLeft <= 0) return '即将删除'
+  if (daysLeft === 1) return '明天自动删除'
+  if (daysLeft === 2) return '后天自动删除'
+  return `还有 ${daysLeft} 天`
+}
+
 // 监听 Tab 切换
 watch(activeTab, (newTab) => {
   if (newTab === 'tasks') {
@@ -549,6 +572,11 @@ onMounted(() => {
 .deleted-time {
   color: #c0c4cc;
   font-size: 12px;
+}
+
+.auto-delete-soon {
+  color: #f56c6c;
+  font-weight: bold;
 }
 
 .overdue {
