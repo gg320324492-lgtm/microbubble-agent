@@ -301,10 +301,10 @@ const fetchInProgressTasks = async () => {
       axios.get('/api/v1/tasks', { params: { status: 'todo', page_size: 20 } }),
       axios.get('/api/v1/tasks', { params: { status: 'in_progress', page_size: 20 } })
     ])
-    const todoTasks = todoRes.data.items || []
-    const inProgressTasks = inProgressRes.data.items || []
+    const todoItems = todoRes.data.items || []
+    const inProgressItems = inProgressRes.data.items || []
     // 合并并按截止日期排序（最近截止的在前）
-    const allTasks = [...todoTasks, ...inProgressTasks]
+    const allTasks = [...todoItems, ...inProgressItems]
     allTasks.sort((a, b) => {
       if (!a.due_date && !b.due_date) return 0
       if (!a.due_date) return 1
