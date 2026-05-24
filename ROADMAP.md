@@ -838,9 +838,17 @@
 | 操作按钮 hover 动效 | 变为珊瑚橙 | ✅ 完成 |
 | 整体入场动画 | fadeSlideUp | ✅ 完成 |
 
-### 待升级页面
+### LoginView 升级 ✅
 
-- [ ] **LoginView** — 登录页珊瑚橙主题统一
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 背景渐变 | 改为珊瑚橙/金橙 | ✅ 完成 |
+| 登录按钮 hover 动效 | 上浮 + 亮度提升 | ✅ 完成 |
+| 整体卡片入场动画 | fadeSlideUp | ✅ 完成 |
+
+---
+
+**UI 全面升级已全部完成！** 所有页面（Dashboard / MainLayout / TaskView / ChatView / MeetingView / KnowledgeView / MemberView / ProjectView / MemoryView / LoginView）均已使用统一的设计令牌系统。
 - [ ] **MeetingView** — 会议卡片样式、会议详情页
 - [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MemberView** — 成员卡片、头像样式
