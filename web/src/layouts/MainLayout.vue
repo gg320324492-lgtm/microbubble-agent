@@ -13,7 +13,9 @@
       :class="['aside', { 'mobile-drawer': isMobile }]"
     >
       <div class="logo">
-        <el-icon size="28"><Aim /></el-icon>
+        <div class="logo-icon">
+          <el-icon size="24"><Aim /></el-icon>
+        </div>
         <span v-show="!isCollapse" class="title">小气助手</span>
       </div>
 
@@ -21,15 +23,14 @@
         :default-active="currentRoute"
         :collapse="isCollapse"
         router
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409eff"
+        class="sidebar-menu"
         @select="onMenuSelect"
       >
         <el-menu-item
           v-for="route in menuRoutes"
           :key="route.path"
           :index="route.path"
+          class="menu-item"
         >
           <el-icon><component :is="route.meta.icon" /></el-icon>
           <template #title>{{ route.meta.title }}</template>
@@ -167,7 +168,11 @@ const markAllRead = async () => {
 }
 
 .aside {
-  background-color: #304156;
+  background: var(--color-bg-sidebar);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-right: 1px solid var(--color-sidebar-border);
+  box-shadow: var(--shadow-sidebar);
   transition: width 0.3s;
   overflow: hidden;
 }
@@ -178,7 +183,7 @@ const markAllRead = async () => {
   left: 0;
   z-index: 2000;
   height: 100vh;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 4px 0 24px rgba(255, 122, 92, 0.15);
 }
 
 .drawer-overlay {
@@ -192,28 +197,111 @@ const markAllRead = async () => {
 }
 
 .logo {
-  height: 60px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-sidebar-border);
+  padding: 0 16px;
+}
+
+.logo-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
-  font-size: 18px;
-  font-weight: bold;
-  border-bottom: 1px solid #3a4a5c;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-primary);
 }
 
 .logo .title {
   white-space: nowrap;
+  font-size: 17px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+/* 菜单样式 */
+.sidebar-menu {
+  background: transparent !important;
+  border-right: none;
+  padding: 8px;
+}
+
+.sidebar-menu .el-menu-item {
+  height: 48px;
+  line-height: 48px;
+  margin: 4px 0;
+  border-radius: var(--radius-lg);
+  color: var(--color-text-regular);
+  font-weight: var(--font-weight-medium);
+  transition: all 200ms ease-out;
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-menu .el-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  background: var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: all 200ms ease-out;
+}
+
+.sidebar-menu .el-menu-item:hover {
+  background: var(--color-primary-bg) !important;
+  color: var(--color-primary);
+}
+
+.sidebar-menu .el-menu-item:hover::before {
+  width: 4px;
+  height: 24px;
+}
+
+.sidebar-menu .el-menu-item.is-active {
+  background: var(--color-primary-bg) !important;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.sidebar-menu .el-menu-item.is-active::before {
+  width: 4px;
+  height: 32px;
+}
+
+.sidebar-menu .el-menu-item .el-icon {
+  font-size: 18px;
+}
+
+/* 收起状态 */
+.el-menu--collapse .sidebar-menu .el-menu-item {
+  justify-content: center;
+  padding: 0 12px;
+}
+
+/* 头像圆角 */
+.header :deep(.el-avatar) {
+  border-radius: var(--radius-lg);
 }
 
 .header {
-  background: #fff;
+  background: var(--color-bg-card);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  box-shadow: var(--shadow-sm);
   padding: 0 20px;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .header-left {
@@ -225,11 +313,15 @@ const markAllRead = async () => {
 .collapse-btn {
   cursor: pointer;
   font-size: 20px;
-  color: #666;
+  color: var(--color-text-secondary);
+  transition: color 200ms ease-out;
+  padding: 6px;
+  border-radius: var(--radius-md);
 }
 
 .collapse-btn:hover {
-  color: #409eff;
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .header-right {
@@ -244,11 +336,15 @@ const markAllRead = async () => {
 
 .bell-icon {
   cursor: pointer;
-  transition: color 0.2s;
+  transition: color 200ms ease-out;
+  color: var(--color-text-secondary);
+  padding: 6px;
+  border-radius: var(--radius-md);
 }
 
 .bell-icon:hover {
-  color: #409eff;
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .user-info {
@@ -256,6 +352,13 @@ const markAllRead = async () => {
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-lg);
+  transition: background 200ms ease-out;
+}
+
+.user-info:hover {
+  background: var(--color-bg-warm);
 }
 
 .user-detail {
@@ -265,26 +368,23 @@ const markAllRead = async () => {
 
 .username {
   font-size: 14px;
-  color: #333;
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
   line-height: 1.2;
 }
 
 .user-role {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-text-secondary);
 }
 
 .main {
-  background-color: #f5f7fa;
+  background-color: var(--color-bg-page);
   padding: 20px;
   overflow-y: auto;
 }
 
 .main.mobile-main {
   padding: 12px;
-}
-
-:deep(.el-menu) {
-  border-right: none;
 }
 </style>
