@@ -176,7 +176,22 @@ import { useMemberStore } from '@/stores/member'
 
 const router = useRouter()
 const memberStore = useMemberStore()
-const members = computed(() => memberStore.members)
+
+// 年级排序（从高到低）
+const GRADE_ORDER = {
+  '教授': 1, '副教授': 2, '博士后': 3, '博士': 4,
+  '研三': 5, '研二': 6, '研一': 7,
+  '大四': 8, '大三': 9, '大二': 10, '大一': 11,
+  '已毕业': 12
+}
+const members = computed(() => {
+  return [...memberStore.members].sort((a, b) => {
+    const orderA = GRADE_ORDER[a.grade] || 99
+    const orderB = GRADE_ORDER[b.grade] || 99
+    if (orderA !== orderB) return orderA - orderB
+    return a.name.localeCompare(b.name, 'zh-CN')
+  })
+})
 
 const isMobile = ref(window.innerWidth <= 768)
 const searchName = ref('')
