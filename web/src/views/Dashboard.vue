@@ -111,9 +111,6 @@
           <div class="task-info">
             <div class="task-title">{{ task.title }}</div>
             <div class="task-meta">
-              <el-tag :type="getStatusType(task.status)" size="small" effect="plain">
-                {{ getStatusLabel(task.status) }}
-              </el-tag>
               <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
                 {{ getPriorityLabel(task.priority) }}
               </el-tag>
@@ -162,89 +159,40 @@
       </div>
     </el-card>
 
-    <!-- 底部双栏 -->
-    <el-row :gutter="16" class="content-row">
-      <!-- 最近会议 -->
-      <el-col :xs="24" :sm="12">
-        <el-card class="content-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>📅 最近会议</span>
-              <el-button text @click="$router.push('/meetings')">查看全部 →</el-button>
-            </div>
-          </template>
-          <div v-if="recentMeetings.length === 0" class="empty-state">
-            <el-empty description="暂无会议记录" :image-size="60" />
-          </div>
-          <div v-else class="meeting-list">
-            <div v-for="meeting in recentMeetings" :key="meeting.id" class="meeting-item">
-              <div class="meeting-date">
-                <div class="date-box">
-                  <span class="month">{{ formatMonth(meeting.start_time) }}</span>
-                  <span class="day">{{ formatDay(meeting.start_time) }}</span>
-                </div>
-              </div>
-              <div class="meeting-info">
-                <div class="meeting-title">{{ meeting.title }}</div>
-                <div class="meeting-meta">
-                  <span class="meeting-time">
-                    <el-icon><Clock /></el-icon>
-                    {{ formatMeetingTime(meeting.start_time) }}
-                  </span>
-                  <el-tag :type="getStatusTagType(meeting.status)" size="small">
-                    {{ getStatusLabel(meeting.status) }}
-                  </el-tag>
-                </div>
-              </div>
+    <!-- 最近会议 -->
+    <el-card class="content-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>📅 最近会议</span>
+          <el-button text @click="$router.push('/meetings')">查看全部 →</el-button>
+        </div>
+      </template>
+      <div v-if="recentMeetings.length === 0" class="empty-state">
+        <el-empty description="暂无会议记录" :image-size="60" />
+      </div>
+      <div v-else class="meeting-list">
+        <div v-for="meeting in recentMeetings" :key="meeting.id" class="meeting-item">
+          <div class="meeting-date">
+            <div class="date-box">
+              <span class="month">{{ formatMonth(meeting.start_time) }}</span>
+              <span class="day">{{ formatDay(meeting.start_time) }}</span>
             </div>
           </div>
-        </el-card>
-      </el-col>
-
-      <!-- 成员进行中任务 -->
-      <el-col :xs="24" :sm="12">
-        <el-card class="content-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>👥 成员进行中任务</span>
+          <div class="meeting-info">
+            <div class="meeting-title">{{ meeting.title }}</div>
+            <div class="meeting-meta">
+              <span class="meeting-time">
+                <el-icon><Clock /></el-icon>
+                {{ formatMeetingTime(meeting.start_time) }}
+              </span>
+              <el-tag :type="getStatusTagType(meeting.status)" size="small">
+                {{ getMeetingStatusLabel(meeting.status) }}
+              </el-tag>
             </div>
-          </template>
-          <div v-if="memberWithTasks.length === 0" class="empty-state">
-            <el-empty description="暂无进行中的任务" :image-size="60" />
           </div>
-          <div v-else class="member-tasks">
-            <el-collapse v-model="expandedMembers">
-              <el-collapse-item v-for="member in memberWithTasks" :key="member.id" :name="member.id">
-                <template #title>
-                  <div class="member-header">
-                    <span class="member-name">{{ member.name }}</span>
-                    <el-badge :value="member.in_progress_tasks.length" type="primary" :hidden="member.in_progress_tasks.length === 0" />
-                  </div>
-                </template>
-                <div v-if="member.in_progress_tasks.length === 0" class="no-tasks">暂无进行中任务</div>
-                <div v-else class="member-task-list">
-                  <div v-for="task in member.in_progress_tasks" :key="task.id" class="member-task-item">
-                    <div class="member-task-info">
-                      <span class="member-task-title">{{ task.title }}</span>
-                      <div class="member-task-meta">
-                        <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
-                          {{ getPriorityLabel(task.priority) }}
-                        </el-tag>
-                        <span class="member-task-due" :class="{ overdue: isOverdue(task.due_date) }">
-                          <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
-                          {{ formatDate(task.due_date) }}
-                        </span>
-                      </div>
-                    </div>
-                    <el-button text type="primary" @click="goToTask(task)">查看</el-button>
-                  </div>
-                </div>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </div>
+      </div>
+    </el-card>
 
     <!-- 创建任务对话框 -->
     <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'">
@@ -298,8 +246,6 @@ const dashboardData = ref({})
 const inProgressTasks = ref([])
 const recentMeetings = ref([])
 const upcomingDeadlines = ref([])
-const memberWithTasks = ref([])
-const expandedMembers = ref([])
 const showCreateTask = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 const currentTime = ref('')
@@ -391,32 +337,6 @@ const fetchUpcomingDeadlines = async () => {
   } catch (e) { console.error('获取即将到期任务失败:', e) }
 }
 
-const fetchMemberTasks = async () => {
-  try {
-    const res = await axios.get('/api/v1/tasks', {
-      params: { page_size: 100, status: 'in_progress' }
-    })
-    const allInProgress = res.data.items || []
-    const memberMap = new Map()
-    allInProgress.forEach(task => {
-      const memberId = task.assignee_id
-      if (!memberMap.has(memberId)) {
-        memberMap.set(memberId, {
-          id: memberId,
-          name: memberStore.getMemberName(memberId),
-          in_progress_tasks: []
-        })
-      }
-      memberMap.get(memberId).in_progress_tasks.push(task)
-    })
-    memberWithTasks.value = Array.from(memberMap.values())
-    // 默认展开有任务的成员
-    expandedMembers.value = memberWithTasks.value
-      .filter(m => m.in_progress_tasks.length > 0)
-      .map(m => m.id)
-  } catch (e) { console.error('获取成员任务失败:', e) }
-}
-
 const fetchMembers = () => memberStore.fetchMembers()
 
 const createTask = async () => {
@@ -429,7 +349,6 @@ const createTask = async () => {
     fetchInProgressTasks()
     fetchDashboardStats()
     fetchUpcomingDeadlines()
-    fetchMemberTasks()
   } catch (e) { ElMessage.error('创建任务失败') }
 }
 
@@ -440,12 +359,7 @@ const toggleTaskStatus = async (task) => {
     fetchInProgressTasks()
     fetchDashboardStats()
     fetchUpcomingDeadlines()
-    fetchMemberTasks()
   } catch (e) { ElMessage.error('更新失败') }
-}
-
-const goToTask = (task) => {
-  ElMessage.info(`任务: ${task.title}`)
 }
 
 const formatDate = (date) => formatCompactDate(date, '无截止')
@@ -483,7 +397,6 @@ onMounted(() => {
   fetchInProgressTasks()
   fetchUpcomingDeadlines()
   fetchRecentMeetings()
-  fetchMemberTasks()
   fetchMembers()
   window.addEventListener('resize', handleResize)
 })
