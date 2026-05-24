@@ -226,7 +226,6 @@ npm run dev
 - 代码质量优化第四批（Dashboard/UserStore/resize 清理 + LiveTranscript WebSocket 协议自适应）
 - **先简要后详细回复** -- 用户提问时先快速返回【简要】核心结论，后台并行生成【详细】展开内容并自动追加
 - 开发环境 Docker 配置（docker-compose.dev.yml，热重载，轻量化）
-- GitHub Actions CI 流水线（语法检查 + Docker 构建测试）
 - 部署文档已完善（docs/deploy.md），生产环境已加固（Docker 健康检查+资源限制、Nginx 限流+server_tokens off、JSON 日志、数据库备份脚本）
 - **MCP 视觉服务架构预写**（切换 DeepSeek 等文本模型时支持图片识别，通过 MCP Server 解耦视觉能力）
 - 文件问答、会议助手等功能待实现（见"待实现功能"）
