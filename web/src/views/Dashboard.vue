@@ -89,6 +89,45 @@
       </el-col>
     </el-row>
 
+    <!-- 进行中任务（合并待办+进行中） -->
+    <el-card class="content-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>🚀 进行中任务</span>
+          <el-badge :value="inProgressTasks.length" type="primary" :hidden="inProgressTasks.length === 0" />
+          <el-button text @click="$router.push('/tasks')">查看全部 →</el-button>
+        </div>
+      </template>
+      <div v-if="inProgressTasks.length === 0" class="empty-state">
+        <el-empty description="暂无进行中任务" :image-size="60" />
+      </div>
+      <div v-else class="task-list">
+        <div v-for="task in inProgressTasks" :key="task.id" class="task-item" :class="{ overdue: isOverdue(task.due_date) }">
+          <el-checkbox
+            :model-value="task.status === 'done'"
+            @change="toggleTaskStatus(task)"
+            size="large"
+          />
+          <div class="task-info">
+            <div class="task-title">{{ task.title }}</div>
+            <div class="task-meta">
+              <el-tag :type="getStatusType(task.status)" size="small" effect="plain">
+                {{ getStatusLabel(task.status) }}
+              </el-tag>
+              <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
+                {{ getPriorityLabel(task.priority) }}
+              </el-tag>
+              <span class="task-assignee">{{ memberStore.getMemberName(task.assignee_id) }}</span>
+            </div>
+          </div>
+          <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
+            <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
+            {{ formatDate(task.due_date) }}
+          </div>
+        </div>
+      </div>
+    </el-card>
+
     <!-- 即将到期任务 -->
     <el-card class="upcoming-card" shadow="hover">
       <template #header>
@@ -97,8 +136,8 @@
           <el-tag size="small" type="warning">未来3天</el-tag>
         </div>
       </template>
-      <div v-if="upcomingDeadlines.length === 0" class="empty-state">
-        <el-empty description="未来3天没有即将到期的任务" :image-size="60" />
+      <div v-if="upcomingDeadlines.length === 0" class="empty-state-sm">
+        <el-empty description="未来3天没有即将到期的任务" :image-size="40" />
       </div>
       <div v-else class="upcoming-list">
         <div v-for="task in upcomingDeadlines" :key="task.id" class="upcoming-item" :class="{ 'overdue': isOverdue(task.due_date) }">
@@ -125,43 +164,6 @@
 
     <!-- 底部双栏 -->
     <el-row :gutter="16" class="content-row">
-      <!-- 待办任务 -->
-      <el-col :xs="24" :sm="12">
-        <el-card class="content-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>📋 待办任务</span>
-              <el-button text @click="$router.push('/tasks')">查看全部 →</el-button>
-            </div>
-          </template>
-          <div v-if="todoTasks.length === 0" class="empty-state">
-            <el-empty description="暂无待办任务" :image-size="60" />
-          </div>
-          <div v-else class="task-list">
-            <div v-for="task in todoTasks" :key="task.id" class="task-item" :class="{ overdue: isOverdue(task.due_date) }">
-              <el-checkbox
-                :model-value="task.status === 'done'"
-                @change="toggleTaskStatus(task)"
-                size="large"
-              />
-              <div class="task-info">
-                <div class="task-title">{{ task.title }}</div>
-                <div class="task-meta">
-                  <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
-                    {{ getPriorityLabel(task.priority) }}
-                  </el-tag>
-                  <span class="task-assignee">{{ memberStore.getMemberName(task.assignee_id) }}</span>
-                </div>
-              </div>
-              <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
-                <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
-                {{ formatDate(task.due_date) }}
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
       <!-- 最近会议 -->
       <el-col :xs="24" :sm="12">
         <el-card class="content-card" shadow="hover">
@@ -198,49 +200,51 @@
           </div>
         </el-card>
       </el-col>
-    </el-row>
 
-    <!-- 成员进行中任务 -->
-    <el-card class="member-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span>👥 成员进行中任务</span>
-        </div>
-      </template>
-      <div v-if="memberWithTasks.length === 0" class="empty-state">
-        <el-empty description="暂无进行中的任务" :image-size="60" />
-      </div>
-      <div v-else class="member-tasks">
-        <el-collapse v-model="expandedMembers">
-          <el-collapse-item v-for="member in memberWithTasks" :key="member.id" :name="member.id">
-            <template #title>
-              <div class="member-header">
-                <span class="member-name">{{ member.name }}</span>
-                <el-badge :value="member.in_progress_tasks.length" type="primary" :hidden="member.in_progress_tasks.length === 0" />
-              </div>
-            </template>
-            <div v-if="member.in_progress_tasks.length === 0" class="no-tasks">暂无进行中任务</div>
-            <div v-else class="member-task-list">
-              <div v-for="task in member.in_progress_tasks" :key="task.id" class="member-task-item">
-                <div class="member-task-info">
-                  <span class="member-task-title">{{ task.title }}</span>
-                  <div class="member-task-meta">
-                    <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
-                      {{ getPriorityLabel(task.priority) }}
-                    </el-tag>
-                    <span class="member-task-due" :class="{ overdue: isOverdue(task.due_date) }">
-                      <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
-                      {{ formatDate(task.due_date) }}
-                    </span>
+      <!-- 成员进行中任务 -->
+      <el-col :xs="24" :sm="12">
+        <el-card class="content-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>👥 成员进行中任务</span>
+            </div>
+          </template>
+          <div v-if="memberWithTasks.length === 0" class="empty-state">
+            <el-empty description="暂无进行中的任务" :image-size="60" />
+          </div>
+          <div v-else class="member-tasks">
+            <el-collapse v-model="expandedMembers">
+              <el-collapse-item v-for="member in memberWithTasks" :key="member.id" :name="member.id">
+                <template #title>
+                  <div class="member-header">
+                    <span class="member-name">{{ member.name }}</span>
+                    <el-badge :value="member.in_progress_tasks.length" type="primary" :hidden="member.in_progress_tasks.length === 0" />
+                  </div>
+                </template>
+                <div v-if="member.in_progress_tasks.length === 0" class="no-tasks">暂无进行中任务</div>
+                <div v-else class="member-task-list">
+                  <div v-for="task in member.in_progress_tasks" :key="task.id" class="member-task-item">
+                    <div class="member-task-info">
+                      <span class="member-task-title">{{ task.title }}</span>
+                      <div class="member-task-meta">
+                        <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
+                          {{ getPriorityLabel(task.priority) }}
+                        </el-tag>
+                        <span class="member-task-due" :class="{ overdue: isOverdue(task.due_date) }">
+                          <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
+                          {{ formatDate(task.due_date) }}
+                        </span>
+                      </div>
+                    </div>
+                    <el-button text type="primary" @click="goToTask(task)">查看</el-button>
                   </div>
                 </div>
-                <el-button text type="primary" @click="goToTask(task)">查看</el-button>
-              </div>
-            </div>
-          </el-collapse-item>
-        </el-collapse>
-      </div>
-    </el-card>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <!-- 创建任务对话框 -->
     <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'">
@@ -282,7 +286,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatCompactDate } from '@/utils/format'
-import { getPriorityType, getPriorityLabel } from '@/utils/task'
+import { getStatusType, getStatusLabel, getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 
@@ -291,7 +295,7 @@ const userStore = useUserStore()
 const members = computed(() => memberStore.members)
 
 const dashboardData = ref({})
-const todoTasks = ref([])
+const inProgressTasks = ref([])
 const recentMeetings = ref([])
 const upcomingDeadlines = ref([])
 const memberWithTasks = ref([])
@@ -343,11 +347,26 @@ const fetchDashboardStats = async () => {
   } catch (e) { console.error('获取仪表盘数据失败:', e) }
 }
 
-const fetchTodoTasks = async () => {
+// 获取进行中任务（合并待办+进行中）
+const fetchInProgressTasks = async () => {
   try {
-    const res = await axios.get('/api/v1/tasks', { params: { status: 'todo', page_size: 5 } })
-    todoTasks.value = res.data.items || []
-  } catch (e) { console.error('获取任务失败:', e) }
+    // 并行获取 todo 和 in_progress 任务
+    const [todoRes, inProgressRes] = await Promise.all([
+      axios.get('/api/v1/tasks', { params: { status: 'todo', page_size: 20 } }),
+      axios.get('/api/v1/tasks', { params: { status: 'in_progress', page_size: 20 } })
+    ])
+    const todoTasks = todoRes.data.items || []
+    const inProgressTasks = inProgressRes.data.items || []
+    // 合并并按截止日期排序（最近截止的在前）
+    const allTasks = [...todoTasks, ...inProgressTasks]
+    allTasks.sort((a, b) => {
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return dayjs(a.due_date).diff(dayjs(b.due_date))
+    })
+    inProgressTasks.value = allTasks
+  } catch (e) { console.error('获取进行中任务失败:', e) }
 }
 
 const fetchRecentMeetings = async () => {
@@ -407,7 +426,7 @@ const createTask = async () => {
     ElMessage.success('任务创建成功')
     showCreateTask.value = false
     newTask.value = { title: '', assignee_id: null, priority: 'medium', due_date: '', description: '' }
-    fetchTodoTasks()
+    fetchInProgressTasks()
     fetchDashboardStats()
     fetchUpcomingDeadlines()
     fetchMemberTasks()
@@ -418,7 +437,7 @@ const toggleTaskStatus = async (task) => {
   const newStatus = task.status === 'done' ? 'todo' : 'done'
   try {
     await axios.put(`/api/v1/tasks/${task.id}`, { status: newStatus })
-    fetchTodoTasks()
+    fetchInProgressTasks()
     fetchDashboardStats()
     fetchUpcomingDeadlines()
     fetchMemberTasks()
@@ -426,8 +445,6 @@ const toggleTaskStatus = async (task) => {
 }
 
 const goToTask = (task) => {
-  // 可以跳转到任务详情页或打开编辑对话框
-  // 目前暂时不做跳转，只是提示
   ElMessage.info(`任务: ${task.title}`)
 }
 
@@ -439,7 +456,7 @@ const getStatusTagType = (status) => {
   const map = { scheduled: 'info', recording: 'warning', completed: 'success', cancelled: 'info' }
   return map[status] || 'info'
 }
-const getStatusLabel = (status) => {
+const getMeetingStatusLabel = (status) => {
   const map = { scheduled: '已安排', recording: '录制中', completed: '已完成', cancelled: '已取消' }
   return map[status] || status
 }
@@ -463,9 +480,9 @@ onMounted(() => {
   updateTime()
   setInterval(updateTime, 1000)
   fetchDashboardStats()
-  fetchTodoTasks()
-  fetchRecentMeetings()
+  fetchInProgressTasks()
   fetchUpcomingDeadlines()
+  fetchRecentMeetings()
   fetchMemberTasks()
   fetchMembers()
   window.addEventListener('resize', handleResize)
@@ -533,6 +550,25 @@ onMounted(() => {
 .stat-number { font-size: 28px; font-weight: bold; color: #303133; }
 .stat-sub { font-size: 12px; color: #909399; margin-top: 2px; }
 
+/* 通用卡片 */
+.content-card { border-radius: 12px; margin-bottom: 16px; }
+.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; gap: 10px; }
+.empty-state { display: flex; justify-content: center; align-items: center; padding: 40px 0; }
+.empty-state-sm { display: flex; justify-content: center; align-items: center; padding: 20px 0; }
+
+/* 进行中任务 */
+.task-list { display: flex; flex-direction: column; }
+.task-item { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
+.task-item:hover { background: #fafafa; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
+.task-item:last-child { border-bottom: none; }
+.task-item.overdue { background: #fef5f5; }
+.task-info { flex: 1; min-width: 0; }
+.task-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-meta { display: flex; align-items: center; gap: 8px; }
+.task-assignee { font-size: 12px; color: #909399; }
+.task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.task-due.overdue { color: #f56c6c; font-weight: 600; }
+
 /* 即将到期 */
 .upcoming-card { border-radius: 12px; margin-bottom: 16px; }
 .upcoming-list { display: flex; flex-direction: column; }
@@ -552,21 +588,6 @@ onMounted(() => {
 .content-row { margin-bottom: 16px; }
 .content-card { border-radius: 12px; height: 100%; }
 .content-card :deep(.el-card__header) { padding: 16px 20px; border-bottom: none; }
-.empty-state { display: flex; justify-content: center; align-items: center; padding: 40px 0; }
-.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; }
-
-/* 待办任务 */
-.task-list { display: flex; flex-direction: column; }
-.task-item { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
-.task-item:hover { background: #fafafa; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
-.task-item:last-child { border-bottom: none; }
-.task-item.overdue { background: #fef5f5; }
-.task-info { flex: 1; min-width: 0; }
-.task-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.task-meta { display: flex; align-items: center; gap: 8px; }
-.task-assignee { font-size: 12px; color: #909399; }
-.task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.task-due.overdue { color: #f56c6c; font-weight: 600; }
 
 /* 会议列表 */
 .meeting-list { display: flex; flex-direction: column; }
