@@ -48,8 +48,8 @@ class MeetingParticipant(Base):
     __tablename__ = "meeting_participants"
 
     id = Column(Integer, primary_key=True)
-    meeting_id = Column(Integer, ForeignKey("meetings.id"), nullable=False)
-    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    meeting_id = Column(Integer, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False)
+    member_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), default="participant")  # host/presenter/participant
 
     meeting = relationship("Meeting", back_populates="participants")
