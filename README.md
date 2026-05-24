@@ -231,6 +231,8 @@ npm run dev
 - **前端 UI 全面升级**（2026-05-24）：建立 CSS 设计令牌（暖橙珊瑚色系）、全部 9 个页面完成升级（Dashboard、TaskView、ChatView、MeetingView、KnowledgeView、MemberView、ProjectView、MemoryView、LoginView）、玻璃拟态、丰富动效、骨架屏
 - **Webhook 自动部署**（2026-05-25）：GitHub push 到 main 分支触发 webhook，云服务器自动 SSH 到本地 Windows 执行 git pull + docker compose restart app
 - **微信对话响应优化**（2026-05-25）：双消息模式，用户发送后 0.5 秒内先发"🤔 收到，让我思考一下..."，后台处理完再发正式回复，解决等待无反馈问题
+- **文件对话存入知识库**（2026-05-25）：上传文件给小气助手后，Agent 回复后追加"存入知识库"按钮，可一键将文件内容存入公共知识库
+- **知识库前端修复**（2026-05-25）：修复文件上传失败问题（移除错误的 Content-Type 手动设置，改为由 axios 自动处理 FormData boundary）；修复 KnowledgeView/ProjectView 弹窗被遮挡问题（height: 100% + overflow-y: auto）
 
 ### 待解决问题
 

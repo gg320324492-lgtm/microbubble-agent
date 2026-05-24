@@ -25,6 +25,7 @@ class ChatResponse(BaseModel):
     session_id: str
     file_url: Optional[str] = None
     file_name: Optional[str] = None
+    knowledge_content: Optional[str] = None  # 文件提取的文本，供存入知识库使用
     is_brief: bool = False  # 是否为【简要】回复
 
 
@@ -155,6 +156,7 @@ async def chat_with_file(
         session_id=session_id,
         file_url=file_url,
         file_name=filename,
+        knowledge_content=extracted_text,
         is_brief=True
     )
 
