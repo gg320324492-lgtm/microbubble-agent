@@ -10,7 +10,7 @@ class Feedback(Base, TimestampMixin):
     __tablename__ = "feedback"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False)
     session_id = Column(String(100))
     rating = Column(Integer, nullable=False)  # 1-5
     comment = Column(Text)  # 用户反馈内容

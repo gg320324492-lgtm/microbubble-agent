@@ -80,8 +80,8 @@ class TaskDependency(Base):
     __tablename__ = "task_dependencies"
 
     id = Column(Integer, primary_key=True)
-    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
-    depends_on_id = Column(Integer, ForeignKey("tasks.id"), nullable=False)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    depends_on_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
 
     task = relationship("Task", foreign_keys=[task_id], back_populates="dependencies")
     depends_on = relationship("Task", foreign_keys=[depends_on_id], back_populates="dependents")

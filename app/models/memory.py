@@ -17,7 +17,7 @@ class Memory(Base, TimestampMixin):
     __tablename__ = "memories"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("members.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True)
     memory_type = Column(String(20), nullable=False)  # preference/summary/entity
     key = Column(String(200))           # 偏好键名
     content = Column(Text, nullable=False)
