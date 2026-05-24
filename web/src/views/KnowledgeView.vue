@@ -153,6 +153,7 @@
       v-model="showCreateDialog"
       :title="editingKnowledge ? '编辑知识' : '添加知识'"
       :width="isMobile ? '90vw' : '600px'"
+      top="8vh"
     >
       <el-form :model="knowledgeForm" label-width="80px">
         <el-form-item label="标题" required>
@@ -200,7 +201,7 @@
     </el-dialog>
 
     <!-- AI问答对话框 -->
-    <el-dialog v-model="showSemanticSearch" title="AI智能问答" :width="isMobile ? '90vw' : '600px'">
+    <el-dialog v-model="showSemanticSearch" title="AI智能问答" :width="isMobile ? '90vw' : '600px'" top="10vh">
       <div class="semantic-search">
         <el-input
           v-model="semanticQuery"
@@ -235,7 +236,7 @@
     </el-dialog>
 
     <!-- 知识详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="知识详情" :width="isMobile ? '90vw' : '600px'">
+    <el-dialog v-model="showDetailDialog" title="知识详情" :width="isMobile ? '90vw' : '600px'" top="5vh">
       <div v-if="currentKnowledge" class="knowledge-detail">
         <h2>{{ currentKnowledge.title }}</h2>
         <div class="detail-meta">
@@ -270,7 +271,7 @@
     </el-dialog>
 
     <!-- 文件上传对话框 -->
-    <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'">
+    <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'" top="10vh">
       <div class="upload-ai-notice">
         <el-icon size="16" color="#409eff"><MagicStick /></el-icon>
         <span>上传后 AI 将自动分析内容，生成摘要、分类和标签</span>

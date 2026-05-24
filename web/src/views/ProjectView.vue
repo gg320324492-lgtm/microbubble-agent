@@ -70,7 +70,7 @@
     </div>
 
     <!-- 创建项目对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建项目" :width="isMobile ? '90vw' : '500px'">
+    <el-dialog v-model="showCreateDialog" title="创建项目" :width="isMobile ? '90vw' : '500px'" top="8vh">
       <el-form :model="projectForm" label-width="80px">
         <el-form-item label="项目名称" required>
           <el-input v-model="projectForm.name" placeholder="请输入项目名称" />
@@ -119,7 +119,7 @@
     </el-dialog>
 
     <!-- 项目详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="项目详情" :width="isMobile ? '95vw' : '700px'">
+    <el-dialog v-model="showDetailDialog" title="项目详情" :width="isMobile ? '95vw' : '700px'" top="5vh">
       <div v-if="currentProject" class="project-detail">
         <h2>{{ currentProject.name }}</h2>
         <el-descriptions :column="2" border>

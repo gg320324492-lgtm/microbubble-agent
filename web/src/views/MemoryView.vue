@@ -70,6 +70,7 @@
       v-model="showEditDialog"
       title="编辑记忆"
       :width="isMobile ? '90vw' : '500px'"
+      top="8vh"
     >
       <el-form label-width="80px">
         <el-form-item label="内容">
