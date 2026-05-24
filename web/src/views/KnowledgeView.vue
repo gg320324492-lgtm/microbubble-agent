@@ -523,6 +523,8 @@ onMounted(() => {
 
 <style scoped>
 .knowledge-view {
+  height: 100%;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
