@@ -152,7 +152,7 @@ async def upload_knowledge_file(
 ):
     """上传文件到知识库，自动提取文本、分类、标签"""
     # 验证文件类型
-    allowed_exts = {'.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt', '.md'}
+    allowed_exts = {'.pdf', '.docx', '.xlsx', '.txt', '.md'}
     filename = file.filename or ""
     ext = '.' + filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext not in allowed_exts:
