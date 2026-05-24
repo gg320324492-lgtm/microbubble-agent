@@ -10,7 +10,7 @@ logger = logging.getLogger("microbubble.file_parser")
 class FileParserService:
     """从各类文件中提取文本内容"""
 
-    SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.doc', '.xlsx', '.xls', '.txt', '.md'}
+    SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.txt', '.md'}
 
     async def extract_text(self, file_data: bytes, filename: str, content_type: str) -> str:
         """提取文件文本，路由到对应解析器"""
