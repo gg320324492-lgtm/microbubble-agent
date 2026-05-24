@@ -898,6 +898,8 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both;
+  position: relative;
+  z-index: 2;
 }
 
 .knowledge-list-card {
