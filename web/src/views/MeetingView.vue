@@ -126,7 +126,7 @@
     </el-card>
 
     <!-- 创建会议对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建会议" :width="isMobile ? '90vw' : '500px'">
+    <el-dialog v-model="showCreateDialog" title="创建会议" :width="isMobile ? '90vw' : '500px'" top="8vh">
       <el-form :model="meetingForm" label-width="80px">
         <el-form-item label="会议主题" required>
           <el-input v-model="meetingForm.title" placeholder="请输入会议主题" />
@@ -173,7 +173,7 @@
     </el-dialog>
 
     <!-- 实时转写对话框 -->
-    <el-dialog v-model="showTranscriptDialog" title="会议实时转写" :width="isMobile ? '95vw' : '800px'" :close-on-click-modal="false">
+    <el-dialog v-model="showTranscriptDialog" title="会议实时转写" :width="isMobile ? '95vw' : '800px'" :close-on-click-modal="false" top="5vh">
       <div v-if="currentMeeting" class="transcript-dialog-content">
         <div class="meeting-info-bar">
           <h3>{{ currentMeeting.title }}</h3>
@@ -191,7 +191,7 @@
     </el-dialog>
 
     <!-- 会议纪要对话框 -->
-    <el-dialog v-model="showMinutesDialog" title="会议纪要" :width="isMobile ? '90vw' : '600px'">
+    <el-dialog v-model="showMinutesDialog" title="会议纪要" :width="isMobile ? '90vw' : '600px'" top="5vh">
       <div v-if="currentMeeting" class="minutes-content">
         <h3>{{ currentMeeting.title }}</h3>
         <div class="minutes-time">
@@ -220,7 +220,7 @@
     </el-dialog>
 
     <!-- 粘贴转录对话框 -->
-    <el-dialog v-model="showPasteDialog" title="粘贴会议转录" :width="'700px'">
+    <el-dialog v-model="showPasteDialog" title="粘贴会议转录" :width="'700px'" top="10vh" :close-on-click-modal="true">
       <el-form label-width="90px">
         <el-form-item label="会议标题" required>
           <el-input v-model="transcriptForm.title" placeholder="请输入会议主题" />
@@ -434,6 +434,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  height: 100%;
+  overflow-y: auto;
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
