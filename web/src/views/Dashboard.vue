@@ -137,9 +137,9 @@
                 <div class="task-title">{{ task.title }}</div>
                 <div class="task-meta">
                   <el-tag :type="getPriorityType(task.priority)" size="small">
-                    {{ task.priority }}
+                    {{ getPriorityLabel(task.priority) }}
                   </el-tag>
-                  <span class="task-assignee">{{ task.assignee_name || '未分配' }}</span>
+                  <span class="task-assignee">{{ memberStore.getMemberName(task.assignee_id) }}</span>
                 </div>
               </div>
               <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
@@ -243,7 +243,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatCompactDate, formatTime } from '@/utils/format'
-import { getStatusType, getPriorityType } from '@/utils/task'
+import { getStatusType, getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 import VChart from 'vue-echarts'

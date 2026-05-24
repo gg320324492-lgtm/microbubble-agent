@@ -37,7 +37,7 @@ class MeetingResponse(MeetingBase):
     id: int
     meeting_url: Optional[str] = None
     meeting_id: Optional[str] = None
-    transcript: Optional[Dict[str, Any]] = None
+    transcript: Optional[Any] = None
     summary: Optional[str] = None
     key_points: Optional[List[str]] = None
     decisions: Optional[List[str]] = None
