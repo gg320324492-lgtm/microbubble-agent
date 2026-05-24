@@ -574,6 +574,7 @@ class MessageHandler:
             msg_copy = dict(msg)
             msg_copy["MsgType"] = "text"
             msg_copy["Content"] = recognition
+            msg_copy["_skip_thinking"] = True  # 语音已有反馈，跳过思考中消息
             await self._handle_private_message(msg_copy, member, "text", db, is_external)
             return
 
@@ -592,6 +593,7 @@ class MessageHandler:
                 msg_copy = dict(msg)
                 msg_copy["MsgType"] = "text"
                 msg_copy["Content"] = text
+                msg_copy["_skip_thinking"] = True  # 语音已有反馈，跳过思考中消息
                 await self._handle_private_message(msg_copy, member, "text", db, is_external)
             else:
                 await self._reply_text(user_id, "语音识别失败，请改用文字。", is_external, msg=msg)
@@ -939,11 +941,13 @@ class MessageHandler:
                                     is_external: bool = False, msg: dict = None) -> None:
         """私聊通用对话"""
         session_id = f"wechat_{user_id}"
-        # 立即发送思考中消息，不阻塞
-        try:
-            await self._reply_text(user_id, "🤔 收到，让我思考一下...", is_external, msg=msg)
-        except Exception as e:
-            logger.warning(f"发送思考中消息失败: {e}")
+        # 如果语音/图片处理已经发送过反馈（如"🎤 收到语音..."），则跳过思考中消息
+        skip_thinking = msg.get("_skip_thinking") if msg else False
+        if not skip_thinking:
+            try:
+                await self._reply_text(user_id, "🤔 收到，让我思考一下...", is_external, msg=msg)
+            except Exception as e:
+                logger.warning(f"发送思考中消息失败: {e}")
         # 后台异步处理 agent 对话
         asyncio.create_task(self._process_general_chat_async(content, member, session_id, db, is_external, msg))
 
