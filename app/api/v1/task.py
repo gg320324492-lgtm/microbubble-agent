@@ -212,16 +212,21 @@ async def list_tasks(
     status: Optional[str] = None,
     project_id: Optional[int] = None,
     overdue: bool = False,
+    include_deleted: bool = False,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """查询任务列表"""
+    """查询任务列表（默认排除已删除任务）"""
     is_admin = current_user.role in ("admin", "leader")
 
     query = select(Task)
     filters = []
+
+    # 默认排除已删除任务
+    if not include_deleted:
+        filters.append(Task.deleted_at.is_(None))
 
     # 权限：普通成员只看自己创建的 + 自己负责的
     if not is_admin:
@@ -275,6 +280,12 @@ async def get_task(
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
+    # 已删除的任务不返回（除非是管理员查看垃圾桶）
+    if task.deleted_at is not None:
+        is_admin = current_user.role in ("admin", "leader")
+        if not is_admin:
+            raise HTTPException(status_code=404, detail="任务不存在")
+
     # 权限：普通成员只能查看自己的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
@@ -297,6 +308,10 @@ async def update_task(
 
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+
+    # 不能编辑已删除的任务
+    if task.deleted_at is not None:
+        raise HTTPException(status_code=400, detail="任务已删除，无法编辑")
 
     # 权限：普通成员只能编辑自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
@@ -328,18 +343,75 @@ async def delete_task(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """删除任务"""
+    """删除任务（软删除，进入垃圾桶）"""
     result = await db.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()
 
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
+    # 已删除的任务不能再删除
+    if task.deleted_at is not None:
+        raise HTTPException(status_code=400, detail="任务已在垃圾桶中")
+
     # 权限：普通成员只能删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
         if task.created_by != current_user.id and task.assignee_id != current_user.id:
             raise HTTPException(status_code=403, detail="只能删除自己创建或被分配的任务")
+
+    # 软删除：设置 deleted_at
+    task.deleted_at = utcnow()
+    await db.commit()
+
+
+@router.post("/tasks/{task_id}/restore", response_model=TaskResponse)
+async def restore_task(
+    task_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """恢复任务（从垃圾桶）"""
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    if task.deleted_at is None:
+        raise HTTPException(status_code=400, detail="任务未删除，无需恢复")
+
+    # 权限：只有管理员可以恢复任务
+    is_admin = current_user.role in ("admin", "leader")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="只有管理员可以恢复任务")
+
+    task.deleted_at = None
+    await db.commit()
+    await db.refresh(task)
+    return task
+
+
+@router.delete("/tasks/{task_id}/permanent", status_code=204)
+async def permanent_delete_task(
+    task_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """永久删除任务（从垃圾桶彻底删除）"""
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    if task.deleted_at is None:
+        raise HTTPException(status_code=400, detail="请先删除任务再永久删除")
+
+    # 权限：只有管理员可以永久删除
+    is_admin = current_user.role in ("admin", "leader")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="只有管理员可以永久删除任务")
 
     await db.delete(task)
     await db.commit()
@@ -356,6 +428,9 @@ async def get_task_stats(
     is_admin = current_user.role in ("admin", "leader")
 
     query = select(Task)
+
+    # 排除已删除的任务
+    query = query.where(Task.deleted_at.is_(None))
 
     if project_id:
         query = query.where(Task.project_id == project_id)
@@ -397,26 +472,27 @@ async def get_dashboard_stats(
     now = utcnow()
     is_admin = current_user.role in ("admin", "leader")
 
-    # 权限：普通成员只看自己的数据
+    # 权限：普通成员只看自己的数据，且排除已删除
     if not is_admin:
-        task_filter = or_(
-            Task.created_by == current_user.id,
-            Task.assignee_id == current_user.id
+        task_filter = and_(
+            Task.deleted_at.is_(None),
+            or_(
+                Task.created_by == current_user.id,
+                Task.assignee_id == current_user.id
+            )
         )
     else:
-        task_filter = None
+        task_filter = Task.deleted_at.is_(None)
 
     # 任务状态统计
     status_query = select(Task.status, func.count(Task.id))
-    if task_filter is not None:
-        status_query = status_query.where(task_filter)
+    status_query = status_query.where(task_filter)
     task_status_result = await db.execute(status_query.group_by(Task.status))
     task_status_stats = {row[0]: row[1] for row in task_status_result.all()}
 
     # 任务优先级统计
     priority_query = select(Task.priority, func.count(Task.id))
-    if task_filter is not None:
-        priority_query = priority_query.where(task_filter)
+    priority_query = priority_query.where(task_filter)
     task_priority_result = await db.execute(priority_query.group_by(Task.priority))
     task_priority_stats = {row[0]: row[1] for row in task_priority_result.all()}
 
@@ -426,8 +502,7 @@ async def get_dashboard_stats(
         func.count(Task.id).label("total_tasks"),
         func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done_tasks")
     ).outerjoin(Task, Task.project_id == Project.id)
-    if task_filter is not None:
-        project_query = project_query.where(task_filter)
+    project_query = project_query.where(task_filter)
     project_stats_result = await db.execute(
         project_query.group_by(Project.id, Project.name)
     )
@@ -449,8 +524,7 @@ async def get_dashboard_stats(
         func.count(Task.id).filter(Task.status == TaskStatus.IN_PROGRESS.value).label("in_progress"),
         func.count(Task.id).filter(Task.status == TaskStatus.DONE.value).label("done")
     ).outerjoin(Task, Task.assignee_id == Member.id).where(Member.is_active == True)
-    if task_filter is not None:
-        member_query = member_query.where(task_filter)
+    member_query = member_query.where(task_filter)
     member_stats_result = await db.execute(
         member_query.group_by(Member.id, Member.name).limit(10)
     )
@@ -466,11 +540,10 @@ async def get_dashboard_stats(
     overdue_query = select(func.count(Task.id)).where(
         and_(
             Task.due_date < now,
-            Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value])
+            Task.status.notin_([TaskStatus.DONE.value, TaskStatus.CANCELLED.value]),
+            Task.deleted_at.is_(None)
         )
     )
-    if task_filter is not None:
-        overdue_query = overdue_query.where(task_filter)
     overdue_result = await db.execute(overdue_query)
     overdue_count = overdue_result.scalar() or 0
 

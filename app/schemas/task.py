@@ -54,6 +54,7 @@ class TaskResponse(TaskBase):
     source: Optional[str] = None
     meeting_id: Optional[int] = None
     tags: Optional[List[str]] = None
+    deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
