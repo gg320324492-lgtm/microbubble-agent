@@ -150,6 +150,10 @@
                 <el-icon v-if="isOverdue(task.due_date)" color="#f56c6c"><Warning /></el-icon>
                 {{ formatDate(task.due_date) }}
               </div>
+              <div class="task-actions">
+                <el-button text type="success" size="small" @click="completeTask(task)">完成</el-button>
+                <el-button text type="primary" size="small" @click="openEditDialog(task)">编辑</el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -184,6 +188,10 @@
           <div class="upcoming-right">
             <div class="due-days" :class="{ urgent: getDaysLeft(task.due_date) <= 1 }">
               {{ getDaysLeftText(task.due_date) }}
+            </div>
+            <div class="task-actions">
+              <el-button text type="success" size="small" @click="completeTask(task)">完成</el-button>
+              <el-button text type="primary" size="small" @click="openEditDialog(task)">编辑</el-button>
             </div>
           </div>
         </div>
@@ -256,6 +264,46 @@
         <el-button type="primary" @click="createTask">创建</el-button>
       </template>
     </el-dialog>
+
+    <!-- 编辑任务对话框 -->
+    <el-dialog v-model="showEditDialog" title="编辑任务" :width="isMobile ? '90vw' : '500px'">
+      <el-form :model="editForm" label-width="80px">
+        <el-form-item label="任务标题" required>
+          <el-input v-model="editForm.title" placeholder="请输入任务标题" />
+        </el-form-item>
+        <el-form-item label="负责人">
+          <el-select v-model="editForm.assignee_id" placeholder="选择负责人" clearable>
+            <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="优先级">
+          <el-radio-group v-model="editForm.priority">
+            <el-radio label="high">高</el-radio>
+            <el-radio label="medium">中</el-radio>
+            <el-radio label="low">低</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="editForm.status">
+            <el-option label="待办" value="todo" />
+            <el-option label="进行中" value="in_progress" />
+            <el-option label="阻塞" value="blocked" />
+            <el-option label="已完成" value="done" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="截止日期">
+          <el-date-picker v-model="editForm.due_date" type="datetime" placeholder="选择截止日期和时间"
+            format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="任务描述">
+          <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="请输入任务描述" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -292,6 +340,40 @@ const updateTime = () => {
 onUnmounted(() => { window.removeEventListener('resize', handleResize) })
 
 const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: '', description: '' })
+
+// 编辑相关
+const editingTask = ref(null)
+const showEditDialog = ref(false)
+const editForm = ref({ title: '', assignee_id: null, priority: 'medium', status: 'todo', due_date: '', description: '', reminders: [] })
+
+const openEditDialog = (task) => {
+  editingTask.value = task
+  editForm.value = { ...task, reminders: task.reminders ? [...task.reminders] : [] }
+  showEditDialog.value = true
+}
+
+const saveEdit = async () => {
+  if (!editForm.value.title) { ElMessage.warning('请输入任务标题'); return }
+  try {
+    await axios.put(`/api/v1/tasks/${editingTask.value.id}`, editForm.value)
+    ElMessage.success('任务更新成功')
+    showEditDialog.value = false
+    editingTask.value = null
+    fetchInProgressTasks()
+    fetchUpcomingDeadlines()
+    fetchDashboardStats()
+  } catch (e) { ElMessage.error('更新任务失败') }
+}
+
+const completeTask = async (task) => {
+  try {
+    await axios.put(`/api/v1/tasks/${task.id}`, { status: 'done' })
+    ElMessage.success('任务已完成')
+    fetchInProgressTasks()
+    fetchUpcomingDeadlines()
+    fetchDashboardStats()
+  } catch (e) { ElMessage.error('操作失败') }
+}
 
 const username = computed(() => userStore.username || '用户')
 
@@ -561,6 +643,11 @@ onMounted(() => {
 .task-row .task-meta { display: flex; align-items: center; gap: 8px; }
 .task-row .task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .task-row .task-due.overdue { color: #f56c6c; font-weight: 600; }
+.task-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
 
 /* 即将到期 */
 .upcoming-card { border-radius: 12px; margin-bottom: 16px; }
@@ -573,7 +660,7 @@ onMounted(() => {
 .upcoming-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .upcoming-meta { display: flex; align-items: center; gap: 8px; }
 .upcoming-assignee { font-size: 12px; color: #909399; }
-.upcoming-right { flex-shrink: 0; }
+.upcoming-right { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .due-days { font-size: 13px; color: #909399; padding: 4px 10px; background: #f5f5f5; border-radius: 12px; }
 .due-days.urgent { color: #f56c6c; background: #fef0f0; font-weight: 600; }
 
