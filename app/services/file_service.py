@@ -1,5 +1,7 @@
 """MinIO 文件上传服务"""
 
+import asyncio
+import io
 import uuid
 from datetime import timedelta
 from minio import Minio
@@ -44,11 +46,12 @@ class FileService:
         Returns:
             {"object_name": ..., "url": ..., "size": ...}
         """
-        import io
         ext = filename.rsplit(".", 1)[-1] if "." in filename else ""
         object_name = f"{prefix}/{uuid.uuid4().hex}.{ext}" if ext else f"{prefix}/{uuid.uuid4().hex}"
 
-        self.client.put_object(
+        # 使用线程池执行同步的 MinIO 操作，避免阻塞事件循环
+        await asyncio.to_thread(
+            self.client.put_object,
             self.bucket,
             object_name,
             io.BytesIO(file_data),

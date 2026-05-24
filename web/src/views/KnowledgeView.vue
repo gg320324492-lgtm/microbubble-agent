@@ -477,9 +477,7 @@ const handleUpload = async () => {
     formData.append('file', uploadFile.value)
     if (uploadTitle.value) formData.append('title', uploadTitle.value)
 
-    await axios.post('/api/v1/knowledge/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    await axios.post('/api/v1/knowledge/upload', formData)
     ElMessage.success('文件上传成功，后台正在分析...')
     showUploadDialog.value = false
     uploadTitle.value = ''
