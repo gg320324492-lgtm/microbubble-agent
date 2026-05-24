@@ -402,7 +402,7 @@ onMounted(() => {
   fetchInProgressTasks()
   fetchUpcomingDeadlines()
   fetchRecentMeetings()
-  fetchMembers()
+  memberStore.refreshMembers() // 强制刷新获取最新头像
   window.addEventListener('resize', handleResize)
 })
 </script>
