@@ -9,7 +9,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.models.base import utcnow, BEIJING_TZ
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -16,6 +16,7 @@ from app.agent.core import agent
 from app.core.database import get_db, async_session
 from app.core.security import get_current_user, decode_token
 from app.models.member import Member
+from app.models.meeting import Meeting
 from app.services.meeting_service import MeetingService
 
 logger = logging.getLogger("microbubble.voice")
