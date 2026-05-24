@@ -42,83 +42,122 @@
 
         <!-- 任务列表 -->
         <el-card class="task-list-card">
-          <div style="overflow-x: auto">
-          <el-table :data="tasks" stripe style="width: 100%">
-            <el-table-column prop="title" label="任务标题" min-width="200">
-              <template #default="{ row }">
-                <div class="task-title-cell">
-                  <el-checkbox
-                    :model-value="row.status === 'done'"
-                    @change="toggleTaskStatus(row)"
+          <!-- 未完成 Section -->
+          <div class="task-section">
+            <div class="section-header">
+              <span class="section-title">📋 进行中</span>
+              <el-badge :value="activeTasks.length" type="warning" />
+            </div>
+            <div v-if="activeTasks.length === 0" class="empty-section">
+              <span>暂无进行中任务</span>
+            </div>
+            <div v-else class="task-groups">
+              <div v-for="group in groupedActiveTasks" :key="group.assignee_id" class="task-group">
+                <!-- 负责人头部 -->
+                <div class="group-header">
+                  <el-avatar
+                    v-if="memberStore.getMemberAvatar(group.assignee_id)"
+                    :src="memberStore.getMemberAvatar(group.assignee_id)"
+                    :size="36"
+                    class="group-avatar"
                   />
-                  <span :class="{ 'task-done': row.status === 'done' }">{{ row.title }}</span>
+                  <el-avatar v-else :size="36" style="background: #409eff" class="group-avatar">
+                    {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
+                  </el-avatar>
+                  <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
+                  <el-tag size="small" type="info">{{ group.tasks.length }}项</el-tag>
                 </div>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="assignee_id" label="负责人" width="150">
-              <template #default="{ row }">
-                <div class="assignee-cell">
-                  <el-avatar v-if="memberStore.getMemberAvatar(row.assignee_id)" :src="memberStore.getMemberAvatar(row.assignee_id)" :size="24" />
-                  <el-avatar v-else :size="24" style="background: #409eff">{{ memberStore.getMemberName(row.assignee_id).charAt(0) }}</el-avatar>
-                  <span>{{ memberStore.getMemberName(row.assignee_id) }}</span>
+                <!-- 任务列表 -->
+                <div class="group-tasks">
+                  <div
+                    v-for="task in group.tasks"
+                    :key="task.id"
+                    class="task-row"
+                    :class="{ overdue: isOverdue(task) }"
+                  >
+                    <el-checkbox
+                      :model-value="task.status === 'done'"
+                      @change="toggleTaskStatus(task)"
+                      size="large"
+                    />
+                    <div class="task-content">
+                      <div class="task-title">{{ task.title }}</div>
+                      <div class="task-meta">
+                        <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
+                          {{ getPriorityLabel(task.priority) }}
+                        </el-tag>
+                        <el-tag v-if="task.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
+                        <el-tag v-else-if="task.status === 'blocked'" size="small" type="danger">阻塞</el-tag>
+                      </div>
+                    </div>
+                    <div class="task-due" :class="{ overdue: isOverdue(task) }">
+                      <el-icon v-if="isOverdue(task)" color="#f56c6c"><Warning /></el-icon>
+                      {{ formatDate(task.due_date) }}
+                    </div>
+                    <div class="task-actions">
+                      <template v-if="isAdmin || task.created_by === currentUserId">
+                        <el-button text type="primary" size="small" @click="editTask(task)">编辑</el-button>
+                        <el-button text type="danger" size="small" @click="deleteTask(task)">删除</el-button>
+                      </template>
+                    </div>
+                  </div>
                 </div>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="priority" label="优先级" width="100">
-              <template #default="{ row }">
-                <el-tag :type="getPriorityType(row.priority)" size="small">
-                  {{ getPriorityLabel(row.priority) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="status" label="状态" width="120">
-              <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
-                  {{ getStatusLabel(row.status) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="due_date" label="截止日期" width="120">
-              <template #default="{ row }">
-                <span :class="{ 'overdue': isOverdue(row) }">
-                  {{ formatDate(row.due_date) }}
-                </span>
-              </template>
-            </el-table-column>
-
-            <el-table-column prop="progress" label="进度" width="150">
-              <template #default="{ row }">
-                <el-progress :percentage="row.progress" :stroke-width="8" />
-              </template>
-            </el-table-column>
-
-            <el-table-column label="操作" width="150" fixed="right">
-              <template #default="{ row }">
-                <template v-if="isAdmin || row.created_by === currentUserId">
-                  <el-button text type="primary" @click="editTask(row)">编辑</el-button>
-                  <el-button text type="danger" @click="deleteTask(row)">删除</el-button>
-                </template>
-                <span v-else class="no-permission">--</span>
-              </template>
-            </el-table-column>
-          </el-table>
+              </div>
+            </div>
           </div>
 
-          <!-- 分页 -->
-          <div class="pagination">
-            <el-pagination
-              v-model:current-page="currentPage"
-              v-model:page-size="pageSize"
-              :page-sizes="[10, 20, 50]"
-              :total="total"
-              layout="total, sizes, prev, pager, next"
-              @size-change="fetchTasks"
-              @current-change="fetchTasks"
-            />
+          <!-- 已完成 Section -->
+          <div class="task-section done-section">
+            <div class="section-header">
+              <span class="section-title">✅ 已完成</span>
+              <el-badge :value="doneTasks.length" type="success" />
+            </div>
+            <div v-if="doneTasks.length === 0" class="empty-section">
+              <span>暂无已完成任务</span>
+            </div>
+            <div v-else class="task-groups">
+              <div v-for="group in groupedDoneTasks" :key="group.assignee_id" class="task-group done-group">
+                <!-- 负责人头部 -->
+                <div class="group-header">
+                  <el-avatar
+                    v-if="memberStore.getMemberAvatar(group.assignee_id)"
+                    :src="memberStore.getMemberAvatar(group.assignee_id)"
+                    :size="36"
+                    class="group-avatar"
+                  />
+                  <el-avatar v-else :size="36" style="background: #67c23a" class="group-avatar">
+                    {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
+                  </el-avatar>
+                  <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
+                  <el-tag size="small" type="info">{{ group.tasks.length }}项</el-tag>
+                </div>
+                <!-- 任务列表 -->
+                <div class="group-tasks">
+                  <div
+                    v-for="task in group.tasks"
+                    :key="task.id"
+                    class="task-row done-row"
+                  >
+                    <el-checkbox
+                      :model-value="true"
+                      @change="toggleTaskStatus(task)"
+                      size="large"
+                    />
+                    <div class="task-content">
+                      <div class="task-title task-done">{{ task.title }}</div>
+                      <div class="task-meta">
+                        <el-tag size="small" type="success">已完成</el-tag>
+                      </div>
+                    </div>
+                    <div class="task-actions">
+                      <template v-if="isAdmin || task.created_by === currentUserId">
+                        <el-button text type="danger" size="small" @click="deleteTask(task)">删除</el-button>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </el-card>
       </el-tab-pane>
@@ -322,6 +361,38 @@ const filters = ref({
   assignee_id: '',
   priority: ''
 })
+
+// 按状态分离任务
+const activeTasks = computed(() => {
+  return tasks.value.filter(t => t.status !== 'done')
+})
+
+const doneTasks = computed(() => {
+  return tasks.value.filter(t => t.status === 'done')
+})
+
+// 按负责人分组
+function groupTasksByAssignee(taskList) {
+  const groups = {}
+  for (const task of taskList) {
+    const id = task.assignee_id || 'unassigned'
+    if (!groups[id]) {
+      groups[id] = { assignee_id: id, tasks: [] }
+    }
+    groups[id].tasks.push(task)
+  }
+  // 组内按创建时间降序
+  for (const g of Object.values(groups)) {
+    g.tasks.sort((a, b) => dayjs(b.created_at).diff(dayjs(a.created_at)))
+  }
+  return Object.values(groups).sort((a, b) => {
+    // 组间按任务数量降序
+    return b.tasks.length - a.tasks.length
+  })
+}
+
+const groupedActiveTasks = computed(() => groupTasksByAssignee(activeTasks.value))
+const groupedDoneTasks = computed(() => groupTasksByAssignee(doneTasks.value))
 
 const taskForm = ref({
   title: '',
@@ -621,5 +692,139 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 分组任务列表 */
+.task-section {
+  margin-bottom: 24px;
+}
+.task-section:last-child {
+  margin-bottom: 0;
+}
+.done-section {
+  border-top: 1px dashed #e4e7ed;
+  padding-top: 20px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e4e7ed;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+.empty-section {
+  text-align: center;
+  color: #909399;
+  padding: 20px 0;
+  font-size: 14px;
+}
+.task-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.task-group {
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.task-group:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.done-group {
+  border-color: #f0f0f0;
+}
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #eef1f5 100%);
+  border-bottom: 1px solid #ebeef5;
+}
+.group-avatar {
+  flex-shrink: 0;
+}
+.group-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  flex: 1;
+}
+.group-tasks {
+  display: flex;
+  flex-direction: column;
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background 0.2s;
+}
+.task-row:last-child {
+  border-bottom: none;
+}
+.task-row:hover {
+  background: #fafafa;
+}
+.task-row.overdue {
+  background: #fff5f5;
+}
+.task-row.overdue:hover {
+  background: #fff0f0;
+}
+.done-row {
+  background: #fafafa;
+}
+.done-row:hover {
+  background: #f5f5f5;
+}
+.task-content {
+  flex: 1;
+  min-width: 0;
+}
+.task-title {
+  font-size: 14px;
+  color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+.task-done {
+  text-decoration: line-through;
+  color: #909399;
+}
+.task-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.task-due {
+  font-size: 12px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+.task-due.overdue {
+  color: #f56c6c;
+  font-weight: 600;
+}
+.task-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>
