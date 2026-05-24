@@ -31,9 +31,10 @@
 用户 → 云服务器 (Nginx + SSL) → FRP 隧道 → 本地电脑 (Docker 全服务 + GPU)
 ```
 
-- **云服务器**（2核2G）：仅运行 Nginx 反向代理 + FRP 服务端，轻量无压力
+- **云服务器**（2核2G）：仅运行 Nginx 反向代理 + FRP 服务端 + webhook 接收服务，轻量无压力
 - **本地电脑**：运行全部应用服务（app、PostgreSQL、Redis、MinIO、Whisper GPU、Celery）
 - **FRP 隧道**：本地 8000 端口穿透到云服务器，用户通过 `https://agent.mnb-lab.cn` 访问
+- **Webhook 自动部署**：GitHub push 到 main 分支 → 云服务器 webhook → SSH 到本地 Windows → 自动 git pull + docker compose restart app
 
 ---
 

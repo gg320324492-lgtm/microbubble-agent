@@ -384,6 +384,22 @@ cd web && npm run build
 
 ### 更新部署
 
+**方式一：Webhook 自动部署（推荐）**
+
+在 GitHub 仓库设置 Webhook：
+- Payload URL: `https://agent.mnb-lab.cn/webhook`
+- Content type: `application/json`
+- Secret: `microbubble-deploy-2026`
+- Events: Just push events
+
+推送代码到 main 分支后，自动部署流程：
+1. GitHub 发送 webhook 到云服务器
+2. 云服务器 webhook 服务验证签名
+3. SSH 连接到本地 Windows
+4. 执行 `git pull` + `docker compose restart app`
+
+**方式二：手动部署**
+
 ```bash
 # 本地电脑
 git pull origin main
