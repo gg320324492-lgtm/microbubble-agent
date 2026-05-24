@@ -778,10 +778,21 @@
 | 动效类名统一 | fade-slide-up, stagger-1/2/3 系列入场动画 | ✅ 完成 |
 | 负责人头像 hover 效果 | 圆形变圆角方形 scale(1.08) 悬停动效 | ✅ 完成 |
 
+### ChatView 升级 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| CSS 设计令牌全面应用 | 全部硬编码颜色替换为 CSS 变量 | ✅ 完成 |
+| 消息气泡 hover 动效 | scale + shadow 提升 | ✅ 完成 |
+| 快捷按钮胶囊样式 | 圆角胶囊 + hover 上浮 + 颜色翻转 | ✅ 完成 |
+| 发送按钮动效 | scale + brightness + shadow | ✅ 完成 |
+| 打字指示器颜色 | dots 颜色改为珊瑚橙 | ✅ 完成 |
+| 整体卡片入场动画 | fadeSlideUp fadeSlideUp | ✅ 完成 |
+
 ### 待升级页面
 
-- [ ] **ChatView** — 聊天界面动效、消息气泡样式、输入区按钮
 - [ ] **MeetingView** — 会议卡片样式、会议详情页
+- [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MeetingView** — 会议卡片样式、会议详情页
 - [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MemberView** — 成员卡片、头像样式
