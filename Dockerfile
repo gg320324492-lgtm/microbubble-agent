@@ -21,10 +21,12 @@ RUN apt-get update && apt-get install -y --fix-missing \
         libpq-dev gcc pkg-config) \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装Python依赖（使用国内镜像源 + 预编译 wheel）
+# 安装Python依赖（使用官方源 + 阿里云备用）
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn && \
-    pip install --no-cache-dir --prefer-binary -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --prefer-binary -r requirements.txt \
+    --extra-index-url https://mirrors.aliyun.com/pypi/simple/ \
+    --trusted-host mirrors.aliyun.com
 
 # 复制应用代码
 COPY . .
