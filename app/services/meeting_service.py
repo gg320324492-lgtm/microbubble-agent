@@ -6,7 +6,6 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Any
 
 from app.models.meeting import Meeting, MeetingParticipant
-from app.models.member import Member
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.wechat.analyzer import analyzer
 from app.wechat.identity import identity_resolver

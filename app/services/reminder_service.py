@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timezone
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -213,7 +213,6 @@ class ReminderService:
 def process_reminders_task():
     """Celery task: 处理所有待发送提醒"""
     import asyncio
-    import time as _time
     import redis.asyncio as aioredis
     from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
     from sqlalchemy.pool import NullPool

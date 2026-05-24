@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-import struct
 import tempfile
 import wave
 

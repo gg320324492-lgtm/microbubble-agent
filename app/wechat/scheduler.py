@@ -9,7 +9,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, timezone
 from app.models.base import utcnow, BEIJING_TZ
 from celery import shared_task
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,6 @@ logger = logging.getLogger("microbubble.wechat.scheduler")
 
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
-from app.models.reminder import Reminder
 from app.wechat.notifier import notifier
 from app.wechat.bot import wechat_bot
 

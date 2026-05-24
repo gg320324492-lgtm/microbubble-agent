@@ -4,9 +4,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, WebSocket, WebSo
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
-from typing import Optional
 import io
-import json
 
 import logging
 from app.voice.asr import asr_service

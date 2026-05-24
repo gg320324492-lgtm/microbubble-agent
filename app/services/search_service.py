@@ -3,7 +3,6 @@ import httpx
 import logging
 import re
 from typing import Dict, Any, List
-from urllib.parse import quote_plus
 
 logger = logging.getLogger("microbubble.search")
 

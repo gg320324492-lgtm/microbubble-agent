@@ -1,7 +1,6 @@
 """企业微信主动通知模块"""
 
 import logging
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 from app.wechat.bot import wechat_bot

@@ -5,10 +5,9 @@
 Celery 每10秒扫描一次到期提醒，精度可达秒级。
 """
 
-import json
 import logging
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from app.core.redis import get_redis
 

@@ -1,11 +1,7 @@
 """语音合成模块 - 基于 Edge-TTS"""
 
-import io
 import edge_tts
-import asyncio
-from typing import Optional, AsyncGenerator
-
-from app.config import settings
+from typing import AsyncGenerator
 
 
 class TextToSpeech:

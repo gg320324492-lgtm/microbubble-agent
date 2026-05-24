@@ -2,7 +2,6 @@
 
 import io
 import wave
-from datetime import datetime
 from app.models.base import utcnow
 from typing import Optional, Callable
 from dataclasses import dataclass

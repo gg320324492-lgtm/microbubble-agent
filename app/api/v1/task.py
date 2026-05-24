@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
-from typing import Optional, List
-from datetime import datetime, timezone
+from typing import Optional
+from datetime import timezone
 from app.models.base import utcnow, BEIJING_TZ
 
 from app.core.database import get_db
@@ -111,8 +111,6 @@ async def debug_wechat_notify(
     db: AsyncSession = Depends(get_db)
 ):
     """调试接口：测试给指定成员发送企业微信通知"""
-    import logging
-    logger = logging.getLogger("microbubble.debug")
     results = {"steps": []}
 
     # Step 1: 查找成员

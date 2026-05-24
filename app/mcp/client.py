@@ -4,8 +4,7 @@ import asyncio
 import json
 import logging
 import subprocess
-from typing import Optional, Any
-from contextlib import asynccontextmanager
+from typing import Optional
 
 logger = logging.getLogger("microbubble.mcp")
 

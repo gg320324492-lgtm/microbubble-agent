@@ -4,7 +4,7 @@ import re
 import json
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.models.base import utcnow
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -328,7 +328,7 @@ class MessageHandler:
             for reminder in result.get("reminders", []):
                 await self._auto_send_reminder(reminder, db)
 
-        except Exception as e:
+        except Exception:
             logger.error("群聊分析失败", exc_info=True)
 
     async def _auto_create_task(self, task_info: dict, messages: list,

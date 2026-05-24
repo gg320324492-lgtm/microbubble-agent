@@ -3,7 +3,6 @@
 import json
 import logging
 
-from app.config import settings
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 logger = logging.getLogger("microbubble.llm_analysis")

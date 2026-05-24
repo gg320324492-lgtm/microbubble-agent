@@ -7,12 +7,10 @@
 - 待办事项
 """
 
-import json
 import logging
 
 logger = logging.getLogger("microbubble.wechat.analyzer")
 from typing import List, Dict
-from app.config import settings
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 ANALYSIS_PROMPT = """你是课题组的AI助手，负责从对话中提取任务和行动项。
