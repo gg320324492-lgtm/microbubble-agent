@@ -44,7 +44,8 @@
         shadow="hover"
       >
         <div class="member-avatar">
-          <el-avatar :size="64" :style="{ background: getAvatarColor(member.name) }">
+          <el-avatar v-if="member.avatar" :size="64" :src="member.avatar" />
+          <el-avatar v-else :size="64" :style="{ background: getAvatarColor(member.name) }">
             {{ member.name.charAt(0) }}
           </el-avatar>
         </div>
