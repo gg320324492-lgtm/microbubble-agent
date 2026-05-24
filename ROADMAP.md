@@ -800,10 +800,21 @@
 | 操作按钮动效 | hover scale 动效 | ✅ 完成 |
 | 筛选/列表卡片入场动画 | fadeSlideUp staggered | ✅ 完成 |
 
+### KnowledgeView 升级 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 统计卡片渐变背景 | 改为珊瑚橙/金橙渐变 | ✅ 完成 |
+| 分类标签 hover 动效 | 上浮 + 颜色翻转 | ✅ 完成 |
+| 知识项 hover 动效 | border-color + shadow + translateY | ✅ 完成 |
+| 标签 chip hover | 变为珊瑚橙 | ✅ 完成 |
+| 搜索结果/AI摘要卡片 | 统一 design token | ✅ 完成 |
+| 各卡片入场动画 | fadeSlideUp staggered | ✅ 完成 |
+
 ### 待升级页面
 
-- [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MemberView** — 成员卡片、头像样式
+- [ ] **ProjectView** — 项目卡片、里程碑样式
 - [ ] **MeetingView** — 会议卡片样式、会议详情页
 - [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MemberView** — 成员卡片、头像样式
