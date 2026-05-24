@@ -248,6 +248,7 @@
       v-model="showCreateDialog"
       :title="editingTask ? '编辑任务' : '创建任务'"
       :width="isMobile ? '90vw' : '500px'"
+      top="8vh"
     >
       <el-form :model="taskForm" label-width="80px">
         <el-form-item label="任务标题" required>

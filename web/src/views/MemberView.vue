@@ -103,6 +103,7 @@
       v-model="showCreateDialog"
       :title="editingMember ? '编辑成员' : '添加成员'"
       :width="isMobile ? '90vw' : '500px'"
+      top="8vh"
     >
       <el-form :model="memberForm" label-width="80px">
         <el-form-item label="姓名" required>
