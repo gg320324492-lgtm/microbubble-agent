@@ -4,7 +4,7 @@
     <el-tabs v-model="activeTab" class="task-tabs">
       <el-tab-pane label="任务列表" name="tasks">
         <!-- 顶部操作栏 -->
-        <el-card class="filter-card">
+        <el-card class="filter-card card fade-slide-up stagger-1">
           <el-row :gutter="16" align="middle">
             <el-col :xs="12" :sm="12" :md="6">
               <el-select v-model="filters.status" placeholder="任务状态" clearable>
@@ -32,7 +32,7 @@
               </el-select>
             </el-col>
             <el-col :xs="12" :sm="12" :md="6">
-              <el-button type="primary" @click="showCreateDialog = true">
+              <el-button type="primary" class="btn btn-primary" @click="showCreateDialog = true">
                 <el-icon><Plus /></el-icon>
                 创建任务
               </el-button>
@@ -41,7 +41,7 @@
         </el-card>
 
         <!-- 任务列表 -->
-        <el-card class="task-list-card">
+        <el-card class="task-list-card card fade-slide-up stagger-2">
           <el-row :gutter="16">
             <el-col :span="12">
               <!-- 未完成 Section -->
@@ -54,7 +54,7 @@
               <span>暂无进行中任务</span>
             </div>
             <div v-else class="task-groups">
-              <div v-for="group in groupedActiveTasks" :key="group.assignee_id" class="task-group">
+              <div v-for="(group, gIdx) in groupedActiveTasks" :key="group.assignee_id" class="task-group fade-slide-up" :style="{ animationDelay: `${(gIdx + 2) * 80}ms` }">
                 <!-- 负责人头部（可点击折叠） -->
                 <div class="group-header" @click="toggleGroup(group.assignee_id)">
                   <el-avatar
@@ -63,7 +63,7 @@
                     :size="36"
                     class="group-avatar"
                   />
-                  <el-avatar v-else :size="36" style="background: #409eff" class="group-avatar">
+                  <el-avatar v-else :size="36" style="background: var(--color-primary)" class="group-avatar">
                     {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
                   </el-avatar>
                   <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
@@ -94,7 +94,7 @@
                       </div>
                     </div>
                     <div class="task-due" :class="{ overdue: isOverdue(task) }">
-                      <el-icon v-if="isOverdue(task)" color="#f56c6c"><Warning /></el-icon>
+                      <el-icon v-if="isOverdue(task)" color="var(--color-danger)"><Warning /></el-icon>
                       {{ formatDate(task.due_date) }}
                     </div>
                     <div class="task-actions">
@@ -120,7 +120,7 @@
               <span>暂无已完成任务</span>
             </div>
             <div v-else class="task-groups">
-              <div v-for="group in groupedDoneTasks" :key="group.assignee_id" class="task-group done-group">
+              <div v-for="(group, gIdx) in groupedDoneTasks" :key="group.assignee_id" class="task-group done-group fade-slide-up" :style="{ animationDelay: `${(gIdx + 3) * 80}ms` }">
                 <!-- 负责人头部（可点击折叠） -->
                 <div class="group-header" @click="toggleGroup(group.assignee_id)">
                   <el-avatar
@@ -129,7 +129,7 @@
                     :size="36"
                     class="group-avatar"
                   />
-                  <el-avatar v-else :size="36" style="background: #67c23a" class="group-avatar">
+                  <el-avatar v-else :size="36" style="background: var(--color-success)" class="group-avatar">
                     {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
                   </el-avatar>
                   <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
@@ -623,19 +623,50 @@ onMounted(() => {
 .task-view {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
+/* ===== 筛选卡片 ===== */
 .filter-card {
   margin-bottom: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  background: var(--color-bg-card);
+  transition: box-shadow var(--duration-normal) var(--ease-out);
+}
+.filter-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
+/* ===== Tabs ===== */
 .task-tabs {
   flex: 1;
   display: flex;
   flex-direction: column;
 }
-
+.task-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+}
+.task-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: var(--color-border);
+}
+.task-tabs :deep(.el-tabs__item) {
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.task-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+.task-tabs :deep(.el-tabs__active-bar) {
+  background: var(--color-primary);
+  height: 3px;
+  border-radius: 2px;
+}
 .task-tabs :deep(.el-tabs__content) {
   padding: 0;
 }
@@ -646,8 +677,13 @@ onMounted(() => {
 
 .task-list-card {
   flex: 1;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  background: var(--color-bg-card);
 }
 
+/* ===== 任务标题单元格 ===== */
 .task-title-cell {
   display: flex;
   align-items: center;
@@ -656,27 +692,22 @@ onMounted(() => {
 
 .task-done {
   text-decoration: line-through;
-  color: #909399;
+  color: var(--color-text-secondary);
 }
 
 .task-deleted {
-  color: #909399;
+  color: var(--color-text-secondary);
   text-decoration: line-through;
 }
 
 .deleted-time {
-  color: #c0c4cc;
-  font-size: 12px;
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-xs);
 }
 
 .auto-delete-soon {
-  color: #f56c6c;
-  font-weight: bold;
-}
-
-.overdue {
-  color: #f56c6c;
-  font-weight: bold;
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semibold);
 }
 
 .pagination {
@@ -685,143 +716,181 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.no-permission {
-  color: #c0c4cc;
-  font-size: 12px;
-}
-
 .reminder-item {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .reminder-hint {
-  color: #909399;
-  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
   margin-top: 4px;
 }
 
 .assignee-cell {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
-/* 分组任务列表 */
+/* ===== 分组任务列表 ===== */
 .task-section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 .task-section:last-child {
   margin-bottom: 0;
 }
+
 .done-section {
-  border-top: 1px dashed #e4e7ed;
-  padding-top: 20px;
+  border-left: 1px dashed var(--color-border);
+  padding-left: var(--space-4);
 }
+
 .section-header {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 14px;
   padding-bottom: 10px;
-  border-bottom: 2px solid #e4e7ed;
+  border-bottom: 2px solid var(--color-primary);
 }
 .section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
 }
+
 .empty-section {
   text-align: center;
-  color: #909399;
-  padding: 20px 0;
-  font-size: 14px;
+  color: var(--color-text-secondary);
+  padding: var(--space-8) 0;
+  font-size: var(--font-size-sm);
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-border);
 }
+
 .task-groups {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
+
 .task-group {
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  transition: box-shadow 0.2s;
+  transition: box-shadow var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
 }
 .task-group:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
+
 .done-group {
-  border-color: #f0f0f0;
+  border-color: var(--color-border-light);
 }
+
 .group-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #eef1f5 100%);
-  border-bottom: 1px solid #ebeef5;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--color-bg-warm) 0%, var(--color-primary-bg) 100%);
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   user-select: none;
+  transition: background var(--duration-normal) var(--ease-out);
+  position: relative;
+}
+.group-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  background: var(--color-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  transition: all var(--duration-normal) var(--ease-out);
 }
 .group-header:hover {
-  background: linear-gradient(135deg, #eef1f5 0%, #e4e7ed 100%);
+  background: linear-gradient(135deg, var(--color-primary-bg) 0%, #FFE4DC 100%);
 }
+.group-header:hover::before {
+  width: 4px;
+  height: 24px;
+}
+
 .collapse-icon {
   margin-left: auto;
-  transition: transform 0.2s;
-  color: #909399;
+  transition: transform var(--duration-normal) var(--ease-out);
+  color: var(--color-text-secondary);
 }
 .collapse-icon.collapsed {
   transform: rotate(-90deg);
 }
+
 .group-avatar {
   flex-shrink: 0;
+  border-radius: var(--radius-lg) !important;
+  transition: transform var(--duration-normal) var(--ease-out);
 }
+.group-avatar:hover {
+  transform: scale(1.08);
+}
+
 .group-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
   flex: 1;
 }
+
 .group-tasks {
   display: flex;
   flex-direction: column;
 }
+
 .task-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #f5f5f5;
-  transition: background 0.2s;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+  transition: background var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
 }
 .task-row:last-child {
   border-bottom: none;
 }
 .task-row:hover {
-  background: #fafafa;
+  background: var(--color-bg-warm);
 }
 .task-row.overdue {
-  background: #fff5f5;
+  background: #FEF8F7;
 }
 .task-row.overdue:hover {
-  background: #fff0f0;
+  background: #FEF0ED;
 }
+
 .done-row {
-  background: #fafafa;
+  background: var(--color-bg-warm);
 }
 .done-row:hover {
-  background: #f5f5f5;
+  background: #FFF0ED;
 }
+
 .task-content {
   flex: 1;
   min-width: 0;
 }
 .task-title {
-  font-size: 14px;
-  color: #303133;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -829,7 +898,7 @@ onMounted(() => {
 }
 .task-done {
   text-decoration: line-through;
-  color: #909399;
+  color: var(--color-text-secondary);
 }
 .task-meta {
   display: flex;
@@ -837,8 +906,8 @@ onMounted(() => {
   gap: 6px;
 }
 .task-due {
-  font-size: 12px;
-  color: #909399;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -846,12 +915,19 @@ onMounted(() => {
   min-width: 80px;
 }
 .task-due.overdue {
-  color: #f56c6c;
-  font-weight: 600;
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semibold);
 }
 .task-actions {
   display: flex;
   gap: 4px;
   flex-shrink: 0;
+}
+.task-actions .el-button {
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.task-actions .el-button:hover {
+  transform: scale(1.02);
 }
 </style>
