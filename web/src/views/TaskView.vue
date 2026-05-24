@@ -488,9 +488,11 @@ const isOverdue = (task) => {
 
 // 计算自动删除倒计时
 const getAutoDeleteDays = (deletedAt) => {
-  if (!deletedAt) return 99
+  if (!deletedAt) return 3
   const deleteDate = dayjs(deletedAt).add(3, 'day')
-  return deleteDate.diff(dayjs(), 'day')
+  const daysLeft = deleteDate.diff(dayjs(), 'day')
+  // 确保最多显示3天
+  return Math.max(0, Math.min(3, daysLeft))
 }
 
 const getAutoDeleteText = (deletedAt) => {
