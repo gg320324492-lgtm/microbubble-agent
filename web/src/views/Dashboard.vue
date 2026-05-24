@@ -89,52 +89,36 @@
       </el-col>
     </el-row>
 
-    <!-- 图表区域 -->
-    <el-row :gutter="16" class="chart-row">
-      <el-col :xs="24" :sm="12">
-        <el-card class="chart-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>任务状态分布</span>
-              <el-tag size="small" type="info">共 {{ dashboardData.summary?.total_tasks || 0 }} 项</el-tag>
-            </div>
-          </template>
-          <div class="chart-container">
-            <v-chart :option="taskStatusOption" autoresize style="height: 220px" />
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="12">
-        <el-card class="chart-card" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span>任务优先级分布</span>
-            </div>
-          </template>
-          <div class="chart-container">
-            <v-chart :option="taskPriorityOption" autoresize style="height: 220px" />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <!-- 项目进度 -->
-    <el-card class="progress-card" shadow="hover">
+    <!-- 即将到期任务 -->
+    <el-card class="upcoming-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>📊 项目进度概览</span>
+          <span>⏰ 即将到期</span>
+          <el-tag size="small" type="warning">未来3天</el-tag>
         </div>
       </template>
-      <div class="progress-list">
-        <div v-for="project in dashboardData.project_stats" :key="project.name" class="progress-item">
-          <div class="progress-name">{{ project.name }}</div>
-          <div class="progress-bar-wrapper">
-            <el-progress :percentage="project.progress" :stroke-width="12" :color="getProgressColor(project.progress)" />
+      <div v-if="upcomingDeadlines.length === 0" class="empty-state">
+        <el-empty description="未来3天没有即将到期的任务" :image-size="60" />
+      </div>
+      <div v-else class="upcoming-list">
+        <div v-for="task in upcomingDeadlines" :key="task.id" class="upcoming-item" :class="{ 'overdue': isOverdue(task.due_date) }">
+          <div class="upcoming-left">
+            <el-checkbox :model-value="task.status === 'done'" @change="toggleTaskStatus(task)" size="large" />
+            <div class="upcoming-info">
+              <div class="upcoming-title">{{ task.title }}</div>
+              <div class="upcoming-meta">
+                <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
+                  {{ getPriorityLabel(task.priority) }}
+                </el-tag>
+                <span class="upcoming-assignee">{{ memberStore.getMemberName(task.assignee_id) }}</span>
+              </div>
+            </div>
           </div>
-          <div class="progress-value">{{ project.progress }}%</div>
-        </div>
-        <div v-if="!dashboardData.project_stats?.length" class="empty-progress">
-          暂无项目数据
+          <div class="upcoming-right">
+            <div class="due-days" :class="{ urgent: getDaysLeft(task.due_date) <= 1 }">
+              {{ getDaysLeftText(task.due_date) }}
+            </div>
+          </div>
         </div>
       </div>
     </el-card>
@@ -216,15 +200,45 @@
       </el-col>
     </el-row>
 
-    <!-- 成员任务统计 -->
+    <!-- 成员进行中任务 -->
     <el-card class="member-card" shadow="hover">
       <template #header>
         <div class="card-header">
-          <span>👥 成员任务统计</span>
+          <span>👥 成员进行中任务</span>
         </div>
       </template>
-      <div class="member-chart">
-        <v-chart :option="memberTaskOption" autoresize style="height: 200px" />
+      <div v-if="memberWithTasks.length === 0" class="empty-state">
+        <el-empty description="暂无进行中的任务" :image-size="60" />
+      </div>
+      <div v-else class="member-tasks">
+        <el-collapse v-model="expandedMembers">
+          <el-collapse-item v-for="member in memberWithTasks" :key="member.id" :name="member.id">
+            <template #title>
+              <div class="member-header">
+                <span class="member-name">{{ member.name }}</span>
+                <el-badge :value="member.in_progress_tasks.length" type="primary" :hidden="member.in_progress_tasks.length === 0" />
+              </div>
+            </template>
+            <div v-if="member.in_progress_tasks.length === 0" class="no-tasks">暂无进行中任务</div>
+            <div v-else class="member-task-list">
+              <div v-for="task in member.in_progress_tasks" :key="task.id" class="member-task-item">
+                <div class="member-task-info">
+                  <span class="member-task-title">{{ task.title }}</span>
+                  <div class="member-task-meta">
+                    <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
+                      {{ getPriorityLabel(task.priority) }}
+                    </el-tag>
+                    <span class="member-task-due" :class="{ overdue: isOverdue(task.due_date) }">
+                      <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
+                      {{ formatDate(task.due_date) }}
+                    </span>
+                  </div>
+                </div>
+                <el-button text type="primary" @click="goToTask(task)">查看</el-button>
+              </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
       </div>
     </el-card>
 
@@ -267,17 +281,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { formatCompactDate, formatTime } from '@/utils/format'
-import { getStatusType, getPriorityType, getPriorityLabel } from '@/utils/task'
+import { formatCompactDate } from '@/utils/format'
+import { getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
-import VChart from 'vue-echarts'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, BarChart, LineChart } from 'echarts/charts'
-import { TitleComponent, TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
-
-use([CanvasRenderer, PieChart, BarChart, LineChart, TitleComponent, TooltipComponent, LegendComponent, GridComponent])
 
 const memberStore = useMemberStore()
 const userStore = useUserStore()
@@ -286,6 +293,9 @@ const members = computed(() => memberStore.members)
 const dashboardData = ref({})
 const todoTasks = ref([])
 const recentMeetings = ref([])
+const upcomingDeadlines = ref([])
+const memberWithTasks = ref([])
+const expandedMembers = ref([])
 const showCreateTask = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 const currentTime = ref('')
@@ -326,66 +336,6 @@ const completionColor = computed(() => {
   return '#f56c6c'
 })
 
-const getProgressColor = (progress) => {
-  if (progress >= 80) return '#67c23a'
-  if (progress >= 50) return '#409eff'
-  if (progress >= 30) return '#e6a23c'
-  return '#f56c6c'
-}
-
-// 任务状态图表
-const taskStatusOption = computed(() => {
-  const statusMap = { todo: '待办', in_progress: '进行中', blocked: '阻塞', review: '评审中', done: '已完成', cancelled: '已取消' }
-  const colorMap = { todo: '#909399', in_progress: '#409eff', blocked: '#f56c6c', review: '#e6a23c', done: '#67c23a', cancelled: '#c0c4cc' }
-  const data = Object.entries(dashboardData.value.task_status || {}).map(([key, value]) => ({
-    name: statusMap[key] || key, value, itemStyle: { color: colorMap[key] || '#409eff' }
-  }))
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 12 } },
-    series: [{ type: 'pie', radius: ['45%', '70%'], center: ['35%', '50%'], avoidLabelOverlap: false,
-      itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
-      label: { show: false }, emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
-      labelLine: { show: false }, data }]
-  }
-})
-
-// 优先级图表
-const taskPriorityOption = computed(() => {
-  const priorityMap = { high: '高', medium: '中', low: '低' }
-  const colorMap = { high: '#f56c6c', medium: '#e6a23c', low: '#909399' }
-  const data = Object.entries(dashboardData.value.task_priority || {}).map(([key, value]) => ({
-    name: priorityMap[key] || key, value, itemStyle: { color: colorMap[key] || '#409eff' }
-  }))
-  return {
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { orient: 'vertical', right: 10, top: 'center', textStyle: { fontSize: 12 } },
-    series: [{ type: 'pie', radius: ['45%', '70%'], center: ['35%', '50%'],
-      itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
-      label: { show: false }, emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
-      labelLine: { show: false }, data }]
-  }
-})
-
-// 成员任务统计
-const memberTaskOption = computed(() => {
-  const memberStats = dashboardData.value.member_stats || []
-  const names = memberStats.map(m => m.name)
-  const inProgressData = memberStats.map(m => m.in_progress)
-  const doneData = memberStats.map(m => m.done)
-  return {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { data: ['进行中', '已完成'], bottom: 0 },
-    grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-    xAxis: { type: 'value' },
-    yAxis: { type: 'category', data: names, axisLabel: { fontSize: 11 } },
-    series: [
-      { name: '进行中', type: 'bar', data: inProgressData, itemStyle: { color: '#409eff' }, barMaxWidth: 30 },
-      { name: '已完成', type: 'bar', data: doneData, itemStyle: { color: '#67c23a' }, barMaxWidth: 30 }
-    ]
-  }
-})
-
 const fetchDashboardStats = async () => {
   try {
     const res = await axios.get('/api/v1/dashboard/stats')
@@ -407,6 +357,47 @@ const fetchRecentMeetings = async () => {
   } catch (e) { console.error('获取会议失败:', e) }
 }
 
+const fetchUpcomingDeadlines = async () => {
+  try {
+    const now = dayjs()
+    const threeDaysLater = now.add(3, 'day').endOf('day').toISOString()
+    const res = await axios.get('/api/v1/tasks', {
+      params: {
+        page_size: 10,
+        status: 'in_progress',
+        due_before: threeDaysLater
+      }
+    })
+    upcomingDeadlines.value = res.data.items || []
+  } catch (e) { console.error('获取即将到期任务失败:', e) }
+}
+
+const fetchMemberTasks = async () => {
+  try {
+    const res = await axios.get('/api/v1/tasks', {
+      params: { page_size: 100, status: 'in_progress' }
+    })
+    const allInProgress = res.data.items || []
+    const memberMap = new Map()
+    allInProgress.forEach(task => {
+      const memberId = task.assignee_id
+      if (!memberMap.has(memberId)) {
+        memberMap.set(memberId, {
+          id: memberId,
+          name: memberStore.getMemberName(memberId),
+          in_progress_tasks: []
+        })
+      }
+      memberMap.get(memberId).in_progress_tasks.push(task)
+    })
+    memberWithTasks.value = Array.from(memberMap.values())
+    // 默认展开有任务的成员
+    expandedMembers.value = memberWithTasks.value
+      .filter(m => m.in_progress_tasks.length > 0)
+      .map(m => m.id)
+  } catch (e) { console.error('获取成员任务失败:', e) }
+}
+
 const fetchMembers = () => memberStore.fetchMembers()
 
 const createTask = async () => {
@@ -418,6 +409,8 @@ const createTask = async () => {
     newTask.value = { title: '', assignee_id: null, priority: 'medium', due_date: '', description: '' }
     fetchTodoTasks()
     fetchDashboardStats()
+    fetchUpcomingDeadlines()
+    fetchMemberTasks()
   } catch (e) { ElMessage.error('创建任务失败') }
 }
 
@@ -427,7 +420,15 @@ const toggleTaskStatus = async (task) => {
     await axios.put(`/api/v1/tasks/${task.id}`, { status: newStatus })
     fetchTodoTasks()
     fetchDashboardStats()
+    fetchUpcomingDeadlines()
+    fetchMemberTasks()
   } catch (e) { ElMessage.error('更新失败') }
+}
+
+const goToTask = (task) => {
+  // 可以跳转到任务详情页或打开编辑对话框
+  // 目前暂时不做跳转，只是提示
+  ElMessage.info(`任务: ${task.title}`)
 }
 
 const formatDate = (date) => formatCompactDate(date, '无截止')
@@ -438,8 +439,25 @@ const getStatusTagType = (status) => {
   const map = { scheduled: 'info', recording: 'warning', completed: 'success', cancelled: 'info' }
   return map[status] || 'info'
 }
+const getStatusLabel = (status) => {
+  const map = { scheduled: '已安排', recording: '录制中', completed: '已完成', cancelled: '已取消' }
+  return map[status] || status
+}
 
 const isOverdue = (date) => date && dayjs(date).isBefore(dayjs())
+
+const getDaysLeft = (date) => {
+  if (!date) return null
+  return dayjs(date).diff(dayjs(), 'day')
+}
+
+const getDaysLeftText = (date) => {
+  const days = getDaysLeft(date)
+  if (days < 0) return '已逾期'
+  if (days === 0) return '今天到期'
+  if (days === 1) return '明天到期'
+  return `${days}天后到期`
+}
 
 onMounted(() => {
   updateTime()
@@ -447,6 +465,8 @@ onMounted(() => {
   fetchDashboardStats()
   fetchTodoTasks()
   fetchRecentMeetings()
+  fetchUpcomingDeadlines()
+  fetchMemberTasks()
   fetchMembers()
   window.addEventListener('resize', handleResize)
 })
@@ -513,27 +533,27 @@ onMounted(() => {
 .stat-number { font-size: 28px; font-weight: bold; color: #303133; }
 .stat-sub { font-size: 12px; color: #909399; margin-top: 2px; }
 
-/* 图表区域 */
-.chart-row { margin-bottom: 16px; }
-.chart-card { border-radius: 12px; }
-.chart-card :deep(.el-card__header) { padding: 16px 20px; border-bottom: none; }
-.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; }
-.chart-container { display: flex; justify-content: center; }
-
-/* 项目进度 */
-.progress-card { border-radius: 12px; margin-bottom: 16px; }
-.progress-list { display: flex; flex-direction: column; gap: 16px; }
-.progress-item { display: flex; align-items: center; gap: 16px; }
-.progress-name { width: 120px; font-size: 14px; color: #606266; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.progress-bar-wrapper { flex: 1; }
-.progress-value { width: 50px; text-align: right; font-size: 14px; font-weight: 600; color: #303133; flex-shrink: 0; }
-.empty-progress { text-align: center; color: #909399; padding: 20px; }
+/* 即将到期 */
+.upcoming-card { border-radius: 12px; margin-bottom: 16px; }
+.upcoming-list { display: flex; flex-direction: column; }
+.upcoming-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid #f0f0f0; }
+.upcoming-item:last-child { border-bottom: none; }
+.upcoming-item.overdue { background: #fef5f5; }
+.upcoming-left { display: flex; align-items: center; gap: 12px; flex: 1; }
+.upcoming-info { flex: 1; min-width: 0; }
+.upcoming-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upcoming-meta { display: flex; align-items: center; gap: 8px; }
+.upcoming-assignee { font-size: 12px; color: #909399; }
+.upcoming-right { flex-shrink: 0; }
+.due-days { font-size: 13px; color: #909399; padding: 4px 10px; background: #f5f5f5; border-radius: 12px; }
+.due-days.urgent { color: #f56c6c; background: #fef0f0; font-weight: 600; }
 
 /* 底部内容区 */
 .content-row { margin-bottom: 16px; }
 .content-card { border-radius: 12px; height: 100%; }
 .content-card :deep(.el-card__header) { padding: 16px 20px; border-bottom: none; }
 .empty-state { display: flex; justify-content: center; align-items: center; padding: 40px 0; }
+.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 15px; }
 
 /* 待办任务 */
 .task-list { display: flex; flex-direction: column; }
@@ -560,7 +580,17 @@ onMounted(() => {
 .meeting-meta { display: flex; align-items: center; gap: 12px; }
 .meeting-time { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; }
 
-/* 成员统计 */
+/* 成员任务 */
 .member-card { border-radius: 12px; }
-.member-chart { display: flex; justify-content: center; }
+.member-header { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.member-name { font-weight: 600; }
+.no-tasks { text-align: center; color: #909399; padding: 20px; }
+.member-task-list { display: flex; flex-direction: column; }
+.member-task-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.member-task-item:last-child { border-bottom: none; }
+.member-task-info { flex: 1; min-width: 0; }
+.member-task-title { font-size: 14px; color: #303133; display: block; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.member-task-meta { display: flex; align-items: center; gap: 8px; }
+.member-task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; }
+.member-task-due.overdue { color: #f56c6c; font-weight: 600; }
 </style>
