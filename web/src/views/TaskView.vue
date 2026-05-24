@@ -55,8 +55,8 @@
             </div>
             <div v-else class="task-groups">
               <div v-for="group in groupedActiveTasks" :key="group.assignee_id" class="task-group">
-                <!-- 负责人头部 -->
-                <div class="group-header">
+                <!-- 负责人头部（可点击折叠） -->
+                <div class="group-header" @click="toggleGroup(group.assignee_id)">
                   <el-avatar
                     v-if="memberStore.getMemberAvatar(group.assignee_id)"
                     :src="memberStore.getMemberAvatar(group.assignee_id)"
@@ -68,9 +68,10 @@
                   </el-avatar>
                   <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
                   <el-tag size="small" type="info">{{ group.tasks.length }}项</el-tag>
+                  <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[group.assignee_id] }"><ArrowDown /></el-icon>
                 </div>
                 <!-- 任务列表 -->
-                <div class="group-tasks">
+                <div v-show="!collapsedGroups[group.assignee_id]" class="group-tasks">
                   <div
                     v-for="task in group.tasks"
                     :key="task.id"
@@ -120,8 +121,8 @@
             </div>
             <div v-else class="task-groups">
               <div v-for="group in groupedDoneTasks" :key="group.assignee_id" class="task-group done-group">
-                <!-- 负责人头部 -->
-                <div class="group-header">
+                <!-- 负责人头部（可点击折叠） -->
+                <div class="group-header" @click="toggleGroup(group.assignee_id)">
                   <el-avatar
                     v-if="memberStore.getMemberAvatar(group.assignee_id)"
                     :src="memberStore.getMemberAvatar(group.assignee_id)"
@@ -133,9 +134,10 @@
                   </el-avatar>
                   <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
                   <el-tag size="small" type="info">{{ group.tasks.length }}项</el-tag>
+                  <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[group.assignee_id] }"><ArrowDown /></el-icon>
                 </div>
                 <!-- 任务列表 -->
-                <div class="group-tasks">
+                <div v-show="!collapsedGroups[group.assignee_id]" class="group-tasks">
                   <div
                     v-for="task in group.tasks"
                     :key="task.id"
@@ -331,6 +333,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
@@ -366,6 +369,12 @@ const filters = ref({
   assignee_id: '',
   priority: ''
 })
+
+// 分组折叠状态
+const collapsedGroups = ref({})
+const toggleGroup = (assigneeId) => {
+  collapsedGroups.value[assigneeId] = !collapsedGroups.value[assigneeId]
+}
 
 // 按状态分离任务
 const activeTasks = computed(() => {
@@ -753,6 +762,19 @@ onMounted(() => {
   padding: 10px 14px;
   background: linear-gradient(135deg, #f5f7fa 0%, #eef1f5 100%);
   border-bottom: 1px solid #ebeef5;
+  cursor: pointer;
+  user-select: none;
+}
+.group-header:hover {
+  background: linear-gradient(135deg, #eef1f5 0%, #e4e7ed 100%);
+}
+.collapse-icon {
+  margin-left: auto;
+  transition: transform 0.2s;
+  color: #909399;
+}
+.collapse-icon.collapsed {
+  transform: rotate(-90deg);
 }
 .group-avatar {
   flex-shrink: 0;
