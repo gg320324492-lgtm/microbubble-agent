@@ -57,7 +57,7 @@ class Task(Base, TimestampMixin):
     assignee = relationship("Member", back_populates="assigned_tasks", foreign_keys=[assignee_id])
     creator = relationship("Member", back_populates="created_tasks", foreign_keys=[created_by])
     project = relationship("Project", back_populates="tasks")
-    reminders = relationship("Reminder", back_populates="task")
+    reminders = relationship("Reminder", back_populates="task", cascade="all, delete-orphan")
 
     # 依赖关系
     dependencies = relationship(
