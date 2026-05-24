@@ -53,6 +53,9 @@ class Task(Base, TimestampMixin):
     # 标签
     tags = Column(ARRAY(String))
 
+    # 软删除
+    deleted_at = Column(DateTime, nullable=True)
+
     # 关系
     assignee = relationship("Member", back_populates="assigned_tasks", foreign_keys=[assignee_id])
     creator = relationship("Member", back_populates="created_tasks", foreign_keys=[created_by])

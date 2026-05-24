@@ -35,6 +35,14 @@
           </el-button>
         </el-col>
       </el-row>
+      <!-- 垃圾桶切换 -->
+      <el-row :gutter="16" align="middle" style="margin-top: 12px;">
+        <el-col :span="24">
+          <el-checkbox v-model="showDeleted" @change="toggleShowDeleted">
+            显示垃圾桶（已删除任务）
+          </el-checkbox>
+        </el-col>
+      </el-row>
     </el-card>
 
     <!-- 任务列表 -->
@@ -44,11 +52,17 @@
         <el-table-column prop="title" label="任务标题" min-width="200">
           <template #default="{ row }">
             <div class="task-title-cell">
-              <el-checkbox
-                :model-value="row.status === 'done'"
-                @change="toggleTaskStatus(row)"
-              />
-              <span :class="{ 'task-done': row.status === 'done' }">{{ row.title }}</span>
+              <template v-if="row.deleted_at">
+                <el-icon color="#909399"><Delete /></el-icon>
+                <span class="task-deleted">{{ row.title }}</span>
+              </template>
+              <template v-else>
+                <el-checkbox
+                  :model-value="row.status === 'done'"
+                  @change="toggleTaskStatus(row)"
+                />
+                <span :class="{ 'task-done': row.status === 'done' }">{{ row.title }}</span>
+              </template>
             </div>
           </template>
         </el-table-column>
@@ -61,7 +75,7 @@
 
         <el-table-column prop="priority" label="优先级" width="100">
           <template #default="{ row }">
-            <el-tag :type="getPriorityType(row.priority)" size="small">
+            <el-tag v-if="!row.deleted_at" :type="getPriorityType(row.priority)" size="small">
               {{ getPriorityLabel(row.priority) }}
             </el-tag>
           </template>
@@ -69,29 +83,35 @@
 
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)" size="small">
+            <el-tag v-if="!row.deleted_at" :type="getStatusType(row.status)" size="small">
               {{ getStatusLabel(row.status) }}
             </el-tag>
+            <el-tag v-else type="info" size="small">已删除</el-tag>
           </template>
         </el-table-column>
 
         <el-table-column prop="due_date" label="截止日期" width="120">
           <template #default="{ row }">
-            <span :class="{ 'overdue': isOverdue(row) }">
+            <span v-if="!row.deleted_at" :class="{ 'overdue': isOverdue(row) }">
               {{ formatDate(row.due_date) }}
             </span>
+            <span v-else class="deleted-time">删除于 {{ formatDate(row.deleted_at) }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="progress" label="进度" width="150">
+        <el-table-column v-if="!showDeleted" prop="progress" label="进度" width="150">
           <template #default="{ row }">
             <el-progress :percentage="row.progress" :stroke-width="8" />
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
-            <template v-if="isAdmin || row.created_by === currentUserId">
+            <template v-if="row.deleted_at && isAdmin">
+              <el-button text type="success" @click="restoreTask(row)">恢复</el-button>
+              <el-button text type="danger" @click="permanentDeleteTask(row)">永久删除</el-button>
+            </template>
+            <template v-else-if="!row.deleted_at && (isAdmin || row.created_by === currentUserId)">
               <el-button text type="primary" @click="editTask(row)">编辑</el-button>
               <el-button text type="danger" @click="deleteTask(row)">删除</el-button>
             </template>
@@ -228,6 +248,7 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const showCreateDialog = ref(false)
 const editingTask = ref(null)
+const showDeleted = ref(false)
 
 const filters = ref({
   status: '',
@@ -255,6 +276,7 @@ const fetchTasks = async () => {
     const params = {
       page: currentPage.value,
       page_size: pageSize.value,
+      include_deleted: showDeleted.value,
       ...activeFilters
     }
     const res = await axios.get('/api/v1/tasks', { params })
@@ -263,6 +285,12 @@ const fetchTasks = async () => {
   } catch (e) {
     console.error('获取任务失败:', e)
   }
+}
+
+// 切换显示已删除
+const toggleShowDeleted = () => {
+  currentPage.value = 1
+  fetchTasks()
 }
 
 // 获取成员列表（使用 store）
@@ -306,15 +334,49 @@ const editTask = (task) => {
 // 删除任务
 const deleteTask = async (task) => {
   try {
-    await ElMessageBox.confirm('确定要删除这个任务吗？', '确认删除', {
+    await ElMessageBox.confirm('确定要删除这个任务吗？删除后可从垃圾桶恢复。', '确认删除', {
       type: 'warning'
     })
     await axios.delete(`/api/v1/tasks/${task.id}`)
-    ElMessage.success('任务删除成功')
+    ElMessage.success('任务已移入垃圾桶')
     fetchTasks()
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error('删除失败')
+    }
+  }
+}
+
+// 恢复任务
+const restoreTask = async (task) => {
+  try {
+    await ElMessageBox.confirm('确定要恢复这个任务吗？', '确认恢复', {
+      type: 'warning'
+    })
+    await axios.post(`/api/v1/tasks/${task.id}/restore`)
+    ElMessage.success('任务已恢复')
+    fetchTasks()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error('恢复失败')
+    }
+  }
+}
+
+// 永久删除任务
+const permanentDeleteTask = async (task) => {
+  try {
+    await ElMessageBox.confirm('确定要永久删除这个任务吗？此操作不可恢复！', '永久删除', {
+      type: 'error',
+      confirmButtonText: '永久删除',
+      cancelButtonText: '取消'
+    })
+    await axios.delete(`/api/v1/tasks/${task.id}/permanent`)
+    ElMessage.success('任务已永久删除')
+    fetchTasks()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error('永久删除失败')
     }
   }
 }
@@ -386,6 +448,16 @@ onMounted(() => {
 .task-done {
   text-decoration: line-through;
   color: #909399;
+}
+
+.task-deleted {
+  color: #909399;
+  text-decoration: line-through;
+}
+
+.deleted-time {
+  color: #c0c4cc;
+  font-size: 12px;
 }
 
 .overdue {

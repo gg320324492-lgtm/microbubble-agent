@@ -135,8 +135,10 @@ class TaskService:
             logging.getLogger("microbubble.task").warning(f"提醒同步到Redis失败: {e}")
 
     async def get_task(self, task_id: int) -> Optional[Task]:
-        """获取任务"""
-        result = await self.db.execute(select(Task).where(Task.id == task_id))
+        """获取任务（排除已删除）"""
+        result = await self.db.execute(
+            select(Task).where(Task.id == task_id, Task.deleted_at.is_(None))
+        )
         return result.scalar_one_or_none()
 
     async def get_tasks(
@@ -146,9 +148,9 @@ class TaskService:
         project_id: Optional[int] = None,
         overdue: bool = False
     ) -> List[Task]:
-        """查询任务列表"""
+        """查询任务列表（排除已删除）"""
         query = select(Task)
-        filters = []
+        filters = [Task.deleted_at.is_(None)]
 
         if assignee_id:
             filters.append(Task.assignee_id == assignee_id)
