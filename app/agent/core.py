@@ -107,7 +107,48 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.warning(f"构建记忆提示词失败: {e}")
 
+        # 检测是否为会议转录，注入会议分析助手提示词
+        if self._is_meeting_transcript(query):
+            parts.append(self._get_meeting_analyzer_prompt())
+
         return "\n".join(parts)
+
+    def _is_meeting_transcript(self, query: str) -> bool:
+        """检测用户消息是否包含会议转录文字"""
+        if not query:
+            return False
+        patterns = ["【", "转录", "会议记录", "发言内容", "发言："]
+        return any(p in query for p in patterns)
+
+    def _get_meeting_analyzer_prompt(self) -> str:
+        """会议分析助手专用提示词"""
+        return """
+
+## 会议分析助手模式
+
+检测到你正在处理会议转录文字。请按以下步骤执行：
+
+1. **创建会议**：调用 create_meeting 工具创建会议记录
+2. **分析转录**：调用 summarize_meeting_transcript 分析转录内容
+3. **更新纪要**：调用 update_meeting 将 summary/key_points/decisions 更新到会议记录
+4. **创建任务**：从转录中识别所有行动项，调用 create_task 为每个行动项创建任务
+
+### 行动项识别要点
+- 包含"负责"、"完成"、"安排"、"下次"、"尽快"、"记得"等关键词的发言内容
+- 发言中明确指定了负责人的事项（如"张三负责这个"）
+- 决策中需要执行的具体事项
+
+### 任务创建规则
+- 如果转录中提到了成员姓名（如"张三负责"），尝试通过 query_members 查找该成员并分配任务
+- 截止日期：根据会议时间和事项性质合理推断（一般事项 1 周内，复杂事项 2-4 周）
+- 优先级：根据事项的重要性和紧急性判断（涉及项目关键节点 → high）
+- description 中标注"来源：XXX 会议"
+- 如果无法确定负责人，任务分配给系统管理员
+
+### 最终回复格式
+- 列出创建了哪些内容（会议标题、任务数量）
+- 任务汇总表（负责人 | 任务内容 | 截止日期 | 优先级）
+"""
 
     async def _extract_and_save_memories(self, user_id: int, messages: List[Dict], session_id: str):
         """后台任务：从对话中提取记忆"""

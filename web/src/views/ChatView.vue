@@ -256,6 +256,7 @@
 
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Picture, Paperclip, Document, Upload, ArrowDown } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -268,6 +269,7 @@ const voiceRecorderRef = ref(null)
 const audioPlayerRef = ref(null)
 const imageInputRef = ref(null)
 const fileInputRef = ref(null)
+const route = useRoute()
 const inputText = ref('')
 const loading = ref(false)
 const voiceMode = ref(false)
@@ -664,6 +666,11 @@ const stopDetailPoll = () => {
 
 onMounted(() => {
   scrollToBottom()
+  // 接收从 MeetingView 粘贴转录跳转过来的消息
+  if (route.query.initialMessage) {
+    inputText.value = route.query.initialMessage
+    sendMessage()
+  }
 })
 </script>
 
