@@ -430,7 +430,7 @@ const sendMessage = async () => {
       formData.append('file', currentFile)
 
       res = await axios.post('/api/v1/chat/file', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        // Content-Type 由 axios 自动设置（包含正确的 boundary）
       })
     } else if (currentImage) {
       // 发送图片消息
@@ -440,7 +440,7 @@ const sendMessage = async () => {
       formData.append('image', currentImage)
 
       res = await axios.post('/api/v1/chat/image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        // Content-Type 由 axios 自动设置（包含正确的 boundary）
       })
     } else {
       // 发送文字消息
@@ -539,7 +539,7 @@ const onRecordStop = async (audioBlob) => {
     formData.append('session_id', sessionId)
 
     const res = await axios.post('/api/v1/voice/chat', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      // Content-Type 由 axios 自动设置（包含正确的 boundary）,
       responseType: 'blob'
     })
 
