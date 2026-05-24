@@ -89,7 +89,7 @@
       </el-col>
     </el-row>
 
-    <!-- 进行中任务（合并待办+进行中） -->
+    <!-- 进行中任务（合并待办+进行中，按负责人分组） -->
     <el-card class="content-card" shadow="hover">
       <template #header>
         <div class="card-header">
@@ -101,29 +101,56 @@
       <div v-if="inProgressTasks.length === 0" class="empty-state">
         <el-empty description="暂无进行中任务" :image-size="60" />
       </div>
-      <div v-else class="task-list">
-        <div v-for="task in inProgressTasks" :key="task.id" class="task-item" :class="{ overdue: isOverdue(task.due_date) }">
-          <el-checkbox
-            :model-value="task.status === 'done'"
-            @change="toggleTaskStatus(task)"
-            size="large"
-          />
-          <div class="task-info">
-            <div class="task-title">{{ task.title }}</div>
-            <div class="task-meta">
-              <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
-                {{ getPriorityLabel(task.priority) }}
-              </el-tag>
-              <div class="task-assignee">
-                <el-avatar v-if="memberStore.getMemberAvatar(task.assignee_id)" :src="memberStore.getMemberAvatar(task.assignee_id)" :size="20" />
-                <el-avatar v-else :size="20" style="background: #409eff">{{ memberStore.getMemberName(task.assignee_id).charAt(0) }}</el-avatar>
-                <span>{{ memberStore.getMemberName(task.assignee_id) }}</span>
-              </div>
+      <div v-else class="task-groups">
+        <div v-for="group in groupedTasks" :key="group.assignee_id" class="task-group">
+          <!-- 负责人头部 -->
+          <div class="group-header">
+            <el-avatar
+              v-if="memberStore.getMemberAvatar(group.assignee_id)"
+              :src="memberStore.getMemberAvatar(group.assignee_id)"
+              :size="40"
+              class="group-avatar"
+            />
+            <el-avatar
+              v-else
+              :size="40"
+              style="background: #409eff"
+              class="group-avatar"
+            >
+              {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
+            </el-avatar>
+            <div class="group-info">
+              <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
+              <el-tag size="small" type="info">{{ group.tasks.length }} 项任务</el-tag>
             </div>
           </div>
-          <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
-            <el-icon v-if="isOverdue(task.due_date)"><Warning /></el-icon>
-            {{ formatDate(task.due_date) }}
+          <!-- 任务列表 -->
+          <div class="group-tasks">
+            <div
+              v-for="task in group.tasks"
+              :key="task.id"
+              class="task-row"
+              :class="{ overdue: isOverdue(task.due_date) }"
+            >
+              <el-checkbox
+                :model-value="task.status === 'done'"
+                @change="toggleTaskStatus(task)"
+                size="large"
+              />
+              <div class="task-content">
+                <div class="task-title">{{ task.title }}</div>
+                <div class="task-meta">
+                  <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
+                    {{ getPriorityLabel(task.priority) }}
+                  </el-tag>
+                  <el-tag v-if="task.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
+                </div>
+              </div>
+              <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
+                <el-icon v-if="isOverdue(task.due_date)" color="#f56c6c"><Warning /></el-icon>
+                {{ formatDate(task.due_date) }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -320,6 +347,27 @@ const fetchInProgressTasks = async () => {
   } catch (e) { console.error('获取进行中任务失败:', e) }
 }
 
+// 按负责人分组
+const groupedTasks = computed(() => {
+  const groups = {}
+  for (const task of inProgressTasks.value) {
+    const id = task.assignee_id || 'unassigned'
+    if (!groups[id]) {
+      groups[id] = { assignee_id: id, tasks: [] }
+    }
+    groups[id].tasks.push(task)
+  }
+  return Object.values(groups).sort((a, b) => {
+    // 按时长逾期分组显示
+    const aHasOverdue = a.tasks.some(t => isOverdue(t.due_date))
+    const bHasOverdue = b.tasks.some(t => isOverdue(t.due_date))
+    if (aHasOverdue && !bHasOverdue) return -1
+    if (!aHasOverdue && bHasOverdue) return 1
+    // 按任务数量降序
+    return b.tasks.length - a.tasks.length
+  })
+})
+
 const fetchRecentMeetings = async () => {
   try {
     const res = await axios.get('/api/v1/meetings', { params: { page_size: 5 } })
@@ -474,18 +522,45 @@ onMounted(() => {
 .empty-state { display: flex; justify-content: center; align-items: center; padding: 40px 0; }
 .empty-state-sm { display: flex; justify-content: center; align-items: center; padding: 20px 0; }
 
-/* 进行中任务 */
-.task-list { display: flex; flex-direction: column; }
-.task-item { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; transition: background 0.2s; }
-.task-item:hover { background: #fafafa; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
-.task-item:last-child { border-bottom: none; }
-.task-item.overdue { background: #fef5f5; }
-.task-info { flex: 1; min-width: 0; }
-.task-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.task-meta { display: flex; align-items: center; gap: 8px; }
-.task-assignee { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #909399; }
-.task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.task-due.overdue { color: #f56c6c; font-weight: 600; }
+/* 进行中任务 - 分组展示 */
+.task-groups { display: flex; flex-direction: column; gap: 16px; }
+.task-group {
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.task-group:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.task-group:first-child { margin-top: 0; }
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #eef1f5 100%);
+  border-bottom: 1px solid #ebeef5;
+}
+.group-avatar { flex-shrink: 0; }
+.group-info { display: flex; align-items: center; gap: 10px; }
+.group-name { font-size: 15px; font-weight: 600; color: #303133; }
+.group-tasks { display: flex; flex-direction: column; }
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background 0.2s;
+}
+.task-row:last-child { border-bottom: none; }
+.task-row:hover { background: #fafafa; }
+.task-row.overdue { background: #fff5f5; }
+.task-row.overdue:hover { background: #fff0f0; }
+.task-content { flex: 1; min-width: 0; }
+.task-row .task-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task-row .task-meta { display: flex; align-items: center; gap: 8px; }
+.task-row .task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.task-row .task-due.overdue { color: #f56c6c; font-weight: 600; }
 
 /* 即将到期 */
 .upcoming-card { border-radius: 12px; margin-bottom: 16px; }
