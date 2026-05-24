@@ -286,7 +286,7 @@ const getRoleLabel = (role) => {
 }
 
 onMounted(() => {
-  fetchMembers()
+  memberStore.refreshMembers()
 })
 </script>
 
