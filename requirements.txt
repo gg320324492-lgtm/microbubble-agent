@@ -1,5 +1,5 @@
 # Web框架
-fastapi==0.104.1
+fastapi>=0.109.0
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 websockets==12.0
@@ -22,7 +22,7 @@ anthropic>=0.39.0
 mcp>=0.9.0
 
 # 语音识别
-pilk>=1.2.0
+pilk>=0.2.4
 
 # 语音合成
 edge-tts==6.1.9
