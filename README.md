@@ -228,7 +228,8 @@ npm run dev
 - 开发环境 Docker 配置（docker-compose.dev.yml，热重载，轻量化）
 - 部署文档已完善（docs/deploy.md），生产环境已加固（Docker 健康检查+资源限制、Nginx 限流+server_tokens off、JSON 日志、数据库备份脚本）
 - **MCP 视觉服务架构预写**（切换 DeepSeek 等文本模型时支持图片识别，通过 MCP Server 解耦视觉能力）
-- 文件问答、会议助手等功能待实现（见"待实现功能"）
+- **前端 UI 全面升级**（2026-05-24）：建立 CSS 设计令牌（暖橙珊瑚色系）、Dashboard 首页升级（玻璃拟态侧边栏、大数字统计卡片、丰富动效、骨架屏、任务分组折叠）、MainLayout 侧边栏升级
+- UI 升级规划：TaskView / ChatView / MeetingView / KnowledgeView / MemberView / ProjectView / MemoryView / LoginView 待逐页升级
 
 ### 待解决问题
 
