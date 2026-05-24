@@ -29,5 +29,10 @@ export const useMemberStore = defineStore('member', () => {
     return m ? m.name : '未分配'
   }
 
-  return { members, loading, fetchMembers, getMemberName }
+  function getMemberAvatar(id) {
+    const m = members.value.find(m => m.id === id)
+    return m?.avatar || null
+  }
+
+  return { members, loading, fetchMembers, getMemberName, getMemberAvatar }
 })
