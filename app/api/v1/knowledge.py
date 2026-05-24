@@ -197,6 +197,25 @@ async def upload_knowledge_file(
     return knowledge
 
 
+@router.post("/knowledge/from-chat", status_code=201)
+async def create_from_chat(
+    title: str = Body(...),
+    content: str = Body(...),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """从聊天内容创建知识条目（不涉及文件上传）"""
+    service = KnowledgeService(db)
+    knowledge = await service.create_knowledge(
+        title=title,
+        content=content,
+        source="chat",
+        source_type="chat",
+        created_by=current_user.id
+    )
+    return knowledge
+
+
 @router.get("/knowledge/stats")
 async def knowledge_stats(
     current_user: Member = Depends(get_current_user),

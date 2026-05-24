@@ -118,6 +118,14 @@
                   点击查看详情
                 </el-button>
               </div>
+
+              <!-- 存入知识库按钮（文件消息且有待存入的内容） -->
+              <div v-if="msg.knowledge_content" class="knowledge-save">
+                <el-button text type="success" size="small" @click="saveToKnowledge(msg)">
+                  <el-icon><Document /></el-icon>
+                  存入知识库
+                </el-button>
+              </div>
             </div>
             <div class="message-time">{{ formatTime(msg.timestamp) }}</div>
           </div>
@@ -458,7 +466,10 @@ const sendMessage = async () => {
       content: res.data.content,
       timestamp: new Date(),
       type: 'text',
-      is_brief: isBrief
+      is_brief: isBrief,
+      knowledge_content: res.data.knowledge_content || null,
+      file_url: res.data.file_url || null,
+      file_name: res.data.file_name || null
     })
 
     // 如果是【简要】回复，启动轮询获取【详细】
@@ -628,6 +639,26 @@ const expandDetail = (index) => {
   // 【详细】回复会在后台生成后追加到 messages，
   // 前端通过轮询检测新消息并自动展示
   scrollToBottom()
+}
+
+// 存入知识库
+const saveToKnowledge = async (msg) => {
+  if (!msg.knowledge_content) {
+    ElMessage.warning('没有可存入的内容')
+    return
+  }
+  try {
+    await axios.post('/api/v1/knowledge/from-chat', {
+      title: msg.file_name || '来自文件的知识',
+      content: msg.knowledge_content
+    })
+    ElMessage.success('已存入知识库')
+    // 清除该消息的知识内容，防止重复存入
+    msg.knowledge_content = null
+  } catch (e) {
+    console.error('存入知识库失败:', e)
+    ElMessage.error(e.response?.data?.detail || '存入知识库失败')
+  }
 }
 
 // 轮询检测【详细】回复
@@ -1115,5 +1146,24 @@ onMounted(() => {
 .detail-expand .el-button:hover {
   transform: scale(1.02);
   background: var(--color-primary-bg);
+}
+
+/* 存入知识库按钮 */
+.knowledge-save {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+  text-align: center;
+}
+
+.knowledge-save .el-button {
+  transition: all var(--duration-fast) var(--ease-out);
+  border-radius: var(--radius-md);
+  color: var(--color-success);
+}
+
+.knowledge-save .el-button:hover {
+  transform: scale(1.02);
+  background: rgba(10, 207, 107, 0.1);
 }
 </style>

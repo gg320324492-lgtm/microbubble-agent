@@ -1175,3 +1175,55 @@
 | 问题 | 修复 |
 |------|------|
 | filters 为空时发送 status=&assignee_id=&priority= | Object.fromEntries 过滤空值 |
+
+---
+
+## 2026-05-25 更新
+
+### 文件对话存入知识库功能
+
+用户上传文件给小气助手后，Agent 回复后追加"存入知识库？"按钮，可一键将文件提取的文本存入公共知识库。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 后端 API | `POST /api/v1/knowledge/from-chat`，接收 title 和 content | ✅ 完成 |
+| 前端按钮 | AI 回复后显示"📚 存入知识库"按钮 | ✅ 完成 |
+| 知识内容传递 | `ChatResponse` 新增 `knowledge_content` 字段返回提取文本 | ✅ 完成 |
+| 权限设计 | 知识库公共（所有人可见），长期记忆私有（按 user_id 过滤） | ✅ 确认 |
+
+**修改文件：**
+- `app/api/v1/chat.py` — ChatResponse 新增 knowledge_content 字段，chat_with_file 返回提取文本
+- `app/api/v1/knowledge.py` — 新增 `/knowledge/from-chat` 端点
+- `web/src/views/ChatView.vue` — 消息展示添加存入知识库按钮，saveToKnowledge 函数
+
+### 知识库前端修复
+
+| 问题 | 修复 | 状态 |
+|------|------|------|
+| 文件上传失败 | 移除手动设置的 `Content-Type: multipart/form-data`，axios 会自动处理 boundary | ✅ 完成 |
+| KnowledgeView 弹窗遮挡 | 添加 `height: 100%; overflow-y: auto` | ✅ 完成 |
+| ProjectView 弹窗遮挡 | 添加 `height: 100%; overflow-y: auto` | ✅ 完成 |
+
+**修改文件：**
+- `web/src/views/KnowledgeView.vue` — 移除错误 header，设置正确 height/overflow
+- `web/src/views/ProjectView.vue` — 设置正确 height/overflow
+- `web/src/views/ChatView.vue` — 移除 3 处错误 Content-Type 设置
+
+### MinIO 异步上传修复
+
+| 问题 | 修复 | 状态 |
+|------|------|------|
+| MinIO 同步调用阻塞事件循环 | 使用 `asyncio.to_thread()` 包装同步的 `put_object` 调用 | ✅ 完成 |
+
+**修改文件：**
+- `app/services/file_service.py` — upload_file 改为 async，使用 asyncio.to_thread
+
+### 微信思考消息重复修复
+
+| 问题 | 修复 | 状态 |
+|------|------|------|
+| 语音消息重复发送思考中消息 | 添加 `_skip_thinking` 标志，语音消息识别和非识别路径均设置 | ✅ 完成 |
+| 图片消息重复发送思考中消息 | 同上 | ✅ 完成 |
+
+**修改文件：**
+- `app/wechat/handler.py` — `_handle_general_chat`/`_handle_group_chat` 检测 `_skip_thinking`，语音/图片处理设置标志
