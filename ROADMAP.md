@@ -811,10 +811,21 @@
 | 搜索结果/AI摘要卡片 | 统一 design token | ✅ 完成 |
 | 各卡片入场动画 | fadeSlideUp staggered | ✅ 完成 |
 
+### MemberView 升级 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 成员卡片 hover 动效 | translateY + shadow + border-color | ✅ 完成 |
+| 头像样式 | 圆角方形 + hover 缩放 | ✅ 完成 |
+| 详情项图标颜色 | 改为珊瑚橙 | ✅ 完成 |
+| 操作按钮 hover 动效 | 背景变为珊瑚橙浅色 | ✅ 完成 |
+| 整体入场动画 | fadeSlideUp | ✅ 完成 |
+
 ### 待升级页面
 
-- [ ] **MemberView** — 成员卡片、头像样式
 - [ ] **ProjectView** — 项目卡片、里程碑样式
+- [ ] **MemoryView** — 记忆列表样式
+- [ ] **LoginView** — 登录页珊瑚橙主题统一
 - [ ] **MeetingView** — 会议卡片样式、会议详情页
 - [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MemberView** — 成员卡片、头像样式
