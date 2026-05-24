@@ -5,7 +5,7 @@
       <template #header>
         <div class="chat-header">
           <div class="header-info">
-            <el-avatar :size="40" style="background: #409eff">
+            <el-avatar :size="40" style="background: var(--color-primary)">
               <el-icon size="24"><Aim /></el-icon>
             </el-avatar>
             <div>
@@ -40,7 +40,7 @@
         <!-- 欢迎消息 -->
         <div class="welcome-banner" v-if="messages.length === 1">
           <div class="welcome-icon">
-            <el-icon size="48" color="#409eff"><Aim /></el-icon>
+            <el-icon size="48" color="var(--color-primary)"><Aim /></el-icon>
           </div>
           <h2>你好，我是小气！</h2>
           <p>微纳米气泡课题组的AI助手</p>
@@ -68,7 +68,7 @@
         >
           <el-avatar
             :size="36"
-            :style="{ background: msg.role === 'user' ? '#67c23a' : '#409eff' }"
+            :style="{ background: msg.role === 'user' ? 'var(--color-success)' : 'var(--color-primary)' }"
           >
             {{ msg.role === 'user' ? '我' : '气' }}
           </el-avatar>
@@ -88,7 +88,7 @@
               <!-- 文件消息 -->
               <div v-else-if="msg.type === 'file'" class="file-message">
                 <div class="file-attachment">
-                  <el-icon size="24" color="#409eff"><Document /></el-icon>
+                  <el-icon size="24" color="var(--color-primary)"><Document /></el-icon>
                   <span class="file-attachment-name">{{ msg.fileName || '文件' }}</span>
                 </div>
                 <div v-if="msg.content && !msg.content.startsWith('[文件:')" class="message-text" v-html="formatMessage(msg.content)"></div>
@@ -125,7 +125,7 @@
 
         <!-- 加载中 -->
         <div v-if="loading" class="message-item agent-message">
-          <el-avatar :size="36" style="background: #409eff">气</el-avatar>
+          <el-avatar :size="36" style="background: var(--color-primary)">气</el-avatar>
           <div class="message-content">
             <div class="message-bubble">
               <div class="typing-indicator">
@@ -159,7 +159,7 @@
         <div v-else class="text-input-area" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop" :class="{ 'drag-over': isDragging }">
           <!-- 拖拽提示 -->
           <div v-if="isDragging" class="drag-overlay">
-            <el-icon size="40" color="#409eff"><Upload /></el-icon>
+            <el-icon size="40" color="var(--color-primary)"><Upload /></el-icon>
             <span>松开鼠标上传文件</span>
           </div>
 
@@ -177,7 +177,7 @@
 
           <!-- 文件预览 -->
           <div v-if="selectedFile && filePreviewType === 'document'" class="file-preview">
-            <el-icon size="20" color="#409eff"><Document /></el-icon>
+            <el-icon size="20" color="var(--color-primary)"><Document /></el-icon>
             <span class="file-name">{{ selectedFile.name }}</span>
             <span class="file-size">({{ (selectedFile.size / 1024).toFixed(0) }}KB)</span>
             <el-button
@@ -698,6 +698,7 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
+  animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
 .chat-card :deep(.el-card__body) {
@@ -721,14 +722,14 @@ onMounted(() => {
 }
 
 .agent-name {
-  font-size: 16px;
-  font-weight: bold;
-  color: #303133;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
 }
 
 .agent-status {
-  font-size: 12px;
-  color: #67c23a;
+  font-size: var(--font-size-xs);
+  color: var(--color-success);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -738,56 +739,83 @@ onMounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #67c23a;
+  background: var(--color-success);
 }
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
+}
+
+.header-actions .el-button {
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.header-actions .el-button:hover {
+  transform: scale(1.08);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .message-list {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
-  background: #f5f7fa;
+  padding: var(--space-5);
+  background: var(--color-bg-page);
 }
 
 /* 欢迎横幅 */
 .welcome-banner {
   text-align: center;
-  padding: 40px 20px;
-  margin-bottom: 20px;
+  padding: var(--space-10) var(--space-5);
+  margin-bottom: var(--space-5);
+  animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
 .welcome-icon {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .welcome-banner h2 {
-  font-size: 24px;
-  color: #303133;
-  margin-bottom: 8px;
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
 }
 
 .welcome-banner p {
-  font-size: 14px;
-  color: #909399;
-  margin-bottom: 24px;
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
 }
 
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
+}
+
+.quick-actions .el-button {
+  border-radius: var(--radius-full);
+  transition: all var(--duration-fast) var(--ease-out);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.quick-actions .el-button:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-primary);
+  background: var(--color-primary);
+  color: #fff;
 }
 
 /* 消息样式 */
 .message-item {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
 
 .user-message {
@@ -799,29 +827,40 @@ onMounted(() => {
 }
 
 .message-bubble {
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
   line-height: 1.6;
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
 }
 
 .user-message .message-bubble {
-  background: #409eff;
+  background: var(--color-primary);
   color: #fff;
-  border-top-right-radius: 4px;
+  border-top-right-radius: var(--radius-sm);
+}
+
+.user-message .message-bubble:hover {
+  transform: scale(1.01);
+  box-shadow: var(--shadow-primary);
 }
 
 .agent-message .message-bubble {
-  background: #fff;
-  color: #303133;
-  border-top-left-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-top-left-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.agent-message .message-bubble:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .message-time {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
 }
 
 .user-message .message-time {
@@ -832,7 +871,7 @@ onMounted(() => {
 .voice-message {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 120px;
 }
 
@@ -845,37 +884,42 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.voice-icon:hover {
+  transform: scale(1.1);
 }
 
 .agent-message .voice-icon {
-  background: #f0f9ff;
+  background: var(--color-primary-bg);
 }
 
 .voice-duration {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 /* 输入区域 */
 .input-area {
-  padding: 16px 20px;
-  border-top: 1px solid #ebeef5;
-  background: #fff;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-card);
 }
 
 .text-input-area {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: flex-end;
   position: relative;
   min-height: 60px;
-  transition: all 0.2s;
+  transition: all var(--duration-normal) var(--ease-out);
 }
 
 .text-input-area.drag-over {
-  background: #f0f9ff;
-  border: 2px dashed #409eff;
-  border-radius: 12px;
-  padding: 12px;
+  background: var(--color-primary-bg);
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
 }
 
 .drag-overlay {
@@ -885,21 +929,37 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  background: rgba(240, 249, 255, 0.95);
-  border-radius: 12px;
+  gap: var(--space-2);
+  background: rgba(255, 240, 237, 0.95);
+  border-radius: var(--radius-lg);
   z-index: 10;
-  font-size: 14px;
-  color: #409eff;
+  font-size: var(--font-size-base);
+  color: var(--color-primary);
 }
 
 .upload-btn:hover {
-  color: #409eff;
-  border-color: #409eff;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  transform: scale(1.05);
 }
 
 .text-input-area .el-input {
   flex: 1;
+}
+
+.text-input-area .el-button[type="primary"] {
+  border-radius: var(--radius-md);
+  transition: all var(--duration-fast) var(--ease-out);
+  box-shadow: var(--shadow-primary);
+}
+
+.text-input-area .el-button[type="primary"]:hover:not(:disabled) {
+  transform: scale(1.02);
+  filter: brightness(1.08);
+}
+
+.text-input-area .el-button[type="primary"]:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 /* 图片预览 */
@@ -911,8 +971,8 @@ onMounted(() => {
 .image-preview img {
   max-width: 120px;
   max-height: 80px;
-  border-radius: 8px;
-  border: 2px solid #e4e7ed;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
   object-fit: cover;
 }
 
@@ -920,31 +980,33 @@ onMounted(() => {
   position: absolute;
   top: -8px;
   right: -8px;
-  background: #f56c6c !important;
-  border-color: #f56c6c !important;
+  background: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
   color: #fff !important;
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .remove-image-btn:hover {
-  background: #f78989 !important;
-  border-color: #f78989 !important;
+  background: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+  transform: scale(1.1);
 }
 
 /* 文件预览 */
 .file-preview {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f0f2f5;
-  border-radius: 8px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
   position: relative;
 }
 
 .file-name {
-  font-size: 13px;
-  color: #303133;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -952,24 +1014,24 @@ onMounted(() => {
 }
 
 .file-size {
-  font-size: 12px;
-  color: #909399;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 /* 文件消息 */
 .file-message .file-attachment {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f0f2f5;
-  border-radius: 6px;
-  margin-bottom: 8px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
 }
 
 .file-attachment-name {
-  font-size: 13px;
-  color: #303133;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
 }
 
 /* 用户图片消息 */
@@ -980,33 +1042,33 @@ onMounted(() => {
 .user-message .image-message img {
   max-width: 200px;
   max-height: 150px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .voice-input-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 20px 0;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
 }
 
 .voice-mode-tip {
-  font-size: 13px;
-  color: #909399;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 /* 打字动画 */
 .typing-indicator {
   display: flex;
-  gap: 4px;
-  padding: 4px 0;
+  gap: var(--space-1);
+  padding: var(--space-1) 0;
 }
 
 .typing-indicator span {
   width: 8px;
   height: 8px;
-  background: #909399;
+  background: var(--color-primary);
   border-radius: 50%;
   animation: typing 1.4s infinite both;
 }
@@ -1032,9 +1094,19 @@ onMounted(() => {
 
 /* 【简要】展开按钮 */
 .detail-expand {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #ebeef5;
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
   text-align: center;
+}
+
+.detail-expand .el-button {
+  transition: all var(--duration-fast) var(--ease-out);
+  border-radius: var(--radius-md);
+}
+
+.detail-expand .el-button:hover {
+  transform: scale(1.02);
+  background: var(--color-primary-bg);
 }
 </style>
