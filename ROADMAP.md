@@ -789,10 +789,21 @@
 | 打字指示器颜色 | dots 颜色改为珊瑚橙 | ✅ 完成 |
 | 整体卡片入场动画 | fadeSlideUp fadeSlideUp | ✅ 完成 |
 
+### MeetingView 升级 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| CSS 设计令牌全面应用 | 全部硬编码颜色替换为 CSS 变量 | ✅ 完成 |
+| 会议卡片样式 | border-radius/box-shadow 统一 design token | ✅ 完成 |
+| 会议项 hover 动效 | border-color + shadow + translateY(-2px) | ✅ 完成 |
+| 日期大数字颜色 | 改为珊瑚橙 | ✅ 完成 |
+| 操作按钮动效 | hover scale 动效 | ✅ 完成 |
+| 筛选/列表卡片入场动画 | fadeSlideUp staggered | ✅ 完成 |
+
 ### 待升级页面
 
-- [ ] **MeetingView** — 会议卡片样式、会议详情页
 - [ ] **KnowledgeView** — 知识库列表、搜索结果样式
+- [ ] **MemberView** — 成员卡片、头像样式
 - [ ] **MeetingView** — 会议卡片样式、会议详情页
 - [ ] **KnowledgeView** — 知识库列表、搜索结果样式
 - [ ] **MemberView** — 成员卡片、头像样式
