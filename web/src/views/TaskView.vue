@@ -248,10 +248,14 @@ const taskForm = ref({
 // 获取任务列表
 const fetchTasks = async () => {
   try {
+    // 过滤掉空值参数，避免 FastAPI 422 验证错误
+    const activeFilters = Object.fromEntries(
+      Object.entries(filters.value).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+    )
     const params = {
       page: currentPage.value,
       page_size: pageSize.value,
-      ...filters.value
+      ...activeFilters
     }
     const res = await axios.get('/api/v1/tasks', { params })
     tasks.value = res.data.items || []
