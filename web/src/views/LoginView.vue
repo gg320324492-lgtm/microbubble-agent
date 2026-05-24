@@ -119,20 +119,22 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
 .login-card {
   width: min(400px, 90vw);
-  padding: 40px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: var(--space-10);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both;
 }
 
 @media (max-width: 768px) {
   .login-card {
-    padding: 24px;
+    padding: var(--space-6);
   }
   .login-header h1 {
     font-size: 20px;
@@ -141,35 +143,49 @@ const handleLogin = async () => {
 
 .login-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: var(--space-8);
 }
 
 .login-header h1 {
-  font-size: 24px;
-  color: #303133;
-  margin-bottom: 8px;
+  font-size: var(--font-size-xl);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
 }
 
 .login-header p {
-  font-size: 14px;
-  color: #909399;
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
 }
 
 .login-form {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .login-button {
   width: 100%;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-primary);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.login-button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.08);
+  box-shadow: 0 8px 24px rgba(255, 122, 92, 0.40);
+}
+
+.login-button:active {
+  transform: translateY(0);
 }
 
 .login-footer {
   text-align: center;
-  font-size: 12px;
-  color: #909399;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 .login-footer p {
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 </style>
