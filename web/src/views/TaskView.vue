@@ -42,8 +42,10 @@
 
         <!-- 任务列表 -->
         <el-card class="task-list-card">
-          <!-- 未完成 Section -->
-          <div class="task-section">
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <!-- 未完成 Section -->
+              <div class="task-section">
             <div class="section-header">
               <span class="section-title">📋 进行中</span>
               <el-badge :value="activeTasks.length" type="warning" />
@@ -105,8 +107,9 @@
               </div>
             </div>
           </div>
-
-          <!-- 已完成 Section -->
+            </el-col>
+            <el-col :span="12">
+              <!-- 已完成 Section -->
           <div class="task-section done-section">
             <div class="section-header">
               <span class="section-title">✅ 已完成</span>
@@ -159,6 +162,8 @@
               </div>
             </div>
           </div>
+            </el-col>
+          </el-row>
         </el-card>
       </el-tab-pane>
 
