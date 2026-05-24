@@ -1,6 +1,5 @@
 """语音识别模块 - 调用 Whisper 服务或本地模型"""
 
-import io
 import time
 import numpy as np
 from typing import Optional

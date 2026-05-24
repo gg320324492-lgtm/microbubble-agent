@@ -4,7 +4,7 @@ from sqlalchemy import select, and_
 from typing import List, Optional
 
 from app.models.base import utcnow
-from app.models.task import Task, TaskStatus, TaskPriority
+from app.models.task import Task, TaskStatus
 from app.models.member import Member
 from app.models.reminder import Reminder
 

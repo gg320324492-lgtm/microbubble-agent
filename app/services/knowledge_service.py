@@ -206,7 +206,6 @@ class KnowledgeService:
             from app.services.embedding_service import generate_embedding
             query_embedding = await generate_embedding(query)
 
-            from pgvector.sqlalchemy import Vector
             stmt = select(
                 Knowledge,
                 Knowledge.embedding.cosine_distance(query_embedding).label("distance")

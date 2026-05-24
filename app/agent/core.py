@@ -274,7 +274,6 @@ class MicroBubbleAgent:
         # 并行发起两次调用（生成简要 + 生成详细）
         # 注意：_generate_brief 内部已处理工具调用，直接返回内容
         brief_task = asyncio.create_task(self._generate_brief(messages, system, db, user_id))
-        detail_task = asyncio.create_task(self._generate_detail(messages, system))
 
         # 先等简要完成，立即返回
         brief_result = await brief_task

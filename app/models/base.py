@@ -1,6 +1,5 @@
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import Column, DateTime
-from app.core.database import Base
 
 # 北京时间时区（东八区）
 BEIJING_TZ = timezone(timedelta(hours=8))

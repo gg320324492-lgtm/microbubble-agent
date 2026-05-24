@@ -12,7 +12,7 @@ from app.models.base import utcnow
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.member import Member
-from app.models.meeting import Meeting, MeetingParticipant
+from app.models.meeting import Meeting
 from app.services.tencent_meeting_service import tencent_meeting
 
 logger = logging.getLogger("microbubble.tencent_meeting")

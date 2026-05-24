@@ -1,5 +1,3 @@
-from app.schemas.member import *
-from app.schemas.task import *
-from app.schemas.meeting import *
-from app.schemas.project import *
-from app.schemas.knowledge import *
+# Re-export schemas for convenience
+# These imports are intentionally empty - each schema module uses __all__
+# to control what gets exported when others do `from app.schemas import *`

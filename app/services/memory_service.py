@@ -1,12 +1,11 @@
 """长期记忆服务"""
 
 import logging
-from datetime import datetime
 from app.models.base import utcnow
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 from typing import List, Optional, Dict
 
-from sqlalchemy import select, and_, or_, text, func, desc
+from sqlalchemy import select, and_, text, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory import Memory

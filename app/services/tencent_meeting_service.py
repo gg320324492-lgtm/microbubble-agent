@@ -9,7 +9,7 @@ import time
 import uuid
 import logging
 import httpx
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from app.config import settings
 
