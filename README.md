@@ -230,6 +230,7 @@ npm run dev
 - **MCP 视觉服务架构预写**（切换 DeepSeek 等文本模型时支持图片识别，通过 MCP Server 解耦视觉能力）
 - **前端 UI 全面升级**（2026-05-24）：建立 CSS 设计令牌（暖橙珊瑚色系）、全部 9 个页面完成升级（Dashboard、TaskView、ChatView、MeetingView、KnowledgeView、MemberView、ProjectView、MemoryView、LoginView）、玻璃拟态、丰富动效、骨架屏
 - **Webhook 自动部署**（2026-05-25）：GitHub push 到 main 分支触发 webhook，云服务器自动 SSH 到本地 Windows 执行 git pull + docker compose restart app
+- **微信对话响应优化**（2026-05-25）：双消息模式，用户发送后 0.5 秒内先发"🤔 收到，让我思考一下..."，后台处理完再发正式回复，解决等待无反馈问题
 
 ### 待解决问题
 
