@@ -3,7 +3,7 @@ import base64
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import select
 from app.models.base import utcnow, BEIJING_TZ
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
