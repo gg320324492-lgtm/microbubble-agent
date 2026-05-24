@@ -114,7 +114,11 @@
               <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
                 {{ getPriorityLabel(task.priority) }}
               </el-tag>
-              <span class="task-assignee">{{ memberStore.getMemberName(task.assignee_id) }}</span>
+              <div class="task-assignee">
+                <el-avatar v-if="memberStore.getMemberAvatar(task.assignee_id)" :src="memberStore.getMemberAvatar(task.assignee_id)" :size="20" />
+                <el-avatar v-else :size="20" style="background: #409eff">{{ memberStore.getMemberName(task.assignee_id).charAt(0) }}</el-avatar>
+                <span>{{ memberStore.getMemberName(task.assignee_id) }}</span>
+              </div>
             </div>
           </div>
           <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
@@ -303,13 +307,14 @@ const fetchInProgressTasks = async () => {
     ])
     const todoItems = todoRes.data.items || []
     const inProgressItems = inProgressRes.data.items || []
-    // 合并并按截止日期排序（最近截止的在前）
+    // 合并并排序：优先按状态（进行中 > 待办），再按创建日期（最新在前）
     const allTasks = [...todoItems, ...inProgressItems]
     allTasks.sort((a, b) => {
-      if (!a.due_date && !b.due_date) return 0
-      if (!a.due_date) return 1
-      if (!b.due_date) return -1
-      return dayjs(a.due_date).diff(dayjs(b.due_date))
+      // 第一优先：状态（in_progress 排前面）
+      if (a.status === 'in_progress' && b.status !== 'in_progress') return -1
+      if (a.status !== 'in_progress' && b.status === 'in_progress') return 1
+      // 第二优先：创建日期（最新的在前）
+      return dayjs(b.created_at).diff(dayjs(a.created_at))
     })
     inProgressTasks.value = allTasks
   } catch (e) { console.error('获取进行中任务失败:', e) }
@@ -478,7 +483,7 @@ onMounted(() => {
 .task-info { flex: 1; min-width: 0; }
 .task-title { font-size: 14px; color: #303133; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .task-meta { display: flex; align-items: center; gap: 8px; }
-.task-assignee { font-size: 12px; color: #909399; }
+.task-assignee { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #909399; }
 .task-due { font-size: 12px; color: #909399; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .task-due.overdue { color: #f56c6c; font-weight: 600; }
 

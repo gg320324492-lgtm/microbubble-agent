@@ -56,9 +56,13 @@
               </template>
             </el-table-column>
 
-            <el-table-column prop="assignee_id" label="负责人" width="120">
+            <el-table-column prop="assignee_id" label="负责人" width="150">
               <template #default="{ row }">
-                {{ getMemberName(row.assignee_id) }}
+                <div class="assignee-cell">
+                  <el-avatar v-if="memberStore.getMemberAvatar(row.assignee_id)" :src="memberStore.getMemberAvatar(row.assignee_id)" :size="24" />
+                  <el-avatar v-else :size="24" style="background: #409eff">{{ memberStore.getMemberName(row.assignee_id).charAt(0) }}</el-avatar>
+                  <span>{{ memberStore.getMemberName(row.assignee_id) }}</span>
+                </div>
               </template>
             </el-table-column>
 
@@ -136,9 +140,13 @@
               </template>
             </el-table-column>
 
-            <el-table-column prop="assignee_id" label="负责人" width="120">
+            <el-table-column prop="assignee_id" label="负责人" width="150">
               <template #default="{ row }">
-                {{ getMemberName(row.assignee_id) }}
+                <div class="assignee-cell">
+                  <el-avatar v-if="memberStore.getMemberAvatar(row.assignee_id)" :src="memberStore.getMemberAvatar(row.assignee_id)" :size="24" />
+                  <el-avatar v-else :size="24" style="background: #409eff">{{ memberStore.getMemberName(row.assignee_id).charAt(0) }}</el-avatar>
+                  <span>{{ memberStore.getMemberName(row.assignee_id) }}</span>
+                </div>
               </template>
             </el-table-column>
 
@@ -607,5 +615,11 @@ onMounted(() => {
   color: #909399;
   font-size: 12px;
   margin-top: 4px;
+}
+
+.assignee-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 </style>
