@@ -470,7 +470,18 @@ class MessageHandler:
                                    is_external: bool = False) -> None:
         """群聊中 @机器人 的对话（回复到群里）"""
         session_id = f"wechat_group_{chat_id}"
+        # 立即发送思考中消息，不阻塞
+        try:
+            await wechat_bot.smart_send_to_group(chat_id, "🤔 收到，让我思考一下...")
+        except Exception as e:
+            logger.warning(f"发送思考中消息失败: {e}")
+        # 后台异步处理 agent 对话
+        asyncio.create_task(self._process_group_chat_async(content, member, session_id, db, chat_id))
 
+    async def _process_group_chat_async(self, content: str, member: Member,
+                                         session_id: str, db: AsyncSession,
+                                         chat_id: str) -> None:
+        """异步处理群聊 agent 对话"""
         try:
             enriched_msg = f"[群聊, 用户: {member.name}, 角色: {member.role}] {content}"
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
@@ -928,6 +939,19 @@ class MessageHandler:
                                     is_external: bool = False, msg: dict = None) -> None:
         """私聊通用对话"""
         session_id = f"wechat_{user_id}"
+        # 立即发送思考中消息，不阻塞
+        try:
+            await self._reply_text(user_id, "🤔 收到，让我思考一下...", is_external, msg=msg)
+        except Exception as e:
+            logger.warning(f"发送思考中消息失败: {e}")
+        # 后台异步处理 agent 对话
+        asyncio.create_task(self._process_general_chat_async(content, member, session_id, db, is_external, msg))
+
+    async def _process_general_chat_async(self, content: str, member: Member,
+                                         session_id: str, db: AsyncSession,
+                                         is_external: bool, msg: dict) -> None:
+        """异步处理 agent 对话"""
+        user_id = msg.get("_resolved_user_id") or msg.get("FromUserName", "")
         try:
             enriched_msg = f"[用户: {member.name}, 角色: {member.role}] {content}"
             result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
