@@ -25,6 +25,7 @@
 - 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装，已接入 text2vec-base-chinese 真实语义搜索）
 - 语音识别使用 faster-whisper GPU，TTS 使用 Edge-TTS
 - **会议转录总结工具** — `summarize_meeting_transcript` 工具支持对话触发与长期存储
+- **任务软删除/垃圾桶** — 删除任务进入垃圾桶（deleted_at 字段），支持恢复或永久删除，3天后自动清除
 
 ## 服务层结构
 

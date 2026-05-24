@@ -992,3 +992,60 @@
 1. 确保 `vision-mcp` 容器运行中
 2. `.env` 设置 `VISION_USE_MCP=true`，`CLAUDE_MODEL=deepseek-xxx`
 3. 图片先通过 MCP 调用视觉服务获取描述，再以文本形式发给 DeepSeek
+
+---
+
+## 2026-05-24 更新
+
+### 任务软删除/垃圾桶功能
+
+实现任务的软删除机制，删除的任务进入垃圾桶而非直接删除，支持恢复或永久删除。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 软删除字段 | Task.deleted_at 字段，null=未删除，有值=已删除 | ✅ 完成 |
+| 删除 API 变更 | DELETE /tasks/{id} 改为设置 deleted_at | ✅ 完成 |
+| 恢复 API | POST /tasks/{id}/restore 恢复任务 | ✅ 完成 |
+| 永久删除 API | DELETE /tasks/{id}/permanent 彻底删除 | ✅ 完成 |
+| 列表查询排除 | GET /tasks 默认排除 deleted_at 非空记录 | ✅ 完成 |
+| 仪表盘统计排除 | dashboard/stats 排除已删除任务 | ✅ 完成 |
+| 前端垃圾桶 UI | Tab 页切换（任务列表/垃圾桶），显示删除倒计时 | ✅ 完成 |
+| 自动删除倒计时 | 显示"还有 X 天自动删除"，最多显示 3 天 | ✅ 完成 |
+
+**修改文件：**
+- `app/models/task.py` — deleted_at 字段 + cascade delete-orphan
+- `app/schemas/task.py` — deleted_at 响应字段
+- `app/api/v1/task.py` — 软删除/恢复/永久删除 API
+- `app/services/task_service.py` — 查询排除已删除
+- `web/src/views/TaskView.vue` — Tab 页垃圾桶 UI
+
+### 外键 CASCADE 修复
+
+修复删除父记录时外键约束失败的问题，为所有 NOT NULL 外键添加 ondelete="CASCADE"。
+
+| 修复位置 | 说明 |
+|----------|------|
+| reminders.task_id | → tasks(id) |
+| task_dependencies.task_id | → tasks(id) |
+| task_dependencies.depends_on_id | → tasks(id) |
+| milestones.project_id | → projects(id) |
+| meeting_participants.meeting_id | → meetings(id) |
+| meeting_participants.member_id | → members(id) |
+| memories.user_id | → members(id) |
+| feedback.user_id | → members(id) |
+
+**修改文件：**
+- `app/models/reminder.py`
+- `app/models/task.py` (TaskDependency)
+- `app/models/project.py`
+- `app/models/meeting.py`
+- `app/models/memory.py`
+- `app/models/feedback.py`
+
+### TaskView 筛选修复
+
+修复 TaskView 空值筛选参数导致 FastAPI 422 错误的问题。
+
+| 问题 | 修复 |
+|------|------|
+| filters 为空时发送 status=&assignee_id=&priority= | Object.fromEntries 过滤空值 |
