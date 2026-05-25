@@ -175,11 +175,6 @@
               class="task-row"
               :class="{ overdue: isOverdue(task.due_date) }"
             >
-              <el-checkbox
-                :model-value="task.status === 'done'"
-                @change="toggleTaskStatus(task)"
-                size="large"
-              />
               <div class="task-content">
                 <div class="task-title">{{ task.title }}</div>
                 <div class="task-meta">
@@ -194,7 +189,7 @@
                 {{ formatDate(task.due_date) }}
               </div>
               <div class="task-actions">
-                <el-button text type="success" size="small" class="btn-success" @click="completeTask(task)">完成</el-button>
+                <el-button type="success" size="small" round @click="completeTask(task)">✓ 完成</el-button>
                 <el-button text type="primary" size="small" @click="openEditDialog(task)">编辑</el-button>
               </div>
             </div>
@@ -235,7 +230,6 @@
       <div v-else class="upcoming-list">
         <div v-for="task in upcomingDeadlines" :key="task.id" class="upcoming-item" :class="{ 'overdue': isOverdue(task.due_date), 'urgent': getDaysLeft(task.due_date) <= 1 }">
           <div class="upcoming-left">
-            <el-checkbox :model-value="task.status === 'done'" @change="toggleTaskStatus(task)" size="large" />
             <div class="upcoming-info">
               <div class="upcoming-title">{{ task.title }}</div>
               <div class="upcoming-meta">
@@ -251,7 +245,7 @@
               {{ getDaysLeftText(task.due_date) }}
             </div>
             <div class="task-actions">
-              <el-button text type="success" size="small" class="btn-success" @click="completeTask(task)">完成</el-button>
+              <el-button type="success" size="small" round @click="completeTask(task)">✓ 完成</el-button>
               <el-button text type="primary" size="small" @click="openEditDialog(task)">编辑</el-button>
             </div>
           </div>
@@ -590,16 +584,6 @@ const createTask = async () => {
     fetchDashboardStats()
     fetchUpcomingDeadlines()
   } catch (e) { ElMessage.error('创建任务失败') }
-}
-
-const toggleTaskStatus = async (task) => {
-  const newStatus = task.status === 'done' ? 'in_progress' : 'done'
-  try {
-    await axios.put(`/api/v1/tasks/${task.id}`, { status: newStatus })
-    fetchInProgressTasks()
-    fetchDashboardStats()
-    fetchUpcomingDeadlines()
-  } catch (e) { ElMessage.error('更新失败') }
 }
 
 const formatDate = (date) => formatCompactDate(date, '无截止')
