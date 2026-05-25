@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import subprocess
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 PORT = 9001
@@ -63,6 +64,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
             self.wfile.write(b"OK")
             return
 
+        # 先返回 200，避免 GitHub 10s 超时
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+        # 后台执行部署
         try:
             data = json.loads(payload)
             ref = data.get("ref", "")
@@ -70,26 +77,29 @@ class WebhookHandler(BaseHTTPRequestHandler):
             commits = len(data.get("commits", []))
             logger.info(f"收到 push: {pusher} 推送了 {commits} 个提交到 {ref}")
 
-            # 只处理 main 分支
             if ref == "refs/heads/main":
                 logger.info("开始自动部署...")
-                result = subprocess.run(
-                    ["bash", DEPLOY_SCRIPT],
-                    capture_output=True, text=True, timeout=300
-                )
-                if result.returncode == 0:
-                    logger.info("部署成功")
-                else:
-                    logger.error(f"部署失败: {result.stderr}")
+                threading.Thread(target=self._run_deploy, daemon=True).start()
             else:
                 logger.info(f"忽略非 main 分支: {ref}")
-
         except Exception as e:
             logger.error(f"处理失败: {e}")
 
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+    def _run_deploy(self):
+        """后台执行部署脚本"""
+        try:
+            result = subprocess.run(
+                ["bash", DEPLOY_SCRIPT],
+                capture_output=True, text=True, timeout=300
+            )
+            if result.returncode == 0:
+                logger.info("部署成功")
+            else:
+                logger.error(f"部署失败: {result.stderr}")
+        except subprocess.TimeoutExpired:
+            logger.error("部署超时（300s）")
+        except Exception as e:
+            logger.error(f"部署异常: {e}")
 
     def do_GET(self):
         """健康检查"""
