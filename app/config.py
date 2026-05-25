@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "microbubble"
     MINIO_SECURE: bool = False
 
+    # 站点域名（用于构造头像等公网可访问的 URL）
+    SITE_DOMAIN: str = "agent.mnb-lab.cn"
+
     # Claude API
     CLAUDE_API_KEY: str = ""
     CLAUDE_BASE_URL: str = ""

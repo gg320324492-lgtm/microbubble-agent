@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import json
 import uuid
 from datetime import timedelta
 from minio import Minio
@@ -21,11 +22,34 @@ class FileService:
         )
         self.bucket = settings.MINIO_BUCKET
         self._ensure_bucket()
+        self._set_public_read_policy()
 
     def _ensure_bucket(self):
         """确保 bucket 存在"""
         if not self.client.bucket_exists(self.bucket):
             self.client.make_bucket(self.bucket)
+
+    def _set_public_read_policy(self):
+        """设置 bucket 公开读权限（头像等通过 Nginx 代理直接访问）"""
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": "*"},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{self.bucket}/*"]
+                }
+            ]
+        }
+        # 尝试获取当前 policy，避免重复设置
+        try:
+            existing = self.client.get_bucket_policy(self.bucket)
+            if json.loads(existing) == policy:
+                return
+        except Exception:
+            pass
+        self.client.set_bucket_policy(self.bucket, json.dumps(policy))
 
     async def upload_file(
         self,
