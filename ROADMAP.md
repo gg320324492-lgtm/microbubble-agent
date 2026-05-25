@@ -1357,3 +1357,17 @@ todo（待办）和 in_progress（进行中）语义高度重合，统一为"进
 - `scripts/webhook.py` — 端口改为 9001 + 移除硬编码默认密钥
 - `nginx/conf.d/tunnel.conf` — 新建（HTTPS + /webhook + /api + /ws + /minio + 缓存头 + 安全头）
 - `scripts/deploy-cloud.sh` — HTTP 临时配置添加 /webhook 代理 + 缓存头
+
+### 任务排序优化 (2026-05-25)
+
+Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优化。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| Dashboard 排序 | 从 `in_progress` 状态优先 + `created_at` 降序 → 优先级高→中→低 + 截止时间早→晚 | ✅ 完成 |
+| TaskView 排序 | 从 `created_at` 降序 → 优先级高→中→低 + 截止时间早→晚 | ✅ 完成 |
+| 无截止日期 | 同优先级中无截止日期的排最后 | ✅ 完成 |
+
+**修改文件：**
+- `web/src/views/Dashboard.vue` — `fetchInProgressTasks` 排序逻辑
+- `web/src/views/TaskView.vue` — `groupTasksByAssignee` 组内排序逻辑
