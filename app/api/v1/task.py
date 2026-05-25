@@ -330,10 +330,11 @@ async def update_task(
     if task.deleted_at is not None:
         raise HTTPException(status_code=400, detail="任务已删除，无法编辑")
 
-    # 权限：普通成员只能编辑自己创建或被分配的任务
+    # 权限：管理员可编辑任意任务，普通成员只能编辑自己或组内可见成员的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+        visible_ids = await _get_visible_member_ids(db, current_user)
+        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
             raise HTTPException(status_code=403, detail="只能编辑自己创建或被分配的任务")
         # 不能把任务分配给其他人
         if task_data.assignee_id is not None and task_data.assignee_id != current_user.id:
@@ -371,10 +372,11 @@ async def delete_task(
     if task.deleted_at is not None:
         raise HTTPException(status_code=400, detail="任务已在垃圾桶中")
 
-    # 权限：普通成员只能删除自己创建或被分配的任务
+    # 权限：普通成员只能删除自己或组内可见成员的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+        visible_ids = await _get_visible_member_ids(db, current_user)
+        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
             raise HTTPException(status_code=403, detail="只能删除自己创建或被分配的任务")
 
     # 软删除：设置 deleted_at
@@ -398,10 +400,11 @@ async def restore_task(
     if task.deleted_at is None:
         raise HTTPException(status_code=400, detail="任务未删除，无需恢复")
 
-    # 权限：管理员可恢复任意任务，普通成员只能恢复自己创建或被分配的任务
+    # 权限：管理员可恢复任意任务，普通成员只能恢复自己或组内可见成员的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+        visible_ids = await _get_visible_member_ids(db, current_user)
+        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
             raise HTTPException(status_code=403, detail="只能恢复自己创建或被分配的任务")
 
     task.deleted_at = None
@@ -426,10 +429,11 @@ async def permanent_delete_task(
     if task.deleted_at is None:
         raise HTTPException(status_code=400, detail="请先删除任务再永久删除")
 
-    # 权限：管理员可永久删除任意任务，普通成员只能永久删除自己创建或被分配的任务
+    # 权限：管理员可永久删除任意任务，普通成员只能永久删除自己或组内可见成员的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+        visible_ids = await _get_visible_member_ids(db, current_user)
+        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
             raise HTTPException(status_code=403, detail="只能永久删除自己创建或被分配的任务")
 
     await db.delete(task)
