@@ -448,7 +448,7 @@ const taskForm = ref({
   assignee_id: null,
   priority: 'medium',
   status: 'in_progress',
-  due_date: '',
+  due_date: null,
   description: '',
   reminders: []
 })
@@ -601,7 +601,7 @@ const resetForm = () => {
     assignee_id: isAdmin.value ? null : currentUserId.value,
     priority: 'medium',
     status: 'in_progress',
-    due_date: '',
+    due_date: null,
     description: '',
     reminders: []
   }
