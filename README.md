@@ -246,6 +246,8 @@ npm run dev
 - **Dashboard 列表顺序修复**（2026-05-25）：后端 `list_tasks` 添加 `ORDER BY created_at DESC`，Dashboard `page_size` 从 60 提升至 100，确保最新任务始终显示
 - **Webhook 异步部署**（2026-05-25）：`webhook.py` 改用 `threading.Thread` 后台执行部署脚本，先返回 200 再部署，彻底解决 GitHub 10 秒超时
 - **通知面板显示具体提醒**（2026-05-25）：新增 `GET /api/v1/reminders` 端点返回待处理提醒列表（含任务标题），铃铛弹窗显示每条提醒的具体内容和时间，点击可跳转到任务管理
+- **企业微信回复修复**（2026-05-25）：修复 WECHAT_API_BASE_URL 指向错误代理地址导致所有微信 API 调用 JSON 解析失败，改为直接调用 qyapi.weixin.qq.com
+- **Dashboard 500 修复**（2026-05-25）：移除 `get_dashboard_stats` 中不存在的 `_get_visible_member_ids` 调用，统一使用简单的软删除过滤
 
 ### 待解决问题
 

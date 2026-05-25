@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-25 (更新：通知面板显示具体提醒内容)
+> 最后更新: 2026-05-25 (更新：企业微信回复修复、Dashboard 500 修复)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1436,3 +1436,20 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 - `app/api/v1/task.py` — 新增 `GET /reminders` 端点
 - `web/src/stores/user.js` — 新增 `notifications` ref 和 `fetchNotifications()`
 - `web/src/layouts/MainLayout.vue` — 弹窗模板改为通知列表 + 新增 `handlePopoverShow`/`goToTask`/`formatTime`
+
+### 企业微信回复失败 + Dashboard 500 修复 (2026-05-25)
+
+**问题 1：** 企业微信用户（刘莫菲、杜同贺）给机器人发消息后无回复。根因是 `.env` 中 `WECHAT_API_BASE_URL=https://agent.mnb-lab.cn/wechat-api`，该路径在 Nginx 上无代理规则，所有微信 API 请求（gettoken/message/send）打到前端 HTML，JSON 解析失败导致全部微信功能瘫痪。
+
+**问题 2：** `GET /dashboard/stats` 返回 500 错误。根因是 `get_dashboard_stats` 调用了不存在的 `_get_visible_member_ids` 函数。
+
+**关键变更：**
+
+| 变更 | 说明 | 状态 |
+|------|------|------|
+| WECHAT_API_BASE_URL | 从 `agent.mnb-lab.cn/wechat-api` 改为 `qyapi.weixin.qq.com` 直接调用企业微信官方 API | ✅ 完成 |
+| Dashboard 权限过滤 | 移除 `_get_visible_member_ids` 调用，所有用户统一使用软删除过滤 | ✅ 完成 |
+
+**修改文件：**
+- `.env` — WECHAT_API_BASE_URL 修正
+- `app/api/v1/task.py` — `get_dashboard_stats` 简化权限过滤
