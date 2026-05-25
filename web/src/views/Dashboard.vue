@@ -445,12 +445,12 @@ const updateTime = () => {
 
 onUnmounted(() => { window.removeEventListener('resize', handleResize) })
 
-const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: '', description: '' })
+const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' })
 
 // 编辑相关
 const editingTask = ref(null)
 const showEditDialog = ref(false)
-const editForm = ref({ title: '', assignee_id: null, priority: 'medium', status: 'in_progress', due_date: '', description: '', reminders: [] })
+const editForm = ref({ title: '', assignee_id: null, priority: 'medium', status: 'in_progress', due_date: null, description: '', reminders: [] })
 
 const openEditDialog = (task) => {
   editingTask.value = task
@@ -585,7 +585,7 @@ const createTask = async () => {
     await axios.post('/api/v1/tasks', newTask.value)
     ElMessage.success('任务创建成功')
     showCreateTask.value = false
-    newTask.value = { title: '', assignee_id: null, priority: 'medium', due_date: '', description: '' }
+    newTask.value = { title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' }
     fetchInProgressTasks()
     fetchDashboardStats()
     fetchUpcomingDeadlines()
