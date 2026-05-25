@@ -1371,3 +1371,51 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 **修改文件：**
 - `web/src/views/Dashboard.vue` — `fetchInProgressTasks` 排序逻辑
 - `web/src/views/TaskView.vue` — `groupTasksByAssignee` 组内排序逻辑
+
+### Webhook 异步部署 (2026-05-25)
+
+修复 GitHub webhook 持续超时（"时间耗尽"）的问题。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 同步→异步 | `subprocess.run` 改为 `threading.Thread` 后台执行 | ✅ 完成 |
+| 先返回 200 | HTTP 响应立即返回，部署脚本在后台运行 | ✅ 完成 |
+| 错误处理 | 后台线程独立 try/except，日志记录超时和异常 | ✅ 完成 |
+
+**修改文件：**
+- `scripts/webhook.py` — `do_POST` 先返回 200，部署移入 `_run_deploy` 线程方法
+
+### Dashboard 完成任务 UI 优化 (2026-05-25)
+
+去除任务行前的复选框，统一为一个绿色"✓ 完成"按钮。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 去掉复选框 | 进行中和即将到期任务行前的 `el-checkbox` 全部删除 | ✅ 完成 |
+| 按钮样式 | 从 `text` 文字按钮改为 `type="success" round` 绿色实心圆角按钮 | ✅ 完成 |
+| 清理代码 | 删除不再使用的 `toggleTaskStatus` 函数 | ✅ 完成 |
+
+**修改文件：**
+- `web/src/views/Dashboard.vue` — 模板（进行中/即将到期任务）和脚本（删除 toggleTaskStatus）
+
+### 创建任务不填截止日期修复 (2026-05-25)
+
+前端 `due_date` 初始值为空字符串，Pydantic 无法转为 `datetime` 导致 422 错误。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| Dashboard.vue | `due_date: ''` → `due_date: null`（3 处） | ✅ 完成 |
+| TaskView.vue | `due_date: ''` → `due_date: null`（2 处） | ✅ 完成 |
+
+### Dashboard 列表顺序修复 (2026-05-25)
+
+后端 `list_tasks` 添加 `ORDER BY created_at DESC`，Dashboard `page_size` 从 60 提升至 100，确保新创建任务不会排在分页之外。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 后端排序 | `app/api/v1/task.py` `list_tasks` 添加 `.order_by(Task.created_at.desc())` | ✅ 完成 |
+| 前端 page_size | Dashboard `fetchInProgressTasks` 从 60→100 | ✅ 完成 |
+
+**修改文件：**
+- `app/api/v1/task.py` — list_tasks 添加 ORDER BY
+- `web/src/views/Dashboard.vue` — page_size 60→100
