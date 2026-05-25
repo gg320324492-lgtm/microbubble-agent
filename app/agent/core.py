@@ -605,11 +605,16 @@ class MicroBubbleAgent:
                 task_svc = TaskService(db)
                 member_svc = MemberService(db)
 
-                # 权限检查：普通成员只看自己的任务
+                # 权限检查
                 is_admin = False
+                is_graduate = False  # 研究生+贾琦+周之超 互相可见
                 if user_id:
                     current_member = await member_svc.get_member(user_id)
                     is_admin = current_member and current_member.role in ("admin", "leader")
+                    if current_member:
+                        graduate_grades = ("研一", "研二", "研三", "博一", "博二")
+                        special_names = ("贾琦", "周之超")
+                        is_graduate = current_member.grade in graduate_grades or current_member.name in special_names
 
                 assignee_id = None
                 if input_data.get("assignee_name"):
@@ -625,8 +630,8 @@ class MicroBubbleAgent:
                             project_id = p.id
                             break
 
-                # 非管理员且未指定负责人时，只查自己的任务
-                if not is_admin and not assignee_id:
+                # 非管理员：普通成员只看自己的任务；研究生可见组内成员
+                if not is_admin and not assignee_id and not is_graduate:
                     assignee_id = user_id
 
                 tasks = await task_svc.get_tasks(
