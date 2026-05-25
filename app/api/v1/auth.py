@@ -27,31 +27,32 @@ from app.schemas.auth import (
     ProfileUpdateRequest,
 )
 
+from app.config import settings
 from app.services.file_service import file_service
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 def _resolve_avatar_url(member: Member) -> str | None:
-    """将 avatar 转为新鲜可用的 URL"""
-    if not member.avatar:
+    """将 avatar 转为公网可访问的 URL（通过 Nginx /minio/ 代理）"""
+    avatar = member.avatar
+    if not avatar:
         return None
 
-    # 兼容旧数据：avatar 字段存的是完整预签名 URL
-    if member.avatar.startswith("http"):
-        try:
-            from urllib.parse import urlparse
-            path = urlparse(member.avatar).path
-            # path = /bucket/object_name
-            parts = path.lstrip("/").split("/", 1)
-            if len(parts) == 2:
-                return file_service.get_url(parts[1])
-        except Exception:
-            pass
-        return member.avatar  # fallback 返回旧 URL
+    # 兼容旧数据：提取 object_name
+    if avatar.startswith("http"):
+        from urllib.parse import urlparse
+        path = urlparse(avatar).path
+        parts = path.lstrip("/").split("/", 1)
+        if len(parts) == 2:
+            object_name = parts[1]
+        else:
+            return avatar  # fallback
+    else:
+        object_name = avatar
 
-    # 正常情况：avatar 存的是 object_name
-    return file_service.get_url(member.avatar)
+    # 通过 Nginx 代理路径构造公网可访问的 URL
+    return f"https://{settings.SITE_DOMAIN}/minio/{object_name}"
 
 
 @router.post("/login", response_model=LoginResponse)
