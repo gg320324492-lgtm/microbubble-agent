@@ -1,26 +1,29 @@
 <template>
   <!-- 移动端独立抽屉 — 在 el-container 外部，不受 Element Plus aside 样式影响 -->
-  <div v-if="isMobile && showMobileMenu" class="mobile-drawer-root">
-    <div class="mobile-drawer-mask" @click="showMobileMenu = false" />
-    <div class="mobile-drawer-body">
-      <div class="mobile-drawer-brand">
-        <div class="mobile-drawer-logo">
-          <el-icon size="24"><Aim /></el-icon>
+  <Transition name="mobile-drawer">
+    <div v-if="isMobile && showMobileMenu" class="mobile-drawer-root">
+      <div class="mobile-drawer-mask" @click="showMobileMenu = false" />
+      <div class="mobile-drawer-body">
+        <div class="mobile-drawer-brand">
+          <div class="mobile-drawer-logo">
+            <el-icon size="24"><Aim /></el-icon>
+          </div>
+          <span>小气助手</span>
         </div>
-        <span>小气助手</span>
-      </div>
-      <div
-        v-for="item in menuRoutes"
-        :key="item.path"
-        class="mobile-drawer-item"
-        :class="{ active: currentRoute === item.path }"
-        @click="navigateTo(item.path)"
-      >
-        <el-icon size="20"><component :is="item.meta.icon" /></el-icon>
-        <span>{{ item.meta.title }}</span>
+        <div
+          v-for="(item, index) in menuRoutes"
+          :key="item.path"
+          class="mobile-drawer-item"
+          :class="{ active: currentRoute === item.path }"
+          :style="{ '--i': index }"
+          @click="navigateTo(item.path)"
+        >
+          <el-icon size="20"><component :is="item.meta.icon" /></el-icon>
+          <span>{{ item.meta.title }}</span>
+        </div>
       </div>
     </div>
-  </div>
+  </Transition>
 
   <el-container class="layout-container">
     <!-- 桌面端侧边栏 — 移动端完全不渲染 -->
@@ -465,6 +468,63 @@ const markAllRead = async () => {
 .mobile-drawer-item.active {
   background: #FF7A5C;
   color: #fff;
+}
+
+/* ===== 移动端抽屉过渡动画 ===== */
+.mobile-drawer-enter-active {
+  transition: opacity 0.3s ease-out;
+}
+.mobile-drawer-enter-active .mobile-drawer-mask {
+  animation: drawer-mask-in 0.3s ease-out both;
+}
+.mobile-drawer-enter-active .mobile-drawer-body {
+  animation: drawer-slide-in 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.mobile-drawer-enter-active .mobile-drawer-item {
+  animation: drawer-item-in 0.35s ease-out both;
+  animation-delay: calc(var(--i, 0) * 50ms + 100ms);
+}
+
+.mobile-drawer-leave-active {
+  transition: opacity 0.25s ease-in;
+}
+.mobile-drawer-leave-active .mobile-drawer-mask {
+  animation: drawer-mask-out 0.25s ease-in both;
+}
+.mobile-drawer-leave-active .mobile-drawer-body {
+  animation: drawer-slide-out 0.25s ease-in both;
+}
+
+.mobile-drawer-enter-from {
+  opacity: 0;
+}
+.mobile-drawer-leave-to {
+  opacity: 0;
+}
+
+@keyframes drawer-mask-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes drawer-mask-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes drawer-slide-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes drawer-slide-out {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+@keyframes drawer-item-in {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 /* 窄屏适配 */
