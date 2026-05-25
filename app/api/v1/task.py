@@ -18,6 +18,24 @@ from app.services.task_service import TaskService
 
 router = APIRouter()
 
+GRADUATE_GRADES = ("研一", "研二", "研三", "博一", "博二")
+SPECIAL_NAMES = ("贾琦", "周之超")
+
+
+async def _get_visible_member_ids(db: AsyncSession, user: Member) -> list[int]:
+    """研究生 + 贾琦 + 周之超 互相对方任务可见"""
+    if user.grade in GRADUATE_GRADES or user.name in SPECIAL_NAMES:
+        result = await db.execute(
+            select(Member.id).where(
+                or_(
+                    Member.grade.in_(GRADUATE_GRADES),
+                    Member.name.in_(SPECIAL_NAMES)
+                )
+            )
+        )
+        return [row[0] for row in result.all()]
+    return [user.id]
+
 
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
 async def create_task(
@@ -226,11 +244,12 @@ async def list_tasks(
     if not include_deleted:
         filters.append(Task.deleted_at.is_(None))
 
-    # 权限：普通成员只看自己创建的 + 自己负责的
+    # 权限：普通成员只看自己创建/负责的；研究生+贾琦+周之超互相对方任务可见
     if not is_admin:
+        visible_ids = await _get_visible_member_ids(db, current_user)
         filters.append(or_(
             Task.created_by == current_user.id,
-            Task.assignee_id == current_user.id
+            Task.assignee_id.in_(visible_ids)
         ))
 
     if assignee_id:
@@ -437,10 +456,10 @@ async def get_task_stats(
         if member_id:
             query = query.where(Task.assignee_id == member_id)
     else:
-        # 普通成员只看自己的统计
+        visible_ids = await _get_visible_member_ids(db, current_user)
         query = query.where(or_(
             Task.created_by == current_user.id,
-            Task.assignee_id == current_user.id
+            Task.assignee_id.in_(visible_ids)
         ))
 
     result = await db.execute(query)
@@ -470,13 +489,14 @@ async def get_dashboard_stats(
     now = utcnow()
     is_admin = current_user.role in ("admin", "leader")
 
-    # 权限：普通成员只看自己的数据，且排除已删除
+    # 权限：普通成员只看自己的数据（研究生可见组内成员任务），且排除已删除
     if not is_admin:
+        visible_ids = await _get_visible_member_ids(db, current_user)
         task_filter = and_(
             Task.deleted_at.is_(None),
             or_(
                 Task.created_by == current_user.id,
-                Task.assignee_id == current_user.id
+                Task.assignee_id.in_(visible_ids)
             )
         )
     else:

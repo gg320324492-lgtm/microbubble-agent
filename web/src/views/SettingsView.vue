@@ -99,6 +99,7 @@ const roleTagType = computed(() => roleTagMap[userInfo.value?.role] || '')
 const savingProfile = ref(false)
 const savingPassword = ref(false)
 const passwordFormRef = ref(null)
+const avatarChanged = ref(false)
 
 const initForm = () => ({
   name: userInfo.value?.name || '',
@@ -154,8 +155,9 @@ const handleAvatarUpload = async (e) => {
     formData.append('prefix', 'avatars')
 
     const res = await axios.post('/api/v1/upload', formData)
-    if (res.data?.url) {
-      form.avatar = res.data.url
+    if (res.data?.object_name) {
+      form.avatar = res.data.object_name
+      avatarChanged.value = true
       ElMessage.success('头像上传成功')
     }
   } catch (err) {
@@ -170,8 +172,11 @@ const saveProfile = async () => {
       name: form.name,
       email: form.email || undefined,
       phone: form.phone || undefined,
-      bio: form.bio || undefined,
-      avatar: form.avatar || undefined
+      bio: form.bio || undefined
+    }
+    // 只在用户新上传头像时发送 object_name，避免覆盖已存储的 object_name
+    if (avatarChanged.value) {
+      payload.avatar = form.avatar || undefined
     }
 
     const res = await axios.put('/api/v1/auth/profile', payload)

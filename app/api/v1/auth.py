@@ -27,7 +27,31 @@ from app.schemas.auth import (
     ProfileUpdateRequest,
 )
 
+from app.services.file_service import file_service
+
 router = APIRouter(prefix="/auth", tags=["认证"])
+
+
+def _resolve_avatar_url(member: Member) -> str | None:
+    """将 avatar 转为新鲜可用的 URL"""
+    if not member.avatar:
+        return None
+
+    # 兼容旧数据：avatar 字段存的是完整预签名 URL
+    if member.avatar.startswith("http"):
+        try:
+            from urllib.parse import urlparse
+            path = urlparse(member.avatar).path
+            # path = /bucket/object_name
+            parts = path.lstrip("/").split("/", 1)
+            if len(parts) == 2:
+                return file_service.get_url(parts[1])
+        except Exception:
+            pass
+        return member.avatar  # fallback 返回旧 URL
+
+    # 正常情况：avatar 存的是 object_name
+    return file_service.get_url(member.avatar)
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -80,7 +104,7 @@ async def login(
         grade=user.grade,
         research_area=user.research_area,
         email=user.email,
-        avatar=user.avatar,
+        avatar=_resolve_avatar_url(user),
         is_active=user.is_active
     )
 
@@ -167,7 +191,7 @@ async def get_current_user_info(current_user: Member = Depends(get_current_user)
         grade=current_user.grade,
         research_area=current_user.research_area,
         email=current_user.email,
-        avatar=current_user.avatar,
+        avatar=_resolve_avatar_url(current_user),
         is_active=current_user.is_active
     )
 
@@ -211,7 +235,7 @@ async def update_profile(
         grade=current_user.grade,
         research_area=current_user.research_area,
         email=current_user.email,
-        avatar=current_user.avatar,
+        avatar=_resolve_avatar_url(current_user),
         is_active=current_user.is_active
     )
 

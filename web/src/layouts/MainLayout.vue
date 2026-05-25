@@ -182,11 +182,23 @@ const navigateTo = (path) => {
   router.push(path)
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('resize', onResize)
   userStore.loadFromStorage()
   userStore.fetchNotificationCount()
   memberStore.fetchMembers()
+
+  // 刷新用户信息，获取新鲜头像 URL
+  try {
+    const res = await axios.get('/api/v1/auth/me')
+    const fresh = res.data
+    const stored = JSON.parse(localStorage.getItem('user_info') || '{}')
+    Object.assign(stored, fresh)
+    localStorage.setItem('user_info', JSON.stringify(stored))
+    userStore.loadFromStorage()
+  } catch {
+    // localStorage 兜底
+  }
 })
 
 onBeforeUnmount(() => {
