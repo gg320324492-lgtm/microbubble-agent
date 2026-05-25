@@ -591,3 +591,37 @@ async def mark_reminders_read(
     )
     await db.commit()
     return {"status": "success"}
+
+
+@router.get("/reminders")
+async def get_pending_reminders(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取当前用户的待处理提醒列表（含任务标题）"""
+    result = await db.execute(
+        select(Reminder, Task.title)
+        .join(Task, Task.id == Reminder.task_id)
+        .where(
+            and_(
+                Task.assignee_id == current_user.id,
+                Reminder.status == "pending"
+            )
+        )
+        .order_by(Reminder.remind_at.asc())
+        .limit(50)
+    )
+    rows = result.all()
+    return {
+        "reminders": [
+            {
+                "id": r.id,
+                "task_id": r.task_id,
+                "task_title": title,
+                "remind_at": r.remind_at.isoformat() if r.remind_at else None,
+                "remind_type": r.remind_type,
+                "status": r.status
+            }
+            for r, title in rows
+        ]
+    }
