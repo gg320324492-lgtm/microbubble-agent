@@ -20,6 +20,7 @@
       </div>
 
       <el-menu
+        v-if="!isMobile || showMobileMenu"
         :key="menuKey"
         :default-active="currentRoute"
         :collapse="menuCollapse"
