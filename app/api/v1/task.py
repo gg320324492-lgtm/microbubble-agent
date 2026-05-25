@@ -427,10 +427,12 @@ async def get_task_stats(
     tasks = result.scalars().all()
 
     now = utcnow()
+    todo_count = sum(1 for t in tasks if t.status == TaskStatus.TODO.value)
+    in_progress_count = sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value)
     stats = TaskStats(
         total=len(tasks),
-        todo=sum(1 for t in tasks if t.status == TaskStatus.TODO.value),
-        in_progress=sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value),
+        todo=todo_count,
+        in_progress=in_progress_count + todo_count,
         blocked=sum(1 for t in tasks if t.status == TaskStatus.BLOCKED.value),
         review=sum(1 for t in tasks if t.status == TaskStatus.REVIEW.value),
         done=sum(1 for t in tasks if t.status == TaskStatus.DONE.value),
@@ -533,8 +535,8 @@ async def get_dashboard_stats(
         "member_stats": member_stats,
         "summary": {
             "total_tasks": total_tasks,
-            "todo_tasks": task_status_stats.get("todo", 0),
-            "in_progress_tasks": task_status_stats.get("in_progress", 0),
+            "todo_tasks": 0,
+            "in_progress_tasks": task_status_stats.get("in_progress", 0) + task_status_stats.get("todo", 0),
             "done_tasks": task_status_stats.get("done", 0),
             "overdue_tasks": overdue_count
         }

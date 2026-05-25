@@ -238,7 +238,7 @@ class MeetingService:
             assignee_id=assignee.id if assignee else None,
             priority=priority,
             due_date=due_date,
-            status=TaskStatus.TODO.value,
+            status=TaskStatus.IN_PROGRESS.value,
             source="meeting",
             meeting_id=meeting.id,
             created_by=meeting.created_by,

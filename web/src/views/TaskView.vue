@@ -8,7 +8,6 @@
           <el-row :gutter="16" align="middle">
             <el-col :xs="12" :sm="12" :md="6">
               <el-select v-model="filters.status" placeholder="任务状态" clearable>
-                <el-option label="待办" value="todo" />
                 <el-option label="进行中" value="in_progress" />
                 <el-option label="阻塞" value="blocked" />
                 <el-option label="已完成" value="done" />
@@ -304,7 +303,6 @@
         </el-form-item>
         <el-form-item label="状态" v-if="editingTask">
           <el-select v-model="taskForm.status">
-            <el-option label="待办" value="todo" />
             <el-option label="进行中" value="in_progress" />
             <el-option label="阻塞" value="blocked" />
             <el-option label="已完成" value="done" />
@@ -441,7 +439,7 @@ const taskForm = ref({
   title: '',
   assignee_id: null,
   priority: 'medium',
-  status: 'todo',
+  status: 'in_progress',
   due_date: '',
   description: '',
   reminders: []
@@ -578,7 +576,7 @@ const permanentDeleteTask = async (task) => {
 
 // 切换任务状态
 const toggleTaskStatus = async (task) => {
-  const newStatus = task.status === 'done' ? 'todo' : 'done'
+  const newStatus = task.status === 'done' ? 'in_progress' : 'done'
   try {
     await axios.put(`/api/v1/tasks/${task.id}`, { status: newStatus })
     fetchTasks()
@@ -594,7 +592,7 @@ const resetForm = () => {
     title: '',
     assignee_id: isAdmin.value ? null : currentUserId.value,
     priority: 'medium',
-    status: 'todo',
+    status: 'in_progress',
     due_date: '',
     description: '',
     reminders: []

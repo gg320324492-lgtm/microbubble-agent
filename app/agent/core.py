@@ -683,9 +683,8 @@ class MicroBubbleAgent:
                 # 获取所有成员工作量
                 all_member_stats = await task_svc.get_all_members_workload()
 
-                # 按状态分组，按成员排序同人任务（第一人显示名，后续任务缩进）
+                # 按状态分组（todo 归入 in_progress）
                 in_progress_list = []
-                todo_list = []
                 done_list = []
 
                 for member_data in all_member_stats:
@@ -697,10 +696,8 @@ class MicroBubbleAgent:
                             "progress": task.progress,
                             "due_date": task.due_date.strftime("%Y-%m-%d") if task.due_date else None,
                         }
-                        if task.status == "in_progress":
+                        if task.status in ("in_progress", "todo"):
                             in_progress_list.append(task_info)
-                        elif task.status == "todo":
-                            todo_list.append(task_info)
                         elif task.status == "done":
                             done_list.append(task_info)
 
@@ -720,20 +717,13 @@ class MicroBubbleAgent:
                     lines.append("- 无")
 
                 lines.append("")
-                lines.append("【待办任务】（共 {} 个）".format(len(todo_list)))
-                if todo_list:
-                    lines.extend(format_by_member(todo_list))
-                else:
-                    lines.append("- 无")
-
-                lines.append("")
                 lines.append("【已完成任务】（共 {} 个）".format(len(done_list)))
                 if done_list:
                     lines.extend(format_by_member(done_list))
                 else:
                     lines.append("- 无")
 
-                total = len(in_progress_list) + len(todo_list) + len(done_list)
+                total = len(in_progress_list) + len(done_list)
                 lines.append("")
                 lines.append(f"共 {total} 个任务")
 
@@ -758,7 +748,7 @@ class MicroBubbleAgent:
 
                 updated = await task_svc.update_task_status(
                     task_id=input_data["task_id"],
-                    status=input_data.get("status", "todo"),
+                    status=input_data.get("status", "in_progress"),
                     progress=input_data.get("progress")
                 )
                 if updated:
@@ -787,10 +777,11 @@ class MicroBubbleAgent:
                     return {"status": "success", "stats": stats}
                 tasks = await task_svc.get_tasks()
                 from app.models.task import TaskStatus
+                todo_stats = sum(1 for t in tasks if t.status == TaskStatus.TODO.value)
                 stats = {
                     "total": len(tasks),
-                    "todo": sum(1 for t in tasks if t.status == TaskStatus.TODO.value),
-                    "in_progress": sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value),
+                    "todo": todo_stats,
+                    "in_progress": sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value) + todo_stats,
                     "blocked": sum(1 for t in tasks if t.status == TaskStatus.BLOCKED.value),
                     "review": sum(1 for t in tasks if t.status == TaskStatus.REVIEW.value),
                     "done": sum(1 for t in tasks if t.status == TaskStatus.DONE.value),

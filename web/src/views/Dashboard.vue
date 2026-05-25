@@ -359,7 +359,6 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="editForm.status">
-            <el-option label="待办" value="todo" />
             <el-option label="进行中" value="in_progress" />
             <el-option label="阻塞" value="blocked" />
             <el-option label="已完成" value="done" />
@@ -451,7 +450,7 @@ const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date
 // 编辑相关
 const editingTask = ref(null)
 const showEditDialog = ref(false)
-const editForm = ref({ title: '', assignee_id: null, priority: 'medium', status: 'todo', due_date: '', description: '', reminders: [] })
+const editForm = ref({ title: '', assignee_id: null, priority: 'medium', status: 'in_progress', due_date: '', description: '', reminders: [] })
 
 const openEditDialog = (task) => {
   editingTask.value = task
@@ -590,7 +589,7 @@ const createTask = async () => {
 }
 
 const toggleTaskStatus = async (task) => {
-  const newStatus = task.status === 'done' ? 'todo' : 'done'
+  const newStatus = task.status === 'done' ? 'in_progress' : 'done'
   try {
     await axios.put(`/api/v1/tasks/${task.id}`, { status: newStatus })
     fetchInProgressTasks()
