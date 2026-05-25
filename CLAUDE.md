@@ -42,6 +42,8 @@
 - **会议转录总结工具** — `summarize_meeting_transcript` 工具支持对话触发与长期存储
 - **任务软删除/垃圾桶** — 删除任务进入垃圾桶（deleted_at 字段），支持恢复或永久删除，3天后自动清除
 - **微信对话双消息模式** — 收到消息后 0.5 秒内先发"🤔 收到，让我思考一下..."，后台异步处理后发正式回复，解决等待无反馈问题
+- **移动端独立抽屉架构** — 移动端侧边栏使用 el-container 外部独立 div + Vue Transition，完全绕过 Element Plus aside 的全局 CSS 干扰。桌面端 `v-if="!isMobile"` 零影响
+- **通知面板** — 铃铛使用 el-popover 弹窗面板，显示提醒数 + 标为已读 + 跳转任务；头像读取 userStore.userInfo.avatar 真实 URL
 
 ## 服务层结构
 
