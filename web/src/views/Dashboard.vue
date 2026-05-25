@@ -514,23 +514,15 @@ const fetchDashboardStats = async () => {
   loadingStats.value = false
 }
 
-// 获取进行中任务（合并待办+进行中）
+// 获取进行中任务（待办+进行中+阻塞，与任务管理"进行中"定义一致）
 const fetchInProgressTasks = async () => {
   try {
-    // 并行获取 todo 和 in_progress 任务
-    const [todoRes, inProgressRes] = await Promise.all([
-      axios.get('/api/v1/tasks', { params: { status: 'todo', page_size: 20 } }),
-      axios.get('/api/v1/tasks', { params: { status: 'in_progress', page_size: 20 } })
-    ])
-    const todoItems = todoRes.data.items || []
-    const inProgressItems = inProgressRes.data.items || []
-    // 合并并排序：优先按状态（进行中 > 待办），再按创建日期（最新在前）
-    const allTasks = [...todoItems, ...inProgressItems]
+    const res = await axios.get('/api/v1/tasks', { params: { page_size: 60 } })
+    const allTasks = (res.data.items || []).filter(t => t.status !== 'done')
+    // 排序：优先按状态（进行中 > 待办/阻塞），再按创建日期（最新在前）
     allTasks.sort((a, b) => {
-      // 第一优先：状态（in_progress 排前面）
       if (a.status === 'in_progress' && b.status !== 'in_progress') return -1
       if (a.status !== 'in_progress' && b.status === 'in_progress') return 1
-      // 第二优先：创建日期（最新的在前）
       return dayjs(b.created_at).diff(dayjs(a.created_at))
     })
     inProgressTasks.value = allTasks
@@ -573,12 +565,11 @@ const fetchUpcomingDeadlines = async () => {
     const threeDaysLater = now.add(3, 'day').endOf('day').toISOString()
     const res = await axios.get('/api/v1/tasks', {
       params: {
-        page_size: 10,
-        status: 'in_progress',
+        page_size: 20,
         due_before: threeDaysLater
       }
     })
-    upcomingDeadlines.value = res.data.items || []
+    upcomingDeadlines.value = (res.data.items || []).filter(t => t.status !== 'done')
   } catch (e) { console.error('获取即将到期任务失败:', e) }
   loadingUpcoming.value = false
 }
