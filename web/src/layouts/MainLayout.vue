@@ -62,7 +62,7 @@
       <!-- 顶部栏 -->
       <el-header class="header">
         <div class="header-left">
-          <el-icon class="collapse-btn" @click="toggleSidebar">
+          <el-icon :class="['collapse-btn', { 'collapse-btn-mobile': isMobile }]" @click="toggleSidebar">
             <template v-if="!isMobile">
               <Fold v-if="!isCollapse" />
               <Expand v-else />
@@ -81,13 +81,30 @@
         </div>
 
         <div class="header-right">
-          <el-badge :value="notificationCount" :max="99" class="badge" :hidden="notificationCount === 0">
-            <el-icon size="20" class="bell-icon" @click="markAllRead"><Bell /></el-icon>
-          </el-badge>
+          <el-popover placement="bottom-end" :width="260" trigger="click">
+            <template #reference>
+              <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
+                <el-icon :size="isMobile ? 22 : 20" class="bell-icon"><Bell /></el-icon>
+              </el-badge>
+            </template>
+            <div class="notification-panel">
+              <div class="notification-panel-title">提醒通知</div>
+              <div class="notification-panel-body">
+                <template v-if="notificationCount > 0">
+                  <p>您有 <strong>{{ notificationCount }}</strong> 条待处理提醒</p>
+                  <el-button type="primary" size="small" @click="handleMarkAllRead">全部标为已读</el-button>
+                </template>
+                <p v-else style="color:#909399">暂无新提醒</p>
+              </div>
+              <div class="notification-panel-footer">
+                <el-button text size="small" @click="router.push('/tasks')">查看我的任务</el-button>
+              </div>
+            </div>
+          </el-popover>
 
           <el-dropdown>
             <div class="user-info">
-              <el-avatar :size="32" icon="UserFilled" />
+              <el-avatar :size="32" :src="userAvatar" icon="UserFilled" />
               <div v-if="!isMobile" class="user-detail">
                 <span class="username">{{ username }}</span>
                 <span class="user-role">{{ userRole }}</span>
@@ -138,6 +155,7 @@ const currentTitle = computed(() => route.meta?.title || '首页')
 const username = computed(() => userStore.username)
 const userRole = computed(() => userStore.userRole)
 const notificationCount = computed(() => userStore.notificationCount)
+const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
@@ -181,13 +199,14 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-const markAllRead = async () => {
+const handleMarkAllRead = async () => {
   if (notificationCount.value === 0) return
   try {
     await axios.post('/api/v1/reminders/mark-read')
     userStore.notificationCount = 0
+    ElMessage.success('已全部标为已读')
   } catch {
-    // ignore
+    ElMessage.error('操作失败')
   }
 }
 </script>
@@ -334,6 +353,23 @@ const markAllRead = async () => {
 .collapse-btn:hover {
   color: var(--color-primary);
   background: var(--color-primary-bg);
+}
+
+.collapse-btn-mobile {
+  font-size: 24px !important;
+  padding: 10px !important;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-radius: var(--radius-lg);
+}
+
+.collapse-btn-mobile:hover {
+  background: rgba(255, 122, 92, 0.2);
 }
 
 .header-right {
@@ -572,10 +608,63 @@ const markAllRead = async () => {
   transform: rotate(90deg) scale(0.6);
 }
 
+/* ===== 通知面板 ===== */
+.notification-panel-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #EBEEF5;
+  margin-bottom: 12px;
+}
+
+.notification-panel-body {
+  padding: 4px 0;
+}
+
+.notification-panel-body p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.notification-panel-footer {
+  padding-top: 12px;
+  border-top: 1px solid #EBEEF5;
+  margin-top: 8px;
+}
+
 /* 窄屏适配 */
 @media (max-width: 768px) {
   .logo .title {
     font-size: 18px;
+  }
+
+  .header {
+    padding: 0 12px;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
+
+  .bell-icon {
+    padding: 10px;
+    border-radius: var(--radius-lg);
+    min-width: 40px;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .user-info {
+    padding: 4px 8px;
+  }
+
+  .user-info :deep(.el-avatar) {
+    width: 36px !important;
+    height: 36px !important;
   }
 }
 </style>
