@@ -1259,6 +1259,82 @@
 **修改文件：**
 - `web/src/layouts/MainLayout.vue` — 模板（el-popover + 动态头像 + 移动端 class）+ 脚本（userAvatar + handleMarkAllRead）+ 样式（通知面板 + 移动端适配）
 
+### 任务权限简化 (2026-05-25)
+
+将所有成员的"我的任务"改为"全部任务"，统一可见范围，降低认知负担。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 查询条件移除 member_id 过滤 | 所有成员可查看全部任务，不再限制为"自己的任务" | ✅ 完成 |
+| 编辑/删除权限保留 | 仅创建人/负责人/管理员可编辑、删除、恢复、永久删除 | ✅ 完成 |
+| 错误提示友好化 | REST + Agent 两种路径均返回清晰的中文权限错误信息 | ✅ 完成 |
+| 垃圾桶权限同步放开 | 进入垃圾桶的任务对创建人/负责人/管理员可见 | ✅ 完成 |
+
+**修改文件：**
+- `app/api/v1/task.py` — tasks GET 移除 member_id 过滤，PUT/DELETE 保留权限检查
+- `app/agent/core.py` — `query_tasks` 和 `query_all_member_tasks` 返回全部任务
+
+### 待办与进行中状态统一 (2026-05-25)
+
+todo（待办）和 in_progress（进行中）语义高度重合，统一为"进行中"。
+
+| 改动 | 说明 | 状态 |
+|------|------|------|
+| 后端模型默认状态 | `TaskStatus.TODO` → `TaskStatus.IN_PROGRESS` | ✅ 完成 |
+| Service/API/Agent 默认状态 | 所有新建任务的 status 默认值从 `todo` 改为 `in_progress` | ✅ 完成 |
+| AI 工具枚举 | 从允许的状态列表中移除 `todo` | ✅ 完成 |
+| Agent 任务汇总 | 将 todo 任务归入 in_progress_list 输出 | ✅ 完成 |
+| 统计合并 | todo 和 in_progress 合并计数 | ✅ 完成 |
+| WeChat 调度器 | 查询条件增加 todo 兼容（现有 todo 任务仍被检查） | ✅ 完成 |
+| 前端状态标签 | `todo: '待办'` → `todo: '进行中'`，UI 显示统一 | ✅ 完成 |
+| 前端选项 | Dashboard/TaskView 状态筛选和编辑对话框移除"待办"选项 | ✅ 完成 |
+| 取消完成任务 | 反向状态从 `todo` 改为 `in_progress` | ✅ 完成 |
+
+**修改文件（14 个）：**
+- `app/models/task.py` — 模型默认值
+- `app/services/task_service.py` — 服务层默认值 + 统计
+- `app/wechat/handler.py` — 微信创建任务默认值
+- `app/services/meeting_service.py` — 会议创建任务默认值
+- `app/agent/core.py` — Agent 创建任务默认值 + 统计 + 汇总
+- `app/agent/tools.py` — 工具枚举
+- `app/wechat/scheduler.py` — 查询条件
+- `app/api/v1/task.py` — 统计接口
+- `web/src/utils/task.js` — 状态标签
+- `web/src/views/Dashboard.vue` — 状态选项 + 反向状态
+- `web/src/views/TaskView.vue` — 状态选项 + 反向状态
+
+### Dashboard/TaskView 一致性修复 (2026-05-25)
+
+修复 Dashboard 首页"进行中任务"数量与 TaskView 显示不一致的问题。
+
+| 问题 | 修复 | 状态 |
+|------|------|------|
+| TaskView 默认 pageSize=20，Dashboard 统计却包含所有任务 | 默认 pageSize 提升至 100，与 Dashboard 统计范围一致 | ✅ 完成 |
+| Dashboard 首页"进行中任务"定义不明确 | 统一定义为 `todo + in_progress + blocked`（所有非 done 状态） | ✅ 完成 |
+
+**修改文件：**
+- `web/src/views/TaskView.vue` — pageSize 20→100
+- `web/src/views/Dashboard.vue` — 进行中任务定义统一
+
+### 个人设置页面 (2026-05-25)
+
+新增个人设置页面，成员可编辑个人信息和上传头像。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 个人信息编辑 | 姓名、邮箱、手机号、角色等字段编辑 | ✅ 完成 |
+| 头像上传 | MinIO 存储，公网可读 | ✅ 完成 |
+| 头像 URL 修复 | 运行时生成新鲜签名，bucket 名称自动补全，nginx 代理访问 | ✅ 完成 |
+
+**新建文件：**
+- `web/src/views/SettingsView.vue` — 个人设置页面
+
+**修改文件：**
+- `web/src/router/index.js` — 新增 /settings 路由
+- `app/services/file_service.py` — 头像上传逻辑
+- `app/core/security.py` — 头像 URL 签名生成
+- `app/api/v1/member.py` — 成员更新端点
+
 ### 云自动部署修复 (2026-05-25)
 
 诊断并修复 Webhook 自动部署流水线的多个问题，端到端验证通过。
