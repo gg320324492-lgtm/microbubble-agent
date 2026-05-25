@@ -68,8 +68,10 @@
               <Expand v-else />
             </template>
             <template v-else>
-              <Fold v-if="!showMobileMenu" />
-              <Expand v-else />
+              <Transition name="icon-swap" mode="out-in">
+                <Fold v-if="!showMobileMenu" key="fold" />
+                <Expand v-else key="expand" />
+              </Transition>
             </template>
           </el-icon>
           <el-breadcrumb v-if="!isMobile" separator="/">
@@ -471,60 +473,103 @@ const markAllRead = async () => {
 }
 
 /* ===== 移动端抽屉过渡动画 ===== */
+
+/* --- 根容器淡入 --- */
 .mobile-drawer-enter-active {
-  transition: opacity 0.3s ease-out;
+  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.mobile-drawer-enter-active .mobile-drawer-mask {
-  animation: drawer-mask-in 0.3s ease-out both;
-}
-.mobile-drawer-enter-active .mobile-drawer-body {
-  animation: drawer-slide-in 0.35s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-.mobile-drawer-enter-active .mobile-drawer-item {
-  animation: drawer-item-in 0.35s ease-out both;
-  animation-delay: calc(var(--i, 0) * 50ms + 100ms);
-}
-
 .mobile-drawer-leave-active {
-  transition: opacity 0.25s ease-in;
+  transition: opacity 0.3s cubic-bezier(0.4, 0, 1, 1);
 }
-.mobile-drawer-leave-active .mobile-drawer-mask {
-  animation: drawer-mask-out 0.25s ease-in both;
-}
-.mobile-drawer-leave-active .mobile-drawer-body {
-  animation: drawer-slide-out 0.25s ease-in both;
-}
-
-.mobile-drawer-enter-from {
-  opacity: 0;
-}
+.mobile-drawer-enter-from,
 .mobile-drawer-leave-to {
   opacity: 0;
 }
 
-@keyframes drawer-mask-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+/* --- 遮罩：淡入 + backdrop-blur 渐变 --- */
+.mobile-drawer-enter-active .mobile-drawer-mask {
+  animation: drawer-mask-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.mobile-drawer-leave-active .mobile-drawer-mask {
+  animation: drawer-mask-out 0.3s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
+@keyframes drawer-mask-in {
+  from { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+  to   { opacity: 1; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+}
 @keyframes drawer-mask-out {
-  from { opacity: 1; }
-  to   { opacity: 0; }
+  from { opacity: 1; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  to   { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+}
+
+/* --- 抽屉主体：弹性滑入 + 干脆滑出 --- */
+.mobile-drawer-enter-active .mobile-drawer-body {
+  animation: drawer-slide-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.mobile-drawer-leave-active .mobile-drawer-body {
+  animation: drawer-slide-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 @keyframes drawer-slide-in {
   from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
 }
-
 @keyframes drawer-slide-out {
   from { transform: translateX(0); }
   to   { transform: translateX(-100%); }
 }
 
-@keyframes drawer-item-in {
-  from { opacity: 0; transform: translateX(-20px); }
+/* --- 品牌区：logo 缩放弹出 + 文字淡入 --- */
+.mobile-drawer-enter-active .mobile-drawer-logo {
+  animation: logo-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: 80ms;
+}
+.mobile-drawer-enter-active .mobile-drawer-brand span {
+  animation: brand-text-in 0.3s ease-out both;
+  animation-delay: 120ms;
+}
+
+@keyframes logo-pop-in {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes brand-text-in {
+  from { opacity: 0; transform: translateX(-8px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+
+/* --- 菜单项：弹簧逐个弹出 + 反向退出 --- */
+.mobile-drawer-enter-active .mobile-drawer-item {
+  animation: drawer-item-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms + 180ms);
+}
+.mobile-drawer-leave-active .mobile-drawer-item {
+  animation: drawer-item-out 0.2s ease-in both;
+  animation-delay: calc((3 - var(--i, 0)) * 40ms);
+}
+
+@keyframes drawer-item-in {
+  from { opacity: 0; transform: translateX(-16px) scale(0.9); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes drawer-item-out {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-16px) scale(0.95); }
+}
+
+/* --- 汉堡图标旋转过渡 --- */
+.icon-swap-enter-active,
+.icon-swap-leave-active {
+  transition: all 0.25s ease-out;
+}
+.icon-swap-enter-from {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.6);
+}
+.icon-swap-leave-to {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.6);
 }
 
 /* 窄屏适配 */
