@@ -52,7 +52,9 @@ def _resolve_avatar_url(member: Member) -> str | None:
         object_name = avatar
 
     # 通过 Nginx 代理路径构造公网可访问的 URL
-    return f"https://{settings.SITE_DOMAIN}/minio/{object_name}"
+    # Nginx proxy_pass http://127.0.0.1:9000/; 会去掉 /minio/ 前缀，
+    # 因此路径中需要保留 bucket 名让 MinIO 正确路由
+    return f"https://{settings.SITE_DOMAIN}/minio/{settings.MINIO_BUCKET}/{object_name}"
 
 
 @router.post("/login", response_model=LoginResponse)
