@@ -39,7 +39,12 @@ def _resolve_avatar_url(member: Member) -> str | None:
     if not avatar:
         return None
 
-    # 兼容旧数据：提取 object_name
+    # 如果已经是本站可访问的 URL，直接返回（DB 中已存储的解析后 URL）
+    site_prefix = f"https://{settings.SITE_DOMAIN}/minio/"
+    if avatar.startswith(site_prefix):
+        return avatar
+
+    # 兼容旧数据：从 presigned URL 提取 object_name
     if avatar.startswith("http"):
         from urllib.parse import urlparse
         path = urlparse(avatar).path
@@ -51,7 +56,6 @@ def _resolve_avatar_url(member: Member) -> str | None:
     else:
         object_name = avatar
 
-    # 通过 Nginx 代理路径构造公网可访问的 URL
     # Nginx proxy_pass http://127.0.0.1:9000/; 会去掉 /minio/ 前缀，
     # 因此路径中需要保留 bucket 名让 MinIO 正确路由
     return f"https://{settings.SITE_DOMAIN}/minio/{settings.MINIO_BUCKET}/{object_name}"
