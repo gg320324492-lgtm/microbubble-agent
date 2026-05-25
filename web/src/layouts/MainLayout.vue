@@ -20,7 +20,6 @@
       </div>
 
       <el-menu
-        v-if="!isMobile || showMobileMenu"
         :key="menuKey"
         :default-active="currentRoute"
         :collapse="menuCollapse"
@@ -109,7 +108,7 @@ const isMobile = ref(window.innerWidth <= 768)
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
 
-// 移动端抽屉展开时菜单不折叠
+// 移动端抽屉打开时不折叠，抽屉关闭时折叠（但 CSS 强制显示文字）
 const menuCollapse = computed(() => {
   if (isMobile.value && showMobileMenu.value) return false
   return isCollapse.value
@@ -449,5 +448,37 @@ const markAllRead = async () => {
 
 .main.mobile-main {
   padding: 12px;
+}
+
+/* 移动端菜单文字始终显示，解决 el-menu collapse 样式问题 */
+@media (max-width: 768px) {
+  .sidebar-menu .el-menu-item .el-menu-item__content {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .sidebar-menu .el-menu-item .el-menu-item__content span {
+    display: inline !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    overflow: visible !important;
+  }
+
+  /* Element Plus 6.x */
+  .sidebar-menu .el-menu-item .menu-text {
+    display: inline !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  /* Element Plus 折叠模式下强制显示文字 */
+  .sidebar-menu.el-menu--collapse .el-menu-item span,
+  .sidebar-menu.el-menu--collapse .el-menu-item .el-menu-item__content,
+  .sidebar-menu.el-menu--collapse .el-menu-item .menu-text {
+    display: inline !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
 }
 </style>
