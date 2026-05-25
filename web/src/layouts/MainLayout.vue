@@ -108,9 +108,13 @@ const isMobile = ref(window.innerWidth <= 768)
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
 
-// 移动端抽屉打开时不折叠，抽屉关闭时折叠（但 CSS 强制显示文字）
+// 移动端抽屉打开时强制不折叠，抽屉关闭时由 CSS 处理
 const menuCollapse = computed(() => {
-  if (isMobile.value && showMobileMenu.value) return false
+  // 移动端抽屉打开时：强制不折叠，让菜单显示完整
+  if (isMobile.value) {
+    return showMobileMenu.value ? false : isCollapse.value
+  }
+  // 桌面端由 isCollapse 控制
   return isCollapse.value
 })
 
@@ -450,35 +454,53 @@ const markAllRead = async () => {
   padding: 12px;
 }
 
-/* 移动端菜单文字始终显示，解决 el-menu collapse 样式问题 */
+/* 移动端菜单 - 全面覆盖 Element Plus 折叠样式 */
 @media (max-width: 768px) {
-  .sidebar-menu .el-menu-item .el-menu-item__content {
-    display: flex !important;
-    opacity: 1 !important;
-    visibility: visible !important;
+  /* 强制菜单项宽度和布局 */
+  .sidebar-menu .el-menu-item {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
   }
 
-  .sidebar-menu .el-menu-item .el-menu-item__content span {
+  /* 强制文字容器显示 */
+  .sidebar-menu .el-menu-item__content,
+  .sidebar-menu .el-menu-item__content * {
+    display: inline-flex !important;
     display: inline !important;
     opacity: 1 !important;
     visibility: visible !important;
+    width: auto !important;
+    max-width: none !important;
     overflow: visible !important;
+    flex: none !important;
   }
 
-  /* Element Plus 6.x */
-  .sidebar-menu .el-menu-item .menu-text {
+  /* Element Plus 标题 */
+  .sidebar-menu .el-menu-item__title,
+  .sidebar-menu .el-menu-item__title * {
     display: inline !important;
     opacity: 1 !important;
     visibility: visible !important;
   }
 
-  /* Element Plus 折叠模式下强制显示文字 */
-  .sidebar-menu.el-menu--collapse .el-menu-item span,
-  .sidebar-menu.el-menu--collapse .el-menu-item .el-menu-item__content,
-  .sidebar-menu.el-menu--collapse .el-menu-item .menu-text {
-    display: inline !important;
-    opacity: 1 !important;
-    visibility: visible !important;
+  /* 取消折叠模式的宽度限制 */
+  .sidebar-menu.el-menu--collapse {
+    width: 220px !important;
+    min-width: 220px !important;
+    transition: none !important;
+  }
+
+  /* 折叠模式下菜单项也正常显示 */
+  .sidebar-menu.el-menu--collapse .el-menu-item {
+    width: 100% !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+  }
+
+  .sidebar-menu.el-menu--collapse .el-menu-item .el-icon {
+    margin-right: 12px !important;
   }
 }
 </style>
