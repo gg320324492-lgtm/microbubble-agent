@@ -21,7 +21,7 @@
 
       <el-menu
         :default-active="currentRoute"
-        :collapse="isCollapse"
+        :collapse="menuCollapse"
         router
         class="sidebar-menu"
         @select="onMenuSelect"
@@ -44,8 +44,14 @@
       <el-header class="header">
         <div class="header-left">
           <el-icon class="collapse-btn" @click="toggleSidebar">
-            <Fold v-if="!isCollapse" />
-            <Expand v-else />
+            <template v-if="!isMobile">
+              <Fold v-if="!isCollapse" />
+              <Expand v-else />
+            </template>
+            <template v-else>
+              <Fold v-if="!showMobileMenu" />
+              <Expand v-else />
+            </template>
           </el-icon>
           <el-breadcrumb v-if="!isMobile" separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
@@ -98,8 +104,14 @@ const userStore = useUserStore()
 const memberStore = useMemberStore()
 
 const isMobile = ref(window.innerWidth <= 768)
-const isCollapse = ref(window.innerWidth <= 768)
+const isCollapse = ref(false)
 const showMobileMenu = ref(false)
+
+// 移动端抽屉展开时菜单不折叠
+const menuCollapse = computed(() => {
+  if (isMobile.value && showMobileMenu.value) return false
+  return isCollapse.value
+})
 
 const sidebarWidth = computed(() => {
   if (isMobile.value) return showMobileMenu.value ? '220px' : '0px'
@@ -119,7 +131,12 @@ const menuRoutes = computed(() => {
 
 const onResize = () => {
   isMobile.value = window.innerWidth <= 768
-  if (!isMobile.value) showMobileMenu.value = false
+  // 移动端收起时关闭抽屉，非移动端收起时使用折叠模式
+  if (isMobile.value) {
+    showMobileMenu.value = false
+  } else {
+    // 保持 isCollapse 的当前状态
+  }
 }
 
 const toggleSidebar = () => {
