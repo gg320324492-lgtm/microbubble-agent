@@ -5,6 +5,7 @@ import axios from 'axios'
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref(null)
   const notificationCount = ref(0)
+  const notifications = ref([])
 
   const username = computed(() => userInfo.value?.name || '用户')
   const userRole = computed(() => {
@@ -28,6 +29,15 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
+  async function fetchNotifications() {
+    try {
+      const res = await axios.get('/api/v1/reminders')
+      notifications.value = res.data.reminders || []
+    } catch {
+      notifications.value = []
+    }
+  }
+
   function logout() {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
@@ -36,5 +46,5 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = null
   }
 
-  return { userInfo, notificationCount, username, userRole, loadFromStorage, fetchNotificationCount, logout }
+  return { userInfo, notificationCount, notifications, username, userRole, loadFromStorage, fetchNotificationCount, fetchNotifications, logout }
 })

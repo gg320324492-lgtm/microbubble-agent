@@ -81,7 +81,7 @@
         </div>
 
         <div class="header-right">
-          <el-popover placement="bottom-end" :width="260" trigger="click">
+          <el-popover placement="bottom-end" :width="320" trigger="click" @show="handlePopoverShow">
             <template #reference>
               <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
                 <el-icon :size="isMobile ? 22 : 20" class="bell-icon"><Bell /></el-icon>
@@ -90,11 +90,19 @@
             <div class="notification-panel">
               <div class="notification-panel-title">提醒通知</div>
               <div class="notification-panel-body">
-                <template v-if="notificationCount > 0">
-                  <p>您有 <strong>{{ notificationCount }}</strong> 条待处理提醒</p>
-                  <el-button type="primary" size="small" @click="handleMarkAllRead">全部标为已读</el-button>
+                <template v-if="notifications.length > 0">
+                  <div
+                    v-for="item in notifications"
+                    :key="item.id"
+                    class="notification-item"
+                    @click="goToTask(item.task_id)"
+                  >
+                    <div class="notification-item-title">{{ item.task_title }}</div>
+                    <div class="notification-item-time">{{ formatTime(item.remind_at) }}</div>
+                  </div>
+                  <el-button type="primary" size="small" class="mark-read-btn" @click="handleMarkAllRead">全部标为已读</el-button>
                 </template>
-                <p v-else style="color:#909399">暂无新提醒</p>
+                <p v-else style="color:#909399;text-align:center;padding:20px 0">暂无新提醒</p>
               </div>
               <div class="notification-panel-footer">
                 <el-button text size="small" @click="router.push('/tasks')">查看我的任务</el-button>
@@ -133,6 +141,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 
@@ -155,6 +164,7 @@ const currentTitle = computed(() => route.meta?.title || '首页')
 const username = computed(() => userStore.username)
 const userRole = computed(() => userStore.userRole)
 const notificationCount = computed(() => userStore.notificationCount)
+const notifications = computed(() => userStore.notifications)
 const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 const menuRoutes = computed(() => {
@@ -186,6 +196,7 @@ onMounted(async () => {
   window.addEventListener('resize', onResize)
   userStore.loadFromStorage()
   userStore.fetchNotificationCount()
+  userStore.fetchNotifications()
   memberStore.fetchMembers()
 
   // 刷新用户信息，获取新鲜头像 URL
@@ -216,10 +227,24 @@ const handleMarkAllRead = async () => {
   try {
     await axios.post('/api/v1/reminders/mark-read')
     userStore.notificationCount = 0
+    userStore.notifications = []
     ElMessage.success('已全部标为已读')
   } catch {
     ElMessage.error('操作失败')
   }
+}
+
+const handlePopoverShow = () => {
+  userStore.fetchNotifications()
+}
+
+const goToTask = (taskId) => {
+  router.push('/tasks')
+}
+
+const formatTime = (t) => {
+  if (!t) return ''
+  return dayjs(t).format('MM-DD HH:mm')
 }
 </script>
 
@@ -621,6 +646,11 @@ const handleMarkAllRead = async () => {
 }
 
 /* ===== 通知面板 ===== */
+.notification-panel {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
 .notification-panel-title {
   font-size: 15px;
   font-weight: 600;
@@ -638,6 +668,46 @@ const handleMarkAllRead = async () => {
   margin: 0 0 12px;
   font-size: 14px;
   color: #606266;
+}
+
+.notification-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-bottom: 1px solid #F2F3F5;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notification-item:last-of-type {
+  border-bottom: none;
+}
+
+.notification-item:hover {
+  background: rgba(255, 122, 92, 0.06);
+}
+
+.notification-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notification-item-time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.mark-read-btn {
+  margin-top: 8px;
+  width: 100%;
 }
 
 .notification-panel-footer {
