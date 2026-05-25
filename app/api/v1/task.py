@@ -18,25 +18,6 @@ from app.services.task_service import TaskService
 
 router = APIRouter()
 
-GRADUATE_GRADES = ("研一", "研二", "研三", "博一", "博二")
-SPECIAL_NAMES = ("贾琦", "周之超")
-
-
-async def _get_visible_member_ids(db: AsyncSession, user: Member) -> list[int]:
-    """研究生 + 贾琦 + 周之超 互相对方任务可见"""
-    if user.grade in GRADUATE_GRADES or user.name in SPECIAL_NAMES:
-        result = await db.execute(
-            select(Member.id).where(
-                or_(
-                    Member.grade.in_(GRADUATE_GRADES),
-                    Member.name.in_(SPECIAL_NAMES)
-                )
-            )
-        )
-        return [row[0] for row in result.all()]
-    return [user.id]
-
-
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
 async def create_task(
     task_data: TaskCreate,
@@ -244,14 +225,6 @@ async def list_tasks(
     if not include_deleted:
         filters.append(Task.deleted_at.is_(None))
 
-    # 权限：普通成员只看自己创建/负责的；研究生+贾琦+周之超互相对方任务可见
-    if not is_admin:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        filters.append(or_(
-            Task.created_by == current_user.id,
-            Task.assignee_id.in_(visible_ids)
-        ))
-
     if assignee_id:
         filters.append(Task.assignee_id == assignee_id)
     if status:
@@ -303,12 +276,6 @@ async def get_task(
         if not is_admin:
             raise HTTPException(status_code=404, detail="任务不存在")
 
-    # 权限：普通成员只能查看自己的任务
-    is_admin = current_user.role in ("admin", "leader")
-    if not is_admin:
-        if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权查看此任务")
-
     return task
 
 
@@ -330,11 +297,10 @@ async def update_task(
     if task.deleted_at is not None:
         raise HTTPException(status_code=400, detail="任务已删除，无法编辑")
 
-    # 权限：管理员可编辑任意任务，普通成员只能编辑自己或组内可见成员的任务
+    # 权限：管理员可编辑任意任务，普通成员只能编辑自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
             raise HTTPException(status_code=403, detail="只能编辑自己创建或被分配的任务")
         # 不能把任务分配给其他人
         if task_data.assignee_id is not None and task_data.assignee_id != current_user.id:
@@ -372,11 +338,10 @@ async def delete_task(
     if task.deleted_at is not None:
         raise HTTPException(status_code=400, detail="任务已在垃圾桶中")
 
-    # 权限：普通成员只能删除自己或组内可见成员的任务
+    # 权限：普通成员只能删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
             raise HTTPException(status_code=403, detail="只能删除自己创建或被分配的任务")
 
     # 软删除：设置 deleted_at
@@ -400,11 +365,10 @@ async def restore_task(
     if task.deleted_at is None:
         raise HTTPException(status_code=400, detail="任务未删除，无需恢复")
 
-    # 权限：管理员可恢复任意任务，普通成员只能恢复自己或组内可见成员的任务
+    # 权限：管理员可恢复任意任务，普通成员只能恢复自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
             raise HTTPException(status_code=403, detail="只能恢复自己创建或被分配的任务")
 
     task.deleted_at = None
@@ -429,11 +393,10 @@ async def permanent_delete_task(
     if task.deleted_at is None:
         raise HTTPException(status_code=400, detail="请先删除任务再永久删除")
 
-    # 权限：管理员可永久删除任意任务，普通成员只能永久删除自己或组内可见成员的任务
+    # 权限：普通成员只能永久删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        if task.created_by != current_user.id and task.assignee_id not in visible_ids:
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
             raise HTTPException(status_code=403, detail="只能永久删除自己创建或被分配的任务")
 
     await db.delete(task)
@@ -448,7 +411,6 @@ async def get_task_stats(
     db: AsyncSession = Depends(get_db)
 ):
     """获取任务统计"""
-    is_admin = current_user.role in ("admin", "leader")
 
     query = select(Task)
 
@@ -458,15 +420,8 @@ async def get_task_stats(
     if project_id:
         query = query.where(Task.project_id == project_id)
 
-    if is_admin:
-        if member_id:
-            query = query.where(Task.assignee_id == member_id)
-    else:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        query = query.where(or_(
-            Task.created_by == current_user.id,
-            Task.assignee_id.in_(visible_ids)
-        ))
+    if member_id:
+        query = query.where(Task.assignee_id == member_id)
 
     result = await db.execute(query)
     tasks = result.scalars().all()
