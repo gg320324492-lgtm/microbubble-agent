@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GitHub Webhook 监听服务 — 收到 push 事件后自动部署"""
+"""GitHub Webhook 监听服务 — 收到 push 事件后自动部署（端口 9001）"""
 
 import hashlib
 import hmac
