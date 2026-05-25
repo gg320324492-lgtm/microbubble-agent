@@ -1227,3 +1227,34 @@
 
 **修改文件：**
 - `app/wechat/handler.py` — `_handle_general_chat`/`_handle_group_chat` 检测 `_skip_thinking`，语音/图片处理设置标志
+
+### 移动端侧边栏修复与动画优化 (2026-05-25)
+
+解决移动端侧边栏菜单只显示图标不显示文字的问题（根因为云服务器部署流水线未生效），以及为侧边栏添加动态过渡特效。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 独立 div 抽屉方案 | 移动端抽屉改为 el-container 外部独立 div，彻底绕过 Element Plus aside 全局 CSS | ✅ 完成 |
+| 桌面端隔离 | `v-if="!isMobile"` 确保桌面端 el-aside 不被移动端代码影响 | ✅ 完成 |
+| 遮罩淡入淡出 | opacity 过渡 + backdrop-filter blur 渐变层次 | ✅ 完成 |
+| 抽屉弹性滑入 | translateX + cubic-bezier(0.34,1.56,0.64,1) overshoot 回弹 | ✅ 完成 |
+| 菜单项弹簧 stagger | scale(0.9→1) + translateX，每个延迟 60ms，关闭时反向退出 | ✅ 完成 |
+| 汉堡图标旋转过渡 | Fold↔Expand 带 rotation + scale 过渡动画 | ✅ 完成 |
+| 品牌 logo 独立入场 | logo 缩放弹出 + 文字淡入，各自独立延迟 | ✅ 完成 |
+
+**修改文件：**
+- `web/src/layouts/MainLayout.vue` — 模板（独立抽屉 + Transition）+ CSS（6 组 @keyframes + transition classes）
+
+### 移动端顶部栏全面优化 (2026-05-25)
+
+优化移动端顶部栏三个问题：汉堡按钮太小、铃铛点击无反馈、头像显示灰色默认图标。
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 汉堡按钮增大 | 移动端 24px 图标 + 10px padding = 44px 触控区（iOS/Material 标准）| ✅ 完成 |
+| 铃铛改为提醒面板 | el-popover 弹窗：显示提醒数 + "全部标为已读"按钮 + "查看我的任务"链接 | ✅ 完成 |
+| 头像读取真实 URL | 从 `userStore.userInfo.avatar` 读取真实头像，无则 fallback 默认图标 | ✅ 完成 |
+| 移动端 header 紧凑 | padding 12px，gap 8px，铃铛+头像触控区增大 | ✅ 完成 |
+
+**修改文件：**
+- `web/src/layouts/MainLayout.vue` — 模板（el-popover + 动态头像 + 移动端 class）+ 脚本（userAvatar + handleMarkAllRead）+ 样式（通知面板 + 移动端适配）
