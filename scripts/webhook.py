@@ -9,7 +9,7 @@ import os
 import subprocess
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-PORT = 9000
+PORT = 9001
 SECRET = os.environ["WEBHOOK_SECRET"]
 DEPLOY_SCRIPT = "/opt/microbubble-agent/scripts/deploy-auto.sh"
 LOG_FILE = "/var/log/webhook-deploy.log"
