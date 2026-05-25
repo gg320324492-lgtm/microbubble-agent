@@ -15,6 +15,10 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
+# 丢弃所有本地修改，确保干净状态
+git checkout -- . >> "$LOG_FILE" 2>&1 || true
+git clean -fd >> "$LOG_FILE" 2>&1 || true
+
 # 拉取最新代码（重试3次）
 log "git pull..."
 PULL_OK=0
