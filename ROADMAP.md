@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-22 (更新：文档全面核对，Phase 1-5 全部完成)
+> 最后更新: 2026-05-25 (更新：通知面板显示具体提醒内容)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1419,3 +1419,20 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 **修改文件：**
 - `app/api/v1/task.py` — list_tasks 添加 ORDER BY
 - `web/src/views/Dashboard.vue` — page_size 60→100
+
+### 通知面板显示具体提醒内容 (2026-05-25)
+
+铃铛弹窗只显示"您有 N 条待处理提醒"+ "全部标为已读"按钮，看不到具体是什么提醒。新增后端列表接口，改造前端弹窗为提醒列表。
+
+**关键变更：**
+
+| 变更 | 说明 | 状态 |
+|------|------|------|
+| 后端 GET /reminders | 新增端点返回待处理提醒列表（含 task_title、remind_at），按时间升序，最多 50 条 | ✅ 完成 |
+| 前端 userStore | 新增 `notifications` 数组 + `fetchNotifications()` 方法 | ✅ 完成 |
+| 前端弹窗面板 | 显示每条提醒的具体内容（任务标题+提醒时间），点击跳转任务管理 | ✅ 完成 |
+
+**修改文件：**
+- `app/api/v1/task.py` — 新增 `GET /reminders` 端点
+- `web/src/stores/user.js` — 新增 `notifications` ref 和 `fetchNotifications()`
+- `web/src/layouts/MainLayout.vue` — 弹窗模板改为通知列表 + 新增 `handlePopoverShow`/`goToTask`/`formatTime`
