@@ -68,7 +68,7 @@ TOOLS = [
                 },
                 "status": {
                     "type": "string",
-                    "enum": ["todo", "in_progress", "blocked", "review", "done", "cancelled"],
+                    "enum": ["in_progress", "blocked", "review", "done", "cancelled"],
                     "description": "按状态筛选"
                 },
                 "project_name": {
@@ -103,7 +103,7 @@ TOOLS = [
                 },
                 "status": {
                     "type": "string",
-                    "enum": ["todo", "in_progress", "blocked", "review", "done", "cancelled"],
+                    "enum": ["in_progress", "blocked", "review", "done", "cancelled"],
                     "description": "新状态"
                 },
                 "progress": {

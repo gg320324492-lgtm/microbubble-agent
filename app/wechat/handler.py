@@ -366,7 +366,7 @@ class MessageHandler:
             assignee_id=assignee.id,
             priority=priority,
             due_date=due_date,
-            status=TaskStatus.TODO.value,
+            status=TaskStatus.IN_PROGRESS.value,
             source="ai_detected"
         )
         db.add(task)

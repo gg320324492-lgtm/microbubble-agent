@@ -37,7 +37,7 @@ class Task(Base, TimestampMixin):
     created_by = Column(Integer, ForeignKey("members.id"))
 
     # 状态信息
-    status = Column(String(20), default=TaskStatus.TODO.value)
+    status = Column(String(20), default=TaskStatus.IN_PROGRESS.value)
     priority = Column(String(10), default=TaskPriority.MEDIUM.value)
     progress = Column(Integer, default=0)  # 0-100
 

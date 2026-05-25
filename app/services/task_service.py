@@ -37,7 +37,7 @@ class TaskService:
             due_date=due_date,
             description=description,
             tags=tags,
-            status=TaskStatus.TODO.value,
+            status=TaskStatus.IN_PROGRESS.value,
             source=source,
             created_by=created_by,
         )
@@ -204,10 +204,11 @@ class TaskService:
         """获取成员工作量统计"""
         tasks = await self.get_tasks(assignee_id=member_id)
 
+        todo_count = sum(1 for t in tasks if t.status == TaskStatus.TODO.value)
         return {
             "total": len(tasks),
-            "todo": sum(1 for t in tasks if t.status == TaskStatus.TODO.value),
-            "in_progress": sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value),
+            "todo": todo_count,
+            "in_progress": sum(1 for t in tasks if t.status == TaskStatus.IN_PROGRESS.value) + todo_count,
             "done": sum(1 for t in tasks if t.status == TaskStatus.DONE.value),
             "overdue": sum(1 for t in tasks if t.due_date and t.due_date < utcnow() and t.status != TaskStatus.DONE.value)
         }
@@ -227,14 +228,15 @@ class TaskService:
         member_stats = []
         for member in members:
             member_tasks = [t for t in all_tasks if t.assignee_id == member.id]
+            m_todo = sum(1 for t in member_tasks if t.status == TaskStatus.TODO.value)
             member_stats.append({
                 "member_id": member.id,
                 "member_name": member.name,
                 "role": member.role,
                 "tasks": member_tasks,
                 "total": len(member_tasks),
-                "todo": sum(1 for t in member_tasks if t.status == TaskStatus.TODO.value),
-                "in_progress": sum(1 for t in member_tasks if t.status == TaskStatus.IN_PROGRESS.value),
+                "todo": m_todo,
+                "in_progress": sum(1 for t in member_tasks if t.status == TaskStatus.IN_PROGRESS.value) + m_todo,
                 "done": sum(1 for t in member_tasks if t.status == TaskStatus.DONE.value),
             })
 

@@ -176,7 +176,7 @@ class ProactiveScheduler:
             select(Task).where(
                 and_(
                     Task.created_at <= yesterday,
-                    Task.status == TaskStatus.TODO.value,
+                    Task.status.in_([TaskStatus.TODO.value, TaskStatus.IN_PROGRESS.value, TaskStatus.BLOCKED.value]),
                     Task.assignee_id.isnot(None)
                 )
             )

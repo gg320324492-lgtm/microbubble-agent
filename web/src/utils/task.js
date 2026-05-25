@@ -29,7 +29,7 @@ export function getPriorityType(priority) {
 // 任务状态标签
 export function getStatusLabel(status) {
   const map = {
-    todo: '待办',
+    todo: '进行中',
     in_progress: '进行中',
     blocked: '阻塞',
     done: '已完成',
