@@ -422,9 +422,17 @@ function groupTasksByAssignee(taskList) {
     }
     groups[id].tasks.push(task)
   }
-  // 组内按创建时间降序
+  // 组内按优先级（高>中>低），同优先级按截止时间（早→晚）
+  const priorityOrder = { high: 3, medium: 2, low: 1 }
   for (const g of Object.values(groups)) {
-    g.tasks.sort((a, b) => dayjs(b.created_at).diff(dayjs(a.created_at)))
+    g.tasks.sort((a, b) => {
+      const pDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0)
+      if (pDiff !== 0) return pDiff
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return dayjs(a.due_date).diff(dayjs(b.due_date))
+    })
   }
   return Object.values(groups).sort((a, b) => {
     // 组间按任务数量降序

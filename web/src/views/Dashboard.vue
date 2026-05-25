@@ -518,11 +518,15 @@ const fetchInProgressTasks = async () => {
   try {
     const res = await axios.get('/api/v1/tasks', { params: { page_size: 60 } })
     const allTasks = (res.data.items || []).filter(t => t.status !== 'done')
-    // 排序：优先按状态（进行中 > 待办/阻塞），再按创建日期（最新在前）
+    // 排序：按优先级（高>中>低），同优先级按截止时间（早→晚）
     allTasks.sort((a, b) => {
-      if (a.status === 'in_progress' && b.status !== 'in_progress') return -1
-      if (a.status !== 'in_progress' && b.status === 'in_progress') return 1
-      return dayjs(b.created_at).diff(dayjs(a.created_at))
+      const priorityOrder = { high: 3, medium: 2, low: 1 }
+      const pDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0)
+      if (pDiff !== 0) return pDiff
+      if (!a.due_date && !b.due_date) return 0
+      if (!a.due_date) return 1
+      if (!b.due_date) return -1
+      return dayjs(a.due_date).diff(dayjs(b.due_date))
     })
     inProgressTasks.value = allTasks
   } catch (e) { console.error('获取进行中任务失败:', e) }
