@@ -60,6 +60,12 @@ const routes = [
         name: 'Memory',
         component: () => import('@/views/MemoryView.vue'),
         meta: { title: '长期记忆', icon: 'Memo' }
+      },
+      {
+        path: 'settings',
+        name: 'Settings',
+        component: () => import('@/views/SettingsView.vue'),
+        meta: { title: '个人设置', icon: 'Setting' }
       }
     ]
   }
