@@ -1,16 +1,35 @@
 <template>
-  <el-container class="layout-container">
-    <!-- 移动端遮罩层 -->
-    <div
-      v-if="isMobile && showMobileMenu"
-      class="drawer-overlay"
-      @click="showMobileMenu = false"
-    />
+  <!-- 诊断：显示 isMobile 和窗口宽度 -->
+  <div style="position:fixed;top:4px;right:4px;z-index:99999;background:#000;color:#0f0;padding:4px 8px;font-size:11px;font-family:monospace;border-radius:4px;pointer-events:none;">
+    isMobile:{{ isMobile }} w:{{ windowWidth }}
+  </div>
 
-    <!-- 侧边栏 -->
+  <!-- 移动端独立抽屉 — 在 el-container 外部，不受 Element Plus aside 样式影响 -->
+  <div v-if="isMobile && showMobileMenu" class="mobile-drawer-root">
+    <div class="mobile-drawer-mask" @click="showMobileMenu = false" />
+    <div class="mobile-drawer-body">
+      <!-- 诊断：极简纯文字，不用 el-icon，不用 SVG，看文字能否渲染 -->
+      <div style="padding:8px 16px 20px;font-size:18px;font-weight:700;color:#2D2D2D;border-bottom:1px solid #EBEEF5;margin-bottom:8px;">
+        小气助手
+      </div>
+      <div
+        v-for="item in menuRoutes"
+        :key="item.path"
+        style="display:flex;align-items:center;height:52px;padding:0 16px;margin:4px 0;border-radius:12px;font-size:16px;font-weight:600;color:#333;cursor:pointer;"
+        :style="currentRoute === item.path ? { background: '#FF7A5C', color: '#fff' } : {}"
+        @click="navigateTo(item.path)"
+      >
+        {{ item.meta.title }}
+      </div>
+    </div>
+  </div>
+
+  <el-container class="layout-container">
+    <!-- 桌面端侧边栏 — 移动端完全不渲染 -->
     <el-aside
+      v-if="!isMobile"
       :width="sidebarWidth"
-      :class="['aside', { 'mobile-drawer': isMobile }]"
+      class="aside"
     >
       <div class="logo">
         <div class="logo-icon">
@@ -20,13 +39,10 @@
       </div>
 
       <el-menu
-        v-if="!isMobile || showMobileMenu"
-        :key="menuKey"
         :default-active="currentRoute"
-        :collapse="menuCollapse"
+        :collapse="isCollapse"
         router
         class="sidebar-menu"
-        @select="onMenuSelect"
       >
         <el-menu-item
           v-for="route in menuRoutes"
@@ -35,7 +51,7 @@
           class="menu-item"
         >
           <el-icon><component :is="route.meta.icon" /></el-icon>
-          <template #title>{{ route.meta.title }}</template>
+          <template #title><span style="color:inherit">{{ route.meta.title }}</span></template>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -105,25 +121,13 @@ const router = useRouter()
 const userStore = useUserStore()
 const memberStore = useMemberStore()
 
+const windowWidth = ref(window.innerWidth)
 const isMobile = ref(window.innerWidth <= 768)
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
 
-// 移动端抽屉打开时强制不折叠，抽屉关闭时由 CSS 处理
-const menuCollapse = computed(() => {
-  // 移动端抽屉打开时：强制不折叠，让菜单显示完整
-  if (isMobile.value) {
-    return showMobileMenu.value ? false : isCollapse.value
-  }
-  // 桌面端由 isCollapse 控制
-  return isCollapse.value
-})
-
-// 强制重新渲染菜单，解决 el-menu collapse 属性响应问题
-const menuKey = computed(() => `${isMobile.value}-${showMobileMenu.value}`)
-
 const sidebarWidth = computed(() => {
-  if (isMobile.value) return showMobileMenu.value ? '220px' : '0px'
+  if (isMobile.value) return '0px'
   return isCollapse.value ? '64px' : '220px'
 })
 
@@ -139,12 +143,10 @@ const menuRoutes = computed(() => {
 })
 
 const onResize = () => {
+  windowWidth.value = window.innerWidth
   isMobile.value = window.innerWidth <= 768
-  // 移动端收起时关闭抽屉，非移动端收起时使用折叠模式
   if (isMobile.value) {
     showMobileMenu.value = false
-  } else {
-    // 保持 isCollapse 的当前状态
   }
 }
 
@@ -156,8 +158,9 @@ const toggleSidebar = () => {
   }
 }
 
-const onMenuSelect = () => {
-  if (isMobile.value) showMobileMenu.value = false
+const navigateTo = (path) => {
+  showMobileMenu.value = false
+  router.push(path)
 }
 
 onMounted(() => {
@@ -193,6 +196,7 @@ const markAllRead = async () => {
   height: 100vh;
 }
 
+/* ===== 桌面端侧边栏 ===== */
 .aside {
   background: var(--color-bg-sidebar);
   backdrop-filter: blur(16px);
@@ -201,28 +205,6 @@ const markAllRead = async () => {
   box-shadow: var(--shadow-sidebar);
   transition: width 0.3s;
   overflow: hidden;
-}
-
-.aside.mobile-drawer {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 2000;
-  height: 100vh;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 4px 0 24px rgba(255, 122, 92, 0.15);
-}
-
-.drawer-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: 1999;
 }
 
 .logo {
@@ -255,7 +237,6 @@ const markAllRead = async () => {
   color: var(--color-text-primary);
 }
 
-/* 菜单样式 */
 .sidebar-menu {
   background: transparent !important;
   border-right: none;
@@ -273,25 +254,6 @@ const markAllRead = async () => {
   transition: all 200ms ease-out;
   position: relative;
   overflow: hidden;
-}
-
-/* 移动端菜单增强 */
-@media (max-width: 768px) {
-  .sidebar-menu .el-menu-item {
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-semibold);
-    height: 52px;
-    line-height: 52px;
-    padding: 0 16px;
-  }
-
-  .sidebar-menu .el-menu-item .el-icon {
-    font-size: 20px;
-  }
-
-  .logo .title {
-    font-size: 18px;
-  }
 }
 
 .sidebar-menu .el-menu-item::before {
@@ -317,11 +279,6 @@ const markAllRead = async () => {
   height: 24px;
 }
 
-.sidebar-menu .el-menu-item:hover::before {
-  width: 4px;
-  height: 24px;
-}
-
 .sidebar-menu .el-menu-item.is-active {
   background: var(--color-primary) !important;
   color: #ffffff !important;
@@ -334,29 +291,16 @@ const markAllRead = async () => {
   background: rgba(255, 255, 255, 0.9);
 }
 
-/* 移动端激活状态 */
-@media (max-width: 768px) {
-  .sidebar-menu .el-menu-item.is-active {
-    background: var(--color-primary) !important;
-    color: #ffffff !important;
-  }
-
-  .sidebar-menu .el-menu-item.is-active .el-icon {
-    color: #ffffff;
-  }
-}
-
 .sidebar-menu .el-menu-item .el-icon {
   font-size: 18px;
 }
 
-/* 收起状态 */
 .el-menu--collapse .sidebar-menu .el-menu-item {
   justify-content: center;
   padding: 0 12px;
 }
 
-/* 头像圆角 */
+/* ===== 顶部栏 ===== */
 .header :deep(.el-avatar) {
   border-radius: var(--radius-lg);
 }
@@ -455,17 +399,82 @@ const markAllRead = async () => {
   padding: 12px;
 }
 
-/* 移动端菜单 - 确保文字始终显示 */
-@media (max-width: 768px) {
-  .sidebar-menu .el-menu-item {
-    justify-content: flex-start !important;
-  }
+/* ===== 移动端独立抽屉 ===== */
+.mobile-drawer-root {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+}
 
-  /* 强制文字始终可见 */
-  .sidebar-menu .el-menu-item span,
-  .sidebar-menu .el-menu-item .el-menu-item__content {
-    display: inline !important;
-    opacity: 1 !important;
+.mobile-drawer-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.mobile-drawer-body {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100%;
+  background: #fff;
+  overflow-y: auto;
+  padding: 20px 12px;
+  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-drawer-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 20px;
+  border-bottom: 1px solid #EBEEF5;
+  margin-bottom: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #2D2D2D;
+}
+
+.mobile-drawer-logo {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.mobile-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 52px;
+  padding: 0 12px;
+  margin: 4px 0;
+  border-radius: 12px;
+  color: #333;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mobile-drawer-item:active {
+  background: rgba(255, 122, 92, 0.1);
+}
+
+.mobile-drawer-item.active {
+  background: #FF7A5C;
+  color: #fff;
+}
+
+/* 窄屏适配 */
+@media (max-width: 768px) {
+  .logo .title {
+    font-size: 18px;
   }
 }
 </style>
