@@ -240,6 +240,9 @@ async def list_tasks(
     if filters:
         query = query.where(and_(*filters))
 
+    # 排序：最新创建在前
+    query = query.order_by(Task.created_at.desc())
+
     # 分页
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)

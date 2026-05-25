@@ -516,7 +516,7 @@ const fetchDashboardStats = async () => {
 // 获取进行中任务（待办+进行中+阻塞，与任务管理"进行中"定义一致）
 const fetchInProgressTasks = async () => {
   try {
-    const res = await axios.get('/api/v1/tasks', { params: { page_size: 60 } })
+    const res = await axios.get('/api/v1/tasks', { params: { page_size: 100 } })
     const allTasks = (res.data.items || []).filter(t => t.status !== 'done')
     // 排序：按优先级（高>中>低），同优先级按截止时间（早→晚）
     allTasks.sort((a, b) => {
