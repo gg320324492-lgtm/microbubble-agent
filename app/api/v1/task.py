@@ -455,18 +455,8 @@ async def get_dashboard_stats(
     now = utcnow()
     is_admin = current_user.role in ("admin", "leader")
 
-    # 权限：普通成员只看自己的数据（研究生可见组内成员任务），且排除已删除
-    if not is_admin:
-        visible_ids = await _get_visible_member_ids(db, current_user)
-        task_filter = and_(
-            Task.deleted_at.is_(None),
-            or_(
-                Task.created_by == current_user.id,
-                Task.assignee_id.in_(visible_ids)
-            )
-        )
-    else:
-        task_filter = Task.deleted_at.is_(None)
+    # 所有成员可查看全部任务，仅排除已删除
+    task_filter = Task.deleted_at.is_(None)
 
     # 任务状态统计
     status_query = select(Task.status, func.count(Task.id))
