@@ -1,25 +1,23 @@
 <template>
-  <!-- 诊断：显示 isMobile 和窗口宽度 -->
-  <div style="position:fixed;top:4px;right:4px;z-index:99999;background:#000;color:#0f0;padding:4px 8px;font-size:11px;font-family:monospace;border-radius:4px;pointer-events:none;">
-    isMobile:{{ isMobile }} w:{{ windowWidth }}
-  </div>
-
   <!-- 移动端独立抽屉 — 在 el-container 外部，不受 Element Plus aside 样式影响 -->
   <div v-if="isMobile && showMobileMenu" class="mobile-drawer-root">
     <div class="mobile-drawer-mask" @click="showMobileMenu = false" />
     <div class="mobile-drawer-body">
-      <!-- 诊断：极简纯文字，不用 el-icon，不用 SVG，看文字能否渲染 -->
-      <div style="padding:8px 16px 20px;font-size:18px;font-weight:700;color:#2D2D2D;border-bottom:1px solid #EBEEF5;margin-bottom:8px;">
-        小气助手
+      <div class="mobile-drawer-brand">
+        <div class="mobile-drawer-logo">
+          <el-icon size="24"><Aim /></el-icon>
+        </div>
+        <span>小气助手</span>
       </div>
       <div
         v-for="item in menuRoutes"
         :key="item.path"
-        style="display:flex;align-items:center;height:52px;padding:0 16px;margin:4px 0;border-radius:12px;font-size:16px;font-weight:600;color:#333;cursor:pointer;"
-        :style="currentRoute === item.path ? { background: '#FF7A5C', color: '#fff' } : {}"
+        class="mobile-drawer-item"
+        :class="{ active: currentRoute === item.path }"
         @click="navigateTo(item.path)"
       >
-        {{ item.meta.title }}
+        <el-icon size="20"><component :is="item.meta.icon" /></el-icon>
+        <span>{{ item.meta.title }}</span>
       </div>
     </div>
   </div>
@@ -121,7 +119,6 @@ const router = useRouter()
 const userStore = useUserStore()
 const memberStore = useMemberStore()
 
-const windowWidth = ref(window.innerWidth)
 const isMobile = ref(window.innerWidth <= 768)
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
@@ -143,7 +140,6 @@ const menuRoutes = computed(() => {
 })
 
 const onResize = () => {
-  windowWidth.value = window.innerWidth
   isMobile.value = window.innerWidth <= 768
   if (isMobile.value) {
     showMobileMenu.value = false
