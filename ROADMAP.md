@@ -1258,3 +1258,26 @@
 
 **修改文件：**
 - `web/src/layouts/MainLayout.vue` — 模板（el-popover + 动态头像 + 移动端 class）+ 脚本（userAvatar + handleMarkAllRead）+ 样式（通知面板 + 移动端适配）
+
+### 云自动部署修复 (2026-05-25)
+
+诊断并修复 Webhook 自动部署流水线的多个问题，端到端验证通过。
+
+| 问题 | 修复 | 状态 |
+|------|------|------|
+| Webhook 端点不可达 | 云 Nginx 添加 `/webhook` 代理到 `127.0.0.1:9001` | ✅ 完成 |
+| deploy-auto.sh 无错误处理 | 添加 `set -e`、磁盘空间检查（500MB）、构建产物验证、nginx -t 预检 | ✅ 完成 |
+| 端口冲突（9000 vs MinIO FRP） | webhook 端口从 9000 改为 9001 | ✅ 完成 |
+| SSL 证书路径错误 | tunnel.conf 证书路径修正为 `/etc/letsencrypt/live/` | ✅ 完成 |
+| Git remote 使用 SSH 无密钥 | 云服务器改用 HTTPS remote | ✅ 完成 |
+| 静态资源无缓存头 | JS/CSS 添加 `expires 7d; Cache-Control: public, immutable` | ✅ 完成 |
+| .env.webhook 缺失 | 服务器手动创建 + systemd EnvironmentFile 引入 | ✅ 完成 |
+| 缺少 tunnel.conf 模板 | 创建 `nginx/conf.d/tunnel.conf`（HTTPS + WebSocket + 缓存 + 安全头） | ✅ 完成 |
+| deploy-cloud.sh 缺少 webhook | HTTP 临时配置添加 /webhook 代理 | ✅ 完成 |
+| webhook.py 硬编码默认密钥 | 移除默认值，强制从环境变量读取 | ✅ 完成 |
+
+**修改文件：**
+- `scripts/deploy-auto.sh` — 全面加固（set -e + 磁盘检查 + 构建验证 + 本地修改丢弃）
+- `scripts/webhook.py` — 端口改为 9001 + 移除硬编码默认密钥
+- `nginx/conf.d/tunnel.conf` — 新建（HTTPS + /webhook + /api + /ws + /minio + 缓存头 + 安全头）
+- `scripts/deploy-cloud.sh` — HTTP 临时配置添加 /webhook 代理 + 缓存头

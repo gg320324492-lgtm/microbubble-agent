@@ -70,7 +70,8 @@
 - 登录页硬编码账号已移除，改为"请联系管理员获取账号密码"
 - Agent 的 `generate_project_plan` 工具会调用 Claude API 两次（生成计划 + 对话），注意 token 消耗
 - 企业微信已上线，腾讯会议凭据待配置（详见 ROADMAP.md）
-- 部署架构：云服务器跑 Nginx+FRP，本地电脑跑全部 Docker 服务，FRP 穿透 8000 端口
+- 部署架构：云服务器跑 Nginx+FRP+Webhook(9001)，本地电脑跑全部 Docker 服务，FRP 穿透 8000/9000/2222 端口
+- Webhook 自动部署：GitHub push → Nginx /webhook 代理 → webhook.py (9001) → deploy-auto.sh → npm build → nginx reload，已端到端验证
 - Claude API 使用代理地址（`CLAUDE_BASE_URL`），支持第三方 API 中转
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->

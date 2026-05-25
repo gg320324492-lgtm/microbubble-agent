@@ -88,8 +88,8 @@ sudo bash scripts/deploy-cloud.sh
 cp scripts/webhook.service /etc/systemd/system/
 systemctl daemon-reload && systemctl enable webhook && systemctl start webhook
 # 然后在 GitHub 仓库 Settings → Webhooks 添加:
-# URL: http://<服务器IP>:9000/webhook
-# Secret: microbubble-deploy-2026
+# URL: https://agent.mnb-lab.cn/webhook
+# Secret: 与 .env.webhook 中 WEBHOOK_SECRET 一致
 # Events: Just the push event
 ```
 
