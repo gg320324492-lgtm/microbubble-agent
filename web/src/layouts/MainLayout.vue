@@ -20,6 +20,7 @@
       </div>
 
       <el-menu
+        v-if="!isMobile || showMobileMenu"
         :key="menuKey"
         :default-active="currentRoute"
         :collapse="menuCollapse"
@@ -454,53 +455,17 @@ const markAllRead = async () => {
   padding: 12px;
 }
 
-/* 移动端菜单 - 全面覆盖 Element Plus 折叠样式 */
+/* 移动端菜单 - 确保文字始终显示 */
 @media (max-width: 768px) {
-  /* 强制菜单项宽度和布局 */
   .sidebar-menu .el-menu-item {
-    width: 100% !important;
     justify-content: flex-start !important;
-    padding-left: 20px !important;
-    padding-right: 20px !important;
   }
 
-  /* 强制文字容器显示 */
-  .sidebar-menu .el-menu-item__content,
-  .sidebar-menu .el-menu-item__content * {
-    display: inline-flex !important;
+  /* 强制文字始终可见 */
+  .sidebar-menu .el-menu-item span,
+  .sidebar-menu .el-menu-item .el-menu-item__content {
     display: inline !important;
     opacity: 1 !important;
-    visibility: visible !important;
-    width: auto !important;
-    max-width: none !important;
-    overflow: visible !important;
-    flex: none !important;
-  }
-
-  /* Element Plus 标题 */
-  .sidebar-menu .el-menu-item__title,
-  .sidebar-menu .el-menu-item__title * {
-    display: inline !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-  }
-
-  /* 取消折叠模式的宽度限制 */
-  .sidebar-menu.el-menu--collapse {
-    width: 220px !important;
-    min-width: 220px !important;
-    transition: none !important;
-  }
-
-  /* 折叠模式下菜单项也正常显示 */
-  .sidebar-menu.el-menu--collapse .el-menu-item {
-    width: 100% !important;
-    padding-left: 20px !important;
-    padding-right: 20px !important;
-  }
-
-  .sidebar-menu.el-menu--collapse .el-menu-item .el-icon {
-    margin-right: 12px !important;
   }
 }
 </style>
