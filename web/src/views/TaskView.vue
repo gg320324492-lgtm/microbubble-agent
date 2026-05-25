@@ -78,11 +78,15 @@
                     class="task-row"
                     :class="{ overdue: isOverdue(task) }"
                   >
-                    <el-checkbox
-                      :model-value="task.status === 'done'"
-                      @change="toggleTaskStatus(task)"
-                      size="large"
-                    />
+                    <el-button
+                      circle
+                      size="default"
+                      class="complete-btn complete-btn--outline"
+                      @click="toggleTaskStatus(task)"
+                      title="标记完成"
+                    >
+                      <el-icon size="18"><Check /></el-icon>
+                    </el-button>
                     <div class="task-content">
                       <div class="task-title">{{ task.title }}</div>
                       <div class="task-meta">
@@ -99,8 +103,14 @@
                     </div>
                     <div class="task-actions">
                       <template v-if="isAdmin || task.created_by === currentUserId">
-                        <el-button text type="primary" size="small" @click="editTask(task)">编辑</el-button>
-                        <el-button text type="danger" size="small" @click="deleteTask(task)">删除</el-button>
+                        <el-button text type="primary" @click="editTask(task)">
+                          <el-icon><Edit /></el-icon>
+                          编辑
+                        </el-button>
+                        <el-button text type="danger" @click="deleteTask(task)">
+                          <el-icon><Delete /></el-icon>
+                          删除
+                        </el-button>
                       </template>
                     </div>
                   </div>
@@ -143,11 +153,15 @@
                     :key="task.id"
                     class="task-row done-row"
                   >
-                    <el-checkbox
-                      :model-value="true"
-                      @change="toggleTaskStatus(task)"
-                      size="large"
-                    />
+                    <el-button
+                      circle
+                      size="default"
+                      class="complete-btn complete-btn--done"
+                      @click="toggleTaskStatus(task)"
+                      title="取消完成"
+                    >
+                      <el-icon size="18"><Check /></el-icon>
+                    </el-button>
                     <div class="task-content">
                       <div class="task-title task-done">{{ task.title }}</div>
                       <div class="task-meta">
@@ -156,7 +170,10 @@
                     </div>
                     <div class="task-actions">
                       <template v-if="isAdmin || task.created_by === currentUserId">
-                        <el-button text type="danger" size="small" @click="deleteTask(task)">删除</el-button>
+                        <el-button text type="danger" @click="deleteTask(task)">
+                          <el-icon><Delete /></el-icon>
+                          删除
+                        </el-button>
                       </template>
                     </div>
                   </div>
@@ -218,10 +235,21 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="操作" width="200" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
-                <el-button text type="success" @click="restoreTask(row)">恢复</el-button>
-                <el-button text type="danger" @click="permanentDeleteTask(row)">永久删除</el-button>
+                <div class="task-actions">
+                  <template v-if="isAdmin || row.created_by === currentUserId || row.assignee_id === currentUserId">
+                    <el-button text type="success" @click="restoreTask(row)">
+                      <el-icon><RefreshRight /></el-icon>
+                      恢复
+                    </el-button>
+                    <el-button text type="danger" @click="permanentDeleteTask(row)">
+                      <el-icon><DeleteFilled /></el-icon>
+                      永久删除
+                    </el-button>
+                  </template>
+                  <span v-else class="no-permission">--</span>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -334,7 +362,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, Check, Edit, Delete, RefreshRight, DeleteFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
@@ -931,6 +959,47 @@ onMounted(() => {
   transition: all var(--duration-fast) var(--ease-out);
 }
 .task-actions .el-button:hover {
-  transform: scale(1.02);
+  transform: scale(1.05);
+}
+
+/* ===== 完成按钮 ===== */
+.complete-btn {
+  flex-shrink: 0;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.complete-btn:hover {
+  transform: scale(1.12);
+}
+.complete-btn:active {
+  transform: scale(0.92);
+}
+
+/* 进行中 → 空心对勾 */
+.complete-btn--outline {
+  color: var(--color-text-placeholder);
+  border-color: var(--color-border);
+}
+.complete-btn--outline:hover {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  background: rgba(103, 194, 58, 0.08);
+}
+
+/* 已完成 → 实心绿底白对勾 */
+.complete-btn--done {
+  color: #fff;
+  background: var(--color-success);
+  border-color: var(--color-success);
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.30);
+}
+.complete-btn--done:hover {
+  background: #85CE61;
+  border-color: #85CE61;
+}
+
+/* ===== 禁用提示 ===== */
+.no-permission {
+  color: var(--color-text-placeholder);
+  font-size: var(--font-size-sm);
 }
 </style>

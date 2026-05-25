@@ -398,10 +398,11 @@ async def restore_task(
     if task.deleted_at is None:
         raise HTTPException(status_code=400, detail="任务未删除，无需恢复")
 
-    # 权限：只有管理员可以恢复任务
+    # 权限：管理员可恢复任意任务，普通成员只能恢复自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        raise HTTPException(status_code=403, detail="只有管理员可以恢复任务")
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="只能恢复自己创建或被分配的任务")
 
     task.deleted_at = None
     await db.commit()
@@ -425,10 +426,11 @@ async def permanent_delete_task(
     if task.deleted_at is None:
         raise HTTPException(status_code=400, detail="请先删除任务再永久删除")
 
-    # 权限：只有管理员可以永久删除
+    # 权限：管理员可永久删除任意任务，普通成员只能永久删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
-        raise HTTPException(status_code=403, detail="只有管理员可以永久删除任务")
+        if task.created_by != current_user.id and task.assignee_id != current_user.id:
+            raise HTTPException(status_code=403, detail="只能永久删除自己创建或被分配的任务")
 
     await db.delete(task)
     await db.commit()
