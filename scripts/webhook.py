@@ -7,7 +7,6 @@ import json
 import logging
 import os
 import subprocess
-import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 PORT = 9001
@@ -24,22 +23,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("webhook")
-
-
-def run_deploy():
-    """在后台线程中执行部署脚本"""
-    logger.info("开始自动部署...")
-    try:
-        result = subprocess.run(
-            ["bash", DEPLOY_SCRIPT],
-            capture_output=True, text=True, timeout=300
-        )
-        if result.returncode == 0:
-            logger.info("部署成功")
-        else:
-            logger.error(f"部署失败: {result.stderr}")
-    except Exception as e:
-        logger.error(f"部署异常: {e}")
 
 
 def verify_signature(payload: bytes, signature: str) -> bool:
@@ -89,13 +72,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
             # 只处理 main 分支
             if ref == "refs/heads/main":
-                # 先返回 200，避免 GitHub 超时（默认 10s）
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"OK")
-                # 后台线程执行部署
-                threading.Thread(target=run_deploy, daemon=True).start()
-                return
+                logger.info("开始自动部署...")
+                result = subprocess.run(
+                    ["bash", DEPLOY_SCRIPT],
+                    capture_output=True, text=True, timeout=300
+                )
+                if result.returncode == 0:
+                    logger.info("部署成功")
+                else:
+                    logger.error(f"部署失败: {result.stderr}")
             else:
                 logger.info(f"忽略非 main 分支: {ref}")
 

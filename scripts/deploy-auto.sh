@@ -68,8 +68,4 @@ nginx -t >> "$LOG_FILE" 2>&1
 log "nginx reload..."
 nginx -s reload >> "$LOG_FILE" 2>&1
 
-# 重启 webhook 服务（使 webhook.py 更新生效）
-log "restart webhook..."
-systemctl restart webhook >> "$LOG_FILE" 2>&1
-
 log "========== 部署完成 =========="
