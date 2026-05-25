@@ -102,7 +102,7 @@
                       {{ formatDate(task.due_date) }}
                     </div>
                     <div class="task-actions">
-                      <template v-if="isAdmin || isGraduateOrSpecial || task.created_by === currentUserId">
+                      <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
                         <el-button text type="primary" @click="editTask(task)">
                           <el-icon><Edit /></el-icon>
                           编辑
@@ -169,7 +169,7 @@
                       </div>
                     </div>
                     <div class="task-actions">
-                      <template v-if="isAdmin || isGraduateOrSpecial || task.created_by === currentUserId">
+                      <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
                         <el-button text type="danger" @click="deleteTask(task)">
                           <el-icon><Delete /></el-icon>
                           删除
@@ -238,7 +238,7 @@
             <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
                 <div class="task-actions">
-                  <template v-if="isAdmin || isGraduateOrSpecial || row.created_by === currentUserId || row.assignee_id === currentUserId">
+                  <template v-if="isAdmin || row.created_by === currentUserId || row.assignee_id === currentUserId">
                     <el-button text type="success" @click="restoreTask(row)">
                       <el-icon><RefreshRight /></el-icon>
                       恢复
@@ -378,14 +378,6 @@ const isAdmin = computed(() => {
   return role === 'admin' || role === 'leader'
 })
 const currentUserId = computed(() => userStore.userInfo?.id)
-
-const GRADUATE_GRADES = ['研一', '研二', '研三', '博一', '博二']
-const SPECIAL_NAMES = ['贾琦', '周之超']
-const isGraduateOrSpecial = computed(() => {
-  const info = userStore.userInfo
-  if (!info) return false
-  return GRADUATE_GRADES.includes(info.grade) || SPECIAL_NAMES.includes(info.name)
-})
 
 const isMobile = ref(window.innerWidth <= 768)
 const activeTab = ref('tasks')
