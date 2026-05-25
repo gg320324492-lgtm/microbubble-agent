@@ -183,6 +183,9 @@ const markAllRead = async () => {
   left: 0;
   z-index: 2000;
   height: 100vh;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow: 4px 0 24px rgba(255, 122, 92, 0.15);
 }
 
@@ -238,11 +241,31 @@ const markAllRead = async () => {
   line-height: 48px;
   margin: 4px 0;
   border-radius: var(--radius-lg);
-  color: var(--color-text-regular);
+  color: var(--color-text-primary);
   font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-base);
   transition: all 200ms ease-out;
   position: relative;
   overflow: hidden;
+}
+
+/* 移动端菜单增强 */
+@media (max-width: 768px) {
+  .sidebar-menu .el-menu-item {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    height: 52px;
+    line-height: 52px;
+    padding: 0 16px;
+  }
+
+  .sidebar-menu .el-menu-item .el-icon {
+    font-size: 20px;
+  }
+
+  .logo .title {
+    font-size: 18px;
+  }
 }
 
 .sidebar-menu .el-menu-item::before {
@@ -259,7 +282,7 @@ const markAllRead = async () => {
 }
 
 .sidebar-menu .el-menu-item:hover {
-  background: var(--color-primary-bg) !important;
+  background: rgba(255, 122, 92, 0.12) !important;
   color: var(--color-primary);
 }
 
@@ -268,15 +291,33 @@ const markAllRead = async () => {
   height: 24px;
 }
 
+.sidebar-menu .el-menu-item:hover::before {
+  width: 4px;
+  height: 24px;
+}
+
 .sidebar-menu .el-menu-item.is-active {
-  background: var(--color-primary-bg) !important;
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
+  background: var(--color-primary) !important;
+  color: #ffffff !important;
+  font-weight: var(--font-weight-bold);
 }
 
 .sidebar-menu .el-menu-item.is-active::before {
   width: 4px;
   height: 32px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* 移动端激活状态 */
+@media (max-width: 768px) {
+  .sidebar-menu .el-menu-item.is-active {
+    background: var(--color-primary) !important;
+    color: #ffffff !important;
+  }
+
+  .sidebar-menu .el-menu-item.is-active .el-icon {
+    color: #ffffff;
+  }
 }
 
 .sidebar-menu .el-menu-item .el-icon {
