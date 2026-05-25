@@ -20,6 +20,7 @@
       </div>
 
       <el-menu
+        :key="menuKey"
         :default-active="currentRoute"
         :collapse="menuCollapse"
         router
@@ -112,6 +113,9 @@ const menuCollapse = computed(() => {
   if (isMobile.value && showMobileMenu.value) return false
   return isCollapse.value
 })
+
+// 强制重新渲染菜单，解决 el-menu collapse 属性响应问题
+const menuKey = computed(() => `${isMobile.value}-${showMobileMenu.value}`)
 
 const sidebarWidth = computed(() => {
   if (isMobile.value) return showMobileMenu.value ? '220px' : '0px'
