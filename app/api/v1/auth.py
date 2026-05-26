@@ -111,6 +111,8 @@ async def login(
         grade=user.grade,
         research_area=user.research_area,
         email=user.email,
+        phone=user.phone,
+        bio=user.bio,
         avatar=_resolve_avatar_url(user),
         is_active=user.is_active
     )
@@ -198,6 +200,8 @@ async def get_current_user_info(current_user: Member = Depends(get_current_user)
         grade=current_user.grade,
         research_area=current_user.research_area,
         email=current_user.email,
+        phone=current_user.phone,
+        bio=current_user.bio,
         avatar=_resolve_avatar_url(current_user),
         is_active=current_user.is_active
     )
@@ -242,6 +246,8 @@ async def update_profile(
         grade=current_user.grade,
         research_area=current_user.research_area,
         email=current_user.email,
+        phone=current_user.phone,
+        bio=current_user.bio,
         avatar=_resolve_avatar_url(current_user),
         is_active=current_user.is_active
     )

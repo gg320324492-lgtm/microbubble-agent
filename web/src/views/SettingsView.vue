@@ -193,6 +193,8 @@ const saveProfile = async () => {
     Object.assign(stored, {
       name: updated.name,
       email: updated.email,
+      phone: updated.phone,
+      bio: updated.bio,
       avatar: updated.avatar
     })
     localStorage.setItem('user_info', JSON.stringify(stored))

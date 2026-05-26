@@ -75,11 +75,15 @@ async def list_members(
     result = await db.execute(query)
     members = result.scalars().all()
 
-    # Resolve avatar URLs for consistent public access
+    # Build response with resolved avatar URLs — do NOT mutate ORM objects
+    # (get_db auto-commits after every request, even GET)
+    items = []
     for m in members:
-        m.avatar = _resolve_avatar_url(m)
+        resp = MemberResponse.model_validate(m)
+        resp.avatar = _resolve_avatar_url(m)
+        items.append(resp)
 
-    return MemberList(items=members, total=len(members))
+    return MemberList(items=items, total=len(members))
 
 
 @router.get("/members/{member_id}", response_model=MemberResponse)
@@ -95,8 +99,9 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="成员不存在")
 
-    member.avatar = _resolve_avatar_url(member)
-    return member
+    resp = MemberResponse.model_validate(member)
+    resp.avatar = _resolve_avatar_url(member)
+    return resp
 
 
 @router.put("/members/{member_id}", response_model=MemberResponse)
