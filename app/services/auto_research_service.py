@@ -325,6 +325,7 @@ class AutoResearchService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=800,
+                timeout=30,
                 messages=[{"role": "user", "content": prompt}],
             )
             text = extract_text_from_response(response)
@@ -427,6 +428,7 @@ class AutoResearchService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=1000,
+                timeout=30,
                 messages=[{"role": "user", "content": prompt}],
             )
             text = extract_text_from_response(response)
@@ -452,6 +454,7 @@ class AutoResearchService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=10,
+                timeout=30,
                 messages=[{"role": "user", "content": prompt}],
             )
             text = extract_text_from_response(response)

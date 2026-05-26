@@ -168,6 +168,7 @@ class KnowledgeQAService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=1500,
+                timeout=30,
                 messages=[{"role": "user", "content": prompt}],
             )
             text = extract_text_from_response(response)
@@ -205,6 +206,7 @@ class KnowledgeQAService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=500,
+                timeout=30,
                 messages=[{"role": "user", "content": prompt}],
             )
             text = extract_text_from_response(response)
