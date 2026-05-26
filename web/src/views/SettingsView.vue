@@ -160,22 +160,49 @@ const handleAvatarUpload = async (e) => {
   }
 
   try {
+    // 1. 上传文件到 MinIO
     const formData = new FormData()
     formData.append('file', file)
     formData.append('prefix', 'avatars')
 
-    const res = await axios.post('/api/v1/upload', formData)
-    if (res.data?.object_name) {
-      // 构建公网可访问的 MinIO URL（预签名 URL 使用 Docker 内部主机名，浏览器无法访问）
-      const url = `${window.location.origin}/minio/microbubble/${res.data.object_name}`
-      form.avatar = url
-      previewAvatarUrl.value = url
-      avatarObjectName.value = res.data.object_name
-      avatarChanged.value = true
-      ElMessage.success('头像上传成功')
+    const res = await axios.post('/api/v1/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000
+    })
+    if (!res.data?.object_name) {
+      ElMessage.error('上传返回数据异常')
+      return
     }
+
+    const objectName = res.data.object_name
+
+    // 2. 立即保存到后端（自动持久化，用户无需再点"保存资料"）
+    await axios.put('/api/v1/auth/profile', { avatar: objectName })
+
+    // 3. 获最新用户信息（拿到后端解析后的完整 URL）
+    const meRes = await axios.get('/api/v1/auth/me')
+    const resolvedUrl = meRes.data?.avatar || `${window.location.origin}/minio/microbubble/${objectName}`
+
+    // 4. 更新 localStorage
+    const stored = JSON.parse(localStorage.getItem('user_info') || '{}')
+    stored.avatar = resolvedUrl
+    localStorage.setItem('user_info', JSON.stringify(stored))
+
+    // 5. 刷新 store
+    userStore.loadFromStorage()
+
+    // 6. 更新预览
+    form.avatar = resolvedUrl
+    previewAvatarUrl.value = resolvedUrl
+    avatarObjectName.value = objectName
+    avatarChanged.value = false
+
+    ElMessage.success('头像已更新')
   } catch (err) {
-    ElMessage.error('头像上传失败')
+    const status = err.response?.status
+    const detail = err.response?.data?.detail || err.message
+    console.error('[头像上传失败]', { status, detail })
+    ElMessage.error(`头像上传失败: ${detail}`)
   }
 }
 
