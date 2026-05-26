@@ -19,6 +19,9 @@ ANALYSIS_PROMPT = """你是微纳米气泡课题组的AI知识管理助手。分
   "knowledge_type": "文献阅读/实验方法/技术标准/研究综述/案例分析/数据报告/FAQ",
   "entities": [
     {{"subject": "主体(材料/方法/指标)", "predicate": "关系(影响/导致/抑制/促进/表征/检测)", "object": "客体(数值/效果/现象)", "condition": "条件(温度/浓度/pH/时间等)，无则null", "confidence": 0.9}}
+  ],
+  "formulas": [
+    {{"name": "公式名称", "formula": "数学表达式(用*表示乘,/表示除,变量用字母)", "variables": {{"V0": {{"description": "空白滴定体积", "unit": "mL"}}}}, "result_unit": "结果单位", "conditions": "适用条件", "domain": "应用领域(COD/pH/臭氧/粒径等)"}}
   ]
 }}
 
@@ -30,6 +33,14 @@ entities 字段要求：
 - condition: 该关系成立的条件（实验条件、环境参数等），如文中未明确则填null
 - confidence: 基于文中证据强度的置信度 0-1
 - 每个三元组应是一个独立的、可被引用的知识单元
+
+formulas 字段要求：
+- 从文档中提取数学公式和计算关系（0-3个，无则返回空数组）
+- name: 公式的中文名称
+- formula: 可执行的数学表达式（用*表示乘，/表示除，变量用字母）
+- variables: 每个变量的描述和单位
+- result_unit: 计算结果单位
+- domain: 应用领域标签
 
 标题: {title}
 内容: {content}"""

@@ -1,5 +1,7 @@
 <template>
   <div class="knowledge-view">
+    <el-tabs v-model="activeTab" type="border-card" class="knowledge-tabs">
+      <el-tab-pane label="知识库" name="knowledge">
     <!-- ===== 动态分类标签云 ===== -->
     <el-card v-if="categories.length > 0" class="tag-cloud-card">
       <div class="tag-cloud-header">
@@ -518,6 +520,193 @@
         </el-button>
       </template>
     </el-dialog>
+      </el-tab-pane>
+
+      <!-- ===== 实体图谱 Tab ===== -->
+      <el-tab-pane label="实体图谱" name="entities">
+        <el-card class="filter-card">
+          <el-row :gutter="12">
+            <el-col :span="5">
+              <el-input v-model="entitySearch.subject" placeholder="主体" clearable @keyup.enter="searchEntities" />
+            </el-col>
+            <el-col :span="5">
+              <el-input v-model="entitySearch.predicate" placeholder="关系" clearable @keyup.enter="searchEntities" />
+            </el-col>
+            <el-col :span="6">
+              <el-input v-model="entitySearch.keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntities" />
+            </el-col>
+            <el-col :span="4">
+              <el-button type="primary" @click="searchEntities">搜索实体</el-button>
+            </el-col>
+            <el-col :span="4">
+              <el-button @click="fetchEntityGraph">图谱视图</el-button>
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <el-card v-if="entityGraphData.nodes.length > 0" class="entity-graph-card">
+          <div ref="entityGraphRef" class="entity-graph-container"></div>
+        </el-card>
+
+        <el-card class="entity-list-card">
+          <div v-if="entityList.length === 0" class="empty-state">
+            <el-empty description="暂无实体数据。上传文档后系统将自动提取知识三元组并跨文档合并。" />
+          </div>
+          <div v-else class="entity-grid">
+            <div v-for="e in entityList" :key="e.id" class="entity-card clickable" @click="showEntityDetail(e.id)">
+              <div class="entity-triple">
+                <span class="entity-subject">{{ e.subject }}</span>
+                <span class="entity-predicate">→ {{ e.predicate }} →</span>
+                <span class="entity-object">{{ e.object }}</span>
+              </div>
+              <div v-if="e.condition" class="entity-condition-text">条件: {{ e.condition }}</div>
+              <div class="entity-meta">
+                <span>{{ e.source_count }} 篇文档</span>
+                <span>{{ e.occurrence_count }} 次出现</span>
+                <el-progress :percentage="Math.round(e.confidence * 100)" :stroke-width="4" :show-text="false" style="width:80px" />
+              </div>
+            </div>
+          </div>
+          <el-pagination v-if="entityTotal > 0" v-model:current-page="entityPage" :page-size="20"
+            :total="entityTotal" layout="total, prev, pager, next" @current-change="searchEntities" style="margin-top:12px" />
+        </el-card>
+      </el-tab-pane>
+
+      <!-- ===== 假设 Tab ===== -->
+      <el-tab-pane label="科研假设" name="hypotheses">
+        <el-card class="filter-card">
+          <el-row :gutter="12" align="middle">
+            <el-col :span="4">
+              <el-select v-model="hypothesisFilter.status" placeholder="状态" clearable @change="fetchHypotheses">
+                <el-option label="已提出" value="proposed" />
+                <el-option label="已验证" value="validated" />
+                <el-option label="已否决" value="rejected" />
+              </el-select>
+            </el-col>
+            <el-col :span="4">
+              <el-select v-model="hypothesisFilter.priority" placeholder="优先级" clearable @change="fetchHypotheses">
+                <el-option label="高" value="high" />
+                <el-option label="中" value="medium" />
+                <el-option label="低" value="low" />
+              </el-select>
+            </el-col>
+            <el-col :span="6">
+              <el-input v-model="hypothesisTopic" placeholder="研究领域（留空=全局）" clearable />
+            </el-col>
+            <el-col :span="5">
+              <el-button type="primary" :loading="hypothesisGenerating" @click="generateHypotheses">
+                <el-icon><MagicStick /></el-icon> 生成假设
+              </el-button>
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <div v-if="hypothesisGenerating" class="qa-loading">🔬 正在分析实体关系并生成假设...</div>
+
+        <div v-else class="hypothesis-grid">
+          <div v-for="h in hypothesisList" :key="h.id" class="hypothesis-card" :class="'hypothesis-' + h.status">
+            <div class="hypothesis-header">
+              <el-tag :type="hypothesisStatusTag(h.status)" size="small">{{ hypothesisStatusLabel(h.status) }}</el-tag>
+              <el-tag :type="h.priority === 'high' ? 'danger' : h.priority === 'medium' ? 'warning' : 'info'" size="small" effect="plain">
+                {{ h.priority === 'high' ? '高优先' : h.priority === 'medium' ? '中优先' : '低优先' }}
+              </el-tag>
+              <span class="hypothesis-confidence">{{ Math.round(h.confidence * 100) }}%</span>
+            </div>
+            <div class="hypothesis-statement">{{ h.statement }}</div>
+            <div v-if="h.rationale" class="hypothesis-rationale"><strong>推导依据:</strong> {{ h.rationale }}</div>
+            <div v-if="h.suggested_experiment" class="hypothesis-experiment"><strong>实验建议:</strong> {{ h.suggested_experiment }}</div>
+            <div class="hypothesis-actions" v-if="h.status === 'proposed'">
+              <el-button size="small" type="success" @click="validateHypothesis(h.id, 'validated')">验证通过</el-button>
+              <el-button size="small" type="danger" @click="validateHypothesis(h.id, 'rejected')">否决</el-button>
+            </div>
+          </div>
+        </div>
+        <el-pagination v-if="hypothesisTotal > 0" v-model:current-page="hypothesisPage" :page-size="20"
+          :total="hypothesisTotal" layout="total, prev, pager, next" @current-change="fetchHypotheses" style="margin-top:12px" />
+      </el-tab-pane>
+
+      <!-- ===== 公式计算 Tab ===== -->
+      <el-tab-pane label="公式计算" name="formulas">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-card class="formula-list-card">
+              <div class="formula-list-header">
+                <el-select v-model="formulaDomainFilter" placeholder="领域筛选" clearable @change="fetchFormulas" style="width:140px">
+                  <el-option v-for="d in formulaDomains" :key="d.name" :label="`${d.name} (${d.count})`" :value="d.name" />
+                </el-select>
+                <el-input v-model="formulaKeyword" placeholder="搜索公式" clearable @keyup.enter="fetchFormulas" style="width:160px" />
+              </div>
+              <div v-if="formulaList.length === 0" class="empty-state">
+                <el-empty description="暂无公式。上传含数学公式的文档后系统将自动提取。" />
+              </div>
+              <div v-for="f in formulaList" :key="f.id" class="formula-item"
+                :class="{ 'formula-selected': selectedFormula?.id === f.id }" @click="selectFormula(f)">
+                <div class="formula-name">{{ f.name }}</div>
+                <div class="formula-latex">{{ f.formula_latex }}</div>
+                <div class="formula-meta">
+                  <el-tag size="small">{{ f.domain || '未分类' }}</el-tag>
+                  <span class="formula-unit">→ {{ f.result_unit }}</span>
+                </div>
+              </div>
+              <el-pagination v-if="formulaTotal > 20" v-model:current-page="formulaPage" :page-size="20"
+                :total="formulaTotal" layout="prev, pager, next" small @current-change="fetchFormulas" />
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card v-if="selectedFormula" class="calculator-card">
+              <h3>{{ selectedFormula.name }}</h3>
+              <div class="calculator-formula">{{ selectedFormula.formula_latex }}</div>
+              <el-divider />
+              <el-form label-width="150px">
+                <el-form-item v-for="(meta, varName) in selectedFormula.variables" :key="varName"
+                  :label="`${meta.description || varName} (${meta.unit || ''})`">
+                  <el-input-number v-model="calcInputs[varName]" :step="0.1" :precision="4" style="width:180px" />
+                </el-form-item>
+                <el-form-item>
+                  <el-button type="primary" :loading="calcLoading" @click="runCalculation">计算</el-button>
+                </el-form-item>
+              </el-form>
+              <div v-if="calcResult" class="calc-result">
+                <div class="calc-value">
+                  结果: <strong>{{ calcResult.value }}</strong> <span class="calc-unit">{{ calcResult.unit }}</span>
+                </div>
+                <div v-if="calcResult.steps" class="calc-steps">
+                  <div class="steps-title">计算步骤</div>
+                  <div v-for="(step, i) in calcResult.steps" :key="i" class="calc-step">
+                    <span class="step-var">{{ step.variable }}</span> = {{ step.value }} {{ step.unit }}
+                  </div>
+                </div>
+                <div class="calc-source">来源: <a @click="gotoKnowledge(selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
+              </div>
+            </el-card>
+            <el-card v-else class="calculator-card">
+              <el-empty description="请从左侧选择一个公式" />
+            </el-card>
+          </el-col>
+        </el-row>
+      </el-tab-pane>
+
+    </el-tabs>
+
+    <!-- Entity detail dialog -->
+    <el-dialog v-model="showEntityDetailDialog" title="实体详情" width="600px">
+      <div v-if="entityDetail">
+        <div class="entity-triple-large">
+          <span class="entity-subject">{{ entityDetail.subject }}</span>
+          <span class="entity-predicate">→ {{ entityDetail.predicate }} →</span>
+          <span class="entity-object">{{ entityDetail.object }}</span>
+        </div>
+        <div v-if="entityDetail.condition" class="entity-condition-text">条件: {{ entityDetail.condition }}</div>
+        <el-divider />
+        <div class="entity-detail-section">
+          <h4>来源文档 ({{ entityDetail.sources?.length || 0 }})</h4>
+          <div v-for="src in entityDetail.sources" :key="src.id" class="source-item clickable" @click="gotoKnowledge(src.id); showEntityDetailDialog = false">
+            {{ src.title }}
+            <el-tag size="small">{{ src.category }}</el-tag>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -550,6 +739,40 @@ const uploadTitle = ref('')
 const uploadFile = ref(null)
 const uploading = ref(false)
 const uploadRef = ref(null)
+
+// Tabs
+const activeTab = ref('knowledge')
+
+// Entity tab
+const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
+const entityList = ref([])
+const entityTotal = ref(0)
+const entityPage = ref(1)
+const entityGraphData = ref({ nodes: [], edges: [] })
+const entityGraphRef = ref(null)
+let entityChartInstance = null
+const showEntityDetailDialog = ref(false)
+const entityDetail = ref(null)
+
+// Hypothesis tab
+const hypothesisList = ref([])
+const hypothesisTotal = ref(0)
+const hypothesisPage = ref(1)
+const hypothesisFilter = ref({ status: '', priority: '' })
+const hypothesisTopic = ref('')
+const hypothesisGenerating = ref(false)
+
+// Formula tab
+const formulaList = ref([])
+const formulaTotal = ref(0)
+const formulaPage = ref(1)
+const formulaDomainFilter = ref('')
+const formulaKeyword = ref('')
+const formulaDomains = ref([])
+const selectedFormula = ref(null)
+const calcInputs = ref({})
+const calcResult = ref(null)
+const calcLoading = ref(false)
 
 // QA
 const qaQuery = ref('')
@@ -962,6 +1185,156 @@ onMounted(() => {
   fetchStats()
   fetchCategories()
   window.addEventListener('resize', handleResize)
+})
+
+// ── Entity methods ──
+
+const searchEntities = async () => {
+  try {
+    const params = { ...entitySearch.value, page: entityPage.value, page_size: 20 }
+    Object.keys(params).forEach(k => { if (!params[k]) delete params[k] })
+    const res = await axios.get('/api/v1/knowledge/entities', { params })
+    entityList.value = res.data.items || []
+    entityTotal.value = res.data.total || 0
+  } catch (e) { ElMessage.error('实体搜索失败') }
+}
+
+const fetchEntityGraph = async () => {
+  try {
+    const res = await axios.get('/api/v1/knowledge/entities/graph', { params: { limit: 80 } })
+    entityGraphData.value = res.data
+    await nextTick()
+    renderEntityGraph()
+  } catch (e) { console.error('实体图谱加载失败:', e) }
+}
+
+const renderEntityGraph = async () => {
+  if (!entityGraphRef.value || entityGraphData.value.nodes.length === 0) return
+  const echarts = await import('echarts')
+  if (entityChartInstance) entityChartInstance.dispose()
+  entityChartInstance = echarts.init(entityGraphRef.value)
+  const cats = [...new Set(entityGraphData.value.nodes.map(n => n.predicate || '其他'))]
+  const colors = ['#FF7A5C', '#FFB347', '#5470c6', '#91cc75', '#ee6666', '#73c0de', '#fc8452']
+  const option = {
+    tooltip: { formatter: p => p.dataType === 'node' ? `${p.data.subject}<br/>${p.data.predicate} → ${p.data.object}` : `共现权重: ${p.data.weight || 1}` },
+    legend: { data: cats.slice(0, 7), bottom: 0 },
+    series: [{
+      type: 'graph', layout: 'force', roam: true, draggable: true,
+      force: { repulsion: 200, edgeLength: [100, 300] },
+      data: entityGraphData.value.nodes.map(n => ({
+        name: String(n.id), subject: n.subject, predicate: n.predicate, object: n.object,
+        symbolSize: Math.max(15, Math.min(40, (n.occurrence_count || 1) * 6)),
+        category: n.predicate || '其他', itemStyle: { color: colors[cats.indexOf(n.predicate || '其他') % colors.length] },
+      })),
+      categories: cats.slice(0, 7).map((c, i) => ({ name: c, itemStyle: { color: colors[i % colors.length] } })),
+      links: entityGraphData.value.edges.map(e => ({ source: String(e.source), target: String(e.target), weight: e.weight })),
+      lineStyle: { opacity: 0.4, curveness: 0.2 },
+      label: { show: true, formatter: p => p.data.subject.length > 8 ? p.data.subject.slice(0, 8) + '...' : p.data.subject, fontSize: 10 },
+    }],
+  }
+  entityChartInstance.setOption(option)
+}
+
+const showEntityDetail = async (id) => {
+  try {
+    const res = await axios.get(`/api/v1/knowledge/entities/${id}`)
+    entityDetail.value = res.data
+    showEntityDetailDialog.value = true
+  } catch (e) { ElMessage.error('获取实体详情失败') }
+}
+
+// ── Hypothesis methods ──
+
+const fetchHypotheses = async () => {
+  try {
+    const params = { page: hypothesisPage.value, page_size: 20 }
+    if (hypothesisFilter.value.status) params.status = hypothesisFilter.value.status
+    if (hypothesisFilter.value.priority) params.priority = hypothesisFilter.value.priority
+    const res = await axios.get('/api/v1/knowledge/hypotheses', { params })
+    hypothesisList.value = res.data.items || []
+    hypothesisTotal.value = res.data.total || 0
+  } catch (e) { console.error('获取假设失败:', e) }
+}
+
+const generateHypotheses = async () => {
+  hypothesisGenerating.value = true
+  try {
+    await axios.post('/api/v1/knowledge/hypotheses', {
+      topic: hypothesisTopic.value || null,
+      count: 3,
+    })
+    hypothesisGenerating.value = false
+    await fetchHypotheses()
+    ElMessage.success('假设生成完成')
+  } catch (e) {
+    hypothesisGenerating.value = false
+    ElMessage.error('假设生成失败')
+  }
+}
+
+const hypothesisStatusTag = (s) => s === 'validated' ? 'success' : s === 'rejected' ? 'danger' : 'warning'
+const hypothesisStatusLabel = (s) => s === 'validated' ? '已验证' : s === 'rejected' ? '已否决' : '已提出'
+
+const validateHypothesis = async (id, status) => {
+  try {
+    await axios.post(`/api/v1/knowledge/hypotheses/${id}/validate`, { status })
+    ElMessage.success(status === 'validated' ? '已标记为验证通过' : '已否决')
+    await fetchHypotheses()
+  } catch (e) { ElMessage.error('操作失败') }
+}
+
+// ── Formula methods ──
+
+const fetchFormulas = async () => {
+  try {
+    const params = { page: formulaPage.value, page_size: 20 }
+    if (formulaDomainFilter.value) params.domain = formulaDomainFilter.value
+    if (formulaKeyword.value) params.keyword = formulaKeyword.value
+    const res = await axios.get('/api/v1/knowledge/formulas', { params })
+    formulaList.value = res.data.items || []
+    formulaTotal.value = res.data.total || 0
+  } catch (e) { console.error('获取公式失败:', e) }
+}
+
+const fetchFormulaDomains = async () => {
+  try {
+    const res = await axios.get('/api/v1/knowledge/formulas/domains')
+    formulaDomains.value = res.data || []
+  } catch (e) { console.error('获取公式领域失败:', e) }
+}
+
+const selectFormula = (f) => {
+  selectedFormula.value = f
+  calcInputs.value = {}
+  calcResult.value = null
+  if (f.variables) {
+    for (const [k, meta] of Object.entries(f.variables)) {
+      calcInputs.value[k] = meta.default ?? 0
+    }
+  }
+}
+
+const runCalculation = async () => {
+  if (!selectedFormula.value) return
+  calcLoading.value = true
+  calcResult.value = null
+  try {
+    const res = await axios.post('/api/v1/knowledge/formulas/calculate', {
+      formula_id: selectedFormula.value.id,
+      variables: calcInputs.value,
+    })
+    calcResult.value = res.data
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '计算失败')
+  } finally { calcLoading.value = false }
+}
+
+// ── Tab watcher ──
+
+watch(activeTab, (tab) => {
+  if (tab === 'entities') { searchEntities(); fetchEntityGraph() }
+  if (tab === 'hypotheses') fetchHypotheses()
+  if (tab === 'formulas') { fetchFormulas(); fetchFormulaDomains() }
 })
 
 onUnmounted(() => {
@@ -1885,5 +2258,148 @@ onUnmounted(() => {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* ── Entity detail ── */
+.entity-triple-large {
+  font-size: var(--font-size-lg); padding: var(--space-4);
+  background: var(--color-primary-bg); border-radius: var(--radius-md);
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+}
+.entity-detail-section h4 { margin: 0 0 8px 0; }
+.source-item.clickable {
+  padding: var(--space-2); border-radius: var(--radius-sm);
+  cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+}
+.source-item.clickable:hover { background: var(--color-bg-page); }
+
+/* ── Entity tab ── */
+.entity-graph-container {
+  width: 100%; height: 350px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-page);
+}
+.entity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-3);
+}
+.entity-card.clickable {
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  transition: all var(--duration-fast);
+}
+.entity-card.clickable:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+.entity-triple {
+  display: flex; align-items: center; gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  flex-wrap: wrap;
+}
+.entity-subject { color: var(--color-primary); font-weight: var(--font-weight-semibold); }
+.entity-predicate { color: var(--color-text-secondary); font-size: 12px; }
+.entity-object { color: var(--color-text-primary); }
+.entity-condition-text { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+.entity-meta {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-top: var(--space-2); font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* ── Hypothesis tab ── */
+.hypothesis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--space-4);
+}
+.hypothesis-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  transition: all var(--duration-fast);
+}
+.hypothesis-card:hover { box-shadow: var(--shadow-primary); }
+.hypothesis-card.hypothesis-validated { border-left: 4px solid #67c23a; }
+.hypothesis-card.hypothesis-rejected { border-left: 4px solid #f56c6c; opacity: 0.7; }
+.hypothesis-header {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.hypothesis-confidence { font-size: 12px; color: var(--color-text-secondary); margin-left: auto; }
+.hypothesis-statement {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  margin: var(--space-3) 0;
+  line-height: 1.6;
+}
+.hypothesis-rationale, .hypothesis-experiment {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+  line-height: 1.5;
+}
+.hypothesis-actions { margin-top: var(--space-3); display: flex; gap: var(--space-2); }
+
+/* ── Formula tab ── */
+.formula-list-header {
+  display: flex; gap: var(--space-2); margin-bottom: var(--space-3);
+}
+.formula-item {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+}
+.formula-item:hover, .formula-item.formula-selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.formula-name { font-weight: var(--font-weight-semibold); margin-bottom: 4px; }
+.formula-latex { font-size: 13px; color: var(--color-text-secondary); font-family: monospace; margin-bottom: 4px; }
+.formula-meta { display: flex; align-items: center; gap: var(--space-2); }
+.formula-unit { font-size: 12px; color: var(--color-text-secondary); }
+.calculator-card h3 { margin: 0 0 8px 0; }
+.calculator-formula {
+  font-size: 16px; font-family: monospace;
+  padding: var(--space-3); background: var(--color-bg-page);
+  border-radius: var(--radius-md);
+}
+.calc-result {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+}
+.calc-value { font-size: 18px; margin-bottom: 8px; }
+.calc-value strong { color: var(--color-primary); font-size: 24px; }
+.calc-unit { color: var(--color-text-secondary); font-size: 14px; }
+.calc-steps { margin-top: var(--space-3); }
+.steps-title { font-weight: var(--font-weight-semibold); margin-bottom: 8px; }
+.calc-step { font-size: 13px; padding: 4px 0; border-bottom: 1px dashed var(--color-border); }
+.step-var { font-weight: var(--font-weight-semibold); color: var(--color-primary); }
+.calc-source { margin-top: var(--space-3); font-size: 12px; color: var(--color-text-secondary); }
+.calc-source a { color: var(--color-primary); cursor: pointer; text-decoration: underline; }
+
+/* ── Tabs ── */
+.knowledge-tabs {
+  background: transparent;
+  box-shadow: none;
+}
+.knowledge-tabs :deep(.el-tabs__header) {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  margin-bottom: 0;
+}
+.knowledge-tabs :deep(.el-tabs__content) {
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 </style>

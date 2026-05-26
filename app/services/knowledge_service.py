@@ -207,6 +207,19 @@ class KnowledgeService:
                             knowledge.knowledge_type = analysis["knowledge_type"]
                         await db.commit()
                         analysis_ok = True
+
+                # Step 2.5: 保存公式（独立容错）
+                if analysis.get("formulas"):
+                    try:
+                        from app.services.formula_service import FormulaService
+                        async with async_session() as db_f:
+                            formula_svc = FormulaService(db_f)
+                            await formula_svc.save_formulas_from_analysis(
+                                knowledge_id, analysis["formulas"]
+                            )
+                    except Exception as e:
+                        logger.warning(f"公式保存失败(knowledge_id={knowledge_id}): {e}")
+
         except Exception as e:
             logger.warning(f"LLM 分析失败(knowledge_id={knowledge_id}): {e}")
 
@@ -230,6 +243,15 @@ class KnowledgeService:
                     await graph_svc.build_relations_for(knowledge_id)
             except Exception as e:
                 logger.warning(f"知识关联建立失败(knowledge_id={knowledge_id}): {e}")
+
+        # Step 5: 实体融合（独立容错）
+        try:
+            from app.services.entity_service import EntityService
+            async with async_session() as db:
+                entity_svc = EntityService(db)
+                await entity_svc.merge_entities_from_document(knowledge_id)
+        except Exception as e:
+            logger.warning(f"实体融合失败(knowledge_id={knowledge_id}): {e}")
 
     async def create_from_conversation(
         self,
