@@ -187,10 +187,10 @@ class AutoResearchService:
         }
 
     async def detect_and_handle_contradictions(self) -> List[dict]:
-        """检测矛盾：高分相似但内容可能矛盾的条目对"""
+        """检测矛盾并持久化：写入 contradicts 关系 + 标记 needs_review"""
         contradictions = []
 
-        # 找出相似度 > 0.8 的关联且 relation_type='similar' 的条目对
+        # 找出相似度 > 0.8 的关联条目对
         stmt = select(KnowledgeRelation).where(
             KnowledgeRelation.relation_type == "similar",
             KnowledgeRelation.score >= 0.8,
@@ -199,13 +199,11 @@ class AutoResearchService:
         relations = result.scalars().all()
 
         for rel in relations:
-            # 获取两个条目内容
             a = await self.db.get(Knowledge, rel.source_id)
             b = await self.db.get(Knowledge, rel.target_id)
             if not a or not b:
                 continue
 
-            # 用 LLM 快速判断是否矛盾
             is_conflict = await self._check_contradiction(a.title, a.content, b.title, b.content)
             if is_conflict:
                 contradictions.append({
@@ -216,6 +214,34 @@ class AutoResearchService:
                     "relation_id": rel.id,
                 })
                 logger.warning(f"检测到可能矛盾: [{a.title}] ↔ [{b.title}]")
+
+                # 持久化：写入 contradicts 关系（双向）
+                for s_id, t_id, reason in [
+                    (rel.source_id, rel.target_id, f"与「{b.title}」结论矛盾"),
+                    (rel.target_id, rel.source_id, f"与「{a.title}」结论矛盾"),
+                ]:
+                    existing = await self.db.execute(
+                        select(KnowledgeRelation).where(and_(
+                            KnowledgeRelation.source_id == s_id,
+                            KnowledgeRelation.target_id == t_id,
+                            KnowledgeRelation.relation_type == "contradicts",
+                        ))
+                    )
+                    if not existing.scalar_one_or_none():
+                        cr = KnowledgeRelation(
+                            source_id=s_id, target_id=t_id,
+                            relation_type="contradicts", score=0.85,
+                            reason=reason, created_by="auto"
+                        )
+                        self.db.add(cr)
+
+                # 标记 needs_review
+                if not a.needs_review:
+                    a.needs_review = True
+                if not b.needs_review:
+                    b.needs_review = True
+
+                await self.db.commit()
 
         return contradictions
 

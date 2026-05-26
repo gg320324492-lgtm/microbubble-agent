@@ -243,14 +243,18 @@
             placeholder="输入你的问题，AI会从知识库中查找并合成答案..."
             size="large"
             :disabled="qaLoading"
-            @keyup.enter="askQuestion"
+            @keyup.enter="handleQA"
           >
             <template #append>
-              <el-button :loading="qaLoading" @click="askQuestion">
+              <el-button :loading="qaLoading" @click="handleQA">
                 {{ qaLoading ? '思考中...' : '提问' }}
               </el-button>
             </template>
           </el-input>
+        </div>
+
+        <div class="qa-mode-toggle">
+          <el-switch v-model="qaReasonMode" active-text="推理模式" inactive-text="检索模式" size="small" />
         </div>
 
         <!-- 快捷问题 -->
@@ -269,7 +273,9 @@
         <!-- 回答区域 -->
         <div v-if="qaLoading" class="qa-loading">
           <div class="qa-loading-dots">
-            <span>🔍</span> 正在检索知识库...
+            <span v-if="qaReasonMode">🧠</span>
+            <span v-else>🔍</span>
+            {{ qaReasonMode ? '正在遍历知识图谱推理链...' : '正在检索知识库...' }}
           </div>
         </div>
 
@@ -309,6 +315,26 @@
               show-icon
               :closable="false"
             />
+          </div>
+        </div>
+
+        <!-- 推理链（推理模式） -->
+        <div v-if="qaReasonResult" class="qa-result">
+          <div class="qa-confidence">
+            <span class="confidence-dot" :class="'conf-' + qaReasonResult.confidence"></span>
+            {{ confidenceLabel(qaReasonResult.confidence) }}
+            <span class="confidence-info">推理链使用 {{ qaReasonResult.nodes_used }} 个节点，{{ qaReasonResult.hops_used }} 跳</span>
+          </div>
+          <div class="qa-answer" v-html="renderAnswer(qaReasonResult.answer)"></div>
+          <div v-if="qaReasonResult.reasoning_chain?.length" class="qa-reasoning-chain">
+            <div class="reasoning-title">🧠 推理路径</div>
+            <div v-for="(step, i) in qaReasonResult.reasoning_chain" :key="i" class="reasoning-step">
+              <span class="step-number">{{ i + 1 }}</span>
+              <span>{{ step }}</span>
+            </div>
+          </div>
+          <div v-if="qaReasonResult.gap_description" class="qa-gap-note">
+            <el-alert :title="'推理缺口: ' + qaReasonResult.gap_description" type="warning" show-icon :closable="false" />
           </div>
         </div>
 
@@ -365,6 +391,11 @@
         </div>
 
         <!-- AI 分析信息 -->
+        <div v-if="currentKnowledge.needs_review" class="detail-review-warning">
+          <span>⚠️ 该条目与其他知识存在矛盾，待人工审阅</span>
+          <el-button size="small" type="danger" plain @click="markReviewed(currentKnowledge.id)">标记已审阅</el-button>
+        </div>
+
         <div v-if="currentKnowledge.key_concepts?.length || currentKnowledge.related_topics?.length" class="detail-analysis">
           <div v-if="currentKnowledge.key_concepts?.length" class="analysis-section">
             <span class="analysis-label">🔑 核心概念</span>
@@ -376,6 +407,25 @@
             <span class="analysis-label">🔗 关联主题</span>
             <div class="analysis-items">
               <span v-for="t in currentKnowledge.related_topics" :key="t" class="topic-chip">{{ t }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 知识三元组 -->
+        <div v-if="currentKnowledge.entities?.length" class="detail-entities">
+          <div class="entities-label">🧩 知识三元组</div>
+          <div class="entities-grid">
+            <div v-for="(e, i) in currentKnowledge.entities" :key="i" class="entity-card">
+              <div class="entity-triple">
+                <span class="entity-subject">{{ e.subject }}</span>
+                <span class="entity-predicate">→ {{ e.predicate }} →</span>
+                <span class="entity-object">{{ e.object }}</span>
+              </div>
+              <div v-if="e.condition" class="entity-condition">条件: {{ e.condition }}</div>
+              <div class="entity-confidence">
+                <el-progress :percentage="(e.confidence * 100).toFixed(0)" :stroke-width="4" :show-text="false" />
+                <span class="confidence-text">{{ (e.confidence * 100).toFixed(0) }}%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -412,7 +462,7 @@
           >
             <div class="related-header">
               <span class="related-item-title">{{ rel.title }}</span>
-              <el-tag size="small" :type="rel.relation_type === 'similar' ? 'success' : rel.relation_type === 'supplements' ? 'warning' : 'info'">
+              <el-tag size="small" :type="relationTagType(rel.relation_type)">
                 {{ rel.relation_type }} {{ (rel.score * 100).toFixed(0) }}%
               </el-tag>
             </div>
@@ -732,6 +782,8 @@ const renderGraph = async () => {
           width: Math.max(1, e.score * 4),
           opacity: 0.6,
           curveness: 0.1,
+          color: e.type === 'contradicts' ? '#f56c6c' : undefined,
+          type: e.type === 'contradicts' ? 'dashed' : 'solid',
         },
         label: { show: e.score > 0.8, formatter: e.type, fontSize: 10 },
       })),
@@ -763,29 +815,9 @@ const openQADialog = () => {
   showQADialog.value = true
 }
 
-const askQuestion = async () => {
-  if (!qaQuery.value) return
-  qaLoading.value = true
-  qaResult.value = null
-  qaError.value = ''
-
-  try {
-    const res = await axios.post('/api/v1/knowledge/qa', {
-      question: qaQuery.value,
-      top_k: 8,
-      auto_research: true,
-    })
-    qaResult.value = res.data
-  } catch (e) {
-    qaError.value = e.response?.data?.detail || '问答服务暂时不可用，请稍后重试'
-  } finally {
-    qaLoading.value = false
-  }
-}
-
 const askSuggestion = (q) => {
   qaQuery.value = q
-  askQuestion()
+  handleQA()
 }
 
 const confidenceLabel = (level) => {
@@ -846,6 +878,57 @@ const handleUpload = async () => {
 }
 
 // ── 工具函数 ──
+
+const relationTagType = (type) => {
+  const map = {
+    similar: 'success',
+    supplements: 'warning',
+    extends: '',
+    supports: '',
+    contradicts: 'danger',
+    method_inherits: 'primary',
+    cites: 'info',
+    prerequisite: 'warning',
+    compares: 'primary',
+  }
+  return map[type] || 'info'
+}
+
+const markReviewed = async (id) => {
+  try {
+    await axios.post(`/api/v1/knowledge/${id}/review`)
+    if (currentKnowledge.value) currentKnowledge.value.needs_review = false
+    ElMessage.success('已标记为已审阅')
+  } catch (e) {
+    ElMessage.error('操作失败')
+  }
+}
+
+// QA reasoning mode
+const qaReasonMode = ref(false)
+const qaReasonResult = ref(null)
+
+const handleQA = async () => {
+  const q = qaQuery.value.trim()
+  if (!q) { ElMessage.warning('请输入问题'); return }
+  qaLoading.value = true
+  qaResult.value = null
+  qaError.value = ''
+  qaReasonResult.value = null
+  try {
+    if (qaReasonMode.value) {
+      const { data } = await axios.post('/api/v1/knowledge/reason', { question: q, max_hops: 2, top_k: 6 })
+      qaReasonResult.value = data
+    } else {
+      const { data } = await axios.post('/api/v1/knowledge/qa', { question: q, top_k: 8, auto_research: true })
+      qaResult.value = data
+    }
+  } catch (e) {
+    qaError.value = e.response?.data?.detail || '问答失败，请稍后重试'
+  } finally {
+    qaLoading.value = false
+  }
+}
 
 const resetForm = () => {
   knowledgeForm.value = { title: '', category: '', tags: [], content: '', source: '' }
@@ -1171,6 +1254,53 @@ onUnmounted(() => {
   gap: var(--space-2);
 }
 
+.qa-mode-toggle {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) 0;
+}
+
+.qa-reasoning-chain {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: #f5f7fa;
+  border-radius: var(--radius-md);
+}
+
+.reasoning-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.reasoning-step {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  font-size: var(--font-size-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-semibold);
+}
+
+.qa-gap-note {
+  margin-top: var(--space-3);
+}
+
 .qa-suggestions {
   padding: var(--space-3) 0;
 }
@@ -1376,6 +1506,83 @@ onUnmounted(() => {
   color: #b8860b;
   border: 1px solid #fce8b2;
 }
+
+/* Needs review warning */
+.detail-review-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fef0f0;
+  border: 1px solid #fde2e2;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  color: #f56c6c;
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Entity triples */
+.detail-entities {
+  margin-bottom: var(--space-4);
+}
+
+.entities-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-3);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.entities-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+}
+
+.entity-card {
+  background: #fafbfc;
+  border: 1px solid #e8eaed;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.entity-triple {
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-1);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.entity-subject {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.entity-predicate {
+  color: #909399;
+}
+
+.entity-object {
+  color: #409eff;
+  font-weight: var(--font-weight-medium);
+}
+
+.entity-condition {
+  font-size: var(--font-size-xs);
+  color: #909399;
+  margin-bottom: var(--space-1);
+}
+
+.entity-confidence {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.entity-confidence .el-progress { flex: 1; }
+.confidence-text { font-size: var(--font-size-xs); color: #909399; }
 
 .detail-summary {
   background: linear-gradient(135deg, var(--color-primary-bg) 0%, #e8f4fd 100%);

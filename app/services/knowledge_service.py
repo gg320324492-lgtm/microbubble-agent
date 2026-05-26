@@ -199,6 +199,8 @@ class KnowledgeService:
                             knowledge.tags = analysis["tags"]
                         if analysis.get("key_concepts"):
                             knowledge.key_concepts = analysis["key_concepts"]
+                        if analysis.get("entities"):
+                            knowledge.entities = analysis["entities"]
                         if analysis.get("related_topics"):
                             knowledge.related_topics = analysis["related_topics"]
                         if analysis.get("knowledge_type"):

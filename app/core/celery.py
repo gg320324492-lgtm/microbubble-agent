@@ -30,13 +30,13 @@ celery_app.conf.update(
             "task": "app.services.memory_service.maintenance_task",
             "schedule": 3600.0,  # 每小时
         },
-        "knowledge-evolution-daily": {
+        "knowledge-evolution-weekly": {
             "task": "app.services.knowledge_evolution_tasks.evolve_knowledge_base",
-            "schedule": 24 * 3600.0,  # 每天
+            "schedule": 7 * 24 * 3600.0,  # 每周
         },
-        "knowledge-gap-detection": {
-            "task": "app.services.knowledge_evolution_tasks.detect_knowledge_gaps",
-            "schedule": 6 * 3600.0,  # 每6小时
+        "knowledge-gap-processing": {
+            "task": "app.services.knowledge_evolution_tasks.process_pending_gaps",
+            "schedule": 6 * 3600.0,  # 每6小时处理待填补空白
         },
         "knowledge-health-check": {
             "task": "app.services.knowledge_evolution_tasks.health_check_knowledge_base",

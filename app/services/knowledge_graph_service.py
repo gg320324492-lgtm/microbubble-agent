@@ -1,5 +1,6 @@
 """知识图谱服务 — 自动发现并维护知识条目之间的关联"""
 
+import json
 import logging
 from typing import List, Optional
 
@@ -7,6 +8,7 @@ from sqlalchemy import select, or_, and_, text, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import Knowledge, KnowledgeRelation
+from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 logger = logging.getLogger("microbubble.knowledge_graph")
 
@@ -20,8 +22,7 @@ class KnowledgeGraphService:
         self.db = db
 
     async def build_relations_for(self, knowledge_id: int):
-        """为新入库的知识条目自动建立关联关系"""
-        # 获取当前知识条目
+        """为新入库的知识条目自动建立关联关系 — LLM 判定具体关系类型"""
         result = await self.db.execute(
             select(Knowledge).where(Knowledge.id == knowledge_id)
         )
@@ -29,7 +30,6 @@ class KnowledgeGraphService:
         if not source:
             return
 
-        # 获取所有已有条目（排除自身）
         result = await self.db.execute(
             select(Knowledge).where(Knowledge.id != knowledge_id)
         )
@@ -39,55 +39,37 @@ class KnowledgeGraphService:
             logger.info(f"知识库尚无其他条目，跳过关联(knowledge_id={knowledge_id})")
             return
 
-        relations = []
-
+        # 1. 用 embedding 相似度筛选候选对
+        candidates = []
         for target in targets:
-            # 1. 语义相似度关联（基于 embedding，支持标签回退）
             sim_score = await self._calc_similarity(source, target)
             if sim_score is None:
-                # 如果 embedding 不可用，尝试标签重叠
                 sim_score = self._tag_similarity(source, target)
             if sim_score and sim_score >= self.SIMILARITY_THRESHOLD:
-                relations.append({
-                    "source_id": knowledge_id,
-                    "target_id": target.id,
-                    "relation_type": "similar",
-                    "score": round(sim_score, 4),
-                    "reason": f"语义相似度 {sim_score:.2%}",
-                    "created_by": "auto"
-                })
+                candidates.append((target, sim_score))
 
-            # 2. 概念共享关联（key_concepts 交集 ≥ 2）
-            concept_overlap = self._concept_overlap(source, target)
-            if concept_overlap and len(concept_overlap) >= 2:
-                relations.append({
-                    "source_id": knowledge_id,
-                    "target_id": target.id,
-                    "relation_type": "supplements",
-                    "score": round(len(concept_overlap) / 5.0, 4),  # 5个概念满分
-                    "reason": f"共享{len(concept_overlap)}个概念: {','.join(concept_overlap)}",
-                    "created_by": "auto"
-                })
+        if not candidates:
+            logger.info(f"无相似候选(knowledge_id={knowledge_id})")
+            return
 
-            # 3. 主题关联（related_topics 交集 ≥ 1）
-            topic_overlap = self._list_overlap(source.related_topics, target.related_topics)
-            if topic_overlap:
-                existing_types = {r["relation_type"] for r in relations}
-                # 如果已建立 similar 或 supplements 关系，不重复关联
-                if not existing_types & {"similar", "supplements"}:
-                    relations.append({
-                        "source_id": knowledge_id,
-                        "target_id": target.id,
-                        "relation_type": "extends",
-                        "score": 0.5,
-                        "reason": f"共同主题: {','.join(topic_overlap)}",
-                        "created_by": "auto"
-                    })
+        # 2. LLM 批量判定关系类型
+        llm_relations = await self._classify_relations_llm(source, candidates)
 
-        # 批量写入（去重）
+        # 3. 写入关系
+        relations = []
+        for rel in llm_relations:
+            relations.append({
+                "source_id": knowledge_id,
+                "target_id": rel["target_id"],
+                "relation_type": rel["type"],
+                "score": round(rel["confidence"], 4),
+                "reason": rel["reason"],
+                "created_by": "llm"
+            })
+
         await self._bulk_create_relations(relations)
 
-        # 建立双向关联（目标→来源的同类型关系）
+        # 建立双向关联
         reverse_relations = [
             {
                 "source_id": r["target_id"],
@@ -95,14 +77,126 @@ class KnowledgeGraphService:
                 "relation_type": r["relation_type"],
                 "score": r["score"],
                 "reason": r["reason"],
-                "created_by": "auto"
+                "created_by": "llm"
             }
             for r in relations
         ]
         await self._bulk_create_relations(reverse_relations)
 
         if relations:
-            logger.info(f"建立 {len(relations)} 对知识关联(knowledge_id={knowledge_id})")
+            types = set(r["relation_type"] for r in relations)
+            logger.info(f"建立 {len(relations)} 对知识关联(knowledge_id={knowledge_id}), 类型: {types}")
+
+    async def _classify_relations_llm(self, source: Knowledge, candidates: list) -> List[dict]:
+        """用 LLM 批量判定源条目与候选条目的关系类型
+
+        Args:
+            source: 源知识条目
+            candidates: [(target_knowledge, sim_score), ...] (最多 8 个)
+
+        Returns:
+            [{"target_id": int, "type": str, "reason": str, "confidence": float}, ...]
+        """
+        if not candidates:
+            return []
+
+        # 构建候选条目文本
+        candidate_texts = []
+        for i, (target, sim_score) in enumerate(candidates):
+            summary = (target.summary or target.content or "")[:200]
+            concepts = ", ".join(target.key_concepts[:4]) if target.key_concepts else "无"
+            candidate_texts.append(
+                f"[{i}] 标题: {target.title}\n"
+                f"    摘要: {summary}\n"
+                f"    核心概念: {concepts}\n"
+                f"    余弦相似度: {sim_score:.2%}"
+            )
+
+        source_summary = (source.summary or source.content or "")[:200]
+        source_concepts = ", ".join(source.key_concepts[:4]) if source.key_concepts else "无"
+
+        prompt = f"""你是微纳米气泡课题组的AI知识管理助手。分析源文档与各候选文档之间的关系类型。
+
+源文档:
+标题: {source.title}
+摘要: {source_summary}
+核心概念: {source_concepts}
+
+候选文档:
+{chr(10).join(candidate_texts)}
+
+对每个候选文档，判断与源文档的关系类型（可多个），从以下选择：
+- supports: 两者实验数据或结论互相支持
+- contradicts: 两者发现或结论互相矛盾
+- method_inherits: 前者使用或扩展了后者的方法（或反之）
+- cites: 前者直接引用或参考了后者
+- prerequisite: 理解前者需要先了解后者的基础概念
+- compares: 两者明确对比或比较方法/条件
+- supplements: 前者补充了后者未涉及的方面
+- extends: 前者在后者的基础上进行了扩展
+- similar: 主题相似但没有明确的深层关系
+
+返回严格的JSON格式（不要其他文字）：
+{{
+  "relations": [
+    {{"candidate_index": 0, "types": [{{"type": "supports", "reason": "具体理由", "confidence": 0.85}}]}},
+    {{"candidate_index": 1, "types": [{{"type": "similar", "reason": "具体理由", "confidence": 0.7}}]}}
+  ]
+}}"""
+
+        try:
+            client = get_anthropic_client()
+            response = await client.messages.create(
+                model=get_default_model(),
+                max_tokens=1500,
+                timeout=45,
+                thinking={'type': 'disabled'},
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = extract_text_from_response(response)
+            result = parse_llm_json(text)
+
+            if not isinstance(result, dict) or "relations" not in result:
+                # 回退：全部用 similar + embedding 分数
+                logger.warning("LLM 关系分类返回格式异常，使用 similar 回退")
+                return [
+                    {"target_id": target.id, "type": "similar",
+                     "reason": f"语义相似度 {sim_score:.2%}", "confidence": sim_score}
+                    for target, sim_score in candidates
+                ]
+
+            # 解析结果
+            relations = []
+            for rel_entry in result["relations"]:
+                idx = rel_entry.get("candidate_index", -1)
+                if idx < 0 or idx >= len(candidates):
+                    continue
+                target, sim_score = candidates[idx]
+                types = rel_entry.get("types", [])
+                if not types:
+                    # LLM 未识别出具体关系，回退 similar
+                    relations.append({
+                        "target_id": target.id, "type": "similar",
+                        "reason": f"语义相似度 {sim_score:.2%}", "confidence": sim_score
+                    })
+                else:
+                    for t in types:
+                        relations.append({
+                            "target_id": target.id,
+                            "type": t.get("type", "similar"),
+                            "reason": t.get("reason", f"语义相似度 {sim_score:.2%}"),
+                            "confidence": t.get("confidence", sim_score),
+                        })
+
+            return relations
+
+        except Exception as e:
+            logger.warning(f"LLM 关系分类失败，使用 similar 回退: {e}")
+            return [
+                {"target_id": target.id, "type": "similar",
+                 "reason": f"语义相似度 {sim_score:.2%}", "confidence": sim_score}
+                for target, sim_score in candidates
+            ]
 
     async def _calc_similarity(self, a: Knowledge, b: Knowledge) -> Optional[float]:
         """计算两个条目的语义相似度"""
