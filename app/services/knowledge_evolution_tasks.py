@@ -118,3 +118,25 @@ def health_check_knowledge_base(self):
     except Exception as e:
         logger.error(f"知识健康检查失败: {e}")
         return {"error": str(e)}
+
+
+@celery_app.task(bind=True, max_retries=1)
+def fuse_entities_task(self):
+    """每日实体融合 — 跨文档合并相似知识三元组"""
+    logger.info("开始每日实体融合")
+
+    async def _run():
+        async with async_session() as db:
+            from app.services.entity_service import EntityService
+            svc = EntityService(db)
+            return await svc.bulk_fuse_entities()
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(_run())
+        loop.close()
+        return result
+    except Exception as e:
+        logger.error(f"实体融合任务失败: {e}")
+        return {"error": str(e)}

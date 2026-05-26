@@ -277,6 +277,175 @@ async def create_from_chat(
     return knowledge
 
 
+# ── P0: Entity-Level Knowledge Graph ──
+
+
+@router.get("/knowledge/entities", response_model=dict)
+async def search_entities(
+    subject: Optional[str] = Query(None),
+    predicate: Optional[str] = Query(None),
+    object_q: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """搜索实体（跨文档合并后的知识三元组）"""
+    from app.services.entity_service import EntityService
+    svc = EntityService(db)
+    return await svc.search_entities(
+        subject=subject, predicate=predicate, object_q=object_q,
+        keyword=keyword, page=page, page_size=page_size,
+    )
+
+
+@router.get("/knowledge/entities/graph", response_model=dict)
+async def get_entity_graph(
+    entity_id: Optional[int] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取实体图谱（节点=实体，边=共现关系）"""
+    from app.services.entity_service import EntityService
+    svc = EntityService(db)
+    return await svc.get_entity_graph(entity_id=entity_id, limit=limit)
+
+
+@router.get("/knowledge/entities/{entity_id}", response_model=dict)
+async def get_entity_detail(
+    entity_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取实体详情（含来源文档列表）"""
+    from app.services.entity_service import EntityService
+    svc = EntityService(db)
+    result = await svc.get_entity_detail(entity_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="实体不存在")
+    return result
+
+
+# ── P2: Formula / Quantitative Reasoning ──
+
+
+@router.get("/knowledge/formulas", response_model=dict)
+async def list_formulas(
+    domain: Optional[str] = Query(None),
+    knowledge_id: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出公式"""
+    from app.services.formula_service import FormulaService
+    svc = FormulaService(db)
+    return await svc.list_formulas(
+        domain=domain, knowledge_id=knowledge_id,
+        keyword=keyword, page=page, page_size=page_size,
+    )
+
+
+@router.get("/knowledge/formulas/domains", response_model=List[dict])
+async def get_formula_domains(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取公式领域分类"""
+    from app.services.formula_service import FormulaService
+    svc = FormulaService(db)
+    return await svc.get_domains()
+
+
+@router.post("/knowledge/formulas/calculate", response_model=dict)
+async def calculate_formula(
+    body: dict = Body(...),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """计算公式 — {formula_id: int, variables: {name: value, ...}}"""
+    formula_id = body.get("formula_id")
+    variables = body.get("variables", {})
+    if not formula_id:
+        raise HTTPException(status_code=422, detail="formula_id 必填")
+    from app.services.formula_service import FormulaService
+    svc = FormulaService(db)
+    result = await svc.calculate(formula_id, variables)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+# ── P1: Hypothesis Generation ──
+
+
+@router.post("/knowledge/hypotheses", response_model=List[dict])
+async def generate_hypotheses(
+    topic: Optional[str] = Body(None),
+    count: int = Body(3, ge=1, le=10),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """生成假设（基于实体+关系+空白）"""
+    from app.services.hypothesis_service import HypothesisService
+    svc = HypothesisService(db)
+    return await svc.generate_hypotheses(topic=topic, count=count)
+
+
+@router.get("/knowledge/hypotheses", response_model=dict)
+async def list_hypotheses(
+    status: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出假设"""
+    from app.services.hypothesis_service import HypothesisService
+    svc = HypothesisService(db)
+    return await svc.list_hypotheses(status=status, priority=priority,
+                                     page=page, page_size=page_size)
+
+
+@router.get("/knowledge/hypotheses/{hypothesis_id}", response_model=dict)
+async def get_hypothesis_detail(
+    hypothesis_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取假设详情（含关联实体）"""
+    from app.services.hypothesis_service import HypothesisService
+    svc = HypothesisService(db)
+    result = await svc.get_hypothesis_detail(hypothesis_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="假设不存在")
+    return result
+
+
+@router.post("/knowledge/hypotheses/{hypothesis_id}/validate", response_model=dict)
+async def validate_hypothesis(
+    hypothesis_id: int,
+    status: str = Body(...),
+    validation_note: Optional[str] = Body(None),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """标记假设验证结果"""
+    if status not in ("validated", "rejected"):
+        raise HTTPException(status_code=422, detail="status 必须为 validated 或 rejected")
+    from app.services.hypothesis_service import HypothesisService
+    svc = HypothesisService(db)
+    result = await svc.validate_hypothesis(hypothesis_id, status, validation_note)
+    if not result:
+        raise HTTPException(status_code=404, detail="假设不存在")
+    return result
+
+
 @router.get("/knowledge/review-queue", response_model=ReviewQueueResponse)
 async def get_review_queue(
     current_user: Member = Depends(get_current_user),

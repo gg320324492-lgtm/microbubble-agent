@@ -42,6 +42,10 @@ celery_app.conf.update(
             "task": "app.services.knowledge_evolution_tasks.health_check_knowledge_base",
             "schedule": 12 * 3600.0,  # 每12小时
         },
+        "entity-fusion-daily": {
+            "task": "app.services.knowledge_evolution_tasks.fuse_entities_task",
+            "schedule": 24 * 3600.0,  # 每日实体融合
+        },
     },
 )
 

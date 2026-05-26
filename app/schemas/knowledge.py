@@ -190,3 +190,79 @@ class ReviewQueueResponse(BaseModel):
     """待审阅队列"""
     items: List[ReviewQueueItem]
     total: int
+
+
+# ── Entity-Level Knowledge Graph Schemas ──
+
+class EntityItem(BaseModel):
+    id: int
+    subject: str
+    predicate: str
+    object: str
+    condition: Optional[str] = None
+    confidence: float
+    source_count: int
+    occurrence_count: int
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class EntityList(BaseModel):
+    items: List[EntityItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class EntityGraph(BaseModel):
+    nodes: List[EntityItem]
+    edges: List[dict]
+
+
+class EntityDetail(EntityItem):
+    sources: List[dict] = []
+
+
+# ── Hypothesis Schemas ──
+
+class HypothesisItem(BaseModel):
+    id: int
+    statement: str
+    rationale: Optional[str] = None
+    suggested_experiment: Optional[str] = None
+    supporting_entity_ids: List[int] = []
+    confidence: float
+    priority: str
+    status: str
+    tags: List[str] = []
+    validated_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class HypothesisList(BaseModel):
+    items: List[HypothesisItem]
+    total: int
+    page: int
+    page_size: int
+
+
+# ── Formula / Quantitative Reasoning Schemas ──
+
+class FormulaItem(BaseModel):
+    id: int
+    knowledge_id: int
+    name: str
+    formula_latex: Optional[str] = None
+    variables: dict = {}
+    result_unit: Optional[str] = None
+    conditions: Optional[str] = None
+    domain: Optional[str] = None
+    confidence: float
+    created_at: Optional[str] = None
+
+
+class FormulaList(BaseModel):
+    items: List[FormulaItem]
+    total: int
+    page: int
+    page_size: int
