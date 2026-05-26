@@ -176,6 +176,8 @@
       :title="editingKnowledge ? '编辑知识' : '添加知识'"
       :width="isMobile ? '90vw' : '600px'"
       top="8vh"
+      destroy-on-close
+      :close-on-click-modal="false"
     >
       <el-form :model="knowledgeForm" label-width="80px">
         <el-form-item label="标题" required>
@@ -322,8 +324,9 @@
       v-model="showDetailDialog"
       title="知识详情"
       :width="isMobile ? '92vw' : '720px'"
-      top="3vh"
+      top="5vh"
       destroy-on-close
+      :close-on-click-modal="false"
     >
       <div v-if="currentKnowledge" class="knowledge-detail">
         <h2>{{ currentKnowledge.title }}</h2>
@@ -433,7 +436,7 @@
     </el-dialog>
 
     <!-- ===== 文件上传对话框 ===== -->
-    <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'" top="10vh">
+    <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'" top="10vh" destroy-on-close>
       <div class="upload-ai-notice">
         <el-icon size="16" color="#409eff"><MagicStick /></el-icon>
         <span>上传后 AI 将自动分析内容，生成摘要、分类、标签和知识关联</span>
@@ -469,7 +472,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, watchEffect, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, MagicStick, Upload, Document, Connection } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -643,6 +646,7 @@ const viewKnowledge = async (item) => {
   showDetailDialog.value = true
   relatedKnowledge.value = []
   graphData.value = { nodes: [], edges: [] }
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 
   // 并行获取关联和图谱数据
   try {
@@ -849,8 +853,8 @@ const resetForm = () => {
 
 const calcCloudSize = (count) => {
   const maxCount = Math.max(...categories.value.map(c => c.count), 1)
-  const ratio = count / maxCount
-  return `${12 + ratio * 10}px`
+  const ratio = Math.log2(1 + count) / Math.log2(1 + maxCount)
+  return `${13 + ratio * 9}px`
 }
 
 watch(filterCategory, () => {
@@ -866,10 +870,23 @@ watch(searchQuery, (val) => {
   }
 })
 
+const handleResize = () => {
+  isMobile.value = window.innerWidth <= 768
+}
+
 onMounted(() => {
   fetchKnowledge()
   fetchStats()
   fetchCategories()
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
 })
 </script>
 
@@ -1281,6 +1298,12 @@ onMounted(() => {
 }
 
 /* ── Detail Dialog ── */
+.knowledge-detail {
+  max-height: 75vh;
+  overflow-y: auto;
+  padding-right: var(--space-2);
+}
+
 .knowledge-detail h2 {
   margin-bottom: var(--space-4);
   color: var(--color-text-primary);
@@ -1385,8 +1408,6 @@ onMounted(() => {
   background: var(--color-bg-page);
   padding: var(--space-4);
   border-radius: var(--radius-md);
-  max-height: 350px;
-  overflow-y: auto;
 }
 
 .detail-source {
@@ -1470,6 +1491,8 @@ onMounted(() => {
 
 .graph-container {
   width: 100%;
+  min-height: 250px;
+  max-height: 45vh;
   height: 350px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
@@ -1581,6 +1604,75 @@ onMounted(() => {
 
 .status-failed {
   background: #f56c6c;
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+  .knowledge-view {
+    gap: var(--space-3);
+  }
+
+  .stats-grid {
+    gap: var(--space-2);
+  }
+
+  .stat-item {
+    padding: var(--space-1) var(--space-2);
+    min-width: 48px;
+  }
+
+  .stat-label {
+    max-width: 60px;
+    font-size: 10px;
+  }
+
+  .stat-number {
+    font-size: var(--font-size-lg);
+  }
+
+  .cloud-tag {
+    padding: 2px var(--space-2);
+    font-size: 12px;
+  }
+
+  .knowledge-item {
+    padding: var(--space-3);
+  }
+
+  .item-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .item-footer {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .item-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .graph-container {
+    height: 250px;
+  }
+
+  .detail-content {
+    font-size: var(--font-size-sm);
+  }
+
+  .filter-card .el-row {
+    gap: var(--space-2);
+  }
+
+  .filter-card .el-col {
+    margin-bottom: var(--space-2);
+  }
+
+  .qa-dialog {
+    gap: var(--space-2);
+  }
 }
 
 @keyframes pulse {

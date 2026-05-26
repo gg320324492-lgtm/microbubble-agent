@@ -38,6 +38,7 @@ class LLMAnalysisService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=800,
+                timeout=30,
                 messages=[{"role": "user", "content": prompt}]
             )
             # 提取文本内容

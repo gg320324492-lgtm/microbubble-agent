@@ -69,8 +69,10 @@ class KnowledgeService:
         self.db.add(knowledge)
         await self.db.commit()
         await self.db.refresh(knowledge)
-        # 自动生成向量嵌入
-        await self._generate_embedding(knowledge, content)
+        # 后台：生成嵌入 + LLM 分析 + 关联
+        asyncio.create_task(
+            self._analyze_and_embed(knowledge.id, title, content)
+        )
         return knowledge
 
     async def _generate_embedding(self, knowledge: Knowledge, content: str):
@@ -144,15 +146,19 @@ class KnowledgeService:
         from app.core.database import async_session
 
         # Step 0: 立即标记 analyzing
-        async with async_session() as db:
-            result = await db.execute(
-                select(Knowledge).where(Knowledge.id == knowledge_id)
-            )
-            knowledge = result.scalar_one_or_none()
-            if not knowledge:
-                return
-            knowledge.analysis_status = "analyzing"
-            await db.commit()
+        try:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Knowledge).where(Knowledge.id == knowledge_id)
+                )
+                knowledge = result.scalar_one_or_none()
+                if not knowledge:
+                    return
+                knowledge.analysis_status = "analyzing"
+                await db.commit()
+        except Exception as e:
+            logger.error(f"分析状态更新失败(knowledge_id={knowledge_id}): {e}")
+            return
 
         embedding_ok = False
         analysis_ok = False

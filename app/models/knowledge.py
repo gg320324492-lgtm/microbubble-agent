@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, LargeBinary, Float, Boolean
+from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -34,8 +35,8 @@ class Knowledge(Base, TimestampMixin):
     file_type = Column(String(200), nullable=True)  # MIME 类型
     summary = Column(Text, nullable=True)  # LLM 生成的摘要
 
-    # 向量嵌入 (用于RAG检索，需要 pgvector 扩展)
-    embedding = Column(LargeBinary, nullable=True)
+    # 向量嵌入 (pgvector Vector(768))
+    embedding = Column(Vector(768), nullable=True)
 
     # 创建者
     created_by = Column(Integer, ForeignKey("members.id"))
