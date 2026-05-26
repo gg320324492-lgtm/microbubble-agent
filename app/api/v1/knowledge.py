@@ -170,12 +170,14 @@ async def upload_knowledge_file(
     # 创建知识条目（后台自动分析）
     service = KnowledgeService(db)
     try:
+        raw_type = file.content_type or "application/octet-stream"
+        safe_file_type = raw_type[:200]
         knowledge = await service.create_from_file(
             title=title or filename,
             content=content,
             file_path=upload_result["object_name"],
             file_name=filename,
-            file_type=file.content_type or "application/octet-stream",
+            file_type=safe_file_type,
             created_by=current_user.id
         )
     except Exception as e:
