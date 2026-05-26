@@ -150,6 +150,37 @@ const passwordRules = {
   ]
 }
 
+// 上传前压缩大图片（手机端网络不稳定，小文件成功率更高）
+const compressImage = (file, maxWidth = 1024, quality = 0.8) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+      if (width > maxWidth) {
+        height = Math.round((maxWidth / width) * height)
+        width = maxWidth
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, width, height)
+      canvas.toBlob((blob) => {
+        if (!blob) return reject(new Error('图片压缩失败'))
+        const name = file.name.replace(/\.[^.]+$/, '') || 'avatar'
+        resolve(new File([blob], `${name}.jpg`, { type: 'image/jpeg' }))
+      }, 'image/jpeg', quality)
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('图片加载失败'))
+    }
+    img.src = url
+  })
+}
+
 const handleAvatarUpload = async (e) => {
   const file = e.target.files[0]
   if (!file) return
@@ -159,10 +190,13 @@ const handleAvatarUpload = async (e) => {
     return
   }
 
+  // 文件 >= 1MB 时先压缩再上传（手机端优化）
+  const uploadFile = file.size >= 1024 * 1024 ? await compressImage(file) : file
+
   try {
     // 1. 上传文件到 MinIO
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', uploadFile)
     formData.append('prefix', 'avatars')
 
     const res = await axios.post('/api/v1/upload', formData, {
