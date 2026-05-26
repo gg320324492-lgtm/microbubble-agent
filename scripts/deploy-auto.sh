@@ -60,7 +60,7 @@ set -e
 # 验证构建产物 — 检查 main JS 文件是否存在（不仅仅是 index.html）
 MAIN_JS=""
 if [ -f "$PROJECT_DIR/web/dist/index.html" ]; then
-    MAIN_JS=$(grep -oP 'src="/assets/index-\w+\.js"' "$PROJECT_DIR/web/dist/index.html" | head -1 | sed 's|src="/||;s|"||')
+    MAIN_JS=$(grep -oP 'src="/assets/index[-\w]+\.js"' "$PROJECT_DIR/web/dist/index.html" | head -1 | sed 's|src="/||;s|"||')
 fi
 
 if [ "$BUILD_EXIT" -ne 0 ] || [ ! -f "$PROJECT_DIR/web/dist/$MAIN_JS" ]; then
