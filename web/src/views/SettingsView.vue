@@ -11,7 +11,7 @@
         </template>
 
         <div class="avatar-section">
-          <el-avatar :size="80" :src="form.avatar || userStore.userInfo?.avatar" icon="UserFilled" class="settings-avatar" />
+          <el-avatar :size="80" :key="previewAvatarUrl" :src="previewAvatarUrl || userStore.userInfo?.avatar" icon="UserFilled" class="settings-avatar" />
           <label class="avatar-upload-btn">
             <input type="file" accept="image/*" hidden @change="handleAvatarUpload" />
             <el-icon><Camera /></el-icon>
@@ -101,6 +101,7 @@ const savingPassword = ref(false)
 const passwordFormRef = ref(null)
 const avatarChanged = ref(false)
 const avatarObjectName = ref('')
+const previewAvatarUrl = ref(userInfo.value?.avatar || '')
 
 const initForm = () => ({
   name: userInfo.value?.name || '',
@@ -158,7 +159,9 @@ const handleAvatarUpload = async (e) => {
     const res = await axios.post('/api/v1/upload', formData)
     if (res.data?.object_name) {
       // 构建公网可访问的 MinIO URL（预签名 URL 使用 Docker 内部主机名，浏览器无法访问）
-      form.avatar = `${window.location.origin}/minio/microbubble/${res.data.object_name}`
+      const url = `${window.location.origin}/minio/microbubble/${res.data.object_name}`
+      form.avatar = url
+      previewAvatarUrl.value = url
       avatarObjectName.value = res.data.object_name
       avatarChanged.value = true
       ElMessage.success('头像上传成功')
@@ -199,6 +202,7 @@ const saveProfile = async () => {
 
     // 更新预览中的头像为后端解析后的完整 URL
     form.avatar = updated.avatar || form.avatar
+    previewAvatarUrl.value = updated.avatar || previewAvatarUrl.value
     avatarChanged.value = false
 
     ElMessage.success('个人资料已保存')
@@ -212,6 +216,7 @@ const saveProfile = async () => {
 
 const resetProfile = () => {
   Object.assign(form, initForm())
+  previewAvatarUrl.value = userInfo.value?.avatar || ''
 }
 
 const changePassword = async () => {
