@@ -249,6 +249,9 @@ npm run dev
 - **企业微信回复修复**（2026-05-25）：修复 WECHAT_API_BASE_URL 指向错误代理地址导致所有微信 API 调用 JSON 解析失败，改为直接调用 qyapi.weixin.qq.com
 - **Dashboard 500 修复**（2026-05-25）：移除 `get_dashboard_stats` 中不存在的 `_get_visible_member_ids` 调用，统一使用简单的软删除过滤
 - **成员登录修复**（2026-05-25）：修复 4 位成员（刘莫菲、孟祥琪、吴怡霏、蒋芦笛）password_hash 为空导致无法登录的问题，设定默认密码
+- **头像上传修复**（2026-05-26）：修复 upload.py 中 `Query` 与前端 FormData 不匹配导致 prefix 回退默认值，所有头像存到 `uploads/` 的问题
+- **铃铛通知去重**（2026-05-26）：`GET /reminders` 使用 `DISTINCT ON (task_id)` 按任务去重，每个任务只显示最早的待处理提醒，避免一个任务多个提醒导致铃铛数量翻倍
+- **多站点部署隔离**（2026-05-26）：云服务器同时托管 `agent.mnb-lab.cn` 和 `mnb-lab.cn`，各自独立 SSL 证书和 Nginx server block，禁止云服务器运行 Next.js 构建
 
 ### 待解决问题
 
