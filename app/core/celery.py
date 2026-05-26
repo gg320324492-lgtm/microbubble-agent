@@ -30,6 +30,18 @@ celery_app.conf.update(
             "task": "app.services.memory_service.maintenance_task",
             "schedule": 3600.0,  # 每小时
         },
+        "knowledge-evolution-daily": {
+            "task": "app.services.knowledge_evolution_tasks.evolve_knowledge_base",
+            "schedule": 24 * 3600.0,  # 每天
+        },
+        "knowledge-gap-detection": {
+            "task": "app.services.knowledge_evolution_tasks.detect_knowledge_gaps",
+            "schedule": 6 * 3600.0,  # 每6小时
+        },
+        "knowledge-health-check": {
+            "task": "app.services.knowledge_evolution_tasks.health_check_knowledge_base",
+            "schedule": 12 * 3600.0,  # 每12小时
+        },
     },
 )
 
@@ -38,5 +50,6 @@ celery_app.autodiscover_tasks(
         "app.services.reminder_service",
         "app.wechat.scheduler",
         "app.services.memory_service",
+        "app.services.knowledge_evolution_tasks",
     ]
 )

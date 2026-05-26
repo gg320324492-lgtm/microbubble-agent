@@ -8,7 +8,7 @@
 - **联网搜索** - 搜狗微信+必应双引擎并发搜索，自动获取最新信息
 - **任务管理** - 创建、分配、追踪任务，自定义提醒时间，角色权限控制（管理员可分配给任何人，普通成员只能管理自己的任务），支持垃圾桶软删除（3天后自动清除）
 - **主动提醒** - 自动检查即将到期、已逾期、未确认的任务，通过企业微信主动提醒成员（每15分钟检查，Redis 去重24小时不重复，北京时间显示）
-- **知识库** - 文献管理、语义搜索（pgvector），AI 自动分类标签，对话知识自动入库
+- **知识库** — 文献管理、语义搜索（pgvector）、AI 自动分类标签（动态生成具体研究方向）、对话知识自动入库、**RAG 优先问答**（基于知识库合成答案+来源引用）、**自主研究**（检测知识空白自动联网搜索补充）、**知识图谱**（自动关联 + ECharts 力导向图可视化）、**CP/动态分类体系**（从实际数据自动聚合涌现分类）
 - **长期记忆** - 用户偏好记忆、对话摘要、知识图谱构建
 - **项目管理** - 课题管理、进度追踪、里程碑管理
 - **成员管理** - 课题组成员信息管理
@@ -32,11 +32,14 @@
 | 组件 | 技术 |
 |------|------|
 | 后端 | Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL |
-| 前端 | Vue 3 + Element Plus + Vite + Pinia |
+| 前端 | Vue 3 + Element Plus + Vite + Pinia + ECharts |
 | AI | Claude API (支持代理地址) + mimo-v2.5 多模态 |
 | 语音 | faster-whisper (GPU) + Edge-TTS |
-| 向量搜索 | pgvector + text2vec-base-chinese |
-| 缓存 | Redis (Session + 微信状态) |
+| 向量搜索 | pgvector + text2vec-base-chinese（余弦相似度语义搜索） |
+| 知识图谱 | 自动关联引擎（语义相似 + 概念重叠 + 主题共享），ECharts 可视化 |
+| RAG 问答 | 检索增强生成（语义搜索 → 阈值分类 → LLM 合成 → 来源引用） |
+| 自主研究 | 知识空白检测 → 联网搜索（搜狗+必应）→ LLM 提取 → 自动入库 |
+| 缓存 | Redis (Session + 微信状态 + 提醒调度 ZSET) |
 | 存储 | MinIO |
 | 任务队列 | Celery + Redis |
 | 部署 | Docker Compose + FRP 内网穿透 |
@@ -177,7 +180,7 @@ npm run dev
 - `GET/POST /api/v1/meetings` - 会议管理（含转写分析）
 - `GET/POST /api/v1/members` - 成员管理
 - `GET/POST /api/v1/projects` - 项目管理（含里程碑）
-- `GET/POST /api/v1/knowledge` - 知识库（语义搜索 + 文件上传）
+- `GET/POST /api/v1/knowledge` - 知识库（语义搜索 + 文件上传 + 动态分类 + 标签云 + 知识图谱）
 - `GET/POST /api/v1/memory` - 长期记忆管理
 
 ### 集成模块
@@ -185,7 +188,7 @@ npm run dev
 - `POST /api/v1/tencent-meeting/webhook` - 腾讯会议回调
 - `POST /api/v1/upload` - 文件上传
 
-### Agent 工具（15个）
+### Agent 工具（17个）
 - `create_task` / `query_tasks` / `update_task` - 任务管理
 - `create_meeting` / `query_meetings` - 会议管理
 - `query_members` - 成员查询
@@ -205,7 +208,7 @@ npm run dev
 - 云服务器部署成功（https://agent.mnb-lab.cn）
 - GitHub Webhook 自动部署已配置
 - 前端支持图片上传、拖拽上传
-- 知识库支持 AI 自动分类标签、对话知识自动入库
+- 知识库已升级为**自主进化知识大脑**（动态 LLM 分类/标签、RAG 优先问答合成答案+来源引用、自动关联引擎建知识图谱、联网自主研究补充知识空白、健康监控检测矛盾/重复/过期）
 - 长期记忆系统已上线（用户偏好/对话摘要/知识图谱）
 - 企业微信集成已上线（支持私聊/群聊@机器人，微信插件在普通微信内对话）
 - 企业微信通知已可靠化（任务分配/到期提醒/逾期通知均可送达，消息格式兼容微信插件端）

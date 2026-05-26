@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-5 全部完成，部署已上线。** 部署采用云服务器（Nginx+FRP）+ 本地电脑（Docker 全服务+GPU）的穿透架构。详见 `ROADMAP.md`。
+**Phase 1-5 + 知识库深层逻辑系统（Knowledge Brain）全部完成，部署已上线。** 知识库已从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**，支持 RAG 优先问答、自动关联引擎、联网自主研究、健康监控。详见 `ROADMAP.md`。
 
 ## 前端设计系统
 
@@ -30,7 +30,7 @@
 
 ## 关键架构决策
 
-- Agent 工具调用通过 `app/agent/core.py` 的 `_execute_tool` 方法路由到 service 层（15 个工具已全部接入）
+- Agent 工具调用通过 `app/agent/core.py` 的 `_execute_tool` 方法路由到 service 层（17 个工具已全部接入）
 - `chat()` 和 `chat_stream()` 接收 `db: AsyncSession` 参数，由 API 路由通过 `Depends(get_db)` 传入
 - 使用 `AsyncAnthropic` 客户端，不阻塞事件循环
 - **Agent 回复采用"先简要后详细"双层结构** — 两阶段并行调用，简要立即返回，详细后台追加
@@ -38,6 +38,12 @@
 - 认证使用 JWT，`app/core/security.py` 已实现，31 个端点全部接入 `get_current_user`
 - 会话存储已迁移到 Redis（`RedisSessionStore`，24 小时 TTL）
 - 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装，已接入 text2vec-base-chinese 真实语义搜索）
+- **知识库深层逻辑系统（Knowledge Brain）** — 五大模块：
+  - **动态 LLM 分析**：LLM 根据内容自由生成分类/标签/key_concepts/related_topics/knowledge_type，不再硬编码
+  - **自动关联引擎**：新入库条目通过 pgvector 余弦相似度 + 概念重叠自动发现关联关系，双向写入 knowledge_relations 表
+  - **RAG 问答引擎**：语义搜索 → 阈值分类 → LLM 合成 → 来源引用，高相关不足时自动触发研究
+  - **自主研究引擎**：知识空白检测 → 联网搜索（搜狗+必应）→ 网页抓取 → LLM 提取 → 自动入库 → 建立关联
+  - **健康监控**：Celery 定时任务检测矛盾/重复/过期条目
 - 语音识别使用 faster-whisper GPU，TTS 使用 Edge-TTS
 - **会议转录总结工具** — `summarize_meeting_transcript` 工具支持对话触发与长期存储
 - **任务软删除/垃圾桶** — 删除任务进入垃圾桶（deleted_at 字段），支持恢复或永久删除，3天后自动清除
@@ -61,7 +67,12 @@
 | `app/services/search_service.py` | 联网搜索（搜狗+必应双引擎） |
 | `app/services/embedding_service.py` | 向量嵌入（text2vec-base-chinese） |
 | `app/services/file_parser_service.py` | 文件内容提取（PDF/Word/Excel） |
-| `app/services/llm_analysis_service.py` | LLM 内容分析（自动分类+标签+摘要） |
+| `app/services/llm_analysis_service.py` | LLM 内容分析（动态分类+标签+摘要+核心概念） |
+| `app/services/knowledge_graph_service.py` | 知识图谱服务（自动关联+BFS 遍历+动态分类+标签云+统计） |
+| `app/services/knowledge_qa_service.py` | RAG 问答引擎（检索+阈值+LLM 合成+来源引用） |
+| `app/services/auto_research_service.py` | 自主研究引擎（联网搜索+知识提取+空白填充+矛盾/重复/过期检测） |
+| `app/services/dynamic_taxonomy_service.py` | 动态分类体系（涌现分类+分类建议+主题网络） |
+| `app/services/knowledge_evolution_tasks.py` | Celery 知识进化定时任务（每日进化/空白检测/健康检查） |
 | `app/services/reminder_scheduler.py` | Redis 精确提醒调度（秒级精度） |
 
 ## 开发注意事项

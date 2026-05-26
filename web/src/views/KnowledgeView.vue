@@ -1,7 +1,28 @@
 <template>
   <div class="knowledge-view">
-    <!-- 分类统计面板 -->
-    <el-card v-if="statsData.total > 0" class="stats-card">
+    <!-- ===== 动态分类标签云 ===== -->
+    <el-card v-if="categories.length > 0" class="tag-cloud-card">
+      <div class="tag-cloud-header">
+        <span class="tag-cloud-title">📌 研究主题</span>
+        <span class="tag-cloud-hint">点击筛选</span>
+      </div>
+      <div class="tag-cloud">
+        <span
+          v-for="cat in categories"
+          :key="cat.name"
+          class="cloud-tag"
+          :class="{ 'cloud-tag-active': filterCategory === cat.name }"
+          :style="{ fontSize: calcCloudSize(cat.count) }"
+          @click="filterCategory = filterCategory === cat.name ? '' : cat.name"
+        >
+          {{ cat.name }}
+          <small>({{ cat.count }})</small>
+        </span>
+      </div>
+    </el-card>
+
+    <!-- ===== 统计 + 操作栏 ===== -->
+    <el-card class="stats-card">
       <div class="stats-grid">
         <div
           class="stat-item stat-total"
@@ -13,23 +34,22 @@
           <div class="stat-label">全部</div>
         </div>
         <div
-          v-for="(count, cat) in statsData.categories"
+          v-for="(count, cat) in catStats"
           :key="cat"
           class="stat-item"
-          :class="['stat-' + getCategoryKey(cat), { 'stat-active': filterCategory === cat }]"
+          :class="{ 'stat-active': filterCategory === cat }"
           @click="filterCategory = filterCategory === cat ? '' : cat"
         >
-          <div class="stat-icon">{{ getCategoryIcon(cat) }}</div>
           <div class="stat-number">{{ count }}</div>
-          <div class="stat-label">{{ cat }}</div>
+          <div class="stat-label" :title="cat">{{ cat.length > 8 ? cat.slice(0, 8) + '…' : cat }}</div>
         </div>
       </div>
     </el-card>
 
-    <!-- 顶部操作栏 -->
+    <!-- ===== 操作栏 ===== -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :xs="24" :sm="12" :md="10">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="searchQuery"
             placeholder="搜索知识库..."
@@ -41,24 +61,21 @@
             </template>
           </el-input>
         </el-col>
-        <el-col :xs="24" :sm="12" :md="14">
+        <el-col :xs="24" :sm="12" :md="16">
           <el-button type="primary" @click="showCreateDialog = true">
-            <el-icon><Plus /></el-icon>
-            添加知识
+            <el-icon><Plus /></el-icon> 添加知识
           </el-button>
           <el-button @click="showUploadDialog = true">
-            <el-icon><Upload /></el-icon>
-            上传文件
+            <el-icon><Upload /></el-icon> 上传文件
           </el-button>
-          <el-button @click="showSemanticSearch = true">
-            <el-icon><MagicStick /></el-icon>
-            AI问答
+          <el-button type="warning" @click="openQADialog">
+            <el-icon><MagicStick /></el-icon> AI问答
           </el-button>
         </el-col>
       </el-row>
     </el-card>
 
-    <!-- 知识列表 -->
+    <!-- ===== 知识列表 ===== -->
     <el-card class="knowledge-list-card">
       <div v-if="knowledgeList.length === 0" class="empty-state">
         <el-empty description="暂无知识条目" />
@@ -73,19 +90,26 @@
         >
           <div class="item-header">
             <div class="item-category">
-              <span class="category-badge" :class="'cat-' + getCategoryKey(item.category)">
-                <span class="category-icon">{{ getCategoryIcon(item.category) }}</span>
-                {{ item.category || '未分类' }}
-              </span>
+              <span class="category-badge">{{ item.category || '未分类' }}</span>
+              <el-tag
+                v-if="item.analysis_status === 'pending'"
+                size="small"
+                type="info"
+                effect="plain"
+              >分析中</el-tag>
+              <el-tag
+                v-if="item.analysis_status === 'failed'"
+                size="small"
+                type="danger"
+                effect="plain"
+              >分析失败</el-tag>
             </div>
             <div class="item-tags">
               <span
                 v-for="tag in (item.tags || []).slice(0, 4)"
                 :key="tag"
                 class="tag-chip"
-              >
-                {{ tag }}
-              </span>
+              >{{ tag }}</span>
               <span v-if="(item.tags || []).length > 4" class="tag-chip tag-more">
                 +{{ item.tags.length - 4 }}
               </span>
@@ -95,26 +119,26 @@
           <h3 class="item-title">
             <el-icon v-if="item.file_path" style="margin-right: 4px; color: #409eff"><Document /></el-icon>
             <span v-if="item.source_type === 'conversation'" class="conversation-badge" title="来自对话记录">💬</span>
+            <span v-if="item.source_type === 'auto_research'" class="auto-research-badge" title="AI自动研究">🤖</span>
+            <span v-if="item.auto_researched" class="auto-researched-dot" title="已触发自主研究">🔄</span>
             {{ item.title }}
           </h3>
           <p v-if="item.summary" class="item-summary">{{ item.summary }}</p>
           <p v-else class="item-content">{{ item.content.substring(0, 150) }}...</p>
 
           <div class="item-footer">
-            <span class="item-time">{{ formatDate(item.created_at) }}</span>
+            <div class="item-footer-left">
+              <span v-if="item.knowledge_type" class="type-badge">{{ item.knowledge_type }}</span>
+              <span class="item-time">{{ formatDate(item.created_at) }}</span>
+            </div>
             <div class="item-actions">
-              <el-button text type="primary" size="small" @click.stop="editKnowledge(item)">
-                编辑
-              </el-button>
-              <el-button text type="danger" size="small" @click.stop="deleteKnowledge(item)">
-                删除
-              </el-button>
+              <el-button text type="primary" size="small" @click.stop="editKnowledge(item)">编辑</el-button>
+              <el-button text type="danger" size="small" @click.stop="deleteKnowledge(item)">删除</el-button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 分页 -->
       <div class="pagination">
         <el-pagination
           v-model:current-page="currentPage"
@@ -126,7 +150,7 @@
       </div>
     </el-card>
 
-    <!-- 添加/编辑知识对话框 -->
+    <!-- ===== 添加/编辑知识对话框 ===== -->
     <el-dialog
       v-model="showCreateDialog"
       :title="editingKnowledge ? '编辑知识' : '添加知识'"
@@ -138,11 +162,13 @@
           <el-input v-model="knowledgeForm.title" placeholder="请输入标题" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="knowledgeForm.category" placeholder="选择分类">
-            <el-option label="基础知识" value="基础" />
-            <el-option label="实验方法" value="方法" />
-            <el-option label="文献笔记" value="文献" />
-            <el-option label="常见问题" value="FAQ" />
+          <el-select v-model="knowledgeForm.category" placeholder="动态分类" filterable allow-create clearable>
+            <el-option
+              v-for="cat in categories"
+              :key="cat.name"
+              :label="`${cat.name} (${cat.count})`"
+              :value="cat.name"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="标签">
@@ -153,11 +179,12 @@
             allow-create
             placeholder="输入标签"
           >
-            <el-option label="气泡" value="气泡" />
-            <el-option label="稳定性" value="稳定性" />
-            <el-option label="NTA" value="NTA" />
-            <el-option label="水处理" value="水处理" />
-            <el-option label="农业" value="农业" />
+            <el-option
+              v-for="tag in hotTags"
+              :key="tag.name"
+              :label="`${tag.name} (${tag.count})`"
+              :value="tag.name"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="内容" required>
@@ -178,81 +205,198 @@
       </template>
     </el-dialog>
 
-    <!-- AI问答对话框 -->
-    <el-dialog v-model="showSemanticSearch" title="AI智能问答" :width="isMobile ? '90vw' : '600px'" top="10vh">
-      <div class="semantic-search">
-        <el-input
-          v-model="semanticQuery"
-          placeholder="输入你的问题，AI会从知识库中查找答案..."
-          size="large"
-          @keyup.enter="semanticSearch"
-        >
-          <template #append>
-            <el-button @click="semanticSearch">
-              <el-icon><Search /></el-icon>
-            </el-button>
-          </template>
-        </el-input>
-
-        <div v-if="searchResults.length > 0" class="search-results">
-          <div
-            v-for="(result, index) in searchResults"
-            :key="index"
-            class="result-item"
+    <!-- ===== AI问答对话框 (RAG) ===== -->
+    <el-dialog
+      v-model="showQADialog"
+      title="🤖 AI知识问答"
+      :width="isMobile ? '92vw' : '700px'"
+      top="5vh"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="qa-dialog">
+        <div class="qa-input-row">
+          <el-input
+            v-model="qaQuery"
+            placeholder="输入你的问题，AI会从知识库中查找并合成答案..."
+            size="large"
+            :disabled="qaLoading"
+            @keyup.enter="askQuestion"
           >
-            <div class="result-header">
-              <span class="result-title">{{ result.title }}</span>
-              <el-tag size="small">相似度: {{ (result.score * 100).toFixed(0) }}%</el-tag>
-            </div>
-            <div v-if="result.category" class="result-category">
-              <el-tag size="small" :type="getCategoryType(result.category)">{{ result.category }}</el-tag>
-            </div>
-            <div class="result-content">{{ result.content }}</div>
+            <template #append>
+              <el-button :loading="qaLoading" @click="askQuestion">
+                {{ qaLoading ? '思考中...' : '提问' }}
+              </el-button>
+            </template>
+          </el-input>
+        </div>
+
+        <!-- 快捷问题 -->
+        <div v-if="!qaResult && !qaLoading" class="qa-suggestions">
+          <div class="suggestion-title">💡 试试这些问题</div>
+          <div class="suggestion-list">
+            <el-tag
+              v-for="q in suggestions"
+              :key="q"
+              class="suggestion-tag"
+              @click="askSuggestion(q)"
+            >{{ q }}</el-tag>
           </div>
+        </div>
+
+        <!-- 回答区域 -->
+        <div v-if="qaLoading" class="qa-loading">
+          <div class="qa-loading-dots">
+            <span>🔍</span> 正在检索知识库...
+          </div>
+        </div>
+
+        <div v-if="qaResult" class="qa-result">
+          <!-- 置信度 -->
+          <div class="qa-confidence">
+            <span class="confidence-dot" :class="'conf-' + qaResult.confidence"></span>
+            {{ confidenceLabel(qaResult.confidence) }}
+            <span class="confidence-info">基于 {{ qaResult.search_results?.high || 0 }} 条高相关、{{ qaResult.search_results?.total || 0 }} 条总检索结果</span>
+          </div>
+
+          <!-- 答案正文 -->
+          <div class="qa-answer" v-html="renderAnswer(qaResult.answer)"></div>
+
+          <!-- 来源引用 -->
+          <div v-if="qaResult.sources && qaResult.sources.length" class="qa-sources">
+            <div class="sources-title">📚 参考来源</div>
+            <div
+              v-for="src in qaResult.sources"
+              :key="src.id"
+              class="source-item"
+              @click="gotoKnowledge(src.id)"
+            >
+              <span class="source-title">{{ src.title }}</span>
+              <el-tag size="small" :type="src.relevance >= 0.7 ? 'success' : 'warning'">
+                {{ (src.relevance * 100).toFixed(0) }}%
+              </el-tag>
+            </div>
+          </div>
+
+          <!-- 研究触发提示 -->
+          <div v-if="qaResult.research_triggered && qaResult.research_queries?.length" class="qa-research-note">
+            <el-alert
+              title="知识库信息不足，已生成研究查询"
+              :description="qaResult.research_queries.join('；')"
+              type="warning"
+              show-icon
+              :closable="false"
+            />
+          </div>
+        </div>
+
+        <!-- 错误 -->
+        <div v-if="qaError" class="qa-error">
+          <el-alert :title="qaError" type="error" show-icon :closable="false" />
         </div>
       </div>
     </el-dialog>
 
-    <!-- 知识详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="知识详情" :width="isMobile ? '90vw' : '600px'" top="5vh">
+    <!-- ===== 知识详情对话框（含关联 + 图谱） ===== -->
+    <el-dialog
+      v-model="showDetailDialog"
+      title="知识详情"
+      :width="isMobile ? '92vw' : '720px'"
+      top="3vh"
+      destroy-on-close
+    >
       <div v-if="currentKnowledge" class="knowledge-detail">
         <h2>{{ currentKnowledge.title }}</h2>
+
         <div class="detail-meta">
-          <span class="category-badge" :class="'cat-' + getCategoryKey(currentKnowledge.category)">
-            <span class="category-icon">{{ getCategoryIcon(currentKnowledge.category) }}</span>
-            {{ currentKnowledge.category || '未分类' }}
-          </span>
+          <span class="category-badge">{{ currentKnowledge.category || '未分类' }}</span>
+          <span v-if="currentKnowledge.knowledge_type" class="type-badge">{{ currentKnowledge.knowledge_type }}</span>
           <span class="detail-date">{{ formatDate(currentKnowledge.created_at) }}</span>
+          <el-tag
+            v-if="currentKnowledge.analysis_status === 'pending'"
+            size="small"
+            type="info"
+          >分析中</el-tag>
+          <el-tag
+            v-if="currentKnowledge.auto_researched"
+            size="small"
+            type="success"
+          >自主研究</el-tag>
         </div>
+
         <div v-if="currentKnowledge.tags && currentKnowledge.tags.length" class="detail-tags">
-          <span
-            v-for="tag in currentKnowledge.tags"
-            :key="tag"
-            class="tag-chip detail-tag"
-          >
-            {{ tag }}
-          </span>
+          <span v-for="tag in currentKnowledge.tags" :key="tag" class="tag-chip detail-tag">{{ tag }}</span>
         </div>
+
+        <!-- AI 分析信息 -->
+        <div v-if="currentKnowledge.key_concepts?.length || currentKnowledge.related_topics?.length" class="detail-analysis">
+          <div v-if="currentKnowledge.key_concepts?.length" class="analysis-section">
+            <span class="analysis-label">🔑 核心概念</span>
+            <div class="analysis-items">
+              <span v-for="c in currentKnowledge.key_concepts" :key="c" class="concept-chip">{{ c }}</span>
+            </div>
+          </div>
+          <div v-if="currentKnowledge.related_topics?.length" class="analysis-section">
+            <span class="analysis-label">🔗 关联主题</span>
+            <div class="analysis-items">
+              <span v-for="t in currentKnowledge.related_topics" :key="t" class="topic-chip">{{ t }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 摘要 -->
         <div v-if="currentKnowledge.summary" class="detail-summary">
           <div class="summary-label">AI 摘要</div>
           <div class="summary-text">{{ currentKnowledge.summary }}</div>
         </div>
+
+        <!-- 正文 -->
         <div class="detail-content">{{ currentKnowledge.content }}</div>
-        <div v-if="currentKnowledge.source || currentKnowledge.file_name || currentKnowledge.source_type === 'conversation'" class="detail-source">
+
+        <!-- 来源 -->
+        <div v-if="currentKnowledge.source || currentKnowledge.file_name || currentKnowledge.source_type" class="detail-source">
           <div v-if="currentKnowledge.source_type === 'conversation'" class="detail-conversation-source">
             <span>💬</span> 来自对话记录，AI 自动提取
           </div>
-          <div v-if="currentKnowledge.source && currentKnowledge.source_type !== 'conversation'">来源：{{ currentKnowledge.source }}</div>
+          <div v-if="currentKnowledge.source_type === 'auto_research'" class="detail-auto-source">
+            <span>🤖</span> AI 自主研究入库
+          </div>
+          <div v-if="currentKnowledge.source">来源：{{ currentKnowledge.source }}</div>
           <div v-if="currentKnowledge.file_name">文件：{{ currentKnowledge.file_name }}</div>
+        </div>
+
+        <!-- ===== 相关知识 ===== -->
+        <div v-if="relatedKnowledge.length > 0" class="detail-related">
+          <div class="related-title">🔗 相关知识</div>
+          <div
+            v-for="rel in relatedKnowledge"
+            :key="rel.id"
+            class="related-item"
+            @click="gotoKnowledge(rel.id)"
+          >
+            <div class="related-header">
+              <span class="related-item-title">{{ rel.title }}</span>
+              <el-tag size="small" :type="rel.relation_type === 'similar' ? 'success' : rel.relation_type === 'supplements' ? 'warning' : 'info'">
+                {{ rel.relation_type }} {{ (rel.score * 100).toFixed(0) }}%
+              </el-tag>
+            </div>
+            <div v-if="rel.reason" class="related-reason">{{ rel.reason }}</div>
+          </div>
+        </div>
+
+        <!-- ===== 知识图谱 ===== -->
+        <div v-if="graphData.nodes && graphData.nodes.length > 0" class="detail-graph">
+          <div class="graph-title">📊 知识图谱</div>
+          <div ref="graphRef" class="graph-container"></div>
         </div>
       </div>
     </el-dialog>
 
-    <!-- 文件上传对话框 -->
+    <!-- ===== 文件上传对话框 ===== -->
     <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'" top="10vh">
       <div class="upload-ai-notice">
         <el-icon size="16" color="#409eff"><MagicStick /></el-icon>
-        <span>上传后 AI 将自动分析内容，生成摘要、分类和标签</span>
+        <span>上传后 AI 将自动分析内容，生成摘要、分类、标签和知识关联</span>
       </div>
       <el-form label-width="80px">
         <el-form-item label="标题">
@@ -285,11 +429,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
-import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
 
 const isMobile = ref(window.innerWidth <= 768)
@@ -301,24 +444,36 @@ const searchQuery = ref('')
 const filterCategory = ref('')
 const showCreateDialog = ref(false)
 const showDetailDialog = ref(false)
-const showSemanticSearch = ref(false)
+const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
 const currentKnowledge = ref(null)
-const semanticQuery = ref('')
-const searchResults = ref([])
 const statsData = ref({ total: 0, categories: {} })
+const categories = ref([])
+const hotTags = ref([])
 const uploadTitle = ref('')
 const uploadFile = ref(null)
 const uploading = ref(false)
 const uploadRef = ref(null)
 
-const categories = [
-  { value: '基础', label: '基础知识', icon: '📚' },
-  { value: '方法', label: '实验方法', icon: '🔬' },
-  { value: '文献', label: '文献笔记', icon: '📄' },
-  { value: 'FAQ', label: '常见问题', icon: '❓' }
+// QA
+const qaQuery = ref('')
+const qaLoading = ref(false)
+const qaResult = ref(null)
+const qaError = ref('')
+const suggestions = [
+  '微纳米气泡在水处理中的应用',
+  '臭氧微纳米气泡消毒效果',
+  'NTA 粒径测量方法',
+  '微纳米气泡在农业中的应用',
+  '气泡稳定性影响因素',
 ]
+
+// Detail extras
+const relatedKnowledge = ref([])
+const graphData = ref({ nodes: [], edges: [] })
+const graphRef = ref(null)
+let chartInstance = null
 
 const knowledgeForm = ref({
   title: '',
@@ -328,13 +483,16 @@ const knowledgeForm = ref({
   source: ''
 })
 
-// 获取知识列表
+// 计算精简后的分类统计（只显示有数据的）
+const catStats = computed(() => {
+  return statsData.value.categories || {}
+})
+
+// ── 知识列表 ──
+
 const fetchKnowledge = async () => {
   try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value
-    }
+    const params = { page: currentPage.value, page_size: pageSize.value }
     if (searchQuery.value) params.keyword = searchQuery.value
     if (filterCategory.value) params.category = filterCategory.value
 
@@ -346,13 +504,39 @@ const fetchKnowledge = async () => {
   }
 }
 
-// 保存知识
+// ── 动态分类 + 标签 ──
+
+const fetchCategories = async () => {
+  try {
+    const [catRes, tagRes] = await Promise.all([
+      axios.get('/api/v1/knowledge/categories'),
+      axios.get('/api/v1/knowledge/tags', { params: { min_freq: 1, limit: 30 } }),
+    ])
+    categories.value = catRes.data || []
+    hotTags.value = tagRes.data || []
+  } catch (e) {
+    console.error('获取分类/标签失败:', e)
+  }
+}
+
+// ── 统计 ──
+
+const fetchStats = async () => {
+  try {
+    const res = await axios.get('/api/v1/knowledge/stats')
+    statsData.value = res.data
+  } catch (e) {
+    console.error('获取统计失败:', e)
+  }
+}
+
+// ── 保存/编辑/删除 ──
+
 const saveKnowledge = async () => {
   if (!knowledgeForm.value.title || !knowledgeForm.value.content) {
     ElMessage.warning('请填写标题和内容')
     return
   }
-
   try {
     if (editingKnowledge.value) {
       await axios.put(`/api/v1/knowledge/${editingKnowledge.value.id}`, knowledgeForm.value)
@@ -366,19 +550,18 @@ const saveKnowledge = async () => {
     resetForm()
     fetchKnowledge()
     fetchStats()
+    fetchCategories()
   } catch (e) {
     ElMessage.error('操作失败')
   }
 }
 
-// 编辑知识
 const editKnowledge = (item) => {
   editingKnowledge.value = item
   knowledgeForm.value = { ...item }
   showCreateDialog.value = true
 }
 
-// 删除知识
 const deleteKnowledge = async (item) => {
   try {
     await ElMessageBox.confirm('确定要删除这条知识吗？', '确认删除', { type: 'warning' })
@@ -387,63 +570,167 @@ const deleteKnowledge = async (item) => {
     fetchKnowledge()
     fetchStats()
   } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('删除失败')
-    }
+    if (e !== 'cancel') ElMessage.error('删除失败')
   }
 }
 
-// 查看知识详情
-const viewKnowledge = (item) => {
+// ── 知识详情 + 关联 + 图谱 ──
+
+const viewKnowledge = async (item) => {
   currentKnowledge.value = item
   showDetailDialog.value = true
+  relatedKnowledge.value = []
+  graphData.value = { nodes: [], edges: [] }
+
+  // 并行获取关联和图谱数据
+  try {
+    const [relRes, graphRes] = await Promise.all([
+      axios.get(`/api/v1/knowledge/${item.id}/related`, { params: { limit: 8 } }),
+      axios.get('/api/v1/knowledge/graph', { params: { center_id: item.id, depth: 1, limit: 30 } }),
+    ])
+    relatedKnowledge.value = relRes.data || []
+    graphData.value = graphRes.data || { nodes: [], edges: [] }
+  } catch (e) {
+    console.error('获取关联数据失败:', e)
+  }
 }
 
-// 语义搜索
-const semanticSearch = async () => {
-  if (!semanticQuery.value) return
+// 渲染 ECharts 图谱
+watch(showDetailDialog, async (val) => {
+  if (val && graphData.value.nodes?.length > 0) {
+    await nextTick()
+    renderGraph()
+  } else if (!val && chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
 
-  try {
-    const res = await axios.get('/api/v1/knowledge/search/semantic', {
-      params: { query: semanticQuery.value }
-    })
-    searchResults.value = res.data || []
+const renderGraph = async () => {
+  if (!graphRef.value) return
+  const echarts = await import('echarts')
+  if (chartInstance) chartInstance.dispose()
 
-    if (searchResults.value.length === 0) {
-      ElMessage.info('未找到相关知识')
+  chartInstance = echarts.init(graphRef.value)
+  const data = graphData.value
+
+  // 颜色映射
+  const colorMap = {}
+  const colors = ['#FF7A5C', '#FFB347', '#409eff', '#67c23a', '#e6a23c', '#909399', '#f56c6c']
+  let colorIdx = 0
+
+  data.nodes.forEach(n => {
+    if (!colorMap[n.category]) {
+      colorMap[n.category] = colors[colorIdx % colors.length]
+      colorIdx++
     }
-  } catch (e) {
-    ElMessage.error('搜索失败')
-  }
+  })
+
+  chartInstance.setOption({
+    tooltip: {
+      formatter: (p) => {
+        if (p.dataType === 'node') {
+          return `<b>${p.data.title}</b><br/>分类: ${p.data.category}<br/>关联: ${p.data.size.toFixed(0)}`
+        }
+        return `${p.data.type}: ${(p.data.score * 100).toFixed(0)}%`
+      }
+    },
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      roam: true,
+      draggable: true,
+      data: data.nodes.map(n => ({
+        id: n.id,
+        name: n.title?.length > 12 ? n.title.slice(0, 12) + '…' : n.title,
+        title: n.title,
+        category: n.category,
+        value: n.size,
+        symbolSize: Math.max(20, Math.min(50, n.size * 8)),
+        itemStyle: { color: colorMap[n.category] || '#909399' },
+      })),
+      edges: data.edges.map(e => ({
+        source: e.source,
+        target: e.target,
+        type: e.type,
+        score: e.score,
+        lineStyle: {
+          width: Math.max(1, e.score * 4),
+          opacity: 0.6,
+          curveness: 0.1,
+        },
+        label: { show: e.score > 0.8, formatter: e.type, fontSize: 10 },
+      })),
+      force: { repulsion: 300, edgeLength: 120 },
+      label: { show: true, fontSize: 10, color: '#333' },
+      emphasis: {
+        focus: 'adjacency',
+        lineStyle: { width: 3 },
+      },
+    }],
+  })
 }
 
-// 重置表单
-const resetForm = () => {
-  knowledgeForm.value = {
-    title: '',
-    category: '',
-    tags: [],
-    content: '',
-    source: ''
-  }
+const gotoKnowledge = (id) => {
+  // 根据ID重新获取详情
+  axios.get(`/api/v1/knowledge/${id}`).then(res => {
+    viewKnowledge(res.data)
+  }).catch(() => {
+    ElMessage.warning('该知识条目可能已被删除')
+  })
 }
 
-// 获取统计
-const fetchStats = async () => {
+// ── AI 问答 (RAG) ──
+
+const openQADialog = () => {
+  qaQuery.value = ''
+  qaResult.value = null
+  qaError.value = ''
+  showQADialog.value = true
+}
+
+const askQuestion = async () => {
+  if (!qaQuery.value) return
+  qaLoading.value = true
+  qaResult.value = null
+  qaError.value = ''
+
   try {
-    const res = await axios.get('/api/v1/knowledge/stats')
-    statsData.value = res.data
+    const res = await axios.post('/api/v1/knowledge/qa', {
+      question: qaQuery.value,
+      top_k: 8,
+      auto_research: true,
+    })
+    qaResult.value = res.data
   } catch (e) {
-    console.error('获取统计失败:', e)
+    qaError.value = e.response?.data?.detail || '问答服务暂时不可用，请稍后重试'
+  } finally {
+    qaLoading.value = false
   }
 }
 
-// 上传文件变更
+const askSuggestion = (q) => {
+  qaQuery.value = q
+  askQuestion()
+}
+
+const confidenceLabel = (level) => {
+  const map = { high: '高置信度', medium: '中等置信度', low: '低置信度' }
+  return map[level] || level
+}
+
+const renderAnswer = (text) => {
+  if (!text) return ''
+  // 将 [来源:xxx] 格式转换为可点击链接
+  return text.replace(/\[来源:([^\]]+)\]/g, '<span class="qa-citation">📖 $1</span>')
+}
+
+// ── 文件上传 ──
+
 const onUploadFileChange = (file) => {
   uploadFile.value = file.raw
 }
 
-// 上传文件
 const handleUpload = async () => {
   if (!uploadFile.value) {
     ElMessage.warning('请选择文件')
@@ -455,7 +742,6 @@ const handleUpload = async () => {
     formData.append('file', uploadFile.value)
     if (uploadTitle.value) formData.append('title', uploadTitle.value)
 
-    console.log('UPLOAD_DEBUG: file=%s size=%s type=%s', uploadFile.value?.name, uploadFile.value?.size, uploadFile.value?.type)
     await axios.post('/api/v1/knowledge/upload', formData, { timeout: 180000 })
     ElMessage.success('文件上传成功，后台正在分析...')
     showUploadDialog.value = false
@@ -484,20 +770,16 @@ const handleUpload = async () => {
   }
 }
 
-// 辅助函数
-const getCategoryType = (category) => {
-  const map = { '基础': '', '方法': 'success', '文献': 'warning', 'FAQ': 'info' }
-  return map[category] || 'info'
+// ── 工具函数 ──
+
+const resetForm = () => {
+  knowledgeForm.value = { title: '', category: '', tags: [], content: '', source: '' }
 }
 
-const getCategoryIcon = (category) => {
-  const map = { '基础': '📚', '方法': '🔬', '文献': '📄', 'FAQ': '❓' }
-  return map[category] || '📁'
-}
-
-const getCategoryKey = (category) => {
-  const map = { '基础': 'base', '方法': 'method', '文献': 'literature', 'FAQ': 'faq' }
-  return map[category] || 'unknown'
+const calcCloudSize = (count) => {
+  const maxCount = Math.max(...categories.value.map(c => c.count), 1)
+  const ratio = count / maxCount
+  return `${12 + ratio * 10}px`
 }
 
 watch(filterCategory, () => {
@@ -508,6 +790,7 @@ watch(filterCategory, () => {
 onMounted(() => {
   fetchKnowledge()
   fetchStats()
+  fetchCategories()
 })
 </script>
 
@@ -519,27 +802,85 @@ onMounted(() => {
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
+/* ── Tag Cloud ── */
+.tag-cloud-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+}
+
+.tag-cloud-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.tag-cloud-title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.tag-cloud-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.cloud-tag {
+  cursor: pointer;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-info-bg);
+  color: var(--color-text-regular);
+  transition: all var(--duration-normal) var(--ease-out);
+  white-space: nowrap;
+}
+
+.cloud-tag:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  transform: scale(1.05);
+}
+
+.cloud-tag-active {
+  background: var(--color-primary) !important;
+  color: #fff !important;
+}
+
+.cloud-tag small {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* ── Stats ── */
 .stats-card {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-primary);
-  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) 40ms both;
 }
 
 .stats-grid {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
 .stat-item {
   text-align: center;
   cursor: pointer;
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-lg);
   transition: all var(--duration-normal) var(--ease-out);
   color: rgba(255, 255, 255, 0.85);
-  min-width: 80px;
+  min-width: 60px;
 }
 
 .stat-item:hover,
@@ -548,37 +889,26 @@ onMounted(() => {
   transform: translateY(-2px);
 }
 
-.stat-total {
-  color: #fff;
-}
-
 .stat-icon {
-  font-size: 24px;
+  font-size: 22px;
   margin-bottom: var(--space-1);
 }
 
 .stat-number {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
+  line-height: 1.2;
 }
 
 .stat-label {
   font-size: var(--font-size-xs);
   margin-top: var(--space-1);
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.item-summary {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin-bottom: var(--space-3);
-  font-style: italic;
-}
-
-.result-category {
-  margin-bottom: var(--space-2);
-}
-
+/* ── List ── */
 .knowledge-list {
   display: flex;
   flex-direction: column;
@@ -609,6 +939,12 @@ onMounted(() => {
   gap: var(--space-2);
 }
 
+.item-category {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .category-badge {
   display: inline-flex;
   align-items: center;
@@ -617,18 +953,9 @@ onMounted(() => {
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  line-height: 1.4;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
-
-.category-icon {
-  font-size: var(--font-size-sm);
-}
-
-.cat-base { background: #e8f4fd; color: #1a7fd4; }
-.cat-method { background: #e8f8e8; color: #2d8c2d; }
-.cat-literature { background: #fff3e0; color: #c77c00; }
-.cat-faq { background: #f3e8fd; color: #7b3fa0; }
-.cat-unknown { background: var(--color-info-bg); color: var(--color-info); }
 
 .tag-chip {
   display: inline-block;
@@ -659,12 +986,26 @@ onMounted(() => {
   align-items: center;
 }
 
-.conversation-badge {
+.conversation-badge,
+.auto-research-badge {
   display: inline-block;
   margin-right: var(--space-1);
   font-size: var(--font-size-sm);
   vertical-align: middle;
   opacity: 0.8;
+}
+
+.auto-researched-dot {
+  margin-right: 2px;
+  font-size: var(--font-size-sm);
+}
+
+.item-summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--space-3);
+  font-style: italic;
 }
 
 .item-content {
@@ -678,6 +1019,23 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.item-footer-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.type-badge {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  background: #f0f5ff;
+  color: #409eff;
+  border: 1px solid #d6e4ff;
 }
 
 .item-time {
@@ -705,58 +1063,147 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.semantic-search {
+/* ── QA Dialog ── */
+.qa-dialog {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
-.search-results {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.result-item {
-  padding: var(--space-4);
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-3);
-  border: 1px solid var(--color-border);
-}
-
-.result-header {
+.qa-input-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: var(--space-2);
+}
+
+.qa-suggestions {
+  padding: var(--space-3) 0;
+}
+
+.suggestion-title {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
   margin-bottom: var(--space-2);
 }
 
-.result-title {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+.suggestion-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.result-content {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-regular);
-  line-height: 1.6;
+.suggestion-tag {
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
-.upload-ai-notice {
+.suggestion-tag:hover {
+  transform: scale(1.04);
+}
+
+.qa-loading {
+  text-align: center;
+  padding: var(--space-8);
+  color: var(--color-text-secondary);
+}
+
+.qa-loading-dots {
+  font-size: var(--font-size-base);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.qa-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.qa-confidence {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-primary-bg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.confidence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.conf-high { background: #67c23a; }
+.conf-medium { background: #e6a23c; }
+.conf-low { background: #f56c6c; }
+
+.confidence-info {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-left: var(--space-2);
+}
+
+.qa-answer {
+  background: var(--color-bg-page);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  line-height: 1.8;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+}
+
+.qa-citation {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+}
+
+.qa-sources {
+  background: #f0f9f0;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+}
+
+.sources-title {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-3);
+  color: var(--color-text-primary);
+}
+
+.source-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.source-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.source-title {
   font-size: var(--font-size-sm);
   color: var(--color-primary);
 }
 
+.qa-research-note {
+  margin-top: var(--space-2);
+}
+
+.qa-error {
+  margin-top: var(--space-2);
+}
+
+/* ── Detail Dialog ── */
 .knowledge-detail h2 {
   margin-bottom: var(--space-4);
   color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
 }
 
 .detail-meta {
@@ -764,6 +1211,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-4);
+  flex-wrap: wrap;
 }
 
 .detail-date {
@@ -772,7 +1220,7 @@ onMounted(() => {
 }
 
 .detail-tags {
-  margin-bottom: var(--space-5);
+  margin-bottom: var(--space-4);
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
@@ -780,6 +1228,49 @@ onMounted(() => {
 
 .detail-tag {
   font-size: var(--font-size-xs);
+}
+
+.detail-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.analysis-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.analysis-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.concept-chip {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  background: #f0f5ff;
+  color: #409eff;
+  border: 1px solid #d6e4ff;
+}
+
+.topic-chip {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  background: #fef7e0;
+  color: #b8860b;
+  border: 1px solid #fce8b2;
 }
 
 .detail-summary {
@@ -813,13 +1304,13 @@ onMounted(() => {
   background: var(--color-bg-page);
   padding: var(--space-4);
   border-radius: var(--radius-md);
-  max-height: 400px;
+  max-height: 350px;
   overflow-y: auto;
 }
 
 .detail-source {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
   border-top: 1px solid var(--color-border);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
@@ -828,7 +1319,8 @@ onMounted(() => {
   gap: var(--space-1);
 }
 
-.detail-conversation-source {
+.detail-conversation-source,
+.detail-auto-source {
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -836,6 +1328,87 @@ onMounted(() => {
   font-weight: var(--font-weight-medium);
 }
 
+/* ── Related Knowledge ── */
+.detail-related {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.related-title {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-3);
+  color: var(--color-text-primary);
+}
+
+.related-item {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.related-item:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.related-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.related-item-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+}
+
+.related-reason {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
+/* ── Knowledge Graph ── */
+.detail-graph {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.graph-title {
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-3);
+  color: var(--color-text-primary);
+}
+
+.graph-container {
+  width: 100%;
+  height: 350px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-page);
+}
+
+/* ── Upload ── */
+.upload-ai-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-primary-bg);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+}
+
+/* ── Misc ── */
 .filter-card {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -846,5 +1419,14 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) 120ms both;
+}
+
+.empty-state {
+  padding: var(--space-12) 0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

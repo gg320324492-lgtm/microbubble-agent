@@ -142,7 +142,7 @@ class KnowledgeService:
         return knowledge
 
     async def _analyze_and_embed(self, knowledge_id: int, title: str, content: str):
-        """后台任务：生成嵌入 + LLM 分类标签"""
+        """后台任务：生成嵌入 + LLM 分析 + 知识关联"""
         from app.core.database import async_session
         try:
             from app.services.embedding_service import generate_embedding
@@ -156,15 +156,39 @@ class KnowledgeService:
                 knowledge = result.scalar_one_or_none()
                 if knowledge:
                     knowledge.embedding = embedding
+                    knowledge.analysis_status = "done"
                     if analysis.get("summary"):
                         knowledge.summary = analysis["summary"]
                     if analysis.get("category"):
                         knowledge.category = analysis["category"]
                     if analysis.get("tags"):
                         knowledge.tags = analysis["tags"]
+                    if analysis.get("key_concepts"):
+                        knowledge.key_concepts = analysis["key_concepts"]
+                    if analysis.get("related_topics"):
+                        knowledge.related_topics = analysis["related_topics"]
+                    if analysis.get("knowledge_type"):
+                        knowledge.knowledge_type = analysis["knowledge_type"]
                     await db.commit()
+
+                    # 分析完成后建立知识关联
+                    try:
+                        from app.services.knowledge_graph_service import KnowledgeGraphService
+                        graph_svc = KnowledgeGraphService(db)
+                        await graph_svc.build_relations_for(knowledge_id)
+                    except Exception as link_e:
+                        logger.warning(f"知识关联建立失败(knowledge_id={knowledge_id}): {link_e}")
         except Exception as e:
             logger.error(f"后台分析失败(knowledge_id={knowledge_id}): {e}")
+            # 标记分析失败
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Knowledge).where(Knowledge.id == knowledge_id)
+                )
+                knowledge = result.scalar_one_or_none()
+                if knowledge:
+                    knowledge.analysis_status = "failed"
+                    await db.commit()
 
     async def create_from_conversation(
         self,

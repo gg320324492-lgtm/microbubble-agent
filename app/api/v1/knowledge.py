@@ -10,9 +10,15 @@ from app.models.member import Member
 from app.models.knowledge import Knowledge
 from app.schemas.knowledge import (
     KnowledgeCreate, KnowledgeUpdate, KnowledgeResponse, KnowledgeList,
-    KnowledgeSearchResult
+    KnowledgeSearchResult, RelatedKnowledge, KnowledgeGraph,
+    DynamicCategory, TagCloudItem, KnowledgeStats,
+    QAResponse, ResearchResponse,
 )
 from app.services.knowledge_service import KnowledgeService
+from app.services.knowledge_graph_service import KnowledgeGraphService
+from app.services.knowledge_qa_service import KnowledgeQAService
+from app.services.auto_research_service import AutoResearchService
+from app.services.dynamic_taxonomy_service import DynamicTaxonomyService
 
 import logging
 logger = logging.getLogger("microbubble.knowledge")
@@ -98,6 +104,65 @@ async def knowledge_stats(
     categories = {row[0] or "未分类": row[1] for row in rows}
     total = sum(categories.values())
     return {"total": total, "categories": categories}
+
+
+@router.get("/knowledge/categories", response_model=List[DynamicCategory])
+async def get_categories(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取动态分类列表（从实际数据自动聚合）"""
+    svc = KnowledgeGraphService(db)
+    return await svc.get_dynamic_categories()
+
+
+@router.get("/knowledge/tags", response_model=List[TagCloudItem])
+async def get_tag_cloud(
+    min_freq: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取标签云（频率排序）"""
+    svc = KnowledgeGraphService(db)
+    return await svc.get_tag_cloud(min_freq=min_freq, limit=limit)
+
+
+@router.get("/knowledge/graph", response_model=KnowledgeGraph)
+async def get_knowledge_graph(
+    center_id: Optional[int] = Query(None),
+    depth: int = Query(2, ge=1, le=5),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取知识图谱数据（用于前端可视化）"""
+    svc = KnowledgeGraphService(db)
+    return await svc.get_knowledge_graph(center_id=center_id, depth=depth, limit=limit)
+
+
+@router.get("/knowledge/stats/rich", response_model=KnowledgeStats)
+async def rich_knowledge_stats(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """知识库增强统计"""
+    svc = KnowledgeGraphService(db)
+    return await svc.get_knowledge_stats()
+
+
+@router.get("/knowledge/{knowledge_id}/related", response_model=List[RelatedKnowledge])
+async def get_related_knowledge(
+    knowledge_id: int,
+    relation_type: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取与指定知识关联的其他条目"""
+    svc = KnowledgeGraphService(db)
+    types = [relation_type] if relation_type else None
+    return await svc.get_related(knowledge_id, relation_types=types, limit=limit)
 
 
 @router.get("/knowledge/search/semantic", response_model=List[KnowledgeSearchResult])
@@ -260,3 +325,110 @@ async def delete_knowledge(
 
     await db.delete(knowledge)
     await db.commit()
+
+
+@router.get("/knowledge/taxonomy/emerging")
+async def get_emerging_categories(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取涌现分类体系（从实际数据中聚合）"""
+    svc = DynamicTaxonomyService(db)
+    return await svc.get_emerging_categories()
+
+
+@router.get("/knowledge/taxonomy/network")
+async def get_theme_network(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取主题关联网络（基于共享概念的分类间关联）"""
+    svc = DynamicTaxonomyService(db)
+    return await svc.get_theme_network()
+
+
+@router.post("/knowledge/qa", response_model=QAResponse)
+async def ask_knowledge(
+    question: str = Body(..., min_length=1, max_length=500),
+    top_k: int = Body(8, ge=3, le=20),
+    auto_research: bool = Body(True),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """RAG 知识问答 — 基于知识库合成答案，附带来源引用"""
+    svc = KnowledgeQAService(db)
+    result = await svc.answer_question(
+        question=question,
+        top_k=top_k,
+        auto_research=auto_research,
+    )
+
+    # 获取推荐阅读的知识条目 ID
+    related = await svc.get_related_knowledge_ids(question)
+
+    return {
+        **result,
+        "related_knowledge": related,
+    }
+
+
+@router.post("/knowledge/research", response_model=ResearchResponse)
+async def trigger_research(
+    queries: List[str] = Body(..., min_length=1, max_length=10),
+    max_results_per_query: int = Body(3, ge=1, le=5),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """触发自主研究 — 搜索网络知识并自动入库"""
+    svc = AutoResearchService(db)
+    result = await svc.research_topic(
+        queries=queries,
+        max_results_per_query=max_results_per_query,
+    )
+    return result
+
+
+@router.post("/knowledge/research/gaps")
+async def fill_knowledge_gaps(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """分析知识库薄弱领域并自动补充"""
+    svc = AutoResearchService(db)
+    result = await svc.fill_knowledge_gaps()
+    return result
+
+
+@router.get("/knowledge/health/contradictions")
+async def detect_contradictions(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """检测知识库中的矛盾条目"""
+    svc = AutoResearchService(db)
+    result = await svc.detect_and_handle_contradictions()
+    return {"contradictions": result, "count": len(result)}
+
+
+@router.get("/knowledge/health/duplicates")
+async def detect_duplicates(
+    threshold: float = Query(0.92, ge=0.5, le=1.0),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """检测重复条目"""
+    svc = AutoResearchService(db)
+    result = await svc.detect_duplicates(threshold=threshold)
+    return {"duplicates": result, "count": len(result)}
+
+
+@router.get("/knowledge/health/staleness")
+async def detect_staleness(
+    days: int = Query(365, ge=30, le=730),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """检测可能过期的条目"""
+    svc = AutoResearchService(db)
+    result = await svc.detect_staleness(days=days)
+    return {"stale_entries": result, "count": len(result)}

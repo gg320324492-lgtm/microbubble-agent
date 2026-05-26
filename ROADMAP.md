@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-26 (更新：头像上传自动保存 + HEIC 兼容 + Nginx ^~ 修复)
+> 最后更新: 2026-05-26 (更新：知识库深层逻辑系统 — 自主进化知识大脑)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1549,4 +1549,117 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 
 **修改文件：**
 - `web/src/views/SettingsView.vue` — 4 处改动（自动保存 + HEIC 回退 + 错误拆分 + Content-Type 删除）
+
+---
+
+## 知识库深层逻辑系统 — 自主进化知识大脑 (2026-05-26)
+
+将知识库从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**。
+
+### Phase 1: 动态内容分析 + 知识关联 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 动态 LLM 分析 Prompt | 不再硬编码 `基础/方法/文献/FAQ`，改为 LLM 根据内容自由生成具体方向（如"臭氧气泡消毒动力学"） | ✅ 完成 |
+| 模型扩展 | Knowledge 新增 key_concepts、related_topics、knowledge_type、analysis_status、auto_researched、quality_score 6 个字段，category 扩宽至 100 字 | ✅ 完成 |
+| 知识关系模型 | KnowledgeRelation 表（source_id/target_id/relation_type/score/reason/created_by），支持 similar/supplements/contradicts/cites/extends/prerequisite | ✅ 完成 |
+| 自动关联引擎 | 新入库条目自动与已有条目建关联：pgvector 余弦相似度（>0.65 similar）+ key_concepts 重叠（≥2 supplements）+ related_topics 重叠（≥1 extends），双向写入 | ✅ 完成 |
+| 动态分类 API | `GET /knowledge/categories` — 从实际数据 GROUP BY 聚合 | ✅ 完成 |
+| 标签云 API | `GET /knowledge/tags` — `unnest(tags)` 频率排序 | ✅ 完成 |
+| 知识图谱 API | `GET /knowledge/graph` — BFS 遍历节点+边，支持中心展开和全局视图 | ✅ 完成 |
+| 关联知识 API | `GET /knowledge/{id}/related` — 按 relation_type 过滤，score 降序 | ✅ 完成 |
+| 增强统计 API | `GET /knowledge/stats/rich` — 类型分布/分析状态/关联数/自动研究数 | ✅ 完成 |
+
+**新建文件：**
+- `app/services/knowledge_graph_service.py` — 知识图谱服务（关联发现 + BFS 图谱 + 动态分类 + 标签云 + 统计）
+- `alembic/versions/007_knowledge_brain_models.py` — 数据库迁移（6 新列 + 关系表 + 3 个索引）
+
+**修改文件：**
+- `app/services/llm_analysis_service.py` — 分析 Prompt 重写（动态分类 + key_concepts + related_topics + knowledge_type）
+- `app/models/knowledge.py` — 6 新字段 + KnowledgeRelation 模型
+- `app/services/knowledge_service.py` — `_analyze_and_embed` 保存全部新字段 + 分析完成后自动关联
+- `app/schemas/knowledge.py` — 新字段 + 5 个新 schema（RelatedKnowledge/GraphNode/GraphEdge/KnowledgeGraph/DynamicCategory/TagCloudItem/KnowledgeStats）
+- `app/api/v1/knowledge.py` — 5 个新端点（categories/tags/graph/related/rich-stats）
+
+### Phase 2: RAG 优先问答引擎 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| RAG 合成答案 | 语义搜索 → 阈值分类（高/中/低相关）→ LLM 合成 → 来源引用 | ✅ 完成 |
+| 置信度评分 | 基于高相关条目数量判断 high/medium/low | ✅ 完成 |
+| 自动研究触发 | 高相关条目 < 2 时自动生成联网搜索查询 | ✅ 完成 |
+| 推荐阅读 | 返回相关知识条目 ID 列表 | ✅ 完成 |
+
+**新建文件：**
+- `app/services/knowledge_qa_service.py` — RAG 问答引擎（检索 + 阈值 + LLM 合成 + 研究查询生成）
+
+**修改文件：**
+- `app/schemas/knowledge.py` — 新增 QASource/QAResponse 结构
+- `app/api/v1/knowledge.py` — 新增 `POST /knowledge/qa` 端点
+
+### Phase 3: 自主研究引擎（自我进化核心）✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 联网自动研究 | 对研究查询执行搜索（搜狗+必应）→ 抓取页面 → LLM 提取知识 → 去重 → 入库 → 建立关联 | ✅ 完成 |
+| 知识空白检测 | LLM 分析知识库统计 → 识别薄弱领域 → 生成研究查询 → 定向补充 | ✅ 完成 |
+| 矛盾检测 | 高分相似条目对 → LLM 判断是否矛盾 → 返回矛盾列表 | ✅ 完成 |
+| 重复检测 | 两两计算 pgvector 余弦相似度 > 0.92 → 返回重复对 | ✅ 完成 |
+| 过期检测 | 超过 365 天未更新的条目（排除 auto_research） | ✅ 完成 |
+
+**新建文件：**
+- `app/services/auto_research_service.py` — 自主研究引擎（研究/空白填充/矛盾检测/重复检测/过期检测）
+- `app/services/knowledge_evolution_tasks.py` — Celery 定时任务（每日进化/6h 空白检测/12h 健康检查）
+
+**修改文件：**
+- `app/core/celery.py` — 3 个新定时任务 + 自动发现
+- `app/schemas/knowledge.py` — 新增 ResearchResultItem/ResearchResponse 结构
+- `app/api/v1/knowledge.py` — 6 个新端点（QA/research/gaps/contradictions/duplicates/staleness）
+
+### Phase 4: 动态分类体系 + 知识健康监控 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 涌现分类 | 从已有 category 聚合 + key_concepts 频率统计 → 分类树+热门概念 | ✅ 完成 |
+| 分类建议 | 基于最相似条目的 embedding 余弦相似度建议分类 | ✅ 完成 |
+| 主题关联网络 | 分类间概念重叠（Jaccard 相似度）→ 关联网络 | ✅ 完成 |
+| 分类报告 | Markdown 格式的动态分类报告生成 | ✅ 完成 |
+
+**新建文件：**
+- `app/services/dynamic_taxonomy_service.py` — 动态分类体系（涌现分类/建议/网络/报告）
+
+**修改文件：**
+- `app/api/v1/knowledge.py` — 2 个新端点（taxonomy/emerging + taxonomy/network）
+
+### Phase 5: 前端改造 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 动态标签云 | 从实际数据聚合的可点击研究主题标签云，字号按频率自适应 | ✅ 完成 |
+| RAG QA 问答面板 | 替换旧语义搜索，合成答案 + 来源引用 + 置信度 + 研究触发提示 + 快捷问题 | ✅ 完成 |
+| 知识详情增强 | 显示 key_concepts/related_topics 分析结果、analysis_status 标签、auto_researched 标记 | ✅ 完成 |
+| 关联知识面板 | 知识详情页显示关联条目（relation_type + score + reason），点击跳转 | ✅ 完成 |
+| 知识图谱可视化 | ECharts force-directed graph，节点大小=关联数，颜色=分类，悬停显示详情 | ✅ 完成 |
+| 动态分类选择器 | 添加/编辑对话框的分类/标签下拉从 API 动态获取 | ✅ 完成 |
+
+**修改文件：**
+- `web/src/views/KnowledgeView.vue` — 完整重写（动态标签云 + RAG QA + 关联面板 + 图谱 + 分析结果展示）
+
+### 新增 API 端点汇总
+
+| 端点 | 说明 | 阶段 |
+|------|------|------|
+| `GET /knowledge/categories` | 动态分类列表（从实际数据聚合） | P1 |
+| `GET /knowledge/tags` | 标签云（频率排序） | P1 |
+| `GET /knowledge/graph` | 知识图谱（节点+边） | P1 |
+| `GET /knowledge/{id}/related` | 关联知识列表 | P1 |
+| `GET /knowledge/stats/rich` | 增强统计 | P1 |
+| `POST /knowledge/qa` | RAG 知识问答 | P2 |
+| `POST /knowledge/research` | 触发自主研究 | P3 |
+| `POST /knowledge/research/gaps` | 分析并填充知识空白 | P3 |
+| `GET /knowledge/health/contradictions` | 矛盾检测 | P3 |
+| `GET /knowledge/health/duplicates` | 重复检测 | P3 |
+| `GET /knowledge/health/staleness` | 过期检测 | P3 |
+| `GET /knowledge/taxonomy/emerging` | 涌现分类体系 | P4 |
+| `GET /knowledge/taxonomy/network` | 主题关联网络 | P4 |
 
