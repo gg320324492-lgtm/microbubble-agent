@@ -9,7 +9,7 @@ Memory 表 DB 是 LargeBinary，需要 ALTER COLUMN。
 """
 
 revision = '008_fix_embedding'
-down_revision = '007_knowledge_brain'
+down_revision = '007'
 branch_labels = None
 depends_on = None
 
@@ -19,16 +19,16 @@ from pgvector.sqlalchemy import Vector
 
 
 def upgrade():
-    # Knowledge 表：若列实际是 vector 则此操作为 no-op
+    # Knowledge: bytea → vector(768)，无已有数据直接转换
     op.execute(
-        "ALTER TABLE knowledge ALTER COLUMN embedding TYPE vector(768) USING embedding::vector(768)"
+        "ALTER TABLE knowledge ALTER COLUMN embedding TYPE vector(768) USING embedding::text::vector(768)"
     )
-    # Memory 表：LargeBinary → Vector(768)
+    # Memories: bytea → vector(768)
     op.execute(
-        "ALTER TABLE memory ALTER COLUMN embedding TYPE vector(768) USING NULLIF(embedding::text, '')::vector(768)"
+        "ALTER TABLE memories ALTER COLUMN embedding TYPE vector(768) USING embedding::text::vector(768)"
     )
 
 
 def downgrade():
     op.execute("ALTER TABLE knowledge ALTER COLUMN embedding TYPE bytea USING embedding::text::bytea")
-    op.execute("ALTER TABLE memory ALTER COLUMN embedding TYPE bytea USING embedding::text::bytea")
+    op.execute("ALTER TABLE memories ALTER COLUMN embedding TYPE bytea USING embedding::text::bytea")
