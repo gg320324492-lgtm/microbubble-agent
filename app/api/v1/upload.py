@@ -1,6 +1,6 @@
 """文件上传 API"""
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -17,7 +17,7 @@ router = APIRouter()
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    prefix: str = Query("uploads", description="存储路径前缀"),
+    prefix: str = Form("uploads", description="存储路径前缀"),
     current_user: Member = Depends(get_current_user)
 ):
     """通用文件上传"""
