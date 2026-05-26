@@ -156,8 +156,9 @@ const handleAvatarUpload = async (e) => {
     formData.append('prefix', 'avatars')
 
     const res = await axios.post('/api/v1/upload', formData)
-    if (res.data?.url) {
-      form.avatar = res.data.url
+    if (res.data?.object_name) {
+      // 构建公网可访问的 MinIO URL（预签名 URL 使用 Docker 内部主机名，浏览器无法访问）
+      form.avatar = `${window.location.origin}/minio/microbubble/${res.data.object_name}`
       avatarObjectName.value = res.data.object_name
       avatarChanged.value = true
       ElMessage.success('头像上传成功')
