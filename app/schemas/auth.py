@@ -1,6 +1,6 @@
 """认证相关Schema"""
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional
 
 
@@ -37,6 +37,8 @@ class UserInfo(BaseModel):
     grade: Optional[str] = None
     research_area: Optional[str] = None
     email: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
     avatar: Optional[str] = None
     is_active: bool
 
@@ -59,7 +61,7 @@ class ResetPasswordRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     """更新个人资料请求"""
     name: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     bio: Optional[str] = None
     avatar: Optional[str] = None
