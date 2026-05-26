@@ -275,6 +275,8 @@ class MemoryService:
             response = await client.messages.create(
                 model=get_default_model(),
                 max_tokens=1000,
+                timeout=30,
+                thinking={'type': 'disabled'},
                 messages=[{"role": "user", "content": prompt}]
             )
             text_content = extract_text_from_response(response)

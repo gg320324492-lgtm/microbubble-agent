@@ -162,6 +162,7 @@ services:
     restart: unless-stopped
 
   # Vision MCP Server
+  vision-mcp:
     build:
       context: .
       dockerfile: Dockerfile.mcp
