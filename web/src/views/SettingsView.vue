@@ -103,12 +103,20 @@ const avatarChanged = ref(false)
 const avatarObjectName = ref('')
 const previewAvatarUrl = ref(userInfo.value?.avatar || '')
 
-// 当 MainLayout.onMounted 的 GET /auth/me 异步返回时，更新头像预览
+// 当 MainLayout.onMounted 的 GET /auth/me 异步返回时，同步所有表单字段
 watch(() => userStore.userInfo, (newInfo) => {
-  if (newInfo?.avatar) {
+  if (!newInfo) return
+  if (newInfo.avatar) {
     previewAvatarUrl.value = newInfo.avatar
     form.avatar = newInfo.avatar
   }
+  form.name = newInfo.name || ''
+  form.email = newInfo.email || ''
+  form.phone = newInfo.phone || ''
+  form.bio = newInfo.bio || ''
+  form.grade = newInfo.grade || ''
+  form.research_area = newInfo.research_area || ''
+  form.roleLabel = roleMap[newInfo.role] || '成员'
 })
 
 const initForm = () => ({
