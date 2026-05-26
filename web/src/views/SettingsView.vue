@@ -166,7 +166,6 @@ const handleAvatarUpload = async (e) => {
     formData.append('prefix', 'avatars')
 
     const res = await axios.post('/api/v1/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000
     })
     if (!res.data?.object_name) {
