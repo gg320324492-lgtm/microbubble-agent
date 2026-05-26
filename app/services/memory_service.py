@@ -97,6 +97,8 @@ class MemoryService:
 
             from app.services.embedding_service import generate_embedding
             query_embedding = await generate_embedding(query)
+            if query_embedding is None:
+                return await self._search_keyword_fallback(user_id, query, top_k, memory_type)
 
             stmt = select(
                 Memory,

@@ -432,3 +432,17 @@ async def detect_staleness(
     svc = AutoResearchService(db)
     result = await svc.detect_staleness(days=days)
     return {"stale_entries": result, "count": len(result)}
+
+
+@router.post("/knowledge/{knowledge_id}/reanalyze", response_model=KnowledgeResponse)
+async def reanalyze_knowledge(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """重新分析指定知识条目（嵌入 + LLM 分析 + 关联），用于分析失败或卡住时重试"""
+    service = KnowledgeService(db)
+    knowledge = await service.reanalyze(knowledge_id)
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+    return knowledge

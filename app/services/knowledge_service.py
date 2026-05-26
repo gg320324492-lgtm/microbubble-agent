@@ -75,14 +75,12 @@ class KnowledgeService:
 
     async def _generate_embedding(self, knowledge: Knowledge, content: str):
         """尝试生成向量嵌入，失败不阻塞"""
-        try:
-            from app.services.embedding_service import generate_embedding
-            embedding = await generate_embedding(content)
+        from app.services.embedding_service import generate_embedding
+        embedding = await generate_embedding(content)
+        if embedding is not None:
             knowledge.embedding = embedding
             await self.db.commit()
             await self.db.refresh(knowledge)
-        except Exception as e:
-            logger.warning(f"生成嵌入向量失败(knowledge_id={knowledge.id}): {e}")
 
     async def update_knowledge(self, knowledge_id: int, **kwargs) -> Optional[Knowledge]:
         """更新知识条目"""
@@ -142,53 +140,88 @@ class KnowledgeService:
         return knowledge
 
     async def _analyze_and_embed(self, knowledge_id: int, title: str, content: str):
-        """后台任务：生成嵌入 + LLM 分析 + 知识关联"""
+        """后台任务：独立步骤执行 embedding + LLM 分析 + 知识关联"""
         from app.core.database import async_session
+
+        # Step 0: 立即标记 analyzing
+        async with async_session() as db:
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if not knowledge:
+                return
+            knowledge.analysis_status = "analyzing"
+            await db.commit()
+
+        embedding_ok = False
+        analysis_ok = False
+
+        # Step 1: Embedding 生成（独立容错）
         try:
             from app.services.embedding_service import generate_embedding
-            from app.services.llm_analysis_service import llm_analysis_service
             embedding = await generate_embedding(content)
-            analysis = await llm_analysis_service.analyze_content(title, content)
-            async with async_session() as db:
-                result = await db.execute(
-                    select(Knowledge).where(Knowledge.id == knowledge_id)
-                )
-                knowledge = result.scalar_one_or_none()
-                if knowledge:
-                    knowledge.embedding = embedding
-                    knowledge.analysis_status = "done"
-                    if analysis.get("summary"):
-                        knowledge.summary = analysis["summary"]
-                    if analysis.get("category"):
-                        knowledge.category = analysis["category"]
-                    if analysis.get("tags"):
-                        knowledge.tags = analysis["tags"]
-                    if analysis.get("key_concepts"):
-                        knowledge.key_concepts = analysis["key_concepts"]
-                    if analysis.get("related_topics"):
-                        knowledge.related_topics = analysis["related_topics"]
-                    if analysis.get("knowledge_type"):
-                        knowledge.knowledge_type = analysis["knowledge_type"]
-                    await db.commit()
-
-                    # 分析完成后建立知识关联
-                    try:
-                        from app.services.knowledge_graph_service import KnowledgeGraphService
-                        graph_svc = KnowledgeGraphService(db)
-                        await graph_svc.build_relations_for(knowledge_id)
-                    except Exception as link_e:
-                        logger.warning(f"知识关联建立失败(knowledge_id={knowledge_id}): {link_e}")
+            if embedding is not None:
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(Knowledge).where(Knowledge.id == knowledge_id)
+                    )
+                    knowledge = result.scalar_one_or_none()
+                    if knowledge:
+                        knowledge.embedding = embedding
+                        await db.commit()
+                        embedding_ok = True
         except Exception as e:
-            logger.error(f"后台分析失败(knowledge_id={knowledge_id}): {e}")
-            # 标记分析失败
-            async with async_session() as db:
-                result = await db.execute(
-                    select(Knowledge).where(Knowledge.id == knowledge_id)
-                )
-                knowledge = result.scalar_one_or_none()
-                if knowledge:
-                    knowledge.analysis_status = "failed"
-                    await db.commit()
+            logger.warning(f"Embedding 生成失败(knowledge_id={knowledge_id}): {e}")
+
+        # Step 2: LLM 分析（独立容错）
+        try:
+            from app.services.llm_analysis_service import llm_analysis_service
+            analysis = await llm_analysis_service.analyze_content(title, content)
+            if analysis.get("summary") or analysis.get("category") or analysis.get("tags"):
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(Knowledge).where(Knowledge.id == knowledge_id)
+                    )
+                    knowledge = result.scalar_one_or_none()
+                    if knowledge:
+                        if analysis.get("summary"):
+                            knowledge.summary = analysis["summary"]
+                        if analysis.get("category"):
+                            knowledge.category = analysis["category"]
+                        if analysis.get("tags"):
+                            knowledge.tags = analysis["tags"]
+                        if analysis.get("key_concepts"):
+                            knowledge.key_concepts = analysis["key_concepts"]
+                        if analysis.get("related_topics"):
+                            knowledge.related_topics = analysis["related_topics"]
+                        if analysis.get("knowledge_type"):
+                            knowledge.knowledge_type = analysis["knowledge_type"]
+                        await db.commit()
+                        analysis_ok = True
+        except Exception as e:
+            logger.warning(f"LLM 分析失败(knowledge_id={knowledge_id}): {e}")
+
+        # Step 3: 确定最终状态（任一成功即为 done）
+        final_status = "done" if (embedding_ok or analysis_ok) else "failed"
+        async with async_session() as db:
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if knowledge:
+                knowledge.analysis_status = final_status
+                await db.commit()
+
+        # Step 4: 知识关联（独立容错，不影响分析状态）
+        if final_status == "done":
+            try:
+                from app.services.knowledge_graph_service import KnowledgeGraphService
+                async with async_session() as db:
+                    graph_svc = KnowledgeGraphService(db)
+                    await graph_svc.build_relations_for(knowledge_id)
+            except Exception as e:
+                logger.warning(f"知识关联建立失败(knowledge_id={knowledge_id}): {e}")
 
     async def create_from_conversation(
         self,
@@ -229,6 +262,8 @@ class KnowledgeService:
 
             from app.services.embedding_service import generate_embedding
             query_embedding = await generate_embedding(query)
+            if query_embedding is None:
+                return await self._search_keyword_fallback(query, top_k, category)
 
             stmt = select(
                 Knowledge,
@@ -283,3 +318,15 @@ class KnowledgeService:
             }
             for r in rows
         ]
+
+    async def reanalyze(self, knowledge_id: int):
+        """重新分析指定知识条目（嵌入 + LLM 分析 + 关联）"""
+        knowledge = await self.get_knowledge(knowledge_id)
+        if not knowledge:
+            return None
+
+        # 重启后台分析（会覆盖现有状态和数据）
+        asyncio.create_task(
+            self._analyze_and_embed(knowledge_id, knowledge.title, knowledge.content)
+        )
+        return knowledge

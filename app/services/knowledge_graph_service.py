@@ -42,8 +42,11 @@ class KnowledgeGraphService:
         relations = []
 
         for target in targets:
-            # 1. 语义相似度关联（基于 embedding）
+            # 1. 语义相似度关联（基于 embedding，支持标签回退）
             sim_score = await self._calc_similarity(source, target)
+            if sim_score is None:
+                # 如果 embedding 不可用，尝试标签重叠
+                sim_score = self._tag_similarity(source, target)
             if sim_score and sim_score >= self.SIMILARITY_THRESHOLD:
                 relations.append({
                     "source_id": knowledge_id,
@@ -123,6 +126,17 @@ class KnowledgeGraphService:
         except Exception as e:
             logger.debug(f"相似度计算失败: {e}")
             return None
+
+    def _tag_similarity(self, a: Knowledge, b: Knowledge) -> Optional[float]:
+        """基于标签重叠计算相似度回退（embedding 不可用时的备用方案）"""
+        a_tags = set(t.lower() for t in (a.tags or []))
+        b_tags = set(t.lower() for t in (b.tags or []))
+        if not a_tags or not b_tags:
+            return None
+        overlap = len(a_tags & b_tags)
+        if overlap < 2:
+            return None
+        return min(0.5 + overlap * 0.1, 0.85)
 
     def _concept_overlap(self, a: Knowledge, b: Knowledge) -> List[str]:
         """计算两个条目的概念重叠"""
@@ -241,6 +255,20 @@ class KnowledgeGraphService:
                     if row.Knowledge.id not in visited:
                         queue.append((row.Knowledge.id, current_depth + 1))
 
+            # BFS 未找到任何关联节点时，至少返回中心节点自身
+            if not nodes and center_id:
+                result = await self.db.execute(
+                    select(Knowledge).where(Knowledge.id == center_id)
+                )
+                kn = result.scalar_one_or_none()
+                if kn:
+                    nodes[center_id] = {
+                        "id": kn.id,
+                        "title": kn.title[:30],
+                        "category": kn.category or "未分类",
+                        "size": 1,
+                    }
+
         else:
             # 全局图谱：获取最活跃的关联
             result = await self.db.execute(
@@ -275,6 +303,19 @@ class KnowledgeGraphService:
                     "type": row.KnowledgeRelation.relation_type,
                     "score": row.KnowledgeRelation.score,
                 })
+
+            # 全局图谱无关联时，返回最近知识作为孤立节点
+            if not nodes:
+                result = await self.db.execute(
+                    select(Knowledge).order_by(Knowledge.created_at.desc()).limit(limit)
+                )
+                for kn in result.scalars().all():
+                    nodes[kn.id] = {
+                        "id": kn.id,
+                        "title": kn.title[:30],
+                        "category": kn.category or "未分类",
+                        "size": 1,
+                    }
 
         # 计算节点度数（关联数）
         for edge in edges:
