@@ -82,55 +82,22 @@ async def list_knowledge(
     return KnowledgeList(items=items, total=total)
 
 
-@router.get("/knowledge/{knowledge_id}", response_model=KnowledgeResponse)
-async def get_knowledge(
-    knowledge_id: int,
+@router.get("/knowledge/stats")
+async def knowledge_stats(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取知识详情"""
-    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
-    knowledge = result.scalar_one_or_none()
-
-    if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
-
-    return knowledge
-
-
-@router.put("/knowledge/{knowledge_id}", response_model=KnowledgeResponse)
-async def update_knowledge(
-    knowledge_id: int,
-    knowledge_data: KnowledgeUpdate,
-    current_user: Member = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """更新知识"""
-    service = KnowledgeService(db)
-    update_data = knowledge_data.model_dump(exclude_unset=True)
-    knowledge = await service.update_knowledge(knowledge_id, **update_data)
-
-    if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
-
-    return knowledge
-
-
-@router.delete("/knowledge/{knowledge_id}", status_code=204)
-async def delete_knowledge(
-    knowledge_id: int,
-    current_user: Member = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """删除知识"""
-    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
-    knowledge = result.scalar_one_or_none()
-
-    if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
-
-    await db.delete(knowledge)
-    await db.commit()
+    """知识库分类统计"""
+    result = await db.execute(
+        select(
+            Knowledge.category,
+            func.count(Knowledge.id)
+        ).group_by(Knowledge.category)
+    )
+    rows = result.all()
+    categories = {row[0] or "未分类": row[1] for row in rows}
+    total = sum(categories.values())
+    return {"total": total, "categories": categories}
 
 
 @router.get("/knowledge/search/semantic", response_model=List[KnowledgeSearchResult])
@@ -242,19 +209,52 @@ async def create_from_chat(
     return knowledge
 
 
-@router.get("/knowledge/stats")
-async def knowledge_stats(
+@router.get("/knowledge/{knowledge_id}", response_model=KnowledgeResponse)
+async def get_knowledge(
+    knowledge_id: int,
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """知识库分类统计"""
-    result = await db.execute(
-        select(
-            Knowledge.category,
-            func.count(Knowledge.id)
-        ).group_by(Knowledge.category)
-    )
-    rows = result.all()
-    categories = {row[0] or "未分类": row[1] for row in rows}
-    total = sum(categories.values())
-    return {"total": total, "categories": categories}
+    """获取知识详情"""
+    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    knowledge = result.scalar_one_or_none()
+
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+
+    return knowledge
+
+
+@router.put("/knowledge/{knowledge_id}", response_model=KnowledgeResponse)
+async def update_knowledge(
+    knowledge_id: int,
+    knowledge_data: KnowledgeUpdate,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """更新知识"""
+    service = KnowledgeService(db)
+    update_data = knowledge_data.model_dump(exclude_unset=True)
+    knowledge = await service.update_knowledge(knowledge_id, **update_data)
+
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+
+    return knowledge
+
+
+@router.delete("/knowledge/{knowledge_id}", status_code=204)
+async def delete_knowledge(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """删除知识"""
+    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    knowledge = result.scalar_one_or_none()
+
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+
+    await db.delete(knowledge)
+    await db.commit()
