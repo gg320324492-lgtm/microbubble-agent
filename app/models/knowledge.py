@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, LargeBinary, Float, Boolean
+from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, Float, Boolean
+from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
@@ -24,6 +25,8 @@ class Knowledge(Base, TimestampMixin):
     analysis_status = Column(String(20), default="pending") # pending/analyzing/done/failed
     auto_researched = Column(Boolean, default=False)        # 是否已触发自主研究
     quality_score = Column(Float, nullable=True)            # 内容质量评分 0-1
+    needs_review = Column(Boolean, default=False)           # 是否需人工审阅（矛盾检测后标记）
+    entities = Column(JSONB, nullable=True)                 # 实体三元组 [{subject, predicate, object, condition, confidence}]
 
     # 来源
     source = Column(String(500))  # 来源链接或文件路径
@@ -56,3 +59,15 @@ class KnowledgeRelation(Base, TimestampMixin):
     score = Column(Float, default=0.5)    # 关联强度 0-1
     reason = Column(String(500))          # 关联原因
     created_by = Column(String(20), default="auto")  # auto/manual/llm
+
+
+class KnowledgeGap(Base, TimestampMixin):
+    """知识空白记录 — QA 引擎检测到的知识缺失"""
+    __tablename__ = "knowledge_gaps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query = Column(Text, nullable=False)          # 触发空白的用户问题
+    area = Column(String(200), nullable=True)     # 空白领域
+    filled = Column(Boolean, default=False)       # 是否已填补
+    filled_at = Column(String, nullable=True)     # 填补时间
+    knowledge_ids = Column(ARRAY(Integer), default=[])  # 填补时入库的知识条目 ID

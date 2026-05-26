@@ -7,7 +7,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
-from app.models.knowledge import Knowledge
+from app.models.knowledge import Knowledge, KnowledgeGap
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
 logger = logging.getLogger("microbubble.knowledge_qa")
@@ -107,12 +107,39 @@ class KnowledgeQAService:
 
         answer_data = await self._llm_synthesize(question, context_str)
 
-        # Step 5: 组装结果
+        confidence = answer_data.get("confidence", "low")
+
+        # Step 5: 低置信度时自动触发研究 + 持久化空白
+        if confidence == "low" and auto_research:
+            try:
+                gap = KnowledgeGap(
+                    query=question,
+                    area=high_quality[0].get("category") if high_quality else None,
+                )
+                self.db.add(gap)
+                await self.db.commit()
+                await self.db.refresh(gap)
+                logger.info(f"知识空白已记录(gap_id={gap.id}): {question[:50]}")
+
+                # 异步触发自主研究
+                import asyncio
+                from app.services.auto_research_service import AutoResearchService
+                asyncio.create_task(
+                    AutoResearchService(self.db).research_topic(
+                        queries=research_queries[:3] if research_queries else [question],
+                        max_results_per_query=2,
+                    )
+                )
+                research_queries = research_queries or [question]
+            except Exception as e:
+                logger.warning(f"知识空白处理失败: {e}")
+
+        # Step 6: 组装结果
         return {
             "answer": answer_data.get("answer", ""),
             "sources": answer_data.get("sources", []),
-            "confidence": answer_data.get("confidence", "low"),
-            "research_triggered": need_research,
+            "confidence": confidence,
+            "research_triggered": need_research or confidence == "low",
             "research_queries": research_queries,
             "search_results": {
                 "high": len(high_quality),
@@ -224,6 +251,149 @@ class KnowledgeQAService:
         """获取与问题相关的知识条目 ID（用于推荐阅读）"""
         results = await self._search_knowledge_base(question, limit)
         return [r["id"] for r in results if r.get("score", 0) >= self.MEDIUM_CONFIDENCE_THRESHOLD]
+
+    async def reason(self, question: str, max_hops: int = 2, top_k: int = 6) -> dict:
+        """多跳推理问答 — 遍历知识图谱关联链，LLM 合成推理路径
+
+        流程:
+        1. 语义搜索 → top_k 种子文档（第1跳）
+        2. 对每个种子 → 查询 get_related() → 关联文档（第2跳）
+        3. 对第2跳结果 → 可选查询更深关联（第3跳）
+        4. 构建推理链文本 → LLM 合成带推理路径的答案
+        """
+        from app.services.knowledge_graph_service import KnowledgeGraphService
+
+        # Step 1: 种子文档
+        seed_results = await self._search_knowledge_base(question, top_k)
+        if not seed_results:
+            return {
+                "answer": "知识库中未找到相关信息，无法进行推理。",
+                "reasoning_chain": [],
+                "confidence": "low",
+                "hops_used": 0,
+            }
+
+        graph_svc = KnowledgeGraphService(self.db)
+        visited = set()
+        chain_nodes = {}  # {id: {title, summary, hop}}
+
+        # Step 2: BFS 多跳遍历
+        for seed in seed_results[:top_k]:
+            sid = seed["id"]
+            if sid in visited:
+                continue
+            visited.add(sid)
+            chain_nodes[sid] = {
+                "title": seed.get("title", ""),
+                "summary": seed.get("summary") or seed.get("content", "")[:200],
+                "hop": 0,
+            }
+
+            if max_hops >= 1:
+                related = await graph_svc.get_related(sid, limit=5)
+                for rel in related:
+                    rid = rel["id"]
+                    if rid not in visited:
+                        visited.add(rid)
+                        chain_nodes[rid] = {
+                            "title": rel.get("title", ""),
+                            "summary": rel.get("summary", "")[:200],
+                            "hop": 1,
+                            "relation_from": rel.get("relation_type", "similar"),
+                            "relation_score": rel.get("score", 0),
+                            "from_node": sid,
+                        }
+
+                        if max_hops >= 2:
+                            deeper = await graph_svc.get_related(rid, limit=3)
+                            for drel in deeper:
+                                did = drel["id"]
+                                if did not in visited and did not in {s["id"] for s in seed_results}:
+                                    visited.add(did)
+                                    chain_nodes[did] = {
+                                        "title": drel.get("title", ""),
+                                        "summary": drel.get("summary", "")[:200],
+                                        "hop": 2,
+                                        "relation_from": drel.get("relation_type", "similar"),
+                                        "from_node": rid,
+                                    }
+
+        if len(chain_nodes) <= 1:
+            # 只有一个节点，降级为普通 RAG
+            return await self.answer_question(question, top_k=top_k, auto_research=False)
+
+        # Step 3: 构建推理链文本
+        chain_texts = []
+        for nid, node in sorted(chain_nodes.items(), key=lambda x: x[1]["hop"]):
+            hop_label = ["种子", "关联", "深层关联"][min(node.get("hop", 0), 2)]
+            if node.get("hop", 0) > 0:
+                from_title = chain_nodes.get(node.get("from_node", 0), {}).get("title", "?")
+                rel_type = node.get("relation_from", "similar")
+                chain_texts.append(
+                    f"[{hop_label}] {node['title']}\n"
+                    f"  ↑ [{rel_type}] ← {from_title}\n"
+                    f"  摘要: {node['summary']}"
+                )
+            else:
+                chain_texts.append(
+                    f"[{hop_label}] {node['title']}\n"
+                    f"  摘要: {node['summary']}"
+                )
+
+        # Step 4: LLM 推理合成
+        prompt = f"""你是一个知识推理助手。基于以下知识图谱推理链回答用户问题。
+
+## 推理链（从种子文档到深层关联，共{len(chain_nodes)}个节点）
+
+{chr(10).join(chain_texts)}
+
+## 用户问题
+
+{question}
+
+## 回答要求
+
+1. 明确展示推理路径：从哪条知识出发 → 经过什么关联 → 得出什么结论
+2. 如果推理链有断点（缺少关键关联），明确指出
+3. 给出结论的置信度（high/medium/low）
+
+返回严格的JSON格式（不要其他文字）：
+{{{{
+  "answer": "完整推理回答，包含推理步骤",
+  "reasoning_chain": ["步骤1: 从...出发", "步骤2: 通过...关联发现", "步骤3: 综合得出..."],
+  "confidence": "medium",
+  "gap_description": "推理链中缺失的关键信息（如有）"
+}}}}"""
+
+        try:
+            client = get_anthropic_client()
+            response = await client.messages.create(
+                model=get_default_model(),
+                max_tokens=1500,
+                timeout=30,
+                thinking={'type': 'disabled'},
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = extract_text_from_response(response)
+            result = parse_llm_json(text)
+
+            return {
+                "answer": result.get("answer", ""),
+                "reasoning_chain": result.get("reasoning_chain", []),
+                "confidence": result.get("confidence", "low"),
+                "gap_description": result.get("gap_description", ""),
+                "hops_used": max(node.get("hop", 0) for node in chain_nodes.values()),
+                "nodes_used": len(chain_nodes),
+            }
+        except Exception as e:
+            logger.error(f"多跳推理失败: {e}")
+            return {
+                "answer": "推理引擎暂时不可用，请稍后重试。",
+                "reasoning_chain": [],
+                "confidence": "low",
+                "gap_description": str(e),
+                "hops_used": 0,
+            }
 
 
 knowledge_qa_service = KnowledgeQAService

@@ -13,6 +13,7 @@ from app.schemas.knowledge import (
     KnowledgeSearchResult, RelatedKnowledge, KnowledgeGraph,
     DynamicCategory, TagCloudItem, KnowledgeStats,
     QAResponse, ResearchResponse,
+    ReasonRequest, ReasonResponse, ReviewQueueItem, ReviewQueueResponse,
 )
 from app.services.knowledge_service import KnowledgeService
 from app.services.knowledge_graph_service import KnowledgeGraphService
@@ -276,6 +277,28 @@ async def create_from_chat(
     return knowledge
 
 
+@router.get("/knowledge/review-queue", response_model=ReviewQueueResponse)
+async def get_review_queue(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取待审阅的知识条目（矛盾检测标记）"""
+    result = await db.execute(
+        select(Knowledge).where(Knowledge.needs_review == True)
+    )
+    items = result.scalars().all()
+    return ReviewQueueResponse(
+        items=[
+            ReviewQueueItem(
+                id=k.id, title=k.title, category=k.category,
+                needs_review=k.needs_review, analysis_status=k.analysis_status
+            )
+            for k in items
+        ],
+        total=len(items),
+    )
+
+
 @router.get("/knowledge/{knowledge_id}", response_model=KnowledgeResponse)
 async def get_knowledge(
     knowledge_id: int,
@@ -446,3 +469,36 @@ async def reanalyze_knowledge(
     if not knowledge:
         raise HTTPException(status_code=404, detail="知识不存在")
     return knowledge
+
+
+@router.post("/knowledge/reason", response_model=ReasonResponse)
+async def reason_knowledge(
+    body: ReasonRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """多跳推理问答 — 遍历知识图谱关联链进行推理"""
+    from app.schemas.knowledge import ReasonRequest, ReasonResponse
+    qa = KnowledgeQAService(db)
+    result = await qa.reason(question=body.question, max_hops=body.max_hops, top_k=body.top_k)
+    return result
+
+
+
+
+@router.post("/knowledge/{knowledge_id}/review")
+async def mark_reviewed(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """标记知识条目为已审阅"""
+    result = await db.execute(
+        select(Knowledge).where(Knowledge.id == knowledge_id)
+    )
+    knowledge = result.scalar_one_or_none()
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+    knowledge.needs_review = False
+    await db.commit()
+    return {"message": "已标记为已审阅", "id": knowledge_id}

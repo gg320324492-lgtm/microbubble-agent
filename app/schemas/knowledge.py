@@ -40,6 +40,8 @@ class KnowledgeResponse(KnowledgeBase):
     analysis_status: Optional[str] = None
     auto_researched: Optional[bool] = False
     quality_score: Optional[float] = None
+    entities: Optional[list] = None
+    needs_review: Optional[bool] = False
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -156,3 +158,35 @@ class ResearchResponse(BaseModel):
     results: List[ResearchResultItem]
     new_knowledge_count: int
     message: str
+
+
+class ReasonRequest(BaseModel):
+    """多跳推理请求"""
+    question: str
+    max_hops: int = 2
+    top_k: int = 6
+
+
+class ReasonResponse(BaseModel):
+    """多跳推理响应"""
+    answer: str
+    reasoning_chain: List[str]
+    confidence: str
+    gap_description: str = ""
+    hops_used: int
+    nodes_used: int
+
+
+class ReviewQueueItem(BaseModel):
+    """待审阅条目"""
+    id: int
+    title: str
+    category: Optional[str] = None
+    needs_review: bool
+    analysis_status: str
+
+
+class ReviewQueueResponse(BaseModel):
+    """待审阅队列"""
+    items: List[ReviewQueueItem]
+    total: int
