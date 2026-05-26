@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash, get_current_user, get_current_admin_user
 from app.models.member import Member
 from app.schemas.member import MemberCreate, MemberUpdate, MemberResponse, MemberList
+from app.api.v1.auth import _resolve_avatar_url
 
 router = APIRouter()
 
@@ -74,6 +75,10 @@ async def list_members(
     result = await db.execute(query)
     members = result.scalars().all()
 
+    # Resolve avatar URLs for consistent public access
+    for m in members:
+        m.avatar = _resolve_avatar_url(m)
+
     return MemberList(items=members, total=len(members))
 
 
@@ -90,6 +95,7 @@ async def get_member(
     if not member:
         raise HTTPException(status_code=404, detail="成员不存在")
 
+    member.avatar = _resolve_avatar_url(member)
     return member
 
 
