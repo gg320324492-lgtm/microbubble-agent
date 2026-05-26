@@ -14,6 +14,10 @@ from app.schemas.knowledge import (
 )
 from app.services.knowledge_service import KnowledgeService
 
+import logging
+logger = logging.getLogger("microbubble.knowledge")
+
+
 router = APIRouter()
 
 
@@ -158,16 +162,24 @@ async def upload_knowledge_file(
     if ext not in allowed_exts:
         raise HTTPException(400, f"不支持的文件类型: {ext}")
 
+    # 先检查 Content-Length 头，避免读取超大文件
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    content_length = file.headers.get("content-length")
+    if content_length and int(content_length) > max_bytes:
+        raise HTTPException(400, f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
+
     # 读取文件
     file_data = await file.read()
-    if len(file_data) > settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024:
+
+    # 二次校验实际大小
+    if len(file_data) > max_bytes:
         raise HTTPException(400, f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
 
     # 提取文本
     from app.services.file_parser_service import file_parser_service
     try:
         content = await file_parser_service.extract_text(
-            file_data, filename, file.content_type or ""
+            file_data, filename, file.content_type or "application/octet-stream"
         )
     except Exception as e:
         raise HTTPException(400, f"文本提取失败: {str(e)}")
@@ -177,23 +189,37 @@ async def upload_knowledge_file(
 
     # 上传文件到 MinIO
     from app.services.file_service import file_service
-    upload_result = await file_service.upload_file(
-        file_data=file_data,
-        filename=filename,
-        content_type=file.content_type or "application/octet-stream",
-        prefix="knowledge"
-    )
+    try:
+        upload_result = await file_service.upload_file(
+            file_data=file_data,
+            filename=filename,
+            content_type=file.content_type or "application/octet-stream",
+            prefix="knowledge"
+        )
+    except Exception as e:
+        logger.exception(f"MinIO 上传失败: {filename}")
+        raise HTTPException(500, "文件存储服务暂时不可用，请稍后重试")
 
     # 创建知识条目（后台自动分析）
     service = KnowledgeService(db)
-    knowledge = await service.create_from_file(
-        title=title or filename,
-        content=content,
-        file_path=upload_result["object_name"],
-        file_name=filename,
-        file_type=file.content_type or "application/octet-stream",
-        created_by=current_user.id
-    )
+    try:
+        knowledge = await service.create_from_file(
+            title=title or filename,
+            content=content,
+            file_path=upload_result["object_name"],
+            file_name=filename,
+            file_type=file.content_type or "application/octet-stream",
+            created_by=current_user.id
+        )
+    except Exception as e:
+        logger.exception(f"知识条目创建失败: {filename}")
+        # 清理 MinIO 中的孤立文件
+        try:
+            file_service.delete_file(upload_result["object_name"])
+        except Exception:
+            logger.warning(f"清理孤立文件失败: {upload_result['object_name']}")
+        raise HTTPException(500, "知识条目创建失败，请稍后重试")
+
     return knowledge
 
 

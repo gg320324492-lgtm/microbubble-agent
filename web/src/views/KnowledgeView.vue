@@ -286,14 +286,14 @@
         drag
         :auto-upload="false"
         :limit="1"
-        accept=".pdf,.docx,.doc,.xlsx,.xls,.txt,.md"
+        accept=".pdf,.docx,.xlsx,.txt,.md"
         :on-change="onUploadFileChange"
         :on-exceed="() => ElMessage.warning('只能上传一个文件')"
       >
         <el-icon class="el-icon--upload"><Upload /></el-icon>
         <div class="el-upload__text">拖拽文件到此处，或 <em>点击选择</em></div>
         <template #tip>
-          <div class="el-upload__tip">支持 PDF、Word、Excel、TXT、Markdown，最大 50MB</div>
+          <div class="el-upload__tip">支持 PDF、Word(.docx)、Excel(.xlsx)、TXT、Markdown，最大 50MB</div>
         </template>
       </el-upload>
       <template #footer>
@@ -477,7 +477,7 @@ const handleUpload = async () => {
     formData.append('file', uploadFile.value)
     if (uploadTitle.value) formData.append('title', uploadTitle.value)
 
-    await axios.post('/api/v1/knowledge/upload', formData)
+    await axios.post('/api/v1/knowledge/upload', formData, { timeout: 180000 })
     ElMessage.success('文件上传成功，后台正在分析...')
     showUploadDialog.value = false
     uploadTitle.value = ''
@@ -486,7 +486,20 @@ const handleUpload = async () => {
     fetchKnowledge()
     fetchStats()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '上传失败')
+    if (e.code === 'ECONNABORTED') {
+      ElMessage.error('上传超时，请检查网络或尝试更小的文件')
+    } else if (!e.response) {
+      ElMessage.error('网络连接失败，请检查网络后重试')
+    } else {
+      const detail = e.response?.data?.detail
+      if (Array.isArray(detail)) {
+        ElMessage.error(detail.map(d => d.msg || JSON.stringify(d)).join('; '))
+      } else if (typeof detail === 'string') {
+        ElMessage.error(detail)
+      } else {
+        ElMessage.error('上传失败')
+      }
+    }
   } finally {
     uploading.value = false
   }
