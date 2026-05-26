@@ -52,13 +52,29 @@ cd "$PROJECT_DIR/web"
 npm install --silent >> "$LOG_FILE" 2>&1
 
 log "npm run build..."
+set +e  # 构建失败不应中止脚本 — 需要走降级逻辑
 npm run build >> "$LOG_FILE" 2>&1
+BUILD_EXIT=$?
+set -e
 
-# 验证构建产物
-if [ ! -f "$PROJECT_DIR/web/dist/index.html" ]; then
-    log "ERROR: npm build 失败，dist/index.html 不存在"
-    log "========== 部署中止 =========="
-    exit 1
+# 验证构建产物 — 检查 main JS 文件是否存在（不仅仅是 index.html）
+MAIN_JS=""
+if [ -f "$PROJECT_DIR/web/dist/index.html" ]; then
+    MAIN_JS=$(grep -oP 'src="/assets/index-\w+\.js"' "$PROJECT_DIR/web/dist/index.html" | head -1 | sed 's|src="/||;s|"||')
+fi
+
+if [ "$BUILD_EXIT" -ne 0 ] || [ ! -f "$PROJECT_DIR/web/dist/$MAIN_JS" ]; then
+    log "WARN: npm build 失败或产物不完整，回退到 git 已提交的 dist"
+    # 恢复 git 中最后一次提交的 dist（如果 git 中有的话）
+    cd "$PROJECT_DIR"
+    git checkout -- web/dist/ 2>/dev/null || true
+    if [ -f "$PROJECT_DIR/web/dist/index.html" ]; then
+        log "已从 git 恢复旧版本 dist，跳过构建步骤继续部署"
+    else
+        log "ERROR: git 中也无可用 dist，部署中止"
+        log "========== 部署中止 =========="
+        exit 1
+    fi
 fi
 
 # 测试 nginx 配置有效性
