@@ -190,9 +190,17 @@ const handleAvatarUpload = async (e) => {
     return
   }
 
-  // 文件 >= 1MB 时先压缩再上传（手机端优化）
-  const uploadFile = file.size >= 1024 * 1024 ? await compressImage(file) : file
+  // 文件 >= 1MB 时先压缩再上传；HEIC 等不受支持的格式跳过压缩
+  let uploadFile = file
+  if (file.size >= 1024 * 1024) {
+    try {
+      uploadFile = await compressImage(file)
+    } catch {
+      // HEIC/WebP 等 Canvas 不支持的格式直接用原文件
+    }
+  }
 
+  let objectName
   try {
     // 1. 上传文件到 MinIO
     const formData = new FormData()
@@ -206,37 +214,42 @@ const handleAvatarUpload = async (e) => {
       ElMessage.error('上传返回数据异常')
       return
     }
+    objectName = res.data.object_name
 
-    const objectName = res.data.object_name
-
-    // 2. 立即保存到后端（自动持久化，用户无需再点"保存资料"）
+    // 2. 立即保存到后端（自动持久化）
     await axios.put('/api/v1/auth/profile', { avatar: objectName })
-
-    // 3. 获最新用户信息（拿到后端解析后的完整 URL）
-    const meRes = await axios.get('/api/v1/auth/me')
-    const resolvedUrl = meRes.data?.avatar || `${window.location.origin}/minio/microbubble/${objectName}`
-
-    // 4. 更新 localStorage
-    const stored = JSON.parse(localStorage.getItem('user_info') || '{}')
-    stored.avatar = resolvedUrl
-    localStorage.setItem('user_info', JSON.stringify(stored))
-
-    // 5. 刷新 store
-    userStore.loadFromStorage()
-
-    // 6. 更新预览
-    form.avatar = resolvedUrl
-    previewAvatarUrl.value = resolvedUrl
-    avatarObjectName.value = objectName
-    avatarChanged.value = false
-
-    ElMessage.success('头像已更新')
   } catch (err) {
-    const status = err.response?.status
     const detail = err.response?.data?.detail || err.message
-    console.error('[头像上传失败]', { status, detail })
+    console.error('[头像上传失败]', { detail })
     ElMessage.error(`头像上传失败: ${detail}`)
+    return
   }
+
+  // 3. 获取完整 URL（容错：失败时用本地构建的兜底）
+  let resolvedUrl
+  try {
+    const meRes = await axios.get('/api/v1/auth/me')
+    resolvedUrl = meRes.data?.avatar
+  } catch {
+    // GET 失败不影响保存结果
+  }
+  resolvedUrl = resolvedUrl || `${window.location.origin}/minio/microbubble/${objectName}`
+
+  // 4. 无论如何都更新 localStorage（防止刷新后回退）
+  const stored = JSON.parse(localStorage.getItem('user_info') || '{}')
+  stored.avatar = resolvedUrl
+  localStorage.setItem('user_info', JSON.stringify(stored))
+
+  // 5. 刷新 store
+  userStore.loadFromStorage()
+
+  // 6. 更新预览
+  form.avatar = resolvedUrl
+  previewAvatarUrl.value = resolvedUrl
+  avatarObjectName.value = objectName
+  avatarChanged.value = false
+
+  ElMessage.success('头像已更新')
 }
 
 const saveProfile = async () => {
