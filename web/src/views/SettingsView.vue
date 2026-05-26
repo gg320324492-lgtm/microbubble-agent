@@ -107,6 +107,7 @@ const previewAvatarUrl = ref(userInfo.value?.avatar || '')
 watch(() => userStore.userInfo, (newInfo) => {
   if (newInfo?.avatar) {
     previewAvatarUrl.value = newInfo.avatar
+    form.avatar = newInfo.avatar
   }
 })
 
