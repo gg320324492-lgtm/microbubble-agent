@@ -543,7 +543,7 @@ async def get_pending_reminder_count(
 ):
     """获取当前用户的待处理提醒数量"""
     result = await db.execute(
-        select(func.count(Reminder.id))
+        select(func.count(func.distinct(Reminder.task_id)))
         .join(Task, Task.id == Reminder.task_id)
         .where(
             and_(
@@ -598,7 +598,8 @@ async def get_pending_reminders(
                 Reminder.status == "pending"
             )
         )
-        .order_by(Reminder.remind_at.asc())
+        .distinct(Reminder.task_id)
+        .order_by(Reminder.task_id, Reminder.remind_at.asc())
         .limit(50)
     )
     rows = result.all()
