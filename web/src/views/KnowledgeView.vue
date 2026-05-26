@@ -29,7 +29,7 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :xs="24" :sm="12" :md="8">
+        <el-col :xs="24" :sm="12" :md="10">
           <el-input
             v-model="searchQuery"
             placeholder="搜索知识库..."
@@ -41,15 +41,7 @@
             </template>
           </el-input>
         </el-col>
-        <el-col :xs="12" :sm="12" :md="6">
-          <el-select v-model="filterCategory" placeholder="分类" clearable>
-            <el-option label="基础知识" value="基础" />
-            <el-option label="实验方法" value="方法" />
-            <el-option label="文献笔记" value="文献" />
-            <el-option label="常见问题" value="FAQ" />
-          </el-select>
-        </el-col>
-        <el-col :xs="12" :sm="12" :md="10">
+        <el-col :xs="24" :sm="12" :md="14">
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
             添加知识
@@ -65,20 +57,6 @@
         </el-col>
       </el-row>
     </el-card>
-
-    <!-- 分类标签 -->
-    <div class="category-tags">
-      <span
-        v-for="cat in categories"
-        :key="cat.value"
-        class="category-tag-item"
-        :class="{ 'category-tag-active': filterCategory === cat.value }"
-        @click="filterCategory = filterCategory === cat.value ? '' : cat.value"
-      >
-        <span class="category-tag-icon">{{ cat.icon }}</span>
-        <span class="category-tag-text">{{ cat.label }}</span>
-      </span>
-    </div>
 
     <!-- 知识列表 -->
     <el-card class="knowledge-list-card">
@@ -477,6 +455,7 @@ const handleUpload = async () => {
     formData.append('file', uploadFile.value)
     if (uploadTitle.value) formData.append('title', uploadTitle.value)
 
+    console.log('UPLOAD_DEBUG: file=%s size=%s type=%s', uploadFile.value?.name, uploadFile.value?.size, uploadFile.value?.type)
     await axios.post('/api/v1/knowledge/upload', formData, { timeout: 180000 })
     ElMessage.success('文件上传成功，后台正在分析...')
     showUploadDialog.value = false
@@ -534,8 +513,6 @@ onMounted(() => {
 
 <style scoped>
 .knowledge-view {
-  height: 100%;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
@@ -600,54 +577,6 @@ onMounted(() => {
 
 .result-category {
   margin-bottom: var(--space-2);
-}
-
-.category-tags {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both;
-}
-
-.category-tag-item {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-full);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-out);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-regular);
-}
-
-.category-tag-item:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-  transform: translateY(-2px);
-}
-
-.category-tag-active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #fff;
-}
-
-.category-tag-active:hover {
-  background: var(--color-primary-dark);
-  border-color: var(--color-primary-dark);
-  color: #fff;
-}
-
-.category-tag-icon {
-  font-size: var(--font-size-md);
-}
-
-.category-tag-text {
-  font-weight: var(--font-weight-medium);
 }
 
 .knowledge-list {
@@ -911,8 +840,6 @@ onMounted(() => {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both;
-  position: relative;
-  z-index: 2;
 }
 
 .knowledge-list-card {
