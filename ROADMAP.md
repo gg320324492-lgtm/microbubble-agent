@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-25 (更新：成员登录修复)
+> 最后更新: 2026-05-26 (更新：头像上传修复 + mnb-lab.cn SSL 修复)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1465,3 +1465,34 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 | 密码补全 | 为 4 位无密码成员设置 bcrypt 哈希后的默认密码 `123456` | ✅ 完成 |
 
 **根因：** 成员批量创建时未调用 `get_password_hash()` 设置密码。
+
+### 头像上传 prefix 参数修复 (2026-05-26)
+
+头像上传后无法正常显示。排查发现前端通过 FormData 发送 `prefix=avatars`，但后端 `app/api/v1/upload.py` 使用 `Query("uploads")` 读取该参数——`Query()` 无法从 multipart/form-data 读取值，导致 prefix 静默回退到默认值 `"uploads"`，所有头像文件存到 `uploads/` 而非 `avatars/`。
+
+**关键变更：**
+
+| 变更 | 说明 | 状态 |
+|------|------|------|
+| Query → Form | `app/api/v1/upload.py` 中 `prefix` 参数从 `Query("uploads")` 改为 `Form("uploads")` | ✅ 完成 |
+
+**修改文件：**
+- `app/api/v1/upload.py` — `Query` 改为 `Form`
+
+**验证：** 端到端测试确认：上传 → `avatars/uuid.png` 前缀正确 → 云代理 HTTP 200 → 保存资料写入 DB → `_resolve_avatar_url` 返回公网 URL。
+
+### mnb-lab.cn SSL 证书修复 (2026-05-26)
+
+`https://mnb-lab.cn` 不可访问，报 `SEC_E_WRONG_PRINCIPAL`。云服务器 Let's Encrypt 证书仅覆盖 `agent.mnb-lab.cn`，`mnb-lab.cn` HTTPS 请求落入 `agent.mnb-lab.cn` 的 server block，证书域名不匹配被浏览器拦截。
+
+**修复：**
+1. `certbot --expand` 将 `mnb-lab.cn` / `www.mnb-lab.cn` 加入证书
+2. nginx 新增 `mnb-lab.cn` 的 HTTP（301→HTTPS）和 HTTPS server block，指向 `/var/www/mnb-lab`
+
+**教训：** 同服务器新增域名 → 必须扩展 SSL 证书 + 添加 nginx server block。
+
+### mnb-lab.cn 内容更新 + 云服务器 OOM (2026-05-26)
+
+`mnb-lab.cn` 网站内容过期，尝试云服务器构建 Next.js 时 2核2G 内存耗尽导致服务器卡死。改为本地 Windows 构建（`npm run build`）→ MinIO 中转 → 云服务器下载部署。
+
+**教训：** 云服务器严禁运行 `npm run build`，所有构建在本地完成后上传静态产物。
