@@ -107,22 +107,16 @@ class KnowledgeGraphService:
     async def _calc_similarity(self, a: Knowledge, b: Knowledge) -> Optional[float]:
         """计算两个条目的语义相似度"""
         try:
-            # 检查 pgvector 扩展和 embedding
-            check = await self.db.execute(text(
-                "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
-            ))
-            if not check.scalar() or a.embedding is None or b.embedding is None:
+            if a.embedding is None or b.embedding is None:
                 return None
 
-            stmt = text(
-                "SELECT 1 - cosine_distance(:emb_a::vector, :emb_b::vector) AS similarity"
-            )
-            result = await self.db.execute(stmt, {
-                "emb_a": a.embedding,
-                "emb_b": b.embedding
-            })
+            # Use pgvector cosine_distance via SQLAlchemy column expression
+            stmt = select(
+                1 - Knowledge.embedding.cosine_distance(b.embedding)
+            ).where(Knowledge.id == a.id)
+            result = await self.db.execute(stmt)
             row = result.one_or_none()
-            return float(row[0]) if row else None
+            return float(row[0]) if row and row[0] is not None else None
         except Exception as e:
             logger.debug(f"相似度计算失败: {e}")
             return None
