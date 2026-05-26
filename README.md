@@ -251,7 +251,7 @@ npm run dev
 - **成员登录修复**（2026-05-25）：修复 4 位成员（刘莫菲、孟祥琪、吴怡霏、蒋芦笛）password_hash 为空导致无法登录的问题，设定默认密码
 - **头像上传修复**（2026-05-26）：修复 upload.py 中 `Query` 与前端 FormData 不匹配导致 prefix 回退默认值，所有头像存到 `uploads/` 的问题
 - **铃铛通知去重**（2026-05-26）：`GET /reminders` 使用 `DISTINCT ON (task_id)` 按任务去重，每个任务只显示最早的待处理提醒，避免一个任务多个提醒导致铃铛数量翻倍
-- **多站点部署隔离**（2026-05-26）：云服务器同时托管 `agent.mnb-lab.cn` 和 `mnb-lab.cn`，各自独立 SSL 证书和 Nginx server block，禁止云服务器运行 Next.js 构建
+- **头像上传修复**（2026-05-26）：上传后自动持久化无需手动保存、Nginx `^~` 修复 MinIO 图片 404、HEIC 格式兼容、Content-Type boundary 修复手机端、MemberView 不再污染 DB 头像数据、分步错误处理确保刷新不回退
 
 ### 待解决问题
 
