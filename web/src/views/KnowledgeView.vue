@@ -77,8 +77,16 @@
 
     <!-- ===== 知识列表 ===== -->
     <el-card class="knowledge-list-card">
-      <div v-if="knowledgeList.length === 0" class="empty-state">
-        <el-empty description="暂无知识条目" />
+      <div v-if="loading" class="skeleton-list">
+        <div v-for="n in 4" :key="n" class="skeleton-item">
+          <div class="skeleton-line skeleton-line-short"></div>
+          <div class="skeleton-line skeleton-line-medium"></div>
+          <div class="skeleton-line skeleton-line-long"></div>
+        </div>
+      </div>
+
+      <div v-else-if="knowledgeList.length === 0" class="empty-state">
+        <el-empty :description="searchQuery ? `没有找到「${searchQuery}」相关内容` : '暂无知识条目'" />
       </div>
 
       <div v-else class="knowledge-list">
@@ -94,15 +102,27 @@
               <el-tag
                 v-if="item.analysis_status === 'pending'"
                 size="small"
-                type="info"
-                effect="plain"
-              >分析中</el-tag>
+                type="warning"
+                effect="light"
+              >
+                <span class="status-dot status-pending"></span> 分析中
+              </el-tag>
+              <el-tag
+                v-if="item.analysis_status === 'analyzing'"
+                size="small"
+                type="warning"
+                effect="light"
+              >
+                <span class="status-dot status-analyzing"></span> 分析中
+              </el-tag>
               <el-tag
                 v-if="item.analysis_status === 'failed'"
                 size="small"
                 type="danger"
-                effect="plain"
-              >分析失败</el-tag>
+                effect="light"
+              >
+                <span class="status-dot status-failed"></span> 失败
+              </el-tag>
             </div>
             <div class="item-tags">
               <span
@@ -313,10 +333,23 @@
           <span v-if="currentKnowledge.knowledge_type" class="type-badge">{{ currentKnowledge.knowledge_type }}</span>
           <span class="detail-date">{{ formatDate(currentKnowledge.created_at) }}</span>
           <el-tag
-            v-if="currentKnowledge.analysis_status === 'pending'"
+            v-if="currentKnowledge.analysis_status === 'pending' || currentKnowledge.analysis_status === 'analyzing'"
             size="small"
-            type="info"
+            type="warning"
           >分析中</el-tag>
+          <el-tag
+            v-if="currentKnowledge.analysis_status === 'failed'"
+            size="small"
+            type="danger"
+          >分析失败</el-tag>
+          <el-button
+            v-if="currentKnowledge.analysis_status === 'failed'"
+            size="small"
+            type="danger"
+            plain
+            :loading="reanalyzing"
+            @click="handleReanalyze(currentKnowledge.id)"
+          >重新分析</el-button>
           <el-tag
             v-if="currentKnowledge.auto_researched"
             size="small"
@@ -385,9 +418,16 @@
         </div>
 
         <!-- ===== 知识图谱 ===== -->
-        <div v-if="graphData.nodes && graphData.nodes.length > 0" class="detail-graph">
+        <div class="detail-graph">
           <div class="graph-title">📊 知识图谱</div>
-          <div ref="graphRef" class="graph-container"></div>
+          <div v-if="graphData.nodes && graphData.nodes.length > 0">
+            <div ref="graphRef" class="graph-container"></div>
+          </div>
+          <div v-else class="graph-empty">
+            <el-icon :size="24" color="#c0c4cc"><Connection /></el-icon>
+            <p>暂无关联数据</p>
+            <p class="graph-empty-hint">后台分析完成后将自动生成知识关联图谱</p>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -429,9 +469,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, watchEffect, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
+import { Search, Plus, MagicStick, Upload, Document, Connection } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
 
@@ -448,6 +488,8 @@ const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
 const currentKnowledge = ref(null)
+const loading = ref(false)
+const reanalyzing = ref(false)
 const statsData = ref({ total: 0, categories: {} })
 const categories = ref([])
 const hotTags = ref([])
@@ -491,6 +533,7 @@ const catStats = computed(() => {
 // ── 知识列表 ──
 
 const fetchKnowledge = async () => {
+  loading.value = true
   try {
     const params = { page: currentPage.value, page_size: pageSize.value }
     if (searchQuery.value) params.keyword = searchQuery.value
@@ -501,6 +544,8 @@ const fetchKnowledge = async () => {
     total.value = res.data.total || 0
   } catch (e) {
     console.error('获取知识失败:', e)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -569,8 +614,25 @@ const deleteKnowledge = async (item) => {
     ElMessage.success('知识删除成功')
     fetchKnowledge()
     fetchStats()
+    fetchCategories()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
+const handleReanalyze = async (id) => {
+  reanalyzing.value = true
+  try {
+    await axios.post(`/api/v1/knowledge/${id}/reanalyze`)
+    ElMessage.success('已开始重新分析，请稍后查看结果')
+    if (currentKnowledge.value) {
+      currentKnowledge.value.analysis_status = 'analyzing'
+    }
+    fetchKnowledge()
+  } catch (e) {
+    ElMessage.error('重新分析触发失败')
+  } finally {
+    reanalyzing.value = false
   }
 }
 
@@ -595,12 +657,20 @@ const viewKnowledge = async (item) => {
   }
 }
 
-// 渲染 ECharts 图谱
-watch(showDetailDialog, async (val) => {
-  if (val && graphData.value.nodes?.length > 0) {
+// 渲染 ECharts 图谱 — 监听 graphData 变化，数据到达后自动渲染
+watchEffect(async () => {
+  const nodes = graphData.value.nodes
+  if (nodes && nodes.length > 0 && showDetailDialog.value) {
     await nextTick()
-    renderGraph()
-  } else if (!val && chartInstance) {
+    if (graphRef.value) {
+      renderGraph()
+    }
+  }
+})
+
+// 关闭弹窗时清理图表实例
+watch(showDetailDialog, (val) => {
+  if (!val && chartInstance) {
     chartInstance.dispose()
     chartInstance = null
   }
@@ -721,8 +791,9 @@ const confidenceLabel = (level) => {
 
 const renderAnswer = (text) => {
   if (!text) return ''
-  // 将 [来源:xxx] 格式转换为可点击链接
-  return text.replace(/\[来源:([^\]]+)\]/g, '<span class="qa-citation">📖 $1</span>')
+  // HTML 转义（防 XSS），仅 [来源:xxx] 转为安全标签
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return escaped.replace(/\[来源:([^\]]+)\]/g, '<span class="qa-citation">📖 $1</span>')
 }
 
 // ── 文件上传 ──
@@ -785,6 +856,14 @@ const calcCloudSize = (count) => {
 watch(filterCategory, () => {
   currentPage.value = 1
   fetchKnowledge()
+})
+
+// 清空搜索时自动刷新
+watch(searchQuery, (val) => {
+  if (!val) {
+    currentPage.value = 1
+    fetchKnowledge()
+  }
 })
 
 onMounted(() => {
@@ -1150,6 +1229,8 @@ onMounted(() => {
   font-size: var(--font-size-base);
   color: var(--color-text-primary);
   white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .qa-citation {
@@ -1395,6 +1476,28 @@ onMounted(() => {
   background: var(--color-bg-page);
 }
 
+.graph-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  color: var(--color-text-secondary);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-page);
+}
+
+.graph-empty p {
+  margin: var(--space-1) 0;
+  font-size: var(--font-size-sm);
+}
+
+.graph-empty-hint {
+  font-size: var(--font-size-xs) !important;
+  opacity: 0.7;
+}
+
 /* ── Upload ── */
 .upload-ai-notice {
   display: flex;
@@ -1423,6 +1526,61 @@ onMounted(() => {
 
 .empty-state {
   padding: var(--space-12) 0;
+}
+
+/* ── Skeleton Loading ── */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeleton-item {
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--color-border) 25%, #e8e8e8 50%, var(--color-border) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  margin-bottom: var(--space-3);
+}
+
+.skeleton-line-short { width: 30%; }
+.skeleton-line-medium { width: 60%; }
+.skeleton-line-long { width: 90%; }
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Status Dots ── */
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+.status-pending {
+  background: #e6a23c;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-analyzing {
+  background: #e6a23c;
+  animation: pulse 0.8s ease-in-out infinite;
+}
+
+.status-failed {
+  background: #f56c6c;
 }
 
 @keyframes pulse {
