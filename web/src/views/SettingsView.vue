@@ -11,7 +11,7 @@
         </template>
 
         <div class="avatar-section">
-          <el-avatar :size="80" :src="form.avatar" icon="UserFilled" class="settings-avatar" />
+          <el-avatar :size="80" :src="userStore.userInfo?.avatar || form.avatar" icon="UserFilled" class="settings-avatar" />
           <label class="avatar-upload-btn">
             <input type="file" accept="image/*" hidden @change="handleAvatarUpload" />
             <el-icon><Camera /></el-icon>
