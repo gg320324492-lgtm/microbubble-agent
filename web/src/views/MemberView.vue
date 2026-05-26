@@ -247,7 +247,8 @@ const saveMember = async () => {
 // 编辑成员
 const editMember = (member) => {
   editingMember.value = member
-  memberForm.value = { ...member }
+  const { avatar: _avatar, ...rest } = member
+  memberForm.value = { ...rest }
   showCreateDialog.value = true
 }
 
