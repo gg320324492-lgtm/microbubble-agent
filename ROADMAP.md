@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-26 (更新：头像上传修复 + mnb-lab.cn SSL 修复)
+> 最后更新: 2026-05-26 (更新：铃铛通知去重)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1496,3 +1496,21 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 `mnb-lab.cn` 网站内容过期，尝试云服务器构建 Next.js 时 2核2G 内存耗尽导致服务器卡死。改为本地 Windows 构建（`npm run build`）→ MinIO 中转 → 云服务器下载部署。
 
 **教训：** 云服务器严禁运行 `npm run build`，所有构建在本地完成后上传静态产物。
+
+### 铃铛通知去重 (2026-05-26)
+
+用户创建 3 个任务，铃铛显示 6 条通知，每个任务出现两次（内容相同但时间不同）。
+
+**根因：** `_create_default_reminders()` 为截止时间 >24h 的任务创建 2 个提醒（提前 2 天 + 提前 2 小时），`GET /reminders` 返回所有 reminder 行，3 任务 × 2 提醒 = 6 条。后端多提醒是合理的调度策略，但通知面板应按任务去重。
+
+**关键变更：**
+
+| 变更 | 说明 | 状态 |
+|------|------|------|
+| pending-count 去重 | `func.count(Reminder.id)` → `func.count(func.distinct(Reminder.task_id))` | ✅ 完成 |
+| reminders 去重 | 新增 `.distinct(Reminder.task_id)` + `ORDER BY task_id, remind_at` | ✅ 完成 |
+
+**修改文件：**
+- `app/api/v1/task.py` — 两个查询（第 546、592 行）
+
+**验证：** 耿嘉栋 3 个任务各有 2 个 pending reminder → count=3（非 6），列表每条 task_id 唯一，mark-read 正常归零。
