@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-26 (更新：铃铛通知去重)
+> 最后更新: 2026-05-26 (更新：头像上传自动保存 + HEIC 兼容 + Nginx ^~ 修复)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1514,3 +1514,39 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 - `app/api/v1/task.py` — 两个查询（第 546、592 行）
 
 **验证：** 耿嘉栋 3 个任务各有 2 个 pending reminder → count=3（非 6），列表每条 task_id 唯一，mark-read 正常归零。
+
+### Nginx ^~ MinIO 修复 (2026-05-26)
+
+**问题：** Nginx 正则 location `~* \.(png|jpg|jpeg|gif)$` 优先级高于 `/minio/` 前缀 location，导致所有通过 `/minio/` 代理访问的头像图片被正则拦截 → 从文档根目录查找静态文件 → 404。
+
+**根因：** Nginx prefix location 默认优先级低于 regex location。请求 `/minio/microbubble/avatars/xxx.jpg` 同时匹配 `/minio/` 前缀和 `\.jpg$` 正则 → 正则胜出 → nginx 尝试从 `root` 提供静态文件。
+
+**修复：** 给 `/minio/` location 添加 `^~` 修饰符（优先前缀匹配，优先级高于 regex）。
+
+**修改文件：**
+- `nginx/conf.d/tunnel.conf` — `location /minio/` → `location ^~ /minio/`
+- `nginx/conf.d/default-http.conf` — 同上
+
+### MemberView 管理员编辑污染 DB 头像 (2026-05-26)
+
+**问题：** 管理员编辑成员时，`{ ...member }` 展开运算符将 `_resolve_avatar_url()` 解析后的完整 URL 拷贝到表单，保存时将完整 URL（如 `https://agent.mnb-lab.cn/minio/microbubble/avatars/xxx.jpg`）写回 DB，而不是 raw object_name。
+
+**修改文件：**
+- `web/src/views/MemberView.vue` — 编辑成员时排除 `avatar` 字段
+
+### SettingsView 头像自动保存 + 手机端上传修复 (2026-05-26)
+
+**问题 1：** 上传头像后需手动点"保存资料"才能持久化，容易遗漏导致刷新后头像丢失。
+
+**修复：** 上传成功后立即调 `PUT /api/v1/auth/profile` 只传 `avatar` 字段，自动持久化。
+
+**问题 2：** 手机端上传头像间歇性失败。根因之一：手动设置 `Content-Type: multipart/form-data` 缺少 `boundary` 参数，手机浏览器更严格导致请求失败。根因之二：HEIC 格式（iPhone 默认拍照格式）Canvas 不支持，`compressImage` 直接报错。
+
+**修复：**
+- 删除手动 Content-Type header，让浏览器自动填写正确的 boundary
+- Canvas 压缩失败时静默回退，直接用原文件上传
+- 优化上传+保存+获取完整 URL 三步骤：拆分为独立 try/catch，任意步骤失败不影响 localStorage 写入，防止网络波动导致刷新后头像回退
+
+**修改文件：**
+- `web/src/views/SettingsView.vue` — 4 处改动（自动保存 + HEIC 回退 + 错误拆分 + Content-Type 删除）
+
