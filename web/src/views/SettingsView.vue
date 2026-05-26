@@ -100,6 +100,7 @@ const savingProfile = ref(false)
 const savingPassword = ref(false)
 const passwordFormRef = ref(null)
 const avatarChanged = ref(false)
+const avatarObjectName = ref('')
 
 const initForm = () => ({
   name: userInfo.value?.name || '',
@@ -155,8 +156,9 @@ const handleAvatarUpload = async (e) => {
     formData.append('prefix', 'avatars')
 
     const res = await axios.post('/api/v1/upload', formData)
-    if (res.data?.object_name) {
-      form.avatar = res.data.object_name
+    if (res.data?.url) {
+      form.avatar = res.data.url
+      avatarObjectName.value = res.data.object_name
       avatarChanged.value = true
       ElMessage.success('头像上传成功')
     }
@@ -176,7 +178,7 @@ const saveProfile = async () => {
     }
     // 只在用户新上传头像时发送 object_name，避免覆盖已存储的 object_name
     if (avatarChanged.value) {
-      payload.avatar = form.avatar || undefined
+      payload.avatar = avatarObjectName.value || undefined
     }
 
     const res = await axios.put('/api/v1/auth/profile', payload)
@@ -193,6 +195,10 @@ const saveProfile = async () => {
 
     // 刷新 userStore
     userStore.loadFromStorage()
+
+    // 更新预览中的头像为后端解析后的完整 URL
+    form.avatar = updated.avatar || form.avatar
+    avatarChanged.value = false
 
     ElMessage.success('个人资料已保存')
   } catch (err) {
