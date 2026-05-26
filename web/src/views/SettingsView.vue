@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
@@ -102,6 +102,13 @@ const passwordFormRef = ref(null)
 const avatarChanged = ref(false)
 const avatarObjectName = ref('')
 const previewAvatarUrl = ref(userInfo.value?.avatar || '')
+
+// 当 MainLayout.onMounted 的 GET /auth/me 异步返回时，更新头像预览
+watch(() => userStore.userInfo, (newInfo) => {
+  if (newInfo?.avatar) {
+    previewAvatarUrl.value = newInfo.avatar
+  }
+})
 
 const initForm = () => ({
   name: userInfo.value?.name || '',
