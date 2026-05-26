@@ -9,6 +9,9 @@ class KnowledgeBase(BaseModel):
     content: str
     category: Optional[str] = None
     tags: Optional[List[str]] = None
+    key_concepts: Optional[List[str]] = None
+    related_topics: Optional[List[str]] = None
+    knowledge_type: Optional[str] = None
 
 
 class KnowledgeCreate(KnowledgeBase):
@@ -34,6 +37,9 @@ class KnowledgeResponse(KnowledgeBase):
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     summary: Optional[str] = None
+    analysis_status: Optional[str] = None
+    auto_researched: Optional[bool] = False
+    quality_score: Optional[float] = None
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -57,3 +63,96 @@ class KnowledgeSearchResult(BaseModel):
     tags: Optional[List[str]] = None
     source: Optional[str] = None
     score: float
+
+
+class RelatedKnowledge(BaseModel):
+    """关联知识"""
+    id: int
+    title: str
+    category: Optional[str] = None
+    summary: Optional[str] = None
+    relation_type: str
+    score: float
+    reason: Optional[str] = None
+
+
+class GraphNode(BaseModel):
+    """知识图谱节点"""
+    id: int
+    title: str
+    category: str
+    size: float
+
+
+class GraphEdge(BaseModel):
+    """知识图谱边"""
+    source: int
+    target: int
+    type: str
+    score: float
+
+
+class KnowledgeGraph(BaseModel):
+    """知识图谱"""
+    nodes: List[GraphNode]
+    edges: List[GraphEdge]
+
+
+class DynamicCategory(BaseModel):
+    """动态分类"""
+    name: str
+    count: int
+
+
+class TagCloudItem(BaseModel):
+    """标签云条目"""
+    name: str
+    count: int
+
+
+class KnowledgeStats(BaseModel):
+    """知识库统计"""
+    total: int
+    types: dict
+    analysis_status: dict
+    relations: int
+    auto_researched: int
+
+
+# ── RAG QA Schemas ──
+
+class QASource(BaseModel):
+    """QA 引用来源"""
+    id: int
+    title: str
+    relevance: float
+
+
+class QAResponse(BaseModel):
+    """QA 响应"""
+    answer: str
+    sources: List[QASource]
+    confidence: str  # high/medium/low
+    research_triggered: bool = False
+    research_queries: Optional[List[str]] = None
+    search_results: Optional[dict] = None
+    related_knowledge: Optional[List[int]] = None
+
+
+# ── Auto-Research Schemas ──
+
+class ResearchResultItem(BaseModel):
+    """研究结果条目"""
+    title: str
+    url: str
+    snippet: str
+    ingested: bool
+    knowledge_id: Optional[int] = None
+
+
+class ResearchResponse(BaseModel):
+    """研究响应"""
+    query: str
+    results: List[ResearchResultItem]
+    new_knowledge_count: int
+    message: str
