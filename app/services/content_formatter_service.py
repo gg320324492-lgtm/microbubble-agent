@@ -1,6 +1,7 @@
 """AI 内容排版服务 — 将 PDF 提取的混乱文本整理为结构化 Markdown"""
 
 import logging
+import re
 
 from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
 
@@ -46,6 +47,8 @@ class ContentFormatterService:
             )
             formatted = extract_text_from_response(response)
             if formatted and len(formatted) > 50:
+                # 后处理：移除 LLM 可能产生的删除线标记
+                formatted = re.sub(r'~~.+?~~', '', formatted)
                 logger.info(f"内容排版成功: {title}, 输出 {len(formatted)} 字符")
                 return formatted
             else:

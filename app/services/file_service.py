@@ -103,6 +103,20 @@ class FileService:
         """删除文件"""
         self.client.remove_object(self.bucket, object_name)
 
+    async def list_objects(self, prefix: str = "") -> list:
+        """列出指定前缀下的对象"""
+        def _list():
+            objects = self.client.list_objects(self.bucket, prefix=prefix, recursive=True)
+            result = []
+            for obj in objects:
+                result.append({
+                    "object_name": obj.object_name,
+                    "url": self.get_url(obj.object_name),
+                    "size": obj.size,
+                })
+            return result
+        return await asyncio.to_thread(_list)
+
 
 # 全局实例
 file_service = FileService()
