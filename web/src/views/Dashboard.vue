@@ -42,7 +42,7 @@
     <el-row :gutter="16" class="stats-row">
       <!-- 骨架屏 -->
       <template v-if="loadingStats">
-        <el-col :xs="12" :sm="6" v-for="i in 4" :key="i">
+        <el-col :xs="12" :sm="6" v-for="i in 3" :key="i">
           <div class="stat-card skeleton-card">
             <div class="skeleton skeleton-icon"></div>
             <div class="skeleton-content">
@@ -76,18 +76,6 @@
               <div class="stat-label">已完成</div>
               <div class="stat-value" :ref="el => animateNumber(el, dashboardData.summary?.done_tasks || 0)">0</div>
               <div class="stat-hint">任务完成</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="6">
-          <div class="stat-card stat-card-warning fade-slide-up stagger-3">
-            <div class="stat-icon-wrap" style="background: linear-gradient(135deg, #FDF6EC 0%, #FDF3E3 100%)">
-              <el-icon size="28" style="color: #E6A23C"><Bell /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-label">即将到期</div>
-              <div class="stat-value" :ref="el => animateNumber(el, upcomingCount)">0</div>
-              <div class="stat-hint">未来3天</div>
             </div>
           </div>
         </el-col>
@@ -198,109 +186,6 @@
       </div>
     </el-card>
 
-    <!-- 即将到期任务 -->
-    <el-card class="upcoming-card card fade-slide-up stagger-3" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">
-            <span class="card-icon">⏰</span>
-            即将到期
-          </span>
-          <el-tag size="small" type="warning">未来3天</el-tag>
-        </div>
-      </template>
-      <!-- 骨架屏 -->
-      <div v-if="loadingUpcoming" class="upcoming-list">
-        <div v-for="i in 3" :key="i" class="upcoming-item skeleton-upcoming">
-          <div class="upcoming-left">
-            <div class="skeleton" style="width: 20px; height: 20px; border-radius: 4px"></div>
-            <div class="upcoming-info" style="flex: 1">
-              <div class="skeleton skeleton-text" style="width: 70%"></div>
-              <div class="skeleton skeleton-text" style="width: 40%; margin-top: 6px"></div>
-            </div>
-          </div>
-          <div class="upcoming-right">
-            <div class="skeleton" style="width: 70px; height: 28px; border-radius: 14px"></div>
-          </div>
-        </div>
-      </div>
-      <div v-else-if="upcomingDeadlines.length === 0" class="empty-state-sm">
-        <el-empty description="未来3天没有即将到期的任务" :image-size="40" />
-      </div>
-      <div v-else class="upcoming-list">
-        <div v-for="task in upcomingDeadlines" :key="task.id" class="upcoming-item" :class="{ 'overdue': isOverdue(task.due_date), 'urgent': getDaysLeft(task.due_date) <= 1 }">
-          <div class="upcoming-left">
-            <div class="upcoming-info">
-              <div class="upcoming-title">{{ task.title }}</div>
-              <div class="upcoming-meta">
-                <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
-                  {{ getPriorityLabel(task.priority) }}
-                </el-tag>
-                <span class="upcoming-assignee">{{ memberStore.getMemberName(task.assignee_id) }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="upcoming-right">
-            <div class="due-days" :class="{ urgent: getDaysLeft(task.due_date) <= 1 }">
-              {{ getDaysLeftText(task.due_date) }}
-            </div>
-            <div class="task-actions">
-              <el-button type="success" size="small" round @click="completeTask(task)">✓ 完成</el-button>
-              <el-button text type="primary" size="small" @click="openEditDialog(task)">编辑</el-button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </el-card>
-
-    <!-- 最近会议 -->
-    <el-card class="content-card card fade-slide-up stagger-4" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">
-            <span class="card-icon">📅</span>
-            最近会议
-          </span>
-          <el-button text class="view-all-btn" @click="$router.push('/meetings')">查看全部 →</el-button>
-        </div>
-      </template>
-      <!-- 骨架屏 -->
-      <div v-if="loadingMeetings" class="meeting-list">
-        <div v-for="i in 3" :key="i" class="meeting-item skeleton-meeting">
-          <div class="skeleton" style="width: 50px; height: 50px; border-radius: 10px; flex-shrink: 0"></div>
-          <div class="meeting-info" style="flex: 1">
-            <div class="skeleton skeleton-text" style="width: 60%"></div>
-            <div class="skeleton skeleton-text" style="width: 40%; margin-top: 8px"></div>
-          </div>
-        </div>
-      </div>
-      <div v-else-if="recentMeetings.length === 0" class="empty-state">
-        <el-empty description="暂无会议记录" :image-size="60" />
-      </div>
-      <div v-else class="meeting-list">
-        <div v-for="meeting in recentMeetings" :key="meeting.id" class="meeting-item">
-          <div class="meeting-date">
-            <div class="date-box">
-              <span class="month">{{ formatMonth(meeting.start_time) }}</span>
-              <span class="day">{{ formatDay(meeting.start_time) }}</span>
-            </div>
-          </div>
-          <div class="meeting-info">
-            <div class="meeting-title">{{ meeting.title }}</div>
-            <div class="meeting-meta">
-              <span class="meeting-time">
-                <el-icon><Clock /></el-icon>
-                {{ formatMeetingTime(meeting.start_time) }}
-              </span>
-              <el-tag :type="getStatusTagType(meeting.status)" size="small">
-                {{ getMeetingStatusLabel(meeting.status) }}
-              </el-tag>
-            </div>
-          </div>
-        </div>
-      </div>
-    </el-card>
-
     <!-- 创建任务对话框 -->
     <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'">
       <el-form :model="newTask" label-width="80px">
@@ -391,8 +276,6 @@ const members = computed(() => memberStore.members)
 
 const dashboardData = ref({})
 const inProgressTasks = ref([])
-const recentMeetings = ref([])
-const upcomingDeadlines = ref([])
 const showCreateTask = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
 const currentTime = ref('')
@@ -401,8 +284,6 @@ const currentDate = ref('')
 // 骨架屏加载状态
 const loadingStats = ref(true)
 const loadingTasks = ref(true)
-const loadingUpcoming = ref(true)
-const loadingMeetings = ref(true)
 
 // 分组折叠状态
 const collapsedGroups = ref({})
@@ -426,9 +307,6 @@ const animateNumber = (el, target) => {
   }
   requestAnimationFrame(animate)
 }
-
-// 即将到期数量
-const upcomingCount = computed(() => upcomingDeadlines.value.length)
 
 const handleResize = () => { isMobile.value = window.innerWidth <= 768 }
 const updateTime = () => {
@@ -460,7 +338,6 @@ const saveEdit = async () => {
     showEditDialog.value = false
     editingTask.value = null
     fetchInProgressTasks()
-    fetchUpcomingDeadlines()
     fetchDashboardStats()
   } catch (e) { ElMessage.error('更新任务失败') }
 }
@@ -470,7 +347,6 @@ const completeTask = async (task) => {
     await axios.put(`/api/v1/tasks/${task.id}`, { status: 'done' })
     ElMessage.success('任务已完成')
     fetchInProgressTasks()
-    fetchUpcomingDeadlines()
     fetchDashboardStats()
   } catch (e) { ElMessage.error('操作失败') }
 }
@@ -548,29 +424,6 @@ const groupedTasks = computed(() => {
   })
 })
 
-const fetchRecentMeetings = async () => {
-  try {
-    const res = await axios.get('/api/v1/meetings', { params: { page_size: 5 } })
-    recentMeetings.value = res.data.items || []
-  } catch (e) { console.error('获取会议失败:', e) }
-  loadingMeetings.value = false
-}
-
-const fetchUpcomingDeadlines = async () => {
-  try {
-    const now = dayjs()
-    const threeDaysLater = now.add(3, 'day').endOf('day').toISOString()
-    const res = await axios.get('/api/v1/tasks', {
-      params: {
-        page_size: 20,
-        due_before: threeDaysLater
-      }
-    })
-    upcomingDeadlines.value = (res.data.items || []).filter(t => t.status !== 'done')
-  } catch (e) { console.error('获取即将到期任务失败:', e) }
-  loadingUpcoming.value = false
-}
-
 const fetchMembers = () => memberStore.fetchMembers()
 
 const createTask = async () => {
@@ -582,45 +435,17 @@ const createTask = async () => {
     newTask.value = { title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' }
     fetchInProgressTasks()
     fetchDashboardStats()
-    fetchUpcomingDeadlines()
   } catch (e) { ElMessage.error('创建任务失败') }
 }
 
 const formatDate = (date) => formatCompactDate(date, '无截止')
-const formatDay = (date) => date ? dayjs(date).format('DD') : '--'
-const formatMonth = (date) => date ? dayjs(date).format('MM月') : '--'
-const formatMeetingTime = (date) => date ? dayjs(date).format('HH:mm') : '--'
-const getStatusTagType = (status) => {
-  const map = { scheduled: 'info', recording: 'warning', completed: 'success', cancelled: 'info' }
-  return map[status] || 'info'
-}
-const getMeetingStatusLabel = (status) => {
-  const map = { scheduled: '已安排', recording: '录制中', completed: '已完成', cancelled: '已取消' }
-  return map[status] || status
-}
-
 const isOverdue = (date) => date && dayjs(date).isBefore(dayjs())
-
-const getDaysLeft = (date) => {
-  if (!date) return null
-  return dayjs(date).diff(dayjs(), 'day')
-}
-
-const getDaysLeftText = (date) => {
-  const days = getDaysLeft(date)
-  if (days < 0) return '已逾期'
-  if (days === 0) return '今天到期'
-  if (days === 1) return '明天到期'
-  return `${days}天后到期`
-}
 
 onMounted(() => {
   updateTime()
   setInterval(updateTime, 1000)
   fetchDashboardStats()
   fetchInProgressTasks()
-  fetchUpcomingDeadlines()
-  fetchRecentMeetings()
   memberStore.refreshMembers() // 强制刷新获取最新头像
   window.addEventListener('resize', handleResize)
 })
@@ -911,120 +736,6 @@ onMounted(() => {
 
 .btn-success { color: var(--color-success) !important; }
 .btn-success:hover { background: var(--color-success-bg) !important; }
-
-/* ===== 即将到期 ===== */
-.upcoming-card { border-radius: var(--radius-lg); margin-bottom: 16px; }
-.upcoming-list { display: flex; flex-direction: column; }
-
-/* 骨架屏即将到期 */
-.skeleton-upcoming {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.upcoming-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--color-border-light);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.upcoming-item:last-child { border-bottom: none; }
-.upcoming-item:hover { background: var(--color-bg-warm); padding-left: 8px; padding-right: 8px; margin: 0 -8px; }
-.upcoming-item.overdue { background: #FEF8F7; }
-.upcoming-item.urgent {
-  border-left: 4px solid var(--color-warning);
-  padding-left: 12px;
-  margin-left: -12px;
-}
-.upcoming-item.urgent.overdue {
-  border-left-color: var(--color-danger);
-}
-
-.upcoming-left { display: flex; align-items: center; gap: 12px; flex: 1; }
-.upcoming-info { flex: 1; min-width: 0; }
-.upcoming-title {
-  font-size: var(--font-size-base);
-  color: var(--color-text-primary);
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.upcoming-meta { display: flex; align-items: center; gap: 8px; }
-.upcoming-assignee { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-.upcoming-right {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-.due-days {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  padding: 4px 12px;
-  background: var(--color-info-bg);
-  border-radius: var(--radius-full);
-  font-weight: var(--font-weight-medium);
-}
-.due-days.urgent {
-  color: var(--color-danger);
-  background: var(--color-danger-bg);
-  font-weight: var(--font-weight-semibold);
-}
-
-/* ===== 会议列表 ===== */
-.meeting-list { display: flex; flex-direction: column; }
-
-/* 骨架屏会议 */
-.skeleton-meeting {
-  display: flex;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.meeting-item {
-  display: flex;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--color-border-light);
-  transition: background var(--duration-fast) var(--ease-out);
-}
-.meeting-item:last-child { border-bottom: none; }
-.meeting-item:hover { background: var(--color-bg-warm); padding-left: 8px; padding-right: 8px; margin: 0 -8px; }
-
-.date-box {
-  width: 50px;
-  height: 50px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
-  border-radius: var(--radius-lg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-primary);
-}
-.month { font-size: 11px; opacity: 0.9; }
-.day { font-size: 18px; font-weight: var(--font-weight-bold); line-height: 1.2; }
-.meeting-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.meeting-title {
-  font-size: var(--font-size-base);
-  color: var(--color-text-primary);
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.meeting-meta { display: flex; align-items: center; gap: 12px; }
-.meeting-time { font-size: var(--font-size-xs); color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
 
 /* ===== 通用覆盖 ===== */
 .content-card :deep(.el-card__header) { padding: 16px 20px; border-bottom: none; }
