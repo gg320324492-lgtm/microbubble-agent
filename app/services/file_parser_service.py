@@ -8,12 +8,12 @@ logger = logging.getLogger("microbubble.file_parser")
 
 
 class FileParserService:
-    """从各类文件中提取文本内容"""
+    """从各类文件中提取文本和图片"""
 
     SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.txt', '.md'}
 
-    async def extract_text(self, file_data: bytes, filename: str, content_type: str) -> str:
-        """提取文件文本，路由到对应解析器"""
+    async def extract_content(self, file_data: bytes, filename: str, content_type: str) -> dict:
+        """提取文件文本+图片，返回 {text, images: {placeholder: bytes}}"""
         ext = ''
         if '.' in filename:
             ext = '.' + filename.rsplit('.', 1)[-1].lower()
@@ -21,32 +21,65 @@ class FileParserService:
         if ext == '.pdf' or 'pdf' in content_type:
             return await self._parse_pdf(file_data)
         elif ext in ('.docx',) or 'wordprocessingml' in content_type:
-            return await self._parse_docx(file_data)
+            return {"text": await self._parse_docx(file_data), "images": {}}
         elif ext in ('.xlsx',) or 'spreadsheetml' in content_type:
-            return await self._parse_xlsx(file_data)
+            return {"text": await self._parse_xlsx(file_data), "images": {}}
         elif ext in ('.txt', '.md') or content_type.startswith('text/'):
-            return file_data.decode('utf-8', errors='replace')
+            return {"text": file_data.decode('utf-8', errors='replace'), "images": {}}
         else:
             raise ValueError(f"不支持的文件类型: {ext}")
 
-    async def _parse_pdf(self, data: bytes) -> str:
-        """解析 PDF 文件"""
+    async def _parse_pdf(self, data: bytes) -> dict:
+        """解析 PDF — 用 PyMuPDF 提取文本和嵌入图片"""
         def _extract():
-            import pdfplumber
-            from pdfminer.pdfdocument import PDFEncryptionError
-            try:
-                with pdfplumber.open(io.BytesIO(data)) as pdf:
-                    pages = []
-                    for page in pdf.pages:
-                        text = page.extract_text()
-                        if text:
-                            pages.append(text)
-                    text = '\n'.join(pages)
-                    if not text.strip():
-                        raise ValueError("PDF 为扫描件或图片型文档，无文字层")
-                    return text
-            except PDFEncryptionError:
+            import fitz  # PyMuPDF
+
+            doc = fitz.open(stream=data, filetype="pdf")
+            if doc.needs_pass:
+                doc.close()
                 raise ValueError("PDF 已加密，无法解析")
+
+            pages_text = []
+            images = {}  # placeholder -> image_bytes
+            fig_idx = 0
+
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+
+                # 提取文本
+                text = page.get_text()
+                if text:
+                    pages_text.append(text)
+
+                # 提取嵌入图片
+                img_list = page.get_images(full=True)
+                for img_info in img_list:
+                    xref = img_info[0]
+                    try:
+                        base_image = doc.extract_image(xref)
+                        img_bytes = base_image["image"]
+                        ext_lower = base_image["ext"].lower()
+                        # 跳过极小图片（< 2KB，通常是图标或装饰元素）
+                        if len(img_bytes) < 2048:
+                            continue
+                        fig_idx += 1
+                        placeholder = f"\n[FIGURE:{fig_idx}]\n"
+                        images[placeholder] = {
+                            "bytes": img_bytes,
+                            "ext": ext_lower if ext_lower in ("png", "jpeg", "jpg") else "png",
+                            "page": page_num + 1,
+                        }
+                        # 在文本中插入占位符
+                        pages_text.append(placeholder)
+                    except Exception as e:
+                        logger.warning(f"PDF 图片提取失败(page={page_num}, xref={xref}): {e}")
+
+            doc.close()
+
+            text = '\n'.join(pages_text).strip()
+            if not text:
+                raise ValueError("PDF 为扫描件或图片型文档，无文字层")
+            return {"text": text, "images": images}
         try:
             return await asyncio.to_thread(_extract)
         except ValueError:
