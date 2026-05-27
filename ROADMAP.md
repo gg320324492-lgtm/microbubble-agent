@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-26 (更新：知识库深层逻辑系统 — 自主进化知识大脑)
+> 最后更新: 2026-05-27 (更新：Knowledge Brain 二次升级 — 实体图谱 + 假设生成 + 量化推理)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1662,4 +1662,111 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 | `GET /knowledge/health/staleness` | 过期检测 | P3 |
 | `GET /knowledge/taxonomy/emerging` | 涌现分类体系 | P4 |
 | `GET /knowledge/taxonomy/network` | 主题关联网络 | P4 |
+
+---
+
+## Knowledge Brain 二次升级 — 实体图谱 + 假设生成 + 量化推理 (2026-05-27)
+
+将知识从"文档附属品"升级为**跨文档可查询、可推理、可计算**的课题组知识大脑。
+
+### P0: 实体级知识图谱 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 跨文档实体融合 | 从文档 entities JSONB 提取 → 精确匹配 → embedding 余弦 ≥0.78 合并 → 新建实体 | ✅ 完成 |
+| 共现网络 | 同一文档内的实体对写入 entity_co_occurrence 表，作为图谱边 | ✅ 完成 |
+| 实体搜索 | 按 subject/predicate/object/keyword 分页搜索 | ✅ 完成 |
+| 实体图谱 API | centered 模式（单实体+邻居）和 global 模式（全部节点+边） | ✅ 完成 |
+| 实体详情 | 含来源文档列表（source_knowledge_ids → 文档标题） | ✅ 完成 |
+| 每日实体融合 | Celery 定时任务，LLM 批量判定同 predicate 相似实体合并 | ✅ 完成 |
+| 前端实体图谱 tab | ECharts 力导向图（节点颜色=predicate 分类，大小=occurrence_count）| ✅ 完成 |
+| 前端实体卡片 | subject→predicate→object + condition + 置信度进度条 + 来源数 | ✅ 完成 |
+
+**数据：** 56 个跨文档实体，173 条共现边，从 9 篇文档 54 个文档内三元组融合而来。
+
+**新建文件：**
+- `app/models/knowledge_entity.py` — KnowledgeEntity + EntityCoOccurrence 模型
+- `app/services/entity_service.py` — 实体融合/搜索/图谱/详情/LLM 合并
+
+**修改文件：**
+- `app/models/__init__.py` — 注册新模型
+- `app/services/knowledge_service.py` — _analyze_and_embed Step 5 触发实体融合
+- `app/api/v1/knowledge.py` — 3 个新端点（entities/list, entities/graph, entities/{id}）
+- `app/schemas/knowledge.py` — 4 个新 schema（EntityItem/EntityList/EntityGraph/EntityDetail）
+- `app/core/celery.py` — entity-fusion-daily 定时任务
+- `app/services/knowledge_evolution_tasks.py` — fuse_entities_task
+- `web/src/views/KnowledgeView.vue` — 实体图谱 tab + 搜索 + 卡片 + 弹窗（~300 行）
+
+### P1: 科研假设生成引擎 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| LLM 假设生成 | 收集实体三元组 + 知识空白 + 关系模式 → LLM 生成可验证假设 | ✅ 完成 |
+| 假设持久化 | statement + rationale + suggested_experiment + supporting_entity_ids | ✅ 完成 |
+| 验证生命周期 | proposed → validated / rejected，记录验证时间 | ✅ 完成 |
+| 优先级+标签 | high/medium/low 优先级 + 自由标签 | ✅ 完成 |
+| 前端假设 tab | 筛选栏（状态/优先级）+ 生成按钮 + 卡片网格 + 验证/否决操作 | ✅ 完成 |
+
+**新建文件：**
+- `app/models/knowledge_hypothesis.py` — KnowledgeHypothesis 模型
+- `app/services/hypothesis_service.py` — 假设生成/列表/验证/详情
+
+**修改文件：**
+- `app/models/__init__.py` — 注册新模型
+- `app/api/v1/knowledge.py` — 4 个新端点（hypotheses POST/GET, hypotheses/{id} GET, hypotheses/{id}/validate）
+- `app/schemas/knowledge.py` — 2 个新 schema（HypothesisItem/HypothesisList）
+- `web/src/views/KnowledgeView.vue` — 假设 tab（~200 行）
+
+### P2: 量化推理引擎 ✅
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| 公式提取 | LLM 分析文档时自动提取数学公式（formula_latex + formula_python） | ✅ 完成 |
+| LaTeX→Python 转换 | ×÷−→*/+，π→pi，等号左侧剥离，变量保留 | ✅ 完成 |
+| 安全计算 | eval() + `{"__builtins__": {}}` + 白名单 math 函数（sqrt/log/exp/pow/abs/pi/e） | ✅ 完成 |
+| 变量校验 | 计算前检查必填变量完整性，返回缺失提示 | ✅ 完成 |
+| 计算步骤 | 返回每步变量代入值和最终结果 | ✅ 完成 |
+| 公式领域分布 | 按 domain 分组统计 | ✅ 完成 |
+| 前端公式计算 tab | 左栏公式列表（领域筛选+关键字搜索），右栏计算器（变量输入+计算结果+步骤展开+来源链接） | ✅ 完成 |
+
+**验证：** COD 公式 (V0=25, V1=20, C=0.25, V=20) → 500.0 mg/L ✅
+
+**新建文件：**
+- `app/models/knowledge_formula.py` — KnowledgeFormula 模型
+- `app/services/formula_service.py` — 公式列表/计算/safe_eval/LaTeX 转换
+
+**修改文件：**
+- `app/models/__init__.py` — 注册新模型
+- `app/services/llm_analysis_service.py` — ANALYSIS_PROMPT 新增 formulas 字段
+- `app/services/knowledge_service.py` — _analyze_and_embed Step 2.5 保存公式
+- `app/api/v1/knowledge.py` — 3 个新端点（formulas/list, formulas/domains, formulas/calculate）
+- `app/schemas/knowledge.py` — 2 个新 schema（FormulaItem/FormulaList）
+- `web/src/views/KnowledgeView.vue` — 公式计算 tab（~250 行）
+
+### 新增 API 端点汇总（二次升级）
+
+| 端点 | 说明 | 维度 |
+|------|------|------|
+| `GET /knowledge/entities` | 搜索实体（subject/predicate/keyword 过滤） | P0 |
+| `GET /knowledge/entities/graph` | 实体图谱（nodes + co-occurrence edges） | P0 |
+| `GET /knowledge/entities/{entity_id}` | 实体详情（含来源文档列表） | P0 |
+| `POST /knowledge/hypotheses` | 生成科研假设 | P1 |
+| `GET /knowledge/hypotheses` | 列出假设（status/priority 过滤） | P1 |
+| `GET /knowledge/hypotheses/{id}` | 假设详情（含关联实体） | P1 |
+| `POST /knowledge/hypotheses/{id}/validate` | 标记验证结果（validated/rejected） | P1 |
+| `GET /knowledge/formulas` | 列出公式（domain/keyword 过滤） | P2 |
+| `GET /knowledge/formulas/domains` | 公式领域分布 | P2 |
+| `POST /knowledge/formulas/calculate` | 计算公式 | P2 |
+
+### 前端改造
+
+KnowledgeView.vue 从 1890 行单文件扩展为 ~2400 行，使用 `el-tabs` 分为四个 tab 页：
+- **知识库** — 原有功能（列表+搜索+RAG QA+图谱+关联+分析结果）
+- **实体图谱** — 实体搜索+ECharts 力导向图+实体卡片网格+详情弹窗
+- **科研假设** — 筛选栏+生成按钮+假设卡片（状态 badge+验证操作）
+- **公式计算** — 双栏布局（公式列表+计算器），变量输入+结果显示+步骤展开
+
+**后端总新增：** ~750 行（3 模型 + 3 服务 + 10 API + 6 schema）
+**前端总新增：** ~500 行（3 tab + 方法 + 样式）
+**数据库新增：** 4 张表（knowledge_entities, entity_co_occurrence, knowledge_hypotheses, knowledge_formulas）
 
