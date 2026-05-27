@@ -48,7 +48,7 @@
         <el-menu-item
           v-for="route in menuRoutes"
           :key="route.path"
-          :index="route.path"
+          :index="'/' + route.path"
           class="menu-item"
         >
           <el-icon><component :is="route.meta.icon" /></el-icon>
@@ -169,7 +169,7 @@ const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
-  return mainRoute?.children || []
+  return (mainRoute?.children || []).filter(r => r.meta?.icon)
 })
 
 const onResize = () => {
@@ -189,7 +189,7 @@ const toggleSidebar = () => {
 
 const navigateTo = (path) => {
   showMobileMenu.value = false
-  router.push(path)
+  router.push('/' + path)
 }
 
 onMounted(async () => {
