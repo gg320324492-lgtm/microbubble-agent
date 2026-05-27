@@ -39,12 +39,11 @@ async def _upload_knowledge_images(knowledge_id: int, images: dict, source_filen
     for placeholder, img_data in images.items():
         try:
             fig_idx = placeholder.strip().replace("[FIGURE:", "").replace("]", "")
-            img_filename = f"knowledge/{knowledge_id}/fig_{fig_idx}_{img_data['ext']}"
             result = await file_service.upload_file(
                 file_data=img_data["bytes"],
-                filename=img_filename,
+                filename=f"fig_{fig_idx}.{img_data['ext']}",
                 content_type=f"image/{img_data['ext']}",
-                prefix="",
+                prefix=f"knowledge/{knowledge_id}",
             )
             image_urls[placeholder] = result["url"]
         except Exception as e:
