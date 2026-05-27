@@ -50,7 +50,7 @@ if not errorlevel 1 (
     echo [=] FRP 客户端已在运行，跳过
 ) else (
     if exist "%~dp0frp\frpc.exe" (
-        start "frpc" /min "%~dp0frp\frpc.exe" -c "%~dp0frp\frpc.toml"
+        powershell -Command "Start-Process -FilePath '%~dp0frp\frpc.exe' -ArgumentList '-c','%~dp0frp\frpc.toml' -WindowStyle Hidden"
         echo [+] FRP 客户端已启动
     ) else (
         echo [!] FRP 客户端不存在: frp\frpc.exe
