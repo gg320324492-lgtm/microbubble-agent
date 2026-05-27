@@ -21,7 +21,7 @@ ANALYSIS_PROMPT = """你是微纳米气泡课题组的AI知识管理助手。分
     {{"subject": "主体(材料/方法/指标)", "predicate": "关系(影响/导致/抑制/促进/表征/检测)", "object": "客体(数值/效果/现象)", "condition": "条件(温度/浓度/pH/时间等)，无则null", "confidence": 0.9}}
   ],
   "formulas": [
-    {{"name": "公式名称", "formula": "数学表达式(用*表示乘,/表示除,变量用字母)", "variables": {{"V0": {{"description": "空白滴定体积", "unit": "mL"}}}}, "result_unit": "结果单位", "conditions": "适用条件", "domain": "应用领域(COD/pH/臭氧/粒径等)"}}
+    {{"name": "公式名称", "formula": "数学表达式(用*表示乘,/表示除,变量用字母)", "variables": {{"V0": {{"description": "空白滴定体积", "unit": "mL"}}}}, "result_unit": "结果单位", "conditions": "适用条件", "domain": "所属领域，从以下分类选择最匹配的一个: bubble_dynamics/mass_transfer/water_quality/chemical_kinetics/fluid_mechanics/statistical_analysis，或具体子领域如COD/BOD/DO/臭氧/消毒/吸附/传质/曝气/雷诺数/粒径"}}
   ]
 }}
 

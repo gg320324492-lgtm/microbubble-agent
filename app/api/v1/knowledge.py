@@ -336,17 +336,20 @@ async def list_formulas(
     domain: Optional[str] = Query(None),
     knowledge_id: Optional[int] = Query(None),
     keyword: Optional[str] = Query(None),
+    category_id: Optional[int] = Query(None),
+    source_type: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出公式"""
+    """列出公式（支持按分类、来源类型筛选）"""
     from app.services.formula_service import FormulaService
     svc = FormulaService(db)
     return await svc.list_formulas(
         domain=domain, knowledge_id=knowledge_id,
-        keyword=keyword, page=page, page_size=page_size,
+        keyword=keyword, category_id=category_id,
+        source_type=source_type, page=page, page_size=page_size,
     )
 
 
@@ -378,6 +381,17 @@ async def calculate_formula(
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+
+@router.get("/knowledge/formulas/categories", response_model=List[dict])
+async def get_formula_categories(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取公式分类树"""
+    from app.services.formula_service import FormulaService
+    svc = FormulaService(db)
+    return await svc.get_categories()
 
 
 # ── P1: Hypothesis Generation ──
