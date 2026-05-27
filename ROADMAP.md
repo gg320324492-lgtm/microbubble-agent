@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-27 (更新：公式计算模块增强 — 分类体系 + 内置公式库 + 前端分类树)
+> 最后更新: 2026-05-27 (更新：Dashboard 布局简化 + Webhook 部署修复)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1768,6 +1768,16 @@ KnowledgeView.vue 从 ~2400 行扩展为 ~2450 行，公式计算 tab 改造：
 **后端总新增：** ~300 行（1 模型 + 1 种子数据 + 1 种子服务 + 1 迁移 + 1 API + schema/service 增强）
 **前端总新增：** ~50 行（模板 + 样式 + 方法）
 **数据库新增：** 1 张表（formula_categories）+ 3 列（knowledge_formulas.source_type/category_id/is_active）
+
+### Dashboard 布局简化 + Webhook 部署修复 (2026-05-27)
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| Dashboard 移除"即将到期" | 删除统计卡片中的"即将到期"数字、"即将到期任务"列表、"最近会议"列表，简化首页 | ✅ 完成 |
+| 前端 dist 未构建修复 | Dashboard.vue 源码已修改但 web/dist/ 未重建，线上仍是旧版。本地 npm run build 后提交 dist | ✅ 完成 |
+| Webhook 手动触发 | GitHub 报告"未能连接到主机"，确认 webhook.py 服务正常但网络瞬时不畅，手动模拟签名 POST 触发部署 | ✅ 完成 |
+
+**教训：** 前端源码修改后必须 `npm run build` 并提交 dist。dist 在 `.gitignore` 中，需 `git add -f web/dist/` 强制添加。deploy-auto.sh 依赖 git 已提交的 dist 文件，不在服务器构建。
 
 ### 新增 API 端点汇总（二次升级）
 
