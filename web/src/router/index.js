@@ -56,6 +56,12 @@ const routes = [
         meta: { title: '知识库', icon: 'Document' }
       },
       {
+        path: 'knowledge/:id',
+        name: 'KnowledgeDetail',
+        component: () => import('@/views/KnowledgeDetailView.vue'),
+        meta: { title: '知识详情' }
+      },
+      {
         path: 'memory',
         name: 'Memory',
         component: () => import('@/views/MemoryView.vue'),

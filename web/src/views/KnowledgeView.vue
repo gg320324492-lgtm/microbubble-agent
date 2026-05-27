@@ -96,7 +96,7 @@
           v-for="item in knowledgeList"
           :key="item.id"
           class="knowledge-item"
-          @click="viewKnowledge(item)"
+          @click="$router.push('/knowledge/' + item.id)"
         >
           <div class="item-header">
             <div class="item-category">
@@ -299,7 +299,7 @@
               v-for="src in qaResult.sources"
               :key="src.id"
               class="source-item"
-              @click="gotoKnowledge(src.id)"
+              @click="$router.push('/knowledge/' +src.id)"
             >
               <span class="source-title">{{ src.title }}</span>
               <el-tag size="small" :type="src.relevance >= 0.7 ? 'success' : 'warning'">
@@ -343,151 +343,6 @@
         <!-- 错误 -->
         <div v-if="qaError" class="qa-error">
           <el-alert :title="qaError" type="error" show-icon :closable="false" />
-        </div>
-      </div>
-    </el-dialog>
-
-    <!-- ===== 知识详情对话框（含关联 + 图谱） ===== -->
-    <el-dialog
-      v-model="showDetailDialog"
-      title="知识详情"
-      :width="isMobile ? '92vw' : '720px'"
-      top="5vh"
-      destroy-on-close
-      :close-on-click-modal="false"
-    >
-      <div v-if="currentKnowledge" class="knowledge-detail">
-        <h2>{{ currentKnowledge.title }}</h2>
-
-        <div class="detail-meta">
-          <span class="category-badge">{{ currentKnowledge.category || '未分类' }}</span>
-          <span v-if="currentKnowledge.knowledge_type" class="type-badge">{{ currentKnowledge.knowledge_type }}</span>
-          <span class="detail-date">{{ formatDate(currentKnowledge.created_at) }}</span>
-          <el-tag
-            v-if="currentKnowledge.analysis_status === 'pending' || currentKnowledge.analysis_status === 'analyzing'"
-            size="small"
-            type="warning"
-          >分析中</el-tag>
-          <el-tag
-            v-if="currentKnowledge.analysis_status === 'failed'"
-            size="small"
-            type="danger"
-          >分析失败</el-tag>
-          <el-button
-            v-if="currentKnowledge.analysis_status === 'failed'"
-            size="small"
-            type="danger"
-            plain
-            :loading="reanalyzing"
-            @click="handleReanalyze(currentKnowledge.id)"
-          >重新分析</el-button>
-          <el-tag
-            v-if="currentKnowledge.auto_researched"
-            size="small"
-            type="success"
-          >自主研究</el-tag>
-        </div>
-
-        <div v-if="currentKnowledge.tags && currentKnowledge.tags.length" class="detail-tags">
-          <span v-for="tag in currentKnowledge.tags" :key="tag" class="tag-chip detail-tag">{{ tag }}</span>
-        </div>
-
-        <!-- AI 分析信息 -->
-        <div v-if="currentKnowledge.needs_review" class="detail-review-warning">
-          <span>⚠️ 该条目与其他知识存在矛盾，待人工审阅</span>
-          <el-button size="small" type="danger" plain @click="markReviewed(currentKnowledge.id)">标记已审阅</el-button>
-        </div>
-
-        <div v-if="currentKnowledge.key_concepts?.length || currentKnowledge.related_topics?.length" class="detail-analysis">
-          <div v-if="currentKnowledge.key_concepts?.length" class="analysis-section">
-            <span class="analysis-label">🔑 核心概念</span>
-            <div class="analysis-items">
-              <span v-for="c in currentKnowledge.key_concepts" :key="c" class="concept-chip">{{ c }}</span>
-            </div>
-          </div>
-          <div v-if="currentKnowledge.related_topics?.length" class="analysis-section">
-            <span class="analysis-label">🔗 关联主题</span>
-            <div class="analysis-items">
-              <span v-for="t in currentKnowledge.related_topics" :key="t" class="topic-chip">{{ t }}</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 知识三元组 -->
-        <div v-if="currentKnowledge.entities?.length" class="detail-entities">
-          <div class="entities-label">🧩 知识三元组</div>
-          <div class="entities-grid">
-            <div v-for="(e, i) in currentKnowledge.entities" :key="i" class="entity-card">
-              <div class="entity-triple">
-                <span class="entity-subject">{{ e.subject }}</span>
-                <span class="entity-predicate">→ {{ e.predicate }} →</span>
-                <span class="entity-object">{{ e.object }}</span>
-              </div>
-              <div v-if="e.condition" class="entity-condition">条件: {{ e.condition }}</div>
-              <div class="entity-confidence">
-                <el-progress :percentage="(e.confidence * 100).toFixed(0)" :stroke-width="4" :show-text="false" />
-                <span class="confidence-text">{{ (e.confidence * 100).toFixed(0) }}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 摘要 -->
-        <div v-if="currentKnowledge.summary" class="detail-summary">
-          <div class="summary-label">AI 摘要</div>
-          <div class="summary-text">{{ currentKnowledge.summary }}</div>
-        </div>
-
-        <!-- 正文 -->
-        <div
-          v-if="currentKnowledge.formatted_content"
-          class="detail-content markdown-body"
-          v-html="renderMarkdown(currentKnowledge.formatted_content)"
-        ></div>
-        <div v-else class="detail-content">{{ currentKnowledge.content }}</div>
-
-        <!-- 来源 -->
-        <div v-if="currentKnowledge.source || currentKnowledge.file_name || currentKnowledge.source_type" class="detail-source">
-          <div v-if="currentKnowledge.source_type === 'conversation'" class="detail-conversation-source">
-            <span>💬</span> 来自对话记录，AI 自动提取
-          </div>
-          <div v-if="currentKnowledge.source_type === 'auto_research'" class="detail-auto-source">
-            <span>🤖</span> AI 自主研究入库
-          </div>
-          <div v-if="currentKnowledge.source">来源：{{ currentKnowledge.source }}</div>
-          <div v-if="currentKnowledge.file_name">文件：{{ currentKnowledge.file_name }}</div>
-        </div>
-
-        <!-- ===== 相关知识 ===== -->
-        <div v-if="relatedKnowledge.length > 0" class="detail-related">
-          <div class="related-title">🔗 相关知识</div>
-          <div
-            v-for="rel in relatedKnowledge"
-            :key="rel.id"
-            class="related-item"
-            @click="gotoKnowledge(rel.id)"
-          >
-            <div class="related-header">
-              <span class="related-item-title">{{ rel.title }}</span>
-              <el-tag size="small" :type="relationTagType(rel.relation_type)">
-                {{ rel.relation_type }} {{ (rel.score * 100).toFixed(0) }}%
-              </el-tag>
-            </div>
-            <div v-if="rel.reason" class="related-reason">{{ rel.reason }}</div>
-          </div>
-        </div>
-
-        <!-- ===== 知识图谱 ===== -->
-        <div class="detail-graph">
-          <div class="graph-title">📊 知识图谱</div>
-          <div v-if="graphData.nodes && graphData.nodes.length > 0">
-            <div ref="graphRef" class="graph-container"></div>
-          </div>
-          <div v-else class="graph-empty">
-            <el-icon :size="24" color="#c0c4cc"><Connection /></el-icon>
-            <p>暂无关联数据</p>
-            <p class="graph-empty-hint">后台分析完成后将自动生成知识关联图谱</p>
-          </div>
         </div>
       </div>
     </el-dialog>
@@ -702,7 +557,7 @@
                     <span class="step-var">{{ step.variable }}</span> = {{ step.value }} {{ step.unit }}
                   </div>
                 </div>
-                <div v-if="selectedFormula.knowledge_id" class="calc-source">来源: <a @click="gotoKnowledge(selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
+                <div v-if="selectedFormula.knowledge_id" class="calc-source">来源: <a @click="$router.push('/knowledge/' +selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
               </div>
             </el-card>
             <el-card v-else class="calculator-card">
@@ -726,7 +581,7 @@
         <el-divider />
         <div class="entity-detail-section">
           <h4>来源文档 ({{ entityDetail.sources?.length || 0 }})</h4>
-          <div v-for="src in entityDetail.sources" :key="src.id" class="source-item clickable" @click="gotoKnowledge(src.id); showEntityDetailDialog = false">
+          <div v-for="src in entityDetail.sources" :key="src.id" class="source-item clickable" @click="$router.push('/knowledge/' +src.id); showEntityDetailDialog = false">
             {{ src.title }}
             <el-tag size="small">{{ src.category }}</el-tag>
           </div>
@@ -737,13 +592,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, watchEffect, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, MagicStick, Upload, Document, Connection } from '@element-plus/icons-vue'
+import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 
 const isMobile = ref(window.innerWidth <= 768)
 const knowledgeList = ref([])
@@ -753,13 +606,10 @@ const pageSize = ref(20)
 const searchQuery = ref('')
 const filterCategory = ref('')
 const showCreateDialog = ref(false)
-const showDetailDialog = ref(false)
 const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
-const currentKnowledge = ref(null)
 const loading = ref(false)
-const reanalyzing = ref(false)
 const statsData = ref({ total: 0, categories: {} })
 const categories = ref([])
 const hotTags = ref([])
@@ -817,12 +667,7 @@ const suggestions = [
   '气泡稳定性影响因素',
 ]
 
-// Detail extras
-const relatedKnowledge = ref([])
-const graphData = ref({ nodes: [], edges: [] })
-const graphRef = ref(null)
-let chartInstance = null
-
+// 计算精简后的分类统计（只显示有数据的）
 const knowledgeForm = ref({
   title: '',
   category: '',
@@ -830,8 +675,6 @@ const knowledgeForm = ref({
   content: '',
   source: ''
 })
-
-// 计算精简后的分类统计（只显示有数据的）
 const catStats = computed(() => {
   return statsData.value.categories || {}
 })
@@ -926,150 +769,6 @@ const deleteKnowledge = async (item) => {
   }
 }
 
-const handleReanalyze = async (id) => {
-  reanalyzing.value = true
-  try {
-    await axios.post(`/api/v1/knowledge/${id}/reanalyze`)
-    ElMessage.success('已开始重新分析，请稍后查看结果')
-    if (currentKnowledge.value) {
-      currentKnowledge.value.analysis_status = 'analyzing'
-    }
-    fetchKnowledge()
-  } catch (e) {
-    ElMessage.error('重新分析触发失败')
-  } finally {
-    reanalyzing.value = false
-  }
-}
-
-const renderMarkdown = (text) => {
-  if (!text) return ''
-  const raw = marked.parse(text)
-  return DOMPurify.sanitize(raw)
-}
-
-// ── 知识详情 + 关联 + 图谱 ──
-
-const viewKnowledge = async (item) => {
-  currentKnowledge.value = item
-  showDetailDialog.value = true
-  relatedKnowledge.value = []
-  graphData.value = { nodes: [], edges: [] }
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-
-  // 无排版内容时自动后台触发排版
-  if (!item.formatted_content) {
-    axios.post(`/api/v1/knowledge/${item.id}/reformat`).catch(() => {})
-  }
-
-  // 并行获取关联和图谱数据
-  try {
-    const [relRes, graphRes] = await Promise.all([
-      axios.get(`/api/v1/knowledge/${item.id}/related`, { params: { limit: 8 } }),
-      axios.get('/api/v1/knowledge/graph', { params: { center_id: item.id, depth: 1, limit: 30 } }),
-    ])
-    relatedKnowledge.value = relRes.data || []
-    graphData.value = graphRes.data || { nodes: [], edges: [] }
-  } catch (e) {
-    console.error('获取关联数据失败:', e)
-  }
-}
-
-// 渲染 ECharts 图谱 — 监听 graphData 变化，数据到达后自动渲染
-watchEffect(async () => {
-  const nodes = graphData.value.nodes
-  if (nodes && nodes.length > 0 && showDetailDialog.value) {
-    await nextTick()
-    if (graphRef.value) {
-      renderGraph()
-    }
-  }
-})
-
-// 关闭弹窗时清理图表实例
-watch(showDetailDialog, (val) => {
-  if (!val && chartInstance) {
-    chartInstance.dispose()
-    chartInstance = null
-  }
-})
-
-const renderGraph = async () => {
-  if (!graphRef.value) return
-  const echarts = await import('echarts')
-  if (chartInstance) chartInstance.dispose()
-
-  chartInstance = echarts.init(graphRef.value)
-  const data = graphData.value
-
-  // 颜色映射
-  const colorMap = {}
-  const colors = ['#FF7A5C', '#FFB347', '#409eff', '#67c23a', '#e6a23c', '#909399', '#f56c6c']
-  let colorIdx = 0
-
-  data.nodes.forEach(n => {
-    if (!colorMap[n.category]) {
-      colorMap[n.category] = colors[colorIdx % colors.length]
-      colorIdx++
-    }
-  })
-
-  chartInstance.setOption({
-    tooltip: {
-      formatter: (p) => {
-        if (p.dataType === 'node') {
-          return `<b>${p.data.title}</b><br/>分类: ${p.data.category}<br/>关联: ${p.data.size.toFixed(0)}`
-        }
-        return `${p.data.type}: ${(p.data.score * 100).toFixed(0)}%`
-      }
-    },
-    series: [{
-      type: 'graph',
-      layout: 'force',
-      roam: true,
-      draggable: true,
-      data: data.nodes.map(n => ({
-        id: n.id,
-        name: n.title?.length > 12 ? n.title.slice(0, 12) + '…' : n.title,
-        title: n.title,
-        category: n.category,
-        value: n.size,
-        symbolSize: Math.max(20, Math.min(50, n.size * 8)),
-        itemStyle: { color: colorMap[n.category] || '#909399' },
-      })),
-      edges: data.edges.map(e => ({
-        source: e.source,
-        target: e.target,
-        type: e.type,
-        score: e.score,
-        lineStyle: {
-          width: Math.max(1, e.score * 4),
-          opacity: 0.6,
-          curveness: 0.1,
-          color: e.type === 'contradicts' ? '#f56c6c' : undefined,
-          type: e.type === 'contradicts' ? 'dashed' : 'solid',
-        },
-        label: { show: e.score > 0.8, formatter: e.type, fontSize: 10 },
-      })),
-      force: { repulsion: 300, edgeLength: 120 },
-      label: { show: true, fontSize: 10, color: '#333' },
-      emphasis: {
-        focus: 'adjacency',
-        lineStyle: { width: 3 },
-      },
-    }],
-  })
-}
-
-const gotoKnowledge = (id) => {
-  // 根据ID重新获取详情
-  axios.get(`/api/v1/knowledge/${id}`).then(res => {
-    viewKnowledge(res.data)
-  }).catch(() => {
-    ElMessage.warning('该知识条目可能已被删除')
-  })
-}
-
 // ── AI 问答 (RAG) ──
 
 const openQADialog = () => {
@@ -1141,33 +840,6 @@ const handleUpload = async () => {
     }
   } finally {
     uploading.value = false
-  }
-}
-
-// ── 工具函数 ──
-
-const relationTagType = (type) => {
-  const map = {
-    similar: 'success',
-    supplements: 'warning',
-    extends: '',
-    supports: '',
-    contradicts: 'danger',
-    method_inherits: 'primary',
-    cites: 'info',
-    prerequisite: 'warning',
-    compares: 'primary',
-  }
-  return map[type] || 'info'
-}
-
-const markReviewed = async (id) => {
-  try {
-    await axios.post(`/api/v1/knowledge/${id}/review`)
-    if (currentKnowledge.value) currentKnowledge.value.needs_review = false
-    ElMessage.success('已标记为已审阅')
-  } catch (e) {
-    ElMessage.error('操作失败')
   }
 }
 

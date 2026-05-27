@@ -3,6 +3,7 @@ from sqlalchemy import select, and_, or_, text
 from typing import List, Optional
 import asyncio
 import logging
+import re
 
 from app.models.knowledge import Knowledge
 
@@ -234,6 +235,7 @@ class KnowledgeService:
                     )
                     knowledge = result.scalar_one_or_none()
                     if knowledge:
+                        formatted = await self._resolve_figure_placeholders(knowledge_id, formatted)
                         knowledge.formatted_content = formatted
                         await db.commit()
                         logger.info(f"内容排版已保存(knowledge_id={knowledge_id})")
@@ -401,8 +403,44 @@ class KnowledgeService:
                     )
                     knowledge = result.scalar_one_or_none()
                     if knowledge:
+                        formatted = await self._resolve_figure_placeholders(knowledge_id, formatted)
                         knowledge.formatted_content = formatted
                         await db.commit()
                         logger.info(f"手动排版已保存(knowledge_id={knowledge_id})")
         except Exception as e:
             logger.error(f"手动排版失败(knowledge_id={knowledge_id}): {e}")
+
+    async def _resolve_figure_placeholders(self, knowledge_id: int, text: str) -> str:
+        """将 [FIGURE:N] 占位符替换为 MinIO 中的实际图片 URL"""
+        placeholders = re.findall(r'\[FIGURE:([\d.]+)\]', text)
+        if not placeholders:
+            return text
+
+        from app.services.file_service import file_service
+        prefix = f"knowledge/{knowledge_id}/"
+        try:
+            objects = await file_service.list_objects(prefix)
+            # 构建 fig_N → url 映射
+            url_map = {}
+            for obj in objects:
+                name = obj.get("object_name", "")
+                url = obj.get("url", "")
+                # 从文件名提取 fig 编号: fig_1.png, fig_2.jpg 等
+                m = re.search(r'fig_(\d+)\.', name)
+                if m:
+                    fig_n = m.group(1)
+                    url_map[fig_n] = url
+
+            for fig_n in placeholders:
+                placeholder = f"[FIGURE:{fig_n}]"
+                if fig_n in url_map:
+                    text = text.replace(placeholder, f"\n![图片 {fig_n}]({url_map[fig_n]})\n")
+                else:
+                    text = text.replace(placeholder, "")
+                    logger.debug(f"图片占位符无匹配文件: {placeholder} (knowledge_id={knowledge_id})")
+        except Exception as e:
+            logger.warning(f"图片占位符解析失败(knowledge_id={knowledge_id}): {e}")
+            # 移除所有未解析的占位符
+            text = re.sub(r'\[FIGURE:[\d.]+\]', '', text)
+
+        return text
