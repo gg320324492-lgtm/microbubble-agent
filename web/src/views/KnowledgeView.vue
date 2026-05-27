@@ -592,7 +592,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
