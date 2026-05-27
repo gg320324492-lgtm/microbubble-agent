@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-5 + 知识库深层逻辑系统（Knowledge Brain）全部完成，部署已上线。** 知识库已从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**，支持 RAG 优先问答、自动关联引擎、联网自主研究、健康监控。详见 `ROADMAP.md`。
+**Phase 1-5 + Knowledge Brain 全部完成，部署已上线。** 知识库已从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**，支持 RAG 优先问答、自动关联引擎、联网自主研究、健康监控、**实体级知识图谱**（跨文档实体融合+共现网络）、**科研假设生成**（LLM 驱动假设+验证生命周期）、**量化推理**（公式提取+安全计算引擎）。详见 `ROADMAP.md`。
 
 ## 前端设计系统
 
@@ -38,12 +38,15 @@
 - 认证使用 JWT，`app/core/security.py` 已实现，31 个端点全部接入 `get_current_user`
 - 会话存储已迁移到 Redis（`RedisSessionStore`，24 小时 TTL）
 - 知识库使用 pgvector 做向量搜索（扩展已在 main.py 启动时自动安装，已接入 text2vec-base-chinese 真实语义搜索）
-- **知识库深层逻辑系统（Knowledge Brain）** — 五大模块：
+- **知识库深层逻辑系统（Knowledge Brain）** — 八大模块：
   - **动态 LLM 分析**：LLM 根据内容自由生成分类/标签/key_concepts/related_topics/knowledge_type，不再硬编码
   - **自动关联引擎**：新入库条目通过 pgvector 余弦相似度 + 概念重叠自动发现关联关系，双向写入 knowledge_relations 表
   - **RAG 问答引擎**：语义搜索 → 阈值分类 → LLM 合成 → 来源引用，高相关不足时自动触发研究
   - **自主研究引擎**：知识空白检测 → 联网搜索（搜狗+必应）→ 网页抓取 → LLM 提取 → 自动入库 → 建立关联
   - **健康监控**：Celery 定时任务检测矛盾/重复/过期条目
+  - **实体知识图谱**：跨文档实体融合（精确匹配→embedding 余弦→新建），共现网络，ECharts 力导向图可视化
+  - **假设生成引擎**：从实体三元组+知识空白 LLM 生成可验证假设，proposed/validated/rejected 生命周期
+  - **量化推理引擎**：LLM 提取数学公式 → safe_eval 安全计算 → LaTeX 渲染 → 前端计算器
 - 语音识别使用 faster-whisper GPU，TTS 使用 Edge-TTS
 - **会议转录总结工具** — `summarize_meeting_transcript` 工具支持对话触发与长期存储
 - **任务软删除/垃圾桶** — 删除任务进入垃圾桶（deleted_at 字段），支持恢复或永久删除，3天后自动清除
@@ -72,8 +75,11 @@
 | `app/services/knowledge_qa_service.py` | RAG 问答引擎（检索+阈值+LLM 合成+来源引用） |
 | `app/services/auto_research_service.py` | 自主研究引擎（联网搜索+知识提取+空白填充+矛盾/重复/过期检测） |
 | `app/services/dynamic_taxonomy_service.py` | 动态分类体系（涌现分类+分类建议+主题网络） |
-| `app/services/knowledge_evolution_tasks.py` | Celery 知识进化定时任务（每日进化/空白检测/健康检查） |
+| `app/services/knowledge_evolution_tasks.py` | Celery 知识进化定时任务（每日进化/空白检测/健康检查/实体融合） |
 | `app/services/reminder_scheduler.py` | Redis 精确提醒调度（秒级精度） |
+| `app/services/entity_service.py` | 实体知识图谱（跨文档融合+搜索+图谱+LLM 合并） |
+| `app/services/hypothesis_service.py` | 科研假设生成（LLM 驱动假设+验证生命周期） |
+| `app/services/formula_service.py` | 量化推理（公式列表+安全计算+LaTeX 转换） |
 
 ## 开发注意事项
 
