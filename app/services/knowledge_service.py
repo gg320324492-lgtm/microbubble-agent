@@ -223,6 +223,23 @@ class KnowledgeService:
         except Exception as e:
             logger.warning(f"LLM 分析失败(knowledge_id={knowledge_id}): {e}")
 
+        # Step 2.6: AI 内容排版（独立容错，仅对 PDF 文件执行）
+        try:
+            from app.services.content_formatter_service import content_formatter_service
+            formatted = await content_formatter_service.format_content(title, content)
+            if formatted:
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(Knowledge).where(Knowledge.id == knowledge_id)
+                    )
+                    knowledge = result.scalar_one_or_none()
+                    if knowledge:
+                        knowledge.formatted_content = formatted
+                        await db.commit()
+                        logger.info(f"内容排版已保存(knowledge_id={knowledge_id})")
+        except Exception as e:
+            logger.warning(f"内容排版失败(knowledge_id={knowledge_id}): {e}")
+
         # Step 3: 确定最终状态（任一成功即为 done）
         final_status = "done" if (embedding_ok or analysis_ok) else "failed"
         async with async_session() as db:
@@ -360,3 +377,32 @@ class KnowledgeService:
             self._analyze_and_embed(knowledge_id, knowledge.title, knowledge.content)
         )
         return knowledge
+
+    async def reformat_content(self, knowledge_id: int):
+        """AI 排版整理指定知识条目的内容"""
+        knowledge = await self.get_knowledge(knowledge_id)
+        if not knowledge:
+            return None
+
+        asyncio.create_task(self._reformat_task(knowledge_id, knowledge.title, knowledge.content))
+        return knowledge
+
+    async def _reformat_task(self, knowledge_id: int, title: str, content: str):
+        """后台任务：AI 排版"""
+        from app.core.database import async_session
+        from app.services.content_formatter_service import content_formatter_service
+
+        try:
+            formatted = await content_formatter_service.format_content(title, content)
+            if formatted:
+                async with async_session() as db:
+                    result = await db.execute(
+                        select(Knowledge).where(Knowledge.id == knowledge_id)
+                    )
+                    knowledge = result.scalar_one_or_none()
+                    if knowledge:
+                        knowledge.formatted_content = formatted
+                        await db.commit()
+                        logger.info(f"手动排版已保存(knowledge_id={knowledge_id})")
+        except Exception as e:
+            logger.error(f"手动排版失败(knowledge_id={knowledge_id}): {e}")

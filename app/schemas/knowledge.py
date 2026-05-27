@@ -37,6 +37,7 @@ class KnowledgeResponse(KnowledgeBase):
     file_name: Optional[str] = None
     file_type: Optional[str] = None
     summary: Optional[str] = None
+    formatted_content: Optional[str] = None
     analysis_status: Optional[str] = None
     auto_researched: Optional[bool] = False
     quality_score: Optional[float] = None
