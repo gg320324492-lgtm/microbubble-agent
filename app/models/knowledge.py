@@ -37,6 +37,7 @@ class Knowledge(Base, TimestampMixin):
     file_name = Column(String(200), nullable=True)  # 原始文件名
     file_type = Column(String(200), nullable=True)  # MIME 类型
     summary = Column(Text, nullable=True)  # LLM 生成的摘要
+    formatted_content = Column(Text, nullable=True)  # AI 排版后的 Markdown 内容
 
     # 向量嵌入 (pgvector Vector(768))
     embedding = Column(Vector(768), nullable=True)

@@ -657,6 +657,20 @@ async def reanalyze_knowledge(
     return knowledge
 
 
+@router.post("/knowledge/{knowledge_id}/reformat", response_model=KnowledgeResponse)
+async def reformat_knowledge(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """AI 排版整理知识条目内容，后台执行，立即返回"""
+    service = KnowledgeService(db)
+    knowledge = await service.reformat_content(knowledge_id)
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+    return knowledge
+
+
 @router.post("/knowledge/reason", response_model=ReasonResponse)
 async def reason_knowledge(
     body: ReasonRequest,

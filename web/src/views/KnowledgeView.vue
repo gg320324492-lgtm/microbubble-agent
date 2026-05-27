@@ -439,7 +439,28 @@
         </div>
 
         <!-- 正文 -->
-        <div class="detail-content">{{ currentKnowledge.content }}</div>
+        <div class="detail-content-section">
+          <div class="detail-content-header">
+            <span class="section-label">正文</span>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :loading="reformatting"
+              @click="handleReformat(currentKnowledge.id)"
+            >
+              {{ reformatting ? '排版中...' : 'AI 排版' }}
+            </el-button>
+          </div>
+          <div
+            v-if="currentKnowledge.formatted_content"
+            class="detail-content markdown-body"
+            v-html="renderMarkdown(currentKnowledge.formatted_content)"
+          ></div>
+          <div v-else class="detail-content">
+            {{ currentKnowledge.content }}
+          </div>
+        </div>
 
         <!-- 来源 -->
         <div v-if="currentKnowledge.source || currentKnowledge.file_name || currentKnowledge.source_type" class="detail-source">
@@ -737,6 +758,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, MagicStick, Upload, Document, Connection } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 const isMobile = ref(window.innerWidth <= 768)
 const knowledgeList = ref([])
@@ -753,6 +776,7 @@ const editingKnowledge = ref(null)
 const currentKnowledge = ref(null)
 const loading = ref(false)
 const reanalyzing = ref(false)
+const reformatting = ref(false)
 const statsData = ref({ total: 0, categories: {} })
 const categories = ref([])
 const hotTags = ref([])
@@ -932,6 +956,33 @@ const handleReanalyze = async (id) => {
     ElMessage.error('重新分析触发失败')
   } finally {
     reanalyzing.value = false
+  }
+}
+
+const renderMarkdown = (text) => {
+  if (!text) return ''
+  const raw = marked.parse(text)
+  return DOMPurify.sanitize(raw)
+}
+
+const handleReformat = async (id) => {
+  reformatting.value = true
+  try {
+    await axios.post(`/api/v1/knowledge/${id}/reformat`)
+    ElMessage.success('AI 排版已开始，请稍后刷新查看')
+    reformatting.value = false
+    // 5秒后自动刷新
+    setTimeout(async () => {
+      try {
+        const { data } = await axios.get(`/api/v1/knowledge/${id}`)
+        currentKnowledge.value = { ...currentKnowledge.value, ...data }
+        ElMessage.success('排版完成')
+      } catch (e) { /* ignore */ }
+      reformatting.value = false
+    }, 5000)
+  } catch (e) {
+    ElMessage.error('排版触发失败')
+    reformatting.value = false
   }
 }
 
@@ -2023,6 +2074,105 @@ onUnmounted(() => {
   padding: var(--space-4);
   border-radius: var(--radius-md);
 }
+
+.detail-content-section {
+  margin-top: var(--space-4);
+}
+
+.detail-content-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.section-label {
+  font-weight: 600;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+}
+
+.markdown-body {
+  font-size: var(--font-size-base);
+  line-height: 1.8;
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-md);
+}
+
+.markdown-body :deep(h1) {
+  font-size: 1.5em;
+  font-weight: 700;
+  margin: 1.2em 0 0.6em;
+  padding-bottom: 0.3em;
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.markdown-body :deep(h2) {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  color: var(--color-text-primary);
+}
+
+.markdown-body :deep(h3) {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  color: var(--color-text-secondary);
+}
+
+.markdown-body :deep(p) {
+  margin: 0.5em 0;
+  text-indent: 2em;
+}
+
+.markdown-body :deep(ul), .markdown-body :deep(ol) {
+  padding-left: 2em;
+  margin: 0.4em 0;
+}
+
+.markdown-body :deep(li) {
+  margin: 0.2em 0;
+}
+
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+  font-size: 0.9em;
+}
+
+.markdown-body :deep(th), .markdown-body :deep(td) {
+  border: 1px solid var(--color-border);
+  padding: 0.4em 0.6em;
+  text-align: left;
+}
+
+.markdown-body :deep(th) {
+  background: var(--color-bg-page);
+  font-weight: 600;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid var(--color-primary);
+  margin: 0.6em 0;
+  padding: 0.3em 1em;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-page);
+}
+
+.markdown-body :deep(code) {
+  background: #f0f0f0;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.markdown-body :deep(sub) { font-size: 0.8em; }
+.markdown-body :deep(sup) { font-size: 0.8em; }
 
 .detail-source {
   margin-top: var(--space-4);
