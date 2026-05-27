@@ -40,6 +40,15 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     print("数据库表创建完成")
 
+    # 初始化内置公式库（幂等）
+    try:
+        from app.core.database import async_session
+        from app.seed.seeder import seed_formula_library
+        async with async_session() as db:
+            await seed_formula_library(db)
+    except Exception as e:
+        print(f"内置公式库初始化失败（可忽略）: {e}")
+
     # 启动时同步待发送提醒到 Redis（实现秒级精确提醒）
     try:
         from app.core.database import async_session

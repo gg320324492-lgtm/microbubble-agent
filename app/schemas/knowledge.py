@@ -248,9 +248,25 @@ class HypothesisList(BaseModel):
 
 # ── Formula / Quantitative Reasoning Schemas ──
 
+class FormulaCategoryItem(BaseModel):
+    id: int
+    name: str
+    display_name: str
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+    children: List["FormulaCategoryItem"] = []
+    formula_count: int = 0
+
+
+class FormulaCategoryTree(BaseModel):
+    categories: List[FormulaCategoryItem]
+
+
 class FormulaItem(BaseModel):
     id: int
-    knowledge_id: int
+    knowledge_id: Optional[int] = None
     name: str
     formula_latex: Optional[str] = None
     variables: dict = {}
@@ -258,6 +274,10 @@ class FormulaItem(BaseModel):
     conditions: Optional[str] = None
     domain: Optional[str] = None
     confidence: float
+    source_type: str = "extracted"
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    is_active: bool = True
     created_at: Optional[str] = None
 
 

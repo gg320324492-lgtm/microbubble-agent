@@ -631,10 +631,23 @@
           <el-col :span="12">
             <el-card class="formula-list-card">
               <div class="formula-list-header">
-                <el-select v-model="formulaDomainFilter" placeholder="领域筛选" clearable @change="fetchFormulas" style="width:140px">
-                  <el-option v-for="d in formulaDomains" :key="d.name" :label="`${d.name} (${d.count})`" :value="d.name" />
-                </el-select>
-                <el-input v-model="formulaKeyword" placeholder="搜索公式" clearable @keyup.enter="fetchFormulas" style="width:160px" />
+                <div class="formula-filter-row">
+                  <el-tree-select
+                    v-model="formulaCategoryFilter"
+                    :data="formulaCategories"
+                    :props="{ label: 'display_name', value: 'id', children: 'children' }"
+                    placeholder="全部分类"
+                    clearable
+                    filterable
+                    style="width:160px"
+                    @change="fetchFormulas"
+                  />
+                  <el-select v-model="formulaSourceFilter" placeholder="来源" clearable @change="fetchFormulas" style="width:100px">
+                    <el-option label="内置公式" value="builtin" />
+                    <el-option label="文档提取" value="extracted" />
+                  </el-select>
+                  <el-input v-model="formulaKeyword" placeholder="搜索公式" clearable @keyup.enter="fetchFormulas" style="width:150px" />
+                </div>
               </div>
               <div v-if="formulaList.length === 0" class="empty-state">
                 <el-empty description="暂无公式。上传含数学公式的文档后系统将自动提取。" />
@@ -645,8 +658,11 @@
                 <div class="formula-latex">{{ f.formula_latex }}</div>
                 <div class="formula-meta">
                   <el-tag size="small">{{ f.domain || '未分类' }}</el-tag>
+                  <el-tag v-if="f.source_type === 'builtin'" size="small" type="success" style="margin-left:4px">内置</el-tag>
+                  <el-tag v-else-if="f.source_type === 'extracted'" size="small" type="info" style="margin-left:4px">提取</el-tag>
                   <span class="formula-unit">→ {{ f.result_unit }}</span>
                 </div>
+                <div v-if="f.category_name" class="formula-category-path">{{ f.category_name }}</div>
               </div>
               <el-pagination v-if="formulaTotal > 20" v-model:current-page="formulaPage" :page-size="20"
                 :total="formulaTotal" layout="prev, pager, next" small @current-change="fetchFormulas" />
@@ -655,6 +671,11 @@
           <el-col :span="12">
             <el-card v-if="selectedFormula" class="calculator-card">
               <h3>{{ selectedFormula.name }}</h3>
+              <div v-if="selectedFormula.category_name" class="calc-category-path">分类: {{ selectedFormula.category_name }}</div>
+              <div class="formula-meta" style="margin-top:4px">
+                <el-tag v-if="selectedFormula.source_type === 'builtin'" size="small" type="success">内置公式</el-tag>
+                <el-tag v-else-if="selectedFormula.source_type === 'extracted'" size="small" type="info">文档提取</el-tag>
+              </div>
               <div class="calculator-formula">{{ selectedFormula.formula_latex }}</div>
               <el-divider />
               <el-form label-width="150px">
@@ -676,7 +697,7 @@
                     <span class="step-var">{{ step.variable }}</span> = {{ step.value }} {{ step.unit }}
                   </div>
                 </div>
-                <div class="calc-source">来源: <a @click="gotoKnowledge(selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
+                <div v-if="selectedFormula.knowledge_id" class="calc-source">来源: <a @click="gotoKnowledge(selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
               </div>
             </el-card>
             <el-card v-else class="calculator-card">
@@ -766,9 +787,11 @@ const hypothesisGenerating = ref(false)
 const formulaList = ref([])
 const formulaTotal = ref(0)
 const formulaPage = ref(1)
-const formulaDomainFilter = ref('')
+const formulaCategoryFilter = ref(null)
 const formulaKeyword = ref('')
+const formulaSourceFilter = ref('')
 const formulaDomains = ref([])
+const formulaCategories = ref([])
 const selectedFormula = ref(null)
 const calcInputs = ref({})
 const calcResult = ref(null)
@@ -1288,12 +1311,20 @@ const validateHypothesis = async (id, status) => {
 const fetchFormulas = async () => {
   try {
     const params = { page: formulaPage.value, page_size: 20 }
-    if (formulaDomainFilter.value) params.domain = formulaDomainFilter.value
+    if (formulaCategoryFilter.value) params.category_id = formulaCategoryFilter.value
     if (formulaKeyword.value) params.keyword = formulaKeyword.value
+    if (formulaSourceFilter.value) params.source_type = formulaSourceFilter.value
     const res = await axios.get('/api/v1/knowledge/formulas', { params })
     formulaList.value = res.data.items || []
     formulaTotal.value = res.data.total || 0
   } catch (e) { console.error('获取公式失败:', e) }
+}
+
+const fetchFormulaCategories = async () => {
+  try {
+    const res = await axios.get('/api/v1/knowledge/formulas/categories')
+    formulaCategories.value = res.data || []
+  } catch (e) { console.error('获取公式分类树失败:', e) }
 }
 
 const fetchFormulaDomains = async () => {
@@ -1334,7 +1365,7 @@ const runCalculation = async () => {
 watch(activeTab, (tab) => {
   if (tab === 'entities') { searchEntities(); fetchEntityGraph() }
   if (tab === 'hypotheses') fetchHypotheses()
-  if (tab === 'formulas') { fetchFormulas(); fetchFormulaDomains() }
+  if (tab === 'formulas') { fetchFormulas(); fetchFormulaCategories() }
 })
 
 onUnmounted(() => {
@@ -2349,6 +2380,9 @@ onUnmounted(() => {
 .formula-list-header {
   display: flex; gap: var(--space-2); margin-bottom: var(--space-3);
 }
+.formula-filter-row {
+  display: flex; gap: var(--space-2); flex-wrap: wrap;
+}
 .formula-item {
   padding: var(--space-3);
   border: 1px solid var(--color-border);
@@ -2365,6 +2399,8 @@ onUnmounted(() => {
 .formula-latex { font-size: 13px; color: var(--color-text-secondary); font-family: monospace; margin-bottom: 4px; }
 .formula-meta { display: flex; align-items: center; gap: var(--space-2); }
 .formula-unit { font-size: 12px; color: var(--color-text-secondary); }
+.formula-category-path { font-size: 11px; color: var(--color-text-placeholder); margin-top: 2px; }
+.calc-category-path { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
 .calculator-card h3 { margin: 0 0 8px 0; }
 .calculator-formula {
   font-size: 16px; font-family: monospace;
