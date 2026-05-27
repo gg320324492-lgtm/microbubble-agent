@@ -1,6 +1,6 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: 2026-05-27 (更新：Knowledge Brain 二次升级 — 实体图谱 + 假设生成 + 量化推理)
+> 最后更新: 2026-05-27 (更新：公式计算模块增强 — 分类体系 + 内置公式库 + 前端分类树)
 
 ## 第一阶段：让系统真正能用（关键）
 
@@ -1717,31 +1717,57 @@ Dashboard 首页和 TaskView 任务管理中，同一人的任务排序规则优
 - `app/schemas/knowledge.py` — 2 个新 schema（HypothesisItem/HypothesisList）
 - `web/src/views/KnowledgeView.vue` — 假设 tab（~200 行）
 
-### P2: 量化推理引擎 ✅
+### P3: 公式库增强 ✅
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| 公式提取 | LLM 分析文档时自动提取数学公式（formula_latex + formula_python） | ✅ 完成 |
-| LaTeX→Python 转换 | ×÷−→*/+，π→pi，等号左侧剥离，变量保留 | ✅ 完成 |
-| 安全计算 | eval() + `{"__builtins__": {}}` + 白名单 math 函数（sqrt/log/exp/pow/abs/pi/e） | ✅ 完成 |
-| 变量校验 | 计算前检查必填变量完整性，返回缺失提示 | ✅ 完成 |
-| 计算步骤 | 返回每步变量代入值和最终结果 | ✅ 完成 |
-| 公式领域分布 | 按 domain 分组统计 | ✅ 完成 |
-| 前端公式计算 tab | 左栏公式列表（领域筛选+关键字搜索），右栏计算器（变量输入+计算结果+步骤展开+来源链接） | ✅ 完成 |
-
-**验证：** COD 公式 (V0=25, V1=20, C=0.25, V=20) → 500.0 mg/L ✅
+| FormulaCategory 模型 | 二级分类树（6 大类 24 子分类），支持图标+排序+描述 | ✅ 完成 |
+| 知识公式关联分类 | knowledge_formulas 新增 category_id FK + source_type（builtin/extracted）+ is_active | ✅ 完成 |
+| 内置公式库 | 32 个微纳米气泡领域公式，覆盖气泡动力学/传质/水质/化学动力学/流体力学/统计分析 | ✅ 完成 |
+| 幂等种子数据 | 启动时自动初始化 formula_categories + 内置公式，仅首次执行 | ✅ 完成 |
+| 分类树 API | GET /knowledge/formulas/categories — 返回树形结构 + 公式计数 | ✅ 完成 |
+| 公式筛选增强 | list_formulas 新增 category_id / source_type 参数，支持按分类+来源组合筛选 | ✅ 完成 |
+| domain→category 映射 | 40+ 条模糊匹配规则，LLM 提取公式自动归入正确分类 | ✅ 完成 |
+| LaTeX 转换增强 | 希腊字母（σ/μ/θ/δ/λ）+ 上标（²/³）+ sum 符号扩展 | ✅ 完成 |
+| LLM 提示词优化 | domain 字段引导使用标准化分类名 | ✅ 完成 |
+| 前端分类树 | el-tree-select 替换 domain 下拉，支持搜索+层级展开+公式计数 | ✅ 完成 |
+| 来源标签 | 公式列表+计算器显示"内置"（绿色）/ "提取"（灰色）标签 | ✅ 完成 |
+| 内置公式去知识链接 | 内置公式无父文档时隐藏"来源: 知识条目 #N"链接 | ✅ 完成 |
 
 **新建文件：**
-- `app/models/knowledge_formula.py` — KnowledgeFormula 模型
-- `app/services/formula_service.py` — 公式列表/计算/safe_eval/LaTeX 转换
+- `app/models/formula_category.py` — FormulaCategory 模型
+- `app/seed/formula_library.py` — 内置公式库种子数据（32 条公式）
+- `app/seed/seeder.py` — 幂等种子服务
+- `alembic/versions/009_formula_categories.py` — 数据库迁移
 
 **修改文件：**
-- `app/models/__init__.py` — 注册新模型
-- `app/services/llm_analysis_service.py` — ANALYSIS_PROMPT 新增 formulas 字段
-- `app/services/knowledge_service.py` — _analyze_and_embed Step 2.5 保存公式
-- `app/api/v1/knowledge.py` — 3 个新端点（formulas/list, formulas/domains, formulas/calculate）
-- `app/schemas/knowledge.py` — 2 个新 schema（FormulaItem/FormulaList）
-- `web/src/views/KnowledgeView.vue` — 公式计算 tab（~250 行）
+- `app/models/knowledge_formula.py` — 新增 source_type/category_id/is_active，knowledge_id 改为 nullable
+- `app/services/formula_service.py` — 新增 get_categories / _resolve_category_name / 增强 list_formulas
+- `app/schemas/knowledge.py` — 新增 FormulaCategoryItem + FormulaItem 增强
+- `app/api/v1/knowledge.py` — 新增 formulas/categories 端点 + 增强 list_formulas 参数
+- `app/services/llm_analysis_service.py` — 提示词 domain 字段优化
+- `web/src/views/KnowledgeView.vue` — 分类树 + 来源标签 + 筛选器
+- `app/main.py` — 启动时调用 seed_formula_library
+
+**验证：** API 分类树返回 6 个顶级分类 + 24 子分类 + 32 内置公式 ✅ Young-Laplace 计算 2×0.072/0.00005=2880 Pa ✅
+
+### 新增 API 端点汇总（公式增强）
+
+| 端点 | 说明 | 维度 |
+|------|------|------|
+| `GET /knowledge/formulas/categories` | 获取公式分类树（含公式计数） | P3 |
+
+### 前端改造
+
+KnowledgeView.vue 从 ~2400 行扩展为 ~2450 行，公式计算 tab 改造：
+- **分类树浏览**：el-tree-select 替代 domain 下拉，支持层级展开 + 关键字搜索 + 公式计数显示
+- **来源筛选**：el-select 切换 全部/内置公式/文档提取
+- **公式卡片增强**：显示来源标签（绿色"内置"/灰色"提取"）+ 分类路径
+- **计算器面板增强**：显示分类路径 + 来源标签，内置公式无"来源: 知识条目"链接
+
+**后端总新增：** ~300 行（1 模型 + 1 种子数据 + 1 种子服务 + 1 迁移 + 1 API + schema/service 增强）
+**前端总新增：** ~50 行（模板 + 样式 + 方法）
+**数据库新增：** 1 张表（formula_categories）+ 3 列（knowledge_formulas.source_type/category_id/is_active）
 
 ### 新增 API 端点汇总（二次升级）
 

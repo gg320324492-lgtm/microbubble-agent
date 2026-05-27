@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-5 + Knowledge Brain 全部完成，部署已上线。** 知识库已从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**，支持 RAG 优先问答、自动关联引擎、联网自主研究、健康监控、**实体级知识图谱**（跨文档实体融合+共现网络）、**科研假设生成**（LLM 驱动假设+验证生命周期）、**量化推理**（公式提取+安全计算引擎）。详见 `ROADMAP.md`。
+**Phase 1-5 + Knowledge Brain 全部完成，部署已上线。** 知识库已从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**，支持 RAG 优先问答、自动关联引擎、联网自主研究、健康监控、**实体级知识图谱**（跨文档实体融合+共现网络）、**科研假设生成**（LLM 驱动假设+验证生命周期）、**量化推理**（公式提取+安全计算引擎 + **结构化分类体系** + **内置 32 个领域公式**）。详见 `ROADMAP.md`。
 
 ## 前端设计系统
 
@@ -47,6 +47,8 @@
   - **实体知识图谱**：跨文档实体融合（精确匹配→embedding 余弦→新建），共现网络，ECharts 力导向图可视化
   - **假设生成引擎**：从实体三元组+知识空白 LLM 生成可验证假设，proposed/validated/rejected 生命周期
   - **量化推理引擎**：LLM 提取数学公式 → safe_eval 安全计算 → LaTeX 渲染 → 前端计算器
+  - **公式分类体系**：6 大类 24 子分类（FormulaCategory 模型树）+ 32 个内置微纳米气泡领域公式，前端分类树浏览，来源标签（内置/提取）
+  - **公式自动分类**：LLM 提取公式 domain 字符串 → 模糊映射到结构化分类，新老公式统一归入分类树
 - 语音识别使用 faster-whisper GPU，TTS 使用 Edge-TTS
 - **会议转录总结工具** — `summarize_meeting_transcript` 工具支持对话触发与长期存储
 - **任务软删除/垃圾桶** — 删除任务进入垃圾桶（deleted_at 字段），支持恢复或永久删除，3天后自动清除
@@ -79,7 +81,7 @@
 | `app/services/reminder_scheduler.py` | Redis 精确提醒调度（秒级精度） |
 | `app/services/entity_service.py` | 实体知识图谱（跨文档融合+搜索+图谱+LLM 合并） |
 | `app/services/hypothesis_service.py` | 科研假设生成（LLM 驱动假设+验证生命周期） |
-| `app/services/formula_service.py` | 量化推理（公式列表+安全计算+LaTeX 转换） |
+| `app/services/formula_service.py` | 量化推理（公式列表+安全计算+LaTeX 转换+分类树+内置公式库） |
 
 ## 开发注意事项
 
