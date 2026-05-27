@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -26,6 +28,48 @@ logger = logging.getLogger("microbubble.knowledge")
 
 
 router = APIRouter()
+
+
+async def _upload_knowledge_images(knowledge_id: int, images: dict, source_filename: str):
+    """后台任务：上传 PDF 提取的图片到 MinIO，更新知识条目的图片 URL"""
+    from app.core.database import async_session
+    from app.services.file_service import file_service
+
+    image_urls = {}
+    for placeholder, img_data in images.items():
+        try:
+            fig_idx = placeholder.strip().replace("[FIGURE:", "").replace("]", "")
+            img_filename = f"knowledge/{knowledge_id}/fig_{fig_idx}_{img_data['ext']}"
+            result = await file_service.upload_file(
+                file_data=img_data["bytes"],
+                filename=img_filename,
+                content_type=f"image/{img_data['ext']}",
+                prefix="",
+            )
+            image_urls[placeholder] = result["url"]
+        except Exception as e:
+            logger.warning(f"图片上传失败(knowledge_id={knowledge_id}, {placeholder}): {e}")
+
+    if image_urls:
+        try:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Knowledge).where(Knowledge.id == knowledge_id)
+                )
+                knowledge = result.scalar_one_or_none()
+                if knowledge:
+                    content = knowledge.content
+                    for placeholder, url in image_urls.items():
+                        fig_num = placeholder.strip().replace("[FIGURE:", "").replace("]", "")
+                        content = content.replace(
+                            placeholder,
+                            f"\n![图片 {fig_num}]({url})\n",
+                        )
+                    knowledge.content = content
+                    await db.commit()
+                    logger.info(f"图片 URL 已嵌入(knowledge_id={knowledge_id}, {len(image_urls)} 张)")
+        except Exception as e:
+            logger.error(f"图片 URL 嵌入失败(knowledge_id={knowledge_id}): {e}")
 
 
 @router.post("/knowledge", response_model=KnowledgeResponse, status_code=201)
@@ -208,12 +252,14 @@ async def upload_knowledge_file(
     if len(file_data) > max_bytes:
         raise HTTPException(400, f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
 
-    # 提取文本
+    # 提取文本和图片
     from app.services.file_parser_service import file_parser_service
     try:
-        content = await file_parser_service.extract_text(
+        extracted = await file_parser_service.extract_content(
             file_data, filename, file.content_type or "application/octet-stream"
         )
+        content = extracted["text"]
+        images = extracted["images"]
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
@@ -236,7 +282,7 @@ async def upload_knowledge_file(
         logger.exception(f"MinIO 上传失败: {filename}")
         raise HTTPException(500, "文件存储服务暂时不可用，请稍后重试")
 
-    # 创建知识条目（后台自动分析）
+    # 创建知识条目（暂不 commit，等图片上传完一起）
     service = KnowledgeService(db)
     try:
         raw_type = file.content_type or "application/octet-stream"
@@ -251,12 +297,17 @@ async def upload_knowledge_file(
         )
     except Exception as e:
         logger.exception(f"知识条目创建失败: {filename}")
-        # 清理 MinIO 中的孤立文件
         try:
             file_service.delete_file(upload_result["object_name"])
         except Exception:
             logger.warning(f"清理孤立文件失败: {upload_result['object_name']}")
         raise HTTPException(500, "知识条目创建失败，请稍后重试")
+
+    # 上传提取的图片到 MinIO（后台执行，不影响响应）
+    if images:
+        asyncio.create_task(
+            _upload_knowledge_images(knowledge.id, images, filename)
+        )
 
     return knowledge
 
