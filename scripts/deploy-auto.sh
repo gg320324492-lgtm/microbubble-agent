@@ -54,6 +54,12 @@ if [ ! -f "$PROJECT_DIR/web/dist/index.html" ]; then
     exit 1
 fi
 
+# 同步 Nginx 配置（tunnel.conf → /etc/nginx/conf.d/default.conf）
+if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
+    cp "$PROJECT_DIR/nginx/conf.d/tunnel.conf" /etc/nginx/conf.d/default.conf
+    log "nginx config synced"
+fi
+
 # 测试 nginx 配置有效性
 nginx -t >> "$LOG_FILE" 2>&1
 
