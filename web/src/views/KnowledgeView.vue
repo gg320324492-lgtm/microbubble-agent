@@ -1114,6 +1114,9 @@ const handleUpload = async () => {
         ElMessage.error(detail.map(d => d.msg || JSON.stringify(d)).join('; '))
       } else if (typeof detail === 'string') {
         ElMessage.error(detail)
+      } else if (typeof e.response?.data === 'string') {
+        // Nginx 返回的 HTML 错误页等非 JSON 响应
+        ElMessage.error('服务器错误，请稍后重试')
       } else {
         ElMessage.error('上传失败')
       }

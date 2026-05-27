@@ -146,6 +146,7 @@ server {
         proxy_connect_timeout 10s;
         proxy_send_timeout 120s;
         proxy_read_timeout 120s;
+        client_max_body_size 50m;
     }
 
     location /ws {
