@@ -439,28 +439,12 @@
         </div>
 
         <!-- 正文 -->
-        <div class="detail-content-section">
-          <div class="detail-content-header">
-            <span class="section-label">正文</span>
-            <el-button
-              size="small"
-              type="primary"
-              plain
-              :loading="reformatting"
-              @click="handleReformat(currentKnowledge.id)"
-            >
-              {{ reformatting ? '排版中...' : 'AI 排版' }}
-            </el-button>
-          </div>
-          <div
-            v-if="currentKnowledge.formatted_content"
-            class="detail-content markdown-body"
-            v-html="renderMarkdown(currentKnowledge.formatted_content)"
-          ></div>
-          <div v-else class="detail-content">
-            {{ currentKnowledge.content }}
-          </div>
-        </div>
+        <div
+          v-if="currentKnowledge.formatted_content"
+          class="detail-content markdown-body"
+          v-html="renderMarkdown(currentKnowledge.formatted_content)"
+        ></div>
+        <div v-else class="detail-content">{{ currentKnowledge.content }}</div>
 
         <!-- 来源 -->
         <div v-if="currentKnowledge.source || currentKnowledge.file_name || currentKnowledge.source_type" class="detail-source">
@@ -776,7 +760,6 @@ const editingKnowledge = ref(null)
 const currentKnowledge = ref(null)
 const loading = ref(false)
 const reanalyzing = ref(false)
-const reformatting = ref(false)
 const statsData = ref({ total: 0, categories: {} })
 const categories = ref([])
 const hotTags = ref([])
@@ -965,27 +948,6 @@ const renderMarkdown = (text) => {
   return DOMPurify.sanitize(raw)
 }
 
-const handleReformat = async (id) => {
-  reformatting.value = true
-  try {
-    await axios.post(`/api/v1/knowledge/${id}/reformat`)
-    ElMessage.success('AI 排版已开始，请稍后刷新查看')
-    reformatting.value = false
-    // 5秒后自动刷新
-    setTimeout(async () => {
-      try {
-        const { data } = await axios.get(`/api/v1/knowledge/${id}`)
-        currentKnowledge.value = { ...currentKnowledge.value, ...data }
-        ElMessage.success('排版完成')
-      } catch (e) { /* ignore */ }
-      reformatting.value = false
-    }, 5000)
-  } catch (e) {
-    ElMessage.error('排版触发失败')
-    reformatting.value = false
-  }
-}
-
 // ── 知识详情 + 关联 + 图谱 ──
 
 const viewKnowledge = async (item) => {
@@ -994,6 +956,11 @@ const viewKnowledge = async (item) => {
   relatedKnowledge.value = []
   graphData.value = { nodes: [], edges: [] }
   window.scrollTo({ top: 0, behavior: 'smooth' })
+
+  // 无排版内容时自动后台触发排版
+  if (!item.formatted_content) {
+    axios.post(`/api/v1/knowledge/${item.id}/reformat`).catch(() => {})
+  }
 
   // 并行获取关联和图谱数据
   try {
@@ -2073,23 +2040,6 @@ onUnmounted(() => {
   background: var(--color-bg-page);
   padding: var(--space-4);
   border-radius: var(--radius-md);
-}
-
-.detail-content-section {
-  margin-top: var(--space-4);
-}
-
-.detail-content-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
-}
-
-.section-label {
-  font-weight: 600;
-  font-size: var(--font-size-base);
-  color: var(--color-text-primary);
 }
 
 .markdown-body {
