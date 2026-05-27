@@ -214,7 +214,10 @@ async def upload_knowledge_file(
         content = await file_parser_service.extract_text(
             file_data, filename, file.content_type or "application/octet-stream"
         )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     except Exception as e:
+        logger.exception(f"文本提取异常: {filename}")
         raise HTTPException(400, f"文本提取失败: {str(e)}")
 
     if not content.strip():

@@ -33,14 +33,27 @@ class FileParserService:
         """解析 PDF 文件"""
         def _extract():
             import pdfplumber
-            with pdfplumber.open(io.BytesIO(data)) as pdf:
-                pages = []
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        pages.append(text)
-                return '\n'.join(pages)
-        return await asyncio.to_thread(_extract)
+            from pdfminer.pdfdocument import PDFEncryptionError
+            try:
+                with pdfplumber.open(io.BytesIO(data)) as pdf:
+                    pages = []
+                    for page in pdf.pages:
+                        text = page.extract_text()
+                        if text:
+                            pages.append(text)
+                    text = '\n'.join(pages)
+                    if not text.strip():
+                        raise ValueError("PDF 为扫描件或图片型文档，无文字层")
+                    return text
+            except PDFEncryptionError:
+                raise ValueError("PDF 已加密，无法解析")
+        try:
+            return await asyncio.to_thread(_extract)
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.exception("PDF 解析失败")
+            raise ValueError(f"PDF 解析失败: {str(e)}")
 
     async def _parse_docx(self, data: bytes) -> str:
         """解析 Word 文档"""
