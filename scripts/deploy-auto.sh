@@ -55,6 +55,7 @@ if [ ! -f "$PROJECT_DIR/web/dist/index.html" ]; then
 fi
 
 # 同步 Nginx 配置（tunnel.conf → /etc/nginx/conf.d/default.conf）
+# 注意：此步骤在 git pull 之后执行，配置变更下次部署生效
 if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
     cp "$PROJECT_DIR/nginx/conf.d/tunnel.conf" /etc/nginx/conf.d/default.conf
     log "nginx config synced"
