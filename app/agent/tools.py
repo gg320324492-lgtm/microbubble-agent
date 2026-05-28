@@ -426,6 +426,22 @@ TOOLS = [
         }
     },
 
+    # 声纹录入工具
+    {
+        "name": "enroll_voice",
+        "description": "录入用户的声纹特征。当用户说'小气，我是XXX'、'帮我录入声纹'、'记住我的声音'等时使用。需要先通过 query_members 确认成员身份。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "member_name": {
+                    "type": "string",
+                    "description": "要录入声纹的成员姓名"
+                }
+            },
+            "required": ["member_name"]
+        }
+    },
+
     # 自定义指令工具
     {
         "name": "set_custom_instructions",

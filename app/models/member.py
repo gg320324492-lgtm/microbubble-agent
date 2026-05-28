@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, ARRAY
+from sqlalchemy import Column, Integer, String, Boolean, Text, ARRAY, DateTime
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from app.core.database import Base
 from app.models.base import TimestampMixin
 
@@ -28,6 +29,11 @@ class Member(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     role = Column(String(20), default="member")  # admin/leader/member
     custom_instructions = Column(Text)  # 用户自定义指令
+
+    # 声纹识别
+    voice_embedding = Column(Vector(256))  # 3D-Speaker 256维说话人嵌入
+    voice_enrolled_at = Column(DateTime)  # 声纹录入时间
+    voice_sample_count = Column(Integer, default=0)  # 采样次数
 
     # 关系
     assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assignee_id")

@@ -23,6 +23,12 @@ mcp>=0.9.0
 
 # 语音识别
 pilk>=0.2.4
+faster-whisper>=1.0.0
+
+# 声纹识别 + VAD
+modelscope>=1.14.0
+torch>=2.0.0
+torchaudio>=2.0.0
 
 # 语音合成
 edge-tts==6.1.9
