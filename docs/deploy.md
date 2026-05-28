@@ -493,3 +493,270 @@ tail -f logs/app.log | jq .
 # 按级别过滤
 grep '"level": "ERROR"' logs/app.log
 ```
+
+---
+
+## 七、数据备份与恢复
+
+### 备份数据
+
+项目所有持久化数据均在项目目录内，无需从系统其他位置收集：
+
+| 数据 | 路径 | 说明 |
+|------|------|------|
+| PostgreSQL 数据库 | `data/postgres/` | 全部业务数据（成员/任务/会议/知识库/向量嵌入） |
+| MinIO 文件 | `data/minio/` | 头像/上传文件/知识库附件 |
+| Redis 缓存 | `data/redis/` | 会话缓存（可重建，非必需） |
+| AI 模型缓存 | `models/` | Whisper large-v3 + text2vec（~6.5GB） |
+| 环境变量 | `.env` | API 密钥和配置 |
+| Webhook 密钥 | `.env.webhook` | 自动部署密钥 |
+
+```bash
+# 打包所有数据（约 7GB）
+tar -czf microbubble-backup-$(date +%Y%m%d).tar.gz data/ models/ .env .env.webhook
+```
+
+### 恢复数据
+
+```bash
+cd /opt/microbubble-agent
+tar -xzf microbubble-backup-YYYYMMDD.tar.gz
+# 确认后启动服务
+docker compose up -d
+```
+
+---
+
+## 八、服务器迁移（单机部署）
+
+将项目从"云服务器 + 本地电脑 FRP"架构迁移到**一台高性能服务器独立运行**的完整指南。
+
+### 8.1 硬件参考
+
+| 组件 | 规格 | 用途 |
+|------|------|------|
+| CPU | AMD Ryzen 9 9950X3D（16核32线程） | Docker 8 服务 + AI 推理 |
+| GPU | NVIDIA RTX 5090 32GB | Whisper large-v3 语音识别（~6GB VRAM） |
+| 主板 | X870E（PCIe 5.0） | 扩展性 + 稳定性 |
+| 内存 | 128GB DDR5 | Docker 分配 ~7GB，剩余充足 |
+| 系统盘 | 1TB NVMe | 操作系统 + Docker 镜像 |
+| 数据盘 | 8TB SSD | 数据库 + MinIO + 模型缓存 |
+| 电源 | ≥1200W 80Plus 白金 | 9950X3D(~170W) + 5090(575W) + 余量 |
+| 散热 | 360mm 以上一体水冷 | 9950X3D 积热严重 |
+| UPS | APC BR1500G 或同级 | 断电保护 + 自动关机 |
+
+### 8.2 系统安装
+
+推荐 Ubuntu Server 24.04 LTS，系统盘挂载 `/`，数据盘挂载 `/data`。
+
+```bash
+# 基础配置
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl wget git vim htop build-essential
+sudo timedatectl set-timezone Asia/Shanghai
+
+# 安装 NVIDIA 驱动（570+）
+sudo apt install -y nvidia-driver-570
+sudo reboot
+nvidia-smi  # 验证
+
+# 安装 Docker + NVIDIA Container Toolkit
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+# 重新登录
+
+# NVIDIA Container Toolkit
+distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/$distribution/libnvidia-container.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt update && sudo apt install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+
+# 验证 GPU 在 Docker 中可用
+docker run --rm --gpus all nvidia/cuda:12.8.0-base-ubuntu24.04 nvidia-smi
+
+# 安装 Node.js 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+### 8.3 部署项目
+
+```bash
+# 克隆项目
+sudo mkdir -p /opt/microbubble-agent
+sudo chown $USER:$USER /opt/microbubble-agent
+git clone <repo-url> /opt/microbubble-agent
+cd /opt/microbubble-agent
+
+# 从旧电脑恢复数据（如果有备份）
+tar -xzf microbubble-backup-YYYYMMDD.tar.gz
+
+# 创建必要目录
+mkdir -p data/{postgres,redis,minio} logs models/hf_cache backups
+
+# 构建前端
+cd web && npm install && npm run build && cd ..
+
+# 构建并启动 Docker 服务
+docker compose build
+docker compose up -d
+```
+
+### 8.4 迁移时需要修改的配置
+
+以下文件在单机部署时需要检查/修改：
+
+#### 必须检查（API 密钥和域名）
+
+| 文件 | 说明 |
+|------|------|
+| `.env` | API 密钥（CLAUDE_API_KEY、MIMO_API_KEY）、数据库密码、SITE_DOMAIN |
+| `app/config.py:27` | `SITE_DOMAIN` 默认值 |
+| `app/main.py:87-96` | CORS origins 是否需要添加新域名/IP |
+
+#### 如果在非中国网络
+
+| 文件 | 行 | 修改 |
+|------|-----|------|
+| `Dockerfile` | 28-29 | 删除阿里云 PyPI 镜像 |
+| `Dockerfile.mcp` | 8,11 | 删除清华 PyPI 镜像 |
+
+#### 如果使用新域名
+
+| 文件 | 涉及值 |
+|------|--------|
+| `nginx/conf.d/tunnel.conf` | `server_name`、SSL 证书路径 |
+| `nginx/conf.d/default-http.conf` | `server_name` |
+| `frp/frpc.toml` | `serverAddr`（单机部署不需要 FRP） |
+| `scripts/deploy.sh`、`deploy-local.sh`、`setup-ssl.sh` | `DOMAIN`、`email` |
+| `app/config.py`、`app/main.py` | `SITE_DOMAIN`、CORS |
+
+#### 硬编码路径（如果项目不在 /opt/microbubble-agent）
+
+| 文件 | 涉及值 |
+|------|--------|
+| `scripts/webhook.py` | `DEPLOY_SCRIPT`、`LOG_FILE` |
+| `scripts/deploy-auto.sh` | `PROJECT_DIR`、`LOG_FILE` |
+| `nginx/conf.d/tunnel.conf` | `root` 路径 |
+
+### 8.5 Nginx + SSL 配置（单机模式）
+
+单机部署不需要 FRP，直接在 Docker 内运行 Nginx：
+
+```bash
+# 删除或修改 docker-compose.override.yml（如果有禁用 nginx 的配置）
+# 确保 docker-compose.yml 中 nginx 服务未被禁用
+
+# 申请 SSL 证书
+docker compose stop nginx
+sudo apt install -y certbot
+sudo certbot certonly --standalone \
+  -d agent.mnb-lab.cn \
+  --email admin@mnb-lab.cn \
+  --agree-tos --non-interactive
+
+# 复制证书
+sudo cp /etc/letsencrypt/live/agent.mnb-lab.cn/fullchain.pem nginx/ssl/
+sudo cp /etc/letsencrypt/live/agent.mnb-lab.cn/privkey.pem nginx/ssl/
+sudo chown $USER:$USER nginx/ssl/*.pem
+
+# 修改 nginx/conf.d/tunnel.conf 中的 proxy_pass
+# 将 127.0.0.1:8000 保持即可（本机 Docker 映射端口）
+
+# 重启
+docker compose start nginx
+docker compose restart app
+```
+
+### 8.6 运维配置
+
+```bash
+# 服务自动启动
+sudo tee /etc/systemd/system/microbubble.service << 'EOF'
+[Unit]
+Description=MicroBubble Agent
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/microbubble-agent
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable microbubble.service
+
+# 数据库每日备份
+sudo tee /usr/local/bin/backup-microbubble-db.sh << 'SCRIPT'
+#!/bin/bash
+D=/data/backups/db && mkdir -p "$D"
+docker compose -f /opt/microbubble-agent/docker-compose.yml exec -T db \
+  pg_dump -U postgres microbubble | gzip > "$D/microbubble_$(date +%Y%m%d_%H%M).sql.gz"
+find "$D" -name "*.sql.gz" -mtime +7 -delete
+SCRIPT
+sudo chmod +x /usr/local/bin/backup-microbubble-db.sh
+
+# 证书自动续期
+sudo tee /usr/local/bin/renew-cert.sh << 'SCRIPT'
+#!/bin/bash
+docker compose -f /opt/microbubble-agent/docker-compose.yml stop nginx
+certbot renew --quiet
+cp /etc/letsencrypt/live/agent.mnb-lab.cn/fullchain.pem /opt/microbubble-agent/nginx/ssl/
+cp /etc/letsencrypt/live/agent.mnb-lab.cn/privkey.pem /opt/microbubble-agent/nginx/ssl/
+docker compose -f /opt/microbubble-agent/docker-compose.yml start nginx
+SCRIPT
+sudo chmod +x /usr/local/bin/renew-cert.sh
+
+# 添加 cron
+(crontab -l 2>/dev/null; echo "0 2 * * * /usr/local/bin/backup-microbubble-db.sh") | crontab -
+(crontab -l 2>/dev/null; echo "0 3 * * * /usr/local/bin/renew-cert.sh") | crontab -
+```
+
+### 8.7 验证部署
+
+```bash
+# 服务状态
+docker compose ps
+# 应看到 8 个服务全部 running
+
+# 健康检查
+curl http://localhost:8000/health
+curl http://localhost:8002/health
+
+# GPU 验证
+docker compose exec whisper python3 -c "
+import torch; print(torch.cuda.get_device_name(0))
+"
+
+# 数据库数据完整性
+docker compose exec db psql -U postgres -d microbubble -c "
+SELECT 'members' as t, count(*) FROM members UNION ALL
+SELECT 'tasks', count(*) FROM tasks UNION ALL
+SELECT 'knowledge', count(*) FROM knowledge_entries;
+"
+
+# 公网访问
+curl https://agent.mnb-lab.cn/health
+```
+
+### 8.8 故障排查
+
+| 问题 | 检查命令 |
+|------|---------|
+| Whisper 启动失败 | `nvidia-smi`；`docker compose logs whisper` |
+| 数据库连接失败 | `docker compose logs app \| grep -i postgres` |
+| 模型下载超时 | 在 `.env` 中设置 `HF_ENDPOINT=https://hf-mirror.com` |
+| 端口冲突 | `sudo netstat -tlnp \| grep -E "80\|443\|8000\|9000"` |
+| 前端白屏 | `ls web/dist/index.html`（不存在则 `cd web && npm run build`） |
