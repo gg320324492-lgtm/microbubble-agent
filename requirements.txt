@@ -29,6 +29,8 @@ faster-whisper>=1.0.0
 modelscope>=1.14.0
 torch>=2.0.0
 torchaudio>=2.0.0
+addict
+datasets
 
 # 语音合成
 edge-tts==6.1.9
