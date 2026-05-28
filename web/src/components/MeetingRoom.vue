@@ -1,338 +1,373 @@
 <template>
-  <div class="meeting-room">
-    <!-- 顶部状态栏 -->
-    <div class="room-header">
-      <div class="room-status">
-        <span :class="['status-dot', isCallActive ? 'live' : '']"></span>
-        <span class="status-text">{{ isCallActive ? '通话中' : '未开始' }}</span>
-        <span v-if="isCallActive" class="duration">{{ formatDuration(duration) }}</span>
+  <div class="call-screen" :class="{ active: isCallActive }">
+    <!-- 粒子背景 -->
+    <div class="particles">
+      <span v-for="i in 20" :key="i" class="particle" :style="particleStyle(i)" />
+    </div>
+
+    <!-- 顶部信息 -->
+    <div class="top-bar">
+      <span class="meeting-label">{{ meetingTitle || '声纹会议' }}</span>
+      <span v-if="isCallActive" class="timer">{{ formatDuration(duration) }}</span>
+    </div>
+
+    <!-- 中央发言者区域 -->
+    <div class="center-stage">
+      <!-- 涟漪波纹 -->
+      <div v-if="currentSpeaker" class="ripple-container">
+        <span class="ripple" :style="{ animationDelay: '0s' }" />
+        <span class="ripple" :style="{ animationDelay: '0.5s' }" />
+        <span class="ripple" :style="{ animationDelay: '1s' }" />
       </div>
-      <div class="room-actions">
-        <el-button
+
+      <!-- 频谱跳动 -->
+      <div v-if="currentSpeaker" class="spectrum">
+        <span v-for="i in 7" :key="i" class="bar" :style="barStyle(i)" />
+      </div>
+
+      <!-- 头像 -->
+      <div class="avatar-ring" :class="{ speaking: !!currentSpeaker }">
+        <el-avatar
+          :size="100"
+          :style="{ background: currentSpeaker ? speakerColor(currentSpeaker) : '#334155' }"
+        >
+          <span class="avatar-text">{{ currentSpeaker ? currentSpeaker[0] : '?' }}</span>
+        </el-avatar>
+      </div>
+
+      <div class="speaker-name-lg">{{ currentSpeaker || '等待加入' }}</div>
+      <div class="speaker-status-lg">
+        <template v-if="isCallActive">
+          <span v-if="currentSpeaker" class="speaking-badge">
+            <span class="dot-pulse" /> 正在发言
+            <span class="confidence">{{ lastConfidence }}%</span>
+          </span>
+          <span v-else class="listening-badge">聆听中<span class="dots">...</span></span>
+        </template>
+        <span v-else class="idle-badge">点击下方按钮开始</span>
+      </div>
+    </div>
+
+    <!-- 转写面板 (右侧毛玻璃) -->
+    <Transition name="panel">
+      <div v-if="isCallActive && entries.length > 0" class="transcript-glass">
+        <div class="transcript-inner" ref="transcriptPanel">
+          <div v-for="(entry, i) in entries" :key="i" class="tx-line">
+            <span class="tx-time">{{ formatTime(entry.start) }}</span>
+            <span
+              class="tx-speaker"
+              :style="{ color: speakerColor(entry.speaker) }"
+            >{{ entry.speaker }}</span>
+            <span class="tx-text">{{ entry.text }}</span>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- 底部操控栏 (毛玻璃) -->
+    <div class="bottom-bar">
+      <div class="controls">
+        <button
+          class="ctrl-btn"
+          :class="{ muted: isMuted }"
+          :disabled="!isCallActive"
+          @click="toggleMute"
+        >
+          <span class="icon">{{ isMuted ? '🔇' : '🎤' }}</span>
+        </button>
+
+        <button
           v-if="!isCallActive"
-          type="primary"
-          :icon="Phone"
+          class="ctrl-btn start-btn"
           @click="startCall"
         >
-          开始通话
-        </el-button>
-        <template v-else>
-          <el-button :icon="Mute" :type="isMuted ? 'danger' : ''" circle @click="toggleMute" />
-          <el-button type="danger" :icon="Phone" circle @click="stopCall" />
-        </template>
-      </div>
-    </div>
+          <span class="icon">📞</span>
+        </button>
+        <button
+          v-else
+          class="ctrl-btn hangup-btn"
+          @click="stopCall"
+        >
+          <span class="icon">📞</span>
+        </button>
 
-    <!-- 当前发言者指示 -->
-    <div v-if="isCallActive" class="speaking-indicator">
-      <div v-if="currentSpeaker" class="current-speaker">
-        <el-avatar :size="48" :style="{ background: speakerColor(currentSpeaker) }">
-          {{ currentSpeaker[0] }}
-        </el-avatar>
-        <div class="speaker-info">
-          <div class="speaker-name">{{ currentSpeaker }}</div>
-          <div class="speaker-status">正在发言...</div>
-        </div>
+        <button
+          class="ctrl-btn"
+          :disabled="!isCallActive"
+          @click="callAI"
+        >
+          <span class="icon">🤖</span>
+        </button>
       </div>
-      <div v-else class="current-speaker idle">
-        <span class="idle-text">聆听中...</span>
+      <div class="btn-labels">
+        <span>静音</span>
+        <span>{{ isCallActive ? '挂断' : '开始' }}</span>
+        <span>呼叫小气</span>
       </div>
-    </div>
-
-    <!-- 实时转写面板 -->
-    <div class="transcript-panel" ref="transcriptPanel">
-      <div v-if="entries.length === 0 && isCallActive" class="empty-state">
-        <el-icon :size="32"><Microphone /></el-icon>
-        <p>等待发言...</p>
-      </div>
-      <div v-else-if="entries.length === 0" class="empty-state">
-        <p>点击「开始通话」开启实时声纹转写</p>
-      </div>
-
-      <div v-for="(entry, i) in entries" :key="i" class="transcript-entry">
-        <div class="entry-time">{{ formatTime(entry.start) }}</div>
-        <div class="entry-speaker">
-          <el-tag
-            :color="speakerColor(entry.speaker)"
-            effect="dark"
-            size="small"
-          >
-            {{ entry.speaker }}
-          </el-tag>
-          <span v-if="entry.speaker_confidence > 0" class="conf">
-            {{ Math.round(entry.speaker_confidence * 100) }}%
-          </span>
-        </div>
-        <div class="entry-text">{{ entry.text }}</div>
-      </div>
-    </div>
-
-    <!-- AI 对话栏 -->
-    <div v-if="isCallActive" class="ai-bar">
-      <el-input
-        v-model="aiInput"
-        placeholder="呼叫小气助手..."
-        :prefix-icon="ChatDotSquare"
-        @keyup.enter="callAI"
-      >
-        <template #append>
-          <el-button :icon="Promotion" @click="callAI" :loading="aiLoading">
-            呼叫
-          </el-button>
-        </template>
-      </el-input>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onUnmounted, nextTick } from 'vue'
+import { ref, onUnmounted, nextTick, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Phone, Mute, Microphone, ChatDotSquare, Promotion } from '@element-plus/icons-vue'
 import { useAudioCapture } from '@/composables/useAudioCapture'
 
 const props = defineProps({
   meetingId: { type: [Number, String], required: true },
   meetingTitle: { type: String, default: '' },
 })
-
 const emit = defineEmits(['meeting-ended'])
 
-const { start: startAudio, stop: stopAudio, isActive } = useAudioCapture()
+const { start: startAudio, stop: stopAudio } = useAudioCapture()
 
 const isCallActive = ref(false)
 const isMuted = ref(false)
 const duration = ref(0)
 const currentSpeaker = ref('')
+const lastConfidence = ref(0)
 const entries = ref([])
-const aiInput = ref('')
-const aiLoading = ref(false)
 const transcriptPanel = ref(null)
 
-let ws = null
-let durationTimer = null
-let speakerTimeout = null
+let ws = null, durationTimer = null, speakerTimeout = null
 
 const speakerColors = {}
-const colorPalette = [
-  '#FF7A5C', '#409EFF', '#67C23A', '#E6A23C', '#F56C6C',
-  '#909399', '#8B5CF6', '#06B6D4', '#F97316',
-]
+const palette = ['#FF7A5C', '#60A5FA', '#4ADE80', '#FBBF24', '#F87171', '#A78BFA', '#22D3EE', '#FB923C']
+function speakerColor(n) {
+  if (!speakerColors[n]) speakerColors[n] = palette[Object.keys(speakerColors).length % palette.length]
+  return speakerColors[n]
+}
 
-function speakerColor(name) {
-  if (!speakerColors[name]) {
-    speakerColors[name] = colorPalette[Object.keys(speakerColors).length % colorPalette.length]
+function particleStyle(i) {
+  const hue = 15 + (i * 17)
+  return {
+    left: `${(i * 47 + 13) % 100}%`,
+    animationDuration: `${8 + (i % 5) * 3}s`,
+    animationDelay: `${(i * 1.7) % 10}s`,
+    background: `hsl(${hue}, 70%, 60%)`,
   }
-  return speakerColors[name]
+}
+
+function barStyle(i) {
+  const d = 0.3 + Math.random() * 0.6
+  const delay = i * 0.1
+  return { animationDuration: `${d}s`, animationDelay: `${delay}s`, height: `${20 + Math.random() * 30}px` }
 }
 
 async function startCall() {
   try {
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const token = localStorage.getItem('access_token') || ''
-    const wsUrl = `${wsProtocol}//${location.host}/api/v1/ws/meeting/${props.meetingId}/live?token=${encodeURIComponent(token)}`
-    ws = new WebSocket(wsUrl)
+    ws = new WebSocket(`${wsProtocol}//${location.host}/api/v1/ws/meeting/${props.meetingId}/live?token=${encodeURIComponent(token)}`)
 
     ws.onopen = async () => {
+      if (durationTimer) clearInterval(durationTimer)
       isCallActive.value = true
       duration.value = 0
-      entries.value = []
-      durationTimer = setInterval(() => duration.value++, 1000)
-
+      durationTimer = setInterval(() => { duration.value++ }, 1000)
       await startAudio(onAudioChunk)
     }
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (e) => {
       try {
-        const data = JSON.parse(event.data)
-
-        if (data.type === 'transcript') {
-          entries.value.push({
-            speaker: data.speaker || '未知',
-            speaker_confidence: data.speaker_confidence || 0,
-            text: data.text || '',
-            start: data.start || 0,
-            end: data.end || 0,
-          })
-
-          if (data.speaker_confidence > 0.4) {
-            currentSpeaker.value = data.speaker
+        const d = JSON.parse(e.data)
+        if (d.type === 'transcript') {
+          entries.value.push({ speaker: d.speaker || '未知', speaker_confidence: d.speaker_confidence || 0, text: d.text || '', start: d.start || 0 })
+          if (d.speaker_confidence > 0.4) {
+            currentSpeaker.value = d.speaker
+            lastConfidence.value = Math.round((d.speaker_confidence || 0) * 100)
             if (speakerTimeout) clearTimeout(speakerTimeout)
-            speakerTimeout = setTimeout(() => {
-              currentSpeaker.value = ''
-            }, 3000)
+            speakerTimeout = setTimeout(() => { currentSpeaker.value = '' }, 3500)
           }
-
-          nextTick(() => {
-            if (transcriptPanel.value) {
-              transcriptPanel.value.scrollTop = transcriptPanel.value.scrollHeight
-            }
-          })
-        } else if (data.type === 'ai_reply') {
-          entries.value.push({
-            speaker: data.speaker || '小气助手',
-            speaker_confidence: 1,
-            text: data.text || '',
-            start: duration.value,
-            end: duration.value,
-            is_ai: true,
-          })
+          nextTick(() => { if (transcriptPanel.value) transcriptPanel.value.scrollTop = transcriptPanel.value.scrollHeight })
+        } else if (d.type === 'ai_reply') {
+          entries.value.push({ speaker: d.speaker || '小气助手', speaker_confidence: 1, text: d.text || '', start: duration.value, is_ai: true })
           ElMessage.success('小气助手已回复')
-        } else if (data.type === 'meeting_ended') {
-          ElMessage.success(`通话结束，共 ${data.entries || entries.value.length} 条记录`)
         }
-      } catch (e) {
-        // 忽略解析错误
-      }
+      } catch {}
     }
-
-    ws.onerror = () => {
-      ElMessage.error('连接失败')
-      stopCall()
-    }
-  } catch (e) {
-    ElMessage.error('启动失败: ' + e.message)
-  }
+    ws.onerror = () => { ElMessage.error('连接失败'); stopCall() }
+  } catch (e) { ElMessage.error('启动失败: ' + e.message) }
 }
 
 function onAudioChunk(float32Array) {
   if (!ws || ws.readyState !== WebSocket.OPEN || isMuted.value) return
-
-  // Float32 → Int16 → ArrayBuffer
   const int16 = new Int16Array(float32Array.length)
-  for (let i = 0; i < float32Array.length; i++) {
-    int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32Array[i] * 32767)))
-  }
+  for (let i = 0; i < float32Array.length; i++) int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32Array[i] * 32767)))
   ws.send(int16.buffer)
 }
 
 function stopCall() {
   stopAudio()
-  if (ws) {
-    ws.close()
-    ws = null
-  }
-  if (durationTimer) {
-    clearInterval(durationTimer)
-    durationTimer = null
-  }
-  if (speakerTimeout) {
-    clearTimeout(speakerTimeout)
-    speakerTimeout = null
-  }
+  if (ws) { ws.close(); ws = null }
+  if (durationTimer) { clearInterval(durationTimer); durationTimer = null }
+  if (speakerTimeout) { clearTimeout(speakerTimeout); speakerTimeout = null }
   isCallActive.value = false
   currentSpeaker.value = ''
   emit('meeting-ended', entries.value)
 }
 
-function toggleMute() {
-  isMuted.value = !isMuted.value
-}
+function toggleMute() { isMuted.value = !isMuted.value }
 
 async function callAI() {
-  const text = aiInput.value.trim()
-  if (!text || !ws) return
-  aiLoading.value = true
-  try {
-    ws.send(JSON.stringify({ type: 'ai_chat', text }))
-    aiInput.value = ''
-  } finally {
-    aiLoading.value = false
-  }
+  if (!ws) return
+  ws.send(JSON.stringify({ type: 'ai_chat', text: '小气，总结一下目前的讨论' }))
 }
 
 function formatDuration(sec) {
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
+  const m = Math.floor(sec / 60), s = sec % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
-
 function formatTime(sec) {
   if (sec == null) return ''
-  const m = Math.floor(sec / 60)
-  const s = Math.floor(sec % 60)
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-onUnmounted(() => {
-  if (isCallActive.value) stopCall()
-})
+onUnmounted(() => { if (isCallActive.value) stopCall() })
 </script>
 
 <style scoped>
-.meeting-room {
+.call-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
+  align-items: center;
+  background: linear-gradient(160deg, #0f1724 0%, #1a1a2e 40%, #16213e 100%);
+  border-radius: 16px;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* === 粒子背景 === */
+.particles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.particle {
+  position: absolute; bottom: -6px; width: 4px; height: 4px; border-radius: 50%;
+  opacity: 0; animation: float-up linear infinite;
+}
+@keyframes float-up {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  10% { opacity: 0.7; }
+  90% { opacity: 0.1; }
+  100% { transform: translateY(-100vh) scale(0); opacity: 0; }
+}
+
+/* === 顶部 === */
+.top-bar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 24px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.3), transparent);
+}
+.meeting-label { color: rgba(255,255,255,0.6); font-size: 13px; }
+.timer { color: #FF7A5C; font-size: 18px; font-family: 'Courier New', monospace; font-weight: bold; }
+
+/* === 中央区域 === */
+.center-stage {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; z-index: 5; position: relative;
+}
+
+/* 涟漪 */
+.ripple-container { position: absolute; width: 180px; height: 180px; }
+.ripple {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 2px solid rgba(255,122,92,0.4);
+  animation: ripple-out 1.5s ease-out infinite;
+}
+@keyframes ripple-out {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+/* 频谱 */
+.spectrum {
+  position: absolute; bottom: -50px; display: flex; gap: 4px; align-items: flex-end; height: 40px;
+}
+.bar {
+  width: 4px; border-radius: 2px; background: #FF7A5C;
+  animation: bar-jump ease-in-out infinite alternate;
+}
+@keyframes bar-jump {
+  0% { transform: scaleY(0.3); opacity: 0.4; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+/* 头像环 */
+.avatar-ring {
+  padding: 6px; border-radius: 50%;
+  border: 3px solid transparent; transition: border-color 0.4s;
+}
+.avatar-ring.speaking {
+  border-color: #FF7A5C;
+  box-shadow: 0 0 30px rgba(255,122,92,0.4), 0 0 60px rgba(255,122,92,0.15);
+}
+
+.avatar-text { font-size: 40px; font-weight: bold; color: #fff; }
+
+.speaker-name-lg { font-size: 28px; font-weight: 700; color: #fff; letter-spacing: 2px; }
+.speaker-status-lg { font-size: 14px; }
+
+.speaking-badge { display: flex; align-items: center; gap: 6px; color: #4ADE80; }
+.dot-pulse { width: 8px; height: 8px; border-radius: 50%; background: #4ADE80; animation: pulse-dot 0.8s infinite; }
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.6); }
+  50% { box-shadow: 0 0 0 10px rgba(74,222,128,0); }
+}
+.confidence { color: rgba(255,255,255,0.4); font-size: 12px; margin-left: 4px; }
+
+.listening-badge { color: rgba(255,255,255,0.4); }
+.listening-badge .dots::after { content: ''; animation: dots 1.5s steps(3) infinite; }
+@keyframes dots { 0% { content: ''; } 33% { content: '.'; } 66% { content: '..'; } 100% { content: '...'; } }
+.idle-badge { color: rgba(255,255,255,0.3); }
+
+/* === 转写面板 (毛玻璃) === */
+.transcript-glass {
+  position: absolute; right: 16px; top: 60px; bottom: 100px; width: 320px; z-index: 8;
+  background: rgba(15,23,36,0.75); backdrop-filter: blur(16px);
+  border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
   overflow: hidden;
 }
-.room-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--color-bg-page);
-  border-bottom: 1px solid var(--color-border);
+.transcript-inner { padding: 12px 16px; height: 100%; overflow-y: auto; }
+.tx-line {
+  padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.8);
 }
-.room-status { display: flex; align-items: center; gap: 8px; }
-.status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-info); }
-.status-dot.live { background: var(--color-success); animation: blink 1.2s infinite; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-.status-text { font-size: var(--font-size-sm); color: var(--color-text-regular); }
-.duration { font-family: monospace; font-weight: bold; color: var(--color-text-primary); }
-.room-actions { display: flex; gap: 8px; }
+.tx-time { color: rgba(255,255,255,0.3); font-family: monospace; font-size: 11px; margin-right: 8px; }
+.tx-speaker { font-weight: 600; margin-right: 6px; }
+.tx-text { word-break: break-word; }
 
-.speaking-indicator {
-  padding: 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-.current-speaker {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.current-speaker.idle { justify-content: center; }
-.idle-text { color: var(--color-text-secondary); font-size: var(--font-size-sm); }
-.speaker-name { font-weight: bold; color: var(--color-text-primary); }
-.speaker-status { font-size: var(--font-size-xs); color: var(--color-success); }
+.panel-enter-active, .panel-leave-active { transition: all 0.4s ease; }
+.panel-enter-from, .panel-leave-to { opacity: 0; transform: translateX(20px); }
 
-.transcript-panel {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  max-height: 400px;
+/* === 底部栏 === */
+.bottom-bar {
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 20px 0 24px;
+  background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
 }
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 150px;
-  color: var(--color-text-secondary);
+.controls { display: flex; gap: 32px; align-items: center; }
+.ctrl-btn {
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.1); backdrop-filter: blur(8px);
+  font-size: 22px; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
 }
-.transcript-entry {
-  display: flex;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--color-border);
-  align-items: flex-start;
-}
-.entry-time {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  font-family: monospace;
-  white-space: nowrap;
-  min-width: 50px;
-}
-.entry-speaker { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.conf { font-size: 10px; color: var(--color-text-secondary); }
-.entry-text { font-size: var(--font-size-sm); color: var(--color-text-primary); line-height: 1.5; flex: 1; }
+.ctrl-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+.ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.ctrl-btn.muted { background: rgba(239,68,68,0.3); }
+.start-btn { background: rgba(74,222,128,0.3); width: 64px; height: 64px; font-size: 26px; }
+.start-btn:hover { background: rgba(74,222,128,0.5); }
+.hangup-btn { background: rgba(239,68,68,0.4); width: 64px; height: 64px; font-size: 26px; }
+.hangup-btn:hover { background: rgba(239,68,68,0.7); }
+.icon { line-height: 1; }
 
-.ai-bar {
-  padding: 12px 16px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-page);
+.btn-labels { display: flex; gap: 72px; font-size: 11px; color: rgba(255,255,255,0.3); }
+@media (max-width: 768px) {
+  .transcript-glass { right: 4px; width: calc(100% - 8px); top: 50%; }
+  .speaker-name-lg { font-size: 22px; }
 }
 </style>
