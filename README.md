@@ -46,7 +46,9 @@
 
 ## 部署架构
 
-采用 **云服务器 + 本地电脑 FRP 穿透** 方案：
+支持两种部署模式：
+
+### 模式 A：云服务器 + 本地电脑 FRP 穿透（当前）
 
 ```
 用户 → 云服务器 (Nginx + SSL + FRP 服务端) → FRP 隧道 → 本地电脑 (全部 Docker 服务 + GPU Whisper)
@@ -55,6 +57,19 @@
 - **云服务器**（2核 2G）：只运行 Nginx 反向代理 + FRP 服务端，轻量无压力
 - **本地电脑**（有 GPU）：运行全部应用服务（app、PostgreSQL、Redis、MinIO、Whisper GPU、Celery）
 - **FRP 隧道**：本地 8000 端口穿透到云服务器，用户通过 `https://agent.mnb-lab.cn` 访问
+
+### 模式 B：单机部署（高性能服务器）
+
+如需迁移到一台高性能服务器独立运行（不再需要云服务器 + FRP），硬件建议：
+
+| 组件 | 最低 | 推荐 |
+|------|------|------|
+| CPU | 8核16线程 | 9950X3D / 9950X |
+| GPU | NVIDIA 8GB VRAM | RTX 5090 32GB |
+| 内存 | 32GB | 128GB DDR5 |
+| 存储 | 2TB SSD | 1TB NVMe(系统) + 8TB SSD(数据) |
+
+完整迁移指南详见 [docs/deploy.md](docs/deploy.md#八服务器迁移单机部署)，包含数据迁移清单、配置修改列表、Nginx + SSL 配置、运维脚本等。
 
 ## 快速开始
 

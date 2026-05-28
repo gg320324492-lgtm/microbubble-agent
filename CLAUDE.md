@@ -7,7 +7,7 @@
 - 后端: Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery
 - 前端: Vue 3 + Vite + Element Plus
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
-- 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接
+- 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
 ## 当前开发阶段
 
