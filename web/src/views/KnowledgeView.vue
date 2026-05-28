@@ -757,13 +757,8 @@ const editKnowledge = (item) => {
   showCreateDialog.value = true
 }
 
-const downloadFile = async (item) => {
-  try {
-    const res = await axios.get(`/api/v1/knowledge/${item.id}/download`)
-    window.open(res.data.download_url, '_blank')
-  } catch (e) {
-    ElMessage.error('获取下载链接失败')
-  }
+const downloadFile = (item) => {
+  window.open(`/api/v1/knowledge/${item.id}/download`, '_blank')
 }
 
 const deleteKnowledge = async (item) => {

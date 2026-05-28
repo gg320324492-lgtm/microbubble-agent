@@ -1,6 +1,7 @@
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Body
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -592,7 +593,7 @@ async def download_knowledge_file(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """获取知识条目文件的下载链接"""
+    """下载知识条目文件"""
     result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
     knowledge = result.scalar_one_or_none()
 
@@ -603,12 +604,25 @@ async def download_knowledge_file(
 
     from app.services.file_service import file_service
 
-    internal_url = file_service.get_url(knowledge.file_path)
-    # 将内部 MinIO 地址替换为公开代理地址
-    internal_prefix = f"http://{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}"
-    public_prefix = f"https://{settings.SITE_DOMAIN}/minio/{settings.MINIO_BUCKET}"
-    download_url = internal_url.replace(internal_prefix, public_prefix)
-    return {"download_url": download_url, "file_name": knowledge.file_name}
+    # MinIO SDK 同步调用，放到线程中执行
+    minio_response = await asyncio.to_thread(
+        file_service.client.get_object, file_service.bucket, knowledge.file_path
+    )
+
+    def iter_chunks():
+        try:
+            for chunk in minio_response.stream(amt=64 * 1024):
+                yield chunk
+        finally:
+            minio_response.close()
+            minio_response.release_conn()
+
+    safe_filename = knowledge.file_name.replace('"', "'") if knowledge.file_name else "download"
+    return StreamingResponse(
+        iter_chunks(),
+        media_type=knowledge.file_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'}
+    )
 
 
 @router.get("/knowledge/taxonomy/emerging")
