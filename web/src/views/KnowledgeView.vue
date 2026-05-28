@@ -154,6 +154,7 @@
               <span class="item-time">{{ formatDate(item.created_at) }}</span>
             </div>
             <div class="item-actions">
+              <el-button v-if="item.file_path" text type="success" size="small" @click.stop="downloadFile(item)">下载</el-button>
               <el-button text type="primary" size="small" @click.stop="editKnowledge(item)">编辑</el-button>
               <el-button text type="danger" size="small" @click.stop="deleteKnowledge(item)">删除</el-button>
             </div>
@@ -754,6 +755,15 @@ const editKnowledge = (item) => {
   editingKnowledge.value = item
   knowledgeForm.value = { ...item }
   showCreateDialog.value = true
+}
+
+const downloadFile = async (item) => {
+  try {
+    const res = await axios.get(`/api/v1/knowledge/${item.id}/download`)
+    window.open(res.data.download_url, '_blank')
+  } catch (e) {
+    ElMessage.error('获取下载链接失败')
+  }
 }
 
 const deleteKnowledge = async (item) => {

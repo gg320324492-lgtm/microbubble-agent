@@ -586,6 +586,27 @@ async def delete_knowledge(
     await db.commit()
 
 
+@router.get("/knowledge/{knowledge_id}/download")
+async def download_knowledge_file(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """获取知识条目文件的下载链接"""
+    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    knowledge = result.scalar_one_or_none()
+
+    if not knowledge:
+        raise HTTPException(status_code=404, detail="知识不存在")
+    if not knowledge.file_path:
+        raise HTTPException(status_code=404, detail="该知识条目没有上传文件")
+
+    from app.services.file_service import file_service
+
+    download_url = file_service.get_url(knowledge.file_path)
+    return {"download_url": download_url, "file_name": knowledge.file_name}
+
+
 @router.get("/knowledge/taxonomy/emerging")
 async def get_emerging_categories(
     current_user: Member = Depends(get_current_user),
