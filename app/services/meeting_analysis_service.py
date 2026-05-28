@@ -120,14 +120,28 @@ class MeetingAnalysisService:
         if not matches:
             return None
 
+        # 过滤非发言人标签（文档结构字段、摘要关键词等）
+        NON_SPEAKER = {
+            "会议主题", "会议标题", "会议摘要", "会议时间", "会议地点",
+            "发言人", "参会人", "参与者", "记录人", "主持人",
+            "讨论要点", "决议事项", "待办事项", "行动项",
+            "摘要", "主题", "时间", "地点", "备注", "注",
+            "总结", "结论", "后续", "附件", "关键词",
+        }
+
         speaker_counts: Dict[str, int] = {}
         speaker_lines: Dict[str, List[str]] = {}
         lines = text.split("\n")
 
         for label in matches:
+            # 跳过文档结构标签
+            if label.strip() in NON_SPEAKER:
+                continue
             speaker_counts[label] = speaker_counts.get(label, 0) + 1
 
         for label in set(matches):
+            if label.strip() in NON_SPEAKER:
+                continue
             sample = []
             for line in lines:
                 if label in line and len(sample) < 2:
@@ -137,6 +151,7 @@ class MeetingAnalysisService:
             speaker_lines[label] = sample
 
         unique_speakers = list(speaker_counts.keys())
+        # 至少需要 2 位真正的发言者，否则交由 AI 检测
         if len(unique_speakers) < 2:
             return None
 
