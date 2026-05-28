@@ -757,8 +757,22 @@ const editKnowledge = (item) => {
   showCreateDialog.value = true
 }
 
-const downloadFile = (item) => {
-  window.open(`/api/v1/knowledge/${item.id}/download`, '_blank')
+const downloadFile = async (item) => {
+  try {
+    const response = await axios.get(`/api/v1/knowledge/${item.id}/download`, {
+      responseType: 'blob'
+    })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', item.file_name || 'download')
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error('下载失败')
+  }
 }
 
 const deleteKnowledge = async (item) => {
