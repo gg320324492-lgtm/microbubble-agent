@@ -402,11 +402,12 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--space-4);
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
 .filter-card {
+  flex-shrink: 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
@@ -417,12 +418,25 @@ onMounted(() => {
 }
 
 .meeting-list-card {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both;
 }
 
+.meeting-list-card :deep(.el-card__body) {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .meeting-list {
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -519,7 +533,10 @@ onMounted(() => {
 }
 
 .pagination {
-  margin-top: var(--space-5);
+  flex-shrink: 0;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
   display: flex;
   justify-content: flex-end;
 }
