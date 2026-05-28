@@ -1098,6 +1098,28 @@ class MicroBubbleAgent:
                 await db.commit()
                 return {"status": "success", "message": f"已保存你的自定义指令：{instructions[:100]}..."}
 
+            elif name == "enroll_voice":
+                from app.models.member import Member
+                member_name = input_data.get("member_name", "")
+                member_result = await db.execute(
+                    select(Member).where(Member.name == member_name)
+                )
+                member = member_result.scalar_one_or_none()
+                if not member:
+                    return {"status": "error", "message": f"未找到成员「{member_name}」，请先确认姓名"}
+
+                if member.voice_embedding is not None:
+                    return {
+                        "status": "success",
+                        "message": f"成员「{member_name}」已录入声纹（{member.voice_sample_count or 0}次采样）。请该成员在安静环境下说一段话（10秒以上），然后上传音频到 /api/v1/voiceprint/enroll/{member.id} 来更新声纹。",
+                    }
+
+                return {
+                    "status": "success",
+                    "message": f"已找到成员「{member_name}」(id={member.id})。要让小气认识{member_name}的声音，请{member_name}录制一段10秒以上的语音（可以说'我是{member_name}'），然后上传音频到声纹录入接口。",
+                    "member_id": member.id,
+                }
+
             elif name == "submit_feedback":
                 from app.models.feedback import Feedback
                 fb = Feedback(

@@ -37,13 +37,19 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    mem_limit: 512m
     restart: unless-stopped
 
   # PostgreSQL数据库

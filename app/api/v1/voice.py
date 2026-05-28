@@ -3,13 +3,16 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from pydantic import BaseModel
 import io
+import time
 
 import logging
 from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
+from app.voice.pipeline import meeting_pipeline, RingBuffer, SAMPLE_RATE
 from app.agent.core import agent
 from app.core.database import get_db, async_session
 from app.core.security import get_current_user, decode_token
@@ -302,5 +305,115 @@ async def meeting_transcript_ws(
             if analysis_result:
                 ended_msg["analysis"] = analysis_result
             await websocket.send_json(ended_msg)
+        except Exception:
+            pass
+
+
+@router.websocket("/ws/meeting/{meeting_id}/live")
+async def meeting_live_ws(
+    websocket: WebSocket,
+    meeting_id: int,
+    token: str = ""
+):
+    """会议实时声纹转写 WebSocket — VAD + 声纹识别 + ASR
+
+    支持文字消息控制：
+    - {"type": "ai_chat", "text": "用户问题"} — AI 实时对话
+    """
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
+    await websocket.accept()
+
+    buffer = RingBuffer(max_seconds=3.0)
+    start_time = time.time()
+    transcript_entries = []
+    meeting_pipeline.reset()
+
+    from app.voice.tts import tts_service as tts
+
+    try:
+        while True:
+            data = await websocket.receive()
+
+            # 文字控制消息
+            if "text" in data:
+                try:
+                    msg = __import__("json").loads(data["text"])
+                    msg_type = msg.get("type", "")
+
+                    if msg_type == "ai_chat":
+                        # AI 实时对话
+                        user_text = msg.get("text", "")
+                        if user_text.strip():
+                            ai_response = await agent.chat(
+                                message=f"[会议实时对话] {user_text}",
+                                db=None,
+                            )
+                            reply = ai_response.get("content", "")[:200]
+                            await websocket.send_json({
+                                "type": "ai_reply",
+                                "text": reply,
+                                "speaker": "小气助手",
+                            })
+                    elif msg_type == "speaker_change":
+                        pass  # 声纹模式下自动识别，忽略手动切换
+                except Exception:
+                    pass
+                continue
+
+            # 音频数据
+            if "bytes" not in data:
+                continue
+
+            audio_bytes = data["bytes"]
+            elapsed = time.time() - start_time
+
+            # 通过流水线处理
+            results = await meeting_pipeline.process_audio(
+                audio_bytes, db=None, elapsed=elapsed
+            )
+
+            for result in results:
+                transcript_entries.append(result)
+                await websocket.send_json(result)
+
+    except WebSocketDisconnect:
+        # 保存转录到会议记录
+        try:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Meeting).where(Meeting.id == meeting_id)
+                )
+                meeting = result.scalar_one_or_none()
+                if meeting and transcript_entries:
+                    meeting.transcript = [
+                        {"speaker": e["speaker"], "text": e["text"],
+                         "start": e.get("start"), "end": e.get("end"),
+                         "confidence": e.get("speaker_confidence", 0)}
+                        for e in transcript_entries
+                    ]
+                    meeting.status = "completed"
+                    await db.commit()
+
+                    if transcript_entries:
+                        meeting_service = MeetingService(db)
+                        await meeting_service.process_meeting_transcript(meeting_id)
+        except Exception as e:
+            logger.error(f"保存会议转录失败: {e}")
+
+        meeting_pipeline.reset()
+        try:
+            await websocket.send_json({
+                "type": "meeting_ended",
+                "meeting_id": meeting_id,
+                "entries": len(transcript_entries),
+            })
         except Exception:
             pass

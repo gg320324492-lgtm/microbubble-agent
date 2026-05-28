@@ -103,6 +103,14 @@
               生成纪要
             </el-button>
             <el-button
+              type="primary"
+              size="small"
+              @click.stop="startLiveCall(meeting)"
+            >
+              <el-icon><Phone /></el-icon>
+              声纹通话
+            </el-button>
+            <el-button
               v-if="meeting.summary"
               size="small"
               @click.stop="viewMinutes(meeting)"
@@ -219,6 +227,26 @@
       </div>
     </el-dialog>
 
+    <!-- 声纹通话对话框 -->
+    <el-dialog
+      v-model="showLiveCallDialog"
+      :title="liveCallMeeting?.title || '声纹通话'"
+      :width="isMobile ? '95vw' : '800px'"
+      top="3vh"
+      :close-on-click-modal="false"
+      fullscreen
+      @close="onLiveCallEnd"
+    >
+      <MeetingRoom
+        v-if="showLiveCallDialog && liveCallMeeting"
+        ref="meetingRoomRef"
+        :meeting-id="liveCallMeeting.id"
+        :meeting-title="liveCallMeeting.title"
+        @meeting-ended="onLiveCallEnd"
+        style="height: 70vh"
+      />
+    </el-dialog>
+
     <!-- 粘贴转录分析对话框 -->
     <PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="fetchMeetings" />
   </div>
@@ -234,6 +262,8 @@ import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
+import MeetingRoom from '@/components/MeetingRoom.vue'
+import { Phone } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
@@ -251,6 +281,22 @@ const showTranscriptDialog = ref(false)
 const currentMeeting = ref(null)
 const liveTranscriptRef = ref(null)
 const pasteAnalyzeDialogRef = ref(null)
+const meetingRoomRef = ref(null)
+
+// 声纹通话
+const showLiveCallDialog = ref(false)
+const liveCallMeeting = ref(null)
+
+const startLiveCall = (meeting) => {
+  liveCallMeeting.value = meeting
+  showLiveCallDialog.value = true
+}
+
+const onLiveCallEnd = () => {
+  showLiveCallDialog.value = false
+  liveCallMeeting.value = null
+  fetchMeetings()
+}
 
 const meetingForm = ref({
   title: '',

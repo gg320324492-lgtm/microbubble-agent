@@ -1,0 +1,13 @@
+# 声纹流水线 GPU 服务（VAD + 3D-Speaker + Whisper）
+FROM nvidia/cuda:12.1-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y \
+    python3.11 python3.11-dev python3-pip ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 不复制 app 代码 — 通过 volume 挂载（与主容器共享）
+CMD ["python", "-c", "print('voice-pipeline 已通过主 app 容器内的 /app 挂载运行')"]
