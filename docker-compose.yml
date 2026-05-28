@@ -145,7 +145,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 256m
+    mem_limit: 2g
     restart: unless-stopped
 
   # Celery Beat (定时任务)
