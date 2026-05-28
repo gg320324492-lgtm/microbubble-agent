@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-5 + Knowledge Brain 全部完成，部署已上线。** 知识库已从"手动喂入的静态文档库"升级为**自主进化的课题组知识大脑**，支持 RAG 优先问答、自动关联引擎、联网自主研究、健康监控、**实体级知识图谱**（跨文档实体融合+共现网络）、**科研假设生成**（LLM 驱动假设+验证生命周期）、**量化推理**（公式提取+安全计算引擎 + **结构化分类体系** + **内置 32 个领域公式**）。详见 `ROADMAP.md`。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。详见 `ROADMAP.md`。
 
 ## 前端设计系统
 
@@ -82,6 +82,10 @@
 | `app/services/entity_service.py` | 实体知识图谱（跨文档融合+搜索+图谱+LLM 合并） |
 | `app/services/hypothesis_service.py` | 科研假设生成（LLM 驱动假设+验证生命周期） |
 | `app/services/formula_service.py` | 量化推理（公式列表+安全计算+LaTeX 转换+分类树+内置公式库） |
+| `app/services/meeting_analysis_service.py` | 会议 AI 分析（发言者检测+格式识别+结构化分析+发言人统计+标题生成）|
+| `app/services/voiceprint_service.py` | 声纹识别（3D-Speaker 嵌入提取+pgvector 匹配+录入）|
+| `app/voice/vad.py` | silero-vad 语音活动检测 |
+| `app/voice/pipeline.py` | VAD → 声纹 → ASR 实时流水线 |
 
 ## 开发注意事项
 
@@ -109,6 +113,12 @@
 - **menuRoutes 过滤非导航路由** — `menuRoutes` 计算属性需过滤 `r.meta?.icon`，确保 `knowledge/:id` 等详情页路由（无 icon）不出现在侧边栏
 - **Vue 组件 import 完整性** — 修改 Vue 组件时，在 `<script setup>` 中添加对 `watch`、`nextTick`、`onUnmounted` 等新 API 调用后，必须同步更新 `import { ... } from 'vue'` 语句，否则生产构建后运行时抛出 `ReferenceError: xxx is not defined` 导致组件白屏
 - **Webhook GitHub 连通性问题** — 阿里云服务器偶发无法连接 GitHub（TLS/GnuTLS 错误或超时），GitHub webhook 交付失败但代码已 push。此时可通过 SSH 到服务器手动触发：`curl -s -X POST http://localhost:9001/webhook -H 'Content-Type: application/json' -H 'X-GitHub-Event: push' -H 'X-Hub-Signature-256: sha256=<hmac>' -d '{"ref":"refs/heads/main","pusher":{"name":"fix"},"commits":[{"id":"fix"}]}'`（HMAC 签名用 `echo -n '<payload>' | openssl dgst -sha256 -hmac "<WEBHOOK_SECRET>"` 生成）
+- **deploy-auto.sh 不重启 Python 后端** — 脚本只重载 Nginx，Python 代码变更（路由注册、新模块等）需要手动 `docker compose restart` 才能生效。数据库新列（ALTER TABLE）也需要手动执行
+- **模型依赖安装** — modelscope（3D-Speaker）有大量传递依赖（addict, datasets, simplejson 等），pip install 时可能遗漏。Docker 内运行 `pip install addict datasets simplejson` 补全。torch + CUDA 包约 2GB，首次下载耗时较长
+- **声纹模型懒加载** — 3D-Speaker 首次调用时从 ModelScope Hub 下载模型（~100MB），需要网络连接。下载后缓存在 `/root/.cache/modelscope/`
+- **发言者检测格式** — `_parse_summary_format()` 识别 `发言人：`/`参会人：` 等字段；`_quick_parse_speakers()` 识别 `【名称】` 格式；NON_SPEAKER 黑名单过滤文档结构标签；过滤后发言者 < 2 人时回退 Claude AI 检测
+- **WebSocket 认证** — `/ws/meeting/{id}/live` 需要在 URL query param 中传 `?token=xxx`，Nginx `/api` location 需要 Upgrade/Connection 头支持 WebSocket
+- **数据库列迁移** — `Base.metadata.create_all()` 不会给已有表添加新列，Member/Meeting 新增的 voice_embedding, speaker_mapping 等列需要手动 ALTER TABLE
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版
