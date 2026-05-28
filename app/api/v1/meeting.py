@@ -86,6 +86,61 @@ async def list_meetings(
     return MeetingList(items=meetings, total=len(meetings))
 
 
+# === 粘贴转录 + AI 分析（固定路径必须在参数化路由之前） ===
+
+@router.post("/meetings/detect-speakers", response_model=SpeakerDetectResponse)
+async def detect_speakers(
+    request: SpeakerDetectRequest,
+    current_user: Member = Depends(get_current_user),
+):
+    """检测转录文本中的发言者（阶段1：不创建会议）"""
+    try:
+        result = await meeting_analysis.detect_speakers(request.transcript_text)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"发言者检测失败: {str(e)}")
+
+
+@router.post("/meetings/analyze-text")
+async def analyze_transcript_text(
+    request: TranscriptAnalyzeRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """粘贴转录文本并全量分析（阶段2：创建会议 + AI 分析 + 创建任务）
+
+    支持两种模式：
+    - 不带 speaker_mapping：先返回发言者检测结果让用户确认
+    - 带 speaker_mapping：直接执行完整分析
+    """
+    meeting_service = MeetingService(db)
+
+    if not request.speaker_mapping:
+        # 阶段1：只检测发言者，不创建会议
+        detection = await meeting_analysis.detect_speakers(request.transcript_text)
+        return {
+            "phase": "speaker_detection",
+            "detection": detection,
+            "message": "请确认发言者映射后再次提交",
+        }
+
+    # 阶段2：完整分析
+    try:
+        title = request.title or await meeting_analysis.generate_title(request.transcript_text)
+        result = await meeting_service.process_pasted_transcript(
+            title=title,
+            start_time=request.start_time,
+            transcript_text=request.transcript_text,
+            speaker_mapping=request.speaker_mapping,
+            participant_ids=request.participants,
+            created_by=current_user.id,
+        )
+        result["phase"] = "complete"
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"转录分析失败: {str(e)}")
+
+
 @router.get("/meetings/{meeting_id}", response_model=MeetingResponse)
 async def get_meeting(
     meeting_id: int,
@@ -242,60 +297,6 @@ async def delete_meeting(
 
     await db.delete(meeting)
     await db.commit()
-
-
-# === 粘贴转录 + AI 分析 ===
-
-@router.post("/meetings/detect-speakers", response_model=SpeakerDetectResponse)
-async def detect_speakers(
-    request: SpeakerDetectRequest,
-    current_user: Member = Depends(get_current_user),
-):
-    """检测转录文本中的发言者（阶段1：不创建会议）"""
-    try:
-        result = await meeting_analysis.detect_speakers(request.transcript_text)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"发言者检测失败: {str(e)}")
-
-
-@router.post("/meetings/analyze-text")
-async def analyze_transcript_text(
-    request: TranscriptAnalyzeRequest,
-    current_user: Member = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """粘贴转录文本并全量分析（阶段2：创建会议 + AI 分析 + 创建任务）
-
-    支持两种模式：
-    - 不带 speaker_mapping：先返回发言者检测结果让用户确认
-    - 带 speaker_mapping：直接执行完整分析
-    """
-    meeting_service = MeetingService(db)
-
-    if not request.speaker_mapping:
-        # 阶段1：只检测发言者，不创建会议
-        detection = await meeting_analysis.detect_speakers(request.transcript_text)
-        return {
-            "phase": "speaker_detection",
-            "detection": detection,
-            "message": "请确认发言者映射后再次提交",
-        }
-
-    # 阶段2：完整分析
-    try:
-        result = await meeting_service.process_pasted_transcript(
-            title=request.title,
-            start_time=request.start_time,
-            transcript_text=request.transcript_text,
-            speaker_mapping=request.speaker_mapping,
-            participant_ids=request.participants,
-            created_by=current_user.id,
-        )
-        result["phase"] = "complete"
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"转录分析失败: {str(e)}")
 
 
 @router.post("/meetings/{meeting_id}/speaker-map")

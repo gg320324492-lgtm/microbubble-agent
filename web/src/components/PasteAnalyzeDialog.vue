@@ -10,8 +10,8 @@
     <!-- 阶段1：输入表单 -->
     <div v-if="stage === 1" class="stage-input">
       <el-form label-width="90px">
-        <el-form-item label="会议标题" required>
-          <el-input v-model="form.title" placeholder="请输入会议主题" />
+        <el-form-item label="会议标题">
+          <el-input v-model="form.title" placeholder="留空则 AI 自动生成标题" />
         </el-form-item>
         <el-form-item label="会议时间" required>
           <el-date-picker
@@ -179,10 +179,6 @@ const reset = () => {
 
 // 阶段1 → 阶段2：检测发言者
 const goDetect = async () => {
-  if (!form.value.title.trim()) {
-    ElMessage.warning('请输入会议标题')
-    return
-  }
   if (!form.value.start_time) {
     ElMessage.warning('请选择会议时间')
     return

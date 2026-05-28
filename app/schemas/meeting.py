@@ -92,7 +92,7 @@ class SpeakerDetectResponse(BaseModel):
 
 class TranscriptAnalyzeRequest(BaseModel):
     """转录分析请求"""
-    title: str
+    title: Optional[str] = None  # 留空则自动生成
     start_time: datetime
     transcript_text: str
     speaker_mapping: Optional[Dict[str, str]] = None

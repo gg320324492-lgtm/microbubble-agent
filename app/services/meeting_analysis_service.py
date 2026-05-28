@@ -301,6 +301,28 @@ class MeetingAnalysisService:
                 "action_items": [],
             }
 
+    # === 标题自动生成 ===
+
+    async def generate_title(self, transcript_text: str) -> str:
+        """根据转录内容自动生成会议标题（15 字以内）。"""
+        prompt = (
+            "请根据以下会议转录内容，生成一个简洁的会议标题（15字以内）。"
+            "标题应概括会议的核心主题。只输出标题文本，不要引号或额外说明。\n\n"
+            f"{transcript_text[:3000]}"
+        )
+        try:
+            response = await self.client.messages.create(
+                model=self.model,
+                max_tokens=64,
+                system="你是一个专业的会议记录员。只输出会议标题，不要其他内容。",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            title = extract_text_from_response(response).strip().strip('"').strip("'").strip("《》")
+            return title[:30] if title else "未命名会议"
+        except Exception as e:
+            logger.error(f"标题生成失败: {e}")
+            return "未命名会议"
+
     # === 发言人统计（纯本地计算） ===
 
     def compute_speaker_stats(
