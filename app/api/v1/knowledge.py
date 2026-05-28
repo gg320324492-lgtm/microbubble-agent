@@ -603,7 +603,11 @@ async def download_knowledge_file(
 
     from app.services.file_service import file_service
 
-    download_url = file_service.get_url(knowledge.file_path)
+    internal_url = file_service.get_url(knowledge.file_path)
+    # 将内部 MinIO 地址替换为公开代理地址
+    internal_prefix = f"http://{settings.MINIO_ENDPOINT}/{settings.MINIO_BUCKET}"
+    public_prefix = f"https://{settings.SITE_DOMAIN}/minio/{settings.MINIO_BUCKET}"
+    download_url = internal_url.replace(internal_prefix, public_prefix)
     return {"download_url": download_url, "file_name": knowledge.file_name}
 
 
