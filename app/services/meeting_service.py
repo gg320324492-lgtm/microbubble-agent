@@ -6,10 +6,12 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Any
 
 from app.models.meeting import Meeting, MeetingParticipant
+from app.models.member import Member
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.wechat.analyzer import analyzer
 from app.wechat.identity import identity_resolver
 from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+from app.services.meeting_analysis_service import meeting_analysis
 
 logger = logging.getLogger("microbubble.meeting_service")
 
@@ -127,66 +129,176 @@ class MeetingService:
             return transcript
         return str(transcript)
 
-    async def process_meeting_transcript(self, meeting_id: int) -> Dict[str, Any]:
+    async def process_pasted_transcript(
+        self,
+        title: str,
+        start_time: datetime,
+        transcript_text: str,
+        speaker_mapping: Optional[Dict[str, str]] = None,
+        participant_ids: Optional[List[int]] = None,
+        created_by: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """粘贴转录的完整处理流程。
+
+        1. 创建会议记录
+        2. 解析转录文本为结构化 JSON
+        3. AI 分析（摘要 + 要点 + 决策 + 行动项）
+        4. 计算发言者统计
+        5. 更新会议记录
+        6. 自动创建任务
+        7. 自动链接发言者与成员
         """
-        分析会议转写内容，提取摘要、要点、决定，并自动创建任务
+        # 1. 创建会议
+        meeting = await self.create_meeting(
+            title=title,
+            start_time=start_time,
+            participant_ids=participant_ids,
+            created_by=created_by,
+        )
 
-        Returns:
-            {
-                "summary": str,
-                "key_points": [str],
-                "decisions": [str],
-                "tasks_created": [{"title": str, "assignee": str}],
-            }
-        """
-        meeting = await self.get_meeting(meeting_id)
-        if not meeting or not meeting.transcript:
-            return {"summary": "", "key_points": [], "decisions": [], "tasks_created": []}
+        # 2. 解析转录文本
+        if speaker_mapping:
+            transcript_entries = meeting_analysis.parse_with_mapping(
+                transcript_text, speaker_mapping
+            )
+        else:
+            # 无映射时，先检测发言者再解析
+            detection = await meeting_analysis.detect_speakers(transcript_text)
+            auto_mapping = {}
+            for sp in detection.get("detected_speakers", []):
+                label = sp["original_label"]
+                auto_mapping[label] = sp.get("suggested_name") or label
+            transcript_entries = meeting_analysis.parse_with_mapping(
+                transcript_text, auto_mapping
+            )
 
-        transcript_text = self._transcript_to_text(meeting.transcript)
-        if not transcript_text.strip():
-            return {"summary": "", "key_points": [], "decisions": [], "tasks_created": []}
+        if transcript_entries:
+            meeting.transcript = transcript_entries
 
-        # 1. 调用 Claude 分析转写内容
-        analysis = await analyzer.extract_action_items(transcript_text)
+        # 3. AI 分析
+        analysis = await meeting_analysis.analyze_transcript(
+            transcript_text, speaker_mapping
+        )
 
-        decisions = analysis.get("decisions", [])
-        tasks_info = analysis.get("tasks", [])
+        # 4. 计算发言者统计
+        if transcript_entries:
+            stats = meeting_analysis.compute_speaker_stats(transcript_entries)
+            meeting.speaker_stats = stats
 
-        # 2. 用 Claude 生成会议摘要
-        summary = await self._generate_summary(transcript_text)
+        if speaker_mapping:
+            meeting.speaker_mapping = speaker_mapping
 
-        # 3. 从分析结果中提取要点（任务标题 + 决定）
-        key_points = []
-        for t in tasks_info:
-            if t.get("title"):
-                assignee = t.get("assignee_name", "")
-                point = f"[任务] {t['title']}"
-                if assignee:
-                    point += f" → {assignee}"
-                key_points.append(point)
-        for d in decisions:
-            key_points.append(f"[决定] {d}")
-
-        # 4. 更新会议记录
-        meeting.summary = summary
-        meeting.key_points = key_points or None
-        meeting.decisions = decisions or None
+        # 5. 更新会议记录
+        meeting.summary = analysis.get("summary", "")
+        meeting.key_points = analysis.get("key_points") or None
+        meeting.decisions = analysis.get("decisions") or None
+        meeting.status = "completed"
         await self.db.commit()
 
-        # 5. 自动创建任务
+        # 6. 自动创建任务
         tasks_created = []
-        for task_info in tasks_info:
+        for task_info in analysis.get("action_items", []):
             result = await self._auto_create_task_from_meeting(meeting, task_info)
             if result:
                 tasks_created.append(result)
 
+        # 7. 发言者-成员自动链接
+        if speaker_mapping:
+            await self._link_speakers_to_participants(meeting.id, speaker_mapping)
+
+        await self.db.refresh(meeting)
+
         return {
-            "summary": summary,
-            "key_points": key_points,
-            "decisions": decisions,
+            "meeting_id": meeting.id,
+            "summary": meeting.summary,
+            "key_points": meeting.key_points or [],
+            "decisions": meeting.decisions or [],
             "tasks_created": tasks_created,
+            "speaker_stats": meeting.speaker_stats,
+            "speaker_mapping": meeting.speaker_mapping,
         }
+
+    async def reanalyze_with_speakers(
+        self,
+        meeting_id: int,
+        speaker_mapping: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """用新的发言者映射重新分析已有会议。
+
+        1. 用映射重写 transcript 条目中的 speaker 字段
+        2. 重新生成摘要/要点/决策
+        3. 重新计算发言者统计
+        """
+        meeting = await self.get_meeting(meeting_id)
+        if not meeting or not meeting.transcript:
+            return {"error": "会议或转录内容不存在"}
+
+        # 重写 transcript 中的 speaker
+        if isinstance(meeting.transcript, list):
+            rewritten = []
+            for entry in meeting.transcript:
+                label = entry.get("speaker", "参会者")
+                real_name = speaker_mapping.get(label, label)
+                rewritten.append({"speaker": real_name, "text": entry.get("text", "")})
+            meeting.transcript = rewritten
+
+        # 重新生成全文
+        transcript_text = self._transcript_to_text(meeting.transcript)
+
+        # 重新分析
+        analysis = await meeting_analysis.analyze_transcript(
+            transcript_text, speaker_mapping
+        )
+
+        # 重新计算统计
+        if isinstance(meeting.transcript, list):
+            meeting.speaker_stats = meeting_analysis.compute_speaker_stats(
+                meeting.transcript
+            )
+
+        meeting.speaker_mapping = speaker_mapping
+        meeting.summary = analysis.get("summary", meeting.summary)
+        meeting.key_points = analysis.get("key_points") or meeting.key_points
+        meeting.decisions = analysis.get("decisions") or meeting.decisions
+
+        await self.db.commit()
+        await self.db.refresh(meeting)
+
+        return {
+            "meeting_id": meeting.id,
+            "summary": meeting.summary,
+            "key_points": meeting.key_points or [],
+            "decisions": meeting.decisions or [],
+            "speaker_stats": meeting.speaker_stats,
+            "speaker_mapping": meeting.speaker_mapping,
+        }
+
+    async def _link_speakers_to_participants(
+        self, meeting_id: int, speaker_mapping: Dict[str, str]
+    ) -> None:
+        """将发言者自动匹配到课题组成员并添加为会议参与者。"""
+        from sqlalchemy import select as sa_select
+
+        for real_name in speaker_mapping.values():
+            result = await self.db.execute(
+                sa_select(Member).where(Member.name == real_name)
+            )
+            member = result.scalar_one_or_none()
+            if member:
+                # 检查是否已是参与者
+                existing = await self.db.execute(
+                    sa_select(MeetingParticipant).where(
+                        MeetingParticipant.meeting_id == meeting_id,
+                        MeetingParticipant.member_id == member.id,
+                    )
+                )
+                if not existing.scalar_one_or_none():
+                    self.db.add(MeetingParticipant(
+                        meeting_id=meeting_id,
+                        member_id=member.id,
+                        role="participant",
+                    ))
+        await self.db.commit()
 
     @classmethod
     async def _generate_summary(cls, transcript_text: str) -> str:
@@ -197,8 +309,14 @@ class MeetingService:
             response = await client.messages.create(
                 model=model,
                 max_tokens=1024,
-                system="你是课题组AI助手，请用简洁的中文总结以下会议内容，200字以内。",
-                messages=[{"role": "user", "content": f"请总结以下会议转写内容：\n\n{transcript_text[:8000]}"}]
+                system="你是课题组AI助手，请用简洁的中文总结以下会议内容，包含讨论主题、主要观点和结论。200字以内。",
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        "请总结以下会议转写内容，注意区分不同发言人的观点：\n\n"
+                        f"{transcript_text[:8000]}"
+                    ),
+                }],
             )
             return extract_text_from_response(response)
         except Exception as e:

@@ -216,7 +216,7 @@ async def meeting_transcript_ws(
     meeting_id: int,
     token: str = ""
 ):
-    """会议实时转写WebSocket"""
+    """会议实时转写WebSocket — 支持发言者切换"""
     # 认证：从query参数获取token
     try:
         payload = decode_token(token)
@@ -230,28 +230,40 @@ async def meeting_transcript_ws(
     await websocket.accept()
 
     recorder = await recorder_manager.start_meeting_recording(meeting_id)
+    current_speaker = "参会者"
 
     try:
         while True:
-            data = await websocket.receive_bytes()
+            data = await websocket.receive()
 
-            recorder.recorder.add_audio_data(data)
+            if "text" in data:
+                # JSON 控制消息（发言者切换等）
+                try:
+                    msg = __import__("json").loads(data["text"])
+                    if msg.get("type") == "speaker_change":
+                        current_speaker = msg.get("speaker", "参会者")
+                except Exception:
+                    pass
+                continue
 
-            async for segment in asr_service.transcribe_stream(data):
-                speaker = "参会者"
+            if "bytes" in data:
+                # 音频数据
+                audio_bytes = data["bytes"]
+                recorder.recorder.add_audio_data(audio_bytes)
 
-                entry = {
-                    "text": segment["text"],
-                    "start": segment["start"],
-                    "end": segment["end"],
-                    "speaker": speaker
-                }
-                recorder.add_transcript_entry(entry)
+                async for segment in asr_service.transcribe_stream(audio_bytes):
+                    entry = {
+                        "text": segment["text"],
+                        "start": segment["start"],
+                        "end": segment["end"],
+                        "speaker": current_speaker,
+                    }
+                    recorder.add_transcript_entry(entry)
 
-                await websocket.send_json({
-                    "type": "transcript",
-                    **entry
-                })
+                    await websocket.send_json({
+                        "type": "transcript",
+                        **entry,
+                    })
 
     except WebSocketDisconnect:
         result = await recorder_manager.stop_meeting_recording()

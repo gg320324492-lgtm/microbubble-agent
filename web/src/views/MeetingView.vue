@@ -32,9 +32,9 @@
             <el-icon><Plus /></el-icon>
             创建会议
           </el-button>
-          <el-button @click="showPasteDialog = true">
+          <el-button type="success" @click="pasteAnalyzeDialogRef?.open()">
             <el-icon><Document /></el-icon>
-            粘贴转录
+            粘贴转录分析
           </el-button>
         </el-col>
       </el-row>
@@ -219,48 +219,13 @@
       </div>
     </el-dialog>
 
-    <!-- 粘贴转录对话框 -->
-    <el-dialog v-model="showPasteDialog" title="粘贴会议转录" :width="'700px'" top="10vh" :close-on-click-modal="true">
-      <el-form label-width="90px">
-        <el-form-item label="会议标题" required>
-          <el-input v-model="transcriptForm.title" placeholder="请输入会议主题" />
-        </el-form-item>
-        <el-form-item label="会议时间" required>
-          <el-date-picker
-            v-model="transcriptForm.start_time"
-            type="datetime"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="选择会议时间"
-          />
-        </el-form-item>
-        <el-form-item label="参会人员">
-          <el-select v-model="transcriptForm.participants" multiple placeholder="选择参会人员（可选）">
-            <el-option v-for="m in members" :key="m.id" :label="m.name" :value="m.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="转录文字" required>
-          <el-input
-            v-model="transcriptForm.transcript"
-            type="textarea"
-            :rows="10"
-            placeholder="请粘贴会议转录文字，支持格式：【发言人】发言内容 或纯文本格式"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showPasteDialog = false">取消</el-button>
-        <el-button type="primary" @click="sendToAgent">
-          发送给 Agent 分析
-        </el-button>
-      </template>
-    </el-dialog>
+    <!-- 粘贴转录分析对话框 -->
+    <PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="fetchMeetings" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
@@ -268,8 +233,8 @@ import { formatDateTime } from '@/utils/format'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import LiveTranscript from '@/components/LiveTranscript.vue'
+import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 
-const router = useRouter()
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
 
@@ -283,9 +248,9 @@ const keyword = ref('')
 const showCreateDialog = ref(false)
 const showMinutesDialog = ref(false)
 const showTranscriptDialog = ref(false)
-const showPasteDialog = ref(false)
 const currentMeeting = ref(null)
 const liveTranscriptRef = ref(null)
+const pasteAnalyzeDialogRef = ref(null)
 
 const meetingForm = ref({
   title: '',
@@ -293,13 +258,6 @@ const meetingForm = ref({
   location: '',
   participants: [],
   description: ''
-})
-
-const transcriptForm = ref({
-  title: '',
-  start_time: '',
-  participants: [],
-  transcript: ''
 })
 
 // 获取会议列表
@@ -341,43 +299,6 @@ const createMeeting = async () => {
   } catch (e) {
     ElMessage.error('创建失败')
   }
-}
-
-// 发送转录给 Agent 分析
-const sendToAgent = async () => {
-  if (!transcriptForm.value.transcript.trim()) {
-    ElMessage.warning('请粘贴转录文字')
-    return
-  }
-  if (!transcriptForm.value.title.trim()) {
-    ElMessage.warning('请输入会议标题')
-    return
-  }
-  if (!transcriptForm.value.start_time) {
-    ElMessage.warning('请选择会议时间')
-    return
-  }
-
-  const participants = transcriptForm.value.participants.length > 0
-    ? `，参会人员已选择 ${transcriptForm.value.participants.length} 人`
-    : ''
-
-  const message = `请分析以下会议转录文字，并完成以下操作：
-
-1. 创建会议记录（标题：「${transcriptForm.value.title}」，时间：${transcriptForm.value.start_time}${participants}）
-2. 分析转录内容，提取：摘要、讨论要点、决议事项
-3. 将分析结果更新到会议记录中
-4. 从转录中识别出所有行动项（需要有人负责的任务），并为每个行动项创建一个任务（优先分配给转录中提到的负责人，如果没有明确负责人则分配给系统管理员）
-
-**重要**：每个任务都要通过 create_task 工具创建，不要只输出任务列表而不创建。
-
-转录内容：
-${transcriptForm.value.transcript}`
-
-  showPasteDialog.value = false
-  transcriptForm.value = { title: '', start_time: '', participants: [], transcript: '' }
-
-  router.push({ path: '/chat', query: { initialMessage: message } })
 }
 
 // 查看会议详情
