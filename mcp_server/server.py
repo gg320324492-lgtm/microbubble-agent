@@ -20,7 +20,7 @@ app = Server(
     name="vision-mcp-server",
     version="1.0.0",
     capabilities=ServerCapabilities(
-        tools=ServerCapabilities.Tools()
+        tools={"listChanged": True}
     )
 )
 

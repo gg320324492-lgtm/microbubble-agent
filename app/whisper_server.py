@@ -6,7 +6,13 @@ import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from faster_whisper import WhisperModel
 import os
-from app.voice.postprocess import postprocess_result
+
+# 后处理函数（内联，避免依赖 app 包）
+def postprocess_result(result: dict) -> dict:
+    """清理和规范化识别结果"""
+    if result.get("text"):
+        result["text"] = result["text"].strip()
+    return result
 
 app = FastAPI(title="Whisper ASR Service")
 
