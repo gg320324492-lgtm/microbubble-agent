@@ -103,6 +103,57 @@ class MeetingAnalysisService:
 
     # === 发言者检测 ===
 
+    def _parse_summary_format(self, text: str) -> Optional[Dict[str, Any]]:
+        """解析结构化摘要格式，提取发言人姓名。
+
+        识别模式：
+        - 发言人：张三、李四、王五
+        - 参会人：张三、李四
+        - 主讲人：张三
+        - 参与人：张三、李四
+        """
+        speaker_pattern = re.compile(
+            r'(?:发言人|参会人|参与人|主讲人|主持人|报告人)[：:]\s*(.+?)(?:\n|$|。|，)'
+        )
+        match = speaker_pattern.search(text)
+        if not match:
+            return None
+
+        names_str = match.group(1).strip()
+        # 分割姓名：、，, 空格
+        names = re.split(r'[、，,\s]+', names_str)
+        names = [n.strip() for n in names if n.strip() and len(n.strip()) >= 2]
+
+        if not names:
+            return None
+
+        # 提取会议标题（如果有）
+        title = None
+        title_match = re.search(r'会议主题[：:]\s*(.+?)(?:\n|$)', text)
+        if not title_match:
+            title_match = re.search(r'会议标题[：:]\s*(.+?)(?:\n|$)', text)
+        if title_match:
+            title = title_match.group(1).strip()[:50]
+
+        detected = []
+        for name in names:
+            detected.append({
+                "original_label": name,
+                "suggested_name": name,
+                "turn_count": 1,
+                "sample_lines": [text[:150]],
+            })
+
+        result = {
+            "detected_speakers": detected,
+            "total_turns": len(detected),
+            "confidence": "high",
+            "format_type": "summary",
+        }
+        if title:
+            result["extracted_title"] = title
+        return result
+
     def _quick_parse_speakers(self, text: str) -> Optional[Dict[str, Any]]:
         """本地快速解析发言者（不调用 AI），处理明确的【发言人】格式。
 
@@ -174,8 +225,17 @@ class MeetingAnalysisService:
     async def detect_speakers(self, transcript_text: str) -> Dict[str, Any]:
         """自动识别转录文本中的发言者。
 
-        先用本地正则快速解析【发言人】格式，失败时回退到 Claude AI。
+        检测顺序：
+        1. 结构化摘要格式（发言人：张三、李四）→ 直接提取
+        2. 对话转录格式（【张三】/ 张三说）→ 正则解析
+        3. 纯文本 → Claude AI 检测
         """
+        # 1. 先尝试摘要格式
+        summary = self._parse_summary_format(transcript_text)
+        if summary:
+            return summary
+
+        # 2. 再尝试对话转录格式
         local = self._quick_parse_speakers(transcript_text)
         if local:
             return local

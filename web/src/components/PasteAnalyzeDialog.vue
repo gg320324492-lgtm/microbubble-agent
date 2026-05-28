@@ -54,6 +54,7 @@
         ref="mappingPanelRef"
         :speakers="detectionResult?.detected_speakers || []"
         :confidence="detectionResult?.confidence || 'medium'"
+        :format-type="detectionResult?.format_type || ''"
         @update:mapping="onMappingUpdate"
       />
 
@@ -194,6 +195,11 @@ const goDetect = async () => {
       transcript_text: form.value.transcript_text,
     })
     detectionResult.value = res.data
+
+    // 摘要格式：自动填充标题
+    if (res.data.format_type === 'summary' && res.data.extracted_title && !form.value.title.trim()) {
+      form.value.title = res.data.extracted_title
+    }
 
     if (res.data.detected_speakers?.length <= 1) {
       // 只有一位或没有发言者，跳过映射阶段

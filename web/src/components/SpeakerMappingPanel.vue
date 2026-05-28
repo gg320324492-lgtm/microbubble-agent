@@ -5,6 +5,15 @@
       <el-tag :type="confidenceTag" size="small">{{ confidenceText }}</el-tag>
     </div>
 
+    <el-alert
+      v-if="formatType === 'summary'"
+      title="检测到会议摘要格式，发言人已从「发言人」或「参会人」字段自动提取"
+      type="success"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+
     <el-table :data="speakers" stripe style="width: 100%">
       <el-table-column prop="original_label" label="原始标识" width="140" />
       <el-table-column label="映射为" min-width="180">
@@ -45,6 +54,7 @@ import { useMemberStore } from '@/stores/member'
 const props = defineProps({
   speakers: { type: Array, default: () => [] },
   confidence: { type: String, default: 'medium' },
+  formatType: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:mapping'])
