@@ -129,7 +129,8 @@ function speakerColor(name) {
 async function startCall() {
   try {
     const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${wsProtocol}//${location.host}/api/v1/ws/meeting/${props.meetingId}/live`
+    const token = localStorage.getItem('access_token') || ''
+    const wsUrl = `${wsProtocol}//${location.host}/api/v1/ws/meeting/${props.meetingId}/live?token=${encodeURIComponent(token)}`
     ws = new WebSocket(wsUrl)
 
     ws.onopen = async () => {
