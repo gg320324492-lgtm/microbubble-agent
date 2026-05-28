@@ -28,6 +28,10 @@ class Meeting(Base, TimestampMixin):
     key_points = Column(ARRAY(String))  # 讨论要点
     decisions = Column(ARRAY(String))  # 决议事项
 
+    # 发言者分析
+    speaker_mapping = Column(JSON)  # 发言者映射 {"原始标签": "真实姓名"}
+    speaker_stats = Column(JSON)  # 发言者统计 [{"name":"...", "turn_count":N, ...}]
+
     # 状态
     status = Column(String(20), default="scheduled")  # scheduled/recording/completed
 

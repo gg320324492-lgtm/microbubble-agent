@@ -9,6 +9,24 @@
         </span>
         <span v-if="isRecording" class="duration">{{ formatDuration(duration) }}</span>
       </div>
+      <div class="header-center">
+        <el-select
+          v-if="isRecording"
+          v-model="currentSpeaker"
+          size="small"
+          placeholder="当前发言人"
+          style="width: 150px"
+          @change="onSpeakerChange"
+        >
+          <el-option
+            v-for="s in speakerOptions"
+            :key="s"
+            :label="s"
+            :value="s"
+          />
+          <el-option label="+ 自定义" value="__custom__" />
+        </el-select>
+      </div>
       <div class="header-actions">
         <el-button
           v-if="!isRecording"
@@ -101,6 +119,7 @@ const isRecording = ref(false)
 const duration = ref(0)
 const currentText = ref('')
 const transcriptItems = ref([])
+const currentSpeaker = ref('参会者')
 
 let ws = null
 let durationTimer = null
@@ -122,6 +141,28 @@ const uniqueSpeakers = computed(() => {
   const speakers = new Set(transcriptItems.value.map(item => item.speaker))
   return Array.from(speakers)
 })
+
+// 发言人选项（默认 + 已出现过的发言人）
+const speakerOptions = computed(() => {
+  const defaults = ['参会者', '发言者A', '发言者B', '发言者C']
+  const existing = uniqueSpeakers.value.filter(s => !defaults.includes(s))
+  return [...new Set([...defaults, ...existing])]
+})
+
+// 切换发言人
+const onSpeakerChange = (value) => {
+  if (value === '__custom__') {
+    const name = prompt('请输入发言人姓名：')
+    if (name && name.trim()) {
+      currentSpeaker.value = name.trim()
+    } else {
+      currentSpeaker.value = '参会者'
+    }
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'speaker_change', speaker: currentSpeaker.value }))
+  }
+}
 
 // 开始转写
 const startTranscript = async () => {
@@ -349,6 +390,11 @@ defineExpose({
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #ebeef5;
+  gap: 12px;
+}
+.header-center {
+  display: flex;
+  align-items: center;
 }
 
 .status-info {

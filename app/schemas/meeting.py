@@ -41,6 +41,8 @@ class MeetingResponse(MeetingBase):
     summary: Optional[str] = None
     key_points: Optional[List[str]] = None
     decisions: Optional[List[str]] = None
+    speaker_mapping: Optional[Any] = None
+    speaker_stats: Optional[Any] = None
     status: str
     created_by: Optional[int] = None
     created_at: datetime
@@ -62,5 +64,70 @@ class MeetingMinutes(BaseModel):
     decisions: List[str]
     action_items: List[Dict[str, Any]]
     next_meeting: Optional[str] = None
+
+
+# === 发言者检测与分析 ===
+
+class SpeakerDetectRequest(BaseModel):
+    """发言者检测请求"""
+    transcript_text: str
+
+
+class DetectedSpeaker(BaseModel):
+    """检测到的发言者"""
+    original_label: str
+    suggested_name: Optional[str] = None
+    turn_count: int
+    sample_lines: List[str]
+
+
+class SpeakerDetectResponse(BaseModel):
+    """发言者检测响应"""
+    phase: str = "speaker_detection"
+    detected_speakers: List[DetectedSpeaker]
+    total_turns: int
+    confidence: str  # high / medium / low
+    format_type: str  # marked / plain / mixed
+
+
+class TranscriptAnalyzeRequest(BaseModel):
+    """转录分析请求"""
+    title: str
+    start_time: datetime
+    transcript_text: str
+    speaker_mapping: Optional[Dict[str, str]] = None
+    participants: Optional[List[int]] = None
+
+
+class TranscriptAnalyzeResponse(BaseModel):
+    """转录分析响应"""
+    phase: str = "complete"
+    meeting_id: int
+    summary: str
+    key_points: List[str]
+    decisions: List[str]
+    tasks_created: List[Dict[str, Any]]
+    speaker_stats: Optional[Any] = None
+
+
+class SpeakerStatsItem(BaseModel):
+    """单个发言者统计"""
+    name: str
+    turn_count: int
+    word_count: int
+    speaking_ratio: float
+    avg_turn_length: int
+    topics: Optional[List[str]] = None
+
+
+class MeetingAnalyticsResponse(BaseModel):
+    """会议分析统计响应"""
+    speaker_stats: List[SpeakerStatsItem]
+    meeting_stats: Dict[str, Any]
+
+
+class SpeakerMapRequest(BaseModel):
+    """发言者映射请求"""
+    speaker_mapping: Dict[str, str]
 
 

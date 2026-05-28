@@ -179,6 +179,28 @@ TOOLS = [
         }
     },
     {
+        "name": "analyze_meeting_transcript",
+        "description": "对粘贴的会议转录文本进行完整的 AI 分析——自动识别发言者、生成摘要、提取要点/决策/行动项、自动创建任务。当用户粘贴会议文本并需要智能分析时调用此工具，不要用 summarize_meeting_transcript（旧版简化工具）。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "transcript_text": {
+                    "type": "string",
+                    "description": "会议转录的完整文本内容（支持【发言人】格式或纯文本）"
+                },
+                "speaker_mapping": {
+                    "type": "object",
+                    "description": "可选的发言者映射，如 {\"王老师\": \"王建国\"}。不传则自动检测"
+                },
+                "create_meeting": {
+                    "type": "boolean",
+                    "description": "是否同时创建会议记录并自动创建任务，默认 true"
+                }
+            },
+            "required": ["transcript_text"]
+        }
+    },
+    {
         "name": "create_meeting",
         "description": "创建会议。当用户要求预约会议、安排组会等时使用。",
         "input_schema": {

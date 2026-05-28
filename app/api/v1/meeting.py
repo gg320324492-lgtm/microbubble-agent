@@ -9,9 +9,13 @@ from app.core.security import get_current_user
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
 from app.schemas.meeting import (
-    MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes
+    MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes,
+    SpeakerDetectRequest, SpeakerDetectResponse,
+    TranscriptAnalyzeRequest, TranscriptAnalyzeResponse,
+    SpeakerMapRequest, MeetingAnalyticsResponse,
 )
 from app.services.meeting_service import MeetingService
+from app.services.meeting_analysis_service import meeting_analysis
 from app.agent.core import agent
 
 router = APIRouter()
@@ -112,7 +116,14 @@ async def get_meeting_minutes(
         raise HTTPException(status_code=404, detail="会议不存在")
 
     if not meeting.summary:
-        raise HTTPException(status_code=404, detail="会议纪要尚未生成")
+        # 返回空内容而非 404，让前端能正常展示空状态
+        return MeetingMinutes(
+            summary="",
+            key_points=meeting.key_points or [],
+            decisions=meeting.decisions or [],
+            action_items=[],
+            next_meeting=None
+        )
 
     return MeetingMinutes(
         summary=meeting.summary,
@@ -231,3 +242,118 @@ async def delete_meeting(
 
     await db.delete(meeting)
     await db.commit()
+
+
+# === 粘贴转录 + AI 分析 ===
+
+@router.post("/meetings/detect-speakers", response_model=SpeakerDetectResponse)
+async def detect_speakers(
+    request: SpeakerDetectRequest,
+    current_user: Member = Depends(get_current_user),
+):
+    """检测转录文本中的发言者（阶段1：不创建会议）"""
+    try:
+        result = await meeting_analysis.detect_speakers(request.transcript_text)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"发言者检测失败: {str(e)}")
+
+
+@router.post("/meetings/analyze-text")
+async def analyze_transcript_text(
+    request: TranscriptAnalyzeRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """粘贴转录文本并全量分析（阶段2：创建会议 + AI 分析 + 创建任务）
+
+    支持两种模式：
+    - 不带 speaker_mapping：先返回发言者检测结果让用户确认
+    - 带 speaker_mapping：直接执行完整分析
+    """
+    meeting_service = MeetingService(db)
+
+    if not request.speaker_mapping:
+        # 阶段1：只检测发言者，不创建会议
+        detection = await meeting_analysis.detect_speakers(request.transcript_text)
+        return {
+            "phase": "speaker_detection",
+            "detection": detection,
+            "message": "请确认发言者映射后再次提交",
+        }
+
+    # 阶段2：完整分析
+    try:
+        result = await meeting_service.process_pasted_transcript(
+            title=request.title,
+            start_time=request.start_time,
+            transcript_text=request.transcript_text,
+            speaker_mapping=request.speaker_mapping,
+            participant_ids=request.participants,
+            created_by=current_user.id,
+        )
+        result["phase"] = "complete"
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"转录分析失败: {str(e)}")
+
+
+@router.post("/meetings/{meeting_id}/speaker-map")
+async def apply_speaker_mapping(
+    meeting_id: int,
+    request: SpeakerMapRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """为已有会议设置发言者映射并重新分析"""
+    meeting_service = MeetingService(db)
+
+    meeting = await meeting_service.get_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+
+    try:
+        result = await meeting_service.reanalyze_with_speakers(
+            meeting_id, request.speaker_mapping
+        )
+        return {"message": "发言者映射已应用并重新分析", **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"重新分析失败: {str(e)}")
+
+
+@router.get("/meetings/{meeting_id}/analytics", response_model=MeetingAnalyticsResponse)
+async def get_meeting_analytics(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取会议发言者维度统计"""
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+
+    if not meeting.speaker_stats:
+        # 如果还没有统计但有转录内容，实时计算
+        if meeting.transcript and isinstance(meeting.transcript, list):
+            stats = meeting_analysis.compute_speaker_stats(meeting.transcript)
+            meeting.speaker_stats = stats
+            await db.commit()
+        else:
+            return MeetingAnalyticsResponse(
+                speaker_stats=[],
+                meeting_stats={"total_turns": 0, "total_words": 0},
+            )
+
+    total_turns = sum(s.get("turn_count", 0) for s in (meeting.speaker_stats or []))
+    total_words = sum(s.get("word_count", 0) for s in (meeting.speaker_stats or []))
+
+    return MeetingAnalyticsResponse(
+        speaker_stats=meeting.speaker_stats or [],
+        meeting_stats={
+            "total_turns": total_turns,
+            "total_words": total_words,
+            "speaker_count": len(meeting.speaker_stats or []),
+        },
+    )

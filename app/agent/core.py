@@ -128,26 +128,32 @@ class MicroBubbleAgent:
 
 检测到你正在处理会议转录文字。请按以下步骤执行：
 
-1. **创建会议**：调用 create_meeting 工具创建会议记录
-2. **分析转录**：调用 summarize_meeting_transcript 分析转录内容
-3. **更新纪要**：调用 update_meeting 将 summary/key_points/decisions 更新到会议记录
-4. **创建任务**：从转录中识别所有行动项，调用 create_task 为每个行动项创建任务
+1. **检测发言者**：调用 analyze_meeting_transcript 工具（不传 speaker_mapping），自动识别文本中的不同发言者
+2. **确认映射**：将检测到的发言者列表展示给用户，询问是否需要调整映射关系
+3. **完整分析**：确认映射后再次调用 analyze_meeting_transcript（传入 speaker_mapping），进行完整分析并自动创建会议和任务
+
+### 发言者识别
+- 识别【姓名】格式标签或"姓名说："格式
+- 尝试将发言者名称与课题组成员匹配（通过 query_members）
+- 不确定的映射关系应向用户确认
 
 ### 行动项识别要点
 - 包含"负责"、"完成"、"安排"、"下次"、"尽快"、"记得"等关键词的发言内容
 - 发言中明确指定了负责人的事项（如"张三负责这个"）
 - 决策中需要执行的具体事项
+- 每条行动项应标注来源发言人
 
 ### 任务创建规则
-- 如果转录中提到了成员姓名（如"张三负责"），尝试通过 query_members 查找该成员并分配任务
+- 优先匹配转录中提到的负责人到课题组成员
 - 截止日期：根据会议时间和事项性质合理推断（一般事项 1 周内，复杂事项 2-4 周）
 - 优先级：根据事项的重要性和紧急性判断（涉及项目关键节点 → high）
 - description 中标注"来源：XXX 会议"
 - 如果无法确定负责人，任务分配给系统管理员
 
 ### 最终回复格式
-- 列出创建了哪些内容（会议标题、任务数量）
-- 任务汇总表（负责人 | 任务内容 | 截止日期 | 优先级）
+- 发言者统计（每位发言者的发言次数/字数占比）
+- 会议摘要（3-5 句话）
+- 任务汇总表（负责人 | 任务内容 | 截止日期 | 优先级 | 置信度）
 """
 
     async def _extract_and_save_memories(self, user_id: int, messages: List[Dict], session_id: str):
@@ -812,6 +818,47 @@ class MicroBubbleAgent:
                         for m in members
                     ]
                 }
+
+            elif name == "analyze_meeting_transcript":
+                from app.services.meeting_analysis_service import meeting_analysis
+
+                transcript_text = input_data["transcript_text"]
+                speaker_mapping = input_data.get("speaker_mapping")
+
+                # 发言者检测
+                detection = await meeting_analysis.detect_speakers(transcript_text)
+
+                # 完整分析
+                analysis = await meeting_analysis.analyze_transcript(
+                    transcript_text, speaker_mapping
+                )
+
+                result = {
+                    "status": "success",
+                    "detection": detection,
+                    "summary": analysis.get("summary", ""),
+                    "key_points": analysis.get("key_points", []),
+                    "decisions": analysis.get("decisions", []),
+                    "action_items": analysis.get("action_items", []),
+                }
+
+                # 可选：创建会议记录和任务
+                if input_data.get("create_meeting", True):
+                    from datetime import datetime as dt
+                    meeting_svc = MeetingService(db)
+                    start_time = dt.now()
+                    created = await meeting_svc.process_pasted_transcript(
+                        title=f"会议分析 - {dt.now().strftime('%Y-%m-%d %H:%M')}",
+                        start_time=start_time,
+                        transcript_text=transcript_text,
+                        speaker_mapping=speaker_mapping,
+                        created_by=user_id,
+                    )
+                    result["meeting_id"] = created.get("meeting_id")
+                    result["tasks_created"] = created.get("tasks_created", [])
+                    result["speaker_stats"] = created.get("speaker_stats")
+
+                return result
 
             elif name == "query_meetings":
                 meeting_svc = MeetingService(db)
