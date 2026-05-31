@@ -65,7 +65,10 @@ class SpeechRecognizer:
             skip_convert: 跳过 ffmpeg 转码（调用方已转为 16kHz WAV 时使用）
         """
         if await self._check_remote():
-            return await self._transcribe_remote(audio_data, language, task)
+            try:
+                return await self._transcribe_remote(audio_data, language, task)
+            except Exception:
+                pass  # 远程失败，回退本地
         return await self._transcribe_local(audio_data, language, task, skip_convert)
 
     async def _transcribe_remote(self, audio_data: bytes, language: str, task: str) -> dict:
