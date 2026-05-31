@@ -388,8 +388,12 @@ const fetchInProgressTasks = async () => {
   try {
     const res = await axios.get('/api/v1/tasks', { params: { page_size: 100 } })
     const allTasks = (res.data.items || []).filter(t => t.status !== 'done')
-    // 排序：按优先级（高>中>低），同优先级按截止时间（早→晚）
+    // 排序：未分配优先 → 优先级（高>中>低）→ 截止时间（早→晚）
     allTasks.sort((a, b) => {
+      // 未分配任务排最前
+      const aUnassigned = !a.assignee_id ? 0 : 1
+      const bUnassigned = !b.assignee_id ? 0 : 1
+      if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned
       const priorityOrder = { high: 3, medium: 2, low: 1 }
       const pDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0)
       if (pDiff !== 0) return pDiff
