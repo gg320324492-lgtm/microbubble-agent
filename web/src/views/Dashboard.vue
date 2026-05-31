@@ -15,11 +15,11 @@
         <div class="quick-tip" v-if="dashboardData.summary">
           <template v-if="dashboardData.summary.overdue_tasks > 0">
             <el-badge :value="dashboardData.summary.overdue_tasks" type="danger">
-              <span class="tip-text">您有 {{ dashboardData.summary.overdue_tasks }} 项逾期任务</span>
+              <span class="tip-text">⚠️ 团队共有 {{ dashboardData.summary.overdue_tasks }} 项逾期任务</span>
             </el-badge>
           </template>
           <template v-else-if="dashboardData.summary.in_progress_tasks > 0">
-            <span class="tip-text success">🎯 您有 {{ dashboardData.summary.in_progress_tasks }} 项任务进行中</span>
+            <span class="tip-text success">🎯 团队共有 {{ dashboardData.summary.in_progress_tasks }} 项任务进行中</span>
           </template>
           <template v-else>
             <span class="tip-text">今日任务已完成，继续保持！</span>
@@ -80,14 +80,14 @@
           </div>
         </el-col>
         <el-col :xs="12" :sm="6">
-          <div class="stat-card stat-card-danger fade-slide-up stagger-4" :class="{ 'has-danger': dashboardData.summary?.overdue_tasks > 0 }">
+          <div class="stat-card stat-card-danger fade-slide-up stagger-4 clickable" :class="{ 'has-danger': dashboardData.summary?.overdue_tasks > 0 }" @click="$router.push('/tasks?overdue=true')">
             <div class="stat-icon-wrap" style="background: linear-gradient(135deg, #FEF0F0 0%, #FEE2E2 100%)">
               <el-icon size="28" style="color: #F56C6C"><Warning /></el-icon>
             </div>
             <div class="stat-content">
               <div class="stat-label">已逾期</div>
               <div class="stat-value" :ref="el => animateNumber(el, dashboardData.summary?.overdue_tasks || 0)">0</div>
-              <div class="stat-hint">需要处理</div>
+              <div class="stat-hint">点击查看逾期任务</div>
             </div>
           </div>
         </el-col>
@@ -547,6 +547,7 @@ onMounted(() => {
               box-shadow var(--duration-normal) var(--ease-out);
   margin-bottom: 12px;
 }
+.stat-card.clickable { cursor: pointer; }
 .stat-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-md);
