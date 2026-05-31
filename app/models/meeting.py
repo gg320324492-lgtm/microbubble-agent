@@ -35,6 +35,9 @@ class Meeting(Base, TimestampMixin):
     # 状态
     status = Column(String(20), default="scheduled")  # scheduled/recording/completed
 
+    # 汇报人员（可多选，存为 JSON 数组）
+    presenter_ids = Column(JSON)
+
     # 创建者
     created_by = Column(Integer, ForeignKey("members.id"))
 
