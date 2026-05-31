@@ -269,8 +269,17 @@ async def update_meeting(
         raise HTTPException(status_code=404, detail="会议不存在")
 
     update_data = meeting_data.model_dump(exclude_unset=True)
+    # participants 是关联表，需特殊处理
+    participant_ids = update_data.pop("participants", None)
     for field, value in update_data.items():
         setattr(meeting, field, value)
+
+    if participant_ids is not None:
+        # 清除旧参与者，写入新列表
+        from sqlalchemy import delete as sa_delete
+        await db.execute(sa_delete(MeetingParticipant).where(MeetingParticipant.meeting_id == meeting_id))
+        for mid in participant_ids:
+            db.add(MeetingParticipant(meeting_id=meeting_id, member_id=mid, role="participant"))
 
     await db.commit()
     await db.refresh(meeting)
