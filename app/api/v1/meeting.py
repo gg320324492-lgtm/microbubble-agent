@@ -115,7 +115,7 @@ async def analyze_transcript_text(
     """
     meeting_service = MeetingService(db)
 
-    if not request.speaker_mapping:
+    if request.speaker_mapping is None:
         # 阶段1：只检测发言者，不创建会议
         detection = await meeting_analysis.detect_speakers(request.transcript_text)
         return {

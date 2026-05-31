@@ -18,14 +18,21 @@
       <el-table-column prop="original_label" label="原始标识" width="140" />
       <el-table-column label="映射为" min-width="180">
         <template #default="{ row }">
-          <el-autocomplete
+          <el-select
             v-model="mapping[row.original_label]"
-            :fetch-suggestions="(query, cb) => searchMembers(query, cb)"
-            placeholder="输入姓名或选择成员"
+            filterable
+            allow-create
             clearable
+            placeholder="选择或输入姓名"
             style="width: 100%"
-            @select="(item) => onSelectMember(row.original_label, item)"
-          />
+          >
+            <el-option
+              v-for="m in memberStore.members"
+              :key="m.id"
+              :label="m.name"
+              :value="m.name"
+            />
+          </el-select>
         </template>
       </el-table-column>
       <el-table-column prop="turn_count" label="发言次数" width="90" align="center" />

@@ -124,6 +124,16 @@ class MeetingAnalysisService:
         names = re.split(r'[、，,\s]+', names_str)
         names = [n.strip() for n in names if n.strip() and len(n.strip()) >= 2]
 
+        # 过滤文档结构标签（NON_SPEAKER 黑名单）
+        NON_SPEAKER = {
+            "会议主题", "会议标题", "会议摘要", "会议时间", "会议地点",
+            "发言人", "参会人", "参与者", "记录人", "主持人",
+            "讨论要点", "决议事项", "待办事项", "行动项",
+            "摘要", "主题", "时间", "地点", "备注", "注",
+            "总结", "结论", "后续", "附件", "关键词",
+        }
+        names = [n for n in names if n not in NON_SPEAKER]
+
         if not names:
             return None
 
