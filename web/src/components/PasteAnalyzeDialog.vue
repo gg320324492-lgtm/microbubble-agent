@@ -202,8 +202,8 @@ const goDetect = async () => {
     }
 
     if (res.data.detected_speakers?.length <= 1) {
-      // 只有一位或没有发言者，跳过映射阶段
-      skipMapping.value = true
+      // 只有一位或没有发言者，直接进入 AI 分析（用空映射）
+      speakerMapping.value = {}
       await goAnalyze()
       return
     }

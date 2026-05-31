@@ -205,29 +205,23 @@ async def generate_meeting_minutes(
     if not meeting.transcript:
         raise HTTPException(status_code=400, detail="会议转写内容为空")
 
-    # 使用Agent生成纪要
     transcript_text = json.dumps(meeting.transcript, ensure_ascii=False)
-    prompt = f"""
-    请分析以下会议转写内容，生成结构化的会议纪要。
 
-    要求输出：
-    1. 会议摘要（3-5句话）
-    2. 讨论要点
-    3. 决议事项
-    4. 待办任务（包含负责人和截止日期建议）
+    # 直接调用 AI 分析服务，不走 agent.chat()（避免污染会话状态）
+    analysis = await meeting_analysis.analyze_transcript(transcript_text)
 
-    会议转写内容：
-    {transcript_text}
-    """
-
-    response = await agent.chat(prompt, db=db)
-
-    # 解析并保存（简化处理）
-    meeting.summary = response["content"]
+    meeting.summary = analysis.get("summary", "")
+    meeting.key_points = analysis.get("key_points") or None
+    meeting.decisions = analysis.get("decisions") or None
     meeting.status = "completed"
     await db.commit()
 
-    return {"message": "会议纪要生成成功", "minutes": response["content"]}
+    return {
+        "message": "会议纪要生成成功",
+        "summary": meeting.summary,
+        "key_points": meeting.key_points or [],
+        "decisions": meeting.decisions or [],
+    }
 
 
 @router.post("/meetings/{meeting_id}/analyze")

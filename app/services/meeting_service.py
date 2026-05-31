@@ -129,6 +129,45 @@ class MeetingService:
             return transcript
         return str(transcript)
 
+    async def process_meeting_transcript(self, meeting_id: int) -> Dict[str, Any]:
+        """分析已有会议的转写内容，提取摘要、要点、决定并创建任务。
+
+        用于 WebSocket 断开后自动分析、腾讯会议 Webhook 回调等场景。
+        """
+        meeting = await self.get_meeting(meeting_id)
+        if not meeting or not meeting.transcript:
+            return {"summary": "", "key_points": [], "decisions": [], "tasks_created": []}
+
+        transcript_text = self._transcript_to_text(meeting.transcript)
+        if not transcript_text.strip():
+            return {"summary": "", "key_points": [], "decisions": [], "tasks_created": []}
+
+        analysis = await meeting_analysis.analyze_transcript(transcript_text)
+
+        meeting.summary = analysis.get("summary", "")
+        meeting.key_points = analysis.get("key_points") or None
+        meeting.decisions = analysis.get("decisions") or None
+        meeting.status = "completed"
+
+        if isinstance(meeting.transcript, list):
+            meeting.speaker_stats = meeting_analysis.compute_speaker_stats(meeting.transcript)
+
+        await self.db.commit()
+
+        tasks_created = []
+        for task_info in analysis.get("action_items", []):
+            result = await self._auto_create_task_from_meeting(meeting, task_info)
+            if result:
+                tasks_created.append(result)
+
+        logger.info(f"会议 {meeting_id} 分析完成: {len(tasks_created)} 个任务已创建")
+        return {
+            "summary": meeting.summary,
+            "key_points": meeting.key_points or [],
+            "decisions": meeting.decisions or [],
+            "tasks_created": tasks_created,
+        }
+
     async def process_pasted_transcript(
         self,
         title: str,
