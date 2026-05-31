@@ -134,9 +134,17 @@
       <div v-else class="task-groups">
         <div v-for="(group, gIdx) in groupedTasks" :key="group.assignee_id" class="task-group" :class="'fade-slide-up'" :style="{ animationDelay: `${(gIdx + 3) * 80}ms` }">
           <!-- 负责人头部（可点击折叠） -->
-          <div class="group-header" @click="toggleGroup(group.assignee_id)">
+          <div class="group-header" :class="{ 'unassigned-group': group.assignee_id === 'unassigned' }" @click="toggleGroup(group.assignee_id)">
             <el-avatar
-              v-if="memberStore.getMemberAvatar(group.assignee_id)"
+              v-if="group.assignee_id === 'unassigned'"
+              :size="40"
+              style="background: #409EFF"
+              class="avatar group-avatar"
+            >
+              <el-icon size="20"><VideoCamera /></el-icon>
+            </el-avatar>
+            <el-avatar
+              v-else-if="memberStore.getMemberAvatar(group.assignee_id)"
               :src="memberStore.getMemberAvatar(group.assignee_id)"
               :size="40"
               class="avatar group-avatar"
@@ -150,7 +158,7 @@
               {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
             </el-avatar>
             <div class="group-info">
-              <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
+              <span class="group-name" :class="{ 'unassigned-label': group.assignee_id === 'unassigned' }">{{ group.assignee_id === 'unassigned' ? '会议创建的任务' : memberStore.getMemberName(group.assignee_id) }}</span>
               <el-tag size="small" type="info">{{ group.tasks.length }} 项任务</el-tag>
             </div>
             <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[group.assignee_id] }"><ArrowDown /></el-icon>
@@ -262,7 +270,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, VideoCamera } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatCompactDate } from '@/utils/format'
@@ -661,6 +669,12 @@ onMounted(() => {
   padding: 12px 16px;
 }
 
+.group-header.unassigned-group {
+  background: rgba(64,158,255,0.06) !important;
+  border: 1px solid rgba(64,158,255,0.2);
+  border-radius: var(--radius-lg);
+}
+.unassigned-label { color: #409EFF; font-weight: var(--font-weight-bold); }
 .group-header {
   display: flex;
   align-items: center;
