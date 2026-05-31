@@ -47,6 +47,7 @@ class MeetingResponse(MeetingBase):
     speaker_mapping: Optional[Any] = None
     speaker_stats: Optional[Any] = None
     presenter_ids: Optional[Any] = None
+    participants: Optional[Any] = None
     status: str
     created_by: Optional[int] = None
     created_at: datetime

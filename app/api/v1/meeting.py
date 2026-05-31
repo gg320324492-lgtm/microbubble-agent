@@ -149,7 +149,10 @@ async def get_meeting(
     db: AsyncSession = Depends(get_db)
 ):
     """获取会议详情"""
-    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(
+        select(Meeting).options(selectinload(Meeting.participants)).where(Meeting.id == meeting_id)
+    )
     meeting = result.scalar_one_or_none()
 
     if not meeting:
