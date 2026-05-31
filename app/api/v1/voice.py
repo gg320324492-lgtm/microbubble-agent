@@ -363,10 +363,20 @@ async def meeting_live_ws(
 
             audio_buffer += data["bytes"]
 
-            # 每积累约 2 秒音频转写一次
-            if len(audio_buffer) >= 32000:
+            # 每积累约 3 秒音频转写一次
+            if len(audio_buffer) >= 48000:
                 try:
-                    result = await asr_service.transcribe(audio_buffer, language="zh")
+                    # 将 Int16 PCM 转为 WAV 后调用本地 ASR
+                    import io as _io, wave as _wave, struct as _struct
+                    wav_buf = _io.BytesIO()
+                    with _wave.open(wav_buf, "wb") as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(16000)
+                        wf.writeframes(audio_buffer)
+                    wav_bytes = wav_buf.getvalue()
+
+                    result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
                     text = result.get("text", "").strip()
                     audio_buffer = b""
                     if text:
@@ -376,13 +386,14 @@ async def meeting_live_ws(
                             "speaker": "发言人",
                             "speaker_confidence": 0,
                             "text": text,
-                            "start": max(0, elapsed - 2),
+                            "start": max(0, elapsed - 3),
                             "end": elapsed,
                         }
                         transcript_entries.append(entry)
                         await websocket.send_json(entry)
                 except Exception as e:
                     logger.error(f"ASR 转写失败: {e}")
+                    audio_buffer = b""  # 清空避免无限重试
 
     except WebSocketDisconnect:
         # 保存转录到会议记录，自动分析
