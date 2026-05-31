@@ -76,47 +76,35 @@
           </div>
 
           <div class="meeting-actions">
-            <el-button
-              v-if="meeting.status === 'scheduled'"
-              type="primary"
-              size="small"
-              @click.stop="startTranscript(meeting)"
-            >
-              <el-icon><VideoCamera /></el-icon>
-              开始转写
-            </el-button>
-            <el-button
-              v-if="meeting.status === 'recording'"
-              type="warning"
-              size="small"
-              @click.stop="startTranscript(meeting)"
-            >
-              <el-icon><VideoCamera /></el-icon>
-              继续转写
-            </el-button>
-            <el-button
-              v-if="meeting.transcript && !meeting.summary"
-              type="success"
-              size="small"
-              @click.stop="generateMinutes(meeting)"
-            >
-              生成纪要
-            </el-button>
-            <el-button
-              type="primary"
-              size="small"
-              @click.stop="startLiveCall(meeting)"
-            >
-              <el-icon><Phone /></el-icon>
-              声纹通话
-            </el-button>
-            <el-button
-              v-if="meeting.summary"
-              size="small"
-              @click.stop="viewMinutes(meeting)"
-            >
-              查看纪要
-            </el-button>
+            <el-tooltip content="声纹通话" placement="top">
+              <el-button class="action-btn action-phone" circle @click.stop="startLiveCall(meeting)">
+                <el-icon size="18"><Phone /></el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip v-if="meeting.summary" content="查看纪要" placement="top">
+              <el-button class="action-btn action-view" circle @click.stop="viewMinutes(meeting)">
+                <el-icon size="18"><Document /></el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip v-if="meeting.transcript && !meeting.summary" content="生成纪要" placement="top">
+              <el-button class="action-btn action-generate" circle @click.stop="generateMinutes(meeting)">
+                <el-icon size="18"><MagicStick /></el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip content="编辑会议" placement="top">
+              <el-button class="action-btn action-edit" circle @click.stop="editMeeting(meeting)">
+                <el-icon size="18"><Edit /></el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-popconfirm title="确定删除此会议？" @confirm="deleteMeeting(meeting.id)">
+              <template #reference>
+                <el-tooltip content="删除会议" placement="top">
+                  <el-button class="action-btn action-delete" circle @click.stop>
+                    <el-icon size="18"><Delete /></el-icon>
+                  </el-button>
+                </el-tooltip>
+              </template>
+            </el-popconfirm>
           </div>
         </div>
       </div>
@@ -134,7 +122,7 @@
     </el-card>
 
     <!-- 创建会议对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建会议" :width="isMobile ? '90vw' : '500px'" top="8vh">
+    <el-dialog v-model="showCreateDialog" :title="editingMeetingId ? '编辑会议' : '创建会议'" :width="isMobile ? '90vw' : '500px'" top="8vh" @close="editingMeetingId = null">
       <el-form :model="meetingForm" label-width="80px">
         <el-form-item label="会议主题" required>
           <el-input v-model="meetingForm.title" placeholder="请输入会议主题" />
@@ -152,18 +140,12 @@
           <el-input v-model="meetingForm.location" placeholder="请输入会议地点" />
         </el-form-item>
         <el-form-item label="参会人员">
-          <el-select
-            v-model="meetingForm.participants"
-            multiple
-            placeholder="选择参会人员"
-          >
-            <el-option
-              v-for="member in members"
-              :key="member.id"
-              :label="member.name"
-              :value="member.id"
-            />
-          </el-select>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <el-select v-model="meetingForm.participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
+              <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
+            </el-select>
+            <el-button size="small" @click="meetingForm.participants = members.map(m=>m.id)">全选</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="会议说明">
           <el-input
@@ -173,10 +155,50 @@
             placeholder="请输入会议说明"
           />
         </el-form-item>
+
+        <!-- 编辑已有会议时显示纪要字段 -->
+        <template v-if="editingMeetingId">
+          <el-divider content-position="left">
+            <el-icon><Document /></el-icon> 会议纪要
+          </el-divider>
+          <el-form-item label="摘要">
+            <el-input
+              v-model="meetingForm.summary"
+              type="textarea"
+              :rows="3"
+              placeholder="会议摘要..."
+              class="minutes-textarea"
+            />
+          </el-form-item>
+          <el-form-item label="讨论要点">
+            <div class="item-list">
+              <div v-for="(point, i) in meetingForm.key_points" :key="'kp'+i" class="item-row">
+                <span class="item-dot" />
+                <el-input v-model="meetingForm.key_points[i]" size="default" placeholder="输入要点..." />
+                <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.key_points.splice(i, 1)" />
+              </div>
+              <el-button dashed size="small" class="item-add" @click="meetingForm.key_points.push('')">
+                <el-icon><Plus /></el-icon> 添加要点
+              </el-button>
+            </div>
+          </el-form-item>
+          <el-form-item label="决议事项">
+            <div class="item-list">
+              <div v-for="(d, i) in meetingForm.decisions" :key="'dc'+i" class="item-row decision">
+                <span class="item-dot decision-dot" />
+                <el-input v-model="meetingForm.decisions[i]" size="default" placeholder="输入决议..." />
+                <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.decisions.splice(i, 1)" />
+              </div>
+              <el-button dashed size="small" class="item-add decision-add" @click="meetingForm.decisions.push('')">
+                <el-icon><Plus /></el-icon> 添加决议
+              </el-button>
+            </div>
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
         <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="createMeeting">创建</el-button>
+        <el-button type="primary" @click="submitMeeting">{{ editingMeetingId ? '保存' : '创建' }}</el-button>
       </template>
     </el-dialog>
 
@@ -253,8 +275,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+
+const router = useRouter()
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatDateTime } from '@/utils/format'
@@ -263,7 +288,7 @@ import { useMemberStore } from '@/stores/member'
 import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
-import { Phone } from '@element-plus/icons-vue'
+import { Phone, Edit, Delete, Document, MagicStick, Plus } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
@@ -287,6 +312,57 @@ const meetingRoomRef = ref(null)
 const showLiveCallDialog = ref(false)
 const liveCallMeeting = ref(null)
 
+// 编辑会议
+const editMeeting = (meeting) => {
+  meetingForm.value = {
+    title: meeting.title,
+    start_time: meeting.start_time,
+    location: meeting.location || '',
+    participants: meeting.participants?.map(p => p.member_id) || [],
+    description: meeting.description || '',
+    summary: meeting.summary || '',
+    key_points: meeting.key_points ? [...meeting.key_points] : [],
+    decisions: meeting.decisions ? [...meeting.decisions] : [],
+  }
+  editingMeetingId.value = meeting.id
+  showCreateDialog.value = true
+}
+
+const editingMeetingId = ref(null)
+
+const deleteMeeting = async (id) => {
+  try {
+    await axios.delete(`/api/v1/meetings/${id}`)
+    ElMessage.success('会议已删除')
+    fetchMeetings()
+  } catch (e) {
+    ElMessage.error('删除失败')
+  }
+}
+
+// 创建/更新会议
+const submitMeeting = async () => {
+  if (!meetingForm.value.title || !meetingForm.value.start_time) {
+    ElMessage.warning('请填写必填项')
+    return
+  }
+  try {
+    if (editingMeetingId.value) {
+      await axios.put(`/api/v1/meetings/${editingMeetingId.value}`, meetingForm.value)
+      ElMessage.success('会议已更新')
+    } else {
+      await axios.post('/api/v1/meetings', meetingForm.value)
+      ElMessage.success('会议创建成功')
+    }
+    showCreateDialog.value = false
+    editingMeetingId.value = null
+    meetingForm.value = { title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [] }
+    fetchMeetings()
+  } catch (e) {
+    ElMessage.error(editingMeetingId.value ? '更新失败' : '创建失败')
+  }
+}
+
 const startLiveCall = (meeting) => {
   liveCallMeeting.value = meeting
   showLiveCallDialog.value = true
@@ -299,12 +375,10 @@ const onLiveCallEnd = () => {
 }
 
 const meetingForm = ref({
-  title: '',
-  start_time: '',
-  location: '',
-  participants: [],
-  description: ''
+  title: '', start_time: '', location: '', participants: [], description: '',
+  summary: '', key_points: [], decisions: [],
 })
+
 
 // 获取会议列表
 const fetchMeetings = async () => {
@@ -329,27 +403,9 @@ const fetchMeetings = async () => {
 // 获取成员列表（使用 store）
 const fetchMembers = () => memberStore.fetchMembers()
 
-// 创建会议
-const createMeeting = async () => {
-  if (!meetingForm.value.title || !meetingForm.value.start_time) {
-    ElMessage.warning('请填写必填项')
-    return
-  }
-
-  try {
-    await axios.post('/api/v1/meetings', meetingForm.value)
-    ElMessage.success('会议创建成功')
-    showCreateDialog.value = false
-    meetingForm.value = { title: '', start_time: '', location: '', participants: [], description: '' }
-    fetchMeetings()
-  } catch (e) {
-    ElMessage.error('创建失败')
-  }
-}
-
-// 查看会议详情
+// 查看会议详情 → 跳转全屏详情页
 const viewMeeting = (meeting) => {
-  currentMeeting.value = meeting
+  router.push(`/meetings/${meeting.id}`)
 }
 
 // 查看纪要
@@ -518,18 +574,62 @@ onMounted(() => {
 
 .meeting-actions {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  justify-content: center;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
 }
 
-.meeting-actions .el-button {
-  border-radius: var(--radius-md);
-  transition: all var(--duration-fast) var(--ease-out);
+.action-btn {
+  width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  border: 1.5px solid var(--color-border) !important;
+  background: #fff !important;
+  transition: all 0.2s ease !important;
 }
+.action-btn:hover {
+  transform: translateY(-1px);
+}
+.action-phone { color: var(--color-primary) !important; border-color: rgba(255,122,92,0.3) !important; }
+.action-phone:hover { background: var(--color-primary) !important; color: #fff !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(255,122,92,0.3); }
 
-.meeting-actions .el-button:hover {
-  transform: scale(1.02);
+.action-view { color: #409EFF !important; border-color: rgba(64,158,255,0.3) !important; }
+.action-view:hover { background: #409EFF !important; color: #fff !important; border-color: #409EFF !important; box-shadow: 0 2px 8px rgba(64,158,255,0.3); }
+
+.action-generate { color: #67C23A !important; border-color: rgba(103,194,58,0.3) !important; }
+.action-generate:hover { background: #67C23A !important; color: #fff !important; border-color: #67C23A !important; box-shadow: 0 2px 8px rgba(103,194,58,0.3); }
+
+.action-edit { color: #909399 !important; border-color: rgba(144,147,153,0.3) !important; }
+.action-edit:hover { background: #909399 !important; color: #fff !important; border-color: #909399 !important; box-shadow: 0 2px 8px rgba(144,147,153,0.3); }
+
+.action-delete { color: #F56C6C !important; border-color: rgba(245,108,108,0.3) !important; }
+.action-delete:hover { background: #F56C6C !important; color: #fff !important; border-color: #F56C6C !important; box-shadow: 0 2px 8px rgba(245,108,108,0.3); }
+
+/* 纪要编辑列表 */
+.minutes-textarea :deep(.el-textarea__inner) { border-radius: var(--radius-md); border-color: var(--color-border); }
+.item-list { display: flex; flex-direction: column; gap: 8px; }
+.item-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; background: var(--color-bg-page); border-radius: var(--radius-md);
+  border: 1px solid transparent; transition: all 0.2s;
+}
+.item-row:hover, .item-row:focus-within {
+  border-color: var(--color-primary-border); background: var(--color-primary-bg);
+}
+.item-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: var(--color-primary);
+}
+.decision-dot { background: var(--color-warning); }
+.item-row .el-input { flex: 1; }
+.item-del { opacity: 0; transition: opacity 0.2s; }
+.item-row:hover .item-del { opacity: 1; }
+.item-add { width: 100%; justify-content: center; border-style: dashed; }
+.decision-add { color: var(--color-warning); border-color: var(--color-warning); }
+
+@media (max-width: 768px) {
+  .meeting-actions { flex-wrap: wrap; }
 }
 
 .pagination {
