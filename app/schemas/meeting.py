@@ -35,6 +35,16 @@ class MeetingUpdate(BaseModel):
     presenter_ids: Optional[List[int]] = None
 
 
+class ParticipantInfo(BaseModel):
+    """参与者简要信息"""
+    member_id: int
+    name: str = ""
+    role: str = "participant"
+
+    class Config:
+        from_attributes = True
+
+
 class MeetingResponse(MeetingBase):
     """会议响应"""
     id: int
@@ -51,16 +61,6 @@ class MeetingResponse(MeetingBase):
     status: str
     created_by: Optional[int] = None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ParticipantInfo(BaseModel):
-    """参与者简要信息"""
-    member_id: int
-    name: str = ""
-    role: str = "participant"
 
     class Config:
         from_attributes = True
