@@ -47,12 +47,13 @@
             </el-row>
             <el-form-item label="参会人员">
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <el-select v-model="form.participants" multiple filterable placeholder="选择参会人员" style="flex:1;min-width:200px">
+                <el-select v-model="form.participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
                   <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
                 </el-select>
                 <el-button size="small" @click="form.participants = memberStore.members.map(m=>m.id)">全选成员</el-button>
                 <el-button size="small" @click="form.participants = []">清空</el-button>
               </div>
+              <span v-if="form.participants.length === memberStore.members.length && memberStore.members.length > 0" style="color:var(--color-primary);font-size:12px">已选择全体成员（{{ memberStore.members.length }}人）</span>
             </el-form-item>
             <el-form-item label="汇报人员">
               <el-select v-model="form.presenter_ids" multiple filterable placeholder="选择汇报人员" style="width:100%">
@@ -180,8 +181,14 @@ const saving = ref(false)
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
 
-const participantNames = computed(() => {
-  if (!meeting.value?.participants) return ''
+const allMemberIds = computed(() => memberStore.members.map(m => m.id))
+const isAllMembers = computed(() => {
+  const pids = meeting.value?.participants?.map(p => p.member_id) || []
+  return pids.length > 0 && allMemberIds.value.length > 0 && allMemberIds.value.every(id => pids.includes(id))
+})
+const participantDisplay = computed(() => {
+  if (isAllMembers.value) return '全体成员'
+  if (!meeting.value?.participants?.length) return ''
   return meeting.value.participants.map(p => {
     const m = memberStore.members.find(x => x.id === p.member_id)
     return m?.name || p.member_id

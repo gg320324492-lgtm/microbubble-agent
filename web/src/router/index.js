@@ -38,6 +38,12 @@ const routes = [
         meta: { title: '会议管理', icon: 'VideoCamera' }
       },
       {
+        path: 'meetings/:id',
+        name: 'MeetingDetail',
+        component: () => import('@/views/MeetingDetailView.vue'),
+        meta: { title: '会议详情' }
+      },
+      {
         path: 'projects',
         name: 'Projects',
         component: () => import('@/views/ProjectView.vue'),
