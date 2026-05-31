@@ -331,12 +331,9 @@ async def meeting_live_ws(
 
     await websocket.accept()
 
-    buffer = RingBuffer(max_seconds=3.0)
     start_time = time.time()
     transcript_entries = []
-    meeting_pipeline.reset()
-
-    from app.voice.tts import tts_service as tts
+    audio_buffer = b""
 
     try:
         while True:
@@ -346,44 +343,46 @@ async def meeting_live_ws(
             if "text" in data:
                 try:
                     msg = __import__("json").loads(data["text"])
-                    msg_type = msg.get("type", "")
-
-                    if msg_type == "ai_chat":
-                        # AI 实时对话
+                    if msg.get("type") == "ai_chat":
                         user_text = msg.get("text", "")
                         if user_text.strip():
                             ai_response = await agent.chat(
-                                message=f"[会议实时对话] {user_text}",
-                                db=None,
-                            )
-                            reply = ai_response.get("content", "")[:200]
+                                message=f"[会议实时对话] {user_text}", db=None)
                             await websocket.send_json({
                                 "type": "ai_reply",
-                                "text": reply,
+                                "text": ai_response.get("content", "")[:200],
                                 "speaker": "小气助手",
                             })
-                    elif msg_type == "speaker_change":
-                        pass  # 声纹模式下自动识别，忽略手动切换
                 except Exception:
                     pass
                 continue
 
-            # 音频数据
+            # 音频数据 — 直接 ASR 转写
             if "bytes" not in data:
                 continue
 
-            audio_bytes = data["bytes"]
-            elapsed = time.time() - start_time
+            audio_buffer += data["bytes"]
 
-            # 通过流水线处理（独立 DB 会话）
-            async with async_session() as pipe_db:
-                results = await meeting_pipeline.process_audio(
-                    audio_bytes, db=pipe_db, elapsed=elapsed
-                )
-
-            for result in results:
-                transcript_entries.append(result)
-                await websocket.send_json(result)
+            # 每积累约 2 秒音频转写一次
+            if len(audio_buffer) >= 32000:
+                try:
+                    result = await asr_service.transcribe(audio_buffer, language="zh")
+                    text = result.get("text", "").strip()
+                    audio_buffer = b""
+                    if text:
+                        elapsed = time.time() - start_time
+                        entry = {
+                            "type": "transcript",
+                            "speaker": "发言人",
+                            "speaker_confidence": 0,
+                            "text": text,
+                            "start": max(0, elapsed - 2),
+                            "end": elapsed,
+                        }
+                        transcript_entries.append(entry)
+                        await websocket.send_json(entry)
+                except Exception as e:
+                    logger.error(f"ASR 转写失败: {e}")
 
     except WebSocketDisconnect:
         # 保存转录到会议记录，自动分析
