@@ -35,10 +35,13 @@ class VoiceprintService:
             from modelscope.utils.constant import Tasks
 
             logger.info("正在加载 3D-Speaker ERes2Net 模型...")
+            # 使用 speaker_embedding 任务提取声纹嵌入向量（非 verification 比对）
             self._pipeline = pipeline(
-                Tasks.speaker_verification,
+                Tasks.speaker_embedding,
                 model="iic/speech_eres2net_sv_zh-cn_3dspeaker_16k",
             )
+            # 标记是否成功加载
+            self._pipeline_loaded = True
             logger.info("3D-Speaker 模型加载完成")
         except Exception as e:
             logger.error(f"3D-Speaker 模型加载失败: {e}")
@@ -80,14 +83,18 @@ class VoiceprintService:
         wav_bytes = self._ensure_wav_format(audio)
         result = self._pipeline(wav_bytes)
 
-        # 3D-Speaker pipeline 返回 embedding 或 best_score
+        # speaker_embedding 返回 embedding 向量 (可能是 list, numpy array, 或 dict)
         if isinstance(result, dict):
-            embedding = result.get("outputs") or result.get("embedding")
+            embedding = result.get("outputs") or result.get("embedding") or result.get("feature")
             if embedding is not None:
-                return np.array(embedding, dtype=np.float32)
+                return np.array(embedding, dtype=np.float32).flatten()
+        elif isinstance(result, (list, np.ndarray)):
+            emb = np.array(result, dtype=np.float32).flatten()
+            if len(emb) >= EMBEDDING_DIM:
+                return emb[:EMBEDDING_DIM]
+            return emb
 
-        # 兼容不同返回格式
-        logger.error(f"3D-Speaker 返回未知格式: {type(result)}")
+        logger.error(f"3D-Speaker 返回未知格式: {type(result)}, keys={result.keys() if isinstance(result, dict) else 'N/A'}")
         raise ValueError(f"无法从结果中提取 embedding: {result}")
 
     async def enroll_member(

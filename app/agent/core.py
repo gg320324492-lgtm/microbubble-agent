@@ -820,45 +820,44 @@ class MicroBubbleAgent:
                 }
 
             elif name == "analyze_meeting_transcript":
+                from datetime import datetime as dt
                 from app.services.meeting_analysis_service import meeting_analysis
 
                 transcript_text = input_data["transcript_text"]
                 speaker_mapping = input_data.get("speaker_mapping")
 
-                # 发言者检测
-                detection = await meeting_analysis.detect_speakers(transcript_text)
-
-                # 完整分析
-                analysis = await meeting_analysis.analyze_transcript(
-                    transcript_text, speaker_mapping
-                )
-
-                result = {
-                    "status": "success",
-                    "detection": detection,
-                    "summary": analysis.get("summary", ""),
-                    "key_points": analysis.get("key_points", []),
-                    "decisions": analysis.get("decisions", []),
-                    "action_items": analysis.get("action_items", []),
-                }
-
-                # 可选：创建会议记录和任务
                 if input_data.get("create_meeting", True):
-                    from datetime import datetime as dt
+                    # 直接走完整流程（process_pasted_transcript 内含发言者检测+分析+创建任务）
                     meeting_svc = MeetingService(db)
                     start_time = dt.now()
                     created = await meeting_svc.process_pasted_transcript(
-                        title=f"会议分析 - {dt.now().strftime('%Y-%m-%d %H:%M')}",
+                        title=f"会议分析 - {dt.now().strftime('%m-%d %H:%M')}",
                         start_time=start_time,
                         transcript_text=transcript_text,
                         speaker_mapping=speaker_mapping,
                         created_by=user_id,
                     )
-                    result["meeting_id"] = created.get("meeting_id")
-                    result["tasks_created"] = created.get("tasks_created", [])
-                    result["speaker_stats"] = created.get("speaker_stats")
-
-                return result
+                    return {
+                        "status": "success",
+                        "meeting_id": created.get("meeting_id"),
+                        "summary": created.get("summary", ""),
+                        "key_points": created.get("key_points", []),
+                        "decisions": created.get("decisions", []),
+                        "tasks_created": created.get("tasks_created", []),
+                        "speaker_stats": created.get("speaker_stats"),
+                    }
+                else:
+                    # 仅分析不创建会议
+                    detection = await meeting_analysis.detect_speakers(transcript_text)
+                    analysis = await meeting_analysis.analyze_transcript(transcript_text, speaker_mapping)
+                    return {
+                        "status": "success",
+                        "detection": detection,
+                        "summary": analysis.get("summary", ""),
+                        "key_points": analysis.get("key_points", []),
+                        "decisions": analysis.get("decisions", []),
+                        "action_items": analysis.get("action_items", []),
+                    }
 
             elif name == "query_meetings":
                 meeting_svc = MeetingService(db)
@@ -899,7 +898,7 @@ class MicroBubbleAgent:
                 transcript_text = input_data["transcript_text"]
 
                 # 1. 生成摘要
-                summary = await MeetingService._generate_summary(None, transcript_text)
+                summary = await MeetingService._generate_summary(transcript_text)
 
                 # 2. 提取关键信息和行动项
                 analyzer = ConversationAnalyzer()

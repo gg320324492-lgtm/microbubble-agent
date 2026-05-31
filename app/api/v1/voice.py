@@ -375,10 +375,11 @@ async def meeting_live_ws(
             audio_bytes = data["bytes"]
             elapsed = time.time() - start_time
 
-            # 通过流水线处理
-            results = await meeting_pipeline.process_audio(
-                audio_bytes, db=None, elapsed=elapsed
-            )
+            # 通过流水线处理（独立 DB 会话）
+            async with async_session() as pipe_db:
+                results = await meeting_pipeline.process_audio(
+                    audio_bytes, db=pipe_db, elapsed=elapsed
+                )
 
             for result in results:
                 transcript_entries.append(result)

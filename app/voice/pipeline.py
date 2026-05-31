@@ -137,22 +137,35 @@ class MeetingPipeline:
         return await asyncio.to_thread(_run)
 
     def _bytes_to_float32(self, data: bytes) -> Optional[np.ndarray]:
-        """将 WebM/opus 音频 bytes 转为 float32 numpy 数组。
+        """将音频 bytes 转为 float32 numpy 数组。
 
-        优先使用 ffmpeg 转码，回退到直接读取 PCM。
+        优先尝试直接解析 PCM Int16（前端 AudioWorklet 默认格式），
+        失败时回退到 ffmpeg 转码。
         """
         if not data:
             return None
 
-        import subprocess
-        import tempfile
-        import os
+        # 1. 尝试直接解析 Int16 PCM（前端 MeetingRoom 发送的原生格式）
+        if len(data) >= 2:
+            pcm = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+            if len(pcm) > 0 and not np.all(pcm == 0):
+                return pcm
 
+        # 2. 回退到 ffmpeg 转码
+        import subprocess, tempfile, os
         with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
             tmp.write(data)
             tmp_path = tmp.name
 
         try:
+            try:
+                import shutil
+                if shutil.which("ffmpeg") is None:
+                    logger.warning("ffmpeg 未安装，无法转码音频")
+                    return None
+            except Exception:
+                pass
+
             output_path = tmp_path + ".wav"
             result = subprocess.run([
                 "ffmpeg", "-y", "-i", tmp_path,
@@ -166,19 +179,15 @@ class MeetingPipeline:
 
             with open(output_path, "rb") as f:
                 raw = f.read()
-
-            samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-            return samples
+            return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
         except Exception as e:
             logger.error(f"音频转码失败: {e}")
             return None
         finally:
             for p in [tmp_path, tmp_path + ".wav"]:
                 if os.path.exists(p):
-                    try:
-                        os.unlink(p)
-                    except Exception:
-                        pass
+                    try: os.unlink(p)
+                    except Exception: pass
 
     def reset(self):
         """重置流水线状态"""
