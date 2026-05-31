@@ -22,7 +22,7 @@ from app.agent.core import agent
 router = APIRouter()
 
 
-@router.post("/meetings", response_model=MeetingResponse, status_code=201)
+@router.post("/meetings", status_code=201)
 async def create_meeting(
     meeting_data: MeetingCreate,
     current_user: Member = Depends(get_current_user),
@@ -259,7 +259,7 @@ async def analyze_meeting_transcript(
         raise HTTPException(status_code=500, detail=f"分析失败: {str(e)}")
 
 
-@router.put("/meetings/{meeting_id}", response_model=MeetingResponse)
+@router.put("/meetings/{meeting_id}")
 async def update_meeting(
     meeting_id: int,
     meeting_data: MeetingUpdate,
