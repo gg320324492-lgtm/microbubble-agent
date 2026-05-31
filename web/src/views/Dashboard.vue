@@ -418,6 +418,9 @@ const groupedTasks = computed(() => {
     groups[id].tasks.push(task)
   }
   return Object.values(groups).sort((a, b) => {
+    // 未分配任务始终排在最前
+    if (a.assignee_id === 'unassigned' && b.assignee_id !== 'unassigned') return -1
+    if (b.assignee_id === 'unassigned' && a.assignee_id !== 'unassigned') return 1
     // 按时长逾期分组显示
     const aHasOverdue = a.tasks.some(t => isOverdue(t.due_date))
     const bHasOverdue = b.tasks.some(t => isOverdue(t.due_date))
