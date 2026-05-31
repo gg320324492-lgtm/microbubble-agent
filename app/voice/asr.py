@@ -114,7 +114,10 @@ class SpeechRecognizer:
                 audio_array, language=language, task=task,
                 beam_size=3, vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=500),
-                initial_prompt=INITIAL_PROMPT
+                initial_prompt=INITIAL_PROMPT,
+                condition_on_previous_text=False,
+                no_speech_threshold=0.6,
+                temperature=0,
             )
             segments_list = []
             full_text = ""
@@ -146,7 +149,10 @@ class SpeechRecognizer:
             segments, _ = self._local_model.transcribe(
                 audio_array, language="zh", beam_size=3, vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=500),
-                initial_prompt=INITIAL_PROMPT
+                initial_prompt=INITIAL_PROMPT,
+                condition_on_previous_text=False,
+                no_speech_threshold=0.6,
+                temperature=0,
             )
             return [{"start": s.start, "end": s.end, "text": s.text.strip()} for s in segments]
 

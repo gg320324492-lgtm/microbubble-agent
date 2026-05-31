@@ -334,6 +334,10 @@ async def meeting_live_ws(
     start_time = time.time()
     transcript_entries = []
     audio_buffer = b""
+    last_text = ""
+
+    # 噪音过滤黑名单
+    NOISE_PATTERNS = ["字幕", "志愿者", "谢谢观看", "观看谢谢", "中文字幕", "翻译", "字幕组"]
 
     try:
         while True:
@@ -379,6 +383,13 @@ async def meeting_live_ws(
                     result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
                     text = result.get("text", "").strip()
                     audio_buffer = b""
+
+                    # 噪音过滤
+                    if len(text) < 2: continue
+                    if text == last_text: continue
+                    if any(p in text for p in NOISE_PATTERNS): continue
+                    last_text = text
+
                     if text:
                         elapsed = time.time() - start_time
                         entry = {
