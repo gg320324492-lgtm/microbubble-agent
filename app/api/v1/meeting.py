@@ -291,7 +291,7 @@ async def update_meeting(
     return meeting
 
 
-@router.delete("/meetings/{meeting_id}", status_code=204)
+@router.delete("/meetings/{meeting_id}")
 async def delete_meeting(
     meeting_id: int,
     current_user: Member = Depends(get_current_user),
@@ -310,6 +310,7 @@ async def delete_meeting(
     await db.execute(sa_update(Task).where(Task.meeting_id == meeting_id).values(meeting_id=None))
     await db.delete(meeting)
     await db.commit()
+    return {"message": "会议已删除"}
 
 
 @router.post("/meetings/{meeting_id}/speaker-map")

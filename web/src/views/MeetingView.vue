@@ -28,14 +28,17 @@
           </el-input>
         </el-col>
         <el-col :xs="24" :sm="12" :md="8">
-          <el-button type="primary" @click="showCreateDialog = true">
-            <el-icon><Plus /></el-icon>
-            创建会议
-          </el-button>
-          <el-button type="success" @click="pasteAnalyzeDialogRef?.open()">
-            <el-icon><Document /></el-icon>
-            粘贴转录分析
-          </el-button>
+          <div class="top-actions">
+            <el-button type="primary" @click="showCreateDialog = true">
+              <el-icon><Plus /></el-icon> 手动创建
+            </el-button>
+            <el-button type="success" @click="pasteAnalyzeDialogRef?.open()">
+              <el-icon><Document /></el-icon> 粘贴转录分析
+            </el-button>
+            <el-button type="warning" @click="startVoiceCreate">
+              <el-icon><Microphone /></el-icon> 声纹创建会议
+            </el-button>
+          </div>
         </el-col>
       </el-row>
     </el-card>
@@ -76,33 +79,12 @@
           </div>
 
           <div class="meeting-actions">
-            <el-tooltip content="声纹通话" placement="top">
-              <el-button class="action-btn action-phone" circle @click.stop="startLiveCall(meeting)">
-                <el-icon size="18"><Phone /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip v-if="meeting.summary" content="查看纪要" placement="top">
-              <el-button class="action-btn action-view" circle @click.stop="viewMinutes(meeting)">
-                <el-icon size="18"><Document /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip v-if="meeting.transcript && !meeting.summary" content="生成纪要" placement="top">
-              <el-button class="action-btn action-generate" circle @click.stop="generateMinutes(meeting)">
-                <el-icon size="18"><MagicStick /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="编辑会议" placement="top">
-              <el-button class="action-btn action-edit" circle @click.stop="editMeeting(meeting)">
-                <el-icon size="18"><Edit /></el-icon>
-              </el-button>
-            </el-tooltip>
+            <el-button type="primary" size="small" @click.stop="viewMeeting(meeting)">
+              查看详情
+            </el-button>
             <el-popconfirm title="确定删除此会议？" @confirm="deleteMeeting(meeting.id)">
               <template #reference>
-                <el-tooltip content="删除会议" placement="top">
-                  <el-button class="action-btn action-delete" circle @click.stop>
-                    <el-icon size="18"><Delete /></el-icon>
-                  </el-button>
-                </el-tooltip>
+                <el-button type="danger" size="small" @click.stop>删除</el-button>
               </template>
             </el-popconfirm>
           </div>
@@ -288,7 +270,7 @@ import { useMemberStore } from '@/stores/member'
 import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
-import { Phone, Edit, Delete, Document, MagicStick, Plus } from '@element-plus/icons-vue'
+import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
@@ -360,6 +342,21 @@ const submitMeeting = async () => {
     fetchMeetings()
   } catch (e) {
     ElMessage.error(editingMeetingId.value ? '更新失败' : '创建失败')
+  }
+}
+
+// 声纹创建会议 (从顶栏点击，先快速创建占位会议再开始通话)
+const startVoiceCreate = async () => {
+  try {
+    const res = await axios.post('/api/v1/meetings', {
+      title: '声纹会议 ' + dayjs().format('MM-DD HH:mm'),
+      start_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    })
+    liveCallMeeting.value = res.data
+    showLiveCallDialog.value = true
+    fetchMeetings()
+  } catch (e) {
+    ElMessage.error('创建会议失败')
   }
 }
 
@@ -472,6 +469,8 @@ onMounted(() => {
 .filter-card :deep(.el-card__body) {
   padding: var(--space-4) var(--space-5);
 }
+
+.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .meeting-list-card {
   flex: 1;
