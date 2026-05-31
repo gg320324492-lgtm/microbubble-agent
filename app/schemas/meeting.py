@@ -17,6 +17,7 @@ class MeetingCreate(MeetingBase):
     meeting_url: Optional[str] = None
     meeting_id: Optional[str] = None
     participants: Optional[List[int]] = None
+    presenter_ids: Optional[List[int]] = None
 
 
 class MeetingUpdate(BaseModel):
@@ -30,6 +31,7 @@ class MeetingUpdate(BaseModel):
     summary: Optional[str] = None
     key_points: Optional[List[str]] = None
     decisions: Optional[List[str]] = None
+    presenter_ids: Optional[List[int]] = None
 
 
 class MeetingResponse(MeetingBase):
@@ -43,6 +45,7 @@ class MeetingResponse(MeetingBase):
     decisions: Optional[List[str]] = None
     speaker_mapping: Optional[Any] = None
     speaker_stats: Optional[Any] = None
+    presenter_ids: Optional[Any] = None
     status: str
     created_by: Optional[int] = None
     created_at: datetime

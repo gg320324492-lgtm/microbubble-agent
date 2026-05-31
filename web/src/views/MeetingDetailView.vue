@@ -1,0 +1,306 @@
+<template>
+  <div class="meeting-detail" v-if="meeting">
+    <!-- 顶部导航 -->
+    <div class="detail-topbar">
+      <el-button text @click="$router.push('/meetings')">
+        <el-icon><ArrowLeft /></el-icon> 返回列表
+      </el-button>
+      <div class="topbar-actions">
+        <el-button type="primary" @click="startLiveCall">
+          <el-icon><Phone /></el-icon> 声纹通话
+        </el-button>
+        <el-popconfirm title="确定删除此会议？" @confirm="handleDelete">
+          <template #reference>
+            <el-button type="danger">删除会议</el-button>
+          </template>
+        </el-popconfirm>
+      </div>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="detail-body">
+      <!-- 左侧：基本信息 -->
+      <div class="detail-main">
+        <el-card class="section-card">
+          <template #header><span>基本信息</span></template>
+
+          <el-form :model="form" label-width="90px">
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="标题" required><el-input v-model="form.title" /></el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="状态">
+                  <el-tag :type="statusType(meeting.status)" size="default">{{ statusLabel(meeting.status) }}</el-tag>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16">
+              <el-col :span="12">
+                <el-form-item label="时间" required>
+                  <el-date-picker v-model="form.start_time" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="地点"><el-input v-model="form.location" placeholder="会议室/线上" /></el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="参会人员">
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <el-select v-model="form.participants" multiple filterable placeholder="选择参会人员" style="flex:1;min-width:200px">
+                  <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
+                </el-select>
+                <el-button size="small" @click="form.participants = memberStore.members.map(m=>m.id)">全选成员</el-button>
+                <el-button size="small" @click="form.participants = []">清空</el-button>
+              </div>
+            </el-form-item>
+            <el-form-item label="汇报人员">
+              <el-select v-model="form.presenter_ids" multiple filterable placeholder="选择汇报人员" style="width:100%">
+                <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="说明">
+              <el-input v-model="form.description" type="textarea" :rows="2" placeholder="会议说明..." />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="saveBasic" :loading="saving">保存</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+
+        <!-- 会议纪要 -->
+        <el-card v-if="meeting.summary || meeting.key_points?.length || meeting.decisions?.length || editingMinutes" class="section-card">
+          <template #header>
+            <div class="card-header">
+              <span><el-icon><Document /></el-icon> 会议纪要</span>
+              <el-button v-if="!editingMinutes" size="small" :icon="Edit" @click="editingMinutes = true">编辑纪要</el-button>
+              <el-button v-else size="small" type="primary" @click="saveMinutes">保存纪要</el-button>
+            </div>
+          </template>
+
+          <template v-if="editingMinutes">
+            <div class="minutes-section">
+              <h4>摘要</h4>
+              <el-input v-model="minutesForm.summary" type="textarea" :rows="4" placeholder="会议摘要..." class="minutes-textarea" />
+            </div>
+            <div class="minutes-section">
+              <h4>讨论要点</h4>
+              <div class="item-list">
+                <div v-for="(p, i) in minutesForm.key_points" :key="'kp'+i" class="item-row">
+                  <span class="item-dot" />
+                  <el-input v-model="minutesForm.key_points[i]" placeholder="输入要点..." />
+                  <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.key_points.splice(i,1)" />
+                </div>
+                <el-button dashed size="small" class="item-add" @click="minutesForm.key_points.push('')">
+                  <el-icon><Plus /></el-icon> 添加要点
+                </el-button>
+              </div>
+            </div>
+            <div class="minutes-section">
+              <h4>决议事项</h4>
+              <div class="item-list">
+                <div v-for="(d, i) in minutesForm.decisions" :key="'dc'+i" class="item-row decision">
+                  <span class="item-dot decision-dot" />
+                  <el-input v-model="minutesForm.decisions[i]" placeholder="输入决议..." />
+                  <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.decisions.splice(i,1)" />
+                </div>
+                <el-button dashed size="small" class="item-add decision-add" @click="minutesForm.decisions.push('')">
+                  <el-icon><Plus /></el-icon> 添加决议
+                </el-button>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <div v-if="meeting.summary" class="minutes-section">
+              <h4>摘要</h4>
+              <p>{{ meeting.summary }}</p>
+            </div>
+            <div v-if="meeting.key_points?.length" class="minutes-section">
+              <h4>讨论要点</h4>
+              <ul><li v-for="(p,i) in meeting.key_points" :key="i">{{ p }}</li></ul>
+            </div>
+            <div v-if="meeting.decisions?.length" class="minutes-section">
+              <h4>决议事项</h4>
+              <ul><li v-for="(d,i) in meeting.decisions" :key="i">{{ d }}</li></ul>
+            </div>
+            <el-empty v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length" description="暂无会议纪要" />
+          </template>
+        </el-card>
+      </div>
+
+      <!-- 右侧：声纹通话 + 发言者统计 -->
+      <div class="detail-side">
+        <el-card class="section-card">
+          <template #header><span>声纹通话</span></template>
+          <MeetingRoom v-if="showCallRoom" :meeting-id="meeting.id" :meeting-title="meeting.title" @meeting-ended="onCallEnd" style="height: 400px" />
+          <div v-else class="call-placeholder" @click="startLiveCall">
+            <el-icon size="40" color="#FF7A5C"><Phone /></el-icon>
+            <p>点击开始声纹通话</p>
+          </div>
+        </el-card>
+
+        <el-card v-if="meeting.speaker_stats?.length" class="section-card">
+          <template #header><span>发言者统计</span></template>
+          <el-table :data="meeting.speaker_stats" size="small" stripe>
+            <el-table-column prop="name" label="发言人" width="80" />
+            <el-table-column prop="turn_count" label="发言次数" width="65" align="center" />
+            <el-table-column prop="word_count" label="字数" width="60" align="center" />
+            <el-table-column label="占比" width="80">
+              <template #default="{row}">{{ Math.round((row.speaking_ratio||0)*100) }}%</template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </div>
+    </div>
+  </div>
+
+  <div v-else class="loading-state"><el-icon class="is-loading" size="24"><Loading /></el-icon> 加载中...</div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { ArrowLeft, Phone, Edit, Delete, Document, Plus, Loading } from '@element-plus/icons-vue'
+import axios from 'axios'
+import dayjs from 'dayjs'
+import { useMemberStore } from '@/stores/member'
+import MeetingRoom from '@/components/MeetingRoom.vue'
+
+const route = useRoute()
+const router = useRouter()
+const memberStore = useMemberStore()
+
+const meeting = ref(null)
+const editingMinutes = ref(false)
+const showCallRoom = ref(false)
+const saving = ref(false)
+
+const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
+const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
+
+const participantNames = computed(() => {
+  if (!meeting.value?.participants) return ''
+  return meeting.value.participants.map(p => {
+    const m = memberStore.members.find(x => x.id === p.member_id)
+    return m?.name || p.member_id
+  }).join('、')
+})
+
+const fetchMeeting = async () => {
+  try {
+    const res = await axios.get(`/api/v1/meetings/${route.params.id}`)
+    meeting.value = res.data
+    // 初始化表单
+    form.value = {
+      title: res.data.title, start_time: res.data.start_time,
+      location: res.data.location || '',
+      participants: res.data.participants?.map(p => p.member_id) || [],
+      presenter_ids: res.data.presenter_ids || [],
+      description: res.data.description || '',
+    }
+  } catch { ElMessage.error('加载会议失败') }
+}
+
+const saveBasic = async () => {
+  saving.value = true
+  try {
+    const payload = {
+      title: form.value.title, start_time: form.value.start_time,
+      location: form.value.location, description: form.value.description,
+      participants: form.value.participants,
+    }
+    await axios.put(`/api/v1/meetings/${meeting.value.id}`, payload)
+    ElMessage.success('已保存'); fetchMeeting()
+  } catch { ElMessage.error('保存失败') }
+  finally { saving.value = false }
+}
+
+const saveMinutes = async () => {
+  try {
+    await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
+      summary: minutesForm.summary,
+      key_points: minutesForm.key_points.filter(Boolean),
+      decisions: minutesForm.decisions.filter(Boolean),
+    })
+    ElMessage.success('纪要已保存'); editingMinutes.value = false; fetchMeeting()
+  } catch { ElMessage.error('保存失败') }
+}
+
+const startLiveCall = () => {
+  showCallRoom.value = true
+  // 初始化纪要编辑表单
+  minutesForm.value = {
+    summary: meeting.value.summary || '',
+    key_points: meeting.value.key_points ? [...meeting.value.key_points] : [],
+    decisions: meeting.value.decisions ? [...meeting.value.decisions] : [],
+  }
+}
+
+const onCallEnd = () => { showCallRoom.value = false; fetchMeeting() }
+
+const handleDelete = async () => {
+  try {
+    await axios.delete(`/api/v1/meetings/${meeting.value.id}`)
+    ElMessage.success('已删除'); router.push('/meetings')
+  } catch { ElMessage.error('删除失败') }
+}
+
+const formatDate = (d) => dayjs(d).format('YYYY-MM-DD HH:mm')
+const statusLabel = (s) => ({ scheduled: '已预约', recording: '录制中', completed: '已完成' }[s] || s)
+const statusType = (s) => ({ scheduled: 'info', recording: 'warning', completed: 'success' }[s] || '')
+
+onMounted(async () => {
+  await memberStore.fetchMembers()
+  await fetchMeeting()
+})
+</script>
+
+<style scoped>
+.meeting-detail { display: flex; flex-direction: column; height: calc(100vh - 120px); padding: 16px 20px; gap: 16px; overflow: hidden; }
+.detail-topbar { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.detail-body { flex: 1; display: flex; gap: 16px; overflow: hidden; }
+.detail-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.detail-side { width: 400px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+
+.section-card { border-radius: var(--radius-lg); }
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.info-item { display: flex; flex-direction: column; gap: 4px; }
+.info-item.full { grid-column: span 2; }
+.info-item label { font-size: 12px; color: var(--color-text-secondary); }
+.info-item span { font-size: 14px; color: var(--color-text-primary); }
+
+.minutes-section { margin-bottom: 16px; }
+.minutes-section h4 { margin: 0 0 8px; font-size: 14px; color: var(--color-text-primary); }
+.minutes-section p { margin: 0; line-height: 1.6; font-size: 14px; }
+.minutes-section ul { padding-left: 18px; margin: 0; }
+.minutes-section li { margin-bottom: 6px; font-size: 14px; line-height: 1.5; }
+
+.call-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; cursor: pointer; border: 2px dashed var(--color-border); border-radius: var(--radius-lg); transition: all 0.2s; }
+.call-placeholder:hover { border-color: var(--color-primary); background: var(--color-primary-bg); }
+.loading-state { display: flex; align-items: center; justify-content: center; height: 200px; gap: 8px; color: var(--color-text-secondary); }
+
+/* 共用编辑列表样式 */
+.minutes-textarea :deep(.el-textarea__inner) { border-radius: var(--radius-md); border-color: var(--color-border); }
+.item-list { display: flex; flex-direction: column; gap: 8px; }
+.item-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--color-bg-page); border-radius: var(--radius-md); border: 1px solid transparent; transition: all 0.2s; }
+.item-row:hover, .item-row:focus-within { border-color: var(--color-primary-border); background: var(--color-primary-bg); }
+.item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary); }
+.decision-dot { background: var(--color-warning); }
+.item-row .el-input { flex: 1; }
+.item-del { opacity: 0; transition: opacity 0.2s; }
+.item-row:hover .item-del { opacity: 1; }
+.item-add { width: 100%; justify-content: center; border-style: dashed; }
+.decision-add { color: var(--color-warning); border-color: var(--color-warning); }
+
+@media (max-width: 768px) {
+  .meeting-detail { height: auto; }
+  .detail-body { flex-direction: column; }
+  .detail-side { width: 100%; }
+  .info-grid { grid-template-columns: 1fr; }
+  .info-item.full { grid-column: span 1; }
+}
+</style>
