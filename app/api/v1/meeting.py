@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
+from app.models.task import Task
 from app.schemas.meeting import (
     MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes,
     SpeakerDetectRequest, SpeakerDetectResponse,
@@ -289,6 +290,10 @@ async def delete_meeting(
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
 
+    # 先清除关联数据（避免外键约束阻止删除）
+    from sqlalchemy import delete as sa_delete, update as sa_update
+    await db.execute(sa_delete(MeetingParticipant).where(MeetingParticipant.meeting_id == meeting_id))
+    await db.execute(sa_update(Task).where(Task.meeting_id == meeting_id).values(meeting_id=None))
     await db.delete(meeting)
     await db.commit()
 
