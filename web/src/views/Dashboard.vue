@@ -178,6 +178,7 @@
                     {{ getPriorityLabel(task.priority) }}
                   </el-tag>
                   <el-tag v-if="task.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
+                  <el-tag v-if="task.source === 'meeting'" size="small" type="primary" effect="dark">会议</el-tag>
                 </div>
               </div>
               <div class="task-due" :class="{ overdue: isOverdue(task.due_date) }">
