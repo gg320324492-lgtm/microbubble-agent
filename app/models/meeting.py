@@ -61,3 +61,7 @@ class MeetingParticipant(Base):
 
     meeting = relationship("Meeting", back_populates="participants")
     member = relationship("Member")
+
+    @property
+    def name(self):
+        return self.member.name if self.member else ""

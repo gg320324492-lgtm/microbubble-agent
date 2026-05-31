@@ -47,10 +47,20 @@ class MeetingResponse(MeetingBase):
     speaker_mapping: Optional[Any] = None
     speaker_stats: Optional[Any] = None
     presenter_ids: Optional[Any] = None
-    participants: Optional[Any] = None
+    participants: Optional[List[ParticipantInfo]] = None
     status: str
     created_by: Optional[int] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ParticipantInfo(BaseModel):
+    """参与者简要信息"""
+    member_id: int
+    name: str = ""
+    role: str = "participant"
 
     class Config:
         from_attributes = True

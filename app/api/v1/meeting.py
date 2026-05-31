@@ -151,7 +151,9 @@ async def get_meeting(
     """获取会议详情"""
     from sqlalchemy.orm import selectinload
     result = await db.execute(
-        select(Meeting).options(selectinload(Meeting.participants)).where(Meeting.id == meeting_id)
+        select(Meeting)
+        .options(selectinload(Meeting.participants).selectinload(MeetingParticipant.member))
+        .where(Meeting.id == meeting_id)
     )
     meeting = result.scalar_one_or_none()
 
