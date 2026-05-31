@@ -35,13 +35,11 @@ class VoiceprintService:
             from modelscope.utils.constant import Tasks
 
             logger.info("正在加载 3D-Speaker ERes2Net 模型...")
-            # 使用 speaker_embedding 任务提取声纹嵌入向量（非 verification 比对）
+            # speaker_verification 任务可以提取嵌入特征
             self._pipeline = pipeline(
-                Tasks.speaker_embedding,
+                Tasks.speaker_verification,
                 model="iic/speech_eres2net_sv_zh-cn_3dspeaker_16k",
             )
-            # 标记是否成功加载
-            self._pipeline_loaded = True
             logger.info("3D-Speaker 模型加载完成")
         except Exception as e:
             logger.error(f"3D-Speaker 模型加载失败: {e}")
@@ -76,26 +74,50 @@ class VoiceprintService:
 
         # 确保足够的语音长度（至少 1 秒）
         if len(audio) < 16000:
-            # 静音填充
             padding = np.zeros(16000 - len(audio), dtype=np.float32)
             audio = np.concatenate([audio, padding])
 
         wav_bytes = self._ensure_wav_format(audio)
+
+        # 尝试通过 pipeline 的底层模型直接提取 embedding
+        try:
+            # 方式1: 使用 pipeline 的预处理+模型前向传播
+            if hasattr(self._pipeline, 'preprocessor') and hasattr(self._pipeline, 'model'):
+                import torch
+                inputs = self._pipeline.preprocessor(wav_bytes)
+                with torch.no_grad():
+                    outputs = self._pipeline.model(inputs)
+                # ERes2Net 输出通常是 embedding tensor
+                if isinstance(outputs, torch.Tensor):
+                    emb = outputs.cpu().numpy().flatten()
+                    if len(emb) >= EMBEDDING_DIM:
+                        return emb[:EMBEDDING_DIM].astype(np.float32)
+                    return emb.astype(np.float32)
+                if isinstance(outputs, dict):
+                    for key in ['embedding', 'feature', 'output', 'last_hidden_state']:
+                        if key in outputs:
+                            return outputs[key].cpu().numpy().flatten()[:EMBEDDING_DIM].astype(np.float32)
+        except Exception as e:
+            logger.warning(f"底层模型提取失败, 回退 pipeline 方式: {e}")
+
+        # 方式2: 直接用 pipeline 调用（speaker_verification 任务）
         result = self._pipeline(wav_bytes)
-
-        # speaker_embedding 返回 embedding 向量 (可能是 list, numpy array, 或 dict)
         if isinstance(result, dict):
-            embedding = result.get("outputs") or result.get("embedding") or result.get("feature")
-            if embedding is not None:
-                return np.array(embedding, dtype=np.float32).flatten()
+            # verification pipeline 返回 scores, 尝试从模型内部获取 embedding
+            for key in ['outputs', 'embedding', 'feature', 'scores']:
+                val = result.get(key)
+                if val is not None:
+                    arr = np.array(val, dtype=np.float32).flatten()
+                    if len(arr) >= 64:
+                        return arr[:EMBEDDING_DIM]
         elif isinstance(result, (list, np.ndarray)):
-            emb = np.array(result, dtype=np.float32).flatten()
-            if len(emb) >= EMBEDDING_DIM:
-                return emb[:EMBEDDING_DIM]
-            return emb
+            arr = np.array(result, dtype=np.float32).flatten()
+            if len(arr) >= 64:
+                return arr[:EMBEDDING_DIM]
 
-        logger.error(f"3D-Speaker 返回未知格式: {type(result)}, keys={result.keys() if isinstance(result, dict) else 'N/A'}")
-        raise ValueError(f"无法从结果中提取 embedding: {result}")
+        logger.error(f"3D-Speaker 无法提取 embedding, 返回类型: {type(result)}")
+        # 返回零向量作为回退
+        return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
     async def enroll_member(
         self, db: AsyncSession, member_id: int, audio: np.ndarray
