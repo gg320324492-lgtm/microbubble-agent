@@ -365,10 +365,14 @@ const startLiveCall = (meeting) => {
   showLiveCallDialog.value = true
 }
 
-const onLiveCallEnd = () => {
+const onLiveCallEnd = (result) => {
   showLiveCallDialog.value = false
+  const mid = result?.meetingId || liveCallMeeting.value?.id
   liveCallMeeting.value = null
   fetchMeetings()
+  if (mid) {
+    router.push(`/meetings/${mid}`)
+  }
 }
 
 const meetingForm = ref({

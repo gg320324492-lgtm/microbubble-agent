@@ -386,7 +386,8 @@ async def meeting_live_ws(
                 await websocket.send_json(result)
 
     except WebSocketDisconnect:
-        # 保存转录到会议记录
+        # 保存转录到会议记录，自动分析
+        analysis_result = None
         try:
             async with async_session() as db:
                 result = await db.execute(
@@ -405,7 +406,17 @@ async def meeting_live_ws(
 
                     if transcript_entries:
                         meeting_service = MeetingService(db)
-                        await meeting_service.process_meeting_transcript(meeting_id)
+                        analysis_result = await meeting_service.process_meeting_transcript(meeting_id)
+                        # 自动生成标题
+                        try:
+                            from app.services.meeting_analysis_service import meeting_analysis
+                            transcript_text = meeting_service._transcript_to_text(meeting.transcript)
+                            new_title = await meeting_analysis.generate_title(transcript_text)
+                            if new_title and new_title != "未命名会议":
+                                meeting.title = new_title
+                                await db.commit()
+                        except Exception:
+                            pass
         except Exception as e:
             logger.error(f"保存会议转录失败: {e}")
 
@@ -415,6 +426,7 @@ async def meeting_live_ws(
                 "type": "meeting_ended",
                 "meeting_id": meeting_id,
                 "entries": len(transcript_entries),
+                "analysis": analysis_result,
             })
         except Exception:
             pass
