@@ -50,6 +50,10 @@
         style="margin-bottom: 16px"
       />
 
+      <div class="mapping-toolbar">
+        <el-button size="small" @click="addManualSpeaker">+ 手动添加发言人</el-button>
+      </div>
+
       <SpeakerMappingPanel
         ref="mappingPanelRef"
         :speakers="detectionResult?.detected_speakers || []"
@@ -60,7 +64,7 @@
 
       <div class="mapping-actions">
         <el-checkbox v-model="skipMapping">
-          跳过映射（使用原始发言者标识）
+          跳过映射（AI 自动分析所有发言内容）
         </el-checkbox>
       </div>
     </div>
@@ -293,6 +297,20 @@ const onMappingUpdate = (mapping) => {
   speakerMapping.value = mapping
 }
 
+// 手动添加发言人
+const addManualSpeaker = () => {
+  if (!detectionResult.value) {
+    detectionResult.value = { detected_speakers: [], total_turns: 0, confidence: 'manual', format_type: 'manual' }
+  }
+  const label = `发言人${(detectionResult.value.detected_speakers?.length || 0) + 1}`
+  detectionResult.value.detected_speakers.push({
+    original_label: label,
+    suggested_name: '',
+    turn_count: 0,
+    sample_lines: [],
+  })
+}
+
 defineExpose({ open })
 </script>
 
@@ -301,6 +319,11 @@ defineExpose({ open })
 .stage-mapping,
 .stage-result {
   min-height: 300px;
+}
+.mapping-toolbar {
+  margin-bottom: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
 }
 .mapping-actions {
   margin-top: var(--space-4);
