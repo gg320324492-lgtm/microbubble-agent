@@ -359,9 +359,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Check, Edit, Delete, RefreshRight, DeleteFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
+
+const route = useRoute()
 import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
 import { getStatusType, getPriorityType, getStatusLabel, getPriorityLabel } from '@/utils/task'
@@ -465,6 +468,10 @@ const fetchTasks = async () => {
       page_size: pageSize.value,
       include_deleted: false,
       ...activeFilters
+    }
+    // 支持从 URL query 参数传入 overdue 过滤
+    if (route.query.overdue === 'true') {
+      params.overdue = true
     }
     const res = await axios.get('/api/v1/tasks', { params })
     tasks.value = res.data.items || []
