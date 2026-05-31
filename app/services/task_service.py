@@ -241,3 +241,34 @@ class TaskService:
             })
 
         return member_stats
+
+    @staticmethod
+    async def auto_purge_trash(db: AsyncSession, retention_days: int = 3) -> int:
+        """自动永久删除垃圾桶中超过 retention_days 天的任务
+
+        Returns: 删除的任务数
+        """
+        cutoff = utcnow() - timedelta(days=retention_days)
+        result = await db.execute(
+            select(Task).where(Task.deleted_at < cutoff)
+        )
+        expired = result.scalars().all()
+        for task in expired:
+            await db.delete(task)
+        await db.commit()
+        return len(expired)
+
+
+async def auto_purge_trash_task():
+    """Celery 定时任务：自动清理过期垃圾桶任务"""
+    import logging
+    from app.core.database import async_session
+
+    logger = logging.getLogger("microbubble.trash")
+    try:
+        async with async_session() as db:
+            count = await TaskService.auto_purge_trash(db, retention_days=3)
+            if count > 0:
+                logger.info(f"自动清理垃圾桶: 永久删除 {count} 个过期任务")
+    except Exception as e:
+        logger.error(f"自动清理垃圾桶失败: {e}")

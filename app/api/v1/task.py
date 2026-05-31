@@ -221,8 +221,10 @@ async def list_tasks(
     query = select(Task)
     filters = []
 
-    # 默认排除已删除任务
-    if not include_deleted:
+    # 垃圾桶/活跃 过滤
+    if include_deleted:
+        filters.append(Task.deleted_at.isnot(None))
+    else:
         filters.append(Task.deleted_at.is_(None))
 
     if assignee_id:
@@ -548,7 +550,8 @@ async def get_pending_reminder_count(
         .where(
             and_(
                 Task.assignee_id == current_user.id,
-                Reminder.status == "pending"
+                Reminder.status == "pending",
+                Task.deleted_at.is_(None)
             )
         )
     )
@@ -572,7 +575,8 @@ async def mark_reminders_read(
                 .where(
                     and_(
                         Task.assignee_id == current_user.id,
-                        Reminder.status == "pending"
+                        Reminder.status == "pending",
+                        Task.deleted_at.is_(None)
                     )
                 )
             )
@@ -595,7 +599,8 @@ async def get_pending_reminders(
         .where(
             and_(
                 Task.assignee_id == current_user.id,
-                Reminder.status == "pending"
+                Reminder.status == "pending",
+                Task.deleted_at.is_(None)
             )
         )
         .distinct(Reminder.task_id)

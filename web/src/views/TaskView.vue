@@ -228,7 +228,7 @@
 
             <el-table-column label="自动删除" width="120">
               <template #default="{ row }">
-                <span :class="{ 'auto-delete-soon': getAutoDeleteDays(row.deleted_at) <= 1 }">
+                <span :class="{ 'auto-delete-soon': getAutoDeleteUrgency(row.deleted_at) }">
                   {{ getAutoDeleteText(row.deleted_at) }}
                 </span>
               </template>
@@ -616,20 +616,26 @@ const isOverdue = (task) => {
 }
 
 // 计算自动删除倒计时
-const getAutoDeleteDays = (deletedAt) => {
-  if (!deletedAt) return 3
-  const deleteDate = dayjs(deletedAt).add(3, 'day')
-  const daysLeft = deleteDate.diff(dayjs(), 'day')
-  // 确保最多显示3天
-  return Math.max(0, Math.min(3, daysLeft))
+const getAutoDeleteText = (deletedAt) => {
+  if (!deletedAt) return '3天后'
+  const deleteTime = dayjs(deletedAt)
+  const expireTime = deleteTime.add(3, 'day')
+  const now = dayjs()
+  const totalHours = expireTime.diff(now, 'hour')
+  const totalMinutes = expireTime.diff(now, 'minute')
+
+  if (totalMinutes <= 0) return '即将自动删除'
+  if (totalHours < 1) return `${Math.max(1, totalMinutes)} 分钟后自动删除`
+  if (totalHours < 24) return `${totalHours} 小时后自动删除`
+  if (totalHours < 48) return '明天自动删除'
+  if (totalHours < 72) return '后天自动删除'
+  return `${Math.ceil(totalHours / 24)} 天后`
 }
 
-const getAutoDeleteText = (deletedAt) => {
-  const daysLeft = getAutoDeleteDays(deletedAt)
-  if (daysLeft <= 0) return '即将删除'
-  if (daysLeft === 1) return '明天自动删除'
-  if (daysLeft === 2) return '后天自动删除'
-  return `还有 ${daysLeft} 天`
+const getAutoDeleteUrgency = (deletedAt) => {
+  if (!deletedAt) return false
+  const expireTime = dayjs(deletedAt).add(3, 'day')
+  return expireTime.diff(dayjs(), 'hour') <= 12
 }
 
 // 监听 Tab 切换
