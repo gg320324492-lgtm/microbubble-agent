@@ -57,7 +57,7 @@ async def create_meeting(
     return meeting
 
 
-@router.get("/meetings", response_model=MeetingList)
+@router.get("/meetings")
 async def list_meetings(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -84,7 +84,7 @@ async def list_meetings(
     result = await db.execute(query)
     meetings = result.scalars().all()
 
-    return MeetingList(items=meetings, total=len(meetings))
+    return {"items": meetings, "total": len(meetings)}
 
 
 # === 粘贴转录 + AI 分析（固定路径必须在参数化路由之前） ===
