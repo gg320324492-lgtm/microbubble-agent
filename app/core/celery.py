@@ -46,6 +46,10 @@ celery_app.conf.update(
             "task": "app.services.knowledge_evolution_tasks.fuse_entities_task",
             "schedule": 24 * 3600.0,  # 每日实体融合
         },
+        "auto-purge-trash": {
+            "task": "app.services.task_service.auto_purge_trash_task",
+            "schedule": 6 * 3600.0,  # 每6小时清理过期垃圾桶
+        },
     },
 )
 
