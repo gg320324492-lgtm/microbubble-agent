@@ -1,6 +1,6 @@
 <template>
   <div class="meeting-room">
-    <!-- 顶部状态栏 -->
+    <!-- TopBar（保留） -->
     <div class="top-bar">
       <div class="title">{{ meetingTitle }}</div>
       <div class="status">
@@ -11,21 +11,42 @@
       <div class="duration">{{ formattedDuration }}</div>
     </div>
 
-    <!-- 发言者条 -->
-    <SpeakerStrip
-      :speakers="participants"
-      :active-speaker-id="activeSpeaker"
-      :audio-levels="audioLevels"
-    />
+    <!-- NetworkStatusBar（Wave 3b 新增） -->
+    <NetworkStatusBar />
 
-    <!-- 转录面板 -->
-    <TranscriptPanel
-      :entries="entries"
-      :font-size="fontSize"
-      @user-scroll="onUserScroll"
-    />
+    <!-- 左侧面板：议程 + 统计 -->
+    <div class="left-panel">
+      <AgendaPanel
+        :meeting-id="meetingId"
+        :agenda="agendaItems"
+        @update="onAgendaUpdate"
+      />
+      <SpeakerStatsLive :meeting-id="meetingId" />
+    </div>
 
-    <!-- AI 助手浮窗 -->
+    <!-- 右侧面板：大头像 + 转录 + 时间轴 -->
+    <div class="right-panel">
+      <LiveSpeakerPanel
+        :participants="participants"
+        :active-speaker-id="activeSpeaker"
+        :audio-levels="audioLevels"
+      />
+      <TranscriptPanel
+        :entries="entries"
+        :font-size="fontSize"
+        @user-scroll="onUserScroll"
+      />
+      <TimelineScrubber
+        :current-ts="currentTs"
+        :duration="meetingDuration"
+        @jump="onJumpTs"
+      />
+    </div>
+
+    <!-- 静音遮罩 -->
+    <MuteOverlay :visible="muted" />
+
+    <!-- AI 助手浮窗（保留） -->
     <AIFloatButton
       ref="aiFloatButtonRef"
       :on-send-a-i-command="sendAICommand"
@@ -70,7 +91,15 @@ import { useAudioCapture } from '@/composables/useAudioCapture'
 import { useMeetingRoomWS } from '@/composables/useMeetingRoomWS'
 import { useTranscript } from '@/composables/useTranscript'
 import { useAutoScroll } from '@/composables/useAutoScroll'
-import SpeakerStrip from './meeting-room/SpeakerStrip.vue'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+// Wave 3b: 6 个新组件
+import LiveSpeakerPanel from './meeting-room/LiveSpeakerPanel.vue'
+import AgendaPanel from './meeting-room/AgendaPanel.vue'
+import SpeakerStatsLive from './meeting-room/SpeakerStatsLive.vue'
+import TimelineScrubber from './meeting-room/TimelineScrubber.vue'
+import MuteOverlay from './meeting-room/MuteOverlay.vue'
+import NetworkStatusBar from './meeting-room/NetworkStatusBar.vue'
+// 保留旧组件
 import TranscriptPanel from './meeting-room/TranscriptPanel.vue'
 import AIFloatButton from './meeting-room/AIFloatButton.vue'
 import SpeakerUnidentifiedDialog from './meeting-room/SpeakerUnidentifiedDialog.vue'
@@ -98,12 +127,17 @@ const unidentified = ref({
 })
 const aiFloatButtonRef = ref(null)
 
+// Wave 3b: 议程 + 时间轴
+const agendaItems = ref([])
+const currentTs = ref(0)
+const meetingDuration = ref(0)
+
 let durationTimer = null
 
 // 转录状态机
 const { entries, addOriginal, applyPolished, markError, fontSize } = useTranscript()
 
-// WS
+// WS（Wave 3b: 暴露 setPendingCountCallback + pendingCount）
 const {
   connect: wsConnect,
   disconnect: wsDisconnect,
@@ -111,6 +145,8 @@ const {
   sendHangup,
   sendSpeakerClaim,
   sendAICommand,
+  setPendingCountCallback,
+  pendingCount,
   connected,
   reconnecting,
   onTranscript,
@@ -126,20 +162,43 @@ const {
   onTTSAudio,
 } = useMeetingRoomWS()
 
+// 网络状态（Wave 3b: wire pending count）
+const network = useNetworkStatus()
+watch(pendingCount, (n) => network.setPendingCount(n))
+
 // 音频采集
 const audioCapture = useAudioCapture()
 
 onMounted(async () => {
-  // 启动时长计时
+  // 启动时长计时（同时更新 currentTs / meetingDuration）
   durationTimer = setInterval(() => {
     const elapsed = Math.floor((Date.now() - startTime.value) / 1000)
+    currentTs.value = elapsed
+    meetingDuration.value = elapsed
     const m = String(Math.floor(elapsed / 60)).padStart(2, '0')
     const s = String(elapsed % 60).padStart(2, '0')
     formattedDuration.value = `${m}:${s}`
   }, 1000)
 
+  // 拉取会议详情（含 agenda）
+  try {
+    const resp = await fetch(`/api/v1/meetings/${props.meetingId}`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    if (resp.ok) {
+      const data = await resp.json()
+      agendaItems.value = data.agenda || []
+    }
+  } catch (e) {
+    console.warn('加载会议 agenda 失败', e)
+  }
+
   // 注册 WS 回调
   onTranscript.value = (msg) => {
+    // Wave 3b 修复：speaker_confidence > 0.45 时切换 activeSpeaker
+    if (msg.member_id && typeof msg.speaker_confidence === 'number' && msg.speaker_confidence > 0.45) {
+      activeSpeaker.value = msg.member_id
+    }
     addOriginal({
       segment_id: msg.segment_id,
       speaker: msg.speaker,
@@ -165,7 +224,6 @@ onMounted(async () => {
   // 通用消息处理（audio_level 等）
   onMessage.value = (msg) => {
     if (msg.type === 'audio_level') {
-      // 找到当前 active speaker，更新其 level
       const activeId = activeSpeaker.value
       if (activeId !== null) {
         audioLevels.value = { ...audioLevels.value, [activeId]: msg.level }
@@ -186,7 +244,6 @@ onMounted(async () => {
 
   // 用户在弹窗选了人
   onSpeakerClaimAck.value = (msg) => {
-    // 后端确认写入后，关闭弹窗（已经在 onSpeakerClaim 中提前关闭，这里做兜底）
     unidentified.value.visible = false
   }
 
@@ -210,7 +267,7 @@ onMounted(async () => {
     audio.play().catch(() => {})
   }
 
-  // 多设备同步（其他设备的转录和 AI 回复）
+  // 多设备同步
   onTranscriptOthers.value = (msg) => {
     addOriginal({
       segment_id: msg.data.segment_id,
@@ -229,7 +286,7 @@ onMounted(async () => {
     }
   }
 
-  // 历史拉取（WS 初始连接时）
+  // 历史拉取
   onTranscriptHistory.value = (msg) => {
     for (const entry of msg.entries || []) {
       addOriginal({
@@ -249,7 +306,6 @@ onMounted(async () => {
   try {
     await audioCapture.start((float32) => {
       if (muted.value) return
-      // Float32 → Int16 转换（useAudioCapture 输出 Float32，WS 期望 Int16 PCM）
       const int16 = new Int16Array(float32.length)
       for (let i = 0; i < float32.length; i++) {
         int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)))
@@ -261,10 +317,20 @@ onMounted(async () => {
   }
 })
 
-// 用户在弹窗选了人
 function onSpeakerClaim(memberId) {
   sendSpeakerClaim(unidentified.value.segmentId, memberId, unidentified.value.speakerLabel)
   unidentified.value.visible = false
+}
+
+// Wave 3b: 议程更新
+function onAgendaUpdate(updated) {
+  agendaItems.value = updated
+}
+
+// Wave 3b: 时间轴跳转（暂时只更新 currentTs；后续可扩展 seek transcript）
+function onJumpTs(ts) {
+  currentTs.value = ts
+  ElMessage.info(`跳转到 ${Math.floor(ts / 60)}:${String(ts % 60).padStart(2, '0')}`)
 }
 
 onUnmounted(() => {
@@ -300,6 +366,8 @@ function onUserScroll() {
   height: 100vh;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: white;
+  position: relative;
+  overflow: hidden;
 }
 .top-bar {
   display: flex;
@@ -307,6 +375,7 @@ function onUserScroll() {
   align-items: center;
   padding: 16px 24px;
   background: rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
 }
 .title {
   font-size: 18px;
@@ -319,11 +388,69 @@ function onUserScroll() {
   font-family: monospace;
   font-size: 16px;
 }
+
+.left-panel {
+  width: 100%;
+  max-height: 35vh;
+  overflow-y: auto;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
 .control-bar {
   display: flex;
   justify-content: center;
   gap: 24px;
   padding: 20px;
   background: rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
+}
+
+/* 桌面端：左右分栏 */
+@media (min-width: 900px) {
+  .meeting-room { display: grid; grid-template-columns: 320px 1fr; grid-template-rows: auto auto 1fr auto; }
+  .top-bar { grid-column: 1 / -1; }
+  .network-bar { grid-column: 1 / -1; }
+  .left-panel {
+    grid-column: 1;
+    grid-row: 3;
+    width: 320px;
+    max-height: none;
+    border-bottom: none;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    overflow-y: auto;
+  }
+  .right-panel {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .control-bar { grid-column: 1 / -1; grid-row: 4; }
+}
+
+/* 移动端横屏：左右分栏 */
+@media (max-width: 900px) and (orientation: landscape) {
+  .meeting-room { display: grid; grid-template-columns: 30% 70%; grid-template-rows: auto auto 1fr auto; }
+  .top-bar { grid-column: 1 / -1; }
+  .network-bar { grid-column: 1 / -1; }
+  .left-panel {
+    grid-column: 1;
+    grid-row: 3;
+    width: 100%;
+    max-height: none;
+    border-bottom: none;
+    border-right: 1px solid rgba(255,255,255,0.1);
+  }
+  .right-panel {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .control-bar { grid-column: 1 / -1; grid-row: 4; }
 }
 </style>
