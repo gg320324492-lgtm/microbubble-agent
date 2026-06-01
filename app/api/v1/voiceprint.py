@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.member import Member
 from app.services.voiceprint_service import voiceprint_service
+from app.utils.audio import decode_audio_to_float32
 
 router = APIRouter()
 
@@ -27,32 +28,17 @@ async def enroll_voiceprint(
         if len(audio_data) < 1000:
             raise HTTPException(status_code=400, detail="音频太短，请录制至少 3 秒语音")
 
-        # 转为 float32 numpy 数组
-        import numpy as np
-        import subprocess
-        import tempfile
-        import os
+        # 复用 app/utils/audio.py 统一转 16kHz mono float32
+        audio_array = await decode_audio_to_float32(audio_data, timeout=15.0)
 
-        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
-            tmp.write(audio_data)
-            tmp_path = tmp.name
+        # 静音检测
+        from app.utils.audio import is_audio_silent
+        if is_audio_silent(audio_array):
+            raise HTTPException(status_code=400, detail="音频为静音，请重新录制")
 
-        try:
-            output_path = tmp_path + ".wav"
-            subprocess.run([
-                "ffmpeg", "-y", "-i", tmp_path,
-                "-ar", "16000", "-ac", "1",
-                "-f", "s16le", "-v", "error",
-                output_path,
-            ], check=True, timeout=10)
-
-            with open(output_path, "rb") as f:
-                raw = f.read()
-            audio_array = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-        finally:
-            for p in [tmp_path, output_path]:
-                if os.path.exists(p):
-                    os.unlink(p)
+        # 太短（< 1s）拒绝
+        if len(audio_array) < 16000:
+            raise HTTPException(status_code=400, detail="音频太短，请录制至少 1 秒以上语音")
 
         success = await voiceprint_service.enroll_member(db, member_id, audio_array)
         if not success:

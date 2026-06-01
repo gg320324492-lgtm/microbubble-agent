@@ -229,7 +229,7 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.error(f"对话知识提取失败: {e}")
 
-    async def _generate_brief(self, messages: List[Dict], system: str, db=None, user_id=None) -> str:
+    async def _generate_brief(self, messages: List[Dict], system: str, db=None, user_id=None, channel_user_id: Optional[str] = None) -> str:
         """生成【简要】回复（带工具调用）"""
         response = await self.client.messages.create(
             model=self.model,
@@ -239,7 +239,7 @@ class MicroBubbleAgent:
             messages=messages
         )
         # 处理工具调用（递归）
-        processed = await self._process_response(response, "", db, messages, user_id=user_id)
+        processed = await self._process_response(response, "", db, messages, user_id=user_id, channel_user_id=channel_user_id)
         return processed.get("content", "")
 
     async def _generate_detail(self, messages: List[Dict], system: str) -> str:
@@ -264,7 +264,8 @@ class MicroBubbleAgent:
         db=None,
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        channel_user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """与Agent对话"""
         messages = await self._load_session(session_id)
@@ -320,7 +321,7 @@ class MicroBubbleAgent:
 
         # 并行发起两次调用（生成简要 + 生成详细）
         # 注意：_generate_brief 内部已处理工具调用，直接返回内容
-        brief_task = asyncio.create_task(self._generate_brief(messages, system, db, user_id))
+        brief_task = asyncio.create_task(self._generate_brief(messages, system, db, user_id, channel_user_id))
 
         # 先等简要完成，立即返回
         brief_result = await brief_task
@@ -332,7 +333,7 @@ class MicroBubbleAgent:
         })
 
         # 后台等待详细回复并追加
-        asyncio.create_task(self._append_detail(messages, session_id, db, user_id))
+        asyncio.create_task(self._append_detail(messages, session_id, db, user_id, channel_user_id))
 
         if len(messages) > settings.SESSION_WINDOW_SIZE:
             messages = messages[-settings.SESSION_WINDOW_SIZE:]
@@ -355,7 +356,7 @@ class MicroBubbleAgent:
             "tool_results": []
         }
 
-    async def _append_detail(self, messages: List[Dict], session_id: str, db, user_id: Optional[int]):
+    async def _append_detail(self, messages: List[Dict], session_id: str, db, user_id: Optional[int], channel_user_id: Optional[str] = None):
         """后台任务：追加【详细】回复到会话"""
         try:
             # 获取带时间的详细 prompt
@@ -386,7 +387,7 @@ class MicroBubbleAgent:
         except Exception as e:
             logger.error(f"生成【详细】回复失败: {e}")
 
-    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None, user_id: Optional[int] = None, _continues_left: int = 3) -> Dict[str, Any]:
+    async def _process_response(self, response, session_id: str, db=None, messages: List[Dict] = None, user_id: Optional[int] = None, channel_user_id: Optional[str] = None, _continues_left: int = 3) -> Dict[str, Any]:
         """处理Claude响应"""
         if messages is None:
             messages = await self._load_session(session_id)
@@ -407,7 +408,7 @@ class MicroBubbleAgent:
 
         if tool_calls:
             for call in tool_calls:
-                result = await self._execute_tool(call["name"], call["input"], db, user_id=user_id)
+                result = await self._execute_tool(call["name"], call["input"], db, user_id=user_id, channel_user_id=channel_user_id)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": call["id"],
@@ -433,7 +434,7 @@ class MicroBubbleAgent:
                 messages=messages
             )
 
-            result = await self._process_response(follow_up, session_id, db, messages, user_id=user_id, _continues_left=_continues_left)
+            result = await self._process_response(follow_up, session_id, db, messages, user_id=user_id, channel_user_id=channel_user_id, _continues_left=_continues_left)
             return {
                 "content": result["content"],
                 "content_blocks": result["content_blocks"],
@@ -471,8 +472,16 @@ class MicroBubbleAgent:
             "tool_results": tool_results
         }
 
-    async def _execute_tool(self, name: str, input_data: Dict, db=None, user_id: Optional[int] = None) -> Any:
-        """执行工具调用，路由到对应 service 层"""
+    async def _execute_tool(self, name: str, input_data: Dict, db=None, user_id: Optional[int] = None, channel_user_id: Optional[str] = None) -> Any:
+        """执行工具调用，路由到对应 service 层
+
+        channel_user_id（可选）：来自非 Web 通道的会话标识（如企业微信 userid），
+        允许特定工具（如 enroll_voice）写入通道相关的状态到 Redis。
+        """
+        # 把 channel_user_id 透传给需要它的工具（注入到 input_data 的隐藏字段）
+        if channel_user_id and isinstance(input_data, dict):
+            input_data = dict(input_data)
+            input_data.setdefault("_channel_user_id", channel_user_id)
         try:
             # 联网搜索不需要数据库
             if name == "web_search":
@@ -1100,6 +1109,9 @@ class MicroBubbleAgent:
 
             elif name == "enroll_voice":
                 from app.models.member import Member
+                from app.core.redis import get_redis
+                import json
+
                 member_name = input_data.get("member_name", "")
                 member_result = await db.execute(
                     select(Member).where(Member.name == member_name)
@@ -1108,6 +1120,31 @@ class MicroBubbleAgent:
                 if not member:
                     return {"status": "error", "message": f"未找到成员「{member_name}」，请先确认姓名"}
 
+                # 微信/外部通道才需要 pending 状态：用户接下来发语音会自动录入
+                # 通过 wechat_user_id 标识会话来源
+                wechat_user_id = input_data.get("wechat_user_id") or input_data.get("_channel_user_id")
+                if wechat_user_id:
+                    r = await get_redis()
+                    if member.voice_embedding is not None:
+                        # 已录入：清除 pending，直接告知
+                        await r.delete(f"wechat:pending_enroll:{wechat_user_id}")
+                        return {
+                            "status": "success",
+                            "message": f"成员「{member_name}」已录入声纹（{member.voice_sample_count or 0}次采样）。如需更新，请发一段10秒以上语音给我，小气会用新语音更新声纹。",
+                        }
+                    # 未录入：写 pending_enroll 状态，5 分钟 TTL
+                    await r.set(
+                        f"wechat:pending_enroll:{wechat_user_id}",
+                        json.dumps({"member_id": member.id, "member_name": member.name}, ensure_ascii=False),
+                        ex=300,
+                    )
+                    return {
+                        "status": "success",
+                        "message": f"已找到成员「{member_name}」。要让小气认识你的声音，**请直接发一段10秒以上的语音**给我（可以说「我是{member_name}」），小气会自动用你的语音录入声纹。⏱ 5分钟内有效。",
+                        "member_id": member.id,
+                    }
+
+                # 非微信通道（Web 端 / 内部 API）走原文字指导
                 if member.voice_embedding is not None:
                     return {
                         "status": "success",
@@ -1146,7 +1183,8 @@ class MicroBubbleAgent:
         db=None,
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        channel_user_id: Optional[str] = None,
     ):
         """流式对话"""
         messages = await self._load_session(session_id)
@@ -1233,7 +1271,7 @@ class MicroBubbleAgent:
                         input_data = json.loads(call["input_json"])
                     except (json.JSONDecodeError, TypeError):
                         input_data = {}
-                result = await self._execute_tool(call["name"], input_data, db, user_id=user_id)
+                result = await self._execute_tool(call["name"], input_data, db, user_id=user_id, channel_user_id=channel_user_id)
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": call["id"],

@@ -43,6 +43,26 @@
         class="member-card"
         shadow="hover"
       >
+        <!-- 声纹状态徽章（右上角） -->
+        <div class="voiceprint-badge">
+          <el-tooltip
+            v-if="member.voice_enrolled_at"
+            :content="`已录入（${member.voice_sample_count || 0} 次采样，更新于 ${formatEnrollTime(member.voice_enrolled_at)}）`"
+            placement="top"
+          >
+            <el-tag type="success" size="small" effect="dark">
+              <el-icon><Microphone /></el-icon>
+              声纹✓
+            </el-tag>
+          </el-tooltip>
+          <el-tooltip v-else content="尚未录入声纹，会议中无法自动识别" placement="top">
+            <el-tag type="info" size="small" effect="plain">
+              <el-icon><Microphone /></el-icon>
+              未录入声纹
+            </el-tag>
+          </el-tooltip>
+        </div>
+
         <div class="member-avatar">
           <el-avatar v-if="member.avatar" :size="64" :src="member.avatar" />
           <el-avatar v-else :size="64" :style="{ background: getAvatarColor(member.name) }">
@@ -92,8 +112,17 @@
         </div>
 
         <div class="member-actions">
-          <el-button text type="primary" @click="editMember(member)">编辑</el-button>
-          <el-button text @click="viewTasks(member)">查看任务</el-button>
+          <el-button
+            :type="member.voice_enrolled_at ? 'default' : 'primary'"
+            :plain="!member.voice_enrolled_at"
+            size="small"
+            @click="openEnrollDialog(member)"
+          >
+            <el-icon><Microphone /></el-icon>
+            {{ member.voice_enrolled_at ? '更新声纹' : '录入声纹' }}
+          </el-button>
+          <el-button text type="primary" size="small" @click="editMember(member)">编辑</el-button>
+          <el-button text size="small" @click="viewTasks(member)">查看任务</el-button>
         </div>
       </el-card>
     </div>
@@ -166,15 +195,24 @@
         <el-button type="primary" @click="saveMember">{{ editingMember ? '保存' : '添加' }}</el-button>
       </template>
     </el-dialog>
+
+    <!-- 声纹录入弹窗 -->
+    <VoiceprintEnrollDialog
+      v-model="enrollDialogVisible"
+      :member="enrollMember"
+      @success="onEnrollSuccess"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Microphone, Search, Plus, Location, Message } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useMemberStore } from '@/stores/member'
+import VoiceprintEnrollDialog from '@/components/VoiceprintEnrollDialog.vue'
 
 const router = useRouter()
 const memberStore = useMemberStore()
@@ -200,6 +238,8 @@ const searchName = ref('')
 const searchGrade = ref('')
 const showCreateDialog = ref(false)
 const editingMember = ref(null)
+const enrollDialogVisible = ref(false)
+const enrollMember = ref(null)
 
 const memberForm = ref({
   name: '',
@@ -255,6 +295,33 @@ const editMember = (member) => {
 // 查看成员任务
 const viewTasks = (member) => {
   router.push({ path: '/tasks', query: { assignee_id: member.id } })
+}
+
+// 打开声纹录入弹窗
+const openEnrollDialog = (member) => {
+  enrollMember.value = member
+  enrollDialogVisible.value = true
+}
+
+// 声纹录入成功后刷新成员列表
+const onEnrollSuccess = async () => {
+  await fetchMembers()
+}
+
+// 格式化声纹录入时间
+const formatEnrollTime = (iso) => {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    const now = new Date()
+    const diffSec = (now - d) / 1000
+    if (diffSec < 60) return '刚刚'
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)} 分钟前`
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} 小时前`
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  } catch {
+    return ''
+  }
 }
 
 // 重置表单
@@ -320,6 +387,19 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   transition: all var(--duration-normal) var(--ease-out);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+  position: relative;
+}
+
+.voiceprint-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+}
+
+.voiceprint-badge .el-icon {
+  margin-right: 2px;
+  vertical-align: -2px;
 }
 
 .member-card:hover {
