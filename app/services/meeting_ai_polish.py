@@ -5,9 +5,13 @@
 """
 import json
 import logging
-from typing import Any
 
-from app.core.llm import get_anthropic_client, get_default_model
+from app.core.llm import (
+    extract_text_from_response,
+    get_anthropic_client,
+    get_default_model,
+    parse_llm_json,
+)
 from app.services.prompts.meeting_polish import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 logger = logging.getLogger("microbubble.meeting_polish")
@@ -57,21 +61,26 @@ async def polish_segments(
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
-    raw_text = response.content[0].text
+    # 使用项目统一 helper：处理 ThinkingBlock（mimo-v2.5/claude-sonnet-4 扩展思维）+ ```json``` 包裹
+    raw_text = extract_text_from_response(response)
 
     try:
-        result = json.loads(raw_text)
-    except json.JSONDecodeError as e:
+        result = parse_llm_json(raw_text)
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"AI 润色 JSON 解析失败: {e}, raw_text={raw_text[:200]}")
-        # 降级：返回原文
-        return {
-            "polished": [{"speaker": s.get("speaker", "发言人"), "text": s["text"], "ts": s["ts"]} for s in segments],
-            "key_points": [],
-            "boundary_after_index": None,
-            "summary": None,
-        }
+        return _fallback_polished(segments)
 
     return _validate_polish_result(result, segments)
+
+
+def _fallback_polished(segments: list[dict]) -> dict:
+    """LLM 失败时的降级路径：返回原文 + 空标注"""
+    return {
+        "polished": [{"speaker": s.get("speaker", "发言人"), "text": s["text"], "ts": s["ts"]} for s in segments],
+        "key_points": [],
+        "boundary_after_index": None,
+        "summary": None,
+    }
 
 
 def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict:
