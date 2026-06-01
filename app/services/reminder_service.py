@@ -75,6 +75,87 @@ class ReminderService:
         await self.db.commit()
         return True
 
+    async def send_meeting_reminder(self, reminder: Reminder) -> bool:
+        """发送会议提醒（Wave 3a 任务 12）
+
+        从 meeting 查所有 active 参会人，调用 notify_meeting_reminder 推送给每个人。
+        成功时标记 reminder.status = 'sent'。
+        """
+        from app.models.meeting import Meeting, MeetingParticipant
+        from app.models.member import Member
+        from app.wechat.notifier import notify_meeting_reminder
+        from sqlalchemy.orm import selectinload
+
+        meeting_id = getattr(reminder, "meeting_id", None)
+        if not meeting_id:
+            logger.warning(f"会议提醒 {reminder.id} 无 meeting_id，跳过")
+            return False
+
+        meeting = await self.db.get(Meeting, meeting_id)
+        if not meeting:
+            logger.warning(f"会议提醒 {reminder.id}: meeting {meeting_id} 不存在")
+            return False
+
+        # 查所有参会人
+        try:
+            participants_result = await self.db.execute(
+                select(Member)
+                .join(MeetingParticipant, MeetingParticipant.member_id == Member.id)
+                .where(
+                    MeetingParticipant.meeting_id == meeting.id,
+                    Member.is_active == True,
+                )
+            )
+            participants = list(participants_result.scalars().all())
+        except Exception as e:
+            logger.error(f"会议提醒 {reminder.id} 查询参会人失败: {e}")
+            return False
+
+        if not participants:
+            logger.warning(f"会议 {meeting_id} 没有 active 参会人，跳过提醒")
+            return False
+
+        # 计算提前分钟数
+        try:
+            if meeting.start_time and reminder.remind_at:
+                remind_min = max(
+                    0,
+                    int(
+                        (meeting.start_time - reminder.remind_at).total_seconds() // 60
+                    ),
+                )
+            else:
+                remind_min = 5
+        except Exception:
+            remind_min = 5
+
+        push_ok = False
+        for p in participants:
+            wechat_id = p.wechat_id or p.external_userid or f"member_{p.id}"
+            try:
+                result = await notify_meeting_reminder(
+                    wechat_id,
+                    {
+                        "title": meeting.title,
+                        "start_time": meeting.start_time,
+                        "location": meeting.location or "线上",
+                        "meeting_url": meeting.meeting_url or "",
+                        "participants": [pp.name for pp in participants],
+                    },
+                    remind_min,
+                )
+                if result:
+                    push_ok = True
+            except Exception as e:
+                logger.error(f"notify_meeting_reminder 失败: member={p.id} {e}")
+
+        if push_ok:
+            reminder.status = "sent"
+            reminder.sent_at = utcnow()
+            await self.db.commit()
+            return True
+        return False
+
     def _format_reminder_message(self, task: Task, member: Member) -> str:
         """格式化提醒消息"""
         now = utcnow()
@@ -185,7 +266,11 @@ class ReminderService:
                 sent_ids.append(reminder.id)
                 continue
             try:
-                success = await self.send_reminder(reminder)
+                # Wave 3a: 按 target_type 分发
+                if getattr(reminder, "target_type", "task") == "meeting":
+                    success = await self.send_meeting_reminder(reminder)
+                else:
+                    success = await self.send_reminder(reminder)
                 if success:
                     success_count += 1
                     sent_ids.append(reminder.id)

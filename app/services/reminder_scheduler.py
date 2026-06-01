@@ -25,6 +25,10 @@ class RedisReminderScheduler:
         await r.zadd(ZSET_KEY, {str(reminder_id): remind_at_timestamp})
         logger.debug(f"提醒 {reminder_id} 已加入调度，触发时间: {remind_at_timestamp}")
 
+    async def add(self, reminder_id: int, remind_at_timestamp: float):
+        """向后兼容别名：等价于 add_reminder（保持 API 一致性，Wave 3a 任务 12）"""
+        return await self.add_reminder(reminder_id, remind_at_timestamp)
+
     async def remove_reminder(self, reminder_id: int):
         """从 Redis 中移除提醒"""
         r = await get_redis()
