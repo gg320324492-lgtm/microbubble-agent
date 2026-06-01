@@ -32,11 +32,14 @@
 ## 开发工具
 
 - **Claude Code 任务通知** - 任务完成时语音提醒（Edge-TTS），音量最大，语速适中
-- **本地运维三件套** (2026-06-02) - 3 个 PowerShell 脚本在本地 Windows 承担所有日常运维，云服务器 0 负载增加：
-  - `scripts/local-watchdog.ps1` - Docker 服务健康监控（每 5 分钟），异常时 Edge-TTS 告警
-  - `scripts/local-backup.ps1` - 数据库每日备份（02:00），保留 7 天，结构化日志
-  - `scripts/local-build-verify.ps1` - 前端 dist 校验（`npm run build` 后跑），本地拦截异常 dist
-  - `scripts/install-local-ops.bat` - 一键注册上述 3 个 Windows 任务计划
+- **本地运维三件套** (2026-06-02 已注册) - 3 个 PowerShell 脚本 + 3 个 schtasks 任务计划，云服务器 0 负载增加：
+  - `scripts/local-watchdog.ps1` — Docker 服务健康监控（每 5 分钟），异常时 Edge-TTS 告警
+  - `scripts/local-backup.ps1` — 数据库每日备份（02:00），保留 7 天，结构化日志
+  - `scripts/local-build-verify.ps1` — 前端 dist 校验（`npm run build` 后跑），本地拦截异常 dist
+  - `scripts/install-local-ops.bat` — 一键注册上述 3 个 Windows 任务计划
+  - ✅ **3 个 schtasks 已注册并验证**（2026-06-02 03:32）：`MicrobubbleWatchdog`（每 5 分钟）/ `MicrobubbleDBBackup`（每日 02:00）/ `MicrobubbleBuildVerify`（手动）
+  - 查看：`schtasks /Query /FO TABLE | findstr Microbubble`
+  - 卸载：`schtasks /Delete /TN "MicrobubbleWatchdog" /F`（其他两个同理）
 
 ## 技术栈
 
