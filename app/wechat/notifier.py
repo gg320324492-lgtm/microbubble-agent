@@ -118,3 +118,36 @@ class WeChatNotifier:
 
 # 全局实例
 notifier = WeChatNotifier()
+
+
+async def notify_meeting_reminder(
+    member_wechat_id: str,
+    meeting_info: dict,
+    remind_minutes: int,
+) -> bool:
+    """
+    推送会议提醒到企业微信（Wave 3a 任务 12）。
+    meeting_info: {title, start_time, location, meeting_url, participants}
+    """
+    from app.wechat.bot import wechat_bot
+
+    start_time_str = meeting_info.get("start_time", "")
+    if hasattr(start_time_str, "strftime"):
+        start_time_str = start_time_str.strftime("%Y-%m-%d %H:%M")
+
+    participants = meeting_info.get("participants", []) or []
+    participants_str = ", ".join(participants) if participants else "（未指定）"
+    location = meeting_info.get("location", "线上") or "线上"
+    meeting_url = meeting_info.get("meeting_url", "") or ""
+    url_line = f"\n会议链接: {meeting_url}" if meeting_url else ""
+
+    content = f"""📅 会议即将开始
+会议: {meeting_info.get('title', '未命名')}
+时间: {start_time_str or '未指定'}
+地点: {location}
+参与人: {participants_str}
+{url_line}
+
+{remind_minutes} 分钟后开始，请准时参会。"""
+
+    return await wechat_bot.smart_send(member_wechat_id, content, msg_type="text")
