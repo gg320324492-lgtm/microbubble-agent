@@ -408,3 +408,69 @@ class MeetingService:
 
         result = {"title": title, "assignee": assignee_name or "未指定"}
         return result
+
+
+async def compute_and_store_embedding(
+    db: AsyncSession,
+    meeting_id: int,
+) -> None:
+    """复分析会议后计算 embedding 存库（用于跨会议相似度）"""
+    from app.services.embedding_service import generate_embedding
+
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        return
+
+    text_parts = []
+    if meeting.title:
+        text_parts.append(meeting.title)
+    if meeting.summary:
+        text_parts.append(meeting.summary)
+    if meeting.key_points:
+        text_parts.extend(meeting.key_points)
+    if meeting.decisions:
+        text_parts.extend(meeting.decisions)
+    full_text = " ".join(text_parts)
+    if not full_text:
+        return
+
+    embedding = await generate_embedding(full_text)
+    meeting.embedding = embedding
+    await db.commit()
+
+
+async def find_related_meetings(
+    db: AsyncSession,
+    meeting_id: int,
+    top_k: int = 3,
+) -> List[Dict[str, Any]]:
+    """跨会议相似度匹配（top-3）"""
+    current = await db.get(Meeting, meeting_id)
+    if not current or not current.embedding:
+        return []
+
+    stmt = (
+        select(
+            Meeting,
+            Meeting.embedding.cosine_distance(current.embedding).label("distance"),
+        )
+        .where(
+            Meeting.id != meeting_id,
+            Meeting.embedding.isnot(None),
+        )
+        .order_by(Meeting.embedding.cosine_distance(current.embedding))
+        .limit(top_k)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    return [
+        {
+            "id": meeting.id,
+            "title": meeting.title,
+            "start_time": meeting.start_time.isoformat() if meeting.start_time else None,
+            "summary": meeting.summary,
+            "similarity": round(1.0 - distance, 4),
+        }
+        for meeting, distance in rows
+    ]
