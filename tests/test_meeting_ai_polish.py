@@ -5,14 +5,19 @@ from app.services.meeting_ai_polish import polish_segments
 
 
 class FakeRedis:
-    """进程内 fake Redis，足够支撑 cache_hit 测试（无需真 Redis）"""
+    """进程内 fake Redis，足够支撑 cache_hit / concurrent_lock 测试（无需真 Redis）
+
+    支持 set(nx=True, ex=ttl) 的 SETNX + TTL 语义，用于验证分布式锁。
+    """
     def __init__(self):
         self.store: dict[str, str] = {}
 
     async def get(self, key: str):
         return self.store.get(key)
 
-    async def set(self, key: str, value, ex=None):
+    async def set(self, key: str, value, ex=None, nx=False):
+        if nx and key in self.store:
+            return None  # SETNX 失败：key 已存在
         self.store[key] = value
         return True
 
@@ -102,7 +107,10 @@ async def test_polish_segments_concurrent_lock():
         await asyncio.sleep(0.5)
         return {"polished": [], "key_points": [], "boundary_after_index": None, "summary": None}
 
-    with patch("app.services.meeting_ai_polish.polish_segments", side_effect=slow_polish):
+    fake_redis = FakeRedis()
+
+    with patch("app.services.meeting_ai_polish.polish_segments", side_effect=slow_polish), \
+         patch("app.services.meeting_ai_polish.get_redis", AsyncMock(return_value=fake_redis)):
         # 并发启动 3 个任务
         results = await asyncio.gather(
             polish_segments_with_lock(999, segments, context),
@@ -112,3 +120,7 @@ async def test_polish_segments_concurrent_lock():
 
     # 至少 1 个被锁跳过，call_count 应 < 3
     assert call_count < 3, f"期望并发被锁限制，但 call_count={call_count}"
+    # 3 个任务都应成功返回（兜底或缓存）
+    assert len(results) == 3
+    for r in results:
+        assert "polished" in r

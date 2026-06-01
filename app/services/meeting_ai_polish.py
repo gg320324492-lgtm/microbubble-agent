@@ -145,3 +145,53 @@ async def polish_segments_with_cache(
     await r.set(cache_key, json.dumps(result, ensure_ascii=False), ex=settings.POLISH_CACHE_TTL_SECONDS)
 
     return result
+
+
+async def polish_segments_with_lock(
+    meeting_id: int,
+    segments: list[dict],
+    meeting_context: dict,
+    _retry: int = 0,
+) -> dict:
+    """
+    带并发锁的润色入口。同 meeting_id 同一时间只允许 1 个 LLM 调用。
+    后到的请求会等待锁释放，然后共享同一缓存结果。
+
+    锁语义：Redis SETNX + TTL（防崩溃导致死锁），无重试上限但实践中：
+    - 持锁方完成后会写缓存
+    - 等待方 200ms 后重读缓存，命中即返回
+    - 缓存未命中才递归重试（持锁方可能还在写）
+    - 兜底：递归 5 次后仍拿不到锁则直接调 with_cache（防极端情况死循环）
+    """
+    import asyncio
+
+    if not segments:
+        return {"polished": [], "key_points": [], "boundary_after_index": None, "summary": None}
+
+    lock_key = f"polish:lock:{meeting_id}"
+    r = await get_redis()
+
+    # 尝试获取锁（SETNX + TTL）
+    acquired = await r.set(lock_key, "1", nx=True, ex=settings.POLISH_LOCK_TTL_SECONDS)
+
+    try:
+        if not acquired:
+            # 锁被占用，等待 200ms 后重读缓存（持锁方可能刚写入）
+            await asyncio.sleep(0.2)
+            segment_hash = hashlib.sha1(
+                json.dumps(segments, sort_keys=True).encode()
+            ).hexdigest()[:16]
+            cached = await r.get(f"polish:{meeting_id}:{segment_hash}")
+            if cached:
+                return json.loads(cached)
+            # 缓存仍无，递归重试（兜底：5 次后放弃抢锁，直接调 with_cache）
+            if _retry >= 5:
+                logger.warning(f"polish 锁递归重试 {_retry} 次仍未拿到，降级为 with_cache")
+                return await polish_segments_with_cache(meeting_id, segments, meeting_context)
+            return await polish_segments_with_lock(meeting_id, segments, meeting_context, _retry=_retry + 1)
+
+        # 拿到锁，执行润色
+        return await polish_segments_with_cache(meeting_id, segments, meeting_context)
+    finally:
+        if acquired:
+            await r.delete(lock_key)
