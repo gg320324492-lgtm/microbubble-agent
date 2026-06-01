@@ -74,6 +74,12 @@ const routes = [
         meta: { title: '长期记忆', icon: 'Memo' }
       },
       {
+        path: 'voiceprint',
+        name: 'Voiceprint',
+        component: () => import('@/views/VoiceprintView.vue'),
+        meta: { title: '声纹库中心', icon: 'mic' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/SettingsView.vue'),
