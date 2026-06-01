@@ -338,6 +338,11 @@ async def meeting_live_ws(
 
     await websocket.accept()
 
+    # Wave 2b: 发送 transcript_history（最近 60s 拉历史）
+    from app.services.meeting_transcript_buffer import get_recent_transcript
+    history = await get_recent_transcript(meeting_id, seconds=60)
+    await websocket.send_json({"type": "transcript_history", "entries": history})
+
     # 创建段满检测器（每条 WS 独立实例，无状态污染）
     segmenter = LiveSegmenter(silence_threshold_ms=1500, max_segment_ms=8000)
 
@@ -362,9 +367,23 @@ async def meeting_live_ws(
         except Exception as e:
             logger.error(f"加载 meeting {meeting_id} 失败: {e}")
 
+        # Wave 2b: 多设备订阅
+        from app.core.redis import get_redis
+        r = await get_redis()
+        pubsub = r.pubsub()
+        await pubsub.subscribe(
+            f"transcript:{meeting_id}",
+            f"ai_reply:{meeting_id}",
+            f"speaker_mapping:{meeting_id}",
+        )
+        broadcast_task = asyncio.create_task(
+            _broadcast_loop(websocket, pubsub, meeting, db)
+        )
+
         return await _run_live_loop(
             websocket, meeting_id, db, meeting,
             segmenter, pipeline, audio_queue, level_task,
+            broadcast_task, pubsub,
         )
 
 
@@ -422,6 +441,8 @@ async def _run_live_loop(
     pipeline: MeetingPipeline,
     audio_queue: asyncio.Queue,
     level_task: asyncio.Task,
+    broadcast_task: asyncio.Task = None,
+    pubsub=None,
 ):
     """会议 /live WS 主循环（wave 2a 任务 9 重构版）
 
@@ -738,6 +759,20 @@ async def _run_live_loop(
         except (asyncio.CancelledError, Exception):
             pass
 
+        # Wave 2b: 取消 broadcast_task
+        if broadcast_task is not None:
+            broadcast_task.cancel()
+            try:
+                await broadcast_task
+            except asyncio.CancelledError:
+                pass
+        if pubsub is not None:
+            try:
+                await pubsub.unsubscribe()
+                await pubsub.aclose()
+            except Exception:
+                pass
+
         # 保存转录到会议记录，自动分析
         analysis_result = None
         try:
@@ -829,3 +864,31 @@ async def _audio_level_loop(websocket: WebSocket, audio_queue: asyncio.Queue):
             break
 
         await asyncio.sleep(0.1)
+
+
+async def _broadcast_loop(websocket: WebSocket, pubsub, meeting, db):
+    """订阅 transcript / ai_reply / speaker_mapping 频道，转发给本 WS"""
+    while True:
+        try:
+            msg = await asyncio.wait_for(
+                pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0),
+                timeout=30.0,
+            )
+            if msg:
+                channel = msg["channel"].decode() if isinstance(msg["channel"], bytes) else msg["channel"]
+                data = json.loads(msg["data"])
+                if channel.startswith("transcript:"):
+                    await websocket.send_json({"type": "transcript_others", "data": data})
+                elif channel.startswith("ai_reply:"):
+                    await websocket.send_json({"type": "ai_reply_others", "data": data})
+                elif channel.startswith("speaker_mapping:"):
+                    # 刷新 meeting 对象
+                    try:
+                        await db.refresh(meeting)
+                    except Exception:
+                        pass
+        except asyncio.TimeoutError:
+            pass
+        except Exception as e:
+            logger.error(f"broadcast loop 异常: {e}")
+            break
