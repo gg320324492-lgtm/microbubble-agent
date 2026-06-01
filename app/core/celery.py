@@ -59,5 +59,6 @@ celery_app.autodiscover_tasks(
         "app.wechat.scheduler",
         "app.services.memory_service",
         "app.services.knowledge_evolution_tasks",
+        "app.services.post_meeting_tasks",
     ]
 )
