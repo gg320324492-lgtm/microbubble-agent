@@ -1,17 +1,20 @@
 """会议转录 AI 润色服务
 
 职责：调用 Claude 把 ASR 口语化转录润色为书面语，结构化输出决策/待办/风险。
-设计：纯 LLM 调用层，缓存与锁在调用方（voice.py 的 /live 端点）管理。
+设计：纯 LLM 调用层 + Redis 缓存层。缓存命中时延迟 < 100ms。
 """
+import hashlib
 import json
 import logging
 
+from app.config import settings
 from app.core.llm import (
     extract_text_from_response,
     get_anthropic_client,
     get_default_model,
     parse_llm_json,
 )
+from app.core.redis import get_redis
 from app.services.prompts.meeting_polish import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 logger = logging.getLogger("microbubble.meeting_polish")
@@ -104,3 +107,41 @@ def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict
         "boundary_after_index": boundary if isinstance(boundary, int) else None,
         "summary": summary if isinstance(summary, str) else None,
     }
+
+
+async def polish_segments_with_cache(
+    meeting_id: int,
+    segments: list[dict],
+    meeting_context: dict,
+) -> dict:
+    """
+    带缓存的润色入口。meeting_id 用于 Redis key 隔离。
+    缓存命中时延迟 < 100ms（无 LLM 调用）。
+    """
+    if not segments:
+        return {"polished": [], "key_points": [], "boundary_after_index": None, "summary": None}
+
+    # 计算 segment hash（与测试保持一致：json.dumps(segments, sort_keys=True)，默认 ensure_ascii=True）
+    segment_hash = hashlib.sha1(
+        json.dumps(segments, sort_keys=True).encode()
+    ).hexdigest()[:16]
+    cache_key = f"polish:{meeting_id}:{segment_hash}"
+
+    # 检查缓存
+    r = await get_redis()
+    cached = await r.get(cache_key)
+    if cached:
+        logger.debug(f"AI 润色缓存命中: {cache_key}")
+        return json.loads(cached)
+
+    # 缓存未命中，调 LLM
+    if not settings.ENABLE_AI_POLISH:
+        logger.info("ENABLE_AI_POLISH=False，跳过润色返回原文")
+        return _fallback_polished(segments)
+
+    result = await polish_segments(segments, meeting_context)
+
+    # 写缓存（24h TTL）
+    await r.set(cache_key, json.dumps(result, ensure_ascii=False), ex=settings.POLISH_CACHE_TTL_SECONDS)
+
+    return result

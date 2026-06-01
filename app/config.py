@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
+    # 会议 AI 润色
+    ENABLE_AI_POLISH: bool = True
+    POLISH_CACHE_TTL_SECONDS: int = 86400  # 24h
+    POLISH_LOCK_TTL_SECONDS: int = 120  # 2min
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
