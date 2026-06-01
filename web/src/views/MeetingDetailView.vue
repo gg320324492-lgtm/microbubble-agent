@@ -70,7 +70,7 @@
         </el-card>
 
         <!-- 会议纪要 -->
-        <el-card v-if="meeting.summary || meeting.key_points?.length || meeting.decisions?.length || editingMinutes" class="section-card">
+        <el-card v-if="meeting.summary || meeting.key_points?.length || meeting.decisions?.length || (meeting.agenda && meeting.agenda.length) || editingMinutes" class="section-card">
           <template #header>
             <div class="card-header">
               <span><el-icon><Document /></el-icon> 会议纪要</span>
@@ -125,7 +125,17 @@
               <h4>决议事项</h4>
               <ul><li v-for="(d,i) in meeting.decisions" :key="i">{{ d }}</li></ul>
             </div>
-            <el-empty v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length" description="暂无会议纪要" />
+            <!-- Wave 3b: 议程 -->
+            <div v-if="meeting.agenda && meeting.agenda.length > 0" class="minutes-section agenda-display">
+              <h4>议程</h4>
+              <ol class="agenda-list">
+                <li v-for="(item, idx) in meeting.agenda" :key="idx">
+                  <span :class="{ done: item.done }">{{ item.text || item }}</span>
+                  <el-tag v-if="item.done" type="success" size="small" style="margin-left: 8px">已完成</el-tag>
+                </li>
+              </ol>
+            </div>
+            <el-empty v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length && (!meeting.agenda || !meeting.agenda.length)" description="暂无会议纪要" />
           </template>
         </el-card>
 
