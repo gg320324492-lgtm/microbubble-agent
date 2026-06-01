@@ -7,7 +7,6 @@
 这些 fixture 不可用，调用它们的测试会被跳过。
 """
 
-import asyncio
 import os
 
 import pytest
@@ -48,13 +47,6 @@ else:
     create_access_token = None
     AsyncClient = None
     ASGITransport = None
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
