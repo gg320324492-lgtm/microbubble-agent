@@ -58,6 +58,11 @@ class Meeting(Base, TimestampMixin):
     creator = relationship("Member", back_populates="created_meetings")
     participants = relationship("MeetingParticipant", back_populates="meeting")
     tasks = relationship("Task", backref="meeting")
+    voiceprint_history = relationship(
+        "VoiceprintHistory",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return f"<Meeting(id={self.id}, title='{self.title}')>"
