@@ -8,6 +8,7 @@
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock
+from sqlalchemy.dialects import postgresql
 
 from app.services.speaker_unidentified_service import get_unenrolled_participants
 
@@ -36,6 +37,9 @@ async def test_get_unenrolled_participants_filters_inactive():
 
     await get_unenrolled_participants(db, meeting_id=1)
 
-    # 验证 SQL WHERE 含 is_active == True
+    # 验证 SQL WHERE 含 is_active == True（编译 SQL 字符串验证）
     call_args = db.execute.call_args
-    assert "is_active" in str(call_args)
+    stmt = call_args.args[0]
+    compiled = str(stmt.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "is_active" in compiled
+    assert "voice_embedding" in compiled
