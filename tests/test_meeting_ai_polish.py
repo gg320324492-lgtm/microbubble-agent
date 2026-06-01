@@ -2,28 +2,7 @@ import json
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from app.services.meeting_ai_polish import polish_segments
-
-
-class FakeRedis:
-    """进程内 fake Redis，足够支撑 cache_hit / concurrent_lock 测试（无需真 Redis）
-
-    支持 set(nx=True, ex=ttl) 的 SETNX + TTL 语义，用于验证分布式锁。
-    """
-    def __init__(self):
-        self.store: dict[str, str] = {}
-
-    async def get(self, key: str):
-        return self.store.get(key)
-
-    async def set(self, key: str, value, ex=None, nx=False):
-        if nx and key in self.store:
-            return None  # SETNX 失败：key 已存在
-        self.store[key] = value
-        return True
-
-    async def delete(self, key: str):
-        self.store.pop(key, None)
-        return 1
+from tests._fake_redis import FakeRedis
 
 
 @pytest.mark.asyncio
