@@ -2,13 +2,18 @@
 
 设计原则：
 - 不依赖真实 ffmpeg：通过 patch 替换 _ffmpeg_to_opus
-- 不依赖真实 MinIO：mock file_service
+- 不依赖真实 MinIO：mock minio 模块，阻止 FileService import 时建连
 - 不依赖真实 DB：mock AsyncSession
 - 在 SKIP_DB_SETUP=1 下可运行
 """
 
-import pytest
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+# 在 import 之前 mock 掉 minio 模块，阻止 FileService 真实建连
+sys.modules.setdefault("minio", MagicMock())
 
 from app.services.audio_archive_service import AudioArchiveWriter
 
