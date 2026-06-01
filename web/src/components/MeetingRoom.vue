@@ -12,7 +12,11 @@
     </div>
 
     <!-- 发言者条 -->
-    <SpeakerStrip :speakers="participants" :active-speaker-id="activeSpeaker" />
+    <SpeakerStrip
+      :speakers="participants"
+      :active-speaker-id="activeSpeaker"
+      :audio-levels="audioLevels"
+    />
 
     <!-- 转录面板 -->
     <TranscriptPanel
@@ -42,6 +46,14 @@
         <el-button type="danger" @click="doHangup">确认挂断</el-button>
       </template>
     </el-dialog>
+
+    <!-- 未识别发言人弹窗 -->
+    <SpeakerUnidentifiedDialog
+      v-model:visible="unidentified.visible"
+      :candidates="unidentified.candidates"
+      :transcript="unidentified.transcript"
+      @claim="onSpeakerClaim"
+    />
   </div>
 </template>
 
@@ -57,6 +69,7 @@ import { useAutoScroll } from '@/composables/useAutoScroll'
 import SpeakerStrip from './meeting-room/SpeakerStrip.vue'
 import TranscriptPanel from './meeting-room/TranscriptPanel.vue'
 import AIFloatButton from './meeting-room/AIFloatButton.vue'
+import SpeakerUnidentifiedDialog from './meeting-room/SpeakerUnidentifiedDialog.vue'
 
 const props = defineProps({
   meetingId: { type: Number, required: true },
@@ -71,6 +84,14 @@ const hangupConfirmVisible = ref(false)
 const startTime = ref(Date.now())
 const formattedDuration = ref('00:00')
 const activeSpeaker = ref(null)
+const audioLevels = ref({})  // { memberId: 0-1 }
+const unidentified = ref({
+  visible: false,
+  segmentId: null,
+  speakerLabel: null,
+  candidates: [],
+  transcript: '',
+})
 
 let durationTimer = null
 
@@ -83,11 +104,15 @@ const {
   disconnect: wsDisconnect,
   sendAudio,
   sendHangup,
+  sendSpeakerClaim,
   connected,
   reconnecting,
   onTranscript,
   onPolished,
   onError,
+  onMessage,
+  onSpeakerUnidentified,
+  onSpeakerClaimAck,
 } = useMeetingRoomWS()
 
 // 音频采集
@@ -125,6 +150,35 @@ onMounted(async () => {
       ElMessage.error(msg.message || '连接错误')
     }
   }
+
+  // 通用消息处理（audio_level 等）
+  onMessage.value = (msg) => {
+    if (msg.type === 'audio_level') {
+      // 找到当前 active speaker，更新其 level
+      const activeId = activeSpeaker.value
+      if (activeId !== null) {
+        audioLevels.value = { ...audioLevels.value, [activeId]: msg.level }
+      }
+    }
+  }
+
+  // 弹窗选人
+  onSpeakerUnidentified.value = (msg) => {
+    unidentified.value = {
+      visible: true,
+      segmentId: msg.segment_id,
+      speakerLabel: msg.speaker_label,
+      candidates: msg.candidates,
+      transcript: msg.transcript_text,
+    }
+  }
+})
+
+// 用户在弹窗选了人
+function onSpeakerClaim(memberId) {
+  sendSpeakerClaim(unidentified.value.segmentId, memberId, unidentified.value.speakerLabel)
+  unidentified.value.visible = false
+}
 
   // 连接 WS
   const token = localStorage.getItem('access_token')
