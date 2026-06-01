@@ -118,5 +118,16 @@ class VADEngine:
         self._reset_state()
 
 
-# 全局单例
-vad_engine = VADEngine()
+# 全局懒加载默认 VAD（向后兼容）
+# 优先使用 per-instance：调用方自行创建 VADEngine()，避免共享状态。
+# 此处保留 get_vad_engine() 工厂仅为平滑过渡旧引用；
+# 不再在 import 时实例化（避免 module-level 单例误用）。
+_default_vad: Optional[VADEngine] = None
+
+
+def get_vad_engine() -> VADEngine:
+    """懒加载全局默认 VAD（向后兼容）"""
+    global _default_vad
+    if _default_vad is None:
+        _default_vad = VADEngine()
+    return _default_vad
