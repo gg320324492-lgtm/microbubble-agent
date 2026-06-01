@@ -10,7 +10,7 @@ class Reminder(Base, TimestampMixin):
     __tablename__ = "reminders"
 
     id = Column(Integer, primary_key=True, index=True)
-    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True)
 
     # 提醒时间
     remind_at = Column(DateTime, nullable=False)
