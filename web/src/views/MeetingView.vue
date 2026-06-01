@@ -106,6 +106,22 @@
     <!-- 创建会议对话框 -->
     <el-dialog v-model="showCreateDialog" :title="editingMeetingId ? '编辑会议' : '创建会议'" :width="isMobile ? '90vw' : '500px'" top="8vh" @close="editingMeetingId = null">
       <el-form :model="meetingForm" label-width="80px">
+        <el-form-item v-if="!editingMeetingId" label="会议模板">
+          <el-select
+            v-model="meetingForm.templateId"
+            placeholder="选择模板自动填充（可选）"
+            clearable
+            style="width:100%"
+            @change="onTemplateChange"
+          >
+            <el-option
+              v-for="tpl in templates"
+              :key="tpl.id"
+              :label="`${tpl.name}（${tpl.default_duration_minutes || 60} 分钟${tpl.agenda?.length ? ' · ' + tpl.agenda.length + ' 议题' : ''}）`"
+              :value="tpl.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="会议主题" required>
           <el-input v-model="meetingForm.title" placeholder="请输入会议主题" />
         </el-form-item>
@@ -136,6 +152,18 @@
             :rows="3"
             placeholder="请输入会议说明"
           />
+        </el-form-item>
+        <el-form-item label="议程">
+          <div class="item-list" style="width:100%">
+            <div v-for="(item, idx) in meetingForm.agenda" :key="idx" class="item-row">
+              <span class="item-dot" />
+              <el-input v-model="meetingForm.agenda[idx]" placeholder="议题描述" />
+              <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.agenda.splice(idx, 1)" />
+            </div>
+            <el-button dashed size="small" class="item-add" @click="meetingForm.agenda.push('')">
+              <el-icon><Plus /></el-icon> 添加议题
+            </el-button>
+          </div>
         </el-form-item>
         <el-form-item label="提前提醒">
           <el-checkbox v-model="meetingForm.remindBefore">会议前 5 分钟企业微信提醒</el-checkbox>
@@ -323,6 +351,7 @@ function onCallEnded(meetingId) {
 // 编辑会议
 const editMeeting = (meeting) => {
   meetingForm.value = {
+    templateId: null,
     title: meeting.title,
     start_time: meeting.start_time,
     location: meeting.location || '',
@@ -331,6 +360,7 @@ const editMeeting = (meeting) => {
     summary: meeting.summary || '',
     key_points: meeting.key_points ? [...meeting.key_points] : [],
     decisions: meeting.decisions ? [...meeting.decisions] : [],
+    agenda: meeting.agenda ? [...meeting.agenda] : [],
     remindBefore: meeting.remind_before !== false,
   }
   editingMeetingId.value = meeting.id
@@ -365,7 +395,7 @@ const submitMeeting = async () => {
     }
     showCreateDialog.value = false
     editingMeetingId.value = null
-    meetingForm.value = { title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [], remindBefore: true }
+    meetingForm.value = { templateId: null, title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [], agenda: [], remindBefore: true }
     fetchMeetings()
   } catch (e) {
     ElMessage.error(editingMeetingId.value ? '更新失败' : '创建失败')
@@ -393,10 +423,55 @@ const startLiveCall = (meeting) => {
 }
 
 const meetingForm = ref({
+  templateId: null,
   title: '', start_time: '', location: '', participants: [], description: '',
   summary: '', key_points: [], decisions: [],
+  agenda: [],  // Wave 3b: 会议议程
   remindBefore: true,
 })
+
+// === Wave 3b: 会议模板 ===
+const templates = ref([])
+
+async function loadTemplates() {
+  try {
+    const resp = await axios.get('/api/v1/meeting-templates')
+    if (resp.status === 200) templates.value = resp.data
+  } catch (e) {
+    console.warn('加载会议模板失败', e)
+  }
+}
+
+function onTemplateChange(templateId) {
+  if (!templateId) return
+  const tpl = templates.value.find(t => t.id === templateId)
+  if (!tpl) return
+  // 仅在字段为空时填充（用户已填写的优先）
+  if (tpl.title_template && !meetingForm.value.title) {
+    meetingForm.value.title = tpl.title_template
+      .replace('{date}', dayjs().format('YYYY-MM-DD'))
+      .replace('{project_name}', '新项目')
+  }
+  if (tpl.description && !meetingForm.value.description) {
+    meetingForm.value.description = tpl.description
+  }
+  if (tpl.agenda && tpl.agenda.length && (!meetingForm.value.agenda || meetingForm.value.agenda.length === 0)) {
+    meetingForm.value.agenda = [...tpl.agenda]
+  }
+  if (tpl.default_duration_minutes && meetingForm.value.start_time && !meetingForm.value.end_time) {
+    const start = dayjs(meetingForm.value.start_time)
+    if (start.isValid()) {
+      // 后端会用 default_duration_minutes 计算 end_time，这里不强写
+    }
+  }
+  if (tpl.default_participant_ids && tpl.default_participant_ids.length && (!meetingForm.value.participants || meetingForm.value.participants.length === 0)) {
+    meetingForm.value.participants = [...tpl.default_participant_ids]
+  }
+  if (tpl.default_location && !meetingForm.value.location) {
+    meetingForm.value.location = tpl.default_location
+  }
+  ElMessage.success(`已应用模板：${tpl.name}`)
+}
 
 
 // 获取会议列表
@@ -468,6 +543,7 @@ const formatDate = (date) => formatDateTime(date)
 onMounted(() => {
   fetchMeetings()
   fetchMembers()
+  loadTemplates()  // Wave 3b
 })
 </script>
 
