@@ -132,10 +132,14 @@ onMounted(async () => {
 
   // 启动音频采集
   try {
-    await audioCapture.start((int16Buffer) => {
-      if (!muted.value) {
-        sendAudio(int16Buffer)
+    await audioCapture.start((float32) => {
+      if (muted.value) return
+      // Float32 → Int16 转换（useAudioCapture 输出 Float32，WS 期望 Int16 PCM）
+      const int16 = new Int16Array(float32.length)
+      for (let i = 0; i < float32.length; i++) {
+        int16[i] = Math.max(-32768, Math.min(32767, Math.round(float32[i] * 32767)))
       }
+      sendAudio(int16.buffer)
     })
   } catch (e) {
     ElMessage.error('麦克风权限被拒绝')
