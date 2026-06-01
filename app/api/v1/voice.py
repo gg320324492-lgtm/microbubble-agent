@@ -613,7 +613,7 @@ async def _run_live_loop(
                         if mapped:
                             speaker = mapped
 
-                    # 推 transcript（含 speaker + 置信度 + 原始 label）
+                    # 推 transcript（含 speaker + 置信度 + 原始 label + member_id）
                     transcript_entry = {
                         "type": "transcript",
                         "segment_id": segment_id,
@@ -625,8 +625,21 @@ async def _run_live_loop(
                         "end": entry.get("end", entry["start"] + 3),
                         "polish_status": "pending",
                     }
+                    # Wave 3a: 带 member_id 字段（用于跨会议反查）
+                    if entry.get("member_id"):
+                        transcript_entry["member_id"] = entry["member_id"]
                     transcript_entries.append(transcript_entry)
                     await websocket.send_json(transcript_entry)
+
+                    # Wave 3a: 记录置信度历史（仅成功识别时记录）
+                    if entry.get("member_id") and entry.get("confidence"):
+                        from app.services.voiceprint_service import record_confidence
+                        try:
+                            await record_confidence(
+                                db, meeting_id, entry["member_id"], entry["confidence"]
+                            )
+                        except Exception as e:
+                            logger.error(f"record_confidence 失败: {e}")
 
                     # Wave 2b: 写滑窗 + 多设备广播
                     from app.services.meeting_transcript_buffer import append_transcript
