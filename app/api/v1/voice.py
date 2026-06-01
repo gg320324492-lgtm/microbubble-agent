@@ -558,6 +558,12 @@ async def _run_live_loop(
                     transcript_entries.append(transcript_entry)
                     await websocket.send_json(transcript_entry)
 
+                    # Wave 2b: 写滑窗 + 多设备广播
+                    from app.services.meeting_transcript_buffer import append_transcript
+                    from app.services.meeting_broadcast_service import publish_transcript
+                    await append_transcript(meeting_id, transcript_entry)
+                    await publish_transcript(meeting_id, transcript_entry)
+
                     # 异步润色
                     asyncio.create_task(
                         _polish_and_send(
@@ -618,6 +624,13 @@ async def _run_live_loop(
                         }
                         transcript_entries.append(entry)
                         await websocket.send_json(entry)
+
+                        # Wave 2b: 写滑窗 + 多设备广播
+                        from app.services.meeting_transcript_buffer import append_transcript
+                        from app.services.meeting_broadcast_service import publish_transcript
+                        await append_transcript(meeting_id, entry)
+                        await publish_transcript(meeting_id, entry)
+
                         asyncio.create_task(
                             _polish_and_send(
                                 websocket, meeting_id, segment_id,
