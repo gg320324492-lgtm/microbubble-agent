@@ -11,6 +11,7 @@ from app.models.reminder import Reminder
 from app.models.memory import Memory
 from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
+from app.models.voiceprint_history import VoiceprintHistory
 
 __all__ = [
     "Member",
@@ -25,4 +26,5 @@ __all__ = [
     "Memory",
     "Feedback",
     "PromptTemplate",
+    "VoiceprintHistory",
 ]
