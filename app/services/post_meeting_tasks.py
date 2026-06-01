@@ -49,13 +49,17 @@ def post_meeting_process(self, meeting_id: int):
             # 阶段 2
             await update_progress(meeting_id, ProgressStage.GENERATING_TITLE, detail="生成会议标题")
             from app.services.meeting_analysis_service import meeting_analysis
+            from app.services.meeting_service import MeetingService
+            svc = MeetingService(db)
+            transcript_text = svc._transcript_to_text(transcript)
             if not meeting.title or meeting.title == "新会议":
-                meeting.title = await meeting_analysis.generate_title(db, transcript)
+                meeting.title = await meeting_analysis.generate_title(transcript_text)
                 await db.commit()
 
             # 阶段 3
             await update_progress(meeting_id, ProgressStage.GENERATING_MINUTES, detail="生成会议纪要")
-            analysis = await meeting_analysis.analyze_transcript(db, transcript)
+            speaker_mapping = meeting.speaker_mapping or None
+            analysis = await meeting_analysis.analyze_transcript(transcript_text, speaker_mapping=speaker_mapping)
             meeting.summary = analysis.get("summary")
             meeting.key_points = analysis.get("key_points", [])
             meeting.decisions = analysis.get("decisions", [])
@@ -63,8 +67,6 @@ def post_meeting_process(self, meeting_id: int):
 
             # 阶段 4
             await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务")
-            from app.services.meeting_service import MeetingService
-            svc = MeetingService(db)
             for decision in analysis.get("decisions", []):
                 await svc._auto_create_task_from_meeting(meeting, decision)
 
