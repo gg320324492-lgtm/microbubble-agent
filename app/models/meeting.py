@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, ARRAY, Boolean, Float, BigInteger
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -41,6 +42,11 @@ class Meeting(Base, TimestampMixin):
     audio_size_bytes = Column(BigInteger, nullable=True)
     audio_archived_at = Column(DateTime(timezone=True), nullable=True)
     audio_archived = Column(Boolean, default=False)
+
+    # Wave 3a: 跨会议关联
+    agenda = Column(JSON, nullable=True)
+    embedding = Column(Vector(768), nullable=True)
+    related_meeting_ids = Column(JSON, nullable=True)
 
     # 汇报人员（可多选，存为 JSON 数组）
     presenter_ids = Column(JSON)
