@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 import io
+import json
 import time
 
 import logging
@@ -13,6 +14,7 @@ from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
 from app.voice.pipeline import meeting_pipeline, RingBuffer, SAMPLE_RATE
+from app.voice.segmenter import LiveSegmenter
 from app.agent.core import agent
 from app.core.database import get_db, async_session
 from app.core.security import get_current_user, decode_token
@@ -331,6 +333,9 @@ async def meeting_live_ws(
 
     await websocket.accept()
 
+    # 创建段满检测器（每条 WS 独立实例，无状态污染）
+    segmenter = LiveSegmenter(silence_threshold_ms=1500, max_segment_ms=8000)
+
     start_time = time.time()
     transcript_entries = []
     audio_buffer = b""
@@ -346,7 +351,7 @@ async def meeting_live_ws(
             # 文字控制消息
             if "text" in data:
                 try:
-                    msg = __import__("json").loads(data["text"])
+                    msg = json.loads(data["text"])
                     if msg.get("type") == "ai_chat":
                         user_text = msg.get("text", "")
                         if user_text.strip():
@@ -365,7 +370,16 @@ async def meeting_live_ws(
             if "bytes" not in data:
                 continue
 
-            audio_buffer += data["bytes"]
+            pcm_chunk = data["bytes"]
+            audio_buffer += pcm_chunk
+
+            # 段满检测（任务16：仅检测，任务18 才接 ASR + 润色）
+            try:
+                if segmenter.feed(pcm_chunk):
+                    pcm_segment = segmenter.drain()
+                    logger.info(f"段满触发: {len(pcm_segment)} bytes")
+            except Exception as e:
+                logger.error(f"段满检测失败: {e}")
 
             # 每积累约 3 秒音频转写一次
             if len(audio_buffer) >= 48000:
