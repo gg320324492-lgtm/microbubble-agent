@@ -128,6 +128,32 @@
             <el-empty v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length" description="暂无会议纪要" />
           </template>
         </el-card>
+
+        <!-- Wave 3a: 相关会议 -->
+        <div class="related-meetings" v-if="relatedMeetings.length > 0">
+          <h3>相关会议</h3>
+          <p class="hint">基于内容相似度推荐（pgvector cosine distance）</p>
+          <el-checkbox-group v-model="selectedRelated">
+            <div
+              v-for="m in relatedMeetings"
+              :key="m.id"
+              class="related-card"
+            >
+              <el-checkbox :value="m.id">
+                <div class="related-content">
+                  <div class="related-title">
+                    <router-link :to="`/meetings/${m.id}`">{{ m.title }}</router-link>
+                    <span class="similarity">{{ Math.round(m.similarity * 100) }}% 相似</span>
+                  </div>
+                  <div class="related-summary">{{ m.summary?.substring(0, 100) }}</div>
+                </div>
+              </el-checkbox>
+            </div>
+          </el-checkbox-group>
+          <el-button type="primary" @click="linkRelated" :disabled="selectedRelated.length === 0">
+            关联选中的会议
+          </el-button>
+        </div>
       </div>
 
       <!-- 右侧：声纹通话 + 发言者统计 -->
@@ -185,6 +211,9 @@ const meeting = ref(null)
 const editingMinutes = ref(false)
 const showCallRoom = ref(false)
 const saving = ref(false)
+
+const relatedMeetings = ref([])
+const selectedRelated = ref([])
 
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
@@ -278,7 +307,34 @@ const statusType = (s) => ({ scheduled: 'info', recording: 'warning', completed:
 onMounted(async () => {
   await memberStore.fetchMembers()
   await fetchMeeting()
+  await loadRelated()
 })
+
+async function loadRelated() {
+  const apiUrl = import.meta.env.VITE_API_BASE || '/api/v1'
+  try {
+    const resp = await fetch(`${apiUrl}/meetings/${meeting.value.id}/related?top_k=3`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+    })
+    if (resp.ok) {
+      relatedMeetings.value = await resp.json()
+    }
+  } catch (e) {}
+}
+
+async function linkRelated() {
+  const apiUrl = import.meta.env.VITE_API_BASE || '/api/v1'
+  await fetch(`${apiUrl}/meetings/${meeting.value.id}/related`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(selectedRelated.value),
+  })
+  ElMessage.success('已关联')
+  selectedRelated.value = []
+}
 </script>
 
 <style scoped>
@@ -319,6 +375,19 @@ onMounted(async () => {
 .item-row:hover .item-del { opacity: 1; }
 .item-add { width: 100%; justify-content: center; border-style: dashed; }
 .decision-add { color: var(--color-warning); border-color: var(--color-warning); }
+
+/* 相关会议 */
+.related-meetings { margin-top: 16px; padding: 16px; background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--color-border); }
+.related-meetings h3 { margin: 0 0 4px; font-size: 15px; color: var(--color-text-primary); }
+.related-meetings .hint { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
+.related-card { padding: 10px; margin-bottom: 8px; background: var(--color-bg-page); border-radius: var(--radius-md); transition: all 0.2s; }
+.related-card:hover { background: var(--color-primary-bg); }
+.related-content { margin-left: 8px; }
+.related-title { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.related-title a { color: var(--color-primary); font-weight: 500; text-decoration: none; }
+.related-title a:hover { text-decoration: underline; }
+.similarity { color: var(--color-text-secondary); font-size: 12px; }
+.related-summary { font-size: 13px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }
 
 @media (max-width: 768px) {
   .meeting-detail { height: auto; }
