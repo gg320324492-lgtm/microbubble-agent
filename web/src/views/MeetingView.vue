@@ -246,13 +246,20 @@
         ref="meetingRoomRef"
         :meeting-id="liveCallMeeting.id"
         :meeting-title="liveCallMeeting.title"
-        @meeting-ended="onLiveCallEnd"
+        @call-ended="onCallEnded(liveCallMeeting.id)"
         style="height: 70vh"
       />
     </el-dialog>
 
     <!-- 粘贴转录分析对话框 -->
     <PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="fetchMeetings" />
+
+    <!-- 挂断后会后处理进度对话框 -->
+    <ProcessingDialog
+      v-if="processingDialogVisible && processingMeetingId"
+      :meeting-id="processingMeetingId"
+      @close="processingDialogVisible = false"
+    />
   </div>
 </template>
 
@@ -270,6 +277,7 @@ import { useMemberStore } from '@/stores/member'
 import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
+import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
@@ -293,6 +301,21 @@ const meetingRoomRef = ref(null)
 // 声纹通话
 const showLiveCallDialog = ref(false)
 const liveCallMeeting = ref(null)
+
+// 挂断后处理进度弹窗
+const processingDialogVisible = ref(false)
+const processingMeetingId = ref(null)
+
+function onCallEnded(meetingId) {
+  // 关闭通话弹窗，弹出会后处理进度对话框
+  showLiveCallDialog.value = false
+  liveCallMeeting.value = null
+  fetchMeetings()
+  if (meetingId) {
+    processingMeetingId.value = meetingId
+    processingDialogVisible.value = true
+  }
+}
 
 // 编辑会议
 const editMeeting = (meeting) => {
@@ -363,16 +386,6 @@ const startVoiceCreate = async () => {
 const startLiveCall = (meeting) => {
   liveCallMeeting.value = meeting
   showLiveCallDialog.value = true
-}
-
-const onLiveCallEnd = (result) => {
-  showLiveCallDialog.value = false
-  const mid = result?.meetingId || liveCallMeeting.value?.id
-  liveCallMeeting.value = null
-  fetchMeetings()
-  if (mid) {
-    router.push(`/meetings/${mid}`)
-  }
 }
 
 const meetingForm = ref({
