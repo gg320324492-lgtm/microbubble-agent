@@ -24,6 +24,10 @@ class Reminder(Base, TimestampMixin):
     # 发送时间
     sent_at = Column(DateTime)
 
+    # Wave 3a
+    target_type = Column(String(20), default='task')  # 'task' | 'meeting'
+    meeting_id = Column(Integer, nullable=True)  # 关联 meeting
+
     # 关系
     task = relationship("Task", back_populates="reminders")
 
