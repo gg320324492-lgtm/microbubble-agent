@@ -64,6 +64,7 @@ class MeetingService:
         description: Optional[str] = None,
         end_time: Optional[datetime] = None,
         location: Optional[str] = None,
+        agenda: Optional[list] = None,  # Wave 3b: 会议议程
         participant_ids: Optional[List[int]] = None,
         created_by: Optional[int] = None
     ) -> Meeting:
@@ -74,6 +75,7 @@ class MeetingService:
             end_time=end_time,
             description=description,
             location=location,
+            agenda=agenda,
             created_by=created_by,
             status="scheduled"
         )

@@ -10,6 +10,7 @@ class MeetingBase(BaseModel):
     start_time: datetime
     end_time: Optional[datetime] = None
     location: Optional[str] = None
+    agenda: Optional[List[str]] = None  # Wave 3b: 会议议程
 
 
 class MeetingCreate(MeetingBase):
@@ -27,6 +28,7 @@ class MeetingUpdate(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     location: Optional[str] = None
+    agenda: Optional[List[str]] = None  # Wave 3b
     status: Optional[str] = None
     summary: Optional[str] = None
     key_points: Optional[List[str]] = None
