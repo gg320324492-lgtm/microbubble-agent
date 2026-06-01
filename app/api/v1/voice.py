@@ -451,18 +451,67 @@ async def _run_live_loop(
                     msg = json.loads(data["text"])
                     msg_type = msg.get("type")
 
-                    if msg_type == "ai_chat":
-                        user_text = msg.get("text", "")
-                        if user_text.strip():
-                            ai_response = await agent.chat(
-                                message=f"[会议实时对话] {user_text}",
-                                db=db,
-                                session_id=f"meeting_{meeting_id}_live",
-                            )
+                    if msg_type == "ai_command":
+                        # Wave 2b: AI 互动 4 能力
+                        from app.services.meeting_ai_interactive import (
+                            ask_agent, summarize_now, summarize_recent, translate,
+                        )
+                        from app.services.meeting_broadcast_service import publish_ai_reply
+                        from app.voice.tts import tts_service
+                        import asyncio
+
+                        action = msg.get("action")
+                        reply = None
+                        try:
+                            if action == "summarize_recent":
+                                text = await summarize_recent(
+                                    meeting_id, msg.get("seconds", 30)
+                                )
+                                reply = {"type": "ai_reply", "action": action, "text": text}
+                            elif action == "translate":
+                                text = msg.get("text", "")
+                                translated = await translate(
+                                    text, "zh", msg.get("lang", "en")
+                                )
+                                reply = {
+                                    "type": "ai_reply",
+                                    "action": action,
+                                    "text": translated,
+                                    "original": text,
+                                }
+                            elif action == "summarize_now":
+                                result = await summarize_now(meeting_id)
+                                reply = {"type": "ai_reply", "action": action, **result}
+                            elif action == "ask":
+                                answer = await ask_agent(
+                                    meeting_id, msg.get("question", "")
+                                )
+                                reply = {
+                                    "type": "ai_reply",
+                                    "action": action,
+                                    "text": answer,
+                                }
+
+                            if reply:
+                                # 1. 推给本 WS
+                                await websocket.send_json(reply)
+                                # 2. 多设备广播
+                                await publish_ai_reply(meeting_id, reply)
+                                # 3. TTS 推送（summarize_recent 和 ask 才推送）
+                                if action in ("summarize_recent", "ask"):
+                                    try:
+                                        mp3 = await asyncio.to_thread(
+                                            tts_service.synthesize, reply.get("text", "")
+                                        )
+                                        await websocket.send_bytes(mp3)
+                                    except Exception as e:
+                                        logger.error(f"TTS 失败: {e}")
+                        except Exception as e:
+                            logger.error(f"AI command 失败: {e}")
                             await websocket.send_json({
                                 "type": "ai_reply",
-                                "text": ai_response.get("content", "")[:200],
-                                "speaker": "小气助手",
+                                "action": action,
+                                "text": f"（处理失败：{str(e)[:50]}）",
                             })
 
                     elif msg_type == "hangup":
