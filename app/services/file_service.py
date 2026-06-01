@@ -93,6 +93,36 @@ class FileService:
             "content_type": content_type
         }
 
+    async def upload_to_path(
+        self,
+        object_name: str,
+        file_data: bytes,
+        content_type: str = "application/octet-stream",
+    ) -> dict:
+        """
+        上传文件到指定完整路径（bypass UUID 后缀逻辑）。
+        用于系统自动生成的音频存档等固定路径场景。
+        """
+        def _sync_upload():
+            from io import BytesIO
+            self.client.put_object(
+                Bucket=self.bucket,
+                Key=object_name,
+                Body=BytesIO(file_data),
+                Length=len(file_data),
+                ContentType=content_type,
+            )
+
+        await asyncio.to_thread(_sync_upload)
+        return {
+            "object_name": object_name,
+            "filename": object_name.split("/")[-1],
+            "size": len(file_data),
+            "content_type": content_type,
+            # 公开读 URL（bucket policy 已是 public-read）
+            "url": f"/{self.bucket}/{object_name}",
+        }
+
     def get_url(self, object_name: str, expires: int = 3600) -> str:
         """获取文件临时访问 URL"""
         return self.client.presigned_get_object(
