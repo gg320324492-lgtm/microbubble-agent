@@ -73,3 +73,56 @@ async def list_enrolled_members(
     """获取已录入声纹的成员列表"""
     members = await voiceprint_service.get_enrolled_members(db)
     return {"members": members}
+
+
+@router.get("/voiceprint/fingerprints")
+async def get_all_fingerprints(
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """返回所有成员的 256 维 embedding + 元数据（声纹库中心）"""
+    from app.services.voiceprint_service import get_fingerprints
+    return await get_fingerprints(db)
+
+
+@router.get("/voiceprint/{member_id}/history")
+async def get_member_voiceprint_history(
+    member_id: int,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """返回该成员的声纹识别置信度历史（最近 N 次）"""
+    from sqlalchemy import select, desc
+    from app.models.voiceprint_history import VoiceprintHistory
+    from app.models.meeting import Meeting
+    stmt = (
+        select(VoiceprintHistory, Meeting)
+        .join(Meeting, VoiceprintHistory.meeting_id == Meeting.id)
+        .where(VoiceprintHistory.member_id == member_id)
+        .order_by(desc(VoiceprintHistory.recorded_at))
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+    return [
+        {
+            "meeting_id": h.meeting_id,
+            "meeting_title": m.title,
+            "confidence": h.confidence,
+            "recorded_at": h.recorded_at.isoformat(),
+        }
+        for h, m in rows
+    ]
+
+
+@router.get("/voiceprint/search")
+async def search_speaker(
+    member_id: int,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """跨会议反查"该成员说过的内容" """
+    from app.services.voiceprint_service import search_speaker_history
+    return await search_speaker_history(db, member_id, limit)
