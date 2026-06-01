@@ -947,7 +947,8 @@ class MicroBubbleAgent:
                 meeting = await meeting_svc.create_meeting(
                     title=input_data["title"],
                     start_time=start_time,
-                    description=input_data.get("agenda"),
+                    description=input_data.get("description"),
+                    agenda=input_data.get("agenda"),  # Wave 3b 修复：agenda 不再错位到 description
                     location=input_data.get("location"),
                     participant_ids=participant_ids
                 )
