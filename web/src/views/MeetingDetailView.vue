@@ -134,7 +134,7 @@
       <div class="detail-side">
         <el-card class="section-card">
           <template #header><span>声纹通话</span></template>
-          <MeetingRoom v-if="showCallRoom" :meeting-id="meeting.id" :meeting-title="meeting.title" @meeting-ended="onCallEnd" style="height: 400px" />
+          <MeetingRoom v-if="showCallRoom" :meeting-id="meeting.id" :meeting-title="meeting.title" @call-ended="onCallEnded" style="height: 400px" />
           <div v-else class="call-placeholder" @click="startLiveCall">
             <el-icon size="40" color="#FF7A5C"><Phone /></el-icon>
             <p>点击开始声纹通话</p>
@@ -157,6 +157,13 @@
   </div>
 
   <div v-else class="loading-state"><el-icon class="is-loading" size="24"><Loading /></el-icon> 加载中...</div>
+
+  <!-- 挂断后会后处理进度对话框 -->
+  <ProcessingDialog
+    v-if="processingDialogVisible && meeting"
+    :meeting-id="meeting.id"
+    @close="processingDialogVisible = false"
+  />
 </template>
 
 <script setup>
@@ -168,6 +175,7 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 import MeetingRoom from '@/components/MeetingRoom.vue'
+import ProcessingDialog from '@/components/ProcessingDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -246,6 +254,15 @@ const startLiveCall = () => {
 }
 
 const onCallEnd = () => { showCallRoom.value = false; fetchMeeting() }
+
+// 挂断后处理进度弹窗
+const processingDialogVisible = ref(false)
+const onCallEnded = () => {
+  // 关闭嵌入式通话卡片，弹出会后处理进度对话框
+  showCallRoom.value = false
+  fetchMeeting()
+  processingDialogVisible.value = true
+}
 
 const handleDelete = async () => {
   try {
