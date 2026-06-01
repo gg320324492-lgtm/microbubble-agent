@@ -17,6 +17,8 @@ from app.schemas.meeting import (
 )
 from app.services.meeting_service import MeetingService
 from app.services.meeting_analysis_service import meeting_analysis
+from app.services.progress_service import init_progress
+from app.services.post_meeting_tasks import post_meeting_process
 from app.agent.core import agent
 
 router = APIRouter()
@@ -372,3 +374,45 @@ async def get_meeting_analytics(
             "speaker_count": len(meeting.speaker_stats or []),
         },
     )
+
+
+@router.post("/meetings/{meeting_id}/end-call", status_code=200)
+async def end_meeting_call(
+    meeting_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """挂断会议：标记完成 + 启动 Celery 任务 + 返回进度 WS URL"""
+    import datetime
+
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+
+    # 校验用户是参与者
+    part_result = await db.execute(
+        select(MeetingParticipant).where(
+            MeetingParticipant.meeting_id == meeting_id,
+            MeetingParticipant.member_id == current_user.id,
+        )
+    )
+    if not part_result.scalar_one_or_none():
+        raise HTTPException(status_code=403, detail="非会议参与者")
+
+    # 更新状态
+    meeting.status = "completed"
+    meeting.end_time = datetime.datetime.utcnow()
+    await db.commit()
+
+    # 初始化进度
+    await init_progress(meeting_id)
+
+    # 启动 Celery
+    post_meeting_process.delay(meeting_id)
+
+    return {
+        "status": "ended",
+        "meeting_id": meeting_id,
+        "progress_ws_url": f"/api/v1/ws/meeting/{meeting_id}/progress",
+    }
