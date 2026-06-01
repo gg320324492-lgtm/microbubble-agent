@@ -213,3 +213,32 @@ class VoiceprintService:
 
 # 全局单例
 voiceprint_service = VoiceprintService()
+
+
+async def get_fingerprints(
+    db: AsyncSession,
+    member_ids: list[int] | None = None,
+) -> list[dict]:
+    """
+    批量返回成员的 256 维 embedding + 元数据。
+    用于声纹库页面一次性加载。
+    """
+    from sqlalchemy import select
+    from app.models.member import Member
+    stmt = select(Member)
+    if member_ids is not None:
+        stmt = stmt.where(Member.id.in_(member_ids))
+    stmt = stmt.where(Member.voice_embedding.isnot(None), Member.is_active == True)
+    result = await db.execute(stmt)
+    members = result.scalars().all()
+    return [
+        {
+            "id": m.id,
+            "name": m.name,
+            "avatar": m.avatar,
+            "embedding": list(m.voice_embedding) if m.voice_embedding is not None else [],
+            "enrolled_at": m.voice_enrolled_at.isoformat() if m.voice_enrolled_at else None,
+            "sample_count": m.voice_sample_count or 0,
+        }
+        for m in members
+    ]
