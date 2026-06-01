@@ -37,6 +37,7 @@ async def create_meeting(
         start_time=meeting_data.start_time,
         end_time=meeting_data.end_time,
         location=meeting_data.location,
+        agenda=meeting_data.agenda,  # Wave 3b
         meeting_url=meeting_data.meeting_url,
         meeting_id=meeting_data.meeting_id,
         status="scheduled"
@@ -484,3 +485,23 @@ async def set_related_meetings(
     from app.services.meeting_service import link_related_meetings
     await link_related_meetings(db, meeting_id, related_ids)
     return {"status": "linked", "count": len(related_ids)}
+
+
+# === Wave 3b: 议程端点 ===
+@router.patch("/meetings/{meeting_id}/agenda", status_code=200)
+async def update_meeting_agenda(
+    meeting_id: int,
+    agenda: list,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """通话中更新议程（手动勾选完成 / 模板应用后写入）"""
+    meeting = (await db.execute(
+        select(Meeting).where(Meeting.id == meeting_id)
+    )).scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    meeting.agenda = agenda
+    await db.commit()
+    await db.refresh(meeting)
+    return {"status": "updated", "agenda": agenda}
