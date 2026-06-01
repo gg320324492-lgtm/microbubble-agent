@@ -137,6 +137,9 @@
             placeholder="请输入会议说明"
           />
         </el-form-item>
+        <el-form-item label="提前提醒">
+          <el-checkbox v-model="meetingForm.remindBefore">会议前 5 分钟企业微信提醒</el-checkbox>
+        </el-form-item>
 
         <!-- 编辑已有会议时显示纪要字段 -->
         <template v-if="editingMeetingId">
@@ -328,6 +331,7 @@ const editMeeting = (meeting) => {
     summary: meeting.summary || '',
     key_points: meeting.key_points ? [...meeting.key_points] : [],
     decisions: meeting.decisions ? [...meeting.decisions] : [],
+    remindBefore: meeting.remind_before !== false,
   }
   editingMeetingId.value = meeting.id
   showCreateDialog.value = true
@@ -361,7 +365,7 @@ const submitMeeting = async () => {
     }
     showCreateDialog.value = false
     editingMeetingId.value = null
-    meetingForm.value = { title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [] }
+    meetingForm.value = { title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [], remindBefore: true }
     fetchMeetings()
   } catch (e) {
     ElMessage.error(editingMeetingId.value ? '更新失败' : '创建失败')
@@ -391,6 +395,7 @@ const startLiveCall = (meeting) => {
 const meetingForm = ref({
   title: '', start_time: '', location: '', participants: [], description: '',
   summary: '', key_points: [], decisions: [],
+  remindBefore: true,
 })
 
 
