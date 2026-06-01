@@ -12,6 +12,7 @@ from app.models.memory import Memory
 from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory
+from app.models.meeting_template import MeetingTemplate  # Wave 3b
 
 __all__ = [
     "Member",
@@ -19,6 +20,7 @@ __all__ = [
     "TaskDependency",
     "Meeting",
     "MeetingParticipant",
+    "MeetingTemplate",
     "Project",
     "Milestone",
     "Knowledge",
