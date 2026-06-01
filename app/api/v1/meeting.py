@@ -459,3 +459,28 @@ async def delete_meeting_audio(
     await db.commit()
 
     return {"status": "deleted", "meeting_id": meeting_id}
+
+
+@router.get("/meetings/{meeting_id}/related")
+async def get_related_meetings(
+    meeting_id: int,
+    top_k: int = 3,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """返回与该会议最相似的 top-k 历史会议"""
+    from app.services.meeting_service import find_related_meetings
+    return await find_related_meetings(db, meeting_id, top_k)
+
+
+@router.post("/meetings/{meeting_id}/related", status_code=200)
+async def set_related_meetings(
+    meeting_id: int,
+    related_ids: list[int],
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """手动设置会议关联（人类选抨）"""
+    from app.services.meeting_service import link_related_meetings
+    await link_related_meetings(db, meeting_id, related_ids)
+    return {"status": "linked", "count": len(related_ids)}
