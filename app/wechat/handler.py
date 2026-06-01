@@ -484,7 +484,7 @@ class MessageHandler:
         """异步处理群聊 agent 对话"""
         try:
             enriched_msg = f"[群聊, 用户: {member.name}, 角色: {member.role}] {content}"
-            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
+            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id, channel_user_id=user_id)
             reply = result.get("content", "抱歉，处理失败了。")
             await self._reply_long_text_to_group(chat_id, reply)
         except Exception as e:
@@ -570,6 +570,13 @@ class MessageHandler:
         user_id = msg.get("FromUserName", "")
         recognition = msg.get("Recognition", "")
 
+        # === 优先检查 pending_enroll 状态（用户正在等待录入声纹）===
+        pending_enroll = await self._get_pending_enroll(user_id)
+        if pending_enroll:
+            handled = await self._try_handle_voice_enroll(msg, member, user_id, db, pending_enroll, is_external)
+            if handled:
+                return  # 已走声纹录入分支，不再走 ASR/Agent 对话
+
         if recognition:
             msg_copy = dict(msg)
             msg_copy["MsgType"] = "text"
@@ -600,6 +607,120 @@ class MessageHandler:
         except Exception as e:
             logger.error(f"语音处理失败: {e}", exc_info=True)
             await self._reply_text(user_id, "语音处理出错了。", is_external, msg=msg)
+
+    # ==================== 声纹录入状态机 ====================
+
+    async def _get_pending_enroll(self, user_id: str) -> dict | None:
+        """从 Redis 获取等待录入声纹状态（5 分钟 TTL）"""
+        try:
+            r = await get_redis()
+            data = await r.get(f"wechat:pending_enroll:{user_id}")
+            return json.loads(data) if data else None
+        except Exception as e:
+            logger.warning(f"读取 pending_enroll 失败: {e}")
+            return None
+
+    async def _clear_pending_enroll(self, user_id: str) -> None:
+        """清除等待录入声纹状态"""
+        try:
+            r = await get_redis()
+            await r.delete(f"wechat:pending_enroll:{user_id}")
+        except Exception as e:
+            logger.warning(f"清除 pending_enroll 失败: {e}")
+
+    async def _try_handle_voice_enroll(
+        self, msg: dict, member: Member, user_id: str,
+        db: AsyncSession, pending: dict, is_external: bool
+    ) -> bool:
+        """用微信语音自动录入声纹
+
+        Returns:
+            True 表示已处理（无论成功失败），False 表示非语音消息继续走原逻辑
+        """
+        media_id = msg.get("MediaId", "")
+        if not media_id:
+            return False
+
+        member_id = pending.get("member_id")
+        if not member_id:
+            await self._clear_pending_enroll(user_id)
+            return False
+
+        # 1. 下载原始语音（SILK/AMR/WAV 任意）
+        try:
+            voice_data = await vision_service.download_voice(media_id)
+        except Exception as e:
+            logger.error(f"下载微信语音失败: {e}")
+            voice_data = None
+        if not voice_data:
+            await self._reply_text(user_id, "❌ 语音下载失败，请重试。", is_external, msg=msg)
+            # 不清 pending，让用户重试
+            return True
+
+        # 2. 提示用户正在处理
+        await self._reply_text(user_id, "🔄 正在录入声纹，请稍等...", is_external, msg=msg)
+
+        # 3. ffmpeg → 16kHz mono float32
+        from app.utils.audio import decode_audio_to_float32, is_audio_silent
+        try:
+            audio_array = await decode_audio_to_float32(voice_data, timeout=15.0)
+        except Exception as e:
+            logger.error(f"音频解码失败: {e}")
+            await self._reply_text(
+                user_id,
+                f"❌ 声纹录入失败：音频格式不支持（{str(e)[:50]}）。\n请重新发送一段语音（10秒以上），或前往网页版『成员管理』录入。",
+                is_external, msg=msg,
+            )
+            return True
+
+        if is_audio_silent(audio_array):
+            await self._reply_text(
+                user_id, "❌ 录到的是静音，请在安静环境下重新发送一段 10 秒以上语音。",
+                is_external, msg=msg,
+            )
+            return True
+
+        if len(audio_array) < 16000 * 2:  # 至少 2 秒
+            await self._reply_text(
+                user_id, f"❌ 语音太短（{len(audio_array) / 16000:.1f}秒），请发送 10 秒以上语音。",
+                is_external, msg=msg,
+            )
+            return True
+
+        # 4. 录入声纹
+        from app.services.voiceprint_service import voiceprint_service
+        try:
+            success = await voiceprint_service.enroll_member(db, member_id, audio_array)
+        except Exception as e:
+            logger.error(f"声纹录入失败: {e}", exc_info=True)
+            success = False
+
+        if success:
+            # 录入成功：清除 pending
+            await self._clear_pending_enroll(user_id)
+            sample_count = 1
+            try:
+                from app.models.member import Member as MemberModel
+                m_result = await db.get(MemberModel, member_id)
+                if m_result:
+                    sample_count = m_result.voice_sample_count or 1
+            except Exception:
+                pass
+            await self._reply_text(
+                user_id,
+                f"✅ 声纹录入成功！（{pending.get('member_name', '')}，第 {sample_count} 次采样）\n小气现在能识别你的声音啦。",
+                is_external, msg=msg,
+            )
+            print(f"[WECHAT] 声纹录入成功: user_id={user_id}, member_id={member_id}", flush=True)
+        else:
+            # 录入失败：保留 pending，让用户重试
+            await self._reply_text(
+                user_id,
+                "❌ 声纹录入失败，请重试。\n如持续失败，请前往网页版『成员管理』→ 选择成员 →『录入声纹』按钮操作。",
+                is_external, msg=msg,
+            )
+
+        return True
 
     # ==================== 工具方法 ====================
 
@@ -958,7 +1079,7 @@ class MessageHandler:
         user_id = msg.get("_resolved_user_id") or msg.get("FromUserName", "")
         try:
             enriched_msg = f"[用户: {member.name}, 角色: {member.role}] {content}"
-            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id)
+            result = await agent.chat(message=enriched_msg, session_id=session_id, db=db, user_id=member.id, channel_user_id=user_id)
             reply = result.get("content", "抱歉，处理失败了。")
             await self._reply_long_text(user_id, reply, is_external, msg=msg)
         except Exception as e:
@@ -1069,7 +1190,8 @@ class MessageHandler:
                 message=f"[用户: {member.name}, 角色: {member.role}] {content}",
                 session_id=session_id,
                 db=db,
-                user_id=member.id
+                user_id=member.id,
+                channel_user_id=user_id,
             )
 
             reply = result.get("content", "抱歉，处理失败了。")

@@ -59,6 +59,8 @@ class MemberResponse(MemberBase):
     is_active: bool
     role: str
     created_at: datetime
+    voice_enrolled_at: Optional[datetime] = None  # 声纹录入时间（None = 未录入）
+    voice_sample_count: Optional[int] = None  # 声纹采样次数
 
     class Config:
         from_attributes = True

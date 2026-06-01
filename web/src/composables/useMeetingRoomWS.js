@@ -28,7 +28,10 @@ export function useMeetingRoomWS() {
   const onTTSAudio = ref(null)  // 二进制 TTS MP3
 
   let reconnectAttempts = 0
-  let maxReconnectAttempts = 3
+  let maxReconnectAttempts = 10
+  const maxReconnectDelay = 30000  // 30s 退避上限
+  let everConnected = false  // 区分「首次连接失败」与「运行中断开」
+  let reconnectTimer = null  // 跟踪重连定时器（防止 disconnect 后又触发）
   let pendingAudioQueue = []  // 重连前累积的音频
   // Wave 3b: pending 数量变化通知（用于 NetworkStatusBar 显示）
   const pendingCount = ref(0)
@@ -48,7 +51,10 @@ export function useMeetingRoomWS() {
     ws.value.onopen = () => {
       connected.value = true
       reconnecting.value = false
-      reconnectAttempts = 0
+      everConnected = true
+      // 注意：不要在这里把 reconnectAttempts = 0 — 让退避曲线继续走，
+      // 避免「重连成功 → 服务端又抖断 → 退避从头算起」的循环闪烁。
+      // 一旦用户主动挂断（disconnect → resetReconnect）才清零。
       // 重连后 flush 累积音频
       while (pendingAudioQueue.length > 0) {
         const chunk = pendingAudioQueue.shift()
@@ -85,14 +91,24 @@ export function useMeetingRoomWS() {
         if (onError.value) onError.value({ message: '登录已过期' })
         return
       }
+      // 主动 disconnect 不重连
+      if (!ws.value) {
+        return
+      }
       // 自动重连
       if (reconnectAttempts < maxReconnectAttempts) {
         reconnecting.value = true
         reconnectAttempts++
-        const delay = Math.pow(2, reconnectAttempts) * 500
-        setTimeout(() => connect(meetingId, token), delay)
+        // 指数退避（首次 1s，封顶 30s）
+        const delay = Math.min(Math.pow(2, reconnectAttempts) * 500, maxReconnectDelay)
+        console.log(`[WS] 断开 (code=${e.code}), ${delay}ms 后第 ${reconnectAttempts} 次重连`)
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null
+          connect(meetingId, token)
+        }, delay)
       } else {
-        if (onError.value) onError.value({ message: '连接断开' })
+        reconnecting.value = false
+        if (onError.value) onError.value({ message: '连接已断开，请刷新页面重试' })
       }
     }
   }
@@ -178,11 +194,19 @@ export function useMeetingRoomWS() {
   }
 
   function disconnect() {
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
     if (ws.value) {
       ws.value.close()
       ws.value = null
     }
     connected.value = false
+    reconnecting.value = false
+    // 主动挂断后才清零，下次 connect() 重新从 0 开始
+    reconnectAttempts = 0
+    everConnected = false
   }
 
   onUnmounted(() => {
