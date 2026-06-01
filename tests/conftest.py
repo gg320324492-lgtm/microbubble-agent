@@ -34,7 +34,14 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_db():
-    """创建测试表"""
+    """创建测试表
+
+    通过设置环境变量 SKIP_DB_SETUP=1 可跳过 DB 初始化，
+    适用于纯 mock/单元测试（如 LLM 工具调用测试）。
+    """
+    if os.getenv("SKIP_DB_SETUP"):
+        yield
+        return
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
