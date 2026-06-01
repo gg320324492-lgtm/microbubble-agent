@@ -18,6 +18,9 @@ export function useMeetingRoomWS() {
   const onPolished = ref(null)    // (data) => void
   const onError = ref(null)       // (data) => void
   const onEnded = ref(null)       // () => void
+  const onMessage = ref(null)     // 通用消息回调
+  const onSpeakerUnidentified = ref(null)
+  const onSpeakerClaimAck = ref(null)
 
   let reconnectAttempts = 0
   let maxReconnectAttempts = 3
@@ -92,10 +95,18 @@ export function useMeetingRoomWS() {
       case 'meeting_ended':
         if (onEnded.value) onEnded.value()
         break
+      case 'speaker_unidentified':
+        if (onSpeakerUnidentified.value) onSpeakerUnidentified.value(msg)
+        break
+      case 'speaker_claim_ack':
+        if (onSpeakerClaimAck.value) onSpeakerClaimAck.value(msg)
+        break
       case 'audio_level':
         audioLevel.value = msg.level
         break
     }
+    // 通用消息回调（兜底，避免新增 type 时静默丢失）
+    if (onMessage.value) onMessage.value(msg)
   }
 
   function sendAudio(int16ArrayBuffer) {
@@ -117,6 +128,17 @@ export function useMeetingRoomWS() {
     disconnect()
   }
 
+  function sendSpeakerClaim(segmentId, memberId, speakerLabel) {
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+      ws.value.send(JSON.stringify({
+        type: 'speaker_claim',
+        segment_id: segmentId,
+        member_id: memberId,
+        speaker_label: speakerLabel,
+      }))
+    }
+  }
+
   function disconnect() {
     if (ws.value) {
       ws.value.close()
@@ -134,6 +156,7 @@ export function useMeetingRoomWS() {
     disconnect,
     sendAudio,
     sendHangup,
+    sendSpeakerClaim,
     connected,
     reconnecting,
     audioLevel,
@@ -141,5 +164,8 @@ export function useMeetingRoomWS() {
     onPolished,
     onError,
     onEnded,
+    onMessage,
+    onSpeakerUnidentified,
+    onSpeakerClaimAck,
   }
 }
