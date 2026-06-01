@@ -21,6 +21,11 @@ export function useMeetingRoomWS() {
   const onMessage = ref(null)     // 通用消息回调
   const onSpeakerUnidentified = ref(null)
   const onSpeakerClaimAck = ref(null)
+  const onAIReply = ref(null)
+  const onTranscriptOthers = ref(null)
+  const onAIReplyOthers = ref(null)
+  const onTranscriptHistory = ref(null)
+  const onTTSAudio = ref(null)  // 二进制 TTS MP3
 
   let reconnectAttempts = 0
   let maxReconnectAttempts = 3
@@ -46,6 +51,10 @@ export function useMeetingRoomWS() {
     }
 
     ws.value.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        if (onTTSAudio.value) onTTSAudio.value(event.data)
+        return
+      }
       if (typeof event.data === 'string') {
         try {
           const msg = JSON.parse(event.data)
@@ -54,7 +63,6 @@ export function useMeetingRoomWS() {
           console.error('WS 消息解析失败:', e)
         }
       }
-      // 二进制帧（暂时不处理）
     }
 
     ws.value.onerror = (e) => {
@@ -104,6 +112,18 @@ export function useMeetingRoomWS() {
       case 'audio_level':
         audioLevel.value = msg.level
         break
+      case 'ai_reply':
+        if (onAIReply.value) onAIReply.value(msg)
+        break
+      case 'transcript_others':
+        if (onTranscriptOthers.value) onTranscriptOthers.value(msg)
+        break
+      case 'ai_reply_others':
+        if (onAIReplyOthers.value) onAIReplyOthers.value(msg)
+        break
+      case 'transcript_history':
+        if (onTranscriptHistory.value) onTranscriptHistory.value(msg)
+        break
     }
     // 通用消息回调（兜底，避免新增 type 时静默丢失）
     if (onMessage.value) onMessage.value(msg)
@@ -139,6 +159,12 @@ export function useMeetingRoomWS() {
     }
   }
 
+  function sendAICommand(action, params = {}) {
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+      ws.value.send(JSON.stringify({ type: 'ai_command', action, ...params }))
+    }
+  }
+
   function disconnect() {
     if (ws.value) {
       ws.value.close()
@@ -157,6 +183,7 @@ export function useMeetingRoomWS() {
     sendAudio,
     sendHangup,
     sendSpeakerClaim,
+    sendAICommand,
     connected,
     reconnecting,
     audioLevel,
@@ -167,5 +194,10 @@ export function useMeetingRoomWS() {
     onMessage,
     onSpeakerUnidentified,
     onSpeakerClaimAck,
+    onAIReply,
+    onTranscriptOthers,
+    onAIReplyOthers,
+    onTranscriptHistory,
+    onTTSAudio,
   }
 }
