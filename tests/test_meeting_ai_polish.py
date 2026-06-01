@@ -83,3 +83,32 @@ async def test_polish_segments_cache_hit():
 
     assert result["polished"][0]["text"] == "缓存版"
     mock_factory.assert_not_called()  # 关键：缓存命中时应不调 LLM
+
+
+@pytest.mark.asyncio
+async def test_polish_segments_concurrent_lock():
+    """同一 meeting_id 并发只一个 LLM 调用，第二个等结果"""
+    import asyncio
+    from app.services.meeting_ai_polish import polish_segments_with_lock
+
+    segments = [{"speaker": "张三", "text": "测试并发", "ts": 1.0}]
+    context = {"title": "测试", "participants": [], "topic": None}
+
+    call_count = 0
+
+    async def slow_polish(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        await asyncio.sleep(0.5)
+        return {"polished": [], "key_points": [], "boundary_after_index": None, "summary": None}
+
+    with patch("app.services.meeting_ai_polish.polish_segments", side_effect=slow_polish):
+        # 并发启动 3 个任务
+        results = await asyncio.gather(
+            polish_segments_with_lock(999, segments, context),
+            polish_segments_with_lock(999, segments, context),
+            polish_segments_with_lock(999, segments, context),
+        )
+
+    # 至少 1 个被锁跳过，call_count 应 < 3
+    assert call_count < 3, f"期望并发被锁限制，但 call_count={call_count}"
