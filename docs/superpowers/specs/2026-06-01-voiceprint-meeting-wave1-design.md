@@ -116,6 +116,7 @@ async def polish_segments(
 **并发控制**：
 - 同一 meeting_id 同一时间只允许 1 个 polish 任务（Redis `SETNX polish:lock:{meeting_id}` 60s TTL）
 - 失败时 DEL lock，调用方捕获后重试或跳过
+- **Lock TTL：120s**（Sonnet 长上下文 + 慢网络可能 > 60s）
 
 **调用方式**：
 - 通过 `app/voice/pipeline.py` 在 VAD 段满（静音 > 1.5s 或累积 > 8s）时触发
@@ -386,6 +387,7 @@ async def end_meeting_call(
 **AI 润色层**（核心）：
 - 每条 entry 状态机：`pending`（ASR 原文 + "润色中…"灰色）→ `polishing` → `polished`（替换文本）→ `error`（原文 + "润色失败"角标）
 - `key_points` 渲染：在 polished entry 下用 ✨ 黄色徽章显示 `重要决策` / ⏰ 蓝色徽章显示 `待办` / ⚠️ 红色徽章显示 `风险`
+  - **匹配方式**：key_point 携带 `ts`（时间戳），前端按 ts 在 polished entries 中找最近 0.5s 内的 entry，把徽章渲染在该 entry 下方
 - 边界切换：相邻 entry speaker 不同时，渲染一条细分隔线（避免每 2s 机械分隔）
 
 **关键句高亮规则**（来自后端结构化 JSON）：
@@ -418,7 +420,7 @@ async def end_meeting_call(
 **快捷指令**（点击触发 WS 消息）：
 - "📝 总结最近 30 秒" → `ai_command: {action: "summarize_recent", seconds: 30}`
 - "🌐 中英翻译" → `ai_command: {action: "translate"}`
-- "🤔 AI 提问" → `ai_command: {action: "ai_question"}`（属第二波，本波 UI 占位）
+- "🤔 AI 提问" → `ai_command: {action: "ai_question"}`（属第二波，本波 UI 占位按钮）
 
 **响应接收**：
 - 后端通过 `ai_reply` 消息推送
@@ -489,6 +491,7 @@ async def end_meeting_call(
 - 拆出 `<MeetingCreateDialog>` / `<LiveTranscriptDialog>` / `<MeetingRoomDialog>`（现有 713 行拆分）
 - 通话挂断后弹出 `ProcessingDialog`
 - 不在 `MeetingView` 列表里直接渲染 `LiveTranscript`（避免与 MeetingRoom 重复路径）
+- **LiveTranscript.vue 处置**：本波后从 `MeetingView` 移除引用，下一波可废弃文件
 
 **MeetingDetailView.vue**：
 - 现有嵌入 `MeetingRoom`（height 400px）保持
