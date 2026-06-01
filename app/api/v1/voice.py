@@ -349,6 +349,10 @@ async def meeting_live_ws(
         voiceprint_service=None,  # 使用默认 voiceprint_service（DI 注入默认）
     )
 
+    # audio_level 旁路推送（每 100ms 推最近音频的 RMS，wave 2a 任务 10）
+    audio_queue: asyncio.Queue = asyncio.Queue(maxsize=20)
+    level_task = asyncio.create_task(_audio_level_loop(websocket, audio_queue))
+
     # 每条 WS 独立 DB 会话（声纹识别 + speaker_mapping 查询需要）
     async with async_session() as db:
         # 预加载 meeting（speaker_mapping 用于将原始声纹 label 映射为真实姓名）
@@ -360,7 +364,7 @@ async def meeting_live_ws(
 
         return await _run_live_loop(
             websocket, meeting_id, db, meeting,
-            segmenter, pipeline,
+            segmenter, pipeline, audio_queue, level_task,
         )
 
 
@@ -416,6 +420,8 @@ async def _run_live_loop(
     meeting,
     segmenter: LiveSegmenter,
     pipeline: MeetingPipeline,
+    audio_queue: asyncio.Queue,
+    level_task: asyncio.Task,
 ):
     """会议 /live WS 主循环（wave 2a 任务 9 重构版）
 
@@ -423,6 +429,7 @@ async def _run_live_loop(
     - 主流程：MeetingPipeline（per-WS VAD + 声纹 + ASR）
     - 兜底：LiveSegmenter + 18000 字节 ASR（pipeline 未输出时使用）
     - 收到 ai_chat JSON → 调用 agent 回复
+    - audio_level 旁路推送：每次收到 PCM 推入 audio_queue，_audio_level_loop 消费
     """
     start_time = time.time()
     transcript_entries = []
@@ -457,6 +464,12 @@ async def _run_live_loop(
 
             pcm_chunk = data["bytes"]
             audio_buffer += pcm_chunk
+
+            # 入队 audio_level（旁路推送，每 100ms 推一次）
+            try:
+                audio_queue.put_nowait(pcm_chunk)
+            except asyncio.QueueFull:
+                pass  # 队列满时丢弃旧数据
 
             # 主流程：MeetingPipeline（VAD + 声纹 + ASR）
             pipeline_emitted = False
@@ -607,6 +620,13 @@ async def _run_live_loop(
                     audio_buffer = b""
 
     except WebSocketDisconnect:
+        # 关闭 audio_level 推送
+        level_task.cancel()
+        try:
+            await level_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
         # 保存转录到会议记录，自动分析
         analysis_result = None
         try:
@@ -650,3 +670,45 @@ async def _run_live_loop(
             })
         except Exception:
             pass
+
+
+async def _audio_level_loop(websocket: WebSocket, audio_queue: asyncio.Queue):
+    """每 100ms 计算最近音频的 RMS（0-1 归一化），推 audio_level 消息
+
+    供前端可视化音量条使用。WS 断开或异常时退出。
+    """
+    BYTES_PER_SAMPLE = 2
+    RMS_NORMALIZATION = 10000  # 经验系数（Int16 PCM 的典型语音 RMS 约 3000-8000）
+
+    while True:
+        try:
+            data = await asyncio.wait_for(audio_queue.get(), timeout=0.5)
+            if not data:
+                level = 0.0
+            else:
+                num_samples = len(data) // BYTES_PER_SAMPLE
+                if num_samples == 0:
+                    level = 0.0
+                else:
+                    total_sq = 0
+                    for i in range(0, num_samples * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE):
+                        sample = int.from_bytes(
+                            data[i:i + BYTES_PER_SAMPLE], "little", signed=True
+                        )
+                        total_sq += sample * sample
+                    rms = (total_sq / num_samples) ** 0.5
+                    level = min(1.0, rms / RMS_NORMALIZATION)
+        except asyncio.TimeoutError:
+            level = 0.0
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"audio_level 异常: {e}")
+            break
+
+        try:
+            await websocket.send_json({"type": "audio_level", "level": round(level, 3)})
+        except Exception:
+            break
+
+        await asyncio.sleep(0.1)
