@@ -15,7 +15,8 @@ import logging
 from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
-from app.voice.pipeline import meeting_pipeline, RingBuffer, SAMPLE_RATE
+from app.voice.pipeline import meeting_pipeline, MeetingPipeline, RingBuffer, SAMPLE_RATE
+from app.voice.vad import VADEngine
 from app.voice.segmenter import LiveSegmenter
 from app.agent.core import agent
 from app.core.database import get_db, async_session
@@ -24,6 +25,7 @@ from app.models.member import Member
 from app.models.meeting import Meeting
 from app.services.meeting_service import MeetingService
 from app.services.meeting_ai_polish import polish_segments_with_lock
+from app.services.speaker_unidentified_service import get_unenrolled_participants
 
 logger = logging.getLogger("microbubble.voice")
 
@@ -339,177 +341,27 @@ async def meeting_live_ws(
     # 创建段满检测器（每条 WS 独立实例，无状态污染）
     segmenter = LiveSegmenter(silence_threshold_ms=1500, max_segment_ms=8000)
 
-    start_time = time.time()
-    transcript_entries = []
-    audio_buffer = b""
-    last_text = ""
+    # 创建 per-WS VAD + MeetingPipeline 实例（避免 VAD 状态污染，wave 2a 任务 5）
+    vad = VADEngine()
+    pipeline = MeetingPipeline(
+        vad_engine=vad,
+        asr_service=asr_service,
+        voiceprint_service=None,  # 使用默认 voiceprint_service（DI 注入默认）
+    )
 
-    # 噪音过滤黑名单
-    NOISE_PATTERNS = ["字幕", "志愿者", "谢谢观看", "观看谢谢", "中文字幕", "翻译", "字幕组"]
-
-    try:
-        while True:
-            data = await websocket.receive()
-
-            # 文字控制消息
-            if "text" in data:
-                try:
-                    msg = json.loads(data["text"])
-                    if msg.get("type") == "ai_chat":
-                        user_text = msg.get("text", "")
-                        if user_text.strip():
-                            ai_response = await agent.chat(
-                                message=f"[会议实时对话] {user_text}", db=None)
-                            await websocket.send_json({
-                                "type": "ai_reply",
-                                "text": ai_response.get("content", "")[:200],
-                                "speaker": "小气助手",
-                            })
-                except Exception:
-                    pass
-                continue
-
-            # 音频数据 — 直接 ASR 转写
-            if "bytes" not in data:
-                continue
-
-            pcm_chunk = data["bytes"]
-            audio_buffer += pcm_chunk
-
-            # 段满检测 + ASR + 润色（任务18）
-            try:
-                if segmenter.feed(pcm_chunk):
-                    pcm_segment = segmenter.drain()
-                    elapsed = time.time() - start_time
-                    try:
-                        # 1. ASR 转录
-                        wav_data = pcm_to_wav(pcm_segment)
-                        asr_result = await asr_service.transcribe(wav_data, language="zh", skip_convert=True)
-                        text = asr_result.get("text", "").strip()
-
-                        # 2. 噪音过滤
-                        if not text or any(noise in text for noise in NOISE_PATTERNS):
-                            logger.debug(f"噪音或空转录: {text[:50]}")
-                            continue
-
-                        # 3. 构造原文 entry 并推送
-                        segment_id = f"seg_{int(elapsed * 1000)}"
-                        transcript_entry = {
-                            "type": "transcript",
-                            "segment_id": segment_id,
-                            "speaker": "发言人",
-                            "speaker_confidence": 0,
-                            "text": text,
-                            "start": max(0, elapsed - 3),
-                            "end": elapsed,
-                            "polish_status": "pending",
-                        }
-                        transcript_entries.append(transcript_entry)
-                        await websocket.send_json(transcript_entry)
-
-                        # 4. 异步触发润色
-                        asyncio.create_task(
-                            _polish_and_send(
-                                websocket, meeting_id, segment_id,
-                                text, elapsed, {},
-                            )
-                        )
-                    except Exception as e:
-                        logger.error(f"段处理失败: {e}")
-                        try:
-                            await websocket.send_json({
-                                "type": "transcript_error",
-                                "message": str(e),
-                            })
-                        except Exception:
-                            pass
-            except Exception as e:
-                logger.error(f"段满检测失败: {e}")
-
-            # 每积累约 3 秒音频转写一次
-            if len(audio_buffer) >= 48000:
-                try:
-                    # 将 Int16 PCM 转为 WAV 后调用本地 ASR
-                    import io as _io, wave as _wave, struct as _struct
-                    wav_buf = _io.BytesIO()
-                    with _wave.open(wav_buf, "wb") as wf:
-                        wf.setnchannels(1)
-                        wf.setsampwidth(2)
-                        wf.setframerate(16000)
-                        wf.writeframes(audio_buffer)
-                    wav_bytes = wav_buf.getvalue()
-
-                    result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
-                    text = result.get("text", "").strip()
-                    audio_buffer = b""
-
-                    # 噪音过滤
-                    if len(text) < 2: continue
-                    if text == last_text: continue
-                    if any(p in text for p in NOISE_PATTERNS): continue
-                    last_text = text
-
-                    if text:
-                        elapsed = time.time() - start_time
-                        entry = {
-                            "type": "transcript",
-                            "speaker": "发言人",
-                            "speaker_confidence": 0,
-                            "text": text,
-                            "start": max(0, elapsed - 3),
-                            "end": elapsed,
-                        }
-                        transcript_entries.append(entry)
-                        await websocket.send_json(entry)
-                except Exception as e:
-                    logger.error(f"ASR 转写失败: {e}")
-                    audio_buffer = b""  # 清空避免无限重试
-
-    except WebSocketDisconnect:
-        # 保存转录到会议记录，自动分析
-        analysis_result = None
+    # 每条 WS 独立 DB 会话（声纹识别 + speaker_mapping 查询需要）
+    async with async_session() as db:
+        # 预加载 meeting（speaker_mapping 用于将原始声纹 label 映射为真实姓名）
+        meeting = None
         try:
-            async with async_session() as db:
-                result = await db.execute(
-                    select(Meeting).where(Meeting.id == meeting_id)
-                )
-                meeting = result.scalar_one_or_none()
-                if meeting and transcript_entries:
-                    meeting.transcript = [
-                        {"speaker": e["speaker"], "text": e["text"],
-                         "start": e.get("start"), "end": e.get("end"),
-                         "confidence": e.get("speaker_confidence", 0)}
-                        for e in transcript_entries
-                    ]
-                    meeting.status = "completed"
-                    await db.commit()
-
-                    if transcript_entries:
-                        meeting_service = MeetingService(db)
-                        analysis_result = await meeting_service.process_meeting_transcript(meeting_id)
-                        # 自动生成标题
-                        try:
-                            from app.services.meeting_analysis_service import meeting_analysis
-                            transcript_text = meeting_service._transcript_to_text(meeting.transcript)
-                            new_title = await meeting_analysis.generate_title(transcript_text)
-                            if new_title and new_title != "未命名会议":
-                                meeting.title = new_title
-                                await db.commit()
-                        except Exception:
-                            pass
+            meeting = await db.get(Meeting, meeting_id)
         except Exception as e:
-            logger.error(f"保存会议转录失败: {e}")
+            logger.error(f"加载 meeting {meeting_id} 失败: {e}")
 
-        meeting_pipeline.reset()
-        try:
-            await websocket.send_json({
-                "type": "meeting_ended",
-                "meeting_id": meeting_id,
-                "entries": len(transcript_entries),
-                "analysis": analysis_result,
-            })
-        except Exception:
-            pass
+        return await _run_live_loop(
+            websocket, meeting_id, db, meeting,
+            segmenter, pipeline,
+        )
 
 
 async def _polish_and_send(
@@ -551,3 +403,250 @@ def pcm_to_wav(pcm_int16: bytes, sample_rate: int = 16000) -> bytes:
         wf.setframerate(sample_rate)
         wf.writeframes(pcm_int16)
     return buf.getvalue()
+
+
+# 噪音过滤黑名单
+NOISE_PATTERNS = ["字幕", "志愿者", "谢谢观看", "观看谢谢", "中文字幕", "翻译", "字幕组"]
+
+
+async def _run_live_loop(
+    websocket: WebSocket,
+    meeting_id: int,
+    db: AsyncSession,
+    meeting,
+    segmenter: LiveSegmenter,
+    pipeline: MeetingPipeline,
+):
+    """会议 /live WS 主循环（wave 2a 任务 9 重构版）
+
+    设计：
+    - 主流程：MeetingPipeline（per-WS VAD + 声纹 + ASR）
+    - 兜底：LiveSegmenter + 18000 字节 ASR（pipeline 未输出时使用）
+    - 收到 ai_chat JSON → 调用 agent 回复
+    """
+    start_time = time.time()
+    transcript_entries = []
+    audio_buffer = b""
+    last_text = ""
+
+    try:
+        while True:
+            data = await websocket.receive()
+
+            # 文字控制消息
+            if "text" in data:
+                try:
+                    msg = json.loads(data["text"])
+                    if msg.get("type") == "ai_chat":
+                        user_text = msg.get("text", "")
+                        if user_text.strip():
+                            ai_response = await agent.chat(
+                                message=f"[会议实时对话] {user_text}", db=None)
+                            await websocket.send_json({
+                                "type": "ai_reply",
+                                "text": ai_response.get("content", "")[:200],
+                                "speaker": "小气助手",
+                            })
+                except Exception:
+                    pass
+                continue
+
+            # 音频数据
+            if "bytes" not in data:
+                continue
+
+            pcm_chunk = data["bytes"]
+            audio_buffer += pcm_chunk
+
+            # 主流程：MeetingPipeline（VAD + 声纹 + ASR）
+            pipeline_emitted = False
+            try:
+                elapsed = time.time() - start_time
+                entries = await pipeline.process_audio(pcm_chunk, db, elapsed)
+                for entry in entries:
+                    pipeline_emitted = True
+
+                    # 噪音过滤
+                    if any(noise in entry["text"] for noise in NOISE_PATTERNS):
+                        continue
+
+                    segment_id = f"seg_{int(entry['start'] * 1000)}"
+                    speaker_label = entry.get("speaker") or "unknown"
+                    speaker = speaker_label
+                    confidence = entry.get("confidence", 0.0)
+
+                    # 应用 speaker_mapping
+                    if meeting and meeting.speaker_mapping:
+                        mapped = meeting.speaker_mapping.get(speaker_label)
+                        if mapped:
+                            speaker = mapped
+
+                    # 推 transcript（含 speaker + 置信度 + 原始 label）
+                    transcript_entry = {
+                        "type": "transcript",
+                        "segment_id": segment_id,
+                        "speaker": speaker,
+                        "speaker_label": speaker_label,
+                        "speaker_confidence": confidence,
+                        "text": entry["text"],
+                        "start": entry["start"],
+                        "end": entry.get("end", entry["start"] + 3),
+                        "polish_status": "pending",
+                    }
+                    transcript_entries.append(transcript_entry)
+                    await websocket.send_json(transcript_entry)
+
+                    # 异步润色
+                    asyncio.create_task(
+                        _polish_and_send(
+                            websocket, meeting_id, segment_id,
+                            entry["text"], entry["start"], {},
+                        )
+                    )
+
+                    # 声纹未识别 + 有未录入成员 → 推 speaker_unidentified
+                    if speaker_label == "unknown" or confidence < 0.4:
+                        try:
+                            candidates = await get_unenrolled_participants(db, meeting_id)
+                            if candidates:
+                                await websocket.send_json({
+                                    "type": "speaker_unidentified",
+                                    "segment_id": segment_id,
+                                    "speaker_label": speaker_label,
+                                    "candidates": [
+                                        {
+                                            "id": c.id,
+                                            "name": c.name,
+                                            "avatar": c.avatar,
+                                        }
+                                        for c in candidates
+                                    ],
+                                    "transcript_text": entry["text"],
+                                })
+                        except Exception as e:
+                            logger.error(f"speaker_unidentified 推送失败: {e}")
+
+            except Exception as e:
+                logger.error(f"pipeline.process_audio 失败: {e}")
+
+            # 兜底：LiveSegmenter（pipeline 未输出时使用）
+            if not pipeline_emitted:
+                try:
+                    if segmenter.feed(pcm_chunk):
+                        pcm_segment = segmenter.drain()
+                        elapsed = time.time() - start_time
+                        wav_data = pcm_to_wav(pcm_segment)
+                        asr_result = await asr_service.transcribe(
+                            wav_data, language="zh", skip_convert=True
+                        )
+                        text = asr_result.get("text", "").strip()
+                        if not text or any(noise in text for noise in NOISE_PATTERNS):
+                            continue
+                        segment_id = f"seg_{int(elapsed * 1000)}"
+                        entry = {
+                            "type": "transcript",
+                            "segment_id": segment_id,
+                            "speaker": "发言人",
+                            "speaker_label": "发言人",
+                            "speaker_confidence": 0,
+                            "text": text,
+                            "start": max(0, elapsed - 3),
+                            "end": elapsed,
+                            "polish_status": "pending",
+                        }
+                        transcript_entries.append(entry)
+                        await websocket.send_json(entry)
+                        asyncio.create_task(
+                            _polish_and_send(
+                                websocket, meeting_id, segment_id,
+                                text, elapsed, {},
+                            )
+                        )
+                except Exception as e:
+                    logger.error(f"兜底段满检测失败: {e}")
+
+            # 老 fallback：48000 字节兜底 ASR
+            if not pipeline_emitted and len(audio_buffer) >= 48000:
+                try:
+                    import io as _io, wave as _wave
+                    wav_buf = _io.BytesIO()
+                    with _wave.open(wav_buf, "wb") as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(16000)
+                        wf.writeframes(audio_buffer)
+                    wav_bytes = wav_buf.getvalue()
+
+                    result = await asr_service.transcribe(
+                        wav_bytes, language="zh", skip_convert=True
+                    )
+                    text = result.get("text", "").strip()
+                    audio_buffer = b""
+
+                    if len(text) < 2 or text == last_text:
+                        last_text = text
+                        continue
+                    if any(p in text for p in NOISE_PATTERNS):
+                        continue
+                    last_text = text
+
+                    elapsed = time.time() - start_time
+                    entry = {
+                        "type": "transcript",
+                        "speaker": "发言人",
+                        "speaker_label": "发言人",
+                        "speaker_confidence": 0,
+                        "text": text,
+                        "start": max(0, elapsed - 3),
+                        "end": elapsed,
+                    }
+                    transcript_entries.append(entry)
+                    await websocket.send_json(entry)
+                except Exception as e:
+                    logger.error(f"48000 字节兜底 ASR 失败: {e}")
+                    audio_buffer = b""
+
+    except WebSocketDisconnect:
+        # 保存转录到会议记录，自动分析
+        analysis_result = None
+        try:
+            if meeting and transcript_entries:
+                meeting.transcript = [
+                    {"speaker": e["speaker"], "text": e["text"],
+                     "start": e.get("start"), "end": e.get("end"),
+                     "confidence": e.get("speaker_confidence", 0)}
+                    for e in transcript_entries
+                ]
+                meeting.status = "completed"
+                await db.commit()
+
+                if transcript_entries:
+                    meeting_service = MeetingService(db)
+                    analysis_result = await meeting_service.process_meeting_transcript(meeting_id)
+                    try:
+                        from app.services.meeting_analysis_service import meeting_analysis
+                        transcript_text = meeting_service._transcript_to_text(meeting.transcript)
+                        new_title = await meeting_analysis.generate_title(transcript_text)
+                        if new_title and new_title != "未命名会议":
+                            meeting.title = new_title
+                            await db.commit()
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"保存会议转录失败: {e}")
+
+        # 清理 per-WS pipeline 状态
+        try:
+            pipeline.reset()
+        except Exception:
+            pass
+
+        try:
+            await websocket.send_json({
+                "type": "meeting_ended",
+                "meeting_id": meeting_id,
+                "entries": len(transcript_entries),
+                "analysis": analysis_result,
+            })
+        except Exception:
+            pass
