@@ -172,13 +172,12 @@ onMounted(async () => {
       transcript: msg.transcript_text,
     }
   }
-})
 
-// 用户在弹窗选了人
-function onSpeakerClaim(memberId) {
-  sendSpeakerClaim(unidentified.value.segmentId, memberId, unidentified.value.speakerLabel)
-  unidentified.value.visible = false
-}
+  // 用户在弹窗选了人
+  onSpeakerClaimAck.value = (msg) => {
+    // 后端确认写入后，关闭弹窗（已经在 onSpeakerClaim 中提前关闭，这里做兜底）
+    unidentified.value.visible = false
+  }
 
   // 连接 WS
   const token = localStorage.getItem('access_token')
@@ -199,6 +198,12 @@ function onSpeakerClaim(memberId) {
     ElMessage.error('麦克风权限被拒绝')
   }
 })
+
+// 用户在弹窗选了人
+function onSpeakerClaim(memberId) {
+  sendSpeakerClaim(unidentified.value.segmentId, memberId, unidentified.value.speakerLabel)
+  unidentified.value.visible = false
+}
 
 onUnmounted(() => {
   if (durationTimer) clearInterval(durationTimer)
