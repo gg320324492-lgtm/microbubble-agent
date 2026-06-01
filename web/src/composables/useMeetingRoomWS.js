@@ -30,6 +30,12 @@ export function useMeetingRoomWS() {
   let reconnectAttempts = 0
   let maxReconnectAttempts = 3
   let pendingAudioQueue = []  // 重连前累积的音频
+  // Wave 3b: pending 数量变化通知（用于 NetworkStatusBar 显示）
+  const pendingCount = ref(0)
+  let pendingCountNotify = null
+  function setPendingCountCallback(fn) {
+    pendingCountNotify = fn
+  }
 
   function connect(meetingId, token) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -48,6 +54,9 @@ export function useMeetingRoomWS() {
         const chunk = pendingAudioQueue.shift()
         sendAudio(chunk)
       }
+      // Wave 3b: flush 后清零 pending count
+      pendingCount.value = 0
+      pendingCountNotify?.(0)
     }
 
     ws.value.onmessage = (event) => {
@@ -138,6 +147,9 @@ export function useMeetingRoomWS() {
       if (pendingAudioQueue.length > 100) {
         pendingAudioQueue.shift()  // 防止内存爆炸
       }
+      // Wave 3b: 通知外部 pending count 变化
+      pendingCount.value = pendingAudioQueue.length
+      pendingCountNotify?.(pendingAudioQueue.length)
     }
   }
 
@@ -184,6 +196,8 @@ export function useMeetingRoomWS() {
     sendHangup,
     sendSpeakerClaim,
     sendAICommand,
+    setPendingCountCallback,  // Wave 3b
+    pendingCount,              // Wave 3b: reactive 队列长度
     connected,
     reconnecting,
     audioLevel,
