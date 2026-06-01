@@ -1,28 +1,53 @@
-"""测试配置和公共 fixtures"""
+"""测试配置和公共 fixtures
+
+通过设置环境变量 SKIP_DB_SETUP=1 可跳过 DB 初始化与重型 import，
+适用于纯 mock/单元测试（如 LLM 工具调用测试）。
+
+注意：当 SKIP_DB_SETUP=1 时，db / client / test_member / admin_member / auth_headers / admin_headers
+这些 fixture 不可用，调用它们的测试会被跳过。
+"""
 
 import asyncio
+import os
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from app.core.database import Base, get_db
-from app.core.security import get_password_hash, create_access_token
-from app.models.member import Member
-from app.main import app
+# 条件 import：仅在非 SKIP_DB_SETUP 时才加载
+SKIP_DB_SETUP = bool(os.getenv("SKIP_DB_SETUP"))
 
-# 使用内存数据库测试（需要 aiosqlite）
-# 由于项目使用 PostgreSQL 特有类型（ARRAY, Vector），测试需要真实 PostgreSQL
-# 这里使用环境变量指定测试数据库
+if not SKIP_DB_SETUP:
+    # 重型依赖：仅当需要 DB 测试时才 import
+    from httpx import AsyncClient, ASGITransport  # noqa: E402
+    from sqlalchemy.ext.asyncio import (  # noqa: E402
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
 
-import os
-TEST_DB_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test"
-)
+    from app.core.database import Base, get_db  # noqa: E402
+    from app.core.security import create_access_token, get_password_hash  # noqa: E402
+    from app.main import app  # noqa: E402
+    from app.models.member import Member  # noqa: E402
 
-engine = create_async_engine(TEST_DB_URL, echo=False)
-TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    TEST_DB_URL = os.getenv(
+        "TEST_DATABASE_URL",
+        "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test",
+    )
+    engine = create_async_engine(TEST_DB_URL, echo=False)
+    TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+else:
+    # SKIP 模式：占位 stub，让 fixture 报"不可用"错误而非 import 失败
+    engine = None
+    TestSession = None
+    app = None
+    Member = None
+    Base = None
+    get_db = None
+    get_password_hash = None
+    create_access_token = None
+    AsyncClient = None
+    ASGITransport = None
 
 
 @pytest.fixture(scope="session")
@@ -34,12 +59,8 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_db():
-    """创建测试表
-
-    通过设置环境变量 SKIP_DB_SETUP=1 可跳过 DB 初始化，
-    适用于纯 mock/单元测试（如 LLM 工具调用测试）。
-    """
-    if os.getenv("SKIP_DB_SETUP"):
+    """创建测试表。SKIP_DB_SETUP=1 时跳过整个 fixture。"""
+    if SKIP_DB_SETUP:
         yield
         return
     async with engine.begin() as conn:
@@ -52,7 +73,9 @@ async def setup_db():
 
 @pytest_asyncio.fixture
 async def db():
-    """每个测试独立的数据库会话"""
+    """每个测试独立的数据库会话（需 DB）"""
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：db fixture 不可用")
     async with TestSession() as session:
         yield session
         await session.rollback()
@@ -60,7 +83,9 @@ async def db():
 
 @pytest_asyncio.fixture
 async def client(db):
-    """异步测试客户端"""
+    """异步测试客户端（需 DB）"""
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：client fixture 不可用")
 
     async def override_get_db():
         yield db
@@ -74,14 +99,16 @@ async def client(db):
 
 @pytest_asyncio.fixture
 async def test_member(db):
-    """创建测试成员"""
+    """创建测试成员（需 DB）"""
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：test_member fixture 不可用")
     member = Member(
         username="testuser",
         name="测试用户",
         password_hash=get_password_hash("test123456"),
         role="member",
         grade="研一",
-        is_active=True
+        is_active=True,
     )
     db.add(member)
     await db.commit()
@@ -91,13 +118,15 @@ async def test_member(db):
 
 @pytest_asyncio.fixture
 async def admin_member(db):
-    """创建管理员成员"""
+    """创建管理员成员（需 DB）"""
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：admin_member fixture 不可用")
     member = Member(
         username="admin",
         name="管理员",
         password_hash=get_password_hash("admin123"),
         role="admin",
-        is_active=True
+        is_active=True,
     )
     db.add(member)
     await db.commit()
@@ -107,13 +136,17 @@ async def admin_member(db):
 
 @pytest_asyncio.fixture
 def auth_headers(test_member):
-    """普通用户的认证 headers"""
+    """普通用户的认证 headers（需 DB）"""
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：auth_headers fixture 不可用")
     token = create_access_token(data={"sub": str(test_member.id)})
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest_asyncio.fixture
 def admin_headers(admin_member):
-    """管理员的认证 headers"""
+    """管理员的认证 headers（需 DB）"""
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：admin_headers fixture 不可用")
     token = create_access_token(data={"sub": str(admin_member.id)})
     return {"Authorization": f"Bearer {token}"}
