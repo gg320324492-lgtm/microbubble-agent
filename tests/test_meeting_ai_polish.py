@@ -63,10 +63,9 @@ async def test_polish_segments_cache_hit():
 
     try:
         with patch("app.services.meeting_ai_polish.get_anthropic_client") as mock_factory:
-            mock_factory.assert_not_called()  # 关键：不应调用 LLM
             result = await polish_segments_with_cache(1, segments, context)
 
         assert result["polished"][0]["text"] == "缓存版"
-        mock_factory.assert_not_called()
+        mock_factory.assert_not_called()  # 关键：缓存命中时应不调 LLM
     finally:
         await r.delete(f"polish:test_meeting:{segment_hash}")
