@@ -26,7 +26,11 @@
     />
 
     <!-- AI 助手浮窗 -->
-    <AIFloatButton />
+    <AIFloatButton
+      ref="aiFloatButtonRef"
+      :on-send-a-i-command="sendAICommand"
+      @air-reply="onAIReply"
+    />
 
     <!-- 底部控制 -->
     <div class="control-bar">
@@ -92,6 +96,7 @@ const unidentified = ref({
   candidates: [],
   transcript: '',
 })
+const aiFloatButtonRef = ref(null)
 
 let durationTimer = null
 
@@ -105,6 +110,7 @@ const {
   sendAudio,
   sendHangup,
   sendSpeakerClaim,
+  sendAICommand,
   connected,
   reconnecting,
   onTranscript,
@@ -113,6 +119,11 @@ const {
   onMessage,
   onSpeakerUnidentified,
   onSpeakerClaimAck,
+  onAIReply,
+  onTranscriptOthers,
+  onAIReplyOthers,
+  onTranscriptHistory,
+  onTTSAudio,
 } = useMeetingRoomWS()
 
 // 音频采集
@@ -177,6 +188,57 @@ onMounted(async () => {
   onSpeakerClaimAck.value = (msg) => {
     // 后端确认写入后，关闭弹窗（已经在 onSpeakerClaim 中提前关闭，这里做兜底）
     unidentified.value.visible = false
+  }
+
+  // AI 回复（含 TTS）处理
+  onAIReply.value = (msg) => {
+    if (aiFloatButtonRef.value) {
+      aiFloatButtonRef.value.addHistoryItem({
+        action: msg.action,
+        text: msg.text,
+        original: msg.original,
+      })
+    }
+    ElMessage.success(`小气: ${msg.text?.substring(0, 30) || ''}...`)
+  }
+
+  // TTS 二进制帧播放
+  onTTSAudio.value = (arrayBuffer) => {
+    const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    audio.play().catch(() => {})
+  }
+
+  // 多设备同步（其他设备的转录和 AI 回复）
+  onTranscriptOthers.value = (msg) => {
+    addOriginal({
+      segment_id: msg.data.segment_id,
+      speaker: msg.data.speaker,
+      text: msg.data.text,
+      ts: msg.data.ts,
+    })
+  }
+  onAIReplyOthers.value = (msg) => {
+    if (aiFloatButtonRef.value) {
+      aiFloatButtonRef.value.addHistoryItem({
+        action: msg.data.action,
+        text: msg.data.text,
+        fromOther: true,
+      })
+    }
+  }
+
+  // 历史拉取（WS 初始连接时）
+  onTranscriptHistory.value = (msg) => {
+    for (const entry of msg.entries || []) {
+      addOriginal({
+        segment_id: entry.segment_id,
+        speaker: entry.speaker,
+        text: entry.text,
+        ts: entry.ts,
+      })
+    }
   }
 
   // 连接 WS
