@@ -436,6 +436,11 @@ async def _run_live_loop(
     audio_buffer = b""
     last_text = ""
 
+    # Wave 2b: 音频归档 writer
+    from app.services.file_service import file_service
+    from app.services.audio_archive_service import AudioArchiveWriter
+    archive_writer = AudioArchiveWriter(meeting_id, file_service)
+
     try:
         while True:
             data = await websocket.receive()
@@ -505,6 +510,9 @@ async def _run_live_loop(
 
             pcm_chunk = data["bytes"]
             audio_buffer += pcm_chunk
+
+            # Wave 2b: 累积 PCM 到 archive writer
+            archive_writer.feed_pcm(pcm_chunk)
 
             # 入队 audio_level（旁路推送，每 100ms 推一次）
             try:
@@ -701,6 +709,12 @@ async def _run_live_loop(
             pipeline.reset()
         except Exception:
             pass
+
+        # Wave 2b: 归档音频
+        try:
+            await archive_writer.finalize(db)
+        except Exception as e:
+            logger.error(f"音频归档失败: {e}")
 
         try:
             await websocket.send_json({
