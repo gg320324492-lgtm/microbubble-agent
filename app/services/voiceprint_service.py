@@ -242,3 +242,61 @@ async def get_fingerprints(
         }
         for m in members
     ]
+
+
+from datetime import datetime, timezone
+
+
+async def record_confidence(
+    db: AsyncSession,
+    meeting_id: int,
+    member_id: int,
+    confidence: float,
+) -> None:
+    """记录一次声纹识别置信度（用于历史曲线）"""
+    from app.models.voiceprint_history import VoiceprintHistory
+    history = VoiceprintHistory(
+        meeting_id=meeting_id,
+        member_id=member_id,
+        confidence=confidence,
+        recorded_at=datetime.now(timezone.utc),
+    )
+    db.add(history)
+    await db.commit()
+
+
+async def search_speaker_history(
+    db: AsyncSession,
+    member_id: int,
+    limit: int = 20,
+) -> list[dict]:
+    """
+    跨会议反查"该成员说过的内容"。
+    """
+    from sqlalchemy import select, desc
+    from app.models.meeting import Meeting
+    stmt = (
+        select(Meeting)
+        .where(Meeting.transcript.isnot(None))
+        .order_by(desc(Meeting.start_time))
+        .limit(limit * 3)
+    )
+    result = await db.execute(stmt)
+    meetings = list(result.scalars().all())
+
+    matches = []
+    for meeting in meetings:
+        transcript = meeting.transcript or []
+        for entry in transcript:
+            if entry.get("member_id") == member_id:
+                matches.append({
+                    "meeting_id": meeting.id,
+                    "meeting_title": meeting.title,
+                    "text": entry.get("text", ""),
+                    "speaker": entry.get("speaker", ""),
+                    "ts": entry.get("ts") or entry.get("start"),
+                    "confidence": entry.get("confidence", 0),
+                })
+                if len(matches) >= limit:
+                    return matches
+    return matches
