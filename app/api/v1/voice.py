@@ -5,9 +5,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
+import asyncio
 import io
 import json
 import time
+import wave
 
 import logging
 from app.voice.asr import asr_service
@@ -21,6 +23,7 @@ from app.core.security import get_current_user, decode_token
 from app.models.member import Member
 from app.models.meeting import Meeting
 from app.services.meeting_service import MeetingService
+from app.services.meeting_ai_polish import polish_segments_with_lock
 
 logger = logging.getLogger("microbubble.voice")
 
@@ -373,11 +376,53 @@ async def meeting_live_ws(
             pcm_chunk = data["bytes"]
             audio_buffer += pcm_chunk
 
-            # 段满检测（任务16：仅检测，任务18 才接 ASR + 润色）
+            # 段满检测 + ASR + 润色（任务18）
             try:
                 if segmenter.feed(pcm_chunk):
                     pcm_segment = segmenter.drain()
-                    logger.info(f"段满触发: {len(pcm_segment)} bytes")
+                    elapsed = time.time() - start_time
+                    try:
+                        # 1. ASR 转录
+                        wav_data = pcm_to_wav(pcm_segment)
+                        asr_result = await asr_service.transcribe(wav_data, language="zh", skip_convert=True)
+                        text = asr_result.get("text", "").strip()
+
+                        # 2. 噪音过滤
+                        if not text or any(noise in text for noise in NOISE_PATTERNS):
+                            logger.debug(f"噪音或空转录: {text[:50]}")
+                            continue
+
+                        # 3. 构造原文 entry 并推送
+                        segment_id = f"seg_{int(elapsed * 1000)}"
+                        transcript_entry = {
+                            "type": "transcript",
+                            "segment_id": segment_id,
+                            "speaker": "发言人",
+                            "speaker_confidence": 0,
+                            "text": text,
+                            "start": max(0, elapsed - 3),
+                            "end": elapsed,
+                            "polish_status": "pending",
+                        }
+                        transcript_entries.append(transcript_entry)
+                        await websocket.send_json(transcript_entry)
+
+                        # 4. 异步触发润色
+                        asyncio.create_task(
+                            _polish_and_send(
+                                websocket, meeting_id, segment_id,
+                                text, elapsed, {},
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(f"段处理失败: {e}")
+                        try:
+                            await websocket.send_json({
+                                "type": "transcript_error",
+                                "message": str(e),
+                            })
+                        except Exception:
+                            pass
             except Exception as e:
                 logger.error(f"段满检测失败: {e}")
 
@@ -465,3 +510,44 @@ async def meeting_live_ws(
             })
         except Exception:
             pass
+
+
+async def _polish_and_send(
+    websocket, meeting_id: int, segment_id: str,
+    text: str, ts: float, context: dict,
+):
+    """异步润色并推送结果"""
+    try:
+        result = await polish_segments_with_lock(
+            meeting_id,
+            [{"speaker": "发言人", "text": text, "ts": ts}],
+            context,
+        )
+        await websocket.send_json({
+            "type": "transcript_polished",
+            "segment_id": segment_id,
+            "polished": result["polished"],
+            "key_points": result["key_points"],
+            "boundary_after_index": result["boundary_after_index"],
+        })
+    except Exception as e:
+        logger.error(f"润色失败: {e}")
+        try:
+            await websocket.send_json({
+                "type": "transcript_polished_error",
+                "segment_id": segment_id,
+                "error": str(e),
+            })
+        except Exception:
+            pass
+
+
+def pcm_to_wav(pcm_int16: bytes, sample_rate: int = 16000) -> bytes:
+    """Int16 PCM 转 WAV 字节流"""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_int16)
+    return buf.getvalue()
