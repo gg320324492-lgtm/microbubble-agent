@@ -444,7 +444,9 @@ async def _run_live_loop(
             if "text" in data:
                 try:
                     msg = json.loads(data["text"])
-                    if msg.get("type") == "ai_chat":
+                    msg_type = msg.get("type")
+
+                    if msg_type == "ai_chat":
                         user_text = msg.get("text", "")
                         if user_text.strip():
                             ai_response = await agent.chat(
@@ -454,8 +456,44 @@ async def _run_live_loop(
                                 "text": ai_response.get("content", "")[:200],
                                 "speaker": "小气助手",
                             })
-                except Exception:
-                    pass
+
+                    elif msg_type == "hangup":
+                        await websocket.close()
+                        return
+
+                    elif msg_type == "speaker_claim":
+                        # 写入 speaker_mapping：将原始声纹 label 绑定到成员
+                        member_id = msg.get("member_id")
+                        speaker_label = msg.get("speaker_label")
+                        segment_id = msg.get("segment_id")
+                        if member_id and speaker_label and meeting is not None:
+                            member = await db.get(Member, member_id)
+                            if member:
+                                if meeting.speaker_mapping is None:
+                                    meeting.speaker_mapping = {}
+                                mapping = dict(meeting.speaker_mapping)
+                                mapping[speaker_label] = member.name
+                                meeting.speaker_mapping = mapping
+                                await db.commit()
+                                logger.info(
+                                    f"speaker_claim 写入: {speaker_label} -> {member.name}"
+                                )
+                                await websocket.send_json({
+                                    "type": "speaker_claim_ack",
+                                    "segment_id": segment_id,
+                                    "speaker_label": speaker_label,
+                                    "member_id": member.id,
+                                    "member_name": member.name,
+                                })
+                            else:
+                                logger.warning(f"speaker_claim: member {member_id} 不存在")
+                        else:
+                            logger.warning(
+                                f"speaker_claim 参数缺失: member_id={member_id} "
+                                f"speaker_label={speaker_label} meeting={meeting is not None}"
+                            )
+                except Exception as e:
+                    logger.error(f"文字消息处理失败: {e}")
                 continue
 
             # 音频数据
