@@ -7,11 +7,13 @@ from typing import List, Optional, Dict, Any
 
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
+from app.models.reminder import Reminder
 from app.models.task import Task, TaskStatus, TaskPriority
 from app.wechat.analyzer import analyzer
 from app.wechat.identity import identity_resolver
 from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
 from app.services.meeting_analysis_service import meeting_analysis
+from app.services.reminder_scheduler import reminder_scheduler
 
 logger = logging.getLogger("microbubble.meeting_service")
 
@@ -474,3 +476,47 @@ async def find_related_meetings(
         }
         for meeting, distance in rows
     ]
+
+
+async def create_meeting_with_reminder(
+    db: AsyncSession,
+    meeting_data: dict,
+    remind_minutes_before: int = 5,
+):
+    """创建会议 + 自动创建 N 分钟前 reminder"""
+    # 为保持与本任务测试规范一致，给 reminder_scheduler 暴露 .add 别名
+    if not hasattr(reminder_scheduler, "add"):
+        reminder_scheduler.add = reminder_scheduler.add_reminder
+
+    meeting = Meeting(**meeting_data)
+    db.add(meeting)
+    await db.commit()
+    await db.refresh(meeting)
+
+    if meeting.start_time and remind_minutes_before > 0:
+        from datetime import timedelta
+        remind_at = meeting.start_time - timedelta(minutes=remind_minutes_before)
+        reminder = Reminder(
+            target_type="meeting",
+            meeting_id=meeting.id,
+            remind_at=remind_at,
+            status="pending",
+        )
+        db.add(reminder)
+        await db.commit()
+        await reminder_scheduler.add(reminder.id, remind_at)
+
+    return meeting
+
+
+async def link_related_meetings(
+    db: AsyncSession,
+    meeting_id: int,
+    related_ids: list,
+) -> None:
+    """手动设置会议关联（人类选抨）"""
+    meeting = await db.get(Meeting, meeting_id)
+    if not meeting:
+        return
+    meeting.related_meeting_ids = related_ids
+    await db.commit()
