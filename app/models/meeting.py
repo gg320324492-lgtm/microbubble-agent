@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, ARRAY
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON, ARRAY, Boolean, Float, BigInteger
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -34,6 +34,13 @@ class Meeting(Base, TimestampMixin):
 
     # 状态
     status = Column(String(20), default="scheduled")  # scheduled/recording/completed
+
+    # Wave 2b: 音频存档
+    audio_archive_url = Column(String(500), nullable=True)
+    audio_duration_seconds = Column(Float, nullable=True)
+    audio_size_bytes = Column(BigInteger, nullable=True)
+    audio_archived_at = Column(DateTime(timezone=True), nullable=True)
+    audio_archived = Column(Boolean, default=False)
 
     # 汇报人员（可多选，存为 JSON 数组）
     presenter_ids = Column(JSON)
