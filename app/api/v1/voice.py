@@ -450,7 +450,10 @@ async def _run_live_loop(
                         user_text = msg.get("text", "")
                         if user_text.strip():
                             ai_response = await agent.chat(
-                                message=f"[会议实时对话] {user_text}", db=None)
+                                message=f"[会议实时对话] {user_text}",
+                                db=db,
+                                session_id=f"meeting_{meeting_id}_live",
+                            )
                             await websocket.send_json({
                                 "type": "ai_reply",
                                 "text": ai_response.get("content", "")[:200],
