@@ -225,9 +225,14 @@ onMounted(async () => {
   onMessage.value = (msg) => {
     if (msg.type === 'audio_level') {
       const activeId = activeSpeaker.value
-      if (activeId !== null) {
-        audioLevels.value = { ...audioLevels.value, [activeId]: msg.level }
-      }
+      // 2026-06-02 修复：解耦 audioLevels 与 activeSpeaker
+      // 之前：只在 activeSpeaker !== null 时更新 audioLevels，但 activeSpeaker 只在收到
+      // transcript 且 speaker_confidence > 0.45 时才设置。如果后端没发出 transcript
+      // （比如 VAD 没检测到语音段），activeSpeaker 永远 null，audioLevels 永远不更新，
+      // 5 根声波条不跳动。修复：activeSpeaker 为 null 时也用 "self" 槽位更新，
+      // 这样只要 WS 保持连接且后端推 audio_level 消息，前端就能看到波动
+      const key = activeId !== null ? String(activeId) : 'self'
+      audioLevels.value = { ...audioLevels.value, [key]: msg.level }
     }
   }
 
