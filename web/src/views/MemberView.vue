@@ -6,6 +6,7 @@
         <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="searchName"
+            name="member-list-search"
             placeholder="搜索成员姓名"
             clearable
             @keyup.enter="fetchMembers"
@@ -16,7 +17,7 @@
           </el-input>
         </el-col>
         <el-col :xs="12" :sm="12" :md="8">
-          <el-select v-model="searchGrade" placeholder="年级" clearable>
+          <el-select v-model="searchGrade" name="searchGrade" placeholder="年级" clearable>
             <el-option label="教授" value="教授" />
             <el-option label="博士后" value="博士后" />
             <el-option label="博一" value="博一" />
@@ -136,10 +137,10 @@
     >
       <el-form :model="memberForm" label-width="80px">
         <el-form-item label="姓名" required>
-          <el-input v-model="memberForm.name" placeholder="请输入姓名" />
+          <el-input v-model="memberForm.name" name="member-form-name" placeholder="请输入姓名" />
         </el-form-item>
         <el-form-item label="年级">
-          <el-select v-model="memberForm.grade" placeholder="选择年级">
+          <el-select v-model="memberForm.grade" name="member-form-grade" placeholder="选择年级">
             <el-option label="教授" value="教授" />
             <el-option label="博士后" value="博士后" />
             <el-option label="博一" value="博一" />
@@ -150,24 +151,25 @@
           </el-select>
         </el-form-item>
         <el-form-item label="研究方向">
-          <el-input v-model="memberForm.research_area" placeholder="如：气泡生成、水处理" />
+          <el-input v-model="memberForm.research_area" name="member-form-research-area" placeholder="如：气泡生成、水处理" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="memberForm.role">
+          <el-select v-model="memberForm.role" name="member-form-role">
             <el-option label="管理员" value="admin" />
             <el-option label="组长" value="leader" />
             <el-option label="成员" value="member" />
           </el-select>
         </el-form-item>
         <el-form-item label="邮箱">
-          <el-input v-model="memberForm.email" placeholder="请输入邮箱" />
+          <el-input v-model="memberForm.email" name="member-form-email" placeholder="请输入邮箱" />
         </el-form-item>
         <el-form-item label="手机">
-          <el-input v-model="memberForm.phone" placeholder="请输入手机号" />
+          <el-input v-model="memberForm.phone" name="member-form-phone" placeholder="请输入手机号" />
         </el-form-item>
         <el-form-item label="技能">
           <el-select
             v-model="memberForm.skills"
+            name="member-form-skills"
             multiple
             filterable
             allow-create
@@ -184,6 +186,7 @@
         <el-form-item label="个人简介">
           <el-input
             v-model="memberForm.bio"
+            name="member-form-bio"
             type="textarea"
             :rows="2"
             placeholder="请输入个人简介"

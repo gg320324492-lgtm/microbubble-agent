@@ -20,6 +20,7 @@
         <template #default="{ row }">
           <el-select
             v-model="mapping[row.original_label]"
+            :name="`speaker-mapping-${row.original_label}`"
             filterable
             allow-create
             clearable

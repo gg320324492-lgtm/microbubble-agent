@@ -4,7 +4,7 @@
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
         <el-col :xs="12" :sm="12" :md="8">
-          <el-select v-model="filters.status" placeholder="项目状态" clearable>
+          <el-select v-model="filters.status" name="filters-status" placeholder="项目状态" clearable>
             <el-option label="进行中" value="active" />
             <el-option label="已暂停" value="paused" />
             <el-option label="已完成" value="completed" />
@@ -73,14 +73,14 @@
     <el-dialog v-model="showCreateDialog" title="创建项目" :width="isMobile ? '90vw' : '500px'" top="8vh">
       <el-form :model="projectForm" label-width="80px">
         <el-form-item label="项目名称" required>
-          <el-input v-model="projectForm.name" placeholder="请输入项目名称" />
+          <el-input v-model="projectForm.name" name="projectForm-name" placeholder="请输入项目名称" />
         </el-form-item>
         <el-form-item label="研究方向">
-          <el-input v-model="projectForm.research_area" placeholder="如：水处理、农业应用" />
+          <el-input v-model="projectForm.research_area" name="projectForm-research_area" placeholder="如：水处理、农业应用" />
         </el-form-item>
         <el-form-item label="项目周期">
           <el-date-picker
-            v-model="projectForm.dateRange"
+            v-model="projectForm.dateRange" name="projectForm-dateRange"
             type="daterange"
             range-separator="至"
             start-placeholder="开始日期"
@@ -91,7 +91,7 @@
         </el-form-item>
         <el-form-item label="项目成员">
           <el-select
-            v-model="projectForm.members"
+            v-model="projectForm.members" name="projectForm-members"
             multiple
             placeholder="选择项目成员"
           >
@@ -105,7 +105,7 @@
         </el-form-item>
         <el-form-item label="项目描述">
           <el-input
-            v-model="projectForm.description"
+            v-model="projectForm.description" name="projectForm-description"
             type="textarea"
             :rows="3"
             placeholder="请输入项目描述"

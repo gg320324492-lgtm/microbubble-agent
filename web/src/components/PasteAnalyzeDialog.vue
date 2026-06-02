@@ -11,11 +11,11 @@
     <div v-if="stage === 1" class="stage-input">
       <el-form label-width="90px">
         <el-form-item label="会议标题">
-          <el-input v-model="form.title" placeholder="留空则 AI 自动生成标题" />
+          <el-input v-model="form.title" name="form-title" placeholder="留空则 AI 自动生成标题" />
         </el-form-item>
         <el-form-item label="会议时间" required>
           <el-date-picker
-            v-model="form.start_time"
+            v-model="form.start_time" name="form-start_time"
             type="datetime"
             format="YYYY-MM-DD HH:mm"
             value-format="YYYY-MM-DD HH:mm:ss"
@@ -24,13 +24,13 @@
           />
         </el-form-item>
         <el-form-item label="参会人员">
-          <el-select v-model="form.participants" multiple placeholder="选择参会人员（可选）">
+          <el-select v-model="form.participants" name="form-participants" multiple placeholder="选择参会人员（可选）">
             <el-option v-for="m in members" :key="m.id" :label="m.name" :value="m.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="转录文字" required>
           <el-input
-            v-model="form.transcript_text"
+            v-model="form.transcript_text" name="form-transcript_text"
             type="textarea"
             :rows="12"
             placeholder="请粘贴会议转录文字，支持格式：&#10;【张三】发言内容&#10;李四说：发言内容&#10;或纯文本格式"
@@ -63,7 +63,7 @@
       />
 
       <div class="mapping-actions">
-        <el-checkbox v-model="skipMapping">
+        <el-checkbox v-model="skipMapping" name="skipMapping">
           跳过映射（AI 自动分析所有发言内容）
         </el-checkbox>
       </div>

@@ -4,7 +4,7 @@
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
         <el-col :xs="24" :sm="12" :md="8">
-          <el-select v-model="filterType" placeholder="记忆类型" clearable>
+          <el-select v-model="filterType" name="filterType" placeholder="记忆类型" clearable>
             <el-option label="全部" value="" />
             <el-option label="偏好" value="preference" />
             <el-option label="摘要" value="summary" />
@@ -76,6 +76,7 @@
         <el-form-item label="内容">
           <el-input
             v-model="editContent"
+            name="memory-edit-content"
             type="textarea"
             :rows="4"
             placeholder="记忆内容"
