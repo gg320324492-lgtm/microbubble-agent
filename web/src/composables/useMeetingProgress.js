@@ -28,10 +28,15 @@ export function useMeetingProgress() {
       try {
         const msg = JSON.parse(event.data)
         if (msg.type === 'progress_snapshot' || msg.type === 'progress_update') {
-          progress.value = msg.data
-          if (msg.data.status === 'done') {
-            done.value = true
-            setTimeout(() => disconnect(), 5000)  // 5s 后自动断开
+          // 2026-06-02 修复：防御性检查 msg.data
+          // 后端 get_progress() 返回 None 时曾发过 {"type":"progress_snapshot","data":null}，
+          // 访问 msg.data.status 抛 TypeError。已修后端不发空快照；前端这里也加防御
+          if (msg.data && typeof msg.data === 'object') {
+            progress.value = msg.data
+            if (msg.data.status === 'done') {
+              done.value = true
+              setTimeout(() => disconnect(), 5000)  // 5s 后自动断开
+            }
           }
         } else if (msg.type === 'ping') {
           // 心跳
