@@ -170,11 +170,13 @@ watch(pendingCount, (n) => network.setPendingCount(n))
 const audioCapture = useAudioCapture()
 
 onMounted(async () => {
-  // 启动时长计时（同时更新 currentTs / meetingDuration）
+  // 启动时长计时（2026-06-02 修复：meetingDuration 改用 MAX_MEETING_DURATION_SEC 兜底）
   durationTimer = setInterval(() => {
     const elapsed = Math.floor((Date.now() - startTime.value) / 1000)
     currentTs.value = elapsed
-    meetingDuration.value = elapsed
+    // meetingDuration 实际语义是 el-slider 的 max，给个合理上限（30 分钟 = 1800s）
+    // 之前用 elapsed 自己导致 max=currentTs，slider 无法拖到未来时间点
+    meetingDuration.value = Math.max(MAX_MEETING_DURATION_SEC, elapsed + 60)
     const m = String(Math.floor(elapsed / 60)).padStart(2, '0')
     const s = String(elapsed % 60).padStart(2, '0')
     formattedDuration.value = `${m}:${s}`
@@ -332,10 +334,19 @@ function onAgendaUpdate(updated) {
   agendaItems.value = updated
 }
 
-// Wave 3b: 时间轴跳转（暂时只更新 currentTs；后续可扩展 seek transcript）
+// Wave 3b: 时间轴跳转
+// 2026-06-02 修复：之前 meetingDuration 永远等于 currentTs（elapsed），
+// 导致 el-slider 的 max=currentTs，用户无法拖到未来时间点。
+// 修复：meetingDuration 改为「预估总时长」（30 分钟兜底），currentTs 是 elapsed 实际秒数
+// duration 实际语义是「slider 最大值」— 给个合理上限 30 分钟
+const MAX_MEETING_DURATION_SEC = 30 * 60
+const meetingStartTime = Date.now()  // 记录会议开始时间
 function onJumpTs(ts) {
+  // 跳转后 currentTs 不再是 elapsed 而是用户跳转到的 ts
   currentTs.value = ts
-  ElMessage.info(`跳转到 ${Math.floor(ts / 60)}:${String(ts % 60).padStart(2, '0')}`)
+  const m = Math.floor(ts / 60)
+  const s = String(ts % 60).padStart(2, '0')
+  ElMessage.info(`跳转到 ${m}:${s}`)
 }
 
 onUnmounted(() => {

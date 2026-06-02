@@ -128,7 +128,9 @@
 - **Whisper 反幻觉必须三层防护**（2026-06-02 教训）— faster-whisper 在静音/低能量片段会**臆造**训练集记忆（YouTube 结束语"B 站风格"如"明镜与点点""点赞订阅转发打赏"）。三层防护缺一不可：
   1. **whisper_server.py**（`app/whisper_server.py`）— `condition_on_previous_text=False` + `no_speech_threshold=0.6` + `temperature=0`，并**过滤** `segment.no_speech_prob > 0.6` 的 segment（这个值在 server 里之前只读不写不过滤，浪费关键信号）
   2. **本地模型 fallback**（`app/voice/asr.py:_transcribe_local`）— 同样三件套（之前 commit `b4a5dc0` 加过，OK）
-  3. **后端 NOISE_PATTERNS 兜底**（`app/api/v1/voice.py:NOISE_PATTERNS`）— 列入"明镜与点点""点赞""订阅""MING PAO"等关键词，所有 ASR 结果二次过滤。**bug 历史**：commit `b4a5dc0` 加反幻觉参数时**只改了本地模型路径，whisper_server（远程服务）漏改** — 这就是为什么线上仍出现"明镜与点点"幻觉。**验证**：用 2 秒静音（amplitude=0.001）调 /transcribe 之前会输出"明镜与点点"，修复后返回 `text: ''` `segments: []`
+  3. **后端 NOISE_PATTERNS 兜底**（`app/api/v1/voice.py:NOISE_PATTERNS`）— 列入"明镜与点点""点赞""订阅""MING PAO""感谢观看""鲜奶油""准备""锅里"等关键词，所有 ASR 结果二次过滤。**bug 历史**：commit `b4a5dc0` 加反幻觉参数时**只改了本地模型路径，whisper_server（远程服务）漏改** — 这就是为什么线上仍出现"明镜与点点"幻觉
+- **后端四重过滤**（`app/api/v1/voice.py:_run_live_loop`，2026-06-02）— NOISE_PATTERNS 之外再加：① segment 时长 < 0.3s 视为噪声；② 文本去标点后 < 2 字符视为短噪音；③ `_is_repetitive_text` 检测同一短子串重复 ≥ 2 次（如"准备准备准备准备"）视为 hallucination。这四层叠加才能彻底压制 faster-whisper 在低能量片段的臆造行为。**NOISE_PATTERNS 维护纪律**：单字（如"感谢"）太宽会误杀正常对话（如"感谢你的帮助"），只放复合关键词（"感谢观看"）
+- **TimelineScrubber duration 不能等于 elapsed**（2026-06-02 教训）— `MeetingRoom.vue` 中 `meetingDuration` 之前用 `elapsed` 赋值，导致 el-slider 的 `max=currentTs`，用户**无法拖到未来时间点**（slider 只能停在自己当前位置）。**修复**：`meetingDuration = Math.max(MAX_MEETING_DURATION_SEC, elapsed + 60)`，给个合理上限 30 分钟，让 slider 真的能拖。**注意**：`onJumpTs` 只更新 currentTs 不真 seek 转录列表是设计妥协（Wave 3b 注释明确说明），至少 slider 要能响应用户操作
 - **发言者检测格式** — `_parse_summary_format()` 识别 `发言人：`/`参会人：` 等字段；`_quick_parse_speakers()` 识别 `【名称】` 格式；NON_SPEAKER 黑名单过滤文档结构标签；过滤后发言者 < 2 人时回退 Claude AI 检测
 - **WebSocket 认证** — `/ws/meeting/{id}/live` 需要在 URL query param 中传 `?token=xxx`，Nginx `/api` location 需要 Upgrade/Connection 头支持 WebSocket
 - **数据库列迁移** — `Base.metadata.create_all()` 不会给已有表添加新列，Member/Meeting 新增的 voice_embedding, speaker_mapping 等列需要手动 ALTER TABLE

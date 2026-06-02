@@ -8,6 +8,7 @@ from pydantic import BaseModel
 import asyncio
 import io
 import json
+import re
 import time
 import wave
 
@@ -457,7 +458,45 @@ NOISE_PATTERNS = [
     "Thanks for watching", "Please subscribe", "Like and subscribe",
     "请不吝", "支持明镜", "支持点点",
     "频道", "channel",
+    # 2026-06-02 二次扩展（用户反馈"鲜奶油""准备准备准备""锅里倒入水"等）
+    "鲜奶油", "奶油", "准备", "锅里", "锅", "倒入", "翻面", "再来", "敲击", "盖起来",
+    "1234", "12345", "123456", "1234567",
+    "下次见", "下次再见", "再见",
+    "哈喽", "Hello", "hi", "Hi", "hello",
+    "测试", "TEST", "test", "Test",
+    "感谢观看",  # 2026-06-02 补：用户反馈"感谢观看"仍出现（不要单加"感谢"会误杀正常对话）
 ]
+
+
+def _is_repetitive_text(text: str, min_repeats: int = 2) -> bool:
+    """检测重复模式：同一短子串重复 >= min_repeats 次视为 whisper hallucination
+
+    例如：
+    - "准备准备准备准备" → 子串"准备"重复 4 次
+    - "锅里锅里锅里" → 子串"锅里"重复 3 次
+    - "abcabcabc" → 子串"abc"重复 3 次
+    - "你好世界" → 不重复，返回 False
+
+    检测策略：枚举所有 1-4 字子串，看是否在原文中重复 >= min_repeats 次
+    """
+    if len(text) < 4:  # 文本太短，不做重复检测（避免误杀"哈哈"等正常 2 字回复）
+        return False
+    for substr_len in range(1, 5):  # 子串长度 1-4
+        for i in range(len(text) - substr_len + 1):
+            substr = text[i:i + substr_len]
+            # 统计该子串出现次数（不重叠）
+            count = 0
+            pos = 0
+            while True:
+                idx = text.find(substr, pos)
+                if idx == -1:
+                    break
+                count += 1
+                pos = idx + substr_len
+            if count >= min_repeats:
+                # 真实对话极少出现"同一短子串重复 2 次以上"，直接判定为 hallucination
+                return True
+    return False
 
 
 async def _run_live_loop(
@@ -665,8 +704,26 @@ async def _live_loop_inner(
                 for entry in entries:
                     pipeline_emitted = True
 
-                    # 噪音过滤
-                    if any(noise in entry["text"] for noise in NOISE_PATTERNS):
+                    # 2026-06-02 反幻觉四重过滤（之前只有 NOISE_PATTERNS 单一过滤，对
+                    # "准备准备准备准备""锅里倒入水""1234567"等短重复/菜谱/数字串无效）
+                    text = entry["text"].strip()
+                    entry_start = entry.get("start", 0)
+                    entry_end = entry.get("end", entry_start)
+                    entry_duration = max(0, entry_end - entry_start)
+
+                    # 1. 噪音黑名单（明镜与点点/YouTube 结束语等）
+                    if any(noise in text for noise in NOISE_PATTERNS):
+                        continue
+                    # 2. 极短 segment（< 0.3s）几乎都是噪声
+                    if entry_duration < 0.3:
+                        continue
+                    # 3. 短文本（去掉标点和空格后 < 2 字符）— 真实语音至少 2 个字
+                    text_no_punct = re.sub(r'[\s,。.!?:;,，！？；：、…\-"\']+', '', text)
+                    if len(text_no_punct) < 2:
+                        continue
+                    # 4. 重复模式（如"准备准备准备准备""锅里锅里锅里"）— 同一 2-4 字子串
+                    #    重复 >= 2 次视为 hallucination
+                    if _is_repetitive_text(text_no_punct):
                         continue
 
                     segment_id = f"seg_{int(entry['start'] * 1000)}"
@@ -758,7 +815,11 @@ async def _live_loop_inner(
                             wav_data, language="zh", skip_convert=True
                         )
                         text = asr_result.get("text", "").strip()
+                        # 2026-06-02 反幻觉四重过滤（兜底分支也要过滤，whisper 幻觉全路径防护）
                         if not text or any(noise in text for noise in NOISE_PATTERNS):
+                            continue
+                        text_no_punct = re.sub(r'[\s,。.!?:;,，！？；：、…\-"\']+', '', text)
+                        if len(text_no_punct) < 2 or _is_repetitive_text(text_no_punct):
                             continue
                         segment_id = f"seg_{int(elapsed * 1000)}"
                         entry = {
