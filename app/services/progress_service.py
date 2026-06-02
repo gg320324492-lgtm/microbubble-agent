@@ -26,12 +26,13 @@ TOTAL_STAGES = 6  # 不含 done
 
 class ProgressStage(str, Enum):
     EXTRACTING_TRANSCRIPT = "extracting_transcript"  # 0
-    IDENTIFYING_SPEAKERS = "identifying_speakers"    # 1
-    GENERATING_TITLE = "generating_title"            # 2
-    GENERATING_MINUTES = "generating_minutes"        # 3
-    CREATING_TASKS = "creating_tasks"                # 4
-    LINKING_HISTORY = "linking_history"              # 5
-    DONE = "done"                                    # 6
+    POLISHING_TRANSCRIPT = "polishing_transcript"    # 1  (2026-06-02 新增：L3 全文精润色)
+    IDENTIFYING_SPEAKERS = "identifying_speakers"    # 2
+    GENERATING_TITLE = "generating_title"            # 3
+    GENERATING_MINUTES = "generating_minutes"        # 4
+    CREATING_TASKS = "creating_tasks"                # 5
+    LINKING_HISTORY = "linking_history"              # 6
+    DONE = "done"                                    # 7
 
 
 STAGE_ORDER = [s.value for s in ProgressStage]
