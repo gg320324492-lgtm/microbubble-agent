@@ -3,14 +3,28 @@
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :xs="24" :sm="12" :md="8">
+        <el-col :xs="12" :sm="6" :md="4">
+          <!--
+            2026-06-02 修复 a11y 警告：原本用 el-date-picker type="daterange"，
+            Element Plus 内部渲染两个 <input class="el-range-input"> 没 name/id，
+            触发浏览器 a11y 警告。改用两个独立的 type="date" 选择器 + unlink-panels 风格。
+          -->
           <el-date-picker
-            v-model="dateRange"
-            name="meeting-list-date-range"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
+            v-model="dateFrom"
+            name="meeting-list-date-from"
+            type="date"
+            placeholder="开始日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            @change="fetchMeetings"
+          />
+        </el-col>
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-date-picker
+            v-model="dateTo"
+            name="meeting-list-date-to"
+            type="date"
+            placeholder="结束日期"
             format="YYYY-MM-DD"
             value-format="YYYY-MM-DD"
             @change="fetchMeetings"
@@ -325,7 +339,8 @@ const meetings = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const dateRange = ref([])
+const dateFrom = ref('')
+const dateTo = ref('')
 const keyword = ref('')
 const showCreateDialog = ref(false)
 const showMinutesDialog = ref(false)
@@ -488,9 +503,11 @@ const fetchMeetings = async () => {
       page_size: pageSize.value,
       keyword: keyword.value
     }
-    if (dateRange.value?.length === 2) {
-      params.date_from = dateRange.value[0]
-      params.date_to = dateRange.value[1]
+    if (dateFrom.value) {
+      params.date_from = dateFrom.value
+    }
+    if (dateTo.value) {
+      params.date_to = dateTo.value
     }
     const res = await axios.get('/api/v1/meetings', { params })
     meetings.value = res.data.items || []
