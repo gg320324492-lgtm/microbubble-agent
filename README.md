@@ -21,6 +21,15 @@
 
 ### 近期新增（按时间倒序）
 
+- **Webhook 持续失败 4 小时根因 + SSH 修复（2026-06-02，5 commit）** — 阿里云→GitHub HTTPS 出口 130s 超时（`curl 16 Error in HTTP2 framing layer` / `GnuTLS recv error (-110)` / `Connection timed out after 130051ms`），导致 14+ webhook delivery 失败。**4 步修复**：
+  - `cd92ad6` `deploy-auto.sh` 显式 `export GIT_SSH_COMMAND="ssh -i /root/.ssh/github_deploy ..."`（belt-and-suspenders）
+  - `1b8429a` `webhook.py` POST 端点加详细诊断日志（`delivery_id` / `event` / `sig_head` / `secret_len` / `payload_head`）
+  - `6124b88` `deploy-auto.sh` 5 次重试 + 指数退避 + `git fetch + reset` fallback
+  - 服务器端：生成 `~/.ssh/github_deploy` 密钥 + 改 `git remote set-url origin git@github.com:...` + 写 `~/.ssh/config` 让 `Host github.com` 自动用专用 key
+  - **效果**：从 130s 超时 → 5s 完成，14+ webhook 全部成功
+- **A11y 警告彻底清零（2026-06-02，2 commit）** — Element Plus 2.4.4 的 `el-date-picker` **所有类型**（date/datetime/daterange/datetimerange）内部 input 都用 `el-range-input` 类，prop 不会传到内部 input，没有任何 prop 能加 name。**唯一方案**：全部用原生 `<input type="date">` / `<input type="datetime-local">` + 自定义 CSS。影响 5 个文件 + 11 个 el-date-picker
+  - `909eecf` `MeetingDetailView` / `ProjectView` / `TaskView` / `Dashboard` / `PasteAnalyzeDialog` 全部替换
+  - `87cdd9c` `MeetingView` / `ProjectView` 改用原生 input（首次尝试 type=date 拆开但仍触发，改用原生彻底解决）
 - **声纹会议全方位热修（2026-06-02，9 commit）** — 一次会话连续修了 9 个生产 bug：
   - `c5ca909` 声纹会议 live WS 静默断开（`_run_live_loop` 顶层 try/except 兜底）+ 前端 `audioLevels` 解耦 `activeSpeaker`（用 `self` 兜底，声波条不再卡死）
   - `9e827a7` Progress WS snapshot `data=null` 致前端 `TypeError`（后端不发空快照 + 前端防御性 `if (msg.data && typeof msg.data === 'object')`）
