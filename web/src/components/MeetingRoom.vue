@@ -33,6 +33,10 @@
       />
       <TranscriptPanel
         :entries="entries"
+        :display-entries="displayEntries"
+        :has-any-polished="hasAnyPolished"
+        :view-mode="viewMode"
+        @update:view-mode="(v) => viewMode = v"
         :font-size="fontSize"
         @user-scroll="onUserScroll"
       />
@@ -135,7 +139,11 @@ const meetingDuration = ref(0)
 let durationTimer = null
 
 // 转录状态机
-const { entries, addOriginal, applyPolished, markError, fontSize } = useTranscript()
+const {
+  entries, viewMode, displayEntries, hasAnyPolished,
+  addOriginal, applyPolished, applyBatchPolished, applyFullPolished,
+  markError, fontSize,
+} = useTranscript()
 
 // WS（Wave 3b: 暴露 setPendingCountCallback + pendingCount）
 const {
@@ -150,7 +158,9 @@ const {
   connected,
   reconnecting,
   onTranscript,
-  onPolished,
+  onPolished,        // 兼容旧
+  onBatchPolished,   // 2026-06-02 L2
+  onFullPolished,    // 2026-06-02 L3
   onError,
   onMessage,
   onSpeakerUnidentified,
@@ -214,6 +224,18 @@ onMounted(async () => {
       polished: msg.polished,
       key_points: msg.key_points,
     })
+  }
+  // 2026-06-02 L2 聚批润色
+  onBatchPolished.value = (msg) => {
+    applyBatchPolished({
+      segment_ids: msg.segment_ids || [],
+      polished: msg.polished || [],
+      key_points: msg.key_points || [],
+    })
+  }
+  // 2026-06-02 L3 全文精润色
+  onFullPolished.value = (msg) => {
+    applyFullPolished(msg.polished_segments || [])
   }
   onError.value = (msg) => {
     if (msg.segment_id) {
