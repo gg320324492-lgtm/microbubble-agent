@@ -44,12 +44,13 @@ async def meeting_progress_ws(
     r = await get_redis()
     channel_name = f"progress:{meeting_id}"
 
-    # 2. 发送当前快照
+    # 2. 发送当前快照（2026-06-02 修复：snapshot=None 时跳过，避免前端访问 null.status 报错）
     snapshot = await get_progress(meeting_id)
-    await websocket.send_json({
-        "type": "progress_snapshot",
-        "data": snapshot,
-    })
+    if snapshot is not None:
+        await websocket.send_json({
+            "type": "progress_snapshot",
+            "data": snapshot,
+        })
 
     # 3. 订阅
     pubsub = r.pubsub()
