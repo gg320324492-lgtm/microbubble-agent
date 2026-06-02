@@ -53,12 +53,25 @@ celery_app.conf.update(
     },
 )
 
+# 2026-06-02 修复：autodiscover_tasks 默认 related_name='tasks'，会尝试 import
+# {package}.tasks 子模块，但本项目任务直接在包内（如 post_meeting_tasks.py 不是
+# tasks.py），autodiscover 静默失败导致 worker [tasks] 列表缺少任务。
+# 改用显式 imports 配置，强制 worker 启动时 import 这些模块
+celery_app.conf.imports = [
+    "app.services.reminder_service",
+    "app.services.post_meeting_tasks",
+    "app.services.memory_service",
+    "app.services.knowledge_evolution_tasks",
+    "app.wechat.scheduler",
+]
+# 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
 celery_app.autodiscover_tasks(
     [
         "app.services.reminder_service",
-        "app.wechat.scheduler",
+        "app.services.post_meeting_tasks",
         "app.services.memory_service",
         "app.services.knowledge_evolution_tasks",
-        "app.services.post_meeting_tasks",
-    ]
+        "app.wechat.scheduler",
+    ],
+    related_name=None,
 )
