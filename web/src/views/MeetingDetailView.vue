@@ -38,7 +38,14 @@
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="时间" required>
-                  <el-date-picker v-model="form.start_time" name="meeting-detail-start-time" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
+                  <input
+    :value="form.start_time"
+    name="form-start_time"
+    type="datetime-local"
+    class="native-date-input"
+    style="width:100%"
+    @change="(e) => { const v = e.target.value; form.start_time = v ? v.replace('T', ' ') + ':00' : ''; }"
+  />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
@@ -348,6 +355,24 @@ async function linkRelated() {
 </script>
 
 <style scoped>
+
+/* 2026-06-02 原生 date input 样式（绕过 el-date-picker 内部 input 缺 name 的 a11y 警告） */
+.native-date-input {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border, #dcdfe6);
+  border-radius: var(--radius-md, 4px);
+  background: #fff;
+  color: var(--color-text-primary, #303133);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.native-date-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #FF7A5C);
+}
+
 .meeting-detail { display: flex; flex-direction: column; height: calc(100vh - 120px); padding: 16px 20px; gap: 16px; overflow: hidden; }
 .detail-topbar { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .detail-body { flex: 1; display: flex; gap: 16px; overflow: hidden; }

@@ -14,14 +14,15 @@
           <el-input v-model="form.title" name="form-title" placeholder="留空则 AI 自动生成标题" />
         </el-form-item>
         <el-form-item label="会议时间" required>
-          <el-date-picker
-            v-model="form.start_time" name="form-start_time"
-            type="datetime"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            placeholder="选择会议时间"
-            style="width: 100%"
-          />
+          <input
+    :value="form.start_time"
+    name="form-start_time"
+    type="datetime-local"
+    class="native-date-input"
+    placeholder="选择会议时间"
+    style="width: 100%"
+    @change="(e) => { const v = e.target.value; form.start_time = v ? v.replace('T', ' ') + ':00' : ''; }"
+  />
         </el-form-item>
         <el-form-item label="参会人员">
           <el-select v-model="form.participants" name="form-participants" multiple placeholder="选择参会人员（可选）">
@@ -315,6 +316,24 @@ defineExpose({ open })
 </script>
 
 <style scoped>
+
+/* 2026-06-02 原生 date input 样式（绕过 el-date-picker 内部 input 缺 name 的 a11y 警告） */
+.native-date-input {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border, #dcdfe6);
+  border-radius: var(--radius-md, 4px);
+  background: #fff;
+  color: var(--color-text-primary, #303133);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.native-date-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #FF7A5C);
+}
+
 .stage-input,
 .stage-mapping,
 .stage-result {
