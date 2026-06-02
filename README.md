@@ -21,6 +21,16 @@
 
 ### 近期新增（按时间倒序）
 
+- **声纹会议 WS 崩溃循环修复（2026-06-02 commit `6bc9687`）** — `meeting_live_ws` 在 BatchPolisher 初始化时访问 `meeting.participants` 触发 SQLAlchemy lazy load，在 async session 中走 sync IO 抛 `MissingGreenlet` → WS 关闭 (1011) → 客户端重连 → 服务端又崩 → 循环（用户看到"重连中"永远不停）。**修复**：传空数组（润色 context 不依赖 participants）
+- **L3 全文精润色 3 项优化（2026-06-02 commit `e01ffdb`）**：
+  - L3 `key_points` 回写到 `meeting.key_points`（从 `[{text,ts,kind}]` 提取纯 text 写 `ARRAY(String)` 列）
+  - voice.py `_broadcast_loop` 订阅 `transcript_polished:{id}` 频道，L3 全文精润结果通过 Redis pub/sub 推给其他设备
+  - L3 `_polish_one_chunk` 加 Redis 缓存（`key = full_polish:sha1(chunk+model)[:16]`，24h TTL），重入会话/测试环境重复触发命中
+- **三级润色流水线（2026-06-02 5 commit `f57abc7..793d61e`）** — 替代逐段单条润色，消除 ASR 幻觉：
+  - Phase 1：三级配置 + 消灭 3 处"发言人"硬编码 + buffer 200→1000
+  - Phase 2：L2 聚批润色（BatchPolisher 攒批 30s/5段，复用 Redis 锁 + 24h 缓存）
+  - Phase 3：L3 全文精润色（alembic 018 + claude-sonnet-4 + run_full_polish_pipeline 分块 + 跨块 context）
+  - Phase 4+5：前端协议 + UI（useTranscript 状态机 + Tab 切换 + 状态徽章 + L3 section）
 - **Webhook 持续失败 4 小时根因 + SSH 修复（2026-06-02，5 commit）** — 阿里云→GitHub HTTPS 出口 130s 超时（`curl 16 Error in HTTP2 framing layer` / `GnuTLS recv error (-110)` / `Connection timed out after 130051ms`），导致 14+ webhook delivery 失败。**4 步修复**：
   - `cd92ad6` `deploy-auto.sh` 显式 `export GIT_SSH_COMMAND="ssh -i /root/.ssh/github_deploy ..."`（belt-and-suspenders）
   - `1b8429a` `webhook.py` POST 端点加详细诊断日志（`delivery_id` / `event` / `sig_head` / `secret_len` / `payload_head`）
