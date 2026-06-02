@@ -338,53 +338,69 @@ async def meeting_live_ws(
 
     await websocket.accept()
 
-    # Wave 2b: 发送 transcript_history（最近 60s 拉历史）
-    from app.services.meeting_transcript_buffer import get_recent_transcript
-    history = await get_recent_transcript(meeting_id, seconds=60)
-    await websocket.send_json({"type": "transcript_history", "entries": history})
+    # 顶层 try/except（2026-06-02 修复）：
+    # 之前函数体无顶层兜底，VAD 加载 / transcript_history 发送 / pubsub.subscribe
+    # 等任何异常会静默逃逸到 Uvicorn，WS 立即关闭且无错误日志
+    try:
+        # Wave 2b: 发送 transcript_history（最近 60s 拉历史）
+        from app.services.meeting_transcript_buffer import get_recent_transcript
+        history = await get_recent_transcript(meeting_id, seconds=60)
+        await websocket.send_json({"type": "transcript_history", "entries": history})
 
-    # 创建段满检测器（每条 WS 独立实例，无状态污染）
-    segmenter = LiveSegmenter(silence_threshold_ms=1500, max_segment_ms=8000)
+        # 创建段满检测器（每条 WS 独立实例，无状态污染）
+        segmenter = LiveSegmenter(silence_threshold_ms=1500, max_segment_ms=8000)
 
-    # 创建 per-WS VAD + MeetingPipeline 实例（避免 VAD 状态污染，wave 2a 任务 5）
-    vad = VADEngine()
-    pipeline = MeetingPipeline(
-        vad_engine=vad,
-        asr_service=asr_service,
-        voiceprint_service=None,  # 使用默认 voiceprint_service（DI 注入默认）
-    )
+        # 创建 per-WS VAD + MeetingPipeline 实例（避免 VAD 状态污染，wave 2a 任务 5）
+        vad = VADEngine()
+        pipeline = MeetingPipeline(
+            vad_engine=vad,
+            asr_service=asr_service,
+            voiceprint_service=None,  # 使用默认 voiceprint_service（DI 注入默认）
+        )
 
-    # audio_level 旁路推送（每 100ms 推最近音频的 RMS，wave 2a 任务 10）
-    audio_queue: asyncio.Queue = asyncio.Queue(maxsize=20)
-    level_task = asyncio.create_task(_audio_level_loop(websocket, audio_queue))
+        # audio_level 旁路推送（每 100ms 推最近音频的 RMS，wave 2a 任务 10）
+        audio_queue: asyncio.Queue = asyncio.Queue(maxsize=20)
+        level_task = asyncio.create_task(_audio_level_loop(websocket, audio_queue))
 
-    # 每条 WS 独立 DB 会话（声纹识别 + speaker_mapping 查询需要）
-    async with async_session() as db:
-        # 预加载 meeting（speaker_mapping 用于将原始声纹 label 映射为真实姓名）
-        meeting = None
+        # 每条 WS 独立 DB 会话（声纹识别 + speaker_mapping 查询需要）
+        async with async_session() as db:
+            # 预加载 meeting（speaker_mapping 用于将原始声纹 label 映射为真实姓名）
+            meeting = None
+            try:
+                meeting = await db.get(Meeting, meeting_id)
+            except Exception as e:
+                logger.error(f"加载 meeting {meeting_id} 失败: {e}")
+
+            # Wave 2b: 多设备订阅
+            from app.core.redis import get_redis
+            r = await get_redis()
+            pubsub = r.pubsub()
+            await pubsub.subscribe(
+                f"transcript:{meeting_id}",
+                f"ai_reply:{meeting_id}",
+                f"speaker_mapping:{meeting_id}",
+            )
+            broadcast_task = asyncio.create_task(
+                _broadcast_loop(websocket, pubsub, meeting, db)
+            )
+
+            return await _run_live_loop(
+                websocket, meeting_id, db, meeting,
+                segmenter, pipeline, audio_queue, level_task,
+                broadcast_task, pubsub,
+            )
+    except WebSocketDisconnect:
+        # 客户端主动断开，无需记录
+        logger.info(f"meeting {meeting_id} live WS 客户端断开")
+    except Exception as e:
+        # 任何其他异常（VAD 加载失败 / transcript_history 失败 / pubsub.subscribe 失败等）
+        # 之前会静默逃逸导致 WS 立即关闭且无错误日志；现在捕获并记录
+        logger.error(f"meeting {meeting_id} live WS 异常崩溃: {e}", exc_info=True)
         try:
-            meeting = await db.get(Meeting, meeting_id)
-        except Exception as e:
-            logger.error(f"加载 meeting {meeting_id} 失败: {e}")
-
-        # Wave 2b: 多设备订阅
-        from app.core.redis import get_redis
-        r = await get_redis()
-        pubsub = r.pubsub()
-        await pubsub.subscribe(
-            f"transcript:{meeting_id}",
-            f"ai_reply:{meeting_id}",
-            f"speaker_mapping:{meeting_id}",
-        )
-        broadcast_task = asyncio.create_task(
-            _broadcast_loop(websocket, pubsub, meeting, db)
-        )
-
-        return await _run_live_loop(
-            websocket, meeting_id, db, meeting,
-            segmenter, pipeline, audio_queue, level_task,
-            broadcast_task, pubsub,
-        )
+            await websocket.close(code=1011)  # 1011 = internal error
+        except Exception:
+            pass
+        return
 
 
 async def _polish_and_send(
@@ -462,6 +478,46 @@ async def _run_live_loop(
     from app.services.audio_archive_service import AudioArchiveWriter
     archive_writer = AudioArchiveWriter(meeting_id, file_service)
 
+    # 外层 try/except 兜底（2026-06-02 修复）：
+    # 之前只捕获 WebSocketDisconnect；任何非 disconnect 异常（RuntimeError / KeyError /
+    # await send_json 在客户端断后抛 ConnectionClosed 等）会逃逸到 Uvicorn 静默关闭 WS。
+    # 现在用 outer try/except 捕获并记录，让运维有迹可循。
+    try:
+        return await _live_loop_inner(
+            websocket, meeting_id, transcript_entries, audio_buffer, last_text,
+            start_time, archive_writer, segmenter, pipeline, audio_queue, level_task,
+            broadcast_task, pubsub, meeting, db,
+        )
+    except WebSocketDisconnect:
+        # 客户端正常断开，走原有的清理流程（保存转录/取消 task/广播 meeting_ended）
+        # 实际清理逻辑在 _live_loop_inner 的 except WebSocketDisconnect 分支
+        logger.info(f"meeting {meeting_id} live WS 客户端断开")
+    except Exception as e:
+        logger.error(f"meeting {meeting_id} _run_live_loop 未捕获异常: {e}", exc_info=True)
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
+        # 尽力清理
+        for t in [level_task, broadcast_task]:
+            if t is not None:
+                t.cancel()
+        if pubsub is not None:
+            try:
+                await pubsub.unsubscribe()
+                await pubsub.aclose()
+            except Exception:
+                pass
+        return None
+    return None
+
+
+async def _live_loop_inner(
+    websocket, meeting_id, transcript_entries, audio_buffer, last_text,
+    start_time, archive_writer, segmenter, pipeline, audio_queue, level_task,
+    broadcast_task, pubsub, meeting, db,
+):
+    """_run_live_loop 内部主循环（被外层 try/except 包裹）"""
     try:
         while True:
             data = await websocket.receive()

@@ -49,7 +49,12 @@ const otherParticipants = computed(() =>
 )
 
 function getBarHeight(i) {
-  const level = props.audioLevels[props.activeSpeakerId] || 0
+  // 2026-06-02 修复：activeSpeakerId 为 null 时读 'self' 槽位
+  // 之前：activeSpeakerId=null 时 props.audioLevels[null] 永远 undefined → level=0，
+  // 5 根声波条不跳动。MeetingRoom 写入 audioLevels 时用 'self' 兜底，
+  // 这里读不到时也降级到 'self'，保证声音波动可见
+  const id = props.activeSpeakerId
+  const level = (id != null && props.audioLevels[id]) || props.audioLevels['self'] || 0
   const offset = (i % 3) * 0.15
   return Math.max(10, Math.min(100, (level + offset) * 100))
 }
