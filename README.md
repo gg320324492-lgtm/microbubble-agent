@@ -21,6 +21,16 @@
 
 ### 近期新增（按时间倒序）
 
+- **声纹会议全方位热修（2026-06-02，9 commit）** — 一次会话连续修了 9 个生产 bug：
+  - `c5ca909` 声纹会议 live WS 静默断开（`_run_live_loop` 顶层 try/except 兜底）+ 前端 `audioLevels` 解耦 `activeSpeaker`（用 `self` 兜底，声波条不再卡死）
+  - `9e827a7` Progress WS snapshot `data=null` 致前端 `TypeError`（后端不发空快照 + 前端防御性 `if (msg.data && typeof msg.data === 'object')`）
+  - `3260bc2` **Celery worker [tasks] 列表缺 `post_meeting_process`**（autodiscover `related_name='tasks'` 静默失败 → 显式 `conf.imports` + `autodiscover_tasks(related_name=None)` + celery-worker 加 `./app` volume 挂载）
+  - `190015f` A11y 警告修复：全项目 50+ 个 `el-input/select/textarea/date-picker/checkbox` 加 `name` 属性
+  - `3e1c475` `el-date-picker type="daterange"` 内部 input 没 name（拆成两个独立 `type="date"` 选择器）
+  - `58a4bf2` 声纹会议反幻觉**四重过滤**（`NOISE_PATTERNS` + segment 时长 + 短文本 + 重复模式）+ TimelineScrubber 跳转修复（`meetingDuration=elapsed` 导致 `max=currentTs`）
+  - `4098d91` 声纹会议 ASR 幻觉修复（whisper_server 漏加 `condition_on_previous_text=False`）
+  - `66428c4` 反幻觉**七重过滤**扩展（字母+数字纯串 / 乱码启发式 / 句子重复 / `_is_repetitive_text` 先去标点，36/36 单元测试通过）
+  - `d6ec60b` 文档同步
 - **KnowledgeView 白屏修复（2026-06-02）** — `onUnmounted` 钩子引用了未声明的 `chartInstance` 触发 `ReferenceError: chartInstance is not defined`，路由跳转到 `/knowledge`（实体图谱 tab 渲染后）即白屏。文件内实际变量是 `entityChartInstance`（632 行 `let entityChartInstance = null`），是 onUnmounted 内的变量名笔误。已修并重新构建 dist（`KnowledgeView-B1cCcwL2.js`），commit `fbffb88`
 - **声纹系统线上修复（2026-06-02 9 个 commit）** —
   - **微信 enroll_voice 状态机**：Agent `enroll_voice` 工具在微信通道下写 Redis pending_enroll，用户发语音后自动完成声纹录入（无需手动上传音频）
