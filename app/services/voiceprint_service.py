@@ -154,11 +154,11 @@ class VoiceprintService:
             return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
         try:
-            # 准备 tensor：(1, N) float32
-            audio_t = torch.from_numpy(audio).float().unsqueeze(0)
+            # 准备 tensor：1D float32（与 ERes2Net_Pipeline.preprocess 规范一致）
+            audio_t = torch.from_numpy(audio).float()
             with torch.no_grad():
                 outputs = model(audio_t)
-            # ERes2Net 输出可能是 tensor 或 tuple
+            # ERes2Net 输出：(1, 192) tensor（模型内部已加 batch 维）
             if isinstance(outputs, tuple):
                 outputs = outputs[0]
             if hasattr(outputs, 'last_hidden_state'):
@@ -167,9 +167,7 @@ class VoiceprintService:
                 emb_t = outputs.get('embeddings') or outputs.get('features') or list(outputs.values())[0]
             else:
                 emb_t = outputs
-            # mean pool over time
-            if emb_t.dim() == 3:
-                emb_t = emb_t.mean(dim=1)
+            # 展平成 1D ndarray
             emb = emb_t.squeeze().cpu().numpy().astype(np.float32)
             if len(emb) >= EMBEDDING_DIM:
                 return emb[:EMBEDDING_DIM]
