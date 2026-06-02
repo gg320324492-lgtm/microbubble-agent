@@ -737,6 +737,17 @@ async def _live_loop_inner(
                         # 2026-06-02: hangup 时强制刷残余 + 停止 BatchPolisher
                         await batch_polisher.flush_remaining()
                         await batch_polisher.stop()
+                        # L3 全文精润色（后台跑，**不 await** 让 WS 立即关闭）
+                        try:
+                            from app.services.meeting_full_polisher import run_full_polish_pipeline
+                            from app.core.database import async_session
+                            asyncio.create_task(
+                                run_full_polish_pipeline(
+                                    meeting_id, transcript_entries, async_session
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(f"L3 触发失败: {e}")
                         await websocket.close()
                         return
 
@@ -1055,6 +1066,19 @@ async def _live_loop_inner(
                 await batch_polisher.stop()
             except Exception as e:
                 logger.warning(f"BatchPolisher flush/stop 失败: {e}")
+
+        # 2026-06-02: WS 异常断开时也触发 L3 全文精润色（后台跑）
+        if transcript_entries:
+            try:
+                from app.services.meeting_full_polisher import run_full_polish_pipeline
+                from app.core.database import async_session
+                asyncio.create_task(
+                    run_full_polish_pipeline(
+                        meeting_id, transcript_entries, async_session
+                    )
+                )
+            except Exception as e:
+                logger.error(f"L3 触发失败: {e}")
 
         # Wave 2b: 取消 broadcast_task
         if broadcast_task is not None:

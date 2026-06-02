@@ -25,6 +25,7 @@ class Meeting(Base, TimestampMixin):
 
     # 转写和纪要
     transcript = Column(JSON)  # 实时转写内容
+    transcript_polished = Column(JSON)  # 2026-06-02 L3 全文精润色结果（hangup 后 Claude Sonnet 全文润色）
     summary = Column(Text)  # 会议摘要
     key_points = Column(ARRAY(String))  # 讨论要点
     decisions = Column(ARRAY(String))  # 决议事项
