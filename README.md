@@ -21,6 +21,7 @@
 
 ### 近期新增（按时间倒序）
 
+- **KnowledgeView 白屏修复（2026-06-02）** — `onUnmounted` 钩子引用了未声明的 `chartInstance` 触发 `ReferenceError: chartInstance is not defined`，路由跳转到 `/knowledge`（实体图谱 tab 渲染后）即白屏。文件内实际变量是 `entityChartInstance`（632 行 `let entityChartInstance = null`），是 onUnmounted 内的变量名笔误。已修并重新构建 dist（`KnowledgeView-B1cCcwL2.js`），commit `fbffb88`
 - **声纹系统线上修复（2026-06-02 9 个 commit）** —
   - **微信 enroll_voice 状态机**：Agent `enroll_voice` 工具在微信通道下写 Redis pending_enroll，用户发语音后自动完成声纹录入（无需手动上传音频）
   - **WS 闪烁根因**：`voice.py` 函数内冗余 `import asyncio` 触发 UnboundLocalError，已修
