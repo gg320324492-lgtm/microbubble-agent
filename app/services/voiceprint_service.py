@@ -103,7 +103,22 @@ class VoiceprintService:
             logger.warning(f"底层模型提取失败, 回退 pipeline 方式: {e}")
 
         # 方式2: 直接用 pipeline 调用（speaker_verification 任务）
-        result = self._pipeline(wav_bytes)
+        # 注：3D-Speaker pipeline 只接受 "音频文件路径" 或 "numpy 数组"，
+        # 不接受 bytes / BytesIO。所以把 wav_bytes 写到临时文件再传路径。
+        import tempfile
+        import os
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp.write(wav_bytes)
+                tmp_path = tmp.name
+            result = self._pipeline(tmp_path)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
         if isinstance(result, dict):
             # verification pipeline 返回 scores, 尝试从模型内部获取 embedding
             for key in ['outputs', 'embedding', 'feature', 'scores']:

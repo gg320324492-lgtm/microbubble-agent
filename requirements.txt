@@ -31,6 +31,10 @@ torch>=2.0.0
 torchaudio>=2.0.0
 addict
 datasets
+sortedcontainers       # modelscope/datasets 传递依赖
+simplejson             # modelscope 传递依赖（CLAUDE.md 模型依赖安装 提示）
+soundfile              # 3D-Speaker ERes2Net pipeline 读取 wav 需要
+pysoundfile            # soundfile 的 Python 绑定（部分平台需要）
 
 # 语音合成
 edge-tts==6.1.9
