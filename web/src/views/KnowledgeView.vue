@@ -1082,9 +1082,9 @@ watch(activeTab, (tab) => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (chartInstance) {
-    chartInstance.dispose()
-    chartInstance = null
+  if (entityChartInstance) {
+    entityChartInstance.dispose()
+    entityChartInstance = null
   }
 })
 </script>
