@@ -1,6 +1,6 @@
 """声纹录入 API"""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -63,18 +63,17 @@ async def list_enrolled_members(
 
 @router.get("/voiceprint/fingerprints")
 async def get_all_fingerprints(
+    response: Response,
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
     """返回所有成员的 192 维 embedding + 元数据（声纹库中心）"""
-    from fastapi.encoders import jsonable_encoder
-    from fastapi.responses import JSONResponse
     from app.services.voiceprint_service import get_fingerprints
-    data = await get_fingerprints(db)
-    return JSONResponse(
-        content=jsonable_encoder(data),
-        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
-    )
+    # 注入 no-cache 头，防止浏览器/代理缓存导致录入后看不到
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return await get_fingerprints(db)
 
 
 @router.get("/voiceprint/{member_id}/history")
