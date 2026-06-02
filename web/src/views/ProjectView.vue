@@ -81,27 +81,28 @@
         <el-form-item label="项目周期">
           <div style="display:flex;gap:8px;align-items:center;width:100%">
             <!--
-              2026-06-02 修复 a11y 警告：原本用 daterange 内部 input 没 name，
-              拆成两个独立 type="date" 选择器。
+              2026-06-02 修复 a11y 警告：Element Plus 2.4.4 的 el-date-picker 即使
+              type="date" 也会用 el-range-input 类（与 daterange 同一底层组件），
+              内部 input 仍无 name。改用原生 <input type="date">。
             -->
-            <el-date-picker
-              v-model="projectForm.startDate"
+            <input
+              :value="projectForm.startDate"
               name="project-form-start-date"
               type="date"
+              class="native-date-input"
               placeholder="开始日期"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
               style="flex:1"
+              @change="(e) => projectForm.startDate = e.target.value"
             />
             <span>至</span>
-            <el-date-picker
-              v-model="projectForm.endDate"
+            <input
+              :value="projectForm.endDate"
               name="project-form-end-date"
               type="date"
+              class="native-date-input"
               placeholder="结束日期"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
               style="flex:1"
+              @change="(e) => projectForm.endDate = e.target.value"
             />
           </div>
         </el-form-item>
@@ -329,6 +330,23 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 2026-06-02 原生 date input 样式（绕过 el-date-picker 内部 input 缺 name 的 a11y 警告） */
+.native-date-input {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border, #dcdfe6);
+  border-radius: var(--radius-md, 4px);
+  background: #fff;
+  color: var(--color-text-primary, #303133);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.native-date-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #FF7A5C);
+}
+
 .project-view {
   height: 100%;
   overflow-y: auto;
