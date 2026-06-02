@@ -465,6 +465,8 @@ NOISE_PATTERNS = [
     "哈喽", "Hello", "hi", "Hi", "hello",
     "测试", "TEST", "test", "Test",
     "感谢观看",  # 2026-06-02 补：用户反馈"感谢观看"仍出现（不要单加"感谢"会误杀正常对话）
+    "嗯",  # 2026-06-02 三次扩展："嗯嗯"是口头语/噪声（"嗯" in "嗯嗯"）
+    "请勿模仿",  # 2026-06-02 三次扩展：用户报告该词反复出现
 ]
 
 
@@ -477,25 +479,101 @@ def _is_repetitive_text(text: str, min_repeats: int = 2) -> bool:
     - "abcabcabc" → 子串"abc"重复 3 次
     - "你好世界" → 不重复，返回 False
 
-    检测策略：枚举所有 1-4 字子串，看是否在原文中重复 >= min_repeats 次
+    检测策略：
+    - 先去掉中英文标点 + 空白（避免 "," "。" 重复触发）
+    - 枚举所有 1-6 字子串，按子串长度用不同阈值：
+      - 1 字 ≥ 4（"啊啊啊啊"）
+      - 2-3 字 ≥ 3（"黑糖黑糖黑糖"）
+      - 4-6 字 ≥ 3
     """
-    if len(text) < 4:  # 文本太短，不做重复检测（避免误杀"哈哈"等正常 2 字回复）
+    if len(text) < 4:
         return False
-    for substr_len in range(1, 5):  # 子串长度 1-4
-        for i in range(len(text) - substr_len + 1):
-            substr = text[i:i + substr_len]
-            # 统计该子串出现次数（不重叠）
+    # 先去标点（避免"，。.空格"等被误判）
+    text_clean = re.sub(r'[\s,。.!?:;,，！？；：、…\-"\']+', '', text)
+    if len(text_clean) < 4:
+        return False
+    thresholds = {1: 4, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3}
+    for substr_len, threshold in thresholds.items():
+        for i in range(len(text_clean) - substr_len + 1):
+            substr = text_clean[i:i + substr_len]
             count = 0
             pos = 0
             while True:
-                idx = text.find(substr, pos)
+                idx = text_clean.find(substr, pos)
                 if idx == -1:
                     break
                 count += 1
                 pos = idx + substr_len
-            if count >= min_repeats:
-                # 真实对话极少出现"同一短子串重复 2 次以上"，直接判定为 hallucination
+            if count >= threshold:
                 return True
+    return False
+
+
+def _is_alphanumeric_run(text: str, min_run: int = 4, max_ratio: float = 0.4) -> bool:
+    """检测字母+数字纯串（whisper 把训练集 ID 列表臆造出来）
+
+    例如：
+    - "G6G7G10G11G12G13G14G15G16G17G18G19G20" → 一串字母+数字连写
+    - "M1结果中心营业G6G7G10" → 主体是字母+数字
+    - "1分钟后,1234567" → 数字串占主体
+
+    判定：text 中 [A-Za-z0-9] 字符占比 > max_ratio 且存在连续 min_run+ 字母数字的 run
+    """
+    alnum_chars = [c for c in text if c.isalnum() and (c.isascii() or c.isdigit())]
+    # 只算 ASCII alnum（中文不算）
+    ascii_alnum = [c for c in text if c.isascii() and c.isalnum()]
+    if not text:
+        return False
+    # 比例判定
+    if len(ascii_alnum) / max(len(text), 1) > max_ratio:
+        # 找连续 ASCII alnum run
+        import re as _re
+        runs = _re.findall(r'[A-Za-z0-9]{' + str(min_run) + r',}', text)
+        if runs:
+            return True
+    return False
+
+
+def _is_gibberish(text: str, min_length: int = 30, common_chars: str = "的了是我你在有和他她么也这那以及与或但而所以因为将把中后放入出到从给它其时时候上下前过做要不让没") -> bool:
+    """检测长无意义乱码（whisper 训练集臆造的中文长文）
+
+    例如：
+    - "高级化铁管理仅次量測年的溶化能力和硬性的一个数据下測感应该是..."
+    - "M1结果中心营业G6G7G10G11G12G13G14G15..."
+
+    启发式（最严格档，避免误杀真实专业句）：
+    - text 长度 ≥ 30 字符
+    - 且 distinct 常见词（虚词 + 代词 + 动作词）= 0
+    - 真实对话 30+ 字几乎必含至少一个"将/把/放/入/到/中/后/给""的/了/是/我/在"等
+
+    注：微纳米气泡这类专业术语（"微纳米气泡的zeta电位是表征..."）含"的""是"等放过。
+    """
+    if len(text) < min_length:
+        return False
+    distinct_common = set(c for c in text if c in common_chars)
+    if len(distinct_common) >= 1:
+        return False
+    return True
+
+
+def _is_sentence_repetitive(text: str, min_repeats: int = 2) -> bool:
+    """检测完整句子重复
+
+    例如：
+    - "它是一种气体。它是一种气体。它是一种气体。"
+    - "是的。是的。"
+
+    策略：按 。！？.!? 切分句子，去标点后任一句子（>=2 字）出现 >= min_repeats 次
+    """
+    if len(text) < 8:
+        return False
+    sentences = re.split(r'[。！？.!?]+', text)
+    sentences = [s.strip() for s in sentences if len(s.strip()) >= 2]
+    if len(sentences) < min_repeats:
+        return False
+    for s in sentences:
+        if text.count(s) >= 3:  # 句子级 ≥ 3 次重复才算（避免误杀"2 分钟后...2 分钟后..."）
+            return True
     return False
 
 
@@ -704,7 +782,7 @@ async def _live_loop_inner(
                 for entry in entries:
                     pipeline_emitted = True
 
-                    # 2026-06-02 反幻觉四重过滤（之前只有 NOISE_PATTERNS 单一过滤，对
+                    # 2026-06-02 反幻觉七重过滤（之前只有 NOISE_PATTERNS 单一过滤，对
                     # "准备准备准备准备""锅里倒入水""1234567"等短重复/菜谱/数字串无效）
                     text = entry["text"].strip()
                     entry_start = entry.get("start", 0)
@@ -721,9 +799,17 @@ async def _live_loop_inner(
                     text_no_punct = re.sub(r'[\s,。.!?:;,，！？；：、…\-"\']+', '', text)
                     if len(text_no_punct) < 2:
                         continue
-                    # 4. 重复模式（如"准备准备准备准备""锅里锅里锅里"）— 同一 2-4 字子串
-                    #    重复 >= 2 次视为 hallucination
+                    # 4. 重复模式（"准备准备准备准备""锅里锅里锅里""啊啊啊啊啊啊"）— 阈值分级
                     if _is_repetitive_text(text_no_punct):
+                        continue
+                    # 5. 字母+数字纯串（whisper 把训练集 ID 列表臆造："G6G7G10G11..."）
+                    if _is_alphanumeric_run(text):
+                        continue
+                    # 6. 长无意义乱码（30+ 字符但几乎不含常见中文虚词："高级化铁管理..."）
+                    if _is_gibberish(text):
+                        continue
+                    # 7. 完整句子重复（"它是一种气体。它是一种气体。它是一种气体。"）
+                    if _is_sentence_repetitive(text):
                         continue
 
                     segment_id = f"seg_{int(entry['start'] * 1000)}"
@@ -815,11 +901,13 @@ async def _live_loop_inner(
                             wav_data, language="zh", skip_convert=True
                         )
                         text = asr_result.get("text", "").strip()
-                        # 2026-06-02 反幻觉四重过滤（兜底分支也要过滤，whisper 幻觉全路径防护）
+                        # 2026-06-02 反幻觉七重过滤（兜底分支也要过滤，whisper 幻觉全路径防护）
                         if not text or any(noise in text for noise in NOISE_PATTERNS):
                             continue
                         text_no_punct = re.sub(r'[\s,。.!?:;,，！？；：、…\-"\']+', '', text)
                         if len(text_no_punct) < 2 or _is_repetitive_text(text_no_punct):
+                            continue
+                        if _is_alphanumeric_run(text) or _is_gibberish(text) or _is_sentence_repetitive(text):
                             continue
                         segment_id = f"seg_{int(elapsed * 1000)}"
                         entry = {
