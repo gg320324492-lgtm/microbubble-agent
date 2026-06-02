@@ -81,30 +81,12 @@ class VoiceprintService:
 
         wav_bytes = self._ensure_wav_format(audio)
 
-        # 尝试通过 pipeline 的底层模型直接提取 embedding
-        try:
-            # 方式1: 使用 pipeline 的预处理+模型前向传播
-            if hasattr(self._pipeline, 'preprocessor') and hasattr(self._pipeline, 'model'):
-                import torch
-                inputs = self._pipeline.preprocessor(wav_bytes)
-                with torch.no_grad():
-                    outputs = self._pipeline.model(inputs)
-                # ERes2Net 输出通常是 embedding tensor
-                if isinstance(outputs, torch.Tensor):
-                    emb = outputs.cpu().numpy().flatten()
-                    if len(emb) >= EMBEDDING_DIM:
-                        return emb[:EMBEDDING_DIM].astype(np.float32)
-                    return emb.astype(np.float32)
-                if isinstance(outputs, dict):
-                    for key in ['embedding', 'feature', 'output', 'last_hidden_state']:
-                        if key in outputs:
-                            return outputs[key].cpu().numpy().flatten()[:EMBEDDING_DIM].astype(np.float32)
-        except Exception as e:
-            logger.warning(f"底层模型提取失败, 回退 pipeline 方式: {e}")
-
-        # 方式2: 直接用 pipeline 调用（speaker_verification 任务）
-        # 注：3D-Speaker pipeline 只接受 "音频文件路径" 或 "numpy 数组"，
-        # 不接受 bytes / BytesIO。所以把 wav_bytes 写到临时文件再传路径。
+        # 直接走 pipeline 入口。
+        # 3D-Speaker speaker_verification pipeline 只接受：
+        #   - 音频文件路径（字符串）
+        #   - numpy ndarray（float32, shape=(N,) 或 (N,1)，16kHz）
+        # 不接受 bytes / BytesIO，也不接受预处理器处理过的 tensor。
+        # 把 wav_bytes 写临时文件，再传路径。
         import tempfile
         import os
         tmp_path = None
@@ -113,28 +95,91 @@ class VoiceprintService:
                 tmp.write(wav_bytes)
                 tmp_path = tmp.name
             result = self._pipeline(tmp_path)
+        except Exception as e_pipeline:
+            # 路径方式失败 → 尝试直接传 numpy 数组
+            logger.warning(f"pipeline(路径) 失败: {e_pipeline}，尝试传 numpy 数组")
+            try:
+                # 转为 mono 1D float32 ndarray
+                if audio.ndim > 1:
+                    audio_mono = audio.mean(axis=1) if audio.shape[1] <= 2 else audio.flatten()
+                else:
+                    audio_mono = audio
+                result = self._pipeline(audio_mono)
+            except Exception as e_np:
+                logger.error(f"pipeline(numpy) 也失败: {e_np}")
+                # 最后一搏：直接调底层 model（绕过 preprocessor）
+                return self._extract_via_model(audio)
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 try:
                     os.unlink(tmp_path)
                 except Exception:
                     pass
+
+        # 解析 result 拿 embedding
+        emb = self._parse_pipeline_result(result)
+        if emb is not None:
+            return emb
+        # pipeline 没拿到 embedding → 直接调底层 model
+        return self._extract_via_model(audio)
+
+    def _parse_pipeline_result(self, result) -> Optional[np.ndarray]:
+        """从 pipeline 返回值中提取 embedding 数组"""
         if isinstance(result, dict):
-            # verification pipeline 返回 scores, 尝试从模型内部获取 embedding
-            for key in ['outputs', 'embedding', 'feature', 'scores']:
+            for key in ['outputs', 'embedding', 'feature', 'scores', 'text']:
                 val = result.get(key)
-                if val is not None:
-                    arr = np.array(val, dtype=np.float32).flatten()
-                    if len(arr) >= 64:
-                        return arr[:EMBEDDING_DIM]
+                if val is None:
+                    continue
+                arr = np.array(val, dtype=np.float32).flatten()
+                if len(arr) >= 64:
+                    return arr[:EMBEDDING_DIM].astype(np.float32)
         elif isinstance(result, (list, np.ndarray)):
             arr = np.array(result, dtype=np.float32).flatten()
             if len(arr) >= 64:
-                return arr[:EMBEDDING_DIM]
+                return arr[:EMBEDDING_DIM].astype(np.float32)
+        return None
 
-        logger.error(f"3D-Speaker 无法提取 embedding, 返回类型: {type(result)}")
-        # 返回零向量作为回退
-        return np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    def _extract_via_model(self, audio: np.ndarray) -> np.ndarray:
+        """直接调底层 model.forward() 提取 embedding（绕过 pipeline 调度）
+
+        适用场景：pipeline 内部 preprocessor 缺失或 buggy。
+        3D-Speaker ERes2Net 输入是 (batch, samples) 的 float32 tensor，
+        输出是 (batch, embed_dim) 的 embedding tensor。
+        """
+        import torch
+        try:
+            model = self._pipeline.model
+        except AttributeError:
+            logger.error("pipeline 没有 .model 属性，无法直接调底层")
+            return np.zeros(EMBEDDING_DIM, dtype=np.float32)
+
+        try:
+            # 准备 tensor：(1, N) float32
+            audio_t = torch.from_numpy(audio).float().unsqueeze(0)
+            with torch.no_grad():
+                outputs = model(audio_t)
+            # ERes2Net 输出可能是 tensor 或 tuple
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
+            if hasattr(outputs, 'last_hidden_state'):
+                emb_t = outputs.last_hidden_state
+            elif isinstance(outputs, dict):
+                emb_t = outputs.get('embeddings') or outputs.get('features') or list(outputs.values())[0]
+            else:
+                emb_t = outputs
+            # mean pool over time
+            if emb_t.dim() == 3:
+                emb_t = emb_t.mean(dim=1)
+            emb = emb_t.squeeze().cpu().numpy().astype(np.float32)
+            if len(emb) >= EMBEDDING_DIM:
+                return emb[:EMBEDDING_DIM]
+            # embedding 维度不够，pad 零
+            padded = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+            padded[: len(emb)] = emb
+            return padded
+        except Exception as e:
+            logger.error(f"底层 model 提取失败: {e}", exc_info=True)
+            return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
     async def enroll_member(
         self, db: AsyncSession, member_id: int, audio: np.ndarray
