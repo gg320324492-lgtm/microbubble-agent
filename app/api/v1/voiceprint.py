@@ -66,9 +66,15 @@ async def get_all_fingerprints(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """返回所有成员的 256 维 embedding + 元数据（声纹库中心）"""
+    """返回所有成员的 192 维 embedding + 元数据（声纹库中心）"""
+    from fastapi.encoders import jsonable_encoder
+    from fastapi.responses import JSONResponse
     from app.services.voiceprint_service import get_fingerprints
-    return await get_fingerprints(db)
+    data = await get_fingerprints(db)
+    return JSONResponse(
+        content=jsonable_encoder(data),
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )
 
 
 @router.get("/voiceprint/{member_id}/history")
