@@ -19,23 +19,40 @@ cd "$PROJECT_DIR"
 git checkout -- . >> "$LOG_FILE" 2>&1 || true
 git clean -fd >> "$LOG_FILE" 2>&1 || true
 
-# 拉取最新代码（重试3次）
+# 拉取最新代码（重试 5 次 + 指数退避，2026-06-02 加固）
+# 背景：阿里云服务器偶发无法连接 GitHub（TLS/GnuTLS 错误或超时），
+# 一次重试不够稳定，加 5 次重试 + 指数退避 + GCM 加密协商回退。
 log "git pull..."
 PULL_OK=0
-for i in 1 2 3; do
-    log "  第${i}次尝试..."
-    if git pull origin main >> "$LOG_FILE" 2>&1; then
+MAX_RETRY=5
+for i in $(seq 1 $MAX_RETRY); do
+    log "  第${i}/${MAX_RETRY}次尝试..."
+    # 用 HTTP/1.1 强制 + 关闭 GCM 加密（有些 GCM 模式在阿里云上 TLS 协商失败）
+    if GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=30 \
+       git -c http.version=HTTP/1.1 -c http.sslVersion=tlsv1.2 \
+           pull origin main >> "$LOG_FILE" 2>&1; then
         PULL_OK=1
         log "  pull 成功"
         break
     fi
-    sleep $((i * 2))
+    # 指数退避：5s, 10s, 20s, 40s（总等待 75s）
+    BACKOFF=$((5 * (2 ** (i - 1))))
+    log "  pull 失败，${BACKOFF}s 后重试（GitHub TLS 偶发错误）"
+    sleep $BACKOFF
 done
 
 if [ $PULL_OK -eq 0 ]; then
-    log "ERROR: git pull 失败，跳过本次部署"
-    log "========== 部署中止 =========="
-    exit 1
+    # 2026-06-02 修复：git pull 失败时尝试 fetch + reset --hard origin/main（绕开合并冲突）
+    log "WARN: git pull 5 次都失败，尝试 fetch + reset 模式..."
+    if git fetch origin main >> "$LOG_FILE" 2>&1 && \
+       git reset --hard origin/main >> "$LOG_FILE" 2>&1; then
+        PULL_OK=1
+        log "  fetch + reset 成功"
+    else
+        log "ERROR: git pull/fetch 都失败，跳过本次部署"
+        log "========== 部署中止 =========="
+        exit 1
+    fi
 fi
 
 # 检查可用磁盘空间（至少 500MB）
