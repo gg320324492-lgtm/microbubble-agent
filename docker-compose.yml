@@ -133,6 +133,7 @@ services:
     build: .
     command: celery -A app.core.celery worker --loglevel=info
     volumes:
+      - ./app:/app/app
       - ./data:/app/data
       - ./logs:/app/logs
       - ./models/hf_cache:/root/.cache/huggingface
