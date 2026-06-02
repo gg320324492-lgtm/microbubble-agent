@@ -372,7 +372,7 @@ async def meeting_live_ws(
             except Exception as e:
                 logger.error(f"加载 meeting {meeting_id} 失败: {e}")
 
-            # Wave 2b: 多设备订阅
+            # Wave 2b: 多设备订阅（2026-06-02 优化 2：加 transcript_polished 频道让 L3 全文精润广播给其他设备）
             from app.core.redis import get_redis
             r = await get_redis()
             pubsub = r.pubsub()
@@ -380,6 +380,7 @@ async def meeting_live_ws(
                 f"transcript:{meeting_id}",
                 f"ai_reply:{meeting_id}",
                 f"speaker_mapping:{meeting_id}",
+                f"transcript_polished:{meeting_id}",  # 2026-06-02 L3 全文精润广播
             )
             broadcast_task = asyncio.create_task(
                 _broadcast_loop(websocket, pubsub, meeting, db)
@@ -1188,7 +1189,7 @@ async def _audio_level_loop(websocket: WebSocket, audio_queue: asyncio.Queue):
 
 
 async def _broadcast_loop(websocket: WebSocket, pubsub, meeting, db):
-    """订阅 transcript / ai_reply / speaker_mapping 频道，转发给本 WS"""
+    """订阅 transcript / ai_reply / speaker_mapping / transcript_polished 频道，转发给本 WS"""
     while True:
         try:
             msg = await asyncio.wait_for(
@@ -1208,6 +1209,13 @@ async def _broadcast_loop(websocket: WebSocket, pubsub, meeting, db):
                         await db.refresh(meeting)
                     except Exception:
                         pass
+                elif channel.startswith("transcript_polished:"):  # 2026-06-02 L3 广播
+                    # L3 全文精润色结果推给本 WS（前端 onFullPolished 处理）
+                    await websocket.send_json({
+                        "type": "transcript_full_polished",
+                        "meeting_id": data.get("meeting_id"),
+                        "polished_segments": data.get("polished_segments", []),
+                    })
         except asyncio.TimeoutError:
             pass
         except Exception as e:

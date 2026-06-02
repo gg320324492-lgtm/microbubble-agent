@@ -13,6 +13,7 @@ from typing import Optional
 
 from app.config import settings
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json
+from app.core.redis import get_redis
 from app.services.prompts.meeting_full_polish import SYSTEM_PROMPT, build_user_prompt
 from app.services.progress_service import ProgressStage, update_progress
 
@@ -50,7 +51,32 @@ async def _polish_one_chunk(
     """调 LLM 润色 1 个 chunk
 
     返回 {"polished": [...], "removed": [...], "key_points": [...], "summary": str|None}
+
+    2026-06-02 优化 3：加 Redis 缓存，缓存键 = sha1(chunk + model)，24h TTL。
+    重入会话或测试环境重复触发时直接命中缓存，节省 Claude 调用。
     """
+    import hashlib
+    import json as _json
+
+    # 1. 构造缓存键（用 chunk 的稳定序列化 + 模型名）
+    cache_key_material = _json.dumps(
+        {"chunk": chunk, "title": title, "participants": participants, "model": settings.FULL_POLISH_MODEL},
+        sort_keys=True, ensure_ascii=False,
+    ).encode("utf-8")
+    cache_hash = hashlib.sha1(cache_key_material).hexdigest()[:16]
+    cache_key = f"full_polish:{cache_hash}"
+
+    # 2. 查缓存
+    try:
+        r = await get_redis()
+        cached = await r.get(cache_key)
+        if cached:
+            logger.info(f"L3 缓存命中 key={cache_key}")
+            return _json.loads(cached)
+    except Exception as e:
+        logger.warning(f"L3 读缓存失败（继续调 LLM）: {e}")
+
+    # 3. 调 LLM
     client = get_anthropic_client()
     model = settings.FULL_POLISH_MODEL or get_default_model()
     user_prompt = build_user_prompt(
@@ -74,12 +100,21 @@ async def _polish_one_chunk(
         if not text:
             raise ValueError("LLM 返回空文本")
         result = parse_llm_json(text)
-        return {
+        result_out = {
             "polished": result.get("polished") or [],
             "removed": result.get("removed") or [],
             "key_points": result.get("key_points") or [],
             "summary": result.get("summary"),
         }
+
+        # 4. 写缓存（24h TTL）
+        try:
+            await r.set(cache_key, _json.dumps(result_out, ensure_ascii=False), ex=86400)
+            logger.debug(f"L3 缓存写入 key={cache_key}")
+        except Exception as e:
+            logger.warning(f"L3 写缓存失败（不影响主流程）: {e}")
+
+        return result_out
     except Exception as e:
         logger.error(f"L3 chunk polish 失败: {e}", exc_info=True)
         # 降级：原样返回，让调用方标记 polish_failed
@@ -172,7 +207,16 @@ async def run_full_polish_pipeline(
                 m = await db.get(Meeting, meeting_id)
                 if m is not None:
                     m.transcript_polished = all_polished
-                    m.key_points = all_key_points if all_key_points else m.key_points
+                    # 2026-06-02 优化 1：L3 key_points 回写到 meeting.key_points
+                    # meeting.key_points 是 ARRAY(String)，从 L3 的 [{text, ts, kind}] 提取纯 text
+                    if all_key_points:
+                        m.key_points = [
+                            kp.get("text", "") for kp in all_key_points
+                            if kp.get("text", "").strip()
+                        ]
+                        logger.info(
+                            f"L3 关键点回写 meeting_id={meeting_id} key_points={len(m.key_points)}"
+                        )
                     await db.commit()
                     logger.info(f"L3 全文润色已持久化 meeting_id={meeting_id} polished={len(all_polished)}")
         except Exception as e:
