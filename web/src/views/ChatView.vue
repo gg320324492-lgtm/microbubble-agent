@@ -126,6 +126,7 @@
           <textarea
             ref="textareaRef"
             v-model="inputText"
+            name="chat-input-message"
             class="input-textarea"
             placeholder="输入消息..."
             rows="1"
