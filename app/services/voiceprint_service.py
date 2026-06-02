@@ -298,7 +298,14 @@ async def get_fingerprints(
             "id": m.id,
             "name": m.name,
             "avatar": m.avatar,
-            "embedding": list(m.voice_embedding) if m.voice_embedding is not None else [],
+            # 强制转 python float — list(numpy_array) 后元素仍是 numpy.float32，
+            # FastAPI jsonable_encoder 不能序列化，会抛 ValueError。
+            # 用 .tolist() 一键转成原生 python float 列表
+            "embedding": (
+                m.voice_embedding.tolist()
+                if hasattr(m.voice_embedding, "tolist")
+                else [float(x) for x in m.voice_embedding]
+            ) if m.voice_embedding is not None else [],
             "enrolled_at": m.voice_enrolled_at.isoformat() if m.voice_enrolled_at else None,
             "sample_count": m.voice_sample_count or 0,
         }
