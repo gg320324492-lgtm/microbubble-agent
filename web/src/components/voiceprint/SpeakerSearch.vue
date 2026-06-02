@@ -1,7 +1,7 @@
 <template>
   <div class="speaker-search">
     <el-input
-      v-model="searchKeyword"
+      v-model="searchKeyword" name="searchKeyword"
       placeholder="搜索该成员说过的内容..."
       clearable
     />

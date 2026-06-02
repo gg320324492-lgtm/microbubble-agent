@@ -12,7 +12,7 @@
       <div class="header-center">
         <el-select
           v-if="isRecording"
-          v-model="currentSpeaker"
+          v-model="currentSpeaker" name="currentSpeaker"
           size="small"
           placeholder="当前发言人"
           style="width: 150px"

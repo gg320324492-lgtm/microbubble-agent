@@ -6,6 +6,7 @@
         <el-col :xs="24" :sm="12" :md="8">
           <el-date-picker
             v-model="dateRange"
+            name="meeting-list-date-range"
             type="daterange"
             range-separator="至"
             start-placeholder="开始日期"
@@ -18,6 +19,7 @@
         <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="keyword"
+            name="meeting-list-keyword"
             placeholder="搜索会议主题"
             clearable
             @keyup.enter="fetchMeetings"
@@ -109,6 +111,7 @@
         <el-form-item v-if="!editingMeetingId" label="会议模板">
           <el-select
             v-model="meetingForm.templateId"
+            name="meeting-form-template"
             placeholder="选择模板自动填充（可选）"
             clearable
             style="width:100%"
@@ -123,11 +126,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="会议主题" required>
-          <el-input v-model="meetingForm.title" placeholder="请输入会议主题" />
+          <el-input v-model="meetingForm.title" name="meeting-form-title" placeholder="请输入会议主题" />
         </el-form-item>
         <el-form-item label="会议时间" required>
           <el-date-picker
             v-model="meetingForm.start_time"
+            name="meeting-form-start-time"
             type="datetime"
             placeholder="选择会议时间"
             format="YYYY-MM-DD HH:mm"
@@ -135,11 +139,11 @@
           />
         </el-form-item>
         <el-form-item label="会议地点">
-          <el-input v-model="meetingForm.location" placeholder="请输入会议地点" />
+          <el-input v-model="meetingForm.location" name="meeting-form-location" placeholder="请输入会议地点" />
         </el-form-item>
         <el-form-item label="参会人员">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <el-select v-model="meetingForm.participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
+            <el-select v-model="meetingForm.participants" name="meeting-form-participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
               <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
             </el-select>
             <el-button size="small" @click="meetingForm.participants = members.map(m=>m.id)">全选</el-button>
@@ -148,6 +152,7 @@
         <el-form-item label="会议说明">
           <el-input
             v-model="meetingForm.description"
+            name="meeting-form-description"
             type="textarea"
             :rows="3"
             placeholder="请输入会议说明"
@@ -157,7 +162,7 @@
           <div class="item-list" style="width:100%">
             <div v-for="(item, idx) in meetingForm.agenda" :key="idx" class="item-row">
               <span class="item-dot" />
-              <el-input v-model="meetingForm.agenda[idx]" placeholder="议题描述" />
+              <el-input v-model="meetingForm.agenda[idx]" :name="`meeting-form-agenda-${idx}`" placeholder="议题描述" />
               <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.agenda.splice(idx, 1)" />
             </div>
             <el-button dashed size="small" class="item-add" @click="meetingForm.agenda.push('')">
@@ -166,7 +171,7 @@
           </div>
         </el-form-item>
         <el-form-item label="提前提醒">
-          <el-checkbox v-model="meetingForm.remindBefore">会议前 5 分钟企业微信提醒</el-checkbox>
+          <el-checkbox v-model="meetingForm.remindBefore" name="meeting-form-remind-before">会议前 5 分钟企业微信提醒</el-checkbox>
         </el-form-item>
 
         <!-- 编辑已有会议时显示纪要字段 -->
@@ -177,6 +182,7 @@
           <el-form-item label="摘要">
             <el-input
               v-model="meetingForm.summary"
+              name="meeting-form-summary"
               type="textarea"
               :rows="3"
               placeholder="会议摘要..."
@@ -187,7 +193,7 @@
             <div class="item-list">
               <div v-for="(point, i) in meetingForm.key_points" :key="'kp'+i" class="item-row">
                 <span class="item-dot" />
-                <el-input v-model="meetingForm.key_points[i]" size="default" placeholder="输入要点..." />
+                <el-input v-model="meetingForm.key_points[i]" :name="`meeting-form-key-points-${i}`" size="default" placeholder="输入要点..." />
                 <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.key_points.splice(i, 1)" />
               </div>
               <el-button dashed size="small" class="item-add" @click="meetingForm.key_points.push('')">
@@ -199,7 +205,7 @@
             <div class="item-list">
               <div v-for="(d, i) in meetingForm.decisions" :key="'dc'+i" class="item-row decision">
                 <span class="item-dot decision-dot" />
-                <el-input v-model="meetingForm.decisions[i]" size="default" placeholder="输入决议..." />
+                <el-input v-model="meetingForm.decisions[i]" :name="`meeting-form-decisions-${i}`" size="default" placeholder="输入决议..." />
                 <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.decisions.splice(i, 1)" />
               </div>
               <el-button dashed size="small" class="item-add decision-add" @click="meetingForm.decisions.push('')">

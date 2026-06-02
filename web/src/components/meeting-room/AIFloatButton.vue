@@ -31,7 +31,7 @@
       </div>
     </div>
     <el-dialog v-model="onAskVisible" title="AI 提问" width="400px">
-      <el-input v-model="askQuestion" type="textarea" :rows="3" placeholder="例如：刚才说的数据有出处吗？" />
+      <el-input v-model="askQuestion" name="askQuestion" type="textarea" :rows="3" placeholder="例如：刚才说的数据有出处吗？" />
       <template #footer>
         <el-button @click="onAskVisible = false">取消</el-button>
         <el-button type="primary" @click="onAsk">提问</el-button>

@@ -7,14 +7,14 @@
         <el-card class="filter-card card fade-slide-up stagger-1">
           <el-row :gutter="16" align="middle">
             <el-col :xs="12" :sm="12" :md="6">
-              <el-select v-model="filters.status" placeholder="任务状态" clearable>
+              <el-select v-model="filters.status" name="filters-status" placeholder="任务状态" clearable>
                 <el-option label="进行中" value="in_progress" />
                 <el-option label="阻塞" value="blocked" />
                 <el-option label="已完成" value="done" />
               </el-select>
             </el-col>
             <el-col :xs="12" :sm="12" :md="6">
-              <el-select v-model="filters.assignee_id" placeholder="负责人" clearable>
+              <el-select v-model="filters.assignee_id" name="filters-assignee_id" placeholder="负责人" clearable>
                 <el-option
                   v-for="member in members"
                   :key="member.id"
@@ -24,7 +24,7 @@
               </el-select>
             </el-col>
             <el-col :xs="12" :sm="12" :md="6">
-              <el-select v-model="filters.priority" placeholder="优先级" clearable>
+              <el-select v-model="filters.priority" name="filters-priority" placeholder="优先级" clearable>
                 <el-option label="高" value="high" />
                 <el-option label="中" value="medium" />
                 <el-option label="低" value="low" />
@@ -279,10 +279,10 @@
     >
       <el-form :model="taskForm" label-width="80px">
         <el-form-item label="任务标题" required>
-          <el-input v-model="taskForm.title" placeholder="请输入任务标题" />
+          <el-input v-model="taskForm.title" name="taskForm-title" placeholder="请输入任务标题" />
         </el-form-item>
         <el-form-item label="负责人">
-          <el-select v-if="isAdmin" v-model="taskForm.assignee_id" placeholder="选择负责人" clearable>
+          <el-select v-if="isAdmin" v-model="taskForm.assignee_id" name="taskForm-assignee_id" placeholder="选择负责人" clearable>
             <el-option
               v-for="member in members"
               :key="member.id"
@@ -290,7 +290,7 @@
               :value="member.id"
             />
           </el-select>
-          <el-select v-else v-model="taskForm.assignee_id" disabled>
+          <el-select v-else v-model="taskForm.assignee_id" name="taskForm-assignee_id" disabled>
             <el-option :label="userStore.userInfo?.name" :value="currentUserId" />
           </el-select>
         </el-form-item>
@@ -302,7 +302,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="状态" v-if="editingTask">
-          <el-select v-model="taskForm.status">
+          <el-select v-model="taskForm.status" name="taskForm-status">
             <el-option label="进行中" value="in_progress" />
             <el-option label="阻塞" value="blocked" />
             <el-option label="已完成" value="done" />
@@ -310,7 +310,7 @@
         </el-form-item>
         <el-form-item label="截止日期">
           <el-date-picker
-            v-model="taskForm.due_date"
+            v-model="taskForm.due_date" name="taskForm-due_date"
             type="datetime"
             placeholder="选择截止日期和时间"
             format="YYYY-MM-DD HH:mm"
@@ -320,14 +320,14 @@
         <el-form-item label="提醒设置">
           <div v-for="(reminder, index) in taskForm.reminders" :key="index" class="reminder-item">
             <el-date-picker
-              v-model="reminder.remind_at"
+              v-model="reminder.remind_at" name="reminder-remind_at"
               type="datetime"
               placeholder="选择提醒时间"
               format="YYYY-MM-DD HH:mm"
               value-format="YYYY-MM-DD HH:mm:ss"
               style="width: 200px"
             />
-            <el-select v-model="reminder.remind_type" style="width: 90px; margin-left: 8px;">
+            <el-select v-model="reminder.remind_type" name="reminder-remind_type" style="width: 90px; margin-left: 8px;">
               <el-option label="微信" value="wechat" />
               <el-option label="邮件" value="email" />
             </el-select>
@@ -342,7 +342,7 @@
         </el-form-item>
         <el-form-item label="任务描述">
           <el-input
-            v-model="taskForm.description"
+            v-model="taskForm.description" name="taskForm-description"
             type="textarea"
             :rows="3"
             placeholder="请输入任务描述"

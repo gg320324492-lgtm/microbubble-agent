@@ -27,7 +27,7 @@
           <el-form :model="form" label-width="90px">
             <el-row :gutter="16">
               <el-col :span="12">
-                <el-form-item label="标题" required><el-input v-model="form.title" /></el-form-item>
+                <el-form-item label="标题" required><el-input v-model="form.title" name="meeting-detail-title" /></el-form-item>
               </el-col>
               <el-col :span="12">
                 <el-form-item label="状态">
@@ -38,16 +38,16 @@
             <el-row :gutter="16">
               <el-col :span="12">
                 <el-form-item label="时间" required>
-                  <el-date-picker v-model="form.start_time" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
+                  <el-date-picker v-model="form.start_time" name="meeting-detail-start-time" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width:100%" />
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="地点"><el-input v-model="form.location" placeholder="会议室/线上" /></el-form-item>
+                <el-form-item label="地点"><el-input v-model="form.location" name="meeting-detail-location" placeholder="会议室/线上" /></el-form-item>
               </el-col>
             </el-row>
             <el-form-item label="参会人员">
               <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <el-select v-model="form.participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
+                <el-select v-model="form.participants" name="meeting-detail-participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
                   <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
                 </el-select>
                 <el-button size="small" @click="form.participants = memberStore.members.map(m=>m.id)">全选成员</el-button>
@@ -56,12 +56,12 @@
               <span v-if="form.participants.length === memberStore.members.length && memberStore.members.length > 0" style="color:var(--color-primary);font-size:12px">已选择全体成员（{{ memberStore.members.length }}人）</span>
             </el-form-item>
             <el-form-item label="汇报人员">
-              <el-select v-model="form.presenter_ids" multiple filterable placeholder="选择汇报人员" style="width:100%">
+              <el-select v-model="form.presenter_ids" name="meeting-detail-presenter-ids" multiple filterable placeholder="选择汇报人员" style="width:100%">
                 <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="说明">
-              <el-input v-model="form.description" type="textarea" :rows="2" placeholder="会议说明..." />
+              <el-input v-model="form.description" name="meeting-detail-description" type="textarea" :rows="2" placeholder="会议说明..." />
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="saveBasic" :loading="saving">保存</el-button>
@@ -82,14 +82,14 @@
           <template v-if="editingMinutes">
             <div class="minutes-section">
               <h4>摘要</h4>
-              <el-input v-model="minutesForm.summary" type="textarea" :rows="4" placeholder="会议摘要..." class="minutes-textarea" />
+              <el-input v-model="minutesForm.summary" name="meeting-detail-minutes-summary" type="textarea" :rows="4" placeholder="会议摘要..." class="minutes-textarea" />
             </div>
             <div class="minutes-section">
               <h4>讨论要点</h4>
               <div class="item-list">
                 <div v-for="(p, i) in minutesForm.key_points" :key="'kp'+i" class="item-row">
                   <span class="item-dot" />
-                  <el-input v-model="minutesForm.key_points[i]" placeholder="输入要点..." />
+                  <el-input v-model="minutesForm.key_points[i]" :name="`meeting-detail-minutes-key-points-${i}`" placeholder="输入要点..." />
                   <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.key_points.splice(i,1)" />
                 </div>
                 <el-button dashed size="small" class="item-add" @click="minutesForm.key_points.push('')">
@@ -102,7 +102,7 @@
               <div class="item-list">
                 <div v-for="(d, i) in minutesForm.decisions" :key="'dc'+i" class="item-row decision">
                   <span class="item-dot decision-dot" />
-                  <el-input v-model="minutesForm.decisions[i]" placeholder="输入决议..." />
+                  <el-input v-model="minutesForm.decisions[i]" :name="`meeting-detail-minutes-decisions-${i}`" placeholder="输入决议..." />
                   <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.decisions.splice(i,1)" />
                 </div>
                 <el-button dashed size="small" class="item-add decision-add" @click="minutesForm.decisions.push('')">
@@ -143,7 +143,7 @@
         <div class="related-meetings" v-if="relatedMeetings.length > 0">
           <h3>相关会议</h3>
           <p class="hint">基于内容相似度推荐（pgvector cosine distance）</p>
-          <el-checkbox-group v-model="selectedRelated">
+          <el-checkbox-group v-model="selectedRelated" name="selectedRelated">
             <div
               v-for="m in relatedMeetings"
               :key="m.id"

@@ -54,6 +54,7 @@
         <el-col :xs="24" :sm="12" :md="8">
           <el-input
             v-model="searchQuery"
+            name="knowledge-list-search"
             placeholder="搜索知识库..."
             clearable
             @keyup.enter="fetchKnowledge"
@@ -184,10 +185,10 @@
     >
       <el-form :model="knowledgeForm" label-width="80px">
         <el-form-item label="标题" required>
-          <el-input v-model="knowledgeForm.title" placeholder="请输入标题" />
+          <el-input v-model="knowledgeForm.title" name="knowledgeForm-title" placeholder="请输入标题" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="knowledgeForm.category" placeholder="动态分类" filterable allow-create clearable>
+          <el-select v-model="knowledgeForm.category" name="knowledgeForm-category" placeholder="动态分类" filterable allow-create clearable>
             <el-option
               v-for="cat in categories"
               :key="cat.name"
@@ -198,7 +199,7 @@
         </el-form-item>
         <el-form-item label="标签">
           <el-select
-            v-model="knowledgeForm.tags"
+            v-model="knowledgeForm.tags" name="knowledgeForm-tags"
             multiple
             filterable
             allow-create
@@ -214,14 +215,14 @@
         </el-form-item>
         <el-form-item label="内容" required>
           <el-input
-            v-model="knowledgeForm.content"
+            v-model="knowledgeForm.content" name="knowledgeForm-content"
             type="textarea"
             :rows="8"
             placeholder="请输入知识内容"
           />
         </el-form-item>
         <el-form-item label="来源">
-          <el-input v-model="knowledgeForm.source" placeholder="来源链接或文件路径" />
+          <el-input v-model="knowledgeForm.source" name="knowledgeForm-source" placeholder="来源链接或文件路径" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -242,7 +243,7 @@
       <div class="qa-dialog">
         <div class="qa-input-row">
           <el-input
-            v-model="qaQuery"
+            v-model="qaQuery" name="qaQuery"
             placeholder="输入你的问题，AI会从知识库中查找并合成答案..."
             size="large"
             :disabled="qaLoading"
@@ -257,7 +258,7 @@
         </div>
 
         <div class="qa-mode-toggle">
-          <el-switch v-model="qaReasonMode" active-text="推理模式" inactive-text="检索模式" size="small" />
+          <el-switch v-model="qaReasonMode" name="qaReasonMode" active-text="推理模式" inactive-text="检索模式" size="small" />
         </div>
 
         <!-- 快捷问题 -->
@@ -356,7 +357,7 @@
       </div>
       <el-form label-width="80px">
         <el-form-item label="标题">
-          <el-input v-model="uploadTitle" placeholder="留空则使用文件名" />
+          <el-input v-model="uploadTitle" name="uploadTitle" placeholder="留空则使用文件名" />
         </el-form-item>
       </el-form>
       <el-upload
@@ -388,13 +389,13 @@
         <el-card class="filter-card">
           <el-row :gutter="12">
             <el-col :span="5">
-              <el-input v-model="entitySearch.subject" placeholder="主体" clearable @keyup.enter="searchEntities" />
+              <el-input v-model="entitySearch.subject" name="entitySearch-subject" placeholder="主体" clearable @keyup.enter="searchEntities" />
             </el-col>
             <el-col :span="5">
-              <el-input v-model="entitySearch.predicate" placeholder="关系" clearable @keyup.enter="searchEntities" />
+              <el-input v-model="entitySearch.predicate" name="entitySearch-predicate" placeholder="关系" clearable @keyup.enter="searchEntities" />
             </el-col>
             <el-col :span="6">
-              <el-input v-model="entitySearch.keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntities" />
+              <el-input v-model="entitySearch.keyword" name="entitySearch-keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntities" />
             </el-col>
             <el-col :span="4">
               <el-button type="primary" @click="searchEntities">搜索实体</el-button>
@@ -438,21 +439,21 @@
         <el-card class="filter-card">
           <el-row :gutter="12" align="middle">
             <el-col :span="4">
-              <el-select v-model="hypothesisFilter.status" placeholder="状态" clearable @change="fetchHypotheses">
+              <el-select v-model="hypothesisFilter.status" name="hypothesisFilter-status" placeholder="状态" clearable @change="fetchHypotheses">
                 <el-option label="已提出" value="proposed" />
                 <el-option label="已验证" value="validated" />
                 <el-option label="已否决" value="rejected" />
               </el-select>
             </el-col>
             <el-col :span="4">
-              <el-select v-model="hypothesisFilter.priority" placeholder="优先级" clearable @change="fetchHypotheses">
+              <el-select v-model="hypothesisFilter.priority" name="hypothesisFilter-priority" placeholder="优先级" clearable @change="fetchHypotheses">
                 <el-option label="高" value="high" />
                 <el-option label="中" value="medium" />
                 <el-option label="低" value="low" />
               </el-select>
             </el-col>
             <el-col :span="6">
-              <el-input v-model="hypothesisTopic" placeholder="研究领域（留空=全局）" clearable />
+              <el-input v-model="hypothesisTopic" name="hypothesisTopic" placeholder="研究领域（留空=全局）" clearable />
             </el-col>
             <el-col :span="5">
               <el-button type="primary" :loading="hypothesisGenerating" @click="generateHypotheses">
@@ -503,11 +504,11 @@
                     style="width:160px"
                     @change="fetchFormulas"
                   />
-                  <el-select v-model="formulaSourceFilter" placeholder="来源" clearable @change="fetchFormulas" style="width:100px">
+                  <el-select v-model="formulaSourceFilter" name="formulaSourceFilter" placeholder="来源" clearable @change="fetchFormulas" style="width:100px">
                     <el-option label="内置公式" value="builtin" />
                     <el-option label="文档提取" value="extracted" />
                   </el-select>
-                  <el-input v-model="formulaKeyword" placeholder="搜索公式" clearable @keyup.enter="fetchFormulas" style="width:150px" />
+                  <el-input v-model="formulaKeyword" name="formulaKeyword" placeholder="搜索公式" clearable @keyup.enter="fetchFormulas" style="width:150px" />
                 </div>
               </div>
               <div v-if="formulaList.length === 0" class="empty-state">

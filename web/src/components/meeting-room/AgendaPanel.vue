@@ -5,6 +5,7 @@
     <div v-for="(item, idx) in items" :key="idx" class="agenda-item">
       <el-checkbox
         :model-value="item.done"
+        :name="`agenda-item-${idx}`"
         @update:model-value="(v) => toggleDone(idx, v)"
       />
       <span :class="{ done: item.done }" class="agenda-text">{{ item.text }}</span>

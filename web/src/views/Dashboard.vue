@@ -199,10 +199,10 @@
     <el-dialog v-model="showCreateTask" title="创建任务" :width="isMobile ? '90vw' : '500px'">
       <el-form :model="newTask" label-width="80px">
         <el-form-item label="任务标题" required>
-          <el-input v-model="newTask.title" placeholder="请输入任务标题" />
+          <el-input v-model="newTask.title" name="newTask-title" placeholder="请输入任务标题" />
         </el-form-item>
         <el-form-item label="负责人">
-          <el-select v-model="newTask.assignee_id" placeholder="选择负责人" clearable>
+          <el-select v-model="newTask.assignee_id" name="newTask-assignee_id" placeholder="选择负责人" clearable>
             <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
           </el-select>
         </el-form-item>
@@ -214,11 +214,11 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="截止日期">
-          <el-date-picker v-model="newTask.due_date" type="datetime" placeholder="选择截止日期和时间"
+          <el-date-picker v-model="newTask.due_date" name="newTask-due_date" type="datetime" placeholder="选择截止日期和时间"
             format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
         </el-form-item>
         <el-form-item label="任务描述">
-          <el-input v-model="newTask.description" type="textarea" :rows="3" placeholder="请输入任务描述" />
+          <el-input v-model="newTask.description" name="newTask-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -231,10 +231,10 @@
     <el-dialog v-model="showEditDialog" title="编辑任务" :width="isMobile ? '90vw' : '500px'">
       <el-form :model="editForm" label-width="80px">
         <el-form-item label="任务标题" required>
-          <el-input v-model="editForm.title" placeholder="请输入任务标题" />
+          <el-input v-model="editForm.title" name="editForm-title" placeholder="请输入任务标题" />
         </el-form-item>
         <el-form-item label="负责人">
-          <el-select v-model="editForm.assignee_id" placeholder="选择负责人" clearable>
+          <el-select v-model="editForm.assignee_id" name="editForm-assignee_id" placeholder="选择负责人" clearable>
             <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
           </el-select>
         </el-form-item>
@@ -246,18 +246,18 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="editForm.status">
+          <el-select v-model="editForm.status" name="editForm-status">
             <el-option label="进行中" value="in_progress" />
             <el-option label="阻塞" value="blocked" />
             <el-option label="已完成" value="done" />
           </el-select>
         </el-form-item>
         <el-form-item label="截止日期">
-          <el-date-picker v-model="editForm.due_date" type="datetime" placeholder="选择截止日期和时间"
+          <el-date-picker v-model="editForm.due_date" name="editForm-due_date" type="datetime" placeholder="选择截止日期和时间"
             format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
         </el-form-item>
         <el-form-item label="任务描述">
-          <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="请输入任务描述" />
+          <el-input v-model="editForm.description" name="editForm-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
         </el-form-item>
       </el-form>
       <template #footer>

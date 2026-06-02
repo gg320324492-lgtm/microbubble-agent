@@ -21,16 +21,16 @@
 
         <el-form :model="form" label-width="80px" class="settings-form">
           <el-form-item label="姓名">
-            <el-input v-model="form.name" placeholder="请输入姓名" />
+            <el-input v-model="form.name" name="form-name" placeholder="请输入姓名" />
           </el-form-item>
           <el-form-item label="邮箱">
-            <el-input v-model="form.email" placeholder="请输入邮箱" />
+            <el-input v-model="form.email" name="form-email" placeholder="请输入邮箱" />
           </el-form-item>
           <el-form-item label="电话">
-            <el-input v-model="form.phone" placeholder="请输入手机号" />
+            <el-input v-model="form.phone" name="form-phone" placeholder="请输入手机号" />
           </el-form-item>
           <el-form-item label="个人简介">
-            <el-input v-model="form.bio" type="textarea" :rows="3" placeholder="介绍一下自己" />
+            <el-input v-model="form.bio" name="form-bio" type="textarea" :rows="3" placeholder="介绍一下自己" />
           </el-form-item>
 
           <!-- 只读信息 -->
@@ -63,13 +63,13 @@
 
         <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="80px">
           <el-form-item label="旧密码" prop="old_password">
-            <el-input v-model="passwordForm.old_password" type="password" show-password placeholder="请输入旧密码" />
+            <el-input v-model="passwordForm.old_password" name="passwordForm-old_password" type="password" show-password placeholder="请输入旧密码" />
           </el-form-item>
           <el-form-item label="新密码" prop="new_password">
-            <el-input v-model="passwordForm.new_password" type="password" show-password placeholder="请输入新密码" />
+            <el-input v-model="passwordForm.new_password" name="passwordForm-new_password" type="password" show-password placeholder="请输入新密码" />
           </el-form-item>
           <el-form-item label="确认密码" prop="confirm_password">
-            <el-input v-model="passwordForm.confirm_password" type="password" show-password placeholder="请再次输入新密码" />
+            <el-input v-model="passwordForm.confirm_password" name="passwordForm-confirm_password" type="password" show-password placeholder="请再次输入新密码" />
           </el-form-item>
 
           <el-form-item>

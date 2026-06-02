@@ -4,7 +4,7 @@
     <div class="section">
       <h4>会议摘要</h4>
       <el-input
-        v-model="localSummary"
+        v-model="localSummary" name="localSummary"
         type="textarea"
         :rows="3"
         placeholder="会议摘要"
@@ -19,7 +19,7 @@
       </div>
       <div class="editable-list">
         <div v-for="(point, i) in localKeyPoints" :key="'kp-' + i" class="list-item">
-          <el-input v-model="localKeyPoints[i]" size="small" />
+          <el-input v-model="localKeyPoints[i]" :name="`analysis-key-points-${i}`" size="small" />
           <el-button
             type="danger"
             size="small"
@@ -39,7 +39,7 @@
       </div>
       <div class="editable-list">
         <div v-for="(d, i) in localDecisions" :key="'dec-' + i" class="list-item">
-          <el-input v-model="localDecisions[i]" size="small" />
+          <el-input v-model="localDecisions[i]" :name="`analysis-decisions-${i}`" size="small" />
           <el-button
             type="danger"
             size="small"
