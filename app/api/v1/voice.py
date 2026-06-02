@@ -617,7 +617,10 @@ async def _run_live_loop(
         websocket=websocket,
         meeting_context={
             "title": meeting.title if meeting else "",
-            "participants": [m.name for m in meeting.participants] if meeting and hasattr(meeting, 'participants') else [],
+            # 2026-06-02 修复：meeting.participants 是 lazy relationship，
+            # 在 async session 中访问会触发 sync IO → MissingGreenlet → WS 崩溃 → 客户端"重连中"循环
+            # 润色 context 不强依赖 participants 列表，传空数组即可
+            "participants": [],
         },
     )
     await batch_polisher.start()
