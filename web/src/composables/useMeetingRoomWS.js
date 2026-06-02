@@ -15,7 +15,9 @@ export function useMeetingRoomWS() {
   const reconnecting = ref(false)
   const audioLevel = ref(0)  // 0-1
   const onTranscript = ref(null)  // (entry) => void
-  const onPolished = ref(null)    // (data) => void
+  const onPolished = ref(null)    // (data) => void 兼容旧 L2 单条
+  const onBatchPolished = ref(null)  // (data) => void 2026-06-02 L2 聚批
+  const onFullPolished = ref(null)   // (data) => void 2026-06-02 L3 全文
   const onError = ref(null)       // (data) => void
   const onEnded = ref(null)       // () => void
   const onMessage = ref(null)     // 通用消息回调
@@ -120,6 +122,12 @@ export function useMeetingRoomWS() {
         break
       case 'transcript_polished':
         if (onPolished.value) onPolished.value(msg)
+        break
+      case 'transcript_batch_polished':  // 2026-06-02 L2 聚批
+        if (onBatchPolished.value) onBatchPolished.value(msg)
+        break
+      case 'transcript_full_polished':   // 2026-06-02 L3 全文
+        if (onFullPolished.value) onFullPolished.value(msg)
         break
       case 'transcript_polished_error':
       case 'transcript_error':
@@ -226,7 +234,9 @@ export function useMeetingRoomWS() {
     reconnecting,
     audioLevel,
     onTranscript,
-    onPolished,
+    onPolished,        // 兼容旧
+    onBatchPolished,   // 2026-06-02 L2
+    onFullPolished,    // 2026-06-02 L3
     onError,
     onEnded,
     onMessage,

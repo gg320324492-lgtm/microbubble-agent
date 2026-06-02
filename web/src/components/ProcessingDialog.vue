@@ -64,6 +64,7 @@ const userStore = useUserStore()
 
 const stages = [
   { key: 'extracting_transcript', label: '提取转录' },
+  { key: 'polishing_transcript', label: '全文润色' },  // 2026-06-02 L3
   { key: 'identifying_speakers', label: '识别发言人' },
   { key: 'generating_title', label: '生成标题' },
   { key: 'generating_minutes', label: '生成纪要' },
@@ -72,6 +73,7 @@ const stages = [
 
 const STAGE_ORDER = [
   'extracting_transcript',
+  'polishing_transcript',  // 2026-06-02 L3
   'identifying_speakers',
   'generating_title',
   'generating_minutes',

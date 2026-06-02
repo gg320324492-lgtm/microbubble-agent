@@ -184,6 +184,39 @@
           </div>
         </el-card>
 
+        <!-- 2026-06-02 L3 全文精润版（如果存在） -->
+        <el-card v-if="meeting.transcript_polished && meeting.transcript_polished.length" class="section-card">
+          <template #header>
+            <div class="card-header">
+              <span>✨ AI 精润版转录（已过滤幻觉）</span>
+              <el-tag size="small" type="success">
+                {{ meeting.transcript_polished.length }} 段
+              </el-tag>
+            </div>
+          </template>
+          <div class="polished-transcript">
+            <div
+              v-for="(entry, i) in meeting.transcript_polished"
+              :key="i"
+              class="polished-entry"
+              :class="{ 'entry-removed': entry.removed }"
+            >
+              <div class="polished-entry-header">
+                <span class="polished-speaker">{{ entry.speaker || '未知说话人' }}</span>
+                <el-tag v-if="entry.removed" size="small" type="info" effect="plain">已过滤</el-tag>
+                <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
+                <span v-if="entry.ts" class="polished-ts">{{ formatTs(entry.ts) }}</span>
+              </div>
+              <div v-if="!entry.removed" class="polished-text">{{ entry.text }}</div>
+              <div v-else class="polished-text removed-text">
+                <el-icon><Delete /></el-icon>
+                <span>{{ entry.text || '(空)' }}</span>
+                <span v-if="entry.reason" class="remove-reason">({{ entry.reason }})</span>
+              </div>
+            </div>
+          </div>
+        </el-card>
+
         <el-card v-if="meeting.speaker_stats?.length" class="section-card">
           <template #header><span>发言者统计</span></template>
           <el-table :data="meeting.speaker_stats" size="small" stripe>
@@ -318,6 +351,12 @@ const handleDelete = async () => {
 }
 
 const formatDate = (d) => dayjs(d).format('YYYY-MM-DD HH:mm')
+const formatTs = (sec) => {  // 2026-06-02 L3 精润版时间戳格式
+  const s = Math.floor(sec || 0)
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`
+}
 const statusLabel = (s) => ({ scheduled: '已预约', recording: '录制中', completed: '已完成' }[s] || s)
 const statusType = (s) => ({ scheduled: 'info', recording: 'warning', completed: 'success' }[s] || '')
 
@@ -381,6 +420,31 @@ async function linkRelated() {
 
 .section-card { border-radius: var(--radius-lg); }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+
+/* 2026-06-02 L3 全文精润版转录 */
+.polished-transcript { display: flex; flex-direction: column; gap: 12px; }
+.polished-entry {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 3px solid #67c23a;
+  border-radius: var(--radius-md);
+}
+.polished-entry.entry-removed {
+  border-left-color: #999;
+  opacity: 0.5;
+}
+.polished-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.polished-speaker { color: #ff7a5c; font-weight: 500; }
+.polished-ts { color: #999; font-family: monospace; margin-left: auto; }
+.polished-text { color: #eee; line-height: 1.6; white-space: pre-wrap; }
+.removed-text { display: flex; align-items: center; gap: 6px; font-style: italic; text-decoration: line-through; }
+.remove-reason { font-size: 11px; color: #999; }
 
 .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .info-item { display: flex; flex-direction: column; gap: 4px; }
