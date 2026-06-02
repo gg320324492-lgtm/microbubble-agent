@@ -186,6 +186,17 @@
   - **schtasks 直接调 powershell.exe 会弹窗**（2026-06-02 教训）— 用当前用户身份注册 schtasks 时，Task Scheduler 在交互式会话启动 `powershell.exe -File xxx.ps1` **会创建可见控制台窗口**，脚本跑完才关闭。如果脚本 2-3 秒跑完（如 watchdog），用户会看到"窗口闪一下然后消失"，体验差。**修复**：用 VBScript 包装器 `wscript.exe run-hidden.vbs xxx.ps1`，vbs 内部用 `WshShell.Run cmd, 0, False` 隐藏窗口启动 PowerShell。`scripts/run-hidden.vbs` 已固化；`install-local-ops.bat` 已改为走 vbs 包装器路径。新增类似后台 PowerShell 任务时**必须**用 vbs 包装，不要直接 `powershell.exe -File`
   - **Task Scheduler 调度选项** — `/RU SYSTEM` 可让任务在 Session 0 跑（完全无窗口），但日志写到用户目录（如 `g:\microbubble-agent\logs\`）会因权限失败。**用 vbs 包装 + 保留用户身份**是最稳的方案
   - **Element Plus daterange/datetimerange 内部 input 没 name**（2026-06-02 教训）— `<el-date-picker type="daterange">` 组件 prop 不会传到内部 `<input class="el-range-input">`，即使外层加 `name="..."` 也只挂在外层 `<div>`。Element Plus 已知限制，**没有任何 prop 能直接修复**。**唯一方案**：拆成两个独立 `<el-date-picker type="date">`（或 `type="datetime"`）选择器，每个都有 name。**代价**：用户需选开始日期 + 结束日期（两步），但消除 a11y 警告 + 浏览器自动填充能力正常
+  - **Webhook 持续失败 4 小时根因**（2026-06-02 教训）— 阿里云→GitHub HTTPS 出口网络持续 130s 超时（`curl 16 Error in HTTP2 framing layer` / `GnuTLS recv error (-110)` / `Failed to connect to github.com port 443 after 130051ms`），deploy-auto.sh 老版本 3 次重试全部失败，**14+ webhook delivery 标红**。**根因链 + 完整修复**：
+    1. **网络层（HTTPS）**：阿里云到 GitHub 出口 IP 受限
+    2. **deploy-auto.sh 无 SSH fallback**：HTTPS 走不通时不会切 SSH
+    3. **专用 SSH key 名非默认**：`~/.ssh/github_deploy` 不是 `id_*`，git 找不到 → `Permission denied (publickey)`
+    4. **修复 4 步**：
+       - `ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N ""` + 贴公钥到 GitHub Deploy keys
+       - `git remote set-url origin git@github.com:gg320324492-lgtm/microbubble-agent.git`（改走 SSH）
+       - 写 `~/.ssh/config` 让 `Host github.com` 自动用 `IdentityFile ~/.ssh/github_deploy`（手动 + 后台都生效）
+       - `deploy-auto.sh` 顶部 `export GIT_SSH_COMMAND="ssh -i /root/.ssh/github_deploy -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"`（belt-and-suspenders）
+    5. **效果**：从 130s 超时 → 5s 完成，14+ webhook 全部成功
+  - **Webhook 服务 alive ≠ 部署成功**（2026-06-02 教训）— `systemctl status webhook.service` 显示 `Active: active (running)` **只代表 HTTP 服务在跑**。**部署是否成功看 `/var/log/webhook-deploy.log` 的 `[DEPLOY] 部署完成` / `部署成功 ✓`**。两者**独立**。Webhook 立即返回 200 OK（避免 GitHub 10s 超时）但后台 deploy 异步跑（看 deploy-auto.sh 是否真的成功）
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版
