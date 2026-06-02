@@ -204,6 +204,8 @@
     - **关键纪律**：兜底段满检测（`voice.py` LiveSegmenter 分支）也**必须调用声纹识别**（之前硬编码 "发言人"，导致用户看不到内容）
     - **降级**：LLM 失败时 `_fallback_polished` 返回原文，前端 `status` 保持 `raw`（不报错，不丢内容）
     - **配置**（`app/config.py`）：`POLISH_BATCH_INTERVAL_SECONDS=30` / `POLISH_BATCH_MAX_SEGMENTS=5` / `FULL_POLISH_MODEL=claude-sonnet-4-20250514` / `FULL_POLISH_CHUNK_CHARS=4000` / `TRANSCRIPT_BUFFER_MAX_ENTRIES=1000`
+  - **async session 中不要访问 lazy relationship**（2026-06-02 commit `6bc9687`）— `meeting.participants` / `meeting.related` / `meeting.speaker_stats` 等关系属性在 async session 中**没有**预加载（`selectinload()`）时，访问触发 lazy load → 走同步 IO → `sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here`。**WS 表现**：服务端 1011 close → 客户端重连 → 服务端又触发同一 lazy load → 循环（用户看到"重连中"永远不停）。**修复**：`await db.refresh(meeting, attribute_names=["participants"])` 预加载，或**避免访问关系属性**（润色/metadata context 不依赖关系）。**错误指纹**：traceback 含 `strategies.py:1130 _emit_lazyload` 关键字 → 100% 是这个错
+  - **会议上下文 metadata 字段选型**（2026-06-02）— `meeting_context` / `meeting_metadata` 等**不依赖** lazy 关系。L2/L3 润色需要的 `title`（column 属性，**不**触发 lazy load）/ `participants`（lazy 关系，**会**触发）/ `topic_line` / `context_segments` 字段应该用 column 字段或显式空值构造
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版
