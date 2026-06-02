@@ -14,8 +14,8 @@ from app.config import settings
 
 logger = logging.getLogger("microbubble.voiceprint")
 
-# 3D-Speaker 嵌入维度
-EMBEDDING_DIM = 256
+# 3D-Speaker ERes2Net 嵌入维度（ERes2Net 实际输出 192 维，不是 256）
+EMBEDDING_DIM = 192
 # 声纹匹配置信度阈值（余弦距离，越低越相似）
 MATCH_THRESHOLD = 0.55
 
@@ -36,9 +36,11 @@ class VoiceprintService:
 
             logger.info("正在加载 3D-Speaker ERes2Net 模型...")
             # speaker_verification 任务可以提取嵌入特征
+            # 注：旧 ID `iic/speech_eres2net_sv_zh-cn_3dspeaker_16k` 已下线，
+            # ModelScope iic 仓库统一改名为 `_16k-common` 后缀版本
             self._pipeline = pipeline(
                 Tasks.speaker_verification,
-                model="iic/speech_eres2net_sv_zh-cn_3dspeaker_16k",
+                model="iic/speech_eres2net_sv_zh-cn_16k-common",
             )
             logger.info("3D-Speaker 模型加载完成")
         except Exception as e:
@@ -68,7 +70,7 @@ class VoiceprintService:
             audio: float32 numpy 数组，16kHz 单声道，值范围 [-1, 1]
 
         Returns:
-            256 维 float32 numpy embedding 向量
+            192 维 float32 numpy embedding 向量（3D-Speaker ERes2Net 输出维度）
         """
         self._load_pipeline()
 

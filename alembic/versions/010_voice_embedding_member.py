@@ -17,7 +17,7 @@ from pgvector.sqlalchemy import Vector
 
 # revision identifiers, used by Alembic.
 revision: str = '010_voice_embedding_member'
-down_revision: Union[str, None] = '008_fix_embedding'
+down_revision: Union[str, None] = '009_formula_categories'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

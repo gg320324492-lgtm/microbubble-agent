@@ -4,8 +4,10 @@
     @update:model-value="onClose"
     :title="dialogTitle"
     :width="isMobile ? '90vw' : '500px'"
-    top="8vh"
+    top="5vh"
     :close-on-click-modal="!uploading"
+    append-to-body
+    :lock-scroll="true"
   >
     <div v-if="member" class="enroll-dialog">
       <div class="member-summary">
