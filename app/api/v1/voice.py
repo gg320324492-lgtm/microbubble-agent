@@ -479,7 +479,6 @@ async def _run_live_loop(
                         )
                         from app.services.meeting_broadcast_service import publish_ai_reply
                         from app.voice.tts import tts_service
-                        import asyncio
 
                         action = msg.get("action")
                         reply = None
