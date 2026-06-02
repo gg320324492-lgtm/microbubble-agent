@@ -407,12 +407,13 @@ async def meeting_live_ws(
 async def _polish_and_send(
     websocket, meeting_id: int, segment_id: str,
     text: str, ts: float, context: dict,
+    speaker: str = "未知说话人",  # 2026-06-02 修复：之前硬编码"发言人"丢失说话人信息
 ):
     """异步润色并推送结果"""
     try:
         result = await polish_segments_with_lock(
             meeting_id,
-            [{"speaker": "发言人", "text": text, "ts": ts}],
+            [{"speaker": speaker, "text": text, "ts": ts}],
             context,
         )
         await websocket.send_json({
@@ -862,6 +863,7 @@ async def _live_loop_inner(
                         _polish_and_send(
                             websocket, meeting_id, segment_id,
                             entry["text"], entry["start"], {},
+                            speaker=speaker,  # 2026-06-02 修复：传声纹识别结果而非硬编码
                         )
                     )
 
@@ -952,6 +954,7 @@ async def _live_loop_inner(
                             _polish_and_send(
                                 websocket, meeting_id, segment_id,
                                 text, elapsed, {},
+                                speaker=speaker,  # 2026-06-02 修复：传声纹识别结果
                             )
                         )
                 except Exception as e:

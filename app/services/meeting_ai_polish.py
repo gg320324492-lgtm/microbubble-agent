@@ -79,7 +79,7 @@ async def polish_segments(
 def _fallback_polished(segments: list[dict]) -> dict:
     """LLM 失败时的降级路径：返回原文 + 空标注"""
     return {
-        "polished": [{"speaker": s.get("speaker", "发言人"), "text": s["text"], "ts": s["ts"]} for s in segments],
+        "polished": [{"speaker": s.get("speaker", "未知说话人"), "text": s["text"], "ts": s["ts"]} for s in segments],
         "key_points": [],
         "boundary_after_index": None,
         "summary": None,
@@ -95,7 +95,7 @@ def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict
 
     # 兜底：polished 为空时回退原文
     if not polished:
-        polished = [{"speaker": s.get("speaker", "发言人"), "text": s["text"], "ts": s["ts"]} for s in original_segments]
+        polished = [{"speaker": s.get("speaker", "未知说话人"), "text": s["text"], "ts": s["ts"]} for s in original_segments]
 
     # 过滤非法 key_point kind
     valid_kinds = {"decision", "todo", "risk"}

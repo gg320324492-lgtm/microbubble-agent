@@ -92,6 +92,16 @@ class Settings(BaseSettings):
     POLISH_CACHE_TTL_SECONDS: int = 86400  # 24h
     POLISH_LOCK_TTL_SECONDS: int = 120  # 2min
 
+    # 2026-06-02 三级润色流水线（实时 / 聚批 / 全文）
+    POLISH_BATCH_INTERVAL_SECONDS: int = 30  # L2 攒批触发间隔
+    POLISH_BATCH_MAX_SEGMENTS: int = 5  # L2 攒批最大段数
+    POLISH_BATCH_MIN_CHARS: int = 30  # L2 攒批最少字符数（避免空批）
+    ENABLE_FULL_POLISH_ON_HANGUP: bool = True  # L3 全文润色开关
+    FULL_POLISH_MODEL: str = "claude-sonnet-4-20250514"  # L3 用高质量 Sonnet
+    FULL_POLISH_MAX_TOKENS: int = 8192
+    FULL_POLISH_CHUNK_CHARS: int = 4000  # L3 分块大小（避免超 max_tokens）
+    TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 1000  # 原 200 → 1000（覆盖长会议）
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

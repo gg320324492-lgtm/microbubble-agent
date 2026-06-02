@@ -1,16 +1,18 @@
 """会议转录滑动窗口（Redis LIST）
 
-职责：每条 transcript 追加到 Redis LIST，限长 200，提供"最近 N 秒"查询。
+职责：每条 transcript 追加到 Redis LIST，限长（默认 1000，可配），提供"最近 N 秒"查询。
 """
 import json
 import logging
 import time
 
 from app.core.redis import get_redis
+from app.config import settings
 
 logger = logging.getLogger("microbubble.transcript_buffer")
 
-MAX_TRANSCRIPT_ENTRIES = 200
+# 2026-06-02 修复：buffer 上限改为读 settings 配置（默认 1000，覆盖长会议全文润色）
+MAX_TRANSCRIPT_ENTRIES = settings.TRANSCRIPT_BUFFER_MAX_ENTRIES
 TRANSCRIPT_TTL_SECONDS = 86400  # 24h
 
 
