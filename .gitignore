@@ -30,6 +30,7 @@ data/
 logs/
 models/
 !app/models/
+backups/   # local-backup.ps1 自动生成的数据库备份（不进 git）
 
 # SSL 证书
 nginx/ssl/
