@@ -7,6 +7,14 @@ set -e
 PROJECT_DIR="/opt/microbubble-agent"
 LOG_FILE="/var/log/webhook-deploy.log"
 
+# 2026-06-02 修复：阿里云→GitHub HTTPS 出口网络持续 130s 超时
+# 改用 SSH 拉取（走 22 端口，绕开 HTTPS 链路问题）
+# 但用户专用 SSH key 在 ~/.ssh/github_deploy（非默认名 id_*），
+# 所以需要显式设 GIT_SSH_COMMAND 让 git 用这个 key
+export GIT_SSH_COMMAND="ssh -i /root/.ssh/github_deploy -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+# 注：StrictHostKeyChecking=no + UserKnownHostsFile=/dev/null 防止 "host key verification failed"
+#      阻塞（首次 SSH 连接时）。生产环境如果想更安全，可以预先生成 known_hosts。
+
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [DEPLOY] $1" >> "$LOG_FILE"
 }
