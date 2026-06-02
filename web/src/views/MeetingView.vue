@@ -142,14 +142,14 @@
           <el-input v-model="meetingForm.title" name="meeting-form-title" placeholder="请输入会议主题" />
         </el-form-item>
         <el-form-item label="会议时间" required>
-          <el-date-picker
-            v-model="meetingForm.start_time"
-            name="meeting-form-start-time"
-            type="datetime"
-            placeholder="选择会议时间"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-          />
+          <input
+    :value="meetingForm.start_time"
+    name="meetingForm-start_time"
+    type="datetime-local"
+    class="native-date-input"
+    placeholder="选择会议时间"
+    @change="(e) => { const v = e.target.value; meetingForm.start_time = v ? v.replace('T', ' ') + ':00' : ''; }"
+  />
         </el-form-item>
         <el-form-item label="会议地点">
           <el-input v-model="meetingForm.location" name="meeting-form-location" placeholder="请输入会议地点" />

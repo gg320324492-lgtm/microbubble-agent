@@ -309,24 +309,26 @@
           </el-select>
         </el-form-item>
         <el-form-item label="截止日期">
-          <el-date-picker
-            v-model="taskForm.due_date" name="taskForm-due_date"
-            type="datetime"
-            placeholder="选择截止日期和时间"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DD HH:mm:ss"
-          />
+          <input
+    :value="taskForm.due_date"
+    name="taskForm-due_date"
+    type="datetime-local"
+    class="native-date-input"
+    placeholder="选择截止日期和时间"
+    @change="(e) => { const v = e.target.value; taskForm.due_date = v ? v.replace('T', ' ') + ':00' : ''; }"
+  />
         </el-form-item>
         <el-form-item label="提醒设置">
           <div v-for="(reminder, index) in taskForm.reminders" :key="index" class="reminder-item">
-            <el-date-picker
-              v-model="reminder.remind_at" name="reminder-remind_at"
-              type="datetime"
-              placeholder="选择提醒时间"
-              format="YYYY-MM-DD HH:mm"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              style="width: 200px"
-            />
+            <input
+    :value="reminder.remind_at"
+    name="reminder-remind_at"
+    type="datetime-local"
+    class="native-date-input"
+    placeholder="选择提醒时间"
+    style="width: 200px"
+    @change="(e) => { const v = e.target.value; reminder.remind_at = v ? v.replace('T', ' ') + ':00' : ''; }"
+  />
             <el-select v-model="reminder.remind_type" name="reminder-remind_type" style="width: 90px; margin-left: 8px;">
               <el-option label="微信" value="wechat" />
               <el-option label="邮件" value="email" />
@@ -669,6 +671,24 @@ onMounted(() => {
 </script>
 
 <style scoped>
+
+/* 2026-06-02 原生 date input 样式（绕过 el-date-picker 内部 input 缺 name 的 a11y 警告） */
+.native-date-input {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border, #dcdfe6);
+  border-radius: var(--radius-md, 4px);
+  background: #fff;
+  color: var(--color-text-primary, #303133);
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+.native-date-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #FF7A5C);
+}
+
 .task-view {
   height: 100%;
   overflow-y: auto;
