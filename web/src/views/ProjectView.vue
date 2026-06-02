@@ -79,15 +79,31 @@
           <el-input v-model="projectForm.research_area" name="projectForm-research_area" placeholder="如：水处理、农业应用" />
         </el-form-item>
         <el-form-item label="项目周期">
-          <el-date-picker
-            v-model="projectForm.dateRange" name="projectForm-dateRange"
-            type="daterange"
-            range-separator="至"
-            start-placeholder="开始日期"
-            end-placeholder="结束日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-          />
+          <div style="display:flex;gap:8px;align-items:center;width:100%">
+            <!--
+              2026-06-02 修复 a11y 警告：原本用 daterange 内部 input 没 name，
+              拆成两个独立 type="date" 选择器。
+            -->
+            <el-date-picker
+              v-model="projectForm.startDate"
+              name="project-form-start-date"
+              type="date"
+              placeholder="开始日期"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              style="flex:1"
+            />
+            <span>至</span>
+            <el-date-picker
+              v-model="projectForm.endDate"
+              name="project-form-end-date"
+              type="date"
+              placeholder="结束日期"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              style="flex:1"
+            />
+          </div>
         </el-form-item>
         <el-form-item label="项目成员">
           <el-select
@@ -189,7 +205,8 @@ const filters = ref({
 const projectForm = ref({
   name: '',
   research_area: '',
-  dateRange: [],
+  startDate: '',
+  endDate: '',
   members: [],
   description: ''
 })
@@ -220,13 +237,13 @@ const createProject = async () => {
       research_area: projectForm.value.research_area,
       description: projectForm.value.description,
       members: projectForm.value.members,
-      start_date: projectForm.value.dateRange?.[0],
-      end_date: projectForm.value.dateRange?.[1]
+      start_date: projectForm.value.startDate,
+      end_date: projectForm.value.endDate
     }
     await axios.post('/api/v1/projects', data)
     ElMessage.success('项目创建成功')
     showCreateDialog.value = false
-    projectForm.value = { name: '', research_area: '', dateRange: [], members: [], description: '' }
+    projectForm.value = { name: '', research_area: '', startDate: '', endDate: '', members: [], description: '' }
     fetchProjects()
   } catch (e) {
     ElMessage.error('创建失败')
