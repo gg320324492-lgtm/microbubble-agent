@@ -42,7 +42,7 @@ function render() {
       smooth: true,
       lineStyle: { color: '#ff7a5c', width: 2 },
       markLine: {
-        data: [{ yAxis: 0.45, label: { formatter: '阈值 0.45' } }],
+        data: [{ yAxis: 0.55, label: { formatter: '阈值 0.55' } }],
         lineStyle: { color: '#f56c6c', type: 'dashed' },
       },
     }],
