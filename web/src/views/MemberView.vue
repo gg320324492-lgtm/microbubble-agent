@@ -403,7 +403,8 @@ onMounted(() => {
 }
 
 .member-card:hover {
-  transform: translateY(-4px);
+  /* 用 margin-top 代替 transform，避免创建 containing block 干扰 el-dialog 定位 */
+  margin-top: -4px;
   box-shadow: var(--shadow-primary);
   border-color: var(--color-primary);
 }

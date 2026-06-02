@@ -31,7 +31,7 @@ class Member(Base, TimestampMixin):
     custom_instructions = Column(Text)  # 用户自定义指令
 
     # 声纹识别
-    voice_embedding = Column(Vector(256))  # 3D-Speaker 256维说话人嵌入
+    voice_embedding = Column(Vector(192))  # 3D-Speaker ERes2Net 192 维说话人嵌入
     voice_enrolled_at = Column(DateTime)  # 声纹录入时间
     voice_sample_count = Column(Integer, default=0)  # 采样次数
 
