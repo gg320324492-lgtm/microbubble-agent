@@ -46,17 +46,30 @@ class WebhookHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", 0))
         payload = self.rfile.read(content_length)
 
-        # 验证签名
+        # 记录详细诊断（2026-06-02 加固：解决 "redeliver 持续失败但无日志" 问题）
+        delivery_id = self.headers.get("X-GitHub-Delivery", "no-id")
+        event = self.headers.get("X-GitHub-Event", "")
         signature = self.headers.get("X-Hub-Signature-256", "")
+        user_agent = self.headers.get("User-Agent", "")
+        logger.info(
+            f"POST /webhook delivery={delivery_id} event={event} "
+            f"ua={user_agent} sig={signature[:20]}... size={content_length}"
+        )
+
+        # 验证签名
         if not verify_signature(payload, signature):
-            logger.warning("签名验证失败")
+            # 2026-06-02 加固：记录更详细诊断信息（delivery_id / sig 前 20 字符）
+            logger.warning(
+                f"签名验证失败 delivery={delivery_id} "
+                f"sig_present={'Y' if signature else 'N'} sig_head={signature[:20] if signature else 'none'} "
+                f"secret_len={len(SECRET)} payload_head={payload[:50].decode('utf-8', 'replace')}"
+            )
             self.send_response(403)
             self.end_headers()
             self.wfile.write(b"Invalid signature")
             return
 
         # 解析事件
-        event = self.headers.get("X-GitHub-Event", "")
         if event != "push":
             logger.info(f"忽略事件: {event}")
             self.send_response(200)
@@ -75,15 +88,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
             ref = data.get("ref", "")
             pusher = data.get("pusher", {}).get("name", "unknown")
             commits = len(data.get("commits", []))
-            logger.info(f"收到 push: {pusher} 推送了 {commits} 个提交到 {ref}")
+            logger.info(f"收到 push: {pusher} 推送了 {commits} 个提交到 {ref} delivery={delivery_id}")
 
             if ref == "refs/heads/main":
-                logger.info("开始自动部署...")
+                logger.info(f"开始自动部署 delivery={delivery_id}...")
                 threading.Thread(target=self._run_deploy, daemon=True).start()
             else:
                 logger.info(f"忽略非 main 分支: {ref}")
         except Exception as e:
-            logger.error(f"处理失败: {e}")
+            logger.error(f"处理失败: {e}", exc_info=True)
 
     def _run_deploy(self):
         """后台执行部署脚本（2026-06-02 加固：死亡任务清理 + 更详细日志）"""
