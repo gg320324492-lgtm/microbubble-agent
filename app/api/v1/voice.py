@@ -445,7 +445,19 @@ def pcm_to_wav(pcm_int16: bytes, sample_rate: int = 16000) -> bytes:
 
 
 # 噪音过滤黑名单
-NOISE_PATTERNS = ["字幕", "志愿者", "谢谢观看", "观看谢谢", "中文字幕", "翻译", "字幕组"]
+# 2026-06-02 扩展：补全 YouTube/B站常见结束语（whisper hallucination 频发）
+# 这些是 faster-whisper 在静音/低能量片段上臆造的"训练集记忆"
+# 即便 whisper_server 已加 condition_on_previous_text=False + no_speech_prob 过滤，
+# 后端这里再兜一层（防御纵深）
+NOISE_PATTERNS = [
+    "字幕", "志愿者", "谢谢观看", "观看谢谢", "中文字幕", "翻译", "字幕组",
+    "明镜与点点", "明镜", "点点栏目",
+    "点赞", "订阅", "转发", "打赏", "不吝",
+    "MING PAO", "MING", "PAO",
+    "Thanks for watching", "Please subscribe", "Like and subscribe",
+    "请不吝", "支持明镜", "支持点点",
+    "频道", "channel",
+]
 
 
 async def _run_live_loop(
