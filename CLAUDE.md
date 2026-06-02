@@ -129,7 +129,15 @@
   1. **whisper_server.py**（`app/whisper_server.py`）— `condition_on_previous_text=False` + `no_speech_threshold=0.6` + `temperature=0`，并**过滤** `segment.no_speech_prob > 0.6` 的 segment（这个值在 server 里之前只读不写不过滤，浪费关键信号）
   2. **本地模型 fallback**（`app/voice/asr.py:_transcribe_local`）— 同样三件套（之前 commit `b4a5dc0` 加过，OK）
   3. **后端 NOISE_PATTERNS 兜底**（`app/api/v1/voice.py:NOISE_PATTERNS`）— 列入"明镜与点点""点赞""订阅""MING PAO""感谢观看""鲜奶油""准备""锅里"等关键词，所有 ASR 结果二次过滤。**bug 历史**：commit `b4a5dc0` 加反幻觉参数时**只改了本地模型路径，whisper_server（远程服务）漏改** — 这就是为什么线上仍出现"明镜与点点"幻觉
-- **后端四重过滤**（`app/api/v1/voice.py:_run_live_loop`，2026-06-02）— NOISE_PATTERNS 之外再加：① segment 时长 < 0.3s 视为噪声；② 文本去标点后 < 2 字符视为短噪音；③ `_is_repetitive_text` 检测同一短子串重复 ≥ 2 次（如"准备准备准备准备"）视为 hallucination。这四层叠加才能彻底压制 faster-whisper 在低能量片段的臆造行为。**NOISE_PATTERNS 维护纪律**：单字（如"感谢"）太宽会误杀正常对话（如"感谢你的帮助"），只放复合关键词（"感谢观看"）
+- **后端七重过滤**（`app/api/v1/voice.py:_run_live_loop`，2026-06-02 三次扩展）— NOISE_PATTERNS 之外再加：
+  1. segment 时长 < 0.3s 视为噪声
+  2. 文本去标点后 < 2 字符视为短噪音
+  3. `_is_repetitive_text` 检测同一短子串重复（1 字 ≥ 4，2-6 字 ≥ 3，**先去标点**避免"，""。"等触发）
+  4. `_is_alphanumeric_run` 检测字母+数字纯串（whisper 臆造"G6G7G10G11..."）
+  5. `_is_gibberish` 检测长无意义乱码（30+ 字符但不含任何"虚词+代词+动作词"）
+  6. `_is_sentence_repetitive` 检测完整句子重复 ≥ 3 次（避免误杀"2分钟后...2分钟后..."菜谱）
+
+  七层叠加才能彻底压制 faster-whisper 在低能量片段的臆造行为。**36/36 单元测试通过**（含"M1结果中心营业G6G7..."等严重 hallucination + "微纳米气泡的zeta电位是表征..."等真实专业句）。**NOISE_PATTERNS 维护纪律**：单字（如"感谢"）太宽会误杀正常对话（如"感谢你的帮助"），只放复合关键词（"感谢观看"）
 - **TimelineScrubber duration 不能等于 elapsed**（2026-06-02 教训）— `MeetingRoom.vue` 中 `meetingDuration` 之前用 `elapsed` 赋值，导致 el-slider 的 `max=currentTs`，用户**无法拖到未来时间点**（slider 只能停在自己当前位置）。**修复**：`meetingDuration = Math.max(MAX_MEETING_DURATION_SEC, elapsed + 60)`，给个合理上限 30 分钟，让 slider 真的能拖。**注意**：`onJumpTs` 只更新 currentTs 不真 seek 转录列表是设计妥协（Wave 3b 注释明确说明），至少 slider 要能响应用户操作
 - **Celery worker 启动时 [tasks] 列表不完整**（2026-06-02 教训）— `app/core/celery.py` 用 `celery_app.autodiscover_tasks([...])` 让 worker 自动发现任务。**Celery 5+ 默认 `related_name='tasks'`**，会尝试 `from {package}.tasks import *`（找 `tasks.py` 子模块），但本项目任务直接在主模块里（如 `post_meeting_tasks.py`），找不到子模块**静默失败**。结果：worker 启动时 [tasks] 列表**缺任务**（如 `post_meeting_process`），任务入 Redis 队列后**永远不被消费**，前端 progress 卡死。**修复**：
   1. `celery.py` 改用显式 `celery_app.conf.imports = [...]` 强制 import 主模块
