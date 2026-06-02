@@ -86,20 +86,30 @@ class WebhookHandler(BaseHTTPRequestHandler):
             logger.error(f"处理失败: {e}")
 
     def _run_deploy(self):
-        """后台执行部署脚本"""
+        """后台执行部署脚本（2026-06-02 加固：死亡任务清理 + 更详细日志）"""
+        import os as _os
         try:
+            logger.info(f"开始执行部署脚本 (pid={_os.getpid()})...")
             result = subprocess.run(
                 ["bash", DEPLOY_SCRIPT],
                 capture_output=True, text=True, timeout=300
             )
             if result.returncode == 0:
-                logger.info("部署成功")
+                logger.info("部署成功 ✓")
+                # 打印最后几行 stdout 帮助调试
+                if result.stdout:
+                    for line in result.stdout.strip().split('\n')[-5:]:
+                        logger.info(f"  [script] {line}")
             else:
-                logger.error(f"部署失败: {result.stderr}")
+                logger.error(f"部署失败 (exit={result.returncode})")
+                if result.stdout:
+                    logger.error(f"  stdout: {result.stdout[-500:]}")
+                if result.stderr:
+                    logger.error(f"  stderr: {result.stderr[-500:]}")
         except subprocess.TimeoutExpired:
-            logger.error("部署超时（300s）")
+            logger.error("部署超时（300s）— 通常是 git pull 卡死（阿里云→GitHub TLS 偶发错误）")
         except Exception as e:
-            logger.error(f"部署异常: {e}")
+            logger.error(f"部署异常: {e}", exc_info=True)
 
     def do_GET(self):
         """健康检查"""
