@@ -909,13 +909,31 @@ async def _live_loop_inner(
                             continue
                         if _is_alphanumeric_run(text) or _is_gibberish(text) or _is_sentence_repetitive(text):
                             continue
+                        # 2026-06-02 修复：兜底段满检测分支也调用声纹识别（之前硬编码 "发言人"，
+                        # 导致反幻觉过滤后所有 entry 都显示 "发言人" 不显示真实说话人）
+                        from app.services.voiceprint_service import voiceprint_service
+                        speaker_name, speaker_member_id, speaker_conf = await voiceprint_service.identify_speaker(db, pcm_segment)
+                        if speaker_name is None:
+                            speaker_label = "unknown"  # 触发 SpeakerUnidentifiedDialog
+                            speaker = "未知说话人"
+                            confidence = speaker_conf
+                        else:
+                            speaker_label = speaker_name
+                            speaker = speaker_name
+                            confidence = speaker_conf
+                        # 应用 speaker_mapping（用户手动认领过的原始 label → 真实姓名）
+                        if meeting and meeting.speaker_mapping and speaker_label != "unknown":
+                            mapped = meeting.speaker_mapping.get(speaker_label)
+                            if mapped:
+                                speaker = mapped
                         segment_id = f"seg_{int(elapsed * 1000)}"
                         entry = {
                             "type": "transcript",
                             "segment_id": segment_id,
-                            "speaker": "发言人",
-                            "speaker_label": "发言人",
-                            "speaker_confidence": 0,
+                            "speaker": speaker,
+                            "speaker_label": speaker_label,
+                            "speaker_confidence": confidence,
+                            "member_id": speaker_member_id,
                             "text": text,
                             "start": max(0, elapsed - 3),
                             "end": elapsed,
@@ -965,11 +983,28 @@ async def _live_loop_inner(
                     last_text = text
 
                     elapsed = time.time() - start_time
+                    # 2026-06-02 修复：48000 字节兜底也调用声纹识别（与 LiveSegmenter 兜底一致）
+                    from app.services.voiceprint_service import voiceprint_service
+                    pcm_segment_fallback = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+                    speaker_name, speaker_member_id, speaker_conf = await voiceprint_service.identify_speaker(db, pcm_segment_fallback)
+                    if speaker_name is None:
+                        speaker_label = "unknown"
+                        speaker = "未知说话人"
+                        confidence = speaker_conf
+                    else:
+                        speaker_label = speaker_name
+                        speaker = speaker_name
+                        confidence = speaker_conf
+                    if meeting and meeting.speaker_mapping and speaker_label != "unknown":
+                        mapped = meeting.speaker_mapping.get(speaker_label)
+                        if mapped:
+                            speaker = mapped
                     entry = {
                         "type": "transcript",
-                        "speaker": "发言人",
-                        "speaker_label": "发言人",
-                        "speaker_confidence": 0,
+                        "speaker": speaker,
+                        "speaker_label": speaker_label,
+                        "speaker_confidence": confidence,
+                        "member_id": speaker_member_id,
                         "text": text,
                         "start": max(0, elapsed - 3),
                         "end": elapsed,
