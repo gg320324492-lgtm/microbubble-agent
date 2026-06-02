@@ -608,6 +608,19 @@ async def _run_live_loop(
     from app.services.audio_archive_service import AudioArchiveWriter
     archive_writer = AudioArchiveWriter(meeting_id, file_service)
 
+    # 2026-06-02 L2 聚批润色器：替代原"每段 1 次 Claude API"逐段触发
+    # 攒批策略：每 30s 或攒满 5 段触发 1 次 LLM，复用 polish_segments_with_lock 的 Redis 锁 + 24h 缓存
+    from app.services.meeting_batch_polisher import BatchPolisher
+    batch_polisher = BatchPolisher(
+        meeting_id=meeting_id,
+        websocket=websocket,
+        meeting_context={
+            "title": meeting.title if meeting else "",
+            "participants": [m.name for m in meeting.participants] if meeting and hasattr(meeting, 'participants') else [],
+        },
+    )
+    await batch_polisher.start()
+
     # 外层 try/except 兜底（2026-06-02 修复）：
     # 之前只捕获 WebSocketDisconnect；任何非 disconnect 异常（RuntimeError / KeyError /
     # await send_json 在客户端断后抛 ConnectionClosed 等）会逃逸到 Uvicorn 静默关闭 WS。
@@ -721,6 +734,9 @@ async def _live_loop_inner(
                             })
 
                     elif msg_type == "hangup":
+                        # 2026-06-02: hangup 时强制刷残余 + 停止 BatchPolisher
+                        await batch_polisher.flush_remaining()
+                        await batch_polisher.stop()
                         await websocket.close()
                         return
 
@@ -858,14 +874,13 @@ async def _live_loop_inner(
                     await append_transcript(meeting_id, transcript_entry)
                     await publish_transcript(meeting_id, transcript_entry)
 
-                    # 异步润色
-                    asyncio.create_task(
-                        _polish_and_send(
-                            websocket, meeting_id, segment_id,
-                            entry["text"], entry["start"], {},
-                            speaker=speaker,  # 2026-06-02 修复：传声纹识别结果而非硬编码
-                        )
-                    )
+                    # 异步润色（2026-06-02 改 BatchPolisher 攒批触发，替代逐段）
+                    await batch_polisher.add({
+                        "segment_id": segment_id,
+                        "speaker": speaker,
+                        "text": entry["text"],
+                        "ts": entry["start"],
+                    })
 
                     # 声纹未识别 + 有未录入成员 → 推 speaker_unidentified
                     if speaker_label == "unknown" or confidence < 0.4:
@@ -957,6 +972,13 @@ async def _live_loop_inner(
                                 speaker=speaker,  # 2026-06-02 修复：传声纹识别结果
                             )
                         )
+                        # 2026-06-02 也入队 BatchPolisher（兜底分支也攒批）
+                        await batch_polisher.add({
+                            "segment_id": segment_id,
+                            "speaker": speaker,
+                            "text": text,
+                            "ts": elapsed,
+                        })
                 except Exception as e:
                     logger.error(f"兜底段满检测失败: {e}")
 
@@ -1025,6 +1047,14 @@ async def _live_loop_inner(
             await level_task
         except (asyncio.CancelledError, Exception):
             pass
+
+        # 2026-06-02: WS 断开时也强制刷 BatchPolisher 残余
+        if batch_polisher is not None:
+            try:
+                await batch_polisher.flush_remaining()
+                await batch_polisher.stop()
+            except Exception as e:
+                logger.warning(f"BatchPolisher flush/stop 失败: {e}")
 
         # Wave 2b: 取消 broadcast_task
         if broadcast_task is not None:
