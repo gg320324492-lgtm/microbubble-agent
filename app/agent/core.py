@@ -1036,12 +1036,105 @@ class MicroBubbleAgent:
                 return {"status": "success", "project_id": project.id, "plan": plan_text}
 
             elif name == "search_knowledge":
-                kb_svc = KnowledgeService(db)
-                results = await kb_svc.search_semantic(
+                # 使用混合检索（向量 + BM25 + 重排序）
+                from app.services.hybrid_retriever import get_hybrid_retriever
+                retriever = get_hybrid_retriever(db)
+                results = await retriever.retrieve(
                     query=input_data["query"],
-                    top_k=5
+                    top_k=5,
+                    enable_vector=True,
+                    enable_bm25=True,
+                    enable_graph=True,
+                    enable_rerank=True,
                 )
                 return {"status": "success", "results": results}
+
+            elif name == "explore_knowledge_graph":
+                from app.services.graph_retriever import get_graph_retriever
+                graph = get_graph_retriever()
+                hops = input_data.get("hops", 1)
+                result = await graph.multi_hop_retrieve(
+                    entity_name=input_data["entity_name"],
+                    hops=min(hops, 3),
+                )
+                return {"status": "success", **result}
+
+            elif name == "find_knowledge_gaps":
+                from app.services.auto_research_service import AutoResearchService
+                svc = AutoResearchService(db)
+                topic = input_data.get("topic")
+                if topic:
+                    # 检查特定主题的空白
+                    results = await svc._analyze_gaps(f"研究主题: {topic}")
+                    return {"status": "success", "gaps": results}
+                else:
+                    # 全局空白检测
+                    stats = await svc._collect_stats()
+                    gaps = await svc._analyze_gaps(stats)
+                    return {"status": "success", "stats": stats, "gaps": gaps}
+
+            elif name == "auto_research":
+                from app.services.auto_research_service import AutoResearchService
+                svc = AutoResearchService(db)
+                result = await svc.research_topic(
+                    queries=[input_data["topic"]],
+                    max_results_per_query=input_data.get("max_results", 5),
+                )
+                return {"status": "success", **result}
+
+            elif name == "compare_knowledge":
+                from app.services.knowledge_service import KnowledgeService
+                kb_svc = KnowledgeService(db)
+                items = input_data["items"]
+                criteria = input_data.get("criteria", "")
+                # 搜索每个条目
+                comparisons = []
+                for item in items:
+                    results = await kb_svc.search_semantic(query=item, top_k=1)
+                    if results:
+                        comparisons.append({
+                            "name": item,
+                            "title": results[0]["title"],
+                            "content": results[0]["content"][:300],
+                            "score": results[0]["score"],
+                        })
+                    else:
+                        comparisons.append({"name": item, "title": "未找到", "content": "", "score": 0})
+                return {"status": "success", "comparisons": comparisons, "criteria": criteria}
+
+            elif name == "summarize_topic":
+                from app.services.graph_retriever import get_graph_retriever
+                from app.services.knowledge_service import KnowledgeService
+                graph = get_graph_retriever()
+                kb_svc = KnowledgeService(db)
+                # 获取社区摘要
+                communities = await graph.get_community_overview(limit=5)
+                # 搜索相关知识
+                results = await kb_svc.search_semantic(query=input_data["topic"], top_k=10)
+                return {
+                    "status": "success",
+                    "topic": input_data["topic"],
+                    "communities": communities,
+                    "knowledge_count": len(results),
+                    "top_items": [{"title": r["title"], "category": r.get("category")} for r in results[:5]],
+                }
+
+            elif name == "suggest_research":
+                from app.services.hypothesis_service import HypothesisService
+                from app.services.auto_research_service import AutoResearchService
+                area = input_data.get("area", "")
+                # 获取现有假设
+                hypothesis_svc = HypothesisService(db)
+                gaps_svc = AutoResearchService(db)
+                # 分析空白
+                stats = await gaps_svc._collect_stats()
+                gaps = await gaps_svc._analyze_gaps(stats)
+                return {
+                    "status": "success",
+                    "area": area,
+                    "gaps": gaps.get("gaps", [])[:5] if isinstance(gaps, dict) else [],
+                    "suggestion": "基于知识空白分析，建议重点关注以下研究方向" if gaps else "知识库较为完善，可探索交叉领域",
+                }
 
             # 长期记忆工具
             elif name == "save_memory":
