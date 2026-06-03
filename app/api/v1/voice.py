@@ -476,6 +476,8 @@ HALLUCINATION_STRONG = [
     "感谢观看",  # YouTube 结束语（不要单加"感谢"会误杀正常对话）
     "请勿模仿",
     "准备准备",  # "准备准备准备" 是 Whisper 幻觉，但单个"准备"是正常词
+    "高级化链",  # 2026-06-03 Whisper 幻觉（"主要是为了使用高级化链和高级化链的关系而定性的销量"）
+    "空气机器",  # 2026-06-03 Whisper 幻觉（"镜头是空气机器,不需要测量"）
 ]
 
 # WEAK：可能是真话的词 → 仅在音频能量低（RMS < 0.02）时过滤
@@ -599,7 +601,7 @@ def _is_sentence_repetitive(text: str, min_repeats: int = 2) -> bool:
     if len(sentences) < min_repeats:
         return False
     for s in sentences:
-        if text.count(s) >= 3:  # 句子级 ≥ 3 次重复才算（避免误杀"2 分钟后...2 分钟后..."）
+        if text.count(s) >= 2:  # 句子级 ≥ 2 次重复即判定（2026-06-03 从 3 降到 2，压制 Whisper 幻觉）
             return True
     return False
 
@@ -892,6 +894,11 @@ async def _live_loop_inner(
                         continue
                     # 7. 完整句子重复（"它是一种气体。它是一种气体。它是一种气体。"）
                     if _is_sentence_repetitive(text):
+                        continue
+                    # 8. 低置信度 + 短文本 → 大概率是 Whisper 幻觉（2026-06-03 新增）
+                    # 声纹置信度 < 0.1 表示几乎没检测到人声，短文本更可能是臆造
+                    speaker_confidence = entry.get("confidence", 0.0)
+                    if speaker_confidence < 0.1 and len(text_no_punct) < 10:
                         continue
 
                     segment_id = f"seg_{int(entry['start'] * 1000)}"
