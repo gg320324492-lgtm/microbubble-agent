@@ -13,6 +13,7 @@ import time
 import wave
 
 import logging
+import numpy as np
 from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
@@ -447,12 +448,22 @@ def pcm_to_wav(pcm_int16: bytes, sample_rate: int = 16000) -> bytes:
     return buf.getvalue()
 
 
-# 噪音过滤黑名单
-# 2026-06-02 扩展：补全 YouTube/B站常见结束语（whisper hallucination 频发）
-# 这些是 faster-whisper 在静音/低能量片段上臆造的"训练集记忆"
-# 即便 whisper_server 已加 condition_on_previous_text=False + no_speech_prob 过滤，
-# 后端这里再兜一层（防御纵深）
-NOISE_PATTERNS = [
+# ===== 反幻觉过滤系统（2026-06-03 重构） =====
+#
+# 问题：之前的 NOISE_PATTERNS 是纯文本黑名单，无法区分
+#   "Whisper 在静音段臆造的幻觉" vs "用户真说了这些词"
+# 导致：用户说"12345"被过滤（假阳性），"Yup""铁化铁"等误识别却漏过
+#
+# 方案：改为三重判定
+#   1. STRONG 黑名单（99% 是幻觉）→ 无条件过滤
+#   2. WEAK 黑名单（可能是真话）→ 仅在音频能量低时过滤
+#   3. 结构性过滤（重复/乱码/数字串）→ 始终生效
+#
+# 能量阈值：RMS > 0.02 认为是真实语音（经验值，安静房间说话约 0.03-0.1）
+
+# STRONG：99% 是幻觉的词（YouTube/B站结束语、菜谱等 Whisper 训练集记忆）
+# 这些词在正常对话中几乎不会出现，无条件过滤
+HALLUCINATION_STRONG = [
     "字幕", "志愿者", "谢谢观看", "观看谢谢", "中文字幕", "翻译", "字幕组",
     "明镜与点点", "明镜", "点点栏目",
     "点赞", "订阅", "转发", "打赏", "不吝",
@@ -460,16 +471,30 @@ NOISE_PATTERNS = [
     "Thanks for watching", "Please subscribe", "Like and subscribe",
     "请不吝", "支持明镜", "支持点点",
     "频道", "channel",
-    # 2026-06-02 二次扩展（用户反馈"鲜奶油""准备准备准备""锅里倒入水"等）
-    "鲜奶油", "奶油", "准备", "锅里", "锅", "倒入", "翻面", "再来", "敲击", "盖起来",
-    "1234", "12345", "123456", "1234567",
-    "下次见", "下次再见", "再见",
-    "哈喽", "Hello", "hi", "Hi", "hello",
-    "测试", "TEST", "test", "Test",
-    "感谢观看",  # 2026-06-02 补：用户反馈"感谢观看"仍出现（不要单加"感谢"会误杀正常对话）
-    "嗯",  # 2026-06-02 三次扩展："嗯嗯"是口头语/噪声（"嗯" in "嗯嗯"）
-    "请勿模仿",  # 2026-06-02 三次扩展：用户报告该词反复出现
+    "鲜奶油", "奶油", "锅里", "锅", "倒入", "翻面", "敲击", "盖起来",
+    "下次见", "下次再见",
+    "感谢观看",  # YouTube 结束语（不要单加"感谢"会误杀正常对话）
+    "请勿模仿",
+    "准备准备",  # "准备准备准备" 是 Whisper 幻觉，但单个"准备"是正常词
 ]
+
+# WEAK：可能是真话的词 → 仅在音频能量低（RMS < 0.02）时过滤
+# 这些词在 Whisper 幻觉中常见，但用户也可能真说
+HALLUCINATION_WEAK = [
+    "1234", "12345", "123456", "1234567",  # 数字串：幻觉常见，但用户也可能真说
+    "哈喽", "Hello", "hi", "Hi", "hello",  # 打招呼：幻觉常见，但用户也可能真说
+    "测试", "TEST", "test", "Test",         # 测试词：幻觉常见，但用户也可能真说
+    "嗯",                                    # 口头语：幻觉常见，但用户也可能真说
+    "再见",                                  # 结束语：幻觉常见，但用户也可能真说
+    "Yup", "yeah", "Yes",                   # 英文应答：幻觉常见
+]
+
+# 能量阈值：RMS 低于此值 + WEAK 黑名单匹配 → 过滤
+# 安静房间说话 RMS 约 0.03-0.1，静音/噪音约 0.001-0.01
+ENERGY_THRESHOLD_FOR_WEAK = 0.02
+
+# 兼容旧代码：合并所有黑名单（用于兜底分支等不需要能量判定的场景）
+NOISE_PATTERNS = HALLUCINATION_STRONG + HALLUCINATION_WEAK
 
 
 def _is_repetitive_text(text: str, min_repeats: int = 2) -> bool:
@@ -814,15 +839,18 @@ async def _live_loop_inner(
                 for entry in entries:
                     pipeline_emitted = True
 
-                    # 2026-06-02 反幻觉七重过滤（之前只有 NOISE_PATTERNS 单一过滤，对
-                    # "准备准备准备准备""锅里倒入水""1234567"等短重复/菜谱/数字串无效）
+                    # 2026-06-03 反幻觉三重判定（重构：黑名单 + 能量 + 结构性）
                     text = entry["text"].strip()
                     entry_start = entry.get("start", 0)
                     entry_end = entry.get("end", entry_start)
                     entry_duration = max(0, entry_end - entry_start)
+                    audio_rms = entry.get("audio_rms", 0.0)
 
-                    # 1. 噪音黑名单（明镜与点点/YouTube 结束语等）
-                    if any(noise in text for noise in NOISE_PATTERNS):
+                    # 1. STRONG 黑名单（99% 是幻觉）→ 无条件过滤
+                    if any(noise in text for noise in HALLUCINATION_STRONG):
+                        continue
+                    # 2. WEAK 黑名单（可能是真话）→ 仅在音频能量低时过滤
+                    if audio_rms < ENERGY_THRESHOLD_FOR_WEAK and any(noise in text for noise in HALLUCINATION_WEAK):
                         continue
                     # 2. 极短 segment（< 0.3s）几乎都是噪声
                     if entry_duration < 0.3:
@@ -933,8 +961,14 @@ async def _live_loop_inner(
                             wav_data, language="zh", skip_convert=True
                         )
                         text = asr_result.get("text", "").strip()
-                        # 2026-06-02 反幻觉七重过滤（兜底分支也要过滤，whisper 幻觉全路径防护）
-                        if not text or any(noise in text for noise in NOISE_PATTERNS):
+                        # 2026-06-03 反幻觉三重判定（兜底分支同步）
+                        # 计算音频能量
+                        fallback_rms = float(np.sqrt(np.mean(np.frombuffer(pcm_segment, dtype=np.int16).astype(np.float32) ** 2 / 32768.0**2))) if len(pcm_segment) > 0 else 0.0
+                        if not text:
+                            continue
+                        if any(noise in text for noise in HALLUCINATION_STRONG):
+                            continue
+                        if fallback_rms < ENERGY_THRESHOLD_FOR_WEAK and any(noise in text for noise in HALLUCINATION_WEAK):
                             continue
                         text_no_punct = re.sub(r'[\s,。.!?:;,，！？；：、…\-"\']+', '', text)
                         if len(text_no_punct) < 2 or _is_repetitive_text(text_no_punct):
@@ -1018,7 +1052,12 @@ async def _live_loop_inner(
                     if len(text) < 2 or text == last_text:
                         last_text = text
                         continue
-                    if any(p in text for p in NOISE_PATTERNS):
+                    # 2026-06-03 反幻觉三重判定（48000 字节兜底同步）
+                    if any(p in text for p in HALLUCINATION_STRONG):
+                        continue
+                    # 48000 字节兜底无 audio_rms，用 buffer 能量估算
+                    buf_rms = float(np.sqrt(np.mean(np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) ** 2 / 32768.0**2))) if len(audio_buffer) > 0 else 0.0
+                    if buf_rms < ENERGY_THRESHOLD_FOR_WEAK and any(p in text for p in HALLUCINATION_WEAK):
                         continue
                     last_text = text
 

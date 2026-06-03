@@ -13,8 +13,8 @@
         </el-radio-button>
       </el-radio-group>
       <div class="view-hint">
-        <span v-if="viewModeProxy === 'raw' && hasAnyPolished" class="hint-text">
-          💡 切换到"AI 润色版"查看精润结果
+        <span v-if="viewModeProxy === 'raw' && hasAnyPolished" class="hint-text hint-highlight">
+          ✨ AI 润色版已就绪，点击查看
         </span>
       </div>
     </div>
@@ -117,6 +117,16 @@ const polishedCount = computed(() => {
   font-size: 11px;
   color: #999;
   font-style: italic;
+}
+.hint-highlight {
+  color: #ff7a5c;
+  font-style: normal;
+  font-weight: 500;
+  animation: hint-pulse 2s ease-in-out infinite;
+}
+@keyframes hint-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 .transcript-panel {
   flex: 1;

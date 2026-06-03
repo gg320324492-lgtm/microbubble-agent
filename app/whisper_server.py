@@ -71,10 +71,11 @@ async def transcribe(
             language=language,
             task=task,
             beam_size=3,
-            vad_filter=True,
-            vad_parameters=dict(min_silence_duration_ms=500),
+            # 2026-06-03 关闭 Whisper 内置 VAD：已有 silero-vad 做 VAD，
+            # 双重 VAD 可能互相干扰导致丢语音段
+            vad_filter=False,
             initial_prompt=INITIAL_PROMPT,
-            # 反幻觉三件套（之前只本地模型有，whisper_server 漏了，commit b4a5dc0 修复不完整）：
+            # 反幻觉三件套：
             # - condition_on_previous_text=False：不基于上文生成，避免 hallucination chain
             # - no_speech_threshold=0.6：no_speech_prob 超过 0.6 视为静音段
             # - temperature=0：不采样，结果稳定

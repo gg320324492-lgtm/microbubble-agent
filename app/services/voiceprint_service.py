@@ -35,17 +35,15 @@ class VoiceprintService:
             from modelscope.utils.constant import Tasks
 
             logger.info("正在加载 3D-Speaker ERes2Net 模型...")
-            # speaker_verification 任务可以提取嵌入特征
-            # 注：旧 ID `iic/speech_eres2net_sv_zh-cn_3dspeaker_16k` 已下线，
-            # ModelScope iic 仓库统一改名为 `_16k-common` 后缀版本
             self._pipeline = pipeline(
                 Tasks.speaker_verification,
                 model="iic/speech_eres2net_sv_zh-cn_16k-common",
             )
             logger.info("3D-Speaker 模型加载完成")
         except Exception as e:
-            logger.error(f"3D-Speaker 模型加载失败: {e}")
-            raise
+            logger.error(f"3D-Speaker 模型加载失败: {e}（声纹识别将不可用，所有发言人显示 unknown）")
+            # 不抛异常，让 identify_speaker 返回 unknown 而不是崩溃 WS
+            self._pipeline = None
 
     def _ensure_wav_format(self, audio_data: np.ndarray) -> bytes:
         """将 float32 numpy 数组转为 WAV bytes（16kHz, 16bit, mono）。"""
@@ -73,6 +71,9 @@ class VoiceprintService:
             192 维 float32 numpy embedding 向量（3D-Speaker ERes2Net 输出维度）
         """
         self._load_pipeline()
+        if self._pipeline is None:
+            # 模型加载失败，返回零向量（identify_speaker 会返回 unknown）
+            return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
         # 确保足够的语音长度（至少 1 秒）
         if len(audio) < 16000:
@@ -225,6 +226,12 @@ class VoiceprintService:
         from app.models.member import Member
 
         embedding = self.extract_embedding(audio)
+
+        # 检查 embedding 是否全零（模型加载失败）
+        if np.all(embedding == 0):
+            logger.warning("声纹 embedding 全零（模型可能未加载），跳过识别")
+            return None, None, 0.0
+
         embedding_list = embedding.tolist()
 
         # 查询已录入声纹的成员，按余弦距离排序
@@ -237,6 +244,7 @@ class VoiceprintService:
         member = result.scalar_one_or_none()
 
         if not member:
+            logger.debug("声纹识别：无已录入成员，返回 unknown")
             return None, None, 0.0
 
         # 计算余弦距离
@@ -248,8 +256,10 @@ class VoiceprintService:
         confidence = float(1.0 - min(cosine_dist, 1.0))
 
         if cosine_dist < MATCH_THRESHOLD:
+            logger.debug(f"声纹识别成功：{member.name} (dist={cosine_dist:.3f}, conf={confidence:.3f})")
             return member.name, member.id, confidence
         else:
+            logger.debug(f"声纹识别未匹配：最近={member.name} (dist={cosine_dist:.3f} > threshold={MATCH_THRESHOLD})")
             return None, None, confidence
 
     async def get_enrolled_members(self, db: AsyncSession) -> List[dict]:

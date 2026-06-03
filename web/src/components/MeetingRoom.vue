@@ -65,6 +65,11 @@
       <el-button @click="confirmHangup" type="danger" circle>
         <el-icon><Phone /></el-icon>
       </el-button>
+      <!-- 声纹状态指示灯 -->
+      <div class="voiceprint-status" :title="voiceprintStatusText">
+        <span class="vp-dot" :class="voiceprintStatusClass"></span>
+        <span class="vp-label">{{ voiceprintStatusText }}</span>
+      </div>
     </div>
 
     <!-- 二次确认弹窗 -->
@@ -130,6 +135,19 @@ const unidentified = ref({
   transcript: '',
 })
 const aiFloatButtonRef = ref(null)
+
+// 2026-06-03 声纹状态指示
+const voiceprintEnrolledCount = ref(-1)  // -1=未知, 0=无人录入, >0=已录入人数
+const voiceprintStatusClass = computed(() => {
+  if (voiceprintEnrolledCount.value === -1) return 'vp-unknown'
+  if (voiceprintEnrolledCount.value === 0) return 'vp-none'
+  return 'vp-ok'
+})
+const voiceprintStatusText = computed(() => {
+  if (voiceprintEnrolledCount.value === -1) return '声纹检查中...'
+  if (voiceprintEnrolledCount.value === 0) return '未录入声纹'
+  return `${voiceprintEnrolledCount.value} 人已录入`
+})
 
 // Wave 3b: 议程 + 时间轴
 const agendaItems = ref([])
@@ -226,12 +244,20 @@ onMounted(async () => {
     })
   }
   // 2026-06-02 L2 聚批润色
+  // 2026-06-03 优化：首批 L2 结果到达时自动切换到 polished 模式
+  let autoSwitchedToPolished = false
   onBatchPolished.value = (msg) => {
     applyBatchPolished({
       segment_ids: msg.segment_ids || [],
       polished: msg.polished || [],
       key_points: msg.key_points || [],
     })
+    // 首批 L2 结果到达时自动切换到 polished 模式
+    if (!autoSwitchedToPolished && viewMode.value === 'raw') {
+      autoSwitchedToPolished = true
+      viewMode.value = 'polished'
+      ElMessage.success('AI 润色版已就绪，已自动切换')
+    }
   }
   // 2026-06-02 L3 全文精润色
   onFullPolished.value = (msg) => {
@@ -330,6 +356,25 @@ onMounted(async () => {
   // 连接 WS
   const token = localStorage.getItem('access_token')
   wsConnect(props.meetingId, token)
+
+  // 2026-06-03 声纹状态检查：进入通话时检查已录入声纹成员数
+  try {
+    const vpResp = await fetch('/api/v1/voiceprint/enrolled', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (vpResp.ok) {
+      const vpData = await vpResp.json()
+      const count = Array.isArray(vpData) ? vpData.length : 0
+      voiceprintEnrolledCount.value = count
+      if (count === 0) {
+        ElMessage.warning({ message: '尚无声纹录入，发言人将显示为"未识别"。请在成员管理页面录入声纹。', duration: 8000 })
+      } else {
+        ElMessage.info({ message: `已录入 ${count} 位成员声纹`, duration: 3000 })
+      }
+    }
+  } catch (e) {
+    voiceprintEnrolledCount.value = 0
+  }
 
   // 启动音频采集
   try {
@@ -445,11 +490,32 @@ function onUserScroll() {
 .control-bar {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 24px;
   padding: 20px;
   background: rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
 }
+.voiceprint-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #aaa;
+}
+.vp-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.vp-ok { background: #67c23a; }
+.vp-none { background: #f56c6c; }
+.vp-unknown { background: #909399; animation: vp-blink 1.5s infinite; }
+@keyframes vp-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.vp-label { white-space: nowrap; }
 
 /* 桌面端：左右分栏 */
 @media (min-width: 900px) {

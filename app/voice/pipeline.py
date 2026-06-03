@@ -103,6 +103,9 @@ class MeetingPipeline:
             logger.error(f"Voiceprint 失败: {e}")
             name, member_id, confidence = None, None, 0.0
 
+        # 计算音频能量（RMS），供反幻觉三重判定使用
+        audio_rms = float(np.sqrt(np.mean(speech_segment ** 2))) if len(speech_segment) > 0 else 0.0
+
         return [{
             "type": "transcript",
             "speaker": name or "unknown",
@@ -111,6 +114,7 @@ class MeetingPipeline:
             "text": text,
             "start": elapsed,
             "end": elapsed + len(speech_segment) / 16000,
+            "audio_rms": audio_rms,
         }]
 
     def _to_wav(self, audio_float32: np.ndarray) -> bytes:

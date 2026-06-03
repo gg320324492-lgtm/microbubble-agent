@@ -112,8 +112,9 @@ class SpeechRecognizer:
 
             segments, info = self._local_model.transcribe(
                 audio_array, language=language, task=task,
-                beam_size=3, vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500),
+                beam_size=3,
+                # 2026-06-03 关闭 Whisper 内置 VAD：已有 silero-vad 做 VAD
+                vad_filter=False,
                 initial_prompt=INITIAL_PROMPT,
                 condition_on_previous_text=False,
                 no_speech_threshold=0.6,
@@ -147,8 +148,8 @@ class SpeechRecognizer:
             self._init_local_model()
             audio_array = self._bytes_to_array(audio_chunk)
             segments, _ = self._local_model.transcribe(
-                audio_array, language="zh", beam_size=3, vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500),
+                audio_array, language="zh", beam_size=3,
+                vad_filter=False,  # 2026-06-03 关闭 Whisper 内置 VAD
                 initial_prompt=INITIAL_PROMPT,
                 condition_on_previous_text=False,
                 no_speech_threshold=0.6,
