@@ -88,16 +88,27 @@ def post_meeting_process(self, meeting_id: int):
         await engine.dispose()
 
     try:
-        return asyncio.run(_run())
+        # 确保每次都有全新的事件循环（Celery worker 复用线程时旧 loop 可能已关闭）
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_run())
+        finally:
+            loop.close()
     except Exception as e:
         logger.error(f"挂断后处理失败: meeting_id={meeting_id}, error={e}", exc_info=True)
         # 2026-06-02 修复：失败时也推 progress_update 让前端看到 error 状态
         try:
-            asyncio.run(update_progress(
-                meeting_id, ProgressStage.DONE,
-                detail=f"处理失败: {str(e)[:80]}",
-                status="error",
-            ))
+            err_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(err_loop)
+            try:
+                err_loop.run_until_complete(update_progress(
+                    meeting_id, ProgressStage.DONE,
+                    detail=f"处理失败: {str(e)[:80]}",
+                    status="error",
+                ))
+            finally:
+                err_loop.close()
         except Exception as push_err:
             logger.error(f"推送 error 状态也失败: {push_err}")
         return {"status": "error", "meeting_id": meeting_id, "error": str(e)}
