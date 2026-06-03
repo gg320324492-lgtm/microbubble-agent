@@ -451,7 +451,11 @@ function doHangup() {
   hangupConfirmVisible.value = false
   sendHangup()
   audioCapture.stop()
-  emit('call-ended')
+  // 等服务器处理完 hangup（派发 Celery 任务 + 初始化进度）再关闭对话框
+  // 服务器收到 hangup 后会主动关闭 WS，最坏情况 5s 超时
+  setTimeout(() => {
+    emit('call-ended')
+  }, 2000)
 }
 
 function onUserScroll() {
