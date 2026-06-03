@@ -84,6 +84,27 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
+  # Neo4j 图数据库（知识图谱）
+  neo4j:
+    image: neo4j:5-community
+    ports:
+      - "7474:7474"   # Web UI
+      - "7687:7687"   # Bolt 协议
+    volumes:
+      - ./data/neo4j/data:/data
+      - ./data/neo4j/logs:/logs
+    environment:
+      - NEO4J_AUTH=neo4j/microbubble2024
+      - NEO4J_server_memory_heap_max__size=512m
+      - NEO4J_server_memory_pagecache_size=256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 1g
+    restart: unless-stopped
+
   # MinIO对象存储
   minio:
     image: minio/minio
