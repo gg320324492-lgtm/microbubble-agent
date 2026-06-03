@@ -295,6 +295,11 @@ npm run dev
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
+### 🔧 最新改进（2026-06-03）
+- **会议模板重构**（commit `d619f33`）— 删除独立 MeetingTemplatesView 页面（91 行），模板选择/管理内嵌到 MeetingView 创建会议对话框。卡片式选择器（4 builtin + 自定义模板）+ 行内 CRUD（编辑/删除/新建）+ 编辑功能**真正可用**（之前是 stub）
+- **Webhook 性能修复**（commit `7ec6ce0`）— `HTTPServer` → `ThreadingHTTPServer` 多线程，0.001s 响应（之前 15-22s）
+- **垃圾桶系统全修**（4 commit 链）— 3 bug 全修 + beat 调度 1h + 前端双行精准倒计时
+
 ### 后端能力
 - **会议系统**（声纹通话）— VAD → 3D-Speaker 声纹（192 维 ERes2Net）→ pgvector 匹配 → ASR 流水线；4 内置会议模板 + 议程全链路；**微信 enroll_voice 状态机**（自动完成声纹录入）
 - **知识库**（自主进化知识大脑）— 动态 LLM 分析 / 自动关联引擎 / RAG 优先问答 / 自主研究 / 实体级知识图谱 / 科研假设生成 / 量化推理（32 内置公式）
