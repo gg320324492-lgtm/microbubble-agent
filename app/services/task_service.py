@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
 
+from app.core.celery import celery_app
+from app.config import settings
 from app.models.base import utcnow
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
@@ -243,32 +245,84 @@ class TaskService:
         return member_stats
 
     @staticmethod
-    async def auto_purge_trash(db: AsyncSession, retention_days: int = 3) -> int:
+    async def auto_purge_trash(db: AsyncSession, retention_days: int = 3) -> dict:
         """自动永久删除垃圾桶中超过 retention_days 天的任务
 
-        Returns: 删除的任务数
+        Returns: {"deleted_count": int, "deleted_ids": list[int], "cutoff": datetime}
+
+        关联清理由 DB 层自动处理：
+            - reminders: ORM relationship `cascade="all, delete-orphan"` 自动级联
+            - task_dependencies: FK 配 `ondelete="CASCADE"`，DB 自动级联
+        避免在 async session 中访问 lazy relationship（2026-06-02 教训：
+        async session 触发同步 IO → MissingGreenlet / asyncpg cross-loop 错误）
         """
         cutoff = utcnow() - timedelta(days=retention_days)
         result = await db.execute(
             select(Task).where(Task.deleted_at < cutoff)
         )
         expired = result.scalars().all()
+        deleted_ids: list[int] = [task.id for task in expired]
+        # 一次 delete 一个 task 让 SQLAlchemy 收集所有依赖，
+        # 单次 commit 提交，asyncpg 连接在 commit 后由 session 关闭时释放
         for task in expired:
             await db.delete(task)
-        await db.commit()
-        return len(expired)
+        if expired:
+            await db.commit()
+        return {
+            "deleted_count": len(expired),
+            "deleted_ids": deleted_ids,
+            "cutoff": cutoff,
+        }
 
 
-async def auto_purge_trash_task():
-    """Celery 定时任务：自动清理过期垃圾桶任务"""
+@celery_app.task(name="app.services.task_service.auto_purge_trash_task")
+def auto_purge_trash_task(retention_days: Optional[int] = None):
+    """Celery 定时任务：自动清理过期垃圾桶任务
+
+    Args:
+        retention_days: 保留天数（None 时使用 settings.TRASH_RETENTION_DAYS，默认 3）
+
+    实现要点（与 reminder_service.process_reminders_task 一致）：
+        - 独立 create_async_engine(NullPool) + async_sessionmaker：避免全局
+          async_session 绑定主进程事件循环，与 asyncio.run() 新循环冲突
+        - NullPool：禁用连接池，每任务创建新连接避免跨 loop 复用
+        - engine.dispose() finally：清理连接
+    """
+    import asyncio
     import logging
-    from app.core.database import async_session
+    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+    from sqlalchemy.pool import NullPool
 
     logger = logging.getLogger("microbubble.trash")
+    days = retention_days if retention_days is not None else settings.TRASH_RETENTION_DAYS
     try:
-        async with async_session() as db:
-            count = await TaskService.auto_purge_trash(db, retention_days=3)
-            if count > 0:
-                logger.info(f"自动清理垃圾桶: 永久删除 {count} 个过期任务")
+        async def _run():
+            engine = create_async_engine(
+                settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+                poolclass=NullPool,
+            )
+            session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            try:
+                async with session_factory() as db:
+                    result = await TaskService.auto_purge_trash(db, retention_days=days)
+                    # 始终输出日志（即使删除 0 个）便于健康监控 + 审计追溯
+                    if result["deleted_count"] > 0:
+                        logger.warning(
+                            f"🗑️ 自动清理垃圾桶: 永久删除 {result['deleted_count']} 个超过 {days} 天的任务 "
+                            f"cutoff={result['cutoff'].isoformat()} ids={result['deleted_ids'][:20]}"
+                            f"{'...' if len(result['deleted_ids']) > 20 else ''}"
+                        )
+                    else:
+                        logger.info(
+                            f"✅ 垃圾桶健康: 当前无超过 {days} 天的过期任务 "
+                            f"(cutoff={result['cutoff'].isoformat()})"
+                        )
+                    return result
+            finally:
+                await engine.dispose()
+
+        result = asyncio.run(_run())
+        return {"status": "ok", "deleted_count": result["deleted_count"]}
     except Exception as e:
-        logger.error(f"自动清理垃圾桶失败: {e}")
+        logger.error(f"❌ 自动清理垃圾桶失败: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
