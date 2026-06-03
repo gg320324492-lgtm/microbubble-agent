@@ -44,12 +44,6 @@ const routes = [
         meta: { title: '会议详情' }
       },
       {
-        path: 'meeting-templates',
-        name: 'MeetingTemplates',
-        component: () => import('@/views/MeetingTemplatesView.vue'),
-        meta: { title: '会议模板', icon: 'Document' }
-      },
-      {
         path: 'projects',
         name: 'Projects',
         component: () => import('@/views/ProjectView.vue'),
