@@ -48,7 +48,10 @@ celery_app.conf.update(
         },
         "auto-purge-trash": {
             "task": "app.services.task_service.auto_purge_trash_task",
-            "schedule": 6 * 3600.0,  # 每6小时清理过期垃圾桶
+            # 2026-06-03 教训：6h 调度最坏情况下任务要等 6h 才被清理，
+            # 而 retention 是 3 天（72h），6h 是 8% 误差。改为 4h（5.5% 误差），
+            # 配合 task_service 函数接受 retention_days 参数便于灵活调整
+            "schedule": 4 * 3600.0,  # 每4小时清理过期垃圾桶（retention=3天时）
         },
     },
 )
@@ -62,6 +65,7 @@ celery_app.conf.imports = [
     "app.services.post_meeting_tasks",
     "app.services.memory_service",
     "app.services.knowledge_evolution_tasks",
+    "app.services.task_service",
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -71,6 +75,7 @@ celery_app.autodiscover_tasks(
         "app.services.post_meeting_tasks",
         "app.services.memory_service",
         "app.services.knowledge_evolution_tasks",
+        "app.services.task_service",
         "app.wechat.scheduler",
     ],
     related_name=None,

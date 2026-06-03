@@ -154,7 +154,12 @@ services:
     build: .
     command: celery -A app.core.celery beat --loglevel=info
     volumes:
+      # 2026-06-03 修复：之前 beat 容器没有 ./app 挂载，导致新增的 Celery 任务
+      # (如 auto_purge_trash) 修改代码后 beat 仍加载旧 schedule，必须 rebuild
+      # 25GB 镜像才能生效。补上 volume 与 worker 一致，代码改动即时生效。
+      - ./app:/app/app
       - ./data:/app/data
+      - ./logs:/app/logs
       - ./models/hf_cache:/root/.cache/huggingface
     env_file:
       - .env

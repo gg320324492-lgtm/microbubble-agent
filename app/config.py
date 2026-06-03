@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     CLAUDE_MAX_TOKENS: int = 8192
     SESSION_WINDOW_SIZE: int = 30
 
+    # 任务垃圾桶：软删除任务保留多少天后自动永久删除
+    # 2026-06-03：硬编码 3 改为可配置，运维/测试时可临时缩短（如 0 立即清空）
+    TRASH_RETENTION_DAYS: int = 3
+
     # 数据库连接池
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 10
