@@ -72,3 +72,17 @@ class KnowledgeGap(Base, TimestampMixin):
     filled = Column(Boolean, default=False)       # 是否已填补
     filled_at = Column(String, nullable=True)     # 填补时间
     knowledge_ids = Column(ARRAY(Integer), default=[])  # 填补时入库的知识条目 ID
+
+
+class RAGEvaluation(Base, TimestampMixin):
+    """RAG 评估记录 — 质量监控"""
+    __tablename__ = "rag_evaluations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query = Column(Text, nullable=False)          # 用户问题
+    answer = Column(Text, nullable=True)          # 生成的回答
+    context = Column(Text, nullable=True)         # 检索到的上下文
+    faithfulness = Column(Float, nullable=True)   # 回答是否基于检索结果
+    answer_relevancy = Column(Float, nullable=True)  # 回答是否切题
+    context_precision = Column(Float, nullable=True)  # 检索结果排序是否合理
+    context_recall = Column(Float, nullable=True)     # 是否检索到了所有相关信息
