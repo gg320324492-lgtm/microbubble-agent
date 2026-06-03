@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-03 最新进展**：垃圾桶系统 4 bug 全修（commit `dc93bff`）+ 精准倒计时双行显示（`b91e429` `46f04ab`）+ beat 调度 1h（`47fb2c9`）+ Webhook 性能 0.001s 响应（`7ec6ce0`）。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-03) 和 [README.md](README.md#当前状态2026-06-03)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-03 最新进展**：声纹会议系统全面修复（8 commit — enrolled API + 参会人 + hangup 后处理 + 反幻觉 + Celery 事件循环）+ 垃圾桶系统 4 bug 全修 + 精准倒计时双行显示 + Webhook 性能 0.001s 响应。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-03) 和 [README.md](README.md#当前状态2026-06-03)。
 
 ## 前端设计系统
 
@@ -193,6 +193,14 @@
   - **「置信度 0.45 直线」是 markLine 误读** — 用户看到 ConfidenceChart 里的 0.45 水平线以为是置信度数据，但实际是 `markLine: yAxis: 0.45` 阈值参考线（红色虚线）。**真实数据看 `voiceprint_history` 表**。同一历史 commit 顺手把 markLine 从 0.45 统一成 0.55（与后端 `MATCH_THRESHOLD` 一致）
   - **ERes2Net 模型实测表现**（2026-06-02 合成语音测试）— intra（同人 2 次录音）cos=0.99 ✅，inter（不同人）cos=0.92-0.97（合成信号偏高，真实人声会更低）。区分度 0.05 偏小，**实际识别需要多人会议反复调阈值**
   - **修改声纹提取时务必清旧 embedding** — 提取逻辑变更（输入维度、模型路径、归一化）后，DB 里旧 embedding 是用旧逻辑算的，跟新逻辑不兼容。**必须 `UPDATE members SET voice_embedding=NULL, voice_enrolled_at=NULL, voice_sample_count=0` 让用户重新录入**
+- **声纹会议系统全面修复教训（2026-06-03 8 commit）**：
+  - **enrolled API 返回格式** — 后端 `/voiceprint/enrolled` 返回 `{"members": [...]}` 而非数组，前端 `Array.isArray(vpData)` 永远 false。**修复**：`vpData.members`
+  - **hangup 不能立即 disconnect** — `sendHangup()` 发完消息后立即 `disconnect()` 导致服务器还没处理 hangup 就断 WS。**修复**：等服务器主动关闭 WS（`watch(connected)` 检测断开再 emit call-ended），5s 超时兜底
+  - **batch_polisher 必须传参** — `_run_live_loop` 创建 `batch_polisher` 但没传给 `_live_loop_inner`，hangup 处理访问时 NameError。**教训**：内部函数引用的外部变量必须显式传参
+  - **Celery 后处理不能复用主 app 连接池** — `async_session` 和 `redis_pool` 在模块导入时创建，绑定主 app 事件循环。Celery worker 的 `asyncio.new_event_loop()` 创建新循环，复用旧连接池报 `Future attached to different loop` / `Event loop is closed`。**修复**：参照 `reminder_service.py` 模式，Celery 任务内创建独立引擎（`NullPool`）+ 独立 Redis 连接（`aioredis.from_url`），`update_progress` 加 `redis_override` 参数
+  - **ProcessingDialog 不要全屏** — 全屏会遮挡侧边栏，改为 500px 弹窗
+  - **反幻觉重复句阈值** — `_is_sentence_repetitive` 从 ≥3 降到 ≥2 次重复即过滤（Whisper 幻觉常重复 2 次）
+  - **低置信度短文本过滤** — 声纹置信度 < 0.1 + 文本 < 10 字，直接过滤（"温暖气泡燃烧""临时发表展示"等 Whisper 幻觉）
 - **本地运维脚本坑**（2026-06-02）：
   - **`$ErrorActionPreference = "Stop"` 会抛 native stderr** — docker compose 输出 `POSTGRES_PASSWORD not set` 等 warning 时会被 PowerShell 当 Error 抛异常，导致整个 try/catch 走 catch 分支。PowerShell 脚本必须用 `$ErrorActionPreference = "Continue"`，需要严格检查时用 `if (...) { throw }` 显式控制
   - **`2>&1` 污染 `$LASTEXITCODE`** — PowerShell 管道最后一节的退出码会覆盖 `$LASTEXITCODE`。要抑制 stderr 又保留 native command 退出码，用 `2>$null`（PowerShell 专属）而非 `2>&1 | Out-Null`

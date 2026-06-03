@@ -1,14 +1,40 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-03** — 会议模板重构（删 91 行独立页 + 内嵌 CRUD）+ 垃圾桶系统 4 bug 全修 + Webhook 性能修复（0.001s 响应）
+> 最后更新: **2026-06-03** — 声纹会议系统全面修复（8 commit）+ 会议模板重构 + 垃圾桶系统 4 bug 全修 + Webhook 性能修复
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-03）
+- [声纹会议系统全面修复](#声纹会议系统全面修复2026-06-038-commit)（8 commit — enrolled API + 参会人 + hangup 后处理 + 反幻觉 + Celery 事件循环）
 - [会议模板重构](#会议模板重构2026-06-03-commit-d619f33)（commit `d619f33` — 删独立页 + 内嵌 CRUD）
 - [Webhook 性能修复](#webhook-性能修复2026-06-03-commit-7ec6ce0)（commit `7ec6ce0`，0.001s 响应）
 - [垃圾桶系统全面修复](#垃圾桶系统全面修复2026-06-034-commit-链)（4 commit 链）
 - [项目当前状态速查](#项目当前状态速查2026-06-03)
+
+---
+
+## 声纹会议系统全面修复（2026-06-03，8 commit）
+
+**问题**：声纹会议存在多个阻塞性 bug — enrolled API 解析错误导致声纹状态始终为 0、参会人未传递导致"等待发言"、hangup 后 ProcessingDialog 永远卡住、Celery 后处理事件循环冲突、Whisper 幻觉过滤不足。
+
+**修复清单**：
+
+| commit | 修复内容 |
+|--------|----------|
+| `8460016` | 声纹全链路测试：`POST /api/v1/voiceprint/test` + `VoiceTestDialog` 组件 |
+| `cbc503f` | enrolled API 解析（`vpData.members`）+ 参会人自拉取 + avatar schema + startVoiceCreate 自动添加当前用户 |
+| `086db70` | hangup 时触发 `post_meeting_process` Celery 任务 |
+| `5a3b864` | hangup 后等待服务器关闭 WS 再关对话框 |
+| `fddff52` | hangup 后 `watch(connected)` 等 WS 断开再 emit call-ended |
+| `63a3e82` | `batch_polisher` 传入 `_live_loop_inner`（修复 NameError） |
+| `00b399b` + `1ed628a` + `095938a` | Celery 后处理独立引擎（NullPool）+ 独立 Redis + `new_event_loop` |
+| `1659f55` | 反幻觉强化：重复句阈值 3→2 + 低置信度短文本过滤 + 新增黑名单 |
+| `87a33b5` | ProcessingDialog 改为 500px 弹窗 |
+
+**关键教训**：
+- `sendHangup()` 不能立即 disconnect，要等服务器处理完
+- Celery worker 不能复用主 app 的 async_session / Redis 连接池（事件循环冲突）
+- `batch_polisher` 等局部变量必须显式传入内部函数
 
 ### 2026-06-02 全面热修
 - 声纹会议全方位热修（9 commit 链）
