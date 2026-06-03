@@ -236,7 +236,7 @@
                     {{ getAutoDeleteText(row.auto_delete_at) }}
                   </div>
                   <div class="auto-delete-absolute">
-                    {{ formatAutoDeleteExact(row.auto_delete_at) }} 删除
+                    {{ formatAutoDeleteExact(row.auto_delete_at) }} {{ isAutoDeleteOverdue(row.auto_delete_at) ? '到期' : '删除' }}
                   </div>
                 </div>
                 <span v-else class="auto-delete-none">—</span>
@@ -663,7 +663,9 @@ const getAutoDeleteText = (autoDeleteAt) => {
   const remHourOfDay = Math.floor((diffMin % (60 * 24)) / 60)
   const remMin = diffMin % 60
 
-  if (diffMin <= 0) return '即将自动删除'
+  // 已过期：auto_delete_at 过了但 beat 还没到下次调度（1h 内会被清理）
+  // 用「等待下次清理」代替「即将自动删除」，避免用户以为是 bug
+  if (diffMin <= 0) return '等待下次清理'
   // < 1 小时：精确到分钟
   if (diffMin < 60) return `${diffMin} 分钟后删除`
   // < 1 天：X 小时 Y 分（如 "5 小时 23 分后删除"）
@@ -680,6 +682,12 @@ const getAutoDeleteText = (autoDeleteAt) => {
 const getAutoDeleteHours = (autoDeleteAt) => {
   if (!autoDeleteAt) return Infinity
   return dayjs(autoDeleteAt).diff(now.value, 'hour', true)
+}
+
+// 是否已过期（用于副标题 "到期" vs "删除" 文案区分）
+const isAutoDeleteOverdue = (autoDeleteAt) => {
+  if (!autoDeleteAt) return false
+  return dayjs(autoDeleteAt).isBefore(now.value)
 }
 
 // 颜色分级：< 6h 红 / 6-24h 橙 / 24-72h 黄 / > 72h 灰
