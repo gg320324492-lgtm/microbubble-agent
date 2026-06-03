@@ -1,10 +1,11 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-03** — 垃圾桶系统 4 bug 全修 + 调度 1h + 双行精准倒计时 + Webhook 性能修复（0.001s 响应）
+> 最后更新: **2026-06-03** — 会议模板重构（删 91 行独立页 + 内嵌 CRUD）+ 垃圾桶系统 4 bug 全修 + Webhook 性能修复（0.001s 响应）
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-03）
+- [会议模板重构](#会议模板重构2026-06-03-commit-d619f33)（commit `d619f33` — 删独立页 + 内嵌 CRUD）
 - [Webhook 性能修复](#webhook-性能修复2026-06-03-commit-7ec6ce0)（commit `7ec6ce0`，0.001s 响应）
 - [垃圾桶系统全面修复](#垃圾桶系统全面修复2026-06-034-commit-链)（4 commit 链）
 - [项目当前状态速查](#项目当前状态速查2026-06-03)
@@ -2351,6 +2352,61 @@ Webhook #5: 200 0.001036s
 | Python `http.server` | **`HTTPServer` 是单线程**，daemon 线程只解决"do_POST 内的耗时"，**不解决"多个 HTTP 请求并发"** | 任何对外服务（webhook / health check / 长任务触发）|
 | 部署服务的元部署 | webhook 触发 deploy，但 deploy 不能重启 webhook（会自中断）| 任何"部署触发器"型服务（webhook / CI runner）|
 | 响应延迟监控 | 持续 10s+ 响应是 webhook 性能问题的早期信号，应在 `local-watchdog.ps1` 加 `WebhookLatency` 监控项 | 部署健康监控 |
+
+---
+
+## 会议模板重构（2026-06-03 commit `d619f33`）
+
+### 问题
+用户反馈：会议模板独立页面（`MeetingTemplatesView.vue`）与会议管理（`MeetingView.vue`）功能重叠，且模板功能不完整：
+- 自定义模板的**编辑功能是 stub**（`ElMessageBox.alert('编辑功能见后续 PR')`）
+- 字段 `default_participant_ids` 和 `default_location` 写但**前端未使用**
+- 用户要管理模板必须**切换页面**，使用流程断裂
+
+### 方案
+**合并**：删除独立 `MeetingTemplatesView.vue`（91 行）+ `/meeting-templates` 路由，把模板选择/管理**内嵌到 MeetingView 创建会议对话框顶部**。
+
+### 实施
+
+#### 删除
+- `web/src/views/MeetingTemplatesView.vue`（91 行孤立页）
+- `web/src/router/index.js` 中 `/meeting-templates` 路由
+
+#### MeetingView 视觉重构
+| 之前 | 之后 |
+|------|------|
+| 隐藏式下拉选择器 | **卡片网格**：4 builtin 卡片 + 自定义模板横向排列 |
+| 选中态无视觉反馈 | 选中卡片高亮（珊瑚橙边框 + 微渐变背景）|
+| 自定义模板需切页面管理 | **行内 CRUD**（hover 显示编辑/删除图标）|
+| 创建模板需切页面 | 右上角"存为新模板"按钮，弹窗填字段 |
+
+#### 字段应用修复
+`onTemplateChange` 实际已实现完整字段应用（包括 `default_participant_ids` 和 `default_location`），重命名为 `applyTemplate` 并补充 `ElMessage` 提示。
+
+#### 新增模板编辑对话框
+字段：`name` / `title_template` / `description` / `default_duration_minutes` / `default_location` / `default_participant_ids` / `agenda`
+- 复用会议表单的 `item-list` 样式（议题增删）
+- 复用成员的 `el-select multiple`（默认参与人多选）
+- 保存：PUT（编辑）/ POST（创建），自动 reload 列表
+
+#### 细节优化
+- 关闭对话框时清理 `templateId` 高亮（避免下次打开误显示选中）
+- 自定义模板 hover 显示操作按钮（`.template-card.custom:hover` 触发）
+- builtin 模板**没有删除按钮**（数据库 `is_builtin` 标记保护）
+
+### 后端
+API 完整，无需改动（CRUD 端点 5 个 + `apply_template_to_meeting_data` 服务函数均已实现）。
+
+### 收益
+- 减 **91 行**孤立代码
+- 减 1 个路由 + 1 个导航菜单项
+- 模板管理贴近使用场景（创建会议时管理，**减少 1 次页面跳转**）
+- 编辑功能**真正可用**（之前是 stub）
+
+### 教训
+- **功能完整性是产品质量的硬指标**：stub 功能（"见后续 PR"）应该被移除或补全，**不应该留在生产**
+- **页面拆分要考虑使用流程**：管理 + 使用的强耦合场景应该靠近（如模板管理贴近模板使用），而不是各自为政
+- **视觉化优于隐藏**：下拉菜单隐藏信息，卡片网格让用户**看到**所有可用模板（包括 builtin），更易发现价值
 
 ---
 
