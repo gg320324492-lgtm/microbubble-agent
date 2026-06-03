@@ -9,7 +9,7 @@ import re
 from typing import List, Optional
 
 import jieba
-from rank_bm25 import BM25Okapi
+from rank_bm25 import BM25L
 
 logger = logging.getLogger("microbubble.bm25")
 
@@ -34,7 +34,7 @@ class BM25Service:
     """BM25 关键词检索服务"""
 
     def __init__(self):
-        self._bm25: Optional[BM25Okapi] = None
+        self._bm25: Optional[BM25L] = None
         self._documents: List[dict] = []
         self._tokenized_corpus: List[List[str]] = []
         self._corpus_size: int = 0
@@ -74,7 +74,7 @@ class BM25Service:
             for doc in documents
         ]
         self._corpus_size = len(documents)
-        self._bm25 = BM25Okapi(self._tokenized_corpus)
+        self._bm25 = BM25L(self._tokenized_corpus)
         logger.info(f"BM25 索引构建完成: {self._corpus_size} 条文档")
 
     def search(self, query: str, top_k: int = 5) -> List[dict]:
@@ -105,7 +105,7 @@ class BM25Service:
 
         results = []
         for doc, score in scored_docs:
-            if score > 0:  # 过滤零分
+            if score != 0:  # 过滤零分（BM25 可能返回负分）
                 results.append({
                     "id": doc["id"],
                     "title": doc.get("title", ""),
@@ -126,7 +126,7 @@ class BM25Service:
             self._tokenize(f"{doc.get('title', '')} {doc.get('content', '')}")
         )
         self._corpus_size = len(self._documents)
-        self._bm25 = BM25Okapi(self._tokenized_corpus)
+        self._bm25 = BM25L(self._tokenized_corpus)
 
 
 # 全局单例（惰性初始化）

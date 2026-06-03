@@ -81,7 +81,7 @@ class RAGEvaluator:
 
 问题: {query}
 上下文: {context[:1500]}
-回答: {answer[:500}
+回答: {answer[:500]}
 
 返回 JSON: {{"score": 0.0-1.0, "reason": "原因"}}
 
@@ -110,7 +110,7 @@ class RAGEvaluator:
         prompt = f"""评估以下回答与问题的相关性。
 
 问题: {query}
-回答: {answer[:500}
+回答: {answer[:500]}
 
 返回 JSON: {{"score": 0.0-1.0, "reason": "原因"}}
 
@@ -139,7 +139,7 @@ class RAGEvaluator:
         prompt = f"""评估以下检索结果的质量和排序。
 
 问题: {query}
-检索结果: {context[:1500}
+检索结果: {context[:1500]}
 
 返回 JSON: {{"score": 0.0-1.0, "reason": "原因"}}
 
@@ -168,8 +168,8 @@ class RAGEvaluator:
         prompt = f"""评估检索结果是否覆盖了回答问题所需的所有信息。
 
 问题: {query}
-检索结果: {context[:1000}
-标准答案: {reference[:500}
+检索结果: {context[:1000]}
+标准答案: {reference[:500]}
 
 返回 JSON: {{"score": 0.0-1.0, "reason": "原因"}}
 
