@@ -286,6 +286,19 @@ class KnowledgeService:
         except Exception as e:
             logger.warning(f"实体融合失败(knowledge_id={knowledge_id}): {e}")
 
+        # Step 6: Neo4j 知识图谱构建（独立容错）
+        try:
+            from app.services.knowledge_graph_builder import get_kg_builder
+            kg_builder = get_kg_builder()
+            result = await kg_builder.build_graph_for_knowledge(knowledge_id, title, content)
+            if result["entities_created"] > 0:
+                logger.info(
+                    f"Neo4j 图谱构建完成(knowledge_id={knowledge_id}): "
+                    f"{result['entities_created']} 实体, {result['relations_created']} 关系"
+                )
+        except Exception as e:
+            logger.warning(f"Neo4j 图谱构建失败(knowledge_id={knowledge_id}): {e}")
+
     async def create_from_conversation(
         self,
         title: str,
