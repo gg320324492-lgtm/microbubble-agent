@@ -13,6 +13,9 @@
         ></div>
       </div>
       <div class="name">{{ activeSpeaker?.name || '等待发言...' }}</div>
+      <div v-if="activeSpeakerId === 'unknown'" class="name unknown-hint">
+        🔇 未识别发言人 — 请在成员管理页面录入声纹
+      </div>
       <div class="confidence" v-if="activeSpeaker?.confidence">
         置信度: {{ Math.round(activeSpeaker.confidence * 100) }}%
       </div>
@@ -88,6 +91,7 @@ function getBarHeight(i) {
   transition: height 0.1s ease-out;
 }
 .name { font-size: 16px; color: white; font-weight: 500; }
+.unknown-hint { font-size: 12px; color: #ff7a5c; margin-top: 4px; font-weight: 400; }
 .confidence { font-size: 12px; color: #aaa; margin-top: 4px; }
 .others-row {
   display: flex;

@@ -17,7 +17,7 @@ SAMPLE_RATE = 16000
 class VADEngine:
     """silero-vad 语音活动检测器"""
 
-    def __init__(self, threshold: float = 0.5, min_speech_ms: int = 250, min_silence_ms: int = 400):
+    def __init__(self, threshold: float = 0.6, min_speech_ms: int = 400, min_silence_ms: int = 400):
         self.threshold = threshold
         self.min_speech_ms = min_speech_ms
         self.min_silence_ms = min_silence_ms
