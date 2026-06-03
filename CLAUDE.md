@@ -147,7 +147,25 @@
 - **发言者检测格式** — `_parse_summary_format()` 识别 `发言人：`/`参会人：` 等字段；`_quick_parse_speakers()` 识别 `【名称】` 格式；NON_SPEAKER 黑名单过滤文档结构标签；过滤后发言者 < 2 人时回退 Claude AI 检测
 - **WebSocket 认证** — `/ws/meeting/{id}/live` 需要在 URL query param 中传 `?token=xxx`，Nginx `/api` location 需要 Upgrade/Connection 头支持 WebSocket
 - **数据库列迁移** — `Base.metadata.create_all()` 不会给已有表添加新列，Member/Meeting 新增的 voice_embedding, speaker_mapping 等列需要手动 ALTER TABLE
-- **垃圾桶软删除** — `deleted_at` 字段标记软删除，3天后 Celery 定时任务自动永久删除。垃圾桶 API `include_deleted=true` 必须加 `deleted_at.isnot(None)`，否则会返回活跃任务。提醒查询必须过滤 `Task.deleted_at.is_(None)`
+- **垃圾桶软删除** — `deleted_at` 字段标记软删除，3天后 Celery 定时任务自动永久删除（beat schedule 1h，最大延迟 1h）。垃圾桶 API `include_deleted=true` 必须加 `deleted_at.isnot(None)`，否则会返回活跃任务。提醒查询必须过滤 `Task.deleted_at.is_(None)`
+- **垃圾桶自动清理 Celery 任务**（2026-06-03 commit `dc93bff` + `47fb2c9`）— 必须同步 3 处：
+  1. `app.services.task_service.auto_purge_trash_task` 函数加 `@celery_app.task(name=...)` 装饰器（缺装饰器 worker 找不到函数）
+  2. `app/core/celery.py` 的 `imports` 列表 + `autodiscover_tasks` 列表都要加 `"app.services.task_service"`（缺 import 模块不被加载）
+  3. `docker-compose.yml` **celery-beat 服务也要加 `./app:/app/app` volume 挂载**（与 worker 一致；2026-06-02 修复时只补了 worker，漏了 beat 导致 beat 跑构建时烧进镜像的旧代码，schedule 改动必须 rebuild 25GB 镜像才能生效）
+- **垃圾桶自动清理任务必须用独立 NullPool 引擎**（commit `dc93bff`）— 不能用全局 `async_session`，否则触发 "Future attached to different loop" 或 "another operation is in progress" 错误。正确模式（与 reminder_service.process_reminders_task 一致）：
+  ```python
+  engine = create_async_engine(
+      settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+      poolclass=NullPool,
+  )
+  session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+  async with session_factory() as db:
+      ...
+  await engine.dispose()  # finally
+  ```
+- **Beat 调度粒度要与用户期望对齐**（2026-06-03 commit `47fb2c9`）— 4h 调度对 3 天 retention 太粗，用户看到 `auto_delete_at` 过期但任务还在（最坏等 4h），困惑。**1h 是"准点清理"的合理上限**（retention 3 天时仅 1.4% 误差）。如未来 retention 调到 7 天可放宽到 2h，但不要超过 1h（UX 边界）
+- **Python 模块缓存**（2026-06-03 教训）— volume 挂载 `./app:/app/app` 让新文件**可见**，但**不重载已 import 的模块**。代码改完后必须 `docker compose restart worker`，否则 worker 还在用旧代码（错误日志指向旧行号是好线索）。Celery prefork worker 的 fork 子进程不共享主进程的模块更新
+- **auto_delete_at 单一数据源**（2026-06-03 commit `b91e429`）— 后端 `list_tasks` / `get_task` 路由用 `setattr` 附加 `auto_delete_at = deleted_at + timedelta(days=settings.TRASH_RETENTION_DAYS)`，不持久化到 DB（避免迁移成本）。前端用这个字段显示倒计时，**前端不再硬编码 retention 天数**，与 Celery 清理任务共享同一配置，**不会漂移**
 - **声纹会议系统 3a/3b 新增注意事项**（2026-06-01~02）：
   - **agenda 字段错位** — `agent/core.py` 早期版本错把议程列表写到 `description` 字段，导致议程链路断裂。MeetingCreate 时必须传入 `agenda` 形参（不是塞到 description），`PATCH /agenda` 端点更新 `Meeting.agenda` 字段。检查 `app/schemas/meeting.py` 的 `MeetingCreate` 包含 `agenda: List[str]` 字段
   - **activeSpeaker 置信度阈值** — `useMeetingRoomWS.onTranscript` 处理 speaker 切换时必须加 `speaker_confidence > 0.45` 判断，否则低置信度误识别会导致 activeSpeaker 在多人时频繁跳变
