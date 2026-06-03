@@ -8,7 +8,7 @@ import logging
 import os
 import subprocess
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 
 PORT = 9001
 SECRET = os.environ["WEBHOOK_SECRET"]
@@ -136,8 +136,15 @@ class WebhookHandler(BaseHTTPRequestHandler):
 
 
 def main():
-    server = HTTPServer(("0.0.0.0", PORT), WebhookHandler)
-    logger.info(f"Webhook 服务启动，监听端口 {PORT}")
+    # 2026-06-03 修复：HTTPServer 改 ThreadingHTTPServer
+    # 单线程 HTTPServer 的问题：do_POST 触发的 _run_deploy 即使在 daemon 线程
+    # 跑，HTTP 请求处理本身仍是顺序的——上一个请求的 send_response 没完全
+    # flush 时新请求会排队。GitHub 10s 超时红线 + Python 单线程 = 部署期间
+    # 后续所有 webhook 都失败（"delivery failed: time out"）。
+    # ThreadingHTTPServer 每个请求独立线程，健康检查（do_GET）和 deploy
+    # (do_POST) 互不阻塞，GitHub 立即收到 200。
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), WebhookHandler)
+    logger.info(f"Webhook 服务启动（多线程），监听端口 {PORT}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -215,6 +215,7 @@
        - `deploy-auto.sh` 顶部 `export GIT_SSH_COMMAND="ssh -i /root/.ssh/github_deploy -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"`（belt-and-suspenders）
     5. **效果**：从 130s 超时 → 5s 完成，14+ webhook 全部成功
   - **Webhook 服务 alive ≠ 部署成功**（2026-06-02 教训）— `systemctl status webhook.service` 显示 `Active: active (running)` **只代表 HTTP 服务在跑**。**部署是否成功看 `/var/log/webhook-deploy.log` 的 `[DEPLOY] 部署完成` / `部署成功 ✓`**。两者**独立**。Webhook 立即返回 200 OK（避免 GitHub 10s 超时）但后台 deploy 异步跑（看 deploy-auto.sh 是否真的成功）
+  - **Webhook 端口必须用 `ThreadingHTTPServer`**（2026-06-03 commit 待提交）— Python `http.server.HTTPServer` 默认**单线程顺序处理请求**。即使 `do_POST` 内用 `daemon=True` 启动 deploy 线程（避免阻塞响应），HTTP 请求的接收/响应仍是串行的。**症状**：deploy 跑 git pull（5 次重试 + 75s 退避 = 最坏 200s+）时，后续所有 GitHub webhook 健康检查都 10s+ 超时，导致 `delivery failed: time out`。**修复**：`from http.server import ThreadingHTTPServer` 替换 `HTTPServer`，每个请求独立线程，do_GET 健康检查与 do_POST deploy 完全不阻塞。**验证**：连续 5 次 curl `/` 应 < 1s（单线程时线性恶化到 20s+）
   - **三级润色流水线**（2026-06-02）— 实时转录常出现 ASR 幻觉（"你和我一样""一二三四"等），单段润色无上下文。**改用三级**：
     1. **L1 实时透传** — 每段 ASR 立即推原文 + `status: "raw"`，前端"实时"徽章
     2. **L2 聚批润色**（`app/services/meeting_batch_polisher.py`）— 每 30s 或攒满 5 段触发 1 次 LLM（`mimo-v2.5`），复用 `polish_segments_with_lock` 已有 Redis 锁 + 24h 缓存，推 `transcript_batch_polished` 消息
