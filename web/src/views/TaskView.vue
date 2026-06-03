@@ -226,20 +226,19 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="自动删除" width="160">
+            <el-table-column label="自动删除" width="170">
               <template #default="{ row }">
-                <el-tooltip
-                  v-if="row.auto_delete_at"
-                  :content="`将于 ${formatAutoDeleteExact(row.auto_delete_at)} 永久删除`"
-                  placement="top"
-                >
-                  <span :class="getAutoDeleteClass(row.auto_delete_at)">
+                <div v-if="row.auto_delete_at" class="auto-delete-cell">
+                  <div :class="['auto-delete-relative', getAutoDeleteClass(row.auto_delete_at)]">
                     <el-icon v-if="getAutoDeleteIcon(row.auto_delete_at)" class="auto-delete-icon">
                       <Clock />
                     </el-icon>
                     {{ getAutoDeleteText(row.auto_delete_at) }}
-                  </span>
-                </el-tooltip>
+                  </div>
+                  <div class="auto-delete-absolute">
+                    {{ formatAutoDeleteExact(row.auto_delete_at) }} 删除
+                  </div>
+                </div>
                 <span v-else class="auto-delete-none">—</span>
               </template>
             </el-table-column>
@@ -832,16 +831,26 @@ onMounted(() => {
   font-size: var(--font-size-xs);
 }
 
-/* 自动删除倒计时 — 4 级颜色（2026-06-03 优化） */
-.auto-delete-imminent,
-.auto-delete-urgent,
-.auto-delete-warning,
-.auto-delete-normal,
-.auto-delete-safe {
+/* 自动删除倒计时 — 两行显示（2026-06-03 优化） */
+.auto-delete-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.3;
+}
+
+.auto-delete-relative {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;  /* 数字等宽，倒计时不抖 */
+}
+
+.auto-delete-absolute {
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+  font-variant-numeric: tabular-nums;
 }
 
 .auto-delete-icon {
