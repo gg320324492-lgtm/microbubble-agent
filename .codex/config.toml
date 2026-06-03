@@ -1,0 +1,6 @@
+[mcp_servers.web-research]
+command = "npx"
+args = [
+    "-y",
+    "@mzxrai/mcp-webresearch",
+]
