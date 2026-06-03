@@ -150,18 +150,33 @@ class KnowledgeQAService:
         }
 
     async def _search_knowledge_base(self, question: str, top_k: int) -> List[dict]:
-        """搜索知识库，优先语义搜索，回退关键词搜索"""
+        """搜索知识库 — 混合检索（向量 + BM25 + 重排序）"""
         try:
-            # 优先使用语义搜索
+            from app.services.hybrid_retriever import get_hybrid_retriever
+            retriever = get_hybrid_retriever(self.db)
+            results = await retriever.retrieve(
+                query=question,
+                top_k=top_k,
+                enable_vector=True,
+                enable_bm25=True,
+                enable_rerank=True,
+            )
+            if results:
+                return results
+        except Exception as e:
+            logger.warning(f"混合检索失败，降级到纯向量: {e}")
+
+        # 降级：纯向量检索
+        try:
             from app.services.knowledge_service import KnowledgeService
             svc = KnowledgeService(self.db)
             results = await svc.search_semantic(query=question, top_k=top_k)
             if results:
                 return results
         except Exception as e:
-            logger.debug(f"语义搜索失败，回退关键词: {e}")
+            logger.debug(f"向量检索失败，降级到关键词: {e}")
 
-        # 关键词搜索回退
+        # 最终降级：关键词搜索
         return await self._keyword_search(question, top_k)
 
     async def _keyword_search(self, question: str, top_k: int) -> List[dict]:
