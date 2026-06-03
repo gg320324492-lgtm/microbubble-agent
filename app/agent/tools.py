@@ -294,6 +294,101 @@ TOOLS = [
             "required": ["query"]
         }
     },
+    {
+        "name": "explore_knowledge_graph",
+        "description": "探索知识图谱。当用户询问实体之间的关系、某个概念的关联知识、多跳推理等时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "entity_name": {
+                    "type": "string",
+                    "description": "实体名称（如'微纳米气泡'、'zeta电位'）"
+                },
+                "hops": {
+                    "type": "integer",
+                    "description": "遍历跳数（默认 1，最大 3）"
+                }
+            },
+            "required": ["entity_name"]
+        }
+    },
+    {
+        "name": "find_knowledge_gaps",
+        "description": "发现知识库中的空白领域。当用户询问'我们还缺什么知识'、'哪些方面需要补充'时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "要检查空白的主题（可选，不填则全局检查）"
+                }
+            }
+        }
+    },
+    {
+        "name": "auto_research",
+        "description": "自主研究某个主题。当用户要求研究某个主题、补充知识空白时使用。会联网搜索并自动入库。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "要研究的主题"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "最大搜索结果数（默认 5）"
+                }
+            },
+            "required": ["topic"]
+        }
+    },
+    {
+        "name": "compare_knowledge",
+        "description": "对比分析多个知识条目。当用户询问'A和B哪个好'、'对比XX和YY'时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "要对比的知识条目名称列表"
+                },
+                "criteria": {
+                    "type": "string",
+                    "description": "对比维度（可选）"
+                }
+            },
+            "required": ["items"]
+        }
+    },
+    {
+        "name": "summarize_topic",
+        "description": "总结某个主题的知识。当用户询问'课题组研究方向有哪些'、'总结一下XX领域'时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "要总结的主题"
+                }
+            },
+            "required": ["topic"]
+        }
+    },
+    {
+        "name": "suggest_research",
+        "description": "基于知识图谱和假设生成研究建议。当用户询问'下一步该研究什么'、'有什么研究方向'时使用。",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "area": {
+                    "type": "string",
+                    "description": "研究领域（可选）"
+                }
+            }
+        }
+    },
 
     # 统计相关工具
     {
