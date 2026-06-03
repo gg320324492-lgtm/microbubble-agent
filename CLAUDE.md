@@ -125,10 +125,14 @@
 - **声纹会议 live WS 静默断开**（2026-06-02 教训）— `app/api/v1/voice.py` 的 `meeting_live_ws` 和 `_run_live_loop` 函数**必须有顶层 try/except 兜底**。VAD 加载 / `transcript_history` 发送 / `pubsub.subscribe` / `await websocket.send_json` 在客户端断后抛 `ConnectionClosed` 等任何异常，如果只捕获 `WebSocketDisconnect` 会逃逸到 Uvicorn 静默关闭 WS，**没有错误日志**。**修复**：`meeting_live_ws` 顶层加 `try/except WebSocketDisconnect/Exception`（后者 `logger.error(..., exc_info=True)` + `await websocket.close(code=1011)`）；`_run_live_loop` 拆出 `_live_loop_inner` + outer try/except 同样处理。验证：改后 WS live 维持 11+ 秒，audio_level 推送正常
 - **audioLevels 必须解耦 activeSpeaker**（2026-06-02 教训）— `MeetingRoom.vue` 的 `onMessage` 处理 `audio_level` 时，**之前**只在 `activeSpeaker !== null` 时写入 `audioLevels[activeId]`。但 `activeSpeaker` 只在收到 transcript 且 `speaker_confidence > 0.45` 时才设置 — 如果后端没发 transcript（比如 VAD 静默），activeSpeaker 永远 null，5 根声波条永远不跳动。**修复**：用 `key = activeId !== null ? String(activeId) : 'self'` 兜底；`LiveSpeakerPanel.getBarHeight` 读不到 activeSpeakerId 时降级到 `props.audioLevels['self']`
 - **Progress WS snapshot 不能发 null**（2026-06-02 教训）— `meeting_progress.py:_send_snapshot` 之前**无条件**发 `{"type": "progress_snapshot", "data": snapshot}`，当 `get_progress(meeting_id)` 返回 None 时 `data=null`，前端 `useMeetingProgress.js` 访问 `msg.data.status` 抛 `TypeError: Cannot read properties of null (reading 'status')`，ProcessingDialog 进度条卡住。**修复**：后端 snapshot 为 None 时**不发**该消息；前端用 `if (msg.data && typeof msg.data === 'object')` 防御性检查。**经验**：WS 推送层不要把 `None` 当作"有效消息"发送，要么不发，要么发空对象 `{}` 让接收方降级处理
-- **Whisper 反幻觉必须三层防护**（2026-06-02 教训）— faster-whisper 在静音/低能量片段会**臆造**训练集记忆（YouTube 结束语"B 站风格"如"明镜与点点""点赞订阅转发打赏"）。三层防护缺一不可：
-  1. **whisper_server.py**（`app/whisper_server.py`）— `condition_on_previous_text=False` + `no_speech_threshold=0.6` + `temperature=0`，并**过滤** `segment.no_speech_prob > 0.6` 的 segment（这个值在 server 里之前只读不写不过滤，浪费关键信号）
-  2. **本地模型 fallback**（`app/voice/asr.py:_transcribe_local`）— 同样三件套（之前 commit `b4a5dc0` 加过，OK）
-  3. **后端 NOISE_PATTERNS 兜底**（`app/api/v1/voice.py:NOISE_PATTERNS`）— 列入"明镜与点点""点赞""订阅""MING PAO""感谢观看""鲜奶油""准备""锅里"等关键词，所有 ASR 结果二次过滤。**bug 历史**：commit `b4a5dc0` 加反幻觉参数时**只改了本地模型路径，whisper_server（远程服务）漏改** — 这就是为什么线上仍出现"明镜与点点"幻觉
+- **Whisper 反幻觉必须三层防护**（2026-06-02 教训，2026-06-03 重构）— faster-whisper 在静音/低能量片段会**臆造**训练集记忆（YouTube 结束语"B 站风格"如"明镜与点点""点赞订阅转发打赏"）。三层防护缺一不可：
+  1. **whisper_server.py**（`app/whisper_server.py`）— `condition_on_previous_text=False` + `no_speech_threshold=0.6` + `temperature=0`，并**过滤** `segment.no_speech_prob > 0.6` 的 segment
+  2. **本地模型 fallback**（`app/voice/asr.py:_transcribe_local`）— 同样三件套
+  3. **后端三重判定**（`app/api/v1/voice.py`，2026-06-03 重构）— 替代旧 NOISE_PATTERNS 单一黑名单：
+     - `HALLUCINATION_STRONG`（99% 幻觉词如"明镜与点点""感谢观看"）→ **无条件过滤**
+     - `HALLUCINATION_WEAK`（可能是真话如"12345""测试""嗯"）→ **仅在音频能量低时过滤**（RMS < 0.02）
+     - `pipeline.process_audio` 返回 `audio_rms` 字段供判定
+  4. **关闭 Whisper 内置 VAD**（2026-06-03）— 已有 silero-vad 做 VAD，双重 VAD 互相干扰导致丢语音段。`vad_filter=False`
 - **后端七重过滤**（`app/api/v1/voice.py:_run_live_loop`，2026-06-02 三次扩展）— NOISE_PATTERNS 之外再加：
   1. segment 时长 < 0.3s 视为噪声
   2. 文本去标点后 < 2 字符视为短噪音
@@ -138,6 +142,7 @@
   6. `_is_sentence_repetitive` 检测完整句子重复 ≥ 3 次（避免误杀"2分钟后...2分钟后..."菜谱）
 
   七层叠加才能彻底压制 faster-whisper 在低能量片段的臆造行为。**36/36 单元测试通过**（含"M1结果中心营业G6G7..."等严重 hallucination + "微纳米气泡的zeta电位是表征..."等真实专业句）。**NOISE_PATTERNS 维护纪律**：单字（如"感谢"）太宽会误杀正常对话（如"感谢你的帮助"），只放复合关键词（"感谢观看"）
+- **声纹模型加载失败必须容错**（2026-06-03 教训）— `voiceprint_service._load_pipeline()` 之前失败直接 `raise`，导致整个 WS 连接崩溃。改为：失败时设 `self._pipeline = None`，`extract_embedding` 检测到 None 时返回零向量，`identify_speaker` 检测到全零 embedding 时返回 unknown。**WS 不会因声纹模型加载失败而断开**。同理，进入通话时前端先检查 `/voiceprint/enrolled` 端点，如果 0 人录入则弹 toast 引导用户去成员管理页面录入
 - **TimelineScrubber duration 不能等于 elapsed**（2026-06-02 教训）— `MeetingRoom.vue` 中 `meetingDuration` 之前用 `elapsed` 赋值，导致 el-slider 的 `max=currentTs`，用户**无法拖到未来时间点**（slider 只能停在自己当前位置）。**修复**：`meetingDuration = Math.max(MAX_MEETING_DURATION_SEC, elapsed + 60)`，给个合理上限 30 分钟，让 slider 真的能拖。**注意**：`onJumpTs` 只更新 currentTs 不真 seek 转录列表是设计妥协（Wave 3b 注释明确说明），至少 slider 要能响应用户操作
 - **Celery worker 启动时 [tasks] 列表不完整**（2026-06-02 教训）— `app/core/celery.py` 用 `celery_app.autodiscover_tasks([...])` 让 worker 自动发现任务。**Celery 5+ 默认 `related_name='tasks'`**，会尝试 `from {package}.tasks import *`（找 `tasks.py` 子模块），但本项目任务直接在主模块里（如 `post_meeting_tasks.py`），找不到子模块**静默失败**。结果：worker 启动时 [tasks] 列表**缺任务**（如 `post_meeting_process`），任务入 Redis 队列后**永远不被消费**，前端 progress 卡死。**修复**：
   1. `celery.py` 改用显式 `celery_app.conf.imports = [...]` 强制 import 主模块
