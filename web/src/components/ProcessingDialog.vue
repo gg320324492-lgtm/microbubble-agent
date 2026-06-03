@@ -4,7 +4,8 @@
     :show-close="false"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
-    fullscreen
+    width="500px"
+    top="15vh"
   >
     <div class="processing-container">
       <div class="processing-icon">
@@ -147,8 +148,7 @@ if (token) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 80vh;
-  padding: 40px;
+  padding: 20px;
 }
 .processing-icon {
   margin-bottom: 20px;
