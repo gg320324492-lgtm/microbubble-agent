@@ -436,7 +436,10 @@ function onJumpTs(ts) {
 onUnmounted(() => {
   if (durationTimer) clearInterval(durationTimer)
   audioCapture.stop()
-  wsDisconnect()
+  // hangup 后服务器会主动关闭 WS，不需要客户端再断开
+  if (!hangupSent.value) {
+    wsDisconnect()
+  }
 })
 
 function toggleMute() {
@@ -447,16 +450,30 @@ function confirmHangup() {
   hangupConfirmVisible.value = true
 }
 
+const hangupSent = ref(false)
+
 function doHangup() {
   hangupConfirmVisible.value = false
+  hangupSent.value = true
   sendHangup()
   audioCapture.stop()
-  // 等服务器处理完 hangup（派发 Celery 任务 + 初始化进度）再关闭对话框
-  // 服务器收到 hangup 后会主动关闭 WS，最坏情况 5s 超时
+  // 不立即关闭对话框 — 等服务器处理完 hangup 后主动关闭 WS
+  // onUnmounted 会检查 hangupSent，避免重复断开
+  // 兜底：10s 后如果 WS 还没关闭，强制关闭
   setTimeout(() => {
-    emit('call-ended')
-  }, 2000)
+    if (hangupSent.value && connected.value) {
+      wsDisconnect()
+      emit('call-ended')
+    }
+  }, 10000)
 }
+
+// 监听 WS 断开：hangup 后服务器会主动关闭 WS，此时再 emit call-ended
+watch(connected, (val) => {
+  if (!val && hangupSent.value) {
+    emit('call-ended')
+  }
+})
 
 function onUserScroll() {
   // 由 TranscriptPanel 内部处理
