@@ -658,7 +658,7 @@ async def _run_live_loop(
         return await _live_loop_inner(
             websocket, meeting_id, transcript_entries, audio_buffer, last_text,
             start_time, archive_writer, segmenter, pipeline, audio_queue, level_task,
-            broadcast_task, pubsub, meeting, db,
+            broadcast_task, pubsub, meeting, db, batch_polisher,
         )
     except WebSocketDisconnect:
         # 客户端正常断开，走原有的清理流程（保存转录/取消 task/广播 meeting_ended）
@@ -687,7 +687,7 @@ async def _run_live_loop(
 async def _live_loop_inner(
     websocket, meeting_id, transcript_entries, audio_buffer, last_text,
     start_time, archive_writer, segmenter, pipeline, audio_queue, level_task,
-    broadcast_task, pubsub, meeting, db,
+    broadcast_task, pubsub, meeting, db, batch_polisher,
 ):
     """_run_live_loop 内部主循环（被外层 try/except 包裹）"""
     try:
