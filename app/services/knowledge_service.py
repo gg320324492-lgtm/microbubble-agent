@@ -74,6 +74,20 @@ class KnowledgeService:
         asyncio.create_task(
             self._analyze_and_embed(knowledge.id, title, content)
         )
+        # 刷新 BM25 索引
+        try:
+            from app.services.bm25_service import get_bm25_service
+            bm25 = get_bm25_service()
+            bm25.add_document({
+                "id": knowledge.id,
+                "title": knowledge.title,
+                "content": knowledge.content,
+                "category": knowledge.category,
+                "tags": knowledge.tags,
+                "source": knowledge.source,
+            })
+        except Exception as e:
+            logger.debug(f"BM25 索引增量更新失败: {e}")
         return knowledge
 
     async def _generate_embedding(self, knowledge: Knowledge, content: str):
