@@ -119,25 +119,59 @@
     </el-card>
 
     <!-- 创建会议对话框 -->
-    <el-dialog v-model="showCreateDialog" :title="editingMeetingId ? '编辑会议' : '创建会议'" :width="isMobile ? '90vw' : '500px'" top="8vh" @close="editingMeetingId = null">
+    <el-dialog v-model="showCreateDialog" :title="editingMeetingId ? '编辑会议' : '创建会议'" :width="isMobile ? '90vw' : '560px'" top="6vh" @close="onCreateDialogClose">
       <el-form :model="meetingForm" label-width="80px">
-        <el-form-item v-if="!editingMeetingId" label="会议模板">
-          <el-select
-            v-model="meetingForm.templateId"
-            name="meeting-form-template"
-            placeholder="选择模板自动填充（可选）"
-            clearable
-            style="width:100%"
-            @change="onTemplateChange"
-          >
-            <el-option
-              v-for="tpl in templates"
+        <!-- 2026-06-03 重构：模板选择从下拉改为卡片式 + 行内 CRUD
+             替代独立 MeetingTemplatesView 页面，贴近使用场景 -->
+        <div v-if="!editingMeetingId" class="template-picker">
+          <div class="template-picker-header">
+            <span class="template-picker-title">
+              <el-icon><Document /></el-icon> 快速模板
+            </span>
+            <el-button text type="primary" size="small" @click="showTemplateForm()">
+              <el-icon><Plus /></el-icon> 存为新模板
+            </el-button>
+          </div>
+          <div class="template-cards">
+            <div
+              v-for="tpl in builtinTemplates"
               :key="tpl.id"
-              :label="`${tpl.name}（${tpl.default_duration_minutes || 60} 分钟${tpl.agenda?.length ? ' · ' + tpl.agenda.length + ' 议题' : ''}）`"
-              :value="tpl.id"
-            />
-          </el-select>
-        </el-form-item>
+              class="template-card builtin"
+              :class="{ active: meetingForm.templateId === tpl.id }"
+              @click="applyTemplate(tpl)"
+            >
+              <div class="template-card-name">{{ tpl.name }}<el-tag size="small" type="info" effect="plain">内置</el-tag></div>
+              <div class="template-card-desc">{{ tpl.description || '—' }}</div>
+              <div class="template-card-meta">
+                <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
+                <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
+              </div>
+            </div>
+            <div
+              v-for="tpl in customTemplates"
+              :key="tpl.id"
+              class="template-card custom"
+              :class="{ active: meetingForm.templateId === tpl.id }"
+              @click="applyTemplate(tpl)"
+            >
+              <div class="template-card-name">
+                {{ tpl.name }}
+                <span class="template-card-actions" @click.stop>
+                  <el-icon class="tpl-action" title="编辑" @click="showTemplateForm(tpl)"><Edit /></el-icon>
+                  <el-icon class="tpl-action danger" title="删除" @click="deleteTemplate(tpl)"><Delete /></el-icon>
+                </span>
+              </div>
+              <div class="template-card-desc">{{ tpl.description || '（无说明）' }}</div>
+              <div class="template-card-meta">
+                <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
+                <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
+              </div>
+            </div>
+            <div v-if="customTemplates.length === 0" class="template-empty">
+              暂无自定义模板，点击右上"存为新模板"创建
+            </div>
+          </div>
+        </div>
         <el-form-item label="会议主题" required>
           <el-input v-model="meetingForm.title" name="meeting-form-title" placeholder="请输入会议主题" />
         </el-form-item>
@@ -231,6 +265,50 @@
       <template #footer>
         <el-button @click="showCreateDialog = false">取消</el-button>
         <el-button type="primary" @click="submitMeeting">{{ editingMeetingId ? '保存' : '创建' }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 2026-06-03 新增：模板编辑对话框（创建/编辑自定义模板） -->
+    <el-dialog v-model="showTemplateDialog" :title="editingTemplateId ? '编辑模板' : '存为新模板'" :width="isMobile ? '92vw' : '500px'" top="8vh">
+      <el-form :model="templateForm" label-width="80px">
+        <el-form-item label="模板名称" required>
+          <el-input v-model="templateForm.name" name="template-form-name" placeholder="如：组会、组内复盘..." maxlength="50" show-word-limit />
+        </el-form-item>
+        <el-form-item label="默认时长">
+          <el-input-number v-model="templateForm.default_duration_minutes" name="template-form-duration" :min="15" :max="240" :step="15" />
+          <span class="form-hint">分钟</span>
+        </el-form-item>
+        <el-form-item label="默认地点">
+          <el-input v-model="templateForm.default_location" name="template-form-location" placeholder="可选，如：组会室、腾讯会议..." maxlength="100" />
+        </el-form-item>
+        <el-form-item label="会议说明">
+          <el-input v-model="templateForm.description" name="template-form-description" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="标题模板">
+          <el-input v-model="templateForm.title_template" name="template-form-title-template" placeholder="可选，支持 {date} 占位符" maxlength="100" />
+          <div class="form-hint">如：组会 - {date}</div>
+        </el-form-item>
+        <el-form-item label="默认议题">
+          <div class="item-list" style="width:100%">
+            <div v-for="(item, idx) in templateForm.agenda" :key="idx" class="item-row">
+              <span class="item-dot" />
+              <el-input v-model="templateForm.agenda[idx]" :name="`template-form-agenda-${idx}`" placeholder="议题描述" />
+              <el-button :icon="Delete" circle size="small" class="item-del" @click="templateForm.agenda.splice(idx, 1)" />
+            </div>
+            <el-button dashed size="small" class="item-add" @click="templateForm.agenda.push('')">
+              <el-icon><Plus /></el-icon> 添加议题
+            </el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="默认参与人">
+          <el-select v-model="templateForm.default_participant_ids" name="template-form-participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="可选" style="width:100%">
+            <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showTemplateDialog = false">取消</el-button>
+        <el-button type="primary" @click="submitTemplate">{{ editingTemplateId ? '保存' : '创建' }}</el-button>
       </template>
     </el-dialog>
 
@@ -328,7 +406,7 @@ import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
-import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone } from '@element-plus/icons-vue'
+import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
@@ -450,8 +528,10 @@ const meetingForm = ref({
   remindBefore: true,
 })
 
-// === Wave 3b: 会议模板 ===
+// === 2026-06-03 重构：会议模板内嵌到 MeetingView ===
 const templates = ref([])
+const builtinTemplates = computed(() => templates.value.filter(t => t.is_builtin))
+const customTemplates = computed(() => templates.value.filter(t => !t.is_builtin))
 
 async function loadTemplates() {
   try {
@@ -462,10 +542,10 @@ async function loadTemplates() {
   }
 }
 
-function onTemplateChange(templateId) {
-  if (!templateId) return
-  const tpl = templates.value.find(t => t.id === templateId)
+// 应用模板：填字段（保留用户已填）+ 提示
+function applyTemplate(tpl) {
   if (!tpl) return
+  meetingForm.value.templateId = tpl.id
   // 仅在字段为空时填充（用户已填写的优先）
   if (tpl.title_template && !meetingForm.value.title) {
     meetingForm.value.title = tpl.title_template
@@ -478,12 +558,6 @@ function onTemplateChange(templateId) {
   if (tpl.agenda && tpl.agenda.length && (!meetingForm.value.agenda || meetingForm.value.agenda.length === 0)) {
     meetingForm.value.agenda = [...tpl.agenda]
   }
-  if (tpl.default_duration_minutes && meetingForm.value.start_time && !meetingForm.value.end_time) {
-    const start = dayjs(meetingForm.value.start_time)
-    if (start.isValid()) {
-      // 后端会用 default_duration_minutes 计算 end_time，这里不强写
-    }
-  }
   if (tpl.default_participant_ids && tpl.default_participant_ids.length && (!meetingForm.value.participants || meetingForm.value.participants.length === 0)) {
     meetingForm.value.participants = [...tpl.default_participant_ids]
   }
@@ -491,6 +565,93 @@ function onTemplateChange(templateId) {
     meetingForm.value.location = tpl.default_location
   }
   ElMessage.success(`已应用模板：${tpl.name}`)
+}
+
+// === 模板 CRUD（行内） ===
+const showTemplateDialog = ref(false)
+const editingTemplateId = ref(null)
+const templateForm = ref({
+  name: '',
+  description: '',
+  title_template: '',
+  default_duration_minutes: 60,
+  default_location: '',
+  default_participant_ids: [],
+  agenda: [],
+})
+
+function resetTemplateForm() {
+  templateForm.value = {
+    name: '',
+    description: '',
+    title_template: '',
+    default_duration_minutes: 60,
+    default_location: '',
+    default_participant_ids: [],
+    agenda: [],
+  }
+  editingTemplateId.value = null
+}
+
+function showTemplateForm(tpl = null) {
+  if (tpl) {
+    // 编辑模式
+    editingTemplateId.value = tpl.id
+    templateForm.value = {
+      name: tpl.name || '',
+      description: tpl.description || '',
+      title_template: tpl.title_template || '',
+      default_duration_minutes: tpl.default_duration_minutes || 60,
+      default_location: tpl.default_location || '',
+      default_participant_ids: tpl.default_participant_ids || [],
+      agenda: tpl.agenda ? [...tpl.agenda] : [],
+    }
+  } else {
+    // 新建模式
+    resetTemplateForm()
+  }
+  showTemplateDialog.value = true
+}
+
+async function submitTemplate() {
+  if (!templateForm.value.name?.trim()) {
+    ElMessage.error('请填写模板名称')
+    return
+  }
+  try {
+    const payload = { ...templateForm.value }
+    if (editingTemplateId.value) {
+      await axios.put(`/api/v1/meeting-templates/${editingTemplateId.value}`, payload)
+      ElMessage.success('模板已更新')
+    } else {
+      await axios.post('/api/v1/meeting-templates', payload)
+      ElMessage.success('模板已创建')
+    }
+    showTemplateDialog.value = false
+    await loadTemplates()
+  } catch (e) {
+    ElMessage.error(`保存失败：${e.response?.data?.detail || e.message}`)
+  }
+}
+
+async function deleteTemplate(tpl) {
+  try {
+    await ElMessageBox.confirm(`删除自定义模板 "${tpl.name}"？`, '确认', { type: 'warning' })
+  } catch { return }
+  try {
+    await axios.delete(`/api/v1/meeting-templates/${tpl.id}`)
+    ElMessage.success('已删除')
+    if (meetingForm.value.templateId === tpl.id) meetingForm.value.templateId = null
+    await loadTemplates()
+  } catch (e) {
+    ElMessage.error(`删除失败：${e.response?.data?.detail || e.message}`)
+  }
+}
+
+// 关闭会议创建对话框时清理 templateId 高亮
+function onCreateDialogClose() {
+  editingMeetingId.value = null
+  meetingForm.value.templateId = null
 }
 
 
@@ -764,6 +925,110 @@ onMounted(() => {
 .item-row:hover .item-del { opacity: 1; }
 .item-add { width: 100%; justify-content: center; border-style: dashed; }
 .decision-add { color: var(--color-warning); border-color: var(--color-warning); }
+
+/* 2026-06-03 新增：模板卡片选择器样式（替代独立 MeetingTemplatesView） */
+.template-picker {
+  background: var(--color-bg-page, #fafafa);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.template-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.template-picker-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.template-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.template-card {
+  border: 1px solid var(--color-border, #e4e7ed);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+.template-card:hover {
+  border-color: var(--color-primary, #FF7A5C);
+  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.12);
+  transform: translateY(-1px);
+}
+.template-card.active {
+  border-color: var(--color-primary, #FF7A5C);
+  background: linear-gradient(135deg, rgba(255, 122, 92, 0.04), rgba(255, 179, 71, 0.04));
+  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.18);
+}
+.template-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+}
+.template-card-desc {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.template-card-meta {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+}
+.template-card-meta span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.template-card-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.template-card.custom:hover .template-card-actions { opacity: 1; }
+.tpl-action {
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  color: var(--color-text-secondary);
+}
+.tpl-action:hover { background: var(--color-bg-page, #fafafa); }
+.tpl-action.danger { color: var(--color-danger); }
+.template-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--color-text-placeholder);
+  font-size: 12px;
+  padding: 16px 0;
+}
+.form-hint {
+  font-size: 11px;
+  color: var(--color-text-placeholder);
+  margin-left: 8px;
+}
 
 @media (max-width: 768px) {
   .meeting-actions { flex-wrap: wrap; }
