@@ -69,6 +69,7 @@ async def update_progress(
     detail: str | None = None,
     percent: float | None = None,
     status: str = "running",
+    redis_override=None,
 ) -> None:
     """
     更新进度：HSET + PUBLISH
@@ -77,7 +78,7 @@ async def update_progress(
     3. PUBLISH progress:{id} channel
     4. DONE 状态保留 TTL
     """
-    r = await get_redis()
+    r = redis_override if redis_override is not None else await get_redis()
     now = int(time.time())
     key = _key(meeting_id)
     channel = _channel(meeting_id)

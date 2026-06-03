@@ -26,7 +26,8 @@ def post_meeting_process(self, meeting_id: int):
     logger.info(f"开始挂断后处理: meeting_id={meeting_id}")
 
     async def _run():
-        # 创建独立引擎，避免 Celery worker 事件循环与主 app 连接池冲突
+        # 创建独立引擎和 Redis 连接，避免 Celery worker 事件循环与主 app 连接池冲突
+        import redis.asyncio as aioredis
         from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
         from sqlalchemy.pool import NullPool
         from app.config import settings
@@ -35,6 +36,7 @@ def post_meeting_process(self, meeting_id: int):
             settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
             poolclass=NullPool,
         )
+        redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with session_factory() as db:
             from app.models.meeting import Meeting
@@ -46,17 +48,17 @@ def post_meeting_process(self, meeting_id: int):
                 return
 
             # 阶段 0
-            await update_progress(meeting_id, ProgressStage.EXTRACTING_TRANSCRIPT, detail="确认转录完整性")
+            await update_progress(meeting_id, ProgressStage.EXTRACTING_TRANSCRIPT, detail="确认转录完整性", redis_override=redis_client)
             transcript = meeting.transcript or []
             if not transcript:
                 logger.warning(f"会议转录为空: {meeting_id}")
 
             # 阶段 1
-            await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人")
+            await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
             await asyncio.sleep(0.5)  # 占位
 
             # 阶段 2
-            await update_progress(meeting_id, ProgressStage.GENERATING_TITLE, detail="生成会议标题")
+            await update_progress(meeting_id, ProgressStage.GENERATING_TITLE, detail="生成会议标题", redis_override=redis_client)
             from app.services.meeting_analysis_service import meeting_analysis
             from app.services.meeting_service import MeetingService
             svc = MeetingService(db)
@@ -66,7 +68,7 @@ def post_meeting_process(self, meeting_id: int):
                 await db.commit()
 
             # 阶段 3
-            await update_progress(meeting_id, ProgressStage.GENERATING_MINUTES, detail="生成会议纪要")
+            await update_progress(meeting_id, ProgressStage.GENERATING_MINUTES, detail="生成会议纪要", redis_override=redis_client)
             speaker_mapping = meeting.speaker_mapping or None
             analysis = await meeting_analysis.analyze_transcript(transcript_text, speaker_mapping=speaker_mapping)
             meeting.summary = analysis.get("summary")
@@ -75,16 +77,17 @@ def post_meeting_process(self, meeting_id: int):
             await db.commit()
 
             # 阶段 4
-            await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务")
+            await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
             for decision in analysis.get("decisions", []):
                 await svc._auto_create_task_from_meeting(meeting, decision)
 
             # 阶段 5：第三波启用，本波跳过
-            await update_progress(meeting_id, ProgressStage.LINKING_HISTORY, detail="跨会议关联（第三波）")
+            await update_progress(meeting_id, ProgressStage.LINKING_HISTORY, detail="跨会议关联（第三波）", redis_override=redis_client)
             await asyncio.sleep(0.1)
 
             # 阶段 6
-            await update_progress(meeting_id, ProgressStage.DONE, detail="处理完成")
+            await update_progress(meeting_id, ProgressStage.DONE, detail="处理完成", redis_override=redis_client)
+        await redis_client.aclose()
         await engine.dispose()
 
     try:
