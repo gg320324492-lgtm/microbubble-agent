@@ -48,10 +48,11 @@ celery_app.conf.update(
         },
         "auto-purge-trash": {
             "task": "app.services.task_service.auto_purge_trash_task",
-            # 2026-06-03 教训：6h 调度最坏情况下任务要等 6h 才被清理，
-            # 而 retention 是 3 天（72h），6h 是 8% 误差。改为 4h（5.5% 误差），
-            # 配合 task_service 函数接受 retention_days 参数便于灵活调整
-            "schedule": 4 * 3600.0,  # 每4小时清理过期垃圾桶（retention=3天时）
+            # 2026-06-03 教训 v2：4h 调度意味着任务最坏要等 4h 才被清理，
+            # 用户看到 auto_delete_at 过了但任务还在（延迟达数小时），困惑。
+            # 改为 1h 调度，最大延迟 1h（retention=3天时仅 1.4% 误差），
+            # 用户体验上等同于"准点清理"。权衡：每天 24 次 DB 扫描，可忽略。
+            "schedule": 3600.0,  # 每1小时清理过期垃圾桶（retention=3天时）
         },
     },
 )
