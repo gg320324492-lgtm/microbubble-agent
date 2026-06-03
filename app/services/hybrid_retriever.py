@@ -29,6 +29,7 @@ class HybridRetriever:
         category: Optional[str] = None,
         enable_vector: bool = True,
         enable_bm25: bool = True,
+        enable_graph: bool = True,
         enable_rerank: bool = True,
     ) -> List[dict]:
         """混合检索
@@ -39,6 +40,7 @@ class HybridRetriever:
             category: 可选分类过滤
             enable_vector: 是否启用向量检索
             enable_bm25: 是否启用 BM25 检索
+            enable_graph: 是否启用图谱检索
             enable_rerank: 是否启用重排序
 
         Returns:
@@ -47,12 +49,18 @@ class HybridRetriever:
         # 候选集数量（重排序前多取一些）
         candidate_k = top_k * 3 if enable_rerank else top_k
 
-        # 并发执行向量检索和 BM25 检索
+        # 并发执行三路检索
         tasks = []
+        task_names = []
         if enable_vector:
             tasks.append(self._vector_search(query, candidate_k, category))
+            task_names.append("vector")
         if enable_bm25:
             tasks.append(self._bm25_search(query, candidate_k, category))
+            task_names.append("bm25")
+        if enable_graph:
+            tasks.append(self._graph_search(query, candidate_k))
+            task_names.append("graph")
 
         if not tasks:
             return []
@@ -61,17 +69,20 @@ class HybridRetriever:
 
         vector_results = []
         bm25_results = []
-        for i, result in enumerate(results_list):
+        graph_results = []
+        for i, (result, name) in enumerate(zip(results_list, task_names)):
             if isinstance(result, Exception):
-                logger.warning(f"检索方式 {i} 失败: {result}")
+                logger.warning(f"检索方式 {name} 失败: {result}")
                 continue
-            if enable_vector and i == 0:
+            if name == "vector":
                 vector_results = result
-            elif enable_bm25:
-                bm25_results = result if enable_vector else result
+            elif name == "bm25":
+                bm25_results = result
+            elif name == "graph":
+                graph_results = result
 
-        # 合并去重
-        merged = self._merge_results(vector_results, bm25_results)
+        # 合并去重（三路）
+        merged = self._merge_results(vector_results, bm25_results, graph_results)
 
         if not merged:
             return []
@@ -152,7 +163,10 @@ class HybridRetriever:
         logger.info(f"BM25 索引刷新完成: {len(documents)} 条")
 
     def _merge_results(
-        self, vector_results: List[dict], bm25_results: List[dict]
+        self,
+        vector_results: List[dict],
+        bm25_results: List[dict],
+        graph_results: List[dict] = None,
     ) -> List[dict]:
         """合并去重：同一文档保留最高分，记录所有来源"""
         merged = {}
@@ -175,7 +189,68 @@ class HybridRetriever:
                 existing = merged[doc_id]
                 existing.setdefault("retrieval_methods", []).append("bm25")
 
+        for r in (graph_results or []):
+            doc_id = r["id"]
+            if doc_id not in merged:
+                merged[doc_id] = {**r, "retrieval_methods": ["graph"]}
+            else:
+                existing = merged[doc_id]
+                existing.setdefault("retrieval_methods", []).append("graph")
+                # 图谱分数作为加成
+                existing["score"] = existing.get("score", 0) + r.get("score", 0) * 0.3
+
         return list(merged.values())
+
+    async def _graph_search(
+        self, query: str, top_k: int
+    ) -> List[dict]:
+        """图谱检索 — 从查询中提取实体关键词，在 Neo4j 中搜索关联知识"""
+        try:
+            from app.services.neo4j_service import get_neo4j_service
+            from app.models.knowledge import Knowledge
+            from sqlalchemy import select
+
+            neo4j = get_neo4j_service()
+
+            # 从查询中提取关键词（简单分词）
+            from app.services.bm25_service import BM25Service
+            tokenizer = BM25Service()
+            keywords = tokenizer._tokenize(query)
+            if not keywords:
+                return []
+
+            # 在 Neo4j 中搜索匹配的实体
+            graph_knowledge_ids = set()
+            for keyword in keywords[:3]:  # 取前 3 个关键词
+                entities = neo4j.search_entities(keyword, limit=5)
+                for entity in entities:
+                    for kid in entity.get("knowledge_ids", []):
+                        graph_knowledge_ids.add(kid)
+
+            if not graph_knowledge_ids:
+                return []
+
+            # 从数据库获取知识条目
+            stmt = select(Knowledge).where(Knowledge.id.in_(list(graph_knowledge_ids)))
+            result = await self.db.execute(stmt)
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "id": r.id,
+                    "title": r.title or "",
+                    "content": (r.content or "")[:500],
+                    "category": r.category,
+                    "tags": r.tags,
+                    "source": r.source,
+                    "score": 0.7,  # 图谱匹配给固定分数
+                    "retrieval_method": "graph",
+                }
+                for r in rows[:top_k]
+            ]
+        except Exception as e:
+            logger.warning(f"图谱检索失败: {e}")
+            return []
 
     def _normalize_scores(self, results: List[dict]) -> List[dict]:
         """分数归一化到 [0, 1]"""
