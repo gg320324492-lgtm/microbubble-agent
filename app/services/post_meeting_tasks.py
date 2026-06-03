@@ -15,7 +15,6 @@ import asyncio
 import logging
 
 from app.core.celery import celery_app
-from app.core.database import async_session
 from app.services.progress_service import ProgressStage, update_progress
 
 logger = logging.getLogger("microbubble.post_meeting")
@@ -27,7 +26,17 @@ def post_meeting_process(self, meeting_id: int):
     logger.info(f"开始挂断后处理: meeting_id={meeting_id}")
 
     async def _run():
-        async with async_session() as db:
+        # 创建独立引擎，避免 Celery worker 事件循环与主 app 连接池冲突
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+        from sqlalchemy.pool import NullPool
+        from app.config import settings
+
+        engine = create_async_engine(
+            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+            poolclass=NullPool,
+        )
+        session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with session_factory() as db:
             from app.models.meeting import Meeting
             from sqlalchemy import select
             result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
@@ -76,27 +85,20 @@ def post_meeting_process(self, meeting_id: int):
 
             # 阶段 6
             await update_progress(meeting_id, ProgressStage.DONE, detail="处理完成")
+        await engine.dispose()
 
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(_run())
-        loop.close()
-        return {"status": "done", "meeting_id": meeting_id}
+        return asyncio.run(_run())
+    except Exception as e:
     except Exception as e:
         logger.error(f"挂断后处理失败: meeting_id={meeting_id}, error={e}", exc_info=True)
         # 2026-06-02 修复：失败时也推 progress_update 让前端看到 error 状态
-        # 之前静默失败只 return error dict，前端 WS 收不到消息会永远卡在"AI 正在整理..."
         try:
-            # 在新 loop 里跑 update_progress（避免和失败的 loop 冲突）
-            fail_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(fail_loop)
-            fail_loop.run_until_complete(update_progress(
+            asyncio.run(update_progress(
                 meeting_id, ProgressStage.DONE,
                 detail=f"处理失败: {str(e)[:80]}",
                 status="error",
             ))
-            fail_loop.close()
         except Exception as push_err:
             logger.error(f"推送 error 状态也失败: {push_err}")
         return {"status": "error", "meeting_id": meeting_id, "error": str(e)}
