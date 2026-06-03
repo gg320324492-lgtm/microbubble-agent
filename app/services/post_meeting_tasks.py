@@ -90,7 +90,6 @@ def post_meeting_process(self, meeting_id: int):
     try:
         return asyncio.run(_run())
     except Exception as e:
-    except Exception as e:
         logger.error(f"挂断后处理失败: meeting_id={meeting_id}, error={e}", exc_info=True)
         # 2026-06-02 修复：失败时也推 progress_update 让前端看到 error 状态
         try:
