@@ -694,6 +694,11 @@ async def _live_loop_inner(
         while True:
             data = await websocket.receive()
 
+            # 客户端断开连接（close frame）
+            if data.get("type") == "websocket.disconnect":
+                logger.info(f"meeting {meeting_id} WS 客户端发送 close frame")
+                break
+
             # 文字控制消息
             if "text" in data:
                 try:
@@ -1154,7 +1159,7 @@ async def _live_loop_inner(
             except Exception:
                 pass
 
-        # 保存转录到会议记录，自动分析
+        # 保存转录到会议记录 + 派发 Celery 后处理任务
         analysis_result = None
         try:
             if meeting and transcript_entries:
@@ -1165,22 +1170,18 @@ async def _live_loop_inner(
                     for e in transcript_entries
                 ]
                 meeting.status = "completed"
+                from datetime import datetime as _dt
+                meeting.end_time = _dt.utcnow()
                 await db.commit()
 
-                if transcript_entries:
-                    meeting_service = MeetingService(db)
-                    analysis_result = await meeting_service.process_meeting_transcript(meeting_id)
-                    try:
-                        from app.services.meeting_analysis_service import meeting_analysis
-                        transcript_text = meeting_service._transcript_to_text(meeting.transcript)
-                        new_title = await meeting_analysis.generate_title(transcript_text)
-                        if new_title and new_title != "未命名会议":
-                            meeting.title = new_title
-                            await db.commit()
-                    except Exception:
-                        pass
+            # 初始化进度 + 派发 Celery 后处理（不管有没有转录都要触发）
+            from app.services.progress_service import init_progress
+            from app.services.post_meeting_tasks import post_meeting_process
+            await init_progress(meeting_id)
+            post_meeting_process.delay(meeting_id)
+            logger.info(f"meeting {meeting_id} WS 断开: 后处理任务已派发")
         except Exception as e:
-            logger.error(f"保存会议转录失败: {e}")
+            logger.error(f"WS 断开后处理派发失败: {e}", exc_info=True)
 
         # 清理 per-WS pipeline 状态
         try:
