@@ -777,6 +777,23 @@ async def _live_loop_inner(
                             )
                         except Exception as e:
                             logger.error(f"L3 触发失败: {e}")
+
+                        # 更新会议状态 + 触发后处理 Celery 任务
+                        try:
+                            from app.services.progress_service import init_progress
+                            from app.services.post_meeting_tasks import post_meeting_process
+                            if meeting:
+                                meeting.status = "completed"
+                                meeting.end_time = __import__("datetime").datetime.utcnow()
+                                if transcript_entries:
+                                    meeting.transcript = transcript_entries
+                                await db.commit()
+                            await init_progress(meeting_id)
+                            post_meeting_process.delay(meeting_id)
+                            logger.info(f"meeting {meeting_id} hangup: 后处理任务已派发")
+                        except Exception as e:
+                            logger.error(f"hangup 后处理派发失败: {e}", exc_info=True)
+
                         await websocket.close()
                         return
 
