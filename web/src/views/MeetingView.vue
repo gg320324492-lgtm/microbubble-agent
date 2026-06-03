@@ -53,6 +53,9 @@
             <el-button type="warning" @click="startVoiceCreate">
               <el-icon><Microphone /></el-icon> 声纹创建会议
             </el-button>
+            <el-button @click="showVoiceTest = true">
+              🎤 测试
+            </el-button>
           </div>
         </el-col>
       </el-row>
@@ -382,6 +385,9 @@
     <!-- 粘贴转录分析对话框 -->
     <PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="fetchMeetings" />
 
+    <!-- 声纹测试对话框 -->
+    <VoiceTestDialog v-model:visible="showVoiceTest" />
+
     <!-- 挂断后会后处理进度对话框 -->
     <ProcessingDialog
       v-if="processingDialogVisible && processingMeetingId"
@@ -407,6 +413,7 @@ import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
+import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
@@ -432,6 +439,7 @@ const meetingRoomRef = ref(null)
 // 声纹通话
 const showLiveCallDialog = ref(false)
 const liveCallMeeting = ref(null)
+const showVoiceTest = ref(false)
 
 // 挂断后处理进度弹窗
 const processingDialogVisible = ref(false)
