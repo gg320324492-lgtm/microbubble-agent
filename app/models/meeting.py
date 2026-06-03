@@ -84,3 +84,7 @@ class MeetingParticipant(Base):
     @property
     def name(self):
         return self.member.name if self.member else ""
+
+    @property
+    def avatar(self):
+        return self.member.avatar if self.member else None

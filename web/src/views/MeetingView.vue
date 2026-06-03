@@ -402,6 +402,7 @@ import dayjs from 'dayjs'
 import { formatDateTime } from '@/utils/format'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
+import { useUserStore } from '@/stores/user'
 import LiveTranscript from '@/components/LiveTranscript.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
@@ -409,6 +410,7 @@ import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List } from '@element-plus/icons-vue'
 
 const memberStore = useMemberStore()
+const userStore = useUserStore()
 const members = computed(() => memberStore.members)
 
 const isMobile = ref(window.innerWidth <= 768)
@@ -503,9 +505,11 @@ const submitMeeting = async () => {
 // 声纹创建会议 (从顶栏点击，先快速创建占位会议再开始通话)
 const startVoiceCreate = async () => {
   try {
+    const currentUserId = userStore.userInfo?.id
     const res = await axios.post('/api/v1/meetings', {
       title: '声纹会议 ' + dayjs().format('MM-DD HH:mm'),
       start_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      participants: currentUserId ? [currentUserId] : [],
     })
     liveCallMeeting.value = res.data
     showLiveCallDialog.value = true
