@@ -42,6 +42,7 @@ class ParticipantInfo(BaseModel):
     member_id: int
     name: str = ""
     role: str = "participant"
+    avatar: Optional[str] = None
 
     class Config:
         from_attributes = True

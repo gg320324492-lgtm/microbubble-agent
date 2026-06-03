@@ -27,7 +27,7 @@
     <!-- 右侧面板：大头像 + 转录 + 时间轴 -->
     <div class="right-panel">
       <LiveSpeakerPanel
-        :participants="participants"
+        :participants="effectiveParticipants"
         :active-speaker-id="activeSpeaker"
         :audio-levels="audioLevels"
       />
@@ -121,6 +121,13 @@ const props = defineProps({
 const emit = defineEmits(['call-ended'])
 
 const userStore = useUserStore()
+
+// 参会人员列表（优先用 prop，否则从 API 自行拉取）
+const localParticipants = ref([])
+const effectiveParticipants = computed(() => {
+  if (props.participants && props.participants.length > 0) return props.participants
+  return localParticipants.value
+})
 const muted = ref(false)
 const hangupConfirmVisible = ref(false)
 const startTime = ref(Date.now())
@@ -210,7 +217,7 @@ onMounted(async () => {
     formattedDuration.value = `${m}:${s}`
   }, 1000)
 
-  // 拉取会议详情（含 agenda）
+  // 拉取会议详情（含 agenda + participants）
   try {
     const resp = await fetch(`/api/v1/meetings/${props.meetingId}`, {
       headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
@@ -218,9 +225,17 @@ onMounted(async () => {
     if (resp.ok) {
       const data = await resp.json()
       agendaItems.value = data.agenda || []
+      // 提取参会人员（API 返回 {member_id, name, role, avatar}，映射为 {id, name, avatar}）
+      if (data.participants && data.participants.length > 0) {
+        localParticipants.value = data.participants.map(p => ({
+          id: p.member_id,
+          name: p.name,
+          avatar: p.avatar || null,
+        }))
+      }
     }
   } catch (e) {
-    console.warn('加载会议 agenda 失败', e)
+    console.warn('加载会议详情失败', e)
   }
 
   // 注册 WS 回调
@@ -358,13 +373,15 @@ onMounted(async () => {
   wsConnect(props.meetingId, token)
 
   // 2026-06-03 声纹状态检查：进入通话时检查已录入声纹成员数
+  // 修复：后端返回 {"members": [...]}，不是数组
   try {
     const vpResp = await fetch('/api/v1/voiceprint/enrolled', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (vpResp.ok) {
       const vpData = await vpResp.json()
-      const count = Array.isArray(vpData) ? vpData.length : 0
+      const members = vpData.members || []
+      const count = Array.isArray(members) ? members.length : 0
       voiceprintEnrolledCount.value = count
       if (count === 0) {
         ElMessage.warning({ message: '尚无声纹录入，发言人将显示为"未识别"。请在成员管理页面录入声纹。', duration: 8000 })
