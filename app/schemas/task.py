@@ -55,6 +55,9 @@ class TaskResponse(TaskBase):
     meeting_id: Optional[int] = None
     tags: Optional[List[str]] = None
     deleted_at: Optional[datetime] = None
+    # 2026-06-03 新增：垃圾桶任务自动永久删除时间（deleted_at + retention_days）
+    # 由 API 路由在返回时计算并附加，前端无需硬编码 retention 天数
+    auto_delete_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

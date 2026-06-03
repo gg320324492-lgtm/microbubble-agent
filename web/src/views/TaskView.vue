@@ -226,11 +226,21 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="自动删除" width="120">
+            <el-table-column label="自动删除" width="160">
               <template #default="{ row }">
-                <span :class="{ 'auto-delete-soon': getAutoDeleteUrgency(row.deleted_at) }">
-                  {{ getAutoDeleteText(row.deleted_at) }}
-                </span>
+                <el-tooltip
+                  v-if="row.auto_delete_at"
+                  :content="`将于 ${formatAutoDeleteExact(row.auto_delete_at)} 永久删除`"
+                  placement="top"
+                >
+                  <span :class="getAutoDeleteClass(row.auto_delete_at)">
+                    <el-icon v-if="getAutoDeleteIcon(row.auto_delete_at)" class="auto-delete-icon">
+                      <Clock />
+                    </el-icon>
+                    {{ getAutoDeleteText(row.auto_delete_at) }}
+                  </span>
+                </el-tooltip>
+                <span v-else class="auto-delete-none">—</span>
               </template>
             </el-table-column>
 
@@ -360,10 +370,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Check, Edit, Delete, RefreshRight, DeleteFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Check, Edit, Delete, RefreshRight, DeleteFilled, Clock } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const route = useRoute()
@@ -395,6 +405,23 @@ const trashTotal = ref(0)
 const trashPage = ref(1)
 const trashPageSize = ref(20)
 const trashCount = ref(0)
+
+// 2026-06-03：实时倒计时驱动器
+// `now` 每 30s 刷新一次，触发 getAutoDeleteText 等 computed 重新计算，
+// 用户停留在垃圾桶 tab 时看到的时间不会"卡住"
+const now = ref(dayjs())
+let autoDeleteTimer = null
+onMounted(() => {
+  autoDeleteTimer = setInterval(() => {
+    now.value = dayjs()
+  }, 30 * 1000)
+})
+onUnmounted(() => {
+  if (autoDeleteTimer) {
+    clearInterval(autoDeleteTimer)
+    autoDeleteTimer = null
+  }
+})
 
 const filters = ref({
   status: '',
@@ -624,27 +651,56 @@ const isOverdue = (task) => {
   return dayjs(task.due_date).isBefore(dayjs())
 }
 
-// 计算自动删除倒计时
-const getAutoDeleteText = (deletedAt) => {
-  if (!deletedAt) return '3天后'
-  const deleteTime = dayjs(deletedAt)
-  const expireTime = deleteTime.add(3, 'day')
-  const now = dayjs()
-  const totalHours = expireTime.diff(now, 'hour')
-  const totalMinutes = expireTime.diff(now, 'minute')
+// 计算自动删除倒计时（2026-06-03 优化）
+// 输入是后端预计算的 auto_delete_at = deleted_at + retention_days，
+// 前端不再硬编码 retention 天数，与后端 TRASH_RETENTION_DAYS 配置保持同步
+// `now` 是响应式 ref，每 30s 刷新以驱动实时倒计时
+const getAutoDeleteText = (autoDeleteAt) => {
+  if (!autoDeleteAt) return ''
+  const expire = dayjs(autoDeleteAt)
+  const diffMin = expire.diff(now.value, 'minute')
+  const diffHour = expire.diff(now.value, 'hour')
+  const diffDay = Math.floor(diffMin / (60 * 24))
+  const remHourOfDay = Math.floor((diffMin % (60 * 24)) / 60)
+  const remMin = diffMin % 60
 
-  if (totalMinutes <= 0) return '即将自动删除'
-  if (totalHours < 1) return `${Math.max(1, totalMinutes)} 分钟后自动删除`
-  if (totalHours < 24) return `${totalHours} 小时后自动删除`
-  if (totalHours < 48) return '明天自动删除'
-  if (totalHours < 72) return '后天自动删除'
-  return `${Math.ceil(totalHours / 24)} 天后`
+  if (diffMin <= 0) return '即将自动删除'
+  // < 1 小时：精确到分钟
+  if (diffMin < 60) return `${diffMin} 分钟后删除`
+  // < 1 天：X 小时 Y 分（如 "5 小时 23 分后删除"）
+  if (diffMin < 24 * 60) {
+    if (remMin > 0) return `${diffHour} 小时 ${remMin} 分后删除`
+    return `${diffHour} 小时后删除`
+  }
+  // >= 1 天：X 天 Y 小时（如 "1 天 5 小时后删除"）
+  if (remHourOfDay > 0) return `${diffDay} 天 ${remHourOfDay} 小时后删除`
+  return `${diffDay} 天后删除`
 }
 
-const getAutoDeleteUrgency = (deletedAt) => {
-  if (!deletedAt) return false
-  const expireTime = dayjs(deletedAt).add(3, 'day')
-  return expireTime.diff(dayjs(), 'hour') <= 12
+// 工具：剩余小时数（用于颜色分级）
+const getAutoDeleteHours = (autoDeleteAt) => {
+  if (!autoDeleteAt) return Infinity
+  return dayjs(autoDeleteAt).diff(now.value, 'hour', true)
+}
+
+// 颜色分级：< 6h 红 / 6-24h 橙 / 24-72h 黄 / > 72h 灰
+const getAutoDeleteClass = (autoDeleteAt) => {
+  const hours = getAutoDeleteHours(autoDeleteAt)
+  if (hours <= 0) return 'auto-delete-imminent'
+  if (hours <= 6) return 'auto-delete-urgent'
+  if (hours <= 24) return 'auto-delete-warning'
+  if (hours <= 72) return 'auto-delete-normal'
+  return 'auto-delete-safe'
+}
+
+// 紧急时显示时钟图标
+const getAutoDeleteIcon = (autoDeleteAt) => {
+  return getAutoDeleteHours(autoDeleteAt) <= 24
+}
+
+// 准确删除时间（用于 tooltip）—— "06-04 14:30"
+const formatAutoDeleteExact = (autoDeleteAt) => {
+  return dayjs(autoDeleteAt).format('MM-DD HH:mm')
 }
 
 // 监听 Tab 切换
@@ -776,9 +832,64 @@ onMounted(() => {
   font-size: var(--font-size-xs);
 }
 
-.auto-delete-soon {
-  color: var(--color-danger);
+/* 自动删除倒计时 — 4 级颜色（2026-06-03 优化） */
+.auto-delete-imminent,
+.auto-delete-urgent,
+.auto-delete-warning,
+.auto-delete-normal,
+.auto-delete-safe {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;  /* 数字等宽，倒计时不抖 */
+}
+
+.auto-delete-icon {
+  font-size: 12px;
+  animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.auto-delete-none {
+  color: var(--color-text-placeholder);
+}
+
+/* <= 0h：已过期，等待下次清理 */
+.auto-delete-imminent {
+  color: #d73838;
+  font-weight: var(--font-weight-bold);
+  animation: pulse-danger 1.2s ease-in-out infinite;
+}
+
+/* < 6h：紧急 */
+.auto-delete-urgent {
+  color: #e85a4f;
   font-weight: var(--font-weight-semibold);
+}
+
+/* 6-24h：警告 */
+.auto-delete-warning {
+  color: #f59e0b;
+  font-weight: var(--font-weight-medium);
+}
+
+/* 24-72h：正常 */
+.auto-delete-normal {
+  color: var(--color-text-secondary);
+}
+
+/* > 72h：安全（短期不会清理） */
+.auto-delete-safe {
+  color: var(--color-text-placeholder);
+}
+
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
 }
 
 .pagination {
