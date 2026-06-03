@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from typing import Optional
-from datetime import timezone
+from datetime import timezone, timedelta
 from app.models.base import utcnow, BEIJING_TZ
+from app.config import settings
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -252,6 +253,13 @@ async def list_tasks(
     result = await db.execute(query)
     tasks = result.scalars().all()
 
+    # 2026-06-03：为软删除任务附加 auto_delete_at = deleted_at + retention_days
+    # 用 setattr 而非持久化字段，避免与 Celery auto_purge 任务的 retention 逻辑漂移
+    retention = timedelta(days=settings.TRASH_RETENTION_DAYS)
+    for t in tasks:
+        if t.deleted_at is not None:
+            t.auto_delete_at = t.deleted_at + retention
+
     # 获取总数
     count_query = select(func.count(Task.id))
     if filters:
@@ -280,6 +288,8 @@ async def get_task(
         is_admin = current_user.role in ("admin", "leader")
         if not is_admin:
             raise HTTPException(status_code=404, detail="任务不存在")
+        # 计算自动删除时间
+        task.auto_delete_at = task.deleted_at + timedelta(days=settings.TRASH_RETENTION_DAYS)
 
     return task
 
