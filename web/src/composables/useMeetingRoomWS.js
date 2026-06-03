@@ -180,8 +180,14 @@ export function useMeetingRoomWS() {
   function sendHangup() {
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       ws.value.send(JSON.stringify({ type: 'hangup' }))
+      // 不立即 disconnect — 等服务器处理完后主动关闭 WS
+      // 设 5s 超时兜底，防止服务器没收到 hangup 时 WS 永不关闭
+      setTimeout(() => {
+        if (ws.value) disconnect()
+      }, 5000)
+    } else {
+      disconnect()
     }
-    disconnect()
   }
 
   function sendSpeakerClaim(segmentId, memberId, speakerLabel) {
