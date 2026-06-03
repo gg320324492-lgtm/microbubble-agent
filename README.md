@@ -21,6 +21,17 @@
 
 ### 近期新增（按时间倒序）
 
+- **声纹会议系统全面修复（2026-06-03，8 commit）** —
+  - **声纹全链路测试**（`8460016`）：新增 `POST /api/v1/voiceprint/test` 端点 + `VoiceTestDialog` 组件，录音→VAD→ASR→声纹一步验证
+  - **声纹 enrolled API 解析修复**（`cbc503f`）：`Array.isArray(vpData)` → `vpData.members`，修复声纹状态始终显示 0
+  - **参会人自拉取 + avatar schema 补全**（`cbc503f`）：MeetingRoom onMounted 自拉取 participants，`MeetingParticipant` 新增 avatar property
+  - **startVoiceCreate 自动添加当前用户**（`cbc503f`）：声纹创建会议不再产生空参会人列表
+  - **hangup 后处理任务派发**（`086db70` + `5a3b864` + `fddff52`）：WS hangup 时触发 `post_meeting_process`，修复 ProcessingDialog 永远卡住
+  - **batch_polisher 传参修复**（`63a3e82`）：`batch_polisher` 未传入 `_live_loop_inner` 导致 hangup 处理 NameError
+  - **Celery 后处理事件循环隔离**（`00b399b` + `1ed628a` + `095938a`）：独立引擎（NullPool）+ 独立 Redis 连接 + `new_event_loop`，修复 `Event loop is closed` / `Future attached to different loop`
+  - **反幻觉过滤强化**（`1659f55`）：重复句阈值 3→2 + 低置信度短文本过滤（`confidence < 0.1 && len < 10`）+ 新增黑名单（"高级化链""空气机器"）
+  - **ProcessingDialog 改为弹窗**（`87a33b5`）：从全屏改为 500px 弹窗，不再遮挡侧边栏
+  - **头像裸路径修复**：DB 中 2 个 `avatars/xxx` 裸路径修正为完整 MinIO URL
 - **声纹会议 WS 崩溃循环修复（2026-06-02 commit `6bc9687`）** — `meeting_live_ws` 在 BatchPolisher 初始化时访问 `meeting.participants` 触发 SQLAlchemy lazy load，在 async session 中走 sync IO 抛 `MissingGreenlet` → WS 关闭 (1011) → 客户端重连 → 服务端又崩 → 循环（用户看到"重连中"永远不停）。**修复**：传空数组（润色 context 不依赖 participants）
 - **L3 全文精润色 3 项优化（2026-06-02 commit `e01ffdb`）**：
   - L3 `key_points` 回写到 `meeting.key_points`（从 `[{text,ts,kind}]` 提取纯 text 写 `ARRAY(String)` 列）
