@@ -21,6 +21,14 @@
 
 ### 近期新增（按时间倒序）
 
+- **知识库大脑 V2 全面升级（2026-06-03，Phase 1-6）** —
+  - **Phase 1: 混合检索** — BM25 关键词检索（jieba 分词 + BM25L）+ Cross-encoder 重排序（ms-marco-MiniLM）+ 三路并发（向量 + BM25 + 图谱）+ 合并去重 + 归一化
+  - **Phase 2: 知识图谱** — Neo4j 5 社区版 + Neo4jService（CRUD + Cypher 查询）+ KnowledgeGraphBuilder（LLM 实体/关系提取）+ 8 种实体类型 + 8 种关系类型 + 优雅降级
+  - **Phase 3: GraphRAG** — GraphRetriever（实体引导检索 + 多跳推理 + 社区摘要 + 路径发现）
+  - **Phase 4: Agent 集成** — 8 个知识工具（search_knowledge/explore_knowledge_graph/find_knowledge_gaps/auto_research/compare_knowledge/summarize_topic/suggest_research）+ 混合检索集成
+  - **Phase 5: Self-RAG** — SelfRAGChecker（相关性检查 + 检索判断）+ ContextCompressor（去重 + 摘要压缩）
+  - **Phase 6: RAG 评估** — RAGEvaluator（faithfulness/relevancy/precision/recall + DB 持久化）
+  - **关键修复** — BM25 改用 BM25L（修复 2 文档返回 0 分 bug）+ RAG 评估器语法修复
 - **声纹会议系统全面修复（2026-06-03，8 commit）** —
   - **声纹全链路测试**（`8460016`）：新增 `POST /api/v1/voiceprint/test` 端点 + `VoiceTestDialog` 组件，录音→VAD→ASR→声纹一步验证
   - **声纹 enrolled API 解析修复**（`cbc503f`）：`Array.isArray(vpData)` → `vpData.members`，修复声纹状态始终显示 0
