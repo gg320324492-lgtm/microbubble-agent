@@ -79,6 +79,28 @@ if [ ! -f "$PROJECT_DIR/web/dist/index.html" ]; then
     exit 1
 fi
 
+# 2026-06-03 健全性检查：dist 必须包含至少 10 个 JS 文件
+# 背景：commit d619f33 漏 build，删了 23 个旧 dist 但没补新文件，
+# 导致 index.html 引用 index-mZemtrw0.js 但 dist 不存在 → 白屏
+# 这个检查会拦住未来类似的"只删不建" commit
+DIST_JS_COUNT=$(find "$PROJECT_DIR/web/dist/assets" -maxdepth 1 -name 'index-*.js' 2>/dev/null | wc -l)
+if [ "$DIST_JS_COUNT" -lt 1 ]; then
+    log "ERROR: dist/assets/index-*.js 不存在（$DIST_JS_COUNT 个），部署中止"
+    log "可能原因：commit 漏 npm run build，或 build 失败"
+    log "请在本地执行 'cd web && npm run build' 后重新 commit"
+    log "========== 部署中止 =========="
+    exit 1
+fi
+# 二次检查：index.html 引用的 JS 是否在 dist 里
+INDEX_HASH=$(grep -oE 'assets/index-[A-Za-z0-9_-]+\.js' "$PROJECT_DIR/web/dist/index.html" | head -1)
+if [ -n "$INDEX_HASH" ] && [ ! -f "$PROJECT_DIR/web/dist/$INDEX_HASH" ]; then
+    log "ERROR: index.html 引用 $INDEX_HASH，但该文件不在 dist 中"
+    log "dist/assets/ 里实际有: $(ls $PROJECT_DIR/web/dist/assets/ 2>/dev/null | grep -E 'index-.*\.js' | tr '\n' ' ')"
+    log "========== 部署中止 =========="
+    exit 1
+fi
+log "dist 健全性检查通过（$DIST_JS_COUNT 个 index-*.js，index.html 引用 $INDEX_HASH 存在）"
+
 # 同步 Nginx 配置（tunnel.conf → /etc/nginx/conf.d/default.conf）
 # 注意：此步骤在 git pull 之后执行，配置变更下次部署生效
 if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
