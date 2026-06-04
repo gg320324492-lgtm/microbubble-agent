@@ -1,3 +1,16 @@
+// Passive event listener 补丁 — 消除 Chrome 滚动事件性能警告
+// 让 wheel/mousewheel/touchstart/touchmove 默认 passive，同时保留显式 passive:false 的能力
+;(() => {
+  const PASSIVE_EVENTS = new Set(['wheel', 'mousewheel', 'touchstart', 'touchmove'])
+  const orig = EventTarget.prototype.addEventListener
+  EventTarget.prototype.addEventListener = function (type, listener, options) {
+    if (PASSIVE_EVENTS.has(type) && (options === undefined || options === null)) {
+      options = { passive: true }
+    }
+    return orig.call(this, type, listener, options)
+  }
+})()
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
