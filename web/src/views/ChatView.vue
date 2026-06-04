@@ -201,6 +201,7 @@ const selectedImage = ref(null)
 const imagePreviewUrl = ref('')
 const selectedFile = ref(null)
 const isDragging = ref(false)
+let backendMsgCount = 0  // 后端 session 中的消息数（不含前端欢迎消息），用于轮询 after_index
 
 // 加载持久化的消息，或初始化欢迎语
 const DEFAULT_MSG = { role: 'assistant', content: '你好！我是小气，微纳米气泡课题组的AI助手。我可以帮你管理任务、查询会议、回答专业问题。有什么可以帮你的吗？', timestamp: new Date(), type: 'text' }
@@ -315,9 +316,12 @@ const sendMessage = async () => {
     else { res = await axios.post('/api/v1/chat', { message: text, session_id: sessionId }) }
 
     const isBrief = res.data.is_brief === true
-    const bi = messages.value.length
+    const briefIdx = messages.value.length  // 前端数组中简要消息的 index
     messages.value.push({ role: 'assistant', content: res.data.content, timestamp: new Date(), type: 'text', is_brief: isBrief, knowledge_content: res.data.knowledge_content || null })
-    if (isBrief) startDetailPoll(sessionId, bi)
+    // 后端 session 索引 = 前端 index - 1（去掉欢迎消息偏移）
+    const sessionBriefIdx = backendMsgCount  // 简要在后端 session 中的 index
+    backendMsgCount += 2  // user msg + assistant brief
+    if (isBrief) startDetailPoll(sessionId, briefIdx, sessionBriefIdx)
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '发送失败')
     messages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试。', timestamp: new Date(), type: 'text' })
@@ -331,22 +335,23 @@ let detailPollTimer = null
 let detailPollStart = 0
 const DETAIL_TIMEOUT = 30000 // 30s 超时
 
-const startDetailPoll = (sid, briefIdx) => {
+const startDetailPoll = (sid, frontendIdx, sessionIdx) => {
   stopDetailPoll()
   detailPollStart = Date.now()
   detailPollTimer = setInterval(async () => {
     // 超时兜底：去掉 is_brief 标记，停止轮询
     if (Date.now() - detailPollStart > DETAIL_TIMEOUT) {
-      const brief = messages.value[briefIdx]
+      const brief = messages.value[frontendIdx]
       if (brief) brief.is_brief = false
       stopDetailPoll(); return
     }
     try {
-      const r = await axios.get(`/api/v1/chat/history/${sid}?after_index=${briefIdx}`)
+      // 用后端 session 索引轮询
+      const r = await axios.get(`/api/v1/chat/history/${sid}?after_index=${sessionIdx}`)
       if (r.data.messages?.length) {
         const detail = r.data.messages.find(m => m.role === 'assistant' && !m.is_brief)
         if (detail) {
-          const brief = messages.value[briefIdx]
+          const brief = messages.value[frontendIdx]
           if (brief) { brief.content = detail.content; brief.is_brief = false }
           scrollToBottom(); stopDetailPoll()
         }
@@ -361,6 +366,7 @@ const expandDetail = () => scrollToBottom()
 const clearChat = () => {
   messages.value = [{ role: 'assistant', content: '对话已清空，有什么可以帮你的吗？', timestamp: new Date(), type: 'text' }]
   localStorage.removeItem(MESSAGES_KEY)
+  backendMsgCount = 0
   // 生成新 sessionId
   const newId = `user_${Date.now()}`
   sessionId = newId
