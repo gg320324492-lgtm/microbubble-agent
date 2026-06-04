@@ -181,18 +181,38 @@ const textareaRef = ref(null)
 const inputText = ref('')
 const loading = ref(false)
 const voiceMode = ref(false)
-const sessionId = `user_${Date.now()}`
+// 持久化 sessionId — 同一会话跨页面保留
+const SESSION_KEY = 'chat_session_id'
+const MESSAGES_KEY = 'chat_messages'
+const savedSessionId = localStorage.getItem(SESSION_KEY)
+let sessionId = savedSessionId || `user_${Date.now()}`
+if (!savedSessionId) localStorage.setItem(SESSION_KEY, sessionId)
 const selectedImage = ref(null)
 const imagePreviewUrl = ref('')
 const selectedFile = ref(null)
 const isDragging = ref(false)
 
-const messages = ref([{
-  role: 'assistant',
-  content: '你好！我是小气，微纳米气泡课题组的AI助手。我可以帮你管理任务、查询会议、回答专业问题。有什么可以帮你的吗？',
-  timestamp: new Date(),
-  type: 'text',
-}])
+// 加载持久化的消息，或初始化欢迎语
+const DEFAULT_MSG = { role: 'assistant', content: '你好！我是小气，微纳米气泡课题组的AI助手。我可以帮你管理任务、查询会议、回答专业问题。有什么可以帮你的吗？', timestamp: new Date(), type: 'text' }
+const loadMessages = () => {
+  try {
+    const saved = localStorage.getItem(MESSAGES_KEY)
+    if (saved) {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch {}
+  return [{ ...DEFAULT_MSG }]
+}
+const messages = ref(loadMessages())
+
+// 持久化消息到 localStorage（限制 200 条避免超限）
+watch(messages, (val) => {
+  try {
+    const trimmed = val.length > 200 ? val.slice(-200) : val
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(trimmed))
+  } catch {}
+}, { deep: true })
 
 const quickActions = [
   { icon: '📋', label: '我的任务', text: '查看我的任务' },
@@ -314,7 +334,14 @@ const stopDetailPoll = () => { if (detailPollTimer) { clearInterval(detailPollTi
 const expandDetail = () => scrollToBottom()
 
 // --- 其他 ---
-const clearChat = () => { messages.value = [{ role: 'assistant', content: '对话已清空，有什么可以帮你的吗？', timestamp: new Date(), type: 'text' }] }
+const clearChat = () => {
+  messages.value = [{ role: 'assistant', content: '对话已清空，有什么可以帮你的吗？', timestamp: new Date(), type: 'text' }]
+  localStorage.removeItem(MESSAGES_KEY)
+  // 生成新 sessionId
+  const newId = `user_${Date.now()}`
+  sessionId = newId
+  localStorage.setItem(SESSION_KEY, newId)
+}
 const toggleVoiceMode = () => { voiceMode.value = !voiceMode.value }
 const onRecordStart = () => {}
 const onRecordStop = async (blob) => { /* 保持原有语音逻辑 */ }
