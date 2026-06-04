@@ -315,23 +315,7 @@
       </template>
     </el-dialog>
 
-    <!-- 实时转写对话框 -->
-    <el-dialog v-model="showTranscriptDialog" title="会议实时转写" :width="isMobile ? '95vw' : '800px'" :close-on-click-modal="false" top="5vh">
-      <div v-if="currentMeeting" class="transcript-dialog-content">
-        <div class="meeting-info-bar">
-          <h3>{{ currentMeeting.title }}</h3>
-          <el-tag :type="getStatusType(currentMeeting.status)">
-            {{ getStatusLabel(currentMeeting.status) }}
-          </el-tag>
-        </div>
-        <LiveTranscript
-          ref="liveTranscriptRef"
-          :meeting-id="currentMeeting.id"
-          @transcript-complete="onTranscriptComplete"
-          style="height: 500px"
-        />
-      </div>
-    </el-dialog>
+    <!-- 实时转写对话框（已废弃，录音机模式无需实时转写） -->
 
     <!-- 会议纪要对话框 -->
     <el-dialog v-model="showMinutesDialog" title="会议纪要" :width="isMobile ? '90vw' : '600px'" top="5vh">
@@ -406,7 +390,7 @@ import { formatDateTime } from '@/utils/format'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
-import LiveTranscript from '@/components/LiveTranscript.vue'
+// LiveTranscript 已删除（录音机模式无需实时转写）
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
