@@ -1,4 +1,4 @@
-"""文件内容提取服务 — 支持 PDF/Word/Excel/TXT/Markdown"""
+"""文件内容提取服务 — 支持 PDF/Word/Excel/PPT/TXT/Markdown"""
 
 import asyncio
 import io
@@ -10,7 +10,7 @@ logger = logging.getLogger("microbubble.file_parser")
 class FileParserService:
     """从各类文件中提取文本和图片"""
 
-    SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.txt', '.md'}
+    SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.md'}
 
     async def extract_content(self, file_data: bytes, filename: str, content_type: str) -> dict:
         """提取文件文本+图片，返回 {text, images: {placeholder: bytes}}"""
@@ -24,6 +24,8 @@ class FileParserService:
             return {"text": await self._parse_docx(file_data), "images": {}}
         elif ext in ('.xlsx',) or 'spreadsheetml' in content_type:
             return {"text": await self._parse_xlsx(file_data), "images": {}}
+        elif ext in ('.pptx',) or 'presentationml' in content_type:
+            return {"text": await self._parse_pptx(file_data), "images": {}}
         elif ext in ('.txt', '.md') or content_type.startswith('text/'):
             return {"text": file_data.decode('utf-8', errors='replace'), "images": {}}
         else:
@@ -107,6 +109,31 @@ class FileParserService:
                     row_text = ' '.join(str(c) for c in row if c is not None)
                     if row_text.strip():
                         texts.append(row_text)
+            return '\n'.join(texts)
+        return await asyncio.to_thread(_extract)
+
+    async def _parse_pptx(self, data: bytes) -> str:
+        """解析 PPT 文件"""
+        def _extract():
+            from pptx import Presentation
+            prs = Presentation(io.BytesIO(data))
+            texts = []
+            for slide_num, slide in enumerate(prs.slides, 1):
+                slide_texts = []
+                for shape in slide.shapes:
+                    if shape.has_text_frame:
+                        for para in shape.text_frame.paragraphs:
+                            text = para.text.strip()
+                            if text:
+                                slide_texts.append(text)
+                    if shape.has_table:
+                        for row in shape.table.rows:
+                            row_text = ' '.join(cell.text.strip() for cell in row.cells if cell.text.strip())
+                            if row_text:
+                                slide_texts.append(row_text)
+                if slide_texts:
+                    texts.append(f"--- 第{slide_num}页 ---")
+                    texts.extend(slide_texts)
             return '\n'.join(texts)
         return await asyncio.to_thread(_extract)
 
