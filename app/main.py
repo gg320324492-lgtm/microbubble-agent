@@ -109,6 +109,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1", tags=["认证"])
 app.include_router(chat.router, prefix="/api/v1", tags=["对话"])
 app.include_router(task.router, prefix="/api/v1", tags=["任务"])
+app.include_router(meeting_recording.router, prefix="/api/v1", tags=["录音会议"])  # 必须在 meeting.router 之前，否则 /meetings/start-recording 会被 /meetings/{meeting_id} 拦截
 app.include_router(meeting.router, prefix="/api/v1", tags=["会议"])
 app.include_router(member.router, prefix="/api/v1", tags=["成员"])
 app.include_router(project.router, prefix="/api/v1", tags=["项目"])
@@ -121,7 +122,6 @@ app.include_router(memory.router, prefix="/api/v1", tags=["长期记忆"])
 app.include_router(voiceprint.router, prefix="/api/v1", tags=["声纹识别"])
 app.include_router(meeting_progress.router, prefix="/api/v1", tags=["会议进度"])
 app.include_router(meeting_template.router, prefix="/api/v1", tags=["会议模板"])
-app.include_router(meeting_recording.router, prefix="/api/v1", tags=["录音会议"])
 
 
 @app.get("/")
