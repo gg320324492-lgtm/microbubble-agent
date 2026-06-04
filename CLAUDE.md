@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-04 最新进展**：前端优化（ECharts 5.6.0 升级 + passive event listener 补丁 + Element Plus 废弃修复）+ 对话记录持久化（localStorage）+ 知识库支持 PPT 上传 + 对话重复回复修复。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-04) 和 [README.md](README.md#当前状态2026-06-04)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-04 最新进展**：声纹会议系统重构（录音机+6阶段离线处理）+ 前端优化 + 对话持久化 + PPT 支持。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-04) 和 [README.md](README.md#当前状态2026-06-04)。
 
 ## 前端设计系统
 
@@ -85,7 +85,7 @@
 | `app/services/meeting_analysis_service.py` | 会议 AI 分析（发言者检测+格式识别+结构化分析+发言人统计+标题生成）|
 | `app/services/voiceprint_service.py` | 声纹识别（3D-Speaker 嵌入提取+pgvector 匹配+录入）|
 | `app/voice/vad.py` | silero-vad 语音活动检测 |
-| `app/voice/pipeline.py` | VAD → 声纹 → ASR 实时流水线 |
+| `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
 
 ## 开发注意事项
 
