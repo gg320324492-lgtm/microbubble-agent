@@ -156,5 +156,22 @@ class AudioProcessor:
         segments = self.segment_audio(audio_pcm, SAMPLE_RATE)
         return audio_pcm, segments, SAMPLE_RATE
 
+    @staticmethod
+    def numpy_to_wav_bytes(audio: np.ndarray, sample_rate: int = SAMPLE_RATE) -> bytes:
+        """float32 PCM numpy → WAV bytes（供 ASR 使用）"""
+        import wave
+        import io
+
+        # float32 → int16
+        pcm_int16 = (audio * 32768).clip(-32768, 32767).astype(np.int16)
+
+        buf = io.BytesIO()
+        with wave.open(buf, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(sample_rate)
+            wf.writeframes(pcm_int16.tobytes())
+        return buf.getvalue()
+
 
 audio_processor = AudioProcessor()

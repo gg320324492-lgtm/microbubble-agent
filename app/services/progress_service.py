@@ -25,14 +25,15 @@ TOTAL_STAGES = 6  # 不含 done
 
 
 class ProgressStage(str, Enum):
-    EXTRACTING_TRANSCRIPT = "extracting_transcript"  # 0
-    POLISHING_TRANSCRIPT = "polishing_transcript"    # 1  (2026-06-02 新增：L3 全文精润色)
-    IDENTIFYING_SPEAKERS = "identifying_speakers"    # 2
-    GENERATING_TITLE = "generating_title"            # 3
-    GENERATING_MINUTES = "generating_minutes"        # 4
-    CREATING_TASKS = "creating_tasks"                # 5
-    LINKING_HISTORY = "linking_history"              # 6
-    DONE = "done"                                    # 7
+    # 2026-06-04 重构：录音机模式 6 阶段
+    DOWNLOADING_AUDIO = "downloading_audio"       # 0: 下载+转码+VAD 分段
+    TRANSCRIBING = "transcribing"                  # 1: ASR 转写
+    IDENTIFYING_SPEAKERS = "identifying_speakers"  # 2: 声纹识别
+    GENERATING_TITLE = "generating_title"          # 3 (兼容旧进度条)
+    GENERATING_ANALYSIS = "generating_analysis"    # 3: AI 分析
+    CREATING_TASKS = "creating_tasks"              # 4: 创建任务
+    STORING_RESULTS = "storing_results"            # 5: 存储结果
+    DONE = "done"                                  # 6: 完成
 
 
 STAGE_ORDER = [s.value for s in ProgressStage]
@@ -52,7 +53,7 @@ async def init_progress(meeting_id: int) -> None:
     now = int(time.time())
     key = _key(meeting_id)
     await r.hset(key, mapping={
-        "stage": ProgressStage.EXTRACTING_TRANSCRIPT.value,
+        "stage": ProgressStage.DOWNLOADING_AUDIO.value,
         "detail": "准备开始处理",
         "percent": 0.0,
         "status": "running",

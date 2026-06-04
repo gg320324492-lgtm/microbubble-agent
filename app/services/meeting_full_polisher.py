@@ -145,7 +145,7 @@ async def run_full_polish_pipeline(
 
     # 1. 推进度
     try:
-        await update_progress(meeting_id, ProgressStage.POLISHING_TRANSCRIPT, "全文润色中")
+        await update_progress(meeting_id, ProgressStage.TRANSCRIBING, "全文润色中")
     except Exception as e:
         logger.warning(f"L3 推 POLISHING_TRANSCRIPT 进度失败: {e}")
 
@@ -247,7 +247,7 @@ async def run_full_polish_pipeline(
     # 7. 推进度完成
     try:
         from app.services.progress_service import ProgressStage as _PS
-        await update_progress(meeting_id, _PS.GENERATING_MINUTES, "全文润色完成")
+        await update_progress(meeting_id, _PS.GENERATING_ANALYSIS, "全文润色完成")
     except Exception as e:
         logger.warning(f"L3 推 GENERATING_MINUTES 进度失败: {e}")
 
