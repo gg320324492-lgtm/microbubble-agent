@@ -112,13 +112,28 @@ async function toggleRecord() {
 }
 
 async function startRecord() {
+  // 1. 获取麦克风权限（单独 try/catch，错误信息精确）
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: { sampleRate: { ideal: 16000 }, channelCount: 1, echoCancellation: true, noiseSuppression: true }
     })
+  } catch (e) {
+    if (e.name === 'NotAllowedError') {
+      ElMessage.error('请允许麦克风权限后再试')
+    } else if (e.name === 'NotFoundError') {
+      ElMessage.error('未检测到麦克风设备')
+    } else {
+      ElMessage.error('麦克风访问失败: ' + e.message)
+    }
+    return
+  }
 
-    // 音量检测
-    audioContext = new AudioContext({ sampleRate: 16000 })
+  // 2. 音量可视化（AudioContext 失败不影响录音）
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 })
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume()
+    }
     const source = audioContext.createMediaStreamSource(mediaStream)
     const analyser = audioContext.createAnalyser()
     analyser.fftSize = 256
@@ -133,9 +148,17 @@ async function startRecord() {
       requestAnimationFrame(updateLevel)
     }
     updateLevel()
+  } catch (e) {
+    console.warn('AudioContext 初始化失败（不影响录音）:', e)
+    currentLevel.value = 0
+  }
 
-    // 录音（用 MediaRecorder 收集 webm）
-    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' })
+  // 3. 录音（支持多格式兜底）
+  const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+    ? 'audio/webm'
+    : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '')
+  try {
+    mediaRecorder = new MediaRecorder(mediaStream, mimeType ? { mimeType } : undefined)
     audioChunks = []
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) audioChunks.push(e.data)
@@ -152,7 +175,8 @@ async function startRecord() {
       }
     }, 1000)
   } catch (e) {
-    ElMessage.error('麦克风权限被拒绝')
+    ElMessage.error('录音启动失败: ' + e.message)
+    stopRecord()
   }
 }
 
