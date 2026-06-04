@@ -1,10 +1,11 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-04** — 声纹会议系统重构（录音机 + 离线后处理）+ 前端优化 + 对话持久化 + PPT 支持
+> 最后更新: **2026-06-04** — 听会功能路由修复 + ProcessingDialog 阶段同步
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-04）
+- [听会功能路由修复+ProcessingDialog阶段同步](#听会功能路由修复processingdialog阶段同步2026-06-04)（路由冲突 + 阶段不匹配）
 - [前端优化+对话持久化+PPT支持](#前端优化对话持久化ppt支持2026-06-047-commit)（7 commit — ECharts 升级 + passive 补丁 + Element Plus 修复 + 对话持久化 + PPT + 重复回复修复）
 
 ### 2026-06-03
@@ -13,6 +14,27 @@
 - [Webhook 性能修复](#webhook-性能修复2026-06-03-commit-7ec6ce0)（commit `7ec6ce0`，0.001s 响应）
 - [垃圾桶系统全面修复](#垃圾桶系统全面修复2026-06-034-commit-链)（4 commit 链）
 - [项目当前状态速查](#项目当前状态速查2026-06-03)
+
+---
+
+## 听会功能路由修复+ProcessingDialog阶段同步（2026-06-04）
+
+**问题**：点击"开始听会"后录音正常，但点击"结束听会"后不会触发自动分析。后端返回 405 Method Not Allowed。
+
+**根因分析**：
+1. **路由冲突**：`meeting.py` 的 `/meetings/{meeting_id}` 路由先注册，把 `/meetings/start-recording` 当作 `meeting_id = "start-recording"` 匹配，但该路由只接受 GET，所以 POST 返回 405
+2. **ProcessingDialog 阶段不匹配**：前端用的是旧版阶段名（`extracting_transcript`、`polishing_transcript` 等），与后端 `ProgressStage`（`downloading_audio`、`transcribing` 等）完全对不上，导致进度条卡住
+
+**修复清单**：
+
+| 文件 | 修复内容 |
+|------|----------|
+| `app/main.py` | `meeting_recording.router` 注册顺序移到 `meeting.router` 之前 |
+| `web/src/components/ProcessingDialog.vue` | 阶段列表改为与后端一致的 6 阶段 |
+
+**关键教训**：
+- FastAPI 按注册顺序匹配路由，固定路径必须在参数路径之前注册
+- ProcessingDialog 阶段必须与后端 ProgressStage 枚举保持同步
 
 ---
 
@@ -70,9 +92,9 @@
 
 | 维度 | 状态 | 最近更新 |
 |------|------|----------|
-| 后端 | Phase 1-6 + 声纹系统 5 修复 + 反幻觉七重过滤 + 垃圾桶系统 4 bug 全修 + PPT 文件解析 | 2026-06-04 |
+| 后端 | Phase 1-6 + 声纹系统 5 修复 + 反幻觉七重过滤 + 垃圾桶系统 4 bug 全修 + PPT 文件解析 + 听会路由修复 | 2026-06-04 |
 | 知识库 | 自主进化知识大脑（实体图谱+假设+量化推理）+ PPT 上传支持 | 2026-06-04 |
-| 会议系统 | 声纹会议 wave 3b + 微信 enroll_voice + 192 维修正 + Celery tasks 修复 | 2026-06-02 |
+| 会议系统 | 录音机+离线后处理模式 + 路由冲突修复 + ProcessingDialog 阶段同步 | 2026-06-04 |
 | 任务管理 | 软删除/垃圾桶 + 3 天后自动清理（1h 调度）+ 精准倒计时双行显示 + 5 级颜色 | 2026-06-03 |
 | 前端 | ECharts 5.6.0 + passive 补丁 + Element Plus 废弃修复 + 对话持久化 + 重复回复修复 | 2026-06-04 |
 | 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取（130s→5s）+ webhook 多线程（0.001s 响应） | 2026-06-03 |

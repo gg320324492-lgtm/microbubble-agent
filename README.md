@@ -21,6 +21,9 @@
 
 ### 近期新增（按时间倒序）
 
+- **听会功能路由修复 + ProcessingDialog 阶段同步（2026-06-04）** —
+  - **路由冲突修复**：`meeting_recording.router` 必须在 `meeting.router` 之前注册，否则 `/meetings/start-recording` 会被 `/meetings/{meeting_id}` 拦截返回 405
+  - **ProcessingDialog 阶段同步**：前端阶段列表与后端 `ProgressStage` 完全不匹配（旧版 `extracting_transcript` 等），改为与后端一致的 6 阶段（下载音频 → 语音转写 → 识别发言人 → AI 分析 → 创建任务 → 保存结果）
 - **声纹会议系统重构 — 录音机 + 离线后处理（2026-06-04）** —
   - **完全替代**实时 WS 流式处理，改为「录音机 + 离线后处理」模式
   - **零配置开录** — 点击「开始听会」即录，无需填写任何信息
