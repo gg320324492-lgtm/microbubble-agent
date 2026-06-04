@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-03 最新进展**：声纹会议系统全面修复（8 commit — enrolled API + 参会人 + hangup 后处理 + 反幻觉 + Celery 事件循环）+ 垃圾桶系统 4 bug 全修 + 精准倒计时双行显示 + Webhook 性能 0.001s 响应。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-03) 和 [README.md](README.md#当前状态2026-06-03)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-04 最新进展**：前端优化（ECharts 5.6.0 升级 + passive event listener 补丁 + Element Plus 废弃修复）+ 对话记录持久化（localStorage）+ 知识库支持 PPT 上传 + 对话重复回复修复。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-04) 和 [README.md](README.md#当前状态2026-06-04)。
 
 ## 前端设计系统
 
@@ -71,7 +71,7 @@
 | `app/services/memory_service.py` | 长期记忆 CRUD + 语义搜索 + LLM 提取 |
 | `app/services/search_service.py` | 联网搜索（搜狗+必应双引擎） |
 | `app/services/embedding_service.py` | 向量嵌入（text2vec-base-chinese） |
-| `app/services/file_parser_service.py` | 文件内容提取（PDF/Word/Excel） |
+| `app/services/file_parser_service.py` | 文件内容提取（PDF/Word/Excel/PPT） |
 | `app/services/llm_analysis_service.py` | LLM 内容分析（动态分类+标签+摘要+核心概念） |
 | `app/services/knowledge_graph_service.py` | 知识图谱服务（自动关联+BFS 遍历+动态分类+标签云+统计） |
 | `app/services/knowledge_qa_service.py` | RAG 问答引擎（检索+阈值+LLM 合成+来源引用） |
