@@ -64,8 +64,6 @@
             <!-- 文字 -->
             <div v-else-if="msg.type !== 'voice'" :class="['msg-bubble', msg.role === 'user' ? 'bubble-user' : 'bubble-bot']">
               <div v-html="renderMD(msg.content)" />
-              <!-- 简要展开 -->
-              <div v-if="msg.is_brief" class="expand-bar" @click="expandDetail(idx)">查看详情 <el-icon><ArrowDown /></el-icon></div>
               <!-- 知识库按钮 -->
               <div v-if="msg.knowledge_content" class="save-kb" @click="saveToKnowledge(msg)">📚 存入知识库</div>
             </div>
@@ -315,13 +313,9 @@ const sendMessage = async () => {
     else if (img) { const fd = new FormData(); fd.append('message', text||'请描述这张图片'); fd.append('session_id', sessionId); fd.append('image', img); res = await axios.post('/api/v1/chat/image', fd) }
     else { res = await axios.post('/api/v1/chat', { message: text, session_id: sessionId }) }
 
-    const isBrief = res.data.is_brief === true
-    const briefIdx = messages.value.length  // 前端数组中简要消息的 index
-    messages.value.push({ role: 'assistant', content: res.data.content, timestamp: new Date(), type: 'text', is_brief: isBrief, knowledge_content: res.data.knowledge_content || null })
-    // 后端 session 索引 = 前端 index - 1（去掉欢迎消息偏移）
-    const sessionBriefIdx = backendMsgCount  // 简要在后端 session 中的 index
-    backendMsgCount += 2  // user msg + assistant brief
-    if (isBrief) startDetailPoll(sessionId, briefIdx, sessionBriefIdx)
+    // 直接显示回复，不做简要/详细轮询替换
+    messages.value.push({ role: 'assistant', content: res.data.content, timestamp: new Date(), type: 'text', knowledge_content: res.data.knowledge_content || null })
+    backendMsgCount += 2  // user msg + assistant reply
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '发送失败')
     messages.value.push({ role: 'assistant', content: '抱歉，我暂时无法回复，请稍后再试。', timestamp: new Date(), type: 'text' })
