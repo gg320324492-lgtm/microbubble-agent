@@ -64,22 +64,21 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const stages = [
-  { key: 'extracting_transcript', label: '提取转录' },
-  { key: 'polishing_transcript', label: '全文润色' },  // 2026-06-02 L3
+  { key: 'downloading_audio', label: '下载音频' },
+  { key: 'transcribing', label: '语音转写' },
   { key: 'identifying_speakers', label: '识别发言人' },
-  { key: 'generating_title', label: '生成标题' },
-  { key: 'generating_minutes', label: '生成纪要' },
+  { key: 'generating_analysis', label: 'AI 分析' },
   { key: 'creating_tasks', label: '创建任务' },
+  { key: 'storing_results', label: '保存结果' },
 ]
 
 const STAGE_ORDER = [
-  'extracting_transcript',
-  'polishing_transcript',  // 2026-06-02 L3
+  'downloading_audio',
+  'transcribing',
   'identifying_speakers',
-  'generating_title',
-  'generating_minutes',
+  'generating_analysis',
   'creating_tasks',
-  'linking_history',
+  'storing_results',
   'done',
 ]
 
