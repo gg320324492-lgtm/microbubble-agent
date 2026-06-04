@@ -133,6 +133,24 @@ class FileService:
         """删除文件"""
         self.client.remove_object(self.bucket, object_name)
 
+    async def download_file(self, object_name: str) -> bytes:
+        """下载文件内容
+
+        Args:
+            object_name: MinIO 中的对象路径
+
+        Returns:
+            文件二进制数据
+        """
+        def _download():
+            response = self.client.get_object(self.bucket, object_name)
+            try:
+                return response.read()
+            finally:
+                response.close()
+                response.release_conn()
+        return await asyncio.to_thread(_download)
+
     async def list_objects(self, prefix: str = "") -> list:
         """列出指定前缀下的对象"""
         def _list():
