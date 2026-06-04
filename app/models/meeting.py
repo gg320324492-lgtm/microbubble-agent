@@ -35,7 +35,13 @@ class Meeting(Base, TimestampMixin):
     speaker_stats = Column(JSON)  # 发言者统计 [{"name":"...", "turn_count":N, ...}]
 
     # 状态
-    status = Column(String(20), default="scheduled")  # scheduled/recording/completed
+    status = Column(String(20), default="scheduled")  # scheduled/recording/processing/completed/error
+
+    # 录音机模式（2026-06-04 重构）
+    audio_url = Column(String(500), nullable=True)           # MinIO 录音路径
+    audio_duration = Column(Integer, nullable=True)           # 录音时长（秒）
+    recording_started_at = Column(DateTime, nullable=True)    # 开始听会时间
+    recording_ended_at = Column(DateTime, nullable=True)      # 结束听会时间
 
     # Wave 2b: 音频存档
     audio_archive_url = Column(String(500), nullable=True)
