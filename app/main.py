@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.config import settings
-from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template
+from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording
 from app.core.database import engine, Base
 from app.core.redis import close_redis
 
@@ -121,6 +121,7 @@ app.include_router(memory.router, prefix="/api/v1", tags=["长期记忆"])
 app.include_router(voiceprint.router, prefix="/api/v1", tags=["声纹识别"])
 app.include_router(meeting_progress.router, prefix="/api/v1", tags=["会议进度"])
 app.include_router(meeting_template.router, prefix="/api/v1", tags=["会议模板"])
+app.include_router(meeting_recording.router, prefix="/api/v1", tags=["录音会议"])
 
 
 @app.get("/")
