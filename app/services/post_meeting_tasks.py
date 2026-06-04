@@ -1,18 +1,23 @@
-"""会议挂断后处理任务
+"""会议后处理任务 — 6 阶段离线处理
 
 阶段：
-0. extracting_transcript - 确认转录完整性
-1. identifying_speakers - 重跑声纹识别或确认 speaker_mapping
-2. generating_title - meeting_analysis.generate_title
-3. generating_minutes - meeting_analysis.analyze_transcript
-4. creating_tasks - meeting_service._auto_create_task_from_meeting
-5. linking_history - 第三波启用（本波跳过）
-6. done
+0. downloading_audio — 下载音频 + ffmpeg 转 16kHz WAV + VAD 分段
+1. transcribing — faster-whisper ASR 转写
+2. identifying_speakers — 3D-Speaker 声纹识别 + 发言人标注
+3. generating_analysis — Claude Sonnet 分析（标题+摘要+要点+决议）
+4. creating_tasks — 从决议/要点自动创建任务
+5. storing_results — 存储结果到 DB
+6. done — 完成通知
 
 每步：progress_service.update_progress，失败重试 1 次。
 """
+
 import asyncio
 import logging
+import io
+import wave
+
+import numpy as np
 
 from app.core.celery import celery_app
 from app.services.progress_service import ProgressStage, update_progress
@@ -20,13 +25,24 @@ from app.services.progress_service import ProgressStage, update_progress
 logger = logging.getLogger("microbubble.post_meeting")
 
 
+def _numpy_to_wav_bytes(audio: np.ndarray, sample_rate: int = 16000) -> bytes:
+    """float32 PCM numpy → WAV bytes"""
+    pcm_int16 = (audio * 32768).clip(-32768, 32767).astype(np.int16)
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_int16.tobytes())
+    return buf.getvalue()
+
+
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
 def post_meeting_process(self, meeting_id: int):
-    """Celery 任务：5 阶段后处理"""
-    logger.info(f"开始挂断后处理: meeting_id={meeting_id}")
+    """Celery 任务：6 阶段离线后处理"""
+    logger.info(f"开始后处理: meeting_id={meeting_id}")
 
     async def _run():
-        # 创建独立引擎和 Redis 连接，避免 Celery worker 事件循环与主 app 连接池冲突
         import redis.asyncio as aioredis
         from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
         from sqlalchemy.pool import NullPool
@@ -38,6 +54,7 @@ def post_meeting_process(self, meeting_id: int):
         )
         redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
         async with session_factory() as db:
             from app.models.meeting import Meeting
             from sqlalchemy import select
@@ -47,51 +64,130 @@ def post_meeting_process(self, meeting_id: int):
                 logger.error(f"会议不存在: {meeting_id}")
                 return
 
-            # 阶段 0
-            await update_progress(meeting_id, ProgressStage.EXTRACTING_TRANSCRIPT, detail="确认转录完整性", redis_override=redis_client)
-            transcript = meeting.transcript or []
-            if not transcript:
-                logger.warning(f"会议转录为空: {meeting_id}")
+            try:
+                # ===== 阶段 0: 下载音频 + VAD 分段 =====
+                await update_progress(meeting_id, ProgressStage.DOWNLOADING_AUDIO, detail="下载音频并转码", redis_override=redis_client)
+                from app.services.audio_processor import audio_processor
+                from app.services.file_service import file_service
 
-            # 阶段 1
-            await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
-            await asyncio.sleep(0.5)  # 占位
+                audio_data = await file_service.download_file(meeting.audio_url)
+                if not audio_data:
+                    raise ValueError("音频文件下载失败")
 
-            # 阶段 2
-            await update_progress(meeting_id, ProgressStage.GENERATING_TITLE, detail="生成会议标题", redis_override=redis_client)
-            from app.services.meeting_analysis_service import meeting_analysis
-            from app.services.meeting_service import MeetingService
-            svc = MeetingService(db)
-            transcript_text = svc._transcript_to_text(transcript)
-            if not meeting.title or meeting.title == "新会议":
-                meeting.title = await meeting_analysis.generate_title(transcript_text)
+                audio_pcm, segments, sample_rate = await audio_processor.convert_and_segment(audio_data)
+                logger.info(f"音频转码+VAD 分段完成: {len(segments)} 段, 总时长 {len(audio_pcm)/sample_rate:.1f}s")
+
+                # ===== 阶段 1: ASR 转写 =====
+                await update_progress(meeting_id, ProgressStage.TRANSCRIBING, detail=f"转写 {len(segments)} 个语音段", redis_override=redis_client)
+                from app.voice.asr import asr_service
+
+                transcript_segments = []
+                for i, seg in enumerate(segments):
+                    wav_bytes = _numpy_to_wav_bytes(seg.audio, sample_rate)
+                    result = await asr_service.transcribe(wav_bytes, language="zh", skip_convert=True)
+                    text = result.get("text", "").strip()
+                    if text:
+                        transcript_segments.append({
+                            "text": text,
+                            "start": round(seg.start_time, 2),
+                            "end": round(seg.end_time, 2),
+                            "speaker_label": f"speaker_{i}",
+                        })
+                    logger.debug(f"  段 {i+1}/{len(segments)}: [{seg.start_time:.1f}-{seg.end_time:.1f}s] {text[:50]}")
+
+                logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
+
+                # ===== 阶段 2: 声纹识别 =====
+                await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
+                from app.services.voiceprint_service import VoiceprintService
+
+                vp_service = VoiceprintService()
+                speaker_mapping = {}
+
+                for seg in transcript_segments:
+                    start_sample = int(seg["start"] * sample_rate)
+                    end_sample = int(seg["end"] * sample_rate)
+                    seg_audio = audio_pcm[start_sample:end_sample]
+
+                    if len(seg_audio) < sample_rate * 0.5:
+                        continue
+
+                    name, member_id, confidence = await vp_service.identify_speaker(db, seg_audio)
+                    if name and confidence > 0.55:
+                        seg["speaker"] = name
+                        speaker_mapping[seg["speaker_label"]] = name
+                    else:
+                        seg["speaker"] = f"发言人{seg['speaker_label'].split('_')[-1]}"
+
+                # 统一未识别的发言人标签
+                unknown_labels = sorted(set(
+                    seg["speaker"] for seg in transcript_segments
+                    if seg["speaker"].startswith("发言人")
+                ))
+                label_map = {old: f"发言人{chr(65+i)}" for i, old in enumerate(unknown_labels)}
+                for seg in transcript_segments:
+                    if seg["speaker"] in label_map:
+                        seg["speaker"] = label_map[seg["speaker"]]
+
+                logger.info(f"声纹识别完成: {len(speaker_mapping)} 人已识别, {len(label_map)} 人未知")
+
+                # ===== 阶段 3: AI 分析 =====
+                await update_progress(meeting_id, ProgressStage.GENERATING_ANALYSIS, detail="AI 分析会议内容", redis_override=redis_client)
+                from app.services.meeting_analysis_service import meeting_analysis
+
+                transcript_text = "\n".join(
+                    f"{seg.get('speaker', '未知')}: {seg['text']}"
+                    for seg in transcript_segments
+                )
+
+                # 生成标题
+                if not meeting.title or meeting.title.startswith("听会"):
+                    meeting.title = await meeting_analysis.generate_title(transcript_text)
+
+                # 分析摘要/要点/决议
+                analysis = await meeting_analysis.analyze_transcript(
+                    transcript_text, speaker_mapping=speaker_mapping
+                )
+                meeting.summary = analysis.get("summary")
+                meeting.key_points = analysis.get("key_points", [])
+                meeting.decisions = analysis.get("decisions", [])
+
+                # 保存转写结果
+                meeting.transcript = transcript_segments
+                meeting.speaker_mapping = speaker_mapping
+
+                # ===== 阶段 4: 自动创建任务 =====
+                await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
+                from app.services.meeting_service import MeetingService
+                svc = MeetingService(db)
+
+                for decision in analysis.get("decisions", []):
+                    await svc._auto_create_task_from_meeting(meeting, decision)
+
+                # ===== 阶段 5: 存储结果 =====
+                await update_progress(meeting_id, ProgressStage.STORING_RESULTS, detail="保存结果", redis_override=redis_client)
+                meeting.status = "completed"
                 await db.commit()
 
-            # 阶段 3
-            await update_progress(meeting_id, ProgressStage.GENERATING_MINUTES, detail="生成会议纪要", redis_override=redis_client)
-            speaker_mapping = meeting.speaker_mapping or None
-            analysis = await meeting_analysis.analyze_transcript(transcript_text, speaker_mapping=speaker_mapping)
-            meeting.summary = analysis.get("summary")
-            meeting.key_points = analysis.get("key_points", [])
-            meeting.decisions = analysis.get("decisions", [])
-            await db.commit()
+                # ===== 阶段 6: 完成 =====
+                await update_progress(meeting_id, ProgressStage.DONE, detail="处理完成", redis_override=redis_client)
+                logger.info(f"后处理完成: meeting_id={meeting_id}, 转写{len(transcript_segments)}段, 标题={meeting.title}")
 
-            # 阶段 4
-            await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
-            for decision in analysis.get("decisions", []):
-                await svc._auto_create_task_from_meeting(meeting, decision)
+            except Exception as e:
+                logger.error(f"后处理阶段失败: meeting_id={meeting_id}, error={e}", exc_info=True)
+                meeting.status = "error"
+                await db.commit()
+                await update_progress(
+                    meeting_id, ProgressStage.DONE,
+                    detail=f"处理失败: {str(e)[:80]}",
+                    status="error",
+                    redis_override=redis_client,
+                )
 
-            # 阶段 5：第三波启用，本波跳过
-            await update_progress(meeting_id, ProgressStage.LINKING_HISTORY, detail="跨会议关联（第三波）", redis_override=redis_client)
-            await asyncio.sleep(0.1)
-
-            # 阶段 6
-            await update_progress(meeting_id, ProgressStage.DONE, detail="处理完成", redis_override=redis_client)
         await redis_client.aclose()
         await engine.dispose()
 
     try:
-        # 确保每次都有全新的事件循环（Celery worker 复用线程时旧 loop 可能已关闭）
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
@@ -99,8 +195,7 @@ def post_meeting_process(self, meeting_id: int):
         finally:
             loop.close()
     except Exception as e:
-        logger.error(f"挂断后处理失败: meeting_id={meeting_id}, error={e}", exc_info=True)
-        # 2026-06-02 修复：失败时也推 progress_update 让前端看到 error 状态
+        logger.error(f"后处理失败: meeting_id={meeting_id}, error={e}", exc_info=True)
         try:
             err_loop = asyncio.new_event_loop()
             asyncio.set_event_loop(err_loop)
