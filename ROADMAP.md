@@ -1,10 +1,11 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-04** — 听会功能路由修复 + ProcessingDialog 阶段同步
+> 最后更新: **2026-06-04** — 声纹测试修复 + DB 列迁移 + Skills 升级 + 代码质量升级计划
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-04）
+- [声纹测试修复+DB迁移+Skills升级+升级计划](#声纹测试修复db迁移skills升级升级计划2026-06-04)（VoiceTestDialog AudioContext + meetings 列迁移 + 16 新 Skills + 4轮24任务计划）
 - [听会功能路由修复+ProcessingDialog阶段同步](#听会功能路由修复processingdialog阶段同步2026-06-04)（路由冲突 + 阶段不匹配）
 - [前端优化+对话持久化+PPT支持](#前端优化对话持久化ppt支持2026-06-047-commit)（7 commit — ECharts 升级 + passive 补丁 + Element Plus 修复 + 对话持久化 + PPT + 重复回复修复）
 
@@ -14,6 +15,64 @@
 - [Webhook 性能修复](#webhook-性能修复2026-06-03-commit-7ec6ce0)（commit `7ec6ce0`，0.001s 响应）
 - [垃圾桶系统全面修复](#垃圾桶系统全面修复2026-06-034-commit-链)（4 commit 链）
 - [项目当前状态速查](#项目当前状态速查2026-06-03)
+
+---
+
+## 声纹测试修复+DB迁移+Skills升级+升级计划（2026-06-04）
+
+### 1. 声纹测试麦克风误报修复
+
+**问题**：王书馨可以正常录入声纹，但测试时显示"麦克风权限被拒绝"，杜同贺手机测试正常。
+
+**根因**：`VoiceTestDialog` 的 `startRecord()` 中，`getUserMedia` 成功后紧接着创建 `AudioContext({ sampleRate: 16000 })` 用于音量可视化。部分手机浏览器（Safari/微信浏览器）的 `AudioContext` 可能处于 `suspended` 状态或不支持指定 `sampleRate`，被外层 catch 兜底捕获后**误报**为"麦克风权限被拒绝"。而 `VoiceprintEnrollDialog` 不需要 `AudioContext`，所以录入正常。
+
+**修复**：
+- 分离 `getUserMedia` 和 `AudioContext` 的 try/catch，错误信息精确区分（`NotAllowedError`/`NotFoundError`/其他）
+- AudioContext 失败时跳过音量可视化，录音不受影响
+- 添加 `webkitAudioContext` 前缀 + `resume()` 处理 suspended 状态
+- 录音格式兜底：webm → mp4 → 默认（兼容 Safari）
+
+### 2. meetings 表列迁移
+
+**问题**：创建会议 500 错误，日志报 `column "audio_url" of relation "meetings" does not exist`
+
+**根因**：`Meeting` 模型定义了 `audio_url`/`audio_duration`/`recording_started_at`/`recording_ended_at` 4 列，但数据库 `meetings` 表没有这些列。`Base.metadata.create_all()` 不会给已有表添加新列。
+
+**修复**：手动 ALTER TABLE 添加 4 列。
+
+### 3. Skills 框架升级
+
+从 [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) 下载 16 个新 Skills：
+
+| 技能 | 用途 |
+|------|------|
+| senior-backend | REST API 设计、数据库优化、认证流程 |
+| senior-devops | CI/CD、基础设施自动化、容器化 |
+| senior-qa | 单元测试、集成测试、E2E 测试 |
+| rag-architect | RAG 流水线设计、向量搜索优化 |
+| database-designer | 数据库 schema 设计、迁移规划 |
+| performance-profiler | CPU/内存/IO 瓶颈分析 |
+| api-design-reviewer | REST API 设计审查 |
+| tdd-guide | TDD 红-绿-重构 |
+| docker-development | Dockerfile 优化、多阶段构建 |
+| llm-cost-optimizer | LLM token 用量优化 |
+| migration-architect | 零停机迁移规划 |
+| spec-driven-workflow | 先写规格再写代码 |
+| codebase-onboarding | 代码库分析、新人上手文档 |
+| security-guidance | 安全反模式检测 |
+| a11y-audit | WCAG 2.2 无障碍审计 |
+| api-test-suite-builder | API 测试生成 |
+
+总计 **37 个 Skills**。
+
+### 4. 代码质量全面升级计划
+
+已完成设计文档和实现计划，待执行：
+
+- **设计文档**：`docs/superpowers/specs/2026-06-04-code-quality-upgrade-design.md`
+- **实现计划**：`docs/superpowers/plans/2026-06-04-code-quality-upgrade.md`
+- **4 轮 24 任务**：API 规范化（任务 1-8）→ 后端测试（9-15）→ 前端拆分（16-19）→ 前端测试（20-24）
+- **执行方式**：子代理驱动
 
 ---
 
@@ -92,13 +151,15 @@
 
 | 维度 | 状态 | 最近更新 |
 |------|------|----------|
-| 后端 | Phase 1-6 + 声纹系统 5 修复 + 反幻觉七重过滤 + 垃圾桶系统 4 bug 全修 + PPT 文件解析 + 听会路由修复 | 2026-06-04 |
+| 后端 | Phase 1-6 + 声纹系统 5 修复 + 反幻觉七重过滤 + 垃圾桶系统 4 bug 全修 + PPT 文件解析 + 听会路由修复 + meetings 列迁移 | 2026-06-04 |
 | 知识库 | 自主进化知识大脑（实体图谱+假设+量化推理）+ PPT 上传支持 | 2026-06-04 |
-| 会议系统 | 录音机+离线后处理模式 + 路由冲突修复 + ProcessingDialog 阶段同步 | 2026-06-04 |
+| 会议系统 | 录音机+离线后处理模式 + 路由冲突修复 + ProcessingDialog 阶段同步 + 声纹测试修复 | 2026-06-04 |
 | 任务管理 | 软删除/垃圾桶 + 3 天后自动清理（1h 调度）+ 精准倒计时双行显示 + 5 级颜色 | 2026-06-03 |
-| 前端 | ECharts 5.6.0 + passive 补丁 + Element Plus 废弃修复 + 对话持久化 + 重复回复修复 | 2026-06-04 |
+| 前端 | ECharts 5.6.0 + passive 补丁 + Element Plus 废弃修复 + 对话持久化 + 重复回复修复 + VoiceTestDialog 修复 | 2026-06-04 |
 | 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取（130s→5s）+ webhook 多线程（0.001s 响应） | 2026-06-03 |
 | Webhook 自动部署 | SSH 拉取已端到端验证（commit `cd92ad6`）+ ThreadingHTTPServer 性能修复（commit `7ec6ce0`，0.001s 响应）| 2026-06-03 |
+| Skills | 37 个 Skills（21 原有 + 16 新增），覆盖后端/前端/DevOps/测试/安全/RAG/数据库 | 2026-06-04 |
+| 升级计划 | 代码质量全面升级 4轮24任务（设计+计划已完成，待执行） | 2026-06-04 |
 | 文档 | README/ROADMAP/CLAUDE.md/MEMORY 已同步 | 2026-06-04 |
 
 ---
