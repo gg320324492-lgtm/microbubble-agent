@@ -184,6 +184,16 @@ const voiceMode = ref(false)
 // 持久化 sessionId — 同一会话跨页面保留
 const SESSION_KEY = 'chat_session_id'
 const MESSAGES_KEY = 'chat_messages'
+const VERSION_KEY = 'chat_version'
+const CHAT_VERSION = 2  // 升级版本号会自动清除旧数据
+
+// 版本升级时清除旧数据
+if (localStorage.getItem(VERSION_KEY) !== String(CHAT_VERSION)) {
+  localStorage.removeItem(MESSAGES_KEY)
+  localStorage.removeItem(SESSION_KEY)
+  localStorage.setItem(VERSION_KEY, String(CHAT_VERSION))
+}
+
 const savedSessionId = localStorage.getItem(SESSION_KEY)
 let sessionId = savedSessionId || `user_${Date.now()}`
 if (!savedSessionId) localStorage.setItem(SESSION_KEY, sessionId)
