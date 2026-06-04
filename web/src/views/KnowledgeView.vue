@@ -527,7 +527,7 @@
                 <div v-if="f.category_name" class="formula-category-path">{{ f.category_name }}</div>
               </div>
               <el-pagination v-if="formulaTotal > 20" v-model:current-page="formulaPage" :page-size="20"
-                :total="formulaTotal" layout="prev, pager, next" small @current-change="fetchFormulas" />
+                :total="formulaTotal" layout="prev, pager, next" size="small" @current-change="fetchFormulas" />
             </el-card>
           </el-col>
           <el-col :span="12">
