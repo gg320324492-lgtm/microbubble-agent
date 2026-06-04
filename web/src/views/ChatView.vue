@@ -326,16 +326,30 @@ const sendMessage = async () => {
 
 const sendQuickMessage = (t) => { inputText.value = t; sendMessage() }
 
-// --- 简要/详细 轮询 ---
+// --- 简要/详细 轮询（详细到达后替换简要，而非追加） ---
 let detailPollTimer = null
+let detailPollStart = 0
+const DETAIL_TIMEOUT = 30000 // 30s 超时
+
 const startDetailPoll = (sid, briefIdx) => {
   stopDetailPoll()
+  detailPollStart = Date.now()
   detailPollTimer = setInterval(async () => {
+    // 超时兜底：去掉 is_brief 标记，停止轮询
+    if (Date.now() - detailPollStart > DETAIL_TIMEOUT) {
+      const brief = messages.value[briefIdx]
+      if (brief) brief.is_brief = false
+      stopDetailPoll(); return
+    }
     try {
       const r = await axios.get(`/api/v1/chat/history/${sid}?after_index=${briefIdx}`)
       if (r.data.messages?.length) {
-        for (const m of r.data.messages) { if (m.role === 'assistant' && !m.is_brief) messages.value.push({ ...m, timestamp: new Date(), type: 'text' }) }
-        scrollToBottom(); stopDetailPoll()
+        const detail = r.data.messages.find(m => m.role === 'assistant' && !m.is_brief)
+        if (detail) {
+          const brief = messages.value[briefIdx]
+          if (brief) { brief.content = detail.content; brief.is_brief = false }
+          scrollToBottom(); stopDetailPoll()
+        }
       }
     } catch {}
   }, 2000)
