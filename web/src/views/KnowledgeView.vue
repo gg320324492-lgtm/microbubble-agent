@@ -365,7 +365,7 @@
         drag
         :auto-upload="false"
         :limit="1"
-        accept=".pdf,.docx,.xlsx,.txt,.md"
+        accept=".pdf,.docx,.xlsx,.pptx,.txt,.md"
         :on-change="onUploadFileChange"
         :on-exceed="() => ElMessage.warning('只能上传一个文件')"
       >

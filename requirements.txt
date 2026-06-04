@@ -53,6 +53,7 @@ numpy==1.26.2
 PyMuPDF==1.24.0
 python-docx==1.1.0
 openpyxl==3.1.2
+python-pptx==1.0.2
 
 # 工具库
 python-dotenv==1.0.0
