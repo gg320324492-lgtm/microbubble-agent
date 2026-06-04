@@ -21,6 +21,11 @@
 
 ### 近期新增（按时间倒序）
 
+- **声纹测试麦克风误报修复 + DB 列迁移 + Skills 升级（2026-06-04）** —
+  - **声纹测试麦克风误报**：`VoiceTestDialog` 的 `AudioContext` 在部分手机浏览器失败后被 catch 误报为"麦克风权限被拒绝"。修复：分离 `getUserMedia` / `AudioContext` 错误处理 + Safari `webkitAudioContext` 兼容 + `suspended` 状态自动 `resume()`
+  - **meetings 表列迁移**：`audio_url`/`audio_duration`/`recording_started_at`/`recording_ended_at` 4 列在模型中定义但数据库缺失（`create_all` 不加新列），手动 ALTER TABLE 补全
+  - **Skills 框架升级**：从 [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) 下载 16 个新 Skills（senior-backend/senior-devops/senior-qa/rag-architect/database-designer/performance-profiler/api-design-reviewer/tdd-guide/docker-development/llm-cost-optimizer/migration-architect/spec-driven-workflow/codebase-onboarding/security-guidance/a11y-audit/api-test-suite-builder），总计 37 个
+  - **代码质量升级计划**：4 轮 24 任务设计文档 + 实现计划已编写（API 规范化 → 后端测试 → 前端拆分 → 前端测试），待执行
 - **听会功能路由修复 + ProcessingDialog 阶段同步（2026-06-04）** —
   - **路由冲突修复**：`meeting_recording.router` 必须在 `meeting.router` 之前注册，否则 `/meetings/start-recording` 会被 `/meetings/{meeting_id}` 拦截返回 405
   - **ProcessingDialog 阶段同步**：前端阶段列表与后端 `ProgressStage` 完全不匹配（旧版 `extracting_transcript` 等），改为与后端一致的 6 阶段（下载音频 → 语音转写 → 识别发言人 → AI 分析 → 创建任务 → 保存结果）

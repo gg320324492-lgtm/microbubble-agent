@@ -151,7 +151,7 @@
 - **Celery 任务失败必须推 progress_update**（2026-06-02 教训）— `post_meeting_tasks.py` 之前外层 `try/except` 失败时只 return error dict，**前端 WS 收不到消息**，ProcessingDialog 永远卡在初始 5 步列表。**修复**：失败时在 fail_loop 里 `update_progress(..., status="error", detail=...)`，前端 `useMeetingProgress.js` 会看到 status=error 关闭弹窗并提示
 - **发言者检测格式** — `_parse_summary_format()` 识别 `发言人：`/`参会人：` 等字段；`_quick_parse_speakers()` 识别 `【名称】` 格式；NON_SPEAKER 黑名单过滤文档结构标签；过滤后发言者 < 2 人时回退 Claude AI 检测
 - **WebSocket 认证** — `/ws/meeting/{id}/live` 需要在 URL query param 中传 `?token=xxx`，Nginx `/api` location 需要 Upgrade/Connection 头支持 WebSocket
-- **数据库列迁移** — `Base.metadata.create_all()` 不会给已有表添加新列，Member/Meeting 新增的 voice_embedding, speaker_mapping 等列需要手动 ALTER TABLE
+- **数据库列迁移** — `Base.metadata.create_all()` 不会给已有表添加新列，Member/Meeting 新增的 voice_embedding, speaker_mapping 等列需要手动 ALTER TABLE。**2026-06-04 教训**：`Meeting` 模型新增 `audio_url`/`audio_duration`/`recording_started_at`/`recording_ended_at` 4 列后，创建会议 500 报 `column "audio_url" of relation "meetings" does not exist`。**防御**：新增模型列后必须立即 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`，不要依赖 `create_all`
 - **垃圾桶软删除** — `deleted_at` 字段标记软删除，3天后 Celery 定时任务自动永久删除（beat schedule 1h，最大延迟 1h）。垃圾桶 API `include_deleted=true` 必须加 `deleted_at.isnot(None)`，否则会返回活跃任务。提醒查询必须过滤 `Task.deleted_at.is_(None)`
 - **垃圾桶自动清理 Celery 任务**（2026-06-03 commit `dc93bff` + `47fb2c9`）— 必须同步 3 处：
   1. `app.services.task_service.auto_purge_trash_task` 函数加 `@celery_app.task(name=...)` 装饰器（缺装饰器 worker 找不到函数）
@@ -193,6 +193,7 @@
   - **「置信度 0.45 直线」是 markLine 误读** — 用户看到 ConfidenceChart 里的 0.45 水平线以为是置信度数据，但实际是 `markLine: yAxis: 0.45` 阈值参考线（红色虚线）。**真实数据看 `voiceprint_history` 表**。同一历史 commit 顺手把 markLine 从 0.45 统一成 0.55（与后端 `MATCH_THRESHOLD` 一致）
   - **ERes2Net 模型实测表现**（2026-06-02 合成语音测试）— intra（同人 2 次录音）cos=0.99 ✅，inter（不同人）cos=0.92-0.97（合成信号偏高，真实人声会更低）。区分度 0.05 偏小，**实际识别需要多人会议反复调阈值**
   - **修改声纹提取时务必清旧 embedding** — 提取逻辑变更（输入维度、模型路径、归一化）后，DB 里旧 embedding 是用旧逻辑算的，跟新逻辑不兼容。**必须 `UPDATE members SET voice_embedding=NULL, voice_enrolled_at=NULL, voice_sample_count=0` 让用户重新录入**
+- **VoiceTestDialog 麦克风误报（2026-06-04 教训）** — `getUserMedia` 成功后创建 `AudioContext({ sampleRate: 16000 })` 在部分手机浏览器（Safari/微信）失败，被外层 catch 误报为"麦克风权限被拒绝"。**关键对比**：`VoiceprintEnrollDialog` 不需要 AudioContext，所以录入正常但测试报错。**修复**：① `getUserMedia` 和 `AudioContext` 各自独立 try/catch ② AudioContext 失败跳过音量可视化，录音不受影响 ③ 添加 `webkitAudioContext` 前缀 + `resume()` 处理 suspended 状态 ④ 错误信息精确区分 `NotAllowedError`/`NotFoundError`/其他。**教训**：catch 块不要把所有错误统一显示为同一消息，否则用户看到的是误导性提示
 - **声纹会议系统全面修复教训（2026-06-03 8 commit）**：
   - **enrolled API 返回格式** — 后端 `/voiceprint/enrolled` 返回 `{"members": [...]}` 而非数组，前端 `Array.isArray(vpData)` 永远 false。**修复**：`vpData.members`
   - **hangup 不能立即 disconnect** — `sendHangup()` 发完消息后立即 `disconnect()` 导致服务器还没处理 hangup 就断 WS。**修复**：等服务器主动关闭 WS（`watch(connected)` 检测断开再 emit call-ended），5s 超时兜底
