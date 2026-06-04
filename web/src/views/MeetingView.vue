@@ -50,8 +50,8 @@
             <el-button type="success" @click="pasteAnalyzeDialogRef?.open()">
               <el-icon><Document /></el-icon> 粘贴转录分析
             </el-button>
-            <el-button type="warning" @click="startVoiceCreate">
-              <el-icon><Microphone /></el-icon> 声纹创建会议
+            <el-button type="warning" @click="startLiveCall">
+              <el-icon><Microphone /></el-icon> 开始听会
             </el-button>
             <el-button @click="showVoiceTest = true">
               🎤 测试
@@ -362,23 +362,20 @@
       </div>
     </el-dialog>
 
-    <!-- 声纹通话对话框 -->
+    <!-- 听会对话框 -->
     <el-dialog
       v-model="showLiveCallDialog"
-      :title="liveCallMeeting?.title || '声纹通话'"
+      title="听会"
       :width="isMobile ? '95vw' : '800px'"
       top="3vh"
       :close-on-click-modal="false"
-      fullscreen
       @close="onLiveCallEnd"
     >
       <MeetingRoom
-        v-if="showLiveCallDialog && liveCallMeeting"
+        v-if="showLiveCallDialog"
         ref="meetingRoomRef"
-        :meeting-id="liveCallMeeting.id"
-        :meeting-title="liveCallMeeting.title"
-        @call-ended="onCallEnded(liveCallMeeting.id)"
-        style="height: 70vh"
+        @call-ended="onCallEnded"
+        style="height: 500px"
       />
     </el-dialog>
 
@@ -446,13 +443,12 @@ const processingDialogVisible = ref(false)
 const processingMeetingId = ref(null)
 
 function onCallEnded(meetingId) {
-  // 关闭通话弹窗，弹出会后处理进度对话框
+  // 关闭听会弹窗，刷新列表
   showLiveCallDialog.value = false
   liveCallMeeting.value = null
   fetchMeetings()
   if (meetingId) {
-    processingMeetingId.value = meetingId
-    processingDialogVisible.value = true
+    router.push(`/meetings/${meetingId}`)
   }
 }
 
@@ -510,25 +506,8 @@ const submitMeeting = async () => {
   }
 }
 
-// 声纹创建会议 (从顶栏点击，先快速创建占位会议再开始通话)
-const startVoiceCreate = async () => {
-  try {
-    const currentUserId = userStore.userInfo?.id
-    const res = await axios.post('/api/v1/meetings', {
-      title: '声纹会议 ' + dayjs().format('MM-DD HH:mm'),
-      start_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
-      participants: currentUserId ? [currentUserId] : [],
-    })
-    liveCallMeeting.value = res.data
-    showLiveCallDialog.value = true
-    fetchMeetings()
-  } catch (e) {
-    ElMessage.error('创建会议失败')
-  }
-}
-
-const startLiveCall = (meeting) => {
-  liveCallMeeting.value = meeting
+const startLiveCall = () => {
+  liveCallMeeting.value = null
   showLiveCallDialog.value = true
 }
 
