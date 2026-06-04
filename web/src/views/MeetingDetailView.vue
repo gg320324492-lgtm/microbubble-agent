@@ -176,11 +176,11 @@
       <!-- 右侧：声纹通话 + 发言者统计 -->
       <div class="detail-side">
         <el-card class="section-card">
-          <template #header><span>声纹通话</span></template>
-          <MeetingRoom v-if="showCallRoom" :meeting-id="meeting.id" :meeting-title="meeting.title" @call-ended="onCallEnded" style="height: 400px" />
+          <template #header><span>听会</span></template>
+          <MeetingRoom v-if="showCallRoom" @call-ended="onCallEnded" style="height: 500px" />
           <div v-else class="call-placeholder" @click="startLiveCall">
-            <el-icon size="40" color="#FF7A5C"><Phone /></el-icon>
-            <p>点击开始声纹通话</p>
+            <el-icon size="40" color="#FF7A5C"><Microphone /></el-icon>
+            <p>点击开始听会</p>
           </div>
         </el-card>
 
