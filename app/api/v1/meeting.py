@@ -73,7 +73,10 @@ async def list_meetings(
     db: AsyncSession = Depends(get_db)
 ):
     """查询会议列表"""
-    query = select(Meeting)
+    from sqlalchemy.orm import selectinload
+    query = select(Meeting).options(
+        selectinload(Meeting.participants).selectinload(MeetingParticipant.member)
+    )
 
     if date_from:
         query = query.where(Meeting.start_time >= date_from)
