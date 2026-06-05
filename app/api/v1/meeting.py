@@ -6,6 +6,8 @@ import json
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
+from app.schemas.pagination import PaginatedResponse
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
 from app.models.task import Task
@@ -161,7 +163,7 @@ async def get_meeting(
     meeting = result.scalar_one_or_none()
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     return meeting
 
@@ -177,7 +179,7 @@ async def get_meeting_minutes(
     meeting = result.scalar_one_or_none()
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     if not meeting.summary:
         # 返回空内容而非 404，让前端能正常展示空状态
@@ -209,10 +211,10 @@ async def generate_meeting_minutes(
     meeting = result.scalar_one_or_none()
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     if not meeting.transcript:
-        raise HTTPException(status_code=400, detail="会议转写内容为空")
+        raise ValidationException("会议转写内容为空")
 
     transcript_text = json.dumps(meeting.transcript, ensure_ascii=False)
 
@@ -244,10 +246,10 @@ async def analyze_meeting_transcript(
     meeting = await meeting_service.get_meeting(meeting_id)
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     if not meeting.transcript:
-        raise HTTPException(status_code=400, detail="会议转写内容为空，无法分析")
+        raise ValidationException("会议转写内容为空，无法分析")
 
     try:
         result = await meeting_service.process_meeting_transcript(meeting_id)
@@ -274,7 +276,7 @@ async def update_meeting(
     meeting = result.scalar_one_or_none()
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     update_data = meeting_data.model_dump(exclude_unset=True)
     # participants 是关联表，需特殊处理
@@ -305,7 +307,7 @@ async def delete_meeting(
     meeting = result.scalar_one_or_none()
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     # 先清除关联数据（避免外键约束阻止删除）
     from sqlalchemy import delete as sa_delete, update as sa_update
@@ -328,7 +330,7 @@ async def apply_speaker_mapping(
 
     meeting = await meeting_service.get_meeting(meeting_id)
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     try:
         result = await meeting_service.reanalyze_with_speakers(
@@ -350,7 +352,7 @@ async def get_meeting_analytics(
     meeting = result.scalar_one_or_none()
 
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     if not meeting.speaker_stats:
         # 如果还没有统计但有转录内容，实时计算
@@ -389,7 +391,7 @@ async def end_meeting_call(
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     # 校验用户是参与者
     part_result = await db.execute(
@@ -399,7 +401,7 @@ async def end_meeting_call(
         )
     )
     if not part_result.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="非会议参与者")
+        raise ForbiddenException("非会议参与者")
 
     # 更新状态
     meeting.status = "completed"
@@ -436,15 +438,15 @@ async def delete_meeting_audio(
 
     # 权限校验：仅管理员
     if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
+        raise ForbiddenException("需要管理员权限")
 
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
 
     if not meeting.audio_archived:
-        raise HTTPException(status_code=400, detail="没有可删除的录音")
+        raise ValidationException("没有可删除的录音")
 
     # 删除 MinIO 文件
     object_name = f"meetings/{meeting_id}/audio.opus"
@@ -500,7 +502,7 @@ async def update_meeting_agenda(
         select(Meeting).where(Meeting.id == meeting_id)
     )).scalar_one_or_none()
     if not meeting:
-        raise HTTPException(status_code=404, detail="会议不存在")
+        raise NotFoundException("会议")
     meeting.agenda = agenda
     await db.commit()
     await db.refresh(meeting)
