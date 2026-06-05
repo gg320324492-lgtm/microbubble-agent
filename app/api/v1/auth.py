@@ -15,6 +15,7 @@ from app.core.security import (
     get_current_admin_user,
 )
 from app.core.rate_limit import login_limiter, get_client_ip
+from app.core.exceptions import AuthException, ValidationException, NotFoundException, ForbiddenException
 from app.models.member import Member
 from app.schemas.auth import (
     LoginRequest,
@@ -80,24 +81,15 @@ async def login(
     # 验证用户存在且密码正确
     if not user or not user.password_hash:
         login_limiter.record(client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
+        raise AuthException("用户名或密码错误")
 
     if not verify_password(login_data.password, user.password_hash):
         login_limiter.record(client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误"
-        )
+        raise AuthException("用户名或密码错误")
 
     # 检查用户是否被禁用
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="用户已被禁用，请联系管理员"
-        )
+        raise ForbiddenException("用户已被禁用，请联系管理员")
 
     # 生成令牌
     access_token = create_access_token(data={"sub": str(user.id)})
@@ -144,17 +136,11 @@ async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends
 
         # 验证令牌类型
         if payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的刷新令牌"
-            )
+            raise AuthException("无效的刷新令牌")
 
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="无效的令牌"
-            )
+            raise AuthException("无效的令牌")
 
         # 验证用户存在
         result = await db.execute(
@@ -163,23 +149,17 @@ async def refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends
         user = result.scalar_one_or_none()
 
         if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="用户不存在或已被禁用"
-            )
+            raise AuthException("用户不存在或已被禁用")
 
         # 生成新的访问令牌
         new_access_token = create_access_token(data={"sub": str(user.id)})
 
         return RefreshTokenResponse(access_token=new_access_token)
 
-    except HTTPException:
+    except AuthException:
         raise
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="无效的刷新令牌"
-        )
+        raise AuthException("无效的刷新令牌")
 
 
 @router.get("/me", response_model=UserInfo)
@@ -275,10 +255,7 @@ async def change_password(
     """
     # 验证旧密码
     if not current_user.password_hash or not verify_password(request.old_password, current_user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="旧密码错误"
-        )
+        raise ValidationException("旧密码错误")
 
     # 更新密码
     current_user.password_hash = get_password_hash(request.new_password)
@@ -314,10 +291,7 @@ async def reset_password(
     user = result.scalar_one_or_none()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="用户不存在"
-        )
+        raise NotFoundException("用户")
 
     # 重置密码
     user.password_hash = get_password_hash(request.new_password)
