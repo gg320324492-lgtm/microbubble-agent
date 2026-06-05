@@ -300,6 +300,20 @@ def post_meeting_process(self, meeting_id: int):
 
                 # 2.6 检查是否多个聚类被识别为同一人（不同音色归为同一名）
                 logger.info(f"聚类调试: 聚类数={len(unique_clusters)}, 标签={cluster_to_name}")
+
+                # 计算每个聚类中心之间的两两相似度
+                if len(unique_clusters) >= 2:
+                    def cosine_sim(a, b):
+                        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8)
+
+                    for ci in list(unique_clusters):
+                        for cj in list(unique_clusters):
+                            if ci >= cj: continue
+                            sim = cosine_sim(cluster_centers[ci], cluster_centers[cj])
+                            if sim < 0.7:  # 聚类中心也不像
+                                logger.info(f"聚类 {ci} vs {cj} 中心相似度 {sim:.3f} < 0.7 → 强制分裂")
+                                if cluster_to_name[ci] == cluster_to_name[cj] and not cluster_to_name[ci].startswith("发言人"):
+                                    cluster_to_name[cj] = f"发言人{chr(65 + cj)}"
                 name_to_clusters = {}
                 for cid, sp_name in cluster_to_name.items():
                     if not sp_name.startswith("发言人"):
