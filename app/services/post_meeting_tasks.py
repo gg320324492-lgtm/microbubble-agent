@@ -366,40 +366,10 @@ def post_meeting_process(self, meeting_id: int):
                             known_names_set.add(label)
                             unknown_count += 1
 
-                # 2.6 检查是否多个聚类被识别为同一人（不同音色归为同一名）
+                # 2.6 调试日志
                 logger.info(f"聚类调试: 聚类数={len(unique_clusters)}, 标签={cluster_to_name}")
 
-                # 计算每个聚类中心之间的两两相似度
-                if len(unique_clusters) >= 2:
-                    def cosine_sim(a, b):
-                        return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8)
-
-                    for ci in list(unique_clusters):
-                        for cj in list(unique_clusters):
-                            if ci >= cj: continue
-                            sim = cosine_sim(cluster_centers[ci], cluster_centers[cj])
-                            if sim < 0.7:  # 聚类中心也不像
-                                logger.info(f"聚类 {ci} vs {cj} 中心相似度 {sim:.3f} < 0.7 → 强制分裂")
-                                if cluster_to_name[ci] == cluster_to_name[cj] and not cluster_to_name[ci].startswith("发言人"):
-                                    cluster_to_name[cj] = f"发言人{chr(65 + cj)}"
-                name_to_clusters = {}
-                for cid, sp_name in cluster_to_name.items():
-                    if not sp_name.startswith("发言人"):
-                        name_to_clusters.setdefault(sp_name, []).append(cid)
-
-                # 同一人对应多个聚类时，保留声纹差异最大的为独立发言人
-                for sp_name, cids in name_to_clusters.items():
-                    if len(cids) >= 2:
-                        # 只有 2 个聚类但同名 → 保留聚类差异，第二个标记为未知
-                        unknown_label = f"发言人{chr(65 + len(cluster_centers) - 1)}"
-                        while unknown_label in cluster_to_name.values():
-                            unknown_label = f"发言人{chr(65 + len(cluster_centers))}"
-                            cluster_centers.append(None)  # dummy
-                        cluster_to_name[cids[1]] = unknown_label
-                        logger.info(f"同名聚类检测: '{sp_name}' 对应 {len(cids)} 个聚类, {cids[1]} 改为 {unknown_label}")
-
-                # 2.7 分配发言人到每个段
-                # 用聚类代表 embedding 直接查询已知成员
+                # 2.7 用聚类代表 embedding 直接查询已知成员
                 for cid in unique_clusters:
                     name, member_id, conf = await vp_service.identify_speaker_by_embedding(
                         db, cluster_representatives[cid]
@@ -410,6 +380,23 @@ def post_meeting_process(self, meeting_id: int):
                     else:
                         cluster_to_name[cid] = f"发言人{chr(65 + cid) if cid < 26 else str(cid - 25)}"
 
+                # 2.8 同名聚类检测（在 embedding 识别之后！）
+                name_to_clusters = {}
+                for cid, sp_name in cluster_to_name.items():
+                    if not sp_name.startswith("发言人"):
+                        name_to_clusters.setdefault(sp_name, []).append(cid)
+
+                for sp_name, cids in name_to_clusters.items():
+                    if len(cids) >= 2:
+                        # 多个聚类被识别为同一个人 → 保留声纹差异最大的为独立发言人
+                        unknown_label = f"发言人{chr(65 + len(cluster_centers) - 1)}"
+                        while unknown_label in cluster_to_name.values():
+                            unknown_label = f"发言人{chr(65 + len(cluster_centers))}"
+                            cluster_centers.append(None)  # dummy
+                        cluster_to_name[cids[1]] = unknown_label
+                        logger.info(f"同名聚类检测: '{sp_name}' 对应 {len(cids)} 个聚类, {cids[1]} 改为 {unknown_label}")
+
+                # 2.9 分配发言人到每个段
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] >= 0:
                         seg["speaker"] = cluster_to_name[clusters[i]]
