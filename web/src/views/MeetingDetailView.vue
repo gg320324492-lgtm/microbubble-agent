@@ -133,17 +133,23 @@
                   <h4>摘要</h4>
                   <p class="summary-text">{{ meeting.summary }}</p>
                 </div>
-                <div v-if="meeting.key_points?.length" class="section">
+                <div v-if="groupedKeyPoints.length" class="section">
                   <h4>讨论要点</h4>
-                  <ul class="points-list">
-                    <li v-for="(p,i) in meeting.key_points" :key="i" class="fade-slide-up" :style="{ animationDelay: (i * 50) + 'ms' }">{{ p }}</li>
-                  </ul>
+                  <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
+                    <div v-if="group.speaker" class="speaker-tag">{{ group.speaker }}</div>
+                    <ul class="points-list">
+                      <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
+                    </ul>
+                  </div>
                 </div>
-                <div v-if="meeting.decisions?.length" class="section">
+                <div v-if="groupedDecisions.length" class="section">
                   <h4>决议事项</h4>
-                  <ul class="decisions-list">
-                    <li v-for="(d,i) in meeting.decisions" :key="i" class="fade-slide-up" :style="{ animationDelay: (i * 50) + 'ms' }">{{ d }}</li>
-                  </ul>
+                  <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
+                    <div v-if="group.speaker" class="speaker-tag">{{ group.speaker }}</div>
+                    <ul class="decisions-list">
+                      <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
+                    </ul>
+                  </div>
                 </div>
                 <div v-if="meeting.agenda?.length" class="section">
                   <h4>议程</h4>
@@ -289,6 +295,41 @@ const transcriptEntries = computed(() => {
     ? meeting.value.transcript_polished
     : (meeting.value.transcript || [])
 })
+
+// 解析条目中的发言人（如 "【杜同贺】介绍了..." → "杜同贺"）
+function parseSpeaker(text) {
+  const match = text.match(/^【(.+?)】/)
+  return match ? match[1] : null
+}
+
+// 去掉发言人前缀
+function removeSpeakerPrefix(text) {
+  return text.replace(/^【.+?】/, '')
+}
+
+// 合并连续同一发言者的条目
+function groupBySpeaker(items) {
+  if (!items?.length) return []
+  const result = []
+  let current = null
+  for (const item of items) {
+    const speaker = parseSpeaker(item)
+    if (speaker && current?.speaker === speaker) {
+      current.items.push(removeSpeakerPrefix(item))
+    } else {
+      if (current) result.push(current)
+      current = speaker
+        ? { speaker, items: [removeSpeakerPrefix(item)] }
+        : { speaker: null, items: [item] }
+    }
+  }
+  if (current) result.push(current)
+  return result
+}
+
+// 分组后的讨论要点和决议
+const groupedKeyPoints = computed(() => groupBySpeaker(meeting.value?.key_points))
+const groupedDecisions = computed(() => groupBySpeaker(meeting.value?.decisions))
 
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
@@ -657,6 +698,19 @@ onMounted(async () => {
   line-height: 1.7;
   font-size: 14px;
   color: var(--color-text-regular, #606266);
+}
+.speaker-group {
+  margin-bottom: 12px;
+}
+.speaker-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary, #FF7A5C);
+  background: var(--color-primary-bg, #fff0ed);
+  border-radius: var(--radius-sm, 4px);
 }
 .points-list, .decisions-list {
   padding-left: 20px;
