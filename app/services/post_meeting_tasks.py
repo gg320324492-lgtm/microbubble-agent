@@ -164,7 +164,8 @@ def post_meeting_process(self, meeting_id: int):
                     return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
 
                 # 贪心聚类
-                cluster_centers = []
+                cluster_centers = []  # 聚类中心（用于比较）
+                cluster_representatives = []  # 聚类代表（第一个 embedding，用于识别）
                 clusters = []
                 MAX_SPEAKERS = 3  # 最多识别 3 位发言人
 
@@ -176,6 +177,7 @@ def post_meeting_process(self, meeting_id: int):
                     if not cluster_centers:
                         # 第一个有效段，创建第一个聚类
                         cluster_centers.append(emb)
+                        cluster_representatives.append(emb)
                         clusters.append(0)
                         continue
 
@@ -191,7 +193,7 @@ def post_meeting_process(self, meeting_id: int):
                     # 相似度 >= 0.45 归为已有聚类，或已达到最大发言人数量
                     if best_sim >= 0.45 or len(cluster_centers) >= MAX_SPEAKERS:
                         clusters.append(best_cluster)
-                        # 更新聚类中心（滑动平均）
+                        # 更新聚类中心（滑动平均，但不更新代表）
                         cluster_centers[best_cluster] = (
                             cluster_centers[best_cluster] * 0.7 + emb * 0.3
                         )
@@ -199,12 +201,14 @@ def post_meeting_process(self, meeting_id: int):
                         # 新发言人
                         clusters.append(len(cluster_centers))
                         cluster_centers.append(emb)
+                        cluster_representatives.append(emb)
 
-                # 2.4 识别每个发言人（使用聚类中心的声纹）
+                # 2.4 识别每个发言人（使用聚类代表的声纹，而非中心）
                 unique_speakers = set(c for c in clusters if c >= 0)
                 cluster_speakers = {}
                 for cluster_id in unique_speakers:
-                    name, member_id, conf = await vp_service.identify_speaker(db, cluster_centers[cluster_id])
+                    # 使用第一个 embedding 作为代表（更稳定）
+                    name, member_id, conf = await vp_service.identify_speaker(db, cluster_representatives[cluster_id])
                     if name and conf > 0.55:
                         cluster_speakers[cluster_id] = name
                     else:
