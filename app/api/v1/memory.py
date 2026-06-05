@@ -8,6 +8,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.exceptions import NotFoundException
 from app.models.member import Member
 from app.services.memory_service import MemoryService
 
@@ -76,7 +77,7 @@ async def update_memory(
         content=data.content
     )
     if not memory:
-        raise HTTPException(status_code=404, detail="记忆不存在")
+        raise NotFoundException("记忆")
     return memory
 
 
@@ -93,4 +94,4 @@ async def delete_memory(
         memory_id=memory_id
     )
     if not success:
-        raise HTTPException(status_code=404, detail="记忆不存在")
+        raise NotFoundException("记忆")
