@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-04 最新进展**：声纹会议系统重构（录音机+6阶段离线处理）+ 前端优化 + 对话持久化 + PPT 支持。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-04) 和 [README.md](README.md#当前状态2026-06-04)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-04 最新进展**：代码质量全面升级（30 commit）— API 规范化 + 后端测试 + 前端 Composables + 18 个子组件 + Vitest 测试体系 + 三大 View 精简 21%。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-04) 和 [README.md](README.md#当前状态2026-06-04)。
 
 ## 前端设计系统
 
@@ -57,6 +57,25 @@
 - **通知面板** — 铃铛使用 el-popover 弹窗面板，显示每条提醒的具体内容（任务标题+提醒时间）、全部标为已读、点击跳转任务；头像读取 userStore.userInfo.avatar 真实 URL
 - **任务权限模型** — 所有成员可见全部任务（降低认知负担），仅创建人/负责人/管理员可编辑、删除、恢复、永久删除
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
+
+## 代码质量规范（2026-06-04 升级）
+
+### API 层
+- **统一异常响应格式**：`{"error": {"code": "RESOURCE_NOT_FOUND", "message": "...", "details": {...}}}`
+- **异常类层次**：`app/core/exceptions.py` — AppException/NotFoundException/ValidationException/AuthException/ForbiddenException/ConflictException/RateLimitException
+- **统一分页模型**：`app/schemas/pagination.py` — PaginationParams + PaginatedResponse + PaginationMeta
+- **全站分级限流**：`app/core/rate_limit.py` — auth:5次/分, write:30次/分, read:100次/分, upload:10次/分
+- **安全响应头**：X-Content-Type-Options/X-Frame-Options/X-XSS-Protection/Referrer-Policy/X-Request-ID
+
+### 前端架构
+- **Composable 模式**：`web/src/composables/` — useTask/useMeeting/useKnowledge 提取共享状态 + API 调用
+- **子组件拆分**：18 个子组件（Task:3 + Knowledge:8 + Meeting:3），主 View ≤ 1920 行
+- **Vitest 测试**：`web/vitest.config.js` — composable 测试（23 个）+ 组件测试（15 个）= 38 个测试通过
+
+### 测试规范
+- **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试
+- **前端**：Vitest + @vue/test-utils，composable 测试优先，组件测试选择性覆盖
+- **Mock 策略**：Redis 用 fakeredis，Claude API 用 respx，Embedding 用固定向量
 
 ## 服务层结构
 
