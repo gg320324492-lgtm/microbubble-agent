@@ -136,7 +136,10 @@
                 <div v-if="groupedKeyPoints.length" class="section">
                   <h4>讨论要点</h4>
                   <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
-                    <div v-if="group.speaker" class="speaker-tag">{{ group.speaker }}</div>
+                    <div v-if="group.speaker" class="speaker-row">
+                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
+                      <span class="speaker-name">{{ group.speaker }}</span>
+                    </div>
                     <ul class="points-list">
                       <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
                     </ul>
@@ -145,7 +148,10 @@
                 <div v-if="groupedDecisions.length" class="section">
                   <h4>决议事项</h4>
                   <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
-                    <div v-if="group.speaker" class="speaker-tag">{{ group.speaker }}</div>
+                    <div v-if="group.speaker" class="speaker-row">
+                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
+                      <span class="speaker-name">{{ group.speaker }}</span>
+                    </div>
                     <ul class="decisions-list">
                       <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
                     </ul>
@@ -724,15 +730,19 @@ onMounted(async () => {
 .speaker-group {
   margin-bottom: 12px;
 }
-.speaker-tag {
-  display: inline-block;
-  padding: 2px 10px;
+.speaker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
-  font-size: 13px;
+}
+.speaker-avatar {
+  flex-shrink: 0;
+}
+.speaker-name {
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-primary, #FF7A5C);
-  background: var(--color-primary-bg, #fff0ed);
-  border-radius: var(--radius-sm, 4px);
 }
 .points-list, .decisions-list {
   padding-left: 20px;
