@@ -48,13 +48,16 @@ const pageTitle = computed(() => {
 })
 
 async function onRecordingStart() {
-  try {
-    const res = await axios.post('/api/v1/meetings/start-recording')
-    meetingId.value = res.data.id
-    ElMessage.success('开始听会')
-  } catch (err) {
-    ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
-  }
+  // 使用 setTimeout 延迟 API 调用，不阻塞 UI
+  setTimeout(async () => {
+    try {
+      const res = await axios.post('/api/v1/meetings/start-recording')
+      meetingId.value = res.data.id
+      ElMessage.success('开始听会')
+    } catch (err) {
+      ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
+    }
+  }, 0)
 }
 
 function onRecordingStop() {
@@ -64,19 +67,23 @@ function onRecordingStop() {
 async function onAudioReady(blob) {
   if (!meetingId.value) return
 
-  try {
-    // 上传音频
-    const fd = new FormData()
-    fd.append('file', blob, `recording_${meetingId.value}.webm`)
-    await axios.post(`/api/v1/meetings/${meetingId.value}/upload-audio`, fd)
+  // 立即显示进度弹窗（不阻塞 UI）
+  showProgress.value = true
 
-    // 停止录音，触发后处理
-    await axios.post(`/api/v1/meetings/${meetingId.value}/stop-recording`)
+  // 使用 setTimeout 延迟上传，不阻塞 UI
+  setTimeout(async () => {
+    try {
+      // 上传音频
+      const fd = new FormData()
+      fd.append('file', blob, `recording_${meetingId.value}.webm`)
+      await axios.post(`/api/v1/meetings/${meetingId.value}/upload-audio`, fd)
 
-    showProgress.value = true
-  } catch (err) {
-    ElMessage.error('上传失败: ' + (err.response?.data?.detail || err.message))
-  }
+      // 停止录音，触发后处理
+      await axios.post(`/api/v1/meetings/${meetingId.value}/stop-recording`)
+    } catch (err) {
+      ElMessage.error('上传失败: ' + (err.response?.data?.detail || err.message))
+    }
+  }, 0)
 }
 
 function onProgressClose() {

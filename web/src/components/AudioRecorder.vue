@@ -89,48 +89,54 @@ function formatTime(seconds) {
 // ===== 录音 =====
 
 async function startRecording() {
-  try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  // 立即切换到录音状态（不阻塞 UI）
+  state.value = 'recording'
+  elapsed.value = 0
 
-    // 音频分析（音量指示器）
-    audioContext = new AudioContext()
-    const source = audioContext.createMediaStreamSource(mediaStream)
-    analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256
-    source.connect(analyser)
-    dataArray = new Uint8Array(analyser.frequencyBinCount)
+  // 使用 requestAnimationFrame 延迟初始化，让 UI 先更新
+  requestAnimationFrame(async () => {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
-    // MediaRecorder
-    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' })
-    audioChunks = []
+      // 音频分析（音量指示器）
+      audioContext = new AudioContext()
+      const source = audioContext.createMediaStreamSource(mediaStream)
+      analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      dataArray = new Uint8Array(analyser.frequencyBinCount)
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunks.push(e.data)
-    }
+      // MediaRecorder
+      mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' })
+      audioChunks = []
 
-    mediaRecorder.onstop = () => {
-      audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop())
-        mediaStream = null
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data)
       }
-      emit('audio-ready', audioBlob)
+
+      mediaRecorder.onstop = () => {
+        audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(t => t.stop())
+          mediaStream = null
+        }
+        emit('audio-ready', audioBlob)
+      }
+
+      mediaRecorder.start(1000) // 每秒收集一次数据
+      emit('recording-start')
+
+      // 计时器
+      timerInterval = setInterval(() => { elapsed.value++ }, 1000)
+
+      // 音量动画
+      updateVolumeBars()
+    } catch (err) {
+      console.error('录音启动失败:', err)
+      state.value = 'idle'
+      alert('无法访问麦克风，请检查浏览器权限')
     }
-
-    mediaRecorder.start(1000) // 每秒收集一次数据
-    state.value = 'recording'
-    elapsed.value = 0
-    emit('recording-start')
-
-    // 计时器
-    timerInterval = setInterval(() => { elapsed.value++ }, 1000)
-
-    // 音量动画
-    updateVolumeBars()
-  } catch (err) {
-    console.error('录音启动失败:', err)
-    alert('无法访问麦克风，请检查浏览器权限')
-  }
+  })
 }
 
 function pauseRecording() {
@@ -152,9 +158,23 @@ function resumeRecording() {
 }
 
 function confirmStop() {
-  if (confirm('确定结束听会？')) {
-    stopRecording()
-  }
+  // 使用 ElMessageBox.confirm 替代原生 confirm（非阻塞）
+  import('element-plus').then(({ ElMessageBox }) => {
+    ElMessageBox.confirm('确定结束听会？', '确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }).then(() => {
+      stopRecording()
+    }).catch(() => {
+      // 用户取消，不做任何操作
+    })
+  }).catch(() => {
+    // element-plus 加载失败，回退到原生 confirm
+    if (window.confirm('确定结束听会？')) {
+      stopRecording()
+    }
+  })
 }
 
 function stopRecording() {
