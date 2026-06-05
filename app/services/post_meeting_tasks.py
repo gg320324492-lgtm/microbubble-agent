@@ -209,7 +209,7 @@ def post_meeting_process(self, meeting_id: int):
                 for cluster_id in unique_speakers:
                     # 使用第一个 embedding 作为代表（更稳定）
                     name, member_id, conf = await vp_service.identify_speaker(db, cluster_representatives[cluster_id])
-                    if name and conf > 0.55:
+                    if name and conf > 0.4:  # 降低阈值从 0.55 到 0.4
                         cluster_speakers[cluster_id] = name
                     else:
                         cluster_speakers[cluster_id] = f"发言人{chr(65 + cluster_id)}"
