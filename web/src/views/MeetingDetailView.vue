@@ -138,26 +138,22 @@
                   <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
                     <div v-if="group.speaker" class="speaker-row">
                       <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
-                      <template v-if="editingSpeaker === group.speaker">
-                        <el-select
-                          v-model="editSpeakerName"
-                          size="small"
-                          class="edit-speaker-select"
-                          filterable
-                          @change="confirmSpeakerRename(group.speaker)"
-                        >
-                          <el-option
-                            v-for="m in memberStore.members"
-                            :key="m.id"
-                            :label="m.name"
-                            :value="m.name"
-                          />
-                        </el-select>
-                      </template>
-                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击选择正确的发言人">{{ group.speaker }}</span>
+                      <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="points-list">
-                      <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
+                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item">
+                        <el-select
+                          v-model="group._editValues[ii]"
+                          size="small"
+                          class="inline-speaker-select"
+                          filterable
+                          @change="(val) => renameSinglePoint('key_points', group, ii, val)"
+                          @click.stop
+                        >
+                          <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
+                        </el-select>
+                        <span class="point-text">{{ item }}</span>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -166,26 +162,22 @@
                   <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
                     <div v-if="group.speaker" class="speaker-row">
                       <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
-                      <template v-if="editingSpeaker === group.speaker">
-                        <el-select
-                          v-model="editSpeakerName"
-                          size="small"
-                          class="edit-speaker-select"
-                          filterable
-                          @change="confirmSpeakerRename(group.speaker)"
-                        >
-                          <el-option
-                            v-for="m in memberStore.members"
-                            :key="m.id"
-                            :label="m.name"
-                            :value="m.name"
-                          />
-                        </el-select>
-                      </template>
-                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击选择正确的发言人">{{ group.speaker }}</span>
+                      <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="decisions-list">
-                      <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
+                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item">
+                        <el-select
+                          v-model="group._editValues[ii]"
+                          size="small"
+                          class="inline-speaker-select"
+                          filterable
+                          @change="(val) => renameSinglePoint('decisions', group, ii, val)"
+                          @click.stop
+                        >
+                          <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
+                        </el-select>
+                        <span class="point-text">{{ item }}</span>
+                      </li>
                     </ul>
                   </div>
                 </div>
@@ -326,58 +318,31 @@ const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
 
-// 发言人名字编辑
-const editingSpeaker = ref(null)
-const editSpeakerName = ref('')
-const speakerInputRef = ref(null)
+// 单独更改某条要点/决议的发言人（仅影响这一条）
+async function renameSinglePoint(type, group, itemIdx, newSpeaker) {
+  const arr = type === 'key_points' ? meeting.value.key_points : meeting.value.decisions
+  if (!arr) return
 
-function startSpeakerRename(oldName) {
-  editingSpeaker.value = oldName
-  editSpeakerName.value = oldName
-}
+  // 在原数组中定位这条
+  let foundIdx = -1
+  for (let i = 0; i < arr.length; i++) {
+    const sp = parseSpeaker(arr[i]) || group.speaker
+    if (removeSpeakerPrefix(arr[i]) === group.items[itemIdx] && sp === group.speaker) {
+      foundIdx = i
+      break
+    }
+  }
+  if (foundIdx < 0) return
 
-async function confirmSpeakerRename(oldName) {
-  const newName = editSpeakerName.value.trim()
-  editingSpeaker.value = null
-  if (!newName || newName === oldName) return
+  const oldSpeaker = parseSpeaker(arr[foundIdx]) || group.speaker
+  arr[foundIdx] = arr[foundIdx].replace(`【${oldSpeaker}】`, `【${newSpeaker}】`)
+  group._editValues[itemIdx] = newSpeaker
 
   try {
-    // 更新 server 端 speaker_mapping
     await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
-      speaker_mapping: { ...(meeting.value.speaker_mapping || {}), [oldName]: newName },
+      [type]: [...arr],
     })
-    // 更新本地数据
-    if (meeting.value.speaker_mapping) {
-      for (const key of Object.keys(meeting.value.speaker_mapping)) {
-        if (meeting.value.speaker_mapping[key] === oldName) {
-          meeting.value.speaker_mapping[key] = newName
-        }
-      }
-    }
-    // 更新 key_points 和 decisions 中的发言人前缀
-    const rename = (arr) => {
-      if (!arr) return
-      for (let i = 0; i < arr.length; i++) {
-        arr[i] = arr[i].replace(`【${oldName}】`, `【${newName}】`)
-      }
-    }
-    rename(meeting.value.key_points)
-    rename(meeting.value.decisions)
-    // 更新转录数据
-    if (meeting.value.transcript_polished) {
-      for (const entry of meeting.value.transcript_polished) {
-        if (entry.speaker === oldName) entry.speaker = newName
-      }
-    }
-    if (meeting.value.transcript) {
-      for (const entry of meeting.value.transcript) {
-        if (entry.speaker === oldName) entry.speaker = newName
-      }
-    }
-    ElMessage.success(`已更新: ${oldName} → ${newName}`)
-  } catch {
-    ElMessage.error('名字更新失败')
-  }
+  } catch { /* 静默 */ }
 }
 
 // 转录记录：优先用 polished，回退到原始 transcript
@@ -431,7 +396,7 @@ function groupBySpeaker(items) {
       return true
     })
     if (unique.length) {
-      result.push({ speaker, items: unique })
+      result.push({ speaker, items: unique, _editValues: unique.map(() => speaker) })
     }
   }
   return result
@@ -829,15 +794,18 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--color-primary, #FF7A5C);
-  cursor: pointer;
-  border-bottom: 1px dashed transparent;
-  transition: border-color 0.2s;
 }
-.speaker-name:hover {
-  border-bottom-color: var(--color-primary, #FF7A5C);
+.point-item {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 6px;
 }
-.edit-speaker-select {
-  width: 140px;
+.inline-speaker-select {
+  width: 90px;
+  flex-shrink: 0;
+}
+.point-text {
+  flex: 1;
 }
 .points-list, .decisions-list {
   padding-left: 20px;
