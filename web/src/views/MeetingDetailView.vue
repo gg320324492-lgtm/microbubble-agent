@@ -29,8 +29,17 @@
           <span class="meta-item">
             <el-icon><Clock /></el-icon>
             <template v-if="!editing">{{ formatDate(meeting.start_time) }}</template>
-            <input v-else :value="form.start_time" type="datetime-local" class="native-date-input"
-              @change="(e) => { const v = e.target.value; form.start_time = v ? v.replace('T', ' ') + ':00' : ''; }" />
+            <el-date-picker
+              v-else
+              v-model="form.start_time"
+              type="datetime"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              placeholder="选择日期时间"
+              size="small"
+              style="width: 200px"
+              :clearable="false"
+            />
           </span>
           <span class="meta-item">
             <el-icon><Location /></el-icon>
@@ -293,9 +302,14 @@ const fetchMeeting = async () => {
 // ===== 编辑模式 =====
 
 function enterEdit() {
+  // 确保日期格式兼容 el-date-picker (YYYY-MM-DD HH:mm:ss)
+  let startTime = meeting.value.start_time || ''
+  if (startTime && startTime.includes('T')) {
+    startTime = startTime.replace('T', ' ').replace(/\.\d+$/, '')
+  }
   form.value = {
     title: meeting.value.title,
-    start_time: meeting.value.start_time,
+    start_time: startTime,
     location: meeting.value.location || '',
     participants: meeting.value.participants?.map(p => p.member_id) || [],
     presenter_ids: meeting.value.presenter_ids || [],
@@ -753,17 +767,8 @@ onMounted(async () => {
 }
 
 /* ====== 编辑态表单 ====== */
-.native-date-input {
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--color-border, #dcdfe6);
-  border-radius: var(--radius-md, 4px);
-  font-size: 13px;
-  font-family: inherit;
-}
-.native-date-input:focus {
-  outline: none;
-  border-color: var(--color-primary, #FF7A5C);
+.hero-meta .el-date-editor {
+  --el-date-editor-width: 200px;
 }
 
 /* ====== 纪要编辑列表 ====== */
