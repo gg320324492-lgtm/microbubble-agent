@@ -8,6 +8,7 @@ from app.agent.core import agent
 from app.core.database import get_db
 from app.core.security import get_current_user, decode_token
 from app.core.redis import session_store
+from app.core.exceptions import ValidationException
 from app.models.member import Member
 
 router = APIRouter()
@@ -117,12 +118,12 @@ async def chat_with_file(
             file_data, filename, content_type
         )
     except ValueError:
-        raise HTTPException(400, f"不支持的文件类型: {filename}")
+        raise ValidationException(f"不支持的文件类型: {filename}")
     except Exception as e:
-        raise HTTPException(400, f"文件解析失败: {str(e)}")
+        raise ValidationException(f"文件解析失败: {str(e)}")
 
     if not extracted_text.strip():
-        raise HTTPException(400, "未能从文件中提取到文本内容")
+        raise ValidationException("未能从文件中提取到文本内容")
 
     # 截断过长文本
     if len(extracted_text) > 50000:

@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.exceptions import NotFoundException
 from app.models.member import Member
 from app.models.project import Project, Milestone
 from app.schemas.project import (
@@ -73,7 +74,7 @@ async def get_project(
     project = result.scalar_one_or_none()
 
     if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
+        raise NotFoundException("项目")
 
     return project
 
@@ -90,7 +91,7 @@ async def update_project(
     project = result.scalar_one_or_none()
 
     if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
+        raise NotFoundException("项目")
 
     update_data = project_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -150,7 +151,7 @@ async def delete_project(
     project = result.scalar_one_or_none()
 
     if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
+        raise NotFoundException("项目")
 
     await db.delete(project)
     await db.commit()
