@@ -141,7 +141,7 @@
                       <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="points-list">
-                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item" @click="editingPoint = (editingPoint === `${type}.${gi}.${ii}` ? null : `${type}.${gi}.${ii}`)">
+                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item" @click="editingPoint = (editingPoint === `key_points.${gi}.${ii}` ? null : `key_points.${gi}.${ii}`)">
                         <span class="point-text">{{ item }}</span>
                         <el-select
                           v-if="editingPoint === `key_points.${gi}.${ii}`"
