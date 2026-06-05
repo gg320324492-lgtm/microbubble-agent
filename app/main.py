@@ -1,6 +1,7 @@
 import sys
 import warnings
-from fastapi import FastAPI
+from uuid import uuid4
+from fastapi import FastAPI, Request
 
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -10,6 +11,8 @@ from app.config import settings
 from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording
 from app.core.database import engine, Base
 from app.core.redis import close_redis
+from app.core.exceptions import AppException, app_exception_handler, generic_exception_handler
+from app.core.rate_limit import rate_limit_middleware
 
 
 @asynccontextmanager
@@ -104,6 +107,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 统一异常处理
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
+
+# 全站限流中间件
+app.middleware("http")(rate_limit_middleware)
+
+# 安全响应头中间件
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """安全响应头 + 请求追踪"""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-Request-ID"] = str(uuid4())
+    return response
 
 # 注册路由
 app.include_router(auth.router, prefix="/api/v1", tags=["认证"])
