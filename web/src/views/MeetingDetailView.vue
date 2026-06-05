@@ -141,18 +141,20 @@
                       <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="points-list">
-                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item">
+                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item" @click="editingPoint = (editingPoint === `${type}.${gi}.${ii}` ? null : `${type}.${gi}.${ii}`)">
+                        <span class="point-text">{{ item }}</span>
                         <el-select
+                          v-if="editingPoint === `key_points.${gi}.${ii}`"
                           v-model="group._editValues[ii]"
                           size="small"
                           class="inline-speaker-select"
                           filterable
-                          @change="(val) => renameSinglePoint('key_points', group, ii, val)"
+                          @change="(val) => { renameSinglePoint('key_points', group, ii, val); editingPoint = null }"
                           @click.stop
+                          @blur="editingPoint = null"
                         >
                           <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
                         </el-select>
-                        <span class="point-text">{{ item }}</span>
                       </li>
                     </ul>
                   </div>
@@ -165,18 +167,20 @@
                       <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="decisions-list">
-                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item">
+                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item" @click="editingPoint = (editingPoint === `decisions.${gi}.${ii}` ? null : `decisions.${gi}.${ii}`)">
+                        <span class="point-text">{{ item }}</span>
                         <el-select
+                          v-if="editingPoint === `decisions.${gi}.${ii}`"
                           v-model="group._editValues[ii]"
                           size="small"
                           class="inline-speaker-select"
                           filterable
-                          @change="(val) => renameSinglePoint('decisions', group, ii, val)"
+                          @change="(val) => { renameSinglePoint('decisions', group, ii, val); editingPoint = null }"
                           @click.stop
+                          @blur="editingPoint = null"
                         >
                           <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
                         </el-select>
-                        <span class="point-text">{{ item }}</span>
                       </li>
                     </ul>
                   </div>
@@ -317,6 +321,8 @@ const saving = ref(false)
 const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
+
+const editingPoint = ref(null)  // 当前编辑的要点 ID
 
 // 单独更改某条要点/决议的发言人（仅影响这一条）
 async function renameSinglePoint(type, group, itemIdx, newSpeaker) {
@@ -796,13 +802,18 @@ onMounted(async () => {
   color: var(--color-primary, #FF7A5C);
 }
 .point-item {
-  display: flex !important;
-  align-items: flex-start;
-  gap: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px 4px;
+  margin-left: -4px;
+}
+.point-item:hover {
+  background: var(--color-bg-page, #f5f7fa);
 }
 .inline-speaker-select {
-  width: 90px;
-  flex-shrink: 0;
+  width: 100px;
+  margin-top: 4px;
 }
 .point-text {
   flex: 1;
