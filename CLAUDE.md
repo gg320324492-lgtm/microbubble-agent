@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-05 最新进展**：听会功能全面修复（datetime 时区 + silero-vad 缓存 + 3D-Speaker 依赖）+ 声纹识别验证通过 + 点击响应优化 + 会议状态中文化。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-05) 和 [README.md](README.md#当前状态2026-06-05)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-05 最新进展**：会议系统 UI 全面优化（6 大模块）— 仪表盘式详情页 + Canvas 波形动画 + ParticipantAvatars/SpeakerStatsCard 新组件 + AudioPlayer 波形回放 + MeetingStats 统计页 + ProcessingDialog Confetti。详见 [ROADMAP.md](ROADMAP.md#会议系统-ui-全面优化2026-06-05) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 前端设计系统
 

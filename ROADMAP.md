@@ -1,10 +1,11 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-05** — 听会功能全面修复 + 性能优化 + UI 中文化
+> 最后更新: **2026-06-05** — 会议系统 UI 全面优化（6 大模块）
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-05）
+- [会议系统 UI 全面优化](#会议系统-ui-全面优化2026-06-05)（6 模块 — Canvas 波形+仪表盘详情页+头像组件+发言统计+录音回放+Confetti）
 - [听会功能全面修复+性能优化+UI中文化](#听会功能全面修复性能优化ui中文化2026-06-055-commit)（datetime 时区 + silero-vad 缓存 + 3D-Speaker 依赖 + 点击响应优化 + 状态中文化 + 声纹验证）
 
 ### 2026-06-04
@@ -19,6 +20,76 @@
 - [Webhook 性能修复](#webhook-性能修复2026-06-03-commit-7ec6ce0)（commit `7ec6ce0`，0.001s 响应）
 - [垃圾桶系统全面修复](#垃圾桶系统全面修复2026-06-034-commit-链)（4 commit 链）
 - [项目当前状态速查](#项目当前状态速查2026-06-03)
+
+---
+
+## 会议系统 UI 全面优化（2026-06-05）
+
+6 大模块全面升级会议系统 UI，从"开发者风格"提升为"仪表盘式"可视化界面。
+
+### 模块 1：VoiceTestDialog Canvas 波形动画
+
+- 20 根 DOM bar → **Canvas 贝塞尔曲线波形**（60fps 流畅动画）
+- 珊瑚橙渐变填充 + 发光描边
+- 麦克风按钮脉冲光晕（`mic-pulse` 环形扩散）
+- 平滑衰减动画（decay 0.7 / attack 0.3，避免突变）
+
+### 模块 2：ParticipantAvatars 复用组件（新建）
+
+- `web/src/components/ParticipantAvatars.vue`
+- 头像堆叠（重叠 -8px）+ 溢出 "+N" 气泡
+- hover 放大 + tooltip 姓名
+- 全体成员自动识别 → "全体成员（N人）" 徽章
+
+### 模块 3：MeetingList 列表增强
+
+- 每个会议项显示参与者头像行（最多 4 个重叠头像）
+- 状态圆点动画（recording/processing 脉冲扩散）
+- 🎙️ 录音标识（有 audio_url 的会议）
+- 摘要 2 行渐变截断（`-webkit-line-clamp`）
+
+### 模块 4：MeetingDetailView 仪表盘式重设计
+
+- **Hero 区**：大标题（22px）+ 状态徽章（带圆点动画）+ 时间/地点/时长元信息 + 参与者头像行
+- **Tab 切换**：会议纪要 / 转录记录 / 发言统计
+- **转录记录**：发言人小头像（24px）+ 时间轴竖线样式
+- **内联编辑**：点击"编辑"直接在 Hero 区修改标题/时间/地点
+- **侧边栏**（320px）：录音回放卡片 + 听会卡片 + 相关会议推荐
+
+### 模块 5：AudioPlayer 增强 + 录音回放
+
+- `web/src/components/AudioPlayer.vue` 全面重写
+- Canvas 波形渲染（运行时解码音频或外部传入 waveformData）
+- 播放头竖线（已播放珊瑚橙 / 未播放灰色）
+- 倍速控制（1x / 1.5x / 2x 循环切换）
+- MeetingDetailView 侧边栏集成录音回放卡片
+
+### 模块 6：SpeakerStatsCard 发言统计组件（新建）
+
+- `web/src/components/SpeakerStatsCard.vue`
+- 水平进度条 + 头像 + 百分比 + 发言次数/字数
+- `fadeSlideUp` stagger 入场动画（每行 60ms 延迟）
+- 自动从 memberStore 匹配发言人头像
+
+### 模块 7：MeetingStats 统计页开发
+
+- `web/src/views/meeting/MeetingStats.vue` 从空占位变为完整页面
+- 3 个统计卡片（总会议数/本月会议/总录音时长）+ 数字滚动动画
+- 最近会议时间线（最近 5 条，状态圆点 + 链接）
+- 发言活跃度排行（跨会议聚合 speaker_stats）
+
+### 模块 8：ProcessingDialog 增强
+
+- 完成时 **Confetti 撒花**动画（20 片彩色纸片下落）
+- ✅ 弹跳入场动画（`done-bounce`）
+- "查看纪要"按钮脉冲光晕（`btn-glow`）
+
+### 新增组件清单
+
+| 组件 | 文件 | 用途 |
+|------|------|------|
+| ParticipantAvatars | `web/src/components/ParticipantAvatars.vue` | 参与者头像行（堆叠+溢出+全体成员） |
+| SpeakerStatsCard | `web/src/components/SpeakerStatsCard.vue` | 发言统计卡片（进度条+头像） |
 
 ---
 
@@ -228,9 +299,9 @@
 |------|------|----------|
 | 后端 | Phase 1-6 + 声纹系统修复 + 反幻觉七重过滤 + 垃圾桶系统 + PPT 解析 + 统一异常类/分页/限流 + datetime 时区修复 + silero-vad 缓存 + 3D-Speaker 依赖修复 | 2026-06-05 |
 | 知识库 | 自主进化知识大脑（实体图谱+假设+量化推理）+ PPT 上传支持 | 2026-06-04 |
-| 会议系统 | 录音机+离线后处理 + 声纹识别验证通过（杜同贺）+ 点击响应优化 + 状态中文化 | 2026-06-05 |
+| 会议系统 | 录音机+离线后处理 + 声纹识别验证 + **UI 全面优化（6 模块）** — 仪表盘详情页+Canvas 波形+头像组件+发言统计+录音回放+Confetti | 2026-06-05 |
 | 任务管理 | 软删除/垃圾桶 + 3 天后自动清理（1h 调度）+ 精准倒计时双行显示 + 5 级颜色 | 2026-06-03 |
-| 前端 | ECharts 5.6.0 + passive 补丁 + 对话持久化 + Composables + 18 个子组件 + Vitest 测试 + 性能优化 | 2026-06-05 |
+| 前端 | ECharts 5.6.0 + passive 补丁 + 对话持久化 + Composables + **20 个子组件** + Vitest 测试 + 性能优化 | 2026-06-05 |
 | 测试 | 后端 33+ 个测试 + 前端 38 个测试 = 71+ 个测试 | 2026-06-04 |
 | 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取（130s→5s）+ webhook 多线程（0.001s 响应） | 2026-06-03 |
 | Skills | 37 个 Skills（21 原有 + 16 新增），覆盖后端/前端/DevOps/测试/安全/RAG/数据库 | 2026-06-04 |
