@@ -599,22 +599,26 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
+import { useKnowledge } from '@/composables/useKnowledge'
+
+// 使用 composable（共享状态 + API）
+const {
+  knowledgeList, total, currentPage, pageSize, loading,
+  searchQuery, filterCategory,
+  statsData, categories, hotTags,
+  entityList, entityTotal, entityPage, entityGraphData,
+  hypothesisList, hypothesisTotal, hypothesisPage,
+  formulaList, formulaTotal, formulaPage, formulaCategories,
+  fetchKnowledge, fetchCategories, fetchStats, deleteKnowledge: deleteKnowledgeApi,
+  searchEntities, fetchEntityGraph, fetchHypotheses,
+  fetchFormulas, fetchFormulaCategories
+} = useKnowledge()
 
 const isMobile = ref(window.innerWidth <= 768)
-const knowledgeList = ref([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(20)
-const searchQuery = ref('')
-const filterCategory = ref('')
 const showCreateDialog = ref(false)
 const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
-const loading = ref(false)
-const statsData = ref({ total: 0, categories: {} })
-const categories = ref([])
-const hotTags = ref([])
 const uploadTitle = ref('')
 const uploadFile = ref(null)
 const uploading = ref(false)
@@ -625,32 +629,21 @@ const activeTab = ref('knowledge')
 
 // Entity tab
 const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
-const entityList = ref([])
-const entityTotal = ref(0)
-const entityPage = ref(1)
-const entityGraphData = ref({ nodes: [], edges: [] })
 const entityGraphRef = ref(null)
 let entityChartInstance = null
 const showEntityDetailDialog = ref(false)
 const entityDetail = ref(null)
 
 // Hypothesis tab
-const hypothesisList = ref([])
-const hypothesisTotal = ref(0)
-const hypothesisPage = ref(1)
 const hypothesisFilter = ref({ status: '', priority: '' })
 const hypothesisTopic = ref('')
 const hypothesisGenerating = ref(false)
 
 // Formula tab
-const formulaList = ref([])
-const formulaTotal = ref(0)
-const formulaPage = ref(1)
 const formulaCategoryFilter = ref(null)
 const formulaKeyword = ref('')
 const formulaSourceFilter = ref('')
 const formulaDomains = ref([])
-const formulaCategories = ref([])
 const selectedFormula = ref(null)
 const calcInputs = ref({})
 const calcResult = ref(null)
@@ -661,6 +654,8 @@ const qaQuery = ref('')
 const qaLoading = ref(false)
 const qaResult = ref(null)
 const qaError = ref('')
+const qaReasonMode = ref(false)
+const qaReasonResult = ref(null)
 const suggestions = [
   '微纳米气泡在水处理中的应用',
   '臭氧微纳米气泡消毒效果',
@@ -669,7 +664,7 @@ const suggestions = [
   '气泡稳定性影响因素',
 ]
 
-// 计算精简后的分类统计（只显示有数据的）
+// 表单
 const knowledgeForm = ref({
   title: '',
   category: '',
@@ -677,56 +672,12 @@ const knowledgeForm = ref({
   content: '',
   source: ''
 })
+
 const catStats = computed(() => {
   return statsData.value.categories || {}
 })
 
-// ── 知识列表 ──
-
-const fetchKnowledge = async () => {
-  loading.value = true
-  try {
-    const params = { page: currentPage.value, page_size: pageSize.value }
-    if (searchQuery.value) params.keyword = searchQuery.value
-    if (filterCategory.value) params.category = filterCategory.value
-
-    const res = await axios.get('/api/v1/knowledge', { params })
-    knowledgeList.value = res.data.items || []
-    total.value = res.data.total || 0
-  } catch (e) {
-    console.error('获取知识失败:', e)
-  } finally {
-    loading.value = false
-  }
-}
-
-// ── 动态分类 + 标签 ──
-
-const fetchCategories = async () => {
-  try {
-    const [catRes, tagRes] = await Promise.all([
-      axios.get('/api/v1/knowledge/categories'),
-      axios.get('/api/v1/knowledge/tags', { params: { min_freq: 1, limit: 30 } }),
-    ])
-    categories.value = catRes.data || []
-    hotTags.value = tagRes.data || []
-  } catch (e) {
-    console.error('获取分类/标签失败:', e)
-  }
-}
-
-// ── 统计 ──
-
-const fetchStats = async () => {
-  try {
-    const res = await axios.get('/api/v1/knowledge/stats')
-    statsData.value = res.data
-  } catch (e) {
-    console.error('获取统计失败:', e)
-  }
-}
-
-// ── 保存/编辑/删除 ──
+// ── 保存/编辑 ──
 
 const saveKnowledge = async () => {
   if (!knowledgeForm.value.title || !knowledgeForm.value.content) {
@@ -776,14 +727,11 @@ const downloadFile = async (item) => {
   }
 }
 
-const deleteKnowledge = async (item) => {
+const handleDeleteKnowledge = async (item) => {
   try {
     await ElMessageBox.confirm('确定要删除这条知识吗？', '确认删除', { type: 'warning' })
-    await axios.delete(`/api/v1/knowledge/${item.id}`)
+    await deleteKnowledgeApi(item.id)
     ElMessage.success('知识删除成功')
-    fetchKnowledge()
-    fetchStats()
-    fetchCategories()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('删除失败')
   }
@@ -810,7 +758,6 @@ const confidenceLabel = (level) => {
 
 const renderAnswer = (text) => {
   if (!text) return ''
-  // HTML 转义（防 XSS），仅 [来源:xxx] 转为安全标签
   const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return escaped.replace(/\[来源:([^\]]+)\]/g, '<span class="qa-citation">📖 $1</span>')
 }
@@ -852,7 +799,6 @@ const handleUpload = async () => {
       } else if (typeof detail === 'string') {
         ElMessage.error(detail)
       } else if (typeof e.response?.data === 'string') {
-        // Nginx 返回的 HTML 错误页等非 JSON 响应
         ElMessage.error('服务器错误，请稍后重试')
       } else {
         ElMessage.error('上传失败')
@@ -862,10 +808,6 @@ const handleUpload = async () => {
     uploading.value = false
   }
 }
-
-// QA reasoning mode
-const qaReasonMode = ref(false)
-const qaReasonResult = ref(null)
 
 const handleQA = async () => {
   const q = qaQuery.value.trim()
@@ -904,7 +846,6 @@ watch(filterCategory, () => {
   fetchKnowledge()
 })
 
-// 清空搜索时自动刷新
 watch(searchQuery, (val) => {
   if (!val) {
     currentPage.value = 1
@@ -925,20 +866,17 @@ onMounted(() => {
 
 // ── Entity methods ──
 
-const searchEntities = async () => {
+const searchEntitiesLocal = async () => {
   try {
     const params = { ...entitySearch.value, page: entityPage.value, page_size: 20 }
     Object.keys(params).forEach(k => { if (!params[k]) delete params[k] })
-    const res = await axios.get('/api/v1/knowledge/entities', { params })
-    entityList.value = res.data.items || []
-    entityTotal.value = res.data.total || 0
+    await searchEntities(params)
   } catch (e) { ElMessage.error('实体搜索失败') }
 }
 
-const fetchEntityGraph = async () => {
+const fetchEntityGraphLocal = async () => {
   try {
-    const res = await axios.get('/api/v1/knowledge/entities/graph', { params: { limit: 80 } })
-    entityGraphData.value = res.data
+    await fetchEntityGraph()
     await nextTick()
     renderEntityGraph()
   } catch (e) { console.error('实体图谱加载失败:', e) }
@@ -981,17 +919,6 @@ const showEntityDetail = async (id) => {
 
 // ── Hypothesis methods ──
 
-const fetchHypotheses = async () => {
-  try {
-    const params = { page: hypothesisPage.value, page_size: 20 }
-    if (hypothesisFilter.value.status) params.status = hypothesisFilter.value.status
-    if (hypothesisFilter.value.priority) params.priority = hypothesisFilter.value.priority
-    const res = await axios.get('/api/v1/knowledge/hypotheses', { params })
-    hypothesisList.value = res.data.items || []
-    hypothesisTotal.value = res.data.total || 0
-  } catch (e) { console.error('获取假设失败:', e) }
-}
-
 const generateHypotheses = async () => {
   hypothesisGenerating.value = true
   try {
@@ -1020,25 +947,6 @@ const validateHypothesis = async (id, status) => {
 }
 
 // ── Formula methods ──
-
-const fetchFormulas = async () => {
-  try {
-    const params = { page: formulaPage.value, page_size: 20 }
-    if (formulaCategoryFilter.value) params.category_id = formulaCategoryFilter.value
-    if (formulaKeyword.value) params.keyword = formulaKeyword.value
-    if (formulaSourceFilter.value) params.source_type = formulaSourceFilter.value
-    const res = await axios.get('/api/v1/knowledge/formulas', { params })
-    formulaList.value = res.data.items || []
-    formulaTotal.value = res.data.total || 0
-  } catch (e) { console.error('获取公式失败:', e) }
-}
-
-const fetchFormulaCategories = async () => {
-  try {
-    const res = await axios.get('/api/v1/knowledge/formulas/categories')
-    formulaCategories.value = res.data || []
-  } catch (e) { console.error('获取公式分类树失败:', e) }
-}
 
 const fetchFormulaDomains = async () => {
   try {
@@ -1076,7 +984,7 @@ const runCalculation = async () => {
 // ── Tab watcher ──
 
 watch(activeTab, (tab) => {
-  if (tab === 'entities') { searchEntities(); fetchEntityGraph() }
+  if (tab === 'entities') { searchEntitiesLocal(); fetchEntityGraphLocal() }
   if (tab === 'hypotheses') fetchHypotheses()
   if (tab === 'formulas') { fetchFormulas(); fetchFormulaCategories() }
 })
