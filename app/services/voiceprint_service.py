@@ -17,7 +17,7 @@ logger = logging.getLogger("microbubble.voiceprint")
 # 3D-Speaker ERes2Net 嵌入维度（ERes2Net 实际输出 192 维，不是 256）
 EMBEDDING_DIM = 192
 # 声纹匹配置信度阈值（余弦距离，越低越相似）
-MATCH_THRESHOLD = 0.55
+MATCH_THRESHOLD = 0.7
 
 
 class VoiceprintService:
