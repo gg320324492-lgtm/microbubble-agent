@@ -372,3 +372,26 @@ body {
 .tag-warning { background: var(--color-warning-bg); color: var(--color-warning); }
 .tag-danger  { background: var(--color-danger-bg); color: var(--color-danger); }
 .tag-info    { background: var(--color-info-bg); color: var(--color-info); }
+
+/* ============================================
+   知识库专用变量
+   ============================================ */
+
+:root {
+  /* 知识库间距 */
+  --knowledge-card-gap: 16px;
+  --knowledge-card-padding: 16px;
+  --knowledge-grid-columns: 3;
+
+  /* 知识库动画 */
+  --knowledge-card-hover-lift: -3px;
+  --knowledge-card-hover-shadow: 0 4px 20px rgba(255, 122, 92, 0.30);
+}
+
+/* 分类颜色 */
+.knowledge-color-microbubble { --accent: #FF7A5C; }  /* 微纳米气泡 - 珊瑚橙 */
+.knowledge-color-water       { --accent: #5470c6; }  /* 水处理 - 蓝色 */
+.knowledge-color-agriculture { --accent: #91cc75; }  /* 农业 - 绿色 */
+.knowledge-color-disinfection{ --accent: #ee6666; }  /* 消毒 - 红色 */
+.knowledge-color-measurement { --accent: #73c0de; }  /* 测量 - 青色 */
+.knowledge-color-application { --accent: #fc8452; }  /* 应用 - 橙色 */
