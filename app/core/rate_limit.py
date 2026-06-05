@@ -70,6 +70,8 @@ def _get_client_key(request: Request) -> str:
 
 async def rate_limit_middleware(request: Request, call_next):
     """全站限流中间件"""
+    from starlette.responses import JSONResponse
+
     # 跳过健康检查和 WebSocket
     if request.url.path in ("/health", "/docs", "/openapi.json"):
         return await call_next(request)
@@ -78,7 +80,14 @@ async def rate_limit_middleware(request: Request, call_next):
     limiter = _rate_limiters[limit_type]
     client_key = f"{limit_type}:{_get_client_key(request)}"
 
-    limiter.check(client_key)
+    try:
+        limiter.check(client_key)
+    except HTTPException as e:
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"error": {"code": "RATE_LIMIT_EXCEEDED", "message": e.detail}},
+        )
+
     limiter.record(client_key)
 
     response = await call_next(request)
