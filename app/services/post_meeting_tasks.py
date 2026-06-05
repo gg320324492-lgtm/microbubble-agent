@@ -134,6 +134,7 @@ def post_meeting_process(self, meeting_id: int):
                     "约纳米气泡": "微纳米气泡",
                     "拆GPT": "ChatGPT",
                     "多通科": "杜同贺",
+                    "宋阳": "宋洋",
                 }
                 for ck, cv in TEXT_CORRECTIONS.items():
                     for seg in transcript_segments:
