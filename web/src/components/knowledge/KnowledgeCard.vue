@@ -235,13 +235,17 @@ const formatDate = (dateStr) => {
 .card-title {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+  color: #2563eb;
   line-height: 1.4;
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.card-title:hover {
+  color: #1d4ed8;
 }
 
 .auto-research-badge {

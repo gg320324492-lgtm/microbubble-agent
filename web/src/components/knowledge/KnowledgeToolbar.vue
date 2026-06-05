@@ -177,6 +177,19 @@ const resetFilters = () => {
 
 .toolbar-actions .el-button {
   flex-shrink: 0;
+  font-weight: 500;
+}
+
+.toolbar-actions .el-button--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.toolbar-actions .el-button--warning {
+  background: #e6a23c;
+  border-color: #e6a23c;
+  color: #fff;
 }
 
 .btn-text {
