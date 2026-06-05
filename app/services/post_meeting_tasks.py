@@ -203,64 +203,84 @@ def post_meeting_process(self, meeting_id: int):
                         cluster_centers.append(emb)
                         cluster_representatives.append(emb)
 
-                # 2.4 识别每个发言人（使用聚类代表的声纹，而非中心）
-                unique_speakers = set(c for c in clusters if c >= 0)
-                cluster_speakers = {}
-                for cluster_id in unique_speakers:
-                    # 使用第一个 embedding 作为代表（更稳定）
-                    name, member_id, conf = await vp_service.identify_speaker(db, cluster_representatives[cluster_id])
-                    if name and conf > 0.4:  # 降低阈值从 0.55 到 0.4
-                        cluster_speakers[cluster_id] = name
+                # 2.4 识别每个段落的发言人（用声纹查询，不依赖聚类）
+                # 先为每个段单独识别
+                seg_names = []
+                for i, seg in enumerate(transcript_segments):
+                    if clusters[i] < 0:
+                        seg_names.append("发言人?")
+                        continue
+                    # 用聚类代表做识别
+                    emb = seg_embeddings[i]
+                    name, member_id, conf = await vp_service.identify_speaker(db, emb)
+                    if name and conf > 0.4:
+                        seg_names.append(name)
                     else:
-                        cluster_speakers[cluster_id] = f"发言人{chr(65 + cluster_id)}"
+                        seg_names.append(None)  # 暂时留空，后面统一处理
 
-                # 2.5 分配发言人到每个段
+                # 2.5 聚类 + 声纹结果协调
+                # 统计每个聚类中出现的已知名字
+                from collections import Counter
+                unique_clusters = set(c for c in clusters if c >= 0)
+                cluster_to_name = {}
+                known_names_set = set()  # 记录所有已知名字
+
+                for cid in unique_clusters:
+                    # 收集该聚类中所有已知名字
+                    cluster_names = [
+                        seg_names[i] for i in range(len(transcript_segments))
+                        if clusters[i] == cid and seg_names[i] is not None
+                    ]
+                    if cluster_names:
+                        # 取出现最多的已知名字
+                        best_name = Counter(cluster_names).most_common(1)[0][0]
+                        cluster_to_name[cid] = best_name
+                        known_names_set.add(best_name)
+                    else:
+                        cluster_to_name[cid] = None
+
+                # 如果所有聚类都没有已知名字 → 使用原位识别
+                if not known_names_set:
+                    for cid in unique_clusters:
+                        cluster_to_name[cid] = f"发言人{chr(65 + cid)}"
+                else:
+                    # 确保每个聚类都有名字：未知聚类分配新名字
+                    unknown_count = 0
+                    for cid in unique_clusters:
+                        if cluster_to_name[cid] is None:
+                            # 检查是否有未使用的已知名字
+                            unused_name = None
+                            for name in ["发言人A", "发言人B"]:
+                                if name not in known_names_set:
+                                    unused_name = name
+                                    break
+                            if unused_name:
+                                cluster_to_name[cid] = unused_name
+                                known_names_set.add(unused_name)
+                            else:
+                                # 分配发言人标签
+                                while f"发言人{chr(65 + unknown_count)}" in known_names_set:
+                                    unknown_count += 1
+                                cluster_to_name[cid] = f"发言人{chr(65 + unknown_count)}"
+                                unknown_count += 1
+
+                # 2.6 分配发言人到每个段
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] >= 0:
-                        seg["speaker"] = cluster_speakers[clusters[i]]
+                        seg["speaker"] = cluster_to_name[clusters[i]]
                         if not seg["speaker"].startswith("发言人"):
                             speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = seg["speaker"]
                     else:
                         seg["speaker"] = "发言人?"
 
-                logger.info(f"声纹聚类完成: {len(unique_speakers)} 位发言人, {len(cluster_centers)} 个聚类中心")
+                logger.info(f"声纹聚类完成: {len(known_names_set)} 位发言人, 已知={[n for n in known_names_set if not n.startswith('发言人')]}")
 
-                # 后处理：智能合并发言人
-                # 统计每个发言人的出现次数
-                speaker_counts = {}
-                for seg in transcript_segments:
-                    sp = seg.get("speaker", "未知")
-                    speaker_counts[sp] = speaker_counts.get(sp, 0) + 1
-
-                known_speakers = [sp for sp in speaker_counts if not sp.startswith("发言人")]
-                unknown_speakers = [sp for sp in speaker_counts if sp.startswith("发言人")]
-
-                # 策略1：如果只有1个已知发言人，所有未知归为"第二位发言人"
-                if len(known_speakers) == 1 and unknown_speakers:
-                    for seg in transcript_segments:
-                        if seg.get("speaker", "").startswith("发言人"):
-                            seg["speaker"] = "发言人B"
-                    logger.info(f"只有 1 位已知发言人 ({known_speakers[0]})，未知发言人合并为 发言人B")
-
-                # 策略2：如果有2个已知发言人，所有未知归为第二个已知发言人
-                elif len(known_speakers) == 2 and unknown_speakers:
-                    second_speaker = known_speakers[1]
-                    for seg in transcript_segments:
-                        if seg.get("speaker", "").startswith("发言人"):
-                            seg["speaker"] = second_speaker
-                            speaker_mapping[seg.get("speaker_label", "")] = second_speaker
-                    logger.info(f"2 位已知发言人 ({known_speakers[0]}, {second_speaker})，未知发言人合并为 {second_speaker}")
-
-                # 策略3：未知发言人统一编号
-                else:
-                    unknown_labels = sorted(set(
-                        seg["speaker"] for seg in transcript_segments
-                        if seg["speaker"].startswith("发言人")
-                    ))
-                    label_map = {old: f"发言人{chr(65+i)}" for i, old in enumerate(unknown_labels)}
-                    for seg in transcript_segments:
-                        if seg["speaker"] in label_map:
-                            seg["speaker"] = label_map[seg["speaker"]]
+                # 后处理：统计确认
+                speaker_set = set(seg.get("speaker", "?") for seg in transcript_segments)
+                speaker_counts = Counter(seg.get("speaker", "?") for seg in transcript_segments)
+                known = [s for s in speaker_set if not s.startswith("发言人") and s != "?"]
+                unknown = [s for s in speaker_set if s.startswith("发言人")]
+                logger.info(f"发言人确认: {len(known)} 位已知({', '.join(known)}), {len(unknown)} 位未知({', '.join(unknown)}), 共{len(speaker_set)}位")
 
                 # 更新 speaker_mapping
                 for seg in transcript_segments:
