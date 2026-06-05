@@ -57,7 +57,7 @@
       <div class="hero-actions">
         <template v-if="!editing">
           <el-button type="primary" @click="startLiveCall">
-            <el-icon><Phone /></el-icon> 声纹通话
+            <el-icon><Microphone /></el-icon> 开始听会
           </el-button>
           <el-button @click="enterEdit">
             <el-icon><Edit /></el-icon> 编辑
@@ -253,7 +253,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Phone, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
