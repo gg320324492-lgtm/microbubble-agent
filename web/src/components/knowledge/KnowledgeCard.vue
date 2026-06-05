@@ -16,7 +16,7 @@
       <div class="card-header">
         <div class="card-category">
           <span class="category-badge" :style="{ background: accentColor + '15', color: accentColor }">
-            {{ item.category || '未分类' }}
+            {{ categoryIcon }} {{ item.category || '未分类' }}
           </span>
           <el-tag
             v-if="item.analysis_status === 'pending' || item.analysis_status === 'analyzing'"
@@ -107,6 +107,7 @@ const props = defineProps({
 defineEmits(['click', 'edit', 'delete', 'download'])
 
 // 分类颜色映射
+// 分类颜色映射
 const categoryColors = {
   '微纳米气泡': '#FF7A5C',
   '水处理': '#5470c6',
@@ -114,11 +115,35 @@ const categoryColors = {
   '消毒': '#ee6666',
   '测量': '#73c0de',
   '应用': '#fc8452',
+  '论文': '#3b82f6',
+  '方法': '#8b5cf6',
+  '标准': '#f59e0b',
+  '综述': '#10b981',
+  '案例': '#f97316',
+  'FAQ': '#ec4899',
+  '笔记': '#6366f1',
+  '手册': '#14b8a6'
+}
+
+// 分类图标映射
+const categoryIcons = {
+  '论文': '📄',
+  '方法': '🔬',
+  '标准': '📏',
+  '综述': '📖',
+  '案例': '💡',
+  'FAQ': '❓',
+  '笔记': '📝',
+  '手册': '📚'
 }
 
 const accentColor = computed(() => {
   const cat = props.item.category
   return categoryColors[cat] || '#FF7A5C'
+})
+
+const categoryIcon = computed(() => {
+  return categoryIcons[props.item.category] || ''
 })
 
 const sourceIcon = computed(() => {

@@ -36,9 +36,9 @@
     </div>
 
     <!-- 热门分类 -->
-    <div class="categories-section" v-if="categories.length > 0">
+    <div class="categories-section">
       <div class="section-header">
-        <h3 class="section-title">🏷️ 热门分类</h3>
+        <h3 class="section-title">🏷️ 知识分类</h3>
         <el-button text size="small" @click="$emit('show-all-categories')">
           查看全部
         </el-button>
@@ -49,10 +49,22 @@
           :class="{ 'category-active': activeCategory === '' }"
           @click="$emit('filter-category', '')"
         >
-          全部
+          📚 全部
         </div>
+        <!-- 预设分类 -->
         <div
-          v-for="cat in categories.slice(0, 8)"
+          v-for="cat in presetCategories"
+          :key="cat.name"
+          class="category-chip"
+          :class="{ 'category-active': activeCategory === cat.name }"
+          @click="$emit('filter-category', cat.name)"
+        >
+          {{ cat.icon }} {{ cat.name }}
+          <span class="category-count" v-if="getCategoryCount(cat.name) > 0">{{ getCategoryCount(cat.name) }}</span>
+        </div>
+        <!-- 动态分类（排除已有的预设分类） -->
+        <div
+          v-for="cat in dynamicCategories"
           :key="cat.name"
           class="category-chip"
           :class="{ 'category-active': activeCategory === cat.name }"
@@ -101,6 +113,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import KnowledgeCard from './KnowledgeCard.vue'
 
 const props = defineProps({
@@ -110,6 +123,30 @@ const props = defineProps({
   activeCategory: { type: String, default: '' },
   loading: { type: Boolean, default: false }
 })
+
+// 预设分类
+const presetCategories = [
+  { name: '论文', icon: '📄' },
+  { name: '方法', icon: '🔬' },
+  { name: '标准', icon: '📏' },
+  { name: '综述', icon: '📖' },
+  { name: '案例', icon: '💡' },
+  { name: 'FAQ', icon: '❓' },
+  { name: '笔记', icon: '📝' },
+  { name: '手册', icon: '📚' }
+]
+
+// 动态分类（排除预设分类）
+const dynamicCategories = computed(() => {
+  const presetNames = presetCategories.map(c => c.name)
+  return props.categories.filter(c => !presetNames.includes(c.name)).slice(0, 6)
+})
+
+// 获取分类数量
+const getCategoryCount = (categoryName) => {
+  const found = props.categories.find(c => c.name === categoryName)
+  return found ? found.count : 0
+}
 
 defineEmits([
   'filter-category',
