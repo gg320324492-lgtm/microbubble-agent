@@ -136,11 +136,11 @@ class AudioProcessor:
                 end_time=len(audio) / sample_rate,
             )]
 
-        # 合并相邻过近的语音段（间隔 < 1s 的合并）
+        # 合并相邻过近的语音段（间隔 < 0.3s 的合并，避免合并不同发言人的语音）
         merged = [speeches[0]]
         for seg in speeches[1:]:
             gap_samples = seg["start"] - merged[-1]["end"]
-            if gap_samples < sample_rate * 1.0:  # 间隔 < 1s，合并
+            if gap_samples < sample_rate * 0.3:  # 间隔 < 0.3s，合并
                 merged[-1]["end"] = seg["end"]
             else:
                 merged.append(seg)
