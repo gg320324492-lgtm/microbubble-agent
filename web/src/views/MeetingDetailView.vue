@@ -56,9 +56,6 @@
       <!-- 操作按钮 -->
       <div class="hero-actions">
         <template v-if="!editing">
-          <el-button type="primary" @click="startLiveCall">
-            <el-icon><Microphone /></el-icon> 开始听会
-          </el-button>
           <el-button @click="enterEdit">
             <el-icon><Edit /></el-icon> 编辑
           </el-button>
