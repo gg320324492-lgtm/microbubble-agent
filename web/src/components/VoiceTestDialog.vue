@@ -17,19 +17,19 @@
       <div class="record-area" v-if="state === 'idle' || state === 'recording'">
         <div class="mic-button" :class="{ recording: state === 'recording' }" @click="toggleRecord">
           <el-icon :size="48"><Microphone /></el-icon>
+          <!-- 录音中的脉冲光晕 -->
+          <div v-if="state === 'recording'" class="mic-pulse" />
         </div>
         <div class="timer" v-if="state === 'recording'">{{ recordingTime }}s / 5s</div>
 
-        <!-- 实时音量条 -->
-        <div class="level-bars" v-if="state === 'recording'">
-          <div
-            v-for="i in 20"
-            :key="i"
-            class="level-bar"
-            :style="{ height: getBarHeight(i) + '%' }"
-            :class="{ active: getBarHeight(i) > 30 }"
-          ></div>
-        </div>
+        <!-- Canvas 波形动画 -->
+        <canvas
+          v-if="state === 'recording'"
+          ref="waveformRef"
+          class="waveform-canvas"
+          width="400"
+          height="80"
+        />
       </div>
 
       <!-- 测试中 -->
@@ -95,13 +95,14 @@ let workletNode = null
 let mediaRecorder = null
 let audioChunks = []
 let timerInterval = null
-let currentLevel = ref(0)
+let animFrameId = null
+let analyserNode = null
+let freqDataArray = null
 
-function getBarHeight(i) {
-  const base = currentLevel.value * 100
-  const offset = (i % 4) * 0.1
-  return Math.max(5, Math.min(100, base + offset * 100))
-}
+// 平滑后的频率数据（用于衰减动画）
+let smoothedData = null
+
+const waveformRef = ref(null)
 
 async function toggleRecord() {
   if (state.value === 'recording') {
@@ -135,22 +136,18 @@ async function startRecord() {
       await audioContext.resume()
     }
     const source = audioContext.createMediaStreamSource(mediaStream)
-    const analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256
-    source.connect(analyser)
+    analyserNode = audioContext.createAnalyser()
+    analyserNode.fftSize = 256
+    analyserNode.smoothingTimeConstant = 0.8
+    source.connect(analyserNode)
 
-    const dataArray = new Uint8Array(analyser.frequencyBinCount)
-    const updateLevel = () => {
-      if (state.value !== 'recording') return
-      analyser.getByteFrequencyData(dataArray)
-      const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length / 255
-      currentLevel.value = avg
-      requestAnimationFrame(updateLevel)
-    }
-    updateLevel()
+    freqDataArray = new Uint8Array(analyserNode.frequencyBinCount)
+    smoothedData = new Float32Array(analyserNode.frequencyBinCount).fill(0)
+
+    // 启动 Canvas 波形动画
+    drawWaveform()
   } catch (e) {
     console.warn('AudioContext 初始化失败（不影响录音）:', e)
-    currentLevel.value = 0
   }
 
   // 3. 录音（支持多格式兜底）
@@ -185,13 +182,107 @@ function stopRecord() {
     mediaRecorder.stop()
   }
   clearInterval(timerInterval)
+  cancelAnimationFrame(animFrameId)
+  animFrameId = null
+  analyserNode = null
+  freqDataArray = null
+  smoothedData = null
   if (mediaStream) {
     mediaStream.getTracks().forEach(t => t.stop())
   }
   if (audioContext) {
     audioContext.close()
   }
-  currentLevel.value = 0
+}
+
+// ===== Canvas 波形绘制 =====
+
+function drawWaveform() {
+  if (state.value !== 'recording') return
+
+  const canvas = waveformRef.value
+  if (!canvas || !analyserNode || !freqDataArray) return
+
+  const ctx = canvas.getContext('2d')
+  const W = canvas.width
+  const H = canvas.height
+
+  // 获取频率数据
+  analyserNode.getByteFrequencyData(freqDataArray)
+
+  // 平滑衰减
+  const decay = 0.7
+  const attack = 0.3
+  for (let i = 0; i < freqDataArray.length; i++) {
+    const target = freqDataArray[i] / 255
+    smoothedData[i] = smoothedData[i] * decay + target * attack
+  }
+
+  // 清除画布
+  ctx.clearRect(0, 0, W, H)
+
+  // 采样点数（取中间频段，跳过高频噪声）
+  const usableBins = Math.floor(freqDataArray.length * 0.7)
+  const pointCount = Math.min(usableBins, 64)
+  const step = Math.floor(usableBins / pointCount)
+
+  const points = []
+  for (let i = 0; i < pointCount; i++) {
+    const idx = i * step
+    const value = smoothedData[idx] || 0
+    points.push({
+      x: (i / (pointCount - 1)) * W,
+      y: H - value * H * 0.85 - H * 0.05
+    })
+  }
+
+  // 绘制填充区域（渐变）
+  const gradient = ctx.createLinearGradient(0, 0, 0, H)
+  gradient.addColorStop(0, 'rgba(255, 122, 92, 0.6)')
+  gradient.addColorStop(0.5, 'rgba(255, 179, 71, 0.3)')
+  gradient.addColorStop(1, 'rgba(255, 122, 92, 0.05)')
+
+  ctx.beginPath()
+  ctx.moveTo(0, H)
+
+  // 用贝塞尔曲线平滑连接
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) {
+      ctx.lineTo(points[i].x, points[i].y)
+    } else {
+      const prev = points[i - 1]
+      const cpx = (prev.x + points[i].x) / 2
+      ctx.bezierCurveTo(cpx, prev.y, cpx, points[i].y, points[i].x, points[i].y)
+    }
+  }
+
+  ctx.lineTo(W, H)
+  ctx.closePath()
+  ctx.fillStyle = gradient
+  ctx.fill()
+
+  // 绘制顶部曲线描边
+  ctx.beginPath()
+  for (let i = 0; i < points.length; i++) {
+    if (i === 0) {
+      ctx.moveTo(points[i].x, points[i].y)
+    } else {
+      const prev = points[i - 1]
+      const cpx = (prev.x + points[i].x) / 2
+      ctx.bezierCurveTo(cpx, prev.y, cpx, points[i].y, points[i].x, points[i].y)
+    }
+  }
+  ctx.strokeStyle = '#FF7A5C'
+  ctx.lineWidth = 2
+  ctx.stroke()
+
+  // 发光效果
+  ctx.shadowColor = 'rgba(255, 122, 92, 0.4)'
+  ctx.shadowBlur = 8
+  ctx.stroke()
+  ctx.shadowBlur = 0
+
+  animFrameId = requestAnimationFrame(drawWaveform)
 }
 
 async function onRecordStop() {
@@ -260,6 +351,7 @@ onUnmounted(() => {
 }
 
 .mic-button {
+  position: relative;
   width: 80px;
   height: 80px;
   border-radius: 50%;
@@ -290,21 +382,24 @@ onUnmounted(() => {
   color: #FF7A5C;
 }
 
-.level-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 50px;
+.waveform-canvas {
+  width: 100%;
+  max-width: 400px;
+  height: 80px;
+  border-radius: var(--radius-md);
 }
-.level-bar {
-  width: 8px;
-  min-height: 4px;
-  background: #ddd;
-  border-radius: 4px;
-  transition: height 0.1s;
+
+.mic-pulse {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 122, 92, 0.4);
+  animation: mic-pulse-ring 1.5s ease-out infinite;
 }
-.level-bar.active {
-  background: linear-gradient(180deg, #FF7A5C, #FFB347);
+
+@keyframes mic-pulse-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.3); opacity: 0; }
 }
 
 .testing-area {
