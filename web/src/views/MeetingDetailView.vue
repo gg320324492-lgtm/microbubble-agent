@@ -168,9 +168,9 @@
           <!-- Tab 2: 转录记录 -->
           <el-tab-pane label="转录记录" name="transcript">
             <div class="tab-content">
-              <template v-if="meeting.transcript_polished?.length">
+              <template v-if="transcriptEntries.length">
                 <div
-                  v-for="(entry, i) in meeting.transcript_polished"
+                  v-for="(entry, i) in transcriptEntries"
                   :key="i"
                   class="transcript-entry"
                   :class="{ 'entry-removed': entry.removed }"
@@ -282,6 +282,14 @@ const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
 
+// 转录记录：优先用 polished，回退到原始 transcript
+const transcriptEntries = computed(() => {
+  if (!meeting.value) return []
+  return meeting.value.transcript_polished?.length
+    ? meeting.value.transcript_polished
+    : (meeting.value.transcript || [])
+})
+
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
 
@@ -294,6 +302,13 @@ const fetchMeeting = async () => {
   try {
     const res = await axios.get(`/api/v1/meetings/${route.params.id}`)
     meeting.value = res.data
+    // 如果没有发言统计但有转录，自动获取统计数据
+    if (!meeting.value.speaker_stats && meeting.value.transcript?.length) {
+      try {
+        const analyticsRes = await axios.get(`/api/v1/meetings/${route.params.id}/analytics`)
+        meeting.value.speaker_stats = analyticsRes.data.speaker_stats || []
+      } catch { /* 静默失败 */ }
+    }
   } catch {
     ElMessage.error('加载会议失败')
   }
