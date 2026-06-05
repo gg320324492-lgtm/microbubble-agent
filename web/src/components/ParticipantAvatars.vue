@@ -82,20 +82,15 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
 .participant-avatars {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 8px;
 }
 
 .avatar-item {
   border: 2px solid #fff;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-  margin-left: -8px;
   cursor: pointer;
   transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
   flex-shrink: 0;
-}
-
-.avatar-item:first-child {
-  margin-left: 0;
 }
 
 .avatar-item:hover {
@@ -113,7 +108,6 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
   border: 2px solid #fff;
   color: var(--color-text-secondary, #909399);
   font-weight: 600;
-  margin-left: -8px;
   flex-shrink: 0;
 }
 
