@@ -37,6 +37,14 @@ def _numpy_to_wav_bytes(audio: np.ndarray, sample_rate: int = 16000) -> bytes:
     return buf.getvalue()
 
 
+def _apply_text_corrections(text: str, corrections: dict) -> str:
+    """对文本应用纠错映射"""
+    for ck, cv in corrections.items():
+        if ck in text:
+            text = text.replace(ck, cv)
+    return text
+
+
 def _edit_distance(a: str, b: str) -> int:
     """Levenshtein 编辑距离（用于名字模糊匹配）"""
     la, lb = len(a), len(b)
@@ -467,6 +475,10 @@ def post_meeting_process(self, meeting_id: int):
                 meeting.summary = analysis.get("summary")
                 meeting.key_points = analysis.get("key_points", [])
                 meeting.decisions = analysis.get("decisions", [])
+                # 对 AI 输出也做文本纠错（"小七助手"→"小气助手" 等）
+                meeting.summary = _apply_text_corrections(meeting.summary or "", TEXT_CORRECTIONS)
+                meeting.key_points = [_apply_text_corrections(kp, TEXT_CORRECTIONS) for kp in (meeting.key_points or [])]
+                meeting.decisions = [_apply_text_corrections(d, TEXT_CORRECTIONS) for d in (meeting.decisions or [])]
 
                 # 保存转写结果（原始 + 润色版）
                 meeting.transcript = transcript_segments
