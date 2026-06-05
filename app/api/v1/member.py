@@ -5,6 +5,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import get_password_hash, get_current_user, get_current_admin_user
+from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
 from app.models.member import Member
 from app.schemas.member import MemberCreate, MemberUpdate, MemberResponse, MemberList
 from app.api.v1.auth import _resolve_avatar_url
@@ -21,7 +22,7 @@ async def create_member(
     """创建成员"""
     existing = await db.execute(select(Member).where(Member.username == member_data.username))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="用户名已存在")
+        raise ValidationException("用户名已存在")
 
     member = Member(
         name=member_data.name,
@@ -97,7 +98,7 @@ async def get_member(
     member = result.scalar_one_or_none()
 
     if not member:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise NotFoundException("成员")
 
     resp = MemberResponse.model_validate(member)
     resp.avatar = _resolve_avatar_url(member)
@@ -116,7 +117,7 @@ async def update_member(
     member = result.scalar_one_or_none()
 
     if not member:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise NotFoundException("成员")
 
     update_data = member_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -138,7 +139,7 @@ async def delete_member(
     member = result.scalar_one_or_none()
 
     if not member:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise NotFoundException("成员")
 
     member.is_active = False
     await db.commit()

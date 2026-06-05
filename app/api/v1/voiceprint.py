@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.exceptions import NotFoundException, ValidationException
 from app.models.member import Member
 from app.services.voiceprint_service import voiceprint_service
 from app.utils.audio import decode_audio_to_float32
@@ -21,12 +22,12 @@ async def enroll_voiceprint(
 ):
     """录入成员声纹 — 上传 3-5 秒语音"""
     if not audio.content_type or not audio.content_type.startswith("audio/"):
-        raise HTTPException(status_code=400, detail="请上传音频文件")
+        raise ValidationException("请上传音频文件")
 
     try:
         audio_data = await audio.read()
         if len(audio_data) < 1000:
-            raise HTTPException(status_code=400, detail="音频太短，请录制至少 3 秒语音")
+            raise ValidationException("音频太短，请录制至少 3 秒语音")
 
         # 复用 app/utils/audio.py 统一转 16kHz mono float32
         audio_array = await decode_audio_to_float32(audio_data, timeout=15.0)
@@ -34,15 +35,15 @@ async def enroll_voiceprint(
         # 静音检测
         from app.utils.audio import is_audio_silent
         if is_audio_silent(audio_array):
-            raise HTTPException(status_code=400, detail="音频为静音，请重新录制")
+            raise ValidationException("音频为静音，请重新录制")
 
         # 太短（< 1s）拒绝
         if len(audio_array) < 16000:
-            raise HTTPException(status_code=400, detail="音频太短，请录制至少 1 秒以上语音")
+            raise ValidationException("音频太短，请录制至少 1 秒以上语音")
 
         success = await voiceprint_service.enroll_member(db, member_id, audio_array)
         if not success:
-            raise HTTPException(status_code=404, detail="成员不存在")
+            raise NotFoundException("成员")
 
         return {"message": "声纹录入成功", "member_id": member_id}
     except HTTPException:
