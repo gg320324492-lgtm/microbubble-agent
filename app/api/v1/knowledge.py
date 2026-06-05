@@ -106,7 +106,12 @@ async def list_knowledge(
     # 构建过滤条件
     filters = []
     if category:
-        filters.append(Knowledge.category == category)
+        # 同时匹配 category 字段或 tags 数组
+        from sqlalchemy import any_
+        filters.append(
+            (Knowledge.category == category) |
+            (Knowledge.tags.any(category))
+        )
     if keyword:
         filters.append(
             Knowledge.title.ilike(f"%{keyword}%") |
