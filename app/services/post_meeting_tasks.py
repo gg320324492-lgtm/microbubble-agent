@@ -167,29 +167,39 @@ def post_meeting_process(self, meeting_id: int):
                                     embeddings.append(emb)
 
                             if len(embeddings) >= 2:
-                                # 聚类：比较相邻 embedding 的余弦相似度
-                                # 相似度 < 0.7 视为不同发言人
+                                # 聚类：与已有聚类中心比较，相似度 >= 0.6 归为同一人
                                 from numpy.linalg import norm
                                 def cosine_sim(a, b):
                                     return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
 
-                                # 简单聚类：相似度高的归为同一人
-                                clusters = [0]  # 第一个片段属于发言人 0
+                                # 贪心聚类：每个新 embedding 与已有聚类中心比较
+                                cluster_centers = [embeddings[0]]  # 聚类中心列表
+                                clusters = [0]  # 每个片段的聚类标签
                                 for i in range(1, len(embeddings)):
-                                    sim = cosine_sim(embeddings[i], embeddings[i-1])
-                                    if sim < 0.7:
-                                        # 新发言人
-                                        clusters.append(max(clusters) + 1)
+                                    best_cluster = -1
+                                    best_sim = -1
+                                    for ci, center in enumerate(cluster_centers):
+                                        sim = cosine_sim(embeddings[i], center)
+                                        if sim > best_sim:
+                                            best_sim = sim
+                                            best_cluster = ci
+                                    if best_sim >= 0.6:  # 相似度 >= 0.6 归为已有聚类
+                                        clusters.append(best_cluster)
+                                        # 更新聚类中心（滑动平均）
+                                        cluster_centers[best_cluster] = (
+                                            cluster_centers[best_cluster] * 0.7 + embeddings[i] * 0.3
+                                        )
                                     else:
-                                        clusters.append(clusters[-1])
+                                        # 新发言人
+                                        clusters.append(len(cluster_centers))
+                                        cluster_centers.append(embeddings[i])
 
-                                # 识别每个发言人
+                                # 识别每个发言人（使用聚类中心的声纹）
                                 unique_speakers = set(clusters)
                                 cluster_speakers = {}
                                 for cluster_id in unique_speakers:
-                                    # 取该聚类中第一个片段的声纹做识别
-                                    idx = clusters.index(cluster_id)
-                                    name, member_id, conf = await vp_service.identify_speaker(db, embeddings[idx])
+                                    # 使用聚类中心做识别
+                                    name, member_id, conf = await vp_service.identify_speaker(db, cluster_centers[cluster_id])
                                     if name and conf > 0.55:
                                         cluster_speakers[cluster_id] = name
                                     else:
@@ -214,6 +224,23 @@ def post_meeting_process(self, meeting_id: int):
                     else:
                         seg["speaker"] = f"发言人{seg['speaker_label'].split('_')[-1]}"
 
+                # 后处理：合并相似发言人（同一人可能被识别为多个标签）
+                # 统计每个发言人的出现次数
+                speaker_counts = {}
+                for seg in transcript_segments:
+                    sp = seg.get("speaker", "未知")
+                    speaker_counts[sp] = speaker_counts.get(sp, 0) + 1
+
+                # 合并策略：如果已知发言人只有一个，将所有未知发言人归为该已知发言人
+                known_speakers = [sp for sp in speaker_counts if not sp.startswith("发言人")]
+                if len(known_speakers) == 1:
+                    # 只有 1 个已知发言人，将所有未知发言人归为"第二位发言人"
+                    main_speaker = known_speakers[0]
+                    for seg in transcript_segments:
+                        if seg.get("speaker", "").startswith("发言人"):
+                            seg["speaker"] = "发言人B"  # 未知的第二位发言人
+                    logger.info(f"只有 1 位已知发言人 ({main_speaker})，未知发言人标记为 发言人B")
+
                 # 统一未识别的发言人标签
                 unknown_labels = sorted(set(
                     seg["speaker"] for seg in transcript_segments
@@ -224,7 +251,13 @@ def post_meeting_process(self, meeting_id: int):
                     if seg["speaker"] in label_map:
                         seg["speaker"] = label_map[seg["speaker"]]
 
-                logger.info(f"声纹识别完成: {len(speaker_mapping)} 人已识别, {len(label_map)} 人未知")
+                # 更新 speaker_mapping
+                for seg in transcript_segments:
+                    sp = seg.get("speaker", "")
+                    if not sp.startswith("发言人") and seg.get("speaker_label"):
+                        speaker_mapping[seg["speaker_label"]] = sp
+
+                logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
 
                 # ===== 阶段 2.5: AI 润色转录 =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="AI 润色转录文本", redis_override=redis_client)
