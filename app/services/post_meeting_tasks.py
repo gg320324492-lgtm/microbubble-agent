@@ -240,6 +240,8 @@ def post_meeting_process(self, meeting_id: int):
                         cluster_representatives.append(emb)
 
                 # 2.4 识别每个段落的发言人（用声纹查询，不依赖聚类）
+                unique_clusters = set(c for c in clusters if c >= 0)
+                seg_names = []
                 # 先为每个段单独识别
                 seg_names = []
                 for i, seg in enumerate(transcript_segments):
@@ -323,7 +325,7 @@ def post_meeting_process(self, meeting_id: int):
                 # 2.5 聚类 + 声纹结果协调
                 # 统计每个聚类中出现的已知名字
                 from collections import Counter
-                unique_clusters = set(c for c in clusters if c >= 0)
+                unique_clusters = set(c for c in clusters if c >= 0)  # 此声明在 2.6 也用
                 cluster_to_name = {}
                 known_names_set = set()  # 记录所有已知名字
 
