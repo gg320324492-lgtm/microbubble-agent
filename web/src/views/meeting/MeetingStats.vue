@@ -137,7 +137,7 @@ function animateCounter(targetRef, target, duration = 600) {
 
 // ===== 辅助函数 =====
 
-const formatDate = (d) => dayjs(d).format('MM/DD HH:mm')
+const formatDate = (d) => dayjs(d).add(8, 'hour').format('MM/DD HH:mm')
 const statusLabel = (s) => ({ scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s)
 const statusType = (s) => ({ scheduled: 'info', recording: 'warning', processing: 'warning', completed: 'success', cancelled: 'info', error: 'danger' }[s] || 'info')
 

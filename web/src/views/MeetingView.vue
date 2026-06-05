@@ -531,10 +531,10 @@ const generateMinutes = async (meeting) => {
   }
 }
 
-// 辅助函数
-const formatMonth = (date) => dayjs(date).format('M月')
-const formatDay = (date) => dayjs(date).format('D')
-const formatHour = (date) => dayjs(date).format('HH:mm')
+// 辅助函数（数据库存 UTC，显示北京时间 UTC+8）
+const formatMonth = (date) => dayjs(date).add(8, 'hour').format('M月')
+const formatDay = (date) => dayjs(date).add(8, 'hour').format('D')
+const formatHour = (date) => dayjs(date).add(8, 'hour').format('HH:mm')
 const formatDate = (date) => formatDateTime(date)
 
 onMounted(() => {
