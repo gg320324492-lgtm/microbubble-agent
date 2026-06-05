@@ -34,23 +34,33 @@ class VADEngine:
         self._speech_probs: list[float] = []
 
     def _load_model(self):
-        """延迟加载 silero-vad 模型"""
+        """延迟加载 silero-vad 模型（优先本地缓存，回退远程下载）"""
         if self._model is not None:
             return
-        try:
-            import torch
-            model, utils = torch.hub.load(
-                repo_or_dir="snakers4/silero-vad",
-                model="silero_vad",
-                force_reload=False,
-                trust_repo=True,
-            )
-            self._get_speech_timestamps = utils[0]
-            self._model = model
-            logger.info("silero-vad 模型加载完成")
-        except Exception as e:
-            logger.error(f"silero-vad 加载失败: {e}")
-            raise
+        import torch
+
+        # 优先从本地缓存加载（避免 GitHub rate limit）
+        for source in ["local", "github"]:
+            try:
+                model, utils = torch.hub.load(
+                    repo_or_dir="snakers4/silero-vad",
+                    model="silero_vad",
+                    source=source,
+                    force_reload=False,
+                    trust_repo=True,
+                )
+                self._get_speech_timestamps = utils[0]
+                self._model = model
+                logger.info(f"silero-vad 模型加载完成 (source={source})")
+                return
+            except Exception as e:
+                logger.warning(f"silero-vad {source} 加载失败: {e}")
+
+        raise RuntimeError(
+            "无法加载 silero-vad 模型，请手动下载 "
+            "https://github.com/snakers4/silero-vad/archive/refs/heads/master.zip "
+            "解压到 /root/.cache/torch/hub/snakers4_silero-vad_master"
+        )
 
     def process_chunk(self, audio_chunk: np.ndarray) -> Optional[np.ndarray]:
         """处理一个音频块，返回完整语音段（如果有）。
