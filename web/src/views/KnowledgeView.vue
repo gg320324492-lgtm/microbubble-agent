@@ -407,7 +407,7 @@ const dashboardStats = computed(() => ({
   total: statsData.value.total || 0,
   recent_count: knowledgeList.value.length,
   entity_count: entityTotal.value || 0,
-  hypothesis_count: hypothesisTotal.value || 0
+  formula_count: formulaTotal.value || 0
 }))
 
 // ── 搜索和筛选 ──
