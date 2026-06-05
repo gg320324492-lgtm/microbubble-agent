@@ -26,6 +26,7 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./models/hf_cache:/root/.cache/huggingface
+      - ./models/torch_hub:/root/.cache/torch/hub
     env_file:
       - .env
     environment:
@@ -158,6 +159,7 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./models/hf_cache:/root/.cache/huggingface
+      - ./models/torch_hub:/root/.cache/torch/hub
     env_file:
       - .env
     environment:
@@ -167,7 +169,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 2g
+    mem_limit: 4g
     restart: unless-stopped
 
   # Celery Beat (定时任务)
