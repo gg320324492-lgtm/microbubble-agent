@@ -37,6 +37,24 @@ def _numpy_to_wav_bytes(audio: np.ndarray, sample_rate: int = 16000) -> bytes:
     return buf.getvalue()
 
 
+def _edit_distance(a: str, b: str) -> int:
+    """Levenshtein 编辑距离（用于名字模糊匹配）"""
+    la, lb = len(a), len(b)
+    dp = list(range(lb + 1))
+    for i in range(1, la + 1):
+        prev = dp[0]
+        dp[0] = i
+        for j in range(1, lb + 1):
+            temp = dp[j]
+            dp[j] = min(
+                prev + (0 if a[i - 1] == b[j - 1] else 1),
+                dp[j] + 1,
+                dp[j - 1] + 1,
+            )
+            prev = temp
+    return dp[lb]
+
+
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
 def post_meeting_process(self, meeting_id: int):
     """Celery 任务：6 阶段离线后处理"""
@@ -274,6 +292,70 @@ def post_meeting_process(self, meeting_id: int):
                 known = [s for s in speaker_set if not s.startswith("发言人") and s != "?"]
                 unknown = [s for s in speaker_set if s.startswith("发言人")]
                 logger.info(f"发言人确认: {len(known)} 位已知({', '.join(known)}), {len(unknown)} 位未知({', '.join(unknown)}), 共{len(speaker_set)}位")
+
+                # 2.7 校对发言人名字（与成员管理中的真实姓名比对）
+                from app.models.member import Member as MemberModel
+                from sqlalchemy import select as sa_select2
+
+                member_list = await db.execute(
+                    sa_select2(MemberModel.id, MemberModel.name).where(MemberModel.is_active == True)
+                )
+                all_members = {row[1]: row[0] for row in member_list.fetchall()}  # name → id
+
+                # 谐音/形近字映射表（常见 ASR 识别错误 → 正确姓名）
+                PHONETIC_CORRECTIONS = {
+                    "杜同和": "杜同贺",
+                    "杜同河": "杜同贺",
+                    "吴梦全": "吴孟铨",
+                    "吴孟全": "吴孟铨",
+                    "吴孟栓": "吴孟铨",
+                    "王天之": "王天志",
+                    "王田志": "王天志",
+                    "赵航嘉": "赵航佳",
+                    "赵航家": "赵航佳",
+                }
+
+                name_corrections = {}
+                all_speakers = set(seg.get("speaker", "") for seg in transcript_segments)
+                for sp in all_speakers:
+                    if sp.startswith("发言人") or not sp:
+                        continue
+
+                    # 1) 精确匹配成员列表
+                    if sp in all_members:
+                        continue  # 无需纠正
+
+                    # 2) 谐音/形近字映射
+                    if sp in PHONETIC_CORRECTIONS:
+                        corrected = PHONETIC_CORRECTIONS[sp]
+                        name_corrections[sp] = corrected
+                        logger.info(f"名字校对（谐音）: '{sp}' → '{corrected}'")
+                        continue
+
+                    # 3) 模糊匹配：编辑距离 ≤ 1 且不在成员列表中
+                    best_match = None
+                    best_dist = 99
+                    for member_name in all_members:
+                        dist = _edit_distance(sp, member_name)
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_match = member_name
+                    # 编辑距离 ≤ 1 且名字长度相近，视为同一人
+                    if best_dist <= 1 and abs(len(sp) - len(best_match)) <= 1:
+                        name_corrections[sp] = best_match
+                        logger.info(f"名字校对（模糊匹配）: '{sp}' → '{best_match}' (dist={best_dist})")
+
+                # 应用名字修正
+                if name_corrections:
+                    for seg in transcript_segments:
+                        sp = seg.get("speaker", "")
+                        if sp in name_corrections:
+                            seg["speaker"] = name_corrections[sp]
+                    # 同步更新 cluster_speakers
+                    for cid in cluster_speakers:
+                        if cluster_speakers[cid] in name_corrections:
+                            cluster_speakers[cid] = name_corrections[cluster_speakers[cid]]
+                    logger.info(f"名字校对完成: 纠正了 {len(name_corrections)} 个名字")
 
                 # 更新 speaker_mapping
                 for seg in transcript_segments:
