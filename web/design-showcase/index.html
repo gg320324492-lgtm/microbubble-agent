@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UI 设计风格展示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347, #667eea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        p {
+            font-size: 18px;
+            color: #888;
+            margin-bottom: 60px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.7;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 60px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 32px;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            cursor: pointer;
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+
+        .card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .card-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin: 0 auto 24px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover .card-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .card h2 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .card p {
+            font-size: 14px;
+            color: #888;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .card .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .card .tag {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        /* 毛玻璃风格 */
+        .glassmorphism .card-icon {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+        }
+
+        /* 新拟态风格 */
+        .neumorphism .card-icon {
+            background: #e0e5ec;
+            box-shadow: 8px 8px 16px #b8bec7, -8px -8px 16px #ffffff;
+            color: #2d3436;
+        }
+
+        /* 渐变流体风格 */
+        .gradient-fluid .card-icon {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347, #f093fb);
+            box-shadow: 0 8px 24px rgba(255, 122, 92, 0.3);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(5deg); }
+        }
+
+        /* 极简主义风格 */
+        .minimalism .card-icon {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            color: white;
+        }
+
+        /* 暗黑模式风格 */
+        .dark-mode .card-icon {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            box-shadow: 0 0 30px rgba(255, 122, 92, 0.3);
+        }
+
+        /* 预览区域 */
+        .preview {
+            margin-top: 40px;
+            padding: 24px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .preview h3 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            color: #FFB347;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .preview-item {
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .preview-item .emoji {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .preview-item .name {
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        /* 底部信息 */
+        .footer {
+            margin-top: 60px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: #FF7A5C;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* 装饰元素 */
+        .decoration {
+            position: fixed;
+            border-radius: 50%;
+            background: rgba(255, 122, 92, 0.1);
+            filter: blur(60px);
+            pointer-events: none;
+        }
+
+        .decoration-1 {
+            width: 400px;
+            height: 400px;
+            top: -100px;
+            right: -100px;
+            animation: pulse 8s ease-in-out infinite;
+        }
+
+        .decoration-2 {
+            width: 300px;
+            height: 300px;
+            bottom: -100px;
+            left: -100px;
+            animation: pulse 10s ease-in-out infinite reverse;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 36px;
+            }
+
+            p {
+                font-size: 16px;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 装饰元素 -->
+    <div class="decoration decoration-1"></div>
+    <div class="decoration decoration-2"></div>
+
+    <div class="container">
+        <h1>UI 设计风格展示</h1>
+        <p>探索不同的 UI 设计风格，为 MicroBubble Agent 选择最适合的视觉语言。点击卡片查看完整示例。</p>
+
+        <div class="grid">
+            <a href="glassmorphism.html" class="card glassmorphism">
+                <div class="card-icon">✨</div>
+                <h2>毛玻璃风格</h2>
+                <p>通过半透明背景和模糊效果创造层次感，营造轻盈、现代的视觉体验。</p>
+                <div class="tags">
+                    <span class="tag">半透明</span>
+                    <span class="tag">模糊效果</span>
+                    <span class="tag">层次感</span>
+                </div>
+            </a>
+
+            <a href="neumorphism.html" class="card neumorphism">
+                <div class="card-icon">🎨</div>
+                <h2>新拟态风格</h2>
+                <p>通过柔和的阴影创造凹凸感，营造出柔和、立体的视觉效果。</p>
+                <div class="tags">
+                    <span class="tag">柔和阴影</span>
+                    <span class="tag">凹凸感</span>
+                    <span class="tag">立体</span>
+                </div>
+            </a>
+
+            <a href="gradient-fluid.html" class="card gradient-fluid">
+                <div class="card-icon">🌊</div>
+                <h2>渐变流体风格</h2>
+                <p>通过动态渐变、有机形状和流动的视觉效果，创造出充满活力和创意的界面。</p>
+                <div class="tags">
+                    <span class="tag">动态渐变</span>
+                    <span class="tag">流体形状</span>
+                    <span class="tag">创意</span>
+                </div>
+            </a>
+
+            <a href="minimalism.html" class="card minimalism">
+                <div class="card-icon">📐</div>
+                <h2>极简主义风格</h2>
+                <p>通过去除多余的装饰，让内容成为焦点，创造出优雅而专注的用户体验。</p>
+                <div class="tags">
+                    <span class="tag">简洁</span>
+                    <span class="tag">留白</span>
+                    <span class="tag">专注</span>
+                </div>
+            </a>
+
+            <a href="dark-mode.html" class="card dark-mode">
+                <div class="card-icon">🌙</div>
+                <h2>暗黑模式风格</h2>
+                <p>通过深色背景和高对比度设计，减少眼睛疲劳，营造专业、现代的视觉氛围。</p>
+                <div class="tags">
+                    <span class="tag">护眼</span>
+                    <span class="tag">高对比度</span>
+                    <span class="tag">专业</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- 预览区域 -->
+        <div class="preview">
+            <h3>🎨 设计元素预览</h3>
+            <div class="preview-grid">
+                <div class="preview-item">
+                    <div class="emoji">🌈</div>
+                    <div class="name">渐变色彩</div>
+                </div>
+                <div class="preview-item">
+                    <div class="emoji">💫</div>
+                    <div class="name">动态效果</div>
+                </div>
+                <div class="preview-item">
+                    <div class="emoji">🔮</div>
+                    <div class="name">玻璃拟态</div>
+                </div>
+                <div class="preview-item">
+                    <div class="emoji">✨</div>
+                    <div class="name">微交互</div>
+                </div>
+                <div class="preview-item">
+                    <div class="emoji">🎯</div>
+                    <div class="name">清晰层次</div>
+                </div>
+                <div class="preview-item">
+                    <div class="emoji">💎</div>
+                    <div class="name">精致细节</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>点击卡片查看完整示例 · 选择最适合 MicroBubble Agent 的设计风格</p>
+        </div>
+    </div>
+
+    <script>
+        // 卡片鼠标跟随效果
+        document.querySelectorAll('.card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                card.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05))`;
+            });
+
+            card.addEventListener('mouseleave', () => {
+                card.style.background = 'rgba(255, 255, 255, 0.05)';
+            });
+        });
+
+        // 入场动画
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.card').forEach((el, index) => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = `all 0.6s ease ${index * 100}ms`;
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>

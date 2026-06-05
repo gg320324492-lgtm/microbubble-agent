@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>暗黑模式风格 (Dark Mode)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+
+        /* 头部导航 */
+        .header {
+            background: #111111;
+            border-bottom: 1px solid #222;
+            padding: 16px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav {
+            display: flex;
+            gap: 32px;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .nav a:hover {
+            color: #e0e0e0;
+        }
+
+        .nav a.active {
+            color: #FF7A5C;
+        }
+
+        .nav a.active::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #FF7A5C, #FFB347);
+            border-radius: 1px;
+        }
+
+        /* 主容器 */
+        .main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        /* 欢迎区域 */
+        .hero {
+            text-align: center;
+            padding: 60px 0 80px;
+            position: relative;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(255, 122, 92, 0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 24px;
+            letter-spacing: -2px;
+            position: relative;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: #888;
+            max-width: 600px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        /* 按钮 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            color: white;
+            box-shadow: 0 8px 24px rgba(255, 122, 92, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(255, 122, 92, 0.4);
+        }
+
+        .btn-secondary {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border: 1px solid #333;
+        }
+
+        .btn-secondary:hover {
+            background: #222;
+            border-color: #444;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #888;
+            border: none;
+        }
+
+        .btn-ghost:hover {
+            color: #FF7A5C;
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: #111111;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #222;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #FF7A5C, #FFB347);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: #333;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card:hover::before {
+            opacity: 1;
+        }
+
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 122, 92, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+            letter-spacing: -1px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .stat-change {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 12px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .stat-change.positive {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+
+        .stat-change.negative {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        /* 卡片网格 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        /* 卡片 */
+        .card {
+            background: #111111;
+            border-radius: 16px;
+            padding: 28px;
+            border: 1px solid #222;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: #333;
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(255, 122, 92, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 12px;
+        }
+
+        .card p {
+            font-size: 14px;
+            color: #888;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 16px;
+            border-top: 1px solid #222;
+        }
+
+        /* 进度条 */
+        .progress {
+            width: 100%;
+            height: 6px;
+            background: #222;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .progress .bar {
+            height: 100%;
+            background: linear-gradient(90deg, #FF7A5C, #FFB347);
+            border-radius: 3px;
+            transition: width 1s ease;
+        }
+
+        /* 列表 */
+        .list {
+            background: #111111;
+            border-radius: 16px;
+            border: 1px solid #222;
+            overflow: hidden;
+        }
+
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #222;
+        }
+
+        .list-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            border-bottom: 1px solid #1a1a1a;
+            transition: all 0.2s ease;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item:hover {
+            background: #1a1a1a;
+        }
+
+        .list-item .checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #333;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .list-item .checkbox.checked {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border-color: transparent;
+        }
+
+        .list-item .checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+        }
+
+        .list-item .content {
+            flex: 1;
+        }
+
+        .list-item .content h4 {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e0e0e0;
+            margin-bottom: 4px;
+        }
+
+        .list-item .content p {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .list-item .status {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+        }
+
+        .status-progress {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .status-completed {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+
+        /* 头像组 */
+        .avatar-group {
+            display: flex;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border: 2px solid #111111;
+            margin-left: -10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .avatar:first-child {
+            margin-left: 0;
+        }
+
+        /* 标签 */
+        .tag {
+            display: inline-block;
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #222;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #888;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tag-active {
+            background: rgba(255, 122, 92, 0.1);
+            border-color: rgba(255, 122, 92, 0.3);
+            color: #FF7A5C;
+        }
+
+        /* 输入框 */
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .input {
+            width: 100%;
+            padding: 14px 18px;
+            background: #1a1a1a;
+            border: 1px solid #222;
+            border-radius: 12px;
+            font-size: 14px;
+            color: #e0e0e0;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .input::placeholder {
+            color: #444;
+        }
+
+        .input:focus {
+            border-color: #FF7A5C;
+            box-shadow: 0 0 0 3px rgba(255, 122, 92, 0.1);
+        }
+
+        /* 搜索框 */
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #1a1a1a;
+            border: 1px solid #222;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .search-box:focus-within {
+            border-color: #FF7A5C;
+            box-shadow: 0 0 0 3px rgba(255, 122, 92, 0.1);
+        }
+
+        .search-box input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .search-box input::placeholder {
+            color: #444;
+        }
+
+        .search-box .icon {
+            color: #666;
+            font-size: 18px;
+        }
+
+        /* 快速操作 */
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        .quick-action {
+            background: #111111;
+            border: 1px solid #222;
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .quick-action:hover {
+            border-color: #FF7A5C;
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(255, 122, 92, 0.1);
+        }
+
+        .quick-action .icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .quick-action h4 {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+
+        .quick-action p {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        /* 霓虹效果 */
+        .neon {
+            text-shadow: 0 0 10px rgba(255, 122, 92, 0.5);
+        }
+
+        .neon-border {
+            box-shadow: 0 0 20px rgba(255, 122, 92, 0.2);
+        }
+
+        /* 页脚 */
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: #444;
+            font-size: 13px;
+            border-top: 1px solid #222;
+            margin-top: 80px;
+        }
+
+        /* 动画 */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes glow {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(255, 122, 92, 0.2);
+            }
+            50% {
+                box-shadow: 0 0 40px rgba(255, 122, 92, 0.4);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease forwards;
+        }
+
+        .fade-in:nth-child(1) { animation-delay: 0ms; }
+        .fade-in:nth-child(2) { animation-delay: 100ms; }
+        .fade-in:nth-child(3) { animation-delay: 200ms; }
+        .fade-in:nth-child(4) { animation-delay: 300ms; }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #111111;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body>
+    <!-- 头部导航 -->
+    <header class="header">
+        <div class="logo">MicroBubble</div>
+        <nav class="nav">
+            <a href="#" class="active">仪表盘</a>
+            <a href="#">任务</a>
+            <a href="#">会议</a>
+            <a href="#">知识库</a>
+            <a href="#">设置</a>
+        </nav>
+        <div class="avatar" style="background: linear-gradient(135deg, #FF7A5C, #FFB347);">张</div>
+    </header>
+
+    <main class="main">
+        <!-- 欢迎区域 -->
+        <section class="hero fade-in">
+            <h1 class="neon">暗黑模式，护眼新体验</h1>
+            <p>暗黑模式通过深色背景和高对比度设计，减少眼睛疲劳，同时营造出专业、现代的视觉氛围。</p>
+            <div class="hero-buttons">
+                <button class="btn btn-primary">开始使用</button>
+                <button class="btn btn-secondary">了解更多</button>
+            </div>
+        </section>
+
+        <!-- 统计卡片 -->
+        <section class="stats-grid">
+            <div class="stat-card fade-in">
+                <div class="stat-icon">📊</div>
+                <div class="stat-number">128</div>
+                <div class="stat-label">总任务数</div>
+                <div class="stat-change positive">↑ 12%</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-icon">✅</div>
+                <div class="stat-number">96</div>
+                <div class="stat-label">已完成</div>
+                <div class="stat-change positive">↑ 8%</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-number">24</div>
+                <div class="stat-label">进行中</div>
+                <div class="stat-change negative">↓ 3%</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-icon">⏳</div>
+                <div class="stat-number">8</div>
+                <div class="stat-label">待处理</div>
+                <div class="stat-change positive">↓ 15%</div>
+            </div>
+        </section>
+
+        <!-- 快速操作 -->
+        <section class="quick-actions">
+            <div class="quick-action fade-in">
+                <div class="icon">📝</div>
+                <h4>新建任务</h4>
+                <p>创建新的工作任务</p>
+            </div>
+            <div class="quick-action fade-in">
+                <div class="icon">📅</div>
+                <h4>安排会议</h4>
+                <p>创建或加入会议</p>
+            </div>
+            <div class="quick-action fade-in">
+                <div class="icon">📚</div>
+                <h4>知识库</h4>
+                <p>查阅文档资料</p>
+            </div>
+            <div class="quick-action fade-in">
+                <div class="icon">👥</div>
+                <h4>团队管理</h4>
+                <p>管理团队成员</p>
+            </div>
+        </section>
+
+        <!-- 卡片网格 -->
+        <section class="grid">
+            <div class="card fade-in">
+                <div class="card-header">
+                    <div class="card-icon">📊</div>
+                    <span class="tag tag-active">进行中</span>
+                </div>
+                <h3>数据分析</h3>
+                <p>暗黑模式下的数据可视化更加突出，图表和关键指标在深色背景上更加醒目。</p>
+                <div class="progress">
+                    <div class="bar" style="width: 75%"></div>
+                </div>
+                <div class="card-footer">
+                    <span style="font-size: 12px; color: #666;">进度: 75%</span>
+                    <div class="avatar-group">
+                        <div class="avatar">张</div>
+                        <div class="avatar">李</div>
+                        <div class="avatar">王</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card fade-in">
+                <div class="card-header">
+                    <div class="card-icon">🎯</div>
+                    <span class="tag">待处理</span>
+                </div>
+                <h3>目标追踪</h3>
+                <p>暗黑模式让目标和进度更加清晰，减少视觉干扰，帮助用户专注于核心任务。</p>
+                <div class="progress">
+                    <div class="bar" style="width: 45%"></div>
+                </div>
+                <div class="card-footer">
+                    <span style="font-size: 12px; color: #666;">进度: 45%</span>
+                    <div class="avatar-group">
+                        <div class="avatar">赵</div>
+                        <div class="avatar">钱</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card fade-in">
+                <div class="card-header">
+                    <div class="card-icon">📈</div>
+                    <span class="tag" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); color: #10b981;">已完成</span>
+                </div>
+                <h3>报告生成</h3>
+                <p>暗黑模式下的报告阅读体验更佳，减少屏幕蓝光，保护用户视力。</p>
+                <div class="progress">
+                    <div class="bar" style="width: 100%"></div>
+                </div>
+                <div class="card-footer">
+                    <span style="font-size: 12px; color: #666;">进度: 100%</span>
+                    <div class="avatar-group">
+                        <div class="avatar">孙</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 任务列表 -->
+        <section class="list fade-in">
+            <div class="list-header">
+                <h2>近期任务</h2>
+                <button class="btn btn-ghost">查看全部</button>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox checked"></div>
+                <div class="content">
+                    <h4>完成UI设计稿</h4>
+                    <p>2026-06-05 · 设计团队</p>
+                </div>
+                <span class="status status-completed">已完成</span>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox"></div>
+                <div class="content">
+                    <h4>编写单元测试</h4>
+                    <p>2026-06-06 · 开发团队</p>
+                </div>
+                <span class="status status-progress">进行中</span>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox"></div>
+                <div class="content">
+                    <h4>部署生产环境</h4>
+                    <p>2026-06-07 · 运维团队</p>
+                </div>
+                <span class="status status-pending">待处理</span>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox"></div>
+                <div class="content">
+                    <h4>用户验收测试</h4>
+                    <p>2026-06-08 · 测试团队</p>
+                </div>
+                <span class="status status-pending">待处理</span>
+            </div>
+        </section>
+
+        <!-- 表单示例 -->
+        <section class="fade-in" style="margin-top: 40px;">
+            <h2 style="font-size: 24px; font-weight: 600; margin-bottom: 24px; color: #ffffff;">快速创建</h2>
+            <div style="background: #111111; border-radius: 16px; padding: 32px; border: 1px solid #222;">
+                <div class="input-group">
+                    <label>任务名称</label>
+                    <input type="text" class="input" placeholder="输入任务名称...">
+                </div>
+                <div class="input-group">
+                    <label>描述</label>
+                    <input type="text" class="input" placeholder="输入任务描述...">
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button class="btn btn-primary">创建任务</button>
+                    <button class="btn btn-secondary">取消</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>© 2026 MicroBubble Agent · 暗黑模式，护眼新体验</p>
+    </footer>
+
+    <script>
+        // 复选框切换
+        document.querySelectorAll('.checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', () => {
+                checkbox.classList.toggle('checked');
+            });
+        });
+
+        // 快速操作点击效果
+        document.querySelectorAll('.quick-action').forEach(action => {
+            action.addEventListener('click', () => {
+                action.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    action.style.transform = '';
+                }, 200);
+            });
+        });
+
+        // 卡片入场动画
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.card, .stat-card, .list-item, .quick-action').forEach(el => {
+            observer.observe(el);
+        });
+
+        // 数字动画
+        function animateNumber(el, target, duration = 1000) {
+            const start = 0;
+            const startTime = performance.now();
+
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(eased * target);
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // 初始化数字动画
+        setTimeout(() => {
+            document.querySelectorAll('.stat-number').forEach(el => {
+                const target = parseInt(el.textContent);
+                animateNumber(el, target);
+            });
+        }, 500);
+    </script>
+</body>
+</html>

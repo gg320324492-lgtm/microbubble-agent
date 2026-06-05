@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>渐变流体风格 (Gradient Fluid)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0c0c1d 0%, #1a1a2e 50%, #16213e 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        /* 动态背景 */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .bg-animation .circle {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.5;
+            animation: float 20s infinite;
+        }
+
+        .bg-animation .circle:nth-child(1) {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            top: -100px;
+            left: -100px;
+            animation-delay: 0s;
+        }
+
+        .bg-animation .circle:nth-child(2) {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            top: 50%;
+            right: -100px;
+            animation-delay: -5s;
+        }
+
+        .bg-animation .circle:nth-child(3) {
+            width: 350px;
+            height: 350px;
+            background: linear-gradient(135deg, #11998e, #38ef7d);
+            bottom: -100px;
+            left: 30%;
+            animation-delay: -10s;
+        }
+
+        .bg-animation .circle:nth-child(4) {
+            width: 250px;
+            height: 250px;
+            background: linear-gradient(135deg, #f093fb, #f5576c);
+            top: 30%;
+            left: 20%;
+            animation-delay: -15s;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translate(0, 0) rotate(0deg) scale(1);
+            }
+            25% {
+                transform: translate(50px, -50px) rotate(90deg) scale(1.1);
+            }
+            50% {
+                transform: translate(100px, 0) rotate(180deg) scale(1);
+            }
+            75% {
+                transform: translate(50px, 50px) rotate(270deg) scale(0.9);
+            }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        /* 流体卡片 */
+        .fluid-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 32px;
+            color: white;
+            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fluid-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 122, 92, 0.1), rgba(102, 126, 234, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .fluid-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .fluid-card:hover::before {
+            opacity: 1;
+        }
+
+        .fluid-card h2 {
+            font-size: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            position: relative;
+            z-index: 1;
+        }
+
+        .fluid-card p {
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.9;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .fluid-card .icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 8px 24px rgba(255, 122, 92, 0.3);
+        }
+
+        /* 渐变按钮 */
+        .btn-gradient {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 24px rgba(255, 122, 92, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(255, 122, 92, 0.4);
+        }
+
+        .btn-gradient:active {
+            transform: translateY(0);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: none;
+        }
+
+        .btn-outline:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: none;
+        }
+
+        /* 渐变边框 */
+        .gradient-border {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 2px;
+        }
+
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 20px;
+            padding: 2px;
+            background: linear-gradient(135deg, #FF7A5C, #667eea, #38ef7d, #f093fb);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            animation: borderRotate 4s linear infinite;
+        }
+
+        @keyframes borderRotate {
+            0% {
+                background: linear-gradient(0deg, #FF7A5C, #667eea, #38ef7d, #f093fb);
+            }
+            25% {
+                background: linear-gradient(90deg, #FF7A5C, #667eea, #38ef7d, #f093fb);
+            }
+            50% {
+                background: linear-gradient(180deg, #FF7A5C, #667eea, #38ef7d, #f093fb);
+            }
+            75% {
+                background: linear-gradient(270deg, #FF7A5C, #667eea, #38ef7d, #f093fb);
+            }
+            100% {
+                background: linear-gradient(360deg, #FF7A5C, #667eea, #38ef7d, #f093fb);
+            }
+        }
+
+        /* 流体形状 */
+        .blob {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            animation: morph 8s ease-in-out infinite;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 32px rgba(255, 122, 92, 0.3);
+        }
+
+        @keyframes morph {
+            0%, 100% {
+                border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            }
+            25% {
+                border-radius: 58% 42% 75% 25% / 76% 46% 54% 24%;
+            }
+            50% {
+                border-radius: 50% 50% 33% 67% / 55% 27% 73% 45%;
+            }
+            75% {
+                border-radius: 33% 67% 58% 42% / 63% 68% 32% 37%;
+            }
+        }
+
+        /* 渐变文字 */
+        .gradient-text {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347, #667eea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+        }
+
+        /* 进度条 */
+        .progress-fluid {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .progress-fluid .bar {
+            height: 100%;
+            background: linear-gradient(90deg, #FF7A5C, #FFB347, #667eea);
+            background-size: 200% 100%;
+            border-radius: 4px;
+            transition: width 1s ease;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 统计数据 */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        /* 头像组 */
+        .avatar-group {
+            display: flex;
+            margin-top: 20px;
+        }
+
+        .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            margin-left: -14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .avatar:first-child {
+            margin-left: 0;
+        }
+
+        .avatar:hover {
+            transform: scale(1.1) translateY(-4px);
+            box-shadow: 0 8px 24px rgba(255, 122, 92, 0.3);
+        }
+
+        /* 标签 */
+        .tag-fluid {
+            display: inline-block;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(255, 122, 92, 0.2), rgba(102, 126, 234, 0.2));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            font-size: 12px;
+            color: white;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        /* 粒子效果 */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: particleFloat 10s infinite;
+        }
+
+        @keyframes particleFloat {
+            0%, 100% {
+                transform: translateY(0) translateX(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100vh) translateX(100px);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 动态背景 -->
+    <div class="bg-animation">
+        <div class="circle"></div>
+        <div class="circle"></div>
+        <div class="circle"></div>
+        <div class="circle"></div>
+    </div>
+
+    <div class="container">
+        <!-- 卡片 1: 项目概览 -->
+        <div class="fluid-card">
+            <div class="particles">
+                <div class="particle" style="left: 10%; top: 20%; animation-delay: 0s;"></div>
+                <div class="particle" style="left: 30%; top: 40%; animation-delay: -2s;"></div>
+                <div class="particle" style="left: 60%; top: 30%; animation-delay: -4s;"></div>
+                <div class="particle" style="left: 80%; top: 50%; animation-delay: -6s;"></div>
+            </div>
+            <div class="blob"></div>
+            <h2>项目概览</h2>
+            <p>渐变流体风格通过动态渐变、有机形状和流动的视觉效果，创造出充满活力和创意的界面。</p>
+            <div class="progress-fluid">
+                <div class="bar" style="width: 75%"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.8;">
+                <span>进度: 75%</span>
+                <span>剩余 3 天</span>
+            </div>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number">12</div>
+                    <div class="stat-label">任务</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">8</div>
+                    <div class="stat-label">完成</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">4</div>
+                    <div class="stat-label">进行中</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 卡片 2: 团队成员 -->
+        <div class="fluid-card">
+            <div class="icon">👥</div>
+            <h2>团队成员</h2>
+            <p>流体设计强调有机的形状和流动的视觉效果，让界面更加生动和有趣。</p>
+            <div class="avatar-group">
+                <div class="avatar">张</div>
+                <div class="avatar">李</div>
+                <div class="avatar">王</div>
+                <div class="avatar">+5</div>
+            </div>
+            <div style="margin-top: 20px;">
+                <span class="tag-fluid">前端</span>
+                <span class="tag-fluid">后端</span>
+                <span class="tag-fluid">设计</span>
+                <span class="tag-fluid">测试</span>
+            </div>
+        </div>
+
+        <!-- 卡片 3: 快速操作 -->
+        <div class="fluid-card gradient-border">
+            <div class="icon">⚡</div>
+            <h2>快速操作</h2>
+            <p>渐变色彩和流体形状的结合，创造出独特的视觉语言和品牌识别度。</p>
+            <input type="text" style="width: 100%; padding: 14px 18px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 12px; color: white; font-size: 14px; outline: none; margin-bottom: 16px; backdrop-filter: blur(10px);" placeholder="输入搜索内容...">
+            <div style="display: flex; gap: 12px;">
+                <button class="btn-gradient">🔍 搜索</button>
+                <button class="btn-gradient btn-outline">➕ 新建</button>
+            </div>
+        </div>
+
+        <!-- 卡片 4: 数据统计 -->
+        <div class="fluid-card">
+            <div class="icon">📈</div>
+            <h2>数据统计</h2>
+            <p>动态渐变背景和流体动画效果，为数据展示增添视觉吸引力和现代感。</p>
+            <div style="margin-top: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                    <span class="gradient-text" style="font-size: 16px;">会议记录</span>
+                    <span style="color: #38ef7d;">+28%</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                    <span class="gradient-text" style="font-size: 16px;">知识文档</span>
+                    <span style="color: #667eea;">+45%</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span class="gradient-text" style="font-size: 16px;">任务完成率</span>
+                    <span style="color: #f093fb;">92%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 卡片鼠标跟随光效
+        document.querySelectorAll('.fluid-card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                card.style.background = `radial-gradient(circle at ${x}px ${y}px, rgba(255, 122, 92, 0.15), rgba(102, 126, 234, 0.1))`;
+            });
+
+            card.addEventListener('mouseleave', () => {
+                card.style.background = 'rgba(255, 255, 255, 0.05)';
+            });
+        });
+
+        // 粒子效果
+        function createParticle() {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDuration = (Math.random() * 10 + 5) + 's';
+            particle.style.animationDelay = (Math.random() * 5) + 's';
+
+            document.querySelector('.particles').appendChild(particle);
+
+            setTimeout(() => {
+                particle.remove();
+            }, 15000);
+        }
+
+        setInterval(createParticle, 2000);
+
+        // 进度条动画
+        setTimeout(() => {
+            document.querySelector('.bar').style.width = '75%';
+        }, 500);
+    </script>
+</body>
+</html>

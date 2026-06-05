@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>极简主义风格 (Minimalism)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #fafafa;
+            color: #1a1a1a;
+            line-height: 1.6;
+        }
+
+        /* 头部导航 */
+        .header {
+            background: white;
+            border-bottom: 1px solid #eee;
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+        }
+
+        .nav {
+            display: flex;
+            gap: 32px;
+        }
+
+        .nav a {
+            text-decoration: none;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .nav a:hover {
+            color: #1a1a1a;
+        }
+
+        .nav a.active {
+            color: #1a1a1a;
+        }
+
+        /* 主容器 */
+        .main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        /* 欢迎区域 */
+        .hero {
+            text-align: center;
+            padding: 80px 0;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 24px;
+            letter-spacing: -1px;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: #666;
+            max-width: 600px;
+            margin: 0 auto 40px;
+            line-height: 1.7;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+        }
+
+        /* 按钮 */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #333;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #1a1a1a;
+            border: 1px solid #ddd;
+        }
+
+        .btn-secondary:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
+        }
+
+        /* 卡片网格 */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-top: 60px;
+        }
+
+        /* 卡片 */
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            border: 1px solid #eee;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+            transform: translateY(-4px);
+            border-color: transparent;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: #f5f5f5;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+        }
+
+        .card p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .card-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 16px;
+            border-top: 1px solid #f0f0f0;
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #eee;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+            letter-spacing: -1px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #999;
+        }
+
+        .stat-change {
+            font-size: 12px;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        .stat-change.positive {
+            color: #10b981;
+        }
+
+        .stat-change.negative {
+            color: #ef4444;
+        }
+
+        /* 列表 */
+        .list-section {
+            margin-top: 60px;
+        }
+
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .list-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #eee;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .list-item:hover {
+            border-color: #ddd;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+        }
+
+        .list-item .checkbox {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .list-item .checkbox.checked {
+            background: #1a1a1a;
+            border-color: #1a1a1a;
+        }
+
+        .list-item .checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 12px;
+        }
+
+        .list-item .content {
+            flex: 1;
+        }
+
+        .list-item .content h4 {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1a1a1a;
+            margin-bottom: 4px;
+        }
+
+        .list-item .content p {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .list-item .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .status-progress {
+            background: #eff6ff;
+            color: #3b82f6;
+        }
+
+        .status-completed {
+            background: #f0fdf4;
+            color: #10b981;
+        }
+
+        /* 头像组 */
+        .avatar-group {
+            display: flex;
+            margin-left: 12px;
+        }
+
+        .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            border: 2px solid white;
+            margin-left: -8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .avatar:first-child {
+            margin-left: 0;
+        }
+
+        /* 输入框 */
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #1a1a1a;
+            background: white;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .input::placeholder {
+            color: #999;
+        }
+
+        .input:focus {
+            border-color: #1a1a1a;
+            box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+        }
+
+        /* 标签 */
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #f5f5f5;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #666;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tag-dark {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        /* 分隔线 */
+        .divider {
+            height: 1px;
+            background: #eee;
+            margin: 40px 0;
+        }
+
+        /* 页脚 */
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-size: 13px;
+            border-top: 1px solid #eee;
+            margin-top: 80px;
+        }
+
+        /* 动画 */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease forwards;
+        }
+
+        .fade-in:nth-child(1) { animation-delay: 0ms; }
+        .fade-in:nth-child(2) { animation-delay: 100ms; }
+        .fade-in:nth-child(3) { animation-delay: 200ms; }
+        .fade-in:nth-child(4) { animation-delay: 300ms; }
+        .fade-in:nth-child(5) { animation-delay: 400ms; }
+        .fade-in:nth-child(6) { animation-delay: 500ms; }
+    </style>
+</head>
+<body>
+    <!-- 头部导航 -->
+    <header class="header">
+        <div class="logo">MicroBubble</div>
+        <nav class="nav">
+            <a href="#" class="active">仪表盘</a>
+            <a href="#">任务</a>
+            <a href="#">会议</a>
+            <a href="#">知识库</a>
+            <a href="#">设置</a>
+        </nav>
+        <div class="avatar" style="background: linear-gradient(135deg, #FF7A5C, #FFB347);">张</div>
+    </header>
+
+    <main class="main">
+        <!-- 欢迎区域 -->
+        <section class="hero fade-in">
+            <h1>简洁、清晰、高效</h1>
+            <p>极简主义设计通过去除多余的装饰，让内容成为焦点，创造出优雅而专注的用户体验。</p>
+            <div class="hero-buttons">
+                <button class="btn btn-primary">开始使用</button>
+                <button class="btn btn-secondary">了解更多</button>
+            </div>
+        </section>
+
+        <!-- 统计卡片 -->
+        <section class="stats-grid">
+            <div class="stat-card fade-in">
+                <div class="stat-number">128</div>
+                <div class="stat-label">总任务数</div>
+                <div class="stat-change positive">↑ 12%</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-number">96</div>
+                <div class="stat-label">已完成</div>
+                <div class="stat-change positive">↑ 8%</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-number">24</div>
+                <div class="stat-label">进行中</div>
+                <div class="stat-change negative">↓ 3%</div>
+            </div>
+            <div class="stat-card fade-in">
+                <div class="stat-number">8</div>
+                <div class="stat-label">待处理</div>
+                <div class="stat-change positive">↓ 15%</div>
+            </div>
+        </section>
+
+        <!-- 卡片网格 -->
+        <section class="grid">
+            <div class="card fade-in">
+                <div class="card-icon">📊</div>
+                <h3>数据分析</h3>
+                <p>极简主义强调数据的清晰呈现，通过简洁的图表和统计让用户快速理解信息。</p>
+                <div class="card-meta">
+                    <span>更新于 2 小时前</span>
+                    <span class="tag">分析</span>
+                </div>
+            </div>
+
+            <div class="card fade-in">
+                <div class="card-icon">📝</div>
+                <h3>任务管理</h3>
+                <p>通过简洁的列表和清晰的状态标识，让任务管理变得简单直观。</p>
+                <div class="card-meta">
+                    <span>5 个任务</span>
+                    <span class="tag-dark tag">进行中</span>
+                </div>
+            </div>
+
+            <div class="card fade-in">
+                <div class="card-icon">👥</div>
+                <h3>团队协作</h3>
+                <p>极简设计让团队成员能够专注于内容本身，减少视觉干扰，提高协作效率。</p>
+                <div class="card-meta">
+                    <span>8 位成员</span>
+                    <div class="avatar-group">
+                        <div class="avatar">张</div>
+                        <div class="avatar">李</div>
+                        <div class="avatar">王</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 任务列表 -->
+        <section class="list-section fade-in">
+            <div class="list-header">
+                <h2>近期任务</h2>
+                <button class="btn btn-secondary">查看全部</button>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox checked"></div>
+                <div class="content">
+                    <h4>完成UI设计稿</h4>
+                    <p>2026-06-05 · 设计团队</p>
+                </div>
+                <span class="status status-completed">已完成</span>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox"></div>
+                <div class="content">
+                    <h4>编写单元测试</h4>
+                    <p>2026-06-06 · 开发团队</p>
+                </div>
+                <span class="status status-progress">进行中</span>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox"></div>
+                <div class="content">
+                    <h4>部署生产环境</h4>
+                    <p>2026-06-07 · 运维团队</p>
+                </div>
+                <span class="status status-pending">待处理</span>
+            </div>
+
+            <div class="list-item">
+                <div class="checkbox"></div>
+                <div class="content">
+                    <h4>用户验收测试</h4>
+                    <p>2026-06-08 · 测试团队</p>
+                </div>
+                <span class="status status-pending">待处理</span>
+            </div>
+        </section>
+
+        <!-- 表单示例 -->
+        <section class="fade-in" style="margin-top: 60px;">
+            <h2 style="font-size: 24px; font-weight: 600; margin-bottom: 24px;">快速创建</h2>
+            <div style="background: white; border-radius: 12px; padding: 32px; border: 1px solid #eee;">
+                <div class="input-group">
+                    <label>任务名称</label>
+                    <input type="text" class="input" placeholder="输入任务名称...">
+                </div>
+                <div class="input-group">
+                    <label>描述</label>
+                    <input type="text" class="input" placeholder="输入任务描述...">
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button class="btn btn-primary">创建任务</button>
+                    <button class="btn btn-secondary">取消</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>© 2026 MicroBubble Agent · 极简主义设计让复杂变得简单</p>
+    </footer>
+
+    <script>
+        // 复选框切换
+        document.querySelectorAll('.checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', () => {
+                checkbox.classList.toggle('checked');
+            });
+        });
+
+        // 卡片入场动画
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.card, .stat-card, .list-item').forEach(el => {
+            observer.observe(el);
+        });
+
+        // 数字动画
+        function animateNumber(el, target, duration = 1000) {
+            const start = 0;
+            const startTime = performance.now();
+
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.round(eased * target);
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        // 初始化数字动画
+        setTimeout(() => {
+            document.querySelectorAll('.stat-number').forEach(el => {
+                const target = parseInt(el.textContent);
+                animateNumber(el, target);
+            });
+        }, 500);
+    </script>
+</body>
+</html>

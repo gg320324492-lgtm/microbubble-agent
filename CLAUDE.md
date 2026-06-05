@@ -5,13 +5,13 @@
 "小气" - 微纳米气泡课题组智能Agent系统，约20人研究实验室的AI助手。
 
 - 后端: Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery
-- 前端: Vue 3 + Vite + Element Plus
+- 前端: Vue 3 + Vite + Element Plus（原版 `web/`，极简版 `web-minimal/`）
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-05 最新进展**：会议系统 UI 全面优化（6 大模块）— 仪表盘式详情页 + Canvas 波形动画 + ParticipantAvatars/SpeakerStatsCard 新组件 + AudioPlayer 波形回放 + MeetingStats 统计页 + ProcessingDialog Confetti。详见 [ROADMAP.md](ROADMAP.md#会议系统-ui-全面优化2026-06-05) 和 [README.md](README.md#近期新增按时间倒序)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-05 最新进展**：创建极简风格前端项目 `web-minimal/`（完全独立，可直接运行）+ UI 设计风格展示（5 种风格示例）。详见 [ROADMAP.md](ROADMAP.md#极简风格前端项目2026-06-05) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 前端设计系统
 
