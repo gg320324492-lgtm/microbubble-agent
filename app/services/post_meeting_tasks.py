@@ -299,7 +299,7 @@ def post_meeting_process(self, meeting_id: int):
                             unknown_count += 1
 
                 # 2.6 检查是否多个聚类被识别为同一人（不同音色归为同一名）
-                logger.info(f"聚类调试: 聚类数={len(unique_speakers)}, 标签={cluster_to_name}")
+                logger.info(f"聚类调试: 聚类数={len(unique_clusters)}, 标签={cluster_to_name}")
                 name_to_clusters = {}
                 for cid, sp_name in cluster_to_name.items():
                     if not sp_name.startswith("发言人"):
