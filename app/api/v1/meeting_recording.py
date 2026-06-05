@@ -24,7 +24,7 @@ async def start_recording(
     db: AsyncSession = Depends(get_db)
 ):
     """创建录音会议（零配置，自动生成标题）"""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
     meeting = Meeting(
         title=f"听会 {now.strftime('%m-%d %H:%M')}",
         start_time=now,
@@ -93,7 +93,7 @@ async def stop_recording(
     if meeting.status != "recording":
         raise HTTPException(status_code=400, detail="会议不在录音状态")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
     meeting.recording_ended_at = now
     meeting.end_time = now
     meeting.status = "processing"
