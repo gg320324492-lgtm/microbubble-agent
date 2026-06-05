@@ -12,7 +12,10 @@ export function getStatusType(status) {
     // 会议状态
     scheduled: 'info',
     recording: 'warning',
+    processing: 'warning',
     completed: 'success',
+    cancelled: 'info',
+    error: 'danger',
     // 通用状态
     pending: 'info',
     overdue: 'danger'
@@ -34,9 +37,15 @@ export function getStatusLabel(status) {
     blocked: '阻塞',
     done: '已完成',
     // 会议状态
-    scheduled: '待开始',
+    scheduled: '已预约',
     recording: '录制中',
-    completed: '已完成'
+    processing: '处理中',
+    completed: '已完成',
+    cancelled: '已取消',
+    error: '处理失败',
+    // 通用状态
+    pending: '待处理',
+    overdue: '已逾期'
   }
   return map[status] || status
 }

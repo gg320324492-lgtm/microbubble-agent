@@ -6,8 +6,8 @@
         <div class="meeting-title">{{ meeting.title }}</div>
         <div class="meeting-time">{{ formatDate(meeting.start_time) }}</div>
         <div class="meeting-status">
-          <el-tag :type="meeting.status === 'completed' ? 'success' : 'info'">
-            {{ meeting.status }}
+          <el-tag :type="statusType(meeting.status)">
+            {{ statusLabel(meeting.status) }}
           </el-tag>
         </div>
       </div>
@@ -35,4 +35,7 @@ defineProps({
 })
 
 defineEmits(['select', 'page-change'])
+
+const statusLabel = (s) => ({ scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s)
+const statusType = (s) => ({ scheduled: 'info', recording: 'warning', processing: 'warning', completed: 'success', cancelled: 'info', error: 'danger' }[s] || 'info')
 </script>
