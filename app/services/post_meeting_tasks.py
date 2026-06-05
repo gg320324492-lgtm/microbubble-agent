@@ -131,6 +131,44 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"声纹识别完成: {len(speaker_mapping)} 人已识别, {len(label_map)} 人未知")
 
+                # ===== 阶段 2.5: AI 润色转录 =====
+                await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="AI 润色转录文本", redis_override=redis_client)
+                from app.services.meeting_ai_polish import polish_segments_with_lock
+
+                # 准备润色上下文
+                participant_names = list(speaker_mapping.values())
+                polish_context = {
+                    "title": meeting.title or "未命名会议",
+                    "participants": participant_names,
+                    "topic": None,
+                    "context": [],
+                }
+
+                # 为润色添加 ts 字段（从 start 时间戳）
+                segments_for_polish = []
+                for seg in transcript_segments:
+                    segments_for_polish.append({
+                        "speaker": seg.get("speaker", "未知"),
+                        "text": seg["text"],
+                        "ts": seg.get("start", 0),
+                    })
+
+                try:
+                    polish_result = await polish_segments_with_lock(
+                        meeting_id, segments_for_polish, polish_context
+                    )
+                    polished_segments = polish_result.get("polished", [])
+                    if polished_segments:
+                        # 将润色后的文本回写到 transcript_segments
+                        for i, polished in enumerate(polished_segments):
+                            if i < len(transcript_segments):
+                                transcript_segments[i]["text_polished"] = polished.get("text", transcript_segments[i]["text"])
+                        logger.info(f"AI 润色完成: {len(polished_segments)} 段")
+                    else:
+                        logger.warning("AI 润色返回空结果，使用原文")
+                except Exception as e:
+                    logger.warning(f"AI 润色失败（降级为原文）: {e}")
+
                 # 将识别出的发言人添加为会议参与者
                 from app.models.meeting import MeetingParticipant
                 from sqlalchemy import select as sa_select
@@ -161,8 +199,9 @@ def post_meeting_process(self, meeting_id: int):
                 await update_progress(meeting_id, ProgressStage.GENERATING_ANALYSIS, detail="AI 分析会议内容", redis_override=redis_client)
                 from app.services.meeting_analysis_service import meeting_analysis
 
+                # 优先使用润色后的文本进行分析
                 transcript_text = "\n".join(
-                    f"{seg.get('speaker', '未知')}: {seg['text']}"
+                    f"{seg.get('speaker', '未知')}: {seg.get('text_polished', seg['text'])}"
                     for seg in transcript_segments
                 )
 
@@ -178,9 +217,28 @@ def post_meeting_process(self, meeting_id: int):
                 meeting.key_points = analysis.get("key_points", [])
                 meeting.decisions = analysis.get("decisions", [])
 
-                # 保存转写结果
+                # 保存转写结果（原始 + 润色版）
                 meeting.transcript = transcript_segments
                 meeting.speaker_mapping = speaker_mapping
+
+                # 构建润色版转录（用于前端显示）
+                transcript_polished = []
+                for seg in transcript_segments:
+                    transcript_polished.append({
+                        "speaker": seg.get("speaker", "未知"),
+                        "text": seg.get("text_polished", seg["text"]),
+                        "ts": seg.get("start", 0),
+                    })
+                meeting.transcript_polished = transcript_polished
+                logger.info(f"保存转录: {len(transcript_segments)} 段原始 + {len(transcript_polished)} 段润色")
+
+                # 计算发言统计
+                try:
+                    speaker_stats = meeting_analysis.compute_speaker_stats(transcript_polished)
+                    meeting.speaker_stats = speaker_stats
+                    logger.info(f"发言统计完成: {len(speaker_stats)} 人")
+                except Exception as e:
+                    logger.warning(f"发言统计计算失败: {e}")
 
                 # ===== 阶段 4: 自动创建任务 =====
                 await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
@@ -188,7 +246,14 @@ def post_meeting_process(self, meeting_id: int):
                 svc = MeetingService(db)
 
                 for decision in analysis.get("decisions", []):
-                    await svc._auto_create_task_from_meeting(meeting, decision)
+                    # decisions 可能是字符串或字典，统一转为字典格式
+                    if isinstance(decision, str):
+                        task_info = {"title": decision}
+                    elif isinstance(decision, dict):
+                        task_info = decision
+                    else:
+                        continue
+                    await svc._auto_create_task_from_meeting(meeting, task_info)
 
                 # ===== 阶段 5: 存储结果 =====
                 await update_progress(meeting_id, ProgressStage.STORING_RESULTS, detail="保存结果", redis_override=redis_client)
