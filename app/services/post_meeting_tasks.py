@@ -322,6 +322,11 @@ def post_meeting_process(self, meeting_id: int):
                                     else:
                                         seg_names.append(None)
 
+                                # 2.4.6 立即把 seg["speaker"] 也更新到分裂后聚类
+                                for i, seg in enumerate(transcript_segments):
+                                    if clusters[i] >= 0 and i < len(seg_names) and seg_names[i]:
+                                        seg["speaker"] = seg_names[i]
+
                 # 2.5 聚类 + 声纹结果协调
                 # 统计每个聚类中出现的已知名字
                 from collections import Counter
