@@ -54,12 +54,14 @@
         <el-input v-model="form.title" placeholder="请输入会议主题" />
       </el-form-item>
       <el-form-item label="会议时间" required>
-        <input
-          :value="form.start_time"
-          type="datetime-local"
-          class="native-date-input"
+        <el-date-picker
+          v-model="form.start_time"
+          type="datetime"
+          format="YYYY-MM-DD HH:mm"
+          value-format="YYYY-MM-DD HH:mm:ss"
           placeholder="选择会议时间"
-          @change="(e) => { const v = e.target.value; form.start_time = v ? v.replace('T', ' ') + ':00' : ''; }"
+          style="width: 100%"
+          :clearable="false"
         />
       </el-form-item>
       <el-form-item label="会议地点">
@@ -299,21 +301,6 @@ const onClose = () => {
   font-size: 12px;
   color: var(--color-text-secondary);
   padding: 8px;
-}
-.native-date-input {
-  width: 100%;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border, #dcdfe6);
-  border-radius: var(--radius-md, 4px);
-  background: #fff;
-  color: var(--color-text-primary, #303133);
-  font-size: 14px;
-  font-family: inherit;
-}
-.native-date-input:focus {
-  outline: none;
-  border-color: var(--color-primary, #FF7A5C);
 }
 .item-list {
   display: flex;

@@ -214,15 +214,16 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="截止日期">
-          <input
-    :value="newTask.due_date"
-    name="newTask-due_date"
-    type="datetime-local"
-    class="native-date-input"
-    placeholder="选择截止日期和时间"
-    style="width: 100%"
-    @change="(e) => { const v = e.target.value; newTask.due_date = v ? v.replace('T', ' ') + ':00' : ''; }"
-  />
+          <el-date-picker
+            v-model="newTask.due_date"
+            name="newTask-due_date"
+            type="datetime"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="选择截止日期和时间"
+            style="width: 100%"
+            :clearable="true"
+          />
         </el-form-item>
         <el-form-item label="任务描述">
           <el-input v-model="newTask.description" name="newTask-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
@@ -260,15 +261,16 @@
           </el-select>
         </el-form-item>
         <el-form-item label="截止日期">
-          <input
-    :value="editForm.due_date"
-    name="editForm-due_date"
-    type="datetime-local"
-    class="native-date-input"
-    placeholder="选择截止日期和时间"
-    style="width: 100%"
-    @change="(e) => { const v = e.target.value; editForm.due_date = v ? v.replace('T', ' ') + ':00' : ''; }"
-  />
+          <el-date-picker
+            v-model="editForm.due_date"
+            name="editForm-due_date"
+            type="datetime"
+            format="YYYY-MM-DD HH:mm"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            placeholder="选择截止日期和时间"
+            style="width: 100%"
+            :clearable="true"
+          />
         </el-form-item>
         <el-form-item label="任务描述">
           <el-input v-model="editForm.description" name="editForm-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
@@ -482,23 +484,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-
-/* 2026-06-02 原生 date input 样式（绕过 el-date-picker 内部 input 缺 name 的 a11y 警告） */
-.native-date-input {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border, #dcdfe6);
-  border-radius: var(--radius-md, 4px);
-  background: #fff;
-  color: var(--color-text-primary, #303133);
-  font-size: 14px;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-.native-date-input:focus {
-  outline: none;
-  border-color: var(--color-primary, #FF7A5C);
-}
 
 .dashboard { max-width: 1400px; padding-bottom: 30px; }
 
