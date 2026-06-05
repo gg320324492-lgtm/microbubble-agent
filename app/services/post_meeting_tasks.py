@@ -225,32 +225,42 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"声纹聚类完成: {len(unique_speakers)} 位发言人, {len(cluster_centers)} 个聚类中心")
 
-                # 后处理：合并相似发言人（同一人可能被识别为多个标签）
+                # 后处理：智能合并发言人
                 # 统计每个发言人的出现次数
                 speaker_counts = {}
                 for seg in transcript_segments:
                     sp = seg.get("speaker", "未知")
                     speaker_counts[sp] = speaker_counts.get(sp, 0) + 1
 
-                # 合并策略：如果已知发言人只有一个，将所有未知发言人归为该已知发言人
                 known_speakers = [sp for sp in speaker_counts if not sp.startswith("发言人")]
-                if len(known_speakers) == 1:
-                    # 只有 1 个已知发言人，将所有未知发言人归为"第二位发言人"
-                    main_speaker = known_speakers[0]
+                unknown_speakers = [sp for sp in speaker_counts if sp.startswith("发言人")]
+
+                # 策略1：如果只有1个已知发言人，所有未知归为"第二位发言人"
+                if len(known_speakers) == 1 and unknown_speakers:
                     for seg in transcript_segments:
                         if seg.get("speaker", "").startswith("发言人"):
-                            seg["speaker"] = "发言人B"  # 未知的第二位发言人
-                    logger.info(f"只有 1 位已知发言人 ({main_speaker})，未知发言人标记为 发言人B")
+                            seg["speaker"] = "发言人B"
+                    logger.info(f"只有 1 位已知发言人 ({known_speakers[0]})，未知发言人合并为 发言人B")
 
-                # 统一未识别的发言人标签
-                unknown_labels = sorted(set(
-                    seg["speaker"] for seg in transcript_segments
-                    if seg["speaker"].startswith("发言人")
-                ))
-                label_map = {old: f"发言人{chr(65+i)}" for i, old in enumerate(unknown_labels)}
-                for seg in transcript_segments:
-                    if seg["speaker"] in label_map:
-                        seg["speaker"] = label_map[seg["speaker"]]
+                # 策略2：如果有2个已知发言人，所有未知归为第二个已知发言人
+                elif len(known_speakers) == 2 and unknown_speakers:
+                    second_speaker = known_speakers[1]
+                    for seg in transcript_segments:
+                        if seg.get("speaker", "").startswith("发言人"):
+                            seg["speaker"] = second_speaker
+                            speaker_mapping[seg.get("speaker_label", "")] = second_speaker
+                    logger.info(f"2 位已知发言人 ({known_speakers[0]}, {second_speaker})，未知发言人合并为 {second_speaker}")
+
+                # 策略3：未知发言人统一编号
+                else:
+                    unknown_labels = sorted(set(
+                        seg["speaker"] for seg in transcript_segments
+                        if seg["speaker"].startswith("发言人")
+                    ))
+                    label_map = {old: f"发言人{chr(65+i)}" for i, old in enumerate(unknown_labels)}
+                    for seg in transcript_segments:
+                        if seg["speaker"] in label_map:
+                            seg["speaker"] = label_map[seg["speaker"]]
 
                 # 更新 speaker_mapping
                 for seg in transcript_segments:
