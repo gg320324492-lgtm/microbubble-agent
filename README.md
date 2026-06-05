@@ -21,6 +21,14 @@
 
 ### 近期新增（按时间倒序）
 
+- **会议系统 UI 全面优化（2026-06-05，6 大模块）** —
+  - **VoiceTestDialog Canvas 波形**：20 根 DOM bar → Canvas 贝塞尔曲线波形（60fps），珊瑚橙渐变+发光描边+麦克风脉冲光晕
+  - **ParticipantAvatars 复用组件**：头像堆叠+溢出+N+全体成员识别+hover 放大
+  - **MeetingDetailView 仪表盘式重设计**：Hero 区（大标题+状态徽章+参与者头像行）+ Tab 切换（纪要/转录/统计）+ 内联编辑 + 录音回放侧边栏
+  - **SpeakerStatsCard 发言统计**：水平进度条+头像+百分比+stagger 入场动画
+  - **AudioPlayer 增强**：Canvas 波形渲染+播放头+倍速控制（1x/1.5x/2x）
+  - **MeetingStats 统计页**：3 统计卡片+数字滚动动画+最近会议时间线+发言活跃度排行
+  - **ProcessingDialog**：Confetti 撒花+按钮脉冲光晕
 - **听会功能全面修复 + 性能优化 + UI 中文化（2026-06-05，5 commit）** —
   - **datetime 时区修复**：`meeting_recording.py` 的 `datetime.now(timezone.utc)` 创建 tz-aware datetime，但数据库列是 `TIMESTAMP WITHOUT TIME ZONE`，asyncpg 无法写入。修复：添加 `.replace(tzinfo=None)`
   - **silero-vad 模型缓存**：GitHub rate limit 导致模型下载失败（HTTP 403），预下载到本地缓存 + 添加回退逻辑
