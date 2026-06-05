@@ -121,7 +121,7 @@ export function useKnowledge() {
 
   const fetchFormulaCategories = async () => {
     try {
-      const res = await axios.get('/api/v1/knowledge/formula-categories')
+      const res = await axios.get('/api/v1/knowledge/formulas/categories')
       formulaCategories.value = res.data.categories || []
     } catch (e) {
       console.error('获取公式分类失败:', e)
