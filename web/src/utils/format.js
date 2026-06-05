@@ -1,18 +1,21 @@
 import dayjs from 'dayjs'
 
+// 数据库存储 UTC 时间，前端统一转北京时间（UTC+8）
+const toBeijing = (date) => dayjs(date).add(8, 'hour')
+
 export function formatDate(date) {
   if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD')
+  return toBeijing(date).format('YYYY-MM-DD')
 }
 
 export function formatDateTime(date) {
   if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
+  return toBeijing(date).format('YYYY-MM-DD HH:mm')
 }
 
 export function formatTime(date) {
   if (!date) return '-'
-  return dayjs(date).format('HH:mm')
+  return toBeijing(date).format('HH:mm')
 }
 
 export function formatRelativeTime(date) {

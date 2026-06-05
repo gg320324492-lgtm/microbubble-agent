@@ -375,7 +375,7 @@ const previewImage = (url) => { if (url) window.open(url, '_blank') }
 const saveToKnowledge = async (msg) => {
   try { await axios.post('/api/v1/knowledge/from-chat', { title: msg.file_name || '来自对话的知识', content: msg.knowledge_content }); ElMessage.success('已存入知识库'); msg.knowledge_content = null } catch (e) { ElMessage.error(e.response?.data?.detail || '存入失败') }
 }
-const formatTime = (t) => dayjs(t).format('HH:mm')
+const formatTime = (t) => dayjs(t).add(8, 'hour').format('HH:mm')
 const scrollToBottom = () => nextTick(() => { if (messageListRef.value) messageListRef.value.scrollTop = messageListRef.value.scrollHeight })
 
 onUnmounted(() => stopDetailPoll())

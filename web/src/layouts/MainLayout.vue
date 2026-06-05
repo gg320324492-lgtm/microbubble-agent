@@ -244,7 +244,7 @@ const goToTask = (taskId) => {
 
 const formatTime = (t) => {
   if (!t) return ''
-  return dayjs(t).format('MM-DD HH:mm')
+  return dayjs(t).add(8, 'hour').format('MM-DD HH:mm')
 }
 </script>
 

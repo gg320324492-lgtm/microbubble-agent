@@ -473,7 +473,11 @@ function getAudioSrc(url) {
   return `/minio/microbubble/${url}`
 }
 
-const formatDate = (d) => dayjs(d).format('YYYY-MM-DD HH:mm')
+const formatDate = (d) => {
+  if (!d) return ''
+  // 数据库存储 UTC 时间，显示北京时间（UTC+8）
+  return dayjs(d).add(8, 'hour').format('YYYY-MM-DD HH:mm')
+}
 const formatTs = (sec) => {
   const s = Math.floor(sec || 0)
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
