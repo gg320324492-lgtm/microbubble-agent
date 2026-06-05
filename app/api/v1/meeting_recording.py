@@ -3,7 +3,7 @@
 录音机模式：零配置开录 → 上传 MinIO → 触发后处理
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -25,8 +25,10 @@ async def start_recording(
 ):
     """创建录音会议（零配置，自动生成标题）"""
     now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
+    # 标题使用北京时间（UTC+8）
+    local_now = now + timedelta(hours=8)
     meeting = Meeting(
-        title=f"听会 {now.strftime('%m-%d %H:%M')}",
+        title=f"听会 {local_now.strftime('%m-%d %H:%M')}",
         start_time=now,
         status="recording",
         recording_started_at=now,
