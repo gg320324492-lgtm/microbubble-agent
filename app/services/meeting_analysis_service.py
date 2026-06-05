@@ -344,49 +344,131 @@ class MeetingAnalysisService:
 
     # === 结构化分析 ===
 
+    MAX_CHUNK_CHARS = 8000  # 单次分析最多 8000 字
+
     async def analyze_transcript(
         self,
         transcript_text: str,
         speaker_mapping: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
-        """对转录文本进行完整 AI 分析：摘要 + 要点 + 决策 + 行动项。
+        """分块分析会议转录（支持 3h+ 长会议）。
 
-        Args:
-            transcript_text: 原始转录文本
-            speaker_mapping: 可选的发言者映射，用于标注发言人归属
+        短文本直接分析；长文本分块分析 + 汇总合并。
         """
-        # 如果有映射，先重写转录文本使发言人标签一致
-        text_to_analyze = transcript_text
         if speaker_mapping:
             applied = []
             for issue, resolved in speaker_mapping.items():
                 applied.append(f"【{issue}】→ {resolved}")
-            text_to_analyze = (
+            transcript_text = (
                 f"发言者映射：{', '.join(applied)}\n\n{transcript_text}"
             )
 
+        # 短文本直接分析
+        if len(transcript_text) <= self.MAX_CHUNK_CHARS:
+            return await self._analyze_chunk(transcript_text)
+
+        # 长文本：分块分析
+        lines = transcript_text.split('\n')
+        chunks = []
+        current_chunk = []
+        current_len = 0
+
+        for line in lines:
+            if current_len + len(line) > self.MAX_CHUNK_CHARS and current_chunk:
+                chunks.append('\n'.join(current_chunk))
+                current_chunk = [line]
+                current_len = len(line)
+            else:
+                current_chunk.append(line)
+                current_len += len(line)
+        if current_chunk:
+            chunks.append('\n'.join(current_chunk))
+
+        logger.info(f"长会议分块分析: {len(chunks)} 块（总长 {len(transcript_text)} 字）")
+
+        # 分析每一块
+        all_key_points = []
+        all_decisions = []
+        all_action_items = []
+        chunk_summaries = []
+
+        for i, chunk in enumerate(chunks):
+            try:
+                result = await self._analyze_chunk(chunk, chunk_index=i, total_chunks=len(chunks))
+                all_key_points.extend(result.get("key_points", []))
+                all_decisions.extend(result.get("decisions", []))
+                all_action_items.extend(result.get("action_items", []))
+                if result.get("summary"):
+                    chunk_summaries.append(result["summary"])
+            except Exception as e:
+                logger.error(f"分块 {i+1}/{len(chunks)} 分析失败: {e}")
+
+        # 汇总摘要
+        summary = await self._merge_summaries(chunk_summaries) if chunk_summaries else ""
+
+        return {
+            "summary": summary,
+            "key_points": all_key_points,
+            "decisions": all_decisions,
+            "action_items": all_action_items,
+        }
+
+    async def _analyze_chunk(self, chunk_text: str, chunk_index: int = 0, total_chunks: int = 1) -> Dict[str, Any]:
+        """分析单个文本块"""
+        import asyncio
+
+        header = ""
+        if total_chunks > 1:
+            header = f"（第 {chunk_index + 1}/{total_chunks} 部分）\n\n"
+
+        for attempt in range(2):
+            try:
+                response = await self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4096,
+                    system="你是课题组会议分析专家。只输出 JSON，不要其他内容。",
+                    messages=[{
+                        "role": "user",
+                        "content": ANALYSIS_PROMPT.format(
+                            transcript_text=header + chunk_text[: self.MAX_CHUNK_CHARS]
+                        ),
+                    }],
+                )
+                text = extract_text_from_response(response)
+                return parse_llm_json(text)
+            except json.JSONDecodeError:
+                if attempt == 0:
+                    await asyncio.sleep(1)
+                    continue
+                logger.warning(f"分块 {chunk_index + 1} 分析 JSON 解析失败（重试后仍失败）")
+            except Exception as e:
+                logger.error(f"分块 {chunk_index + 1} 分析失败: {e}")
+                break
+
+        return {"summary": "", "key_points": [], "decisions": [], "action_items": []}
+
+    async def _merge_summaries(self, summaries: list) -> str:
+        """合并多个块的摘要为一个"""
+        if len(summaries) == 1:
+            return summaries[0]
+        if not summaries:
+            return ""
+
+        combined = "\n\n".join(f"{i+1}. {s}" for i, s in enumerate(summaries))
         try:
             response = await self.client.messages.create(
                 model=self.model,
-                max_tokens=4096,
-                system="你是课题组会议分析专家。只输出 JSON，不要其他内容。",
+                max_tokens=1024,
+                system="你是一个专业的会议纪要助手。把分段摘要合并成一段完整的会议摘要。只输出摘要文本，不要其他。",
                 messages=[{
                     "role": "user",
-                    "content": ANALYSIS_PROMPT.format(
-                        transcript_text=text_to_analyze[:12000]
-                    ),
+                    "content": f"请将以下 {len(summaries)} 段会议摘要合并为一个完整的摘要（3-5句话）：\n\n{combined}",
                 }],
             )
-            text = extract_text_from_response(response)
-            return parse_llm_json(text)
+            return extract_text_from_response(response).strip()
         except Exception as e:
-            logger.error(f"转录分析失败: {e}")
-            return {
-                "summary": "",
-                "key_points": [],
-                "decisions": [],
-                "action_items": [],
-            }
+            logger.error(f"摘要合并失败: {e}")
+            return summaries[0] if summaries else ""
 
     # === 标题自动生成 ===
 
