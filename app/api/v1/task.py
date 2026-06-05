@@ -8,6 +8,8 @@ from app.config import settings
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
+from app.schemas.pagination import PaginatedResponse
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
 from app.models.project import Project
@@ -31,7 +33,7 @@ async def create_task(
     # 权限：普通成员只能给自己创建任务
     if not is_admin:
         if task_data.assignee_id and task_data.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="普通成员只能给自己创建任务")
+            raise ForbiddenException("普通成员只能给自己创建任务")
 
     task_svc = TaskService(db)
 
@@ -155,7 +157,7 @@ async def sync_wechat_ids(
 ):
     """从企业微信API同步成员userid（仅管理员）"""
     if current_user.role not in ("admin", "leader"):
-        raise HTTPException(status_code=403, detail="仅管理员可操作")
+        raise ForbiddenException("仅管理员可操作")
 
     from app.wechat.bot import wechat_bot
     import logging
@@ -204,7 +206,7 @@ async def sync_wechat_ids(
     }
 
 
-@router.get("/tasks", response_model=TaskList)
+@router.get("/tasks", response_model=PaginatedResponse[TaskResponse])
 async def list_tasks(
     assignee_id: Optional[int] = None,
     status: Optional[str] = None,
@@ -267,7 +269,10 @@ async def list_tasks(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    return TaskList(items=tasks, total=total)
+    return PaginatedResponse.create(
+        items=[TaskResponse.model_validate(t) for t in tasks],
+        total=total, page=page, page_size=page_size,
+    )
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
@@ -281,13 +286,13 @@ async def get_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise NotFoundException("任务")
 
     # 已删除的任务不返回（除非是管理员查看垃圾桶）
     if task.deleted_at is not None:
         is_admin = current_user.role in ("admin", "leader")
         if not is_admin:
-            raise HTTPException(status_code=404, detail="任务不存在")
+            raise NotFoundException("任务")
         # 计算自动删除时间
         task.auto_delete_at = task.deleted_at + timedelta(days=settings.TRASH_RETENTION_DAYS)
 
@@ -306,20 +311,20 @@ async def update_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise NotFoundException("任务")
 
     # 不能编辑已删除的任务
     if task.deleted_at is not None:
-        raise HTTPException(status_code=400, detail="任务已删除，无法编辑")
+        raise ValidationException("任务已删除，无法编辑")
 
     # 权限：管理员可编辑任意任务，普通成员只能编辑自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
         if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="只能编辑自己创建或被分配的任务")
+            raise ForbiddenException("只能编辑自己创建或被分配的任务")
         # 不能把任务分配给其他人
         if task_data.assignee_id is not None and task_data.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="普通成员不能将任务分配给其他人")
+            raise ForbiddenException("普通成员不能将任务分配给其他人")
 
     # 更新字段
     update_data = task_data.model_dump(exclude_unset=True)
@@ -347,17 +352,17 @@ async def delete_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise NotFoundException("任务")
 
     # 已删除的任务不能再删除
     if task.deleted_at is not None:
-        raise HTTPException(status_code=400, detail="任务已在垃圾桶中")
+        raise ValidationException("任务已在垃圾桶中")
 
     # 权限：普通成员只能删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
         if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="只能删除自己创建或被分配的任务")
+            raise ForbiddenException("只能删除自己创建或被分配的任务")
 
     # 软删除：设置 deleted_at
     task.deleted_at = utcnow()
@@ -375,16 +380,16 @@ async def restore_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise NotFoundException("任务")
 
     if task.deleted_at is None:
-        raise HTTPException(status_code=400, detail="任务未删除，无需恢复")
+        raise ValidationException("任务未删除，无需恢复")
 
     # 权限：管理员可恢复任意任务，普通成员只能恢复自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
         if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="只能恢复自己创建或被分配的任务")
+            raise ForbiddenException("只能恢复自己创建或被分配的任务")
 
     task.deleted_at = None
     await db.commit()
@@ -403,16 +408,16 @@ async def permanent_delete_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="任务不存在")
+        raise NotFoundException("任务")
 
     if task.deleted_at is None:
-        raise HTTPException(status_code=400, detail="请先删除任务再永久删除")
+        raise ValidationException("请先删除任务再永久删除")
 
     # 权限：普通成员只能永久删除自己创建或被分配的任务
     is_admin = current_user.role in ("admin", "leader")
     if not is_admin:
         if task.created_by != current_user.id and task.assignee_id != current_user.id:
-            raise HTTPException(status_code=403, detail="只能永久删除自己创建或被分配的任务")
+            raise ForbiddenException("只能永久删除自己创建或被分配的任务")
 
     await db.delete(task)
     await db.commit()
