@@ -470,22 +470,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 2026-06-02 原生 date input 样式 */
-.native-date-input {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border, #dcdfe6);
-  border-radius: var(--radius-md, 4px);
-  background: #fff;
-  color: var(--color-text-primary, #303133);
-  font-size: 14px;
-  font-family: inherit;
-  transition: border-color 0.2s;
-}
-.native-date-input:focus {
-  outline: none;
-  border-color: var(--color-primary, #FF7A5C);
-}
 
 .task-view {
   height: 100%;
