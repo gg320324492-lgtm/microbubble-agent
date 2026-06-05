@@ -61,7 +61,7 @@
               <el-button type="primary" @click="searchEntitiesLocal">搜索实体</el-button>
             </el-col>
             <el-col :span="4">
-              <el-button @click="fetchEntityGraphLocal">加载图谱</el-button>
+              <el-button @click="fetchEntityGraphLocal" :loading="entityGraphLoading">刷新图谱</el-button>
             </el-col>
           </el-row>
         </el-card>
@@ -409,6 +409,7 @@ let entityChartInstance = null
 const showEntityDetailDialog = ref(false)
 const entityDetail = ref(null)
 const selectedEntityId = ref(null)
+const entityGraphLoading = ref(false)
 
 // Hypothesis tab
 const hypothesisFilter = ref({ status: '', priority: '' })
@@ -573,11 +574,19 @@ const searchEntitiesLocal = async () => {
 }
 
 const fetchEntityGraphLocal = async () => {
+  entityGraphLoading.value = true
   try {
     await fetchEntityGraph()
+    // 等待 DOM 更新后再渲染图谱
     await nextTick()
-    renderEntityGraph()
-  } catch (e) { console.error('实体图谱加载失败:', e) }
+    setTimeout(() => {
+      renderEntityGraph()
+      entityGraphLoading.value = false
+    }, 100)
+  } catch (e) {
+    console.error('实体图谱加载失败:', e)
+    entityGraphLoading.value = false
+  }
 }
 
 const renderEntityGraph = async () => {
