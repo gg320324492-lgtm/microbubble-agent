@@ -45,6 +45,7 @@
 
       <!-- ===== 实体图谱 Tab ===== -->
       <el-tab-pane label="实体图谱" name="entities">
+        <!-- 搜索栏 -->
         <el-card class="filter-card">
           <el-row :gutter="12">
             <el-col :span="5">
@@ -60,37 +61,68 @@
               <el-button type="primary" @click="searchEntitiesLocal">搜索实体</el-button>
             </el-col>
             <el-col :span="4">
-              <el-button @click="fetchEntityGraphLocal">图谱视图</el-button>
+              <el-button @click="fetchEntityGraphLocal">加载图谱</el-button>
             </el-col>
           </el-row>
         </el-card>
 
-        <el-card v-if="entityGraphData.nodes.length > 0" class="entity-graph-card">
-          <div ref="entityGraphRef" class="entity-graph-container"></div>
-        </el-card>
-
-        <el-card class="entity-list-card">
-          <div v-if="entityList.length === 0" class="empty-state">
-            <el-empty description="暂无实体数据。上传文档后系统将自动提取知识三元组并跨文档合并。" />
+        <!-- 图谱联动布局 -->
+        <div class="entity-linked-view">
+          <!-- 左侧：力导向图 -->
+          <div class="entity-graph-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">🔗 关系网络</h3>
+              <span class="panel-hint">点击节点查看详情</span>
+            </div>
+            <div v-if="entityGraphData.nodes.length === 0" class="graph-empty">
+              <el-empty description="暂无图谱数据，点击「加载图谱」" :image-size="80" />
+            </div>
+            <div v-else ref="entityGraphRef" class="entity-graph-container"></div>
           </div>
-          <div v-else class="entity-grid">
-            <div v-for="e in entityList" :key="e.id" class="entity-card clickable" @click="showEntityDetail(e.id)">
-              <div class="entity-triple">
-                <span class="entity-subject">{{ e.subject }}</span>
-                <span class="entity-predicate">→ {{ e.predicate }} →</span>
-                <span class="entity-object">{{ e.object }}</span>
-              </div>
-              <div v-if="e.condition" class="entity-condition-text">条件: {{ e.condition }}</div>
-              <div class="entity-meta">
-                <span>{{ e.source_count }} 篇文档</span>
-                <span>{{ e.occurrence_count }} 次出现</span>
-                <el-progress :percentage="Math.round(e.confidence * 100)" :stroke-width="4" :show-text="false" style="width:80px" />
+
+          <!-- 右侧：实体列表 -->
+          <div class="entity-list-panel">
+            <div class="panel-header">
+              <h3 class="panel-title">📋 实体列表</h3>
+              <span class="panel-count">{{ entityList.length }} 个实体</span>
+            </div>
+            <div v-if="entityList.length === 0" class="list-empty">
+              <el-empty description="暂无实体数据" :image-size="60" />
+            </div>
+            <div v-else class="entity-list-scroll">
+              <div
+                v-for="e in entityList"
+                :key="e.id"
+                class="entity-card"
+                :class="{ 'entity-card-active': selectedEntityId === e.id }"
+                @click="handleEntityClick(e)"
+              >
+                <div class="entity-triple">
+                  <span class="entity-subject">{{ e.subject }}</span>
+                  <span class="entity-predicate">{{ e.predicate }}</span>
+                  <span class="entity-object">{{ e.object }}</span>
+                </div>
+                <div v-if="e.condition" class="entity-condition-text">条件: {{ e.condition }}</div>
+                <div class="entity-meta">
+                  <span class="meta-item">{{ e.source_count }} 篇文档</span>
+                  <span class="meta-item">{{ e.occurrence_count }} 次出现</span>
+                  <span class="meta-confidence">
+                    <el-progress :percentage="Math.round(e.confidence * 100)" :stroke-width="3" :show-text="false" style="width:60px" />
+                  </span>
+                </div>
               </div>
             </div>
+            <el-pagination
+              v-if="entityTotal > 0"
+              v-model:current-page="entityPage"
+              :page-size="20"
+              :total="entityTotal"
+              layout="total, prev, pager, next"
+              @current-change="searchEntitiesLocal"
+              class="entity-pagination"
+            />
           </div>
-          <el-pagination v-if="entityTotal > 0" v-model:current-page="entityPage" :page-size="20"
-            :total="entityTotal" layout="total, prev, pager, next" @current-change="searchEntitiesLocal" style="margin-top:12px" />
-        </el-card>
+        </div>
       </el-tab-pane>
 
       <!-- ===== 假设 Tab ===== -->
@@ -376,6 +408,7 @@ const entityGraphRef = ref(null)
 let entityChartInstance = null
 const showEntityDetailDialog = ref(false)
 const entityDetail = ref(null)
+const selectedEntityId = ref(null)
 
 // Hypothesis tab
 const hypothesisFilter = ref({ status: '', priority: '' })
@@ -561,7 +594,7 @@ const renderEntityGraph = async () => {
       type: 'graph', layout: 'force', roam: true, draggable: true,
       force: { repulsion: 200, edgeLength: [100, 300] },
       data: entityGraphData.value.nodes.map(n => ({
-        name: String(n.id), subject: n.subject, predicate: n.predicate, object: n.object,
+        name: String(n.id), subject: n.subject, predicate: n.predicate, object: n.object, entityId: n.id,
         symbolSize: Math.max(15, Math.min(40, (n.occurrence_count || 1) * 6)),
         category: n.predicate || '其他', itemStyle: { color: colors[cats.indexOf(n.predicate || '其他') % colors.length] },
       })),
@@ -569,9 +602,29 @@ const renderEntityGraph = async () => {
       links: entityGraphData.value.edges.map(e => ({ source: String(e.source), target: String(e.target), weight: e.weight })),
       lineStyle: { opacity: 0.4, curveness: 0.2 },
       label: { show: true, formatter: p => p.data.subject.length > 8 ? p.data.subject.slice(0, 8) + '...' : p.data.subject, fontSize: 10 },
+      emphasis: {
+        focus: 'adjacency',
+        lineStyle: { width: 3 }
+      }
     }],
   }
   entityChartInstance.setOption(option)
+
+  // 图谱节点点击 → 列表联动
+  entityChartInstance.on('click', (params) => {
+    if (params.dataType === 'node' && params.data.entityId) {
+      selectedEntityId.value = params.data.entityId
+
+      // 滚动到列表中对应的卡片
+      const card = document.querySelector(`.entity-card-active`)
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+
+      // 显示详情
+      showEntityDetail(params.data.entityId)
+    }
+  })
 }
 
 const showEntityDetail = async (id) => {
@@ -580,6 +633,28 @@ const showEntityDetail = async (id) => {
     entityDetail.value = res.data
     showEntityDetailDialog.value = true
   } catch (e) { ElMessage.error('获取实体详情失败') }
+}
+
+// 处理实体点击（列表 → 图谱联动）
+const handleEntityClick = (entity) => {
+  selectedEntityId.value = entity.id
+
+  // 高亮图谱中对应的节点
+  if (entityChartInstance && entityGraphData.value.nodes.length > 0) {
+    const nodeIndex = entityGraphData.value.nodes.findIndex(n => n.id === entity.id)
+    if (nodeIndex >= 0) {
+      entityChartInstance.dispatchAction({
+        type: 'highlight',
+        seriesIndex: 0,
+        dataIndex: nodeIndex
+      })
+      // 滚动到图谱位置
+      entityGraphRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
+  // 显示详情
+  showEntityDetail(entity.id)
 }
 
 // ── Hypothesis methods ──
@@ -712,40 +787,92 @@ onUnmounted(() => {
 }
 
 /* ── Entity ── */
-.entity-graph-card {
-  margin-bottom: var(--space-4);
+.entity-linked-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.entity-graph-panel,
+.entity-list-panel {
+  background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.panel-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.panel-hint,
+.panel-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 
 .entity-graph-container {
-  height: 400px;
+  height: 500px;
   width: 100%;
 }
 
-.entity-list-card {
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
+.graph-empty,
+.list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
 }
 
-.entity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-3);
+.entity-list-scroll {
+  max-height: 500px;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.entity-list-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.entity-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.entity-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-text-placeholder);
+  border-radius: 3px;
 }
 
 .entity-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  transition: all var(--duration-normal) var(--ease-out);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-light);
+  margin-bottom: var(--space-2);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .entity-card:hover {
   border-color: var(--color-primary);
-  box-shadow: var(--shadow-primary);
-  transform: translateY(-2px);
+  background: var(--color-primary-bg);
+}
+
+.entity-card-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+  box-shadow: 0 0 0 2px var(--color-primary-border);
 }
 
 .entity-triple {
@@ -764,6 +891,9 @@ onUnmounted(() => {
 .entity-predicate {
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
+  padding: 2px 8px;
+  background: var(--color-info-bg);
+  border-radius: var(--radius-full);
 }
 
 .entity-object {
@@ -782,6 +912,21 @@ onUnmounted(() => {
   gap: var(--space-3);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.meta-confidence {
+  margin-left: auto;
+}
+
+.entity-pagination {
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .entity-triple-large {
@@ -1052,12 +1197,34 @@ onUnmounted(() => {
 }
 
 /* ── 响应式 ── */
+@media (max-width: 1200px) {
+  .entity-linked-view {
+    grid-template-columns: 1fr;
+  }
+
+  .entity-graph-container {
+    height: 400px;
+  }
+}
+
 @media (max-width: 768px) {
   .knowledge-tabs :deep(.el-tabs__content) {
     padding: var(--space-3);
   }
 
-  .entity-grid,
+  .entity-linked-view {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  .entity-graph-container {
+    height: 300px;
+  }
+
+  .entity-list-scroll {
+    max-height: 400px;
+  }
+
   .hypothesis-grid {
     grid-template-columns: 1fr;
   }
