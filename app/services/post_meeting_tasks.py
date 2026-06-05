@@ -131,6 +131,32 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"声纹识别完成: {len(speaker_mapping)} 人已识别, {len(label_map)} 人未知")
 
+                # 将识别出的发言人添加为会议参与者
+                from app.models.meeting import MeetingParticipant
+                from sqlalchemy import select as sa_select
+                identified_member_ids = set()
+                for seg in transcript_segments:
+                    if seg.get("speaker") and not seg["speaker"].startswith("发言人"):
+                        # 通过声纹识别找到 member_id
+                        start_sample = int(seg["start"] * sample_rate)
+                        end_sample = int(seg["end"] * sample_rate)
+                        seg_audio = audio_pcm[start_sample:end_sample]
+                        if len(seg_audio) >= sample_rate * 0.5:
+                            _, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
+                            if member_id and conf > 0.55:
+                                identified_member_ids.add(member_id)
+
+                # 去重：检查已有参与者
+                existing = await db.execute(
+                    sa_select(MeetingParticipant.member_id).where(MeetingParticipant.meeting_id == meeting_id)
+                )
+                existing_ids = {row[0] for row in existing.fetchall()}
+
+                for mid in identified_member_ids:
+                    if mid not in existing_ids:
+                        db.add(MeetingParticipant(meeting_id=meeting_id, member_id=mid, role="participant"))
+                        logger.info(f"自动添加参与者: member_id={mid}")
+
                 # ===== 阶段 3: AI 分析 =====
                 await update_progress(meeting_id, ProgressStage.GENERATING_ANALYSIS, detail="AI 分析会议内容", redis_override=redis_client)
                 from app.services.meeting_analysis_service import meeting_analysis
