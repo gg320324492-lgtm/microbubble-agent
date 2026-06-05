@@ -9,6 +9,7 @@ from typing import Optional, List
 from app.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.exceptions import NotFoundException, ValidationException
 from app.models.member import Member
 from app.models.knowledge import Knowledge
 from app.schemas.knowledge import (
@@ -237,20 +238,20 @@ async def upload_knowledge_file(
     filename = file.filename or ""
     ext = '.' + filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext not in allowed_exts:
-        raise HTTPException(400, f"不支持的文件类型: {ext}")
+        raise ValidationException(f"不支持的文件类型: {ext}")
 
     # 先检查 Content-Length 头，避免读取超大文件
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     content_length = file.headers.get("content-length")
     if content_length and int(content_length) > max_bytes:
-        raise HTTPException(400, f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
+        raise ValidationException(f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
 
     # 读取文件
     file_data = await file.read()
 
     # 二次校验实际大小
     if len(file_data) > max_bytes:
-        raise HTTPException(400, f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
+        raise ValidationException(f"文件过大（最大 {settings.MAX_UPLOAD_SIZE_MB}MB）")
 
     # 提取文本和图片
     from app.services.file_parser_service import file_parser_service
@@ -261,13 +262,13 @@ async def upload_knowledge_file(
         content = extracted["text"]
         images = extracted["images"]
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise ValidationException(str(e))
     except Exception as e:
         logger.exception(f"文本提取异常: {filename}")
-        raise HTTPException(400, f"文本提取失败: {str(e)}")
+        raise ValidationException(f"文本提取失败: {str(e)}")
 
     if not content.strip():
-        raise HTTPException(400, "未能从文件中提取到文本内容")
+        raise ValidationException("未能从文件中提取到文本内容")
 
     # 上传文件到 MinIO
     from app.services.file_service import file_service
@@ -378,7 +379,7 @@ async def get_entity_detail(
     svc = EntityService(db)
     result = await svc.get_entity_detail(entity_id)
     if not result:
-        raise HTTPException(status_code=404, detail="实体不存在")
+        raise NotFoundException("实体")
     return result
 
 
@@ -428,12 +429,12 @@ async def calculate_formula(
     formula_id = body.get("formula_id")
     variables = body.get("variables", {})
     if not formula_id:
-        raise HTTPException(status_code=422, detail="formula_id 必填")
+        raise ValidationException("formula_id 必填")
     from app.services.formula_service import FormulaService
     svc = FormulaService(db)
     result = await svc.calculate(formula_id, variables)
     if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
+        raise ValidationException(result["error"])
     return result
 
 
@@ -491,7 +492,7 @@ async def get_hypothesis_detail(
     svc = HypothesisService(db)
     result = await svc.get_hypothesis_detail(hypothesis_id)
     if not result:
-        raise HTTPException(status_code=404, detail="假设不存在")
+        raise NotFoundException("假设")
     return result
 
 
@@ -505,12 +506,12 @@ async def validate_hypothesis(
 ):
     """标记假设验证结果"""
     if status not in ("validated", "rejected"):
-        raise HTTPException(status_code=422, detail="status 必须为 validated 或 rejected")
+        raise ValidationException("status 必须为 validated 或 rejected")
     from app.services.hypothesis_service import HypothesisService
     svc = HypothesisService(db)
     result = await svc.validate_hypothesis(hypothesis_id, status, validation_note)
     if not result:
-        raise HTTPException(status_code=404, detail="假设不存在")
+        raise NotFoundException("假设")
     return result
 
 
@@ -547,7 +548,7 @@ async def get_knowledge(
     knowledge = result.scalar_one_or_none()
 
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
 
     return knowledge
 
@@ -565,7 +566,7 @@ async def update_knowledge(
     knowledge = await service.update_knowledge(knowledge_id, **update_data)
 
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
 
     return knowledge
 
@@ -581,7 +582,7 @@ async def delete_knowledge(
     knowledge = result.scalar_one_or_none()
 
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
 
     await db.delete(knowledge)
     await db.commit()
@@ -598,9 +599,9 @@ async def download_knowledge_file(
     knowledge = result.scalar_one_or_none()
 
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
     if not knowledge.file_path:
-        raise HTTPException(status_code=404, detail="该知识条目没有上传文件")
+        raise NotFoundException("文件")
 
     from app.services.file_service import file_service
 
@@ -742,7 +743,7 @@ async def reanalyze_knowledge(
     service = KnowledgeService(db)
     knowledge = await service.reanalyze(knowledge_id)
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
     return knowledge
 
 
@@ -756,7 +757,7 @@ async def reformat_knowledge(
     service = KnowledgeService(db)
     knowledge = await service.reformat_content(knowledge_id)
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
     return knowledge
 
 
@@ -787,7 +788,7 @@ async def mark_reviewed(
     )
     knowledge = result.scalar_one_or_none()
     if not knowledge:
-        raise HTTPException(status_code=404, detail="知识不存在")
+        raise NotFoundException("知识")
     knowledge.needs_review = False
     await db.commit()
     return {"message": "已标记为已审阅", "id": knowledge_id}
