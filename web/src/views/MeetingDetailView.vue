@@ -144,7 +144,6 @@
                           size="small"
                           class="edit-speaker-select"
                           filterable
-                          :ref="focusSelect"
                           @change="confirmSpeakerRename(group.speaker)"
                         >
                           <el-option
