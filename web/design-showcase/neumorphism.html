@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新拟态风格 (Neumorphism)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #e0e5ec;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        /* 新拟态卡片 */
+        .neu-card {
+            background: #e0e5ec;
+            border-radius: 20px;
+            padding: 32px;
+            box-shadow: 8px 8px 16px #b8bec7, -8px -8px 16px #ffffff;
+            transition: all 0.3s ease;
+        }
+
+        .neu-card:hover {
+            box-shadow: 12px 12px 24px #b8bec7, -12px -12px 24px #ffffff;
+            transform: translateY(-4px);
+        }
+
+        .neu-card h2 {
+            color: #2d3436;
+            font-size: 22px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .neu-card p {
+            color: #636e72;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .neu-card .icon {
+            width: 60px;
+            height: 60px;
+            background: #e0e5ec;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 20px;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+        }
+
+        /* 凹陷效果 */
+        .neu-inset {
+            background: #e0e5ec;
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        /* 按钮样式 */
+        .btn-neu {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            background: #e0e5ec;
+            border: none;
+            border-radius: 12px;
+            color: #2d3436;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 6px 6px 12px #b8bec7, -6px -6px 12px #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .btn-neu:hover {
+            box-shadow: 8px 8px 16px #b8bec7, -8px -8px 16px #ffffff;
+        }
+
+        .btn-neu:active {
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+        }
+
+        .btn-neu-primary {
+            color: #FF7A5C;
+        }
+
+        .btn-neu-success {
+            color: #67C23A;
+        }
+
+        /* 输入框样式 */
+        .input-neu {
+            width: 100%;
+            padding: 14px 18px;
+            background: #e0e5ec;
+            border: none;
+            border-radius: 12px;
+            color: #2d3436;
+            font-size: 14px;
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+            outline: none;
+            transition: all 0.3s ease;
+            margin-bottom: 16px;
+        }
+
+        .input-neu::placeholder {
+            color: #a0a8b0;
+        }
+
+        .input-neu:focus {
+            box-shadow: inset 6px 6px 12px #b8bec7, inset -6px -6px 12px #ffffff;
+        }
+
+        /* 进度条 */
+        .progress-neu {
+            width: 100%;
+            height: 12px;
+            background: #e0e5ec;
+            border-radius: 6px;
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .progress-neu .bar {
+            height: 100%;
+            background: linear-gradient(90deg, #FF7A5C, #FFB347);
+            border-radius: 6px;
+            transition: width 1s ease;
+            box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 统计数据 */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 16px;
+            background: #e0e5ec;
+            border-radius: 12px;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2d3436;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #636e72;
+        }
+
+        /* 头像组 */
+        .avatar-group {
+            display: flex;
+            margin-top: 20px;
+        }
+
+        .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            border: 4px solid #e0e5ec;
+            margin-left: -14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+        }
+
+        .avatar:first-child {
+            margin-left: 0;
+        }
+
+        /* 标签 */
+        .tag-neu {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #e0e5ec;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #636e72;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+        }
+
+        /* 开关 */
+        .switch-neu {
+            width: 60px;
+            height: 30px;
+            background: #e0e5ec;
+            border-radius: 15px;
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .switch-neu::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: #e0e5ec;
+            border-radius: 50%;
+            top: 3px;
+            left: 3px;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+            transition: all 0.3s ease;
+        }
+
+        .switch-neu.active {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+        }
+
+        .switch-neu.active::after {
+            left: 33px;
+            box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 滑块 */
+        .slider-neu {
+            width: 100%;
+            height: 12px;
+            background: #e0e5ec;
+            border-radius: 6px;
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+            position: relative;
+            margin: 16px 0;
+        }
+
+        .slider-neu .thumb {
+            width: 24px;
+            height: 24px;
+            background: #e0e5ec;
+            border-radius: 50%;
+            position: absolute;
+            top: -6px;
+            left: 30%;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+            cursor: pointer;
+        }
+
+        /* 列表项 */
+        .list-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: #e0e5ec;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            box-shadow: 4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .list-item:hover {
+            box-shadow: 6px 6px 12px #b8bec7, -6px -6px 12px #ffffff;
+        }
+
+        .list-item .checkbox {
+            width: 24px;
+            height: 24px;
+            background: #e0e5ec;
+            border-radius: 6px;
+            box-shadow: inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .list-item .checkbox.checked {
+            background: linear-gradient(135deg, #FF7A5C, #FFB347);
+            box-shadow: none;
+        }
+
+        .list-item .checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 卡片 1: 项目概览 -->
+        <div class="neu-card">
+            <div class="icon">📊</div>
+            <h2>项目概览</h2>
+            <p>新拟态风格（Neumorphism）通过柔和的阴影创造凹凸感，营造出柔和、现代的视觉效果。</p>
+            <div class="progress-neu">
+                <div class="bar" style="width: 75%"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #636e72;">
+                <span>进度: 75%</span>
+                <span>剩余 3 天</span>
+            </div>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-number">12</div>
+                    <div class="stat-label">任务</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">8</div>
+                    <div class="stat-label">完成</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">4</div>
+                    <div class="stat-label">进行中</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 卡片 2: 团队成员 -->
+        <div class="neu-card">
+            <div class="icon">👥</div>
+            <h2>团队成员</h2>
+            <p>新拟态设计强调简洁和层次感，通过阴影的明暗对比来区分元素的状态。</p>
+            <div class="avatar-group">
+                <div class="avatar">张</div>
+                <div class="avatar">李</div>
+                <div class="avatar">王</div>
+                <div class="avatar">+5</div>
+            </div>
+            <div style="margin-top: 20px;">
+                <span class="tag-neu">前端</span>
+                <span class="tag-neu">后端</span>
+                <span class="tag-neu">设计</span>
+                <span class="tag-neu">测试</span>
+            </div>
+        </div>
+
+        <!-- 卡片 3: 快速操作 -->
+        <div class="neu-card">
+            <div class="icon">⚡</div>
+            <h2>快速操作</h2>
+            <p>新拟态风格适合创建简洁、现代的界面，强调内容的层次和交互反馈。</p>
+            <input type="text" class="input-neu" placeholder="输入搜索内容...">
+            <div style="display: flex; gap: 12px;">
+                <button class="btn-neu btn-neu-primary">🔍 搜索</button>
+                <button class="btn-neu btn-neu-success">➕ 新建</button>
+            </div>
+            <div style="margin-top: 20px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 14px; color: #636e72;">通知</span>
+                <div class="switch-neu active"></div>
+            </div>
+        </div>
+
+        <!-- 卡片 4: 任务列表 -->
+        <div class="neu-card">
+            <div class="icon">✅</div>
+            <h2>任务列表</h2>
+            <p>新拟态设计通过微妙的阴影变化，创造出柔和、舒适的视觉体验。</p>
+            <div style="margin-top: 20px;">
+                <div class="list-item">
+                    <div class="checkbox checked"></div>
+                    <div>
+                        <div style="font-weight: 500; color: #2d3436;">完成UI设计</div>
+                        <div style="font-size: 12px; color: #636e72;">2026-06-05</div>
+                    </div>
+                </div>
+                <div class="list-item">
+                    <div class="checkbox"></div>
+                    <div>
+                        <div style="font-weight: 500; color: #2d3436;">编写测试用例</div>
+                        <div style="font-size: 12px; color: #636e72;">2026-06-06</div>
+                    </div>
+                </div>
+                <div class="list-item">
+                    <div class="checkbox"></div>
+                    <div>
+                        <div style="font-weight: 500; color: #2d3436;">部署上线</div>
+                        <div style="font-size: 12px; color: #636e72;">2026-06-07</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 开关切换
+        document.querySelectorAll('.switch-neu').forEach(switchEl => {
+            switchEl.addEventListener('click', () => {
+                switchEl.classList.toggle('active');
+            });
+        });
+
+        // 复选框切换
+        document.querySelectorAll('.checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', () => {
+                checkbox.classList.toggle('checked');
+            });
+        });
+
+        // 滑块拖动
+        document.querySelectorAll('.slider-neu .thumb').forEach(thumb => {
+            let isDragging = false;
+
+            thumb.addEventListener('mousedown', (e) => {
+                isDragging = true;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const slider = thumb.parentElement;
+                const rect = slider.getBoundingClientRect();
+                let x = e.clientX - rect.left;
+                x = Math.max(0, Math.min(x, rect.width));
+                thumb.style.left = x + 'px';
+            });
+
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+        });
+
+        // 进度条动画
+        setTimeout(() => {
+            document.querySelector('.bar').style.width = '75%';
+        }, 500);
+    </script>
+</body>
+</html>
