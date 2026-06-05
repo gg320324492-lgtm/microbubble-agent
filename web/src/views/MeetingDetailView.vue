@@ -307,23 +307,41 @@ function removeSpeakerPrefix(text) {
   return text.replace(/^【.+?】/, '')
 }
 
-// 合并连续同一发言者的条目
+// 合并所有同一发言者的条目（非连续也合并）
 function groupBySpeaker(items) {
   if (!items?.length) return []
-  const result = []
-  let current = null
+  const map = new Map()  // speaker → items[]
+  const order = []       // 保持发言人首次出现顺序
   for (const item of items) {
     const speaker = parseSpeaker(item)
-    if (speaker && current?.speaker === speaker) {
-      current.items.push(removeSpeakerPrefix(item))
+    const text = speaker ? removeSpeakerPrefix(item) : item
+    if (speaker) {
+      if (!map.has(speaker)) {
+        map.set(speaker, [])
+        order.push(speaker)
+      }
+      map.get(speaker).push(text)
     } else {
-      if (current) result.push(current)
-      current = speaker
-        ? { speaker, items: [removeSpeakerPrefix(item)] }
-        : { speaker: null, items: [item] }
+      // 无发言人前缀的条目单独显示
+      order.push(null)
+      map.set(null, [text])
     }
   }
-  if (current) result.push(current)
+  // 去重：同一发言人的相同内容只保留一条
+  const result = []
+  const seen = new Set()
+  for (const speaker of order) {
+    const items = map.get(speaker)
+    const unique = items.filter(item => {
+      const key = item.trim()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (unique.length) {
+      result.push({ speaker, items: unique })
+    }
+  }
   return result
 }
 
