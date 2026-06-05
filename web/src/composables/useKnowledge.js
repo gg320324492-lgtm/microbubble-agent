@@ -90,7 +90,7 @@ export function useKnowledge() {
 
   const fetchEntityGraph = async () => {
     try {
-      const res = await axios.get('/api/v1/knowledge/entity-graph')
+      const res = await axios.get('/api/v1/knowledge/entities/graph')
       entityGraphData.value = res.data
     } catch (e) {
       console.error('获取实体图谱失败:', e)
