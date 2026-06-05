@@ -175,6 +175,7 @@ def post_meeting_process(self, meeting_id: int):
                                 # 贪心聚类：每个新 embedding 与已有聚类中心比较
                                 cluster_centers = [embeddings[0]]  # 聚类中心列表
                                 clusters = [0]  # 每个片段的聚类标签
+                                MAX_SPEAKERS = 3  # 最多识别 3 位发言人（避免过度分割）
                                 for i in range(1, len(embeddings)):
                                     best_cluster = -1
                                     best_sim = -1
@@ -183,7 +184,8 @@ def post_meeting_process(self, meeting_id: int):
                                         if sim > best_sim:
                                             best_sim = sim
                                             best_cluster = ci
-                                    if best_sim >= 0.6:  # 相似度 >= 0.6 归为已有聚类
+                                    # 相似度 >= 0.5 归为已有聚类，或已达到最大发言人数量
+                                    if best_sim >= 0.5 or len(cluster_centers) >= MAX_SPEAKERS:
                                         clusters.append(best_cluster)
                                         # 更新聚类中心（滑动平均）
                                         cluster_centers[best_cluster] = (
