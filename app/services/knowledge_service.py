@@ -237,6 +237,19 @@ class KnowledgeService:
                     except Exception as e:
                         logger.warning(f"公式保存失败(knowledge_id={knowledge_id}): {e}")
 
+                # Step 2.6: 自动生成假设（独立容错，异步执行）
+                if analysis.get("entities") and len(analysis["entities"]) >= 2:
+                    try:
+                        from app.services.hypothesis_service import HypothesisService
+                        async with async_session() as db_h:
+                            hypothesis_svc = HypothesisService(db_h)
+                            topic = analysis.get("topic") or analysis.get("category")
+                            hypotheses = await hypothesis_svc.generate_hypotheses(topic=topic, count=2)
+                            if hypotheses:
+                                logger.info(f"自动生成 {len(hypotheses)} 条假设(knowledge_id={knowledge_id}, topic={topic})")
+                    except Exception as e:
+                        logger.warning(f"假设自动生成失败(knowledge_id={knowledge_id}): {e}")
+
         except Exception as e:
             logger.warning(f"LLM 分析失败(knowledge_id={knowledge_id}): {e}")
 
