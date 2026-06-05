@@ -195,9 +195,13 @@
           :trash-total="trashTotal"
           :trash-page="trashPage"
           :trash-page-size="trashPageSize"
+          :loading="loading"
+          :is-admin="isAdmin"
+          :current-user-id="currentUserId"
           @restore="handleRestore"
           @permanent-delete="handlePermanentDelete"
           @page-change="handleTrashPageChange"
+          @size-change="handleTrashSizeChange"
         />
       </el-tab-pane>
     </el-tabs>
@@ -369,6 +373,12 @@ const handlePermanentDelete = async (taskId) => {
 // 垃圾桶分页
 const handleTrashPageChange = (page) => {
   trashPage.value = page
+  fetchTrashTasks()
+}
+
+const handleTrashSizeChange = (size) => {
+  trashPageSize.value = size
+  trashPage.value = 1
   fetchTrashTasks()
 }
 
@@ -663,55 +673,6 @@ onMounted(() => {
 /* ===== 垃圾桶 ===== */
 .trash-badge {
   margin-left: 4px;
-}
-
-/* ===== 自动删除倒计时 ===== */
-.auto-delete-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.auto-delete-relative {
-  font-size: 13px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.auto-delete-absolute {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-
-.auto-delete-imminent {
-  color: #ff4d4f;
-}
-
-.auto-delete-urgent {
-  color: #ff4d4f;
-}
-
-.auto-delete-warning {
-  color: #faad14;
-}
-
-.auto-delete-normal {
-  color: #faad14;
-}
-
-.auto-delete-safe {
-  color: var(--color-text-secondary);
-}
-
-.auto-delete-icon {
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
 }
 
 .auto-delete-none {
