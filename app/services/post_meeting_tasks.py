@@ -213,7 +213,7 @@ def post_meeting_process(self, meeting_id: int):
                     # 用聚类代表做识别
                     emb = seg_embeddings[i]
                     name, member_id, conf = await vp_service.identify_speaker(db, emb)
-                    if name and conf > 0.4:
+                    if name and conf > 0.35:  # 更宽松的阈值
                         seg_names.append(name)
                     else:
                         seg_names.append(None)  # 暂时留空，后面统一处理
