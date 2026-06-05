@@ -60,8 +60,8 @@ async def polish_segments(
     model = get_default_model()
     response = await client.messages.create(
         model=model,
-        max_tokens=2048,
-        temperature=0.3,  # 低温度，减少创造性改写但保持响应
+        max_tokens=4096,
+        temperature=0.5,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
