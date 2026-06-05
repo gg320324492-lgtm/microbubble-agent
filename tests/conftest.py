@@ -142,3 +142,10 @@ def admin_headers(admin_member):
         pytest.skip("SKIP_DB_SETUP=1：admin_headers fixture 不可用")
     token = create_access_token(data={"sub": str(admin_member.id)})
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def mock_embedding():
+    """固定 192 维向量（不需 DB）"""
+    import numpy as np
+    return np.random.randn(192).astype(np.float32).tolist()
