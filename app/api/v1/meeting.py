@@ -83,15 +83,17 @@ async def list_meetings(
     if keyword:
         query = query.where(Meeting.title.contains(keyword))
 
+    query = query.options(
+        selectinload(Meeting.participants).selectinload(MeetingParticipant.member)
+    )
     query = query.order_by(Meeting.start_time.desc())
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
 
-    # 预加载参与者（避免异步懒加载 MissingGreenlet 错误）
-    query = query.options(selectinload(Meeting.participants).selectinload(MeetingParticipant.member))
-
     result = await db.execute(query)
-    meetings = result.scalars().unique().all()
+    meetings = list(dict.fromkeys(result.scalars().all()).keys())
+
+    return {"items": meetings, "total": len(meetings)}
 
     return {"items": meetings, "total": len(meetings)}
 
