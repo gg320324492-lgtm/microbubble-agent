@@ -43,6 +43,7 @@ class KnowledgeResponse(KnowledgeBase):
     quality_score: Optional[float] = None
     entities: Optional[list] = None
     needs_review: Optional[bool] = False
+    topic: Optional[str] = None
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime

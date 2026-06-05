@@ -18,6 +18,7 @@
           <span class="category-badge" :style="{ background: accentColor + '15', color: accentColor }">
             {{ categoryIcon }} {{ item.category || '未分类' }}
           </span>
+          <span v-if="item.topic" class="topic-badge">{{ item.topic }}</span>
           <el-tag
             v-if="item.analysis_status === 'pending' || item.analysis_status === 'analyzing'"
             size="small"
@@ -248,6 +249,16 @@ const formatDate = (dateStr) => {
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
+}
+
+.topic-badge {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  background: var(--color-info-bg);
+  color: var(--color-text-secondary);
+  margin-left: var(--space-1);
 }
 
 .card-source-icon {

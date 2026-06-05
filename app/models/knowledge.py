@@ -15,7 +15,8 @@ class Knowledge(Base, TimestampMixin):
     content = Column(Text, nullable=False)
 
     # 分类和标签
-    category = Column(String(100))  # LLM动态生成的具体分类（如"臭氧气泡消毒动力学"）
+    category = Column(String(100))  # 预设分类（论文/方法/标准/综述/案例/FAQ/笔记/手册）
+    topic = Column(String(200))  # 具体研究方向（如"臭氧气泡消毒动力学"）
     tags = Column(ARRAY(String))
 
     # 动态分析结果
