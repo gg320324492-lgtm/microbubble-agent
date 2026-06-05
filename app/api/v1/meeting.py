@@ -74,7 +74,9 @@ async def list_meetings(
 ):
     """查询会议列表"""
     from sqlalchemy.orm import selectinload
-    query = select(Meeting)
+    query = select(Meeting).options(
+        selectinload(Meeting.participants).selectinload(MeetingParticipant.member)
+    )
 
     if date_from:
         query = query.where(Meeting.start_time >= date_from)
@@ -83,17 +85,42 @@ async def list_meetings(
     if keyword:
         query = query.where(Meeting.title.contains(keyword))
 
-    query = query.options(
-        selectinload(Meeting.participants).selectinload(MeetingParticipant.member)
-    )
     query = query.order_by(Meeting.start_time.desc())
     offset = (page - 1) * page_size
     query = query.offset(offset).limit(page_size)
 
     result = await db.execute(query)
-    meetings = list(dict.fromkeys(result.scalars().all()).keys())
+    meetings = list(dict.fromkeys(result.scalars().unique().all()).keys())
 
-    return {"items": meetings, "total": len(meetings)}
+    # 手动构建响应字典避免 Pydantic 序列化 ORM 失败
+    items = []
+    for m in meetings:
+        p_list = []
+        for p in (m.participants or []):
+            p_list.append({
+                "member_id": p.member_id,
+                "name": p.member.name if p.member else "",
+                "role": p.role or "participant",
+                "avatar": getattr(p.member, "avatar", None) if p.member else None,
+            })
+        items.append({
+            "id": m.id,
+            "title": m.title,
+            "start_time": m.start_time.isoformat() if m.start_time else None,
+            "end_time": m.end_time.isoformat() if m.end_time else None,
+            "location": m.location,
+            "status": m.status,
+            "summary": m.summary,
+            "audio_url": m.audio_url,
+            "audio_duration": m.audio_duration,
+            "participants": p_list,
+            "presenter_ids": m.presenter_ids,
+            "agenda": m.agenda,
+            "created_by": m.created_by,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        })
+
+    return {"items": items, "total": len(items)}
 
     return {"items": meetings, "total": len(meetings)}
 
