@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-04 最新进展**：代码质量全面升级（30 commit）— API 规范化 + 后端测试 + 前端 Composables + 18 个子组件 + Vitest 测试体系 + 三大 View 精简 21%。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-04) 和 [README.md](README.md#当前状态2026-06-04)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-05 最新进展**：听会功能全面修复（datetime 时区 + silero-vad 缓存 + 3D-Speaker 依赖）+ 声纹识别验证通过 + 点击响应优化 + 会议状态中文化。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-05) 和 [README.md](README.md#当前状态2026-06-05)。
 
 ## 前端设计系统
 
@@ -261,6 +261,10 @@
   - **会议上下文 metadata 字段选型**（2026-06-02）— `meeting_context` / `meeting_metadata` 等**不依赖** lazy 关系。L2/L3 润色需要的 `title`（column 属性，**不**触发 lazy load）/ `participants`（lazy 关系，**会**触发）/ `topic_line` / `context_segments` 字段应该用 column 字段或显式空值构造
 - **FastAPI 路由注册顺序**（2026-06-04 教训）— `meeting_recording.py` 的 `/meetings/start-recording` 路由被 `meeting.py` 的 `/meetings/{meeting_id}` 拦截返回 405。**根因**：FastAPI 按注册顺序匹配路由，`meeting.router` 先注册时 `/meetings/start-recording` 会被当作 `meeting_id = "start-recording"` 匹配到 GET-only 的详情路由。**修复**：`meeting_recording.router` 必须在 `meeting.router` 之前注册。**通用规则**：当多个路由文件有路径前缀重叠时（如 `/meetings/xxx` 和 `/meetings/{id}`），**固定路径必须在参数路径之前注册**
 - **ProcessingDialog 阶段必须与后端 ProgressStage 同步**（2026-06-04 教训）— 前端 ProcessingDialog 的 `stages` 数组和 `STAGE_ORDER` 必须与后端 `progress_service.py` 的 `ProgressStage` 枚举完全一致。本次发现前端用的是旧版阶段名（`extracting_transcript`、`polishing_transcript`、`generating_minutes`），后端已改为 `downloading_audio`、`transcribing`、`generating_analysis` 等，导致 `STAGE_ORDER.indexOf()` 返回 -1，进度条卡住不动。**规则**：修改后处理流水线阶段时，必须同步更新 `ProcessingDialog.vue` 的 `stages` + `STAGE_ORDER` 和 `progress_service.py` 的 `ProgressStage`
+
+- **3D-Speaker 依赖链**（2026-06-05 教训）— `modelscope` 的 `speaker_verification` pipeline 有大量传递依赖：`addict`（模型配置）、`datasets`（数据集加载）、`simplejson`（JSON 序列化）、`sortedcontainers`（排序容器）、`soundfile`（音频文件读取）。这些依赖已写入 `requirements.txt`，但 Celery worker 容器如果是旧构建会缺少。**症状**：`ModuleNotFoundError: No module named 'addict'` → 声纹识别静默返回 unknown，所有发言人显示"发言人A"。**修复**：容器内 `pip install addict datasets simplejson sortedcontainers soundfile`，然后 `docker compose restart celery-worker`
+- **silero-vad 模型下载失败**（2026-06-05 教训）— `torch.hub.load("snakers4/silero-vad")` 从 GitHub 下载模型，服务器出口 IP 受限时会 HTTP 403 rate limit。**修复**：手动下载 `https://github.com/snakers4/silero-vad/archive/refs/heads/master.zip` → 解压到 `/root/.cache/torch/hub/snakers4_silero-vad_master` → 代码加 `source="local"` 回退
+- **datetime tz-aware 写入 tz-naive 列**（2026-06-05 教训）— `datetime.now(timezone.utc)` 创建带时区的 datetime，但 PostgreSQL `TIMESTAMP WITHOUT TIME ZONE` 列无法接收。asyncpg 报 `can't subtract offset-naive and offset-aware datetimes`。**修复**：`.replace(tzinfo=None)` 转为 naive datetime。**通用规则**：凡是写入数据库的 datetime，必须确认列类型是 `TIMESTAMP WITH TIME ZONE` 还是 `WITHOUT`，对应使用 tz-aware 或 naive
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版

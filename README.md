@@ -21,6 +21,13 @@
 
 ### 近期新增（按时间倒序）
 
+- **听会功能全面修复 + 性能优化 + UI 中文化（2026-06-05，5 commit）** —
+  - **datetime 时区修复**：`meeting_recording.py` 的 `datetime.now(timezone.utc)` 创建 tz-aware datetime，但数据库列是 `TIMESTAMP WITHOUT TIME ZONE`，asyncpg 无法写入。修复：添加 `.replace(tzinfo=None)`
+  - **silero-vad 模型缓存**：GitHub rate limit 导致模型下载失败（HTTP 403），预下载到本地缓存 + 添加回退逻辑
+  - **3D-Speaker 依赖修复**：Celery worker 缺少 `addict`/`datasets`/`simplejson`/`sortedcontainers`/`soundfile`，声纹识别无法工作。修复：容器内安装 + 确认 requirements.txt 已包含
+  - **点击响应优化**：`requestAnimationFrame` 延迟初始化 + 非阻塞 API 调用 + `ElMessageBox` 替代原生 `confirm`，消除 `[Violation] 'click' handler took 1043ms` 性能警告
+  - **会议状态中文化**：`scheduled`→已预约、`recording`→录制中、`processing`→处理中、`completed`→已完成、`cancelled`→已取消、`error`→处理失败
+  - **声纹识别验证通过**：杜同贺声纹录入后，听会 30 秒正确识别发言人
 - **代码质量全面升级（2026-06-04，30 commit）** —
   - **API 规范化**：统一异常类层次（7 个异常类）+ 统一分页模型 + 全站分级限流（auth:5次/分, write:30次/分, read:100次/分）+ 安全响应头（X-Content-Type-Options/X-Frame-Options/X-XSS-Protection/Referrer-Policy/X-Request-ID）+ 8 个 API 文件全部改造
   - **后端测试补全**：conftest fixtures + task_service + meeting_service 单元测试 + 任务 API 集成测试（33+ 个测试）
