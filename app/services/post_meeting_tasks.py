@@ -142,89 +142,84 @@ def post_meeting_process(self, meeting_id: int):
                             result.append((start, end))
                     return result
 
-                # 2.2 对每个转录段做发言人识别
+                # 2.2 对所有转录段提取声纹 embedding
+                seg_embeddings = []
                 for seg in transcript_segments:
                     start_sample = int(seg["start"] * sample_rate)
                     end_sample = int(seg["end"] * sample_rate)
                     seg_audio = audio_pcm[start_sample:end_sample]
 
                     if len(seg_audio) < sample_rate * 0.5:
-                        seg["speaker"] = "发言人?"
+                        seg_embeddings.append(None)
                         continue
 
-                    # 对长段（>5s）做细粒度发言人检测
-                    seg_duration = len(seg_audio) / sample_rate
-                    if seg_duration > 5.0:
-                        # 切分成小片段，分别提取声纹
-                        sub_segments = _detect_speaker_changes(seg_audio, sample_rate, min_gap_sec=0.4)
-                        if len(sub_segments) > 1:
-                            # 为每个子片段提取声纹 embedding
-                            embeddings = []
-                            for sub_start, sub_end in sub_segments:
-                                sub_audio = seg_audio[sub_start:sub_end]
-                                if len(sub_audio) >= sample_rate * 0.3:
-                                    emb = vp_service.extract_embedding(sub_audio)
-                                    embeddings.append(emb)
+                    emb = vp_service.extract_embedding(seg_audio)
+                    seg_embeddings.append(emb)
 
-                            if len(embeddings) >= 2:
-                                # 聚类：与已有聚类中心比较，相似度 >= 0.6 归为同一人
-                                from numpy.linalg import norm
-                                def cosine_sim(a, b):
-                                    return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
+                # 2.3 统一聚类所有段的声纹
+                from numpy.linalg import norm
+                from collections import Counter
 
-                                # 贪心聚类：每个新 embedding 与已有聚类中心比较
-                                cluster_centers = [embeddings[0]]  # 聚类中心列表
-                                clusters = [0]  # 每个片段的聚类标签
-                                MAX_SPEAKERS = 3  # 最多识别 3 位发言人（避免过度分割）
-                                for i in range(1, len(embeddings)):
-                                    best_cluster = -1
-                                    best_sim = -1
-                                    for ci, center in enumerate(cluster_centers):
-                                        sim = cosine_sim(embeddings[i], center)
-                                        if sim > best_sim:
-                                            best_sim = sim
-                                            best_cluster = ci
-                                    # 相似度 >= 0.5 归为已有聚类，或已达到最大发言人数量
-                                    if best_sim >= 0.5 or len(cluster_centers) >= MAX_SPEAKERS:
-                                        clusters.append(best_cluster)
-                                        # 更新聚类中心（滑动平均）
-                                        cluster_centers[best_cluster] = (
-                                            cluster_centers[best_cluster] * 0.7 + embeddings[i] * 0.3
-                                        )
-                                    else:
-                                        # 新发言人
-                                        clusters.append(len(cluster_centers))
-                                        cluster_centers.append(embeddings[i])
+                def cosine_sim(a, b):
+                    return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
 
-                                # 识别每个发言人（使用聚类中心的声纹）
-                                unique_speakers = set(clusters)
-                                cluster_speakers = {}
-                                for cluster_id in unique_speakers:
-                                    # 使用聚类中心做识别
-                                    name, member_id, conf = await vp_service.identify_speaker(db, cluster_centers[cluster_id])
-                                    if name and conf > 0.55:
-                                        cluster_speakers[cluster_id] = name
-                                    else:
-                                        cluster_speakers[cluster_id] = f"发言人{chr(65 + cluster_id)}"
+                # 贪心聚类
+                cluster_centers = []
+                clusters = []
+                MAX_SPEAKERS = 3  # 最多识别 3 位发言人
 
-                                # 取出现最多的发言人作为该段的主要发言人
-                                from collections import Counter
-                                main_speaker_id = Counter(clusters).most_common(1)[0][0]
-                                seg["speaker"] = cluster_speakers[main_speaker_id]
-                                seg["speaker_changes"] = len(unique_speakers)  # 记录发言人切换次数
-                            else:
-                                # 只有 1 个 embedding，直接识别
-                                name, member_id, conf = await vp_service.identify_speaker(db, embeddings[0])
-                                seg["speaker"] = name if name and conf > 0.55 else "发言人A"
-                            continue
+                for i, emb in enumerate(seg_embeddings):
+                    if emb is None:
+                        clusters.append(-1)  # 无效段
+                        continue
 
-                    # 短段或无法切分时，直接用整段声纹识别
-                    name, member_id, confidence = await vp_service.identify_speaker(db, seg_audio)
-                    if name and confidence > 0.55:
-                        seg["speaker"] = name
-                        speaker_mapping[seg["speaker_label"]] = name
+                    if not cluster_centers:
+                        # 第一个有效段，创建第一个聚类
+                        cluster_centers.append(emb)
+                        clusters.append(0)
+                        continue
+
+                    # 与已有聚类中心比较
+                    best_cluster = -1
+                    best_sim = -1
+                    for ci, center in enumerate(cluster_centers):
+                        sim = cosine_sim(emb, center)
+                        if sim > best_sim:
+                            best_sim = sim
+                            best_cluster = ci
+
+                    # 相似度 >= 0.45 归为已有聚类，或已达到最大发言人数量
+                    if best_sim >= 0.45 or len(cluster_centers) >= MAX_SPEAKERS:
+                        clusters.append(best_cluster)
+                        # 更新聚类中心（滑动平均）
+                        cluster_centers[best_cluster] = (
+                            cluster_centers[best_cluster] * 0.7 + emb * 0.3
+                        )
                     else:
-                        seg["speaker"] = f"发言人{seg['speaker_label'].split('_')[-1]}"
+                        # 新发言人
+                        clusters.append(len(cluster_centers))
+                        cluster_centers.append(emb)
+
+                # 2.4 识别每个发言人（使用聚类中心的声纹）
+                unique_speakers = set(c for c in clusters if c >= 0)
+                cluster_speakers = {}
+                for cluster_id in unique_speakers:
+                    name, member_id, conf = await vp_service.identify_speaker(db, cluster_centers[cluster_id])
+                    if name and conf > 0.55:
+                        cluster_speakers[cluster_id] = name
+                    else:
+                        cluster_speakers[cluster_id] = f"发言人{chr(65 + cluster_id)}"
+
+                # 2.5 分配发言人到每个段
+                for i, seg in enumerate(transcript_segments):
+                    if clusters[i] >= 0:
+                        seg["speaker"] = cluster_speakers[clusters[i]]
+                        if not seg["speaker"].startswith("发言人"):
+                            speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = seg["speaker"]
+                    else:
+                        seg["speaker"] = "发言人?"
+
+                logger.info(f"声纹聚类完成: {len(unique_speakers)} 位发言人, {len(cluster_centers)} 个聚类中心")
 
                 # 后处理：合并相似发言人（同一人可能被识别为多个标签）
                 # 统计每个发言人的出现次数
