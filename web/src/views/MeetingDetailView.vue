@@ -139,16 +139,23 @@
                     <div v-if="group.speaker" class="speaker-row">
                       <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
                       <template v-if="editingSpeaker === group.speaker">
-                        <el-input
+                        <el-select
                           v-model="editSpeakerName"
                           size="small"
-                          class="edit-speaker-input"
-                          @keyup.enter="confirmSpeakerRename(group.speaker)"
-                          @blur="confirmSpeakerRename(group.speaker)"
-                          ref="speakerInputRef"
-                        />
+                          class="edit-speaker-select"
+                          filterable
+                          :ref="focusSelect"
+                          @change="confirmSpeakerRename(group.speaker)"
+                        >
+                          <el-option
+                            v-for="m in memberStore.members"
+                            :key="m.id"
+                            :label="m.name"
+                            :value="m.name"
+                          />
+                        </el-select>
                       </template>
-                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击编辑发言人名字">{{ group.speaker }}</span>
+                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击选择正确的发言人">{{ group.speaker }}</span>
                     </div>
                     <ul class="points-list">
                       <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
@@ -161,16 +168,22 @@
                     <div v-if="group.speaker" class="speaker-row">
                       <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
                       <template v-if="editingSpeaker === group.speaker">
-                        <el-input
+                        <el-select
                           v-model="editSpeakerName"
                           size="small"
-                          class="edit-speaker-input"
-                          @keyup.enter="confirmSpeakerRename(group.speaker)"
-                          @blur="confirmSpeakerRename(group.speaker)"
-                          ref="speakerInputRef"
-                        />
+                          class="edit-speaker-select"
+                          filterable
+                          @change="confirmSpeakerRename(group.speaker)"
+                        >
+                          <el-option
+                            v-for="m in memberStore.members"
+                            :key="m.id"
+                            :label="m.name"
+                            :value="m.name"
+                          />
+                        </el-select>
                       </template>
-                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击编辑发言人名字">{{ group.speaker }}</span>
+                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击选择正确的发言人">{{ group.speaker }}</span>
                     </div>
                     <ul class="decisions-list">
                       <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
@@ -824,8 +837,8 @@ onMounted(async () => {
 .speaker-name:hover {
   border-bottom-color: var(--color-primary, #FF7A5C);
 }
-.edit-speaker-input {
-  width: 120px;
+.edit-speaker-select {
+  width: 140px;
 }
 .points-list, .decisions-list {
   padding-left: 20px;
