@@ -85,14 +85,32 @@ class AudioProcessor:
             AudioSegment 列表，每段包含音频数据和时间戳
         """
         import torch
+        import os
 
-        # 加载 silero-vad
-        model, utils = torch.hub.load(
-            repo_or_dir="snakers4/silero-vad",
-            model="silero_vad",
-            force_reload=False,
-            trust_repo=True,
-        )
+        # 加载 silero-vad（带重试和本地缓存）
+        try:
+            # 尝试从本地缓存加载
+            model, utils = torch.hub.load(
+                repo_or_dir="snakers4/silero-vad",
+                model="silero_vad",
+                force_reload=False,
+                trust_repo=True,
+            )
+        except Exception as e:
+            logger.warning(f"从 GitHub 加载 silero-vad 失败: {e}，尝试使用本地缓存")
+            # 如果下载失败，尝试使用本地缓存（如果存在）
+            hub_dir = os.path.expanduser("~/.cache/torch/hub")
+            if os.path.exists(os.path.join(hub_dir, "snakers4_silero-vad_master")):
+                model, utils = torch.hub.load(
+                    repo_or_dir=os.path.join(hub_dir, "snakers4_silero-vad_master"),
+                    model="silero_vad",
+                    force_reload=False,
+                    trust_repo=True,
+                    source="local",
+                )
+            else:
+                raise RuntimeError(f"无法加载 silero-vad 模型，请检查网络连接或手动下载模型到 {hub_dir}") from e
+
         get_speech_timestamps = utils[0]
 
         # 转为 tensor
