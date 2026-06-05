@@ -115,6 +115,23 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
 
+                # ===== 阶段 1.5: ASR 文本纠错 =====
+                TEXT_CORRECTIONS = {
+                    "小七助手": "小气助手",
+                    "小西助手": "小气助手",
+                    "小汽助手": "小气助手",
+                    "小器助手": "小气助手",
+                    "小气驻守": "小气助手",
+                    "小七驻守": "小气助手",
+                    "约纳米气泡": "微纳米气泡",
+                    "拆GPT": "ChatGPT",
+                    "多通科": "杜同贺",
+                }
+                for ck, cv in TEXT_CORRECTIONS.items():
+                    for seg in transcript_segments:
+                        if ck in seg["text"]:
+                            seg["text"] = seg["text"].replace(ck, cv)
+
                 # ===== 阶段 2: 发言人分离（声纹 + 停顿 + 内容） =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
                 from app.services.voiceprint_service import VoiceprintService
