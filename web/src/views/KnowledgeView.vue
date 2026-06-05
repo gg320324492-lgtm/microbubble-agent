@@ -2,248 +2,46 @@
   <div class="knowledge-view">
     <el-tabs v-model="activeTab" type="border-card" class="knowledge-tabs">
       <el-tab-pane label="知识库" name="knowledge">
-    <!-- ===== 动态分类标签云 ===== -->
-    <el-card v-if="categories.length > 0" class="tag-cloud-card">
-      <div class="tag-cloud-header">
-        <span class="tag-cloud-title">📌 研究主题</span>
-        <span class="tag-cloud-hint">点击筛选</span>
-      </div>
-      <div class="tag-cloud">
-        <span
-          v-for="cat in categories"
-          :key="cat.name"
-          class="cloud-tag"
-          :class="{ 'cloud-tag-active': filterCategory === cat.name }"
-          :style="{ fontSize: calcCloudSize(cat.count) }"
-          @click="filterCategory = filterCategory === cat.name ? '' : cat.name"
-        >
-          {{ cat.name }}
-          <small>({{ cat.count }})</small>
-        </span>
-      </div>
-    </el-card>
-
-    <!-- ===== 统计 + 操作栏 ===== -->
-    <el-card class="stats-card">
-      <div class="stats-grid">
-        <div
-          class="stat-item stat-total"
-          :class="{ 'stat-active': filterCategory === '' }"
-          @click="filterCategory = ''"
-        >
-          <div class="stat-icon">📊</div>
-          <div class="stat-number">{{ statsData.total }}</div>
-          <div class="stat-label">全部</div>
-        </div>
-        <div
-          v-for="(count, cat) in catStats"
-          :key="cat"
-          class="stat-item"
-          :class="{ 'stat-active': filterCategory === cat }"
-          @click="filterCategory = filterCategory === cat ? '' : cat"
-        >
-          <div class="stat-number">{{ count }}</div>
-          <div class="stat-label" :title="cat">{{ cat.length > 8 ? cat.slice(0, 8) + '…' : cat }}</div>
-        </div>
-      </div>
-    </el-card>
-
-    <!-- ===== 操作栏 ===== -->
-    <el-card class="filter-card">
-      <el-row :gutter="16" align="middle">
-        <el-col :xs="24" :sm="12" :md="8">
-          <el-input
-            v-model="searchQuery"
-            name="knowledge-list-search"
-            placeholder="搜索知识库..."
-            clearable
-            @keyup.enter="fetchKnowledge"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="16">
-          <el-button type="primary" @click="showCreateDialog = true">
-            <el-icon><Plus /></el-icon> 添加知识
-          </el-button>
-          <el-button @click="showUploadDialog = true">
-            <el-icon><Upload /></el-icon> 上传文件
-          </el-button>
-          <el-button type="warning" @click="openQADialog">
-            <el-icon><MagicStick /></el-icon> AI问答
-          </el-button>
-        </el-col>
-      </el-row>
-    </el-card>
-
-    <!-- ===== 知识列表 ===== -->
-    <el-card class="knowledge-list-card">
-      <div v-if="loading" class="skeleton-list">
-        <div v-for="n in 4" :key="n" class="skeleton-item">
-          <div class="skeleton-line skeleton-line-short"></div>
-          <div class="skeleton-line skeleton-line-medium"></div>
-          <div class="skeleton-line skeleton-line-long"></div>
-        </div>
-      </div>
-
-      <div v-else-if="knowledgeList.length === 0" class="empty-state">
-        <el-empty :description="searchQuery ? `没有找到「${searchQuery}」相关内容` : '暂无知识条目'" />
-      </div>
-
-      <div v-else class="knowledge-list">
-        <div
-          v-for="item in knowledgeList"
-          :key="item.id"
-          class="knowledge-item"
-          @click="$router.push('/knowledge/' + item.id)"
-        >
-          <div class="item-header">
-            <div class="item-category">
-              <span class="category-badge">{{ item.category || '未分类' }}</span>
-              <el-tag
-                v-if="item.analysis_status === 'pending'"
-                size="small"
-                type="warning"
-                effect="light"
-              >
-                <span class="status-dot status-pending"></span> 分析中
-              </el-tag>
-              <el-tag
-                v-if="item.analysis_status === 'analyzing'"
-                size="small"
-                type="warning"
-                effect="light"
-              >
-                <span class="status-dot status-analyzing"></span> 分析中
-              </el-tag>
-              <el-tag
-                v-if="item.analysis_status === 'failed'"
-                size="small"
-                type="danger"
-                effect="light"
-              >
-                <span class="status-dot status-failed"></span> 失败
-              </el-tag>
-            </div>
-            <div class="item-tags">
-              <span
-                v-for="tag in (item.tags || []).slice(0, 4)"
-                :key="tag"
-                class="tag-chip"
-              >{{ tag }}</span>
-              <span v-if="(item.tags || []).length > 4" class="tag-chip tag-more">
-                +{{ item.tags.length - 4 }}
-              </span>
-            </div>
-          </div>
-
-          <h3 class="item-title">
-            <el-icon v-if="item.file_path" style="margin-right: 4px; color: #409eff"><Document /></el-icon>
-            <span v-if="item.source_type === 'conversation'" class="conversation-badge" title="来自对话记录">💬</span>
-            <span v-if="item.source_type === 'auto_research'" class="auto-research-badge" title="AI自动研究">🤖</span>
-            <span v-if="item.auto_researched" class="auto-researched-dot" title="已触发自主研究">🔄</span>
-            {{ item.title }}
-          </h3>
-          <p v-if="item.summary" class="item-summary">{{ item.summary }}</p>
-          <p v-else class="item-content">{{ item.content.substring(0, 150) }}...</p>
-
-          <div class="item-footer">
-            <div class="item-footer-left">
-              <span v-if="item.knowledge_type" class="type-badge">{{ item.knowledge_type }}</span>
-              <span class="item-time">{{ formatDate(item.created_at) }}</span>
-            </div>
-            <div class="item-actions">
-              <el-button v-if="item.file_path" text type="success" size="small" @click.stop="downloadFile(item)">下载</el-button>
-              <el-button text type="primary" size="small" @click.stop="editKnowledge(item)">编辑</el-button>
-              <el-button text type="danger" size="small" @click.stop="deleteKnowledge(item)">删除</el-button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="pagination">
-        <el-pagination
-          v-model:current-page="currentPage"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="fetchKnowledge"
+        <!-- 工具栏 -->
+        <KnowledgeToolbar
+          :categories="categories"
+          @search="handleSearch"
+          @create="showCreateDialog = true"
+          @upload="showUploadDialog = true"
+          @qa="openQADialog"
+          @entities="activeTab = 'entities'"
+          @filter="handleFilter"
         />
-      </div>
-    </el-card>
 
-    <!-- ===== 添加/编辑知识对话框 ===== -->
-    <el-dialog
-      v-model="showCreateDialog"
-      :title="editingKnowledge ? '编辑知识' : '添加知识'"
-      :width="isMobile ? '90vw' : '600px'"
-      top="8vh"
-      destroy-on-close
-      :close-on-click-modal="false"
-    >
-      <el-form :model="knowledgeForm" label-width="80px">
-        <el-form-item label="标题" required>
-          <el-input v-model="knowledgeForm.title" name="knowledgeForm-title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="分类">
-          <el-select v-model="knowledgeForm.category" name="knowledgeForm-category" placeholder="动态分类" filterable allow-create clearable>
-            <el-option
-              v-for="cat in categories"
-              :key="cat.name"
-              :label="`${cat.name} (${cat.count})`"
-              :value="cat.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-select
-            v-model="knowledgeForm.tags" name="knowledgeForm-tags"
-            multiple
-            filterable
-            allow-create
-            placeholder="输入标签"
-          >
-            <el-option
-              v-for="tag in hotTags"
-              :key="tag.name"
-              :label="`${tag.name} (${tag.count})`"
-              :value="tag.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="内容" required>
-          <el-input
-            v-model="knowledgeForm.content" name="knowledgeForm-content"
-            type="textarea"
-            :rows="8"
-            placeholder="请输入知识内容"
+        <!-- Dashboard -->
+        <KnowledgeDashboard
+          :stats="dashboardStats"
+          :categories="categories"
+          :recent-items="knowledgeList"
+          :active-category="filterCategory"
+          :loading="loading"
+          @filter-category="handleCategoryFilter"
+          @filter-time="handleTimeFilter"
+          @show-entities="activeTab = 'entities'"
+          @show-hypotheses="activeTab = 'hypotheses'"
+          @show-all-categories="showAllCategories = true"
+          @show-all="showAllKnowledge = true"
+          @view-detail="$router.push('/knowledge/' + $event)"
+          @edit="editKnowledge"
+          @delete="handleDeleteKnowledge"
+          @download="downloadFile"
+        />
+
+        <!-- 分页（查看全部时显示） -->
+        <div v-if="showAllKnowledge && total > pageSize" class="pagination">
+          <el-pagination
+            v-model:current-page="currentPage"
+            :page-size="pageSize"
+            :total="total"
+            layout="total, prev, pager, next"
+            @current-change="fetchKnowledge"
           />
-        </el-form-item>
-        <el-form-item label="来源">
-          <el-input v-model="knowledgeForm.source" name="knowledgeForm-source" placeholder="来源链接或文件路径" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveKnowledge">{{ editingKnowledge ? '保存' : '添加' }}</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- AI 问答对话框 -->
-    <KnowledgeQADialog
-      v-model:visible="showQADialog"
-      :is-mobile="isMobile"
-      @navigate="$router.push('/knowledge/' + $event)"
-    />
-
-    <!-- 文件上传对话框 -->
-    <KnowledgeUploadDialog
-      v-model:visible="showUploadDialog"
-      :is-mobile="isMobile"
-      @success="onUploadSuccess"
-    />
+        </div>
       </el-tab-pane>
 
       <!-- ===== 实体图谱 Tab ===== -->
@@ -251,19 +49,19 @@
         <el-card class="filter-card">
           <el-row :gutter="12">
             <el-col :span="5">
-              <el-input v-model="entitySearch.subject" name="entitySearch-subject" placeholder="主体" clearable @keyup.enter="searchEntities" />
+              <el-input v-model="entitySearch.subject" name="entitySearch-subject" placeholder="主体" clearable @keyup.enter="searchEntitiesLocal" />
             </el-col>
             <el-col :span="5">
-              <el-input v-model="entitySearch.predicate" name="entitySearch-predicate" placeholder="关系" clearable @keyup.enter="searchEntities" />
+              <el-input v-model="entitySearch.predicate" name="entitySearch-predicate" placeholder="关系" clearable @keyup.enter="searchEntitiesLocal" />
             </el-col>
             <el-col :span="6">
-              <el-input v-model="entitySearch.keyword" name="entitySearch-keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntities" />
+              <el-input v-model="entitySearch.keyword" name="entitySearch-keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntitiesLocal" />
             </el-col>
             <el-col :span="4">
-              <el-button type="primary" @click="searchEntities">搜索实体</el-button>
+              <el-button type="primary" @click="searchEntitiesLocal">搜索实体</el-button>
             </el-col>
             <el-col :span="4">
-              <el-button @click="fetchEntityGraph">图谱视图</el-button>
+              <el-button @click="fetchEntityGraphLocal">图谱视图</el-button>
             </el-col>
           </el-row>
         </el-card>
@@ -292,7 +90,7 @@
             </div>
           </div>
           <el-pagination v-if="entityTotal > 0" v-model:current-page="entityPage" :page-size="20"
-            :total="entityTotal" layout="total, prev, pager, next" @current-change="searchEntities" style="margin-top:12px" />
+            :total="entityTotal" layout="total, prev, pager, next" @current-change="searchEntitiesLocal" style="margin-top:12px" />
         </el-card>
       </el-tab-pane>
 
@@ -433,6 +231,77 @@
 
     </el-tabs>
 
+    <!-- 添加/编辑知识对话框 -->
+    <el-dialog
+      v-model="showCreateDialog"
+      :title="editingKnowledge ? '编辑知识' : '添加知识'"
+      :width="isMobile ? '90vw' : '600px'"
+      top="8vh"
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <el-form :model="knowledgeForm" label-width="80px">
+        <el-form-item label="标题" required>
+          <el-input v-model="knowledgeForm.title" name="knowledgeForm-title" placeholder="请输入标题" />
+        </el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="knowledgeForm.category" name="knowledgeForm-category" placeholder="动态分类" filterable allow-create clearable>
+            <el-option
+              v-for="cat in categories"
+              :key="cat.name"
+              :label="`${cat.name} (${cat.count})`"
+              :value="cat.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="标签">
+          <el-select
+            v-model="knowledgeForm.tags" name="knowledgeForm-tags"
+            multiple
+            filterable
+            allow-create
+            placeholder="输入标签"
+          >
+            <el-option
+              v-for="tag in hotTags"
+              :key="tag.name"
+              :label="`${tag.name} (${tag.count})`"
+              :value="tag.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="内容" required>
+          <el-input
+            v-model="knowledgeForm.content" name="knowledgeForm-content"
+            type="textarea"
+            :rows="8"
+            placeholder="请输入知识内容"
+          />
+        </el-form-item>
+        <el-form-item label="来源">
+          <el-input v-model="knowledgeForm.source" name="knowledgeForm-source" placeholder="来源链接或文件路径" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCreateDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveKnowledge">{{ editingKnowledge ? '保存' : '添加' }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- AI 问答对话框 -->
+    <KnowledgeQADialog
+      v-model:visible="showQADialog"
+      :is-mobile="isMobile"
+      @navigate="$router.push('/knowledge/' + $event)"
+    />
+
+    <!-- 文件上传对话框 -->
+    <KnowledgeUploadDialog
+      v-model:visible="showUploadDialog"
+      :is-mobile="isMobile"
+      @success="onUploadSuccess"
+    />
+
     <!-- Entity detail dialog -->
     <el-dialog v-model="showEntityDetailDialog" title="实体详情" width="600px">
       <div v-if="entityDetail">
@@ -458,10 +327,11 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-vue'
+import { MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
-import { formatDate } from '@/utils/format'
 import { useKnowledge } from '@/composables/useKnowledge'
+import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
+import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
 import KnowledgeQADialog from './knowledge/KnowledgeQADialog.vue'
 import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
 
@@ -483,10 +353,8 @@ const showCreateDialog = ref(false)
 const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
-const uploadTitle = ref('')
-const uploadFile = ref(null)
-const uploading = ref(false)
-const uploadRef = ref(null)
+const showAllCategories = ref(false)
+const showAllKnowledge = ref(false)
 
 // Tabs
 const activeTab = ref('knowledge')
@@ -513,21 +381,6 @@ const calcInputs = ref({})
 const calcResult = ref(null)
 const calcLoading = ref(false)
 
-// QA
-const qaQuery = ref('')
-const qaLoading = ref(false)
-const qaResult = ref(null)
-const qaError = ref('')
-const qaReasonMode = ref(false)
-const qaReasonResult = ref(null)
-const suggestions = [
-  '微纳米气泡在水处理中的应用',
-  '臭氧微纳米气泡消毒效果',
-  'NTA 粒径测量方法',
-  '微纳米气泡在农业中的应用',
-  '气泡稳定性影响因素',
-]
-
 // 表单
 const knowledgeForm = ref({
   title: '',
@@ -537,9 +390,42 @@ const knowledgeForm = ref({
   source: ''
 })
 
-const catStats = computed(() => {
-  return statsData.value.categories || {}
-})
+// Dashboard 统计数据
+const dashboardStats = computed(() => ({
+  total: statsData.value.total || 0,
+  recent_count: knowledgeList.value.length,
+  entity_count: entityTotal.value || 0,
+  hypothesis_count: hypothesisTotal.value || 0
+}))
+
+// ── 搜索和筛选 ──
+
+const handleSearch = (query) => {
+  searchQuery.value = query
+  currentPage.value = 1
+  fetchKnowledge()
+}
+
+const handleFilter = (filters) => {
+  // 处理高级筛选
+  if (filters.category) {
+    filterCategory.value = filters.category
+  }
+  // 其他筛选条件可以扩展
+  currentPage.value = 1
+  fetchKnowledge()
+}
+
+const handleCategoryFilter = (category) => {
+  filterCategory.value = category
+  currentPage.value = 1
+  fetchKnowledge()
+}
+
+const handleTimeFilter = (range) => {
+  // 时间筛选逻辑
+  console.log('Time filter:', range)
+}
 
 // ── 保存/编辑 ──
 
@@ -611,11 +497,11 @@ const resetForm = () => {
   knowledgeForm.value = { title: '', category: '', tags: [], content: '', source: '' }
 }
 
-const calcCloudSize = (count) => {
-  const maxCount = Math.max(...categories.value.map(c => c.count), 1)
-  const ratio = Math.log2(1 + count) / Math.log2(1 + maxCount)
-  return `${13 + ratio * 9}px`
+const openQADialog = () => {
+  showQADialog.value = true
 }
+
+// ── 监听 ──
 
 watch(filterCategory, () => {
   currentPage.value = 1
@@ -782,259 +668,378 @@ onUnmounted(() => {
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
-/* ── Tag Cloud ── */
-.tag-cloud-card {
+/* ── Tabs ── */
+.knowledge-tabs {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
 
-.tag-cloud-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
+.knowledge-tabs :deep(.el-tabs__header) {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  margin: 0;
 }
 
-.tag-cloud-title {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+.knowledge-tabs :deep(.el-tabs__item) {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  padding: 0 var(--space-5);
+  height: 48px;
+  line-height: 48px;
 }
 
-.tag-cloud-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-
-.cloud-tag {
-  cursor: pointer;
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-full);
-  background: var(--color-info-bg);
-  color: var(--color-text-regular);
-  transition: all var(--duration-normal) var(--ease-out);
-  white-space: nowrap;
-}
-
-.cloud-tag:hover {
-  background: var(--color-primary-bg);
+.knowledge-tabs :deep(.el-tabs__item.is-active) {
   color: var(--color-primary);
-  transform: scale(1.05);
+  font-weight: var(--font-weight-semibold);
 }
 
-.cloud-tag-active {
-  background: var(--color-primary) !important;
-  color: #fff !important;
+.knowledge-tabs :deep(.el-tabs__active-bar) {
+  background: var(--color-primary);
 }
 
-.cloud-tag small {
-  font-size: 11px;
-  opacity: 0.7;
+.knowledge-tabs :deep(.el-tabs__content) {
+  padding: var(--space-4);
 }
 
-/* ── Stats ── */
-.stats-card {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+/* ── Filter Card ── */
+.filter-card {
+  margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-primary);
-  animation: fadeSlideUp var(--duration-slow) var(--ease-out) 40ms both;
+  box-shadow: var(--shadow-xs);
 }
 
-.stats-grid {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  text-align: center;
-  cursor: pointer;
-  padding: var(--space-2) var(--space-4);
+/* ── Entity ── */
+.entity-graph-card {
+  margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
-  transition: all var(--duration-normal) var(--ease-out);
-  color: rgba(255, 255, 255, 0.85);
-  min-width: 60px;
+  box-shadow: var(--shadow-xs);
 }
 
-.stat-item:hover,
-.stat-active {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+.entity-graph-container {
+  height: 400px;
+  width: 100%;
 }
 
-.stat-icon {
-  font-size: 22px;
-  margin-bottom: var(--space-1);
+.entity-list-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
 }
 
-.stat-number {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: var(--font-size-xs);
-  margin-top: var(--space-1);
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── List ── */
-.knowledge-list {
-  display: flex;
-  flex-direction: column;
+.entity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-3);
 }
 
-.knowledge-item {
-  padding: var(--space-4);
+.entity-card {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
+  padding: var(--space-4);
   border: 1px solid var(--color-border);
-  cursor: pointer;
   transition: all var(--duration-normal) var(--ease-out);
 }
 
-.knowledge-item:hover {
+.entity-card:hover {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-primary);
   transform: translateY(-2px);
 }
 
-.item-header {
+.entity-triple {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-3);
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
   flex-wrap: wrap;
-  gap: var(--space-2);
 }
 
-.item-category {
+.entity-subject {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.entity-predicate {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.entity-object {
+  color: var(--color-accent);
+}
+
+.entity-condition-text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.entity-meta {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.category-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-full);
+  gap: var(--space-3);
   font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  color: var(--color-text-secondary);
 }
 
-.tag-chip {
-  display: inline-block;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  background: var(--color-info-bg);
-  color: var(--color-text-regular);
-  margin-left: var(--space-1);
-  transition: all var(--duration-fast) var(--ease-out);
+.entity-triple-large {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-4);
 }
 
-.tag-chip:hover {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-
-.tag-more {
-  background: #e8f4fd;
-  color: var(--color-primary);
-}
-
-.item-title {
-  font-size: var(--font-size-md);
+.entity-detail-section h4 {
+  margin: 0 0 var(--space-3) 0;
   color: var(--color-text-primary);
+}
+
+.source-item {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   display: flex;
+  justify-content: space-between;
   align-items: center;
 }
 
-.conversation-badge,
-.auto-research-badge {
-  display: inline-block;
-  margin-right: var(--space-1);
-  font-size: var(--font-size-sm);
-  vertical-align: middle;
-  opacity: 0.8;
+.source-item:hover {
+  background: var(--color-primary-bg);
 }
 
-.auto-researched-dot {
-  margin-right: 2px;
-  font-size: var(--font-size-sm);
+/* ── Hypothesis ── */
+.hypothesis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
 }
 
-.item-summary {
+.hypothesis-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.hypothesis-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.hypothesis-proposed {
+  border-left: 4px solid var(--color-warning);
+}
+
+.hypothesis-validated {
+  border-left: 4px solid var(--color-success);
+}
+
+.hypothesis-rejected {
+  border-left: 4px solid var(--color-danger);
+}
+
+.hypothesis-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.hypothesis-confidence {
+  margin-left: auto;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.hypothesis-statement {
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  margin-bottom: var(--space-3);
+}
+
+.hypothesis-rationale,
+.hypothesis-experiment {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   line-height: 1.6;
-  margin-bottom: var(--space-3);
-  font-style: italic;
+  margin-bottom: var(--space-2);
 }
 
-.item-content {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-regular);
-  line-height: 1.6;
-  margin-bottom: var(--space-3);
-}
-
-.item-footer {
+.hypothesis-actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* ── Formula ── */
+.formula-list-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+.formula-list-header {
+  margin-bottom: var(--space-3);
+}
+
+.filter-row {
+  display: flex;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  gap: var(--space-2);
 }
 
-.item-footer-left {
+.formula-item {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  margin-bottom: var(--space-2);
+}
+
+.formula-item:hover {
+  background: var(--color-info-bg);
+}
+
+.formula-selected {
+  background: var(--color-primary-bg);
+  border: 1px solid var(--color-primary-border);
+}
+
+.formula-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.formula-latex {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-family: 'Courier New', monospace;
+  margin-bottom: var(--space-2);
+}
+
+.formula-meta {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.type-badge {
-  padding: 1px var(--space-2);
-  border-radius: var(--radius-full);
-  font-size: 10px;
-  background: #f0f5ff;
-  color: #409eff;
-  border: 1px solid #d6e4ff;
+.formula-unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
-.item-time {
+.formula-category-path {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-1);
+}
+
+/* ── Calculator ── */
+.calculator-card {
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  position: sticky;
+  top: var(--space-4);
+}
+
+.calculator-card h3 {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--color-text-primary);
+}
+
+.calc-category-path {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.calculator-formula {
+  font-size: var(--font-size-md);
+  font-family: 'Courier New', monospace;
+  color: var(--color-primary);
+  padding: var(--space-3);
+  background: var(--color-info-bg);
+  border-radius: var(--radius-md);
+  margin: var(--space-3) 0;
+  text-align: center;
+}
+
+.calc-result {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-md);
+}
+
+.calc-value {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.calc-unit {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.calc-steps {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.steps-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.calc-step {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.step-var {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+}
+
+.calc-source {
+  margin-top: var(--space-2);
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
 
-.item-actions {
-  display: flex;
-  gap: var(--space-2);
+.calc-source a {
+  color: var(--color-primary);
+  cursor: pointer;
 }
 
-.item-actions .el-button {
-  border-radius: var(--radius-md);
-  transition: all var(--duration-fast) var(--ease-out);
+.calc-source a:hover {
+  text-decoration: underline;
 }
 
-.item-actions .el-button:hover {
-  transform: scale(1.02);
+/* ── Common ── */
+.clickable {
+  cursor: pointer;
+}
+
+.empty-state {
+  padding: var(--space-10) 0;
+}
+
+.qa-loading {
+  text-align: center;
+  padding: var(--space-10);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-md);
 }
 
 .pagination {
@@ -1043,878 +1048,19 @@ onUnmounted(() => {
   justify-content: flex-end;
 }
 
-/* ── QA Dialog ── */
-.qa-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.qa-input-row {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.qa-mode-toggle {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--space-2) 0;
-}
-
-.qa-reasoning-chain {
-  margin-top: var(--space-4);
-  padding: var(--space-3);
-  background: #f5f7fa;
-  border-radius: var(--radius-md);
-}
-
-.reasoning-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-2);
-}
-
-.reasoning-step {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-}
-
-.step-number {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: var(--font-size-xs);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: var(--font-weight-semibold);
-}
-
-.qa-gap-note {
-  margin-top: var(--space-3);
-}
-
-.qa-suggestions {
-  padding: var(--space-3) 0;
-}
-
-.suggestion-title {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-2);
-}
-
-.suggestion-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.suggestion-tag {
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.suggestion-tag:hover {
-  transform: scale(1.04);
-}
-
-.qa-loading {
-  text-align: center;
-  padding: var(--space-8);
-  color: var(--color-text-secondary);
-}
-
-.qa-loading-dots {
-  font-size: var(--font-size-base);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.qa-result {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.qa-confidence {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.confidence-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.conf-high { background: #67c23a; }
-.conf-medium { background: #e6a23c; }
-.conf-low { background: #f56c6c; }
-
-.confidence-info {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  margin-left: var(--space-2);
-}
-
-.qa-answer {
-  background: var(--color-bg-page);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  line-height: 1.8;
-  font-size: var(--font-size-base);
-  color: var(--color-text-primary);
-  white-space: pre-wrap;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.qa-citation {
-  display: inline-block;
-  padding: 0 var(--space-1);
-  color: var(--color-primary);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-}
-
-.qa-sources {
-  background: #f0f9f0;
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-}
-
-.sources-title {
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-3);
-  color: var(--color-text-primary);
-}
-
-.source-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background var(--duration-fast);
-}
-
-.source-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.source-title {
-  font-size: var(--font-size-sm);
-  color: var(--color-primary);
-}
-
-.qa-research-note {
-  margin-top: var(--space-2);
-}
-
-.qa-error {
-  margin-top: var(--space-2);
-}
-
-/* ── Detail Dialog ── */
-.knowledge-detail {
-  max-height: 75vh;
-  overflow-y: auto;
-  padding-right: var(--space-2);
-}
-
-.knowledge-detail h2 {
-  margin-bottom: var(--space-4);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-xl);
-}
-
-.detail-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-  flex-wrap: wrap;
-}
-
-.detail-date {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.detail-tags {
-  margin-bottom: var(--space-4);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.detail-tag {
-  font-size: var(--font-size-xs);
-}
-
-.detail-analysis {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.analysis-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.analysis-label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-.analysis-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-}
-
-.concept-chip {
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  background: #f0f5ff;
-  color: #409eff;
-  border: 1px solid #d6e4ff;
-}
-
-.topic-chip {
-  padding: 2px var(--space-3);
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  background: #fef7e0;
-  color: #b8860b;
-  border: 1px solid #fce8b2;
-}
-
-/* Needs review warning */
-.detail-review-warning {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fef0f0;
-  border: 1px solid #fde2e2;
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-4);
-  color: #f56c6c;
-  font-weight: var(--font-weight-semibold);
-}
-
-/* Entity triples */
-.detail-entities {
-  margin-bottom: var(--space-4);
-}
-
-.entities-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-3);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.entities-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-2);
-}
-
-.entity-card {
-  background: #fafbfc;
-  border: 1px solid #e8eaed;
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-}
-
-.entity-triple {
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--space-1);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.entity-subject {
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.entity-predicate {
-  color: #909399;
-}
-
-.entity-object {
-  color: #409eff;
-  font-weight: var(--font-weight-medium);
-}
-
-.entity-condition {
-  font-size: var(--font-size-xs);
-  color: #909399;
-  margin-bottom: var(--space-1);
-}
-
-.entity-confidence {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.entity-confidence .el-progress { flex: 1; }
-.confidence-text { font-size: var(--font-size-xs); color: #909399; }
-
-.detail-summary {
-  background: linear-gradient(135deg, var(--color-primary-bg) 0%, #e8f4fd 100%);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  margin-bottom: var(--space-5);
-  border-left: 4px solid var(--color-primary);
-}
-
-.summary-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-2);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.summary-text {
-  font-size: var(--font-size-base);
-  line-height: 1.7;
-  color: var(--color-text-primary);
-}
-
-.detail-content {
-  font-size: var(--font-size-base);
-  line-height: 1.8;
-  color: var(--color-text-primary);
-  white-space: pre-wrap;
-  background: var(--color-bg-page);
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
-}
-
-.markdown-body {
-  font-size: var(--font-size-base);
-  line-height: 1.8;
-  color: var(--color-text-primary);
-  background: var(--color-bg-page);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-md);
-}
-
-.markdown-body :deep(h1) {
-  font-size: 1.5em;
-  font-weight: 700;
-  margin: 1.2em 0 0.6em;
-  padding-bottom: 0.3em;
-  border-bottom: 2px solid var(--color-border);
-  color: var(--color-text-primary);
-}
-
-.markdown-body :deep(h2) {
-  font-size: 1.3em;
-  font-weight: 600;
-  margin: 1em 0 0.5em;
-  color: var(--color-text-primary);
-}
-
-.markdown-body :deep(h3) {
-  font-size: 1.1em;
-  font-weight: 600;
-  margin: 0.8em 0 0.4em;
-  color: var(--color-text-secondary);
-}
-
-.markdown-body :deep(p) {
-  margin: 0.5em 0;
-  text-indent: 2em;
-}
-
-.markdown-body :deep(ul), .markdown-body :deep(ol) {
-  padding-left: 2em;
-  margin: 0.4em 0;
-}
-
-.markdown-body :deep(li) {
-  margin: 0.2em 0;
-}
-
-.markdown-body :deep(table) {
-  border-collapse: collapse;
-  width: 100%;
-  margin: 0.8em 0;
-  font-size: 0.9em;
-}
-
-.markdown-body :deep(th), .markdown-body :deep(td) {
-  border: 1px solid var(--color-border);
-  padding: 0.4em 0.6em;
-  text-align: left;
-}
-
-.markdown-body :deep(th) {
-  background: var(--color-bg-page);
-  font-weight: 600;
-}
-
-.markdown-body :deep(blockquote) {
-  border-left: 3px solid var(--color-primary);
-  margin: 0.6em 0;
-  padding: 0.3em 1em;
-  color: var(--color-text-secondary);
-  background: var(--color-bg-page);
-}
-
-.markdown-body :deep(code) {
-  background: #f0f0f0;
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-  font-size: 0.9em;
-}
-
-.markdown-body :deep(sub) { font-size: 0.8em; }
-.markdown-body :deep(sup) { font-size: 0.8em; }
-
-.detail-source {
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.detail-conversation-source,
-.detail-auto-source {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--color-primary);
-  font-weight: var(--font-weight-medium);
-}
-
-/* ── Related Knowledge ── */
-.detail-related {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-}
-
-.related-title {
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-3);
-  color: var(--color-text-primary);
-}
-
-.related-item {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  margin-bottom: var(--space-2);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.related-item:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-
-.related-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.related-item-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-primary);
-}
-
-.related-reason {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-1);
-}
-
-/* ── Knowledge Graph ── */
-.detail-graph {
-  margin-top: var(--space-5);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--color-border);
-}
-
-.graph-title {
-  font-weight: var(--font-weight-semibold);
-  margin-bottom: var(--space-3);
-  color: var(--color-text-primary);
-}
-
-.graph-container {
-  width: 100%;
-  min-height: 250px;
-  max-height: 45vh;
-  height: 350px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-page);
-}
-
-.graph-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 150px;
-  color: var(--color-text-secondary);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-page);
-}
-
-.graph-empty p {
-  margin: var(--space-1) 0;
-  font-size: var(--font-size-sm);
-}
-
-.graph-empty-hint {
-  font-size: var(--font-size-xs) !important;
-  opacity: 0.7;
-}
-
-/* ── Upload ── */
-.upload-ai-notice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-primary-bg);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
-  font-size: var(--font-size-sm);
-  color: var(--color-primary);
-}
-
-/* ── Misc ── */
-.filter-card {
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both;
-}
-
-.knowledge-list-card {
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  animation: fadeSlideUp var(--duration-slow) var(--ease-out) 120ms both;
-}
-
-.empty-state {
-  padding: var(--space-12) 0;
-}
-
-/* ── Skeleton Loading ── */
-.skeleton-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.skeleton-item {
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-card);
-}
-
-.skeleton-line {
-  height: 14px;
-  border-radius: 4px;
-  background: linear-gradient(90deg, var(--color-border) 25%, #e8e8e8 50%, var(--color-border) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-  margin-bottom: var(--space-3);
-}
-
-.skeleton-line-short { width: 30%; }
-.skeleton-line-medium { width: 60%; }
-.skeleton-line-long { width: 90%; }
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* ── Status Dots ── */
-.status-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  margin-right: 4px;
-}
-
-.status-pending {
-  background: #e6a23c;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.status-analyzing {
-  background: #e6a23c;
-  animation: pulse 0.8s ease-in-out infinite;
-}
-
-.status-failed {
-  background: #f56c6c;
-}
-
-/* ── Mobile Responsive ── */
+/* ── 响应式 ── */
 @media (max-width: 768px) {
-  .knowledge-view {
-    gap: var(--space-3);
-  }
-
-  .stats-grid {
-    gap: var(--space-2);
-  }
-
-  .stat-item {
-    padding: var(--space-1) var(--space-2);
-    min-width: 48px;
-  }
-
-  .stat-label {
-    max-width: 60px;
-    font-size: 10px;
-  }
-
-  .stat-number {
-    font-size: var(--font-size-lg);
-  }
-
-  .cloud-tag {
-    padding: 2px var(--space-2);
-    font-size: 12px;
-  }
-
-  .knowledge-item {
+  .knowledge-tabs :deep(.el-tabs__content) {
     padding: var(--space-3);
   }
 
-  .item-header {
+  .entity-grid,
+  .hypothesis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-row {
     flex-direction: column;
-    align-items: flex-start;
   }
-
-  .item-footer {
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .item-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .graph-container {
-    height: 250px;
-  }
-
-  .detail-content {
-    font-size: var(--font-size-sm);
-  }
-
-  .filter-card .el-row {
-    gap: var(--space-2);
-  }
-
-  .filter-card .el-col {
-    margin-bottom: var(--space-2);
-  }
-
-  .qa-dialog {
-    gap: var(--space-2);
-  }
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-/* ── Entity detail ── */
-.entity-triple-large {
-  font-size: var(--font-size-lg); padding: var(--space-4);
-  background: var(--color-primary-bg); border-radius: var(--radius-md);
-  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
-}
-.entity-detail-section h4 { margin: 0 0 8px 0; }
-.source-item.clickable {
-  padding: var(--space-2); border-radius: var(--radius-sm);
-  cursor: pointer; display: flex; align-items: center; justify-content: space-between;
-}
-.source-item.clickable:hover { background: var(--color-bg-page); }
-
-/* ── Entity tab ── */
-.entity-graph-container {
-  width: 100%; height: 350px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-page);
-}
-.entity-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: var(--space-3);
-}
-.entity-card.clickable {
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  transition: all var(--duration-fast);
-}
-.entity-card.clickable:hover {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-primary);
-}
-.entity-triple {
-  display: flex; align-items: center; gap: var(--space-1);
-  font-size: var(--font-size-sm);
-  flex-wrap: wrap;
-}
-.entity-subject { color: var(--color-primary); font-weight: var(--font-weight-semibold); }
-.entity-predicate { color: var(--color-text-secondary); font-size: 12px; }
-.entity-object { color: var(--color-text-primary); }
-.entity-condition-text { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
-.entity-meta {
-  display: flex; align-items: center; gap: var(--space-2);
-  margin-top: var(--space-2); font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-/* ── Hypothesis tab ── */
-.hypothesis-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: var(--space-4);
-}
-.hypothesis-card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  transition: all var(--duration-fast);
-}
-.hypothesis-card:hover { box-shadow: var(--shadow-primary); }
-.hypothesis-card.hypothesis-validated { border-left: 4px solid #67c23a; }
-.hypothesis-card.hypothesis-rejected { border-left: 4px solid #f56c6c; opacity: 0.7; }
-.hypothesis-header {
-  display: flex; align-items: center; gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-.hypothesis-confidence { font-size: 12px; color: var(--color-text-secondary); margin-left: auto; }
-.hypothesis-statement {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  margin: var(--space-3) 0;
-  line-height: 1.6;
-}
-.hypothesis-rationale, .hypothesis-experiment {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-2);
-  line-height: 1.5;
-}
-.hypothesis-actions { margin-top: var(--space-3); display: flex; gap: var(--space-2); }
-
-/* ── Formula tab ── */
-.formula-list-header {
-  display: flex; gap: var(--space-2); margin-bottom: var(--space-3);
-}
-.formula-filter-row {
-  display: flex; gap: var(--space-2); flex-wrap: wrap;
-}
-.formula-item {
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-2);
-  cursor: pointer;
-  transition: all var(--duration-fast);
-}
-.formula-item:hover, .formula-item.formula-selected {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-.formula-name { font-weight: var(--font-weight-semibold); margin-bottom: 4px; }
-.formula-latex { font-size: 13px; color: var(--color-text-secondary); font-family: monospace; margin-bottom: 4px; }
-.formula-meta { display: flex; align-items: center; gap: var(--space-2); }
-.formula-unit { font-size: 12px; color: var(--color-text-secondary); }
-.formula-category-path { font-size: 11px; color: var(--color-text-placeholder); margin-top: 2px; }
-.calc-category-path { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
-.calculator-card h3 { margin: 0 0 8px 0; }
-.calculator-formula {
-  font-size: 16px; font-family: monospace;
-  padding: var(--space-3); background: var(--color-bg-page);
-  border-radius: var(--radius-md);
-}
-.calc-result {
-  margin-top: var(--space-4);
-  padding: var(--space-3);
-  background: var(--color-primary-bg);
-  border-radius: var(--radius-md);
-}
-.calc-value { font-size: 18px; margin-bottom: 8px; }
-.calc-value strong { color: var(--color-primary); font-size: 24px; }
-.calc-unit { color: var(--color-text-secondary); font-size: 14px; }
-.calc-steps { margin-top: var(--space-3); }
-.steps-title { font-weight: var(--font-weight-semibold); margin-bottom: 8px; }
-.calc-step { font-size: 13px; padding: 4px 0; border-bottom: 1px dashed var(--color-border); }
-.step-var { font-weight: var(--font-weight-semibold); color: var(--color-primary); }
-.calc-source { margin-top: var(--space-3); font-size: 12px; color: var(--color-text-secondary); }
-.calc-source a { color: var(--color-primary); cursor: pointer; text-decoration: underline; }
-
-/* ── Tabs ── */
-.knowledge-tabs {
-  background: transparent;
-  box-shadow: none;
-}
-.knowledge-tabs :deep(.el-tabs__header) {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-  margin-bottom: 0;
-}
-.knowledge-tabs :deep(.el-tabs__content) {
-  padding: var(--space-4);
-  background: var(--color-bg-card);
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 </style>
