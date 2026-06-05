@@ -83,13 +83,26 @@
           <div class="meeting-info">
             <div class="meeting-title">{{ meeting.title }}</div>
             <div class="meeting-meta">
-              <el-tag :type="getStatusType(meeting.status)" size="small">
-                {{ getStatusLabel(meeting.status) }}
-              </el-tag>
+              <span class="status-dot-wrap">
+                <span class="status-dot" :class="'status-' + meeting.status" />
+                <el-tag :type="getStatusType(meeting.status)" size="small">
+                  {{ getStatusLabel(meeting.status) }}
+                </el-tag>
+              </span>
               <span v-if="meeting.location" class="meeting-location">
                 <el-icon><Location /></el-icon>
                 {{ meeting.location }}
               </span>
+              <span v-if="meeting.audio_url" class="meeting-has-audio" title="有录音">
+                🎙️
+              </span>
+            </div>
+            <div class="meeting-participants-row">
+              <ParticipantAvatars
+                :participants="meeting.participants || []"
+                :max-display="4"
+                :size="24"
+              />
             </div>
             <div v-if="meeting.summary" class="meeting-summary">
               {{ meeting.summary.substring(0, 100) }}...
@@ -255,7 +268,8 @@ import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
-import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List } from '@element-plus/icons-vue'
+import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
+import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List, Location } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const memberStore = useMemberStore()
@@ -668,6 +682,44 @@ onMounted(() => {
   font-size: var(--font-size-sm);
   color: var(--color-text-regular);
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meeting-participants-row {
+  margin: var(--space-2) 0;
+}
+
+.status-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.status-scheduled { background: var(--color-info, #909399); }
+.status-dot.status-recording { background: var(--color-primary, #FF7A5C); animation: dot-pulse 1.2s infinite; }
+.status-dot.status-processing { background: var(--color-warning, #E6A23C); animation: dot-pulse 1.5s infinite; }
+.status-dot.status-completed { background: var(--color-success, #67C23A); }
+.status-dot.status-cancelled { background: var(--color-info, #909399); opacity: 0.5; }
+.status-dot.status-error { background: var(--color-danger, #F56C6C); }
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.meeting-has-audio {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .meeting-actions {

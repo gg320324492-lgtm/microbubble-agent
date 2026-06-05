@@ -8,8 +8,14 @@
     top="15vh"
   >
     <div class="processing-container">
+      <!-- 完成时的 Confetti 效果 -->
+      <div v-if="done" class="confetti-container">
+        <div v-for="i in 20" :key="i" class="confetti-piece" :style="confettiStyle(i)" />
+      </div>
+
       <div class="processing-icon">
-        <el-icon class="is-loading" :size="60" color="#FF7A5C"><Loading /></el-icon>
+        <el-icon v-if="!done" class="is-loading" :size="60" color="#FF7A5C"><Loading /></el-icon>
+        <div v-else class="done-icon">✅</div>
       </div>
       <h2 class="processing-title">{{ titleText }}</h2>
 
@@ -41,7 +47,7 @@
       <p class="hint">预计 30-60 秒，您可以先看看其他内容</p>
 
       <div v-if="done" class="done-actions">
-        <el-button type="primary" @click="goToDetail">查看纪要</el-button>
+        <el-button type="primary" class="btn-pulse" @click="goToDetail">查看纪要</el-button>
       </div>
     </div>
   </el-dialog>
@@ -83,6 +89,24 @@ const STAGE_ORDER = [
 ]
 
 const { connect, disconnect, progress, done, error } = useMeetingProgress()
+
+// Confetti 样式生成
+const confettiColors = ['#FF7A5C', '#FFB347', '#67C23A', '#409EFF', '#E6A23C', '#F56C6C']
+function confettiStyle(i) {
+  const color = confettiColors[i % confettiColors.length]
+  const left = Math.random() * 100
+  const delay = Math.random() * 0.5
+  const size = 4 + Math.random() * 6
+  const rotation = Math.random() * 360
+  return {
+    left: `${left}%`,
+    animationDelay: `${delay}s`,
+    width: `${size}px`,
+    height: `${size * 0.6}px`,
+    background: color,
+    transform: `rotate(${rotation}deg)`,
+  }
+}
 
 const currentStageIndex = computed(() => {
   if (!progress.value) return -1
@@ -151,6 +175,46 @@ if (token) {
 }
 .processing-icon {
   margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
+}
+.done-icon {
+  font-size: 60px;
+  line-height: 1;
+  animation: done-bounce 0.5s ease-out;
+}
+@keyframes done-bounce {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Confetti */
+.confetti-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.confetti-piece {
+  position: absolute;
+  top: -10px;
+  border-radius: 2px;
+  animation: confetti-fall 2.5s ease-out forwards;
+}
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(400px) rotate(720deg);
+    opacity: 0;
+  }
 }
 .processing-title {
   font-size: 24px;
@@ -224,5 +288,14 @@ if (token) {
 }
 .done-actions {
   margin-top: 24px;
+  position: relative;
+  z-index: 1;
+}
+.btn-pulse {
+  animation: btn-glow 2s ease-in-out infinite;
+}
+@keyframes btn-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 122, 92, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 122, 92, 0); }
 }
 </style>

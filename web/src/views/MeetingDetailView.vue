@@ -1,240 +1,247 @@
 <template>
   <div class="meeting-detail" v-if="meeting">
-    <!-- 顶部导航 -->
-    <div class="detail-topbar">
-      <el-button text @click="$router.push('/meetings')">
-        <el-icon><ArrowLeft /></el-icon> 返回列表
-      </el-button>
-      <div class="topbar-actions">
-        <el-button type="primary" @click="startLiveCall">
-          <el-icon><Phone /></el-icon> 声纹通话
+    <!-- ====== Hero 区域 ====== -->
+    <div class="detail-hero">
+      <!-- 返回 -->
+      <div class="hero-back">
+        <el-button text @click="$router.push('/meetings')">
+          <el-icon><ArrowLeft /></el-icon> 返回列表
         </el-button>
-        <el-popconfirm title="确定删除此会议？" @confirm="handleDelete">
-          <template #reference>
-            <el-button type="danger">删除会议</el-button>
-          </template>
-        </el-popconfirm>
       </div>
-    </div>
 
-    <!-- 内容区 -->
-    <div class="detail-body">
-      <!-- 左侧：基本信息 -->
-      <div class="detail-main">
-        <el-card class="section-card">
-          <template #header><span>基本信息</span></template>
+      <!-- 主信息 -->
+      <div class="hero-main">
+        <!-- 标题（展示/编辑态切换） -->
+        <div v-if="!editing" class="hero-title-row">
+          <h1 class="hero-title">{{ meeting.title }}</h1>
+          <span class="status-badge" :class="'status-' + meeting.status">
+            <span class="status-dot" />
+            {{ statusLabel(meeting.status) }}
+          </span>
+        </div>
+        <div v-else class="hero-title-row editing">
+          <el-input v-model="form.title" class="edit-title-input" />
+          <el-tag :type="statusType(meeting.status)" size="default">{{ statusLabel(meeting.status) }}</el-tag>
+        </div>
 
-          <el-form :model="form" label-width="90px">
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="标题" required><el-input v-model="form.title" name="meeting-detail-title" /></el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="状态">
-                  <el-tag :type="statusType(meeting.status)" size="default">{{ statusLabel(meeting.status) }}</el-tag>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="时间" required>
-                  <input
-    :value="form.start_time"
-    name="form-start_time"
-    type="datetime-local"
-    class="native-date-input"
-    style="width:100%"
-    @change="(e) => { const v = e.target.value; form.start_time = v ? v.replace('T', ' ') + ':00' : ''; }"
-  />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="地点"><el-input v-model="form.location" name="meeting-detail-location" placeholder="会议室/线上" /></el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="参会人员">
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                <el-select v-model="form.participants" name="meeting-detail-participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
-                  <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
-                </el-select>
-                <el-button size="small" @click="form.participants = memberStore.members.map(m=>m.id)">全选成员</el-button>
-                <el-button size="small" @click="form.participants = []">清空</el-button>
-              </div>
-              <span v-if="form.participants.length === memberStore.members.length && memberStore.members.length > 0" style="color:var(--color-primary);font-size:12px">已选择全体成员（{{ memberStore.members.length }}人）</span>
-            </el-form-item>
-            <el-form-item label="汇报人员">
-              <el-select v-model="form.presenter_ids" name="meeting-detail-presenter-ids" multiple filterable placeholder="选择汇报人员" style="width:100%">
-                <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.id" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="说明">
-              <el-input v-model="form.description" name="meeting-detail-description" type="textarea" :rows="2" placeholder="会议说明..." />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" @click="saveBasic" :loading="saving">保存</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
+        <!-- 元信息行 -->
+        <div class="hero-meta">
+          <span class="meta-item">
+            <el-icon><Clock /></el-icon>
+            <template v-if="!editing">{{ formatDate(meeting.start_time) }}</template>
+            <input v-else :value="form.start_time" type="datetime-local" class="native-date-input"
+              @change="(e) => { const v = e.target.value; form.start_time = v ? v.replace('T', ' ') + ':00' : ''; }" />
+          </span>
+          <span class="meta-item">
+            <el-icon><Location /></el-icon>
+            <template v-if="!editing">{{ meeting.location || '未设置' }}</template>
+            <el-input v-else v-model="form.location" size="small" style="width:160px" placeholder="地点" />
+          </span>
+          <span v-if="meeting.audio_duration" class="meta-item">
+            <el-icon><Microphone /></el-icon>
+            {{ formatDuration(meeting.audio_duration) }}
+          </span>
+        </div>
 
-        <!-- 会议纪要 -->
-        <el-card v-if="meeting.summary || meeting.key_points?.length || meeting.decisions?.length || (meeting.agenda && meeting.agenda.length) || editingMinutes" class="section-card">
-          <template #header>
-            <div class="card-header">
-              <span><el-icon><Document /></el-icon> 会议纪要</span>
-              <el-button v-if="!editingMinutes" size="small" :icon="Edit" @click="editingMinutes = true">编辑纪要</el-button>
-              <el-button v-else size="small" type="primary" @click="saveMinutes">保存纪要</el-button>
-            </div>
-          </template>
-
-          <template v-if="editingMinutes">
-            <div class="minutes-section">
-              <h4>摘要</h4>
-              <el-input v-model="minutesForm.summary" name="meeting-detail-minutes-summary" type="textarea" :rows="4" placeholder="会议摘要..." class="minutes-textarea" />
-            </div>
-            <div class="minutes-section">
-              <h4>讨论要点</h4>
-              <div class="item-list">
-                <div v-for="(p, i) in minutesForm.key_points" :key="'kp'+i" class="item-row">
-                  <span class="item-dot" />
-                  <el-input v-model="minutesForm.key_points[i]" :name="`meeting-detail-minutes-key-points-${i}`" placeholder="输入要点..." />
-                  <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.key_points.splice(i,1)" />
-                </div>
-                <el-button dashed size="small" class="item-add" @click="minutesForm.key_points.push('')">
-                  <el-icon><Plus /></el-icon> 添加要点
-                </el-button>
-              </div>
-            </div>
-            <div class="minutes-section">
-              <h4>决议事项</h4>
-              <div class="item-list">
-                <div v-for="(d, i) in minutesForm.decisions" :key="'dc'+i" class="item-row decision">
-                  <span class="item-dot decision-dot" />
-                  <el-input v-model="minutesForm.decisions[i]" :name="`meeting-detail-minutes-decisions-${i}`" placeholder="输入决议..." />
-                  <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.decisions.splice(i,1)" />
-                </div>
-                <el-button dashed size="small" class="item-add decision-add" @click="minutesForm.decisions.push('')">
-                  <el-icon><Plus /></el-icon> 添加决议
-                </el-button>
-              </div>
-            </div>
-          </template>
-
-          <template v-else>
-            <div v-if="meeting.summary" class="minutes-section">
-              <h4>摘要</h4>
-              <p>{{ meeting.summary }}</p>
-            </div>
-            <div v-if="meeting.key_points?.length" class="minutes-section">
-              <h4>讨论要点</h4>
-              <ul><li v-for="(p,i) in meeting.key_points" :key="i">{{ p }}</li></ul>
-            </div>
-            <div v-if="meeting.decisions?.length" class="minutes-section">
-              <h4>决议事项</h4>
-              <ul><li v-for="(d,i) in meeting.decisions" :key="i">{{ d }}</li></ul>
-            </div>
-            <!-- Wave 3b: 议程 -->
-            <div v-if="meeting.agenda && meeting.agenda.length > 0" class="minutes-section agenda-display">
-              <h4>议程</h4>
-              <ol class="agenda-list">
-                <li v-for="(item, idx) in meeting.agenda" :key="idx">
-                  <span :class="{ done: item.done }">{{ item.text || item }}</span>
-                  <el-tag v-if="item.done" type="success" size="small" style="margin-left: 8px">已完成</el-tag>
-                </li>
-              </ol>
-            </div>
-            <el-empty v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length && (!meeting.agenda || !meeting.agenda.length)" description="暂无会议纪要" />
-          </template>
-        </el-card>
-
-        <!-- Wave 3a: 相关会议 -->
-        <div class="related-meetings" v-if="relatedMeetings.length > 0">
-          <h3>相关会议</h3>
-          <p class="hint">基于内容相似度推荐（pgvector cosine distance）</p>
-          <el-checkbox-group v-model="selectedRelated" name="selectedRelated">
-            <div
-              v-for="m in relatedMeetings"
-              :key="m.id"
-              class="related-card"
-            >
-              <el-checkbox :value="m.id">
-                <div class="related-content">
-                  <div class="related-title">
-                    <router-link :to="`/meetings/${m.id}`">{{ m.title }}</router-link>
-                    <span class="similarity">{{ Math.round(m.similarity * 100) }}% 相似</span>
-                  </div>
-                  <div class="related-summary">{{ m.summary?.substring(0, 100) }}</div>
-                </div>
-              </el-checkbox>
-            </div>
-          </el-checkbox-group>
-          <el-button type="primary" @click="linkRelated" :disabled="selectedRelated.length === 0">
-            关联选中的会议
-          </el-button>
+        <!-- 参与者头像 -->
+        <div class="hero-participants">
+          <ParticipantAvatars
+            :participants="meeting.participants || []"
+            :max-display="8"
+            :size="36"
+          />
         </div>
       </div>
 
-      <!-- 右侧：声纹通话 + 发言者统计 -->
+      <!-- 操作按钮 -->
+      <div class="hero-actions">
+        <template v-if="!editing">
+          <el-button type="primary" @click="startLiveCall">
+            <el-icon><Phone /></el-icon> 声纹通话
+          </el-button>
+          <el-button @click="enterEdit">
+            <el-icon><Edit /></el-icon> 编辑
+          </el-button>
+          <el-popconfirm title="确定删除此会议？" @confirm="handleDelete">
+            <template #reference>
+              <el-button type="danger" plain>删除</el-button>
+            </template>
+          </el-popconfirm>
+        </template>
+        <template v-else>
+          <el-button type="primary" @click="saveBasic" :loading="saving">保存</el-button>
+          <el-button @click="cancelEdit">取消</el-button>
+        </template>
+      </div>
+    </div>
+
+    <!-- ====== 主体区域 ====== -->
+    <div class="detail-body">
+      <!-- 左侧 Tab 内容 -->
+      <div class="detail-main">
+        <el-tabs v-model="activeTab" class="detail-tabs">
+          <!-- Tab 1: 会议纪要 -->
+          <el-tab-pane label="会议纪要" name="minutes">
+            <div class="tab-content">
+              <!-- 编辑态 -->
+              <template v-if="editingMinutes">
+                <div class="section">
+                  <h4>摘要</h4>
+                  <el-input v-model="minutesForm.summary" type="textarea" :rows="4" placeholder="会议摘要..." />
+                </div>
+                <div class="section">
+                  <h4>讨论要点</h4>
+                  <div class="item-list">
+                    <div v-for="(p, i) in minutesForm.key_points" :key="'kp'+i" class="item-row">
+                      <span class="item-dot" />
+                      <el-input v-model="minutesForm.key_points[i]" placeholder="输入要点..." />
+                      <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.key_points.splice(i,1)" />
+                    </div>
+                    <el-button dashed size="small" class="item-add" @click="minutesForm.key_points.push('')">
+                      <el-icon><Plus /></el-icon> 添加要点
+                    </el-button>
+                  </div>
+                </div>
+                <div class="section">
+                  <h4>决议事项</h4>
+                  <div class="item-list">
+                    <div v-for="(d, i) in minutesForm.decisions" :key="'dc'+i" class="item-row decision">
+                      <span class="item-dot decision-dot" />
+                      <el-input v-model="minutesForm.decisions[i]" placeholder="输入决议..." />
+                      <el-button :icon="Delete" circle size="small" class="item-del" @click="minutesForm.decisions.splice(i,1)" />
+                    </div>
+                    <el-button dashed size="small" class="item-add decision-add" @click="minutesForm.decisions.push('')">
+                      <el-icon><Plus /></el-icon> 添加决议
+                    </el-button>
+                  </div>
+                </div>
+                <div class="section-actions">
+                  <el-button type="primary" @click="saveMinutes">保存纪要</el-button>
+                  <el-button @click="editingMinutes = false">取消</el-button>
+                </div>
+              </template>
+
+              <!-- 展示态 -->
+              <template v-else>
+                <div v-if="meeting.summary" class="section">
+                  <h4>摘要</h4>
+                  <p class="summary-text">{{ meeting.summary }}</p>
+                </div>
+                <div v-if="meeting.key_points?.length" class="section">
+                  <h4>讨论要点</h4>
+                  <ul class="points-list">
+                    <li v-for="(p,i) in meeting.key_points" :key="i" class="fade-slide-up" :style="{ animationDelay: (i * 50) + 'ms' }">{{ p }}</li>
+                  </ul>
+                </div>
+                <div v-if="meeting.decisions?.length" class="section">
+                  <h4>决议事项</h4>
+                  <ul class="decisions-list">
+                    <li v-for="(d,i) in meeting.decisions" :key="i" class="fade-slide-up" :style="{ animationDelay: (i * 50) + 'ms' }">{{ d }}</li>
+                  </ul>
+                </div>
+                <div v-if="meeting.agenda?.length" class="section">
+                  <h4>议程</h4>
+                  <ol class="agenda-list">
+                    <li v-for="(item, idx) in meeting.agenda" :key="idx">
+                      <span :class="{ done: item.done }">{{ item.text || item }}</span>
+                      <el-tag v-if="item.done" type="success" size="small">已完成</el-tag>
+                    </li>
+                  </ol>
+                </div>
+                <el-button v-if="!editingMinutes" size="small" class="edit-minutes-btn" @click="enterEditMinutes">
+                  <el-icon><Edit /></el-icon> 编辑纪要
+                </el-button>
+                <el-empty
+                  v-if="!meeting.summary && !meeting.key_points?.length && !meeting.decisions?.length && !meeting.agenda?.length"
+                  description="暂无会议纪要"
+                />
+              </template>
+            </div>
+          </el-tab-pane>
+
+          <!-- Tab 2: 转录记录 -->
+          <el-tab-pane label="转录记录" name="transcript">
+            <div class="tab-content">
+              <template v-if="meeting.transcript_polished?.length">
+                <div
+                  v-for="(entry, i) in meeting.transcript_polished"
+                  :key="i"
+                  class="transcript-entry"
+                  :class="{ 'entry-removed': entry.removed }"
+                >
+                  <div class="transcript-left">
+                    <el-avatar :size="28" :src="getSpeakerAvatar(entry.speaker)" class="transcript-avatar">
+                      {{ (entry.speaker || '?')[0] }}
+                    </el-avatar>
+                    <div class="transcript-line" />
+                  </div>
+                  <div class="transcript-body">
+                    <div class="transcript-header">
+                      <span class="transcript-speaker">{{ entry.speaker || '未知' }}</span>
+                      <el-tag v-if="entry.removed" size="small" type="info" effect="plain">已过滤</el-tag>
+                      <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
+                      <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
+                    </div>
+                    <div v-if="!entry.removed" class="transcript-text">{{ entry.text }}</div>
+                    <div v-else class="transcript-text removed">
+                      <el-icon><Delete /></el-icon>
+                      <span>{{ entry.text || '(空)' }}</span>
+                      <span v-if="entry.reason" class="remove-reason">({{ entry.reason }})</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <el-empty v-else description="暂无转录记录" />
+            </div>
+          </el-tab-pane>
+
+          <!-- Tab 3: 发言统计 -->
+          <el-tab-pane label="发言统计" name="stats">
+            <div class="tab-content">
+              <SpeakerStatsCard :stats="meeting.speaker_stats || []" />
+            </div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+
+      <!-- 右侧边栏 -->
       <div class="detail-side">
-        <el-card class="section-card">
+        <!-- 录音回放 -->
+        <el-card v-if="meeting.audio_url" class="side-card">
+          <template #header><span>🎙️ 录音回放</span></template>
+          <AudioPlayer :src="getAudioSrc(meeting.audio_url)" />
+          <div v-if="meeting.audio_duration" class="audio-meta">
+            录音时长: {{ formatDuration(meeting.audio_duration) }}
+          </div>
+        </el-card>
+
+        <!-- 听会 -->
+        <el-card class="side-card">
           <template #header><span>听会</span></template>
-          <MeetingRoom v-if="showCallRoom" @call-ended="onCallEnded" style="height: 500px" />
+          <MeetingRoom v-if="showCallRoom" @call-ended="onCallEnded" style="height: 400px" />
           <div v-else class="call-placeholder" @click="startLiveCall">
             <el-icon size="40" color="#FF7A5C"><Microphone /></el-icon>
             <p>点击开始听会</p>
           </div>
         </el-card>
 
-        <!-- 2026-06-02 L3 全文精润版（如果存在） -->
-        <el-card v-if="meeting.transcript_polished && meeting.transcript_polished.length" class="section-card">
-          <template #header>
-            <div class="card-header">
-              <span>✨ AI 精润版转录（已过滤幻觉）</span>
-              <el-tag size="small" type="success">
-                {{ meeting.transcript_polished.length }} 段
-              </el-tag>
-            </div>
-          </template>
-          <div class="polished-transcript">
-            <div
-              v-for="(entry, i) in meeting.transcript_polished"
-              :key="i"
-              class="polished-entry"
-              :class="{ 'entry-removed': entry.removed }"
-            >
-              <div class="polished-entry-header">
-                <span class="polished-speaker">{{ entry.speaker || '未知说话人' }}</span>
-                <el-tag v-if="entry.removed" size="small" type="info" effect="plain">已过滤</el-tag>
-                <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
-                <span v-if="entry.ts" class="polished-ts">{{ formatTs(entry.ts) }}</span>
-              </div>
-              <div v-if="!entry.removed" class="polished-text">{{ entry.text }}</div>
-              <div v-else class="polished-text removed-text">
-                <el-icon><Delete /></el-icon>
-                <span>{{ entry.text || '(空)' }}</span>
-                <span v-if="entry.reason" class="remove-reason">({{ entry.reason }})</span>
-              </div>
-            </div>
+        <!-- 相关会议 -->
+        <el-card v-if="relatedMeetings.length > 0" class="side-card">
+          <template #header><span>相关会议</span></template>
+          <div v-for="m in relatedMeetings" :key="m.id" class="related-item">
+            <router-link :to="`/meetings/${m.id}`" class="related-link">{{ m.title }}</router-link>
+            <span class="related-similarity">{{ Math.round(m.similarity * 100) }}%</span>
           </div>
-        </el-card>
-
-        <el-card v-if="meeting.speaker_stats?.length" class="section-card">
-          <template #header><span>发言者统计</span></template>
-          <el-table :data="meeting.speaker_stats" size="small" stripe>
-            <el-table-column prop="name" label="发言人" width="80" />
-            <el-table-column prop="turn_count" label="发言次数" width="65" align="center" />
-            <el-table-column prop="word_count" label="字数" width="60" align="center" />
-            <el-table-column label="占比" width="80">
-              <template #default="{row}">{{ Math.round((row.speaking_ratio||0)*100) }}%</template>
-            </el-table-column>
-          </el-table>
         </el-card>
       </div>
     </div>
   </div>
 
-  <div v-else class="loading-state"><el-icon class="is-loading" size="24"><Loading /></el-icon> 加载中...</div>
+  <div v-else class="loading-state">
+    <el-icon class="is-loading" size="24"><Loading /></el-icon> 加载中...
+  </div>
 
-  <!-- 挂断后会后处理进度对话框 -->
+  <!-- 会后处理进度弹窗 -->
   <ProcessingDialog
     v-if="processingDialogVisible && meeting"
     :meeting-id="meeting.id"
@@ -246,116 +253,169 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Phone, Edit, Delete, Document, Plus, Loading } from '@element-plus/icons-vue'
+import { ArrowLeft, Phone, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
+import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
+import SpeakerStatsCard from '@/components/SpeakerStatsCard.vue'
+import AudioPlayer from '@/components/AudioPlayer.vue'
 
 const route = useRoute()
 const router = useRouter()
 const memberStore = useMemberStore()
 
 const meeting = ref(null)
+const editing = ref(false)
 const editingMinutes = ref(false)
 const showCallRoom = ref(false)
 const saving = ref(false)
+const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
-const selectedRelated = ref([])
 
 const form = ref({ title: '', start_time: '', location: '', participants: [], presenter_ids: [], description: '' })
 const minutesForm = ref({ summary: '', key_points: [], decisions: [] })
 
-const allMemberIds = computed(() => memberStore.members.map(m => m.id))
-const isAllMembers = computed(() => {
-  const pids = meeting.value?.participants?.map(p => p.member_id) || []
-  return pids.length > 0 && allMemberIds.value.length > 0 && allMemberIds.value.every(id => pids.includes(id))
-})
-const participantDisplay = computed(() => {
-  if (isAllMembers.value) return '全体成员'
-  if (!meeting.value?.participants?.length) return ''
-  return meeting.value.participants.map(p => {
-    const m = memberStore.members.find(x => x.id === p.member_id)
-    return m?.name || p.member_id
-  }).join('、')
-})
+// 挂断后处理进度弹窗
+const processingDialogVisible = ref(false)
+
+// ===== 数据加载 =====
 
 const fetchMeeting = async () => {
   try {
     const res = await axios.get(`/api/v1/meetings/${route.params.id}`)
     meeting.value = res.data
-    // 初始化表单
-    form.value = {
-      title: res.data.title, start_time: res.data.start_time,
-      location: res.data.location || '',
-      participants: res.data.participants?.map(p => p.member_id) || [],
-      presenter_ids: res.data.presenter_ids || [],
-      description: res.data.description || '',
-    }
-  } catch { ElMessage.error('加载会议失败') }
+  } catch {
+    ElMessage.error('加载会议失败')
+  }
+}
+
+// ===== 编辑模式 =====
+
+function enterEdit() {
+  form.value = {
+    title: meeting.value.title,
+    start_time: meeting.value.start_time,
+    location: meeting.value.location || '',
+    participants: meeting.value.participants?.map(p => p.member_id) || [],
+    presenter_ids: meeting.value.presenter_ids || [],
+    description: meeting.value.description || '',
+  }
+  editing.value = true
+}
+
+function cancelEdit() {
+  editing.value = false
 }
 
 const saveBasic = async () => {
   saving.value = true
   try {
-    const payload = {
-      title: form.value.title, start_time: form.value.start_time,
-      location: form.value.location, description: form.value.description,
-      participants: form.value.participants,
-    }
-    await axios.put(`/api/v1/meetings/${meeting.value.id}`, payload)
-    ElMessage.success('已保存'); fetchMeeting()
-  } catch { ElMessage.error('保存失败') }
-  finally { saving.value = false }
-}
-
-const saveMinutes = async () => {
-  try {
     await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
-      summary: minutesForm.summary,
-      key_points: minutesForm.key_points.filter(Boolean),
-      decisions: minutesForm.decisions.filter(Boolean),
+      title: form.value.title,
+      start_time: form.value.start_time,
+      location: form.value.location,
+      description: form.value.description,
+      participants: form.value.participants,
     })
-    ElMessage.success('纪要已保存'); editingMinutes.value = false; fetchMeeting()
-  } catch { ElMessage.error('保存失败') }
+    ElMessage.success('已保存')
+    editing.value = false
+    await fetchMeeting()
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    saving.value = false
+  }
 }
 
-const startLiveCall = () => {
-  showCallRoom.value = true
-  // 初始化纪要编辑表单
+// ===== 纪要编辑 =====
+
+function enterEditMinutes() {
   minutesForm.value = {
     summary: meeting.value.summary || '',
     key_points: meeting.value.key_points ? [...meeting.value.key_points] : [],
     decisions: meeting.value.decisions ? [...meeting.value.decisions] : [],
   }
+  editingMinutes.value = true
 }
 
-const onCallEnd = () => { showCallRoom.value = false; fetchMeeting() }
+const saveMinutes = async () => {
+  try {
+    await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
+      summary: minutesForm.value.summary,
+      key_points: minutesForm.value.key_points.filter(Boolean),
+      decisions: minutesForm.value.decisions.filter(Boolean),
+    })
+    ElMessage.success('纪要已保存')
+    editingMinutes.value = false
+    await fetchMeeting()
+  } catch {
+    ElMessage.error('保存失败')
+  }
+}
 
-// 挂断后处理进度弹窗
-const processingDialogVisible = ref(false)
-const onCallEnded = () => {
-  // 关闭嵌入式通话卡片，弹出会后处理进度对话框
+// ===== 听会 =====
+
+function startLiveCall() {
+  showCallRoom.value = true
+}
+
+function onCallEnded() {
   showCallRoom.value = false
   fetchMeeting()
   processingDialogVisible.value = true
 }
 
+// ===== 删除 =====
+
 const handleDelete = async () => {
   try {
     await axios.delete(`/api/v1/meetings/${meeting.value.id}`)
-    ElMessage.success('已删除'); router.push('/meetings')
-  } catch { ElMessage.error('删除失败') }
+    ElMessage.success('已删除')
+    router.push('/meetings')
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
+
+// ===== 相关会议 =====
+
+async function loadRelated() {
+  try {
+    const resp = await fetch(`/api/v1/meetings/${meeting.value.id}/related?top_k=3`, {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
+    })
+    if (resp.ok) relatedMeetings.value = await resp.json()
+  } catch { /* ignore */ }
+}
+
+// ===== 辅助函数 =====
+
+function getSpeakerAvatar(name) {
+  if (!name) return null
+  const member = memberStore.members.find(m => m.name === name)
+  return member?.avatar || null
+}
+
+function getAudioSrc(url) {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return `/minio/microbubble/${url}`
 }
 
 const formatDate = (d) => dayjs(d).format('YYYY-MM-DD HH:mm')
-const formatTs = (sec) => {  // 2026-06-02 L3 精润版时间戳格式
+const formatTs = (sec) => {
   const s = Math.floor(sec || 0)
-  const m = Math.floor(s / 60)
-  const r = s % 60
-  return `${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`
+  return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
+}
+const formatDuration = (sec) => {
+  if (!sec) return ''
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return m > 0 ? `${m}分${s}秒` : `${s}秒`
 }
 const statusLabel = (s) => ({ scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s)
 const statusType = (s) => ({ scheduled: 'info', recording: 'warning', processing: 'warning', completed: 'success', cancelled: 'info', error: 'danger' }[s] || '')
@@ -365,134 +425,392 @@ onMounted(async () => {
   await fetchMeeting()
   await loadRelated()
 })
-
-async function loadRelated() {
-  const apiUrl = import.meta.env.VITE_API_BASE || '/api/v1'
-  try {
-    const resp = await fetch(`${apiUrl}/meetings/${meeting.value.id}/related?top_k=3`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` },
-    })
-    if (resp.ok) {
-      relatedMeetings.value = await resp.json()
-    }
-  } catch (e) {}
-}
-
-async function linkRelated() {
-  const apiUrl = import.meta.env.VITE_API_BASE || '/api/v1'
-  await fetch(`${apiUrl}/meetings/${meeting.value.id}/related`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(selectedRelated.value),
-  })
-  ElMessage.success('已关联')
-  selectedRelated.value = []
-}
 </script>
 
 <style scoped>
+/* ====== 布局 ====== */
+.meeting-detail {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 120px);
+  padding: 16px 20px;
+  gap: 16px;
+  overflow: hidden;
+}
 
-/* 2026-06-02 原生 date input 样式（绕过 el-date-picker 内部 input 缺 name 的 a11y 警告） */
+/* ====== Hero ====== */
+.detail-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(180deg, #fff 0%, var(--color-bg-page, #f5f7fa) 100%);
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--color-border, #ebeef5);
+  flex-shrink: 0;
+}
+
+.hero-back { flex-shrink: 0; }
+
+.hero-main { flex: 1; min-width: 0; }
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.hero-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary, #2d2d2d);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hero-title-row.editing { gap: 12px; }
+.edit-title-input { max-width: 400px; }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.status-badge .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-badge.status-scheduled { background: #f4f4f5; color: #909399; }
+.status-badge.status-scheduled .status-dot { background: #909399; }
+.status-badge.status-recording { background: #fff0ed; color: #FF7A5C; }
+.status-badge.status-recording .status-dot { background: #FF7A5C; animation: dot-pulse 1.2s infinite; }
+.status-badge.status-processing { background: #fdf6ec; color: #E6A23C; }
+.status-badge.status-processing .status-dot { background: #E6A23C; animation: dot-pulse 1.5s infinite; }
+.status-badge.status-completed { background: #f0f9eb; color: #67C23A; }
+.status-badge.status-completed .status-dot { background: #67C23A; }
+.status-badge.status-cancelled { background: #f4f4f5; color: #909399; }
+.status-badge.status-cancelled .status-dot { background: #909399; opacity: 0.5; }
+.status-badge.status-error { background: #fef0f0; color: #F56C6C; }
+.status-badge.status-error .status-dot { background: #F56C6C; }
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.4); }
+}
+
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--color-text-regular, #606266);
+}
+.meta-item .el-icon { color: var(--color-text-secondary, #909399); }
+
+.hero-participants { margin-top: 4px; }
+
+.hero-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+/* ====== 主体 ====== */
+.detail-body {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.detail-main {
+  flex: 1;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--color-border, #ebeef5);
+}
+
+.detail-tabs {
+  height: 100%;
+}
+.detail-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0 20px;
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: var(--radius-lg, 12px) var(--radius-lg, 12px) 0 0;
+}
+.detail-tabs :deep(.el-tabs__content) {
+  height: calc(100% - 40px);
+  overflow-y: auto;
+}
+.detail-tabs :deep(.el-tab-pane) {
+  height: 100%;
+}
+
+.tab-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ====== 侧边栏 ====== */
+.detail-side {
+  width: 320px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.side-card {
+  border-radius: var(--radius-lg, 12px);
+}
+.side-card :deep(.el-card__header) {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 12px 16px;
+}
+
+.audio-meta {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+}
+
+.call-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  cursor: pointer;
+  border: 2px dashed var(--color-border, #ebeef5);
+  border-radius: var(--radius-lg, 12px);
+  transition: all 0.2s;
+}
+.call-placeholder:hover {
+  border-color: var(--color-primary, #FF7A5C);
+  background: var(--color-primary-bg, #fff0ed);
+}
+.call-placeholder p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--color-text-secondary, #909399);
+}
+
+/* ====== 纪要 ====== */
+.section h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary, #2d2d2d);
+}
+.summary-text {
+  margin: 0;
+  line-height: 1.7;
+  font-size: 14px;
+  color: var(--color-text-regular, #606266);
+}
+.points-list, .decisions-list {
+  padding-left: 20px;
+  margin: 0;
+}
+.points-list li, .decisions-list li {
+  margin-bottom: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-regular, #606266);
+}
+.decisions-list li::marker {
+  color: var(--color-warning, #E6A23C);
+}
+.agenda-list {
+  padding-left: 20px;
+  margin: 0;
+}
+.agenda-list li {
+  margin-bottom: 6px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agenda-list .done {
+  text-decoration: line-through;
+  color: var(--color-text-secondary, #909399);
+}
+.edit-minutes-btn {
+  margin-top: 8px;
+  align-self: flex-start;
+}
+.section-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ====== 转录记录 ====== */
+.transcript-entry {
+  display: flex;
+  gap: 12px;
+}
+.transcript-entry.entry-removed {
+  opacity: 0.5;
+}
+.transcript-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+.transcript-avatar {
+  flex-shrink: 0;
+}
+.transcript-line {
+  flex: 1;
+  width: 2px;
+  background: var(--color-border, #ebeef5);
+  margin: 4px 0;
+}
+.transcript-entry:last-child .transcript-line {
+  display: none;
+}
+.transcript-body {
+  flex: 1;
+  padding-bottom: 16px;
+}
+.transcript-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.transcript-speaker {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--color-primary, #FF7A5C);
+}
+.transcript-ts {
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+  font-family: 'SF Mono', 'Cascadia Code', monospace;
+  margin-left: auto;
+}
+.transcript-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-regular, #606266);
+}
+.transcript-text.removed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-style: italic;
+  text-decoration: line-through;
+  color: var(--color-text-secondary, #909399);
+}
+.remove-reason {
+  font-size: 12px;
+  color: var(--color-text-placeholder, #c0c4cc);
+}
+
+/* ====== 相关会议 ====== */
+.related-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border, #ebeef5);
+}
+.related-item:last-child { border-bottom: none; }
+.related-link {
+  font-size: 13px;
+  color: var(--color-primary, #FF7A5C);
+  text-decoration: none;
+  font-weight: 500;
+}
+.related-link:hover { text-decoration: underline; }
+.related-similarity {
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+}
+
+/* ====== 编辑态表单 ====== */
 .native-date-input {
-  height: 32px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 8px;
   border: 1px solid var(--color-border, #dcdfe6);
   border-radius: var(--radius-md, 4px);
-  background: #fff;
-  color: var(--color-text-primary, #303133);
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
-  transition: border-color 0.2s;
 }
 .native-date-input:focus {
   outline: none;
   border-color: var(--color-primary, #FF7A5C);
 }
 
-.meeting-detail { display: flex; flex-direction: column; height: calc(100vh - 120px); padding: 16px 20px; gap: 16px; overflow: hidden; }
-.detail-topbar { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-.detail-body { flex: 1; display: flex; gap: 16px; overflow: hidden; }
-.detail-main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-.detail-side { width: 400px; flex-shrink: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-
-.section-card { border-radius: var(--radius-lg); }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
-
-/* 2026-06-02 L3 全文精润版转录 */
-.polished-transcript { display: flex; flex-direction: column; gap: 12px; }
-.polished-entry {
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-left: 3px solid #67c23a;
-  border-radius: var(--radius-md);
-}
-.polished-entry.entry-removed {
-  border-left-color: #999;
-  opacity: 0.5;
-}
-.polished-entry-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  font-size: 12px;
-}
-.polished-speaker { color: #ff7a5c; font-weight: 500; }
-.polished-ts { color: #999; font-family: monospace; margin-left: auto; }
-.polished-text { color: #eee; line-height: 1.6; white-space: pre-wrap; }
-.removed-text { display: flex; align-items: center; gap: 6px; font-style: italic; text-decoration: line-through; }
-.remove-reason { font-size: 11px; color: #999; }
-
-.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.info-item { display: flex; flex-direction: column; gap: 4px; }
-.info-item.full { grid-column: span 2; }
-.info-item label { font-size: 12px; color: var(--color-text-secondary); }
-.info-item span { font-size: 14px; color: var(--color-text-primary); }
-
-.minutes-section { margin-bottom: 16px; }
-.minutes-section h4 { margin: 0 0 8px; font-size: 14px; color: var(--color-text-primary); }
-.minutes-section p { margin: 0; line-height: 1.6; font-size: 14px; }
-.minutes-section ul { padding-left: 18px; margin: 0; }
-.minutes-section li { margin-bottom: 6px; font-size: 14px; line-height: 1.5; }
-
-.call-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; cursor: pointer; border: 2px dashed var(--color-border); border-radius: var(--radius-lg); transition: all 0.2s; }
-.call-placeholder:hover { border-color: var(--color-primary); background: var(--color-primary-bg); }
-.loading-state { display: flex; align-items: center; justify-content: center; height: 200px; gap: 8px; color: var(--color-text-secondary); }
-
-/* 共用编辑列表样式 */
-.minutes-textarea :deep(.el-textarea__inner) { border-radius: var(--radius-md); border-color: var(--color-border); }
+/* ====== 纪要编辑列表 ====== */
 .item-list { display: flex; flex-direction: column; gap: 8px; }
-.item-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--color-bg-page); border-radius: var(--radius-md); border: 1px solid transparent; transition: all 0.2s; }
-.item-row:hover, .item-row:focus-within { border-color: var(--color-primary-border); background: var(--color-primary-bg); }
-.item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary); }
-.decision-dot { background: var(--color-warning); }
+.item-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; background: var(--color-bg-page, #f5f7fa); border-radius: var(--radius-md, 8px);
+  border: 1px solid transparent; transition: all 0.2s;
+}
+.item-row:hover, .item-row:focus-within { border-color: rgba(255, 122, 92, 0.3); background: var(--color-primary-bg, #fff0ed); }
+.item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary, #FF7A5C); }
+.decision-dot { background: var(--color-warning, #E6A23C); }
 .item-row .el-input { flex: 1; }
 .item-del { opacity: 0; transition: opacity 0.2s; }
 .item-row:hover .item-del { opacity: 1; }
 .item-add { width: 100%; justify-content: center; border-style: dashed; }
-.decision-add { color: var(--color-warning); border-color: var(--color-warning); }
+.decision-add { color: var(--color-warning, #E6A23C); border-color: var(--color-warning, #E6A23C); }
 
-/* 相关会议 */
-.related-meetings { margin-top: 16px; padding: 16px; background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--color-border); }
-.related-meetings h3 { margin: 0 0 4px; font-size: 15px; color: var(--color-text-primary); }
-.related-meetings .hint { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary); }
-.related-card { padding: 10px; margin-bottom: 8px; background: var(--color-bg-page); border-radius: var(--radius-md); transition: all 0.2s; }
-.related-card:hover { background: var(--color-primary-bg); }
-.related-content { margin-left: 8px; }
-.related-title { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.related-title a { color: var(--color-primary); font-weight: 500; text-decoration: none; }
-.related-title a:hover { text-decoration: underline; }
-.similarity { color: var(--color-text-secondary); font-size: 12px; }
-.related-summary { font-size: 13px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }
+/* ====== 加载态 ====== */
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 8px;
+  color: var(--color-text-secondary, #909399);
+}
 
+/* ====== 入场动画 ====== */
+.fade-slide-up {
+  animation: fadeSlideUp 300ms ease-out both;
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== 响应式 ====== */
 @media (max-width: 768px) {
   .meeting-detail { height: auto; }
+  .detail-hero { flex-direction: column; }
+  .hero-actions { flex-direction: row; align-self: stretch; }
   .detail-body { flex-direction: column; }
   .detail-side { width: 100%; }
-  .info-grid { grid-template-columns: 1fr; }
-  .info-item.full { grid-column: span 1; }
+  .hero-title { font-size: 18px; }
 }
 </style>
