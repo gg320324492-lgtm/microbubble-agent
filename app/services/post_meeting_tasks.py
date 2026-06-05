@@ -254,10 +254,71 @@ def post_meeting_process(self, meeting_id: int):
                         seg_names.append(None)
                         continue
                     name, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
-                    if name and conf > 0.35:  # 更宽松的阈值
+                    if name and conf > 0.35:
                         seg_names.append(name)
                     else:
                         seg_names.append(None)  # 暂时留空，后面统一处理
+
+                # 2.4.5 兜底：聚类数=1 但有多个明显不同的说话模式时强制分裂
+                if len(unique_clusters) == 1 and len(seg_embeddings) >= 3:
+                    # 计算段间声纹相似度统计
+                    from collections import defaultdict
+                    sims = []
+                    for i in range(len(seg_embeddings)):
+                        for j in range(i+1, len(seg_embeddings)):
+                            if seg_embeddings[i] is not None and seg_embeddings[j] is not None:
+                                sims.append(cosine_sim(seg_embeddings[i], seg_embeddings[j]))
+                    if sims:
+                        import statistics
+                        mean_sim = statistics.mean(sims)
+                        std_sim = statistics.stdev(sims) if len(sims) > 1 else 0
+                        max_sim = max(sims)
+                        min_sim = min(sims)
+                        logger.info(f"聚类统计: 平均={mean_sim:.3f}, 标准差={std_sim:.3f}, max={max_sim:.3f}, min={min_sim:.3f}")
+
+                        # 标准差大说明确实有不同说话人
+                        if std_sim > 0.15 and min_sim < 0.55:
+                            logger.info(f"检测到声纹分布发散（标准差={std_sim:.3f}），强制分裂聚类")
+                            # 用 KMeans 硬分 2 聚类
+                            from sklearn.cluster import KMeans
+                            valid_embs = np.array([e for e in seg_embeddings if e is not None])
+                            if len(valid_embs) >= 2:
+                                km = KMeans(n_clusters=2, random_state=42, n_init=10).fit(valid_embs)
+                                # 重新赋值 clusters
+                                idx = 0
+                                new_clusters = list(clusters)
+                                for i in range(len(seg_embeddings)):
+                                    if seg_embeddings[i] is not None:
+                                        new_clusters[i] = int(km.labels_[idx])
+                                        idx += 1
+                                clusters = new_clusters
+                                # 重置聚类中心和代表
+                                cluster_centers = []
+                                cluster_representatives = []
+                                for cid in set(clusters):
+                                    if cid < 0: continue
+                                    members = [seg_embeddings[i] for i in range(len(seg_embeddings)) if clusters[i] == cid]
+                                    if members:
+                                        cluster_centers.append(members[0])
+                                        cluster_representatives.append(members[0])
+                                logger.info(f"强制分裂后: 聚类数={len(cluster_centers)}")
+                                # 同步重新识别（用更新后的聚类数）
+                                seg_names = []
+                                for i, seg in enumerate(transcript_segments):
+                                    if clusters[i] < 0:
+                                        seg_names.append("发言人?")
+                                        continue
+                                    start_sample = int(seg["start"] * sample_rate)
+                                    end_sample = int(seg["end"] * sample_rate)
+                                    seg_audio = audio_pcm[start_sample:end_sample]
+                                    if len(seg_audio) < sample_rate * 0.5:
+                                        seg_names.append(None)
+                                        continue
+                                    name, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
+                                    if name and conf > 0.35:
+                                        seg_names.append(name)
+                                    else:
+                                        seg_names.append(None)
 
                 # 2.5 聚类 + 声纹结果协调
                 # 统计每个聚类中出现的已知名字
