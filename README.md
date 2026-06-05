@@ -21,11 +21,16 @@
 
 ### 近期新增（按时间倒序）
 
+- **代码质量全面升级（2026-06-04，30 commit）** —
+  - **API 规范化**：统一异常类层次（7 个异常类）+ 统一分页模型 + 全站分级限流（auth:5次/分, write:30次/分, read:100次/分）+ 安全响应头（X-Content-Type-Options/X-Frame-Options/X-XSS-Protection/Referrer-Policy/X-Request-ID）+ 8 个 API 文件全部改造
+  - **后端测试补全**：conftest fixtures + task_service + meeting_service 单元测试 + 任务 API 集成测试（33+ 个测试）
+  - **前端 Composables**：useTask/useMeeting/useKnowledge 提取共享状态 + API 调用
+  - **前端子组件拆分**：18 个子组件（Task:3 + Knowledge:8 + Meeting:3），三大 View 精简 21%（4495→3568 行）
+  - **前端测试体系**：Vitest 配置 + 3 个 composable 测试（23 个）+ 3 个组件测试（15 个）= 38 个测试全部通过
 - **声纹测试麦克风误报修复 + DB 列迁移 + Skills 升级（2026-06-04）** —
   - **声纹测试麦克风误报**：`VoiceTestDialog` 的 `AudioContext` 在部分手机浏览器失败后被 catch 误报为"麦克风权限被拒绝"。修复：分离 `getUserMedia` / `AudioContext` 错误处理 + Safari `webkitAudioContext` 兼容 + `suspended` 状态自动 `resume()`
   - **meetings 表列迁移**：`audio_url`/`audio_duration`/`recording_started_at`/`recording_ended_at` 4 列在模型中定义但数据库缺失（`create_all` 不加新列），手动 ALTER TABLE 补全
-  - **Skills 框架升级**：从 [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) 下载 16 个新 Skills（senior-backend/senior-devops/senior-qa/rag-architect/database-designer/performance-profiler/api-design-reviewer/tdd-guide/docker-development/llm-cost-optimizer/migration-architect/spec-driven-workflow/codebase-onboarding/security-guidance/a11y-audit/api-test-suite-builder），总计 37 个
-  - **代码质量升级计划**：4 轮 24 任务设计文档 + 实现计划已编写（API 规范化 → 后端测试 → 前端拆分 → 前端测试），待执行
+  - **Skills 框架升级**：从 [alirezarezvani/claude-skills](https://github.com/alirezarezvani/claude-skills) 下载 16 个新 Skills，总计 37 个
 - **听会功能路由修复 + ProcessingDialog 阶段同步（2026-06-04）** —
   - **路由冲突修复**：`meeting_recording.router` 必须在 `meeting.router` 之前注册，否则 `/meetings/start-recording` 会被 `/meetings/{meeting_id}` 拦截返回 405
   - **ProcessingDialog 阶段同步**：前端阶段列表与后端 `ProgressStage` 完全不匹配（旧版 `extracting_transcript` 等），改为与后端一致的 6 阶段（下载音频 → 语音转写 → 识别发言人 → AI 分析 → 创建任务 → 保存结果）

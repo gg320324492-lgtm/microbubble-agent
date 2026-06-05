@@ -1,11 +1,12 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-04** — 声纹测试修复 + DB 列迁移 + Skills 升级 + 代码质量升级计划
+> 最后更新: **2026-06-04** — 代码质量全面升级完成（30 commit）
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-04）
-- [声纹测试修复+DB迁移+Skills升级+升级计划](#声纹测试修复db迁移skills升级升级计划2026-06-04)（VoiceTestDialog AudioContext + meetings 列迁移 + 16 新 Skills + 4轮24任务计划）
+- [代码质量全面升级](#代码质量全面升级2026-06-0430-commit)（30 commit — API规范化+后端测试+前端Composables+子组件拆分+前端测试+View重构）
+- [声纹测试修复+DB迁移+Skills升级](#声纹测试修复db迁移skills升级2026-06-04)（VoiceTestDialog AudioContext + meetings 列迁移 + 16 新 Skills）
 - [听会功能路由修复+ProcessingDialog阶段同步](#听会功能路由修复processingdialog阶段同步2026-06-04)（路由冲突 + 阶段不匹配）
 - [前端优化+对话持久化+PPT支持](#前端优化对话持久化ppt支持2026-06-047-commit)（7 commit — ECharts 升级 + passive 补丁 + Element Plus 修复 + 对话持久化 + PPT + 重复回复修复）
 
@@ -18,7 +19,64 @@
 
 ---
 
-## 声纹测试修复+DB迁移+Skills升级+升级计划（2026-06-04）
+## 代码质量全面升级（2026-06-04，30 commit）
+
+### 第 1 轮：API 规范化（6 commit）
+
+| 改动 | 说明 |
+|------|------|
+| 统一异常类层次 | AppException/NotFoundException/ValidationException/AuthException/ForbiddenException/ConflictException/RateLimitException |
+| 统一分页模型 | PaginationParams + PaginatedResponse + PaginationMeta |
+| 全站分级限流 | auth:5次/分, write:30次/分, read:100次/分, upload:10次/分 |
+| 安全响应头 | X-Content-Type-Options/X-Frame-Options/X-XSS-Protection/Referrer-Policy/X-Request-ID |
+| 8 个 API 文件改造 | task/meeting/knowledge/member/auth/voiceprint/memory/project/chat |
+
+### 第 2 轮：后端测试补全（3 commit）
+
+| 测试文件 | 测试内容 |
+|---------|---------|
+| tests/unit/test_task_service.py | CRUD/分页/状态更新/逾期 |
+| tests/unit/test_meeting_service.py | 创建/议程/分页/更新/删除 |
+| tests/integration/test_api_tasks.py | CRUD/分页/错误格式/认证 |
+
+### 第 3 轮：前端组件拆分（10 commit）
+
+**Composables（3 个）**：
+- useTask.js — 任务状态 + API
+- useMeeting.js — 会议状态 + API
+- useKnowledge.js — 知识库状态 + API
+
+**子组件（18 个）**：
+| 模块 | 组件 | 行数 |
+|------|------|------|
+| Task | TaskList, TaskCreateDialog, TaskTrash | 34 + 89 + 88 |
+| Knowledge | KnowledgeDashboard, KnowledgeSearch, KnowledgeEntities, KnowledgeHypotheses, KnowledgeFormulas, KnowledgeHealth, KnowledgeQADialog, KnowledgeUploadDialog | 45+43+30+21+19+5+167+104 |
+| Meeting | MeetingList, MeetingCreateDialog, MeetingStats | 43 + 344 + 5 |
+
+### 第 4 轮：前端测试补全（4 commit）
+
+| 测试文件 | 测试数量 |
+|---------|---------|
+| useTask.test.js | 7 |
+| useMeeting.test.js | 8 |
+| useKnowledge.test.js | 8 |
+| TaskCreateDialog.test.js | 4 |
+| KnowledgeQADialog.test.js | 4 |
+| MeetingCreateDialog.test.js | 7 |
+| **总计** | **38 个测试全部通过** |
+
+### View 重构（6 commit）
+
+| View | 原始行数 | 当前行数 | 减少 |
+|------|---------|---------|------|
+| TaskView | 1173 | 737 | -436（-37%）|
+| KnowledgeView | 2236 | 1920 | -316（-14%）|
+| MeetingView | 1086 | 911 | -175（-16%）|
+| **总计** | **4495** | **3568** | **-927（-21%）**|
+
+---
+
+## 声纹测试修复+DB迁移+Skills升级（2026-06-04）
 
 ### 1. 声纹测试麦克风误报修复
 
@@ -151,15 +209,15 @@
 
 | 维度 | 状态 | 最近更新 |
 |------|------|----------|
-| 后端 | Phase 1-6 + 声纹系统 5 修复 + 反幻觉七重过滤 + 垃圾桶系统 4 bug 全修 + PPT 文件解析 + 听会路由修复 + meetings 列迁移 | 2026-06-04 |
+| 后端 | Phase 1-6 + 声纹系统 5 修复 + 反幻觉七重过滤 + 垃圾桶系统 4 bug 全修 + PPT 文件解析 + 听会路由修复 + meetings 列迁移 + 统一异常类/分页/限流 | 2026-06-04 |
 | 知识库 | 自主进化知识大脑（实体图谱+假设+量化推理）+ PPT 上传支持 | 2026-06-04 |
 | 会议系统 | 录音机+离线后处理模式 + 路由冲突修复 + ProcessingDialog 阶段同步 + 声纹测试修复 | 2026-06-04 |
 | 任务管理 | 软删除/垃圾桶 + 3 天后自动清理（1h 调度）+ 精准倒计时双行显示 + 5 级颜色 | 2026-06-03 |
-| 前端 | ECharts 5.6.0 + passive 补丁 + Element Plus 废弃修复 + 对话持久化 + 重复回复修复 + VoiceTestDialog 修复 | 2026-06-04 |
+| 前端 | ECharts 5.6.0 + passive 补丁 + Element Plus 废弃修复 + 对话持久化 + VoiceTestDialog 修复 + Composables + 18 个子组件 + Vitest 测试 | 2026-06-04 |
+| 测试 | 后端 33+ 个测试 + 前端 38 个测试（composable 23 + 组件 15）= 71+ 个测试 | 2026-06-04 |
 | 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取（130s→5s）+ webhook 多线程（0.001s 响应） | 2026-06-03 |
-| Webhook 自动部署 | SSH 拉取已端到端验证（commit `cd92ad6`）+ ThreadingHTTPServer 性能修复（commit `7ec6ce0`，0.001s 响应）| 2026-06-03 |
 | Skills | 37 个 Skills（21 原有 + 16 新增），覆盖后端/前端/DevOps/测试/安全/RAG/数据库 | 2026-06-04 |
-| 升级计划 | 代码质量全面升级 4轮24任务（设计+计划已完成，待执行） | 2026-06-04 |
+| 代码质量 | API 规范化 + 后端测试 + 前端 Composables + 子组件拆分（-21%）+ 前端测试，30 commit 全部完成 | 2026-06-04 |
 | 文档 | README/ROADMAP/CLAUDE.md/MEMORY 已同步 | 2026-06-04 |
 
 ---
