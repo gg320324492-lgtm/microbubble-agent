@@ -262,6 +262,46 @@ class VoiceprintService:
             logger.debug(f"声纹识别未匹配：最近={member.name} (dist={cosine_dist:.3f} > threshold={MATCH_THRESHOLD})")
             return None, None, confidence
 
+    async def identify_speaker_by_embedding(
+        self, db: AsyncSession, embedding: np.ndarray
+    ) -> Tuple[Optional[str], Optional[int], float]:
+        """直接用 embedding 识别说话人（无需音频）。
+
+        Args:
+            db: 数据库会话
+            embedding: 192 维声纹 embedding
+
+        Returns:
+            (name, member_id, confidence) — name 为 None 表示未识别
+        """
+        from app.models.member import Member
+
+        if np.all(embedding == 0):
+            return None, None, 0.0
+
+        embedding_list = embedding.tolist()
+
+        result = await db.execute(
+            select(Member)
+            .where(Member.voice_embedding.isnot(None))
+            .order_by(Member.voice_embedding.cosine_distance(embedding_list))
+            .limit(1)
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            return None, None, 0.0
+
+        db_emb = np.array(member.voice_embedding, dtype=np.float32)
+        cosine_dist = float(1.0 - np.dot(embedding, db_emb) / (
+            np.linalg.norm(embedding) * np.linalg.norm(db_emb) + 1e-8
+        ))
+        confidence = float(1.0 - min(cosine_dist, 1.0))
+
+        if cosine_dist < MATCH_THRESHOLD:
+            return member.name, member.id, confidence
+        else:
+            return None, None, confidence
+
     async def get_enrolled_members(self, db: AsyncSession) -> List[dict]:
         """获取已录入声纹的成员列表。"""
         from app.models.member import Member

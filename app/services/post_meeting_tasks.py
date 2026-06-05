@@ -399,6 +399,17 @@ def post_meeting_process(self, meeting_id: int):
                         logger.info(f"同名聚类检测: '{sp_name}' 对应 {len(cids)} 个聚类, {cids[1]} 改为 {unknown_label}")
 
                 # 2.7 分配发言人到每个段
+                # 用聚类代表 embedding 直接查询已知成员
+                for cid in unique_clusters:
+                    name, member_id, conf = await vp_service.identify_speaker_by_embedding(
+                        db, cluster_representatives[cid]
+                    )
+                    if name and conf > 0.35:
+                        cluster_to_name[cid] = name
+                        known_names_set.add(name)
+                    else:
+                        cluster_to_name[cid] = f"发言人{chr(65 + cid) if cid < 26 else str(cid - 25)}"
+
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] >= 0:
                         seg["speaker"] = cluster_to_name[clusters[i]]
