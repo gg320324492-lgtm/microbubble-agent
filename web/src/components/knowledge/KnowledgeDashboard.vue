@@ -1,40 +1,5 @@
 <template>
   <div class="knowledge-dashboard">
-    <!-- 统计卡片组 -->
-    <div class="stats-grid">
-      <div class="stat-card stat-total" @click="$emit('filter-category', '')">
-        <div class="stat-icon">📚</div>
-        <div class="stat-content">
-          <div class="stat-number">{{ stats.total || 0 }}</div>
-          <div class="stat-label">总知识量</div>
-        </div>
-      </div>
-
-      <div class="stat-card stat-recent" @click="$emit('filter-time', 'week')">
-        <div class="stat-icon">📝</div>
-        <div class="stat-content">
-          <div class="stat-number">{{ stats.recent_count || 0 }}</div>
-          <div class="stat-label">本周新增</div>
-        </div>
-      </div>
-
-      <div class="stat-card stat-entities" @click="$emit('show-entities')">
-        <div class="stat-icon">🔬</div>
-        <div class="stat-content">
-          <div class="stat-number">{{ stats.entity_count || 0 }}</div>
-          <div class="stat-label">实体三元组</div>
-        </div>
-      </div>
-
-      <div class="stat-card stat-formulas">
-        <div class="stat-icon">📐</div>
-        <div class="stat-content">
-          <div class="stat-number">{{ stats.formula_count || 0 }}</div>
-          <div class="stat-label">公式库</div>
-        </div>
-      </div>
-    </div>
-
     <!-- 热门分类 -->
     <div class="categories-section">
       <div class="section-header">
@@ -117,7 +82,6 @@ import { computed } from 'vue'
 import KnowledgeCard from './KnowledgeCard.vue'
 
 const props = defineProps({
-  stats: { type: Object, default: () => ({}) },
   categories: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   activeCategory: { type: String, default: '' },
@@ -168,73 +132,6 @@ defineEmits([
   flex-direction: column;
   gap: var(--space-6);
   animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
-}
-
-/* 统计卡片 */
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-4);
-}
-
-.stat-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  cursor: pointer;
-  transition: all var(--duration-normal) var(--ease-out);
-  border: 1px solid var(--color-border);
-  box-shadow: var(--shadow-xs);
-}
-
-.stat-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-md);
-}
-
-.stat-total {
-  background: linear-gradient(135deg, var(--color-primary-bg) 0%, #fff 100%);
-  border-color: var(--color-primary-border);
-}
-
-.stat-recent {
-  background: linear-gradient(135deg, var(--color-accent-bg) 0%, #fff 100%);
-  border-color: rgba(255, 179, 71, 0.2);
-}
-
-.stat-entities {
-  background: linear-gradient(135deg, #e8f4fd 0%, #fff 100%);
-  border-color: rgba(84, 112, 198, 0.2);
-}
-
-.stat-formulas {
-  background: linear-gradient(135deg, #f0f9eb 0%, #fff 100%);
-  border-color: rgba(145, 204, 117, 0.2);
-}
-
-.stat-icon {
-  font-size: 32px;
-  flex-shrink: 0;
-}
-
-.stat-content {
-  min-width: 0;
-}
-
-.stat-number {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-1);
 }
 
 /* 分类区域 */
