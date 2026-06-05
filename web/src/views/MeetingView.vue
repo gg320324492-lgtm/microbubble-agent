@@ -382,37 +382,35 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-
-const router = useRouter()
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatDateTime } from '@/utils/format'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
-// LiveTranscript 已删除（录音机模式无需实时转写）
+import { useMeeting } from '@/composables/useMeeting'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List } from '@element-plus/icons-vue'
 
+const router = useRouter()
 const memberStore = useMemberStore()
 const userStore = useUserStore()
 const members = computed(() => memberStore.members)
 
+// 使用 composable
+const {
+  meetings, total, currentPage, pageSize, loading,
+  keyword, dateFrom, dateTo, currentMeeting,
+  fetchMeetings, createMeeting, updateMeeting, deleteMeeting: deleteMeetingApi
+} = useMeeting()
+
 const isMobile = ref(window.innerWidth <= 768)
-const meetings = ref([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(20)
-const dateFrom = ref('')
-const dateTo = ref('')
-const keyword = ref('')
 const showCreateDialog = ref(false)
 const showMinutesDialog = ref(false)
 const showTranscriptDialog = ref(false)
-const currentMeeting = ref(null)
 const liveTranscriptRef = ref(null)
 const pasteAnalyzeDialogRef = ref(null)
 const meetingRoomRef = ref(null)
@@ -459,9 +457,8 @@ const editingMeetingId = ref(null)
 
 const deleteMeeting = async (id) => {
   try {
-    await axios.delete(`/api/v1/meetings/${id}`)
+    await deleteMeetingApi(id)
     ElMessage.success('会议已删除')
-    fetchMeetings()
   } catch (e) {
     ElMessage.error('删除失败')
   }
@@ -475,16 +472,15 @@ const submitMeeting = async () => {
   }
   try {
     if (editingMeetingId.value) {
-      await axios.put(`/api/v1/meetings/${editingMeetingId.value}`, meetingForm.value)
+      await updateMeeting(editingMeetingId.value, meetingForm.value)
       ElMessage.success('会议已更新')
     } else {
-      await axios.post('/api/v1/meetings', meetingForm.value)
+      await createMeeting(meetingForm.value)
       ElMessage.success('会议创建成功')
     }
     showCreateDialog.value = false
     editingMeetingId.value = null
     meetingForm.value = { templateId: null, title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [], agenda: [], remindBefore: true }
-    fetchMeetings()
   } catch (e) {
     ElMessage.error(editingMeetingId.value ? '更新失败' : '创建失败')
   }
@@ -627,29 +623,6 @@ async function deleteTemplate(tpl) {
 function onCreateDialogClose() {
   editingMeetingId.value = null
   meetingForm.value.templateId = null
-}
-
-
-// 获取会议列表
-const fetchMeetings = async () => {
-  try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-      keyword: keyword.value
-    }
-    if (dateFrom.value) {
-      params.date_from = dateFrom.value
-    }
-    if (dateTo.value) {
-      params.date_to = dateTo.value
-    }
-    const res = await axios.get('/api/v1/meetings', { params })
-    meetings.value = res.data.items || []
-    total.value = res.data.total || 0
-  } catch (e) {
-    console.error('获取会议失败:', e)
-  }
 }
 
 // 获取成员列表（使用 store）
