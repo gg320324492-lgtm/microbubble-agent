@@ -210,6 +210,8 @@ class KnowledgeService:
                             knowledge.summary = analysis["summary"]
                         if analysis.get("category"):
                             knowledge.category = analysis["category"]
+                        if analysis.get("topic"):
+                            knowledge.topic = analysis["topic"]
                         if analysis.get("tags"):
                             knowledge.tags = analysis["tags"]
                         if analysis.get("key_concepts"):
