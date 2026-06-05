@@ -163,25 +163,22 @@ def post_meeting_process(self, meeting_id: int):
                 def cosine_sim(a, b):
                     return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
 
-                # 贪心聚类
-                cluster_centers = []  # 聚类中心（用于比较）
-                cluster_representatives = []  # 聚类代表（第一个 embedding，用于识别）
+                # 贪心聚类（不限人数）
+                cluster_centers = []
+                cluster_representatives = []
                 clusters = []
-                MAX_SPEAKERS = 3  # 最多识别 3 位发言人
 
                 for i, emb in enumerate(seg_embeddings):
                     if emb is None:
-                        clusters.append(-1)  # 无效段
+                        clusters.append(-1)
                         continue
 
                     if not cluster_centers:
-                        # 第一个有效段，创建第一个聚类
                         cluster_centers.append(emb)
                         cluster_representatives.append(emb)
                         clusters.append(0)
                         continue
 
-                    # 与已有聚类中心比较
                     best_cluster = -1
                     best_sim = -1
                     for ci, center in enumerate(cluster_centers):
@@ -190,15 +187,13 @@ def post_meeting_process(self, meeting_id: int):
                             best_sim = sim
                             best_cluster = ci
 
-                    # 相似度 >= 0.45 归为已有聚类，或已达到最大发言人数量
-                    if best_sim >= 0.45 or len(cluster_centers) >= MAX_SPEAKERS:
+                    # 相似度 >= 0.45 归为已有聚类
+                    if best_sim >= 0.45:
                         clusters.append(best_cluster)
-                        # 更新聚类中心（滑动平均，但不更新代表）
                         cluster_centers[best_cluster] = (
                             cluster_centers[best_cluster] * 0.7 + emb * 0.3
                         )
                     else:
-                        # 新发言人
                         clusters.append(len(cluster_centers))
                         cluster_centers.append(emb)
                         cluster_representatives.append(emb)
@@ -244,30 +239,23 @@ def post_meeting_process(self, meeting_id: int):
                     else:
                         cluster_to_name[cid] = None
 
-                # 如果所有聚类都没有已知名字 → 使用原位识别
+                # 如果所有聚类都没有已知名字 → 使用编号
                 if not known_names_set:
                     for cid in unique_clusters:
-                        cluster_to_name[cid] = f"发言人{chr(65 + cid)}"
+                        cluster_to_name[cid] = f"发言人{chr(65 + cid) if cid < 26 else str(cid - 25)}"
                 else:
                     # 确保每个聚类都有名字：未知聚类分配新名字
                     unknown_count = 0
                     for cid in unique_clusters:
                         if cluster_to_name[cid] is None:
-                            # 检查是否有未使用的已知名字
-                            unused_name = None
-                            for name in ["发言人A", "发言人B"]:
-                                if name not in known_names_set:
-                                    unused_name = name
-                                    break
-                            if unused_name:
-                                cluster_to_name[cid] = unused_name
-                                known_names_set.add(unused_name)
-                            else:
-                                # 分配发言人标签
-                                while f"发言人{chr(65 + unknown_count)}" in known_names_set:
-                                    unknown_count += 1
-                                cluster_to_name[cid] = f"发言人{chr(65 + unknown_count)}"
+                            # 分配发言人标签
+                            label = f"发言人{chr(65 + unknown_count) if unknown_count < 26 else str(unknown_count - 25)}"
+                            while label in known_names_set:
                                 unknown_count += 1
+                                label = f"发言人{chr(65 + unknown_count) if unknown_count < 26 else str(unknown_count - 25)}"
+                            cluster_to_name[cid] = label
+                            known_names_set.add(label)
+                            unknown_count += 1
 
                 # 2.6 分配发言人到每个段
                 for i, seg in enumerate(transcript_segments):
