@@ -231,8 +231,8 @@ def post_meeting_process(self, meeting_id: int):
                             best_sim = sim
                             best_cluster = ci
 
-                    # 相似度 >= 0.42 归为已有聚类
-                    if best_sim >= 0.35:
+                    # 相似度 >= 0.40 归为已有聚类
+                    if best_sim >= 0.40:
                         clusters.append(best_cluster)
                     else:
                         clusters.append(len(cluster_centers))
