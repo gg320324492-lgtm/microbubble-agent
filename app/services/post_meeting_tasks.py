@@ -210,9 +210,14 @@ def post_meeting_process(self, meeting_id: int):
                     if clusters[i] < 0:
                         seg_names.append("发言人?")
                         continue
-                    # 用聚类代表做识别
-                    emb = seg_embeddings[i]
-                    name, member_id, conf = await vp_service.identify_speaker(db, emb)
+                    # 用原始音频段做识别（不是 embedding）
+                    start_sample = int(seg["start"] * sample_rate)
+                    end_sample = int(seg["end"] * sample_rate)
+                    seg_audio = audio_pcm[start_sample:end_sample]
+                    if len(seg_audio) < sample_rate * 0.5:
+                        seg_names.append(None)
+                        continue
+                    name, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
                     if name and conf > 0.35:  # 更宽松的阈值
                         seg_names.append(name)
                     else:
