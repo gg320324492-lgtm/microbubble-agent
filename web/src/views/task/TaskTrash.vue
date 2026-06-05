@@ -25,28 +25,40 @@
     <!-- 分页 -->
     <el-pagination
       v-if="trashTotal > trashPageSize"
-      v-model:current-page="trashPage"
+      :current-page="currentPage"
       :page-size="trashPageSize"
       :total="trashTotal"
       layout="prev, pager, next"
-      @current-change="$emit('page-change', $event)"
+      @current-change="onPageChange"
     />
   </div>
 </template>
 
 <script setup>
+import { ref, watch } from 'vue'
 import { RefreshRight, Delete } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 import dayjs from 'dayjs'
 
-defineProps({
+const props = defineProps({
   trashTasks: { type: Array, default: () => [] },
   trashTotal: { type: Number, default: 0 },
   trashPage: { type: Number, default: 1 },
   trashPageSize: { type: Number, default: 20 }
 })
 
-defineEmits(['restore', 'permanent-delete', 'page-change'])
+const emit = defineEmits(['restore', 'permanent-delete', 'page-change'])
+
+const currentPage = ref(props.trashPage)
+
+watch(() => props.trashPage, (newVal) => {
+  currentPage.value = newVal
+})
+
+const onPageChange = (page) => {
+  currentPage.value = page
+  emit('page-change', page)
+}
 
 function getAutoDeleteText(autoDeleteAt) {
   const diff = dayjs(autoDeleteAt).diff(dayjs(), 'hour')
