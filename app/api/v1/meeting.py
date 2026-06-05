@@ -74,9 +74,7 @@ async def list_meetings(
 ):
     """查询会议列表"""
     from sqlalchemy.orm import selectinload
-    query = select(Meeting).options(
-        selectinload(Meeting.participants).selectinload(MeetingParticipant.member)
-    )
+    query = select(Meeting)
 
     if date_from:
         query = query.where(Meeting.start_time >= date_from)
@@ -91,6 +89,28 @@ async def list_meetings(
 
     result = await db.execute(query)
     meetings = result.scalars().all()
+
+    # 手动加载参与者（避免 selectinload 序列化问题）
+    meeting_ids = [m.id for m in meetings]
+    if meeting_ids:
+        from sqlalchemy import select as sa_select2
+        mp_result = await db.execute(
+            sa_select2(MeetingParticipant).where(MeetingParticipant.meeting_id.in_(meeting_ids))
+        )
+        participants_by_meeting = {}
+        for mp in mp_result.scalars().all():
+            participants_by_meeting.setdefault(mp.meeting_id, []).append(mp)
+
+        from app.models.member import Member as MemberModel
+        member_result = await db.execute(
+            sa_select2(MemberModel).where(MemberModel.id.in_([mp.member_id for mps in participants_by_meeting.values() for mp in mps]))
+        )
+        members = {m.id: m for m in member_result.scalars().all()}
+
+        for meeting in meetings:
+            mps = participants_by_meeting.get(meeting.id, [])
+            for mp in mps:
+                mp.member = members.get(mp.member_id)
 
     return {"items": meetings, "total": len(meetings)}
 
