@@ -303,7 +303,7 @@ def post_meeting_process(self, meeting_id: int):
 
                 # 2.6 检查是否多个聚类被识别为同一人（不同音色归为同一名）
                 name_to_clusters = {}
-                for cid, sp_name in cluster_speakers.items():
+                for cid, sp_name in cluster_to_name.items():
                     if not sp_name.startswith("发言人"):
                         name_to_clusters.setdefault(sp_name, []).append(cid)
 
@@ -312,16 +312,16 @@ def post_meeting_process(self, meeting_id: int):
                     if len(cids) >= 2:
                         # 只有 2 个聚类但同名 → 保留聚类差异，第二个标记为未知
                         unknown_label = f"发言人{chr(65 + len(cluster_centers) - 1)}"
-                        while unknown_label in cluster_speakers.values():
+                        while unknown_label in cluster_to_name.values():
                             unknown_label = f"发言人{chr(65 + len(cluster_centers))}"
                             cluster_centers.append(None)  # dummy
-                        cluster_speakers[cids[1]] = unknown_label
+                        cluster_to_name[cids[1]] = unknown_label
                         logger.info(f"同名聚类检测: '{sp_name}' 对应 {len(cids)} 个聚类, {cids[1]} 改为 {unknown_label}")
 
                 # 2.7 分配发言人到每个段
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] >= 0:
-                        seg["speaker"] = cluster_speakers[clusters[i]]
+                        seg["speaker"] = cluster_to_name[clusters[i]]
                         if not seg["speaker"].startswith("发言人"):
                             speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = seg["speaker"]
                     else:
@@ -394,10 +394,10 @@ def post_meeting_process(self, meeting_id: int):
                         sp = seg.get("speaker", "")
                         if sp in name_corrections:
                             seg["speaker"] = name_corrections[sp]
-                    # 同步更新 cluster_speakers
-                    for cid in cluster_speakers:
-                        if cluster_speakers[cid] in name_corrections:
-                            cluster_speakers[cid] = name_corrections[cluster_speakers[cid]]
+                    # 同步更新 cluster_to_name
+                    for cid in cluster_to_name:
+                        if cluster_to_name[cid] in name_corrections:
+                            cluster_to_name[cid] = name_corrections[cluster_to_name[cid]]
                     logger.info(f"名字校对完成: 纠正了 {len(name_corrections)} 个名字")
 
                 # 更新 speaker_mapping
