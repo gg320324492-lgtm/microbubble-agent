@@ -122,154 +122,15 @@
     </el-card>
 
     <!-- 创建会议对话框 -->
-    <el-dialog v-model="showCreateDialog" :title="editingMeetingId ? '编辑会议' : '创建会议'" :width="isMobile ? '90vw' : '560px'" top="6vh" @close="onCreateDialogClose">
-      <el-form :model="meetingForm" label-width="80px">
-        <!-- 2026-06-03 重构：模板选择从下拉改为卡片式 + 行内 CRUD
-             替代独立 MeetingTemplatesView 页面，贴近使用场景 -->
-        <div v-if="!editingMeetingId" class="template-picker">
-          <div class="template-picker-header">
-            <span class="template-picker-title">
-              <el-icon><Document /></el-icon> 快速模板
-            </span>
-            <el-button text type="primary" size="small" @click="showTemplateForm()">
-              <el-icon><Plus /></el-icon> 存为新模板
-            </el-button>
-          </div>
-          <div class="template-cards">
-            <div
-              v-for="tpl in builtinTemplates"
-              :key="tpl.id"
-              class="template-card builtin"
-              :class="{ active: meetingForm.templateId === tpl.id }"
-              @click="applyTemplate(tpl)"
-            >
-              <div class="template-card-name">{{ tpl.name }}<el-tag size="small" type="info" effect="plain">内置</el-tag></div>
-              <div class="template-card-desc">{{ tpl.description || '—' }}</div>
-              <div class="template-card-meta">
-                <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
-                <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
-              </div>
-            </div>
-            <div
-              v-for="tpl in customTemplates"
-              :key="tpl.id"
-              class="template-card custom"
-              :class="{ active: meetingForm.templateId === tpl.id }"
-              @click="applyTemplate(tpl)"
-            >
-              <div class="template-card-name">
-                {{ tpl.name }}
-                <span class="template-card-actions" @click.stop>
-                  <el-icon class="tpl-action" title="编辑" @click="showTemplateForm(tpl)"><Edit /></el-icon>
-                  <el-icon class="tpl-action danger" title="删除" @click="deleteTemplate(tpl)"><Delete /></el-icon>
-                </span>
-              </div>
-              <div class="template-card-desc">{{ tpl.description || '（无说明）' }}</div>
-              <div class="template-card-meta">
-                <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
-                <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
-              </div>
-            </div>
-            <div v-if="customTemplates.length === 0" class="template-empty">
-              暂无自定义模板，点击右上"存为新模板"创建
-            </div>
-          </div>
-        </div>
-        <el-form-item label="会议主题" required>
-          <el-input v-model="meetingForm.title" name="meeting-form-title" placeholder="请输入会议主题" />
-        </el-form-item>
-        <el-form-item label="会议时间" required>
-          <input
-    :value="meetingForm.start_time"
-    name="meetingForm-start_time"
-    type="datetime-local"
-    class="native-date-input"
-    placeholder="选择会议时间"
-    @change="(e) => { const v = e.target.value; meetingForm.start_time = v ? v.replace('T', ' ') + ':00' : ''; }"
-  />
-        </el-form-item>
-        <el-form-item label="会议地点">
-          <el-input v-model="meetingForm.location" name="meeting-form-location" placeholder="请输入会议地点" />
-        </el-form-item>
-        <el-form-item label="参会人员">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <el-select v-model="meetingForm.participants" name="meeting-form-participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="选择参会人员" style="flex:1;min-width:200px">
-              <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
-            </el-select>
-            <el-button size="small" @click="meetingForm.participants = members.map(m=>m.id)">全选</el-button>
-          </div>
-        </el-form-item>
-        <el-form-item label="会议说明">
-          <el-input
-            v-model="meetingForm.description"
-            name="meeting-form-description"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入会议说明"
-          />
-        </el-form-item>
-        <el-form-item label="议程">
-          <div class="item-list" style="width:100%">
-            <div v-for="(item, idx) in meetingForm.agenda" :key="idx" class="item-row">
-              <span class="item-dot" />
-              <el-input v-model="meetingForm.agenda[idx]" :name="`meeting-form-agenda-${idx}`" placeholder="议题描述" />
-              <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.agenda.splice(idx, 1)" />
-            </div>
-            <el-button dashed size="small" class="item-add" @click="meetingForm.agenda.push('')">
-              <el-icon><Plus /></el-icon> 添加议题
-            </el-button>
-          </div>
-        </el-form-item>
-        <el-form-item label="提前提醒">
-          <el-checkbox v-model="meetingForm.remindBefore" name="meeting-form-remind-before">会议前 5 分钟企业微信提醒</el-checkbox>
-        </el-form-item>
-
-        <!-- 编辑已有会议时显示纪要字段 -->
-        <template v-if="editingMeetingId">
-          <el-divider content-position="left">
-            <el-icon><Document /></el-icon> 会议纪要
-          </el-divider>
-          <el-form-item label="摘要">
-            <el-input
-              v-model="meetingForm.summary"
-              name="meeting-form-summary"
-              type="textarea"
-              :rows="3"
-              placeholder="会议摘要..."
-              class="minutes-textarea"
-            />
-          </el-form-item>
-          <el-form-item label="讨论要点">
-            <div class="item-list">
-              <div v-for="(point, i) in meetingForm.key_points" :key="'kp'+i" class="item-row">
-                <span class="item-dot" />
-                <el-input v-model="meetingForm.key_points[i]" :name="`meeting-form-key-points-${i}`" size="default" placeholder="输入要点..." />
-                <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.key_points.splice(i, 1)" />
-              </div>
-              <el-button dashed size="small" class="item-add" @click="meetingForm.key_points.push('')">
-                <el-icon><Plus /></el-icon> 添加要点
-              </el-button>
-            </div>
-          </el-form-item>
-          <el-form-item label="决议事项">
-            <div class="item-list">
-              <div v-for="(d, i) in meetingForm.decisions" :key="'dc'+i" class="item-row decision">
-                <span class="item-dot decision-dot" />
-                <el-input v-model="meetingForm.decisions[i]" :name="`meeting-form-decisions-${i}`" size="default" placeholder="输入决议..." />
-                <el-button :icon="Delete" circle size="small" class="item-del" @click="meetingForm.decisions.splice(i, 1)" />
-              </div>
-              <el-button dashed size="small" class="item-add decision-add" @click="meetingForm.decisions.push('')">
-                <el-icon><Plus /></el-icon> 添加决议
-              </el-button>
-            </div>
-          </el-form-item>
-        </template>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="submitMeeting">{{ editingMeetingId ? '保存' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
+    <!-- 创建/编辑会议对话框 -->
+    <MeetingCreateDialog
+      v-model:visible="showCreateDialog"
+      :is-mobile="isMobile"
+      :editing-id="editingMeetingId"
+      :editing-data="editingMeetingData"
+      :templates="templates"
+      @success="onMeetingSaved"
+    />
 
     <!-- 2026-06-03 新增：模板编辑对话框（创建/编辑自定义模板） -->
     <el-dialog v-model="showTemplateDialog" :title="editingTemplateId ? '编辑模板' : '存为新模板'" :width="isMobile ? '92vw' : '500px'" top="8vh">
@@ -389,6 +250,7 @@ import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 import { useMeeting } from '@/composables/useMeeting'
+import MeetingCreateDialog from './meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
@@ -464,26 +326,16 @@ const deleteMeeting = async (id) => {
   }
 }
 
-// 创建/更新会议
-const submitMeeting = async () => {
-  if (!meetingForm.value.title || !meetingForm.value.start_time) {
-    ElMessage.warning('请填写必填项')
-    return
-  }
-  try {
-    if (editingMeetingId.value) {
-      await updateMeeting(editingMeetingId.value, meetingForm.value)
-      ElMessage.success('会议已更新')
-    } else {
-      await createMeeting(meetingForm.value)
-      ElMessage.success('会议创建成功')
-    }
-    showCreateDialog.value = false
-    editingMeetingId.value = null
-    meetingForm.value = { templateId: null, title: '', start_time: '', location: '', participants: [], description: '', summary: '', key_points: [], decisions: [], agenda: [], remindBefore: true }
-  } catch (e) {
-    ElMessage.error(editingMeetingId.value ? '更新失败' : '创建失败')
-  }
+// 编辑会议数据
+const editingMeetingData = computed(() => {
+  if (!editingMeetingId.value) return null
+  return meetings.value.find(m => m.id === editingMeetingId.value)
+})
+
+// 会议保存成功回调
+const onMeetingSaved = () => {
+  editingMeetingId.value = null
+  fetchMeetings()
 }
 
 const startLiveCall = () => {
