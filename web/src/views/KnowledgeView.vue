@@ -245,13 +245,25 @@
           <el-input v-model="knowledgeForm.title" name="knowledgeForm-title" placeholder="请输入标题" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-select v-model="knowledgeForm.category" name="knowledgeForm-category" placeholder="动态分类" filterable allow-create clearable>
-            <el-option
-              v-for="cat in categories"
-              :key="cat.name"
-              :label="`${cat.name} (${cat.count})`"
-              :value="cat.name"
-            />
+          <el-select v-model="knowledgeForm.category" name="knowledgeForm-category" placeholder="选择分类" filterable allow-create clearable>
+            <el-option-group label="预设分类">
+              <el-option label="📄 论文" value="论文" />
+              <el-option label="🔬 方法" value="方法" />
+              <el-option label="📏 标准" value="标准" />
+              <el-option label="📖 综述" value="综述" />
+              <el-option label="💡 案例" value="案例" />
+              <el-option label="❓ FAQ" value="FAQ" />
+              <el-option label="📝 笔记" value="笔记" />
+              <el-option label="📚 手册" value="手册" />
+            </el-option-group>
+            <el-option-group label="动态分类" v-if="categories.length > 0">
+              <el-option
+                v-for="cat in categories"
+                :key="cat.name"
+                :label="`${cat.name} (${cat.count})`"
+                :value="cat.name"
+              />
+            </el-option-group>
           </el-select>
         </el-form-item>
         <el-form-item label="标签">
