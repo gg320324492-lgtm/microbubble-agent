@@ -138,7 +138,17 @@
                   <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
                     <div v-if="group.speaker" class="speaker-row">
                       <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
-                      <span class="speaker-name">{{ group.speaker }}</span>
+                      <template v-if="editingSpeaker === group.speaker">
+                        <el-input
+                          v-model="editSpeakerName"
+                          size="small"
+                          class="edit-speaker-input"
+                          @keyup.enter="confirmSpeakerRename(group.speaker)"
+                          @blur="confirmSpeakerRename(group.speaker)"
+                          ref="speakerInputRef"
+                        />
+                      </template>
+                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击编辑发言人名字">{{ group.speaker }}</span>
                     </div>
                     <ul class="points-list">
                       <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
@@ -150,7 +160,17 @@
                   <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
                     <div v-if="group.speaker" class="speaker-row">
                       <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
-                      <span class="speaker-name">{{ group.speaker }}</span>
+                      <template v-if="editingSpeaker === group.speaker">
+                        <el-input
+                          v-model="editSpeakerName"
+                          size="small"
+                          class="edit-speaker-input"
+                          @keyup.enter="confirmSpeakerRename(group.speaker)"
+                          @blur="confirmSpeakerRename(group.speaker)"
+                          ref="speakerInputRef"
+                        />
+                      </template>
+                      <span v-else class="speaker-name" @click="startSpeakerRename(group.speaker)" title="点击编辑发言人名字">{{ group.speaker }}</span>
                     </div>
                     <ul class="decisions-list">
                       <li v-for="(item, ii) in group.items" :key="ii">{{ item }}</li>
@@ -293,6 +313,60 @@ const saving = ref(false)
 const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
+
+// 发言人名字编辑
+const editingSpeaker = ref(null)
+const editSpeakerName = ref('')
+const speakerInputRef = ref(null)
+
+function startSpeakerRename(oldName) {
+  editingSpeaker.value = oldName
+  editSpeakerName.value = oldName
+}
+
+async function confirmSpeakerRename(oldName) {
+  const newName = editSpeakerName.value.trim()
+  editingSpeaker.value = null
+  if (!newName || newName === oldName) return
+
+  try {
+    // 更新 server 端 speaker_mapping
+    await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
+      speaker_mapping: { ...(meeting.value.speaker_mapping || {}), [oldName]: newName },
+    })
+    // 更新本地数据
+    if (meeting.value.speaker_mapping) {
+      for (const key of Object.keys(meeting.value.speaker_mapping)) {
+        if (meeting.value.speaker_mapping[key] === oldName) {
+          meeting.value.speaker_mapping[key] = newName
+        }
+      }
+    }
+    // 更新 key_points 和 decisions 中的发言人前缀
+    const rename = (arr) => {
+      if (!arr) return
+      for (let i = 0; i < arr.length; i++) {
+        arr[i] = arr[i].replace(`【${oldName}】`, `【${newName}】`)
+      }
+    }
+    rename(meeting.value.key_points)
+    rename(meeting.value.decisions)
+    // 更新转录数据
+    if (meeting.value.transcript_polished) {
+      for (const entry of meeting.value.transcript_polished) {
+        if (entry.speaker === oldName) entry.speaker = newName
+      }
+    }
+    if (meeting.value.transcript) {
+      for (const entry of meeting.value.transcript) {
+        if (entry.speaker === oldName) entry.speaker = newName
+      }
+    }
+    ElMessage.success(`已更新: ${oldName} → ${newName}`)
+  } catch {
+    ElMessage.error('名字更新失败')
+  }
+}
 
 // 转录记录：优先用 polished，回退到原始 transcript
 const transcriptEntries = computed(() => {
@@ -743,6 +817,15 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--color-primary, #FF7A5C);
+  cursor: pointer;
+  border-bottom: 1px dashed transparent;
+  transition: border-color 0.2s;
+}
+.speaker-name:hover {
+  border-bottom-color: var(--color-primary, #FF7A5C);
+}
+.edit-speaker-input {
+  width: 120px;
 }
 .points-list, .decisions-list {
   padding-left: 20px;
