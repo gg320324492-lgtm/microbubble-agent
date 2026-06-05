@@ -97,21 +97,116 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
 
-                # ===== 阶段 2: 声纹识别 =====
+                # ===== 阶段 2: 发言人分离（声纹 + 停顿 + 内容） =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
                 from app.services.voiceprint_service import VoiceprintService
+                import torch
 
                 vp_service = VoiceprintService()
                 speaker_mapping = {}
 
+                # 2.1 对长段音频做细粒度 VAD，检测发言人切换点
+                def _detect_speaker_changes(audio: np.ndarray, sr: int, min_gap_sec: float = 0.4) -> list[tuple[int, int]]:
+                    """检测音频中的发言人切换点（基于停顿）
+                    返回 [(start_sample, end_sample), ...] 的语音片段列表"""
+                    audio_tensor = torch.from_numpy(audio.copy())
+                    try:
+                        vad_model, vad_utils = torch.hub.load(
+                            repo_or_dir="snakers4/silero-vad", model="silero_vad",
+                            source="local", force_reload=False, trust_repo=True,
+                        )
+                        get_timestamps = vad_utils[0]
+                        speeches = get_timestamps(
+                            audio_tensor, vad_model, threshold=0.5,
+                            min_speech_duration_ms=300, min_silence_duration_ms=200,
+                            return_seconds=False, sampling_rate=sr,
+                        )
+                    except Exception:
+                        # VAD 失败时回退：整段作为一个片段
+                        return [(0, len(audio))]
+
+                    if not speeches:
+                        return [(0, len(audio))]
+
+                    # 基于停顿切分（间隔 >= min_gap_sec 视为发言人可能切换）
+                    result = []
+                    for seg in speeches:
+                        start, end = seg["start"], seg["end"]
+                        if result and (start - result[-1][1]) >= sr * min_gap_sec:
+                            # 停顿足够长，可能是发言人切换
+                            result.append((start, end))
+                        elif result:
+                            # 停顿短，合并到上一段
+                            result[-1] = (result[-1][0], end)
+                        else:
+                            result.append((start, end))
+                    return result
+
+                # 2.2 对每个转录段做发言人识别
                 for seg in transcript_segments:
                     start_sample = int(seg["start"] * sample_rate)
                     end_sample = int(seg["end"] * sample_rate)
                     seg_audio = audio_pcm[start_sample:end_sample]
 
                     if len(seg_audio) < sample_rate * 0.5:
+                        seg["speaker"] = "发言人?"
                         continue
 
+                    # 对长段（>5s）做细粒度发言人检测
+                    seg_duration = len(seg_audio) / sample_rate
+                    if seg_duration > 5.0:
+                        # 切分成小片段，分别提取声纹
+                        sub_segments = _detect_speaker_changes(seg_audio, sample_rate, min_gap_sec=0.4)
+                        if len(sub_segments) > 1:
+                            # 为每个子片段提取声纹 embedding
+                            embeddings = []
+                            for sub_start, sub_end in sub_segments:
+                                sub_audio = seg_audio[sub_start:sub_end]
+                                if len(sub_audio) >= sample_rate * 0.3:
+                                    emb = vp_service.extract_embedding(sub_audio)
+                                    embeddings.append(emb)
+
+                            if len(embeddings) >= 2:
+                                # 聚类：比较相邻 embedding 的余弦相似度
+                                # 相似度 < 0.7 视为不同发言人
+                                from numpy.linalg import norm
+                                def cosine_sim(a, b):
+                                    return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
+
+                                # 简单聚类：相似度高的归为同一人
+                                clusters = [0]  # 第一个片段属于发言人 0
+                                for i in range(1, len(embeddings)):
+                                    sim = cosine_sim(embeddings[i], embeddings[i-1])
+                                    if sim < 0.7:
+                                        # 新发言人
+                                        clusters.append(max(clusters) + 1)
+                                    else:
+                                        clusters.append(clusters[-1])
+
+                                # 识别每个发言人
+                                unique_speakers = set(clusters)
+                                cluster_speakers = {}
+                                for cluster_id in unique_speakers:
+                                    # 取该聚类中第一个片段的声纹做识别
+                                    idx = clusters.index(cluster_id)
+                                    name, member_id, conf = await vp_service.identify_speaker(db, embeddings[idx])
+                                    if name and conf > 0.55:
+                                        cluster_speakers[cluster_id] = name
+                                    else:
+                                        cluster_speakers[cluster_id] = f"发言人{chr(65 + cluster_id)}"
+
+                                # 取出现最多的发言人作为该段的主要发言人
+                                from collections import Counter
+                                main_speaker_id = Counter(clusters).most_common(1)[0][0]
+                                seg["speaker"] = cluster_speakers[main_speaker_id]
+                                seg["speaker_changes"] = len(unique_speakers)  # 记录发言人切换次数
+                            else:
+                                # 只有 1 个 embedding，直接识别
+                                name, member_id, conf = await vp_service.identify_speaker(db, embeddings[0])
+                                seg["speaker"] = name if name and conf > 0.55 else "发言人A"
+                            continue
+
+                    # 短段或无法切分时，直接用整段声纹识别
                     name, member_id, confidence = await vp_service.identify_speaker(db, seg_audio)
                     if name and confidence > 0.55:
                         seg["speaker"] = name
