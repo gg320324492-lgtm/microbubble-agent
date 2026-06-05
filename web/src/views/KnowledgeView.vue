@@ -231,157 +231,19 @@
       </template>
     </el-dialog>
 
-    <!-- ===== AI问答对话框 (RAG) ===== -->
-    <el-dialog
-      v-model="showQADialog"
-      title="🤖 AI知识问答"
-      :width="isMobile ? '92vw' : '700px'"
-      top="5vh"
-      :close-on-click-modal="false"
-      destroy-on-close
-    >
-      <div class="qa-dialog">
-        <div class="qa-input-row">
-          <el-input
-            v-model="qaQuery" name="qaQuery"
-            placeholder="输入你的问题，AI会从知识库中查找并合成答案..."
-            size="large"
-            :disabled="qaLoading"
-            @keyup.enter="handleQA"
-          >
-            <template #append>
-              <el-button :loading="qaLoading" @click="handleQA">
-                {{ qaLoading ? '思考中...' : '提问' }}
-              </el-button>
-            </template>
-          </el-input>
-        </div>
+    <!-- AI 问答对话框 -->
+    <KnowledgeQADialog
+      v-model:visible="showQADialog"
+      :is-mobile="isMobile"
+      @navigate="$router.push('/knowledge/' + $event)"
+    />
 
-        <div class="qa-mode-toggle">
-          <el-switch v-model="qaReasonMode" name="qaReasonMode" active-text="推理模式" inactive-text="检索模式" size="small" />
-        </div>
-
-        <!-- 快捷问题 -->
-        <div v-if="!qaResult && !qaLoading" class="qa-suggestions">
-          <div class="suggestion-title">💡 试试这些问题</div>
-          <div class="suggestion-list">
-            <el-tag
-              v-for="q in suggestions"
-              :key="q"
-              class="suggestion-tag"
-              @click="askSuggestion(q)"
-            >{{ q }}</el-tag>
-          </div>
-        </div>
-
-        <!-- 回答区域 -->
-        <div v-if="qaLoading" class="qa-loading">
-          <div class="qa-loading-dots">
-            <span v-if="qaReasonMode">🧠</span>
-            <span v-else>🔍</span>
-            {{ qaReasonMode ? '正在遍历知识图谱推理链...' : '正在检索知识库...' }}
-          </div>
-        </div>
-
-        <div v-if="qaResult" class="qa-result">
-          <!-- 置信度 -->
-          <div class="qa-confidence">
-            <span class="confidence-dot" :class="'conf-' + qaResult.confidence"></span>
-            {{ confidenceLabel(qaResult.confidence) }}
-            <span class="confidence-info">基于 {{ qaResult.search_results?.high || 0 }} 条高相关、{{ qaResult.search_results?.total || 0 }} 条总检索结果</span>
-          </div>
-
-          <!-- 答案正文 -->
-          <div class="qa-answer" v-html="renderAnswer(qaResult.answer)"></div>
-
-          <!-- 来源引用 -->
-          <div v-if="qaResult.sources && qaResult.sources.length" class="qa-sources">
-            <div class="sources-title">📚 参考来源</div>
-            <div
-              v-for="src in qaResult.sources"
-              :key="src.id"
-              class="source-item"
-              @click="$router.push('/knowledge/' +src.id)"
-            >
-              <span class="source-title">{{ src.title }}</span>
-              <el-tag size="small" :type="src.relevance >= 0.7 ? 'success' : 'warning'">
-                {{ (src.relevance * 100).toFixed(0) }}%
-              </el-tag>
-            </div>
-          </div>
-
-          <!-- 研究触发提示 -->
-          <div v-if="qaResult.research_triggered && qaResult.research_queries?.length" class="qa-research-note">
-            <el-alert
-              title="知识库信息不足，已生成研究查询"
-              :description="qaResult.research_queries.join('；')"
-              type="warning"
-              show-icon
-              :closable="false"
-            />
-          </div>
-        </div>
-
-        <!-- 推理链（推理模式） -->
-        <div v-if="qaReasonResult" class="qa-result">
-          <div class="qa-confidence">
-            <span class="confidence-dot" :class="'conf-' + qaReasonResult.confidence"></span>
-            {{ confidenceLabel(qaReasonResult.confidence) }}
-            <span class="confidence-info">推理链使用 {{ qaReasonResult.nodes_used }} 个节点，{{ qaReasonResult.hops_used }} 跳</span>
-          </div>
-          <div class="qa-answer" v-html="renderAnswer(qaReasonResult.answer)"></div>
-          <div v-if="qaReasonResult.reasoning_chain?.length" class="qa-reasoning-chain">
-            <div class="reasoning-title">🧠 推理路径</div>
-            <div v-for="(step, i) in qaReasonResult.reasoning_chain" :key="i" class="reasoning-step">
-              <span class="step-number">{{ i + 1 }}</span>
-              <span>{{ step }}</span>
-            </div>
-          </div>
-          <div v-if="qaReasonResult.gap_description" class="qa-gap-note">
-            <el-alert :title="'推理缺口: ' + qaReasonResult.gap_description" type="warning" show-icon :closable="false" />
-          </div>
-        </div>
-
-        <!-- 错误 -->
-        <div v-if="qaError" class="qa-error">
-          <el-alert :title="qaError" type="error" show-icon :closable="false" />
-        </div>
-      </div>
-    </el-dialog>
-
-    <!-- ===== 文件上传对话框 ===== -->
-    <el-dialog v-model="showUploadDialog" title="上传文件到知识库" :width="isMobile ? '90vw' : '500px'" top="10vh" destroy-on-close>
-      <div class="upload-ai-notice">
-        <el-icon size="16" color="#409eff"><MagicStick /></el-icon>
-        <span>上传后 AI 将自动分析内容，生成摘要、分类、标签和知识关联</span>
-      </div>
-      <el-form label-width="80px">
-        <el-form-item label="标题">
-          <el-input v-model="uploadTitle" name="uploadTitle" placeholder="留空则使用文件名" />
-        </el-form-item>
-      </el-form>
-      <el-upload
-        ref="uploadRef"
-        drag
-        :auto-upload="false"
-        :limit="1"
-        accept=".pdf,.docx,.xlsx,.pptx,.txt,.md"
-        :on-change="onUploadFileChange"
-        :on-exceed="() => ElMessage.warning('只能上传一个文件')"
-      >
-        <el-icon class="el-icon--upload"><Upload /></el-icon>
-        <div class="el-upload__text">拖拽文件到此处，或 <em>点击选择</em></div>
-        <template #tip>
-          <div class="el-upload__tip">支持 PDF、Word(.docx)、Excel(.xlsx)、TXT、Markdown，最大 50MB</div>
-        </template>
-      </el-upload>
-      <template #footer>
-        <el-button @click="showUploadDialog = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="handleUpload">
-          {{ uploading ? '分析中...' : '上传' }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <!-- 文件上传对话框 -->
+    <KnowledgeUploadDialog
+      v-model:visible="showUploadDialog"
+      :is-mobile="isMobile"
+      @success="onUploadSuccess"
+    />
       </el-tab-pane>
 
       <!-- ===== 实体图谱 Tab ===== -->
@@ -600,6 +462,8 @@ import { Search, Plus, MagicStick, Upload, Document } from '@element-plus/icons-
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
 import { useKnowledge } from '@/composables/useKnowledge'
+import KnowledgeQADialog from './knowledge/KnowledgeQADialog.vue'
+import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
 
 // 使用 composable（共享状态 + API）
 const {
@@ -737,98 +601,10 @@ const handleDeleteKnowledge = async (item) => {
   }
 }
 
-// ── AI 问答 (RAG) ──
-
-const openQADialog = () => {
-  qaQuery.value = ''
-  qaResult.value = null
-  qaError.value = ''
-  showQADialog.value = true
-}
-
-const askSuggestion = (q) => {
-  qaQuery.value = q
-  handleQA()
-}
-
-const confidenceLabel = (level) => {
-  const map = { high: '高置信度', medium: '中等置信度', low: '低置信度' }
-  return map[level] || level
-}
-
-const renderAnswer = (text) => {
-  if (!text) return ''
-  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return escaped.replace(/\[来源:([^\]]+)\]/g, '<span class="qa-citation">📖 $1</span>')
-}
-
-// ── 文件上传 ──
-
-const onUploadFileChange = (file) => {
-  uploadFile.value = file.raw
-}
-
-const handleUpload = async () => {
-  if (!uploadFile.value) {
-    ElMessage.warning('请选择文件')
-    return
-  }
-  uploading.value = true
-  try {
-    const formData = new FormData()
-    formData.append('file', uploadFile.value)
-    if (uploadTitle.value) formData.append('title', uploadTitle.value)
-
-    await axios.post('/api/v1/knowledge/upload', formData, { timeout: 180000 })
-    ElMessage.success('文件上传成功，后台正在分析...')
-    showUploadDialog.value = false
-    uploadTitle.value = ''
-    uploadFile.value = null
-    if (uploadRef.value) uploadRef.value.clearFiles()
-    fetchKnowledge()
-    fetchStats()
-  } catch (e) {
-    if (e.code === 'ECONNABORTED') {
-      ElMessage.error('上传超时，请检查网络或尝试更小的文件')
-    } else if (!e.response) {
-      ElMessage.error('网络连接失败，请检查网络后重试')
-    } else {
-      const detail = e.response?.data?.detail
-      if (Array.isArray(detail)) {
-        ElMessage.error(detail.map(d => d.msg || JSON.stringify(d)).join('; '))
-      } else if (typeof detail === 'string') {
-        ElMessage.error(detail)
-      } else if (typeof e.response?.data === 'string') {
-        ElMessage.error('服务器错误，请稍后重试')
-      } else {
-        ElMessage.error('上传失败')
-      }
-    }
-  } finally {
-    uploading.value = false
-  }
-}
-
-const handleQA = async () => {
-  const q = qaQuery.value.trim()
-  if (!q) { ElMessage.warning('请输入问题'); return }
-  qaLoading.value = true
-  qaResult.value = null
-  qaError.value = ''
-  qaReasonResult.value = null
-  try {
-    if (qaReasonMode.value) {
-      const { data } = await axios.post('/api/v1/knowledge/reason', { question: q, max_hops: 2, top_k: 6 })
-      qaReasonResult.value = data
-    } else {
-      const { data } = await axios.post('/api/v1/knowledge/qa', { question: q, top_k: 8, auto_research: true })
-      qaResult.value = data
-    }
-  } catch (e) {
-    qaError.value = e.response?.data?.detail || '问答失败，请稍后重试'
-  } finally {
-    qaLoading.value = false
-  }
+// ── 上传成功回调 ──
+const onUploadSuccess = () => {
+  fetchKnowledge()
+  fetchStats()
 }
 
 const resetForm = () => {
