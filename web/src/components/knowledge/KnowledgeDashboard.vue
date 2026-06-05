@@ -8,12 +8,6 @@
           <div class="stat-number">{{ stats.total || 0 }}</div>
           <div class="stat-label">总知识量</div>
         </div>
-        <div class="stat-ring">
-          <svg viewBox="0 0 36 36">
-            <path class="ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-            <path class="ring-fill" :style="{ strokeDasharray: `${Math.min(100, (stats.total || 0) / 2)}, 100` }" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-          </svg>
-        </div>
       </div>
 
       <div class="stat-card stat-recent" @click="$emit('filter-time', 'week')">
@@ -21,9 +15,6 @@
         <div class="stat-content">
           <div class="stat-number">{{ stats.recent_count || 0 }}</div>
           <div class="stat-label">本周新增</div>
-        </div>
-        <div class="stat-trend" v-if="stats.recent_count > 0">
-          <span class="trend-up">↑</span>
         </div>
       </div>
 
@@ -40,74 +31,6 @@
         <div class="stat-content">
           <div class="stat-number">{{ stats.formula_count || 0 }}</div>
           <div class="stat-label">公式库</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 可视化图表区域 -->
-    <div class="charts-section">
-      <!-- 分类分布饼图 -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h3 class="chart-title">📊 分类分布</h3>
-        </div>
-        <div class="chart-body">
-          <div class="pie-chart">
-            <svg viewBox="0 0 100 100">
-              <circle v-for="(seg, i) in pieSegments" :key="i"
-                :cx="50" :cy="50" :r="40"
-                fill="none"
-                :stroke="seg.color"
-                stroke-width="12"
-                :stroke-dasharray="`${seg.length} ${seg.gap}`"
-                :stroke-dashoffset="seg.offset"
-                class="pie-segment"
-                :style="{ animationDelay: `${i * 100}ms` }"
-              />
-            </svg>
-            <div class="pie-center">
-              <div class="pie-total">{{ categories.length }}</div>
-              <div class="pie-label">分类</div>
-            </div>
-          </div>
-          <div class="pie-legend">
-            <div v-for="(cat, i) in topCategories" :key="cat.name" class="legend-item">
-              <span class="legend-dot" :style="{ background: chartColors[i % chartColors.length] }"></span>
-              <span class="legend-name">{{ cat.name }}</span>
-              <span class="legend-count">{{ cat.count }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 知识增长趋势 -->
-      <div class="chart-card">
-        <div class="chart-header">
-          <h3 class="chart-title">📈 增长趋势</h3>
-          <div class="chart-tabs">
-            <span class="chart-tab" :class="{ active: trendPeriod === 'week' }" @click="trendPeriod = 'week'">周</span>
-            <span class="chart-tab" :class="{ active: trendPeriod === 'month' }" @click="trendPeriod = 'month'">月</span>
-          </div>
-        </div>
-        <div class="chart-body">
-          <div class="bar-chart">
-            <div v-for="(bar, i) in trendBars" :key="i" class="bar-item">
-              <div class="bar-wrapper">
-                <div class="bar-fill" :style="{ height: bar.height + '%', animationDelay: `${i * 50}ms` }"></div>
-              </div>
-              <div class="bar-label">{{ bar.label }}</div>
-            </div>
-          </div>
-          <div class="trend-summary">
-            <div class="trend-item">
-              <span class="trend-value">+{{ stats.recent_count || 0 }}</span>
-              <span class="trend-label">本周新增</span>
-            </div>
-            <div class="trend-item">
-              <span class="trend-value">{{ Math.round((stats.total || 0) / 4) }}</span>
-              <span class="trend-label">月均增长</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -190,7 +113,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import KnowledgeCard from './KnowledgeCard.vue'
 
 const props = defineProps({
@@ -213,9 +136,6 @@ const presetCategories = [
   { name: '手册', icon: '📚' }
 ]
 
-// 图表颜色
-const chartColors = ['#FF7A5C', '#FFB347', '#5470c6', '#91cc75', '#ee6666', '#73c0de', '#fc8452', '#9a60b4']
-
 // 动态分类（排除预设分类）
 const dynamicCategories = computed(() => {
   const presetNames = presetCategories.map(c => c.name)
@@ -227,66 +147,6 @@ const getCategoryCount = (categoryName) => {
   const found = props.categories.find(c => c.name === categoryName)
   return found ? found.count : 0
 }
-
-// 饼图数据
-const topCategories = computed(() => {
-  return props.categories.slice(0, 6)
-})
-
-const pieSegments = computed(() => {
-  const total = props.categories.reduce((sum, c) => sum + c.count, 0)
-  if (total === 0) return []
-
-  const segments = []
-  let currentOffset = 25 // 从顶部开始
-
-  props.categories.slice(0, 6).forEach((cat, i) => {
-    const percentage = (cat.count / total) * 100
-    const circumference = 2 * Math.PI * 40 // r=40
-
-    segments.push({
-      length: (percentage / 100) * circumference,
-      gap: circumference - (percentage / 100) * circumference,
-      offset: -currentOffset,
-      color: chartColors[i % chartColors.length]
-    })
-
-    currentOffset += (percentage / 100) * circumference
-  })
-
-  return segments
-})
-
-// 趋势图数据
-const trendPeriod = ref('week')
-
-const trendBars = computed(() => {
-  // 模拟数据 - 实际应从 API 获取
-  const weekData = [
-    { label: '一', value: 3 },
-    { label: '二', value: 5 },
-    { label: '三', value: 2 },
-    { label: '四', value: 7 },
-    { label: '五', value: 4 },
-    { label: '六', value: 1 },
-    { label: '日', value: 6 }
-  ]
-
-  const monthData = [
-    { label: '1周', value: 12 },
-    { label: '2周', value: 18 },
-    { label: '3周', value: 15 },
-    { label: '4周', value: 22 }
-  ]
-
-  const data = trendPeriod.value === 'week' ? weekData : monthData
-  const maxValue = Math.max(...data.map(d => d.value), 1)
-
-  return data.map(d => ({
-    ...d,
-    height: (d.value / maxValue) * 100
-  }))
-})
 
 defineEmits([
   'filter-category',
@@ -328,8 +188,6 @@ defineEmits([
   transition: all var(--duration-normal) var(--ease-out);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-xs);
-  position: relative;
-  overflow: hidden;
 }
 
 .stat-card:hover {
@@ -364,7 +222,6 @@ defineEmits([
 
 .stat-content {
   min-width: 0;
-  flex: 1;
 }
 
 .stat-number {
@@ -378,256 +235,6 @@ defineEmits([
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   margin-top: var(--space-1);
-}
-
-/* 环形进度条 */
-.stat-ring {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 48px;
-  height: 48px;
-  opacity: 0.6;
-}
-
-.stat-ring svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.ring-bg {
-  fill: none;
-  stroke: var(--color-border);
-  stroke-width: 3;
-}
-
-.ring-fill {
-  fill: none;
-  stroke: var(--color-primary);
-  stroke-width: 3;
-  stroke-linecap: round;
-  transition: stroke-dasharray 1s ease;
-}
-
-/* 趋势箭头 */
-.stat-trend {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-}
-
-.trend-up {
-  color: var(--color-success);
-  font-size: 18px;
-  font-weight: bold;
-}
-
-/* 图表区域 */
-.charts-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-}
-
-.chart-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-}
-
-.chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-4) var(--space-4) 0;
-}
-
-.chart-title {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.chart-tabs {
-  display: flex;
-  gap: var(--space-1);
-  background: var(--color-info-bg);
-  border-radius: var(--radius-full);
-  padding: 2px;
-}
-
-.chart-tab {
-  padding: 4px 12px;
-  font-size: var(--font-size-xs);
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  transition: all var(--duration-fast);
-  color: var(--color-text-secondary);
-}
-
-.chart-tab.active {
-  background: var(--color-primary);
-  color: #fff;
-}
-
-.chart-body {
-  padding: var(--space-4);
-}
-
-/* 饼图 */
-.pie-chart {
-  position: relative;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto var(--space-3);
-}
-
-.pie-chart svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.pie-segment {
-  animation: pieGrow 0.8s ease-out forwards;
-  opacity: 0;
-}
-
-@keyframes pieGrow {
-  from {
-    opacity: 0;
-    stroke-dasharray: 0 251.2;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.pie-center {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-}
-
-.pie-total {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-}
-
-.pie-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.pie-legend {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-sm);
-}
-
-.legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.legend-name {
-  flex: 1;
-  color: var(--color-text-regular);
-}
-
-.legend-count {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-/* 柱状图 */
-.bar-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-2);
-  height: 120px;
-  margin-bottom: var(--space-3);
-}
-
-.bar-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.bar-wrapper {
-  width: 100%;
-  height: 100px;
-  background: var(--color-info-bg);
-  border-radius: var(--radius-sm);
-  position: relative;
-  overflow: hidden;
-}
-
-.bar-fill {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  animation: barGrow 0.6s ease-out forwards;
-  transform-origin: bottom;
-}
-
-@keyframes barGrow {
-  from {
-    transform: scaleY(0);
-  }
-  to {
-    transform: scaleY(1);
-  }
-}
-
-.bar-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.trend-summary {
-  display: flex;
-  justify-content: space-around;
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.trend-item {
-  text-align: center;
-}
-
-.trend-value {
-  display: block;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-primary);
-}
-
-.trend-label {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
 }
 
 /* 分类区域 */
@@ -780,10 +387,6 @@ defineEmits([
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .charts-section {
-    grid-template-columns: 1fr;
-  }
-
   .knowledge-grid,
   .loading-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -806,10 +409,6 @@ defineEmits([
 
   .stat-number {
     font-size: var(--font-size-xl);
-  }
-
-  .stat-ring {
-    display: none;
   }
 
   .knowledge-grid,
