@@ -370,12 +370,29 @@ async function renameSinglePoint(type, group, itemIdx, newSpeaker) {
   }
 }
 
-// 转录记录：优先用 polished，回退到原始 transcript
+// 转录记录：优先用 polished，回退到原始 transcript，合并连续同发言人
 const transcriptEntries = computed(() => {
   if (!meeting.value) return []
-  return meeting.value.transcript_polished?.length
+  const raw = meeting.value.transcript_polished?.length
     ? meeting.value.transcript_polished
     : (meeting.value.transcript || [])
+  if (!raw.length) return []
+
+  // 合并连续同一发言人的条目
+  const merged = []
+  let current = { ...raw[0] }
+  for (let i = 1; i < raw.length; i++) {
+    const entry = raw[i]
+    if (entry.speaker === current.speaker && !entry.removed) {
+      current.text += ' ' + entry.text
+      if (entry.ts) current.end_ts = entry.ts
+    } else {
+      merged.push(current)
+      current = { ...entry }
+    }
+  }
+  merged.push(current)
+  return merged
 })
 
 const speakerOptions = computed(() => {
