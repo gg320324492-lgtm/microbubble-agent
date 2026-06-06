@@ -332,12 +332,12 @@ async def update_meeting(
 @router.patch("/meetings/{meeting_id}/transcript-speaker")
 async def update_transcript_speaker(
     meeting_id: int,
-    body: dict,
+    body: TranscriptSpeakerRequest,
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    entry_index = body.get("entry_index")
-    speaker = body.get("speaker")
+    entry_index = body.entry_index
+    speaker = body.speaker
     """更新转录中某一项的发言人"""
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
