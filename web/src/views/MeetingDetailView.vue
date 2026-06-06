@@ -860,8 +860,7 @@ onMounted(async () => {
   background: var(--color-bg-page, #f5f7fa);
 }
 .inline-speaker-select {
-  width: 100px;
-  margin-top: 4px;
+  width: 84px;
 }
 .point-text {
   flex: 1;
