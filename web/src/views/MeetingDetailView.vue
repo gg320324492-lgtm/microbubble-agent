@@ -364,7 +364,10 @@ async function renameSinglePoint(type, group, itemIdx, newSpeaker) {
     await axios.put(`/api/v1/meetings/${meeting.value.id}`, {
       [type]: [...arr],
     })
-  } catch { /* 静默 */ }
+    ElMessage.success(`已更新为 ${newSpeaker}`)
+  } catch (e) {
+    ElMessage.error('更新失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 // 转录记录：优先用 polished，回退到原始 transcript
