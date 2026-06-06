@@ -47,26 +47,16 @@ async def polish_segments(
     if not segments:
         return {"polished": [], "key_points": [], "boundary_after_index": None, "summary": None}
 
-    title = meeting_context.get("title", "")
-    participants = meeting_context.get("participants", [])
-    topic = meeting_context.get("topic")
-    context_history = meeting_context.get("context") or []
-
-    topic_line = f"当前话题：{topic}" if topic else ""
     user_prompt = USER_PROMPT_TEMPLATE.format(
-        title=title,
-        participants="、".join(participants) if participants else "未指定",
-        topic_line=topic_line,
         segments_json=json.dumps(segments, ensure_ascii=False),
-        context_json=json.dumps(context_history, ensure_ascii=False) if context_history else "无",
     )
 
     client = get_anthropic_client()
     model = get_default_model()
     response = await client.messages.create(
         model=model,
-        max_tokens=4096,
-        temperature=0.2,
+        max_tokens=8192,
+        temperature=0.3,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
@@ -76,8 +66,23 @@ async def polish_segments(
     try:
         result = parse_llm_json(raw_text)
     except (json.JSONDecodeError, ValueError) as e:
-        logger.error(f"AI 润色 JSON 解析失败: {e}, raw_text={raw_text[:200]}")
-        return _fallback_polished(segments)
+        # 尝试修复截断的 JSON
+        logger.warning(f"AI 润色 JSON 解析失败: {e}, raw_text={raw_text[:200]}")
+        try:
+            # 补全末尾的 ]
+            fixed = raw_text.strip()
+            if not fixed.endswith(']}'):
+                # 找到最后一个完整的 speaker 条目
+                last_complete = fixed.rfind('},')
+                if last_complete > 0:
+                    fixed = fixed[:last_complete + 1] + '\n  ]\n}'
+            if not fixed.startswith('{'):
+                fixed = '{' + fixed
+            result = parse_llm_json(fixed)
+            logger.info("JSON 修复成功")
+        except Exception:
+            logger.error("JSON 修复也失败，使用原文")
+            return _fallback_polished(segments)
 
     return _validate_polish_result(result, segments)
 
