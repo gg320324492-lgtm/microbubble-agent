@@ -6,6 +6,7 @@
 import hashlib
 import json
 import logging
+import re
 
 from app.config import settings
 from app.core.llm import (
@@ -18,6 +19,10 @@ from app.core.redis import get_redis
 from app.services.prompts.meeting_polish import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 logger = logging.getLogger("microbubble.meeting_polish")
+
+
+_PUNCTUATION_RE = re.compile(r"[\s,，.。!！?？;；:：、\"'“”‘’（）()【】\[\]《》<>-]+")
+_FILLER_RE = re.compile(r"^(嗯|呃|啊|额|那个|就是|就是说)+")
 
 
 async def polish_segments(
@@ -61,7 +66,7 @@ async def polish_segments(
     response = await client.messages.create(
         model=model,
         max_tokens=4096,
-        temperature=0.5,
+        temperature=0.2,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
     )
@@ -87,6 +92,18 @@ def _fallback_polished(segments: list[dict]) -> dict:
     }
 
 
+def _normalize_for_punctuation_check(text: str) -> str:
+    """Normalize text to verify punctuation-only edits."""
+    normalized = _PUNCTUATION_RE.sub("", text or "")
+    normalized = _FILLER_RE.sub("", normalized)
+    return normalized
+
+
+def _is_punctuation_only_edit(original: str, polished: str) -> bool:
+    """Return True when polished text only adds punctuation/removes fillers."""
+    return _normalize_for_punctuation_check(original) == _normalize_for_punctuation_check(polished)
+
+
 def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict:
     """校验并规范化 AI 返回结果"""
     polished = result.get("polished") or []
@@ -97,6 +114,29 @@ def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict
     # 兜底：polished 为空时回退原文
     if not polished:
         polished = [{"speaker": s.get("speaker", "未知说话人"), "text": s["text"], "ts": s["ts"]} for s in original_segments]
+    else:
+        checked = []
+        for i, original in enumerate(original_segments):
+            item = polished[i] if i < len(polished) and isinstance(polished[i], dict) else {}
+            candidate = item.get("text", "")
+            if candidate and _is_punctuation_only_edit(original.get("text", ""), candidate):
+                checked.append({
+                    "speaker": item.get("speaker", original.get("speaker", "未知说话人")),
+                    "text": candidate,
+                    "ts": item.get("ts", original.get("ts")),
+                })
+            else:
+                logger.warning(
+                    "AI 润色疑似改写，已回退原文: original=%s polished=%s",
+                    original.get("text", "")[:80],
+                    candidate[:80],
+                )
+                checked.append({
+                    "speaker": original.get("speaker", "未知说话人"),
+                    "text": original.get("text", ""),
+                    "ts": original.get("ts"),
+                })
+        polished = checked
 
     # 过滤非法 key_point kind
     valid_kinds = {"decision", "todo", "risk"}

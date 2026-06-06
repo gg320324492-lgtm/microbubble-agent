@@ -153,7 +153,10 @@ services:
   # Celery Worker (异步任务)
   celery-worker:
     build: .
-    command: celery -A app.core.celery worker --loglevel=info
+    # 使用 solo pool 避免 prefork 子进程保留旧代码快照。
+    # 本项目的重任务主要受 GPU/模型限制，单 worker 更符合本地开发和线上稳定性；
+    # 代码改动后 docker compose restart celery-worker 即可重新加载。
+    command: celery -A app.core.celery worker --loglevel=info --pool=solo
     volumes:
       - ./app:/app/app
       - ./data:/app/data

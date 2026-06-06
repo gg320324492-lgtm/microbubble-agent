@@ -1,7 +1,7 @@
 import json
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from app.services.meeting_ai_polish import polish_segments
+from app.services.meeting_ai_polish import _validate_polish_result, polish_segments
 from tests._fake_redis import FakeRedis
 
 
@@ -9,14 +9,14 @@ from tests._fake_redis import FakeRedis
 async def test_polish_segments_basic():
     """基础调用：传入 ASR 段，调用 Claude，返回结构化结果"""
     segments = [
-        {"speaker": "张三", "text": "呃，那个，我觉得这个方案可以。", "ts": 1.0},
-        {"speaker": "李四", "text": "嗯，就是说，我们下周开始做。", "ts": 5.0},
+        {"speaker": "张三", "text": "我觉得这个方案可以", "ts": 1.0},
+        {"speaker": "李四", "text": "我们下周开始做", "ts": 5.0},
     ]
     context = {"title": "项目讨论", "participants": ["张三", "李四"], "topic": None}
 
     mock_response_text = """{
         "polished": [
-            {"speaker": "张三", "text": "我认为这个方案可以。", "ts": 1.0},
+            {"speaker": "张三", "text": "我觉得这个方案可以。", "ts": 1.0},
             {"speaker": "李四", "text": "我们下周开始做。", "ts": 5.0}
         ],
         "key_points": [
@@ -36,9 +36,46 @@ async def test_polish_segments_basic():
         result = await polish_segments(segments, context)
 
     assert len(result["polished"]) == 2
-    assert result["polished"][0]["text"] == "我认为这个方案可以。"
+    assert result["polished"][0]["text"] == "我觉得这个方案可以。"
     assert result["key_points"][0]["kind"] == "decision"
     assert result["summary"] == "讨论方案并决定下周开始"
+
+
+def test_validate_polish_result_rejects_rewritten_text():
+    """润色只能加标点；如果 LLM 改写原文，应回退到原始文本。"""
+    original = [
+        {"speaker": "张三", "text": "今天是6月5号然后我们看任务管理", "ts": 1.0},
+    ]
+    llm_result = {
+        "polished": [
+            {"speaker": "张三", "text": "今天介绍任务管理模块。", "ts": 1.0},
+        ],
+        "key_points": [],
+        "boundary_after_index": None,
+        "summary": None,
+    }
+
+    result = _validate_polish_result(llm_result, original)
+
+    assert result["polished"][0]["text"] == original[0]["text"]
+
+
+def test_validate_polish_result_accepts_punctuation_only_text():
+    original = [
+        {"speaker": "张三", "text": "今天是6月5号然后我们看任务管理", "ts": 1.0},
+    ]
+    llm_result = {
+        "polished": [
+            {"speaker": "张三", "text": "今天是6月5号，然后我们看任务管理。", "ts": 1.0},
+        ],
+        "key_points": [],
+        "boundary_after_index": None,
+        "summary": None,
+    }
+
+    result = _validate_polish_result(llm_result, original)
+
+    assert result["polished"][0]["text"] == "今天是6月5号，然后我们看任务管理。"
 
 
 @pytest.mark.asyncio
