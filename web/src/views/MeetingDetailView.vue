@@ -244,16 +244,8 @@
                       <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
                     </div>
                     <div v-if="!entry.removed" class="transcript-text">
-                      {{ entry.text }}
-                      <el-button
-                        v-if="entry.text && entry.text.length > 20 && !entry.removed"
-                        size="small"
-                        text
-                        type="primary"
-                        class="polish-text-btn"
-                        :loading="polishingIndex === i"
-                        @click.stop="polishMergedText(i)"
-                      >润色</el-button>
+                      {{ getPolishedText(entry, i) }}
+                      <el-tag v-if="polishingIndex === i" size="small" type="warning" class="polish-tag">润色中</el-tag>
                     </div>
                     <div v-else class="transcript-text removed">
                       <el-icon><Delete /></el-icon>
@@ -416,7 +408,6 @@ const transcriptEntries = computed(() => {
     : (meeting.value.transcript || [])
   if (!raw.length) return []
 
-  // 合并连续同一发言人的条目（保留原始索引用于 PATCH）
   const merged = []
   let current = { ...raw[0], _origIndex: 0 }
   for (let i = 1; i < raw.length; i++) {
@@ -430,8 +421,39 @@ const transcriptEntries = computed(() => {
     }
   }
   merged.push(current)
+
+  // 标记合并条目，触发自动润色
+  merged.forEach((entry, i) => {
+    if (entry._origIndex !== undefined && raw[entry._origIndex]?.text !== entry.text) {
+      entry._needsPolish = (entry.text || '').length > 20  // 合并过且够长
+    }
+  })
   return merged
 })
+
+// 存储润色后的文本
+const polishedTexts = ref({})
+
+async function autoPolishIfNeeded() {
+  if (!meeting.value) return
+  for (let i = 0; i < transcriptEntries.value.length; i++) {
+    const entry = transcriptEntries.value[i]
+    if (!entry._needsPolish || polishedTexts.value[i]) continue
+    try {
+      const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
+        text: entry.text,
+      })
+      const polished = res.data.polished
+      if (polished && polished !== entry.text) {
+        polishedTexts.value[i] = polished
+      }
+    } catch { /* 静默 */ }
+  }
+}
+
+function getPolishedText(entry, index) {
+  return polishedTexts.value[index] || entry.text
+}
 
 const speakerOptions = computed(() => {
   const options = new Set()
@@ -510,6 +532,8 @@ const fetchMeeting = async () => {
   try {
     const res = await axios.get(`/api/v1/meetings/${route.params.id}`)
     meeting.value = res.data
+    // 延迟触发自动润色（等 DOM 渲染完）
+    setTimeout(() => autoPolishIfNeeded(), 500)
     // 如果没有发言统计但有转录，自动获取统计数据
     if (!meeting.value.speaker_stats && meeting.value.transcript?.length) {
       try {
