@@ -489,18 +489,22 @@ class MeetingAnalysisService:
         if len(short_text) < 10:
             return "未命名会议"
 
+        # mimo-v2.5 的 thinking 块会吃掉所有 tokens，用 Claude 直接生成
+        from app.config import settings
+        title_model = getattr(settings, 'TITLE_MODEL', None) or 'claude-sonnet-4-20250514'
+
         for attempt in range(3):
             try:
                 response = await self.client.messages.create(
-                    model=self.model,
-                    max_tokens=256,
-                    temperature=0.4,
-                    system="只输出一个会议标题，15字以内，不要解释，不要编号，不要列表，不要markdown。",
-                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（15字以内）："}],
+                    model=title_model if attempt > 0 else self.model,
+                    max_tokens=64,
+                    temperature=0.3,
+                    system="输出一个15字以内的中文会议标题，不要解释。",
+                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题："}],
                 )
-                # 直接从 blocks 提取第一个 text block
-                raw = None
-                if hasattr(response, 'content') and response.content:
+                # 提取文本：优先用 extract_text_from_response（Claude），回退到 block 遍历
+                raw = extract_text_from_response(response) or ""
+                if not raw and hasattr(response, 'content') and response.content:
                     for block in response.content:
                         if getattr(block, 'type', None) == 'thinking':
                             continue
