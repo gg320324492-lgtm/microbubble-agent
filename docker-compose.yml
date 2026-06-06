@@ -27,6 +27,7 @@ services:
       - ./logs:/app/logs
       - ./models/hf_cache:/root/.cache/huggingface
       - ./models/torch_hub:/root/.cache/torch/hub
+      - ./models/modelscope:/root/.cache/modelscope
     env_file:
       - .env
     environment:
@@ -163,6 +164,7 @@ services:
       - ./logs:/app/logs
       - ./models/hf_cache:/root/.cache/huggingface
       - ./models/torch_hub:/root/.cache/torch/hub
+      - ./models/modelscope:/root/.cache/modelscope
     env_file:
       - .env
     environment:
