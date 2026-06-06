@@ -493,7 +493,7 @@ class MeetingAnalysisService:
             try:
                 response = await self.client.messages.create(
                     model=self.model,
-                    max_tokens=32,
+                    max_tokens=256,
                     temperature=0.4,
                     system="只输出一个会议标题，15字以内，不要解释，不要编号，不要列表，不要markdown。",
                     messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（15字以内）："}],
@@ -502,6 +502,8 @@ class MeetingAnalysisService:
                 raw = None
                 if hasattr(response, 'content') and response.content:
                     for block in response.content:
+                        if getattr(block, 'type', None) == 'thinking':
+                            continue  # 跳过 thinking 块，只要 text
                         t = getattr(block, 'text', None)
                         if t and str(t).strip():
                             raw = str(t).strip()
