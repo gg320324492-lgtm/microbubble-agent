@@ -623,8 +623,15 @@ def post_meeting_process(self, meeting_id: int):
                 )
 
                 # 生成标题
-                if not meeting.title or meeting.title.startswith("听会") or meeting.title == "未命名会议":
-                    meeting.title = await meeting_analysis.generate_title(transcript_text)
+                need_title = not meeting.title or meeting.title.startswith("听会") or meeting.title == "未命名会议"
+                if need_title:
+                    logger.info(f"开始生成标题，当前标题: '{meeting.title}'")
+                    new_title = await meeting_analysis.generate_title(transcript_text)
+                    logger.info(f"标题生成结果: '{new_title}'")
+                    if new_title and new_title != "未命名会议":
+                        meeting.title = new_title
+                    else:
+                        logger.warning(f"标题生成返回无效: '{new_title}'，保留原标题")
 
                 # 分析摘要/要点/决议
                 analysis = await meeting_analysis.analyze_transcript(
