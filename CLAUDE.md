@@ -118,6 +118,27 @@
 
 ## 开发注意事项
 
+### 2026-06-06 新增
+
+- **语义断句** — VAD + 声纹之外，ASR 后增加基于规则的语义断句（问答切分、转折词、回应词），检测同一段内的对话切换。不使用 AI API，纯本地规则，零延迟。
+- **KMeans 强制分裂** — 贪心聚类数=1 但声纹分布标准差>0.15 时，用 sklearn KMeans 硬分 2 簇，解决声纹模型区分度不够的问题。
+- **同名聚类检测** — 多个聚类被 identify_speaker_by_embedding 识别为同一人时，自动保留差异为独立发言人。
+- **名字校对** — 谐音映射（杜同和→杜同贺）+ 编辑距离≤1 模糊匹配 + 精确匹配三位一体，与成员管理数据库比对。
+- **标题自动生成** — "听会"和"未命名会议"标题自动触发 AI 生成，重试 3 次 + temperature 0.7。
+- **转录合并自动润色** — 同一发言人连续段合并后，自动调 AI 加标点。超长文本（>20字）显示润色后文本。
+- **转录发言人手动修改** — `PATCH /meetings/{id}/transcript-speaker` 端点，前端 el-select 下拉选人，合并条用原始索引。
+- **会议纪要独立改发言人** — 每条要点/决议点击展开 el-select，改一条不影响其他。
+- **AI 润色简化 + JSON 修复** — prompt 缩减到 5 句规则，max_tokens 4096→8192，JSON 截断自动补全。
+- **规则标点兜底** — AI 润色失败时，本地规则加标点（问句加？，长句连接词加逗号，句末加。）。
+- **VAD 精细化** — 合并阈值 0.3→0.15→0.1s，min_speech 500→300→200ms，min_silence 300→200→100ms。
+- **MATCH_THRESHOLD** — 0.55→0.7（余弦距离阈值，更宽松匹配）。
+- **Celery solo pool** — 改为 `--pool=solo` 避免 prefork 子进程保留旧代码。
+- **modelscope 缓存挂载** — `./models/modelscope:/root/.cache/modelscope`，避免每次重建容器重下载 3D-Speaker。
+- **认证限流** — 5→20次/分钟。
+- **UI** — 全项目 date-picker 替换、日期北京时区、参与者头像间距、发言人选择器缩小、纪要合并显示。
+
+## 开发注意事项（历史）
+
 - **重构子组件不能丢样式**（2026-06-05 教训）— 把 Element Plus 组件（el-table、el-card）换成裸 div 时必须手写等效 CSS，否则 UI 变成无样式纯文本。抽完后对比原始 UI 确保视觉一致
 - 数据库模型使用 PostgreSQL 特有类型（ARRAY, Vector），不可直接切换到 SQLite
 - 前端 ProjectView 调用了 DELETE /projects/{id}（已实现），MeetingView 的 PUT/DELETE 端点已实现
