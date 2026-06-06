@@ -123,6 +123,79 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
 
+                # ===== 阶段 1.3: 语义断句（AI 检测同一段内的对话切换） =====
+                from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response, parse_llm_json
+
+                semantic_split_segments = []
+                for seg in transcript_segments:
+                    text = seg["text"]
+                    # 只对较长文本（>15字）做语义分析，短文本不需要
+                    if len(text) <= 15:
+                        semantic_split_segments.append(seg)
+                        continue
+
+                    try:
+                        client = get_anthropic_client()
+                        model = get_default_model()
+                        response = await client.messages.create(
+                            model=model,
+                            max_tokens=512,
+                            temperature=0.1,
+                            system="你是对话分析专家。只输出 JSON，不要其他内容。",
+                            messages=[{
+                                "role": "user",
+                                "content": f"""分析以下对话文本，判断是否包含多个说话人。
+如果明显是两个人交替说话（如问答、反驳、不同语气），输出每句话的说话人标签。
+
+规则：
+- 问句和答句一般是不同人
+- 反驳/纠正前一个人一般是不同人
+- 明显的语气转换可能是不同人
+- 不强行拆分，不确定就保持原样
+
+文本：{text}
+
+输出 JSON：
+{{"has_multiple": true/false, "split_points": [{{"text": "前半句", "speaker_label": "A"}}, {{"text": "后半句", "speaker_label": "B"}}]}}
+
+如果只有一个人说话，split_points 为空数组。"""
+                            }],
+                        )
+                        result_text = extract_text_from_response(response)
+                        result = parse_llm_json(result_text)
+
+                        if result.get("has_multiple") and result.get("split_points"):
+                            # 按 split_points 拆分时间段
+                            total_duration = seg["end"] - seg["start"]
+                            total_chars = sum(len(sp["text"]) for sp in result["split_points"])
+                            if total_chars == 0:
+                                semantic_split_segments.append(seg)
+                                continue
+
+                            current_offset = seg["start"]
+                            for sp in result["split_points"]:
+                                char_ratio = len(sp["text"]) / total_chars
+                                duration = total_duration * char_ratio
+                                new_seg = {
+                                    "text": sp["text"].strip(),
+                                    "start": round(current_offset, 2),
+                                    "end": round(current_offset + duration, 2),
+                                    "speaker_label": f"speaker_{len(semantic_split_segments)}",
+                                }
+                                if new_seg["text"]:
+                                    semantic_split_segments.append(new_seg)
+                                current_offset += duration
+                            logger.debug(f"语义断句: {len(seg['text'])}字拆成{len(result['split_points'])}段")
+                        else:
+                            semantic_split_segments.append(seg)
+                    except Exception as e:
+                        logger.warning(f"语义断句失败（保留原文）: {e}")
+                        semantic_split_segments.append(seg)
+
+                if len(semantic_split_segments) > len(transcript_segments):
+                    logger.info(f"语义断句: {len(transcript_segments)}→{len(semantic_split_segments)} 段")
+                    transcript_segments = semantic_split_segments
+
                 # ===== 阶段 1.5: ASR 文本纠错 =====
                 TEXT_CORRECTIONS = {
                     "小七助手": "小气助手",
