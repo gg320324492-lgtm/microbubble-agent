@@ -15,7 +15,7 @@ from app.schemas.meeting import (
     MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes,
     SpeakerDetectRequest, SpeakerDetectResponse,
     TranscriptAnalyzeRequest, TranscriptAnalyzeResponse,
-    SpeakerMapRequest, MeetingAnalyticsResponse,
+    SpeakerMapRequest, MeetingAnalyticsResponse, TranscriptSpeakerUpdateRequest,
 )
 from app.services.meeting_service import MeetingService
 from app.services.meeting_analysis_service import meeting_analysis
@@ -372,6 +372,33 @@ async def apply_speaker_mapping(
         return {"message": "发言者映射已应用并重新分析", **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重新分析失败: {str(e)}")
+
+
+@router.patch("/meetings/{meeting_id}/transcript-speaker")
+async def update_transcript_speaker(
+    meeting_id: int,
+    request: TranscriptSpeakerUpdateRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """手动修正某条转录记录的发言人，不重新生成纪要。"""
+    meeting_service = MeetingService(db)
+    try:
+        result = await meeting_service.update_transcript_speaker(
+            meeting_id=meeting_id,
+            entry_index=request.entry_index,
+            speaker=request.speaker,
+        )
+    except IndexError:
+        raise ValidationException("转录条目不存在")
+    except ValueError as e:
+        raise ValidationException(str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"更新发言人失败: {str(e)}")
+
+    if result.get("error"):
+        raise NotFoundException("会议")
+    return {"message": "转录发言人已更新", **result}
 
 
 @router.get("/meetings/{meeting_id}/analytics", response_model=MeetingAnalyticsResponse)

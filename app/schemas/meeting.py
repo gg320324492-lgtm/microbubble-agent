@@ -150,3 +150,8 @@ class SpeakerMapRequest(BaseModel):
     speaker_mapping: Dict[str, str]
 
 
+class TranscriptSpeakerUpdateRequest(BaseModel):
+    """手动修正单条转录发言人"""
+    entry_index: int
+    speaker: str
+
