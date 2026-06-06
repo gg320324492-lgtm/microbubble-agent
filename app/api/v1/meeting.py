@@ -392,11 +392,15 @@ async def polish_text(
     response = await client.messages.create(
         model=model,
         max_tokens=2048,
-        temperature=0.3,
-        system="给以下中文文本加标点符号（逗号、句号、问号），不要改内容。只输出结果文本。",
-        messages=[{"role": "user", "content": f"加标点（不要改内容）：\n{text}"}],
+        temperature=0.2,
+        system="你是一个标点添加工具。输出必须与输入完全一致，只添加逗号、句号、问号。不增加、不删除、不重复任何字符。",
+        messages=[{"role": "user", "content": f"只加标点，不改内容，不重复：\n{text}"}],
     )
-    polished = extract_text_from_response(response)
+    polished = extract_text_from_response(response).strip()
+    # 去重：如果输出是输入的重复拼接，只用一半
+    if len(polished) >= len(text) * 1.5 and text in polished:
+        # 取 polished 中去掉 text 后的剩余部分
+        polished = polished.replace(text, '', 1).strip() or text
     return {"polished": polished}
 
 
