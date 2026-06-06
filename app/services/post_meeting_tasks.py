@@ -527,6 +527,29 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
 
+                # ===== 阶段 1.8: 规则标点补充（兜底 AI 润色失败的情况） =====
+                def _add_punctuation(text: str) -> str:
+                    """给中文文本添加基本标点符号"""
+                    import re
+                    # 已有标点的不处理
+                    if re.search(r'[，。？！、；：]', text):
+                        return text
+                    # 按空格/中文分词边界处加逗号
+                    # 问句特征词后加问号
+                    text = re.sub(r'([吗呢吧啊])\s*$', r'\1？', text)
+                    text = re.sub(r'([吗呢吧啊])\s+', r'\1？', text)
+                    # 句末加句号
+                    if not re.search(r'[。？！]$', text):
+                        text += '。'
+                    # 中间长连串加逗号（每隔约 10-15 字加一个）
+                    if len(text) > 15 and '，' not in text and '？' not in text:
+                        # 在常见连接词后加逗号
+                        text = re.sub(r'(然后|所以|但是|不过|而且|因为|或者)', r'，\1', text)
+                    return text
+
+                for seg in transcript_segments:
+                    seg["text"] = _add_punctuation(seg["text"])
+
                 # ===== 阶段 2.5: AI 润色转录 =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="AI 润色转录文本", redis_override=redis_client)
                 from app.services.meeting_ai_polish import polish_segments_with_lock
