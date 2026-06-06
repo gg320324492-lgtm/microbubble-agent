@@ -120,9 +120,9 @@ class AudioProcessor:
         speeches = get_speech_timestamps(
             audio_tensor,
             model,
-            threshold=0.5,
-            min_speech_duration_ms=300,
-            min_silence_duration_ms=200,
+            threshold=0.4,
+            min_speech_duration_ms=200,
+            min_silence_duration_ms=100,
             return_seconds=False,
             sampling_rate=sample_rate,
         )
@@ -140,7 +140,7 @@ class AudioProcessor:
         merged = [speeches[0]]
         for seg in speeches[1:]:
             gap_samples = seg["start"] - merged[-1]["end"]
-            if gap_samples < sample_rate * 0.15:  # 间隔 < 0.15s，合并
+            if gap_samples < sample_rate * 0.1:  # 间隔 < 0.1s，合并
                 merged[-1]["end"] = seg["end"]
             else:
                 merged.append(seg)
