@@ -243,7 +243,18 @@
                       <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
                       <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
                     </div>
-                    <div v-if="!entry.removed" class="transcript-text">{{ entry.text }}</div>
+                    <div v-if="!entry.removed" class="transcript-text">
+                      {{ entry.text }}
+                      <el-button
+                        v-if="entry.text && entry.text.length > 20 && !entry.removed"
+                        size="small"
+                        text
+                        type="primary"
+                        class="polish-text-btn"
+                        :loading="polishingIndex === i"
+                        @click.stop="polishMergedText(i)"
+                      >润色</el-button>
+                    </div>
                     <div v-else class="transcript-text removed">
                       <el-icon><Delete /></el-icon>
                       <span>{{ entry.text || '(空)' }}</span>
@@ -334,6 +345,33 @@ const editingMinutes = ref(false)
 const showCallRoom = ref(false)
 const saving = ref(false)
 const savingTranscriptSpeaker = ref(null)
+const polishingIndex = ref(null)
+
+async function polishMergedText(index) {
+  if (!meeting.value) return
+  polishingIndex.value = index
+  try {
+    const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
+      text: transcriptEntries.value[index].text,
+    })
+    const polished = res.data.polished
+    if (polished && polished !== transcriptEntries.value[index].text) {
+      // 更新合并前的原始条目中的第一条
+      const origIdx = transcriptEntries.value[index]._origIndex ?? index
+      if (meeting.value.transcript && meeting.value.transcript[origIdx]) {
+        meeting.value.transcript[origIdx].text = polished
+      }
+      if (meeting.value.transcript_polished && meeting.value.transcript_polished[origIdx]) {
+        meeting.value.transcript_polished[origIdx].text = polished
+      }
+      ElMessage.success('已润色')
+    }
+  } catch {
+    ElMessage.error('润色失败')
+  } finally {
+    polishingIndex.value = null
+  }
+}
 const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
@@ -887,6 +925,11 @@ onMounted(async () => {
 }
 .transcript-speaker-select {
   width: 90px;
+}
+.polish-text-btn {
+  margin-left: 6px;
+  font-size: 12px;
+  vertical-align: middle;
 }
 .point-text {
   flex: 1;
