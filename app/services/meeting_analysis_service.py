@@ -489,29 +489,32 @@ class MeetingAnalysisService:
         if len(short_text) < 10:
             return "未命名会议"
 
-        # mimo-v2.5 的 thinking 块会吃掉所有 tokens，用 Claude 直接生成
-        from app.config import settings
-        title_model = getattr(settings, 'TITLE_MODEL', None) or 'claude-sonnet-4-20250514'
-
         for attempt in range(3):
             try:
                 response = await self.client.messages.create(
-                    model=title_model if attempt > 0 else self.model,
-                    max_tokens=64,
+                    model=self.model,
+                    max_tokens=512,
                     temperature=0.3,
-                    system="输出一个15字以内的中文会议标题，不要解释。",
-                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题："}],
+                    system="只输出标题文本，不要markdown，不要解释。15字以内。",
+                    messages=[{"role": "user", "content": f"{short_text}\n\n15字标题："}],
                 )
-                # 提取文本：优先用 extract_text_from_response（Claude），回退到 block 遍历
+                # 从 response 提取文本
+                raw = ""
+                # 方法1: extract_text_from_response
                 raw = extract_text_from_response(response) or ""
+                # 方法2: block 遍历
                 if not raw and hasattr(response, 'content') and response.content:
                     for block in response.content:
-                        if getattr(block, 'type', None) == 'thinking':
-                            continue
-                        t = getattr(block, 'text', None)
+                        t = getattr(block, 'text', '')
                         if t and str(t).strip():
                             raw = str(t).strip()
-                            break
+                # 方法3: 正则暴力提取
+                if not raw:
+                    raw_str = str(response)
+                    import re
+                    m = re.search(r'text=.(.{2,30}).', raw_str)
+                    if m:
+                        raw = m.group(1).strip()
                 if not raw:
                     logger.warning(f"标题生成第{attempt+1}次: 无法提取文本")
                     continue
