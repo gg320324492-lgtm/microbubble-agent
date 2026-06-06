@@ -64,64 +64,17 @@ class VoiceprintService:
     def extract_embedding(self, audio: np.ndarray) -> np.ndarray:
         """从音频片段提取说话人嵌入向量。
 
-        Args:
-            audio: float32 numpy 数组，16kHz 单声道，值范围 [-1, 1]
-
-        Returns:
-            192 维 float32 numpy embedding 向量（3D-Speaker ERes2Net 输出维度）
+        直接调用底层 ERes2Net model，绕过 pipeline（pipeline 只接受文件路径/numpy
+        数组但 preprocessor 缺失，必然失败浪费日志）。
         """
         self._load_pipeline()
         if self._pipeline is None:
-            # 模型加载失败，返回零向量（identify_speaker 会返回 unknown）
             return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
-        # 确保足够的语音长度（至少 1 秒）
         if len(audio) < 16000:
             padding = np.zeros(16000 - len(audio), dtype=np.float32)
             audio = np.concatenate([audio, padding])
 
-        wav_bytes = self._ensure_wav_format(audio)
-
-        # 直接走 pipeline 入口。
-        # 3D-Speaker speaker_verification pipeline 只接受：
-        #   - 音频文件路径（字符串）
-        #   - numpy ndarray（float32, shape=(N,) 或 (N,1)，16kHz）
-        # 不接受 bytes / BytesIO，也不接受预处理器处理过的 tensor。
-        # 把 wav_bytes 写临时文件，再传路径。
-        import tempfile
-        import os
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                tmp.write(wav_bytes)
-                tmp_path = tmp.name
-            result = self._pipeline(tmp_path)
-        except Exception as e_pipeline:
-            # 路径方式失败 → 尝试直接传 numpy 数组
-            logger.warning(f"pipeline(路径) 失败: {e_pipeline}，尝试传 numpy 数组")
-            try:
-                # 转为 mono 1D float32 ndarray
-                if audio.ndim > 1:
-                    audio_mono = audio.mean(axis=1) if audio.shape[1] <= 2 else audio.flatten()
-                else:
-                    audio_mono = audio
-                result = self._pipeline(audio_mono)
-            except Exception as e_np:
-                logger.error(f"pipeline(numpy) 也失败: {e_np}")
-                # 最后一搏：直接调底层 model（绕过 preprocessor）
-                return self._extract_via_model(audio)
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
-
-        # 解析 result 拿 embedding
-        emb = self._parse_pipeline_result(result)
-        if emb is not None:
-            return emb
-        # pipeline 没拿到 embedding → 直接调底层 model
         return self._extract_via_model(audio)
 
     def _parse_pipeline_result(self, result) -> Optional[np.ndarray]:
