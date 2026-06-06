@@ -493,29 +493,30 @@ class MeetingAnalysisService:
             try:
                 response = await self.client.messages.create(
                     model=self.model,
-                    max_tokens=128,
-                    temperature=0.7,
-                    system="输出会议标题，15字以内，不要任何解释。",
-                    messages=[{"role": "user", "content": f"给以下会议内容起个标题（15字以内）：\n{short_text}"}],
+                    max_tokens=32,
+                    temperature=0.4,
+                    system="只输出一个会议标题，15字以内，不要解释，不要编号，不要列表，不要markdown。",
+                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（15字以内）："}],
                 )
                 # 直接从 blocks 提取第一个 text block
                 raw = None
                 if hasattr(response, 'content') and response.content:
                     for block in response.content:
-                        if getattr(block, 'type', None) == 'text':
-                            t = getattr(block, 'text', None)
-                            if t and str(t).strip():
-                                raw = str(t).strip()
-                                break
+                        t = getattr(block, 'text', None)
+                        if t and str(t).strip():
+                            raw = str(t).strip()
+                            break
                 if not raw:
                     logger.warning(f"标题生成第{attempt+1}次: 无法提取文本")
                     continue
 
-                # 清洗：去掉 markdown bold 和常见前缀
+                # 清洗：去掉 markdown 和常见前缀，只取第一行
                 import re
-                title = re.sub(r'\*\*[^*]+\*\*\s*', '', raw)  # 去掉 **xxx**
-                title = title.strip().strip('"').strip("'").strip("《》").strip()
+                title = raw.strip()
+                title = re.sub(r'\*\*[^*]+\*\*\s*', '', title)  # 去掉 **xxx**
+                title = re.sub(r'^#+\s*', '', title)  # 去掉 # 标题前缀
                 title = title.split('\n')[0].strip()
+                title = title.strip('"').strip("'").strip("《》").strip()
                 if 2 <= len(title) <= 30:
                     logger.info(f"标题生成成功（第{attempt+1}次）: {title}")
                     return title
