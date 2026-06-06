@@ -316,6 +316,45 @@ class MeetingService:
             "speaker_mapping": meeting.speaker_mapping,
         }
 
+    async def update_transcript_speaker(
+        self,
+        meeting_id: int,
+        entry_index: int,
+        speaker: str,
+    ) -> Dict[str, Any]:
+        """手动修正某条转录记录的发言人。"""
+        meeting = await self.get_meeting(meeting_id)
+        if not meeting:
+            return {"error": "会议不存在"}
+
+        from app.services.transcript_editor import update_transcript_speaker
+
+        updated = update_transcript_speaker(
+            transcript=meeting.transcript,
+            transcript_polished=meeting.transcript_polished,
+            speaker_mapping=meeting.speaker_mapping,
+            entry_index=entry_index,
+            speaker=speaker,
+        )
+
+        meeting.transcript = updated.transcript
+        meeting.transcript_polished = updated.transcript_polished
+        meeting.speaker_mapping = updated.speaker_mapping
+
+        stats_source = updated.transcript_polished or updated.transcript
+        meeting.speaker_stats = meeting_analysis.compute_speaker_stats(stats_source)
+
+        await self.db.commit()
+        await self.db.refresh(meeting)
+
+        return {
+            "meeting_id": meeting.id,
+            "transcript": meeting.transcript or [],
+            "transcript_polished": meeting.transcript_polished or [],
+            "speaker_mapping": meeting.speaker_mapping or {},
+            "speaker_stats": meeting.speaker_stats or [],
+        }
+
     async def _link_speakers_to_participants(
         self, meeting_id: int, speaker_mapping: Dict[str, str]
     ) -> None:

@@ -223,7 +223,22 @@
                   </div>
                   <div class="transcript-body">
                     <div class="transcript-header">
-                      <span class="transcript-speaker">{{ entry.speaker || '未知' }}</span>
+                      <el-select
+                        :model-value="entry.speaker || '未知'"
+                        size="small"
+                        class="transcript-speaker-select"
+                        filterable
+                        :loading="savingTranscriptSpeaker === i"
+                        :disabled="savingTranscriptSpeaker === i"
+                        @change="(val) => saveTranscriptSpeaker(i, val)"
+                      >
+                        <el-option
+                          v-for="option in speakerOptions"
+                          :key="option"
+                          :label="option"
+                          :value="option"
+                        />
+                      </el-select>
                       <el-tag v-if="entry.removed" size="small" type="info" effect="plain">已过滤</el-tag>
                       <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
                       <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
@@ -318,6 +333,7 @@ const editing = ref(false)
 const editingMinutes = ref(false)
 const showCallRoom = ref(false)
 const saving = ref(false)
+const savingTranscriptSpeaker = ref(null)
 const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
@@ -357,6 +373,18 @@ const transcriptEntries = computed(() => {
   return meeting.value.transcript_polished?.length
     ? meeting.value.transcript_polished
     : (meeting.value.transcript || [])
+})
+
+const speakerOptions = computed(() => {
+  const options = new Set()
+  memberStore.members.forEach(m => {
+    if (m.name) options.add(m.name)
+  })
+  ;(transcriptEntries.value || []).forEach(entry => {
+    if (entry?.speaker) options.add(entry.speaker)
+  })
+  ;['发言人A', '发言人B', '发言人C', '发言人D', '未知'].forEach(name => options.add(name))
+  return Array.from(options)
 })
 
 // 解析条目中的发言人（如 "【杜同贺】介绍了..." → "杜同贺"）
@@ -502,6 +530,26 @@ const saveMinutes = async () => {
     await fetchMeeting()
   } catch {
     ElMessage.error('保存失败')
+  }
+}
+
+async function saveTranscriptSpeaker(index, speaker) {
+  if (!meeting.value || !speaker) return
+  savingTranscriptSpeaker.value = index
+  try {
+    const res = await axios.patch(`/api/v1/meetings/${meeting.value.id}/transcript-speaker`, {
+      entry_index: index,
+      speaker,
+    })
+    meeting.value.transcript = res.data.transcript
+    meeting.value.transcript_polished = res.data.transcript_polished
+    meeting.value.speaker_mapping = res.data.speaker_mapping
+    meeting.value.speaker_stats = res.data.speaker_stats
+    ElMessage.success('发言人已更新')
+  } catch {
+    ElMessage.error('更新发言人失败')
+  } finally {
+    savingTranscriptSpeaker.value = null
   }
 }
 
