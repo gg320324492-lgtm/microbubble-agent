@@ -140,7 +140,7 @@ def post_meeting_process(self, meeting_id: int):
                         response = await client.messages.create(
                             model=model,
                             max_tokens=512,
-                            temperature=0.1,
+                            temperature=0.7,
                             system="你是对话分析专家。只输出 JSON，不要其他内容。",
                             messages=[{
                                 "role": "user",
@@ -162,6 +162,8 @@ def post_meeting_process(self, meeting_id: int):
                             }],
                         )
                         result_text = extract_text_from_response(response)
+                        if not result_text or len(result_text.strip()) < 5:
+                            raise ValueError(f"空响应: '{result_text}'")
                         result = parse_llm_json(result_text)
 
                         if result.get("has_multiple") and result.get("split_points"):
