@@ -498,17 +498,16 @@ class MeetingAnalysisService:
                     system="输出会议标题，15字以内，不要任何解释。",
                     messages=[{"role": "user", "content": f"给以下会议内容起个标题（15字以内）：\n{short_text}"}],
                 )
-                # 直接从 response 内容提取
-                raw = None
-                if hasattr(response, 'content') and response.content:
-                    for block in response.content:
-                        t = getattr(block, 'text', None)
-                        if t and str(t).strip():
-                            raw = str(t).strip()
-                            break
+                # 尝试提取文本
+                raw = extract_text_from_response(response)
                 if not raw:
-                    # fallback: 尝试 extract_text_from_response
-                    raw = extract_text_from_response(response)
+                    # fallback: 直接从 blocks 拿
+                    if hasattr(response, 'content') and response.content:
+                        for block in response.content:
+                            t = getattr(block, 'text', None)
+                            if t and str(t).strip():
+                                raw = str(t).strip()
+                                break
                 if not raw:
                     logger.warning(f"标题生成第{attempt+1}次: 无法提取文本")
                     continue
