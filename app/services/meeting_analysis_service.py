@@ -502,13 +502,9 @@ class MeetingAnalysisService:
                 raw = None
                 if hasattr(response, 'content') and response.content:
                     for block in response.content:
-                        bt = getattr(block, 'type', '?')
-                        t = getattr(block, 'text', None)
-                        # 调试输出
-                        import sys
-                        print(f"[DEBUG title block] type={bt}, has_text={t is not None}, text_len={len(str(t)) if t else 0}", file=sys.stderr)
-                        if bt == 'thinking':
+                        if getattr(block, 'type', None) == 'thinking':
                             continue
+                        t = getattr(block, 'text', None)
                         if t and str(t).strip():
                             raw = str(t).strip()
                             break
