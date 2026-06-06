@@ -324,15 +324,21 @@ curl http://localhost:8000/health
 
 ## 六、GPU 优化配置
 
-### 6.1 Docker GPU 支持
+### 6.1 5090 32GB 内存分配规划
+
+| 模型 | VRAM 占用 | 说明 |
+|------|----------|------|
+| faster-whisper large-v3 | ~6GB | 语音识别，必装 |
+| 3D-Speaker ERes2Net | ~2GB | 声纹识别，CPU 亦可 |
+| 本地 LLM（可选） | ~20GB | Qwen2.5-7B 或 Qwen2.5-14B |
+| 预留 | ~4GB | CUDA context + 余量 |
+
+### 6.2 Docker GPU 配置
 
 ```yaml
-# docker-compose.yml 中为 whisper 服务添加 GPU 支持
+# docker-compose.yml 中为需要 GPU 的服务添加
 services:
   whisper:
-    build:
-      context: .
-      dockerfile: Dockerfile.whisper
     deploy:
       resources:
         reservations:
@@ -341,33 +347,88 @@ services:
               count: 1
               capabilities: [gpu]
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_VISIBLE_DEVICES=0
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=float16
+
+  # 可选：如果部署本地 LLM
+  llm:
+    image: vllm/vllm-openai:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
+    command: >
+      --model Qwen/Qwen2.5-7B-Instruct
+      --gpu-memory-utilization 0.7
+      --max-model-len 16384
+      --port 8001
 ```
 
-### 6.2 Whisper 模型升级
+### 6.3 Whisper 模型配置
 
-```bash
-# 5090 32GB 可以使用更大的模型
-# 在 .env 中修改
-WHISPER_MODEL=large-v3
+```env
+# .env 中修改
+WHISPER_MODEL_SIZE=large-v3    # 5090 32GB 轻松跑
 WHISPER_DEVICE=cuda
 WHISPER_COMPUTE_TYPE=float16
+WHISPER_BATCH_SIZE=16          # 增大批处理提高吞吐
 ```
 
-### 6.3 本地模型部署（可选）
+### 6.4 Docker 资源分配建议
 
-```bash
-# 如果需要部署本地 LLM（如 Qwen-7B）
-# 5090 32GB 足够运行 7B 模型
+```yaml
+# docker-compose.yml 各服务 mem_limit
+services:
+  app:
+    mem_limit: 2g
+  db:
+    mem_limit: 8g              # PostgreSQL 可以多用内存
+  redis:
+    mem_limit: 4g              # 缓存更多
+  minio:
+    mem_limit: 1g
+  whisper:
+    mem_limit: 16g             # GPU 推理 + 模型
+  celery-worker:
+    mem_limit: 8g              # 3D-Speaker + 声纹提取
+  celery-beat:
+    mem_limit: 512m
+  nginx:
+    mem_limit: 256m
+```
 
-# 安装 vLLM
-pip install vllm
+### 6.5 3D-Speaker GPU 加速（可选）
 
-# 启动本地模型服务
-python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen-7B-Chat \
-  --gpu-memory-utilization 0.9 \
-  --max-model-len 8192
+3D-Speaker 默认用 CPU 提取 embedding，5090 上可改为 GPU：
+
+```python
+# voiceprint_service.py 中修改
+self._pipeline = pipeline(
+    Tasks.speaker_verification,
+    model="iic/speech_eres2net_sv_zh-cn_16k-common",
+    device="cuda:0",  # 启用 GPU
+)
+```
+
+### 6.6 本地 LLM 替代 Claude API（可选）
+
+5090 32GB 可运行 Qwen2.5-14B-Instruct（~28GB VRAM），完全替代云端 API：
+
+```python
+# app/core/llm.py 中添加
+def get_local_llm_client():
+    from openai import OpenAI
+    return OpenAI(
+        base_url="http://localhost:8001/v1",
+        api_key="not-needed",
+    )
 ```
 
 ---
