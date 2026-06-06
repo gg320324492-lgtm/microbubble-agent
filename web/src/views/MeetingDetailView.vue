@@ -378,9 +378,9 @@ const transcriptEntries = computed(() => {
     : (meeting.value.transcript || [])
   if (!raw.length) return []
 
-  // 合并连续同一发言人的条目
+  // 合并连续同一发言人的条目（保留原始索引用于 PATCH）
   const merged = []
-  let current = { ...raw[0] }
+  let current = { ...raw[0], _origIndex: 0 }
   for (let i = 1; i < raw.length; i++) {
     const entry = raw[i]
     if (entry.speaker === current.speaker && !entry.removed) {
@@ -388,7 +388,7 @@ const transcriptEntries = computed(() => {
       if (entry.ts) current.end_ts = entry.ts
     } else {
       merged.push(current)
-      current = { ...entry }
+      current = { ...entry, _origIndex: i }
     }
   }
   merged.push(current)
@@ -553,12 +553,15 @@ const saveMinutes = async () => {
   }
 }
 
-async function saveTranscriptSpeaker(index, speaker) {
+async function saveTranscriptSpeaker(displayIndex, speaker) {
   if (!meeting.value || !speaker) return
-  savingTranscriptSpeaker.value = index
+  savingTranscriptSpeaker.value = displayIndex
+  // 用合并前的原始索引（如果有的话）
+  const entry = transcriptEntries.value[displayIndex]
+  const realIndex = entry?._origIndex ?? displayIndex
   try {
     const res = await axios.patch(`/api/v1/meetings/${meeting.value.id}/transcript-speaker`, {
-      entry_index: index,
+      entry_index: realIndex,
       speaker,
     })
     meeting.value.transcript = res.data.transcript
