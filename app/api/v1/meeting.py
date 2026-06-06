@@ -374,6 +374,32 @@ async def apply_speaker_mapping(
         raise HTTPException(status_code=500, detail=f"重新分析失败: {str(e)}")
 
 
+@router.post("/meetings/{meeting_id}/polish-text")
+async def polish_text(
+    meeting_id: int,
+    body: dict,
+    current_user: Member = Depends(get_current_user),
+):
+    """对指定文本进行 AI 润色（加标点，不改内容）"""
+    text = body.get("text", "")
+    if not text or len(text.strip()) < 3:
+        raise HTTPException(status_code=400, detail="文本太短")
+
+    from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+
+    client = get_anthropic_client()
+    model = get_default_model()
+    response = await client.messages.create(
+        model=model,
+        max_tokens=2048,
+        temperature=0.3,
+        system="给以下中文文本加标点符号（逗号、句号、问号），不要改内容。只输出结果文本。",
+        messages=[{"role": "user", "content": f"加标点（不要改内容）：\n{text}"}],
+    )
+    polished = extract_text_from_response(response)
+    return {"polished": polished}
+
+
 @router.patch("/meetings/{meeting_id}/transcript-speaker")
 async def update_transcript_speaker(
     meeting_id: int,
