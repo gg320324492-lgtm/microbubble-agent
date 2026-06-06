@@ -31,7 +31,7 @@ class RateLimiter:
 
 # 分级限流器实例
 _rate_limiters = {
-    "auth": RateLimiter(max_attempts=5, window_seconds=60),      # 认证：5次/分钟
+    "auth": RateLimiter(max_attempts=20, window_seconds=60),      # 认证：20次/分钟
     "write": RateLimiter(max_attempts=30, window_seconds=60),    # 写操作：30次/分钟
     "read": RateLimiter(max_attempts=100, window_seconds=60),    # 读操作：100次/分钟
     "upload": RateLimiter(max_attempts=10, window_seconds=60),   # 上传：10次/分钟
