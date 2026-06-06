@@ -882,6 +882,9 @@ onMounted(async () => {
 .inline-speaker-select {
   width: 84px;
 }
+.transcript-speaker-select {
+  width: 90px;
+}
 .point-text {
   flex: 1;
 }
