@@ -123,76 +123,104 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"ASR 转写完成: {len(transcript_segments)}/{len(segments)} 段有文本")
 
-                # ===== 阶段 1.3: 语义断句（AI 检测同一段内的对话切换） =====
-                from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response, parse_llm_json
+                # ===== 阶段 1.3: 语义断句（基于规则的对话切换检测） =====
+                import re
+
+                # 检测对话切换的模式：
+                # 1. 问答模式：第一个问号/感叹号后可能是不同人
+                # 2. 转折词："不过"、"但是"、"可"、"那"等开头可能是不同人
+                # 3. 回应词："嗯嗯"、"好的"、"行"开头可能是不同人
+                SPEAKER_CUT_PATTERNS = [
+                    (r'(?<=[？?!！。])\s*(?!.*[？?!！。])(.+$)', '问答切分'),
+                    (r'(?<=[。])\s*(?=那[你我他她])', '转折切分'),
+                    (r'(?<=[。])\s*(?=好的|嗯|行|对|是的)', '回应切分'),
+                    (r'(?<=[。])\s*(?=不过|但是|可|所以|那)', '转折切分'),
+                ]
+
+                def _split_by_semantics(text: str, segment_start: float, segment_end: float, seg_index: int) -> list:
+                    """基于规则的语义断句：检测对话切换点"""
+                    # 模式1：问答 - 最后一个？或！后拆开
+                    # 找最后一个问号（"怎么了？"）
+                    last_q = max(text.rfind('？'), text.rfind('?'))
+                    last_excl = max(text.rfind('！'), text.rfind('!'))
+
+                    # 如果有问号且有后续内容，在问号后切分
+                    cut_positions = []
+                    if last_q >= 0 and last_q < len(text) - 3:
+                        # 问号后面有内容，可能是回答
+                        after_q = text[last_q + 1:].strip()
+                        if after_q and len(after_q) >= 3:
+                            cut_positions.append(last_q + 1)
+                    if last_excl >= 0 and last_excl < len(text) - 3:
+                        after_ex = text[last_excl + 1:].strip()
+                        if after_ex and len(after_ex) >= 3:
+                            cut_positions.append(last_excl + 1)
+
+                    # 模式2：检测"好的"、"那"、"嗯"等开头的切换
+                    for m in re.finditer(r'[。]?(好的|嗯嗯|行吧|那[你我他她]|不过|但是|可问题是|所以)', text):
+                        pos = m.start() + (1 if text[m.start()] == '。' else 0)
+                        if pos > 3 and pos not in cut_positions:  # 不在开头
+                            cut_positions.append(pos)
+
+                    if not cut_positions:
+                        return [{"text": text, "start": segment_start, "end": segment_end,
+                                 "speaker_label": f"speaker_{seg_index}"}]
+
+                    # 排序切分点
+                    cut_positions = sorted(set(cut_positions))
+                    # 过滤太近的切分点（< 5 字间隔）
+                    filtered = []
+                    prev = -100
+                    for pos in cut_positions:
+                        if pos - prev >= 5:
+                            filtered.append(pos)
+                            prev = pos
+
+                    if not filtered:
+                        return [{"text": text, "start": segment_start, "end": segment_end,
+                                 "speaker_label": f"speaker_{seg_index}"}]
+
+                    # 按切分点拆分
+                    parts = []
+                    last_cut = 0
+                    for cut in filtered:
+                        part_text = text[last_cut:cut].strip()
+                        if part_text:
+                            parts.append(part_text)
+                        last_cut = cut
+                    part_text = text[last_cut:].strip()
+                    if part_text:
+                        parts.append(part_text)
+
+                    if len(parts) <= 1:
+                        return [{"text": text, "start": segment_start, "end": segment_end,
+                                 "speaker_label": f"speaker_{seg_index}"}]
+
+                    total_len = sum(len(p) for p in parts)
+                    result = []
+                    current_start = segment_start
+                    for i, part in enumerate(parts):
+                        ratio = len(part) / total_len if total_len > 0 else 0
+                        dur = (segment_end - segment_start) * ratio
+                        result.append({
+                            "text": part,
+                            "start": round(current_start, 2),
+                            "end": round(current_start + dur, 2),
+                            "speaker_label": f"speaker_{seg_index}_{i}",
+                        })
+                        current_start += dur
+                    return result
 
                 semantic_split_segments = []
-                for seg in transcript_segments:
+                for i, seg in enumerate(transcript_segments):
                     text = seg["text"]
-                    # 只对较长文本（>15字）做语义分析，短文本不需要
                     if len(text) <= 15:
                         semantic_split_segments.append(seg)
                         continue
-
-                    try:
-                        client = get_anthropic_client()
-                        model = get_default_model()
-                        response = await client.messages.create(
-                            model=model,
-                            max_tokens=512,
-                            temperature=0.7,
-                            system="你是对话分析专家。只输出 JSON，不要其他内容。",
-                            messages=[{
-                                "role": "user",
-                                "content": f"""分析以下对话文本，判断是否包含多个说话人。
-如果明显是两个人交替说话（如问答、反驳、不同语气），输出每句话的说话人标签。
-
-规则：
-- 问句和答句一般是不同人
-- 反驳/纠正前一个人一般是不同人
-- 明显的语气转换可能是不同人
-- 不强行拆分，不确定就保持原样
-
-文本：{text}
-
-输出 JSON：
-{{"has_multiple": true/false, "split_points": [{{"text": "前半句", "speaker_label": "A"}}, {{"text": "后半句", "speaker_label": "B"}}]}}
-
-如果只有一个人说话，split_points 为空数组。"""
-                            }],
-                        )
-                        result_text = extract_text_from_response(response)
-                        if not result_text or len(result_text.strip()) < 5:
-                            raise ValueError(f"空响应: '{result_text}'")
-                        result = parse_llm_json(result_text)
-
-                        if result.get("has_multiple") and result.get("split_points"):
-                            # 按 split_points 拆分时间段
-                            total_duration = seg["end"] - seg["start"]
-                            total_chars = sum(len(sp["text"]) for sp in result["split_points"])
-                            if total_chars == 0:
-                                semantic_split_segments.append(seg)
-                                continue
-
-                            current_offset = seg["start"]
-                            for sp in result["split_points"]:
-                                char_ratio = len(sp["text"]) / total_chars
-                                duration = total_duration * char_ratio
-                                new_seg = {
-                                    "text": sp["text"].strip(),
-                                    "start": round(current_offset, 2),
-                                    "end": round(current_offset + duration, 2),
-                                    "speaker_label": f"speaker_{len(semantic_split_segments)}",
-                                }
-                                if new_seg["text"]:
-                                    semantic_split_segments.append(new_seg)
-                                current_offset += duration
-                            logger.debug(f"语义断句: {len(seg['text'])}字拆成{len(result['split_points'])}段")
-                        else:
-                            semantic_split_segments.append(seg)
-                    except Exception as e:
-                        logger.warning(f"语义断句失败（保留原文）: {e}")
-                        semantic_split_segments.append(seg)
+                    parts = _split_by_semantics(text, seg["start"], seg["end"], i)
+                    if len(parts) > 1:
+                        logger.debug(f"语义断句: [{seg['start']:.1f}-{seg['end']:.1f}s] {len(text)}字→{len(parts)}段")
+                    semantic_split_segments.extend(parts)
 
                 if len(semantic_split_segments) > len(transcript_segments):
                     logger.info(f"语义断句: {len(transcript_segments)}→{len(semantic_split_segments)} 段")
