@@ -498,12 +498,11 @@ class MeetingAnalysisService:
                     system="输出会议标题，15字以内，不要任何解释。",
                     messages=[{"role": "user", "content": f"给以下会议内容起个标题（15字以内）：\n{short_text}"}],
                 )
-                # 尝试提取文本
-                raw = extract_text_from_response(response)
-                if not raw:
-                    # fallback: 直接从 blocks 拿
-                    if hasattr(response, 'content') and response.content:
-                        for block in response.content:
+                # 直接从 blocks 提取第一个 text block
+                raw = None
+                if hasattr(response, 'content') and response.content:
+                    for block in response.content:
+                        if getattr(block, 'type', None) == 'text':
                             t = getattr(block, 'text', None)
                             if t and str(t).strip():
                                 raw = str(t).strip()
@@ -512,8 +511,12 @@ class MeetingAnalysisService:
                     logger.warning(f"标题生成第{attempt+1}次: 无法提取文本")
                     continue
 
-                title = raw.strip().strip('"').strip("'").strip("《》").strip().split('\n')[0].strip()
-                if len(title) >= 2 and len(title) <= 30:
+                # 清洗：去掉 markdown bold 和常见前缀
+                import re
+                title = re.sub(r'\*\*[^*]+\*\*\s*', '', raw)  # 去掉 **xxx**
+                title = title.strip().strip('"').strip("'").strip("《》").strip()
+                title = title.split('\n')[0].strip()
+                if 2 <= len(title) <= 30:
                     logger.info(f"标题生成成功（第{attempt+1}次）: {title}")
                     return title
                 logger.warning(f"标题生成第{attempt+1}次无效: '{title}' ({len(title)}字)")
