@@ -485,7 +485,7 @@ class MeetingAnalysisService:
         """根据转录内容自动生成会议标题（15 字以内）。"""
         import asyncio
 
-        short_text = transcript_text[:500]
+        short_text = transcript_text[:2000]
         if len(short_text) < 10:
             return "未命名会议"
 
@@ -495,8 +495,8 @@ class MeetingAnalysisService:
                     model=self.model,
                     max_tokens=512,
                     temperature=0.3,
-                    system="只输出标题文本，不要markdown，不要解释。15字以内。",
-                    messages=[{"role": "user", "content": f"{short_text}\n\n15字标题："}],
+                    system="根据会议全文生成一个精炼的中文标题（20字以内）。标题应概括会议核心内容和主题，不要编号列表。",
+                    messages=[{"role": "user", "content": f"会议内容：{short_text}\n\n标题（20字以内）："}],
                 )
                 # 从 response 提取文本
                 raw = ""
