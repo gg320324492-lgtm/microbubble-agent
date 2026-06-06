@@ -157,6 +157,12 @@ class TranscriptSpeakerRequest(BaseModel):
 
 
 class TranscriptSpeakerUpdateRequest(BaseModel):
+    """转录发言人更新请求（手动修正，不重新生成纪要）"""
+    entry_index: int
+    speaker: str
+
+
+class TranscriptSpeakerUpdateRequest(BaseModel):
     """手动修正单条转录发言人"""
     entry_index: int
     speaker: str
