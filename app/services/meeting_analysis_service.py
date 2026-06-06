@@ -485,8 +485,9 @@ class MeetingAnalysisService:
         """根据转录内容自动生成会议标题（15 字以内）。"""
         import asyncio
 
-        # 取前 500 字作为标题生成的输入（够用了）
         short_text = transcript_text[:500]
+        if len(short_text) < 10:
+            return "未命名会议"
 
         for attempt in range(3):
             try:
@@ -497,15 +498,22 @@ class MeetingAnalysisService:
                     system="输出会议标题，15字以内，不要任何解释。",
                     messages=[{"role": "user", "content": f"给以下会议内容起个标题（15字以内）：\n{short_text}"}],
                 )
-                title = extract_text_from_response(response)
-                if title:
-                    title = title.strip().strip('"').strip("'").strip("《》").strip()
-                    # 去掉可能的标签和换行
-                    title = title.split('\n')[0].strip()
-                    if len(title) >= 2 and len(title) <= 30:
-                        logger.info(f"标题生成成功（第{attempt+1}次）: {title}")
-                        return title
-                logger.warning(f"标题生成第{attempt+1}次返回空或无效: '{title}'")
+                # 直接从 response 内容提取，不依赖 extract_text_from_response
+                raw = None
+                if hasattr(response, 'content') and response.content:
+                    for block in response.content:
+                        if hasattr(block, 'text') and block.text:
+                            raw = block.text.strip()
+                            break
+                if not raw:
+                    logger.warning(f"标题生成第{attempt+1}次: 无法提取文本, response type={type(response).__name__}")
+                    continue
+
+                title = raw.strip().strip('"').strip("'").strip("《》").strip().split('\n')[0].strip()
+                if len(title) >= 2 and len(title) <= 30:
+                    logger.info(f"标题生成成功（第{attempt+1}次）: {title}")
+                    return title
+                logger.warning(f"标题生成第{attempt+1}次无效: '{title}' ({len(title)}字)")
             except Exception as e:
                 logger.error(f"标题生成第{attempt+1}次失败: {e}")
             if attempt < 2:
