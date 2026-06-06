@@ -613,6 +613,7 @@ def post_meeting_process(self, meeting_id: int):
                         logger.info(f"自动添加参与者: member_id={mid}")
 
                 # ===== 阶段 2.8: 声纹持续学习（用本次识别结果强化已有声纹） =====
+                from datetime import datetime, timezone
                 learned_count = 0
                 for cid in unique_clusters:
                     if cid < 0 or cid >= len(cluster_representatives):
