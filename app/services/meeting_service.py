@@ -351,12 +351,17 @@ class MeetingService:
             model = get_default_model()
             response = await client.messages.create(
                 model=model,
-                max_tokens=1024,
-                system="你是课题组AI助手，请用简洁的中文总结以下会议内容，包含讨论主题、主要观点和结论。200字以内。",
+                max_tokens=2048,
+                system=(
+                    "你是课题组会议纪要助手。请按 docs/meeting-minutes-standard.md 的标准，"
+                    "参考“2026.5.28 例行例会”的信息密度总结会议：必须包含背景、讨论过程、"
+                    "关键人物观点、结论和后续方向。不要只写短摘要，不要虚构转录中没有的信息。"
+                ),
                 messages=[{
                     "role": "user",
                     "content": (
-                        "请总结以下会议转写内容，注意区分不同发言人的观点：\n\n"
+                        "请总结以下会议转写内容，注意区分不同发言人的观点。"
+                        "输出一段 3-6 句话的完整摘要：\n\n"
                         f"{transcript_text[:8000]}"
                     ),
                 }],

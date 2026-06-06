@@ -49,18 +49,21 @@ else:
     ASGITransport = None
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def setup_db():
-    """创建测试表。SKIP_DB_SETUP=1 时跳过整个 fixture。"""
-    if SKIP_DB_SETUP:
+if SKIP_DB_SETUP:
+    @pytest.fixture(scope="session", autouse=True)
+    def setup_db():
+        """SKIP_DB_SETUP=1 时使用同步 fixture，避免 async teardown 绑定已关闭事件循环。"""
         yield
-        return
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
+else:
+    @pytest_asyncio.fixture(scope="session", autouse=True)
+    async def setup_db():
+        """创建测试表。"""
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        yield
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture

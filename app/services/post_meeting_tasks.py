@@ -144,10 +144,18 @@ def post_meeting_process(self, meeting_id: int):
                 # ===== 阶段 2: 发言人分离（声纹 + 停顿 + 内容） =====
                 await update_progress(meeting_id, ProgressStage.IDENTIFYING_SPEAKERS, detail="识别发言人", redis_override=redis_client)
                 from app.services.voiceprint_service import VoiceprintService
+                from app.services.speaker_assignment import (
+                    SpeakerMatch,
+                    correct_speaker_name,
+                    cosine_similarity,
+                    finalize_cluster_speakers,
+                    should_force_split,
+                )
                 import torch
 
                 vp_service = VoiceprintService()
                 speaker_mapping = {}
+                speaker_assignment_result = None
 
                 # 2.1 对长段音频做细粒度 VAD，检测发言人切换点
                 def _detect_speaker_changes(audio: np.ndarray, sr: int, min_gap_sec: float = 0.4) -> list[tuple[int, int]]:
@@ -201,11 +209,7 @@ def post_meeting_process(self, meeting_id: int):
                     seg_embeddings.append(emb)
 
                 # 2.3 统一聚类所有段的声纹
-                from numpy.linalg import norm
                 from collections import Counter
-
-                def cosine_sim(a, b):
-                    return np.dot(a, b) / (norm(a) * norm(b) + 1e-8)
 
                 # 贪心聚类（不限人数）
                 cluster_centers = []
@@ -226,7 +230,7 @@ def post_meeting_process(self, meeting_id: int):
                     best_cluster = -1
                     best_sim = -1
                     for ci, center in enumerate(cluster_centers):
-                        sim = cosine_sim(emb, center)
+                        sim = cosine_similarity(emb, center)
                         if sim > best_sim:
                             best_sim = sim
                             best_cluster = ci
@@ -264,12 +268,11 @@ def post_meeting_process(self, meeting_id: int):
                 # 2.4.5 兜底：聚类数=1 但有多个明显不同的说话模式时强制分裂
                 if len(unique_clusters) == 1 and len(seg_embeddings) >= 3:
                     # 计算段间声纹相似度统计
-                    from collections import defaultdict
                     sims = []
                     for i in range(len(seg_embeddings)):
                         for j in range(i+1, len(seg_embeddings)):
                             if seg_embeddings[i] is not None and seg_embeddings[j] is not None:
-                                sims.append(cosine_sim(seg_embeddings[i], seg_embeddings[j]))
+                                sims.append(cosine_similarity(seg_embeddings[i], seg_embeddings[j]))
                     if sims:
                         import statistics
                         mean_sim = statistics.mean(sims)
@@ -279,7 +282,7 @@ def post_meeting_process(self, meeting_id: int):
                         logger.info(f"聚类统计: 平均={mean_sim:.3f}, 标准差={std_sim:.3f}, max={max_sim:.3f}, min={min_sim:.3f}")
 
                         # 标准差大说明确实有不同说话人
-                        if std_sim > 0.15 and min_sim < 0.55:
+                        if should_force_split(seg_embeddings):
                             logger.info(f"检测到声纹分布发散（标准差={std_sim:.3f}），强制分裂聚类")
                             # 用 KMeans 硬分 2 聚类
                             from sklearn.cluster import KMeans
@@ -295,15 +298,15 @@ def post_meeting_process(self, meeting_id: int):
                                         idx += 1
                                 clusters = new_clusters
                                 # 重置聚类中心和代表
-                                cluster_centers = []
-                                cluster_representatives = []
-                                for cid in set(clusters):
-                                    if cid < 0: continue
+                                valid_cids = sorted(cid for cid in set(clusters) if cid >= 0)
+                                cluster_centers = [None] * (max(valid_cids) + 1)
+                                cluster_representatives = [None] * (max(valid_cids) + 1)
+                                for cid in valid_cids:
                                     members = [seg_embeddings[i] for i in range(len(seg_embeddings)) if clusters[i] == cid]
                                     if members:
-                                        cluster_centers.append(members[0])
-                                        cluster_representatives.append(members[0])
-                                logger.info(f"强制分裂后: 聚类数={len(cluster_centers)}")
+                                        cluster_centers[cid] = members[0]
+                                        cluster_representatives[cid] = members[0]
+                                logger.info(f"强制分裂后: 聚类数={len(valid_cids)}")
                                 # 同步重新识别（用更新后的聚类数）
                                 seg_names = []
                                 for i, seg in enumerate(transcript_segments):
@@ -328,73 +331,40 @@ def post_meeting_process(self, meeting_id: int):
                                         seg["speaker"] = seg_names[i]
 
                 # 2.5 聚类 + 声纹结果协调
-                # 统计每个聚类中出现的已知名字
-                from collections import Counter
-                unique_clusters = set(c for c in clusters if c >= 0)  # 此声明在 2.6 也用
-                cluster_to_name = {}
-                known_names_set = set()  # 记录所有已知名字
-
-                for cid in unique_clusters:
-                    # 收集该聚类中所有已知名字
-                    cluster_names = [
+                unique_clusters = sorted(set(c for c in clusters if c >= 0))
+                cluster_votes = {
+                    cid: [
                         seg_names[i] for i in range(len(transcript_segments))
                         if clusters[i] == cid and seg_names[i] is not None
                     ]
-                    if cluster_names:
-                        # 取出现最多的已知名字
-                        best_name = Counter(cluster_names).most_common(1)[0][0]
-                        cluster_to_name[cid] = best_name
-                        known_names_set.add(best_name)
-                    else:
-                        cluster_to_name[cid] = None
-
-                # 如果所有聚类都没有已知名字 → 使用编号
-                if not known_names_set:
-                    for cid in unique_clusters:
-                        cluster_to_name[cid] = f"发言人{chr(65 + cid) if cid < 26 else str(cid - 25)}"
-                else:
-                    # 确保每个聚类都有名字：未知聚类分配新名字
-                    unknown_count = 0
-                    for cid in unique_clusters:
-                        if cluster_to_name[cid] is None:
-                            # 分配发言人标签
-                            label = f"发言人{chr(65 + unknown_count) if unknown_count < 26 else str(unknown_count - 25)}"
-                            while label in known_names_set:
-                                unknown_count += 1
-                                label = f"发言人{chr(65 + unknown_count) if unknown_count < 26 else str(unknown_count - 25)}"
-                            cluster_to_name[cid] = label
-                            known_names_set.add(label)
-                            unknown_count += 1
-
-                # 2.6 调试日志
-                logger.info(f"聚类调试: 聚类数={len(unique_clusters)}, 标签={cluster_to_name}")
-
-                # 2.7 用聚类代表 embedding 直接查询已知成员
+                    for cid in unique_clusters
+                }
+                representative_matches = {}
                 for cid in unique_clusters:
+                    if cid >= len(cluster_representatives) or cluster_representatives[cid] is None:
+                        continue
                     name, member_id, conf = await vp_service.identify_speaker_by_embedding(
                         db, cluster_representatives[cid]
                     )
-                    if name and conf > 0.35:
-                        cluster_to_name[cid] = name
-                        known_names_set.add(name)
-                    else:
-                        cluster_to_name[cid] = f"发言人{chr(65 + cid) if cid < 26 else str(cid - 25)}"
+                    representative_matches[cid] = SpeakerMatch(name=name, member_id=member_id, confidence=conf)
 
-                # 2.8 同名聚类检测（在 embedding 识别之后！）
-                name_to_clusters = {}
-                for cid, sp_name in cluster_to_name.items():
-                    if not sp_name.startswith("发言人"):
-                        name_to_clusters.setdefault(sp_name, []).append(cid)
+                speaker_assignment_result = finalize_cluster_speakers(
+                    cluster_ids=unique_clusters,
+                    cluster_votes=cluster_votes,
+                    representative_matches=representative_matches,
+                )
+                cluster_to_name = speaker_assignment_result.cluster_to_name
+                known_names_set = {
+                    name for name in cluster_to_name.values()
+                    if name and not name.startswith("发言人")
+                }
 
-                for sp_name, cids in name_to_clusters.items():
-                    if len(cids) >= 2:
-                        # 多个聚类被识别为同一个人 → 保留声纹差异最大的为独立发言人
-                        unknown_label = f"发言人{chr(65 + len(cluster_centers) - 1)}"
-                        while unknown_label in cluster_to_name.values():
-                            unknown_label = f"发言人{chr(65 + len(cluster_centers))}"
-                            cluster_centers.append(None)  # dummy
-                        cluster_to_name[cids[1]] = unknown_label
-                        logger.info(f"同名聚类检测: '{sp_name}' 对应 {len(cids)} 个聚类, {cids[1]} 改为 {unknown_label}")
+                logger.info(f"聚类调试: 聚类数={len(unique_clusters)}, 标签={cluster_to_name}")
+                if speaker_assignment_result.ambiguous_clusters:
+                    logger.warning(
+                        "声纹存在歧义聚类: %s",
+                        speaker_assignment_result.ambiguous_clusters,
+                    )
 
                 # 2.9 分配发言人到每个段
                 for i, seg in enumerate(transcript_segments):
@@ -423,48 +393,16 @@ def post_meeting_process(self, meeting_id: int):
                 )
                 all_members = {row[1]: row[0] for row in member_list.fetchall()}  # name → id
 
-                # 谐音/形近字映射表（常见 ASR 识别错误 → 正确姓名）
-                PHONETIC_CORRECTIONS = {
-                    "杜同和": "杜同贺",
-                    "杜同河": "杜同贺",
-                    "吴梦全": "吴孟铨",
-                    "吴孟全": "吴孟铨",
-                    "吴孟栓": "吴孟铨",
-                    "王天之": "王天志",
-                    "王田志": "王天志",
-                    "赵航嘉": "赵航佳",
-                    "赵航家": "赵航佳",
-                }
-
                 name_corrections = {}
                 all_speakers = set(seg.get("speaker", "") for seg in transcript_segments)
                 for sp in all_speakers:
                     if sp.startswith("发言人") or not sp:
                         continue
 
-                    # 1) 精确匹配成员列表
-                    if sp in all_members:
-                        continue  # 无需纠正
-
-                    # 2) 谐音/形近字映射
-                    if sp in PHONETIC_CORRECTIONS:
-                        corrected = PHONETIC_CORRECTIONS[sp]
+                    corrected = correct_speaker_name(sp, all_members)
+                    if corrected != sp:
                         name_corrections[sp] = corrected
-                        logger.info(f"名字校对（谐音）: '{sp}' → '{corrected}'")
-                        continue
-
-                    # 3) 模糊匹配：编辑距离 ≤ 1 且不在成员列表中
-                    best_match = None
-                    best_dist = 99
-                    for member_name in all_members:
-                        dist = _edit_distance(sp, member_name)
-                        if dist < best_dist:
-                            best_dist = dist
-                            best_match = member_name
-                    # 编辑距离 ≤ 1 且名字长度相近，视为同一人
-                    if best_dist <= 1 and abs(len(sp) - len(best_match)) <= 1:
-                        name_corrections[sp] = best_match
-                        logger.info(f"名字校对（模糊匹配）: '{sp}' → '{best_match}' (dist={best_dist})")
+                        logger.info(f"名字校对: '{sp}' → '{corrected}'")
 
                 # 应用名字修正
                 if name_corrections:
@@ -527,17 +465,15 @@ def post_meeting_process(self, meeting_id: int):
                 # 将识别出的发言人添加为会议参与者
                 from app.models.meeting import MeetingParticipant
                 from sqlalchemy import select as sa_select
-                identified_member_ids = set()
+                identified_member_ids = set(
+                    speaker_assignment_result.known_member_ids
+                    if speaker_assignment_result is not None else []
+                )
                 for seg in transcript_segments:
                     if seg.get("speaker") and not seg["speaker"].startswith("发言人"):
-                        # 通过声纹识别找到 member_id
-                        start_sample = int(seg["start"] * sample_rate)
-                        end_sample = int(seg["end"] * sample_rate)
-                        seg_audio = audio_pcm[start_sample:end_sample]
-                        if len(seg_audio) >= sample_rate * 0.5:
-                            _, member_id, conf = await vp_service.identify_speaker(db, seg_audio)
-                            if member_id and conf > 0.55:
-                                identified_member_ids.add(member_id)
+                        member_id = all_members.get(seg["speaker"])
+                        if member_id:
+                            identified_member_ids.add(member_id)
 
                 # 去重：检查已有参与者
                 existing = await db.execute(
