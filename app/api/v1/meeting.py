@@ -15,7 +15,7 @@ from app.schemas.meeting import (
     MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes,
     SpeakerDetectRequest, SpeakerDetectResponse,
     TranscriptAnalyzeRequest, TranscriptAnalyzeResponse,
-    SpeakerMapRequest, MeetingAnalyticsResponse, TranscriptSpeakerRequest,
+    SpeakerMapRequest, MeetingAnalyticsResponse, TranscriptSpeakerRequest, TranscriptSpeakerUpdateRequest,
 )
 from app.services.meeting_service import MeetingService
 from app.services.meeting_analysis_service import meeting_analysis
@@ -327,46 +327,6 @@ async def update_meeting(
     await db.commit()
     await db.refresh(meeting)
     return meeting
-
-
-@router.patch("/meetings/{meeting_id}/transcript-speaker")
-async def update_transcript_speaker(
-    meeting_id: int,
-    body: TranscriptSpeakerRequest,
-    current_user: Member = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    entry_index = body.entry_index
-    speaker = body.speaker
-    """更新转录中某一项的发言人"""
-    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
-    meeting = result.scalar_one_or_none()
-    if not meeting:
-        raise NotFoundException("会议")
-
-    # 更新 transcript
-    if meeting.transcript and isinstance(meeting.transcript, list) and entry_index < len(meeting.transcript):
-        meeting.transcript[entry_index]["speaker"] = speaker
-    # 更新 transcript_polished
-    if meeting.transcript_polished and isinstance(meeting.transcript_polished, list) and entry_index < len(meeting.transcript_polished):
-        meeting.transcript_polished[entry_index]["speaker"] = speaker
-    # 更新 speaker_mapping
-    label = f"speaker_{entry_index}"
-    if meeting.speaker_mapping and isinstance(meeting.speaker_mapping, dict):
-        meeting.speaker_mapping[label] = speaker
-
-    from app.services.meeting_analysis_service import meeting_analysis
-    meeting.speaker_stats = meeting_analysis.compute_speaker_stats(
-        meeting.transcript_polished if meeting.transcript_polished else meeting.transcript
-    )
-
-    await db.commit()
-    return {
-        "transcript": meeting.transcript,
-        "transcript_polished": meeting.transcript_polished,
-        "speaker_mapping": meeting.speaker_mapping,
-        "speaker_stats": meeting.speaker_stats,
-    }
 
 
 @router.delete("/meetings/{meeting_id}")
