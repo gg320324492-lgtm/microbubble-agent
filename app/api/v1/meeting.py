@@ -15,7 +15,7 @@ from app.schemas.meeting import (
     MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes,
     SpeakerDetectRequest, SpeakerDetectResponse,
     TranscriptAnalyzeRequest, TranscriptAnalyzeResponse,
-    SpeakerMapRequest, MeetingAnalyticsResponse, TranscriptSpeakerUpdateRequest,
+    SpeakerMapRequest, MeetingAnalyticsResponse, TranscriptSpeakerRequest,
 )
 from app.services.meeting_service import MeetingService
 from app.services.meeting_analysis_service import meeting_analysis
