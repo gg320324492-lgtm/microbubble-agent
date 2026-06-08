@@ -123,9 +123,8 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Request-ID"] = str(uuid4())
-    # API 响应禁用缓存（静态资源由 Nginx 控制）
-    if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store"
+    # API 不设 Cache-Control（Nginx proxy 默认不添加缓存头，浏览器对 API 不缓存）
+    # 静态资源缓存由 Nginx tunnel.conf 控制
     return response
 
 # 注册路由
