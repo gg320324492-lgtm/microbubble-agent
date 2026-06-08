@@ -256,7 +256,7 @@ const toggleGroup = (assigneeId) => {
 function groupTasksByAssignee(taskList) {
   const groups = {}
   for (const task of taskList) {
-    const id = task.assignee_id || 'unassigned'
+    const id = task.assignee_id != null ? task.assignee_id : 'unassigned'
     if (!groups[id]) {
       groups[id] = { assignee_id: id, tasks: [] }
     }
