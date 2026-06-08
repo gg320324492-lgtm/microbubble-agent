@@ -84,7 +84,7 @@
           <el-popover placement="bottom-end" :width="320" trigger="click" v-model:visible="popoverVisible" @show="handlePopoverShow">
             <template #reference>
               <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
-                <el-icon :size="isMobile ? 22 : 20" class="bell-icon"><Bell /></el-icon>
+                <el-icon :size="isMobile ? 26 : 24" class="bell-icon"><Bell /></el-icon>
               </el-badge>
             </template>
             <div v-if="popoverVisible" class="notification-panel">
@@ -421,15 +421,17 @@ const formatTime = (t) => {
 
 .bell-icon {
   cursor: pointer;
-  transition: color 200ms ease-out;
+  transition: all 200ms ease-out;
   color: var(--color-text-secondary);
-  padding: 6px;
-  border-radius: var(--radius-md);
+  padding: 8px;
+  border-radius: 50%;
+  background: rgba(144, 147, 153, 0.06);
 }
 
 .bell-icon:hover {
   color: var(--color-primary);
   background: var(--color-primary-bg);
+  transform: scale(1.1);
 }
 
 .user-info {
