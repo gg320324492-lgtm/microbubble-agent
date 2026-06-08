@@ -13,7 +13,7 @@
           <el-icon><Search /></el-icon>
         </template>
         <template #append>
-          <el-button @click="showAdvanced = !showAdvanced">
+          <el-button aria-label="高级筛选" @click="showAdvanced = !showAdvanced">
             <el-icon><Filter /></el-icon>
           </el-button>
         </template>
