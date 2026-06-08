@@ -17,13 +17,14 @@
 
     <div style="overflow-x: auto">
       <el-table
+        ref="tableRef"
         v-loading="loading"
         :data="trashTasks"
         stripe
         style="width: 100%"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column v-if="editMode" type="selection" width="45" />
+        <el-table-column type="selection" width="45" :class-name="editMode ? '' : 'col-hidden'" />
         <el-table-column prop="title" label="任务标题" min-width="200">
           <template #default="{ row }">
             <div class="task-title-cell">
@@ -156,7 +157,13 @@ const handleSelectionChange = (rows) => {
 const exitEditMode = () => {
   editMode.value = false
   selectedRows.value = []
+  // 清除表格选择状态
+  if (tableRef.value) {
+    tableRef.value.clearSelection()
+  }
 }
+
+const tableRef = ref(null)
 
 const batchPermanentDelete = () => {
   const ids = selectedRows.value.map(r => r.id)
@@ -252,6 +259,14 @@ function formatAutoDeleteExact(autoDeleteAt) {
   font-size: 13px;
   color: var(--color-text-secondary);
   margin-left: auto;
+}
+
+/* 隐藏选择列（非编辑模式） */
+:deep(.col-hidden) {
+  visibility: hidden;
+  width: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
 }
 .task-title-cell {
   display: flex;
