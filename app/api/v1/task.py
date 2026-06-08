@@ -423,6 +423,35 @@ async def permanent_delete_task(
     await db.commit()
 
 
+@router.post("/tasks/batch-permanent-delete")
+async def batch_permanent_delete(
+    body: dict,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """批量永久删除任务"""
+    ids = body.get("ids", [])
+    if not ids:
+        raise ValidationException("ids 不能为空")
+
+    result = await db.execute(select(Task).where(Task.id.in_(ids)))
+    tasks = result.scalars().all()
+
+    is_admin = current_user.role in ("admin", "leader")
+    deleted = 0
+    for task in tasks:
+        if task.deleted_at is None:
+            continue
+        if not is_admin:
+            if task.created_by != current_user.id and task.assignee_id != current_user.id:
+                continue
+        await db.delete(task)
+        deleted += 1
+
+    await db.commit()
+    return {"deleted": deleted}
+
+
 @router.get("/tasks/stats/overview", response_model=TaskStats)
 async def get_task_stats(
     project_id: Optional[int] = None,
