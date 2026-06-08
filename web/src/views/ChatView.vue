@@ -12,8 +12,8 @@
         </div>
       </div>
       <div class="topbar-right">
-        <el-tooltip content="语音模式"><el-button :type="voiceMode ? 'primary' : ''" circle size="small" @click="toggleVoiceMode"><el-icon><Microphone /></el-icon></el-button></el-tooltip>
-        <el-tooltip content="新对话"><el-button circle size="small" @click="clearChat"><el-icon><Delete /></el-icon></el-button></el-tooltip>
+        <el-tooltip content="语音模式"><el-button aria-label="语音模式" :type="voiceMode ? 'primary' : ''" circle size="small" @click="toggleVoiceMode"><el-icon><Microphone /></el-icon></el-button></el-tooltip>
+        <el-tooltip content="新对话"><el-button aria-label="新对话" circle size="small" @click="clearChat"><el-icon><Delete /></el-icon></el-button></el-tooltip>
       </div>
     </header>
 
@@ -118,8 +118,8 @@
         </div>
 
         <div class="input-core">
-          <button class="input-btn" :disabled="loading" @click="triggerImageUpload"><el-icon><Picture /></el-icon></button>
-          <button class="input-btn" :disabled="loading" @click="triggerFileUpload"><el-icon><Paperclip /></el-icon></button>
+          <button type="button" class="input-btn" aria-label="上传图片" :disabled="loading" @click="triggerImageUpload"><el-icon><Picture /></el-icon></button>
+          <button type="button" class="input-btn" aria-label="上传文件" :disabled="loading" @click="triggerFileUpload"><el-icon><Paperclip /></el-icon></button>
 
           <textarea
             ref="textareaRef"
@@ -134,7 +134,9 @@
           />
 
           <button
+            type="button"
             class="send-btn"
+            aria-label="发送消息"
             :disabled="(!inputText.trim() && !selectedImage && !selectedFile) || loading"
             @click="sendMessage"
           >
@@ -142,8 +144,8 @@
           </button>
         </div>
 
-        <input ref="imageInputRef" type="file" accept="image/*" hidden @change="handleImageSelect" />
-        <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md" hidden @change="handleFileSelect" />
+        <input ref="imageInputRef" type="file" accept="image/*" aria-label="选择图片" hidden @change="handleImageSelect" />
+        <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md" aria-label="选择文件" hidden @change="handleFileSelect" />
       </div>
     </footer>
 
