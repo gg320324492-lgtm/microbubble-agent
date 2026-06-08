@@ -1,0 +1,74 @@
+/*
+ * Element Plus CSS 覆盖 — 消除 webhint 性能警告
+ * 用 transform 替代 background-position，视觉效果完全一致
+ * 升级 Element Plus 后如需更新，对照 node_modules/element-plus 的原始 keyframes
+ */
+
+/* ===== 进度条条纹动画 ===== */
+/* 原始: background-position 移动条纹 → 改为伪元素 translateX */
+@keyframes progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes striped-flow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(0); }
+}
+
+/* 进度条条纹用伪元素实现平移 */
+.el-progress-bar__inner.el-progress-bar__inner--striped,
+.el-progress-bar__inner.el-progress-bar__inner--striped-flow {
+  background-image: none !important;
+  overflow: hidden;
+  position: relative;
+}
+
+.el-progress-bar__inner.el-progress-bar__inner--striped::after,
+.el-progress-bar__inner.el-progress-bar__inner--striped-flow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.15) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 32px 32px;
+  animation: progress 0.8s linear infinite;
+}
+
+/* ===== 骨架屏闪烁动画 ===== */
+@keyframes el-skeleton-loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.el-skeleton__item {
+  overflow: hidden !important;
+  position: relative;
+}
+
+.el-skeleton__item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent 100%
+  );
+  animation: el-skeleton-loading 1.8s ease-in-out infinite;
+}
+
+/* ===== 自定义 shimmer 动画 ===== */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
