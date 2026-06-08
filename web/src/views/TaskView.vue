@@ -85,6 +85,7 @@
                   {{ memberStore.getMemberName(pair.assignee_id).charAt(0) }}
                 </el-avatar>
                 <span class="group-name">{{ memberStore.getMemberName(pair.assignee_id) }}</span>
+                <el-tag size="small" type="info">{{ pair.activeTasks.length + pair.doneTasks.length }}项</el-tag>
                 <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[pair.assignee_id] }"><ArrowDown /></el-icon>
               </div>
             </div>
@@ -92,7 +93,7 @@
             <div v-show="!collapsedGroups[pair.assignee_id]" class="paired-content">
               <!-- 左列：进行中 -->
               <div class="paired-col paired-col-left">
-                <div v-if="pair.activeTasks.length === 0" class="empty-col">暂无</div>
+                <div v-if="pair.activeTasks.length === 0" class="empty-col">暂无进行中任务</div>
                 <div
                   v-for="task in pair.activeTasks"
                   :key="task.id"
@@ -106,7 +107,8 @@
                     <div class="task-title">{{ task.title }}</div>
                     <div class="task-meta">
                       <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">{{ getPriorityLabel(task.priority) }}</el-tag>
-                      <el-tag v-if="task.status === 'blocked'" size="small" type="danger">阻塞</el-tag>
+                      <el-tag v-if="task.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
+                      <el-tag v-else-if="task.status === 'blocked'" size="small" type="danger">阻塞</el-tag>
                     </div>
                   </div>
                   <div class="task-due" :class="{ overdue: isOverdue(task) }">
@@ -124,7 +126,7 @@
 
               <!-- 右列：已完成 -->
               <div class="paired-col paired-col-right">
-                <div v-if="pair.doneTasks.length === 0" class="empty-col">暂无</div>
+                <div v-if="pair.doneTasks.length === 0" class="empty-col">暂无已完成任务</div>
                 <div
                   v-for="task in pair.doneTasks"
                   :key="task.id"
@@ -137,7 +139,11 @@
                   </el-button>
                   <div class="task-content">
                     <div class="task-title task-done">{{ task.title }}</div>
+                    <div class="task-meta">
+                      <el-tag size="small" type="success">已完成</el-tag>
+                    </div>
                   </div>
+                  <div class="task-due">-</div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
                       <el-button text type="danger" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
