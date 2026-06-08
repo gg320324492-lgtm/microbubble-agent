@@ -21,6 +21,11 @@
 
 ### 近期新增（按时间倒序）
 
+- **Webhint 无障碍+性能+安全头全面优化（2026-06-08）** — 修复 ARIA hidden 包含可聚焦元素（el-popover v-if / el-tab-pane lazy）、el-select/el-button/el-progress 补全 aria-label、移除废弃 Pragma/Expires 头、Cache-Control 统一为 max-age=0、Nginx proxy_hide_header X-XSS-Protection、CSS 动画用 transform 替代 background-position 消除 webhint 性能警告、Nginx charset_types 去重、移除多余 CSP 头
+- **垃圾桶批量删除（2026-06-08）** — 编辑按钮切换勾选模式 + 批量永久删除（后端 POST /api/v1/tasks/batch-permanent-delete 单次请求，秒级完成不触发限流）
+- **任务列表配对布局（2026-06-08）** — 按负责人配对：左进行中 ↔ 右已完成，同一人左右对齐。修复负责人显示为"未分配"的 string/number 类型不匹配 bug
+- **精确跳转（2026-06-08）** — 成员管理"查看任务"跳转自动按 assignee_id 筛选；铃铛"查看我的任务"自动按当前用户筛选
+- **UI 优化（2026-06-08）** — 铃铛按钮加大（32px 图标 + 圆形背景 + hover 缩放阴影）、垃圾桶 Tab 加图标加大
 - **声纹识别系统重大优化（2026-06-06）** — VAD 精细化（合并阈值 0.1s + 静音 100ms）+ 语义断句（问答/转折/回应词检测）+ KMeans 强制分裂（std>0.15）+ 同名聚类检测 + 名字校对（谐音+编辑距离+精确匹配）。MATCH_THRESHOLD 0.55→0.7。不限人数真实检测。
 - **转录编辑功能（2026-06-06）** — 转录每条独立改发言人（el-select 下拉选人）+ 合并后自动 AI 润色加标点。
 - **UI 全面优化（2026-06-06）** — 全项目日期选择器替换为 el-date-picker + 时区修正（UTC→北京时间）+ 参与者头像间距分离 + 纪要发言人合并展示 + 纪要加头像 + 每条要点独立选发言人。

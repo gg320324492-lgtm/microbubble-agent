@@ -118,6 +118,19 @@
 
 ## 开发注意事项
 
+### 2026-06-08 新增
+
+- **Webhint 优化纪律** — webhint 审计工具检查无障碍（ARIA）、性能（Cache-Control/CSS 动画）、安全头（X-XSS-Protection/CSP/Pragma）。修复规则：el-popover 用 `v-model:visible` + `v-if` 控制弹出内容；el-tab-pane 用 `lazy` 避免隐藏标签页包含 focusable 元素；图标按钮必须加 `aria-label`；API 用 `Cache-Control: max-age=0`（webhint 只接受 max-age，不接受 no-store/must-revalidate/Pragma/Expires）；Nginx 用 `proxy_hide_header X-XSS-Protection` 剥离 MinIO 废弃头；CSS 动画用 `transform` 替代 `background-position` 消除 Paint 性能警告
+- **el-select aria-label** — Element Plus 内部 input 不继承 placeholder，必须显式加 `aria-label` prop
+- **el-progress aria-label** — 进度条组件通过 `$attrs` 传递 `aria-label` 到根元素
+- **对象 key 类型陷阱** — JavaScript 对象 key 始终是字符串，`{123: ...}` 变成 `{"123": ...}`。用 `===` 比较数字会失败（`"123" === 123` → false）。`getMemberName`/`getMemberAvatar` 必须用 `==` 宽松比较
+- **批量删除限流** — write 限流 30次/分钟 = 1次/2秒。批量操作必须用后端单次 API 请求（`POST /tasks/batch-permanent-delete`），不要前端逐个调用
+- **任务列表配对布局** — `pairedGroups` computed 合并 active/done 按 assignee_id 配对，左右对齐。分组函数用 `task.assignee_id != null` 判断（不要用 `||`，会把 0 当 falsy）
+- **精确跳转** — 从其他页面跳转到任务列表时，通过 URL query `?assignee_id=xxx` 传递筛选条件，TaskView 在 `onMounted` 中读取 `route.query.assignee_id` 设置 `filters.assignee_id`
+- **Nginx charset_types** — `text/html` 是 Nginx 默认值，不需要在 `charset_types` 中重复声明，否则会有 `duplicate MIME type` 警告
+- **Nginx CSP 头** — 只有 `frame-ancestors 'self'` 的 CSP 太弱，webhint 认为 unneeded。如果不需要完整 CSP 策略，不要添加
+- **Webhook 自动部署正常** — 每次 git push 自动触发 webhook → deploy-auto.sh → git pull → nginx reload。如果部署失败，检查 `/var/log/webhook-deploy.log`
+
 ### 2026-06-06 新增
 
 - **语义断句** — VAD + 声纹之外，ASR 后增加基于规则的语义断句（问答切分、转折词、回应词），检测同一段内的对话切换。不使用 AI API，纯本地规则，零延迟。
