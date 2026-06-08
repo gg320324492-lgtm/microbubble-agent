@@ -1,13 +1,9 @@
-{
-  "extends": ["web-recommended"],
+﻿{
   "hints": {
-    "no-html-only-headers": ["warning", {
-      "ignore": ["Content-Security-Policy"],
-      "include": []
-    }],
-    "no-disallowed-headers": "off",
-    "content-type": ["warning", {
-      ".*\\.css": "text/css; charset=utf-8"
+    "http-cache": ["warning", {
+      "revvingPatterns": [
+        "\\/[^/]+[._-][A-Za-z0-9_-]{5,}\\.\\w+$"
+      ]
     }]
   }
 }
