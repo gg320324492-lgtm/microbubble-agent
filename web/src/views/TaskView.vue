@@ -429,17 +429,30 @@ const batchDeleteDone = async () => {
     })
     let success = 0
     let failed = 0
-    for (const id of ids) {
+    const BATCH_DELAY_MS = 2500  // 每个请求间隔 2.5s，避免触发 write 限流（30次/分钟）
+    for (let i = 0; i < ids.length; i++) {
+      // 非首个请求加延迟，避免 429 Too Many Requests
+      if (i > 0) {
+        await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
+      }
       try {
-        await deleteTaskApi(id)
+        await deleteTaskApi(ids[i])
         success++
-      } catch {
+      } catch (e) {
+        // 429 限流时提前终止，避免无意义重试
+        if (e?.response?.status === 429) {
+          failed += ids.length - i  // 剩余全部算失败
+          ElMessage.warning(`触发限流，已暂停。成功删除 ${success} 条，剩余 ${ids.length - i} 条未删除`)
+          break
+        }
         failed++
       }
     }
     if (failed === 0) {
       ElMessage.success(`已删除 ${success} 条任务到垃圾桶`)
-    } else {
+    } else if (failed > 0 && success > 0 && !ids.length) {
+      // 已在 429 分支提示过，不再重复
+    } else if (failed > 0) {
       ElMessage.warning(`已删除 ${success} 条，${failed} 条失败`)
     }
     selectedDoneIds.value = new Set()  // 清空选择
