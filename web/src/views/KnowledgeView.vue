@@ -44,7 +44,7 @@
       </el-tab-pane>
 
       <!-- ===== 实体图谱 Tab ===== -->
-      <el-tab-pane label="实体图谱" name="entities">
+      <el-tab-pane label="实体图谱" name="entities" lazy>
         <!-- 搜索栏 -->
         <el-card class="filter-card">
           <el-row :gutter="12">
@@ -126,7 +126,7 @@
       </el-tab-pane>
 
       <!-- ===== 假设 Tab ===== -->
-      <el-tab-pane label="科研假设" name="hypotheses">
+      <el-tab-pane label="科研假设" name="hypotheses" lazy>
         <el-card class="filter-card">
           <el-row :gutter="12" align="middle">
             <el-col :span="4">
@@ -179,7 +179,7 @@
       </el-tab-pane>
 
       <!-- ===== 公式计算 Tab ===== -->
-      <el-tab-pane label="公式计算" name="formulas">
+      <el-tab-pane label="公式计算" name="formulas" lazy>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-card class="formula-list-card">
