@@ -1,13 +1,18 @@
 <template>
   <el-card class="task-list-card">
-    <!-- 批量操作栏 -->
-    <div v-if="selectedRows.length > 0" class="batch-bar">
-      <span class="batch-count">已选 {{ selectedRows.length }} 项</span>
-      <el-button text type="primary" @click="clearSelection">取消选择</el-button>
-      <el-button text type="danger" @click="batchPermanentDelete">
-        <el-icon><DeleteFilled /></el-icon>
-        批量永久删除
+    <!-- 顶部操作栏 -->
+    <div class="trash-toolbar">
+      <el-button v-if="!editMode" text type="primary" @click="editMode = true">
+        <el-icon><Edit /></el-icon> 编辑
       </el-button>
+      <template v-else>
+        <el-button text @click="exitEditMode">取消</el-button>
+        <span v-if="selectedRows.length > 0" class="batch-count">已选 {{ selectedRows.length }} 项</span>
+        <el-button text type="danger" :disabled="selectedRows.length === 0" @click="batchPermanentDelete">
+          <el-icon><DeleteFilled /></el-icon>
+          批量永久删除 {{ selectedRows.length > 0 ? `(${selectedRows.length})` : '' }}
+        </el-button>
+      </template>
     </div>
 
     <div style="overflow-x: auto">
@@ -18,7 +23,7 @@
         style="width: 100%"
         @selection-change="handleSelectionChange"
       >
-        <el-table-column type="selection" width="45" />
+        <el-table-column v-if="editMode" type="selection" width="45" />
         <el-table-column prop="title" label="任务标题" min-width="200">
           <template #default="{ row }">
             <div class="task-title-cell">
@@ -121,7 +126,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { Delete, RefreshRight, DeleteFilled, Clock } from '@element-plus/icons-vue'
+import { Delete, RefreshRight, DeleteFilled, Clock, Edit } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
 import { getStatusType, getStatusLabel, getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
@@ -141,13 +146,15 @@ const props = defineProps({
 
 const emit = defineEmits(['restore', 'permanent-delete', 'batch-permanent-delete', 'page-change', 'size-change'])
 
+const editMode = ref(false)
 const selectedRows = ref([])
 
 const handleSelectionChange = (rows) => {
   selectedRows.value = rows
 }
 
-const clearSelection = () => {
+const exitEditMode = () => {
+  editMode.value = false
   selectedRows.value = []
 }
 
@@ -234,21 +241,17 @@ function formatAutoDeleteExact(autoDeleteAt) {
 </script>
 
 <style scoped>
-.batch-bar {
+.trash-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+  gap: 8px;
   margin-bottom: 12px;
-  background: var(--color-primary-light-9, #fef0f0);
-  border-radius: var(--radius-md, 8px);
-  border: 1px solid var(--color-danger-light-8, #fbc4c4);
 }
 
 .batch-count {
   font-size: 13px;
   color: var(--color-text-secondary);
-  margin-right: auto;
+  margin-left: auto;
 }
 .task-title-cell {
   display: flex;
