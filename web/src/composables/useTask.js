@@ -91,6 +91,12 @@ export function useTask() {
     await fetchTrashTasks()
   }
 
+  const batchPermanentDelete = async (ids) => {
+    const res = await axios.post('/api/v1/tasks/batch-permanent-delete', { ids })
+    await fetchTrashTasks()
+    return res.data.deleted
+  }
+
   // 计算属性
   const activeTasks = computed(() => tasks.value.filter(t => t.status !== 'done'))
   const doneTasks = computed(() => tasks.value.filter(t => t.status === 'done'))
@@ -103,6 +109,6 @@ export function useTask() {
     activeTasks, doneTasks,
     // 方法
     fetchTasks, fetchTrashTasks, createTask, updateTask,
-    deleteTask, restoreTask, permanentlyDeleteTask
+    deleteTask, restoreTask, permanentlyDeleteTask, batchPermanentDelete
   }
 }

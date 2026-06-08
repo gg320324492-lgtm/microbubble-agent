@@ -310,7 +310,7 @@ const {
   trashTasks, trashTotal, trashPage, trashPageSize, trashCount,
   activeTasks, doneTasks,
   fetchTasks, fetchTrashTasks, createTask, updateTask,
-  deleteTask: deleteTaskApi, restoreTask: restoreTaskApi, permanentlyDeleteTask
+  deleteTask: deleteTaskApi, restoreTask: restoreTaskApi, permanentlyDeleteTask, batchPermanentDelete
 } = useTask()
 
 const isMobile = ref(window.innerWidth <= 768)
@@ -537,21 +537,8 @@ const handleBatchPermanentDelete = async (ids) => {
       confirmButtonText: `永久删除 ${ids.length} 个`,
       cancelButtonText: '取消'
     })
-    let success = 0
-    let failed = 0
-    const BATCH_DELAY_MS = 2500  // 间隔 2.5s，避免触发 write 限流（30次/分钟）
-    for (let i = 0; i < ids.length; i++) {
-      if (i > 0) await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
-      try {
-        await permanentlyDeleteTask(ids[i])
-        success++
-      } catch { failed++ }
-    }
-    if (failed > 0) {
-      ElMessage.warning(`成功删除 ${success} 个，失败 ${failed} 个`)
-    } else {
-      ElMessage.success(`已永久删除 ${success} 个任务`)
-    }
+    const deleted = await batchPermanentDelete(ids)
+    ElMessage.success(`已永久删除 ${deleted} 个任务`)
     fetchTrashTasks()
   } catch (e) {
     if (e !== 'cancel') {
