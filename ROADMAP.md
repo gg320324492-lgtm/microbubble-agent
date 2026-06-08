@@ -1,8 +1,15 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-06** — 声纹系统全面优化 + 标题自动生成 + 持续学习 + 5090 迁移指南完善
+> 最后更新: **2026-06-08** — Webhint 全面优化 + 垃圾桶批量删除 + 任务配对布局 + 精确跳转
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-08）
+- [Webhint 无障碍+性能+安全头全面优化](#webhint-优化2026-06-08)（ARIA + Cache-Control + CSS 动画 + Nginx 配置）
+- [垃圾桶批量删除](#垃圾桶批量删除2026-06-08)（编辑按钮 + 勾选 + 单次 API 请求秒级完成）
+- [任务列表配对布局](#任务配对布局2026-06-08)（按负责人左右对齐 + 负责人类型修复）
+- [精确跳转](#精确跳转2026-06-08)（成员管理/铃铛跳转自动按用户筛选）
+- [UI 优化](#ui优化2026-06-08)（铃铛加大 + 垃圾桶 Tab 加大）
 
 ### 最新完成（2026-06-06）
 - [声纹识别系统重大优化](#声纹识别系统重大优化2026-06-06)（VAD精细化+语义断句+KMeans分裂+同名检测+名字校对+不限人数）
@@ -40,6 +47,40 @@
 - [项目当前状态速查](#项目当前状态速查2026-06-03)
 
 ---
+
+## Webhint 优化（2026-06-08）
+
+全面修复 webhint 审计工具报告的无障碍、性能和安全头问题：
+
+- **ARIA 修复** — el-popover 关闭时 v-if 移除内部可聚焦元素；el-tab-pane 加 lazy 避免隐藏标签页包含 focusable 元素
+- **表单标签** — el-select/el-button/el-progress 全面补全 aria-label
+- **废弃头移除** — Pragma、Expires 头从 voiceprint 端点移除
+- **Cache-Control** — API 统一为 `max-age=0`，SPA HTML 同步
+- **Nginx 安全头** — proxy_hide_header X-XSS-Protection（API + MinIO）、移除多余 CSP 头、charset_types 去重 text/html
+- **CSS 动画** — 新增 element-plus-overrides.css，用 transform 替代 background-position 消除性能警告
+
+## 垃圾桶批量删除（2026-06-08）
+
+- 垃圾桶表格新增编辑按钮，切换勾选模式
+- 勾选后显示"批量永久删除"按钮
+- 后端新增 `POST /api/v1/tasks/batch-permanent-delete` 接口，接收 `{ids: [1,2,3]}`
+- 单次请求秒级完成，不触发限流（之前逐个删除会触发 429）
+
+## 任务配对布局（2026-06-08）
+
+- 任务列表从左右独立分组改为按负责人配对：左进行中 ↔ 右已完成
+- 新增 `pairedGroups` 计算属性，合并 active/done 按 assignee_id 配对
+- 修复 `getMemberName` 类型不匹配 bug：对象 key 是字符串，`===` 比较数字失败，改为 `==` 宽松比较
+
+## 精确跳转（2026-06-08）
+
+- 成员管理"查看任务"跳转 `/tasks?assignee_id=xxx`，TaskView 自动读取 query 参数筛选
+- 铃铛"查看我的任务"跳转 `/tasks?assignee_id=当前用户ID`
+
+## UI 优化（2026-06-08）
+
+- 铃铛图标加大（32px）+ 圆形背景 + 边框 + hover 缩放阴影
+- 垃圾桶 Tab 加图标（🗑️）+ 加大字号 + hover 背景色
 
 ## 会议纪要标准格式固化（2026-06-06）
 
