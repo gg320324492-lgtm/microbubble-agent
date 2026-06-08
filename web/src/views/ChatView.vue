@@ -169,7 +169,7 @@ marked.setOptions({ breaks: true, gfm: true })
 
 const route = useRoute()
 const userStore = useUserStore()
-const userAvatar = ref('')
+const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 const username = computed(() => userStore.userInfo?.name || '用户')
 
 const messageListRef = ref(null)
@@ -235,7 +235,6 @@ const quickActions = [
 
 onMounted(async () => {
   scrollToBottom()
-  try { userAvatar.value = userStore.userInfo?.avatar || '' } catch {}
   if (route.query.initialMessage) { inputText.value = route.query.initialMessage; sendMessage() }
 })
 
