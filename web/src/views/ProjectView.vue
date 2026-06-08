@@ -4,7 +4,7 @@
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
         <el-col :xs="12" :sm="12" :md="8">
-          <el-select v-model="filters.status" name="filters-status" placeholder="项目状态" clearable>
+          <el-select v-model="filters.status" name="filters-status" placeholder="项目状态" aria-label="项目状态筛选" clearable>
             <el-option label="进行中" value="active" />
             <el-option label="已暂停" value="paused" />
             <el-option label="已完成" value="completed" />
@@ -33,7 +33,7 @@
             {{ getStatusLabel(project.status) }}
           </el-tag>
           <el-dropdown @command="(cmd) => handleCommand(cmd, project)">
-            <el-icon><MoreFilled /></el-icon>
+            <el-icon aria-label="更多操作"><MoreFilled /></el-icon>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="edit">编辑</el-dropdown-item>
@@ -64,7 +64,7 @@
             <span>进度</span>
             <span>{{ project.progress || 0 }}%</span>
           </div>
-          <el-progress :percentage="project.progress || 0" :stroke-width="8" />
+          <el-progress :percentage="project.progress || 0" :stroke-width="8" :aria-label="`项目进度 ${project.progress || 0}%`" />
         </div>
       </el-card>
     </div>
