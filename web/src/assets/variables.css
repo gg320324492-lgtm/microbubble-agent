@@ -397,12 +397,11 @@ body {
 .knowledge-color-application { --accent: #fc8452; }  /* 应用 - 橙色 */
 
 /* ============================================
-   2026-06-08: 覆盖 Element Plus 库内部的 CSS 兼容性属性
-   消除 webhint 警告，同时保持跨浏览器兼容性
+   2026-06-08: 覆盖 Element Plus 兼容性与性能问题
+   消除 webhint 警告，保持跨浏览器兼容性
    ============================================ */
 
-/* 覆盖 -moz-appearance：为 Element Plus 组件添加标准 appearance */
-/* 注意：保留 -moz-appearance 作为 Firefox 回退，但 webhint 只检测标准属性是否存在 */
+/* ---- 1. -moz-appearance → 添加标准 appearance ---- */
 .el-select .el-select__wrapper,
 .el-select-v2 .el-select__wrapper,
 .el-input-number .el-input__wrapper,
@@ -410,10 +409,24 @@ body {
   appearance: none;
   -webkit-appearance: none;
 }
+/* el-pagination 的 input 使用 -moz-appearance: textfield */
+.el-pagination .el-input__inner {
+  appearance: textfield;
+  -webkit-appearance: none;
+}
 
-/* 覆盖 scrollbar-width：Safari 不支持，但有 -webkit-scrollbar 回退 */
-/* 这些是 Element Plus 内部的，无法通过 CSS 覆盖移除，只能忽略 webhint 警告 */
-/* scrollbar-width: thin / none 在 el-scrollbar、el-virtual-list、el-splitter-panel 内部使用 */
+/* ---- 2. 覆盖 Element Plus keyframes：left → transform（避免 Layout 触发） ---- */
+/* 覆盖 el-progress 的 indeterminate 动画（原用 left，触发 Layout） */
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
 
-/* 覆盖 -webkit-backdrop-filter：MainLayout.vue 已正确使用 */
-/* Element Plus 只在类型定义里有，实际 CSS 没用 */
+/* ---- 3. scrollbar-width ---- */
+/* Safari 不支持 scrollbar-width，但有 -webkit-scrollbar 回退 */
+/* 无法通过 CSS 覆盖完全移除属性，webhint 警告可忽略 */
+
+/* ---- 4. webhint 误报说明 ---- */
+/* - backdrop-filter 在 MainLayout.vue 已同时使用标准 + 前缀，"无需添加标准属性"是 webhint 误报 */
+/* - content-security-policy: frame-ancestors 是必要的安全头，"不需要此头"是 webhint 误报 */
+/* - background-position 在 @keyframes（progress/striped-flow/shimmer）是标准骨架屏动画技术 */

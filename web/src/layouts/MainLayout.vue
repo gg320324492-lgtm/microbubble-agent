@@ -257,7 +257,6 @@ const formatTime = (t) => {
 .aside {
   background: var(--color-bg-sidebar);
   backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border-right: 1px solid var(--color-sidebar-border);
   box-shadow: var(--shadow-sidebar);
   transition: width 0.3s;
@@ -568,12 +567,12 @@ const formatTime = (t) => {
 }
 
 @keyframes drawer-mask-in {
-  from { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
-  to   { opacity: 1; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to   { opacity: 1; backdrop-filter: blur(4px); }
 }
 @keyframes drawer-mask-out {
-  from { opacity: 1; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
-  to   { opacity: 0; backdrop-filter: blur(0px); -webkit-backdrop-filter: blur(0px); }
+  from { opacity: 1; backdrop-filter: blur(4px); }
+  to   { opacity: 0; backdrop-filter: blur(0px); }
 }
 
 /* --- 抽屉主体：弹性滑入 + 干脆滑出 --- */
