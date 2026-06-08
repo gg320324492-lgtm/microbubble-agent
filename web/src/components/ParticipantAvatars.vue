@@ -18,6 +18,7 @@
           :size="size"
           :src="p.avatar || undefined"
           class="avatar-item"
+          :alt="p.name || '未知成员'"
           :style="{ zIndex: displayList.length - idx }"
         >
           {{ (p.name || '?')[0] }}

@@ -140,6 +140,7 @@
               :size="40"
               style="background: #409EFF"
               class="avatar group-avatar"
+              alt="系统"
             >
               <el-icon size="20"><VideoCamera /></el-icon>
             </el-avatar>
@@ -148,12 +149,14 @@
               :src="memberStore.getMemberAvatar(group.assignee_id)"
               :size="40"
               class="avatar group-avatar"
+              :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`"
             />
             <el-avatar
               v-else
               :size="40"
               style="background: var(--color-primary)"
               class="avatar group-avatar"
+              :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`"
             >
               {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
             </el-avatar>

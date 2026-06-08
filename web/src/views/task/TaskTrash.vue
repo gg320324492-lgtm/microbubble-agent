@@ -18,8 +18,9 @@
                 v-if="memberStore.getMemberAvatar(row.assignee_id)"
                 :src="memberStore.getMemberAvatar(row.assignee_id)"
                 :size="24"
+                :alt="`${memberStore.getMemberName(row.assignee_id)}的头像`"
               />
-              <el-avatar v-else :size="24" style="background: #409eff">
+              <el-avatar v-else :size="24" style="background: #409eff" :alt="`${memberStore.getMemberName(row.assignee_id)}的头像`">
                 {{ memberStore.getMemberName(row.assignee_id).charAt(0) }}
               </el-avatar>
               <span>{{ memberStore.getMemberName(row.assignee_id) }}</span>

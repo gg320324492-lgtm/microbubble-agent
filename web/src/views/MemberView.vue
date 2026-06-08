@@ -65,8 +65,8 @@
         </div>
 
         <div class="member-avatar">
-          <el-avatar v-if="member.avatar" :size="64" :src="member.avatar" />
-          <el-avatar v-else :size="64" :style="{ background: getAvatarColor(member.name) }">
+          <el-avatar v-if="member.avatar" :size="64" :src="member.avatar" :alt="`${member.name}的头像`" />
+          <el-avatar v-else :size="64" :style="{ background: getAvatarColor(member.name) }" :alt="`${member.name}的头像`">
             {{ member.name.charAt(0) }}
           </el-avatar>
         </div>

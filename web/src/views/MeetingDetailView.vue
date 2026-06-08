@@ -137,7 +137,7 @@
                   <h4>讨论要点</h4>
                   <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
                     <div v-if="group.speaker" class="speaker-row">
-                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
+                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
                       <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="points-list">
@@ -163,7 +163,7 @@
                   <h4>决议事项</h4>
                   <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
                     <div v-if="group.speaker" class="speaker-row">
-                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar">{{ group.speaker[0] }}</el-avatar>
+                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
                       <span class="speaker-name">{{ group.speaker }}</span>
                     </div>
                     <ul class="decisions-list">
@@ -216,7 +216,7 @@
                   :class="{ 'entry-removed': entry.removed }"
                 >
                   <div class="transcript-left">
-                    <el-avatar :size="28" :src="getSpeakerAvatar(entry.speaker)" class="transcript-avatar">
+                    <el-avatar :size="28" :src="getSpeakerAvatar(entry.speaker)" class="transcript-avatar" :alt="`${entry.speaker || '未知'}的头像`">
                       {{ (entry.speaker || '?')[0] }}
                     </el-avatar>
                     <div class="transcript-line" />

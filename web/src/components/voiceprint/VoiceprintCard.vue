@@ -9,7 +9,7 @@
       ></div>
     </div>
     <div class="meta">
-      <el-avatar :src="member.avatar" :size="32">{{ member.name?.[0] }}</el-avatar>
+      <el-avatar :src="member.avatar" :size="32" :alt="`${member.name}的头像`">{{ member.name?.[0] }}</el-avatar>
       <span class="name">{{ member.name }}</span>
       <span class="samples">{{ member.sample_count }} 次录入</span>
     </div>
