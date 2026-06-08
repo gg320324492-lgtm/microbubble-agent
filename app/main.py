@@ -125,8 +125,7 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Request-ID"] = str(uuid4())
     # API 响应禁用缓存（静态资源由 Nginx 控制）
     if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 # 注册路由
