@@ -158,7 +158,11 @@
 
       <el-tab-pane name="trash">
         <template #label>
-          <span>垃圾桶 <el-badge :value="trashCount" :hidden="trashCount === 0" class="trash-badge" /></span>
+          <span class="trash-tab-label">
+            <el-icon :size="16"><Delete /></el-icon>
+            <span>垃圾桶</span>
+            <el-badge v-if="trashCount > 0" :value="trashCount" class="trash-badge" />
+          </span>
         </template>
         <!-- 垃圾桶列表 -->
         <TaskTrash
@@ -847,9 +851,21 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* ===== 垃圾桶 ===== */
+/* ===== 垃圾桶 Tab ===== */
+.trash-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: var(--radius-md, 8px);
+  transition: background var(--duration-fast, 150ms);
+}
+.trash-tab-label:hover {
+  background: rgba(144, 147, 153, 0.08);
+}
 .trash-badge {
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
 .auto-delete-none {
