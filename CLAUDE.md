@@ -130,6 +130,9 @@
 - **Nginx charset_types** — `text/html` 是 Nginx 默认值，不需要在 `charset_types` 中重复声明，否则会有 `duplicate MIME type` 警告
 - **Nginx CSP 头** — 只有 `frame-ancestors 'self'` 的 CSP 太弱，webhint 认为 unneeded。如果不需要完整 CSP 策略，不要添加
 - **Webhook 自动部署正常** — 每次 git push 自动触发 webhook → deploy-auto.sh → git pull → nginx reload。如果部署失败，检查 `/var/log/webhook-deploy.log`
+- **IE 兼容性不修** — Vue 3 + Element Plus 本身不支持 IE，所有 IE 兼容性警告（-ms-grid、flex、sticky、8 位颜色值等）直接忽略，不需要加 `-ms-` 前缀
+- **webhint http-cache 误报** — Vite content-hash 文件名（`index-f2KQs4XE.js`）是业界标准缓存方案，但 webhint 内置正则只认 `[0-9a-f]` 小写十六进制，不认 Vite 的 base64 格式。已添加 `.hintrc` 自定义 revving 正则，但 Edge DevTools 内置 webhint 不读项目配置，浏览器端无法消除此警告
+- **webhint 判断规则** — Error 必须修，Warning 看情况修，Info/Tip 大部分忽略。看源码路径：自己写的代码可以改，第三方库（Element Plus/Vite 打包产物）不能改
 
 ### 2026-06-06 新增
 

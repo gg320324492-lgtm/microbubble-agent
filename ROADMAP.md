@@ -5,11 +5,11 @@
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-08）
-- [Webhint 无障碍+性能+安全头全面优化](#webhint-优化2026-06-08)（ARIA + Cache-Control + CSS 动画 + Nginx 配置）
+- [Webhint 无障碍+性能+安全头全面优化](#webhint-优化2026-06-08)（ARIA + Cache-Control + CSS 动画 + Nginx 配置 + .hintrc + IE 兼容性确认忽略）
 - [垃圾桶批量删除](#垃圾桶批量删除2026-06-08)（编辑按钮 + 勾选 + 单次 API 请求秒级完成）
 - [任务列表配对布局](#任务配对布局2026-06-08)（按负责人左右对齐 + 负责人类型修复）
 - [精确跳转](#精确跳转2026-06-08)（成员管理/铃铛跳转自动按用户筛选）
-- [UI 优化](#ui优化2026-06-08)（铃铛加大 + 垃圾桶 Tab 加大）
+- [UI 优化](#ui优化2026-06-08)（铃铛加大 + 垃圾桶 Tab 加大 + 全站图标按钮 aria-label）
 
 ### 最新完成（2026-06-06）
 - [声纹识别系统重大优化](#声纹识别系统重大优化2026-06-06)（VAD精细化+语义断句+KMeans分裂+同名检测+名字校对+不限人数）
@@ -58,6 +58,9 @@
 - **Cache-Control** — API 统一为 `max-age=0`，SPA HTML 同步
 - **Nginx 安全头** — proxy_hide_header X-XSS-Protection（API + MinIO）、移除多余 CSP 头、charset_types 去重 text/html
 - **CSS 动画** — 新增 element-plus-overrides.css，用 transform 替代 background-position 消除性能警告
+- **.hintrc 配置** — 自定义 revving 正则 `[A-Za-z0-9_-]{5,}` 兼容 Vite base64 content-hash 文件名
+- **IE 兼容性确认忽略** — 所有 IE 兼容性警告（-ms-grid、flex、sticky 等）确认不需要修复，Vue 3 本身不支持 IE
+- **http-cache 说明** — Vite content-hash 文件名已是业界标准缓存方案，webhint 不认是规则缺陷
 
 ## 垃圾桶批量删除（2026-06-08）
 
