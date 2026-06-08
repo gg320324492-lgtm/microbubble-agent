@@ -7,7 +7,7 @@
       :style="{ animationDelay: (idx * 60) + 'ms' }"
     >
       <el-tooltip :content="speaker.name" placement="top" :show-after="300">
-        <el-avatar :size="32" :src="getAvatar(speaker.name)" class="speaker-avatar">
+        <el-avatar :size="32" :src="getAvatar(speaker.name)" class="speaker-avatar" :alt="`${speaker.name}的头像`">
           {{ (speaker.name || '?')[0] }}
         </el-avatar>
       </el-tooltip>

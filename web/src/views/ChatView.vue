@@ -77,7 +77,7 @@
 
           <!-- 用户头像 -->
           <div v-if="msg.role === 'user'" class="msg-avatar msg-avatar-user">
-            <el-avatar :size="32" :src="userAvatar" />
+            <el-avatar :size="32" :src="userAvatar" alt="用户" />
           </div>
         </div>
       </div>

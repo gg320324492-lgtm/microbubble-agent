@@ -11,7 +11,7 @@
         </template>
 
         <div class="avatar-section">
-          <el-avatar :size="80" :key="previewAvatarUrl" :src="previewAvatarUrl || userStore.userInfo?.avatar" icon="UserFilled" class="settings-avatar" />
+          <el-avatar :size="80" :key="previewAvatarUrl" :src="previewAvatarUrl || userStore.userInfo?.avatar" :alt="`${userStore.userInfo?.name || '用户'}的头像`" icon="UserFilled" class="settings-avatar" />
           <label class="avatar-upload-btn">
             <input type="file" accept="image/*" hidden @change="handleAvatarUpload" />
             <el-icon><Camera /></el-icon>

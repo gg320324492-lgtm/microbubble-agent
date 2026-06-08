@@ -11,8 +11,8 @@
   >
     <div v-if="member" class="enroll-dialog">
       <div class="member-summary">
-        <el-avatar v-if="member.avatar" :size="48" :src="member.avatar" />
-        <el-avatar v-else :size="48" :style="{ background: avatarColor }">
+        <el-avatar v-if="member.avatar" :size="48" :src="member.avatar" :alt="`${member.name}的头像`" />
+        <el-avatar v-else :size="48" :style="{ background: avatarColor }" :alt="`${member.name}的头像`">
           {{ member.name.charAt(0) }}
         </el-avatar>
         <div>
