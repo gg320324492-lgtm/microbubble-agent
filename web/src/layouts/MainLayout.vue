@@ -112,7 +112,7 @@
 
           <el-dropdown>
             <div class="user-info">
-              <el-avatar :size="32" :src="userAvatar" icon="UserFilled" />
+              <el-avatar :size="32" :src="userAvatar" :alt="username" icon="UserFilled" />
               <div v-if="!isMobile" class="user-detail">
                 <span class="username">{{ username }}</span>
                 <span class="user-role">{{ userRole }}</span>
