@@ -425,7 +425,7 @@ onUnmounted(() => stopDetailPoll())
 
 /* 消息行 */
 .msg-row { display: flex; gap: 8px; max-width: 80%; margin-bottom: 2px; }
-.msg-user { align-self: flex-end; }
+.msg-user { margin-left: auto; }
 .msg-bot { align-self: flex-start; }
 @media (max-width: 768px) { .msg-row { max-width: 92%; } }
 
