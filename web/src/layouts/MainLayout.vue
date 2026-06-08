@@ -81,13 +81,13 @@
         </div>
 
         <div class="header-right">
-          <el-popover placement="bottom-end" :width="320" trigger="click" @show="handlePopoverShow">
+          <el-popover placement="bottom-end" :width="320" trigger="click" v-model:visible="popoverVisible" @show="handlePopoverShow">
             <template #reference>
               <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
                 <el-icon :size="isMobile ? 22 : 20" class="bell-icon"><Bell /></el-icon>
               </el-badge>
             </template>
-            <div class="notification-panel">
+            <div v-if="popoverVisible" class="notification-panel">
               <div class="notification-panel-title">提醒通知</div>
               <div class="notification-panel-body">
                 <template v-if="notifications.length > 0">
@@ -153,6 +153,7 @@ const memberStore = useMemberStore()
 const isMobile = ref(window.innerWidth <= 768)
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
+const popoverVisible = ref(false)
 
 const sidebarWidth = computed(() => {
   if (isMobile.value) return '0px'
