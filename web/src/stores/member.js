@@ -63,12 +63,12 @@ export const useMemberStore = defineStore('member', () => {
   }
 
   function getMemberName(id) {
-    const m = members.value.find(m => m.id === id)
+    const m = members.value.find(m => m.id == id)  // == 兼容 string/number
     return m ? m.name : '未分配'
   }
 
   function getMemberAvatar(id) {
-    const m = members.value.find(m => m.id === id)
+    const m = members.value.find(m => m.id == id)  // == 兼容 string/number
     return m?.avatar || null
   }
 
