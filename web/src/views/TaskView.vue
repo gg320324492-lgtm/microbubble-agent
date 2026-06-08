@@ -39,212 +39,114 @@
           </el-row>
         </el-card>
 
-        <!-- 任务列表 -->
+        <!-- 任务列表 — 按负责人配对：左进行中，右已完成 -->
         <el-card class="task-list-card card fade-slide-up stagger-2">
-          <el-row :gutter="16">
-            <el-col :span="12">
-              <!-- 未完成 Section -->
-              <div class="task-section">
-                <div class="section-header">
-                  <span class="section-title">📋 进行中</span>
-                  <el-badge :value="activeTasks.length" type="warning" />
-                </div>
-                <div v-if="activeTasks.length === 0" class="empty-section">
-                  <span>暂无进行中任务</span>
-                </div>
-                <div v-else class="task-groups">
-                  <div v-for="(group, gIdx) in groupedActiveTasks" :key="group.assignee_id" class="task-group fade-slide-up" :style="{ animationDelay: `${(gIdx + 2) * 80}ms` }">
-                    <!-- 负责人头部（可点击折叠） -->
-                    <div class="group-header" @click="toggleGroup(group.assignee_id)">
-                      <el-avatar
-                        v-if="memberStore.getMemberAvatar(group.assignee_id)"
-                        :src="memberStore.getMemberAvatar(group.assignee_id)"
-                        :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`"
-                        :size="36"
-                        class="group-avatar"
-                      />
-                      <el-avatar v-else :size="36" style="background: var(--color-primary)" class="group-avatar">
-                        {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
-                      </el-avatar>
-                      <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
-                      <el-tag size="small" type="info">{{ group.tasks.length }}项</el-tag>
-                      <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[group.assignee_id] }"><ArrowDown /></el-icon>
+          <!-- 总表头 -->
+          <div class="paired-header">
+            <div class="paired-header-left">
+              <span class="section-title">📋 进行中</span>
+              <el-badge :value="activeTasks.length" type="warning" />
+            </div>
+            <div class="paired-header-right">
+              <span class="section-title">✅ 已完成</span>
+              <el-badge :value="doneTasks.length" type="success" />
+              <template v-if="doneTasks.length > 0">
+                <el-button v-if="!doneEditMode" size="small" text class="edit-mode-btn" @click="enterDoneEditMode">
+                  <el-icon><Edit /></el-icon> 编辑
+                </el-button>
+                <el-button v-else size="small" text class="edit-mode-btn" @click="exitDoneEditMode">完成</el-button>
+              </template>
+              <template v-if="doneEditMode">
+                <el-button size="small" text @click="toggleSelectAllDone">{{ isAllDoneSelected ? '取消全选' : '全选' }}</el-button>
+                <el-button size="small" type="danger" :disabled="selectedDoneIds.size === 0" class="batch-btn" @click="batchDeleteDone">
+                  <el-icon><Delete /></el-icon> {{ selectedDoneIds.size > 0 ? `删除(${selectedDoneIds.size})` : '删除' }}
+                </el-button>
+              </template>
+            </div>
+          </div>
+
+          <div v-if="pairedGroups.length === 0" class="empty-section">
+            <span>暂无任务</span>
+          </div>
+
+          <!-- 每人一行：左进行中，右已完成 -->
+          <div v-for="(pair, pIdx) in pairedGroups" :key="pair.assignee_id" class="paired-row fade-slide-up" :style="{ animationDelay: `${(pIdx + 2) * 80}ms` }">
+            <!-- 负责人头部 -->
+            <div class="paired-avatar-col">
+              <div class="group-header" @click="toggleGroup(pair.assignee_id)">
+                <el-avatar
+                  v-if="memberStore.getMemberAvatar(pair.assignee_id)"
+                  :src="memberStore.getMemberAvatar(pair.assignee_id)"
+                  :alt="`${memberStore.getMemberName(pair.assignee_id)}的头像`"
+                  :size="36"
+                  class="group-avatar"
+                />
+                <el-avatar v-else :size="36" style="background: var(--color-primary)" class="group-avatar">
+                  {{ memberStore.getMemberName(pair.assignee_id).charAt(0) }}
+                </el-avatar>
+                <span class="group-name">{{ memberStore.getMemberName(pair.assignee_id) }}</span>
+                <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[pair.assignee_id] }"><ArrowDown /></el-icon>
+              </div>
+            </div>
+
+            <div v-show="!collapsedGroups[pair.assignee_id]" class="paired-content">
+              <!-- 左列：进行中 -->
+              <div class="paired-col paired-col-left">
+                <div v-if="pair.activeTasks.length === 0" class="empty-col">暂无</div>
+                <div
+                  v-for="task in pair.activeTasks"
+                  :key="task.id"
+                  class="task-row"
+                  :class="{ overdue: isOverdue(task) }"
+                >
+                  <el-button circle size="default" class="complete-btn complete-btn--outline" @click="toggleTaskStatus(task)" title="标记完成">
+                    <el-icon size="18"><Check /></el-icon>
+                  </el-button>
+                  <div class="task-content">
+                    <div class="task-title">{{ task.title }}</div>
+                    <div class="task-meta">
+                      <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">{{ getPriorityLabel(task.priority) }}</el-tag>
+                      <el-tag v-if="task.status === 'blocked'" size="small" type="danger">阻塞</el-tag>
                     </div>
-                    <!-- 任务列表 -->
-                    <div v-show="!collapsedGroups[group.assignee_id]" class="group-tasks">
-                      <div
-                        v-for="task in group.tasks"
-                        :key="task.id"
-                        class="task-row"
-                        :class="{ overdue: isOverdue(task) }"
-                      >
-                        <el-button
-                          circle
-                          size="default"
-                          class="complete-btn complete-btn--outline"
-                          @click="toggleTaskStatus(task)"
-                          title="标记完成"
-                        >
-                          <el-icon size="18"><Check /></el-icon>
-                        </el-button>
-                        <div class="task-content">
-                          <div class="task-title">{{ task.title }}</div>
-                          <div class="task-meta">
-                            <el-tag :type="getPriorityType(task.priority)" size="small" effect="plain">
-                              {{ getPriorityLabel(task.priority) }}
-                            </el-tag>
-                            <el-tag v-if="task.status === 'in_progress'" size="small" type="warning">进行中</el-tag>
-                            <el-tag v-else-if="task.status === 'blocked'" size="small" type="danger">阻塞</el-tag>
-                          </div>
-                        </div>
-                        <div class="task-due" :class="{ overdue: isOverdue(task) }">
-                          <el-icon v-if="isOverdue(task)" color="var(--color-danger)"><Warning /></el-icon>
-                          {{ formatDate(task.due_date) }}
-                        </div>
-                        <div class="task-actions">
-                          <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                            <el-button text type="primary" @click="editTask(task)">
-                              <el-icon><Edit /></el-icon>
-                              编辑
-                            </el-button>
-                            <el-button text type="danger" @click="deleteTask(task)">
-                              <el-icon><Delete /></el-icon>
-                              删除
-                            </el-button>
-                          </template>
-                        </div>
-                      </div>
-                    </div>
+                  </div>
+                  <div class="task-due" :class="{ overdue: isOverdue(task) }">
+                    <el-icon v-if="isOverdue(task)" color="var(--color-danger)"><Warning /></el-icon>
+                    {{ formatDate(task.due_date) }}
+                  </div>
+                  <div class="task-actions">
+                    <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
+                      <el-button text type="primary" @click="editTask(task)"><el-icon><Edit /></el-icon></el-button>
+                      <el-button text type="danger" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
+                    </template>
                   </div>
                 </div>
               </div>
-            </el-col>
-            <el-col :span="12">
-              <!-- 已完成 Section -->
-              <div class="task-section done-section">
-                <div class="section-header">
-                  <span class="section-title">✅ 已完成</span>
-                  <el-badge :value="doneTasks.length" type="success" />
-                  <span v-if="doneEditMode" class="selection-info" :class="{ 'is-active': selectedDoneIds.size > 0 }">
-                    {{ selectedDoneIds.size > 0 ? `已选 ${selectedDoneIds.size}` : '选择要删除的任务' }}
-                  </span>
-                  <el-button
-                    v-if="doneTasks.length > 0 && doneEditMode && selectedDoneIds.size > 0"
-                    size="small"
-                    text
-                    @click="clearDoneSelection"
-                  >
-                    清空
+
+              <!-- 右列：已完成 -->
+              <div class="paired-col paired-col-right">
+                <div v-if="pair.doneTasks.length === 0" class="empty-col">暂无</div>
+                <div
+                  v-for="task in pair.doneTasks"
+                  :key="task.id"
+                  class="task-row done-row"
+                  :class="{ 'is-selected': selectedDoneIds.has(task.id) }"
+                >
+                  <el-checkbox v-if="doneEditMode" :model-value="selectedDoneIds.has(task.id)" class="row-checkbox" @change="toggleSelectDone(task.id)" />
+                  <el-button circle size="default" class="complete-btn complete-btn--done" @click="toggleTaskStatus(task)" title="取消完成">
+                    <el-icon size="18"><Check /></el-icon>
                   </el-button>
-                  <el-button
-                    v-if="doneTasks.length > 0 && doneEditMode"
-                    size="small"
-                    text
-                    @click="toggleSelectAllDone"
-                  >
-                    {{ isAllDoneSelected ? '取消全选' : '全选' }}
-                  </el-button>
-                  <el-button
-                    v-if="doneTasks.length > 0 && doneEditMode"
-                    size="small"
-                    type="danger"
-                    :disabled="selectedDoneIds.size === 0"
-                    class="batch-btn"
-                    @click="batchDeleteDone"
-                  >
-                    <el-icon><Delete /></el-icon>
-                    {{ selectedDoneIds.size > 0
-                      ? `删除（${selectedDoneIds.size}）`
-                      : '删除' }}
-                  </el-button>
-                  <template v-if="doneTasks.length > 0">
-                    <el-button
-                      v-if="!doneEditMode"
-                      size="small"
-                      text
-                      class="edit-mode-btn"
-                      @click="enterDoneEditMode"
-                    >
-                      <el-icon><Edit /></el-icon> 编辑
-                    </el-button>
-                    <el-button
-                      v-else
-                      size="small"
-                      text
-                      class="edit-mode-btn"
-                      @click="exitDoneEditMode"
-                    >
-                      完成
-                    </el-button>
-                  </template>
-                </div>
-                <div v-if="doneTasks.length === 0" class="empty-section">
-                  <span>暂无已完成任务</span>
-                </div>
-                <div v-else class="task-groups">
-                  <div v-for="(group, gIdx) in groupedDoneTasks" :key="group.assignee_id" class="task-group done-group fade-slide-up" :style="{ animationDelay: `${(gIdx + 3) * 80}ms` }">
-                    <!-- 负责人头部（可点击折叠） -->
-                    <div class="group-header" @click="toggleGroup(group.assignee_id)">
-                      <el-avatar
-                        v-if="memberStore.getMemberAvatar(group.assignee_id)"
-                        :src="memberStore.getMemberAvatar(group.assignee_id)"
-                        :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`"
-                        :size="36"
-                        class="group-avatar"
-                      />
-                      <el-avatar v-else :size="36" style="background: var(--color-success)" class="group-avatar">
-                        {{ memberStore.getMemberName(group.assignee_id).charAt(0) }}
-                      </el-avatar>
-                      <span class="group-name">{{ memberStore.getMemberName(group.assignee_id) }}</span>
-                      <el-tag size="small" type="info">{{ group.tasks.length }}项</el-tag>
-                      <el-icon class="collapse-icon" :class="{ collapsed: collapsedGroups[group.assignee_id] }"><ArrowDown /></el-icon>
-                    </div>
-                    <!-- 任务列表 -->
-                    <div v-show="!collapsedGroups[group.assignee_id]" class="group-tasks">
-                      <div
-                        v-for="task in group.tasks"
-                        :key="task.id"
-                        class="task-row done-row"
-                        :class="{ 'is-selected': selectedDoneIds.has(task.id) }"
-                      >
-                        <template v-if="doneEditMode">
-                          <el-checkbox
-                            :model-value="selectedDoneIds.has(task.id)"
-                            :aria-label="`选择任务：${task.title}`"
-                            class="row-checkbox"
-                            @change="toggleSelectDone(task.id)"
-                          />
-                        </template>
-                        <el-button
-                          circle
-                          size="default"
-                          class="complete-btn complete-btn--done"
-                          @click="toggleTaskStatus(task)"
-                          title="取消完成"
-                        >
-                          <el-icon size="18"><Check /></el-icon>
-                        </el-button>
-                        <div class="task-content">
-                          <div class="task-title task-done">{{ task.title }}</div>
-                          <div class="task-meta">
-                            <el-tag size="small" type="success">已完成</el-tag>
-                          </div>
-                        </div>
-                        <div class="task-actions">
-                          <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                            <el-button text type="danger" @click="deleteTask(task)">
-                              <el-icon><Delete /></el-icon>
-                              删除
-                            </el-button>
-                          </template>
-                        </div>
-                      </div>
-                    </div>
+                  <div class="task-content">
+                    <div class="task-title task-done">{{ task.title }}</div>
+                  </div>
+                  <div class="task-actions">
+                    <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
+                      <el-button text type="danger" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
+                    </template>
                   </div>
                 </div>
               </div>
-            </el-col>
-          </el-row>
+            </div>
+          </div>
         </el-card>
       </el-tab-pane>
 
@@ -373,6 +275,23 @@ function groupTasksByAssignee(taskList) {
 
 const groupedActiveTasks = computed(() => groupTasksByAssignee(activeTasks.value))
 const groupedDoneTasks = computed(() => groupTasksByAssignee(doneTasks.value))
+
+// 统一配对：按负责人合并进行中+已完成，左右对齐
+const pairedGroups = computed(() => {
+  const activeMap = {}
+  for (const g of groupedActiveTasks.value) activeMap[g.assignee_id] = g.tasks
+  const doneMap = {}
+  for (const g of groupedDoneTasks.value) doneMap[g.assignee_id] = g.tasks
+  // 所有负责人（进行中优先排序）
+  const allIds = [...new Set([...Object.keys(activeMap), ...Object.keys(doneMap)])]
+  // 按进行中任务数排序，无进行中的排后面
+  allIds.sort((a, b) => (activeMap[b]?.length || 0) - (activeMap[a]?.length || 0))
+  return allIds.map(id => ({
+    assignee_id: id,
+    activeTasks: activeMap[id] || [],
+    doneTasks: doneMap[id] || []
+  }))
+})
 
 // 打开创建弹窗
 const openCreateDialog = () => {
@@ -679,7 +598,57 @@ onMounted(() => {
   background: var(--color-bg-card);
 }
 
-/* ===== 任务分组 ===== */
+/* ===== 配对布局：按负责人左右对齐 ===== */
+.paired-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border-lighter, #ebeef5);
+}
+.paired-header-left,
+.paired-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.paired-row {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--color-border-lighter, #ebeef5);
+  padding: 12px 0;
+}
+.paired-row:last-child {
+  border-bottom: none;
+}
+.paired-avatar-col {
+  flex-shrink: 0;
+}
+.paired-content {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+.paired-col {
+  flex: 1;
+  min-width: 0;
+}
+.paired-col-left {
+  border-right: 1px solid var(--color-border-lighter, #ebeef5);
+  padding-right: 16px;
+}
+.paired-col-right {
+  padding-left: 0;
+}
+.empty-col {
+  color: var(--color-text-placeholder);
+  font-size: 13px;
+  padding: 8px 0;
+  text-align: center;
+}
+
+/* ===== 任务分组（旧样式保留兼容） ===== */
 .task-section {
   padding: 0 8px;
 }
