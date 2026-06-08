@@ -211,12 +211,8 @@ defineExpose({
 }
 
 @keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(245, 108, 108, 0);
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .recording-icon {
@@ -256,14 +252,15 @@ defineExpose({
 
 .wave-bar {
   width: 3px;
-  height: 8px;
+  height: 20px;
   background: #f56c6c;
   border-radius: 2px;
   animation: wave 0.8s ease-in-out infinite;
+  transform-origin: center center;
 }
 
 @keyframes wave {
-  0%, 100% { height: 8px; }
-  50% { height: 20px; }
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
 }
 </style>
