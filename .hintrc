@@ -5,6 +5,9 @@
       "ignore": ["Content-Security-Policy"],
       "include": []
     }],
-    "no-disallowed-headers": "off"
+    "no-disallowed-headers": "off",
+    "content-type": ["warning", {
+      ".*\\.css": "text/css; charset=utf-8"
+    }]
   }
 }
