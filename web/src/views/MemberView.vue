@@ -17,7 +17,7 @@
           </el-input>
         </el-col>
         <el-col :xs="12" :sm="12" :md="8">
-          <el-select v-model="searchGrade" name="searchGrade" placeholder="年级" clearable>
+          <el-select v-model="searchGrade" name="searchGrade" placeholder="年级" aria-label="年级筛选" clearable>
             <el-option label="教授" value="教授" />
             <el-option label="博士后" value="博士后" />
             <el-option label="博一" value="博一" />
@@ -140,7 +140,7 @@
           <el-input v-model="memberForm.name" name="member-form-name" placeholder="请输入姓名" />
         </el-form-item>
         <el-form-item label="年级">
-          <el-select v-model="memberForm.grade" name="member-form-grade" placeholder="选择年级">
+          <el-select v-model="memberForm.grade" name="member-form-grade" placeholder="选择年级" aria-label="年级">
             <el-option label="教授" value="教授" />
             <el-option label="博士后" value="博士后" />
             <el-option label="博一" value="博一" />
@@ -154,7 +154,7 @@
           <el-input v-model="memberForm.research_area" name="member-form-research-area" placeholder="如：气泡生成、水处理" />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="memberForm.role" name="member-form-role">
+          <el-select v-model="memberForm.role" name="member-form-role" aria-label="角色">
             <el-option label="管理员" value="admin" />
             <el-option label="组长" value="leader" />
             <el-option label="成员" value="member" />
@@ -174,6 +174,7 @@
             filterable
             allow-create
             placeholder="输入技能标签"
+            aria-label="技能标签"
           >
             <el-option label="NTA" value="NTA" />
             <el-option label="DLS" value="DLS" />
