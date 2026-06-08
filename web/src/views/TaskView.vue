@@ -124,6 +124,16 @@
                 <div class="section-header">
                   <span class="section-title">✅ 已完成</span>
                   <el-badge :value="doneTasks.length" type="success" />
+                  <el-button
+                    v-if="doneTasks.length > 0"
+                    size="small"
+                    type="danger"
+                    plain
+                    class="batch-btn"
+                    @click="batchDeleteDone"
+                  >
+                    <el-icon><Delete /></el-icon> 批量删除已完成
+                  </el-button>
                 </div>
                 <div v-if="doneTasks.length === 0" class="empty-section">
                   <span>暂无已完成任务</span>
@@ -338,6 +348,30 @@ const deleteTask = async (task) => {
   }
 }
 
+// 批量删除已完成任务
+const batchDeleteDone = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除全部 ${doneTasks.value.length} 条已完成任务吗？删除后可从垃圾桶恢复。`,
+      '批量删除',
+      { type: 'warning', confirmButtonText: '全部删除', cancelButtonText: '取消' }
+    )
+    let success = 0
+    for (const task of doneTasks.value) {
+      try {
+        await deleteTaskApi(task.id)
+        success++
+      } catch { /* 继续 */ }
+    }
+    ElMessage.success(`已删除 ${success} 条任务到垃圾桶`)
+    fetchTasks()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error('批量删除失败')
+    }
+  }
+}
+
 // 恢复任务
 const handleRestore = async (taskId) => {
   try {
@@ -508,6 +542,9 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 12px;
   padding: 8px 0;
+}
+.batch-btn {
+  margin-left: auto;
 }
 
 .section-title {
