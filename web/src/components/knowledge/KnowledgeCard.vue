@@ -71,6 +71,7 @@
             text
             type="success"
             size="small"
+            aria-label="下载"
             @click="$emit('download', item)"
           >
             <el-icon><Download /></el-icon>
@@ -79,6 +80,7 @@
             text
             type="primary"
             size="small"
+            aria-label="编辑"
             @click="$emit('edit', item)"
           >
             <el-icon><Edit /></el-icon>
@@ -87,6 +89,7 @@
             text
             type="danger"
             size="small"
+            aria-label="删除"
             @click="$emit('delete', item)"
           >
             <el-icon><Delete /></el-icon>
