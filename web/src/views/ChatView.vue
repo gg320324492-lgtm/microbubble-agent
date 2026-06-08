@@ -77,7 +77,7 @@
 
           <!-- 用户头像 -->
           <div v-if="msg.role === 'user'" class="msg-avatar msg-avatar-user">
-            <el-avatar :size="32" :src="userAvatar" alt="用户" icon="UserFilled">{{ username[0] }}</el-avatar>
+            <el-avatar :size="32" :src="userAvatar" alt="用户">{{ username[0] }}</el-avatar>
           </div>
         </div>
       </div>
@@ -157,7 +157,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Close, Picture, Paperclip, Document, ArrowDown, Microphone, Delete, Promotion, VideoPlay, UserFilled } from '@element-plus/icons-vue'
+import { Close, Picture, Paperclip, Document, ArrowDown, Microphone, Delete, Promotion, VideoPlay } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { marked } from 'marked'
@@ -426,7 +426,7 @@ onUnmounted(() => stopDetailPoll())
 
 /* 消息行 */
 .msg-row { display: flex; gap: 8px; max-width: 80%; margin-bottom: 2px; }
-.msg-user { margin-left: auto; }
+.msg-user { justify-content: flex-end; }
 .msg-bot { align-self: flex-start; }
 @media (max-width: 768px) { .msg-row { max-width: 92%; } }
 
