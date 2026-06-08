@@ -263,6 +263,7 @@
           :current-user-id="currentUserId"
           @restore="handleRestore"
           @permanent-delete="handlePermanentDelete"
+          @batch-permanent-delete="handleBatchPermanentDelete"
           @page-change="handleTrashPageChange"
           @size-change="handleTrashSizeChange"
         />
@@ -524,6 +525,30 @@ const handlePermanentDelete = async (taskId) => {
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error('永久删除失败')
+    }
+  }
+}
+
+const handleBatchPermanentDelete = async (ids) => {
+  if (!ids.length) return
+  try {
+    await ElMessageBox.confirm(`确定要永久删除 ${ids.length} 个任务吗？此操作不可恢复！`, '批量永久删除', {
+      type: 'error',
+      confirmButtonText: `永久删除 ${ids.length} 个`,
+      cancelButtonText: '取消'
+    })
+    let success = 0
+    for (const id of ids) {
+      try {
+        await permanentlyDeleteTask(id)
+        success++
+      } catch { /* skip failed */ }
+    }
+    ElMessage.success(`已永久删除 ${success} 个任务`)
+    fetchTrashTasks()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error('批量永久删除失败')
     }
   }
 }
