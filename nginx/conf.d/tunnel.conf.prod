@@ -1,5 +1,9 @@
 # HTTPS 配置（SSL 证书申请后使用）
 # 部署路径: /etc/nginx/conf.d/default.conf
+# 2026-06-08: 修复 webhint 安全头/缓存/性能警告
+
+# 隐藏 nginx 版本号（webhint: server header should only contain server name）
+server_tokens off;
 
 # HTTP → HTTPS 重定向
 server {
@@ -24,11 +28,17 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
-    # 安全头
+    # 安全头（2026-06-08 更新）
+    # - 移除 X-Frame-Options，改用 CSP frame-ancestors（更现代，支持更一致）
+    # - 移除 X-XSS-Protection（已过时，现代浏览器不需要）
+    # - 保留 Strict-Transport-Security + X-Content-Type-Options
     add_header Strict-Transport-Security "max-age=63072000" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # 默认字符集（webhint: content-type charset should be utf-8）
+    charset utf-8;
 
     root /opt/microbubble-agent/web/dist;
     index index.html;
@@ -89,9 +99,14 @@ server {
     }
 
     # 静态资源缓存（配合 Vite content-hash 文件名）
+    # 2026-06-08: 移除 expires，改用纯 Cache-Control（webhint: Expires 不应使用）
+    # 注意：location 内的 add_header 会覆盖 server 块的 add_header，
+    #       所以必须重复声明安全头（nginx 已知行为）
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 7d;
-        add_header Cache-Control "public, immutable";
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 }
 
@@ -114,10 +129,14 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
+    # 安全头（2026-06-08 更新，与 agent 站点一致）
     add_header Strict-Transport-Security "max-age=63072000" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Content-Security-Policy "frame-ancestors 'self'" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # 默认字符集
+    charset utf-8;
 
     root /var/www/mnb-lab;
     index index.html;
@@ -126,8 +145,11 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # 静态资源缓存（2026-06-08: 移除 expires，改用纯 Cache-Control）
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 }
