@@ -118,11 +118,15 @@ app.middleware("http")(rate_limit_middleware)
 # 安全响应头中间件
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    """安全响应头 + 请求追踪"""
+    """安全响应头 + 请求追踪 + Cache-Control"""
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Request-ID"] = str(uuid4())
+    # API 响应禁用缓存（静态资源由 Nginx 控制）
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
     return response
 
 # 注册路由
