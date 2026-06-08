@@ -7,14 +7,14 @@
         <el-card class="filter-card card fade-slide-up stagger-1">
           <el-row :gutter="16" align="middle">
             <el-col :xs="12" :sm="12" :md="6">
-              <el-select v-model="filters.status" name="filters-status" placeholder="任务状态" clearable>
+              <el-select v-model="filters.status" name="filters-status" placeholder="任务状态" aria-label="按任务状态筛选" clearable>
                 <el-option label="进行中" value="in_progress" />
                 <el-option label="阻塞" value="blocked" />
                 <el-option label="已完成" value="done" />
               </el-select>
             </el-col>
             <el-col :xs="12" :sm="12" :md="6">
-              <el-select v-model="filters.assignee_id" name="filters-assignee_id" placeholder="负责人" clearable>
+              <el-select v-model="filters.assignee_id" name="filters-assignee_id" placeholder="负责人" aria-label="按负责人筛选" clearable>
                 <el-option
                   v-for="member in members"
                   :key="member.id"
@@ -24,7 +24,7 @@
               </el-select>
             </el-col>
             <el-col :xs="12" :sm="12" :md="6">
-              <el-select v-model="filters.priority" name="filters-priority" placeholder="优先级" clearable>
+              <el-select v-model="filters.priority" name="filters-priority" placeholder="优先级" aria-label="按优先级筛选" clearable>
                 <el-option label="高" value="high" />
                 <el-option label="中" value="medium" />
                 <el-option label="低" value="low" />
@@ -59,6 +59,7 @@
                       <el-avatar
                         v-if="memberStore.getMemberAvatar(group.assignee_id)"
                         :src="memberStore.getMemberAvatar(group.assignee_id)"
+                        :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`"
                         :size="36"
                         class="group-avatar"
                       />
@@ -168,6 +169,7 @@
                       <el-avatar
                         v-if="memberStore.getMemberAvatar(group.assignee_id)"
                         :src="memberStore.getMemberAvatar(group.assignee_id)"
+                        :alt="`${memberStore.getMemberName(group.assignee_id)}的头像`"
                         :size="36"
                         class="group-avatar"
                       />
@@ -188,6 +190,7 @@
                       >
                         <el-checkbox
                           :model-value="selectedDoneIds.has(task.id)"
+                          :aria-label="`选择任务：${task.title}`"
                           class="row-checkbox"
                           @change="toggleSelectDone(task.id)"
                         />
