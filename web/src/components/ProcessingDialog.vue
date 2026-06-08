@@ -269,8 +269,8 @@ if (token) {
   background: #ccc;
 }
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 122, 92, 0.5); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 122, 92, 0); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 .stage-name {
   font-size: 16px;
@@ -295,7 +295,7 @@ if (token) {
   animation: btn-glow 2s ease-in-out infinite;
 }
 @keyframes btn-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 122, 92, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(255, 122, 92, 0); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 </style>
