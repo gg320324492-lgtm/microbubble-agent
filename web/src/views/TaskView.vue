@@ -117,8 +117,8 @@
                   </div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                      <el-button text type="primary" @click="editTask(task)"><el-icon><Edit /></el-icon></el-button>
-                      <el-button text type="danger" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
+                      <el-button text type="primary" aria-label="编辑" @click="editTask(task)"><el-icon><Edit /></el-icon></el-button>
+                      <el-button text type="danger" aria-label="删除" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
                     </template>
                   </div>
                 </div>
@@ -146,7 +146,7 @@
                   <div class="task-due">-</div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                      <el-button text type="danger" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
+                      <el-button text type="danger" aria-label="删除" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
                     </template>
                   </div>
                 </div>
