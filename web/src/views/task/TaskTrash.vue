@@ -1,7 +1,24 @@
 <template>
   <el-card class="task-list-card">
+    <!-- 批量操作栏 -->
+    <div v-if="selectedRows.length > 0" class="batch-bar">
+      <span class="batch-count">已选 {{ selectedRows.length }} 项</span>
+      <el-button text type="primary" @click="clearSelection">取消选择</el-button>
+      <el-button text type="danger" @click="batchPermanentDelete">
+        <el-icon><DeleteFilled /></el-icon>
+        批量永久删除
+      </el-button>
+    </div>
+
     <div style="overflow-x: auto">
-      <el-table v-loading="loading" :data="trashTasks" stripe style="width: 100%">
+      <el-table
+        v-loading="loading"
+        :data="trashTasks"
+        stripe
+        style="width: 100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="45" />
         <el-table-column prop="title" label="任务标题" min-width="200">
           <template #default="{ row }">
             <div class="task-title-cell">
@@ -122,7 +139,22 @@ const props = defineProps({
   currentUserId: { type: [Number, String], default: null }
 })
 
-const emit = defineEmits(['restore', 'permanent-delete', 'page-change', 'size-change'])
+const emit = defineEmits(['restore', 'permanent-delete', 'batch-permanent-delete', 'page-change', 'size-change'])
+
+const selectedRows = ref([])
+
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows
+}
+
+const clearSelection = () => {
+  selectedRows.value = []
+}
+
+const batchPermanentDelete = () => {
+  const ids = selectedRows.value.map(r => r.id)
+  emit('batch-permanent-delete', ids)
+}
 
 const currentPage = ref(props.trashPage)
 const pageSize = ref(props.trashPageSize)
@@ -202,6 +234,22 @@ function formatAutoDeleteExact(autoDeleteAt) {
 </script>
 
 <style scoped>
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--color-primary-light-9, #fef0f0);
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-danger-light-8, #fbc4c4);
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-right: auto;
+}
 .task-title-cell {
   display: flex;
   align-items: center;
