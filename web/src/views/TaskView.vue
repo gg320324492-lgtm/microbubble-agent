@@ -325,6 +325,11 @@ onMounted(() => {
   autoDeleteTimer = setInterval(() => {
     now.value = dayjs()
   }, 30 * 1000)
+
+  // 从 URL query 读取筛选条件（如从成员管理跳转过来）
+  if (route.query.assignee_id) {
+    filters.value.assignee_id = Number(route.query.assignee_id)
+  }
 })
 onUnmounted(() => {
   if (autoDeleteTimer) {
