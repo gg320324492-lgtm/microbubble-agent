@@ -84,7 +84,7 @@
           <el-popover placement="bottom-end" :width="320" trigger="click" v-model:visible="popoverVisible" @show="handlePopoverShow">
             <template #reference>
               <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
-                <el-icon :size="isMobile ? 30 : 28" class="bell-icon"><Bell /></el-icon>
+                <el-icon :size="isMobile ? 36 : 32" class="bell-icon"><Bell /></el-icon>
               </el-badge>
             </template>
             <div v-if="popoverVisible" class="notification-panel">
