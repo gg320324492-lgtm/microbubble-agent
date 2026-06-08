@@ -123,10 +123,9 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Request-ID"] = str(uuid4())
-    # API 响应：允许验证但不缓存（private + max-age=0 + must-revalidate）
-    # 满足 webhint 要求必须含 max-age，实际效果与 no-store 等价
+    # API 响应：max-age=0 满足 webhint 规则（只接受 max-age，不接受 no-store/must-revalidate）
     if request.url.path.startswith("/api/"):
-        response.headers["Cache-Control"] = "private, max-age=0, must-revalidate"
+        response.headers["Cache-Control"] = "max-age=0"
     return response
 
 # 注册路由
