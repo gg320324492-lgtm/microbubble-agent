@@ -105,7 +105,7 @@
                 <p v-else style="color:#909399;text-align:center;padding:20px 0">暂无新提醒</p>
               </div>
               <div class="notification-panel-footer">
-                <el-button text size="small" @click="router.push('/tasks')">查看我的任务</el-button>
+                <el-button text size="small" @click="router.push({ path: '/tasks', query: { assignee_id: userStore.userInfo?.id } })">查看我的任务</el-button>
               </div>
             </div>
           </el-popover>
