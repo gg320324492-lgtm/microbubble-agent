@@ -538,13 +538,20 @@ const handleBatchPermanentDelete = async (ids) => {
       cancelButtonText: '取消'
     })
     let success = 0
-    for (const id of ids) {
+    let failed = 0
+    const BATCH_DELAY_MS = 2500  // 间隔 2.5s，避免触发 write 限流（30次/分钟）
+    for (let i = 0; i < ids.length; i++) {
+      if (i > 0) await new Promise(r => setTimeout(r, BATCH_DELAY_MS))
       try {
-        await permanentlyDeleteTask(id)
+        await permanentlyDeleteTask(ids[i])
         success++
-      } catch { /* skip failed */ }
+      } catch { failed++ }
     }
-    ElMessage.success(`已永久删除 ${success} 个任务`)
+    if (failed > 0) {
+      ElMessage.warning(`成功删除 ${success} 个，失败 ${failed} 个`)
+    } else {
+      ElMessage.success(`已永久删除 ${success} 个任务`)
+    }
     fetchTrashTasks()
   } catch (e) {
     if (e !== 'cancel') {
