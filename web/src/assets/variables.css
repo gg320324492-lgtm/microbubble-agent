@@ -410,9 +410,10 @@ body {
   -webkit-appearance: none;
 }
 /* el-pagination 的 input 使用 -moz-appearance: textfield */
+/* 注意：vendor prefix 在前，标准属性在后（标准属性垫底覆盖） */
 .el-pagination .el-input__inner {
-  appearance: textfield;
   -webkit-appearance: none;
+  appearance: textfield;
 }
 
 /* ---- 2. 覆盖 Element Plus keyframes：left → transform（避免 Layout 触发） ---- */
