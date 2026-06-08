@@ -125,11 +125,11 @@
                 <div class="section-header">
                   <span class="section-title">✅ 已完成</span>
                   <el-badge :value="doneTasks.length" type="success" />
-                  <span v-if="selectedDoneIds.size > 0" class="selection-info">
-                    已选 {{ selectedDoneIds.size }} / {{ doneTasks.length }}
+                  <span v-if="doneEditMode" class="selection-info" :class="{ 'is-active': selectedDoneIds.size > 0 }">
+                    {{ selectedDoneIds.size > 0 ? `已选 ${selectedDoneIds.size}` : '选择要删除的任务' }}
                   </span>
                   <el-button
-                    v-if="doneTasks.length > 0 && selectedDoneIds.size > 0"
+                    v-if="doneTasks.length > 0 && doneEditMode && selectedDoneIds.size > 0"
                     size="small"
                     text
                     @click="clearDoneSelection"
@@ -137,7 +137,7 @@
                     清空
                   </el-button>
                   <el-button
-                    v-if="doneTasks.length > 0"
+                    v-if="doneTasks.length > 0 && doneEditMode"
                     size="small"
                     text
                     @click="toggleSelectAllDone"
@@ -145,19 +145,38 @@
                     {{ isAllDoneSelected ? '取消全选' : '全选' }}
                   </el-button>
                   <el-button
-                    v-if="doneTasks.length > 0"
+                    v-if="doneTasks.length > 0 && doneEditMode"
                     size="small"
                     type="danger"
-                    :plain="selectedDoneIds.size === 0"
                     :disabled="selectedDoneIds.size === 0"
                     class="batch-btn"
                     @click="batchDeleteDone"
                   >
                     <el-icon><Delete /></el-icon>
                     {{ selectedDoneIds.size > 0
-                      ? `批量删除（${selectedDoneIds.size}）`
-                      : '批量删除已完成' }}
+                      ? `删除（${selectedDoneIds.size}）`
+                      : '删除' }}
                   </el-button>
+                  <template v-if="doneTasks.length > 0">
+                    <el-button
+                      v-if="!doneEditMode"
+                      size="small"
+                      text
+                      class="edit-mode-btn"
+                      @click="enterDoneEditMode"
+                    >
+                      <el-icon><Edit /></el-icon> 编辑
+                    </el-button>
+                    <el-button
+                      v-else
+                      size="small"
+                      text
+                      class="edit-mode-btn"
+                      @click="exitDoneEditMode"
+                    >
+                      完成
+                    </el-button>
+                  </template>
                 </div>
                 <div v-if="doneTasks.length === 0" class="empty-section">
                   <span>暂无已完成任务</span>
@@ -188,12 +207,14 @@
                         class="task-row done-row"
                         :class="{ 'is-selected': selectedDoneIds.has(task.id) }"
                       >
-                        <el-checkbox
-                          :model-value="selectedDoneIds.has(task.id)"
-                          :aria-label="`选择任务：${task.title}`"
-                          class="row-checkbox"
-                          @change="toggleSelectDone(task.id)"
-                        />
+                        <template v-if="doneEditMode">
+                          <el-checkbox
+                            :model-value="selectedDoneIds.has(task.id)"
+                            :aria-label="`选择任务：${task.title}`"
+                            class="row-checkbox"
+                            @change="toggleSelectDone(task.id)"
+                          />
+                        </template>
                         <el-button
                           circle
                           size="default"
@@ -380,11 +401,21 @@ const deleteTask = async (task) => {
   }
 }
 
-// 已完成任务多选状态
+// 已完成任务多选状态 + 编辑模式
+const doneEditMode = ref(false)
 const selectedDoneIds = ref(new Set())
 const isAllDoneSelected = computed(
   () => doneTasks.value.length > 0 && selectedDoneIds.value.size === doneTasks.value.length
 )
+
+const enterDoneEditMode = () => {
+  doneEditMode.value = true
+}
+
+const exitDoneEditMode = () => {
+  doneEditMode.value = false
+  selectedDoneIds.value = new Set()  // 退出编辑模式时清空选择
+}
 
 const toggleSelectDone = (taskId) => {
   // 重新构造 Set 触发 ref 响应式（Set 的 add/delete 在 ref 包中也能触发，但赋值最稳）
@@ -456,6 +487,7 @@ const batchDeleteDone = async () => {
       ElMessage.warning(`已删除 ${success} 条，${failed} 条失败`)
     }
     selectedDoneIds.value = new Set()  // 清空选择
+    doneEditMode.value = false  // 删除完成后退出编辑模式
     fetchTasks()
   } catch (e) {
     if (e !== 'cancel') {
@@ -641,11 +673,22 @@ onMounted(() => {
 }
 .selection-info {
   font-size: 12px;
-  color: var(--color-primary);
-  font-weight: 600;
-  background: rgba(255, 122, 92, 0.08);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  background: rgba(144, 147, 153, 0.08);
   padding: 2px 8px;
   border-radius: var(--radius-sm);
+}
+.selection-info.is-active {
+  color: var(--color-primary);
+  background: rgba(255, 122, 92, 0.08);
+  font-weight: 600;
+}
+.edit-mode-btn {
+  margin-left: auto !important;
+}
+.edit-mode-btn:last-child {
+  margin-right: 0;
 }
 
 .section-title {
