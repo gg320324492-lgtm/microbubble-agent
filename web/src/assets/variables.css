@@ -395,3 +395,25 @@ body {
 .knowledge-color-disinfection{ --accent: #ee6666; }  /* 消毒 - 红色 */
 .knowledge-color-measurement { --accent: #73c0de; }  /* 测量 - 青色 */
 .knowledge-color-application { --accent: #fc8452; }  /* 应用 - 橙色 */
+
+/* ============================================
+   2026-06-08: 覆盖 Element Plus 库内部的 CSS 兼容性属性
+   消除 webhint 警告，同时保持跨浏览器兼容性
+   ============================================ */
+
+/* 覆盖 -moz-appearance：为 Element Plus 组件添加标准 appearance */
+/* 注意：保留 -moz-appearance 作为 Firefox 回退，但 webhint 只检测标准属性是否存在 */
+.el-select .el-select__wrapper,
+.el-select-v2 .el-select__wrapper,
+.el-input-number .el-input__wrapper,
+.el-input-tag .el-input-tag__wrapper {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* 覆盖 scrollbar-width：Safari 不支持，但有 -webkit-scrollbar 回退 */
+/* 这些是 Element Plus 内部的，无法通过 CSS 覆盖移除，只能忽略 webhint 警告 */
+/* scrollbar-width: thin / none 在 el-scrollbar、el-virtual-list、el-splitter-panel 内部使用 */
+
+/* 覆盖 -webkit-backdrop-filter：MainLayout.vue 已正确使用 */
+/* Element Plus 只在类型定义里有，实际 CSS 没用 */
