@@ -124,15 +124,38 @@
                 <div class="section-header">
                   <span class="section-title">✅ 已完成</span>
                   <el-badge :value="doneTasks.length" type="success" />
+                  <span v-if="selectedDoneIds.size > 0" class="selection-info">
+                    已选 {{ selectedDoneIds.size }} / {{ doneTasks.length }}
+                  </span>
+                  <el-button
+                    v-if="doneTasks.length > 0 && selectedDoneIds.size > 0"
+                    size="small"
+                    text
+                    @click="clearDoneSelection"
+                  >
+                    清空
+                  </el-button>
+                  <el-button
+                    v-if="doneTasks.length > 0"
+                    size="small"
+                    text
+                    @click="toggleSelectAllDone"
+                  >
+                    {{ isAllDoneSelected ? '取消全选' : '全选' }}
+                  </el-button>
                   <el-button
                     v-if="doneTasks.length > 0"
                     size="small"
                     type="danger"
-                    plain
+                    :plain="selectedDoneIds.size === 0"
+                    :disabled="selectedDoneIds.size === 0"
                     class="batch-btn"
                     @click="batchDeleteDone"
                   >
-                    <el-icon><Delete /></el-icon> 批量删除已完成
+                    <el-icon><Delete /></el-icon>
+                    {{ selectedDoneIds.size > 0
+                      ? `批量删除（${selectedDoneIds.size}）`
+                      : '批量删除已完成' }}
                   </el-button>
                 </div>
                 <div v-if="doneTasks.length === 0" class="empty-section">
@@ -161,7 +184,13 @@
                         v-for="task in group.tasks"
                         :key="task.id"
                         class="task-row done-row"
+                        :class="{ 'is-selected': selectedDoneIds.has(task.id) }"
                       >
+                        <el-checkbox
+                          :model-value="selectedDoneIds.has(task.id)"
+                          class="row-checkbox"
+                          @change="toggleSelectDone(task.id)"
+                        />
                         <el-button
                           circle
                           size="default"
@@ -348,22 +377,69 @@ const deleteTask = async (task) => {
   }
 }
 
-// 批量删除已完成任务
+// 已完成任务多选状态
+const selectedDoneIds = ref(new Set())
+const isAllDoneSelected = computed(
+  () => doneTasks.value.length > 0 && selectedDoneIds.value.size === doneTasks.value.length
+)
+
+const toggleSelectDone = (taskId) => {
+  // 重新构造 Set 触发 ref 响应式（Set 的 add/delete 在 ref 包中也能触发，但赋值最稳）
+  const next = new Set(selectedDoneIds.value)
+  if (next.has(taskId)) {
+    next.delete(taskId)
+  } else {
+    next.add(taskId)
+  }
+  selectedDoneIds.value = next
+}
+
+const toggleSelectAllDone = () => {
+  if (isAllDoneSelected.value) {
+    selectedDoneIds.value = new Set()
+  } else {
+    selectedDoneIds.value = new Set(doneTasks.value.map(t => t.id))
+  }
+}
+
+const clearDoneSelection = () => {
+  selectedDoneIds.value = new Set()
+}
+
+// 批量删除选中任务
 const batchDeleteDone = async () => {
+  const ids = Array.from(selectedDoneIds.value)
+  if (ids.length === 0) return
+
+  // 准备预览：最多列 5 条标题，超出显示「等」
+  const previewMap = new Map(doneTasks.value.map(t => [t.id, t.title]))
+  const previewLines = ids.slice(0, 5).map(id => `· ${previewMap.get(id) || `#${id}`}`)
+  const more = ids.length > 5 ? `\n…等共 ${ids.length} 条` : ''
+  const confirmMsg = `确定要删除以下 ${ids.length} 条已完成任务吗？\n删除后可从垃圾桶恢复。\n\n${previewLines.join('\n')}${more}`
+
   try {
-    await ElMessageBox.confirm(
-      `确定要删除全部 ${doneTasks.value.length} 条已完成任务吗？删除后可从垃圾桶恢复。`,
-      '批量删除',
-      { type: 'warning', confirmButtonText: '全部删除', cancelButtonText: '取消' }
-    )
+    await ElMessageBox.confirm(confirmMsg, '批量删除（选择性）', {
+      type: 'warning',
+      confirmButtonText: `删除 ${ids.length} 条`,
+      cancelButtonText: '取消',
+      customStyle: { maxWidth: '480px', whiteSpace: 'pre-line' }
+    })
     let success = 0
-    for (const task of doneTasks.value) {
+    let failed = 0
+    for (const id of ids) {
       try {
-        await deleteTaskApi(task.id)
+        await deleteTaskApi(id)
         success++
-      } catch { /* 继续 */ }
+      } catch {
+        failed++
+      }
     }
-    ElMessage.success(`已删除 ${success} 条任务到垃圾桶`)
+    if (failed === 0) {
+      ElMessage.success(`已删除 ${success} 条任务到垃圾桶`)
+    } else {
+      ElMessage.warning(`已删除 ${success} 条，${failed} 条失败`)
+    }
+    selectedDoneIds.value = new Set()  // 清空选择
     fetchTasks()
   } catch (e) {
     if (e !== 'cancel') {
@@ -542,9 +618,18 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 12px;
   padding: 8px 0;
+  flex-wrap: wrap;
 }
 .batch-btn {
   margin-left: auto;
+}
+.selection-info {
+  font-size: 12px;
+  color: var(--color-primary);
+  font-weight: 600;
+  background: rgba(255, 122, 92, 0.08);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
 }
 
 .section-title {
@@ -627,6 +712,19 @@ onMounted(() => {
 
 .task-row.done-row {
   opacity: 0.7;
+}
+
+.task-row.done-row.is-selected {
+  opacity: 1;
+  background: rgba(255, 122, 92, 0.08);
+  border-left: 3px solid var(--color-primary);
+  padding-left: 9px;  /* 补偿 border-left 3px，避免布局抖动 */
+  margin-left: -3px;
+}
+
+.row-checkbox {
+  flex-shrink: 0;
+  margin-right: -4px;  /* 紧凑排列：与 complete-btn 视觉距离 */
 }
 
 .complete-btn {
