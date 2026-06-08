@@ -77,7 +77,7 @@
 
           <!-- 用户头像 -->
           <div v-if="msg.role === 'user'" class="msg-avatar msg-avatar-user">
-            <el-avatar :size="32" :src="userAvatar" alt="用户" />
+            <el-avatar :size="32" :src="userAvatar" alt="用户" icon="UserFilled">{{ username[0] }}</el-avatar>
           </div>
         </div>
       </div>
@@ -154,10 +154,10 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Close, Picture, Paperclip, Document, ArrowDown, Microphone, Delete, Promotion, VideoPlay } from '@element-plus/icons-vue'
+import { Close, Picture, Paperclip, Document, ArrowDown, Microphone, Delete, Promotion, VideoPlay, UserFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { marked } from 'marked'
@@ -170,6 +170,7 @@ marked.setOptions({ breaks: true, gfm: true })
 const route = useRoute()
 const userStore = useUserStore()
 const userAvatar = ref('')
+const username = computed(() => userStore.userInfo?.name || '用户')
 
 const messageListRef = ref(null)
 const voiceRecorderRef = ref(null)
