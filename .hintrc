@@ -1,0 +1,9 @@
+{
+  "extends": ["web-recommended"],
+  "hints": {
+    "no-html-only-headers": ["warning", {
+      "ignore": ["Content-Security-Policy"],
+      "include": []
+    }]
+  }
+}
