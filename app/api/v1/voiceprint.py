@@ -70,10 +70,8 @@ async def get_all_fingerprints(
 ):
     """返回所有成员的 192 维 embedding + 元数据（声纹库中心）"""
     from app.services.voiceprint_service import get_fingerprints
-    # 注入 no-cache 头，防止浏览器/代理缓存导致录入后看不到
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
+    # 防止浏览器缓存导致录入后看不到
+    response.headers["Cache-Control"] = "max-age=0"
     return await get_fingerprints(db)
 
 
