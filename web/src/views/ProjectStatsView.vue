@@ -18,19 +18,19 @@
       </template>
       <div class="stats-grid">
         <div class="stat-box">
-          <div class="stat-value">{{ formatNumber(stats.total_lines) }}</div>
+          <div class="stat-value" :ref="el => animateNumber(el, stats.total_lines, 'total_lines')">0</div>
           <div class="stat-label">行代码</div>
         </div>
         <div class="stat-box">
-          <div class="stat-value">{{ formatNumber(stats.total_commits) }}</div>
+          <div class="stat-value" :ref="el => animateNumber(el, stats.total_commits, 'total_commits')">0</div>
           <div class="stat-label">次提交</div>
         </div>
         <div class="stat-box">
-          <div class="stat-value">{{ stats.dev_days }}</div>
+          <div class="stat-value" :ref="el => animateNumber(el, stats.dev_days, 'dev_days')">0</div>
           <div class="stat-label">开发天数</div>
         </div>
         <div class="stat-box">
-          <div class="stat-value">{{ formatNumber(stats.total_files) }}</div>
+          <div class="stat-value" :ref="el => animateNumber(el, stats.total_files, 'total_files')">0</div>
           <div class="stat-label">个文件</div>
         </div>
       </div>
@@ -133,6 +133,50 @@ const stats = ref({
   total_files: 0
 })
 const showAllLogs = ref(false)
+
+// 数字动画状态
+const animatedValues = ref({
+  total_lines: 0,
+  total_commits: 0,
+  dev_days: 0,
+  total_files: 0
+})
+const animationStarted = ref({
+  total_lines: false,
+  total_commits: false,
+  dev_days: false,
+  total_files: false
+})
+
+// 数字计数器动画
+const animateNumber = (el, target, key) => {
+  if (!el || target === undefined || target === null) return
+  if (animationStarted.value[key]) return
+
+  const targetNum = Number(target)
+  if (isNaN(targetNum) || targetNum === 0) {
+    el.textContent = '0'
+    return
+  }
+
+  animationStarted.value[key] = true
+  const duration = 1500
+  const startTime = performance.now()
+
+  const animate = (currentTime) => {
+    const elapsed = currentTime - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    // easeOutExpo 缓动函数，数字增长越来越快，最后骤停
+    const eased = 1 - Math.pow(2, -10 * progress)
+    el.textContent = Math.round(eased * targetNum).toLocaleString()
+    if (progress < 1) {
+      requestAnimationFrame(animate)
+    } else {
+      el.textContent = targetNum.toLocaleString()
+    }
+  }
+  requestAnimationFrame(animate)
+}
 
 const formatNumber = (num) => {
   if (num === undefined || num === null) return '0'
