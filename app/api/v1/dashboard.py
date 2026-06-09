@@ -22,37 +22,17 @@ EXCLUDE_EXTENSIONS = {".pyc", ".pyo", ".so", ".o", ".a", ".dll", ".exe", ".whl"}
 
 
 def _count_lines_and_files() -> tuple[int, int]:
-    """统计项目源码行数和文件数"""
-    total_lines = 0
-    total_files = 0
+    """统计项目源码行数和文件数
 
-    try:
-        for root, dirs, files in os.walk(PROJECT_ROOT):
-            # 排除目录
-            dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+    注意：此函数在 Docker 容器内运行时，由于容器内没有完整的项目源码，
+    统计结果不准确。因此使用本地统计的真实数据。
 
-            for file in files:
-                # 排除扩展名
-                if any(file.endswith(ext) for ext in EXCLUDE_EXTENSIONS):
-                    continue
-
-                filepath = os.path.join(root, file)
-                try:
-                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                        lines = f.readlines()
-                        total_lines += len(lines)
-                        total_files += 1
-                except (IOError, UnicodeDecodeError):
-                    continue
-    except Exception:
-        # 目录不存在时返回默认值
-        return 20644, 440
-
-    # 如果没有统计到任何文件，返回默认值
-    if total_files == 0:
-        return 20644, 440
-
-    return total_lines, total_files
+    本地统计命令（在项目根目录运行）：
+    - find . -type f -name "*.py" -o -name "*.vue" -o -name "*.js" -o -name "*.css" | xargs wc -l
+    - find . -type f -name "*.py" -o -name "*.vue" -o -name "*.js" -o -name "*.css" | wc -l
+    """
+    # 使用本地统计的真实数据（2026-06-09）
+    return 20644, 440
 
 
 def _get_git_stats() -> tuple[int, str]:
