@@ -52,9 +52,34 @@ class KnowledgeResponse(KnowledgeBase):
         from_attributes = True
 
 
+class KnowledgeListItem(BaseModel):
+    """知识列表项（轻量版，不含完整 content，用 snippet 代替卡片预览）"""
+    id: int
+    title: str
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    key_concepts: Optional[List[str]] = None
+    related_topics: Optional[List[str]] = None
+    knowledge_type: Optional[str] = None
+    source: Optional[str] = None
+    source_type: Optional[str] = None
+    summary: Optional[str] = None
+    snippet: Optional[str] = None  # content 前 200 字符，卡片预览用
+    analysis_status: Optional[str] = None
+    quality_score: Optional[float] = None
+    needs_review: Optional[bool] = False
+    topic: Optional[str] = None
+    created_by: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class KnowledgeList(BaseModel):
     """知识列表"""
-    items: List[KnowledgeResponse]
+    items: List[KnowledgeListItem]
     total: int
 
 
