@@ -143,6 +143,15 @@ function isActive() {
   return state.value === 'recording' || state.value === 'paused'
 }
 
+/** 重置为 idle（录音结束后调用，允许开始新录音） */
+function reset() {
+  state.value = 'idle'
+  elapsed.value = 0
+  barHeights.value = [4, 4, 4, 4, 4]
+  isPaused.value = false
+  audioChunks = []
+}
+
 /** 获取已录制的 blob（仅 stopped 后可用） */
 function getAudioBlob() {
   if (audioChunks.length === 0) return null
@@ -161,6 +170,7 @@ export function useGlobalRecorder() {
     pause,
     resumePaused,
     stop,
+    reset,
     isActive,
     getAudioBlob,
   }

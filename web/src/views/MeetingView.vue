@@ -265,6 +265,7 @@ import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 import { useMeeting } from '@/composables/useMeeting'
 import { useRecordingState } from '@/composables/useRecordingState'
+import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import MeetingCreateDialog from './meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
@@ -280,6 +281,7 @@ const userStore = useUserStore()
 
 // 全局录音状态
 const { recordingMeetingId: globalRecordingId, startRecording, stopRecording } = useRecordingState()
+const { stop: stopGlobalRecorder, isActive: isRecorderActive } = useGlobalRecorder()
 const members = computed(() => memberStore.members)
 
 // 使用 composable
@@ -366,10 +368,27 @@ const startLiveCall = () => {
 }
 
 // 弹窗被关闭（用户点 X 或 ESC）
-function onLiveCallEnd() {
+async function onLiveCallEnd() {
+  // 如果录音还在进行中，停止录音并上传
+  if (isRecorderActive()) {
+    const blob = await stopGlobalRecorder()
+    const mid = liveCallMeeting.value?.id || globalRecordingId.value
+    if (blob && mid) {
+      try {
+        const fd = new FormData()
+        fd.append('file', blob, `recording_${mid}.webm`)
+        await axios.post(`/api/v1/meetings/${mid}/upload-audio`, fd)
+        await axios.post(`/api/v1/meetings/${mid}/stop-recording`)
+        ElMessage.success('录音已保存')
+      } catch (err) {
+        ElMessage.error('录音保存失败: ' + (err.response?.data?.detail || err.message))
+      }
+    }
+  }
   showLiveCallDialog.value = false
   liveCallMeeting.value = null
   stopRecording()
+  fetchMeetings()
 }
 
 // 从全局状态恢复录音（MeetingRoom 内 AudioRecorder 不保留录音状态，
