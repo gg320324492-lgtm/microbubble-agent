@@ -3,8 +3,8 @@
     <!-- 状态：idle — 待录音 -->
     <div v-if="state === 'idle'" class="recorder-idle">
       <div class="recorder-icon">🎙️</div>
-      <button class="btn-start" @click="handleStart">{{ isActive ? '返回录音' : '开始听会' }}</button>
-      <p v-if="isActive" class="recorder-hint resume-hint">录音在后台持续进行中</p>
+      <button class="btn-start" @click="handleStart">{{ isActive() ? '返回录音' : '开始听会' }}</button>
+      <p v-if="isActive()" class="recorder-hint resume-hint">录音在后台持续进行中</p>
       <p v-else class="recorder-hint">点击后即开始录音，无需填写任何信息</p>
     </div>
 
@@ -82,9 +82,9 @@ function formatTime(seconds) {
 // ===== 初始化 =====
 
 onMounted(() => {
-  // 如果录音已停止（上一次会话结束），重置为 idle 允许新录音
-  // 如果录音正在进行中（用户从其他页面返回），保持当前状态
-  if (state.value === 'stopped') {
+  // 如果录音已停止或胶囊已消失（无会议ID），重置为 idle
+  // 如果录音正在进行中且胶囊仍在（用户从其他页面返回），保持当前状态
+  if (state.value === 'stopped' || (state.value !== 'idle' && !sessionStorage.getItem('recording_meeting_id'))) {
     reset()
   }
 })
