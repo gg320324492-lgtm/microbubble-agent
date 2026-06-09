@@ -272,7 +272,7 @@ import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
-import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List, Location } from '@element-plus/icons-vue'
+import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List, Location, Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
