@@ -40,21 +40,14 @@ function stopRecording() {
 
 /**
  * 检查后端是否有正在录音的会议（页面加载时调用一次）
+ * sessionStorage 数据必须与后端验证，避免残留脏数据
  */
 async function checkActiveRecording() {
   if (initialized.value) return
   initialized.value = true
 
-  // 优先从 sessionStorage 恢复（同标签页内导航）
-  const cached = sessionStorage.getItem('recording_meeting_id')
-  if (cached) {
-    recordingMeetingId.value = Number(cached)
-    recordingMeetingTitle.value = sessionStorage.getItem('recording_meeting_title') || `听会 #${cached}`
-    return
-  }
-
-  // 兜底：查后端是否有 recording 状态的会议
   try {
+    // 始终查后端确认是否有 recording 状态的会议
     const res = await axios.get('/api/v1/meetings', {
       params: { status: 'recording', page_size: 1 }
     })
@@ -62,9 +55,17 @@ async function checkActiveRecording() {
     if (items && items.length > 0) {
       const m = items[0]
       startRecording(m.id, m.title)
+    } else {
+      // 后端没有录音中的会议，清除 sessionStorage 残留
+      stopRecording()
     }
   } catch {
-    // 静默失败，不影响正常功能
+    // API 失败时降级读 sessionStorage，但标记未验证
+    const cached = sessionStorage.getItem('recording_meeting_id')
+    if (cached) {
+      recordingMeetingId.value = Number(cached)
+      recordingMeetingTitle.value = sessionStorage.getItem('recording_meeting_title') || `听会 #${cached}`
+    }
   }
 }
 
