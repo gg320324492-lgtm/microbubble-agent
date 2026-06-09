@@ -52,7 +52,15 @@
     { "id": 9, "name": "自动化文献综述", "cycle": "6-8 周", "priority": "中" },
     { "id": 10, "name": "智能实验方案生成", "cycle": "6-8 周", "priority": "中" },
     { "id": 11, "name": "深度论文理解", "cycle": "4-6 周", "priority": "高" },
-    { "id": 12, "name": "课题组专属 AI 研究员", "cycle": "8-12 周", "priority": "低" }
+    { "id": 12, "name": "课题组专属 AI 研究员", "cycle": "8-12 周", "priority": "低" },
+    { "id": 13, "name": "实验数据分析平台", "cycle": "6-8 周", "priority": "中" },
+    { "id": 14, "name": "科研协作工作流", "cycle": "4-6 周", "priority": "高" },
+    { "id": 15, "name": "智能实验记录本", "cycle": "4-6 周", "priority": "高" },
+    { "id": 16, "name": "课题组知识图谱可视化", "cycle": "3-4 周", "priority": "中" },
+    { "id": 17, "name": "AI 辅助论文写作", "cycle": "6-8 周", "priority": "中" },
+    { "id": 18, "name": "智能实验设备管理", "cycle": "4-6 周", "priority": "低" },
+    { "id": 19, "name": "科研数据自动备份", "cycle": "2-3 周", "priority": "高" },
+    { "id": 20, "name": "AI 科研助手移动端", "cycle": "6-8 周", "priority": "中" }
   ],
   "changelog": [
     {
