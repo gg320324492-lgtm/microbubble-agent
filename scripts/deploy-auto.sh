@@ -115,4 +115,40 @@ nginx -t >> "$LOG_FILE" 2>&1
 log "nginx reload..."
 nginx -s reload >> "$LOG_FILE" 2>&1
 
+# 统计项目代码数据（供"项目动态"页面使用）
+log "统计项目代码数据..."
+STATS_FILE="$PROJECT_DIR/stats.json"
+TOTAL_LINES=$(find "$PROJECT_DIR" -type f \( -name "*.py" -o -name "*.vue" -o -name "*.js" -o -name "*.css" \) \
+  -not -path "*/node_modules/*" \
+  -not -path "*/dist/*" \
+  -not -path "*/.git/*" \
+  -not -path "*/__pycache__/*" \
+  -not -path "*/.venv/*" \
+  -not -path "*/venv/*" \
+  -not -path "*/models/*" \
+  | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
+TOTAL_FILES=$(find "$PROJECT_DIR" -type f \( -name "*.py" -o -name "*.vue" -o -name "*.js" -o -name "*.css" \) \
+  -not -path "*/node_modules/*" \
+  -not -path "*/dist/*" \
+  -not -path "*/.git/*" \
+  -not -path "*/__pycache__/*" \
+  -not -path "*/.venv/*" \
+  -not -path "*/venv/*" \
+  -not -path "*/models/*" \
+  | wc -l)
+TOTAL_COMMITS=$(git -C "$PROJECT_DIR" rev-list --count HEAD)
+FIRST_COMMIT=$(git -C "$PROJECT_DIR" log --reverse --format=%ai --max-count=1 | cut -d' ' -f1)
+DEV_DAYS=$(( ($(date +%s) - $(date -d "$FIRST_COMMIT" +%s)) / 86400 ))
+
+cat > "$STATS_FILE" << EOF
+{
+  "total_lines": ${TOTAL_LINES:-0},
+  "total_commits": ${TOTAL_COMMITS:-0},
+  "dev_days": ${DEV_DAYS:-0},
+  "total_files": ${TOTAL_FILES:-0},
+  "updated_at": "$(date '+%Y-%m-%d %H:%M:%S')"
+}
+EOF
+log "项目统计: ${TOTAL_LINES}行, ${TOTAL_COMMITS}次提交, ${DEV_DAYS}天, ${TOTAL_FILES}个文件"
+
 log "========== 部署完成 =========="
