@@ -173,7 +173,7 @@ import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
-import { ArrowRight, DataBoard, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
