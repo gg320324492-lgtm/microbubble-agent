@@ -3,8 +3,8 @@
     <!-- 状态：idle — 待录音 -->
     <div v-if="state === 'idle'" class="recorder-idle">
       <div class="recorder-icon">🎙️</div>
-      <button class="btn-start" @click="startRecording">{{ resumeHint ? '继续录音' : '开始听会' }}</button>
-      <p v-if="resumeHint" class="recorder-hint resume-hint">{{ resumeHint }}</p>
+      <button class="btn-start" @click="handleStart">{{ isActive ? '返回录音' : '开始听会' }}</button>
+      <p v-if="isActive" class="recorder-hint resume-hint">录音在后台持续进行中</p>
       <p v-else class="recorder-hint">点击后即开始录音，无需填写任何信息</p>
     </div>
 
@@ -22,8 +22,8 @@
       </div>
 
       <div class="recorder-controls">
-        <button v-if="state === 'recording'" class="btn-pause" @click="pauseRecording">⏸ 暂停</button>
-        <button v-else class="btn-resume" @click="resumeRecording">▶ 继续</button>
+        <button v-if="state === 'recording'" class="btn-pause" @click="handlePause">⏸ 暂停</button>
+        <button v-else class="btn-resume" @click="handleResume">▶ 继续</button>
         <button class="btn-stop" @click="confirmStop">⏹ 结束听会</button>
       </div>
     </div>
@@ -48,41 +48,25 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted, nextTick } from 'vue'
-
-const props = defineProps({
-  /** 恢复模式提示文字（如 "继续听会 #74"），有值时 idle 状态显示恢复 UI */
-  resumeHint: { type: String, default: '' },
-})
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 
 const emit = defineEmits(['recording-start', 'recording-stop', 'audio-ready'])
 
-// 状态机: idle → recording → paused → recording → stopped
-const state = ref('idle')
-const elapsed = ref(0)
+const {
+  state, elapsed, barHeights, isPaused,
+  start, pause, resumePaused, stop, isActive, getAudioBlob,
+} = useGlobalRecorder()
+
+// 回放状态（组件局部）
 const isPlaying = ref(false)
 const currentPlayTime = ref(0)
-
-// 录音相关
-let mediaRecorder = null
-let audioChunks = []
-let audioContext = null
-let analyser = null
-let dataArray = null
-let timerInterval = null
-let animationFrame = null
-let mediaStream = null
-
-// 回放相关
-let audioBlob = null
 let audioElement = null
 let waveformData = null
-
 const waveformCanvas = ref(null)
-const formattedTime = computed(() => formatTime(elapsed.value))
+const stoppedDuration = ref(0) // stop 后记住时长
 
-// 音量条高度（5 根）
-const barHeights = ref([4, 4, 4, 4, 4])
+const formattedTime = computed(() => formatTime(stoppedDuration.value || elapsed.value))
 
 function formatTime(seconds) {
   const s = Math.floor(seconds)
@@ -92,145 +76,66 @@ function formatTime(seconds) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 }
 
-// ===== 录音 =====
+// ===== 初始化 =====
 
-async function startRecording() {
-  // 立即切换到录音状态（不阻塞 UI）
-  state.value = 'recording'
-  elapsed.value = 0
+onMounted(() => {
+  // 如果全局录音器已在进行中（用户从其他页面返回），
+  // state 已经是 recording/paused，模板自动显示录音 UI，无需额外操作
+})
 
-  // 使用 requestAnimationFrame 延迟初始化，让 UI 先更新
-  requestAnimationFrame(async () => {
-    try {
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+// ===== 操作 =====
 
-      // 音频分析（音量指示器）
-      audioContext = new AudioContext()
-      const source = audioContext.createMediaStreamSource(mediaStream)
-      analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-      // MediaRecorder
-      mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' })
-      audioChunks = []
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunks.push(e.data)
-      }
-
-      mediaRecorder.onstop = () => {
-        audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(t => t.stop())
-          mediaStream = null
-        }
-        emit('audio-ready', audioBlob)
-      }
-
-      mediaRecorder.start(1000) // 每秒收集一次数据
-      emit('recording-start')
-
-      // 计时器
-      timerInterval = setInterval(() => { elapsed.value++ }, 1000)
-
-      // 音量动画
-      updateVolumeBars()
-    } catch (err) {
-      console.error('录音启动失败:', err)
-      state.value = 'idle'
-      alert('无法访问麦克风，请检查浏览器权限')
-    }
-  })
-}
-
-function pauseRecording() {
-  if (mediaRecorder?.state === 'recording') {
-    mediaRecorder.pause()
-    state.value = 'paused'
-    clearInterval(timerInterval)
-    cancelAnimationFrame(animationFrame)
+async function handleStart() {
+  try {
+    await start()
+    emit('recording-start')
+  } catch (err) {
+    console.error('录音启动失败:', err)
+    alert('无法访问麦克风，请检查浏览器权限')
   }
 }
 
-function resumeRecording() {
-  if (mediaRecorder?.state === 'paused') {
-    mediaRecorder.resume()
-    state.value = 'recording'
-    timerInterval = setInterval(() => { elapsed.value++ }, 1000)
-    updateVolumeBars()
-  }
+function handlePause() {
+  pause()
+}
+
+function handleResume() {
+  resumePaused()
 }
 
 function confirmStop() {
-  // 使用 ElMessageBox.confirm 替代原生 confirm（非阻塞）
   import('element-plus').then(({ ElMessageBox }) => {
     ElMessageBox.confirm('确定结束听会？', '确认', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
       type: 'warning',
     }).then(() => {
-      stopRecording()
-    }).catch(() => {
-      // 用户取消，不做任何操作
-    })
+      doStop()
+    }).catch(() => {})
   }).catch(() => {
-    // element-plus 加载失败，回退到原生 confirm
     if (window.confirm('确定结束听会？')) {
-      stopRecording()
+      doStop()
     }
   })
 }
 
-function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop()
-  }
-  clearInterval(timerInterval)
-  cancelAnimationFrame(animationFrame)
-  state.value = 'stopped'
+async function doStop() {
+  stoppedDuration.value = elapsed.value
+  const blob = await stop()
   emit('recording-stop')
-
-  // 生成波形数据
+  if (blob) {
+    emit('audio-ready', blob)
+  }
   nextTick(() => generateWaveform())
-}
-
-// ===== 音量指示器 =====
-
-function updateVolumeBars() {
-  if (!analyser) return
-  analyser.getByteFrequencyData(dataArray)
-
-  // 取 5 个频段的平均值
-  const bands = 5
-  const step = Math.floor(dataArray.length / bands)
-  const heights = []
-  for (let i = 0; i < bands; i++) {
-    let sum = 0
-    for (let j = i * step; j < (i + 1) * step; j++) {
-      sum += dataArray[j]
-    }
-    const avg = sum / step
-    heights.push(Math.max(4, Math.min(40, avg / 4)))
-  }
-  barHeights.value = heights
-
-  if (state.value === 'recording') {
-    animationFrame = requestAnimationFrame(updateVolumeBars)
-  }
 }
 
 // ===== 波形渲染 =====
 
 async function generateWaveform() {
-  if (!audioBlob || !waveformCanvas.value) return
+  const blob = getAudioBlob()
+  if (!blob || !waveformCanvas.value) return
 
-  // 如果 audioContext 已关闭，创建新的用于解码
-  let decodeContext = audioContext
-  if (!decodeContext || decodeContext.state === 'closed') {
-    decodeContext = new AudioContext()
-  }
+  const decodeContext = new AudioContext()
 
   const canvas = waveformCanvas.value
   const ctx = canvas.getContext('2d')
@@ -239,12 +144,10 @@ async function generateWaveform() {
   canvas.width = width
   canvas.height = height
 
-  // 解码音频
-  const arrayBuffer = await audioBlob.arrayBuffer()
+  const arrayBuffer = await blob.arrayBuffer()
   const decoded = await decodeContext.decodeAudioData(arrayBuffer)
   const channelData = decoded.getChannelData(0)
 
-  // 采样（取 width 个点）
   const step = Math.floor(channelData.length / width)
   waveformData = []
   for (let i = 0; i < width; i++) {
@@ -256,7 +159,6 @@ async function generateWaveform() {
     waveformData.push({ min, max })
   }
 
-  // 绘制
   ctx.fillStyle = '#f5f5f5'
   ctx.fillRect(0, 0, width, height)
 
@@ -269,10 +171,7 @@ async function generateWaveform() {
     ctx.fillRect(i, yMin, 1, yMax - yMin || 1)
   }
 
-  // 如果新建了 context，关闭它
-  if (decodeContext !== audioContext) {
-    decodeContext.close()
-  }
+  decodeContext.close()
 }
 
 function seekWaveform(e) {
@@ -287,7 +186,9 @@ function seekWaveform(e) {
 
 function togglePlayback() {
   if (!audioElement) {
-    audioElement = new Audio(URL.createObjectURL(audioBlob))
+    const blob = getAudioBlob()
+    if (!blob) return
+    audioElement = new Audio(URL.createObjectURL(blob))
     audioElement.ontimeupdate = () => {
       currentPlayTime.value = audioElement.currentTime
     }
@@ -306,28 +207,10 @@ function togglePlayback() {
   }
 }
 
-// ===== 清理 =====
-
-onUnmounted(() => {
-  clearInterval(timerInterval)
-  cancelAnimationFrame(animationFrame)
-  if (audioElement) {
-    audioElement.pause()
-    audioElement = null
-  }
-  if (mediaStream) {
-    mediaStream.getTracks().forEach(t => t.stop())
-    mediaStream = null
-  }
-  if (audioContext && audioContext.state !== 'closed') {
-    audioContext.close()
-  }
-})
-
 // ===== 暴露方法 =====
 
 defineExpose({
-  getAudioBlob: () => audioBlob,
+  getAudioBlob,
   getDuration: () => elapsed.value,
 })
 </script>

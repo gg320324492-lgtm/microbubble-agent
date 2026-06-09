@@ -9,7 +9,6 @@
     <main class="room-main">
       <AudioRecorder
         ref="recorderRef"
-        :resume-hint="meetingId ? `会议 #${meetingId} 仍在进行中，点击开始新的录音段` : ''"
         @recording-start="onRecordingStart"
         @recording-stop="onRecordingStop"
         @audio-ready="onAudioReady"
