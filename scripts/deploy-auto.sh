@@ -125,6 +125,17 @@ nginx -t >> "$LOG_FILE" 2>&1
 log "nginx reload..."
 nginx -s reload >> "$LOG_FILE" 2>&1
 
+# 后处理 mnb-lab.cn CSS（修复 webhint vendor prefix 警告）
+MNB_CSS_DIR="/var/www/mnb-lab/_next/static/css"
+if [ -d "$MNB_CSS_DIR" ]; then
+    for css in "$MNB_CSS_DIR"/*.css; do
+        # 添加标准属性（如果只有 webkit 前缀）
+        sed -i 's/-webkit-backdrop-filter:blur(20px)/-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)/g' "$css"
+        sed -i 's/-webkit-text-size-adjust:100%/-webkit-text-size-adjust:100%;text-size-adjust:100%/g' "$css"
+    done
+    log "mnb-lab CSS vendor prefixes fixed"
+fi
+
 # 统计项目代码数据（供"项目动态"页面使用）
 log "统计项目代码数据..."
 STATS_FILE="$PROJECT_DIR/stats.json"

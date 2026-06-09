@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // PostCSS 插件：剥离 -moz-appearance（webhint: 应使用标准 appearance，已有 CSS 覆盖补全）
 const stripMozAppearance = {
@@ -22,7 +24,13 @@ const stripScrollbarWidth = {
 }
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    Components({
+      resolvers: [ElementPlusResolver({ importStyle: 'css' })],
+      dts: false,  // 不生成类型声明文件
+    }),
+  ],
   css: {
     postcss: {
       plugins: [stripMozAppearance, stripScrollbarWidth]

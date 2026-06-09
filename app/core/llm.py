@@ -39,7 +39,14 @@ def parse_llm_json(text: str) -> dict:
 
 def extract_text_from_response(response) -> str:
     """从 Claude API 响应中提取文本内容（兼容 ThinkingBlock）"""
+    text_content = ""
+    thinking_content = ""
     for block in response.content:
-        if hasattr(block, "text"):
-            return block.text.strip()
-    return ""
+        if hasattr(block, "text") and block.text:
+            text_content = block.text.strip()
+        elif hasattr(block, "thinking") and block.thinking:
+            thinking_content = block.thinking.strip()
+    # 优先返回 text；如果只有 thinking 则返回 thinking（模型有时只返回 thinking）
+    if not text_content and thinking_content:
+        logger.debug("响应只有 ThinkingBlock，使用 thinking 内容")
+    return text_content or thinking_content

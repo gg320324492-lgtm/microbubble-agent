@@ -500,23 +500,27 @@ class MeetingAnalysisService:
                 )
                 # 从 response 提取文本
                 raw = ""
-                # 方法1: extract_text_from_response
+                # 方法1: extract_text_from_response（已兼容 ThinkingBlock）
                 raw = extract_text_from_response(response) or ""
-                # 方法2: block 遍历
+                # 方法2: block 遍历（text + thinking）
                 if not raw and hasattr(response, 'content') and response.content:
                     for block in response.content:
-                        t = getattr(block, 'text', '')
+                        t = getattr(block, 'text', '') or getattr(block, 'thinking', '')
                         if t and str(t).strip():
                             raw = str(t).strip()
+                            break
                 # 方法3: 正则暴力提取
                 if not raw:
                     raw_str = str(response)
                     import re
                     m = re.search(r'text=.(.{2,30}).', raw_str)
+                    if not m:
+                        m = re.search(r'thinking=.(.{2,30}).', raw_str)
                     if m:
                         raw = m.group(1).strip()
                 if not raw:
-                    logger.warning(f"标题生成第{attempt+1}次: 无法提取文本")
+                    block_types = [type(b).__name__ for b in (response.content or [])]
+                    logger.warning(f"标题生成第{attempt+1}次: 无法提取文本, block_types={block_types}, stop_reason={response.stop_reason}")
                     continue
 
                 # 清洗：去掉 markdown 和常见前缀，只取第一行
