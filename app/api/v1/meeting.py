@@ -67,6 +67,7 @@ async def list_meetings(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     keyword: Optional[str] = None,
+    status: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: Member = Depends(get_current_user),
@@ -84,6 +85,8 @@ async def list_meetings(
         query = query.where(Meeting.start_time <= date_to)
     if keyword:
         query = query.where(Meeting.title.contains(keyword))
+    if status:
+        query = query.where(Meeting.status == status)
 
     query = query.order_by(Meeting.start_time.desc())
     offset = (page - 1) * page_size

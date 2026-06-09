@@ -232,6 +232,7 @@
       <MeetingRoom
         v-if="showLiveCallDialog"
         ref="meetingRoomRef"
+        :meeting-id="liveCallMeeting?.id || null"
         @call-ended="onCallEnded"
         style="height: 500px"
       />
@@ -253,8 +254,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
@@ -263,6 +264,7 @@ import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 import { useMeeting } from '@/composables/useMeeting'
+import { useRecordingState } from '@/composables/useRecordingState'
 import MeetingCreateDialog from './meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
@@ -272,8 +274,12 @@ import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List, Location } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const memberStore = useMemberStore()
 const userStore = useUserStore()
+
+// 全局录音状态
+const { recordingMeetingId: globalRecordingId, startRecording, stopRecording } = useRecordingState()
 const members = computed(() => memberStore.members)
 
 // 使用 composable
@@ -304,6 +310,7 @@ function onCallEnded(meetingId) {
   // 关闭听会弹窗，刷新列表
   showLiveCallDialog.value = false
   liveCallMeeting.value = null
+  stopRecording()
   fetchMeetings()
   if (meetingId) {
     router.push(`/meetings/${meetingId}`)
@@ -354,6 +361,21 @@ const onMeetingSaved = () => {
 
 const startLiveCall = () => {
   liveCallMeeting.value = null
+  showLiveCallDialog.value = true
+  // 录音 ID 会在 MeetingRoom 的 onRecordingStart 回调中设置
+}
+
+// 弹窗被关闭（用户点 X 或 ESC）
+function onLiveCallEnd() {
+  showLiveCallDialog.value = false
+  liveCallMeeting.value = null
+  stopRecording()
+}
+
+// 从全局状态恢复录音（MeetingRoom 内 AudioRecorder 不保留录音状态，
+// 所以 resume 只是打开对话框让用户重新开始；真正的录音数据在后端已保存）
+const resumeRecording = (meetingId) => {
+  liveCallMeeting.value = { id: meetingId }
   showLiveCallDialog.value = true
 }
 
@@ -541,6 +563,14 @@ onMounted(() => {
   fetchMeetings()
   fetchMembers()
   loadTemplates()  // Wave 3b
+
+  // 支持从全局录音指示器跳转回来恢复录音对话框
+  const resumeId = route.query.resume
+  if (resumeId) {
+    resumeRecording(Number(resumeId))
+    // 清除 query 参数避免刷新重复打开
+    router.replace({ path: '/meetings' })
+  }
 })
 </script>
 
