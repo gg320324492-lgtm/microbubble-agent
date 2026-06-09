@@ -290,7 +290,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, VideoCamera } from '@element-plus/icons-vue'
+import { ArrowDown, VideoCamera, Clock, CircleCheck, Warning, ChatDotRound, Plus } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatCompactDate } from '@/utils/format'
