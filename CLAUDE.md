@@ -176,6 +176,10 @@
   - **禁止回退** — 任何时候都不要把 `import ElementPlus from 'element-plus'` 或全量 CSS import 加回 main.js，也不要移除 vite.config.js 的 Components 插件，否则 bundle 会膨胀回 1.2MB
 - **知识库列表 API 不能返回完整 content**（2026-06-09）— `GET /knowledge` 每页 20 条，若每条含完整文档内容会导致响应体数 MB，穿过 FRP 隧道时触发 HTTP/2 帧错误（`ERR_HTTP2_PROTOCOL_ERROR`）。**修复**：列表 API 使用 `KnowledgeListItem` schema（不含 `content`/`formatted_content`），改为 `snippet` 字段（content 前 200 字符），卡片预览用 `item.summary || item.snippet`。详情 API `GET /knowledge/{id}` 不受影响
 - **Nginx /api 不能加 `Connection: upgrade`**（2026-06-09）— 该 header 仅用于 WebSocket 升级（`/ws` location），放在 `/api` 中每个请求都要求后端升级连接，会干扰 HTTP/2 帧封装。同时添加 `proxy_buffer_size 16k` + `proxy_buffers 8 64k` + `proxy_max_temp_file_size 128m` 防止大响应撑爆缓冲区
+- **Element Plus 图标按需导入注意事项**（2026-06-09）— `unplugin-vue-components` 可以解析模板中的 `<IconName />` 静态标签，但**无法解析**以下两种用法，必须显式 `import { X } from '@element-plus/icons-vue'`：
+  1. **动态组件**：`<component :is="item.meta.icon" />` — 编译时看不到字符串值
+  2. **某些图标**：`Aim`、`Bell` 等 — resolver 可能漏解析，必须在 script 中显式 import
+  - MainLayout.vue 现已导入全部 14 个图标（Aim/Bell/ArrowRight/DataBoard + 10 个路由 meta 图标）
 
 ## 开发注意事项（历史）
 
