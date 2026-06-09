@@ -21,6 +21,8 @@
 
 ### 近期新增（按时间倒序）
 
+- **听会后台录音 + 全局指示器（2026-06-09）** — 录音在后台持续进行，导航到其他页面不中断。右下角浮动脉冲胶囊随时可见，点击返回录音界面（计时器继续）。关闭对话框自动保存录音不丢失数据。sessionStorage 始终与后端验证，避免幽灵胶囊残留
+- **Webhook 自动部署修复（2026-06-09）** — Nginx 扫描器屏蔽正则 `web` 误杀 `/webhook`（返回 444），修复为 `web$` 精确匹配。GitHub webhook 恢复正常，push 后自动部署
 - **Nginx 安全防护（2026-06-09）** — 添加恶意扫描器屏蔽规则：敏感文件探测（.env/.git/.ssh/.aws）、WordPress 漏洞路径、云凭证探测、开发文件探测、常见攻击路径。扫描器请求返回 444（静默关闭连接），正常访问不受影响。agent.mnb-lab.cn + mnb-lab.cn 双站点均已防护
 - **Docker Desktop 更新（2026-06-09）** — 4.73.1 → 4.77.0（Engine 29.5.3）+ 中文汉化语言包安装（asxez/DockerDesktop-CN）
 - **Webhint 无障碍+性能+安全头全面优化（2026-06-08）** — 修复 ARIA hidden 包含可聚焦元素（el-popover v-if / el-tab-pane lazy）、全站 el-select/el-button/el-progress 图标按钮补全 aria-label（含 MemoryView/TaskView/KnowledgeView/ProjectView/MemberView）、移除废弃 Pragma/Expires 头、Cache-Control 统一为 max-age=0、Nginx proxy_hide_header X-XSS-Protection、CSS 动画用 transform 替代 background-position 消除 webhint 性能警告、Nginx charset_types 去重、移除多余 CSP 头、添加 .hintrc 自定义 revving 正则匹配 Vite content-hash、IE 兼容性警告确认忽略（Vue 3 不支持 IE）
