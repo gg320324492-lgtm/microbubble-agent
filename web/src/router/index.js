@@ -89,7 +89,7 @@ const routes = [
         path: 'project-stats',
         name: 'ProjectStats',
         component: () => import('@/views/ProjectStatsView.vue'),
-        meta: { title: '项目动态', icon: 'DataBoard' }
+        meta: { title: '项目动态' }
       }
     ]
   }

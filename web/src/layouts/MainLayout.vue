@@ -55,6 +55,18 @@
           <template #title><span style="color:inherit">{{ route.meta.title }}</span></template>
         </el-menu-item>
       </el-menu>
+
+      <!-- 侧边栏底部 - 项目动态 -->
+      <div class="sidebar-bottom">
+        <div
+          class="sidebar-bottom-item"
+          :class="{ active: currentRoute === '/project-stats' }"
+          @click="router.push('/project-stats')"
+        >
+          <el-icon><DataBoard /></el-icon>
+          <span v-show="!isCollapse">项目动态</span>
+        </div>
+      </div>
     </el-aside>
 
     <!-- 主内容区 -->
@@ -161,7 +173,7 @@ import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
-import { ArrowRight } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -384,6 +396,39 @@ const formatTime = (t) => {
 .el-menu--collapse .sidebar-menu .el-menu-item {
   justify-content: center;
   padding: 0 12px;
+}
+
+/* ===== 侧边栏底部 ===== */
+.sidebar-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-bottom-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-bottom-item:hover {
+  background: rgba(255, 122, 92, 0.1);
+  color: var(--color-primary);
+}
+
+.sidebar-bottom-item.active {
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: var(--font-weight-bold);
 }
 
 /* ===== 顶部栏 ===== */
