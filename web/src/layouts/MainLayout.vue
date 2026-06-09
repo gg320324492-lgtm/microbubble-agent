@@ -134,6 +134,22 @@
       </el-main>
     </el-container>
   </el-container>
+
+  <!-- 全局浮动录音指示器 — 有会议正在录音时显示 -->
+  <Transition name="recording-banner">
+    <div
+      v-if="recordingMeetingId"
+      class="recording-indicator"
+      role="status"
+      aria-label="正在听会，点击返回"
+      @click="goToRecording"
+    >
+      <span class="recording-dot" />
+      <span class="recording-text">正在听会</span>
+      <span class="recording-title">{{ recordingMeetingTitle }}</span>
+      <el-icon class="recording-arrow"><ArrowRight /></el-icon>
+    </div>
+  </Transition>
 </template>
 
 <script setup>
@@ -144,11 +160,22 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
+import { useRecordingState } from '@/composables/useRecordingState'
+import { ArrowRight } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const memberStore = useMemberStore()
+
+// 全局录音状态
+const { recordingMeetingId, recordingMeetingTitle, checkActiveRecording } = useRecordingState()
+
+const goToRecording = () => {
+  if (recordingMeetingId.value) {
+    router.push(`/meetings?resume=${recordingMeetingId.value}`)
+  }
+}
 
 const isMobile = ref(window.innerWidth <= 768)
 const isCollapse = ref(false)
@@ -199,6 +226,7 @@ onMounted(async () => {
   userStore.fetchNotificationCount()
   userStore.fetchNotifications()
   memberStore.fetchMembers()
+  checkActiveRecording()
 
   // 刷新用户信息，获取新鲜头像 URL
   try {
@@ -721,8 +749,99 @@ const formatTime = (t) => {
   margin-top: 8px;
 }
 
+/* ===== 全局浮动录音指示器 ===== */
+.recording-indicator {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2900;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #FF7A5C 0%, #FF6B6B 100%);
+  color: #fff;
+  border-radius: 50px;
+  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(12px);
+  user-select: none;
+}
+
+.recording-indicator:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(255, 107, 107, 0.5), 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: recording-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+
+.recording-text {
+  white-space: nowrap;
+}
+
+.recording-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.recording-arrow {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.recording-indicator:hover .recording-arrow {
+  transform: translateX(3px);
+}
+
+/* 录音指示器入场/退场动画 */
+.recording-banner-enter-active {
+  animation: banner-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.recording-banner-leave-active {
+  animation: banner-out 0.25s ease-in both;
+}
+
+@keyframes banner-in {
+  from { opacity: 0; transform: translateY(20px) scale(0.9); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes banner-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(20px) scale(0.9); }
+}
+
 /* 窄屏适配 */
 @media (max-width: 768px) {
+  .recording-indicator {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    padding: 14px 18px;
+    justify-content: center;
+  }
+  .recording-title {
+    max-width: 120px;
+  }
+
   .logo .title {
     font-size: 18px;
   }
