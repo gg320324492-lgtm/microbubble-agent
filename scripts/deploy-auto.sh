@@ -108,6 +108,12 @@ if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
     log "nginx config synced"
 fi
 
+# 补充 woff2 MIME 类型（Nginx 默认 mime.types 可能不含 woff2）
+if ! grep -q 'woff2' /etc/nginx/mime.types 2>/dev/null; then
+    sed -i '/application\/font-woff.*woff;/a\    application/font-woff2                woff2;' /etc/nginx/mime.types
+    log "woff2 MIME type added to mime.types"
+fi
+
 # 测试 nginx 配置有效性
 nginx -t >> "$LOG_FILE" 2>&1
 
