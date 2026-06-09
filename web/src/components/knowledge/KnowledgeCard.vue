@@ -49,7 +49,7 @@
 
       <!-- 摘要 -->
       <p class="card-summary">
-        {{ item.summary || (item.content ? item.content.substring(0, 120) + '...' : '') }}
+        {{ item.summary || item.snippet || '' }}
       </p>
 
       <!-- 标签 -->

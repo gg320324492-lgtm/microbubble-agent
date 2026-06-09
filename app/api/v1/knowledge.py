@@ -102,11 +102,10 @@ async def list_knowledge(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """查询知识库"""
+    """查询知识库（列表不含 content 字段，详情请调 /knowledge/{id}）"""
     # 构建过滤条件
     filters = []
     if category:
-        # 同时匹配 category 字段或 tags 数组
         from sqlalchemy import any_
         filters.append(
             (Knowledge.category == category) |
@@ -125,7 +124,7 @@ async def list_knowledge(
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    # 分页查询
+    # 分页查询 — content 字段只取前 200 字符作为 snippet，不返回完整内容
     query = select(Knowledge)
     if filters:
         query = query.where(*filters)
@@ -135,6 +134,13 @@ async def list_knowledge(
 
     result = await db.execute(query)
     items = result.scalars().all()
+
+    # 列表不含完整 content，只生成 snippet 供卡片预览
+    for item in items:
+        if not item.summary and item.content:
+            item.snippet = item.content[:200]
+        item.content = None       # 不序列化完整内容
+        item.formatted_content = None
 
     return KnowledgeList(items=items, total=total)
 
