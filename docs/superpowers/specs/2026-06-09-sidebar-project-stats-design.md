@@ -18,28 +18,30 @@
 | 开发天数 | 从首次 commit 到今天的天数 |
 | 文件总数 | 项目中的源码文件数量 |
 
-### 2. 开发阶段进度（静态配置）
+### 2. 已解决痛点（静态配置）
 
-统一展示 Phase 1-12 全部阶段，已完成的显示 ✅ + 100%，进行中的显示进度条，规划中的显示 🔜。
+从项目建立至今攻克的技术难题，按分类展示：
 
-| 阶段 | 名称 | 状态 |
-|------|------|------|
-| Phase 1 | Agent 工具路由 + 会话隔离 | ✅ 100% |
-| Phase 2 | 认证 + 语义搜索 + 微信通知 | ✅ 100% |
-| Phase 3 | Redis 会话 + Alembic + 限流 | ✅ 100% |
-| Phase 4 | 日志 + Pinia + 测试框架 | ✅ 100% |
-| Phase 5 | 腾讯会议 + MinIO + 转写分析 | ✅ 100% |
-| Phase 6 | API 规范化 + 组件拆分 + 测试 | ✅ 100% |
-| Phase 7 | 多模态知识库 | 🔜 规划中 |
-| Phase 8 | 实时语音科研助手 | 🔜 规划中 |
-| Phase 9 | 自动化文献综述 | 🔜 规划中 |
-| Phase 10 | 智能实验方案生成 | 🔜 规划中 |
-| Phase 11 | 深度论文理解 | 🔜 规划中 |
-| Phase 12 | 课题组专属 AI 研究员 | 🔜 规划中 |
+| 分类 | 痛点 |
+|------|------|
+| 幻觉 | Whisper 三层防护、反幻觉七重过滤、低置信度短文本过滤 |
+| 部署 | Webhook SSH fallback、Celery 任务丢失修复、ThreadingHTTPServer |
+| 安全 | Nginx 扫描器屏蔽（88% 恶意流量）、认证限流、sessionStorage 残留修复 |
+| 性能 | 声纹维度 256→192 修正、VAD 精细化、silero-vad 本地缓存 |
+| 架构 | 全局录音器单例、WebSocket 闪烁根因定位、async session lazy load |
 
-### 3. 已解决痛点（静态配置）
+### 3. 待做事项（静态配置）
 
-从项目建立至今攻克的技术难题总数 + 分类标签（幻觉/部署/性能/安全等）。
+未来发展方向：
+
+| Phase | 名称 | 周期 | 优先级 |
+|-------|------|------|--------|
+| Phase 7 | 多模态知识库 | 4-6 周 | 🔴 高 |
+| Phase 8 | 实时语音科研助手 | 6-8 周 | 🟡 中 |
+| Phase 9 | 自动化文献综述 | 6-8 周 | 🟡 中 |
+| Phase 10 | 智能实验方案生成 | 6-8 周 | 🟡 中 |
+| Phase 11 | 深度论文理解 | 4-6 周 | 🔴 高 |
+| Phase 12 | 课题组专属 AI 研究员 | 8-12 周 | 🟢 低 |
 
 ### 4. 更新日志（静态 JSON）
 
@@ -64,14 +66,20 @@
 │ 开发 24 天           │
 │ 440 个文件           │
 │                     │
-│ 开发阶段：          │
-│ ✅ Phase 1-6 已完成  │
+│ 已解决痛点：        │
+│ 🔧 幻觉 3 个        │
+│ 🔧 部署 4 个        │
+│ 🔧 安全 2 个        │
+│ 🔧 性能 3 个        │
+│ 🔧 架构 5 个        │
+│                     │
+│ 待做事项：          │
 │ 🔜 Phase 7 多模态   │
 │ 🔜 Phase 8 语音对话 │
 │ 🔜 Phase 9 文献检索 │
-│ ...                 │
-│                     │
-│ 已解决 12 个痛点    │
+│ 🔜 Phase 10 实验    │
+│ 🔜 Phase 11 论文    │
+│ 🔜 Phase 12 AI研究员│
 │                     │
 │ 最近更新：          │
 │ • 06-09 后台录音    │
@@ -135,25 +143,20 @@ app/api/v1/
 
 ```json
 {
-  "phases": [
-    { "id": 1, "name": "基础框架搭建", "status": "done", "progress": 100 },
-    { "id": 2, "name": "Agent 对话系统", "status": "done", "progress": 100 },
-    { "id": 3, "name": "会议管理系统", "status": "done", "progress": 100 },
-    { "id": 4, "name": "知识库系统", "status": "done", "progress": 100 },
-    { "id": 5, "name": "声纹识别系统", "status": "done", "progress": 100 },
-    { "id": 6, "name": "代码质量升级", "status": "done", "progress": 100 },
-    { "id": 7, "name": "多模态识别", "status": "planned" },
-    { "id": 8, "name": "实时语音对话", "status": "planned" },
-    { "id": 9, "name": "文献检索解析", "status": "planned" },
-    { "id": 10, "name": "实验数据管理", "status": "planned" },
-    { "id": 11, "name": "论文写作辅助", "status": "planned" },
-    { "id": 12, "name": "AI 自主研究", "status": "planned" }
-  ],
   "pain_points": [
-    { "category": "幻觉", "count": 3, "examples": ["Whisper 三层防护", "反幻觉七重过滤"] },
-    { "category": "部署", "count": 4, "examples": ["Webhook SSH fallback", "Celery 任务丢失"] },
-    { "category": "安全", "count": 2, "examples": ["Nginx 扫描器屏蔽", "认证限流"] },
-    { "category": "性能", "count": 3, "examples": ["声纹维度修正", "VAD 精细化"] }
+    { "category": "幻觉", "icon": "🎯", "items": ["Whisper 三层防护", "反幻觉七重过滤", "低置信度短文本过滤"] },
+    { "category": "部署", "icon": "🚀", "items": ["Webhook SSH fallback", "Celery 任务丢失修复", "ThreadingHTTPServer"] },
+    { "category": "安全", "icon": "🔒", "items": ["Nginx 扫描器屏蔽（88% 恶意流量）", "认证限流", "sessionStorage 残留修复"] },
+    { "category": "性能", "icon": "⚡", "items": ["声纹维度 256→192 修正", "VAD 精细化", "silero-vad 本地缓存"] },
+    { "category": "架构", "icon": "🏗️", "items": ["全局录音器单例", "WebSocket 闪烁根因定位", "async session lazy load"] }
+  ],
+  "todos": [
+    { "id": 7, "name": "多模态知识库", "cycle": "4-6 周", "priority": "高" },
+    { "id": 8, "name": "实时语音科研助手", "cycle": "6-8 周", "priority": "中" },
+    { "id": 9, "name": "自动化文献综述", "cycle": "6-8 周", "priority": "中" },
+    { "id": 10, "name": "智能实验方案生成", "cycle": "6-8 周", "priority": "中" },
+    { "id": 11, "name": "深度论文理解", "cycle": "4-6 周", "priority": "高" },
+    { "id": 12, "name": "课题组专属 AI 研究员", "cycle": "8-12 周", "priority": "低" }
   ],
   "changelog": [
     {
