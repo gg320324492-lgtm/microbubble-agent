@@ -96,19 +96,12 @@
             <span class="card-icon">📅</span>
             更新日志
           </span>
-          <el-button
-            v-if="data.changelog.length > 10"
-            text
-            type="primary"
-            @click="showAllLogs = !showAllLogs"
-          >
-            {{ showAllLogs ? '收起' : '查看全部' }}
-          </el-button>
+          <el-tag type="info" size="small">{{ data.changelog.length }} 条记录</el-tag>
         </div>
       </template>
       <el-timeline>
         <el-timeline-item
-          v-for="log in displayedLogs"
+          v-for="log in data.changelog"
           :key="log.date + log.title"
           :timestamp="log.date"
           placement="top"
@@ -140,13 +133,6 @@ const stats = ref({
   total_files: 0
 })
 const showAllLogs = ref(false)
-
-const displayedLogs = computed(() => {
-  if (showAllLogs.value) {
-    return data.value.changelog
-  }
-  return data.value.changelog.slice(0, 10)
-})
 
 const formatNumber = (num) => {
   if (num === undefined || num === null) return '0'
