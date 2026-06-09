@@ -1,12 +1,49 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-09** — Nginx 安全防护 + Docker Desktop 更新
+> 最后更新: **2026-06-09** — 听会后台录音 + 全局指示器 + Webhook 修复 + Nginx 安全防护
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-09）
+- [听会后台录音 + 全局指示器](#听会后台录音--全局指示器2026-06-09)（录音不中断 + 浮动胶囊 + 自动保存 + sessionStorage 验证）
+- [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+## 听会后台录音 + 全局指示器（2026-06-09）
+
+**问题**：点击"开始听会"后导航到其他页面，录音对话框消失，无法找回正在录音的会议。
+
+**修复方案**：
+- **useGlobalRecorder** — 模块级单例管理 MediaRecorder 生命周期，组件销毁不影响录音
+- **useRecordingState** — 全局录音状态 + 浮动胶囊指示器（MainLayout 右下角脉冲动画）
+- **AudioRecorder 重构** — 从独立录音器变为全局录音器的纯 UI 壳
+- **sessionStorage 验证** — 页面加载时始终查后端确认，避免残留脏数据
+- **自动保存** — 关闭对话框时如果录音还在进行，自动停止并上传
+
+技术细节：
+- `useGlobalRecorder.js` — 模块级变量（mediaRecorder/audioContext/analyser/timer），响应式 state/elapsed/barHeights
+- `useRecordingState.js` — recordingMeetingId + sessionStorage 持久化 + 后端 API 验证
+- `MainLayout.vue` — 浮动录音指示器（fixed 右下角，脉冲动画，点击跳转 `/meetings?resume={id}`）
+- `MeetingView.vue` — `?resume={id}` query 自动打开录音对话框
+- `meeting.py` — 会议列表 API 新增 `status` 过滤参数
+- 退出录音状态：结束听会 / 关闭对话框 / 后端确认无录音中会议
+
+## Webhook 自动部署修复（2026-06-09）
+
+**问题**：GitHub webhook 推送到 `https://agent.mnb-lab.cn/webhook` 被 Nginx 返回 444（静默关闭），自动部署完全失效。
+
+**根因**：扫描器屏蔽正则 `^/(...|web|...)` 中的 `web` 匹配到了 `/webhook`。
+
+**修复**：`web` → `web$`，`test` → `test$`，`db` → `db$`，确保只匹配精确路径。
+
+验证：
+- `curl -X POST https://agent.mnb-lab.cn/webhook` → `Invalid signature`（到达 webhook 服务）✅
+- `git push` → webhook 自动触发 → `部署成功 ✓` ✅
+
+**教训**：Nginx regex location 中关键词可能与合法路径前缀重叠，必须加 `$` 锚定。
 
 ---
 

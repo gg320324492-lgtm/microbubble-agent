@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-09 最新进展**：Nginx 安全防护（恶意扫描器屏蔽）+ Docker Desktop 更新到 4.77.0 + 中文汉化。详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-09) 和 [README.md](README.md#近期新增按时间倒序)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-09 最新进展**：听会后台录音不中断（全局录音器单例 + 浮动胶囊指示器）+ Webhook 自动部署修复（扫描器正则误杀 /webhook）+ Nginx 安全防护 + Docker Desktop 更新。详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-09) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 会议纪要标准格式（2026-06-06 硬规则）
 
@@ -136,6 +136,11 @@
 
 ### 2026-06-09 新增
 
+- **Nginx 扫描器正则误杀 /webhook** — `^/(...|web|...)` 中的 `web` 匹配到了 `/webhook`，GitHub webhook 被 444 静默关闭。修复：`web` → `web$` 精确匹配。**教训**：扫描器屏蔽正则中所有可能与合法路径前缀重叠的关键词必须加 `$` 锚定
+- **sessionStorage 残留脏数据** — 录音结束后 sessionStorage 未清除，刷新页面后幽灵胶囊仍显示。修复：`checkActiveRecording` 始终先查后端 API，后端无 recording 会议时调 `stopRecording()` 清除 sessionStorage。不再信任 sessionStorage 作为首选数据源
+- **全局录音器单例** — `useGlobalRecorder.js` 模块级变量管理 MediaRecorder 生命周期，组件销毁不影响录音。AudioRecorder 重构为纯 UI 壳。录音在后台持续进行，导航到其他页面不中断
+- **useRecordingState + 浮动胶囊** — MainLayout 右下角浮动脉冲胶囊，显示录音状态 + 会议标题，点击跳转 `/meetings?resume={id}`。sessionStorage 持久化 + 后端 API 验证双重保障
+- **meeting.py status 过滤** — 会议列表 API 新增 `status` 查询参数，支持按状态筛选。用于全局录音状态检查（`status=recording`）
 - **Nginx 安全防护** — `nginx/conf.d/tunnel.conf` 添加恶意扫描器屏蔽规则，覆盖两个站点（agent.mnb-lab.cn + mnb-lab.cn）。屏蔽类别：敏感文件（.env/.git/.ssh/.aws/.azure）、WordPress 漏洞路径、云凭证探测、开发文件（_next/node_modules）、常见攻击路径（boaform/formLogin/servlet）。使用 `return 444` 静默关闭连接不返回任何响应。正常访问（/、/api、/minio）不受影响
 - **Docker Desktop 汉化** — 使用 asxez/DockerDesktop-CN 项目，需替换 3 个文件（Docker Desktop.exe + app.asar + app.asar.unpacked）。4.74.0+ 版本有 asar 完整性校验，必须同时替换 exe。每次 Docker 更新后汉化失效需重装
 - **服务器访问日志分析** — 2452 条请求中 88% 是恶意扫描器（WordPress 漏洞、.env 探测、云凭证探测），真实用户只有杜同贺（3 个 IP 同一人不同设备）和少量 mnb-lab.cn 主站访客。202.113.x.x 网段是校园/办公网络
