@@ -1,15 +1,45 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-09** — 项目动态页面 + 听会后台录音 + Webhook 修复 + Nginx 安全防护
+> 最后更新: **2026-06-09** — 前端性能大幅优化（gzip + Element Plus 按需导入，主 bundle -83%）
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-09）
+- [前端性能大幅优化](#前端性能大幅优化2026-06-09)（Nginx gzip + Element Plus 按需导入 + 图标按需，首屏 -84%）
 - [项目动态页面](#项目动态页面2026-06-09)（侧边栏入口 + 全页面展示 + 数字动画 + 部署自动更新）
 - [听会后台录音 + 全局指示器](#听会后台录音--全局指示器2026-06-09)（录音不中断 + 浮动胶囊 + 自动保存 + sessionStorage 验证）
 - [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+## 前端性能大幅优化（2026-06-09）
+
+**问题**：页面首次加载 1.2MB JS + 355KB CSS，浏览响应缓慢。
+
+**修复方案（三重优化）**：
+
+1. **Nginx gzip 压缩** — 两个 server block（agent + mnb-lab）均开启 gzip，JS/CSS 传输体积减 70%
+2. **Element Plus 按需导入** — 使用 `unplugin-vue-components` + `ElementPlusResolver({ importStyle: 'css' })` 自动按需导入组件和样式
+3. **图标按需注册** — 移除 `import * as ElementPlusIconsVue` 全量注册 + `app.component` 循环，改为 auto-import
+
+**优化效果**：
+
+| 指标 | 优化前 | 优化后 | 减少 |
+|------|--------|--------|------|
+| 主 JS bundle | 1.2MB | 199KB | 83% ↓ |
+| 主 JS (gzip) | ~400KB | 76KB | 81% ↓ |
+| 主 CSS | 355KB | 15.6KB | 96% ↓ |
+| 首屏总加载 (gzip) | ~500KB | ~80KB | 84% ↓ |
+
+**技术细节**：
+- `vite.config.js` — 添加 `Components({ resolvers: [ElementPlusResolver({ importStyle: 'css' })] })`
+- `main.js` — 移除 `import ElementPlus from 'element-plus'`、`import 'element-plus/dist/index.css'`、`app.use(ElementPlus)`、全量图标注册
+- `AudioRecorder.vue` — 动态 `import('element-plus').then(...)` 改为静态 `import { ElMessageBox } from 'element-plus'`
+- `tunnel.conf` — 添加 `gzip on` + `gzip_types` 配置（comp_level 5, min_length 1000）
+- Element Plus 组件 CSS 自动拆分为 50+ 个独立文件，仅在对应组件渲染时加载
+- ECharts 保持 1MB 独立 chunk（已在懒加载路由中，不影响首屏）
 
 ---
 

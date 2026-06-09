@@ -165,6 +165,15 @@
 - **pipeline 日志精简** — 跳过 3D-Speaker pipeline（必然失败），直调底层 model，消除 30+ 行 WARNING/ERROR。
 - **认证限流** — 5→20次/分钟，读操作 100→200次/分钟。
 - **UI** — 全项目 date-picker 替换、日期北京时区、参与者头像间距、发言人选择器缩小、纪要合并显示。
+- **前端性能大幅优化（2026-06-09）** — Nginx gzip + Element Plus 按需导入 + 图标按需注册，主 JS bundle 1.2MB→199KB(-83%)，首屏 gzip ~500KB→~80KB(-84%)。具体变更：
+  - **Nginx gzip** — `tunnel.conf` 两个 server block 均开启 gzip（comp_level 5），JS/CSS 传输减 70%
+  - **Element Plus 按需导入** — 使用 `unplugin-vue-components` + `ElementPlusResolver({ importStyle: 'css' })`，自动按需导入组件和 CSS。vite.config.js 中配置 Components 插件
+  - **main.js 精简** — 移除 `import ElementPlus from 'element-plus'`、`import 'element-plus/dist/index.css'`、`app.use(ElementPlus)`、全量图标注册（`import *` + `app.component` 循环）
+  - **ElMessage/ElMessageBox** — 这些是 service 不是组件，在各文件中手动 `import { ElMessage } from 'element-plus'` 的写法保持不变，resolver 会自动优化导入路径
+  - **动态 import 不能保留** — `import('element-plus').then(...)` 无法被 resolver 转换，必须改为静态 import（如 `AudioRecorder.vue` 的 `ElMessageBox`）
+  - **CSS 拆分** — Element Plus 组件 CSS 自动拆分为 50+ 个独立文件，仅在对应组件渲染时加载，不再单一 355KB CSS 文件
+  - **dist 构建后检查** — 修改 vite.config.js 或 main.js 后必须 `npm run build` 并 `git add -f web/dist/` 提交 dist。验证：主 bundle 应 < 300KB（而非 1.2MB）
+  - **禁止回退** — 任何时候都不要把 `import ElementPlus from 'element-plus'` 或全量 CSS import 加回 main.js，也不要移除 vite.config.js 的 Components 插件，否则 bundle 会膨胀回 1.2MB
 
 ## 开发注意事项（历史）
 

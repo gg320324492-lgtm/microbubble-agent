@@ -49,6 +49,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
 
@@ -110,19 +111,13 @@ function handleResume() {
 }
 
 function confirmStop() {
-  import('element-plus').then(({ ElMessageBox }) => {
-    ElMessageBox.confirm('确定结束听会？', '确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    }).then(() => {
-      doStop()
-    }).catch(() => {})
-  }).catch(() => {
-    if (window.confirm('确定结束听会？')) {
-      doStop()
-    }
-  })
+  ElMessageBox.confirm('确定结束听会？', '确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(() => {
+    doStop()
+  }).catch(() => {})
 }
 
 async function doStop() {

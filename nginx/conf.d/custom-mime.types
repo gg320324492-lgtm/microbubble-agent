@@ -1,0 +1,2 @@
+# 补充 Nginx 默认 mime.types 缺失的类型
+application/font-woff2                woff2;
