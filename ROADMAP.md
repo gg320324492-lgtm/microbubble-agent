@@ -1,16 +1,45 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-09** — 前端性能大幅优化（gzip + Element Plus 按需导入，主 bundle -83%）
+> 最后更新: **2026-06-09** — 知识库 API HTTP/2 修复 + Element Plus 图标导入全面补全
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-09）
+- [知识库 API HTTP/2 协议错误修复](#知识库-api-http2-协议错误修复2026-06-09)（列表去 content + snippet + Nginx proxy buffer）
+- [Element Plus 图标全面修复](#element-plus-图标全面修复2026-06-09)（全项目扫描补全 20+ 缺失图标导入）
 - [前端性能大幅优化](#前端性能大幅优化2026-06-09)（Nginx gzip + Element Plus 按需导入 + 图标按需，首屏 -84%）
 - [项目动态页面](#项目动态页面2026-06-09)（侧边栏入口 + 全页面展示 + 数字动画 + 部署自动更新）
 - [听会后台录音 + 全局指示器](#听会后台录音--全局指示器2026-06-09)（录音不中断 + 浮动胶囊 + 自动保存 + sessionStorage 验证）
 - [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+## 知识库 API HTTP/2 协议错误修复（2026-06-09）
+
+**问题**：`GET /api/v1/knowledge?page=1&page_size=20` 返回 20 条完整 content（可达数 MB），穿过 FRP 隧道时 HTTP/2 帧损坏，浏览器报 `ERR_HTTP2_PROTOOL_ERROR`。
+
+**修复方案**：
+- 新增 `KnowledgeListItem` schema（不含 `content`/`formatted_content`），列表 API 改为 `snippet`（前 200 字符）+ `content=None`
+- `KnowledgeCard.vue` 卡片预览改为 `item.summary || item.snippet`
+- Nginx `/api` location 移除 `Connection: upgrade`（仅用于 WebSocket）+ 添加 `proxy_buffer_size 16k` + `proxy_buffers 8 64k` + `proxy_max_temp_file_size 128m`
+
+**效果**：列表 API 响应体积 -99%，不再触发 HTTP/2 协议错误。
+
+---
+
+## Element Plus 图标全面修复（2026-06-09）
+
+**问题**：改为 Element Plus 按需导入后，`unplugin-vue-components` 的 resolver 无法解析动态 `<component :is="string">` 和部分静态 `<IconName />`，导致侧边栏/仪表盘/logo/铃铛等图标不显示。
+
+**修复方案**：
+- 全项目扫描 40+ 个 Vue 组件，找出所有模板中使用但未显式 import 的图标
+- `MainLayout.vue`：显式 import 14 个图标（Aim/Bell + 路由 meta 10 个 + ArrowRight/DataBoard），创建 `iconMap` 映射
+- `Dashboard.vue`：补全 Clock/CircleCheck/Warning/ChatDotRound/Plus
+- `MeetingView.vue`：补全 Search
+
+**教训**：`unplugin-vue-components` + `ElementPlusResolver` 的图标自动解析不完整，所有 `<IconName />` 必须显式 import 最保险。
 
 ---
 
