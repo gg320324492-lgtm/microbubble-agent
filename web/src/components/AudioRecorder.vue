@@ -3,8 +3,9 @@
     <!-- 状态：idle — 待录音 -->
     <div v-if="state === 'idle'" class="recorder-idle">
       <div class="recorder-icon">🎙️</div>
-      <button class="btn-start" @click="startRecording">开始听会</button>
-      <p class="recorder-hint">点击后即开始录音，无需填写任何信息</p>
+      <button class="btn-start" @click="startRecording">{{ resumeHint ? '继续录音' : '开始听会' }}</button>
+      <p v-if="resumeHint" class="recorder-hint resume-hint">{{ resumeHint }}</p>
+      <p v-else class="recorder-hint">点击后即开始录音，无需填写任何信息</p>
     </div>
 
     <!-- 状态：recording — 录音中 -->
@@ -48,6 +49,11 @@
 
 <script setup>
 import { ref, computed, onUnmounted, nextTick } from 'vue'
+
+const props = defineProps({
+  /** 恢复模式提示文字（如 "继续听会 #74"），有值时 idle 状态显示恢复 UI */
+  resumeHint: { type: String, default: '' },
+})
 
 const emit = defineEmits(['recording-start', 'recording-stop', 'audio-ready'])
 
@@ -347,6 +353,7 @@ defineExpose({
 }
 .btn-start:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(255,122,92,0.4); }
 .recorder-hint { color: #999; font-size: 13px; margin-top: 12px; }
+.resume-hint { color: #FF7A5C; font-weight: 600; font-size: 14px; background: rgba(255,122,92,0.08); padding: 8px 16px; border-radius: 8px; }
 
 /* recording */
 .recorder-active { text-align: center; }
