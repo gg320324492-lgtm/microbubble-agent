@@ -6,7 +6,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import APIRouter
-from app.core.redis import redis_client
+from app.core.redis import get_redis
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -91,8 +91,9 @@ def _calculate_dev_days(first_commit_str: str) -> int:
 async def get_project_stats():
     """获取项目开发统计数据"""
     # 尝试从 Redis 缓存获取
+    r = await get_redis()
     cache_key = "dashboard:project-stats"
-    cached = await redis_client.get(cache_key)
+    cached = await r.get(cache_key)
     if cached:
         return json.loads(cached)
 
@@ -109,6 +110,6 @@ async def get_project_stats():
     }
 
     # 缓存 1 小时
-    await redis_client.setex(cache_key, 3600, json.dumps(result))
+    await r.setex(cache_key, 3600, json.dumps(result))
 
     return result
