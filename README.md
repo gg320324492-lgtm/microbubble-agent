@@ -21,6 +21,8 @@
 
 ### 近期新增（按时间倒序）
 
+- **Nginx 安全防护（2026-06-09）** — 添加恶意扫描器屏蔽规则：敏感文件探测（.env/.git/.ssh/.aws）、WordPress 漏洞路径、云凭证探测、开发文件探测、常见攻击路径。扫描器请求返回 444（静默关闭连接），正常访问不受影响。agent.mnb-lab.cn + mnb-lab.cn 双站点均已防护
+- **Docker Desktop 更新（2026-06-09）** — 4.73.1 → 4.77.0（Engine 29.5.3）+ 中文汉化语言包安装（asxez/DockerDesktop-CN）
 - **Webhint 无障碍+性能+安全头全面优化（2026-06-08）** — 修复 ARIA hidden 包含可聚焦元素（el-popover v-if / el-tab-pane lazy）、全站 el-select/el-button/el-progress 图标按钮补全 aria-label（含 MemoryView/TaskView/KnowledgeView/ProjectView/MemberView）、移除废弃 Pragma/Expires 头、Cache-Control 统一为 max-age=0、Nginx proxy_hide_header X-XSS-Protection、CSS 动画用 transform 替代 background-position 消除 webhint 性能警告、Nginx charset_types 去重、移除多余 CSP 头、添加 .hintrc 自定义 revving 正则匹配 Vite content-hash、IE 兼容性警告确认忽略（Vue 3 不支持 IE）
 - **垃圾桶批量删除（2026-06-08）** — 编辑按钮切换勾选模式 + 批量永久删除（后端 POST /api/v1/tasks/batch-permanent-delete 单次请求，秒级完成不触发限流）
 - **任务列表配对布局（2026-06-08）** — 按负责人配对：左进行中 ↔ 右已完成，同一人左右对齐。修复负责人显示为"未分配"的 string/number 类型不匹配 bug
