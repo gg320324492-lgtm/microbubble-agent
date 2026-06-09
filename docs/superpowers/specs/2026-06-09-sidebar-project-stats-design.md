@@ -20,26 +20,28 @@
 
 ### 2. 开发阶段进度（静态配置）
 
-Phase 1-6 各阶段名称 + 完成百分比 + 进度条，Phase 7+ 标记为"规划中"。
+统一展示 Phase 1-12 全部阶段，已完成的显示 ✅ + 100%，进行中的显示进度条，规划中的显示 🔜。
+
+| 阶段 | 名称 | 状态 |
+|------|------|------|
+| Phase 1 | 基础框架搭建 | ✅ 100% |
+| Phase 2 | Agent 对话系统 | ✅ 100% |
+| Phase 3 | 会议管理系统 | ✅ 100% |
+| Phase 4 | 知识库系统 | ✅ 100% |
+| Phase 5 | 声纹识别系统 | ✅ 100% |
+| Phase 6 | 代码质量升级 | ✅ 100% |
+| Phase 7 | 多模态识别 | 🔜 规划中 |
+| Phase 8 | 实时语音对话 | 🔜 规划中 |
+| Phase 9 | 文献检索解析 | 🔜 规划中 |
+| Phase 10 | 实验数据管理 | 🔜 规划中 |
+| Phase 11 | 论文写作辅助 | 🔜 规划中 |
+| Phase 12 | AI 自主研究 | 🔜 规划中 |
 
 ### 3. 已解决痛点（静态配置）
 
 从项目建立至今攻克的技术难题总数 + 分类标签（幻觉/部署/性能/安全等）。
 
-### 4. 待做事项（静态配置）
-
-从 ROADMAP.md 中提取的规划中任务，展示未来发展方向。
-
-| 分类 | 示例 |
-|------|------|
-| 多模态 | 图片识别、文档解析 |
-| 语音 | 实时语音对话、TTS 优化 |
-| 文献 | 论文检索、PDF 解析 |
-| 实验 | 实验数据管理、结果分析 |
-| 论文 | 论文写作辅助、格式化 |
-| AI 研究员 | 自主研究、假设验证 |
-
-### 5. 更新日志（静态 JSON）
+### 4. 更新日志（静态 JSON）
 
 全历程时间线，每条包含：
 - 日期：如 `2026-06-09`
@@ -62,15 +64,14 @@ Phase 1-6 各阶段名称 + 完成百分比 + 进度条，Phase 7+ 标记为"规
 │ 开发 45 天           │
 │ 230 个文件           │
 │                     │
-│ Phase 6 ██████░░ 85%│
+│ 开发阶段：          │
+│ ✅ Phase 1-6 已完成  │
+│ 🔜 Phase 7 多模态   │
+│ 🔜 Phase 8 语音对话 │
+│ 🔜 Phase 9 文献检索 │
+│ ...                 │
 │                     │
 │ 已解决 12 个痛点    │
-│                     │
-│ 待做事项：          │
-│ 🔜 多模态识别       │
-│ 🔜 实时语音对话     │
-│ 🔜 论文检索解析     │
-│ 🔜 AI 自主研究      │
 │                     │
 │ 最近更新：          │
 │ • 06-09 后台录音    │
@@ -135,26 +136,24 @@ app/api/v1/
 ```json
 {
   "phases": [
-    { "id": 1, "name": "基础框架搭建", "progress": 100 },
-    { "id": 2, "name": "Agent 对话系统", "progress": 100 },
-    { "id": 3, "name": "会议管理系统", "progress": 100 },
-    { "id": 4, "name": "知识库系统", "progress": 100 },
-    { "id": 5, "name": "声纹识别系统", "progress": 100 },
-    { "id": 6, "name": "代码质量升级", "progress": 100 }
+    { "id": 1, "name": "基础框架搭建", "status": "done", "progress": 100 },
+    { "id": 2, "name": "Agent 对话系统", "status": "done", "progress": 100 },
+    { "id": 3, "name": "会议管理系统", "status": "done", "progress": 100 },
+    { "id": 4, "name": "知识库系统", "status": "done", "progress": 100 },
+    { "id": 5, "name": "声纹识别系统", "status": "done", "progress": 100 },
+    { "id": 6, "name": "代码质量升级", "status": "done", "progress": 100 },
+    { "id": 7, "name": "多模态识别", "status": "planned" },
+    { "id": 8, "name": "实时语音对话", "status": "planned" },
+    { "id": 9, "name": "文献检索解析", "status": "planned" },
+    { "id": 10, "name": "实验数据管理", "status": "planned" },
+    { "id": 11, "name": "论文写作辅助", "status": "planned" },
+    { "id": 12, "name": "AI 自主研究", "status": "planned" }
   ],
   "pain_points": [
     { "category": "幻觉", "count": 3, "examples": ["Whisper 三层防护", "反幻觉七重过滤"] },
     { "category": "部署", "count": 4, "examples": ["Webhook SSH fallback", "Celery 任务丢失"] },
     { "category": "安全", "count": 2, "examples": ["Nginx 扫描器屏蔽", "认证限流"] },
     { "category": "性能", "count": 3, "examples": ["声纹维度修正", "VAD 精细化"] }
-  ],
-  "todos": [
-    { "category": "多模态", "icon": "🖼️", "items": ["图片识别", "文档解析"] },
-    { "category": "语音", "icon": "🎤", "items": ["实时语音对话", "TTS 优化"] },
-    { "category": "文献", "icon": "📄", "items": ["论文检索", "PDF 解析"] },
-    { "category": "实验", "icon": "🧪", "items": ["实验数据管理", "结果分析"] },
-    { "category": "论文", "icon": "✍️", "items": ["论文写作辅助", "格式化"] },
-    { "category": "AI 研究员", "icon": "🤖", "items": ["自主研究", "假设验证"] }
   ],
   "changelog": [
     {
