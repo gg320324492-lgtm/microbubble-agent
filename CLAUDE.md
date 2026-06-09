@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-05 最新进展**：创建极简风格前端项目 `web-minimal/`（完全独立，可直接运行）+ UI 设计风格展示（5 种风格示例）。详见 [ROADMAP.md](ROADMAP.md#极简风格前端项目2026-06-05) 和 [README.md](README.md#近期新增按时间倒序)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-09 最新进展**：Nginx 安全防护（恶意扫描器屏蔽）+ Docker Desktop 更新到 4.77.0 + 中文汉化。详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-09) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 会议纪要标准格式（2026-06-06 硬规则）
 
@@ -133,6 +133,12 @@
 - **IE 兼容性不修** — Vue 3 + Element Plus 本身不支持 IE，所有 IE 兼容性警告（-ms-grid、flex、sticky、8 位颜色值等）直接忽略，不需要加 `-ms-` 前缀
 - **webhint http-cache 误报** — Vite content-hash 文件名（`index-f2KQs4XE.js`）是业界标准缓存方案，但 webhint 内置正则只认 `[0-9a-f]` 小写十六进制，不认 Vite 的 base64 格式。已添加 `.hintrc` 自定义 revving 正则，但 Edge DevTools 内置 webhint 不读项目配置，浏览器端无法消除此警告
 - **webhint 判断规则** — Error 必须修，Warning 看情况修，Info/Tip 大部分忽略。看源码路径：自己写的代码可以改，第三方库（Element Plus/Vite 打包产物）不能改
+
+### 2026-06-09 新增
+
+- **Nginx 安全防护** — `nginx/conf.d/tunnel.conf` 添加恶意扫描器屏蔽规则，覆盖两个站点（agent.mnb-lab.cn + mnb-lab.cn）。屏蔽类别：敏感文件（.env/.git/.ssh/.aws/.azure）、WordPress 漏洞路径、云凭证探测、开发文件（_next/node_modules）、常见攻击路径（boaform/formLogin/servlet）。使用 `return 444` 静默关闭连接不返回任何响应。正常访问（/、/api、/minio）不受影响
+- **Docker Desktop 汉化** — 使用 asxez/DockerDesktop-CN 项目，需替换 3 个文件（Docker Desktop.exe + app.asar + app.asar.unpacked）。4.74.0+ 版本有 asar 完整性校验，必须同时替换 exe。每次 Docker 更新后汉化失效需重装
+- **服务器访问日志分析** — 2452 条请求中 88% 是恶意扫描器（WordPress 漏洞、.env 探测、云凭证探测），真实用户只有杜同贺（3 个 IP 同一人不同设备）和少量 mnb-lab.cn 主站访客。202.113.x.x 网段是校园/办公网络
 
 ### 2026-06-06 新增
 

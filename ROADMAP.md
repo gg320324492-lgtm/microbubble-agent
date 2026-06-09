@@ -1,8 +1,46 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-08** — Webhint 全面优化 + 垃圾桶批量删除 + 任务配对布局 + 精确跳转
+> 最后更新: **2026-06-09** — Nginx 安全防护 + Docker Desktop 更新
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-09）
+- [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
+- [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+## Nginx 安全防护（2026-06-09）
+
+服务器访问日志分析发现 2452 条请求中 88% 是恶意扫描器流量，添加 Nginx 屏蔽规则：
+
+- **敏感文件探测** — `.env`, `.git`, `.svn`, `.htaccess`, `.ssh`, `.aws`, `.azure`, `.gcp` → 444
+- **WordPress 漏洞路径** — `wp-admin`, `wp-content`, `wp-includes`, `xmlrpc`, `admin`, `phpmyadmin` → 444
+- **云凭证探测** — `.azure`, `.aws`, `.gcp`, `credentials`, `service-account` → 444
+- **开发文件探测** — `_next`, `__next`, `node_modules`, `vendor` → 444
+- **常见攻击路径** — `boaform`, `formLogin`, `servlet`, `nccloud`, `k3cloud`, `easweb`, `owa` → 444
+
+技术细节：
+- `return 444` 是 Nginx 特有状态码，静默关闭连接不返回任何响应
+- 规则放在 `server {}` 块内，位于 `location / {}` 之前
+- 两个站点（agent.mnb-lab.cn + mnb-lab.cn）均已防护
+- 配置文件：`nginx/conf.d/tunnel.conf`（本地）→ `/etc/nginx/conf.d/default.conf`（服务器）
+
+验证结果：
+- `/.env` → 000（连接被关闭）✅
+- `/wp-admin/` → 000 ✅
+- `/.azure/credentials` → 000 ✅
+- `/` → 200（正常访问）✅
+- `/api/v1/auth/me` → 401（API 正常）✅
+
+## Docker Desktop 更新（2026-06-09）
+
+- Docker Desktop 4.73.1 → 4.77.0（Engine 29.5.3）
+- 中文汉化语言包：[asxez/DockerDesktop-CN](https://github.com/asxez/DockerDesktop-CN)
+- 汉化需替换 3 个文件：`Docker Desktop.exe` + `app.asar` + `app.asar.unpacked`
+- 4.74.0+ 版本有 asar 完整性校验，必须同时替换 exe
+- 每次 Docker 更新后汉化失效需重装
+- WSL 重启后引擎才能正常启动（`wsl --shutdown` 再启动 Docker）
 
 ### 最新完成（2026-06-08）
 - [Webhint 无障碍+性能+安全头全面优化](#webhint-优化2026-06-08)（ARIA + Cache-Control + CSS 动画 + Nginx 配置 + .hintrc + IE 兼容性确认忽略）
