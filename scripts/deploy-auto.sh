@@ -108,11 +108,14 @@ if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
     log "nginx config synced"
 fi
 
-# 补充 woff2 MIME 类型（Nginx 默认 mime.types 可能不含 woff2）
-if ! grep -q 'woff2' /etc/nginx/mime.types 2>/dev/null; then
-    # 在 woff 行后插入 woff2（用 printf 避免 sed 转义问题）
-    awk '/application\/font-woff.*woff;/{print;print "    application/font-woff2                woff2;";next}1' /etc/nginx/mime.types > /tmp/mime.types.new && mv /tmp/mime.types.new /etc/nginx/mime.types
-    log "woff2 MIME type added to mime.types"
+# 补充/修正 woff2 MIME 类型（Nginx 默认 mime.types 可能不含 woff2，或旧值不正确）
+if ! grep -q 'font/woff2' /etc/nginx/mime.types 2>/dev/null; then
+    # 删除旧的错误条目（application/font-woff2）
+    grep -v 'application/font-woff2' /etc/nginx/mime.types > /tmp/mime.types.new
+    # 在 woff 行后插入正确的 woff2
+    awk '/application\/font-woff.*woff;/{print;print "    font/woff2                           woff2;";next}1' /tmp/mime.types.new > /etc/nginx/mime.types
+    rm -f /tmp/mime.types.new
+    log "woff2 MIME type fixed in mime.types"
 fi
 
 # 测试 nginx 配置有效性
