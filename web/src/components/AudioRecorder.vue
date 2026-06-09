@@ -50,13 +50,16 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
+import { useRecordingState } from '@/composables/useRecordingState'
 
 const emit = defineEmits(['recording-start', 'recording-stop', 'audio-ready'])
 
 const {
   state, elapsed, barHeights, isPaused,
-  start, pause, resumePaused, stop, isActive, getAudioBlob,
+  start, pause, resumePaused, stop, reset, isActive, getAudioBlob,
 } = useGlobalRecorder()
+
+const { stopRecording: clearRecordingIndicator } = useRecordingState()
 
 // 回放状态（组件局部）
 const isPlaying = ref(false)
@@ -79,8 +82,11 @@ function formatTime(seconds) {
 // ===== 初始化 =====
 
 onMounted(() => {
-  // 如果全局录音器已在进行中（用户从其他页面返回），
-  // state 已经是 recording/paused，模板自动显示录音 UI，无需额外操作
+  // 如果录音已停止（上一次会话结束），重置为 idle 允许新录音
+  // 如果录音正在进行中（用户从其他页面返回），保持当前状态
+  if (state.value === 'stopped') {
+    reset()
+  }
 })
 
 // ===== 操作 =====
@@ -123,6 +129,8 @@ async function doStop() {
   stoppedDuration.value = elapsed.value
   const blob = await stop()
   emit('recording-stop')
+  // 清除全局录音指示器（胶囊）
+  clearRecordingIndicator()
   if (blob) {
     emit('audio-ready', blob)
   }
