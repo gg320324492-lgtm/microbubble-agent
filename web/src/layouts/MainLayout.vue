@@ -18,7 +18,7 @@
           :style="{ '--i': index }"
           @click="navigateTo(item.path)"
         >
-          <el-icon size="20"><component :is="item.meta.icon" /></el-icon>
+          <el-icon size="20"><component :is="iconMap[item.meta.icon]" /></el-icon>
           <span>{{ item.meta.title }}</span>
         </div>
       </div>
@@ -51,7 +51,7 @@
           :index="'/' + route.path"
           class="menu-item"
         >
-          <el-icon><component :is="route.meta.icon" /></el-icon>
+          <el-icon><component :is="iconMap[route.meta.icon]" /></el-icon>
           <template #title><span style="color:inherit">{{ route.meta.title }}</span></template>
         </el-menu-item>
       </el-menu>
@@ -173,7 +173,15 @@ import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
-import { ArrowRight, DataBoard } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting } from '@element-plus/icons-vue'
+
+// 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
+// unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
+const iconMap = {
+  Odometer, ChatDotRound, List, VideoCamera, Folder,
+  User, Document, Memo, Setting,
+  mic: Microphone,  // 声纹库图标
+}
 
 const route = useRoute()
 const router = useRouter()
