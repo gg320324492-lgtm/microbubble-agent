@@ -84,6 +84,12 @@ const routes = [
         name: 'Settings',
         component: () => import('@/views/SettingsView.vue'),
         meta: { title: '个人设置', icon: 'Setting' }
+      },
+      {
+        path: 'project-stats',
+        name: 'ProjectStats',
+        component: () => import('@/views/ProjectStatsView.vue'),
+        meta: { title: '项目动态', icon: 'DataBoard' }
       }
     ]
   }

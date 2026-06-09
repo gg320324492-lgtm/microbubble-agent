@@ -55,11 +55,6 @@
           <template #title><span style="color:inherit">{{ route.meta.title }}</span></template>
         </el-menu-item>
       </el-menu>
-
-      <!-- 项目动态 — 侧边栏底部 -->
-      <div class="sidebar-stats">
-        <SidebarProjectStats :collapsed="isCollapse" />
-      </div>
     </el-aside>
 
     <!-- 主内容区 -->
@@ -167,7 +162,6 @@ import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { ArrowRight } from '@element-plus/icons-vue'
-import SidebarProjectStats from '@/components/SidebarProjectStats.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -390,16 +384,6 @@ const formatTime = (t) => {
 .el-menu--collapse .sidebar-menu .el-menu-item {
   justify-content: center;
   padding: 0 12px;
-}
-
-/* ===== 侧边栏底部项目动态 ===== */
-.sidebar-stats {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-sidebar);
 }
 
 /* ===== 顶部栏 ===== */
