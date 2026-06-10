@@ -15,6 +15,9 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './assets/element-plus-overrides.css'
 import './assets/variables.css'
+// ElMessage / ElMessageBox 是 JS 服务调用，unplugin-vue-components 无法检测模板中的使用，需手动导入 CSS
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
 import axios from 'axios'
 
 import App from './App.vue'
