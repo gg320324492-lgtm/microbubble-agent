@@ -521,297 +521,351 @@ onUnmounted(() => {
 /* ===== 容器 ===== */
 .pet-world {
   position: relative;
-  width: 80px;
-  height: 100px;
+  width: 90px;
+  height: 110px;
   flex-shrink: 0;
   cursor: default;
+  perspective: 300px;
 }
 
 /* ===== 兔子本体 ===== */
 .bunny {
   position: absolute;
-  width: 45px;
-  height: 55px;
-  transition: transform 0.1s ease-out;
+  width: 65px;
+  height: 80px;
+  transition: transform 0.15s ease-out;
   z-index: 10;
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.12));
+  transform-style: preserve-3d;
 }
-
-.bunny.hovered { filter: brightness(1.05); }
-.bunny.walking { animation: pet-walk 0.4s ease-in-out infinite; }
-.bunny.sleeping { opacity: 0.85; }
-
+.bunny:hover {
+  filter: drop-shadow(0 8px 18px rgba(255,122,92,0.25)) brightness(1.05);
+}
+.bunny.walking {
+  animation: pet-walk 0.35s ease-in-out infinite;
+}
+.bunny.sleeping {
+  opacity: 0.8;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
+}
 @keyframes pet-walk {
-  0%, 100% { margin-top: 0; }
-  50% { margin-top: -4px; }
+  0%, 100% { transform: translateY(0) rotateX(0); }
+  30% { transform: translateY(-6px) rotateX(5deg); }
+  60% { transform: translateY(-2px) rotateX(2deg); }
 }
 
-/* ===== 身体 ===== */
+/* ===== 3D 身体 ===== */
 .body {
   position: absolute;
   bottom: 0;
-  left: 4px;
-  width: 37px;
-  height: 32px;
-  background: #FFF0E8;
-  border-radius: 50% 50% 42% 42%;
+  left: 6px;
+  width: 50px;
+  height: 42px;
+  background: radial-gradient(ellipse at 40% 30%, #FFF8F4 0%, #F5E0D0 60%, #E8D0BC 100%);
+  border-radius: 52% 48% 48% 52% / 55% 55% 45% 45%;
   z-index: 2;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow:
+    inset 0 -6px 12px rgba(180,140,120,0.2),
+    inset 0 4px 8px rgba(255,255,255,0.6),
+    0 4px 8px rgba(0,0,0,0.06);
   animation: pet-breathe 4s ease-in-out infinite;
 }
-
 @keyframes pet-breathe {
   0%, 100% { transform: scaleY(1) scaleX(1); }
-  50% { transform: scaleY(1.03) scaleX(0.97); }
+  50% { transform: scaleY(1.04) scaleX(0.97); }
 }
 
-/* ===== 头 ===== */
+/* ===== 3D 头（chibi大脸） ===== */
 .head {
   position: absolute;
-  bottom: 24px;
-  left: 8px;
-  width: 29px;
-  height: 28px;
-  background: #FFF0E8;
-  border-radius: 50%;
+  bottom: 34px;
+  left: 4px;
+  width: 54px;
+  height: 50px;
+  background: radial-gradient(ellipse at 42% 35%, #FFFCFA 0%, #F8E8DA 55%, #EDD5C0 100%);
+  border-radius: 50% 50% 48% 52%;
   z-index: 4;
-  animation: pet-breathe 4s ease-in-out infinite;
+  box-shadow:
+    inset 0 -5px 10px rgba(180,140,120,0.15),
+    inset 0 6px 8px rgba(255,255,255,0.5),
+    0 3px 6px rgba(0,0,0,0.05);
+  animation: pet-breathe 4s ease-in-out infinite 0.5s;
 }
 
-/* ===== 耳朵 ===== */
+/* ===== 3D 耳朵（更立体） ===== */
 .ear {
   position: absolute;
-  width: 10px;
-  height: 24px;
-  background: #FFF0E8;
-  border-radius: 50% 50% 35% 35%;
+  width: 16px;
+  height: 38px;
+  background: radial-gradient(ellipse at 50% 30%, #FFF8F2 0%, #F2DDCB 50%, #E0C8B0 100%);
+  border-radius: 45% 45% 30% 30%;
   z-index: 3;
   transform-origin: bottom center;
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    inset 0 3px 6px rgba(255,255,255,0.4),
+    inset 0 -4px 8px rgba(180,130,100,0.15),
+    0 2px 4px rgba(0,0,0,0.04);
 }
 .ear::after {
   content: '';
   position: absolute;
-  top: 3px;
-  left: 2px;
-  width: 6px;
-  height: 16px;
-  background: #FFD4C4;
+  top: 4px;
+  left: 4px;
+  width: 8px;
+  height: 26px;
+  background: radial-gradient(ellipse at 50% 30%, #FFD8C8 0%, #F0C0A8 100%);
   border-radius: 50%;
 }
-.ear-left { bottom: 42px; left: 4px; transform: rotate(-10deg); }
-.ear-right { bottom: 42px; right: 4px; transform: rotate(10deg); }
-.ear.twitch { transform: rotate(15deg); }
+.ear-left {
+  bottom: 64px;
+  left: 8px;
+  transform: rotate(-15deg);
+}
+.ear-right {
+  bottom: 64px;
+  right: 8px;
+  transform: rotate(15deg);
+}
+.ear.twitch {
+  transform: rotate(22deg) scaleX(1.05);
+}
 
-/* ===== 眼睛 ===== */
+/* ===== Kawaii 大眼睛 ===== */
 .eye {
   position: absolute;
-  top: 9px;
-  width: 7px;
-  height: 8px;
-  background: #FFF0E8;
+  top: 14px;
+  width: 14px;
+  height: 16px;
+  background: radial-gradient(circle at 50% 45%, #fff 0%, #fafafa 100%);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 5;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
 }
-.eye-left { left: 5px; }
-.eye-right { right: 5px; }
+.eye-left { left: 8px; }
+.eye-right { right: 8px; }
 
 .pupil {
-  width: 4px;
-  height: 4.5px;
-  background: #4A3728;
+  width: 8px;
+  height: 10px;
+  background: radial-gradient(circle at 50% 40%, #5A4535 0%, #3A2518 100%);
   border-radius: 50%;
-  transition: transform 0.1s;
+  position: relative;
+  transition: transform 0.15s ease;
 }
-.bunny.hovered .pupil { transform: scale(1.3); }
+/* 眼睛高光 */
+.pupil::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 3px;
+  height: 3px;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+.bunny.hovered .pupil {
+  transform: scale(1.2);
+}
 
 /* 爱心眼 */
 .heart-eye {
   position: absolute;
-  top: 7px;
-  font-size: 11px;
-  color: #FF6B6B;
+  top: 12px;
+  font-size: 14px;
+  color: #FF5E5E;
   z-index: 6;
-  animation: pet-heartbeat 0.6s ease-in-out infinite;
+  animation: pet-heartbeat 0.5s ease-in-out infinite;
+  filter: drop-shadow(0 1px 2px rgba(255,60,60,0.3));
 }
-.heart-left { left: 3px; }
-.heart-right { right: 3px; }
-
+.heart-left { left: 6px; }
+.heart-right { right: 6px; }
 @keyframes pet-heartbeat {
   0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.25); }
+  50% { transform: scale(1.3); }
 }
 
 /* 睡觉眼 */
 .sleep-eye {
   position: absolute;
-  top: 12px;
-  width: 7px;
-  height: 2px;
-  background: #4A3728;
-  border-radius: 1px;
+  top: 21px;
+  width: 14px;
+  height: 3px;
+  background: #5A4535;
+  border-radius: 2px;
   z-index: 6;
+  opacity: 0.8;
 }
-.sleep-eye-left { left: 5px; }
-.sleep-eye-right { right: 5px; }
+.sleep-eye-left { left: 8px; }
+.sleep-eye-right { right: 8px; }
 
-/* ===== 鼻子 ===== */
+/* ===== 小鼻子 ===== */
 .nose {
   position: absolute;
-  top: 16px;
+  top: 29px;
   left: 50%;
   transform: translateX(-50%);
-  width: 5px;
-  height: 4px;
-  background: #FF9D85;
+  width: 7px;
+  height: 5px;
+  background: radial-gradient(circle at 50% 30%, #FFB8A8 0%, #F09080 100%);
   border-radius: 50%;
   z-index: 5;
 }
 
-/* ===== 嘴 ===== */
+/* ===== 3D Y型小嘴 ===== */
 .mouth {
   position: absolute;
-  top: 20px;
+  top: 33px;
   left: 50%;
   transform: translateX(-50%);
-  width: 8px;
-  height: 4px;
-  border-bottom: 1.2px solid #E8C4B0;
-  border-radius: 0 0 50% 50%;
+  width: 14px;
+  height: 8px;
   z-index: 5;
 }
+.mouth::before,
+.mouth::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 7px;
+  height: 8px;
+  border-bottom: 1.5px solid #D0B8A8;
+  border-radius: 0 0 50% 50%;
+}
+.mouth::before { left: 0; border-right: 1.5px solid #D0B8A8; border-radius: 0 0 50% 50%; }
+.mouth::after { right: 0; border-left: 1.5px solid #D0B8A8; border-radius: 0 0 50% 50%; }
 
-/* ===== 腮红 ===== */
+/* ===== 软萌腮红 ===== */
 .blush {
   position: absolute;
-  top: 14px;
-  width: 6px;
-  height: 5px;
-  background: rgba(255, 180, 160, 0.5);
+  top: 19px;
+  width: 9px;
+  height: 7px;
+  background: radial-gradient(ellipse, rgba(255,160,140,0.5) 0%, transparent 70%);
   border-radius: 50%;
   z-index: 4;
 }
 .blush-left { left: 1px; }
 .blush-right { right: 1px; }
 
-/* ===== 腿 ===== */
+/* ===== 圆润小腿 ===== */
 .leg {
   position: absolute;
-  bottom: 2px;
-  width: 10px;
-  height: 8px;
-  background: #FFF0E8;
+  bottom: 0;
+  width: 16px;
+  height: 11px;
+  background: radial-gradient(ellipse at 50% 40%, #FFF6F0 0%, #F0DCC8 100%);
   border-radius: 50%;
   z-index: 1;
+  box-shadow: 0 2px 3px rgba(0,0,0,0.04);
 }
-.leg-front-left { left: 6px; }
-.leg-front-right { right: 6px; }
-.bunny.walking .leg-front-left { animation: pet-leg 0.4s ease-in-out infinite; }
-.bunny.walking .leg-front-right { animation: pet-leg 0.4s ease-in-out infinite 0.2s; }
-
+.leg-front-left { left: 8px; }
+.leg-front-right { right: 8px; }
+.bunny.walking .leg-front-left { animation: pet-leg 0.35s ease-in-out infinite; }
+.bunny.walking .leg-front-right { animation: pet-leg 0.35s ease-in-out infinite 0.17s; }
 @keyframes pet-leg {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  50% { transform: translateY(-4px) scaleY(0.85); }
 }
 
-/* ===== 尾巴 ===== */
+/* ===== 毛茸茸圆尾巴 ===== */
 .tail {
   position: absolute;
-  bottom: 24px;
-  left: -2px;
-  width: 8px;
-  height: 8px;
-  background: #FFF0E8;
+  bottom: 32px;
+  left: -6px;
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle at 40% 35%, #FFFCFA 0%, #F2E0D0 100%);
   border-radius: 50%;
   z-index: 3;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 /* ===== 配饰 ===== */
 .accessory {
   position: absolute;
-  top: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 12px;
-  z-index: 10;
-}
-.group-crown {
-  position: absolute;
-  top: -10px;
+  top: -8px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 14px;
+  z-index: 10;
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.1));
+}
+.group-crown {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
   z-index: 11;
   animation: pet-float 2s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(255,180,0,0.4));
 }
-
 @keyframes pet-float {
   0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-3px); }
+  50% { transform: translateX(-50%) translateY(-4px); }
 }
 
 /* ===== 对话气泡 ===== */
 .speech-bubble {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   background: #fff;
   color: #333;
-  border-radius: 10px;
-  padding: 4px 10px;
+  border-radius: 12px;
+  padding: 5px 12px;
   font-size: 11px;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 3px 14px rgba(0,0,0,0.12);
   z-index: 20;
   pointer-events: none;
-  animation: pet-bubble-in 0.3s ease-out;
+  animation: pet-bubble-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 个人兔气泡：箭头指向左下 */
 .pet-world:first-child .speech-bubble::after,
 .speech-bubble::after {
   content: '';
   position: absolute;
   top: 100%;
-  left: 12px;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 5px solid #fff;
+  left: 14px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #fff;
 }
-/* 大兔气泡：箭头指向右下 */
 .pet-world:nth-child(2) .speech-bubble::after {
   left: auto;
-  right: 12px;
+  right: 14px;
 }
-
 @keyframes pet-bubble-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(6px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* ===== 睡觉 Zzz ===== */
 .sleep-zzz {
   position: absolute;
-  top: -5px;
-  right: 0;
+  top: -8px;
+  right: -4px;
   font-size: 14px;
   z-index: 15;
   pointer-events: none;
-  animation: pet-zzz 2s ease-out infinite;
+  animation: pet-zzz 2.5s ease-out infinite;
 }
-
 @keyframes pet-zzz {
-  0% { opacity: 1; transform: translateY(0) translateX(0); }
-  100% { opacity: 0; transform: translateY(-16px) translateX(6px); }
+  0% { opacity: 1; transform: translate(0, 0) scale(0.8); }
+  100% { opacity: 0; transform: translate(8px, -20px) scale(1.2); }
 }
 
 /* ===== XP 进度条 ===== */
 .xp-bar-wrap {
   position: absolute;
-  bottom: -2px;
+  bottom: -4px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 15;
@@ -821,17 +875,18 @@ onUnmounted(() => {
   gap: 2px;
 }
 .xp-bar {
-  width: 40px;
-  height: 5px;
-  background: rgba(255,255,255,0.3);
+  width: 44px;
+  height: 6px;
+  background: rgba(255,255,255,0.25);
   border-radius: 3px;
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
 }
 .xp-fill {
   height: 100%;
-  background: #67C23A;
+  background: linear-gradient(90deg, #81C784, #66BB6A);
   border-radius: 3px;
-  transition: width 0.5s ease-out;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .xp-label {
   display: flex;
@@ -841,51 +896,29 @@ onUnmounted(() => {
   color: rgba(255,255,255,0.9);
   white-space: nowrap;
 }
-.xp-level {
-  font-weight: 700;
-}
-.xp-hint {
-  opacity: 0.7;
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.xp-level { font-weight: 700; }
+.xp-hint { opacity: 0.7; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== 升级特效 ===== */
-.level-up-effect {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  z-index: 25;
-  pointer-events: none;
-}
+.level-up-effect { position: absolute; top: 50%; left: 50%; z-index: 25; pointer-events: none; }
 .lu-particle {
-  position: absolute;
-  font-size: 12px;
-  animation: pet-lu-burst 2s ease-out forwards;
+  position: absolute; font-size: 13px;
+  animation: pet-lu-burst 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
-
 @keyframes pet-lu-burst {
-  0% { transform: translate(0, 0) scale(1); opacity: 1; }
-  100% { transform: translate(var(--lx), var(--ly)) scale(1.5); opacity: 0; }
+  0% { transform: translate(0, 0) scale(0); opacity: 1; }
+  50% { opacity: 1; }
+  100% { transform: translate(var(--lx), var(--ly)) scale(1.8); opacity: 0; }
 }
 
 /* ===== 爱心粒子 ===== */
-.particles {
-  position: absolute;
-  top: 40%;
-  left: 40%;
-  z-index: 30;
-  pointer-events: none;
-}
+.particles { position: absolute; top: 35%; left: 35%; z-index: 30; pointer-events: none; }
 .particle {
-  position: absolute;
-  font-size: 10px;
+  position: absolute; font-size: 11px;
   animation: pet-particle-up ease-out forwards;
 }
-
 @keyframes pet-particle-up {
-  0% { transform: translate(0, 0); opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+  0% { transform: translate(0, 0) scale(0.5); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1.3); opacity: 0; }
 }
 </style>
