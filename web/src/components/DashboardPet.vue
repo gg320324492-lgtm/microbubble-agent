@@ -280,6 +280,7 @@ function onWorldMouseMove(e) {
 function onEnter() {
   isHovered.value = true
   isHeartEyes.value = true
+  // 只有没人在说话时才显示气泡
   if (!window.__petSpeaking) {
     showBubble.value = true
   }
@@ -290,9 +291,9 @@ function onEnter() {
 function onLeave() {
   isHovered.value = false
   isHeartEyes.value = false
-  if (!window.__petSpeaking || window.__petSpeaking && showBubble.value) {
+  // 只有自己不是轮播说话者时才隐藏气泡
+  if (window.__petSpeaking !== props.type) {
     showBubble.value = false
-    window.__petSpeaking = false
   }
 }
 
@@ -414,20 +415,19 @@ function buildMessages() {
 // 全局说话互斥：同一时间只有一只兔子说话
 function trySpeak(msg) {
   if (window.__petSpeaking) return false
-  window.__petSpeaking = true
+  window.__petSpeaking = props.type // 记录谁在说话
   currentMessage.value = msg
   showBubble.value = true
   clearTimeout(bubbleTimer)
   bubbleTimer = setTimeout(() => {
     showBubble.value = false
-    window.__petSpeaking = false
+    window.__petSpeaking = null
   }, 5000)
   return true
 }
 
 function showMessage(msg) {
-  if (window.__petSpeaking) {
-    // 另一只兔子在说话，等 2 秒后再试
+  if (window.__petSpeaking && window.__petSpeaking !== props.type) {
     clearTimeout(bubbleTimer)
     bubbleTimer = setTimeout(() => showMessage(msg), 2000)
     return
@@ -442,7 +442,7 @@ function startMessageCarousel() {
       messageIndex.value = (messageIndex.value + 1) % messages.value.length
       trySpeak(messages.value[messageIndex.value])
     }
-  }, 8000 + Math.random() * 4000) // 随机 8-12s 间隔，避免同步
+  }, 8000 + Math.random() * 4000)
 }
 
 function stopMessageCarousel() {
@@ -537,8 +537,8 @@ onUnmounted(() => {
   stopMessageCarousel()
   clearTimeout(earTimer)
   clearTimeout(bubbleTimer)
-  if (window.__petSpeaking && showBubble.value) {
-    window.__petSpeaking = false
+  if (window.__petSpeaking === props.type) {
+    window.__petSpeaking = null
   }
 })
 </script>
@@ -575,9 +575,9 @@ onUnmounted(() => {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
 }
 @keyframes pet-walk {
-  0%, 100% { transform: translateY(0) rotateX(0); }
-  30% { transform: translateY(-6px) rotateX(5deg); }
-  60% { transform: translateY(-2px) rotateX(2deg); }
+  0%, 100% { margin-top: 0; }
+  30% { margin-top: -6px; }
+  60% { margin-top: -2px; }
 }
 
 /* ===== 3D 身体 ===== */
