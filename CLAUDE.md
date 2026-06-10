@@ -134,6 +134,15 @@
 - **webhint http-cache 误报** — Vite content-hash 文件名（`index-f2KQs4XE.js`）是业界标准缓存方案，但 webhint 内置正则只认 `[0-9a-f]` 小写十六进制，不认 Vite 的 base64 格式。已添加 `.hintrc` 自定义 revving 正则，但 Edge DevTools 内置 webhint 不读项目配置，浏览器端无法消除此警告
 - **webhint 判断规则** — Error 必须修，Warning 看情况修，Info/Tip 大部分忽略。看源码路径：自己写的代码可以改，第三方库（Element Plus/Vite 打包产物）不能改
 
+### 2026-06-10 新增（宠物系统）
+
+- **CSS keyframe 不能覆盖行内 transform** — walking 动画用 `transform: translateY(-6px)` 覆盖了 bunny 行内 `translate(-50%,-50%) scaleX(...)` 定位 → 兔子闪现。**修复**：动画改用 `margin-top` 或 wrapper div 隔离
+- **overflow:hidden 裁切绝对定位气泡** — 欢迎区 `overflow:hidden` 用于裁剪装饰元素，但宠物气泡 `position:absolute` 超出容器被裁切。**修复**：改为 `overflow:visible`，单独给草地 `overflow:hidden`
+- **互斥锁所有权限随** — `window.__petSpeaking` 从 boolean 改为记录 `props.type`（谁在说话）。`onLeave` 只清理自己不是说话者的情况，不误清轮播锁
+- **bash 数组兼容性** — `EXCLUDE_DIRS=(-not -path "*/node_modules/*")` 在老 bash 上不支持。在函数内用 `set -f` + 字符串变量替代
+- **`set -e` + 统计函数** — `find` 无结果 → `xargs wc -l` 返回非零 → `set -e` 退出脚本。统计段用 `set +e` 包裹，结束后恢复
+- **props 默认值用 `Number()` 包裹** — `props.totalTasks || 'N'` 在值为 0 时走 `'N'` 分支。用 `Number(props.totalTasks) || 0` 先转数字再判断
+
 ### 2026-06-10 新增
 
 - **unplugin-vue-components 不检测 JS 服务调用** — `ElMessageBox.confirm()` / `ElMessage.success()` 等服务 API 不在模板中使用 `<el-message-box>` 标签，`ElementPlusResolver` 无法为其自动导入 CSS。`el-message-box.css` 和 `el-message.css` 完全不会被打包进 dist。**修复**：在 `main.js` 中手动 `import 'element-plus/theme-chalk/el-message.css'` 和 `el-message-box.css`。**验证方法**：`npm run build` 后搜索 dist CSS 是否包含 `.el-message-box`。**教训**：新增使用 Element Plus 服务 API 时，必须手动导入对应 CSS
