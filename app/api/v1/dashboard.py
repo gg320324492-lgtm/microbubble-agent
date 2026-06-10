@@ -21,7 +21,7 @@ def _get_stats_from_file() -> dict:
     for stats_file in _STATS_PATHS:
         try:
             if stats_file.exists():
-                with open(stats_file, "r", encoding="utf-8") as f:
+                with open(stats_file, "r", encoding="utf-8-sig") as f:
                     return json.loads(f.read())
         except Exception:
             continue
