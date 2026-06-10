@@ -934,12 +934,16 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 9px;
-  color: rgba(255,255,255,0.9);
+  font-size: 10px;
+  color: #fff;
   white-space: nowrap;
+  background: rgba(0,0,0,0.45);
+  border-radius: 10px;
+  padding: 2px 8px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 .xp-level { font-weight: 700; }
-.xp-hint { opacity: 0.7; max-width: 80px; overflow: hidden; text-overflow: ellipsis; }
+.xp-hint { opacity: 0.9; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ===== 升级特效 ===== */
 .level-up-effect { position: absolute; top: 50%; left: 50%; z-index: 25; pointer-events: none; }
