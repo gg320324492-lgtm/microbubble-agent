@@ -134,6 +134,16 @@
 - **webhint http-cache 误报** — Vite content-hash 文件名（`index-f2KQs4XE.js`）是业界标准缓存方案，但 webhint 内置正则只认 `[0-9a-f]` 小写十六进制，不认 Vite 的 base64 格式。已添加 `.hintrc` 自定义 revving 正则，但 Edge DevTools 内置 webhint 不读项目配置，浏览器端无法消除此警告
 - **webhint 判断规则** — Error 必须修，Warning 看情况修，Info/Tip 大部分忽略。看源码路径：自己写的代码可以改，第三方库（Element Plus/Vite 打包产物）不能改
 
+### 2026-06-10 新增
+
+- **unplugin-vue-components 不检测 JS 服务调用** — `ElMessageBox.confirm()` / `ElMessage.success()` 等服务 API 不在模板中使用 `<el-message-box>` 标签，`ElementPlusResolver` 无法为其自动导入 CSS。`el-message-box.css` 和 `el-message.css` 完全不会被打包进 dist。**修复**：在 `main.js` 中手动 `import 'element-plus/theme-chalk/el-message.css'` 和 `el-message-box.css`。**验证方法**：`npm run build` 后搜索 dist CSS 是否包含 `.el-message-box`。**教训**：新增使用 Element Plus 服务 API 时，必须手动导入对应 CSS
+- **dist 提交必须 `git add -f`** — `web/dist/` 在 `.gitignore` 中，`git add web/dist/` 静默被拦截不报错，只删除旧文件不加新文件 → 线上 404。**每次 `npm run build` 后必须 `git add -f web/dist/` 提交产物**
+- **bash 数组防 glob 展开** — 字符串变量 `EXCLUDE_DIRS="-not -path */node_modules/*"` 在函数中 `$EXCLUDE_DIRS` 展开时，`*/node_modules/*` 会被 shell glob 展开为实际文件路径，破坏 `find` 的 `-path` pattern。**修复**：改用 bash 数组 `EXCLUDE_DIRS=(-not -path "*/node_modules/*")` + `"${EXCLUDE_DIRS[@]}"` 展开
+- **git log --reverse --max-count=1 陷阱** — `--max-count=1` 先于 `--reverse` 执行，结果永远是 HEAD 而非最早提交。正确做法：`git rev-list --max-parents=0 HEAD` 找根提交后再取日期
+- **deploy-auto.sh 自更新局限** — `git pull` 后脚本文件已更新到磁盘，但当前 bash 进程仍在执行旧版内存内容。新版统计逻辑需下次部署（新进程）才能生效。紧急时可 `bash scripts/deploy-auto.sh` 手动重跑
+- **PowerShell UTF-8 BOM** — `Set-Content -Encoding UTF8` 写入 UTF-8 BOM（3 字节 `EF BB BF`），Python `json.loads` 默认不处理 → `JSONDecodeError`。修复：PowerShell 用 `[System.Text.UTF8Encoding]::new($false)` 写无 BOM 文件；Python 用 `encoding="utf-8-sig"` 读取
+- **stats.json Docker 路径** — Docker volume 只挂载 `./app:/app/app`，项目根 `/app/stats.json` 来自镜像构建（只读、过期）。`stats.json` 必须放在 `app/` 内才可通过 volume 实时更新
+
 ### 2026-06-09 新增
 
 - **Nginx 扫描器正则误杀 /webhook** — `^/(...|web|...)` 中的 `web` 匹配到了 `/webhook`，GitHub webhook 被 444 静默关闭。修复：`web` → `web$` 精确匹配。**教训**：扫描器屏蔽正则中所有可能与合法路径前缀重叠的关键词必须加 `$` 锚定

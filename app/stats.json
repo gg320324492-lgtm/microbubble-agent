@@ -1,0 +1,35 @@
+{
+    "total_commits":  857,
+    "total_files":  626,
+    "files_by_type":  {
+                          "sql":  1,
+                          "vue":  85,
+                          "shell":  21,
+                          "docker":  5,
+                          "css":  3,
+                          "javascript":  43,
+                          "html":  9,
+                          "python":  224,
+                          "markdown":  181,
+                          "typescript":  1,
+                          "config":  44,
+                          "other":  9
+                      },
+    "total_lines":  140459,
+    "lines_by_type":  {
+                          "sql":  194,
+                          "vue":  20097,
+                          "shell":  2168,
+                          "docker":  337,
+                          "css":  817,
+                          "javascript":  3720,
+                          "html":  3193,
+                          "python":  45712,
+                          "markdown":  50441,
+                          "typescript":  144,
+                          "config":  12550,
+                          "other":  1086
+                      },
+    "dev_days":  25,
+    "updated_at":  "2026-06-10 14:06:01"
+}

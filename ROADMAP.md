@@ -1,8 +1,13 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-09** — 知识库 API HTTP/2 修复 + Element Plus 图标导入全面补全
+> 最后更新: **2026-06-10** — ElMessageBox CSS 修复 + 项目动态代码分布升级（12 类 / 140K 行）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-10）
+- [项目动态代码分布统计升级](#项目动态代码分布统计升级2026-06-10)（4 类 → 12 类，140,459 行 + 柱状图可视化）
+- [ElMessageBox/ElMessage CSS 缺失修复](#elmessageboxelmessage-css-缺失修复2026-06-10)（unplugin 不检测 JS 服务 → 手动导入 CSS）
+- [开发天数计算修复](#开发天数计算修复2026-06-10)（git log --reverse --max-count=1 陷阱）
 
 ### 最新完成（2026-06-09）
 - [知识库 API HTTP/2 协议错误修复](#知识库-api-http2-协议错误修复2026-06-09)（列表去 content + snippet + Nginx proxy buffer）
@@ -13,6 +18,64 @@
 - [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+---
+
+## 项目动态代码分布统计升级（2026-06-10）
+
+**问题**：项目动态页面只统计 4 类文件（.py/.vue/.js/.css），遗漏了大量代码（Markdown/Shell/Config/SQL/Docker 等），总行数仅 57K，与实际规模不匹配。
+
+**修复方案**：
+- 统计从 4 类扩展到 **12 类**：Python、Vue、JavaScript、TypeScript、CSS、HTML、Markdown、Shell、Config、SQL、Docker、Other
+- `deploy-auto.sh` — `_count_lines`/`_count_files` 函数按语言分类统计，生成 `lines_by_type` + `files_by_type`
+- `ProjectStatsView.vue` — 新增「📝 代码分布」卡片：12 行水平柱状图（语言品牌色 + 行数 + 文件数 + 占比进度条）
+- `stats.json` — 迁移到 `app/` 目录（Docker volume 挂载 `/app/app/`），`dashboard.py` 双路径回退读取
+- 本地 PowerShell 脚本生成 stats.json，兼容 UTF-8 BOM
+
+**效果**：
+- 总行数：57,470 → **140,459**（+144%），总文件：315 → **626**（+99%）
+- Top 5：Markdown 50,441 / Python 45,712 / Vue 20,097 / Config 12,550 / JS 3,720
+
+**踩坑记录**：
+- `EXCLUDE_DIRS` 字符串变量中的 `*/node_modules/*` wildcard 被 shell glob 展开为实际文件 → 全部归零 → 改用 bash 数组 `("${EXCLUDE_DIRS[@]}")`
+- PowerShell `Set-Content -Encoding UTF8` 写入 BOM → Python `json.loads` 报错 → API 改用 `utf-8-sig`
+- `deploy-auto.sh` 编辑时误删 `STATS_FILE="$PROJECT_DIR/stats.json"` 定义 → `cat: : No such file or directory`
+
+**文件**：
+- `scripts/deploy-auto.sh` — 扩展统计逻辑
+- `web/src/views/ProjectStatsView.vue` — 代码分布卡片
+- `app/api/v1/dashboard.py` — 多路径 + BOM 兼容
+- `app/stats.json` — 本地生成的统计数据
+
+---
+
+## ElMessageBox/ElMessage CSS 缺失修复（2026-06-10）
+
+**问题**：任务管理中删除任务时，确认弹窗的「确定」和「取消」按钮位置偏移异常，没有 Element Plus 样式。
+
+**根因**：`ElMessageBox.confirm()` 和 `ElMessage.success()` 是 JS 服务调用，不是 Vue 模板组件。`unplugin-vue-components` 的 `ElementPlusResolver` 只能静态分析模板中使用的 `<el-*>` 标签来自动导入 CSS，**无法检测 JS 服务调用**。结果 `el-message-box.css` 和 `el-message.css` 完全没有被打包进 dist。
+
+**修复方案**：在 `main.js` 中手动导入：
+```js
+import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/el-message-box.css'
+```
+
+**文件**：`web/src/main.js`
+
+---
+
+## 开发天数计算修复（2026-06-10）
+
+**问题**：开发天数始终显示 0。
+
+**根因**：`git log --reverse --max-count=1` — Git 先应用 `--max-count=1`（只取最新 1 条），然后 `--reverse` 反转这个只有 1 条的列表，结果仍是 HEAD 的日期（今天），不是项目最早提交。
+
+**修复**：改用 `git rev-list --max-parents=0 HEAD` 找到根提交，再 `git log --format=%ai -1 $ROOT_SHA` 取日期。
+
+**文件**：`scripts/deploy-auto.sh`
 
 ---
 
