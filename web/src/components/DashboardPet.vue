@@ -346,16 +346,26 @@ function triggerLevelUp(newLevel) {
 function buildMessages() {
   const msgs = []
   const name = (props.username && props.username !== '用户') ? props.username : '同学'
-  const hour = new Date().getHours()
-  const greeting = hour < 9 ? '早上好' : hour < 12 ? '上午好' : hour < 18 ? '下午好' : '晚上好'
-  msgs.push(`${greeting}，${name}！☀️ 新的一天一起加油~`)
 
-  if (props.overdueCount > 0) {
-    msgs.push(`${name}，你有 ${props.overdueCount} 个任务逾期了哦 😟 需要帮忙吗？`)
-  } else if (props.inProgressCount > 0) {
-    msgs.push(`${name}，${props.inProgressCount} 个任务进行中，稳扎稳打！💪`)
+  if (props.type === 'group') {
+    // 课题组大兔消息
+    const level = levelInfo.value
+    msgs.push(`我是课题组大兔「小气」🐰👑 全组一起养大的哦~`)
+    msgs.push(`全组已完成 ${props.totalTasks || 'N'} 个任务啦！继续加油！💪`)
+    msgs.push(`大兔当前 Lv.${level.level}，再攒 ${level.xpToNext} XP 就升级啦~`)
   } else {
-    msgs.push('今天没有任务呢，要不要创建新的？📝')
+    // 个人兔消息
+    const hour = new Date().getHours()
+    const greeting = hour < 9 ? '早上好' : hour < 12 ? '上午好' : hour < 18 ? '下午好' : '晚上好'
+    msgs.push(`${greeting}，${name}！☀️ 新的一天一起加油~`)
+
+    if (props.overdueCount > 0) {
+      msgs.push(`${name}，你有 ${props.overdueCount} 个任务逾期了哦 😟 需要帮忙吗？`)
+    } else if (props.inProgressCount > 0) {
+      msgs.push(`${name}，${props.inProgressCount} 个任务进行中，稳扎稳打！💪`)
+    } else {
+      msgs.push('今天没有任务呢，要不要创建新的？📝')
+    }
   }
 
   // Add random science facts

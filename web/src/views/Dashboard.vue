@@ -39,7 +39,8 @@
         />
         <DashboardPet
           type="group"
-          :username="'课题组'"
+          :username="userStore.username"
+          :total-tasks="dashboardData.summary?.total_completed_tasks ?? 0"
           :group-xp="groupPetStats.total_xp"
           :group-level="groupPetStats.level"
         />
