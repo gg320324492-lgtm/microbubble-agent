@@ -180,53 +180,54 @@ let animFrame = null
 let lastTime = 0
 let stateTimer = 0
 let idleTimer = 0
-const WALK_SPEED = 0.015 // % per ms
+let pauseTimer = 0
+const WALK_SPEED = 0.008 // % per ms (慢一点，更自然)
 
 function gameLoop(timestamp) {
   if (!lastTime) lastTime = timestamp
   const dt = Math.min(timestamp - lastTime, 50)
   lastTime = timestamp
 
-  // State transitions
   stateTimer += dt
-  if (!isSleeping.value && !isHovered.value) {
-    if (state.value === 'idle' && stateTimer > 3000 + Math.random() * 5000) {
-      pickNewTarget()
-      state.value = 'walking'
-      stateTimer = 0
-    } else if (state.value === 'walking' && stateTimer > 1500 + Math.random() * 3000) {
-      state.value = 'idle'
-      stateTimer = 0
-    }
-  }
 
-  // Move toward target
-  if (state.value === 'walking' && !isSleeping.value) {
-    const dx = target.x - position.x
-    const dy = target.y - position.y
-    const dist = Math.sqrt(dx * dx + dy * dy)
-    if (dist < 2) {
-      state.value = 'idle'
-      stateTimer = 0
-      isWalking.value = false
-    } else {
-      isWalking.value = true
-      const speed = WALK_SPEED * dt
-      position.x += (dx / dist) * speed
-      position.y += (dy / dist) * speed
-      if (dx > 0) facing.value = 1
-      else if (dx < 0) facing.value = -1
+  if (!isSleeping.value && !isHovered.value) {
+    // 走路状态：走向目标
+    if (state.value === 'walking') {
+      const dx = target.x - position.x
+      const dy = target.y - position.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist < 1.5) {
+        // 到达目标，发一会儿呆
+        state.value = 'idle'
+        stateTimer = 0
+        pauseTimer = 2000 + Math.random() * 3000 // 发呆 2-5s
+        isWalking.value = false
+      } else {
+        isWalking.value = true
+        const speed = WALK_SPEED * dt
+        position.x += (dx / dist) * speed
+        position.y += (dy / dist) * speed
+        if (Math.abs(dx) > 1) facing.value = dx > 0 ? 1 : -1
+      }
     }
-  } else {
+    // 发呆状态：等一会儿再走
+    else if (state.value === 'idle') {
+      isWalking.value = false
+      if (stateTimer > pauseTimer) {
+        pickNearbyTarget()
+        state.value = 'walking'
+        stateTimer = 0
+      }
+    }
+  } else if (isHovered.value) {
     isWalking.value = false
+    state.value = 'idle'
   }
 
   // Clamp to container bounds
   if (containerRef.value) {
-    const w = containerRef.value.clientWidth
-    const h = containerRef.value.clientHeight
-    position.x = Math.max(5, Math.min(95, position.x))
-    position.y = Math.max(10, Math.min(85, position.y))
+    position.x = Math.max(5, Math.min(92, position.x))
+    position.y = Math.max(15, Math.min(82, position.y))
   }
 
   // Sleep timer
@@ -239,10 +240,31 @@ function gameLoop(timestamp) {
   animFrame = requestAnimationFrame(gameLoop)
 }
 
+function pickNearbyTarget() {
+  // 在当前点附近选目标，让走动看起来自然连续
+  const range = 12 + Math.random() * 18 // 12-30% 范围
+  let tx = position.x + (Math.random() - 0.5) * range * 2
+  let ty = position.y + (Math.random() - 0.5) * range * 2
+  // 限制在草地范围内
+  tx = Math.max(8, Math.min(88, tx))
+  ty = Math.max(20, Math.min(78, ty))
+  target.x = tx
+  target.y = ty
+}
+
+// 偶尔跳到远处（替换发呆时的小概率跳远）
+function pickFarTarget() {
+  target.x = 10 + Math.random() * 80
+  target.y = 25 + Math.random() * 55
+}
+
 function pickNewTarget() {
-  const margin = 15
-  target.x = margin + Math.random() * (90 - margin * 2)
-  target.y = 40 + Math.random() * 50 // stay in lower half (grass area)
+  // 15% 概率跳远，85% 就近走
+  if (Math.random() < 0.15) {
+    pickFarTarget()
+  } else {
+    pickNearbyTarget()
+  }
 }
 
 // ===== Cursor tracking =====
@@ -281,10 +303,13 @@ function onClick() {
 }
 
 function onDblClick() {
-  state.value = 'walking'
-  pickNewTarget()
-  target.x = position.x + (Math.random() - 0.5) * 40
-  target.y = position.y + (Math.random() - 0.5) * 30
+  // 瞬移到远处（受惊逃跑）
+  position.x = Math.max(8, Math.min(88, position.x + (Math.random() - 0.5) * 50))
+  position.y = Math.max(20, Math.min(78, position.y + (Math.random() - 0.5) * 40))
+  pickNearbyTarget()
+  state.value = 'idle'
+  stateTimer = 0
+  pauseTimer = 1000
   emitParticles('💨', 3, 40, 20, [0.5, 1])
 }
 
@@ -475,7 +500,8 @@ onMounted(() => {
   buildMessages()
   startMessageCarousel()
   scheduleEarTwitch()
-  pickNewTarget()
+  pickNearbyTarget()
+  state.value = 'walking'
   animFrame = requestAnimationFrame(gameLoop)
 
   // Login XP
