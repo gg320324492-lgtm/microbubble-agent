@@ -7,13 +7,25 @@ from app.core.redis import get_redis
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-# 项目根目录
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+# stats.json 位置（app/ 目录有 Docker volume 挂载，云端和本地都能读到）
+_STATS_DIR = Path(__file__).parent.parent.parent
+# 优先本地 app/stats.json，回退到项目根 stats.json（兼容旧版）
+_STATS_PATHS = [
+    _STATS_DIR / "stats.json",
+    _STATS_DIR.parent / "stats.json",
+]
 
 
 def _get_stats_from_file() -> dict:
     """从 stats.json 读取项目统计数据（部署时自动生成）"""
-    stats_file = PROJECT_ROOT / "stats.json"
+    for stats_file in _STATS_PATHS:
+        try:
+            if stats_file.exists():
+                with open(stats_file, "r", encoding="utf-8") as f:
+                    return json.loads(f.read())
+        except Exception:
+            continue
+    return None
     try:
         if stats_file.exists():
             with open(stats_file, "r", encoding="utf-8") as f:
