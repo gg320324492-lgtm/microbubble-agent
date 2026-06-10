@@ -345,7 +345,7 @@ function triggerLevelUp(newLevel) {
 // ===== Messages =====
 function buildMessages() {
   const msgs = []
-  const name = props.username || '同学'
+  const name = (props.username && props.username !== '用户') ? props.username : '同学'
   const hour = new Date().getHours()
   const greeting = hour < 9 ? '早上好' : hour < 12 ? '上午好' : hour < 18 ? '下午好' : '晚上好'
   msgs.push(`${greeting}，${name}！☀️ 新的一天一起加油~`)
@@ -432,6 +432,13 @@ watch(() => petData.xp, (xp) => {
     currentAccessory.value = unlocked[unlocked.length - 1].emoji
   }
 }, { immediate: true })
+
+// 用户名加载后更新消息
+watch(() => props.username, (name) => {
+  if (name && name !== '用户') {
+    buildMessages()
+  }
+})
 
 // ===== Lifecycle =====
 onMounted(() => {
