@@ -138,6 +138,7 @@ fi
 
 # 统计项目代码数据（供"项目动态"页面使用）
 log "统计项目代码数据..."
+STATS_FILE="$PROJECT_DIR/stats.json"
 
 # 排除目录（统一使用）
 EXCLUDE_DIRS="-not -path */node_modules/* -not -path */dist/* -not -path */.git/* -not -path */__pycache__/* -not -path */.venv/* -not -path */venv/* -not -path */models/* -not -path */.agents/*"
