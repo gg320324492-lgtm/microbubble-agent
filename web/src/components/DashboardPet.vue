@@ -151,8 +151,11 @@ const messageIndex = ref(0)
 let messageTimer = null
 let bubbleTimer = null
 const bubbleStyle = computed(() => {
-  const isRight = facing.value === 1
-  return { [isRight ? 'right' : 'left']: '50%', transform: isRight ? 'translateX(0)' : 'translateX(-50%)' }
+  // 个人兔气泡偏左，大兔气泡偏右，避免重叠
+  if (props.type === 'group') {
+    return { left: 'auto', right: '0', transform: 'translateX(10px)' }
+  }
+  return { left: '0', right: 'auto', transform: 'translateX(-10px)' }
 })
 
 // ===== Particles =====
@@ -255,7 +258,9 @@ function onWorldMouseMove(e) {
 function onEnter() {
   isHovered.value = true
   isHeartEyes.value = true
-  showBubble.value = true
+  if (!window.__petSpeaking) {
+    showBubble.value = true
+  }
   idleTimer = 0
   emitParticles('❤️', 1, 30, 20, [1, 1.5])
 }
@@ -263,7 +268,10 @@ function onEnter() {
 function onLeave() {
   isHovered.value = false
   isHeartEyes.value = false
-  showBubble.value = false
+  if (!window.__petSpeaking || window.__petSpeaking && showBubble.value) {
+    showBubble.value = false
+    window.__petSpeaking = false
+  }
 }
 
 function onClick() {
@@ -378,26 +386,38 @@ function buildMessages() {
   currentMessage.value = msgs[0]
 }
 
-function showMessage(msg) {
+// 全局说话互斥：同一时间只有一只兔子说话
+function trySpeak(msg) {
+  if (window.__petSpeaking) return false
+  window.__petSpeaking = true
   currentMessage.value = msg
   showBubble.value = true
   clearTimeout(bubbleTimer)
   bubbleTimer = setTimeout(() => {
-    if (!isHovered.value) showBubble.value = false
+    showBubble.value = false
+    window.__petSpeaking = false
   }, 5000)
+  return true
+}
+
+function showMessage(msg) {
+  if (window.__petSpeaking) {
+    // 另一只兔子在说话，等 2 秒后再试
+    clearTimeout(bubbleTimer)
+    bubbleTimer = setTimeout(() => showMessage(msg), 2000)
+    return
+  }
+  trySpeak(msg)
 }
 
 function startMessageCarousel() {
   stopMessageCarousel()
   messageTimer = setInterval(() => {
-    if (!showBubble.value && !isSleeping.value) {
+    if (!showBubble.value && !isSleeping.value && !window.__petSpeaking) {
       messageIndex.value = (messageIndex.value + 1) % messages.value.length
-      currentMessage.value = messages.value[messageIndex.value]
-      showBubble.value = true
-      clearTimeout(bubbleTimer)
-      bubbleTimer = setTimeout(() => { showBubble.value = false }, 5000)
+      trySpeak(messages.value[messageIndex.value])
     }
-  }, 8000)
+  }, 8000 + Math.random() * 4000) // 随机 8-12s 间隔，避免同步
 }
 
 function stopMessageCarousel() {
@@ -490,6 +510,10 @@ onUnmounted(() => {
   cancelAnimationFrame(animFrame)
   stopMessageCarousel()
   clearTimeout(earTimer)
+  clearTimeout(bubbleTimer)
+  if (window.__petSpeaking && showBubble.value) {
+    window.__petSpeaking = false
+  }
 })
 </script>
 
@@ -731,9 +755,7 @@ onUnmounted(() => {
 /* ===== 对话气泡 ===== */
 .speech-bubble {
   position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: calc(100% + 6px);
   background: #fff;
   color: #333;
   border-radius: 10px;
@@ -744,16 +766,25 @@ onUnmounted(() => {
   z-index: 20;
   pointer-events: none;
   animation: pet-bubble-in 0.3s ease-out;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* 个人兔气泡：箭头指向左下 */
+.pet-world:first-child .speech-bubble::after,
 .speech-bubble::after {
   content: '';
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 12px;
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
   border-top: 5px solid #fff;
+}
+/* 大兔气泡：箭头指向右下 */
+.pet-world:nth-child(2) .speech-bubble::after {
+  left: auto;
+  right: 12px;
 }
 
 @keyframes pet-bubble-in {
