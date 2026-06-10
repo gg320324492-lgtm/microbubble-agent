@@ -396,7 +396,8 @@ function buildMessages() {
     // 课题组大兔消息
     const level = levelInfo.value
     msgs.push(`我是课题组大兔「小气」🐰👑 全组一起养大的哦~`)
-    msgs.push(`全组已完成 ${props.totalTasks || 'N'} 个任务啦！继续加油！💪`)
+    const done = Number(props.totalTasks) || 0
+    msgs.push(done > 0 ? `全组已完成 ${done} 个任务啦！继续加油！💪` : '大家加油完成任务，养大我哦~ 🥕')
     msgs.push(`大兔当前 Lv.${level.level}，再攒 ${level.xpToNext} XP 就升级啦~`)
   } else {
     // 个人兔消息
