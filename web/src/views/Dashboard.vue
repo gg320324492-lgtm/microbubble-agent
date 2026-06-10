@@ -529,7 +529,7 @@ onMounted(() => {
   color: #fff;
   box-shadow: var(--shadow-primary);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* 云朵 */
@@ -571,15 +571,19 @@ onMounted(() => {
   50% { box-shadow: 0 0 30px rgba(255, 200, 80, 0.6), 0 0 70px rgba(255, 180, 60, 0.3); }
 }
 
-/* 宠物区域 */
+/* 宠物区域 — 填充中间空间，给兔子最大活动范围 */
 .welcome-pets {
+  flex: 1;
   display: flex;
   gap: 20px;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: center;
   position: relative;
   z-index: 4;
-  min-height: 110px;
-  padding-bottom: 8px;
+  min-height: 120px;
+  height: 100%;
+  padding-bottom: 4px;
+  align-self: stretch;
 }
 
 /* 草地 */
@@ -591,6 +595,7 @@ onMounted(() => {
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   z-index: 1;
   pointer-events: none;
+  overflow: hidden;
 }
 .grass-item {
   position: absolute;
