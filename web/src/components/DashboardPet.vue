@@ -817,16 +817,18 @@ onUnmounted(() => {
   background: #fff;
   color: #333;
   border-radius: 12px;
-  padding: 5px 12px;
-  font-size: 11px;
-  white-space: nowrap;
+  padding: 6px 14px;
+  font-size: 12px;
+  line-height: 1.5;
   box-shadow: 0 3px 14px rgba(0,0,0,0.12);
   z-index: 20;
   pointer-events: none;
   animation: pet-bubble-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 220px;
+  min-width: 60px;
+  word-break: break-word;
+  white-space: normal;
+  text-align: left;
 }
 .pet-world:first-child .speech-bubble::after,
 .speech-bubble::after {
