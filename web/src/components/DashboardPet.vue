@@ -500,11 +500,14 @@ watch(() => petData.xp, (xp) => {
   }
 }, { immediate: true })
 
-// 用户名加载后更新消息
+// 用户名加载后或任务数据变化时更新消息
 watch(() => props.username, (name) => {
   if (name && name !== '用户') {
     buildMessages()
   }
+})
+watch([() => props.overdueCount, () => props.inProgressCount], () => {
+  buildMessages()
 })
 
 // ===== Lifecycle =====
