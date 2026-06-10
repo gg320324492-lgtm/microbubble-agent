@@ -138,25 +138,53 @@ fi
 
 # 统计项目代码数据（供"项目动态"页面使用）
 log "统计项目代码数据..."
-STATS_FILE="$PROJECT_DIR/stats.json"
-TOTAL_LINES=$(find "$PROJECT_DIR" -type f \( -name "*.py" -o -name "*.vue" -o -name "*.js" -o -name "*.css" \) \
-  -not -path "*/node_modules/*" \
-  -not -path "*/dist/*" \
-  -not -path "*/.git/*" \
-  -not -path "*/__pycache__/*" \
-  -not -path "*/.venv/*" \
-  -not -path "*/venv/*" \
-  -not -path "*/models/*" \
-  | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}' || echo "0")
-TOTAL_FILES=$(find "$PROJECT_DIR" -type f \( -name "*.py" -o -name "*.vue" -o -name "*.js" -o -name "*.css" \) \
-  -not -path "*/node_modules/*" \
-  -not -path "*/dist/*" \
-  -not -path "*/.git/*" \
-  -not -path "*/__pycache__/*" \
-  -not -path "*/.venv/*" \
-  -not -path "*/venv/*" \
-  -not -path "*/models/*" \
-  | wc -l)
+
+# 排除目录（统一使用）
+EXCLUDE_DIRS="-not -path */node_modules/* -not -path */dist/* -not -path */.git/* -not -path */__pycache__/* -not -path */.venv/* -not -path */venv/* -not -path */models/* -not -path */.agents/*"
+
+_count_lines() {
+  local pattern="$1"
+  local result=$(find "$PROJECT_DIR" -type f -name "$pattern" $EXCLUDE_DIRS 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+  echo "${result:-0}"
+}
+
+_count_files() {
+  local pattern="$1"
+  find "$PROJECT_DIR" -type f -name "$pattern" $EXCLUDE_DIRS 2>/dev/null | wc -l
+}
+
+# 按语言分类统计行数
+PY_LINES=$(_count_lines "*.py")
+VUE_LINES=$(_count_lines "*.vue")
+JS_LINES=$(( $(_count_lines "*.js") + $(_count_lines "*.mjs") + $(_count_lines "*.cjs") ))
+TS_LINES=$(_count_lines "*.ts")
+CSS_LINES=$(( $(_count_lines "*.css") + $(_count_lines "*.scss") + $(_count_lines "*.less") ))
+HTML_LINES=$(_count_lines "*.html")
+MD_LINES=$(_count_lines "*.md")
+SH_LINES=$(( $(_count_lines "*.sh") + $(_count_lines "*.bat") + $(_count_lines "*.ps1") ))
+CONF_LINES=$(( $(_count_lines "*.json") + $(_count_lines "*.yaml") + $(_count_lines "*.yml") + $(_count_lines "*.toml") + $(_count_lines "*.cfg") + $(_count_lines "*.ini") + $(_count_lines "*.conf") ))
+SQL_LINES=$(_count_lines "*.sql")
+DOCKER_LINES=$(( $(find "$PROJECT_DIR" -type f -name "Dockerfile" -o -name "docker-compose*" $EXCLUDE_DIRS 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}') ))
+OTHER_LINES=$(( $(_count_lines "*.txt") + $(_count_lines "*.xml") + $(_count_lines "*.env") + $(_count_lines "*.template") ))
+
+TOTAL_LINES=$(( PY_LINES + VUE_LINES + JS_LINES + TS_LINES + CSS_LINES + HTML_LINES + MD_LINES + SH_LINES + CONF_LINES + SQL_LINES + DOCKER_LINES + OTHER_LINES ))
+
+# 按语言分类统计文件数
+PY_FILES=$(_count_files "*.py")
+VUE_FILES=$(_count_files "*.vue")
+JS_FILES=$(( $(_count_files "*.js") + $(_count_files "*.mjs") + $(_count_files "*.cjs") ))
+TS_FILES=$(_count_files "*.ts")
+CSS_FILES=$(( $(_count_files "*.css") + $(_count_files "*.scss") + $(_count_files "*.less") ))
+HTML_FILES=$(_count_files "*.html")
+MD_FILES=$(_count_files "*.md")
+SH_FILES=$(( $(_count_files "*.sh") + $(_count_files "*.bat") + $(_count_files "*.ps1") ))
+CONF_FILES=$(( $(_count_files "*.json") + $(_count_files "*.yaml") + $(_count_files "*.yml") + $(_count_files "*.toml") + $(_count_files "*.cfg") + $(_count_files "*.ini") + $(_count_files "*.conf") ))
+SQL_FILES=$(_count_files "*.sql")
+DOCKER_FILES=$(find "$PROJECT_DIR" -type f \( -name "Dockerfile" -o -name "docker-compose*" \) $EXCLUDE_DIRS 2>/dev/null | wc -l)
+OTHER_FILES=$(( $(_count_files "*.txt") + $(_count_files "*.xml") + $(_count_files "*.env") + $(_count_files "*.template") ))
+
+TOTAL_FILES=$(( PY_FILES + VUE_FILES + JS_FILES + TS_FILES + CSS_FILES + HTML_FILES + MD_FILES + SH_FILES + CONF_FILES + SQL_FILES + DOCKER_FILES + OTHER_FILES ))
+
 TOTAL_COMMITS=$(git -C "$PROJECT_DIR" rev-list --count HEAD)
 FIRST_COMMIT=$(git -C "$PROJECT_DIR" log --reverse --format=%ai --max-count=1 | cut -d' ' -f1)
 DEV_DAYS=$(( ($(date +%s) - $(date -d "$FIRST_COMMIT" +%s)) / 86400 ))
@@ -167,9 +195,39 @@ cat > "$STATS_FILE" << EOF
   "total_commits": ${TOTAL_COMMITS:-0},
   "dev_days": ${DEV_DAYS:-0},
   "total_files": ${TOTAL_FILES:-0},
-  "updated_at": "$(date '+%Y-%m-%d %H:%M:%S')"
+  "updated_at": "$(date '+%Y-%m-%d %H:%M:%S')",
+  "lines_by_type": {
+    "python": ${PY_LINES:-0},
+    "vue": ${VUE_LINES:-0},
+    "javascript": ${JS_LINES:-0},
+    "typescript": ${TS_LINES:-0},
+    "css": ${CSS_LINES:-0},
+    "html": ${HTML_LINES:-0},
+    "markdown": ${MD_LINES:-0},
+    "shell": ${SH_LINES:-0},
+    "config": ${CONF_LINES:-0},
+    "sql": ${SQL_LINES:-0},
+    "docker": ${DOCKER_LINES:-0},
+    "other": ${OTHER_LINES:-0}
+  },
+  "files_by_type": {
+    "python": ${PY_FILES:-0},
+    "vue": ${VUE_FILES:-0},
+    "javascript": ${JS_FILES:-0},
+    "typescript": ${TS_FILES:-0},
+    "css": ${CSS_FILES:-0},
+    "html": ${HTML_FILES:-0},
+    "markdown": ${MD_FILES:-0},
+    "shell": ${SH_FILES:-0},
+    "config": ${CONF_FILES:-0},
+    "sql": ${SQL_FILES:-0},
+    "docker": ${DOCKER_FILES:-0},
+    "other": ${OTHER_FILES:-0}
+  }
 }
 EOF
-log "项目统计: ${TOTAL_LINES}行, ${TOTAL_COMMITS}次提交, ${DEV_DAYS}天, ${TOTAL_FILES}个文件"
+
+log "项目统计: ${TOTAL_LINES}行(${TOTAL_FILES}个文件), ${TOTAL_COMMITS}次提交, ${DEV_DAYS}天"
+log "  语言分布: Python=${PY_LINES} Vue=${VUE_LINES} JS=${JS_LINES} CSS=${CSS_LINES} MD=${MD_LINES} Shell=${SH_LINES} Config=${CONF_LINES} 其他=${OTHER_LINES}"
 
 log "========== 部署完成 =========="
