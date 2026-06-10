@@ -139,28 +139,24 @@ fi
 # 统计项目代码数据（供"项目动态"页面使用）
 log "统计项目代码数据..."
 STATS_FILE="$PROJECT_DIR/stats.json"
+set +e  # 临停容错，统计段允许 find 无结果
 
-# 排除目录（使用数组避免 shell glob 展开破坏 wildcard pattern）
-EXCLUDE_DIRS=(
-  -not -path "*/node_modules/*"
-  -not -path "*/dist/*"
-  -not -path "*/.git/*"
-  -not -path "*/__pycache__/*"
-  -not -path "*/.venv/*"
-  -not -path "*/venv/*"
-  -not -path "*/models/*"
-  -not -path "*/.agents/*"
-)
+# 排除目录（用单行避免数组语法兼容性 + set -f 防 glob 展开）
+EXCLUDE_ARGS="-not -path */node_modules/* -not -path */dist/* -not -path */.git/* -not -path */__pycache__/* -not -path */.venv/* -not -path */venv/* -not -path */models/* -not -path */.agents/*"
 
 _count_lines() {
   local pattern="$1"
-  local result=$(find "$PROJECT_DIR" -type f -name "$pattern" "${EXCLUDE_DIRS[@]}" 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+  set -f
+  local result=$(find "$PROJECT_DIR" -type f -name "$pattern" $EXCLUDE_ARGS 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}')
+  set +f
   echo "${result:-0}"
 }
 
 _count_files() {
   local pattern="$1"
-  find "$PROJECT_DIR" -type f -name "$pattern" "${EXCLUDE_DIRS[@]}" 2>/dev/null | wc -l
+  set -f
+  find "$PROJECT_DIR" -type f -name "$pattern" $EXCLUDE_ARGS 2>/dev/null | wc -l
+  set +f
 }
 
 # 按语言分类统计行数
@@ -174,7 +170,7 @@ MD_LINES=$(_count_lines "*.md")
 SH_LINES=$(( $(_count_lines "*.sh") + $(_count_lines "*.bat") + $(_count_lines "*.ps1") ))
 CONF_LINES=$(( $(_count_lines "*.json") + $(_count_lines "*.yaml") + $(_count_lines "*.yml") + $(_count_lines "*.toml") + $(_count_lines "*.cfg") + $(_count_lines "*.ini") + $(_count_lines "*.conf") ))
 SQL_LINES=$(_count_lines "*.sql")
-DOCKER_LINES=$(( $(find "$PROJECT_DIR" -type f \( -name "Dockerfile" -o -name "docker-compose*" \) "${EXCLUDE_DIRS[@]}" 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}') ))
+DOCKER_LINES=$(( $(find "$PROJECT_DIR" -type f \( -name "Dockerfile" -o -name "docker-compose*" \) $EXCLUDE_ARGS 2>/dev/null | xargs wc -l 2>/dev/null | tail -1 | awk '{print $1}') ))
 OTHER_LINES=$(( $(_count_lines "*.txt") + $(_count_lines "*.xml") + $(_count_lines "*.env") + $(_count_lines "*.template") ))
 
 TOTAL_LINES=$(( PY_LINES + VUE_LINES + JS_LINES + TS_LINES + CSS_LINES + HTML_LINES + MD_LINES + SH_LINES + CONF_LINES + SQL_LINES + DOCKER_LINES + OTHER_LINES ))
@@ -190,7 +186,7 @@ MD_FILES=$(_count_files "*.md")
 SH_FILES=$(( $(_count_files "*.sh") + $(_count_files "*.bat") + $(_count_files "*.ps1") ))
 CONF_FILES=$(( $(_count_files "*.json") + $(_count_files "*.yaml") + $(_count_files "*.yml") + $(_count_files "*.toml") + $(_count_files "*.cfg") + $(_count_files "*.ini") + $(_count_files "*.conf") ))
 SQL_FILES=$(_count_files "*.sql")
-DOCKER_FILES=$(find "$PROJECT_DIR" -type f \( -name "Dockerfile" -o -name "docker-compose*" \) "${EXCLUDE_DIRS[@]}" 2>/dev/null | wc -l)
+DOCKER_FILES=$(find "$PROJECT_DIR" -type f \( -name "Dockerfile" -o -name "docker-compose*" \) $EXCLUDE_ARGS 2>/dev/null | wc -l)
 OTHER_FILES=$(( $(_count_files "*.txt") + $(_count_files "*.xml") + $(_count_files "*.env") + $(_count_files "*.template") ))
 
 TOTAL_FILES=$(( PY_FILES + VUE_FILES + JS_FILES + TS_FILES + CSS_FILES + HTML_FILES + MD_FILES + SH_FILES + CONF_FILES + SQL_FILES + DOCKER_FILES + OTHER_FILES ))
@@ -240,5 +236,6 @@ EOF
 
 log "项目统计: ${TOTAL_LINES}行(${TOTAL_FILES}个文件), ${TOTAL_COMMITS}次提交, ${DEV_DAYS}天"
 log "  语言分布: Python=${PY_LINES} Vue=${VUE_LINES} JS=${JS_LINES} CSS=${CSS_LINES} MD=${MD_LINES} Shell=${SH_LINES} Config=${CONF_LINES} 其他=${OTHER_LINES}"
+set -e  # 恢复容错
 
 log "========== 部署完成 =========="
