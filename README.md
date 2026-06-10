@@ -21,6 +21,7 @@
 
 ### 近期新增（按时间倒序）
 
+- **ElMessageBox/ElMessage 按钮偏移修复 + 项目动态代码分布统计（2026-06-10）** — 修复删除确认弹窗按钮位置异常（根因：unplugin-vue-components 无法检测 JS 服务调用，el-message-box.css 未打包）。项目动态页面新增「代码分布」卡片，统计从 4 类（.py/.vue/.js/.css）扩展到 12 类（Python/Vue/JS/TS/CSS/HTML/Markdown/Shell/Config/SQL/Docker/Other），水平柱状图展示各语言行数占比 + 文件数。总计 140,459 行 / 626 文件。修复开发天数计算（git log --reverse --max-count=1 拿到的并非最早提交）。stats.json 迁移到 app/ 目录（Docker volume 挂载范围）
 - **知识库 API 性能修复 + Nginx HTTP/2 协议错误修复（2026-06-09）** — 列表 API 不再返回完整 content，改用 snippet 字段（-99% 响应体积），修复大响应穿过 FRP 隧道时 ERR_HTTP2_PROTOCOL_ERROR。Nginx /api 移除 Connection:upgrade + 添加 proxy_buffer 配置
 - **前端性能大幅优化（2026-06-09）** — Nginx 开启 gzip 压缩（JS/CSS 传输体积减 70%）+ Element Plus 按需导入（unplugin-vue-components）+ 图标按需注册。主 JS bundle 从 1.2MB 降至 199KB（-83%），主 CSS 从 355KB 单文件降至 15.6KB 按需拆分（-96%），首屏总加载（gzip）从 ~500KB 降至 ~80KB（-84%）
 - **项目动态页面（2026-06-09）** — 侧边栏底部新增「项目动态」入口，点击进入全页面展示：项目体量（代码行数/提交次数/开发天数/文件数量，数字递增动画）、已解决痛点（幻觉/部署/安全/性能/架构分类展示）、待做事项（Phase 7-12）、更新日志（全历程时间线）。统计数据由部署脚本自动生成 stats.json，每次 push 自动更新
