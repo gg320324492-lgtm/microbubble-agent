@@ -40,7 +40,7 @@
         <DashboardPet
           type="group"
           :username="userStore.username"
-          :total-tasks="dashboardData.summary?.total_completed_tasks ?? 0"
+          :total-tasks="dashboardData.summary?.done_tasks ?? 0"
           :group-xp="groupPetStats.total_xp"
           :group-level="groupPetStats.level"
         />
