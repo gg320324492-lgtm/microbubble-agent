@@ -1,10 +1,11 @@
 <template>
   <div class="dashboard">
-    <!-- 欢迎区域 -->
+    <!-- 欢迎区域 = 兔子的小窝 -->
     <div class="welcome-section slide-down-fade">
-      <!-- 装饰光晕 -->
-      <div class="welcome-glow glow-1"></div>
-      <div class="welcome-glow glow-2"></div>
+      <!-- 云朵和太阳 -->
+      <div class="welcome-cloud cloud-1"></div>
+      <div class="welcome-cloud cloud-2"></div>
+      <div class="welcome-sun"></div>
       <div class="welcome-left">
         <div class="greeting">{{ greeting }}，{{ username }}！</div>
         <div class="date-time">
@@ -26,6 +27,24 @@
           </template>
         </div>
       </div>
+
+      <!-- 🐰 两只兔子 -->
+      <div class="welcome-pets">
+        <DashboardPet
+          type="personal"
+          :username="userStore.username"
+          :overdue-count="dashboardData.summary?.overdue_tasks ?? 0"
+          :in-progress-count="dashboardData.summary?.in_progress_tasks ?? 0"
+          :total-tasks="dashboardData.summary?.total_tasks ?? 0"
+        />
+        <DashboardPet
+          type="group"
+          :username="'课题组'"
+          :group-xp="groupPetStats.total_xp"
+          :group-level="groupPetStats.level"
+        />
+      </div>
+
       <div class="welcome-right">
         <el-button type="primary" size="large" class="btn-welcome" @click="$router.push('/chat')">
           <el-icon><ChatDotRound /></el-icon>
@@ -35,6 +54,11 @@
           <el-icon><Plus /></el-icon>
           创建任务
         </el-button>
+      </div>
+
+      <!-- 草地 -->
+      <div class="welcome-grass">
+        <span class="grass-item" v-for="i in 8" :key="i" :style="{ left: (i * 12 - 5) + '%', animationDelay: (i * 0.3) + 's' }">🌿</span>
       </div>
     </div>
 
@@ -297,12 +321,14 @@ import { formatCompactDate } from '@/utils/format'
 import { getStatusType, getStatusLabel, getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
+import DashboardPet from '@/components/DashboardPet.vue'
 
 const memberStore = useMemberStore()
 const userStore = useUserStore()
 const members = computed(() => memberStore.members)
 
 const dashboardData = ref({})
+const groupPetStats = ref({ total_xp: 0, level: 1, tasks_completed: 0 })
 const inProgressTasks = ref([])
 const showCreateTask = ref(false)
 const isMobile = ref(window.innerWidth <= 768)
@@ -505,25 +531,77 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.welcome-glow {
+/* 云朵 */
+.welcome-cloud {
   position: absolute;
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+  filter: blur(8px);
+}
+.cloud-1 {
+  width: 120px; height: 50px;
+  top: 8px; right: 60px;
+  animation: pet-cloud-drift 20s ease-in-out infinite;
+}
+.cloud-2 {
+  width: 80px; height: 35px;
+  top: 20px; right: 200px;
+  animation: pet-cloud-drift 25s ease-in-out infinite 5s;
+}
+@keyframes pet-cloud-drift {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-30px); }
+}
+
+/* 太阳 */
+.welcome-sun {
+  position: absolute;
+  top: 12px; right: 30px;
+  width: 32px; height: 32px;
+  background: rgba(255, 220, 100, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 20px rgba(255, 200, 80, 0.4), 0 0 50px rgba(255, 180, 60, 0.2);
+  pointer-events: none;
+  animation: pet-sun-glow 3s ease-in-out infinite;
+}
+@keyframes pet-sun-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 200, 80, 0.4), 0 0 50px rgba(255, 180, 60, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(255, 200, 80, 0.6), 0 0 70px rgba(255, 180, 60, 0.3); }
+}
+
+/* 宠物区域 */
+.welcome-pets {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  position: relative;
+  z-index: 4;
+  min-height: 110px;
+  padding-bottom: 8px;
+}
+
+/* 草地 */
+.welcome-grass {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 36px;
+  background: linear-gradient(to top, rgba(129, 199, 132, 0.45), transparent);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  z-index: 1;
   pointer-events: none;
 }
-.glow-1 {
-  width: 200px;
-  height: 200px;
-  top: -80px;
-  right: 80px;
-  animation: pulse 3s ease-in-out infinite;
+.grass-item {
+  position: absolute;
+  bottom: 4px;
+  font-size: 16px;
+  z-index: 2;
+  animation: pet-grass-sway 3s ease-in-out infinite;
+  pointer-events: none;
 }
-.glow-2 {
-  width: 140px;
-  height: 140px;
-  bottom: -60px;
-  right: 200px;
-  animation: pulse 3s ease-in-out infinite 1s;
+@keyframes pet-grass-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
 }
 
 .welcome-left { flex: 1; position: relative; z-index: 1; }
@@ -561,10 +639,12 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .welcome-section { flex-direction: column; gap: 16px; padding: 20px; }
+  .welcome-section { flex-direction: column; gap: 12px; padding: 16px 20px; }
   .greeting { font-size: var(--font-size-xl); }
+  .welcome-pets { gap: 8px; min-height: 90px; transform: scale(0.75); transform-origin: center bottom; }
   .welcome-right { width: 100%; }
   .welcome-right .el-button { flex: 1; }
+  .welcome-grass { height: 24px; }
 }
 
 /* ===== 统计卡片 ===== */
