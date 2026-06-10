@@ -123,8 +123,8 @@ const emit = defineEmits(['xp-gained'])
 // ===== Refs =====
 const containerRef = ref(null)
 const bunnyRef = ref(null)
-const position = reactive({ x: 50, y: 60 })
-const target = reactive({ x: 50, y: 60 })
+const position = reactive({ x: 40 + Math.random() * 20, y: 40 + Math.random() * 40 })
+const target = reactive({ x: position.x, y: position.y })
 const state = ref('idle')
 const facing = ref(1) // 1=right, -1=left
 const isHovered = ref(false)
@@ -224,10 +224,10 @@ function gameLoop(timestamp) {
     state.value = 'idle'
   }
 
-  // Clamp to container bounds
+  // Clamp to container bounds (留 3% 边距)
   if (containerRef.value) {
-    position.x = Math.max(5, Math.min(92, position.x))
-    position.y = Math.max(15, Math.min(82, position.y))
+    position.x = Math.max(3, Math.min(95, position.x))
+    position.y = Math.max(3, Math.min(92, position.y))
   }
 
   // Sleep timer
@@ -240,27 +240,38 @@ function gameLoop(timestamp) {
   animFrame = requestAnimationFrame(gameLoop)
 }
 
+// 趴靠点：兔子可以在文字区域附近活动
+const PERCH_ZONES = [
+  { y: 8, label: '问候文字旁' },
+  { y: 25, label: '日期时间旁' },
+  { y: 45, label: '中间区域' },
+  { y: 65, label: '任务提示旁' },
+  { y: 82, label: '草地上' },
+]
+
 function pickNearbyTarget() {
-  // 在当前点附近选目标，让走动看起来自然连续
-  const range = 12 + Math.random() * 18 // 12-30% 范围
+  const range = 10 + Math.random() * 25
   let tx = position.x + (Math.random() - 0.5) * range * 2
   let ty = position.y + (Math.random() - 0.5) * range * 2
-  // 限制在草地范围内
-  tx = Math.max(8, Math.min(88, tx))
-  ty = Math.max(20, Math.min(78, ty))
+  tx = Math.max(3, Math.min(95, tx))
+  ty = Math.max(3, Math.min(90, ty))
   target.x = tx
   target.y = ty
 }
 
-// 偶尔跳到远处（替换发呆时的小概率跳远）
 function pickFarTarget() {
-  target.x = 10 + Math.random() * 80
-  target.y = 25 + Math.random() * 55
+  target.x = 5 + Math.random() * 90
+  // 偶尔走到趴靠点
+  if (Math.random() < 0.3) {
+    const zone = PERCH_ZONES[Math.floor(Math.random() * PERCH_ZONES.length)]
+    target.y = zone.y + (Math.random() - 0.5) * 8
+  } else {
+    target.y = 5 + Math.random() * 85
+  }
 }
 
 function pickNewTarget() {
-  // 15% 概率跳远，85% 就近走
-  if (Math.random() < 0.15) {
+  if (Math.random() < 0.2) {
     pickFarTarget()
   } else {
     pickNearbyTarget()
@@ -547,9 +558,11 @@ onUnmounted(() => {
 /* ===== 容器 ===== */
 .pet-world {
   position: relative;
-  width: 90px;
-  height: 110px;
-  flex-shrink: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 120px;
+  min-height: 100px;
+  flex-shrink: 1;
   cursor: default;
   perspective: 300px;
 }
@@ -846,11 +859,11 @@ onUnmounted(() => {
   padding: 6px 14px;
   font-size: 12px;
   line-height: 1.5;
-  box-shadow: 0 3px 14px rgba(0,0,0,0.12);
-  z-index: 20;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+  z-index: 100;
   pointer-events: none;
   animation: pet-bubble-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  max-width: 220px;
+  max-width: 240px;
   min-width: 60px;
   word-break: break-word;
   white-space: normal;
