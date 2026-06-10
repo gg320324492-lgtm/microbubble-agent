@@ -243,6 +243,11 @@ const navigateTo = (path) => {
 onMounted(async () => {
   window.addEventListener('resize', onResize)
   userStore.loadFromStorage()
+
+  // 未登录时不发起 API 请求，避免 401 刷屏
+  const token = localStorage.getItem('access_token')
+  if (!token) return
+
   userStore.fetchNotificationCount()
   userStore.fetchNotifications()
   memberStore.fetchMembers()
