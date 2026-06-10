@@ -1,8 +1,7 @@
 #!/bin/bash
 # 自动部署脚本 — 由 webhook 触发
 # 拉取代码 → 重载 Nginx（前端在本地构建，dist 由 git 提交）
-
-set -e
+# 容错策略：关键步骤手动 exit，非关键步骤允许失败继续
 
 PROJECT_DIR="/opt/microbubble-agent"
 LOG_FILE="/var/log/webhook-deploy.log"
@@ -118,12 +117,13 @@ if ! grep -q 'font/woff2' /etc/nginx/mime.types 2>/dev/null; then
     log "woff2 MIME type fixed in mime.types"
 fi
 
-# 测试 nginx 配置有效性
-nginx -t >> "$LOG_FILE" 2>&1
-
-# 重载 Nginx
-log "nginx reload..."
-nginx -s reload >> "$LOG_FILE" 2>&1
+# 测试 + 重载 Nginx（失败只 warn 不退出）
+if nginx -t >> "$LOG_FILE" 2>&1; then
+    log "nginx reload..."
+    nginx -s reload >> "$LOG_FILE" 2>&1 || log "WARN: nginx reload 失败"
+else
+    log "ERROR: nginx -t 失败，跳过 reload"
+fi
 
 # 后处理 mnb-lab.cn CSS（修复 webhint vendor prefix 警告）
 MNB_CSS_DIR="/var/www/mnb-lab/_next/static/css"
