@@ -196,7 +196,8 @@ OTHER_FILES=$(( $(_count_files "*.txt") + $(_count_files "*.xml") + $(_count_fil
 TOTAL_FILES=$(( PY_FILES + VUE_FILES + JS_FILES + TS_FILES + CSS_FILES + HTML_FILES + MD_FILES + SH_FILES + CONF_FILES + SQL_FILES + DOCKER_FILES + OTHER_FILES ))
 
 TOTAL_COMMITS=$(git -C "$PROJECT_DIR" rev-list --count HEAD)
-FIRST_COMMIT=$(git -C "$PROJECT_DIR" log --reverse --format=%ai --max-count=1 | cut -d' ' -f1)
+ROOT_SHA=$(git -C "$PROJECT_DIR" rev-list --max-parents=0 HEAD)
+FIRST_COMMIT=$(git -C "$PROJECT_DIR" log --format=%ai -1 "$ROOT_SHA" | cut -d' ' -f1)
 DEV_DAYS=$(( ($(date +%s) - $(date -d "$FIRST_COMMIT" +%s)) / 86400 ))
 
 cat > "$STATS_FILE" << EOF
