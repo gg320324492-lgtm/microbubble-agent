@@ -11,7 +11,7 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-11 最新进展**：Webhook 自动部署三次修复根除交付失败（移除全局 set -e + 子 shell 隔离统计 + exit 0 兜底）+ 宠物兔子消息实时反映任务数据（watch overdueCount/inProgressCount 变化重建消息）。详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-11) 和 [README.md](README.md#近期新增按时间倒序)。
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-11 最新进展**：Webhook 三次修复根除交付失败 + 项目统计自动更新（路径修正 + 开发天数动态计算）+ CSS 动画全面 GPU 化（4 轮修复，webhint 性能警告清零）+ 更新日志补充至 28 条。详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-11) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 会议纪要标准格式（2026-06-06 硬规则）
 
@@ -123,7 +123,12 @@
 - **bash `set -e` 陷阱** — 全局 `set -e` 让所有命令的失败都退出脚本。`find` 无结果 + `xargs wc -l` 返回非零、统计命令在空目录运行等非关键步骤都会导致脚本提前退出。**修复**：移除全局 `set -e`，只在关键步骤（`git pull`/`npm run build`/`nginx reload`）手动 `exit 1`。非关键步骤用 `|| echo 0` 兜底。
 - **bash 子 shell 隔离统计段** — 统计/计数函数用子 shell `( ... )` 包裹，退出码不影响主流程。函数内 `find`/`xargs`/`wc` 等命令都加 `|| echo 0` 兜底，确保不会因为无匹配文件而返回非零。
 - **脚本末尾 `exit 0` 保底** — bash 在子 shell 或管道中运行时 `$?` 可能被中间命令覆盖，末尾显式 `exit 0` 确保 webhook 收到成功响应（不依赖 `$?` 的传递链）。
-- **Vue `watch` 响应式数据** — 组件消息/内容依赖 props 数据时，只在 `onMounted` 构建一次会导致数据过时。必须用 `watch` 监听 props 变化后触发 `rebuildMessages()` 重建。**教训**：任何依赖外部数据（props/store/API）的生成式内容（数组、对象、模板字符串），只要外部数据会变，就必须 watch 并重建。
+- **stats.json 写入路径与 Docker volume 对齐** — `deploy-auto.sh` 写 `$PROJECT_DIR/stats.json`，API 读 `app/stats.json`。Docker 只挂载 `./app`，根目录文件容器内不可见。**路径必须与 volume 挂载点一致**。
+- **静态天数改为动态计算** — stats.json 中 `dev_days` 只有部署时更新，跨天不刷新。改为存 `first_commit_date`，API 每次请求 `math.ceil((now - first) / 86400)` 实时计算。
+- **Vue `watch` 响应式数据** — 组件消息/内容依赖 props 数据时，只在 `onMounted` 构建一次会导致数据过时。必须用 `watch` 监听 props 变化后触发 `rebuildMessages()` 重建。
+- **CSS 动画 GPU 化规范** — `@keyframes` 中只用 `transform` 和 `opacity`（GPU Composite），禁用 `left`/`margin-top`（Layout）和 `background-position`/`box-shadow`（Paint）。需要隔离定位 transform 时用 wrapper div。
+- **同名 `@keyframes` 加载顺序陷阱** — `unplugin-vue-components` 按需加载 EP CSS 晚于自定义 CSS，同名 keyframes 被覆盖。**修复**：用独特前缀（`mb-*`）+ `!important` 覆盖 animation-name，或用 PostCSS 插件在构建时剥离第三方 keyframes。
+- **PostCSS 剥离第三方 CSS** — `vite.config.js` 的 `css.postcss.plugins` 可注册自定义 PostCSS 插件，通过 `AtRule` 钩子按名称移除 `@keyframes`、通过 `Declaration` 钩子移除特定属性。
 
 ### 2026-06-08 新增
 
