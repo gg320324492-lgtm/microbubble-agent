@@ -22,6 +22,8 @@
 
 ### 近期新增（按时间倒序）
 
+- **Webhook 自动部署三次修复（2026-06-11）** — 根除 webhook 交付失败问题：①移除全局 `set -e` 改为关键步骤手动 `exit`（确保脚本不会因非关键错误提前退出）②统计段彻底隔离到子 shell + 全部命令加 `|| echo 0` 兜底（find/xargs 无结果时不中断）③脚本末尾加 `exit 0` 确保返回成功。GitHub webhook 交付稳定成功
+- **宠物兔子对话消息修复（2026-06-11）** — 兔子气泡消息之前不反映实际任务数据（显示 `N`），根因是 `DashboardPet.vue` 只在 mount 时构建消息一次。修复：`watch` overdueCount/inProgressCount 变化后触发 `rebuildMessages()`，消息内容随任务数据实时更新
 - **仪表盘宠物乐园（2026-06-10）** — 🐰 欢迎区变身微缩自然世界（天空+云朵+草地+太阳），两只纯 CSS 3D 立体兔子自主走动。**个人兔**随个人任务完成 XP 成长进化（10 级阶段：兔宝→兔+猫+狗+鸡+仓鼠→传奇），**课题组大兔**「小气」随全组任务总和成长。60fps 状态机：散步/发呆/蹦跳/追光标/逃跑/睡觉。悬停爱心眼+粒子、点击喂食🥕、双击逃跑💨、拖拽移动。XP 进度条、配饰系统（8 种）、智能消息轮播（50 条科研知识+任务提醒+趣味彩蛋）。欢迎区草地+花草+云朵+太阳，兔子可趴靠文字区域
 - **ElMessageBox/ElMessage 按钮偏移修复 + 项目动态代码分布统计（2026-06-10）** — 修复删除确认弹窗按钮位置异常（根因：unplugin-vue-components 无法检测 JS 服务调用，el-message-box.css 未打包）。项目动态页面新增「代码分布」卡片，统计从 4 类扩展到 12 类，水平柱状图展示各语言行数占比 + 文件数。总计 140,459 行 / 626 文件。stats.json 动态读取 + Redis 缓存 + POST /refresh-stats 端点
 - **知识库 API 性能修复 + Nginx HTTP/2 协议错误修复（2026-06-09）** — 列表 API 不再返回完整 content，改用 snippet 字段（-99% 响应体积），修复大响应穿过 FRP 隧道时 ERR_HTTP2_PROTOCOL_ERROR。Nginx /api 移除 Connection:upgrade + 添加 proxy_buffer 配置
@@ -382,7 +384,7 @@ npm run dev
 
 详细文档: https://agent.mnb-lab.cn/docs
 
-## 当前状态（2026-06-03）
+## 当前状态（2026-06-11）
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
