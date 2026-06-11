@@ -23,59 +23,62 @@
       class="bunny"
       ref="bunnyRef"
       :style="bunnyStyle"
-      :class="{ hovered: isHovered, walking: isWalking, sleeping: isSleeping }"
+      :class="{ hovered: isHovered, sleeping: isSleeping }"
       @mouseenter="onEnter"
       @mouseleave="onLeave"
       @click.stop="onClick"
       @dblclick.stop="onDblClick"
       @mousedown.stop="onDragStart"
     >
-      <!-- 配饰 -->
-      <div class="accessory" v-if="currentAccessory">{{ currentAccessory }}</div>
+      <!-- 走路动画层 — 与定位 transform 隔离，避免互相覆盖 -->
+      <div class="bunny-body" :class="{ walking: isWalking }">
+        <!-- 配饰 -->
+        <div class="accessory" v-if="currentAccessory">{{ currentAccessory }}</div>
 
-      <!-- 大兔皇冠 -->
-      <div class="group-crown" v-if="type === 'group' && groupLevel >= 20">👑</div>
+        <!-- 大兔皇冠 -->
+        <div class="group-crown" v-if="type === 'group' && groupLevel >= 20">👑</div>
 
-      <!-- 耳朵 -->
-      <div class="ear ear-left" :class="{ twitch: earTwitching }"></div>
-      <div class="ear ear-right" :class="{ twitch: earTwitching }"></div>
+        <!-- 耳朵 -->
+        <div class="ear ear-left" :class="{ twitch: earTwitching }"></div>
+        <div class="ear ear-right" :class="{ twitch: earTwitching }"></div>
 
-      <!-- 头 -->
-      <div class="head">
-        <!-- 眼睛 -->
-        <div class="eye eye-left" v-show="!isSleeping && !isHeartEyes">
-          <div class="pupil"></div>
+        <!-- 头 -->
+        <div class="head">
+          <!-- 眼睛 -->
+          <div class="eye eye-left" v-show="!isSleeping && !isHeartEyes">
+            <div class="pupil"></div>
+          </div>
+          <div class="eye eye-right" v-show="!isSleeping && !isHeartEyes">
+            <div class="pupil"></div>
+          </div>
+
+          <!-- 爱心眼 -->
+          <div class="heart-eye heart-left" v-show="isHeartEyes">♥</div>
+          <div class="heart-eye heart-right" v-show="isHeartEyes">♥</div>
+
+          <!-- 睡觉眼 -->
+          <div class="sleep-eye sleep-eye-left" v-show="isSleeping"></div>
+          <div class="sleep-eye sleep-eye-right" v-show="isSleeping"></div>
+
+          <!-- 鼻子 -->
+          <div class="nose"></div>
+          <!-- 嘴 -->
+          <div class="mouth"></div>
+          <!-- 腮红 -->
+          <div class="blush blush-left"></div>
+          <div class="blush blush-right"></div>
         </div>
-        <div class="eye eye-right" v-show="!isSleeping && !isHeartEyes">
-          <div class="pupil"></div>
-        </div>
 
-        <!-- 爱心眼 -->
-        <div class="heart-eye heart-left" v-show="isHeartEyes">♥</div>
-        <div class="heart-eye heart-right" v-show="isHeartEyes">♥</div>
+        <!-- 身体 -->
+        <div class="body"></div>
 
-        <!-- 睡觉眼 -->
-        <div class="sleep-eye sleep-eye-left" v-show="isSleeping"></div>
-        <div class="sleep-eye sleep-eye-right" v-show="isSleeping"></div>
+        <!-- 前腿 -->
+        <div class="leg leg-front-left"></div>
+        <div class="leg leg-front-right"></div>
 
-        <!-- 鼻子 -->
-        <div class="nose"></div>
-        <!-- 嘴 -->
-        <div class="mouth"></div>
-        <!-- 腮红 -->
-        <div class="blush blush-left"></div>
-        <div class="blush blush-right"></div>
+        <!-- 尾巴 -->
+        <div class="tail"></div>
       </div>
-
-      <!-- 身体 -->
-      <div class="body"></div>
-
-      <!-- 前腿 -->
-      <div class="leg leg-front-left"></div>
-      <div class="leg leg-front-right"></div>
-
-      <!-- 尾巴 -->
-      <div class="tail"></div>
     </div>
 
     <!-- XP 进度条 (悬停时显示) -->
@@ -581,10 +584,14 @@ onUnmounted(() => {
   filter: drop-shadow(0 6px 12px rgba(0,0,0,0.12));
   transform-style: preserve-3d;
 }
+.bunny-body {
+  width: 100%;
+  height: 100%;
+}
 .bunny:hover {
   filter: drop-shadow(0 8px 18px rgba(255,122,92,0.25)) brightness(1.05);
 }
-.bunny.walking {
+.bunny-body.walking {
   animation: pet-walk 0.35s ease-in-out infinite;
 }
 .bunny.sleeping {
@@ -592,9 +599,9 @@ onUnmounted(() => {
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
 }
 @keyframes pet-walk {
-  0%, 100% { margin-top: 0; }
-  30% { margin-top: -6px; }
-  60% { margin-top: -2px; }
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+  60% { transform: translateY(-2px); }
 }
 
 /* ===== 3D 身体 ===== */
