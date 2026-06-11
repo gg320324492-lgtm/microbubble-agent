@@ -138,7 +138,7 @@ fi
 
 # 统计项目代码数据（供"项目动态"页面使用）— 独立子 shell 执行，失败不影响部署
 log "统计项目代码数据..."
-STATS_FILE="$PROJECT_DIR/stats.json"
+STATS_FILE="$PROJECT_DIR/app/stats.json"
 (
   # 整个统计段跑在子 shell 里，任何错误都只影响统计不影响部署
   EXCLUDE_ARGS="-not -path */node_modules/* -not -path */dist/* -not -path */.git/* -not -path */__pycache__/* -not -path */.venv/* -not -path */venv/* -not -path */models/* -not -path */.agents/*"
