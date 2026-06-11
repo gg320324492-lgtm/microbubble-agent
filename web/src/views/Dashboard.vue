@@ -562,13 +562,13 @@ onMounted(() => {
   width: 32px; height: 32px;
   background: rgba(255, 220, 100, 0.8);
   border-radius: 50%;
-  box-shadow: 0 0 20px rgba(255, 200, 80, 0.4), 0 0 50px rgba(255, 180, 60, 0.2);
+  box-shadow: 0 0 30px rgba(255, 200, 80, 0.6), 0 0 70px rgba(255, 180, 60, 0.3);
   pointer-events: none;
   animation: pet-sun-glow 3s ease-in-out infinite;
 }
 @keyframes pet-sun-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(255, 200, 80, 0.4), 0 0 50px rgba(255, 180, 60, 0.2); }
-  50% { box-shadow: 0 0 30px rgba(255, 200, 80, 0.6), 0 0 70px rgba(255, 180, 60, 0.3); }
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
 }
 
 /* 宠物区域 — 填充中间空间，给兔子最大活动范围 */
