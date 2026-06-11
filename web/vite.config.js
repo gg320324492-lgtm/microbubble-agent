@@ -63,5 +63,15 @@ export default defineConfig({
         ws: true
       }
     }
+  },
+  // webhint cache-busting 兼容：把 chunk/asset 哈希从默认 base64 改成 16 进制
+  // 默认 hash: 'Bd9Mi5i6' (base64url, A-Za-z0-9_-) 被 webhint 内置 [0-9a-f]+ 正则拒绝
+  // hashCharacters: 'hex' 后产出 'bd9a3e21' 这种全小写 16 进制，webhint 通过
+  build: {
+    rollupOptions: {
+      output: {
+        hashCharacters: 'hex'
+      }
+    }
   }
 })
