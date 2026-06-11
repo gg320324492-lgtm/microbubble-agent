@@ -22,6 +22,9 @@
 
 ### 近期新增（按时间倒序）
 
+- **会议转录段落智能切分 + 前端不合并长同发言人段（2026-06-11）** — 后端 `scripts/split_meeting_paragraphs.py` 按主题信号词（但是/我举个例子/接下来/明白吗/第一/第二/此外/另外/所以/因此 等）自动切段，会议 #83 从 48→64 段，最长段 1859字→316字。前端 `MeetingDetailView.vue` 合并阈值改为 60 字，转录卡片从 ~10 个超长卡片 → **~30 个聚焦卡片**（每张聚焦一个主题）。会议 #83 完整精修版见 `meeting83_final.md`
+- **会议 L2 润色 prompt 升级（2026-06-11）** — 5 行 "只加标点不改内容" → 允许清理孤立 ASR 幻觉（YouTube 结束语/字幕组声明）+ 修正明显同音错字（"杨词→杨慈"、"丑阳雅雄→臭氧氧化"）。验证层 `_is_punctuation_only_edit` → `_is_reasonable_edit`（容忍 10% 字符差异），支持 `removed` 数组。polish-text 端点从旧内联 prompt 切换为统一 service。会议 #83 全文重润色：532 段 → 323 段（删除 154 段幻觉），残留错名/乱码（周之超/王书馨/优惠价值外/弹牛/MINGPAO/中文字幕志愿者）全部清零，key_points 12→30 条
+- **el-tab-pane 加 lazy + Nginx /api 重复 header 修复（2026-06-11）** — 8 个 `el-tab-pane` 加 `lazy` 属性（未激活时不渲染内容），消除 axe/webhint "ARIA hidden focusable" 警告。Nginx `/api` 移除与后端重复的 `add_header`（避免响应里同时存在小写 + PascalCase 两份 header 触发 webhint "missing" 误报）
 - **Webhook 自动部署三次修复（2026-06-11）** — 根除 webhook 交付失败：①移除全局 `set -e`，改为关键步骤手动 `exit` ②统计段隔离到子 shell + 命令加 `|| echo 0` 兜底 ③末尾 `exit 0` 确保返回成功。GitHub webhook 交付稳定。**连带修复**：stats.json 写入路径从项目根修正为 `app/`（Docker volume 挂载范围），开发天数从静态值改为 API 每次请求动态计算（`math.ceil` 向上取整，每天自动递增），项目统计从 857 提交/140K 行更新至 891 提交/181K 行
 - **CSS 动画性能全面优化（2026-06-11）** — 4 轮修复消除 webhint 性能警告：①`pet-walk` 用 `.bunny-body` wrapper 隔离 transform 动画 ②`pet-sun-glow` 改 opacity 动画 ③`skeleton`/`shimmer`/`skeleton-loading` 改伪元素 + `transform:translateX()` ④PostCSS `stripEpProgressKeyframes` 插件剥离 Element Plus 原版 `left`/`background-position` keyframes。全部动画走 GPU Composite，无 Layout/Paint 触发
 - **宠物兔子对话消息修复（2026-06-11）** — `DashboardPet.vue` watch overdueCount/inProgressCount 变化后触发 `rebuildMessages()`，消息内容随任务数据实时更新

@@ -1,34 +1,32 @@
 {
-    "total_commits": 891,
-    "total_files": 678,
+    "total_commits": 900,
+    "total_files": 630,
     "files_by_type": {
-        "python": 224,
+        "python": 205,
+        "markdown": 115,
+        "javascript": 109,
         "vue": 86,
-        "javascript": 47,
-        "typescript": 2,
-        "css": 3,
+        "css": 49,
+        "config": 28,
+        "other": 16,
+        "shell": 11,
         "html": 10,
-        "markdown": 227,
-        "shell": 24,
-        "config": 48,
-        "sql": 1,
-        "docker": 6
+        "typescript": 1
     },
-    "total_lines": 181311,
+    "total_lines": 120227,
     "lines_by_type": {
-        "python": 53415,
-        "vue": 23784,
-        "javascript": 5111,
-        "typescript": 316,
-        "css": 976,
-        "html": 3811,
-        "markdown": 77807,
-        "shell": 2818,
-        "config": 12912,
-        "sql": 207,
-        "docker": 154
+        "markdown": 44454,
+        "python": 30984,
+        "vue": 23790,
+        "config": 9326,
+        "javascript": 4386,
+        "html": 3611,
+        "shell": 1567,
+        "css": 1022,
+        "other": 929,
+        "typescript": 158
     },
     "first_commit_date": "2026-05-16",
-    "dev_days": 26,
-    "updated_at": "2026-06-11 11:08:23"
+    "dev_days": 27,
+    "updated_at": "2026-06-11 18:49:36"
 }
