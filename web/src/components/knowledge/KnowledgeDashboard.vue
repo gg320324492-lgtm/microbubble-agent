@@ -248,11 +248,19 @@ defineEmits([
 
 .skeleton-line {
   height: 12px;
-  background: linear-gradient(90deg, var(--color-info-bg) 25%, #e8e8e8 50%, var(--color-info-bg) 75%);
-  background-size: 200% 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-info-bg);
   border-radius: var(--radius-sm);
   margin-bottom: var(--space-3);
+}
+.skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 25%, #e8e8e8 50%, transparent 75%);
   animation: skeleton-loading 1.5s infinite;
+  border-radius: inherit;
 }
 
 .skeleton-short {
@@ -269,8 +277,8 @@ defineEmits([
 }
 
 @keyframes skeleton-loading {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
 }
 
 /* 空状态 */
