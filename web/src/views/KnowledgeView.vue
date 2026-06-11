@@ -1,7 +1,7 @@
 <template>
   <div class="knowledge-view">
     <el-tabs v-model="activeTab" type="border-card" class="knowledge-tabs">
-      <el-tab-pane label="知识库" name="knowledge">
+      <el-tab-pane label="知识库" name="knowledge" lazy>
         <!-- 工具栏 -->
         <KnowledgeToolbar
           :categories="categories"
