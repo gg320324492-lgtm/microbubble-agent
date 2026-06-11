@@ -424,12 +424,7 @@ body {
   appearance: textfield;
 }
 
-/* ---- 2. 覆盖 Element Plus keyframes：left → transform（避免 Layout 触发） ---- */
-/* 覆盖 el-progress 的 indeterminate 动画（原用 left，触发 Layout） */
-@keyframes indeterminate {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
+/* ---- 2. Element Plus keyframes 覆盖已移至 element-plus-overrides.css（mb-* 前缀） ---- */
 
 /* ---- 3. scrollbar-width ---- */
 /* Safari 不支持 scrollbar-width，但有 -webkit-scrollbar 回退 */
@@ -438,4 +433,4 @@ body {
 /* ---- 4. webhint 误报说明 ---- */
 /* - backdrop-filter 在 MainLayout.vue 已同时使用标准 + 前缀，"无需添加标准属性"是 webhint 误报 */
 /* - content-security-policy: frame-ancestors 是必要的安全头，"不需要此头"是 webhint 误报 */
-/* - background-position 在 @keyframes（progress/striped-flow/shimmer）是标准骨架屏动画技术 */
+/* - progress/striped-flow/indeterminate/shimmer keyframes 已用 mb-* 前缀 + transform 重写 */

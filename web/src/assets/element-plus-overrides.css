@@ -5,13 +5,13 @@
  */
 
 /* ===== 进度条条纹动画 ===== */
-/* 原始: background-position 移动条纹 → 改为伪元素 translateX */
-@keyframes progress {
+/* 用 mb-* 前缀避免被 Element Plus 同名 keyframes 覆盖（EP 按需加载在后） */
+@keyframes mb-progress {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(0); }
 }
 
-@keyframes striped-flow {
+@keyframes mb-striped-flow {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(0); }
 }
@@ -40,7 +40,21 @@
     transparent
   );
   background-size: 32px 32px;
-  animation: progress 0.8s linear infinite;
+  animation: mb-progress 0.8s linear infinite;
+}
+
+.el-progress-bar__inner--striped-flow::after {
+  animation: mb-striped-flow 0.8s linear infinite;
+}
+
+/* 覆盖 indeterminate 进度条动画 — 用 mb- 前缀避让 */
+@keyframes mb-indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.el-progress-bar__inner.is-indeterminate,
+.el-progress-bar__inner:not(.el-progress-bar__inner--striped):not(.el-progress-bar__inner--striped-flow) {
+  animation: mb-indeterminate 2s ease-in-out infinite !important;
 }
 
 /* ===== 骨架屏闪烁动画 ===== */
