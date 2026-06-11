@@ -1,35 +1,33 @@
 {
-    "total_commits":  857,
-    "total_files":  626,
-    "files_by_type":  {
-                          "sql":  1,
-                          "vue":  85,
-                          "shell":  21,
-                          "docker":  5,
-                          "css":  3,
-                          "javascript":  43,
-                          "html":  9,
-                          "python":  224,
-                          "markdown":  181,
-                          "typescript":  1,
-                          "config":  44,
-                          "other":  9
-                      },
-    "total_lines":  140459,
-    "lines_by_type":  {
-                          "sql":  194,
-                          "vue":  20097,
-                          "shell":  2168,
-                          "docker":  337,
-                          "css":  817,
-                          "javascript":  3720,
-                          "html":  3193,
-                          "python":  45712,
-                          "markdown":  50441,
-                          "typescript":  144,
-                          "config":  12550,
-                          "other":  1086
-                      },
-    "dev_days":  25,
-    "updated_at":  "2026-06-10 14:06:01"
+    "total_commits": 882,
+    "total_files": 678,
+    "files_by_type": {
+        "python": 224,
+        "vue": 86,
+        "javascript": 47,
+        "typescript": 2,
+        "css": 3,
+        "html": 10,
+        "markdown": 227,
+        "shell": 24,
+        "config": 48,
+        "sql": 1,
+        "docker": 6
+    },
+    "total_lines": 181216,
+    "lines_by_type": {
+        "python": 53401,
+        "vue": 23769,
+        "javascript": 5101,
+        "typescript": 316,
+        "css": 959,
+        "html": 3811,
+        "markdown": 77807,
+        "shell": 2818,
+        "config": 12873,
+        "sql": 207,
+        "docker": 154
+    },
+    "dev_days": 25,
+    "updated_at": "2026-06-11 10:23:38"
 }
