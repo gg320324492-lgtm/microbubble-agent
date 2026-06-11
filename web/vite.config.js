@@ -22,6 +22,16 @@ const stripScrollbarWidth = {
     }
   }
 }
+// PostCSS 插件：剥离 Element Plus 进度条 keyframes（已用 mb-* 前缀 GPU 版替代）
+const stripEpProgressKeyframes = {
+  postcssPlugin: 'strip-ep-progress-keyframes',
+  AtRule(atRule) {
+    if (atRule.name === 'keyframes' &&
+        /^(progress|striped-flow|indeterminate)$/.test(atRule.params)) {
+      atRule.remove()
+    }
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -33,7 +43,7 @@ export default defineConfig({
   ],
   css: {
     postcss: {
-      plugins: [stripMozAppearance, stripScrollbarWidth]
+      plugins: [stripMozAppearance, stripScrollbarWidth, stripEpProgressKeyframes]
     }
   },
   resolve: {
