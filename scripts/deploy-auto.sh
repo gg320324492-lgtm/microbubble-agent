@@ -174,7 +174,7 @@ STATS_FILE="$PROJECT_DIR/app/stats.json"
   ROOT_SHA=$(git -C "$PROJECT_DIR" rev-list --max-parents=0 HEAD 2>/dev/null || echo "")
   if [ -n "$ROOT_SHA" ]; then
     FIRST_COMMIT=$(git -C "$PROJECT_DIR" log --format=%ai -1 "$ROOT_SHA" 2>/dev/null | cut -d' ' -f1)
-    DEV_DAYS=$(( ($(date +%s) - $(date -d "$FIRST_COMMIT" +%s 2>/dev/null || echo 0)) / 86400 ))
+    DEV_DAYS=$(( ($(date +%s) - $(date -d "$FIRST_COMMIT" +%s 2>/dev/null || echo 0) + 86399) / 86400 ))
   else
     DEV_DAYS=0
   fi
