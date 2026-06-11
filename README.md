@@ -22,10 +22,11 @@
 
 ### 近期新增（按时间倒序）
 
-- **Webhook 自动部署三次修复（2026-06-11）** — 根除 webhook 交付失败问题：①移除全局 `set -e` 改为关键步骤手动 `exit`（确保脚本不会因非关键错误提前退出）②统计段彻底隔离到子 shell + 全部命令加 `|| echo 0` 兜底（find/xargs 无结果时不中断）③脚本末尾加 `exit 0` 确保返回成功。GitHub webhook 交付稳定成功
-- **宠物兔子对话消息修复（2026-06-11）** — 兔子气泡消息之前不反映实际任务数据（显示 `N`），根因是 `DashboardPet.vue` 只在 mount 时构建消息一次。修复：`watch` overdueCount/inProgressCount 变化后触发 `rebuildMessages()`，消息内容随任务数据实时更新
-- **仪表盘宠物乐园（2026-06-10）** — 🐰 欢迎区变身微缩自然世界（天空+云朵+草地+太阳），两只纯 CSS 3D 立体兔子自主走动。**个人兔**随个人任务完成 XP 成长进化（10 级阶段：兔宝→兔+猫+狗+鸡+仓鼠→传奇），**课题组大兔**「小气」随全组任务总和成长。60fps 状态机：散步/发呆/蹦跳/追光标/逃跑/睡觉。悬停爱心眼+粒子、点击喂食🥕、双击逃跑💨、拖拽移动。XP 进度条、配饰系统（8 种）、智能消息轮播（50 条科研知识+任务提醒+趣味彩蛋）。欢迎区草地+花草+云朵+太阳，兔子可趴靠文字区域
-- **ElMessageBox/ElMessage 按钮偏移修复 + 项目动态代码分布统计（2026-06-10）** — 修复删除确认弹窗按钮位置异常（根因：unplugin-vue-components 无法检测 JS 服务调用，el-message-box.css 未打包）。项目动态页面新增「代码分布」卡片，统计从 4 类扩展到 12 类，水平柱状图展示各语言行数占比 + 文件数。总计 140,459 行 / 626 文件。stats.json 动态读取 + Redis 缓存 + POST /refresh-stats 端点
+- **Webhook 自动部署三次修复（2026-06-11）** — 根除 webhook 交付失败：①移除全局 `set -e`，改为关键步骤手动 `exit` ②统计段隔离到子 shell + 命令加 `|| echo 0` 兜底 ③末尾 `exit 0` 确保返回成功。GitHub webhook 交付稳定。**连带修复**：stats.json 写入路径从项目根修正为 `app/`（Docker volume 挂载范围），开发天数从静态值改为 API 每次请求动态计算（`math.ceil` 向上取整，每天自动递增），项目统计从 857 提交/140K 行更新至 891 提交/181K 行
+- **CSS 动画性能全面优化（2026-06-11）** — 4 轮修复消除 webhint 性能警告：①`pet-walk` 用 `.bunny-body` wrapper 隔离 transform 动画 ②`pet-sun-glow` 改 opacity 动画 ③`skeleton`/`shimmer`/`skeleton-loading` 改伪元素 + `transform:translateX()` ④PostCSS `stripEpProgressKeyframes` 插件剥离 Element Plus 原版 `left`/`background-position` keyframes。全部动画走 GPU Composite，无 Layout/Paint 触发
+- **宠物兔子对话消息修复（2026-06-11）** — `DashboardPet.vue` watch overdueCount/inProgressCount 变化后触发 `rebuildMessages()`，消息内容随任务数据实时更新
+- **仪表盘宠物乐园（2026-06-10）** — 🐰 欢迎区变身微缩自然世界（天空+云朵+草地+太阳），两只纯 CSS 3D 立体兔子自主走动。**个人兔**随个人任务完成 XP 成长进化（10 级阶段：兔宝→兔+猫+狗+鸡+仓鼠→传奇），**课题组大兔**「小气」随全组任务总和成长。60fps 状态机：散步/发呆/蹦跳/追光标/逃跑/睡觉。悬停爱心眼+粒子、点击喂食🥕、双击逃跑💨、拖拽移动。XP 进度条、配饰系统（8 种）、智能消息轮播（50 条科研知识+任务提醒+趣味彩蛋）
+- **ElMessageBox/ElMessage 按钮偏移修复 + 项目动态代码分布统计（2026-06-10）** — unplugin-vue-components 无法检测 JS 服务调用 → `el-message-box.css` 手动导入。项目动态新增「代码分布」卡片，12 类语言统计 + 水平柱状图
 - **知识库 API 性能修复 + Nginx HTTP/2 协议错误修复（2026-06-09）** — 列表 API 不再返回完整 content，改用 snippet 字段（-99% 响应体积），修复大响应穿过 FRP 隧道时 ERR_HTTP2_PROTOCOL_ERROR。Nginx /api 移除 Connection:upgrade + 添加 proxy_buffer 配置
 - **前端性能大幅优化（2026-06-09）** — Nginx 开启 gzip 压缩（JS/CSS 传输体积减 70%）+ Element Plus 按需导入（unplugin-vue-components）+ 图标按需注册。主 JS bundle 从 1.2MB 降至 199KB（-83%），主 CSS 从 355KB 单文件降至 15.6KB 按需拆分（-96%），首屏总加载（gzip）从 ~500KB 降至 ~80KB（-84%）
 - **项目动态页面（2026-06-09）** — 侧边栏底部新增「项目动态」入口，点击进入全页面展示：项目体量（代码行数/提交次数/开发天数/文件数量，数字递增动画）、已解决痛点（幻觉/部署/安全/性能/架构分类展示）、待做事项（Phase 7-12）、更新日志（全历程时间线）。统计数据由部署脚本自动生成 stats.json，每次 push 自动更新
@@ -388,7 +389,11 @@ npm run dev
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
-### 🔧 最新改进（2026-06-03）
+### 🔧 最新改进（2026-06-11）
+
+- **Webhook 部署彻底修复** — 三次递进：移除 `set -e` + 子 shell 隔离统计段 + `exit 0` 保底。stats.json 写入路径修正为 `app/` + 开发天数动态计算
+- **CSS 动画全面 GPU 化** — 4 轮修复（pet-walk/sun-glow/shimmer/skeleton + PostCSS 剥离 EP keyframes），webhint 性能警告清零
+- **项目统计更新** — 891 次提交 / 181,311 行代码 / 678 个文件 / 26 开发天数。更新日志 21→28 条
 - **会议模板重构**（commit `d619f33`）— 删除独立 MeetingTemplatesView 页面（91 行），模板选择/管理内嵌到 MeetingView 创建会议对话框。卡片式选择器（4 builtin + 自定义模板）+ 行内 CRUD（编辑/删除/新建）+ 编辑功能**真正可用**（之前是 stub）
 - **Webhook 性能修复**（commit `7ec6ce0`）— `HTTPServer` → `ThreadingHTTPServer` 多线程，0.001s 响应（之前 15-22s）
 - **垃圾桶系统全修**（4 commit 链）— 3 bug 全修 + beat 调度 1h + 前端双行精准倒计时

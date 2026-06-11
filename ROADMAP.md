@@ -1,11 +1,13 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-11** — Webhook 三次修复根除部署失败 + 兔子消息实时反映任务数据
+> 最后更新: **2026-06-11** — Webhook 三次修复 + 项目统计自动更新 + 开发天数动态计算 + CSS 动画全面 GPU 化
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-11）
 - [Webhook 自动部署三次修复](#webhook-自动部署三次修复2026-06-11)（根除交付失败 — 移除全局 set -e + 子 shell 隔离统计 + exit 0）
+- [项目统计自动更新修复](#项目统计自动更新修复2026-06-11)（deploy-auto.sh 路径修正 + 开发天数动态计算）
+- [CSS 动画性能全面优化](#css-动画性能全面优化2026-06-11)（4 轮修复 — GPU Composite 替代 Layout/Paint + PostCSS 剥离 EP keyframes）
 - [宠物兔子对话消息修复](#宠物兔子对话消息修复2026-06-11)（watch 任务计数变化 → 消息实时更新）
 
 ### 最新完成（2026-06-10）
@@ -25,6 +27,61 @@
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
 
 ---
+
+---
+
+## 项目统计自动更新修复（2026-06-11）
+
+**问题**：项目动态页面显示的数据始终不更新（857 提交/140K 行），实际项目已 891 提交/181K 行。
+
+**根因链**：
+1. `deploy-auto.sh` 写 stats.json 到项目根目录，但 API (`dashboard.py`) 从 `app/stats.json` 读取 — 路径不匹配
+2. Docker volume 只挂载 `./app:/app/app`，根目录 stats.json 在容器内不可见
+3. `dev_days` 用整数除法截断，首提交在晚上 22:37，完整 24h 周期数偏少 1 天
+4. `dev_days` 写死在 stats.json 里，只有部署时才更新
+
+**修复方案**：
+- `deploy-auto.sh`: `STATS_FILE="$PROJECT_DIR/stats.json"` → `"$PROJECT_DIR/app/stats.json"`
+- `deploy-auto.sh`: `DEV_DAYS` 计算改为 `(diff + 86399) / 86400`（ceil 除法）
+- `dashboard.py`: 新增 `first_commit_date` 字段，API 每次请求动态计算 `dev_days`，Redis 缓存 TTL 缩短到 10 分钟
+- 本地重新生成 `app/stats.json`：891 提交/181,311 行/678 文件/26 天
+
+**效果**：开发天数每天自动递增，不依赖部署频率。
+
+**文件**：
+- `scripts/deploy-auto.sh` — 路径修正 + ceil 除法
+- `app/api/v1/dashboard.py` — 动态 dev_days 计算
+- `app/stats.json` — 最新统计数据
+
+---
+
+## CSS 动画性能全面优化（2026-06-11）
+
+**问题**：webhint 报告多个 CSS 动画在 `@keyframes` 中使用 `margin-top`/`left`/`background-position`/`box-shadow`，触发 Layout 或 Paint。
+
+**4 轮修复**：
+
+1. **第 1 轮（`5b2471b`）** — 组件级动画：
+   - `DashboardPet.vue`: `pet-walk` `margin-top` → `transform: translateY()`，新增 `.bunny-body` wrapper 隔离定位 transform
+   - `Dashboard.vue`: `pet-sun-glow` `box-shadow` → 静态阴影 + `opacity` 动画
+   - `variables.css`: `shimmer` `background-position` → `::after` 伪元素 + `transform: translateX()`
+   - `.skeleton` 改为 `overflow: hidden` + `::after` 滑过渐变
+
+2. **第 2 轮（`c59413f`）** — Element Plus keyframes 被覆盖问题：用 `mb-*` 前缀（`mb-progress`/`mb-striped-flow`/`mb-indeterminate`）+ `!important` 强制覆盖 EP 元素 animation-name
+
+3. **第 3 轮（`94dff5d`）** — PostCSS `stripEpProgressKeyframes` 插件构建时剥离 EP 原版 keyframes，从源头消除 webhint 警告
+
+4. **第 4 轮（`0fc6666`）** — `KnowledgeDashboard.vue` `skeleton-loading` `background-position` → `::after` + `transform: translateX()`
+
+**效果**：webhint CSS 性能警告全部清零（除第三方库不可修改的少量残余）。
+
+**文件**：
+- `web/src/components/DashboardPet.vue` — bunny-body wrapper + transform
+- `web/src/views/Dashboard.vue` — sun-glow opacity
+- `web/src/assets/variables.css` — skeleton/shimmer 伪元素
+- `web/src/assets/element-plus-overrides.css` — mb-* keyframes
+- `web/src/components/knowledge/KnowledgeDashboard.vue` — skeleton-loading
+- `web/vite.config.js` — PostCSS stripEpProgressKeyframes
 
 ---
 
@@ -851,12 +908,12 @@ commit `94735a3`（TaskView 集成子组件）把垃圾桶从 TaskView 抽成 `T
 | 知识库 | 自主进化知识大脑（实体图谱+假设+量化推理）+ PPT 上传支持 | 2026-06-04 |
 | 会议系统 | 录音机+离线后处理 + 声纹识别验证 + UI 全面优化（6 模块）— 仪表盘详情页+Canvas 波形+头像组件+发言统计+录音回放+Confetti | 2026-06-05 |
 | 任务管理 | 软删除/垃圾桶 + 3 天后自动清理（1h 调度）+ 精准倒计时双行显示 + 5 级颜色 | 2026-06-03 |
-| 前端 | ECharts 5.6.0 + Element Plus 按需导入 + Nginx gzip + 对话持久化 + **🐰 宠物乐园**（两只 3D 兔子 + XP 成长 + 轮播消息）+ Composables + **20 个子组件** + Vitest 测试 + 性能优化（bundle -83%） | 2026-06-11 |
+| 前端 | ECharts 5.6.0 + Element Plus 按需导入 + Nginx gzip + 对话持久化 + **🐰 宠物乐园**（两只 3D 兔子 + XP 成长 + 轮播消息）+ Composables + **20 个子组件** + Vitest 测试 + 性能优化（bundle -83%）+ **CSS 动画全面 GPU 化**（webhint 性能警告清零） | 2026-06-11 |
 | 测试 | 后端 33+ 个测试 + 前端 38 个测试 = 71+ 个测试 | 2026-06-04 |
-| 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取（130s→5s）+ webhook 多线程（0.001s 响应）+ Webhook 三次修复根除交付失败 | 2026-06-11 |
-| Skills | 37 个 Skills（21 原有 + 16 新增），覆盖后端/前端/DevOps/测试/安全/RAG/数据库 | 2026-06-04 |
+| 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取 + webhook 多线程 + **三次递进修复**（set -e 移除 + 子 shell 隔离 + exit 0）+ **stats.json 路径修正** + 开发天数动态计算 | 2026-06-11 |
+| 性能 | PostCSS 剥离 EP keyframes + 全站 CSS 动画 GPU Composite + Nginx gzip + EP 按需导入（bundle -83%）| 2026-06-11 |
 | 代码质量 | API 规范化 + 后端测试 + 前端 Composables + 子组件拆分（-21%）+ 前端测试，30 commit 全部完成 | 2026-06-04 |
-| 文档 | README/ROADMAP/CLAUDE.md/MEMORY 已同步 | 2026-06-11 |
+| 文档 | README/ROADMAP/CLAUDE.md/MEMORY 已同步 + 更新日志 21→28 条 | 2026-06-11 |
 
 ---
 
