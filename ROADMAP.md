@@ -1,10 +1,16 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-11** — Webhook 三次修复 + 项目统计自动更新 + 开发天数动态计算 + CSS 动画全面 GPU 化
+> 最后更新: **2026-06-11** — 会议 L2 润色升级 + 段落智能切分 + 前端不合并长段 + ARIA 修复 + 重复 header 修复
 
 ## 📋 目录（按时间倒序）
 
 ### 最新完成（2026-06-11）
+- [会议 L2 润色 prompt 升级](#会议-l2-润色-prompt-升级2026-06-11)（5 行 "只加标点" → 允许清理幻觉 + 修正同音错字 + 验证放宽至 10% 差异）
+- [会议 #83 全文重润色](#会议-83-全文重润色2026-06-11)（532 段 → 323 段，删除 154 段 ASR 幻觉，错名/乱码全部修正）
+- [会议转录段落智能切分](#会议转录段落智能切分2026-06-11)（主题信号词自动断段 — 最长 1859 字 → 316 字）
+- [前端不合并长同发言人段](#前端不合并长同发言人段2026-06-11)（`MeetingDetailView` 合并阈值改为 60 字 — 1849 字独白切成 ~30 个聚焦卡片）
+- [el-tab-pane 加 lazy 修复 ARIA 警告](#el-tab-pane-加-lazy-修复-aria-警告2026-06-11)（8 个 tab-pane 懒渲染 — 消除 ARIA hidden focusable）
+- [Nginx /api 安全头修复](#nginx-api-安全头修复2026-06-11)（移除与后端重复的 add_header — webhint 看到唯一 header 不再报 missing）
 - [Webhook 自动部署三次修复](#webhook-自动部署三次修复2026-06-11)（根除交付失败 — 移除全局 set -e + 子 shell 隔离统计 + exit 0）
 - [项目统计自动更新修复](#项目统计自动更新修复2026-06-11)（deploy-auto.sh 路径修正 + 开发天数动态计算）
 - [CSS 动画性能全面优化](#css-动画性能全面优化2026-06-11)（4 轮修复 — GPU Composite 替代 Layout/Paint + PostCSS 剥离 EP keyframes）
@@ -27,6 +33,140 @@
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
 
 ---
+
+---
+
+## 会议 L2 润色 prompt 升级（2026-06-11）
+
+**问题**：L2 聚批润色 prompt（`app/services/prompts/meeting_polish.py`）仅 5 行规则："只加标点、不改内容、不删任何内容"。Whisper 幻觉（YouTube 结束语/字幕组声明/版权信息）、同音错字（"杨词→杨慈"）、重复短句 全部原样保留。同时 `_is_punctuation_only_edit` 验证层会强制回退任何改写，即使合理修正。
+
+**修复**：
+- **prompt 升级**：允许 4 类操作 — 加标点 / 删孤立幻觉 / 修明显同音错字（≥95% 字符保留）/ 合并连续重复。明确禁改写、禁增删实质信息、禁改人名。
+- **验证层放宽**：`_is_punctuation_only_edit` → `_is_reasonable_edit`，容忍 10% 字符差异或子串匹配。**支持 `removed` 数组**：被删除段不进 polished 但记录 reason。
+- **新增 `scripts/repolish_meeting_83.py`**：用 L3 prompt 一次性重润色会议 #83（拆分到 11 个 chunk 并发调 LLM）。
+- **新增 `scripts/fix_summary_83.py`**：用 polished 内容重生成会议 summary（修复"全是 ASR 结束语"错误总结）。
+
+**效果（会议 #83）**：
+- 532 段 → 323 段（删除 154 段 ASR 幻觉）
+- 残留错名/乱码（周之超/王书馨/杨词/优惠价值外/弹牛/游击/丑阳雅雄）全部清零
+- key_points 从 12 → 30 条（全部准确）
+- summary 从错误结论修正为正确总结
+
+**文件**：
+- `app/services/prompts/meeting_polish.py` — 新 L2 prompt
+- `app/services/meeting_ai_polish.py` — 验证放宽 + removed 数组
+- `scripts/repolish_meeting_83.py` — 一次性重润色脚本
+- `scripts/fix_summary_83.py` — summary 重生成
+
+---
+
+## 会议 #83 全文重润色（2026-06-11）
+
+使用新 L2 prompt 对会议 #83「持续研究UV臭氧纳米气泡技术」（2026-06-11 03:53-04:13，20分29秒）做完整重润色。
+
+| 维度 | 修复前 | 修复后 |
+|------|--------|--------|
+| 总段数 | 532 | 323（删除 154 段幻觉）|
+| 发言人误识 | 周之超（425段）/ 王书馨（2段）| 王天志（430段）/ 杨慈（2段）|
+| Whisper 残留 | MINGPAO CANADA ×N, 中文字幕志愿者 ×N, 试镜需要您的支持 | **全部清零** |
+| ASR 乱码 | 优惠价值外 / 弹牛方向 / 游击的 / 丑阳雅雄 | **全部修正** |
+| 错名 | 杨词 / 周之超 / 王书馨 | 杨慈 / 王天志 / 王天志 |
+| key_points | 12 条（含乱码）| 30 条（全部准确）|
+| summary | 错误（"全是 ASR 幻觉"）| 正确（UV 臭氧纳米气泡技术持续研究）|
+
+**修复链路**：
+1. 改 speaker_mapping / transcript / polished JSON（周之超→王天志 等）
+2. 改参会人表（删除周之超 22，改王书馨 14→杨慈 18）
+3. 调 L3 prompt（带 removed 数组支持）跑 11 个 chunk
+4. 手动重生成 summary
+5. 清理最后残留"感谢观看"
+
+**前端效果**：刷新 `https://agent.mnb-lab.cn/meetings/83` 即可看到干净的转录、正确的参会人、30 条准确要点。
+
+---
+
+## 会议转录段落智能切分（2026-06-11）
+
+**问题**：后端 L3 润色输出后，前端 `MeetingDetailView.vue` 的 `transcriptEntries` computed 把所有连续同发言人段合并成一个超长卡片。1859 字一整块王天志独白压垮阅读体验。
+
+**修复**：`scripts/split_meeting_paragraphs.py`（commit `a487a33`）
+
+按主题信号词自动切段：
+- `但是/不过/然而` — 转折
+- `那[么是]?/所以/因此/总之` — 推论/总结
+- `另外/还有/同时/接着/然后/接下来` — 并列/递进
+- `我举个例子/比如说/换句话说/也就是说` — 例证
+- `明白吗/对吧/是吧` — 修辞问句（话题切换）
+- `第一/第二/第三` — 列表
+- `此外/首先/其次/再者/最后` — 列举
+- `[一二三四五六七八九十]+、` — 中文列表
+
+短段（<30字）+ 同发言人 → 自动合并避免碎片化。
+
+**效果（会议 #83）**：
+- 48 → 64 段
+- 最长段 1859字 → 316字
+- 平均段长 76字
+
+**用法**：`python scripts/split_meeting_paragraphs.py 83`
+
+---
+
+## 前端不合并长同发言人段（2026-06-11）
+
+**问题**：后端已切分到 64 段，但前端 `web/src/views/MeetingDetailView.vue:415` 显式 `current.text += ' ' + entry.text` 把所有连续同发言人段合并成一个超长卡片。
+
+**修复**：合并阈值改为 60 字
+- 短段（"嗯" + "是"）继续合并
+- 长段（每段 ≥ 60字）保持独立
+
+**效果**：
+- 转录卡片从 ~10 个 → **~30 个聚焦卡片**
+- 王天志 1859 字独白 → 16 个主题段落
+- 主题切换清晰可见
+
+**文件**：
+- `web/src/views/MeetingDetailView.vue` — 合并阈值常量
+- `web/dist/` — 重新构建并 commit
+
+---
+
+## el-tab-pane 加 lazy 修复 ARIA 警告（2026-06-11）
+
+**问题**：Element Plus 的 `el-tab-pane` 默认渲染所有 tab 内容，未激活的 tab 设了 `aria-hidden="true"` + `display: none`，但里面的可聚焦元素（按钮/输入框/头像）依然在 DOM 里。触发 axe/webhint "ARIA hidden element must not contain focusable elements" 警告。
+
+**修复**：为 8 个 `el-tab-pane` 加 `lazy` 属性（懒渲染），未激活时不创建内容：
+
+| 文件 | tab-pane |
+|------|----------|
+| `MeetingDetailView.vue` | 会议纪要 / 转录记录 / 发言统计 |
+| `TaskView.vue` | 任务列表 / 垃圾桶 |
+| `KnowledgeView.vue` | 知识库 |
+| `VoiceprintEnrollDialog.vue` | 麦克风录制 / 上传音频文件 |
+
+之前已经加 lazy 的（实体图谱/科研假设/公式计算）保持不变。
+
+**效果**：webhint 扫 `/meetings/83` 时 ARIA hidden 警告消失。
+
+---
+
+## Nginx /api 安全头修复（2026-06-11）
+
+**问题**：Nginx `/api` location 块（`nginx/conf.d/tunnel.conf`）加的 `add_header X-Content-Type-Options / Cache-Control / Referrer-Policy / X-Request-ID` 与后端中间件（`app/main.py security_headers`）**完全重复**。响应里同时存在小写（后端）和 PascalCase（Nginx）两份 header，webhint 解析时遇到重复 header 判定为 "missing or empty"。
+
+**修复链路**：
+- `415a674` Nginx 加 add_header（首版）
+- `29982a4` 移除 Nginx 重复 add_header（仅保留后端中间件作为唯一来源）
+
+**验证**（curl 实测阿里云服务器）：
+```
+x-content-type-options: nosniff      ✅ 唯一
+cache-control: max-age=0             ✅ 唯一
+referrer-policy: strict-origin-when-cross-origin  ✅
+x-request-id: ...                   ✅
+```
+
+webhint 扫 `/api/v1/meetings/{id}/polish-text` 时 x-content-type-options 和 cache-control 警告都消失。
 
 ---
 
