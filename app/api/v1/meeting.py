@@ -383,27 +383,22 @@ async def polish_text(
     body: dict,
     current_user: Member = Depends(get_current_user),
 ):
-    """对指定文本进行 AI 润色（加标点，不改内容）"""
+    """对指定文本进行 AI 轻量润色（2026-06-11 升级：加标点 + 删孤立幻觉 + 修明显错字）
+
+    升级背景：原版 prompt "只加标点不改内容" 过于保守，导致 ASR 乱码 / 错名 / 字幕组声明
+    等噪声全部原样保留。现已对齐 meeting_polish.py 的新规则。
+    """
     text = body.get("text", "")
     if not text or len(text.strip()) < 3:
         raise HTTPException(status_code=400, detail="文本太短")
 
-    from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+    from app.services.meeting_ai_polish import polish_segments
 
-    client = get_anthropic_client()
-    model = get_default_model()
-    response = await client.messages.create(
-        model=model,
-        max_tokens=2048,
-        temperature=0.2,
-        system="你是一个标点添加工具。输出必须与输入完全一致，只添加逗号、句号、问号。不增加、不删除、不重复任何字符。",
-        messages=[{"role": "user", "content": f"只加标点，不改内容，不重复：\n{text}"}],
+    result = await polish_segments(
+        segments=[{"speaker": "未知", "text": text, "ts": 0.0}],
+        meeting_context={"title": "", "participants": [], "topic": None, "context": None},
     )
-    polished = extract_text_from_response(response).strip()
-    # 去重：如果输出是输入的重复拼接，只用一半
-    if len(polished) >= len(text) * 1.5 and text in polished:
-        # 取 polished 中去掉 text 后的剩余部分
-        polished = polished.replace(text, '', 1).strip() or text
+    polished = result["polished"][0]["text"] if result.get("polished") else text
     return {"polished": polished}
 
 
