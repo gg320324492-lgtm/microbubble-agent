@@ -80,6 +80,42 @@
       "pain_point": "导航离开录音中断"
     },
     {
+      "date": "2026-06-10",
+      "title": "仪表盘宠物乐园",
+      "tag": "功能",
+      "pain_point": "两只 3D 兔子 + XP 成长 + 智能对话"
+    },
+    {
+      "date": "2026-06-10",
+      "title": "项目动态代码分布统计",
+      "tag": "功能",
+      "pain_point": "12 类语言 181K 行统计"
+    },
+    {
+      "date": "2026-06-10",
+      "title": "ElMessageBox CSS 修复",
+      "tag": "修复",
+      "pain_point": "unplugin 不检测 JS 服务调用"
+    },
+    {
+      "date": "2026-06-11",
+      "title": "Webhook 部署三次修复",
+      "tag": "修复",
+      "pain_point": "set -e + 子shell隔离 + exit 0 兜底"
+    },
+    {
+      "date": "2026-06-11",
+      "title": "开发天数动态计算",
+      "tag": "功能",
+      "pain_point": "静态值 → 每次请求实时计算"
+    },
+    {
+      "date": "2026-06-11",
+      "title": "CSS 动画性能全面优化",
+      "tag": "优化",
+      "pain_point": "GPU Composite 替代 Layout/Paint"
+    },
+    {
       "date": "2026-06-09",
       "title": "Webhook 自动部署修复",
       "tag": "修复",
