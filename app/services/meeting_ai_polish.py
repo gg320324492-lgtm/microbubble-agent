@@ -104,35 +104,91 @@ def _normalize_for_punctuation_check(text: str) -> str:
     return normalized
 
 
-def _is_punctuation_only_edit(original: str, polished: str) -> bool:
-    """Return True when polished text only adds punctuation/removes fillers."""
-    return _normalize_for_punctuation_check(original) == _normalize_for_punctuation_check(polished)
+def _is_reasonable_edit(original: str, polished: str) -> bool:
+    """2026-06-11 升级：允许轻量清理（幻觉删除 + 同音错字修正）。
+
+    规则：
+    1. 字符差异 ≤ 10%（去除标点和空格后）— 允许标点、少量字符增删
+    2. polished 是 original 的子串 — 允许删除中间内容（如幻觉）
+    3. 双方都为空 — 允许
+    """
+    norm_orig = _normalize_for_punctuation_check(original)
+    norm_polish = _normalize_for_punctuation_check(polished)
+
+    if not norm_orig and not norm_polish:
+        return True
+    if not norm_orig:
+        return not norm_polish  # 原为空，polished 也应为空
+    if not norm_polish:
+        return False  # 原文非空但 polished 为空 — 整段被删（需走 removed 逻辑）
+
+    # 规则 1: 字符差异 ≤ 10%
+    len_diff = abs(len(norm_orig) - len(norm_polish))
+    max_allowed = max(5, int(len(norm_orig) * 0.10))
+    if len_diff <= max_allowed:
+        return True
+
+    # 规则 2: polished 是 original 的子串（允许删除中间内容）
+    if norm_polish in norm_orig:
+        return True
+
+    return False
 
 
 def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict:
-    """校验并规范化 AI 返回结果"""
+    """校验并规范化 AI 返回结果（2026-06-11 升级：支持 removed 段 + 合理编辑验证）"""
     polished = result.get("polished") or []
+    removed = result.get("removed") or []
     key_points = result.get("key_points") or []
     boundary = result.get("boundary_after_index")
     summary = result.get("summary")
+
+    # 构建被删除段的 index 集合
+    removed_indices: set[int] = set()
+    for r in removed:
+        if isinstance(r, dict) and isinstance(r.get("index"), int):
+            removed_indices.add(r["index"])
 
     # 兜底：polished 为空时回退原文
     if not polished:
         polished = [{"speaker": s.get("speaker", "未知说话人"), "text": s["text"], "ts": s["ts"]} for s in original_segments]
     else:
+        # 2026-06-11 升级：polished 可能比 original_segments 少（被 removed 的段不出现在 polished 中）
+        # 用 original 索引匹配 polished — 跳过 removed 的段
+        polished_iter = iter(polished)
         checked = []
         for i, original in enumerate(original_segments):
-            item = polished[i] if i < len(polished) and isinstance(polished[i], dict) else {}
+            if i in removed_indices:
+                # 该段被 AI 标记删除，跳过（不进 checked）
+                continue
+            try:
+                item = next(polished_iter)
+            except StopIteration:
+                # polished 遍历完，剩下 original 段都按原文
+                checked.append({
+                    "speaker": original.get("speaker", "未知说话人"),
+                    "text": original.get("text", ""),
+                    "ts": original.get("ts"),
+                })
+                continue
+            if not isinstance(item, dict):
+                checked.append({
+                    "speaker": original.get("speaker", "未知说话人"),
+                    "text": original.get("text", ""),
+                    "ts": original.get("ts"),
+                })
+                continue
             candidate = item.get("text", "")
-            if candidate and _is_punctuation_only_edit(original.get("text", ""), candidate):
+            if candidate and _is_reasonable_edit(original.get("text", ""), candidate):
                 checked.append({
                     "speaker": item.get("speaker", original.get("speaker", "未知说话人")),
                     "text": candidate,
                     "ts": item.get("ts", original.get("ts")),
                 })
             else:
+                # 改写幅度过大，回退原文
                 logger.warning(
-                    "AI 润色疑似改写，已回退原文: original=%s polished=%s",
+                    "AI 润色疑似改写（>10%差异），已回退原文: original=%s polished=%s",
                     original.get("text", "")[:80],
                     candidate[:80],
                 )
@@ -149,6 +205,7 @@ def _validate_polish_result(result: dict, original_segments: list[dict]) -> dict
 
     return {
         "polished": polished,
+        "removed": removed if isinstance(removed, list) else [],
         "key_points": key_points,
         "boundary_after_index": boundary if isinstance(boundary, int) else None,
         "summary": summary if isinstance(summary, str) else None,
