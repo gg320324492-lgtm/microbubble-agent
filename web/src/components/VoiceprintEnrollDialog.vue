@@ -40,7 +40,7 @@
 
       <el-tabs v-model="activeTab" class="enroll-tabs">
         <!-- Tab 1: 麦克风录制 -->
-        <el-tab-pane label="麦克风录制" name="record">
+        <el-tab-pane label="麦克风录制" name="record" lazy>
           <div class="record-pane">
             <el-button
               v-if="!recording && !recordedBlob"
@@ -72,7 +72,7 @@
         </el-tab-pane>
 
         <!-- Tab 2: 上传文件 -->
-        <el-tab-pane label="上传音频文件" name="upload">
+        <el-tab-pane label="上传音频文件" name="upload" lazy>
           <div class="upload-pane">
             <el-upload
               :auto-upload="false"

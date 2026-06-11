@@ -2,7 +2,7 @@
   <div class="task-view">
     <!-- Tab 切换：任务列表 / 垃圾桶 -->
     <el-tabs v-model="activeTab" class="task-tabs">
-      <el-tab-pane label="任务列表" name="tasks">
+      <el-tab-pane label="任务列表" name="tasks" lazy>
         <!-- 顶部操作栏 -->
         <el-card class="filter-card card fade-slide-up stagger-1">
           <el-row :gutter="16" align="middle">
@@ -156,7 +156,7 @@
         </el-card>
       </el-tab-pane>
 
-      <el-tab-pane name="trash">
+      <el-tab-pane name="trash" lazy>
         <template #label>
           <span class="trash-tab-label">
             <el-icon :size="20"><Delete /></el-icon>

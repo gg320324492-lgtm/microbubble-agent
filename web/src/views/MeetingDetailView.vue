@@ -87,7 +87,7 @@
       <div class="detail-main">
         <el-tabs v-model="activeTab" class="detail-tabs">
           <!-- Tab 1: 会议纪要 -->
-          <el-tab-pane label="会议纪要" name="minutes">
+          <el-tab-pane label="会议纪要" name="minutes" lazy>
             <div class="tab-content">
               <!-- 编辑态 -->
               <template v-if="editingMinutes">
@@ -206,7 +206,7 @@
           </el-tab-pane>
 
           <!-- Tab 2: 转录记录 -->
-          <el-tab-pane label="转录记录" name="transcript">
+          <el-tab-pane label="转录记录" name="transcript" lazy>
             <div class="tab-content">
               <template v-if="transcriptEntries.length">
                 <div
@@ -260,7 +260,7 @@
           </el-tab-pane>
 
           <!-- Tab 3: 发言统计 -->
-          <el-tab-pane label="发言统计" name="stats">
+          <el-tab-pane label="发言统计" name="stats" lazy>
             <div class="tab-content">
               <SpeakerStatsCard :stats="meeting.speaker_stats || []" />
             </div>
