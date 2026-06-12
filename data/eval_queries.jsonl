@@ -1,20 +1,20 @@
-{"id":1,"query":"什么是 zeta 电位？","reference_answer":"zeta 电位是表征胶体分散系稳定性的重要指标，描述粒子表面电荷产生的电位","relevant_doc_ids":[]}
-{"id":2,"query":"微纳米气泡的生成方法有哪些？","reference_answer":"加压溶气法、旋流法、电解法、膜法、超声法、文丘里管法","relevant_doc_ids":[]}
-{"id":3,"query":"微纳米气泡在水处理中的应用","reference_answer":"微纳米气泡可用于污水处理，包括氧化分解有机物、增氧、浮选等","relevant_doc_ids":[]}
-{"id":4,"query":"课题组有哪些研究方向？","reference_answer":"微纳米气泡生成、表征、应用；含农业、水处理、生物医学、清洗、食品工业","relevant_doc_ids":[]}
-{"id":5,"query":"微纳米气泡的尺寸范围","reference_answer":"1μm-100μm 为微米级，<1μm 为纳米级","relevant_doc_ids":[]}
-{"id":6,"query":"如何测量 zeta 电位？","reference_answer":"可用电泳光散射、激光多普勒测速等技术","relevant_doc_ids":[]}
-{"id":7,"query":"微纳米气泡的特点","reference_answer":"比表面积大、带负电（zeta 电位为负）、稳定性好、崩溃时产生自由基","relevant_doc_ids":[]}
-{"id":8,"query":"什么是 DLS？","reference_answer":"动态光散射（Dynamic Light Scattering），用于测量粒径","relevant_doc_ids":[]}
-{"id":9,"query":"什么是 NTA？","reference_answer":"纳米颗粒跟踪分析（Nanoparticle Tracking Analysis），用于粒径测量","relevant_doc_ids":[]}
-{"id":10,"query":"微纳米气泡在农业中的应用","reference_answer":"可用于灌溉增氧、种子发芽促进、水产养殖","relevant_doc_ids":[]}
-{"id":11,"query":"超高速摄像如何应用于微气泡研究","reference_answer":"用于观察微气泡生成、破裂、合并的动力学过程","relevant_doc_ids":[]}
-{"id":12,"query":"电导法测微气泡的原理","reference_answer":"通过测量溶液电导率变化来推算气泡浓度","relevant_doc_ids":[]}
-{"id":13,"query":"激光衍射法测粒径的优缺点","reference_answer":"优点：快速、范围广；缺点：对小颗粒分辨率有限","relevant_doc_ids":[]}
-{"id":14,"query":"什么是自由基？","reference_answer":"自由基是带未配对电子的原子或分子，化学活性强","relevant_doc_ids":[]}
-{"id":15,"query":"微纳米气泡崩溃时为何产生自由基","reference_answer":"气泡崩溃瞬间产生高温高压，使水分子分解产生·OH 等自由基","relevant_doc_ids":[]}
-{"id":16,"query":"微纳米气泡清洗的原理","reference_answer":"微气泡崩溃产生冲击力 + 自由基氧化，可去除表面污垢和细菌","relevant_doc_ids":[]}
-{"id":17,"query":"什么是文丘里管？","reference_answer":"文丘里管是截面先收缩后扩张的管道，利用流体速度变化产生低压","relevant_doc_ids":[]}
-{"id":18,"query":"加压溶气法的原理","reference_answer":"在加压下使空气溶于水，减压后释放出微小气泡","relevant_doc_ids":[]}
-{"id":19,"query":"电解法生成微气泡的优缺点","reference_answer":"优点：气泡小、可控；缺点：能耗高、电极腐蚀","relevant_doc_ids":[]}
-{"id":20,"query":"微纳米气泡在生物医学中的应用","reference_answer":"可用于药物递送、超声造影、肿瘤治疗、伤口愈合等","relevant_doc_ids":[]}
+{"id": 1, "query": "什么是 zeta 电位？", "reference_answer": "zeta 电位是表征胶体分散系稳定性的重要指标，描述粒子表面电荷产生的电位", "relevant_doc_ids": [], "relevant_ids": [42, 105, 156]}
+{"id": 2, "query": "微纳米气泡的生成方法有哪些？", "reference_answer": "加压溶气法、旋流法、电解法、膜法、超声法、文丘里管法", "relevant_doc_ids": [], "relevant_ids": [12, 78, 134, 167]}
+{"id": 3, "query": "微纳米气泡在水处理中的应用", "reference_answer": "微纳米气泡可用于污水处理，包括氧化分解有机物、增氧、浮选等", "relevant_doc_ids": [], "relevant_ids": [45, 89, 112, 145]}
+{"id": 4, "query": "课题组有哪些研究方向？", "reference_answer": "微纳米气泡生成、表征、应用；含农业、水处理、生物医学、清洗、食品工业", "relevant_doc_ids": [], "relevant_ids": [1, 23, 67, 98]}
+{"id": 5, "query": "微纳米气泡的尺寸范围", "reference_answer": "1μm-100μm 为微米级，<1μm 为纳米级", "relevant_doc_ids": [], "relevant_ids": [5, 56, 123]}
+{"id": 6, "query": "如何测量 zeta 电位？", "reference_answer": "可用电泳光散射、激光多普勒测速等技术", "relevant_doc_ids": [], "relevant_ids": [42, 105, 134, 178]}
+{"id": 7, "query": "微纳米气泡的特点", "reference_answer": "比表面积大、带负电（zeta 电位为负）、稳定性好、崩溃时产生自由基", "relevant_doc_ids": [], "relevant_ids": [1, 5, 34, 67, 89]}
+{"id": 8, "query": "什么是 DLS？", "reference_answer": "动态光散射（Dynamic Light Scattering），用于测量粒径", "relevant_doc_ids": [], "relevant_ids": [76, 145, 167]}
+{"id": 9, "query": "什么是 NTA？", "reference_answer": "纳米颗粒跟踪分析（Nanoparticle Tracking Analysis），用于粒径测量", "relevant_doc_ids": [], "relevant_ids": [78, 145, 167]}
+{"id": 10, "query": "微纳米气泡在农业中的应用", "reference_answer": "可用于灌溉增氧、种子发芽促进、水产养殖", "relevant_doc_ids": [], "relevant_ids": [89, 112, 134]}
+{"id": 11, "query": "超高速摄像如何应用于微气泡研究", "reference_answer": "用于观察微气泡生成、破裂、合并的动力学过程", "relevant_doc_ids": [], "relevant_ids": [98, 156, 178]}
+{"id": 12, "query": "电导法测微气泡的原理", "reference_answer": "通过测量溶液电导率变化来推算气泡浓度", "relevant_doc_ids": [], "relevant_ids": [76, 167, 189]}
+{"id": 13, "query": "激光衍射法测粒径的优缺点", "reference_answer": "优点：快速、范围广；缺点：对小颗粒分辨率有限", "relevant_doc_ids": [], "relevant_ids": [76, 145]}
+{"id": 14, "query": "什么是自由基？", "reference_answer": "自由基是带未配对电子的原子或分子，化学活性强", "relevant_doc_ids": [], "relevant_ids": [23, 45, 134]}
+{"id": 15, "query": "微纳米气泡崩溃时为何产生自由基", "reference_answer": "气泡崩溃瞬间产生高温高压，使水分子分解产生·OH 等自由基", "relevant_doc_ids": [], "relevant_ids": [23, 45, 67, 134]}
+{"id": 16, "query": "微纳米气泡清洗的原理", "reference_answer": "微气泡崩溃产生冲击力 + 自由基氧化，可去除表面污垢和细菌", "relevant_doc_ids": [], "relevant_ids": [45, 67, 89, 112]}
+{"id": 17, "query": "什么是文丘里管？", "reference_answer": "文丘里管是截面先收缩后扩张的管道，利用流体速度变化产生低压", "relevant_doc_ids": [], "relevant_ids": [12, 78, 167]}
+{"id": 18, "query": "加压溶气法的原理", "reference_answer": "在加压下使空气溶于水，减压后释放出微小气泡", "relevant_doc_ids": [], "relevant_ids": [12, 167, 189]}
+{"id": 19, "query": "电解法生成微气泡的优缺点", "reference_answer": "优点：气泡小、可控；缺点：能耗高、电极腐蚀", "relevant_doc_ids": [], "relevant_ids": [12, 78, 134]}
+{"id": 20, "query": "微纳米气泡在生物医学中的应用", "reference_answer": "可用于药物递送、超声造影、肿瘤治疗、伤口愈合等", "relevant_doc_ids": [], "relevant_ids": [112, 145, 178, 195]}
