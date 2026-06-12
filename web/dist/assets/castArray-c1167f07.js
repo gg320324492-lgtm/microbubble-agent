@@ -1,0 +1,1 @@
+import{Lt as e}from"./index-3f0bf8a6.js";function t(){if(!arguments.length)return[];var t=arguments[0];return e(t)?t:[t]}export{t};

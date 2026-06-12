@@ -700,8 +700,8 @@ const formatTime = (t) => {
 }
 
 @keyframes logo-pop-in {
-  from { transform: scale(0); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
+  from { scale: 0; opacity: 0; }
+  to   { scale: 1; opacity: 1; }
 }
 @keyframes brand-text-in {
   from { opacity: 0; transform: translateX(-8px); }
@@ -849,8 +849,8 @@ const formatTime = (t) => {
 }
 
 @keyframes recording-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.3); }
+  0%, 100% { opacity: 1; scale: 1; }
+  50% { opacity: 0.5; scale: 1.3; }
 }
 
 .recording-text {
