@@ -18,16 +18,18 @@ import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import RichContent from '@/components/chat/RichContent.vue'
+import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import { sseFetch } from '@/api/agent/sse'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { useChatSessionsStore } from '@/stores/chatSessions'
 import { renderMarkdown } from '@/utils/markdown'
 
 // --- 状态 ---
 const messages = ref([])
 const inputText = ref('')
 const loading = ref(false)
-const sessionId = ref(localStorage.getItem('chat_session_id') || `user_${Date.now()}`)
-const sessionKey = 'chat_session_id'
+const sessionId = ref(localStorage.getItem('chat_current_session_v3') || localStorage.getItem('chat_session_id') || `user_${Date.now()}`)
+const sessionKey = 'chat_current_session_v3'
 const messagesKey = 'chat_messages_v2'
 const isDragging = ref(false)
 const textareaRef = ref(null)
@@ -38,9 +40,72 @@ const selectedFile = ref(null)
 const voiceMode = ref(false)
 const imageInputRef = ref(null)
 const fileInputRef = ref(null)
+const sidebarCollapsed = ref(false)
+const isDark = ref(localStorage.getItem('theme') === 'dark')
 
 // --- 网络状态 ---
 const { isOnline } = useNetworkStatus()
+
+// --- 会话管理 ---
+const sessionsStore = useChatSessionsStore()
+sessionsStore.migrateFromV1()  // 兼容旧单会话 localStorage
+if (!sessionsStore.currentSession()) {
+  sessionsStore.createSession()
+}
+sessionId.value = sessionsStore.currentId || sessionId.value
+
+// --- Dark mode ---
+const toggleTheme = () => {
+  isDark.value = !isDark.value
+  document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+}
+if (isDark.value) {
+  document.documentElement.setAttribute('data-theme', 'dark')
+}
+
+const onCreateSession = () => {
+  sessionsStore.createSession()
+  sessionId.value = sessionsStore.currentId
+  messages.value = [{
+    id: crypto.randomUUID(),
+    role: 'assistant', content: '新对话，有什么可以帮你的吗？',
+    richBlocks: [], timestamp: new Date().toISOString()
+  }]
+  persistMessages()
+  nextTick(scrollToBottom)
+}
+const onSwitchSession = (id) => {
+  sessionId.value = id
+  // 重新加载该会话历史（简化：localStorage 按 sessionId 存）
+  const saved = localStorage.getItem(`chat_msgs_${id}`)
+  if (saved) {
+    try { messages.value = JSON.parse(saved) } catch { messages.value = [] }
+  } else {
+    messages.value = [{
+      id: crypto.randomUUID(),
+      role: 'assistant', content: '已切换会话',
+      richBlocks: [], timestamp: new Date().toISOString()
+    }]
+  }
+  nextTick(scrollToBottom)
+}
+
+const persistMessages = () => {
+  // 限 200 条 + 按 sessionId 分键
+  const slice = messages.value.slice(-200)
+  localStorage.setItem(messagesKey, JSON.stringify(slice))  // 兼容
+  localStorage.setItem(`chat_msgs_${sessionId.value}`, JSON.stringify(slice))
+  // 更新 store
+  if (sessionsStore.currentSession()) {
+    const lastMsg = messages.value[messages.value.length - 1]
+    sessionsStore.updateActivity(
+      sessionId.value,
+      messages.value.length,
+      lastMsg?.content || ''
+    )
+  }
+}
 
 // 快捷指令
 const quickActions = [
@@ -71,13 +136,6 @@ onMounted(() => {
 onUnmounted(() => {
   persistMessages()
 })
-
-const persistMessages = () => {
-  // 限制 200 条
-  const slice = messages.value.slice(-200)
-  localStorage.setItem(messagesKey, JSON.stringify(slice))
-  localStorage.setItem(sessionKey, sessionId.value)
-}
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -259,21 +317,32 @@ const onRecordError = () => {}
       <span class="nb-dot" />网络已断开，正在等待恢复...
     </div>
 
-    <!-- 顶部 -->
-    <header class="chat-header">
-      <div class="header-left">
-        <el-avatar :size="36" class="bot-avatar">
-          <el-icon><ChatDotRound /></el-icon>
-        </el-avatar>
-        <div class="header-text">
-          <div class="bot-name">小气</div>
-          <div class="bot-status"><span class="status-dot" />在线</div>
-        </div>
-      </div>
-      <div class="header-right">
-        <el-button text @click="clearChat">清空对话</el-button>
-      </div>
-    </header>
+    <div class="chat-layout">
+      <!-- 侧栏 -->
+      <SessionSidebar :collapsed="sidebarCollapsed" @create="onCreateSession" @switch="onSwitchSession" />
+
+      <div class="chat-main">
+        <!-- 顶部 -->
+        <header class="chat-header">
+          <div class="header-left">
+            <el-button text size="small" @click="sidebarCollapsed = !sidebarCollapsed" title="切换侧栏">
+              <span style="font-size: 16px;">☰</span>
+            </el-button>
+            <el-avatar :size="36" class="bot-avatar">
+              <el-icon><ChatDotRound /></el-icon>
+            </el-avatar>
+            <div class="header-text">
+              <div class="bot-name">小气</div>
+              <div class="bot-status"><span class="status-dot" />在线</div>
+            </div>
+          </div>
+          <div class="header-right">
+            <el-button text @click="toggleTheme" :title="isDark ? '切换浅色' : '切换深色'">
+              {{ isDark ? '☀️' : '🌙' }}
+            </el-button>
+            <el-button text @click="clearChat">清空对话</el-button>
+          </div>
+        </header>
 
     <!-- 消息区 -->
     <div ref="messagesRef" class="messages">
@@ -379,6 +448,8 @@ const onRecordError = () => {}
       <input ref="imageInputRef" type="file" accept="image/*" hidden @change="handleImageSelect" />
       <input ref="fileInputRef" type="file" hidden @change="handleFileSelect" />
     </footer>
+      </div><!-- /chat-main -->
+    </div><!-- /chat-layout -->
   </div>
 </template>
 
@@ -391,6 +462,8 @@ const onRecordError = () => {}
   overflow: hidden;
   position: relative;
 }
+.chat-layout { display: flex; flex: 1; overflow: hidden; }
+.chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .network-banner {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 16px;
