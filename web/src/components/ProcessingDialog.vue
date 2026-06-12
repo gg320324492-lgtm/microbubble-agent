@@ -184,9 +184,9 @@ if (token) {
   animation: done-bounce 0.5s ease-out;
 }
 @keyframes done-bounce {
-  0% { transform: scale(0.3); opacity: 0; }
-  50% { transform: scale(1.1); }
-  100% { transform: scale(1); opacity: 1; }
+  0% { scale: 0.3; opacity: 0; }
+  50% { scale: 1.1; }
+  100% { scale: 1; opacity: 1; }
 }
 
 /* Confetti */

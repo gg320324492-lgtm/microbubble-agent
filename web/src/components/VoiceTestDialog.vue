@@ -372,8 +372,8 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+  0%, 100% { scale: 1; }
+  50% { scale: 1.08; }
 }
 
 .timer {
@@ -398,8 +398,8 @@ onUnmounted(() => {
 }
 
 @keyframes mic-pulse-ring {
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.3); opacity: 0; }
+  0% { scale: 1; opacity: 0.6; }
+  100% { scale: 1.3; opacity: 0; }
 }
 
 .testing-area {
@@ -416,7 +416,7 @@ onUnmounted(() => {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin { to { rotate: 360deg; } }
 
 .result-area {
   width: 100%;
