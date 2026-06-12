@@ -6,7 +6,8 @@
       "items": [
         "Whisper 三层防护",
         "反幻觉七重过滤",
-        "低置信度短文本过滤"
+        "低置信度短文本过滤",
+        "LLM 撒谎模式防御（必调工具黄金规则）"
       ]
     },
     {
@@ -15,7 +16,8 @@
       "items": [
         "Webhook SSH fallback",
         "Celery 任务丢失修复",
-        "ThreadingHTTPServer"
+        "ThreadingHTTPServer",
+        "Docker Python 模块缓存重启纪律"
       ]
     },
     {
@@ -24,7 +26,8 @@
       "items": [
         "Nginx 扫描器屏蔽（88% 恶意流量）",
         "认证限流",
-        "sessionStorage 残留修复"
+        "sessionStorage 残留修复",
+        "5 个 file input a11y 4 属性套件"
       ]
     },
     {
@@ -33,7 +36,8 @@
       "items": [
         "声纹维度 256→192 修正",
         "VAD 精细化",
-        "silero-vad 本地缓存"
+        "silero-vad 本地缓存",
+        "webhint paint keyframes 干净绕开（scale/rotate 替代 transform）"
       ]
     },
     {
@@ -42,7 +46,10 @@
       "items": [
         "全局录音器单例",
         "WebSocket 闪烁根因定位",
-        "async session lazy load"
+        "async session lazy load",
+        "v2/v3/v4 Agent 拆分（1469 → 689 行，34 工具 @tool 化）",
+        "Docker 模块缓存失配诊断三件套",
+        "SSE 增量/快照事件语义对齐"
       ]
     }
   ],
@@ -219,6 +226,78 @@
   "changelog": [
     {
       "date": "2026-06-12",
+      "title": "SSE brief 事件不再 append delta",
+      "tag": "修复",
+      "pain_point": "chat 内容重复两次（增量 + 快照塞同 append 分支）"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "Docker 模块缓存失配 + search_tools.py NameError",
+      "tag": "修复",
+      "pain_point": "/chat/stream 404 双层根因：模块缓存掩盖 4ba7390 + restart 纪律"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "ChatViewSSE composable 解构字段名拼写",
+      "tag": "修复",
+      "pain_point": "{ isOnline } vs { online } → 横幅永远误显网络断开"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "5 个 file input 补 a11y 4 属性",
+      "tag": "修复",
+      "pain_point": "webhint form-label + axe labels 警告清零"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "会议查询 bug 双层根因修复",
+      "tag": "修复",
+      "pain_point": "prompts 工具调用黄金规则 + core.py:911 UnboundLocalError"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "v2/v3/v4 Agent 全栈架构收官",
+      "tag": "架构",
+      "pain_point": "core.py 1469→689 行，34 工具全 @tool 化 + Rich Block 12 类"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "整合 140 项待做清单到 README",
+      "tag": "数据",
+      "pain_point": "107 项老 + 33 项 v4 收官遗留集中管理"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "会议录音全栈防御机制 5 阶段完成",
+      "tag": "功能",
+      "pain_point": "IDB 兜底 + 边录边传 + Celery 真实 retry + 孤儿清理"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "webhint CSS @keyframes paint 警告深度治理",
+      "tag": "优化",
+      "pain_point": "独立 scale/rotate 替代 transform，8 类 keyframes 清理"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "polish-text 400 空白堆积修复",
+      "tag": "修复",
+      "pain_point": "_needsPolish 改 trim().length 判定 + 双层兜底"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "transcriptEntries undefined.length 崩溃修复",
+      "tag": "修复",
+      "pain_point": "merge 循环左右两侧都防 undefined（4 处防御）"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "LLM-as-judge + RAG 召回率评估体系",
+      "tag": "功能",
+      "pain_point": "20 问标注 + 5 消融 + 评估脚本"
+    },
+    {
+      "date": "2026-06-12",
       "title": "Vite hash 改 hex 消除 webhint cache-busting 误报",
       "tag": "修复",
       "pain_point": "49 条 URL pattern 报告清零（base64url→hex）"
@@ -227,7 +306,7 @@
       "date": "2026-06-12",
       "title": "项目统计更新",
       "tag": "数据",
-      "pain_point": "902 提交 / 172K 行 / 628 文件 / 27 天"
+      "pain_point": "940 提交 / 187K 行 / 2840 文件 / 28 天"
     },
     {
       "date": "2026-06-11",
