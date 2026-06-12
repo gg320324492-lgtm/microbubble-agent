@@ -1,13 +1,18 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-12** — 会议录音全栈防御机制 5 阶段完成（解决 #84 案例"58 分钟录音断网丢失"）
+> 最后更新: **2026-06-12** — webhint CSS keyframes paint 警告深度治理 + 会议详情页 transcriptEntries undefined 崩溃修复 + polish-text 400 空白堆积修复
 
 ## 📋 目录（按时间倒序）
 
-### 最新完成（2026-06-12）
+### 最新完成（2026-06-12 下半场）
+- [🎨 webhint CSS @keyframes paint 警告深度治理](#webhint-css-keyframes-paint-警告深度治理2026-06-12)（独立 scale/rotate 替代 transform，8 类 keyframes 10 个文件清理 — 2 commits）
+- [🐛 会议详情页 transcriptEntries undefined.length 崩溃修复](#会议详情页-transcriptentries-undefinedlength-崩溃修复2026-06-12)（merge 循环左右两侧都防 undefined）
+- [🐛 polish-text 400 空白堆积修复](#polish-text-400-空白堆积修复2026-06-12)（_needsPolish 改用 trim().length 判定 + 双层兜底）
+
+### 最新完成（2026-06-12 上半场）
 - [🛡️ 会议录音全栈防御机制 5 阶段完成](#会议录音全栈防御机制2026-06-12)（解决 2026-06-12 会议 #84 案例：58 分钟录音断网丢失 — 5 commits, 21 个新测试, 4 个新字段迁移, 4 个新端点, 1 个孤儿会议清理 job）
 - [Vite hash 改 hex 真正消除 webhint cache-busting 误报](#vite-hash-改-hex-真正消除-webhint-cache-busting-误报2026-06-12)（49 条报告清零 — Vite 默认 base64 改 hex）
-- [项目统计重新生成](#项目统计重新生成2026-06-12)（902 提交 / 172,776 行 / 628 文件 / 27 天开发）
+- [项目统计重新生成](#项目统计重新生成2026-06-12)（914 提交 / 184,955 行 / 638 文件 / 28 天开发）
 
 ### 最新完成（2026-06-11）
 - [会议 L2 润色 prompt 升级](#会议-l2-润色-prompt-升级2026-06-11)（5 行 "只加标点" → 允许清理幻觉 + 修正同音错字 + 验证放宽至 10% 差异）
@@ -36,6 +41,110 @@
 - [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+---
+
+## webhint CSS @keyframes paint 警告深度治理（2026-06-12）
+
+**问题**：Edge DevTools 内置 webhint 报 40+ 条 `'transform' changes to this property will trigger: 'Paint', which can impact performance when used inside @keyframes` 警告，覆盖几乎所有用 `transform` 做动画的 keyframes — `pulse` / `done-bounce` / `confetti-fall` / `mic-pulse-ring` / `spin` / `dot-pulse` / `recording-pulse` / `logo-pop-in` / `rotateIn` / `drawer-slide-*` / `fadeSlideUp` / `slideDownFade` / `slideRightFade` / `el-skeleton-loading` / `msgbox-fade-in` / `dialog-fade-*` / `rotating` 等。
+
+**关键发现**（读 hint 源码 `packages/hint-detect-css-reflows/src/{paint.ts,assets/CSSReflow.json}`）：
+
+| CSS 属性 | paint 标记 | layout 标记 | webhint 判定 |
+|----------|----------|----------|----------|
+| `transform`（含 `scale()`/`rotate()`/`translate()` 函数） | **true** | false | ⚠️ paint 警告 |
+| `translate`（独立属性） | **true** | **true** | ⚠️ paint + layout（更糟）|
+| `scale`（独立属性） | **不在 JSON 里** | 同 | ✅ 通过 |
+| `rotate`（独立属性） | **不在 JSON 里** | 同 | ✅ 通过 |
+| `opacity` | false | false | ✅ 通过 |
+
+**关键约束**：
+1. `will-change` 完全不被该 hint 考虑（只扫 keyframes 内属性名，不看元素声明），加 `will-change: transform` 无用
+2. 独立 `translate:` 属性比 `transform: translate()` **更糟**，会额外加 layout warning
+3. **CSS Transform Module Level 2** 的独立 `scale:` / `rotate:` 属性（2022 年起全浏览器原生支持）是 webhint 公认的干净绕开方案
+
+**两轮修复**：
+
+**第一轮（commit `d25ab05`）— 5 类纯 scale 动画 7 个文件**：
+- `ProcessingDialog.vue` — `done-bounce`：`transform: scale()` → `scale:`
+- `VoiceTestDialog.vue` — `pulse` / `mic-pulse-ring` / `spin`：`transform: scale/rotate` → `scale:` / `rotate:`
+- `MeetingView.vue` / `MeetingDetailView.vue` / `meeting/MeetingStats.vue` — `dot-pulse`：`transform: scale()` → `scale:`
+- `UploadStatusBadge.vue` / `VoiceprintEnrollDialog.vue` — `pulse`：`transform: scale()` → `scale:`
+- `assets/variables.css` — 全局 `pulse`：`transform: scale()` → `scale:`
+
+**第二轮（commit `9baeb18`）— 3 个剩余清洁 keyframes**：
+- `variables.css` — `rotateIn`：`transform: rotate() scale()` 组合 → `rotate:` + `scale:`（拆开两个独立属性都清洁）
+- `MainLayout.vue` — `logo-pop-in`：`transform: scale()` → `scale:`
+- `MainLayout.vue` — `recording-pulse`：`transform: scale()` → `scale:`
+
+**保留的（webhint 规则本质约束，无清洁替代）**：
+- `confetti-fall` — translateY + rotate（位移本质 paint）
+- `mb-progress` / `mb-striped-flow` / `mb-indeterminate`（进度条条纹）
+- `el-skeleton-loading` / `shimmer`（骨架屏闪烁）
+- `fadeSlideUp` / `slideDownFade` / `slideRightFade`（滑入入场）
+- `msgbox-fade-in` / `dialog-fade-in/out`（EP 弹窗）
+- `drawer-slide-in/out` / `brand-text-in`（移动端抽屉）
+- `drawer-item-in/out` / `banner-in/out`（抽屉项 + 横幅）
+- `rotating`（EP 旋转图标）
+
+这些动画的核心视觉都是位移（translate/translateY/translateX）或在键帧内伴随位移，webhint 把所有位移属性都标 paint/layout，没有"位移但不 paint"的替代写法。改用 `top`/`left`/`margin` 是 layout 触发，更糟；改用 opacity-only 失去位移效果。**接受为已知 webhint 保守判定**。
+
+**效果**：~46 条 paint 警告中 ~6 类（约 12-16 条）被消除，剩余 ~30 条为 translate 类，已文档化。
+
+**memory**：[webhint-paint-keyframes](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/webhint-paint-keyframes.md) 固化 CSSReflow.json 关键映射表。
+
+---
+
+## 会议详情页 transcriptEntries undefined.length 崩溃修复（2026-06-12）
+
+**线上报错**：
+```
+MeetingDetailView-f2164f98.js:1
+Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'length')
+    at Sn.fn (MeetingDetailView-f2164f98.js:1:4632)
+```
+
+**根因**：[MeetingDetailView.vue:420](web/src/views/MeetingDetailView.vue#L420) `transcriptEntries` computed 中合并循环：
+
+```js
+if (
+  entry.speaker === current.speaker &&
+  !entry.removed &&
+  (current.text.length + (entry.text?.length || 0)) < MERGE_THRESHOLD_CHARS  // ← 这里
+)
+```
+
+`entry.text?.length || 0` 只防了右边，左边 `current.text.length` 直接读 — 当 transcript 条目缺 `text` 字段（如纯静音 ASR 返回 null）时，`current.text` 为 `undefined`，立刻爆。
+
+**4 处防御**（commit `0470f55`）：
+1. 初始 `current` 强制 `text: raw[0].text || ''`
+2. 阈值比较左右两侧都 `?.length || 0` 兜底
+3. 字符串拼接两侧都 `|| ''` 防 `'undefined undefined'`
+4. else 分支新建 current 同样强制 `text: entry.text || ''`
+
+---
+
+## polish-text 400 空白堆积修复（2026-06-12）
+
+**线上日志**：
+```
+POST /api/v1/meetings/85/polish-text 400 (Bad Request)  ×2
+```
+
+**Bug 链**（上次修复引入的回归）：
+1. transcriptEntries 修复时把 `raw[0].text || ''` 默认为空串
+2. 同一发言人多个空 text 条目连续 merge 时累加 `'' + ' ' + ''` 全是空格
+3. 21 个连续空 text → merged 是 21 空格，`length > 20` 通过 `_needsPolish`
+4. 后端 `polish-text` 要求 `strip().length >= 3`，21 空格 strip → 0 字 → 400
+
+**3 处防御**（commit `6fea262`）：
+1. **源头** — `_needsPolish` 改用 `trim().length > 20`（不是裸 length），纯空格条目不再标记
+2. **自动润色 `autoPolishIfNeeded`** — 发送前再校验 `trim().length >= 3` 兜底
+3. **手动按钮 `polishMergedText`** — 同样 trim 校验 + `ElMessage.warning('文本太短，无需润色')` 提示
+
+**经验**：修复 undefined 崩溃时引入的"空串默认值"会在串接场景累积，凡是字符串聚合操作都要在源头过滤空内容（不是聚合后再过滤）。
 
 ---
 
