@@ -1,6 +1,9 @@
 import { config } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
+// fake-indexeddb: jsdom 默认不提供 IndexedDB, 引入 fake-indexeddb 启用持久化测试
+import 'fake-indexeddb/auto'
+
 // 每个测试前重置 Pinia
 beforeEach(() => {
   setActivePinia(createPinia())
