@@ -15,6 +15,8 @@ let dataArray = null
 let audioChunks = []
 let timerInterval = null
 let animationFrame = null
+let chunkIndex = 0              // 已发出的 chunk 序号（仅 start 时重置）
+const chunkCallbacks = []       // 外部 chunk 钩子（阶段1: 边录边传持久化用）
 
 // ===== 响应式状态（UI 绑定） =====
 const state = ref('idle')       // idle | recording | paused | stopped
@@ -30,6 +32,7 @@ async function start() {
   state.value = 'recording'
   elapsed.value = 0
   isPaused.value = false
+  chunkIndex = 0
 
   mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
@@ -46,7 +49,17 @@ async function start() {
   audioChunks = []
 
   mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) audioChunks.push(e.data)
+    if (e.data.size === 0) return
+    audioChunks.push(e.data)
+    // 通知所有外部 chunk 订阅者（不阻塞 ondataavailable 本身）
+    const idx = chunkIndex++
+    for (const cb of chunkCallbacks) {
+      try {
+        cb({ index: idx, blob: e.data, size: e.data.size })
+      } catch (err) {
+        console.error('[useGlobalRecorder] chunk callback 错误:', err)
+      }
+    }
   }
 
   mediaRecorder.start(1000)
@@ -150,6 +163,20 @@ function reset() {
   barHeights.value = [4, 4, 4, 4, 4]
   isPaused.value = false
   audioChunks = []
+  chunkIndex = 0
+}
+
+/**
+ * 注册 chunk 回调（每次 ondataavailable 触发时调用）
+ * 返回取消注册的函数
+ * @param {(chunk: { index: number, blob: Blob, size: number }) => void} cb
+ */
+function onChunk(cb) {
+  chunkCallbacks.push(cb)
+  return () => {
+    const idx = chunkCallbacks.indexOf(cb)
+    if (idx >= 0) chunkCallbacks.splice(idx, 1)
+  }
 }
 
 /** 获取已录制的 blob（仅 stopped 后可用） */
@@ -173,5 +200,7 @@ export function useGlobalRecorder() {
     reset,
     isActive,
     getAudioBlob,
+    // 阶段 1 新增：chunk 回调钩子
+    onChunk,
   }
 }
