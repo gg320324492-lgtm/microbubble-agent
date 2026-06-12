@@ -12,7 +12,8 @@
 
 import type { StreamEvent } from './protocol'
 
-export async function* sseFetch(url: string, body: any): AsyncGenerator<StreamEvent> {
+export async function* sseFetch(url: string, body: any, options: { signal?: AbortSignal } = {}): AsyncGenerator<StreamEvent> {
+  const { signal } = options
   const token = localStorage.getItem('access_token') || ''
   const res = await fetch(url, {
     method: 'POST',
@@ -20,7 +21,8 @@ export async function* sseFetch(url: string, body: any): AsyncGenerator<StreamEv
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
@@ -34,6 +36,12 @@ export async function* sseFetch(url: string, body: any): AsyncGenerator<StreamEv
 
   try {
     while (true) {
+      // 检查 abort：如有 signal 且已 abort，立即 cancel reader 并 return
+      // （防止切会话后旧 SSE 流继续 yield 把内容写到被覆盖的 assistantMsg）
+      if (signal?.aborted) {
+        try { await reader.cancel() } catch {}
+        return
+      }
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
