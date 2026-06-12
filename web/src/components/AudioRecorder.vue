@@ -10,6 +10,14 @@
 
     <!-- 状态：recording — 录音中 -->
     <div v-else-if="state === 'recording' || state === 'paused'" class="recorder-active">
+      <UploadStatusBadge
+        v-if="meetingId"
+        :online="network.online.value"
+        :uploaded-count="uploadedCount"
+        :total-count="totalChunks"
+        :pending-count="pendingCount"
+        :state="state"
+      />
       <div class="recorder-status">
         <span class="rec-dot" :class="{ paused: state === 'paused' }" />
         {{ state === 'paused' ? '已暂停' : '录音中' }}
@@ -48,10 +56,18 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { useChunkedRecorder } from '@/composables/useChunkedRecorder'
+import UploadStatusBadge from '@/components/UploadStatusBadge.vue'
+
+const props = defineProps({
+  meetingId: { type: Number, default: null },
+  meetingTitle: { type: String, default: '' },
+})
 
 const emit = defineEmits(['recording-start', 'recording-stop', 'audio-ready'])
 
@@ -61,6 +77,15 @@ const {
 } = useGlobalRecorder()
 
 const { stopRecording: clearRecordingIndicator } = useRecordingState()
+const network = useNetworkStatus()
+
+// 边录边传 chunked recorder（仅在 meetingId 存在时启用）
+const chunkedRecorder = props.meetingId
+  ? useChunkedRecorder(props.meetingId, { title: props.meetingTitle })
+  : null
+const uploadedCount = computed(() => chunkedRecorder?.uploadedCount.value ?? 0)
+const pendingCount = computed(() => chunkedRecorder?.pendingCount.value ?? 0)
+const totalChunks = computed(() => chunkedRecorder?.totalChunks.value ?? 0)
 
 // 回放状态（组件局部）
 const isPlaying = ref(false)
