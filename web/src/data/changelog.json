@@ -218,6 +218,18 @@
   ],
   "changelog": [
     {
+      "date": "2026-06-12",
+      "title": "Vite hash 改 hex 消除 webhint cache-busting 误报",
+      "tag": "修复",
+      "pain_point": "49 条 URL pattern 报告清零（base64url→hex）"
+    },
+    {
+      "date": "2026-06-12",
+      "title": "项目统计更新",
+      "tag": "数据",
+      "pain_point": "902 提交 / 172K 行 / 628 文件 / 27 天"
+    },
+    {
       "date": "2026-06-11",
       "title": "Webhook 部署三次修复",
       "tag": "修复",
