@@ -1,8 +1,12 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-11** — 会议 L2 润色升级 + 段落智能切分 + 前端不合并长段 + ARIA 修复 + 重复 header 修复
+> 最后更新: **2026-06-12** — Vite hash 改 hex 真正消除 webhint cache-busting 误报（49 条报告清零）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-12）
+- [Vite hash 改 hex 真正消除 webhint cache-busting 误报](#vite-hash-改-hex-真正消除-webhint-cache-busting-误报2026-06-12)（49 条报告清零 — Vite 默认 base64 改 hex）
+- [项目统计重新生成](#项目统计重新生成2026-06-12)（902 提交 / 172,776 行 / 628 文件 / 27 天开发）
 
 ### 最新完成（2026-06-11）
 - [会议 L2 润色 prompt 升级](#会议-l2-润色-prompt-升级2026-06-11)（5 行 "只加标点" → 允许清理幻觉 + 修正同音错字 + 验证放宽至 10% 差异）
@@ -33,6 +37,79 @@
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
 
 ---
+
+## Vite hash 改 hex 真正消除 webhint cache-busting 误报（2026-06-12）
+
+**问题**：Edge DevTools 内置 webhint 报告 49 条 `Resource should use cache busting but URL does not match configured patterns`，覆盖全部 `/assets/*` 文件（`index-Qec9lxup.css`、`MainLayout-B6AkdWtm.js`、`useRecordingState-DFmcezhN.js` 等）。这些文件都包含 Vite content-hash，本来就是标准缓存破坏方案，但 webhint 内置正则只认 `[0-9a-f]+` 小写 16 进制。
+
+之前 [[vite-hex-hash]] MEMORY 误判为"浏览器端无法消除"（因为 `.hintrc` 配置文件在 Edge 内置 webhint 中不生效），实际上**从工具链上游（Vite 配置）改**就能彻底消除。
+
+**根因**：Vite 8 默认 `output.hashCharacters: 'base64url'`，产出形如 `Qec9lxup`/`B6AkdWtm`（含大小写字母+数字+下划线+连字符），被 webhint 全部拒绝。
+
+**修复**：[web/vite.config.js](web/vite.config.js) 加：
+
+```js
+build: {
+  rollupOptions: {
+    output: {
+      hashCharacters: 'hex'
+    }
+  }
+}
+```
+
+Rollup 4.x 原生支持 `hashCharacters` 选项（`'base64' | 'base36' | 'hex'`），设 `hex` 后产出 `9ab8129c`/`1079cf65` 等全小写 16 进制，webhint 通过。
+
+**验证**：
+- 构建前文件：`index-Qec9lxup.css` / `MainLayout-B6AkdWtm.js` / `useRecordingState-DFmcezhN.js`
+- 构建后文件：`index-1079cf65.css` / `MainLayout-b56ff566.js` / `useRecordingState-a27a6772.css`
+- `curl https://agent.mnb-lab.cn/` 验证 index.html 引用的文件名已是 hex 格式
+- `curl -I https://agent.mnb-lab.cn/assets/index-9ab8129c.js` 验证响应头：`Cache-Control: public, max-age=31536000, immutable` + `X-Content-Type-Options: nosniff`
+
+**效果**：
+- 49 条 cache-busting 报告全部清零
+- 文件名长度不变（8 字符 hex），CDN/浏览器缓存效果一致
+- CDN 兼容性更好（小写 hex 是最通用的命名约定）
+
+**教训**：不要被"工具限制"标签固化思路。遇到工具误报时优先考虑：
+1. **工具链上游**：构建工具/CDN/响应头是否可调整
+2. **响应头**：Nginx/后端中间件是否可加
+3. **配置**：本地 `.hintrc` 能否覆盖（但 Edge 内置不读）
+4. **接受误报**：最后才考虑
+
+之前 MEMORY 错把 webhint cache-busting 归类为"必须接受"，实际工具链改造就能消除。
+
+---
+
+## 项目统计重新生成（2026-06-12）
+
+| 维度 | 数值 |
+|------|------|
+| 总提交 | 902（commit `6339c29`）|
+| 总文件 | 628 |
+| 总行数 | 172,776 |
+| 开发天数 | 27 天（2026-05-16 ~ 2026-06-12）|
+| Python | 53,896 行（227 文件）|
+| Vue | 23,790 行（86 文件）|
+| JavaScript | 4,527 行（44 文件）|
+| Markdown | 68,747 行（182 文件，含 docs/skills/memory）|
+| Config | 13,083 行（45 文件）|
+| HTML | 3,597 行（9 文件）|
+| Shell | 2,547 行（21 文件）|
+| CSS | 976 行（3 文件）|
+| 其他 | 1,249 行（9 文件）|
+| SQL | 206 行（1 文件）|
+| TypeScript | 158 行（1 文件）|
+| Docker | 0 行（无 Dockerfile — 部署用云服务器+本地 docker-compose）|
+
+统计脚本：`scripts/deploy-auto.sh` 末尾子 shell 段，`( ... )` 隔离错误不影响部署。stats.json 写入 `$PROJECT_DIR/app/stats.json`（Docker volume `./app:/app/app` 挂载范围，容器内 `/app/app/stats.json` 可读）。
+
+API 端点：`GET /api/v1/dashboard/project-stats`（Redis 缓存 10min）→ 动态计算 dev_days + 静态数值。
+
+**How to apply**：
+- 每次 push 后 webhook 触发 `deploy-auto.sh` 自动重生成 stats.json
+- 手动重生成：复制 deploy-auto.sh 的子 shell 段到本地执行
+- 路径必须在 `app/` 内，否则容器内 Python 读不到
 
 ---
 
@@ -1040,20 +1117,20 @@ commit `94735a3`（TaskView 集成子组件）把垃圾桶从 TaskView 抽成 `T
 
 ---
 
-## 🟢 项目当前状态速查（2026-06-11）
+## 🟢 项目当前状态速查（2026-06-12）
 
 | 维度 | 状态 | 最近更新 |
 |------|------|----------|
-| 后端 | Phase 1-6 + 声纹系统修复 + 反幻觉七重过滤 + 垃圾桶系统 + PPT 解析 + 统一异常类/分页/限流 + datetime 时区修复 + silero-vad 缓存 + 3D-Speaker 依赖修复 | 2026-06-05 |
+| 后端 | Phase 1-6 + 声纹系统修复 + 反幻觉七重过滤 + 垃圾桶系统 + PPT 解析 + 统一异常类/分页/限流 + datetime 时区修复 + silero-vad 缓存 + 3D-Speaker 依赖修复 + **API 安全响应头中间件**（X-Content-Type-Options/Cache-Control） | 2026-06-12 |
 | 知识库 | 自主进化知识大脑（实体图谱+假设+量化推理）+ PPT 上传支持 | 2026-06-04 |
-| 会议系统 | 录音机+离线后处理 + 声纹识别验证 + UI 全面优化（6 模块）— 仪表盘详情页+Canvas 波形+头像组件+发言统计+录音回放+Confetti | 2026-06-05 |
+| 会议系统 | 录音机+离线后处理 + 声纹识别验证 + UI 全面优化（6 模块）+ **L2 润色 prompt 升级**（清理幻觉+修同音错字）+ **段落智能切分脚本** | 2026-06-11 |
 | 任务管理 | 软删除/垃圾桶 + 3 天后自动清理（1h 调度）+ 精准倒计时双行显示 + 5 级颜色 | 2026-06-03 |
-| 前端 | ECharts 5.6.0 + Element Plus 按需导入 + Nginx gzip + 对话持久化 + **🐰 宠物乐园**（两只 3D 兔子 + XP 成长 + 轮播消息）+ Composables + **20 个子组件** + Vitest 测试 + 性能优化（bundle -83%）+ **CSS 动画全面 GPU 化**（webhint 性能警告清零） | 2026-06-11 |
+| 前端 | ECharts 5.6.0 + Element Plus 按需导入 + Nginx gzip + 对话持久化 + **🐰 宠物乐园**（两只 3D 兔子 + XP 成长 + 轮播消息）+ Composables + **20 个子组件** + Vitest 测试 + 性能优化（bundle -83%）+ **CSS 动画全面 GPU 化** + **Vite hash 改 hex**（消除 webhint cache-busting 误报） | 2026-06-12 |
 | 测试 | 后端 33+ 个测试 + 前端 38 个测试 = 71+ 个测试 | 2026-06-04 |
 | 部署 | 阿里云 Nginx+FRP + 本地 Docker 8 services + SSH 拉取 + webhook 多线程 + **三次递进修复**（set -e 移除 + 子 shell 隔离 + exit 0）+ **stats.json 路径修正** + 开发天数动态计算 | 2026-06-11 |
-| 性能 | PostCSS 剥离 EP keyframes + 全站 CSS 动画 GPU Composite + Nginx gzip + EP 按需导入（bundle -83%）| 2026-06-11 |
+| 性能 | PostCSS 剥离 EP keyframes + 全站 CSS 动画 GPU Composite + Nginx gzip + EP 按需导入（bundle -83%）+ **Vite hashCharacters hex** | 2026-06-12 |
 | 代码质量 | API 规范化 + 后端测试 + 前端 Composables + 子组件拆分（-21%）+ 前端测试，30 commit 全部完成 | 2026-06-04 |
-| 文档 | README/ROADMAP/CLAUDE.md/MEMORY 已同步 + 更新日志 21→28 条 | 2026-06-11 |
+| 文档 | README/ROADMAP/CLAUDE.md/MEMORY 已同步 + 更新日志 28→33+ 条 | 2026-06-12 |
 
 ---
 

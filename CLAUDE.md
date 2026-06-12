@@ -128,6 +128,12 @@
 
 ## 开发注意事项
 
+### 2026-06-12 新增
+
+- **Vite/Rollup hashCharacters 默认值** — Vite 8 默认 `hashCharacters: 'base64url'`，产出形如 `index-Qec9lxup.css`、`MainLayout-B6AkdWtm.js`（含大小写字母+数字+下划线+连字符）。webhint 内置 cache-busting 正则只认 `[0-9a-f]+` 小写 16 进制，会对所有 chunk/asset 文件报 "URL does not match configured patterns"。**修复**：`web/vite.config.js` 加 `build.rollupOptions.output.hashCharacters: 'hex'`，文件名变为 `index-9ab8129c.js` 等全小写 hex，webhint 通过。Rollup 4.x 原生支持此选项。新建 Vite 项目时应直接配为 hex
+- **Vite dist 重命名提交** — 改 hashCharacters 后 `npm run build` 会重命名 100+ 个 dist 文件。**必须** `git add -f web/dist` 强制提交，否则 `.gitignore` 拦截新文件名（删了旧的不加新的），线上 404 白屏。验证 `git diff --cached --stat` 看到所有文件都是 `rename:` 不是 `deleted:`
+- **webhint cache-busting 误报的真实修复路径** — 之前 MEMORY 误记为"Edge DevTools 内置 webhint 不读项目配置 → 浏览器端无法消除"，实际**工具链配置可以彻底消除**。不要被"工具限制"标签固化思路，遇到工具误报时优先考虑是否能从工具链上游（构建工具/CDN/响应头）解决
+
 ### 2026-06-11 新增
 
 - **bash `set -e` 陷阱** — 全局 `set -e` 让所有命令的失败都退出脚本。`find` 无结果 + `xargs wc -l` 返回非零、统计命令在空目录运行等非关键步骤都会导致脚本提前退出。**修复**：移除全局 `set -e`，只在关键步骤（`git pull`/`npm run build`/`nginx reload`）手动 `exit 1`。非关键步骤用 `|| echo 0` 兜底。

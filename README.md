@@ -22,6 +22,9 @@
 
 ### 近期新增（按时间倒序）
 
+- **Vite hash 改 hex 真正消除 webhint cache-busting 误报（2026-06-12）** — Vite 8 默认 `hashCharacters: 'base64url'` 产出 `index-Qec9lxup.css`、`MainLayout-B6AkdWtm.js` 等，webhint 内置正则只认 `[0-9a-f]+` 小写 16 进制，导致 **49 条 cache-busting 报告全部报"URL does not match configured patterns"**。修复：[web/vite.config.js](web/vite.config.js) 加 `build.rollupOptions.output.hashCharacters: 'hex'`，文件名变为 `index-9ab8129c.js` 等全小写 hex。Rollup 4.x 原生支持。**效果**：49 条报告清零，文件名长度不变（8 字符），CDN 缓存效果一致
+- **项目统计更新（2026-06-12）** — 902 次提交 / 172,776 行代码 / 628 个文件 / 27 开发天数（5/16→6/12 动态计算）。stats.json 写入路径稳定在 `app/`（Docker volume 挂载范围）
+- **生产 API 响应头实测（2026-06-12）** — curl 实测 `https://agent.mnb-lab.cn/api/v1/meetings/71/polish-text` 响应包含 `X-Content-Type-Options: nosniff` + `Cache-Control: max-age=0` + `Referrer-Policy` + `X-Request-ID`，全部齐全。后端 `security_headers` 中间件 + Nginx 协同工作正常
 - **会议转录段落智能切分 + 前端不合并长同发言人段（2026-06-11）** — 后端 `scripts/split_meeting_paragraphs.py` 按主题信号词（但是/我举个例子/接下来/明白吗/第一/第二/此外/另外/所以/因此 等）自动切段，会议 #83 从 48→64 段，最长段 1859字→316字。前端 `MeetingDetailView.vue` 合并阈值改为 60 字，转录卡片从 ~10 个超长卡片 → **~30 个聚焦卡片**（每张聚焦一个主题）。会议 #83 完整精修版见 `meeting83_final.md`
 - **会议 L2 润色 prompt 升级（2026-06-11）** — 5 行 "只加标点不改内容" → 允许清理孤立 ASR 幻觉（YouTube 结束语/字幕组声明）+ 修正明显同音错字（"杨词→杨慈"、"丑阳雅雄→臭氧氧化"）。验证层 `_is_punctuation_only_edit` → `_is_reasonable_edit`（容忍 10% 字符差异），支持 `removed` 数组。polish-text 端点从旧内联 prompt 切换为统一 service。会议 #83 全文重润色：532 段 → 323 段（删除 154 段幻觉），残留错名/乱码（周之超/王书馨/优惠价值外/弹牛/MINGPAO/中文字幕志愿者）全部清零，key_points 12→30 条
 - **el-tab-pane 加 lazy + Nginx /api 重复 header 修复（2026-06-11）** — 8 个 `el-tab-pane` 加 `lazy` 属性（未激活时不渲染内容），消除 axe/webhint "ARIA hidden focusable" 警告。Nginx `/api` 移除与后端重复的 `add_header`（避免响应里同时存在小写 + PascalCase 两份 header 触发 webhint "missing" 误报）
@@ -388,15 +391,22 @@ npm run dev
 
 详细文档: https://agent.mnb-lab.cn/docs
 
-## 当前状态（2026-06-11）
+## 当前状态（2026-06-12）
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
-### 🔧 最新改进（2026-06-11）
+### 🔧 最新改进（2026-06-12）
 
-- **Webhook 部署彻底修复** — 三次递进：移除 `set -e` + 子 shell 隔离统计段 + `exit 0` 保底。stats.json 写入路径修正为 `app/` + 开发天数动态计算
-- **CSS 动画全面 GPU 化** — 4 轮修复（pet-walk/sun-glow/shimmer/skeleton + PostCSS 剥离 EP keyframes），webhint 性能警告清零
-- **项目统计更新** — 891 次提交 / 181,311 行代码 / 678 个文件 / 26 开发天数。更新日志 21→28 条
+- **Vite hash 改 hex 真正消除 webhint cache-busting 误报** — 49 条报告清零。Vite 默认 `hashCharacters: 'base64url'` → 改 `'hex'`，文件名变为全小写 16 进制（`index-9ab8129c.js`），webhint cache-busting 正则通过
+- **项目统计更新** — 902 次提交 / 172,776 行代码 / 628 个文件 / 27 开发天数。更新日志 28→33 条
+- **生产 API 响应头验证** — `curl /api/v1/meetings/71/polish-text` 实测 `X-Content-Type-Options: nosniff` + `Cache-Control: max-age=0` 全部齐全
+- **会议 L2 润色升级**（2026-06-11）— 5 行"只加标点"prompt → 允许清理 ASR 幻觉+修正同音错字（杨词→杨慈、丑阳雅雄→臭氧氧化）。会议 #83 全文重润色：532 段 → 323 段，key_points 12→30 条
+- **前端不合并长同发言人段**（2026-06-11）— `MeetingDetailView` 合并阈值 60 字，转录卡片从 ~10 → **~30 个聚焦卡片**
+- **段落智能切分脚本**（2026-06-11）— `scripts/split_meeting_paragraphs.py` 按主题信号词自动断段，最长段 1859→316 字
+- **el-tab-pane lazy**（2026-06-11）— 8 个 tab-pane 懒渲染，消除 ARIA hidden focusable
+- **Nginx /api 重复 header 修复**（2026-06-11）— 移除与后端重复的 add_header，避免 webhint 看到小写+PascalCase 两份 header 误报 missing
+- **CSS 动画全面 GPU 化**（2026-06-11）— 4 轮修复（pet-walk/sun-glow/shimmer/skeleton + PostCSS 剥离 EP keyframes），webhint 性能警告清零
+- **Webhook 部署彻底修复**（2026-06-11）— 三次递进：移除 `set -e` + 子 shell 隔离统计段 + `exit 0` 保底
 - **会议模板重构**（commit `d619f33`）— 删除独立 MeetingTemplatesView 页面（91 行），模板选择/管理内嵌到 MeetingView 创建会议对话框。卡片式选择器（4 builtin + 自定义模板）+ 行内 CRUD（编辑/删除/新建）+ 编辑功能**真正可用**（之前是 stub）
 - **Webhook 性能修复**（commit `7ec6ce0`）— `HTTPServer` → `ThreadingHTTPServer` 多线程，0.001s 响应（之前 15-22s）
 - **垃圾桶系统全修**（4 commit 链）— 3 bug 全修 + beat 调度 1h + 前端双行精准倒计时
