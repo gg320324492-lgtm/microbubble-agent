@@ -20,7 +20,7 @@ import { ref, computed, watch } from 'vue'
 
 const STORAGE_KEY = 'theme'
 
-function readInitial(): 'light' | 'dark' {
+function readInitial() {
   if (typeof localStorage === 'undefined') return 'light'
   const saved = localStorage.getItem(STORAGE_KEY)
   if (saved === 'dark' || saved === 'light') return saved
@@ -28,13 +28,13 @@ function readInitial(): 'light' | 'dark' {
   return 'light'
 }
 
-function apply(mode: 'light' | 'dark') {
+function apply(mode) {
   if (typeof document === 'undefined') return
   document.documentElement.setAttribute('data-theme', mode)
 }
 
 export const useThemeStore = defineStore('theme', () => {
-  const mode = ref<'light' | 'dark'>(readInitial())
+  const mode = ref(readInitial())
 
   // 立即应用初始值（避免刷新时 brief flash）
   apply(mode.value)
@@ -54,7 +54,7 @@ export const useThemeStore = defineStore('theme', () => {
     mode.value = mode.value === 'dark' ? 'light' : 'dark'
   }
 
-  function set(modeValue: 'light' | 'dark') {
+  function set(modeValue) {
     mode.value = modeValue
   }
 
