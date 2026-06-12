@@ -19,15 +19,20 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, get_args
 
 from app.agent.protocol import (
     RichBlock,
+    RichBlockType,
     StreamEvent,
     ToolError,
     ToolInputError,
     ToolNotFoundError,
 )
+
+# RichBlock.type 合法字面量集合（用于 _extract_rich_block 守卫）
+# 与 protocol.RichBlockType Literal 同步：动态从 get_args 提取，新增类型自动覆盖
+_VALID_RICH_BLOCK_TYPES: frozenset[str] = frozenset(get_args(RichBlockType))
 from app.agent.session_manager import session_manager
 from app.agent.tool_registry import (
     ToolContext,
@@ -245,7 +250,9 @@ class ChatEngine:
                 yield StreamEvent(type="brief", delta=accumulated_text)
 
             # 4. 流式结束
-            duration_ms = int((time.time() - t0) * 1000)
+            # 注意：t0 是 time.monotonic()（line 158），这里必须用 monotonic 配对
+            # 旧版用 time.time() 配对产生 1780 万亿毫秒的垃圾值（不同时间基准）
+            duration_ms = int((time.monotonic() - t0) * 1000)
             yield StreamEvent(
                 type="done",
                 usage=trace.usage,
@@ -430,8 +437,11 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
         return None
 
     # 工具结果里显式标注 rich_block_type
-    if "rich_block_type" in result:
-        rb_type = result["rich_block_type"]
+    # 守卫：None 或非法 Literal 值都跳过显式分支，让代码 fall through 到 implicit_map
+    # （search_memory / save_memory / web_search 等 17 个工具的 OutputModel
+    # 默认值都是 None，return dict 里也常带 "rich_block_type": None）
+    rb_type = result.get("rich_block_type")
+    if rb_type and rb_type in _VALID_RICH_BLOCK_TYPES:
         # 复制 data（去掉 rich_block_type 字段本身）
         data = {k: v for k, v in result.items() if k != "rich_block_type"}
         return RichBlock(
