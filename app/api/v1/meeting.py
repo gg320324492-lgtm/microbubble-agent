@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
 import json
+import logging
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -11,6 +12,8 @@ from app.schemas.pagination import PaginatedResponse
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.member import Member
 from app.models.task import Task
+
+logger = logging.getLogger("microbubble.meeting_api")
 from app.schemas.meeting import (
     MeetingCreate, MeetingUpdate, MeetingResponse, MeetingList, MeetingMinutes,
     SpeakerDetectRequest, SpeakerDetectResponse,
@@ -344,6 +347,22 @@ async def delete_meeting(
 
     if not meeting:
         raise NotFoundException("会议")
+
+    # ★ 阶段 4（2026-06-12 防御机制）：先清 MinIO 上的 chunked/merged 文件 + 旧版 audio_url
+    # 防止删除会议后 MinIO 残留孤儿文件
+    try:
+        from app.services.chunked_upload_service import chunked_upload_service
+        from app.services.file_service import file_service
+        # 1. 清 chunked 模式文件（chunks/ + merged.webm）
+        await chunked_upload_service.delete_all(meeting_id)
+        # 2. 清旧版一次性上传的 audio_url
+        if meeting.audio_url and not meeting.audio_url.startswith("recordings/" + str(meeting_id) + "/"):
+            try:
+                file_service.delete_file(meeting.audio_url)
+            except Exception as e:
+                logger.warning(f"清旧版 audio_url 失败: {e}")
+    except Exception as e:
+        logger.warning(f"清理会议 {meeting_id} MinIO 资源失败（继续删 DB）: {e}")
 
     # 先清除关联数据（避免外键约束阻止删除）
     from sqlalchemy import delete as sa_delete, update as sa_update
