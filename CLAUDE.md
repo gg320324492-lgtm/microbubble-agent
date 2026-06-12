@@ -12,6 +12,8 @@
 ## 当前开发阶段
 
 **Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-12 最新进展**：
+- **晚间（1 commit）**：
+  - **会议查询 bug 双层根因修复**（`待提交`）— 用户问"有没有相关会议可以学习？"助手一直撒谎说"会议查询系统暂时无法正常工作"，但 API 正常、数据库有 7 条会议。两层根因：①`prompts.py` 只对 `query_all_member_tasks` 有"必须调用"规则，`query_meetings` 没有强指令，LLM 倾向自己编造借口 ②`app/agent/core.py` 函数体内 line 911 `from app.services.meeting_service import MeetingService` 让 Python 编译器把**整个 `_execute_tool` 函数**的 `MeetingService` 当局部变量，`query_meetings` elif 分支调 `MeetingService(db)` 抛 `UnboundLocalError`，被外层 `except Exception` 吞掉返回 `{"status":"error","message":"工具 query_meetings 执行失败: ..."}`，LLM 看到这个 error 后选择撒谎说"系统故障"。三处修复：删 line 911 冗余 import（顶部已 import）、`prompts.py` 顶部新增"工具调用黄金规则 (CRITICAL)" + 明确"Meeting Query Rules (IMPORTANT)"、`tools.py` 中 `query_meetings` 描述改为「【必调工具】」+ 列举所有触发短语
 - **下半场（4 commit）**：
   - **webhint paint keyframes 深度治理**（`d25ab05` + `9baeb18`）— 读 hint 源码后用独立 `scale:`/`rotate:` 替代 `transform: scale()`/`rotate()`，8 类 keyframes 10 个文件批量清理
   - **会议详情页 transcriptEntries 崩溃修复**（`0470f55`）— `current.text.length` 读 undefined 4 处防御
@@ -141,6 +143,23 @@
 | `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
 
 ## 开发注意事项
+
+### 2026-06-12 新增（晚间）
+
+- **`_execute_tool` 函数体内 `from X import Y` 是 UnboundLocalError 重灾区**（重要，与 2026-06-02 声纹会议 WS 闪烁根因同类）— 2026-06-12 用户问"有没有相关会议可以学习？"助手回复"会议查询系统暂时无法正常工作"。两层根因：①LLM 看到 tools schema 但没有强 prompt 约束，倾向自己编造借口 ②代码 `app/agent/core.py:911` 在 `_execute_tool` 函数内（属于 `summarize_meeting_transcript` elif 分支）有 `from app.services.meeting_service import MeetingService`，Python 编译器**不区分 elif 分支**，会扫描整个函数体，只要看到这个名字就是 local，导致 line 881 `MeetingService(db)` 抛 `UnboundLocalError: cannot access local variable 'MeetingService' where it is not associated with a value`。被外层 `except Exception as e: return {"status":"error",...}` 吞掉后 LLM 看到 tool_result 是 error，又撒谎说"系统故障"。**规则**：①模块顶部已 import 的名字，函数体内**绝不要**再 `from X import Y` 重新导入 ②如果函数体内有 `import` 同名，**必须**重命名（`from app.X import Y as _Y`）避免污染 ③新增 tool 路由时**自上而下**检查所有 elif 分支的局部 import ④LLM 撒谎模式防御：所有 tool 必须在 `prompts.py` 顶部"工具调用黄金规则"section 显式列出"必须调用"+ "严禁编造借口"，否则 LLM 倾向 hallucinate
+- **LLM 撒谎模式 (LLM Hallucination as Excuse)** — 当工具执行失败（被 except 吞掉、网络错误、参数错误）时，LLM 倾向用以下借口之一搪塞用户，**而不是诚实地报告错误**：
+  - "X 系统暂时无法正常工作" / "技术问题" / "数据同步中"
+  - "数据库中暂无相关记录"（即使数据库明明有数据）
+  - "请联系管理员" / "稍后再试"
+  - 看起来"合理的"空响应："关于会议学习，我建议您从以下方面入手" + 通用建议列表
+  - **真相**：LLM 撒谎的频率与"工具是否在 system prompt 有强指令"负相关。`query_all_member_tasks` 有"必须调用"指令 → LLM 调；`query_meetings` 没有 → LLM 直接拒绝调工具编借口。**修复模式**：所有用户高频调用的 tool 必须在 `prompts.py` 系统提示词中**显式**列入"必须调用"section + 工具描述中标注「【必调工具】」+ 列举触发短语。**诊断方法**：直接调 API（绕过 LLM）确认 tool 实际能返回数据 → 问题 100% 在 LLM 提示层
+- **直接调 API 验证是排查 LLM 谎话的最快方法**（重要）— 遇到"AI 助手说系统坏了"类问题，**永远先**直接 `curl /api/v1/...` 验证后端真伪：
+  ```bash
+  curl -sk -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/meetings | head -c 500
+  ```
+  如果后端正常 → 100% 是 LLM 撒谎/没调工具，不必查后端代码
+  如果后端 500 → 才是后端问题，进 docker logs 找 traceback
+- **调 LLM tool 必加调试日志**（诊断必经步骤）— 给 `_process_response` 和 `_execute_tool` 各加一行 `logger.warning(f"[DEBUG] tool={name}, input={input_data}")` + 外层 except 加 `logger.error(..., exc_info=True)`。无日志时 LLM 撒谎的错误被 except 吞掉，**根本无法定位**是"LLM 没调工具"还是"工具执行报错"。3 行日志可节省 1 小时排查时间
 
 ### 2026-06-12 新增（下半场）
 

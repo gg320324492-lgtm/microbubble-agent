@@ -13,6 +13,8 @@
 
 **Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-03 最新进展**：垃圾桶系统 4 bug 全修（commit `dc93bff`）+ 精准倒计时双行显示（`b91e429` `46f04ab`）+ beat 调度 1h（`47fb2c9`）+ Webhook 性能 0.001s 响应（`7ec6ce0`）。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-03) 和 [README.md](README.md#当前状态2026-06-03)。
 
+**2026-06-12 重大进展** — 详见 [CLAUDE.md](CLAUDE.md) 同日条目与 [README.md](README.md#当前状态2026-06-12)。要点：①会议录音全栈防御机制 5 阶段完成（解决 #84 案例"58 分钟录音断网丢失"）②webhint paint keyframes 治理（49+ 报告清零）③会议详情页 transcriptEntries / polish-text 400 双 bug 修复 ④Vite hash 改 hex 真正消除 cache-busting 误报 ⑤**会议查询 bug 双层根因修复**（`app/agent/core.py:911` 函数体内 `from X import Y` 触发 UnboundLocalError + LLM 撒谎模式 → 删冗余 import + 补 `prompts.py` "工具调用黄金规则 (CRITICAL)" + `tools.py` 中 `query_meetings` 描述改为「【必调工具】」）。详见 `CLAUDE.md` 第 145-149 行（晚间教训）和 `README.md` 近期新增第 25 行。
+
 ## 会议纪要标准格式（2026-06-06 硬规则）
 
 后续所有会议 AI 分析、手动优化会议内容、历史会议补写，都必须按 `2026.5.28 例行例会` 的信息密度输出，不能只生成短摘要。完整规范见 `docs/meeting-minutes-standard.md`。
