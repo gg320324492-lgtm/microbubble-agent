@@ -19,6 +19,13 @@ from app.agent.tools import hypothesis_tools  # noqa: F401
 from app.agent.tools import knowledge_tools  # noqa: F401
 from app.agent.tools import memory_tools  # noqa: F401
 from app.agent.tools import search_tools  # noqa: F401
+from app.agent.tools import feedback_tools  # noqa: F401
+from app.agent.tools import voice_tools  # noqa: F401
+from app.agent.tools import extra_task_tools  # noqa: F401
+from app.agent.tools import research_tools  # noqa: F401
+from app.agent.tools import graph_tools  # noqa: F401
+from app.agent.tools import transcript_tools  # noqa: F401
+from app.agent.tools import meeting_create_tools  # noqa: F401
 
 # 兼容旧 import 路径：旧 core.py 仍 `from app.agent.tools import TOOLS`
 # 由于 app/agent/tools.py 文件被忽略（Python 优先选包），在此 shim 导出
@@ -36,5 +43,12 @@ __all__ = [
     "knowledge_tools",
     "memory_tools",
     "search_tools",
+    "feedback_tools",
+    "voice_tools",
+    "extra_task_tools",
+    "research_tools",
+    "graph_tools",
+    "transcript_tools",
+    "meeting_create_tools",
     "TOOLS",
 ]
