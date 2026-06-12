@@ -15,11 +15,11 @@
     <!-- 分页 -->
     <el-pagination
       v-if="total > pageSize"
-      v-model:current-page="currentPage"
+      :current-page="currentPage"
       :page-size="pageSize"
       :total="total"
       layout="prev, pager, next"
-      @current-change="$emit('page-change', $event)"
+      @update:current-page="(v) => $emit('page-change', v)"
     />
   </div>
 </template>

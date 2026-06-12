@@ -12,8 +12,8 @@
       v-model:show="showDrawer"
       :sessions="sessionsList"
       :current-id="sessionId"
-      @create="onCreateSession"
-      @switch="onSwitchSession"
+      @create="handleCreateSession"
+      @switch="handleSwitchSession"
     />
 
     <main
@@ -141,8 +141,8 @@ const {
   sessionId,
   messages,
   isCurrentSessionSending,
-  onCreateSession,
-  onSwitchSession,
+  onCreateSession: streamOnCreateSession,
+  onSwitchSession: streamOnSwitchSession,
   sendMessage: sendMessageStream,
   playTTS,
   asrRecognize,
@@ -332,16 +332,16 @@ function onQuickAction(text) {
 // ============================================================================
 // 会话操作
 // ============================================================================
-function onCreateSession() {
+function handleCreateSession() {
   haptic.tap()
-  onCreateSession()
+  streamOnCreateSession()
   showDrawer.value = false
   nextTick(() => messageListRef.value?.scrollToBottom(true))
 }
 
-function onSwitchSession(id) {
+function handleSwitchSession(id) {
   haptic.tap()
-  onSwitchSession(id)
+  streamOnSwitchSession(id)
   showDrawer.value = false
   nextTick(() => messageListRef.value?.scrollToBottom(true))
 }

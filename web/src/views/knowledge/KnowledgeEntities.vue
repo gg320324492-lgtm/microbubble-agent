@@ -10,11 +10,11 @@
     <!-- 分页 -->
     <el-pagination
       v-if="entityTotal > 20"
-      v-model:current-page="entityPage"
+      :current-page="entityPage"
       :page-size="20"
       :total="entityTotal"
       layout="prev, pager, next"
-      @current-change="$emit('page-change', $event)"
+      @update:current-page="(v) => $emit('page-change', v)"
     />
   </div>
 </template>
