@@ -436,3 +436,37 @@ body {
 /* - backdrop-filter 在 MainLayout.vue 已同时使用标准 + 前缀，"无需添加标准属性"是 webhint 误报 */
 /* - content-security-policy: frame-ancestors 是必要的安全头，"不需要此头"是 webhint 误报 */
 /* - progress/striped-flow/indeterminate/shimmer keyframes 已用 mb-* 前缀 + transform 重写 */
+
+/* ============================================
+   Dark Mode（2026-06-12）
+   在 <html data-theme="dark"> 时激活
+   ============================================ */
+[data-theme="dark"] {
+  --color-text-primary: #e8eaed;
+  --color-text-regular: #c0c4cc;
+  --color-text-secondary: #909399;
+  --color-text-placeholder: #606266;
+  --color-bg-page: #1a1d23;
+  --color-bg-card: #2a2d35;
+  --color-bg-hover: #3a3d45;
+  --color-border-base: #3a3d45;
+  --color-border-light: #2a2d35;
+  --color-primary: #FF9D85;
+  --color-primary-light: #FF7A5C;
+  --color-primary-dark: #FFB347;
+  --color-primary-bg: rgba(255, 122, 92, 0.15);
+  --color-accent: #FFC067;
+  --color-accent-bg: rgba(255, 179, 71, 0.12);
+  --color-success-bg: rgba(103, 194, 58, 0.15);
+  --color-warning-bg: rgba(230, 162, 60, 0.15);
+  --color-danger-bg: rgba(245, 108, 108, 0.15);
+  --color-info-bg: rgba(144, 147, 153, 0.15);
+}
+
+/* Dark 模式全局微调 */
+[data-theme="dark"] body { background: var(--color-bg-page); color: var(--color-text-primary); }
+[data-theme="dark"] .rich-card { background: var(--color-bg-card); border-color: var(--color-border-base); color: var(--color-text-primary); }
+[data-theme="dark"] .tool-trace { background: rgba(255, 255, 255, 0.04); border-left-color: var(--color-primary); }
+[data-theme="dark"] .chat-immersive { background: linear-gradient(180deg, #1a1d23 0%, #0e1015 100%); }
+[data-theme="dark"] .bot-bubble { background: var(--color-bg-card); color: var(--color-text-primary); }
+[data-theme="dark"] .typing-bubble span { background: var(--color-primary); }
