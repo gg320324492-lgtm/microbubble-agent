@@ -144,8 +144,28 @@
           </button>
         </div>
 
-        <input ref="imageInputRef" type="file" accept="image/*" aria-label="选择图片" hidden @change="handleImageSelect" />
-        <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md" aria-label="选择文件" hidden @change="handleFileSelect" />
+        <input
+          ref="imageInputRef"
+          id="chat-image-upload-legacy"
+          name="chat-image-upload-legacy"
+          type="file"
+          accept="image/*"
+          aria-label="选择图片"
+          title="选择图片"
+          hidden
+          @change="handleImageSelect"
+        />
+        <input
+          ref="fileInputRef"
+          id="chat-file-upload-legacy"
+          name="chat-file-upload-legacy"
+          type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.md"
+          aria-label="选择文件"
+          title="选择文件"
+          hidden
+          @change="handleFileSelect"
+        />
       </div>
     </footer>
 
