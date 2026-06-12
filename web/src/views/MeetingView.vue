@@ -744,8 +744,8 @@ onMounted(() => {
 .status-dot.status-error { background: var(--color-danger, #F56C6C); }
 
 @keyframes dot-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.3); }
+  0%, 100% { opacity: 1; scale: 1; }
+  50% { opacity: 0.5; scale: 1.3; }
 }
 
 .meeting-has-audio {

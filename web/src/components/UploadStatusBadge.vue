@@ -125,8 +125,8 @@ function onManualRetry() {
 .pulse-red .dot { background: #F56C6C; animation: pulse 0.8s infinite; }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(1.2); }
+  0%, 100% { opacity: 1; scale: 1; }
+  50% { opacity: 0.5; scale: 1.2; }
 }
 
 .badge-text { flex: 1; }
