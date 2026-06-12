@@ -1,8 +1,11 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-12** — webhint CSS keyframes paint 警告深度治理 + 会议详情页 transcriptEntries undefined 崩溃修复 + polish-text 400 空白堆积修复
+> 最后更新: **2026-06-12 晚** — 会议查询 bug 双层根因修复（`app/agent/core.py:911` UnboundLocalError + LLM 撒谎模式）+ prompts.py 顶部"工具调用黄金规则" + tools.py 必调工具描述
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-12 晚）
+- [🐛 会议查询 bug 双层根因修复](#会议查询-bug-双层根因修复2026-06-12-晚)（`app/agent/core.py:911` UnboundLocalError + LLM 撒谎模式 + prompts.py 工具调用黄金规则）
 
 ### 最新完成（2026-06-12 下半场）
 - [🎨 webhint CSS @keyframes paint 警告深度治理](#webhint-css-keyframes-paint-警告深度治理2026-06-12)（独立 scale/rotate 替代 transform，8 类 keyframes 10 个文件清理 — 2 commits）
@@ -43,6 +46,48 @@
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
 
 ---
+
+---
+
+## 会议查询 bug 双层根因修复（2026-06-12 晚）
+
+**问题**：用户问"有没有相关会议可以学习？"AI 助手回复"会议查询系统暂时无法正常工作"或"数据库中暂无相关记录"。但直接 `curl GET /api/v1/meetings` 验证：API 返回 200 OK，数据库有 7 条会议（IDs 85/83/71/70/68/...）。
+
+### 两层根因
+
+**根因 ①（提示层）**：`prompts.py` 系统提示词**只对 `query_all_member_tasks` 有"必须调用"规则**，`query_meetings` 等其他 10+ 个工具没有强指令。LLM 遇到模糊查询时倾向**自己编造借口**（"系统故障/技术问题/数据库暂无"），而不是老老实实调工具。
+
+**根因 ②（代码层）**：`app/agent/core.py:911` 在 `_execute_tool` 函数内（属于 `summarize_meeting_transcript` elif 分支）有 `from app.services.meeting_service import MeetingService`，Python 编译器**不区分 elif 分支**会扫描整个函数体，看到这个名字就是 local。导致 line 881 `MeetingService(db)` 抛 `UnboundLocalError: cannot access local variable 'MeetingService' where it is not associated with a value`，被外层 `except Exception` 吞掉返回 `{"status":"error","message":"工具 query_meetings 执行失败: ..."}`，LLM 看到这个 error 后又撒谎说"系统故障"。
+
+**这与 CLAUDE.md 已记录的 2026-06-02 声纹会议 WS 闪烁根因（`import asyncio` 函数体内让 Python 把 `asyncio` 当局部变量）是完全相同的一类坑。**
+
+### 三处修复
+
+1. **`app/agent/core.py:911`** — 删除冗余 `from app.services.meeting_service import MeetingService`（顶部 line 16 已有 import）
+2. **`app/agent/prompts.py`** — 顶部新增「工具调用黄金规则 (CRITICAL)」+ 明确「Meeting Query Rules (IMPORTANT)」列出所有触发短语 + 严禁编造借口话术
+3. **`app/agent/tools.py:147`** — `query_meetings` 描述改为「【必调工具】」+ 列举触发短语（"最近的会议/近期组会/有哪些会议/查会议/会议纪要/有什么会议/哪些会议可以学习/上次会议讲了什么/今天/昨天/上周/本月开过什么会/UV相关会议/远紫外会议/开过哪些学术报告"等）
+
+### 调试过程（值得记录）
+
+1. **直接调 API 验证后端真伪** — `curl GET /api/v1/meetings` 返回 200 + 7 条会议 → 100% 是 LLM 提示层问题，不是后端
+2. **添加调试日志** — `_process_response` 加 `logger.warning(f"[DEBUG] tool={name}, input={input_data}")`，`_execute_tool` 顶层加 `[DEBUG-EXEC]`，每个 tool 分支加 `[DEBUG-XYZ]`，外层 except 加 `logger.error(..., exc_info=True)`。3 行日志发现 SQL 日志中**没有 `FROM meetings` 查询**但 `[DEBUG]` 显示 LLM 调了 `query_meetings` → 锁定 `query_meetings` 分支根本没执行
+3. **捕获 `UnboundLocalError` 异常** — `logger.error` 显示 `tool=query_meetings failed: UnboundLocalError: cannot access local variable 'MeetingService' where it is not associated with a value` → 锁定根因 ②
+
+### 验证结果
+
+| 测试问句 | 修复前 | 修复后 |
+|---|---|---|
+| "有没有相关会议可以学习？" | "会议查询系统暂时无法正常工作" + 编造 6 类"获取会议信息的途径" | 真的返回 6+ 场会议（远紫外 #85 学术报告、UV臭氧纳米气泡、臭氧气泡实验、实验数据排查、小气助手适配性测试、持续研究UV臭氧纳米气泡技术）+ 每条给学习价值评级 + 适合学习的方向 |
+| "查一下最近的会议" | "数据库中暂无相关记录" | 真的返回 7 条会议按时间倒序 |
+| "2026年6月5日到6月10日开过哪些会议" | （未测） | 准确返回 4 场日期范围内会议 + 发言人姓名（周之超、贾琦、杜同贺、陈金薪）真实 |
+| SQL 日志 `FROM meetings` | 0 次（工具执行 UnboundLocalError 被 except 吞掉） | 真实执行，返回 `result_count=7, ids=[85, 83, 71, 70, 68]` |
+| 异常日志 | `UnboundLocalError: cannot access local variable 'MeetingService'` × N 次 | 0 次 |
+
+### 教训（重要，三条规则）
+
+1. **模块顶部已 import 的名字，函数体内绝不要** `from X import Y` 重新导入 — Python 编译器会把整个函数的同名变量都当 local，导致任何 elif 分支使用同名全局变量都 `UnboundLocalError`。如果函数体内必须 import 用 `from app.X import Y as _Y` 重命名
+2. **LLM 撒谎模式防御** — 遇到工具错误，LLM 倾向用 "系统故障/技术问题/数据库暂无/请联系管理员" 搪塞。**所有高频 tool 必须在 `prompts.py` 顶部"工具调用黄金规则 (CRITICAL)" section 显式列出"必须调用"** + 工具描述中标注「【必调工具】」+ 列举触发短语。`query_all_member_tasks` 有规则 → 调；`query_meetings` 没规则 → 拒绝调工具编借口
+3. **遇到"AI 说系统坏了"先 `curl` 直接调 API 验证后端真伪** — 绕过 LLM 直接验证后端永远是最快定位"是 LLM 问题还是后端问题"的方法。后端正常 → 100% 是 LLM 提示层问题，不必查后端代码
 
 ---
 

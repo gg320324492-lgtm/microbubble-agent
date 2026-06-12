@@ -904,7 +904,6 @@ class MicroBubbleAgent:
                 }
 
             elif name == "summarize_meeting_transcript":
-                from app.services.meeting_service import MeetingService
                 from app.services.memory_service import MemoryService
                 from app.wechat.analyzer import ConversationAnalyzer
 

@@ -145,21 +145,23 @@ TOOLS = [
     # 会议相关工具
     {
         "name": "query_meetings",
-        "description": "查询会议记录。当用户询问最近的会议、某次的会议纪要等时使用。",
+        "description": """【必调工具】查询课题组会议记录并返回会议列表（id/title/start_time/status/summary）。
+当用户问题涉及任何会议相关内容时**必须调用此工具**：包括但不限于「最近的会议」「近期组会」「有哪些会议」「查会议」「会议纪要」「有什么会议」「哪些会议可以学习」「上次会议讲了什么」「今天/昨天/上周/本月开过什么会」「UV相关会议」「远紫外会议」「开过哪些学术报告」等。
+**禁止编造「系统故障/技术问题/无法访问/需要联系管理员」等借口**——这些借口都是错的，系统正常，数据可查。""",
         "input_schema": {
             "type": "object",
             "properties": {
                 "date_from": {
                     "type": "string",
-                    "description": "开始日期，格式：YYYY-MM-DD"
+                    "description": "开始日期，格式：YYYY-MM-DD。无需过滤时省略"
                 },
                 "date_to": {
                     "type": "string",
-                    "description": "结束日期，格式：YYYY-MM-DD"
+                    "description": "结束日期，格式：YYYY-MM-DD。无需过滤时省略"
                 },
                 "keyword": {
                     "type": "string",
-                    "description": "关键词搜索"
+                    "description": "关键词搜索（如'远紫外'、'UV'、'微纳米气泡'等从用户问句中提取的关键词）。无需过滤时省略"
                 }
             }
         }
