@@ -152,12 +152,14 @@
     <div
       v-if="recordingMeetingId"
       class="recording-indicator"
+      :class="{ 'is-offline': !network.online.value }"
       role="status"
       aria-label="正在听会，点击返回"
       @click="goToRecording"
     >
       <span class="recording-dot" />
       <span class="recording-text">正在听会</span>
+      <span v-if="!network.online.value" class="recording-warning" title="网络已断开，录音暂存本地">⚠</span>
       <span class="recording-title">{{ recordingMeetingTitle }}</span>
       <el-icon class="recording-arrow"><ArrowRight /></el-icon>
     </div>
@@ -173,6 +175,7 @@ import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
@@ -190,6 +193,7 @@ const memberStore = useMemberStore()
 
 // 全局录音状态
 const { recordingMeetingId, recordingMeetingTitle, checkActiveRecording } = useRecordingState()
+const network = useNetworkStatus()
 
 const goToRecording = () => {
   if (recordingMeetingId.value) {
@@ -851,6 +855,19 @@ const formatTime = (t) => {
 
 .recording-text {
   white-space: nowrap;
+}
+
+/* 离线状态 — 胶囊变橙红色，加警告图标 */
+.recording-indicator.is-offline {
+  background: linear-gradient(135deg, #F56C6C, #FF9D85);
+  box-shadow: 0 4px 16px rgba(245, 108, 108, 0.5);
+}
+.recording-indicator.is-offline:hover {
+  box-shadow: 0 6px 24px rgba(245, 108, 108, 0.6), 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+.recording-warning {
+  font-size: 14px;
+  animation: recording-pulse 1s ease-in-out infinite;
 }
 
 .recording-title {
