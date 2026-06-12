@@ -13,8 +13,13 @@
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import './assets/element-plus-overrides.css'
+// 全局样式加载顺序：
+// 1. variables.css 设计令牌（必须在最前）
+// 2. element-plus-overrides.css 桌面组件覆盖
+// 3. mobile-base.css 移动端通用基础（PR #1 新增）
 import './assets/variables.css'
+import './assets/element-plus-overrides.css'
+import './assets/mobile-base.css'
 // ElMessage / ElMessageBox 是 JS 服务调用，unplugin-vue-components 无法检测模板中的使用，需手动导入 CSS
 import 'element-plus/theme-chalk/el-message.css'
 import 'element-plus/theme-chalk/el-message-box.css'
@@ -22,6 +27,9 @@ import axios from 'axios'
 
 import App from './App.vue'
 import router from './router'
+
+// PR #1 基建：初始化主题 store（避免刷新闪烁；必须在 router 之前）
+import { useThemeStore } from './stores/useThemeStore'
 
 // 配置axios拦截器
 axios.interceptors.request.use(
@@ -81,5 +89,8 @@ const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
+
+// 主题初始化（在 Pinia/router 注册后立即调用，避免刷新时 brief flash）
+useThemeStore()
 
 app.mount('#app')

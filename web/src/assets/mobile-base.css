@@ -1,0 +1,131 @@
+/* ============================================
+   mobile-base.css — 移动端基础样式（2026-06-13）
+   PR #1 基建：仅通用规则，不覆盖任何桌面组件
+   ============================================ */
+
+/* ----- 文字调整 + 抗锯齿 ----- */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ----- 全局滚动行为 ----- */
+html, body {
+  /* 防止下拉刷出 Chrome 默认刷新 */
+  overscroll-behavior-y: contain;
+}
+
+/* 移动端隐藏滚动条（保留功能 + 美观），桌面端恢复 */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+@media (min-width: 1024px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-secondary);
+  }
+}
+
+/* ----- 点击高亮去除（iOS Safari 蓝色框） ----- */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ----- 全局 touch-action（关闭双击缩放/双指默认手势） ----- */
+/* 注意：仅对通用按钮/链接生效；图表/富交互元素需要单独 override */
+button,
+a,
+.btn,
+.el-button {
+  touch-action: manipulation;
+}
+
+/* ----- 禁止 iOS 长按选中（聊天/卡片除外） ----- */
+.no-select,
+.no-select * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ----- 触觉目标最小尺寸（Apple HIG 44px / Material 48dp） ----- */
+/* 仅作用于通用控件；Element Plus 组件 / 自定义组件需单独覆盖 */
+button,
+.btn,
+.el-button {
+  min-height: var(--touch-target-min);
+}
+
+/* ----- 全局 dvh 修复（iOS Safari 100vh = 浏览器全高含地址栏） ----- */
+/* 通过 CSS 变量 --vh 暴露；useViewport.js 会动态更新它 */
+:root {
+  --vh: 100vh; /* fallback */
+}
+@supports (height: 100dvh) {
+  :root {
+    --vh: 100dvh; /* 现代浏览器优先 */
+  }
+}
+
+/* ----- 路由切换动画（仅 fade-page，不破坏 SSE） ----- */
+.fade-page-enter-active,
+.fade-page-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.fade-page-enter-from {
+  opacity: 0;
+  transform: translateX(8px);
+}
+.fade-page-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+/* Chat 路由例外（避免 SSE 流被中断；App.vue 给 Chat 页面根元素加 .is-sse-route 类） */
+.is-sse-route.fade-page-enter-active,
+.is-sse-route.fade-page-leave-active {
+  transition: none;
+}
+
+/* ----- input/textarea 字号修复（iOS 默认 16px 才不会缩放） ----- */
+input,
+textarea,
+select {
+  font-size: max(16px, var(--font-size-base));
+}
+
+/* ----- placeholder 颜色统一 ----- */
+::placeholder {
+  color: var(--color-text-placeholder);
+  opacity: 1;
+}
+
+/* ----- 移动端平滑滚动 ----- */
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ----- 焦点环统一（键盘 a11y） ----- */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ----- 防止图片/卡片被拖动 ----- */
+img,
+.rich-card,
+.card {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
