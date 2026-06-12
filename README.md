@@ -22,6 +22,7 @@
 
 ### 近期新增（按时间倒序）
 
+- **🛡️ 会议录音全栈防御机制 5 阶段完成（2026-06-12）** — 解决会议 #84 案例：58 分钟录音因 network error 丢失。完整修复：①前端 IndexedDB 兜底（chunks 全部持久化，断网/刷新不丢）②边录边传（每 1s chunk 立即 PUT，失败 IDB 标记 + 5xx 指数退避 1s→2s→4s→8s→16s，4xx 不重试）③后端 chunked 端点（`PUT /audio-chunk` / `POST /merge-chunks` / `GET /upload-status`）④状态机字段迁移（`upload_status` / `last_chunk_index` / `total_chunks` / `error_reason`）⑤后端 stop-recording 硬校验（无 chunk 返回 400，避免空处理）⑥Celery 真实 self.retry（之前 `max_retries` 形同虚设，瞬时错误自动重试 3 次/60s）⑦孤儿会议清理 job（10 分钟扫一次 `recording > 1h 无 chunk` 标 error + 清 MinIO）⑧删会议清 MinIO（chunks + merged + 旧版 audio_url 全清）。**5 个 commit, 21 个新 vitest, 全部 59 测试通过, 端到端 curl 验证会议 #89 全链路（3 真实静音 webm → merge → 80KB merged → Celery 处理 → completed）**。详见 [ROADMAP 章节](ROADMAP.md#会议录音全栈防御机制2026-06-12)
 - **Vite hash 改 hex 真正消除 webhint cache-busting 误报（2026-06-12）** — Vite 8 默认 `hashCharacters: 'base64url'` 产出 `index-Qec9lxup.css`、`MainLayout-B6AkdWtm.js` 等，webhint 内置正则只认 `[0-9a-f]+` 小写 16 进制，导致 **49 条 cache-busting 报告全部报"URL does not match configured patterns"**。修复：[web/vite.config.js](web/vite.config.js) 加 `build.rollupOptions.output.hashCharacters: 'hex'`，文件名变为 `index-9ab8129c.js` 等全小写 hex。Rollup 4.x 原生支持。**效果**：49 条报告清零，文件名长度不变（8 字符），CDN 缓存效果一致
 - **项目统计更新（2026-06-12）** — 902 次提交 / 172,776 行代码 / 628 个文件 / 27 开发天数（5/16→6/12 动态计算）。stats.json 写入路径稳定在 `app/`（Docker volume 挂载范围）
 - **生产 API 响应头实测（2026-06-12）** — curl 实测 `https://agent.mnb-lab.cn/api/v1/meetings/71/polish-text` 响应包含 `X-Content-Type-Options: nosniff` + `Cache-Control: max-age=0` + `Referrer-Policy` + `X-Request-ID`，全部齐全。后端 `security_headers` 中间件 + Nginx 协同工作正常
@@ -397,6 +398,12 @@ npm run dev
 
 ### 🔧 最新改进（2026-06-12）
 
+- **🛡️ 会议录音全栈防御机制 5 阶段完成** — 解决 #84 案例"58 分钟录音断网丢失"。详见 [ROADMAP](ROADMAP.md#会议录音全栈防御机制2026-06-12)：
+  - **阶段 1** 前端 IndexedDB 兜底 + 边录边传（`useChunkedRecorder` + `useChunkedUploader` + `idbStore`，21 个新测试）
+  - **阶段 2** 上传状态徽章 `UploadStatusBadge.vue` + `useNetworkStatus` 首次接入 + 浮动胶囊网络提示
+  - **阶段 3** 后端 chunked 端点（PUT /audio-chunk / POST /merge-chunks / GET /upload-status）+ 4 字段状态机迁移
+  - **阶段 4** stop-recording 硬校验 + Celery 真实 `self.retry` + 孤儿会议清理（10min 扫一次）+ 删会议清 MinIO
+  - **阶段 5** 端到端测试 + 修复 `delete_chunks` 误删 merged.webm bug（拆为 3 个独立方法）
 - **Vite hash 改 hex 真正消除 webhint cache-busting 误报** — 49 条报告清零。Vite 默认 `hashCharacters: 'base64url'` → 改 `'hex'`，文件名变为全小写 16 进制（`index-9ab8129c.js`），webhint cache-busting 正则通过
 - **项目统计更新** — 902 次提交 / 172,776 行代码 / 628 个文件 / 27 开发天数。更新日志 28→33 条
 - **生产 API 响应头验证** — `curl /api/v1/meetings/71/polish-text` 实测 `X-Content-Type-Options: nosniff` + `Cache-Control: max-age=0` 全部齐全
