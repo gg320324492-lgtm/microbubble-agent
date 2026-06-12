@@ -185,11 +185,13 @@ body {
 @keyframes rotateIn {
   from {
     opacity: 0;
-    transform: rotate(-10deg) scale(0.95);
+    rotate: -10deg;
+    scale: 0.95;
   }
   to {
     opacity: 1;
-    transform: rotate(0) scale(1);
+    rotate: 0deg;
+    scale: 1;
   }
 }
 
