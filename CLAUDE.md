@@ -12,9 +12,9 @@
 ## 当前开发阶段
 
 **Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**当前状态（2026-06-12 深夜收尾后，commit `cf70ff5`）**：
-- **22 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4：a11y / composable 解构 / Docker 模块缓存 + Optional import / SSE brief 重复）
+- **24 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4 + 多会话并行 2：后端 3 bug `3852755` + 前端多会话并行架构 `662a6ea`）
 - **160 测试全过**（87 后端 + 73 前端，0 回归）
-- **940 次提交 / 187K 行代码 / 2840 文件 / 28 开发天数**（`app/stats.json` 由 webhook 部署时云端重生成；本地 Git Bash `find` 行为差异不一致）
+- **945 次提交 / 187K 行代码 / 2840 文件 / 28 开发天数**（`app/stats.json` 由 webhook 部署时云端重生成；本地 Git Bash `find` 行为差异不一致）
 - **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留）
 
 **v2/v3/v4 关键成果**：
@@ -137,6 +137,21 @@
 | `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
 
 ## 开发注意事项
+
+### 2026-06-12 v4 收官后新增（多会话并行架构）
+
+- **多会话并行架构（修复 4）核心纪律**（重要，commit `662a6ea`）— ChatViewSSE 多会话并行不丢数据不打架：①`messagesBySession: Record<sessionId, Message[]>` per-session 隔离 ②`activeAssistantMap: Record<sessionId, Message>` SSE yield 找目标引用 ③`sendMessage` 启动时**闭包捕获 `targetSessionId`**（防止 SSE yield 时 outer `sessionId.value` 已切走）④`abortControllers[sessionId]` per-session 取消（多次点击同会话）⑤`loadedSessions: Set<sessionId>` 防重复加载覆盖后台 SSE 增量 ⑥`persistTimers: Record<sessionId, Timer>` debounce 100ms 持久化（防后台丢）⑦`scrollToBottom` / `loading` 仅 `targetSessionId === sessionId.value` 时触发（避免切走还在滚 A 的消息区）。**切会话不 abort 任何 SSE**（让 A 后台继续跑），但**组件卸载时 abort 所有**。**任何"流式响应 + 多视图"场景都要 per-session 隔离 + 闭包贯穿**。沉淀：[multi-session-parallel-architecture.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/multi-session-parallel-architecture.md)
+- **Pydantic Literal 字段不接受 None**（重要，commit `3852755`）— 即使 Python 类型注解是 `Optional[str]`，None 仍会触发 Literal 验证失败。17 个 tools/*.py 的 OutputModel schema 都定义 `rich_block_type: Optional[str] = None`（默认值），`chat_engine._extract_rich_block:432-441` 旧版只要 `result` 里有 `rich_block_type` 键就强行 `RichBlock(type=rb_type, ...)` 致 SSE 流 500。**修复**：加 `_VALID_RICH_BLOCK_TYPES: frozenset = frozenset(get_args(RichBlockType))` 守卫 + 改用 `if rb_type and rb_type in _VALID_RICH_BLOCK_TYPES` 跳过显式分支（fall through 到 implicit_map）。**用 `get_args` 动态生成集合**——与 protocol.py Literal 自动同步，未来新增 block 类型无需维护。**不要信任"键存在就构造"模式**——必须先验证值的合法性。沉淀：[richblock-type-none-pitfall.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/richblock-type-none-pitfall.md)
+- **Python 模块加载级 NameError：缺 typing import**（重要，commit `3852755`，与 4ba7390 修复 2 同类）— 整个 `app/services/hybrid_retriever.py:12` 写 `from typing import List, Optional`，但 line 272 `eval_set: List[Dict]` / line 305 `_aggregate(per_query: List[Dict]) -> Dict` 用到 `Dict` → 模块加载就抛 `NameError: name 'Dict' is not defined. Did you mean: 'dict'?` → 整个 hybrid_retriever import 失败 → search_knowledge 工具一调就报。**类型注解在模块加载时也会执行**（不是只在调用时）。**扫描 one-liner**（改进版检查 import 列表是否真含所需名字）：```bash
+for f in app/services/*.py app/agent/tools/*.py; do
+  for type_name in Dict List Tuple Optional Union Set FrozenSet; do
+    if grep -qE "\b$type_name\b" "$f" 2>/dev/null && ! grep -qE "from typing import.*\b$type_name\b|\*\)" "$f" 2>/dev/null; then
+      echo "MISSING $type_name in: $f"
+    fi
+  done
+done
+```**每个 app 子包要确保 import 链完整**——加新 model/service/tool 后跑 `python -c "from app.X import Y"` 验证。**加进 CI / pre-commit 钩子**。沉淀：[typing-import-missing-bug.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/typing-import-missing-bug.md)
+- **a11y 表单元素 4 属性套件是铁律**（小坑）— webhint 报 `A form field element should have an id or name attribute`，任何 `<textarea>` / `<input>` / `<el-input>` 都要补齐 `id` + `name` + `aria-label` + `title` 4 属性。`<textarea id="chat-input-textarea" name="chat-input-textarea" aria-label="聊天输入框" title="聊天输入框">` 是一例。**仅 file input 因为 hidden 无法走可见 label 路径，必须显式 aria-label + title 兜底**。参考 [Webhint Optimization](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/webhint-optimization.md) + 2026-06-12 commit `c97071c`（file input 4 属性套件先例）+ 2026-06-12 commit `662a6ea`（chat textarea 4 属性套件）
 
 ### 2026-06-12 v4 收官新增
 

@@ -22,6 +22,16 @@
 
 ### 近期新增（按时间倒序）
 
+- **🚀 ChatViewSSE 多会话并行架构 + 切会话丢数据修复 + AbortController（2026-06-12 深夜 +1，commit `662a6ea`）** — A 会话在生成中 → 切到 B 会话 → A 不中断在后台继续 → 切回 A 看到 A 已生成完的内容。真实并行，多 SSE 流互不干扰。**4 项修复合一**：
+  - **修复 4（核心新增）多会话并行架构** — per-session 数据隔离（`messagesBySession` + `activeAssistantMap` + `abortControllers` + `sendingSessions` + `loadedSessions` + `persistTimers`）。`sendMessage` 启动时闭包捕获 `targetSessionId`，SSE yield 通过 `activeAssistantMap[targetSessionId]` 找目标引用。**切会话不 abort 任何 SSE**（让 A 后台继续跑）。流式增量 debounce 100ms 持久化（防后台丢）
+  - **修复 1 切会话丢数据** — `onSwitchSession` 切前 `persistSessionSync` 保存当前会话
+  - **修复 2 AbortController 取消旧 SSE** — `sseFetch` 加 `signal` 参数 + per-session `abortControllers`（多次点击同会话时 abort 旧流；组件卸载时 abort 所有）
+  - **修复 3 watch(sessionId) 兜底** — 外部代码改 sessionId 时触发 rebuild；`loading` 中不 reload
+  - **附带 a11y 修复**：chat `<textarea>` 补 `id` + `name` + `aria-label` + `title` 4 属性套件（修 webhint form field 警告）
+- **🐛 后端 3 bug 修复（2026-06-12 深夜 +1，commit `3852755`，curl 全部验证生效）**：
+  - **RichBlock.type=None Literal 验证失败** — 17 个 tool schema 默认 `rich_block_type: Optional[str] = None`，`chat_engine._extract_rich_block` 旧版只要 result 里有键就强行 `RichBlock(type=None, ...)` 致 SSE 流 500。修复：加 `_VALID_RICH_BLOCK_TYPES: frozenset = frozenset(get_args(RichBlockType))` 守卫 + `if rb_type and rb_type in _VALID_RICH_BLOCK_TYPES:` 跳过显式分支。用 `get_args` 动态生成集合与 protocol.py Literal 自动同步
+  - **search_knowledge 缺 Dict 导入（模块加载级 NameError）** — `hybrid_retriever.py:12` 只 `from typing import List, Optional`，但 line 272 / 305 用到 `List[Dict]` / `Dict` → 整个模块 import 失败 → search_knowledge 工具一调就报。修复：加 `Dict` import
+  - **time.monotonic / time.time 混用** — `chat_engine.py:158 t0=time.monotonic()` vs line 253 `time.time()` 不配对 → `duration_ms: 1780984477934` 错乱。修复：line 253 改用 `time.monotonic()` 与 t0 配对，验证 `duration_ms: 2584` 合理
 - **🐛 SSE brief 事件重复输出 + 误显"网络已断开" + a11y 修复（2026-06-12 深夜，4 commits）** — 收尾批量修：
   - **`cf70ff5`**：聊天回复内容**重复出现两次**（"你好！晚上好...你好！晚上好..."）— 根因 `chat_engine.chat_stream` 流式分支既 yield `text_delta` 增量 token 又在结束时 yield `brief` 完整文本快照，前端 [ChatViewSSE.vue:215](web/src/views/chat/ChatViewSSE.vue#L215) 把两种事件塞进同一 `||` 分支盲目 `append` → text_delta 累完一遍 + brief 又把完整文本 append 一次。修复：拆 3 分支按事件语义处理（`text_delta` 增量 append / `brief` 阶段标记不重复 / `detail` 用 `\n\n` 分隔 append）
   - **`4ba7390`**：`/api/v1/chat/stream` **404 双层根因排查** — ①Docker Python 模块缓存（app 容器 8:43 启动 vs `chat.py` 17:55 修改 → 进程内永远是旧路由表，OpenAPI 里没有 `/chat/stream`，volume 挂载只换文件不换模块缓存）②重启后又暴露 `search_tools.py` 缺 `from typing import Optional`（v4 收官 commit 引入但被模块缓存掩盖数天），整个 FastAPI 启动失败 → 所有 `/api/v1/*` 路由 404。修复：补 typing import + `docker compose restart app`
