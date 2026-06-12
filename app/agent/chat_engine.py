@@ -444,6 +444,7 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
     implicit_map = {
         "query_meetings": ("meeting", "会议列表"),
         "query_tasks": ("task_list", "任务列表"),
+        "query_members": ("member", "成员列表"),
         "search_knowledge": ("knowledge_ref", "知识引用"),
         "get_meeting_detail": ("meeting", "会议详情"),
         "get_meeting_transcript": ("transcript", "会议转录"),
@@ -452,6 +453,7 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
         "list_formulas": ("formula", "公式列表"),
         "list_hypotheses": ("hypothesis", "假设列表"),
         "get_recent_meeting_conclusions": ("meeting", "近期会议结论"),
+        "analyze_meeting_transcript": ("meeting", "会议分析"),
     }
     if tool_name in implicit_map and result.get("status") == "success":
         rb_type, default_title = implicit_map[tool_name]
