@@ -45,7 +45,7 @@ const sidebarCollapsed = ref(false)
 const isDark = ref(localStorage.getItem('theme') === 'dark')
 
 // --- 网络状态 ---
-const { isOnline } = useNetworkStatus()
+const { online: isOnline } = useNetworkStatus()
 
 // --- 会话管理 ---
 const sessionsStore = useChatSessionsStore()
