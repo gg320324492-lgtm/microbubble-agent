@@ -324,3 +324,91 @@ async def get_recent_meeting_conclusions(input: GetRecentConclusionsInput, ctx: 
         "groups": groups,
         "rich_block_type": "meeting",
     }
+
+
+# ============================================================================
+# 4. get_meeting_transcript（新增）
+# ============================================================================
+
+
+class GetMeetingTranscriptInput(BaseModel):
+    meeting_id: int = Field(..., description="会议ID")
+    format: str = Field("text", description="输出格式：raw / polished / text（默认 text）")
+    max_chars: int = Field(10000, ge=100, le=50000, description="最大字符数（默认 10000，防止 token 溢出）")
+
+
+class GetMeetingTranscriptOutput(BaseModel):
+    status: str
+    meeting_id: int
+    title: Optional[str] = None
+    transcript_text: str = ""
+    format: str = "text"
+    entries_count: int = 0
+    truncated: bool = False
+    rich_block_type: str = "transcript"
+
+
+@tool(
+    name="get_meeting_transcript",
+    description="获取一次会议的完整转录文本（默认优先 polished 精润色版）。返回文本可能很长（>10k 字会自动截断）。当用户要看会议转录原文、想复盘某段对话、查具体发言内容时调用。",
+    input_model=GetMeetingTranscriptInput,
+    output_model=GetMeetingTranscriptOutput,
+)
+async def get_meeting_transcript(input: GetMeetingTranscriptInput, ctx: ToolContext) -> dict:
+    """获取单次会议转录（按需截断）"""
+    from app.services.meeting_service import MeetingService
+
+    svc = MeetingService(ctx.db)
+    m = await svc.get_meeting(input.meeting_id)
+    if not m:
+        return {
+            "status": "error", "code": "NOT_FOUND",
+            "message": f"未找到会议（meeting_id={input.meeting_id}）",
+            "meeting_id": input.meeting_id, "transcript_text": "",
+            "entries_count": 0, "truncated": False,
+        }
+
+    # 按 format 选择源
+    source_data = None
+    if input.format == "polished":
+        source_data = m.transcript_polished
+    elif input.format == "raw":
+        source_data = m.transcript
+    else:  # text 默认优先 polished
+        source_data = m.transcript_polished or m.transcript
+
+    # 转纯文本
+    if isinstance(source_data, list):
+        # JSON 格式 [{speaker, text}] → 拼成纯文本
+        lines = []
+        for entry in source_data:
+            if isinstance(entry, dict):
+                speaker = entry.get("speaker", "未知")
+                text = entry.get("text", "")
+                lines.append(f"【{speaker}】{text}")
+            elif isinstance(entry, str):
+                lines.append(entry)
+        text = "\n".join(lines)
+    elif isinstance(source_data, str):
+        text = source_data
+    else:
+        text = str(source_data) if source_data else ""
+
+    entries_count = len(source_data) if isinstance(source_data, list) else 0
+
+    # 截断
+    truncated = False
+    if len(text) > input.max_chars:
+        text = text[: input.max_chars] + f"\n\n... (已截断到 {input.max_chars} 字符)"
+        truncated = True
+
+    return {
+        "status": "success",
+        "meeting_id": m.id,
+        "title": m.title,
+        "transcript_text": text,
+        "format": input.format,
+        "entries_count": entries_count,
+        "truncated": truncated,
+        "rich_block_type": "transcript",
+    }
