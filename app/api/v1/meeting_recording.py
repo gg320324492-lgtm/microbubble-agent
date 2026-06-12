@@ -216,13 +216,50 @@ async def stop_recording(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """停止录音，触发后处理"""
+    """
+    停止录音，触发后处理。
+
+    阶段 4 新增硬校验（2026-06-12 防御机制）：
+    - 必须 last_chunk_index >= 0（至少收到一个 chunk）
+    - 必须 audio_url 非空（旧版一次性上传）或 upload_status='completed'（新版 chunked）
+    - 否则返回 400，会议保持 'recording' 状态（不触发 Celery）
+    """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
     if meeting.status != "recording":
         raise HTTPException(status_code=400, detail="会议不在录音状态")
+
+    # ★ 校验：必须已上传音频
+    last_idx = meeting.last_chunk_index
+    has_audio = bool(meeting.audio_url) or (last_idx is not None and last_idx >= 0)
+    if not has_audio:
+        # 标 upload_status 让前端能区分失败原因
+        meeting.upload_status = "never_uploaded"
+        meeting.error_reason = "录音结束但未收到任何音频（last_chunk_index={}）".format(last_idx)
+        await db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "音频上传不完整 (last_chunk_index={}, audio_url={})。"
+                " 请刷新页面让前端自动补传，或重新录制。"
+            ).format(last_idx, meeting.audio_url)
+        )
+
+    # ★ 兜底：如果走 chunked 但还没 merge，尝试自动 merge
+    if meeting.upload_status == "uploading" and not meeting.audio_url:
+        try:
+            logger.info(f"stop-recording 自动 merge 会议 {meeting_id} 的 chunks")
+            await chunked_upload_service.merge_chunks(meeting_id)
+            # 重新查 audio_url
+            await db.refresh(meeting)
+        except Exception as e:
+            logger.error(f"自动 merge 失败: {e}")
+            meeting.upload_status = "failed"
+            meeting.error_reason = f"merge failed: {e}"
+            await db.commit()
+            raise HTTPException(status_code=500, detail=f"音频合并失败: {e}")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
     meeting.recording_ended_at = now

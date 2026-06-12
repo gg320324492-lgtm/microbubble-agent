@@ -54,6 +54,11 @@ celery_app.conf.update(
             # 用户体验上等同于"准点清理"。权衡：每天 24 次 DB 扫描，可忽略。
             "schedule": 3600.0,  # 每1小时清理过期垃圾桶（retention=3天时）
         },
+        # 2026-06-12 防御机制：每 10 分钟清理超 1h 且未收到任何 chunk 的孤儿会议
+        "cleanup-orphan-meetings": {
+            "task": "app.services.orphan_meeting_cleanup.cleanup_orphan_meetings",
+            "schedule": 600.0,  # 10 分钟
+        },
     },
 )
 
@@ -67,6 +72,7 @@ celery_app.conf.imports = [
     "app.services.memory_service",
     "app.services.knowledge_evolution_tasks",
     "app.services.task_service",
+    "app.services.orphan_meeting_cleanup",
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -77,6 +83,7 @@ celery_app.autodiscover_tasks(
         "app.services.memory_service",
         "app.services.knowledge_evolution_tasks",
         "app.services.task_service",
+        "app.services.orphan_meeting_cleanup",
         "app.wechat.scheduler",
     ],
     related_name=None,

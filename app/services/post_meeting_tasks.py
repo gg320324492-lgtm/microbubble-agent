@@ -63,9 +63,14 @@ def _edit_distance(a: str, b: str) -> int:
     return dp[lb]
 
 
-@celery_app.task(bind=True, max_retries=2, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def post_meeting_process(self, meeting_id: int):
-    """Celery 任务：6 阶段离线后处理"""
+    """
+    Celery 任务：6 阶段离线后处理
+
+    阶段 4 修复（2026-06-12）：阶段 0/1-5 失败时真实调用 self.retry()
+    让 Celery 真正重试（之前 max_retries 形同虚设，失败直接落 error）。
+    """
     logger.info(f"开始后处理: meeting_id={meeting_id}")
 
     async def _run():
@@ -732,15 +737,59 @@ def post_meeting_process(self, meeting_id: int):
                 logger.info(f"后处理完成: meeting_id={meeting_id}, 转写{len(transcript_segments)}段, 标题={meeting.title}")
 
             except Exception as e:
-                logger.error(f"后处理阶段失败: meeting_id={meeting_id}, error={e}", exc_info=True)
-                meeting.status = "error"
-                await db.commit()
-                await update_progress(
-                    meeting_id, ProgressStage.DONE,
-                    detail=f"处理失败: {str(e)[:80]}",
-                    status="error",
-                    redis_override=redis_client,
-                )
+                # ★ 阶段 4 修复：瞬时错误（ValueError/IOError/ConnectionError）→ self.retry
+                # 永久错误（KeyError/AttributeError）→ 落 error
+                import redis as _redis_sync
+                try:
+                    await redis_client.aclose()
+                except Exception:
+                    pass
+                try:
+                    await engine.dispose()
+                except Exception:
+                    pass
+
+                transient_errors = (ValueError, IOError, OSError, ConnectionError, TimeoutError)
+                if isinstance(e, transient_errors):
+                    logger.warning(
+                        f"后处理瞬时错误: meeting_id={meeting_id}, retry_count={self.request.retries}, error={e}"
+                    )
+                    try:
+                        # 让 Celery 重新调度本任务（max_retries=3, default_retry_delay=60）
+                        raise self.retry(exc=e, countdown=60)
+                    except self.MaxRetriesExceededError:
+                        logger.error(f"会议 {meeting_id} 重试耗尽, 落 error")
+                        # 重新 raise 走外层 except 推 error 状态
+                        raise
+
+                # 非瞬时错误：标记 error + 推 WS 通知
+                logger.error(f"后处理阶段失败（永久错误）: meeting_id={meeting_id}, error={e}", exc_info=True)
+                try:
+                    # 重新打开 db/redis 推 error 状态（_run 的 db 已关闭，需新建）
+                    err_engine = create_async_engine(
+                        settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+                        poolclass=NullPool,
+                    )
+                    err_session = async_sessionmaker(err_engine, class_=AsyncSession, expire_on_commit=False)
+                    err_redis = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+                    async with err_session() as db2:
+                        r = await db2.execute(select(Meeting).where(Meeting.id == meeting_id))
+                        m2 = r.scalar_one_or_none()
+                        if m2:
+                            m2.status = "error"
+                            m2.error_reason = str(e)[:500]
+                            await db2.commit()
+                    await update_progress(
+                        meeting_id, ProgressStage.DONE,
+                        detail=f"处理失败: {str(e)[:80]}",
+                        status="error",
+                        redis_override=err_redis,
+                    )
+                    await err_redis.aclose()
+                    await err_engine.dispose()
+                except Exception as push_err:
+                    logger.error(f"推送 error 状态也失败: {push_err}")
+                return  # 永久错误：return 不 raise（Celery 视为 success）
 
         await redis_client.aclose()
         await engine.dispose()
