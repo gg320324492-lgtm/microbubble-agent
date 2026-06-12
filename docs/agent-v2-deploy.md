@@ -176,6 +176,11 @@ npm run build
 | `736a17c` | feat(chat): 5 Rich Block 组件 + 动画 + 网络感知 | Day 11-12 |
 | `0737a44` | feat(chat): 多会话侧栏 + dark mode + Pinia | Day 13 |
 | `8c65944` | feat(observability): agent_traces 可观测性闭环 | Day 14 |
+| `3a06131` | docs: v3 部署补充 | Day 15 |
+| `4dab542` | feat(agent): 14 legacy 工具迁 @tool 装饰器 (TOOL_REGISTRY=34) | Day 17-18 |
+| `a211c56` | feat(chat): ASR 语音完整链路 + 代码高亮 (highlight.js) | Day 19 |
+| `2c46d0f` | test(perf): 性能基线 tests/perf/ (4 文件 6 测试) | Day 20 |
+| `8d053b1` | feat(eval): LLM-as-judge + RAG 召回率评估体系 | Day 21-22 |
 
 ---
 
@@ -265,4 +270,85 @@ Pinia store `web/src/stores/chatSessions.ts` 自动持久化到 localStorage：
 2. 异步通过 Celery `persist_trace_task.delay(dict)` 写 agent_traces 表
 3. admin 打开 `/admin/agent-traces` 实时查看
 4. Celery 失败时降级到 logger（不阻塞 chat）
+
+
+---
+
+## v4 部署补充（2026-06-12 Day 17-22 增量）
+
+### 34 个 @tool 装饰器工具（Day 17-18 14 legacy 全迁完）
+
+```
+任务 4    : create_task / query_tasks / update_task / query_all_member_tasks / get_task_stats
+会议 7    : query_meetings / get_meeting_detail / get_meeting_transcript /
+            get_recent_meeting_conclusions / create_meeting /
+            analyze_meeting_transcript / summarize_meeting_transcript
+项目 3    : query_projects / get_project_summary / generate_project_plan
+成员 2    : query_members / get_member_profile
+知识 9    : search_knowledge / explore_knowledge_graph / find_knowledge_gaps /
+            auto_research / compare_knowledge / summarize_topic /
+            suggest_research / save_conversation_knowledge / (1)
+公式 1    : list_formulas
+假设 1    : list_hypotheses
+记忆 3    : save_memory / search_memory / forget_memory
+搜索 1    : web_search
+个性化 2  : set_custom_instructions / enroll_voice
+反馈 1    : submit_feedback
+```
+
+兼容保留：
+- `app/agent/core.py._execute_tool` 仍 20 个 elif（兜底链路，实际无触发）
+- `dispatch_legacy` 自动 fallback（已无实际场景，仅做防御性兜底）
+
+### ASR / TTS 完整语音链路（Day 19）
+
+`web/src/views/chat/ChatViewSSE.vue` 接入：
+- 点 🎤 → `<VoiceRecorder>` 录音 → 松开
+- `onRecordStop(blob)` → `POST /api/v1/voice/asr` (multipart) → text → 自动 sendMessage
+- assistant 消息底部 🔊 按钮 → `POST /api/v1/voice/tts` (responseType=blob) → `<audio>` 播放
+
+### 代码高亮（Day 19）
+
+`web/src/utils/markdown.ts` 升级：
+- `npm i highlight.js marked-highlight`
+- 6 种语言：python / javascript / bash / json / sql / yaml
+- dark mode 用 CSS 变量覆盖（不换主题文件）
+
+### 性能基线（Day 20）
+
+`tests/perf/` 新目录 4 文件 6 测试：
+- `test_brief_latency.py` — brief P95 < 3s
+- `test_sse_first_byte.py` — SSE 首字节 < 1s
+- `test_tool_round_trip.py` — dispatch 平均 < 5ms + schema 导出 < 50ms + 工具数 ≥ 30
+
+阈值设计：
+- 首次跑取实测 P95 + 30% buffer 作为基线
+- CI 接受 ±30% 浮动
+
+跑法：
+```bash
+cd /opt/microbubble-agent
+pytest tests/perf/ -v
+```
+
+### 质量评估体系（Day 21-22）
+
+`data/eval_queries.jsonl` 20 问标注集（微纳米气泡领域）。
+
+**`scripts/run_llm_judge.py`**：
+- 调 `RAGEvaluator.evaluate()` 评分 4 指标
+- 阈值：avg_faithfulness ≥ 0.7 / avg_overall ≥ 4.0/5
+- 产出 `data/quality_report.json` + 首跑生成 `data/quality_report_baseline.json`
+
+**`scripts/run_rag_eval.py`**：
+- 调 `HybridRetriever.evaluate()` 计算 IR 指标 + 5 种消融
+- 阈值：recall@5 ≥ 0.8
+- 产出 `data/rag_recall_report.json`
+
+跑法：
+```bash
+cd /opt/microbubble-agent
+python scripts/run_llm_judge.py   # 需 DB + LLM API
+python scripts/run_rag_eval.py    # 需 DB（无 relevant_ids 时优雅退出）
+```
 
