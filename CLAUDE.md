@@ -11,7 +11,16 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-11 最新进展**：
+**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-12 最新进展（会议录音全栈防御 5 阶段）**：
+- **解决 #84 案例"58 分钟录音断网丢失"** — 5 个 commit (`a41dd20` 边录边传骨架 → `49de30c` 上传状态徽章 → `f458dad` 后端 chunked 端点 + 4 字段迁移 → `838a18d` 后端防御硬化 → `9464726` bug 修复)
+- **阶段 1 前端 IndexedDB 兜底** — chunks 持久化 + 1s 切片 + 边录边传 + 指数退避重传
+- **阶段 2 UI 徽章** — `UploadStatusBadge.vue`（已传 N/总 M 片 + 网络状态）+ 浮动胶囊离线变橙红
+- **阶段 3 后端 3 端点** — `PUT /audio-chunk` / `POST /merge-chunks` (ffmpeg concat) / `GET /upload-status`
+- **阶段 4 防御硬化** — stop-recording 校验 `last_chunk_index >= 0` 才允许 status=processing；Celery `self.retry(exc=e, countdown=60)` 真实生效；孤儿会议清理（10min beat 扫 `recording > 1h 无 chunk`）；删会议清 MinIO
+- **阶段 5 bug 修复** — `delete_chunks` 误删 merged.webm → 拆为 3 个独立方法
+- **21 个新 vitest 全部通过**（idbStore 12 + useChunkedUploader 9）
+
+**2026-06-11 进展**：
 - **会议 L2 润色升级**（commit `e8a4471`）— 5 行"只加标点"→ 允许清理 ASR 幻觉+修正同音错字+合并重复
 - **会议 #83 全文重润色**（commit `e8a4471`）— 532 段 → 323 段，删除 154 段幻觉，错名/乱码全部清零
 - **段落智能切分脚本**（commit `a487a33`）— 按主题信号词自动切段，会议 #83 最长段 1859→316 字
@@ -21,7 +30,7 @@
 - **stats.json 动态化**（之前）— 900 提交 / 630 文件 / 120K 行 / 27 天开发
 - **changelog 补充至 33 条**
 
-详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-11) 和 [README.md](README.md#近期新增按时间倒序)。
+详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-12) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 会议纪要标准格式（2026-06-06 硬规则）
 
@@ -130,6 +139,16 @@
 
 ### 2026-06-12 新增
 
+- **会议录音断网防御机制（5 阶段全栈完成）** — 2026-06-12 会议 #84 录音 58 分钟因 network error 丢失 1.6 秒废片段后永久卡死。完整修复：①前端 IndexedDB 兜底 + 边录边传骨架 ②上传状态徽章 + `useNetworkStatus` 接入 ③后端 chunked 端点（PUT /audio-chunk, POST /merge-chunks, GET /upload-status）+ 4 字段迁移 ④后端 stop-recording 硬校验 + Celery 真实 `self.retry` + 孤儿会议清理 + 删会议清 MinIO ⑤端到端测试 + bug 修复。**关键教训**（重要）：
+  - **`useGlobalRecorder.js` 改造必须向后兼容** — 阶段 1 新增 `onChunk` 回调钩子（注册到 `chunkCallbacks` 数组），保留原 `audioChunks.push` 逻辑，AudioRecorder.vue 等消费者零感知改动
+  - **fake-indexeddb 不支持复合索引 `IDBKeyRange.only([k, v])`** — jsdom + fake-indexeddb 抛 `DataError: parameter 2 is not of type 'Blob'`。修复：取消 `by_meeting_uploaded` 复合索引，改用 `by_meeting` 单字段 + 内存 filter `records.filter(r => !r.uploaded)`
+  - **fake-indexeddb 反序列化 Blob 为普通对象** — 存进去再读出来 `blob.constructor.name === 'Object'`，后续 `FormData.append('file', blob, ...)` 抛 `parameter 2 is not of type 'Blob'`。修复：在 `idbStore.putChunk` / `getPendingChunks` 重新包装 `const safeBlob = blob instanceof Blob ? blob : new Blob([blob], { type: 'audio/webm' })`
+  - **Celery `self.retry()` 必须 `raise`** — 在新 event loop 中 `try/except` 接住后**阻断** Celery 重试机制。正确模式：`_run()` 内 `except (ValueError, IOError, OSError, ConnectionError, TimeoutError) as e: raise self.retry(exc=e, countdown=60)` 让 Celery 装饰器接住；外层 `try/except` 只兜底 Celery 自身崩溃
+  - **`delete_chunks` 不能"顺手删 merged"** — 阶段 5 端到端发现此 bug：merge 完成后调 delete_chunks 清理源 chunks，旧版 delete_chunks 内部又删了 merged.webm → 后处理 NoSuchKey。修复拆三个方法：`delete_chunks` / `delete_merged` / `delete_all`（用于删会议时清理）
+  - **minio-py `put_object` 用位置参数** — 旧 `file_service.upload_to_path` 误用 S3-style kwargs `Bucket/Key/Body/Length/ContentType` 抛 `TypeError: Minio.put_object() got an unexpected keyword argument 'Bucket'`。正确：`put_object(bucket_name, object_name, data, length=-1, content_type=None)`
+- **fake-indexeddb 必须 `import 'fake-indexeddb/auto'`** — 装包后只在 `setup.js` 顶部 import 一次，jsdom 环境才有 IndexedDB。`npm install --save-dev fake-indexeddb`
+- **Vitest 默认 5s 超时** — uploadOne 内部 5xx 重试 5 次 × 指数退避（1s+2s+4s+8s+16s=31s）超过默认 timeout。测试中用 `vi.mockResolvedValue` 模拟 4xx 不重试，避免 hang
+- **断网录音前端** — `useNetworkStatus.js`（2026-06-09 已实现但未接入），本次首次接入到 `MainLayout.vue` 浮动胶囊 + `AudioRecorder.vue` 徽章。`online` / `offline` 事件 + `navigator.connection.effectiveType`
 - **Vite/Rollup hashCharacters 默认值** — Vite 8 默认 `hashCharacters: 'base64url'`，产出形如 `index-Qec9lxup.css`、`MainLayout-B6AkdWtm.js`（含大小写字母+数字+下划线+连字符）。webhint 内置 cache-busting 正则只认 `[0-9a-f]+` 小写 16 进制，会对所有 chunk/asset 文件报 "URL does not match configured patterns"。**修复**：`web/vite.config.js` 加 `build.rollupOptions.output.hashCharacters: 'hex'`，文件名变为 `index-9ab8129c.js` 等全小写 hex，webhint 通过。Rollup 4.x 原生支持此选项。新建 Vite 项目时应直接配为 hex
 - **Vite dist 重命名提交** — 改 hashCharacters 后 `npm run build` 会重命名 100+ 个 dist 文件。**必须** `git add -f web/dist` 强制提交，否则 `.gitignore` 拦截新文件名（删了旧的不加新的），线上 404 白屏。验证 `git diff --cached --stat` 看到所有文件都是 `rename:` 不是 `deleted:`
 - **webhint cache-busting 误报的真实修复路径** — 之前 MEMORY 误记为"Edge DevTools 内置 webhint 不读项目配置 → 浏览器端无法消除"，实际**工具链配置可以彻底消除**。不要被"工具限制"标签固化思路，遇到工具误报时优先考虑是否能从工具链上游（构建工具/CDN/响应头）解决
