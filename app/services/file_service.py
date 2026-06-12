@@ -105,12 +105,13 @@ class FileService:
         """
         def _sync_upload():
             from io import BytesIO
+            # minio-py 位置参数: (bucket_name, object_name, data, length=-1, content_type=None)
             self.client.put_object(
-                Bucket=self.bucket,
-                Key=object_name,
-                Body=BytesIO(file_data),
-                Length=len(file_data),
-                ContentType=content_type,
+                self.bucket,
+                object_name,
+                BytesIO(file_data),
+                length=len(file_data),
+                content_type=content_type,
             )
 
         await asyncio.to_thread(_sync_upload)

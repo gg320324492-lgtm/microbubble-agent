@@ -37,6 +37,12 @@ class Meeting(Base, TimestampMixin):
     # 状态
     status = Column(String(20), default="scheduled")  # scheduled/recording/processing/completed/error
 
+    # 阶段 3：分片上传状态机（2026-06-12 防御机制）
+    upload_status = Column(String(20), default="pending")  # pending/uploading/completed/failed/never_uploaded/partial
+    last_chunk_index = Column(Integer, nullable=True)  # -1 表示无 chunk，>=0 表示收到的最大 idx
+    total_chunks = Column(Integer, nullable=True)  # 累计收到的 chunk 数（含未上传的）
+    error_reason = Column(Text, nullable=True)  # 录音失败 / 孤儿清理原因
+
     # 录音机模式（2026-06-04 重构）
     audio_url = Column(String(500), nullable=True)           # MinIO 录音路径
     audio_duration = Column(Integer, nullable=True)           # 录音时长（秒）
