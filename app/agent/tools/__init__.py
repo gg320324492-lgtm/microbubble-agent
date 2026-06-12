@@ -14,8 +14,15 @@ from app.agent.tools import meeting_tools  # noqa: F401
 from app.agent.tools import task_tools  # noqa: F401
 from app.agent.tools import member_tools  # noqa: F401
 
+# 兼容旧 import 路径：旧 core.py 仍 `from app.agent.tools import TOOLS`
+# 由于 app/agent/tools.py 文件被忽略（Python 优先选包），在此 shim 导出
+from app.agent.tool_registry import get_all_tool_schemas
+
+TOOLS = get_all_tool_schemas()
+
 __all__ = [
     "meeting_tools",
     "task_tools",
     "member_tools",
+    "TOOLS",
 ]
