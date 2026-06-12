@@ -13,6 +13,7 @@ from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory
 from app.models.meeting_template import MeetingTemplate  # Wave 3b
+from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
 
 __all__ = [
     "Member",
@@ -29,4 +30,5 @@ __all__ = [
     "Feedback",
     "PromptTemplate",
     "VoiceprintHistory",
+    "AgentTrace",
 ]

@@ -73,6 +73,7 @@ celery_app.conf.imports = [
     "app.services.knowledge_evolution_tasks",
     "app.services.task_service",
     "app.services.orphan_meeting_cleanup",
+    "app.services.agent_trace_tasks",  # 2026-06-12 可观测性
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -84,6 +85,7 @@ celery_app.autodiscover_tasks(
         "app.services.knowledge_evolution_tasks",
         "app.services.task_service",
         "app.services.orphan_meeting_cleanup",
+        "app.services.agent_trace_tasks",  # 2026-06-12
         "app.wechat.scheduler",
     ],
     related_name=None,
