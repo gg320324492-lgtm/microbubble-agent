@@ -445,6 +445,7 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
         "query_meetings": ("meeting", "会议列表"),
         "query_tasks": ("task_list", "任务列表"),
         "query_members": ("member", "成员列表"),
+        "query_projects": ("project", "项目列表"),
         "search_knowledge": ("knowledge_ref", "知识引用"),
         "get_meeting_detail": ("meeting", "会议详情"),
         "get_meeting_transcript": ("transcript", "会议转录"),

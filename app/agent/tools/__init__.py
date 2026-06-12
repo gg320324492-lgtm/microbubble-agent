@@ -13,6 +13,12 @@ import 这个包会触发所有子模块加载，所有工具自动注册。
 from app.agent.tools import meeting_tools  # noqa: F401
 from app.agent.tools import task_tools  # noqa: F401
 from app.agent.tools import member_tools  # noqa: F401
+from app.agent.tools import project_tools  # noqa: F401
+from app.agent.tools import formula_tools  # noqa: F401
+from app.agent.tools import hypothesis_tools  # noqa: F401
+from app.agent.tools import knowledge_tools  # noqa: F401
+from app.agent.tools import memory_tools  # noqa: F401
+from app.agent.tools import search_tools  # noqa: F401
 
 # 兼容旧 import 路径：旧 core.py 仍 `from app.agent.tools import TOOLS`
 # 由于 app/agent/tools.py 文件被忽略（Python 优先选包），在此 shim 导出
@@ -24,5 +30,11 @@ __all__ = [
     "meeting_tools",
     "task_tools",
     "member_tools",
+    "project_tools",
+    "formula_tools",
+    "hypothesis_tools",
+    "knowledge_tools",
+    "memory_tools",
+    "search_tools",
     "TOOLS",
 ]
