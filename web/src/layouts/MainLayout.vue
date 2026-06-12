@@ -164,6 +164,9 @@
       <el-icon class="recording-arrow"><ArrowRight /></el-icon>
     </div>
   </Transition>
+
+  <!-- 移动端底部导航 TabBar（PR #2 新增：基于 NutUI nut-tabbar） -->
+  <MobileTabBar v-if="isMobile" />
 </template>
 
 <script setup>
@@ -176,6 +179,8 @@ import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { useIsMobile } from '@/composables/useIsMobile'
+import MobileTabBar from '@/components/mobile/TabBar.vue'
 import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
@@ -201,7 +206,7 @@ const goToRecording = () => {
   }
 }
 
-const isMobile = ref(window.innerWidth <= 768)
+const isMobile = useIsMobile().isMobile
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
 const popoverVisible = ref(false)
@@ -224,8 +229,12 @@ const menuRoutes = computed(() => {
   return (mainRoute?.children || []).filter(r => r.meta?.icon)
 })
 
-const onResize = () => {
-  isMobile.value = window.innerWidth <= 768
+// PR #2: isMobile 改用 useIsMobile composable（matchMedia + 防抖）
+// 不再需要本地 onResize + window resize 监听
+// 跨断点组件切换由 useAdaptiveRoute 自动处理
+
+function syncMobileDrawerClose() {
+  // 跨断点时强制关闭移动端抽屉
   if (isMobile.value) {
     showMobileMenu.value = false
   }
@@ -245,7 +254,6 @@ const navigateTo = (path) => {
 }
 
 onMounted(async () => {
-  window.addEventListener('resize', onResize)
   userStore.loadFromStorage()
 
   // 未登录时不发起 API 请求，避免 401 刷屏
@@ -268,10 +276,6 @@ onMounted(async () => {
   } catch {
     // localStorage 兜底
   }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onResize)
 })
 
 const handleLogout = () => {
@@ -905,10 +909,17 @@ const formatTime = (t) => {
   to   { opacity: 0; transform: translateY(20px) scale(0.9); }
 }
 
-/* 窄屏适配 */
+/* 窄屏适配（PR #2 增强：考虑 TabBar + Safe Area） */
 @media (max-width: 768px) {
+  /* 主内容区底部预留 TabBar 高度 + safe-area */
+  .mobile-main {
+    /* 给底部 TabBar 留出空间 */
+    padding-bottom: calc(var(--tabbar-height, 56px) + var(--sab, 0px));
+  }
+
+  /* 录音指示器在 TabBar 上方 */
   .recording-indicator {
-    bottom: 16px;
+    bottom: calc(var(--tabbar-height, 56px) + var(--sab, 0px) + 12px);
     right: 16px;
     left: 16px;
     padding: 14px 18px;
@@ -923,7 +934,7 @@ const formatTime = (t) => {
   }
 
   .header {
-    padding: 0 12px;
+    padding: 0 var(--mobile-padding-x, 16px);
   }
 
   .header-right {
@@ -933,8 +944,8 @@ const formatTime = (t) => {
   .bell-icon {
     padding: 10px;
     border-radius: var(--radius-lg);
-    min-width: 40px;
-    min-height: 40px;
+    min-width: var(--touch-target-min, 44px);
+    min-height: var(--touch-target-min, 44px);
     display: flex;
     align-items: center;
     justify-content: center;
