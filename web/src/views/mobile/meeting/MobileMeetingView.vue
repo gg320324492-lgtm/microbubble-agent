@@ -1,0 +1,719 @@
+<template>
+  <div class="mobile-meeting-view">
+    <PageHeader title="会议管理" show-back @back="$router.back()">
+      <template #right>
+        <button
+          type="button"
+          class="header-action"
+          aria-label="搜索"
+          title="搜索"
+          @click="showSearch = true"
+        >🔍</button>
+        <button
+          type="button"
+          class="header-action primary"
+          aria-label="新建"
+          title="新建"
+          @click="showActionSheet = true"
+        >+</button>
+      </template>
+    </PageHeader>
+
+    <main class="meeting-main" :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }">
+      <!-- 日期范围快速筛选 -->
+      <div class="quick-filters">
+        <button
+          v-for="f in dateFilters"
+          :key="f.label"
+          type="button"
+          class="filter-chip"
+          :class="{ active: activeDateFilter === f.value }"
+          @click="applyDateFilter(f.value)"
+        >{{ f.label }}</button>
+      </div>
+
+      <!-- 会议列表 -->
+      <div v-if="loading && meetings.length === 0" class="loading-state">
+        <div class="skeleton-card" v-for="i in 3" :key="i">
+          <div class="skeleton-line w-60" />
+          <div class="skeleton-line w-90" />
+          <div class="skeleton-line w-40" />
+        </div>
+      </div>
+
+      <div v-else-if="meetings.length === 0" class="empty-state">
+        <div class="empty-icon">📅</div>
+        <div class="empty-title">暂无会议记录</div>
+        <div class="empty-hint">点击右上角 + 创建</div>
+      </div>
+
+      <div v-else class="meeting-list">
+        <button
+          v-for="meeting in meetings"
+          :key="meeting.id"
+          type="button"
+          class="meeting-card"
+          @click="$router.push(`/meetings/${meeting.id}`)"
+        >
+          <div class="card-time-block">
+            <div class="time-month">{{ formatMonth(meeting.start_time) }}</div>
+            <div class="time-day">{{ formatDay(meeting.start_time) }}</div>
+            <div class="time-hour">{{ formatHour(meeting.start_time) }}</div>
+          </div>
+
+          <div class="card-info">
+            <div class="card-header">
+              <div class="card-title">{{ meeting.title }}</div>
+              <span class="status-dot" :class="'status-' + meeting.status" />
+            </div>
+
+            <div class="card-meta">
+              <span class="status-tag" :class="'tag-' + meeting.status">
+                {{ getStatusLabel(meeting.status) }}
+              </span>
+              <span v-if="meeting.location" class="meta-location">📍 {{ meeting.location }}</span>
+              <span v-if="meeting.audio_url" class="meta-audio" title="有录音">🎙️</span>
+            </div>
+
+            <div v-if="meeting.participants?.length" class="card-participants">
+              <div class="participants-avatars">
+                <div
+                  v-for="p in meeting.participants.slice(0, 4)"
+                  :key="p.member_id"
+                  class="mini-avatar"
+                  :title="p.name"
+                >{{ p.name?.charAt(0) || '?' }}</div>
+                <div v-if="meeting.participants.length > 4" class="mini-avatar more">
+                  +{{ meeting.participants.length - 4 }}
+                </div>
+              </div>
+            </div>
+
+            <div v-if="meeting.summary" class="card-summary">
+              {{ meeting.summary.substring(0, 80) }}{{ meeting.summary.length > 80 ? '...' : '' }}
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <!-- 分页（仅显示总数） -->
+      <div v-if="total > pageSize" class="pagination-info">
+        共 {{ total }} 条 · 第 {{ currentPage }} / {{ Math.ceil(total / pageSize) }} 页
+      </div>
+    </main>
+
+    <!-- 操作菜单（替代桌面 4 个按钮） -->
+    <Teleport to="body">
+      <Transition name="action-sheet">
+        <div v-if="showActionSheet" class="action-overlay" @click.self="showActionSheet = false">
+          <div class="action-panel">
+            <div class="action-title">会议操作</div>
+            <button type="button" class="action-item" @click="handleCreateMeeting">
+              <span class="action-icon" style="background: #FF7A5C">+</span>
+              <span>手动创建</span>
+            </button>
+            <button type="button" class="action-item" @click="handlePasteAnalyze">
+              <span class="action-icon" style="background: #67C23A">📋</span>
+              <span>粘贴转录分析</span>
+            </button>
+            <button type="button" class="action-item" @click="handleStartLive">
+              <span class="action-icon" style="background: #E6A23C">🎤</span>
+              <span>开始听会</span>
+            </button>
+            <button type="button" class="action-item" @click="handleVoiceTest">
+              <span class="action-icon" style="background: #909399">🎙</span>
+              <span>麦克风测试</span>
+            </button>
+            <button type="button" class="action-item cancel" @click="showActionSheet = false">取消</button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 搜索 Sheet -->
+    <Teleport to="body">
+      <Transition name="search-sheet">
+        <div v-if="showSearch" class="search-overlay" @click.self="showSearch = false">
+          <div class="search-panel">
+            <div class="search-header">
+              <h3>搜索会议</h3>
+              <button type="button" @click="showSearch = false">✕</button>
+            </div>
+            <input
+              ref="searchInputRef"
+              v-model="keyword"
+              type="search"
+              class="search-input"
+              placeholder="搜索会议主题..."
+              @keyup.enter="onSearch"
+            />
+            <div class="search-actions">
+              <button type="button" class="btn-secondary" @click="onReset">重置</button>
+              <button type="button" class="btn-primary" @click="onSearch">搜索</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 创建会议对话框（移动端仍用 el-dialog fullscreen） -->
+    <MeetingCreateDialog
+      v-model:visible="showCreateDialog"
+      :is-mobile="true"
+      @success="onMeetingSaved"
+    />
+  </div>
+</template>
+
+<script setup>
+/**
+ * MobileMeetingView.vue — 移动端会议列表
+ *
+ * PR #4: 桌面 4 按钮（手动创建/粘贴/听会/测试）折叠为底部 ActionSheet
+ * 列表卡片化（不用 el-table 卡片化）：时间块 + 标题 + meta + 参与者头像
+ * 移动端快速筛选：今日/本周/本月/全部
+ */
+
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import dayjs from 'dayjs'
+import { useMeeting } from '@/composables/useMeeting'
+import PageHeader from '@/components/mobile/PageHeader.vue'
+import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
+
+const router = useRouter()
+
+const {
+  meetings, total, currentPage, pageSize, loading,
+  keyword, dateFrom, dateTo,
+  fetchMeetings,
+} = useMeeting()
+
+const showActionSheet = ref(false)
+const showSearch = ref(false)
+const showCreateDialog = ref(false)
+const searchInputRef = ref(null)
+
+// 日期范围快速筛选
+const activeDateFilter = ref('all')
+const dateFilters = [
+  { label: '全部', value: 'all' },
+  { label: '今天', value: 'today' },
+  { label: '本周', value: 'week' },
+  { label: '本月', value: 'month' },
+]
+
+function applyDateFilter(filter) {
+  activeDateFilter.value = filter
+  const today = dayjs()
+  switch (filter) {
+    case 'today':
+      dateFrom.value = today.format('YYYY-MM-DD')
+      dateTo.value = today.format('YYYY-MM-DD')
+      break
+    case 'week':
+      dateFrom.value = today.startOf('week').format('YYYY-MM-DD')
+      dateTo.value = today.endOf('week').format('YYYY-MM-DD')
+      break
+    case 'month':
+      dateFrom.value = today.startOf('month').format('YYYY-MM-DD')
+      dateTo.value = today.endOf('month').format('YYYY-MM-DD')
+      break
+    case 'all':
+    default:
+      dateFrom.value = ''
+      dateTo.value = ''
+  }
+  currentPage.value = 1
+  fetchMeetings()
+}
+
+// 格式化
+function formatMonth(t) {
+  if (!t) return '--'
+  return dayjs(t).add(8, 'hour').format('M月')
+}
+function formatDay(t) {
+  if (!t) return '--'
+  return dayjs(t).add(8, 'hour').format('DD')
+}
+function formatHour(t) {
+  if (!t) return '--'
+  return dayjs(t).add(8, 'hour').format('HH:mm')
+}
+
+function getStatusLabel(s) {
+  return { scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s
+}
+
+// 操作菜单处理
+function handleCreateMeeting() {
+  showActionSheet.value = false
+  showCreateDialog.value = true
+}
+function handlePasteAnalyze() {
+  showActionSheet.value = false
+  ElMessage.info('粘贴转录分析（开发中）')
+}
+function handleStartLive() {
+  showActionSheet.value = false
+  // 复用桌面的实时听会流程：跳转 /meetings?startLive=true
+  // 简化：直接跳转新会议详情，由 MeetingDetailView 处理
+  router.push('/meetings?startLive=true')
+}
+function handleVoiceTest() {
+  showActionSheet.value = false
+  ElMessage.info('麦克风测试（开发中）')
+}
+
+function onMeetingSaved() {
+  fetchMeetings()
+}
+
+function onSearch() {
+  showSearch.value = false
+  currentPage.value = 1
+  fetchMeetings()
+}
+
+function onReset() {
+  keyword.value = ''
+  dateFrom.value = ''
+  dateTo.value = ''
+  activeDateFilter.value = 'all'
+  currentPage.value = 1
+  fetchMeetings()
+  showSearch.value = false
+}
+
+onMounted(() => {
+  fetchMeetings()
+})
+</script>
+
+<style scoped>
+.mobile-meeting-view {
+  min-height: 100vh;
+  background: var(--color-bg-page);
+  display: flex;
+  flex-direction: column;
+}
+
+.meeting-main {
+  flex: 1;
+  padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+}
+
+/* 日期快速筛选 */
+.quick-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.quick-filters::-webkit-scrollbar { display: none; }
+.filter-chip {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-chip.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+/* 会议卡片 */
+.meeting-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meeting-card {
+  display: flex;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  gap: 12px;
+  align-items: flex-start;
+}
+.meeting-card:active {
+  background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .meeting-card {
+  border-color: var(--color-border-base);
+}
+
+.card-time-block {
+  flex-shrink: 0;
+  width: 60px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--color-primary-bg), var(--color-accent-bg));
+  border-radius: var(--radius-md);
+  padding: 8px 4px;
+}
+.time-month {
+  font-size: 11px;
+  color: var(--color-text-regular);
+  margin-bottom: 2px;
+}
+.time-day {
+  font-size: 22px;
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-primary);
+  line-height: 1;
+}
+.time-hour {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin-top: 4px;
+}
+
+.card-info {
+  flex: 1;
+  min-width: 0;
+}
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.card-title {
+  font-size: 15px;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  flex: 1;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.status-dot.status-scheduled { background: #909399; }
+.status-dot.status-recording { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
+.status-dot.status-processing { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
+.status-dot.status-completed { background: var(--color-success, #67C23A); }
+.status-dot.status-cancelled { background: var(--color-info, #909399); }
+.status-dot.status-error { background: var(--color-danger, #F56C6C); }
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.status-tag {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  background: var(--color-bg-page);
+}
+.tag-scheduled { background: var(--color-info-bg); color: var(--color-info); }
+.tag-recording, .tag-processing { background: var(--color-warning-bg); color: var(--color-warning); }
+.tag-completed { background: var(--color-success-bg); color: var(--color-success); }
+.tag-cancelled { background: var(--color-bg-page); color: var(--color-text-secondary); }
+.tag-error { background: var(--color-danger-bg); color: var(--color-danger); }
+
+.meta-location { color: var(--color-text-secondary); }
+.meta-audio { color: var(--color-primary); }
+
+.card-participants { margin-bottom: 4px; }
+.participants-avatars {
+  display: flex;
+  align-items: center;
+}
+.mini-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -6px;
+  border: 2px solid var(--color-bg-card);
+}
+.mini-avatar:first-child { margin-left: 0; }
+.mini-avatar.more {
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+}
+
+.card-summary {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 加载 / 空 */
+.loading-state, .empty-state {
+  padding: 20px 0;
+}
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.empty-title {
+  font-size: 15px;
+  color: var(--color-text-regular);
+  margin-bottom: 4px;
+}
+.empty-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.skeleton-card {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.skeleton-line {
+  height: 12px;
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--color-bg-warm), transparent);
+  animation: shimmer 1.5s infinite;
+}
+.skeleton-line.w-60 { width: 60%; }
+.skeleton-line.w-90 { width: 90%; }
+.skeleton-line.w-40 { width: 40%; }
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 分页信息 */
+.pagination-info {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  padding: 12px 0;
+}
+
+/* Header action */
+.header-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.header-action:active { background: var(--color-primary-bg); }
+.header-action.primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: white;
+  font-weight: 600;
+  font-size: 22px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ActionSheet */
+.action-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.action-panel {
+  width: 100%;
+  background: var(--color-bg-card);
+  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px));
+}
+.action-title {
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+}
+.action-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px;
+  margin-bottom: 6px;
+  background: var(--color-bg-page);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+}
+.action-item:active { background: var(--color-bg-hover); }
+.action-item.cancel {
+  background: var(--color-bg-card);
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+  justify-content: center;
+  margin-top: 4px;
+  font-weight: 500;
+}
+.action-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.action-sheet-enter-active, .action-sheet-leave-active {
+  transition: opacity 0.25s ease;
+}
+.action-sheet-enter-active .action-panel, .action-sheet-leave-active .action-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.action-sheet-enter-from, .action-sheet-leave-to { opacity: 0; }
+.action-sheet-enter-from .action-panel, .action-sheet-leave-to .action-panel {
+  transform: translateY(100%);
+}
+
+/* 搜索 Sheet */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3500;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+}
+.search-panel {
+  width: 100%;
+  background: var(--color-bg-card);
+  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px));
+}
+.search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.search-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold, 600);
+}
+.search-header button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+}
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-page);
+  font-size: 15px;
+  outline: none;
+  color: var(--color-text-primary);
+}
+.search-input:focus { border-color: var(--color-primary); }
+.search-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.btn-secondary, .btn-primary {
+  flex: 1;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-secondary {
+  background: var(--color-bg-page);
+  color: var(--color-text-regular);
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: white;
+}
+
+.search-sheet-enter-active, .search-sheet-leave-active {
+  transition: opacity 0.25s ease;
+}
+.search-sheet-enter-active .search-panel, .search-sheet-leave-active .search-panel {
+  transition: transform 0.3s ease;
+}
+.search-sheet-enter-from, .search-sheet-leave-to { opacity: 0; }
+.search-sheet-enter-from .search-panel, .search-sheet-leave-to .search-panel {
+  transform: translateY(100%);
+}
+</style>
