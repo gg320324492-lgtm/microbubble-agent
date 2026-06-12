@@ -11,10 +11,10 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**当前状态（2026-06-12 v4 收官后，commit `e92842d`）**：
-- **18 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2）
+**Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**当前状态（2026-06-12 深夜收尾后，commit `cf70ff5`）**：
+- **22 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4：a11y / composable 解构 / Docker 模块缓存 + Optional import / SSE brief 重复）
 - **160 测试全过**（87 后端 + 73 前端，0 回归）
-- **918 次提交 / 187K 行代码 / 2840 文件 / 28 开发天数**（`app/stats.json` 动态）
+- **940 次提交 / 187K 行代码 / 2840 文件 / 28 开发天数**（`app/stats.json` 由 webhook 部署时云端重生成；本地 Git Bash `find` 行为差异不一致）
 - **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留）
 
 **v2/v3/v4 关键成果**：
@@ -156,6 +156,17 @@
 - **12 类 Rich Block 组件化**（v3 + v4 累计）— `MeetingCard` / `TaskListBlock` / `KnowledgeRefBlock` / `MemberCardBlock` / `FormulaBlock` / `HypothesisBlock` / `ProjectSummaryBlock` / `TranscriptBlock` / `ChartBlock` + 2 兜底。注册表 `web/src/components/chat/blocks/registry.ts` 用 `Record<string, Component>` 极简映射，支持 `registerBlock()` 动态扩展。**新增 block 类型**只改 3 处：①组件实现 ②registry 注册 ③`chat_engine._extract_rich_block.implicit_map` 加映射
 - **多会话侧栏 + 兼容 v1**（v3 设计）— Pinia `chatSessions` store 自动 watch 持久化到 localStorage，**首次启动调 `migrateFromV1()`** 从旧 `chat_session_id` 单键导入为新会话。**新会话标题**取首条 user 消息前 30 字（LLM-as-judge 不依赖，零成本）
 - **dark mode 主题切换通过 CSS 变量**（v3 设计）— `web/src/assets/variables.css` 加 `[data-theme="dark"]` 块重定义 `--color-*` 变量，所有组件用 `var(--color-primary)` 而非硬编码 `#FF7A5C`。切换主题 = `document.documentElement.setAttribute('data-theme', 'dark')` + localStorage 持久化。**不切换主题文件**避免双套 CSS 加载
+
+### 2026-06-12 新增（深夜，4 commits 收尾）
+
+- **Docker volume 挂载只换文件不换 Python 模块缓存**（重要，commit `4ba7390`）— `/api/v1/chat/stream` 404 排查双层根因：①app 容器 8:43 启动，`chat.py` 17:55 才加 `/chat/stream` 路由，**volume 实时同步文件但 Python 进程只在启动时 import 一次**，路由表停留在 16:43 那刻。`docker exec ... cat chat.py` 能看到新版（误导诊断），但 `curl /openapi.json | grep /chat/stream` **完全没有**这条路由（决定性证据）②重启 app 后又暴露 `search_tools.py` 缺 `from typing import Optional`，整个 FastAPI 启动失败 → 所有 `/api/v1/*` 路由 404。这个 NameError 是 v4 收官批量改 tools/ 时引入，但**模块缓存反过来掩盖了它数天**，直到为修 chat/stream 重启才一次性炸。**规则**：①怀疑路由 404 时**第一步看 OpenAPI**：`curl /openapi.json | grep "/route"`，没有 = 100% 模块缓存问题，不要去查文件 ②任何改路由 / import / 装饰器 / Pydantic 模型字段的 commit **必须** `docker compose restart app`，不只是 celery ③批量改 `tools/` 或 `schemas/` 的 commit **必须立即手动重启验证**，不要寄望"下次自然重启"暴露 bug ④扫描 typing import 漏写的 bash one-liner：`for f in app/agent/tools/*.py; do uses=$(grep -c '\bOptional\b' "$f"); has=$(grep -c 'from typing import.*Optional' "$f"); [ "$uses" -gt 0 ] && [ "$has" -eq 0 ] && echo "MISSING typing import: $f"; done`。**沉淀**：[docker-python-module-cache.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/docker-python-module-cache.md)
+- **SSE/WS 流式事件两种语义混用必爆**（重要，commit `cf70ff5`）— `chat_engine.chat_stream` 流式分支既 yield `text_delta`（每个 token 一个增量）又在结束时 yield `brief`（`delta=accumulated_text` 完整文本快照）。前端 [ChatViewSSE.vue:215](web/src/views/chat/ChatViewSSE.vue#L215) 旧版 `if (type === 'text_delta' || type === 'brief' || type === 'detail') content += delta` **盲目 append**，结果 text_delta 累一遍 brief + brief 又把完整文本 append 一次 → 用户看到内容**重复出现两次**。**两类事件长得一样但语义相反**：
+  - **增量事件**（如 `text_delta`）：delta=新增的一小段，正确处理 `content += delta`
+  - **快照事件**（如 `brief`）：delta=完整累积文本，正确处理 `content = delta`（替换）或**根本不 append**（仅作阶段标记）
+  
+  **诊断方法**：①Network → EventStream 看原始事件流，哪一帧 delta 字段**突然变长**就是快照事件；②`console.log(content.length)` 每收一帧，长度**翻倍** = 快照被误 append。**防御纪律**：①protocol 文件里**显式标注每个事件类型的 delta 语义**（增量/快照/替换）②**前端不写「多事件类型共用 append 分支」**——拆开强迫读代码时区分语义 ③快照事件命名带 `_snapshot` / `_complete` 后缀避免误读 ④添加新事件类型时先想清楚 delta 是增量还是快照，更新两端 protocol + 组件 switch case。**沉淀**：[sse-event-semantic-mismatch.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/sse-event-semantic-mismatch.md)
+- **Composable 解构字段名拼写错误**（重要，commit `13ba305`）— `const { isOnline } = useNetworkStatus()` 但 composable 实际暴露 `online` 不是 `isOnline`，`isOnline = undefined` 让模板 `v-if="!isOnline"` 永远等价于 `v-if="true"`，横幅永远显示"网络已断开"。**与 2026-06-02 变量名笔误同源**（`<script setup>` 内标识符错误编译期完全沉默），但触发模式不同：第 2 条访问**未声明**变量 → 运行到 lifecycle 抛 `ReferenceError` → 白屏（易察觉）；这条解构出**不存在字段** → 变量永远 `undefined` → 模板永远 falsy/truthy → **沉默误导**（难察觉，看起来"功能在跑"但条件永错）。**对照**：`MainLayout.vue` / `AudioRecorder.vue` 用 `const network = useNetworkStatus()` 整体接收没踩坑。**规则**：①解构 composable **前必看 return 语句**，不凭直觉猜字段名（`isOnline` / `connected` / `available` / `loading` / `isLoading` 都是常见误猜）②不确定时改用整体接收 `const x = useXxx()` + `x.field.value` ③想要重命名就显式写 `const { online: isOnline } = useXxx()`，强迫看一眼源字段名 ④TypeScript 能编译期捕获，纯 JS 项目得靠纪律。**沉淀**：[frontend-pitfalls.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/frontend-pitfalls.md) 第 4 条
+- **a11y file input 4 属性套件**（小坑，commit `c97071c`）— webhint 在 `/chat` 报隐藏 file input 无 label。所有 `<input type="file" hidden>` 必须补齐 4 属性：①`id` + `name`（webhint「form field needs id or name」+ 浏览器 autofill 友好）②`aria-label`（axe「elements must have labels」，hidden input 无法走可见 label 路径）③`title`（webhint 兜底）。每个 id 全局唯一，多文件复用同样语义时加 `-legacy` / `-v2` 后缀避免 autofill 串扰。本项目 5 个 file input 全部修齐：[ChatViewSSE.vue:506-526](web/src/views/chat/ChatViewSSE.vue#L506-L526)（chat-image-upload / chat-file-upload）+ [ChatView.vue:147-168](web/src/views/ChatView.vue#L147-L168)（legacy 后缀）+ [SettingsView.vue:16-25](web/src/views/SettingsView.vue#L16-L25)（settings-avatar-upload）
 
 ### 2026-06-12 新增（晚间）
 

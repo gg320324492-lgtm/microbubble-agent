@@ -1,8 +1,14 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-12 晚** — 会议查询 bug 双层根因修复（`app/agent/core.py:911` UnboundLocalError + LLM 撒谎模式）+ prompts.py 顶部"工具调用黄金规则" + tools.py 必调工具描述
+> 最后更新: **2026-06-12 深夜** — SSE brief 事件重复输出修复 + Docker Python 模块缓存双 bug 排查（`/chat/stream` 404 → 模块缓存失配 → 暴露 `search_tools.py` NameError）+ ChatViewSSE composable 解构字段名拼写 + 5 个 file input a11y 收尾 — 4 commits（cf70ff5 / 4ba7390 / 13ba305 / c97071c）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-12 深夜）
+- [🐛 SSE brief 事件重复输出修复](#sse-brief-事件重复输出修复2026-06-12-深夜)（增量 token + 完整快照塞同 append 分支 — commit cf70ff5）
+- [🐛 /chat/stream 404 双层根因：Docker 模块缓存 + 隐藏 NameError](#chatstream-404-双层根因docker-模块缓存--隐藏-nameerror2026-06-12-深夜)（commit 4ba7390 + docker restart）
+- [🐛 聊天误显"网络已断开" composable 解构字段名拼写](#聊天误显网络已断开-composable-解构字段名拼写2026-06-12-深夜)（{ isOnline } vs { online } — commit 13ba305）
+- [♿ 5 个 file input 补 a11y 4 属性](#5-个-file-input-补-a11y-4-属性2026-06-12-深夜)（id/name/aria-label/title — commit c97071c）
 
 ### 最新完成（2026-06-12 晚）
 - [🐛 会议查询 bug 双层根因修复](#会议查询-bug-双层根因修复2026-06-12-晚)（`app/agent/core.py:911` UnboundLocalError + LLM 撒谎模式 + prompts.py 工具调用黄金规则）
@@ -46,6 +52,149 @@
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
 
 ---
+
+---
+
+## SSE brief 事件重复输出修复（2026-06-12 深夜）
+
+**问题**：聊天回复内容**完全重复输出两次**（"你好！晚上好，杜同贺...你好！晚上好，杜同贺..."），用户视觉上每次都看到同一段话被复述。
+
+### 根因（一行 bug，事件语义不匹配）
+
+后端 [chat_engine.py](app/agent/chat_engine.py) 流式分支按**两种粒度**发送同样的 brief 文本：
+
+| 行号 | 事件 | delta 字段含义 |
+|---|---|---|
+| [193-199](app/agent/chat_engine.py#L193-L199) | `text_delta` × N | 每个增量 token（如 `"你"`、`"好"`） |
+| [244-245](app/agent/chat_engine.py#L244-L245) | `brief` × 1 | `accumulated_text` —— **完整 brief 文本** |
+
+前端 [ChatViewSSE.vue:215](web/src/views/chat/ChatViewSSE.vue#L215) 旧版把三种事件**一视同仁** `append delta`：
+
+```js
+if (evt.type === 'text_delta' || evt.type === 'brief' || evt.type === 'detail') {
+  assistantMsg.content += evt.delta || ''
+}
+```
+
+结果：
+- `text_delta` × N 累完: `"你好！晚上好..."`（第一遍）
+- `brief` 又 append 完整文本: `"你好！晚上好...你好！晚上好..."`（第二遍）
+
+### 修复（前端 3 分支拆分）
+
+```js
+if (evt.type === 'text_delta') {
+  assistantMsg.content += evt.delta || ''            // 增量 append
+} else if (evt.type === 'brief') {
+  // 阶段标记，delta 已被 text_delta 累完，不重复 append
+  if (!assistantMsg.content && evt.delta) assistantMsg.content = evt.delta  // 容错降级
+} else if (evt.type === 'detail') {
+  // detail 是 brief 之后的延伸，用 \n\n 分隔
+  if (evt.delta) assistantMsg.content += (assistantMsg.content ? '\n\n' : '') + evt.delta
+}
+```
+
+**好处**：双轨容错。后端正常发 `text_delta + brief` 走主路径；降级只发 `brief` 也能正确显示；为未来 `_append_detail_background` 通过 SSE 发 detail 预留正确语义。
+
+**沉淀**：[sse-event-semantic-mismatch.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/sse-event-semantic-mismatch.md) — SSE/WS 增量 vs 快照事件混用 = 沉默 bug 家族。Commit `cf70ff5`。
+
+---
+
+## /chat/stream 404 双层根因：Docker 模块缓存 + 隐藏 NameError（2026-06-12 深夜）
+
+**问题**：聊天页发消息后 `ChatViewSSE.vue` 抛 `HTTP 404: {"detail":"Not Found"}`，所有对话失败。
+
+### 双层根因（前一个 bug 掩盖了后一个）
+
+**根因 ①（直接）**：Docker Python 模块缓存失配。
+- app 容器启动时间：`2026-06-12 08:43 UTC`（北京 16:43）
+- `chat.py` 加 `/chat/stream` 路由的 commit 时间：`2026-06-12 17:55 +0800`
+- **代码改在容器启动之后** → volume 挂载让文件可见（`docker exec cat chat.py` 找得到），但 Python 进程只 import 一次 → 路由表停留在 16:43 那一刻
+- 决定性证据：`curl /openapi.json | grep chat` 只有 `/chat`、`/chat/file`、`/chat/image`、`/chat/history`，**没有 `/chat/stream`**
+
+**根因 ②（隐藏炸弹）**：`search_tools.py` 缺 `from typing import Optional`。
+- `WebSearchOutput` 用 `Optional[str]` 但忘记 import → `NameError: name 'Optional' is not defined`
+- v4 收官批量改 `tools/` 时引入，但 app 容器一直没重启过（运行旧版 search_tools.py）→ **模块缓存反过来掩盖了 NameError，潜伏数天没人发现**
+- 重启时一次性炸：整个 FastAPI 启动失败 → 所有 `/api/v1/*` 路由 404（不是只有 chat/stream）
+
+### 修复
+
+| Step | 动作 |
+|---|---|
+| 1 | [app/agent/tools/search_tools.py](app/agent/tools/search_tools.py) 加 `from typing import Optional` |
+| 2 | 扫全部 `app/agent/tools/*.py`，无其他同类问题（一行 bash 脚本验证） |
+| 3 | `docker compose restart app` → 5 秒返 200 |
+| 4 | OpenAPI 确认 `/api/v1/chat/stream` 已注册 |
+| 5 | 无 token POST 返 401（认证缺失，路由正常）✅ |
+
+### 教训
+
+1. **「文件可见」≠「模块加载」** — `docker exec cat file.py` 总是最新的，但 Python 进程跑的版本是启动那刻的。改路由/import/装饰器后必须 `docker compose restart`，不只是 celery
+2. **模块缓存会反向掩盖 NameError** — 文件改了但没人触发重启 = bug 永远不暴露。v4 这种批量改 tools/ 的 commit 后**必须立即手动重启验证**
+3. **怀疑路由 404 时先看 OpenAPI** — `curl /openapi.json | grep /your/route`，没有 = 100% 模块缓存问题
+
+**沉淀**：[docker-python-module-cache.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/docker-python-module-cache.md) — 包含诊断三件套 + 防御纪律 + 扫描 typing import 的 bash one-liner。Commit `4ba7390`。
+
+---
+
+## 聊天误显"网络已断开" composable 解构字段名拼写（2026-06-12 深夜）
+
+**问题**：聊天页面横幅**永远显示**"⚠ 网络已断开，正在等待恢复..."，与实际网络状态完全脱钩（本地开发环境网络是好的）。
+
+### 根因（一行 bug，编译期完全沉默）
+
+[ChatViewSSE.vue:48](web/src/views/chat/ChatViewSSE.vue#L48) 写：
+```js
+const { isOnline } = useNetworkStatus()
+```
+
+但 [useNetworkStatus.js:62](web/src/composables/useNetworkStatus.js#L62) 返回 `{ online, effectiveType, status, pendingCount, setPendingCount }`，**根本没有 `isOnline` 字段**。
+
+后果链：
+- `isOnline = undefined`
+- 模板 `v-if="!isOnline"` ≡ `v-if="!undefined"` ≡ `v-if="true"`
+- 横幅**永远显示**
+
+### 修复（最小改动）
+
+```js
+const { online: isOnline } = useNetworkStatus()  // 重命名解构，强迫看一眼源字段名
+```
+
+### 对照检查
+
+| 文件 | 写法 | 状态 |
+|---|---|---|
+| [MainLayout.vue:196](web/src/layouts/MainLayout.vue#L196) | `const network = useNetworkStatus()` + `network.online.value` | ✅ 正确 |
+| [AudioRecorder.vue:80](web/src/components/AudioRecorder.vue#L80) | `const network = useNetworkStatus()` + `network.online.value` | ✅ 正确 |
+| [ChatViewSSE.vue:48](web/src/views/chat/ChatViewSSE.vue#L48) | `const { isOnline } = ...` | ❌ 已修 |
+
+整体接收 `network` 没踩坑，唯独 ChatViewSSE 解构时凭直觉猜了 `isOnline`（合理但错的命名直觉）。
+
+**沉淀**：更新 [frontend-pitfalls.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/frontend-pitfalls.md) 第 4 条「composable 解构字段名拼写错误」— 跟变量名笔误同源（编译期沉默），但更隐蔽（变量永远 undefined → 模板永远 falsy/truthy → 看起来"功能在跑"但条件永错）。Commit `13ba305`。
+
+---
+
+## 5 个 file input 补 a11y 4 属性（2026-06-12 深夜）
+
+**问题**：webhint + axe 在 `/chat` 页报「Form field element should have an id or name attribute」+「Elements must have labels」。
+
+### 修复（统一 4 属性）
+
+扫全项目 5 个 `type="file"` input 一次性补齐：
+
+| 文件 | input | id / name |
+|---|---|---|
+| [ChatViewSSE.vue:506-526](web/src/views/chat/ChatViewSSE.vue#L506-L526) | 图片+文件上传（活跃 /chat） | `chat-image-upload` / `chat-file-upload` |
+| [ChatView.vue:147-168](web/src/views/ChatView.vue#L147-L168) | 图片+文件上传（v1 回滚版） | `chat-image-upload-legacy` / `chat-file-upload-legacy` |
+| [SettingsView.vue:16-25](web/src/views/SettingsView.vue#L16-L25) | 头像上传 | `settings-avatar-upload` |
+
+每个 input 补 4 属性：
+- `id` + `name` — 满足 webhint「form field needs id or name」+ 浏览器 autofill 友好
+- `aria-label` — 满足 axe「elements must have labels」（hidden input 无法走可见 label 路径）
+- `title` — webhint 兜底
+
+每个 id 全局唯一（legacy 后缀避免与 SSE 版冲突，浏览器 autofill 不串）。Commit `c97071c`。
 
 ---
 

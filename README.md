@@ -22,6 +22,12 @@
 
 ### 近期新增（按时间倒序）
 
+- **🐛 SSE brief 事件重复输出 + 误显"网络已断开" + a11y 修复（2026-06-12 深夜，4 commits）** — 收尾批量修：
+  - **`cf70ff5`**：聊天回复内容**重复出现两次**（"你好！晚上好...你好！晚上好..."）— 根因 `chat_engine.chat_stream` 流式分支既 yield `text_delta` 增量 token 又在结束时 yield `brief` 完整文本快照，前端 [ChatViewSSE.vue:215](web/src/views/chat/ChatViewSSE.vue#L215) 把两种事件塞进同一 `||` 分支盲目 `append` → text_delta 累完一遍 + brief 又把完整文本 append 一次。修复：拆 3 分支按事件语义处理（`text_delta` 增量 append / `brief` 阶段标记不重复 / `detail` 用 `\n\n` 分隔 append）
+  - **`4ba7390`**：`/api/v1/chat/stream` **404 双层根因排查** — ①Docker Python 模块缓存（app 容器 8:43 启动 vs `chat.py` 17:55 修改 → 进程内永远是旧路由表，OpenAPI 里没有 `/chat/stream`，volume 挂载只换文件不换模块缓存）②重启后又暴露 `search_tools.py` 缺 `from typing import Optional`（v4 收官 commit 引入但被模块缓存掩盖数天），整个 FastAPI 启动失败 → 所有 `/api/v1/*` 路由 404。修复：补 typing import + `docker compose restart app`
+  - **`13ba305`**：聊天页面横幅**永远显示"网络已断开，正在等待恢复..."** — 根因 `const { isOnline } = useNetworkStatus()` 解构出**不存在的字段**（composable 实际暴露 `online` 不是 `isOnline`），`isOnline = undefined` 让模板 `v-if="!isOnline"` 永远 `true`。修复：`const { online: isOnline } = useNetworkStatus()` 重命名解构。对照：`MainLayout.vue` / `AudioRecorder.vue` 用 `const network = useNetworkStatus()` 整体接收没踩坑
+  - **`c97071c`**：webhint 报 `/chat` 页 2 个隐藏 file input 无 label — 顺手扫全项目 **5 个 `type="file"` input** 统一补 `id` + `name` + `aria-label` + `title` 4 属性（ChatViewSSE 2 个 / ChatView 2 个 legacy / SettingsView 1 个头像）
+  - **沉淀 2 条新 memory**：[docker-python-module-cache.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/docker-python-module-cache.md)（volume 挂载 vs 模块缓存两面教训 + 诊断三件套）、[sse-event-semantic-mismatch.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/sse-event-semantic-mismatch.md)（SSE 增量/快照事件混用 → 同 delta 字段语义不对齐）；更新 [frontend-pitfalls.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/frontend-pitfalls.md) 加第 4 条 composable 解构猜字段名
 - **v2/v3/v4 全栈架构重构完成（2026-06-12 收官）** — 小气助手后端 Agent 从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件。**17 commits 推进**（`8fff43a`→`e92842d`），关键成果：
   - **v2 核心**（Day 1-8, 6 commits）：拆 core.py 基础设施 / ChatEngine 双层回复引擎 / @tool 装饰器 + Pydantic 校验 / `/chat/stream` SSE 真实流式 / 4 Rich Block 组件 / 18 E2E 集成测试 + 部署文档
   - **v3 深化**（Day 9-15, 5 commits）：9 个新工具（get_meeting_detail/transcript/member_profile/project_summary/list_formulas/list_hypotheses + 3 项目域）/ 5 个新 Rich Block（Formula/Hypothesis/ProjectSummary/Transcript/Chart）/ 多会话侧栏（Pinia + localStorage）/ dark mode（CSS 变量化 + 顶栏 toggle）/ agent_traces 可观测性闭环（Celery 持久化 + `/admin/agent-traces` + 管理页）
@@ -413,6 +419,12 @@ npm run dev
 
 ### 🔧 最新改进（2026-06-12）
 
+- **🐛 SSE brief 重复输出 + 误显"网络已断开" + a11y 收尾（深夜 4 commits）**：
+  - `cf70ff5` — chat brief 事件不再 append delta（修内容出现两次）
+  - `4ba7390` — search_tools.py 补 `Optional` import + `docker compose restart app`（修 `/chat/stream` 404 双层根因：Python 模块缓存失配 + 缓存掩盖的 NameError）
+  - `13ba305` — ChatViewSSE 解构 `isOnline` 字段名拼写错误（实际字段是 `online`），横幅永远显示已断开
+  - `c97071c` — 5 个 file input 补 `id` + `name` + `aria-label` + `title`（修 webhint form-label + axe a11y 警告）
+  - 沉淀 2 条新 memory：[Docker Python Module Cache](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/docker-python-module-cache.md) + [SSE Event Semantic Mismatch](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/sse-event-semantic-mismatch.md)；更新 [frontend-pitfalls](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/frontend-pitfalls.md) 加第 4 条 composable 解构坑
 - **🐛 会议查询 bug 双层根因修复（晚间）** — 用户问"有没有相关会议可以学习？"AI 一直撒谎说"系统故障/数据库暂无"，实际 API 正常 + 数据库有 7 条会议。**两层根因**（教训双倍）：①`prompts.py` 只对 `query_all_member_tasks` 有"必须调用"规则，`query_meetings` 没有强指令 → LLM 倾向自己编造借口 ②`app/agent/core.py:911` 函数体内 `from app.services.meeting_service import MeetingService` 让 Python 编译器把**整个 `_execute_tool` 函数**的 `MeetingService` 当局部变量（与 2026-06-02 WS 闪烁根因同类），`query_meetings` 分支调 `MeetingService(db)` 抛 `UnboundLocalError` 被 `except` 吞掉。**三处修复**：①删 line 911 冗余 import ②`prompts.py` 顶部加「工具调用黄金规则 (CRITICAL)」+ 「Meeting Query Rules (IMPORTANT)」③`tools.py` 中 `query_meetings` 描述改为「【必调工具】」+ 列举触发短语。验证：问原始问句 → 真的返回 6+ 场真实会议 + 远紫外 #85 学术报告细节（222nm/UV/EST/Water Research/Nature Communications）齐
 - **🛡️ 会议录音全栈防御机制 5 阶段完成** — 解决 #84 案例"58 分钟录音断网丢失"。详见 [ROADMAP](ROADMAP.md#会议录音全栈防御机制2026-06-12)：
   - **阶段 1** 前端 IndexedDB 兜底 + 边录边传（`useChunkedRecorder` + `useChunkedUploader` + `idbStore`，21 个新测试）
