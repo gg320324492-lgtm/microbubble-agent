@@ -22,7 +22,9 @@ const routes = [
       {
         path: 'chat',
         name: 'Chat',
-        component: () => import('@/views/ChatView.vue'),
+        // 2026-06-12 v2 优化：切换到 ChatViewSSE（接 SSE 流式 + Rich Block 渲染）
+        // 原 ChatView.vue 保留在 web/src/views/ChatView.vue 作为回滚
+        component: () => import('@/views/chat/ChatViewSSE.vue'),
         meta: { title: '智能对话', icon: 'ChatDotRound' }
       },
       {
