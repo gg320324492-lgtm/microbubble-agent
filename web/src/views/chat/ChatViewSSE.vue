@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * ChatViewSSE.vue — v2 极简版（接 SSE 流式 + Rich Block 渲染）
  *
