@@ -1,8 +1,18 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-12 深夜** — SSE brief 事件重复输出修复 + Docker Python 模块缓存双 bug 排查（`/chat/stream` 404 → 模块缓存失配 → 暴露 `search_tools.py` NameError）+ ChatViewSSE composable 解构字段名拼写 + 5 个 file input a11y 收尾 — 4 commits（cf70ff5 / 4ba7390 / 13ba305 / c97071c）
+> 最后更新: **2026-06-12 深夜（推进 2 commits）** — 多会话并行架构 + 切会话丢数据修复 + AbortController 取消旧 SSE + a11y chat `<textarea>` 4 属性套件（commit `662a6ea`）；后端 3 bug 修复（RichBlock 守卫 + search_knowledge Dict 导入 + time.monotonic 混用）+ curl 验证（commit `3852755`）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-12 深夜 +1）
+- [🚀 多会话并行架构（修复 4）](#多会话并行架构修复-42026-06-12)（per-session 数据隔离 + targetSessionId 闭包 + activeAssistantMap 引用 + 切走不打断后台生成 — commit 662a6ea）
+- [🐛 切会话丢数据修复（修复 1）](#切会话丢数据修复修复-12026-06-12)（onSwitchSession 切前 persistMessages 保存当前会话 — commit 662a6ea）
+- [🛡️ AbortController 取消旧 SSE 流（修复 2）](#abortcontroller-取消旧-sse-流修复-22026-06-12)（sseFetch 加 signal + per-session abortControllers — commit 662a6ea）
+- [♻️ watch(sessionId) 兜底 reload（修复 3）](#watchsessionid-兜底-reload修复-32026-06-12)（外部代码改 sessionId 触发 rebuild — commit 662a6ea）
+- [♿ chat `<textarea>` 补 a11y 4 属性](#chat-textarea-补-a11y-4-属性2026-06-12)（id/name/aria-label/title — commit 662a6ea）
+- [🐛 RichBlock.type=None Literal 验证失败](#richblocktype-none-literal-验证失败2026-06-12)（17 个 tool schema 默认 None + chat_engine 不分青红皂白构造 — commit 3852755）
+- [🐛 search_knowledge Dict 导入缺失](#search_knowledge-dict-导入缺失2026-06-12)（模块加载级 NameError 让整个 hybrid_retriever import 失败 — commit 3852755）
+- [🐛 time.monotonic / time.time 混用](#timemonotonic--timetime-混用2026-06-12)（duration_ms=1780984477934 错乱数字 — commit 3852755）
 
 ### 最新完成（2026-06-12 深夜）
 - [🐛 SSE brief 事件重复输出修复](#sse-brief-事件重复输出修复2026-06-12-深夜)（增量 token + 完整快照塞同 append 分支 — commit cf70ff5）
@@ -3968,4 +3978,242 @@ API 完整，无需改动（CRUD 端点 5 个 + `apply_template_to_meeting_data`
 **评估**：`data/eval_queries.jsonl` + `scripts/{run_llm_judge,run_rag_eval,build_eval_ground_truth}.py`
 
 **性能**：`tests/perf/{test_brief_latency,test_sse_first_byte,test_tool_round_trip}.py`
+
+---
+
+## 多会话并行架构（修复 4，2026-06-12 深夜 +1）
+
+**commit `662a6ea`**（feat(chat): 多会话并行架构 + 切会话丢数据修复 + AbortController + a11y textarea）
+
+**需求**：用户在 A 会话输入"你好"（SSE 开始流式生成）→ 切到 B 会话继续对话 → A 不中断在后台继续 → 切回 A 看到 A 已生成完的内容。多个 SSE 并行互不干扰。
+
+**为什么是架构改造**：旧版 `messages: Ref<Message[]>` 是单一数组，切会话时**直接替换** `messages.value`，导致 ①正在生成的流式内容丢失 ②旧 SSE 流 yield 把内容写到已被覆盖的 `assistantMsg` 引用（白做工）③多个 SSE 流并发会互相打架。
+
+**核心数据结构（per-session 隔离）**：
+- `messagesBySession: ref<Record<sessionId, Message[]>>({})` — 每会话独立消息数组
+- `messages = computed(() => messagesBySession.value[sessionId.value] || [])` — 模板用
+- `activeAssistantMap: ref<Record<sessionId, Message>>({})` — SSE yield 找目标引用
+- `abortControllers: Record<sessionId, AbortController>` — per-session 取消
+- `sendingSessions: Set<sessionId>` — per-session 锁（不阻止其他会话）
+- `loadedSessions: Set<sessionId>` — 防重复加载覆盖后台 SSE 增量
+- `persistTimers: Record<sessionId, Timer>` — debounce 100ms 持久化
+
+**关键设计**：
+- **`sendMessage` 启动时闭包捕获 `targetSessionId = sessionId.value`**（防止 SSE yield 时外层 `sessionId.value` 已切到 B）
+- **SSE yield 通过 `activeAssistantMap.value[targetSessionId]` 找目标 assistantMsg 引用**（即使切到 B，A 的 SSE 仍能写 A 的对象）
+- **`scrollToBottom` / `loading` 仅 `targetSessionId === sessionId.value` 时触发**（避免切走后还在滚 A 的消息区）
+- **切会话不 abort 任何 SSE**（让 A 后台继续跑），但**组件卸载时 abort 所有**
+- **持久化改每次 yield debounce 100ms**（防后台丢数据）
+
+**文件改动**：[web/src/views/chat/ChatViewSSE.vue](web/src/views/chat/ChatViewSSE.vue) 692 → 787 行（架构改造）
+
+**沉淀**：[multi-session-parallel-architecture.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/multi-session-parallel-architecture.md)
+
+---
+
+## 切会话丢数据修复（修复 1，2026-06-12 深夜 +1）
+
+**问题**：用户在 A 会话输入"你好"等流式回复中 → 切到 B 会话 → 切回 A → A 之前生成的回复"消失"了。
+
+**根因**：[web/src/views/chat/ChatViewSSE.vue:79-93](web/src/views/chat/ChatViewSSE.vue#L79-L93) `onSwitchSession` 旧版：
+```javascript
+const onSwitchSession = (id) => {
+  sessionId.value = id
+  const saved = localStorage.getItem(`chat_msgs_${id}`)
+  if (saved) {
+    try { messages.value = JSON.parse(saved) } catch { messages.value = [] }
+  } else {
+    messages.value = [{...}]
+  }
+}
+```
+**没在切换前保存当前会话** → 切走时正在生成的流式回复直接丢。
+
+**修复**：切换前先 `persistSessionSync(sessionId.value)` 把当前会话快照保存到 localStorage（虽然 A 还在后台生成，但**切走时已生成的部分**不丢）。同时归并到修复 4 架构的 `persistSessionSync(id)` 工具函数（同步 + debounce 两个版本）。
+
+**commit**：`662a6ea`
+
+---
+
+## AbortController 取消旧 SSE 流（修复 2，2026-06-12 深夜 +1）
+
+**问题**：
+- 多次快速点击"发送"按钮 → 多个 SSE 流并发 → 旧流的 yield 把内容写到新流的 `assistantMsg`
+- 切到 B 会话时旧 SSE 仍在跑 → 浪费资源 + yield 到无引用对象
+- 组件卸载时 SSE 流没关闭 → reader 没 release
+
+**修复**：
+1. [web/src/api/agent/sse.ts](web/src/api/agent/sse.ts) `sseFetch` 加 `signal` 选项 + 内部 `if (signal?.aborted) { await reader.cancel(); return }` 优雅退出
+2. `ChatViewSSE` 加 `abortControllers: Record<sessionId, AbortController>` per-session 引用
+3. `sendMessage` 启动前 `abortControllers[targetSessionId]?.abort()` + 创建新 controller
+4. `onUnmounted` abort 所有 controller + 持久化所有 session
+
+**commit**：`662a6ea`
+
+**关键纪律**：**abort 策略分层**——同视图内重复点击 + 组件卸载要 abort，但**切会话不 abort**（让后台继续跑）。这是修复 4 与旧版"切走就 abort"的关键区别。
+
+---
+
+## watch(sessionId) 兜底 reload（修复 3，2026-06-12 深夜 +1）
+
+**问题**：`sessionId` 可能在 `onSwitchSession` 之外被外部代码改（如 SessionSidebar 调 store action 直接改 currentId），但**没有 watch** 触发 reload，UI 仍显示旧消息。
+
+**修复**：
+```javascript
+watch(sessionId, (newId, oldId) => {
+  if (newId === oldId) return
+  if (loading.value) {
+    // 正在生成：暂不 reload（避免打断后台流式）
+    return
+  }
+  loadHistory(newId)
+  nextTick(scrollToBottom)
+})
+```
+
+**注意**：`onSwitchSession` / `onCreateSession` 内部手动设的 `sessionId` 走自己的 reload 路径，**不**走 watch（避免双重加载）。
+
+**commit**：`662a6ea`
+
+**参考**：CLAUDE.md 2026-06-11 重点规则「Vue `watch` 响应式数据 — 组件消息/内容依赖 props 数据时只在 onMounted 构建一次会导致数据过时」。
+
+---
+
+## chat `<textarea>` 补 a11y 4 属性（2026-06-12 深夜 +1）
+
+**问题**：webhint 报 `A form field element should have an id or name attribute. A form field element has neither an id nor a name attribute. This might prevent the browser from correctly autofilling the form.`
+
+**根因**：[web/src/views/chat/ChatViewSSE.vue:646-654](web/src/views/chat/ChatViewSSE.vue#L646-L654) chat 输入 `<textarea>` 此前**没** `id` / `name` 属性（历史欠债）。
+
+**修复**：
+```html
+<textarea
+  ref="textareaRef"
+  id="chat-input-textarea"
+  name="chat-input-textarea"
+  v-model="inputText"
+  class="input-textarea"
+  placeholder="问问小气…"
+  rows="1"
+  aria-label="聊天输入框"
+  title="聊天输入框"
+  @keydown="handleKeydown"
+  @input="autoResize"
+/>
+```
+
+**commit**：`662a6ea`（合并到修复 4 架构改造 commit）
+
+**a11y 4 属性铁律**：任何 `<textarea>` / `<input>` / `<el-input>` 都要补齐 `id` + `name` + `aria-label` + `title` 4 属性。**仅 file input 因为 hidden 无法走可见 label 路径，必须显式 aria-label + title 兜底**。参考 [Webhint Optimization](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/webhint-optimization.md) + 2026-06-12 commit `c97071c`（file input 4 属性套件先例）。
+
+---
+
+## RichBlock.type=None Literal 验证失败（2026-06-12 深夜 +1）
+
+**问题**：用户报告"小气助手还在思考 5+ 分钟"。curl `/api/v1/chat/stream` 验证：SSE 事件链完整（thinking → tool_use → tool_result → brief → done），但 `tool_result` 报 `name 'Dict' is not defined` + `done` 事件 `duration_ms: 1780984477934` 错乱。**多层 bug 叠加触发"hang"现象**。
+
+**根因**（[app/agent/chat_engine.py:432-441](app/agent/chat_engine.py#L432-L441) 旧版）：
+```python
+if "rich_block_type" in result:
+    rb_type = result["rich_block_type"]  # None!
+    data = {k: v for k, v in result.items() if k != "rich_block_type"}
+    return RichBlock(
+        type=rb_type,  # Literal[...] 验证失败！rb_type=None
+        data=data,
+        title=result.get("title"),
+    )
+```
+
+**问题链**：
+1. 17 个 tools/*.py 的 `OutputModel` 都定义 `rich_block_type: Optional[str] = None`（schema 默认值）
+2. 工具 `return {"rich_block_type": None, ...}` 把 None 写进 result dict
+3. `_extract_rich_block` 只要看到键就构造 `RichBlock(type=None, ...)` → Pydantic Literal 验证失败 → 整个 `chat_stream` 流程**没 yield done 事件** → 前端 SSE 不关闭 → "三个点一直转"
+
+**修复**（[app/agent/chat_engine.py:432-449](app/agent/chat_engine.py#L432-L449)）：
+```python
+_VALID_RICH_BLOCK_TYPES: frozenset[str] = frozenset(get_args(RichBlockType))
+
+def _extract_rich_block(tool_name, result):
+    if not isinstance(result, dict):
+        return None
+    rb_type = result.get("rich_block_type")
+    # 守卫：None 或非法 Literal 值都跳过 → fall through 到 implicit_map
+    if rb_type and rb_type in _VALID_RICH_BLOCK_TYPES:
+        data = {k: v for k, v in result.items() if k != "rich_block_type"}
+        return RichBlock(type=rb_type, data=data, title=result.get("title"))
+    # ... implicit_map fallback
+    return None
+```
+
+**用 `get_args(RichBlockType)` 动态生成集合**——与 [app/agent/protocol.py](app/agent/protocol.py) Literal 自动同步，未来新增 block 类型无需维护。
+
+**commit**：`3852755`
+
+**沉淀**：[richblock-type-none-pitfall.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/richblock-type-none-pitfall.md)
+
+---
+
+## search_knowledge Dict 导入缺失（2026-06-12 深夜 +1）
+
+**问题**：curl 测试 `POST /api/v1/chat/stream` 收到 `tool_result.tool_output.message: "工具 search_knowledge 执行失败: name 'Dict' is not defined"`。
+
+**根因**：[app/services/hybrid_retriever.py:12](app/services/hybrid_retriever.py#L12) 写 `from typing import List, Optional`，但 line 272 `eval_set: List[Dict]` / line 305 `async def _aggregate(per_query: List[Dict]) -> Dict` 用到 `Dict`。
+
+**Python 模块加载时**整个模块的语句都会执行，函数定义体内的类型注解也属于"模块加载期执行"——只要遇到 `Dict` 名称查找，就抛 `NameError: name 'Dict' is not defined. Did you mean: 'dict'?`。**整个 hybrid_retriever 模块根本 import 失败** → search_knowledge 工具一调就报，被兜底 except 吞掉返回 status=error。
+
+**诊断**（在容器内直接 import 测试）：
+```python
+docker exec microbubble-agent-app-1 python -c "
+from app.services.hybrid_retriever import get_hybrid_retriever
+"
+# 立刻抛 NameError（行号指向 List[Dict] 类型注解）
+```
+
+**扫描所有 typing import 漏写**（改进版检查 import 列表是否真含所需名字）：
+```bash
+for f in app/services/*.py app/agent/tools/*.py; do
+  for type_name in Dict List Tuple Optional Union Set FrozenSet; do
+    if grep -qE "\b$type_name\b" "$f" 2>/dev/null && ! grep -qE "from typing import.*\b$type_name\b|\*\)" "$f" 2>/dev/null; then
+      echo "MISSING $type_name in: $f"
+    fi
+  done
+done
+```
+
+**修复**：`from typing import List, Optional` → `from typing import Dict, List, Optional`
+
+**commit**：`3852755`
+
+**沉淀**：[typing-import-missing-bug.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/typing-import-missing-bug.md)
+
+**同类坑**：2026-06-12 commit `4ba7390`（search_tools.py 缺 `Optional`）—— 但那次是 *bare name 出现*，不是 *类型注解中出现*。两类都该用扫描 one-liner 覆盖。
+
+---
+
+## time.monotonic / time.time 混用（2026-06-12 深夜 +1）
+
+**问题**：SSE 流 `done` 事件 `duration_ms: 1780984477934`（**19818 年**——明显错乱）。
+
+**根因**：[app/agent/chat_engine.py:158](app/agent/chat_engine.py#L158) `t0 = time.monotonic()`（启动后的秒数，0.0, 1.5, 100.0...）vs line 253 `int((time.time() - t0) * 1000)`（用 `time.time()` 返回 Unix timestamp 秒数 1780984477.934）—— **两个完全不同的时钟**。
+
+**修复**：
+```python
+# chat_engine.py:158 (不变)
+t0 = time.monotonic()
+
+# chat_engine.py:253 (修复)
+# 注意：t0 是 time.monotonic()（line 158），这里必须用 monotonic 配对
+# 旧版用 time.time() 配对产生 1780 万亿毫秒的垃圾值（不同时间基准）
+duration_ms = int((time.monotonic() - t0) * 1000)
+```
+
+**commit**：`3852755`
+
+**验证**：`duration_ms: 2584`（合理——LLM 调用耗时 2.6 秒）。
+
+**纪律**：**时钟必须配对**——`time.monotonic()` 配 `time.monotonic()`（测量经过时间，推荐，避免系统时钟跳变），`time.time()` 配 `time.time()`（Unix timestamp，用于跨进程时间戳）。**永远不要混用**。
+
+---
+
+
 
