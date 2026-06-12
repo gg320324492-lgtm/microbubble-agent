@@ -133,7 +133,7 @@ class ChunkedUploadService:
 
     async def delete_chunks(self, meeting_id: int) -> int:
         """
-        删除某会议的所有 chunk + merged 文件。
+        仅删除某会议的 chunk 文件（不删 merged.webm）。
         返回删除的对象数。
         """
         prefix = self.chunk_prefix.format(meeting_id=meeting_id) + "/"
@@ -145,24 +145,25 @@ class ChunkedUploadService:
                 deleted += 1
             except Exception as e:
                 logger.warning(f"删除 chunk 失败 {obj['object_name']}: {e}")
+        return deleted
 
-        # 顺手删 merged
+    async def delete_merged(self, meeting_id: int) -> bool:
+        """仅删除 merged.webm（merge 后的最终文件）"""
         merged = self._merged_object_name(meeting_id)
         try:
             file_service.delete_file(merged)
-            deleted += 1
+            return True
         except Exception:
-            pass  # 可能不存在
-
-        return deleted
+            return False
 
     async def delete_all(self, meeting_id: int) -> int:
         """
-        删除某会议的所有相关文件（chunks + merged + 旧版 audio_url）。
+        删除某会议的所有相关文件（chunks + merged）。
         用于 DELETE /meetings/{id} 兜底清理。
         """
-        # 1. chunks + merged (chunked 模式)
         deleted = await self.delete_chunks(meeting_id)
+        if await self.delete_merged(meeting_id):
+            deleted += 1
         return deleted
 
 
