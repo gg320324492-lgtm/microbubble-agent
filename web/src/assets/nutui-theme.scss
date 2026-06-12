@@ -1,0 +1,87 @@
+/* ============================================
+   nutui-theme.scss — NutUI 4 主题覆盖（CSS 变量）
+   PR #2: 移动端组件库统一主题（珊瑚橙）
+   ============================================ */
+
+/**
+ * NutUI 4 用 importStyle: 'css' 模式时，编译产物内部用 CSS 变量驱动主题。
+ * 这里通过覆盖 NutUI 暴露的 --nut-* CSS 变量来适配珊瑚橙主题色。
+ *
+ * 注意：NutUI CSS 变量的优先级高于 SCSS 变量，所以这里用 CSS 变量覆盖即可。
+ * 不需要再 @use '@nutui/nutui/dist/styles/variables.scss'。
+ */
+
+:root {
+  /* ===== 主色 ===== */
+  --nut-primary-color: #FF7A5C;
+  --nut-primary-color-end: #FF9D85;
+  --nut-primary-color-pressed: #E85A3A;
+  --nut-primary-disabled-color: #FFB59A;
+
+  /* ===== 功能色 ===== */
+  --nut-success-color: #67C23A;
+  --nut-danger-color: #F56C6C;
+  --nut-warning-color: #E6A23C;
+  --nut-info-color: #909399;
+  --nut-help-color: #909399;
+
+  /* ===== 文字色 ===== */
+  --nut-title-color: #2D2D2D;
+  --nut-title-color2: #606266;
+  --nut-content-color: #606266;
+  --nut-sub-color: #909399;
+  --nut-disable-color: #C0C4CC;
+  --nut-white: #FFFFFF;
+  --nut-black: #2D2D2D;
+
+  /* ===== 背景色 ===== */
+  --nut-background-color: #F5F7FA;
+  --nut-background-color2: #F0F0F0;
+  --nut-background-color3: #FFFFFF;
+
+  /* ===== Tabbar ===== */
+  --nut-tabbar-height: 56px;
+  --nut-tabbar-active-color: #FF7A5C;
+  --nut-tabbar-inactive-color: #909399;
+  --nut-tabbar-border-top: 1px solid #EBEEF5;
+
+  /* ===== Popup ===== */
+  --nut-popup-border-radius: 16px;
+
+  /* ===== Cell ===== */
+  --nut-cell-font-size: 14px;
+  --nut-cell-vertical-padding: 12px;
+  --nut-cell-horizontal-padding: 16px;
+  --nut-cell-border-bottom: 1px solid #EBEEF5;
+
+  /* ===== Button ===== */
+  --nut-button-border-radius: 8px;
+  --nut-button-default-height: 44px;
+  --nut-button-primary-bg-color: #FF7A5C;
+  --nut-button-primary-color: #FFFFFF;
+
+  /* ===== 输入控件 ===== */
+  --nut-input-font-size: 15px;
+  --nut-input-border-color: #EBEEF5;
+}
+
+/* Dark mode 自动继承 data-theme=dark（CSS 变量级联） */
+[data-theme="dark"] {
+  --nut-primary-color: #FF9D85;
+  --nut-primary-color-end: #FF7A5C;
+  --nut-primary-color-pressed: #FFB347;
+
+  --nut-title-color: #e8eaed;
+  --nut-title-color2: #c0c4cc;
+  --nut-content-color: #c0c4cc;
+  --nut-sub-color: #909399;
+  --nut-disable-color: #606266;
+
+  --nut-background-color: #1a1d23;
+  --nut-background-color2: #2a2d35;
+  --nut-background-color3: #2a2d35;
+
+  --nut-tabbar-border-top: 1px solid #3a3d45;
+  --nut-cell-border-bottom: 1px solid #3a3d45;
+  --nut-input-border-color: #3a3d45;
+}

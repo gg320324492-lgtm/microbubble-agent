@@ -17,9 +17,11 @@ import { createPinia } from 'pinia'
 // 1. variables.css 设计令牌（必须在最前）
 // 2. element-plus-overrides.css 桌面组件覆盖
 // 3. mobile-base.css 移动端通用基础（PR #1 新增）
+// 4. nutui-theme.scss NutUI 4 主题变量（PR #2 新增）
 import './assets/variables.css'
 import './assets/element-plus-overrides.css'
 import './assets/mobile-base.css'
+import './assets/nutui-theme.scss'
 // ElMessage / ElMessageBox 是 JS 服务调用，unplugin-vue-components 无法检测模板中的使用，需手动导入 CSS
 import 'element-plus/theme-chalk/el-message.css'
 import 'element-plus/theme-chalk/el-message-box.css'
