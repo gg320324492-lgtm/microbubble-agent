@@ -1,8 +1,16 @@
-# 小气助手 v2 部署文档（2026-06-12 重构）
+# 小气助手 v2/v3 部署文档（2026-06-12 全栈重构）
 
 ## 概述
 
-v2 重构将 `app/agent/core.py` (1469 行单文件) 拆为 7 个职责清晰的文件，并把前端 `ChatView.vue` (565 行) 替换为 `ChatViewSSE.vue` (~350 行)，接入真实 SSE 流式 + Rich Block 富文本渲染。
+Day 1-8 (v2) 核心架构重构：把 `app/agent/core.py` (1469 行单文件) 拆为 7 个职责清晰的文件，前端 `ChatView.vue` (565 行) 替换为 `ChatViewSSE.vue` (~350 行)，接入真实 SSE 流式 + Rich Block 富文本渲染。
+
+Day 9-14 (v3) 全栈深化：
+- 9 个新工具（get_meeting_detail/transcript/member_profile/project_summary/list_formulas/list_hypotheses + 3 个项目域）
+- 6 个旧工具迁到 @tool 装饰器（create_task/update_task/search_knowledge/save_memory/search_memory/web_search）
+- 5 个新 Rich Block 组件（FormulaBlock/HypothesisBlock/ProjectSummaryBlock/TranscriptBlock/ChartBlock）
+- 多会话侧栏（Pinia + IndexedDB 持久化）
+- dark mode（CSS 变量化 + 顶栏 toggle）
+- agent_traces 可观测性闭环（Celery 持久化 + /admin 端点 + 管理页）
 
 ## 部署步骤
 
@@ -156,8 +164,105 @@ npm run build
 
 ## 提交记录
 
-- `8fff43a` refactor(agent): 拆 core.py 基础设施
-- `3e81e82` feat(agent): ChatEngine 双层回复引擎 + v2 主类
-- `371a4fc` feat(agent): 迁移 3 工具 + 2 新工具
-- `1eb9fce` feat(api): ChatResponse 扩 4 字段 + /chat/stream SSE
-- `2f62d51` feat(chat): 前端 SSE + 4 Rich Block 组件
+| Commit | 内容 | 阶段 |
+|---|---|---|
+| `8fff43a` | refactor(agent): 拆 core.py 基础设施 | Day 1 |
+| `3e81e82` | feat(agent): ChatEngine 双层回复引擎 + v2 主类 | Day 2 |
+| `371a4fc` | feat(agent): 迁移 3 工具 + 2 新工具 | Day 3 |
+| `1eb9fce` | feat(api): ChatResponse 扩 4 字段 + /chat/stream SSE | Day 4 |
+| `2f62d51` | feat(chat): 前端 SSE + 4 Rich Block 组件 | Day 5-6 |
+| `463d30b` | feat(agent): 兼容 shim + 18 E2E 集成测试 + 部署文档 | Day 7-8 |
+| `c3c139a` | feat(agent): 9 v2 工具 + 6 迁移 + 删 tools.py | Day 9-10 |
+| `736a17c` | feat(chat): 5 Rich Block 组件 + 动画 + 网络感知 | Day 11-12 |
+| `0737a44` | feat(chat): 多会话侧栏 + dark mode + Pinia | Day 13 |
+| `8c65944` | feat(observability): agent_traces 可观测性闭环 | Day 14 |
+
+---
+
+## v3 部署补充（2026-06-12 Day 9-14 增量）
+
+### 新增数据库表：`agent_traces`
+
+Celery 任务 `app.services.agent_trace_tasks.persist_trace_task` 写这张表。重启后端时会自动 `Base.metadata.create_all` 创建，**无需手动迁移**（如 alembic 启用了可能需 alembic upgrade head 一次）。
+
+```sql
+-- 自动创建（无 alembic 干预场景）
+CREATE TABLE agent_traces (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES members(id),
+    session_id VARCHAR(64) NOT NULL,
+    message TEXT NOT NULL,
+    tool_calls JSON DEFAULT '[]',
+    rich_blocks JSON DEFAULT '[]',
+    brief TEXT,
+    detail TEXT,
+    input_tokens INT, output_tokens INT, total_tokens INT,
+    total_duration_ms INT,
+    error TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX idx_traces_user_created ON agent_traces(user_id, created_at);
+```
+
+### 新增 API 端点
+
+```
+GET  /api/v1/admin/agent-traces       # admin 监控列表（需 admin/leader 权限）
+GET  /api/v1/admin/agent-traces/{id}  # 单条详情
+```
+
+### 新增 Celery 任务
+
+`app.services.agent_trace_tasks.persist_trace_task` — 每次 chat 后异步写 agent_traces 表。已在 `app/core/celery.py` 注册。**重启 celery worker + beat** 即可生效：
+
+```bash
+docker compose restart celery-worker celery-beat
+```
+
+### 新增前端路由
+
+- `/admin/agent-traces` — Agent Trace 监控页（表格 + 详情抽屉）
+- `/chat` — 路由指向 `ChatViewSSE.vue`（含侧栏 + dark mode + 网络感知）
+
+### 19 个新调度工具（@tool 装饰器）
+
+```
+任务: create_task / query_tasks / update_task
+会议: query_meetings / get_meeting_detail / get_meeting_transcript / get_recent_meeting_conclusions
+项目: query_projects / get_project_summary / generate_project_plan
+成员: query_members / get_member_profile
+知识: search_knowledge
+公式: list_formulas
+假设: list_hypotheses
+记忆: save_memory / search_memory / forget_memory
+搜索: web_search
+```
+
+剩 14 个走 `dispatch_legacy` 回退（admin only 或低频）：query_all_member_tasks / get_task_stats / create_meeting / analyze_meeting_transcript / summarize_meeting_transcript / explore_knowledge_graph / find_knowledge_gaps / auto_research / compare_knowledge / summarize_topic / suggest_research / save_conversation_knowledge / set_custom_instructions / enroll_voice / submit_feedback
+
+### 12 类 Rich Block 组件
+
+```
+meeting / task_list / knowledge_ref / member          # Day 1-8
+formula / hypothesis / project / transcript / chart   # Day 11-12
+table (未实现) / fallback                            # 兜底
+```
+
+### 多会话侧栏
+
+Pinia store `web/src/stores/chatSessions.ts` 自动持久化到 localStorage：
+- 240px 折叠侧栏（顶栏 ☰ 切换）
+- 标题自动取首条 user 消息前 30 字
+- 兼容 v1 单会话（migrateFromV1）
+
+### dark mode
+
+`web/src/assets/variables.css` 加 `[data-theme="dark"]` 变量块 + 顶栏 🌙/☀️ toggle，localStorage 持久化。
+
+### 监控闭环
+
+1. chat() 完成后 TraceCollector 自动收集 tool_calls / rich_blocks / token / duration
+2. 异步通过 Celery `persist_trace_task.delay(dict)` 写 agent_traces 表
+3. admin 打开 `/admin/agent-traces` 实时查看
+4. Celery 失败时降级到 logger（不阻塞 chat）
+
