@@ -14,6 +14,7 @@ import HypothesisBlock from './HypothesisBlock.vue'
 import ProjectSummaryBlock from './ProjectSummaryBlock.vue'
 import TranscriptBlock from './TranscriptBlock.vue'
 import ChartBlock from './ChartBlock.vue'
+import TableBlock from './TableBlock.vue' // PR #3 新增
 import FallbackBlock from './FallbackBlock.vue'
 
 const REGISTRY: Record<string, Component> = {
@@ -26,6 +27,7 @@ const REGISTRY: Record<string, Component> = {
   project: ProjectSummaryBlock,
   transcript: TranscriptBlock,
   chart: ChartBlock,
+  table: TableBlock, // PR #3 新增
   fallback: FallbackBlock
 }
 
