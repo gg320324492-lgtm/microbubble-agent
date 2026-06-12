@@ -97,6 +97,60 @@
   --ease-out: ease-out;
   --ease-in-out: ease-in-out;
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ===== 断点（CSS @media 数值必须硬写 CSS 不支持变量，这里仅作文档参考；JS 在 useIsMobile.js 中维护） =====
+     xs  < 480px    iPhone SE 一代等极小屏
+     sm  < 768px    iPhone 主流屏
+     md  < 1024px   iPad mini / iPad Pro 竖屏
+     lg  >= 1024px  桌面端 */
+
+  /* ===== Safe Area 安全区（iPhone X+ 全面屏、刘海/灵动岛、底部 Home Indicator） =====
+     仅在 viewport-fit=cover 时有效。env() 在不支持的浏览器自动 fallback 到 0px */
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+
+  /* ===== 触觉目标尺寸（Apple HIG 44pt / Material Design 48dp / WCAG AAA） ===== */
+  --touch-target-min: 44px;
+  --touch-target-comfort: 48px;
+
+  /* ===== 移动端专用间距 ===== */
+  --mobile-padding-x: 16px;
+  --mobile-padding-y: 12px;
+  --mobile-section-gap: 16px;
+  --mobile-font-scale: 1.0;
+  --mobile-line-height: 1.55;
+
+  /* ===== 移动端导航栏高度 ===== */
+  --tabbar-height: 56px;
+  --header-mobile-height: 52px;
+
+  /* ===== 抽屉 / Sheet 尺寸 ===== */
+  --drawer-width-mobile: 280px;
+  --sheet-radius: 16px;
+  --sheet-handle-w: 36px;
+  --sheet-handle-h: 4px;
+
+  /* ===== iOS 100vh 修复 ===== */
+  --vh: 100vh; /* 默认 fallback */
+  --dvh: 100dvh; /* 现代浏览器优先 */
+}
+
+/* 移动端字号缩放（mobile-first） */
+@media (max-width: 768px) {
+  :root {
+    --font-size-base: 15px;
+  }
+  body {
+    line-height: var(--mobile-line-height);
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --font-size-base: 16px; /* iPhone SE @2x 仍清晰 */
+  }
 }
 
 /* ============================================
@@ -470,3 +524,88 @@ body {
 [data-theme="dark"] .chat-immersive { background: linear-gradient(180deg, #1a1d23 0%, #0e1015 100%); }
 [data-theme="dark"] .bot-bubble { background: var(--color-bg-card); color: var(--color-text-primary); }
 [data-theme="dark"] .typing-bubble span { background: var(--color-primary); }
+
+/* Dark 模式功能色前景色（修复 2026-06-12 dark mode 覆盖不完整） */
+[data-theme="dark"] {
+  --color-success: #85ce61; /* 亮绿，提升对比度 */
+  --color-warning: #ebb563; /* 亮黄 */
+  --color-danger: #f78989;  /* 亮红 */
+  --color-info: #a6a9ad;    /* 亮灰 */
+}
+
+/* Dark 模式 Element Plus 组件级覆盖 */
+[data-theme="dark"] .el-card,
+[data-theme="dark"] .el-table,
+[data-theme="dark"] .el-input__wrapper,
+[data-theme="dark"] .el-select__wrapper,
+[data-theme="dark"] .el-textarea__inner {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-overlay {
+  background-color: rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .el-message-box {
+  background-color: var(--color-bg-card);
+  border: 1px solid var(--color-border-base);
+}
+[data-theme="dark"] .el-message-box__title,
+[data-theme="dark"] .el-message-box__content,
+[data-theme="dark"] .el-message-box__message,
+[data-theme="dark"] .el-message-box__message p {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-button--primary {
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  --el-button-hover-bg-color: var(--color-primary-light);
+  --el-button-hover-border-color: var(--color-primary-light);
+  color: #fff;
+}
+[data-theme="dark"] .el-drawer {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-drawer__header {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-popper,
+[data-theme="dark"] .el-select-dropdown,
+[data-theme="dark"] .el-dropdown-menu {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-popper__arrow::before,
+[data-theme="dark"] .el-select-dropdown__item {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-select-dropdown__item:hover {
+  background-color: var(--color-bg-hover);
+}
+[data-theme="dark"] .el-menu {
+  background-color: transparent;
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-menu-item,
+[data-theme="dark"] .el-sub-menu__title {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-menu-item:hover,
+[data-theme="dark"] .el-sub-menu__title:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-menu-item.is-active {
+  color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+}
+[data-theme="dark"] .el-pagination {
+  --el-pagination-bg-color: transparent;
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-tag {
+  border-color: var(--color-border-base);
+}
