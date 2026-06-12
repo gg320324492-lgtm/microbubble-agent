@@ -1,236 +1,77 @@
 <script setup lang="ts">
 /**
- * ChatViewSSE.vue — v2 极简版（接 SSE 流式 + Rich Block 渲染）
+ * ChatViewSSE.vue — 桌面端 Chat（SSE 流式 + Rich Block）
  *
- * 修复 4：多会话并行架构
+ * PR #3 重构：所有 SSE 状态管理逻辑抽出到 useChatStream composable
+ * 桌面/移动共用一份核心（per-session 数据隔离 + targetSessionId 闭包 + abort）。
+ * 本文件只保留桌面 UI 相关状态（侧栏、拖拽、录音面板）。
+ *
+ * 修复 4：多会话并行架构（保留，绝不可破坏）
  * - 每个 sessionId 独立 messages 数组（messagesBySession）
  * - 切会话不 abort SSE，让 A 在后台继续生成
  * - SSE yield 通过 activeAssistantMap[sessionId] 找到目标 assistantMsg 引用
  * - 流式增量 debounce 100ms 持久化到 localStorage（防后台丢）
  *
- * 替换原 564 行 ChatView.vue 90% 体积，专注核心：
- * - 真实 SSE 流式（/api/v1/chat/stream）替换 setInterval 轮询
- * - assistant 消息支持 rich_blocks 渲染
- * - 工具调用中间态展示（"🔍 正在 X..."）
- * - 保留必要的图片/文件上传、欢迎页、快捷指令
- *
  * 复用：
- * - 工具标签 TOOL_LABELS（web/src/api/agent/toolLabels.ts）
- * - Rich Block 注册表（web/src/components/chat/blocks/registry.ts）
- * - Pinia store（如有，chat.ts）
+ * - useChatStream (SSE 多会话核心) - 桌面/移动共用
+ * - useThemeStore (Pinia 全局主题)
+ * - Rich Block 注册表 (web/src/components/chat/blocks/registry.ts)
+ * - Pinia chatSessions store
  */
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
-import axios from 'axios'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
-import { sseFetch } from '@/api/agent/sse'
+import { useChatStream } from '@/composables/chat/useChatStream'
+import { useThemeStore } from '@/stores/useThemeStore'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import { useChatSessionsStore } from '@/stores/chatSessions'
 import { renderMarkdown } from '@/utils/markdown'
 
 // ============================================================================
-// 状态：当前 UI 显示的会话
+// SSE 核心（桌面/移动共用）
 // ============================================================================
-const sessionId = ref(localStorage.getItem('chat_current_session_v3') || localStorage.getItem('chat_session_id') || `user_${Date.now()}`)
-const sessionKey = 'chat_current_session_v3'
-const messagesKey = 'chat_messages_v2'  // 旧单会话兼容键（仅写不读）
-
-// ============================================================================
-// 状态：per-session 数据（修复 4 核心：多会话并行）
-// ============================================================================
-// 每个会话独立的消息数组，切会话不会丢其他会话的数据
-const messagesBySession = ref<Record<string, any[]>>({})
-// 模板用 computed 从 messagesBySession 读当前 sessionId 的消息
-const messages = computed(() => messagesBySession.value[sessionId.value] || [])
-
-// 每个会话"正在生成的 assistantMsg 引用"
-// SSE 流启动时把引用存入，SSE yield 时通过 targetSessionId 找到正确对象
-// 关键：用户切走 A → A 后台 SSE 继续 yield → 找到 activeAssistantMap[A] 追加内容
-const activeAssistantMap = ref<Record<string, any>>({})
-
-// per-session abort controller（多次点击同一会话时 abort 旧流）
-// 不在切会话时 abort（让 A 后台继续跑）
-const abortControllers: Record<string, AbortController> = {}
-
-// per-session 发送锁（防止同一会话快速点击叠加）
-const sendingSessions = new Set<string>()
-
-// 已加载过 localStorage 的 session 集合（防重复覆盖后台 SSE 增量）
-const loadedSessions = new Set<string>()
-
-// debounce 持久化 timer（per-session 100ms）
-const persistTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+const {
+  sessionId,
+  messages,
+  isCurrentSessionSending,
+  onCreateSession,
+  onSwitchSession,
+  clearChat,
+  sendMessage: sendMessageCore,
+  playTTS,
+  asrRecognize,
+} = useChatStream()
 
 // ============================================================================
-// 其他 UI 状态
+// 主题（PR #1 useThemeStore）
+// ============================================================================
+const themeStore = useThemeStore()
+const isDark = computed(() => themeStore.isDark)
+const toggleTheme = () => themeStore.toggle()
+
+// ============================================================================
+// UI 状态（仅桌面端）
 // ============================================================================
 const inputText = ref('')
-const loading = ref(false)  // 当前会话是否在生成（按 session 算的 UI 提示）
 const isDragging = ref(false)
-const textareaRef = ref(null)
-const messagesRef = ref(null)
-const selectedImage = ref(null)
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const messagesRef = ref<HTMLElement | null>(null)
+const selectedImage = ref<File | null>(null)
 const imagePreviewUrl = ref('')
-const selectedFile = ref(null)
+const selectedFile = ref<File | null>(null)
 const voiceMode = ref(false)
-const imageInputRef = ref(null)
-const fileInputRef = ref(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 const sidebarCollapsed = ref(false)
-const isDark = ref(localStorage.getItem('theme') === 'dark')
+const loading = ref(false)
 
-// 当前会话是否正在生成（UI 用：消息区"三个点"动画）
-const isCurrentSessionSending = computed(() => sendingSessions.has(sessionId.value))
-
-// --- 网络状态 ---
+// 网络状态
 const { online: isOnline } = useNetworkStatus()
 
-// --- 会话管理 store ---
-const sessionsStore = useChatSessionsStore()
-sessionsStore.migrateFromV1()
-if (!sessionsStore.currentSession()) {
-  sessionsStore.createSession()
-}
-sessionId.value = sessionsStore.currentId || sessionId.value
-
-// --- Dark mode ---
-const toggleTheme = () => {
-  isDark.value = !isDark.value
-  document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light')
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-}
-if (isDark.value) {
-  document.documentElement.setAttribute('data-theme', 'dark')
-}
-
 // ============================================================================
-// 持久化工具（修复 4：debounce 100ms 防止后台丢）
-// ============================================================================
-const persistSessionSync = (id: string) => {
-  // 同步写入（不 debounce）— 用于切会话/卸载等关键节点
-  const msgs = messagesBySession.value[id] || []
-  const slice = msgs.slice(-200)
-  localStorage.setItem(`chat_msgs_${id}`, JSON.stringify(slice))
-  if (id === sessionId.value) {
-    localStorage.setItem(messagesKey, JSON.stringify(slice))  // 兼容旧键
-  }
-  // 更新 store
-  if (sessionsStore.currentSession()) {
-    const lastMsg = msgs[msgs.length - 1]
-    sessionsStore.updateActivity(id, msgs.length, lastMsg?.content || '')
-  }
-}
-
-const persistSessionDebounced = (id: string) => {
-  // debounce 100ms — SSE 流式 yield 时调用，避免 localStorage 写入风暴
-  if (persistTimers[id]) clearTimeout(persistTimers[id])
-  persistTimers[id] = setTimeout(() => {
-    persistSessionSync(id)
-  }, 100)
-}
-
-// ============================================================================
-// 会话加载（修复 4：loadedSessions 防重复覆盖后台 SSE 增量）
-// ============================================================================
-const ensureSessionLoaded = (id: string) => {
-  if (loadedSessions.has(id)) return  // 已加载过（不重新读 localStorage，保留后台 SSE 增量）
-  loadedSessions.add(id)
-  const saved = localStorage.getItem(`chat_msgs_${id}`)
-  if (saved) {
-    try {
-      messagesBySession.value[id] = JSON.parse(saved)
-    } catch {
-      messagesBySession.value[id] = []
-    }
-  } else {
-    messagesBySession.value[id] = []
-  }
-}
-
-// ============================================================================
-// 会话操作
-// ============================================================================
-const onCreateSession = () => {
-  // 修复 1：先保存当前会话
-  persistSessionSync(sessionId.value)
-  // 创建新会话
-  sessionsStore.createSession()
-  const newId = sessionsStore.currentId
-  // 关键：先在 store.currentId 更新前不要改 sessionId（避免中间态）
-  sessionId.value = newId
-  messagesBySession.value[newId] = [{
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: '新对话，有什么可以帮你的吗？',
-    richBlocks: [],
-    timestamp: new Date().toISOString()
-  }]
-  loadedSessions.add(newId)
-  persistSessionSync(newId)
-  nextTick(scrollToBottom)
-}
-
-const onSwitchSession = (id: string) => {
-  if (id === sessionId.value) return
-  // 修复 1：先保存当前会话（切走前快照，含正在生成的流式部分）
-  persistSessionSync(sessionId.value)
-  // 修复 4：不 abort 任何 SSE，让 A 在后台继续生成
-  // 切换目标
-  ensureSessionLoaded(id)
-  sessionId.value = id
-  nextTick(scrollToBottom)
-}
-
-const clearChat = () => {
-  // 清空当前会话（不动其他会话，不 abort 后台 SSE）
-  // 注意：当前会话如果在生成中，新消息会 push 到这个空数组
-  messagesBySession.value[sessionId.value] = [{
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: '对话已清空，有什么可以帮你的吗？',
-    richBlocks: [],
-    timestamp: new Date().toISOString()
-  }]
-  // 不生成新 sessionId（用户期望是清空而非新开）
-  // 但确保 loadedSessions 标记
-  loadedSessions.add(sessionId.value)
-  persistSessionSync(sessionId.value)
-  // 兼容旧行为：保留 sessionId 不变
-}
-
-// ============================================================================
-// 生命周期
-// ============================================================================
-onMounted(() => {
-  // 加载当前会话历史
-  ensureSessionLoaded(sessionId.value)
-  // 首条消息时显示欢迎页
-  if ((messagesBySession.value[sessionId.value] || []).length === 0) {
-    messagesBySession.value[sessionId.value] = [{
-      id: crypto.randomUUID(),
-      role: 'assistant',
-      content: '你好！我是"小气"，课题组智能助手。有什么可以帮你的吗？',
-      richBlocks: [],
-      timestamp: new Date().toISOString()
-    }]
-  }
-})
-
-onUnmounted(() => {
-  // abort 所有正在跑的 SSE 流
-  for (const ctrl of Object.values(abortControllers)) {
-    try { ctrl.abort() } catch {}
-  }
-  // 持久化所有 session（含后台流式生成的内容）
-  for (const id of Object.keys(messagesBySession.value)) {
-    persistSessionSync(id)
-  }
-})
-
-// ============================================================================
-// 滚动到底部（仅在当前正在显示的 session 滚动）
+// 滚动到底部
 // ============================================================================
 const scrollToBottom = async () => {
   await nextTick()
@@ -240,28 +81,12 @@ const scrollToBottom = async () => {
 }
 
 // ============================================================================
-// 发送（SSE 流式）— 修复 4：per-session 闭包，targetSessionId 贯穿
+// 发送消息（包装 useChatStream.sendMessage 以处理 UI 副作用）
 // ============================================================================
-const sendMessage = async (text?: string) => {
+async function sendMessage(text?: string) {
   const content = (text ?? inputText.value).trim()
-  if ((!content && !selectedImage.value && !selectedFile.value)) return
-  // 修复 4：按 session 锁，不阻止其他 session
-  if (sendingSessions.has(sessionId.value)) return
+  if (!content && !selectedImage.value && !selectedFile.value) return
 
-  // ★ 关键：捕获目标 sessionId 到闭包（防止 SSE yield 时用户已切走）
-  const targetSessionId = sessionId.value
-  const targetMsgs = messagesBySession.value[targetSessionId] || (messagesBySession.value[targetSessionId] = [])
-
-  // 用户消息
-  const userMsg = {
-    id: crypto.randomUUID(),
-    role: 'user',
-    content,
-    richBlocks: [],
-    timestamp: new Date().toISOString(),
-    type: selectedImage.value ? 'image' : selectedFile.value ? 'file' : 'text'
-  }
-  targetMsgs.push(userMsg)
   inputText.value = ''
   const file = selectedFile.value
   const img = selectedImage.value
@@ -270,167 +95,26 @@ const sendMessage = async (text?: string) => {
   selectedFile.value = null
   if (textareaRef.value) textareaRef.value.style.height = 'auto'
 
-  // Assistant 占位
-  const assistantMsg = {
-    id: crypto.randomUUID(),
-    role: 'assistant',
-    content: '',
-    richBlocks: [],
-    toolTrace: [],
-    timestamp: new Date().toISOString(),
-    state: 'streaming',
-    is_brief: true,
-    error: null
-  }
-  targetMsgs.push(assistantMsg)
-  // ★ 关键：把 assistantMsg 引用存到 activeAssistantMap[SSE 所属 sessionId]
-  // SSE yield 时通过这个 map 找引用（即使切到 B，A 的 SSE 仍能找到 A 的 assistantMsg）
-  activeAssistantMap.value[targetSessionId] = assistantMsg
-
-  // per-session abort controller（多次点击同会话时 abort 旧流）
-  abortControllers[targetSessionId]?.abort()
-  const controller = new AbortController()
-  abortControllers[targetSessionId] = controller
-  sendingSessions.add(targetSessionId)
-  // 仅当本会话是当前显示会话时设 loading（其他 session 在后台不显示"三个点"）
-  if (targetSessionId === sessionId.value) {
-    loading.value = true
-    await scrollToBottom()
-  } else {
-    // 切到 B 后从 B 触发 A 的 sendMessage 不会到这里（targetSessionId === sessionId.value）
-    await scrollToBottom()
-  }
+  loading.value = true
+  await scrollToBottom()
 
   try {
-    if (file || img) {
-      await sendNonStream(content, file, img, assistantMsg, targetSessionId)
-    } else {
-      await sendSSE(content, assistantMsg, targetSessionId, controller.signal)
-    }
-    persistSessionDebounced(targetSessionId)
-  } catch (e: any) {
-    // 检查是否是 abort 触发的（用户切走导致）— 不显示错误
-    if (e?.name === 'AbortError') {
-      // 静默，不弹错
-    } else {
-      console.error('SSE error', e)
-      ElMessage.error(e.message || '发送失败')
-      // 把错误写到目标 session 的 assistantMsg
-      const targetAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
-      targetAssistant.error = e.message || '发送失败'
-      targetAssistant.content = targetAssistant.content || '抱歉，我暂时无法回复，请稍后再试。'
-    }
+    await sendMessageCore({
+      text: content,
+      file,
+      image: img,
+    })
+  } catch {
+    // 错误已由 useChatStream 内部处理
   } finally {
-    sendingSessions.delete(targetSessionId)
-    if (targetSessionId === sessionId.value) {
-      loading.value = false
-    }
-    const finalAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
-    finalAssistant.state = 'idle'
-    finalAssistant.is_brief = false
-    // SSE 完成后清理 activeAssistantMap
-    if (activeAssistantMap.value[targetSessionId] === assistantMsg) {
-      delete activeAssistantMap.value[targetSessionId]
-    }
-    if (targetSessionId === sessionId.value) {
-      await scrollToBottom()
-    }
-    persistSessionSync(targetSessionId)
+    loading.value = false
+    await scrollToBottom()
   }
 }
 
 // ============================================================================
-// SSE 流式发送 — 修复 4：通过 activeAssistantMap[targetSessionId] 找引用
+// 输入栏 / 文件上传 / 拖拽
 // ============================================================================
-const sendSSE = async (
-  content: string,
-  assistantMsg: any,
-  targetSessionId: string,
-  signal?: AbortSignal
-) => {
-  // targetSessionId 是 sendMessage 启动时捕获的闭包变量
-  // 即使后续 sessionId.value 切到其他 session，这里 targetSessionId 仍指向原 session
-  for await (const evt of sseFetch('/api/v1/chat/stream', {
-    message: content,
-    session_id: targetSessionId  // ★ 关键：传 targetSessionId 而不是 sessionId.value
-  }, { signal })) {
-    // ★ 关键：通过 activeAssistantMap[targetSessionId] 找当前正在生成的引用
-    // （如果用户切到 B 又切回 A，activeAssistantMap 里的引用不变；但更稳妥是每次都从 map 查）
-    const currentAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
-    const isCurrentView = targetSessionId === sessionId.value  // 仅当显示这个会话时才滚动
-
-    if (evt.type === 'text_delta') {
-      currentAssistant.content += evt.delta || ''
-      if (isCurrentView) await scrollToBottom()
-    } else if (evt.type === 'brief') {
-      if (!currentAssistant.content && evt.delta) {
-        currentAssistant.content = evt.delta
-      }
-      if (isCurrentView) await scrollToBottom()
-    } else if (evt.type === 'detail') {
-      const delta = evt.delta || ''
-      if (delta) {
-        currentAssistant.content += (currentAssistant.content ? '\n\n' : '') + delta
-        if (isCurrentView) await scrollToBottom()
-      }
-    } else if (evt.type === 'thinking') {
-      currentAssistant.toolTrace.push({ type: 'thinking', label: evt.label })
-    } else if (evt.type === 'tool_use') {
-      currentAssistant.toolTrace.push({
-        type: 'tool',
-        name: evt.tool_name,
-        state: 'running'
-      })
-    } else if (evt.type === 'tool_result') {
-      const last = currentAssistant.toolTrace[currentAssistant.toolTrace.length - 1]
-      if (last && last.type === 'tool' && last.name === evt.tool_name) {
-        last.state = 'done'
-        last.duration_ms = evt.tool_duration_ms
-      }
-    } else if (evt.type === 'rich_block') {
-      currentAssistant.richBlocks.push(evt.block)
-    } else if (evt.type === 'error') {
-      currentAssistant.error = evt.message
-    } else if (evt.type === 'done') {
-      currentAssistant.usage = evt.usage
-      currentAssistant.durationMs = evt.duration_ms
-    }
-    // 流式增量持久化（防后台丢数据；debounce 100ms）
-    persistSessionDebounced(targetSessionId)
-  }
-}
-
-// ============================================================================
-// 非流式发送（图片/文件）— 同样闭包 targetSessionId
-// ============================================================================
-const sendNonStream = async (
-  text: string,
-  file: File | null,
-  img: File | null,
-  assistantMsg: any,
-  targetSessionId: string
-) => {
-  let res
-  if (file) {
-    const fd = new FormData(); fd.append('message', text || ''); fd.append('session_id', targetSessionId); fd.append('file', file)
-    res = await axios.post('/api/v1/chat/file', fd)
-  } else if (img) {
-    const fd = new FormData(); fd.append('message', text || '请描述这张图片'); fd.append('session_id', targetSessionId); fd.append('image', img)
-    res = await axios.post('/api/v1/chat/image', fd)
-  } else {
-    res = await axios.post('/api/v1/chat', { message: text, session_id: targetSessionId })
-  }
-  const targetAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
-  targetAssistant.content = res.data.content || ''
-  if (Array.isArray(res.data.rich_blocks)) {
-    targetAssistant.richBlocks = res.data.rich_blocks
-  }
-}
-
-// ============================================================================
-// 输入栏
-// ============================================================================
-// 快捷指令
 const quickActions = [
   { icon: '📋', label: '我的任务', text: '我最近有什么任务？' },
   { icon: '📅', label: '最近会议', text: '上周开了什么会？有什么结论？' },
@@ -438,90 +122,92 @@ const quickActions = [
   { icon: '📚', label: '知识问答', text: 'zeta 电位是什么？' }
 ]
 
-const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
+  }
 }
-const autoResize = () => {
+
+function autoResize() {
   const el = textareaRef.value
   if (!el) return
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
-const sendQuickMessage = (t: string) => { inputText.value = t; sendMessage(t) }
-const triggerImageUpload = () => imageInputRef.value?.click()
-const triggerFileUpload = () => fileInputRef.value?.click()
-const handleImageSelect = (e: Event) => {
+
+function sendQuickMessage(t: string) { inputText.value = t; sendMessage(t) }
+function triggerImageUpload() { imageInputRef.value?.click() }
+function triggerFileUpload() { fileInputRef.value?.click() }
+
+function handleImageSelect(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return
   if (!f.type.startsWith('image/')) return ElMessage.error('请选择图片文件')
   if (f.size > 10 * 1024 * 1024) return ElMessage.error('图片不超过10MB')
-  selectedImage.value = f; imagePreviewUrl.value = URL.createObjectURL(f); (e.target as HTMLInputElement).value = ''
+  selectedImage.value = f
+  imagePreviewUrl.value = URL.createObjectURL(f)
+  ;(e.target as HTMLInputElement).value = ''
 }
-const handleFileSelect = (e: Event) => {
+
+function handleFileSelect(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return
   if (f.size > 50 * 1024 * 1024) return ElMessage.error('文件不超过50MB')
-  selectedFile.value = f; (e.target as HTMLInputElement).value = ''
+  selectedFile.value = f
+  ;(e.target as HTMLInputElement).value = ''
 }
-const onDragOver = () => { isDragging.value = true }
-const onDragLeave = () => { isDragging.value = false }
-const onDrop = (e: DragEvent) => {
+
+function onDragOver() { isDragging.value = true }
+function onDragLeave() { isDragging.value = false }
+function onDrop(e: DragEvent) {
   isDragging.value = false
   const f = e.dataTransfer?.files?.[0]; if (!f) return
-  if (f.type.startsWith('image/')) { if (f.size > 10*1024*1024) return ElMessage.error('图片不超过10MB'); selectedImage.value = f; imagePreviewUrl.value = URL.createObjectURL(f) }
-  else { if (f.size > 50*1024*1024) return ElMessage.error('文件不超过50MB'); selectedFile.value = f }
+  if (f.type.startsWith('image/')) {
+    if (f.size > 10 * 1024 * 1024) return ElMessage.error('图片不超过10MB')
+    selectedImage.value = f
+    imagePreviewUrl.value = URL.createObjectURL(f)
+  } else {
+    if (f.size > 50 * 1024 * 1024) return ElMessage.error('文件不超过50MB')
+    selectedFile.value = f
+  }
 }
-const toggleVoiceMode = () => { voiceMode.value = !voiceMode.value }
-const onRecordStart = () => {
+
+// ============================================================================
+// 录音面板
+// ============================================================================
+function toggleVoiceMode() { voiceMode.value = !voiceMode.value }
+function onRecordStart() {
   ElMessage.info('🎤 录音中...')
 }
-const onRecordStop = async (blob: Blob) => {
-  if (!blob || blob.size === 0) {
-    ElMessage.warning('录音为空，请重试')
-    return
-  }
-  try {
-    const fd = new FormData()
-    fd.append('audio', blob, 'voice.webm')
-    const r = await axios.post('/api/v1/voice/asr', fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      params: { language: 'zh' }
-    })
-    const text = r.data?.text?.trim()
-    if (text) {
-      inputText.value = text
-      await sendMessage()
-    } else {
-      ElMessage.warning('未能识别语音，请重试')
-    }
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || 'ASR 识别失败')
+async function onRecordStop(blob: Blob) {
+  const text = await asrRecognize(blob)
+  if (text) {
+    inputText.value = text
+    await sendMessage()
   }
 }
-const onRecordError = (err: any) => {
+function onRecordError(err: any) {
   ElMessage.error(err?.message || '录音错误')
 }
 
-// TTS 播放
-const playingAudio = ref<HTMLAudioElement | null>(null)
-const playTTS = async (text: string) => {
-  if (!text) return
-  if (playingAudio.value) {
-    playingAudio.value.pause()
-    playingAudio.value = null
-  }
-  try {
-    const r = await axios.post('/api/v1/voice/tts',
-      { text, voice: 'zh_female' },
-      { responseType: 'blob' }
-    )
-    const url = URL.createObjectURL(r.data)
-    const audio = new Audio(url)
-    playingAudio.value = audio
-    audio.onended = () => { URL.revokeObjectURL(url); playingAudio.value = null }
-    audio.play()
-  } catch (e: any) {
-    ElMessage.error('TTS 播放失败：' + (e.response?.data?.detail || e.message))
-  }
+// ============================================================================
+// TTS（包装 useChatStream.playTTS）
+// ============================================================================
+async function playTTSWrap(text: string) {
+  await playTTS(text)
 }
+
+// ============================================================================
+// 生命周期
+// ============================================================================
+onMounted(async () => {
+  await nextTick()
+  scrollToBottom()
+})
+
+onUnmounted(() => {
+  // useChatStream 的 onUnmounted 已处理：abort 所有 SSE + 持久化所有 session
+  // 这里无需额外逻辑
+})
 </script>
 
 <template>
@@ -614,7 +300,7 @@ const playTTS = async (text: string) => {
             <div v-if="msg.state === 'idle' && (msg.usage || msg.durationMs)" class="msg-meta">
               <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
               <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
-              <el-button v-if="msg.content" text size="small" @click="playTTS(msg.content)" title="播放语音">🔊</el-button>
+              <el-button v-if="msg.content" text size="small" @click="playTTSWrap(msg.content)" title="播放语音">🔊</el-button>
             </div>
           </div>
         </div>
