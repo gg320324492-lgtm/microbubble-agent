@@ -341,10 +341,15 @@ const polishingIndex = ref(null)
 
 async function polishMergedText(index) {
   if (!meeting.value) return
+  const text = transcriptEntries.value[index]?.text || ''
+  if (text.trim().length < 3) {
+    ElMessage.warning('文本太短，无需润色')
+    return
+  }
   polishingIndex.value = index
   try {
     const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
-      text: transcriptEntries.value[index].text,
+      text,
     })
     const polished = res.data.polished
     if (polished && polished !== transcriptEntries.value[index].text) {
@@ -431,7 +436,9 @@ const transcriptEntries = computed(() => {
   // 标记合并条目，触发自动润色
   merged.forEach((entry, i) => {
     if (entry._origIndex !== undefined && raw[entry._origIndex]?.text !== entry.text) {
-      entry._needsPolish = (entry.text || '').length > 20  // 合并过且够长
+      // 必须 trim 后 ≥3 字才有润色价值（后端要求 ≥3 strip 字符）
+      const trimmed = (entry.text || '').trim()
+      entry._needsPolish = trimmed.length > 20
     }
   })
   return merged
@@ -445,6 +452,9 @@ async function autoPolishIfNeeded() {
   for (let i = 0; i < transcriptEntries.value.length; i++) {
     const entry = transcriptEntries.value[i]
     if (!entry._needsPolish || polishedTexts.value[i]) continue
+    // 双重防御：即使 _needsPolish 为 true，发送前仍校验 trim 长度
+    const text = (entry.text || '').trim()
+    if (text.length < 3) continue
     try {
       const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
         text: entry.text,
