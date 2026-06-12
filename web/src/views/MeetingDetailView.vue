@@ -411,19 +411,19 @@ const transcriptEntries = computed(() => {
   if (!raw.length) return []
 
   const merged = []
-  let current = { ...raw[0], _origIndex: 0 }
+  let current = { ...raw[0], text: raw[0].text || '', _origIndex: 0 }
   for (let i = 1; i < raw.length; i++) {
     const entry = raw[i]
     if (
       entry.speaker === current.speaker &&
       !entry.removed &&
-      (current.text.length + (entry.text?.length || 0)) < MERGE_THRESHOLD_CHARS
+      ((current.text?.length || 0) + (entry.text?.length || 0)) < MERGE_THRESHOLD_CHARS
     ) {
-      current.text += ' ' + entry.text
+      current.text = (current.text || '') + ' ' + (entry.text || '')
       if (entry.ts) current.end_ts = entry.ts
     } else {
       merged.push(current)
-      current = { ...entry, _origIndex: i }
+      current = { ...entry, text: entry.text || '', _origIndex: i }
     }
   }
   merged.push(current)
