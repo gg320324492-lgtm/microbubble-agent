@@ -135,25 +135,51 @@ class TraceCollector:
     def _schedule_persist(self):
         """异步持久化到数据库（不阻塞 chat 流程）
 
-        未来实现：写 agent_traces 表。当前先打 log。
+        流程：Celery 任务 persist_trace_task.delay(dict) 异步写 agent_traces 表
+        失败：Celery max_retries=2 重试，仍失败时降级到 logger
         """
         try:
-            log_entry = {
+            from app.services.agent_trace_tasks import persist_trace_task
+            # 序列化为 dict（Celery 任务参数需要 JSON 兼容）
+            payload = {
                 "user_id": self.user_id,
                 "session_id": self.session_id,
-                "message_preview": (self.message or "")[:100],
-                "tool_count": len(self.tool_calls),
-                "rich_block_count": len(self.rich_blocks),
-                "tool_names": [tc.name for tc in self.tool_calls],
-                "rich_block_types": [rb.block_type for rb in self.rich_blocks],
-                "total_duration_ms": self.total_duration_ms,
+                "message": (self.message or "")[:1000],
+                "tool_calls": [
+                    {
+                        "name": tc.name,
+                        "input_keys": list((tc.input or {}).keys()),
+                        "output_keys": list((tc.output or {}).keys()) if tc.output else None,
+                        "duration_ms": tc.duration_ms,
+                        "error": tc.error,
+                    }
+                    for tc in self.tool_calls
+                ],
+                "rich_blocks": [
+                    {"type": rb.block_type, "title": rb.title}
+                    for rb in self.rich_blocks
+                ],
+                "brief": (self.brief or "")[:5000] if self.brief else None,
+                "detail": (self.detail or "")[:20000] if self.detail else None,
                 "usage": self.usage,
+                "total_duration_ms": self.total_duration_ms,
                 "error": self.error,
             }
-            logger.info(f"AgentTrace: {log_entry}")
+            persist_trace_task.delay(payload)
         except Exception as e:
-            # trace 失败不影响 chat
-            logger.warning(f"trace 持久化失败（已忽略）: {e}")
+            # Celery 不可用时降级到 log
+            logger.warning(f"trace Celery 调度失败（已降级 log）: {e}")
+            try:
+                log_entry = {
+                    "user_id": self.user_id,
+                    "session_id": self.session_id,
+                    "tool_count": len(self.tool_calls),
+                    "rich_block_count": len(self.rich_blocks),
+                    "total_duration_ms": self.total_duration_ms,
+                }
+                logger.info(f"AgentTrace(fallback): {log_entry}")
+            except Exception:
+                pass
 
     # ---- 序列化 ----
 

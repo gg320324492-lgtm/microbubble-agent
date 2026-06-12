@@ -92,6 +92,12 @@ const routes = [
         name: 'ProjectStats',
         component: () => import('@/views/ProjectStatsView.vue'),
         meta: { title: '项目动态' }
+      },
+      {
+        path: 'admin/agent-traces',
+        name: 'AgentTraces',
+        component: () => import('@/views/admin/AgentTracesView.vue'),
+        meta: { title: 'Agent Trace 监控' }
       }
     ]
   }
