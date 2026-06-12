@@ -14,12 +14,13 @@
  * - Pinia store（如有，chat.ts）
  */
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import RichContent from '@/components/chat/RichContent.vue'
 import { sseFetch } from '@/api/agent/sse'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { renderMarkdown } from '@/utils/markdown'
 
 // --- 状态 ---
 const messages = ref([])
@@ -37,6 +38,9 @@ const selectedFile = ref(null)
 const voiceMode = ref(false)
 const imageInputRef = ref(null)
 const fileInputRef = ref(null)
+
+// --- 网络状态 ---
+const { isOnline } = useNetworkStatus()
 
 // 快捷指令
 const quickActions = [
@@ -82,9 +86,7 @@ const scrollToBottom = async () => {
   }
 }
 
-// --- Markdown 渲染（统一入口） ---
-marked.setOptions({ breaks: true, gfm: true })
-const renderMarkdown = (text) => marked.parse(text || '')
+// --- Markdown 渲染（统一入口由 utils/markdown.ts 提供，含 highlight.js） ---
 
 // --- 发送（SSE 流式） ---
 const sendMessage = async (text) => {
@@ -252,6 +254,11 @@ const onRecordError = () => {}
 
 <template>
   <div class="chat-immersive" :class="{ 'is-dragging': isDragging }">
+    <!-- 网络断线横幅 -->
+    <div v-if="!isOnline" class="network-banner">
+      <span class="nb-dot" />网络已断开，正在等待恢复...
+    </div>
+
     <!-- 顶部 -->
     <header class="chat-header">
       <div class="header-left">
@@ -270,6 +277,7 @@ const onRecordError = () => {}
 
     <!-- 消息区 -->
     <div ref="messagesRef" class="messages">
+      <TransitionGroup name="msg">
       <template v-for="(msg, idx) in messages" :key="msg.id || idx">
         <!-- 时间分割 -->
         <div v-if="idx > 0 && new Date(msg.timestamp) - new Date(messages[idx-1].timestamp) > 5*60*1000" class="time-divider">
@@ -324,6 +332,7 @@ const onRecordError = () => {}
           </div>
         </div>
       </template>
+      </TransitionGroup>
 
       <!-- 欢迎页（仅首条消息时） -->
       <div v-if="messages.length === 1" class="welcome-hero">
@@ -382,6 +391,23 @@ const onRecordError = () => {}
   overflow: hidden;
   position: relative;
 }
+.network-banner {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px;
+  background: #ffebee; color: #c62828;
+  font-size: 13px; font-weight: 500;
+  border-bottom: 1px solid #f5c2c7;
+}
+.nb-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #f56c6c;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.msg-enter-active { transition: all 0.25s ease; }
+.msg-enter-from { opacity: 0; transform: translateY(8px); }
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 20px;
