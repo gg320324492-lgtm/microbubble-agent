@@ -3730,3 +3730,93 @@ API 完整，无需改动（CRUD 端点 5 个 + `apply_template_to_meeting_data`
 
 ---
 
+
+## v2/v3/v4 全栈架构重构（2026-06-12 收官，17 commits）
+
+> 完整 commit 链 + 按时间倒序的修复记录
+
+### 收官总览
+
+| 阶段 | Commits | 核心成果 |
+|---|---|---|
+| **v2 核心** (Day 1-8) | 6 | 拆 core.py 1469 行 → 7 模块 + 18 E2E 集成测试 + 部署文档 |
+| **v3 深化** (Day 9-15) | 5 | 9 新工具 + 5 Rich Block + 多会话 + dark mode + agent_traces |
+| **v4 收官** (Day 17-24) | 6 | 14 legacy 迁完 + ASR 语音 + 代码高亮 + perf + 评估 + core 清理 |
+| **合计** | **17** | **160 测试全过**（87 后端 + 73 前端），0 回归 |
+
+### v2 (Day 1-8) 核心架构重构
+
+| Commit | 内容 |
+|---|---|
+| `8fff43a` | refactor(agent): 拆 core.py 基础设施（5 文件 + 21 测试） |
+| `3e81e82` | feat(agent): ChatEngine 双层回复引擎 + v2 主类（+ 23 测试） |
+| `371a4fc` | feat(agent): 迁移 3 工具 + 2 新工具（+ 22 测试） |
+| `1eb9fce` | feat(api): ChatResponse 扩 4 字段 + /chat/stream SSE 端点 |
+| `2f62d51` | feat(chat): 前端 SSE + 4 Rich Block 组件（+ 14 测试） |
+| `463d30b` | feat(agent): 兼容 shim + 18 E2E 集成测试 + 部署文档 |
+
+**架构变化**：
+- `app/agent/core.py` 1469 行单文件 → 7 个职责清晰模块（`protocol.py` / `tool_registry.py` / `chat_engine.py` / `session_manager.py` / `tracing.py` / `micro_bubble_agent.py` / `llm.py`）
+- 工具调度从 26 个 `if/elif` → `@tool` 装饰器 + Pydantic 校验 + 注册表
+- 前端 `ChatView.vue` 565 行 → `ChatViewSSE.vue` ~350 行 + 5 个 Rich Block 组件
+- 流式从 2s 轮询换全文 → 真实 SSE 流式（`/chat/stream`）
+- 响应字段从 6 → 10（+rich_blocks/tool_trace/usage/duration_ms）
+
+### v3 (Day 9-15) 全栈深化
+
+| Commit | 内容 |
+|---|---|
+| `c3c139a` | feat(agent): 9 v2 工具 + 6 迁移 + 删 tools.py |
+| `736a17c` | feat(chat): 5 Rich Block 组件 + 动画 + 网络感知 |
+| `0737a44` | feat(chat): 多会话侧栏 + dark mode + Pinia |
+| `8c65944` | feat(observability): agent_traces 可观测性闭环 |
+| `3a06131` | docs: v3 部署补充 |
+
+**能力新增**：
+- 9 个新工具：`get_meeting_detail` / `get_meeting_transcript` / `get_recent_meeting_conclusions` / `get_member_profile` / `get_project_summary` / `list_formulas` / `list_hypotheses` / `query_projects` / `generate_project_plan`
+- 5 个 Rich Block：`FormulaBlock`（LaTeX 公式 + 计算）/ `HypothesisBlock`（状态徽章）/ `ProjectSummaryBlock`（任务统计 + 里程碑）/ `TranscriptBlock`（折叠展开）/ `ChartBlock`（ECharts）
+- 多会话侧栏：Pinia `chatSessions` store + `SessionSidebar.vue`（240px 折叠 + localStorage 持久化 + 兼容 v1 迁移）
+- dark mode：CSS 变量化（`[data-theme="dark"]`）+ 顶栏 toggle（🌙/☀️）
+- agent_traces 闭环：Celery 异步写表 + `/admin/agent-traces` 端点 + `AgentTracesView` 管理页
+
+### v4 (Day 17-24) 收官
+
+| Commit | 内容 |
+|---|---|
+| `4dab542` | feat(agent): 14 legacy 工具迁 @tool 装饰器（`TOOL_REGISTRY` = 34） |
+| `a211c56` | feat(chat): ASR 语音完整链路 + 代码高亮（highlight.js 6 种语言） |
+| `2c46d0f` | test(perf): 性能基线（`tests/perf/` 6 测试：brief<3s / SSE<1s / tool<5ms） |
+| `8d053b1` | feat(eval): LLM-as-judge + RAG 召回率评估体系（20 问标注 + 5 消融） |
+| `40cc299` | feat(eval): 20 问标注 + core.py 清理（1469→689 行，-53%） |
+| `a8eba51` | docs: 35 项待做清单（v4 收官后） |
+| `e92842d` | docs: 整合 140 项待做清单到 README.md |
+
+**收尾亮点**：
+- `app/agent/core.py` **1469 行 → 689 行**（-53%），原 794 行 `_execute_tool` 20 个 elif 链替换为 14 行薄壳调 `dispatch_tool`
+- ASR 链路：`ChatViewSSE.vue` 点 🎤 → `<VoiceRecorder>` → `onRecordStop` → `POST /api/v1/voice/asr` → 文字 → `sendMessage`；assistent 消息 🔊 按钮 → `POST /api/v1/voice/tts` → `<audio>` 播放
+- 代码高亮：`web/src/utils/markdown.ts` 加 `marked-highlight` + 6 语言（python / js / bash / json / sql / yaml）
+- 性能基线：`tests/perf/` 4 文件 6 测试 + 阈值（首跑取实测 P95 + 30% buffer）
+- 评估体系：`data/eval_queries.jsonl` 20 问标注（`relevant_ids` 占位待部署后人工标真实 ID）+ `scripts/run_llm_judge.py` + `scripts/run_rag_eval.py` + `HybridRetriever.evaluate()` 方法（recall@5 / precision@5 / MRR + 5 消融对比）
+
+### 部署文档
+
+- `docs/agent-v2-deploy.md` — v2 + v3 + v4 完整部署步骤（git pull / docker restart / 验证 / 回滚 / 监控 / 自检命令 / baseline 跑法）
+- `docs/pending-tasks-2026-06-12.md`（已删除，合并到 README.md）
+- README.md §待做清单（107 项老清单 + 33 项 v4 收官 = 140 项）
+
+### 关键文件索引
+
+**后端核心**：`app/agent/{protocol,tool_registry,llm,session_manager,tracing,chat_engine,micro_bubble_agent}.py`
+
+**工具目录**（13 个文件，34 工具）：`app/agent/tools/{meeting,task,member,project,formula,hypothesis,knowledge,memory,search,feedback,voice,extra_task,research,graph,transcript,meeting_create}_tools.py`
+
+**可观测性**：`app/models/agent_trace.py` + `app/services/agent_trace_tasks.py` + `app/api/v1/admin.py`
+
+**API**：`app/api/v1/chat.py`（8 端点：chat / chat/stream / chat/image / chat/file / ws/chat / chat/history / admin/agent-traces）
+
+**前端**：`web/src/views/chat/ChatViewSSE.vue` + `web/src/components/chat/{RichContent,SessionSidebar}.vue` + `web/src/components/chat/blocks/{10 个 Block}.vue` + `web/src/views/admin/AgentTracesView.vue` + `web/src/stores/chatSessions.ts` + `web/src/utils/markdown.ts`
+
+**评估**：`data/eval_queries.jsonl` + `scripts/{run_llm_judge,run_rag_eval,build_eval_ground_truth}.py`
+
+**性能**：`tests/perf/{test_brief_latency,test_sse_first_byte,test_tool_round_trip}.py`
+
