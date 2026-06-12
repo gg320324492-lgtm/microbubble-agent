@@ -212,9 +212,25 @@ const sendSSE = async (content, assistantMsg) => {
     message: content,
     session_id: sessionId.value
   })) {
-    if (evt.type === 'text_delta' || evt.type === 'brief' || evt.type === 'detail') {
+    if (evt.type === 'text_delta') {
+      // 增量 token：直接 append
       assistantMsg.content += evt.delta || ''
       await scrollToBottom()
+    } else if (evt.type === 'brief') {
+      // brief 是阶段标记，delta=完整 brief 文本（已被上面 text_delta 累积完）
+      // 不重复 append，避免内容出现两次；仅保留 is_brief 状态由 SSE 结束后置 false
+      // 容错：若后端只发 brief 不发 text_delta（如降级路径），用 delta 兜底
+      if (!assistantMsg.content && evt.delta) {
+        assistantMsg.content = evt.delta
+      }
+      await scrollToBottom()
+    } else if (evt.type === 'detail') {
+      // detail 是 brief 后的延伸文本（后台异步生成），用换行分隔后 append
+      const delta = evt.delta || ''
+      if (delta) {
+        assistantMsg.content += (assistantMsg.content ? '\n\n' : '') + delta
+        await scrollToBottom()
+      }
     } else if (evt.type === 'thinking') {
       assistantMsg.toolTrace.push({ type: 'thinking', label: evt.label })
     } else if (evt.type === 'tool_use') {
