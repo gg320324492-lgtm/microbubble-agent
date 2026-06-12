@@ -22,6 +22,12 @@
 
 ### 近期新增（按时间倒序）
 
+- **v2/v3/v4 全栈架构重构完成（2026-06-12 收官）** — 小气助手后端 Agent 从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件。**17 commits 推进**（`8fff43a`→`e92842d`），关键成果：
+  - **v2 核心**（Day 1-8, 6 commits）：拆 core.py 基础设施 / ChatEngine 双层回复引擎 / @tool 装饰器 + Pydantic 校验 / `/chat/stream` SSE 真实流式 / 4 Rich Block 组件 / 18 E2E 集成测试 + 部署文档
+  - **v3 深化**（Day 9-15, 5 commits）：9 个新工具（get_meeting_detail/transcript/member_profile/project_summary/list_formulas/list_hypotheses + 3 项目域）/ 5 个新 Rich Block（Formula/Hypothesis/ProjectSummary/Transcript/Chart）/ 多会话侧栏（Pinia + localStorage）/ dark mode（CSS 变量化 + 顶栏 toggle）/ agent_traces 可观测性闭环（Celery 持久化 + `/admin/agent-traces` + 管理页）
+  - **v4 收官**（Day 17-24, 6 commits）：14 个 legacy 工具全迁 @tool 装饰器（`TOOL_REGISTRY` = 34）/ ASR 语音完整链路接通（点 🎤 → 录音 → ASR → 自动发 + 🔊 TTS 播放）/ 代码高亮（6 种语言 + dark mode 适配）/ 性能基线（`tests/perf/` 6 测试：brief<3s / SSE<1s / tool<5ms）/ LLM-as-judge + RAG 召回率评估体系（20 问标注 + 5 消融）/ 清理 `core.py` 794 行 elif 链（1469→689 行，-53%）/ 整合 140 项待做清单到 README
+  - **最终态**：87 后端 + 73 前端 = **160 测试全过** + 0 回归
+  - 详细 commit 链见 [ROADMAP.md](ROADMAP.md) 第 X 章（v2/v3/v4 收官记录）
 - **🐛 会议查询 bug 双层根因修复（2026-06-12 晚）** — 用户问"有没有相关会议可以学习？"AI 助手一直撒谎说"会议查询系统暂时无法正常工作"或"数据库中暂无相关记录"，但 API 完全正常、数据库有 7 条会议。**两层根因**（教训双倍）：
   - **根因 ①**（提示层）：`prompts.py` 系统提示词**只对 `query_all_member_tasks` 有"必须调用"规则**，`query_meetings` 等 10+ 个工具没有强指令。LLM 遇到模糊查询时倾向**自己编造借口**（"系统故障/技术问题/数据库暂无"），而不是老老实实调工具
   - **根因 ②**（代码层）：`app/agent/core.py:911` 在 `_execute_tool` 函数内（属于 `summarize_meeting_transcript` elif 分支）有 `from app.services.meeting_service import MeetingService`，Python 编译器**不区分 elif 分支**会扫描整个函数体，看到这个名字就是 local。导致 line 881 `MeetingService(db)` 抛 `UnboundLocalError: cannot access local variable 'MeetingService' where it is not associated with a value`，被外层 `except Exception` 吞掉返回 `{"status":"error","message":"工具 query_meetings 执行失败: ..."}`，LLM 看到这个 error 后又撒谎说"系统故障"。这与 CLAUDE.md 已记录的 2026-06-02 声纹会议 WS 闪烁根因（`import asyncio` 函数体内让 Python 把 `asyncio` 当局部变量）是**完全相同的一类坑**

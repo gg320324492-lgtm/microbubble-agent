@@ -11,33 +11,27 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**（替代实时 WS 流式处理），支持零配置开录、音量指示器、波形回放、AI 自动填充会议信息。**2026-06-12 最新进展**：
-- **晚间（1 commit）**：
-  - **会议查询 bug 双层根因修复**（`待提交`）— 用户问"有没有相关会议可以学习？"助手一直撒谎说"会议查询系统暂时无法正常工作"，但 API 正常、数据库有 7 条会议。两层根因：①`prompts.py` 只对 `query_all_member_tasks` 有"必须调用"规则，`query_meetings` 没有强指令，LLM 倾向自己编造借口 ②`app/agent/core.py` 函数体内 line 911 `from app.services.meeting_service import MeetingService` 让 Python 编译器把**整个 `_execute_tool` 函数**的 `MeetingService` 当局部变量，`query_meetings` elif 分支调 `MeetingService(db)` 抛 `UnboundLocalError`，被外层 `except Exception` 吞掉返回 `{"status":"error","message":"工具 query_meetings 执行失败: ..."}`，LLM 看到这个 error 后选择撒谎说"系统故障"。三处修复：删 line 911 冗余 import（顶部已 import）、`prompts.py` 顶部新增"工具调用黄金规则 (CRITICAL)" + 明确"Meeting Query Rules (IMPORTANT)"、`tools.py` 中 `query_meetings` 描述改为「【必调工具】」+ 列举所有触发短语
-- **下半场（4 commit）**：
-  - **webhint paint keyframes 深度治理**（`d25ab05` + `9baeb18`）— 读 hint 源码后用独立 `scale:`/`rotate:` 替代 `transform: scale()`/`rotate()`，8 类 keyframes 10 个文件批量清理
-  - **会议详情页 transcriptEntries 崩溃修复**（`0470f55`）— `current.text.length` 读 undefined 4 处防御
-  - **polish-text 400 空白堆积修复**（`6fea262`）— `_needsPolish` 改用 trim().length 判定 + 双层兜底
-- **上半场（5 commit）— 解决 #84 案例"58 分钟录音断网丢失"**：
-  - 5 个 commit (`a41dd20` 边录边传骨架 → `49de30c` 上传状态徽章 → `f458dad` 后端 chunked 端点 + 4 字段迁移 → `838a18d` 后端防御硬化 → `9464726` bug 修复)
-  - **阶段 1 前端 IndexedDB 兜底** — chunks 持久化 + 1s 切片 + 边录边传 + 指数退避重传
-  - **阶段 2 UI 徽章** — `UploadStatusBadge.vue`（已传 N/总 M 片 + 网络状态）+ 浮动胶囊离线变橙红
-  - **阶段 3 后端 3 端点** — `PUT /audio-chunk` / `POST /merge-chunks` (ffmpeg concat) / `GET /upload-status`
-  - **阶段 4 防御硬化** — stop-recording 校验 `last_chunk_index >= 0` 才允许 status=processing；Celery `self.retry(exc=e, countdown=60)` 真实生效；孤儿会议清理（10min beat 扫 `recording > 1h 无 chunk`）；删会议清 MinIO
-  - **阶段 5 bug 修复** — `delete_chunks` 误删 merged.webm → 拆为 3 个独立方法
-  - **21 个新 vitest 全部通过**（idbStore 12 + useChunkedUploader 9）
+**Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**当前状态（2026-06-12 v4 收官后，commit `e92842d`）**：
+- **18 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2）
+- **160 测试全过**（87 后端 + 73 前端，0 回归）
+- **918 次提交 / 187K 行代码 / 2840 文件 / 28 开发天数**（`app/stats.json` 动态）
+- **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留）
 
-**2026-06-11 进展**：
-- **会议 L2 润色升级**（commit `e8a4471`）— 5 行"只加标点"→ 允许清理 ASR 幻觉+修正同音错字+合并重复
-- **会议 #83 全文重润色**（commit `e8a4471`）— 532 段 → 323 段，删除 154 段幻觉，错名/乱码全部清零
-- **段落智能切分脚本**（commit `a487a33`）— 按主题信号词自动切段，会议 #83 最长段 1859→316 字
-- **前端不合并长段**（commit `e5d76cc`）— `MeetingDetailView` 合并阈值改为 60 字，转录卡片从 ~10 → ~30 个
-- **el-tab-pane lazy**（commit `4170d4b`）— 8 个 tab-pane 懒渲染，消除 ARIA hidden focusable 警告
-- **Nginx /api 重复 header 修复**（commit `29982a4`）— 移除与后端重复的 add_header
-- **stats.json 动态化**（之前）— 900 提交 / 630 文件 / 120K 行 / 27 天开发
-- **changelog 补充至 33 条**
+**v2/v3/v4 关键成果**：
+- **34 个 `@tool` 装饰器工具**（覆盖任务 5 / 会议 7 / 项目 3 / 成员 2 / 知识 9 / 公式 1 / 假设 1 / 记忆 3 / 搜索 1 / 个性化 2 / 反馈 1 — 含 16 个 v2+v3 新工具）
+- **12 类 Rich Block 组件**（meeting / task_list / knowledge_ref / member / formula / hypothesis / project / transcript / chart + 2 兜底）
+- **真实 SSE 流式**（`/chat/stream`）替代伪流式 2s 轮询
+- **10 字段响应**（content + session_id + file_url + file_name + knowledge_content + is_brief + **rich_blocks + tool_trace + usage + duration_ms**）
+- **多会话侧栏**（Pinia + localStorage + 兼容 v1 单会话迁移）
+- **dark mode**（CSS 变量化 + 顶栏 toggle + 主题持久化）
+- **agent_traces 可观测性闭环**（Celery 异步写表 + `/admin/agent-traces` 端点 + `AgentTracesView` 管理页）
+- **ASR 语音完整链路**（点 🎤 → 录音 → ASR 文字 → 自动发 + 🔊 TTS 播放）
+- **代码高亮**（highlight.js + 6 种语言：python / js / bash / json / sql / yaml）
+- **性能基线**（`tests/perf/` 6 测试：brief<3s / SSE<1s / tool<5ms）
+- **质量评估体系**（LLM-as-judge + RAG 召回率 + 20 问标注 + 5 消融）
+- **`core.py` 清理**：1469 → 689 行（-53%，原 794 行 elif 链替换为 14 行薄壳调 `dispatch_tool`）
 
-详见 [ROADMAP.md](ROADMAP.md#最新完成2026-06-12) 和 [README.md](README.md#近期新增按时间倒序)。
+详见 [ROADMAP.md](ROADMAP.md#v2v3v4-全栈架构重构2026-06-12-收官17-commits) 和 [README.md](README.md#近期新增按时间倒序)。
 
 ## 会议纪要标准格式（2026-06-06 硬规则）
 
@@ -143,6 +137,25 @@
 | `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
 
 ## 开发注意事项
+
+### 2026-06-12 v4 收官新增
+
+- **`@tool` 装饰器 + Pydantic 校验是工具调用的标准模式**（v4 收官确定）— 34 工具全走装饰器后，**任何**新增工具必须遵循 4 步：①Pydantic BaseModel 严格定义 `input_model` / `output_model`（不依赖裸 `Dict[str, Any]`）②handler 委托原 service（不重写业务逻辑）③pytest happy/error/edge 三用例 ④`dispatch_tool(name, ...)` 跑通。`@tool(requires_db=True, requires_user=False)` 标记前置条件，dispatcher 自动校验缺 DB 返 `DB_UNAVAILABLE` 错误、缺 user 返 `AUTH_REQUIRED` 错误
+- **`dispatch_legacy` 是装饰器注册表的兜底**（v4 清理后保留）— 当 `TOOL_REGISTRY` 没找到某工具名时（极端情况：用户自定义工具未注册），dispatch_legacy 回退到 `MicroBubbleAgent._execute_tool` 薄壳。所有 34 工具确认走装饰器后，**未来可彻底删除 dispatch_legacy**（约 18 行代码）让错误立即抛 `ToolNotFoundError`
+- **`core.py` 是兼容壳，不是真实逻辑**（v4 清理后）— 原 1469 行 → 689 行（-53%）。`_execute_tool` 14 行薄壳直接调 `dispatch_tool`，**不再有 if/elif 链**。MicroBubbleAgent 类保留仅为向后兼容（chat/chat_stream/clear_session 公开 API 仍可调用）。所有业务逻辑在 `micro_bubble_agent.py`（v2 主类）
+- **Pydantic BaseModel 字段顺序很重要**（教训）— 写 `MeetingListItem` 等 OutputModel 时，`rich_block_type` 字段**必须放最后**（避免 Pydantic V2 序列化冲突）。`Field(default=...)` 显式标注默认值，让 optional 字段有 fallback
+- **SSE 事件类型不要在前后端硬编码**（v4 教训）— 协议层（`app/agent/protocol.py`）用 `Literal` 类型定义 9 种 `StreamEventType`，前端 `web/src/api/agent/protocol.ts` 用 union type 镜像。**新增事件类型**只改这两个文件 + 后端 `chat_engine.py` + 前端 `sse.ts` + 组件 switch case 共 4 处
+- **ASR 端到端 4 层链路**（v4 完整接通）— `前端 VoiceRecorder emit record-stop blob` → `axios.post /api/v1/voice/asr (multipart)` → `后端 app/voice/asr.py:POST /voice/asr` 调 faster-whisper GPU large-v3 → 文字 → `inputText + sendMessage()`。**任一环节断就静默失败**，必须 4 步全验证（端到端真实语音 → ASR 真实文字 → sendMessage → assistant 真实回复）
+- **highlight.js 按需注册**（v4 教训）— 200+ 语言全量打包 +30KB gzip+。**只注册 6 种常用语言**（python / js / bash / json / sql / yaml）就覆盖 90% 场景。dark mode 用 CSS 变量覆盖 `.hljs` 类而非切换主题文件（更轻）
+- **性能基线 P95 阈值需取实测 + 30% buffer**（v4 设计）— 不能用硬编码 3s/30s（不同机器性能差 5x）。`tests/perf/` 第一次跑取 20 次实测 P95 + 30% buffer 作为基线，CI 接受 ±30% 浮动。**机器换了**（如本地开发机 vs 生产服务器）需重测
+- **评估标注集是质量基线的根基**（v4 设计）— `data/eval_queries.jsonl` 20 问的 `relevant_ids` 字段是**占位预填**（基于领域知识 1-200 范围），**部署后必须**跑 `scripts/build_eval_ground_truth.py` 半自动修正为真实 ID（检索 top-10 + 人工筛）。否则 `recall@5` 计算无意义（查的 ID 数据库里不存在）
+- **`agent_traces` 表 30 天清理策略**（v4 待做）— 当前表会无限增长。Celery beat 加 `purge_old_traces(days=30)` 每日清理，**与 reminder 任务同模式**（已 `app/services/reminder_service.py` 有参考实现）
+
+### 2026-06-12 v3 深化新增
+
+- **12 类 Rich Block 组件化**（v3 + v4 累计）— `MeetingCard` / `TaskListBlock` / `KnowledgeRefBlock` / `MemberCardBlock` / `FormulaBlock` / `HypothesisBlock` / `ProjectSummaryBlock` / `TranscriptBlock` / `ChartBlock` + 2 兜底。注册表 `web/src/components/chat/blocks/registry.ts` 用 `Record<string, Component>` 极简映射，支持 `registerBlock()` 动态扩展。**新增 block 类型**只改 3 处：①组件实现 ②registry 注册 ③`chat_engine._extract_rich_block.implicit_map` 加映射
+- **多会话侧栏 + 兼容 v1**（v3 设计）— Pinia `chatSessions` store 自动 watch 持久化到 localStorage，**首次启动调 `migrateFromV1()`** 从旧 `chat_session_id` 单键导入为新会话。**新会话标题**取首条 user 消息前 30 字（LLM-as-judge 不依赖，零成本）
+- **dark mode 主题切换通过 CSS 变量**（v3 设计）— `web/src/assets/variables.css` 加 `[data-theme="dark"]` 块重定义 `--color-*` 变量，所有组件用 `var(--color-primary)` 而非硬编码 `#FF7A5C`。切换主题 = `document.documentElement.setAttribute('data-theme', 'dark')` + localStorage 持久化。**不切换主题文件**避免双套 CSS 加载
 
 ### 2026-06-12 新增（晚间）
 
