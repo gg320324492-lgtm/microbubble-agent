@@ -19,6 +19,7 @@ import { ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
+import VoiceRecorder from '@/components/VoiceRecorder.vue'
 import { sseFetch } from '@/api/agent/sse'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useChatSessionsStore } from '@/stores/chatSessions'
@@ -302,12 +303,60 @@ const clearChat = () => {
   localStorage.setItem(sessionKey, sessionId.value)
 }
 const toggleVoiceMode = () => { voiceMode.value = !voiceMode.value }
-const onRecordStart = () => {}
-const onRecordStop = async (blob) => {
-  // v2.1: 调 /voice/asr 后再发（先占位）
-  console.log('语音停止，待接入 ASR', blob)
+const onRecordStart = () => {
+  // 录音中提示
+  ElMessage.info('🎤 录音中...')
 }
-const onRecordError = () => {}
+const onRecordStop = async (blob) => {
+  // 调 /api/v1/voice/asr 上传音频 → 文字 → 自动发
+  if (!blob || blob.size === 0) {
+    ElMessage.warning('录音为空，请重试')
+    return
+  }
+  try {
+    const fd = new FormData()
+    fd.append('audio', blob, 'voice.webm')
+    const r = await axios.post('/api/v1/voice/asr', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: { language: 'zh' }
+    })
+    const text = r.data?.text?.trim()
+    if (text) {
+      inputText.value = text
+      await sendMessage()
+    } else {
+      ElMessage.warning('未能识别语音，请重试')
+    }
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || 'ASR 识别失败')
+  }
+}
+const onRecordError = (err) => {
+  ElMessage.error(err?.message || '录音错误')
+}
+
+// TTS 播放（assistant 消息 🔊 按钮）
+const playingAudio = ref(null)
+const playTTS = async (text) => {
+  if (!text) return
+  if (playingAudio.value) {
+    playingAudio.value.pause()
+    playingAudio.value = null
+  }
+  try {
+    const r = await axios.post('/api/v1/voice/tts',
+      { text, voice: 'zh_female' },
+      { responseType: 'blob' }
+    )
+    const url = URL.createObjectURL(r.data)
+    const audio = new Audio(url)
+    playingAudio.value = audio
+    audio.onended = () => { URL.revokeObjectURL(url); playingAudio.value = null }
+    audio.play()
+  } catch (e) {
+    ElMessage.error('TTS 播放失败：' + (e.response?.data?.detail || e.message))
+  }
+}
 </script>
 
 <template>
@@ -346,6 +395,14 @@ const onRecordError = () => {}
 
     <!-- 消息区 -->
     <div ref="messagesRef" class="messages">
+      <!-- 录音面板（voiceMode 开启时显示） -->
+      <VoiceRecorder
+        v-if="voiceMode"
+        @record-start="onRecordStart"
+        @record-stop="onRecordStop"
+        @record-error="onRecordError"
+      />
+
       <TransitionGroup name="msg">
       <template v-for="(msg, idx) in messages" :key="msg.id || idx">
         <!-- 时间分割 -->
@@ -397,6 +454,7 @@ const onRecordError = () => {}
             <div v-if="msg.state === 'idle' && (msg.usage || msg.durationMs)" class="msg-meta">
               <span v-if="msg.usage">📊 {{ msg.usage.total_tokens }} tokens</span>
               <span v-if="msg.durationMs">⏱ {{ (msg.durationMs / 1000).toFixed(1) }}s</span>
+              <el-button v-if="msg.content" text size="small" @click="playTTS(msg.content)" title="播放语音">🔊</el-button>
             </div>
           </div>
         </div>
@@ -425,7 +483,7 @@ const onRecordError = () => {}
         <div class="input-actions-left">
           <el-button text @click="triggerImageUpload"><span class="iconfont">🖼️</span></el-button>
           <el-button text @click="triggerFileUpload"><span class="iconfont">📎</span></el-button>
-          <el-button text @click="toggleVoiceMode"><span class="iconfont">🎤</span></el-button>
+          <el-button text @click="toggleVoiceMode" :type="voiceMode ? 'primary' : ''"><span class="iconfont">🎤</span></el-button>
         </div>
         <textarea
           ref="textareaRef"
