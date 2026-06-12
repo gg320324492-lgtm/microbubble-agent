@@ -267,6 +267,80 @@ class HybridRetriever:
 
         return results
 
+    async def evaluate(
+        self,
+        eval_set: List[Dict],
+        top_k: int = 5,
+        ablations: Optional[Dict] = None,
+    ) -> Dict:
+        """RAG 检索评估
+
+        Args:
+            eval_set: [{query, relevant_ids: List[int]}]
+            top_k: 评估 top_k
+            ablations: 消融配置，如 {"vector_only": {"enable_bm25": False, "enable_graph": False}}
+
+        Returns:
+            {
+                "recall@5": float, "precision@5": float, "mrr": float,
+                "per_query": [...],
+                "ablations": {name: {...}}
+            }
+        """
+        async def _run_one(query: str, relevant: set, **config) -> Dict:
+            config.setdefault("top_k", top_k)
+            retrieved = await self.retrieve(query, **config)
+            retrieved_ids = {r["id"] for r in retrieved if "id" in r}
+            hits = retrieved_ids & relevant
+            recall = len(hits) / len(relevant) if relevant else 0
+            precision = len(hits) / len(retrieved_ids) if retrieved_ids else 0
+            mrr = 0.0
+            for i, r in enumerate(retrieved):
+                if r.get("id") in relevant:
+                    mrr = 1 / (i + 1)
+                    break
+            return {"recall": recall, "precision": precision, "mrr": mrr,
+                    "retrieved_count": len(retrieved), "hits": list(hits)}
+
+        async def _aggregate(per_query: List[Dict]) -> Dict:
+            n = len(per_query)
+            if n == 0:
+                return {"recall@5": 0, "precision@5": 0, "mrr": 0, "per_query": []}
+            return {
+                "recall@5": sum(p["recall"] for p in per_query) / n,
+                "precision@5": sum(p["precision"] for p in per_query) / n,
+                "mrr": sum(p["mrr"] for p in per_query) / n,
+                "per_query": per_query,
+            }
+
+        # 默认四路全开
+        per_query = []
+        for case in eval_set:
+            relevant = set(case.get("relevant_ids", []))
+            if not relevant:
+                # 无标注 relevant_ids 时跳过（避免除零）
+                per_query.append({"id": case.get("id"), "recall": 0, "precision": 0, "mrr": 0, "skipped": True})
+                continue
+            one = await _run_one(case["query"], relevant)
+            per_query.append({"id": case.get("id"), **one})
+        results = await _aggregate(per_query)
+
+        # 消融
+        if ablations:
+            abl_results = {}
+            for name, config in ablations.items():
+                abl_per_query = []
+                for case in eval_set:
+                    relevant = set(case.get("relevant_ids", []))
+                    if not relevant:
+                        continue
+                    one = await _run_one(case["query"], relevant, **config)
+                    abl_per_query.append({"id": case.get("id"), **one})
+                abl_results[name] = await _aggregate(abl_per_query)
+            results["ablations"] = abl_results
+
+        return results
+
 
 # 全局工厂
 def get_hybrid_retriever(db: AsyncSession) -> HybridRetriever:
