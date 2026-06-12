@@ -13,7 +13,16 @@
         <div class="avatar-section">
           <el-avatar :size="80" :key="previewAvatarUrl" :src="previewAvatarUrl || userStore.userInfo?.avatar" :alt="`${userStore.userInfo?.name || '用户'}的头像`" icon="UserFilled" class="settings-avatar" />
           <label class="avatar-upload-btn">
-            <input type="file" accept="image/*" hidden @change="handleAvatarUpload" />
+            <input
+              id="settings-avatar-upload"
+              name="settings-avatar-upload"
+              type="file"
+              accept="image/*"
+              aria-label="更换头像"
+              title="更换头像"
+              hidden
+              @change="handleAvatarUpload"
+            />
             <el-icon><Camera /></el-icon>
             <span>更换头像</span>
           </label>

@@ -503,8 +503,27 @@ const playTTS = async (text) => {
           <span>↑</span>
         </el-button>
       </div>
-      <input ref="imageInputRef" type="file" accept="image/*" hidden @change="handleImageSelect" />
-      <input ref="fileInputRef" type="file" hidden @change="handleFileSelect" />
+      <input
+        ref="imageInputRef"
+        id="chat-image-upload"
+        name="chat-image-upload"
+        type="file"
+        accept="image/*"
+        hidden
+        aria-label="上传图片"
+        title="上传图片"
+        @change="handleImageSelect"
+      />
+      <input
+        ref="fileInputRef"
+        id="chat-file-upload"
+        name="chat-file-upload"
+        type="file"
+        hidden
+        aria-label="上传文件"
+        title="上传文件"
+        @change="handleFileSelect"
+      />
     </footer>
       </div><!-- /chat-main -->
     </div><!-- /chat-layout -->
