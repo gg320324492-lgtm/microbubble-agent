@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.models.member import Member
 from app.models.task import Task, TaskStatus
-from app.agent.core import agent
+from app.agent.micro_bubble_agent import agent
 from app.wechat.notifier import notifier
 from app.wechat.bot import wechat_bot
 from app.wechat.identity import identity_resolver

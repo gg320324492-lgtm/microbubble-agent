@@ -14,7 +14,7 @@ import numpy as np
 from app.voice.asr import asr_service
 from app.voice.tts import tts_service
 from app.voice.recorder import recorder_manager
-from app.agent.core import agent
+from app.agent.micro_bubble_agent import agent
 from app.core.database import get_db, async_session
 from app.core.security import get_current_user, decode_token
 from app.models.member import Member

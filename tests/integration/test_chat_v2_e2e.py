@@ -60,13 +60,11 @@ class TestChatAPISchema:
         assert "/ws/chat/{user_id}" in paths
 
     def test_chat_uses_v2_agent(self):
-        """chat.py 必须用 v2 micro_bubble_agent，不是旧 core.py"""
+        """chat.py 必须用 v2 micro_bubble_agent（2026-06-14 Stage 5：core.py 已删除）"""
         from app.api.v1 import chat as chat_module
         from app.agent.micro_bubble_agent import MicroBubbleAgent
-        from app.agent.core import MicroBubbleAgent as LegacyAgent
-        # 验证 v2_agent 是 v2 类，不是 legacy
+        # 验证 v2_agent 是 v2 类
         assert isinstance(chat_module.v2_agent, MicroBubbleAgent)
-        assert not isinstance(chat_module.v2_agent, LegacyAgent)
 
 
 # ============================================================================

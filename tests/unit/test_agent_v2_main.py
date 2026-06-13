@@ -60,9 +60,8 @@ class TestMicroBubbleAgentV2:
     def test_singleton(self):
         assert global_agent is not None
         assert isinstance(global_agent, MicroBubbleAgent)
-        # 不应该是旧 core 的实例
-        from app.agent.core import MicroBubbleAgent as LegacyAgent
-        assert not isinstance(global_agent, LegacyAgent)
+        # 2026-06-14 方案 C Stage 5：core.py 已删除，只剩 v2 单例
+        # 旧版"不应该是 LegacyAgent 实例"断言移除（无 Legacy 类）
 
     def test_has_three_public_methods(self):
         assert hasattr(global_agent, "chat")
@@ -207,20 +206,29 @@ class TestChatEngine:
 
 
 class TestBackwardCompat:
-    def test_old_agent_still_importable(self):
-        """旧 core.py 仍可导入（兼容性）"""
-        from app.agent.core import agent as legacy_agent
-        from app.agent.core import MicroBubbleAgent as LegacyAgent
-        assert legacy_agent is not None
-        assert isinstance(legacy_agent, LegacyAgent)
-        # 旧 agent 仍可调用（虽然 v2 是新的）
-        assert hasattr(legacy_agent, "chat")
-        assert hasattr(legacy_agent, "chat_stream")
-        assert hasattr(legacy_agent, "clear_session")
+    def test_core_py_removed(self):
+        """2026-06-14 方案 C Stage 5：app.agent.core 已完全删除"""
+        # 验证 core.py 不再存在
+        from pathlib import Path
+        core_path = Path(__file__).parent.parent.parent / "app" / "agent" / "core.py"
+        assert not core_path.exists(), "core.py 应已删除（方案 C Stage 5）"
+        # 验证 import 失败（NotFound 或 ModuleNotFoundError）
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            from app.agent.core import agent  # noqa: F401
 
-    def test_v2_and_legacy_coexist(self):
-        """新旧两个 agent 单例共存"""
-        from app.agent.core import agent as legacy
-        assert legacy is not global_agent
-        assert isinstance(legacy, MicroBubbleAgent) is False  # legacy 不是 v2
-        assert isinstance(global_agent, MicroBubbleAgent) is True
+    def test_legacy_chat_engine_file_still_exists(self):
+        """chat_engine_legacy.py 仍保留（30 天回滚资产，铁律 6）"""
+        from pathlib import Path
+        legacy_path = Path(__file__).parent.parent.parent / "app" / "agent" / "chat_engine_legacy.py"
+        assert legacy_path.exists(), "chat_engine_legacy.py 应保留（30 天回滚资产）"
+
+    def test_dispatch_legacy_removed(self):
+        """dispatch_legacy 函数已被删除（Stage 5 收尾）"""
+        from app.agent import tool_registry
+        assert not hasattr(tool_registry, "dispatch_legacy"), "dispatch_legacy 应已删除"
+
+    def test_v2_agent_is_singleton(self):
+        """v2 agent 仍是单例（替代 legacy 单例位置）"""
+        from app.agent.micro_bubble_agent import agent
+        from app.agent.micro_bubble_agent import MicroBubbleAgent
+        assert isinstance(agent, MicroBubbleAgent)
