@@ -197,6 +197,69 @@
   8. f148d96（18:58 真修复：回滚 types block + 改 deploy-auto.sh）
   9. 5c24442（19:05 修 awk → sed）
 
+### 2026-06-13 SW 污染 cache 修复 — 整站 HTML 修复后浏览器仍进不去（commit `747a735`）
+
+- **第二阶段事故** — 服务器 MIME 修好后（`f148d96` + `5c24442`）curl 验证 `/` 返回正确 `text/html`，但**用户报告"网站还是进不去"**。curl 服务器一切正常 → 100% 是浏览器侧问题。
+- **根因** — Service Worker 污染 cache：
+  1. `08f440f` 部署后服务器开始返回 octet-stream HTML
+  2. 用户访问时浏览器 SW（NetworkFirst 策略）**缓存了 octet-stream 响应到 `documents` cache**
+  3. 服务器修复后 SW 仍可能返回缓存的 octet-stream（虽然 NetworkFirst 应优先网络，但浏览器 SW 缓存逻辑 + activate 时机导致老 cache 没及时清）
+  4. `cleanupOutdatedCaches()` 只清 workbox 维护的 precache cache，**不**清 NetworkFirst/StaleWhileRevalidate 运行时创建的 cache
+- **修复：sw.js 升级模式**（commit `747a735`）—
+  ```js
+  // web/src/sw.js
+  const SW_VERSION = 'v2-cache-purge-2026-06-13'  // BUMP 触发 SW 字节变化
+  self.__SW_VERSION__ = SW_VERSION
+
+  self.skipWaiting()
+  self.addEventListener('activate', (event) => {
+    event.waitUntil((async () => {
+      // 清空所有 cache（不只是 workbox 默认的）
+      const keys = await caches.keys()
+      await Promise.all(keys.map((n) => caches.delete(n)))
+      await self.clients.claim()
+      // 通知所有客户端 reload
+      const clients = await self.clients.matchAll({ type: 'window' })
+      clients.forEach((c) => c.postMessage({ type: 'SW_UPDATED', version: SW_VERSION }))
+    })())
+  })
+  ```
+  ```js
+  // web/src/main.js
+  useRegisterSW({
+    immediate: true,
+    onRegisteredSW(swUrl) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'SW_UPDATED') {
+          setTimeout(() => window.location.reload(), 500)
+        }
+      })
+    },
+  })
+  ```
+- **修复链路** — 用户下次访问 → 浏览器检测 `/sw.js` 字节变化 → 安装新 SW → 立即 `skipWaiting` 激活 → `activate` 钩子清空所有 cache + `postMessage` → 客户端 `useRegisterSW` 收到 `SW_UPDATED` → `window.location.reload()` → 用户拿到全新资源
+- **纪律（4 条铁律）** —
+  ① **SW 污染 cache 修复必须改 sw.js** ——
+  - 只改 HTML/JS/CSS 没用，浏览器 SW 还在用老 SW 文件
+  - 改 sw.js 触发 SW 升级 + activate 钩子清 cache 是**唯一**标准修复路径
+  ② **`cleanupOutdatedCaches()` 不够** ——
+  - 它只清 workbox 维护的 precache cache
+  - **不**清 NetworkFirst/StaleWhileRevalidate/CacheFirst 运行时创建的 cache
+  - 真正"清空所有 cache"必须自己写：`caches.keys() + Promise.all(keys.map(caches.delete))`
+  ③ **BUMP SW_VERSION 触发升级** ——
+  - 浏览器通过**字节比较**检测 SW 更新（不是 SW 内容里的 manifest）
+  - 改 sw.js 文件加一行 const 都会触发字节变化 → 浏览器拉新 SW → 升级流程
+  - 每次事故修复或 SW 大改动时**都**应 bump 版本号
+  ④ **postMessage + reload 闭环** ——
+  - SW 升级后**不会**自动刷新页面（skipWaiting + clients.claim 立即接管但页面不 reload）
+  - 必须 SW postMessage → 客户端监听 → `window.location.reload()`
+  - 用 `setTimeout(..., 500)` 让 console.log 先显示出来再 reload
+- **调试技巧** ——
+  - 用户报"页面进不去"但服务器 curl 一切正常 → 100% 是 SW/浏览器 cache 问题
+  - 让用户 DevTools → Application → Service Workers → 看到 SW 状态为 `activated` 且内容含新 `SW_VERSION` → SW 已升级
+  - 让用户 DevTools → Application → Cache Storage → 应该看到 precache 列表**无 documents cache**（已被清空）
+  - **兜底**：用户可手动 DevTools → Application → Storage → Clear site data 彻底重置
+
 ### 测试规范
 - **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试
 - **前端**：Vitest + @vue/test-utils，composable 测试优先，组件测试选择性覆盖
