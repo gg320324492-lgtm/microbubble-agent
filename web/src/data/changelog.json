@@ -14,10 +14,11 @@
       "category": "部署",
       "icon": "🚀",
       "items": [
-        "Webhook SSH fallback",
+        "Webhook SSH fallback + socket timeout",
         "Celery 任务丢失修复",
         "ThreadingHTTPServer",
-        "Docker Python 模块缓存重启纪律"
+        "Docker Python 模块缓存重启纪律",
+        "Nginx /sw.js 强制 no-store（一年内不缓存）"
       ]
     },
     {
@@ -27,7 +28,8 @@
         "Nginx 扫描器屏蔽（88% 恶意流量）",
         "认证限流",
         "sessionStorage 残留修复",
-        "5 个 file input a11y 4 属性套件"
+        "5 个 file input a11y 4 属性套件",
+        "FRP 隧道存活三步验证（防僵尸进程）"
       ]
     },
     {
@@ -37,7 +39,20 @@
         "声纹维度 256→192 修正",
         "VAD 精细化",
         "silero-vad 本地缓存",
-        "webhint paint keyframes 干净绕开（scale/rotate 替代 transform）"
+        "webhint paint keyframes 干净绕开（scale/rotate 替代 transform）",
+        "Vite 3.4→3.5 升级（消除 el-table 'bum' null bug）"
+      ]
+    },
+    {
+      "category": "PWA",
+      "icon": "📱",
+      "items": [
+        "切 injectManifest 模式（修 navigateFallback 永久拦截 bug）",
+        "NetworkFirst + 5s 超时（阿里云+FRP 高延迟环境）",
+        "SW 升级时清空所有 cache + 通知客户端 reload",
+        "图片路由 NetworkFirst + CacheableResponsePlugin（防 5xx 永久缓存）",
+        "vite-plugin-pwa manifest precache 路径同步",
+        "Vue 3.5 unmountComponent null patch 插件"
       ]
     },
     {
@@ -49,7 +64,19 @@
         "async session lazy load",
         "v2/v3/v4 Agent 拆分（1469 → 689 行，34 工具 @tool 化）",
         "Docker 模块缓存失配诊断三件套",
-        "SSE 增量/快照事件语义对齐"
+        "SSE 增量/快照事件语义对齐",
+        "MCP stdio Docker 死循环修复（stdin_open + tty）"
+      ]
+    },
+    {
+      "category": "移动端",
+      "icon": "📲",
+      "items": [
+        "路由级双栈（同一 URL 不同组件，桌面/移动端零 CSS 冲突）",
+        "18 个移动端页面 + 12 个移动端组件",
+        "NutUI 4 + 4 PWA 策略（manifest + SW + safe-area + IndexedDB）",
+        "iOS Safari + Android Chrome 全兼容",
+        "Playwright 5 viewport × 13 页面视觉回归测试"
       ]
     }
   ],
@@ -76,13 +103,6 @@
       "desc": "实体关系网络+交互式探索"
     },
     {
-      "id": 10,
-      "name": "实时语音科研助手",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "语音对话+实时转录+AI问答"
-    },
-    {
       "id": 11,
       "name": "智能实验记录本",
       "cycle": "4-6 周",
@@ -97,46 +117,11 @@
       "desc": "任务分配+进度追踪+评审流程"
     },
     {
-      "id": 13,
-      "name": "自动化文献综述",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "文献检索+摘要生成+引用管理"
-    },
-    {
-      "id": 14,
-      "name": "智能实验方案生成",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "基于知识库生成实验方案"
-    },
-    {
-      "id": 15,
-      "name": "实验数据分析平台",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "数据导入+统计分析+可视化"
-    },
-    {
       "id": 16,
       "name": "深度论文理解",
       "cycle": "4-6 周",
       "priority": "高",
       "desc": "论文解析+关键信息提取+对比"
-    },
-    {
-      "id": 17,
-      "name": "AI 辅助论文写作",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "大纲生成+内容建议+格式检查"
-    },
-    {
-      "id": 18,
-      "name": "智能实验设备管理",
-      "cycle": "4-6 周",
-      "priority": "低",
-      "desc": "设备预约+使用记录+维护提醒"
     },
     {
       "id": 19,
@@ -146,46 +131,11 @@
       "desc": "自主研究+假设验证+论文草稿"
     },
     {
-      "id": 20,
-      "name": "AI 科研助手移动端",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "移动App+语音交互+离线模式"
-    },
-    {
       "id": 21,
       "name": "智能实验参数优化",
       "cycle": "4-6 周",
       "priority": "高",
       "desc": "贝叶斯优化+自动调参+最优解搜索"
-    },
-    {
-      "id": 22,
-      "name": "科研数据质量监控",
-      "cycle": "3-4 周",
-      "priority": "高",
-      "desc": "异常检测+数据校验+质量报告"
-    },
-    {
-      "id": 23,
-      "name": "跨项目知识迁移",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "相似项目发现+经验复用+最佳实践"
-    },
-    {
-      "id": 24,
-      "name": "智能实验排程",
-      "cycle": "4-6 周",
-      "priority": "中",
-      "desc": "资源约束+并行优化+冲突消解"
-    },
-    {
-      "id": 25,
-      "name": "科研成果自动评估",
-      "cycle": "4-6 周",
-      "priority": "中",
-      "desc": "创新性评估+影响力预测+改进建议"
     },
     {
       "id": 26,
@@ -195,35 +145,128 @@
       "desc": "失败原因分析+修复建议+预防措施"
     },
     {
-      "id": 27,
-      "name": "多模态科研数据融合",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "文本+图像+数据联合分析"
-    },
-    {
-      "id": 28,
-      "name": "科研知识蒸馏系统",
-      "cycle": "6-8 周",
-      "priority": "中",
-      "desc": "专家知识提取+新手培训+知识传承"
-    },
-    {
       "id": 29,
       "name": "智能科研方向推荐",
       "cycle": "8-10 周",
       "priority": "高",
       "desc": "热点预测+空白发现+方向规划"
-    },
-    {
-      "id": 30,
-      "name": "科研元宇宙实验室",
-      "cycle": "10-12 周",
-      "priority": "低",
-      "desc": "3D虚拟实验+远程协作+沉浸式体验"
     }
   ],
   "changelog": [
+    {
+      "date": "2026-06-13",
+      "title": "edge-tts 6.1.9 → 7.2.8 修复 TTS 403 Forbidden",
+      "tag": "修复",
+      "pain_point": "Microsoft 端点检测策略升级，旧 UA + TrustedClientToken 失效"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "Nginx /sw.js 强制 no-store — 一年内不缓存",
+      "tag": "修复",
+      "pain_point": "浏览器 SW 一年后才拉新 sw.js，bug 修复永远不生效"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "Nginx 静态资源 location 加 webmanifest 扩展名",
+      "tag": "修复",
+      "pain_point": "Nginx mime.types 不含 .webmanifest 默认 octet-stream"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "vite-plugin-pwa manifest precache 路径同步 + closeBundle 时序",
+      "tag": "修复",
+      "pain_point": "重命名 manifest 后 sw.js __WB_MANIFEST 不同步 + 异步生成时序陷阱"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "SW 图片路由 CacheFirst → NetworkFirst + CacheableResponsePlugin",
+      "tag": "修复",
+      "pain_point": "workbox 默认缓存 5xx 响应 → frp 断时 502 永久缓存头像 30 天"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "MCP stdio Docker 死循环 + mcp 0.9.x API 兼容",
+      "tag": "修复",
+      "pain_point": "stdin_open + tty 缺一不可 + Server.__init__ 签名变更"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "frpc.exe 僵尸进程陷阱 + start.bat 验证连通性",
+      "tag": "修复",
+      "pain_point": "进程存在 ≠ 隧道连通，必须 frpc.log 写入 + netstat ESTABLISHED 双验证"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "webhook 偶发 499 失败加固（git reset --hard + socket timeout）",
+      "tag": "修复",
+      "pain_point": "阿里云→GitHub TLS 握手瞬时失败 + 脏 working tree 卡 git pull"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "移动端 10 PR 全栈定制收官",
+      "tag": "功能",
+      "pain_point": "18 页面 + 12 组件 + 4 PWA 策略 + Playwright 5×13 视觉回归"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "Nginx types 指令覆盖事故链修复",
+      "tag": "修复",
+      "pain_point": "server context types {} 完全覆盖 mime.types → 整站 HTML octet-stream 白屏"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "SW 升级时清空所有 cache + 通知客户端自动 reload",
+      "tag": "修复",
+      "pain_point": "SW 污染 cache 后服务器修复浏览器仍进不去，cleanupOutdatedCaches 不够"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "Vue 3.4 → 3.5.34 升级 + unmountComponent null patch 插件",
+      "tag": "优化",
+      "pain_point": "el-table 递归 unmount 触发 'bum' null 解构崩溃（20+ 组件受影响）"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "PWA 切 injectManifest 模式 — 修 navigateFallback 永久拦截 bug",
+      "tag": "修复",
+      "pain_point": "navigateFallback 是 SPA shell 不是离线兜底，永返 offline.html 致网络误提示"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "AnalysisResultPanel v-if → v-show workaround",
+      "tag": "修复",
+      "pain_point": "el-table 外层 v-if 触发 EP 'bum' null bug 临时方案"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "PWA document 用 NetworkFirst + 5s 超时",
+      "tag": "优化",
+      "pain_point": "阿里云+FRP 5-30s 响应常态，StaleWhileRevalidate 无超时误判离线"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "webhint PWA 5 警告全栈修复",
+      "tag": "修复",
+      "pain_point": "webmanifest MIME + cache-busting hash + registerSW.js 静态注入"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "老 manifest.webmanifest 路径 410 Gone",
+      "tag": "修复",
+      "pain_point": "SPA fallback 删文件后返 index.html 致扫描器拿到 HTML 当 manifest"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "整合 README/ROADMAP 去除重复和过期内容",
+      "tag": "数据",
+      "pain_point": "项目状态/近期新增分散 4 处，集中到 README 一处为唯一来源"
+    },
+    {
+      "date": "2026-06-13",
+      "title": "stats.json 准确化（138K/617 → 140K/624）",
+      "tag": "数据",
+      "pain_point": "本地 Python 严格 exclude + 二进制检测 + 动态开发天数"
+    },
     {
       "date": "2026-06-12",
       "title": "SSE brief 事件不再 append delta",
