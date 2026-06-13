@@ -150,6 +150,41 @@
 - **移动端 18 页面 + 12 组件 + 4 PWA 策略（PR #1-10 全栈定制收官，commit `9026c07`）** — 完整覆盖：Dashboard/Login/Chat（带 session drawer + message bubble + input bar + rich card）/Task/TaskTrash/Meeting/MeetingDetail/MeetingRoom（3D CSS 声波条）/Knowledge/KnowledgeDetail/Project/ProjectStats/Member/Memory/Settings/Voiceprint/AgentTraces/admin。**核心组件**：CardList（卡片列表+下拉刷新+无限滚动）/LongPressWrapper（长按事件封装，300ms 触发）/MobileActionSheet（iOS 风格底部弹出菜单）/MobileECharts（图表懒加载+resize 监听）/MobileFormSheet（表单底部弹出）/MobileSearchSheet（搜索浮层）/MobileTaskCreateForm（任务创建 5 字段）/PageHeader（顶栏统一规范）/ProcessingSheet（处理中浮层）/SafeArea（iPhone 刘海/底栏安全区适配）/TabBar（底部 4 tab + 中间凸起 +badge）/VoiceTestFlow/VoiceprintEnrollFlow。**PWA 4 策略**：①vite-plugin-pwa 自动生成 manifest.json + service worker（workbox）②Service Worker 预缓存 app shell + 路由 fallback ③`useSafeArea` 读 env(safe-area-inset-*) + dynamic viewport units ④App 离线时显示「网络已断开但可查看最近消息」+ IndexedDB 缓存
 - **移动端测试矩阵（PR #10 收官，commit `9026c07`）** — `web/tests/visual/visual-regression.spec.mjs` Playwright 跨设备截图测试，覆盖 iPhone SE/14/15 Pro Max + iPad mini + Galaxy S21 5 个 viewport，**13 个核心页面视觉对比基线**。`web/src/components/mobile/__tests__/` 2 个组件测试（CardList + MobileFormSheet）+ Vitest jsdom 环境
 
+### 2026-06-13 Vue 3.5 升级 + PWA HTML 策略新增
+
+- **Vue 升级审计 3 项纪律（重要，commit `bf2da67` + merge `c6cb0e0`）** — 升 Vue 大版本（3.4 → 3.5 等）前必查 3 项：①`const { x } = props` 解构模式（Vue 3.5 reactive props destructure 默认开启会改变行为：旧版解构出非响应式副本，新版解构出响应式引用）②`toRefs(props)` 冗余用法（Vue 3.5 后可以删除，但保留无害）③`peer dep` 范围（EP 等 UI 库的 `vue: ^3.2.0` 是否覆盖目标版本）。**审计 one-liner**（3 分钟搞定）：
+  ```bash
+  cd web && \
+  echo "=== 1. 响应式解构 ===" && \
+  grep -rE "const\s*\{[^}]+\}\s*=\s*(props|defineProps)" src --include="*.vue" | wc -l && \
+  echo "=== 2. toRefs(props) 冗余 ===" && \
+  grep -rE "toRefs\s*\(\s*props" src --include="*.vue" | wc -l && \
+  echo "=== 3. peer dep 范围 ===" && \
+  npm view element-plus@<当前版本> peerDependencies.vue
+  ```
+  **本次审计结果**：项目**完全干净**（0 处命中响应式解构、0 处 toRefs 冗余、EP 2.4.4 peer `vue: ^3.2.0` 覆盖 3.5），**0 行代码改动**完成升级。111 个测试全过 + build 1.26s 0 警告。
+- **Vue 3.4 `bum` null 解构 bug（element-plus-desktop 报错根因）** — `Object.remove` → 父组件 unmount → `unmountChildren`（`ge`）→ 子节点 `vnode.component === null`（已卸载/未挂载）→ Vue 3.4 renderer 内部 `let{bum:r, scope:i, job:a, ...} = e` 抛 `Cannot destructure property 'bum' of 'e' as it is null`（`bum` = `beforeUnmount` hook 内部字段名）。**触发组件**：`AgentTracesView.vue`（19 el-table）/ `TaskTrash.vue`（18）/ `SpeakerMappingPanel.vue`（8）— 切 tab / 路由跳转触发 lazy unmount。**修复**：Vue 3.5 重构 unmount 路径加空值检查（PR vuejs/core#11487 之类）。**Workaround（不升级时）**：给触发组件加 `:key` 强制重挂载，或 `v-show` 替代 `v-if`。
+- **PWA HTML 文档必须用 NetworkFirst + 超时（重要，commit `d08555c`）** — 阿里云 + FRP 隧道环境下 5-30s 响应是常态。workbox `StaleWhileRevalidate` **没有超时**，SW 会无界等待直到浏览器放弃 → 回退到 `navigateFallback: '/offline.html'` → 用户看到「网络已断开」误提示。**修复**：
+  ```js
+  // vite.config.js workbox.runtimeCaching
+  {
+    urlPattern: ({ request }) => request.destination === 'document',
+    handler: 'NetworkFirst',
+    options: {
+      cacheName: 'documents',
+      networkTimeoutSeconds: 5,  // ← 关键，5s 内无响应走 cache/offline.html
+      expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
+    },
+  },
+  ```
+  **纪律**：workbox `globPatterns` 永远**不预缓存 `*.html`**（避免 SPA 旧 HTML 被新 SW 服务）；**单独把 `offline.html` 加进 globPatterns** 让真离线时仍能显示 PWA 离线页。
+- **PWA navigateFallback 静态页面也要同步 webhint 修复（重要，commit `e6d40a1`）** — `vite-plugin-pwa` 的 `navigateFallback: '/offline.html'` 指向 `web/public/offline.html`，**它和 `index.html` 是两套独立文件**。改 `index.html` meta 时必须同步改 `offline.html`，否则 SW 回退时 webhint 扫到的还是旧版（3 个 viewport / theme-color 警告持续出现）。**纪律**：任何改 `<meta>` / `<link rel="manifest">` / `<title>` 的 PR 必须 `git diff web/public/offline.html` 同步检查；建议把 head 片段提取到模板（如 `vite-plugin-html` 的 `injectOption`）避免遗漏。**调试技巧**：webhint 报陈年警告 + 清缓存/隐私模式仍存在 → 99% 是 PWA 静态页面而非 index.html 漏改。
+- **el-table / el-tree-select 外层避免 v-if（重要，commit `14c22e3` workaround）** — v-if 切换 → 完整 unmount → 递归卸载子组件（el-checkbox / el-tooltip / el-popper）→ Vue 3.4 renderer 内部 `let{bum:r,...}=e` 在 `e`（vnode.component）为 null 时抛 `Cannot destructure property 'bum' of 'e' as it is null`。**纪律**：①任何 el-table / el-tree-select / el-cascader 外层用 `v-show`（EP 组件大多有 `empty-text` 内置空态，不需要 v-if 隐藏）②即使升级 Vue 3.5 修了 bug，仍建议 v-show 作双保险 + 顺带保留 el-table 内部状态（sort/selection/scroll）③真要 v-if 释放 DOM 的场景，强制加 `:key` 显式声明 remount 意图。**已应用**：`AnalysisResultPanel.vue:55,77` v-if → v-show。**审计 one-liner**：
+  ```bash
+  cd web && grep -rB1 -A2 "<el-table\|<el-tree-select\|<el-cascader" src --include="*.vue" \
+    | grep -E "v-if=\"" | head -20
+  ```
+
 ### 2026-06-12 v4 收官后新增（多会话并行架构）
 
 - **多会话并行架构（修复 4）核心纪律**（重要，commit `662a6ea`）— ChatViewSSE 多会话并行不丢数据不打架：①`messagesBySession: Record<sessionId, Message[]>` per-session 隔离 ②`activeAssistantMap: Record<sessionId, Message>` SSE yield 找目标引用 ③`sendMessage` 启动时**闭包捕获 `targetSessionId`**（防止 SSE yield 时 outer `sessionId.value` 已切走）④`abortControllers[sessionId]` per-session 取消（多次点击同会话）⑤`loadedSessions: Set<sessionId>` 防重复加载覆盖后台 SSE 增量 ⑥`persistTimers: Record<sessionId, Timer>` debounce 100ms 持久化（防后台丢）⑦`scrollToBottom` / `loading` 仅 `targetSessionId === sessionId.value` 时触发（避免切走还在滚 A 的消息区）。**切会话不 abort 任何 SSE**（让 A 后台继续跑），但**组件卸载时 abort 所有**。**任何"流式响应 + 多视图"场景都要 per-session 隔离 + 闭包贯穿**。沉淀：[multi-session-parallel-architecture.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/multi-session-parallel-architecture.md)
