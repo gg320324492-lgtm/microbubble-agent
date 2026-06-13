@@ -206,6 +206,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.mcp
+    # MCP stdio 服务器默认 stdin 会被 Docker 关闭 → 进程退出 → restart 死循环
+    # 必须 stdin_open + tty 保持 stdio 开放，等待 MCP 客户端连接
+    stdin_open: true
+    tty: true
     environment:
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - CLAUDE_BASE_URL=${CLAUDE_BASE_URL}

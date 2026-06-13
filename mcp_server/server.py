@@ -3,7 +3,6 @@
 import logging
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import ServerCapabilities
 
 from app.config import settings
 from app.services.vision_service import VisionService
@@ -16,13 +15,9 @@ logging.basicConfig(
 logger = logging.getLogger("mcp_vision")
 
 # 创建 MCP 服务器
-app = Server(
-    name="vision-mcp-server",
-    version="1.0.0",
-    capabilities=ServerCapabilities(
-        tools={"listChanged": True}
-    )
-)
+# 注意：mcp 0.9.x 的 Server.__init__ 只接受 (name: str)，
+# version/capabilities 已被移除（version 改在 create_initialization_options 中设置）
+app = Server(name="vision-mcp-server")
 
 # 注册视觉工具
 from .tools.vision import create_vision_tools
