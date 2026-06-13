@@ -142,6 +142,61 @@
 - **纪律** — ① 这种"上游已知 bug 但未修复"的场景，**Vite plugin transform 阶段 patch** 比 npm postinstall patch 更稳（postinstall 会被 reinstall 覆盖；plugin 在 build 时每次生效）② `enforce: 'pre'` 确保在 esbuild/rollup 处理前 patch③ 防御性 `if (code.includes('...')) return` 防重复 patch④ pattern 未命中要 `console.warn` 而非静默吞（升级 Vue 后能立即发现 plugin 失效，需要重新适配）⑤ **只 patch build 产物，不 patch dev mode**（dev 保留原始报错方便定位应用层问题）
 - **临时性 + 自动失效** — 升级到 Vue 3.5.36+/3.6+ 若官方修了 `unmountComponent` instance null 检查，plugin 自动 skip（pattern 未命中 → warn）。监控 console 是否有 `[vue-bum-null-patch] pattern not found` 警告
 
+### 2026-06-13 Nginx types 指令覆盖/合并行为差异 — 整站 octet-stream 白屏事故（commit `08f440f` 留尾 → `f148d96` + `5c24442` 修复）
+
+- **事故** — 用户报告"打开 /dashboard /members 直接下载名为 dashboard / members 的文件"。curl 验证 `/index.html` 返回 `Content-Type: application/octet-stream` → 浏览器把 HTML 当二进制下载而非渲染。
+- **根因（极隐蔽，2 层）** —
+  1. `commit 08f440f` 在 `server { ... }` block 内加 `types { application/manifest+json webmanifest; }` 块想修 webmanifest MIME 问题
+  2. **Nginx `types` 指令在 server context 是"完全覆盖"语义（NOT 合并）**：从 http context 继承的 mime.types 整个被丢弃，只剩 types 块里的 MIME → `.html` 找不到 `text/html` → fallback 到 `default_type application/octet-stream` → 整站 HTML/CSS/JS/PNG 全变 octet-stream
+  3. **极其隐蔽**：webhint 只查 manifest.webmanifest 不查 HTML，所以没暴露这个问题；用户浏览器可能缓存了 08f440f 之前的 HTML 没刷新，所以没立即发现
+- **修复路径（commit `f148d96` + `5c24442`）**—
+  - **第一步（f148d96）**：删除 tunnel.conf 两个 server block 里的所有 `types { }` block，恢复 http context mime.types 默认合并语义
+  - **第二步（f148d96）**：改 `scripts/deploy-auto.sh` 增加 webmanifest MIME 注入：
+    ```bash
+    if ! grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
+        sed -i '/^application\/json[[:space:]]/a\    application/manifest+json           webmanifest;' /etc/nginx/mime.types
+        if grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
+            log "webmanifest MIME type added to mime.types"
+        else
+            log "ERROR: webmanifest MIME sed injection failed"  # fail loud
+        fi
+    fi
+    ```
+  - **第三步（5c24442）**：原 awk 模式注入失败（猜测 mime.types 行尾 `\r` 导致 awk `next+print` 行为异常）→ 改 sed `-i` 行后追加模式 + 注入后 grep 验证
+- **纪律（5 条铁律）** —
+  ① **Nginx `types` 指令上下文敏感**——
+  - `http` context：**合并**（additive，可加新 MIME 不丢默认）
+  - `server`/`location` context：**完全覆盖**（覆盖后必须列全用到的 MIME，否则 fallback octet-stream）
+  - 缺省 default：`application/octet-stream bin;`（最小集）
+  ② **永远不要在 server context 加 types { } block** —— 想给 PWA 加 MIME 就在 mime.types 里加（http context include 的那个文件）
+  ③ **deploy-auto.sh 注入 mime.types 必须 fail loud** ——
+  - sed/awk 注入后必须 `grep -q` 验证成功才 log success，否则 `log "ERROR: ..."`
+  - 注入幂等（先 grep 是否已存在）
+  - 优先用 sed `-i` 而非 awk（awk 在行尾 `\r` 时行为异常）
+  ④ **Webhint 不查 HTML MIME** ——
+  - webhint 报 manifest MIME 错误时**只查** manifest 不查 HTML/CSS/JS
+  - 加 types { } block 可能悄无声息破坏整站 MIME，**改 nginx 配置后必须 curl 验证所有响应 Content-Type**（HTML + CSS + JS + PNG + manifest + sw.js 至少 6 点）
+  ⑤ **改 nginx 配置后立刻 6 点 curl 验证** —
+    ```bash
+    curl -sk -o /dev/null -w "%{content_type}\n" https://xxx/index.html
+    curl -sk -o /dev/null -w "%{content_type}\n" https://xxx/  # SPA fallback
+    curl -sk -o /dev/null -w "%{content_type}\n" https://xxx/dashboard  # SPA route
+    curl -sk -o /dev/null -w "%{content_type}\n" https://xxx/sw.js
+    curl -sk -o /dev/null -w "%{content_type}\n" https://xxx/pwa-192.png
+    curl -sk -o /dev/null -w "%{content_type}\n" https://xxx/manifest.{hash}.webmanifest
+    ```
+    任一返回 octet-stream 即配置错误，不要等用户报告
+- **事故链时间线** —
+  1. 08f440f（18:27 加 types block，覆盖 mime.types，**事故起点**）
+  2. c855f0e（18:30 加 manifest.webmanifest 410）
+  3. ef130ce（18:32 CLAUDE.md）
+  4. 79305b7（18:40 Vue patch）
+  5. 7a077dd（18:42 CLAUDE.md）
+  6. 0a29290（18:49 试图"修复"types block，加完整 MIME 列表，但 types 指令在 server context 行为不变，整站仍 octet-stream）
+  7. 用户报告"下载文件"
+  8. f148d96（18:58 真修复：回滚 types block + 改 deploy-auto.sh）
+  9. 5c24442（19:05 修 awk → sed）
+
 ### 测试规范
 - **后端**：pytest + httpx AsyncClient，service 层单元测试 + API 集成测试
 - **前端**：Vitest + @vue/test-utils，composable 测试优先，组件测试选择性覆盖
