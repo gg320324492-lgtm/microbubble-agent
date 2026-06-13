@@ -296,6 +296,38 @@
 
 ## 开发注意事项
 
+### 2026-06-13 frpc.exe 僵尸进程陷阱：start.bat 不验证 FRP 隧道实际连通（commit 待提交）
+
+- **frpc.exe 进程存在 ≠ FRP 隧道连通（重要）** — 重启电脑后用 `start.bat` 启动 `frpc.exe`，进程跑起来后 `tasklist /FI "IMAGENAME eq frpc.exe"` 显示 PID ✓，但**实际并没有连接到云服务器 frps**。症状：① `frpc.log` 最后修改时间还是 17 天前的 ② 浏览器访问 `https://agent.mnb-lab.cn/minio/...` 头像 502 Bad Gateway ③ `netstat -ano | grep :7000` 显示**另一个进程**（如 clash-win64.exe）持有云服务器 7000 端口的 ESTABLISHED 连接，真正的 frpc.exe 是僵尸。**根因**：frpc.exe 启动失败时**进程不立即退出**（在等云服务器响应），`start.bat` 只检查进程存在就认为成功，跳过了真实连通性验证。**修复**：
+  ```bash
+  # 重启后必须验证（不能只看进程）
+  taskkill //F //IM frpc.exe 2>/dev/null
+  rm -f frp/frpc.log
+  powershell -Command "Start-Process -FilePath 'frpc.exe' -ArgumentList '-c','frpc.toml' -WindowStyle Hidden -WorkingDirectory 'frp'"
+  sleep 5
+  # 必须 cat log 看新写入
+  tail -10 frp/frpc.log  # 应包含 "start frpc service" 和 "login to server success"
+  netstat -ano | grep ":7000.*ESTABLISHED"  # PID 必须是刚启动的 frpc.exe
+  ```
+- **frpc.log 写入 = FRP 隧道活着的标志** — frpc 正常运行时会持续往 log 写 reconnect/heartbeat 信息，**如果 log 长时间（>1h）没动**，frpc 一定死了或僵尸化。**纪律**：① start.bat 启动 frpc 后必须 `sleep 5 && tail frpc.log` 看新写入；② `start.bat` 改为检测 `tail -1 frpc.log` 含 `start proxy success` 才认为成功；③ 部署文档加一节"FRP 隧道存活检查 one-liner"：
+  ```bash
+  # 三步验证法
+  echo "1. frpc.log 最新时间:"
+  stat -c %y frp/frpc.log
+  echo "2. frpc.exe 连接:"
+  netstat -ano | grep ":7000.*ESTABLISHED"
+  echo "3. 外网访问头像:"
+  curl -s -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/minio/microbubble/avatars/ce71e922b5b4491da9221df678a39acf.jpeg
+  # 期望: 3 个时间都是最近 + netstat PID 是 frpc.exe + 头像 HTTP 200
+  ```
+- **frps 服务端重启过会导致旧 run id 失效（重要）** — 这次新 frpc 启动后 run id 从 `531dadd3bd53b7d1`（旧，17 天前）变成 `2723f1d42c04b27b`（新），说明云服务器 frps 重启过，**但 frpc.exe 客户端没有自动重连**。frpc 0.x 有重连逻辑，但长时间无活动 + frps 重启 + frpc 自身无心跳时可能错过重连窗口。**纪律**：① 任何时候发现外网访问异常（502 / 连接拒绝），第一步 `tail frpc.log` 看 run id 是否变过；② 如果 frps 重启（云服务器维护），**必须手动重启 frpc.exe**，不要等它自动恢复；③ 改进 frpc.toml 加 `transport.heartbeatInterval = 30` + `transport.heartbeatTimeout = 90` 强制 30s 心跳，缩短发现断连的时间
+- **clash 代理可能劫持 frpc 的 HTTPS 连接（小坑）** — 用户本机 clash-win64.exe（PID 27808）开了系统代理，netstat 显示它自己持有 `60.205.93.8:7000` 的连接（应该是 frpc 的目标）。frpc 默认走系统代理（环境变量 `HTTP_PROXY` / `HTTPS_PROXY`），clash 接到后处理失败，frpc 就卡死。**修复**：启动 frpc 前显式清空代理环境变量：
+  ```bash
+  HTTP_PROXY="" HTTPS_PROXY="" http_proxy="" https_proxy="" NO_PROXY="*" no_proxy="*" \
+    powershell -Command "Start-Process -FilePath 'frpc.exe' ..."
+  ```
+  **纪律**：① 本地有 clash/v2ray 等代理软件时，启动 frpc 前**必须**清代理环境变量；② `frpc.toml` 本身不支持 `proxy_url` 配置（旧版本），靠环境变量；③ 如果换新版本 frpc（0.50+），可以用 `transport.proxyURL` 配置强制不走代理
+
 ### 2026-06-13 MCP stdio 服务器在 Docker 中的重启死循环 + mcp 0.9.x API 兼容（commit `db3e275`）
 
 - **MCP stdio 服务器在 Docker 里默认 stdin 关闭 → 进程退出 → restart 死循环（重要）** — `mcp.server.stdio` 通过 stdin/stdout 与 MCP 客户端通信，**不是 HTTP 服务**。Docker 启动容器时 stdin 默认是关闭的 pipe，stdio MCP 服务器一启动就立刻 `EOFError`/`BrokenPipeError` 退出。配合 `restart: unless-stopped` 就形成「启动 → stdio 关闭 → 进程退出 → 立即重启」的紧密循环，`docker compose ps` 永远显示 `Restarting (1) X seconds ago`，**日志只看到 INFO "Starting..." 然后被截断**，没有 traceback，定位极难。**修复**：docker-compose 加两行：
