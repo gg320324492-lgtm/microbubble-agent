@@ -33,6 +33,11 @@ import router from './router'
 // PR #1 基建：初始化主题 store（避免刷新闪烁；必须在 router 之前）
 import { useThemeStore } from './stores/useThemeStore'
 
+// PWA Service Worker 注册（webhint cache-busting 修复）
+// 用 Vue composable 替代 vite-plugin-pwa 自动注入的 <script src="/registerSW.js">，
+// 避免静态 registerSW.js 缺 hash 触发 cache-busting 警告。
+import { useRegisterSW } from 'virtual:pwa-register/vue'
+
 // 配置axios拦截器
 axios.interceptors.request.use(
   (config) => {
@@ -94,5 +99,16 @@ app.use(router)
 
 // 主题初始化（在 Pinia/router 注册后立即调用，避免刷新时 brief flash）
 useThemeStore()
+
+// PWA Service Worker 注册（webhint cache-busting 修复）
+useRegisterSW({
+  immediate: true,
+  onRegisteredSW(swUrl) {
+    console.log('[PWA] SW registered:', swUrl)
+  },
+  onRegisterError(err) {
+    console.warn('[PWA] SW registration failed:', err)
+  },
+})
 
 app.mount('#app')

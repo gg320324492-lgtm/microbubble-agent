@@ -1,10 +1,46 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import { readFileSync, writeFileSync, renameSync } from 'fs'
+import crypto from 'crypto'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
 import { VitePWA } from 'vite-plugin-pwa'
+
+// webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
+// 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
+// closeBundle 钩子里把文件重命名为 manifest.{sha256_8}.webmanifest，并同步改
+// index.html / offline.html 的 link 引用。8 字符 hex 满足 webhint 默认 [0-9a-f]+ 正则。
+function manifestHashPlugin() {
+  return {
+    name: 'manifest-hash-plugin',
+    closeBundle() {
+      const distDir = resolve(__dirname, 'dist')
+      const manifestPath = resolve(distDir, 'manifest.webmanifest')
+      let content
+      try {
+        content = readFileSync(manifestPath)
+      } catch {
+        return // dev 模式或 manifest 未生成时静默跳过
+      }
+      const hash = crypto.createHash('sha256').update(content).digest('hex').slice(0, 8)
+      const newName = `manifest.${hash}.webmanifest`
+      renameSync(manifestPath, resolve(distDir, newName))
+      // 同步改 HTML 引用（index.html + offline.html 兜底页都要改）
+      for (const file of ['index.html', 'offline.html']) {
+        const p = resolve(distDir, file)
+        try {
+          let html = readFileSync(p, 'utf-8')
+          if (html.includes('/manifest.webmanifest')) {
+            html = html.replace('/manifest.webmanifest', `/${newName}`)
+            writeFileSync(p, html)
+          }
+        } catch { /* offline.html 不存在时跳过 */ }
+      }
+    },
+  }
+}
 
 // PostCSS 插件：剥离 -moz-appearance（webhint: 应使用标准 appearance，已有 CSS 覆盖补全）
 const stripMozAppearance = {
@@ -54,10 +90,12 @@ export default defineConfig({
     // - registerType: 'autoUpdate' 自动更新（新版本部署后下次访问自动应用）
     // - strategies: 'injectManifest' 自定义 SW（src/sw.js），修复 generateSW 模式
     //   下 navigateFallback 把 offline.html 当 SPA shell 永远返回的 bug
-    // - manifest: 应用元信息（添加到桌面用）
+    // - injectRegister: null → 不自动注入 /registerSW.js，改在 main.js 用
+    //   useRegisterSW Vue composable 注册，避免 webhint 报 registerSW.js 缺 cache-busting
+    // - manifest: 应用元信息（添加到桌面用），文件名带 hash 由上面 manifestHashPlugin 处理
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto', // 自动注入 service worker 注册
+      injectRegister: null,
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.js',
@@ -87,6 +125,9 @@ export default defineConfig({
         enabled: false,
       },
     }),
+
+    // webhint cache-busting 修复：manifest.webmanifest → manifest.{hash}.webmanifest
+    manifestHashPlugin(),
   ],
   css: {
     postcss: {
