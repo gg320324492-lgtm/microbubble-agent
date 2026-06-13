@@ -130,10 +130,15 @@ fi
 # 会让 .html/.css/.js 全变 octet-stream（白屏事故 2026-06-13 commit 0a29290）。
 # http context 的 mime.types 是合并语义（additive），不会丢失默认 MIME。
 if ! grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
-    # 在 json 行后插入 webmanifest（保持 mime.types 格式对齐）
-    awk '/application\/json/{print;print "    application/manifest+json           webmanifest;";next}1' /etc/nginx/mime.types > /tmp/mime.types.new
-    mv /tmp/mime.types.new /etc/nginx/mime.types
-    log "webmanifest MIME type added to mime.types"
+    # 用 sed 在 application/json 行后追加 webmanifest（更可靠，awk 在某些 Nginx 默认
+    # mime.types 行尾含 \r 时会失效）。
+    # 匹配 "application/json" 整行（含可能尾随空格/CR），在新行后插入 webmanifest。
+    sed -i '/^application\/json[[:space:]]/a\    application/manifest+json           webmanifest;' /etc/nginx/mime.types
+    if grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
+        log "webmanifest MIME type added to mime.types"
+    else
+        log "ERROR: webmanifest MIME sed injection failed"
+    fi
 fi
 
 # 测试 + 重载 Nginx（失败只 warn 不退出）
