@@ -74,14 +74,27 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // 预缓存所有构建产物（最大 3MB）
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // 预缓存：JS/CSS/SVG/PNG/字体 + offline.html（让真离线时也能看到 PWA 离线页）
+        // 不预缓存 index.html 等 SPA HTML：HTML 总从服务器拉取最新（NetworkFirst 处理）
+        globPatterns: ['**/*.{js,css,svg,png,ico,woff,woff2}', 'offline.html'],
         navigateFallback: '/offline.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/ws\//],
         runtimeCaching: [
           {
-            // 静态资源（已通过 globPatterns 预缓存）
-            urlPattern: ({ request }) => request.destination === 'document' || request.destination === 'script' || request.destination === 'style',
+            // HTML 文档：NetworkFirst + 5s 超时（应对阿里云 FRP 隧道慢导致的
+            // navigateFallback 误触发）。网络通畅时直接用最新 HTML，5s 内未响应
+            // 才回退到 cache 或 offline.html。
+            urlPattern: ({ request }) => request.destination === 'document',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'documents',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
+            },
+          },
+          {
+            // 静态资源（已通过 globPatterns 预缓存，SWR 让离线访问 + 在线即时更新）
+            urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style',
             handler: 'StaleWhileRevalidate',
             options: { cacheName: 'static-resources' },
           },
