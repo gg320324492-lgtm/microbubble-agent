@@ -169,8 +169,8 @@ watch(
   z-index: 100;
   background: var(--color-bg-card);
   border-top: 1px solid var(--color-border);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   /* 底部 padding 由 inputPaddingBottom prop 动态控制（键盘高度 + safe-area） */
   padding-top: 8px;
 }

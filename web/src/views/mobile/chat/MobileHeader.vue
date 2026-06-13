@@ -57,8 +57,8 @@ defineEmits(['open-menu', 'toggle-theme'])
   z-index: 50;
   background: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   /* iOS 顶部安全区 */
   padding-top: var(--sat);
 }

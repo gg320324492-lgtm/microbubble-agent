@@ -3,11 +3,7 @@
    PR #1 基建：仅通用规则，不覆盖任何桌面组件
    ============================================ */
 
-/* ----- 文字调整 + 抗锯齿 ----- */
-html {
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
+/* ----- 文字抗锯齿（text-size-adjust 在 2026 年所有现代浏览器默认 100%，无需声明） ----- */
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

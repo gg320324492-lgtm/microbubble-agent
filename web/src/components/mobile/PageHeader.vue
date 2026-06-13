@@ -88,8 +88,8 @@ function onBack() {
   z-index: 100;
   background: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
 [data-theme="dark"] .mobile-page-header {
