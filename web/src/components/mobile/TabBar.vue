@@ -74,8 +74,8 @@ function handleSwitch(name) {
   bottom: 0;
   z-index: 2500; /* 高于一般内容，低于录音 FAB */
   background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   border-top: 1px solid var(--color-border);
 }
 

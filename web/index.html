@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <!-- 移动端 viewport 配置：
        - viewport-fit=cover: 允许内容延伸到刘海/底部 Home Indicator 区域，配合 env(safe-area-inset-*) 适配
-       - maximum-scale=5 / user-scalable=yes: 允许用户缩放（a11y）
+       - 不写 maximum-scale / user-scalable：遵循 webhint a11y 建议，默认允许用户缩放
        - width=device-width: 不使用固定 viewport（iOS 横屏 980→390） -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5, user-scalable=yes, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
-  <!-- 主题色（浏览器顶部栏 + Android 任务切换器） -->
-  <meta name="theme-color" content="#FF7A5C" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1a1d23" media="(prefers-color-scheme: dark)">
+  <!-- 主题色（浏览器顶部栏 + Android 任务切换器）
+       Firefox 不支持 media 属性，dark mode 由 useThemeStore 动态写入第 2 个 meta 标签 -->
+  <meta name="theme-color" content="#FF7A5C">
 
   <!-- iOS 添加到主屏幕（Web App） -->
   <meta name="apple-mobile-web-app-capable" content="yes">
