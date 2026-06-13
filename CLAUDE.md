@@ -178,6 +178,32 @@
   },
   ```
   **纪律**：workbox `globPatterns` 永远**不预缓存 `*.html`**（避免 SPA 旧 HTML 被新 SW 服务）；**单独把 `offline.html` 加进 globPatterns** 让真离线时仍能显示 PWA 离线页。
+- **PWA `navigateFallback` 不是「离线兜底」是 SPA shell 模式（重要，commit `d08555c` 留尾 → 本次彻底修复）** — workbox-build `generateSW` 模式下，`navigateFallback: '/offline.html'` 会被翻译成 `registerRoute(new NavigationRoute(createHandlerBoundToURL("/offline.html"), ...))`，而 `createHandlerBoundToURL` 是**不管网络是否可用直接返回 precache 内容**的 SPA shell handler。配合 `precacheAndRoute([..., 'offline.html'])` → **所有 navigation 秒返回 offline.html**，即便同时声明 NetworkFirst 文档路由也会被先注册的 NavigationRoute 抢走。**症状**：用户网络完全正常，DevTools Network 面板看不到任何 HTML 请求出去，PWA 永远显示「网络已断开」。**正确修复**：切 `strategies: 'injectManifest'` 自己写 `web/src/sw.js`：
+  ```js
+  import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
+  import { registerRoute, setCatchHandler } from 'workbox-routing'
+  import { NetworkFirst } from 'workbox-strategies'
+
+  self.skipWaiting()
+  self.addEventListener('activate', e => e.waitUntil(self.clients.claim()))
+  precacheAndRoute(self.__WB_MANIFEST)
+  cleanupOutdatedCaches()
+
+  registerRoute(
+    ({ request }) => request.mode === 'navigate' || request.destination === 'document',
+    new NetworkFirst({ cacheName: 'documents', networkTimeoutSeconds: 5, plugins: [...] })
+  )
+  // ... 其他路由
+
+  // 真离线兜底：仅当上面所有 handler throw 时才进来
+  setCatchHandler(async ({ request }) => {
+    if (request.destination === 'document' || request.mode === 'navigate') {
+      return (await caches.match('/offline.html')) || Response.error()
+    }
+    return Response.error()
+  })
+  ```
+  **vite.config.js 配套**：`VitePWA({ strategies: 'injectManifest', srcDir: 'src', filename: 'sw.js', injectManifest: { globPatterns: [...] } })`。**workbox-* 模块按需 import**——`workbox-precaching` / `workbox-routing` / `workbox-strategies` / `workbox-expiration` 都在 `vite-plugin-pwa` 传递依赖里，直接 import 就行，无需手动 `npm install`。**回归测试 one-liner**：`grep -E "NavigationRoute|navigateFallback|createHandlerBoundToURL" dist/sw.js` 必须 0 命中（generateSW 模式下永远命中，注定 bug）。**纪律**：① `navigateFallback` 仅适合纯 SPA shell 场景（单一 index.html 包打天下）；② 想做「真离线兜底」必须 `setCatchHandler`，而它**只在 `injectManifest` 模式下可用**；③ 诊断「永远显示离线页」类 bug，第一步看 DevTools → Application → Service Workers → sw.js 源码，有 `NavigationRoute` + `createHandlerBoundToURL` 就 100% 是这个陷阱。
 - **PWA navigateFallback 静态页面也要同步 webhint 修复（重要，commit `e6d40a1`）** — `vite-plugin-pwa` 的 `navigateFallback: '/offline.html'` 指向 `web/public/offline.html`，**它和 `index.html` 是两套独立文件**。改 `index.html` meta 时必须同步改 `offline.html`，否则 SW 回退时 webhint 扫到的还是旧版（3 个 viewport / theme-color 警告持续出现）。**纪律**：任何改 `<meta>` / `<link rel="manifest">` / `<title>` 的 PR 必须 `git diff web/public/offline.html` 同步检查；建议把 head 片段提取到模板（如 `vite-plugin-html` 的 `injectOption`）避免遗漏。**调试技巧**：webhint 报陈年警告 + 清缓存/隐私模式仍存在 → 99% 是 PWA 静态页面而非 index.html 漏改。
 - **el-table / el-tree-select 外层避免 v-if（重要，commit `14c22e3` workaround）** — v-if 切换 → 完整 unmount → 递归卸载子组件（el-checkbox / el-tooltip / el-popper）→ Vue 3.4 renderer 内部 `let{bum:r,...}=e` 在 `e`（vnode.component）为 null 时抛 `Cannot destructure property 'bum' of 'e' as it is null`。**纪律**：①任何 el-table / el-tree-select / el-cascader 外层用 `v-show`（EP 组件大多有 `empty-text` 内置空态，不需要 v-if 隐藏）②即使升级 Vue 3.5 修了 bug，仍建议 v-show 作双保险 + 顺带保留 el-table 内部状态（sort/selection/scroll）③真要 v-if 释放 DOM 的场景，强制加 `:key` 显式声明 remount 意图。**已应用**：`AnalysisResultPanel.vue:55,77` v-if → v-show。**审计 one-liner**：
   ```bash
