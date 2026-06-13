@@ -52,11 +52,15 @@ export default defineConfig({
 
     // PR #9: PWA 配置
     // - registerType: 'autoUpdate' 自动更新（新版本部署后下次访问自动应用）
+    // - strategies: 'injectManifest' 自定义 SW（src/sw.js），修复 generateSW 模式
+    //   下 navigateFallback 把 offline.html 当 SPA shell 永远返回的 bug
     // - manifest: 应用元信息（添加到桌面用）
-    // - workbox: 资源预缓存 + API 缓存 + 离线 fallback
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto', // 自动注入 service worker 注册
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       manifest: {
         name: '微纳米气泡课题组智能助手',
         short_name: '小气助手',
@@ -73,52 +77,10 @@ export default defineConfig({
           { src: '/pwa-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: {
-        // 预缓存：JS/CSS/SVG/PNG/字体 + offline.html（让真离线时也能看到 PWA 离线页）
-        // 不预缓存 index.html 等 SPA HTML：HTML 总从服务器拉取最新（NetworkFirst 处理）
+      injectManifest: {
+        // 预缓存：JS/CSS/SVG/PNG/字体 + offline.html（真离线兜底）
+        // 不预缓存 index.html：HTML 总走 NetworkFirst 拿最新
         globPatterns: ['**/*.{js,css,svg,png,ico,woff,woff2}', 'offline.html'],
-        navigateFallback: '/offline.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/ws\//],
-        runtimeCaching: [
-          {
-            // HTML 文档：NetworkFirst + 5s 超时（应对阿里云 FRP 隧道慢导致的
-            // navigateFallback 误触发）。网络通畅时直接用最新 HTML，5s 内未响应
-            // 才回退到 cache 或 offline.html。
-            urlPattern: ({ request }) => request.destination === 'document',
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'documents',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
-            },
-          },
-          {
-            // 静态资源（已通过 globPatterns 预缓存，SWR 让离线访问 + 在线即时更新）
-            urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style',
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'static-resources' },
-          },
-          {
-            // API GET 请求（5 分钟缓存）
-            urlPattern: /^\/api\/v1\/.*$/,
-            handler: 'NetworkFirst',
-            method: 'GET',
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 5,
-              expiration: { maxEntries: 100, maxAgeSeconds: 300 },
-            },
-          },
-          {
-            // 图片资源（30 天缓存）
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images',
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-        ],
       },
       devOptions: {
         // 开发模式禁用 service worker（避免缓存干扰调试）
