@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
-import { readFileSync, writeFileSync, renameSync } from 'fs'
+import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs'
 import crypto from 'crypto'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
@@ -11,7 +11,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
 // 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
 // closeBundle 钩子里把文件重命名为 manifest.{sha256_8}.webmanifest，并同步改
-// index.html / offline.html 的 link 引用。8 字符 hex 满足 webhint 默认 [0-9a-f]+ 正则。
+// index.html / offline.html 的 link 引用 + sw.js 里 __WB_MANIFEST 的引用。
+// 8 字符 hex 满足 webhint 默认 [0-9a-f]+ 正则。
+//
+// 2026-06-13 事故修复：之前只改 HTML，没改 sw.js 的 __WB_MANIFEST，
+// vite-plugin-pwa 在 generateBundle 阶段就把 manifest.webmanifest 加进了
+// precache 列表（字符串嵌入 sw.js），closeBundle 重命名 dist 文件后 sw.js
+// 里的路径还是旧名字 → SW install 阶段 precache 拉旧 URL → 服务器 410 Gone
+// （commit c855f0e 加的 location = /manifest.webmanifest { return 410 }）
+// → bad-precaching-response → SW install 失败 → 新 SW 永远激活不了。
+// 修复：rename 之后同步替换 sw.js 里所有 '"/manifest.webmanifest"' 字符串。
 function manifestHashPlugin() {
   return {
     name: 'manifest-hash-plugin',
@@ -38,6 +47,45 @@ function manifestHashPlugin() {
           }
         } catch { /* offline.html 不存在时跳过 */ }
       }
+      // 同步改 sw.js 里的 __WB_MANIFEST
+      // 2026-06-13 时序问题：vite-plugin-pwa 用自己的内部 rollup build 异步生成 sw.js，
+      // 在主 build 的 closeBundle 之后才写 dist/sw.js。这里用 setImmediate 让出主线程，
+      // 等 vite-plugin-pwa 完成后再修改 sw.js，最多重试 20 次（每次 +100ms）。
+      // 注意：__WB_MANIFEST 里的 url 没有前导斜杠（"manifest.webmanifest"），与 HTML 不同。
+      // 2026-06-13 教训：之前只改 HTML 没改 sw.js，导致 SW install 阶段 precache 拉
+      // 旧 manifest URL → 服务器 410 Gone（commit c855f0e 加的 location return 410）
+      // → bad-precaching-response → SW install 失败 → 新 SW 永远激活不了。
+      const swPath = resolve(distDir, 'sw.js')
+      let attempts = 0
+      const MAX_ATTEMPTS = 20
+      const tryUpdateSw = () => {
+        try {
+          attempts++
+          if (attempts > MAX_ATTEMPTS) {
+            console.warn('[manifest-hash-plugin] sw.js update failed after', MAX_ATTEMPTS, 'attempts')
+            return
+          }
+          if (!existsSync(swPath)) {
+            setTimeout(tryUpdateSw, 100)
+            return
+          }
+          let sw = readFileSync(swPath, 'utf-8')
+          if (sw.includes('"manifest.webmanifest"')) {
+            sw = sw.replaceAll('"manifest.webmanifest"', `"${newName}"`)
+            writeFileSync(swPath, sw)
+            console.log(`[manifest-hash-plugin] sw.js __WB_MANIFEST updated → ${newName} (attempt ${attempts})`)
+          } else if (sw.includes(`"${newName}"`)) {
+            // 已经更新过了（可能 setImmediate 多次回调或重 build）
+            return
+          } else {
+            console.warn(`[manifest-hash-plugin] sw.js pattern not found (attempt ${attempts})`)
+          }
+        } catch (e) {
+          // 任何错误都不能影响 build 流程（closeBundle 抛错会让 build 失败）
+          console.warn(`[manifest-hash-plugin] sw.js update error (attempt ${attempts}):`, e.message)
+        }
+      }
+      setImmediate(tryUpdateSw)
     },
   }
 }

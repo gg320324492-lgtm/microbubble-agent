@@ -19,7 +19,10 @@
 // → 用户下次访问拿到的就是新资源（不受之前 octet-stream 缓存影响）
 // 2026-06-13 v3 BUMP：图片路由 CacheFirst → NetworkFirst + CacheableResponsePlugin，
 // 防止 FRP/服务端 5xx 响应被永久缓存 30 天
-const SW_VERSION = 'v3-images-networkfirst-2026-06-13'
+// 2026-06-13 v4 BUMP：修复 __WB_MANIFEST 里 manifest.webmanifest 旧路径导致 SW install
+// 阶段 precache 失败的问题（vite-plugin-pwa 在 generateBundle 把 manifest 写进 SW，
+// manifestHashPlugin 在 closeBundle 才重命名文件，SW 里还引用旧名字 → 410 Gone）
+const SW_VERSION = 'v4-manifest-precache-fix-2026-06-13'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
