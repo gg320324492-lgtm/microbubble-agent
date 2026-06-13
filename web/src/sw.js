@@ -14,6 +14,13 @@
 // 2. `setCatchHandler` 兜底：路由处理 throw 时（真正离线 + 没缓存）才返回
 //    offline.html，配合 retry 按钮 + online 事件监听器自动刷新。
 
+// 2026-06-13 事故修复：BUMP 每次部署递增，触发 SW 字节变化让浏览器检测到新 SW
+// → 立即 skipWaiting() 激活 → activate 钩子清空所有 cache（包括被污染的 documents）
+// → 用户下次访问拿到的就是新资源（不受之前 octet-stream 缓存影响）
+const SW_VERSION = 'v2-cache-purge-2026-06-13'
+self.__SW_VERSION__ = SW_VERSION
+console.log('[SW] version:', SW_VERSION)
+
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { registerRoute, setCatchHandler } from 'workbox-routing'
 import { NetworkFirst, StaleWhileRevalidate, CacheFirst } from 'workbox-strategies'
@@ -24,7 +31,33 @@ import { ExpirationPlugin } from 'workbox-expiration'
 // 用户刷新一次后看到的就是新逻辑（autoUpdate 体验）
 self.skipWaiting()
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil(
+    (async () => {
+      // 清空所有 cache（不只是 workbox 默认的，所有客户端 cache）
+      // 解决：之前 server 返回 octet-stream 时期被 SW NetworkFirst 缓存到 documents
+      // cache 的污染响应 —— 老 SW 不会清，老 activate 不会跑
+      const keys = await caches.keys()
+      await Promise.all(
+        keys.map(async (cacheName) => {
+          console.log('[SW] deleting cache:', cacheName)
+          return caches.delete(cacheName)
+        })
+      )
+      await self.clients.claim()
+      // 通知所有客户端 SW 已升级，让它们 reload
+      const clients = await self.clients.matchAll({ type: 'window' })
+      clients.forEach((client) => {
+        client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })
+      })
+    })()
+  )
+})
+
+// 监听客户端消息：SW_UPDATED → reload
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 // === 预缓存 ===
