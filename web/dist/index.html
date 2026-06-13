@@ -8,9 +8,8 @@
        - width=device-width: 不使用固定 viewport（iOS 横屏 980→390） -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
-  <!-- 主题色（浏览器顶部栏 + Android 任务切换器）
-       Firefox 不支持 media 属性，dark mode 由 useThemeStore 动态写入第 2 个 meta 标签 -->
-  <meta name="theme-color" content="#FF7A5C">
+  <!-- theme-color 由 useThemeStore.apply() 在 JS 中动态注入（避免 webhint Edge DevTools 报
+       "Firefox 不支持"，且 Firefox 不读 .hintrc 配置，必须从 HTML 源头消除） -->
 
   <!-- iOS 添加到主屏幕（Web App） -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,7 +26,7 @@
   <title>微纳米气泡课题组 - 智能Agent</title>
   <link rel="icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/favicon.ico">
-  <script type="module" crossorigin src="/assets/index-35163fe6.js"></script>
+  <script type="module" crossorigin src="/assets/index-69c3e082.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-12fb2496.js">
   <link rel="modulepreload" crossorigin href="/assets/element-plus-desktop-9172f645.js">
   <link rel="stylesheet" crossorigin href="/assets/element-plus-desktop-c27510e0.css">
