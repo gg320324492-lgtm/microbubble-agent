@@ -4,6 +4,7 @@ import { resolve } from 'path'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // PostCSS 插件：剥离 -moz-appearance（webhint: 应使用标准 appearance，已有 CSS 覆盖补全）
 const stripMozAppearance = {
@@ -47,6 +48,69 @@ export default defineConfig({
         NutUIResolver({ importStyle: 'css' }),
       ],
       dts: false,  // 不生成类型声明文件
+    }),
+
+    // PR #9: PWA 配置
+    // - registerType: 'autoUpdate' 自动更新（新版本部署后下次访问自动应用）
+    // - manifest: 应用元信息（添加到桌面用）
+    // - workbox: 资源预缓存 + API 缓存 + 离线 fallback
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'auto', // 自动注入 service worker 注册
+      manifest: {
+        name: '微纳米气泡课题组智能助手',
+        short_name: '小气助手',
+        description: '任务/会议/知识一体化智能 Agent',
+        theme_color: '#FF7A5C',
+        background_color: '#F5F7FA',
+        display: 'standalone',
+        orientation: 'portrait',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/pwa-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        // 预缓存所有构建产物（最大 3MB）
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        navigateFallback: '/offline.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/ws\//],
+        runtimeCaching: [
+          {
+            // 静态资源（已通过 globPatterns 预缓存）
+            urlPattern: ({ request }) => request.destination === 'document' || request.destination === 'script' || request.destination === 'style',
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'static-resources' },
+          },
+          {
+            // API GET 请求（5 分钟缓存）
+            urlPattern: /^\/api\/v1\/.*$/,
+            handler: 'NetworkFirst',
+            method: 'GET',
+            options: {
+              cacheName: 'api-cache',
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 100, maxAgeSeconds: 300 },
+            },
+          },
+          {
+            // 图片资源（30 天缓存）
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        // 开发模式禁用 service worker（避免缓存干扰调试）
+        enabled: false,
+      },
     }),
   ],
   css: {
