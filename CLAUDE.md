@@ -11,11 +11,11 @@
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**当前状态（2026-06-12 深夜收尾后，commit `cf70ff5`）**：
-- **24 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4 + 多会话并行 2：后端 3 bug `3852755` + 前端多会话并行架构 `662a6ea`）
-- **160 测试全过**（87 后端 + 73 前端，0 回归）
-- **945 次提交 / 187K 行代码 / 2840 文件 / 28 开发天数**（`app/stats.json` 由 webhook 部署时云端重生成；本地 Git Bash `find` 行为差异不一致）
-- **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留）
+**Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官 + 移动端 10 个 PR 全栈定制收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**移动端**采用 NutUI 4 + Element Plus **路由级双栈**架构（`useIsMobile.js` 判定 + `resolveMobile.js` 路由适配），**18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略**全部交付，**iOS Safari + Android Chrome 全兼容**。**当前状态（2026-06-13 收官后，commit `9026c07`）**：
+- **43 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4 + 多会话并行 2 + 移动端 PR #1-10 共 10 + 文档/webhint 5 + 部署加固 1）
+- **160+ 测试全过**（87 后端 + 73 前端 + 21 录音断网防御 + 2 移动端组件）
+- **965 次提交 / 138K 行代码 / 617 文件 / 29 开发天数**（`app/stats.json` 由本地 Python 准确计算；之前的 webhook 统计包含 .meta/.log/.wav 等非源代码已剔除）
+- **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留），移动端 10 PR 完成后清单大幅缩短
 
 **v2/v3/v4 关键成果**：
 - **34 个 `@tool` 装饰器工具**（覆盖任务 5 / 会议 7 / 项目 3 / 成员 2 / 知识 9 / 公式 1 / 假设 1 / 记忆 3 / 搜索 1 / 个性化 2 / 反馈 1 — 含 16 个 v2+v3 新工具）
@@ -87,6 +87,7 @@
 - **通知面板** — 铃铛使用 el-popover 弹窗面板，显示每条提醒的具体内容（任务标题+提醒时间）、全部标为已读、点击跳转任务；头像读取 userStore.userInfo.avatar 真实 URL
 - **任务权限模型** — 所有成员可见全部任务（降低认知负担），仅创建人/负责人/管理员可编辑、删除、恢复、永久删除
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
+- **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**PWA 4 策略**：manifest + service worker（workbox）预缓存 app shell + useSafeArea 读 iPhone 安全区 + 离线 IndexedDB 兜底。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
 
 ## 代码质量规范（2026-06-04 升级）
 
@@ -137,6 +138,17 @@
 | `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
 
 ## 开发注意事项
+
+### 2026-06-13 移动端 10 PR + 部署加固 收官新增
+
+- **移动端路由级双栈（重要，PR #1 基建 + PR #2 NutUI 引入，commits `99bbe6b` `3c58cb1`）** — 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不是 `v-if` 全局切换。模式：①`useIsMobile.js` 监听 `window.matchMedia('(max-width: 768px)')` + `navigator.userAgent`（iPad/iPhone 误判时用 UA 兜底）②`router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` ③每个 View 文件在 setup 顶部 import 自己的子组件，不共享 component 树。**好处**：桌面端 `el-*` 与移动端 `nut-*` 完全隔离，无 CSS 冲突；切设备时**不重载后端**，URL 不变。**坑**：`/chat` 桌面端走 ChatViewSSE.vue，移动端走 MobileChatView.vue，store/Pinia 完全独立（避免桌面端 dark mode 状态污染移动端主题）
+- **移动端首屏包大小纪律（PR #3 教训，commit `0ed4294`）** — `import.meta.glob('eager: true, import: 'default')` 在移动端 View 文件**会触发 Vite 静态分析失败**（MobileChatView 引入 12 个 block 组件全部 eager import → 桌面端代码被打进移动端 chunk）。**修复**：①eager 模式必须包在 `if (!isMobile.value) { ... }` 条件内，让 Vite tree-shake ②构建后 `web/dist/assets/` 里 grep 关键桌面组件名（如 `ChatViewSSE`），不应该出现在 mobile-*.js chunk 里 ③mobile chunk size 目标 < 250KB gzip
+- **v-model on prop 误用 Vue 警告（PR #3 教训）** — Element Plus `<el-input v-model="localValue">` 在 `:value` 上写 v-model，Vue 警告。**修复**：用 `computed` get/set 包装 props 后再 v-model。`<el-input :model-value="localValue" @update:model-value="localValue = $event">` 也可
+- **webhint `meta-theme-color` 静态声明 vs JS 动态注入（commit `0bbc12d` + `3cf8634`）** — 静态 `<meta name="theme-color" content="...">` 只能写一个固定值，但项目有 dark mode 需要切换。**修复**：HTML 不写静态 meta，`useThemeStore` 监听 `theme` 变化后 `document.querySelector('meta[name="theme-color"]')?.remove()` + 创建新 meta 注入。`.hintrc` 加 `"webhint:recommended"` 关闭该规则（webhint `meta-viewport` hint 仍会查这个）
+- **webhint cache-busting 缓存正则匹配 hex 8 字符（commit `6339c29` 续，PR 修复迁移）** — Vite `hashCharacters: 'hex'` 输出 8 字符 hex 满足 webhint 内置 `[0-9a-f]+` 正则。新建 Vite 项目**默认配置**应为 `hex`，不要用 base64url
+- **webhook 偶发 499 失败根因（重要，commit `7e41577`）** — 阿里云→GitHub HTTPS 出口网络瞬时故障，TLS 握手时 GitHub 客户端 10s 超时断开，Nginx 收 499 但 webhook service 完全没机会处理（连接都没建立）。**修复 1（deploy-auto.sh 改 git reset --hard 模式）** — 服务器是 immutable infra，`git pull` 在 dirty working tree（之前有失败 deploy 留下的 untracked 文件）下会卡。`git fetch origin main && git reset --hard origin/main` 永远把工作区强制对齐。`git clean -fd` 改 `git clean -fdx`（也清 .gitignore 内文件）。**修复 2（webhook.py socket timeout）** — `import socket` + `self.connection.settimeout(15)`（GitHub 默认 10s + 5s 余量）+ try/except socket.timeout → 504。**手动 redeliver trick**（紧急补部署）：本地 `git rev-parse HEAD` 取 SHA → 构造真实 payload → openssl dgst -sha256 -hmac 计算 X-Hub-Signature-256 → SSH 到服务器 `curl -X POST http://127.0.0.1:9001/webhook`（绕过 Nginx 直接调 service，绕过 GitHub 5min/30min 重试链）。沉淀：[webhook-debug-2026-06-13.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/webhook-debug-2026-06-13.md)
+- **移动端 18 页面 + 12 组件 + 4 PWA 策略（PR #1-10 全栈定制收官，commit `9026c07`）** — 完整覆盖：Dashboard/Login/Chat（带 session drawer + message bubble + input bar + rich card）/Task/TaskTrash/Meeting/MeetingDetail/MeetingRoom（3D CSS 声波条）/Knowledge/KnowledgeDetail/Project/ProjectStats/Member/Memory/Settings/Voiceprint/AgentTraces/admin。**核心组件**：CardList（卡片列表+下拉刷新+无限滚动）/LongPressWrapper（长按事件封装，300ms 触发）/MobileActionSheet（iOS 风格底部弹出菜单）/MobileECharts（图表懒加载+resize 监听）/MobileFormSheet（表单底部弹出）/MobileSearchSheet（搜索浮层）/MobileTaskCreateForm（任务创建 5 字段）/PageHeader（顶栏统一规范）/ProcessingSheet（处理中浮层）/SafeArea（iPhone 刘海/底栏安全区适配）/TabBar（底部 4 tab + 中间凸起 +badge）/VoiceTestFlow/VoiceprintEnrollFlow。**PWA 4 策略**：①vite-plugin-pwa 自动生成 manifest.json + service worker（workbox）②Service Worker 预缓存 app shell + 路由 fallback ③`useSafeArea` 读 env(safe-area-inset-*) + dynamic viewport units ④App 离线时显示「网络已断开但可查看最近消息」+ IndexedDB 缓存
+- **移动端测试矩阵（PR #10 收官，commit `9026c07`）** — `web/tests/visual/visual-regression.spec.mjs` Playwright 跨设备截图测试，覆盖 iPhone SE/14/15 Pro Max + iPad mini + Galaxy S21 5 个 viewport，**13 个核心页面视觉对比基线**。`web/src/components/mobile/__tests__/` 2 个组件测试（CardList + MobileFormSheet）+ Vitest jsdom 环境
 
 ### 2026-06-12 v4 收官后新增（多会话并行架构）
 
