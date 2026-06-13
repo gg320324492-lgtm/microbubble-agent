@@ -42,6 +42,50 @@ function manifestHashPlugin() {
   }
 }
 
+// Vue 3.5 'bum' null 解构 bug patch（已确认 3.5.34 / 3.5.38 都没修）
+// renderer.ts unmountComponent 函数签名：
+//   const unmountComponent = (instance, parentSuspense, doRemove) => {
+//     if (__DEV__ && instance.type.__hmrId) { unregisterHMR(instance) }
+//     const { bum, scope, job, subTree, um, m, a } = instance  // ← instance === null 时爆！
+// 触发链路：EP 内部 el-table 子组件递归 unmount → 某子 vnode.component 已是 null →
+//   vnode.type.remove(...) → unmountComponent(null) → 'Cannot destructure bum of null'
+// 修复：在 esm-bundler.js 顶部注入一行 if (!instance) return; 守卫
+// 只影响 build 产物（dev mode 不修，因为 dev 调试需要看原始报错定位应用层 bug）
+const VUE_BUM_NULL_PATCH = '/* patch:vue-3.5-bum-null */ if (!instance) return;'
+function vueBumNullPatchPlugin() {
+  return {
+    name: 'vue-bum-null-patch',
+    // enforce:'pre' 让 transform 在其他插件前跑（确保 patch 在 esbuild 处理前生效）
+    enforce: 'pre',
+    transform(code, id) {
+      // 只 patch @vue/runtime-core 的 esm-bundler 入口（build 时 Vite 会加载这个）
+      if (!/node_modules\/@vue\/runtime-core\/dist\/runtime-core\.esm-bundler\.js$/.test(id)) {
+        return null
+      }
+      // 防御性：检查是否已 patch（避免重复）
+      if (code.includes('/* patch:vue-3.5-bum-null */')) {
+        return null
+      }
+      // 定位 unmountComponent 函数体
+      // esm-bundler.js 是 minified-ish（变量短但结构保留），用正则匹配
+      const pattern = /(const\s+unmountComponent\s*=\s*\([^)]*\)\s*=>\s*\{)/
+      const match = code.match(pattern)
+      if (!match) {
+        // 文件结构变了，patch 失败（升级 Vue 后要重新适配）
+        console.warn('[vue-bum-null-patch] unmountComponent pattern not found, skipped')
+        return null
+      }
+      // 在函数体开头插入 null guard
+      const patched = code.replace(pattern, `$1\n    ${VUE_BUM_NULL_PATCH}`)
+      console.log('[vue-bum-null-patch] applied to', id)
+      return {
+        code: patched,
+        map: null,
+      }
+    },
+  }
+}
+
 // PostCSS 插件：剥离 -moz-appearance（webhint: 应使用标准 appearance，已有 CSS 覆盖补全）
 const stripMozAppearance = {
   postcssPlugin: 'strip-moz-appearance',
@@ -128,6 +172,9 @@ export default defineConfig({
 
     // webhint cache-busting 修复：manifest.webmanifest → manifest.{hash}.webmanifest
     manifestHashPlugin(),
+
+    // Vue 3.5 'bum' null 解构 bug patch — 见上面 vueBumNullPatchPlugin 注释
+    vueBumNullPatchPlugin(),
   ],
   css: {
     postcss: {
