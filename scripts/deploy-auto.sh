@@ -121,6 +121,21 @@ if ! grep -q 'font/woff2' /etc/nginx/mime.types 2>/dev/null; then
     log "woff2 MIME type fixed in mime.types"
 fi
 
+# 2026-06-13 webhint 修复：注入 webmanifest MIME 类型到 mime.types
+# 背景：Nginx 1.27 之前默认 mime.types 不含 .webmanifest → application/octet-stream
+# → 浏览器拒绝解析 PWA manifest。
+#
+# ⚠️ 关键纪律：必须在 http 块的 mime.types 里加，**不要**在 server context 用
+# types { } block —— types 指令在 server context **完全覆盖**默认 mime.types，
+# 会让 .html/.css/.js 全变 octet-stream（白屏事故 2026-06-13 commit 0a29290）。
+# http context 的 mime.types 是合并语义（additive），不会丢失默认 MIME。
+if ! grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
+    # 在 json 行后插入 webmanifest（保持 mime.types 格式对齐）
+    awk '/application\/json/{print;print "    application/manifest+json           webmanifest;";next}1' /etc/nginx/mime.types > /tmp/mime.types.new
+    mv /tmp/mime.types.new /etc/nginx/mime.types
+    log "webmanifest MIME type added to mime.types"
+fi
+
 # 测试 + 重载 Nginx（失败只 warn 不退出）
 if nginx -t >> "$LOG_FILE" 2>&1; then
     log "nginx reload..."
