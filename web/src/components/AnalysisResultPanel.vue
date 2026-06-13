@@ -51,8 +51,10 @@
       </div>
     </div>
 
-    <!-- 发言者统计 -->
-    <div v-if="speakerStats?.length" class="section">
+    <!-- 发言者统计 — 用 v-show 而非 v-if（Vue 3.4 renderer bug 'Cannot destructure property bum' workaround）
+         当 speakerStats 从 [] 变 N 时 v-if 会完整 unmount el-table，触发 EP 子组件递归 unmount 中
+         vnode.component === null 的崩溃。v-show 保持 el-table 挂载，仅切换可见性 -->
+    <div v-show="speakerStats?.length" class="section">
       <h4>发言者统计</h4>
       <el-table :data="speakerStats" size="small" stripe>
         <el-table-column prop="name" label="发言人" width="100" />
@@ -71,10 +73,10 @@
       </el-table>
     </div>
 
-    <!-- 待创建任务预览 -->
-    <div v-if="tasksPreview?.length" class="section">
+    <!-- 待创建任务预览 — 同样 v-show workaround（见上方发言者统计注释） -->
+    <div v-show="tasksPreview?.length" class="section">
       <div class="section-header">
-        <h4>待创建任务（{{ tasksPreview.length }} 个）</h4>
+        <h4>待创建任务（{{ tasksPreview?.length || 0 }} 个）</h4>
       </div>
       <el-table :data="tasksPreview" size="small" stripe>
         <el-table-column prop="title" label="任务" min-width="180" />
