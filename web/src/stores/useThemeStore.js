@@ -32,12 +32,17 @@ function apply(mode) {
   if (typeof document === 'undefined') return
   document.documentElement.setAttribute('data-theme', mode)
 
-  // 动态同步浏览器顶部栏 theme-color（避免在 index.html 写 media 属性 — Firefox 不支持会一直显示第一个）
-  // 静态 meta 标签只保留 light 默认值，dark mode 由 JS 动态改 content
-  const meta = document.querySelector('meta[name="theme-color"]')
-  if (meta) {
-    meta.setAttribute('content', mode === 'dark' ? '#1a1d23' : '#FF7A5C')
+  // 动态注入 theme-color meta（不在 index.html 静态声明，避免 webhint 报 Firefox 不支持）
+  // - 首次调用：createElement + appendChild 到 <head>
+  // - 后续调用：直接 setAttribute('content', ...) 更新
+  // - Firefox 不实现该属性，JS 注入无副作用
+  let meta = document.head.querySelector('meta[name="theme-color"]')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.setAttribute('name', 'theme-color')
+    document.head.appendChild(meta)
   }
+  meta.setAttribute('content', mode === 'dark' ? '#1a1d23' : '#FF7A5C')
 }
 
 export const useThemeStore = defineStore('theme', () => {

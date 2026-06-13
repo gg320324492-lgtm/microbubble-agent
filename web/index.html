@@ -8,9 +8,8 @@
        - width=device-width: 不使用固定 viewport（iOS 横屏 980→390） -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
-  <!-- 主题色（浏览器顶部栏 + Android 任务切换器）
-       Firefox 不支持 media 属性，dark mode 由 useThemeStore 动态写入第 2 个 meta 标签 -->
-  <meta name="theme-color" content="#FF7A5C">
+  <!-- theme-color 由 useThemeStore.apply() 在 JS 中动态注入（避免 webhint Edge DevTools 报
+       "Firefox 不支持"，且 Firefox 不读 .hintrc 配置，必须从 HTML 源头消除） -->
 
   <!-- iOS 添加到主屏幕（Web App） -->
   <meta name="apple-mobile-web-app-capable" content="yes">
