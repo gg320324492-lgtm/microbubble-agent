@@ -296,6 +296,31 @@
 
 ## 开发注意事项
 
+### 2026-06-13 SW 图片路由 CacheFirst 缓存 5xx 响应 → 头像永久 502（commit `707c0f9`）
+
+- **workbox `CacheFirst` 会缓存所有响应包括 5xx（重要，教训）** — 之前 `web/src/sw.js` 路由 4（图片）用 `CacheFirst`，当 frp 断的窗口期浏览器加载头像时，nginx 返回 502，**workbox 把 502 当成成功响应缓存到 images cache**，30 天有效期。frp 修好后浏览器**永远返回 cache 里的 502**，用户头像持续看不到。**根因**：workbox 默认不区分 200/4xx/5xx，全部缓存。**修复**：
+  ```js
+  // 路由 4：图片 (修复后)
+  new NetworkFirst({
+    cacheName: 'images',
+    networkTimeoutSeconds: 5,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),  // ← 关键：只缓存 0 (opaque) 和 200
+      new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 }),
+    ],
+  })
+  ```
+  **纪律（3 条）**：① **任何 SW 缓存策略都必须加 `CacheableResponsePlugin({ statuses: [0, 200] })`**——不区分 2xx 是 workbox 的默认行为，不是 bug 而是设计选择，必须显式覆盖。② **图片/音频/字体等大资源不要用 `CacheFirst` 兜底**——`NetworkFirst` + 5s 超时才是正确姿势（在线先网络，慢/断才 cache）。`CacheFirst` 只适合**已经分发的静态资源**（已写入 precache 列表的），不适合网络请求结果。③ **API GET 路由同样需要 `CacheableResponsePlugin`**（路由 3 已补）——后端 503/504 也可能被永久缓存
+- **SW 升级触发条件 = 字节变化（重要，commit `747a735` 已说过，再强化）** — 浏览器通过**字节比较**检测 SW 更新，不是 SW 内容里的版本号。改 `sw.js` 文件加一行 const 都会触发字节变化 → 浏览器拉新 SW → 升级流程。**当前机制**：`SW_VERSION` 字符串 + `skipWaiting()` + `clients.claim()` + activate 钩子 `caches.keys() + Promise.all(keys.map(caches.delete))` 清空所有 cache + `postMessage({ type: 'SW_UPDATED' })` → 客户端监听后 `window.location.reload()`。**事故修复标准路径**：BUMP `SW_VERSION` 到新值 → rebuild dist → git add -f + push → 用户下次访问自动 reload。**调试**：DevTools → Application → Service Workers 看 sw.js 源码，搜 `SW_VERSION` 字符串确认是否升级成功
+- **用户浏览器 SW 缓存污染的最快恢复手段（兜底）** ——
+  ```bash
+  # DevTools → Application → Storage → Clear site data 一键清空
+  # 或 Application → Service Workers → "Unregister" + Application → Cache Storage 右键删除
+  # 或硬刷新 Ctrl+Shift+R / Cmd+Shift+R（绕过部分 HTTP cache，但**不绕过 SW cache**）
+  # 最稳：F12 → 右键 Reload 按钮 → "Empty Cache and Hard Reload"
+  ```
+  **不要只告诉用户"刷新一下"**——普通刷新**不会**清 SW cache，必须明确告诉用户硬刷新或清 site data
+
 ### 2026-06-13 frpc.exe 僵尸进程陷阱：start.bat 不验证 FRP 隧道实际连通（commit 待提交）
 
 - **frpc.exe 进程存在 ≠ FRP 隧道连通（重要）** — 重启电脑后用 `start.bat` 启动 `frpc.exe`，进程跑起来后 `tasklist /FI "IMAGENAME eq frpc.exe"` 显示 PID ✓，但**实际并没有连接到云服务器 frps**。症状：① `frpc.log` 最后修改时间还是 17 天前的 ② 浏览器访问 `https://agent.mnb-lab.cn/minio/...` 头像 502 Bad Gateway ③ `netstat -ano | grep :7000` 显示**另一个进程**（如 clash-win64.exe）持有云服务器 7000 端口的 ESTABLISHED 连接，真正的 frpc.exe 是僵尸。**根因**：frpc.exe 启动失败时**进程不立即退出**（在等云服务器响应），`start.bat` 只检查进程存在就认为成功，跳过了真实连通性验证。**修复**：
