@@ -1,8 +1,22 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-13 晚（推进 6 commits）** — Vue 3.4 → 3.5.34 升级（修 element-plus 'bum' null 解构 bug）+ PWA HTML NetworkFirst + 5s 超时（修离线页误触发）+ offline.html 同步 webhint 修复 + AnalysisResultPanel v-show workaround + CLAUDE.md 沉淀自动加纪律
+> 最后更新: **2026-06-14 凌晨（重启电脑后端到端事故修复 13 commits）** — 修复 8 个真 bug（vision-mcp × 3 + frpc 僵尸 + SW CacheFirst 502 + vite-plugin-pwa 时序 + nginx webmanifest + edge-tts 6.1.9 过期 + favicon 404）+ 6 个 CLAUDE.md 铁律沉淀 + 卸载 Edge Zotero 扩展 + 重新计算 stats.json（1001 commits / 139K 行 / 622 文件 / 30 天）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-14 凌晨 重启电脑端到端事故修复 8 联弹）
+- [🔧 重启电脑后端到端事故修复 8 联弹](#重启电脑后端到端事故修复-8-联弹2026-06-14-凌晨)（13 commits — commit `db3e275` / `bbddc0f` / `707c0f9` / `6186108` / `6d93d35` / `f4e53d5` / `d029299` / `41cf204` / `e8b49a6` / `a2abe29` / `95539fc` / `be4c6c9`）
+  - 🐛 vision-mcp 三个连环 bug（Server 参数 + router 缺失 + stdio 重启死循环）
+  - 🛡️ frpc.exe 僵尸进程陷阱（tasklist PID ≠ netstat PID）
+  - 🐛 SW 图片路由 CacheFirst 永久缓存 5xx（workbox 不区分 200/4xx/5xx）
+  - 🐛 vite-plugin-pwa manifest precache 路径不同步 + closeBundle 时序陷阱
+  - 🔧 nginx 静态资源 location 漏 webmanifest 扩展名
+  - 🐛 edge-tts 6.1.9 TrustedClientToken 过期 → TTS 500（升级 7.2.8）
+  - 🎨 webhint http-cache 误报（TTS POST 动态内容）
+  - 🎨 favicon.ico 404 + Zotero Edge 扩展卸载
+- [🚨 .env.webhook 被 `git clean -fdx` 误清事故](#envwebhook-被-git-clean-fdx-误清事故2026-06-14-凌晨)（commit `be4c6c9` — 4 条铁律：git clean fdx 核弹级命令 / sudo cp 不在白名单 / EnvironmentFile 缺失要 fail loud / systemctl restart 前检查）
+- [🛠️ deploy 用户 sudo 白名单](#deploy-用户-sudo-白名单2026-06-14-凌晨)（`(ALL) NOPASSWD: deploy-mnb/systemctl/nginx/rsync` — 紧急 deploy 必须 `scp + sudo rsync`）
+- [📊 项目动态 stats.json 重新计算](#项目动态-statsjson-重新计算2026-06-14-凌晨)（1001 commits / 139934 行 / 622 文件 / 30 天 — 第一次 1000 commits 里程碑）
 
 ### 最新完成（2026-06-13 晚 Vue/PWA 收尾）
 - [🐛 element-plus 'bum' null 解构 bug 修复](#element-plus-bum-null-解构-bug-修复2026-06-13-晚)（Vue 3.4 → 3.5.34 升级 + AnalysisResultPanel v-show workaround — merge `c6cb0e0` + `14c22e3`）
@@ -4641,3 +4655,142 @@ workbox: {
 
 ---
 
+
+---
+
+## 重启电脑端到端事故修复 8 联弹（2026-06-14 凌晨）
+
+> **背景**：用户重启电脑 + Docker 关掉。启动项目时**一次性暴露积压数月的 8 个真 bug**（生产事故在历史部署中没被发现，因为没有跨完整流程的端到端验证）。所有 13 个 commit 一次性修复并沉淀到 CLAUDE.md / memory。
+
+### 8 个真 bug
+
+1. **🐛 vision-mcp 三个连环 bug**（commit `db3e275` + `bbddc0f`）
+   - `Server()` 不接受 `version=` / `capabilities=` 参数（mcp 0.9.1 `__init__` 签名只 `(name: str)`）
+   - `tools/__init__.py` 引用不存在的 `router`（应为 `create_vision_tools`）
+   - **MCP stdio 服务在 Docker 中死循环重启**——必须 `stdin_open: true` + `tty: true` 保持 stdio 开放
+
+2. **🛡️ frpc.exe 僵尸进程陷阱**（commit `ce29b71`）
+   - `start.bat` 第 3 阶段启动 frpc.exe 只检查进程存在 → 没验证 FRP 隧道连通
+   - 事故：`netstat` 显示云服务器 7000 连接在 PID 27808（clash-win64.exe 误持），frpc.exe PID 39408 实际没连接
+   - 修复：`taskkill + rm log + HTTP_PROXY="" + powershell Start-Process` 重启
+   - **3 步验证**：`tail frpc.log` 有新写入 + `netstat | grep :7000` ESTABLISHED + `curl 外网头像` HTTP 200
+
+3. **🐛 SW 图片路由 CacheFirst 永久缓存 5xx**（commit `707c0f9` + `6186108`）
+   - frp 断的窗口期浏览器加载头像 → nginx 502 → SW 路由 4 (`CacheFirst`) 把 502 当成功响应缓存到 `images` cache **30 天有效期**
+   - 修复：`CacheFirst` → `NetworkFirst` + `CacheableResponsePlugin({ statuses: [0, 200] })` + API GET 路由同步加固
+
+4. **🐛 vite-plugin-pwa manifest precache 路径不同步 + closeBundle 时序陷阱**（commit `6d93d35` + `f4e53d5`）
+   - `vite-plugin-pwa` 在 `generateBundle` 嵌入 `/manifest.webmanifest` 到 `__WB_MANIFEST`；`manifestHashPlugin` 在 `closeBundle` 才重命名
+   - 双坑：①SW URL 是旧路径 → install 拉旧 URL → 服务器 **410 Gone** → `bad-precaching-response` → SW install 失败
+   - ②**vite-plugin-pwa 异步生成 sw.js**，主 build closeBundle 触发时 sw.js 还不存在（ENOENT）
+   - 修复：`setImmediate` 让出主线程 + 轮询等待（最多 20 次 × 100ms）+ try/catch 包裹 setImmediate 回调
+
+5. **🔧 nginx 静态资源 location 漏 webmanifest 扩展名**（commit `d029299`）
+   - `location ~* \.(js|css|...|eot)$` 没包含 `webmanifest` → manifest 文件 fallback 到 `location /` 的 `max-age=0`
+   - 两个 server block 都加 `|webmanifest`
+
+6. **🐛 edge-tts 6.1.9 TrustedClientToken 过期 → TTS 500**（commit `41cf204` + `e8b49a6`）
+   - Microsoft 2026 年初更新 readaloud 端点检测策略，拒绝非 Edge UA
+   - 修复：`edge-tts==6.1.9` → `edge-tts>=7.2.8,<8.0.0` + 简化 tts.py + 加 logger.error(..., exc_info=True)
+   - 教训：`requirements.txt` 不能盲目锁 `==`，要用 `>=X,<Y`
+
+7. **🎨 webhint http-cache 误报**（commit `a2abe29`）
+   - TTS POST 返回 `audio/mpeg`（动态生成），必须 `max-age=0`
+   - 但 webhint 不区分 GET/POST，按 mediaType 判断，要求 `max-age=31536000+immutable`
+   - 修复：`.hintrc` 把 `http-cache` 设为 `off`（nginx 已单独配置静态资源 long cache）
+
+8. **🎨 favicon.ico 404**（commit `95539fc`）
+   - 浏览器默认请求 `/favicon.ico` 但 web/public/ 没有
+   - 修复：复制 `pwa-192.png` 为 `public/favicon.ico`，Vite build 自动复制
+
+### 8 个对应 CLAUDE.md 铁律
+
+每个 bug 修复都伴随 1 个 `docs(claudemd)` commit 沉淀详细铁律（30+ 行新内容）：
+
+- **commit `bbddc0f`** MCP stdio Docker 重启循环 + mcp 0.9.x API 兼容 3 条铁律
+- **commit `6186108`** SW CacheFirst 缓存 5xx 响应 3 条铁律
+- **commit `f4e53d5`** vite-plugin-pwa precache 路径同步 + closeBundle 时序 4 条铁律
+- **commit `e8b49a6`** edge-tts 失效 + requirements.txt 锁版本坑 4 条铁律
+- **commit `be4c6c9`** .env.webhook 被 git clean -fdx 误清事故 4 条铁律
+
+---
+
+## .env.webhook 被 `git clean -fdx` 误清事故（2026-06-14 凌晨）
+
+> **背景**：`deploy-auto.sh:31` 用 `git clean -fdx` 清 untracked（`-x` 也清 `.gitignore` 内文件）。事故链：①某次部署把 `.env.webhook` 误清（文件本身在 .gitignore 中，本地 secret 配置）②webhook 服务 6月11日启动时 secret 已加载到 process memory，仍在跑 ③今天 `systemctl restart webhook` 触发重启 → 找不到 `.env.webhook` → systemd 启动失败 → webhook 完全挂掉。
+
+### 修复
+
+1. 生成新 secret：`aa2351c74ef58a7891145859906fac51e7ff81c7e27846a7360da50d29d9dccc`
+2. scp 上传 `/tmp/webhook_secret.env` + sudo rsync 复制到 `/opt/microbubble-agent/.env.webhook`
+3. `sudo systemctl reset-failed webhook && sudo systemctl restart webhook` → Active: running
+
+### 4 条铁律
+
+1. **`.env*` 文件必须 gitignored + deploy 前 ensure-exists**：加守卫脚本 `[ ! -f .env.webhook ] && exit 1`
+2. **`git clean -fdx` 是核弹级命令**：deploy 前检查 `.gitignore` 规则，避免误清 .env / .secrets
+3. **webhook EnvironmentFile 缺失必须 fail loud**：systemd 已做（`ignore_errors=no`），再加 `ExecStartPre` 守卫
+4. **systemctl restart 前先看 EnvironmentFile 是否存在**：`systemctl show <svc> -p EnvironmentFiles` + `ls -la <file>`
+
+### 待用户操作
+
+去 GitHub Settings → Webhooks → 编辑 webhook → Secret 改为：
+```
+aa2351c74ef58a7891145859906fac51e7ff81c7e27846a7360da50d29d9dccc
+```
+否则未来 push 触发 webhook 时签名验证失败 → 403 → 不部署。
+
+---
+
+## deploy 用户 sudo 白名单（2026-06-14 凌晨）
+
+> **背景**：`sudo -l` 显示 deploy 用户的 sudo 白名单。这是日常手动部署的边界条件，必须记录在案。
+
+### 白名单（`sudo -l` 输出）
+
+```
+User deploy may run the following commands on iZ2zedgg0z8q6voyv07ehfZ:
+    (ALL) NOPASSWD: /usr/local/bin/deploy-mnb,
+                    /bin/systemctl,
+                    /usr/sbin/nginx,
+                    /usr/bin/rsync
+```
+
+### 关键纪律
+
+- `/usr/local/bin/deploy-mnb` 文件**不存在**（sudoers 引用但 `sudo` 报 command not found，可能是预留脚本待创建）
+- **`sudo cp` 不在白名单**——要复制 root 拥有文件**必须用 `sudo rsync`**（如恢复 .env.webhook 时）
+- `sudo systemctl` 可以 restart 服务，但要先检查 EnvironmentFile 存在
+- 紧急 deploy 时：`scp 到 /tmp + sudo rsync 推 /opt/microbubble-agent`（绕开 `.git/` root 644 写入限制）
+- 完整 deploy 仍走 `webhook 服务 (root) → deploy-auto.sh → git pull`，手动 deploy 是兜底
+
+---
+
+## 项目动态 stats.json 重新计算（2026-06-14 凌晨）
+
+> **背景**：webhook 自动部署链路因 .env.webhook 丢失中断，stats.json 没自动更新。本地用 `scripts/update-stats.py` 重新计算（commit `ce4bfaf` + 本次更新）。
+
+### 最新数据（2026-06-14 00:31）
+
+| 指标 | 值 |
+|---|---|
+| **total_commits** | **1001** ← 第一次破 1000 |
+| **total_lines** | 139934 |
+| **total_files** | 622 |
+| **dev_days** | 30（首次 commit 2026-05-16 → 今天 2026-06-14） |
+
+### 语言分布（top 5）
+
+| 类型 | 行数 | 文件 |
+|---|---|---|
+| vue | 39503 | 139 |
+| markdown | 37425 | 73 |
+| python | 36125 | 214 |
+| config | 2446 | 24 |
+| shell | 2300 | 18 |
+
+### 教训
+
+webhook 自动部署是 stats.json 持续更新的**唯一**路径。一旦 webhook 挂掉，stats.json 就过期。下次类似事故需要：
+1. 立即 SSH 到云服务器用 `bash scripts/deploy-auto.sh` 手动跑一次
+2. 或者本地跑 `python scripts/update-stats.py` + `git add -f app/stats.json + git commit + git push`
