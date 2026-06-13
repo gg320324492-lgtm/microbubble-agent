@@ -255,13 +255,86 @@ class MicroBubbleAgent:
             logger.error(f"后台记忆提取失败: {e}")
 
     async def _extract_knowledge_bg(self, user_id: int, messages: List[Dict], session_id: str):
-        """后台知识提取（从对话中）"""
+        """后台知识提取（从对话中）
+
+        2026-06-14 方案 C Stage 5：原本 delegate 给 legacy core.py.MicroBubbleAgent
+        现把 _extract_and_save_knowledge 逻辑直接搬到本方法内（独立可移植）
+        """
         from app.core.database import async_session
+        from app.core.llm import get_anthropic_client, get_default_model
         try:
-            # 复用旧 core.py 的 _extract_and_save_knowledge 逻辑（已测试）
-            from app.agent.core import MicroBubbleAgent as LegacyAgent
-            legacy = LegacyAgent()
-            await legacy._extract_and_save_knowledge(user_id, messages, session_id)
+            # 构建对话文本（仅最近 10 条）
+            conversation = ""
+            for msg in messages[-10:]:
+                role = "用户" if msg.get("role") == "user" else "助手"
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    content = " ".join(
+                        b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+                    )
+                if content:
+                    conversation += f"{role}: {content}\n"
+
+            if len(conversation) < 100:
+                return  # 太短不提取
+
+            prompt = f"""分析以下对话，判断是否包含值得保存到知识库的专业知识。
+只保存：实验方法、研究发现、技术方案、经验总结、专业概念解释、操作步骤。
+不保存：闲聊、简单问答、临时性信息、任务安排、会议通知。
+
+对话内容:
+{conversation[:3000]}
+
+如果没有值得保存的知识，返回 {{"save": false}}
+如果有，返回严格的JSON格式（不要包含其他文字）：
+{{"save": true, "title": "知识标题", "content": "整理后的完整知识内容", "category": "基础/方法/文献/FAQ", "tags": ["标签1", "标签2"]}}"""
+
+            client = get_anthropic_client()
+            response = await client.messages.create(
+                model=get_default_model(),
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            text = ""
+            for block in response.content:
+                if hasattr(block, "text") and block.text:
+                    text = block.text.strip()
+                    break
+
+            import json as _json
+            try:
+                result = _json.loads(text)
+            except _json.JSONDecodeError:
+                # 尝试剥 markdown 包裹
+                if text.startswith("```"):
+                    lines = text.split("\n")
+                    if lines and lines[-1].strip() == "```":
+                        text = "\n".join(lines[1:-1])
+                    else:
+                        text = "\n".join(lines[1:])
+                    result = _json.loads(text)
+                else:
+                    raise
+
+            if not result.get("save"):
+                return
+
+            # 写入 knowledge_items 表
+            from app.core.database import KnowledgeItem
+            async with async_session() as session:
+                item = KnowledgeItem(
+                    title=result["title"],
+                    content=result["content"],
+                    category=result.get("category", "基础"),
+                    tags=result.get("tags", []),
+                    source="conversation",
+                    session_id=session_id,
+                    user_id=user_id,
+                )
+                session.add(item)
+                await session.commit()
+                logger.info(f"知识提取成功: {result['title'][:50]}")
         except Exception as e:
             logger.error(f"后台知识提取失败: {e}")
 

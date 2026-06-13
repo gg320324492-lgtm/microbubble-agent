@@ -248,26 +248,8 @@ async def dispatch_tool(
 
 
 # ============================================================================
-# 兼容性：让旧 core.py 的 if/elif 调度仍然可用
+# 2026-06-14 方案 C Stage 5：删除 dispatch_legacy
+# 原有的 `dispatch_legacy` 函数（回退到旧 core.py）已删除
+# 原因：方案 C 完成全栈迁移，core.py 也被删除
+# 如需新增工具，请用 @tool 装饰器注册到 TOOL_REGISTRY
 # ============================================================================
-
-
-async def dispatch_legacy(name: str, input_data: dict, ctx: ToolContext) -> dict:
-    """兼容旧 _execute_tool 调用 — 如果工具未注册到装饰器，回退到旧的 if/elif 链
-
-    迁移期使用。完全迁移后删除。
-    """
-    # 如果新装饰器注册了，直接走新路径
-    if name in TOOL_REGISTRY:
-        return await dispatch_tool(name, input_data, ctx)
-
-    # 否则回退到旧 core.py._execute_tool
-    from app.agent.core import MicroBubbleAgent
-    legacy_agent = MicroBubbleAgent()
-    return await legacy_agent._execute_tool(
-        name=name,
-        input_data=input_data,
-        db=ctx.db,
-        user_id=ctx.user_id,
-        channel_user_id=ctx.channel_user_id,
-    )

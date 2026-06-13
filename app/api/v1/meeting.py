@@ -24,7 +24,6 @@ from app.services.meeting_service import MeetingService
 from app.services.meeting_analysis_service import meeting_analysis
 from app.services.progress_service import init_progress
 from app.services.post_meeting_tasks import post_meeting_process
-from app.agent.core import agent
 
 router = APIRouter()
 
