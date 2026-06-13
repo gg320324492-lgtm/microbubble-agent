@@ -296,6 +296,27 @@
 
 ## 开发注意事项
 
+### 2026-06-13 vite-plugin-pwa manifest precache 路径不同步 + closeBundle 时序陷阱（commit `6d93d35`）
+
+- **vite-plugin-pwa 把 manifest URL 嵌入 sw.js 但不走 rollup hash 流程（重要，commit `08f440f` 已说过，再次强化）** — `vite-plugin-pwa` 在 generateBundle 阶段把 `/manifest.webmanifest` 嵌入 `__WB_MANIFEST` 字符串，注入到 sw.js。如果用 `manifestHashPlugin` rename dist 文件但**不修改 sw.js 里的字符串**，SW install 阶段 precache 会去拉**旧路径** → 服务器 410 Gone（commit `c855f0e` 加的精确 410 拦截）→ `bad-precaching-response` → SW install 失败 → 新 SW 永远激活不了。**修复**：manifestHashPlugin.rename 之后必须 replaceAll sw.js 里的 `"manifest.webmanifest"` 字符串。
+- **`__WB_MANIFEST` 里的 URL 没前导斜杠（容易踩的小坑）** — vite-plugin-pwa 嵌入的 url 是 `"manifest.webmanifest"`（**不带** `/`），但 HTML `<link rel="manifest" href="/manifest.webmanifest">` 是带前导斜杠。**两个 replace 必须分别写**，不要想当然统一成一个 pattern：
+  ```js
+  // HTML：带前导斜杠
+  html.replace('/manifest.webmanifest', `/${newName}`)
+  // SW __WB_MANIFEST：不带前导斜杠
+  sw.replaceAll('"manifest.webmanifest"', `"${newName}"`)
+  ```
+  **调试技巧**：先用 `grep -oE '.{5}manifest\.webmanifest.{5}' dist/sw.js` 看 sw.js 里实际字符串格式，再决定 replace pattern
+- **vite-plugin-pwa sw.js 生成是异步的，主 build closeBundle 触发时 sw.js 还不存在（重要，时序陷阱）** — vite-plugin-pwa 用自己的内部 rollup/esbuild build 异步编译 src/sw.js，**在主 build 的 `closeBundle` 钩子触发之后**才写 dist/sw.js。直接同步 readFileSync 会 ENOENT。**修复**：`setImmediate` 让出主线程 + 轮询等待（最多 20 次 × 100ms）：
+  ```js
+  setImmediate(() => {
+    if (!existsSync(swPath)) return setTimeout(retry, 100)
+    // 现在 sw.js 已写完，可以替换
+  })
+  ```
+  **陷阱**：setImmediate 回调内抛错**会让 Vite build 失败**（closeBundle 抛错是同步的）—— 整个 tryUpdateSw 必须包 try/catch，**任何错误只能 console.warn 不能 throw**。**纪律**：① Vite plugin 钩子内的异步操作都用 try/catch 保护；② 不要相信"build 完成就是 sw.js 写完"——vite-plugin-pwa 是异步插件，必须轮询/等待；③ 升级 vite-plugin-pwa 大版本时必查 changelog 是否改变 sw.js 生成时序
+- **dist 在 .gitignore 里，dist/sw.js 修改必须 `git add -f`** — `web/dist/` 在 `.gitignore` 中，正常 `git add web/dist/sw.js` 静默被拦截不报错。**修复后必须 `git add -f web/dist/sw.js`** 强制提交，否则服务器拉的还是旧 sw.js，浏览器永远 install 失败。**验证**：`git show --stat HEAD` 确认 `web/dist/sw.js` 在 commit 里
+
 ### 2026-06-13 SW 图片路由 CacheFirst 缓存 5xx 响应 → 头像永久 502（commit `707c0f9`）
 
 - **workbox `CacheFirst` 会缓存所有响应包括 5xx（重要，教训）** — 之前 `web/src/sw.js` 路由 4（图片）用 `CacheFirst`，当 frp 断的窗口期浏览器加载头像时，nginx 返回 502，**workbox 把 502 当成成功响应缓存到 images cache**，30 天有效期。frp 修好后浏览器**永远返回 cache 里的 502**，用户头像持续看不到。**根因**：workbox 默认不区分 200/4xx/5xx，全部缓存。**修复**：
