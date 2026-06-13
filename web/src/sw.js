@@ -17,7 +17,9 @@
 // 2026-06-13 事故修复：BUMP 每次部署递增，触发 SW 字节变化让浏览器检测到新 SW
 // → 立即 skipWaiting() 激活 → activate 钩子清空所有 cache（包括被污染的 documents）
 // → 用户下次访问拿到的就是新资源（不受之前 octet-stream 缓存影响）
-const SW_VERSION = 'v2-cache-purge-2026-06-13'
+// 2026-06-13 v3 BUMP：图片路由 CacheFirst → NetworkFirst + CacheableResponsePlugin，
+// 防止 FRP/服务端 5xx 响应被永久缓存 30 天
+const SW_VERSION = 'v3-images-networkfirst-2026-06-13'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
@@ -25,6 +27,7 @@ import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { registerRoute, setCatchHandler } from 'workbox-routing'
 import { NetworkFirst, StaleWhileRevalidate, CacheFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
+import { CacheableResponsePlugin } from 'workbox-cacheable-response'
 
 // === 生命周期 ===
 // skipWaiting + clients.claim 让新版 SW 安装后立即接管所有已开的标签页，
@@ -90,29 +93,39 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: 'static-resources' })
 )
 
-// === 路由 3：API GET（5 分钟缓存）===
+// === 路由 3：API GET（5 分钟缓存 + 仅 2xx）===
 // 阿里云 FRP 隧道偶发慢，5s 内无响应回退到 5 分钟内的旧响应
+// 2026-06-13 教训：必须 CacheableResponsePlugin 限制只缓存 0/200，避免 5xx 被永久缓存
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/v1/'),
   new NetworkFirst({
     cacheName: 'api-cache',
     networkTimeoutSeconds: 5,
     plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 300 }),
     ],
   }),
   'GET'
 )
 
-// === 路由 4：图片（30 天缓存）===
-// MinIO 通过 FRP 隧道的头像/封面图，CacheFirst 节省带宽
+// === 路由 4：图片（NetworkFirst + 仅缓存 2xx）===
+// MinIO 通过 FRP 隧道的头像/封面图。
+// 2026-06-13 教训：之前用 CacheFirst，FRP 断时浏览器把 502 响应**当成功缓存**到 images cache
+// 30 天有效期 → frp 修好后浏览器永远返回 cache 里的 502，用户看不到头像。
+// workbox 默认不会区分 200/4xx/5xx，全部缓存。
+// 修复：① 改 NetworkFirst（先网络后 cache，5s 超时）② 加 CacheableResponsePlugin 只缓存
+// statuses: [0, 200] 的响应（0 = opaque/cross-origin no-cors，200 = 真实成功）
 registerRoute(
   ({ request, url }) =>
     request.destination === 'image' ||
     /\.(?:png|jpg|jpeg|svg|gif|webp)$/.test(url.pathname),
-  new CacheFirst({
+  new NetworkFirst({
     cacheName: 'images',
+    networkTimeoutSeconds: 5,
     plugins: [
+      // 关键：只缓存 0 (opaque) 和 200，避免 5xx 被永久缓存
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 }),
     ],
   })
