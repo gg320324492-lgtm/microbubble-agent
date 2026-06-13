@@ -4,7 +4,8 @@
 # 容错策略：关键步骤手动 exit，非关键步骤允许失败继续
 
 PROJECT_DIR="/opt/microbubble-agent"
-LOG_FILE="/var/log/webhook-deploy.log"
+# 2026-06-13 加固：LOG_FILE 允许环境变量覆盖（deploy 用户调试时可指定可写路径）
+LOG_FILE="${LOG_FILE:-/var/log/webhook-deploy.log}"
 
 # 2026-06-02 修复：阿里云→GitHub HTTPS 出口网络持续 130s 超时
 # 改用 SSH 拉取（走 22 端口，绕开 HTTPS 链路问题）
@@ -22,9 +23,10 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
-# 丢弃所有本地修改，确保干净状态
+# 2026-06-13 加固：丢弃所有本地修改 + untracked 文件，确保干净工作区
+# （之前 git checkout + git clean 分两步有时不彻底，残留 untracked 文件阻塞 git pull fast-forward）
 git checkout -- . >> "$LOG_FILE" 2>&1 || true
-git clean -fd >> "$LOG_FILE" 2>&1 || true
+git clean -fdx >> "$LOG_FILE" 2>&1 || true  # -x 也清 .gitignore 内的文件
 
 # 拉取最新代码（重试 5 次 + 指数退避，2026-06-02 加固）
 # 背景：阿里云服务器偶发无法连接 GitHub（TLS/GnuTLS 错误或超时），
@@ -34,17 +36,19 @@ PULL_OK=0
 MAX_RETRY=5
 for i in $(seq 1 $MAX_RETRY); do
     log "  第${i}/${MAX_RETRY}次尝试..."
-    # 用 HTTP/1.1 强制 + 关闭 GCM 加密（有些 GCM 模式在阿里云上 TLS 协商失败）
-    if GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=30 \
-       git -c http.version=HTTP/1.1 -c http.sslVersion=tlsv1.2 \
-           pull origin main >> "$LOG_FILE" 2>&1; then
+    # 2026-06-13 改：直接用 fetch + reset --hard 模式，不依赖 git pull 的合并逻辑
+    # 原因：服务器是 immutable infra（部署后不保留任何本地修改），
+    # git pull 在 dirty working tree 下可能被本地 untracked 文件阻塞 → "Cannot fast-forward"
+    # fetch + reset --hard 永远只把 working tree 强制对齐 origin/main
+    if git fetch origin main >> "$LOG_FILE" 2>&1 && \
+       git reset --hard origin/main >> "$LOG_FILE" 2>&1; then
         PULL_OK=1
-        log "  pull 成功"
+        log "  fetch + reset --hard 成功"
         break
     fi
     # 指数退避：5s, 10s, 20s, 40s（总等待 75s）
     BACKOFF=$((5 * (2 ** (i - 1))))
-    log "  pull 失败，${BACKOFF}s 后重试（GitHub TLS 偶发错误）"
+    log "  fetch 失败，${BACKOFF}s 后重试（GitHub TLS 偶发错误）"
     sleep $BACKOFF
 done
 
