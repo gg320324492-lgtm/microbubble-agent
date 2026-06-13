@@ -296,6 +296,24 @@
 
 ## 开发注意事项
 
+### 2026-06-13 .env.webhook 被 `git clean -fdx` 误清 → webhook 服务挂掉事故
+
+- **`git clean -fdx` 会清 `.gitignore` 内文件（包括 `.env.webhook`）（重要，再犯就死）** — deploy-auto.sh line 31 写 `git clean -fdx`（-x 也清 .gitignore 内的文件），目的是清 untracked 文件确保干净工作区。但 `.env.webhook` 在 .gitignore 里（本地 secret 配置）也被清了！事故链：① 之前某次部署 `git clean -fdx` 删了 `/opt/microbubble-agent/.env.webhook` ② webhook 服务 6月11日启动时 secret 已加载到 process memory，仍在跑 ③ 6月13日我 `systemctl restart webhook` 触发了重启 → 找不到 .env.webhook → systemd 启动失败 → webhook 完全挂掉，GitHub push 无法自动部署。**修复**：用 sudo rsync 复制新 secret + 写入 .env.webhook + 重启 webhook。**纪律（4 条）**：
+  - ① **`.env*` 文件必须 gitignored + 在 deploy 前 ensure-exists**：deploy-auto.sh 加 `[ ! -f .env.webhook ] && echo 'ERROR: .env.webhook missing, refusing to clean' && exit 1` 守卫。或者更稳：把 .env.webhook 移到 `/etc/microbubble-agent/.env.webhook`（不在 git 工作区内）
+  - ② **`git clean -fdx` 是核弹级命令** — deploy-auto.sh line 31 用它清 untracked，但要确保 .gitignore 内的 .env* / .secrets / 模型缓存都不在 deploy 路径下。**检查命令**：`grep -E '^\.(env|secrets|config)' .gitignore` 看 gitignore 规则
+  - ③ **webhook 服务 EnvironmentFile 缺失必须 fail loud（已经做了）** — `EnvironmentFile=... (ignore_errors=no)` 让 systemd 启动失败。**但要让用户在重启 webhook 前看到错误**，建议加 `ExecStartPre=/bin/sh -c 'test -f /opt/microbubble-agent/.env.webhook || (echo "ERROR: .env.webhook missing" && exit 1)'`
+  - ④ **重启 systemd 服务前先看 .env 文件** — `systemctl show <service> -p EnvironmentFiles` + `ls -la <file>` 确认存在再 restart
+- **deploy 用户有 sudo 白名单：deploy-mnb/systemctl/nginx/rsync（重要，已验证）** — `sudo -l` 输出：`(ALL) NOPASSWD: /usr/local/bin/deploy-mnb, /bin/systemctl, /usr/sbin/nginx, /usr/bin/rsync`。**纪律**：① `/usr/local/bin/deploy-mnb` 文件**不存在**（2026-06-13 sudo -l 显示但 `sudo <file>` 报 command not found，可能是预留脚本待创建）② `sudo cp` 不在白名单（要复制 root 拥有的文件**必须用 `sudo rsync`**）③ `sudo systemctl` 可以 restart 服务 → 让 webhook 服务用新 secret 重启 → 但 `cp .env.webhook` 必须 sudo rsync ④ **紧急修复 .git 写权限不够时的 deploy**：用 sudo rsync 推 /tmp/staging → sudo rsync 推 /opt/microbubble-agent（绕开 .git/ root 拥有 644 写入限制）
+- **webhook secret 不可重建，必须用户重设（外部依赖）** — 我恢复 webhook 服务时生成了**新 secret** `aa2351c74ef58a7891145859906fac51e7ff81c7e27846a7360da50d29d9dccc`，但 **GitHub 端 webhook 配置的 secret 还是旧的**。后续 push 会触发 webhook 服务，新服务用新 secret 验证 → 旧 secret 签名 → 验证失败 → 403 Invalid signature → 自动部署失败。**用户必须去 GitHub webhook 设置更新 secret**（GitHub repo → Settings → Webhooks → 编辑 → Secret）。**纪律**：① webhook secret 必须在 deploy 文档明确告知用户保存位置 ② 项目 README/docs/deploy.md 加一节"webhook secret 管理" ③ 考虑用 GitHub App + private key 代替 webhook + secret（更安全、可恢复）
+- **systemctl restart 之前先看 systemd unit 的 EnvironmentFile 是否存在（已踩坑）** — `systemctl restart` 不会检查 EnvironmentFile 是否存在，systemd 才检查。如果 EnvironmentFile 缺失，restart 会进入失败循环（restart counter 累加）。**修复前的检查命令**：
+  ```bash
+  # 1. 看 EnvironmentFile 路径
+  systemctl show <service> -p EnvironmentFiles
+  # 2. 看文件是否真的存在
+  ls -la $(systemctl show <service> -p EnvironmentFiles | awk -F= '{print $2}' | awk '{print $1}')
+  # 3. 不存在先恢复再 restart
+  ```
+
 ### 2026-06-13 edge-tts 6.1.9 TrustedClientToken 过期 → TTS 500（commit `41cf204`）
 
 - **edge-tts 6.1.9 已失效，Microsoft 返回 403 Forbidden（重要）** — 2026 年初 Microsoft 更新了 `wss://speech.platform.bing.com/...readaloud/edge/v1` 端点的检测策略，**拒绝非 Edge 浏览器 UA**，edge-tts 6.1.9 内部硬编码的 `Chrome/91.0.4472.77 Edg/91.0.864.41`（2021 年版本）+ 硬编码的 `TrustedClientToken=6A5AA1D4EAFF4E9FB37E23D68491D6F4` 已不被接受，报 `WSServerHandshakeError 403, message='Invalid response status'`。**修复**：升级到 edge-tts 7.2.8（PyPI 最新版，更新了 internal UA + endpoint 配置 + 新增 `boundary/connector/connect_timeout/receive_timeout` 参数）。**诊断命令**：
