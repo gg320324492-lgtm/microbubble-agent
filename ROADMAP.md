@@ -1,8 +1,14 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-13（推进 18 commits）** — 移动端 10 PR 全栈定制收官（PR #1 基建 → PR #10 视觉回归测试）+ Webhook 偶发 499 失败加固（git reset --hard 模式 + socket.timeout(15)）+ webhint meta-theme-color JS 动态注入
+> 最后更新: **2026-06-13 晚（推进 6 commits）** — Vue 3.4 → 3.5.34 升级（修 element-plus 'bum' null 解构 bug）+ PWA HTML NetworkFirst + 5s 超时（修离线页误触发）+ offline.html 同步 webhint 修复 + AnalysisResultPanel v-show workaround + CLAUDE.md 沉淀自动加纪律
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-13 晚 Vue/PWA 收尾）
+- [🐛 element-plus 'bum' null 解构 bug 修复](#element-plus-bum-null-解构-bug-修复2026-06-13-晚)（Vue 3.4 → 3.5.34 升级 + AnalysisResultPanel v-show workaround — merge `c6cb0e0` + `14c22e3`）
+- [🛡️ PWA HTML 文档 NetworkFirst + 5s 超时](#pwa-html-文档-networkfirst--5s-超时2026-06-13-晚)（workbox 策略修复 — commit `d08555c`）
+- [🎨 webhint offline.html 同步 webhint 修复](#webhint-offlinehtml-同步-webhint-修复2026-06-13-晚)（commit `e6d40a1`）
+- [📝 CLAUDE.md 沉淀自动加纪律](#claudemd-沉淀自动加纪律2026-06-13-晚)（commit `d5edf73` + memory `auto-add-claudemd-lessons.md`）
 
 ### 最新完成（2026-06-13 移动端收官）
 - [📱 移动端 10 PR 全栈定制](#移动端-10-pr-全栈定制2026-06-13-收官)（18 commits：PR #1 基建 → PR #10 视觉回归测试，18 页面 + 12 组件 + 4 PWA 策略 — commit `9026c07` 收官）
@@ -4472,22 +4478,166 @@ EXCLUDE_FILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']
 # 按扩展名分类 + 二进制文件检测（'\x00' in text 跳过）
 ```
 
-**新值**（2026-06-13 13:17:08 重新计算）：
-- **总行数**：138,853
-- **总文件数**：617
-- **总提交数**：965
+**新值**（2026-06-13 17:59:14 重新计算，今日 6 commits 后）：
+- **总行数**：139,354
+- **总文件数**：618
+- **总提交数**：973
 - **开发天数**：29（5/16 → 6/13）
-- **行数分类**：python 35,976 / vue 39,501 / markdown 36,716 / javascript 6,475 / typescript 1,141 / css 1,365 / html 3,517 / shell 2,280 / config 2,651 / docker 56 / other 9,175
-- **文件分类**：python 213 / vue 139 / markdown 73 / javascript 63 / typescript 9 / css 5 / html 9 / shell 18 / config 26 / docker 2 / other 60
+- **行数分类**：python 36,142 / vue 39,503 / markdown 36,942 / javascript 6,488 / typescript 1,141 / css 1,365 / html 3,520 / shell 2,280 / config 2,368 / docker 374 / other 9,231
+- **文件分类**：python 214 / vue 139 / markdown 73 / javascript 63 / typescript 9 / css 5 / html 9 / shell 18 / config 23 / docker 5 / other 60
 
 **对比**（旧值 → 新值）：
-- 187,220 → 138,853 行（-26%，剔除 .wav/.gz/.meta/.log/.sql）
-- 2,840 → 617 文件（-78%，剔除 PostgreSQL data + 一些测试 fixtures）
+- 187,220 → 139,354 行（-26%，剔除 .wav/.gz/.meta/.log/.sql）
+- 2,840 → 618 文件（-78%，剔除 PostgreSQL data + 一些测试 fixtures）
 
 **Why:** stats.json 是项目动态页面的数据源，数字虚高会让 184K/2840 看起来不真实（与 git 跟踪的 796 个文件差 3.5x）。准确化让数字可信。
 **How to apply:** 后续 stats.json 更新都用本地 Python 脚本生成（deploy-auto.sh 调 `python3 scripts/update-stats.py`），不再用 find+wc 一次性脚本。
 
 ---
 
+## element-plus 'bum' null 解构 bug 修复（2026-06-13 晚）
 
+> **背景**：用户报告浏览器 console 抛 `TypeError: Cannot destructure property 'bum' of 'e' as it is null`，发生在 `element-plus-desktop-X.js` 内部。`Object.remove` → 父组件 unmount → `unmountChildren`（`ge`）→ 子节点 `vnode.component === null` → Vue 3.4 renderer 内部 `let{bum:r, scope:i, job:a, subTree:o, um:s, m:c, a:l} = e` 抛错。`bum` 是 Vue 3 内部 `beforeUnmount` hook 字段名。
+
+**双层修复**：
+
+### 修复 1：Vue 3.4 → 3.5.34 升级（commit `bf2da67` + merge `c6cb0e0`）
+Vue 3.5 重构 unmount 路径加空值检查。审计 3 项：
+- **响应式 props 解构** — `grep "const\\s*{[^}]*}\\s*=\\s*(props|defineProps)"` 0 命中（reactive props destructure 默认开启对项目无影响）
+- **toRefs(props) 冗余** — 0 命中
+- **EP peer dep** — `vue: ^3.2.0` 覆盖 3.5（无需升 EP）
+
+**审计 one-liner**（3 分钟搞定）：
+```bash
+cd web && \
+echo "=== 1. 响应式解构 ===" && \
+grep -rE "const\s*\{[^}]+\}\s*=\s*(props|defineProps)" src --include="*.vue" | wc -l && \
+echo "=== 2. toRefs(props) 冗余 ===" && \
+grep -rE "toRefs\s*\(\s*props" src --include="*.vue" | wc -l && \
+echo "=== 3. peer dep 范围 ===" && \
+npm view element-plus@<当前版本> peerDependencies.vue
+```
+
+**结果**：项目**完全干净**（0 + 0 + peer dep 兼容），**0 行代码改动**完成升级。111 测试全过 + build 1.26s 0 警告。
+
+### 修复 2：v-if → v-show workaround（commit `14c22e3`）
+即使 Vue 3.5 修了 bug，加 belt-and-suspenders。`AnalysisResultPanel.vue:55,77` 两处 v-if → v-show：
+```vue
+<!-- 之前：v-if 完整 unmount el-table，触发 EP 子组件递归 unmount 中 vnode.component === null 崩溃 -->
+<div v-if="speakerStats?.length" class="section">
+  <h4>发言者统计</h4>
+  <el-table :data="speakerStats" ...>
+
+<!-- 现在：v-show 保持挂载，仅切可见性 -->
+<div v-show="speakerStats?.length" class="section">
+  <h4>发言者统计</h4>
+  <el-table :data="speakerStats" ...>
+```
+
+**审计 one-liner**（找出所有同类 pattern）：
+```bash
+cd web && grep -rB1 -A2 "<el-table\|<el-tree-select\|<el-cascader" src --include="*.vue" \
+  | grep -E "v-if=\"" | head -20
+```
+
+**触发组件候选**（按 el-table 复杂度排序）：
+- `views/admin/AgentTracesView.vue`（19 el-table）
+- `views/task/TaskTrash.vue`（18）
+- `components/SpeakerMappingPanel.vue`（8）
+- `components/AnalysisResultPanel.vue`（已修，2 处）
+
+**Why:** el-table / el-tree-select 内部子组件（el-checkbox / el-tooltip / el-popper）递归 unmount 时遇到 `vnode.component === null` 触发 Vue 3.4 bug。
+**How to apply:** ①任何 el-table / el-tree-select / el-cascader 外层用 `v-show`（EP 组件大多有 `empty-text` 内置空态）②真要 v-if 释放 DOM 的场景，强制加 `:key` 显式声明 remount 意图 ③即使 Vue 3.5 修了 bug，仍建议 v-show 作双保险 + 顺带保留 el-table 内部状态（sort/selection/scroll）。
+
+---
+
+## PWA HTML 文档 NetworkFirst + 5s 超时（2026-06-13 晚）
+
+> **背景**：用户报告清理浏览器缓存 + 隐私模式访问 `/dashboard` 仍显示「网络已断开」PWA 离线页。根因：workbox `StaleWhileRevalidate` **没有超时**，阿里云 + FRP 隧道慢（5-30s 响应）时 SW 无界等待 → 浏览器放弃 → SW 回退到 `navigateFallback: '/offline.html'`。
+
+**3 处修改**（`web/vite.config.js`）：
+
+```js
+workbox: {
+  // 不预缓存 HTML（避免 SPA HTML 被旧 SW 缓存污染）
+  // 单独把 offline.html 加进 globPatterns（真离线时 SW 仍可显示 PWA 离线页）
+  globPatterns: ['**/*.{js,css,svg,png,ico,woff,woff2}', 'offline.html'],
+  navigateFallback: '/offline.html',
+  navigateFallbackDenylist: [/^\/api\//, /^\/ws\//],
+  runtimeCaching: [
+    {
+      // 关键修复：HTML 文档改用 NetworkFirst + 5s 超时
+      // 5s 内未响应则走 cache/offline.html，FRP 慢不会让用户卡住等
+      urlPattern: ({ request }) => request.destination === 'document',
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'documents',
+        networkTimeoutSeconds: 5,
+        expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 },
+      },
+    },
+    {
+      // 静态资源（已通过 globPatterns 预缓存，SWR 让离线访问 + 在线即时更新）
+      urlPattern: ({ request }) => request.destination === 'script' || request.destination === 'style',
+      handler: 'StaleWhileRevalidate',
+      options: { cacheName: 'static-resources' },
+    },
+    // ... 其他 API / images 策略保持不变
+  ],
+},
+```
+
+**commit**：`d08555c fix(pwa): document 用 NetworkFirst + 5s 超时 + 单独预缓存 offline.html`
+
+**Why:** 阿里云 + FRP 隧道环境下 5-30s 响应是常态，SWR 无超时会让 SW 等到浏览器放弃。NetworkFirst + 5s 超时是 PWA 在国内网络环境的标配。
+**How to apply:** 任何 workbox `runtimeCaching` 的 document 路由必须用 `NetworkFirst` + `networkTimeoutSeconds`，globPatterns 永远不预缓存 `*.html`。
+
+---
+
+## webhint offline.html 同步 webhint 修复（2026-06-13 晚）
+
+> **背景**：commit `0bbc12d` 修了 `index.html` 的 webhint 警告，但 `vite-plugin-pwa` 的 `navigateFallback: '/offline.html'` 指向 `web/public/offline.html`（**与 `index.html` 是两套独立文件**），用户清理缓存 + 隐私模式仍看到 3 个 webhint 警告（maximum-scale / user-scalable / 静态 theme-color）。**根因**：改 `index.html` meta 时漏改 `offline.html`，SW 回退时 webhint 扫到的是旧版 offline.html。
+
+**修复**（`web/public/offline.html`）：
+```html
+<!-- 之前 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5, user-scalable=yes">
+<meta name="theme-color" content="#FF7A5C">
+
+<!-- 现在（与 web/index.html 同步） -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!-- theme-color 由 useThemeStore.apply() 在 JS 中动态注入 -->
+```
+
+**commit**：`e6d40a1 fix(pwa): offline.html 同步 index.html — 删除 maximum-scale/user-scalable + 静态 theme-color meta`
+
+**Why:** PWA navigateFallback 的静态页面与 SPA 入口是两套独立 HTML 文件，webhint 扫的是实际部署的 HTML。
+**How to apply:** ①任何改 `<meta>` / `<link rel="manifest">` / `<title>` 的 PR 必须 `git diff web/public/offline.html` 同步检查 ②建议把 head 片段提取到模板（如 `vite-plugin-html` 的 `injectOption`）避免遗漏 ③调试技巧：webhint 报陈年警告 + 清缓存/隐私模式仍存在 → 99% 是 PWA 静态页面而非 index.html 漏改。
+
+---
+
+## CLAUDE.md 沉淀自动加纪律（2026-06-13 晚）
+
+> **背景**：用户要求以后**自动**把修复经验沉淀到 CLAUDE.md 对应日期章节，不等用户提醒。`CLAUDE.md` 是项目的"长期记忆" + 后续 Claude 会话的第一上下文，手动等用户要求会丢失大量有价值的踩坑经验（用户经常忘记总结）。
+
+**新增 memory**：`C:\Users\admin\.claude\projects\g--microbubble-agent\memory\auto-add-claudemd-lessons.md`
+
+**4 个触发条件**（满足任一即沉淀）：
+1. 修复不显然的 bug（不是简单 typo / obvious error）— 必须沉淀
+2. 发现反直觉的工具链 / 框架行为 — 必须沉淀
+3. 找到非显然的根因（多层级 / 跨模块、有"原来如此"的感觉）— 必须沉淀
+4. 建立新的工程纪律（如"任何 PR 必须同步 X"）— 必须沉淀
+
+**沉淀格式**：
+```markdown
+- **<一句话标题，标重要程度>**（重要，commit `<SHA>` workaround）— <一句话根因>。
+  **纪律**：①... ②... **审计 one-liner**（可选）：`<bash 命令>`。**已应用**（可选）：`文件.vue:行号`。
+```
+
+**已应用**（commit `d5edf73`）：CLAUDE.md 新增 `### 2026-06-13 Vue 3.5 升级 + PWA HTML 策略新增` 章节，5 条新经验沉淀。
+
+**Why:** 用户说"以后自动加"是显式反馈。
+**How to apply:** 触发后立即沉淀，不等用户说"加到 CLAUDE.md"。例外：简单 typo / 代码风格 / 已在 CLAUDE.md 历史里的（先 grep 确认不重复）。
+
+---
 

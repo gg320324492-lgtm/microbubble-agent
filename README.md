@@ -23,10 +23,16 @@
 
 ### 近期新增（按时间倒序）
 
+- **🐛 element-plus 'bum' null 解构 bug 修复（2026-06-13，merge `c6cb0e0`）** — 浏览器 console 报 `TypeError: Cannot destructure property 'bum' of 'e' as it is null`，根因 Vue 3.4.x renderer 内部 unmount 路径在 `vnode.component === null` 时解构 `bum`（`beforeUnmount` hook 内部字段名）抛错。**双修复**：
+  - **Vue 3.4 → 3.5.34 升级**（commit `bf2da67`）— Vue 3.5 重构 unmount 路径加空值检查。审计 3 项：①项目无 `const { x } = props` 响应式解构（reactive props destructure 默认开启对项目无影响）②无 `toRefs(props)` 冗余 ③EP 2.4.4 peer dep `vue: ^3.2.0` 覆盖 3.5。**零代码改动**完成升级，111 测试全过
+  - **workaround**（commit `14c22e3`）— `AnalysisResultPanel.vue:55,77` el-table 外层 `v-if` → `v-show`（保持挂载），适用所有 el-table / el-tree-select / el-cascader 包裹场景。Vue 3.5 修了 bug 但 v-show 是双保险 + 顺带保留 el-table 内部状态（sort/selection/scroll）
+- **🛡️ PWA HTML 文档 NetworkFirst + 5s 超时（2026-06-13，commit `d08555c`）** — 阿里云 + FRP 隧道慢（5-30s 响应）让 workbox `StaleWhileRevalidate` 无界等待 → 回退到 `navigateFallback: '/offline.html'` → 用户看到「网络已断开」误提示。**3 处修改**：`vite.config.js` ①document 单独用 `NetworkFirst` + `networkTimeoutSeconds: 5` ②`globPatterns` 移除 `*.html`（SPA HTML 不被旧 SW 缓存污染）③单独加 `offline.html` 进 globPatterns（真离线时仍能显示 PWA 离线页）
+- **🎨 webhint offline.html 同步 webhint 修复（2026-06-13，commit `e6d40a1`）** — PWA `navigateFallback: '/offline.html'` 指向 `web/public/offline.html`（与 `index.html` 是两套独立文件），改 `index.html` meta 时漏改 offline.html → SW 回退时 webhint 扫到旧版 viewport + theme-color → 3 个警告持续。修复：offline.html 删除 `maximum-scale=5, user-scalable=yes` + 静态 `<meta name="theme-color">`（与 index.html 同步）
+- **📝 沉淀自动加 CLAUDE.md 经验（2026-06-13，commit `d5edf73`）** — 用户要求以后**自动**把修复经验沉淀到 CLAUDE.md 对应日期章节，不等用户提醒。新建 memory `auto-add-claudemd-lessons.md` 定义 4 个触发条件 + 沉淀格式 + 例外清单
 - **📱 移动端 10 PR 全栈定制收官（2026-06-13，commit `9026c07`）** — 从 PR #1 基建 → PR #10 视觉回归测试，**10 个 PR × 18 commits** 完整覆盖：①基建（`useIsMobile` + `useSafeArea` + `useViewport` + 路由级双栈）②NutUI 4 引入 + MainLayout 移动端适配 ③MobileChatView + ChatViewSSE 重构 `useChatStream` + TableBlock ④MobileMeetingView/MobileMeetingDetailView/MobileMeetingRoom（3D CSS 声波条）⑤3 个独立移动端组件（CardList/LongPressWrapper/PageHeader，不用 CSS 全屏妥协）⑥4 个浮层组件（FormSheet/ActionSheet/SearchSheet/TaskCreateForm）⑦CardList + MobileECharts + TaskTrash 演示集成 ⑧a 6 个移动端页面（Dashboard/Login/Task/TaskTrash/Memory/Settings）⑧b 7 个移动端页面（Knowledge/Project/Member/Voiceprint/AgentTraces）⑨PWA + 离线降级 + 骨架屏（manifest + service worker + workbox 预缓存 + 离线兜底）⑩视觉回归测试矩阵（Playwright 5 viewport × 13 核心页面）+ 移动端深度定制（SafeArea/TabBar badge/卡片大圆角/下拉刷新/无限滚动）。**桌面端完全零影响**（`v-if="!isMobile"` 隔离）
 - **🛡️ Webhook 偶发 499 失败加固（2026-06-13，commit `7e41577`）** — 阿里云→GitHub HTTPS 出口网络瞬时故障根除：①`deploy-auto.sh` 改 `git reset --hard origin/main` 模式（immutable infra，dirty 工作区不再阻塞）+ `git clean -fdx` ②`webhook.py` 加 `socket.timeout(15)` + try/except（GitHub 10s 客户端超时 + 5s 余量，504 友好返回）③手动 redeliver trick（本地构造真实 payload + HMAC 签名的 curl，绕过 Nginx/NAT 直连 service）。**效果**：从偶发失败 → 5s 完成稳定部署
 - **🎨 webhint meta-theme-color 静态声明 → JS 动态注入（2026-06-12/13，commit `0bbc12d`）** — dark mode 切换时静态 `<meta name="theme-color">` 写一个值不够用。修复：`useThemeStore` watch `theme` → 移除旧 meta + 动态创建新 meta 注入。`.hintrc` 注释标注决策记录
-- **📝 项目动态 stats.json 准确化（2026-06-13）** — 本地 Python 重新计算，剔除 .meta/.log/.wav/.gz 等非源代码。**965 次提交 / 138K 行代码 / 617 文件 / 29 开发天数**（之前 webhook 统计 187K/2840 文件含测试音频/锁文件/PostgreSQL 数据）
+- **📝 项目动态 stats.json 准确化（2026-06-13）** — 本地 Python 重新计算，剔除 .meta/.log/.wav/.gz 等非源代码。**973 次提交 / 139K 行代码 / 618 文件 / 29 开发天数**（之前 webhook 统计 187K/2840 文件含测试音频/锁文件/PostgreSQL 数据）
 - **🚀 ChatViewSSE 多会话并行架构 + 切会话丢数据修复 + AbortController（2026-06-12 深夜 +1，commit `662a6ea`）** — A 会话在生成中 → 切到 B 会话 → A 不中断在后台继续 → 切回 A 看到 A 已生成完的内容。真实并行，多 SSE 流互不干扰。**4 项修复合一**：
   - **修复 4（核心新增）多会话并行架构** — per-session 数据隔离（`messagesBySession` + `activeAssistantMap` + `abortControllers` + `sendingSessions` + `loadedSessions` + `persistTimers`）。`sendMessage` 启动时闭包捕获 `targetSessionId`，SSE yield 通过 `activeAssistantMap[targetSessionId]` 找目标引用。**切会话不 abort 任何 SSE**（让 A 后台继续跑）。流式增量 debounce 100ms 持久化（防后台丢）
   - **修复 1 切会话丢数据** — `onSwitchSession` 切前 `persistSessionSync` 保存当前会话
@@ -229,7 +235,7 @@
 | 组件 | 技术 |
 |------|------|
 | 后端 | Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL |
-| 前端 | Vue 3 + Element Plus + Vite + Pinia + ECharts |
+| 前端 | Vue 3.5 + Element Plus 2.4.4 + Vite 8 + Pinia + ECharts（路由级桌面/移动双栈：Element Plus + NutUI 4）|
 | AI | Claude API (支持代理地址) + mimo-v2.5 多模态 |
 | 语音 | faster-whisper (GPU) + Edge-TTS + silero-vad |
 | 声纹识别 | 3D-Speaker ERes2Net (ModelScope) + pgvector 余弦匹配 |
