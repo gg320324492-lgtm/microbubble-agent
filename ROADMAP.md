@@ -4794,3 +4794,65 @@ User deploy may run the following commands on iZ2zedgg0z8q6voyv07ehfZ:
 webhook 自动部署是 stats.json 持续更新的**唯一**路径。一旦 webhook 挂掉，stats.json 就过期。下次类似事故需要：
 1. 立即 SSH 到云服务器用 `bash scripts/deploy-auto.sh` 手动跑一次
 2. 或者本地跑 `python scripts/update-stats.py` + `git add -f app/stats.json + git commit + git push`
+
+---
+
+## webhook 链路完整恢复 + 端到端验证（2026-06-14 凌晨）
+
+> **背景**：用户更新 GitHub 端 webhook Secret 后，做了一次端到端验证：本地构造 push payload + HMAC SHA256 签名 → POST 到公网 webhook 服务 → 触发自动部署。
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| webhook 服务健康 | ✅ Active: running (PID 3023112) |
+| 公网 POST 返回 | ✅ **HTTP 200**（签名验证通过） |
+| GitHub ↔ 云服务器 Secret 一致 | ✅ |
+| 自动触发 deploy-auto.sh | ✅ |
+| git pull 拉到最新 commit | ✅ `057bf64` |
+| dist 健全性检查 | ✅ index.html 引用的 `index-ae94a8ee.js` 存在 |
+| nginx reload | ✅ 成功 |
+| favicon.ico | ✅ HTTP 200（git clean 删后 reset 重建） |
+
+### 项目统计同步更新
+
+```
+项目统计: 141801 行(561 个文件), 1002 次提交, 30 天
+```
+
+🎯 **1002 commits 里程碑**（比 webhook 自动部署前的 1001 多 1，因为我发的 secret-test payload 也算 push）。
+
+### 链路完整恢复
+
+✅ **未来 push 自动部署**——只需 `git push`，GitHub → webhook → 服务器自动 `git pull + nginx reload`，无需任何人工介入。
+
+### 整个端到端事故时序
+
+| 时间 | 事件 |
+|---|---|
+| 2026-06-13 22:00 | 用户重启电脑 |
+| 22:25 | 启动 8 个 Docker 服务 + FRP 客户端 |
+| 22:30+ | 修复 8 个真 bug（13 commits）|
+| 23:26 | .env.webhook 丢失被修复（webhook 服务恢复）|
+| 2026-06-14 00:30 | 用户更新 GitHub webhook Secret |
+| 00:54 | 端到端验证 HTTP 200，链路完全恢复 ✅ |
+
+**从重启电脑到链路完全恢复：约 3 小时**
+
+### 教训（4 条铁律）
+
+1. **webhook 链路是项目的"血液循环"** —— 一旦 webhook 挂掉，所有自动部署都失效，必须立即手动 SSH 修复
+2. **`.env*` 文件必须 deploy 前 ensure-exists** — `git clean -fdx` 会清掉，加上守卫脚本 `[ ! -f .env.webhook ] && exit 1`
+3. **webhook Secret 必须在 GitHub 端和服务器端都保存** — 一方丢失会导致 403 验证失败。建议存到 `docs/deploy.md` 文档
+4. **链路验证必须端到端** — 不能只看 `systemctl status`（"active"≠"能接收 push"），必须 `tail log + netstat + curl POST` 三步验证
+
+### 经验沉淀
+
+| 文件 | 内容 |
+|---|---|
+| `CLAUDE.md` 「开发注意事项」section | 8 个新铁律（含 .env.webhook / 端到端验证） |
+| `memory/restart-pc-incident-2026-06-13.md` | 13 commits 总结 + 6 大纪律 |
+| `memory/workbox-cacheable-response-plugin.md` | CacheableResponsePlugin 必须加 |
+| `memory/vite-plugin-pwa-manifest-timing.md` | 异步 sw.js + setImmediate 轮询 |
+| `README.md` 「近期新增」section | 13 commits 总结 |
+| `ROADMAP.md`（本文件） | 4 个二级正文 + 1 个事故闭环 |
