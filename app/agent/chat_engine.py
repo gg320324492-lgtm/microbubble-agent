@@ -1,65 +1,195 @@
-"""ChatEngine — 双层回复编排 + 流式生成 + 工具循环
+"""ChatEngine — 方案 C 单阶段流式渐进综合（Stage 2 重写）
 
-负责：
-- 调用 LLMClient 生成响应
-- 处理 tool_use 循环（最多 N 轮 + 截断续写）
-- 生成【简要】+【详细】双层回复
-- yield StreamEvent 给前端 SSE
-- 把每个工具调用记录到 TraceCollector
-- 收集 rich_blocks 用于前端富文本渲染
-
-设计原则：
-- 完全异步（async）
-- 与 LLMClient 解耦（接收 client 实例）
-- 与 ToolContext 集成（传递 db/user_id/trace/event_callback）
-- 与 session_manager 集成（messages 持久化）
+设计目标（2026-06-14 方案 C）：
+- 主入口 `synthesize_stream()` 编排 4 个 Agent 模块（intent → agentic_loop → critique）
+- 取消 brief/detail 双层：content = synthesis_text（单阶段综合输出）
+- TraceCollector 用 `async with` 包裹：异常时同步落库（铁律 4）
+- Kill switch：AGENT_NEW_ARCHITECTURE_ENABLED=False 时走 chat_engine_legacy
+- 保留旧 API 签名（chat_stream / chat_with_brief_and_detail）以兼容 micro_bubble_agent
 """
 
 import asyncio
 import json
 import logging
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional, get_args
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-from app.agent.protocol import (
-    RichBlock,
-    RichBlockType,
-    StreamEvent,
-    ToolError,
-    ToolInputError,
-    ToolNotFoundError,
+from app.agent.agentic_loop import AgenticLoop
+from app.agent.intent_classifier import (
+    IntentCategory,
+    IntentResult,
+    classify_intent,
+    intent_to_sse_event,
 )
-
-# RichBlock.type 合法字面量集合（用于 _extract_rich_block 守卫）
-# 与 protocol.RichBlockType Literal 同步：动态从 get_args 提取，新增类型自动覆盖
-_VALID_RICH_BLOCK_TYPES: frozenset[str] = frozenset(get_args(RichBlockType))
-from app.agent.session_manager import session_manager
-from app.agent.tool_registry import (
-    ToolContext,
-    dispatch_tool,
-    get_all_tool_schemas,
-)
+from app.agent.protocol import RichBlock, StreamEvent
+from app.agent.tool_registry import ToolContext
 from app.agent.tracing import TraceCollector
 from app.config import settings
-from app.core.llm import LLMClient, llm_client
 
 logger = logging.getLogger("microbubble.agent.engine")
 
 
-# 工具循环最大轮数（防止无限循环）
-MAX_TOOL_ROUNDS = 5
-# 截断续写最大次数
-MAX_CONTINUES = 3
+# ============================================================================
+# 主类
+# ============================================================================
 
 
 class ChatEngine:
-    """双层回复引擎"""
+    """单阶段流式综合引擎
 
-    def __init__(self, llm: Optional[LLMClient] = None):
-        self.llm = llm or llm_client
+    Stage 2 重写后职责清晰：
+    1. 入口：`synthesize_stream()` 编排 intent → agentic_loop → critique（流式 yield）
+    2. 薄壳：`chat_stream()` / `chat_with_brief_and_detail()` 兼容老 API
+    3. 旧实现：`chat_engine_legacy.py`（30 天回滚资产）
+    """
+
+    def __init__(self, llm=None):
+        # Stage 2 仍可注入 llm（向后兼容），agentic_loop 内部用 ctx.llm 优先
+        self.llm = llm
 
     # =========================================================================
-    # 核心：双层回复（brief → 后台 detail）
+    # 主入口：synthesize_stream（方案 C 核心）
+    # =========================================================================
+
+    async def synthesize_stream(
+        self,
+        messages: List[Dict],
+        system: str,
+        user_id: Optional[int] = None,
+        db=None,
+        channel_user_id: Optional[str] = None,
+        session_id: str = "default",
+    ) -> AsyncIterator[StreamEvent]:
+        """方案 C 单阶段流式综合主入口
+
+        编排顺序：
+        1. [snapshot] intent_detected（Haiku 分类）
+        2. async with TraceCollector：异常时同步落库（铁律 4）
+        3. AgenticLoop.run：tool loop → synthesis stream → critique → retry → done
+        4. done 事件含 usage + duration_ms
+
+        Kill switch（铁律 6）：
+        AGENT_NEW_ARCHITECTURE_ENABLED=False → 退到 chat_engine_legacy
+
+        Yields:
+        - intent_detected [snapshot]
+        - tool_use / tool_result / tool_compressed (loop)
+        - synthesis_start [snapshot]
+        - text_delta [increment] 流式 token
+        - rich_block [snapshot]
+        - critique [snapshot]
+        - retry [snapshot] (条件)
+        - text_delta [increment] (retry 流式)
+        - done [snapshot] | error [snapshot]
+        """
+        # Kill switch：紧急回滚到老路径（铁律 6）
+        if not settings.AGENT_NEW_ARCHITECTURE_ENABLED:
+            async for evt in self._legacy_chat_stream(
+                messages, system, user_id, db, channel_user_id, session_id,
+            ):
+                yield evt
+            return
+
+        # 1. 意图分类
+        ctx = ToolContext(
+            db=db,
+            user_id=user_id,
+            channel_user_id=channel_user_id,
+        )
+        intent: Optional[IntentResult] = None
+        try:
+            intent = await classify_intent(
+                question=_last_user_text(messages),
+                ctx=ctx,
+            )
+            yield intent_to_sse_event(intent)
+        except Exception as e:
+            # intent 分类失败不阻塞（降级已在 classify_intent 内部处理）
+            logger.warning(f"intent classification failed at top-level: {e}")
+
+        # 2. Agentic Loop + Trace 持久化（async with 异常安全）
+        trace = TraceCollector(
+            user_id=user_id,
+            session_id=session_id,
+            message=_last_user_text(messages),
+        )
+        # 记录 intent 到 trace（Stage 3 数据库列完整生效）
+        if intent is not None:
+            trace.set_intent(intent.category.value, intent.confidence)
+
+        # 构造带 LLM 的 ctx
+        ctx = ToolContext(
+            db=db,
+            user_id=user_id,
+            channel_user_id=channel_user_id,
+            trace=trace,
+            llm=self.llm,  # 显式注入，避免 agentic_loop 走全局 LLMClient 单例（跨 loop 安全）
+        )
+
+        loop = AgenticLoop()
+        try:
+            async with trace:
+                async for evt in loop.run(
+                    messages=messages,
+                    system=system,
+                    intent=intent or IntentResult(category=IntentCategory.SEARCH_INFO, confidence=0.0),
+                    ctx=ctx,
+                    max_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
+                ):
+                    # 收集 trace 数据
+                    if evt.type == "tool_use":
+                        pass  # 已在 dispatch_tool 记录到 trace
+                    elif evt.type == "tool_result":
+                        # 从 StreamEvent 拿 duration 不方便，由 dispatch_tool 负责
+                        pass
+                    elif evt.type == "rich_block" and evt.block:
+                        trace.record_rich_block(evt.block.type, evt.block.title)
+                    elif evt.type == "critique" and evt.critique:
+                        trace.set_critique(
+                            score=int(evt.critique.get("score", 0)),
+                            retry_count=int(evt.critique.get("retry_count", 0)),
+                        )
+                    yield evt
+        except asyncio.CancelledError:
+            # 铁律 4：用户中断，async with TraceCollector.__aexit__ 已同步落库
+            logger.warning(f"synthesize_stream cancelled: user_id={user_id} session_id={session_id}")
+            yield StreamEvent(type="error", code="USER_ABORTED", message="用户已中断生成")
+            raise
+        except Exception as e:
+            logger.error(f"synthesize_stream failed: {e}", exc_info=True)
+            # 把 error 事件也 yield 出去（前端 useChatStream 处理）
+            yield StreamEvent(type="error", code="SYNTHESIZE_ERROR", message=str(e))
+            raise
+
+    # =========================================================================
+    # 薄壳：chat_stream（向后兼容 micro_bubble_agent.py:136）
+    # =========================================================================
+
+    async def chat_stream(
+        self,
+        messages: List[Dict],
+        system: str,
+        user_id: Optional[int] = None,
+        db=None,
+        channel_user_id: Optional[str] = None,
+        session_id: str = "default",
+    ) -> AsyncIterator[StreamEvent]:
+        """流式接口 — 内部转给 synthesize_stream
+
+        向后兼容：micro_bubble_agent.chat_stream() 直接 for-await 此方法的 yield
+        """
+        async for evt in self.synthesize_stream(
+            messages=messages,
+            system=system,
+            user_id=user_id,
+            db=db,
+            channel_user_id=channel_user_id,
+            session_id=session_id,
+        ):
+            yield evt
+
+    # =========================================================================
+    # 薄壳：chat_with_brief_and_detail（向后兼容 ChatResponse 10 字段）
     # =========================================================================
 
     async def chat_with_brief_and_detail(
@@ -73,343 +203,116 @@ class ChatEngine:
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
     ) -> Dict[str, Any]:
-        """非流式：先返回 brief，后台跑 detail
+        """非流式接口 — 消费 synthesize_stream 收集为 dict
 
-        返回 dict 兼容旧 MicroBubbleAgent.chat() 接口：
+        返回 dict 字段（向后兼容 ChatResponse 10 字段）：
         {
-            "content": "<brief 文本>",
-            "content_blocks": [...],
-            "tool_calls": [...],
-            "tool_results": [...],
-            "rich_blocks": [...],  # 新增
-            "tool_trace": [...],   # 新增
-            "usage": {...},        # 新增
-            "duration_ms": 3200,   # 新增
+          "content": str,                # synthesis_text（v2+ 唯一答案）
+          "content_blocks": list,
+          "tool_calls": list,
+          "tool_results": list,
+          "rich_blocks": list,
+          "tool_trace": list,
+          "usage": dict,
+          "duration_ms": int,
+          "intent": dict,                # 2026-06-14 新增
+          "critique": dict,              # 2026-06-14 新增
+          "is_brief": bool,              # deprecated 永远 False（v1 客户端兼容）
         }
         """
         t0 = time.monotonic()
+        content = ""
+        content_blocks: List[Dict] = []
+        tool_calls: List[Dict] = []
+        tool_results: List[Dict] = []
         rich_blocks: List[RichBlock] = []
-        trace = TraceCollector(user_id=user_id, session_id=session_id, message=_last_user_text(messages))
+        intent: Optional[Dict] = None
+        critique: Optional[Dict] = None
+        usage: Optional[Dict] = None
+        duration_ms: Optional[int] = None
 
-        # 构造 ToolContext
-        ctx = ToolContext(
-            db=db,
-            user_id=user_id,
-            channel_user_id=channel_user_id,
-            trace=trace,
-        )
-
-        # 1. 生成 brief（带工具调用，可能产生 rich_blocks）
-        brief_text, brief_rich_blocks, tool_calls, tool_results = await self._generate_with_tools(
+        async for evt in self.synthesize_stream(
             messages=messages,
             system=system,
-            tools=get_all_tool_schemas(),
-            max_tokens=500,
-            ctx=ctx,
-        )
-        rich_blocks.extend(brief_rich_blocks)
-        trace.set_brief(brief_text)
-
-        # 2. 后台跑 detail（无工具，更长 max_tokens）
-        asyncio.create_task(self._append_detail_background(
-            messages=messages,
-            brief=brief_text,
-            session_id=session_id,
             user_id=user_id,
-        ))
+            db=db,
+            channel_user_id=channel_user_id,
+            session_id=session_id,
+        ):
+            if evt.type == "text_delta":
+                content += evt.delta or ""
+                content_blocks.append({"type": "text", "text": content})
+            elif evt.type == "tool_use":
+                tool_calls.append({
+                    "id": evt.tool_use_id,
+                    "name": evt.tool_name,
+                    "input": evt.tool_input,
+                })
+            elif evt.type == "tool_result":
+                tool_results.append({
+                    "tool_use_id": evt.tool_use_id,
+                    "name": evt.tool_name,
+                    "result": evt.tool_output,
+                })
+            elif evt.type == "rich_block" and evt.block:
+                rich_blocks.append(evt.block)
+            elif evt.type == "intent_detected" and evt.intent:
+                intent = evt.intent
+            elif evt.type == "critique" and evt.critique:
+                critique = evt.critique
+            elif evt.type == "done":
+                usage = evt.usage
+                duration_ms = evt.duration_ms
 
-        # 3. 统计 + 返回
-        duration_ms = int((time.monotonic() - t0) * 1000)
         return {
-            "content": brief_text,
-            "content_blocks": [{"type": "text", "text": brief_text}],
+            "content": content,
+            "content_blocks": content_blocks,
             "tool_calls": tool_calls,
             "tool_results": tool_results,
             "rich_blocks": [rb.model_dump() for rb in rich_blocks],
-            "tool_trace": [tc.__dict__ for tc in trace.tool_calls],
-            "usage": trace.usage,
-            "duration_ms": duration_ms,
+            "tool_trace": tool_calls,  # alias for backward compat
+            "usage": usage,
+            "duration_ms": duration_ms if duration_ms is not None else int((time.monotonic() - t0) * 1000),
+            "intent": intent,
+            "critique": critique,
+            "is_brief": False,  # deprecated 永远 False
         }
 
     # =========================================================================
-    # 核心：流式
+    # 内部：legacy fallback（铁律 6 kill switch）
     # =========================================================================
 
-    async def chat_stream(
+    async def _legacy_chat_stream(
         self,
         messages: List[Dict],
         system: str,
-        user_id: Optional[int] = None,
-        db=None,
-        channel_user_id: Optional[str] = None,
-        session_id: str = "default",
-    ) -> AsyncIterator[StreamEvent]:
-        """流式：yield StreamEvent 序列
-
-        事件流（典型）：
-        1. thinking: "正在分析问题..."
-        2. tool_use: {name, input}
-        3. tool_result: {name, output, duration_ms}
-        4. rich_block: {type, data}
-        5. text_delta: "你好" / brief: "简要..."
-        6. detail: "详细..."  (后续)
-        7. done: {usage, duration_ms}
-        """
-        t0 = time.monotonic()
-        trace = TraceCollector(user_id=user_id, session_id=session_id, message=_last_user_text(messages))
-        ctx = ToolContext(
-            db=db,
-            user_id=user_id,
-            channel_user_id=channel_user_id,
-            trace=trace,
-        )
-
-        try:
-            yield StreamEvent(type="thinking", label="🔍 正在分析问题...")
-
-            # 1. 调用 LLM 流式
-            accumulated_text = ""
-            tool_uses_buffer: Dict[str, Dict] = {}  # id -> {name, input_json}
-            current_tool_id: Optional[str] = None
-
-            kwargs = {
-                "messages": messages,
-                "system": system,
-                "tools": get_all_tool_schemas(),
-                "max_tokens": 500,
-            }
-            async with self.llm.client.messages.stream(
-                model=self.llm.models[0],
-                **kwargs,
-            ) as stream:
-                async for event in stream:
-                    if event.type == "content_block_start":
-                        if event.content_block.type == "tool_use":
-                            current_tool_id = event.content_block.id
-                            tool_uses_buffer[current_tool_id] = {
-                                "name": event.content_block.name,
-                                "input_json": "",
-                            }
-                            yield StreamEvent(
-                                type="tool_use",
-                                tool_name=event.content_block.name,
-                                tool_use_id=current_tool_id,
-                            )
-                    elif event.type == "content_block_delta":
-                        if event.delta.type == "text_delta":
-                            accumulated_text += event.delta.text
-                            yield StreamEvent(
-                                type="text_delta",
-                                delta=event.delta.text,
-                            )
-                        elif event.delta.type == "input_json_delta" and current_tool_id:
-                            tool_uses_buffer[current_tool_id]["input_json"] += getattr(
-                                event.delta, "partial_json", ""
-                            )
-                    elif event.type == "content_block_stop":
-                        if current_tool_id and current_tool_id in tool_uses_buffer:
-                            tu = tool_uses_buffer[current_tool_id]
-                            try:
-                                tu["input"] = json.loads(tu["input_json"]) if tu["input_json"] else {}
-                            except json.JSONDecodeError:
-                                tu["input"] = {}
-                            del tu["input_json"]
-                            current_tool_id = None
-
-                response = await stream.get_final_message()
-                # token 统计（Anthropic 响应里有 usage）
-                if hasattr(response, "usage") and response.usage:
-                    trace.set_usage(
-                        input_tokens=response.usage.input_tokens,
-                        output_tokens=response.usage.output_tokens,
-                    )
-
-            # 2. 处理工具调用（brief 阶段可能 0-1 个 tool_use）
-            if tool_uses_buffer:
-                for tool_use_id, tu in tool_uses_buffer.items():
-                    input_data = tu.get("input", {})
-                    yield StreamEvent(
-                        type="thinking",
-                        label=f"🔧 正在调用工具：{tu['name']}",
-                    )
-                    result = await dispatch_tool(tu["name"], input_data, ctx)
-                    yield StreamEvent(
-                        type="tool_result",
-                        tool_name=tu["name"],
-                        tool_use_id=tool_use_id,
-                        tool_output=result if isinstance(result, dict) else {"result": str(result)},
-                    )
-                    # 检测 rich block
-                    rb = _extract_rich_block(tu["name"], result)
-                    if rb:
-                        trace.record_rich_block(rb.type, rb.title)
-                        yield StreamEvent(type="rich_block", block=rb)
-
-            # 3. brief 标记
-            if accumulated_text:
-                yield StreamEvent(type="brief", delta=accumulated_text)
-
-            # 4. 流式结束
-            # 注意：t0 是 time.monotonic()（line 158），这里必须用 monotonic 配对
-            # 旧版用 time.time() 配对产生 1780 万亿毫秒的垃圾值（不同时间基准）
-            duration_ms = int((time.monotonic() - t0) * 1000)
-            yield StreamEvent(
-                type="done",
-                usage=trace.usage,
-                duration_ms=duration_ms,
-                session_id=session_id,
-            )
-
-        except Exception as e:
-            logger.error(f"流式 chat 失败: {e}", exc_info=True)
-            trace.set_error(f"{type(e).__name__}: {e}")
-            yield StreamEvent(
-                type="error",
-                code="STREAM_ERROR",
-                message=str(e),
-            )
-
-    # =========================================================================
-    # 内部：带工具的完整生成（brief 阶段用）
-    # =========================================================================
-
-    async def _generate_with_tools(
-        self,
-        messages: List[Dict],
-        system: str,
-        tools: List[Dict],
-        max_tokens: int,
-        ctx: ToolContext,
-    ) -> tuple[str, List[RichBlock], List[Dict], List[Dict]]:
-        """一次完整 LLM 调用 + 工具循环（brief 阶段）"""
-        accumulated_text = ""
-        rich_blocks: List[RichBlock] = []
-        all_tool_calls: List[Dict] = []
-        all_tool_results: List[Dict] = []
-
-        for round_idx in range(MAX_TOOL_ROUNDS):
-            try:
-                response = await self.llm.complete(
-                    messages=messages,
-                    system=system,
-                    tools=tools,
-                    max_tokens=max_tokens,
-                )
-            except Exception as e:
-                logger.error(f"LLM 调用失败（round {round_idx}）: {e}", exc_info=True)
-                ctx.trace.set_error(f"{type(e).__name__}: {e}")
-                break
-
-            # 提取文本 + 工具调用
-            round_text = ""
-            round_tool_calls = []
-            for block in response.content:
-                if block.type == "text":
-                    round_text += block.text
-                elif block.type == "tool_use":
-                    round_tool_calls.append({
-                        "id": block.id,
-                        "name": block.name,
-                        "input": block.input,
-                    })
-
-            accumulated_text += round_text
-            all_tool_calls.extend(round_tool_calls)
-
-            # 无工具调用 → 结束
-            if not round_tool_calls:
-                # 截断检测
-                if response.stop_reason == "max_tokens":
-                    logger.warning("brief 阶段 max_tokens 截断")
-                break
-
-            # 处理工具调用
-            tool_results = []
-            for call in round_tool_calls:
-                result = await dispatch_tool(call["name"], call["input"], ctx)
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": call["id"],
-                    "content": json.dumps(result, ensure_ascii=False, default=str),
-                })
-                all_tool_results.append({
-                    "tool_use_id": call["id"],
-                    "name": call["name"],
-                    "result": result,
-                })
-                rb = _extract_rich_block(call["name"], result)
-                if rb:
-                    rich_blocks.append(rb)
-                    ctx.trace.record_rich_block(rb.type, rb.title)
-
-            # 把这一轮 append 到 messages
-            messages = list(messages)
-            messages.append({
-                "role": "assistant",
-                "content": [_block_dump(b) for b in response.content],
-            })
-            messages.append({
-                "role": "user",
-                "content": tool_results,
-            })
-
-        return accumulated_text, rich_blocks, all_tool_calls, all_tool_results
-
-    # =========================================================================
-    # 后台 detail 任务
-    # =========================================================================
-
-    async def _append_detail_background(
-        self,
-        messages: List[Dict],
-        brief: str,
-        session_id: str,
         user_id: Optional[int],
-    ):
-        """后台跑 detail 回复（无工具，更长 max_tokens）"""
-        try:
-            from app.agent.prompts import get_detail_prompt, _weekdays
-            from datetime import datetime
-            from app.models.base import BEIJING_TZ
+        db,
+        channel_user_id: Optional[str],
+        session_id: str,
+    ) -> AsyncIterator[StreamEvent]:
+        """退到 chat_engine_legacy.py 的旧实现（30 天回滚资产）"""
+        from app.agent.chat_engine_legacy import ChatEngine as LegacyChatEngine
 
-            now = datetime.now(BEIJING_TZ)
-            today_str = f"{now.year}年{now.month}月{now.day}日（{_weekdays[now.weekday()]}）"
-            time_str = now.strftime('%H:%M')
-            system_detail = get_detail_prompt().format(today_str=today_str, time_str=time_str)
-
-            # 把 brief 加到 messages 最后
-            messages = list(messages)
-            messages.append({"role": "assistant", "content": brief})
-
-            response = await self.llm.complete(
-                messages=messages,
-                system=system_detail,
-                max_tokens=settings.CLAUDE_MAX_TOKENS,
-            )
-
-            detail_text = ""
-            for block in response.content:
-                if block.type == "text":
-                    detail_text += block.text
-
-            if detail_text:
-                # 追加到 session
-                await session_manager.append_message(session_id, {
-                    "role": "assistant",
-                    "content": detail_text,
-                })
-                logger.info(f"detail 已追加到 session {session_id}")
-        except Exception as e:
-            logger.error(f"detail 后台生成失败: {e}", exc_info=True)
+        legacy = LegacyChatEngine()
+        async for evt in legacy.chat_stream(
+            messages=messages,
+            system=system,
+            user_id=user_id,
+            db=db,
+            channel_user_id=channel_user_id,
+            session_id=session_id,
+        ):
+            yield evt
 
 
 # ============================================================================
-# 辅助函数
+# 辅助函数（与 chat_engine_legacy 同源，供 legacy fallback 引用）
 # ============================================================================
 
 
 def _last_user_text(messages: List[Dict]) -> str:
-    """提取最后一条 user 消息的纯文本"""
+    """从最后一条 user 消息抽取纯文本"""
     for msg in reversed(messages):
         if msg.get("role") == "user":
             content = msg.get("content", "")
@@ -432,17 +335,18 @@ def _block_dump(block) -> Dict:
 
 
 def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
-    """从工具结果中提取 RichBlock（如果工具在结果中标注了 rich_block_type）"""
+    """从工具结果中提取 RichBlock（与原实现兼容，供 chat_engine_legacy 调用）"""
+    from typing import get_args
+
+    from app.agent.protocol import RichBlockType
+
     if not isinstance(result, dict):
         return None
 
     # 工具结果里显式标注 rich_block_type
-    # 守卫：None 或非法 Literal 值都跳过显式分支，让代码 fall through 到 implicit_map
-    # （search_memory / save_memory / web_search 等 17 个工具的 OutputModel
-    # 默认值都是 None，return dict 里也常带 "rich_block_type": None）
+    valid_types = frozenset(get_args(RichBlockType))
     rb_type = result.get("rich_block_type")
-    if rb_type and rb_type in _VALID_RICH_BLOCK_TYPES:
-        # 复制 data（去掉 rich_block_type 字段本身）
+    if rb_type and rb_type in valid_types:
         data = {k: v for k, v in result.items() if k != "rich_block_type"}
         return RichBlock(
             type=rb_type,
@@ -450,7 +354,7 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
             title=result.get("title"),
         )
 
-    # 隐式映射：某些工具默认产生某种 block
+    # 隐式映射
     implicit_map = {
         "query_meetings": ("meeting", "会议列表"),
         "query_tasks": ("task_list", "任务列表"),

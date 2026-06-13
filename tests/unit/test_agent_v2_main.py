@@ -120,10 +120,12 @@ class TestChatEngine:
 
     def test_engine_has_methods(self):
         engine = ChatEngine()
-        assert hasattr(engine, "chat_with_brief_and_detail")
-        assert hasattr(engine, "chat_stream")
-        assert hasattr(engine, "_generate_with_tools")
-        assert hasattr(engine, "_append_detail_background")
+        # 2026-06-14 方案 C Stage 2：ChatEngine 重写为单阶段流式
+        assert hasattr(engine, "chat_with_brief_and_detail"), "薄壳保留（旧 API 兼容）"
+        assert hasattr(engine, "chat_stream"), "薄壳保留（旧 API 兼容）"
+        assert hasattr(engine, "synthesize_stream"), "新主入口（方案 C 核心）"
+        assert hasattr(engine, "_legacy_chat_stream"), "Kill switch 退回老实现（铁律 6）"
+        # 删除的旧方法（_generate_with_tools / _append_detail_background 已迁到 agentic_loop.py）
 
     def test_last_user_text(self):
         msgs = [
