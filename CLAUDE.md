@@ -296,6 +296,30 @@
 
 ## 开发注意事项
 
+### 2026-06-13 MCP stdio 服务器在 Docker 中的重启死循环 + mcp 0.9.x API 兼容（commit `db3e275`）
+
+- **MCP stdio 服务器在 Docker 里默认 stdin 关闭 → 进程退出 → restart 死循环（重要）** — `mcp.server.stdio` 通过 stdin/stdout 与 MCP 客户端通信，**不是 HTTP 服务**。Docker 启动容器时 stdin 默认是关闭的 pipe，stdio MCP 服务器一启动就立刻 `EOFError`/`BrokenPipeError` 退出。配合 `restart: unless-stopped` 就形成「启动 → stdio 关闭 → 进程退出 → 立即重启」的紧密循环，`docker compose ps` 永远显示 `Restarting (1) X seconds ago`，**日志只看到 INFO "Starting..." 然后被截断**，没有 traceback，定位极难。**修复**：docker-compose 加两行：
+  ```yaml
+  vision-mcp:
+    stdin_open: true   # 保持 stdin 开放
+    tty: true          # 分配 TTY
+  ```
+  这样 MCP 服务器会阻塞在 `stdio_server().__aenter__()` 等待客户端连接，不会立刻退出。**纪律**：① 任何 stdio MCP 服务器（Anthropic MCP Python SDK 的 `stdio_server()`、FastMCP 的 stdio transport 等）必须在 Docker 中加这两行，否则永远不会 stable running；② HTTP 模式的 MCP server（如 SSE/StreamableHTTP）才不需要这两行；③ 诊断"反复重启+无错误日志"模式时，**第一时间查 stdin_open**——99% 是这个问题
+- **mcp 0.9.1 `Server.__init__` 只接受 `(name: str)`（重要）** — 项目 commit `6069a14` 写的代码：
+  ```python
+  app = Server(
+      name="vision-mcp-server",
+      version="1.0.0",
+      capabilities=ServerCapabilities(tools={"listChanged": True})
+  )
+  ```
+  在 mcp 0.9.1 报 `TypeError: Server.__init__() got an unexpected keyword argument 'version'`。**新版 mcp 库的 Server 简化了**：version 移到了 `create_initialization_options()` 里设置，capabilities 由装饰器（`@server.list_tools()` / `@server.call_tool()`）自动推导，无需手动声明。**修复**：
+  ```python
+  app = Server(name="vision-mcp-server")
+  ```
+  **纪律**：① 升 mcp 库大版本前必查 `inspect.signature(Server.__init__)`；② mcp 库的 API 在 0.5→0.6→0.7→0.8→0.9 几个版本里**反复重构**过 Server/Client 签名，写代码前先 `pip show mcp` 看实际安装版本；③ 如果新版本加回了 `version`/`capabilities`，可以恢复原代码
+- **`from .vision import router` 在 tools/__init__.py 中导入不存在符号（教训）** — `mcp_server/tools/vision.py` 导出的是 `create_vision_tools(server)` 函数（用于注册工具），**不是** `router`（HTTP router 概念）。但 `tools/__init__.py` 旧版写着 `from .vision import router`，启动时报 `ImportError: cannot import name 'router'`。**修复**：改 `from .vision import create_vision_tools` 即可。**纪律**：① `__init__.py` 的导出名必须与子模块实际定义对齐（`dir(module)` 看真实符号）；② 改模块主 API（`router` → `create_vision_tools`）时**一定要同步更新所有 `__init__.py` 和 `from ... import` 语句**；③ `ImportError: cannot import name 'X'` 是最容易修的 import 错误，但需要**先确认 X 应该叫什么**——不要凭直觉改名
+
 ### 2026-06-13 移动端 10 PR + 部署加固 收官新增
 
 - **移动端路由级双栈（重要，PR #1 基建 + PR #2 NutUI 引入，commits `99bbe6b` `3c58cb1`）** — 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不是 `v-if` 全局切换。模式：①`useIsMobile.js` 监听 `window.matchMedia('(max-width: 768px)')` + `navigator.userAgent`（iPad/iPhone 误判时用 UA 兜底）②`router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` ③每个 View 文件在 setup 顶部 import 自己的子组件，不共享 component 树。**好处**：桌面端 `el-*` 与移动端 `nut-*` 完全隔离，无 CSS 冲突；切设备时**不重载后端**，URL 不变。**坑**：`/chat` 桌面端走 ChatViewSSE.vue，移动端走 MobileChatView.vue，store/Pinia 完全独立（避免桌面端 dark mode 状态污染移动端主题）
