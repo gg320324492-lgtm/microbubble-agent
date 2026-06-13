@@ -5,14 +5,21 @@
     "  - Chrome/Safari/Edge 顶部栏美化由 useThemeStore.apply() JS 动态注入（保留价值）",
     "  - .hintrc 配置对 webhint CLI 有效，对 Edge DevTools 内置 webhint 无效（独立运行不读项目配置）",
     "  - 已审查 3 种方案（静态 / .hintrc 禁用 / JS 注入）后接受 Edge DevTools 误报",
-    "  - 决策记录：见 2026-06-13 chat 历史 + memory/webhint-optimization.md"
+    "  - 决策记录：见 2026-06-13 chat 历史 + memory/webhint-optimization.md",
+    "",
+    "http-cache 'off' 用意说明：",
+    "  - webhint http-cache 不区分 GET/POST，按 response mediaType 判断缓存策略",
+    "  - TTS (/api/v1/voice/tts) 返回 audio/mpeg 但每次文本不同（动态生成），必须 max-age=0",
+    "  - webhint 把 audio/mpeg 当静态音频要求 max-age=31536000+immutable，是 webhint 误报",
+    "  - 后端 security_headers 中间件 (app/main.py:126-128) 统一给 /api/ 加 max-age=0",
+    "    是正确行为（动态 API 不能缓存），不能再改",
+    "  - http-cache hint 没有 ignoredUrls / includeUrlPatterns 选项，无法精确排除 API 路径",
+    "  - 唯一选择：要么全关 http-cache（接受静态资源检查冗余），要么接受 TTS 误报",
+    "  - 决策：全关 http-cache。nginx 已单独配置静态资源 long cache（tunnel.conf），",
+    "    webhint 检查是冗余的；TTS 误报严重干扰 Edge DevTools 体验"
   ],
   "hints": {
-    "http-cache": ["warning", {
-      "revvingPatterns": [
-        "\\/[^/]+[._-][A-Za-z0-9_-]{5,}\\.\\w+$"
-      ]
-    }],
+    "http-cache": "off",
     "meta-theme-color": "off"
   }
 }
