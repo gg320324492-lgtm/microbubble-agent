@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import socket
 import subprocess
 import threading
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -38,13 +39,32 @@ def verify_signature(payload: bytes, signature: str) -> bool:
 
 class WebhookHandler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # 2026-06-13 加固：socket timeout 防止 rfile.read 无限阻塞
+        # 背景：GitHub 客户端偶发 10s 超时断开，Nginx 转 499 但 service 还在 rfile.read 等待
+        # 设 15s timeout > GitHub 默认 10s 客户端超时，留 5s 余量给 service 读完 body
+        self.connection.settimeout(15)
+
         if self.path != "/webhook":
             self.send_response(404)
             self.end_headers()
             return
 
         content_length = int(self.headers.get("Content-Length", 0))
-        payload = self.rfile.read(content_length)
+        # 防止 rfile.read 阻塞：socket.timeout 时返回 504 + 日志
+        # 背景：阿里云到 GitHub 网络偶发抖动，客户端可能已断开但 rfile 还在等 body
+        try:
+            payload = self.rfile.read(content_length)
+        except socket.timeout:
+            logger.error(
+                f"读取 body 超时 (15s)，客户端可能已断开 delivery={self.headers.get('X-GitHub-Delivery', 'no-id')} "
+                f"ua={self.headers.get('User-Agent', 'none')}"
+            )
+            try:
+                self.send_response(504)
+                self.end_headers()
+            except Exception:
+                pass
+            return
 
         # 记录详细诊断（2026-06-02 加固：解决 "redeliver 持续失败但无日志" 问题）
         delivery_id = self.headers.get("X-GitHub-Delivery", "no-id")
