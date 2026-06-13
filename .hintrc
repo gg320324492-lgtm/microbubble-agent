@@ -1,4 +1,12 @@
-﻿{
+{
+  "_comment": [
+    "meta-theme-color = 'off' 用意说明：",
+    "  - Firefox 永远不实现 meta theme-color（任何写法 webhint 都报），属于已知误报",
+    "  - Chrome/Safari/Edge 顶部栏美化由 useThemeStore.apply() JS 动态注入（保留价值）",
+    "  - .hintrc 配置对 webhint CLI 有效，对 Edge DevTools 内置 webhint 无效（独立运行不读项目配置）",
+    "  - 已审查 3 种方案（静态 / .hintrc 禁用 / JS 注入）后接受 Edge DevTools 误报",
+    "  - 决策记录：见 2026-06-13 chat 历史 + memory/webhint-optimization.md"
+  ],
   "hints": {
     "http-cache": ["warning", {
       "revvingPatterns": [
