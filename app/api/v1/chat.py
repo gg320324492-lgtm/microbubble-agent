@@ -57,18 +57,27 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    """对话响应（v2 扩展）"""
+    """对话响应（v2 扩展 + 方案 C）
+
+    字段说明：
+    - content: 完整综合答案（方案 C 取消 brief/detail 双层，content 即最终答案）
+    - is_brief: DEPRECATED 永远 False，仅保留为 v1 客户端兼容；v2+ 客户端请用 rich_blocks 判断
+    - intent / critique: 方案 C Stage 2 新增，agent 自我意识元数据
+    """
     content: str
     session_id: str
     file_url: Optional[str] = None
     file_name: Optional[str] = None
     knowledge_content: Optional[str] = None
-    is_brief: bool = False
+    is_brief: bool = False  # deprecated 永远 False（v1 客户端兼容）
     # === v2 新增字段 ===
     rich_blocks: list[dict[str, Any]] = []
     tool_trace: list[dict[str, Any]] = []
     usage: Optional[dict[str, int]] = None
     duration_ms: Optional[int] = None
+    # === 2026-06-14 方案 C 新增 ===
+    intent: Optional[dict[str, Any]] = None
+    critique: Optional[dict[str, Any]] = None
 
 
 # ============================================================================
@@ -95,11 +104,13 @@ async def chat(
     return ChatResponse(
         content=result["content"],
         session_id=request.session_id,
-        is_brief=True,
+        is_brief=False,  # 2026-06-14 方案 C：永远 False（v1 客户端兼容）
         rich_blocks=result.get("rich_blocks", []),
         tool_trace=result.get("tool_trace", []),
         usage=result.get("usage"),
         duration_ms=result.get("duration_ms"),
+        intent=result.get("intent"),
+        critique=result.get("critique"),
     )
 
 
