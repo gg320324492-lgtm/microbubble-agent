@@ -23,6 +23,8 @@ const filters = ref({
   user_id: null,
   date_from: null,
   date_to: null,
+  // 2026-06-14 方案 C Stage 3：按状态过滤
+  status: '',
 })
 
 const formatDate = (iso) => {
@@ -39,6 +41,7 @@ const fetchTraces = async () => {
     if (filters.value.user_id) params.user_id = filters.value.user_id
     if (filters.value.date_from) params.date_from = filters.value.date_from
     if (filters.value.date_to) params.date_to = filters.value.date_to
+    if (filters.value.status) params.status = filters.value.status
     params.limit = 100
     const r = await axios.get('/api/v1/admin/agent-traces', { params })
     traces.value = r.data.traces || []
@@ -68,6 +71,39 @@ const onRowClick = async (row) => {
   }
 }
 
+// 2026-06-14 方案 C Stage 3：辅助函数
+const intentZh = (cat) => ({
+  recommend_person: '推荐人',
+  search_info: '找资料',
+  explain_concept: '解释概念',
+  execute_action: '执行操作',
+  data_query: '数据查询',
+  casual_chat: '闲聊',
+}[cat] || cat || '-')
+
+const critiqueColor = (score) => {
+  if (score == null) return 'info'
+  if (score >= 8) return 'success'
+  if (score >= 6) return 'warning'
+  return 'danger'
+}
+
+const statusZh = (s) => ({
+  completed: '已完成',
+  aborted: '已中断',
+  error: '异常',
+  low_score_fallback: '低分降级',
+  in_progress: '进行中',
+}[s] || s || '-')
+
+const statusColor = (s) => ({
+  completed: 'success',
+  aborted: 'warning',
+  error: 'danger',
+  low_score_fallback: 'warning',
+  in_progress: 'info',
+}[s] || 'info')
+
 onMounted(fetchTraces)
 </script>
 
@@ -90,9 +126,17 @@ onMounted(fetchTraces)
         <el-form-item label="结束日期">
           <el-date-picker v-model="filters.date_to" type="date" placeholder="可选" value-format="YYYY-MM-DD" />
         </el-form-item>
+        <el-form-item label="状态" style="width: 140px;">
+          <el-select v-model="filters.status" placeholder="全部" clearable>
+            <el-option label="已完成" value="completed" />
+            <el-option label="已中断" value="aborted" />
+            <el-option label="异常" value="error" />
+            <el-option label="低分降级" value="low_score_fallback" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="fetchTraces">查询</el-button>
-          <el-button @click="filters = { user_id: null, date_from: null, date_to: null }; fetchTraces()">重置</el-button>
+          <el-button @click="filters = { user_id: null, date_from: null, date_to: null, status: '' }; fetchTraces()">重置</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -141,6 +185,31 @@ onMounted(fetchTraces)
           <template #default="{ row }">
             <el-tag v-if="row.error" type="danger" size="small">有错误</el-tag>
             <span v-else class="muted">-</span>
+          </template>
+        </el-table-column>
+        <!-- 2026-06-14 方案 C Stage 3 新增列 -->
+        <el-table-column label="意图" width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.intent_category" class="intent-tag">
+              {{ intentZh(row.intent_category) }}
+              <small v-if="row.intent_confidence != null" class="muted">
+                {{ (row.intent_confidence * 100).toFixed(0) }}%
+              </small>
+            </span>
+            <span v-else class="muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="自评" width="70">
+          <template #default="{ row }">
+            <el-tag v-if="row.critique_score != null" :type="critiqueColor(row.critique_score)" size="small">
+              {{ row.critique_score }}/10
+            </el-tag>
+            <span v-else class="muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="statusColor(row.status)" size="small">{{ statusZh(row.status) }}</el-tag>
           </template>
         </el-table-column>
       </el-table>

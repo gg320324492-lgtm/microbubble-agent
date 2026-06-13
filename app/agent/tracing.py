@@ -355,4 +355,11 @@ class TraceCollector:
             "error": self.error,
             "total_duration_ms": self.total_duration_ms,
             "status": self.status,
+            # 2026-06-14 方案 C Stage 3 新增字段
+            "intent_category": self.intent_category,
+            "intent_confidence": self.intent_confidence,
+            "tool_rounds_used": self.tool_rounds_used,
+            "compression_applied_count": self.compression_applied_count,
+            "critique_score": self.critique_score,
+            "retry_count": self.retry_count,
         }
