@@ -296,6 +296,30 @@
 
 ## 开发注意事项
 
+### 2026-06-13 edge-tts 6.1.9 TrustedClientToken 过期 → TTS 500（commit `41cf204`）
+
+- **edge-tts 6.1.9 已失效，Microsoft 返回 403 Forbidden（重要）** — 2026 年初 Microsoft 更新了 `wss://speech.platform.bing.com/...readaloud/edge/v1` 端点的检测策略，**拒绝非 Edge 浏览器 UA**，edge-tts 6.1.9 内部硬编码的 `Chrome/91.0.4472.77 Edg/91.0.864.41`（2021 年版本）+ 硬编码的 `TrustedClientToken=6A5AA1D4EAFF4E9FB37E23D68491D6F4` 已不被接受，报 `WSServerHandshakeError 403, message='Invalid response status'`。**修复**：升级到 edge-tts 7.2.8（PyPI 最新版，更新了 internal UA + endpoint 配置 + 新增 `boundary/connector/connect_timeout/receive_timeout` 参数）。**诊断命令**：
+  ```bash
+  docker exec <app> pip show edge-tts  # 看版本
+  docker exec <app> python -c "
+  import asyncio
+  from edge_tts import Communicate
+  async def test():
+      try:
+          async for chunk in Communicate(text='test', voice='zh-CN-XiaoxiaoNeural').stream():
+              print('OK')
+              break
+      except Exception as e:
+          print(f'FAIL: {type(e).__name__}: {str(e)[:200]}')
+  asyncio.run(test())
+  "
+  # 期望：6.1.9 → 403 Forbidden；7.2.8 → OK
+  ```
+  **纪律**：① Microsoft Edge TTS readaloud 端点会持续更新检测策略，edge-tts 库需跟进；② 升级前先 `pip index versions edge-tts` 看 PyPI latest；③ 不要盲目锁 `==` 版本（见下条）
+- **requirements.txt 不能盲目锁 == 版本（重要纪律，本次再次踩坑）** — 项目 `requirements.txt` 写了 `edge-tts==6.1.9` 是 2024-2025 年的版本，2026 年 Microsoft 更新端点检测策略后失效，但== 锁定无法接收 patch 升级。**修复**：`edge-tts==6.1.9` → `edge-tts>=7.2.8,<8.0.0`（允许补丁/次版本升级，但锁 major 防 breaking change）。**纪律**：① 第三方库版本用 `>=X,<Y` 范围，不用 `==`；② 例外：pydantic/fastapi/sqlalchemy 等核心库的 major version 锁住；③ 升级后必跑一遍测试（`pytest tests/` 至少要 smoke test）；④ **不要把"`==` 防意外升级"当借口**——意外升级的风险远小于"上游 API 已变你还不知道"的风险
+- **catch-all except 后只返回 500 必须加 logger.error(..., exc_info=True)（再次踩坑）** — `app/api/v1/voice.py:97-98` 的 `except Exception as e: raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")` 返回 `语音合成失败: 403, message='Invalid response status'...`，**没暴露完整 traceback**，排错只能从 detail 字符串猜根因。本次必须用 `docker exec ... python -c "..."` 直接调 tts_service 才能看到真因。**修复**：tts.py 加 `logger.error(f"TTS 合成失败: {type(e).__name__}: {e} | voice={voice_id} text_len={len(text)}", exc_info=True)`，**任何 except 都必须 logger.error**。**纪律（CLAUDE.md 已有，本次强化）**：① catch-all except 后只 HTTPException 不行，**必须先 logger.error(..., exc_info=True)** 留 traceback；② detail 字符串不要太长（前 200 字符够识别），但 logger 要全量；③ 排错优先级：docker logs → logger.error traceback → 直接 exec 测试 service 函数，三步定位
+- **容器内 `pip install --upgrade` 不持久化到镜像（已知陷阱，commit `41cf204` 配套）** — 本次在容器内 `pip install --upgrade edge-tts` 是临时修复，**下次 `docker compose build` 会重装 requirements.txt 锁定的版本**。已通过修改 requirements.txt + commit + push 让永久修复生效。**纪律**：① 容器内 `pip install` 改的依赖**必须同步改 requirements.txt**；② 否则下次 rebuild 镜像后 bug 复发；③ 容器内临时修复只能用于"应急验证"，不能作为最终修复
+
 ### 2026-06-13 vite-plugin-pwa manifest precache 路径不同步 + closeBundle 时序陷阱（commit `6d93d35`）
 
 - **vite-plugin-pwa 把 manifest URL 嵌入 sw.js 但不走 rollup hash 流程（重要，commit `08f440f` 已说过，再次强化）** — `vite-plugin-pwa` 在 generateBundle 阶段把 `/manifest.webmanifest` 嵌入 `__WB_MANIFEST` 字符串，注入到 sw.js。如果用 `manifestHashPlugin` rename dist 文件但**不修改 sw.js 里的字符串**，SW install 阶段 precache 会去拉**旧路径** → 服务器 410 Gone（commit `c855f0e` 加的精确 410 拦截）→ `bad-precaching-response` → SW install 失败 → 新 SW 永远激活不了。**修复**：manifestHashPlugin.rename 之后必须 replaceAll sw.js 里的 `"manifest.webmanifest"` 字符串。
