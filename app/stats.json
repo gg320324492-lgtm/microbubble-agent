@@ -1,36 +1,36 @@
 {
-  "total_lines": 139354,
-  "total_commits": 973,
+  "total_lines": 140868,
+  "total_commits": 997,
   "first_commit_date": "2026-05-16",
   "dev_days": 29,
-  "total_files": 618,
-  "updated_at": "2026-06-13 17:59:14",
+  "total_files": 624,
+  "updated_at": "2026-06-13 22:34:01",
   "lines_by_type": {
-    "python": 36142,
+    "python": 36125,
     "vue": 39503,
-    "javascript": 6488,
+    "javascript": 6759,
     "typescript": 1141,
     "css": 1365,
     "html": 3520,
-    "markdown": 36942,
-    "shell": 2280,
-    "config": 2368,
+    "markdown": 37407,
+    "shell": 2300,
+    "config": 2403,
     "sql": 0,
-    "docker": 374,
-    "other": 9231
+    "docker": 378,
+    "other": 9967
   },
   "files_by_type": {
     "python": 214,
     "vue": 139,
-    "javascript": 63,
+    "javascript": 64,
     "typescript": 9,
     "css": 5,
     "html": 9,
     "markdown": 73,
     "shell": 18,
-    "config": 23,
+    "config": 24,
     "sql": 0,
     "docker": 5,
-    "other": 60
+    "other": 64
   }
 }
