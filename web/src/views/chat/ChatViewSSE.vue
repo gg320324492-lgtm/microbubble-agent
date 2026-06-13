@@ -40,6 +40,7 @@ const {
   onSwitchSession,
   clearChat,
   sendMessage: sendMessageCore,
+  stopGeneration,  // 2026-06-14 方案 C Stage 4：停止生成按钮
   playTTS,
   asrRecognize,
 } = useChatStream()
@@ -343,12 +344,26 @@ onUnmounted(() => {
           @input="autoResize"
         />
         <el-button
+          v-if="!isCurrentSessionSending"
           type="primary"
           class="send-btn"
           :disabled="!inputText.trim()"
+          aria-label="发送消息"
+          title="发送消息"
           @click="sendMessage()"
         >
           <span>↑</span>
+        </el-button>
+        <!-- 2026-06-14 方案 C Stage 4：停止生成按钮（流式中变 ⏹） -->
+        <el-button
+          v-else
+          type="danger"
+          class="stop-btn"
+          aria-label="停止生成"
+          title="停止生成"
+          @click="stopGeneration()"
+        >
+          <span>⏹</span>
         </el-button>
       </div>
       <input

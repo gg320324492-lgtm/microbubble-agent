@@ -37,15 +37,27 @@ export interface ChatMessage {
     name?: string
     state?: 'running' | 'done'
     duration_ms?: number
+    // 2026-06-14 方案 C Stage 4：附加压缩信息（tool_compressed 事件）
+    compression?: {
+      original_count: number
+      selected_count: number
+      summary: string
+    }
   }>
   timestamp: string
-  state?: 'streaming' | 'idle'
+  // 2026-06-14 方案 C Stage 4：state 加 'aborted'
+  state?: 'streaming' | 'idle' | 'aborted'
   is_brief?: boolean
   error?: string | null
   usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
   durationMs?: number
   type?: 'text' | 'image' | 'file'
   imageUrl?: string
+  // 2026-06-14 方案 C Stage 4：新增 4 个字段（对应 6 个新事件）
+  intent?: { category: string; confidence: number; keywords?: string[]; reasoning?: string }
+  plan?: Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
+  critique?: { score: number; addresses_question?: boolean; has_synthesis?: boolean; has_citations?: boolean; suggestion?: string }
+  retryCount?: number
 }
 
 export interface SendOptions {
@@ -310,16 +322,38 @@ export function useChatStream() {
     )) {
       const currentAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
 
+      // 2026-06-14 方案 C Stage 4：abort 状态机守卫
+      // 用户点 ⏹ → stopGeneration 把 state 改为 'aborted'
+      // 后端可能还在 yield 几个事件（race condition），忽略全部避免显示错乱
+      if (currentAssistant.state === 'aborted') {
+        // 跳过 switch case，但 loop 仍走 persistSessionDebounced（让中断状态持久化）
+        persistSessionDebounced(targetSessionId)
+        continue
+      }
+
       switch (evt.type) {
         case 'text_delta':
+          // [increment] 累加 delta 到 content
+          // 防 brief 重复 bug（2026-06-12 commit cf70ff5 根因）：
+          //   检测单次 delta > 100 字且不包含已有内容前 50 字 → 长度异常
+          if (evt.delta && evt.delta.length > 100) {
+            const prevPrefix = (currentAssistant.content || '').slice(0, 50)
+            if (prevPrefix && !evt.delta.includes(prevPrefix)) {
+              console.warn(
+                `[useChatStream] text_delta 长度异常：${evt.delta.length} 字，不含已有内容前缀`,
+              )
+            }
+          }
           currentAssistant.content = (currentAssistant.content || '') + (evt.delta || '')
           break
         case 'brief':
+          // [snapshot, deprecated] v1 客户端兼容，v2+ 忽略
           if (!currentAssistant.content && evt.delta) {
             currentAssistant.content = evt.delta
           }
           break
         case 'detail': {
+          // [snapshot, deprecated] v1 客户端兼容
           const delta = evt.delta || ''
           if (delta) {
             currentAssistant.content =
@@ -330,9 +364,11 @@ export function useChatStream() {
           break
         }
         case 'thinking':
+          // [snapshot] 提示
           currentAssistant.toolTrace!.push({ type: 'thinking', label: evt.label })
           break
         case 'tool_use':
+          // [snapshot] 工具调用开始
           currentAssistant.toolTrace!.push({
             type: 'tool',
             name: evt.tool_name,
@@ -340,6 +376,7 @@ export function useChatStream() {
           })
           break
         case 'tool_result': {
+          // [snapshot] 工具调用结果
           const last = currentAssistant.toolTrace![currentAssistant.toolTrace!.length - 1]
           if (last && last.type === 'tool' && last.name === evt.tool_name) {
             last.state = 'done'
@@ -347,19 +384,126 @@ export function useChatStream() {
           }
           break
         }
+        case 'tool_compressed': {
+          // [snapshot] 工具结果被 Haiku 压缩（2026-06-14 Stage 4）
+          // 附加到最近一个同名的 tool 项上
+          const lastTool = [...currentAssistant.toolTrace!]
+            .reverse()
+            .find((t) => t.type === 'tool' && t.name === evt.tool_name)
+          if (lastTool) {
+            lastTool.compression = evt.compression
+          }
+          // 同时 push 一个 thinking 块展示压缩信息
+          currentAssistant.toolTrace!.push({
+            type: 'thinking',
+            label: evt.label || `🗜️ 压缩：${evt.compression?.summary || ''}`,
+          })
+          break
+        }
         case 'rich_block':
+          // [snapshot] 富文本块
           if (evt.block) currentAssistant.richBlocks.push(evt.block)
           break
+        case 'intent_detected': {
+          // [snapshot] 意图分类（2026-06-14 Stage 4）
+          currentAssistant.intent = evt.intent || {
+            category: evt.label || 'unknown',
+            confidence: 0,
+          }
+          // 在 toolTrace 顶部展示意图
+          currentAssistant.toolTrace!.push({
+            type: 'thinking',
+            label: evt.label || `🧠 意图：${evt.intent?.category || 'unknown'}`,
+          })
+          break
+        }
+        case 'plan_step': {
+          // [snapshot] 工具规划单步（2026-06-14 Stage 4）
+          if (!currentAssistant.plan) currentAssistant.plan = []
+          currentAssistant.plan.push({
+            step: evt.step || evt.label || '',
+            tool: evt.tool_name,
+            status: evt.plan_status || 'pending',
+          })
+          break
+        }
+        case 'synthesis_start': {
+          // [snapshot] 综合阶段开始（2026-06-14 Stage 4）
+          currentAssistant.toolTrace!.push({
+            type: 'thinking',
+            label: evt.label || '✨ 综合分析中...',
+          })
+          break
+        }
+        case 'critique': {
+          // [snapshot] 自评（2026-06-14 Stage 4）
+          currentAssistant.critique = evt.critique || {
+            score: 0,
+            suggestion: evt.label,
+          }
+          // 低分加 ⚠️ 徽章
+          if (evt.critique && evt.critique.score < 7) {
+            currentAssistant.toolTrace!.push({
+              type: 'thinking',
+              label: `⚠️ 自评 ${evt.critique.score}/10 — ${evt.critique.suggestion || ''}`,
+            })
+          } else if (evt.critique) {
+            currentAssistant.toolTrace!.push({
+              type: 'thinking',
+              label: `📊 自评 ${evt.critique.score}/10`,
+            })
+          }
+          break
+        }
+        case 'retry': {
+          // [snapshot] critique 低分触发重试（2026-06-14 Stage 4）
+          // 关键：必须先清空 content，否则 retry 的 text_delta 拼接到旧内容后面
+          currentAssistant.retryCount = (currentAssistant.retryCount || 0) + 1
+          currentAssistant.content = ''
+          currentAssistant.toolTrace!.push({
+            type: 'thinking',
+            label: `🔄 重试中（第 ${currentAssistant.retryCount} 次）：${evt.retry_reason || ''}`,
+          })
+          break
+        }
         case 'error':
+          // [snapshot] 错误
           currentAssistant.error = evt.message
+          // abort 状态：error 事件也代表流结束
+          if (currentAssistant.state === 'streaming') {
+            currentAssistant.state = 'idle'
+          }
           break
         case 'done':
+          // [snapshot] 流结束
           currentAssistant.usage = evt.usage
           currentAssistant.durationMs = evt.duration_ms
           break
       }
       // 流式增量持久化（防后台丢数据；debounce 100ms）
       persistSessionDebounced(targetSessionId)
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // 停止生成（2026-06-14 方案 C Stage 4）
+  // --------------------------------------------------------------------------
+  function stopGeneration(targetSessionId?: string) {
+    const sid = targetSessionId || sessionId.value
+    const ctrl = abortControllers[sid]
+    if (ctrl) {
+      ctrl.abort()
+      // 标记 assistant state='aborted'（UI 显示「⏹ 已中断」）
+      const assistant = activeAssistantMap.value[sid]
+      if (assistant && assistant.state === 'streaming') {
+        assistant.state = 'aborted'
+        // 后续 SSE 事件被忽略（state !== 'streaming'，switch case 不再处理）
+        // 立即关闭 loading
+        sendingSessions.delete(sid)
+      }
+      // 立即持久化（用户可能直接关页面）
+      persistSessionSync(sid)
     }
   }
 
@@ -498,6 +642,8 @@ export function useChatStream() {
 
     // 发送
     sendMessage,
+    // 2026-06-14 方案 C Stage 4：停止生成按钮
+    stopGeneration,
 
     // 辅助
     playTTS,
