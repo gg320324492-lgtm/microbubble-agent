@@ -86,12 +86,14 @@ class LRUResponseCache:
         self._lock = Lock()
 
     def _key(self, messages: list, system: Optional[str], tools: Optional[list], **kwargs) -> str:
-        # 简化：只 hash messages + system + max_tokens + model
+        # 简化：只 hash messages + system + max_tokens + model + temperature
+        # 2026-06-14 方案 C：加 model 维度（不同模型不能共用缓存项）
         payload = {
             "messages": messages,
             "system": system,
             "max_tokens": kwargs.get("max_tokens"),
             "temperature": kwargs.get("temperature", 0.3),
+            "model": kwargs.get("model", ""),
         }
         raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.md5(raw.encode()).hexdigest()
@@ -167,6 +169,7 @@ class LLMClient:
         self,
         messages: list[dict],
         *,
+        model: Optional[str] = None,
         system: Optional[str] = None,
         tools: Optional[list[dict]] = None,
         max_tokens: int = 4096,
@@ -175,8 +178,15 @@ class LLMClient:
     ) -> Any:
         """同步调用：返回 Anthropic Message 响应对象
 
-        自动 fallback：主模型失败 → 备用模型
-        失败重试：同模型连续 3 次
+        参数：
+        - model: 指定模型名（如 "claude-haiku-4-5-20251001"），None 时走 self.models[0] + fallback 链
+                 keyword-only（铁律 5）：禁止位置传 model，防止老代码静默走错模型
+        - 其他参数同 Anthropic SDK messages.create
+
+        行为：
+        - model 显式指定时：只用该模型，失败不 fallback（调用方明确意图，不应擅自降级）
+        - model 为 None 时：走 self.models[0] → fallback 链
+        - 失败重试：同模型连续 3 次（实际为 for-loop 切模型，每模型一次）
         """
         kwargs = {
             "messages": messages,
@@ -188,27 +198,34 @@ class LLMClient:
         if tools:
             kwargs["tools"] = tools
 
+        # 选择模型链：显式 model 时只用一个，否则走 fallback 链
+        models_to_try = [model] if model else self.models
+
         # 缓存键（仅在无 tools 时启用缓存，避免 tool_use 缓存错乱）
         cache_key = None
         if use_cache and not tools:
-            cache_key = self.cache._key(messages, system, None, max_tokens=max_tokens, temperature=temperature)
+            cache_key = self.cache._key(
+                messages, system, None,
+                max_tokens=max_tokens, temperature=temperature,
+                model=model or self.models[0],  # 加 model 维度
+            )
             cached = self.cache.get(cache_key)
             if cached is not None:
-                logger.debug(f"LLM 缓存命中: {cache_key[:8]}")
+                logger.debug(f"LLM 缓存命中: {cache_key[:8]} (model={model or self.models[0]})")
                 return cached
 
         # 尝试每个模型
         last_exc: Optional[Exception] = None
-        for model in self.models:
+        for m in models_to_try:
             try:
-                resp = await self.client.messages.create(model=model, **kwargs)
+                resp = await self.client.messages.create(model=m, **kwargs)
                 if cache_key:
                     self.cache.set(cache_key, resp)
-                if model != self.models[0]:
-                    logger.info(f"LLM fallback 成功: {self.models[0]} → {model}")
+                if not model and m != self.models[0]:
+                    logger.info(f"LLM fallback 成功: {self.models[0]} → {m}")
                 return resp
             except (anthropic.APIError, anthropic.APITimeoutError, anthropic.APIConnectionError) as e:
-                logger.warning(f"模型 {model} 失败: {type(e).__name__}: {e}")
+                logger.warning(f"模型 {m} 失败: {type(e).__name__}: {e}")
                 last_exc = e
                 continue
             except Exception as e:
@@ -217,19 +234,24 @@ class LLMClient:
                 raise
 
         # 所有模型都失败
-        logger.error(f"所有 LLM 模型失败: {self.models}")
+        logger.error(f"所有 LLM 模型失败: {models_to_try}")
         raise last_exc  # type: ignore
 
     async def stream(
         self,
         messages: list[dict],
         *,
+        model: Optional[str] = None,
         system: Optional[str] = None,
         tools: Optional[list[dict]] = None,
         max_tokens: int = 4096,
         temperature: float = 0.3,
     ) -> AsyncIterator[Any]:
         """流式调用：返回 Anthropic MessageStream 上下文管理器
+
+        参数：
+        - model: 指定模型名，None 时走 self.models[0]（流式不做 fallback，因为流到一半切换体验差）
+                 keyword-only（铁律 5）
 
         用法：
             async with (await client.stream(messages=...)) as stream:
@@ -247,15 +269,15 @@ class LLMClient:
             kwargs["tools"] = tools
 
         # 流式不做缓存，不做 fallback 链（流式 fallback 体验差）
-        # 直接用主模型
-        model = self.models[0]
-        async with self.client.messages.stream(model=model, **kwargs) as stream:
+        chosen = model or self.models[0]
+        async with self.client.messages.stream(model=chosen, **kwargs) as stream:
             yield stream
 
     async def stream_raw(
         self,
         messages: list[dict],
         *,
+        model: Optional[str] = None,
         system: Optional[str] = None,
         tools: Optional[list[dict]] = None,
         max_tokens: int = 4096,
@@ -263,11 +285,13 @@ class LLMClient:
     ):
         """流式 + fallback：返回 async iterator 包装后的 chunk 字典
 
+        参数：
+        - model: keyword-only（铁律 5），None 时用 self.models[0]
+
         用法：
             async for chunk in client.stream_raw(messages=...):
                 chunk == {"type": "text_delta", "text": "..."}
         """
-        # 注：当前实现是单模型，未来可扩展为 fallback 链
         kwargs = {
             "messages": messages,
             "max_tokens": max_tokens,
@@ -277,7 +301,8 @@ class LLMClient:
             kwargs["system"] = system
         if tools:
             kwargs["tools"] = tools
-        async with self.client.messages.stream(model=self.models[0], **kwargs) as stream:
+        chosen = model or self.models[0]
+        async with self.client.messages.stream(model=chosen, **kwargs) as stream:
             async for event in stream:
                 if event.type == "content_block_start":
                     if event.content_block.type == "tool_use":

@@ -4,6 +4,12 @@
 - 后端 chat_engine 产出 StreamEvent 实例，前端通过 sse.ts 解析同样结构
 - 一个文件，前后端各自实现，但字段名/类型必须严格一致
 - 新增事件类型时只改这里 + 前后端各加 case 分支
+
+⚠️ SSE 事件 delta 语义铁律（CLAUDE.md 552 行）⚠️
+每个事件类型必须在源码注释里标注 [increment] 或 [snapshot]：
+- [increment] delta 是新增 token，前端必须 `content += delta`
+- [snapshot] delta 是完整快照文本，前端必须 `content = delta`（替换）或不 append
+混用会导致 2026-06-12 brief 重复输出 bug（commit cf70ff5）再现。
 """
 
 from typing import Any, Literal, Optional
@@ -36,6 +42,10 @@ class RichBlock(BaseModel):
     title: Optional[str] = None
     compact: bool = False  # 紧凑模式（折叠）
     timestamp: Optional[str] = None  # ISO 时间戳
+    # 2026-06-14 方案 C 新增：折叠态展示 + LLM-driven 决策
+    summary: Optional[str] = None  # 折叠态一行摘要，如「成员推荐 3 人（27→3）」
+    expanded: bool = False  # 当前是否展开（前端 toggle 时写入）
+    collapsed_by_default: bool = True  # LLM 在 synthesis 阶段可 override（让重要 block 默认展开）
 
 
 # ============================================================================
@@ -43,15 +53,23 @@ class RichBlock(BaseModel):
 # ============================================================================
 
 StreamEventType = Literal[
-    "text_delta",     # 文本逐字流
-    "tool_use",       # 工具调用开始（含 input）
-    "tool_result",    # 工具调用结果（含 output）
-    "rich_block",     # 富文本块（前端按 type 渲染）
-    "thinking",       # 思考中（"正在 X..." 提示）
-    "brief",          # 【简要】回复（一次完整 brief 文本）
-    "detail",         # 【详细】回复（一次完整 detail 文本）
-    "error",          # 错误
-    "done",           # 流结束
+    # ===== 原 9 种事件 =====
+    "text_delta",     # [increment] 文本逐字流，delta=新增 token，前端 content += delta
+    "tool_use",       # [snapshot] 工具调用开始，含 tool_name/tool_use_id
+    "tool_result",    # [snapshot] 工具调用结果，含 tool_output/tool_duration_ms
+    "rich_block",     # [snapshot] 富文本块，含完整 block 对象
+    "thinking",       # [snapshot] "正在 X..." 提示，含 label
+    "brief",          # [snapshot, deprecated] 完整 brief 文本快照，v2+ 客户端忽略，保留为 v1 兼容
+    "detail",         # [snapshot, deprecated] 完整 detail 文本快照，v2+ 客户端忽略
+    "error",          # [snapshot] 错误，含 code/message
+    "done",           # [snapshot] 流结束，含 usage/duration_ms/session_id
+    # ===== 2026-06-14 方案 C 新增 6 种事件 =====
+    "intent_detected",   # [snapshot] 意图分类结果，含 category/confidence/keywords/reasoning（IntentResult dict）
+    "plan_step",         # [snapshot] 工具规划单步，含 step/tool/status（pending/running/done）
+    "tool_compressed",   # [snapshot] 工具结果被 Haiku 压缩，附加到对应 tool_result 项
+    "synthesis_start",   # [snapshot] 综合阶段开始（无 delta，仅阶段标记），后续 text_delta 是最终答案
+    "critique",          # [snapshot] 自评结果，含 score/addresses_question/has_synthesis/suggestion
+    "retry",             # [snapshot] critique 低分触发重试，前端必须清空 content 准备接收新 text_delta
 ]
 
 
@@ -75,7 +93,7 @@ class StreamEvent(BaseModel):
     # rich_block
     block: Optional[RichBlock] = None
 
-    # thinking
+    # thinking / plan_step
     label: Optional[str] = None  # e.g. "🔍 正在搜索知识库..."
 
     # error
@@ -86,6 +104,22 @@ class StreamEvent(BaseModel):
     usage: Optional[dict[str, int]] = None  # {input_tokens, output_tokens, total_tokens}
     duration_ms: Optional[int] = None
     session_id: Optional[str] = None
+
+    # ========================================================================
+    # 2026-06-14 方案 C 新增字段（按事件类型可选填充）
+    # ========================================================================
+    # intent_detected
+    intent: Optional[dict[str, Any]] = None  # {category, confidence, keywords, suggested_tools, reasoning}
+    # plan_step
+    step: Optional[str] = None
+    plan_status: Optional[Literal["pending", "running", "done"]] = None
+    # tool_compressed
+    compression: Optional[dict[str, Any]] = None  # {original_count, selected_count, reasoning, summary}
+    # critique
+    critique: Optional[dict[str, Any]] = None  # {score, addresses_question, has_synthesis, has_citations, missing, suggestion}
+    # retry
+    retry_reason: Optional[str] = None
+    retry_count: Optional[int] = None
 
     def to_sse(self) -> str:
         """序列化为 SSE data 帧"""

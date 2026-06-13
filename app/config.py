@@ -106,6 +106,26 @@ class Settings(BaseSettings):
     FULL_POLISH_CHUNK_CHARS: int = 4000  # L3 分块大小（避免超 max_tokens）
     TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 1000  # 原 200 → 1000（覆盖长会议）
 
+    # ========================================================================
+    # 2026-06-14 方案 C：Agent 单阶段流式渐进综合架构（plan: eager-juggling-dewdrop.md）
+    # ========================================================================
+    # 模型配置（按职责分配）
+    AGENT_COMPRESSOR_MODEL: str = "claude-haiku-4-5-20251001"  # 工具结果压缩（量大但浅）
+    AGENT_INTENT_MODEL: str = "claude-haiku-4-5-20251001"  # 意图分类（闭集 6 选 1）
+    AGENT_REFLECTION_MODEL: str = "claude-sonnet-4-6"  # 自评（accuracy critical）
+    AGENT_SYNTHESIS_MODEL: str = ""  # 综合主模型，空时用 CLAUDE_MODEL
+    # 流程控制
+    AGENT_MAX_TOOL_ROUNDS: int = 5  # agentic loop 最多轮数
+    AGENT_MAX_SYNTHESIS_TOKENS: int = 4000  # 综合阶段 max_tokens
+    AGENT_COMPRESSION_THRESHOLD: int = 5  # 工具结果超过 N 条触发 Haiku 压缩
+    AGENT_REFLECTION_THRESHOLD: int = 7  # 自评 < 阈值触发 retry
+    AGENT_MAX_REFLECTION_RETRIES: int = 1  # 防爆炸：最多 retry 1 次
+    AGENT_RESULT_CACHE_TTL_SEC: int = 300  # 同问题 5min 复用 final synthesis
+    # Kill switches（紧急时刻一键降级，改 .env + restart 生效）
+    AGENT_REFLECTION_ENABLED: bool = True  # 关闭 Reflection 单点
+    AGENT_COMPRESSION_ENABLED: bool = True  # 关闭 Haiku 压缩单点
+    AGENT_NEW_ARCHITECTURE_ENABLED: bool = True  # 整个新架构全局开关，False 时走 chat_engine_legacy
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
