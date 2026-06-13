@@ -35,11 +35,18 @@ async def list_agent_traces(
     user_id: Optional[int] = Query(None, description="按 user_id 过滤"),
     date_from: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
     date_to: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD"),
+    status: Optional[str] = Query(None, description="按状态过滤（2026-06-14 Stage 3 新增）"),
     limit: int = Query(50, ge=1, le=200, description="返回数量"),
     current_user: Member = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出 agent_traces（按时间倒序）"""
+    """列出 agent_traces（按时间倒序）
+
+    2026-06-14 Stage 3 新增 status 参数：
+    - status=completed 看正常完成
+    - status=aborted 看用户中断
+    - status=error 看异常退出
+    """
     q = select(AgentTrace).order_by(AgentTrace.created_at.desc()).limit(limit)
     if user_id:
         q = q.where(AgentTrace.user_id == user_id)
@@ -57,12 +64,14 @@ async def list_agent_traces(
             q = q.where(AgentTrace.created_at < dt + timedelta(days=1))
         except ValueError:
             pass
+    if status:
+        q = q.where(AgentTrace.status == status)
     result = await db.execute(q)
     traces = result.scalars().all()
     return {
         "traces": [t.to_dict() for t in traces],
         "total": len(traces),
-        "filters": {"user_id": user_id, "date_from": date_from, "date_to": date_to},
+        "filters": {"user_id": user_id, "date_from": date_from, "date_to": date_to, "status": status},
     }
 
 
@@ -83,4 +92,6 @@ async def get_agent_trace(
     d["rich_blocks"] = trace.rich_blocks or []
     d["brief"] = trace.brief
     d["detail"] = trace.detail
+    # 2026-06-14 Stage 3: detail 包含完整 intent / critique（不只 in to_dict 摘要）
+    # 保持 to_dict() 已有 intent_category/intent_confidence/critique_score/retry_count/status
     return d
