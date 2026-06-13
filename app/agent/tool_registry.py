@@ -36,7 +36,13 @@ logger = logging.getLogger("microbubble.agent.registry")
 
 
 class ToolContext:
-    """工具执行上下文 — 每个 chat 一次构造，跨工具共享"""
+    """工具执行上下文 — 每个 chat 一次构造，跨工具共享
+
+    ⚠️ 跨 event loop 安全铁律（CLAUDE.md 752/812）⚠️
+    所有外部 IO 客户端（redis/llm/db）通过 ctx 注入，不在模块顶部 import 阶段创建。
+    Celery worker 跨 event loop 调用时，必须在 task 内创建新 client 传给 ctx，
+    否则触发 "Future attached to different loop" 错误。
+    """
 
     def __init__(
         self,
@@ -45,12 +51,19 @@ class ToolContext:
         channel_user_id: Optional[str] = None,
         trace=None,  # TraceCollector 实例（见 tracing.py）
         event_callback: Optional[Callable] = None,  # 用于流式事件回传
+        # 2026-06-14 方案 C 新增：跨 loop 安全注入点（铁律 1）
+        redis=None,  # aioredis.Redis | None；intent_classifier / result_compressor 用
+        llm=None,    # LLMClient | None；agentic_loop / critic 用，None 时调用方临时创建
+        loop_id: str = "",  # debugging：记录当前 event loop 标识，便于排查跨 loop 问题
     ):
         self.db = db
         self.user_id = user_id
         self.channel_user_id = channel_user_id
         self.trace = trace
         self.event_callback = event_callback
+        self.redis = redis
+        self.llm = llm
+        self.loop_id = loop_id
 
 
 # ============================================================================
