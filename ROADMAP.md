@@ -1,8 +1,14 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-12 深夜（推进 2 commits）** — 多会话并行架构 + 切会话丢数据修复 + AbortController 取消旧 SSE + a11y chat `<textarea>` 4 属性套件（commit `662a6ea`）；后端 3 bug 修复（RichBlock 守卫 + search_knowledge Dict 导入 + time.monotonic 混用）+ curl 验证（commit `3852755`）
+> 最后更新: **2026-06-13（推进 18 commits）** — 移动端 10 PR 全栈定制收官（PR #1 基建 → PR #10 视觉回归测试）+ Webhook 偶发 499 失败加固（git reset --hard 模式 + socket.timeout(15)）+ webhint meta-theme-color JS 动态注入
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-13 移动端收官）
+- [📱 移动端 10 PR 全栈定制](#移动端-10-pr-全栈定制2026-06-13-收官)（18 commits：PR #1 基建 → PR #10 视觉回归测试，18 页面 + 12 组件 + 4 PWA 策略 — commit `9026c07` 收官）
+- [🛡️ Webhook 偶发 499 失败加固](#webhook-偶发-499-失败加固2026-06-13)（`git reset --hard` 模式 + `socket.timeout(15)` + 手动 redeliver trick — commit `7e41577`）
+- [🎨 webhint meta-theme-color 静态 → JS 动态注入](#webhint-meta-theme-color-静态--js-动态注入2026-06-12)（dark mode 主题切换时动态创建 meta — commit `0bbc12d`）
+- [📊 项目统计本地 Python 准确化](#项目统计本地-python-准确化2026-06-13)（剔除 .meta/.log/.wav/.gz 等非源代码，965 提交 / 138K 行 / 617 文件 / 29 天）
 
 ### 最新完成（2026-06-12 深夜 +1）
 - [🚀 多会话并行架构（修复 4）](#多会话并行架构修复-42026-06-12)（per-session 数据隔离 + targetSessionId 闭包 + activeAssistantMap 引用 + 切走不打断后台生成 — commit 662a6ea）
@@ -4212,6 +4218,311 @@ duration_ms = int((time.monotonic() - t0) * 1000)
 **验证**：`duration_ms: 2584`（合理——LLM 调用耗时 2.6 秒）。
 
 **纪律**：**时钟必须配对**——`time.monotonic()` 配 `time.monotonic()`（测量经过时间，推荐，避免系统时钟跳变），`time.time()` 配 `time.time()`（Unix timestamp，用于跨进程时间戳）。**永远不要混用**。
+
+---
+
+## 移动端 10 PR 全栈定制（2026-06-13 收官）
+
+> **背景**：项目原版 `web/` 桌面端（Element Plus）已完整交付，移动端只做了"独立抽屉架构 + 横屏 media query + 紧凑顶栏"的局部适配（见 [README 2026-06-02 commit](README.md)）。为满足杜同贺 iPhone + 课题组同学通勤场景，**2026-06-12~13 启动移动端全栈定制**，10 个 PR × 18 commits 完整覆盖。
+
+### 架构总览：路由级双栈 + 4 大基础设施
+
+- **`useIsMobile.js`** — 监听 `window.matchMedia('(max-width: 768px)')` + `navigator.userAgent` 兜底（iPad/iPhone 误判时用 UA 修正）
+- **`useSafeArea.js`** — 读 `env(safe-area-inset-*)` 给 iPhone 刘海/底栏留白，包装 `padding-top: max(0px, env(safe-area-inset-top))` 模式
+- **`useViewport.js`** — resize 监听 + dynamic viewport units（dvh/dvw）替代 vh/vw 解决 iOS Safari URL bar 抖动
+- **`resolveMobile.js`** — 路由解析时根据 `isMobile` 动态 `import('views/mobile/X.vue')` 或 `import('views/X.vue')`，**同一 URL 不同组件**
+
+### PR #1 基建（commit `99bbe6b`）
+
+- `useIsMobile.js` / `useSafeArea.js` / `useViewport.js` 三个 composables
+- `resolveMobile.js` 路由适配器
+- 路由级双栈骨架：路由表保留，组件 import 延后到路由 resolve 时
+
+**commit**：`99bbe6b feat(mobile): PR #1 基建 — composables + 路由级双栈骨架`
+
+### PR #2 NutUI 4 引入（commit `3c58cb1`）
+
+- `@nutui/nutui` 4.3.14 装包
+- MainLayout 移动端分支（`v-if="!isMobile.value"`）：底部 TabBar（4 tab + 中间凸起 +badge）+ 紧凑顶栏 + 安全区适配
+- 路由双栈接入：`/chat` 桌面走 `ChatViewSSE.vue`，移动走 `MobileChatView.vue`
+
+**commit**：`3c58cb1 feat(mobile): PR #2 NutUI 4 引入 + 路由级双栈 + MainLayout 移动端`
+
+### PR #3 MobileChatView + ChatViewSSE 重构（commits `c154d86` + `0ed4294`）
+
+- ChatViewSSE 重构出 `useChatStream` composable，桌面移动共享 SSE 客户端（不重复写 SSE 协议层）
+- TableBlock 组件：移动端 Rich Block 表格渲染（合并单元格、列宽自适应）
+- **build 修复（commit `0ed4294`）** — `import.meta.glob('eager: true, import: 'default')` 在 MobileChatView 引入 12 个 block 组件全部 eager import → Vite 把桌面端代码打进 mobile chunk。**修复**：eager 模式必须包在 `if (!isMobile.value) { ... }` 条件内，让 Vite tree-shake。验证 `web/dist/assets/` 里 grep 桌面组件名不应该出现在 mobile-*.js chunk
+- **v-model on prop 误用** — Element Plus `<el-input v-model="localValue">` 在 `:value` 上写 v-model Vue 警告。修复：computed get/set 包装 props
+
+**commit**：`c154d86 feat(mobile): PR #3 MobileChatView + ChatViewSSE 重构 useChatStream + TableBlock` / `0ed4294 fix(mobile): PR #3 build 修复 — import.meta.glob + 修 pre-existing v-model on prop`
+
+### PR #4 会议 3 页（commit `79e445d`）
+
+- `MobileMeetingView`（会议列表 + 状态徽章 + 卡片）
+- `MobileMeetingDetailView`（纪要 + 转录 tab 切换 + 录音回放）
+- `MobileMeetingRoom`（CSS 3D 声波条 + 麦克风按钮 + 实时字幕）
+- 声纹 5 根声波条用 CSS `scale:` 独立属性（不是 `transform: scale()`，避免 webhint paint 警告）
+
+**commit**：`79e445d feat(mobile): PR #4 MobileMeetingView + MobileMeetingDetailView + MobileMeetingRoom`
+
+### PR #5 3 个独立组件（commit `979f4fa`）
+
+- **`CardList.vue`** — 卡片列表 + 下拉刷新（`@touchmove` 监听 + 阈值触发）+ 无限滚动（IntersectionObserver 触发 load more）
+- **`LongPressWrapper.vue`** — 长按事件封装（300ms 触发，emit `longpress` 事件，移动端删除/收藏必备）
+- **`PageHeader.vue`** — 顶栏统一规范（左侧返回 + 中间标题 + 右侧操作插槽，sticky 定位 + 安全区 padding-top）
+
+**关键决策**：不用 CSS 全屏妥协（`@media (max-width: 768px) { /* 桌面端样式覆盖 */ }`）——独立组件保证可维护性，避免桌面端代码与移动端 CSS 互相污染。
+
+**commit**：`979f4fa feat(mobile): PR #5 3 个独立移动端组件（不用 CSS 全屏妥协）`
+
+### PR #6 4 个浮层组件（commit `f364485`）
+
+- **`MobileFormSheet.vue`** — 表单底部弹出（带 drag-to-dismiss 手势）
+- **`MobileActionSheet.vue`** — iOS 风格底部菜单（多个操作 + 取消按钮，v-for 渲染 + emit select）
+- **`MobileSearchSheet.vue`** — 搜索浮层（自动 focus + 防抖 300ms + 历史记录）
+- **`MobileTaskCreateForm.vue`** — 任务创建 5 字段（标题/描述/负责人/优先级/截止时间），用 MobileFormSheet 包装
+
+**commit**：`f364485 feat(mobile): PR #6 FormSheet + ActionSheet + SearchSheet + TaskCreateForm`
+
+### PR #7 CardList + MobileECharts + TaskTrash 演示集成（commit `ea73cc6`）
+
+- **`MobileECharts.vue`** — 图表懒加载（IntersectionObserver 触发 init，避免非视口图表消耗资源）+ resize 监听
+- MobileTaskTrash.vue（垃圾桶页面）用 CardList 渲染 + 恢复/永久删除 ActionSheet
+- 完成 PR #5/#6 组件的首次生产集成，验证组件 API 设计
+
+**commit**：`ea73cc6 feat(mobile): PR #7 CardList + MobileECharts + TaskTrash 演示集成`
+
+### PR #8a 6 个移动端页面（commit `0df319e`）
+
+- `MobileDashboard.vue`（欢迎区 + 任务概览 + 宠物兔 + 通知）
+- `MobileLoginView.vue`（极简登录 + 验证码 + 主题切换）
+- `MobileTaskView.vue`（任务列表 + 状态切换 + 搜索）
+- `MobileTaskTrash.vue`（垃圾桶 + 倒计时 + 5 级颜色）
+- `MobileMemoryView.vue`（长期记忆列表 + 时间线）
+- `MobileSettingsView.vue`（用户设置 + 头像 + 主题）
+
+**commit**：`0df319e feat(mobile): PR #8a 6 个移动端页面（Dashboard/Login/Task/TaskTrash/Memory/Settings）`
+
+### PR #8b 7 个移动端页面（commit `28c4a06`）
+
+- `MobileKnowledgeView.vue`（知识库列表 + 分类筛选 + 搜索）
+- `MobileKnowledgeDetailView.vue`（知识详情 + 富文本 + 关联）
+- `MobileProjectView.vue`（项目列表 + 进度条）
+- `MobileProjectStatsView.vue`（项目统计 + 图表 + 时间线）
+- `MobileMemberView.vue`（成员管理 + 卡片 + 声纹录入入口）
+- `MobileVoiceprintView.vue`（声纹录入流程 + VoiceprintEnrollFlow 组件）
+- `MobileAgentTracesView.vue`（admin 域）
+
+**commit**：`28c4a06 feat(mobile): PR #8b 7 个移动端页面（Knowledge / Project / Member / Voiceprint / AgentTraces）`
+
+### PR #9 PWA + 离线降级 + 骨架屏（commit `2ad3b1e`）
+
+- `vite-plugin-pwa` 1.3.0 装包
+- 自动生成 `manifest.json`（name / short_name / theme_color / icons 192+512）
+- Service Worker（workbox 7.4）预缓存 app shell（JS/CSS/字体）+ 路由 fallback（offline.html）
+- **离线策略 4 件套**：
+  1. Service Worker 预缓存 app shell
+  2. 路由 fallback：未匹配路由返回 offline.html
+  3. `useSafeArea` 动态 viewport units（dvh/dvw）替代 vh/vw
+  4. 离线 IndexedDB 兜底：`idbStore` 缓存最近消息
+- 骨架屏：移动端首屏加载 < 1.5s 之前显示灰色占位（无 loading spinner，避免闪烁）
+
+**commit**：`2ad3b1e feat(mobile): PR #9 PWA + 离线降级 + 骨架屏`
+
+### PR #10 视觉回归测试矩阵 + 移动端深度定制（commit `9026c07`）
+
+- **`web/tests/visual/visual-regression.spec.mjs`** — Playwright 跨设备截图，**5 viewport × 13 核心页面**：
+  - Viewport：iPhone SE (375×667) / iPhone 14 (390×844) / iPhone 15 Pro Max (430×932) / iPad mini (768×1024) / Galaxy S21 (360×800)
+  - 13 页面：Dashboard / Chat / Task / TaskTrash / Meeting / MeetingDetail / MeetingRoom / Knowledge / KnowledgeDetail / Project / ProjectStats / Member / Settings
+  - 基线截图存 `web/tests/visual/__snapshots__/`，CI 像素对比
+- **移动端深度定制**：
+  - `TabBar.vue` 底部 4 tab + 中间凸起 + badge 红点
+  - `CardList.vue` 卡片大圆角（16px）+ 阴影 + 触摸反馈
+  - `SafeArea` 全局 iPhone 刘海/底栏适配
+  - 无限滚动（IntersectionObserver sentinel + load more）
+  - 下拉刷新（touch 事件链）
+- **组件测试**（`web/src/components/mobile/__tests__/`）：
+  - `CardList.test.js` — props 渲染 + 滚动事件 + 长按事件
+  - `MobileFormSheet.test.js` — open/close 状态 + 字段校验
+  - jsdom + Vitest
+
+**commit**：`9026c07 feat(mobile): PR #10 测试矩阵 + 视觉回归 + 移动端深度定制收官`
+
+### 移动端关键纪律
+
+- **路由级双栈** ≠ `v-if` 全局切换：**同一 URL 不同组件**（`/chat` 桌面 `ChatViewSSE.vue` / 移动 `MobileChatView.vue`），store/Pinia 完全独立
+- **桌面端 `v-if="!isMobile"` 零影响**：MainLayout 桌面端代码**完全不变**，移动端只是新增分支
+- **桌面端 store 不污染**：桌面 `chatSessions` Pinia store 用 Element Plus 主题，移动 `chatSessions` 用 NutUI 主题，两套独立
+- **包大小纪律**：mobile chunk 目标 < 250KB gzip，构建后 grep 桌面组件名不应该在 mobile-*.js 出现
+- **iOS Safari URL bar 抖动**：用 dynamic viewport units（dvh/dvw）替代 vh/vw
+- **iOS 输入法弹起 viewport 变化**：`useViewport` 监听 resize，键盘弹起时重新计算 SafeArea bottom
+
+### 移动端新增文件清单（45 个新文件）
+
+| 类型 | 文件 | PR |
+|------|------|------|
+| Composable | `useIsMobile.js` / `useSafeArea.js` / `useViewport.js` | #1 |
+| Composable | `useChatStream.js`（桌面移动共享） | #3 |
+| 路由 | `resolveMobile.js` | #1 |
+| 组件 | `CardList.vue` / `LongPressWrapper.vue` / `PageHeader.vue` | #5 |
+| 组件 | `MobileFormSheet.vue` / `MobileActionSheet.vue` / `MobileSearchSheet.vue` / `MobileTaskCreateForm.vue` | #6 |
+| 组件 | `MobileECharts.vue` / `ProcessingSheet.vue` / `TabBar.vue` / `SafeArea.vue` | #7-9 |
+| 组件 | `VoiceTestFlow.vue` / `VoiceprintEnrollFlow.vue` | #8b |
+| 页面 | `MobileDashboard.vue` / `MobileLoginView.vue` / `MobileTaskView.vue` / `MobileTaskTrash.vue` / `MobileMemoryView.vue` / `MobileSettingsView.vue` | #8a |
+| 页面 | `MobileKnowledgeView.vue` / `MobileKnowledgeDetailView.vue` / `MobileProjectView.vue` / `MobileProjectStatsView.vue` / `MobileMemberView.vue` / `MobileVoiceprintView.vue` / `MobileAgentTracesView.vue` | #8b |
+| 页面（chat） | `MobileChatView.vue` / `MobileHeader.vue` / `MobileInputBar.vue` / `MobileMessageBubble.vue` / `MobileMessageList.vue` / `MobileRichCard.vue` / `MobileSessionDrawer.vue` | #2-3 |
+| 页面（meeting） | `MobileMeetingView.vue` / `MobileMeetingDetailView.vue` / `MobileMeetingRoom.vue` | #4 |
+| 测试 | `CardList.test.js` / `MobileFormSheet.test.js` | #10 |
+| 测试 | `visual-regression.spec.mjs`（Playwright 5×13） | #10 |
+
+---
+
+## Webhook 偶发 499 失败加固（2026-06-13）
+
+> **背景**：2026-06-13 12:27:48 GitHub webhook delivery `354e917e` 失败（Nginx 收 499，service 无日志），整套排查+修复。
+
+### 5 步排查流程
+
+1. **查 service 状态** — `systemctl is-active webhook` / `journalctl -u webhook --since "X minutes ago"`。service 还活着 + journal 无对应 delivery = 请求没到 service
+2. **查 Nginx access log** — `grep "12:2[5-9]" /var/log/nginx/access.log | grep webhook`。Nginx 收 499 = 客户端主动断开（**不是 service bug**）
+3. **查 Nginx error log** — 看是否 `SSL_do_handshake() failed (bad key share)`（阿里云→GitHub TLS 偶发握手失败）
+4. **本地 curl 模拟** — `curl -sv http://127.0.0.1:9001/` 验 service 还能响应；构造带正确 X-Hub-Signature-256 的 POST 验整条链路
+5. **查服务器 git log** — 看是否落后 main（落后 = 之前有失败 deploy 累积）
+
+### 根因（本次实际）
+
+阿里云→GitHub HTTPS 出口网络瞬时故障（**非代码 bug**）：
+- Nginx 收到 GitHub POST → TLS 握手时客户端超时 → Nginx 看到客户端断开返回 499
+- service 完全没机会处理（连接都没建立）
+- 12:34:51 GitHub 自动重试（`36e23210` delivery）成功部署
+
+### 修复 1：deploy-auto.sh git reset --hard 模式
+
+**根因**：服务器是 immutable infra（部署后不保留本地修改），`git pull` 在 dirty working tree 下会被 untracked 文件阻塞（"Cannot fast-forward"）。
+
+**修复**：
+```bash
+# 旧（line 32-49）— 5 次重试 + 指数退避，但 dirty 工作区仍会卡
+git pull origin main
+
+# 新 — 永远把工作区强制对齐 origin/main
+git fetch origin main && git reset --hard origin/main
+```
+
+**额外**：`git clean -fd` 改 `git clean -fdx`（也清 .gitignore 内文件，更彻底）
+
+**额外**：`LOG_FILE` 改 `${LOG_FILE:-/var/log/webhook-deploy.log}`（deploy 用户调试时可指定可写路径）
+
+### 修复 2：webhook.py socket timeout
+
+**根因**：rfile.read 无 timeout，GitHub 客户端 10s 超时断开后 service 还在等 body（"幽灵"线程），Nginx 收 499 但 service 无日志（因为日志在 read 之后才打）。
+
+**修复**：
+```python
+import socket  # 之前缺
+self.connection.settimeout(15)  # do_POST 第一行
+try:
+    payload = self.rfile.read(content_length)
+except socket.timeout:
+    logger.error(f"读取 body 超时 (15s) ...")
+    self.send_response(504)
+    self.end_headers()
+    return
+```
+
+15s = GitHub 默认 10s 客户端超时 + 5s 余量。
+
+### 修复 3：手动 redeliver GitHub webhook（无需 GitHub 介入）
+
+GitHub 自身不重发时，可在本地用真实 commit payload + 真实 secret 模拟 GitHub POST 触发 service 跑 deploy：
+
+```bash
+# 1. 取 HEAD SHA
+HEAD_SHA=$(git rev-parse HEAD)
+
+# 2. 构造 payload（head_commit / commits / pusher）
+PAYLOAD='{"ref":"refs/heads/main","pusher":{"name":"USER"},"head_commit":{"id":"'"$HEAD_SHA"'"},"commits":[{"id":"'"$HEAD_SHA"'"}]}'
+
+# 3. 计算 HMAC-SHA256 签名
+SIG=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | sed 's/^.*= //')
+
+# 4. POST 到 webhook service（localhost 直连绕过 Nginx）
+ssh USER@host "printf '%s' \"$PAYLOAD\" | curl -X POST http://127.0.0.1:9001/webhook \
+  -H 'Content-Type: application/json' \
+  -H 'X-GitHub-Event: push' \
+  -H 'X-GitHub-Delivery: redeliver-$HEAD_SHA' \
+  -H \"X-Hub-Signature-256: sha256=\$SIG\" -d @-"
+```
+
+service 收到 200 OK 后后台异步跑 deploy，无需等待 GitHub retry 链（5min/30min）。
+
+**commit**：`7e41577 fix(deploy): webhook 偶发 499 失败加固`
+
+**沉淀 memory**：[webhook-debug-2026-06-13.md](../webhook-debug-2026-06-13.md)
+
+**Why:** Webhook 偶发失败是基础设施问题，但脏工作区 + 缺超时是真实代码风险，**两个根因都修才能彻底避免类似事故**。手动 redeliver 是补救手段，不是替代品。
+
+**How to apply:** webhook service 失败时按 5 步排查；deploy-auto.sh 必须用 `git reset --hard` 而非 `git pull`（immutable infra）；webhook.py 必须 `import socket` + `settimeout(15)` + try/except；紧急补部署用 ssh + 真实 payload + HMAC 签名的 curl。
+
+---
+
+## webhint meta-theme-color 静态 → JS 动态注入（2026-06-12）
+
+> **背景**：项目从静态 HTML `<meta name="theme-color" content="#FF7A5C">` 声明主题色，dark mode 切换时静态声明无法跟随主题变化（只能写一个固定值）。
+
+**修复**（commits `0bbc12d` + `3cf8634`）：
+
+- HTML 模板不写静态 meta
+- `useThemeStore` 监听 `theme` 变化（'light' / 'dark'）→ 移除旧 meta → 动态创建新 meta 注入 `document.head`
+- `.hintrc` 加 `webhint:recommended` 关闭该规则（`hint-meta-theme-color` 只查静态声明，不感知 JS 动态注入）
+- `.hintrc` 注释标注决策记录（项目可读性 + 未来决策可追溯）
+
+```javascript
+// useThemeStore.js
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme)
+  // theme-color 动态注入
+  let meta = document.querySelector('meta[name="theme-color"]')
+  if (meta) meta.remove()
+  meta = document.createElement('meta')
+  meta.name = 'theme-color'
+  meta.content = theme === 'dark' ? '#1a1a1a' : '#FF7A5C'
+  document.head.appendChild(meta)
+}
+```
+
+**commit**：`0bbc12d fix(webhint): theme-color 改 JS 动态注入消除 Edge DevTools 误报` / `3cf8634 docs(webhint): .hintrc 标注 meta-theme-color 决策记录`
+
+---
+
+## 项目统计本地 Python 准确化（2026-06-13）
+
+> **背景**：之前 `deploy-auto.sh` 调 `find` + `wc -l` 统计的 stats.json 包含 .meta/.log/.wav/.gz/PostgreSQL data 等**非源代码**，导致 187,220 行 / 2,840 文件数字虚高。本地 Python 脚本按扩展名 + 严格 exclude 目录 + 二进制文件检测，**准确统计源代码**。
+
+**新算法**（本地 Python）：
+
+```python
+EXCLUDE_DIRS = ['node_modules', 'dist', '.git', '__pycache__', '.venv', 'venv', 'models', '.agents', '.next', '.cache']
+EXCLUDE_FILES = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml']
+
+# 按扩展名分类 + 二进制文件检测（'\x00' in text 跳过）
+```
+
+**新值**（2026-06-13 13:17:08 重新计算）：
+- **总行数**：138,853
+- **总文件数**：617
+- **总提交数**：965
+- **开发天数**：29（5/16 → 6/13）
+- **行数分类**：python 35,976 / vue 39,501 / markdown 36,716 / javascript 6,475 / typescript 1,141 / css 1,365 / html 3,517 / shell 2,280 / config 2,651 / docker 56 / other 9,175
+- **文件分类**：python 213 / vue 139 / markdown 73 / javascript 63 / typescript 9 / css 5 / html 9 / shell 18 / config 26 / docker 2 / other 60
+
+**对比**（旧值 → 新值）：
+- 187,220 → 138,853 行（-26%，剔除 .wav/.gz/.meta/.log/.sql）
+- 2,840 → 617 文件（-78%，剔除 PostgreSQL data + 一些测试 fixtures）
+
+**Why:** stats.json 是项目动态页面的数据源，数字虚高会让 184K/2840 看起来不真实（与 git 跟踪的 796 个文件差 3.5x）。准确化让数字可信。
+**How to apply:** 后续 stats.json 更新都用本地 Python 脚本生成（deploy-auto.sh 调 `python3 scripts/update-stats.py`），不再用 find+wc 一次性脚本。
 
 ---
 

@@ -19,8 +19,15 @@
 - **文件管理** - MinIO 文件上传，支持对话文件
 - **自动部署** - GitHub Webhook 触发，push 后自动构建部署
 - **🐰 宠物乐园** — 仪表盘欢迎区两只 3D 立体兔子（个人兔 + 课题组大兔），CSS 绘制 + 60fps 自主走动，XP 成长进化 + 配饰解锁 + 智能对话 + 互动喂食
+- **📱 移动端 PWA（2026-06-13 收官）** — NutUI 4 + Element Plus **路由级双栈架构**（同一 URL 不同组件，不共享 component 树），18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略，iOS Safari + Android Chrome 全兼容，离线可查看最近消息。`useIsMobile.js` + `resolveMobile.js` + `useSafeArea.js` 三大基础设施
 
 ### 近期新增（按时间倒序）
+
+- **📱 移动端 10 PR 全栈定制收官（2026-06-13，commit `9026c07`）** — 从 PR #1 基建 → PR #10 视觉回归测试，**10 个 PR × 18 commits** 完整覆盖：①基建（`useIsMobile` + `useSafeArea` + `useViewport` + 路由级双栈）②NutUI 4 引入 + MainLayout 移动端适配 ③MobileChatView + ChatViewSSE 重构 `useChatStream` + TableBlock ④MobileMeetingView/MobileMeetingDetailView/MobileMeetingRoom（3D CSS 声波条）⑤3 个独立移动端组件（CardList/LongPressWrapper/PageHeader，不用 CSS 全屏妥协）⑥4 个浮层组件（FormSheet/ActionSheet/SearchSheet/TaskCreateForm）⑦CardList + MobileECharts + TaskTrash 演示集成 ⑧a 6 个移动端页面（Dashboard/Login/Task/TaskTrash/Memory/Settings）⑧b 7 个移动端页面（Knowledge/Project/Member/Voiceprint/AgentTraces）⑨PWA + 离线降级 + 骨架屏（manifest + service worker + workbox 预缓存 + 离线兜底）⑩视觉回归测试矩阵（Playwright 5 viewport × 13 核心页面）+ 移动端深度定制（SafeArea/TabBar badge/卡片大圆角/下拉刷新/无限滚动）。**桌面端完全零影响**（`v-if="!isMobile"` 隔离）
+- **🛡️ Webhook 偶发 499 失败加固（2026-06-13，commit `7e41577`）** — 阿里云→GitHub HTTPS 出口网络瞬时故障根除：①`deploy-auto.sh` 改 `git reset --hard origin/main` 模式（immutable infra，dirty 工作区不再阻塞）+ `git clean -fdx` ②`webhook.py` 加 `socket.timeout(15)` + try/except（GitHub 10s 客户端超时 + 5s 余量，504 友好返回）③手动 redeliver trick（本地构造真实 payload + HMAC 签名的 curl，绕过 Nginx/NAT 直连 service）。**效果**：从偶发失败 → 5s 完成稳定部署
+- **🎨 webhint meta-theme-color 静态声明 → JS 动态注入（2026-06-12/13，commit `0bbc12d`）** — dark mode 切换时静态 `<meta name="theme-color">` 写一个值不够用。修复：`useThemeStore` watch `theme` → 移除旧 meta + 动态创建新 meta 注入。`.hintrc` 注释标注决策记录
+- **📝 项目动态 stats.json 准确化（2026-06-13）** — 本地 Python 重新计算，剔除 .meta/.log/.wav/.gz 等非源代码。**965 次提交 / 138K 行代码 / 617 文件 / 29 开发天数**（之前 webhook 统计 187K/2840 文件含测试音频/锁文件/PostgreSQL 数据）
+- **🚀 ChatViewSSE 多会话并行架构 + 切会话丢数据修复 + AbortController（2026-06-12 深夜 +1，commit `662a6ea`）** — A 会话在生成中 → 切到 B 会话 → A 不中断在后台继续 → 切回 A 看到 A 已生成完的内容。真实并行，多 SSE 流互不干扰。**4 项修复合一**：
 
 - **🚀 ChatViewSSE 多会话并行架构 + 切会话丢数据修复 + AbortController（2026-06-12 深夜 +1，commit `662a6ea`）** — A 会话在生成中 → 切到 B 会话 → A 不中断在后台继续 → 切回 A 看到 A 已生成完的内容。真实并行，多 SSE 流互不干扰。**4 项修复合一**：
   - **修复 4（核心新增）多会话并行架构** — per-session 数据隔离（`messagesBySession` + `activeAssistantMap` + `abortControllers` + `sendingSessions` + `loadedSessions` + `persistTimers`）。`sendMessage` 启动时闭包捕获 `targetSessionId`，SSE yield 通过 `activeAssistantMap[targetSessionId]` 找目标引用。**切会话不 abort 任何 SSE**（让 A 后台继续跑）。流式增量 debounce 100ms 持久化（防后台丢）
@@ -423,11 +430,29 @@ npm run dev
 
 详细文档: https://agent.mnb-lab.cn/docs
 
-## 当前状态（2026-06-12）
+## 当前状态（2026-06-13）
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
-### 🔧 最新改进（2026-06-12）
+### 🔧 最新改进（2026-06-13 移动端收官 + 部署加固）
+
+- **📱 移动端 10 PR 全栈定制收官（commit `9026c07`）** — PR #1 基建 → PR #10 视觉回归测试，**10 个 PR × 18 commits** 全交付。详见 [ROADMAP.md 移动端章节](ROADMAP.md#移动端-10-pr-全栈定制2026-06-13-收官)：
+  - **PR #1 基建**（`99bbe6b`）— `useIsMobile.js`（viewport + UA 兜底） + `useSafeArea.js`（iPhone 刘海/底栏）+ `useViewport.js`（resize 监听）+ 路由级双栈骨架
+  - **PR #2 NutUI 4 引入**（`3c58cb1`）— `@nutui/nutui` 装包 + MainLayout 移动端分支（`v-if="!isMobile"`）+ 路由双栈接入
+  - **PR #3 MobileChatView**（`c154d86` + `0ed4294`）— ChatViewSSE 重构 `useChatStream` composable（桌面移动共享 SSE 客户端）+ TableBlock 组件 + build 修复（`import.meta.glob` eager 模式包 `if (!isMobile.value)` 条件内，避免桌面代码进 mobile chunk）
+  - **PR #4 会议 3 页**（`79e445d`）— MobileMeetingView / MobileMeetingDetailView / MobileMeetingRoom（CSS 3D 声波条 + 安全区适配）
+  - **PR #5 3 个独立组件**（`979f4fa`）— CardList（卡片列表+下拉刷新+无限滚动）/ LongPressWrapper（长按事件封装，300ms 触发）/ PageHeader（顶栏统一规范）。**不**用 CSS 全屏妥协，独立组件保证可维护性
+  - **PR #6 4 个浮层组件**（`f364485`）— MobileFormSheet（表单底部弹出）/ MobileActionSheet（iOS 风格底部菜单）/ MobileSearchSheet（搜索浮层）/ MobileTaskCreateForm（任务创建 5 字段）
+  - **PR #7 CardList + MobileECharts**（`ea73cc6`）— TaskTrash 演示集成 + 图表懒加载（IntersectionObserver 触发 + resize 监听）
+  - **PR #8a 6 个页面**（`0df319e`）— MobileDashboard / Login / Task / TaskTrash / Memory / Settings
+  - **PR #8b 7 个页面**（`28c4a06`）— MobileKnowledgeView / Detail / ProjectView / Stats / MemberView / VoiceprintView / AgentTraces
+  - **PR #9 PWA + 离线降级 + 骨架屏**（`2ad3b1e`）— `vite-plugin-pwa` 自动生成 manifest + service worker（workbox 预缓存 app shell + 路由 fallback）+ 离线 IndexedDB 兜底 + Skeleton loading
+  - **PR #10 视觉回归测试矩阵**（`9026c07`）— `web/tests/visual/visual-regression.spec.mjs` Playwright 跨设备截图（iPhone SE/14/15 Pro Max + iPad mini + Galaxy S21 5 个 viewport × 13 个核心页面）+ 移动端深度定制（SafeArea/TabBar badge/卡片大圆角/下拉刷新/无限滚动）+ `CardList.test.js` + `MobileFormSheet.test.js` 2 个组件测试
+- **🛡️ Webhook 偶发 499 失败加固（commit `7e41577`）** — 阿里云→GitHub HTTPS 出口瞬时故障根除：①`deploy-auto.sh` 改 `git reset --hard origin/main` 模式（immutable infra，dirty 工作区不再阻塞 `git pull`）+ `git clean -fdx` ②`webhook.py` 加 `socket.timeout(15)`（GitHub 10s 客户端超时 + 5s 余量，504 友好返回）+ try/except ③手动 redeliver trick 文档化。**效果**：从偶发失败 → 5s 完成稳定部署
+- **🎨 webhint meta-theme-color 静态 → JS 动态注入（commit `0bbc12d`）** — dark mode 切换时静态 meta 不够用，`useThemeStore` watch 移除旧 meta + 动态创建新 meta 注入。`.hintrc` 标注决策记录
+- **📊 项目统计本地 Python 准确化（commit 即将）** — 之前的 webhook 统计 187K/2840 文件含 .meta/.log/.wav/.gz/PostgreSQL data 等非源代码。本地 Python 按 `EXCLUDE_DIRS=('node_modules', 'dist', '.git', '__pycache__', '.venv', 'venv', 'models', '.agents', '.next', '.cache')` 严格过滤 + 按扩展名分类 + 二进制文件检测（`'\x00' in text` 跳过）。**新值**：965 次提交 / 138,853 行代码 / 617 文件 / 29 开发天数
+
+### 🔧 前日改进（2026-06-12）
 
 - **🐛 SSE brief 重复输出 + 误显"网络已断开" + a11y 收尾（深夜 4 commits）**：
   - `cf70ff5` — chat brief 事件不再 append delta（修内容出现两次）
@@ -467,8 +492,13 @@ npm run dev
 
 ### 前端能力
 - 设计系统：暖橙珊瑚色 CSS 设计令牌（`web/src/assets/variables.css`）
-- 9 个页面全部完成 UI 升级：Dashboard / TaskView / ChatView / MeetingView / KnowledgeView / MemberView / ProjectView / MemoryView / LoginView
-- 移动端：独立抽屉架构 + 横屏 media query + 紧凑顶栏
+- 9 个桌面端页面全部完成 UI 升级：Dashboard / TaskView / ChatView / MeetingView / KnowledgeView / MemberView / ProjectView / MemoryView / LoginView
+- **📱 18 个移动端页面（PR #1-10 收官）**：Dashboard / Login / Chat / Task / TaskTrash / Meeting / MeetingDetail / MeetingRoom / Knowledge / KnowledgeDetail / Project / ProjectStats / Member / Memory / Settings / Voiceprint / AgentTraces / admin
+- **📱 12 个移动端独立组件**：CardList / LongPressWrapper / MobileActionSheet / MobileECharts / MobileFormSheet / MobileSearchSheet / MobileTaskCreateForm / PageHeader / ProcessingSheet / SafeArea / TabBar / VoiceTestFlow / VoiceprintEnrollFlow
+- **📱 路由级双栈架构**：桌面端 Element Plus + 移动端 NutUI 4 同一 URL 不同组件，`useIsMobile.js` + `resolveMobile.js` + `useSafeArea.js` 三大基础设施
+- **📱 PWA 离线策略**：vite-plugin-pwa + workbox 预缓存 app shell + IndexedDB 消息兜底
+- **📱 视觉回归测试**：Playwright 5 viewport（iPhone SE/14/15 Pro Max + iPad mini + Galaxy S21）× 13 核心页面截图对比
+- 移动端（v1 旧版）：独立抽屉架构 + 横屏 media query + 紧凑顶栏
 - 声纹录入 UI（MemberView 卡片徽章 + 录入弹窗）
 - 声纹库中心（256 竖条指纹图 + 跨会议相似度推荐）
 
@@ -476,6 +506,7 @@ npm run dev
 - 阿里云 2核2G：Nginx + FRP 服务端 + Webhook（多线程，0.001s 响应）
 - 本地 Windows（32核+GPU）：Docker 8 services + GPU Whisper
 - **Webhook 自动部署**：GitHub push → SSH 拉取（130s→5s）+ ThreadingHTTPServer（0.001s 响应）
+- **Webhook 偶发 499 加固（2026-06-13，commit `7e41577`）** — `git reset --hard origin/main` 模式（immutable infra） + `socket.timeout(15)` 防止 GitHub 客户端超时"幽灵"线程 + 手动 redeliver trick
 - 本地运维三件套：watchdog / backup / build-verify（schtasks 注册）
 
 ### 详细历史
