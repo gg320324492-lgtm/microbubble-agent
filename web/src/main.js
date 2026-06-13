@@ -101,10 +101,21 @@ app.use(router)
 useThemeStore()
 
 // PWA Service Worker 注册（webhint cache-busting 修复）
+// 监听 sw.js activate 钩子发的 SW_UPDATED 消息，触发自动 reload 让用户拿到新资源
+// （修复事故：之前 server 返回 octet-stream 时期 SW NetworkFirst 缓存了污染响应，
+// 现在 SW 升级会清空所有 cache + 通知客户端 reload）
 useRegisterSW({
   immediate: true,
   onRegisteredSW(swUrl) {
     console.log('[PWA] SW registered:', swUrl)
+    // 监听 SW 消息：SW 升级时它会 postMessage({type: 'SW_UPDATED'})
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'SW_UPDATED') {
+        console.log('[PWA] SW updated, reloading...', event.data.version)
+        // 延迟 500ms 让 console.log 显示出来再 reload
+        setTimeout(() => window.location.reload(), 500)
+      }
+    })
   },
   onRegisterError(err) {
     console.warn('[PWA] SW registration failed:', err)
