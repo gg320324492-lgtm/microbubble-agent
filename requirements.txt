@@ -37,7 +37,9 @@ soundfile              # 3D-Speaker ERes2Net pipeline 读取 wav 需要
 pysoundfile            # soundfile 的 Python 绑定（部分平台需要）
 
 # 语音合成
-edge-tts==6.1.9
+# 2026-06-13 升级：6.1.9 的 TrustedClientToken 已过期，Microsoft 返回 403 Forbidden。
+# 7.2.8 更新了 internal UA + endpoint 配置修复。>=7.2 锁定 minor 版本兼容 API。
+edge-tts>=7.2.8,<8.0.0
 
 # 向量数据库
 pgvector==0.2.4
