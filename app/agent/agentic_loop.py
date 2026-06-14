@@ -98,9 +98,71 @@ def _sanitize_pending_tool_uses(messages: list[dict], reason: str = "max_rounds_
     return len(dangling)
 
 
+def _normalize_fake_tool_input(name: str, input_dict: dict) -> dict:
+    """2026-06-14 收官：fake tool_call 参数名 alias 解析
+
+    模型 fake 输出时常把字段名写错（如 get_member_profile 的 member_name 写成 name），
+    这里通过工具的 Pydantic schema 反查，自动 alias 匹配：
+    - 输入 "name" → 找 schema 里第一个 str 字段（典型如 member_name / task_name / project_name）
+    - 输入 "query" → 找 schema 里第一个非 id 字段
+    - 输入 "id" → 找 schema 里 ID 字段
+    - 输入其他未声明字段 → 保留（让 Pydantic 报错暴露给模型看）
+    """
+    if not input_dict:
+        return input_dict
+    try:
+        from app.agent.tool_registry import TOOL_REGISTRY
+        td = TOOL_REGISTRY.get(name)
+        if not td or not td.input_model:
+            return input_dict
+        # 拿到 Pydantic schema 字段列表
+        schema_fields = td.input_model.model_fields
+        # 收集"明显是 id 字段"和"明显是 name 字段"
+        id_fields = {fn for fn in schema_fields if fn == "id" or fn.endswith("_id")}
+        name_fields = [fn for fn in schema_fields if "name" in fn.lower()]
+        # 通用 alias 规则
+        alias_map = {}
+        if "name" in input_dict:
+            # 优先匹配 _name 后缀的（如 member_name / task_name），其次是单 name
+            target = None
+            for nf in name_fields:
+                if nf != "name":  # 跳过 "name" 本身（如果有）
+                    target = nf
+                    break
+            if target is None and "name" in schema_fields:
+                target = "name"
+            if target:
+                alias_map["name"] = target
+        if "query" in input_dict and "query" not in schema_fields:
+            # 找一个最像的字段（通常是 keyword / search_text）
+            for cand in ("keyword", "search_text", "text", "q"):
+                if cand in schema_fields:
+                    alias_map["query"] = cand
+                    break
+        # 应用 alias
+        result = dict(input_dict)
+        for old_key, new_key in alias_map.items():
+            if old_key in result and new_key not in result:
+                result[new_key] = result.pop(old_key)
+        # 过滤掉 schema 里不存在的字段（避免 Pydantic 报 unexpected field）
+        known_fields = set(schema_fields.keys())
+        result = {k: v for k, v in result.items() if k in known_fields}
+        return result
+    except Exception as e:
+        logger.warning(f"_normalize_fake_tool_input({name}) failed: {e}")
+        return input_dict
+
+
 def _extract_tool_uses(response) -> list[dict]:
-    """从 Anthropic Message 响应中提取 tool_use 列表"""
+    """从 Anthropic Message 响应中提取 tool_use 列表
+
+    2026-06-14 收官：双路径解析
+    - 路径 A：原生 tool_use blocks（代理正确转发 tools 参数时）
+    - 路径 B：模型在 content 里 fake 输出 XML 格式（代理吞掉 tools 参数时）—
+      解析 <function_calls>/<tool_call> 等多种格式，转成 tool_use 走后续流程
+    """
     tool_uses = []
+    # 路径 A：原生 tool_use blocks
     for block in response.content:
         if hasattr(block, "type") and block.type == "tool_use":
             tool_uses.append({
@@ -108,7 +170,157 @@ def _extract_tool_uses(response) -> list[dict]:
                 "name": block.name,
                 "input": block.input,
             })
-    return tool_uses
+    if tool_uses:
+        return tool_uses
+
+    # 路径 B：从 text block 里解析 fake tool_call XML
+    text_parts = []
+    for block in response.content:
+        if hasattr(block, "text") and block.text:
+            text_parts.append(block.text)
+    if not text_parts:
+        return tool_uses
+    full_text = "\n".join(text_parts)
+    return _parse_fake_tool_calls(full_text)
+
+
+def _parse_fake_tool_calls(text: str) -> list[dict]:
+    """2026-06-14 收官：解析 LLM 在 content 里 fake 输出的 tool_call 文本
+
+    背景：CLAUDE_BASE_URL 走代理时，代理不转发 tools 参数（实测），
+    导致模型收到 prompt 看不到 tools 列表，只能在 content 里用 XML 文本
+    "模拟"工具调用。常见格式有 4 种：
+
+    格式 1（Mistral/Qwen）：<tool_call>{"name": "foo", "arguments": {"k": "v"}}</tool_call>
+    格式 2（Anthropic legacy）：<function_calls><invoke name="foo"><k>v</k></invoke></function_calls>
+    格式 3（单行简化）：<function=foo><parameter=k>v</parameter></function>
+    格式 4（裸 JSON）：{"name": "foo", "arguments": {"k": "v"}}（单行紧跟 ```json fence）
+
+    返回：tool_use 列表，每个含 id (UUID 伪生成) / name / input
+    """
+    import re
+    import uuid as _uuid
+
+    fake_uses = []
+
+    # 格式 1：<tool_call>{...}</tool_call>
+    pattern1 = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+    for m in pattern1.finditer(text):
+        try:
+            data = json.loads(m.group(1))
+            name = data.get("name") or data.get("function") or data.get("tool")
+            args = data.get("arguments") or data.get("parameters") or data.get("input") or {}
+            if name:
+                fake_uses.append({
+                    "id": f"toolu_fake_{_uuid.uuid4().hex[:12]}",
+                    "name": name,
+                    "input": args if isinstance(args, dict) else {},
+                })
+        except (json.JSONDecodeError, AttributeError):
+            continue
+
+    # 格式 4：裸 JSON {name, arguments} 在 ```json fence 里
+    if not fake_uses:
+        pattern4 = re.compile(r"```(?:json)?\s*(\{[^{}]*\"(?:name|function|tool)\"[^{}]*\})\s*```", re.DOTALL)
+        for m in pattern4.finditer(text):
+            try:
+                data = json.loads(m.group(1))
+                name = data.get("name") or data.get("function") or data.get("tool")
+                args = data.get("arguments") or data.get("parameters") or data.get("input") or {}
+                if name:
+                    fake_uses.append({
+                        "id": f"toolu_fake_{_uuid.uuid4().hex[:12]}",
+                        "name": name,
+                        "input": args if isinstance(args, dict) else {},
+                    })
+            except json.JSONDecodeError:
+                continue
+
+    # 格式 2：<function_calls><invoke name="foo"><k>v</k></invoke></function_calls>
+    if not fake_uses:
+        pattern2 = re.compile(
+            r"<function_calls?\s*>(.*?)</function_calls?\s*>", re.DOTALL
+        )
+        for fc in pattern2.finditer(text):
+            inner = fc.group(1)
+            # 单个 invoke 块
+            for inv in re.finditer(
+                r'<invoke\s+name\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</invoke>',
+                inner, re.DOTALL,
+            ):
+                name = inv.group(1).strip()
+                args = _parse_xml_params(inv.group(2))
+                fake_uses.append({
+                    "id": f"toolu_fake_{_uuid.uuid4().hex[:12]}",
+                    "name": name,
+                    "input": args,
+                })
+
+    # 格式 3：<function=foo><parameter=k>v</parameter></function>（最常见的简化版）
+    if not fake_uses:
+        pattern3 = re.compile(
+            r"<function\s*=\s*([^>\s]+)\s*>(.*?)</function\s*>", re.DOTALL
+        )
+        for fn in pattern3.finditer(text):
+            name = fn.group(1).strip()
+            args = _parse_xml_params(fn.group(2))
+            fake_uses.append({
+                "id": f"toolu_fake_{_uuid.uuid4().hex[:12]}",
+                "name": name,
+                "input": args,
+            })
+
+    if fake_uses:
+        # Schema-aware 参数名 alias 解析（防模型写错字段名）
+        normalized = []
+        for u in fake_uses:
+            u["input"] = _normalize_fake_tool_input(u["name"], u["input"])
+            normalized.append(u)
+        fake_uses = normalized
+        logger.info(
+            f"_parse_fake_tool_calls: recovered {len(fake_uses)} fake tool call(s) "
+            f"from content (proxy likely stripped tools param): "
+            f"{[u['name'] for u in fake_uses]}"
+        )
+    return fake_uses
+
+
+def _strip_fake_tool_calls(text: str) -> str:
+    """2026-06-14 收官：把 LLM 在 content 里写的 fake tool_call XML 全部清掉
+
+    防狼：即使 Phase 1 已经 fake → real，Phase 2 synthesis 模型可能再次写出
+    这种 XML（因为它在 prompt 里学会了这种格式），要剥掉不让用户看到。
+    """
+    import re
+    # 4 种格式的剥除（与 _parse_fake_tool_calls 镜像）
+    text = re.sub(r"<tool_call>\s*\{.*?\}\s*</tool_call>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<function_calls?\s*>.*?</function_calls?\s*>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<function\s*=[^>]+>.*?</function\s*>", "", text, flags=re.DOTALL)
+    text = re.sub(r"```(?:json)?\s*\{[^{}]*\"(?:name|function|tool)\"[^{}]*\}\s*```", "", text, flags=re.DOTALL)
+    # 清理残留空行
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _parse_xml_params(xml_str: str) -> dict:
+    """从 <parameter=k>v</parameter> 风格 XML 串提取参数 dict"""
+    import re
+    params = {}
+    # 匹配 <parameter name>value</parameter> 或 <parameter=name>value</parameter>
+    for m in re.finditer(
+        r'<\s*parameter(?:\s+name\s*)?\s*=\s*["\']?([^>"\']+)["\']?\s*>(.*?)<\s*/\s*parameter\s*>',
+        xml_str, re.DOTALL,
+    ):
+        key = m.group(1).strip()
+        val = m.group(2).strip()
+        # 去尾部 </parameter
+        val = re.sub(r"</parameter\s*>\s*$", "", val, flags=re.IGNORECASE).strip()
+        params[key] = val
+    # 也匹配 <k>v</k> 形式
+    if not params:
+        for m in re.finditer(r"<([a-zA-Z_][a-zA-Z0-9_]*)>(.*?)</\1>", xml_str, re.DOTALL):
+            params[m.group(1).strip()] = m.group(2).strip()
+    return params
 
 
 def _extract_rich_block(tool_name: str, result: dict) -> Optional[RichBlock]:

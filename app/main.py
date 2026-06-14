@@ -8,6 +8,10 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.config import settings
+# 2026-06-14 收官：提前 import 触发所有 @tool 装饰器执行，
+# 避免 chat 第一次请求时 TOOL_REGISTRY 还是空的（导致模型在 content 里 fake tool_call，
+# fake parser 解析后 dispatch_tool 又报 TOOL_NOT_FOUND）
+import app.agent.tools  # noqa: F401  ← 关键！触发 tools/__init__.py 链式 import
 from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording, dashboard, admin
 from app.core.database import engine, Base
 from app.core.redis import close_redis
