@@ -294,6 +294,84 @@
 | `app/voice/vad.py` | silero-vad 语音活动检测 |
 | `app/services/audio_processor.py` | 音频格式转换（WebM→WAV）+ 离线 VAD 分段 |
 
+## 2026-06-14 方案 C：Agent 单阶段流式渐进综合架构（plan: eager-juggling-dewdrop.md）
+
+**6 个 stage 已收官**（commits `5ce1203` `8a76750` `9862546` `d3f74df` `59cbbb1` `2f2b619` `bf61456`）。
+核心改造：取消 brief/detail 双层 → 单阶段流式综合（intent → agentic_loop → critique → done）。
+
+### 方案 C 6 条铁律（必读）
+
+**铁律 1：跨 event loop 安全（CLAUDE.md 752/812 行铁律升级）**
+所有外部 IO 客户端（AsyncAnthropic / aioredis / async_session）**禁止在模块顶部 import 阶段创建**。统一通过 `ctx: ToolContext` 注入：
+```python
+# ❌ 反模式（agentic_loop.py 模块顶部）
+from app.core.redis import async_redis_client  # 绑定 app loop 的全局单例
+client = AsyncAnthropic(...)                   # 同上
+
+# ✅ 正模式（ctx 注入）
+async def run(self, ..., ctx: ToolContext):
+    redis = ctx.redis or aioredis.from_url(settings.REDIS_URL)
+    llm = ctx.llm or LLMClient()
+```
+`ToolContext` 字段：`redis` / `llm` / `loop_id`（debugging）。Celery worker 跨 event loop 调用时由调用方注入新 client，否则触发 "Future attached to different loop"。
+
+**铁律 2：typing import CI 检查**
+任何 `app/agent/*.py` 新文件**必须**在 commit 前跑：
+```bash
+bash scripts/check_typing_imports.sh   # 106 文件 0 错误
+```
+新代码若用了 `Dict`/`List`/`Optional` 但没 `from typing import ...` → 整个模块加载失败 → 工具一调就报。Docker 模块缓存会掩盖该 bug 数天。建议集成到 pre-commit hook。
+
+**铁律 3：SSE 事件 delta 语义显式标注**
+[app/agent/protocol.py](app/agent/protocol.py) 每个 `StreamEventType` 必须在源码注释里标注 `[increment]` 或 `[snapshot]`：
+- `[increment]` delta 是新增 token，前端必须 `content += delta`
+- `[snapshot]` delta 是完整快照文本，前端必须 `content = delta`（替换）或不 append
+- 混用会导致 2026-06-12 brief 重复输出 bug（commit `cf70ff5`）再现
+- 前端 useChatStream.ts switch case 也必须标注
+
+**铁律 4：流式 abort 安全（trace 持久化 + 悬空 tool_use sanitize）**
+`chat_engine.synthesize_stream()` 必须用 `async with TraceCollector(...) as trace` 包裹：
+- `TraceCollector.__aexit__` 收到 `CancelledError`/`BaseException` 时**同步**落库（不走 Celery），保证 trace 至少有 partial 记录
+- `agentic_loop.run()` 在收到 `CancelledError` 或循环达到 `max_rounds` 时，必须调 `_sanitize_pending_tool_uses(messages, reason=...)`：给悬空 tool_use 追加 `tool_result: "用户已中断"` 哨兵，否则下次拼回 context 时 Anthropic API 报 400
+- `_sanitize_pending_tool_uses` 必须在调下一次 LLM 前调
+
+**铁律 5：LLMClient 接口加 model 参数用 keyword-only**
+```python
+async def complete(self, messages, *, model=None, system=None, ...):
+    # `*` 强制所有调用走关键字
+```
+老代码传位置 model 必报 TypeError（炸得明显），不会静默走错模型。LRU cache key 必须含 model 维度（防不同模型互相污染缓存）。
+
+**铁律 6：feature flag 必须保留老路径代码（不是 git revert）**
+3 个 kill switch：
+- `AGENT_NEW_ARCHITECTURE_ENABLED: bool = True`（全局开关）
+- `AGENT_REFLECTION_ENABLED: bool = True`
+- `AGENT_COMPRESSION_ENABLED: bool = True`
+- 关闭时由 `chat_engine.py` 内部调 `chat_engine_legacy.py`（保留作为 30 天回滚资产，**不是 in-file dead code**）
+- 30 天后（2026-07-14）单独 commit 删除 `chat_engine_legacy.py`
+
+### 部署必做
+
+```bash
+# 1. 跑数据库迁移（Stage 3 加 7 列）
+docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble \
+  -f scripts/alter_agent_traces_stage3.sql
+
+# 2. 重启 Python 进程（CLAUDE.md 752 行铁律）
+docker compose restart app celery-worker
+```
+
+不跑这两步，新架构写入 `intent_category` 等列会报 `column does not exist` 500。
+
+### 方案 C 没做的（plan 明确范围外）
+
+- LangGraph 风格 state machine 重写
+- 多 agent 独立服务（planner / executor / critic）
+- 流式 ChartBlock 渐进渲染（边输出文字边出图）
+- RAG 引用图谱可视化
+- ASR/TTS 真流式（边录音边出文字）
+- 30 天后删除 `chat_engine_legacy.py`（2026-07-14）
+
 ## 开发注意事项
 
 ### 2026-06-13 .env.webhook 被 `git clean -fdx` 误清 → webhook 服务挂掉事故

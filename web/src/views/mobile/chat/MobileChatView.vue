@@ -34,7 +34,9 @@
       :selected-image="selectedImage"
       :selected-file="selectedFile"
       :input-padding-bottom="inputPaddingBottom"
+      :is-sending="isCurrentSessionSending"
       @send="sendMessage"
+      @stop="onStopGeneration"
       @image="triggerImage"
       @file="triggerFile"
       @voice-start="onVoiceStart"
@@ -144,6 +146,7 @@ const {
   onCreateSession: streamOnCreateSession,
   onSwitchSession: streamOnSwitchSession,
   sendMessage: sendMessageStream,
+  stopGeneration,  // 2026-06-14 方案 C Stage 5 收尾
   playTTS,
   asrRecognize,
 } = useChatStream()
@@ -190,16 +193,21 @@ async function sendMessage() {
   haptic.tap()
   await sendMessageStream({
     text,
-    image: selectedImage.value,
     file: selectedFile.value,
+    image: selectedImage.value,
   })
-  // 清空输入
   inputText.value = ''
   selectedImage.value = null
   selectedFile.value = null
-  await nextTick()
-  messageListRef.value?.scrollToBottom(true)
 }
+
+function onStopGeneration() {
+  // 2026-06-14 方案 C Stage 5 收尾：停止当前流式生成
+  haptic.tap()
+  stopGeneration()
+}
+
+
 
 // ============================================================================
 // 文件上传

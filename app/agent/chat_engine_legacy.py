@@ -7,6 +7,11 @@
 - AGENT_NEW_ARCHITECTURE_ENABLED=False 时由 chat_engine.py 委托到这里
 - 新架构稳定后另一个 commit 删除（plan: eager-juggling-dewdrop.md Stage 5）
 
+⏰ TODO 提醒：2026-07-14 删除此文件（方案 C 部署后 30 天）
+- 计划在 2026-07-14 跑一个 git commit 删除此文件
+- 同步更新 chat_engine.py 移除 _legacy_chat_stream 委托
+- 同步删除 tests 中对 chat_engine_legacy.py 的断言（TestLegacyChatEngineFileExists / TestBackwardsCompat 等）
+
 只允许在 chat_engine.py 内部以 `from app.agent.chat_engine_legacy import ...` 委托式引用。
 禁止从 app/api / app/wechat / app/services 等业务层直接 import。
 

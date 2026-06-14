@@ -141,6 +141,29 @@ if ! grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
     fi
 fi
 
+# ============================================================================
+# 2026-06-14 方案 C Stage 5 收尾：agent_traces 表迁移
+# 自动跑 alter_agent_traces_stage3.sql（加 7 列：intent/critique/status 等）
+# 幂等（用 ADD COLUMN IF NOT EXISTS），重复跑安全
+# ============================================================================
+MIGRATION_SQL="$PROJECT_DIR/scripts/alter_agent_traces_stage3.sql"
+if [ -f "$MIGRATION_SQL" ]; then
+    PG_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E 'postgres|db' | head -1)
+    if [ -n "$PG_CONTAINER" ]; then
+        log "运行 agent_traces schema 迁移（7 列）..."
+        if docker exec -i "$PG_CONTAINER" psql -U postgres -d microbubble < "$MIGRATION_SQL" >> "$LOG_FILE" 2>&1; then
+            log "agent_traces 迁移成功（intentional 幂等）"
+        else
+            log "WARN: agent_traces 迁移失败，请手动跑："
+            log "  docker exec $PG_CONTAINER psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql"
+        fi
+    else
+        log "WARN: 未找到 postgres 容器，跳过迁移（请手动跑 ALTER TABLE）"
+    fi
+else
+    log "WARN: $MIGRATION_SQL 不存在（首次部署？git pull 可能漏了）"
+fi
+
 # 测试 + 重载 Nginx（失败只 warn 不退出）
 if nginx -t >> "$LOG_FILE" 2>&1; then
     log "nginx reload..."
