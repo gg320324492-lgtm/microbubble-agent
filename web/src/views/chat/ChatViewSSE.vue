@@ -18,9 +18,9 @@
  * - Rich Block 注册表 (web/src/components/chat/blocks/registry.ts)
  * - Pinia chatSessions store
  */
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown } from '@element-plus/icons-vue'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -58,7 +58,6 @@ const toggleTheme = () => themeStore.toggle()
 const inputText = ref('')
 const isDragging = ref(false)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const messagesRef = ref<HTMLElement | null>(null)
 const selectedImage = ref<File | null>(null)
 const imagePreviewUrl = ref('')
 const selectedFile = ref<File | null>(null)
@@ -72,14 +71,73 @@ const loading = ref(false)
 const { online: isOnline } = useNetworkStatus()
 
 // ============================================================================
-// 滚动到底部
+// 滚动到底部（智能 sticky scroll）
 // ============================================================================
-const scrollToBottom = async () => {
+// 行为：
+// 1. 任何消息变化（流式 text_delta / rich_block / 新消息）时，若 autoStick=true 则滚到底
+// 2. 用户手动往上滚（scroll 位置 < 阈值）→ 取消 autoStick，停止自动滚
+//    （避免用户看历史消息时被打扰）
+// 3. 显示"↓ 跳到最新"按钮：点了恢复 autoStick + 滚到底
+const messagesRef = ref<HTMLElement | null>(null)
+const autoStick = ref(true)  // 是否自动贴底
+const showJumpToBottom = ref(false)  // 是否显示"跳到最新"按钮
+const STICK_THRESHOLD_PX = 80  // 距底 < 80px 算"贴底"
+const USER_SCROLL_UP_THRESHOLD = 120  // 距底 > 120px 视为"用户主动上滚"
+
+const scrollToBottom = async (force = false) => {
   await nextTick()
+  if (messagesRef.value) {
+    if (force || autoStick.value) {
+      messagesRef.value.scrollTop = messagesRef.value.scrollHeight
+      autoStick.value = true
+      showJumpToBottom.value = false
+    }
+  }
+}
+
+// 监听用户手动滚动：用户往上滚 → 取消 autoStick
+const onMessagesScroll = () => {
+  if (!messagesRef.value) return
+  const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
+  const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+  if (distanceFromBottom < STICK_THRESHOLD_PX) {
+    // 接近底部 → 重新启用 autoStick
+    autoStick.value = true
+    showJumpToBottom.value = false
+  } else {
+    // 离开底部（用户上滚）→ 停止自动滚，显示跳到最新按钮
+    autoStick.value = false
+    showJumpToBottom.value = true
+  }
+}
+
+const jumpToBottom = () => {
   if (messagesRef.value) {
     messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   }
+  autoStick.value = true
+  showJumpToBottom.value = false
 }
+
+// ============================================================================
+// 智能 sticky scroll：监听 messages 变化自动滚到底（除非用户已上滚）
+// ============================================================================
+// 2026-06-14 方案 C 增强：之前只在 sendMessage 前后滚，流式生成中不滚，
+// 用户必须手动滚轮才能看新内容。改为 watch messages 实时滚。
+watch(
+  () => messages.value,
+  () => {
+    // 强制模式下永远滚；autoStick 模式下用户已上滚则不滚
+    scrollToBottom(false)
+  },
+  { deep: true, flush: 'post' },
+)
+
+// 新 session 切换时也滚到底
+watch(
+  () => sessionId.value,
+  () => scrollToBottom(true),
+)
 
 // ============================================================================
 // 发送消息（包装 useChatStream.sendMessage 以处理 UI 副作用）
@@ -250,7 +308,19 @@ onUnmounted(() => {
         </header>
 
     <!-- 消息区 -->
-    <div ref="messagesRef" class="messages">
+    <div ref="messagesRef" class="messages" @scroll="onMessagesScroll">
+      <!-- 2026-06-14 智能 sticky scroll：用户上滚后显示"跳到最新"按钮 -->
+      <button
+        v-if="showJumpToBottom"
+        class="jump-to-bottom"
+        type="button"
+        aria-label="跳到最新消息"
+        title="跳到最新消息"
+        @click="jumpToBottom"
+      >
+        <el-icon><ArrowDown /></el-icon>
+        <span>跳到最新</span>
+      </button>
       <!-- 录音面板 -->
       <VoiceRecorder
         v-if="voiceMode"
@@ -436,7 +506,35 @@ onUnmounted(() => {
 .bot-status { font-size: 12px; color: #999; display: flex; align-items: center; gap: 4px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; }
 
-.messages { flex: 1; overflow-y: auto; padding: 20px; }
+.messages { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
+
+/* 2026-06-14 智能 sticky scroll：跳到最新按钮 */
+.jump-to-bottom {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: white;
+  border: 1px solid var(--color-primary, #FF7A5C);
+  border-radius: 20px;
+  color: var(--color-primary, #FF7A5C);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.jump-to-bottom:hover {
+  background: var(--color-primary, #FF7A5C);
+  color: white;
+  transform: translateX(-50%) translateY(-2px);
+}
 .time-divider { text-align: center; font-size: 12px; color: #999; margin: 16px 0; }
 
 .msg-row { display: flex; margin-bottom: 16px; gap: 8px; }
