@@ -329,6 +329,89 @@ def _strip_fake_tool_calls(text: str) -> str:
     return text.strip()
 
 
+# 元话语前缀模式（2026-06-15 修复，防御 LLM 在正文里写 thinking 独白）
+_META_PREFIX_PATTERNS = [
+    r"我需要[把将]?",  # "我需要介绍..." / "我将..."
+    r"我应该[把将]?",
+    r"我会[把将]?",
+    r"用户问的?[是什]?",
+    r"用户想知道",
+    r"用户可能想[要知道]?",
+    r"开始回答吧",
+    r"那么[，,]",
+    r"好的[，,。 ]?我来回答",
+    r"好的[，,。 ]?让我",
+    r"让我[先来]?",
+    r"首先我需要",
+    r"让我整理[一]?下",
+    r"工具返回了",
+    r"根据工具返回",
+    r"从工具返回来看",
+    r"经过思考",
+    r"思考后",
+    r"经过分析",
+]
+
+
+def _strip_meta_thinking(text: str) -> str:
+    """2026-06-15 修复：剥除 LLM 在正文里写的 thinking/元话语独白
+
+    触发场景：即使 prompts.py 已加硬规则，LLM 偶尔仍会输出：
+    "用户问的是 X。我需要介绍她的基本信息。从工具返回来看，她的研究方向是 Y。开始回答吧。X 是我们的成员..."
+
+    剥除策略：
+    - 在 text 里**只剥开头的元话语**（前 800 字符范围内）—— 不影响正文中间的元话语引用
+    - 每次匹配到元话语句 → 删掉那个元话语开头的句子（到下一个 "。" 句号为止）
+    - 最多剥除 3 次（防无限循环）—— 使用 while 循环（不是 for），
+      每次剥完重新检测新开头是否还有元话语
+    - 不剥除正常回复里的 "我建议" / "我认为" 等**实质**第一人称表达
+
+    边界情况：
+    - 如果整段都是元话语（用户看到空文本）→ 保留原文（兜底）
+    - 如果剥除后剩余 < 30 字符 → 保留原文（兜底）
+    """
+    import re
+    if not text or len(text) < 10:
+        return text
+
+    # 只检查前 800 字符内的元话语
+    head = text[:800]
+    rest = text[800:]
+
+    new_head = head
+    stripped_count = 0
+    max_strip = 3
+
+    # 关键：while 而非 for —— 每次剥完重新检测新开头是否还有元话语
+    while stripped_count < max_strip:
+        matched = False
+        for pattern in _META_PREFIX_PATTERNS:
+            m = re.match(
+                r"^(" + pattern + r")[^。]*?。\s*",
+                new_head.lstrip(),
+            )
+            if m:
+                stripped = m.group(0)
+                new_head = new_head.lstrip()[len(stripped):]
+                stripped_count += 1
+                matched = True
+                break  # 跳出内层 for，重新 while 检测新开头
+        if not matched:
+            break  # 没匹配到任何 pattern，退出
+
+    result = new_head + rest
+    # 清理残留前导空白
+    result = result.lstrip()
+
+    # 兜底：剥除后过短（< 5 字符）→ 保留原文
+    # 阈值原本 30 太严，把"杨慈是我们课题组的成员。"（12 字符）这种干净短回复也判失败
+    # 改为 5：只剩几乎空白才兜底
+    if len(result) < 5 and stripped_count > 0:
+        return text
+
+    return result
+
+
 def _parse_xml_params(xml_str: str) -> dict:
     """从 <parameter=k>v</parameter> 风格 XML 串提取参数 dict"""
     import re
@@ -567,12 +650,22 @@ class AgenticLoop:
                 yield critique_to_sse_event(critique)
                 accumulated_text = retry_text
 
+            # ===== Phase 4.5: 在 done 之前重算 text_without_json（retry 后文本可能已变）=====
+            # 2026-06-15 修复元话语泄露：把"剥除 JSON 段 + fake tool_call + 元话语"的最终干净文本
+            # 传给前端，让前端在 done 时**替换** content（流式过程已发出无法撤销）
+            # 流程：accumulated_text → 剥 JSON 段 → 剥 fake tool_call → 剥元话语
+            # 与 _synthesize_stream 内部后处理**完全镜像**——必须保持一致
+            final_text, _ = _extract_rich_block_json(accumulated_text)
+            final_text = _strip_fake_tool_calls(final_text)
+            final_text = _strip_meta_thinking(final_text)
+
             # ===== Phase 5: done =====
             duration_ms = int((time.monotonic() - t0) * 1000)
             yield StreamEvent(
                 type="done",
                 duration_ms=duration_ms,
                 session_id=ctx.trace.session_id if ctx.trace else None,
+                text_without_json=final_text,
             )
 
         except asyncio.CancelledError:
@@ -707,6 +800,10 @@ class AgenticLoop:
             # Phase 1 已经被 _parse_fake_tool_calls 解析并 dispatch，但模型在 synthesis 阶段
             # 可能再次写出 fake tool_call（从训练里学来的输出格式），必须清掉
             text_without_json = _strip_fake_tool_calls(text_without_json)
+            # 2026-06-15 修复：剥除 LLM 写在正文开头的元话语/thinking 文本
+            # 即使 prompts.py 加了硬规则，LLM 偶尔仍会输出"我需要..."、"用户问的是..."、
+            # "开始回答吧"等内部独白。后端兜底剥除，避免泄露到用户视野
+            text_without_json = _strip_meta_thinking(text_without_json)
             # 同步剥除 rich_blocks 里 data 含 fake XML 的（防御性，正常不该有）
             for rb_data in rich_blocks:
                 # Grounded 守卫：type=member 必须有真实姓名来自工具结果
