@@ -51,7 +51,7 @@
           <div class="msg-body">
             <!-- 图片 -->
             <div v-if="msg.type === 'image'" class="msg-image">
-              <img v-if="msg.imageUrl" :src="msg.imageUrl" @click="previewImage(msg.imageUrl)" />
+              <img v-if="msg.imageUrl" :src="msg.imageUrl" :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" @click="previewImage(msg.imageUrl)" />
               <div v-if="msg.content !== '[图片]'" class="msg-text" v-html="renderMD(msg.content)" />
             </div>
 
@@ -107,7 +107,7 @@
         @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop">
         <!-- 图片预览 -->
         <div v-if="selectedImage" class="preview-chip">
-          <img :src="imagePreviewUrl" />
+          <img :src="imagePreviewUrl" :alt="`已选图片预览：${imagePreviewUrl.split('/').pop() || ''}`" :title="`已选图片预览：${imagePreviewUrl.split('/').pop() || ''}`" />
           <span class="chip-close" @click="removeImage">✕</span>
         </div>
         <!-- 文件预览 -->
