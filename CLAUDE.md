@@ -14,7 +14,7 @@
 **Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官 + 移动端 10 个 PR 全栈定制收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**移动端**采用 NutUI 4 + Element Plus **路由级双栈**架构（`useIsMobile.js` 判定 + `resolveMobile.js` 路由适配），**18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略**全部交付，**iOS Safari + Android Chrome 全兼容**。**当前状态（2026-06-13 收官后，commit `9026c07`）**：
 - **43 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4 + 多会话并行 2 + 移动端 PR #1-10 共 10 + 文档/webhint 5 + 部署加固 1）
 - **160+ 测试全过**（87 后端 + 73 前端 + 21 录音断网防御 + 2 移动端组件）
-- **965 次提交 / 138K 行代码 / 617 文件 / 29 开发天数**（`app/stats.json` 由本地 Python 准确计算；之前的 webhook 统计包含 .meta/.log/.wav 等非源代码已剔除）
+- **1014 次提交 / 135K 行代码 / 578 文件 / 30 开发天数**（`app/stats.json` 由本地 Python 准确计算；排除 frp/.git/node_modules/dist/.meta/.log/.wav/.exe 等非源代码）
 - **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留），移动端 10 PR 完成后清单大幅缩短
 
 **v2/v3/v4 关键成果**：
@@ -373,6 +373,21 @@ docker compose restart app celery-worker
 - 30 天后删除 `chat_engine_legacy.py`（2026-07-14）
 
 ## 开发注意事项
+
+### 2026-06-14 webhint Edge DevTools `/chat` 页 6 警告 5 误报 + favicon.ico 真修复（commit `30fa545`）
+
+- **Edge DevTools 内置 webhint 不读 .hintrc**（重要，反复踩坑再次强化）— 用户报告 webhint 警告时，**永远先判断是真问题还是 webhint 误报**：①打开 `.hintrc` 看对应 hint 状态 ②判断 URL 类型（blob:/TTS/favicon.ico 都是已知误报源）③Edge DevTools 警告**只能在 webhint CLI 验证时消除**，浏览器端无解。**.hintrc 配置的 4 类 hint 优先级**：
+  - **http-cache**（cache-control 检查）— TTS 动态 API max-age=0 是正确行为，webhint 误把 audio/mpeg 当静态要求 1 年 + immutable。TTS 文本不同 → max-age=31536000 会返回错误音频。**全关**最稳（CLAUDE.md 2026-06-13 决策）
+  - **no-immutable**（独立于 http-cache）— 即使 http-cache off，TTS 仍会报「immutable 缺失」。**全关**
+  - **no-cache-busting**（URL 模式匹配）— 浏览器自动请求 `/favicon.ico`（无 hash），HTML `<link rel="icon">` 改不改都请求。**全关**（最干净）或 `.hintrc` 改 pattern 加 `\.ico$`
+  - **content-type-options**（X-Content-Type-Options 头）— `blob:https://...` 是 `URL.createObjectURL()` 客户端生成，**没有 HTTP 响应/headers**，webhint 误报无法避免。**全关**
+  - **meta-theme-color**（Firefox 不支持）— 已知 webhint 误报，保留 Chrome/Safari/iOS Safari PWA 顶部栏美化价值。**全关接受噪音**
+- **favicon.ico 真修复：nginx `location = /favicon.ico` 精确匹配**（commit `30fa545`）— 之前 `location ~* \.(...ico...)$` 正则 location 理论上给 favicon.ico 加 1 年 + immutable + nosniff，但 Edge DevTools 报 `/favicon.ico` 返回 `Cache-Control: max-age=0`（命中 `location /` 兜底）。**根因**：nginx `add_header` **不继承**父级 location 也没问题，但**优先级**中精确 `=` 最高，`~*` 正则次之。**修复**：在 `tunnel.conf` line 116-124 加 `location = /favicon.ico { add_header Cache-Control "public, max-age=31536000, immutable" always; ... }` 精确匹配。**双保险**：① 精确路径优先匹配避免被 `location /` 兜底② 显式 immutable + nosniff 一目了然审计。**纪律**：
+  1. 任何"用户浏览器自动请求的资源"（favicon.ico / robots.txt / sitemap.xml / apple-touch-icon）都用精确 `location =` 而非正则
+  2. nginx `add_header` 调试：用 `curl -I https://agent.mnb-lab.cn/favicon.ico | grep -i cache-control` 直接看响应头，**不要**相信文档里"正则 location 应该匹配"的说法
+  3. 改 nginx 后**必须 6 点 curl 验证**（CLAUDE.md 2026-06-13 整站 octet-stream 事故铁律）—— favicon.ico / index.html / favicon.ico / sw.js / pwa-192.png / manifest.{hash}.webmanifest 至少 6 个路径
+- **TTS 端点不改后端逻辑**（commit `30fa545` 决策记录）— `/api/v1/voice/tts` 是 POST API，每次文本不同，本就该 `max-age=0`。后端 `security_headers` 中间件（app/main.py:126-128）已正确配 max-age=0。**别被 webhint 误导改后端**，改了就破坏动态 API 语义。TTS "immutable 缺失" 警告用 `.hintrc no-immutable: off` 消除即可
+- **`.hintrc` 文件位置**（重要，已踩坑）— 项目 `.hintrc` 在**根目录** `g:\microbubble-agent\.hintrc`（不在 `web/.hintrc`）。webhint CLI 在 `web/` 目录跑时会沿目录树向上找 `.hintrc`，所以**两个位置都能识别**。**纪律**：① webhint 配置统一放根目录方便审计 ② 修改后 commit + push 让团队同步 ③ `.hintrc` 是 Edge DevTools 不读的，**不要为了消除 Edge DevTools 警告而改生产代码**（会破坏 TTS 等动态 API 语义）
 
 ### 2026-06-13 .env.webhook 被 `git clean -fdx` 误清 → webhook 服务挂掉事故
 
