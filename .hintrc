@@ -16,10 +16,32 @@
     "  - http-cache hint 没有 ignoredUrls / includeUrlPatterns 选项，无法精确排除 API 路径",
     "  - 唯一选择：要么全关 http-cache（接受静态资源检查冗余），要么接受 TTS 误报",
     "  - 决策：全关 http-cache。nginx 已单独配置静态资源 long cache（tunnel.conf），",
-    "    webhint 检查是冗余的；TTS 误报严重干扰 Edge DevTools 体验"
+    "    webhint 检查是冗余的；TTS 误报严重干扰 Edge DevTools 体验",
+    "",
+    "no-immutable 'off' 用意说明：",
+    "  - TTS /api/v1/voice/tts 返回 audio/mpeg，本就该 max-age=0（每次文本不同）",
+    "  - no-immutable 独立于 http-cache，http-cache off 后 no-immutable 仍会报「immutable 缺失」",
+    "  - TTS 加 immutable 是错的（文本不同 → immutable 缓存会返回错误音频）",
+    "  - 决策：关闭 no-immutable，nginx 静态资源 immutable 配置已就位（tunnel.conf:204）",
+    "",
+    "no-cache-busting 'off' 用意说明：",
+    "  - 浏览器自动请求 /favicon.ico（无 hash 尾巴），webhint 强制要求 URL 含 hash",
+    "  - favicon.ico 是浏览器默认行为，无法消除，HTML <link> 改不改都请求 /favicon.ico",
+    "  - nginx 已给 favicon.ico 配 max-age=31536000 + immutable + nosniff（tunnel.conf:204）",
+    "  - 真正修复 cache-busting 的方案：SVG favicon + versioned URL 也不够稳（浏览器仍自动请求 ico）",
+    "  - 决策：关闭 no-cache-busting，nginx 静态资源版本化方案（Vite content-hash）已就位",
+    "",
+    "content-type-options 'off' 用意说明：",
+    "  - blob: URL 是 URL.createObjectURL() 客户端生成（无 HTTP 响应、无 headers）",
+    "  - webhint 把 blob URL 当普通 HTTP 资源扫描 → 必然报「missing x-content-type-options」",
+    "  - blob URL 误报无可避免（属于 webhint 设计缺陷）",
+    "  - 决策：关闭 content-type-options。TTS/blob URL/正常 API 都已由后端中间件配 nosniff（app/main.py:123）"
   ],
   "hints": {
     "http-cache": "off",
+    "no-immutable": "off",
+    "no-cache-busting": "off",
+    "content-type-options": "off",
     "meta-theme-color": "off"
   }
 }
