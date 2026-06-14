@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, ARRAY, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, Text, ARRAY, DateTime, JSON
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from app.core.database import Base
@@ -29,6 +29,9 @@ class Member(Base, TimestampMixin):
     is_active = Column(Boolean, default=True)
     role = Column(String(20), default="member")  # admin/leader/member
     custom_instructions = Column(Text)  # 用户自定义指令
+    notification_preferences = Column(JSON, nullable=True)  # 通知偏好（2026-06-15 v2）：
+    # {"enabled": True, "digest_time": "11:00", "channels": ["wechat"],
+    #  "snoozed_until": "2026-06-16T03:00:00Z"}
 
     # 声纹识别
     voice_embedding = Column(Vector(192))  # 3D-Speaker ERes2Net 192 维说话人嵌入

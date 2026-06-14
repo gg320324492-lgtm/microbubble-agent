@@ -4,8 +4,8 @@ import re
 import json
 import asyncio
 import logging
-from datetime import datetime
-from app.models.base import utcnow
+from datetime import datetime, timezone
+from app.models.base import utcnow, BEIJING_TZ
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -17,6 +17,8 @@ from app.wechat.bot import wechat_bot
 from app.wechat.identity import identity_resolver
 from app.wechat.analyzer import analyzer
 from app.services.vision_service import vision_service
+from app.services.reminder_service import ReminderService
+from app.services.reminder_policy import next_digest_slot
 from app.core.redis import get_redis
 
 logger = logging.getLogger("microbubble.wechat")
@@ -974,8 +976,67 @@ class MessageHandler:
     async def _try_handle_task_reply(self, content: str, member: Member,
                                       user_id: str, db: AsyncSession,
                                       msg: dict = None) -> bool:
-        """识别任务回复"""
+        """识别任务回复（v2: ack/snooze 联动 reminder 表）
+
+        2026-06-15 全面优化：
+        - "收到"/"OK"/"好"/"👌"/"1" → acknowledge_all_user_reminders 取消 pending
+        - "今天别提醒"/"停止提醒" → snooze_user_reminders 顺延到下次 11AM
+        - "完成" → task.status=DONE + acknowledge
+        - 杜同贺痛点：ack 不再需要 active_task（用户主动说"我已知悉"）
+        """
         content_lower = content.lower().strip()
+
+        # === v2 新增：跨任务的 ack/snooze（不依赖 active_task）===
+        ack_keywords = {"收到", "ok", "好的", "知道了", "了解", "好", "1", "👌"}
+        snooze_keywords = {
+            "今天不要再提醒", "今天别烦我", "今天别提醒", "停止提醒",
+            "今天不提醒", "别烦我", "今天别吵我",
+        }
+        if content_lower in ack_keywords:
+            try:
+                svc = ReminderService(db)
+                count = await svc.acknowledge_all_user_reminders(
+                    member.id, channel="wechat"
+                )
+                reply = (
+                    f"✅ 已确认收到，今天 11 点不再提醒你（已取消 {count} 条待发提醒）"
+                    if count > 0
+                    else "✅ 已确认收到"
+                )
+                await self._reply_text(user_id, reply, msg=msg)
+            except Exception as e:
+                logger.error(
+                    f"ack 处理失败 member_id={member.id}: {e}", exc_info=True
+                )
+                await self._reply_text(user_id, "✅ 已确认收到", msg=msg)
+            return True
+
+        if content_lower in snooze_keywords:
+            try:
+                target = next_digest_slot(utcnow())
+                svc = ReminderService(db)
+                count = await svc.snooze_user_reminders(
+                    member.id, until=target
+                )
+                target_str = target.replace(tzinfo=timezone.utc).astimezone(
+                    BEIJING_TZ
+                ).strftime("%m-%d %H:%M")
+                await self._reply_text(
+                    user_id,
+                    f"好的，已推迟 {count} 条提醒到 {target_str}",
+                    msg=msg,
+                )
+            except Exception as e:
+                logger.error(
+                    f"snooze 处理失败 member_id={member.id}: {e}",
+                    exc_info=True,
+                )
+                await self._reply_text(
+                    user_id, "好的，今天先不打扰", msg=msg
+                )
+            return True
+
+        # === 原有：依赖 active_task 的指令（完成/进度/进行中/问题）===
         task = await self._get_active_task(member.id, db)
         if not task:
             return False
@@ -991,11 +1052,15 @@ class MessageHandler:
             if teacher:
                 await notifier.notify_task_completed(teacher, task.title, member.name)
             await self._check_all_completed(task, db)
+            # v2: 任务完成时联动 ack 该用户所有 pending（任务完成 = 不再推任何 reminder）
+            try:
+                svc = ReminderService(db)
+                await svc.acknowledge_all_user_reminders(
+                    member.id, channel="wechat_done"
+                )
+            except Exception as e:
+                logger.error(f"完成联动 ack 失败: {e}", exc_info=True)
             await self._reply_text(user_id, "✅ 已记录完成！辛苦了！", msg=msg)
-            return True
-
-        if content_lower in ("收到", "ok", "好的", "知道了", "了解"):
-            await self._reply_text(user_id, "👍 收到确认，加油！", msg=msg)
             return True
 
         progress_match = re.search(r"进度\s*(\d+)\s*%", content)
@@ -1010,6 +1075,14 @@ class MessageHandler:
                 await notifier.notify_progress_update(teacher, task.title, member.name, content)
             if progress >= 100:
                 await self._check_all_completed(task, db)
+                # 进度 100% 同样联动 ack
+                try:
+                    svc = ReminderService(db)
+                    await svc.acknowledge_all_user_reminders(
+                        member.id, channel="wechat_progress_100"
+                    )
+                except Exception as e:
+                    logger.error(f"进度 100% 联动 ack 失败: {e}", exc_info=True)
             await self._reply_text(user_id, f"📝 已更新进度为 {progress}%！", msg=msg)
             return True
 
