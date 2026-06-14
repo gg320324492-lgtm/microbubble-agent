@@ -22,7 +22,11 @@
 // 2026-06-13 v4 BUMP：修复 __WB_MANIFEST 里 manifest.webmanifest 旧路径导致 SW install
 // 阶段 precache 失败的问题（vite-plugin-pwa 在 generateBundle 把 manifest 写进 SW，
 // manifestHashPlugin 在 closeBundle 才重命名文件，SW 里还引用旧名字 → 410 Gone）
-const SW_VERSION = 'v4-manifest-precache-fix-2026-06-13'
+// 2026-06-14 v5 BUMP：commit a40e84c 修复 dist 漏 commit 事故后，用户浏览器仍报
+// 'Cache.put() encountered a network error' — 老 SW 还在 stuck 在 install 失败状态
+// （老 precache 引用不存在的 index-c2fe833d.js）。BUMP 版本强制浏览器识别为新 SW
+// 重走 install 流程，激活钩子的 caches.delete 会清空老 cache。
+const SW_VERSION = 'v5-cacheput-recovery-2026-06-14'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
