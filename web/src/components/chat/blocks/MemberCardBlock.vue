@@ -18,7 +18,7 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
       <span class="title">{{ block.title || '成员列表' }} ({{ members.length }})</span>
     </div>
     <div v-for="m in members" :key="m.id" class="member-item">
-      <el-avatar :size="40" :src="m.avatar" class="avatar">
+      <el-avatar :size="40" :src="m.avatar" class="avatar" :alt="`${m.name || '成员'}的头像`" :title="`${m.name || '成员'}的头像`">
         {{ m.name?.charAt(0) }}
       </el-avatar>
       <div class="member-info">

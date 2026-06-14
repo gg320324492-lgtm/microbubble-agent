@@ -229,7 +229,7 @@ onUnmounted(() => {
             <el-button text size="small" @click="sidebarCollapsed = !sidebarCollapsed" title="切换侧栏">
               <span style="font-size: 16px;">☰</span>
             </el-button>
-            <el-avatar :size="36" class="bot-avatar">
+            <el-avatar :size="36" class="bot-avatar" alt="小气助手头像" title="小气助手">
               <el-icon><ChatDotRound /></el-icon>
             </el-avatar>
             <div class="header-text">
@@ -269,13 +269,13 @@ onUnmounted(() => {
           <div class="bubble user-bubble">
             <div v-html="renderMarkdown(msg.content)" />
             <div v-if="msg.imageUrl" class="msg-image">
-              <img :src="msg.imageUrl" @click="window.open(msg.imageUrl, '_blank')" />
+              <img :src="msg.imageUrl" :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" @click="window.open(msg.imageUrl, '_blank')" />
             </div>
           </div>
         </div>
 
         <div v-else class="msg-row bot">
-          <el-avatar :size="32" class="bot-msg-avatar">
+          <el-avatar :size="32" class="bot-msg-avatar" alt="小气助手头像" title="小气助手">
             <el-icon><ChatDotRound /></el-icon>
           </el-avatar>
           <div class="bubble bot-bubble">
@@ -309,7 +309,7 @@ onUnmounted(() => {
       </TransitionGroup>
 
       <div v-if="messages.length === 1" class="welcome-hero">
-        <el-avatar :size="80" class="hero-avatar">
+        <el-avatar :size="80" class="hero-avatar" alt="小气助手大头像" title="小气助手">
           <el-icon><ChatDotRound /></el-icon>
         </el-avatar>
         <h2>你好，我是小气</h2>
