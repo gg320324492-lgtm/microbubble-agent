@@ -1,0 +1,100 @@
+{"id":"A01","category":"member","question":"杨慈是研究什么的？","expect":{"intent":"search_info","tools":["get_member_profile","query_members"],"must_contain":["饮用水安全","蜡样芽孢杆菌","微生物消杀"],"must_not_contain":["暂无详细信息","系统故障","技术问题"],"forbidden_names":["杜同贺","陈金薪","吴孟铨","王天志"]}}
+{"id":"A02","category":"member","question":"宋洋做什么方向？","expect":{"intent":"search_info","tools":["get_member_profile","query_members"],"must_contain":["饮用水处理","管网生物膜","膜耦合"],"forbidden_names":["杨慈","杜同贺"]}}
+{"id":"A03","category":"member","question":"请教谁研究饮用水？","expect":{"intent":"recommend_person","tools":["query_members","get_member_profile"],"must_contain":["杨慈","宋洋"],"must_not_contain":["陈金薪","吴孟铨"]}}
+{"id":"A04","category":"member","question":"课题组有谁做水处理？","expect":{"intent":"recommend_person","tools":["query_members"],"must_contain":["雒培媛","宋洋","杨慈"]}}
+{"id":"A05","category":"member","question":"陈金薪 leader 角色","expect":{"intent":"data_query","tools":["get_member_profile","query_members"]}}
+{"id":"A06","category":"member","question":"雒培媛 现在在哪？","expect":{"intent":"search_info","tools":["get_member_profile"],"must_contain":["同济大学","博士"]}}
+{"id":"A07","category":"member","question":"李胜景 做什么","expect":{"intent":"search_info","tools":["get_member_profile"],"must_contain":["水产养殖","高密度","无抗鱼"]}}
+{"id":"A08","category":"member","question":"杜同贺 邮箱","expect":{"intent":"data_query","tools":["get_member_profile"]}}
+{"id":"A09","category":"member","question":"列出所有 leader","expect":{"intent":"data_query","tools":["query_members"]}}
+{"id":"A10","category":"member","question":"王天志 组长的研究方向","expect":{"intent":"search_info","tools":["get_member_profile"],"must_contain":["微纳米气泡技术","副教授"]}}
+{"id":"A11","category":"member","question":"查一下余歆睿","expect":{"intent":"search_info","tools":["get_member_profile"],"must_contain":["藻华控制","小球藻"]}}
+{"id":"A12","category":"member","question":"胡小琪 的研究","expect":{"intent":"search_info","tools":["get_member_profile"],"must_contain":["黑臭水体","泥/水界面","微生境"]}}
+{"id":"A13","category":"member","question":"张懿 干什么的","expect":{"intent":"search_info","tools":["get_member_profile"],"must_contain":["智能化运行","发生器参数","在线监测"]}}
+{"id":"A14","category":"member","question":"课题组有几个人？","expect":{"intent":"data_query","tools":["query_members"]}}
+{"id":"A15","category":"member","question":"组里有哪些角色？","expect":{"intent":"data_query","tools":["query_members"]}}
+{"id":"B01","category":"task","question":"我最近有什么任务？","expect":{"intent":"data_query","tools":["query_tasks"]}}
+{"id":"B02","category":"task","question":"创建一个任务：完成实验报告","expect":{"intent":"execute_action","tools":["create_task"]}}
+{"id":"B03","category":"task","question":"项目当前在做什么？","expect":{"intent":"data_query","tools":["query_tasks"]}}
+{"id":"B04","category":"task","question":"把任务 #1 标记为完成","expect":{"intent":"execute_action","tools":["update_task"]}}
+{"id":"B05","category":"task","question":"紧急任务有哪些？","expect":{"intent":"data_query","tools":["query_tasks"]}}
+{"id":"B06","category":"task","question":"我有多少进行中任务？","expect":{"intent":"data_query","tools":["query_tasks"]}}
+{"id":"B07","category":"task","question":"删除任务 #999","expect":{"intent":"execute_action","tools":["delete_task"]}}
+{"id":"B08","category":"task","question":"延期了怎么办？","expect":{"intent":"casual_chat"}}
+{"id":"B09","category":"task","question":"高优先级任务","expect":{"intent":"data_query","tools":["query_tasks"]}}
+{"id":"B10","category":"task","question":"把任务 #3 分配给陈金薪","expect":{"intent":"execute_action","tools":["update_task"]}}
+{"id":"C01","category":"meeting","question":"最近的会议","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"C02","category":"meeting","question":"上周开了什么会？","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"C03","category":"meeting","question":"有什么关于臭氧微纳米气泡的会议？","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"C04","category":"meeting","question":"今天的会议","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"C05","category":"meeting","question":"2026年5月28日 例会讲了什么","expect":{"intent":"data_query","tools":["query_meetings","get_meeting_detail"]}}
+{"id":"C06","category":"meeting","question":"我有哪些待开的会议？","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"C07","category":"meeting","question":"明天有什么会议？","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"C08","category":"meeting","question":"组会一般讨论什么","expect":{"intent":"explain_concept"}}
+{"id":"C09","category":"meeting","question":"查一下第 3 个会议","expect":{"intent":"data_query","tools":["get_meeting_detail"]}}
+{"id":"C10","category":"meeting","question":"远紫外相关会议","expect":{"intent":"data_query","tools":["query_meetings"]}}
+{"id":"D01","category":"knowledge","question":"什么是 zeta 电位？","expect":{"intent":"explain_concept"}}
+{"id":"D02","category":"knowledge","question":"微纳米气泡有哪些表征方法？","expect":{"intent":"explain_concept"}}
+{"id":"D03","category":"knowledge","question":"知识库里有几篇文献？","expect":{"intent":"data_query"}}
+{"id":"D04","category":"knowledge","question":"搜一下臭氧在水处理中的应用","expect":{"intent":"search_info"}}
+{"id":"D05","category":"knowledge","question":"纳米气泡和微米气泡的区别","expect":{"intent":"explain_concept"}}
+{"id":"D06","category":"knowledge","question":"查一下知识库关于蜡样芽孢杆菌的内容","expect":{"intent":"search_info"}}
+{"id":"D07","category":"knowledge","question":"怎么检测微纳米气泡的尺寸？","expect":{"intent":"explain_concept"}}
+{"id":"D08","category":"knowledge","question":"组里有哪些研究方向？","expect":{"intent":"data_query"}}
+{"id":"D09","category":"knowledge","question":"NTA 是什么？","expect":{"intent":"explain_concept"}}
+{"id":"D10","category":"knowledge","question":"保存这段对话到知识库","expect":{"intent":"execute_action","tools":["save_conversation_knowledge"]}}
+{"id":"E01","category":"project","question":"列出所有项目","expect":{"intent":"data_query","tools":["query_projects"]}}
+{"id":"E02","category":"project","question":"项目进度如何？","expect":{"intent":"data_query","tools":["query_projects"]}}
+{"id":"E03","category":"project","question":"在研项目有几个？","expect":{"intent":"data_query","tools":["query_projects"]}}
+{"id":"E04","category":"project","question":"饮用水项目状态","expect":{"intent":"data_query","tools":["query_projects"]}}
+{"id":"E05","category":"project","question":"立项一个新项目","expect":{"intent":"execute_action","tools":["create_project"]}}
+{"id":"F01","category":"concept","question":"微纳米气泡的稳定性如何？","expect":{"intent":"explain_concept"}}
+{"id":"F02","category":"concept","question":"臭氧氧化的原理","expect":{"intent":"explain_concept"}}
+{"id":"F03","category":"concept","question":"什么是溃灭？","expect":{"intent":"explain_concept"}}
+{"id":"F04","category":"concept","question":"超声法的优缺点","expect":{"intent":"explain_concept"}}
+{"id":"F05","category":"concept","question":"加压溶气法怎么工作？","expect":{"intent":"explain_concept"}}
+{"id":"G01","category":"multiturn","question":"杨慈","expect":{"intent":"search_info","tools":["get_member_profile"]}}
+{"id":"G02","category":"multiturn","question":"她的研究方向","expect":{"intent":"explain_concept"}}
+{"id":"G03","category":"multiturn","question":"她有什么任务？","expect":{"intent":"data_query","tools":["query_tasks"]}}
+{"id":"G04","category":"multiturn","question":"类似的还有谁？","expect":{"intent":"recommend_person","tools":["query_members"]}}
+{"id":"G05","category":"multiturn","question":"他们的邮箱呢","expect":{"intent":"data_query","tools":["get_member_profile"]}}
+{"id":"H01","category":"edge_hallucination","question":"张三丰是研究什么的？","expect":{"intent":"search_info","tools":["get_member_profile","query_members"],"must_not_contain":["张三丰研究","张三丰负责"]}}
+{"id":"H02","category":"edge_hallucination","question":"诸葛亮的研究方向","expect":{"intent":"search_info","must_not_contain":["诸葛亮是","诸葛亮研究"]}}
+{"id":"H03","category":"edge_hallucination","question":"清华大学微纳米气泡实验室","expect":{"intent":"search_info"}}
+{"id":"H04","category":"edge_hallucination","question":"小气助手的训练数据是哪些？","expect":{"intent":"explain_concept"}}
+{"id":"H05","category":"edge_hallucination","question":"杨茲是研究什么的？","expect":{"intent":"search_info","tools":["get_member_profile","query_members"]}}
+{"id":"H06","category":"edge_hallucination","question":"","expect":{"intent":"casual_chat"}}
+{"id":"H07","category":"edge_hallucination","question":"                    ","expect":{"intent":"casual_chat"}}
+{"id":"H08","category":"edge_hallucination","question":"有谁能造时光机？","expect":{"intent":"casual_chat"}}
+{"id":"H09","category":"edge_hallucination","question":"我想找一个会武术的研究人员","expect":{"intent":"recommend_person"}}
+{"id":"H10","category":"edge_hallucination","question":"课题组有没有外星人？","expect":{"intent":"casual_chat"}}
+{"id":"H11","category":"edge_hallucination","question":"😊 🥺 给我讲个笑话","expect":{"intent":"casual_chat"}}
+{"id":"H12","category":"edge_hallucination","question":"你是谁","expect":{"intent":"casual_chat"}}
+{"id":"H13","category":"edge_hallucination","question":"请用一句话介绍微纳米气泡","expect":{"intent":"explain_concept"}}
+{"id":"H14","category":"edge_hallucination","question":"我想删除杨慈","expect":{"intent":"execute_action","tools":["delete_member"]}}
+{"id":"H15","category":"edge_hallucination","question":"把 1000000000 加到 2000000000 等于多少","expect":{"intent":"explain_concept"}}
+{"id":"I01","category":"casual","question":"你好","expect":{"intent":"casual_chat"}}
+{"id":"I02","category":"casual","question":"今天天气怎么样？","expect":{"intent":"casual_chat"}}
+{"id":"I03","category":"casual","question":"谢谢","expect":{"intent":"casual_chat"}}
+{"id":"I04","category":"casual","question":"你会什么？","expect":{"intent":"casual_chat"}}
+{"id":"I05","category":"casual","question":"有什么能帮到我的？","expect":{"intent":"casual_chat"}}
+{"id":"J01","category":"memory","question":"记住：我叫小明","expect":{"intent":"execute_action","tools":["save_memory"]}}
+{"id":"J02","category":"memory","question":"你记住了什么？","expect":{"intent":"data_query","tools":["search_memory"]}}
+{"id":"J03","category":"memory","question":"忘掉我的名字","expect":{"intent":"execute_action","tools":["forget_memory"]}}
+{"id":"J04","category":"memory","question":"以后回答都用中文","expect":{"intent":"execute_action","tools":["save_memory"]}}
+{"id":"J05","category":"memory","question":"不要再用表情了","expect":{"intent":"execute_action","tools":["save_memory"]}}
+{"id":"K01","category":"cross","question":"和杨慈开个会讨论饮用水","expect":{"intent":"execute_action","tools":["create_meeting"]}}
+{"id":"K02","category":"cross","question":"给我讲个微纳米气泡的故事","expect":{"intent":"casual_chat"}}
+{"id":"K03","category":"cross","question":"今天做完杨慈那个任务的概率","expect":{"intent":"casual_chat"}}
+{"id":"K04","category":"cross","question":"为杨慈推荐学习资源","expect":{"intent":"recommend_person"}}
+{"id":"K05","category":"cross","question":"微纳米气泡 杨慈 饮用水","expect":{"intent":"search_info"}}
+{"id":"L01","category":"extreme","question":"abcdefghijklmnopqrstuvwxyz","expect":{"intent":"casual_chat"}}
+{"id":"L02","category":"extreme","question":"水处理水处理水处理水处理水处理水处理水处理","expect":{"intent":"search_info"}}
+{"id":"L03","category":"extreme","question":"a","expect":{"intent":"casual_chat"}}
+{"id":"L04","category":"extreme","question":"?","expect":{"intent":"casual_chat"}}
+{"id":"L05","category":"extreme","question":"给一个长长长长长长长长长长长的回复","expect":{"intent":"casual_chat"}}
+{"id":"L06","category":"extreme","question":"中文 繁體字 mixed with English","expect":{"intent":"casual_chat"}}
+{"id":"L07","category":"extreme","question":"' or 1=1; DROP TABLE members;--","expect":{"intent":"casual_chat"}}
+{"id":"L08","category":"extreme","question":"a\nb\nc\nd\ne\nf\ng","expect":{"intent":"casual_chat"}}
+{"id":"L09","category":"extreme","question":"赵航佳、杨慈、宋洋 三个人谁更适合做饮用水","expect":{"intent":"recommend_person"}}
+{"id":"L10","category":"extreme","question":"分析下我们课题组未来 5 年的研究方向","expect":{"intent":"explain_concept"}}
