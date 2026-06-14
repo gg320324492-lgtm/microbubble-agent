@@ -6,6 +6,7 @@
 - Reflection 失败时不阻塞主流程：吞掉异常，返回 score=0 + addresses_question=True
   （Plan agent 5c：仍 yield critique 事件让前端知道）
 - 低分 fallback 出口时 UI 显示警告（前端 toolTrace 折叠区 ⚠️ 徽章）
+- 2026-06-14 收官：加 grounded_in_tools 评分维度 + 喂 tool_results 给 critic
 
 跨进程安全（铁律 1）：
 - llm 从 ctx.llm 拿，None 时调用方临时创建
@@ -32,11 +33,12 @@ class CritiqueResult(BaseModel):
     addresses_question: bool = True
     has_synthesis: bool = False  # 是否做了筛选/推理（不是单纯展示数据）
     has_citations: bool = False  # 是否引用了具体数据
+    grounded_in_tools: int = Field(default=10, ge=0, le=10)  # 2026-06-14 收官：防 hallucination
     missing: list[str] = Field(default_factory=list)  # 缺失的方面
     suggestion: str = ""  # 改进建议（注入下一轮 system prompt）
 
 
-_CRITIQUE_PROMPT = """你是响应质量评审员。基于以下 3 维度给 1-10 分。
+_CRITIQUE_PROMPT = """你是响应质量评审员。基于以下 4 维度给 1-10 分。
 
 ## 评分维度
 1. **addresses_question (1-10)**: 是否直接回答了用户的问题？
@@ -52,11 +54,17 @@ _CRITIQUE_PROMPT = """你是响应质量评审员。基于以下 3 维度给 1-1
    - true：引用了具体工具返回的字段、ID、标题等
    - false：泛泛而谈
 
+4. **grounded_in_tools (1-10)**: 回答中出现的具体信息（姓名/研究方向/技能/项目名/会议标题）是否严格来自本轮工具调用结果？
+   - 1-3：含编造的人名/字段/标题（hallucination），或使用"暂无详细信息"/"待补充"等占位符
+   - 4-6：部分信息无工具支撑，混入了凭印象/归纳的内容
+   - 7-10：所有具体信息都可追溯到 tool_results 中的字段
+
 ## 输入
 用户问题：{question}
 用户意图：{intent_category} ({intent_reasoning})
 助手响应：{response_text}
 调用的工具：{tool_calls}
+工具实际返回（用于 grounding 校验）：{tool_results}
 生成的富文本块数：{rich_block_count}
 
 ## 输出（严格 JSON）
@@ -65,6 +73,7 @@ _CRITIQUE_PROMPT = """你是响应质量评审员。基于以下 3 维度给 1-1
   "addresses_question": bool,
   "has_synthesis": bool,
   "has_citations": bool,
+  "grounded_in_tools": 1-10,
   "missing": ["缺失的方面 1", "缺失的方面 2"],
   "suggestion": "具体改进建议（注入到下一轮 system prompt）"
 }}
@@ -102,12 +111,19 @@ async def critique_response(
         f"- {tc.get('name', '?')}({list(tc.get('input', {}).keys())})"
         for tc in tool_calls[:10]
     ) or "（无）"
+    # 2026-06-14 收官：把 tool_calls 的 output 字段也喂给 critic（截断到 6KB），
+    # 让它能 cross-check 回答里出现的姓名/字段是否在工具返回里
+    tool_results_text = "\n".join(
+        f"[{tc.get('name', '?')}] {json.dumps(tc.get('output', {}), ensure_ascii=False, default=str)[:1500]}"
+        for tc in tool_calls[:5] if tc.get("output")
+    ) or "（无工具返回）"
     prompt = _CRITIQUE_PROMPT.format(
         question=user_question,
         intent_category=intent.category.value,
         intent_reasoning=intent.reasoning,
         response_text=response_text[:3000],  # 截断避免 token 爆炸
         tool_calls=tool_call_summary,
+        tool_results=tool_results_text[:6000],
         rich_block_count=len(rich_blocks),
     )
 
@@ -138,11 +154,12 @@ async def critique_response(
             addresses_question=bool(result_dict.get("addresses_question", True)),
             has_synthesis=bool(result_dict.get("has_synthesis", False)),
             has_citations=bool(result_dict.get("has_citations", False)),
+            grounded_in_tools=max(0, min(10, int(result_dict.get("grounded_in_tools", 10)))),
             missing=result_dict.get("missing", []),
             suggestion=result_dict.get("suggestion", ""),
         )
         logger.info(
-            f"critique: score={result.score}/10 "
+            f"critique: score={result.score}/10 grounded={result.grounded_in_tools}/10 "
             f"synthesis={result.has_synthesis} citations={result.has_citations} "
             f"intent={intent.category.value}"
         )
@@ -161,7 +178,10 @@ async def critique_response(
 
 
 def critique_to_sse_event(result: CritiqueResult) -> StreamEvent:
-    """CritiqueResult → StreamEvent（前端展示自评分 + 警告）"""
+    """CritiqueResult → StreamEvent（前端展示自评分 + 警告）
+
+    2026-06-14 收官：label 字段保留（前端 toggle 开启时显示），off 时由前端 v-if 隐藏
+    """
     return StreamEvent(
         type="critique",
         critique=result.model_dump(),

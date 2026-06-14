@@ -140,11 +140,16 @@ async def get_member_profile(input: GetMemberProfileInput, ctx: ToolContext) -> 
     from app.models.project import Project, ProjectMember
 
     svc = MemberService(ctx.db)
-    m = await svc.get_member_by_name(input.member_name)
+    # 先精确匹配；失败再 ilike 模糊匹配（应对 LLM 抽名时多带空格/标点/同音字）
+    m = await svc.get_member_by_name(input.member_name.strip())
+    if not m:
+        # 模糊匹配：用 name ilike 找第一个
+        fuzzy = await svc.get_members(name=input.member_name.strip())
+        m = fuzzy[0] if fuzzy else None
     if not m:
         return {
             "status": "error", "code": "NOT_FOUND",
-            "message": f"未找到成员 {input.member_name!r}",
+            "message": f"未找到成员 {input.member_name!r}，请确认姓名拼写",
             "id": 0, "name": input.member_name, "role": "member",
         }
 
