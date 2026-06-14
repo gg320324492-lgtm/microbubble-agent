@@ -737,6 +737,11 @@ done
 
 - **unplugin-vue-components 不检测 JS 服务调用** — `ElMessageBox.confirm()` / `ElMessage.success()` 等服务 API 不在模板中使用 `<el-message-box>` 标签，`ElementPlusResolver` 无法为其自动导入 CSS。`el-message-box.css` 和 `el-message.css` 完全不会被打包进 dist。**修复**：在 `main.js` 中手动 `import 'element-plus/theme-chalk/el-message.css'` 和 `el-message-box.css`。**验证方法**：`npm run build` 后搜索 dist CSS 是否包含 `.el-message-box`。**教训**：新增使用 Element Plus 服务 API 时，必须手动导入对应 CSS
 - **dist 提交必须 `git add -f`** — `web/dist/` 在 `.gitignore` 中，`git add web/dist/` 静默被拦截不报错，只删除旧文件不加新文件 → 线上 404。**每次 `npm run build` 后必须 `git add -f web/dist/` 提交产物**
+- **`git add -A` 静默跳过 .gitignore 内文件（2026-06-14 收官新坑，commit `a40e84c`）** — 上次 commit `e2a9a49` 用了 `git add -A app/ web/src/ web/dist/` 想"全部 add"，但 `web/dist/` 在 .gitignore 第 50 行 → git **静默**跳过整个 dist 目录（不报错、不警告），结果 commit 里只有"删除旧 dist 文件"没有"添加新 dist 文件"。服务器 git pull 后 `web/dist/assets/index-*.js` 数量为 0，部署安全检查中止（commit `2b38c99` 加的健全性检查救了一命）。用户浏览器报 ERR_ABORTED 404 + SW `bad-precaching-response`。**修复**：`git add -A` 后**必须**追加 `git add -f web/dist/`。**或者**直接两步走：① `git add -A app/ web/src/` ② `git add -f web/dist/`。**纪律（永久）**：
+  - `git add -A` 对 .gitignore 内的文件**静默跳过**，不报任何错（与 `git add` 不存在的路径报错不同）
+  - 提交前**必跑** `git ls-files web/dist/assets/index-*.js | wc -l` 应该 >= 1
+  - 提交后 `git show --stat HEAD | grep "dist/assets/index-"` 看新增/修改/删除的 index js 数量
+  - 永远**不要**只依赖 `git status`（它默认也隐藏 ignored 文件，需要 `--ignored` 才显示）
 - **bash 数组防 glob 展开** — 字符串变量 `EXCLUDE_DIRS="-not -path */node_modules/*"` 在函数中 `$EXCLUDE_DIRS` 展开时，`*/node_modules/*` 会被 shell glob 展开为实际文件路径，破坏 `find` 的 `-path` pattern。**修复**：改用 bash 数组 `EXCLUDE_DIRS=(-not -path "*/node_modules/*")` + `"${EXCLUDE_DIRS[@]}"` 展开
 - **git log --reverse --max-count=1 陷阱** — `--max-count=1` 先于 `--reverse` 执行，结果永远是 HEAD 而非最早提交。正确做法：`git rev-list --max-parents=0 HEAD` 找根提交后再取日期
 - **deploy-auto.sh 自更新局限** — `git pull` 后脚本文件已更新到磁盘，但当前 bash 进程仍在执行旧版内存内容。新版统计逻辑需下次部署（新进程）才能生效。紧急时可 `bash scripts/deploy-auto.sh` 手动重跑
