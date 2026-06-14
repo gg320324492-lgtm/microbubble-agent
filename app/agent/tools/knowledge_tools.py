@@ -31,7 +31,7 @@ class SearchKnowledgeOutput(BaseModel):
 
 @tool(
     name="search_knowledge",
-    description="搜索知识库。当用户询问专业问题、查找文献、查询实验方法等时使用。",
+    description="搜索知识库。当用户询问专业问题、查找文献、查询实验方法等时使用。返回 0 结果时会附 hint 提示是否需要 web_search 补充。",
     input_model=SearchKnowledgeInput,
     output_model=SearchKnowledgeOutput,
 )
@@ -48,9 +48,17 @@ async def search_knowledge(input: SearchKnowledgeInput, ctx: ToolContext) -> dic
         enable_graph=True,
         enable_rerank=True,
     )
-    return {
+    result = {
         "status": "success",
         "count": len(results),
         "results": results,
         "rich_block_type": "knowledge_ref",
     }
+    # 2026-06-14 收官：本地知识库返回 0 结果时，hint 调 web_search 补充
+    # 防狼：防止模型在 synthesis 阶段 fake 输出 <function=web_search> 误导用户
+    if len(results) == 0:
+        result["hint"] = (
+            "本地知识库无结果。建议继续调 web_search 工具获取最新网络资料。"
+            "调用示例: web_search(query='<用户问题>', max_results=5)"
+        )
+    return result

@@ -54,10 +54,21 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之
 
 - recommend_person: 用户想找人/请教谁/谁能帮忙（如「请教谁」「谁能指导」）
 - search_info: 用户想找资料/文献/方法/知识（如「怎么检测」「有什么方案」）
-- explain_concept: 用户想理解概念/原理/定义（如「什么是」「原理」）
-- execute_action: 用户想执行操作（创建/修改/删除 任务/会议/项目）
-- data_query: 用户想查询数据（任务列表/会议列表/统计）
-- casual_chat: 闲聊/问候/无法分类
+- explain_concept: 用户想理解概念/原理/定义（如「什么是」「原理」「如何工作」）
+- execute_action: 用户想执行操作。包括：
+  - 任务/会议/项目的增删改（如「创建任务」「删除会议」「立项」）
+  - **记忆操作**（如「记住：XX」「忘掉XX」「以后XX」「不要XX」→ save_memory / forget_memory）
+  - **保存知识**（如「保存到知识库」→ save_conversation_knowledge）
+  - 提醒/通知（如「提醒我」）
+- data_query: 用户想查询数据（任务列表/会议列表/统计「多少」「几个」）
+- casual_chat: 闲聊/问候/无法分类（如「你好」「谢谢」「天气」）
+
+关键区分点（容易混淆）：
+- 「记住 X」/「忘掉 X」/「以后 X」→ execute_action（不是 casual_chat）
+- 「保存 X 到知识库」→ execute_action
+- 「X 是研究什么的」→ search_info（找人/找资料）
+- 「X 在做什么」→ data_query（具体人员查具体任务）
+- 「什么是 X」/「X 的原理」→ explain_concept
 
 输出严格 JSON（无其他文字）：
 {{

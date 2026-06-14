@@ -1,0 +1,240 @@
+{"id":"T01","category":"expand_kb","question":"知识库里有几篇关于 zeta 电位的知识？","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T02","category":"expand_kb","question":"知识库里关于 NTA 的最新研究有哪些？","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T03","category":"expand_kb","question":"知识库里关于 DMPO 的知识有几条？","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T04","category":"expand_kb","question":"知识库关于 蜡样芽孢杆菌 有几篇资料？","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T05","category":"expand_kb","question":"知识库关于 臭氧微纳米气泡 综述","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T06","category":"expand_kb","question":"知识库关于 黑臭水体 知识总结","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T07","category":"expand_kb","question":"知识库关于 自由基 的全部内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T08","category":"expand_kb","question":"知识库关于 微纳米气泡发生器 的所有条目","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T09","category":"expand_kb","question":"知识库关于 水产养殖 的应用案例","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T10","category":"expand_kb","question":"知识库关于 饮用水处理 全部内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T11","category":"expand_kb","question":"知识库关于 表面清洗 全部内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T12","category":"expand_kb","question":"知识库关于 农业 应用","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T13","category":"expand_kb","question":"知识库里近一周新增了哪些内容？","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T14","category":"expand_kb","question":"知识库中公式库的最新公式","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T15","category":"expand_kb","question":"知识库中假设库的最新假设","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T16","category":"expand_kb","question":"知识库中实体图谱的关键节点","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T17","category":"expand_kb","question":"知识库中关于 zeta 的内容质量如何？","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T18","category":"expand_kb","question":"知识库中关于 EPR 的全部内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T19","category":"expand_kb","question":"知识库中关于 CFD 模拟 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T20","category":"expand_kb","question":"知识库中关于 高级氧化 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T21","category":"expand_kb","question":"知识库中关于 膜技术 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T22","category":"expand_kb","question":"知识库中关于 发生器设计 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T23","category":"expand_kb","question":"知识库中关于 实验方案 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T24","category":"expand_kb","question":"知识库中关于 工程化应用 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T25","category":"expand_kb","question":"知识库中关于 仪器设备 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T26","category":"expand_kb","question":"知识库中关于 浓度 检测的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T27","category":"expand_kb","question":"知识库中关于 实验设计 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T28","category":"expand_kb","question":"知识库中关于 检测方法 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T29","category":"expand_kb","question":"知识库中关于 论文 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"T30","category":"expand_kb","question":"知识库中关于 综述 的内容","kind":"external_knowledge","scope":"kb_check"}
+{"id":"U01","category":"cross_member","question":"杨慈、宋洋 在饮用水方向上的研究互补吗？","kind":"cross","scope":"people_relationship"}
+{"id":"U02","category":"cross_member","question":"杜同贺 和 杨慈 的研究方向能合作吗？","kind":"cross","scope":"people_relationship"}
+{"id":"U03","category":"cross_member","question":"杜同贺的 水质提升 和 杨慈的 饮用水安全 有什么共同点？","kind":"cross","scope":"people_relationship"}
+{"id":"U04","category":"cross_member","question":"雒培媛 和 杨慈 都在做饮用水吗？","kind":"cross","scope":"people_relationship"}
+{"id":"U05","category":"cross_member","question":"同做水处理的成员有几个？","kind":"cross","scope":"people_relationship"}
+{"id":"U06","category":"cross_member","question":"王天志组长的研究方向与杜同贺有什么关联？","kind":"cross","scope":"people_relationship"}
+{"id":"U07","category":"cross_member","question":"组里最年轻和最年长的成员分别是？","kind":"cross","scope":"people_relationship"}
+{"id":"U08","category":"cross_member","question":"做水产的、做水处理的、做水设备的，分别有谁？","kind":"cross","scope":"people_relationship"}
+{"id":"U09","category":"cross_member","question":"谁和谁有共同研究方向？","kind":"cross","scope":"people_relationship"}
+{"id":"U10","category":"cross_member","question":"组里做 自由基 的和做 饮用水 的可以一起做项目吗？","kind":"cross","scope":"people_relationship"}
+{"id":"U11","category":"cross_member","question":"哪些成员可能合作做水处理 + 自由基联用技术？","kind":"cross","scope":"people_relationship"}
+{"id":"U12","category":"cross_member","question":"组里哪些人是 leader？","kind":"cross","scope":"people_relationship"}
+{"id":"U13","category":"cross_member","question":"组里 admin 角色和 leader 角色各几个？","kind":"cross","scope":"people_relationship"}
+{"id":"U14","category":"cross_member","question":"做 表面清洗 的人有几位？","kind":"cross","scope":"people_relationship"}
+{"id":"U15","category":"cross_member","question":"做 农业 方向的有几个成员？","kind":"cross","scope":"people_relationship"}
+{"id":"U16","category":"cross_member","question":"做 自由基 的成员都是谁？","kind":"cross","scope":"people_relationship"}
+{"id":"U17","category":"cross_member","question":"做 设备开发 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U18","category":"cross_member","question":"做 管网水质 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U19","category":"cross_member","question":"做 水产养殖 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U20","category":"cross_member","question":"做 盐碱土 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U21","category":"cross_member","question":"做 气泡成核 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U22","category":"cross_member","question":"做 智能化运行 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U23","category":"cross_member","question":"做 发生器优化 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U24","category":"cross_member","question":"做 装备研发 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U25","category":"cross_member","question":"做 微生物消杀 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U26","category":"cross_member","question":"做 膜技术 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U27","category":"cross_member","question":"做 生物膜 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U28","category":"cross_member","question":"做 高级氧化 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U29","category":"cross_member","question":"做 印染废水 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"U30","category":"cross_member","question":"做 重金属去除 的成员","kind":"cross","scope":"people_relationship"}
+{"id":"V01","category":"deep_knowledge","question":"微纳米气泡的破裂产生的 局部高温 (5000K) 怎么计算？","kind":"deep","scope":"theory"}
+{"id":"V02","category":"deep_knowledge","question":"微纳米气泡的 ·OH 自由基产率怎么用化学发光法测定？","kind":"deep","scope":"method"}
+{"id":"V03","category":"deep_knowledge","question":"微纳米气泡在液体中的溶解氧过饱和度上限","kind":"deep","scope":"theory"}
+{"id":"V04","category":"deep_knowledge","question":"微纳米气泡的 zeta 电位与 pH 关系曲线","kind":"deep","scope":"theory"}
+{"id":"V05","category":"deep_knowledge","question":"微纳米气泡发生器的能量效率公式","kind":"deep","scope":"method"}
+{"id":"V06","category":"deep_knowledge","question":"微纳米气泡对病原微生物的致死机制（多靶点）","kind":"deep","scope":"theory"}
+{"id":"V07","category":"deep_knowledge","question":"微纳米气泡与传统曝气氧传质系数对比","kind":"deep","scope":"method"}
+{"id":"V08","category":"deep_knowledge","question":"微纳米气泡的密度比水小多少？为什么仍能悬浮？","kind":"deep","scope":"theory"}
+{"id":"V09","category":"deep_knowledge","question":"微纳米气泡的 Ostwald 熟化机制","kind":"deep","scope":"theory"}
+{"id":"V10","category":"deep_knowledge","question":"微纳米气泡发生器中 多孔膜 的孔径与气泡尺寸关系","kind":"deep","scope":"method"}
+{"id":"V11","category":"deep_knowledge","question":"微纳米气泡 + 紫外联用对 微囊藻毒素 的去除","kind":"deep","scope":"application"}
+{"id":"V12","category":"deep_knowledge","question":"微纳米气泡对蓝藻（铜绿微囊藻）的杀灭效果","kind":"deep","scope":"application"}
+{"id":"V13","category":"deep_knowledge","question":"微纳米气泡在 高浊度水 中的应用限制","kind":"deep","scope":"theory"}
+{"id":"V14","category":"deep_knowledge","question":"微纳米气泡在 含油污水 中的破乳效果","kind":"deep","scope":"application"}
+{"id":"V15","category":"deep_knowledge","question":"微纳米气泡在 电镀废水 中的重金属去除","kind":"deep","scope":"application"}
+{"id":"V16","category":"deep_knowledge","question":"微纳米气泡发生器中 旋流 设计的 CFD 优化","kind":"deep","scope":"method"}
+{"id":"V17","category":"deep_knowledge","question":"微纳米气泡在 油田回注水 中的应用","kind":"deep","scope":"application"}
+{"id":"V18","category":"deep_knowledge","question":"微纳米气泡在 煤矿矿井水 处理","kind":"deep","scope":"application"}
+{"id":"V19","category":"deep_knowledge","question":"微纳米气泡对 垃圾渗滤液 的处理","kind":"deep","scope":"application"}
+{"id":"V20","category":"deep_knowledge","question":"微纳米气泡对 印染废水色度 去除","kind":"deep","scope":"application"}
+{"id":"V21","category":"deep_knowledge","question":"微纳米气泡发生器的 寿命 与维护周期","kind":"deep","scope":"method"}
+{"id":"V22","category":"deep_knowledge","question":"微纳米气泡 实际工程 中 吨水能耗","kind":"deep","scope":"method"}
+{"id":"V23","category":"deep_knowledge","question":"微纳米气泡 + PAC 混凝 协同处理","kind":"deep","scope":"method"}
+{"id":"V24","category":"deep_knowledge","question":"微纳米气泡在 海水淡化 中的应用","kind":"deep","scope":"application"}
+{"id":"V25","category":"deep_knowledge","question":"微纳米气泡对 黑臭河道底泥 修复","kind":"deep","scope":"application"}
+{"id":"V26","category":"deep_knowledge","question":"微纳米气泡 + 生物接触氧化 工艺","kind":"deep","scope":"method"}
+{"id":"V27","category":"deep_knowledge","question":"微纳米气泡对 抗生素废水 中残留抗生素去除","kind":"deep","scope":"application"}
+{"id":"V28","category":"deep_knowledge","question":"微纳米气泡对 微塑料 去除","kind":"deep","scope":"application"}
+{"id":"V29","category":"deep_knowledge","question":"微纳米气泡对 新型污染物 (PFOA) 去除","kind":"deep","scope":"application"}
+{"id":"V30","category":"deep_knowledge","question":"微纳米气泡对 持久性有机污染物 (POPs) 降解","kind":"deep","scope":"application"}
+{"id":"W01","category":"scenario","question":"如果我是 王天志 老师的学生，要做饮用水方向，应该怎么入门？","kind":"scenario","scope":"scenario"}
+{"id":"W02","category":"scenario","question":"如果我想读 杨慈 方向的博士，应该选什么学校？","kind":"scenario","scope":"scenario"}
+{"id":"W03","category":"scenario","question":"如果我是 杜同贺 的合作方，怎么合作？","kind":"scenario","scope":"scenario"}
+{"id":"W04","category":"scenario","question":"如果组里有人想转去做 微纳米气泡+自由基，应该看什么文献？","kind":"scenario","scope":"scenario"}
+{"id":"W05","category":"scenario","question":"如果组里新来一个 研一学生，他应该先学什么？","kind":"scenario","scope":"scenario"}
+{"id":"W06","category":"scenario","question":"组里研三要毕业，应该先做什么？","kind":"scenario","scope":"scenario"}
+{"id":"W07","category":"scenario","question":"导师让做 横向项目（与企业合作），怎么开展？","kind":"scenario","scope":"scenario"}
+{"id":"W08","category":"scenario","question":"导师让做 纵向项目（基金委），怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W09","category":"scenario","question":"如果我要投稿 微纳米气泡 相关期刊，应该选哪些？","kind":"scenario","scope":"scenario"}
+{"id":"W10","category":"scenario","question":"如果要参加 微纳米气泡 相关会议，有哪些？","kind":"scenario","scope":"scenario"}
+{"id":"W11","category":"scenario","question":"如果组里要采购 微纳米气泡发生器，应该选什么品牌？","kind":"scenario","scope":"scenario"}
+{"id":"W12","category":"scenario","question":"如果要给企业做 微纳米气泡应用 演示，应该准备什么？","kind":"scenario","scope":"scenario"}
+{"id":"W13","category":"scenario","question":"如果企业要 微纳米气泡 + 饮用水 中试方案，怎么出？","kind":"scenario","scope":"scenario"}
+{"id":"W14","category":"scenario","question":"如果要申请 微纳米气泡 相关专利，应该怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W15","category":"scenario","question":"如果要做 微纳米气泡 综述论文，怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W16","category":"scenario","question":"如果要做 微纳米气泡 项目结题报告 怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W17","category":"scenario","question":"如果要做 微纳米气泡 立项书 怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W18","category":"scenario","question":"如果要做 微纳米气泡 学位论文 怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W19","category":"scenario","question":"如果要做 微纳米气泡 答辩 PPT 怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W20","category":"scenario","question":"如果组里要做 微纳米气泡 公众号文章，怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W21","category":"scenario","question":"如果组里要做 微纳米气泡 实验视频 拍摄脚本","kind":"scenario","scope":"scenario"}
+{"id":"W22","category":"scenario","question":"如果组里要做 微纳米气泡 实验事故应急","kind":"scenario","scope":"scenario"}
+{"id":"W23","category":"scenario","question":"如果企业来谈 微纳米气泡 技术合作 怎么接待？","kind":"scenario","scope":"scenario"}
+{"id":"W24","category":"scenario","question":"如果要做 微纳米气泡 实验安全 培训 怎么讲？","kind":"scenario","scope":"scenario"}
+{"id":"W25","category":"scenario","question":"如果组里要做 微纳米气泡 设备维护方案 怎么写？","kind":"scenario","scope":"scenario"}
+{"id":"W26","category":"scenario","question":"如果要做 微纳米气泡 设备操作手册","kind":"scenario","scope":"scenario"}
+{"id":"W27","category":"scenario","question":"如果要做 微纳米气泡 实验记录本模板","kind":"scenario","scope":"scenario"}
+{"id":"W28","category":"scenario","question":"如果组里要做 微纳米气泡 数据管理方案","kind":"scenario","scope":"scenario"}
+{"id":"W29","category":"scenario","question":"如果组里要做 微纳米气泡 项目进度报告 模板","kind":"scenario","scope":"scenario"}
+{"id":"W30","category":"scenario","question":"如果组里要做 微纳米气泡 论文管理 方案","kind":"scenario","scope":"scenario"}
+{"id":"X01","category":"data_drive","question":"知识库里与 微纳米气泡+自由基 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X02","category":"data_drive","question":"知识库里与 微纳米气泡+饮用水 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X03","category":"data_drive","question":"知识库里与 微纳米气泡+农业 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X04","category":"data_drive","question":"知识库里与 微纳米气泡+黑臭水体 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X05","category":"data_drive","question":"知识库里与 微纳米气泡+水产 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X06","category":"data_drive","question":"知识库里与 微纳米气泡+印染 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X07","category":"data_drive","question":"知识库里与 微纳米气泡+重金属 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X08","category":"data_drive","question":"知识库里与 微纳米气泡+微塑料 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X09","category":"data_drive","question":"知识库里与 微纳米气泡+抗生素 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X10","category":"data_drive","question":"知识库里与 微纳米气泡+垃圾渗滤液 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X11","category":"data_drive","question":"知识库里与 微纳米气泡+微藻 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X12","category":"data_drive","question":"知识库里与 微纳米气泡+海水 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X13","category":"data_drive","question":"知识库里与 微纳米气泡+油田 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X14","category":"data_drive","question":"知识库里与 微纳米气泡+矿井水 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X15","category":"data_drive","question":"知识库里与 微纳米气泡+含油污水 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X16","category":"data_drive","question":"知识库里与 微纳米气泡+高浊度 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X17","category":"data_drive","question":"知识库里与 微纳米气泡+膜污染 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X18","category":"data_drive","question":"知识库里与 微纳米气泡+膜技术 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X19","category":"data_drive","question":"知识库里与 微纳米气泡+生物膜 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X20","category":"data_drive","question":"知识库里与 微纳米气泡+CFD 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X21","category":"data_drive","question":"知识库里与 微纳米气泡+膜组件 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X22","category":"data_drive","question":"知识库里与 微纳米气泡+膜分离 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X23","category":"data_drive","question":"知识库里与 微纳米气泡+膜清洗 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X24","category":"data_drive","question":"知识库里与 微纳米气泡+陶瓷膜 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X25","category":"data_drive","question":"知识库里与 微纳米气泡+中空纤维膜 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X26","category":"data_drive","question":"知识库里与 微纳米气泡+超滤 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X27","category":"data_drive","question":"知识库里与 微纳米气泡+纳滤 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X28","category":"data_drive","question":"知识库里与 微纳米气泡+反渗透 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X29","category":"data_drive","question":"知识库里与 微纳米气泡+MBR 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"X30","category":"data_drive","question":"知识库里与 微纳米气泡+高级氧化 相关的所有内容","kind":"data","scope":"data_query"}
+{"id":"Y01","category":"project","question":"项目 黑臭水体无药剂低能耗治理 当前阶段","kind":"project","scope":"project"}
+{"id":"Y02","category":"project","question":"项目 饮用水水质提升与安全保障 当前阶段","kind":"project","scope":"project"}
+{"id":"Y03","category":"project","question":"项目 水产高密度无抗养殖与品质改善 当前阶段","kind":"project","scope":"project"}
+{"id":"Y04","category":"project","question":"项目 气泡成核过程调控 当前阶段","kind":"project","scope":"project"}
+{"id":"Y05","category":"project","question":"项目 表面清洗 当前阶段","kind":"project","scope":"project"}
+{"id":"Y06","category":"project","question":"我参与了哪些项目？","kind":"project","scope":"project"}
+{"id":"Y07","category":"project","question":"项目 1 的负责人","kind":"project","scope":"project"}
+{"id":"Y08","category":"project","question":"项目 2 的成员","kind":"project","scope":"project"}
+{"id":"Y09","category":"project","question":"项目 3 的预算","kind":"project","scope":"project"}
+{"id":"Y10","category":"project","question":"项目 4 的状态","kind":"project","scope":"project"}
+{"id":"Y11","category":"project","question":"项目 5 周期","kind":"project","scope":"project"}
+{"id":"Y12","category":"project","question":"项目 1 当前在做什么","kind":"project","scope":"project"}
+{"id":"Y13","category":"project","question":"项目 2 的所有任务","kind":"project","scope":"project"}
+{"id":"Y14","category":"project","question":"项目 3 的会议","kind":"project","scope":"project"}
+{"id":"Y15","category":"project","question":"项目 4 的文档","kind":"project","scope":"project"}
+{"id":"Y16","category":"project","question":"项目 5 任务数","kind":"project","scope":"project"}
+{"id":"Y17","category":"project","question":"项目 1 与项目 2 的关系","kind":"project","scope":"project"}
+{"id":"Y18","category":"project","question":"项目 3 的里程碑","kind":"project","scope":"project"}
+{"id":"Y19","category":"project","question":"项目 4 的报告","kind":"project","scope":"project"}
+{"id":"Y20","category":"project","question":"项目 5 的时间表","kind":"project","scope":"project"}
+{"id":"Y21","category":"project","question":"所有项目的负责人","kind":"project","scope":"project"}
+{"id":"Y22","category":"project","question":"所有项目的当前状态","kind":"project","scope":"project"}
+{"id":"Y23","category":"project","question":"所有项目的成员","kind":"project","scope":"project"}
+{"id":"Y24","category":"project","question":"所有项目的当前任务","kind":"project","scope":"project"}
+{"id":"Y25","category":"project","question":"所有项目本月进展","kind":"project","scope":"project"}
+{"id":"Y26","category":"project","question":"项目 黑臭水体 的最近一次会议","kind":"project","scope":"project"}
+{"id":"Y27","category":"project","question":"项目 饮用水 的最近一次任务","kind":"project","scope":"project"}
+{"id":"Y28","category":"project","question":"项目 水产 的最近一次更新","kind":"project","scope":"project"}
+{"id":"Y29","category":"project","question":"项目 气泡成核 的最近一次例会","kind":"project","scope":"project"}
+{"id":"Y30","category":"project","query":"项目 表面清洗 的最近一次纪要","kind":"project","scope":"project"}
+{"id":"Z01","category":"meeting","question":"最近的会议讲了什么","kind":"meeting","scope":"meeting"}
+{"id":"Z02","category":"meeting","question":"上周会议总结","kind":"meeting","scope":"meeting"}
+{"id":"Z03","category":"meeting","question":"本月所有会议","kind":"meeting","scope":"meeting"}
+{"id":"Z04","category":"meeting","question":"徐佳乐 博士学术报告讲了什么","kind":"meeting","scope":"meeting"}
+{"id":"Z05","category":"meeting","question":"组会一般在什么时间","kind":"meeting","scope":"meeting"}
+{"id":"Z06","category":"meeting","question":"上次例会讲了什么","kind":"meeting","scope":"meeting"}
+{"id":"Z07","category":"meeting","question":"最近的组会纪要","kind":"meeting","scope":"meeting"}
+{"id":"Z08","category":"meeting","question":"远紫外 222nm 报告讲了什么","kind":"meeting","scope":"meeting"}
+{"id":"Z09","category":"meeting","question":"UV 臭氧 纳米气泡 会议讲了什么","kind":"meeting","scope":"meeting"}
+{"id":"Z10","category":"meeting","question":"臭氧微纳米气泡实验条件 会议讲了什么","kind":"meeting","scope":"meeting"}
+{"id":"Z11","category":"meeting","question":"实验数据可靠性排查 会议","kind":"meeting","scope":"meeting"}
+{"id":"Z12","category":"meeting","question":"臭氧气泡实验变量分析 会议","kind":"meeting","scope":"meeting"}
+{"id":"Z13","category":"meeting","question":"小气助手软件适配性测试 会议","kind":"meeting","scope":"meeting"}
+{"id":"Z14","category":"meeting","question":"2026.5.28 例行例会 全部内容","kind":"meeting","scope":"meeting"}
+{"id":"Z15","category":"meeting","question":"下次会议安排","kind":"meeting","scope":"meeting"}
+{"id":"Z16","category":"meeting","question":"本季度所有会议","kind":"meeting","scope":"meeting"}
+{"id":"Z17","category":"meeting","question":"最近一次主持会议是谁","kind":"meeting","scope":"meeting"}
+{"id":"Z18","category":"meeting","question":"我主持过的所有会议","kind":"meeting","scope":"meeting"}
+{"id":"Z19","category":"meeting","question":"我做过报告的所有会议","kind":"meeting","scope":"meeting"}
+{"id":"Z20","category":"meeting","question":"所有例会时间","kind":"meeting","scope":"meeting"}
+{"id":"Z21","category":"meeting","question":"最近一周的会议","kind":"meeting","scope":"meeting"}
+{"id":"Z22","category":"meeting","question":"未来一周的会议","kind":"meeting","scope":"meeting"}
+{"id":"Z23","category":"meeting","question":"已完成的会议","kind":"meeting","scope":"meeting"}
+{"id":"Z24","category":"meeting","question":"未开始的会议","kind":"meeting","scope":"meeting"}
+{"id":"Z25","category":"meeting","question":"所有学术报告会议","kind":"meeting","scope":"meeting"}
+{"id":"Z26","category":"meeting","question":"最近一次有外部专家的会议","kind":"meeting","scope":"meeting"}
+{"id":"Z27","category":"meeting","question":"最近一次组会的发言顺序","kind":"meeting","scope":"meeting"}
+{"id":"Z28","category":"meeting","question":"最近一次 5.28 例会 关键结论","kind":"meeting","scope":"meeting"}
+{"id":"Z29","category":"meeting","question":"最近一次会议的行动项","kind":"meeting","scope":"meeting"}
+{"id":"Z30","category":"meeting","question":"最近一次会议的下一步","kind":"meeting","scope":"meeting"}
+{"id":"AA01","category":"expansion","question":"微纳米气泡 + 区块链","kind":"expansion","scope":"wild"}
+{"id":"AA02","category":"expansion","question":"微纳米气泡 + 元宇宙","kind":"expansion","scope":"wild"}
+{"id":"AA03","category":"expansion","question":"微纳米气泡 + AI","kind":"expansion","scope":"wild"}
+{"id":"AA04","category":"expansion","question":"微纳米气泡 + 大模型","kind":"expansion","scope":"wild"}
+{"id":"AA05","category":"expansion","question":"微纳米气泡 + GPT","kind":"expansion","scope":"wild"}
+{"id":"AA06","category":"expansion","question":"微纳米气泡 + 量子计算","kind":"expansion","scope":"wild"}
+{"id":"AA07","category":"expansion","question":"微纳米气泡 + 太空","kind":"expansion","scope":"wild"}
+{"id":"AA08","category":"expansion","question":"微纳米气泡 + 火星","kind":"expansion","scope":"wild"}
+{"id":"AA09","category":"expansion","question":"微纳米气泡 + 月球","kind":"expansion","scope":"wild"}
+{"id":"AA10","category":"expansion","question":"微纳米气泡 + 深海","kind":"expansion","scope":"wild"}
+{"id":"AA11","category":"expansion","question":"微纳米气泡 + 极地","kind":"expansion","scope":"wild"}
+{"id":"AA12","category":"expansion","question":"微纳米气泡 + 高原","kind":"expansion","scope":"wild"}
+{"id":"AA13","category":"expansion","question":"微纳米气泡 + 沙漠","kind":"expansion","scope":"wild"}
+{"id":"AA14","category":"expansion","question":"微纳米气泡 + 雨林","kind":"expansion","scope":"wild"}
+{"id":"AA15","category":"expansion","question":"微纳米气泡 + 极寒","kind":"expansion","scope":"wild"}
+{"id":"AA16","category":"expansion","question":"微纳米气泡 + 极热","kind":"expansion","scope":"wild"}
+{"id":"AA17","category":"expansion","question":"微纳米气泡 + 海岛","kind":"expansion","scope":"wild"}
+{"id":"AA18","category":"expansion","question":"微纳米气泡 + 山区","kind":"expansion","scope":"wild"}
+{"id":"AA19","category":"expansion","question":"微纳米气泡 + 城市","kind":"expansion","scope":"wild"}
+{"id":"AA20","category":"expansion","question":"微纳米气泡 + 农村","kind":"expansion","scope":"wild"}
+{"id":"AA21","category":"expansion","question":"微纳米气泡 + 工业化","kind":"expansion","scope":"wild"}
+{"id":"AA22","category":"expansion","question":"微纳米气泡 + 自动化","kind":"expansion","scope":"wild"}
+{"id":"AA23","category":"expansion","question":"微纳米气泡 + 数字化","kind":"expansion","scope":"wild"}
+{"id":"AA24","category":"expansion","question":"微纳米气泡 + 智能化","kind":"expansion","scope":"wild"}
+{"id":"AA25","category":"expansion","question":"微纳米气泡 + 低碳","kind":"expansion","scope":"wild"}
+{"id":"AA26","category":"expansion","question":"微纳米气泡 + 碳中和","kind":"expansion","scope":"wild"}
+{"id":"AA27","category":"expansion","question":"微纳米气泡 + ESG","kind":"expansion","scope":"wild"}
+{"id":"AA28","category":"expansion","question":"微纳米气泡 + 国产替代","kind":"expansion","scope":"wild"}
+{"id":"AA29","category":"expansion","question":"微纳米气泡 + 出口","kind":"expansion","scope":"wild"}
+{"id":"AA30","category":"expansion","question":"微纳米气泡 + 一带一路","kind":"expansion","scope":"wild"}
