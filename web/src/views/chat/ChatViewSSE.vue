@@ -26,6 +26,7 @@ import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useUiStore } from '@/stores/useUiStore'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -51,6 +52,13 @@ const {
 const themeStore = useThemeStore()
 const isDark = computed(() => themeStore.isDark)
 const toggleTheme = () => themeStore.toggle()
+
+// ============================================================================
+// UI 偏好（2026-06-14 收官）：是否显示 agent 内部思考过程
+// ============================================================================
+const uiStore = useUiStore()
+const showThinking = computed(() => uiStore.showThinking)
+const toggleThinking = () => uiStore.toggleThinking()
 
 // ============================================================================
 // UI 状态（仅桌面端）
@@ -306,6 +314,15 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="header-right">
+            <el-button
+              text
+              @click="toggleThinking"
+              :title="showThinking ? '隐藏思考过程' : '显示思考过程'"
+              :aria-label="showThinking ? '隐藏思考过程' : '显示思考过程'"
+              :class="['thinking-toggle', { active: showThinking }]"
+            >
+              {{ showThinking ? '🧠' : '💭' }}
+            </el-button>
             <el-button text @click="toggleTheme" :title="isDark ? '切换浅色' : '切换深色'">
               {{ isDark ? '☀️' : '🌙' }}
             </el-button>
@@ -355,7 +372,7 @@ onUnmounted(() => {
             <el-icon><ChatDotRound /></el-icon>
           </el-avatar>
           <div class="bubble bot-bubble">
-            <div v-if="msg.toolTrace && msg.toolTrace.length" class="tool-trace">
+            <div v-if="showThinking && msg.toolTrace && msg.toolTrace.length" class="tool-trace">
               <div v-for="(t, i) in msg.toolTrace" :key="i" class="trace-item" :class="t.state">
                 <span v-if="t.type === 'thinking'">{{ t.label }}</span>
                 <span v-else>🔧 {{ t.name }} {{ t.state === 'running' ? '...' : '✓' }}<span v-if="t.duration_ms" class="duration"> {{ t.duration_ms }}ms</span></span>
@@ -555,6 +572,9 @@ onUnmounted(() => {
 .trace-item { font-size: 12px; color: #666; padding: 2px 0; }
 .trace-item.running { color: #FF7A5C; }
 .trace-item .duration { color: #999; font-size: 11px; }
+
+/* 2026-06-14 收官：thinking toggle 按钮激活态高亮 */
+.thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: rgba(255, 122, 92, 0.08); }
 
 .msg-content :deep(p) { margin: 0 0 8px; }
 .msg-content :deep(p:last-child) { margin-bottom: 0; }

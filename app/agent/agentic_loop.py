@@ -365,10 +365,28 @@ class AgenticLoop:
         chosen_model = settings.AGENT_SYNTHESIS_MODEL or None
 
         # 在 system 末尾追加 JSON 协议（让 LLM 知道可输出 rich_block 声明）
+        # 2026-06-14 收官：4 条铁律防 LLM 凭空捏造 rich_block.data
         json_protocol = """
 
-## 输出格式（2026-06-14 方案 C）
+## 输出格式 (CRITICAL — 2026-06-14 收官)
 
+### 铁律 1：rich_blocks.data 必须 grounded
+- 任何 rich_block 的 data 内容必须严格来自本轮工具调用的真实返回结果
+- 严禁编造成员姓名 / 研究方向 / 邮箱 / 技能 / 任务标题 / 会议标题 等任何字段
+- 严禁使用 "暂无详细信息" / "待补充" / "建议查询" / "请查阅" 等占位符
+
+### 铁律 2：工具返回空/错误时不出 rich_block
+- 工具返回 status="error" 或 count=0 或 members=[] 时，**不要**为该工具生成 rich_block
+- 用纯文字告诉用户"暂未找到相关信息"，或建议其他查询路径
+
+### 铁律 3：能直接复述的不进 rich_block
+- 成员姓名/研究方向等结构化字段已经在正文里说明白时，不要重复进 rich_block
+- rich_block 留给"完整列表/可点击卡片/可交互"的场景
+
+### 铁律 4：找不到任何工具结果时不要出 JSON 段
+- 整段回答里没调用工具 / 工具全空 / 用户问的是闲聊 → 直接结束回答，**不要**出 ```json fence```
+
+### Schema
 在回答末尾可选择性追加 JSON 段（用 ```json fence 包裹）声明结构化富文本块：
 ```json
 {
@@ -377,14 +395,14 @@ class AgenticLoop:
       "type": "member" | "knowledge_ref" | "task_list" | "meeting" | ...,
       "title": "可选标题",
       "summary": "折叠态一行摘要（必填，建议 < 30 字）",
-      "collapsed_by_default": true | false,
-      "data": { ... 块内容 ... }
+      "collapsed_by_default": false,
+      "data": { ... 真实工具返回的字段 ... }
     }
   ]
 }
 ```
 
-不输出 JSON 段 = 不出 rich_block（保持简洁）
+注意：除非长列表（> 5 项），否则 collapsed_by_default 设为 false（默认展开，用户第一眼看到真实数据）。
 """
         kwargs["system"] = system + json_protocol
 
@@ -409,13 +427,22 @@ class AgenticLoop:
             # 这里的 _extract_rich_block_json 解析末尾 ```json``` 段，与 thinking 无关
             text_without_json, rich_blocks = _extract_rich_block_json(accumulated)
             for rb_data in rich_blocks:
+                # 2026-06-14 收官：grounding 守卫 — type=member 必须有真实姓名来自工具结果
+                if not _is_rich_block_grounded(rb_data, ctx):
+                    logger.warning(
+                        f"dropping ungrounded rich_block: type={rb_data.get('type')} "
+                        f"name={rb_data.get('data', {}).get('name')!r} "
+                        f"seen_names={list(ctx.seen_member_names)[:5]}"
+                    )
+                    continue
                 try:
                     rb = RichBlock(
                         type=rb_data.get("type", "fallback"),
                         data=rb_data.get("data", {}),
                         title=rb_data.get("title"),
                         summary=rb_data.get("summary"),
-                        collapsed_by_default=rb_data.get("collapsed_by_default", True),
+                        # 2026-06-14 收官：默认 False（展开），让用户第一眼看到数据
+                        collapsed_by_default=rb_data.get("collapsed_by_default", False),
                     )
                     # [snapshot] rich_block
                     yield StreamEvent(type="rich_block", block=rb)
@@ -500,11 +527,48 @@ def _extract_rich_block_json(accumulated_text: str) -> tuple[str, list[dict]]:
     blocks = parsed.get("rich_blocks", [])
     if not isinstance(blocks, list):
         return text_without_json, []
-    # 给每个 block 补 collapsed_by_default 缺省值（默认折叠）
+    # 给每个 block 补 collapsed_by_default 缺省值（2026-06-14 收官：默认展开）
     for block in blocks:
         if isinstance(block, dict) and "collapsed_by_default" not in block:
-            block["collapsed_by_default"] = True
+            block["collapsed_by_default"] = False
     return text_without_json, blocks
+
+
+def _is_rich_block_grounded(rb_data: dict, ctx) -> bool:
+    """2026-06-14 收官：校验 LLM 输出的 rich_block.data 是否 grounded in tools
+
+    当前规则（保守）：
+    - type=member: data 里的 name 必须在 ctx.seen_member_names 里（防 LLM 编造姓名）
+    - type=task_list: 暂放行（任务名幻觉检测成本高，留给 critic 打分）
+    - type=meeting / project / knowledge_ref 等: 暂放行
+    - type=fallback / 其他: 放行
+    """
+    if not isinstance(rb_data, dict):
+        return True  # 让 Pydantic 构造时自己报错
+    rb_type = rb_data.get("type")
+    if rb_type != "member":
+        return True
+    data = rb_data.get("data") or {}
+    if not isinstance(data, dict):
+        return False
+    name = data.get("name")
+    mid = data.get("id")
+    # 必须有 name 或 id
+    if not name and not mid:
+        return False
+    # 名字必须 grounded（在 ctx.seen_member_names 集合里）
+    if isinstance(name, str) and name.strip():
+        if ctx is None or not hasattr(ctx, "seen_member_names"):
+            return False
+        if name.strip() not in ctx.seen_member_names:
+            return False
+    # id 必须 grounded
+    if isinstance(mid, int) and mid > 0:
+        if ctx is None or not hasattr(ctx, "seen_member_ids"):
+            return False
+        if mid not in ctx.seen_member_ids:
+            return False
+    return True
 
 
 def _block_dump(block) -> dict:

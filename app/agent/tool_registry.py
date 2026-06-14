@@ -64,6 +64,11 @@ class ToolContext:
         self.redis = redis
         self.llm = llm
         self.loop_id = loop_id
+        # 2026-06-14 收官：grounding 守卫用 — 工具返回里出现过的成员 ID + 姓名
+        # agentic_loop._extract_rich_block_json 解析 LLM 输出的 rich_block.data 时
+        # 校验 name 是否在这个集合里，否则丢弃（防 LLM 凭空捏造成员名）
+        self.seen_member_ids: set[int] = set()
+        self.seen_member_names: set[str] = set()
 
 
 # ============================================================================
@@ -245,6 +250,29 @@ async def dispatch_tool(
                 duration_ms=elapsed_ms,
                 error=error_msg,
             )
+        # 2026-06-14 收官：把工具结果里出现过的成员姓名/ID 收集到 ctx，
+        # 供 agentic_loop grounding 守卫校验 LLM 是否在编造成员名
+        if output_dump and isinstance(output_dump, dict):
+            _collect_grounded_members(name, output_dump, ctx)
+
+
+def _collect_grounded_members(tool_name: str, output: dict, ctx: ToolContext) -> None:
+    """从工具结果里抽取真实成员 ID/姓名，写入 ctx.seen_member_* 集合"""
+    if tool_name not in ("query_members", "get_member_profile"):
+        return
+    # query_members 返回 {members: [...]} / get_member_profile 返回平铺对象
+    candidates: list[dict] = []
+    if isinstance(output.get("members"), list):
+        candidates = [m for m in output["members"] if isinstance(m, dict)]
+    elif output.get("id") and output.get("name"):
+        candidates = [output]
+    for m in candidates:
+        mid = m.get("id")
+        mname = m.get("name")
+        if isinstance(mid, int) and mid > 0:
+            ctx.seen_member_ids.add(mid)
+        if isinstance(mname, str) and mname.strip():
+            ctx.seen_member_names.add(mname.strip())
 
 
 # ============================================================================

@@ -5,8 +5,10 @@
  * 用法：
  *   <RichContent :block="richBlock" />
  *
- * 折叠行为（2026-06-14 方案 C）：
- * - 默认折叠（除 LLM 在 synthesis 阶段主动 collapsed_by_default=false）
+ * 折叠行为：
+ * - 2026-06-14 收官：默认**展开**（用户第一眼看到真实数据）
+ *   - 旧版默认折叠，结果气泡正文是 LLM 废话 + 折叠区反而有真数据，顺序颠倒
+ *   - LLM 主动 collapsed_by_default=true 时仍可折叠（留给长列表场景）
  * - 折叠态：显示 block.summary 字段（如果后端传了）或自动生成摘要（如「👥 成员 3 人（27→3）」）
  * - 点击展开：渲染真实 block 组件
  * - 11 个 block 组件不需修改（保留向后兼容，RichContent 在 wrapper 层做折叠）
@@ -16,15 +18,16 @@ import { resolveBlock } from './blocks/registry'
 
 const props = defineProps({ block: { type: Object, required: true } })
 
-const isExpanded = ref(false)  // 用户手动展开后保持
+const isExpanded = ref(true)  // 用户手动展开/折叠后保持；2026-06-14 收官：初始默认展开
 const hasUserToggled = ref(false)
 
 // 决定默认折叠还是展开
 const shouldBeExpanded = computed(() => {
   if (hasUserToggled.value) return isExpanded.value
-  // LLM 决定：collapsed_by_default=false → 默认展开
-  if (props.block.collapsed_by_default === false) return true
-  return false
+  // 2026-06-14 收官：默认展开（让用户第一眼看到真实数据）
+  // LLM 主动 collapsed_by_default=true 时才折叠（留给长列表）
+  if (props.block.collapsed_by_default === true) return false
+  return true
 })
 
 const toggle = () => {
