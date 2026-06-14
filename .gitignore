@@ -60,3 +60,12 @@ frpc.exe
 
 # 构建产物
 *.tar.gz
+
+# 本地 debug 资产（不入库）
+# 2026-06-15 新增: qa-bench 360 题日志 / round6 / smoke / 验证脚本
+results/qa-bench/
+results/round6/
+results/smoke/
+scripts/e2e_*.py
+scripts/verify_*.py
+scripts/probe_*.py
