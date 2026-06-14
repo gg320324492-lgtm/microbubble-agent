@@ -210,11 +210,17 @@ class TraceCollector:
                     f"trace ERROR (sync persist): {self.error}",
                     exc_info=False,  # 避免重复 traceback（外层会 trace）
                 )
-            # 异常路径：同步落库（不走 Celery）
+            # 异常路径：fire-and-forget 异步落库（不用 await，避免被 CancelledError 二次取消）
+            # create_task 在 event loop 内调度，__aexit__ 立即 return，_persist_now 后台跑完
+            # 这保证 abort 路径一定能写库（铁律 4 关键）
             try:
-                await self._persist_now()
+                _bg_task = asyncio.create_task(self._persist_now())
+                _bg_task.add_done_callback(
+                    lambda t: logger.error(f"trace _persist_now 失败: {t.exception()}", exc_info=t.exception())
+                    if t.exception() else logger.info(f"trace _persist_now 成功 session={self.session_id} status={self.status}")
+                )
             except Exception as e:
-                logger.error(f"trace 同步落库失败（已降级 Celery）: {e}")
+                logger.error(f"trace 同步落库启动失败（已降级 Celery）: {e}")
                 # 退路：仍走 Celery
                 self._schedule_persist()
         else:
@@ -239,6 +245,10 @@ class TraceCollector:
         try:
             from app.services.agent_trace_tasks import persist_trace_task
             payload = self._build_payload()
+            logger.debug(f"_schedule_persist: payload type={type(payload).__name__}, keys={list(payload.keys()) if isinstance(payload, dict) else 'NOT DICT'}")
+            if not isinstance(payload, dict):
+                logger.error(f"_schedule_persist: payload is not dict! type={type(payload).__name__} value={payload!r}")
+                return  # 不投递无效 payload
             persist_trace_task.delay(payload)
         except Exception as e:
             # Celery 不可用时降级到 log
@@ -279,6 +289,7 @@ class TraceCollector:
                 # 直接 insert，不走 ORM 避免 migration race
                 from app.models.agent_trace import AgentTrace
                 payload = self._build_payload()
+                _u = payload.get("usage") or {}  # 2026-06-14 修复：usage 可能 None
                 trace_row = AgentTrace(
                     user_id=payload["user_id"],
                     session_id=payload["session_id"],
@@ -287,15 +298,34 @@ class TraceCollector:
                     rich_blocks=payload["rich_blocks"],
                     brief=payload["brief"],
                     detail=payload["detail"],
-                    usage=payload["usage"],
+                    input_tokens=_u.get("input_tokens"),
+                    output_tokens=_u.get("output_tokens"),
+                    total_tokens=_u.get("total_tokens"),
                     total_duration_ms=payload["total_duration_ms"],
                     error=payload["error"],
                 )
-                # 2026-06-14 方案 C 新增字段（Stage 2 仅写存在的，Stage 3 加 6 metric 列后写入）
+                # 2026-06-14 方案 C 新增字段（Stage 3 加 7 列后写入）
                 if hasattr(trace_row, "status"):
                     trace_row.status = self.status
+                if hasattr(trace_row, "intent_category"):
+                    trace_row.intent_category = payload.get("intent_category")
+                if hasattr(trace_row, "intent_confidence"):
+                    trace_row.intent_confidence = payload.get("intent_confidence")
+                if hasattr(trace_row, "tool_rounds_used"):
+                    trace_row.tool_rounds_used = payload.get("tool_rounds_used", 0)
+                if hasattr(trace_row, "compression_applied_count"):
+                    trace_row.compression_applied_count = payload.get("compression_applied_count", 0)
+                if hasattr(trace_row, "critique_score"):
+                    trace_row.critique_score = payload.get("critique_score")
+                if hasattr(trace_row, "retry_count"):
+                    trace_row.retry_count = payload.get("retry_count", 0)
                 db.add(trace_row)
+                logger.info(f"_persist_now: 准备 INSERT trace session={payload.get('session_id')} status={self.status}")
                 await db.commit()
+                logger.info(f"_persist_now: INSERT 成功 session={payload.get('session_id')}")
+        except Exception as e:
+            logger.error(f"_persist_now 失败: {type(e).__name__}: {e}", exc_info=True)
+            raise
         finally:
             await engine.dispose()
 

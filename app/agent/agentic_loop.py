@@ -389,17 +389,24 @@ class AgenticLoop:
         kwargs["system"] = system + json_protocol
 
         try:
-            stream_ctx = await llm.stream(**kwargs, model=chosen_model)
-            async with stream_ctx as stream:
-                accumulated = ""
-                async for event in stream:
-                    if event.type == "content_block_delta" and event.delta.type == "text_delta":
-                        delta = event.delta.text
-                        accumulated += delta
-                        # [increment] text_delta
-                        yield StreamEvent(type="text_delta", delta=delta)
+            # llm.stream() 是 AsyncIterator（不是 async context manager），
+            # 正确用法：async for 拿 stream 后再 async with
+            # 2026-06-14 Stage 5 收尾：mimo 等思考型模型显式禁用 thinking（避免只返 thinking）
+            async for stream in llm.stream(
+                **kwargs, model=chosen_model, thinking={"type": "disabled"}
+            ):
+                async with stream as s:
+                    accumulated = ""
+                    async for event in s:
+                        if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                            delta = event.delta.text
+                            accumulated += delta
+                            # [increment] text_delta
+                            yield StreamEvent(type="text_delta", delta=delta)
 
             # ===== 后处理：解析 LLM 末尾的 JSON 段 =====
+            # accumulated 来自流式 text_delta（直接累加 token），不走 thinking block
+            # 这里的 _extract_rich_block_json 解析末尾 ```json``` 段，与 thinking 无关
             text_without_json, rich_blocks = _extract_rich_block_json(accumulated)
             for rb_data in rich_blocks:
                 try:

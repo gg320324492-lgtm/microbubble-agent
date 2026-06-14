@@ -186,8 +186,13 @@ class TestAbortVsNormal:
 
         mock_llm = MagicMock()
         mock_llm.complete = AsyncMock(side_effect=RuntimeError("LLM boom"))
-        # _synthesize_stream 调 llm.stream()，也需要抛错避免 MagicMock await 错误
-        mock_llm.stream = AsyncMock(side_effect=RuntimeError("stream LLM boom"))
+        # 2026-06-14 Stage 5：synthesize_stream 用 `async for stream in llm.stream(...)`，
+        # 需要一个 async generator 抛错（不是 AsyncMock，AsyncMock 是 awaitable）
+        async def boom_stream(**kwargs):
+            if False:
+                yield None  # 变成 async generator
+            raise RuntimeError("stream LLM boom")
+        mock_llm.stream = boom_stream
         ctx = MagicMock()
         ctx.llm = mock_llm
         ctx.redis = None
