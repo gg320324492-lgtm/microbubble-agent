@@ -217,8 +217,20 @@ def evaluate_expectation(
             "expect": expect["intent"],
             "actual": actual.get("intent"),
         })
+    # intent_any（任一满足即可，宽松模式）
+    if "intent_any" in expect:
+        any_intents = set(expect["intent_any"])
+        if actual.get("intent") not in any_intents:
+            # 只有当严格的 intent 字段也不匹配时才报
+            if "intent" not in expect or expect["intent"] != actual.get("intent"):
+                issues.append({
+                    "type": "intent_mismatch",
+                    "expect": sorted(any_intents),
+                    "actual": actual.get("intent"),
+                    "note": "intent_any — 任一即可",
+                })
 
-    # tools
+    # tools（严格模式：必须全部调过）
     if "tools" in expect:
         expected_tools = set(expect["tools"])
         actual_tools = set(actual.get("tools_called", []))
@@ -228,7 +240,18 @@ def evaluate_expectation(
                 "type": "missing_tools",
                 "missing": sorted(missing),
             })
-        # 不期望的工具被调 (optional, by default 严格)
+
+    # tools_any（任一满足即可，宽松模式）
+    if "tools_any" in expect and not any(i["type"] == "missing_tools" for i in issues):
+        any_tools = set(expect["tools_any"])
+        actual_tools = set(actual.get("tools_called", []))
+        matched = any_tools & actual_tools
+        if not matched:
+            issues.append({
+                "type": "missing_tools",
+                "missing": sorted(any_tools),
+                "note": "tools_any — 任一即可",
+            })
 
     # must_contain
     if "must_contain" in expect:

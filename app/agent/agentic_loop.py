@@ -633,6 +633,11 @@ class AgenticLoop:
 ### 铁律 4：找不到任何工具结果时不要出 JSON 段
 - 整段回答里没调用工具 / 工具全空 / 用户问的是闲聊 → 直接结束回答，**不要**出 ```json fence```
 
+### 铁律 5（2026-06-14 收官）：综合阶段禁止写工具调用
+- 不要再写 `<function=...>...`、`<tool_call>{...}</tool_call>`、`<function_calls>...` 等任何"伪工具调用"语法
+- 工具调用已在前面阶段完成，本阶段只负责把工具结果**组织成自然语言回复**
+- 如果你发现自己在写 `<function` 开头的内容 → 停下来，直接用自然语言写正文
+
 ### Schema
 在回答末尾可选择性追加 JSON 段（用 ```json fence 包裹）声明结构化富文本块：
 ```json
@@ -651,7 +656,32 @@ class AgenticLoop:
 
 注意：除非长列表（> 5 项），否则 collapsed_by_default 设为 false（默认展开，用户第一眼看到真实数据）。
 """
-        kwargs["system"] = system + json_protocol
+        # 2026-06-14 收官：检查本轮所有工具结果是否都为空
+        # 如果是，注入显式"无可用数据"提示，逼模型不要 fake 写 tool_call，直接回答
+        empty_tools = []
+        for msg in messages[-6:]:  # 只看最后几轮
+            if msg.get("role") == "user":
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    for blk in content:
+                        if isinstance(blk, dict) and blk.get("type") == "tool_result":
+                            inner = blk.get("content", "")
+                            # 检查 tool_result 是否表示"无数据"
+                            try:
+                                inner_data = json.loads(inner) if isinstance(inner, str) else inner
+                                if isinstance(inner_data, dict):
+                                    count = inner_data.get("count", 0)
+                                    if count == 0 or inner_data.get("status") == "error":
+                                        empty_tools.append(blk.get("tool_use_id", "?"))
+                            except Exception:
+                                pass
+        if empty_tools:
+            kwargs["system"] = kwargs["system"] + (
+                "\n\n## ⚠️ 数据缺失警告\n"
+                f"本轮工具调用（{len(empty_tools)} 个）全部返回空/错误。**严禁**再次 fake 写工具调用语法，"
+                "直接告诉用户：本地知识库和联网都没找到相关资料，**不要**编造。\n"
+                "如果用户允许，可以把对话保存为新知识。"
+            )
 
         try:
             # llm.stream() 是 AsyncIterator（不是 async context manager），

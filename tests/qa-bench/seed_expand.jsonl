@@ -1,0 +1,75 @@
+{"id":"S01","category":"expand_knowledge","question":"微纳米气泡的核心物理特性有哪些？","kind":"concept_expand","scope":"core"}
+{"id":"S02","category":"expand_knowledge","question":"zeta 电位的物理意义是什么？怎么影响气泡稳定性？","kind":"concept_expand","scope":"core"}
+{"id":"S03","category":"expand_knowledge","question":"微纳米气泡在饮用水处理中的国标是什么？GB 5749-2022 对浊度/微生物指标的要求","kind":"external_knowledge","scope":"industry"}
+{"id":"S04","category":"expand_knowledge","question":"微纳米气泡在水产养殖上的应用案例有哪些？","kind":"external_knowledge","scope":"application"}
+{"id":"S05","category":"expand_knowledge","question":"加压溶气法、文丘里管法、超声法、电解法产生微纳米气泡的原理对比","kind":"concept_expand","scope":"method"}
+{"id":"S06","category":"expand_knowledge","question":"国内外做微纳米气泡研究的重点实验室/团队有哪些？","kind":"external_knowledge","scope":"academic"}
+{"id":"S07","category":"expand_knowledge","question":"微纳米气泡在黑臭水体治理中的应用现状","kind":"external_knowledge","scope":"application"}
+{"id":"S08","category":"expand_knowledge","question":"微纳米气泡发生器有哪些品牌和型号？价格区间？","kind":"external_knowledge","scope":"industry"}
+{"id":"S09","category":"expand_knowledge","question":"微纳米气泡在表面清洗/去污领域的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S10","category":"expand_knowledge","question":"微纳米气泡·OH 自由基的检测方法（EPR、化学探针）","kind":"concept_expand","scope":"method"}
+{"id":"S11","category":"expand_knowledge","question":"国际期刊：微纳米气泡相关的高影响力期刊有哪些？","kind":"external_knowledge","scope":"academic"}
+{"id":"S12","category":"expand_knowledge","question":"微纳米气泡与微米气泡、纳米气泡的尺寸边界划分","kind":"concept_expand","scope":"core"}
+{"id":"S13","category":"expand_knowledge","question":"微纳米气泡在农业（土壤修复、灌溉）上的研究进展","kind":"external_knowledge","scope":"application"}
+{"id":"S14","category":"expand_knowledge","question":"微纳米气泡的工业级发生器（10m³/h 以上）品牌和案例","kind":"external_knowledge","scope":"industry"}
+{"id":"S15","category":"expand_knowledge","question":"微纳米气泡稳定性：经典 DLVO 理论与实际差异","kind":"concept_expand","scope":"theory"}
+{"id":"S16","category":"expand_knowledge","question":"微纳米气泡能应用在哪些新兴行业？半导体/医药/食品","kind":"external_knowledge","scope":"emerging"}
+{"id":"S17","category":"expand_knowledge","question":"什么是脉冲放电法（PEM）？与微纳米气泡的关系","kind":"concept_expand","scope":"method"}
+{"id":"S18","category":"expand_knowledge","question":"气泡溃灭（collapse）瞬间的物理化学过程","kind":"concept_expand","scope":"core"}
+{"id":"S19","category":"expand_knowledge","question":"微纳米气泡对蜡样芽孢杆菌等致病菌的消杀机制","kind":"external_knowledge","scope":"application"}
+{"id":"S20","category":"expand_knowledge","question":"国内外微纳米气泡相关会议/学术活动","kind":"external_knowledge","scope":"academic"}
+{"id":"S21","category":"expand_knowledge","question":"微纳米气泡 + UV/O3 高级氧化联用技术","kind":"concept_expand","scope":"method"}
+{"id":"S22","category":"expand_knowledge","question":"微纳米气泡在膜污染控制中的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S23","category":"expand_knowledge","question":"·OH 自由基产量怎么计算？与微纳米气泡参数的关系","kind":"concept_expand","scope":"method"}
+{"id":"S24","category":"expand_knowledge","question":"微纳米气泡在线监测/在线检测设备","kind":"external_knowledge","scope":"industry"}
+{"id":"S25","category":"expand_knowledge","question":"微纳米气泡的国家自然科学基金立项方向有哪些？","kind":"external_knowledge","scope":"academic"}
+{"id":"S26","category":"expand_knowledge","question":"微气泡（microbubble）和纳米气泡（nanobubble）实验上如何区分？","kind":"concept_expand","scope":"method"}
+{"id":"S27","category":"expand_knowledge","question":"微纳米气泡发生器的核心专利分布（国内外）","kind":"external_knowledge","scope":"industry"}
+{"id":"S28","category":"expand_knowledge","question":"微纳米气泡在生物医学（药物递送、影像）的探索","kind":"external_knowledge","scope":"emerging"}
+{"id":"S29","category":"expand_knowledge","question":"微纳米气泡在化妆品/食品工业的安全标准","kind":"external_knowledge","scope":"industry"}
+{"id":"S30","category":"expand_knowledge","question":"微纳米气泡相关的国家/行业标准目录","kind":"external_knowledge","scope":"industry"}
+{"id":"S31","category":"expand_knowledge","question":"微纳米气泡与超细气泡（UFB）的术语区别","kind":"concept_expand","scope":"core"}
+{"id":"S32","category":"expand_knowledge","question":"微纳米气泡在水族馆/景观水体的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S33","category":"expand_knowledge","question":"微纳米气泡国家标准制定的最新进展","kind":"external_knowledge","scope":"policy"}
+{"id":"S34","category":"expand_knowledge","question":"国内外微纳米气泡相关博士学位论文题目（近 5 年）","kind":"external_knowledge","scope":"academic"}
+{"id":"S35","category":"expand_knowledge","question":"微纳米气泡 + 高级氧化（AOP）研究方向综述","kind":"concept_expand","scope":"theory"}
+{"id":"S36","category":"expand_knowledge","question":"微纳米气泡在纺织印染废水处理中的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S37","category":"expand_knowledge","question":"什么是微泡浮选（microflotation）？与微纳米气泡区别","kind":"concept_expand","scope":"method"}
+{"id":"S38","category":"expand_knowledge","question":"微纳米气泡 + 光催化的协同效应","kind":"concept_expand","scope":"method"}
+{"id":"S39","category":"expand_knowledge","question":"微纳米气泡发生器国内外学术论文统计（按年份）","kind":"external_knowledge","scope":"academic"}
+{"id":"S40","category":"expand_knowledge","question":"微纳米气泡与臭氧联用消毒副产物（DBP）控制","kind":"external_knowledge","scope":"application"}
+{"id":"S41","category":"expand_knowledge","question":"微纳米气泡技术在污水处理厂升级改造中的实际案例","kind":"external_knowledge","scope":"industry"}
+{"id":"S42","category":"expand_knowledge","question":"微纳米气泡发生器对进水水质的要求","kind":"concept_expand","scope":"method"}
+{"id":"S43","category":"expand_knowledge","question":"微纳米气泡在重金属去除中的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S44","category":"expand_knowledge","question":"微纳米气泡与生物膜反应器（MBR）的耦合应用","kind":"external_knowledge","scope":"application"}
+{"id":"S45","category":"expand_knowledge","question":"微纳米气泡的国际会议（ICBE、ISMTMS 等）","kind":"external_knowledge","scope":"academic"}
+{"id":"S46","category":"expand_knowledge","question":"微纳米气泡的 CFD 模拟方法","kind":"concept_expand","scope":"method"}
+{"id":"S47","category":"expand_knowledge","question":"微纳米气泡在土壤修复（多环芳烃污染）中的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S48","category":"expand_knowledge","question":"微纳米气泡与微藻培养的耦合效应","kind":"external_knowledge","scope":"application"}
+{"id":"S49","category":"expand_knowledge","question":"什么是 supercavitation？与微纳米气泡的不同","kind":"concept_expand","scope":"core"}
+{"id":"S50","category":"expand_knowledge","question":"微纳米气泡在医疗消毒（手消毒、器械消毒）的研究","kind":"external_knowledge","scope":"emerging"}
+{"id":"S51","category":"expand_knowledge","question":"什么是微流控芯片产生微纳米气泡？","kind":"concept_expand","scope":"method"}
+{"id":"S52","category":"expand_knowledge","question":"国内外微纳米气泡相关的科技公司（10 家代表）","kind":"external_knowledge","scope":"industry"}
+{"id":"S53","category":"expand_knowledge","question":"微纳米气泡在石油天然气工业的应用（提高采收率）","kind":"external_knowledge","scope":"emerging"}
+{"id":"S54","category":"expand_knowledge","question":"微纳米气泡的国家级科研项目布局（十三五、十四五）","kind":"external_knowledge","scope":"policy"}
+{"id":"S55","category":"expand_knowledge","question":"微纳米气泡在工业循环冷却水的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S56","category":"expand_knowledge","question":"微纳米气泡的 zeta 电位调控方法","kind":"concept_expand","scope":"method"}
+{"id":"S57","category":"expand_knowledge","question":"微纳米气泡相关的国际专利数量趋势","kind":"external_knowledge","scope":"industry"}
+{"id":"S58","category":"expand_knowledge","question":"微纳米气泡与超临界 CO2 气泡的区别","kind":"concept_expand","scope":"core"}
+{"id":"S59","category":"expand_knowledge","question":"微纳米气泡在造纸行业的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S60","category":"expand_knowledge","question":"国内外微纳米气泡的产业化项目案例","kind":"external_knowledge","scope":"industry"}
+{"id":"S61","category":"expand_knowledge","question":"微纳米气泡在生物医药的 FDA 认证进展","kind":"external_knowledge","scope":"policy"}
+{"id":"S62","category":"expand_knowledge","question":"微纳米气泡与微乳液（microemulsion）的区别","kind":"concept_expand","scope":"core"}
+{"id":"S63","category":"expand_knowledge","question":"微纳米气泡发生器的能耗分析（kWh/m³）","kind":"external_knowledge","scope":"industry"}
+{"id":"S64","category":"expand_knowledge","question":"微纳米气泡在食品工业（清洗、消毒）的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S65","category":"expand_knowledge","question":"微纳米气泡在湖泊富营养化治理的应用","kind":"external_knowledge","scope":"application"}
+{"id":"S66","category":"expand_knowledge","question":"微纳米气泡在核电厂放射性废水处理的应用","kind":"external_knowledge","scope":"emerging"}
+{"id":"S67","category":"expand_knowledge","question":"微纳米气泡的 CNKI 中文核心论文统计","kind":"external_knowledge","scope":"academic"}
+{"id":"S68","category":"expand_knowledge","question":"微纳米气泡的工业化生产成本（按 m³）","kind":"external_knowledge","scope":"industry"}
+{"id":"S69","category":"expand_knowledge","question":"微纳米气泡的 中国发明专利 数量与分布","kind":"external_knowledge","scope":"industry"}
+{"id":"S70","category":"expand_knowledge","question":"微纳米气泡的 EU REACH 法规注册情况","kind":"external_knowledge","scope":"policy"}
+{"id":"S71","category":"expand_knowledge","question":"微纳米气泡在 PCB 制造中的应用","kind":"external_knowledge","scope":"emerging"}
+{"id":"S72","category":"expand_knowledge","question":"微纳米气泡在半导体晶圆清洗的应用","kind":"external_knowledge","scope":"emerging"}
+{"id":"S73","category":"expand_knowledge","question":"微纳米气泡的工业 4.0 智能发生器案例","kind":"external_knowledge","scope":"emerging"}
+{"id":"S74","category":"expand_knowledge","question":"微纳米气泡 + 臭氧 + UV 三联用技术","kind":"concept_expand","scope":"method"}
+{"id":"S75","category":"expand_knowledge","question":"微纳米气泡在制药纯化水系统的应用","kind":"external_knowledge","scope":"application"}

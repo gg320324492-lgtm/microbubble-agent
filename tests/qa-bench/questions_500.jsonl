@@ -1,0 +1,495 @@
+{"id": "M001", "category": "member", "question": "那个老成员是谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M002", "category": "member", "question": "对了刘莫菲 有什么产出？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M003", "category": "member", "question": "诶诶AI 一下 蒋芦笛", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M004", "category": "member", "question": "话说做黑臭水体的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M005", "category": "member", "question": "关小未 在读研几？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M006", "category": "member", "question": "麻烦问下请教谁研究 农业灌溉？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M007", "category": "member", "question": "对了咱们组里做水产的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M008", "category": "member", "question": "对了把 韩重阳 介绍给我认识", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M009", "category": "member", "question": "我想了解王天志 做什么方向？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M010", "category": "member", "question": "我想知道邓国祥 的邮箱？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M011", "category": "member", "question": "诶诶组员里有谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M012", "category": "member", "question": "诶余歆睿 的 bio", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M013", "category": "member", "question": "对了胡小琪 现在是博士吗？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M014", "category": "member", "question": "诶董昊宇 能带我吗", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M015", "category": "member", "question": "我想知道张懿 的导师是谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M016", "category": "member", "question": "诶饮用水方向都有谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M017", "category": "member", "question": "诶诶找一个会 清洗工艺 的人", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M018", "category": "member", "question": "诶陈金薪 邓国祥 谁更擅长 饮用水安全", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M019", "category": "member", "question": "课题组有谁做 设备开发？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M020", "category": "member", "question": "我想了解李锐远 的项目编号？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M021", "category": "member", "question": "请帮我查胡小琪 有几个任务？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M022", "category": "member", "question": "谁做 表面清洗技术？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M023", "category": "member", "question": "请教周之超 现在在做什么实验？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M024", "category": "member", "question": "那个韩重阳 主攻方向是", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M025", "category": "member", "question": "那个找在水产方向的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M026", "category": "member", "question": "请教在 藻华控制 方面积累最多的人", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M027", "category": "member", "question": "对了能推荐一个博后做 设备开发 吗", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M028", "category": "member", "question": "请帮我查王书馨 跟 刘莫菲 一起做什么？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M029", "category": "member", "question": "诶列出所有 admin", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M030", "category": "member", "question": "诶诶课题组有几个人？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M031", "category": "member", "question": "嗯谁研究 饮用水处理 方向？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M032", "category": "member", "question": "那个谁还没交周报？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M033", "category": "member", "question": "诶诶谁好相处？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M034", "category": "member", "question": "我想了解王书馨 拿过什么奖？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M035", "category": "member", "question": "诶诶周之超 任务多吗？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M036", "category": "member", "question": "诶诶组里谁是 微纳米气泡技术与应用 的 leader", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M037", "category": "member", "question": "请教查 韩重阳 的联系方式", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M038", "category": "member", "question": "麻烦问下余歆睿 现在带学生吗？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M039", "category": "member", "question": "那个谁在延期？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M040", "category": "member", "question": "诶吴孟铨 的课题组是？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M041", "category": "member", "question": "麻烦问下我现在能和谁讨论 盐碱土改良", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M042", "category": "member", "question": "诶诶韩重阳 性格如何？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M043", "category": "member", "question": "诶诶陈金薪 简介写完了吗？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M044", "category": "member", "question": "诶耿嘉栋 哪一级？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M045", "category": "member", "question": "诶诶张懿 参与了哪些项目？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M046", "category": "member", "question": "我想知道谁幽默？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M047", "category": "member", "question": "董昊宇 何时入学？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M048", "category": "member", "question": "诶周五有谁在？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M049", "category": "member", "question": "嗯组里做 自由基研究 的博后", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M050", "category": "member", "question": "我想知道关小未 哪个学校毕业的？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M051", "category": "member", "question": "请教介绍一下 李锐远", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M052", "category": "member", "question": "请帮我查教我做 黑臭水体", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M053", "category": "member", "question": "诶诶查一下 周之超", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M054", "category": "member", "question": "诶陈金薪 是不是做自由基的？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M055", "category": "member", "question": "诶诶找博士做 黑臭水体", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M056", "category": "member", "question": "请教做表面清洗的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M057", "category": "member", "question": "对了除了 杜同贺 还能找谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M058", "category": "member", "question": "那个刘子毅 和 贾琦 哪个做得好", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M059", "category": "member", "question": "请问做膜处理的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M060", "category": "member", "question": "那个董昊宇 毕业了吗？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M061", "category": "member", "question": "话说陈金薪 是做什么的？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M062", "category": "member", "question": "诶做管网生物膜的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M063", "category": "member", "question": "请帮我查张宏魁 是专硕还是学硕？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M064", "category": "member", "question": "请问组里谁最近最忙？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M065", "category": "member", "question": "我想了解谁是博士？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M066", "category": "member", "question": "那个近期入职的成员", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M067", "category": "member", "question": "李锐远 是不是做水处理的？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M068", "category": "member", "question": "诶跟 杨慈 同方向的人还有谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M069", "category": "member", "question": "诶诶水处理方向谁最强？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M070", "category": "member", "question": "嗯做农业的成员", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M071", "category": "member", "question": "诶诶王天志 是研究什么的？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M072", "category": "member", "question": "话说查 杜同贺 详细资料", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M073", "category": "member", "question": "麻烦问下刘莫菲 是哪个实验室的？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M074", "category": "member", "question": "帮我看看管理员里有谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M075", "category": "member", "question": "嗯组里 leader 角色", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M076", "category": "member", "question": "诶杨慈 做 饮用水 的人吗？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M077", "category": "member", "question": "组里最熟悉 自由基生成 的是谁？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M078", "category": "member", "question": "请教刘子毅 研究什么具体技术？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M079", "category": "member", "question": "嗯下周谁有空？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M080", "category": "member", "question": "那个陈金薪 简介", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M081", "category": "member", "question": "麻烦问下做管网水质的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M082", "category": "member", "question": "我想知道王书馨 的研究方向是？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M083", "category": "member", "question": "请问找 副教授 阶段做 装备开发 的", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M084", "category": "member", "question": "请问张宏魁 项目经验", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M085", "category": "member", "question": "请帮我查组里微纳米气泡方向的代表人物", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M086", "category": "member", "question": "帮我看看杜同贺 是不是 alumni", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M087", "category": "member", "question": "请帮我查组里 admin 角色", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M088", "category": "member", "question": "诶周末谁有空？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M089", "category": "member", "question": "话说杜同贺 联系电话多少？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "M090", "category": "member", "question": "请问陈天祥 的论文发了几篇？", "expect": {"tools_any": ["get_member_profile", "query_members"], "intent_any": ["search_info", "data_query", "recommend_person"]}}
+{"id": "T001", "category": "task", "question": "我想了解陈金薪 最近忙什么？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T002", "category": "task", "question": "我想知道我做过的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T003", "category": "task", "question": "请问查任务 #89 详情", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T004", "category": "task", "question": "麻烦问下把任务 #101 移到 吴怡霏", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T005", "category": "task", "question": "嗯距离截止日最近的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T006", "category": "task", "question": "请帮我查我完成过哪些任务？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T007", "category": "task", "question": "我想知道任务 #11 是什么？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T008", "category": "task", "question": "我想知道这周提交了什么", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T009", "category": "task", "question": "嗯我今天完成了什么？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T010", "category": "task", "question": "我想知道你能做任务 #51 吗", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T011", "category": "task", "question": "请教我最近有什么任务？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T012", "category": "task", "question": "帮我看看cancelled 状态任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T013", "category": "task", "question": "耿嘉栋 还有什么任务没完成？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T014", "category": "task", "question": "那个高优先级任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T015", "category": "task", "question": "话说下周要做的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T016", "category": "task", "question": "这周要交的", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T017", "category": "task", "question": "麻烦问下任务总数", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T018", "category": "task", "question": "请教把任务 #79 改优先级为 high", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T019", "category": "task", "question": "请帮我查我今天该做啥？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T020", "category": "task", "question": "那个我创建过的所有任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T021", "category": "task", "question": "对了列出所有 done 的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T022", "category": "task", "question": "我想知道medium 优先级的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T023", "category": "task", "question": "请问任务 #40 优先级", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T024", "category": "task", "question": "我想了解创建一个任务：京津冀课题三预算编制", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T025", "category": "task", "question": "请教项目当前任务状态", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T026", "category": "task", "question": "话说把 李胜景 改成 done", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T027", "category": "task", "question": "诶诶我今天的待办", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T028", "category": "task", "question": "请问贾琦 的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T029", "category": "task", "question": "诶诶我做过的项目任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T030", "category": "task", "question": "请帮我查todo 任务按截止日期排", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T031", "category": "task", "question": "麻烦问下我有哪些高优先级任务？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T032", "category": "task", "question": "对了把 王书馨 的所有 todo 任务列出来", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T033", "category": "task", "question": "明天有 deadline 吗", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T034", "category": "task", "question": "诶in_progress 任务都列一下", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T035", "category": "task", "question": "那个本周新增任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T036", "category": "task", "question": "对了把任务 #204 改成 cancelled", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T037", "category": "task", "question": "请帮我查高优先级 todo 任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T038", "category": "task", "question": "麻烦问下标记任务 #204 完成", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T039", "category": "task", "question": "诶统计所有任务状态", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T040", "category": "task", "question": "诶查任务 #195 创建时间", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T041", "category": "task", "question": "话说在研项目任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T042", "category": "task", "question": "诶谁负责任务 #97？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T043", "category": "task", "question": "那个任务 #115 的负责人是谁？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T044", "category": "task", "question": "对了紧急且高优先级", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T045", "category": "task", "question": "那个项目 deadline 排序", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T046", "category": "task", "question": "删除任务 #113", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T047", "category": "task", "question": "麻烦问下把任务 #70 标记为完成", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T048", "category": "task", "question": "帮我看看耿嘉栋 的紧急任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T049", "category": "task", "question": "对了项目 宋洋 的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T050", "category": "task", "question": "我想了解任务 #64 完成了吗？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T051", "category": "task", "question": "诶下周截止的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T052", "category": "task", "question": "韩重阳 high 任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T053", "category": "task", "question": "我想知道新建任务 催麦蜂网站视频", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T054", "category": "task", "question": "对了本月要交付的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T055", "category": "task", "question": "请问组里现在最紧急的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T056", "category": "task", "question": "对了把任务 #190 截止日推到下周五", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T057", "category": "task", "question": "诶我参与的项目当前任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T058", "category": "task", "question": "话说延期任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T059", "category": "task", "question": "那个我有多少进行中任务？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T060", "category": "task", "question": "话说过去一周完成的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T061", "category": "task", "question": "我所有 cancelled 任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T062", "category": "task", "question": "我想了解把任务 #55 分配给 杜同贺", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T063", "category": "task", "question": "诶重新打开任务 #69", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T064", "category": "task", "question": "诶我今天新建了什么？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T065", "category": "task", "question": "我想了解今天该做什么？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T066", "category": "task", "question": "麻烦问下李锐远 手上还有多少活", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T067", "category": "task", "question": "我想知道把任务 #58 复制给 李胜景", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T068", "category": "task", "question": "请帮我查把任务 #80 状态改成 done", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T069", "category": "task", "question": "我所有 done 任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T070", "category": "task", "question": "那个我所有的 in_progress 任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T071", "category": "task", "question": "把任务 #53 改优先级为 low", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T072", "category": "task", "question": "话说谁在 done 任务最多", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T073", "category": "task", "question": "请教每人任务数", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T074", "category": "task", "question": "请帮我查项目 #76 当前任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T075", "category": "task", "question": "嗯紧急任务有哪些？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T076", "category": "task", "question": "今天有截止的吗", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T077", "category": "task", "question": "我想了解给我看看 todo 的任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T078", "category": "task", "question": "帮我看看已结题项目任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T079", "category": "task", "question": "诶任务 #192 截止日期？", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "T080", "category": "task", "question": "我想知道宋洋 过去一周新增任务", "expect": {"tools_any": ["query_tasks", "create_task", "update_task", "delete_task"], "intent_any": ["data_query", "execute_action", "casual_chat"]}}
+{"id": "C001", "category": "meeting", "question": "请教未开始的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C002", "category": "meeting", "question": "我想了解贾琦 参加过的会", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C003", "category": "meeting", "question": "帮我看看近一周的会议纪要", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C004", "category": "meeting", "question": "那个列出 陈金薪 参加的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C005", "category": "meeting", "question": "请教未完成的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C006", "category": "meeting", "question": "请问查询会议 #85", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C007", "category": "meeting", "question": "诶诶臭氧相关会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C008", "category": "meeting", "question": "麻烦问下本月会议安排", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C009", "category": "meeting", "question": "请问未来 3 天会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C010", "category": "meeting", "question": "嗯查会议 #12 议程", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C011", "category": "meeting", "question": "我想了解组里最近一次例会的纪要", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C012", "category": "meeting", "question": "请教今天做学术报告的人", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C013", "category": "meeting", "question": "麻烦问下查一下第 70 个会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C014", "category": "meeting", "question": "我想知道搜索 饮用水 会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C015", "category": "meeting", "question": "嗯组会时间", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C016", "category": "meeting", "question": "话说组里本周开了几次会", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C017", "category": "meeting", "question": "话说组会安排", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C018", "category": "meeting", "question": "帮我看看第 70 场会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C019", "category": "meeting", "question": "诶我主持过的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C020", "category": "meeting", "question": "帮我看看最近的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C021", "category": "meeting", "question": "请教已完成的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C022", "category": "meeting", "question": "请教列出所有 scheduled 会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C023", "category": "meeting", "question": "请问未开始的例会", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C024", "category": "meeting", "question": "请帮我查哪些会议讲过 水处理", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C025", "category": "meeting", "question": "请问新增一个会议：讨论 微纳米气泡", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C026", "category": "meeting", "question": "麻烦问下未来一周的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C027", "category": "meeting", "question": "麻烦问下上周会议总结", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C028", "category": "meeting", "question": "对了我发起过的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C029", "category": "meeting", "question": "麻烦问下开过的会里涉及 臭氧", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C030", "category": "meeting", "question": "本月所有例行会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C031", "category": "meeting", "question": "麻烦问下黑臭水体 例会", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C032", "category": "meeting", "question": "会议时间冲突检查", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C033", "category": "meeting", "question": "请教本周 微纳米气泡 会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C034", "category": "meeting", "question": "话说把 关小未 从会议 #64 移除", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C035", "category": "meeting", "question": "我想了解找会议 #85", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C036", "category": "meeting", "question": "话说下次开会在哪", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C037", "category": "meeting", "question": "请问今天做报告的主题", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C038", "category": "meeting", "question": "请帮我查会议 #64 详情", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C039", "category": "meeting", "question": "我想了解近 7 天会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C040", "category": "meeting", "question": "我想知道今天有什么会议？", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C041", "category": "meeting", "question": "话说微纳米气泡相关会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C042", "category": "meeting", "question": "诶耿嘉栋 主持的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C043", "category": "meeting", "question": "请问上次例会讲了什么", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C044", "category": "meeting", "question": "我想了解查 陈金薪 做主持的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C045", "category": "meeting", "question": "话说把 孟祥琪 加到会议 #85", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C046", "category": "meeting", "question": "请问远紫外 主题会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C047", "category": "meeting", "question": "诶今天开的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C048", "category": "meeting", "question": "诶诶农业 相关的所有会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C049", "category": "meeting", "question": "我想知道这周开了什么会？", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C050", "category": "meeting", "question": "话说有什么关于 远紫外 的会议？", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C051", "category": "meeting", "question": "我想知道实验进展相关的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C052", "category": "meeting", "question": "麻烦问下修改会议 #64 时间", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C053", "category": "meeting", "question": "帮我看看远紫外相关会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C054", "category": "meeting", "question": "麻烦问下我做主持的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C055", "category": "meeting", "question": "麻烦问下董昊宇 最近开过什么会", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C056", "category": "meeting", "question": "诶诶组会一般讨论什么", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C057", "category": "meeting", "question": "麻烦问下本月开了几次会", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C058", "category": "meeting", "question": "请教上周开了什么会？", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C059", "category": "meeting", "question": "那个本季度所有会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C060", "category": "meeting", "question": "那个我所有会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C061", "category": "meeting", "question": "对了张宏魁 做报告的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C062", "category": "meeting", "question": "请问最近一次组会讲了什么", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C063", "category": "meeting", "question": "请问本月的会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C064", "category": "meeting", "question": "请教预约 饮用水 会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C065", "category": "meeting", "question": "那个请描述会议 #64", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C066", "category": "meeting", "question": "下周会议安排", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C067", "category": "meeting", "question": "麻烦问下本月所有会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C068", "category": "meeting", "question": "我想了解饮用水相关会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C069", "category": "meeting", "question": "请教近 30 天会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "C070", "category": "meeting", "question": "帮我看看未来 7 天会议", "expect": {"tools_any": ["query_meetings", "get_meeting_detail", "create_meeting"], "intent_any": ["data_query", "execute_action", "explain_concept"]}}
+{"id": "P001", "category": "project", "question": "诶我做的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P002", "category": "project", "question": "我想了解黑臭水体无药剂低能耗治理 项目负责人", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P003", "category": "project", "question": "那个项目 水产高密度无抗养殖与品质改善 已完成", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P004", "category": "project", "question": "麻烦问下项目 1 状态更新", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P005", "category": "project", "question": "我想了解饮用水水质提升与安全保障 参与的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P006", "category": "project", "question": "请教项目 2 摘要", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P007", "category": "project", "question": "对了项目 2 状态", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P008", "category": "project", "question": "帮我看看项目 3 月报", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P009", "category": "project", "question": "诶我需要新立 饮用水水质提升与安全保障 项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P010", "category": "project", "question": "麻烦问下我负责的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P011", "category": "project", "question": "话说项目 气泡成核过程调控与设备研发 团队", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P012", "category": "project", "question": "麻烦问下已立项的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P013", "category": "project", "question": "对了新加一个项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P014", "category": "project", "question": "请问饮用水水质提升与安全保障 项目背景", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P015", "category": "project", "question": "我想了解项目 #3 预算", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P016", "category": "project", "question": "麻烦问下饮用水水质提升与安全保障 项目立项书", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P017", "category": "project", "question": "帮我看看黑臭水体无药剂低能耗治理 项目交付", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P018", "category": "project", "question": "对了微纳米气泡 相关项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P019", "category": "project", "question": "我想了解气泡成核过程调控与设备研发 项目结题", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P020", "category": "project", "question": "我想了解谁立项了 气泡成核过程调控与设备研发", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P021", "category": "project", "question": "诶项目 3 立项背景", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P022", "category": "project", "question": "对了项目 4 当前阶段任务", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P023", "category": "project", "question": "已完成项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P024", "category": "project", "question": "请帮我查我做的课题", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P025", "category": "project", "question": "诶诶我负责的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P026", "category": "project", "question": "嗯项目 饮用水水质提升与安全保障 当前任务", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P027", "category": "project", "question": "那个我现在做的 气泡成核过程调控与设备研发", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P028", "category": "project", "question": "请问气泡成核过程调控与设备研发 项目会议", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P029", "category": "project", "question": "麻烦问下项目 水产高密度无抗养殖与品质改善 还在进行吗", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P030", "category": "project", "question": "那个未立项的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P031", "category": "project", "question": "请问项目 饮用水水质提升与安全保障 的里程碑", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P032", "category": "project", "question": "水产高密度无抗养殖与品质改善 项目阶段", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P033", "category": "project", "question": "请问项目 #1 任务", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P034", "category": "project", "question": "嗯新加项目：饮用水水质提升与安全保障", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P035", "category": "project", "question": "对了组里所有项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P036", "category": "project", "question": "帮我看看项目 #4 起止时间", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P037", "category": "project", "question": "水产高密度无抗养殖与品质改善 项目的概要", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P038", "category": "project", "question": "麻烦问下新立项的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P039", "category": "project", "question": "嗯项目 4 当前进展", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P040", "category": "project", "question": "帮我看看项目进度如何？", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P041", "category": "project", "question": "我想知道列出所有项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P042", "category": "project", "question": "请问黑臭水体无药剂低能耗治理 项目立项时间", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P043", "category": "project", "question": "话说新立项的项目有", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P044", "category": "project", "question": "请帮我查项目 4 验收", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P045", "category": "project", "question": "我想了解我现在的项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P046", "category": "project", "question": "请帮我查项目 黑臭水体无药剂低能耗治理", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P047", "category": "project", "question": "项目 3 当前 status", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P048", "category": "project", "question": "诶诶新立一个 气泡成核过程调控与设备研发 项目", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P049", "category": "project", "question": "帮我看看完成项目 #3", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P050", "category": "project", "question": "请帮我查项目 黑臭水体无药剂低能耗治理 详细", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P051", "category": "project", "question": "我想知道项目 水产高密度无抗养殖与品质改善 进度", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P052", "category": "project", "question": "请教水产高密度无抗养殖与品质改善 项目预算", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P053", "category": "project", "question": "请教新立项目 水产高密度无抗养殖与品质改善", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P054", "category": "project", "question": "请帮我查我参与了哪些项目？", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P055", "category": "project", "question": "对了项目 黑臭水体无药剂低能耗治理 经费", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P056", "category": "project", "question": "诶项目 黑臭水体无药剂低能耗治理 是 active 吗", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P057", "category": "project", "question": "请帮我查气泡成核过程调控与设备研发 项目周报", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P058", "category": "project", "question": "请帮我查项目状态变更", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P059", "category": "project", "question": "嗯气泡成核过程调控与设备研发 项目成员", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "P060", "category": "project", "question": "帮我看看项目 黑臭水体无药剂低能耗治理 状态变更历史", "expect": {"tools_any": ["query_projects", "create_project", "get_project_summary"], "intent_any": ["data_query", "execute_action"]}}
+{"id": "K001", "category": "knowledge", "question": "请帮我查UV/O3 实验论文", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K002", "category": "knowledge", "question": "请教PEM 电解 综述论文", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K003", "category": "knowledge", "question": "请帮我查搜一下 TiO2", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K004", "category": "knowledge", "question": "保存这段对话到知识库", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K005", "category": "knowledge", "question": "那个什么是 DLS？", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K006", "category": "knowledge", "question": "诶诶PEM 综述", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K007", "category": "knowledge", "question": "对了微纳米气泡崩溃现象", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K008", "category": "knowledge", "question": "对了知识库我搜过 zeta", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K009", "category": "knowledge", "question": "嗯知识图谱 UV/TiO2", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K010", "category": "knowledge", "question": "我想知道微纳米气泡的优势", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K011", "category": "knowledge", "question": "微纳米气泡 哪一年发表的", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K012", "category": "knowledge", "question": "臭氧在水处理中的应用", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K013", "category": "knowledge", "question": "什么是微纳米气泡", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K014", "category": "knowledge", "question": "文丘里管 综合", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K015", "category": "knowledge", "question": "那个膜耦合 实验方案", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K016", "category": "knowledge", "question": "请教致病菌 核心观点", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K017", "category": "knowledge", "question": "诶上次问的 NTA", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K018", "category": "knowledge", "question": "我想知道我之前在知识库看到过 PEM", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K019", "category": "knowledge", "question": "请教臭氧 论文", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K020", "category": "knowledge", "question": "对了微纳米气泡应用领域", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K021", "category": "knowledge", "question": "嗯公式: 高级氧化", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K022", "category": "knowledge", "question": "对了组里 蜡样芽孢杆菌 论文", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K023", "category": "knowledge", "question": "我想知道微纳米气泡 + 黑臭水体", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K024", "category": "knowledge", "question": "帮我看看我以前查过 UV/TiO2", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K025", "category": "knowledge", "question": "那个微纳米气泡和传统气泡区别", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K026", "category": "knowledge", "question": "请帮我查高铁酸钾 实验方法", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K027", "category": "knowledge", "question": "我想知道查 加压溶气 文献", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K028", "category": "knowledge", "question": "那个DLS 案例", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K029", "category": "knowledge", "question": "找关于 生物稳定性 的所有文档", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K030", "category": "knowledge", "question": "诶诶知识库命中 膜耦合", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K031", "category": "knowledge", "question": "对了知识库里有几篇文献？", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K032", "category": "knowledge", "question": "帮我看看UV/O3 公式库", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K033", "category": "knowledge", "question": "诶诶石墨烯 综述", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K034", "category": "knowledge", "question": "请教查所有 zeta 知识", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K035", "category": "knowledge", "question": "请问加压溶气 假设库", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K036", "category": "knowledge", "question": "臭氧氧化原理", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K037", "category": "knowledge", "question": "我想了解Fenton 原理", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K038", "category": "knowledge", "question": "请帮我查知识库分类", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K039", "category": "knowledge", "question": "请教PEM 假设", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K040", "category": "knowledge", "question": "嗯回忆一下 臭氧", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K041", "category": "knowledge", "question": "嗯微纳米气泡表征", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K042", "category": "knowledge", "question": "对了UF 方法对比", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K043", "category": "knowledge", "question": "我想知道微纳米气泡 + 水产养殖", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K044", "category": "knowledge", "question": "话说致病菌 知识库已存", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K045", "category": "knowledge", "question": "麻烦问下什么是溃灭？", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K046", "category": "knowledge", "question": "话说纳气泡 知识图谱", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K047", "category": "knowledge", "question": "诶诶NF 我记得是这样", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K048", "category": "knowledge", "question": "那个微纳米气泡 + 农业", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K049", "category": "knowledge", "question": "嗯我需要查 高级氧化", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K050", "category": "knowledge", "question": "诶诶微纳米气泡带电性", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K051", "category": "knowledge", "question": "那个我记得 纳气泡", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K052", "category": "knowledge", "question": "对了知识库索引", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K053", "category": "knowledge", "question": "我想了解我之前存过 UV/H2O2", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K054", "category": "knowledge", "question": "诶微纳米气泡有哪些表征方法？", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K055", "category": "knowledge", "question": "麻烦问下电解法", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K056", "category": "knowledge", "question": "帮我看看查 生物稳定性 相关公式", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K057", "category": "knowledge", "question": "嗯气泡溃灭 我之前提过", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K058", "category": "knowledge", "question": "请问搜索 UV/H2O2", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K059", "category": "knowledge", "question": "请问微纳米气泡 + 表面清洗", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "K060", "category": "knowledge", "question": "诶什么是 NTA？", "expect": {"tools_any": ["search_knowledge", "save_conversation_knowledge"], "intent_any": ["explain_concept", "search_info", "execute_action"]}}
+{"id": "X001", "category": "cross", "question": "那个周之超 的 完成实验报告 关联到 64", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X002", "category": "cross", "question": "话说胡小琪 的 表面清洗 进展", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X003", "category": "cross", "question": "诶把 董昊宇 推荐的 农业灌溉 资料给我", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X004", "category": "cross", "question": "对了把 陈天祥 和 200L新机器壳子定制 关联", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X005", "category": "cross", "question": "话说比一下 韩重阳 和 杜同贺", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X006", "category": "cross", "question": "我今天做完 修改论文 的概率", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X007", "category": "cross", "question": "我想知道饮用水水质提升与安全保障 项目的 表面清洗技术 会议", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X008", "category": "cross", "question": "嗯蒋芦笛 项目的 整理知识库论文", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X009", "category": "cross", "question": "请帮我查刘子毅 的 催麦蜂网站视频 还差多久", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X010", "category": "cross", "question": "王书馨 和 赵航佳 谁的 微纳米气泡技术与应用 更强", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X011", "category": "cross", "question": "诶64 议程里有 测试水样 吗", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X012", "category": "cross", "question": "对了64 提到了 蒋芦笛", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X013", "category": "cross", "question": "请帮我查找 管网水质 的人", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X014", "category": "cross", "question": "嗯张懿 上周会议讲了什么", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X015", "category": "cross", "question": "诶把 余歆睿 加到 64 会议", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X016", "category": "cross", "question": "我想知道安排 董昊宇 和 胡小琪 讨论 农业应用", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X017", "category": "cross", "question": "诶诶今天完成 准备数学考试 的概率", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X018", "category": "cross", "question": "请教把 71 会议内容总结发给 吴怡霏", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X019", "category": "cross", "question": "请教把 测样 安排给 李胜景", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X020", "category": "cross", "question": "话说宋洋 的 帮老师汇总高被引论文情况 和 表面清洗 关联", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X021", "category": "cross", "question": "王天志 给我推荐 气泡成核过程调控 资源", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X022", "category": "cross", "question": "请帮我查我在 黑臭水体无药剂低能耗治理 里的角色", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X023", "category": "cross", "question": "那个杜同贺 的 完成实验报告 该找谁协助", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X024", "category": "cross", "question": "饮用水水质提升与安全保障 项目和 管网水质 关联", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X025", "category": "cross", "question": "话说宋洋 下一步任务", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X026", "category": "cross", "question": "我想了解杨慈 推荐", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X027", "category": "cross", "question": "那个推荐 设备开发 的人做 气泡成核过程调控与设备研发", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X028", "category": "cross", "question": "请帮我查陈金薪 项目当前任务", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X029", "category": "cross", "question": "请问黑臭水体无药剂低能耗治理 当前任务状态", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X030", "category": "cross", "question": "帮我看看吴孟铨 和 看文献", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X031", "category": "cross", "question": "我想了解王天志 做的 京津冀课题三预算编制 进展如何？", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X032", "category": "cross", "question": "把会议 #68 的纪要发给 杜同贺", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X033", "category": "cross", "question": "请帮我查组里 装备开发 讨论过几次", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X034", "category": "cross", "question": "帮我看看关小未 在 68 讲了 水产养殖", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X035", "category": "cross", "question": "配置服务器与老师的电脑 关联 刘莫菲", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X036", "category": "cross", "question": "那个王书馨 跟 自由基生成 相关的项目", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X037", "category": "cross", "question": "诶诶实验组臭氧处理 在哪个项目", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X038", "category": "cross", "question": "请教气泡成核过程调控与设备研发 项目当前在做的任务", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X039", "category": "cross", "question": "找 胡小琪", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X040", "category": "cross", "question": "对了胡小琪 任务最近一次更新", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X041", "category": "cross", "question": "推荐 关小未 做 水产高密度无抗养殖与品质改善", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X042", "category": "cross", "question": "嗯把 取大棚水样 跟 周之超 的研究结合", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X043", "category": "cross", "question": "请帮我查杨慈的研究跟 黑臭水体无药剂低能耗治理 项目关系？", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X044", "category": "cross", "question": "请帮我查王天志 下一个会议是", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X045", "category": "cross", "question": "嗯把 张宏魁 列为 气泡成核过程调控与设备研发 成员", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X046", "category": "cross", "question": "做 装备开发 的同事", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X047", "category": "cross", "question": "我想知道把 吴怡霏 加到 水产高密度无抗养殖与品质改善 项目", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X048", "category": "cross", "question": "那个让 周之超 帮忙 学习四六级监考", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X049", "category": "cross", "question": "让 韩重阳 准备 实验室危废化学品回收 的资料", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X050", "category": "cross", "question": "请问张懿 在 气泡成核过程调控与设备研发 里的角色", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X051", "category": "cross", "question": "嗯孟祥琪 能不能帮 陈天祥", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X052", "category": "cross", "question": "请教查询 饮用水水质提升与安全保障 项目 吴怡霏 的任务", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X053", "category": "cross", "question": "请教杜同贺 能不能同时做 水产高密度无抗养殖与品质改善", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X054", "category": "cross", "question": "那个邓国祥 的 MDPI投稿 deadline 是哪天", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "X055", "category": "cross", "question": "我想知道为 韩重阳 推荐 盐碱土改良 的资源", "expect": {"intent_any": ["data_query", "search_info", "recommend_person", "execute_action", "explain_concept", "casual_chat"]}}
+{"id": "U001", "category": "casual", "question": "你多大了", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U002", "category": "casual", "question": "对了再见~", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U003", "category": "casual", "question": "请问嗨", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U004", "category": "casual", "question": "我想了解想睡觉了", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U005", "category": "casual", "question": "吃饭了吗", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U006", "category": "casual", "question": "话说我下班了", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U007", "category": "casual", "question": "那个哈", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U008", "category": "casual", "question": "请帮我查你好", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U009", "category": "casual", "question": "我想了解嗯", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U010", "category": "casual", "question": "帮我看看hello", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U011", "category": "casual", "question": "请问周一好", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U012", "category": "casual", "question": "我想了解你", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U013", "category": "casual", "question": "请问下午好", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U014", "category": "casual", "question": "对了我心情不好", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U015", "category": "casual", "question": "诶诶今天天气怎么样", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U016", "category": "casual", "question": "请问你爱我吗", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U017", "category": "casual", "question": "诶3q", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U018", "category": "casual", "question": "请教你在吗", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U019", "category": "casual", "question": "诶那", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U020", "category": "casual", "question": "诶嗯嗯", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U021", "category": "casual", "question": "那个我多大了", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U022", "category": "casual", "question": "诶诶考虑下", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U023", "category": "casual", "question": "诶诶对的", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U024", "category": "casual", "question": "请帮我查我饿了", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U025", "category": "casual", "question": "对了也许吧", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U026", "category": "casual", "question": "我想了解回头说", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U027", "category": "casual", "question": "那个早上好", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U028", "category": "casual", "question": "话说明天再聊", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U029", "category": "casual", "question": "请教加班中", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "U030", "category": "casual", "question": "诶诶周末愉快", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info"]}}
+{"id": "Y001", "category": "memory", "question": "请问我没考上", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y002", "category": "memory", "question": "请帮我查你是什么模型", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y003", "category": "memory", "question": "我吃了麻辣烫", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y004", "category": "memory", "question": "我想了解记住：我喜欢 管网生物膜", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y005", "category": "memory", "question": "对了我说过 胡小琪 吗", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y006", "category": "memory", "question": "麻烦问下我之前说了什么", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y007", "category": "memory", "question": "嗯我想辞职", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y008", "category": "memory", "question": "我想了解你底层用 GPT 吗", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y009", "category": "memory", "question": "那个你记住了什么", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y010", "category": "memory", "question": "我想知道save memory 论文", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y011", "category": "memory", "question": "请问我之前说 吴怡霏 你怎么不记得", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y012", "category": "memory", "question": "我想了解你会唱歌吗", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y013", "category": "memory", "question": "话说忘掉 孟祥琪", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y014", "category": "memory", "question": "嗯我叫 吴怡霏, 再记一下", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y015", "category": "memory", "question": "那个记住：我讨厌 emoji", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y016", "category": "memory", "question": "我想了解我感冒了", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y017", "category": "memory", "question": "那个你有什么特长", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y018", "category": "memory", "question": "以后我问你任何问题都用 实验", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y019", "category": "memory", "question": "麻烦问下从头开始", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y020", "category": "memory", "question": "对了你星座", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y021", "category": "memory", "question": "那个你能写 Python 吗", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y022", "category": "memory", "question": "话说我之前说过 李胜景 吗", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y023", "category": "memory", "question": "我想了解我心情不好", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y024", "category": "memory", "question": "那个你权重多少", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y025", "category": "memory", "question": "我想了解我吃了火锅", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y026", "category": "memory", "question": "话说我再告诉你一次我叫 张懿", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y027", "category": "memory", "question": "嗯save 实验", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y028", "category": "memory", "question": "对了我叫什么来着", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y029", "category": "memory", "question": "诶my preferences", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Y030", "category": "memory", "question": "我想知道记住：我不太会 盐碱土修复", "expect": {"intent_any": ["execute_action", "casual_chat", "data_query", "search_info"]}}
+{"id": "Z001", "category": "extreme", "question": "麻烦问下我能加入 黑臭水体项目 吗", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z002", "category": "extreme", "question": "那个我被导师骂了", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z003", "category": "extreme", "question": "请教你好吗", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z004", "category": "extreme", "question": "我想了解1234567890", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z005", "category": "extreme", "question": "请帮我查abc def ghi jkl mno pqr stu vwx yz", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z006", "category": "extreme", "question": "请教组里我啥都不会", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z007", "category": "extreme", "question": "话说人生的意义", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z008", "category": "extreme", "question": "那个1 + 1 = ?", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z009", "category": "extreme", "question": "请问韩重阳 是不是要延期", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z010", "category": "extreme", "question": "麻烦问下韩重阳 是不是比 关小未 更强", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z011", "category": "extreme", "question": "麻烦问下陈天祥 是不是不合适", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z012", "category": "extreme", "question": "我想知道我能不能硕转博", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z013", "category": "extreme", "question": "请教装备开发 国家排名", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z014", "category": "extreme", "question": "话说我该不该跳 农业灌溉", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z015", "category": "extreme", "question": "那个老板是不是要跳槽", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z016", "category": "extreme", "question": "对了我有个疑问", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z017", "category": "extreme", "question": "我想知道或许", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z018", "category": "extreme", "question": "我们 黑臭水体 行业前景", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z019", "category": "extreme", "question": "请问我想换导师", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
+{"id": "Z020", "category": "extreme", "question": "请教。", "expect": {"intent_any": ["casual_chat", "data_query", "execute_action", "search_info", "explain_concept"]}}
