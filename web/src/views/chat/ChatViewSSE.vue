@@ -142,6 +142,10 @@ watch(
 // ============================================================================
 // 发送消息（包装 useChatStream.sendMessage 以处理 UI 副作用）
 // ============================================================================
+// 关键设计：发送消息是**用户主动行为**，意图明确，必须**强制**滚到底（force=true）
+// 不受 sticky scroll 的 autoStick 守卫影响（用户上滚看历史时也要能看到自己发的内容）
+// 注意：scrollToBottom(true) 内部会 autoStick.value = true（line 92），恢复贴底状态
+// 后续流式 text_delta 接收时 watch(messages) 仍按 sticky 行为（用户再次上滚可中断）
 async function sendMessage(text?: string) {
   const content = (text ?? inputText.value).trim()
   if (!content && !selectedImage.value && !selectedFile.value) return
@@ -155,7 +159,8 @@ async function sendMessage(text?: string) {
   if (textareaRef.value) textareaRef.value.style.height = 'auto'
 
   loading.value = true
-  await scrollToBottom()
+  // 2026-06-14 修复：发送前**强制**滚到底（force=true），不受 autoStick 守卫
+  await scrollToBottom(true)
 
   try {
     await sendMessageCore({
@@ -167,7 +172,8 @@ async function sendMessage(text?: string) {
     // 错误已由 useChatStream 内部处理
   } finally {
     loading.value = false
-    await scrollToBottom()
+    // 2026-06-14 修复：发送后**强制**滚到底（force=true），确保 assistant 占位可见
+    await scrollToBottom(true)
   }
 }
 

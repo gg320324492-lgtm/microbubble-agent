@@ -187,15 +187,23 @@ function onToggleTheme() {
 // ============================================================================
 // 发送消息
 // ============================================================================
+// 关键设计：发送消息是**用户主动行为**，必须**强制**滚到底（force=true）
+// 不受 MobileMessageList 的 isAtBottom 守卫影响（用户在底部以上时也要能看到自己发的内容）
+// 与桌面端 ChatViewSSE.sendMessage 一致：force=true 跳过 sticky scroll 守卫
 async function sendMessage() {
   const text = inputText.value.trim()
   if (!text && !selectedImage.value && !selectedFile.value) return
   haptic.tap()
+  // 2026-06-14 修复：发送前**强制**滚到底（nextTick + force=true），
+  // 跳过 isAtBottom 守卫，确保 user 消息立刻可见
+  nextTick(() => messageListRef.value?.scrollToBottom(true))
   await sendMessageStream({
     text,
     file: selectedFile.value,
     image: selectedImage.value,
   })
+  // 2026-06-14 修复：发送后**强制**滚到底，让 assistant 占位（typing bubble）可见
+  nextTick(() => messageListRef.value?.scrollToBottom(true))
   inputText.value = ''
   selectedImage.value = null
   selectedFile.value = null
