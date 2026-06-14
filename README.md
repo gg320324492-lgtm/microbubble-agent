@@ -33,6 +33,18 @@
 
 ### 近期新增（按时间倒序）
 
+- **🔔 任务提醒体系 v2 全面优化 + v2.1 微信交互简化（2026-06-15，commits `223ea74` + `ba75e32`）** — 解决两个用户痛点：
+  - **赵航佳半夜收微信提醒** → 所有 reminder 统一在 **11:00 AM 北京时间窗口**发送（±60min 容差），半夜不触发任何推送
+  - **杜同贺多次发"收到"小气助手仍推** → 新增 `acknowledged` 状态 + `acknowledge_all_user_reminders` 服务方法
+  - **v2.1 简化**：**任何微信消息都触发 ack**（用户活跃 = 不再推旧的），"今天别提醒" snooze 路径并入 ack（用户原话"用户发任何内容都是不再提醒"）
+  - **核心模型**：每个任务只有 1 次 11AM 提醒机会，发完即结束，失败也标 sent（one-shot，不重试）
+  - **同用户多条提醒合并为 1 条 digest 消息**（避免轰炸，8 个任务变 1 条）
+  - **alembic 019 迁移**（[alembic/versions/019_reminder_ack_snooze_v2.py](alembic/versions/019_reminder_ack_snooze_v2.py)）：reminders 加 6 列（`acknowledged_at`/`acknowledged_by`/`ack_channel`/`snoozed_until`/`reminder_batch_date`/`policy_version=2`）+ members 加 `notification_preferences: JSON`
+  - **新文件**：[app/services/reminder_policy.py](app/services/reminder_policy.py)（3 个纯函数：`next_digest_slot` / `is_in_digest_window` / `batch_date_for`）+ [app/schemas/notification.py](app/schemas/notification.py) + [web/src/composables/useNotificationPrefs.js](web/src/composables/useNotificationPrefs.js)
+  - **API**：`GET/PUT /api/v1/members/me/notification-preferences`（用户可改 digest_time，已有 reminder 自动重排）
+  - **前端**：桌面端 SettingsView + 移动端 MobileSettingsView 加"通知偏好"卡片（启用开关 / 时间 picker / 状态 tag / 解除 snooze 按钮）
+  - **测试**：`tests/test_reminder_window.py` + `test_acknowledge.py` + `test_snooze.py` + `test_process_reminders_window.py` + `test_migration_019_reminder_v2.py`，**20/20 通过**
+  - **详细文档**：[memory/reminder-v2-11am-digest.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/reminder-v2-11am-digest.md)
 - **🔧 重启电脑后端到端事故修复 8 联弹（2026-06-13 晚 ~ 06-14 凌晨，13 commits）** — 重启电脑 + Docker 关掉后启动项目暴露**积压数月的 8 个真 bug**，全部修复：
   - **🐛 vision-mcp 三个连环 bug（commit `db3e275`）** — ①`Server()` 不接受 `version=` / `capabilities=` 参数（mcp 0.9.1 `__init__` 签名只 `(name: str)`）②`tools/__init__.py` 引用不存在的 `router`（应为 `create_vision_tools`）③**MCP stdio 服务在 Docker 中死循环重启**——必须 `stdin_open: true` + `tty: true` 保持 stdio 开放，否则 `restart: unless-stopped` 形成紧密死循环（log 只看到 `Starting...` 然后被截断，定位极难）
   - **🛡️ frpc.exe 僵尸进程陷阱（commit `ce29b71` 沉淀）** — `start.bat` 第 3 阶段启动 `frpc.exe` 只检查进程存在就认为成功。事故：`netstat` 显示云服务器 7000 端口连接在 PID 27808（**clash-win64.exe** 误持），frpc.exe PID 39408 实际没建立任何连接。`frpc.log` 17 天没新写入 = 僵尸。修复：`taskkill + rm log + HTTP_PROXY="" powershell Start-Process` 重启。**纪律**：`start.bat` 必须 `sleep 5 && tail frpc.log` + `netstat | grep :7000` 三步验证
@@ -458,11 +470,14 @@ npm run dev
 
 详细文档: https://agent.mnb-lab.cn/docs
 
-## 当前状态（2026-06-13）
+## 当前状态（2026-06-15）
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
-### 🔧 最新改进（2026-06-13 移动端收官 + 部署加固）
+### 🔧 最新改进（2026-06-15 任务提醒体系 v2 + qa-bench 闭环）
+
+- **🔔 任务提醒体系 v2 全面优化（commits `223ea74` + `ba75e32`）** — 见上方"近期新增"详述。**核心变化**：所有 reminder 统一在 11:00 AM 北京时间窗口推送，每个任务 1 次推完即结束；任何微信消息 = ack 取消该用户所有 pending（杜同贺痛点彻底解决）；同用户多条合并为 1 条 digest 消息。
+- **🤖 Agent 回答质量 5 大根因修复 + qa-bench 360 题闭环（2026-06-15 凌晨，14 commits）** — 见 [CLAUDE.md 2026-06-15 section](CLAUDE.md#2026-06-15-agent-质量--qa-bench-闭环)：`TOOL_REGISTRY` 启动初始化 + LLM 代理层 fake tool_call 5 格式解析 + `get_member_profile` dead import + 长期记忆干扰 + synthesis fake XML 泄露。知识库 64 → 247 条（+183），qa-bench 360 题 84% 高分率
 
 - **📱 移动端 10 PR 全栈定制收官（commit `9026c07`）** — PR #1 基建 → PR #10 视觉回归测试，**10 个 PR × 18 commits** 全交付。详见 [ROADMAP.md 移动端章节](ROADMAP.md#移动端-10-pr-全栈定制2026-06-13-收官)：
   - **PR #1 基建**（`99bbe6b`）— `useIsMobile.js`（viewport + UA 兜底） + `useSafeArea.js`（iPhone 刘海/底栏）+ `useViewport.js`（resize 监听）+ 路由级双栈骨架
@@ -856,17 +871,17 @@ MIT License
 
 ### 项目统计（2026-06-15）
 
-- **1026 commits** / **236K 行** / **941 文件** / **31 天**
+- **1029 commits** / **235K 行** / **688 文件** / **31 天**
 
 | 类型 | 行数 | 文件数 |
 |------|------|-------|
-| json | 79,601 | 16 |
-| markdown | 42,646 | 84 |
-| python | 42,470 | 247 |
-| vue | 40,318 | 140 |
-| sql | 11,124 | 4 |
-| javascript | 6,888 | 64 |
-| html | 3,527 | 9 |
+| json | 79,000+ | 16 |
+| markdown | 43,000+ | 84 |
+| python | 43,000+ | 252 |
+| vue | 40,500+ | 142 |
+| sql | 11,200+ | 4 |
+| javascript | 7,000+ | 66 |
+| html | 3,600+ | 9 |
 | **总计** | **236,133** | **941** |
 
 ## 📚 相关文档（更新版）
