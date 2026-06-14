@@ -826,3 +826,55 @@ npm run dev
 ## 许可证
 
 MIT License
+
+## 🆕 最新完成（2026-06-15 凌晨 Agent 回答质量 + qa-bench 14 commits）
+
+### 5 大根因修复（用户原始 4 次抱怨 → 全部 PASS）
+
+| 根因 | 症状 | 修复 | commit |
+|------|------|------|--------|
+| TOOL_REGISTRY 启动未注册 | 34 工具都调不到 | `app/main.py` 加 `import app.agent.tools` | `d36d1db` |
+| LLM 代理 fake tool_call | 模型在 content 里写 `<function=...>` | 5 格式 XML 解析 + schema-aware alias | `d36d1db` / `e2a9a49` |
+| get_member_profile dead import | `ImportError: ProjectMember` | 移除 dead import | `d36d1db` |
+| is_active 过滤 alumni | 雒培媛 找不到 | `member_service` 不按姓名过滤 | `d36d1db` |
+| 长期记忆干扰 | 模型提了记忆里但没在工具返回里的人 | `prompts.py` 加"严禁编造"硬规则 | `e2a9a49` |
+| synthesis 阶段 fake XML 泄露 | 用户看到 `<function=...>` 文本 | `_strip_fake_tool_calls` 5 格式剥除 | `e2a9a49` |
+
+### UI 干净化 + Service Worker 升级
+
+- `web/src/stores/useUiStore.js` 新建：管理所有 UI 偏好（localStorage 持久化）
+- ChatViewSSE 顶栏加 💭/🧠 toggle 按钮（默认 off，刷新保留）
+- rich block 默认展开（用户第一眼看到真实数据）
+- `SW_VERSION v4→v5` BUMP 强制升级，激活时 `caches.delete()` 清空老 cache
+
+### qa-bench 框架闭环
+
+- **100 题基线** → 5 轮迭代 39% → 84% 高分率
+- **360 题逐个问答**（75 拓展 + 285 拓展 = 8 大类）
+- 知识库 **64 → 247 条**（+183 条, +286%）
+- 详细报告：[docs/qa-bench-500-report.md](docs/qa-bench-500-report.md)
+
+### 项目统计（2026-06-15）
+
+- **1026 commits** / **236K 行** / **941 文件** / **31 天**
+
+| 类型 | 行数 | 文件数 |
+|------|------|-------|
+| json | 79,601 | 16 |
+| markdown | 42,646 | 84 |
+| python | 42,470 | 247 |
+| vue | 40,318 | 140 |
+| sql | 11,124 | 4 |
+| javascript | 6,888 | 64 |
+| html | 3,527 | 9 |
+| **总计** | **236,133** | **941** |
+
+## 📚 相关文档（更新版）
+
+- 🚀 **[本地启动注意事项](docs/local-startup.md)** — 从关机状态恢复 / 重启电脑 / 本地首次启动的完整流程、9 服务启动顺序、8 点 curl 验证清单
+- ☁️ **[部署文档](docs/deploy.md)** — 云端部署 + 单机部署 + frps 服务端配置 + 阿里云迁移
+- 🗺️ **[路线图](ROADMAP.md)** — v1 → v4 + Agent 回答质量 + qa-bench 完整历史
+- 🧪 **[QA 测试报告（100 题基线）](docs/qa-bench-report-2026-06-14.md)** — 100 题自动测试框架结果
+- 🧪 **[QA 测试报告（500 题闭环）](docs/qa-bench-500-report.md)** — 360 题逐个问答 + 知识库拓展
+- 📋 **[会议纪要标准](docs/meeting-minutes-standard.md)** — 所有会议 AI 分析的硬规则
+- 🔄 **[5090 服务器迁移](docs/migration-5090-server.md)** — GPU 服务器迁移专项

@@ -1,0 +1,981 @@
+{
+  "summary": {
+    "timestamp": "2026-06-14T16:58:09.343726",
+    "total": 100,
+    "pass": 0,
+    "warn": 0,
+    "fail": 2,
+    "error": 98,
+    "by_category": {
+      "member": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 2,
+        "error": 13
+      },
+      "task": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 10
+      },
+      "meeting": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 10
+      },
+      "knowledge": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 10
+      },
+      "project": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 5
+      },
+      "concept": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 5
+      },
+      "multiturn": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 5
+      },
+      "edge_hallucination": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 15
+      },
+      "casual": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 5
+      },
+      "memory": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 5
+      },
+      "cross": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 5
+      },
+      "extreme": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 0,
+        "error": 10
+      }
+    },
+    "issue_distribution": {
+      "hallucinated_names": 1,
+      "missing_tools": 2,
+      "forbidden_names_appeared": 1,
+      "intent_mismatch": 1,
+      "missing_required_terms": 1
+    }
+  },
+  "results": [
+    {
+      "id": "A01",
+      "category": "member",
+      "question": "杨慈是研究什么的？",
+      "expect": {
+        "intent": "search_info",
+        "tools": [
+          "get_member_profile",
+          "query_members"
+        ],
+        "must_contain": [
+          "饮用水安全",
+          "蜡样芽孢杆菌",
+          "微生物消杀"
+        ],
+        "must_not_contain": [
+          "暂无详细信息",
+          "系统故障",
+          "技术问题"
+        ],
+        "forbidden_names": [
+          "杜同贺",
+          "陈金薪",
+          "吴孟铨",
+          "王天志"
+        ]
+      },
+      "actual": {
+        "intent": "search_info",
+        "tools_called": [
+          "get_member_profile"
+        ],
+        "tool_inputs": [
+          {
+            "name": "get_member_profile",
+            "input": {
+              "member_name": "杨慈",
+              "include_projects": true,
+              "include_tasks": false
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_member_profile",
+            "result": {
+              "status": "success",
+              "id": 18,
+              "name": "杨慈",
+              "grade": "研三",
+              "research_area": "饮用水安全",
+              "email": "yc3259672120@163.com",
+              "phone": null,
+              "role": "member",
+              "skills": [
+                "饮用水安全",
+                "蜡样芽孢杆菌",
+                "微生物消杀"
+              ],
+              "bio": "探索微纳米气泡在饮用水安全保障领域的应用",
+              "custom_instructions": null,
+              "voice_enrolled": true,
+              "voice_enrolled_at": "2026-06-04T10:30:02.442916+00:00",
+              "voice_sample_count": 4,
+              "projects": [
+                {
+                  "id": 2,
+                  "name": "饮用水水质提升与安全保障",
+                  "status": "active"
+                }
+              ],
+              "tasks": []
+            }
+          }
+        ],
+        "content": "根据课题组成员数据库，杨慈同学的研究方向如下：\n\n## 杨慈的研究方向\n\n**核心研究领域：饮用水安全**\n\n杨慈同学专注于**微纳米气泡技术在饮用水安全保障领域的应用研究**，具体包括：\n\n- **饮用水安全**：探索如何利用微纳米气泡技术提升饮用水水质\n- **蜡样芽孢杆菌**：研究该类微生物的特性及其在水处理中的控制\n- **微生物消杀**：利用微纳米气泡技术实现水中微生物的有效灭活\n\n## 个人简介\n\n> 探索微纳米气泡在饮用水安全保障领域的应用\n\n## 参与项目\n\n- **饮用水水质提升与安全保障**（进行中）\n\n## 基本信息\n\n- **年级**：研三\n- **邮箱**：yc3259672120@163.com\n\n---\n\n杨慈同学的研究与课题组在饮用水处理方向的工作密切相关，与李松泽、王天志、杜同贺、周之超等同学的研究方向有较多交集。如果需要进一步了解杨慈同学的具体任务或项目进展，可以随时告诉我！",
+        "grounded_names": [
+          "杨慈"
+        ],
+        "critique_score": 9,
+        "duration_ms": 28564
+      },
+      "issues": [
+        {
+          "type": "hallucinated_names",
+          "names": [
+            "王天志",
+            "杜同贺",
+            "周之超"
+          ]
+        },
+        {
+          "type": "missing_tools",
+          "missing": [
+            "query_members"
+          ]
+        },
+        {
+          "type": "forbidden_names_appeared",
+          "names": [
+            "杜同贺",
+            "王天志"
+          ]
+        }
+      ],
+      "has_critical_issue": true,
+      "verdict": "FAIL"
+    },
+    {
+      "id": "A02",
+      "category": "member",
+      "question": "宋洋做什么方向？",
+      "expect": {
+        "intent": "search_info",
+        "tools": [
+          "get_member_profile",
+          "query_members"
+        ],
+        "must_contain": [
+          "饮用水处理",
+          "管网生物膜",
+          "膜耦合"
+        ],
+        "forbidden_names": [
+          "杨慈",
+          "杜同贺"
+        ]
+      },
+      "actual": {
+        "intent": "data_query",
+        "tools_called": [
+          "query_members"
+        ],
+        "tool_inputs": [
+          {
+            "name": "query_members",
+            "input": {
+              "name": "宋洋"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "query_members",
+            "result": {
+              "status": "success",
+              "count": 1,
+              "members": [
+                {
+                  "id": 13,
+                  "name": "宋洋",
+                  "grade": "研二",
+                  "research_area": "饮用水处理",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "生物稳定性",
+                    "管网生物膜",
+                    "膜耦合"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "微纳米气泡饮用水处理组，研究气泡与膜的耦合应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/bfa35e46d45f4138b843a9a86c6e3b46.jpg",
+                  "rich_block_type": "member"
+                }
+              ]
+            }
+          }
+        ],
+        "content": "",
+        "grounded_names": [
+          "宋洋"
+        ],
+        "critique_score": null,
+        "duration_ms": 9731
+      },
+      "issues": [
+        {
+          "type": "intent_mismatch",
+          "expect": "search_info",
+          "actual": "data_query"
+        },
+        {
+          "type": "missing_tools",
+          "missing": [
+            "get_member_profile"
+          ]
+        },
+        {
+          "type": "missing_required_terms",
+          "missing": [
+            "饮用水处理",
+            "管网生物膜",
+            "膜耦合"
+          ]
+        }
+      ],
+      "has_critical_issue": true,
+      "verdict": "FAIL"
+    },
+    {
+      "id": "A03",
+      "category": "member",
+      "question": "请教谁研究饮用水？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A04",
+      "category": "member",
+      "question": "课题组有谁做水处理？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 12
+    },
+    {
+      "id": "A05",
+      "category": "member",
+      "question": "陈金薪 leader 角色",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A06",
+      "category": "member",
+      "question": "雒培媛 现在在哪？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A07",
+      "category": "member",
+      "question": "李胜景 做什么",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A08",
+      "category": "member",
+      "question": "杜同贺 邮箱",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A09",
+      "category": "member",
+      "question": "列出所有 leader",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A10",
+      "category": "member",
+      "question": "王天志 组长的研究方向",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A11",
+      "category": "member",
+      "question": "查一下余歆睿",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A12",
+      "category": "member",
+      "question": "胡小琪 的研究",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 3
+    },
+    {
+      "id": "A13",
+      "category": "member",
+      "question": "张懿 干什么的",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 3
+    },
+    {
+      "id": "A14",
+      "category": "member",
+      "question": "课题组有几个人？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "A15",
+      "category": "member",
+      "question": "组里有哪些角色？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B01",
+      "category": "task",
+      "question": "我最近有什么任务？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B02",
+      "category": "task",
+      "question": "创建一个任务：完成实验报告",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B03",
+      "category": "task",
+      "question": "项目当前在做什么？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B04",
+      "category": "task",
+      "question": "把任务 #1 标记为完成",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B05",
+      "category": "task",
+      "question": "紧急任务有哪些？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B06",
+      "category": "task",
+      "question": "我有多少进行中任务？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B07",
+      "category": "task",
+      "question": "删除任务 #999",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B08",
+      "category": "task",
+      "question": "延期了怎么办？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B09",
+      "category": "task",
+      "question": "高优先级任务",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "B10",
+      "category": "task",
+      "question": "把任务 #3 分配给陈金薪",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C01",
+      "category": "meeting",
+      "question": "最近的会议",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C02",
+      "category": "meeting",
+      "question": "上周开了什么会？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C03",
+      "category": "meeting",
+      "question": "有什么关于臭氧微纳米气泡的会议？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C04",
+      "category": "meeting",
+      "question": "今天的会议",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C05",
+      "category": "meeting",
+      "question": "2026年5月28日 例会讲了什么",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C06",
+      "category": "meeting",
+      "question": "我有哪些待开的会议？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C07",
+      "category": "meeting",
+      "question": "明天有什么会议？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 3
+    },
+    {
+      "id": "C08",
+      "category": "meeting",
+      "question": "组会一般讨论什么",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C09",
+      "category": "meeting",
+      "question": "查一下第 3 个会议",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "C10",
+      "category": "meeting",
+      "question": "远紫外相关会议",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D01",
+      "category": "knowledge",
+      "question": "什么是 zeta 电位？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D02",
+      "category": "knowledge",
+      "question": "微纳米气泡有哪些表征方法？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D03",
+      "category": "knowledge",
+      "question": "知识库里有几篇文献？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D04",
+      "category": "knowledge",
+      "question": "搜一下臭氧在水处理中的应用",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D05",
+      "category": "knowledge",
+      "question": "纳米气泡和微米气泡的区别",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D06",
+      "category": "knowledge",
+      "question": "查一下知识库关于蜡样芽孢杆菌的内容",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D07",
+      "category": "knowledge",
+      "question": "怎么检测微纳米气泡的尺寸？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D08",
+      "category": "knowledge",
+      "question": "组里有哪些研究方向？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D09",
+      "category": "knowledge",
+      "question": "NTA 是什么？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "D10",
+      "category": "knowledge",
+      "question": "保存这段对话到知识库",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "E01",
+      "category": "project",
+      "question": "列出所有项目",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "E02",
+      "category": "project",
+      "question": "项目进度如何？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "E03",
+      "category": "project",
+      "question": "在研项目有几个？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "E04",
+      "category": "project",
+      "question": "饮用水项目状态",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "E05",
+      "category": "project",
+      "question": "立项一个新项目",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "F01",
+      "category": "concept",
+      "question": "微纳米气泡的稳定性如何？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "F02",
+      "category": "concept",
+      "question": "臭氧氧化的原理",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "F03",
+      "category": "concept",
+      "question": "什么是溃灭？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "F04",
+      "category": "concept",
+      "question": "超声法的优缺点",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "F05",
+      "category": "concept",
+      "question": "加压溶气法怎么工作？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "G01",
+      "category": "multiturn",
+      "question": "杨慈",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "G02",
+      "category": "multiturn",
+      "question": "她的研究方向",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "G03",
+      "category": "multiturn",
+      "question": "她有什么任务？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "G04",
+      "category": "multiturn",
+      "question": "类似的还有谁？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "G05",
+      "category": "multiturn",
+      "question": "他们的邮箱呢",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H01",
+      "category": "edge_hallucination",
+      "question": "张三丰是研究什么的？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H02",
+      "category": "edge_hallucination",
+      "question": "诸葛亮的研究方向",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H03",
+      "category": "edge_hallucination",
+      "question": "清华大学微纳米气泡实验室",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H04",
+      "category": "edge_hallucination",
+      "question": "小气助手的训练数据是哪些？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H05",
+      "category": "edge_hallucination",
+      "question": "杨茲是研究什么的？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H06",
+      "category": "edge_hallucination",
+      "question": "",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H07",
+      "category": "edge_hallucination",
+      "question": "                    ",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H08",
+      "category": "edge_hallucination",
+      "question": "有谁能造时光机？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H09",
+      "category": "edge_hallucination",
+      "question": "我想找一个会武术的研究人员",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H10",
+      "category": "edge_hallucination",
+      "question": "课题组有没有外星人？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H11",
+      "category": "edge_hallucination",
+      "question": "😊 🥺 给我讲个笑话",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H12",
+      "category": "edge_hallucination",
+      "question": "你是谁",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H13",
+      "category": "edge_hallucination",
+      "question": "请用一句话介绍微纳米气泡",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H14",
+      "category": "edge_hallucination",
+      "question": "我想删除杨慈",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "H15",
+      "category": "edge_hallucination",
+      "question": "把 1000000000 加到 2000000000 等于多少",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "I01",
+      "category": "casual",
+      "question": "你好",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "I02",
+      "category": "casual",
+      "question": "今天天气怎么样？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "I03",
+      "category": "casual",
+      "question": "谢谢",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "I04",
+      "category": "casual",
+      "question": "你会什么？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "I05",
+      "category": "casual",
+      "question": "有什么能帮到我的？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "J01",
+      "category": "memory",
+      "question": "记住：我叫小明",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "J02",
+      "category": "memory",
+      "question": "你记住了什么？",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "J03",
+      "category": "memory",
+      "question": "忘掉我的名字",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "J04",
+      "category": "memory",
+      "question": "以后回答都用中文",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "J05",
+      "category": "memory",
+      "question": "不要再用表情了",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "K01",
+      "category": "cross",
+      "question": "和杨慈开个会讨论饮用水",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "K02",
+      "category": "cross",
+      "question": "给我讲个微纳米气泡的故事",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "K03",
+      "category": "cross",
+      "question": "今天做完杨慈那个任务的概率",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "K04",
+      "category": "cross",
+      "question": "为杨慈推荐学习资源",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "K05",
+      "category": "cross",
+      "question": "微纳米气泡 杨慈 饮用水",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L01",
+      "category": "extreme",
+      "question": "abcdefghijklmnopqrstuvwxyz",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L02",
+      "category": "extreme",
+      "question": "水处理水处理水处理水处理水处理水处理水处理",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L03",
+      "category": "extreme",
+      "question": "a",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L04",
+      "category": "extreme",
+      "question": "?",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L05",
+      "category": "extreme",
+      "question": "给一个长长长长长长长长长长长的回复",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L06",
+      "category": "extreme",
+      "question": "中文 繁體字 mixed with English",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L07",
+      "category": "extreme",
+      "question": "' or 1=1; DROP TABLE members;--",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L08",
+      "category": "extreme",
+      "question": "a\nb\nc\nd\ne\nf\ng",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L09",
+      "category": "extreme",
+      "question": "赵航佳、杨慈、宋洋 三个人谁更适合做饮用水",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 2
+    },
+    {
+      "id": "L10",
+      "category": "extreme",
+      "question": "分析下我们课题组未来 5 年的研究方向",
+      "error": "HTTP 429: {\"error\":{\"code\":\"RATE_LIMIT_EXCEEDED\",\"message\":\"请求过于频繁，请 60 秒后重试\"}}",
+      "duration_ms": 3
+    }
+  ]
+}
