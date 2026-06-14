@@ -478,6 +478,13 @@ export function useChatStream() {
           // [snapshot] 流结束
           currentAssistant.usage = evt.usage
           currentAssistant.durationMs = evt.duration_ms
+          // 2026-06-15 修复元话语/thinking 文本泄露：done 时用后端剥除过的干净文本替换 content
+          // 流式过程 text_delta 累加的 content 包含 LLM 写的"我需要..."等元话语
+          // 后端 text_without_json 已剥除（JSON 段 + fake tool_call + 元话语）
+          // 差异时替换（保留流式观感 + 最终干净）
+          if (evt.text_without_json != null && evt.text_without_json !== currentAssistant.content) {
+            currentAssistant.content = evt.text_without_json
+          }
           break
       }
       // 流式增量持久化（防后台丢数据；debounce 100ms）

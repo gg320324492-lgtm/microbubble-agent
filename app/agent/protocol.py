@@ -104,6 +104,10 @@ class StreamEvent(BaseModel):
     usage: Optional[dict[str, int]] = None  # {input_tokens, output_tokens, total_tokens}
     duration_ms: Optional[int] = None
     session_id: Optional[str] = None
+    # done (2026-06-15 修复元话语/thinking 泄露)
+    # 流式过程 text_delta 累加的 accumulated 含 LLM 写的"我需要..."等元话语
+    # 后处理剥除后的最终干净文本，前端 done 时用它**替换** content
+    text_without_json: Optional[str] = None  # 剥除 JSON 段 + fake tool_call + 元话语后的纯文本
 
     # ========================================================================
     # 2026-06-14 方案 C 新增字段（按事件类型可选填充）
