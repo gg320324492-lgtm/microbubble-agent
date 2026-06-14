@@ -1,13 +1,15 @@
-"""提醒服务（v2）
+"""提醒服务（v2.1）
 
 2026-06-15 全面优化：
 - 所有提醒统一在 11:00 AM 北京时间窗口发送（± 60min 容差）
 - 每个 task 只有 1 次 11AM 提醒机会：发完即结束，不重试
 - 同用户多条 reminder 聚合为 1 条 digest 消息（避免轰炸）
-- 用户微信发"收到"→ acknowledge_all_user_reminders 取消 pending
-- 用户微信发"今天别提醒"→ snooze_user_reminders 顺延到次日 11AM
+- **任何微信消息都触发 ack**（用户活跃 = 不再推旧的）
+  - 包括"收到"/"OK"/"好"/"今天别提醒"/"你好"/"查询 XXX"等所有内容
+  - "完成"/"进度 X%" 仍然有 task 状态变更副作用
 - 失败也标 sent（one-shot，不重试）
 
+注：snooze_user_reminders 仍保留在 API 端点用于向后兼容，但微信路径已不再调用。
 设计文档：C:\\Users\\admin\\.claude\\plans\\snappy-coalescing-quiche.md
 """
 import logging
