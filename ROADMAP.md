@@ -4856,3 +4856,66 @@ webhook 自动部署是 stats.json 持续更新的**唯一**路径。一旦 webh
 | `memory/vite-plugin-pwa-manifest-timing.md` | 异步 sw.js + setImmediate 轮询 |
 | `README.md` 「近期新增」section | 13 commits 总结 |
 | `ROADMAP.md`（本文件） | 4 个二级正文 + 1 个事故闭环 |
+
+---
+
+## 方案 C：Agent 单阶段流式渐进综合架构（2026-06-14 收官 + 收尾 + 端到端修复，12 commits）
+
+**核心改造**：取消 brief/detail 双层架构 → 单阶段流式综合（intent → agentic_loop → critique → done）。
+
+**用户原始痛点**：问"请教谁研究饮用水"类问题，AI 调工具后把 27 个成员 + 10 条知识**原封不动展示**（不是推荐）。**修复后**：直接推荐 3 人 + 理由 + Rich Block 折叠为「👥 推荐 3 人（27→3）」。
+
+### 6 个 stage commit 链
+
+| Commit | Stage | 核心成果 |
+|---|---|---|
+| `5ce1203` | **Stage 0**：配置 + 协议层 + 老 chat_engine 备份 | 13 AGENT_* 配置项 + 6 新 SSE 事件 + 3 RichBlock 字段 + LLMClient keyword-only model + ToolContext 跨 loop 字段 + 30 天回滚 chat_engine_legacy.py + typing 扫描脚本 |
+| `8a76750` | **Stage 1**：4 个新 Agent 模块 | `intent_classifier`（Haiku 6 选 1）/ `result_compressor`（Haiku 工具结果重排）/ `critic`（Sonnet 自评）/ `agentic_loop`（5 轮工具循环 + critique + retry） |
+| `9862546` | **Stage 2**：ChatEngine 单阶段流式综合 | `synthesize_stream()` 主入口 + 2 个薄壳（向后兼容）+ TraceCollector async context + abort 同步落库（铁律 4） |
+| `d3f74df` | **Stage 3**：性能基线 + agent_traces 加 7 列 + admin | synthesis_first_byte<2.5s / p95<10s / retry 慢路径<16s + 7 列（intent/critique/status 等）+ admin 面板状态过滤 + 5 viewport 视觉回归 |
+| `59cbbb1` | **Stage 4.1**：useChatStream 6 事件 + 停止按钮 | intent_detected / plan_step / tool_compressed / synthesis_start / critique / retry 6 case + stopGeneration + 4 字段 + 防 brief 重复 + 长度异常检查 |
+| `2f2b619` | **Stage 4.2**：ThinkingProcess 组件 + RichContent 折叠 | ThinkingProcess.vue 折叠/展开 7 section + RichContent.vue wrapper + 11 block 组件零侵入（v-show 而非 v-if） + summary 自动生成 + LLM-driven collapsed_by_default |
+| `bf61456` | **Stage 5 收官**：微信/语音迁移 + 删 core.py | wechat/voice import 切到 micro_bubble_agent + meeting.py 删死 import + tool_registry dispatch_legacy 删 + micro_bubble_agent 内联 _extract_knowledge_bg + TestBackwardCompat 重写 |
+| `82173e5` | **Stage 5 收尾**：mobile 停止 + rich_block 提取 + runbook | MobileInputBar 停止按钮 + agentic_loop._extract_rich_block_json 末尾 ```json``` 段解析（让 LLM-driven collapsed_by_default 生效）+ CLAUDE.md 6 铁律 + chat_engine_legacy 30 天 TODO + deploy-auto.sh 集成 ALTER TABLE |
+| `5f01cac` | **端到端实测修复 5 bug** | 1) `await llm.stream()` 改 `async for` 2) mimo 思考型模型加 `thinking=disabled` 3) usage=None 加 `or {}` 4) `await _persist_now` 改 `create_task` fire-and-forget 5) Celery task 加 `isinstance` 守卫 |
+| `2c28c51` | **webhint a11y 修复** | 6 处 img 加 alt/title（MemberCardBlock + ChatViewSSE 4 处 + ChatView 2 处） |
+| `48ac8dc` | **ChatViewSSE 智能 sticky scroll** | watch messages 自动滚 + 用户上滚停自动 + 跳到最新浮动按钮 |
+
+### 6 条铁律（已沉淀 CLAUDE.md）
+
+1. **跨 event loop 安全**（CLAUDE.md 752/812） — 所有 IO 客户端通过 `ctx: ToolContext` 注入，禁止模块顶部创建
+2. **typing import CI** — `scripts/check_typing_imports.sh` 扫描 105 文件 0 错误
+3. **SSE 事件 delta 语义** — `protocol.py` 标注 `[increment]/[snapshot]`（防 2026-06-12 brief 重复输出 bug）
+4. **abort 同步落库** — `TraceCollector.__aexit__` 收 CancelledError → `asyncio.create_task` 写库（不被二次取消）
+5. **keyword-only model** — `LLMClient.complete(*, model=None, ...)` 用 `*` 强制关键字
+6. **feature flag + 30 天回滚** — `AGENT_NEW_ARCHITECTURE_ENABLED=False` 退到 `chat_engine_legacy.py`
+
+### 端到端实测验证（本地 docker stack，commit `5f01cac` 部署后）
+
+| Step | 命令 | 结果 |
+|---|---|---|
+| 1. 数据库迁移 | `docker exec psql < alter_agent_traces_stage3.sql` | 7 列添加成功 |
+| 2. Docker 重启 | `docker compose restart app celery-worker celery-beat` | 5 个新模块 import OK |
+| 3. 真实 LLM 端到端 | curl /chat 3 个真实问题 | 「请教谁」→ recommend_person 0.95 + content 真实推荐 |
+| 4. 流式中断 | curl -m 15 触发 synthesize 阶段 | `status=aborted` 写入 agent_traces 表 |
+
+### 部署必做（runbook 见 docs/stage5-rollout-runbook.md）
+
+1. 跑 ALTER TABLE
+2. `docker compose restart app celery-worker celery-beat`
+3. 浏览器实测 3 个真实问题
+4. 流式中断 → admin 面板查 `status=aborted` 记录
+
+### 测试统计
+
+- **176 后端 unit 测试**全过
+- **128 前端 vitest 测试**全过
+- **105 文件 typing 扫描** 0 错误
+
+### 新 memory 沉淀（待 commit）
+
+- `memory/agentic-loop-cancelled-error-persistence.md` — `await _persist_now()` 被二次取消坑（create_task fire-and-forget 修复）
+- `memory/llm-thinking-model-compat.md` — mimo-v2.5 思考型模型 + `thinking=disabled` 显式禁用
+- `memory/tracing-payload-none-defensive.md` — Celery 收 None 防御（isinstance 守卫 + or {} 兜底）
+- `memory/agentic-loop-await-stream-misuse.md` — `await llm.stream()` 误用为 awaitable（应是 `async for`）
+- `memory/chat-sticky-scroll-pattern.md` — 智能 sticky scroll 三件套（autoStick + watch + 跳到最新按钮）

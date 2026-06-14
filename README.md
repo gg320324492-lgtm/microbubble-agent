@@ -21,6 +21,16 @@
 - **🐰 宠物乐园** — 仪表盘欢迎区两只 3D 立体兔子（个人兔 + 课题组大兔），CSS 绘制 + 60fps 自主走动，XP 成长进化 + 配饰解锁 + 智能对话 + 互动喂食
 - **📱 移动端 PWA（2026-06-13 收官）** — NutUI 4 + Element Plus **路由级双栈架构**（同一 URL 不同组件，不共享 component 树），18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略，iOS Safari + Android Chrome 全兼容，离线可查看最近消息。`useIsMobile.js` + `resolveMobile.js` + `useSafeArea.js` 三大基础设施
 
+- **🔁 ChatViewSSE 智能 sticky scroll（2026-06-14，commit `48ac8dc`）** — 之前只在发送前后滚，流式生成中不滚，用户必须手动滚轮看新内容。修复：`watch(messages, scrollToBottom, { deep: true, flush: 'post' })` 任何消息变化自动滚 + `onMessagesScroll` 监听用户上滚（>80px）切 `autoStick=false` 停止自动滚 + 显示"↓ 跳到最新"浮动按钮（50% 居中 + 圆角 + 阴影 + a11y 4 属性）
+- **🎨 webhint a11y img alt 警告（2026-06-14，commit `2c28c51`）** — `/chat` 页面 15+ 个 `<img>` 缺 alt（成员卡片头像 + bot 头像 + 消息图片）。修 6 处：`MemberCardBlock.vue:21` 加 `:alt="${name}的头像" :title="..."` + `ChatViewSSE.vue:232/272/278/312` 加 alt/title + `ChatView.vue:54/110` legacy 路由同样补。**theme-color Firefox 不支持**是浏览器限制（CLAUDE.md 269 行铁律），不修
+- **🐛 端到端实测修复 5 bug（2026-06-14，commit `5f01cac`，本地 docker 全验证）**：
+  - `agentic_loop._synthesize_stream` 误用 `await llm.stream()`（实际是 AsyncIterator）→ 改 `async for stream in llm.stream(...):`
+  - **mimo-v2.5 思考型模型只返 thinking block** → 4 个 JSON-output 调用点（intent/compressor/critic/agentic_loop）全加 `thinking={"type": "disabled"}`
+  - `TraceCollector 持久化报 'NoneType' has no attribute 'get'`（`usage=None` 时 `.get()` 崩）→ 两处都加 `or {}` 防御
+  - `await _persist_now()` 在 CancelledError 路径下被二次取消根本跑不完 → 改 `asyncio.create_task()` fire-and-forget + add_done_callback
+  - Celery 任务收 `trace_dict=None` → 加 `isinstance` 守卫 + payload preview 日志
+- **🚀 方案 C：Agent 单阶段流式渐进综合架构（2026-06-14 收官 + 收尾 + 端到端修复，**12 commits** 完整链路 `5ce1203`→`8a76750`→`9862546`→`d3f74df`→`59cbbb1`→`2f2b619`→`bf61456`→`82173e5`→`5f01cac`→`2c28c51`→`48ac8dc`）** — 取消 brief/detail 双层架构 → 单阶段流式综合（intent → agentic_loop → critique → done），用户问"请教谁"类问题不再拿到 27 张成员卡片堆砌，而是**直接推荐 3 人 + 理由**。**6 条铁律沉淀到 CLAUDE.md**（跨 event loop / typing CI / SSE delta 语义 / abort 同步落库 / keyword-only model / feature flag + 30 天回滚）
+
 ### 近期新增（按时间倒序）
 
 - **🔧 重启电脑后端到端事故修复 8 联弹（2026-06-13 晚 ~ 06-14 凌晨，13 commits）** — 重启电脑 + Docker 关掉后启动项目暴露**积压数月的 8 个真 bug**，全部修复：
