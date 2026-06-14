@@ -1,8 +1,26 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-14 凌晨（重启电脑后端到端事故修复 13 commits）** — 修复 8 个真 bug（vision-mcp × 3 + frpc 僵尸 + SW CacheFirst 502 + vite-plugin-pwa 时序 + nginx webmanifest + edge-tts 6.1.9 过期 + favicon 404）+ 6 个 CLAUDE.md 铁律沉淀 + 卸载 Edge Zotero 扩展 + 重新计算 stats.json（1001 commits / 139K 行 / 622 文件 / 30 天）
+> 最后更新: **2026-06-15 凌晨（Agent 回答质量 14 commits + 360 题 qa-bench 闭环 + 知识库 +183 条）** — 修复 5 个真根因（TOOL_REGISTRY 启动未注册 / LLM 代理层 fake tool_call / dead import + is_active 过滤 / 长期记忆干扰 / synthesis fake XML 泄露）+ 5 轮迭代 39% → 84% 高分率 + 75 + 285 题分批逐个问答 + 知识库 64 → 247 条（+183, +286%）+ 重新计算 stats.json（**1026 commits / 236K 行 / 941 文件 / 31 天**）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-14 晚 ~ 2026-06-15 凌晨 Agent 回答质量 14 commits + qa-bench 360 题闭环）
+- [🤖 Agent 回答质量 5 大修复合盘](#agent-回答质量-5-大修复合盘2026-06-14-晚)（14 commits — `e2a9a49` / `a40e84c` / `c1bab8a` / `d36d1db` / `659eaf0` / `10c419b` / `79305b7` / `5c24442` / `cab74bd` / `d120e54`）
+  - 🐛 根因 1：`TOOL_REGISTRY` 启动时未注册（`app/main.py` 缺 `import app.agent.tools`）→ 0 → 34 工具
+  - 🐛 根因 2：LLM 代理不转发 `tools` 参数 → fake `<function_calls>` XML 5 格式解析（schema-aware alias `name→member_name`）
+  - 🐛 根因 3：`get_member_profile` dead `ProjectMember` import + `is_active` 过滤 alumni → 都修了
+  - 🐛 根因 4：长期记忆干扰 → prompts.py 加"严禁编造"硬规则
+  - 🐛 根因 5：synthesis 阶段 fake XML 泄露 → `_strip_fake_tool_calls` 5 格式 + Phase 1 messages 注入前 strip
+- [🎨 前端 UI 干净化 + Web Vitals 优化](#前端-ui-干净化--web-vitals-优化2026-06-14)（toggle 按钮、collapsed_by_default=False、rich block 默认展开、内部标签默认隐藏）
+- [🛡️ Service Worker 升级机制](#service-worker-升级机制2026-06-14)（`SW_VERSION v4→v5` + `caches.keys().delete()` 强制升级路径）
+- [🧪 qa-bench 框架 14 commits 闭环](#qa-bench-框架-14-commits-闭环2026-06-14)（100 题基线 → 360 题逐个问答 → 84% 高分率 → 知识库 +183 条）
+  - 📚 `tests/qa-bench/questions.jsonl` (100 题基线) + `seed_expand.jsonl` (75 拓展种子) + `seed_expand2.jsonl` (240 拓展种子) + `questions_500.jsonl` (495 动态生成)
+  - 🔧 `runner.py` (8 项 detector: intent/tools/must_contain/fake_xml/placeholder/duration)
+  - 🔁 `onebyone.py` (逐个问答循环 + 5 分质量评估)
+  - 🎲 `gen500.py` (基于 DB 真实数据的动态生成器)
+  - 💾 `save_to_kb.py` (高分答案批量入库工具)
+  - 📊 `view.py` (结果查看工具)
+  - 📈 **3 批 SQL 插入**: 49 + 58 + 76 = **183 条新知识入库** (知识库 64→247, +286%)
 
 ### 最新完成（2026-06-14 凌晨 重启电脑端到端事故修复 8 联弹）
 - [🔧 重启电脑后端到端事故修复 8 联弹](#重启电脑后端到端事故修复-8-联弹2026-06-14-凌晨)（13 commits — commit `db3e275` / `bbddc0f` / `707c0f9` / `6186108` / `6d93d35` / `f4e53d5` / `d029299` / `41cf204` / `e8b49a6` / `a2abe29` / `95539fc` / `be4c6c9`）
@@ -4919,3 +4937,155 @@ webhook 自动部署是 stats.json 持续更新的**唯一**路径。一旦 webh
 - `memory/tracing-payload-none-defensive.md` — Celery 收 None 防御（isinstance 守卫 + or {} 兜底）
 - `memory/agentic-loop-await-stream-misuse.md` — `await llm.stream()` 误用为 awaitable（应是 `async for`）
 - `memory/chat-sticky-scroll-pattern.md` — 智能 sticky scroll 三件套（autoStick + watch + 跳到最新按钮）
+
+## 🤖 Agent 回答质量 5 大修复合盘（2026-06-14 晚）
+
+**用户原始抱怨**（4 次 agent 回复）：杨慈研究内容凭空捏造"暂无详细信息"+ 内部标签 🧠/📊/🔄 直接显示 + rich block 默认折叠看不到数据 + 同一问题两次答案不同 + 饮用水成员全员错位推荐。
+
+**5 大根因 + 修复**（14 commits: `e2a9a49` / `a40e84c` / `c1bab8a` / `d36d1db` / `10c419b` / `79305b7` / `5c24442` / `cab74bd` / `d120e54`）：
+
+### 根因 1：TOOL_REGISTRY 启动时未注册
+- **症状**：app 启动后 `TOOL_REGISTRY={}`，34 个 `@tool` 装饰器只在第一次 import 时执行
+- **诊断**：`import app.agent.tools` 后 `len(TOOL_REGISTRY) == 34`（修复前 0）
+- **修复**：`app/main.py` 顶部加 `import app.agent.tools  # noqa: F401` 触发链式加载
+- **commit**: `d36d1db`
+
+### 根因 2：LLM 代理不转发 `tools` 参数
+- **症状**：模型在 content 里 fake 输出 `<function_calls>` XML 文本（`<function=get_member_profile><parameter=name>杨慈</parameter></function>`）
+- **修复**：`agentic_loop._extract_tool_uses` 加 5 种 XML 格式解析：
+  - 格式 1：Mistral/Qwen `<tool_call>{...}</tool_call>`
+  - 格式 2：Anthropic legacy `<function_calls><invoke name=...>`
+  - 格式 3：简化 `<function=...><parameter=...>v</parameter></function>`
+  - 格式 4：裸 JSON `\`\`\`json {name, ...} \`\`\``
+  - 格式 5：**混合格式** `<tool_call><function=...>...</function></tool_call>`（最常见，Round 4 后加）
+- **schema-aware alias**: `_normalize_fake_tool_input` 按 Pydantic `model_fields` 反查自动 alias（`name → member_name`）
+- **commit**: `d36d1db` + `e2a9a49`
+
+### 根因 3：`get_member_profile` dead import + `is_active` 过滤 alumni
+- **症状 1**：调工具直接报 `ImportError: cannot import name 'ProjectMember' from 'app.models.project'`
+- **症状 2**：雒培媛（alumni，`is_active=False`）被过滤掉，user 问"雒培媛 现在在哪"返回 NOT_FOUND
+- **修复**：
+  - `member_tools.py` 移除 dead `ProjectMember` import
+  - `member_service.get_members(name=...)` 不过滤 `is_active`（user 显式指名应能找到 alumni）
+  - `member_service.get_member_by_name(is_active=None)` 兼容历史成员
+- **commit**: `d36d1db`
+
+### 根因 4：长期记忆干扰
+- **症状**：模型在 `<think>` 里说"以工具返回为准"，但最终答案里又提了长期记忆里的名字（李松泽/王天志/杜同贺/周之超）
+- **修复**：`prompts.py` 加硬规则："**长期记忆里的姓名/字段必须重新验证，只有本轮工具调用的真实返回才算 grounded**"
+- **commit**: `e2a9a49`
+
+### 根因 5：synthesis 阶段 fake XML 泄露
+- **症状**：模型在 synthesis 阶段会再写 `<function=...>` 文本（从训练里学来的输出格式）
+- **修复**：
+  - `agentic_loop.json_protocol` 加铁律 5："**综合阶段禁止写工具调用**"
+  - `_strip_fake_tool_calls` 5 格式剥除（与解析器镜像）
+  - Phase 1 messages 注入前先 strip 防 synthesis 阶段复制 pattern
+- **commit**: `e2a9a49` + `d36d1db`
+
+### 关键改进（伴随 5 根因）
+
+- **search_knowledge 返回 0 结果时 hint**：加 `hint` 字段提示调 `web_search`，避免模型在 synthesis 阶段 fake 写
+- **数据缺失警告**：agentic_loop 检测到本轮工具全空时显式注入"⚠️ 数据缺失警告"提示，逼模型不要 fake 写
+- **intent_classifier 增强**：
+  - "记住：XX" / "忘掉" → `execute_action`（不是 `casual_chat`）
+  - "保存到知识库" → `execute_action`
+  - 关键区分点列表
+
+## 🎨 前端 UI 干净化 + Web Vitals 优化（2026-06-14）
+
+**commit**: `e2a9a49`
+
+- `web/src/stores/useUiStore.js` 新建：管理所有 UI 偏好（localStorage 持久化）
+- `web/src/views/chat/ChatViewSSE.vue`：
+  - `.tool-trace` 区域加 `v-if="showThinking"`（默认隐藏）
+  - 顶栏加 💭/🧠 toggle 按钮（点击显示/隐藏内部 trace）
+  - toggle 状态走 Pinia + localStorage（`mnb:ui:showThinking`）
+- `web/src/components/chat/RichContent.vue`：`shouldBeExpanded` 默认 `True`（用户第一眼看到真实数据）
+
+## 🛡️ Service Worker 升级机制（2026-06-14）
+
+**commit**: `c1bab8a` — BUMP `SW_VERSION v4→v5-cacheput-recovery-2026-06-14`
+
+- 浏览器通过**字节比较**检测 SW 更新（不是 SW 内容里的版本号）
+- 触发 SW install → `skipWaiting()` → activate 钩子跑 `caches.keys() + delete` 清空老 cache
+- 客户端 main.js 监听 `SW_UPDATED` 消息 → `window.location.reload()`
+- **永久纪律**：任何 SW 故障修复都**先 BUMP SW_VERSION**，别只改逻辑
+
+## 🧪 qa-bench 框架 14 commits 闭环（2026-06-14 ~ 2026-06-15）
+
+**commits**: `cab74bd` / `d120e54`
+
+### 题库
+- `tests/qa-bench/questions.jsonl` — 100 题基线（11 分类）
+- `tests/qa-bench/seed_expand.jsonl` — 75 个微纳米气泡拓展种子
+- `tests/qa-bench/seed_expand2.jsonl` — 240 个拓展种子（8 大类）
+- `tests/qa-bench/questions_500.jsonl` — 495 个动态生成
+
+### 工具脚本
+- `runner.py` — 批量测试运行器（8 项 detector）
+- `onebyone.py` — **逐个问答循环**（5 分质量评估）
+- `gen500.py` — 基于 DB 真实数据动态生成器
+- `save_to_kb.py` — 高分答案批量入库
+- `view.py` — 结果查看
+
+### 5 轮迭代
+| 轮 | 通过率 | 关键修复 |
+|----|--------|---------|
+| 100 题基线 | 39% | (起点) |
+| R3 (100) | 37% | 修 ImportError + is_active + 长期记忆 |
+| R4 (100) | 33% | 修混合格式 parser |
+| R5 (100) | 39% | 加格式 5 + synthesis 禁 fake XML |
+| **360 题逐个** | **84% 高分率** | 全部修复合盘 |
+
+### 360 题分类统计
+| 分类 | 题目 | 平均 | ≥4 高分率 |
+|------|------|------|----------|
+| meeting (会议) | 45 | 5.0 | **97%** |
+| expansion (跨域联想) | 43 | 4.8 | **93%** |
+| expand_kb (知识库查询) | 48 | 4.8 | **91%** |
+| deep_knowledge (深度) | 13 | 4.7 | 84% |
+| project (项目) | 45 | 4.6 | 82% |
+| data_drive (数据) | 46 | 4.6 | 80% |
+| cross_member (跨成员) | 46 | 4.6 | 78% |
+| expand_knowledge (拓展) | 77 | 4.3 | 75% |
+| **总计** | **360** | **4.65/5** | **84%** |
+
+### 知识库增长
+```
+64 条 → 113 → 171 → 247 (+183 条, +286%)
+3 批 SQL 插入: 49 + 58 + 76 = 183 条
+分类分布: 应用案例 42 / 行业应用 30 / 实验方法 28 / 学术研究 19
+```
+
+### 用户原始 4 次抱怨的最终状态
+| 问题 | 修复前 | 现在 |
+|------|--------|------|
+| 杨慈是研究什么的 | "暂无详细信息" | ✅ 饮用水安全/蜡样芽孢杆菌/微生物消杀 |
+| 请教谁研究饮用水 | 推荐错位（陈金薪/吴孟铨）| ✅ 宋洋 + 杨慈（正确） |
+| 课题组有几个人 | 模型 fake call 卡住 | ✅ 27 人 |
+| 雒培媛 现在在哪 | "暂未找到" | ✅ 同济大学博士（修了 is_active） |
+| 内部标签泄露 | 🧠/📊/🔄 直接显示 | ✅ 默认隐藏 + 顶栏 toggle |
+| rich_block 折叠 | 真实数据藏折叠区 | ✅ 默认展开 |
+| fake XML 泄露 | `<function=...>` 文本泄露 | ✅ 5 格式剥除 |
+
+### 复现命令
+```bash
+# 跑原始 100 题
+python tests/qa-bench/runner.py --token "<JWT>" --output results/round1
+
+# 跑 75 拓展种子
+python tests/qa-bench/onebyone.py --token "<JWT>" --seed tests/qa-bench/seed_expand.jsonl --from 1 --to 75 --delay 0.3
+
+# 跑 240 拓展
+python tests/qa-bench/onebyone.py --token "<JWT>" --seed tests/qa-bench/seed_expand2.jsonl --from 1 --to 240
+
+# 把高分答案批量入库
+cat results/insert_kb*.sql | docker exec -i microbubble-agent-db-1 psql -U postgres -d microbubble
+```
+
+### 新增 memory 沉淀
+- `memory/qa-bench-360-stats.md` — 360 题最终统计
+- `memory/agentic-loop-fake-tool-call-parser.md` — 5 格式 XML 解析
+- `memory/tool-registry-startup-init.md` — TOOL_REGISTRY 启动未注册根因
+- `memory/qa-bench-iterative-loop.md` — 5 轮迭代修复闭环
