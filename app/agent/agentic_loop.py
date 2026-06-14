@@ -331,25 +331,36 @@ def _strip_fake_tool_calls(text: str) -> str:
 
 # 元话语前缀模式（2026-06-15 修复，防御 LLM 在正文里写 thinking 独白）
 _META_PREFIX_PATTERNS = [
-    r"我需要[把将]?",  # "我需要介绍..." / "我将..."
+    r"我需要[把将按]?",  # "我需要介绍..." / "我将..." / "我需要按..."
     r"我应该[把将]?",
     r"我会[把将]?",
+    r"我要[把将]?",
+    r"我先[来按]?",
     r"用户问的?[是什]?",
     r"用户想知道",
     r"用户可能想[要知道]?",
     r"开始回答吧",
+    r"现在我需要",
+    r"现在让我",
+    r"现在[，,]我来",
     r"那么[，,]",
     r"好的[，,。 ]?我来回答",
     r"好的[，,。 ]?让我",
-    r"让我[先来]?",
+    r"让我[先来整组]?",  # "让我先..." / "让我整理..." / "让我组织..."
     r"首先我需要",
     r"让我整理[一]?下",
+    r"让我组织[一]?下[回答]*",
     r"工具返回了",
+    r"工具返回[成功后]*",
     r"根据工具返回",
     r"从工具返回来看",
     r"经过思考",
     r"思考后",
     r"经过分析",
+    r"按照[一]?[下个]?Synthesis Output Discipline[的，, ]?[要求]*",
+    r"现在按照",
+    r"现在[，,]?先写",
+    r"先写文本[摘回]",
 ]
 
 
@@ -403,11 +414,16 @@ def _strip_meta_thinking(text: str) -> str:
     # 清理残留前导空白
     result = result.lstrip()
 
-    # 兜底：剥除后过短（< 5 字符）→ 保留原文
-    # 阈值原本 30 太严，把"杨慈是我们课题组的成员。"（12 字符）这种干净短回复也判失败
-    # 改为 5：只剩几乎空白才兜底
-    if len(result) < 5 and stripped_count > 0:
-        return text
+    # 兜底：剥除后过短 → 保留原文
+    # 但不能把"整个文本都是元话语"的情况也兜底回去（会泄露元话语）
+    # 判断：剥除后只剩标点/空白 → 说明原文全是元话语 → 返回空串
+    #        剥除后有少量实质内容（如"赵航佳是成员。"）→ 保留
+    if stripped_count > 0:
+        # 去掉标点和空白后看剩余长度
+        meaningful = result.strip().rstrip("。，、；！？ \n\t")
+        if len(meaningful) < 2:
+            # 全是元话语，不要兜底回原文
+            return ""
 
     return result
 
@@ -657,7 +673,45 @@ class AgenticLoop:
             # 与 _synthesize_stream 内部后处理**完全镜像**——必须保持一致
             final_text, _ = _extract_rich_block_json(accumulated_text)
             final_text = _strip_fake_tool_calls(final_text)
+            pre_strip_len = len(final_text)
             final_text = _strip_meta_thinking(final_text)
+            meta_was_stripped = len(final_text) < pre_strip_len  # 元话语被剥掉了
+
+            # 2026-06-15 兜底：text 为空，或 text 被元话语剥除后只剩残片 → 用 rich blocks 生成摘要
+            # 防 LLM synthesis 只输出 ```json[...]``` 或只输出 fake tool_call，正文为空
+            # 两个来源：
+            # - rich_blocks（Phase 1 工具结果，RichBlock 对象列表）
+            # - synthesis_json_blocks（Phase 2 JSON 段解析，dict 列表）
+            # 注意：fallback 文本不走 _strip_meta_thinking（它是服务端生成的，不是 LLM 元话语）
+            # 触发条件：
+            # 1. final_text 为空（LLM 没写正文）
+            # 2. meta_was_stripped 且有 rich blocks（LLM 写了"工具返回了..."元话语，剥掉后只剩残片）
+            if not final_text.strip() or (meta_was_stripped and rich_blocks):
+                _, synthesis_json_blocks = _extract_rich_block_json(accumulated_text)
+                all_rb = []
+                if rich_blocks:
+                    all_rb.extend(rb.model_dump() if hasattr(rb, "model_dump") else rb for rb in rich_blocks)
+                if synthesis_json_blocks and isinstance(synthesis_json_blocks, list):
+                    all_rb.extend(synthesis_json_blocks)
+                if all_rb:
+                    fallback = _summarize_rich_blocks_for_empty_text(all_rb)
+                    if fallback:
+                        logger.info(
+                            f"Phase 4.5 兜底：synthesis text 为空但有 {len(all_rb)} 个 rich block，"
+                            f"自动生成 {len(fallback)} 字摘要"
+                        )
+                        # 直接用 fallback 作为 final_text，不走 _strip_meta_thinking
+                        # 因为 fallback 是服务端生成的结构化摘要，不是 LLM 的元话语
+                        final_text = fallback
+                    else:
+                        logger.warning(
+                            f"Phase 4.5 兜底：{len(all_rb)} 个 rich block 但摘要生成为空"
+                        )
+                else:
+                    logger.warning(
+                        f"Phase 4.5 兜底：synthesis text 为空且无 rich blocks"
+                        f"（rich_blocks={len(rich_blocks)}，synthesis_json_blocks={len(synthesis_json_blocks) if synthesis_json_blocks else 0}）"
+                    )
 
             # ===== Phase 5: done =====
             duration_ms = int((time.monotonic() - t0) * 1000)
@@ -675,6 +729,22 @@ class AgenticLoop:
             raise  # 让上层 TraceCollector.__aexit__ 收到 exc_value 走同步落库
         except Exception as e:
             logger.error(f"agentic_loop failed: {e}", exc_info=True)
+            # 2026-06-15 兜底：即使 synthesis 阶段失败（429/超时等），
+            # 如果 Phase 1 工具结果有 rich blocks，仍生成文本摘要给用户
+            # 防用户只看到空内容 + rich block 卡片
+            if rich_blocks and not final_text.strip():
+                rb_dicts = [rb.model_dump() if hasattr(rb, "model_dump") else rb for rb in rich_blocks]
+                fallback = _summarize_rich_blocks_for_empty_text(rb_dicts)
+                if fallback:
+                    logger.info(f"异常兜底：{len(rich_blocks)} 个 rich block，自动生成 {len(fallback)} 字摘要")
+                    yield StreamEvent(type="text_delta", delta=fallback)
+                    yield StreamEvent(
+                        type="done",
+                        duration_ms=int((time.monotonic() - t0) * 1000),
+                        session_id=ctx.trace.session_id if ctx.trace else None,
+                        text_without_json=fallback,
+                    )
+                    return  # 兜底成功，不 raise
             yield StreamEvent(type="error", code="AGENTIC_LOOP_ERROR", message=str(e))
             raise
 
@@ -911,7 +981,100 @@ def _extract_rich_block_json(accumulated_text: str) -> tuple[str, list[dict]]:
     for block in blocks:
         if isinstance(block, dict) and "collapsed_by_default" not in block:
             block["collapsed_by_default"] = False
+
+    # 2026-06-15 修复：text 为空但有 rich block → 自动从 rich block 生成文本摘要
+    # 防 LLM 把所有内容都塞进 JSON 段，正文一个字不写，用户只看到 "👥 成员 1 人 ▸ 展开"
+    if not text_without_json.strip() and blocks:
+        fallback = _summarize_rich_blocks_for_empty_text(blocks)
+        if fallback:
+            logger.info(
+                f"synthesis 兜底：text 为空但有 {len(blocks)} 个 rich block，"
+                f"自动生成 {len(fallback)} 字摘要"
+            )
+            text_without_json = fallback
+
     return text_without_json, blocks
+
+
+def _summarize_rich_blocks_for_empty_text(blocks: list) -> str:
+    """当 LLM 只输出 rich block JSON 没写文本时，从 rich block 数据生成简洁摘要
+
+    覆盖类型（2026-06-15 当前 12 类 Rich Block 中的高频 4 类）：
+    - member: "找到 N 位成员：姓名1（方向1）、姓名2（方向2）..."
+    - task_list: "有 N 个任务在进行中..."
+    - meeting: "找到 N 个相关会议：标题1、标题2..."
+    - knowledge_ref: "找到 N 篇相关知识..."
+
+    其他类型（formula/hypothesis/transcript/chart/fallback/project_summary）：
+    返回通用提示
+    """
+    if not blocks:
+        return ""
+    parts = []
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        btype = block.get("type", "")
+        bdata = block.get("data") or {}
+
+        if btype == "member":
+            members = bdata.get("members") or []
+            if not members:
+                parts.append("暂未找到相关成员")
+                continue
+            n = len(members)
+            if n == 1:
+                m = members[0]
+                name = m.get("name", "")
+                ra = m.get("research_area") or "未明确研究方向"
+                parts.append(f"找到 1 位成员：**{name}**，研究方向是 **{ra}**")
+            else:
+                names_with_ra = []
+                for m in members[:5]:
+                    name = m.get("name", "")
+                    ra = m.get("research_area") or "未明确"
+                    names_with_ra.append(f"**{name}**（{ra}）")
+                more = f"等共 {n} 位" if n > 5 else f"共 {n} 位"
+                parts.append(f"找到 {more}：" + "、".join(names_with_ra))
+
+        elif btype == "task_list":
+            tasks = bdata.get("tasks") or []
+            n = len(tasks)
+            if not tasks:
+                parts.append("暂未找到相关任务")
+            else:
+                parts.append(f"找到 {n} 个相关任务")
+
+        elif btype == "meeting":
+            meetings = bdata.get("meetings") or []
+            n = len(meetings)
+            if not meetings:
+                parts.append("暂未找到相关会议")
+            else:
+                titles = [m.get("title", "") for m in meetings[:3] if m.get("title")]
+                more = f"等共 {n} 个" if n > 3 else f"共 {n} 个"
+                if titles:
+                    parts.append(f"找到 {more}会议：" + "、".join(f"《{t}》" for t in titles))
+                else:
+                    parts.append(f"找到 {n} 个相关会议")
+
+        elif btype == "knowledge_ref":
+            refs = bdata.get("refs") or bdata.get("items") or []
+            n = len(refs)
+            if not refs:
+                parts.append("暂未找到相关知识")
+            else:
+                parts.append(f"找到 {n} 篇相关知识")
+
+        elif btype in ("formula", "hypothesis", "transcript", "chart", "fallback", "project_summary"):
+            title = block.get("title") or "相关内容"
+            parts.append(f"已为您整理：{title}")
+        else:
+            # 未知类型：给通用提示
+            title = block.get("title") or "相关内容"
+            parts.append(f"已为您整理：{title}")
+
+    return "\n\n".join(parts) if parts else ""
 
 
 def _is_rich_block_grounded(rb_data: dict, ctx) -> bool:

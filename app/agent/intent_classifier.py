@@ -66,9 +66,12 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之
 关键区分点（容易混淆）：
 - 「记住 X」/「忘掉 X」/「以后 X」→ execute_action（不是 casual_chat）
 - 「保存 X 到知识库」→ execute_action
-- 「X 是研究什么的」→ search_info（找人/找资料）
-- 「X 在做什么」→ data_query（具体人员查具体任务）
+- 「X 是研究什么的」/「X 做什么研究」/「X 的研究方向」→ search_info（找人/找资料）
+- **「X 呢？」/「X 怎么样」/「X 做什么」**（**简写延续**，无动词）→ search_info（默认理解为研究主题，除非上文明确在问任务）
+- 「X 在做什么」→ **歧义**：默认 data_query（具体人员查具体任务），但**当上文在讨论研究方向/找人**时改为 search_info
+- 「X 的任务」/「X 的工作清单」/「X 在做什么（任务）」→ data_query（显式问任务）
 - 「什么是 X」/「X 的原理」→ explain_concept
+- 「所有成员任务」/「团队任务」/「大家都在做什么任务」→ data_query（query_all_member_tasks）
 
 输出严格 JSON（无其他文字）：
 {{
