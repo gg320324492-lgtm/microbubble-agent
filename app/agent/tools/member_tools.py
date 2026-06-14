@@ -137,7 +137,7 @@ async def get_member_profile(input: GetMemberProfileInput, ctx: ToolContext) -> 
     from app.services.member_service import MemberService
     from app.services.task_service import TaskService
     from sqlalchemy import select
-    from app.models.project import Project, ProjectMember
+    from app.models.project import Project
 
     svc = MemberService(ctx.db)
     # 先精确匹配；失败再 ilike 模糊匹配（应对 LLM 抽名时多带空格/标点/同音字）

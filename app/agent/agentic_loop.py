@@ -270,6 +270,22 @@ def _parse_fake_tool_calls(text: str) -> list[dict]:
                 "input": args,
             })
 
+    # 格式 5（2026-06-14 收官 v5）：<tool_call><function=...><parameter=...>v</parameter></function></tool_call>
+    # 混合格式 — LLM 实际最常用。<tool_call> fence 包着 <function=...> XML 体。
+    if not fake_uses:
+        pattern5 = re.compile(
+            r"<tool_call>\s*<function\s*=\s*([^>\s]+)\s*>(.*?)</function\s*>\s*</tool_call>",
+            re.DOTALL,
+        )
+        for fn in pattern5.finditer(text):
+            name = fn.group(1).strip()
+            args = _parse_xml_params(fn.group(2))
+            fake_uses.append({
+                "id": f"toolu_fake_{_uuid.uuid4().hex[:12]}",
+                "name": name,
+                "input": args,
+            })
+
     if fake_uses:
         # Schema-aware 参数名 alias 解析（防模型写错字段名）
         normalized = []
@@ -290,12 +306,23 @@ def _strip_fake_tool_calls(text: str) -> str:
 
     防狼：即使 Phase 1 已经 fake → real，Phase 2 synthesis 模型可能再次写出
     这种 XML（因为它在 prompt 里学会了这种格式），要剥掉不让用户看到。
+
+    2026-06-14 v5 收官：加 <tool_call><function=...>...</function></tool_call> 混合格式
     """
     import re
-    # 4 种格式的剥除（与 _parse_fake_tool_calls 镜像）
+    # 5 种格式的剥除（与 _parse_fake_tool_calls 镜像）
+    # 格式 5：<tool_call><function=...><parameter=...>v</parameter></function></tool_call>
+    text = re.sub(
+        r"<tool_call>\s*<function\s*=[^>]+>.*?</function\s*>\s*</tool_call>",
+        "", text, flags=re.DOTALL,
+    )
+    # 格式 1：<tool_call>{...}</tool_call>
     text = re.sub(r"<tool_call>\s*\{.*?\}\s*</tool_call>", "", text, flags=re.DOTALL)
+    # 格式 2：<function_calls>...</function_calls>
     text = re.sub(r"<function_calls?\s*>.*?</function_calls?\s*>", "", text, flags=re.DOTALL)
+    # 格式 3：<function=...>...</function> 单独出现
     text = re.sub(r"<function\s*=[^>]+>.*?</function\s*>", "", text, flags=re.DOTALL)
+    # 格式 4：```json {name, ...} ```
     text = re.sub(r"```(?:json)?\s*\{[^{}]*\"(?:name|function|tool)\"[^{}]*\}\s*```", "", text, flags=re.DOTALL)
     # 清理残留空行
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -454,9 +481,17 @@ class AgenticLoop:
                     })
 
                 # 把本轮 tool_use + tool_result 灌回 messages
+                # 2026-06-14 收官：strip 掉 response content 里的 fake tool_call XML，
+                # 否则 Phase 2 synthesis 看到这种 pattern 会复制到最终输出（fake_xml_leaked）
+                cleaned_content = []
+                for b in response.content:
+                    dumped = _block_dump(b)
+                    if isinstance(dumped, dict) and dumped.get("type") == "text":
+                        dumped["text"] = _strip_fake_tool_calls(dumped.get("text", ""))
+                    cleaned_content.append(dumped)
                 messages.append({
                     "role": "assistant",
-                    "content": [_block_dump(b) for b in response.content],
+                    "content": cleaned_content,
                 })
                 messages.append({"role": "user", "content": round_results})
 
@@ -638,7 +673,13 @@ class AgenticLoop:
             # accumulated 来自流式 text_delta（直接累加 token），不走 thinking block
             # 这里的 _extract_rich_block_json 解析末尾 ```json``` 段，与 thinking 无关
             text_without_json, rich_blocks = _extract_rich_block_json(accumulated)
+            # 2026-06-14 收官：synthesis 阶段也剥除 fake tool_call XML（防狼到用户看到）
+            # Phase 1 已经被 _parse_fake_tool_calls 解析并 dispatch，但模型在 synthesis 阶段
+            # 可能再次写出 fake tool_call（从训练里学来的输出格式），必须清掉
+            text_without_json = _strip_fake_tool_calls(text_without_json)
+            # 同步剥除 rich_blocks 里 data 含 fake XML 的（防御性，正常不该有）
             for rb_data in rich_blocks:
+                # Grounded 守卫：type=member 必须有真实姓名来自工具结果
                 # 2026-06-14 收官：grounding 守卫 — type=member 必须有真实姓名来自工具结果
                 if not _is_rich_block_grounded(rb_data, ctx):
                     logger.warning(
