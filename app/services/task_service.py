@@ -71,58 +71,36 @@ class TaskService:
         return task
 
     async def _create_default_reminders(self, task: Task):
-        """创建默认提醒（根据距截止时间的远近自动调整）"""
+        """v2 策略：1 task = 1 reminder，统一在下次 11AM 北京时间窗口发送
+
+        2026-06-15 任务提醒体系全面优化：
+        - 不再根据 due_date 距离远近创建多条 reminder
+        - 1 个任务只创建 1 条 reminder，remind_at 落点 = next_digest_slot(task.due_date)
+        - 详见 C:\\Users\\admin\\.claude\\plans\\snappy-coalescing-quiche.md
+        """
         if not task.due_date:
             return
 
-        now = utcnow()
-        time_until_due = task.due_date - now
-        total_seconds = time_until_due.total_seconds()
+        from app.services.reminder_policy import (
+            next_digest_slot,
+            batch_date_for,
+        )
 
-        reminders = []
+        remind_at = next_digest_slot(task.due_date)
+        batch_date = batch_date_for(task.due_date)
 
-        if total_seconds <= 3600:
-            # 1小时内到期：1分钟后提醒（即时提醒场景）
-            reminders.append(Reminder(
-                task_id=task.id,
-                remind_at=now + timedelta(minutes=1),
-                remind_type="wechat",
-                status="pending"
-            ))
-        elif total_seconds <= 86400:
-            # 24小时内到期：提前30分钟提醒
-            remind_at = task.due_date - timedelta(minutes=30)
-            if remind_at > now:
-                reminders.append(Reminder(
-                    task_id=task.id,
-                    remind_at=remind_at,
-                    remind_type="wechat",
-                    status="pending"
-                ))
-        else:
-            # 超过24小时：提前2天 + 提前2小时
-            reminders.append(Reminder(
-                task_id=task.id,
-                remind_at=task.due_date - timedelta(days=2),
-                remind_type="wechat",
-                status="pending"
-            ))
-            reminders.append(Reminder(
-                task_id=task.id,
-                remind_at=task.due_date - timedelta(hours=2),
-                remind_type="wechat",
-                status="pending"
-            ))
-
-        for reminder in reminders:
-            self.db.add(reminder)
-
+        reminder = Reminder(
+            task_id=task.id,
+            remind_at=remind_at,
+            remind_type="wechat",
+            status="pending",
+            reminder_batch_date=batch_date,
+            policy_version=2,
+        )
+        self.db.add(reminder)
         await self.db.commit()
-
-        # 刷新获取 ID 后同步到 Redis
-        for reminder in reminders:
-            await self.db.refresh(reminder)
-        await self._sync_reminders_to_redis(reminders)
+        await self.db.refresh(reminder)
+        await self._sync_reminders_to_redis([reminder])
 
     async def _sync_reminders_to_redis(self, reminders: list):
         """将提醒同步到 Redis 有序集合，实现秒级精确调度"""

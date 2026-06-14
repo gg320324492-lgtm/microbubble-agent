@@ -608,27 +608,18 @@ async def mark_reminders_read(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """标记当前用户所有待处理提醒为已读"""
-    from sqlalchemy import update
-    await db.execute(
-        update(Reminder)
-        .where(
-            Reminder.id.in_(
-                select(Reminder.id)
-                .join(Task, Task.id == Reminder.task_id)
-                .where(
-                    and_(
-                        Task.assignee_id == current_user.id,
-                        Reminder.status == "pending",
-                        Task.deleted_at.is_(None)
-                    )
-                )
-            )
-        )
-        .values(status="sent")
+    """v2: 标记当前用户所有待处理提醒为"已确认收到"
+
+    2026-06-15 优化：语义对齐 ack 状态机
+    - 旧版: status="sent"（语义模糊，"系统已发"还是"用户已读"？）
+    - 新版: status="acknowledged"（明确"用户已确认收到"）+ 记 acknowledged_at/by/channel
+    """
+    from app.services.reminder_service import ReminderService
+    svc = ReminderService(db)
+    count = await svc.acknowledge_all_user_reminders(
+        current_user.id, channel="web"
     )
-    await db.commit()
-    return {"status": "success"}
+    return {"status": "success", "acknowledged_count": count}
 
 
 @router.get("/reminders")

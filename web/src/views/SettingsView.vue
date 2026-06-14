@@ -86,15 +86,86 @@
           </el-form-item>
         </el-form>
       </el-card>
+
+      <!-- 通知偏好卡片（v2 11AM 单一窗口） -->
+      <el-card class="settings-card" v-loading="prefsLoading">
+        <template #header>
+          <div class="card-header">
+            <el-icon><Bell /></el-icon>
+            <span>通知偏好</span>
+          </div>
+        </template>
+
+        <el-form :model="prefsForm" label-width="100px">
+          <el-form-item label="启用提醒">
+            <el-switch
+              v-model="prefsForm.enabled"
+              name="prefs-enabled"
+              active-text="启用"
+              inactive-text="关闭"
+            />
+            <div class="form-help">关闭后将不再推送任何微信提醒</div>
+          </el-form-item>
+
+          <el-form-item label="每日提醒时间">
+            <el-time-picker
+              v-model="prefsForm.digestTimeObj"
+              format="HH:mm"
+              value-format="HH:mm"
+              placeholder="选择时间（北京时间）"
+              :disabled="!prefsForm.enabled"
+              name="prefs-digest-time"
+              aria-label="每日提醒时间"
+              title="每日提醒时间"
+              @change="onDigestTimeChange"
+            />
+            <div class="form-help">
+              每日 {{ prefsForm.digest_time || '11:00' }} (北京时间) 统一推送待办提醒
+            </div>
+          </el-form-item>
+
+          <el-form-item label="当前状态">
+            <el-tag v-if="prefs?.in_digest_window" type="success">正处于提醒窗口内</el-tag>
+            <el-tag v-else type="info">
+              下次推送：{{ formatDateTime(prefs?.next_digest_at) }}
+            </el-tag>
+          </el-form-item>
+
+          <el-form-item v-if="prefs?.snoozed_until" label="已推迟">
+            <el-alert
+              :title="`已推迟到 ${formatDateTime(prefs.snoozed_until)}`"
+              type="warning"
+              :closable="false"
+              show-icon
+            >
+              <template #default>
+                <el-button size="small" @click="onUnsnooze">立即解除</el-button>
+              </template>
+            </el-alert>
+          </el-form-item>
+
+          <el-form-item>
+            <el-button
+              type="primary"
+              :loading="prefsSaving"
+              @click="onSavePrefs"
+            >
+              保存
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </el-card>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
+import { User, Lock, Camera, Bell } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 
 const userStore = useUserStore()
 const userInfo = computed(() => userStore.userInfo)
@@ -343,6 +414,67 @@ const changePassword = async () => {
     ElMessage.error(msg)
   } finally {
     savingPassword.value = false
+  }
+}
+
+// === 2026-06-15 v2 通知偏好（11AM 单一窗口）===
+const { prefs, loading: prefsLoading, fetchPrefs, savePrefs, unsnooze } = useNotificationPrefs()
+const prefsSaving = ref(false)
+const prefsForm = reactive({
+  enabled: true,
+  digest_time: '11:00',
+  digestTimeObj: '11:00',
+})
+
+onMounted(async () => {
+  await fetchPrefs()
+  if (prefs.value) {
+    prefsForm.enabled = prefs.value.enabled
+    prefsForm.digest_time = prefs.value.digest_time
+    prefsForm.digestTimeObj = prefs.value.digest_time
+  }
+})
+
+function onDigestTimeChange(val) {
+  if (typeof val === 'string' && /^\d{2}:\d{2}$/.test(val)) {
+    prefsForm.digest_time = val
+  } else if (val instanceof Date) {
+    const hh = String(val.getHours()).padStart(2, '0')
+    const mm = String(val.getMinutes()).padStart(2, '0')
+    prefsForm.digest_time = `${hh}:${mm}`
+  }
+}
+
+async function onSavePrefs() {
+  prefsSaving.value = true
+  try {
+    await savePrefs({
+      enabled: prefsForm.enabled,
+      digest_time: prefsForm.digest_time,
+    })
+  } catch (e) {
+    // 错误已由 composable 内部 ElMessage 处理
+  } finally {
+    prefsSaving.value = false
+  }
+}
+
+async function onUnsnooze() {
+  prefsSaving.value = true
+  try {
+    await unsnooze()
+    ElMessage.success('已解除推迟')
+  } finally {
+    prefsSaving.value = false
+  }
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '-'
+  try {
+    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  } catch {
+    return iso
   }
 }
 </script>

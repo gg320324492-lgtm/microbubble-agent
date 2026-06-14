@@ -225,14 +225,17 @@ async def create_task(input: CreateTaskInput, ctx: ToolContext) -> dict:
             beijing_dt = datetime.strptime(input.due_date, "%Y-%m-%d").replace(hour=18, minute=0)
         due_date = beijing_dt.replace(tzinfo=BEIJING_TZ).astimezone(timezone.utc).replace(tzinfo=None)
 
-    # 解析 reminders
+    # 解析 reminders（v2：用户显式 reminder 也对齐到下次 11AM 窗口）
     reminders_data = None
     if input.reminders:
+        from app.services.reminder_policy import next_digest_slot
         reminders_data = []
         for r in input.reminders:
             rem_beijing = datetime.strptime(r.remind_at, "%Y-%m-%d %H:%M")
             rem_utc = rem_beijing.replace(tzinfo=BEIJING_TZ).astimezone(timezone.utc).replace(tzinfo=None)
-            reminders_data.append({"remind_at": rem_utc, "remind_type": r.remind_type})
+            # 2026-06-15 v2: 所有 reminder 落点 = next 11AM 北京时间窗口
+            aligned_utc = next_digest_slot(rem_utc)
+            reminders_data.append({"remind_at": aligned_utc, "remind_type": r.remind_type})
 
     task_svc = TaskService(ctx.db)
     task = await task_svc.create_task(

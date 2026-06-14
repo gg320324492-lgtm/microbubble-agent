@@ -62,6 +62,22 @@
         <button
           type="button"
           class="settings-item"
+          @click="showNotifSheet = true"
+        >
+          <div class="item-icon" style="background: var(--color-info-bg, #ecf5ff)">🔔</div>
+          <div class="item-info">
+            <div class="item-title">通知偏好</div>
+            <div class="item-desc">
+              每日 {{ notifPrefs?.digest_time || '11:00' }} 统一推送
+              <span v-if="notifPrefs?.snoozed_until" class="snoozed-badge">已推迟</span>
+            </div>
+          </div>
+          <span class="item-arrow">›</span>
+        </button>
+
+        <button
+          type="button"
+          class="settings-item"
           @click="toggleTheme"
         >
           <div class="item-icon" style="background: var(--color-success-bg)">🌓</div>
@@ -130,6 +146,17 @@
       @select="onAvatarAction"
     />
 
+    <!-- 通知偏好 Sheet（v2 11AM 单一窗口） -->
+    <MobileFormSheet
+      v-model:show="showNotifSheet"
+      title="通知偏好"
+      :fields="notifFields"
+      v-model:form="notifForm"
+      submit-text="保存"
+      :submitting="notifSaving"
+      @submit="onSaveNotif"
+    />
+
     <input
       ref="avatarInputRef"
       type="file"
@@ -159,6 +186,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
@@ -172,10 +200,50 @@ const userInfo = computed(() => userStore.userInfo)
 const showProfileSheet = ref(false)
 const showPasswordSheet = ref(false)
 const showAvatarSheet = ref(false)
+const showNotifSheet = ref(false)
 const avatarInputRef = ref(null)
 
 const savingProfile = ref(false)
 const savingPassword = ref(false)
+
+// 通知偏好（v2 11AM 单一窗口）
+const { prefs: notifPrefs, loading: notifLoading, fetchPrefs: fetchNotifPrefs, savePrefs: saveNotifPrefs } = useNotificationPrefs()
+const notifSaving = ref(false)
+const notifForm = reactive({
+  enabled: true,
+  digest_time: '11:00',
+})
+const notifFields = computed(() => [
+  {
+    key: 'enabled',
+    label: '启用提醒',
+    type: 'switch',
+  },
+  {
+    key: 'digest_time',
+    label: '每日提醒时间 (HH:MM)',
+    type: 'input',
+    placeholder: '11:00',
+    rules: [
+      (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v) || '格式错误，应为 HH:MM (00:00-23:59)',
+    ],
+  },
+])
+
+async function onSaveNotif(form) {
+  notifSaving.value = true
+  try {
+    await saveNotifPrefs({
+      enabled: form.enabled,
+      digest_time: form.digest_time,
+    })
+    showNotifSheet.value = false
+  } catch (e) {
+    // 错误已由 composable 内部 ElMessage 处理
+  } finally {
+    notifSaving.value = false
+  }
+}
 
 const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
 const roleLabel = computed(() => roleMap[userInfo.value?.role] || '成员')
@@ -322,12 +390,18 @@ function handleLogout() {
   router.push('/login')
 }
 
-onMounted(() => {
+onMounted(async () => {
   // 同步最新用户信息
   profileForm.name = userInfo.value?.name || ''
   profileForm.email = userInfo.value?.email || ''
   profileForm.phone = userInfo.value?.phone || ''
   profileForm.bio = userInfo.value?.bio || ''
+  // 加载通知偏好
+  await fetchNotifPrefs()
+  if (notifPrefs.value) {
+    notifForm.enabled = notifPrefs.value.enabled
+    notifForm.digest_time = notifPrefs.value.digest_time
+  }
 })
 </script>
 
@@ -503,4 +577,13 @@ onMounted(() => {
   -webkit-tap-highlight-color: transparent;
 }
 .logout-btn:active { opacity: 0.7; }
+.snoozed-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: var(--color-warning-bg, #fdf6ec);
+  color: var(--color-warning, #E6A23C);
+  border-radius: 8px;
+  font-size: 10px;
+}
 </style>
