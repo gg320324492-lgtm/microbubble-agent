@@ -109,6 +109,106 @@
 
 ---
 
+## 任务提醒体系 v2 全面优化（2026-06-15，commits `223ea74` + `ba75e32`）
+
+**两个用户痛点 → 两个根因修复**：
+
+### 痛点 1：赵航佳抱怨半夜收微信提醒
+**根因**：[app/services/task_service.py:73-125](app/services/task_service.py) `_create_default_reminders` 算出 `remind_at` 是**绝对 naive UTC 时间**，落到凌晨即触发；`Reminder` 模型无任何 quiet hours 机制；`Member` 模型无任何通知偏好字段；`SettingsView.vue` 无相关 UI。
+
+**修复**：所有 reminder 统一在 **11:00 AM 北京时间窗口**发送（±60min 容差），半夜不触发任何推送。
+
+### 痛点 2：杜同贺多次发"收到"小气助手仍推
+**根因**：[app/wechat/handler.py:997-999](app/wechat/handler.py) 命中"收到"后**只回文本 "👍 收到确认"，不联动 Reminder 表**；`Reminder.status` 只有 `pending/sent/cancelled`，**无 acknowledged 状态**；Celery 10s 跑 `process_reminders`，失败的 reminder 留在 Redis ZSET **无上限重试**。
+
+**修复**：新增 `acknowledged` 状态 + `acknowledge_all_user_reminders` 服务方法。
+
+### v2.1 二次简化（commit `ba75e32`）
+用户原话"用户发任何内容都是不再提醒。包括这个'今天别提醒'"。**删除 snooze 微信路径**，把 ack 从"匹配特定关键词"改为"任何消息都触发"：
+- 旧版：'收到'/'OK'/'好'/'👌'/'1' → ack；'今天别提醒' → snooze
+- 新版：**任何微信消息**都 ack（用户活跃 = 不要再推旧的）
+
+### 核心模型（用户决策）
+- **每个 task 只有 1 次 11AM 提醒机会**：发完即结束，**不重试**（"无用用户回复与否，只提醒一次"）
+- 失败也标 sent（one-shot）
+- 同用户多条 reminder 聚合为 1 条 digest 消息（避免轰炸）
+- "收到"是 UX 优化（取消当天 11AM 还没发的待推），防重复靠 1-per-task 模型本身
+
+### 完整改动清单
+| 文件 | 改动 |
+|---|---|
+| [alembic/versions/019_reminder_ack_snooze_v2.py](alembic/versions/019_reminder_ack_snooze_v2.py) | 新建（reminders 6列 + members JSON） |
+| [app/services/reminder_policy.py](app/services/reminder_policy.py) | 新建（3 个纯函数） |
+| [app/services/reminder_service.py](app/services/reminder_service.py) | process_reminders 重构 + 聚合 + ack/snooze |
+| [app/services/task_service.py:73-125](app/services/task_service.py) | `_create_default_reminders` 1 task = 1 reminder |
+| [app/wechat/handler.py:976-1056](app/wechat/handler.py) | v2.1 任何消息 ack + 任务指令保留 |
+| [app/api/v1/task.py:606-631](app/api/v1/task.py) | `mark_reminders_read` 改用 ack |
+| [app/api/v1/member.py](app/api/v1/member.py) 末尾 | GET/PUT `/members/me/notification-preferences` |
+| [app/schemas/notification.py](app/schemas/notification.py) | 新建 |
+| [app/models/reminder.py](app/models/reminder.py) | +6 列 |
+| [app/models/member.py](app/models/member.py) | +`notification_preferences: JSON` |
+| [app/agent/tools/task_tools.py:230-235](app/agent/tools/task_tools.py) | `create_task` 显式 reminder 也对齐 11AM |
+| [web/src/composables/useNotificationPrefs.js](web/src/composables/useNotificationPrefs.js) | 新建 composable |
+| [web/src/views/SettingsView.vue](web/src/views/SettingsView.vue) | +"通知偏好"卡片 |
+| [web/src/views/mobile/MobileSettingsView.vue](web/src/views/mobile/MobileSettingsView.vue) | +"通知偏好"按钮 + Sheet |
+| `tests/test_reminder_window.py` | 新建 12 case |
+| `tests/test_acknowledge.py` | 新建 3 case |
+| `tests/test_snooze.py` | 新建 2 case |
+| `tests/test_process_reminders_window.py` | 新建 3 case |
+| `tests/test_migration_019_reminder_v2.py` | 新建 3 case（alembic 升级后字段就位） |
+
+**测试结果**：20/20 通过。
+
+### 状态机
+
+```
+                 ┌────→ sent（11AM 推送，one-shot）
+                 │
+pending ─────────┼────→ acknowledged（任何微信消息 → channel="wechat_any"）
+                 │
+                 └────→ cancelled（任务删 / soft_delete）
+```
+
+### 聚合消息格式（`_send_digest_message`）
+
+```
+📋 你今天有 3 条待办：
+
+• [high] 完成实验报告（截止 06-20 18:00）
+• [medium] 修改论文（截止 06-25 23:59）
+• [low] 整理文献（截止 07-01 12:00）
+
+回复「收到」= 今天不再提醒；「完成 XXX」= 标记完成。
+```
+
+### 部署必做（CLAUDE.md 752 行铁律）
+
+```bash
+# 1. 跑迁移
+docker compose exec app alembic upgrade head
+
+# 2. 验证
+docker compose exec postgres psql -U postgres -d microbubble \
+  -c "\d reminders" | grep -E "acknowledged|snoozed|policy"
+docker compose exec postgres psql -U postgres -d microbubble \
+  -c "\d members" | grep notification_preferences
+
+# 3. 重启（volume 挂载只换文件不换模块缓存）
+docker compose restart app celery-worker
+```
+
+### pytest 纪律沉淀
+
+1. **monkeypatch 函数 import 后必须 patch 两处** — `from app.services.reminder_policy import is_in_digest_window` 在 `reminder_service.py` 顶部已 import，只 patch `reminder_policy.is_in_digest_window` 不影响 reminder_service。pytest 必须同时 `monkeypatch.setattr(rs_mod, "is_in_digest_window", ...)`
+2. **测试假数据让两次 DB 查询都返回相同列表 → 重复计数**。`_make_db_session` 必须用 `call_count` 区分：第一次返回 reminders，第二次返回 `[]`（避免 task+meeting 双计）
+3. **catch-all except 必须 `logger.error(..., exc_info=True)`**（CLAUDE.md 已有纪律，本次新增 reminder_service 全部遵守）
+4. **`wechat_bot.smart_send` 是实例方法**（不是类方法），`monkeypatch.setattr(rs_mod.wechat_bot, "smart_send", mock)` 即可生效（替换实例属性）
+
+### 经验沉淀
+[C:/Users/admin/.claude/projects/g--microbubble-agent/memory/reminder-v2-11am-digest.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/reminder-v2-11am-digest.md)
+
+---
+
 ## SSE brief 事件重复输出修复（2026-06-12 深夜）
 
 **问题**：聊天回复内容**完全重复输出两次**（"你好！晚上好，杜同贺...你好！晚上好，杜同贺..."），用户视觉上每次都看到同一段话被复述。
