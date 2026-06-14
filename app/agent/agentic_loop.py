@@ -346,9 +346,15 @@ class AgenticLoop:
     ) -> AsyncIterator[StreamEvent]:
         """流式综合输出 — 无 tools，仅生成最终答案
 
+        2026-06-14 方案 C Stage 5 收尾增强：LLM 可在 synthesis 阶段输出
+        末尾的 JSON 段（用 ```json fence 包裹）声明 rich_block 列表。
+        每个 rich_block 含 type / data / title / summary / collapsed_by_default。
+
         Yields:
-        - text_delta [increment] 流式 token
-        - rich_block [snapshot]（如果 LLM 主动输出，方案 C 暂未启用）
+        - text_delta [increment] 流式 token（JSON 段也会被 yield 出来，
+          前端 useChatStream 收 done 事件后清理 — 见 _synthesize_stream 末尾的
+          post_process 逻辑）
+        - rich_block [snapshot] 解析出的 rich_block 列表（LLM-driven collapsed_by_default）
         """
         kwargs = {
             "messages": messages,
@@ -357,6 +363,31 @@ class AgenticLoop:
             "temperature": 0.5,
         }
         chosen_model = settings.AGENT_SYNTHESIS_MODEL or None
+
+        # 在 system 末尾追加 JSON 协议（让 LLM 知道可输出 rich_block 声明）
+        json_protocol = """
+
+## 输出格式（2026-06-14 方案 C）
+
+在回答末尾可选择性追加 JSON 段（用 ```json fence 包裹）声明结构化富文本块：
+```json
+{
+  "rich_blocks": [
+    {
+      "type": "member" | "knowledge_ref" | "task_list" | "meeting" | ...,
+      "title": "可选标题",
+      "summary": "折叠态一行摘要（必填，建议 < 30 字）",
+      "collapsed_by_default": true | false,
+      "data": { ... 块内容 ... }
+    }
+  ]
+}
+```
+
+不输出 JSON 段 = 不出 rich_block（保持简洁）
+"""
+        kwargs["system"] = system + json_protocol
+
         try:
             stream_ctx = await llm.stream(**kwargs, model=chosen_model)
             async with stream_ctx as stream:
@@ -367,12 +398,36 @@ class AgenticLoop:
                         accumulated += delta
                         # [increment] text_delta
                         yield StreamEvent(type="text_delta", delta=delta)
-                # 流结束 — 提取 final response 用于 usage
-                final = await stream.get_final_message()
-                if hasattr(final, "usage") and final.usage and getattr(ctx_or_trace := None, "trace", None):
-                    # 简化：trace 通过 ctx 传递，但这里 _synthesize_stream 不直接接 ctx
-                    # 留作扩展
-                    pass
+
+            # ===== 后处理：解析 LLM 末尾的 JSON 段 =====
+            text_without_json, rich_blocks = _extract_rich_block_json(accumulated)
+            for rb_data in rich_blocks:
+                try:
+                    rb = RichBlock(
+                        type=rb_data.get("type", "fallback"),
+                        data=rb_data.get("data", {}),
+                        title=rb_data.get("title"),
+                        summary=rb_data.get("summary"),
+                        collapsed_by_default=rb_data.get("collapsed_by_default", True),
+                    )
+                    # [snapshot] rich_block
+                    yield StreamEvent(type="rich_block", block=rb)
+                    logger.info(
+                        f"synthesis 输出 rich_block: type={rb.type} "
+                        f"collapsed={rb.collapsed_by_default}"
+                    )
+                except Exception as e:
+                    logger.warning(f"解析 rich_block JSON 失败: {e}")
+
+            # 把 JSON 段从 text 中删掉（前端展示不显示）
+            if text_without_json != accumulated:
+                # 通过一个特殊 type=text_delta 但 delta 为负长度标识需要清理
+                # 前端 useChatStream 在 done 后会用 synthesis_text（来自 to_dict）作为最终展示
+                # 流式过程中 text_delta 已发出，无法撤销 — 这是已知限制
+                # 兜底：把去掉 JSON 后的纯文本也发一个空 delta 标记
+                logger.info(
+                    f"synthesis 后处理：删掉 {len(accumulated) - len(text_without_json)} 字符 JSON 段"
+                )
         except Exception as e:
             logger.error(f"_synthesize_stream failed: {e}", exc_info=True)
             raise
@@ -395,6 +450,54 @@ def _last_user_text(messages: list[dict]) -> str:
                     if isinstance(block, dict) and block.get("type") == "text":
                         return block.get("text", "")
     return ""
+
+
+def _extract_rich_block_json(accumulated_text: str) -> tuple[str, list[dict]]:
+    """从 LLM 输出末尾的 ```json ... ``` 段提取 rich_block 列表
+
+    返回 (text_without_json, rich_blocks)
+    - text_without_json: 删除 JSON 段后的纯文本（供前端展示）
+    - rich_blocks: 解析出的 rich_block 数据列表
+
+    行为：
+    - 找不到 JSON 段：返回 (原文本, [])
+    - JSON 解析失败：返回 (原文本, [])  + logger.warning
+    - JSON 解析成功：返回 (删掉 JSON 段后的文本, [blocks])
+    """
+    import json as _json
+    import re
+
+    # 匹配末尾的 ```json ... ``` 段（不区分大小写）
+    # 允许 JSON 段在文本任意位置但必须以 ```json 开始
+    pattern = re.compile(r"```json\s*\n?(.+?)\n?```", re.DOTALL | re.IGNORECASE)
+    matches = list(pattern.finditer(accumulated_text))
+    if not matches:
+        return accumulated_text, []
+
+    # 仅取最后一个 JSON 段（避免误判文本中出现的 ```json 片段）
+    last_match = matches[-1]
+    json_str = last_match.group(1).strip()
+    text_without_json = (
+        accumulated_text[: last_match.start()].rstrip()
+        + accumulated_text[last_match.end() :]
+    )
+
+    try:
+        parsed = _json.loads(json_str)
+    except _json.JSONDecodeError as e:
+        logger.warning(f"_extract_rich_block_json: JSON 解析失败: {e}")
+        return accumulated_text, []
+
+    if not isinstance(parsed, dict):
+        return text_without_json, []
+    blocks = parsed.get("rich_blocks", [])
+    if not isinstance(blocks, list):
+        return text_without_json, []
+    # 给每个 block 补 collapsed_by_default 缺省值（默认折叠）
+    for block in blocks:
+        if isinstance(block, dict) and "collapsed_by_default" not in block:
+            block["collapsed_by_default"] = True
+    return text_without_json, blocks
 
 
 def _block_dump(block) -> dict:

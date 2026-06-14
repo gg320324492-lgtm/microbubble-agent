@@ -46,7 +46,15 @@
       />
 
       <button
-        v-if="modelValue.trim() || selectedImage || selectedFile"
+        v-if="isSending"
+        type="button"
+        class="stop-btn"
+        aria-label="停止生成"
+        title="停止生成"
+        @click="$emit('stop')"
+      >⏹</button>
+      <button
+        v-else-if="modelValue.trim() || selectedImage || selectedFile"
         type="button"
         class="send-btn"
         aria-label="发送"
@@ -96,11 +104,14 @@ const props = defineProps({
   selectedImage: { type: Object, default: null },
   selectedFile: { type: Object, default: null },
   inputPaddingBottom: { type: String, default: 'var(--sab, 0px)' },
+  // 2026-06-14 方案 C Stage 5 收尾：流式中显示 ⏹ 停止按钮
+  isSending: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
   'update:modelValue',
   'send',
+  'stop',  // 2026-06-14 方案 C Stage 5 收尾
   'image',
   'file',
   'voice-start',
