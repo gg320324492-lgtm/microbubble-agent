@@ -41,6 +41,14 @@ class MemberService:
         - 按姓名查（name 显式传）时不强制 is_active=True — 用户明确指名应能查到 alumni/已离开成员
         - 按 research_area/grade 查（列表筛选）时仍走 is_active=True — 列表展示只给当前成员
         - 显式传 is_active=False 可看历史成员
+
+        2026-06-15 增强：
+        - grade 简写自动模糊匹配（防「博一」查不到「博士」类 bug）：
+          * 博一/博二/博三/博四 → ilike "博%"（匹配博士、博一、博二 等所有博士相关记录）
+          * 研一/研二/研三 → exact match（保留精确）
+          * 大三/大四/副教授/已毕业 → exact match
+          * 博士 → ilike "博%"
+          * 其他 → exact match
         """
         query = select(Member)
         filters = []
@@ -54,7 +62,12 @@ class MemberService:
         if research_area:
             filters.append(Member.research_area.ilike(f"%{research_area}%"))
         if grade:
-            filters.append(Member.grade == grade)
+            # grade 简写模糊匹配：博一/博二/博三/博四/博士 一律匹配博%
+            grade_normalized = grade.strip()
+            if grade_normalized in ("博一", "博二", "博三", "博四", "博士"):
+                filters.append(Member.grade.ilike("博%"))
+            else:
+                filters.append(Member.grade == grade_normalized)
 
         query = query.where(and_(*filters))
         result = await self.db.execute(query)
