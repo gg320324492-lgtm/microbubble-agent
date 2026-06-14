@@ -135,22 +135,24 @@ class TestTraceCollectorAsyncContext:
 
     @pytest.mark.asyncio
     async def test_cancelled_error_status_aborted(self):
-        """CancelledError → status=ABORTED，同步落库（铁律 4）"""
+        """CancelledError → status=ABORTED，create_task 异步落库（铁律 4 收尾增强）"""
         trace = TraceCollector(user_id=1, session_id="s1", message="hi")
-        # Mock _persist_now 验证异常路径真的调同步落库
         persist_called = []
-        original_persist = trace._persist_now
 
         async def mock_persist():
             persist_called.append(trace.status)
-            # 模拟不创建新 DB 引擎（避免 SKIP_DB_SETUP 模式炸）
             return None
         trace._persist_now = mock_persist
 
+        # 2026-06-14 Stage 5 收尾：__aexit__ 用 create_task fire-and-forget 而非 await
+        # 测试需要等待 task 完成（否则 mock 还没被调）
         with pytest.raises(asyncio.CancelledError):
             async with trace:
                 trace.record_tool_call("query_members", {}, {}, 50)
                 raise asyncio.CancelledError()
+
+        # 给 create_task 时间跑完
+        await asyncio.sleep(0.05)
 
         assert trace.status == TraceStatus.ABORTED
         assert len(persist_called) == 1
@@ -158,7 +160,7 @@ class TestTraceCollectorAsyncContext:
 
     @pytest.mark.asyncio
     async def test_other_exception_status_error(self):
-        """非 CancelledError 异常 → status=ERROR，同步落库"""
+        """非 CancelledError 异常 → status=ERROR，create_task 异步落库"""
         trace = TraceCollector(user_id=1, session_id="s1", message="hi")
         persist_called = []
 
@@ -171,6 +173,8 @@ class TestTraceCollectorAsyncContext:
             async with trace:
                 trace.record_tool_call("query_members", {}, {}, 30)
                 raise RuntimeError("LLM boom")
+
+        await asyncio.sleep(0.05)
 
         assert trace.status == TraceStatus.ERROR
         assert trace.error is not None

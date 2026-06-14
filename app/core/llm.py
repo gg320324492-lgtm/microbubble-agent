@@ -175,12 +175,16 @@ class LLMClient:
         max_tokens: int = 4096,
         temperature: float = 0.3,
         use_cache: bool = False,
+        thinking: Optional[dict] = None,
     ) -> Any:
         """同步调用：返回 Anthropic Message 响应对象
 
         参数：
         - model: 指定模型名（如 "claude-haiku-4-5-20251001"），None 时走 self.models[0] + fallback 链
                  keyword-only（铁律 5）：禁止位置传 model，防止老代码静默走错模型
+        - thinking: 2026-06-14 Stage 5 收尾新增 — 控制 thinking block
+                 思考型模型（mimo-v2.5）必须显式传 {"type": "disabled"} 否则只返 thinking 不返 text
+                 {"type": "enabled", "budget_tokens": int} 启用 thinking
         - 其他参数同 Anthropic SDK messages.create
 
         行为：
@@ -197,6 +201,10 @@ class LLMClient:
             kwargs["system"] = system
         if tools:
             kwargs["tools"] = tools
+        if thinking is not None:
+            # 思考型模型控制：disabled=不思考（适合 JSON 输出）
+            # enabled+budget_tokens=允许思考（适合复杂推理）
+            kwargs["thinking"] = thinking
 
         # 选择模型链：显式 model 时只用一个，否则走 fallback 链
         models_to_try = [model] if model else self.models
@@ -246,17 +254,21 @@ class LLMClient:
         tools: Optional[list[dict]] = None,
         max_tokens: int = 4096,
         temperature: float = 0.3,
+        thinking: Optional[dict] = None,
     ) -> AsyncIterator[Any]:
         """流式调用：返回 Anthropic MessageStream 上下文管理器
 
         参数：
         - model: 指定模型名，None 时走 self.models[0]（流式不做 fallback，因为流到一半切换体验差）
                  keyword-only（铁律 5）
+        - thinking: 2026-06-14 Stage 5 收尾新增 — 思考型模型控制
+                 {"type": "disabled"} 强制不思考 / {"type": "enabled", "budget_tokens": int} 允许思考
 
         用法：
-            async with (await client.stream(messages=...)) as stream:
-                async for event in stream:
-                    ...
+            async for stream in client.stream(messages=...):
+                async with stream as s:
+                    async for event in s:
+                        ...
         """
         kwargs = {
             "messages": messages,
@@ -267,6 +279,8 @@ class LLMClient:
             kwargs["system"] = system
         if tools:
             kwargs["tools"] = tools
+        if thinking is not None:
+            kwargs["thinking"] = thinking
 
         # 流式不做缓存，不做 fallback 链（流式 fallback 体验差）
         chosen = model or self.models[0]

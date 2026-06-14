@@ -103,7 +103,8 @@ class TestPersistNowFallbackToCelery:
     """铁律 4 退路：_persist_now 失败时降级到 Celery"""
 
     @pytest.mark.asyncio
-    async def test_persist_now_failure_falls_back_to_celery(self):
+    async def test_persist_now_create_task_fire_and_forget(self):
+        """2026-06-14 Stage 5 收尾增强：__aexit__ 用 create_task 而非 await，避免被 CancelledError 二次取消"""
         trace = TraceCollector(user_id=1, session_id="s1", message="q")
         # Mock _persist_now 抛错
         async def mock_persist_fail():
@@ -117,8 +118,12 @@ class TestPersistNowFallbackToCelery:
             async with trace:
                 raise asyncio.CancelledError()
 
-        # 降级：sync 失败后，Celery schedule 被调
-        assert len(schedule_called) == 1, "降级路径必须调 Celery schedule"
+        # 给 create_task 一点时间跑完（mock 抛错被 add_done_callback 捕获）
+        await asyncio.sleep(0.05)
+
+        # 行为：create_task 不让 sync 失败降级 Celery（因为 process 正在死）
+        # add_done_callback 仅 log 错误，不调 _schedule_persist
+        assert len(schedule_called) == 0, "create_task fire-and-forget 模式不降级 Celery（避免 process 死时 race）"
 
 
 # 辅助

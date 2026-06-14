@@ -117,10 +117,13 @@ async def critique_response(
         resp = await llm.complete(
             messages=[{"role": "user", "content": prompt}],
             model=settings.AGENT_REFLECTION_MODEL,
-            system="你是质量评审员。只输出 JSON。",
+            # 2026-06-14 Stage 5 收尾：mimo 等思考型模型显式禁用 thinking
+            system="你是质量评审员。直接输出纯 JSON。",
             max_tokens=500,
             temperature=0.0,
+            thinking={"type": "disabled"},
         )
+        # 提取文本
         text = ""
         for block in resp.content:
             if hasattr(block, "text") and block.text:

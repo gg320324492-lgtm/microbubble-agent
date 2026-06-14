@@ -296,11 +296,9 @@ class MicroBubbleAgent:
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            text = ""
-            for block in response.content:
-                if hasattr(block, "text") and block.text:
-                    text = block.text.strip()
-                    break
+            # 2026-06-14 Stage 5 收尾：兼容 mimo 等思考型模型只返 thinking block
+            from app.core.llm import extract_text_from_response
+            text = extract_text_from_response(response).strip()
 
             import json as _json
             try:

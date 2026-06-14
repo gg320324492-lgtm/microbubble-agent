@@ -30,12 +30,25 @@ def persist_trace_task(self, trace_dict: dict):
     from sqlalchemy.pool import NullPool
     from app.models.agent_trace import AgentTrace
 
+    # 2026-06-14 Stage 5 收尾：防御性检查（之前收到 None 报 'NoneType' has no attribute 'get'）
+    logger.info(
+        f"persist_trace_task 收到: type={type(trace_dict).__name__}, "
+        f"preview={str(trace_dict)[:200] if trace_dict else 'None'}"
+    )
+    if not isinstance(trace_dict, dict):
+        logger.error(
+            f"persist_trace_task: trace_dict 不是 dict! type={type(trace_dict).__name__}, "
+            f"放弃投递"
+        )
+        return None
+
     async def _write():
         db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
         engine = create_async_engine(db_url, poolclass=NullPool)
         Session = async_sessionmaker(engine, expire_on_commit=False)
         try:
             async with Session() as db:
+                _u = trace_dict.get("usage") or {}  # 2026-06-14 修复：usage 可能为 None
                 trace = AgentTrace(
                     user_id=trace_dict.get("user_id", 0),
                     session_id=trace_dict.get("session_id", ""),
@@ -44,11 +57,19 @@ def persist_trace_task(self, trace_dict: dict):
                     rich_blocks=trace_dict.get("rich_blocks", []),
                     brief=trace_dict.get("brief"),
                     detail=trace_dict.get("detail"),
-                    input_tokens=trace_dict.get("usage", {}).get("input_tokens"),
-                    output_tokens=trace_dict.get("usage", {}).get("output_tokens"),
-                    total_tokens=trace_dict.get("usage", {}).get("total_tokens"),
+                    input_tokens=_u.get("input_tokens"),
+                    output_tokens=_u.get("output_tokens"),
+                    total_tokens=_u.get("total_tokens"),
                     total_duration_ms=trace_dict.get("total_duration_ms"),
                     error=trace_dict.get("error"),
+                    # 2026-06-14 Stage 3 加 7 列
+                    status=trace_dict.get("status", "completed"),
+                    intent_category=trace_dict.get("intent_category"),
+                    intent_confidence=trace_dict.get("intent_confidence"),
+                    tool_rounds_used=trace_dict.get("tool_rounds_used", 0),
+                    compression_applied_count=trace_dict.get("compression_applied_count", 0),
+                    critique_score=trace_dict.get("critique_score"),
+                    retry_count=trace_dict.get("retry_count", 0),
                 )
                 db.add(trace)
                 await db.commit()

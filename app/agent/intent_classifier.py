@@ -112,11 +112,14 @@ async def classify_intent(question: str, ctx: ToolContext) -> IntentResult:
         resp = await llm.complete(
             messages=[{"role": "user", "content": prompt}],
             model=settings.AGENT_INTENT_MODEL,
-            system="你是意图分类器。只输出 JSON，不解释。",
+            system="你是意图分类器。直接输出纯 JSON。",
             max_tokens=300,
             temperature=0.0,
+            # 2026-06-14 Stage 5 收尾：mimo 等思考型模型必须显式禁用 thinking
+            # 否则只返 thinking block 不返 text，JSON 解析失败
+            thinking={"type": "disabled"},
         )
-        # 提取文本
+        # 只读 text block（不要 fallback 到 thinking，避免解析 thinking 内容当 JSON 失败）
         text = ""
         for block in resp.content:
             if hasattr(block, "text") and block.text:
