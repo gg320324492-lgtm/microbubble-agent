@@ -372,6 +372,15 @@ def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
     }
     if tool_name in implicit_map and result.get("status") == "success":
         rb_type, default_title = implicit_map[tool_name]
+        # 统一 member 类型为 {members: [...]} 形态（前端 MemberCardBlock 只认这个）
+        if rb_type == "member":
+            if "members" in result and isinstance(result["members"], list):
+                data = result
+            else:
+                # get_member_profile 返回单成员对象 → 包装为数组
+                member = {k: v for k, v in result.items() if k not in ("status",)}
+                data = {"members": [member]}
+            return RichBlock(type=rb_type, data=data, title=default_title)
         return RichBlock(
             type=rb_type,
             data=result,

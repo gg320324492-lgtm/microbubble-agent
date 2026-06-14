@@ -1028,7 +1028,8 @@ class MessageHandler:
             if teacher:
                 await notifier.notify_progress_update(teacher, task.title, member.name, content)
             if progress >= 100:
-                await self._check_all_completed(task, db)
+                try:
+                    await self._check_all_completed(task, db)
                 except Exception as e:
                     logger.error(f"进度 100% 联动 ack 失败: {e}", exc_info=True)
             await self._reply_text(user_id, f"📝 已更新进度为 {progress}%！", msg=msg)
