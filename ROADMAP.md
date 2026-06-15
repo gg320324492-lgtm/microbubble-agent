@@ -1,8 +1,15 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-15 深夜（会议 #95 声纹重置 + 重识别全链路 + 2 commits + 9 条铁律沉淀 + stats 重算）** — ① 会议 #95 实际是王天志主讲 + 李胜景补话（不是 DB 里的周之超/李/杜），speaker_mapping 严重错标 ② KMeans(k=2) 重聚类 287 family：Cluster 0 王天志（vs 王距离 0.017），Cluster 1 李胜景（vs 李距离 0.112）③ 现有 voice_embedding 失真（4 样本平均后所有距离 > 0.4）→ 直接重置 sample_count=1 ④ **铁律 9**：transcript_polished[].speaker 才是前端实际渲染字段，不是 transcript[].speaker，必须**同时改 8 个 JSON 字段** ⑤ [scripts/recalc_stats.py](scripts/recalc_stats.py) 项目统计重算：**1051 提交 / 155,859 行 / 641 文件 / 31 天**（python 44K / vue 40K / markdown 39K / config 14K / javascript 7K）
+> 最后更新: **2026-06-15 晚 22:02（主动提醒 v2 漏修补救 + highlight.js plaintext + 3 commits + 5 条铁律沉淀 + stats 重算 1056 提交 / 155K 行 / 633 文件 / 31 天）** — ① 用户凌晨 2:48 仍收到"分配已超过24小时"提醒根因：`app/wechat/scheduler.py:ProactiveScheduler` 3 个 check 方法（due_soon/overdue/unconfirmed）**完全绕过 11AM 窗口**，与 v2 `reminder_service` 并行运行 ② 修复：3 个 check 方法顶部加 `is_in_digest_window()` 守卫，窗口外 return 0（重启后第一次执行耗时 0.002s = 仅窗口判断立即 return）③ bonus fix：highlight.js `plaintext` fallback 未注册 → console 一直报 warning ④ [scripts/recalc_stats.py](scripts/recalc_stats.py) 项目统计重算：**1056 提交 / 155,485 行 / 633 文件 / 31 天**（python 44.5K / vue 40.5K / markdown 39.8K / config 14.2K / javascript 7.1K）⑤ **5 条铁律沉淀**：v2 大改动必须 grep 并行路径 / 并行调度器审计 one-liner / "主动提醒+被动提醒"两套系统必须共享策略 / 窗口守卫必须放方法最顶部 / Redis SET dedup 不替代窗口守卫
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-15 晚 主动提醒调度器补 11AM 窗口守卫 + highlight.js plaintext fallback，3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）
+- [🔔 主动提醒 v2 漏修补救 + highlight.js plaintext 注册（2026-06-15 晚，3 commits）](#主动提醒-v2-漏修补救--highlightjs-plaintext-注册2026-06-15-晚3-commits)
+  - 🐛 根因 1：用户凌晨 2:48 仍收提醒（commit `d0ddf49e`）
+  - 🐛 根因 2：highlight.js `plaintext` 未注册 → console warning（commit `c18b01e8`）
+  - 📐 5 条铁律沉淀到 CLAUDE.md（commit `09e4548d`）
+  - 🧪 6/6 新测试 + 20/20 旧测试 0 回归
 
 ### 最新完成（2026-06-15 深夜 会议 #95 声纹重置 + 重识别全链路，2 commits `af044bfc` + `3bcc8c20`）
 - [🎤 会议 #95 声纹重置 + 重识别全链路（2026-06-15 深夜，2 commits）](#会议-95-声纹重置--重识别全链路2026-06-15-深夜2-commits-af044bfc--3bcc8c20)
@@ -119,6 +126,95 @@
 - [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+## 主动提醒 v2 漏修补救 + highlight.js plaintext 注册（2026-06-15 晚，3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）
+
+**用户痛点**：2026-06-15 凌晨 2:48 仍收到"📋 任务确认提醒 / 📌 模拟任务 / ⏰ 分配已超过24小时"推送。任务提醒体系 v2（`app/services/reminder_service.py` + `app/wechat/handler.py` v2.1）虽然在 06-15 上午已上线并通过 5+ 测试，但用户依然被凌晨骚扰 → 说明 **v2 改动有漏网之鱼**。
+
+### 🐛 根因 1：proactive scheduler 与 v2 reminder 并行运行，完全绕过 11AM 窗口（commit `d0ddf49e`）
+
+**架构真相**：本项目**有两套独立的提醒推送系统**并行运行：
+
+| 系统 | 文件 | 触发频率 | 入口任务 |
+|---|---|---|---|
+| v2 被动提醒 | `app/services/reminder_service.py:ReminderService.process_reminders` | 10 秒 tick | `app.services.reminder_service.process_reminders_task` |
+| 主动调度 | `app/wechat/scheduler.py:ProactiveScheduler` 3 个 check_* | 15 分钟 tick | `app.wechat.scheduler.run_proactive_checks` |
+
+`reminder_service.process_reminders` 在 v2 中加了 `is_in_digest_window()` 守卫（窗口外立即 return 0），但 `ProactiveScheduler` 是**独立编写的**并行调度器：
+- `check_due_soon`（明天截止）
+- `check_overdue`（已逾期）
+- **`check_unconfirmed`（分配超过24小时未确认）← 用户收到的就是这个**
+
+3 个 check 方法**完全没有 11AM 窗口检查**，直接 `wechat_bot.smart_send(member, content)` 立即推送。Celery beat 每 15 分钟 tick 一次，凌晨 2:48 命中任务 → 推送 → 用户被叫醒。
+
+**修复**（commit `d0ddf49e`）：3 个 check 方法顶部都加 `is_in_digest_window()` 守卫，窗口外 `return 0`：
+
+```python
+# app/wechat/scheduler.py
+from app.services.reminder_policy import is_in_digest_window  # 与 v2 reminder 共享策略
+
+async def check_unconfirmed(self, db: AsyncSession, redis_client=None) -> int:
+    if not is_in_digest_window():
+        logger.debug("check_unconfirmed 跳过：非 11AM 推送窗口")
+        return 0
+    # ... 原有逻辑
+```
+
+**部署验证**（CLAUDE.md 752 行铁律）：本地 Docker `docker compose restart celery-worker celery-beat`。重启后第一次执行耗时 **0.002s**（仅 `is_in_digest_window()` 判断立即 return 0，不查 DB 不发微信）= 修复生效的硬证据。对比之前 13:48 那次窗口外执行耗时 0.092s（已查过 DB），0.002s 直接说明早返回生效。
+
+**6 个新测试**（`tests/test_proactive_scheduler_window.py`）：
+1. `test_check_unconfirmed_skips_outside_window` — 窗口外 return 0 + 不查 DB + 不调 `db.get()`
+2. `test_check_due_soon_skips_outside_window` — 同上
+3. `test_check_overdue_skips_outside_window` — 同上
+4. `test_run_all_checks_skips_outside_window` — Celery beat 入口 `{'due_soon': 0, 'overdue': 0, 'unconfirmed': 0}` + 0 DB queries
+5. `test_check_unconfirmed_inside_window_no_tasks` — 窗口内无任务正常 return 0（无副作用）
+6. `test_proactive_checks_integration_with_v2_reminder` — 与 v2 `reminder_service` 集成测试，**共享同一策略函数**
+
+20 个旧 reminder 测试 0 回归。
+
+### 🐛 根因 2（bonus fix）：highlight.js `plaintext` fallback 未注册 → console warning（commit `c18b01e8`）
+
+**用户截图附带**：浏览器 console 一直报 `Could not find the language 'plaintext', did you forget to load/include a language module?`。
+
+**根因**：[web/src/utils/markdown.ts:41](web/src/utils/markdown.ts#L41) 写：
+```typescript
+const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext'
+```
+意图"未知语言降级到 plaintext"，但 `highlight.js/lib/core` 按 v4 性能纪律**只显式注册 6 种语言**（python/js/bash/json/sql/yaml + typescript 占位），没注册 plaintext → fallback 路径反而成为最大噪音源。
+
+**修复**（commit `c18b01e8`）：import `highlight.js/lib/languages/plaintext` + 注册 3 个 alias：
+```typescript
+import plaintext from 'highlight.js/lib/languages/plaintext'
+hljs.registerLanguage('plaintext', plaintext)
+hljs.registerLanguage('text', plaintext)
+hljs.registerLanguage('txt', plaintext)
+```
+plaintext 是 hljs 官方纯透传语言（无高亮、HTML 转义），markdown chunk 增量 < 1KB。
+
+### 📐 5 条铁律沉淀到 CLAUDE.md（commit `09e4548d`）
+
+1. **v2 大改动必须 grep 全项目找并行路径**：
+   ```bash
+   grep -rn "wechat_bot\.smart_send\|smart_send(.*member" app/
+   grep -rn "Celery\|@shared_task\|@celery_app.task" app/
+   ```
+2. **并行调度器审计 one-liner**（任何 smart_send 调用都必须有窗口守卫）：
+   ```bash
+   grep -rn "smart_send\|send_text\|send_message" app/ --include="*.py" | grep -v test
+   ```
+3. **"主动提醒"和"被动提醒"是两套系统**——v2 被动（reminder 表 + reminder_service）+ 主动（scheduler.py + Celery beat），两者都必须走同一窗口策略函数
+4. **窗口外守卫必须放方法最顶部**——不能放循环里（已查 DB + 实例化对象），不能放 dedup 检查后（还跑 Redis 往返），必须第一行 return 0
+5. **Redis SET dedup 不替代窗口守卫**——dedup 只防 24h 内重复，**不防半夜推送**
+
+### 🧪 测试 + 部署验证
+
+- **6/6 新测试通过** + **20/20 旧测试 0 回归**
+- **typing import CI 检查**：106 文件 0 错误
+- **模块加载**：`python -c "from app.wechat.scheduler import ProactiveScheduler"` OK
+- **本地部署**：`docker compose restart celery-worker celery-beat`
+- **运行时验证**：worker 日志显示 `proactive-checks` 任务**耗时 0.002s**（窗口外立即 skip）+ 返回 `{'due_soon': 0, 'overdue': 0, 'unconfirmed': 0}`
 
 ---
 

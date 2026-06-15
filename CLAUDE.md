@@ -8,6 +8,8 @@
 >
 > **2026-06-15 晚间更新**：reminders 表 v2 字段缺失 → /api/v1/reminders 500（webhint 报错 index-2bce6a55.js:4 GET 500）。本地 + 生产 ALTER TABLE 加 6 列（acknowledged_at / acknowledged_by / ack_channel / snoozed_until / reminder_batch_date / policy_version）。deploy-auto.sh 集成自动迁移。
 >
+> **2026-06-15 晚更新**：主动提醒调度器补 11AM 窗口守卫（3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）。**根因**：`app/wechat/scheduler.py:ProactiveScheduler` 3 个 check 方法（due_soon/overdue/unconfirmed）**完全绕过 11AM 窗口**，与 v2 `reminder_service` 并行运行，Celery beat 15min tick 凌晨 2:48 推送 → 用户被叫醒。**修复**：3 个 check 方法顶部加 `is_in_digest_window()` 守卫（共享 v2 reminder_policy 策略函数）。**bonus**：`markdown.ts` plaintext fallback 未注册导致 console warning。**部署**：本地 Docker `docker compose restart celery-worker celery-beat`（CLAUDE.md 752 行铁律），重启后第一次执行耗时 0.002s = 修复生效。详见 [## 2026-06-15 任务提醒体系 v2 全面优化](#2026-06-15-任务提醒体系-v2-全面优化) 末尾"v2 漏修补救"section + 5 条新铁律。
+
 > **2026-06-15 全天更新**：任务提醒体系 v2 全面优化（commits `223ea74` + `ba75e32`）。所有 reminder 统一在 11:00 AM 北京时间窗口发送，每个任务 1 次推完即结束；任何微信消息 = ack 取消该用户所有 pending 提醒（杜同贺痛点彻底解决）。详见 [## 2026-06-15 任务提醒体系 v2 全面优化](#2026-06-15-任务提醒体系-v2-全面优化)。
 >
 > **2026-06-15 全天追加**：会议 #95 声纹重置 + KMeans 重识别 + speaker_mapping 重写 + meeting_participants 修复。教训：`psycopg2` 中途失败导致整个 transaction rollback、speaker_mapping 与 meeting_participants 必须互相对齐、Whisper 幻觉段不能用作声纹学习。详见 [## 2026-06-15 会议 #95 声纹重置 + 重识别教训](#2026-06-15-会议-95-声纹重置--重识别教训) section。

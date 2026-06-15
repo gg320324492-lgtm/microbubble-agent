@@ -7,7 +7,7 @@
 - **智能对话** - 支持文字/语音/图片/文件与Agent交互，多模态识别，拖拽上传，对话记录持久化（切换页面/刷新不丢失）
 - **联网搜索** - 搜狗微信+必应双引擎并发搜索，自动获取最新信息
 - **任务管理** - 创建、分配、追踪任务，自定义提醒时间，角色权限控制（管理员可分配给任何人，普通成员只能管理自己的任务），支持垃圾桶软删除（**3 天后自动清除**，每小时清理一次，垃圾桶 UI 实时显示精确倒计时：`< 1h` 精确到分钟 + 5 级紧急度颜色 + 双行展示「X 小时 Y 分后删除 / 06-04 14:30 删除」）
-- **主动提醒** - 自动检查即将到期、已逾期、未确认的任务，通过企业微信主动提醒成员（每15分钟检查，Redis 去重24小时不重复，北京时间显示）
+- **主动提醒** - 自动检查即将到期、已逾期、未确认的任务，通过企业微信主动提醒成员（**11:00 AM 北京时间窗口推送**，±60min 容差，Redis 去重24小时不重复）
 - **知识库** — 文献管理（支持 PDF/Word/Excel/**PPT**/TXT/Markdown）、语义搜索（pgvector）、AI 自动分类标签（动态生成具体研究方向）、对话知识自动入库、**RAG 优先问答**（基于知识库合成答案+来源引用）、**自主研究**（检测知识空白自动联网搜索补充）、**知识图谱**（自动关联 + ECharts 力导向图可视化）、**CP/动态分类体系**（从实际数据自动聚合涌现分类）、**公式计算**（内置 32 个微纳米气泡领域公式 + 分类树浏览 + 安全计算引擎 + LLM 自动提取映射）
 - **长期记忆** - 用户偏好记忆、对话摘要、知识图谱构建
 - **项目管理** - 课题管理、进度追踪、里程碑管理
@@ -33,6 +33,12 @@
 
 ### 近期新增（按时间倒序）
 
+- **🔔 主动提醒调度器补 11AM 窗口守卫 + 凌晨骚扰推送根因修复（2026-06-15 晚，3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）** — 用户报告昨晚 2:48 仍收到"分配已超过24小时"提醒：
+  - **根因 1（commit `c18b01e8`）**：浏览器 console 一直报 `Could not find the language 'plaintext'` 警告。[web/src/utils/markdown.ts:41](web/src/utils/markdown.ts#L41) 写 `lang && hljs.getLanguage(lang) ? lang : 'plaintext'` fallback 到 plaintext，但 `highlight.js/lib/core` 只注册 6 种语言，没注册 plaintext。修复：import `highlight.js/lib/languages/plaintext` + 注册 `plaintext` / `text` / `txt` 三个 alias。plaintext 是 hljs 官方纯透传语言（无高亮、HTML 转义），chunk 增量 < 1KB
+  - **根因 2（commit `d0ddf49e`）— 用户凌晨 2:48 根因**：[app/wechat/scheduler.py:ProactiveScheduler](app/wechat/scheduler.py) 是**与 v2 reminder 并行存在的独立调度器**，3 个 check 方法（`check_due_soon` / `check_overdue` / **`check_unconfirmed`** ← 用户收到的就是这个）**完全绕过 11AM 窗口**，直接 `wechat_bot.smart_send()` 立即推送。Celery beat 每 15 分钟跑一次（[app/core/celery.py:26-28](app/core/celery.py#L26-L28) `proactive-checks` schedule 900.0s），凌晨 2:48 命中 24h+ 任务 → 推送 → 用户醒来骂娘。修复：3 个 check 方法顶部都加 `is_in_digest_window()` 守卫，窗口外立即 `return 0`，与 `reminder_service.process_reminders` 共享同一策略函数
+  - **6/6 测试通过**（3 check 方法窗口外 skip + run_all_checks 入口 skip + 窗口内无任务正常返回 0 + 与 v2 reminder 集成测试），20 个旧 reminder 测试 0 回归
+  - **部署**：本地 Docker `docker compose restart celery-worker celery-beat`（CLAUDE.md 752 行铁律）。**重启后第一次执行耗时 0.002s**（仅 `is_in_digest_window()` 判断立即 return 0，不查 DB 不发微信）= 修复生效的硬证据
+  - **5 条铁律沉淀**（[CLAUDE.md 任务提醒体系 v2 section](CLAUDE.md#v2-漏修补救proactive-scheduler-也必须走-11am-窗口commit-d0ddf49e)）：①v2 大改动必须 grep 全项目找并行路径 ②并行调度器审计 one-liner ③"主动提醒"和"被动提醒"是两套系统必须共享策略 ④窗口外守卫必须放方法最顶部 ⑤Redis SET dedup 不替代窗口守卫
 - **🎤 会议 #95 声纹重置 + 重识别全链路（2026-06-15 晚，2 commits `af044bfc` + `3bcc8c20`）** — 用户要求重识别"最新会议"（实际是 #95 水产养殖纳米气泡），speaker_mapping 严重错标（80 段误标"周之超"），需完整清理 8 个 JSON 字段：
   - **根因 1（commit `af044bfc`）**：会议实际参会者是**王天志（主讲）+ 李胜景（补话）**，但数据库 `meeting_participants` 错录为 周之超/李胜景/杜同贺，`speaker_mapping` 把所有段错标"周之超"。KMeans(k=2) 重聚类 287 个 family：Cluster 0 = 王天志（482.1s，208 families，vs 王距离 0.017），Cluster 1 = 李胜景（133.5s，79 families，vs 李距离 0.112）
   - **根因 2**：现有 `members.voice_embedding` 严重失真（4 样本平均后所有距离 > 0.4），按加权平均学习无效 → **直接重置**（sample_count=1），用新提的 embedding 覆盖
@@ -484,12 +490,15 @@ npm run dev
 
 详细文档: https://agent.mnb-lab.cn/docs
 
-## 当前状态（2026-06-15）
+## 当前状态（2026-06-15 晚）
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
-### 🔧 最新改进（2026-06-15 任务提醒体系 v2 + qa-bench 闭环 + 移动端声纹测试全链路改造）
+**📊 最新统计**（2026-06-15 22:02 重算）：**1056 次提交 / 155K 行代码 / 633 文件 / 31 开发天数**（python 44.5K / vue 40.5K / markdown 39.8K / config 14.2K / js 7.1K）。1056 commits 里程碑：proactive scheduler 11AM 窗口守卫修复。
 
+### 🔧 最新改进（2026-06-15 晚 主动提醒 v2 漏修补救 + highlight.js plaintext + 上午声纹测试全链路 + 凌晨 v2 全栈）
+
+- **🔔 主动提醒调度器补 11AM 窗口守卫（3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）** — 见上方"近期新增"详述。**核心变化**：①[web/src/utils/markdown.ts:41](web/src/utils/markdown.ts#L41) 注册 plaintext fallback 消 console warning ②[app/wechat/scheduler.py](app/wechat/scheduler.py) 3 个 check 方法顶部加 `is_in_digest_window()` 守卫，与 v2 reminder_service 共享策略函数 → **凌晨 2:48 不再有骚扰推送** ③5 条铁律沉淀（v2 大改动必须 grep 并行路径、Redis SET dedup 不替代窗口守卫、窗口守卫必须放方法最顶部等）
 - **🎤 移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug 修复（5 commits `de7ef8aa` / `22d5570a` / `f84524cf` / `392a88d7` / `9231d8bf` / `ceae0cd5`）** — 见上方"近期新增"详述。**核心变化**：①VoiceTestFlow.vue 从"麦克风测试"升级为"声纹识别测试"（5 状态机 + 调 `/api/v1/voiceprint/test` 全链路 5 步：音频解码→静音检测→VAD→ASR→声纹匹配，返回 `speaker + confidence + transcript`）②会议页 ActionSheet 第 2 个"麦克风测试"入口接入同一组件（去掉"开发中"toast）③**修复 `v-model:show` vs `modelValue` prop 名不匹配 bug**（Vue 静默失败不报错，"点击没反应"系列问题第一排查点）④**新铁律：多入口 grep 纪律**（移动端同一功能可能在多个页面有入口）
 - **🔔 任务提醒体系 v2 全面优化（commits `223ea74` + `ba75e32`）** — 见上方"近期新增"详述。**核心变化**：所有 reminder 统一在 11:00 AM 北京时间窗口推送，每个任务 1 次推完即结束；任何微信消息 = ack 取消该用户所有 pending（杜同贺痛点彻底解决）；同用户多条合并为 1 条 digest 消息。
 - **🤖 Agent 回答质量 5 大根因修复 + qa-bench 360 题闭环（2026-06-15 凌晨，14 commits）** — 见 [CLAUDE.md 2026-06-15 section](CLAUDE.md#2026-06-15-agent-质量--qa-bench-闭环)：`TOOL_REGISTRY` 启动初始化 + LLM 代理层 fake tool_call 5 格式解析 + `get_member_profile` dead import + 长期记忆干扰 + synthesis fake XML 泄露。知识库 64 → 247 条（+183），qa-bench 360 题 84% 高分率
