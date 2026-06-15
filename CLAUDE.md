@@ -1273,6 +1273,48 @@ FROM reminders WHERE acknowledged_at IS NOT NULL ORDER BY id DESC LIMIT 5;
 -- 期望：status='acknowledged'，ack_channel='wechat_any'
 ```
 
+### v2 漏修补救：proactive scheduler 也必须走 11AM 窗口（commit `d0ddf49e`）
+
+**用户 2026-06-15 凌晨 2:48 仍收到提醒根因** — v2 reminder 体系（`app/services/reminder_service.py`）虽然加了 11AM 窗口守卫，但**`app/wechat/scheduler.py:ProactiveScheduler` 是独立的并行调度器**：
+- `check_due_soon` — 明天截止的任务
+- `check_overdue` — 已逾期的任务
+- `check_unconfirmed` — 分配超过24小时未确认 ← **用户收到的就是这个**
+
+3 个 check 方法**完全绕过 11AM 窗口**，直接 `wechat_bot.smart_send(...)` 立即推送。Celery beat 每 15 分钟跑一次（`app/core/celery.py:beat_schedule.proactive-checks`），凌晨 2:48 命中任务 → 推送 → 用户醒来骂娘。
+
+**修复** — 3 个 check 方法顶部都加 `is_in_digest_window()` 守卫，窗口外 `return 0`，与 `reminder_service.process_reminders` 共享同一策略函数（`app/services/reminder_policy.py`）。6 个新测试覆盖：3 个 check 方法窗口外 skip + 不查 DB、run_all_checks 入口全 skip、窗口内无任务正常返回 0、与 v2 reminder_service 集成测试。
+
+**纪律 5 条**：
+① **v2 大改动必须 grep 全项目找并行路径** ——
+- `grep -rn "wechat_bot\.smart_send\|smart_send(.*member" app/`
+- `grep -rn "Celery\|@shared_task\|@celery_app.task" app/`
+- 任何独立的"主动推送 / 通知 / 提醒" Celery 任务都必须走 v2 窗口
+② **并行调度器审计 one-liner**：
+```bash
+grep -rn "smart_send\|send_text\|send_message" app/ --include="*.py" | grep -v test
+# 任何匹配的文件都必须检查 is_in_digest_window 守卫
+```
+③ **"主动提醒"和"被动提醒"是两套系统** ——
+- v2 被动：reminder 表 + reminder_service.process_reminders（10 秒 tick）
+- 主动：scheduler.py + Celery beat run_proactive_checks（15 分钟 tick）
+- 两者都**必须**走同一窗口策略函数，不能各写各的判断
+④ **窗口外守卫必须放方法最顶部** ——
+- 不能放 `for task in tasks` 循环里（已经查 DB + 实例化对象了）
+- 也不能放 `await self._already_notified(...)` 之后（还跑了 Redis 往返）
+- 必须第一行 return 0，省 DB / Redis / LLM 全部资源
+⑤ **Redis SET dedup 不替代窗口守卫** ——
+- scheduler.py 用 `scheduler:{type}:notified` Redis SET 做 24h dedup
+- 但**第一次发送时仍然立即触发**（SET 还不存在）
+- 24h 内重复 → SET 命中 → skip
+- 24h 后 SET 过期 → 又能立即触发
+- **dedup 只防重复，不防半夜推送**
+
+**部署必做**：
+```bash
+docker compose restart celery-worker celery-beat   # CLAUDE.md 752 行铁律
+# 验证：tail docker logs 看 "proactive-checks" task 是否 log "跳过：非 11AM 推送窗口"
+```
+
 ## 2026-06-15 移动端"声纹测试"是真识别测试不是麦克风测试（commit `de7ef8aa`）
 
 - **根因（用户痛点）** — 用户说"已录入声纹的成员可以再听会之前检测一下是否能识别出来自己的声纹"，但 [web/src/components/mobile/VoiceTestFlow.vue](web/src/components/mobile/VoiceTestFlow.vue) 原本只做 3 件事：①`getUserMedia` 拿麦克风权限 ②`MediaRecorder` 录音 ③Canvas 音量可视化 + 音频回放。**完全没调 `POST /api/v1/voiceprint/test`**。用户点完测试看到的只是"录音能不能录"——而他要的是"我能不能被识别出来"。
