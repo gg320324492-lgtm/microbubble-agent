@@ -258,9 +258,9 @@ function handlePasteAnalyze() {
 }
 function handleStartLive() {
   showActionSheet.value = false
-  // 复用桌面的实时听会流程：跳转 /meetings?startLive=true
-  // 简化：直接跳转新会议详情，由 MeetingDetailView 处理
-  router.push('/meetings?startLive=true')
+  // 移动端听会独立路由（占位 UI，WS 实时录音 = 后续 PR）
+  // 老逻辑跳 `/meetings?startLive=true` 在移动端就是回到自己（同路由仅 query 变化不重渲）→ 看起来"点击没反应"
+  router.push('/meetings/room')
 }
 function handleVoiceTest() {
   showActionSheet.value = false

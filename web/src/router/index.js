@@ -57,6 +57,14 @@ const routes = [
         meta: { title: '会议管理', icon: 'VideoCamera' }
       },
       {
+        // 移动端听会房间（占位 UI，WS 实时录音集成 = 后续 PR）
+        // 桌面端 fallback 到 MeetingView（用户不会从桌面 UI 触发此路由）
+        path: 'meetings/room',
+        name: 'MeetingRoom',
+        component: resolveMobileComponent('MeetingView', 'meeting/MobileMeetingRoom'),
+        meta: { title: '开始听会' }
+      },
+      {
         path: 'meetings/:id',
         name: 'MeetingDetail',
         component: resolveMobileComponent('MeetingDetailView', 'meeting/MobileMeetingDetailView'),
