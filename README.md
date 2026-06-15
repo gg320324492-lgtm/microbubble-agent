@@ -33,6 +33,13 @@
 
 ### 近期新增（按时间倒序）
 
+- **🎤 会议 #95 声纹重置 + 重识别全链路（2026-06-15 晚，2 commits `af044bfc` + `3bcc8c20`）** — 用户要求重识别"最新会议"（实际是 #95 水产养殖纳米气泡），speaker_mapping 严重错标（80 段误标"周之超"），需完整清理 8 个 JSON 字段：
+  - **根因 1（commit `af044bfc`）**：会议实际参会者是**王天志（主讲）+ 李胜景（补话）**，但数据库 `meeting_participants` 错录为 周之超/李胜景/杜同贺，`speaker_mapping` 把所有段错标"周之超"。KMeans(k=2) 重聚类 287 个 family：Cluster 0 = 王天志（482.1s，208 families，vs 王距离 0.017），Cluster 1 = 李胜景（133.5s，79 families，vs 李距离 0.112）
+  - **根因 2**：现有 `members.voice_embedding` 严重失真（4 样本平均后所有距离 > 0.4），按加权平均学习无效 → **直接重置**（sample_count=1），用新提的 embedding 覆盖
+  - **根因 3（铁律 9）**：修了 `transcript` 不够，前端 `MeetingDetailView.vue:219-227` 渲染的是 `transcript_polished[].speaker`，330/333 段还是旧的"周之超"
+  - **完整清理 8 字段**：`transcript[]` / `transcript_polished[]` / `speaker_mapping{}` / `speaker_stats[]` / `key_points[]` / `decisions[]` / `summary` / `meeting_participants`
+  - **9 条铁律沉淀到 CLAUDE.md**（psycopg2 transaction rollback / KMeans 重聚类 / Whisper 幻觉不学习 / speaker_mapping 与 meeting_participants 同步对齐 / 用户认知 ≠ DB 时先汇报数据 / 重置声纹一次性单向 / speaker_mapping 必须覆盖全部 labels / 8 个 JSON 字段必须同步 / `transcript_polished` 才是前端渲染字段）
+  - **完整文档**：[CLAUDE.md 2026-06-15 会议 #95 声纹重置 + 重识别教训](CLAUDE.md#2026-06-15-会议-95-声纹重置--重识别教训) section（commits `af044bfc` + `3bcc8c20`）
 - **🎤 移动端"声纹识别测试"真全链路改造 + v-model 命名 bug 修复（2026-06-15 晚，5 commits `de7ef8aa` + `22d5570a` + `392a88d7` + `f84524cf` + `9231d8bf`）** — 用户报告"声纹测试还是显示开发中"+"点击没反应"两大问题，根因 + 修复链：
   - **根因 1（commit `de7ef8aa`）**：移动端 [VoiceTestFlow.vue](web/src/components/mobile/VoiceTestFlow.vue) 原本只做"麦克风测试"（拿权限 + 录音 + 音量可视化 + 回放），**根本没调** `POST /api/v1/voiceprint/test` 做声纹匹配。改造为和桌面端 [VoiceTestDialog.vue](web/src/components/VoiceTestDialog.vue) 一致的真声纹识别测试，**5 状态机** `idle → recording → recorded → testing → result`：录完用户回放 → 手动点"🔍 测试识别"才调后端 → 后端跑完整 5 步链路（音频解码 → 静音检测 → VAD → ASR → 声纹匹配）→ 前端按 `testResult.steps[]` 渲染 `✅/⚠️/❌` + 最终 `speaker + confidence + transcript`。错误降级：axios 失败时构造 `steps: [{name: '测试请求', status: 'error', ...}]` 渲染
   - **根因 2（commit `22d5570a`）**：commit `de7ef8aa` 只修了声纹中心顶栏 1 个入口，**漏了会议页 ActionSheet 第二个入口** → 用户点第二个仍弹 `'麦克风测试（开发中）'` toast。修复：会议页 import `VoiceTestFlow` + `showVoiceTest` ref + `handleVoiceTest()` 改为 `showVoiceTest.value = true`（打开全屏测试页），button 文字/aria-label 同步"麦克风测试"→"声纹识别测试"
@@ -501,7 +508,8 @@ npm run dev
   - **PR #10 视觉回归测试矩阵**（`9026c07`）— `web/tests/visual/visual-regression.spec.mjs` Playwright 跨设备截图（iPhone SE/14/15 Pro Max + iPad mini + Galaxy S21 5 个 viewport × 13 个核心页面）+ 移动端深度定制（SafeArea/TabBar badge/卡片大圆角/下拉刷新/无限滚动）+ `CardList.test.js` + `MobileFormSheet.test.js` 2 个组件测试
 - **🛡️ Webhook 偶发 499 失败加固（commit `7e41577`）** — 阿里云→GitHub HTTPS 出口瞬时故障根除：①`deploy-auto.sh` 改 `git reset --hard origin/main` 模式（immutable infra，dirty 工作区不再阻塞 `git pull`）+ `git clean -fdx` ②`webhook.py` 加 `socket.timeout(15)`（GitHub 10s 客户端超时 + 5s 余量，504 友好返回）+ try/except ③手动 redeliver trick 文档化。**效果**：从偶发失败 → 5s 完成稳定部署
 - **🎨 webhint meta-theme-color 静态 → JS 动态注入（commit `0bbc12d`）** — dark mode 切换时静态 meta 不够用，`useThemeStore` watch 移除旧 meta + 动态创建新 meta 注入。`.hintrc` 标注决策记录
-- **📊 项目统计本地 Python 准确化（commit 即将）** — 之前的 webhook 统计 187K/2840 文件含 .meta/.log/.wav/.gz/PostgreSQL data 等非源代码。本地 Python 按 `EXCLUDE_DIRS=('node_modules', 'dist', '.git', '__pycache__', '.venv', 'venv', 'models', '.agents', '.next', '.cache')` 严格过滤 + 按扩展名分类 + 二进制文件检测（`'\x00' in text` 跳过）。**新值**：965 次提交 / 138,853 行代码 / 617 文件 / 29 开发天数
+- **📊 项目统计本地 Python 准确化（commit `af044bfc` + `3bcc8c20`）** — 之前的 webhook 统计 187K/2840 文件含 .meta/.log/.wav/.gz/PostgreSQL data 等非源代码。本地 Python [scripts/recalc_stats.py](scripts/recalc_stats.py) 按 `EXCLUDE_DIRS=('node_modules', 'dist', '.git', '__pycache__', '.venv', 'venv', 'models', '.agents', '.next', '.cache', 'data', 'results')` 严格过滤 + 排除 MinIO 大文件分片 `*.1`/`*.2`/... + 按扩展名分类 + 二进制文件检测。**新值**：1051 次提交 / 155,859 行代码 / 641 文件 / 31 开发天数（python 44K / vue 40K / markdown 39K / config 14K / javascript 7K）
+- **🎤 会议 #95 声纹重置 + 重识别全链路（2026-06-15 晚，2 commits `af044bfc` + `3bcc8c20`）** — 见上方"近期新增"详述。**核心变化**：①会议实际参会者是王天志+李胜景（不是 DB 里的周之超+李胜景+杜同贺），`speaker_mapping` 严重错标（80 段误标"周之超"）②KMeans(k=2) 重聚类 287 个 family：Cluster 0 = 王天志（482.1s，208 families，vs 王距离 0.017），Cluster 1 = 李胜景（133.5s，79 families，vs 李距离 0.112）③现有 `members.voice_embedding` 严重失真（4 样本平均后所有距离 > 0.4）→ **直接重置** sample_count=1 ④**铁律 9**：`transcript_polished[].speaker` 才是前端实际渲染字段，不是 `transcript[].speaker`，必须**同时改 8 个 JSON 字段**（transcript / transcript_polished / speaker_mapping / speaker_stats / key_points / decisions / summary / meeting_participants）。9 条铁律沉淀到 CLAUDE.md
 
 ### 🔧 前日改进（2026-06-12）
 
