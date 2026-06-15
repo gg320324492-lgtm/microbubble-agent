@@ -9,89 +9,29 @@
         <button
           type="button"
           class="header-action"
-          :aria-label="'帮助'"
+          aria-label="帮助"
           title="帮助"
           @click="showHelp = true"
         >❓</button>
       </template>
     </PageHeader>
 
-    <!-- 占位提示横幅（实时 WS 录音尚未接入，避免误以为录音在工作） -->
-    <div class="wip-banner" role="status">
-      <span class="wip-icon">🚧</span>
-      <span class="wip-text">移动端实时听会即将开放，请用桌面端浏览器录制完整会议</span>
-    </div>
-
-    <!-- 录音状态横幅 -->
-    <div v-if="recording" class="rec-banner">
-      <span class="rec-dot" />
-      <span class="rec-text">正在听会 · {{ formatDuration(duration) }}</span>
-    </div>
-
-    <!-- 转录实时滚动区 -->
-    <main class="room-main" ref="mainRef">
-      <div v-if="transcript.length === 0" class="empty-state">
-        <div class="empty-illustration">
-          <div class="empty-icon">🎙️</div>
-        </div>
-        <h3>准备就绪</h3>
-        <p class="empty-hint">点击下方麦克风开始录音</p>
-        <p class="empty-hint">实时转录将显示在此处</p>
-      </div>
-
-      <div v-else class="transcript-stream">
-        <div
-          v-for="(seg, i) in transcript"
-          :key="seg.id || i"
-          class="stream-segment"
-        >
-          <div class="seg-header">
-            <span class="seg-speaker">{{ seg.speaker || '发言人' }}</span>
-            <span class="seg-time">{{ formatTime(seg.timestamp) }}</span>
-          </div>
-          <div class="seg-text">{{ seg.text }}</div>
-        </div>
-      </div>
+    <!-- 录音器（复用桌面端 AudioRecorder，模式：录完一次性上传 → 后台离线分析） -->
+    <main class="room-main">
+      <AudioRecorder
+        ref="recorderRef"
+        @recording-start="onRecordingStart"
+        @recording-stop="onRecordingStop"
+        @audio-ready="onAudioReady"
+      />
     </main>
 
-    <!-- 底部控制条（sticky） -->
-    <footer class="room-controls" :style="{ paddingBottom: 'var(--sab, 0px)' }">
-      <div class="control-row">
-        <button
-          type="button"
-          class="control-btn secondary"
-          :disabled="!recording"
-          aria-label="静音"
-          title="静音"
-          @click="toggleMute"
-        >
-          {{ muted ? '🔇' : '🎤' }}
-        </button>
-
-        <button
-          type="button"
-          class="control-btn record"
-          :class="{ active: recording }"
-          :aria-label="recording ? '停止' : '开始录音'"
-          :title="recording ? '停止' : '开始录音'"
-          @click="toggleRecording"
-        >
-          <span class="record-icon">{{ recording ? '⏹' : '●' }}</span>
-        </button>
-
-        <button
-          type="button"
-          class="control-btn secondary"
-          aria-label="结束听会"
-          title="结束"
-          @click="handleHangup"
-        >📞</button>
-      </div>
-      <div class="control-hint">
-        <span v-if="recording">点击中间按钮停止录音</span>
-        <span v-else>点击中间按钮开始录音</span>
-      </div>
-    </footer>
+    <!-- 后台处理进度（el-dialog 在窄屏会自动撑成 ~100vw） -->
+    <ProcessingDialog
+      v-if="showProgress"
+      :meeting-id="meetingId"
+      @close="onProgressClose"
+    />
 
     <!-- 帮助 Sheet -->
     <Teleport to="body">
@@ -100,28 +40,35 @@
           <div class="help-panel">
             <div class="help-header">
               <h3>使用说明</h3>
-              <button type="button" @click="showHelp = false">✕</button>
+              <button type="button" aria-label="关闭" @click="showHelp = false">✕</button>
             </div>
             <div class="help-content">
               <div class="help-item">
                 <div class="help-num">1</div>
                 <div class="help-text">
-                  <strong>点击中间按钮开始录音</strong>
+                  <strong>点击「开始听会」开始录音</strong>
                   <p>系统会请求麦克风权限</p>
                 </div>
               </div>
               <div class="help-item">
                 <div class="help-num">2</div>
                 <div class="help-text">
-                  <strong>实时转录显示在中央</strong>
-                  <p>说话内容会自动识别并显示</p>
+                  <strong>录音过程仅本机进行</strong>
+                  <p>无实时转录推送，转录与纪要在停止后由后台分析</p>
                 </div>
               </div>
               <div class="help-item">
                 <div class="help-num">3</div>
                 <div class="help-text">
-                  <strong>点击红色按钮停止</strong>
-                  <p>音频会自动上传并生成会议纪要</p>
+                  <strong>点「结束听会」停止</strong>
+                  <p>音频会自动上传 + 触发后台 ASR/声纹/纪要分析</p>
+                </div>
+              </div>
+              <div class="help-item">
+                <div class="help-num">4</div>
+                <div class="help-text">
+                  <strong>过程中请勿息屏 / 切走 App</strong>
+                  <p>移动端浏览器后台会暂停录音；如需长时间录音建议用桌面端浏览器</p>
                 </div>
               </div>
             </div>
@@ -136,148 +83,124 @@
 /**
  * MobileMeetingRoom.vue — 移动端听会房间
  *
- * PR #4:
- * - 顶部 sticky 录音状态横幅
- * - 中央转录实时滚动（简化版：保留显示 transcript，未集成 WS 实时流）
- * - 底部 sticky 控制条（静音 / 录音 / 挂断）
- * - 点击中央大按钮触发桌面 AudioRecorder（沿用录音能力）
+ * 2026-06-15 重写：与桌面端 MeetingRoom.vue 共用同一组逻辑组件（AudioRecorder + ProcessingDialog）
+ * 模式：录音 → 停止 → 一次性上传 → 触发后台 ASR/声纹/纪要离线分析（不走 WS 实时转录）
  *
- * 简化：当前实现使用 desktop AudioRecorder 通过 DOM 引用调用，
- * 完整实时转录依赖 WS 联调，作为后续 PR #4+ 增强项。
+ * 链路：
+ *   handleStart() → AudioRecorder.start()
+ *   → onRecordingStart() → POST /api/v1/meetings/start-recording 拿 meetingId
+ *   → 用户录音
+ *   → 用户停止 → onAudioReady(blob)
+ *   → POST /api/v1/meetings/{id}/upload-audio （上传 webm）
+ *   → POST /api/v1/meetings/{id}/stop-recording （触发 Celery 后处理）
+ *   → ProcessingDialog 显示进度
+ *   → 完成 → onProgressClose → router.replace(`/meetings/{id}`)
  */
 
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import axios from 'axios'
+import AudioRecorder from '@/components/AudioRecorder.vue'
+import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
+import { useRecordingState } from '@/composables/useRecordingState'
+import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 
-const props = defineProps({
-  meetingId: { type: Number, default: null },
-})
+const router = useRouter()
+const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
+const { isActive: isGlobalRecorderActive } = useGlobalRecorder()
 
-const emit = defineEmits(['call-ended'])
-
-const recording = ref(false)
-const muted = ref(false)
-const duration = ref(0)
-const transcript = ref([])
+const recorderRef = ref(null)
+const meetingId = ref(null)
+const showProgress = ref(false)
 const showHelp = ref(false)
-const mainRef = ref(null)
-let durationTimer = null
 
 const pageTitle = computed(() => {
-  if (props.meetingId) return `听会 #${props.meetingId}`
+  if (meetingId.value) return `听会 #${meetingId.value}`
   return '开始听会'
 })
 
-function formatDuration(s) {
-  const m = Math.floor(s / 60)
-  const sec = s % 60
-  return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
+async function onRecordingStart() {
+  // 录音真实开始后，创建会议拿 meetingId（与桌面端 MeetingRoom 同款链路）
+  if (meetingId.value) {
+    startRecording(meetingId.value, `听会 #${meetingId.value}`)
+    ElMessage.success('继续听会')
+    return
+  }
+  try {
+    const res = await axios.post('/api/v1/meetings/start-recording')
+    meetingId.value = res.data.id
+    startRecording(res.data.id, res.data.title || `听会 #${res.data.id}`)
+    ElMessage.success('开始听会')
+  } catch (err) {
+    ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
+  }
 }
 
-function formatTime(t) {
-  const d = new Date(t)
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`
+function onRecordingStop() {
+  // AudioRecorder 内部已处理 UI 状态切换；这里不做事
 }
 
-function toggleRecording() {
-  if (recording.value) {
-    stopRecording()
+async function onAudioReady(blob) {
+  if (!meetingId.value) {
+    ElMessage.error('会议未创建，无法上传')
+    return
+  }
+  // 立即弹进度，不阻塞 UI
+  showProgress.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', blob, `recording_${meetingId.value}.webm`)
+    await axios.post(`/api/v1/meetings/${meetingId.value}/upload-audio`, fd)
+    await axios.post(`/api/v1/meetings/${meetingId.value}/stop-recording`)
+  } catch (err) {
+    ElMessage.error('上传失败: ' + (err.response?.data?.detail || err.message))
+    // 上传失败时关闭进度弹窗，让用户可以重试
+    showProgress.value = false
+  }
+}
+
+function onProgressClose() {
+  showProgress.value = false
+  stopRecording()
+  // 跳转到会议详情页，让用户继续看结果
+  if (meetingId.value) {
+    router.replace(`/meetings/${meetingId.value}`)
   } else {
-    startRecording()
+    router.replace('/meetings')
   }
 }
 
-function startRecording() {
-  // WIP：实时录音 WS 集成尚未完工，避免误导用户以为系统在录音
-  ElMessage.warning('移动端实时听会即将开放，请用桌面端浏览器录制')
-  return
-  // 以下代码暂时禁用，待 WS 集成后启用：
-  // recording.value = true
-  // duration.value = 0
-  // durationTimer = setInterval(() => { duration.value += 1 }, 1000)
-  // simulateTranscript()
-  // ElMessage.success('开始听会')
-}
-
-function stopRecording() {
-  if (durationTimer) {
-    clearInterval(durationTimer)
-    durationTimer = null
-  }
-  recording.value = false
-  ElMessage.info('录音已停止，后台处理中...')
-}
-
-function toggleMute() {
-  muted.value = !muted.value
-  ElMessage.info(muted.value ? '已静音' : '已取消静音')
-}
-
-async function handleHangup() {
-  if (recording.value) {
+async function handleBack() {
+  // 录音中点返回 → 提示用户：录音会继续在后台跑（浮动胶囊可见），不会丢
+  if (isGlobalRecorderActive()) {
     try {
-      await ElMessageBox.confirm('确定结束听会？录音会保存', '结束确认', {
-        confirmButtonText: '结束',
-        cancelButtonText: '继续',
-        type: 'warning',
-      })
+      await ElMessageBox.confirm(
+        '正在录音中。返回后录音会继续在后台进行（右下角胶囊提示），稍后可再次进入此页停止上传。',
+        '录音中',
+        {
+          confirmButtonText: '返回（录音继续）',
+          cancelButtonText: '留在此页',
+          type: 'warning',
+        }
+      )
+      router.back()
     } catch {
       return  // 用户取消
     }
+  } else {
+    router.back()
   }
-  emit('call-ended', props.meetingId)
 }
 
-function handleBack() {
-  if (recording.value) {
-    ElMessage.warning('录音中，请先停止或挂断')
-    return
+// 恢复模式：用户从浮动胶囊或其他页面跳回 → 复用 sessionStorage / 后端的 meetingId
+// 这样停止录音时能 POST 到正确的 /meetings/{id}/upload-audio
+onMounted(async () => {
+  await checkActiveRecording()  // 异步校验后端 recording 状态
+  if (recordingMeetingId.value && !meetingId.value) {
+    meetingId.value = recordingMeetingId.value
   }
-  emit('call-ended', props.meetingId)
-}
-
-// 占位转录模拟（5 秒一段，实际由后端 WS 推送）
-let transcriptTimer = null
-function simulateTranscript() {
-  const samples = [
-    { speaker: '杜同贺', text: '我们先讨论本周的研究进展' },
-    { speaker: '王五', text: '上周的微纳米气泡实验数据出来了' },
-    { speaker: '杜同贺', text: '嗯，zeta 电位的测量结果怎么样？' },
-    { speaker: '王五', text: '在 -25mV 左右，比预期略低' },
-    { speaker: '杜同贺', text: '好的，下一步调整一下浓度配比' },
-  ]
-  let idx = 0
-  transcriptTimer = setInterval(() => {
-    if (!recording.value) return
-    if (idx < samples.length) {
-      transcript.value.push({
-        id: Date.now() + idx,
-        speaker: samples[idx].speaker,
-        text: samples[idx].text,
-        timestamp: new Date().toISOString(),
-      })
-      idx += 1
-      // 自动滚动到底部
-      nextTick(() => {
-        if (mainRef.value) {
-          mainRef.value.scrollTop = mainRef.value.scrollHeight
-        }
-      })
-    } else {
-      clearInterval(transcriptTimer)
-      transcriptTimer = null
-    }
-  }, 5000)
-}
-
-onMounted(() => {
-  // 可在此处连接后端 WS 获取实时转录
-})
-
-onBeforeUnmount(() => {
-  if (durationTimer) clearInterval(durationTimer)
-  if (transcriptTimer) clearInterval(transcriptTimer)
 })
 </script>
 
@@ -289,190 +212,60 @@ onBeforeUnmount(() => {
   flex-direction: column;
 }
 
-.rec-banner {
-  background: var(--color-danger, #F56C6C);
-  color: white;
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: var(--font-weight-medium, 500);
-}
-.rec-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: white;
-  animation: pulse 1s infinite;
-}
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-/* 主区 */
 .room-main {
   flex: 1;
-  overflow-y: auto;
-  padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(16px + var(--sab, 0px));
   -webkit-overflow-scrolling: touch;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 80px 20px;
-}
-.empty-illustration {
-  margin-bottom: 16px;
-}
-.empty-icon {
-  font-size: 64px;
-}
-.empty-state h3 {
-  font-size: 18px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-text-primary);
-  margin: 0 0 8px;
-}
-.empty-hint {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  margin: 4px 0;
-}
-
-/* 转录流 */
-.transcript-stream {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.stream-segment {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
-  padding: 12px;
-  animation: slide-in 0.3s ease;
-}
-@keyframes slide-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.seg-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.seg-speaker {
-  font-size: 12px;
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--color-primary);
-}
-.seg-time {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-.seg-text {
-  font-size: 14px;
-  color: var(--color-text-primary);
-  line-height: 1.6;
-}
-
-/* 控制条 */
-.room-controls {
-  position: sticky;
-  bottom: 0;
-  background: var(--color-bg-card);
-  border-top: 1px solid var(--color-border);
-  padding: 16px var(--mobile-padding-x, 16px) 12px;
-  backdrop-filter: blur(12px);
-}
-[data-theme="dark"] .room-controls {
-  background: rgba(42, 45, 53, 0.95);
-}
-.control-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-.control-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+/* 顶栏右侧按钮 */
+.header-action {
+  width: 36px;
+  height: 36px;
   border: none;
-  background: var(--color-bg-page);
-  font-size: 22px;
-  color: var(--color-text-regular);
+  background: transparent;
+  font-size: 18px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-}
-.control-btn:active { transform: scale(0.95); }
-.control-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.control-btn.record {
-  width: 72px;
-  height: 72px;
-  background: var(--color-text-regular);
-  color: white;
-  font-size: 28px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-}
-.control-btn.record.active {
-  background: var(--color-danger, #F56C6C);
-  animation: record-pulse 2s infinite;
-}
-.record-icon {
-  font-weight: bold;
-}
-@keyframes record-pulse {
-  0%, 100% { box-shadow: 0 4px 16px rgba(245, 108, 108, 0.4); }
-  50% { box-shadow: 0 4px 24px rgba(245, 108, 108, 0.7); }
-}
-.control-hint {
-  text-align: center;
-  font-size: 11px;
-  color: var(--color-text-secondary);
-}
-
-/* Header action */
-.header-action {
-  width: 36px;
-  height: 36px;
   border-radius: 50%;
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--color-text-regular);
-  cursor: pointer;
+  transition: background 0.2s;
 }
-.header-action:active { background: var(--color-primary-bg); }
+.header-action:active {
+  background: rgba(0, 0, 0, 0.05);
+}
 
 /* 帮助 Sheet */
 .help-overlay {
   position: fixed;
   inset: 0;
-  z-index: 4000;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
   display: flex;
   align-items: flex-end;
+  backdrop-filter: blur(4px);
 }
 .help-panel {
   width: 100%;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
-  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px));
+  background: var(--color-bg-card, #fff);
+  border-radius: 16px 16px 0 0;
+  padding: 16px;
+  padding-bottom: calc(16px + var(--sab, 0px));
+  max-height: 80vh;
+  overflow-y: auto;
 }
 .help-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border-light, #eee);
+  margin-bottom: 16px;
 }
 .help-header h3 {
   margin: 0;
@@ -480,60 +273,63 @@ onBeforeUnmount(() => {
   font-weight: var(--font-weight-semibold, 600);
 }
 .help-header button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--color-text-regular);
-  cursor: pointer;
 }
 .help-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 .help-item {
   display: flex;
   gap: 12px;
-  padding: 12px;
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md);
 }
 .help-num {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
+  background: linear-gradient(135deg, #FF7A5C, #FF9D85);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: var(--font-weight-bold, 700);
+  font-size: 14px;
   flex-shrink: 0;
 }
 .help-text strong {
-  font-size: 14px;
-  color: var(--color-text-primary);
   display: block;
+  font-size: 14px;
   margin-bottom: 4px;
+  color: var(--color-text-primary);
 }
 .help-text p {
+  margin: 0;
   font-size: 12px;
   color: var(--color-text-secondary);
-  margin: 0;
+  line-height: 1.5;
 }
 
-.help-sheet-enter-active, .help-sheet-leave-active {
+/* Transition */
+.help-sheet-enter-active,
+.help-sheet-leave-active {
   transition: opacity 0.25s ease;
 }
-.help-sheet-enter-active .help-panel, .help-sheet-leave-active .help-panel {
-  transition: transform 0.3s ease;
+.help-sheet-enter-active .help-panel,
+.help-sheet-leave-active .help-panel {
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
-.help-sheet-enter-from, .help-sheet-leave-to { opacity: 0; }
-.help-sheet-enter-from .help-panel, .help-sheet-leave-to .help-panel {
+.help-sheet-enter-from,
+.help-sheet-leave-to {
+  opacity: 0;
+}
+.help-sheet-enter-from .help-panel,
+.help-sheet-leave-to .help-panel {
   transform: translateY(100%);
 }
 </style>
