@@ -172,7 +172,7 @@
     />
 
     <!-- 声纹识别测试全屏（ActionSheet 入口，复用声纹中心同款） -->
-    <VoiceTestFlow v-model:show="showVoiceTest" />
+    <VoiceTestFlow v-model="showVoiceTest" />
   </div>
 </template>
 
