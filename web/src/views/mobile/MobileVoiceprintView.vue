@@ -108,7 +108,7 @@
     </Teleport>
 
     <!-- 麦克风测试全屏 -->
-    <VoiceTestFlow v-model:show="showTest" />
+    <VoiceTestFlow v-model="showTest" />
 
     <!-- 声纹录入全屏 -->
     <VoiceprintEnrollFlow
