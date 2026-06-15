@@ -1303,3 +1303,29 @@ FROM reminders WHERE acknowledged_at IS NOT NULL ORDER BY id DESC LIMIT 5;
   ④ **button 文字 + aria-label + title 三处统一**（a11y 4 属性套件原则）—— 入口 A 叫"声纹识别测试" 入口 B 不能叫"麦克风测试"
 - **常见的多入口模式** — 移动端"X 测试"功能常出现在：①声纹中心页顶栏 ②会议页 ActionSheet ③录音对话框前置引导 ④任何下拉菜单/更多按钮。**一次 fix 必须覆盖所有入口**
 
+### v-model 命名必须跟组件 prop 名严格匹配（commit `f84524cf`，重要）
+
+- **新症状** — 部署 commit `22d5570a` 后用户仍说"点击'声纹识别测试'没反应"。根因：调用方 `<VoiceTestFlow v-model:show="showTest" />`（要 `show` prop + `update:show` 事件），但 [VoiceTestFlow.vue](web/src/components/mobile/VoiceTestFlow.vue) 内部 prop 是 `modelValue`（默认 v-model 用的）—— **prop 名不匹配**。
+- **静默失败链** —
+  1. `v-model:show` 等价于 `:show="showTest" @update:show="showTest = $event"`，但组件没 `show` prop → Vue 3 静默 fallback（不抛错，只在 dev mode 偶尔 warn "Extraneous non-emits event listeners"）
+  2. showTest 设为 true 后，传给子组件的 `show` prop 被忽略，**实际 `modelValue` 仍为 undefined**
+  3. 子组件 `v-if="modelValue"` 永远 false → `<Teleport>` 不渲染
+  4. 子组件 `emit('update:modelValue', false)` 父组件没监听 update:show → 永远关不上
+  5. **结果**：用户点击 button 完全无视觉反馈，不报错、不警告、不进 console
+- **修复** — 调用方改 `v-model:show` → `v-model`（默认走 `modelValue` prop）：
+  - [MobileVoiceprintView.vue:111](web/src/views/mobile/MobileVoiceprintView.vue#L111)
+  - [MobileMeetingView.vue:175](web/src/views/mobile/meeting/MobileMeetingView.vue#L175)
+- **铁律 3 条** —
+  ① **`v-model` 必须对应组件 prop 名 `modelValue`**（默认）—— 子组件 `defineProps({ modelValue: ... })` + `defineEmits(['update:modelValue'])`
+  ② **`v-model:foo` 必须对应组件 prop 名 `foo`** —— 子组件 `defineProps({ foo: ... })` + `defineEmits(['update:foo'])`，**prop 名 / emit 名必须与 v-model 修饰符完全一致**
+  ③ **Vue 不会编译报错**——`<Foo v-model:bar="x" />` 即便 Foo 没 bar prop，模板编译完全合法，运行只静默失败。**debug "点击没反应" 类问题**第一步 grep 调用方的 `v-model:xxx` 看 xxx 跟子组件 prop 名是否一致
+- **debug 技巧** ——
+  ```js
+  // 浏览器 console
+  const el = document.querySelector('[data-v-app]')
+  // Vue 3 devtools → Component Tree → 选中目标组件
+  // 看 props 面板：modelValue / show 实际值是什么
+  // 如果子组件 v-if="modelValue" 但 props.modelValue 永远 undefined → 100% 是 v-model 命名不匹配
+  ```
+- **跟 CLAUDE.md 2026-06-12 教训的差别** — 之前 PR #3 教训是"el-input v-model 写错 prop 名 Vue 警告"（Element Plus prop 固定叫 `modelValue`，想写 v-model 必须用 `model-value`/`@update:model-value`）。本条是**自研组件**场景，prop 命名是项目自己定的，调用方/定义方必须协商一致。**两条都强调"命名一致"，但触发的库不同**
+
