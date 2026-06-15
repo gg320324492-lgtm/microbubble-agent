@@ -112,7 +112,15 @@
               <span class="action-icon" style="background: #FF7A5C">+</span>
               <span>手动创建</span>
             </button>
-            <button type="button" class="action-item" @click="handlePasteAnalyze">
+            <button
+              id="meeting-paste-analyze"
+              type="button"
+              name="meeting-paste-analyze"
+              class="action-item"
+              aria-label="粘贴转录分析"
+              title="粘贴转录分析"
+              @click="handlePasteAnalyze"
+            >
               <span class="action-icon" style="background: #67C23A">📋</span>
               <span>粘贴转录分析</span>
             </button>
@@ -173,6 +181,9 @@
 
     <!-- 声纹识别测试全屏（ActionSheet 入口，复用声纹中心同款） -->
     <VoiceTestFlow v-model="showVoiceTest" />
+
+    <!-- 粘贴转录分析（复用桌面端 el-dialog 组件，isMobile 模式自动 95vw 适配） -->
+    <PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="onMeetingSaved" />
   </div>
 </template>
 
@@ -192,6 +203,7 @@ import dayjs from 'dayjs'
 import { useMeeting } from '@/composables/useMeeting'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
+import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
 
 const router = useRouter()
@@ -206,6 +218,7 @@ const showActionSheet = ref(false)
 const showSearch = ref(false)
 const showCreateDialog = ref(false)
 const showVoiceTest = ref(false)
+const pasteAnalyzeDialogRef = ref(null)
 const searchInputRef = ref(null)
 
 // 日期范围快速筛选
@@ -267,7 +280,8 @@ function handleCreateMeeting() {
 }
 function handlePasteAnalyze() {
   showActionSheet.value = false
-  ElMessage.info('粘贴转录分析（开发中）')
+  // 复用桌面端 PasteAnalyzeDialog（isMobile=true 时自动 95vw 适配）
+  pasteAnalyzeDialogRef.value?.open()
 }
 function handleStartLive() {
   showActionSheet.value = false
