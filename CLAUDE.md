@@ -9,6 +9,8 @@
 > **2026-06-15 晚间更新**：reminders 表 v2 字段缺失 → /api/v1/reminders 500（webhint 报错 index-2bce6a55.js:4 GET 500）。本地 + 生产 ALTER TABLE 加 6 列（acknowledged_at / acknowledged_by / ack_channel / snoozed_until / reminder_batch_date / policy_version）。deploy-auto.sh 集成自动迁移。
 >
 > **2026-06-15 全天更新**：任务提醒体系 v2 全面优化（commits `223ea74` + `ba75e32`）。所有 reminder 统一在 11:00 AM 北京时间窗口发送，每个任务 1 次推完即结束；任何微信消息 = ack 取消该用户所有 pending 提醒（杜同贺痛点彻底解决）。详见 [## 2026-06-15 任务提醒体系 v2 全面优化](#2026-06-15-任务提醒体系-v2-全面优化)。
+>
+> **2026-06-15 全天追加**：会议 #95 声纹重置 + KMeans 重识别 + speaker_mapping 重写 + meeting_participants 修复。教训：`psycopg2` 中途失败导致整个 transaction rollback、speaker_mapping 与 meeting_participants 必须互相对齐、Whisper 幻觉段不能用作声纹学习。详见 [## 2026-06-15 会议 #95 声纹重置 + 重识别教训](#2026-06-15-会议-95-声纹重置--重识别教训) section。
 
 ## 项目简介
 
@@ -1339,4 +1341,70 @@ FROM reminders WHERE acknowledged_at IS NOT NULL ORDER BY id DESC LIMIT 5;
   ② **复用模式** — 桌面端用 `ref + open()` 暴露，移动端也用 `ref + open()`。`<XxxDialog ref="xxxRef" @saved="onSaved" />` 放在 template 末尾
   ③ **el-dialog 内部 el-form CSS 已在 mobile bundle** — 因为移动端已经用 `MeetingCreateDialog`（[MobileMeetingView.vue:167](web/src/views/mobile/meeting/MobileMeetingView.vue#L167) 注释"移动端仍用 el-dialog fullscreen"），el-form / el-input / el-select / el-date-picker CSS **0 增量打包**
   ④ **多入口 grep 铁律 3 次奏效** — 这次是同 1 个 ActionSheet 里的第 3 个"开发中"toast（前 2 个：声纹中心按钮 + 会议页 ActionSheet 第 2 项"麦克风测试"）。**改 1 个 ActionSheet 必 grep ActionSheet 全部 4 个 item**，不能改一个忘一个
+
+## 2026-06-15 会议 #95 声纹重置 + 重识别教训
+
+**场景** — 用户说"最新的会议讨论人是王天志+李胜景，重新识别并学习"。但数据库 `meeting_participants` 显示是 周之超+李胜景+杜同贺，王天志根本没参加。`speaker_mapping` 把 90 段标"周之超"、4 段标"李胜景"、2 段标"杜同贺"。**最终真相**：会议里只有王天志（主讲）和李胜景（补话），周/杜根本没说话。`meeting_participants` 录入会议时被默认勾选错误，`speaker_mapping` 全部错标。
+
+### 6 条铁律
+
+**铁律 1：psycopg2 transaction rollback 静默吃 UPDATE**
+- `psycopg2.connect()` 默认 autocommit=False，所有 SQL 在同一 transaction。**中间任何一条 SQL 失败 → 整个 transaction rollback**，前面所有 UPDATE 全部丢
+- 本次复现：`UPDATE members SET voice_embedding=...` 看似成功（rowcount=1），但后面 `INSERT INTO meeting_participants` 报 `column created_at does not exist` → 整个 transaction rollback → `voice_embedding` 实际未改
+- **修复模式**：①要么用多个独立 connection 跑各组操作 ②要么把所有 SQL 写完 + 验证 schema 后**一次性 commit** ③**先看表结构再写 INSERT/UPDATE**（`\d meeting_participants` 必须先看）
+- **诊断**：`SELECT name, voice_sample_count, voice_enrolled_at FROM members WHERE name='X'` 如果 enrolled_at 还是旧值 → 100% rollback 了，必须重做
+
+**铁律 2：speaker_mapping 完全错标时必须用 KMeans 重聚类**
+- `speaker_mapping` 是聚类后映射的结果，**可能严重错**。本次 90% 段被错标"周之超"（实际是李胜景讲水产养殖）
+- **重识别流程**：①按 speaker_label 分组，过滤 < 3s 簇 ②每簇提 embedding ③KMeans(k=N) 重聚类（N=参会人数）④聚类中心 vs 现有 voice_embedding 余弦距离比对 → 找出最佳匹配 ⑤用聚类中心拼接的音频 → 提 embedding → 重置 voice_embedding
+- **关键**：聚类中心 vs 现有 voice_embedding 距离全 > 0.4 → 现有 embedding 严重失真 → **必须重置（sample_count=1）**，加权融合无效
+
+**铁律 3：Whisper 幻觉段不能用作声纹学习**
+- 静音/低能量片段 Whisper 臆造 B 站结束语模板："谢谢观看 欢迎订阅我的频道"、"请不吝点赞 订阅 转发 打赏支持明镜与点点栏目"、"中文字符志愿者 杨茜茜"（CLAUDE.md 2026-06-02/03 已提，本节再次踩坑）
+- 本次 `speaker_mapping` 给"李胜景/杜同贺"分配的 6 段（共 4.8s）**100% 是 Whisper 幻觉**，用这些段提 embedding → 学进 member.voice_embedding → **永久污染**
+- **防御**：①文本含上述模板 → 直接跳过不学 ②簇总时长 < 5s 且文本是单句 → 不学 ③Whisper hallucination 黑名单在 `app/api/v1/voice.py` HALLUCINATION_STRONG/WEAK 已实现
+- **诊断**：speaker_mapping 标某人的段，全是 B 站结束语模板 → 100% 是幻觉
+
+**铁律 4：speaker_mapping 与 meeting_participants 必须互相对齐**
+- 本次发现 speaker_mapping 把所有人都标"周之超"，但实际参会者是王+李。两者都错，但错得不一样
+- **修复时同步更新两张表**：
+  - `meetings.speaker_mapping`：所有 speaker_label → 真实身份
+  - `meeting_participants`：删除实际没说话的人，加上实际说话的人
+- **铁律**：任何"重识别发言人"操作，**必须同时改 speaker_mapping + meeting_participants**，否则后续按 participants 推送通知、按 speaker_mapping 统计会数据不一致
+
+**铁律 5：用户认知 vs 数据库不一致时必须先汇报数据**
+- 本次用户说"王天志+李胜景说话"，但数据库 meeting_participants 是 周/李/杜
+- **第一次盲信用户决策**会做错。**必须先抽文本验证**：抽样 speaker_mapping 标"周之超"段的文本 → 全是水产养殖讨论 → 显然不是周之超（方向是表面污染去除）→ 立刻发现 speaker_mapping 错标
+- **KMeans 重聚类结果与用户判断冲突时**，不要强制按用户判断，要给用户看完整距离数据再决策
+- **纪律**：遇到 user 描述 ≠ db 实际，**永远先打印证据**（样本文本、距离矩阵），让用户基于证据决策
+
+**铁律 6：重置声纹是一次性单向操作**
+- `UPDATE members SET voice_embedding = X, voice_sample_count = 1, voice_enrolled_at = NOW()` 会**覆盖**现有 embedding，且不保留历史
+- 现有 4 样本（可能来自多次成功录入）的所有信息都丢失
+- **重置前必做**：①备份到临时表或 JSON 文件 ②确认 KMeans 聚类中心的 cosine_distance < 0.7（很相似）才能重置 ③重置后立即用 5+ 段测试 verify
+- **备份 one-liner**：
+  ```sql
+  CREATE TABLE members_voice_backup_20260615 AS 
+  SELECT id, name, voice_embedding, voice_sample_count, voice_enrolled_at 
+  FROM members WHERE voice_embedding IS NOT NULL;
+  ```
+- **恢复 one-liner**：`UPDATE members SET voice_embedding = b.voice_embedding, voice_sample_count = b.voice_sample_count FROM members_voice_backup_20260615 b WHERE members.id = b.id`
+
+### 端到端 verify
+
+```python
+# 抽 5 段测试
+test_cases = [
+    ('speaker_14', 50.91, 56.41),    # 原周之超 → 王天志
+    ('speaker_48', 148.51, 153.69),  # 原周之超 → 王天志
+    ('speaker_166', 526.47, 529.31), # 原发言人D → 李胜景
+    ('speaker_137', 454.79, 460.22), # 原发言人J → 李胜景
+    ('speaker_39', 122.0, 128.0),    # 原发言人D → 王天志
+]
+for desc, s, e in test_cases:
+    chunk = audio[int(s*sr):int(e*sr)]
+    name, mid, conf = await voiceprint_service.identify_speaker(db, chunk)
+    print(f'{desc}: {name} (conf={conf:.3f})')
+```
+期望：5/5 段全部正确分类，置信度 > 0.65（理想 > 0.8）。如果某段 conf < 0.6 → 该段可能跨簇（多说话人重叠），需要手动剔除或重新聚类
 
