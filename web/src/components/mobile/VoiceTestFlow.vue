@@ -5,13 +5,15 @@
         <!-- Header -->
         <div class="flow-header">
           <button
+            id="voice-test-close"
             type="button"
             class="header-btn"
-            aria-label="返回"
-            title="返回"
+            name="voice-test-close"
+            aria-label="关闭"
+            title="关闭"
             @click="onClose"
           >✕</button>
-          <h2 class="flow-title">麦克风测试</h2>
+          <h2 class="flow-title">声纹识别测试</h2>
           <div class="header-spacer" />
         </div>
 
@@ -21,14 +23,23 @@
             <div class="big-icon">⚠️</div>
             <h3>无法访问麦克风</h3>
             <p class="error-hint">{{ permissionError }}</p>
-            <button type="button" class="btn-primary" @click="retryPermission">
+            <button
+              id="voice-test-retry-permission"
+              type="button"
+              name="voice-test-retry-permission"
+              aria-label="重新尝试"
+              title="重新尝试"
+              class="btn-primary"
+              @click="retryPermission"
+            >
               重新尝试
             </button>
           </div>
 
-          <!-- 正常测试 -->
+          <!-- 录音 + 结果 -->
           <div v-else class="test-state">
-            <div class="visualizer-wrap">
+            <!-- 可视化（仅录音中） -->
+            <div v-if="state === 'recording'" class="visualizer-wrap">
               <div class="visualizer">
                 <div
                   v-for="i in 20"
@@ -38,66 +49,135 @@
                 />
               </div>
               <div class="volume-display">
-                <div class="volume-num">{{ Math.round(volume * 100) }}</div>
-                <div class="volume-unit">%</div>
+                <div class="volume-num">{{ recordingTime }}</div>
+                <div class="volume-unit">s / 5s</div>
               </div>
             </div>
 
+            <!-- 状态文字 -->
             <div class="status-display">
-              <span class="rec-dot" v-if="recording" />
+              <span class="rec-dot" v-if="state === 'recording'" />
+              <span class="rec-dot spinner-dot" v-else-if="state === 'testing'" />
               <span>{{ statusText }}</span>
             </div>
 
-            <!-- 测试控制 -->
-            <div class="controls">
+            <!-- 录音控制：idle 或 recording -->
+            <div v-if="state === 'idle' || state === 'recording'" class="controls">
               <button
-                v-if="!recording && !recordedBlob"
+                v-if="state === 'idle'"
+                id="voice-test-start"
                 type="button"
+                name="voice-test-start"
+                aria-label="开始录音"
+                title="开始录音"
                 class="big-btn record"
                 @click="startTest"
               >
                 <span class="big-btn-icon">🎤</span>
-                <span>开始测试</span>
+                <span>开始录音</span>
               </button>
 
               <button
-                v-else-if="recording"
+                v-else
+                id="voice-test-stop"
                 type="button"
+                name="voice-test-stop"
+                aria-label="停止录音"
+                title="停止录音"
                 class="big-btn stop"
                 @click="stopTest"
               >
                 <span class="big-btn-icon">⏹</span>
                 <span>停止</span>
               </button>
+            </div>
 
-              <div v-else-if="recordedBlob" class="result-controls">
-                <audio :src="recordedUrl" controls class="audio-player" />
-                <div class="btn-row">
-                  <button
-                    type="button"
-                    class="btn-secondary"
-                    @click="discard"
-                  >重录</button>
-                  <button
-                    type="button"
-                    class="btn-primary"
-                    @click="onClose"
-                  >完成</button>
-                </div>
+            <!-- 录完未测试：重录 / 测一下 -->
+            <div v-else-if="state === 'recorded'" class="result-controls">
+              <audio :src="recordedUrl" controls class="audio-player" />
+              <div class="btn-row">
+                <button
+                  id="voice-test-retry"
+                  type="button"
+                  name="voice-test-retry"
+                  aria-label="重录"
+                  title="重录"
+                  class="btn-secondary"
+                  @click="discard"
+                >重录</button>
+                <button
+                  id="voice-test-submit"
+                  type="button"
+                  name="voice-test-submit"
+                  aria-label="测试声纹识别"
+                  title="测试声纹识别"
+                  class="btn-primary"
+                  :disabled="testing"
+                  @click="submitTest"
+                >
+                  {{ testing ? '测试中...' : '🔍 测试识别' }}
+                </button>
               </div>
             </div>
 
-            <!-- 实时转写（如果有 ASR） -->
-            <div v-if="asrResult" class="asr-result">
-              <div class="asr-label">识别结果：</div>
-              <div class="asr-text">{{ asrResult }}</div>
+            <!-- 测试中 -->
+            <div v-else-if="state === 'testing'" class="testing-area">
+              <div class="spinner" />
+              <p>正在分析音频...</p>
+            </div>
+
+            <!-- 结果展示 -->
+            <div v-else-if="state === 'result'" class="result-area">
+              <!-- 步骤列表 -->
+              <div class="steps-list">
+                <div v-for="(step, idx) in testResult.steps" :key="idx" class="step-row">
+                  <div class="step-icon">
+                    <span v-if="step.status === 'ok'" class="icon-ok">✅</span>
+                    <span v-else-if="step.status === 'warn'" class="icon-warn">⚠️</span>
+                    <span v-else class="icon-error">❌</span>
+                  </div>
+                  <div class="step-info">
+                    <div class="step-name">{{ step.name }}</div>
+                    <div class="step-detail" :class="`status-${step.status}`">{{ step.detail }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 最终结果 -->
+              <div v-if="testResult.success" class="final-result success">
+                <div class="result-badge success">🎉 识别成功</div>
+                <div class="result-speaker">{{ testResult.speaker }}</div>
+                <div class="result-confidence">置信度: {{ Math.round((testResult.confidence || 0) * 100) }}%</div>
+                <div v-if="testResult.transcript" class="result-transcript">"{{ testResult.transcript }}"</div>
+              </div>
+              <div v-else class="final-result fail">
+                <div class="result-badge fail">未成功识别</div>
+                <p v-if="testResult.transcript" class="result-hint">
+                  语音内容: "{{ testResult.transcript }}"
+                </p>
+                <p class="result-hint">
+                  请检查：麦克风是否正常、是否已录入声纹、说话是否清晰
+                </p>
+              </div>
+
+              <button
+                id="voice-test-restart"
+                type="button"
+                name="voice-test-restart"
+                aria-label="再测一次"
+                title="再测一次"
+                class="btn-primary full"
+                @click="resetTest"
+              >
+                再测一次
+              </button>
             </div>
           </div>
         </main>
 
         <!-- 帮助 -->
         <div class="help-footer">
-          <p>💡 测试说话音量是否足够清晰</p>
+          <p>💡 说完 3-5 秒，系统会先解码 → 静音检测 → VAD → 语音识别 → 声纹匹配</p>
         </div>
       </div>
     </Transition>
@@ -106,29 +186,39 @@
 
 <script setup>
 /**
- * VoiceTestFlow.vue — 移动端麦克风测试全屏组件
+ * VoiceTestFlow.vue — 移动端声纹识别测试全屏组件
  *
- * PR #5: 独立组件（不用 el-dialog + CSS 全屏）
- * - 实时音量可视化（20 根 bar 高度变化）
- * - 录音 + 播放 + 重录
- * - 错误处理：NotAllowedError / NotFoundError 区分提示
- * - ASR 集成（可选，识别说话内容）
- *
- * 关键修复（CLAUDE.md 教训）：
+ * 关键点（CLAUDE.md 教训）：
+ * - 这是「声纹识别测试」不是「麦克风测试」——录音完必须 POST /api/v1/voiceprint/test
+ *   让后端跑完整 5 步链路（解码/静音检测/VAD/ASR/声纹识别），返回 speaker + confidence
+ * - 之前版本只测麦克风能不能录音 + 音量可视化 → 用户测完了"我能不能被识别"毫无头绪
  * - getUserMedia 和 AudioContext 各自独立 try/catch
  * - 错误信息精确区分（NotAllowedError / NotFoundError / Other）
  * -webkitAudioContext 前缀兼容 + resume() 处理 suspended
+ * - 不要手动设 Content-Type，让 axios 自动处理 multipart boundary
  */
 
 import { ref, computed, onUnmounted, onBeforeUnmount } from 'vue'
+import axios from 'axios'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
 })
 const emit = defineEmits(['update:modelValue'])
 
-// 录音状态
-const recording = ref(false)
+// 状态机：idle → recording → recorded → testing → result
+const state = ref('idle')
+const recordingTime = ref(0)
+const testing = ref(false)
+const testResult = ref({
+  steps: [],
+  success: false,
+  speaker: null,
+  confidence: 0,
+  transcript: '',
+})
+
+// 录音资源
 const recordedBlob = ref(null)
 const recordedUrl = ref('')
 let mediaRecorder = null
@@ -137,30 +227,33 @@ let audioContext = null
 let analyser = null
 let mediaStream = null
 let rafId = null
+let timerInterval = null
 
 // 音量可视化
 const volume = ref(0)
-const bars = ref(new Array(20).fill(0))
 
 // 错误
 const permissionError = ref('')
 
-// ASR 识别结果（可选）
-const asrResult = ref('')
-
 const statusText = computed(() => {
-  if (recording.value) return '正在录音...'
-  if (recordedBlob.value) return '录制完成'
-  return '准备就绪'
+  if (state.value === 'recording') return '正在录音...'
+  if (state.value === 'recorded') return '录制完成'
+  if (state.value === 'testing') return '正在分析音频...'
+  if (state.value === 'result') return testResult.value.success
+    ? `识别为：${testResult.value.speaker}`
+    : '未成功识别'
+  return '点击按钮开始测试'
 })
 
 function getBarHeight(idx) {
   if (!recording.value) return 8
-  // 根据当前 volume + 位置产生波动
   const offset = (Date.now() / 100 + idx) % 1
   const target = volume.value * 100 * (0.5 + Math.sin(offset * Math.PI * 2) * 0.5)
   return Math.max(8, target + 8)
 }
+
+// Vue 3.5 模板里需要响应式 ref（不是普通变量）
+const recording = computed(() => state.value === 'recording')
 
 // ============================================================================
 // 权限与初始化
@@ -214,48 +307,102 @@ async function startTest() {
   const ok = await initAudio()
   if (!ok) return
 
-  recording.value = true
+  state.value = 'recording'
+  recordingTime.value = 0
   audioChunks = []
 
   try {
-    mediaRecorder = new MediaRecorder(mediaStream)
+    // iOS Safari 兼容：尝试 webm，失败回退默认
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '')
+    mediaRecorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream)
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) audioChunks.push(e.data)
     }
     mediaRecorder.onstop = () => {
-      recordedBlob.value = new Blob(audioChunks, { type: 'audio/webm' })
-      recordedUrl.value = URL.createObjectURL(recordedBlob.value)
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' })
+      if (recordedUrl.value) URL.revokeObjectURL(recordedUrl.value)
+      recordedBlob.value = blob
+      recordedUrl.value = URL.createObjectURL(blob)
       audioChunks = []
+      state.value = 'recorded'
     }
     mediaRecorder.start()
   } catch (e) {
     permissionError.value = '录音启动失败：' + e.message
-    recording.value = false
+    state.value = 'idle'
     return
   }
+
+  // 5 秒自动停止（与桌面端一致）
+  timerInterval = setInterval(() => {
+    recordingTime.value++
+    if (recordingTime.value >= 5) {
+      stopTest()
+    }
+  }, 1000)
 
   // 开始音量检测
   monitorVolume()
 }
 
 function stopTest() {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
+  }
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop()
   }
-  recording.value = false
   stopVolumeMonitor()
+  // 注意：state 不在这里改，等 onstop 回调里改（避免 blob 还没好就切换 UI）
 }
 
 function discard() {
   if (recordedUrl.value) URL.revokeObjectURL(recordedUrl.value)
   recordedBlob.value = null
   recordedUrl.value = ''
-  asrResult.value = ''
+  testResult.value = { steps: [], success: false, speaker: null, confidence: 0, transcript: '' }
+  state.value = 'idle'
 }
 
-function onClose() {
-  cleanup()
-  emit('update:modelValue', false)
+// ============================================================================
+// 提交声纹识别测试
+// ============================================================================
+async function submitTest() {
+  if (!recordedBlob.value || testing.value) return
+  testing.value = true
+  state.value = 'testing'
+
+  try {
+    const formData = new FormData()
+    formData.append('audio', recordedBlob.value, 'test.webm')
+    // 不要手动设 Content-Type，让 axios 自动加 boundary（CLAUDE.md 教训）
+
+    const resp = await axios.post('/api/v1/voiceprint/test', formData)
+    testResult.value = resp.data || testResult.value
+    state.value = 'result'
+  } catch (e) {
+    // 后端 4xx/5xx 时仍要保持有步骤信息，让用户知道错在哪
+    const detail = e.response?.data?.detail || e.message
+    testResult.value = {
+      steps: [
+        { name: '测试请求', status: 'error', detail: `测试请求失败：${detail}` },
+      ],
+      success: false,
+      speaker: null,
+      confidence: 0,
+      transcript: '',
+    }
+    state.value = 'result'
+  } finally {
+    testing.value = false
+  }
+}
+
+function resetTest() {
+  discard()
 }
 
 // ============================================================================
@@ -266,17 +413,11 @@ function monitorVolume() {
   const data = new Uint8Array(analyser.frequencyBinCount)
 
   function tick() {
-    if (!recording.value) return
+    if (state.value !== 'recording') return
     analyser.getByteFrequencyData(data)
-    // 计算平均音量
     let sum = 0
     for (let i = 0; i < data.length; i++) sum += data[i]
     volume.value = sum / data.length / 255
-    // 更新 20 根 bar
-    bars.value = bars.value.map((_, i) => {
-      const idx = Math.floor((i / 20) * data.length)
-      return data[idx] / 255
-    })
     rafId = requestAnimationFrame(tick)
   }
   tick()
@@ -286,13 +427,21 @@ function stopVolumeMonitor() {
   if (rafId) cancelAnimationFrame(rafId)
   rafId = null
   volume.value = 0
-  bars.value = new Array(20).fill(0)
+}
+
+function onClose() {
+  cleanup()
+  emit('update:modelValue', false)
 }
 
 // ============================================================================
 // 清理
 // ============================================================================
 function cleanup() {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
+  }
   stopVolumeMonitor()
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     try { mediaRecorder.stop() } catch { /* ignore */ }
@@ -310,13 +459,14 @@ function cleanup() {
   audioContext = null
   analyser = null
   audioChunks = []
-  recording.value = false
+  state.value = 'idle'
   recordedBlob.value = null
   recordedUrl.value = ''
+  recordingTime.value = 0
+  testing.value = false
   volume.value = 0
-  bars.value = new Array(20).fill(0)
   permissionError.value = ''
-  asrResult.value = ''
+  testResult.value = { steps: [], success: false, speaker: null, confidence: 0, transcript: '' }
 }
 
 onBeforeUnmount(cleanup)
@@ -375,6 +525,7 @@ onUnmounted(cleanup)
   align-items: center;
   justify-content: center;
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+  overflow-y: auto;
 }
 
 .error-state {
@@ -445,7 +596,7 @@ onUnmounted(cleanup)
   gap: 8px;
   font-size: 14px;
   color: var(--color-text-regular);
-  margin-bottom: 40px;
+  margin-bottom: 24px;
 }
 .rec-dot {
   width: 10px;
@@ -453,6 +604,9 @@ onUnmounted(cleanup)
   border-radius: 50%;
   background: var(--color-danger, #F56C6C);
   animation: pulse 1s infinite;
+}
+.rec-dot.spinner-dot {
+  background: var(--color-primary);
 }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -485,6 +639,7 @@ onUnmounted(cleanup)
   background: linear-gradient(135deg, var(--color-danger, #F56C6C), #FF8888);
   box-shadow: 0 8px 24px rgba(245, 108, 108, 0.3);
 }
+.big-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .big-btn-icon { font-size: 56px; }
 
 .result-controls {
@@ -512,30 +667,81 @@ onUnmounted(cleanup)
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
   color: white;
 }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-secondary {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
   color: var(--color-text-primary);
 }
+.btn-primary.full { width: 100%; margin-top: 16px; }
 
-/* ASR 结果 */
-.asr-result {
+/* 测试中 */
+.testing-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 0;
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #eee;
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 结果 */
+.result-area {
   width: 100%;
-  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.steps-list {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
   padding: 12px 16px;
+}
+.step-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.step-row:last-child { border-bottom: none; }
+.step-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+.step-info { flex: 1; }
+.step-name { font-weight: 600; font-size: 14px; color: var(--color-text-primary); }
+.step-detail { font-size: 13px; margin-top: 2px; }
+.step-detail.status-ok { color: var(--color-success, #52c41a); }
+.step-detail.status-warn { color: var(--color-warning, #faad14); }
+.step-detail.status-error { color: var(--color-danger, #ff4d4f); }
+
+.final-result {
+  margin-top: 8px;
+  text-align: center;
+  padding: 16px;
   background: var(--color-bg-card);
   border-radius: var(--radius-md);
 }
-.asr-label {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  margin-bottom: 4px;
-}
-.asr-text {
+.result-badge {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 20px;
+  font-weight: 600;
   font-size: 15px;
-  color: var(--color-text-primary);
-  line-height: 1.5;
 }
+.result-badge.success { background: rgba(82, 196, 26, 0.1); color: #52c41a; border: 1px solid #b7eb8f; }
+.result-badge.fail { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid #ffccc7; }
+.result-speaker { font-size: 22px; font-weight: 700; margin-top: 8px; color: var(--color-text-primary); }
+.result-confidence { font-size: 14px; color: var(--color-text-secondary); margin-top: 4px; }
+.result-transcript { font-size: 14px; color: var(--color-text-regular); margin-top: 8px; font-style: italic; word-break: break-word; }
+.result-hint { font-size: 13px; color: var(--color-text-secondary); margin-top: 8px; }
 
 /* 帮助 */
 .help-footer {
