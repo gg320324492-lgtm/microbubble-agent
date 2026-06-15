@@ -1269,3 +1269,24 @@ SELECT id, status, acknowledged_at, acknowledged_by, ack_channel
 FROM reminders WHERE acknowledged_at IS NOT NULL ORDER BY id DESC LIMIT 5;
 -- 期望：status='acknowledged'，ack_channel='wechat_any'
 ```
+
+## 2026-06-15 移动端"声纹测试"是真识别测试不是麦克风测试（commit `de7ef8aa`）
+
+- **根因（用户痛点）** — 用户说"已录入声纹的成员可以再听会之前检测一下是否能识别出来自己的声纹"，但 [web/src/components/mobile/VoiceTestFlow.vue](web/src/components/mobile/VoiceTestFlow.vue) 原本只做 3 件事：①`getUserMedia` 拿麦克风权限 ②`MediaRecorder` 录音 ③Canvas 音量可视化 + 音频回放。**完全没调 `POST /api/v1/voiceprint/test`**。用户点完测试看到的只是"录音能不能录"——而他要的是"我能不能被识别出来"。
+- **桌面端范式** — [web/src/components/VoiceTestDialog.vue:302](web/src/components/VoiceTestDialog.vue#L302) `axios.post('/api/v1/voiceprint/test', formData)` 是正确范式：录音 + POST /voiceprint/test + 展示 `testResult.steps[]`（5 步：音频解码/格式转换/静音检测/VAD/ASR/声纹识别）+ 最终 `speaker + confidence + transcript`。
+- **修复** — 移动端 VoiceTestFlow.vue 状态机升级为 5 态 `idle → recording → recorded → testing → result`：
+  1. `idle`/`recording` 阶段只录音 + 可视化
+  2. `recorded` 阶段用户可回放，**手动**点"测试识别"才调 `/voiceprint/test`
+  3. `testing` 阶段显示 spinner
+  4. `result` 阶段渲染后端返回的 5 步结果 + 最终识别
+  5. 错误降级：axios 失败时构造 `steps: [{name: '测试请求', status: 'error', detail: ...}]` 渲染
+- **关键纪律** —
+  ① **"X 测试"组件先 grep 桌面端有没有同名实现**——本项目 90% 移动端组件都有桌面端孪生，不要凭想象造移动端专用版本
+  ② **状态机切换不能在 `stopTest` 里**——`onstop` 回调是异步的（blob 还没生成），state 切到 `recorded` 必须在 `onstop` 里。`stopTest` 只调 `mediaRecorder.stop()` + 清 timer
+  ③ **iOS Safari MediaRecorder 兜底**——`MediaRecorder.isTypeSupported('audio/webm')` 不一定 true，兜底 `audio/mp4`
+  ④ **不要手动设 Content-Type** —— axios 自动加 multipart boundary（CLAUDE.md 已有纪律）
+  ⑤ **5 秒自动停止 + 5 步步骤展示**——与桌面端硬规则对齐，不要自由发挥
+  ⑥ **错误降级构造 steps** —— 网络/服务器错时仍要渲染"测试请求: error"步骤，让用户知道是网络问题而不是"功能不存在"
+  ⑦ **a11y 4 属性套件** —— 所有 `<button>` 补 `id` + `name` + `aria-label` + `title`（CLAUDE.md 2026-06-12 铁律）
+- **沉淀** — [mobile-voiceprint-real-test.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/mobile-voiceprint-real-test.md)
+
