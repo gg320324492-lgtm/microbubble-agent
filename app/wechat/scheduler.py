@@ -5,6 +5,10 @@
 - 已逾期的任务 → 提醒负责人 + 老师
 - 未确认的任务 → 提醒确认
 
+**v2 11AM 窗口纪律（2026-06-15 修复）**：所有 check_* 都必须在 11AM 北京时间窗口
+（10:30-11:30）才推送，窗口外立即 return 0。否则半夜 Celery beat 会触发骚扰推送，
+绕过了 `app.services.reminder_service` 的 v2 11AM 单一窗口逻辑。
+
 去重机制：Redis SET 记录已提醒的任务，24 小时过期，避免重复发送。
 """
 
@@ -19,6 +23,7 @@ logger = logging.getLogger("microbubble.wechat.scheduler")
 
 from app.models.task import Task, TaskStatus
 from app.models.member import Member
+from app.services.reminder_policy import is_in_digest_window
 from app.wechat.notifier import notifier
 from app.wechat.bot import wechat_bot
 
@@ -50,6 +55,10 @@ class ProactiveScheduler:
 
     async def check_due_soon(self, db: AsyncSession, redis_client=None) -> int:
         """检查即将到期的任务（明天截止），提醒负责人 + 通知创建人"""
+        # v2 11AM 窗口：窗口外不触发推送（防半夜骚扰）
+        if not is_in_digest_window():
+            logger.debug("check_due_soon 跳过：非 11AM 推送窗口")
+            return 0
         tomorrow = utcnow() + timedelta(days=1)
         tomorrow_end = tomorrow.replace(hour=23, minute=59, second=59)
 
@@ -120,6 +129,10 @@ class ProactiveScheduler:
 
     async def check_overdue(self, db: AsyncSession, redis_client=None) -> int:
         """检查已逾期的任务，提醒负责人 + 通知创建人"""
+        # v2 11AM 窗口：窗口外不触发推送（防半夜骚扰）
+        if not is_in_digest_window():
+            logger.debug("check_overdue 跳过：非 11AM 推送窗口")
+            return 0
         result = await db.execute(
             select(Task).where(
                 and_(
@@ -170,6 +183,10 @@ class ProactiveScheduler:
 
     async def check_unconfirmed(self, db: AsyncSession, redis_client=None) -> int:
         """检查未确认的任务（分配超过24小时未回复）"""
+        # v2 11AM 窗口：窗口外不触发推送（防半夜骚扰）
+        if not is_in_digest_window():
+            logger.debug("check_unconfirmed 跳过：非 11AM 推送窗口")
+            return 0
         yesterday = utcnow() - timedelta(hours=24)
 
         result = await db.execute(
