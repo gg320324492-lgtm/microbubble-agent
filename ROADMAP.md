@@ -1,8 +1,15 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-15 晚（移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug + 5 commits + 2 条新铁律）** — ① VoiceTestFlow.vue 从"麦克风测试"升级为"声纹识别测试"（5 状态机 + 调 `/api/v1/voiceprint/test` 全链路 5 步）② 会议页 ActionSheet 第 2 个"麦克风测试"入口接入同一组件（去掉"开发中"toast）③ 修复 `v-model:show` vs `modelValue` prop 名不匹配 bug（Vue 静默失败不报错）④ 新铁律：多入口 grep 纪律 + v-model 命名匹配铁律。**累计**：1026+ commits / 236K 行 / 941 文件 / 31+ 开发天数
+> 最后更新: **2026-06-15 深夜（会议 #95 声纹重置 + 重识别全链路 + 2 commits + 9 条铁律沉淀 + stats 重算）** — ① 会议 #95 实际是王天志主讲 + 李胜景补话（不是 DB 里的周之超/李/杜），speaker_mapping 严重错标 ② KMeans(k=2) 重聚类 287 family：Cluster 0 王天志（vs 王距离 0.017），Cluster 1 李胜景（vs 李距离 0.112）③ 现有 voice_embedding 失真（4 样本平均后所有距离 > 0.4）→ 直接重置 sample_count=1 ④ **铁律 9**：transcript_polished[].speaker 才是前端实际渲染字段，不是 transcript[].speaker，必须**同时改 8 个 JSON 字段** ⑤ [scripts/recalc_stats.py](scripts/recalc_stats.py) 项目统计重算：**1051 提交 / 155,859 行 / 641 文件 / 31 天**（python 44K / vue 40K / markdown 39K / config 14K / javascript 7K）
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-15 深夜 会议 #95 声纹重置 + 重识别全链路，2 commits `af044bfc` + `3bcc8c20`）
+- [🎤 会议 #95 声纹重置 + 重识别全链路（2026-06-15 深夜，2 commits）](#会议-95-声纹重置--重识别全链路2026-06-15-深夜2-commits-af044bfc--3bcc8c20)
+  - 🐛 根因 1：speaker_mapping 严重错标（80 段误标"周之超"）
+  - 🐛 根因 2：现有 voice_embedding 失真（距离 > 0.4）→ 重置 sample_count=1
+  - 🐛 根因 3：铁律 9：transcript_polished 才是前端渲染字段（修了 transcript 不够）
+  - 📐 9 条铁律沉淀到 CLAUDE.md
 
 ### 最新完成（2026-06-15 晚 移动端声纹识别测试全链路改造 + 2 个连锁 bug 修复，5 commits）
 - [🎤 移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug（2026-06-15 晚，5 commits）](#移动端声纹识别测试真全链路改造--2-个连锁-bug2026-06-15-晚5-commits-de7ef8aa--22d5570a--f84524cf--392a88d7--9231d8bf--ceae0cd5)
@@ -112,6 +119,113 @@
 - [Webhook 自动部署修复](#webhook-自动部署修复2026-06-09)（扫描器正则误杀 /webhook — web$ 精确匹配）
 - [Nginx 安全防护](#nginx-安全防护2026-06-09)（恶意扫描器屏蔽 — .env/WordPress/云凭证/攻击路径，444 静默关闭）
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
+
+---
+
+## 会议 #95 声纹重置 + 重识别全链路（2026-06-15 深夜，2 commits `af044bfc` + `3bcc8c20`）
+
+**用户痛点**：用户要求"重新识别最新会议并学习声纹"，但用户认知 vs 数据库严重不符——
+
+| 维度 | 用户认知 | DB 实际 |
+|---|---|---|
+| 会议标题 | "最新会议" | #95「水产养殖纳米气泡技术与双业务平台构建」（2026-06-15 06:43，18:14） |
+| 讨论人 | "王天志 + 李胜景" | meeting_participants = 周之超/李胜景/杜同贺（**无王天志**） |
+| 发言人标签 | 王天志主讲，李胜景补话 | speaker_mapping 80 段误标"周之超" |
+
+**Why**：会议实际是 **王天志**（副教授/admin，微纳米气泡方向）给 **李胜景**（研二，研究方向"水产养殖"）指导 PPT 修改 —— 但数据库录入时默认勾选了错误参会者，且原 speaker_mapping 把所有段都映射成"周之超"。
+
+**3 层根因 + 修复**：
+
+### 根因 1：speaker_mapping 严重错标
+
+抽 11 段 speaker_mapping 标"周之超"的文本 → 全是**水产养殖纳米气泡讨论**（"先讲这个传统的养殖方式难以支撑高密度稳定化无抗化养殖需求"、"构建了两个双业务增长平台"），这些显然是**李胜景**讲的内容（研究方向 = 水产养殖），不是周之超（"表面污染去除"）。
+
+**修复**：KMeans(k=2) 重聚类所有 296 个 speaker_label（按 base_family 合并 = 287 个 family），不限长度（即使 1s 也提 embedding）：
+- **Cluster 0**：208 families, 482.1s, vs 王天志距离 **0.017**（极近）, vs 李胜景 0.170 → **王天志**
+- **Cluster 1**：79 families, 133.5s, vs 王 0.267, vs 李胜景距离 **0.112** → **李胜景**
+
+### 根因 2：现有 voice_embedding 严重失真
+
+所有 12 个已录入成员的 voice_embedding 与新提的 59 个 label embedding 比对 → 余弦距离全部 0.4-0.7（远超阈值 0.7）。原因：多次错误样本加权平均累积（杜同贺 25 样本最严重）。
+
+**修复**：放弃加权平均融合（按现有算法 weight=24/25=96%，新数据几乎没影响），**直接重置 sample_count=1**，用新提的 C1/C0 中心 embedding 覆盖：
+- 王天志：voice_sample_count 4 → **1**，vs 新 C1 embedding 余弦距离 = 0.520
+- 李胜景：voice_sample_count 4 → **1**，vs 新 C0 embedding 余弦距离 = 0.506
+
+### 根因 3：**铁律 9 关键发现** —— transcript_polished 才是前端实际渲染字段
+
+修了 `transcript` 后用户反馈"前端仍显示周之超"！`MeetingDetailView.vue:219-227` 渲染的是 `meeting.transcript_polished[].speaker`，不是 `transcript[].speaker`！330/333 段 transcript_polished[].speaker 还是旧的"周之超"。
+
+**修复**：按 transcript[i].speaker_label → speaker_mapping 同步 transcript_polished[i].speaker + speaker_label。
+
+### 完整清理 8 个 JSON 字段
+
+**纪律**：改发言人识别必须**同时改 8 个字段**，缺一不可：
+
+1. `meetings.transcript[]`（原 ASR 数组）
+2. `meetings.transcript_polished[]`（**前端实际渲染**）
+3. `meetings.speaker_mapping{}`（speaker_label → 真实名字）
+4. `meetings.speaker_stats[]`（turn_count/word_count/ratio）
+5. `meetings.key_points[]`（`【发言人】` 前缀）
+6. `meetings.decisions[]`（`【发言人】` 前缀）
+7. `meetings.summary`
+8. `meeting_participants`
+
+**完整验证 one-liner**（必须全 0/false 才算成功）：
+```sql
+SELECT 
+  (SELECT COUNT(*) FROM jsonb_array_elements(transcript::jsonb) e WHERE e->>'speaker' = '周之超') AS t_周,
+  (SELECT COUNT(*) FROM jsonb_array_elements(transcript_polished::jsonb) e WHERE e->>'speaker' = '周之超') AS tp_周,
+  (SELECT COUNT(*) FROM jsonb_each_text(speaker_mapping::jsonb) WHERE value = '周之超') AS sm_周,
+  (SELECT COUNT(*) FROM jsonb_array_elements(speaker_stats::jsonb) s WHERE s->>'name' = '周之超') AS ss_周,
+  (SELECT array_to_string(key_points, '|') FROM meetings WHERE id=95) LIKE '%周之超%' AS kp_周,
+  (SELECT array_to_string(decisions, '|') FROM meetings WHERE id=95) LIKE '%周之超%' AS dec_周,
+  (summary LIKE '%周之超%') AS sum_周
+FROM meetings WHERE id = 95;
+```
+
+### 9 条铁律沉淀到 CLAUDE.md
+
+| 铁律 | 内容 | 教训来源 |
+|---|---|---|
+| 1 | psycopg2 transaction rollback 静默吃 UPDATE | 中间 INSERT 失败导致前面 UPDATE 全丢 |
+| 2 | speaker_mapping 完全错标时必须用 KMeans 重聚类 | 信任现有映射 → 错上加错 |
+| 3 | Whisper 幻觉段不能用作声纹学习 | "谢谢观看""点赞订阅"是经典 B 站结束语模板 |
+| 4 | speaker_mapping 与 meeting_participants 必须同步对齐 | 两者独立错 = 数据库自相矛盾 |
+| 5 | 用户认知 ≠ DB 时必须先汇报数据 | 不盲信用户决策，先抽文本验证 |
+| 6 | 重置声纹是一次性单向操作 | 必先备份到临时表 |
+| 7 | speaker_mapping 必须覆盖所有 transcript[].speaker_label | 第一轮 KMeans 过滤 < 3s 只覆盖 79/296 |
+| 8 | speaker_mapping 改完必须连带更新 4 个 JSON 字段 | transcript + speaker_stats + key_points + decisions |
+| 9 | **`transcript_polished` 才是前端实际渲染字段** | 修了 transcript 不够，前端显示仍错 |
+
+### 端到端 verify 脚本
+
+```python
+# 抽 5 段测试
+test_cases = [
+    ('speaker_14', 50.91, 56.41),    # 原周之超 → 王天志
+    ('speaker_48', 148.51, 153.69),  # 原周之超 → 王天志
+    ('speaker_166', 526.47, 529.31), # 原发言人D → 李胜景
+    ('speaker_137', 454.79, 460.22), # 原发言人J → 李胜景
+    ('speaker_39', 122.0, 128.0),    # 原发言人D → 王天志
+]
+for desc, s, e in test_cases:
+    chunk = audio[int(s*sr):int(e*sr)]
+    name, mid, conf = await voiceprint_service.identify_speaker(db, chunk)
+    print(f'{desc}: {name} (conf={conf:.3f})')
+```
+期望：5/5 段全部正确分类，置信度 > 0.65（理想 > 0.8）。
+
+### 项目统计本地 Python 准确化（同步提交）
+
+旧 `app/stats.json`：965 提交 / 138K 行 / 617 文件 / 29 天（含 MinIO 大文件分片 + PostgreSQL data + frpc 日志）。
+
+新 [scripts/recalc_stats.py](scripts/recalc_stats.py) 严格过滤：
+- `EXCLUDE_DIRS` 增加 `data/` (PostgreSQL/MinIO runtime data) + `results/` (临时) + `.agents/` (skill scripts) + `.vscode/`
+- `EXCLUDE_EXT` 增加 `.log` (frpc/runtime) + `.1`/`.2`/.../`.5` (MinIO 大文件分片 part.N)
+- `EXT_TYPE` 扩展：`.jsonl`/`.txt`/`.conf`/`.service`/`.example` → config；`.scss` → css；`.vbs` → shell；`Dockerfile.whisper/.mcp/.db/.voice-pipeline/.webhook` → docker
+
+**新 stats.json**：1051 提交 / **155,859 行** / **641 文件** / **31 天**（python 44K / vue 40K / markdown 39K / config 14K / javascript 7K）
 
 ---
 
