@@ -1408,3 +1408,42 @@ for desc, s, e in test_cases:
 ```
 期望：5/5 段全部正确分类，置信度 > 0.65（理想 > 0.8）。如果某段 conf < 0.6 → 该段可能跨簇（多说话人重叠），需要手动剔除或重新聚类
 
+### 铁律 9：`meetings.transcript_polished` 是前端实际渲染的字段，不是 `transcript`！
+
+- **前端实际渲染**：[MeetingDetailView.vue:219-227](web/src/views/MeetingDetailView.vue#L219-L227) 用 `meeting.transcript_polished[].speaker` 渲染头像 + 名字
+- 修了 `transcript` 不够！前端读的是 `transcript_polished`（L2/L3 润色后生成的独立 JSON 数组，与 transcript 一一对应）
+- **本次踩坑**：DB 验证 `transcript` 全干净（0 周之超），但用户前端仍显示周之超 → 查 `transcript_polished` 才发现 80 段还在写"周之超"（commit `af044bfc` 漏修了这条字段）
+- **纪律（"改发言人识别同时改 8 个 JSON 字段"）**：
+  1. `meetings.transcript[]`（原 ASR 数组）
+  2. `meetings.transcript_polished[]`（L2/L3 润色后数组，**前端实际渲染**）
+  3. `meetings.speaker_mapping{}`（speaker_label → 真实名字映射）
+  4. `meetings.speaker_stats[]`（AI 后期统计的发言次数/字数）
+  5. `meetings.key_points[]`（讨论要点，`【发言人】` 前缀）
+  6. `meetings.decisions[]`（决议事项，`【发言人】` 前缀）
+  7. `meetings.summary`（摘要，可能含人名）
+  8. `meeting_participants`（参会者列表）
+- **完整验证 one-liner**（必须**全 0** 才算成功）：
+  ```sql
+  SELECT 
+    (SELECT COUNT(*) FROM jsonb_array_elements(transcript::jsonb) e WHERE e->>'speaker' = '周之超') AS t_周,
+    (SELECT COUNT(*) FROM jsonb_array_elements(transcript_polished::jsonb) e WHERE e->>'speaker' = '周之超') AS tp_周,
+    (SELECT COUNT(*) FROM jsonb_each_text(speaker_mapping::jsonb) WHERE value = '周之超') AS sm_周,
+    (SELECT COUNT(*) FROM jsonb_array_elements(speaker_stats::jsonb) s WHERE s->>'name' = '周之超') AS ss_周,
+    (SELECT array_to_string(key_points, '|') FROM meetings WHERE id=95) LIKE '%周之超%' AS kp_周,
+    (SELECT array_to_string(decisions, '|') FROM meetings WHERE id=95) LIKE '%周之超%' AS dec_周,
+    (summary LIKE '%周之超%') AS sum_周
+  FROM meetings WHERE id = 95;
+  ```
+  **任一字段不为 0/false → 改漏了**，重做
+- **transcript 与 transcript_polished 同步方法**：两者数组按顺序一一对应，按 transcript[i].speaker_label 在 speaker_mapping 里的 value 同步 tp[i].speaker
+  ```python
+  new_tp = []
+  for i, tp_e in enumerate(transcript_polished):
+      if i < len(transcript):
+          new_e = dict(tp_e)
+          new_e['speaker'] = transcript[i]['speaker']
+          new_e['speaker_label'] = transcript[i]['speaker_label']
+          new_tp.append(new_e)
+  ```
+- **用户必做**：DB 改完后**硬刷新浏览器**（Ctrl+Shift+R / Cmd+Shift+R）才能绕过 SW cache 看到更新
+
