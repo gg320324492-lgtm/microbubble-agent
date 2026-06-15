@@ -3,10 +3,12 @@
     <PageHeader title="声纹中心" show-back @back="$router.back()">
       <template #right>
         <button
+          id="voiceprint-header-test"
           type="button"
+          name="voiceprint-header-test"
           class="header-action"
-          aria-label="麦克风测试"
-          title="麦克风测试"
+          aria-label="声纹识别测试"
+          title="声纹识别测试"
           @click="showTest = true"
         >🎤</button>
       </template>

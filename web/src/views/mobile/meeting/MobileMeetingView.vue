@@ -120,9 +120,17 @@
               <span class="action-icon" style="background: #E6A23C">🎤</span>
               <span>开始听会</span>
             </button>
-            <button type="button" class="action-item" @click="handleVoiceTest">
+            <button
+              id="meeting-voice-test"
+              type="button"
+              name="meeting-voice-test"
+              class="action-item"
+              aria-label="声纹识别测试"
+              title="声纹识别测试"
+              @click="handleVoiceTest"
+            >
               <span class="action-icon" style="background: #909399">🎙</span>
-              <span>麦克风测试</span>
+              <span>声纹识别测试</span>
             </button>
             <button type="button" class="action-item cancel" @click="showActionSheet = false">取消</button>
           </div>
@@ -162,6 +170,9 @@
       :is-mobile="true"
       @success="onMeetingSaved"
     />
+
+    <!-- 声纹识别测试全屏（ActionSheet 入口，复用声纹中心同款） -->
+    <VoiceTestFlow v-model:show="showVoiceTest" />
   </div>
 </template>
 
@@ -181,6 +192,7 @@ import dayjs from 'dayjs'
 import { useMeeting } from '@/composables/useMeeting'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
+import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
 
 const router = useRouter()
 
@@ -193,6 +205,7 @@ const {
 const showActionSheet = ref(false)
 const showSearch = ref(false)
 const showCreateDialog = ref(false)
+const showVoiceTest = ref(false)
 const searchInputRef = ref(null)
 
 // 日期范围快速筛选
@@ -264,7 +277,8 @@ function handleStartLive() {
 }
 function handleVoiceTest() {
   showActionSheet.value = false
-  ElMessage.info('麦克风测试（开发中）')
+  // 复用声纹中心同款 VoiceTestFlow（POST /api/v1/voiceprint/test 全链路）
+  showVoiceTest.value = true
 }
 
 function onMeetingSaved() {
