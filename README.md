@@ -33,6 +33,13 @@
 
 ### 近期新增（按时间倒序）
 
+- **🎤 移动端"声纹识别测试"真全链路改造 + v-model 命名 bug 修复（2026-06-15 晚，5 commits `de7ef8aa` + `22d5570a` + `392a88d7` + `f84524cf` + `9231d8bf`）** — 用户报告"声纹测试还是显示开发中"+"点击没反应"两大问题，根因 + 修复链：
+  - **根因 1（commit `de7ef8aa`）**：移动端 [VoiceTestFlow.vue](web/src/components/mobile/VoiceTestFlow.vue) 原本只做"麦克风测试"（拿权限 + 录音 + 音量可视化 + 回放），**根本没调** `POST /api/v1/voiceprint/test` 做声纹匹配。改造为和桌面端 [VoiceTestDialog.vue](web/src/components/VoiceTestDialog.vue) 一致的真声纹识别测试，**5 状态机** `idle → recording → recorded → testing → result`：录完用户回放 → 手动点"🔍 测试识别"才调后端 → 后端跑完整 5 步链路（音频解码 → 静音检测 → VAD → ASR → 声纹匹配）→ 前端按 `testResult.steps[]` 渲染 `✅/⚠️/❌` + 最终 `speaker + confidence + transcript`。错误降级：axios 失败时构造 `steps: [{name: '测试请求', status: 'error', ...}]` 渲染
+  - **根因 2（commit `22d5570a`）**：commit `de7ef8aa` 只修了声纹中心顶栏 1 个入口，**漏了会议页 ActionSheet 第二个入口** → 用户点第二个仍弹 `'麦克风测试（开发中）'` toast。修复：会议页 import `VoiceTestFlow` + `showVoiceTest` ref + `handleVoiceTest()` 改为 `showVoiceTest.value = true`（打开全屏测试页），button 文字/aria-label 同步"麦克风测试"→"声纹识别测试"
+  - **根因 3（commit `f84524cf`）**：修复后用户仍报"点击没反应"。根因：调用方 `<VoiceTestFlow v-model:show="showTest" />`（要 `show` prop + `update:show` 事件），但组件内部 prop 是 `modelValue`（默认 v-model 用）—— **prop 名不匹配**。Vue 不会编译报错，只静默失败：`showTest` 传不到 `modelValue` → Teleport 永远不渲染 + emit `update:modelValue` 父组件没监听。修复：两处调用 `v-model:show` → `v-model`
+  - **新铁律（commit `9231d8bf`）**：**多入口 grep 铁律** — 改前 `grep -rn "X 测试|开发中" web/src/views/mobile/ web/src/components/mobile/` 找全所有同名入口；改后再次 grep 验证 = 0；同一组件 `<VoiceTestFlow v-model="showXxx" />` 多处复用
+  - **新铁律（commit `f84524cf`）**：**v-model 命名匹配铁律** — `v-model` ↔ prop `modelValue` / `v-model:foo` ↔ prop `foo`（**prop 名 / emit 名必须与 v-model 修饰符完全一致**）。Vue 不会编译报错，`v-model:bar` 即便子组件没 `bar` prop 也合法，运行只静默失败
+  - **完整文档**：[memory/mobile-voiceprint-real-test.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/mobile-voiceprint-real-test.md) + [CLAUDE.md 2026-06-15 v-model 命名匹配铁律](CLAUDE.md#v-model-命名必须跟组件-prop-名严格匹配commit-f84524cf重要)
 - **🔔 任务提醒体系 v2 全面优化 + v2.1 微信交互简化（2026-06-15，commits `223ea74` + `ba75e32`）** — 解决两个用户痛点：
   - **赵航佳半夜收微信提醒** → 所有 reminder 统一在 **11:00 AM 北京时间窗口**发送（±60min 容差），半夜不触发任何推送
   - **杜同贺多次发"收到"小气助手仍推** → 新增 `acknowledged` 状态 + `acknowledge_all_user_reminders` 服务方法
@@ -474,8 +481,9 @@ npm run dev
 
 ✅ **已上线运行** — 核心功能已完成，生产环境部署成功（https://agent.mnb-lab.cn）
 
-### 🔧 最新改进（2026-06-15 任务提醒体系 v2 + qa-bench 闭环）
+### 🔧 最新改进（2026-06-15 任务提醒体系 v2 + qa-bench 闭环 + 移动端声纹测试全链路改造）
 
+- **🎤 移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug 修复（5 commits `de7ef8aa` / `22d5570a` / `f84524cf` / `392a88d7` / `9231d8bf` / `ceae0cd5`）** — 见上方"近期新增"详述。**核心变化**：①VoiceTestFlow.vue 从"麦克风测试"升级为"声纹识别测试"（5 状态机 + 调 `/api/v1/voiceprint/test` 全链路 5 步：音频解码→静音检测→VAD→ASR→声纹匹配，返回 `speaker + confidence + transcript`）②会议页 ActionSheet 第 2 个"麦克风测试"入口接入同一组件（去掉"开发中"toast）③**修复 `v-model:show` vs `modelValue` prop 名不匹配 bug**（Vue 静默失败不报错，"点击没反应"系列问题第一排查点）④**新铁律：多入口 grep 纪律**（移动端同一功能可能在多个页面有入口）
 - **🔔 任务提醒体系 v2 全面优化（commits `223ea74` + `ba75e32`）** — 见上方"近期新增"详述。**核心变化**：所有 reminder 统一在 11:00 AM 北京时间窗口推送，每个任务 1 次推完即结束；任何微信消息 = ack 取消该用户所有 pending（杜同贺痛点彻底解决）；同用户多条合并为 1 条 digest 消息。
 - **🤖 Agent 回答质量 5 大根因修复 + qa-bench 360 题闭环（2026-06-15 凌晨，14 commits）** — 见 [CLAUDE.md 2026-06-15 section](CLAUDE.md#2026-06-15-agent-质量--qa-bench-闭环)：`TOOL_REGISTRY` 启动初始化 + LLM 代理层 fake tool_call 5 格式解析 + `get_member_profile` dead import + 长期记忆干扰 + synthesis fake XML 泄露。知识库 64 → 247 条（+183），qa-bench 360 题 84% 高分率
 

@@ -1,8 +1,16 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-15 凌晨（Agent 回答质量 14 commits + 360 题 qa-bench 闭环 + 知识库 +183 条）** — 修复 5 个真根因（TOOL_REGISTRY 启动未注册 / LLM 代理层 fake tool_call / dead import + is_active 过滤 / 长期记忆干扰 / synthesis fake XML 泄露）+ 5 轮迭代 39% → 84% 高分率 + 75 + 285 题分批逐个问答 + 知识库 64 → 247 条（+183, +286%）+ 重新计算 stats.json（**1026 commits / 236K 行 / 941 文件 / 31 天**）
+> 最后更新: **2026-06-15 晚（移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug + 5 commits + 2 条新铁律）** — ① VoiceTestFlow.vue 从"麦克风测试"升级为"声纹识别测试"（5 状态机 + 调 `/api/v1/voiceprint/test` 全链路 5 步）② 会议页 ActionSheet 第 2 个"麦克风测试"入口接入同一组件（去掉"开发中"toast）③ 修复 `v-model:show` vs `modelValue` prop 名不匹配 bug（Vue 静默失败不报错）④ 新铁律：多入口 grep 纪律 + v-model 命名匹配铁律。**累计**：1026+ commits / 236K 行 / 941 文件 / 31+ 开发天数
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-15 晚 移动端声纹识别测试全链路改造 + 2 个连锁 bug 修复，5 commits）
+- [🎤 移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug（2026-06-15 晚，5 commits）](#移动端声纹识别测试真全链路改造--2-个连锁-bug2026-06-15-晚5-commits-de7ef8aa--22d5570a--f84524cf--392a88d7--9231d8bf--ceae0cd5)
+  - 🐛 根因 1：VoiceTestFlow 只测麦克风没调识别 API（commit `de7ef8aa`）
+  - 🐛 根因 2：多入口漏改（commit `22d5570a` 跟进）
+  - 🐛 根因 3：v-model 命名不匹配（commit `f84524cf` 跟进）
+  - 📐 新铁律 1：多入口 grep 纪律（commit `9231d8bf`）
+  - 📐 新铁律 2：v-model 命名匹配（commit `ceae0cd5`）
 
 ### 最新完成（2026-06-14 晚 ~ 2026-06-15 凌晨 Agent 回答质量 14 commits + qa-bench 360 题闭环）
 - [🤖 Agent 回答质量 5 大修复合盘](#agent-回答质量-5-大修复合盘2026-06-14-晚)（14 commits — `e2a9a49` / `a40e84c` / `c1bab8a` / `d36d1db` / `659eaf0` / `10c419b` / `79305b7` / `5c24442` / `cab74bd` / `d120e54`）
@@ -106,6 +114,93 @@
 - [Docker Desktop 更新](#docker-desktop-更新2026-06-09)（4.73.1 → 4.77.0 + 中文汉化语言包）
 
 ---
+
+---
+
+## 移动端"声纹识别测试"真全链路改造 + 2 个连锁 bug（2026-06-15 晚，5 commits `de7ef8aa` + `22d5570a` + `f84524cf` + `392a88d7` + `9231d8bf` + `ceae0cd5`）
+
+### 痛点 + 三个根因
+
+用户报告两个问题：
+1. "声纹测试还是显示开发中"（commit `de7ef8aa` 修了第 1 个入口后）
+2. "现在移动端点击'声纹识别测试'没有反应"（commit `22d5570a` 修了第 2 个入口后）
+
+#### 根因 1（commit `de7ef8aa`）：VoiceTestFlow 只测麦克风没调识别 API
+
+[web/src/components/mobile/VoiceTestFlow.vue](web/src/components/mobile/VoiceTestFlow.vue) 原本只做 3 件事：
+1. `getUserMedia` 拿麦克风权限
+2. `MediaRecorder` 录音
+3. Canvas 音量可视化 + 音频回放
+
+**漏了最关键一步**：录音完成后**根本没调** `POST /api/v1/voiceprint/test`。用户点完"测试"看到的只是音频播放器，永远看不到"我能不能被识别"。
+
+**Why**：用户原话"已录入声纹的成员可以再听会之前检测一下是否能识别出来自己的声纹"——这是**声纹识别**测试，不是麦克风测试。两者差别：
+- 麦克风测试：只验证硬件是否工作
+- 声纹识别测试：调后端全链路 5 步（解码 → 静音检测 → VAD → ASR → 声纹匹配），返回 `speaker + confidence + transcript`
+
+**修复**：状态机升级为 5 态 `idle → recording → recorded → testing → result`：
+- `idle`/`recording`：录音 + 可视化
+- `recorded`：用户可回放，**手动**点"测试识别"按钮
+- `testing`：spinner
+- `result`：渲染后端返回的 `testResult.steps[]`（每步 `ok/warn/error` + 详情）+ 最终 `speaker + confidence + transcript`
+- 错误降级：axios 失败时构造 `steps: [{name: '测试请求', status: 'error', detail: ...}]` 渲染
+
+#### 根因 2（commit `22d5570a`）：多入口漏改
+
+[web/src/views/mobile/meeting/MobileMeetingView.vue:265-268](web/src/views/mobile/meeting/MobileMeetingView.vue#L265-L268) 也有一个独立的"麦克风测试"入口（ActionSheet），点完只弹 `ElMessage.info('麦克风测试（开发中）')` toast。**commit `de7ef8aa` 只修了第 1 个入口** → 用户打开第 2 个仍弹"开发中"。
+
+**修复**：
+- 会议页 `import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'` + 加 `showVoiceTest` ref
+- `handleVoiceTest` 改为 `showVoiceTest.value = true`（打开全屏测试页）
+- 按钮文字"麦克风测试"→"声纹识别测试"，aria-label/title 同步
+- 声纹中心 [MobileVoiceprintView.vue:8](web/src/views/mobile/MobileVoiceprintView.vue#L8) button aria-label/title 同步
+- 同一份 `<VoiceTestFlow v-model:show="showXxx" />` 多处复用
+
+#### 根因 3（commit `f84524cf`）：v-model 命名不匹配
+
+修复后用户仍报"点击没反应"。根因：调用方 `<VoiceTestFlow v-model:show="showTest" />`（要 `show` prop + `update:show` 事件），但 VoiceTestFlow 内部 prop 是 `modelValue`（默认 v-model 用的）—— **prop 名不匹配**。
+
+**静默失败链**：
+1. `v-model:show` 等价于 `:show="showTest" @update:show="showTest = $event"`，但组件没 `show` prop → Vue 3 静默 fallback（不抛错，偶尔 dev mode 警告）
+2. `showTest = true` 传到子组件的 `show` prop 被忽略，**实际 `modelValue` 仍为 undefined**
+3. 子组件 `v-if="modelValue"` 永远 false → `<Teleport>` 不渲染
+4. 子组件 `emit('update:modelValue', false)` 父组件没监听 update:show → 永远关不上
+5. **结果**：用户点击 button 完全无视觉反馈，不报错、不警告、不进 console
+
+**修复**：两处调用 `v-model:show` → `v-model`（默认走 `modelValue` prop）。
+
+### 新增 2 条铁律（已沉淀到 CLAUDE.md）
+
+#### 多入口 grep 铁律（commit `9231d8bf`）
+- 改前 `grep -rn "X 测试|开发中" web/src/views/mobile/ web/src/components/mobile/` 找全所有同名入口
+- 改后再次 grep 验证 = 0
+- 同一组件多处复用（`<VoiceTestFlow v-model="showXxx" />` 复用）
+- button 文字 + aria-label + title 三处统一
+
+#### v-model 命名匹配铁律（commit `ceae0cd5`）
+- `v-model` 必须对应 prop `modelValue` + emit `update:modelValue`
+- `v-model:foo` 必须对应 prop `foo` + emit `update:foo`（**prop 名 / emit 名必须与 v-model 修饰符完全一致**）
+- Vue 不会编译报错。`v-model:bar` 即便子组件没 `bar` prop 也合法，运行只静默失败
+- debug "点击没反应" 类问题第一步就是 grep 调用方 `v-model:xxx` 看 xxx 跟子组件 prop 名是否一致
+- 跟 CLAUDE.md 2026-06-12 PR #3 教训的差别：之前是"el-input v-model 写错 prop 名 Vue 警告"（EP prop 固定叫 `modelValue`，想写 v-model 必须用 `model-value`/`@update:model-value`）；本条是**自研组件**场景，prop 命名是项目自己定的，调用方/定义方必须协商一致
+
+### 提交链
+
+| Commit | 作用 |
+|---|---|
+| `de7ef8aa` | VoiceTestFlow.vue 真声纹识别测试改造（5 状态机 + 调 /voiceprint/test） |
+| `22d5570a` | 会议页 ActionSheet 第二个入口接入 + button 文字/aria 统一 |
+| `392a88d7` | CLAUDE.md + memory 沉淀"麦克风→声纹识别"教训 |
+| `f84524cf` | 修复 v-model:show 跟 modelValue prop 不匹配导致点击无反应 |
+| `9231d8bf` | CLAUDE.md 沉淀"多入口 grep"铁律 |
+| `ceae0cd5` | CLAUDE.md 沉淀"v-model 命名匹配"铁律 |
+
+### 完整文档
+
+- [CLAUDE.md 2026-06-15 移动端"声纹测试"是真识别测试不是麦克风测试（commit `de7ef8aa`）](CLAUDE.md#2026-06-15-移动端声纹测试是真识别测试不是麦克风测试commit-de7ef8aa)
+- [CLAUDE.md 2026-06-15 多入口 grep 铁律（commit `22d5570a`）](CLAUDE.md#多入口-grep-铁律commit-22d5570a同一-pr-跟进)
+- [CLAUDE.md 2026-06-15 v-model 命名必须跟组件 prop 名严格匹配（commit `f84524cf`）](CLAUDE.md#v-model-命名必须跟组件-prop-名严格匹配commit-f84524cf重要)
+- [memory/mobile-voiceprint-real-test.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/mobile-voiceprint-real-test.md)
 
 ---
 
