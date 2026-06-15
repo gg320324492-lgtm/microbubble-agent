@@ -1290,3 +1290,16 @@ FROM reminders WHERE acknowledged_at IS NOT NULL ORDER BY id DESC LIMIT 5;
   ⑦ **a11y 4 属性套件** —— 所有 `<button>` 补 `id` + `name` + `aria-label` + `title`（CLAUDE.md 2026-06-12 铁律）
 - **沉淀** — [mobile-voiceprint-real-test.md](C:/Users/admin/.claude/projects/g--microbubble-agent/memory/mobile-voiceprint-real-test.md)
 
+### 多入口 grep 铁律（commit `22d5570a`，同一 PR 跟进）
+
+- **同一个功能可能在移动端多个页面有入口**——本项目"麦克风/声纹测试"有 2 个独立入口：
+  1. [MobileVoiceprintView.vue:8](web/src/views/mobile/MobileVoiceprintView.vue#L8) 顶栏 🎤 button
+  2. [MobileMeetingView.vue:123-126](web/src/views/mobile/meeting/MobileMeetingView.vue#L123-L126) ActionSheet "麦克风测试" 按钮
+- **commit `de7ef8aa` 只修了第 1 个** → 用户打开第 2 个入口仍弹 `'麦克风测试（开发中）'` toast，以为没修。**commit `22d5570a` 修第 2 个 + 同步 aria-label/title**
+- **铁律 4 条** —
+  ① **改前先 grep**：`grep -rn "X 测试\|X test\|开发中" web/src/views/mobile/ web/src/components/mobile/` 找全所有同名入口
+  ② **改后必验证**：`grep -rn "开发中" web/src/views/mobile/ web/src/components/mobile/` 应该是 0（"知识健康"等用户已知未开发的功能除外）
+  ③ **同一组件多处复用**：本次让声纹中心和会议页都 `<VoiceTestFlow v-model:show="showVoiceTest" />`，避免维护多份
+  ④ **button 文字 + aria-label + title 三处统一**（a11y 4 属性套件原则）—— 入口 A 叫"声纹识别测试" 入口 B 不能叫"麦克风测试"
+- **常见的多入口模式** — 移动端"X 测试"功能常出现在：①声纹中心页顶栏 ②会议页 ActionSheet ③录音对话框前置引导 ④任何下拉菜单/更多按钮。**一次 fix 必须覆盖所有入口**
+
