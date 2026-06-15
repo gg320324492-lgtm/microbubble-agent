@@ -1,7 +1,8 @@
 /**
  * 统一 Markdown 渲染（含代码高亮）
  *
- * 性能考量：只注册常用 6 种语言（python / js / bash / json / sql / yaml），
+ * 性能考量：只注册常用 6 种语言（python / js / bash / json / sql / yaml）+
+ * plaintext fallback（语言未指定或不支持时透传，消 console warning），
  * 避免 highlight.js 200+ 语言全量打包（gzip 后 +30KB）。
  */
 
@@ -14,8 +15,9 @@ import bash from 'highlight.js/lib/languages/bash'
 import json from 'highlight.js/lib/languages/json'
 import sql from 'highlight.js/lib/languages/sql'
 import yaml from 'highlight.js/lib/languages/yaml'
+import plaintext from 'highlight.js/lib/languages/plaintext'
 
-// 注册 6 种常用语言
+// 注册 6 种常用语言 + plaintext fallback
 hljs.registerLanguage('python', python)
 hljs.registerLanguage('py', python)
 hljs.registerLanguage('javascript', javascript)
@@ -29,6 +31,9 @@ hljs.registerLanguage('json', json)
 hljs.registerLanguage('sql', sql)
 hljs.registerLanguage('yaml', yaml)
 hljs.registerLanguage('yml', yaml)
+hljs.registerLanguage('plaintext', plaintext)
+hljs.registerLanguage('text', plaintext)
+hljs.registerLanguage('txt', plaintext)
 
 // TypeScript 简化为 JS 高亮（避免再装 typescript 包）
 function typescriptPlaceholder() { return javascript }
