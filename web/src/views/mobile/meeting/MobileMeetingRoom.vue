@@ -16,6 +16,12 @@
       </template>
     </PageHeader>
 
+    <!-- 占位提示横幅（实时 WS 录音尚未接入，避免误以为录音在工作） -->
+    <div class="wip-banner" role="status">
+      <span class="wip-icon">🚧</span>
+      <span class="wip-text">移动端实时听会即将开放，请用桌面端浏览器录制完整会议</span>
+    </div>
+
     <!-- 录音状态横幅 -->
     <div v-if="recording" class="rec-banner">
       <span class="rec-dot" />
@@ -141,7 +147,7 @@
  */
 
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 
 const props = defineProps({
@@ -183,14 +189,15 @@ function toggleRecording() {
 }
 
 function startRecording() {
-  recording.value = true
-  duration.value = 0
-  durationTimer = setInterval(() => {
-    duration.value += 1
-  }, 1000)
-  // 占位转录（实际由 AudioRecorder + WS 提供）
-  simulateTranscript()
-  ElMessage.success('开始听会')
+  // WIP：实时录音 WS 集成尚未完工，避免误导用户以为系统在录音
+  ElMessage.warning('移动端实时听会即将开放，请用桌面端浏览器录制')
+  return
+  // 以下代码暂时禁用，待 WS 集成后启用：
+  // recording.value = true
+  // duration.value = 0
+  // durationTimer = setInterval(() => { duration.value += 1 }, 1000)
+  // simulateTranscript()
+  // ElMessage.success('开始听会')
 }
 
 function stopRecording() {
@@ -207,9 +214,17 @@ function toggleMute() {
   ElMessage.info(muted.value ? '已静音' : '已取消静音')
 }
 
-function handleHangup() {
+async function handleHangup() {
   if (recording.value) {
-    ElMessageBox.confirm?.('确定结束听会？录音会保存').catch(() => {})
+    try {
+      await ElMessageBox.confirm('确定结束听会？录音会保存', '结束确认', {
+        confirmButtonText: '结束',
+        cancelButtonText: '继续',
+        type: 'warning',
+      })
+    } catch {
+      return  // 用户取消
+    }
   }
   emit('call-ended', props.meetingId)
 }

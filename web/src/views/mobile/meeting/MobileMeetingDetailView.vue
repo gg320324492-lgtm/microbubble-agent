@@ -319,7 +319,8 @@ function playAudio() {
 }
 
 function handleStartLive() {
-  router.push('/meetings?startLive=true')
+  // 移动端听会独立路由（占位 UI，WS 实时录音 = 后续 PR）
+  router.push('/meetings/room')
 }
 
 async function handleDelete() {
