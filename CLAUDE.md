@@ -1329,3 +1329,14 @@ FROM reminders WHERE acknowledged_at IS NOT NULL ORDER BY id DESC LIMIT 5;
   ```
 - **跟 CLAUDE.md 2026-06-12 教训的差别** — 之前 PR #3 教训是"el-input v-model 写错 prop 名 Vue 警告"（Element Plus prop 固定叫 `modelValue`，想写 v-model 必须用 `model-value`/`@update:model-value`）。本条是**自研组件**场景，prop 命名是项目自己定的，调用方/定义方必须协商一致。**两条都强调"命名一致"，但触发的库不同**
 
+### 移动端"X 分析"功能复用桌面端 el-dialog 组件模式（commit `67fd7eaa`）
+
+- **场景** — 移动端会议页 [MobileMeetingView.vue:255-258](web/src/views/mobile/meeting/MobileMeetingView.vue#L255-L258) ActionSheet 第三个"粘贴转录分析"按钮点完只弹 `'粘贴转录分析（开发中）'` toast（跟前两次声纹测试的 bug 一模一样）。用户要求"也要能正常使用"
+- **关键观察** — 桌面端 [MeetingView.vue:51, 242](web/src/views/MeetingView.vue) 已经有完整实现：`<PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="fetchMeetings" />` + `pasteAnalyzeDialogRef.value?.open()` 模式。组件内部 line 135 `isMobile = ref(window.innerWidth <= 768)` + line 4 `:width="isMobile ? '95vw' : '750px'"` 已在桌面端**预留移动端适配**。
+- **修复** — 移动端 import `PasteAnalyzeDialog` + 加 `pasteAnalyzeDialogRef` ref + `handlePasteAnalyze` 改为 `pasteAnalyzeDialogRef.value?.open()`。dialog 内部 `isMobile` 自动检测窄屏，宽度自动从 750px 变 95vw。**0 改动 PasteAnalyzeDialog.vue 本身**。
+- **铁律 4 条** —
+  ① **移动端 dialog 类组件**（带表单/选择器）**优先复用桌面端 el-dialog**——不用重写 `<MobileXxxDialog>`，桌面端组件已含 `isMobile` 适配（line 4 `:width="isMobile ? '95vw' : '750px'"` 模式）。如果桌面端 dialog 没 isMobile 适配，再考虑改 prop 或写移动端版
+  ② **复用模式** — 桌面端用 `ref + open()` 暴露，移动端也用 `ref + open()`。`<XxxDialog ref="xxxRef" @saved="onSaved" />` 放在 template 末尾
+  ③ **el-dialog 内部 el-form CSS 已在 mobile bundle** — 因为移动端已经用 `MeetingCreateDialog`（[MobileMeetingView.vue:167](web/src/views/mobile/meeting/MobileMeetingView.vue#L167) 注释"移动端仍用 el-dialog fullscreen"），el-form / el-input / el-select / el-date-picker CSS **0 增量打包**
+  ④ **多入口 grep 铁律 3 次奏效** — 这次是同 1 个 ActionSheet 里的第 3 个"开发中"toast（前 2 个：声纹中心按钮 + 会议页 ActionSheet 第 2 项"麦克风测试"）。**改 1 个 ActionSheet 必 grep ActionSheet 全部 4 个 item**，不能改一个忘一个
+
