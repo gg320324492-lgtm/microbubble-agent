@@ -1,0 +1,1 @@
+import"./rolldown-runtime-12fb2496.js";import{En as e,T as t,fn as n,ln as r}from"./element-plus-desktop-df602b2d.js";import{r as i}from"./index-1ee619c8.js";var a={},o={class:`knowledge-health`};function s(i,a){let s=t;return e(),r(`div`,o,[n(s,{description:`健康监控功能开发中`})])}var c=i(a,[[`render`,s]]);export{c as default};
