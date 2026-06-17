@@ -9,7 +9,7 @@
     />
 
     <MobileSessionDrawer
-      v-model:show="showDrawer"
+      v-model="showDrawer"
       :sessions="sessionsList"
       :current-id="sessionId"
       @create="handleCreateSession"
