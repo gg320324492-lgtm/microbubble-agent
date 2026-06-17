@@ -1,6 +1,8 @@
 # MicroBubble Agent - 项目上下文
 
 > **2026-06-17 部署与基础设施重建**：Docker Desktop 引擎崩溃循环修复（WSL2 `docker-desktop-data` 发行版丢失 → com.docker.service 7-9 分钟反复启停）+ 24GB C 盘 Docker 缓存清空 + 数据全 E 盘化（junction 透明重定向）+ huaweicloud 镜像源 404 → aliyun 正确路径（Debian bookworm-security 走 `debian-security/` 独立路径）+ aliyun PyPI 限速 600KB/s → 清华源 + pip `--retries 10 --timeout 60` + 新增 `.dockerignore`（build context 12GB→700MB 17 倍提速）+ frp 客户端 Windows 计划任务自启。详见 [CHANGELOG.md](CHANGELOG.md) `[Unreleased] 2026-06-17` section + [memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) 10 条铁律。
+>
+> **2026-06-17 晚间更新**：服务器 webhook deploy 链断裂修复（dist `Last-Modified` 停在 6/15 13:52 已 2 天）。根因：服务器 `/root/.ssh/github_deploy` key 与 GitHub repo Deploy keys 不匹配，5 次重试全 `Permission denied (publickey)` → webhook 服务在线但 git fetch 失败 → deploy 静默退出（GitHub UI 显示 200 OK 但服务器代码没动）。修复：重新生成 ed25519 + GitHub 端加 deploy key + 顺便持久化 `.env.webhook`（修 6/13 教训的幽灵隐患）+ `deploy-auto.sh` 加 `.env.webhook missing` 守卫（commit `c9c60ca6`）。详见底部 [## 2026-06-17 webhook deploy 链断裂修复](#2026-06-17-webhook-deploy-链断裂修复) section 5 条铁律。
 
 > **2026-06-15 凌晨更新**：Agent 回答质量 5 大根因修复（14 commits）+ qa-bench 360 题逐个问答闭环 + 知识库 64→247 条（+183）。详见底部 [## 2026-06-15 Agent 质量 + qa-bench 闭环](#2026-06-15-agent-质量--qa-bench-闭环) section。
 >
@@ -1600,3 +1602,108 @@ docker compose restart app celery-worker
 - **build context 12GB → 700MB**（17 倍提速）
 - **9 个 Docker 服务运行中**：app、db、redis、minio、neo4j、whisper、vision-mcp、celery-worker、celery-beat
 - **`https://agent.mnb-lab.cn` 端到端连通**（之前 502 Bad Gateway，现在 401 = 端点通了，密码错）
+
+## 2026-06-17 webhook deploy 链断裂修复
+
+**症状链**（用户报告"移动端 UI 还是没生效"）：
+1. 6/17 22:46 / 22:53 GitHub webhook 2 次 push 失败
+2. 服务器 dist `Last-Modified: Mon, 15 Jun 2026 13:52:55 GMT` — **2 天前的状态**
+3. `https://agent.mnb-lab.cn` index hash 仍是 `index-1ee619c8.js`（旧）
+
+**根因（公网探测 4 步定位）**：
+1. `POST /webhook` 无 auth 返 403 = webhook service 活着（响应签名验证拒绝）
+2. `Last-Modified: 6/15 13:52` = dist 没动过
+3. `MainLayout-791d4aa6.js: 404` = 本地 build 出的 hash 服务器不存在
+4. 服务器 SSH 不可达（本地 `id_ed25519` 不被服务器认可）→ 只能从公网推断
+
+**用户 SSH 进去后看到 5 真相**（[webhook-deploy.log](https://github.com/gg320324492-lgtm/microbubble-agent/blob/main/scripts/webhook.py)）：
+```
+23:09:17 POST /webhook delivery=7c9cf3be-... sig=sha256=7abb02d3...  ← 签名通过
+23:09:18 git fetch origin main
+       git@github.com: Permission denied (publickey).  ← 真正根因
+       fatal: Could not read from remote repository.
+23:09:20-23:10:46 第 1-5 次重试 5s/10s/20s/40s/80s 退避全失败
+23:12:09 ERROR: git pull/fetch 都失败，跳过本次部署
+```
+
+**5 条铁律**：
+
+**铁律 1：webhook 失败根因必须先看 `/var/log/webhook-deploy.log`，不要只看 GitHub UI**——
+- GitHub UI 显示 200 OK = webhook service 收到了 + 返回 200，**不代表** deploy 成功
+- webhook service 收到 push → 立即 `return 200 OK` → 启动 daemon 线程跑 deploy-auto.sh → 失败时只 log 不返错给 GitHub
+- 看到 GitHub webhook 标红/失败 = webhook service 完全没收到（网络/firewall/secret 错）
+- 看到 GitHub webhook 显示 ✓ 但服务器没动 = 99% 是 deploy 脚本失败，看 log
+- 诊断命令三件套（服务器 root 跑）：
+  ```bash
+  sudo systemctl status webhook --no-pager -l
+  sudo tail -60 /var/log/webhook-deploy.log
+  ls -la /opt/microbubble-agent/.env.webhook
+  ```
+
+**铁律 2：`git@github.com: Permission denied (publickey)` 95% 是 server-side deploy key 与 GitHub 端不匹配**——
+- 服务器 `/root/.ssh/github_deploy` 是专用 key（不在默认 `id_*` 名字里，git 找不到）
+- 修法：`ssh-keygen -t ed25519 -f /root/.ssh/github_deploy -N "" -C "aliyun-deploy-2026-06-17"` + 把 `.pub` 加到 GitHub repo → Settings → Deploy keys（**Allow write access 不勾**）
+- **deploy key 也要定期轮换**（6/13 教训讲的是 secret 没讲 key，6/17 才发现 server-side key 也需要管理）
+- 定期检查命令（建议加进季度运维清单）：
+  ```bash
+  # 本地
+  for key in ~/.ssh/*.pub; do
+      echo "=== $key ==="
+      cat "$key"
+  done
+  # GitHub 端: Settings → Deploy keys 比对 fingerprint
+  ```
+
+**铁律 3：webhook service EnvironmentFile 缺失是隐形杀手**（6/13 教训的延伸，6/17 才发现没修干净）——
+- 6/13 事故：`.env.webhook` 被 `git clean -fdx` 误删 → webhook service 启动失败
+- 6/13 修复：临时 secret 写到 process memory 重启 service → service active (running) 一切正常
+- 6/17 今日发现：process memory 里的 secret 还在跑，但 `.env.webhook` 文件**仍然不存在** → 任何一次 `systemctl restart webhook` 必挂（因为 `EnvironmentFile=... (ignore_errors=no)`）
+- 修法（commit `c9c60ca6`）：`deploy-auto.sh` 在 `git clean -fdx` 之前 fail loud：
+  ```bash
+  if [ ! -f "$PROJECT_DIR/.env.webhook" ]; then
+      log "ERROR: \$PROJECT_DIR/.env.webhook missing — refusing to clean (会删 webhook secret)"
+      exit 1
+  fi
+  ```
+- 持久化 one-liner（服务器 root 跑，从 process memory 读出来再写文件）：
+  ```bash
+  PID=$(pgrep -f "scripts/webhook.py" | head -1)
+  SECRET=$(sudo cat /proc/$PID/environ | tr '\0' '\n' | grep -E "^WEBHOOK_SECRET=" | cut -d= -f2)
+  echo "WEBHOOK_SECRET=$SECRET" | sudo tee /opt/microbubble-agent/.env.webhook > /dev/null
+  sudo chmod 600 /opt/microbubble-agent/.env.webhook
+  ```
+
+**铁律 4：本地 SSH 不到 server 时只能从公网探测**——
+- 用户本机 `id_ed25519` 可能跟服务器 `~/.ssh/authorized_keys` 不匹配（用户换电脑/重装系统/重生成 key）
+- 公网探测 4 件套：
+  ```bash
+  curl -sk -o /dev/null -w "POST /webhook: %{http_code}\n" -X POST https://agent.mnb-lab.cn/webhook -d '{}'
+  # 期望 403 = 服务在响应；期望 502/connection refused = 服务挂了
+  
+  curl -sI https://agent.mnb-lab.cn/ | grep -iE "(date|last-modified|server)"
+  # Last-Modified 时间 = 最近一次 dist 写入时间
+  
+  curl -sk https://agent.mnb-lab.cn/ | grep -oE 'index-[a-f0-9]+\.js' | head -1
+  # 期望跟 git log 最新 commit 的 dist/index-*.js 一致
+  
+  curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/sw.js
+  # 期望 200 = SW 在跑
+  ```
+- 完整定位用 `<dist Last-Modified 时间>` 对比 `<最新 commit 时间>`：差距 > 几小时 = deploy 链断了
+
+**铁律 5：webhook push → 等 60s → 探测 → 不变就 SSH 排查，不要纯靠 GitHub UI 状态**——
+- 阿里云→GitHub 网络 130s 超时是已知问题（CLAUDE.md 6/13 教训），但 webhook service 立即返 200 + 异步跑 deploy = GitHub UI 可能 1-2 分钟内显示 ✓ 但实际还在 deploy
+- **60s 内不更新 = 异常**（本地 build 1.21s + git reset 5s + nginx reload 0.5s，正常 < 10s 完成）
+- 60s 后还不变：SSH 进 server 看 log，不要在 GitHub UI 上"Redeliver" — Redeliver 用原 payload 重发同样会失败（如果根因是 deploy key 不匹配）
+
+**附带发现 — `manifest.webmanifest` 在 dist 里 404 算"正常"**（与本次 bug 无关）：
+- commit `08f440f` 加了 `location = /manifest.webmanifest { return 410; }` 精确 410 Gone
+- 但 `manifest.{hash}.webmanifest`（vite-plugin-pwa 输出 + manifestHashPlugin 加 hash）应 200
+- 探针：`curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/manifest.webmanifest` 应 410（旧路径）OR `curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/manifest.{8char_hash}.webmanifest` 应 200（新路径）
+
+**最终 commit 链**：
+- `0e11009` 修图标 import（MainLayout 缺 Fold/Expand）
+- `0f8d600` 同步 package-lock.json
+- `9d1086d` 空 commit 触发 fresh webhook（GitHub 端 push 后 23:11 webhook 收到但 server 端 git fetch 失败）
+- `c9c60ca6` deploy-auto.sh 加 .env.webhook 守卫
+- 服务器端手动：重新生成 deploy key + 写 .env.webhook + 跑一次手动 deploy
