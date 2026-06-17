@@ -1,7 +1,13 @@
 FROM python:3.11-slim-bookworm
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
+# 阿里云镜像源 (bookworm-security 路径已正确支持)
+RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm main contrib\n' > /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
+
+# Install system dependencies (with retry for transient 502 Bad Gateway)
+RUN apt-get update && apt-get install -y --fix-missing \
     ffmpeg \
     libavformat-dev \
     libavcodec-dev \
@@ -11,6 +17,10 @@ RUN apt-get update && apt-get install -y \
     libswscale-dev \
     libswresample-dev \
     pkg-config \
+    || (apt-get update && apt-get install -y --fix-missing --no-install-recommends \
+        ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
+        libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
+        pkg-config) \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
