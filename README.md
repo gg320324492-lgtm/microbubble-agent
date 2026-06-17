@@ -33,6 +33,26 @@
 
 ### 近期新增（按时间倒序）
 
+- **📱 移动端 26 commits 全面修复（2026-06-18，全栈治理）** — 服务器 6/15 13:52 后没成功 deploy，移动端 13 个 bug 隐藏 3 天一次性发现：
+  - **图标层**：`MainLayout.vue:184` 缺 `Fold`/`Expand` import → 移动端左上角"红方块"根因（commit `0e11009`）
+  - **路由层**：8/16 mobile 路由路径错（`knowledge/MobileKnowledgeView` 等假设子目录但实际在 `views/mobile/` 根目录，commit `025424ca`）
+  - **后端层**：4 个移动端 API 端点缺失（`/dashboard/summary` + `/formula` + `/hypothesis` + `/memory`，commit `d671c41c` + `5f5bfd06`）— `MemoryService.list_memories` 返回 SQLAlchemy ORM 对象 FastAPI 报 "cannot convert dict" → 用 `MemoryResponse.model_validate().model_dump()` 转换
+  - **布局层**：`TabBar` z-index 2500 vs `MobileInputBar` 100 完全重叠 → 隐藏 TabBar + 改用 input 浮在 TabBar 上方（commit `7131ad4b` + `c94d0603`）
+  - **指示器层**：`MobileMeetingView.onMounted` 漏处理 `route.query.resume` → "正在听会" 指示器点击无反应（commit `fc27af59`）
+  - **v-model 错配（11 处）**：`v-model:show="X"` 但组件 prop 是 `modelValue`（CLAUDE.md 6/15 教训 #5 重复踩坑）→ 静默"点击无反应"。批量 `sed` 修 8 处 + 单点修 3 处（commit `6b4f57d0` + `20df60db` + `607e7b06`）
+  - **ASR 500**：用户录音 110 字节（MediaRecorder 几毫秒），whisper 容器 ffmpeg 转 webm 失败（"EBML header parsing failed"）→ 客户端 `<1KB` 拦截 + 服务端 `len(audio_data) < 1024` 返 400（commit `3cd88d4a`）
+  - **passive event listener 误伤**：`main.js` 全局 patch 强制 4 个事件为 passive → Element Plus 内部 `preventDefault` 失效 + 移动端 `@touchstart.prevent` 失效 → 只对 `wheel`/`mousewheel` 强制（commit `3cd88d4a`）
+  - **知识 3 action 接通后端**：`/knowledge` (手动添加) + `/knowledge/upload` (上传文件) + `/knowledge/research` (AI 研究) 之前是"开发中"占位 toast，现在接通真实端点（commit `33608c9c`）
+  - **头像同步**：新建 `MemberAvatar.vue` 移动版（接受 memberId，从 `memberStore.getMemberAvatar()` 查 URL，缺 avatar 时显示首字母 + 背景色 hash 选色），`CardList` 加 `avatarField` prop，Task/Task/Task/Member/Settings 全部显示真实头像（commit `33608c9c`）
+  - **12 条铁律沉淀**：[memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) — 重点：①v-model 命名必须严格匹配 prop 名 ②useRecordingState + 路由 query 双向打通 ③build 失败必须停止 commit ④Z-index 冲突用 UX 解决 ⑤ASR/上传类端点 size guard 前后端都要 ⑥passive patch 必须最小化 ⑦新建 mobile 组件先 grep 桌面端孪生 ⑧占用 toast 是反模式 ⑨头像组件必须跨端复用 ⑩route component 假设的子目录要 grep 验证 ⑪webhook 失败 = 看 /var/log/webhook-deploy.log ⑫v-model 重命名后必须 hard refresh
+
+- **🚀 服务器 webhook deploy 链断裂修复（2026-06-17 晚，6 commits `63371138` + `c9c60ca6` + `025424ca` + `c110b1a7` + `d671c41c` + `5f5bfd06`）** — 服务器 dist `Last-Modified: 6/15 13:52`（**2 天前的状态**），GitHub webhook 22:46/22:53 标红失败：
+  - **根因 1**：服务器 `/root/.ssh/github_deploy` key 与 GitHub repo Deploy keys 不匹配 → 5 次重试全 `Permission denied (publickey)` → webhook 服务在线但 git fetch 失败 → deploy 静默退出（GitHub UI 显示 200 OK 但服务器代码没动）
+  - **修复**：重新生成 ed25519 + `ssh-keygen -t ed25519 -f /root/.ssh/github_deploy -N "" -C "aliyun-deploy-2026-06-17"` + GitHub 端加 deploy key（**Allow write access 不要勾**）+ 写 `~/.ssh/config` 让 `Host github.com` 自动用 `IdentityFile`
+  - **根因 2（隐患）**：`/opt/microbubble-agent/.env.webhook` 文件不存在（6/13 教训遗留），但 webhook service 靠 process memory 跑，**任何 `systemctl restart webhook` 必挂**
+  - **修复**（commit `c9c60ca6`）：`deploy-auto.sh` 加 `.env.webhook missing` 守卫（缺失时 fail loud），持久化 one-liner：`PID=$(pgrep -f "scripts/webhook.py") ; SECRET=$(sudo cat /proc/$PID/environ | tr '\0' '\n' | grep -E "^WEBHOOK_SECRET=" | cut -d= -f2) ; echo "WEBHOOK_SECRET=$SECRET" | sudo tee /opt/microbubble-agent/.env.webhook > /dev/null ; sudo chmod 600 /opt/microbubble-agent/.env.webhook`
+  - **5 条铁律沉淀**：[CLAUDE.md 2026-06-17 webhook deploy 链断裂修复 section](CLAUDE.md#2026-06-17-webhook-deploy-链断裂修复) — 重点：①webhook 失败根因必须先看 `/var/log/webhook-deploy.log`，不要只看 GitHub UI ②server-side deploy key 也要定期轮换（6/13 没意识到） ③webhook service EnvironmentFile 缺失是隐形杀手 ④本地 SSH 不到 server 时只能从公网探测（4 件套：POST /webhook + Last-Modified + index hash + MainLayout chunk） ⑤webhook push → 等 60s → 探测 → 不变就 SSH 排查，不要纯靠 GitHub UI 状态
+
 - **🐳 部署与基础设施全面重建（2026-06-17，6 文件 1 commit `2de0a074`，`CHANGELOG.md` 同步发布）** — 重启电脑后 Docker 服务启动失败 8 个容器端到端连通，4 层根因 4 类修复全栈治理：
   - **根因 1（Docker Desktop 引擎崩溃）**：WSL2 `docker-desktop-data` 发行版丢失，`com.docker.service` 每 7-9 分钟反复启停。**修复**：删 C 盘 24GB Docker 缓存（先备份 E 盘）→ Docker Desktop 自动重建发行版 → 用 `mklink /J` junction 透明重定向（`C:\Users\pc\AppData\Local\Docker` → `E:\DockerData\appdata`），C 盘 0 字节占用。**共释放 ~192 GB**（24GB 缓存 + 168GB 孤儿 `docker_data.vhdx`）
   - **根因 2（Dockerfile 镜像源 404）**：huaweicloud 镜像源 `bookworm-security` 已迁到 `debian-security/`，旧路径 404。**修复**：3 个 source 模板（`Dockerfile` / `Dockerfile.whisper`）改 `mirrors.aliyun.com/debian-security bookworm-security main contrib` 正确路径

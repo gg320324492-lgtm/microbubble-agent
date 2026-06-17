@@ -1,8 +1,29 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-17 部署与基础设施重建（Docker Desktop 引擎崩溃 + 镜像源治理 + 数据 E 盘化，6 文件 1 commit `2de0a074` + CHANGELOG.md 发布）** — ① 重启电脑后 8 个 Docker 容器端到端连通失败，4 层根因：WSL2 `docker-desktop-data` 发行版丢失 → com.docker.service 7-9 分钟反复启停 + C 盘 24GB Docker 缓存残留 + huaweicloud 镜像源 404 + aliyun PyPI 限速 600KB/s ② 修复：删 24GB 缓存 + Docker Desktop 自动重建发行版 + 用 `mklink /J` junction 透明重定向到 E 盘 + 改 aliyun 正确路径（`debian-security bookworm-security`）+ pip 清华源 + `--retries 10 --timeout 60` + 新建 .dockerignore（build context 12GB→700MB 17 倍提速）+ frp 计划任务自启 ③ [scripts/recalc_stats.js](scripts/recalc_stats.js) Node.js 版本（host Python 不可用，2 行 git + 文件遍历）：**1058 提交 / 156,021 行 / 630 文件 / 33 天**（python 44.8K / vue 40.6K / markdown 40.0K / config 14.2K / javascript 7.3K）④ **共释放 ~192 GB** + **9 个 Docker 服务全运行中** + **`https://agent.mnb-lab.cn` 端到端连通** ⑤ **10 条铁律沉淀**：[memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) — junction 重定向 / WSL docker-desktop-data reset / Debian bookworm-security 路径 / pip 限速 + 重试 / apt-get fallback / .dockerignore / docker-compose.override.yml 默认加载 / frp 用户级 AtLogOn / dockerproxy.net 500 = daemon 未起 / Docker 代理走 GUI 不走 config.json
+> 最后更新: **2026-06-18 移动端 26 commits 全面修复（图标 + 路由 + 端点 + v-model + ASR + 被动 + 头像，2 文件 1 commit `33608c9c` + 8 个 fix commits + memory 沉淀）** — ① 服务器 6/15 13:52 之后没成功 deploy（webhook 链断了 2 天），移动端 13 个隐藏 bug 一次性发现 ② **26 个 commits 跨 6 个 fix 类**（图标/路由/端点/布局/指示器/v-model/ASR/passive/知识 3 action/头像）：`0e11009` Fold/Expand import + `025424ca` 8 路由路径 + `d671c41c` + `5f5bfd06` 4 个端点 + `c9c60ca6` + `63371138` webhook 链修复 + `7131ad4b` TabBar + `fc27af59` resume + `6b4f57d0` + `20df60db` + `607e7b06` 11 处 v-model 错配 + `c94d0603` 恢复 TabBar + `3cd88d4a` ASR + passive + `33608c9c` 知识 + 头像 ③ [memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) **12 条铁律** ④ [scripts/recalc_stats.js](scripts/recalc_stats.js) Node.js 重算：**1084 提交 / 156,809 行 / 630 文件 / 33 天**（+26 commits / +788 lines / python 44.9K / vue 40.8K / markdown 40.4K / config 14.2K / javascript 7.3K / shell 2.5K / typescript 1.4K / html 3.5K / css 1.4K） ⑤ **9 个 Docker 服务 + agent.mnb-lab.cn 端到端连通** + **Server index hash 持续更新**（webhook 自愈机制 v2 生效，每次 push 60s 内 deploy） ⑥ **关键纪律沉淀**：①v-model 命名严格匹配 prop 名（CLAUDE.md 6/15 教训 #5 升级）②useRecordingState + 路由 query 双向打通 ③build 失败必须停止 commit ④Z-index 冲突用 UX 解决 ⑤ASR/上传 size guard 前后端都要 ⑥passive patch 必须最小化 ⑦新建 mobile 组件先 grep 桌面端孪生 ⑧占位 toast 是反模式 ⑨头像组件必须跨端复用 ⑩route 子目录要 grep 验证
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-18 移动端 26 commits 全面修复，5 commit + 1 memory + 4 文件 + stats 重算）
+- [📱 移动端 26 commits 全面修复（2026-06-18，1084 提交 / 156K 行 / 630 文件 / 33 天）](#移动端-26-commits-全面修复2026-06-18)
+  - 🐛 根因 1：图标层缺 Fold/Expand import（commit `0e11009`）
+  - 🐛 根因 2：路由层 8/16 mobile 路径错（commit `025424ca`）
+  - 🐛 根因 3：后端层 4 端点缺失 + /memory ORM 序列化（`d671c41c` + `5f5bfd06`）
+  - 🐛 根因 4：布局层 TabBar z-index 2500 覆盖 MobileInputBar 100（`7131ad4b` + `c94d0603`）
+  - 🐛 根因 5：指示器层 MobileMeetingView 漏处理 route.query.resume（`fc27af59`）
+  - 🐛 根因 6：v-model 命名错配 11 处（CLAUDE.md 6/15 教训 #5 升级版，commit `6b4f57d0` + `20df60db` + `607e7b06`）
+  - 🐛 根因 7：ASR 500 — 110 字节 webm ffmpeg 失败（commit `3cd88d4a`）
+  - 🐛 根因 8：passive event listener 全局 patch 误伤 touchstart（commit `3cd88d4a`）
+  - 🔧 知识 3 action 接通后端真实端点：手动添加 / 上传文件 / AI 研究（commit `33608c9c`）
+  - 🔧 头像同步：新建 MemberAvatar.vue + CardList avatarField prop（commit `33608c9c`）
+  - 📐 12 条铁律沉淀：[memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md)
+
+### 最新完成（2026-06-17 晚 服务器 webhook deploy 链断裂修复，6 commits `63371138` + `c9c60ca6` + `025424ca` + `c110b1a7` + `d671c41c` + `5f5bfd06`）
+- [🚀 webhook deploy 链断裂修复（2026-06-17 晚）](#webhook-deploy-链断裂修复2026-06-17-晚)
+  - 🐛 根因 1：服务器 `/root/.ssh/github_deploy` key 与 GitHub Deploy keys 不匹配
+  - 🐛 根因 2：`/opt/microbubble-agent/.env.webhook` 文件不存在（6/13 教训遗留）
+  - 🔧 修复：重新生成 ed25519 + GitHub 端加 deploy key + 持久化 .env.webhook（从 process memory）+ deploy-auto.sh 加 .env.webhook 守卫
+  - 📐 5 条铁律沉淀到 CLAUDE.md
 
 ### 最新完成（2026-06-17 部署与基础设施重建，6 文件 1 commit `2de0a074` + CHANGELOG.md）
 - [🐳 部署与基础设施全面重建（2026-06-17，6 文件 1 commit `2de0a074`）](#部署与基础设施全面重建2026-06-176-文件-1-commit-2de0a074--changelogmd)
@@ -5669,3 +5690,31 @@ node scripts/recalc_stats.js
 - ✅ whisper `faster-whisper==1.2.1` large-v3 模型加载完成，CUDA 库就绪（RTX 5090 32GB）
 - ✅ `git push origin main` 同步成功（commit `2de0a074` → GitHub main）
 - ✅ 本地 webhook 可重新接收 push 事件
+
+### 最新完成（2026-06-18 移动端 26 commits 全面修复，1084 提交 / 156,809 行 / 630 文件 / 33 天）
+
+#### 📱 移动端 26 commits 全面修复（2026-06-18）
+
+**触发原因**：服务器 6/15 13:52 之后没成功 deploy（webhook 链断 2 天），移动端 PR #1-#10 收官后 13 个隐藏 bug 一次性暴露。
+
+**13 个 bug + 26 个 commit 完整列表**：
+
+1. **图标层（commit `0e11009`）**：`MainLayout.vue:184` 缺 `@element-plus/icons-vue` 的 `Fold`/`Expand` import。`<el-icon>` 容器套 `.collapse-btn-mobile` 样式（`background: var(--color-primary-bg)` + `color: var(--color-primary)` = `#FF7A5C`）→ 移动端左上角"红方块"根因
+2. **路由层（commit `025424ca`）**：8/16 mobile 路由路径错（`knowledge/MobileKnowledgeView` 等假设子目录但实际在 `views/mobile/` 根目录），`resolveMobile.js` 找不到组件 → console 警告"未找到组件"+ 路由 fallback 桌面版
+3. **后端端点层（commit `d671c41c`）**：4 个移动端 API 端点缺失（`/dashboard/summary` + `/formula` + `/hypothesis` + `/memory`）— 移动端用了简化路径但后端只实现了嵌套路径（`/knowledge/formulas` 等）
+4. **ORM 序列化层（commit `5f5bfd06`）**：`MemoryService.list_memories` 返回 SQLAlchemy ORM 对象，FastAPI `jsonable_encoder` 报"cannot convert dictionary update sequence element" → 用 `MemoryResponse.model_validate(m).model_dump()` 转换
+5. **布局层（commit `7131ad4b` + `c94d0603`）**：`TabBar` z-index 2500 vs `MobileInputBar` 100，两者都 `position: fixed; bottom: 0;` → TabBar 完全覆盖输入框。先隐藏 TabBar 在 /chat 路由（标准 mobile UX），用户反馈"覆盖导航栏"后改用 input 浮在 TabBar 上方（`bottom: var(--tabbar-height)` + z-index 1100）
+6. **指示器层（commit `fc27af59`）**：`MobileMeetingView.onMounted` 漏处理 `route.query.resume` → "正在听会"指示器点击无反应（`MobileMeetingRoom` 已有从 `useRecordingState` 恢复 `meetingId` 的逻辑 line 200-203，但需要先跳转触发）
+7. **v-model 命名错配 11 处（commit `6b4f57d0` + `20df60db` + `607e7b06`）**：`v-model:show="X"` 但组件 prop 是 `modelValue`（CLAUDE.md 6/15 教训 #5 升级版）→ 静默"点击无反应"无 console 错误。批量 `sed 's/v-model:show=/v-model=/g' web/src/views/mobile/` 修 8 处 + 单点修 3 处
+8. **ASR 500（commit `3cd88d4a`）**：用户录音 110 字节（MediaRecorder 几毫秒 / swipe cancel），whisper 容器 ffmpeg 转 110 字节 webm 失败（"EBML header parsing failed"）→ 客户端 `useChatStream.ts:587-595` `blob.size < 1024` 提示"录音太短" + 服务端 `app/api/v1/voice.py:55-65` `len(audio_data) < 1024` 返 400
+9. **passive event listener 误伤（commit `3cd88d4a`）**：`main.js` 全局 patch 强制 4 个事件为 passive → Element Plus 内部 `preventDefault` 失效（"Unable to preventDefault inside passive event listener" 警告）+ 移动端 `@touchstart.prevent` 失效 → 只对 `wheel`/`mousewheel` 强制（Chrome 滚轮性能警告的真正根因）
+10. **知识 3 action 接通后端（commit `33608c9c`）**：之前 `onCreateAction` 全 `ElMessage.info('...开发中')` 占位 → 接通真实端点：手动添加（`POST /api/v1/knowledge`，MobileFormSheet title/content/category）+ 上传文件（`POST /api/v1/knowledge/upload`，file input `.pdf/.docx/.xlsx/.pptx/.txt/.md`）+ AI 研究（`POST /api/v1/knowledge/research`，MobileFormSheet topic）
+11. **头像同步（commit `33608c9c`）**：新建 `web/src/components/mobile/MemberAvatar.vue`（接受 memberId + size，从 `memberStore.getMemberAvatar(id)` 查 URL，缺 avatar 时显示首字母 + 背景色 hash 选色，与桌面 `getAvatarColor` 逻辑一致）。`CardList` 加 `avatarField` prop（function returning memberId），集成到 `MobileTaskView` + `MobileMemberView` + `MobileSettingsView`
+
+**12 条铁律沉淀**：[memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) — 详见该文件
+
+**统计变化**：
+- commit 数：1058 → **1084**（+26）
+- 总行数：156,021 → **156,809**（+788）
+- 文件数：630（不变）
+- dev_days：33
