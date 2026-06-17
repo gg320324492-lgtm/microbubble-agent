@@ -588,6 +588,14 @@ export function useChatStream() {
       ElMessage.warning('录音为空，请重试')
       return null
     }
+    // 2026-06-18 修复：录音 < 1KB 通常是 MediaRecorder 录了几毫秒（被 swipe cancel
+    // 或按住时间太短），webm header 损坏，whisper 容器 ffmpeg 转 110 字节 webm 必失败
+    // 拦截在客户端避免无效请求打到后端
+    const MIN_AUDIO_SIZE = 1024  // 1KB
+    if (blob.size < MIN_AUDIO_SIZE) {
+      ElMessage.warning('录音太短（不到 1 秒），请长按说话')
+      return null
+    }
     try {
       const fd = new FormData()
       fd.append('audio', blob, 'voice.webm')
