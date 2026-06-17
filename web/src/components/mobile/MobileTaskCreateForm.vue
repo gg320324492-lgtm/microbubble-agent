@@ -1,6 +1,7 @@
 <template>
   <MobileFormSheet
-    v-model:show="show"
+    :model-value="show"
+    @update:model-value="(val) => show = val"
     :title="editingTask ? '编辑任务' : '创建任务'"
     :fields="fields"
     v-model:form="form"
