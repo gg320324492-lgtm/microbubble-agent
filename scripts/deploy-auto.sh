@@ -23,20 +23,37 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
-# 2026-06-17 加固：webhook secret 持久化文件必须存在
-# （教训：6/13 修复后未持久化 .env.webhook，webhook service 靠进程内存跑，
-#  但 `git clean -fdx` 会删它（.gitignore 内），导致 deploy 之后用户重启
-#  webhook service 必挂。必须在 clean 之前就 fail loud）
+# 2026-06-17 加固 v2：webhook secret 持久化文件自愈机制
+# 教训：guard 必须在 git clean 之前 + git clean 排除 .env.webhook + 缺失时从 PID 进程环境恢复
+# 6/17 v1 版本：guard 在 clean 之前检查 → 通过 → git clean -fdx 删 .env.webhook → 下次 deploy 失败循环
+# 6/17 v2 版本：自愈（从 PID 3023112 process memory 重新写） + git clean 排除 (-e .env.webhook)
 if [ ! -f "$PROJECT_DIR/.env.webhook" ]; then
-    log "ERROR: $PROJECT_DIR/.env.webhook missing — refusing to clean (会删 webhook secret)"
-    log "ERROR: 修复：sudo cp .env.webhook.bak .env.webhook && sudo systemctl restart webhook"
-    exit 1
+    log "[recovery] .env.webhook 缺失，尝试从 webhook 进程环境恢复..."
+    PID=$(pgrep -f "scripts/webhook.py" | head -1)
+    if [ -n "$PID" ] && [ -r /proc/$PID/environ ]; then
+        SECRET=$(cat /proc/$PID/environ 2>/dev/null | tr '\0' '\n' | grep -E "^WEBHOOK_SECRET=" | cut -d= -f2)
+        if [ -n "$SECRET" ]; then
+            echo "WEBHOOK_SECRET=$SECRET" > "$PROJECT_DIR/.env.webhook"
+            chmod 600 "$PROJECT_DIR/.env.webhook"
+            chown root:root "$PROJECT_DIR/.env.webhook" 2>/dev/null || true
+            log "[recovery] ✓ 从 PID $PID 恢复 .env.webhook (${#SECRET} 字符)"
+        else
+            log "ERROR: PID $PID 存在但读不到 WEBHOOK_SECRET"
+            exit 1
+        fi
+    else
+        log "ERROR: .env.webhook 缺失 + 找不到 webhook 进程（pgrep failed）"
+        log "ERROR: 手动修复：sudo systemctl restart webhook 会失败因为 EnvironmentFile 缺失"
+        log "ERROR: 需要手动：1) 写 .env.webhook  2) systemctl daemon-reload  3) systemctl restart webhook"
+        exit 1
+    fi
 fi
 
 # 2026-06-13 加固：丢弃所有本地修改 + untracked 文件，确保干净工作区
 # （之前 git checkout + git clean 分两步有时不彻底，残留 untracked 文件阻塞 git pull fast-forward）
+# 2026-06-17 v2 加：-e .env.webhook 排除该文件（虽然它在 .gitignore 内但 git clean -fdx 仍会删）
 git checkout -- . >> "$LOG_FILE" 2>&1 || true
-git clean -fdx >> "$LOG_FILE" 2>&1 || true  # -x 也清 .gitignore 内的文件
+git clean -fdx -e .env.webhook >> "$LOG_FILE" 2>&1 || true  # -x 也清 .gitignore 内的文件，但 -e 排除指定
 
 # 拉取最新代码（重试 5 次 + 指数退避，2026-06-02 加固）
 # 背景：阿里云服务器偶发无法连接 GitHub（TLS/GnuTLS 错误或超时），
