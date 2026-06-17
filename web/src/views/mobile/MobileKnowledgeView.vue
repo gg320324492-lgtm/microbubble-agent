@@ -107,7 +107,7 @@
 
     <!-- 搜索 Sheet -->
     <MobileSearchSheet
-      v-model:show="showSearch"
+      v-model="showSearch"
       v-model:keyword="searchKeyword"
       title="搜索知识"
       placeholder="搜索标题/内容/标签..."
@@ -119,7 +119,7 @@
 
     <!-- 创建/编辑 Sheet -->
     <MobileActionSheet
-      v-model:show="showCreateSheet"
+      v-model="showCreateSheet"
       title="添加知识"
       :actions="createActions"
       @select="onCreateAction"

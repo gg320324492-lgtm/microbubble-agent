@@ -140,7 +140,7 @@
 
     <!-- 头像操作 Sheet -->
     <MobileActionSheet
-      v-model:show="showAvatarSheet"
+      v-model="showAvatarSheet"
       title="更换头像"
       :actions="avatarActions"
       @select="onAvatarAction"

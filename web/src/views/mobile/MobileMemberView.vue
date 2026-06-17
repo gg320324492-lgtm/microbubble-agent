@@ -49,7 +49,7 @@
 
     <!-- 搜索 Sheet -->
     <MobileSearchSheet
-      v-model:show="showSearch"
+      v-model="showSearch"
       v-model:keyword="searchKeyword"
       title="搜索成员"
       placeholder="搜索姓名..."
