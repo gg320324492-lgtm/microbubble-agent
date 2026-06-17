@@ -1,5 +1,7 @@
 # MicroBubble Agent - 项目上下文
 
+> **2026-06-17 部署与基础设施重建**：Docker Desktop 引擎崩溃循环修复（WSL2 `docker-desktop-data` 发行版丢失 → com.docker.service 7-9 分钟反复启停）+ 24GB C 盘 Docker 缓存清空 + 数据全 E 盘化（junction 透明重定向）+ huaweicloud 镜像源 404 → aliyun 正确路径（Debian bookworm-security 走 `debian-security/` 独立路径）+ aliyun PyPI 限速 600KB/s → 清华源 + pip `--retries 10 --timeout 60` + 新增 `.dockerignore`（build context 12GB→700MB 17 倍提速）+ frp 客户端 Windows 计划任务自启。详见 [CHANGELOG.md](CHANGELOG.md) `[Unreleased] 2026-06-17` section + [memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) 10 条铁律。
+
 > **2026-06-15 凌晨更新**：Agent 回答质量 5 大根因修复（14 commits）+ qa-bench 360 题逐个问答闭环 + 知识库 64→247 条（+183）。详见底部 [## 2026-06-15 Agent 质量 + qa-bench 闭环](#2026-06-15-agent-质量--qa-bench-闭环) section。
 >
 > **2026-06-15 上午更新**：Rich Block 统一包装铁律（杨慈是谁呀 Rich Block 显示"暂无成员"修复 + 顺手修 wechat/handler.py:1031 SyntaxError + members.notification_preferences 列缺失）。详见底部 [## 2026-06-15 Rich Block 统一包装铁律](#2026-06-15-rich-block-统一包装铁律杨慈是谁呀暂无成员修复) section。
@@ -1492,3 +1494,109 @@ for desc, s, e in test_cases:
   ```
 - **用户必做**：DB 改完后**硬刷新浏览器**（Ctrl+Shift+R / Cmd+Shift+R）才能绕过 SW cache 看到更新
 
+
+## 2026-06-17 部署与基础设施重建（Docker Desktop 引擎崩溃 + 镜像源治理 + 数据 E 盘化）
+
+**根因链** — 重启电脑后 Docker 服务无法启动 8 个容器端到端连通失败 4 层根因：
+1. **WSL2 `docker-desktop-data` 发行版丢失** — `wsl -l -v` 只看到 `docker-desktop` 没有 `docker-desktop-data`，`com.docker.service` 每 7-9 分钟反复启动又停止（事件日志可见）
+2. **C 盘 24GB Docker 缓存残留** — `C:\Users\pc\AppData\Local\Docker` 占据系统盘 24GB 但 WSL 引用已断
+3. **huaweicloud 镜像源 404** — Debian bookworm `bookworm-security` 已从 `debian/` 迁到 `debian-security/`，旧路径 404
+4. **aliyun PyPI 限速** — 单连接 ~600KB/s，下 torch 532MB 装 13 分钟且 502 瞬时错误
+
+### 10 条铁律沉淀（[memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md)）
+
+**铁律 1：junction 透明重定向 = Windows 上让应用"运行在 E 盘"的标准做法**
+- C 盘软件硬编码路径（如 `C:\Users\pc\AppData\Local\Docker`）不能直接 move。**修复**：删 C 盘原目录 → `mklink /J "C:\path" "E:\real\path"` 创建 junction → 软件硬编码路径继续工作，物理数据在 E 盘。C 盘 0 字节占用
+- **数据全 E 盘方案**：删 C 盘 `AppData\Local\Docker` 24GB（先备份到 E 盘）→ Docker Desktop 启动时自动重建 `docker-desktop-data` 发行版在 E 盘 → 用 junction 透明重定向回 C 盘原路径
+
+**铁律 2：WSL Docker 引擎恢复流程**
+- `wsl -l -v` 看发行版 → 缺 `docker-desktop-data` → 重置 Docker Desktop（设置 → Troubleshoot → Reset to factory defaults）→ 自动重建发行版
+- **不要尝试手动 `wsl --unregister docker-desktop-data`** — 会清掉所有镜像/卷，不如 reset factory defaults 自动重建干净
+
+**铁律 3：Dockerfile 镜像源选择（Debian bookworm）**
+- `bookworm-security` 走 `debian-security/` 独立路径，**不在** `debian/` 下
+- ❌ 错误：`mirrors.huaweicloud.com/debian bookworm-security`（404）
+- ✅ 正确：`mirrors.aliyun.com/debian-security bookworm-security main contrib`
+- **3 个 source 模板**（`Dockerfile` / `Dockerfile.whisper` 已统一）：
+  ```dockerfile
+  RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
+      printf 'deb http://mirrors.aliyun.com/debian bookworm main contrib\n' > /etc/apt/sources.list && \
+      printf 'deb http://mirrors.aliyun.com/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
+      printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
+  ```
+
+**铁律 4：PyPI 限速真相 + pip 重试**
+- aliyun PyPI 单连接 ~600KB/s，下 torch 532MB 装 13 分钟 + 502 瞬时错误
+- 清华 TUNA 前 12 秒 14MB/s 后降到 320KB/s 仍会断（限速算法类似 burst + throttle）
+- **最稳方案**：`pip install --retries 10 --timeout 60`（重试机制是兜底，无论哪个源都该有）
+- **PyTorch 2.4+ 同步滞后**：清华源对 torch 2.12+ 同步慢，PyTorch 直接走 `download.pytorch.org/whl/cu121` 官方 wheel 源
+- **PyTorch 官方基础镜像 GPG 缺失**：`pytorch/pytorch:2.4.0-cuda12.1-cudnn9-runtime` 精简了 Debian keyring → apt 装包 GPG 失败（`NO_PUBKEY 6ED0E7B82643E131`）。`[trusted=yes]` 和 `Acquire::AllowInsecureRepositories=true` 在新版 apt 不生效。**最佳方案：保持 `python:3.11-slim-bookworm` 基础镜像**（自带完整 keyring）
+
+**铁律 5：apt-get install 必加 fallback**
+- aliyun `libcaca0` 等包偶发 502 Bad Gateway 瞬时错误
+- `Dockerfile.whisper` 加 `|| (apt-get update && apt-get install -y --fix-missing --no-install-recommends ...)` 第一个包失败时自动重试
+- **不要**改 apt sources 加重试（apt 不支持源级重试）
+
+**铁律 6：.dockerignore 是必须的**
+- `models/` 含 huggingface/torch/modelscope 缓存（10+ GB）→ 不加 .dockerignore → build context 传 12GB 到 Docker daemon 慢且占空间
+- **标准 .dockerignore 模板**（本项目）：`models/` `data/` `logs/` `.git/` `.gitignore` `.agents/` `docs/` `.claude/` `node_modules/` `dist/` `build/` `__pycache__/` `*.pyc` `*.pyo` `*.log` `.vscode/` `.idea/` `.DS_Store` `*.md` `nginx/ssl/` `.env.webhook` `.env.example`
+- **效果**：build context 从 12GB → 700MB（**17 倍提速**）
+- **警告**：build context 减小 ≠ build 时间线性减小（apt-get install 仍占大头），但 docker daemon 接收 context 阶段从分钟级 → 秒级
+
+**铁律 7：docker-compose.override.yml 默认加载**
+- 文件名 `override.yml` 会被 compose 自动加载合并到主 compose 上，**不需要** `-f` 指定
+- 想禁用重载：使用 `--no-merge` 或重命名为非 `override.yml` 名字
+- 调试时可临时 `cp override.yml override.yml.bak` 隔离排查
+
+**铁律 8：frp 客户端 Windows 开机自启（用户级 + AtLogOn）**
+- ❌ `sc create` 命令行引号转义问题 + UAC 提权
+- ❌ 直接 `powershell.exe -File xxx.ps1` 在 schtasks 调度会**弹控制台窗口**（用户看到窗口闪一下）
+- ✅ `Register-ScheduledTask` 创建用户级登录任务（`AtLogOn`），调 wrapper 脚本 `start-frpc.ps1`（检测 frpc 已运行则退出，避免重复进程）
+- ✅ PowerShell wrapper 用 `-WindowStyle Hidden` 启动 frpc.exe 隐藏窗口
+- **wrapper 模板**（`frp/start-frpc.ps1` 已固化）：
+  ```powershell
+  $existing = Get-Process -Name "frpc" -ErrorAction SilentlyContinue
+  if ($existing) { Write-Host "frpc 已在运行 (PID: $($existing.Id))"; exit 0 }
+  $proc = Start-Process -FilePath "E:\path\frpc.exe" `
+    -ArgumentList "-c","E:\path\frpc.toml" `
+    -WorkingDirectory "E:\path\frp" `
+    -WindowStyle Hidden -PassThru
+  Write-Host "frpc 已启动 (PID: $($proc.Id))"
+  ```
+
+**铁律 9：dockerproxy.net 500 错误 = Docker Desktop daemon 没完全起来**
+- 解决：完全 kill 所有 Docker 进程 → 等 10 秒 → 重启 Docker Desktop → 等 90-120 秒 daemon 完全起来
+- **不能光退出 Docker Desktop UI**，要 kill `com.docker.backend` 进程 + `com.docker.service` + `com.docker.proxy`
+- **检查**：`tasklist | findstr docker` 看是否所有进程都退出
+
+**铁律 10：~/.docker/config.json 不要随便加 proxies 字段**
+- 加了 `proxies.default.httpsProxy: http://host.docker.internal:7890` 后 Docker Desktop daemon 内部通信出错（500 错误）
+- Docker Desktop 走代理应通过 Settings GUI 配置（Settings → Resources → Proxies），**不通过** config.json
+- **恢复**：删 config.json 里的 proxies 字段 → 重启 Docker Desktop
+
+### 部署必做（CLAUDE.md 752 行铁律变体）
+
+```bash
+# 1. 验证容器状态
+docker compose ps  # 应显示 9 个服务 Up
+
+# 2. 验证外网连通
+curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/api/v1/auth/me
+# 期望：401（端点通了，密码错）而不是 502 Bad Gateway
+
+# 3. 验证 whisper 模型
+docker exec microbubble-agent-whisper-1 python -c "
+import faster_whisper
+print('model:', faster_whisper.__version__)
+" 2>&1 | head -3
+
+# 4. 重启 Python 进程（CLAUDE.md 752 行铁律）
+docker compose restart app celery-worker
+```
+
+### 沉淀统计
+
+- **共释放 ~192 GB**（24GB Docker 缓存 + 168GB 孤儿 `docker_data.vhdx`）
+- **build context 12GB → 700MB**（17 倍提速）
+- **9 个 Docker 服务运行中**：app、db、redis、minio、neo4j、whisper、vision-mcp、celery-worker、celery-beat
+- **`https://agent.mnb-lab.cn` 端到端连通**（之前 502 Bad Gateway，现在 401 = 端点通了，密码错）
