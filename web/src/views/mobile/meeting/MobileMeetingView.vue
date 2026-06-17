@@ -198,10 +198,6 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
-const route = useRoute()
-const router = useRouter()
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import { useMeeting } from '@/composables/useMeeting'
@@ -209,6 +205,9 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
+
+const route = useRoute()
+const router = useRouter()
 
 const router = useRouter()
 
