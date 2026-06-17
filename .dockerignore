@@ -1,0 +1,25 @@
+# 不需要进入 Docker build context 的目录/文件
+# 模型与数据通过 volume 挂载，不在镜像里
+models/
+data/
+logs/
+.dockerignore
+.git/
+.gitignore
+.agents/
+docs/
+.claude/
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.vscode/
+.idea/
+.DS_Store
+*.md
+nginx/ssl/
+.env.webhook
+.env.example
