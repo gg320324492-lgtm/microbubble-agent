@@ -13,6 +13,7 @@ from app.config import settings
 # fake parser 解析后 dispatch_tool 又报 TOOL_NOT_FOUND）
 import app.agent.tools  # noqa: F401  ← 关键！触发 tools/__init__.py 链式 import
 from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording, dashboard, admin
+from app.api.v1.dashboard import mobile_router as mobile_aliases  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 from app.core.database import engine, Base
 from app.core.redis import close_redis
 from app.core.exceptions import AppException, app_exception_handler, generic_exception_handler
@@ -141,6 +142,7 @@ app.include_router(meeting.router, prefix="/api/v1", tags=["会议"])
 app.include_router(member.router, prefix="/api/v1", tags=["成员"])
 app.include_router(project.router, prefix="/api/v1", tags=["项目"])
 app.include_router(knowledge.router, prefix="/api/v1", tags=["知识库"])
+app.include_router(mobile_aliases, prefix="/api/v1", tags=["移动端别名"])  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 app.include_router(voice.router, prefix="/api/v1", tags=["语音"])
 app.include_router(wechat.router, prefix="/api/v1", tags=["企业微信"])
 app.include_router(upload.router, prefix="/api/v1", tags=["文件上传"])
