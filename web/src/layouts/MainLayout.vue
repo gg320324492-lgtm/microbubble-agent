@@ -165,8 +165,10 @@
     </div>
   </Transition>
 
-  <!-- 移动端底部导航 TabBar（PR #2 新增：基于 NutUI nut-tabbar） -->
-  <MobileTabBar v-if="isMobile" />
+  <!-- 移动端底部导航 TabBar（PR #2 新增：基于 NutUI nut-tabbar）
+       /chat 路由隐藏 TabBar，避免与 MobileInputBar (z-index 100) 重叠被覆盖 (TabBar z-index 2500)
+       标准 mobile UX：chat 页面全屏专注（WeChat/iMessage/WhatsApp 都这样做） -->
+  <MobileTabBar v-if="isMobile && !isChatRoute" />
 </template>
 
 <script setup>
@@ -210,6 +212,9 @@ const isMobile = useIsMobile().isMobile
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
 const popoverVisible = ref(false)
+
+// /chat 路由不显示 TabBar（标准 mobile UX：聊天专注模式 + 避免覆盖 MobileInputBar）
+const isChatRoute = computed(() => route.path.startsWith('/chat'))
 
 const sidebarWidth = computed(() => {
   if (isMobile.value) return '0px'
