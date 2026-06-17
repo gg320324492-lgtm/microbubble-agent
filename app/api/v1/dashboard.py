@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -160,8 +161,13 @@ async def mobile_list_memories(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """移动端记忆列表（MobileMemoryView.vue 用，路径从 /memories 简化为 /memory）"""
+    """移动端记忆列表（MobileMemoryView.vue 用，路径从 /memories 简化为 /memory）
+
+    复用 app/api/v1/memory.py 的 MemoryResponse schema（from_attributes=True）
+    来转换 SQLAlchemy ORM 对象为 dict，避免 FastAPI jsonable_encoder 失败。
+    """
     from app.services.memory_service import MemoryService
+    from app.api.v1.memory import MemoryResponse
     svc = MemoryService(db)
     items, total = await svc.list_memories(
         user_id=current_user.id,
@@ -169,20 +175,33 @@ async def mobile_list_memories(
         page=page,
         page_size=page_size,
     )
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    # ORM 对象 → Pydantic → dict 序列化（否则 FastAPI 报 cannot convert dict）
+    return {
+        "items": [MemoryResponse.model_validate(m).model_dump() for m in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 @mobile_router.put("/memory/{memory_id}")
 async def mobile_update_memory(
     memory_id: int,
-    content: str,
+    body: dict = Body(..., example={"content": "新内容"}),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """移动端记忆更新"""
+    """移动端记忆更新（body 传 {content: "..."}，与 MobileMemoryView.vue:218 一致）"""
     from app.services.memory_service import MemoryService
+    from app.api.v1.memory import MemoryResponse
     svc = MemoryService(db)
-    return await svc.update_memory(memory_id=memory_id, content=content, user_id=current_user.id)
+    content = body.get("content", "")
+    memory = await svc.update_memory(
+        memory_id=memory_id, content=content, user_id=current_user.id
+    )
+    if not memory:
+        return {"ok": False, "message": "未找到或无权限"}
+    return {"ok": True, "data": MemoryResponse.model_validate(memory).model_dump()}
 
 
 @mobile_router.delete("/memory/{memory_id}")
