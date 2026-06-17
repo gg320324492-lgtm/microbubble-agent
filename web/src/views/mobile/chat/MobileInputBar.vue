@@ -176,8 +176,10 @@ watch(
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
-  z-index: 100;
+  /* 浮在 TabBar 上方（TabBar 高度 = var(--tabbar-height, 56px)）
+     这样两个组件都在底部，input 不覆盖 TabBar */
+  bottom: var(--tabbar-height, 56px);
+  z-index: 1100; /* 高于 TabBar 内容（TabBar 容器 z=2500，input bar 视觉在上层） */
   background: var(--color-bg-card);
   border-top: 1px solid var(--color-border);
   -webkit-backdrop-filter: blur(12px);

@@ -166,9 +166,8 @@
   </Transition>
 
   <!-- 移动端底部导航 TabBar（PR #2 新增：基于 NutUI nut-tabbar）
-       /chat 路由隐藏 TabBar，避免与 MobileInputBar (z-index 100) 重叠被覆盖 (TabBar z-index 2500)
-       标准 mobile UX：chat 页面全屏专注（WeChat/iMessage/WhatsApp 都这样做） -->
-  <MobileTabBar v-if="isMobile && !isChatRoute" />
+       /chat 路由也显示 TabBar（在 input 框下方），用户偏好 persistent nav -->
+  <MobileTabBar v-if="isMobile" />
 </template>
 
 <script setup>

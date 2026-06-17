@@ -66,9 +66,11 @@ export function useKeyboardInset() {
     () => `calc(${keyboardHeight.value}px + var(--sab, 0px))`
   )
 
-  /** 消息区需要的 padding-bottom（输入栏高度 + 键盘 + safe-area） */
+  /** 消息区需要的 padding-bottom（输入栏 72px + TabBar 56px + 键盘 + safe-area）
+      输入栏现在浮在 TabBar 上方（bottom: var(--tabbar-height)），所以消息区要把
+      两个高度都留出来，否则最后几条消息会被输入栏盖住 */
   const messagesPaddingBottom = computed(
-    () => `calc(72px + ${keyboardHeight.value}px + var(--sab, 0px))`
+    () => `calc(72px + var(--tabbar-height, 56px) + ${keyboardHeight.value}px + var(--sab, 0px))`
   )
 
   return {
