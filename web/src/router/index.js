@@ -34,7 +34,7 @@ const routes = [
       {
         path: 'dashboard',
         name: 'Dashboard',
-        component: resolveMobileComponent('Dashboard', 'dashboard/MobileDashboard'),
+        component: resolveMobileComponent('Dashboard', 'MobileDashboard'),
         meta: { title: '仪表盘', icon: 'Odometer' }
       },
       {
@@ -47,7 +47,7 @@ const routes = [
       {
         path: 'tasks',
         name: 'Tasks',
-        component: resolveMobileComponent('TaskView', 'tasks/MobileTaskView'),
+        component: resolveMobileComponent('TaskView', 'MobileTaskView'),
         meta: { title: '任务管理', icon: 'List' }
       },
       {
@@ -73,49 +73,49 @@ const routes = [
       {
         path: 'projects',
         name: 'Projects',
-        component: resolveMobileComponent('ProjectView', 'projects/MobileProjectView'),
+        component: resolveMobileComponent('ProjectView', 'MobileProjectView'),
         meta: { title: '项目管理', icon: 'Folder' }
       },
       {
         path: 'members',
         name: 'Members',
-        component: resolveMobileComponent('MemberView', 'members/MobileMemberView'),
+        component: resolveMobileComponent('MemberView', 'MobileMemberView'),
         meta: { title: '成员管理', icon: 'User' }
       },
       {
         path: 'knowledge',
         name: 'Knowledge',
-        component: resolveMobileComponent('KnowledgeView', 'knowledge/MobileKnowledgeView'),
+        component: resolveMobileComponent('KnowledgeView', 'MobileKnowledgeView'),
         meta: { title: '知识库', icon: 'Document' }
       },
       {
         path: 'knowledge/:id',
         name: 'KnowledgeDetail',
-        component: resolveMobileComponent('KnowledgeDetailView', 'knowledge/MobileKnowledgeDetailView'),
+        component: resolveMobileComponent('KnowledgeDetailView', 'MobileKnowledgeDetailView'),
         meta: { title: '知识详情' }
       },
       {
         path: 'memory',
         name: 'Memory',
-        component: resolveMobileComponent('MemoryView', 'memory/MobileMemoryView'),
+        component: resolveMobileComponent('MemoryView', 'MobileMemoryView'),
         meta: { title: '长期记忆', icon: 'Memo' }
       },
       {
         path: 'voiceprint',
         name: 'Voiceprint',
-        component: resolveMobileComponent('VoiceprintView', 'members/MobileVoiceprintView'),
+        component: resolveMobileComponent('VoiceprintView', 'MobileVoiceprintView'),
         meta: { title: '声纹库中心', icon: 'mic' }
       },
       {
         path: 'settings',
         name: 'Settings',
-        component: resolveMobileComponent('SettingsView', 'settings/MobileSettingsView'),
+        component: resolveMobileComponent('SettingsView', 'MobileSettingsView'),
         meta: { title: '个人设置', icon: 'Setting' }
       },
       {
         path: 'project-stats',
         name: 'ProjectStats',
-        component: resolveMobileComponent('ProjectStatsView', 'projects/MobileProjectStatsView'),
+        component: resolveMobileComponent('ProjectStatsView', 'MobileProjectStatsView'),
         meta: { title: '项目动态' }
       },
       {
