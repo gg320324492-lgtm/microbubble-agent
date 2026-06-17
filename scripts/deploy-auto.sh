@@ -23,6 +23,16 @@ log "========== 开始部署 =========="
 
 cd "$PROJECT_DIR"
 
+# 2026-06-17 加固：webhook secret 持久化文件必须存在
+# （教训：6/13 修复后未持久化 .env.webhook，webhook service 靠进程内存跑，
+#  但 `git clean -fdx` 会删它（.gitignore 内），导致 deploy 之后用户重启
+#  webhook service 必挂。必须在 clean 之前就 fail loud）
+if [ ! -f "$PROJECT_DIR/.env.webhook" ]; then
+    log "ERROR: $PROJECT_DIR/.env.webhook missing — refusing to clean (会删 webhook secret)"
+    log "ERROR: 修复：sudo cp .env.webhook.bak .env.webhook && sudo systemctl restart webhook"
+    exit 1
+fi
+
 # 2026-06-13 加固：丢弃所有本地修改 + untracked 文件，确保干净工作区
 # （之前 git checkout + git clean 分两步有时不彻底，残留 untracked 文件阻塞 git pull fast-forward）
 git checkout -- . >> "$LOG_FILE" 2>&1 || true
