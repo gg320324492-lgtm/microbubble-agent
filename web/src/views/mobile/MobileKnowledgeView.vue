@@ -124,6 +124,38 @@
       :actions="createActions"
       @select="onCreateAction"
     />
+
+    <!-- 手动添加知识 Sheet -->
+    <MobileFormSheet
+      v-model="showManualSheet"
+      title="手动添加知识"
+      :fields="manualFields"
+      v-model:form="manualForm"
+      submit-text="保存"
+      :submitting="manualSaving"
+      @submit="onManualSubmit"
+    />
+
+    <!-- AI 研究 Sheet -->
+    <MobileFormSheet
+      v-model="showResearchSheet"
+      title="AI 自动研究"
+      :fields="researchFields"
+      v-model:form="researchForm"
+      submit-text="开始研究"
+      :submitting="researchRunning"
+      @submit="onResearchSubmit"
+    />
+
+    <input
+      ref="uploadInputRef"
+      type="file"
+      accept=".pdf,.docx,.xlsx,.pptx,.txt,.md"
+      hidden
+      aria-label="选择知识文件"
+      title="选择知识文件"
+      @change="onUploadFile"
+    />
   </div>
 </template>
 
@@ -334,9 +366,110 @@ async function deleteKnowledge(item) {
 }
 
 function onCreateAction(action) {
-  if (action.name === '手动添加') ElMessage.info('手动添加（开发中）')
-  else if (action.name === '上传文件') ElMessage.info('上传文件（开发中）')
-  else if (action.name === 'AI 自动研究') ElMessage.info('AI 研究（开发中）')
+  if (action.name === '手动添加') {
+    showManualSheet.value = true
+  } else if (action.name === '上传文件') {
+    uploadInputRef.value?.click()
+  } else if (action.name === 'AI 自动研究') {
+    showResearchSheet.value = true
+  }
+}
+
+// === 手动添加知识 ===
+const showManualSheet = ref(false)
+const manualSaving = ref(false)
+const manualForm = ref({ title: '', content: '', category: '' })
+const manualFields = [
+  { key: 'title', label: '标题', type: 'text', required: true, placeholder: '知识标题' },
+  { key: 'content', label: '内容', type: 'textarea', required: true, placeholder: '知识正文（支持 Markdown）' },
+  {
+    key: 'category',
+    label: '分类',
+    type: 'select',
+    options: [
+      { value: '', label: '未分类' },
+      { value: 'microbubble', label: '微纳米气泡' },
+      { value: 'water', label: '水处理' },
+      { value: 'agriculture', label: '农业' },
+      { value: 'disinfection', label: '消毒' },
+      { value: 'measurement', label: '测量' },
+      { value: 'application', label: '应用' },
+    ],
+  },
+]
+async function onManualSubmit() {
+  if (!manualForm.value.title?.trim() || !manualForm.value.content?.trim()) {
+    ElMessage.warning('标题和内容不能为空')
+    return
+  }
+  manualSaving.value = true
+  try {
+    await axios.post('/api/v1/knowledge', {
+      title: manualForm.value.title,
+      content: manualForm.value.content,
+      category: manualForm.value.category || null,
+    })
+    ElMessage.success('知识添加成功')
+    showManualSheet.value = false
+    manualForm.value = { title: '', content: '', category: '' }
+    fetchKnowledge()
+  } catch (e) {
+    ElMessage.error('添加失败：' + (e.response?.data?.detail || e.message))
+  } finally {
+    manualSaving.value = false
+  }
+}
+
+// === 上传文件 ===
+const uploadInputRef = ref(null)
+async function onUploadFile(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.error('文件超过 50MB')
+    e.target.value = ''
+    return
+  }
+  const fd = new FormData()
+  fd.append('file', file, file.name)
+  const loading = ElMessage.info({ message: '上传中，请稍候...', duration: 0 })
+  try {
+    await axios.post('/api/v1/knowledge/upload', fd)
+    ElMessage.success('文件上传成功，已自动提取知识')
+    fetchKnowledge()
+  } catch (err) {
+    ElMessage.error('上传失败：' + (err.response?.data?.detail || err.message))
+  } finally {
+    loading.close()
+    e.target.value = ''
+  }
+}
+
+// === AI 自动研究 ===
+const showResearchSheet = ref(false)
+const researchRunning = ref(false)
+const researchForm = ref({ topic: '' })
+const researchFields = [
+  { key: 'topic', label: '研究主题', type: 'textarea', required: true, placeholder: '如：微纳米气泡在农业消毒中的应用' },
+]
+async function onResearchSubmit() {
+  if (!researchForm.value.topic?.trim()) {
+    ElMessage.warning('请输入研究主题')
+    return
+  }
+  researchRunning.value = true
+  try {
+    await axios.post('/api/v1/knowledge/research', { topic: researchForm.value.topic })
+    ElMessage.success('研究完成，知识已入库')
+    showResearchSheet.value = false
+    researchForm.value = { topic: '' }
+    fetchKnowledge()
+    fetchHypotheses()
+  } catch (e) {
+    ElMessage.error('研究失败：' + (e.response?.data?.detail || e.message))
+  } finally {
+    researchRunning.value = false
+  }
 }
 
 onMounted(() => {

@@ -26,6 +26,7 @@
       <CardList
         :items="members"
         :field-config="memberFieldConfig"
+        :avatar-field="(m) => m.id"
         :loading="loading"
         empty-icon="👥"
         empty-title="暂无成员"
@@ -62,7 +63,7 @@
     <!-- 声纹录入全屏流程 -->
     <VoiceprintEnrollFlow
       v-if="enrollingMember"
-      v-model:show="showEnroll"
+      v-model="showEnroll"
       :member="enrollingMember"
       @success="onEnrollSuccess"
     />

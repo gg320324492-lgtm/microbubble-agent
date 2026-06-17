@@ -41,6 +41,7 @@
       <CardList
         :items="filteredTasks"
         :field-config="fieldConfig"
+        :avatar-field="(t) => t.assignee_id"
         :loading="loading"
         empty-icon="📋"
         empty-title="暂无任务"
@@ -69,7 +70,7 @@
 
     <!-- 筛选 Sheet -->
     <MobileSearchSheet
-      v-model:show="showFilter"
+      v-model="showFilter"
       v-model:keyword="searchKeyword"
       title="筛选任务"
       placeholder="搜索任务标题..."
@@ -81,7 +82,7 @@
 
     <!-- 创建/编辑 FormSheet -->
     <MobileTaskCreateForm
-      v-model:show="showCreate"
+      v-model="showCreate"
       :editing-task="editingTask"
       @success="onTaskSaved"
     />
