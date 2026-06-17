@@ -57,6 +57,16 @@ async def speech_to_text(
     if len(audio_data) == 0:
         raise HTTPException(status_code=400, detail="音频文件为空")
 
+    # 2026-06-18 修复：录音 < 1KB 通常是 MediaRecorder 录了几毫秒（swipe cancel / 按住太短），
+    # webm header 损坏，whisper 容器 ffmpeg 转 webm 必失败（EBML header parsing failed）
+    # 提前 400 拒绝避免下游 ffmpeg 报错 + 避免误导用户的"识别失败"提示
+    MIN_AUDIO_SIZE = 1024  # 1KB
+    if len(audio_data) < MIN_AUDIO_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"录音太短（{len(audio_data)} 字节），请长按说话至少 1 秒"
+        )
+
     try:
         result = await asr_service.transcribe(
             audio_data=audio_data,
