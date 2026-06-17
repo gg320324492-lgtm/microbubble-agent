@@ -1,8 +1,19 @@
 # MicroBubble Agent - 完善路线图
 
-> 最后更新: **2026-06-15 晚 22:02（主动提醒 v2 漏修补救 + highlight.js plaintext + 3 commits + 5 条铁律沉淀 + stats 重算 1056 提交 / 155K 行 / 633 文件 / 31 天）** — ① 用户凌晨 2:48 仍收到"分配已超过24小时"提醒根因：`app/wechat/scheduler.py:ProactiveScheduler` 3 个 check 方法（due_soon/overdue/unconfirmed）**完全绕过 11AM 窗口**，与 v2 `reminder_service` 并行运行 ② 修复：3 个 check 方法顶部加 `is_in_digest_window()` 守卫，窗口外 return 0（重启后第一次执行耗时 0.002s = 仅窗口判断立即 return）③ bonus fix：highlight.js `plaintext` fallback 未注册 → console 一直报 warning ④ [scripts/recalc_stats.py](scripts/recalc_stats.py) 项目统计重算：**1056 提交 / 155,485 行 / 633 文件 / 31 天**（python 44.5K / vue 40.5K / markdown 39.8K / config 14.2K / javascript 7.1K）⑤ **5 条铁律沉淀**：v2 大改动必须 grep 并行路径 / 并行调度器审计 one-liner / "主动提醒+被动提醒"两套系统必须共享策略 / 窗口守卫必须放方法最顶部 / Redis SET dedup 不替代窗口守卫
+> 最后更新: **2026-06-17 部署与基础设施重建（Docker Desktop 引擎崩溃 + 镜像源治理 + 数据 E 盘化，6 文件 1 commit `2de0a074` + CHANGELOG.md 发布）** — ① 重启电脑后 8 个 Docker 容器端到端连通失败，4 层根因：WSL2 `docker-desktop-data` 发行版丢失 → com.docker.service 7-9 分钟反复启停 + C 盘 24GB Docker 缓存残留 + huaweicloud 镜像源 404 + aliyun PyPI 限速 600KB/s ② 修复：删 24GB 缓存 + Docker Desktop 自动重建发行版 + 用 `mklink /J` junction 透明重定向到 E 盘 + 改 aliyun 正确路径（`debian-security bookworm-security`）+ pip 清华源 + `--retries 10 --timeout 60` + 新建 .dockerignore（build context 12GB→700MB 17 倍提速）+ frp 计划任务自启 ③ [scripts/recalc_stats.js](scripts/recalc_stats.js) Node.js 版本（host Python 不可用，2 行 git + 文件遍历）：**1058 提交 / 156,021 行 / 630 文件 / 33 天**（python 44.8K / vue 40.6K / markdown 40.0K / config 14.2K / javascript 7.3K）④ **共释放 ~192 GB** + **9 个 Docker 服务全运行中** + **`https://agent.mnb-lab.cn` 端到端连通** ⑤ **10 条铁律沉淀**：[memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) — junction 重定向 / WSL docker-desktop-data reset / Debian bookworm-security 路径 / pip 限速 + 重试 / apt-get fallback / .dockerignore / docker-compose.override.yml 默认加载 / frp 用户级 AtLogOn / dockerproxy.net 500 = daemon 未起 / Docker 代理走 GUI 不走 config.json
 
 ## 📋 目录（按时间倒序）
+
+### 最新完成（2026-06-17 部署与基础设施重建，6 文件 1 commit `2de0a074` + CHANGELOG.md）
+- [🐳 部署与基础设施全面重建（2026-06-17，6 文件 1 commit `2de0a074`）](#部署与基础设施全面重建2026-06-176-文件-1-commit-2de0a074--changelogmd)
+  - 🐛 根因 1：WSL2 docker-desktop-data 发行版丢失 + C 盘 24GB Docker 缓存残留
+  - 🐛 根因 2：huaweicloud 镜像源 `bookworm-security` 路径 404
+  - 🐛 根因 3：aliyun PyPI 单连接 ~600KB/s，torch 532MB 装 13 分钟
+  - 🐛 根因 4：apt-get `libcaca0` 502 Bad Gateway 瞬时错误
+  - 🔧 修复：junction 透明重定向 + aliyun 正确路径 + pip 清华源重试 + .dockerignore + frp 计划任务
+  - 📐 10 条铁律沉淀到 CLAUDE.md + memory
+  - 📊 stats 重算：1058 commits / 156K 行 / 630 文件 / 33 天（+2 commits / +2 dev_days）
+  - 💾 共释放 ~192 GB（C 盘 24GB 缓存 + 168GB 孤儿 vhdx）
 
 ### 最新完成（2026-06-15 晚 主动提醒调度器补 11AM 窗口守卫 + highlight.js plaintext fallback，3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）
 - [🔔 主动提醒 v2 漏修补救 + highlight.js plaintext 注册（2026-06-15 晚，3 commits）](#主动提醒-v2-漏修补救--highlightjs-plaintext-注册2026-06-15-晚3-commits)
@@ -5494,3 +5505,167 @@ cat results/insert_kb*.sql | docker exec -i microbubble-agent-db-1 psql -U postg
 - `memory/agentic-loop-fake-tool-call-parser.md` — 5 格式 XML 解析
 - `memory/tool-registry-startup-init.md` — TOOL_REGISTRY 启动未注册根因
 - `memory/qa-bench-iterative-loop.md` — 5 轮迭代修复闭环
+
+## 部署与基础设施全面重建（2026-06-17，6 文件 1 commit `2de0a074` + `CHANGELOG.md`）
+
+### 🐛 根因链（4 层）
+
+1. **WSL2 `docker-desktop-data` 发行版丢失** — `wsl -l -v` 只看到 `docker-desktop` 没有 `docker-desktop-data`，`com.docker.service` 每 7-9 分钟反复启动又停止（事件日志可见）。这是**根因 1**：
+   - 重启电脑后 `docker-compose up -d` 命令卡住 / 8 个容器全部无法启动
+   - 进程列表有 `com.docker.backend` + `com.docker.service` 但状态反复 `running` ↔ `stopped`
+   - 9 个服务（app / db / redis / minio / neo4j / whisper / vision-mcp / celery-worker / celery-beat）`docker compose ps` 全部 `Restarting (1) N seconds ago`
+2. **C 盘 24GB Docker 缓存残留** — `C:\Users\pc\AppData\Local\Docker` 占据系统盘 24GB 但 WSL 引用已断。`du -sh` 看到 Docker 文件夹巨大但 `wsl --list` 看不到数据
+3. **huaweicloud 镜像源 404** — Debian bookworm `bookworm-security` 已从 `debian/` 迁到 `debian-security/`，旧路径 404。**根因 3**：
+   - `apt-get update` 报 `The repository 'http://mirrors.huaweicloud.com/debian bookworm-security Release' does not have a Release file`
+   - 所有 apt install 失败 → 镜像构建失败
+4. **aliyun PyPI 限速** — 单连接 ~600KB/s，下 torch 532MB 装 13 分钟且 502 瞬时错误
+
+### 🔧 修复（4 类全栈治理）
+
+**修复 1：Docker Desktop 引擎恢复 + 数据 E 盘化**
+```bash
+# 1. 备份 24GB C 盘 Docker 缓存到 E 盘（保险）
+mv C:\Users\pc\AppData\Local\Docker E:\DockerData\appdata-cache-c
+
+# 2. Docker Desktop → Settings → Troubleshoot → Reset to factory defaults
+#    自动重建 docker-desktop-data 发行版（这次在 E 盘，因为 Docker Desktop 数据默认在 %LOCALAPPDATA%）
+
+# 3. 创建 junction 透明重定向（让原 C 盘路径继续工作）
+mklink /J "C:\Users\pc\AppData\Local\Docker" "E:\DockerData\appdata"
+
+# 4. 验证
+wsl -l -v   # 看到 docker-desktop + docker-desktop-data 两个
+docker compose ps   # 9 个服务全部 Up
+```
+
+**修复 2：Dockerfile 镜像源（3 个 source 模板统一）**
+```dockerfile
+# ❌ 错误：huaweicloud bookworm-security 404
+# deb http://mirrors.huaweicloud.com/debian bookworm-security main contrib
+
+# ✅ 正确：aliyun debian-security 独立路径
+RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm main contrib\n' > /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
+```
+
+**修复 3：pip 清华源 + 重试机制**
+```dockerfile
+# ❌ 错误：aliyun PyPI 限速 600KB/s
+# pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
+
+# ✅ 正确：清华源 + --retries 10 --timeout 60
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --prefer-binary \
+        --retries 10 --timeout 60 \
+        -r requirements.txt \
+        -i https://pypi.tuna.tsinghua.edu.cn/simple/ \
+        --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+**修复 4：apt-get install fallback（Dockerfile.whisper）**
+```dockerfile
+# ❌ 错误：aliyun libcaca0 502 一次失败全失败
+# RUN apt-get update && apt-get install -y ffmpeg libavformat-dev ... pkg-config
+
+# ✅ 正确：失败时自动重试
+RUN apt-get update && apt-get install -y --fix-missing \
+    ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
+    libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
+    pkg-config \
+    || (apt-get update && apt-get install -y --fix-missing --no-install-recommends \
+        ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
+        libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
+        pkg-config) \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+**修复 5：.dockerignore 必加（17 倍 build context 提速）**
+```dockerignore
+models/       # huggingface/torch/modelscope 缓存 10+ GB
+data/         # postgres/minio runtime data
+logs/
+.git/
+.gitignore
+.agents/
+docs/         # 全套文档不进镜像
+.claude/
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc *.pyo *.log
+.vscode/ .idea/ .DS_Store
+*.md
+nginx/ssl/
+.env.webhook .env.example
+```
+**效果**：build context 从 12GB → 700MB
+
+**修复 6：frp 客户端 Windows 计划任务自启**
+```powershell
+# Register-ScheduledTask - 用户级 AtLogOn + PowerShell wrapper
+$action = New-ScheduledTaskAction -Execute "powershell.exe" `
+  -Argument "-File E:\microbubble-agent\frp\start-frpc.ps1"
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName "FRPClient" -Action $action -Trigger $trigger `
+  -User "$env:USERNAME" -RunLevel Highest
+```
+
+### 📐 10 条铁律沉淀（[memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) + [CLAUDE.md 2026-06-17 section](CLAUDE.md#2026-06-17-部署与基础设施重建docker-desktop-引擎崩溃--镜像源治理--数据-e-盘化)）
+
+| # | 铁律 | 关键命令 |
+|---|---|---|
+| 1 | **junction 透明重定向** | `mklink /J "C:\path" "E:\real\path"` |
+| 2 | **WSL docker-desktop-data 重建** | `wsl -l -v` 看发行版，缺就 reset factory defaults |
+| 3 | **Debian bookworm-security 路径** | `debian-security bookworm-security` 独立路径，**不在** `debian/` 下 |
+| 4 | **pip 限速** | `pip --retries 10 --timeout 60 -i 清华源`（必须带重试） |
+| 5 | **apt-get install fallback** | 加 `|| (apt-get update && apt-get install -y --fix-missing ...)` |
+| 6 | **.dockerignore 必加** | `models/data/logs/.git` 排除后 build context 12GB→700MB |
+| 7 | **docker-compose.override.yml** | 默认自动加载，**不需要** `-f` 指定 |
+| 8 | **frp 用户级 AtLogOn** | `Register-ScheduledTask` 比 `sc create` 稳（无 UAC + 隐藏窗口） |
+| 9 | **dockerproxy.net 500 = daemon 未起** | 完全 kill Docker 进程 → 等 10s → 重启 → 等 90-120s |
+| 10 | **Docker 代理走 Settings GUI** | 不走 `~/.docker/config.json`（会破坏 daemon 内部通信） |
+
+### 📊 stats 重算（[scripts/recalc_stats.js](scripts/recalc_stats.js) — Node.js 版）
+
+```bash
+node scripts/recalc_stats.js
+# total_lines=156021 total_files=630 total_commits=1058 dev_days=33 first=2026-05-16
+# --- by_type ---
+#   python      :   44806 lines, 264 files
+#   vue         :   40583 lines, 140 files
+#   markdown    :   40043 lines,  78 files
+#   config      :   14207 lines,  25 files
+#   javascript  :    7300 lines,  68 files
+#   html        :    3527 lines,   9 files
+#   shell       :    2511 lines,  20 files
+#   typescript  :    1370 lines,   9 files
+#   css         :    1368 lines,   5 files
+#   docker      :     180 lines,   7 files
+#   sql         :      70 lines,   2 files
+#   other       :      56 lines,   3 files
+```
+
+**vs 上一次（2026-06-15 22:09）**：
+- commits 1056 → **1058**（+2）
+- dev_days 31 → **33**（+2）
+- total_lines 155,485 → **156,021**（+536）
+- total_files 633 → **630**（-3，因 `.codex` 目录被排除）
+- markdown 39,754 → **40,043**（+289，CHANGELOG.md 新增）
+
+### 💾 共释放 ~192 GB
+
+- 24 GB — C 盘 `AppData\Local\Docker` 缓存副本（已备份到 E 盘，已删除）
+- 168 GB — 孤儿 `docker_data.vhdx`（旧 docker-desktop-data 发行版数据，已无引用）
+- 删除 frp 冗余文件：`frps.toml`（服务端配置，本地用不到）、`run-frpc.bat`（旧 wrapper）、`frpc-stderr.log`
+- 删除 Docker 镜像 `ubuntu:latest`（160MB，未使用）
+
+### 🚀 部署状态
+
+- ✅ 9 个 Docker 服务运行中：app、db、redis、minio、neo4j、whisper、vision-mcp、celery-worker、celery-beat
+- ✅ `https://agent.mnb-lab.cn` 端到端连通（之前 502 Bad Gateway，现在 401 = 端点通了，密码错）
+- ✅ whisper `faster-whisper==1.2.1` large-v3 模型加载完成，CUDA 库就绪（RTX 5090 32GB）
+- ✅ `git push origin main` 同步成功（commit `2de0a074` → GitHub main）
+- ✅ 本地 webhook 可重新接收 push 事件

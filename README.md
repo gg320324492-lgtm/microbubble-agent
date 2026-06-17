@@ -33,6 +33,17 @@
 
 ### 近期新增（按时间倒序）
 
+- **🐳 部署与基础设施全面重建（2026-06-17，6 文件 1 commit `2de0a074`，`CHANGELOG.md` 同步发布）** — 重启电脑后 Docker 服务启动失败 8 个容器端到端连通，4 层根因 4 类修复全栈治理：
+  - **根因 1（Docker Desktop 引擎崩溃）**：WSL2 `docker-desktop-data` 发行版丢失，`com.docker.service` 每 7-9 分钟反复启停。**修复**：删 C 盘 24GB Docker 缓存（先备份 E 盘）→ Docker Desktop 自动重建发行版 → 用 `mklink /J` junction 透明重定向（`C:\Users\pc\AppData\Local\Docker` → `E:\DockerData\appdata`），C 盘 0 字节占用。**共释放 ~192 GB**（24GB 缓存 + 168GB 孤儿 `docker_data.vhdx`）
+  - **根因 2（Dockerfile 镜像源 404）**：huaweicloud 镜像源 `bookworm-security` 已迁到 `debian-security/`，旧路径 404。**修复**：3 个 source 模板（`Dockerfile` / `Dockerfile.whisper`）改 `mirrors.aliyun.com/debian-security bookworm-security main contrib` 正确路径
+  - **根因 3（PyPI 限速）**：aliyun PyPI 单连接 ~600KB/s，torch 532MB 装 13 分钟 + 502 瞬时错误。**修复**：清华源 + `pip --retries 10 --timeout 60` 重试机制（**最稳方案**，无论哪个源都该有）
+  - **根因 4（apt-get 瞬时 502）**：aliyun `libcaca0` 偶发 502。**修复**：`Dockerfile.whisper` 加 `|| (apt-get update && apt-get install -y --fix-missing --no-install-recommends ...)` 自动重试
+  - **`.dockerignore` 新建**：排除 `models/` `data/` `logs/` `.git/` `.agents/` `docs/` 等，**build context 12GB → 700MB（17 倍提速）**
+  - **frp 客户端 Windows 计划任务自启**：`Register-ScheduledTask` 用户级 `AtLogOn` + `frp/start-frpc.ps1` wrapper（`-WindowStyle Hidden` + 检测重复进程）
+  - **9 个 Docker 服务运行中**：app、db、redis、minio、neo4j、whisper、vision-mcp、celery-worker、celery-beat
+  - **`https://agent.mnb-lab.cn` 端到端连通**（之前 502 Bad Gateway，现在 401 = 端点通了，密码错）
+  - **10 条铁律沉淀**：[memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) + [CLAUDE.md 2026-06-17 section](CLAUDE.md#2026-06-17-部署与基础设施重建docker-desktop-引擎崩溃--镜像源治理--数据-e-盘化)。**关键纪律**：①junction 透明重定向让 C 盘软件跑 E 盘 ②WSL docker-desktop-data 丢失必须 reset factory defaults ③Debian bookworm-security 走 `debian-security/` 独立路径 ④pip 限速**必须**带 `--retries 10 --timeout 60` ⑤apt-get install 必加 fallback ⑥.dockeignore 是必须的 ⑦docker-compose.override.yml 默认自动加载 ⑧frp 用户级 AtLogOn 比 sc create 稳 ⑨dockerproxy.net 500 = daemon 没起来（要 90-120s） ⑩Docker Desktop 代理走 Settings GUI 不走 config.json
+
 - **🔔 主动提醒调度器补 11AM 窗口守卫 + 凌晨骚扰推送根因修复（2026-06-15 晚，3 commits `c18b01e8` + `d0ddf49e` + `09e4548d`）** — 用户报告昨晚 2:48 仍收到"分配已超过24小时"提醒：
   - **根因 1（commit `c18b01e8`）**：浏览器 console 一直报 `Could not find the language 'plaintext'` 警告。[web/src/utils/markdown.ts:41](web/src/utils/markdown.ts#L41) 写 `lang && hljs.getLanguage(lang) ? lang : 'plaintext'` fallback 到 plaintext，但 `highlight.js/lib/core` 只注册 6 种语言，没注册 plaintext。修复：import `highlight.js/lib/languages/plaintext` + 注册 `plaintext` / `text` / `txt` 三个 alias。plaintext 是 hljs 官方纯透传语言（无高亮、HTML 转义），chunk 增量 < 1KB
   - **根因 2（commit `d0ddf49e`）— 用户凌晨 2:48 根因**：[app/wechat/scheduler.py:ProactiveScheduler](app/wechat/scheduler.py) 是**与 v2 reminder 并行存在的独立调度器**，3 个 check 方法（`check_due_soon` / `check_overdue` / **`check_unconfirmed`** ← 用户收到的就是这个）**完全绕过 11AM 窗口**，直接 `wechat_bot.smart_send()` 立即推送。Celery beat 每 15 分钟跑一次（[app/core/celery.py:26-28](app/core/celery.py#L26-L28) `proactive-checks` schedule 900.0s），凌晨 2:48 命中 24h+ 任务 → 推送 → 用户醒来骂娘。修复：3 个 check 方法顶部都加 `is_in_digest_window()` 守卫，窗口外立即 `return 0`，与 `reminder_service.process_reminders` 共享同一策略函数
