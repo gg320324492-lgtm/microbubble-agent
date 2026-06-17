@@ -197,6 +197,10 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
@@ -317,6 +321,14 @@ function onReset() {
 
 onMounted(() => {
   fetchMeetings()
+  // 处理 /meetings?resume={id} 跳转（MainLayout 录音指示器点击调用）
+  // 之前漏了 → 移动端点击指示器没反应（同路由 query 变化不重渲）
+  // 跳到 /meetings/room 后，MobileMeetingRoom.onMounted 会自动从 useRecordingState
+  // 拿 recordingMeetingId 复用（line 200-203）实现"恢复现有听会"
+  const resumeId = route.query.resume
+  if (resumeId) {
+    router.replace('/meetings/room')
+  }
 })
 </script>
 
