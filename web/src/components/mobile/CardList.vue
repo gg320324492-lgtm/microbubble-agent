@@ -50,6 +50,15 @@
         </span>
 
         <div class="item-content">
+          <!-- 可选：左侧头像（与桌面端 el-table 列对齐） -->
+          <MemberAvatar
+            v-if="avatarField"
+            :member-id="avatarField(item)"
+            :size="40"
+            class="item-avatar"
+          />
+
+          <div class="item-body">
           <!-- 顶部行（主标题 + 状态） -->
           <div v-if="getField(item, 'title') || getField(item, 'subtitle') || getField(item, 'badge')" class="item-top">
             <div class="item-title-wrap">
@@ -88,6 +97,7 @@
           <div v-if="$slots['item-' + getKey(item, idx)]" class="item-slot">
             <slot :name="'item-' + getKey(item, idx)" :item="item" :idx="idx" />
           </div>
+          </div><!-- /item-body -->
         </div>
 
         <!-- 箭头 -->
@@ -141,6 +151,7 @@
  */
 
 import { ref, computed, watch } from 'vue'
+import MemberAvatar from './MemberAvatar.vue'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -149,6 +160,8 @@ const props = defineProps({
   fieldConfig: { type: Object, default: () => ({}) },
   /** 唯一键字段名（默认 id） */
   rowKey: { type: String, default: 'id' },
+  /** 可选：左侧头像（与桌面端 el-table 列对齐）。函数返回 memberId（从 memberStore 查 avatar） */
+  avatarField: { type: Function, default: null },
   /** 是否支持多选 */
   selectable: { type: Boolean, default: false },
   /** 多选绑定值 */
@@ -403,6 +416,16 @@ watch(
 
 /* Item 内容 */
 .item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.item-avatar {
+  flex-shrink: 0;
+}
+.item-body {
   flex: 1;
   min-width: 0;
 }

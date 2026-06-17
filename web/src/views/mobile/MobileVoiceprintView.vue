@@ -113,7 +113,7 @@
     <!-- 声纹录入全屏 -->
     <VoiceprintEnrollFlow
       v-if="enrollingMember"
-      v-model:show="showEnroll"
+      v-model="showEnroll"
       :member="enrollingMember"
       @success="onEnrollSuccess"
     />

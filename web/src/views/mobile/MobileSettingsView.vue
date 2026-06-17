@@ -9,9 +9,11 @@
       <!-- 头像卡片 -->
       <section class="avatar-card">
         <div class="avatar-wrap">
-          <div class="avatar-circle">
-            {{ userInfo?.name?.charAt(0) || '👤' }}
-          </div>
+          <MemberAvatar
+            :member-id="userInfo?.id"
+            :member-name="userInfo?.name"
+            :size="72"
+          />
           <button
             type="button"
             class="avatar-upload-btn"
@@ -118,7 +120,7 @@
 
     <!-- 个人资料编辑 Sheet -->
     <MobileFormSheet
-      v-model:show="showProfileSheet"
+      v-model="showProfileSheet"
       title="编辑个人资料"
       :fields="profileFields"
       v-model:form="profileForm"
@@ -129,7 +131,7 @@
 
     <!-- 修改密码 Sheet -->
     <MobileFormSheet
-      v-model:show="showPasswordSheet"
+      v-model="showPasswordSheet"
       title="修改密码"
       :fields="passwordFields"
       v-model:form="passwordForm"
@@ -148,7 +150,7 @@
 
     <!-- 通知偏好 Sheet（v2 11AM 单一窗口） -->
     <MobileFormSheet
-      v-model:show="showNotifSheet"
+      v-model="showNotifSheet"
       title="通知偏好"
       :fields="notifFields"
       v-model:form="notifForm"
@@ -190,6 +192,7 @@ import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
+import MemberAvatar from '@/components/mobile/MemberAvatar.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
