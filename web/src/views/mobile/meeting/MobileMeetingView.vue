@@ -209,8 +209,6 @@ import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
 const route = useRoute()
 const router = useRouter()
 
-const router = useRouter()
-
 const {
   meetings, total, currentPage, pageSize, loading,
   keyword, dateFrom, dateTo,
