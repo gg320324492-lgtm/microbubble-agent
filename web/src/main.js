@@ -1,7 +1,11 @@
-// Passive event listener 补丁 — 消除 Chrome 滚动事件性能警告
-// 让 wheel/mousewheel/touchstart/touchmove 默认 passive，同时保留显式 passive:false 的能力
+// Passive event listener 补丁 — 消除 Chrome 滚轮事件性能警告
+// 2026-06-18 修复：只强制 wheel/mousewheel 为 passive（Chrome 滚轮性能警告根因）
+// touchstart/touchmove **不强制** — 移动端组件（语音按钮、longpress）需要 preventDefault 取消默认行为
+// 之前 v1 (commit 77398a4a) 把 4 个事件都强制 passive，导致：
+// 1. MobileInputBar @touchstart.prevent 失效（语音按钮"按住说话"行为异常）
+// 2. Element Plus 内部 popover/dialog 的 preventDefault 抛 'Unable to preventDefault inside passive' 警告
 ;(() => {
-  const PASSIVE_EVENTS = new Set(['wheel', 'mousewheel', 'touchstart', 'touchmove'])
+  const PASSIVE_EVENTS = new Set(['wheel', 'mousewheel'])
   const orig = EventTarget.prototype.addEventListener
   EventTarget.prototype.addEventListener = function (type, listener, options) {
     if (PASSIVE_EVENTS.has(type) && (options === undefined || options === null)) {
