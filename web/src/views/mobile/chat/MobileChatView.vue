@@ -30,7 +30,7 @@
     </main>
 
     <MobileInputBar
-      v-model:text="inputText"
+      v-model="inputText"
       :selected-image="selectedImage"
       :selected-file="selectedFile"
       :input-padding-bottom="inputPaddingBottom"
