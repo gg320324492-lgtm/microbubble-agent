@@ -1818,3 +1818,15 @@ sudo docker-compose restart app celery-worker  # v1 老命令
 # volume 挂载只换文件不换模块缓存，新代码 import 必须靠重启进程
 ```
 rate_limit.py 是 `/app/app/core/rate_limit.py`，改完不 restart app = 限流配置永远走旧逻辑。本次就是因为没及时 restart 看到 curl 还 429 一度怀疑修复无效。
+
+**修复 4（commit `defb08e1`）**：MeetingView.onMounted 重复 `router.replace` 覆盖导致"会议管理界面不断刷新"：
+```js
+if (resumeId) {
+  resumeRecording(Number(resumeId))          // router.replace('/meetings/room')
+  router.replace({ path: '/meetings' })      // ← 立刻覆盖！URL 永远停在 /meetings
+}
+```
+- **症状**：用户点击"正在听会"指示器后，桌面端停留在"会议管理"界面不断刷新，进不去 MeetingRoomView
+- **根因链**：commit `f099e7e5` 把 `resumeRecording` 从"开 dialog"改为"`router.replace('/meetings/room')`"，但 onMounted 紧接着的 `router.replace({ path: '/meetings' })`（旧代码用来"清理 query 让刷新不重复弹窗"）**立即覆盖**了新跳转。URL 永远在 `/meetings` 反复 render → 视觉上"不断刷新"
+- **修复**：删 onMounted 末尾那行 router.replace，resumeRecording 内部已 navigate 走，不需要额外清理
+- **新铁律**：**`router.replace/push 后不要再紧接着 router.replace/push`** —— Vue Router 的两个连续导航会冲突，后一行覆盖前一行。常见踩坑模式：① 旧代码"清理 query"在新代码"已 navigate"后变成 bug ② 同一个 onMounted 里多个 replace 想"先 X 后 Y"实际只走 Y ③ if/else 两分支各自 replace 会被外层最终 replace 覆盖。**纪律**：一个 onMounted / 一个事件回调里最多 1 次 router 操作，需要多次导航用 await 链式或 nextTick 拆开
