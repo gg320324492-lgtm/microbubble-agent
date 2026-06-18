@@ -100,6 +100,17 @@ function manifestHashPlugin() {
 // 修复：在 esm-bundler.js 顶部注入一行 if (!instance) return; 守卫
 // 只影响 build 产物（dev mode 不修，因为 dev 调试需要看原始报错定位应用层 bug）
 const VUE_BUM_NULL_PATCH = '/* patch:vue-3.5-bum-null */ if (!instance) return;'
+
+// EP useOrderedChildren.removeChild null guard patch（2026-06-18 实战教训）
+// 触发链：el-tab-pane / el-table-column 等注册到父 el-tabs / el-table 的 pane，
+//   父组件先 unmount → parentNode 被 detach → childNode.parentNode 变 null
+//   → nodesMap.get(null) 返回 undefined → childNodes.indexOf(childNode) 爆
+//   → 'Cannot read properties of undefined (reading indexOf)' at unregisterPane
+// 修复：在 removeChild 拿到 childNodes 后立刻 return，不要 splice
+// 触发页（高频）：AgentTracesView（19 el-table）/ TaskTrash（18）/ MeetingDetailView（el-tabs lazy）
+//   / KnowledgeView（4 tab lazy）/ SpeakerMappingPanel（8）/ VoiceprintEnrollDialog（el-tabs lazy）
+// 只影响 build 产物（dev mode 不修），与 VUE_BUM_NULL_PATCH 同款策略
+const EP_UNREGISTER_PANE_NULL_PATCH = '/* patch:ep-unregister-pane-null */ if (!childNodes) return;'
 function vueBumNullPatchPlugin() {
   return {
     name: 'vue-bum-null-patch',
@@ -126,6 +137,51 @@ function vueBumNullPatchPlugin() {
       // 在函数体开头插入 null guard
       const patched = code.replace(pattern, `$1\n    ${VUE_BUM_NULL_PATCH}`)
       console.log('[vue-bum-null-patch] applied to', id)
+      return {
+        code: patched,
+        map: null,
+      }
+    },
+  }
+}
+
+// EP useOrderedChildren.removeChild null guard（防 el-tabs/el-table 父组件先 unmount 后
+// 子 pane 调 unregisterPane 拿不到 nodesMap entry 而 indexOf undefined 崩溃）。
+// patch 目标：node_modules/element-plus/es/hooks/use-ordered-children/index.mjs
+// pattern 唯一性：`nodesMap.get(parentNode)` 后紧跟 `childNodes.indexOf(childNode)`，
+// 该组合在 EP 其他文件无重复出现（只有 useOrderedChildren 用 WeakMap(parentNode)）
+function epUnregisterPaneNullPatchPlugin() {
+  return {
+    name: 'ep-unregister-pane-null-patch',
+    enforce: 'pre',
+    transform(code, id) {
+      // 只 patch useOrderedChildren 的源码模块
+      if (!/node_modules\/element-plus\/es\/hooks\/use-ordered-children\/index\.mjs$/.test(id)) {
+        return null
+      }
+      // 防御性：检查是否已 patch
+      if (code.includes('/* patch:ep-unregister-pane-null */')) {
+        return null
+      }
+      // 定位 removeChild 函数体内 nodesMap.get(parentNode) → childNodes.indexOf(childNode) 链路
+      // 源码原样（保留 tab 缩进）：
+      //   const childNodes = nodesMap.get(parentNode);
+      //   const index = childNodes.indexOf(childNode);
+      const pattern = /(const childNodes = nodesMap\.get\(parentNode\);\s*\n\s*const index = childNodes\.indexOf)/
+      const match = code.match(pattern)
+      if (!match) {
+        // EP 升级后源码结构变了，patch 失效（升级后要重新适配）
+        console.warn('[ep-unregister-pane-null-patch] pattern not found, skipped (EP version may have changed)')
+        return null
+      }
+      // 在 childNodes.indexOf 之前插入 null guard
+      // 格式：拿不到 childNodes 说明 parentNode 没在 nodesMap 注册过（父组件已 unmount），
+      // 直接 return 不再做 splice（WeakMap 用 null 作 key 会丢，仅 delete children.value 已足够清理）
+      const patched = code.replace(
+        pattern,
+        `const childNodes = nodesMap.get(parentNode);\n\t\t\t${EP_UNREGISTER_PANE_NULL_PATCH}\n\t\t\tconst index = childNodes.indexOf`
+      )
+      console.log('[ep-unregister-pane-null-patch] applied to', id)
       return {
         code: patched,
         map: null,
@@ -223,6 +279,8 @@ export default defineConfig({
 
     // Vue 3.5 'bum' null 解构 bug patch — 见上面 vueBumNullPatchPlugin 注释
     vueBumNullPatchPlugin(),
+    // EP useOrderedChildren.removeChild null guard — 见 epUnregisterPaneNullPatchPlugin 注释
+    epUnregisterPaneNullPatchPlugin(),
   ],
   css: {
     postcss: {

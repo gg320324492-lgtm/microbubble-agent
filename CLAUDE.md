@@ -564,7 +564,36 @@ docker compose restart app celery-worker
 - **移动端 18 页面 + 12 组件 + 4 PWA 策略（PR #1-10 全栈定制收官，commit `9026c07`）** — 完整覆盖：Dashboard/Login/Chat（带 session drawer + message bubble + input bar + rich card）/Task/TaskTrash/Meeting/MeetingDetail/MeetingRoom（3D CSS 声波条）/Knowledge/KnowledgeDetail/Project/ProjectStats/Member/Memory/Settings/Voiceprint/AgentTraces/admin。**核心组件**：CardList（卡片列表+下拉刷新+无限滚动）/LongPressWrapper（长按事件封装，300ms 触发）/MobileActionSheet（iOS 风格底部弹出菜单）/MobileECharts（图表懒加载+resize 监听）/MobileFormSheet（表单底部弹出）/MobileSearchSheet（搜索浮层）/MobileTaskCreateForm（任务创建 5 字段）/PageHeader（顶栏统一规范）/ProcessingSheet（处理中浮层）/SafeArea（iPhone 刘海/底栏安全区适配）/TabBar（底部 4 tab + 中间凸起 +badge）/VoiceTestFlow/VoiceprintEnrollFlow。**PWA 4 策略**：①vite-plugin-pwa 自动生成 manifest.json + service worker（workbox）②Service Worker 预缓存 app shell + 路由 fallback ③`useSafeArea` 读 env(safe-area-inset-*) + dynamic viewport units ④App 离线时显示「网络已断开但可查看最近消息」+ IndexedDB 缓存
 - **移动端测试矩阵（PR #10 收官，commit `9026c07`）** — `web/tests/visual/visual-regression.spec.mjs` Playwright 跨设备截图测试，覆盖 iPhone SE/14/15 Pro Max + iPad mini + Galaxy S21 5 个 viewport，**13 个核心页面视觉对比基线**。`web/src/components/mobile/__tests__/` 2 个组件测试（CardList + MobileFormSheet）+ Vitest jsdom 环境
 
-### 2026-06-13 Vue 3.5 升级 + PWA HTML 策略新增
+### 2026-06-18 EP useOrderedChildren.removeChild null 崩溃修复（同 'bum' 系列卸载时序问题）
+
+- **症状** — 浏览器 console 报错 `TypeError: Cannot read properties of undefined (reading 'indexOf') at Object.o [as unregisterPane] (element-plus-desktop-xxx.js:8:1774)`，触发组件：el-tabs（带 lazy 的 tab 切换 + 路由切换）/ el-table（含 el-table-column 的重表格页）。触发链：父组件先 unmount → parentNode 被 detach → childNode.parentNode 变 null → `nodesMap.get(null)` 返回 undefined → `childNodes.indexOf(childNode)` 爆。
+- **真根因** — Element Plus `es/hooks/use-ordered-children/index.mjs` 的 `removeChild` 函数（被 tabs/tab-pane/table-column 复用，命名为 `unregisterPane`）源码：
+  ```js
+  const removeChild = (child) => {
+      delete children.value[child.uid];
+      triggerRef(children);
+      const childNode = child.getVnode().el;
+      const parentNode = childNode.parentNode;
+      const childNodes = nodesMap.get(parentNode);  // ← parentNode 是 null 时返 undefined
+      const index = childNodes.indexOf(childNode);  // ← BUG: childNodes undefined
+      childNodes.splice(index, 1);
+  };
+  ```
+  与 `bum` null bug 同源（都是 Vue 3 卸载时序 + EP 内部状态清理竞态），但触发函数不同。
+- **修复** — `web/vite.config.js` 新增 `epUnregisterPaneNullPatchPlugin`，Vite plugin transform 阶段 patch EP 源码（与 `vueBumNullPatchPlugin` 同模式，详见代码注释）：
+  ```js
+  // patch 字符串
+  const EP_UNREGISTER_PANE_NULL_PATCH = '/* patch:ep-unregister-pane-null */ if (!childNodes) return;'
+  // pattern 唯一性：nodesMap.get(parentNode) 后紧跟 childNodes.indexOf(childNode)
+  ```
+- **验证** — `npm run build` 后 `grep -boE 'if\(!a\)return;' element-plus-desktop-*.js` 找到 patch 注入位置（minifier 把 `childNodes` minify 成 `a`、把 `nodesMap` minify 成 `i`、把 `removeChild` minify 成 `o`，注释被剥但代码在）。**两处 `if(!a)return;`**：①offset ~28k 是 Vue 3.5 源码 `unmount()` 自带检查（CLAUDE.md 之前记录的 line 6572）②offset ~161k 是我们新 patch。
+- **纪律（5 条铁律）**：
+  ① **"上游已知 bug 但未修复"系列再次扩展** —— Vue 'bum' bug 用 Vite plugin patch 修（CLAUDE.md 752 行铁律），EP `removeChild` null 同样套路。同系列还有：el-table v-if 外层必须 v-show（commit `14c22e3`）、vite-plugin-pwa manifest URL 不同步（commit `6d93d35`）—— 都用"Vite plugin transform 阶段 patch build 产物"模式解决，不污染 node_modules。
+  ② **EP source `use-ordered-children/index.mjs` 是 pane 注册中心的唯一源** —— 所有 pane 类型（ElTabPane / ElTableColumn / ElSplitPane）都通过 `addChild`/`removeChild` 注册。改这一个文件能影响 3 类组件，未来 EP 加新 pane 类型也会自动受益。
+  ③ **patch 文件 ID 用完整 node_modules 路径正则** —— 与 `vueBumNullPatchPlugin` 一致 `/node_modules\/element-plus\/es\/hooks\/use-ordered-children\/index\.mjs$/`，避免误 patch 其他文件（WeakMap + parentNode + childNodes 组合在 EP 只此一处）。
+  ④ **升级 EP 大版本时 plugin 自动失效但要 warn loud** —— `console.warn('[ep-unregister-pane-null-patch] pattern not found, skipped (EP version may have changed)')`，与 `vueBumNullPatchPlugin` 的 `pattern not found` 同款。升级 EP 2.x → 3.x 时如果源码改了 pattern，必须重新适配。
+  ⑤ **dev mode 不 patch**（与 Vue 'bum' 策略一致）—— dev 调试需要看原始报错定位应用层 bug，patch 只影响 build 产物。
+
 
 - **Vue 升级审计 3 项纪律（重要，commit `bf2da67` + merge `c6cb0e0`）** — 升 Vue 大版本（3.4 → 3.5 等）前必查 3 项：①`const { x } = props` 解构模式（Vue 3.5 reactive props destructure 默认开启会改变行为：旧版解构出非响应式副本，新版解构出响应式引用）②`toRefs(props)` 冗余用法（Vue 3.5 后可以删除，但保留无害）③`peer dep` 范围（EP 等 UI 库的 `vue: ^3.2.0` 是否覆盖目标版本）。**审计 one-liner**（3 分钟搞定）：
   ```bash
