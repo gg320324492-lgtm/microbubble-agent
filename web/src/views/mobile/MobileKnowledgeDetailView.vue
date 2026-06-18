@@ -148,7 +148,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/format'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 
 const route = useRoute()
@@ -188,11 +188,6 @@ function getCategoryLabel(c) {
     measurement: '测量',
     application: '应用',
   }[c] || c || '未分类'
-}
-
-function formatDate(t) {
-  if (!t) return ''
-  return dayjs(t).format('YYYY-MM-DD')
 }
 
 // 分享当前知识条目（Web Share API 优先，fallback 复制链接）
