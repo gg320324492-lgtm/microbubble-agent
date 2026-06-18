@@ -585,12 +585,13 @@ onMounted(() => {
   fetchMembers()
   loadTemplates()  // Wave 3b
 
-  // 支持从全局录音指示器跳转回来恢复录音对话框
+  // 支持从全局录音指示器跳转回来：2026-06-18 改为跳到 /meetings/room 全屏页
+  // （与 MobileMeetingView:325-328 镜像），不要再"清理 query 后留 /meetings"
+  // —— 那会让 URL 永远停在 /meetings + MeetingView 持续重渲 = "会议管理界面不断刷新"
   const resumeId = route.query.resume
   if (resumeId) {
     resumeRecording(Number(resumeId))
-    // 清除 query 参数避免刷新重复打开
-    router.replace({ path: '/meetings' })
+    // resumeRecording 内部已 router.replace('/meetings/room')，不要在这里再 replace
   }
 })
 </script>
