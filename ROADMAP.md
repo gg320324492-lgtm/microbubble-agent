@@ -4,6 +4,16 @@
 
 ## 📋 目录（按时间倒序）
 
+### 最新完成（2026-06-18 三连环修复 + 限流误伤复盘，7 commits + 1 memory + 5 文件）
+- [🛠 三连环修复（2026-06-18）](#2026-06-18-三连环修复-限流误伤复盘)
+  - 🐛 根因 1：EP useOrderedChildren.removeChild null 崩溃（commit `f8d27015`）
+  - 🎤 根因 2：桌面"正在听会"指示器不接进度（commit `f099e7e5`）
+  - 🔌 根因 3：/auth/me 限流误伤（commits `a1fd8280` + `22f5a7d7`）
+  - 🔄 根因 4：MeetingView 重复 router.replace 覆盖（commit `defb08e1`）
+  - 🐛 根因 5：MeetingRoomView 模板 .value 反模式（commit `9f11d97a`）
+  - 📋 部署链路事故：本地 commit 后忘 push（[memory/incident-2026-06-18-deploy-chain.md](memory/incident-2026-06-18-deploy-chain.md)）
+  - 📚 7 条新铁律沉淀到 CLAUDE.md（`38a1ec5` + `38039d7c`）
+
 ### 最新完成（2026-06-18 移动端 26 commits 全面修复，5 commit + 1 memory + 4 文件 + stats 重算）
 - [📱 移动端 26 commits 全面修复（2026-06-18，1084 提交 / 156K 行 / 630 文件 / 33 天）](#移动端-26-commits-全面修复2026-06-18)
   - 🐛 根因 1：图标层缺 Fold/Expand import（commit `0e11009`）

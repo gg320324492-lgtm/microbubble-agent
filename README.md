@@ -33,6 +33,13 @@
 
 ### 近期新增（按时间倒序）
 
+- **🛠 三连环修复 + 限流误伤复盘（2026-06-18，7 commits）** — 1 天内完成 5 个独立 bug 修复 + 1 个部署链路事故复盘：
+  - **🐛 EP useOrderedChildren.removeChild null 崩溃**（commit `f8d27015`）— Element Plus tab/table pane 卸载时 `nodesMap.get(parentNode)` 返 undefined → `childNodes.indexOf(childNode)` 报 `Cannot read properties of undefined (reading 'indexOf')`。修复：`web/vite.config.js` 新增 `epUnregisterPaneNullPatchPlugin`，transform 阶段 patch EP 源码。与现有 `vueBumNullPatchPlugin` 同模式（"上游已知 bug 但未修复" Vite plugin patch 系列）。触发页：AgentTracesView（19 el-table）/ TaskTrash（18）/ MeetingDetailView（el-tabs lazy）/ KnowledgeView（4 tab lazy）/ SpeakerMappingPanel（8）/ VoiceprintEnrollDialog
+  - **🎤 桌面"正在听会"指示器不接进度**（commit `f099e7e5` + `defb08e1` + `9f11d97a`）— 桌面端 MeetingView 用 el-dialog 嵌套 MeetingRoom 与移动端 MobileMeetingRoom 全屏页 UX 不一致。修复链：①新建 `web/src/views/MeetingRoomView.vue`（218 行）镜像 MobileMeetingRoom 但桌面化（el-page-header + el-dialog 帮助 + 右上"正在听会 #N"橙色徽章）②router `meetings/room` fallback 改用 MeetingRoomView ③MeetingView.resumeRecording 改 navigate ④删 onMounted 末尾重复 router.replace 防 URL 永远 /meetings ⑤模板去掉 .value 防 null.value TypeError
+  - **🔌 /auth/me 限流误伤 → 完全豁免**（commits `a1fd8280` + `22f5a7d7`）— 旧版 `/auth/me` 归 auth tier 20/min 被 useUserStore 高频 polling 触发 429。先移到 read tier 200/min 仍不够，最终新增 `_AUTH_UNLIMITED_PATHS = {"/api/v1/auth/me"}` + middleware 看到 "unlimited" 直接跳过
+  - **📋 部署链路事故复盘**（[memory/incident-2026-06-18-deploy-chain.md](memory/incident-2026-06-18-deploy-chain.md)）— 用户报告"正在听会不接进度"后我误以为是 webhook 链断（CLAUDE.md 2026-06-17 教训复发），实际是**本地 commit 后忘 push**，GitHub 端一直停在 `c1b969dd`。补 push 后 webhook 5 秒内触发 + 服务器 HEAD 变 `f099e7e5` + `f8d27015` + dist 自动含 MeetingRoomView
+  - **7 条新铁律沉淀到 CLAUDE.md**：①commit + push 后必 `git log origin/main -3` 验证 ②怀疑 webhook 断先看 origin/main ③/auth/ 路径按 path+method 细分 ④高频只读端点完全豁免 ⑤template 里 ref 不写 .value ⑥router 操作一次只一个 ⑦docker compose v1/v2 服务器不互通
+
 - **📱 移动端 26 commits 全面修复（2026-06-18，全栈治理）** — 服务器 6/15 13:52 后没成功 deploy，移动端 13 个 bug 隐藏 3 天一次性发现：
   - **图标层**：`MainLayout.vue:184` 缺 `Fold`/`Expand` import → 移动端左上角"红方块"根因（commit `0e11009`）
   - **路由层**：8/16 mobile 路由路径错（`knowledge/MobileKnowledgeView` 等假设子目录但实际在 `views/mobile/` 根目录，commit `025424ca`）
