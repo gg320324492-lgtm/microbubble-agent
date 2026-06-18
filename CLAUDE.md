@@ -1764,3 +1764,57 @@ docker compose restart app celery-worker
 - `9d1086d` 空 commit 触发 fresh webhook（GitHub 端 push 后 23:11 webhook 收到但 server 端 git fetch 失败）
 - `c9c60ca6` deploy-auto.sh 加 .env.webhook 守卫
 - 服务器端手动：重新生成 deploy key + 写 .env.webhook + 跑一次手动 deploy
+
+### 2026-06-18 三连环修复（EP patch + MeetingRoomView + /auth/me 限流）
+
+本次 1 天内完成 3 个独立修复，但部署链路把 3 个 commit 的失败/成功搞混了，引出 2 条新铁律。
+
+**修复 1（commit `f8d27015`）**：EP `useOrderedChildren.removeChild` null guard — Vite plugin patch EP 源码防 `indexOf(undefined)` 崩溃（详见前面"### 2026-06-18 EP useOrderedChildren.removeChild null 崩溃修复"）
+
+**修复 2（commit `f099e7e5`）**：桌面"正在听会"指示器不接进度 — 新建 MeetingRoomView 全屏页镜像移动端 MobileMeetingRoom（详见前面"### 2026-06-18 桌面'正在听会'指示器不接进度修复"）
+
+**修复 3（commit `a1fd8280`）**：/auth/me 限流误伤 — `app/core/rate_limit.py` 把 `/auth/me` 等只读端点从 auth tier (20/min) 移到 read tier (200/min)
+
+**事故链：本地只 commit 没 push，误以为是 webhook 链断（CLAUDE.md 已有教训 2026-06-17 复发误判）**
+- 用户报告"桌面端点击'正在听会'按钮还是不能继续之前的听会进度"
+- 我先入为主以为 webhook 链又断了，按 2026-06-17 教训排查
+- 服务器 git log 显示 HEAD 在 `c1b969dd`、dist 没有 MeetingRoomView chunk → 进一步怀疑 deploy 链断
+- 但实际 SSH 测 GitHub 通、fetch 成功、webhook service 正常 — 唯一异常：`origin/main` 没有我刚 commit 的 `f8d27015` + `f099e7e5`
+- **真相**：我本地 `git commit` 后忘了 `git push`，GitHub 端一直停在 `c1b969dd`，服务器当然 deploy 不动
+- 修复：`git push origin main` 之后 webhook 5 秒内触发，服务器 HEAD 变 `f099e7e5` + `f8d27015`，dist 自动含 MeetingRoomView
+
+**新铁律 5 条**：
+① **commit 后必 verify push 真到 origin**（最重要，最容易踩）：
+```bash
+# commit + push 后必跑
+git push origin main && \
+git log --oneline origin/main -3  # 确认 HEAD 与本地一致
+```
+缺这步 = 服务器 deploy 永远拿不到新代码，与 webhook 链断的症状 100% 一样（dist mtime 不动、git log 不前进），浪费排查时间。
+
+② **怀疑 webhook 断时第一步先看 origin/main**：
+```bash
+ssh 服务器 "cd /opt/microbubble-agent && sudo git fetch origin main && git log --oneline origin/main -5"
+```
+- 如果 origin/main 与本地 HEAD 不一致 → 本地没 push 成功，不是 webhook 断
+- 如果 origin/main 有新 commit 但服务器 HEAD 停在旧 commit → 真 webhook 断，走 2026-06-17 教训排查
+- 如果 origin/main + 服务器 HEAD 都新 → 不是 deploy 问题，是浏览器侧 SW cache 污染
+
+③ **/auth/ 下路径必须分级限流**（修复 3 教训）：
+`if "/auth/" in path` 一刀切归 auth tier 20/min 是误伤：/auth/me 是高频只读（页面加载/Pinia 初始化/token 校验都会调），20/min ≈ 3秒/次根本不够。修复模式 = 白名单敏感路径（login/refresh/change-password）保留 20/min + 其他按方法分（PUT/PATCH/DELETE → write 30/min，GET → read 200/min）+ fallback 仍归 auth tier（防 401 风暴）。**铁律**：API 限流"按前缀"易误伤，必须"按 path 精确 + 按方法细分"，否则高频只读端点会持续 429。
+
+④ **docker compose v1 (docker-compose) 与 v2 (docker compose) 服务器上不互通**：
+服务器 Docker 29.5.3 装的是 docker-compose v5.1.4 独立二进制，**`docker compose` 命令不存在**，必须用 `sudo docker-compose`。判断方法：
+```bash
+which docker-compose 2>&1  # 存在 = v1 (老独立二进制)
+docker compose version 2>&1  # 存在 = v2 (Docker CLI plugin)
+```
+v1 警告 `Couldn't find env file: /opt/microbubble-agent/.env` 不影响 restart（只 restart 不重建容器，env 不需要重新解析）。
+
+⑤ **CLAUDE.md 752 行铁律对后端依然适用**：
+```bash
+# 任何后端 Python 文件改动（app/ 任何路径）必跑：
+sudo docker-compose restart app celery-worker  # v1 老命令
+# volume 挂载只换文件不换模块缓存，新代码 import 必须靠重启进程
+```
+rate_limit.py 是 `/app/app/core/rate_limit.py`，改完不 restart app = 限流配置永远走旧逻辑。本次就是因为没及时 restart 看到 curl 还 429 一度怀疑修复无效。
