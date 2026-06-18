@@ -14,6 +14,7 @@
           class="header-action"
           aria-label="分享"
           title="分享"
+          @click="shareCurrent"
         >🔗</button>
       </template>
     </PageHeader>
@@ -145,6 +146,7 @@
 
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/mobile/PageHeader.vue'
@@ -191,6 +193,26 @@ function getCategoryLabel(c) {
 function formatDate(t) {
   if (!t) return ''
   return dayjs(t).format('YYYY-MM-DD')
+}
+
+// 分享当前知识条目（Web Share API 优先，fallback 复制链接）
+async function shareCurrent() {
+  const title = knowledge.value?.title || '知识条目'
+  const url = window.location.href
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, url })
+    } else if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url)
+      ElMessage.success('链接已复制')
+    } else {
+      ElMessage.info('请手动复制链接：' + url)
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      ElMessage.error('分享失败：' + (e.message || '未知错误'))
+    }
+  }
 }
 
 function formatContent(content) {

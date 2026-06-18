@@ -71,7 +71,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 
@@ -133,9 +133,8 @@ function setStatus(v) {
 }
 
 function viewProject(project) {
-  ElMessageBox.alert(project.description || '暂无描述', project.name, {
-    confirmButtonText: '关闭',
-  }).catch(() => {})
+  // 跳到移动端项目详情页（新建 MobileProjectDetailView，含里程碑 timeline + 成员列表）
+  router.push(`/mobile/projects/${project.id}`)
 }
 
 onMounted(() => {

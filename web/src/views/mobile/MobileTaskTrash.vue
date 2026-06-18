@@ -60,10 +60,10 @@
         <template #item-actions="{ item }">
           <div class="item-actions">
             <template v-if="canRestore(item)">
-              <button type="button" class="item-btn restore" @click.stop="$emit('restore', item.id)">
+              <button type="button" class="item-btn restore" @click.stop="restoreTask(item.id)">
                 ↩️ 恢复
               </button>
-              <button type="button" class="item-btn danger" @click.stop="$emit('permanent-delete', item.id)">
+              <button type="button" class="item-btn danger" @click.stop="permanentDelete(item.id)">
                 🗑 永久删除
               </button>
             </template>
@@ -103,6 +103,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
@@ -117,6 +118,7 @@ const props = defineProps({
   isAdmin: { type: Boolean, default: false },
 })
 
+// 注：保留 emit 以兼容未来嵌入式调用（作为独立路由时不依赖父级监听）
 const emit = defineEmits(['restore', 'permanent-delete', 'batch-permanent-delete'])
 
 const userStore = useUserStore()
@@ -213,8 +215,43 @@ function exitEditMode() {
 
 function batchPermanentDelete() {
   const ids = selectedRows.value.map((r) => r.id)
-  emit('batch-permanent-delete', ids)
-  exitEditMode()
+  if (ids.length === 0) return
+  if (!window.confirm(`确定要永久删除 ${ids.length} 个任务吗？此操作不可恢复！`)) return
+  axios.post('/api/v1/tasks/batch-permanent-delete', { ids })
+    .then(() => {
+      ElMessage.success(`已永久删除 ${ids.length} 个任务`)
+      emit('batch-permanent-delete', ids)
+      exitEditMode()
+      fetchTrash()
+    })
+    .catch((e) => {
+      ElMessage.error('批量删除失败: ' + (e.response?.data?.detail || e.message))
+    })
+}
+
+// 恢复单个任务（直接调 API + emit 兼容）
+async function restoreTask(taskId) {
+  try {
+    await axios.post(`/api/v1/tasks/${taskId}/restore`)
+    ElMessage.success('已恢复')
+    emit('restore', taskId)
+    fetchTrash()
+  } catch (e) {
+    ElMessage.error('恢复失败: ' + (e.response?.data?.detail || e.message))
+  }
+}
+
+// 永久删除单个任务（直接调 API + emit 兼容）
+async function permanentDelete(taskId) {
+  if (!window.confirm('确定要永久删除该任务吗？此操作不可恢复！')) return
+  try {
+    await axios.delete(`/api/v1/tasks/${taskId}/permanent`)
+    ElMessage.success('已永久删除')
+    emit('permanent-delete', taskId)
+    fetchTrash()
+  } catch (e) {
+    ElMessage.error('删除失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 onMounted(() => {

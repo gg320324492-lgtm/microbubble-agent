@@ -5,6 +5,13 @@
         <button
           type="button"
           class="header-action"
+          aria-label="任务回收站"
+          title="任务回收站"
+          @click="$router.push('/tasks/trash')"
+        >🗑</button>
+        <button
+          type="button"
+          class="header-action"
           aria-label="筛选"
           title="筛选"
           @click="showFilter = true"

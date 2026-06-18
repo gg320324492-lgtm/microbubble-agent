@@ -319,7 +319,7 @@ import { ArrowDown, VideoCamera, Clock, CircleCheck, Warning, ChatDotRound, Plus
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatCompactDate } from '@/utils/format'
-import { getStatusType, getStatusLabel, getPriorityType, getPriorityLabel } from '@/utils/task'
+import { getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
 import DashboardPet from '@/components/DashboardPet.vue'
@@ -420,14 +420,6 @@ const completionRate = computed(() => {
   const done = dashboardData.value.summary?.done_tasks || 0
   if (total === 0) return 0
   return Math.round((done / total) * 100)
-})
-
-const completionColor = computed(() => {
-  const rate = completionRate.value
-  if (rate >= 80) return '#67c23a'
-  if (rate >= 50) return '#409eff'
-  if (rate >= 30) return '#e6a23c'
-  return '#f56c6c'
 })
 
 const fetchDashboardStats = async () => {
