@@ -33,13 +33,11 @@ class RateLimiter:
 _rate_limiters = {
     "auth": RateLimiter(max_attempts=20, window_seconds=60),      # 真认证动作：登录/刷新/改密 20次/分钟
     "write": RateLimiter(max_attempts=30, window_seconds=60),    # 写操作：30次/分钟
-    "read": RateLimiter(max_attempts=200, window_seconds=60),    # 读操作（含 /auth/me）：200次/分钟
+    "read": RateLimiter(max_attempts=200, window_seconds=60),    # 读操作：200次/分钟
     "upload": RateLimiter(max_attempts=10, window_seconds=60),   # 上传：10次/分钟
 }
 
-# /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流，
-# GET /auth/me 是高频只读查询（页面加载/Pinia 初始化/token 校验都会调）
-# → 走 read tier (200/min)，避免用户被 429 误伤
+# /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
 _AUTH_SENSITIVE_PATHS = frozenset({
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
@@ -48,17 +46,32 @@ _AUTH_SENSITIVE_PATHS = frozenset({
     "/api/v1/auth/init-password",
 })
 
+# 2026-06-18 用户强烈反馈：/auth/me 即便 200/min 也被高频 polling 触发 429
+# （MainLayout / MeetingView 每次 reactive set value 都触发 useUserStore 重新拉 /auth/me）
+# 完全豁免限流 —— /auth/me 是只读 GET，且需要 JWT 鉴权（未带 token 401 直接拒），
+# 攻击成本高，无防护必要。设超大值兜底
+_AUTH_UNLIMITED_PATHS = frozenset({
+    "/api/v1/auth/me",  # 当前用户信息（高频 polling：页面加载/Pinia 初始化/token 校验/reactive 触发）
+})
+
 
 def _get_rate_limit_type(request: Request) -> str:
-    """根据请求路径和方法判断限流类型"""
+    """根据请求路径和方法判断限流类型
+
+    返回 "unlimited" 表示跳过限流（/auth/me 等安全只读端点）
+    """
     path = request.url.path
     method = request.method
+
+    # /auth/me 等高频只读端点 → 不限流（JWT 鉴权已防滥用）
+    if path in _AUTH_UNLIMITED_PATHS:
+        return "unlimited"
 
     # /auth/ 路径细分（4 类）：
     #  1. 白名单内（login/refresh/change-password 等敏感） → auth tier (20/min)
     #  2. 写操作（PUT /auth/profile 等） → write tier (30/min)
-    #  3. 只读查询（GET /auth/me 高频） → read tier (200/min)
-    #  4. 其他 /auth/* fallback → auth tier（防未列出的端点被滥用）
+    #  3. 其他 /auth/* 只读 → read tier (200/min)
+    #  4. 其他 /auth/* 未列出 → auth tier fallback（防 401 风暴）
     if "/auth/" in path:
         if path in _AUTH_SENSITIVE_PATHS:
             return "auth"
@@ -96,6 +109,9 @@ async def rate_limit_middleware(request: Request, call_next):
         return await call_next(request)
 
     limit_type = _get_rate_limit_type(request)
+    # 2026-06-18 /auth/me 等安全只读端点完全不限流（JWT 已鉴权）
+    if limit_type == "unlimited":
+        return await call_next(request)
     limiter = _rate_limiters[limit_type]
     client_key = f"{limit_type}:{_get_client_key(request)}"
 
