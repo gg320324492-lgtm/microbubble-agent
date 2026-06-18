@@ -1830,3 +1830,15 @@ if (resumeId) {
 - **根因链**：commit `f099e7e5` 把 `resumeRecording` 从"开 dialog"改为"`router.replace('/meetings/room')`"，但 onMounted 紧接着的 `router.replace({ path: '/meetings' })`（旧代码用来"清理 query 让刷新不重复弹窗"）**立即覆盖**了新跳转。URL 永远在 `/meetings` 反复 render → 视觉上"不断刷新"
 - **修复**：删 onMounted 末尾那行 router.replace，resumeRecording 内部已 navigate 走，不需要额外清理
 - **新铁律**：**`router.replace/push 后不要再紧接着 router.replace/push`** —— Vue Router 的两个连续导航会冲突，后一行覆盖前一行。常见踩坑模式：① 旧代码"清理 query"在新代码"已 navigate"后变成 bug ② 同一个 onMounted 里多个 replace 想"先 X 后 Y"实际只走 Y ③ if/else 两分支各自 replace 会被外层最终 replace 覆盖。**纪律**：一个 onMounted / 一个事件回调里最多 1 次 router 操作，需要多次导航用 await 链式或 nextTick 拆开
+
+**修复 5（commit `9f11d97a`）**：MeetingRoomView 模板里 ref 写 `.value` 导致 `null.value` TypeError：
+```vue
+<!-- ❌ 反模式：Vue template 自动 unwrap ref，写 .value 等于 null.value -->
+<span v-if="recordingMeetingId.value && meetingId.value">...</span>
+
+<!-- ✅ 正模式：template 里直接用 ref 变量名 -->
+<span v-if="recordingMeetingId && meetingId">...</span>
+```
+- **症状**：console 报 `TypeError: Cannot read properties of null (reading 'value')`，且界面显示"开始听会"而非"正在听会"
+- **根因**：`<script setup>` 里 `recordingMeetingId = ref(null)`，模板里 Vue 自动 unwrap ref（顶层 property），所以模板应该直接用 `recordingMeetingId`（Vue 帮你 unwrap）。写 `recordingMeetingId.value` 实际是访问 `null.value`，每次 render 都抛错，模板 partial render + 状态设置中断
+- **新铁律**：① **`script setup` 里 `.value`，template 里裸用** —— 这是 Vue 3 `<script setup>` 的硬规则，反过来就是 bug ② `v-if` / `{{ }}` / `:prop` / `@event` 等模板表达式里**永远不写 `.value`** ③ 复制桌面/移动组件时容易把 script 的 `.value` 习惯带进 template，必须逐个去掉 ④ TypeScript 项目 Vue 3.4+ 已能用 `defineProps<T>()` 强制类型，IDE 会标红但纯 JS 项目无提示只能靠纪律 + E2E 测试
