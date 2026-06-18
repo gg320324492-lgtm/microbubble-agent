@@ -57,11 +57,14 @@ const routes = [
         meta: { title: '会议管理', icon: 'VideoCamera' }
       },
       {
-        // 移动端听会房间（占位 UI，WS 实时录音集成 = 后续 PR）
-        // 桌面端 fallback 到 MeetingView（用户不会从桌面 UI 触发此路由）
+        // 听会房间 — 桌面端用 MeetingRoomView（全屏页面，2026-06-18 新建），
+        // 移动端用 MobileMeetingRoom（PageHeader + 底部 sheet 帮助）。
+        // 桌面 MainLayout "正在听会" 胶囊点击 → /meetings?resume={id} →
+        // MeetingView 跳到本页 → onMounted 用 checkActiveRecording() 复用 recordingMeetingId
+        // → 用户可继续听会 / 重新开始
         path: 'meetings/room',
         name: 'MeetingRoom',
-        component: resolveMobileComponent('MeetingView', 'meeting/MobileMeetingRoom'),
+        component: resolveMobileComponent('MeetingRoomView', 'meeting/MobileMeetingRoom'),
         meta: { title: '开始听会' }
       },
       {
