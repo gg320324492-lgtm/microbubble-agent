@@ -177,6 +177,16 @@
             <div v-else class="confirm-state">
               <div class="big-icon">✓</div>
               <h3 class="step-title">准备就绪</h3>
+
+              <!-- 音频预览（录制模式） -->
+              <div v-if="method === 'record' && recordedUrl" class="audio-preview-confirm">
+                <audio :src="recordedUrl" controls class="audio-player" />
+              </div>
+              <!-- 文件信息（上传模式） -->
+              <div v-else-if="method === 'upload' && selectedFile" class="file-info-confirm">
+                🎵 {{ selectedFile.name }} ({{ formatFileSize(selectedFile.size) }})
+              </div>
+
               <p class="confirm-hint">点击下方按钮确认录入</p>
 
               <button
@@ -321,6 +331,8 @@ function stopRecord() {
     recordTimer = null
   }
   recording.value = false
+  // 录音完成后自动进入第 3 步（确认）
+  step.value = 3
 }
 
 function onRecordClick() {
@@ -846,6 +858,22 @@ onUnmounted(cleanup)
   font-size: 13px;
   color: var(--color-text-secondary);
   margin-bottom: 20px;
+}
+.audio-preview-confirm {
+  margin: 16px auto;
+  max-width: 320px;
+}
+.audio-preview-confirm .audio-player {
+  width: 100%;
+}
+.file-info-confirm {
+  font-size: 14px;
+  color: var(--color-text-regular);
+  padding: 12px;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  margin: 16px 0;
+  text-align: center;
 }
 
 .btn-primary {
