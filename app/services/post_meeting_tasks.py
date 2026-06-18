@@ -304,19 +304,24 @@ def post_meeting_process(self, meeting_id: int):
                             result.append((start, end))
                     return result
 
-                # 2.2 对所有转录段提取声纹 embedding
-                seg_embeddings = []
+                # 2.2 对所有转录段提取声纹 embedding（GPU batch 加速）
+                # 2026-06-18 优化：3368 段 CPU 串行要 84 分钟，GPU batch=32 几秒搞定
+                seg_audios = []  # 与 transcript_segments 等长，None 表示跳过
                 for seg in transcript_segments:
                     start_sample = int(seg["start"] * sample_rate)
                     end_sample = int(seg["end"] * sample_rate)
                     seg_audio = audio_pcm[start_sample:end_sample]
-
                     if len(seg_audio) < sample_rate * 0.5:
-                        seg_embeddings.append(None)
-                        continue
+                        seg_audios.append(None)
+                    else:
+                        seg_audios.append(seg_audio)
 
-                    emb = vp_service.extract_embedding(seg_audio)
-                    seg_embeddings.append(emb)
+                # 一次性 batch 推理
+                logger.info(f"开始批量声纹提取：{len(seg_audios)} 段")
+                seg_embeddings = vp_service.batch_extract_embeddings(
+                    seg_audios, batch_size=32
+                )
+                logger.info(f"批量声纹提取完成：{sum(1 for e in seg_embeddings if e is not None)} 段有效")
 
                 # 2.3 统一聚类所有段的声纹
                 from collections import Counter
@@ -712,20 +717,28 @@ def post_meeting_process(self, meeting_id: int):
                 except Exception as e:
                     logger.warning(f"发言统计计算失败: {e}")
 
-                # ===== 阶段 4: 自动创建任务 =====
-                await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
-                from app.services.meeting_service import MeetingService
-                svc = MeetingService(db)
+                # ===== 阶段 4: 自动创建任务（2026-06-19 默认关闭，决策不再自动变任务） =====
+                from app.config import settings
+                if settings.ENABLE_AUTO_TASK_FROM_MEETING:
+                    await update_progress(meeting_id, ProgressStage.CREATING_TASKS, detail="自动创建任务", redis_override=redis_client)
+                    from app.services.meeting_service import MeetingService
+                    svc = MeetingService(db)
 
-                for decision in analysis.get("decisions", []):
-                    # decisions 可能是字符串或字典，统一转为字典格式
-                    if isinstance(decision, str):
-                        task_info = {"title": decision}
-                    elif isinstance(decision, dict):
-                        task_info = decision
-                    else:
-                        continue
-                    await svc._auto_create_task_from_meeting(meeting, task_info)
+                    for decision in analysis.get("decisions", []):
+                        # decisions 可能是字符串或字典，统一转为字典格式
+                        if isinstance(decision, str):
+                            task_info = {"title": decision}
+                        elif isinstance(decision, dict):
+                            task_info = decision
+                        else:
+                            continue
+                        await svc._auto_create_task_from_meeting(meeting, task_info)
+                else:
+                    logger.info(
+                        f"会议 {meeting_id} 后处理: 跳过自动建任务"
+                        f"（{len(analysis.get('decisions', []))} 个 decisions 未创建任务；"
+                        f"ENABLE_AUTO_TASK_FROM_MEETING=False）"
+                    )
 
                 # ===== 阶段 5: 存储结果 =====
                 await update_progress(meeting_id, ProgressStage.STORING_RESULTS, detail="保存结果", redis_override=redis_client)

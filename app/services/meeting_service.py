@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
+from app.config import settings
 from typing import List, Optional, Dict, Any
 
 from app.models.meeting import Meeting, MeetingParticipant
@@ -159,10 +160,17 @@ class MeetingService:
         await self.db.commit()
 
         tasks_created = []
-        for task_info in analysis.get("action_items", []):
-            result = await self._auto_create_task_from_meeting(meeting, task_info)
-            if result:
-                tasks_created.append(result)
+        if settings.ENABLE_AUTO_TASK_FROM_MEETING:
+            for task_info in analysis.get("action_items", []):
+                result = await self._auto_create_task_from_meeting(meeting, task_info)
+                if result:
+                    tasks_created.append(result)
+        else:
+            logger.info(
+                f"会议 {meeting_id} 分析完成: 跳过自动建任务"
+                f"（{len(analysis.get('action_items', []))} 个 action_items 未创建任务；"
+                f"ENABLE_AUTO_TASK_FROM_MEETING=False）"
+            )
 
         logger.info(f"会议 {meeting_id} 分析完成: {len(tasks_created)} 个任务已创建")
         return {
@@ -238,12 +246,13 @@ class MeetingService:
         meeting.status = "completed"
         await self.db.commit()
 
-        # 6. 自动创建任务
+        # 6. 自动创建任务（2026-06-19 默认关闭，决策不再自动变任务；通过 settings.ENABLE_AUTO_TASK_FROM_MEETING 恢复）
         tasks_created = []
-        for task_info in analysis.get("action_items", []):
-            result = await self._auto_create_task_from_meeting(meeting, task_info)
-            if result:
-                tasks_created.append(result)
+        if settings.ENABLE_AUTO_TASK_FROM_MEETING:
+            for task_info in analysis.get("action_items", []):
+                result = await self._auto_create_task_from_meeting(meeting, task_info)
+                if result:
+                    tasks_created.append(result)
 
         # 7. 发言者-成员自动链接
         if speaker_mapping:
