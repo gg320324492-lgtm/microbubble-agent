@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     # 2026-06-03：硬编码 3 改为可配置，运维/测试时可临时缩短（如 0 立即清空）
     TRASH_RETENTION_DAYS: int = 3
 
+    # 2026-06-19：开始听会 → 不再自动从会议决策/action items 创建任务
+    # 关闭后 _auto_create_task_from_meeting 不再被调用，user 需手动建任务
+    # 设 True 可恢复旧行为（不推荐，决策不一定都该是任务）
+    ENABLE_AUTO_TASK_FROM_MEETING: bool = False
+
     # 数据库连接池
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 10
