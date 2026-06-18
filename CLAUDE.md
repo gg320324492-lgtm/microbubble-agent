@@ -1842,3 +1842,14 @@ if (resumeId) {
 - **症状**：console 报 `TypeError: Cannot read properties of null (reading 'value')`，且界面显示"开始听会"而非"正在听会"
 - **根因**：`<script setup>` 里 `recordingMeetingId = ref(null)`，模板里 Vue 自动 unwrap ref（顶层 property），所以模板应该直接用 `recordingMeetingId`（Vue 帮你 unwrap）。写 `recordingMeetingId.value` 实际是访问 `null.value`，每次 render 都抛错，模板 partial render + 状态设置中断
 - **新铁律**：① **`script setup` 里 `.value`，template 里裸用** —— 这是 Vue 3 `<script setup>` 的硬规则，反过来就是 bug ② `v-if` / `{{ }}` / `:prop` / `@event` 等模板表达式里**永远不写 `.value`** ③ 复制桌面/移动组件时容易把 script 的 `.value` 习惯带进 template，必须逐个去掉 ④ TypeScript 项目 Vue 3.4+ 已能用 `defineProps<T>()` 强制类型，IDE 会标红但纯 JS 项目无提示只能靠纪律 + E2E 测试
+
+**修复 6（commit `22f5a7d7`）**：`/auth/me` 完全豁免限流（高频 polling 仍 429）：
+```python
+# /auth/me 即便 200/min 也被 useUserStore 在 reactive set value 时反复触发
+# （MainLayout / MeetingView 每次 reactive 更新都重新拉 /auth/me）
+# 200/min = 3.3 req/sec 撑不住，console 持续 429
+
+_AUTH_UNLIMITED_PATHS = frozenset({"/api/v1/auth/me"})
+# _get_rate_limit_type 返 "unlimited"，middleware 跳过
+```
+- **新铁律**：① **高频只读端点设任何次/min 都可能误伤** —— Vue reactive 触发 set value 链式调用 / WebSocket 心跳 / 路由 prefetch / polling，真实请求频次远超产品逻辑假设 ② **判断端点是否限流要看"是否会被高频轮询"而不是"是否敏感"** —— `/auth/me` 虽然挂在 `/auth/` 前缀下但是只读 GET + JWT 鉴权，攻击成本高（没 token 401 直接拒），防护无意义 ③ **正确分级**：登录/改密/refresh（高频攻击面）→ 严格 20/min；只读 GET + JWT（合法高频轮询）→ 完全豁免；其他写操作 → write 30/min ④ 监控 429 出现时立刻 `grep X-RateLimit-Remaining` 响应头确认哪个 tier 触顶
