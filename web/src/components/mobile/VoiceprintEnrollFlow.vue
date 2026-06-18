@@ -275,15 +275,29 @@ function onClose() {
 async function startRecord() {
   errorMessage.value = ''
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    mediaRecorder = new MediaRecorder(stream)
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: { ideal: 16000 },
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+      },
+    })
+
+    // 优先 webm，Safari 用 mp4（与桌面端 VoiceprintEnrollDialog 对齐）
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '')
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+
     audioChunks = []
     mediaRecorder.ondataavailable = (e) => {
       if (e.data.size > 0) audioChunks.push(e.data)
     }
     mediaRecorder.onstop = () => {
       stream.getTracks().forEach((t) => t.stop())
-      recordedBlob.value = new Blob(audioChunks, { type: 'audio/webm' })
+      const blobType = mediaRecorder.mimeType || 'audio/webm'
+      recordedBlob.value = new Blob(audioChunks, { type: blobType })
       recordedUrl.value = URL.createObjectURL(recordedBlob.value)
       audioChunks = []
     }
@@ -364,12 +378,16 @@ async function onSubmit() {
   try {
     const fd = new FormData()
     if (method.value === 'record') {
-      fd.append('audio', recordedBlob.value, 'voice.webm')
+      // 根据实际 MIME 类型选择扩展名（与桌面端 uploadRecorded 对齐）
+      const blob = recordedBlob.value
+      const ext = blob.type.includes('mp4') ? 'm4a' : 'webm'
+      fd.append('audio', blob, `recording.${ext}`)
     } else {
       fd.append('audio', selectedFile.value, selectedFile.value.name)
     }
+    // 不手动设 Content-Type，让 axios 自动生成 boundary（手动设 multipart/form-data 会丢失 boundary 导致后端解析失败）
     const res = await axios.post(`/api/v1/voiceprint/enroll/${props.member.id}`, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 30000,
     })
     if (res.data?.success !== false) {
       uploadSuccess.value = true
@@ -382,7 +400,10 @@ async function onSubmit() {
       errorMessage.value = res.data?.message || '录入失败'
     }
   } catch (e) {
-    errorMessage.value = e.response?.data?.detail || e.message || '上传失败'
+    // 后端可能返回 {detail: "..."} 或 {error: {message: "..."}} 两种格式
+    const resp = e.response?.data
+    const detail = resp?.detail || resp?.error?.message
+    errorMessage.value = (typeof detail === 'string' ? detail : null) || e.message || '上传失败'
   } finally {
     uploading.value = false
   }
