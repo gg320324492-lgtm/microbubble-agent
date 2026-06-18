@@ -5,8 +5,8 @@
       <el-page-header :icon="ArrowLeft" @back="handleBack">
         <template #content>
           <span class="room-title">{{ pageTitle }}</span>
-          <span v-if="recordingMeetingId.value && meetingId.value" class="resume-badge">
-            正在听会 #{{ meetingId.value }}
+          <span v-if="recordingMeetingId && meetingId" class="resume-badge">
+            正在听会 #{{ meetingId }}
           </span>
         </template>
       </el-page-header>
