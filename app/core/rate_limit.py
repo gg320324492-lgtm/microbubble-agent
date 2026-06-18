@@ -31,11 +31,22 @@ class RateLimiter:
 
 # 分级限流器实例
 _rate_limiters = {
-    "auth": RateLimiter(max_attempts=20, window_seconds=60),      # 认证：20次/分钟
+    "auth": RateLimiter(max_attempts=20, window_seconds=60),      # 真认证动作：登录/刷新/改密 20次/分钟
     "write": RateLimiter(max_attempts=30, window_seconds=60),    # 写操作：30次/分钟
-    "read": RateLimiter(max_attempts=200, window_seconds=60),    # 读操作：200次/分钟
+    "read": RateLimiter(max_attempts=200, window_seconds=60),    # 读操作（含 /auth/me）：200次/分钟
     "upload": RateLimiter(max_attempts=10, window_seconds=60),   # 上传：10次/分钟
 }
+
+# /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流，
+# GET /auth/me 是高频只读查询（页面加载/Pinia 初始化/token 校验都会调）
+# → 走 read tier (200/min)，避免用户被 429 误伤
+_AUTH_SENSITIVE_PATHS = frozenset({
+    "/api/v1/auth/login",
+    "/api/v1/auth/refresh",
+    "/api/v1/auth/change-password",
+    "/api/v1/auth/reset-password",
+    "/api/v1/auth/init-password",
+})
 
 
 def _get_rate_limit_type(request: Request) -> str:
@@ -43,9 +54,17 @@ def _get_rate_limit_type(request: Request) -> str:
     path = request.url.path
     method = request.method
 
-    # 认证端点
+    # /auth/ 路径细分（4 类）：
+    #  1. 白名单内（login/refresh/change-password 等敏感） → auth tier (20/min)
+    #  2. 写操作（PUT /auth/profile 等） → write tier (30/min)
+    #  3. 只读查询（GET /auth/me 高频） → read tier (200/min)
+    #  4. 其他 /auth/* fallback → auth tier（防未列出的端点被滥用）
     if "/auth/" in path:
-        return "auth"
+        if path in _AUTH_SENSITIVE_PATHS:
+            return "auth"
+        if method in ("POST", "PUT", "PATCH", "DELETE"):
+            return "write"
+        return "read"
 
     # 上传端点
     if "/upload" in path:
