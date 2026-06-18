@@ -106,7 +106,8 @@ watch(
       history.value = []
       errorMessage.value = ''
     }
-  }
+  },
+  { immediate: true }  // 首次 mount 触发（避免依赖外层 nextTick）
 )
 
 async function fetchHistory(memberId) {
