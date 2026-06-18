@@ -93,7 +93,12 @@
             {{ getField(item, 'meta') }}
           </div>
 
-          <!-- 自定义内容 slot -->
+          <!-- 通用具名 slot：每项底部操作区（被 5 个移动端 view 依赖） -->
+          <div v-if="$slots['item-actions']" class="item-slot">
+            <slot name="item-actions" :item="item" :idx="idx" />
+          </div>
+
+          <!-- 动态单条 slot：item-{id} 形式（每行独立内容） -->
           <div v-if="$slots['item-' + getKey(item, idx)]" class="item-slot">
             <slot :name="'item-' + getKey(item, idx)" :item="item" :idx="idx" />
           </div>
