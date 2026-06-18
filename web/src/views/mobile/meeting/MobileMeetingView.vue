@@ -286,8 +286,8 @@ function handlePasteAnalyze() {
 }
 function handleStartLive() {
   showActionSheet.value = false
-  // 移动端听会独立路由（占位 UI，WS 实时录音 = 后续 PR）
-  // 老逻辑跳 `/meetings?startLive=true` 在移动端就是回到自己（同路由仅 query 变化不重渲）→ 看起来"点击没反应"
+  // 跳到移动端全屏听会页（MobileMeetingRoom）
+  // 注：移动端走"录音机+离线后处理"模式，不是桌面 WS 实时转录
   router.push('/meetings/room')
 }
 function handleVoiceTest() {

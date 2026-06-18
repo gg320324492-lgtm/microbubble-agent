@@ -341,15 +341,19 @@ function viewDetail(item) {
 }
 
 function viewHypothesis(item) {
-  ElMessage.info('查看假设详情（开发中）')
+  // 假设详情：路由跳到桌面版（假设 detail Dialog 已在桌面 KnowledgeView 实现）
+  // 桌面 URL：/knowledge，参数 ?hypothesisId=xxx 触发 dialog
+  router.push({ path: '/knowledge', query: { tab: 'hypotheses', id: item.id } })
 }
 
 function viewFormula(item) {
-  ElMessage.info('查看公式详情（开发中）')
+  // 公式详情：路由跳到桌面版（公式计算器已在桌面 KnowledgeView 实现）
+  router.push({ path: '/knowledge', query: { tab: 'formulas', id: item.id } })
 }
 
 function editKnowledge(item) {
-  ElMessage.info('编辑功能（开发中）')
+  // 知识编辑：跳到桌面详情页（KnowledgeDetailView 内嵌编辑表单）
+  router.push(`/knowledge/${item.id}?edit=true`)
 }
 
 async function deleteKnowledge(item) {

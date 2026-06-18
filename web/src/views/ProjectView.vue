@@ -132,6 +132,71 @@
       </template>
     </el-dialog>
 
+    <!-- 编辑项目对话框（与创建共享 projectForm） -->
+    <el-dialog v-model="showEditDialog" title="编辑项目" :width="isMobile ? '95vw' : '500px'" top="8vh">
+      <el-form :model="projectForm" label-width="80px">
+        <el-form-item label="项目名称" required>
+          <el-input v-model="projectForm.name" name="projectForm-edit-name" placeholder="请输入项目名称" />
+        </el-form-item>
+        <el-form-item label="研究方向">
+          <el-input v-model="projectForm.research_area" name="projectForm-edit-research-area" placeholder="如：水处理、农业应用" />
+        </el-form-item>
+        <el-form-item label="项目周期">
+          <div style="display:flex;gap:8px;align-items:center;width:100%">
+            <el-date-picker
+              v-model="projectForm.startDate"
+              name="project-form-edit-start-date"
+              type="date"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              placeholder="开始日期"
+              style="flex:1"
+              :clearable="true"
+            />
+            <span>至</span>
+            <el-date-picker
+              v-model="projectForm.endDate"
+              name="project-form-edit-end-date"
+              type="date"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              placeholder="结束日期"
+              style="flex:1"
+              :clearable="true"
+            />
+          </div>
+        </el-form-item>
+        <el-form-item label="项目成员">
+          <el-select
+            v-model="projectForm.members"
+            name="projectForm-edit-members"
+            multiple
+            placeholder="选择项目成员"
+          >
+            <el-option
+              v-for="member in members"
+              :key="member.id"
+              :label="member.name"
+              :value="member.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="项目描述">
+          <el-input
+            v-model="projectForm.description"
+            name="projectForm-edit-description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入项目描述"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditDialog = false">取消</el-button>
+        <el-button type="primary" @click="updateProject">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 项目详情对话框 -->
     <el-dialog v-model="showDetailDialog" title="项目详情" :width="isMobile ? '95vw' : '700px'" top="5vh">
       <div v-if="currentProject" class="project-detail">
@@ -194,6 +259,8 @@ const projects = ref([])
 const milestones = ref([])
 const showCreateDialog = ref(false)
 const showDetailDialog = ref(false)
+const showEditDialog = ref(false)
+const editingProjectId = ref(null)
 const currentProject = ref(null)
 
 const filters = ref({
@@ -266,7 +333,17 @@ const viewProject = async (project) => {
 const handleCommand = async (cmd, project) => {
   switch (cmd) {
     case 'edit':
-      // TODO: 编辑项目
+      editingProjectId.value = project.id
+      // 把项目数据回填到 projectForm（共享 create 表单）
+      projectForm.value = {
+        name: project.name || '',
+        research_area: project.research_area || '',
+        startDate: project.start_date || '',
+        endDate: project.end_date || '',
+        members: Array.isArray(project.members) ? [...project.members] : [],
+        description: project.description || '',
+      }
+      showEditDialog.value = true
       break
     case 'pause':
       await updateProjectStatus(project, 'paused')
@@ -277,6 +354,31 @@ const handleCommand = async (cmd, project) => {
     case 'delete':
       await deleteProject(project)
       break
+  }
+}
+
+// 保存项目编辑
+const updateProject = async () => {
+  if (!projectForm.value.name) {
+    ElMessage.warning('请输入项目名称')
+    return
+  }
+  if (!editingProjectId.value) return
+  try {
+    await axios.put(`/api/v1/projects/${editingProjectId.value}`, {
+      name: projectForm.value.name,
+      research_area: projectForm.value.research_area,
+      start_date: projectForm.value.startDate,
+      end_date: projectForm.value.endDate,
+      members: projectForm.value.members,
+      description: projectForm.value.description,
+    })
+    ElMessage.success('项目更新成功')
+    showEditDialog.value = false
+    editingProjectId.value = null
+    fetchProjects()
+  } catch (e) {
+    ElMessage.error('更新失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

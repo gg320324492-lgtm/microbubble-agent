@@ -117,6 +117,9 @@
       :member="enrollingMember"
       @success="onEnrollSuccess"
     />
+
+    <!-- 说话记录底部弹层 -->
+    <SpeakerSearchSheet v-model="showSpeakerSearch" :member="selectedMember" />
   </div>
 </template>
 
@@ -133,6 +136,7 @@ import dayjs from 'dayjs'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
 import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
+import SpeakerSearchSheet from '@/components/mobile/SpeakerSearchSheet.vue'
 
 const members = ref([])
 const loading = ref(true)

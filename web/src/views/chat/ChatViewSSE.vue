@@ -212,6 +212,7 @@ function autoResize() {
 function sendQuickMessage(t: string) { inputText.value = t; sendMessage(t) }
 function triggerImageUpload() { imageInputRef.value?.click() }
 function triggerFileUpload() { fileInputRef.value?.click() }
+function openImage(url: string) { window.open(url, '_blank') }
 
 function handleImageSelect(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return
@@ -362,7 +363,7 @@ onUnmounted(() => {
           <div class="bubble user-bubble">
             <div v-html="renderMarkdown(msg.content)" />
             <div v-if="msg.imageUrl" class="msg-image">
-              <img :src="msg.imageUrl" :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" @click="window.open(msg.imageUrl, '_blank')" />
+              <img :src="msg.imageUrl" :alt="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" :title="`消息图片：${msg.imageUrl.split('/').pop() || ''}`" @click="openImage(msg.imageUrl)" />
             </div>
           </div>
         </div>

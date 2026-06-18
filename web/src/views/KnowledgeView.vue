@@ -1,7 +1,7 @@
 <template>
   <div class="knowledge-view">
     <el-tabs v-model="activeTab" type="border-card" class="knowledge-tabs">
-      <el-tab-pane label="知识库" name="knowledge" lazy>
+      <el-tab-pane :label="`知识库 (${total})`" name="knowledge" lazy>
         <!-- 工具栏 -->
         <KnowledgeToolbar
           :categories="categories"
@@ -31,6 +31,15 @@
           @download="downloadFile"
         />
 
+        <!-- 健康度摘要（health badge 替代 KnowledgeHealth 独立页） -->
+        <div class="health-summary" v-if="!loading">
+          <el-tag type="info" size="small" effect="plain">📚 知识 {{ total }}</el-tag>
+          <el-tag type="success" size="small" effect="plain">🔗 实体 {{ entityTotal }}</el-tag>
+          <el-tag type="warning" size="small" effect="plain">🧪 假设 {{ hypothesisTotal }}</el-tag>
+          <el-tag type="primary" size="small" effect="plain">📐 公式 {{ formulaTotal }}</el-tag>
+          <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
+        </div>
+
         <!-- 分页（查看全部时显示） -->
         <div v-if="showAllKnowledge && total > pageSize" class="pagination">
           <el-pagination
@@ -44,7 +53,7 @@
       </el-tab-pane>
 
       <!-- ===== 实体图谱 Tab ===== -->
-      <el-tab-pane label="实体图谱" name="entities" lazy>
+      <el-tab-pane :label="`实体图谱 (${entityTotal})`" name="entities" lazy>
         <!-- 搜索栏 -->
         <el-card class="filter-card">
           <el-row :gutter="12">
@@ -126,7 +135,7 @@
       </el-tab-pane>
 
       <!-- ===== 假设 Tab ===== -->
-      <el-tab-pane label="科研假设" name="hypotheses" lazy>
+      <el-tab-pane :label="`科研假设 (${hypothesisTotal})`" name="hypotheses" lazy>
         <el-card class="filter-card">
           <el-row :gutter="12" align="middle">
             <el-col :span="4">
@@ -179,7 +188,7 @@
       </el-tab-pane>
 
       <!-- ===== 公式计算 Tab ===== -->
-      <el-tab-pane label="公式计算" name="formulas" lazy>
+      <el-tab-pane :label="`公式计算 (${formulaTotal})`" name="formulas" lazy>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-card class="formula-list-card">
@@ -793,6 +802,17 @@ onUnmounted(() => {
   margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
+}
+
+.health-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: var(--space-3);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
 }
 
 /* ── Entity ── */
