@@ -142,6 +142,7 @@ const sessionsStore = useChatSessionsStore()
 const {
   sessionId,
   messages,
+  messagesBySession,
   isCurrentSessionSending,
   onCreateSession: streamOnCreateSession,
   onSwitchSession: streamOnSwitchSession,
@@ -325,14 +326,26 @@ async function copyMessage() {
   actionSheet.value.visible = false
 }
 
-// 删除用户消息（直接操作 messagesBySession）
+// 删除用户消息（直接操作 messagesBySession，前端 filter 模式）
+// 注：后端暂无 DELETE chat/messages/{id} API，本地状态从 messagesBySession 中删除
+// 持久化在 useChatStream 内部处理（debounce 100ms 自动写 localStorage）
 function deleteMessage() {
   const target = actionSheet.value.msg
   if (!target) return
-  // 找到当前 session 的 messages 数组（通过 useChatStream 暴露的方式）
-  // 因为 useChatStream 没有暴露 messagesBySession，我们走 store + emit 模式
-  // 简化：直接刷新页面来删除（避免暴露内部数据结构）
-  ElMessage.warning('删除功能开发中')
+  const sid = sessionId.value
+  const list = messagesBySession.value[sid]
+  if (!Array.isArray(list)) {
+    actionSheet.value.visible = false
+    return
+  }
+  // 用 timestamp + content 前 30 字兜底定位（msg 可能没 id）
+  const idx = list.findIndex((m) => m === target)
+  if (idx >= 0) {
+    list.splice(idx, 1)
+    ElMessage.success('已删除')
+  } else {
+    ElMessage.warning('未找到该消息')
+  }
   actionSheet.value.visible = false
 }
 

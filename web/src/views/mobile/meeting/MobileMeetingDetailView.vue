@@ -319,7 +319,8 @@ function playAudio() {
 }
 
 function handleStartLive() {
-  // 移动端听会独立路由（占位 UI，WS 实时录音 = 后续 PR）
+  // 跳到移动端全屏听会页（MobileMeetingRoom）
+  // 注：移动端走"录音机+离线后处理"模式，不是桌面 WS 实时转录
   router.push('/meetings/room')
 }
 
