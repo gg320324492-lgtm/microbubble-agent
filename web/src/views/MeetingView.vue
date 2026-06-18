@@ -391,11 +391,13 @@ async function onLiveCallEnd() {
   fetchMeetings()
 }
 
-// 从全局状态恢复录音（MeetingRoom 内 AudioRecorder 不保留录音状态，
-// 所以 resume 只是打开对话框让用户重新开始；真正的录音数据在后端已保存）
+// 从全局状态恢复录音：2026-06-18 改为跳到 /meetings/room 全屏页面（与移动端同款）
+// 之前是打开 el-dialog 嵌套 MeetingRoom，但弹窗 UX 与移动端页面不一致，
+// 用户点击"正在听会"胶囊后看不到明确的"继续听会"提示。新建 MeetingRoomView.vue
+// 桌面端用 el-page-header 全屏布局 + onMounted 自动 checkActiveRecording()，
+// 与 MobileMeetingRoom 镜像对齐
 const resumeRecording = (meetingId) => {
-  liveCallMeeting.value = { id: meetingId }
-  showLiveCallDialog.value = true
+  router.replace('/meetings/room')
 }
 
 const meetingForm = ref({

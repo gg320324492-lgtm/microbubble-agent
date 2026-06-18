@@ -594,6 +594,32 @@ docker compose restart app celery-worker
   ④ **升级 EP 大版本时 plugin 自动失效但要 warn loud** —— `console.warn('[ep-unregister-pane-null-patch] pattern not found, skipped (EP version may have changed)')`，与 `vueBumNullPatchPlugin` 的 `pattern not found` 同款。升级 EP 2.x → 3.x 时如果源码改了 pattern，必须重新适配。
   ⑤ **dev mode 不 patch**（与 Vue 'bum' 策略一致）—— dev 调试需要看原始报错定位应用层 bug，patch 只影响 build 产物。
 
+### 2026-06-18 桌面"正在听会"指示器不接进度修复（弹窗 vs 全屏页面 UX 不一致）
+
+- **症状** — 用户报告"桌面端点击'正在听会'弹窗不会接上之前的听会进度，移动端没问题"。
+- **真根因（双层）** —
+  1. **架构不一致**：移动端 [MobileMeetingView.vue:325-328](web/src/views/mobile/meeting/MobileMeetingView.vue#L325-L328) 处理 `?resume={id}` 是直接 `router.replace('/meetings/room')` 跳到全屏页面 [MobileMeetingRoom.vue](web/src/views/mobile/meeting/MobileMeetingRoom.vue)；桌面端 [MeetingView.vue:396-399](web/src/views/MeetingView.vue#L396-L399) 旧版是 `liveCallMeeting = {id}` + `showLiveCallDialog = true` 打开 el-dialog 嵌套 [MeetingRoom.vue](web/src/components/MeetingRoom.vue)。两种 UX 行为不一致，桌面弹窗给用户"又要开始新听会"的感觉
+  2. **router fallback 错位**：[router/index.js:62-65](web/src/router/index.js#L62-L65) 旧版 `/meetings/room` 路由的桌面 fallback 是 `MeetingView`（会议**列表**页），注释写"用户不会从桌面 UI 触发此路由"——但本次修复后桌面也要走这条路由
+- **修复（3 步）** —
+  1. **新建桌面全屏页面** [web/src/views/MeetingRoomView.vue](web/src/views/MeetingRoomView.vue)（218 行）—— 完全镜像 `MobileMeetingRoom.vue` 但桌面化：① 顶栏 `el-page-header` 替代 `PageHeader` ② 帮助用 `el-dialog` 替代底部 sheet ③ 顶栏右上显示 `正在听会 #N` 橙色徽章让"继续听会"语义明确
+  2. **router fallback 改正**：[router/index.js:64](web/src/router/index.js#L64) `component: resolveMobileComponent('MeetingView', ...)` → `resolveMobileComponent('MeetingRoomView', 'meeting/MobileMeetingRoom')`，桌面/移动都用各自专属 RoomView
+  3. **MeetingView.resumeRecording 改 navigate**：[MeetingView.vue:394-401](web/src/views/MeetingView.vue#L394-L401) 旧版开 dialog → 新版 `router.replace('/meetings/room')`，与移动端 `MobileMeetingView.vue:327` 镜像对齐
+- **关键代码（桌面 MeetingRoomView onMounted）**：
+  ```js
+  onMounted(async () => {
+    await checkActiveRecording()  // 后端校验，sessionStorage 兜底
+    if (recordingMeetingId.value && !meetingId.value) {
+      meetingId.value = recordingMeetingId.value  // 复用现有听会 ID
+    }
+  })
+  ```
+  与 [MobileMeetingRoom.vue:199-204](web/src/views/mobile/meeting/MobileMeetingRoom.vue#L199-L204) 完全镜像，两端 UI 不一致问题彻底解决
+- **纪律（4 条铁律）**：
+  ① **同一功能必须桌面/移动 UX 一致** —— 不要因为实现难度差就差异化。本项目移动端用全屏页面 + 移动组件，桌面用 el-dialog 嵌套，结果用户感受"一个能用一个不能"。**镜像移动端最简实现**（哪怕组件复制粘贴 + 改 CSS）优于"复用桌面组件塞进 dialog"
+  ② **`resolveMobileComponent` 必须给桌面 fallback 真正的桌面组件**，不能 fallback 到列表/详情等无关页面。router 注释写"用户不会触发" = 留尾 = 终将踩坑
+  ③ **改动多处复用页面结构时 grep "桌面" + "移动" 两个版本** —— `MeetingView.vue:396` 桌面 vs `MobileMeetingView.vue:325` 移动 一对比立刻看出不一致。同系列之前还有：① MobileSessionDrawer v-model 命名错配（commit `6b4f57d0`）② MobileMeetingView 重复 const router=useRouter()（commit `fc27af59`）③ MobileVoiceprintView 真测试 vs 桌面 stub（commit `de7ef8aa`）—— 全是"移动端独有路径 desktop fallback 留尾"踩坑
+  ④ **新建视图文件优先放 `web/src/views/` 根**（非 `meeting/` 子目录），与桌面视图同 namespace。`MobileMeetingRoom.vue` 在 `mobile/meeting/` 子目录因为它是移动端专属；桌面版放 `views/MeetingRoomView.vue` 即可，路由配置 `resolveMobileComponent('MeetingRoomView', 'meeting/MobileMeetingRoom')` 自动处理
+
 
 - **Vue 升级审计 3 项纪律（重要，commit `bf2da67` + merge `c6cb0e0`）** — 升 Vue 大版本（3.4 → 3.5 等）前必查 3 项：①`const { x } = props` 解构模式（Vue 3.5 reactive props destructure 默认开启会改变行为：旧版解构出非响应式副本，新版解构出响应式引用）②`toRefs(props)` 冗余用法（Vue 3.5 后可以删除，但保留无害）③`peer dep` 范围（EP 等 UI 库的 `vue: ^3.2.0` 是否覆盖目标版本）。**审计 one-liner**（3 分钟搞定）：
   ```bash
