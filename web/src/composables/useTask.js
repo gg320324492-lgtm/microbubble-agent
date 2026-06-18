@@ -12,7 +12,8 @@ export function useTask() {
     status: '',
     assignee_id: '',
     project_id: '',
-    search: ''
+    search: '',
+    overdue: false,  // 仅显示已逾期任务（Dashboard 跳转过来时启用）
   })
 
   // 垃圾桶
@@ -26,9 +27,14 @@ export function useTask() {
   const fetchTasks = async (params = {}) => {
     loading.value = true
     try {
-      // 过滤掉空值参数
+      // 过滤掉空值参数（保留 false 等有意义的布尔值）
       const activeFilters = Object.fromEntries(
-        Object.entries(filters.value).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+        Object.entries(filters.value).filter(([k, v]) => {
+          if (v === '' || v === null || v === undefined) return false
+          // boolean false 保留（如 overdue=false 时不发送参数）
+          if (typeof v === 'boolean') return v === true
+          return true
+        })
       )
       const queryParams = {
         page: currentPage.value,

@@ -67,6 +67,16 @@
       :member="enrollingMember"
       @success="onEnrollSuccess"
     />
+
+    <!-- 添加成员表单 Sheet -->
+    <MobileFormSheet
+      v-model:show="showCreate"
+      v-model:form="createForm"
+      title="添加成员"
+      :fields="createFields"
+      :submitting="creating"
+      @submit="onCreateSubmit"
+    />
   </div>
 </template>
 
@@ -78,11 +88,14 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
+import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 
 const members = ref([])
 const loading = ref(false)
@@ -90,6 +103,7 @@ const showSearch = ref(false)
 const showCreate = ref(false)
 const showEnroll = ref(false)
 const enrollingMember = ref(null)
+const router = useRouter()
 
 const searchKeyword = ref('')
 const activeFilters = ref({ grade: '' })
@@ -152,8 +166,8 @@ function onSearchReset() {
 }
 
 function viewMember(member) {
-  // 简化：弹窗显示详情
-  // 实际可以跳转到详情页
+  // 跳到移动端成员详情页（新建 MobileMemberDetailView，简化版：头像/邮箱/方向/声纹状态）
+  router.push(`/mobile/members/${member.id}`)
 }
 
 function handleVoiceprint(member) {
@@ -165,6 +179,71 @@ function onEnrollSuccess() {
   showEnroll.value = false
   enrollingMember.value = null
   fetchMembers()
+}
+
+// ============================================================================
+// 添加成员（showCreate + MobileFormSheet）
+// ============================================================================
+const createForm = ref({
+  name: '',
+  grade: '',
+  research_area: '',
+  role: 'member',
+  email: '',
+})
+const creating = ref(false)
+
+const createFields = computed(() => [
+  { key: 'name', label: '姓名', type: 'input', required: true, placeholder: '请输入姓名' },
+  {
+    key: 'grade',
+    label: '年级',
+    type: 'select',
+    options: [
+      { value: '', label: '请选择' },
+      { value: '教授', label: '教授' },
+      { value: '副教授', label: '副教授' },
+      { value: '博士后', label: '博士后' },
+      { value: '博一', label: '博一' },
+      { value: '博二', label: '博二' },
+      { value: '研一', label: '研一' },
+      { value: '研二', label: '研二' },
+      { value: '研三', label: '研三' },
+    ],
+  },
+  { key: 'research_area', label: '研究方向', type: 'input', placeholder: '如：气泡生成、水处理' },
+  {
+    key: 'role',
+    label: '角色',
+    type: 'radio',
+    required: true,
+    options: [
+      { value: 'admin', label: '管理员' },
+      { value: 'leader', label: '组长' },
+      { value: 'member', label: '成员' },
+    ],
+  },
+  { key: 'email', label: '邮箱', type: 'input', placeholder: 'example@mnb-lab.cn' },
+])
+
+async function onCreateSubmit(form) {
+  if (!form.name) {
+    ElMessage.warning('请输入姓名')
+    return
+  }
+  creating.value = true
+  try {
+    await axios.post('/api/v1/members', form)
+    ElMessage.success('成员添加成功')
+    showCreate.value = false
+    // 重置表单
+    createForm.value = { name: '', grade: '', research_area: '', role: 'member', email: '' }
+    fetchMembers()
+  } catch (e) {
+    ElMessage.error('添加失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    creating.value = false
+  }
 }
 
 onMounted(() => {

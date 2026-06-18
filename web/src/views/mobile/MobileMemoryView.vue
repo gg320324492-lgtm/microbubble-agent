@@ -2,12 +2,13 @@
   <div class="mobile-memory-view">
     <PageHeader title="长期记忆" show-back @back="$router.back()">
       <template #right>
+        <!-- 顶部搜索入口（与 chip 筛选互不冲突） -->
         <button
           type="button"
           class="header-action"
-          aria-label="筛选"
-          title="筛选"
-          @click="showFilter = true"
+          aria-label="搜索记忆"
+          title="搜索记忆"
+          @click="showSearch = true"
         >🔍</button>
       </template>
     </PageHeader>
@@ -94,6 +95,15 @@
       </div>
     </main>
 
+    <!-- 搜索 Sheet -->
+    <MobileSearchSheet
+      v-model="showSearch"
+      v-model:keyword="searchKeyword"
+      title="搜索记忆"
+      placeholder="搜索记忆内容..."
+      @confirm="onSearchConfirm"
+    />
+
     <!-- 编辑 Sheet -->
     <Teleport to="body">
       <Transition name="edit-sheet">
@@ -135,14 +145,16 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import PageHeader from '@/components/mobile/PageHeader.vue'
+import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 
-const showFilter = ref(false)
+const showSearch = ref(false)
 const loading = ref(false)
 const memoryList = ref([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const filterType = ref('')
+const searchKeyword = ref('')
 
 const showEdit = ref(false)
 const editingMemory = ref(null)
@@ -169,6 +181,7 @@ async function fetchMemories() {
   try {
     const params = { page: currentPage.value, page_size: pageSize.value }
     if (filterType.value) params.memory_type = filterType.value
+    if (searchKeyword.value) params.keyword = searchKeyword.value
     const res = await axios.get('/api/v1/memory', { params })
     memoryList.value = res.data?.items || []
     total.value = res.data?.pagination?.total || res.data?.total || 0
@@ -177,6 +190,12 @@ async function fetchMemories() {
   } finally {
     loading.value = false
   }
+}
+
+function onSearchConfirm({ keyword }) {
+  searchKeyword.value = keyword
+  currentPage.value = 1
+  fetchMemories()
 }
 
 function setFilterType(value) {
@@ -190,9 +209,12 @@ function onPageChange(page) {
   fetchMemories()
 }
 
+// 实时统计每个类型的记忆数量（从已加载的 memoryList）
+// 注意：仅在当前页数据内统计，跨页需后端 /memory/stats 端点支持
 function getTypeCount(type) {
   if (!type) return null
-  return null // 简化：不实时统计
+  const count = memoryList.value.filter((m) => (m.memory_type || m.type) === type).length
+  return count > 0 ? count : null
 }
 
 function formatDate(t) {

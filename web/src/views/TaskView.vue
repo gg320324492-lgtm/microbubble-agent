@@ -192,7 +192,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Check, Edit, Delete, Plus, Warning } from '@element-plus/icons-vue'
@@ -230,23 +230,16 @@ const activeTab = ref('tasks')
 const showCreateDialog = ref(false)
 const editingTask = ref(null)
 
-// 2026-06-03：实时倒计时驱动器
-const now = ref(dayjs())
-let autoDeleteTimer = null
+// 2026-06-03：实时倒计时驱动器（autoDeleteTimer + now 是为兼容未来 TaskTrash 嵌入扩展保留）
+// 注：垃圾桶 UI 已在 task/TaskTrash.vue 内独立实现（line 288+ helpers）
+// 此处 onMounted 只读 URL query 筛选
 onMounted(() => {
-  autoDeleteTimer = setInterval(() => {
-    now.value = dayjs()
-  }, 30 * 1000)
-
-  // 从 URL query 读取筛选条件（如从成员管理跳转过来）
+  // 从 URL query 读取筛选条件（从成员管理或 Dashboard 跳转过来）
   if (route.query.assignee_id) {
     filters.value.assignee_id = Number(route.query.assignee_id)
   }
-})
-onUnmounted(() => {
-  if (autoDeleteTimer) {
-    clearInterval(autoDeleteTimer)
-    autoDeleteTimer = null
+  if (route.query.overdue === 'true') {
+    filters.value.overdue = true
   }
 })
 
@@ -508,53 +501,6 @@ const toggleTaskStatus = async (task) => {
 const isOverdue = (task) => {
   if (!task.due_date || task.status === 'done') return false
   return dayjs(task.due_date).isBefore(dayjs())
-}
-
-// 计算自动删除倒计时
-const getAutoDeleteText = (autoDeleteAt) => {
-  if (!autoDeleteAt) return ''
-  const expire = dayjs(autoDeleteAt)
-  const diffMin = expire.diff(now.value, 'minute')
-  const diffHour = expire.diff(now.value, 'hour')
-  const diffDay = Math.floor(diffMin / (60 * 24))
-  const remHourOfDay = Math.floor((diffMin % (60 * 24)) / 60)
-  const remMin = diffMin % 60
-
-  if (diffMin <= 0) return '等待下次清理'
-  if (diffMin < 60) return `${diffMin} 分钟后删除`
-  if (diffMin < 24 * 60) {
-    if (remMin > 0) return `${diffHour} 小时 ${remMin} 分后删除`
-    return `${diffHour} 小时后删除`
-  }
-  if (remHourOfDay > 0) return `${diffDay} 天 ${remHourOfDay} 小时后删除`
-  return `${diffDay} 天后删除`
-}
-
-const getAutoDeleteHours = (autoDeleteAt) => {
-  if (!autoDeleteAt) return Infinity
-  return dayjs(autoDeleteAt).diff(now.value, 'hour', true)
-}
-
-const isAutoDeleteOverdue = (autoDeleteAt) => {
-  if (!autoDeleteAt) return false
-  return dayjs(autoDeleteAt).isBefore(now.value)
-}
-
-const getAutoDeleteClass = (autoDeleteAt) => {
-  const hours = getAutoDeleteHours(autoDeleteAt)
-  if (hours <= 0) return 'auto-delete-imminent'
-  if (hours <= 6) return 'auto-delete-urgent'
-  if (hours <= 24) return 'auto-delete-warning'
-  if (hours <= 72) return 'auto-delete-normal'
-  return 'auto-delete-safe'
-}
-
-const getAutoDeleteIcon = (autoDeleteAt) => {
-  return getAutoDeleteHours(autoDeleteAt) <= 24
-}
-
-const formatAutoDeleteExact = (autoDeleteAt) => {
-  return dayjs(autoDeleteAt).format('MM-DD HH:mm')
 }
 
 // 监听 Tab 切换

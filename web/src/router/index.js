@@ -51,6 +51,13 @@ const routes = [
         meta: { title: '任务管理', icon: 'List' }
       },
       {
+        // 移动端任务回收站（桌面嵌入 TaskView，移动端独立路由）
+        path: 'tasks/trash',
+        name: 'MobileTaskTrash',
+        component: () => import('@/views/mobile/MobileTaskTrash.vue'),
+        meta: { title: '任务回收站' }
+      },
+      {
         path: 'meetings',
         name: 'Meetings',
         component: resolveMobileComponent('MeetingView', 'meeting/MobileMeetingView'),
@@ -80,10 +87,24 @@ const routes = [
         meta: { title: '项目管理', icon: 'Folder' }
       },
       {
+        // 移动端项目详情（桌面 ProjectView 的 dialog 内容镜像成全屏页）
+        path: 'projects/:id',
+        name: 'ProjectDetail',
+        component: resolveMobileComponent('ProjectView', 'mobile/MobileProjectDetailView'),
+        meta: { title: '项目详情' }
+      },
+      {
         path: 'members',
         name: 'Members',
         component: resolveMobileComponent('MemberView', 'MobileMemberView'),
         meta: { title: '成员管理', icon: 'User' }
+      },
+      {
+        // 移动端成员详情（从 MobileMemberView 卡片点击进入）
+        path: 'members/:id',
+        name: 'MemberDetail',
+        component: resolveMobileComponent('MemberView', 'mobile/MobileMemberDetailView'),
+        meta: { title: '成员详情' }
       },
       {
         path: 'knowledge',
