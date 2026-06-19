@@ -173,13 +173,6 @@ const reanalyzing = ref(false)
 const graphRef = ref(null)
 let chartInstance = null
 
-// 立即挂载 debug 标志（让用户在控制台可以确认代码版本已加载）
-if (typeof window !== 'undefined') {
-  window.__PAPER_DEBUG__ = window.__PAPER_DEBUG__ || { __status: 'KnowledgeDetailView 脚本已加载，等待 fetchDetail...' }
-  window.__PAPER_DEBUG_LOADED__ = new Date().toISOString()
-  window.__PAPER_DEBUG_VERSION__ = 'v3-debug-2026-06-19'
-  console.log('[PaperDetail] script loaded, version:', window.__PAPER_DEBUG_VERSION__)
-}
 
 // 多模态提取状态
 const imageStats = ref(null)
