@@ -52,7 +52,14 @@ const blockClasses = computed(() => ({
 
 const renderedContent = computed(() => {
   const raw = props.block.content || ''
-  // 非中文论文：先做化学式/单位上下角标标准化，再做 auto-link
+  // 渲染管线（v26 回归修复）：
+  //   raw (纯文本)
+  //     → formatChemicalText (纯文本 + Unicode 上下标)
+  //     → autoLinkContent (escape + DOI/URL/邮箱包 <a>)
+  //     → v-html 渲染
+  //
+  // 注意：formatChemicalText 已改为返回纯文本（不再返回 <span class="chem-formula">），
+  // 因此 autoLinkContent 的 _escapeHtml 不会再次转义化学式 → 不会泄漏 HTML 源码。
   const formatted = props.isChinese ? raw : formatChemicalText(raw)
   return autoLinkContent(formatted)
 })
@@ -88,6 +95,11 @@ const renderedContent = computed(() => {
   color: #1D4ED8;
   text-decoration: underline;
 }
+
+/* 化学式 / 离子 / 自由基样式（v26 回归修复：改为 Unicode 字符）
+   formatChemicalText 现已返回纯 Unicode 上下标字符，不再输出 <span> 标签。
+   浏览器原生渲染 O₃ / H₂O₂ / OH⁻ / mg·L⁻¹，无需特殊样式。
+   如需视觉强调（如 ·OH 自由基），用 CSS 标记包裹：见下面 ::first-letter 等。 */
 
 .block-heading {
   font-size: 16px;

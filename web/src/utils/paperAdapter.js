@@ -105,6 +105,22 @@ const INTERNAL_MARKER_RES = [
   /([A-Z]\.\s*[A-Z][a-z]+(?:\s+et\s+al\.?)?)\s+\d+\s*\[PAGE:\s*\d+\s*\]/gi,  // 暂不激进删除（保留作者名+数字）
   // "Journal name 513 (2026) 142456" → 这种页码信息保留为元数据，不在正文
   /\s*\[PAGE:\s*\d+\s*\]\s*/g,      // 任何位置前后的 [PAGE:x] 单独删除
+  // === v26 回归修复新增（执行顺序很重要） ===
+  // 1) 中文图注（含 JSON 或纯页码）必须先剥，贪婪匹配整段 "图（P8，{...}）"
+  //    若后剥则 JSON 正则先吃掉 {...}，留下孤儿 "图（P8，）" 无法再匹配
+  /图\s*[（(]\s*[Pp]?\d+\s*(?:[,，]?\s*\{[^）)]*\})?\s*[）)]/g,
+  // 2) "图表说明（P4）" / "图表描述" 等纯文本中文图注
+  /图表(?:说明|描述|caption)\s*[（(]\s*[Pp]?\d+\s*[）)]/gi,
+  // 3) "Figure caption (P4)" / "Caption (P4)" 英文变体
+  /(?:Figure|Table|Caption)\s+caption\s*[（(]\s*[Pp]?\d+\s*[）)]/gi,
+  // 4) 多模态 OCR 块标记
+  /MULTIMODAL_INLINED[^\n]*/gi,
+  /OCR_TEXT[^\n]*/gi,
+  // 5) JSON 残留（孤立的 {category:..., kind:..., ...}）—— 放在中文图注之后，避免抢匹配
+  /\{\s*['"`]?(?:category|kind|type|model|source|confidence|page_number)['"`]?\s*:\s*['"`]?[^}]{0,200}['"`]?\s*,?\s*\}/gi,
+  // 6) agent/minio 内网图片 URL（即使在正文中也不应直接显示）
+  /https?:\/\/(?:agent\.)?mnb-lab\.cn\/minio\/[^\s<>"'\)]+/gi,
+  /https?:\/\/localhost:\d+\/minio\/[^\s<>"'\)]+/gi,
 ]
 
 // HTML 属性残留
@@ -1199,18 +1215,55 @@ export function matchFiguresWithCaptions(figures, extractions, content) {
   // 2. 从 content 找 "Fig. N" / "Figure N" / "图 N" 后 1-3 句
   const captionsByFigIdx = _scanFigCaptionsInContent(content)
 
-  // 3. 给每个 figure 分配 caption
+  // 3. 给每个 figure 分配 caption + figureNo
+  //    === v26 回归修复 ===
+  //    之前版本对所有图片按 idx+1 机械分配 "Fig. N"，导致 Elsevier logo 也被叫 Fig. 1。
+  //    现在按图类型分级：
+  //    - cover / logo / publisher / unknown: figureNo = null（不进正文）
+  //    - 有真实 caption/OCR 含图号: 用真实图号（Fig. 5）
+  //    - 否则: 在 isCoreFigure 子数组内按顺序分配 Fig. 1, Fig. 2, ...
+  let coreCounter = 0
   return figures.map((fig, idx) => {
-    // 优先按 fig idx 在 content 里找（fig.id 通常是 DB 顺序，idx+1 对应正文"图 N"）
     const figIdx = idx + 1
     let caption = captionsByFigureId[fig.imageId || fig.id] || null
     if (!caption && captionsByFigIdx[figIdx]) {
       caption = captionsByFigIdx[figIdx]
     }
+
+    // 判断是否核心图（默认 true，旧代码兼容性）
+    const figureType = fig.figureType || null
+    const isPublisherImage = !!fig.isPublisherImage
+    const isCoreFigure = fig.isCoreFigure !== undefined ? !!fig.isCoreFigure : true
+    const isCoverLike = isPublisherImage
+      || ['cover', 'logo', 'publisher', 'unknown'].includes(figureType)
+
+    let figureNo = null
+    if (isCoverLike) {
+      // 封面/logo/publisher/unknown 不进正文，figureNo = null
+      figureNo = null
+    } else {
+      // 尝试从 caption 提取真实图号
+      const capText = caption || fig.ocrText || ''
+      const m = capText.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+      if (m) {
+        // 还原成 "Fig. N" 形式
+        const prefix = m[0].match(/Fig\.?|Figure|Scheme|Table/i)?.[0] || 'Fig.'
+        figureNo = `${prefix} ${m[1]}`
+      } else {
+        // 否则按核心图子数组顺序分配
+        coreCounter += 1
+        figureNo = `Fig. ${coreCounter}`
+      }
+    }
+
     return {
       ...fig,
       caption,
-      figureNo: `Fig. ${figIdx}`,
+      figureNo,
+      // 同时回填分类字段，方便下游使用
+      figureType: figureType || (isCoverLike ? 'unknown' : 'figure'),
+      isCoreFigure: !isCoverLike,
+      isPublisherImage,
     }
   })
 }
