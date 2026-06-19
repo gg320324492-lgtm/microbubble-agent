@@ -295,7 +295,24 @@ export function cleanContent(text, options = {}) {
 
   let result = String(text)
 
-  // 0. 先拆分行内章节标题（markdown 模式跳过，会破坏 # 标记）
+  // 0. 先剥除 LLM blockquote 图描述（> 📊 **图表说明（Px）**\n> ... 整段）
+  //    这些是 inline 进正文的图注描述，不应作为正文段落
+  //    保留为 figure caption 候选
+  const captionBlocks = []
+  result = result.replace(/^[ \t]*>[ \t]*((?:📊|📈|📉|🖼|🧪|⚗|🔬|🔍|💠)?[ \t]*[*_]*\s*(?:图表说明|Figure\s+caption|Table\s+caption|Caption|图表描述|Figure description)[^]*?)(?=\n[ \t]*[^>]|\n\n|$)/gim, (m, captionText) => {
+    captionBlocks.push(captionText.replace(/^[ \t]*>[ \t]*/gm, '').trim())
+    return '' // 整段剥除
+  })
+
+  // 0.1 剥除 OCR 风格作者列表 + 单位块（开头常见）
+  //    "Tianzhi Wang a, Hangjia Zhao a, ...\nFawei Lin a,*\na School of ..., Tianjin 300072"
+  //    标题之下、Abstract 之前的 author + affiliation 整段
+  result = result.replace(
+    /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+[a-z](?:[,\s]+[A-Z][a-z]+\s+[a-z])+[,]?\s*(?:\d[,\s]*)+(?:[\n\r]\s*[A-Z][a-z]+\s+[a-z][\s,]*[*†‡§]?)*\s*[\n\r]\s*(?:[a-z]\s+(?:School|College|Institute|Department|University)[^\n]+(?:\n[^\n]+){0,3}))/m,
+    ''
+  )
+
+  // 0.2 先拆分行内章节标题（markdown 模式跳过，会破坏 # 标记）
   if (!isMarkdown) {
     result = insertSectionBreaks(result)
   }
@@ -782,6 +799,8 @@ function _detectAbstractFromContent(content) {
   const m = /(?:^|\n)\s*(?:abstract|摘要|内容摘要|文摘)\s*[:：]?\s*([\s\S]{20,3000}?)(?=\n\s*(?:keywords?|关键词|关键字|introduction|引言|1\s*\.?\s*Introduction|1\s*引言|1\s+引言|article\s+info|received|available\s+online|\[PAGE:))/i.exec(content)
   if (!m) return null
   let abstract = _cleanText(m[1])
+  // 去掉开头的残留（"\]" 等）
+  abstract = abstract.replace(/^[\s\]\}>]+/, '').trim()
   // 剥除出版信息行
   abstract = _stripPublicationInfo(abstract)
   return abstract
@@ -1114,9 +1133,20 @@ export function normalizePaperData(raw, extra = {}) {
   const extractions = _normalizeExtractions(extra.extractions)
 
   // 1. 选内容源
-  const hasFormatted = !!(raw.formatted_content && raw.formatted_content.trim())
+  //    formatted_content 仅在 LLM 真正排版过（包含 # ## 标题）时才视为 markdown
+  //    否则即使有值也当 plain text 处理
   const rawContent = raw.content || ''
-  const inputContent = hasFormatted ? raw.formatted_content : rawContent
+  const rawFormatted = raw.formatted_content || ''
+  let hasFormatted = !!(rawFormatted.trim())
+  // 检测 formatted 是否真排版：含 # 标题 或 与 content 长度差异 > 10%
+  if (hasFormatted) {
+    const sameLength = Math.abs(rawFormatted.length - rawContent.length) <= Math.max(20, rawContent.length * 0.1)
+    const hasMdHeading = /(?:^|\n)#{1,4}\s+\S/.test(rawFormatted)
+    if (sameLength && !hasMdHeading) {
+      hasFormatted = false // 后端直接复制 content 到 formatted_content，当作 plain text
+    }
+  }
+  const inputContent = hasFormatted ? rawFormatted : rawContent
 
   // 调试：dump 中间产物到 window
   if (typeof window !== 'undefined') {
