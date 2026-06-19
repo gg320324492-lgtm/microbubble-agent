@@ -192,7 +192,7 @@ const hasAnyContent = computed(() => {
  */
 const displaySections = computed(() => {
   if (!paper.value?.sections) return []
-  const skipTypes = new Set(['preamble', 'highlights', 'graphical_abstract', 'article_info', 'keywords'])
+  const skipTypes = new Set(['preamble', 'highlights', 'graphical_abstract', 'article_info', 'keywords', 'abstract'])
   return paper.value.sections.filter(s => !skipTypes.has(s.type))
 })
 
@@ -609,7 +609,9 @@ onUnmounted(() => {
 /* 知识图谱无数据时的轻量空状态 */
 .paper-graph-empty {
   min-height: 100px;
+  max-height: 140px;
   height: auto;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: center;

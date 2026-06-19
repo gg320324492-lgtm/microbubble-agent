@@ -17,8 +17,8 @@
       </span>
     </header>
 
-    <!-- 章节正文 -->
-    <div class="section-body">
+    <!-- 章节正文（References section 跳过，由下方折叠卡片渲染） -->
+    <div v-if="!isReferences" class="section-body">
       <PaperBlockRenderer
         v-for="(block, i) in section.blocks"
         :key="i"
