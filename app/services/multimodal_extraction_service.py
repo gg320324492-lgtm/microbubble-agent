@@ -929,6 +929,10 @@ class MultimodalExtractionService:
         if self.INLINE_MARKER in new_content:
             new_content = new_content.split(self.INLINE_MARKER)[0].rstrip()
 
+        # 9.5 清掉所有未被 inline 替换的 [FIGURE:N] 占位符
+        #     装饰图被过滤掉时，对应占位符没被替换会留在 content 里
+        new_content = re.sub(r"\n?\[FIGURE:\d+\]\n?", "", new_content)
+
         if unmatched_to_append:
             new_content += "\n\n---\n\n## 未在正文匹配的多模态提取\n\n" + "\n\n".join(unmatched_to_append) + "\n"
 
