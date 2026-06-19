@@ -196,5 +196,189 @@ class TestParseMarkdownTable:
         assert _parse_markdown_table(None)["rows"] == []
 
 
+# ============================================================================
+# v28: PROMPT_FIGURE_ANALYZE 结构化识别（封面/logo 区分）
+# ============================================================================
+
+
+class TestParseFigureStructured:
+    """v28: _parse_figure_structured_response 解析逻辑测试（mock LLM 返回）"""
+
+    def _import(self):
+        from app.services.ocr_service import _parse_figure_structured_response
+        return _parse_figure_structured_response
+
+    def test_parse_elsevier_logo_response(self):
+        """Elsevier logo 应该识别为 isPublisherImage=true"""
+        parse = self._import()
+        llm_response = """```json
+{
+  "figureNo": null,
+  "figureType": "logo",
+  "semanticTitle": null,
+  "visualSummary": "Elsevier 出版商 logo",
+  "sectionHint": null,
+  "isCoreFigure": false,
+  "isPublisherImage": true,
+  "isSupportingFigure": false,
+  "confidence": 0.99
+}
+```"""
+        result = parse(llm_response)
+        assert result["isPublisherImage"] is True
+        assert result["isCoreFigure"] is False
+        assert result["figureType"] == "logo"
+        assert result["figureNo"] is None
+        assert result["confidence"] == 0.99
+
+    def test_parse_journal_cover_response(self):
+        """期刊封面应识别为 isPublisherImage=true, figureType=publisher"""
+        parse = self._import()
+        llm_response = """```json
+{
+  "figureNo": null,
+  "figureType": "publisher",
+  "semanticTitle": "Journal of Hazardous Materials 期刊封面",
+  "visualSummary": "期刊首页",
+  "sectionHint": null,
+  "isCoreFigure": false,
+  "isPublisherImage": true,
+  "isSupportingFigure": false,
+  "confidence": 0.97
+}
+```"""
+        result = parse(llm_response)
+        assert result["isPublisherImage"] is True
+        assert result["isCoreFigure"] is False
+        assert result["figureType"] == "publisher"
+        assert result["figureNo"] is None
+
+    def test_parse_core_figure_response(self):
+        """正文核心图应识别为 isCoreFigure=true, figureNo 有效"""
+        parse = self._import()
+        llm_response = """```json
+{
+  "figureNo": "Fig. 2",
+  "figureType": "chart",
+  "semanticTitle": "Effects of oxidant on toluene conversion",
+  "visualSummary": "热力图",
+  "sectionHint": "Effect of oxidant supply",
+  "isCoreFigure": true,
+  "isPublisherImage": false,
+  "isSupportingFigure": false,
+  "confidence": 0.92
+}
+```"""
+        result = parse(llm_response)
+        assert result["isCoreFigure"] is True
+        assert result["isPublisherImage"] is False
+        assert result["figureNo"] == "Fig. 2"
+        assert result["figureType"] == "chart"
+        assert result["sectionHint"] == "Effect of oxidant supply"
+
+    def test_parse_supporting_figure_response(self):
+        """补充材料图 (Fig. S2) 应识别为 isSupportingFigure=true, isCoreFigure=false"""
+        parse = self._import()
+        llm_response = """```json
+{
+  "figureNo": "Fig. S2",
+  "figureType": "chart",
+  "semanticTitle": "Supplementary figure S2",
+  "visualSummary": "补充材料",
+  "sectionHint": null,
+  "isCoreFigure": false,
+  "isPublisherImage": false,
+  "isSupportingFigure": true,
+  "confidence": 0.90
+}
+```"""
+        result = parse(llm_response)
+        assert result["isCoreFigure"] is False
+        assert result["isSupportingFigure"] is True
+        assert result["figureNo"] == "Fig. S2"
+
+    def test_parse_invalid_json_returns_default(self):
+        """无效 JSON 应该返回默认值（不抛异常）"""
+        parse = self._import()
+        result = parse("not valid json at all")
+        assert result["figureNo"] is None
+        assert result["isCoreFigure"] is True
+        assert result["isPublisherImage"] is False
+        assert result["confidence"] == 0.0
+
+    def test_parse_empty_string_returns_default(self):
+        parse = self._import()
+        result = parse("")
+        assert result["figureNo"] is None
+        assert result["isCoreFigure"] is True
+
+    def test_parse_with_surrounding_text(self):
+        """LLM 在 JSON 前后输出额外文字时，应能正确提取 JSON 块"""
+        parse = self._import()
+        llm_response = """这是分析结果:
+```json
+{"figureNo": "Fig. 1", "figureType": "chart", "isCoreFigure": true, "confidence": 0.9, "isPublisherImage": false}
+```
+分析完成。"""
+        result = parse(llm_response)
+        assert result["figureNo"] == "Fig. 1"
+        assert result["isCoreFigure"] is True
+
+    def test_parse_with_trailing_comma(self):
+        """LLM 输出带尾逗号的 JSON 也能解析（容错）"""
+        parse = self._import()
+        llm_response = """```json
+{
+  "figureNo": "Fig. 3",
+  "isCoreFigure": true,
+  "confidence": 0.85,
+}
+```"""
+        result = parse(llm_response)
+        assert result["figureNo"] == "Fig. 3"
+        assert result["confidence"] == 0.85
+
+    def test_default_values_present(self):
+        """返回值必须含所有 9 个字段"""
+        from app.services.ocr_service import _default_figure_structured
+        defaults = _default_figure_structured()
+        expected_keys = {
+            "figureNo", "figureType", "semanticTitle", "visualSummary",
+            "sectionHint", "isCoreFigure", "isPublisherImage",
+            "isSupportingFigure", "confidence"
+        }
+        assert set(defaults.keys()) == expected_keys
+
+
+class TestFigureAnalyzePrompt:
+    """v28: PROMPT_FIGURE_ANALYZE prompt 质量检查"""
+
+    def test_prompt_emphasizes_type_priority(self):
+        from app.services.ocr_service import PROMPT_FIGURE_ANALYZE
+        # Prompt 必须强调"先判断 isPublisherImage"
+        assert "isPublisherImage" in PROMPT_FIGURE_ANALYZE
+        # 必须有 few-shot examples
+        assert "Example" in PROMPT_FIGURE_ANALYZE
+        # 必须支持 Elsevier logo / journal cover / Supplementary
+        assert "ELSEVIER" in PROMPT_FIGURE_ANALYZE.upper() or "Elsevier" in PROMPT_FIGURE_ANALYZE
+        # 必须支持 SI 图号
+        assert "Fig. S2" in PROMPT_FIGURE_ANALYZE or "S2" in PROMPT_FIGURE_ANALYZE
+        # 必须强制 JSON 输出
+        assert "json" in PROMPT_FIGURE_ANALYZE.lower()
+
+    def test_prompt_lists_all_8_fields(self):
+        from app.services.ocr_service import PROMPT_FIGURE_ANALYZE
+        for field in ["figureNo", "figureType", "semanticTitle", "visualSummary",
+                      "sectionHint", "isCoreFigure", "isPublisherImage",
+                      "isSupportingFigure", "confidence"]:
+            assert field in PROMPT_FIGURE_ANALYZE, f"prompt missing field: {field}"
+
+    def test_prompt_examples_cover_4_types(self):
+        from app.services.ocr_service import PROMPT_FIGURE_ANALYZE
+        # 至少 4 个 Example 覆盖：logo / cover / 正文图 / supporting
+        example_count = PROMPT_FIGURE_ANALYZE.count("Example ")
+        assert example_count >= 4, f"expected ≥4 examples, got {example_count}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
