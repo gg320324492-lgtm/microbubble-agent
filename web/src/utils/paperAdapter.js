@@ -1272,6 +1272,18 @@ export function normalizePaperData(raw, extra = {}) {
   if (!abstract && content) {
     abstract = _detectAbstractFromContent(content)
   }
+
+  // 即使 abstract 来自后端 summary，也要 strip 出版信息
+  if (abstract) {
+    abstract = _stripPublicationInfo(abstract)
+    abstract = abstract.replace(/^[\s\]\}>]+/, '').trim()
+  }
+
+  // 即使 abstract 来自后端 summary，也要 strip 出版信息
+  if (abstract) {
+    abstract = _stripPublicationInfo(abstract)
+    abstract = abstract.replace(/^[\s\]\}>]+/, '').trim()
+  }
   if (content && !keywords.length) {
     const detectedKw = _detectKeywordsFromContent(content)
     if (detectedKw.length) keywords = detectedKw
