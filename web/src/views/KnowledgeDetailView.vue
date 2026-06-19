@@ -111,10 +111,17 @@
           @extract="handleExtractMultimodal"
         />
 
-        <!-- 知识图谱（兼容老数据） -->
+        <!-- 知识图谱（无数据时轻量空状态） -->
         <section v-if="graphData?.nodes?.length" class="paper-graph">
           <h2 class="graph-title">🕸️ 知识图谱</h2>
           <div ref="graphRef" class="graph-container"></div>
+        </section>
+        <section v-else class="paper-graph paper-graph-empty">
+          <div class="graph-empty-content">
+            <el-icon class="graph-empty-icon"><Share /></el-icon>
+            <span class="graph-empty-text">暂无知识图谱数据</span>
+            <span class="graph-empty-hint">该条目暂无关联实体图谱</span>
+          </div>
         </section>
 
         <!-- 相关知识 -->
@@ -124,8 +131,8 @@
       <!-- 右侧导航（sticky） -->
       <RightAnchorNav
         v-if="hasAnchors"
-        :anchors="anchorList"
-        :module-counts="moduleCounts"
+        :sections="anchorSections"
+        :modules="anchorModules"
       />
     </div>
   </div>
@@ -135,6 +142,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Share } from '@element-plus/icons-vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -175,17 +183,28 @@ const hasAnyContent = computed(() => {
   return paper.value.sections?.length > 0
 })
 
-const hasAnchors = computed(() => anchorList.value.length > 0)
+const hasAnchors = computed(() => anchorSections.value.length > 0)
 
-const anchorList = computed(() => {
+const anchorSections = computed(() => {
   if (!paper.value) return []
-  return buildAnchorTree(paper.value.sections || [])
+  const { sections } = buildAnchorTree(paper.value.sections || [], {
+    moduleCounts: moduleCounts.value,
+  })
+  return sections
+})
+
+const anchorModules = computed(() => {
+  if (!paper.value) return []
+  const { modules } = buildAnchorTree(paper.value.sections || [], {
+    moduleCounts: moduleCounts.value,
+  })
+  return modules
 })
 
 const moduleCounts = computed(() => {
   if (!paper.value) return { figures: 0, extractions: 0, related: 0 }
   return {
-    figures: paper.value.figures?.length || 0,
+    figures: paper.value.coreFigureCount || paper.value.figures?.length || 0,
     extractions: paper.value.extractions?.length || 0,
     related: paper.value.relatedKnowledge?.length || 0,
   }
@@ -567,5 +586,41 @@ onUnmounted(() => {
   width: 100%;
   height: 380px;
   border-radius: 8px;
+}
+
+/* 知识图谱无数据时的轻量空状态 */
+.paper-graph-empty {
+  min-height: 100px;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FAFAFA;
+  border: 1px dashed var(--color-border-light);
+}
+
+.graph-empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 16px;
+}
+
+.graph-empty-icon {
+  font-size: 28px;
+  color: #D1D5DB;
+  margin-bottom: 4px;
+}
+
+.graph-empty-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B7280;
+}
+
+.graph-empty-hint {
+  font-size: 12px;
+  color: #9CA3AF;
 }
 </style>

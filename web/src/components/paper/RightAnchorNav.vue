@@ -1,5 +1,5 @@
 <template>
-  <aside v-if="anchors.length" class="right-anchor-nav" :class="{ 'is-collapsed': collapsed }">
+  <aside v-if="sections.length || modules.length" class="right-anchor-nav" :class="{ 'is-collapsed': collapsed }">
     <div class="anchor-nav-header">
       <span class="anchor-nav-title">📑 文章导航</span>
       <button class="anchor-nav-toggle" @click="collapsed = !collapsed" :title="collapsed ? '展开导航' : '收起导航'">
@@ -8,36 +8,38 @@
     </div>
 
     <div v-show="!collapsed" class="anchor-nav-body">
-      <ul class="anchor-list">
+      <!-- 论文章节（按 type 显示友好图标） -->
+      <ul v-if="sections.length" class="anchor-list">
         <li
-          v-for="anchor in anchors"
+          v-for="anchor in sections"
           :key="anchor.id"
           :class="[
             'anchor-item',
             `anchor-level-${anchor.level}`,
             { 'is-active': activeId === anchor.id }
           ]"
+          :data-type="anchor.type"
           @click="scrollToAnchor(anchor)"
         >
           <span class="anchor-indicator"></span>
-          <span class="anchor-text">{{ anchor.title }}</span>
+          <el-icon v-if="sectionIcon(anchor.type)" class="anchor-icon">
+            <component :is="sectionIcon(anchor.type)" />
+          </el-icon>
+          <span class="anchor-text">{{ sectionLabel(anchor) }}</span>
         </li>
       </ul>
 
-      <!-- 模块入口 -->
-      <div v-if="hasModules" class="anchor-modules">
+      <!-- 模块入口：图表 / 提取物 / 相关知识 -->
+      <div v-if="modules.length" class="anchor-modules">
         <div class="anchor-modules-divider"></div>
-        <div v-if="moduleCounts.figures" class="anchor-module-item" @click="emitScrollTo('#paper-figures')">
-          <el-icon><Picture /></el-icon>
-          <span>图表 ({{ moduleCounts.figures }})</span>
-        </div>
-        <div v-if="moduleCounts.extractions" class="anchor-module-item" @click="emitScrollTo('#paper-extractions')">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>提取物 ({{ moduleCounts.extractions }})</span>
-        </div>
-        <div v-if="moduleCounts.related" class="anchor-module-item" @click="emitScrollTo('#paper-related')">
-          <el-icon><Connection /></el-icon>
-          <span>相关知识 ({{ moduleCounts.related }})</span>
+        <div
+          v-for="mod in modules"
+          :key="mod.id"
+          class="anchor-module-item"
+          @click="emitScrollTo('#' + mod.anchor)"
+        >
+          <el-icon><DataAnalysis v-if="mod.id === 'm-figures'" /><Connection v-else /></el-icon>
+          <span>{{ mod.title }}</span>
         </div>
       </div>
     </div>
@@ -46,11 +48,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { ArrowRight, ArrowLeft, Picture, DataAnalysis, Connection } from '@element-plus/icons-vue'
+import {
+  ArrowRight, ArrowLeft, Picture, DataAnalysis, Connection,
+  Document, Reading, DataLine, Files, EditPen, List, ChatLineRound, Promotion, Coin,
+} from '@element-plus/icons-vue'
 
 const props = defineProps({
-  anchors: { type: Array, default: () => [] },
-  moduleCounts: { type: Object, default: () => ({ figures: 0, extractions: 0, related: 0 }) },
+  sections: { type: Array, default: () => [] },
+  modules: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['scroll-to'])
@@ -58,11 +63,62 @@ const emit = defineEmits(['scroll-to'])
 const collapsed = ref(false)
 const activeId = ref(null)
 let observer = null
-let scrollThrottle = null
 
-const hasModules = computed(() => {
-  return Object.values(props.moduleCounts).some(v => v > 0)
-})
+// 章节 type → 图标
+const sectionIcon = (type) => {
+  const map = {
+    abstract: Reading,
+    keywords: Coin,
+    highlights: Coin,
+    graphical_abstract: Picture,
+    article_info: Document,
+    introduction: Reading,
+    background: Reading,
+    methods: Files,
+    results: DataLine,
+    discussion: ChatLineRound,
+    conclusion: Promotion,
+    acknowledgments: EditPen,
+    references: List,
+    supplementary: Document,
+    appendix: Document,
+    preamble: Document,
+    normal: null,
+  }
+  return map[type] || null
+}
+
+// 章节 type → 显示标签（中文）
+const sectionLabel = (anchor) => {
+  const typeLabelMap = {
+    abstract: '摘要',
+    keywords: '关键词',
+    highlights: '亮点',
+    graphical_abstract: '图形摘要',
+    article_info: '文章信息',
+    introduction: '引言',
+    background: '研究背景',
+    methods: '材料与方法',
+    results: '结果与讨论',
+    discussion: '讨论',
+    conclusion: '结论',
+    acknowledgments: '致谢',
+    references: '参考文献',
+    supplementary: '补充材料',
+    appendix: '附录',
+    preamble: '前言',
+  }
+  if (anchor.type && typeLabelMap[anchor.type]) {
+    return `${typeLabelMap[anchor.type]} · ${stripNumberPrefix(anchor.title)}`
+  }
+  return stripNumberPrefix(anchor.title)
+}
+
+// 去除章节标题中的编号前缀（"1. Introduction" → "Introduction"）
+const stripNumberPrefix = (title) => {
+  if (!title) return ''
+  return String(title).replace(/^(\d+(?:\.\d+)*)\.?\s+/, '').trim() || title
+}
 
 function scrollToAnchor(anchor) {
   const el = document.getElementById(`section-${anchor.id}`)
@@ -86,7 +142,6 @@ function setupObserver() {
     for (const entry of entries) {
       visibilityMap.set(entry.target.id, entry.intersectionRatio)
     }
-    // 找到当前可见度最高且 > 0 的 section
     let bestId = null
     let bestRatio = 0
     for (const [id, ratio] of visibilityMap.entries()) {
@@ -99,7 +154,6 @@ function setupObserver() {
       const id = bestId.replace('section-', '')
       if (activeId.value !== id) {
         activeId.value = id
-        // 滚动时把当前激活项也滚到导航视口里
         nextTick(() => {
           const activeEl = document.querySelector('.anchor-item.is-active')
           if (activeEl) {
@@ -120,14 +174,13 @@ function setupObserver() {
     threshold: [0, 0.1, 0.5, 1],
   })
 
-  // 注册所有 section 锚点
-  for (const anchor of props.anchors) {
+  for (const anchor of props.sections) {
     const el = document.getElementById(`section-${anchor.id}`)
     if (el) observer.observe(el)
   }
 }
 
-watch(() => props.anchors, () => {
+watch(() => props.sections, () => {
   nextTick(() => setupObserver())
 }, { deep: true })
 
