@@ -32,7 +32,11 @@ class FileParserService:
             raise ValueError(f"不支持的文件类型: {ext}")
 
     async def _parse_pdf(self, data: bytes) -> dict:
-        """解析 PDF — 用 PyMuPDF 提取文本和嵌入图片"""
+        """解析 PDF — 用 PyMuPDF 提取文本和嵌入图片
+
+        2026-06-19 Phase 7 v2: 在页间插入 [PAGE:N] 标记，便于多模态 inline
+        按页码精确定位插入点（LLM 启发式对页内 anchor 太保守）
+        """
         def _extract():
             import fitz  # PyMuPDF
 
@@ -47,6 +51,11 @@ class FileParserService:
 
             for page_num in range(len(doc)):
                 page = doc[page_num]
+
+                # 2026-06-19 Phase 7: 页间插入 [PAGE:N] 标记
+                # multimodal_extraction_service.inline_extractions_to_content 用此
+                # 把图片按 page_number 精确插到对应页的开头
+                pages_text.append(f"[PAGE:{page_num + 1}]")
 
                 # 提取文本
                 text = page.get_text()
@@ -113,12 +122,17 @@ class FileParserService:
         return await asyncio.to_thread(_extract)
 
     async def _parse_pptx(self, data: bytes) -> str:
-        """解析 PPT 文件"""
+        """解析 PPT 文件
+
+        2026-06-19 Phase 7 v2: 每页前插入 [PAGE:N] 标记，便于多模态 inline 按页定位
+        """
         def _extract():
             from pptx import Presentation
             prs = Presentation(io.BytesIO(data))
             texts = []
             for slide_num, slide in enumerate(prs.slides, 1):
+                # 2026-06-19 Phase 7: 每页前加 [PAGE:N] 标记
+                texts.append(f"[PAGE:{slide_num}]")
                 slide_texts = []
                 for shape in slide.shapes:
                     if shape.has_text_frame:

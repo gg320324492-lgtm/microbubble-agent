@@ -328,6 +328,20 @@ class KnowledgeService:
         except Exception as e:
             logger.warning(f"多模态提取失败(knowledge_id={knowledge_id}): {e}", exc_info=True)
 
+        # Step 7b: 把图/表/公式 inline 嵌入原文位置 — 2026-06-19 v2
+        # LLM 找 anchor + markdown 内联
+        try:
+            from app.services.multimodal_extraction_service import multimodal_extraction_service
+            inline_result = await multimodal_extraction_service.inline_extractions_to_content(knowledge_id)
+            if inline_result.get("ok") and not inline_result.get("skipped"):
+                logger.info(
+                    f"多模态 inline 嵌入完成(knowledge_id={knowledge_id}): "
+                    f"matches={inline_result.get('matches_total', 0)}, "
+                    f"unmatched={inline_result.get('unmatched_total', 0)}"
+                )
+        except Exception as e:
+            logger.warning(f"多模态 inline 失败(knowledge_id={knowledge_id}): {e}", exc_info=True)
+
     async def create_from_conversation(
         self,
         title: str,
