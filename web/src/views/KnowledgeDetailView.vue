@@ -91,6 +91,7 @@
             :section="section"
             :is-chinese="paper.isChineseHeavy"
             :inline-figures="getInlineFiguresFor(section)"
+            :inline-figure-anchors="paper.inlineFigureAnchors || {}"
           />
         </article>
 

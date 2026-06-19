@@ -18,25 +18,28 @@
     </header>
 
     <!-- 章节正文（References section 跳过，由下方折叠卡片渲染） -->
+    <!-- v27 段落级 inline figure 锚定：在每个 paragraph block 后插入锚定的图 -->
     <div v-if="!isReferences" class="section-body">
-      <PaperBlockRenderer
-        v-for="(block, i) in section.blocks"
-        :key="i"
-        :block="block"
-        :is-chinese="isChinese"
-      />
-    </div>
-
-    <!-- 章节内嵌图（按 figure_marker 锚点后插入对应图片） -->
-    <div v-if="inlineFigures.length" class="section-inline-figures">
-      <FigureCard
-        v-for="fig in inlineFigures"
-        :key="fig.id"
-        :figure="fig"
-        :figure-no="`图 ${fig.figureNo || fig.id}`"
-        :caption="fig.caption"
-        compact
-      />
+      <template v-for="(block, i) in section.blocks" :key="i">
+        <PaperBlockRenderer
+          :block="block"
+          :is-chinese="isChinese"
+        />
+        <!-- 段落级 inline figure 锚定: 在 paragraph block 后插入 -->
+        <div
+          v-if="block.type === 'paragraph' && getAnchoredFigures(i).length"
+          class="paragraph-inline-figures"
+        >
+          <FigureCard
+            v-for="fig in getAnchoredFigures(i)"
+            :key="`fig-${fig.id}`"
+            :figure="fig"
+            :figure-no="`图 ${fig.figureNo || fig.id}`"
+            :caption="fig.caption"
+            compact
+          />
+        </div>
+      </template>
     </div>
 
     <!-- 参考文献可折叠 -->
@@ -70,8 +73,20 @@ import { splitReferences } from '@/utils/paperAdapter'
 const props = defineProps({
   section: { type: Object, required: true },
   isChinese: { type: Boolean, default: false },
+  // 兼容旧 API: section 级 inline figures（已废弃，建议用 inlineFigureAnchors）
   inlineFigures: { type: Array, default: () => [] },
+  // v27 新 API: paragraph 级锚定 { paragraphId → [figures] }
+  // paragraphId 格式: `${section.id}__p${paragraphIndex}`
+  inlineFigureAnchors: { type: Object, default: () => ({}) },
 })
+
+/**
+ * 获取指定 paragraph index 锚定的 figures
+ */
+function getAnchoredFigures(paragraphIdx) {
+  const pid = `${props.section.id}__p${paragraphIdx}`
+  return props.inlineFigureAnchors[pid] || []
+}
 
 const referencesExpanded = ref(false)
 
@@ -197,12 +212,22 @@ const pageRangeText = computed(() => {
   padding: 0;
 }
 
-/* 章节内嵌图：缩略图样式 */
-.section-inline-figures {
-  margin: 16px 0;
+/* 段落级 inline figure: 在 paragraph 下方插入锚定的图 */
+.paragraph-inline-figures {
+  margin: 12px 0 16px;
+  padding: 12px 16px;
+  background: #FAFAFA;
+  border: 1px solid var(--color-border-light);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+}
+
+.paragraph-inline-figures :deep(.figure-card) {
+  background: #fff;
+  border-radius: 4px;
 }
 
 /* 参考文献样式 */

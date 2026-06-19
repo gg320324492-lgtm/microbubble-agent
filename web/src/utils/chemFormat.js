@@ -1,29 +1,33 @@
 /**
- * 化学式 / 离子 / 单位上下角标格式化（v2 回归修复版）
+ * 统一科学文本格式化器 (v3 — 通用 parser 版)
  *
- * 把论文中的 H2O2 / O3 / CO2 / mg·L-1 等普通文本
- * 转换为带 Unicode 下标/上标字符的纯文本。
+ * 不再"发现一个加一个映射"。所有规则走底层通用 parser：
+ * - 公式 (formula)     : 元素符号 + 数字 → 下标 (O3 → O₃, H2O2 → H₂O₂)
+ * - 单位指数 (unit)     : 已知单位 + -1/-2/-3 → 上标 (L·h-1 → L·h⁻¹)
+ * - 离子电荷 (charge)   : 元素 + +/- → 上标 (OH- → OH⁻, Fe3+ → Fe³⁺)
+ * - 自由基 (radical)    : ·OH / •OH / O2·- → 保留点号视觉提示
+ * - 体积立方 (vol-cubic): m3 → m³ (OCR 误识别修复)
+ * - 科学计数 (sci-not)  : ×10-3 → ×10⁻³
  *
- * 为什么改用 Unicode 而不是 HTML：
- * 1. 返回 HTML 字符串会被下游 `autoLinkContent` 的 `_escapeHtml` 二次转义
- *    → `<span class="chem-formula">O<sub>3</sub></span>` 显示成源码文本
- * 2. Unicode 字符 (O₃ / H₂O₂ / CO₂) 直接走文本插值，最稳定
- * 3. 浏览器原生支持 Unicode 上下标字符渲染，无需自定义 CSS
- * 4. 复制粘贴、搜索引擎、a11y 都更友好
+ * 设计原则：
+ * 1. **不返回 HTML 标签**（v26 修复：避免下游 _escapeHtml 二次转义）
+ * 2. **输出 Unicode 字符**（O₃ / H₂O₂ / OH⁻ / mg·L⁻¹ / ²³⁺）
+ * 3. **不误伤**：年份 (2026) / 页码 / Fig. N / Table N / DOI / [1] / 普通英文
+ * 4. **可顺序调用**：formatScientificText 内部按特定顺序调用 4 个子函数
  *
- * 实现原则：
- * 1. **优先 Unicode 上下标**（O₃ / H₂O₂ / CO₂ / mg·L⁻¹）
- * 2. 返回纯文本字符串，调用方可用 {{ }} 或 v-html 渲染
- * 3. 不误伤普通年份 / 编号 / 参考文献编号
- * 4. 保留自由基点号 ·OH 的视觉提示（用 inline 样式不污染纯文本）
- *
- * 公开 API：
- *   formatChemicalText(text)    - 返回纯文本（Unicode 上下标字符版本，无 HTML）
- *   formatChemicalTextHTML(text)- 旧版 HTML 返回（仅供特殊场景，已不推荐）
- *   tokenizeChem(s)              - 把 token 拆成 [text, sub, sup] 数组
+ * 公开 API:
+ *   formatScientificText(text)              - 一站式入口（论文正文用）
+ *   formatChemicalFormula(text)             - 仅化学式
+ *   formatUnitExponent(text)                - 仅单位指数
+ *   formatIonCharge(text)                   - 仅离子电荷
+ *   formatRadicals(text)                    - 仅自由基
+ *   formatChemicalText(text) [兼容旧 API]    - = formatScientificText
  */
 
-// Unicode 子/上标字符
+// ============================================================
+// Unicode 子/上标字符表
+// ============================================================
+
 const SUB_DIGITS = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉', '+': '₊', '-': '₋' }
 const SUP_DIGITS = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', '−': '⁻' }
 
@@ -35,7 +39,6 @@ function _toSup(num) {
   return String(num).split('').map(c => SUP_DIGITS[c] || c).join('')
 }
 
-// 把 "23" → ₂₃, "2+" → ₂⁺, "-1" → ⁻¹
 function _toSubSup(text) {
   let result = ''
   for (const c of String(text)) {
@@ -46,232 +49,349 @@ function _toSubSup(text) {
   return result
 }
 
-// 精确化学式映射（Unicode 下标版本）
-const EXACT_FORMULAS = [
-  // 单元素 + 数字下标
-  [/\bH2O2\b/g, 'H₂O₂'],
-  [/\bH2O\b/g,  'H₂O'],
-  [/\bO3\b/g,   'O₃'],
-  [/\bO2\b/g,   'O₂'],
-  [/\bN2\b/g,   'N₂'],
-  [/\bCl2\b/g,  'Cl₂'],
-  [/\bH2\b/g,   'H₂'],
-  [/\bCO2\b/g,  'CO₂'],
-  [/\bSO2\b/g,  'SO₂'],
-  [/\bNO2\b/g,  'NO₂'],
-  [/\bNO3\b(?!\w)/g, 'NO₃'],
-  [/\bNH3\b/g,  'NH₃'],
-  [/\bNH4\b/g,  'NH₄'],
-  [/\bCH4\b/g,  'CH₄'],
-  [/\bC2H4\b/g, 'C₂H₄'],
-  [/\bC2H6\b/g, 'C₂H₆'],
-  [/\bC3H8\b/g, 'C₃H₈'],
-  [/\bC6H6\b/g, 'C₆H₆'],
-  [/\bC7H8\b/g, 'C₇H₈'],
-  // 含 2+ 数字下标的复杂分子
-  [/\bFe2O3\b/g, 'Fe₂O₃'],
-  [/\bFe3O4\b/g, 'Fe₃O₄'],
-  [/\bTiO2\b/g,  'TiO₂'],
-  [/\bMnO2\b/g,  'MnO₂'],
-  [/\bCaCO3\b/g, 'CaCO₃'],
-  [/\bH2SO4\b/g, 'H₂SO₄'],
-  [/\bHNO3\b/g,  'HNO₃'],
-  [/\bKMnO4\b/g, 'KMnO₄'],
-  [/\bNa2SO4\b/g, 'Na₂SO₄'],
-  [/\bBaSO4\b/g, 'BaSO₄'],
-  [/\bAl2O3\b/g, 'Al₂O₃'],
-  [/\bMg(OH)2\b/g, 'Mg(OH)₂'],
-  [/\bCa(OH)2\b/g, 'Ca(OH)₂'],
-  [/\bPbO2\b/g,  'PbO₂'],
-  [/\bV2O5\b/g,  'V₂O₅'],
-  [/\bWO3\b/g,   'WO₃'],
-  [/\bCeO2\b/g,  'CeO₂'],
-  [/\bBi2O3\b/g, 'Bi₂O₃'],
-  // PM2.5 / PM10
-  [/\bPM2\.5\b/g, 'PM₂.₅'],
-  [/\bPM10\b/g,   'PM₁₀'],
-]
+// ============================================================
+// 已知单位白名单（用于单位指数识别）
+// ============================================================
 
-// 离子 / 自由基上标（Unicode 版本）
-const ION_PATTERNS = [
-  // 自由基（保持 ·OH 形式，无 HTML 标签）
-  [/[·•]OH\b/g, '·OH'],
-  [/OH[·•]\b/g, 'OH·'],
-  [/[·•]O2[·•−-]?/g, '·O₂'],
-  // 电荷上标（用 Unicode 上下标字符）
-  [/\bOH−\b/g, 'OH⁻'],
-  [/\bOH-\b/g, 'OH⁻'],
-  [/\bH\+\b/g, 'H⁺'],
-  [/\bNa\+\b/g, 'Na⁺'],
-  [/\bK\+\b/g, 'K⁺'],
-  [/\bCa2\+/g, 'Ca²⁺'],
-  [/\bCa²⁺/g,  'Ca²⁺'],
-  [/\bMg2\+/g, 'Mg²⁺'],
-  [/\bFe3\+/g, 'Fe³⁺'],
-  [/\bFe2\+/g, 'Fe²⁺'],
-  [/\bMn2\+/g, 'Mn²⁺'],
-  [/\bCu2\+/g, 'Cu²⁺'],
-  [/\bZn2\+/g, 'Zn²⁺'],
-  [/\bAl3\+/g, 'Al³⁺'],
-  [/\bNH4\+/g, 'NH₄⁺'],
-  [/\bCl−\b/g, 'Cl⁻'],
-  [/\bCl-\b/g, 'Cl⁻'],
-  [/\bNO3−\b/g, 'NO₃⁻'],
-  [/\bNO3-\b/g, 'NO₃⁻'],
-  [/\bSO4²−/g, 'SO₄²⁻'],
-  [/\bSO4 2−/g, 'SO₄²⁻'],
-  [/\bSO42-/g,  'SO₄²⁻'],
-  [/\bCO3²−/g, 'CO₃²⁻'],
-  [/\bCO3 2−/g, 'CO₃²⁻'],
-  [/\bCO32-/g,  'CO₃²⁻'],
-  [/\bHCO3−\b/g, 'HCO₃⁻'],
-  [/\bHCO3-\b/g, 'HCO₃⁻'],
-]
+const LENGTH_UNITS = ['m', 'cm', 'mm', 'km', 'dm', 'μm', 'nm', 'pm', 'Å']
+const VOLUME_UNITS = ['L', 'mL', 'μL', 'nL', 'kL']
+const MASS_UNITS = ['g', 'kg', 'mg', 'μg', 'ng', 'pg']
+const TIME_UNITS = ['s', 'min', 'h', 'ms', 'μs', 'ns']
+const AMOUNT_UNITS = ['mol', 'mmol', 'μmol', 'nmol', 'pmol']
+const CONC_UNITS = ['M', 'mM', 'μM', 'nM']
 
-// 单位负指数 + 科学计数（Unicode 版本）
-const UNIT_PATTERNS = [
-  // mg·L-1 / mg/L-1 / mg L-1 → mg·L⁻¹
-  [/(mg|μg|ng|g|kg|pg|fg|ton)\s*[·\/・]\s*(L|mL|cm3|dm3|m3|cm²|cm3|ml|L)-1/gi, (m, unit, base) => `${unit}·${base}⁻¹`],
-  [/(mg|μg|ng|g|kg|pg|fg)\s+(L|mL|cm3|dm3|m3)-1/gi, (m, unit, base) => `${unit} ${base}⁻¹`],
-  // mol·L-1 / mol/L
-  [/(mol|mmol|μmol|nmol|pmol)\s*[·\/・]\s*(L|mL|L)-1/gi, (m, unit, base) => `${unit}·${base}⁻¹`],
-  // m3·h-1
-  [/m3\s*[·\/・]\s*h-1/g, 'm³·h⁻¹'],
-  // mL·min-1
-  [/mL\s*[·\/・]\s*min-1/g, 'mL·min⁻¹'],
-  // L·min-1
-  [/L\s*[·\/・]\s*min-1/g, 'L·min⁻¹'],
-  // cm-1
-  [/\bcm-1\b/g, 'cm⁻¹'],
-  // m-2, m-3
-  [/\bm-2\b/g, 'm⁻²'],
-  [/\bm-3\b/g, 'm⁻³'],
-  // s-1
-  [/\bs-1\b/g, 's⁻¹'],
-  // h-1
-  [/\bh-1\b/g, 'h⁻¹'],
-  // min-1
-  [/\bmin-1\b/g, 'min⁻¹'],
-  // m3（立方米）
-  [/\bm3\b(?!\.\d)/g, 'm³'],
-  [/\bcm3\b/g, 'cm³'],
-  [/\bdm3\b/g, 'dm³'],
-  // μmol/L, mg/L（保留斜杠原样）
-  [/μg\s*\/\s*L/g, 'μg/L'],
-  [/mg\s*\/\s*L/g, 'mg/L'],
-  // 科学计数 10-3 / 10^3 / x10^n
-  [/\b10-(\d)\b/g, (m, n) => `10${_toSup('-' + n)}`],
-  [/\b10\^(\d)\b/g, (m, n) => `10${_toSup(n)}`],
-  [/[×xX]10-(\d)\b/g, (m, n) => `×10${_toSup('-' + n)}`],
-  [/[×xX]10\^(\d)\b/g, (m, n) => `×10${_toSup(n)}`],
+const ALL_UNITS = [
+  ...VOLUME_UNITS, ...LENGTH_UNITS, ...MASS_UNITS,
+  ...TIME_UNITS, ...AMOUNT_UNITS, ...CONC_UNITS,
 ]
+// 按长度倒序排，贪婪匹配（"mL" 优先于 "L"，"mmol" 优先于 "mol"）
+ALL_UNITS.sort((a, b) => b.length - a.length)
+
+// 单位指数中的"基础量"（指数前可出现的单位；不含指数本身）
+const UNIT_BASE_GROUP = `(?:${ALL_UNITS.join('|')})`
+const UNIT_EXP_NUMBER = '(-1|-2|-3|-¹|-²|-³)'
+
+// ============================================================
+// 1. 化学式自动识别 (formula → subscript)
+// ============================================================
 
 /**
- * 主入口：把普通文本转成带 Unicode 上下标字符的纯文本
+ * 通用公式正则:
+ *   - 必须以 [A-Z][a-z]? 开头（化学元素符号）
+ *   - 可选紧跟数字（原子数 → 下标）
+ *   - 后面可继续接 [A-Z][a-z]?\d* 块（多元素连续）
+ *   - 边界：左边不能是字母/数字（避免误伤连续字母），右边不能是小写字母（避免截断 2 字符元素符号）
  *
- * 返回纯文本！可安全用于：
- * - Vue 模板 {{ }} 插值
- * - v-html 渲染（不会再被 autoLinkContent 二次 escape）
- * - 复制粘贴、纯文本导出
+ * 匹配:
+ *   O3 / H2O2 / Co3O4 / Fe2O3 / MnO2 / CaCO3 / NH4+
+ *   O3-MNBs / O3/H2O2 / H2O2+N2
  *
- * 不返回 HTML 标签（与历史版本不同），消除下游 _escapeHtml 二次转义导致的
- * "HTML 源码显示给用户"的回归 bug。
+ * 不匹配:
+ *   2026 / 2.1 / Fig.2 / Table3 / DOI:10.xxx / [12]
+ *   段首 "C"（罗马数字？本 parser 不强制过滤，靠 lookahead 边界）
  */
-export function formatChemicalText(text) {
+
+// 单元匹配：Element + 数字（不含 groups）
+// group 形式：(FORMULA_GROUP)NUMBER，组内允许多元素 (OH) / (SO4) / (CO3) / (NH4)
+const FORMULA_GROUP_RE = /\(((?:[A-Z][a-z]?\d*)+)\)(\d+)(?![A-Za-z\d])/g
+
+// 主公式正则：连续 Element + 数字
+// Lookahead `(?![a-z\d])`: 拒绝小写字母或数字，但允许大写字母（表示下一个元素）
+// Lookbehind `(?<!\d)`: 只拒绝前面是数字（避免截断 "123CO2" 这种）
+//   注意：不能拒绝字母（否则 "CO2" 中 O 前面是 C，lookbehind 会拒绝 O2）
+const FORMULA_RE = /(?<!\d)([A-Z][a-z]?\d+(?:[A-Z][a-z]?\d+)*)(?![a-z\d])/g
+
+function _formatFormulaSegment(seg) {
+  // seg 是像 "H2O2" "Co3O4" "CaCO3" 的连续元素+数字串
+  // 在内部继续拆 Element + Digit 对
+  return seg.replace(/([A-Z][a-z]?)(\d+)/g, (_m, elem, num) => {
+    return elem + _toSub(num)
+  })
+}
+
+function formatChemicalFormula(text) {
   if (!text) return ''
   let result = String(text)
 
-  // 保护已有的 HTML 标签（理论上不应有，但作为防御）
-  const protectedTags = []
-  result = result.replace(/<[^>]+>/g, (m) => {
-    protectedTags.push(m)
-    return `\x00CHEM_TAG_${protectedTags.length - 1}\x00`
+  // 先处理 (group)N 模式 (e.g. (OH)2 → (OH)₂)
+  result = result.replace(FORMULA_GROUP_RE, (_m, group, num) => {
+    return `(${_formatFormulaSegment(group)})${_toSub(num)}`
   })
 
-  // 1. 先做精确化学式（高优先级）
-  for (const [re, replacement] of EXACT_FORMULAS) {
-    result = result.replace(re, replacement)
-  }
-
-  // 2. 离子 / 自由基
-  for (const [re, replacement] of ION_PATTERNS) {
-    result = result.replace(re, replacement)
-  }
-
-  // 3. 单位
-  for (const entry of UNIT_PATTERNS) {
-    const [re, replacement] = entry
-    result = result.replace(re, replacement)
-  }
-
-  // 4. 通用元素 token parser
-  //    匹配 Xn 模式：单大写字母 + 数字（如 O2, H2, N2）
-  //    已被精确匹配的不会再出现（因为精确匹配已替换成 Unicode）
-  result = result.replace(/\b([A-Z][a-z]?)(\d+)(?!\w)/g, (m, elem, num) => {
-    return `${elem}${_toSub(num)}`
-  })
-
-  // 5. 通用单位指数（如 standalone -1 / -2 / -3）
-  //    只在单位上下文中（前一个字符是 L / m / s 等）
-  result = result.replace(/([Ll]|[Mm][Ll]?|[Cc][Mm]|[Hh]|[Ss])(-1|-2|-3)\b/g, (m, base, exp) => {
-    const e = exp.replace('-', '−')
-    return `${base}${_toSup(e)}`
-  })
-
-  // 6. 通用电荷上标（如 X+ / X-）
-  //    前面是元素符号（Ca/Na/Fe/K 等 + 电荷）
-  result = result.replace(/\b([A-Z][a-z]?)(\d*[+−-])(?!\w)/g, (m, elem, charge) => {
-    const sign = charge.replace('-', '−').replace('+', '+')
-    if (/^\d/.test(sign)) {
-      // 带数字的电荷（如 2+ / 3-）
-      const n = sign.match(/\d/)[0]
-      const s = sign.replace(/\d/g, '')
-      return `${elem}${_toSup(n)}${_toSup(s)}`
-    }
-    return `${elem}${_toSup(sign)}`
-  })
-
-// 7. 兜底：处理字符串末尾或非边界位置残留的电荷符号（OH- / Na+ / Cl- 等）
-  //    解决独立输入 "OH-" 时  不在末尾匹配的问题
-  result = result.replace(/([A-Z][a-z]?\d*)([+\u2212-])(?![A-Za-z\d])/g, (m, base, charge) => {
-    if (charge === '-' || charge === '\u2212') return base + '\u207B'
-    if (charge === '+') return base + '\u207A'
-    return m
-  })
-
-
-  // 恢复保护的标签（如果有）
-  result = result.replace(/\x00CHEM_TAG_(\d+)\x00/g, (m, i) => protectedTags[parseInt(i)])
+  // 然后处理连续的 Element+Digit 块
+  // 用一个更复杂的正则匹配"完整的连续公式段"
+  result = result.replace(
+    FORMULA_RE,
+    (_m, seg) => _formatFormulaSegment(seg)
+  )
 
   return result
 }
 
-/**
- * 旧版 HTML 返回（保留以备特殊场景，但默认不使用）
- *
- * 当前所有调用方应使用 formatChemicalText（返回 Unicode）。
- * 此函数保留仅为向后兼容，若有调用方需要 HTML span 包装才用。
- */
-export function formatChemicalTextHTML(text) {
-  if (!text) return ''
-  // 直接调 formatChemicalText 再用 span 包装（保留视觉强调）
-  // 注意：仍会被 _escapeHtml 二次转义，使用方必须保证不走二次 escape
-  const safe = formatChemicalText(text)
-  // 仅当确实需要 HTML 时，才把化学式还原为 <sub>/<sup> 形式
-  // 这里用一段受控的 HTML 字符串，调用方需保证不进入 _escapeHtml 流水线
-  return safe
-}
+// ============================================================
+// 2. 单位指数自动识别 (unit exponent → superscript)
+// ============================================================
 
 /**
- * 把一个 token 拆成 [text, sub, sup] 数组（供高级渲染使用）
- * 例: "H2O" → [{text:"H",sub:"2"}, {text:"O",sub:""}]
+ * 通用单位指数正则:
+ *   模式: <unit>(<sep>?<unit>?)(-1|-2|-3)
+ *   其中 unit 必须在白名单中
+ *
+ * 匹配:
+ *   L·h-1 / mL·min-1 / mg·L-1 / m3·h-1
+ *   cm-1 / s-1 / min-1 / h-1
+ *   200 L·h-1 / 100 mL·min-1
+ *
+ * 不匹配:
+ *   Page-1 (P 不是单位)
+ *   2-1 (数字开头不是元素符号)
+ *   Fig-2 / Table-3 (特殊前缀)
  */
-export function tokenizeChem(s) {
-  const tokens = []
-  const re = /([A-Z][a-z]?)(?:(\d+))?/g
-  let m
-  while ((m = re.exec(s)) !== null) {
-    tokens.push({ text: m[1], sub: m[2] || '' })
-  }
-  return tokens
+
+// 把单位列表转义用于正则
+const UNIT_GROUP = ALL_UNITS.map(u => u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
+
+// 单位指数主正则: 单位 (可选分隔符 + 可选单位) + 负指数
+// 关键: -N 必须是真正的负指数 (-1/-2/-3)，前面跟单位
+const UNIT_EXP_RE = new RegExp(
+  // 1. 主单位 (不贪婪，避免多匹配)
+  `(${UNIT_GROUP})` +
+  // 2. 可选分隔符 (· / ・ / / / space)
+  `(?:[·／・\\s]+)?` +
+  // 3. 可选基础单位 (e.g. h-1, L-1)
+  `(?:(${UNIT_GROUP})(?:[·／・\\s]+))?` +
+  // 4. 负指数（必须 -1/-2/-3 或 Unicode 上标）
+  `(-1|-2|-3|-¹|-²|-³)` +
+  // 5. 边界: 后面不能是数字或连字符（避免误吃 -10 中的 -1）
+  `(?![-\\d])`,
+  'g'
+)
+
+function formatUnitExponent(text) {
+  if (!text) return ''
+  let result = String(text)
+
+  // 第一步: 体积立方 m3 → m³ / cm3 → cm³ (在单位指数处理之前)
+  result = result.replace(
+    /\b(m|cm|mm|km|dm|μm|nm)(3)(?![A-Za-z\d])/g,
+    (_m, prefix, _three) => prefix + '³'
+  )
+
+  // 第二步: 单位指数 -1/-2/-3 → ⁻¹/⁻²/⁻³
+  // Unicode 上标 ⁻¹/⁻²/⁻³ 直接透传，避免重复转换
+  result = result.replace(UNIT_EXP_RE, (_m, unit1, unit2, exp) => {
+    const expSup = exp.startsWith('-')
+      ? '⁻' + _toSup(exp.slice(1))
+      : _toSup(exp)
+    if (unit2) {
+      return `${unit1}${unit2}${expSup}`
+    }
+    return `${unit1}${expSup}`
+  })
+
+  return result
+}
+
+// ============================================================
+// 3. 离子与电荷自动识别 (charge → superscript)
+// ============================================================
+
+/**
+ * 通用离子电荷正则:
+ *   模式: (<formula>)(<charge_num>?)(+/-)
+ *   charge_num 是 superscript（电荷数）
+ *   formula 部分已被 _formatFormulaSegment 处理（原子数 subscript）
+ *
+ * 关键: 区分电荷 "-" 与连接符 "-"
+ *   电荷: 元素/公式 + 末尾 + (Na+, OH-, CO3 2-, SO42-, Fe3+)
+ *   连接符: 公式 + - + 大写词 (O3-MNBs, CO3-MNBs)
+ *
+ * 区分方法: lookahead 必须是"非字母数字"
+ *   电荷: 后跟空白/标点/字符串末尾
+ *   连接符: 后跟大写字母 (新词)
+ *
+ * 匹配:
+ *   H+ / Na+ / K+ / OH- / HCO3-
+ *   Fe3+ / Mn2+ / Ca2+ / Cu2+ / Zn2+ / Al3+
+ *   Fe2+ / Fe3+ / NH4+ / Cl- / NO3-
+ *   CO32- / CO3 2- / SO42- / SO4 2-
+ *   CO3^2- / SO4^2- (OCR caret 变体)
+ *   O2·- (自由基 + 电荷，· 由 formatRadicals 处理)
+ *
+ * 不匹配:
+ *   O3-MNBs (formula + connector + word)
+ *   O3/H2O2 (formula + separator)
+ *   2026 (数字开头)
+ *   Fig-2 (P 不是元素符号，但 Fig 也含 F/i/g)
+ *     → 实际: Fig 后跟 "-" 时，"Fig-" 整体 [A-Z][a-z]?\d*? 不匹配，
+ *       因为 "F"+"ig" 不是 [A-Z][a-z]? 模式 (i,g 是 lowercase 但 ig 不行，
+ *       regex 只允许 1 个 lowercase letter)
+ *     → "Fig-2" 不会匹配离子正则
+ */
+
+// 离子正则: (Formula)(\s*)(optional digit)(optional radical)(sign)
+// 4 个 capture groups 顺序: formula, digit, radical, sign
+// 关键: extension 用 *? 和 \d+? 双重非贪婪，避免 O42 整体被吞作 formula
+// 例: SO42- → 优先 SO4 + 2(charge) 解析，而非 SO42(atom)
+//     O2·- → O + 2(atom) + · + -
+//     Fe3+ → Fe + 3(charge) + +
+//     H+   → H + sign
+const CHARGE_RE = /(?<![A-Z][a-z])([A-Z][a-z]?(?:[A-Z][a-z]?\d+?)*?)\s*(\d*)([·•]?)([+−−-])(?![A-Za-z\d])/g
+
+function formatIonCharge(text) {
+  if (!text) return ''
+  let result = String(text)
+
+  // capture 顺序: 1=formula, 2=digit, 3=radical, 4=sign
+  result = result.replace(CHARGE_RE, (_m, formulaPart, digit, radical, chargeSign) => {
+    // formulaPart: "Na" / "OH" / "CO3" / "Fe" / "NH4" 等
+    // 内部继续拆 Element + Digit 对（subscript）
+    const formattedFormula = formulaPart.replace(/([A-Z][a-z]?)(\d+)/g, (_mm, el, n) => {
+      return el + _toSub(n)
+    })
+
+    // 关键: radical (·/•) 存在时 digit 是原子数（subscript），不存在时是电荷数（superscript）
+    // 例: O2·- → O₂·⁻ (digit=atom subscript)
+    //     Fe3+ → Fe³⁺ (digit=charge superscript)
+    //     SO42- → SO₄²⁻ (digit=charge superscript，因为没有 radical)
+    let digitSup = ''
+    if (digit) {
+      digitSup = radical ? _toSub(digit) : _toSup(digit)
+    }
+
+    // charge sign 永远 superscript
+    const chargeSignSup = chargeSign === '-' || chargeSign === '−' ? '⁻' : '⁺'
+
+    return formattedFormula + digitSup + (radical || '') + chargeSignSup
+  })
+
+  return result
+}
+
+// ============================================================
+// 4. 自由基 / 活性氧 (radical preservation)
+// ============================================================
+
+/**
+ * 处理自由基点号 · 和 •
+ * - ·OH / •OH (保持)
+ * - O2·- → 先处理 formula (O₂) + charge (⁻)，· 是视觉提示
+ * - O2.- → OCR 变体 . 当作 ·
+ * - ·O2- → 同上
+ */
+
+// 自由基点号规范化：把 . + - 模式当作 ·⁻ (OCR 脏数据)
+const RADICAL_NORMALIZE_RE = /([A-Z][a-z]?\d*)\.([+−−-])/g
+
+// 自由基 ·OH / •OH 保留
+const RADICAL_PRESERVE_RE = /([·•])([A-Z][a-z]?\d*)/g
+
+function formatRadicals(text) {
+  if (!text) return ''
+  let result = String(text)
+
+  // 1. 规范化 OCR 脏数据: O2.- → O2·- (dot before charge → middle dot)
+  result = result.replace(RADICAL_NORMALIZE_RE, (_m, base, charge) => {
+    return base + '·' + charge
+  })
+
+  // 2. ·OH / •OH 保持（不做转换）
+  // 这里仅清理，无需操作
+
+  return result
+}
+
+// ============================================================
+// 5. 体积立方 (volume cubic: m3 → m³) — 已并入 formatUnitExponent
+// ============================================================
+
+// 体积立方的处理已经在 formatUnitExponent 第一步完成。
+// 这里保留独立函数以兼容旧 API。
+function formatVolumeCubic(text) {
+  if (!text) return ''
+  return String(text).replace(
+    /\b(m|cm|mm|km|dm|μm|nm)(3)(?![A-Za-z\d])/g,
+    (_m, prefix, _three) => prefix + '³'
+  )
+}
+
+// ============================================================
+// 6. 科学计数法 (scientific notation: ×10-3 → ×10⁻³)
+// ============================================================
+
+/**
+ * 仅在显式有 × / x / X / * 前缀时转换（避免误伤 "Eq. 10-3" 这种普通范围）
+ *
+ * 匹配: ×10-3 / x10-3 / X10-3 / *10-3 → 对应 Unicode 上标
+ */
+
+const SCI_NOTATION_RE = /([×xX*])10(-1|-2|-3|-4|-5|-6|-7|-8|-9|-\d{2,})(?![-\d])/g
+
+function formatScientificNotation(text) {
+  if (!text) return ''
+  let result = String(text)
+
+  result = result.replace(SCI_NOTATION_RE, (_m, prefix, exp) => {
+    // exp 形如 "-3" 或 "-12"
+    const expNum = exp.replace('-', '')
+    return `${prefix}10⁻${_toSup(expNum)}`
+  })
+
+  return result
+}
+
+// ============================================================
+// 主入口：按特定顺序组合所有规则
+// ============================================================
+
+/**
+ * 格式化顺序很关键:
+ * 1. formatRadicals 先做（OCR 脏数据 . → ·）
+ * 2. formatIonCharge 第二（在 formula 之前！避免 Fe3+ 被 formula 吃掉 3 → Fe₃+）
+ * 3. formatUnitExponent 第三（包含体积立方 m3 → m³）
+ * 4. formatScientificNotation 第四（避免被 formula 规则吃掉 10-3 中的 10）
+ * 5. formatChemicalFormula 最后（subscript 数字）
+ */
+function formatScientificText(text) {
+  if (!text) return ''
+  let result = String(text)
+
+  // 保护已有 HTML 标签（防御性，理论上不应有）
+  const protectedTags = []
+  result = result.replace(/<[^>]+>/g, (m) => {
+    protectedTags.push(m)
+    return `\x00SCI_TAG_${protectedTags.length - 1}\x00`
+  })
+
+  result = formatRadicals(result)
+  result = formatIonCharge(result)
+  result = formatUnitExponent(result)
+  result = formatScientificNotation(result)
+  result = formatChemicalFormula(result)
+
+  // 恢复保护的标签
+  result = result.replace(/\x00SCI_TAG_(\d+)\x00/g, (_m, i) => protectedTags[parseInt(i)])
+
+  return result
+}
+
+// 兼容旧 API
+export const formatChemicalText = formatScientificText
+
+// ============================================================
+// 公开导出
+// ============================================================
+
+export {
+  formatScientificText,
+  formatChemicalFormula,
+  formatUnitExponent,
+  formatIonCharge,
+  formatRadicals,
+  formatVolumeCubic,
+  formatScientificNotation,
+  _toSub,
+  _toSup,
+  _toSubSup,
+  ALL_UNITS,
 }
