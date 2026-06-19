@@ -1,191 +1,163 @@
 <template>
-  <div class="knowledge-detail-page">
-    <!-- 顶部导航 -->
-    <div class="detail-topbar">
-      <el-button text @click="$router.push('/knowledge')">
-        <el-icon><ArrowLeft /></el-icon> 返回知识库
-      </el-button>
-      <el-button
-        v-if="knowledge && knowledge.analysis_status === 'failed'"
-        size="small"
-        type="danger"
-        plain
-        :loading="reanalyzing"
-        @click="handleReanalyze"
-      >重新分析</el-button>
-    </div>
-
-    <div v-if="loading" class="detail-loading">
+  <div class="paper-detail-page">
+    <!-- 加载状态 -->
+    <div v-if="loading" class="paper-detail-loading">
       <el-skeleton :rows="10" animated />
     </div>
 
-    <template v-else-if="knowledge">
-      <!-- 标题 -->
-      <h1 class="detail-title">{{ knowledge.title }}</h1>
-
-      <!-- 元信息 -->
-      <div class="detail-meta">
-        <span class="category-badge">{{ knowledge.category || '未分类' }}</span>
-        <span v-if="knowledge.knowledge_type" class="type-badge">{{ knowledge.knowledge_type }}</span>
-        <span class="detail-date">{{ formatDate(knowledge.created_at) }}</span>
-        <el-tag v-if="knowledge.analysis_status === 'analyzing'" size="small" type="warning">分析中</el-tag>
-        <el-tag v-if="knowledge.auto_researched" size="small" type="success">自主研究</el-tag>
-      </div>
-
-      <!-- 标签 -->
-      <div v-if="knowledge.tags?.length" class="detail-tags">
-        <span v-for="tag in knowledge.tags" :key="tag" class="tag-chip">{{ tag }}</span>
-      </div>
-
-      <!-- 审阅提醒 -->
-      <div v-if="knowledge.needs_review" class="detail-review-warning">
-        <span>该条目与其他知识存在矛盾，待人工审阅</span>
-      </div>
-
-      <!-- 核心概念 -->
-      <div v-if="knowledge.key_concepts?.length || knowledge.related_topics?.length" class="detail-analysis">
-        <div v-if="knowledge.key_concepts?.length" class="analysis-section">
-          <span class="analysis-label">核心概念</span>
-          <div class="analysis-items">
-            <span v-for="c in knowledge.key_concepts" :key="c" class="concept-chip">{{ c }}</span>
-          </div>
-        </div>
-        <div v-if="knowledge.related_topics?.length" class="analysis-section">
-          <span class="analysis-label">关联主题</span>
-          <div class="analysis-items">
-            <span v-for="t in knowledge.related_topics" :key="t" class="topic-chip">{{ t }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 知识三元组 -->
-      <div v-if="knowledge.entities?.length" class="detail-entities">
-        <div class="entities-label">知识三元组</div>
-        <div class="entities-grid">
-          <div v-for="(e, i) in knowledge.entities" :key="i" class="entity-card">
-            <div class="entity-triple">
-              <span class="entity-subject">{{ e.subject }}</span>
-              <span class="entity-predicate">→ {{ e.predicate }} →</span>
-              <span class="entity-object">{{ e.object }}</span>
-            </div>
-            <div v-if="e.condition" class="entity-condition">条件: {{ e.condition }}</div>
-            <div class="entity-confidence">
-              <el-progress :percentage="(e.confidence * 100).toFixed(0)" :stroke-width="4" :show-text="false" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- AI 摘要 -->
-      <div v-if="knowledge.summary" class="detail-summary">
-        <div class="summary-label">AI 摘要</div>
-        <div class="summary-text">{{ knowledge.summary }}</div>
-      </div>
-
-      <!-- 正文 -->
-      <div class="detail-body">
-        <div
-          v-if="knowledge.formatted_content"
-          class="detail-content markdown-body"
-          v-html="renderMarkdown(knowledge.formatted_content)"
-        ></div>
-        <div v-else class="detail-content">{{ knowledge.content }}</div>
-      </div>
-
-      <!-- 2026-06-19 Phase 7: 多模态提取区（图片 / 公式 / 表格 / 图表） -->
-      <div v-if="knowledge.file_path" class="detail-multimodal">
-        <div class="multimodal-header">
-          <h2 class="multimodal-title">🖼️ 多模态提取</h2>
-          <el-button
-            v-if="!hasMultimodal"
-            size="small"
-            type="primary"
-            plain
-            :loading="extracting"
-            @click="handleExtractMultimodal"
-          >
-            <el-icon><MagicStick /></el-icon> 触发图片/公式/表格提取
-          </el-button>
-        </div>
-        <el-tabs v-if="hasMultimodal" v-model="activeMultimodalTab" class="multimodal-tabs">
-          <el-tab-pane name="images" :label="`图片 (${imageStats.total})`" lazy>
-            <KnowledgeImageGallery
-              :knowledge-id="knowledge.id"
-              :show-trigger="false"
-              empty-text="该知识条目暂无提取图片"
-              @updated="onGalleryUpdated"
-            />
-          </el-tab-pane>
-          <el-tab-pane name="extractions" :label="`公式/表格/图表 (${extractionTotal})`" lazy>
-            <KnowledgeExtractionsPanel
-              :knowledge-id="knowledge.id"
-              :show-trigger="false"
-              empty-text="该知识条目暂无公式/表格/图表提取"
-              @updated="onExtractionsUpdated"
-            />
-          </el-tab-pane>
-        </el-tabs>
-        <div v-else class="multimodal-empty">
-          <el-empty
-            description="该知识条目尚未触发多模态提取（仅 PDF/PPTX 文件可提取）"
-            :image-size="80"
-          />
-        </div>
-      </div>
-
-      <!-- 来源 -->
-      <div v-if="knowledge.source || knowledge.file_name" class="detail-source">
-        <div v-if="knowledge.source">来源：{{ knowledge.source }}</div>
-        <div v-if="knowledge.file_name">文件：{{ knowledge.file_name }}</div>
-      </div>
-
-      <!-- 相关知识 -->
-      <div v-if="relatedKnowledge.length > 0" class="detail-related">
-        <div class="related-title">相关知识</div>
-        <div
-          v-for="rel in relatedKnowledge"
-          :key="rel.id"
-          class="related-item"
-          @click="$router.push('/knowledge/' + rel.id)"
-        >
-          <div class="related-header">
-            <span class="related-item-title">{{ rel.title }}</span>
-            <el-tag size="small" :type="relationTagType(rel.relation_type)">
-              {{ rel.relation_type }} {{ (rel.score * 100).toFixed(0) }}%
-            </el-tag>
-          </div>
-          <div v-if="rel.reason" class="related-reason">{{ rel.reason }}</div>
-        </div>
-      </div>
-
-      <!-- 知识图谱 -->
-      <div v-if="graphData.nodes?.length > 0" class="detail-graph">
-        <div class="graph-title">知识图谱</div>
-        <div ref="graphRef" class="graph-container"></div>
-      </div>
-    </template>
-
-    <div v-else class="detail-empty">
+    <!-- 数据不存在 -->
+    <div v-else-if="!paper" class="paper-detail-empty">
       <el-empty description="知识条目不存在" />
+    </div>
+
+    <!-- 主内容：三栏布局（左侧系统菜单由 MainLayout 提供） -->
+    <div v-else class="paper-detail-layout">
+      <!-- 中间主内容 -->
+      <main class="paper-detail-main">
+        <!-- 标题区 -->
+        <PaperHeader
+          :paper="paper"
+          :reanalyzing="reanalyzing"
+          @reanalyze="handleReanalyze"
+        />
+
+        <!-- 摘要卡片 -->
+        <AbstractCard v-if="paper.abstract" :paper="paper" />
+
+        <!-- 核心概念 / 关联主题（兼容老数据） -->
+        <section v-if="paper.keyConcepts?.length || paper.relatedTopics?.length" class="paper-concepts">
+          <div v-if="paper.keyConcepts?.length" class="concept-block">
+            <h3 class="concept-label">核心概念</h3>
+            <div class="concept-items">
+              <el-tag
+                v-for="c in paper.keyConcepts"
+                :key="c"
+                type="info"
+                effect="plain"
+                size="small"
+                round
+              >{{ c }}</el-tag>
+            </div>
+          </div>
+          <div v-if="paper.relatedTopics?.length" class="concept-block">
+            <h3 class="concept-label">关联主题</h3>
+            <div class="concept-items">
+              <el-tag
+                v-for="t in paper.relatedTopics"
+                :key="t"
+                type="success"
+                effect="plain"
+                size="small"
+                round
+              >{{ t }}</el-tag>
+            </div>
+          </div>
+        </section>
+
+        <!-- 知识三元组（兼容老数据） -->
+        <section v-if="paper.entities?.length" class="paper-entities">
+          <h3 class="entities-label">知识三元组</h3>
+          <div class="entities-list">
+            <div v-for="(e, i) in paper.entities" :key="i" class="entity-card">
+              <div class="entity-triple">
+                <span class="entity-subject">{{ e.subject }}</span>
+                <span class="entity-predicate">→ {{ e.predicate }} →</span>
+                <span class="entity-object">{{ e.object }}</span>
+              </div>
+              <div v-if="e.condition" class="entity-condition">条件: {{ e.condition }}</div>
+              <div class="entity-confidence">
+                <el-progress
+                  :percentage="Math.round((e.confidence || 0) * 100)"
+                  :stroke-width="3"
+                  :show-text="false"
+                />
+                <span class="confidence-text">{{ Math.round((e.confidence || 0) * 100) }}%</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 论文正文（按章节渲染） -->
+        <article id="paper-content" class="paper-article">
+          <div v-if="!hasAnyContent" class="paper-no-content">
+            <el-empty description="该条目暂无正文内容" :image-size="60" />
+          </div>
+          <PaperSectionRenderer
+            v-for="section in paper.sections"
+            :key="section.id"
+            :section="section"
+            :is-chinese="paper.isChineseHeavy"
+            :inline-figures="getInlineFiguresFor(section)"
+          />
+        </article>
+
+        <!-- 来源信息 -->
+        <div v-if="paper.raw?.source || paper.fileName" class="paper-source">
+          <span v-if="paper.raw?.source">来源：{{ paper.raw.source }}</span>
+          <span v-if="paper.fileName">文件：{{ paper.fileName }}</span>
+        </div>
+
+        <!-- 多模态提取区（仅 PDF/PPTX 显示） -->
+        <ExtractionPanel
+          v-if="paper.filePath"
+          :paper="paper"
+          :figures="paper.figures"
+          :formulas="paper.formulas"
+          :tables="paper.tables"
+          :charts="paper.extractions"
+          :image-stats="imageStats"
+          :loading="extractionLoading"
+          :extracting="extracting"
+          @extract="handleExtractMultimodal"
+        />
+
+        <!-- 知识图谱（兼容老数据） -->
+        <section v-if="graphData?.nodes?.length" class="paper-graph">
+          <h2 class="graph-title">🕸️ 知识图谱</h2>
+          <div ref="graphRef" class="graph-container"></div>
+        </section>
+
+        <!-- 相关知识 -->
+        <RelatedKnowledgeList :related="paper.relatedKnowledge" />
+      </main>
+
+      <!-- 右侧导航（sticky） -->
+      <RightAnchorNav
+        v-if="hasAnchors"
+        :anchors="anchorList"
+        :module-counts="moduleCounts"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
-import { formatDate } from '@/utils/format'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import * as echarts from 'echarts'
-import KnowledgeImageGallery from '@/components/knowledge/KnowledgeImageGallery.vue'
-import KnowledgeExtractionsPanel from '@/components/knowledge/KnowledgeExtractionsPanel.vue'
+
+import PaperHeader from '@/components/paper/PaperHeader.vue'
+import AbstractCard from '@/components/paper/AbstractCard.vue'
+import PaperSectionRenderer from '@/components/paper/PaperSectionRenderer.vue'
+import PaperBlockRenderer from '@/components/paper/PaperBlockRenderer.vue'
+import FigureCard from '@/components/paper/FigureCard.vue'
+import FormulaBlock from '@/components/paper/FormulaBlock.vue'
+import TableCard from '@/components/paper/TableCard.vue'
+import ExtractionPanel from '@/components/paper/ExtractionPanel.vue'
+import RelatedKnowledgeList from '@/components/paper/RelatedKnowledgeList.vue'
+import RightAnchorNav from '@/components/paper/RightAnchorNav.vue'
+
+import {
+  normalizePaperData,
+  buildAnchorTree,
+  extractFigureMarkers,
+} from '@/utils/paperAdapter'
 
 const route = useRoute()
-const knowledge = ref(null)
+const rawKnowledge = ref(null)
+const paper = ref(null)
 const relatedKnowledge = ref([])
 const graphData = ref({ nodes: [], edges: [] })
 const loading = ref(true)
@@ -193,28 +165,136 @@ const reanalyzing = ref(false)
 const graphRef = ref(null)
 let chartInstance = null
 
-// Phase 7: 多模态提取
-const hasMultimodal = ref(false)
-const imageStats = ref({ total: 0, done: 0, failed: 0, pending: 0 })
-const extractionTotal = ref(0)
+// 多模态提取状态
+const imageStats = ref(null)
 const extracting = ref(false)
-const activeMultimodalTab = ref('images')
+const extractionLoading = ref(false)
+
+const hasAnyContent = computed(() => {
+  if (!paper.value) return false
+  return paper.value.sections?.length > 0
+})
+
+const hasAnchors = computed(() => anchorList.value.length > 0)
+
+const anchorList = computed(() => {
+  if (!paper.value) return []
+  return buildAnchorTree(paper.value.sections || [])
+})
+
+const moduleCounts = computed(() => {
+  if (!paper.value) return { figures: 0, extractions: 0, related: 0 }
+  return {
+    figures: paper.value.figures?.length || 0,
+    extractions: paper.value.extractions?.length || 0,
+    related: paper.value.relatedKnowledge?.length || 0,
+  }
+})
+
+/**
+ * 根据章节内嵌的 figure_marker 把对应图片放进章节
+ */
+function getInlineFiguresFor(section) {
+  if (!paper.value || !section?.blocks) return []
+  const figureIds = new Set()
+  for (const b of section.blocks) {
+    if (b.type === 'figure_marker') figureIds.add(b.content)
+  }
+  if (!figureIds.size) return []
+  return (paper.value.figures || []).filter(f => {
+    return figureIds.has(String(f.imageId)) || figureIds.has(String(f.id))
+  })
+}
+
+// ============================================================
+// API
+// ============================================================
+
+const fetchDetail = async () => {
+  loading.value = true
+  try {
+    const id = route.params.id
+
+    // 主数据 + 关联 + 多模态状态 全部并发
+    const [detailRes, relRes, graphRes] = await Promise.all([
+      axios.get(`/api/v1/knowledge/${id}`),
+      axios.get(`/api/v1/knowledge/${id}/related`, { params: { limit: 12 } }).catch(() => ({ data: [] })),
+      axios.get('/api/v1/knowledge/graph', { params: { center_id: id, depth: 1, limit: 30 } }).catch(() => ({ data: { nodes: [], edges: [] } })),
+    ])
+
+    rawKnowledge.value = detailRes.data
+    relatedKnowledge.value = relRes.data || []
+    graphData.value = graphRes.data || { nodes: [], edges: [] }
+
+    // 后台异步：触发 reformat（如果还没排版过）
+    if (!detailRes.data.formatted_content) {
+      axios.post(`/api/v1/knowledge/${id}/reformat`).catch(() => {})
+    }
+
+    // 并行拉多模态数据
+    await fetchMultimodalData(id)
+
+    // 适配成 PaperDetail
+    paper.value = normalizePaperData(detailRes.data, {
+      images: imageStats.value ? window.__paperImagesCache : [],
+      extractions: window.__paperExtractionsCache || [],
+      related: relatedKnowledge.value,
+    })
+
+    await nextTick()
+    renderGraph()
+  } catch (e) {
+    console.error('获取知识详情失败', e)
+    ElMessage.error('获取知识详情失败')
+    paper.value = null
+  } finally {
+    loading.value = false
+  }
+}
+
+const fetchMultimodalData = async (id) => {
+  extractionLoading.value = true
+  try {
+    const [imgRes, extRes] = await Promise.all([
+      axios.get(`/api/v1/knowledge/${id}/images`).catch(() => ({ data: { items: [], total: 0, ocr_done: 0, ocr_failed: 0, ocr_pending: 0 } })),
+      axios.get(`/api/v1/knowledge/${id}/extractions`, { params: { page: 1, page_size: 200 } }).catch(() => ({ data: { items: [], total: 0, by_kind: {} } })),
+    ])
+
+    const imgs = imgRes.data?.items || []
+    const exts = extRes.data?.items || []
+
+    imageStats.value = {
+      total: imgs.length,
+      done: imgs.filter(i => i.ocr_status === 'done').length,
+      failed: imgs.filter(i => i.ocr_status === 'failed').length,
+      pending: imgs.filter(i => i.ocr_status === 'pending' || i.ocr_status === 'skipped').length,
+    }
+
+    // 缓存到 window 供 normalize 使用
+    window.__paperImagesCache = imgs
+    window.__paperExtractionsCache = exts
+  } finally {
+    extractionLoading.value = false
+  }
+}
 
 const handleExtractMultimodal = async () => {
-  if (!knowledge.value) return
+  if (!paper.value) return
   extracting.value = true
   try {
-    const { data } = await axios.post(`/api/v1/knowledge/${knowledge.value.id}/extract-multimodal`)
+    const { data } = await axios.post(`/api/v1/knowledge/${paper.value.id}/extract-multimodal`)
     if (data.ok) {
       const msg = data.skipped
         ? `未提取：${data.reason}`
         : `提取完成（${data.images_total} 张图 / ${(data.extractions?.formula || 0)} 公式 / ${(data.extractions?.table || 0)} 表格）`
       ElMessage.success(msg)
-      hasMultimodal.value = !data.skipped
-      // 切换到对应 tab 让用户立刻看到结果
-      if (!data.skipped && (data.extractions?.formula || data.extractions?.table || data.extractions?.chart)) {
-        activeMultimodalTab.value = 'extractions'
-      }
+      // 重新拉数据
+      await fetchMultimodalData(paper.value.id)
+      paper.value = normalizePaperData(rawKnowledge.value, {
+        images: window.__paperImagesCache || [],
+        extractions: window.__paperExtractionsCache || [],
+        related: relatedKnowledge.value,
+      })
     } else {
       ElMessage.warning(data.error || data.reason || '提取失败')
     }
@@ -225,79 +305,12 @@ const handleExtractMultimodal = async () => {
   }
 }
 
-const onGalleryUpdated = (stats) => {
-  if (stats) imageStats.value = stats
-}
-
-const onExtractionsUpdated = (info) => {
-  if (info?.total != null) extractionTotal.value = info.total
-}
-
-// 检测知识是否已有多模态提取
-const checkMultimodalStatus = async () => {
-  if (!knowledge.value?.file_path) return
-  try {
-    const [imgRes, extRes] = await Promise.all([
-      axios.get(`/api/v1/knowledge/${knowledge.value.id}/images`),
-      axios.get(`/api/v1/knowledge/${knowledge.value.id}/extractions`, { params: { page: 1, page_size: 1 } }),
-    ])
-    const imgs = imgRes.data?.items || []
-    imageStats.value = {
-      total: imgs.length,
-      done: imgs.filter((i) => i.ocr_status === 'done').length,
-      failed: imgs.filter((i) => i.ocr_status === 'failed').length,
-      pending: imgs.filter((i) => i.ocr_status === 'pending' || i.ocr_status === 'skipped').length,
-    }
-    extractionTotal.value = extRes.data?.total || 0
-    hasMultimodal.value = imgs.length > 0 || extractionTotal.value > 0
-  } catch (e) {
-    // 静默 — 多模态状态是辅助信息，不影响主流程
-  }
-}
-
-const renderMarkdown = (text) => {
-  if (!text) return ''
-  return DOMPurify.sanitize(marked.parse(text))
-}
-
-const relationTagType = (type) => {
-  const map = { similar: 'success', supplements: 'warning', extends: '', supports: '', contradicts: 'danger', method_inherits: 'primary', cites: 'info', prerequisite: 'warning', compares: 'primary' }
-  return map[type] || 'info'
-}
-
-const fetchDetail = async () => {
-  loading.value = true
-  try {
-    const id = route.params.id
-    const { data } = await axios.get(`/api/v1/knowledge/${id}`)
-    knowledge.value = data
-    // 无排版内容时触发后台排版
-    if (!data.formatted_content) {
-      axios.post(`/api/v1/knowledge/${id}/reformat`).catch(() => {})
-    }
-    // 并行获取关联和图谱
-    const [relRes, graphRes] = await Promise.all([
-      axios.get(`/api/v1/knowledge/${id}/related`, { params: { limit: 8 } }),
-      axios.get('/api/v1/knowledge/graph', { params: { center_id: id, depth: 1, limit: 30 } }),
-    ])
-    relatedKnowledge.value = relRes.data || []
-    graphData.value = graphRes.data || { nodes: [], edges: [] }
-    await nextTick()
-    renderGraph()
-    await checkMultimodalStatus()
-  } catch (e) {
-    ElMessage.error('获取知识详情失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 const handleReanalyze = async () => {
   reanalyzing.value = true
   try {
-    await axios.post(`/api/v1/knowledge/${knowledge.value.id}/reanalyze`)
+    await axios.post(`/api/v1/knowledge/${paper.value.id}/reanalyze`)
     ElMessage.success('已开始重新分析')
-    knowledge.value.analysis_status = 'analyzing'
+    paper.value.status = 'analyzing'
   } catch (e) {
     ElMessage.error('操作失败')
   } finally {
@@ -306,374 +319,253 @@ const handleReanalyze = async () => {
 }
 
 const renderGraph = () => {
-  if (!graphRef.value || !graphData.value.nodes?.length) return
+  if (!graphRef.value || !graphData.value?.nodes?.length) return
   if (chartInstance) chartInstance.dispose()
   chartInstance = echarts.init(graphRef.value)
   const nodes = graphData.value.nodes.map(n => ({
-    id: n.id, name: n.label || n.title, symbolSize: Math.min(40, 15 + (n.weight || 1) * 5),
-    category: n.type || 0
+    id: n.id,
+    name: n.label || n.title,
+    symbolSize: Math.min(40, 15 + (n.weight || 1) * 5),
+    category: n.type || 0,
   }))
   const edges = graphData.value.edges.map(e => ({
-    source: e.source, target: e.target, label: { show: true, formatter: e.label || '' }
+    source: e.source,
+    target: e.target,
+    label: { show: true, formatter: e.label || '' },
   }))
   chartInstance.setOption({
     tooltip: {},
     series: [{
-      type: 'graph', layout: 'force', roam: true, draggable: true,
+      type: 'graph',
+      layout: 'force',
+      roam: true,
+      draggable: true,
       force: { repulsion: 200, edgeLength: [100, 300] },
-      data: nodes, edges: edges,
+      data: nodes,
+      edges: edges,
       label: { show: true, fontSize: 11 },
-      lineStyle: { color: '#ccc', curveness: 0.2 }
-    }]
+      lineStyle: { color: '#ccc', curveness: 0.2 },
+    }],
   })
 }
 
-watch(() => route.params.id, () => {
-  if (route.params.id) fetchDetail()
+// 路由 id 变化时重新加载
+watch(() => route.params.id, (newId) => {
+  if (newId) {
+    // 清空缓存
+    window.__paperImagesCache = []
+    window.__paperExtractionsCache = []
+    fetchDetail()
+  }
 })
 
 onMounted(() => fetchDetail())
-onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
+
+onUnmounted(() => {
+  if (chartInstance) chartInstance.dispose()
+})
 </script>
 
 <style scoped>
-.knowledge-detail-page {
-  max-width: 100%;
+.paper-detail-page {
   width: 100%;
-  margin: 0 auto;
-  padding: 0 var(--space-6) var(--space-8);
+  min-height: 100%;
+  background: #F5F7FA;
+  padding: 0;
   box-sizing: border-box;
 }
 
-@media (min-width: 1400px) {
-  .knowledge-detail-page {
-    max-width: 1400px;
+.paper-detail-loading {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.paper-detail-empty {
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.paper-detail-layout {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1280px) {
+  .paper-detail-layout {
+    grid-template-columns: 1fr;
   }
 }
 
-.detail-topbar {
+.paper-detail-main {
+  min-width: 0;
+}
+
+/* 核心概念 */
+.paper-concepts {
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-4);
+  flex-direction: column;
+  gap: 12px;
 }
 
-.detail-loading {
-  padding: var(--space-8);
-}
-
-.detail-title {
-  font-size: 1.5em;
-  font-weight: 700;
-  margin-bottom: var(--space-3);
-  line-height: 1.4;
-  color: var(--color-text-primary);
-}
-
-.detail-meta {
+.concept-block {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: var(--space-3);
 }
 
-.category-badge {
-  background: var(--color-primary);
-  color: #fff;
-  padding: 2px 10px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-}
-
-.type-badge {
-  background: var(--color-accent);
-  color: #fff;
-  padding: 2px 10px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-}
-
-.detail-date {
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.detail-tags {
-  display: flex;
-  gap: var(--space-1);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-3);
-}
-
-.tag-chip {
-  background: var(--color-bg-page);
-  color: var(--color-text-secondary);
-  padding: 2px 10px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  border: 1px solid var(--color-border);
-}
-
-.detail-review-warning {
-  background: #fef0f0;
-  border: 1px solid #fab6b6;
-  color: #c45656;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-4);
-  font-size: var(--font-size-sm);
-}
-
-.detail-analysis {
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.analysis-section {
-  margin-bottom: var(--space-2);
-}
-
-.analysis-label {
+.concept-label {
+  margin: 0;
+  font-size: 13px;
   font-weight: 600;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  display: block;
-  margin-bottom: var(--space-1);
+  color: #6B7280;
+  flex-shrink: 0;
+  min-width: 70px;
 }
 
-.analysis-items {
+.concept-items {
   display: flex;
-  gap: var(--space-1);
   flex-wrap: wrap;
+  gap: 6px;
 }
 
-.concept-chip {
-  background: #e6f7ff;
-  color: #1890ff;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-}
-
-.topic-chip {
-  background: #f6ffed;
-  color: #52c41a;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-}
-
-.detail-entities {
-  margin-bottom: var(--space-4);
+/* 三元组 */
+.paper-entities {
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .entities-label {
+  margin: 0 0 12px;
+  font-size: 15px;
   font-weight: 600;
-  margin-bottom: var(--space-2);
+  color: #1F2937;
 }
 
-.entities-grid {
+.entities-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .entity-card {
-  background: var(--color-bg-page);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  background: #FAFAFA;
+  border-radius: 8px;
+  padding: 10px 14px;
 }
 
 .entity-triple {
-  font-size: var(--font-size-sm);
   display: flex;
-  gap: var(--space-1);
+  gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+  font-size: 13px;
 }
 
-.entity-subject { color: var(--color-primary); font-weight: 600; }
-.entity-predicate { color: var(--color-text-secondary); }
-.entity-object { color: var(--color-text-primary); }
+.entity-subject {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.entity-predicate {
+  color: #6B7280;
+  font-size: 12px;
+}
+
+.entity-object {
+  color: #1F2937;
+}
 
 .entity-condition {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-1);
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 4px;
 }
 
 .entity-confidence {
-  margin-top: var(--space-1);
+  margin-top: 6px;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 8px;
 }
 
-.detail-summary {
-  background: #fff7e6;
-  border: 1px solid #ffd591;
-  border-radius: var(--radius-md);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
+.confidence-text {
+  font-size: 11px;
+  color: #9CA3AF;
 }
 
-.summary-label {
-  font-weight: 600;
-  margin-bottom: var(--space-2);
-  color: #d48806;
-}
-
-.summary-text {
-  font-size: var(--font-size-base);
-  line-height: 1.7;
-}
-
-.detail-body {
-  margin-bottom: var(--space-4);
-}
-
-.detail-content {
-  font-size: var(--font-size-base);
-  line-height: 1.8;
-  color: var(--color-text-primary);
-  white-space: pre-wrap;
-  background: var(--color-bg-page);
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
-  word-break: normal;
-  overflow-wrap: break-word;
+/* 正文容器 */
+.paper-article {
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+  padding: 24px 32px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
   max-width: 100%;
+  overflow: hidden;
 }
 
-.markdown-body {
-  font-size: var(--font-size-base);
-  line-height: 1.85;
-  color: var(--color-text-primary);
-  background: var(--color-bg-page);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-md);
-  word-break: normal;
-  overflow-wrap: break-word;
-  max-width: 100%;
-  white-space: normal;
+@media (max-width: 768px) {
+  .paper-article {
+    padding: 16px 20px;
+  }
 }
 
-.markdown-body :deep(h1) { font-size: 1.5em; font-weight: 700; margin: 1.2em 0 0.6em; padding-bottom: 0.3em; border-bottom: 2px solid var(--color-border); }
-.markdown-body :deep(h2) { font-size: 1.3em; font-weight: 600; margin: 1em 0 0.5em; }
-.markdown-body :deep(h3) { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.4em; }
-.markdown-body :deep(p) { margin: 0.5em 0; text-indent: 2em; word-break: normal; overflow-wrap: break-word; }
-.markdown-body :deep(ul), .markdown-body :deep(ol) { padding-left: 2em; margin: 0.4em 0; }
-.markdown-body :deep(li) { margin: 0.2em 0; }
-.markdown-body :deep(table) { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
-.markdown-body :deep(th), .markdown-body :deep(td) { border: 1px solid var(--color-border); padding: 0.4em 0.6em; text-align: left; }
-.markdown-body :deep(th) { background: var(--color-bg-page); font-weight: 600; }
-.markdown-body :deep(blockquote) { border-left: 3px solid var(--color-primary); margin: 0.6em 0; padding: 0.3em 1em; color: var(--color-text-secondary); word-break: normal; }
-.markdown-body :deep(sub), .markdown-body :deep(sup) { font-size: 0.8em; }
-.markdown-body :deep(img) { max-width: 100%; width: auto; height: auto; border-radius: var(--radius-md); margin: 1em auto; display: block; }
-.markdown-body :deep(pre) { word-break: normal; overflow-wrap: break-word; white-space: pre-wrap; }
-
-.detail-source {
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
+.paper-no-content {
+  padding: 40px 0;
 }
 
-.detail-related {
-  margin-top: var(--space-6);
-}
-
-.related-title {
-  font-weight: 600;
-  font-size: 1.1em;
-  margin-bottom: var(--space-3);
-}
-
-.related-item {
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-2);
-  cursor: pointer;
-  transition: box-shadow var(--duration-fast);
-}
-
-.related-item:hover {
-  box-shadow: var(--shadow-sm);
-}
-
-.related-header {
+/* 来源信息 */
+.paper-source {
+  margin: 16px 0;
+  padding: 10px 16px;
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #6B7280;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
-.related-item-title {
-  font-weight: 500;
-  color: var(--color-primary);
-}
-
-.related-reason {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-1);
-}
-
-.detail-graph {
-  margin-top: var(--space-6);
+/* 知识图谱 */
+.paper-graph {
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 .graph-title {
-  font-weight: 600;
-  font-size: 1.1em;
-  margin-bottom: var(--space-3);
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1F2937;
 }
 
 .graph-container {
   width: 100%;
-  height: 400px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.detail-empty {
-  padding: var(--space-16);
-  text-align: center;
-}
-
-/* 2026-06-19 Phase 7: 多模态区样式 */
-.detail-multimodal {
-  margin-top: var(--space-6);
-  padding: var(--space-4);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-}
-
-.multimodal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-3);
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.multimodal-title {
-  font-weight: 600;
-  font-size: 1.1em;
-  margin: 0;
-}
-
-.multimodal-tabs {
-  margin-top: var(--space-2);
-}
-
-.multimodal-empty {
-  padding: var(--space-4) 0;
+  height: 380px;
+  border-radius: 8px;
 }
 </style>
