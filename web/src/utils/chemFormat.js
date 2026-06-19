@@ -341,20 +341,88 @@ function formatScientificNotation(text) {
 }
 
 // ============================================================
+// 保护区（v27.2 铁律）
+// ============================================================
+
+/**
+ * 不应该被化学式 / 单位 / 电荷 格式化器改动的"保护区"文本模式：
+ * - 图表引用: Fig. 1 / Fig. S2 / Figs. S3-S4 / Figure 1 / Scheme 1 / Table S1 / Text S4 / Eq. 2
+ * - 参考文献: [1] / [1,2] / [3–5]
+ * - DOI: 10.1016/j.scitotenv.2024.123456
+ * - URL: https://doi.org/...  http://...
+ * - 章节编号: 2.1 / 3.5.2 / Section 2.1
+ *
+ * 关键问题: Fig. S2 中的 "S2" 会被 formula regex 误判为元素 S 的下标
+ *
+ * 策略: 用 placeholder 替换 → 跑格式化 → 还原
+ */
+
+// 单一 combined regex：一次扫描所有保护区，避免位置偏移问题
+// 顺序：URL > DOI > Ref > Section > Fig（最长匹配优先）
+const PROTECTED_ALL_RE = new RegExp(
+  // URL: http(s)://...
+  'https?://[^\\s<>"\']+' +
+  '|' +
+  // DOI: 10.xxxx/yyyyy
+  '\\b10\\.\\d{4,9}/[-._;()\\/:A-Z0-9]+' +
+  '|' +
+  // 参考文献编号 [1] [1,2] [3–5] [12–15]
+  '\\[\\d+(?:[\\s,–\\-]+\\d+)*\\]' +
+  '|' +
+  // 章节编号 Section 2.1 / §2.1 / Chapter 4
+  '\\b(?:Section|§|Chapter)\\s+\\d+(?:\\.\\d+){0,3}\\b' +
+  '|' +
+  // 图表引用 Fig. 1 / Fig. S2 / Figs. S3-S4 / Figure 1 / Scheme 1 / Table S1 / Text S4 / Eq. 2
+  '\\b(?:Fig|Figs|Figure|Scheme|Table|Text|Eq|Ref|Section)\\.?\\s+(?:S\\d+|\\d+)[a-z]?(?:[\\s,–\\-]+(?:S\\d+|\\d+)[a-z]?)*\\b',
+  'gi'
+)
+
+
+// 使用 Unicode 控制字符 (U+0001/U+0002) 作 placeholder
+// 这两个字符几乎不会在学术文本中自然出现
+const PROTECT_OPEN = String.fromCharCode(1)
+const PROTECT_CLOSE = String.fromCharCode(2)
+
+function _protectRanges(text) {
+  const ranges = []
+  text = text.replace(PROTECTED_ALL_RE, (match, ...args) => {
+    const offset = args[args.length - 2]
+    ranges.push({ start: offset, end: offset + match.length, original: match })
+    return PROTECT_OPEN + String(ranges.length - 1) + PROTECT_CLOSE
+  })
+  return { text, ranges }
+}
+
+function _restoreRanges(text, ranges) {
+  let result = text
+  for (let i = ranges.length - 1; i >= 0; i--) {
+    const placeholder = PROTECT_OPEN + String(i) + PROTECT_CLOSE
+    result = result.split(placeholder).join(ranges[i].original)
+  }
+  return result
+}
+
+// ============================================================
 // 主入口：按特定顺序组合所有规则
 // ============================================================
 
 /**
  * 格式化顺序很关键:
+ * 0. _protectRanges 把图号/DOI/章节号保护为 placeholder
  * 1. formatRadicals 先做（OCR 脏数据 . → ·）
  * 2. formatIonCharge 第二（在 formula 之前！避免 Fe3+ 被 formula 吃掉 3 → Fe₃+）
  * 3. formatUnitExponent 第三（包含体积立方 m3 → m³）
  * 4. formatScientificNotation 第四（避免被 formula 规则吃掉 10-3 中的 10）
  * 5. formatChemicalFormula 最后（subscript 数字）
+ * 6. _restoreRanges 还原 placeholder
  */
 function formatScientificText(text) {
   if (!text) return ''
   let result = String(text)
+
+  // 0. 保护区：把不应被改动的内容替换为 placeholder
+  const { text: protectedText, ranges } = _protectRanges(result)
+  result = protectedText
 
   // 保护已有 HTML 标签（防御性，理论上不应有）
   const protectedTags = []
@@ -371,6 +439,9 @@ function formatScientificText(text) {
 
   // 恢复保护的标签
   result = result.replace(/\x00SCI_TAG_(\d+)\x00/g, (_m, i) => protectedTags[parseInt(i)])
+
+  // 6. 还原保护区（URL/DOI/Fig/Ref/Section）
+  result = _restoreRanges(result, ranges)
 
   return result
 }

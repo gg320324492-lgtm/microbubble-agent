@@ -978,36 +978,133 @@ function _stripPublicationInfo(text) {
  * 保留：少量中文专有名词（如作者单位里的"天津"）在元信息区，
  * 但正文段落不应出现大段中文。
  */
+/**
+ * 中文污染过滤（v27.2 多规则版）
+ *
+ * 5 条规则共同判断某行/某段是否应该被删除：
+ *   1. block 来源判断 (in quote / OCR caption / JSON-like)
+ *   2. 中文字符占比 (>40% 且 >3 个中文字符)
+ *   3. 中文关键词检测 (图/表/说明/分子模拟图/OCR 解释等)
+ *   4. JSON-like 结构检测 ({ "category": / { "text": 等)
+ *   5. ASCII 噪声检测 (大量特殊符号 / 控制字符 / 无正常英文词)
+ *
+ * 返回清洗后的 text
+ */
 function _cleanChineseFromEnglish(text) {
   if (!text) return ''
+
+  // 先按 \n\n 拆段（多行段落），分别判断
+  // 这样能避免"一段文字里只有一行是中文"被漏判
   const lines = String(text).split('\n')
-  const keep = []
-  for (const line of lines) {
+  const keepLines = []
+
+  // 关键词白名单（保留这些中文章节标题）
+  const CN_TITLE_KEEP = /^(摘要|关键词|引言|结论|参考文献|致谢|材料与方法|实验方法|结果与讨论|实验结果|前言|背景|讨论|方法|附录|Abstract|Keywords|Introduction|Conclusion|References|Acknowledgments|Methods|Results|Discussion)\b/
+
+  // 强删关键词（中文图注/OCR 解释/LLM 输出等）
+  const CN_POLLUTION_KEYWORDS = /(图表说明|图表描述|图（[Pp]?[0-9]|图\s\(P?[0-9]|Figure description|Figure caption|分子模拟图|图片说明|图片描述|识别文字|识别结果|OCR\s*文本|OCR\s*识别|识别说明|分析结果|可视化|图表分析|图表解读|Table description|Table caption|图谱说明|图谱描述|系统提示|用户提示|Assistant|User)/
+
+  // JSON-like 结构检测（含 "category": / "text": / "kind": 等键）
+  const JSON_LIKE_RE = /\{\s*["'](?:category|kind|type|text|description|model|source|confidence)["']\s*:/
+
+  // 异常字符检测（含 \x00 等控制字符，或大量重复特殊符号）
+  const NOISE_RE = /[\x00-\x08\x0B-\x1F\x7F]/
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     const trimmed = line.trim()
+
+    // 空行保留
     if (!trimmed) {
-      keep.push(line)
+      keepLines.push(line)
       continue
     }
-    // 计算中文字符占比
+
+    // 规则 1: 强删 — 包含明显的中文污染关键词（无论占比）
+    if (CN_POLLUTION_KEYWORDS.test(trimmed)) {
+      continue  // 删除
+    }
+
+    // 规则 2: 强删 — JSON-like 结构（OCR extractions 输出）
+    if (JSON_LIKE_RE.test(trimmed)) {
+      continue
+    }
+
+    // 规则 3: 强删 — 控制字符污染
+    if (NOISE_RE.test(line)) {
+      continue
+    }
+
+    // 规则 4: 中文字符占比（>40% 且 ≥3 个中文字符）
     const cnChars = (trimmed.match(/[一-鿿]/g) || []).length
     const totalChars = trimmed.length
     const cnRatio = cnChars / Math.max(1, totalChars)
-    // 高中文占比行（> 40%）且不是章节标题 → 删除
+
     if (cnRatio > 0.4 && cnChars >= 3) {
-      // 豁免：图表说明 blockquote（已在 cleanContent 剥除，这里兜底）
-      if (/^[>＞]/.test(trimmed)) continue
       // 豁免：中文章节标题（摘要/引言/结论等）
-      if (/^(摘要|关键词|引言|结论|参考文献|致谢|材料与方法|实验方法)/.test(trimmed)) {
-        keep.push(line)
+      if (CN_TITLE_KEEP.test(trimmed)) {
+        keepLines.push(line)
         continue
       }
-      // 其他高中文行 → 删除
+      // 豁免：blockquote（已在 cleanContent 剥除）
+      if (/^[>＞]/.test(trimmed)) continue
+      // 其他高中文占比行 → 删除
       continue
     }
-    // 低中文占比行保留（可能是英文正文中的少量中文专有名词）
-    keep.push(line)
+
+    // 规则 5: 段落级判断 — 如果当前行有中文且前后 2 行也是中文，整段都删
+    //   （避免一段文字只有一行中文被保留导致段落碎片化）
+    if (cnChars > 0 && cnRatio > 0.2) {
+      // 看前后 2 行是否也是中文
+      const prevLine = i > 0 ? lines[i - 1].trim() : ''
+      const nextLine = i < lines.length - 1 ? lines[i + 1].trim() : ''
+      const prevCn = (prevLine.match(/[一-鿿]/g) || []).length
+      const nextCn = (nextLine.match(/[一-鿿]/g) || []).length
+      const prevRatio = prevCn / Math.max(1, prevLine.length)
+      const nextRatio = nextCn / Math.max(1, nextLine.length)
+      if (prevRatio > 0.4 || nextRatio > 0.4) {
+        // 前后行也是中文 → 整段都是中文，删除当前行
+        continue
+      }
+    }
+
+    // 保留
+    keepLines.push(line)
   }
-  return keep.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+
+  return keepLines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * 段落级深度清洗（v27.2 新增）
+ *
+ * 处理 _cleanChineseFromEnglish 行级清洗无法捕捉的情况：
+ * - 一段文字里既有英文又有中文图表说明混合
+ * - 多模态 extraction 输出混入正文段
+ *
+ * 启发式：如果一段含 OCR/JSON/中文图注特征，整段删除
+ */
+function _cleanParagraphHeavy(text) {
+  if (!text) return ''
+  const paragraphs = String(text).split(/\n\n+/)
+  const kept = []
+  for (const p of paragraphs) {
+    const trimmed = p.trim()
+    if (!trimmed) continue
+
+    // 段落级 JSON-like 检测（多模态 OCR 输出混入）
+    if (/^\s*\{[\s\S]*"(?:category|kind|text|description|model)[\s\S]*\}\s*$/.test(trimmed)) {
+      continue  // 整段是 JSON
+    }
+
+    // 段落级 OCR caption 检测（开头是 "图（" 或 "图表说明"）
+    if (/^\s*(?:图（[Pp]?\d|图表说明|图表描述|Figure description|Table description)/.test(trimmed)) {
+      continue
+    }
+
+    kept.push(p)
+  }
+  return kept.join('\n\n').trim()
 }
 
 /**
@@ -2034,7 +2131,9 @@ export function normalizePaperData(raw, extra = {}) {
       if (!section.blocks) continue
       section.blocks = section.blocks.map(b => {
         if (b.type !== 'paragraph') return b
-        return { ...b, content: _cleanChineseFromEnglish(b.content) }
+        let cleaned = _cleanChineseFromEnglish(b.content)
+        cleaned = _cleanParagraphHeavy(cleaned)  // v27.2 段落级深度清洗
+        return { ...b, content: cleaned }
       }).filter(b => b.type !== 'paragraph' || (b.content && b.content.trim().length > 5))
     }
   }

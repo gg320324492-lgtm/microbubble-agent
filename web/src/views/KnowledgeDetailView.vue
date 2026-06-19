@@ -22,7 +22,10 @@
         />
 
         <!-- 阅读器工具栏（阶段 2：组件已就位，翻译功能待后端 API） -->
-        <ReadingToolbar :paper="paper" />
+        <ReadingToolbar
+          :paper="paper"
+          @toggle-inline-figures="v => showInlineFigures = v"
+        />
 
         <!-- 摘要卡片 -->
         <AbstractCard v-if="paper.abstract" :paper="paper" />
@@ -92,6 +95,7 @@
             :is-chinese="paper.isChineseHeavy"
             :inline-figures="getInlineFiguresFor(section)"
             :inline-figure-anchors="paper.inlineFigureAnchors || {}"
+            :show-inline-figures="showInlineFigures"
           />
         </article>
 
@@ -140,11 +144,20 @@
       </main>
 
       <!-- 右侧导航（sticky） -->
-      <RightAnchorNav
-        v-if="hasAnchors"
-        :sections="anchorSections"
-        :modules="anchorModules"
-      />
+      <div class="paper-right-column">
+        <RightAnchorNav
+          v-if="hasAnchors"
+          :sections="anchorSections"
+          :modules="anchorModules"
+        />
+        <!-- 右侧随动图表栏 (v27.2) -->
+        <RightImageRail
+          v-if="paper && paper.figures && paper.figures.length"
+          :figures="currentSectionFigures"
+          :active-section-id="activeSectionId"
+          class="paper-right-rail"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -167,6 +180,7 @@ import TableCard from '@/components/paper/TableCard.vue'
 import ExtractionPanel from '@/components/paper/ExtractionPanel.vue'
 import RelatedKnowledgeList from '@/components/paper/RelatedKnowledgeList.vue'
 import RightAnchorNav from '@/components/paper/RightAnchorNav.vue'
+import RightImageRail from '@/components/paper/RightImageRail.vue'
 import ReadingToolbar from '@/components/paper/ReadingToolbar.vue'
 
 import {
@@ -229,6 +243,33 @@ const anchorModules = computed(() => {
   return modules
 })
 
+/**
+ * 当前激活 section id（v27.2）— 用 IntersectionObserver 检测
+ */
+const activeSectionId = ref('')
+
+/**
+ * 当前 section 相关图表（v27.2 右侧随动图表栏数据源）
+ *
+ * 简化策略：按 page 排序的 core 图列表前 8 个
+ * 高级策略：基于 anchorMap 按 sectionId 过滤（本轮先用简化版）
+ */
+const currentSectionFigures = computed(() => {
+  if (!paper.value?.figures) return []
+  const allCoreFigures = (paper.value.figures || []).filter(f => {
+    // 过滤掉 cover/logo/publisher（这些不进右侧 rail）
+    if (f.isPublisherImage) return false
+    if (f.kind === 'cover' || f.kind === 'logo') return false
+    if (!f.figureNo) return false  // 没图号的不显示在 rail
+    return true
+  })
+  // 按 page 排序，取前 8 个
+  return allCoreFigures
+    .slice()
+    .sort((a, b) => (a.page || 0) - (b.page || 0))
+    .slice(0, 8)
+})
+
 const moduleCounts = computed(() => {
   if (!paper.value) return { figures: 0, extractions: 0, related: 0 }
   return {
@@ -244,6 +285,16 @@ const moduleCounts = computed(() => {
  * v26 回归修复：过滤掉 Elsevier logo / 期刊封面 / publisher 图片，
  * 这些图不应该进正文，只保留在文末多模态总图库。
  */
+/**
+ * v27.2: 是否显示正文内嵌图（默认 false — 使用右侧图表栏）
+ * 用户可在工具栏切换
+ */
+const SHOW_INLINE_FIGURES_KEY = 'mnb:paper:showInlineFigures'
+const showInlineFigures = ref(localStorage.getItem(SHOW_INLINE_FIGURES_KEY) === 'true')
+watch(showInlineFigures, (v) => {
+  localStorage.setItem(SHOW_INLINE_FIGURES_KEY, String(v))
+})
+
 function getInlineFiguresFor(section) {
   if (!paper.value || !section) return []
 
@@ -497,6 +548,25 @@ onUnmounted(() => {
 
 .paper-detail-main {
   min-width: 0;
+}
+
+/* 右侧栏: 章节导航 + 图表栏 stack (v27.2) */
+.paper-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.paper-right-rail {
+  /* RightImageRail 自身已有 sticky，由父级控制滚动 */
+  position: relative;
+  top: auto;
+  max-height: none;
 }
 
 /* 核心概念 */

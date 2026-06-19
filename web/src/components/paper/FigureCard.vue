@@ -35,9 +35,9 @@
         {{ captionCollapsed ? '展开 ▾' : '收起 ▴' }}
       </button>
 
-      <!-- OCR 文本（默认折叠） -->
-      <details v-if="figure.ocrText && figure.ocrText !== captionText" class="figure-ocr">
-        <summary>OCR 文本</summary>
+      <!-- 图中文字（默认折叠）— v27.2 改名 + 默认折叠 -->
+      <details v-if="hasRecognizedText" class="figure-ocr">
+        <summary>查看图中文字</summary>
         <pre>{{ figure.ocrText }}</pre>
       </details>
 
@@ -70,7 +70,7 @@
             <span>{{ figure.width }} × {{ figure.height }}</span>
           </div>
           <div v-if="figure.ocrText" class="preview-ocr">
-            <div class="preview-info-label">OCR 文本</div>
+            <div class="preview-info-label">图中文字（系统识别）</div>
             <pre>{{ figure.ocrText }}</pre>
           </div>
         </div>
@@ -100,6 +100,25 @@ const captionText = computed(() => {
 })
 
 const isLongCaption = computed(() => captionText.value.length > 200)
+
+/**
+ * 是否显示"查看图中文字"折叠区
+ *
+ * 显示条件：
+ * 1. figure.ocrText 存在
+ * 2. 与 caption 不重复
+ * 3. 长度 > 5（避免显示过短内容）
+ * 4. 字母比例 > 30%（避免显示纯乱码/控制字符）
+ */
+const hasRecognizedText = computed(() => {
+  const ocr = props.figure.ocrText
+  if (!ocr || ocr === captionText.value) return false
+  if (ocr.length < 5) return false
+  // 字母字符（含中英文）占比 > 30%
+  const letterCount = (ocr.match(/[\w一-鿿]/g) || []).length
+  const letterRatio = letterCount / ocr.length
+  return letterRatio > 0.3
+})
 
 const onImgLoad = () => { loaded.value = true }
 const onImgError = (e) => {

@@ -738,6 +738,86 @@ describe('cleanContent', () => {
 // _buildFigureRegistry v27 段落级锚定测试
 // ============================================================
 
+// ============================================================
+// v27.2 中文污染多规则过滤测试
+// ============================================================
+
+describe('v27.2 中文污染多规则过滤', () => {
+  const testInput = (paragraphs) => ({
+    id: 19,
+    title: 'test',
+    content: 'PLACEHOLDER',
+    formatted_content: 'PLACEHOLDER',
+    images: [],
+    extractions: [],
+  })
+
+  it('强删中文图注关键词（图表说明）', () => {
+    const paper = normalizePaperData({
+      ...testInput(),
+      content: 'See results.\n图表说明（P8，{ "category": "mixed", "text": "(a) C O H" }）the figure.\nConclusion.',
+      formatted_content: 'See results.\n图表说明（P8，{ "category": "mixed", "text": "(a) C O H" }）the figure.\nConclusion.',
+    })
+    const allText = (paper.sections || []).flatMap(s => s.blocks || []).map(b => b.content).join('\n')
+    expect(allText).not.toContain('图表说明')
+  })
+
+  it('强删 JSON-like 结构（多模态 OCR 输出混入）', () => {
+    const paper = normalizePaperData({
+      ...testInput(),
+      content: 'Paragraph 1.\n{ "category": "mixed", "text": "(a) C O H 分子模拟图", "kind": "chart" }\nParagraph 2.',
+      formatted_content: 'Paragraph 1.\n{ "category": "mixed", "text": "(a) C O H 分子模拟图", "kind": "chart" }\nParagraph 2.',
+    })
+    const allText = (paper.sections || []).flatMap(s => s.blocks || []).map(b => b.content).join('\n')
+    expect(allText).not.toContain('category')
+    expect(allText).not.toContain('分子模拟图')
+  })
+
+  it('强删中英混合的中文图表说明（含 "图（Px"）', () => {
+    const paper = normalizePaperData({
+      ...testInput(),
+      content: 'Some English text.\n图（P8，{ "category": "mixed", "text": "(a) 分子模拟图" }()\nMore English text.',
+      formatted_content: 'Some English text.\n图（P8，{ "category": "mixed", "text": "(a) 分子模拟图" }()\nMore English text.',
+    })
+    const allText = (paper.sections || []).flatMap(s => s.blocks || []).map(b => b.content).join('\n')
+    expect(allText).not.toContain('分子模拟图')
+    expect(allText).not.toContain('图（P8')
+  })
+
+  it('保留正常英文段落（包括化学式）', () => {
+    const paper = normalizePaperData({
+      ...testInput(),
+      content: 'The reaction between O3 and H2O2 produces OH radicals.\n\nFig. S2 shows the heatmap.\n\nSee Section 2.1 for details.',
+      formatted_content: 'The reaction between O3 and H2O2 produces OH radicals.\n\nFig. S2 shows the heatmap.\n\nSee Section 2.1 for details.',
+    })
+    const allText = (paper.sections || []).flatMap(s => s.blocks || []).map(b => b.content).join('\n')
+    expect(allText).toContain('The reaction')
+    expect(allText).toContain('Fig. S2')
+    expect(allText).toContain('Section 2.1')
+  })
+
+  it('不误伤"中文图"等纯英文内嵌词', () => {
+    const paper = normalizePaperData({
+      ...testInput(),
+      content: 'The chinese figure illustrates the mechanism.\n\nMore English text here.',
+      formatted_content: 'The chinese figure illustrates the mechanism.\n\nMore English text here.',
+    })
+    const allText = (paper.sections || []).flatMap(s => s.blocks || []).map(b => b.content).join('\n')
+    expect(allText).toContain('chinese figure')
+  })
+
+  it('段落级深度清洗：整段是 JSON 时整段删除', () => {
+    const paper = normalizePaperData({
+      ...testInput(),
+      content: 'Normal paragraph 1.\n\n{"category": "mixed", "text": "(a) COH 分子模拟图", "kind": "chart"}\n\nNormal paragraph 2.',
+      formatted_content: 'Normal paragraph 1.\n\n{"category": "mixed", "text": "(a) COH 分子模拟图", "kind": "chart"}\n\nNormal paragraph 2.',
+    })
+    const allText = (paper.sections || []).flatMap(s => s.blocks || []).map(b => b.content).join('\n')
+    expect(allText).not.toContain('category')
+    expect(allText).not.toContain('分子模拟图')
+  })
+})
+
 describe('normalizePaperData - v27 inline figure 段落级锚定', () => {
   // 用户报告的真实场景模拟数据
   // 后端 OCR 不输出 "Fig. 1" 这种图号字符串，只输出图描述
