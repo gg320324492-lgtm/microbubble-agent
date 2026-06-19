@@ -355,11 +355,6 @@ onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
   display: flex;
   justify-content: space-between;
   align-items: center;
-
-.detail-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: var(--space-4);
 }
 
