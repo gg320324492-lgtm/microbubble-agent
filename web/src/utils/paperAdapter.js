@@ -168,6 +168,42 @@ function _genId(prefix = 'b') {
   return `${prefix}_${_idCounter.toString(36)}`
 }
 
+/**
+ * v26.1: 专门剥除多模态 chart 描述块
+ *
+ * OCR 经常把多模态图描述输出为 JSON 结构：
+ *   { "category": "mixed", "text": "(a) ... (b) ... coupling and electron transfer between toluene..."}
+ *
+ * 但 OCR 经常漏闭合 },导致结构化块溢出到正文中。
+ *
+ * 终止条件（任一）：
+ * - 英文学术句末: . [大写字母开头的单词] [小写单词]
+ * - markdown 图片语法: ![
+ * - 段落分隔: 
+
+
+ * - 字符串末尾
+ *
+ * 起始条件（必须全部满足）：
+ * - { "category"|"kind": "<以下类型之一>"
+ * - 类型白名单: mixed|chart|figure|formula|table|image_block|extraction|graph|plot|spectrum|figure_block
+ */
+function _stripMultimodalBlocks(text) {
+  if (!text) return text
+  // 直接正则字面量（避免 RegExp constructor 的反斜杠转义陷阱）
+  //
+  // 匹配 { "category|kind": "<类型>" 起始的多模态 chart 描述块。
+  // 容忍 { 和 key 之间的空格（OCR 经常漏压缩）
+  //
+  // 关键纪律（重要）：**禁止**用 $ 作为终止符 —— 否则在没有真实边界的输入上
+  //   非贪婪 + $ lookahead 会贪婪扩展到字符串末尾，吃掉正文。
+  //   必须强制要求真实终止符（\. 学句末 / !\[ 图片 / \n\n 段落分隔）
+  //
+  // 限长 800 字符（多模态块典型 100-400 字符，余量足够）
+  const re = /\{\s*['"]?(?:category|kind)['"]?\s*:\s*['"](?:mixed|chart|figure|formula|table|image_block|extraction|graph|plot|spectrum|figure_block)['"][^}]{0,800}?(?=\.\s+[A-Z][a-z]+\s+[a-z]|\s*!\[|\n\s*\n)/gi
+  return text.replace(re, '')
+}
+
 function _escapeHtml(s) {
   if (s == null) return ''
   return String(s)
@@ -395,6 +431,9 @@ export function cleanContent(text, options = {}) {
       return m
     })
   }
+
+  // 3.5 v26.1: 多模态 chart 描述块（OCR 漏闭合 }）—— 必须在 INTERNAL_MARKER_RES 之前
+  result = _stripMultimodalBlocks(result)
 
   // 4. 系统内部标记
   for (const re of INTERNAL_MARKER_RES) {
