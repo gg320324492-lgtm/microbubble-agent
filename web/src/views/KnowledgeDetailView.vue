@@ -175,7 +175,7 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, MagicStick, Position } from '@element-plus/icons-vue'
+import { ArrowLeft, MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
 import { marked } from 'marked'
@@ -198,7 +198,6 @@ const hasMultimodal = ref(false)
 const imageStats = ref({ total: 0, done: 0, failed: 0, pending: 0 })
 const extractionTotal = ref(0)
 const extracting = ref(false)
-const inlining = ref(false)
 const activeMultimodalTab = ref('images')
 
 const handleExtractMultimodal = async () => {
@@ -223,40 +222,6 @@ const handleExtractMultimodal = async () => {
     ElMessage.error('触发提取失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
   } finally {
     extracting.value = false
-  }
-}
-
-const handleInlineExtractions = async () => {
-  if (!knowledge.value) return
-  inlining.value = true
-  try {
-    // 1. 先确保 content 有 [PAGE:N] 标记（老 PDF 需要）
-    const d_req = axios.get(`/api/v1/knowledge/${knowledge.value.id}`)
-    // 2. 触发 inline
-    const r = await axios.post(`/api/v1/knowledge/${knowledge.value.id}/inline-extractions`)
-    if (r.data.ok) {
-      ElMessage.success(`已整合 ${r.data.matches_total} 项到正文${r.data.unmatched_total > 0 ? `，${r.data.unmatched_total} 项未匹配已放末尾` : ''}`)
-      // 刷新详情
-      const { data } = await axios.get(`/api/v1/knowledge/${knowledge.value.id}`)
-      knowledge.value = data
-    } else if (r.data.reason === 'no_page_markers_in_content') {
-      // 提示用户先 reparse
-      ElMessage.warning('内容缺少页码标记，先重新解析 PDF...')
-      await axios.post(`/api/v1/knowledge/${knowledge.value.id}/reparse-pdf`)
-      // 再 inline
-      const r2 = await axios.post(`/api/v1/knowledge/${knowledge.value.id}/inline-extractions`)
-      if (r2.data.ok) {
-        ElMessage.success(`已整合 ${r2.data.matches_total} 项到正文`)
-        const { data } = await axios.get(`/api/v1/knowledge/${knowledge.value.id}`)
-        knowledge.value = data
-      }
-    } else {
-      ElMessage.warning(r.data.error || r.data.reason || '整合失败')
-    }
-  } catch (e) {
-    ElMessage.error('整合失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
-  } finally {
-    inlining.value = false
   }
 }
 
@@ -680,12 +645,6 @@ onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
   margin-bottom: var(--space-3);
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-.multimodal-actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
 }
 
 .multimodal-title {

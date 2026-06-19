@@ -1087,3 +1087,123 @@ async def reparse_pdf(
     except Exception as e:
         logger.exception(f"reparse_pdf 失败(knowledge_id={knowledge_id})")
         return ReparsePdfResponse(ok=False, error=str(e))
+
+
+# ── 全量重跑端点（admin 专用） ─────────────────────────────
+
+
+async def _require_admin(current_user: Member):
+    """检查当前用户是否 admin（system_admin / admin / wangtianzhi 等）"""
+    admin_usernames = {"admin", "wangtianzhi"}
+    if current_user.username not in admin_usernames and current_user.role not in ("admin", "system_admin"):
+        raise HTTPException(status_code=403, detail="需要 admin 权限")
+
+
+class ReprocessAllResponse(BaseModel):
+    """全量重跑多模态 inline 响应"""
+    ok: bool
+    total: int
+    succeeded: int
+    failed: int
+    skipped: int
+    results: list  # [{knowledge_id, title, status, detail}]
+
+
+@router.post(
+    "/knowledge/reprocess-all-multimodal",
+    response_model=ReprocessAllResponse,
+)
+async def reprocess_all_multimodal(
+    file_type: Optional[str] = Query("pdf", description="文件类型过滤：pdf/pptx/docx/全部(空)"),
+    limit: int = Query(100, ge=1, le=500),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """全量重跑所有有文件知识的 inline 排版
+
+    流程（对每个 knowledge）：
+    1. reparse-pdf → 给 content 加 [PAGE:N] 标记
+    2. extract-multimodal → 提取图片/公式/表格（如果还没提取过）
+    3. inline-extractions → 按页码 inline 嵌入正文
+
+    适用：Phase 7 v2 升级后，老数据迁移 / 重新排版
+    """
+    await _require_admin(current_user)
+    from app.services.multimodal_extraction_service import multimodal_extraction_service
+
+    # 1. 找出所有有 file_path 的知识
+    file_type_filter = f"%{file_type}%" if file_type else "%"
+    q = select(Knowledge).where(
+        Knowledge.file_path.isnot(None),
+        Knowledge.file_type.ilike(file_type_filter),
+    ).order_by(Knowledge.id).limit(limit)
+    rows = (await db.execute(q)).scalars().all()
+
+    results = []
+    succeeded = 0
+    failed = 0
+    skipped = 0
+
+    for k in rows:
+        entry = {
+            "knowledge_id": k.id,
+            "title": k.title,
+            "file_name": k.file_name,
+            "status": None,
+            "detail": None,
+        }
+        try:
+            # Step 1: reparse-pdf (给 content 加 [PAGE:N])
+            reparse_result = await multimodal_extraction_service.reparse_pdf_with_page_markers(k.id)
+            if not reparse_result.get("ok"):
+                entry["status"] = "reparse_failed"
+                entry["detail"] = reparse_result.get("reason") or reparse_result.get("error")
+                failed += 1
+                results.append(entry)
+                continue
+
+            # Step 2: extract-multimodal (如果还没提取过)
+            if not k.file_path or "application/pdf" not in (k.file_type or "") and "presentationml" not in (k.file_type or ""):
+                # DOCX/XLSX 不支持多模态
+                entry["status"] = "skipped_non_pdf_pptx"
+                entry["detail"] = f"file_type={k.file_type}"
+                skipped += 1
+                results.append(entry)
+                continue
+
+            extract_result = await multimodal_extraction_service.extract_for_knowledge(k.id)
+            extract_ok = extract_result.get("ok") and not extract_result.get("skipped")
+            images_count = extract_result.get("images_total", 0) if extract_ok else 0
+
+            # Step 3: inline-extractions
+            inline_result = await multimodal_extraction_service.inline_extractions_to_content(k.id)
+            if not inline_result.get("ok"):
+                entry["status"] = "inline_failed"
+                entry["detail"] = inline_result.get("reason") or inline_result.get("error")
+                failed += 1
+                results.append(entry)
+                continue
+
+            entry["status"] = "ok"
+            entry["detail"] = (
+                f"images={images_count}, "
+                f"inline_matched={inline_result.get('matches_total', 0)}, "
+                f"inline_unmatched={inline_result.get('unmatched_total', 0)}"
+            )
+            succeeded += 1
+            results.append(entry)
+        except Exception as e:
+            logger.exception(f"reprocess failed for knowledge_id={k.id}")
+            entry["status"] = "exception"
+            entry["detail"] = str(e)[:300]
+            failed += 1
+            results.append(entry)
+
+    return ReprocessAllResponse(
+        ok=failed == 0,
+        total=len(rows),
+        succeeded=succeeded,
+        failed=failed,
+        skipped=skipped,
+        results=results,
+    )
