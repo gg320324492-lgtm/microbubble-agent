@@ -40,17 +40,36 @@
 
     <!-- 有内容时：tab 切换 -->
     <el-tabs v-else v-model="activeTab" class="extraction-tabs">
-      <el-tab-pane name="images" :label="`图片 (${imageStats?.total || figures.length})`" lazy>
-        <div v-if="figures.length" class="extraction-grid">
+      <el-tab-pane name="images" :label="`核心图表 (${coreFigures.length})`" lazy>
+        <div v-if="coreFigures.length" class="extraction-grid">
           <FigureCard
-            v-for="fig in figures"
+            v-for="fig in coreFigures"
             :key="fig.id"
             :figure="fig"
-            :figure-no="`图 ${fig.imageId || fig.id}`"
+            :figure-no="fig.figureNo || `图 ${fig.imageId || fig.id}`"
+            :caption="fig.caption"
             compact
           />
         </div>
-        <el-empty v-else description="该知识条目暂无提取图片" :image-size="60" />
+        <el-empty v-else description="该知识条目暂无核心图表" :image-size="60" />
+      </el-tab-pane>
+
+      <!-- 封面/logo 弱化区（折叠） -->
+      <el-tab-pane v-if="coverFigures.length" name="others" :label="`其他图片 (${coverFigures.length})`" lazy>
+        <div class="cover-info">
+          <el-icon class="cover-info-icon"><InfoFilled /></el-icon>
+          <span>以下为封面、出版信息或装饰图片，论文核心内容不依赖这些图。</span>
+        </div>
+        <div class="extraction-grid extraction-grid-secondary">
+          <FigureCard
+            v-for="fig in coverFigures"
+            :key="fig.id"
+            :figure="fig"
+            :figure-no="fig.label || '图'"
+            :caption="fig.caption"
+            compact
+          />
+        </div>
       </el-tab-pane>
 
       <el-tab-pane name="formulas" :label="`公式 (${formulas.length})`" lazy>
@@ -97,7 +116,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { CircleCheck, CircleClose, Loading, MagicStick, Picture, DataAnalysis } from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, Loading, MagicStick, Picture, DataAnalysis, InfoFilled } from '@element-plus/icons-vue'
 import FigureCard from './FigureCard.vue'
 import FormulaBlock from './FormulaBlock.vue'
 import TableCard from './TableCard.vue'
@@ -116,6 +135,11 @@ const props = defineProps({
 defineEmits(['extract'])
 
 const activeTab = ref('images')
+
+// 核心图（figure 类型，非 cover/logo）
+const coreFigures = computed(() => props.figures.filter(f => !f.kind || f.kind === 'figure'))
+// 封面/出版信息/logo 弱化区
+const coverFigures = computed(() => props.figures.filter(f => f.kind === 'cover' || f.kind === 'logo'))
 
 const hasAnyExtraction = computed(() => {
   return props.figures.length > 0 ||
@@ -202,6 +226,27 @@ const typeLabel = (kind) => ({
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
+}
+
+.extraction-grid-secondary {
+  opacity: 0.7;
+  margin-top: 8px;
+}
+
+.cover-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #F9FAFB;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #6B7280;
+  margin-bottom: 4px;
+}
+
+.cover-info-icon {
+  color: #9CA3AF;
 }
 
 .extraction-list {

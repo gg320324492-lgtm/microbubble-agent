@@ -24,13 +24,16 @@
 // 常量：通用识别规则
 // ============================================================
 
-// 章节标题关键词（中英文，支持变体）
+// 章节标题关键词（中英文，支持变体）— 严格只匹配标题行（不带后续内容）
 const SECTION_KEYWORDS = [
   { type: 'abstract', regex: /^(abstract|summary|摘要|内容摘要|文摘)\s*[:：]?\s*$/i },
   { type: 'keywords', regex: /^(keywords?|key\s*words?|关键词|关键字)\s*[:：]?\s*$/i },
+  { type: 'highlights', regex: /^(highlights?|亮点|研究亮点)\s*[:：]?\s*$/i },
+  { type: 'graphical_abstract', regex: /^(graphical\s+abstract|图解摘要|图形摘要)\s*[:：]?\s*$/i },
+  { type: 'article_info', regex: /^(article\s+info(rmation)?|文章信息|论文信息)\s*[:：]?\s*$/i },
   { type: 'introduction', regex: /^(introduction|引言|前言|绪论|序言)\s*[:：]?/i },
   { type: 'background', regex: /^(background|研究背景|问题背景)\s*[:：]?/i },
-  { type: 'methods', regex: /^(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?))?|材料与方法|实验方法|实验部分|方法|实验材料与方法|2\.\s*Experimental)\s*[:：]?/i },
+  { type: 'methods', regex: /^(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?|setup))?|材料与方法|实验方法|实验部分|方法|实验材料与方法|2\.\s*Experimental)\s*[:：]?/i },
   { type: 'results', regex: /^(results?(\s+and\s+discussion)?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?/i },
   { type: 'discussion', regex: /^(discussion|讨论|分析与讨论)\s*[:：]?/i },
   { type: 'conclusion', regex: /^(conclusions?|总结|结论|结语|小结)\s*[:：]?/i },
@@ -57,13 +60,63 @@ const PAGE_MARKER_RES = [
 const FIGURE_MARKER_RE = /\[FIGURE:([\d.a-zA-Z]+)\]/g
 const TABLE_MARKER_RE = /\[TABLE:([\d.a-zA-Z]+)\]/g
 
-// 链接识别
-const DOI_RE = /\b(10\.\d{4,9}\/[-._;()\/:A-Z0-9]+)\b/gi
+// 链接识别（DOI 不含特殊字符的简单版，避免后向引用错乱）
+const DOI_RE = /\b(10\.\d{4,9}\/[A-Za-z0-9._;()\/\-:]+)/gi
 const URL_RE = /\bhttps?:\/\/[^\s<>"')]+/g
-const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z]{2,}\b/gi
+const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g
 
 // 引用模式：参考文献条目通常以 [1] / 1. / (Smith 2020) 开头
 const REFERENCE_ENTRY_RE = /^\s*(?:\[\d+\]|\(\d+\)|\d+\.)\s+[A-Z一-龥]/
+
+// 图片扩展名（识别裸图片 URL）
+const IMG_EXT_RE = /\.(?:jpe?g|png|webp|gif|bmp|svg)(?:\?[^\s]*)?$/i
+
+// 系统内部标记（不应在正文中显示）
+const INTERNAL_MARKER_RES = [
+  /<!--\s*MULTIMODAL_INLINED[^*]*-->/gi,
+  /<!--\s*OCR_TEXT[^>]*-->/gi,
+  /<!--[\s\S]*?-->/g, // 任意 HTML 注释
+  /\bJSON\s*(?:格式|output|response)\s*[:：]?\s*[{\[][^\n]*/gi, // LLM prompt 残留
+  /\b(?:json|markdown)\s*(?:格式|output|format)\s*[:：]?\s*$/gim, // 单独的格式要求行
+  /\[FIGURE:\d+\]/g, // [FIGURE:N] 占位符转锚点（不应在正文中显示）
+  /\[TABLE:\d+\]/g,
+  /\[IMAGE:[^\]]*\]/g,
+  /\[图\s*[Pp]?\d+\]/g, // [图 P1] 等
+]
+
+// HTML 属性残留
+const HTML_ATTR_RES = [
+  /\s+target\s*=\s*"[^"]*"/gi,
+  /\s+target\s*=\s*'[^']*'/gi,
+  /\s+rel\s*=\s*"[^"]*"/gi,
+  /\s+rel\s*=\s*'[^']*'/gi,
+  /\s+class\s*=\s*"[^"]*"/gi,
+  /\s+class\s*=\s*'[^']*'/gi,
+  /\s+style\s*=\s*"[^"]*"/gi,
+  /\s+style\s*=\s*'[^']*'/gi,
+  /\s+width\s*=\s*"\d+%?"/gi,
+  /\s+height\s*=\s*"\d+%?"/gi,
+  /\s+id\s*=\s*"[^"]*"/gi,
+]
+
+// 重复 DOI 链接修复
+// 匹配 (https?://(dx.)?doi.org/)+ 后面再有 (https?://(dx.)?doi.org/)* 的情况
+const DOI_DUP_RE = /(?:https?:\/\/(?:dx\.)?doi\.org\/){2,}/gi
+// 修复 doi.org/doi.org/xxx（无协议，2 个连续 doi.org/）
+const DOI_DUP_NOPROTO_RE = /(?:(?:dx\.)?doi\.org\/){2,}/gi
+
+// PDF 页脚 / 出版信息模式（不直接删除，但避免反复出现在正文中）
+const FOOTER_PATTERNS = [
+  /Journal\s+of\s+[A-Z][a-zA-Z\s&]+\d+\s*\(\d{4}\)\s*\d+/g, // Journal of Xxx 123 (2024) 456
+  /Available\s+online\s+\d+\s+\w+\s+\d{4}/gi,
+  /©\s*\d{4}\s+(?:Elsevier|Elsevier\s+B\.V\.|Springer|Wiley|American\s+Chemical\s+Society).*$/gim,
+  /https?:\/\/(?:www\.)?sciencedirect\.com\/science\/article\/[^\s]+/gi,
+  /Received\s+in\s+revised\s+form\s+\d+\s+\w+\s+\d{4}.*?Accepted\s+\d+\s+\w+\s+\d{4}/gi,
+  /Received\s+\d+\s+\w+\s+\d{4}.*?Available\s+online\s+\d+\s+\w+\s+\d{4}/gi,
+]
+
+// 字符间隔的标题（H I G H L I G H T S → HIGHLIGHTS）
+const SPACED_TITLE_RE = /\b([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z](?:\s+[A-Z])+)\b/g
 
 
 // ============================================================
@@ -96,7 +149,6 @@ function _cleanText(text) {
   if (!text) return ''
   return text
     .replace(/\r\n/g, '\n')
-    .replace(/ /g, ' ')
     // 合并连续空行（≥3 个换行 → 2 个）
     .replace(/\n{3,}/g, '\n\n')
     // 去除行尾空格
@@ -104,6 +156,97 @@ function _cleanText(text) {
     // 合并 OCR 异常断行：中文字符后被强行换行 + 下一行也是中文字符
     .replace(/([一-龥，。：；！？、])\n([一-龥])/g, '$1$2')
     .trim()
+}
+
+/**
+ * 强力清洗论文原始正文（OCR / LLM 输出 / PDF 抽取）
+ *
+ * 处理：
+ * 1. HTML 属性残留（target/rel/class/style/width/height/id）
+ * 2. Markdown 图片语法 ![alt](url) → 剥除
+ * 3. 裸图片 URL → 提取为 figures，正文不留
+ * 4. 系统内部标记（HTML 注释 / [FIGURE:N] / [图 P1] / LLM prompt 残留）
+ * 5. 重复 DOI 链接（https://doi.org/https://doi.org/xxx）
+ * 6. PDF 页脚（期刊信息 / Received / Available online）
+ * 7. 字符间隔的标题（H I G H L I G H T S → HIGHLIGHTS）
+ * 8. Markdown 残留的 `**` 强调
+ * 9. 孤立的"图表说明 (P4)"行 / "Caption:" 行
+ *
+ * @returns {{ content: string, extractedImages: Array<{url, alt}> }}
+ */
+export function cleanContent(text, options = {}) {
+  if (!text) return { content: '', extractedImages: [] }
+  const extractedImages = []
+  const { stripImageUrls = true } = options
+
+  let result = String(text)
+
+  // 1. HTML 属性残留
+  for (const re of HTML_ATTR_RES) {
+    result = result.replace(re, '')
+  }
+
+  // 2. Markdown 图片语法 ![alt](url) → 提取到 figures，剥除
+  result = result.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, alt, url) => {
+    if (url.match(IMG_EXT_RE) || /\/minio\//.test(url)) {
+      extractedImages.push({ url: url.trim(), alt: (alt || '').trim() })
+      return ''
+    }
+    return m
+  })
+
+  // 3. 裸图片 URL
+  if (stripImageUrls) {
+    // 整行就是 URL
+    result = result.replace(/^[ \t]*(https?:\/\/[^\s<>"')]+)\s*$/gim, (m, url) => {
+      if (IMG_EXT_RE.test(url) || /\/minio\//.test(url)) {
+        extractedImages.push({ url: url.trim(), alt: '' })
+        return ''
+      }
+      return m
+    })
+    // 行内含 URL
+    result = result.replace(URL_RE, (m) => {
+      if (IMG_EXT_RE.test(m) || /\/minio\//.test(m)) {
+        extractedImages.push({ url: m, alt: '' })
+        return ''
+      }
+      return m
+    })
+  }
+
+  // 4. 系统内部标记
+  for (const re of INTERNAL_MARKER_RES) {
+    result = result.replace(re, '')
+  }
+
+  // 5. 重复 DOI 链接修复
+  result = result.replace(DOI_DUP_RE, 'https://doi.org/')
+  result = result.replace(DOI_DUP_NOPROTO_RE, (m) => {
+    // 保留前面的非 doi 内容前缀
+    const lead = m.match(/^[^a-z]*/)
+    return (lead ? lead[0] : '') + 'doi.org/'
+  })
+
+  // 6. PDF 页脚
+  for (const re of FOOTER_PATTERNS) {
+    result = result.replace(re, '')
+  }
+
+  // 7. 字符间隔的标题
+  result = result.replace(SPACED_TITLE_RE, (m) => m.replace(/\s+/g, ''))
+
+  // 8. Markdown 强调 `**text**` → text
+  result = result.replace(/\*\*([^*\n]+)\*\*/g, '$1')
+
+  // 9. 孤立的元行
+  result = result.replace(/^图表说明\s*\([Pp]\d+\)\s*$/gm, '')
+  result = result.replace(/^Caption\s*[:：]?\s*$/gim, '')
+
+  // 10. 合并空行 + 行尾空白
+  result = result.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trim()
+
+  return { content: result, extractedImages }
 }
 
 
@@ -344,11 +487,13 @@ function _parsePlainTextSections(content) {
 
       if (isLikelyTitle) {
         pushCurrent()
+        // 章节 type 净化：abstract/keywords/highlights/article_info 都视为 metadata
+        const normalizedType = match.type
         current = {
           id: _genId('s'),
           title: trimmed.replace(/[:：]\s*$/, ''),
           level: match.level,
-          type: match.type,
+          type: normalizedType,
           blocks: [],
         }
         continue
@@ -363,7 +508,7 @@ function _parsePlainTextSections(content) {
   }
   pushCurrent()
 
-  // preamble 单独成一个 section（一般含标题、作者、摘要）
+  // preamble 单独成一个 section（一般含标题、作者）
   if (preamble.length) {
     sections.unshift({
       id: _genId('s'),
@@ -527,28 +672,144 @@ function _detectKeywordsFromContent(content) {
  * 关联图与图注
  *
  * 策略：
- * 1. 如果后端有 extractions（带 source_image_id），优先用这个关联
- * 2. 否则按出现顺序相邻匹配：
- *    - [FIGURE:N] 占位符 → 紧跟其后的 caption 文本
- *    - "Fig. 1" / "Figure 1" 关键词 → 同一段落或下一段作为 caption
+ * 1. 优先用 extractions[].data.caption 作为图注
+ * 2. 否则在 content 文本中按 fig_idx 找 "Fig. 1" 后 1-3 句作为图注候选
+ *
+ * @param {Array} figures - 后端返回的 images 适配列表
+ * @param {Array} extractions - 后端返回的 extractions 适配列表
+ * @param {string} content - 原始正文
+ * @returns {Array<{...figure, caption: string|null, figureNo: string|null}>}
  */
-export function matchFiguresWithCaptions(figures, captions, textBlocks) {
-  // 简单实现：保留 figures 原顺序，把 captions 按出现顺序附给对应图
-  const result = figures.map((fig, i) => ({
-    ...fig,
-    caption: captions[i] || null,
-  }))
+export function matchFiguresWithCaptions(figures, extractions, content) {
+  if (!Array.isArray(figures)) return []
+
+  // 1. 从 extractions 找 caption
+  const captionsByFigureId = {}
+  if (Array.isArray(extractions)) {
+    for (const ex of extractions) {
+      if (!ex?.data) continue
+      if (ex.kind === 'image_block' && ex.data?.caption) {
+        const sid = ex.sourceImageId || ex.data?.source_image_id
+        if (sid) captionsByFigureId[sid] = ex.data.caption
+      }
+      // chart 也可能含图描述
+      if (ex.kind === 'chart' && ex.data?.caption) {
+        const sid = ex.sourceImageId || ex.data?.source_image_id
+        if (sid) captionsByFigureId[sid] = ex.data.caption
+      }
+    }
+  }
+
+  // 2. 从 content 找 "Fig. N" / "Figure N" / "图 N" 后 1-3 句
+  const captionsByFigIdx = _scanFigCaptionsInContent(content)
+
+  // 3. 给每个 figure 分配 caption
+  return figures.map((fig, idx) => {
+    // 优先按 fig idx 在 content 里找（fig.id 通常是 DB 顺序，idx+1 对应正文"图 N"）
+    const figIdx = idx + 1
+    let caption = captionsByFigureId[fig.imageId || fig.id] || null
+    if (!caption && captionsByFigIdx[figIdx]) {
+      caption = captionsByFigIdx[figIdx]
+    }
+    return {
+      ...fig,
+      caption,
+      figureNo: `Fig. ${figIdx}`,
+    }
+  })
+}
+
+/**
+ * 在 content 文本中扫描 "Fig. N" / "Figure N" / "图 N" 后 1-3 句作为图注
+ * @returns {Object<figIdx, caption>}
+ */
+function _scanFigCaptionsInContent(content) {
+  if (!content) return {}
+  const result = {}
+  // 匹配 Fig. 1 / Figure 1 / 图 1 / 表 1 / Scheme 1 等
+  // 中文 "图" / "表" 前后不是 word char，\b 不适用
+  const figRefRe = /(?:Fig\.?|Figure|Scheme|图|表)\s*(\d{1,3})\b[.\s:：]?/gi
+  let m
+  while ((m = figRefRe.exec(content)) !== null) {
+    const idx = parseInt(m[1], 10)
+    if (!Number.isFinite(idx)) continue
+    if (result[idx]) continue // 已记录过
+    // 提取后续 200 字符作为图注候选
+    const after = content.slice(m.index + m[0].length, m.index + m[0].length + 300)
+    // 截到第一个换行 / 下一个 "Fig." / 中文/英文句号
+    const stopMatch = after.match(/\n|\b(?:Fig\.?|Figure|Scheme)\s*\d|\.\s+[A-Z一-龥]/)
+    const caption = (stopMatch ? after.slice(0, stopMatch.index) : after)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/^[.,;。：:]\s*/, '') // 去掉前导标点
+      .slice(0, 280)
+    if (caption && caption.length > 8) {
+      result[idx] = caption
+    }
+  }
   return result
+}
+
+/**
+ * 图片分类：cover/logo vs figure/chart/scheme
+ *
+ * @param {Object} image - { id, page, ocrText, width, height, ... }
+ * @returns {{ kind: 'cover'|'logo'|'figure'|'table', label: string }}
+ */
+export function classifyImageKind(image) {
+  if (!image) return { kind: 'figure', label: '图' }
+  const text = (image.ocrText || '').toLowerCase()
+  const url = (image.imageUrl || image.src || '').toLowerCase()
+  const filename = (url.split('/').pop() || '').toLowerCase()
+
+  // 1. 封面/出版信息识别
+  const coverKeywords = [
+    'elsevier', 'springer', 'wiley', 'copyright', '©', 'all rights reserved',
+    'published by', 'journal of', 'contents', 'editorial board',
+    'issn', 'isbn', 'doi.org/', 'sciencedirect',
+  ]
+  for (const kw of coverKeywords) {
+    if (text.includes(kw) || filename.includes(kw.replace(/\s+/g, ''))) {
+      return { kind: 'cover', label: '封面/出版' }
+    }
+  }
+
+  // 2. Logo/装饰识别
+  const logoKeywords = ['logo', 'brand', 'watermark']
+  for (const kw of logoKeywords) {
+    if (filename.includes(kw) || text.includes(kw)) {
+      return { kind: 'logo', label: 'Logo' }
+    }
+  }
+
+  // 3. 极小尺寸（< 50x50 或 < 5KB 且无 OCR）→ 装饰
+  if (image.width && image.height && (image.width < 50 || image.height < 50)) {
+    return { kind: 'logo', label: '装饰' }
+  }
+
+  // 4. 早期页码（cover 多在 P1） + 无 OCR 文本 + 大尺寸 → 可能是封面
+  if (image.page === 1 && !text && image.width && image.height && image.width >= 800) {
+    return { kind: 'cover', label: '封面' }
+  }
+
+  return { kind: 'figure', label: '图' }
 }
 
 
 /**
  * 构建右侧导航树
- * @returns {Array<{ id, title, type, level, anchor }>}
+ *
+ * 输出结构：
+ * {
+ *   sections: Array<{id, title, type, level, anchor}>,  // 论文章节
+ *   modules: Array<{id, title, type, anchor, count}>     // 模块入口（图表/提取物/相关知识）
+ * }
  */
-export function buildAnchorTree(sections) {
-  if (!Array.isArray(sections)) return []
-  return sections
+export function buildAnchorTree(sections, options = {}) {
+  if (!Array.isArray(sections)) return { sections: [], modules: [] }
+  const { moduleCounts = {} } = options
+
+  const sectionAnchors = sections
     .filter(s => s && s.title)
     .map(s => ({
       id: s.id,
@@ -557,6 +818,29 @@ export function buildAnchorTree(sections) {
       level: s.level || 1,
       anchor: `section-${s.id}`,
     }))
+
+  // 模块入口：图表、提取物、相关知识
+  const modules = []
+  if (moduleCounts.figures) {
+    modules.push({
+      id: 'm-figures',
+      title: `多模态提取 (${moduleCounts.figures})`,
+      type: 'module',
+      anchor: 'paper-extractions',
+      count: moduleCounts.figures,
+    })
+  }
+  if (moduleCounts.related) {
+    modules.push({
+      id: 'm-related',
+      title: `相关知识 (${moduleCounts.related})`,
+      type: 'module',
+      anchor: 'paper-related',
+      count: moduleCounts.related,
+    })
+  }
+
+  return { sections: sectionAnchors, modules }
 }
 
 
@@ -567,15 +851,24 @@ export function buildAnchorTree(sections) {
 export function autoLinkContent(text) {
   if (!text) return ''
   let escaped = _escapeHtml(text)
+
+  // 先修复重复 DOI 链接（避免下面 DOI_RE 重复添加前缀）
+  escaped = escaped.replace(DOI_DUP_RE, 'https://doi.org/')
+  escaped = escaped.replace(DOI_DUP_NOPROTO_RE, 'doi.org/')
+
   // DOI
   escaped = escaped.replace(
     DOI_RE,
-    '<a class="auto-link doi-link" href="https://doi.org/$1" target="_blank" rel="noopener">$1</a>'
+    '<a class="auto-link doi-link" href="https://doi.org/$1">$1</a>'
   )
-  // URL
+  // URL（仅匹配图片以外的 URL，图片 URL 应在 cleanContent 中已剥除）
   escaped = escaped.replace(
     URL_RE,
-    '<a class="auto-link url-link" href="$&" target="_blank" rel="noopener">$&</a>'
+    (m) => {
+      // 已是 DOI/email/图片的不要二次包
+      if (IMG_EXT_RE.test(m) || /\/minio\//.test(m)) return m
+      return `<a class="auto-link url-link" href="${m}" target="_blank" rel="noopener">${m}</a>`
+    }
   )
   // 邮箱
   escaped = escaped.replace(
@@ -630,6 +923,18 @@ function _normalizeImages(images) {
 /**
  * 主入口：把后端原始数据 + 多模态数据 → PaperDetail
  *
+ * 流程：
+ * 1. 选内容源（formatted_content > content）
+ * 2. cleanContent 强力清洗（剥 HTML 属性 / 图片 URL / 系统标记 / 重复 DOI / PDF 页脚 / 字符间隔标题）
+ * 3. 重新提取 [PAGE:N] / [FIGURE:N] 占位符
+ * 4. parsePaperSections 拆章节
+ * 5. 给每个 section 注入 page 标记
+ * 6. 检测摘要 / 关键词（先取 raw.summary / raw.tags，再 fallback）
+ * 7. matchFiguresWithCaptions 给图绑定 caption + figureNo
+ * 8. classifyImageKind 给图分类 cover/logo/figure
+ * 9. 收集 references / thumbnails / extractions
+ * 10. 返回 PaperDetail
+ *
  * @param {Object} raw - 后端 /knowledge/{id} 返回的 KnowledgeResponse
  * @param {Object} extra - 附加数据 { images, extractions, related }
  * @returns {Object} PaperDetail
@@ -639,27 +944,31 @@ export function normalizePaperData(raw, extra = {}) {
   const images = _normalizeImages(extra.images)
   const extractions = _normalizeExtractions(extra.extractions)
 
-  // 1. 选内容源：优先 formatted_content（LLM 排版过的 markdown），其次 content
+  // 1. 选内容源
   const hasFormatted = !!(raw.formatted_content && raw.formatted_content.trim())
   const rawContent = raw.content || ''
-  const content = hasFormatted ? raw.formatted_content : rawContent
+  const inputContent = hasFormatted ? raw.formatted_content : rawContent
 
-  // 2. 提取页面/图表标记
+  // 2. 强力清洗原始内容
+  const cleaned = cleanContent(inputContent, { stripImageUrls: true })
+  const content = cleaned.content
+  const extraFromClean = cleaned.extractedImages || []
+
+  // 3. 提取页面/图表标记
   const pageMarkers = extractPageMarkers(content)
   const figureMarkers = extractFigureMarkers(content)
 
-  // 3. 拆 section
+  // 4. 拆 section
   const isMd = hasFormatted
   const sections = parsePaperSections(content, { isMarkdown: isMd })
 
-  // 4. 给每个 section 注入 page 标记和 block 列表
+  // 5. 给每个 section 注入 page 标记
   sections.forEach(section => {
     if (section.type === 'preamble') {
       // preamble 内部按 [PAGE:N] 拆 block
       section.blocks = _buildContentBlocks(section.blocks[0]?.content || '')
       return
     }
-    // 已有 blocks（从 markdown 来的）：给每个 block 标记 page
     let currentPage = null
     section.blocks = section.blocks.map(b => {
       if (b.type === 'page_marker') {
@@ -673,32 +982,62 @@ export function normalizePaperData(raw, extra = {}) {
     })
   })
 
-  // 5. 检测摘要和关键词
+  // 6. 检测摘要和关键词
   let abstract = raw.summary || null
   let keywords = Array.isArray(raw.tags) ? raw.tags.slice() : []
 
-  if (!abstract && rawContent) {
-    abstract = _detectAbstractFromContent(rawContent)
+  if (!abstract && content) {
+    abstract = _detectAbstractFromContent(content)
   }
-  if (rawContent && !keywords.length) {
-    const detectedKw = _detectKeywordsFromContent(rawContent)
+  if (content && !keywords.length) {
+    const detectedKw = _detectKeywordsFromContent(content)
     if (detectedKw.length) keywords = detectedKw
   }
 
-  // 6. 图表清单
-  const figures = images.map(img => ({
+  // 7. 图表清单（带 caption + figureNo + 分类）
+  const figuresRaw = images.map(img => ({
     id: `fig-${img.id}`,
     imageId: img.id,
     page: img.page,
     src: img.src,
+    imageUrl: img.imageUrl,
     width: img.width,
     height: img.height,
     ocrText: img.ocrText,
     ocrStatus: img.ocrStatus,
-    caption: null, // 后端没存 caption，前端从内容上下文推断
+    ocrError: img.ocrError,
+    ocrModel: img.ocrModel,
+    caption: null,
   }))
+  const figures = matchFiguresWithCaptions(figuresRaw, extractions, content)
+    .map(fig => {
+      const cls = classifyImageKind(fig)
+      return { ...fig, kind: cls.kind, label: cls.label }
+    })
 
-  // 7. 参考文献 section
+  // 7.5 补充从 cleanContent 抽出的图片（如果后端 images 为空，但正文中出现了图片 URL）
+  if (extraFromClean.length && figuresRaw.length === 0) {
+    for (const img of extraFromClean) {
+      const cls = classifyImageKind({ src: img.url, ocrText: img.alt })
+      figures.push({
+        id: `ext-${_genId('i')}`,
+        imageId: null,
+        page: null,
+        src: img.url,
+        imageUrl: img.url,
+        width: null,
+        height: null,
+        ocrText: img.alt,
+        ocrStatus: 'pending',
+        caption: img.alt || null,
+        figureNo: null,
+        kind: cls.kind,
+        label: cls.label,
+      })
+    }
+  }
+
+  // 8. 参考文献 section
   const referencesSection = sections.find(s => s.type === 'references')
   let references = []
   if (referencesSection) {
@@ -709,7 +1048,7 @@ export function normalizePaperData(raw, extra = {}) {
     references = splitReferences(refText)
   }
 
-  // 8. 缩略图（来自 extractions 中的 chart 类型）
+  // 9. 缩略图（来自 extractions 中的 chart/table/formula 类型）
   const thumbnails = extractions
     .filter(e => e.kind === 'chart' || e.kind === 'table' || e.kind === 'formula')
     .map(e => ({
@@ -724,7 +1063,10 @@ export function normalizePaperData(raw, extra = {}) {
       contentText: e.contentText,
     }))
 
-  // 9. 返回 PaperDetail
+  // 10. 统计核心图（非 cover/logo）数量
+  const coreFigureCount = figures.filter(f => f.kind === 'figure').length
+
+  // 11. 返回 PaperDetail
   return {
     id: raw.id,
     title: raw.title || '（无标题）',
@@ -752,6 +1094,7 @@ export function normalizePaperData(raw, extra = {}) {
     references,
     pageMarkers,
     figureMarkers,
+    coreFigureCount,
     // 透传原数据（兼容老代码）
     raw,
     // 元信息
@@ -786,4 +1129,6 @@ export default {
   splitReferences,
   autoLinkContent,
   classifySectionType,
+  classifyImageKind,
+  cleanContent,
 }
