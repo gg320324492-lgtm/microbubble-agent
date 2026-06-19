@@ -24,26 +24,28 @@
 // 常量：通用识别规则
 // ============================================================
 
-// 章节标题关键词（中英文 + 编号 + 字符间隔 + 拼写变体）
-// 设计：regex 同时支持"裸字符串"（用于 markdown 解析后单行 title）
-//       和"行首匹配"（用于纯文本行扫描，标题独立成行）
+// 章节标题关键词（严格 ^...$ 锚定，只匹配独立行的标题）
+// 不用宽松的 \b 匹配，避免正文中含 "method"/"result"/"experimental"
+// 等词的句子被误识别为章节标题
 const SECTION_KEYWORDS = [
-  // 注意顺序：长的/复合的 keyword 放前面（避免被短 keyword 误吃）
-  { type: 'graphical_abstract', regex: /(?:(?:^|\n)\s*|\b)(graphical\s+abstract|图解摘要|图形摘要)\s*[:：]?(\s|$)/i },
-  { type: 'article_info', regex: /(?:(?:^|\n)\s*|\b)(article\s+info(rmation)?|文章信息|论文信息)\s*[:：]?(\s|$)/i },
-  { type: 'abstract', regex: /(?:(?:^|\n)\s*|\b)(abstract|summary|摘要|内容摘要|文摘)\s*[:：]?(\s|$)/i },
-  { type: 'keywords', regex: /(?:(?:^|\n)\s*|\b)(keywords?|key\s*words?|关键词|关键字)\s*[:：]?(\s|$)/i },
-  { type: 'highlights', regex: /(?:(?:^|\n)\s*|\b)(highlights?|亮点|研究亮点)\s*[:：]?(\s|$)/i },
-  { type: 'introduction', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(introduction|引言|前言|绪论|序言)\s*[:：]?(\s|$)/i },
-  { type: 'background', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(background|研究背景|问题背景)\s*[:：]?(\s|$)/i },
-  { type: 'methods', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?|setup))?|材料与方法|实验方法|实验部分|方法|实验材料与方法)\s*[:：]?(\s|$)/i },
-  { type: 'results', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(results?(\s+and\s+discussion)?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?(\s|$)/i },
-  { type: 'discussion', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(discussion|讨论|分析与讨论)\s*[:：]?(\s|$)/i },
-  { type: 'conclusion', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(conclusions?|总结|结论|结语|小结)\s*[:：]?(\s|$)/i },
-  { type: 'acknowledgments', regex: /(?:(?:^|\n)\s*|\b)(acknowledg(e)?ments?|致谢|鸣谢)\s*[:：]?(\s|$)/i },
-  { type: 'references', regex: /(?:(?:^|\n)\s*|\b)(references?|bibliography|参考文献|引用文献)\s*[:：]?(\s|$)/i },
-  { type: 'supplementary', regex: /(?:(?:^|\n)\s*|\b)(supporting\s+information|supplementary\s+(material|information|content)|附录|补充材料|补充信息)\s*[:：]?(\s|$)/i },
-  { type: 'appendix', regex: /(?:(?:^|\n)\s*|\b)(appendix|附录)\s*[:：]?(\s|$)/i },
+  // 复合 keyword 在前（避免被短 keyword 误吃）
+  { type: 'graphical_abstract', regex: /^\s*(graphical\s+abstract|图解摘要|图形摘要)\s*[:：]?\s*$/i },
+  { type: 'article_info', regex: /^\s*(article\s+info(rmation)?|文章信息|论文信息)\s*[:：]?\s*$/i },
+  { type: 'highlights', regex: /^\s*(highlights?|亮点|研究亮点)\s*[:：]?\s*$/i },
+  { type: 'abstract', regex: /^\s*(abstract|summary|摘要|内容摘要|文摘)\s*[:：]?\s*$/i },
+  { type: 'keywords', regex: /^\s*(keywords?|key\s*words?|关键词|关键字)\s*[:：]?\s*$/i },
+  // methods / results / discussion / conclusion / introduction / background
+  // 全部带 ^ 锚定 + 行尾 \s*$，且 methods/results 必须带编号前缀或独立
+  { type: 'introduction', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(introduction|引言|前言|绪论|序言)\s*[:：]?\s*$/i },
+  { type: 'background', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(background|研究背景|问题背景)\s*[:：]?\s*$/i },
+  { type: 'methods', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?|setup))?|材料与方法|实验方法|实验部分|方法|实验材料与方法)\s*[:：]?\s*$/i },
+  { type: 'results', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(results?(\s+and\s+discussion)?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?\s*$/i },
+  { type: 'discussion', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(discussion|讨论|分析与讨论)\s*[:：]?\s*$/i },
+  { type: 'conclusion', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(conclusions?|总结|结论|结语|小结)\s*[:：]?\s*$/i },
+  { type: 'acknowledgments', regex: /^\s*(acknowledg(e)?ments?|致谢|鸣谢)\s*[:：]?\s*$/i },
+  { type: 'references', regex: /^\s*(references?|bibliography|参考文献|引用文献)\s*[:：]?\s*$/i },
+  { type: 'supplementary', regex: /^\s*(supporting\s+information|supplementary\s+(material|information|content)|附录|补充材料|补充信息)\s*[:：]?\s*$/i },
+  { type: 'appendix', regex: /^\s*(appendix|附录)\s*[:：]?\s*$/i },
 ]
 
 // 编号章节模式（带或不带点）—— 只匹配前导编号 + 空白，不吞标题
