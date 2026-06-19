@@ -111,8 +111,8 @@
           @extract="handleExtractMultimodal"
         />
 
-        <!-- 知识图谱（无数据时轻量空状态） -->
-        <section v-if="graphData?.nodes?.length" class="paper-graph">
+        <!-- 知识图谱（无数据或渲染失败时轻量空状态） -->
+        <section v-if="graphData?.nodes?.length && graphRendered" class="paper-graph">
           <h2 class="graph-title">🕸️ 知识图谱</h2>
           <div ref="graphRef" class="graph-container"></div>
         </section>
@@ -355,35 +355,46 @@ const handleReanalyze = async () => {
   }
 }
 
+const graphRendered = ref(false)
+
 const renderGraph = () => {
-  if (!graphRef.value || !graphData.value?.nodes?.length) return
-  if (chartInstance) chartInstance.dispose()
-  chartInstance = echarts.init(graphRef.value)
-  const nodes = graphData.value.nodes.map(n => ({
-    id: n.id,
-    name: n.label || n.title,
-    symbolSize: Math.min(40, 15 + (n.weight || 1) * 5),
-    category: n.type || 0,
-  }))
-  const edges = graphData.value.edges.map(e => ({
-    source: e.source,
-    target: e.target,
-    label: { show: true, formatter: e.label || '' },
-  }))
-  chartInstance.setOption({
-    tooltip: {},
-    series: [{
-      type: 'graph',
-      layout: 'force',
-      roam: true,
-      draggable: true,
-      force: { repulsion: 200, edgeLength: [100, 300] },
-      data: nodes,
-      edges: edges,
-      label: { show: true, fontSize: 11 },
-      lineStyle: { color: '#ccc', curveness: 0.2 },
-    }],
-  })
+  if (!graphRef.value || !graphData.value?.nodes?.length) {
+    graphRendered.value = false
+    return
+  }
+  try {
+    if (chartInstance) chartInstance.dispose()
+    chartInstance = echarts.init(graphRef.value)
+    const nodes = graphData.value.nodes.map(n => ({
+      id: n.id,
+      name: n.label || n.title,
+      symbolSize: Math.min(40, 15 + (n.weight || 1) * 5),
+      category: n.type || 0,
+    }))
+    const edges = graphData.value.edges.map(e => ({
+      source: e.source,
+      target: e.target,
+      label: { show: true, formatter: e.label || '' },
+    }))
+    chartInstance.setOption({
+      tooltip: {},
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        draggable: true,
+        force: { repulsion: 200, edgeLength: [100, 300] },
+        data: nodes,
+        edges: edges,
+        label: { show: true, fontSize: 11 },
+        lineStyle: { color: '#ccc', curveness: 0.2 },
+      }],
+    })
+    graphRendered.value = true
+  } catch (e) {
+    console.warn('知识图谱渲染失败，降级为空状态:', e)
+    graphRendered.value = false
+  }
 }
 
 // 路由 id 变化时重新加载
