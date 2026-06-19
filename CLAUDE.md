@@ -2133,3 +2133,29 @@ print(f'{sum(1 for e in embs if e is not None and not np.all(e == 0))}/50 valid'
 ```
 
 **沉淀**：[memory/voiceprint-batch-bug-fix-2026-06-19.md](memory/voiceprint-batch-bug-fix-2026-06-19.md) 完整复盘 + [scripts/reprocess_meeting.py](scripts/reprocess_meeting.py) 9 步 CLI (verify step 可独立跑用于 8 字段 check)
+
+## 2026-06-19 声纹主路径修复第二次重跑验证（100% 幂等）
+
+修复推到主路径后（commit `52fa51a6`），用 `scripts/reprocess_meeting.py` 完整跑一次会议 #120 做对比验证：
+
+| 指标 | 第一次（修复前手动） | 第二次（修复后主路径） | 一致 |
+|---|---|---|---|
+| n_segments | 3357 | 3357 | ✅ |
+| n_valid_embs | 2830/2830 | 2830/2830 | ✅ |
+| n_clusters | 4 | 4 | ✅ |
+| silhouette | 0.184 | 0.184 | ✅ |
+| 聚类 0 | 宋洋 (294 votes, conf=0.419) | 宋洋 (294 votes, conf=0.419) | ✅ |
+| 聚类 1 | 杜同贺 (263 votes, conf=0.374) | 杜同贺 (263 votes, conf=0.374) | ✅ |
+| 聚类 2 | 贾琦 (287 votes, conf=0.538) | 贾琦 (287 votes, conf=0.538) | ✅ |
+| 聚类 3 | 王天志 (1094 votes, conf=0.394) | 王天志 (1094 votes, conf=0.394) | ✅ |
+| **new_speaker 数组** | 3357 段 | 3357 段 | ✅ **100% 一致** |
+| 8 字段 verify | 全 0 旧错标人 | 全 0 旧错标人 | ✅ |
+
+**结论** — 修复后 `vp_service.batch_extract_embeddings()` 与手工 `ThreadPoolExecutor` 行为**完全一致**：
+- 4 个聚类的名字/votes/conf 全部位级相同
+- 3357 段 speaker 分配完全相同（0 段差异）
+- silhouette 数值相同（embedding 数值层面就是一致的）
+
+**证据** — [scripts/compare_reprocess.py](scripts/compare_reprocess.py) 前后对比验证脚本，可用于任何重处理场景的幂等性检查。
+
+**总耗时** — 第一次 ~107s（手动脚本）vs 第二次 ~100s（主路径 wrapper），性能基本一致（音频 ffmpeg 转换缓存命中省了 7s）。
