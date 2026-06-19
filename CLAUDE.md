@@ -2159,3 +2159,281 @@ print(f'{sum(1 for e in embs if e is not None and not np.all(e == 0))}/50 valid'
 **证据** — [scripts/compare_reprocess.py](scripts/compare_reprocess.py) 前后对比验证脚本，可用于任何重处理场景的幂等性检查。
 
 **总耗时** — 第一次 ~107s（手动脚本）vs 第二次 ~100s（主路径 wrapper），性能基本一致（音频 ffmpeg 转换缓存命中省了 7s）。
+
+## 2026-06-19 智能论文阅读器 v26 + v26.1 回归修复（7 处回归 + 8 条新铁律）
+
+### 7 处回归根因 → 修复方案 → 验收
+
+| # | 回归症状 | 根因 | 修复 commit | 验收 |
+|---|---------|------|------------|------|
+| 1 | `<span class="chem-formula">O<sub>3</sub></span>` HTML 源码显示 | `chemFormat.formatChemicalText` 返回 HTML 字符串 → `autoLinkContent._escapeHtml` 二次转义 → v-html 渲染源码 | `2ee27015` | 0 命中 |
+| 2 | N2/O3/H2O2/CO2/mg·L-1 不显示为上下标 | 同 #1 | 同上 | Unicode 字符已渲染 272 个 |
+| 3 | 中文 OCR 说明 / JSON `{category: mixed...}` 残留 | `INTERNAL_MARKER_RES` 缺正则 | 同上 + `a7398d5c` | 0 命中 |
+| 4 | `[PAGE:x]` 仍出现 | 同上 | 同上 | 0 命中 |
+| 5 | Elsevier logo / 期刊封面被机械插入正文 | `matchFiguresWithCaptions` `figureNo: \`Fig. ${idx+1}\`` 按数组顺序分配；`getInlineFiguresFor` L2 不过滤 cover/logo | `2ee27015` | logo 不进正文 |
+| 6 | 阅读器变窄（732px） | `commit 982ac584` 把 `.paper-article { max-width: 820px; margin: 0 auto }` 居中挤压 | `2ee27015` 改 `max-width: 100%` | 1088px |
+| 7 | 工具栏破坏布局 | 同上链路 | 同上 | 工具栏不影响正文 |
+
+### 8 条新铁律（永久沉淀）
+
+#### 铁律 1：化学式 / 上下角标格式化必须返回 Unicode 字符，不用 HTML 标签
+
+```js
+// ❌ 反模式（chemFormat.js v25 及之前）
+[/\bO3\b/g, '<span class="chem-formula">O<sub>3</sub></span>']
+
+// ✅ 正模式（v26 回归修复后）
+[/\bO3\b/g, 'O₃']
+```
+
+**核心纪律**：
+- 任何"富文本格式化"函数（化学式 / 离子 / 自由基 / 单位上下角标 / 引用编号）**默认返回纯文本 + Unicode 上下标字符**（O₃ / H₂O₂ / CO₂ / OH⁻ / mg·L⁻¹ / ²³⁺）
+- **不**返回 `<span class="...">` `<sub>` `<sup>` 等 HTML 标签
+- 返回 HTML 是**最后手段**，且必须验证下游链路没有 `_escapeHtml` 等会二次转义的环节
+- 浏览器原生支持 Unicode 上下标字符渲染，无需自定义 CSS
+
+**为什么**：Vue 模板的 `v-html` 接收字符串时，**不再次 escape**。但很多工具链里有 `_escapeHtml(text)` 这种全量 escape 步骤（用于包 `<a>` 链接）。如果上游已经返回 HTML 字符串，再被下游 escape 就会把 `<` 转成 `&lt;`，v-html 渲染时显示源码。
+
+**如何修复 v-html + escape 链路冲突**：
+1. **方案 A（推荐，稳定）**：上游改返回纯 Unicode 字符，escape 无害
+2. 方案 B：上游保留 HTML，下游在 escape 前先检测/保护已有标签（如 `chemFormat.js` 历史 `__CHEM_TAG_N__` 机制），escape 后再还原
+
+**纪律**：新增任何"格式化字符串"工具函数时，**第一步**确认下游是否有 escape 链路，第二步决定返回类型。
+
+#### 铁律 2：正则 `{0,N}?` + `|$` 是经典陷阱，禁止使用
+
+```js
+// ❌ 反模式（v26.1 修复前的 _stripMultimodalBlocks）
+const re = /\{...[^}]{0,1500}?(?=\.\s+[A-Z]...|\s*!\[|\n\s*\n|$)/gi
+//                                        ↑ 这里 $ 让 lookahead 永远在字符串末尾成立
+//                                          非贪婪 + 1500 字符上限 + $ 终止符
+//                                          → 没有真实边界时贪婪到字符串末尾，吃掉所有正文
+```
+
+**核心纪律**：
+- `[^X]{0,N}?` 配合 `(?=...|$)` 的 `$` 分支会**永远满足**（字符串末尾就是 `$` 位置）
+- 当输入没有真实终止符（如 `. Fig` / `![` / `\n\n`）时，正则会扩展 `[^X]{0,N}?` 直到上限或字符串末尾
+- 表现为"莫名吃了一大段正文"
+
+**修复模式**：
+- **删除 `|$`** —— 强制要求真实终止符（`. 学句末` / `![` / `\n\n`）
+- 用 `[\s\S]{0,N}?` 替代 `[^X]{0,N}?`（允许更多字符类型，包括换行）
+- 限长 N 选择 800-1500 之间（根据真实块典型长度 × 2 估算）
+
+**诊断方法**：
+- 清洗函数吃掉了不该吃的内容
+- 手动 trace 每个 regex：先单独跑 `INTERNAL_MARKER_RES` 全部 22 条，无匹配；再逐步 trace `_cleanText` / `insertSectionBreaks` / `_stripMultimodalBlocks` 等
+- 用 `if (r !== before) console.log(...)` 加在每个 replace 之后，定位哪个 step 吃了内容
+
+**沉淀**：v26.1 调试用 `trace3.js` 完整 trace 了 cleanContent 所有 12 个步骤，最终定位到行 124 的内联 v26.1 正则 `|$` 导致 `species. Consistent with these results...` 之后 226 字符全被吃掉。
+
+#### 铁律 3：OCR 半截 JSON 必须有专门 `_stripMultimodalBlocks` 函数处理
+
+```js
+// OCR 经常输出:
+//   { "category": "mixed", "text": "(图描述)" }   ← 理想
+//   { "category": "mixed", "text": "(图描述)     ← OCR 漏闭合 }，污染溢出到正文
+// 后跟学术句末: ". Consistent with these results..."
+```
+
+**核心纪律**：
+- **不要**用 `\}` 闭合作为必需条件 —— OCR 经常漏闭合
+- 必须接受**未闭合**结构，但用真实边界作为终止符（`. [大写][小写]` / `![` / `\n\n`）
+- 起始正则必须允许 `{` 后空格（OCR 经常漏压缩空白）：`\{\s*['"]?category` 而非 `\{['"]?category`
+
+**正确实现模板**（`paperAdapter.js:_stripMultimodalBlocks`）：
+```js
+function _stripMultimodalBlocks(text) {
+  if (!text) return text
+  // 禁止 $ 作为终止符（铁律 2）
+  // 必须允许 \s* 容忍 OCR 空格
+  // 限长 800 字符（多模态块典型 100-400）
+  const re = /\{\s*['"]?(?:category|kind)['"]?\s*:\s*['"](?:mixed|chart|figure|...|figure_block)['"][^}]{0,800}?(?=\.\s+[A-Z][a-z]+\s+[a-z]|\s*!\[|\n\s*\n)/gi
+  return text.replace(re, '')
+}
+```
+
+**调用位置**：在 `INTERNAL_MARKER_RES` 循环之前调用（更精准的剥离优先）。
+
+#### 铁律 4：`_escapeHtml` 二次转义是隐形杀手
+
+**场景**：
+```js
+// 链路:
+const formatted = chemFormat.formatChemicalText(raw)   // 返回 '<span>O₃</span>'
+const linked = autoLinkContent(formatted)               // 内部 _escapeHtml(formatted)
+// _escapeHtml 把 '<' 转成 '&lt;' → linked = '&lt;span&gt;O₃&lt;/span&gt;'
+// v-html 渲染时显示为源码文本
+```
+
+**核心纪律**：
+- 任何**返回 HTML 字符串**的函数，上游链路必须 100% 确认**没有 `_escapeHtml` / `escape` / `encode` 类调用**
+- 用 grep 搜：`_escapeHtml`、`\.replace\(.*&lt;`、`.escapeHtml\(`、`escape(`
+- 如果发现上游有 escape，**改上游返回纯文本**（方案 A）或者**改下游先保护再 escape**
+
+**诊断方法**：
+- 浏览器 DevTools → Elements → 选中残留 HTML 源码（如 `<span class="chem-formula">`）
+- 看是否以 `&lt;` 开头（说明 v-html 接收的是 escaped HTML）
+- 而不是以 `<` 开头（v-html 接收的是真实 HTML）
+
+#### 铁律 5：图片必须按"真实图号 + isCoreFigure 分级"插入，禁止按数组顺序机械分配
+
+```js
+// ❌ 反模式（paperAdapter.js:1213 v25 及之前）
+return figures.map((fig, idx) => ({
+  ...fig,
+  figureNo: `Fig. ${idx + 1}`,   // ← 第一张图永远是 Fig. 1，Elsevier logo 也算 Fig. 1
+}))
+
+// ✅ 正模式（v26 回归修复后）
+return figures.map((fig, idx) => {
+  const isCoverLike = fig.isPublisherImage
+    || ['cover', 'logo', 'publisher', 'unknown'].includes(fig.figureType)
+  if (isCoverLike) {
+    return { ...fig, figureNo: null }   // 封面/logo/publisher 不进正文
+  }
+  // 尝试从 caption/OCR 提取真实图号
+  const m = (fig.caption || fig.ocrText || '').match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+  if (m) {
+    return { ...fig, figureNo: `${m[1].match(/Fig\.?|Figure|Scheme|Table/i)[0]} ${m[1]}` }
+  }
+  // 否则在 isCoreFigure 子数组内按顺序分配
+  coreCounter += 1
+  return { ...fig, figureNo: `Fig. ${coreCounter}` }
+})
+```
+
+**核心纪律**：
+- **禁止** `figureNo: \`Fig. ${idx+1}\`` 这种按数组索引分配的逻辑
+- 图片图号必须来自：① caption 文本 ② OCR 提取 ③ 同小节"Fig. N"正文引用 ④ 按 isCoreFigure 子数组顺序分配
+- `isPublisherImage = true` 或 `figureType` 是 `cover / logo / publisher / unknown` 的图，**永远 `figureNo = null`**，不进正文
+- `getInlineFiguresFor` L2 fallback 也必须有同样的过滤（否则 `figure_marker` block 会绕过 L1 的过滤）
+
+#### 铁律 6：阅读器宽度必须有"主列 + 工具栏"分层，工具栏不挤压正文
+
+```css
+/* ❌ 反模式（v25 提交后回归） */
+.paper-article {
+  max-width: 820px;
+  margin-left: auto;       /* 在 1fr 主列中居中挤压 */
+  margin-right: auto;
+}
+
+/* ✅ 正模式（v26 修复） */
+.paper-article {
+  max-width: 100%;          /* 撑满主列（~1088px） */
+}
+.paper-detail-layout {
+  display: grid;
+  grid-template-columns: 1fr 240px;  /* 主列自适应 + 右栏 sticky */
+  max-width: 1400px;
+  margin: 0 auto;
+}
+```
+
+**核心纪律**：
+- 主内容卡片用 `max-width: 100%` 让 grid 自动撑满主列
+- 工具栏（如 `ReadingToolbar`）如果自身无限宽，**必须**也用 `max-width: 100%`（否则工具栏宽度 ≠ 正文宽度，视觉错位）
+- 布局尺寸参考：主列 1088px / 右栏 240px / 间距 24px / 整体 ≤ 1400px
+
+**诊断方法**：
+- DevTools → 选中 `.paper-article` → 检查 computed width
+- 选中 `.reading-toolbar` → 检查 computed width
+- 两者应该相同（或工具栏略宽但不超过主列）
+
+#### 铁律 7：内联图片必须有"高置信度"三重校验
+
+```js
+// isInlineEligible 函数（v26 修复 KnowledgeDetailView.vue）
+const isInlineEligible = (f) => {
+  if (!f) return false
+  if (f.isPublisherImage) return false           // 1. 过滤 publish/cover/logo
+  if (f.kind === 'cover' || f.kind === 'logo') return false
+  if (['cover', 'logo', 'publisher', 'unknown'].includes(f.figureType)) return false
+  if (!f.figureNo) return false                  // 2. 必须有真实图号（不能是 Fig. ${idx} 占位）
+  return true
+}
+```
+
+**三重校验**（任何 inline image 必须同时满足）：
+1. **类型合法**：`isCoreFigure = true` 且 figureType 不是 cover/logo/publisher/unknown
+2. **图号合法**：`figureNo` 不为 null 且**不**是 `Fig. ${数组idx}` 这种机械占位
+3. **正文引用**：section 的段落文本里出现过 `Fig. N` / `Scheme N` 等引用（`_buildInlineFigureMap` 已实现）
+
+**不满足时**：宁可不在正文内嵌图，保留在文末"多模态总图库"。
+
+#### 铁律 8：本地 trace 脚本是定位 v26/v26.1 这类"正则吃内容"问题的唯一可靠手段
+
+```bash
+# 1. 用 Node eval 跑 cleanContent 看真实输出
+node -e "
+  const fs = require('fs');
+  let src = fs.readFileSync('web/src/utils/paperAdapter.js', 'utf8');
+  src = src.replace(/^\\s*export\\s+/gm, '');
+  eval(src + \`
+    const r = cleanContent('orbital ![图（P8, { \\\"category\\\": \\\"mixed\\\", \\\"text\\\": \\\"...\\\". Consistent with');
+    console.log(JSON.stringify(r.content));
+  \`);
+"
+
+# 2. 逐步 trace 每个 step
+# 在 cleanContent 内每个 replace 后加 console.log
+for (const re of INTERNAL_MARKER_RES) {
+  const before = r;
+  r = r.replace(re, '');
+  if (r !== before) console.log('Marker ate:', re.toString().slice(0, 80), 'len', before.length, '→', r.length);
+}
+```
+
+**核心纪律**：
+- 看到 `cleanContent` 输出与原始输入差异巨大时（如 242 → 16 chars），99% 是某条正则贪婪匹配
+- 不要凭直觉猜哪条正则，**逐步 trace**每个 step 看哪一步吃了内容
+- 关键 trace 工具：每个 replace 后加 `if (before !== after) console.log(...)` + 打印正则字符串 + 打印前后长度
+
+### 部署必做（CLAUDE.md 752 行铁律变体）
+
+```bash
+# 1. 跑单元测试
+cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
+# 期望: 73/73 通过
+
+# 2. 前端 build
+npm run build  # 注意 dist 在 .gitignore，必须 git add -f web/dist/
+
+# 3. 验证 deploy 链（按 CLAUDE.md 2026-06-17 教训）
+git push origin main
+git log --oneline origin/main -1  # 必须 = 本地 HEAD
+
+# 4. 用户端硬刷新 + 一键检测
+# Cmd/Ctrl + Shift + R
+# 浏览器 console 跑 v261RegressionCheck 验证 8/8 PASS
+```
+
+### 沉淀
+
+- **chemFormat.js**: Unicode 版本稳定，所有 EXACT_FORMULAS / ION_PATTERNS / UNIT_PATTERNS 都返回纯文本
+- **paperAdapter.js**: 
+  - `_stripMultimodalBlocks` 处理 OCR 半截 JSON（铁律 3）
+  - `matchFiguresWithCaptions` 按 isCoreFigure 分级 + 真实图号（铁律 5）
+  - `INTERNAL_MARKER_RES` 新增 8 条正则覆盖 JSON 残留 / 中文图注 / minio URL
+- **PaperBlockRenderer.vue**: 移除过时 chem-formula CSS，添加 v26 防御注释
+- **KnowledgeDetailView.vue**: 
+  - `getInlineFiguresFor` 加 `isInlineEligible` 守卫（铁律 7）
+  - `.paper-article { max-width: 100% }` 恢复撑满主列（铁律 6）
+- **测试**: paperAdapter.test.js **73/73 通过**（含 3 个 v26.1 新增 case：用户真实数据 + kind 变体 + 闭合版本）
+
+### 验收命令
+
+```bash
+# 单元测试
+cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
+# 期望: 73/73 通过
+
+# 端到端（浏览器 console）
+# Cmd/Ctrl + Shift + R 后跑 v261RegressionCheck
+# 期望: P0-1~P0-6 全 0，P1-1 > 10，P1-2 > 900
+```
+
+### 后续约束
+
+P1 工作（智能图文匹配 / 翻译 / 知识图谱 / 段落操作 / AI 总结）按用户要求**暂不启动**，等基础阅读器稳定确认无误后再推进。任何新增功能必须遵守铁律 1-8，避免再次触发 HTML 二次转义 / 正则贪婪吃内容 / 图片机械分配 等回归。
