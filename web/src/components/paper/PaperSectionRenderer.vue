@@ -75,13 +75,20 @@ const props = defineProps({
 
 const referencesExpanded = ref(false)
 
-const displayTitle = computed(() => {
-  return props.section.title || '未命名章节'
+const sectionNumber = computed(() => {
+  const m = /^(\d+(?:\.\d+)*)\.?\s+/.exec(props.section.title || '')
+  return m ? m[1] : null
 })
 
-const sectionNumber = computed(() => {
-  const m = /^(\d+(?:\.\d+)*)\s*/.exec(props.section.title || '')
-  return m ? m[1] : null
+// 如果有 sectionNumber badge，标题只显示编号后的文字（避免重复显示 2.1）
+const displayTitle = computed(() => {
+  const title = props.section.title || '未命名章节'
+  if (sectionNumber.value) {
+    // 去掉编号前缀："2.1. Experimental system" → "Experimental system"
+    const stripped = title.replace(/^(\d+(?:\.\d+)*)\.?\s+/, '').trim()
+    return stripped || title
+  }
+  return title
 })
 
 const isReferences = computed(() => props.section.type === 'references')

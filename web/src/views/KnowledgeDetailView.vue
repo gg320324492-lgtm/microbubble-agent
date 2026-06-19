@@ -111,16 +111,23 @@
           @extract="handleExtractMultimodal"
         />
 
-        <!-- 知识图谱（无数据或渲染失败时轻量空状态） -->
-        <section v-if="graphData?.nodes?.length && graphRendered" class="paper-graph">
+        <!-- 知识图谱三态：success / empty / failed -->
+        <section v-if="graphStatus === 'success' && graphRendered" class="paper-graph">
           <h2 class="graph-title">🕸️ 知识图谱</h2>
           <div ref="graphRef" class="graph-container"></div>
+        </section>
+        <section v-else-if="graphStatus === 'failed'" class="paper-graph paper-graph-empty paper-graph-failed">
+          <div class="graph-empty-content">
+            <el-icon class="graph-empty-icon"><CircleClose /></el-icon>
+            <span class="graph-empty-text">知识图谱生成失败</span>
+            <span class="graph-empty-hint">图谱数据加载异常，请稍后刷新重试</span>
+          </div>
         </section>
         <section v-else class="paper-graph paper-graph-empty">
           <div class="graph-empty-content">
             <el-icon class="graph-empty-icon"><Share /></el-icon>
             <span class="graph-empty-text">暂无知识图谱数据</span>
-            <span class="graph-empty-hint">该条目暂无关联实体图谱</span>
+            <span class="graph-empty-hint">该论文尚未完成知识图谱构建</span>
           </div>
         </section>
 
@@ -142,7 +149,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Share } from '@element-plus/icons-vue'
+import { Share, CircleClose } from '@element-plus/icons-vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -168,6 +175,7 @@ const rawKnowledge = ref(null)
 const paper = ref(null)
 const relatedKnowledge = ref([])
 const graphData = ref({ nodes: [], edges: [] })
+const graphStatus = ref('loading')  // 'loading' | 'success' | 'empty' | 'failed'
 const loading = ref(true)
 const reanalyzing = ref(false)
 const graphRef = ref(null)
@@ -225,12 +233,16 @@ const moduleCounts = computed(() => {
 })
 
 /**
- * 根据章节内嵌的 figure_marker 把对应图片放进章节
+ * 根据章节内嵌的 figure_marker 或 inlineFigureMap 把对应图片放进章节
  */
 function getInlineFiguresFor(section) {
-  if (!paper.value || !section?.blocks) return []
+  if (!paper.value || !section) return []
+  // L1: inlineFigureMap（正文中 "Fig. N" 引用匹配）
+  const fromMap = paper.value.inlineFigureMap?.[section.id] || []
+  if (fromMap.length) return fromMap
+  // L2: figure_marker blocks（[FIGURE:N] 占位符）
   const figureIds = new Set()
-  for (const b of section.blocks) {
+  for (const b of (section.blocks || [])) {
     if (b.type === 'figure_marker') figureIds.add(b.content)
   }
   if (!figureIds.size) return []
@@ -252,12 +264,17 @@ const fetchDetail = async () => {
     const [detailRes, relRes, graphRes] = await Promise.all([
       axios.get(`/api/v1/knowledge/${id}`),
       axios.get(`/api/v1/knowledge/${id}/related`, { params: { limit: 12 } }).catch(() => ({ data: [] })),
-      axios.get('/api/v1/knowledge/graph', { params: { center_id: id, depth: 1, limit: 30 } }).catch(() => ({ data: { nodes: [], edges: [] } })),
+      axios.get('/api/v1/knowledge/graph', { params: { center_id: id, depth: 1, limit: 30 } })
+        .then(r => { graphStatus.value = 'success'; return r })
+        .catch(e => { graphStatus.value = 'failed'; return { data: { nodes: [], edges: [] } } }),
     ])
 
     rawKnowledge.value = detailRes.data
     relatedKnowledge.value = relRes.data || []
     graphData.value = graphRes.data || { nodes: [], edges: [] }
+    if (graphStatus.value !== 'failed') {
+      graphStatus.value = (graphData.value.nodes?.length > 0) ? 'success' : 'empty'
+    }
 
     // 后台异步：触发 reformat（如果还没排版过）
     if (!detailRes.data.formatted_content) {
@@ -653,5 +670,18 @@ onUnmounted(() => {
 .graph-empty-hint {
   font-size: 12px;
   color: #9CA3AF;
+}
+
+.paper-graph-failed {
+  border-color: #fde2e2;
+  background: #fef0f0;
+}
+
+.paper-graph-failed .graph-empty-icon {
+  color: var(--color-danger);
+}
+
+.paper-graph-failed .graph-empty-text {
+  color: var(--color-danger);
 }
 </style>
