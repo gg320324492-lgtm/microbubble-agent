@@ -49,7 +49,11 @@ const SECTION_KEYWORDS = [
 ]
 
 // 编号章节模式（带或不带点）—— 只匹配前导编号 + 空白，不吞标题
-const NUMBERED_SECTION_RE = /^\s*(\d+(?:\.\d+){0,3})\.?\s+/
+// 严格限制：
+// - 数字 1-2 位（避免匹配 "2018. Formation" 这种年份开头）
+// - 必须后跟大写或中文字符（避免匹配 "[55] (14)" 这种参考文献条目）
+// - 容忍 "1.Introduction"（无空格）和 "1. Introduction"（有空格）
+const NUMBERED_SECTION_RE = /^\s*(\d{1,2}(\.\d{1,2}){0,3})\.?\s*([A-Z一-龥])/
 
 // 页码占位符（多种形式）
 const PAGE_MARKER_RES = [
@@ -71,7 +75,13 @@ const URL_RE = /\bhttps?:\/\/[^\s<>"')]+/g
 const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g
 
 // 引用模式：参考文献条目通常以 [1] / 1. / (Smith 2020) 开头
-const REFERENCE_ENTRY_RE = /^\s*(?:\[\d+\]|\(\d+\)|\d+\.)\s+[A-Z一-龥]/
+// 兼容真实 OCR 格式：
+// - [1] Author, A. B. (2020). Title. Journal. https://doi.org/...
+// - [55] (14), 9691-9710. Title. Journal.  ← (14) 是卷号，紧跟空格
+// - 1. Author. Title. Journal.
+// - 100031. https://doi.org/...           ← 只剩 DOI 的精简条目
+// 关键: 整行必须以 [N] / N. / N 开头（数字），否则不是参考文献
+const REFERENCE_ENTRY_RE = /^\s*(?:\[\d+\]|\d+\.)\s+\S/
 
 // 图片扩展名（识别裸图片 URL）
 const IMG_EXT_RE = /\.(?:jpe?g|png|webp|gif|bmp|svg)(?:\?[^\s]*)?$/i
@@ -665,7 +675,18 @@ function _parsePlainTextSections(content) {
     })
   }
 
-  return sections
+  // 去重相邻重复章节（OCR 重复识别）
+  const deduped = []
+  for (const s of sections) {
+    const last = deduped[deduped.length - 1]
+    if (last && last.type === s.type && last.title?.toLowerCase() === s.title?.toLowerCase()) {
+      // 合并 blocks
+      last.blocks = (last.blocks || []).concat(s.blocks || [])
+      continue
+    }
+    deduped.push(s)
+  }
+  return deduped
 }
 
 
