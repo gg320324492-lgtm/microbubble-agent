@@ -314,6 +314,20 @@ class KnowledgeService:
         except Exception as e:
             logger.warning(f"Neo4j 图谱构建失败(knowledge_id={knowledge_id}): {e}")
 
+        # Step 7: 多模态提取（图片 OCR / 公式 / 表格） — Phase 7
+        # 仅当文件是 PDF/PPTX 且有 file_path 时触发
+        try:
+            from app.services.multimodal_extraction_service import multimodal_extraction_service
+            extraction_result = await multimodal_extraction_service.extract_for_knowledge(knowledge_id)
+            if extraction_result.get("ok") and not extraction_result.get("skipped"):
+                logger.info(
+                    f"多模态提取完成(knowledge_id={knowledge_id}): "
+                    f"images={extraction_result.get('images_total', 0)}, "
+                    f"extractions={extraction_result.get('extractions', {})}"
+                )
+        except Exception as e:
+            logger.warning(f"多模态提取失败(knowledge_id={knowledge_id}): {e}", exc_info=True)
+
     async def create_from_conversation(
         self,
         title: str,

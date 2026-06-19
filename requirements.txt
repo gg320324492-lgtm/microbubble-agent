@@ -57,6 +57,10 @@ python-docx==1.1.0
 openpyxl==3.1.2
 python-pptx==1.0.2
 
+# 多模态知识库 OCR（Phase 7）
+Pillow>=10.0.0          # 图片处理（缩放、模式转换）
+# pytesseract 可选（备选 OCR 后端，需系统 tesseract 二进制）
+
 # 工具库
 python-dotenv==1.0.0
 pydantic-settings==2.1.0

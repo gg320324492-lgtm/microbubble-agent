@@ -10,6 +10,12 @@
     <!-- 左侧彩色条 -->
     <div class="card-accent" :style="{ background: accentColor }"></div>
 
+    <!-- 缩略图（Phase 7 多模态：有图时显示首图） -->
+    <div v-if="item.thumbnail_url" class="card-thumbnail">
+      <img :src="item.thumbnail_url" :alt="item.title" loading="lazy" />
+      <div v-if="item.image_count > 1" class="card-thumbnail-badge">+{{ item.image_count - 1 }}</div>
+    </div>
+
     <!-- 卡片内容 -->
     <div class="card-body">
       <!-- 头部：分类 + 状态 -->
@@ -268,6 +274,39 @@ const formatDate = (dateStr) => {
   font-size: 18px;
   opacity: 0.7;
   flex-shrink: 0;
+}
+
+/* 缩略图（Phase 7 多模态） */
+.card-thumbnail {
+  position: relative;
+  width: 100%;
+  height: 120px;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+  flex-shrink: 0;
+}
+
+.card-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.knowledge-card:hover .card-thumbnail img {
+  transform: scale(1.05);
+}
+
+.card-thumbnail-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 /* 标题 */

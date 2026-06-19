@@ -10,6 +10,10 @@
       <el-icon size="16" color="#409eff"><MagicStick /></el-icon>
       <span>上传后 AI 将自动分析内容，生成摘要、分类、标签和知识关联</span>
     </div>
+    <div v-if="isPdfOrPptx" class="upload-multimodal-notice">
+      <el-icon size="16" color="#67c23a"><Picture /></el-icon>
+      <span>PDF / PPTX 将自动提取图片、公式（LaTeX）、表格和图表说明（多模态 OCR）</span>
+    </div>
     <el-form label-width="80px">
       <el-form-item label="标题">
         <el-input v-model="title" placeholder="留空则使用文件名" />
@@ -40,9 +44,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { MagicStick, Upload } from '@element-plus/icons-vue'
+import { MagicStick, Upload, Picture } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const props = defineProps({
@@ -57,6 +61,12 @@ const title = ref('')
 const file = ref(null)
 const uploading = ref(false)
 const uploadRef = ref(null)
+
+const isPdfOrPptx = computed(() => {
+  if (!file.value) return false
+  const name = file.value.name || ''
+  return /\.pdf$|\.pptx$/i.test(name)
+})
 
 const onFileChange = (f) => {
   file.value = f.raw
@@ -74,7 +84,10 @@ const onUpload = async () => {
     if (title.value) formData.append('title', title.value)
 
     await axios.post('/api/v1/knowledge/upload', formData, { timeout: 180000 })
-    ElMessage.success('文件上传成功，后台正在分析...')
+    const tip = isPdfOrPptx.value
+      ? '文件上传成功，后台正在分析（文本 + 多模态 OCR 约 30-60s）'
+      : '文件上传成功，后台正在分析...'
+    ElMessage.success(tip)
     visible.value = false
     title.value = ''
     file.value = null
@@ -102,3 +115,26 @@ const onUpload = async () => {
   }
 }
 </script>
+
+<style scoped>
+.upload-ai-notice,
+.upload-multimodal-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--color-text-regular, #606266);
+}
+
+.upload-ai-notice {
+  background: #ecf5ff;
+}
+
+.upload-multimodal-notice {
+  background: #f0f9eb;
+  margin-top: -4px;
+}
+</style>

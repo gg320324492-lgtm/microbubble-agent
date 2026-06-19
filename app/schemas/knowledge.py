@@ -72,6 +72,9 @@ class KnowledgeListItem(BaseModel):
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    # 2026-06-19 Phase 7: 多模态摘要（首图缩略图 + 图片数）
+    thumbnail_url: Optional[str] = None
+    image_count: int = 0
 
     class Config:
         from_attributes = True
@@ -313,3 +316,78 @@ class FormulaList(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ── Multimodal Extraction Schemas (Phase 7) ──
+
+
+class KnowledgeImageItem(BaseModel):
+    """提取的图片（含 OCR 结果）"""
+    id: int
+    knowledge_id: int
+    page_number: Optional[int] = None
+    width: Optional[int] = None
+    height: Optional[int] = None
+    image_url: str
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    ocr_text: Optional[str] = None
+    ocr_status: str  # pending/done/failed/skipped
+    ocr_error: Optional[str] = None
+    ocr_model: Optional[str] = None
+    ocr_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class KnowledgeImageList(BaseModel):
+    """图片列表（含聚合统计）"""
+    items: List[KnowledgeImageItem]
+    total: int
+    ocr_done: int
+    ocr_failed: int
+    ocr_pending: int
+
+
+class ExtractionItem(BaseModel):
+    """统一提取物（公式/表格/图表/图片-OCR 块）"""
+    id: int
+    knowledge_id: int
+    source_image_id: Optional[int] = None
+    kind: str  # formula/table/chart/image_block
+    page_number: Optional[int] = None
+    data: Optional[dict] = None
+    content_text: Optional[str] = None
+    confidence: float
+    model_used: Optional[str] = None
+    source: str = "auto"
+    is_active: bool = True
+    created_at: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+        # 2026-06-19: model_used 触发 pydantic protected namespace 警告，
+        # 显式置空允许以 model_ 开头的字段名
+        protected_namespaces = ()
+
+
+class ExtractionList(BaseModel):
+    """提取物列表"""
+    items: List[ExtractionItem]
+    total: int
+    by_kind: dict  # {formula: N, table: N, chart: N, image_block: N}
+
+
+class MultimodalExtractResponse(BaseModel):
+    """触发多模态提取响应（手动重跑用）"""
+    ok: bool
+    skipped: bool = False
+    reason: Optional[str] = None
+    knowledge_id: Optional[int] = None
+    images_total: Optional[int] = None
+    images_ocr_ok: Optional[int] = None
+    extractions: Optional[dict] = None
+    error: Optional[str] = None
+

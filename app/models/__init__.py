@@ -7,6 +7,7 @@ from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
 from app.models.knowledge_hypothesis import KnowledgeHypothesis
 from app.models.knowledge_formula import KnowledgeFormula
 from app.models.formula_category import FormulaCategory
+from app.models.knowledge_multimodal import KnowledgeImage, KnowledgeExtraction  # Phase 7
 from app.models.reminder import Reminder
 from app.models.memory import Memory
 from app.models.feedback import Feedback
@@ -31,4 +32,6 @@ __all__ = [
     "PromptTemplate",
     "VoiceprintHistory",
     "AgentTrace",
+    "KnowledgeImage",       # Phase 7 多模态
+    "KnowledgeExtraction",  # Phase 7 多模态
 ]
