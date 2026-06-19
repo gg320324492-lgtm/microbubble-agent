@@ -51,6 +51,25 @@ https://agent.mnb-lab.cn        # 生产
 
 详细部署：[docs/deploy.md](docs/deploy.md)
 
+## 运维工具
+
+### 会议发言人重处理（用于修复历史会议识别质量）
+
+```powershell
+# 重处理某次会议（声纹 + DB + 纪要 + verify 一条龙）
+powershell scripts/run-reprocess.ps1 -Meeting 120 -AudioPath "C:\path\audio.m4a"
+
+# 只验证 8 字段无错标人
+powershell scripts/run-reprocess.ps1 -Meeting 120 -Steps verify
+
+# 只重生成 summary/key_points/decisions（复用 result.json）
+powershell scripts/run-reprocess.ps1 -Meeting 120 -Steps regen
+```
+
+cmd.exe 用户：`scripts\run-reprocess.bat 120 verify`
+
+详见 [docs/reprocess-meeting.md](docs/reprocess-meeting.md)。
+
 ## 项目结构
 
 ```
