@@ -601,6 +601,261 @@ class MultimodalExtractionService:
             knowledge.formatted_content = base + injection
             await db.commit()
 
+    # ── Inline placement（v2: 把图/表/公式 嵌回原文位置） ─────────
+
+    INLINE_MARKER = "<!-- MULTIMODAL_INLINED v1 -->"
+    PAGE_MARKER_RE = re.compile(r"\[PAGE:(\d+)\]")
+
+    async def reparse_pdf_with_page_markers(self, knowledge_id: int) -> dict:
+        """重新解析 PDF 加上 [PAGE:N] 标记，更新 knowledge.content
+
+        适用场景：知识入库时是 Phase 7 v1 之前，没有 page marker → inline 无法定位
+        """
+        from app.services.file_service import file_service as fs
+        from app.services.file_parser_service import file_parser_service
+
+        async with async_session() as db:
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if not knowledge:
+                return {"ok": False, "reason": "knowledge_not_found"}
+            if not knowledge.file_path:
+                return {"ok": False, "reason": "no_file_path"}
+            file_path = knowledge.file_path
+            file_name = knowledge.file_name or "unknown"
+            file_type = knowledge.file_type or "application/octet-stream"
+
+        try:
+            file_data = await fs.download_file(file_path)
+        except Exception as e:
+            return {"ok": False, "reason": f"download_failed: {e}"}
+
+        try:
+            extracted = await file_parser_service.extract_content(
+                file_data, file_name, file_type
+            )
+        except Exception as e:
+            return {"ok": False, "reason": f"parse_failed: {e}"}
+
+        new_content = extracted["text"]
+        async with async_session() as db:
+            r = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+            k = r.scalar_one_or_none()
+            if k:
+                k.content = new_content
+                # 保留现有 formatted_content 不变（AI 排版有章节结构）
+                await db.commit()
+        return {"ok": True, "new_content_length": len(new_content), "page_markers": len(self.PAGE_MARKER_RE.findall(new_content))}
+
+    async def inline_extractions_to_content(self, knowledge_id: int) -> dict:
+        """用页码匹配把多模态提取物嵌回原文对应位置
+
+        设计目标：
+        - 解决用户痛点「所有图都在底下，正文只看到 Fig.5 文字」
+        - 用**页码 + [PAGE:N] 标记**定位（OCR 文字里没 Fig 编号，LLM 又太保守）
+        - 流程：
+          1. 找 content 里所有 [PAGE:N] 标记
+          2. 对每个 image/extraction，按其 page_number 找对应 [PAGE:N] 标记
+          3. 在 [PAGE:N] 标记后插入 inline markdown
+        - 找不到 page marker（老 content 无标记）→ 退回末尾
+        - 幂等：检查 INLINE_MARKER 避免重复插入
+        """
+        import re
+
+        # 1. 拿 knowledge
+        async with async_session() as db:
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if not knowledge:
+                return {"ok": False, "reason": "knowledge_not_found"}
+            # 用 content（有 [PAGE:N] 标记）做定位基底，formatted_content 做最终展示
+            # 但 formatted_content 缺 page marker，inline 必须基于 content
+            base_content = knowledge.content or ""
+
+        # 2. 拿所有 images + extractions
+        async with async_session() as db:
+            img_result = await db.execute(
+                select(KnowledgeImage)
+                .where(KnowledgeImage.knowledge_id == knowledge_id)
+                .order_by(KnowledgeImage.id)
+            )
+            images = img_result.scalars().all()
+            ext_result = await db.execute(
+                select(KnowledgeExtraction)
+                .where(
+                    KnowledgeExtraction.knowledge_id == knowledge_id,
+                    KnowledgeExtraction.is_active == True,
+                )
+                .order_by(KnowledgeExtraction.id)
+            )
+            extractions = ext_result.scalars().all()
+
+        figure_images = [
+            img for img in images
+            if (img.ocr_text and len(img.ocr_text) > 30)  # 排除 journal logo / 装饰
+        ]
+        inline_extractions = [
+            e for e in extractions
+            if e.kind in (EXTRACTION_KIND_FORMULA, EXTRACTION_KIND_TABLE, EXTRACTION_KIND_CHART)
+        ]
+
+        if not (figure_images or inline_extractions):
+            return {"ok": True, "skipped": True, "reason": "no_inline_candidates"}
+
+        # 3. 找所有 [PAGE:N] 标记
+        page_marker_positions: dict = {}  # page_num -> position
+        for m in self.PAGE_MARKER_RE.finditer(base_content):
+            page_num = int(m.group(1))
+            if page_num not in page_marker_positions:
+                page_marker_positions[page_num] = m.end()  # 标记结束位置 = 插入点
+
+        if not page_marker_positions:
+            # 老 content 没有 page marker → 退回末尾
+            logger.warning(
+                f"knowledge_id={knowledge_id} content 无 [PAGE:N] 标记，"
+                f"请先调 reparse_pdf_with_page_markers 重解析"
+            )
+            return {
+                "ok": False,
+                "reason": "no_page_markers_in_content",
+                "hint": "POST /knowledge/{id}/reparse-pdf first",
+            }
+
+        # 4. 为每个 item 找对应 page 的插入点
+        max_page = max(page_marker_positions.keys())
+        match_positions: list = []  # [(position, mid, kind, item)]
+
+        for img in figure_images:
+            page = img.page_number or 1
+            if page > max_page:
+                page = max_page
+            pos = page_marker_positions.get(page)
+            if pos is not None:
+                match_positions.append((pos, img.id, "image", img))
+
+        for e in inline_extractions:
+            page = e.page_number or 1
+            if page > max_page:
+                page = max_page
+            pos = page_marker_positions.get(page)
+            if pos is not None:
+                match_positions.append((pos, e.id, "extraction", e))
+
+        if not match_positions:
+            return {"ok": True, "skipped": True, "reason": "no_page_matches"}
+
+        # 5. 按位置从后往前排序，相同位置（同一页）按 ID 排序
+        match_positions.sort(key=lambda x: (x[0], -x[1]), reverse=True)
+
+        # 合并同一位置的多个 item（同一页可能有多图/表）
+        new_content = base_content
+        inserted_mids: set = set()
+        grouped: dict = {}  # pos -> [items]
+        for pos, mid, kind, item in match_positions:
+            grouped.setdefault(pos, []).append((mid, kind, item))
+
+        # 按位置从后往前插入
+        for pos in sorted(grouped.keys(), reverse=True):
+            items_at_pos = grouped[pos]
+            md_chunks = []
+            for mid, kind, item in items_at_pos:
+                if mid in inserted_mids:
+                    continue
+                inline_md = self._format_inline_markdown(kind, item)
+                if inline_md:
+                    md_chunks.append(inline_md)
+                    inserted_mids.add(mid)
+            if md_chunks:
+                block = "\n\n" + "\n\n".join(md_chunks) + "\n\n"
+                new_content = new_content[:pos] + block + new_content[pos:]
+
+        # 6. unmatched items → 末尾 append
+        item_lookup = {img.id: ("image", img) for img in figure_images}
+        for e in inline_extractions:
+            item_lookup[e.id] = ("extraction", e)
+        unmatched_to_append = []
+        for pos, mid, kind, item in match_positions:
+            if mid in inserted_mids or mid not in item_lookup:
+                continue
+            inline_md = self._format_inline_markdown(kind, item)
+            if inline_md:
+                unmatched_to_append.append(inline_md)
+
+        # 7. 幂等检查
+        if self.INLINE_MARKER in new_content:
+            new_content = new_content.split(self.INLINE_MARKER)[0].rstrip()
+
+        if unmatched_to_append:
+            new_content += "\n\n---\n\n## 未在正文匹配的多模态提取\n\n" + "\n\n".join(unmatched_to_append) + "\n"
+
+        new_content += f"\n\n{self.INLINE_MARKER}\n"
+
+        # 8. 写回 formatted_content（同时保留 content 完整性）
+        async with async_session() as db:
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if knowledge:
+                # 同时更新 formatted_content（详情页渲染）和 content（保留 page marker）
+                # 因为 base_content 是 content 本身，所以新 content 就是 base + inline
+                knowledge.content = new_content
+                knowledge.formatted_content = new_content
+                await db.commit()
+
+        logger.info(
+            f"inline_extractions(knowledge_id={knowledge_id}): "
+            f"matched={len(inserted_mids)} unmatched={len(unmatched_to_append)}"
+        )
+        return {
+            "ok": True,
+            "knowledge_id": knowledge_id,
+            "matches_total": len(inserted_mids),
+            "unmatched_total": len(unmatched_to_append),
+            "new_content_length": len(new_content),
+        }
+
+    def _format_inline_markdown(self, kind: str, item) -> Optional[str]:
+        """把图片 / 公式 / 表格 / 图表 格式化成 inline markdown 片段
+
+        Returns: markdown 字符串（不含前后空行）或 None（无法格式化）
+        """
+        if kind == "image":
+            # 图片：![caption](url)
+            img = item
+            page = img.page_number
+            ocr = (img.ocr_text or "").strip().replace("\n", " ")[:100]
+            cap = f"图（P{page}，{ocr}...）" if page else f"图（{ocr}...）"
+            return f"![{cap}]({img.image_url})"
+        elif kind == "extraction":
+            e = item
+            if e.kind == EXTRACTION_KIND_FORMULA:
+                latex = (e.data or {}).get("latex", "").strip() or e.content_text or ""
+                if not latex:
+                    return None
+                page = e.page_number
+                return f"$$\n{latex}\n$$\n<!-- 公式（P{page}） -->" if page else f"$$\n{latex}\n$$"
+            elif e.kind == EXTRACTION_KIND_TABLE:
+                md = e.content_text or ""
+                if not md:
+                    return None
+                page = e.page_number
+                cap = f"**表格（P{page}）**\n\n" if page else "**表格**\n\n"
+                return cap + md
+            elif e.kind == EXTRACTION_KIND_CHART:
+                desc = (e.data or {}).get("description", "").strip() or e.content_text or ""
+                if not desc:
+                    return None
+                page = e.page_number
+                header = f"> 📊 **图表说明（P{page}）**" if page else "> 📊 **图表说明**"
+                # 多行描述加引用块
+                return f"{header}\n> {desc}"
+        return None
+
 
 def _parse_markdown_table(md: str) -> dict:
     """简单解析 Markdown 表格为 {headers, rows, caption}

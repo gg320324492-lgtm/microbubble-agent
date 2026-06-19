@@ -2,6 +2,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Body
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from typing import Optional, List
@@ -995,3 +996,94 @@ async def trigger_multimodal_extraction(
         return MultimodalExtractResponse(
             ok=False, error=str(e), knowledge_id=knowledge_id,
         )
+
+
+class InlineExtractionsResponse(BaseModel):
+    """Inline 多模态提取物到原排版响应"""
+    ok: bool
+    knowledge_id: Optional[int] = None
+    matches_total: Optional[int] = None  # 成功 inline 到正文的项数
+    unmatched_total: Optional[int] = None  # 退回末尾的项数
+    new_content_length: Optional[int] = None
+    reason: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post(
+    "/knowledge/{knowledge_id}/inline-extractions",
+    response_model=InlineExtractionsResponse,
+)
+async def inline_extractions(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """把多模态提取物（图片/公式/表格/图表）inline 嵌入原排版
+
+    解决用户痛点「所有图都在底下，正文只看到 Fig.5 文字」：
+    - 用页码匹配：根据图片/公式/表格的 page_number 找 [PAGE:N] 标记位置
+    - 在该位置插入 markdown（图片/LaTeX/表格/引用块）
+    - 找不到 page marker（老 PDF 无标记）→ 退回末尾"未匹配" section
+    - 幂等（检查 INLINE_MARKER）
+
+    适用场景：
+    - extract-multimodal 后没自动跑 inline（默认 step 7b 跑过一次）
+    - 想重新调整 inline 位置
+
+    前置条件：knowledge.content 必须有 [PAGE:N] 标记（Phase 7 v2 后新上传自动有）
+    老知识先调 POST /knowledge/{id}/reparse-pdf 重解析
+    """
+    from app.services.multimodal_extraction_service import multimodal_extraction_service
+
+    k_result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    knowledge = k_result.scalar_one_or_none()
+    if not knowledge:
+        raise NotFoundException("知识")
+
+    try:
+        result = await multimodal_extraction_service.inline_extractions_to_content(knowledge_id)
+        return InlineExtractionsResponse(**result)
+    except Exception as e:
+        logger.exception(f"inline_extractions 失败(knowledge_id={knowledge_id})")
+        return InlineExtractionsResponse(
+            ok=False, knowledge_id=knowledge_id, error=str(e),
+        )
+
+
+class ReparsePdfResponse(BaseModel):
+    """重解析 PDF 加 page markers 响应"""
+    ok: bool
+    new_content_length: Optional[int] = None
+    page_markers: Optional[int] = None
+    reason: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post(
+    "/knowledge/{knowledge_id}/reparse-pdf",
+    response_model=ReparsePdfResponse,
+)
+async def reparse_pdf(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """重新解析 PDF 加 [PAGE:N] 标记（仅 Phase 7 v2 之前入库的 PDF 需要）
+
+    - 从 MinIO 下载原 PDF
+    - 调 file_parser_service 重新提取（v2 版本会插入 [PAGE:N] 标记）
+    - 更新 knowledge.content（formatted_content 不动，保留 AI 排版）
+    """
+    from app.services.multimodal_extraction_service import multimodal_extraction_service
+
+    k_result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    knowledge = k_result.scalar_one_or_none()
+    if not knowledge:
+        raise NotFoundException("知识")
+
+    try:
+        result = await multimodal_extraction_service.reparse_pdf_with_page_markers(knowledge_id)
+        return ReparsePdfResponse(**result)
+    except Exception as e:
+        logger.exception(f"reparse_pdf 失败(knowledge_id={knowledge_id})")
+        return ReparsePdfResponse(ok=False, error=str(e))
