@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "microbubble"
     MINIO_SECURE: bool = False
+    # 2026-06-19 Phase 7 修复：公网可访问的 MinIO URL（bucket 已是 public-read）
+    # 不设置时回退到 presigned URL（仅 docker 内网可达，浏览器无法解析）
+    # 格式: https://agent.mnb-lab.cn/minio
+    MINIO_PUBLIC_URL: str = "https://agent.mnb-lab.cn/minio"
 
     # 站点域名（用于构造头像等公网可访问的 URL）
     SITE_DOMAIN: str = "agent.mnb-lab.cn"
