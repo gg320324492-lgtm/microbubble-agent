@@ -695,6 +695,42 @@ describe('cleanContent', () => {
     const { content } = cleanContent(text)
     expect(content).not.toContain('MULTIMODAL_INLINED')
   })
+
+  // === v26.1 修复新增：多模态 chart 描述块（OCR 漏闭合 }） ===
+
+  it('v26.1: 剥离 { category: mixed, text: ... } 多模态块（无闭合 }，OCR 漏识别）', () => {
+    // 用户报告的真实场景：OCR 漏闭合 } + 长描述 + 后接学术句末 "species. Consistent ..."
+    // 终止符: . [大写字母开头单词] [小写单词] → "species. Consistent with"
+    // 期望: 剥除到 "species" 之前；". Consistent with...Fig. 5d..." 保留
+    const text = 'orbital ![图（P8, { "category": "mixed", "text": "(a) C O H [分子模拟图] coupling and electron transfer between toluene and the oxidizing species. Consistent with these results, the free-energy profiles in Fig. 5d demonstrate that the energy barrier.'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('category')
+    expect(content).not.toContain('mixed')
+    expect(content).not.toContain('分子模拟')
+    expect(content).toContain('orbital')
+    // 学术句末 "Fig. 5d" 后应保留
+    expect(content).toContain('Fig. 5d')
+    expect(content).toContain('Consistent with')
+  })
+
+  it('v26.1: 剥离 { kind: chart, text: ... } 变体', () => {
+    // 终止符: ". The final"（. 后大写字母开头单词 + 空格 + 小写）
+    const text = '前文 { "kind": "chart", "text": "(图说明内容很长). The final text comes here.'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('kind')
+    expect(content).not.toContain('图说明内容')
+    expect(content).toContain('前文')
+    expect(content).toContain('The final text')
+  })
+
+  it('v26.1: 剥离 { category: mixed } 闭合版本（带 }）', () => {
+    // 闭合版本（INTERNAL_MARKER_RES 那条带 } 闭合的正则处理）
+    const text = '段落 1 { "category": "mixed", "text": "图描述" } 段落 2'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('category')
+    expect(content).toContain('段落 1')
+    expect(content).toContain('段落 2')
+  })
 })
 
 
