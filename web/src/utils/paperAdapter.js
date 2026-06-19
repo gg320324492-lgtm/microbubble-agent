@@ -675,15 +675,21 @@ function _parsePlainTextSections(content) {
     })
   }
 
-  // 去重相邻重复章节（OCR 重复识别）
+  // 去重 OCR 重复识别的章节（不只相邻，全局去重）
+  // 规则：同 type + title 相似（lowercase 比较）→ 跳过（保留第一次出现）
   const deduped = []
+  const seenKeys = new Set()
   for (const s of sections) {
-    const last = deduped[deduped.length - 1]
-    if (last && last.type === s.type && last.title?.toLowerCase() === s.title?.toLowerCase()) {
-      // 合并 blocks
-      last.blocks = (last.blocks || []).concat(s.blocks || [])
+    const key = `${s.type}::${(s.title || '').toLowerCase().trim()}`
+    if (seenKeys.has(key)) {
+      // 重复：合并到第一次出现的 sections
+      const first = deduped.find(d => `${d.type}::${(d.title || '').toLowerCase().trim()}` === key)
+      if (first) {
+        first.blocks = (first.blocks || []).concat(s.blocks || [])
+      }
       continue
     }
+    seenKeys.add(key)
     deduped.push(s)
   }
   return deduped
