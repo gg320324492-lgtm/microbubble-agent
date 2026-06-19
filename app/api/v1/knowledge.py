@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Body
 from fastapi.responses import StreamingResponse
@@ -1107,6 +1108,12 @@ class ReprocessAllResponse(BaseModel):
     failed: int
     skipped: int
     results: list  # [{knowledge_id, title, status, detail}]
+    task_id: Optional[str] = None  # 异步模式时返回
+    status_url: Optional[str] = None  # 客户端轮询状态
+
+
+# 简易 in-memory task state（admin 重跑用，进程重启清空无影响）
+_reprocess_state: dict = {}
 
 
 @router.post(
@@ -1116,6 +1123,7 @@ class ReprocessAllResponse(BaseModel):
 async def reprocess_all_multimodal(
     file_type: Optional[str] = Query("pdf", description="文件类型过滤：pdf/pptx/docx/全部(空)"),
     limit: int = Query(100, ge=1, le=500),
+    sync: bool = Query(False, description="True=同步等待完成（开发用），False=异步后台跑（生产用，避免 nginx 504）"),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1127,7 +1135,10 @@ async def reprocess_all_multimodal(
     3. inline-extractions → 按页码 inline 嵌入正文
 
     适用：Phase 7 v2 升级后，老数据迁移 / 重新排版
+    异步模式（默认）：立即返回 task_id，结果写到 _reprocess_state[task_id]
     """
+    import asyncio as _asyncio
+    import uuid
     await _require_admin(current_user)
     from app.services.multimodal_extraction_service import multimodal_extraction_service
 
@@ -1139,71 +1150,120 @@ async def reprocess_all_multimodal(
     ).order_by(Knowledge.id).limit(limit)
     rows = (await db.execute(q)).scalars().all()
 
-    results = []
-    succeeded = 0
-    failed = 0
-    skipped = 0
+    async def _run_task(knowledge_rows):
+        results = []
+        succeeded = 0
+        failed = 0
+        skipped = 0
+        for k in knowledge_rows:
+            entry = {
+                "knowledge_id": k.id,
+                "title": k.title,
+                "file_name": k.file_name,
+                "status": None,
+                "detail": None,
+            }
+            try:
+                reparse_result = await multimodal_extraction_service.reparse_pdf_with_page_markers(k.id)
+                if not reparse_result.get("ok"):
+                    entry["status"] = "reparse_failed"
+                    entry["detail"] = reparse_result.get("reason") or reparse_result.get("error")
+                    failed += 1
+                    results.append(entry)
+                    continue
 
-    for k in rows:
-        entry = {
-            "knowledge_id": k.id,
-            "title": k.title,
-            "file_name": k.file_name,
-            "status": None,
-            "detail": None,
+                is_multimodal_type = (
+                    "application/pdf" in (k.file_type or "")
+                    or "presentationml" in (k.file_type or "")
+                )
+                if not is_multimodal_type:
+                    entry["status"] = "skipped_non_pdf_pptx"
+                    entry["detail"] = f"file_type={k.file_type}"
+                    skipped += 1
+                    results.append(entry)
+                    continue
+
+                extract_result = await multimodal_extraction_service.extract_for_knowledge(k.id)
+                extract_ok = extract_result.get("ok") and not extract_result.get("skipped")
+                images_count = extract_result.get("images_total", 0) if extract_ok else 0
+
+                inline_result = await multimodal_extraction_service.inline_extractions_to_content(k.id)
+                if not inline_result.get("ok"):
+                    entry["status"] = "inline_failed"
+                    entry["detail"] = inline_result.get("reason") or inline_result.get("error")
+                    failed += 1
+                    results.append(entry)
+                    continue
+
+                entry["status"] = "ok"
+                entry["detail"] = (
+                    f"images={images_count}, "
+                    f"inline_matched={inline_result.get('matches_total', 0)}, "
+                    f"inline_unmatched={inline_result.get('unmatched_total', 0)}"
+                )
+                succeeded += 1
+                results.append(entry)
+            except Exception as e:
+                logger.exception(f"reprocess failed for knowledge_id={k.id}")
+                entry["status"] = "exception"
+                entry["detail"] = str(e)[:300]
+                failed += 1
+                results.append(entry)
+        return {
+            "ok": failed == 0,
+            "total": len(knowledge_rows),
+            "succeeded": succeeded,
+            "failed": failed,
+            "skipped": skipped,
+            "results": results,
         }
+
+    if sync:
+        # 同步模式：开发测试用，可能 nginx 504
+        return ReprocessAllResponse(**(await _run_task(rows)))
+
+    # 异步模式：立即返回 task_id，后台跑
+    task_id = str(uuid.uuid4())[:8]
+    _reprocess_state[task_id] = {
+        "status": "running",
+        "total": len(rows),
+        "knowledge_ids": [k.id for k in rows],
+        "started_at": datetime.utcnow().isoformat(),
+    }
+
+    async def _bg_run():
         try:
-            # Step 1: reparse-pdf (给 content 加 [PAGE:N])
-            reparse_result = await multimodal_extraction_service.reparse_pdf_with_page_markers(k.id)
-            if not reparse_result.get("ok"):
-                entry["status"] = "reparse_failed"
-                entry["detail"] = reparse_result.get("reason") or reparse_result.get("error")
-                failed += 1
-                results.append(entry)
-                continue
-
-            # Step 2: extract-multimodal (如果还没提取过)
-            if not k.file_path or "application/pdf" not in (k.file_type or "") and "presentationml" not in (k.file_type or ""):
-                # DOCX/XLSX 不支持多模态
-                entry["status"] = "skipped_non_pdf_pptx"
-                entry["detail"] = f"file_type={k.file_type}"
-                skipped += 1
-                results.append(entry)
-                continue
-
-            extract_result = await multimodal_extraction_service.extract_for_knowledge(k.id)
-            extract_ok = extract_result.get("ok") and not extract_result.get("skipped")
-            images_count = extract_result.get("images_total", 0) if extract_ok else 0
-
-            # Step 3: inline-extractions
-            inline_result = await multimodal_extraction_service.inline_extractions_to_content(k.id)
-            if not inline_result.get("ok"):
-                entry["status"] = "inline_failed"
-                entry["detail"] = inline_result.get("reason") or inline_result.get("error")
-                failed += 1
-                results.append(entry)
-                continue
-
-            entry["status"] = "ok"
-            entry["detail"] = (
-                f"images={images_count}, "
-                f"inline_matched={inline_result.get('matches_total', 0)}, "
-                f"inline_unmatched={inline_result.get('unmatched_total', 0)}"
-            )
-            succeeded += 1
-            results.append(entry)
+            result = await _run_task(rows)
+            _reprocess_state[task_id] = {
+                "status": "completed",
+                **result,
+                "finished_at": datetime.utcnow().isoformat(),
+            }
+            logger.info(f"reprocess task {task_id} done: {result['succeeded']}/{result['total']}")
         except Exception as e:
-            logger.exception(f"reprocess failed for knowledge_id={k.id}")
-            entry["status"] = "exception"
-            entry["detail"] = str(e)[:300]
-            failed += 1
-            results.append(entry)
+            logger.exception(f"reprocess task {task_id} failed")
+            _reprocess_state[task_id] = {"status": "failed", "error": str(e)}
+
+    # 启动后台任务（fire-and-forget）
+    _asyncio.create_task(_bg_run())
 
     return ReprocessAllResponse(
-        ok=failed == 0,
+        ok=True,
         total=len(rows),
-        succeeded=succeeded,
-        failed=failed,
-        skipped=skipped,
-        results=results,
+        succeeded=0,
+        failed=0,
+        skipped=0,
+        results=[],
+        task_id=task_id,
+        status_url=f"/api/v1/knowledge/reprocess-status/{task_id}",
     )
+
+
+@router.get("/knowledge/reprocess-status/{task_id}")
+async def get_reprocess_status(
+    task_id: str,
+    current_user: Member = Depends(get_current_user),
+):
+    """查询异步批量重跑任务状态"""
+    await _require_admin(current_user)
+    return _reprocess_state.get(task_id, {"status": "not_found"})
