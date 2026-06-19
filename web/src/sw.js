@@ -26,7 +26,7 @@
 // 'Cache.put() encountered a network error' — 老 SW 还在 stuck 在 install 失败状态
 // （老 precache 引用不存在的 index-c2fe833d.js）。BUMP 版本强制浏览器识别为新 SW
 // 重走 install 流程，激活钩子的 caches.delete 会清空老 cache。
-const SW_VERSION = 'v18-doi-fix-2026-06-19'
+const SW_VERSION = 'v19-remove-debug-final-2026-06-19'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
