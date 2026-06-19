@@ -2,6 +2,8 @@
 
 > **2026-06-18 移动端 26 commits 全面修复（图标 + 路由 + 端点 + v-model 命名 + ASR + 被动事件 + 头像）**：① 移动端"左上角红方块"根因是 `MainLayout.vue` 缺 `Fold`/`Expand` 图标 import（commit `0e11009`）② 8/16 路由 mobile 路径错（`knowledge/MobileKnowledgeView` 等假设了子目录但实际在 `views/mobile/` 根目录，commit `025424ca`）③ 4 个移动端 API 端点缺失（`/dashboard/summary` + `/formula` + `/hypothesis` + `/memory`，commit `d671c41c` + `5f5bfd06`）④ TabBar 2500 z-index 覆盖 MobileInputBar 100 → `/chat` 路由隐藏 TabBar + 修 v-model 命名（commit `7131ad4b`），用户偏好 persistent nav 后恢复 TabBar + input 浮在 TabBar 上方（commit `c94d0603`）⑤ "正在听会"指示器点击无反应 → `MobileMeetingView` onMounted 漏处理 `route.query.resume`（commit `fc27af59`）⑥ 11 处 `v-model:show` 命名错配（prop 是 `modelValue`，commit `6b4f57d0` + `20df60db` + `607e7b06`）⑦ ASR 500 真实根因 110 字节 webm → 客户端 `<1KB` 拦截 + 服务端返 400（commit `3cd88d4a`）⑧ passive event listener 全局 patch 误伤 `touchstart` → 只对 `wheel`/`mousewheel` 强制（commit `3cd88d4a`）⑨ 知识 3 个 ActionSheet 之前是"开发中"占位 → 接通 `/knowledge` + `/knowledge/upload` + `/knowledge/research` 真实端点 ⑩ 头像同步：新建 `MemberAvatar.vue` 复用 `memberStore.getMemberAvatar(id)`，在 `CardList` 加 `avatarField` prop，Task/Task/Task/Member/Settings 全部显示真实头像。详见底部 [## 2026-06-18 移动端 26 commits 全面修复](#2026-06-18-移动端-26-commits-全面修复) section + [memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) 12 条铁律。
 >
+> **2026-06-19 Phase 7 多模态知识库（图片/公式/表格 OCR 入库）**：① 端到端 PDF 文档 OCR 实测 10/10 图全成功 + 10 OCR 块 + 4 图表描述（论文 id=19 催化臭氧氧化甲苯）② 后端选 LLM-Vision 复用现有 vision_service，零新依赖 + 零新模型下载，settings.MULTIMODAL_OCR_BACKEND 留 Tesseract 备选钩子 ③ 数据模型统一 `KnowledgeExtraction(kind='formula|table|chart|image_block', data JSONB)` 单一表，简化 JOIN ④ 并发控制 asyncio.Semaphore(4) 防 vision API rate limit ⑤ pre-existing bug 修复 2 项：列表接口 mutate ORM 触发 autoflush NOT NULL 违反 + 009/010 alembic chain 不一致 ⑥ docker-compose 加 `./alembic/versions` volume 挂载，新迁移无需 rebuild 镜像即生效 ⑦ 21 个 OCR 单元测试（_clean_latex_response / _clean_ocr_text thinking 块剥除 / 图片缩放 / MIME 检测 / markdown 表格解析）。详见底部 [## 2026-06-19 Phase 7 多模态知识库](#2026-06-19-phase-7-多模态知识库) section + 8 条铁律。
+>
 > **2026-06-17 部署与基础设施重建**：Docker Desktop 引擎崩溃循环修复（WSL2 `docker-desktop-data` 发行版丢失 → com.docker.service 7-9 分钟反复启停）+ 24GB C 盘 Docker 缓存清空 + 数据全 E 盘化（junction 透明重定向）+ huaweicloud 镜像源 404 → aliyun 正确路径（Debian bookworm-security 走 `debian-security/` 独立路径）+ aliyun PyPI 限速 600KB/s → 清华源 + pip `--retries 10 --timeout 60` + 新增 `.dockerignore`（build context 12GB→700MB 17 倍提速）+ frp 客户端 Windows 计划任务自启。详见 [CHANGELOG.md](CHANGELOG.md) `[Unreleased] 2026-06-17` section + [memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) 10 条铁律。
 >
 > **2026-06-17 晚间更新**：服务器 webhook deploy 链断裂修复（dist `Last-Modified` 停在 6/15 13:52 已 2 天）。根因：服务器 `/root/.ssh/github_deploy` key 与 GitHub repo Deploy keys 不匹配，5 次重试全 `Permission denied (publickey)` → webhook 服务在线但 git fetch 失败 → deploy 静默退出（GitHub UI 显示 200 OK 但服务器代码没动）。修复：重新生成 ed25519 + GitHub 端加 deploy key + 顺便持久化 `.env.webhook`（修 6/13 教训的幽灵隐患）+ `deploy-auto.sh` 加 `.env.webhook missing` 守卫（commit `c9c60ca6`）。详见底部 [## 2026-06-17 webhook deploy 链断裂修复](#2026-06-17-webhook-deploy-链断裂修复) section 5 条铁律。
@@ -33,9 +35,20 @@
 
 **Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官 + 移动端 10 个 PR 全栈定制收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**移动端**采用 NutUI 4 + Element Plus **路由级双栈**架构（`useIsMobile.js` 判定 + `resolveMobile.js` 路由适配），**18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略**全部交付，**iOS Safari + Android Chrome 全兼容**。**当前状态（2026-06-13 收官后，commit `9026c07`）**：
 - **43 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4 + 多会话并行 2 + 移动端 PR #1-10 共 10 + 文档/webhint 5 + 部署加固 1）
-- **160+ 测试全过**（87 后端 + 73 前端 + 21 录音断网防御 + 2 移动端组件）
+- **160+ 测试全过**（87 后端 + 73 前端 + 21 录音断网防御 + 2 移动端组件 + 21 多模态 OCR）
 - **1014 次提交 / 135K 行代码 / 578 文件 / 30 开发天数**（`app/stats.json` 由本地 Python 准确计算；排除 frp/.git/node_modules/dist/.meta/.log/.wav/.exe 等非源代码）
 - **140 项待做清单**已整合到 README.md（107 项老 + 33 项 v4 收官遗留），移动端 10 PR 完成后清单大幅缩短
+
+**Phase 7 多模态知识库（2026-06-19）**：
+- **2 张新表**：`knowledge_images`（图片 + OCR 结果）+ `knowledge_extractions`（统一 formula/table/chart/image_block）
+- **OCR 服务抽象层**（`app/services/ocr_service.py`）：主后端 LLM-Vision 复用 vision_service，可选 Tesseract 备选（settings.MULTIMODAL_OCR_BACKEND 切换）
+- **多模态解析管线**（`app/services/multimodal_extraction_service.py`）：PDF/PPTX 提取嵌入图片 → 缩放 → MinIO → asyncio.Semaphore 并发 OCR → 写表
+- **3 个新 API**：`GET /knowledge/{id}/images`、`GET /knowledge/{id}/extractions`、`POST /knowledge/{id}/extract-multimodal`（老 PDF 手动重提）
+- **KnowledgeService step 7**：上传时自动触发多模态提取；独立容错
+- **5 个新 settings**：`MULTIMODAL_OCR_BACKEND` / `_CONCURRENCY=4` / `_MAX_IMAGES_PER_DOC=20` / `_MAX_IMAGE_PIXELS=2.5MP` / `_MIN_IMAGE_PIXELS=10k`
+- **2 个新前端组件**：`KnowledgeImageGallery.vue`（图片网格 + 放大预览 + OCR 文本）+ `KnowledgeExtractionsPanel.vue`（公式 LaTeX + 表格 HTML + 图表描述）
+- **KnowledgeCard 缩略图** + `KnowledgeUploadDialog` PDF/PPTX 多模态提示
+- **端到端验证**：PDF id=19 OCR 10/10 + 10 OCR 块 + 4 图表描述成功
 
 **v2/v3/v4 关键成果**：
 - **34 个 `@tool` 装饰器工具**（覆盖任务 5 / 会议 7 / 项目 3 / 成员 2 / 知识 9 / 公式 1 / 假设 1 / 记忆 3 / 搜索 1 / 个性化 2 / 反馈 1 — 含 16 个 v2+v3 新工具）
@@ -1853,3 +1866,93 @@ _AUTH_UNLIMITED_PATHS = frozenset({"/api/v1/auth/me"})
 # _get_rate_limit_type 返 "unlimited"，middleware 跳过
 ```
 - **新铁律**：① **高频只读端点设任何次/min 都可能误伤** —— Vue reactive 触发 set value 链式调用 / WebSocket 心跳 / 路由 prefetch / polling，真实请求频次远超产品逻辑假设 ② **判断端点是否限流要看"是否会被高频轮询"而不是"是否敏感"** —— `/auth/me` 虽然挂在 `/auth/` 前缀下但是只读 GET + JWT 鉴权，攻击成本高（没 token 401 直接拒），防护无意义 ③ **正确分级**：登录/改密/refresh（高频攻击面）→ 严格 20/min；只读 GET + JWT（合法高频轮询）→ 完全豁免；其他写操作 → write 30/min ④ 监控 429 出现时立刻 `grep X-RateLimit-Remaining` 响应头确认哪个 tier 触顶
+
+
+## 2026-06-19 Phase 7 多模态知识库（图片/公式/表格 OCR 入库）
+
+**8 条铁律沉淀**（commit `5eb18358`）：
+
+**铁律 1：多模态入库拆 2 张表（images + extractions），比单表 + JSON 更易查询**
+- `knowledge_images` 单独存图片元数据（page_number / dimensions / ocr_status / ocr_text / ocr_model）
+- `knowledge_extractions` 存提取物（formula/table/chart/image_block），data JSONB 存结构化内容
+- `source_image_id` 关联"OCR 块属于哪张图"，前端可点图看对应的所有提取物
+- 单一 extractions 表（kind 区分）vs 4 张表（formula/table/chart/image_block）：单表省 JOIN、跨 kind 聚合简单
+
+**铁律 2：OCR 后端选 LLM-Vision 复用 vision_service，零新依赖**
+- 主后端：`vision_service.analyze_image()` 走 vision-mcp（stdin_open + tty 必须）或多模态 LLM API
+- 备后端：Tesseract（pytesseract + apt-get install tesseract-ocr + tesseract-ocr-chi-sim）
+- `settings.MULTIMODAL_OCR_BACKEND` 切换，默认 `llm_vision`
+- **不要**装 PaddleOCR/RapidOCR 之类重型模型（GPU 依赖 + 几 GB 镜像）— LLM-Vision 已经够用且省事
+
+**铁律 3：并发控制 asyncio.Semaphore 是必须的**
+- `settings.MULTIMODAL_OCR_CONCURRENCY=4`（默认 4，受 vision API rate limit 限制）
+- 一篇 PDF 20 张图 + 串行 = 60s 用户体感差
+- 4 并发 = 15s 体感可接受 + 不打爆 vision API
+- 单图失败独立 try/except，1 张失败不阻塞其他图
+
+**铁律 4：图片处理前置过滤 + 缩放**
+- `MULTIMODAL_MIN_IMAGE_PIXELS=100*100`（< 该尺寸视为装饰/图标直接 skip，省 OCR 成本）
+- `MULTIMODAL_MAX_IMAGE_PIXELS=1568*1568`（> 该尺寸等比缩小到 ~2.5MP，Anthropic Vision 建议值）
+- `MULTIMODAL_MAX_IMAGES_PER_DOC=20`（单文档限流，避免 1 本书 OCR 跑 1 小时）
+- 缩放用 PIL.Image.LANCZOS（高质量），格式保持原图（PNG/JPEG）
+
+**铁律 5：session 隔离 — 不能 mutate 跨 session 的 ORM 对象**
+- `_upload_images` 在 session A 创建 KnowledgeImage 行（`img.ocr_status='pending'`）
+- `_save_extractions` 在 session B 想 `img.ocr_status='done'` → SQLAlchemy 不会持久化（不同 session 不共享 identity map）
+- **修复**：session B 内先 `select(KnowledgeImage).where(id.in_(img_ids))` re-fetch，再 mutate
+- **诊断**：`commit()` 不报错但 DB 字段没变 = 100% 是这个
+
+**铁律 6：列表接口不能 mutate ORM 对象（autoflush 触发 NOT NULL 违反）**
+- 之前：`item.content = None` 试图从响应移除完整 content
+- SQLAlchemy 在 return 之前会 autoflush，把这个 mutate 翻译成 `UPDATE knowledge SET content=NULL` → NOT NULL 违反
+- **修复**：转 dict 后再返回（不碰 ORM 对象）
+- **诊断**：500 + log 显示 `null value in column "content" violates not-null constraint` = 100% 是这个
+
+**铁律 7：vision 模型（mimo-v2.5）会泄露 ThinkingBlock 序列化字符串到 content**
+- 即使 `thinking:disabled`，vision 模型仍可能输出 `ThinkingBlock(signature='', thinking='...')` 字符串到 text
+- 必须 `_clean_ocr_text` 正则剥除：`ThinkingBlock\(...\)` / `signature='...'` / `thinking='...'` / `category: 必须...` 指令泄露
+- 端到端测试：实际跑 10 张图，1-2 张会出现这个泄露，必须清洗后才入库
+- **纪律**：任何 LLM 输出经过流水线入库前都要 strip 元数据/思考残留，不要信任模型不泄露
+
+**铁律 8：alembic 链断裂必须 1 行修复 + docker-compose 加 volume 挂载免 rebuild**
+- 现象：pre-existing 009 用 `revision='009'`，010 期望 `down_revision='009_formula_categories'`，链断
+- 修复：010 改 `down_revision='009'`（1 行）
+- 升级：docker-compose.yml app/celery-worker 加 `./alembic/versions:/app/alembic/versions:rw` volume
+- 效果：新 alembic 文件直接挂进容器，`alembic upgrade head` 即生效，无需 rebuild 25GB 镜像
+- **纪律**：任何 schema 改动都先 `alembic stamp` 现状 → 改 chain → 改新迁移 → `alembic upgrade head`
+
+**部署必做**（CLAUDE.md 752 行铁律变体）：
+
+```bash
+# 1. 复制新迁移到容器（volume 挂载在 Windows 上新文件可能延迟可见）
+docker cp alembic/versions/020_knowledge_multimodal.py microbubble-agent-app-1:/app/alembic/versions/
+docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__  # 清缓存
+
+# 2. 跑迁移
+docker exec microbubble-agent-app-1 alembic upgrade head
+
+# 3. 重启后端
+docker compose restart app celery-worker
+
+# 4. 验证
+docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
+  -c "SELECT version_num FROM alembic_version;"  # 期望: 020_kb_multimodal
+docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
+  -c "\d knowledge_images"  # 应该看到 16 列
+docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
+  -c "\d knowledge_extractions"  # 应该看到 14 列
+```
+
+**端到端测试**（人工触发老 PDF 重提）：
+```python
+# 1. 登录
+POST /api/v1/auth/login {"username": "wangtianzhi", "password": "admin123"}
+# 2. 触发 PDF id=19 多模态提取
+POST /api/v1/knowledge/19/extract-multimodal
+# 期望: {"ok": true, "images_total": 10, "images_ocr_ok": 10, "extractions": {"formula": 0, "table": 0, "chart": 3-4, "image_block": 10}}
+# 3. 查图片列表
+GET /api/v1/knowledge/19/images  # 期望 10 张 done=10 pending=0
+# 4. 查提取物
+GET /api/v1/knowledge/19/extractions  # 期望 13-14 条（4 chart + 10 image_block + 可选 formula/table）
+```
+
