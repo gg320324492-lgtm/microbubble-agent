@@ -24,23 +24,26 @@
 // 常量：通用识别规则
 // ============================================================
 
-// 章节标题关键词（中英文，支持变体）— 严格只匹配标题行（不带后续内容）
+// 章节标题关键词（中英文 + 编号 + 字符间隔 + 拼写变体）
+// 设计：regex 同时支持"裸字符串"（用于 markdown 解析后单行 title）
+//       和"行首匹配"（用于纯文本行扫描，标题独立成行）
 const SECTION_KEYWORDS = [
-  { type: 'abstract', regex: /^(abstract|summary|摘要|内容摘要|文摘)\s*[:：]?\s*$/i },
-  { type: 'keywords', regex: /^(keywords?|key\s*words?|关键词|关键字)\s*[:：]?\s*$/i },
-  { type: 'highlights', regex: /^(highlights?|亮点|研究亮点)\s*[:：]?\s*$/i },
-  { type: 'graphical_abstract', regex: /^(graphical\s+abstract|图解摘要|图形摘要)\s*[:：]?\s*$/i },
-  { type: 'article_info', regex: /^(article\s+info(rmation)?|文章信息|论文信息)\s*[:：]?\s*$/i },
-  { type: 'introduction', regex: /^(introduction|引言|前言|绪论|序言)\s*[:：]?/i },
-  { type: 'background', regex: /^(background|研究背景|问题背景)\s*[:：]?/i },
-  { type: 'methods', regex: /^(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?|setup))?|材料与方法|实验方法|实验部分|方法|实验材料与方法|2\.\s*Experimental)\s*[:：]?/i },
-  { type: 'results', regex: /^(results?(\s+and\s+discussion)?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?/i },
-  { type: 'discussion', regex: /^(discussion|讨论|分析与讨论)\s*[:：]?/i },
-  { type: 'conclusion', regex: /^(conclusions?|总结|结论|结语|小结)\s*[:：]?/i },
-  { type: 'acknowledgments', regex: /^(acknowledg(e)?ments?|致谢|鸣谢)\s*[:：]?/i },
-  { type: 'references', regex: /^(references?|bibliography|参考文献|引用文献)\s*[:：]?/i },
-  { type: 'supplementary', regex: /^(supporting\s+information|supplementary\s+(material|information|content)|附录|补充材料|补充信息)\s*[:：]?/i },
-  { type: 'appendix', regex: /^(appendix|附录)\s*[:：]?/i },
+  // 注意顺序：长的/复合的 keyword 放前面（避免被短 keyword 误吃）
+  { type: 'graphical_abstract', regex: /(?:(?:^|\n)\s*|\b)(graphical\s+abstract|图解摘要|图形摘要)\s*[:：]?(\s|$)/i },
+  { type: 'article_info', regex: /(?:(?:^|\n)\s*|\b)(article\s+info(rmation)?|文章信息|论文信息)\s*[:：]?(\s|$)/i },
+  { type: 'abstract', regex: /(?:(?:^|\n)\s*|\b)(abstract|summary|摘要|内容摘要|文摘)\s*[:：]?(\s|$)/i },
+  { type: 'keywords', regex: /(?:(?:^|\n)\s*|\b)(keywords?|key\s*words?|关键词|关键字)\s*[:：]?(\s|$)/i },
+  { type: 'highlights', regex: /(?:(?:^|\n)\s*|\b)(highlights?|亮点|研究亮点)\s*[:：]?(\s|$)/i },
+  { type: 'introduction', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(introduction|引言|前言|绪论|序言)\s*[:：]?(\s|$)/i },
+  { type: 'background', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(background|研究背景|问题背景)\s*[:：]?(\s|$)/i },
+  { type: 'methods', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?|setup))?|材料与方法|实验方法|实验部分|方法|实验材料与方法)\s*[:：]?(\s|$)/i },
+  { type: 'results', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(results?(\s+and\s+discussion)?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?(\s|$)/i },
+  { type: 'discussion', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(discussion|讨论|分析与讨论)\s*[:：]?(\s|$)/i },
+  { type: 'conclusion', regex: /(?:(?:^|\n)\s*|\b)(\d+(\.\d+)*\.?\s+)?(conclusions?|总结|结论|结语|小结)\s*[:：]?(\s|$)/i },
+  { type: 'acknowledgments', regex: /(?:(?:^|\n)\s*|\b)(acknowledg(e)?ments?|致谢|鸣谢)\s*[:：]?(\s|$)/i },
+  { type: 'references', regex: /(?:(?:^|\n)\s*|\b)(references?|bibliography|参考文献|引用文献)\s*[:：]?(\s|$)/i },
+  { type: 'supplementary', regex: /(?:(?:^|\n)\s*|\b)(supporting\s+information|supplementary\s+(material|information|content)|附录|补充材料|补充信息)\s*[:：]?(\s|$)/i },
+  { type: 'appendix', regex: /(?:(?:^|\n)\s*|\b)(appendix|附录)\s*[:：]?(\s|$)/i },
 ]
 
 // 编号章节模式（带或不带点）—— 只匹配前导编号 + 空白，不吞标题
@@ -159,27 +162,143 @@ function _cleanText(text) {
 }
 
 /**
+ * DOI 文本规范化：修复各种重复 / 错误前缀
+ *
+ * 规则：
+ * - https://doi.org/https://doi.org/xxx → https://doi.org/xxx
+ * - http://dx.doi.org/https://doi.org/xxx → https://doi.org/xxx
+ * - doi.org/doi.org/xxx → https://doi.org/xxx
+ * - DOI: https://doi.org/xxx → https://doi.org/xxx
+ * - 裸 DOI 10.xxxx/xxxxx → https://doi.org/10.xxxx/xxxxx（不修改，给 autoLinkContent 处理）
+ */
+export function normalizeDoiText(text) {
+  if (!text) return ''
+  let result = String(text)
+  // 1. 多个完整 DOI URL 串联 → 保留最后一个完整
+  result = result.replace(/(?:https?:\/\/(?:dx\.)?doi\.org\/)+/gi, 'https://doi.org/')
+  // 2. dx.doi.org 前缀 → doi.org
+  result = result.replace(/https?:\/\/dx\.doi\.org\//gi, 'https://doi.org/')
+  // 3. 裸 doi.org/ 重复
+  result = result.replace(/(?:(?:dx\.)?doi\.org\/){2,}/gi, 'doi.org/')
+  // 4. "DOI:" / "DOI：" 前缀剥除（保留 URL）
+  result = result.replace(/\bDOI\s*[:：]\s*(https?:\/\/(?:dx\.)?doi\.org\/)/gi, '$1')
+  return result
+}
+
+/**
+ * 行内章节标题切分
+ *
+ * 真实 OCR / LLM 输出常把章节标题挤在前一段文字中：
+ *   "...conditions. 1. Introduction The emission of..."
+ *   "...support at room temperature. 2. Materials and methods 2.1 Experimental system..."
+ *   "...kinetics. 3. Results and discussion..."
+ *
+ * 把这些模式前面插入换行符，让它们变成独立行。
+ */
+export function insertSectionBreaks(text) {
+  if (!text) return ''
+  let result = String(text)
+
+  // 处理 字符间隔的标题（OCR 字符全大写带空格）
+  // "H I G H L I G H T S" → "HIGHLIGHTS"（独立成行）
+  result = result.replace(/\b([A-Z])\s+([A-Z])\s+([A-Z])\s+([A-Z](?:\s+[A-Z])+)\b/g, (m) => {
+    return '\n' + m.replace(/\s+/g, '') + '\n'
+  })
+
+  // 多个标题合并（HIGHLIGHTSGRAPHICALABSTRACTARTICLEINFO）→ 拆成多行
+  // 用大写英文单词做拆分点
+  const mergedTitleRe = /(?<![A-Z])(HIGHLIGHTS|GRAPHICAL\s+ABSTRACT|ARTICLE\s+INFO(?:RMATION)?|KEYWORDS|ABSTRACT|INTRODUCTION|MATERIALS\s+AND\s+METHODS|RESULTS?\s+AND\s+DISCUSSION|CONCLUSIONS?|REFERENCES|ACKNOWLEDGEMENTS|GRAPHICALABSTRACT|ARTICLEINFO)/gi
+  result = result.replace(mergedTitleRe, '\n$1\n')
+
+  // 同行内章节标题：句末+编号+标题
+  // "conditions. 1. Introduction" → "conditions.\n1. Introduction"
+  result = result.replace(
+    /([。.!?;]|\b[a-z]+\b)\s+(\d+(?:\.\d+)?\.?\s+(Introduction|引言)\b)/gi,
+    '$1\n$2'
+  )
+  result = result.replace(
+    /([。.!?;]|\b[a-z]+\b)\s+(\d+(?:\.\d+)?\.?\s+(Materials\s+and\s+methods|Methods|Experimental(?:\s+section)?|Methods\s+and\s+materials|材料与方法|实验方法|方法)\b)/gi,
+    '$1\n$2'
+  )
+  result = result.replace(
+    /([。.!?;]|\b[a-z]+\b)\s+(\d+(?:\.\d+)?\.?\s+(Results?\s+and\s+discussion|Results|Discussion|结果与讨论|结果|讨论)\b)/gi,
+    '$1\n$2'
+  )
+  result = result.replace(
+    /([。.!?;]|\b[a-z]+\b)\s+(\d+(?:\.\d+)?\.?\s+(Conclusions?|Conclusion|结论|总结)\b)/gi,
+    '$1\n$2'
+  )
+  result = result.replace(
+    /([。.!?;]|\b[a-z]+\b)\s+(\d+(?:\.\d+)?\.?\s+(References|参考文献)\b)/gi,
+    '$1\n$2'
+  )
+  result = result.replace(
+    /([。.!?;]|\b[a-z]+\b)\s+(\d+(?:\.\d+)?\.?\s+(Acknowledg(?:e)?ments?|致谢)\b)/gi,
+    '$1\n$2'
+  )
+
+  // 中文无编号章节
+  result = result.replace(
+    /([。！？])\s*(摘要|引言|前言|材料与方法|实验方法|结果与讨论|结论|参考文献|致谢)\b/g,
+    '$1\n$2'
+  )
+
+  // 合并连续空行
+  result = result.replace(/\n{3,}/g, '\n\n')
+  return result
+}
+
+/**
+ * 删除正文开头的 front matter
+ * （HIGHLIGHTS / GRAPHICAL ABSTRACT / ARTICLE INFO / ABSTRACT / KEYWORDS / 作者单位 / 标题）
+ *
+ * 返回正文从 Introduction（或第一个正文段）开始的内容
+ */
+export function removeFrontMatter(content) {
+  if (!content) return { cleaned: '', abstract: null, keywords: [], hasFrontMatter: false }
+
+  let result = String(content)
+
+  // 1. 找第一个 Introduction / 引言 位置（正文从此开始）
+  const introMatch = result.match(/(?:^|\n)\s*(\d+(\.\d+)*\.?\s+)?(Introduction|引言|前言|绪论)\b/i)
+  const introIdx = introMatch ? introMatch.index : -1
+
+  if (introIdx < 0) {
+    // 没找到 Introduction 起点，原样返回
+    return { cleaned: result, abstract: null, keywords: [], hasFrontMatter: false }
+  }
+
+  const frontMatter = result.slice(0, introIdx)
+  const body = result.slice(introIdx)
+
+  return {
+    cleaned: body.trim(),
+    frontMatter: frontMatter.trim(),
+    hasFrontMatter: true,
+  }
+}
+
+/**
  * 强力清洗论文原始正文（OCR / LLM 输出 / PDF 抽取）
  *
- * 处理：
- * 1. HTML 属性残留（target/rel/class/style/width/height/id）
- * 2. Markdown 图片语法 ![alt](url) → 剥除
- * 3. 裸图片 URL → 提取为 figures，正文不留
- * 4. 系统内部标记（HTML 注释 / [FIGURE:N] / [图 P1] / LLM prompt 残留）
- * 5. 重复 DOI 链接（https://doi.org/https://doi.org/xxx）
- * 6. PDF 页脚（期刊信息 / Received / Available online）
- * 7. 字符间隔的标题（H I G H L I G H T S → HIGHLIGHTS）
- * 8. Markdown 残留的 `**` 强调
- * 9. 孤立的"图表说明 (P4)"行 / "Caption:" 行
- *
- * @returns {{ content: string, extractedImages: Array<{url, alt}> }}
+ * 流程：
+ *   1. insertSectionBreaks  → 拆分行内章节标题
+ *   2. HTML 属性 / markdown 图片 / 裸图片 URL / 系统内部标记
+ *   3. DOI 规范化
+ *   4. PDF 页脚
+ *   5. 字符间隔 / 强调 / 孤立元行
  */
 export function cleanContent(text, options = {}) {
   if (!text) return { content: '', extractedImages: [] }
   const extractedImages = []
-  const { stripImageUrls = true } = options
+  const { stripImageUrls = true, isMarkdown = false } = options
 
   let result = String(text)
+
+  // 0. 先拆分行内章节标题（markdown 模式跳过，会破坏 # 标记）
+  if (!isMarkdown) {
+    result = insertSectionBreaks(result)
+  }
 
   // 1. HTML 属性残留
   for (const re of HTML_ATTR_RES) {
@@ -197,7 +316,6 @@ export function cleanContent(text, options = {}) {
 
   // 3. 裸图片 URL
   if (stripImageUrls) {
-    // 整行就是 URL
     result = result.replace(/^[ \t]*(https?:\/\/[^\s<>"')]+)\s*$/gim, (m, url) => {
       if (IMG_EXT_RE.test(url) || /\/minio\//.test(url)) {
         extractedImages.push({ url: url.trim(), alt: '' })
@@ -205,7 +323,6 @@ export function cleanContent(text, options = {}) {
       }
       return m
     })
-    // 行内含 URL
     result = result.replace(URL_RE, (m) => {
       if (IMG_EXT_RE.test(m) || /\/minio\//.test(m)) {
         extractedImages.push({ url: m, alt: '' })
@@ -220,24 +337,23 @@ export function cleanContent(text, options = {}) {
     result = result.replace(re, '')
   }
 
-  // 5. 重复 DOI 链接修复
-  result = result.replace(DOI_DUP_RE, 'https://doi.org/')
-  result = result.replace(DOI_DUP_NOPROTO_RE, (m) => {
-    // 保留前面的非 doi 内容前缀
-    const lead = m.match(/^[^a-z]*/)
-    return (lead ? lead[0] : '') + 'doi.org/'
-  })
+  // 5. DOI 规范化
+  result = normalizeDoiText(result)
 
   // 6. PDF 页脚
   for (const re of FOOTER_PATTERNS) {
     result = result.replace(re, '')
   }
 
-  // 7. 字符间隔的标题
-  result = result.replace(SPACED_TITLE_RE, (m) => m.replace(/\s+/g, ''))
+  // 7. 字符间隔的标题（insertSectionBreaks 已处理大部分，这里兜底；markdown 跳过）
+  if (!isMarkdown) {
+    result = result.replace(SPACED_TITLE_RE, (m) => m.replace(/\s+/g, ''))
+  }
 
-  // 8. Markdown 强调 `**text**` → text
-  result = result.replace(/\*\*([^*\n]+)\*\*/g, '$1')
+  // 8. Markdown 强调 `**text**` → text（仅 markdown 处理）
+  if (isMarkdown) {
+    result = result.replace(/\*\*([^*\n]+)\*\*/g, '$1')
+  }
 
   // 9. 孤立的元行
   result = result.replace(/^图表说明\s*\([Pp]\d+\)\s*$/gm, '')
@@ -651,20 +767,73 @@ function _buildContentBlocks(content, options = {}) {
 
 /**
  * 自动识别摘要（如果后端没返回 summary 也没 formatted_content）
+ *
+ * 起点：ABSTRACT / Abstract / 摘要
+ * 终点（按优先级）：
+ *   1. Keywords / KEYWORDS / 关键词
+ *   2. 1. Introduction / Introduction / 引言
+ *   3. Article info / Received
+ *   4. [PAGE:N]
+ *
+ * 同时剥除摘要内的出版信息（Corresponding author / E-mail / Received / DOI 等）
  */
 function _detectAbstractFromContent(content) {
   if (!content) return null
-  // 摘要 20~2000 字符（中英文都兼容；中文摘要通常较短）
-  const m = /(?:^|\n)\s*(?:abstract|摘要|内容摘要|文摘)\s*[:：]?\s*([\s\S]{20,2000}?)(?=\n\s*(?:keywords?|关键词|关键字|introduction|引言|1\s*\.?\s*Introduction|1\s*引言|1\s+引言))/i.exec(content)
-  if (m) return _cleanText(m[1])
-  return null
+  const m = /(?:^|\n)\s*(?:abstract|摘要|内容摘要|文摘)\s*[:：]?\s*([\s\S]{20,3000}?)(?=\n\s*(?:keywords?|关键词|关键字|introduction|引言|1\s*\.?\s*Introduction|1\s*引言|1\s+引言|article\s+info|received|available\s+online|\[PAGE:))/i.exec(content)
+  if (!m) return null
+  let abstract = _cleanText(m[1])
+  // 剥除出版信息行
+  abstract = _stripPublicationInfo(abstract)
+  return abstract
+}
+
+/**
+ * 从摘要/正文段中剥除出版信息
+ */
+function _stripPublicationInfo(text) {
+  if (!text) return ''
+  const lines = String(text).split('\n')
+  const keep = []
+  const skipKeywords = [
+    /^Corresponding\s+author/i,
+    /^E-?mail\s+address/i,
+    /^E-?mail\s*[:：]/i,
+    /^Tel\.?\s*[:：]/i,
+    /^ScienceDirect/i,
+    /^journal\s+homepage/i,
+    /^Received\s+(?:in\s+revised\s+form\s+)?\d/i,
+    /^Revised\s+\d/i,
+    /^Accepted\s+\d/i,
+    /^Available\s+online\s+\d/i,
+    /^©\s*\d{4}/i,
+    /^Copyright/i,
+    /^\s*\[PAGE:\d+\]/i,
+    /^https?:\/\/(?:dx\.)?doi\.org\//i,
+    /^DOI\s*[:：]/i,
+  ]
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      keep.push(line)
+      continue
+    }
+    if (skipKeywords.some(re => re.test(trimmed))) {
+      continue
+    }
+    keep.push(line)
+  }
+  return keep.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 function _detectKeywordsFromContent(content) {
   if (!content) return []
-  const m = /(?:^|\n)\s*(?:keywords?|关键词|关键字)\s*[:：]?\s*([^\n]{3,400})/i.exec(content)
+  // 多行匹配：Keywords: 后到下一个空行（≥2 个 \n）或章节标题前
+  // 停止词：Introduction / 引言 / Article info / Received / ABSTRACT / Highlights
+  const m = /(?:^|\n)\s*(?:keywords?|关键词|关键字)\s*[:：]?\s*([\s\S]{3,800}?)(?=\n\s*(?:introduction|引言|1\s*\.?\s*Introduction|1\s*引言|article\s+info|received|available\s+online|abstract|摘要|highlights|亮点|\[PAGE:))/i.exec(content)
   if (!m) return []
-  return m[1].split(/[,;，；、]/).map(s => s.trim()).filter(Boolean).slice(0, 20)
+  // 截到第一个空行（避免抓过整个 abstract 段）
+  const firstParagraph = m[1].split(/\n\s*\n/)[0] || m[1]
+  return firstParagraph.split(/[,;，；、\n]/).map(s => s.trim()).filter(Boolean).slice(0, 20)
 }
 
 
@@ -950,7 +1119,12 @@ export function normalizePaperData(raw, extra = {}) {
   const inputContent = hasFormatted ? raw.formatted_content : rawContent
 
   // 2. 强力清洗原始内容
-  const cleaned = cleanContent(inputContent, { stripImageUrls: true })
+  //    markdown 模式下不跑 insertSectionBreaks（会破坏 # / ## 标记）
+  //    也不跑 markdown 强调 / 行内标题拆分；只剥 HTML 属性 + 脏内容
+  const cleaned = cleanContent(inputContent, {
+    stripImageUrls: true,
+    isMarkdown: hasFormatted,
+  })
   const content = cleaned.content
   const extraFromClean = cleaned.extractedImages || []
 
