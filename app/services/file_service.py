@@ -125,7 +125,20 @@ class FileService:
         }
 
     def get_url(self, object_name: str, expires: int = 3600) -> str:
-        """获取文件临时访问 URL"""
+        """获取文件可访问 URL
+
+        2026-06-19 Phase 7 修复：如果配置了 MINIO_PUBLIC_URL，返回公网 URL（bucket
+        已是 public-read，无需 presigned 签名，浏览器可直接访问）。
+        否则回退到 presigned URL（仅适合 docker 内网调用方）。
+
+        旧实现问题：presigned URL 形如 http://minio:9000/...?X-Amz-Signature=xxx
+        浏览器在公网无法解析 minio:9000（docker 内网域名），导致 SW 拉图片失败
+        FetchEvent error（用户首次访问 Phase 7 多模态页面会看到此错）。
+        """
+        public_base = getattr(settings, "MINIO_PUBLIC_URL", "").strip()
+        if public_base:
+            return f"{public_base.rstrip('/')}/{self.bucket}/{object_name}"
+        # Fallback: presigned URL（仅内部用，如 Celery 任务间传文件）
         return self.client.presigned_get_object(
             self.bucket, object_name, expires=timedelta(seconds=expires)
         )
