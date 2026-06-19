@@ -1073,17 +1073,23 @@ export function autoLinkContent(text) {
   escaped = escaped.replace(DOI_DUP_RE, 'https://doi.org/')
   escaped = escaped.replace(DOI_DUP_NOPROTO_RE, 'doi.org/')
 
-  // DOI
+  // 1. DOI URL 已有的（https://doi.org/10.xxx）→ 整体包成链接
   escaped = escaped.replace(
-    DOI_RE,
+    /https?:\/\/(?:dx\.)?doi\.org\/(10\.\d{4,9}\/[-._;()\/:A-Z0-9]+)/gi,
     '<a class="auto-link doi-link" href="https://doi.org/$1">$1</a>'
   )
-  // URL（仅匹配图片以外的 URL，图片 URL 应在 cleanContent 中已剥除）
+  // 2. 裸 DOI（未被 doi.org 包裹的）→ 加前缀
+  //    负向 lookbehind：前面不是 doi.org/ 或 "doi.org/" 或已链接的
+  escaped = escaped.replace(
+    /(?<!doi\.org\/)(?<!href="https:\/\/doi\.org\/)\b(10\.\d{4,9}\/[-._;()\/:A-Z0-9]+)\b(?![^<]*<\/a>)/gi,
+    '<a class="auto-link doi-link" href="https://doi.org/$1">$1</a>'
+  )
+  // 3. 非 DOI URL（跳过 doi.org / minio / 图片）
   escaped = escaped.replace(
     URL_RE,
     (m) => {
-      // 已是 DOI/email/图片的不要二次包
       if (IMG_EXT_RE.test(m) || /\/minio\//.test(m)) return m
+      if (/doi\.org/i.test(m)) return m
       return `<a class="auto-link url-link" href="${m}" target="_blank" rel="noopener">${m}</a>`
     }
   )
