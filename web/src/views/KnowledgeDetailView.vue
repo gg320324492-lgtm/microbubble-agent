@@ -21,6 +21,9 @@
           @reanalyze="handleReanalyze"
         />
 
+        <!-- 阅读器工具栏（阶段 2：组件已就位，翻译功能待后端 API） -->
+        <ReadingToolbar :paper="paper" />
+
         <!-- 摘要卡片 -->
         <AbstractCard v-if="paper.abstract" :paper="paper" />
 
@@ -126,8 +129,8 @@
         <section v-else class="paper-graph paper-graph-empty">
           <div class="graph-empty-content">
             <el-icon class="graph-empty-icon"><Share /></el-icon>
-            <span class="graph-empty-text">暂无知识图谱数据</span>
-            <span class="graph-empty-hint">该论文尚未完成知识图谱构建</span>
+            <span class="graph-empty-text">该论文尚未完成知识图谱构建</span>
+            <span class="graph-empty-hint">暂无实体关系数据 / not_generated</span>
           </div>
         </section>
 
@@ -163,11 +166,13 @@ import TableCard from '@/components/paper/TableCard.vue'
 import ExtractionPanel from '@/components/paper/ExtractionPanel.vue'
 import RelatedKnowledgeList from '@/components/paper/RelatedKnowledgeList.vue'
 import RightAnchorNav from '@/components/paper/RightAnchorNav.vue'
+import ReadingToolbar from '@/components/paper/ReadingToolbar.vue'
 
 import {
   normalizePaperData,
   buildAnchorTree,
   extractFigureMarkers,
+  normalizeGraphData,
 } from '@/utils/paperAdapter'
 
 const route = useRoute()
@@ -273,7 +278,9 @@ const fetchDetail = async () => {
     relatedKnowledge.value = relRes.data || []
     graphData.value = graphRes.data || { nodes: [], edges: [] }
     if (graphStatus.value !== 'failed') {
-      graphStatus.value = (graphData.value.nodes?.length > 0) ? 'success' : 'empty'
+      // 用 normalizeGraphData 判断是否有可渲染的节点
+      const normalized = normalizeGraphData(graphData.value)
+      graphStatus.value = normalized._status === 'success' ? 'success' : 'empty'
     }
 
     // 后台异步：触发 reformat（如果还没排版过）
@@ -382,27 +389,27 @@ const renderGraph = () => {
   try {
     if (chartInstance) chartInstance.dispose()
     chartInstance = echarts.init(graphRef.value)
-    const nodes = graphData.value.nodes.map(n => ({
-      id: n.id,
-      name: n.label || n.title,
-      symbolSize: Math.min(40, 15 + (n.weight || 1) * 5),
-      category: n.type || 0,
-    }))
-    const edges = graphData.value.edges.map(e => ({
-      source: e.source,
-      target: e.target,
-      label: { show: true, formatter: e.label || '' },
-    }))
+    // 使用 normalizeGraphData 适配多种字段名（id/node_id/label/value 等）
+    const normalized = normalizeGraphData(graphData.value)
+    if (import.meta.env.DEV) {
+      console.debug('[KnowledgeGraph] normalized:', normalized._status, 'nodes:', normalized.nodes.length, 'links:', normalized.links.length)
+    }
+    if (!normalized.nodes.length) {
+      graphRendered.value = false
+      return
+    }
     chartInstance.setOption({
-      tooltip: {},
+      tooltip: { trigger: 'item' },
+      legend: normalized.categories?.length > 1 ? { data: normalized.categories.map(c => c.name) } : undefined,
       series: [{
         type: 'graph',
         layout: 'force',
         roam: true,
         draggable: true,
         force: { repulsion: 200, edgeLength: [100, 300] },
-        data: nodes,
-        edges: edges,
+        data: normalized.nodes,
+        links: normalized.links,
+        categories: normalized.categories,
         label: { show: true, fontSize: 11 },
         lineStyle: { color: '#ccc', curveness: 0.2 },
       }],
@@ -580,16 +587,51 @@ onUnmounted(() => {
   background: #fff;
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
-  padding: 24px 32px;
+  padding: 32px 44px;
   margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-  max-width: 100%;
+  max-width: 820px;
+  margin-left: auto;
+  margin-right: auto;
   overflow: hidden;
+}
+
+.paper-article :deep(.block-paragraph) {
+  font-size: 16px;
+  line-height: 1.85;
+  color: #1F2937;
+  margin: 0 0 16px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  text-indent: 0;
+  max-width: 100%;
+}
+
+.paper-article :deep(.section-title) {
+  margin-top: 32px;
+  margin-bottom: 20px;
+  scroll-margin-top: 80px;
+}
+
+.paper-article :deep(.section-title h2) {
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.paper-article :deep(.section-level-2 .section-title h2) {
+  font-size: 18px;
+}
+
+.paper-article :deep(.section-body) {
+  margin-bottom: 24px;
 }
 
 @media (max-width: 768px) {
   .paper-article {
-    padding: 16px 20px;
+    padding: 20px;
+  }
+  .paper-article :deep(.block-paragraph) {
+    font-size: 15.5px;
   }
 }
 
