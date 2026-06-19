@@ -1039,60 +1039,221 @@ function _buildFigureRegistry(images, extractions, content) {
   if (!Array.isArray(images)) return []
 
   // 1. 构建 extractions 按 source_image_id 索引
+  //    兼容三种字段名: sourceImageId (camelCase, _normalizeExtractions 输出)
+  //                    source_image_id (snake_case, 后端原始)
+  //                    "fig-N" 字符串 (figuresRaw 的 id)
   const extByImageId = {}
   for (const ex of (extractions || [])) {
-    if (ex?.sourceImageId) {
-      extByImageId[ex.sourceImageId] = ex
-    }
-    if (ex?.source_image_id) {
-      extByImageId[ex.source_image_id] = ex
-    }
+    const sid = ex?.sourceImageId ?? ex?.source_image_id
+    if (sid == null) continue
+    extByImageId[sid] = ex
+    extByImageId[String(sid)] = ex
+    extByImageId[`fig-${sid}`] = ex
   }
 
   // 2. 扫描正文，识别每个 figureNo 出现的 page
   const figPages = _scanFigurePages(content)
 
-  return images.map((img, idx) => {
-    const ext = extByImageId[img.id] || {}
-    // 2.1 figureNo 优先级：extraction.data.caption > OCR > 按 page 推测
-    let figureNo = null
-    if (ext.data?.caption) {
-      const m = ext.data.caption.match(/\b(?:Fig\.?|Figure|Scheme|Table|图|表)\s*(\d{1,3}[a-z]?)\b/i)
-      if (m) figureNo = m[0]
-    }
-    if (!figureNo && img.ocrText) {
-      const m = img.ocrText.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
-      if (m) figureNo = m[0]
-    }
+  // 3. 一次扫描：找出所有有真实 figureNo 的图，按 page 排序记下"已知图号"
+  //    L1 inference: 对没有 figureNo 的核心图，按 page + isCoreFigure 顺序兜底分配
+  //    例: page 1 上的 core 图 → Fig. 1 / Fig. 2 (按 OCR 顺序)
+  //        page 4 上的 core 图 → Fig. 5 / Fig. 6 (按 OCR 顺序)
+  const result = images.map((img, idx) => {
+    // 兼容多种 id 字段名：figuresRaw 中是 "fig-518"，但 ext 用 518
+    const imgId = img.imageId ?? img.id
+    const ext = extByImageId[imgId] || extByImageId[img.id] || {}
+    const extData = ext.data || {}
 
-    // 2.2 figureType 推断
-    const figureType = _inferFigureType(img, ext)
+    // 3.1 figureNo 多源提取（按优先级尝试 6 个字段）
+    let figureNo = _extractFigureNo(img, ext)
+    let figureNoSource = figureNo ? 'extracted' : null
 
-    // 2.3 isCoreFigure / isPublisherImage
+    // 3.2 figureType 改进推断 (基于 extractions data.description 关键词)
+    const figureType = _inferFigureTypeV2(img, ext)
+
+    // 3.3 isCoreFigure / isPublisherImage
     const isPublisherImage = ['cover', 'logo', 'publisher'].includes(figureType)
-    const isCoreFigure = !isPublisherImage && figureType !== 'unknown'
+    // unknown 也算 core figure（兜底，避免 OCR 无关键词时漏判）
+    // 但 page=1 + 极小 OCR + 无 description 时仍按 unknown 处理
+    const ocrText = _ocrTextOf(img)
+    const hasContent = ocrText.length > 10 || (extData.description || '').length > 10
+    const isCoreFigure = !isPublisherImage && (figureType !== 'unknown' || hasContent)
 
-    // 2.4 sectionHint（从 figureNo 所在 page 找最近 section）
+    // 3.4 sectionHint（从 figureNo 所在 page 找最近 section）
     const sectionHint = figureNo ? (figPages[figureNo] || null) : null
 
-    // 2.5 semanticTitle（从 caption 提取第一句作为标题）
-    const semanticTitle = (ext.data?.caption || img.ocrText || '').split(/[.\n]/)[0].slice(0, 80) || null
+    // 3.5 semanticTitle（从 caption 提取第一句作为标题）
+    const semanticTitle = (extData.caption || extData.description || _ocrTextOf(img) || '')
+      .split(/[.\n]/)[0]
+      .slice(0, 80) || null
 
     return {
-      id: img.id,
-      src: img.src || img.imageUrl,
-      page: img.page,
+      id: img.imageId ?? img.id,  // 数字 id（兼容旧 API 查找 f.id === 518）
+      imageId: img.imageId ?? img.id,
+      rawId: img.id,  // 原始 'fig-N' 字符串 id
+      src: img.src || img.imageUrl || img.image_url,
+      page: img.page_number || img.page,
       figureNo,
+      figureNoSource,  // 'extracted' | 'inferred' | null
       figureType,
       isCoreFigure,
       isPublisherImage,
-      caption: ext.data?.caption || null,
-      ocrText: img.ocrText || null,
+      caption: extData.caption || null,
+      description: extData.description || null,
+      ocrText: _ocrTextOf(img),
       semanticTitle,
       sectionHint,
       confidence: ext.confidence || 0.5,
     }
   })
+
+  // 4. L1 inference: 给没有真实 figureNo 但 isCoreFigure 的图按 page 顺序兜底分配
+  //    从正文中已知图号推断最大可用 N
+  const knownFigNos = new Set()
+  for (const fig of result) {
+    if (fig.figureNo) {
+      const m = fig.figureNo.match(/\d+/)
+      if (m) knownFigNos.add(parseInt(m[0], 10))
+    }
+  }
+
+  // 按 (page, idx) 排序的 core 图列表
+  const coreFigList = result
+    .filter(f => f.isCoreFigure)
+    .sort((a, b) => {
+      const pa = a.page || 0
+      const pb = b.page || 0
+      if (pa !== pb) return pa - pb
+      return 0  // 稳定排序保持原顺序
+    })
+
+  // 收集未分配的 core 图
+  const unassigned = coreFigList.filter(f => !f.figureNo)
+  let nextFigNo = 1
+  for (const fig of unassigned) {
+    while (knownFigNos.has(nextFigNo)) nextFigNo++
+    fig.figureNo = `Fig. ${nextFigNo}`
+    fig.figureNoSource = 'inferred'
+    knownFigNos.add(nextFigNo)
+    nextFigNo++
+  }
+
+  return result
+}
+
+/**
+ * Helper: 兼容 normalizer 后的 ocrText 字段和原始 ocr_text 字段
+ */
+function _ocrTextOf(img) {
+  return img?.ocrText || img?.ocr_text || ''
+}
+
+/**
+ * 从多字段提取 figureNo
+ * 优先级: caption → text → description → content_text → ocr_text → page + order
+ */
+function _extractFigureNo(img, ext) {
+  const extData = ext.data || {}
+
+  // 来源 1: caption 字段 (最可能含 "Figure 1: ...")
+  const captionSources = [
+    extData.caption,
+    extData.title,
+    extData.figure_no,
+  ]
+  for (const s of captionSources) {
+    if (!s) continue
+    const m = String(s).match(/\b(?:Fig\.?|Figure|Scheme|Table|图|表)\s*(\d{1,3}[a-z]?)\b/i)
+    if (m) return m[0]
+  }
+
+  // 来源 2: image_block 的 text 字段 (可能含 "Figure 1: ..." 残留)
+  const textSources = [
+    extData.text,
+    extData.content,
+    ext.content_text,
+  ]
+  for (const s of textSources) {
+    if (!s) continue
+    const m = String(s).match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+    if (m) return m[0]
+  }
+
+  // 来源 3: ocr_text / ocrText
+  const ocr = _ocrTextOf(img)
+  if (ocr) {
+    const m = ocr.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+    if (m) return m[0]
+  }
+
+  return null
+}
+
+/**
+ * 改进的 figureType 推断（v2）
+ * 基于 extractions.data.description 关键词 + ocr_text 内容
+ */
+function _inferFigureTypeV2(img, ext) {
+  const extData = ext.data || {}
+  const ocr = _ocrTextOf(img).toLowerCase()
+  const caption = String(extData.caption || '').toLowerCase()
+  const description = String(extData.description || '').toLowerCase()
+  const text = String(extData.text || '').toLowerCase()
+  const allText = `${caption} ${description} ${text} ${ocr}`.slice(0, 2000)
+  const imageUrl = String(img.src || img.imageUrl || img.image_url || '').toLowerCase()
+
+  // 1. 封面/logo/publisher 识别（高优先级）
+  if (/elsevier|springer|wiley|copyright|©|all\s+rights\s+reserved|published\s+by|journal\s+of|contents|editorial\s+board|issn|isbn|doi\.org|sciencedirect/.test(allText)) {
+    return 'publisher'
+  }
+  if (/cover|homepage/.test(allText)) return 'cover'
+  if (/logo|watermark/.test(allText) || /logo/.test(imageUrl)) return 'logo'
+
+  // 2. 页 1 大尺寸 + 极短 OCR + 无 description → 可能是封面/logo
+  const pageNum = img.page_number || img.page
+  if (pageNum === 1 && (!ocr || ocr.length < 50) && !description) {
+    return 'cover'
+  }
+
+  // 3. 极小尺寸 → logo/装饰
+  const w = img.width || 0
+  const h = img.height || 0
+  if (w && h && (w < 60 || h < 60)) return 'logo'
+
+  // 4. chart 类型 (来自 extractions.kind === 'chart' 或 OCR/description 含图表关键词)
+  //    中英文混合关键词，避免 OCR 描述纯英文时被漏判
+  if (ext.kind === 'chart' ||
+      /图表|热力图|柱状图|折线图|散点图|曲线图|条形图|饼图|分布图/.test(description) ||
+      /\bchart\b|\bgraph\b|\bplot\b|\bcurve\b|\bheatmap\b|\bbar\s*chart\b|\bline\s*chart\b|\bscatter\b|\bhistogram\b/i.test(allText)) {
+    return 'chart'
+  }
+
+  // 5. scheme / mechanism
+  if (/^scheme\s*\d/i.test(caption) || /机制|示意|流程图|scheme|mechanism/.test(allText)) {
+    return 'scheme'
+  }
+
+  // 6. experimental setup
+  if (/实验装置|experimental|setup|apparatus|设备/.test(allText)) {
+    return 'experimental_setup'
+  }
+
+  // 7. molecular / simulation
+  if (/molecular|simulation|dft|分子/.test(allText)) {
+    return 'molecular_simulation'
+  }
+
+  // 8. 有图号 → figure
+  const hasFigNo = /\b(?:Fig\.?|Figure|Scheme|Table)\s*\d/i.test(allText)
+  if (hasFigNo) return 'figure'
+
+  // 9. 有 OCR 文本内容 → 至少是 figure (即使 OCR 没识别出图号)
+  if (ocr && ocr.length > 100) return 'figure'
+
+  // 10. 有 description → figure
+  if (description && description.length > 30) return 'figure'
+
+  return 'unknown'
 }
 
 /**
@@ -1115,43 +1276,6 @@ function _scanFigurePages(content) {
     }
   }
   return result
-}
-
-/**
- * 推断 figureType
- */
-function _inferFigureType(img, ext) {
-  const ocr = (img.ocrText || '').toLowerCase()
-  const caption = (ext?.data?.caption || '').toLowerCase()
-
-  // 1. 优先从 caption 识别
-  if (/graphical\s+abstract/.test(caption)) return 'graphical_abstract'
-  if (/^scheme\s*\d/i.test(caption)) return 'scheme'
-  if (/^table\s*\d/i.test(caption)) return 'table'
-  if (/experimental\s+(setup|system|apparatus)/.test(caption)) return 'experimental_setup'
-  if (/mechanism/.test(caption)) return 'mechanism'
-  if (/molecular\s+(simulation|dynamics|structure)/.test(caption)) return 'molecular_simulation'
-
-  // 2. 从 OCR 文本识别
-  if (/elsevier|sciencedirect|journal|©\s*\d{4}|copyright/.test(ocr)) return 'publisher'
-  if (/cover|homepage/.test(ocr)) return 'cover'
-  if (/logo/.test(ocr)) return 'logo'
-  if (/scheme\s*\d/i.test(ocr)) return 'scheme'
-  if (/table\s*\d/i.test(ocr)) return 'table'
-
-  // 3. 从 page 推断：page=1 大尺寸 = 封面
-  if (img.page === 1 && img.width && img.width >= 800 && !ocr) return 'cover'
-  // 极小尺寸 = logo
-  if (img.width && img.height && (img.width < 60 || img.height < 60)) return 'logo'
-
-  // 4. 从图类型（ext.kind）推断
-  if (ext?.kind === 'chart') return 'chart'
-
-  // 5. 有图号 → figure
-  const hasFigNo = /\b(?:Fig\.?|Figure|Scheme|Table)\s*\d/i.test(caption + ocr)
-  if (hasFigNo) return 'figure'
-
-  return 'unknown'
 }
 
 /**
@@ -1583,6 +1707,9 @@ function _normalizeExtractions(extractions) {
     kind: e.kind,
     page: e.page_number,
     pageNumber: e.page_number,
+    // ⚠ 关键: 保留 source_image_id 字段（用于 paperAdapter._buildFigureRegistry 关联 image）
+    sourceImageId: e.source_image_id ?? e.sourceImageId ?? null,
+    source_image_id: e.source_image_id ?? null,
     figureNo: e.kind === 'chart' ? null : null,
     thumbnail: null,
     title: e.data?.caption || null,
