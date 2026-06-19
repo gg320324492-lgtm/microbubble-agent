@@ -58,10 +58,10 @@
       </div>
     </div>
 
-    <!-- 标签 -->
-    <div v-if="paper.tags?.length" class="paper-tags">
+    <!-- 标签（如果 keywords 也在 AbstractCard 显示，这里只显示分类/类型标签，不重复论文关键词） -->
+    <div v-if="headerTags.length" class="paper-tags">
       <el-tag
-        v-for="tag in paper.tags"
+        v-for="tag in headerTags"
         :key="tag"
         size="small"
         effect="plain"
@@ -79,15 +79,31 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 
-defineProps({
+const props = defineProps({
   paper: { type: Object, required: true },
   reanalyzing: { type: Boolean, default: false },
 })
 
 defineEmits(['reanalyze'])
+
+// 标签去重：如果 AbstractCard 已显示论文关键词，Header 只显示分类/类型标签
+// 如果 keywords 和 tags 重合度 >= 60%，Header 隐藏 tags
+const headerTags = computed(() => {
+  const tags = (props.paper.tags || []).map(t => t.toLowerCase().trim())
+  const kws = (props.paper.keywords || []).map(k => k.toLowerCase().trim())
+  if (!kws.length) return props.paper.tags || []
+  if (!tags.length) return []
+  // 计算重合度
+  const overlap = tags.filter(t => kws.some(k => k === t || k.includes(t) || t.includes(k)))
+  const ratio = overlap.length / Math.max(tags.length, 1)
+  // 重合度 >= 60% → 隐藏 Header tags（AbstractCard 会显示 keywords）
+  if (ratio >= 0.6) return []
+  return props.paper.tags || []
+})
 </script>
 
 <style scoped>

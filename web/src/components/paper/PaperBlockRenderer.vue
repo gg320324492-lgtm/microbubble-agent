@@ -37,6 +37,7 @@
 import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
 import { autoLinkContent } from '@/utils/paperAdapter'
+import { formatChemicalText } from '@/utils/chemFormat'
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -49,7 +50,12 @@ const blockClasses = computed(() => ({
   'block-paragraph-wrapper': props.block.type === 'paragraph',
 }))
 
-const renderedContent = computed(() => autoLinkContent(props.block.content || ''))
+const renderedContent = computed(() => {
+  const raw = props.block.content || ''
+  // 非中文论文：先做化学式/单位上下角标标准化，再做 auto-link
+  const formatted = props.isChinese ? raw : formatChemicalText(raw)
+  return autoLinkContent(formatted)
+})
 </script>
 
 <style scoped>

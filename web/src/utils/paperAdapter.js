@@ -52,8 +52,8 @@ const SECTION_KEYWORDS = [
 // 严格限制：
 // - 数字 1-2 位（避免匹配 "2018. Formation" 这种年份开头）
 // - 必须后跟大写或中文字符（避免匹配 "[55] (14)" 这种参考文献条目）
-// - 容忍 "1.Introduction"（无空格）和 "1. Introduction"（有空格）
-const NUMBERED_SECTION_RE = /^\s*(\d{1,2}(\.\d{1,2}){0,3})\.?\s*([A-Z一-龥])/
+// - 用 lookforward 而非消费：不吞掉标题第一个字符
+const NUMBERED_SECTION_RE = /^\s*(\d{1,2}(\.\d{1,2}){0,3})\.?\s+(?=[A-Z一-龥])/
 
 // 页码占位符（多种形式）
 const PAGE_MARKER_RES = [
@@ -895,6 +895,95 @@ function _stripPublicationInfo(text) {
   return keep.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+/**
+ * 英文论文正文中文污染过滤
+ *
+ * 如果一行中中文字符占比 > 50%，且不是章节标题 / 关键词 / 图表标记，
+ * 则视为 OCR 中文解说残留，整行删除。
+ *
+ * 保留：少量中文专有名词（如作者单位里的"天津"）在元信息区，
+ * 但正文段落不应出现大段中文。
+ */
+function _cleanChineseFromEnglish(text) {
+  if (!text) return ''
+  const lines = String(text).split('\n')
+  const keep = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) {
+      keep.push(line)
+      continue
+    }
+    // 计算中文字符占比
+    const cnChars = (trimmed.match(/[一-鿿]/g) || []).length
+    const totalChars = trimmed.length
+    const cnRatio = cnChars / Math.max(1, totalChars)
+    // 高中文占比行（> 40%）且不是章节标题 → 删除
+    if (cnRatio > 0.4 && cnChars >= 3) {
+      // 豁免：图表说明 blockquote（已在 cleanContent 剥除，这里兜底）
+      if (/^[>＞]/.test(trimmed)) continue
+      // 豁免：中文章节标题（摘要/引言/结论等）
+      if (/^(摘要|关键词|引言|结论|参考文献|致谢|材料与方法|实验方法)/.test(trimmed)) {
+        keep.push(line)
+        continue
+      }
+      // 其他高中文行 → 删除
+      continue
+    }
+    // 低中文占比行保留（可能是英文正文中的少量中文专有名词）
+    keep.push(line)
+  }
+  return keep.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * 构建正文内嵌图映射
+ *
+ * 扫描每个 section 的 blocks，找到 "Fig. N" / "Figure N" / "图 N" 引用，
+ * 返回 { sectionId: [figure, ...] } 映射。
+ * 每张图只在首次出现的 section 内嵌一次。
+ */
+function _buildInlineFigureMap(sections, figures, extractions) {
+  const map = {}  // sectionId → [figure]
+  if (!figures.length || !sections.length) return map
+
+  // 构建 figure 编号 → figure 对象映射
+  const figureByNo = {}
+  for (let i = 0; i < figures.length; i++) {
+    const fig = figures[i]
+    const no = fig.figureNo || `Fig. ${i + 1}`
+    figureByNo[no.toLowerCase()] = fig
+    // 也按数字索引
+    figureByNo[`fig. ${i + 1}`] = fig
+    figureByNo[`figure ${i + 1}`] = fig
+    figureByNo[`图${i + 1}`] = fig
+    figureByNo[`图 ${i + 1}`] = fig
+  }
+
+  // 扫描每个 section
+  const placedFigures = new Set()  // 已放置的 figure id
+  for (const section of sections) {
+    if (!section.blocks) continue
+    for (const block of section.blocks) {
+      if (block.type !== 'paragraph') continue
+      const text = block.content || ''
+      // 匹配 "Fig. 1" / "Figure 1" / "图 1" / "Scheme 1" / "Table 1"
+      const figRefs = text.match(/\b(?:Fig\.?|Figure|Scheme|图|表)\s*(\d{1,3})\b/gi)
+      if (!figRefs) continue
+      for (const ref of figRefs) {
+        const key = ref.toLowerCase().trim()
+        const fig = figureByNo[key]
+        if (!fig) continue
+        if (placedFigures.has(fig.id)) continue  // 已在其他 section 放过
+        if (!map[section.id]) map[section.id] = []
+        map[section.id].push(fig)
+        placedFigures.add(fig.id)
+      }
+    }
+  }
+  return map
+}
+
 function _detectKeywordsFromContent(content) {
   if (!content) return []
   // 多行匹配：Keywords: 后到下一个空行（≥2 个 \n）或章节标题前
@@ -1205,6 +1294,9 @@ export function normalizePaperData(raw, extra = {}) {
   }
   const inputContent = hasFormatted ? rawFormatted : rawContent
 
+  // 中间语言判断（用于后续中文污染过滤）
+  const isEnglishPaper = !_isChineseHeavy(inputContent)
+
   // 调试：dump 中间产物到 window
   if (typeof window !== 'undefined') {
     window.__PAPER_INTERMEDIATE__ = {
@@ -1358,10 +1450,28 @@ export function normalizePaperData(raw, extra = {}) {
       contentText: e.contentText,
     }))
 
-  // 10. 统计核心图（非 cover/logo）数量
+  // 10. 英文论文正文中文污染过滤
+  //     如果 isChineseHeavy = false（英文论文），删除 sections 中的中文污染行
+  const isEnglish = !_isChineseHeavy(content)
+  if (isEnglish) {
+    for (const section of sections) {
+      if (!section.blocks) continue
+      section.blocks = section.blocks.map(b => {
+        if (b.type !== 'paragraph') return b
+        return { ...b, content: _cleanChineseFromEnglish(b.content) }
+      }).filter(b => b.type !== 'paragraph' || (b.content && b.content.trim().length > 5))
+    }
+  }
+
+  // 11. 构建正文内嵌图映射
+  //     按 "Fig. N" / "Figure N" / "图 N" 在正文中出现位置，
+  //     把对应 figure 插入到引用所在 section 的 blocks 中
+  const inlineFigureMap = _buildInlineFigureMap(sections, figures, extractions)
+
+  // 12. 统计核心图（非 cover/logo）数量
   const coreFigureCount = figures.filter(f => f.kind === 'figure').length
 
-  // 11. 返回 PaperDetail
+  // 13. 返回 PaperDetail
   return {
     id: raw.id,
     title: raw.title || '（无标题）',
@@ -1390,6 +1500,7 @@ export function normalizePaperData(raw, extra = {}) {
     pageMarkers,
     figureMarkers,
     coreFigureCount,
+    inlineFigureMap,
     // 透传原数据（兼容老代码）
     raw,
     // 元信息
