@@ -1180,7 +1180,13 @@ export function normalizePaperData(raw, extra = {}) {
 
   // 4. 拆 section
   const isMd = hasFormatted
-  const sections = parsePaperSections(content, { isMarkdown: isMd })
+  let sections = parsePaperSections(content, { isMarkdown: isMd })
+
+  // 兜底：markdown 解析若只产出 1 个 preamble section（说明实际不是 markdown），
+  // 强制按 plain text 重新解析
+  if (isMd && sections.length <= 1) {
+    sections = parsePaperSections(content, { isMarkdown: false })
+  }
 
   // 5. 给每个 section 注入 page 标记
   sections.forEach(section => {
