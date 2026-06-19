@@ -273,6 +273,28 @@ const fetchDetail = async () => {
       related: relatedKnowledge.value,
     })
 
+    // 临时调试：把数据 dump 到 window，浏览器 console 可见
+    // 复制 `JSON.stringify(window.__PAPER_DEBUG__, null, 2)` 发给我
+    window.__PAPER_DEBUG__ = {
+      rawKeys: Object.keys(detailRes.data || {}),
+      rawContentLen: detailRes.data?.content?.length || 0,
+      rawFormattedLen: detailRes.data?.formatted_content?.length || 0,
+      rawContentSample: String(detailRes.data?.content || '').slice(0, 600),
+      rawFormattedSample: String(detailRes.data?.formatted_content || '').slice(0, 600),
+      sections: (paper.value.sections || []).map(s => ({
+        type: s.type, title: s.title, level: s.level, blocks: s.blocks?.length,
+      })),
+      abstractLen: paper.value.abstract?.length || 0,
+      abstractSample: String(paper.value.abstract || '').slice(0, 200),
+      keywords: paper.value.keywords,
+      referencesCount: paper.value.references?.length || 0,
+      coreFigureCount: paper.value.coreFigureCount,
+      displaySections: displaySections.value.map(s => ({ type: s.type, title: s.title })),
+      anchorSections: anchorSections.value.map(s => ({ type: s.type, title: s.title })),
+      anchorModules: anchorModules.value.map(m => m.title),
+    }
+    console.log('[PaperDetail DEBUG]', window.__PAPER_DEBUG__)
+
     await nextTick()
     renderGraph()
   } catch (e) {
