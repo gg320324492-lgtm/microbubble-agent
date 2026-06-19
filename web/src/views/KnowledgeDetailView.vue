@@ -239,19 +239,39 @@ const moduleCounts = computed(() => {
 
 /**
  * 根据章节内嵌的 figure_marker 或 inlineFigureMap 把对应图片放进章节
+ *
+ * v26 回归修复：过滤掉 Elsevier logo / 期刊封面 / publisher 图片，
+ * 这些图不应该进正文，只保留在文末多模态总图库。
  */
 function getInlineFiguresFor(section) {
   if (!paper.value || !section) return []
-  // L1: inlineFigureMap（正文中 "Fig. N" 引用匹配）
-  const fromMap = paper.value.inlineFigureMap?.[section.id] || []
+
+  // 过滤函数：剔除封面/logo/publisher/无图号的图
+  const isInlineEligible = (f) => {
+    if (!f) return false
+    // isPublisherImage 为 true → 过滤
+    if (f.isPublisherImage) return false
+    // 旧 kind 字段：cover / logo → 过滤
+    if (f.kind === 'cover' || f.kind === 'logo') return false
+    // figureType 已知为 publisher/cover/logo/unknown → 过滤
+    if (['cover', 'logo', 'publisher', 'unknown'].includes(f.figureType)) return false
+    // 必须有 figureNo（否则就是被机械分配的占位图）
+    if (!f.figureNo) return false
+    return true
+  }
+
+  // L1: inlineFigureMap（正文中 "Fig. N" 引用匹配）—— 已被 _buildInlineFigureMap 过滤 isCoreFigure
+  const fromMap = (paper.value.inlineFigureMap?.[section.id] || []).filter(isInlineEligible)
   if (fromMap.length) return fromMap
-  // L2: figure_marker blocks（[FIGURE:N] 占位符）
+
+  // L2: figure_marker blocks（[FIGURE:N] 占位符）—— 同样过滤
   const figureIds = new Set()
   for (const b of (section.blocks || [])) {
     if (b.type === 'figure_marker') figureIds.add(b.content)
   }
   if (!figureIds.size) return []
   return (paper.value.figures || []).filter(f => {
+    if (!isInlineEligible(f)) return false
     return figureIds.has(String(f.imageId)) || figureIds.has(String(f.id))
   })
 }
@@ -582,7 +602,7 @@ onUnmounted(() => {
   color: #9CA3AF;
 }
 
-/* 正文容器 */
+/* 正文容器（v26 回归修复：去掉 820px 限制，恢复 1180-1280px 阅读宽度） */
 .paper-article {
   background: #fff;
   border: 1px solid var(--color-border-light);
@@ -590,9 +610,7 @@ onUnmounted(() => {
   padding: 32px 44px;
   margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-  max-width: 820px;
-  margin-left: auto;
-  margin-right: auto;
+  max-width: 100%;       /* 恢复撑满主列，不再 820px 居中挤压 */
   overflow: hidden;
 }
 
@@ -608,7 +626,7 @@ onUnmounted(() => {
 }
 
 .paper-article :deep(.section-title) {
-  margin-top: 32px;
+  margin-top: 36px;
   margin-bottom: 20px;
   scroll-margin-top: 80px;
 }

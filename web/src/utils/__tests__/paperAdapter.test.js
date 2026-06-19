@@ -633,6 +633,68 @@ describe('cleanContent', () => {
     expect(cleanContent('')).toEqual({ content: '', extractedImages: [] })
     expect(cleanContent(null)).toEqual({ content: '', extractedImages: [] })
   })
+
+  // === v26 回归修复新增 ===
+
+  it('v26: 剥离残余 [PAGE:N] 标记（行尾、行中、独立行）', () => {
+    const text = 'T. Wang et al. 3 [PAGE:4]\nSection\n[PAGE:3]\n\nPAGE:5'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('[PAGE:4]')
+    expect(content).not.toContain('[PAGE:3]')
+    expect(content).not.toContain('PAGE:5')
+    expect(content).toContain('T. Wang et al.')
+  })
+
+  it('v26: 剥离 JSON 残留 { category: mixed ... }', () => {
+    const text = '正文段落\n{ category: mixed, kind: chart, model: llm }\n继续'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('category')
+    expect(content).not.toContain('kind:')
+    expect(content).not.toContain('mixed')
+    expect(content).toContain('正文段落')
+    expect(content).toContain('继续')
+  })
+
+  it('v26: 剥离 JSON 残留 {"kind":"chart"}', () => {
+    const text = '段落1\n{"kind":"chart","confidence":0.9}\n段落2'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('kind')
+    expect(content).not.toContain('confidence')
+  })
+
+  it('v26: 剥离中文图表说明 "图（P8，{...}）"', () => {
+    const text = '正文段落\n图（P8，{ category: mixed }）\n继续段落'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('图（P8')
+    expect(content).not.toContain('category')
+  })
+
+  it('v26: 剥离中文图表说明 "图表说明（P4）"', () => {
+    const text = '段落1\n图表说明（P4）\n段落2'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('图表说明')
+  })
+
+  it('v26: 剥离 "Figure caption (P4)" 英文变体', () => {
+    const text = 'Some text\nFigure caption (P4)\nMore text'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('Figure caption')
+  })
+
+  it('v26: 剥离 agent/minio 内网图片 URL', () => {
+    const text = '段落\nhttps://agent.mnb-lab.cn/minio/microbubble/x.jpeg\n继续'
+    const { content, extractedImages } = cleanContent(text)
+    expect(content).not.toContain('mnb-lab.cn')
+    expect(content).not.toContain('minio')
+    // 图片被提取
+    expect(extractedImages.length).toBeGreaterThan(0)
+  })
+
+  it('v26: 剥离 MULTIMODAL_INLINED 标记', () => {
+    const text = '段落\nMULTIMODAL_INLINED: image-1\n继续'
+    const { content } = cleanContent(text)
+    expect(content).not.toContain('MULTIMODAL_INLINED')
+  })
 })
 
 
