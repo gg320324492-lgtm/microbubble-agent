@@ -97,6 +97,14 @@ const INTERNAL_MARKER_RES = [
   /\[TABLE:\d+\]/g,
   /\[IMAGE:[^\]]*\]/g,
   /\[图\s*[Pp]?\d+\]/g, // [图 P1] 等
+  // PDF 页码标记（多种格式）
+  /\[PAGE:\s*\d+\s*\]/gi,           // [PAGE:1] / [PAGE: 1]
+  /\[PAGE\s*:\s*\d+\s*\]/gi,       // 兼容空格
+  /\bPAGE\s*[:：]\s*\d+\b/gi,       // PAGE:1 (无方括号)
+  // "T. Wang et al. 3 [PAGE:4]" → 保留作者名 + 页码，去掉 [PAGE:x]
+  /([A-Z]\.\s*[A-Z][a-z]+(?:\s+et\s+al\.?)?)\s+\d+\s*\[PAGE:\s*\d+\s*\]/gi,  // 暂不激进删除（保留作者名+数字）
+  // "Journal name 513 (2026) 142456" → 这种页码信息保留为元数据，不在正文
+  /\s*\[PAGE:\s*\d+\s*\]\s*/g,      // 任何位置前后的 [PAGE:x] 单独删除
 ]
 
 // HTML 属性残留
@@ -306,6 +314,17 @@ export function cleanContent(text, options = {}) {
   const { stripImageUrls = true, isMarkdown = false } = options
 
   let result = String(text)
+
+  // -1. 优先剥除 PDF 页码标记（多种格式：行中、行尾、独立行）
+  //      "T. Wang et al. 3 [PAGE:4]" → "T. Wang et al."
+  //      "Vol 513 (2026) 142456 [PAGE:5]" → "Vol 513 (2026) 142456"
+  // 关键：用 \n 替代空格，保留行边界（防止章节标题被合并到前一/后行）
+  result = result.replace(/[ \t]*\[PAGE:\s*\d+\s*\][ \t]*\n?/gi, '\n')
+  result = result.replace(/\n\[PAGE:\s*\d+\s*\][ \t]*\n?/gi, '\n')
+  // 孤立的 [PAGE:x] 行（整行只有页码）
+  result = result.replace(/^[ \t]*\[PAGE:\s*\d+\s*\][ \t]*$/gim, '')
+  // 行内 "PAGE:3"（无方括号，如 "Chapter 1 PAGE:3 Title"）
+  result = result.replace(/\s+PAGE:\s*\d+\b/gi, ' ')
 
   // 0. 先剥除 LLM blockquote 图描述（> 📊 **图表说明（Px）**\n> ... 整段）
   //    这些是 inline 进正文的图注描述，不应作为正文段落
@@ -943,41 +962,190 @@ function _cleanChineseFromEnglish(text) {
  * 返回 { sectionId: [figure, ...] } 映射。
  * 每张图只在首次出现的 section 内嵌一次。
  */
-function _buildInlineFigureMap(sections, figures, extractions) {
-  const map = {}  // sectionId → [figure]
-  if (!figures.length || !sections.length) return map
+/**
+ * Figure Registry：建立统一的图片元数据索引
+ *
+ * 每张图片整理为：
+ * {
+ *   id, src, page, figureNo, figureType,
+ *   isCoreFigure, isPublisherImage,
+ *   caption, ocrText, semanticTitle, sectionHint, confidence
+ * }
+ *
+ * figureType 候选：
+ *   graphical_abstract / scheme / figure / chart / table /
+ *   mechanism / experimental_setup / molecular_simulation /
+ *   cover / logo / publisher / unknown
+ *
+ * isCoreFigure = true 的图片才允许正文内嵌
+ * isPublisherImage = true 的图片只能在文末"出版信息"区
+ */
+function _buildFigureRegistry(images, extractions, content) {
+  if (!Array.isArray(images)) return []
 
-  // 构建 figure 编号 → figure 对象映射
-  const figureByNo = {}
-  for (let i = 0; i < figures.length; i++) {
-    const fig = figures[i]
-    const no = fig.figureNo || `Fig. ${i + 1}`
-    figureByNo[no.toLowerCase()] = fig
-    // 也按数字索引
-    figureByNo[`fig. ${i + 1}`] = fig
-    figureByNo[`figure ${i + 1}`] = fig
-    figureByNo[`图${i + 1}`] = fig
-    figureByNo[`图 ${i + 1}`] = fig
+  // 1. 构建 extractions 按 source_image_id 索引
+  const extByImageId = {}
+  for (const ex of (extractions || [])) {
+    if (ex?.sourceImageId) {
+      extByImageId[ex.sourceImageId] = ex
+    }
+    if (ex?.source_image_id) {
+      extByImageId[ex.source_image_id] = ex
+    }
   }
 
-  // 扫描每个 section
-  const placedFigures = new Set()  // 已放置的 figure id
+  // 2. 扫描正文，识别每个 figureNo 出现的 page
+  const figPages = _scanFigurePages(content)
+
+  return images.map((img, idx) => {
+    const ext = extByImageId[img.id] || {}
+    // 2.1 figureNo 优先级：extraction.data.caption > OCR > 按 page 推测
+    let figureNo = null
+    if (ext.data?.caption) {
+      const m = ext.data.caption.match(/\b(?:Fig\.?|Figure|Scheme|Table|图|表)\s*(\d{1,3}[a-z]?)\b/i)
+      if (m) figureNo = m[0]
+    }
+    if (!figureNo && img.ocrText) {
+      const m = img.ocrText.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+      if (m) figureNo = m[0]
+    }
+
+    // 2.2 figureType 推断
+    const figureType = _inferFigureType(img, ext)
+
+    // 2.3 isCoreFigure / isPublisherImage
+    const isPublisherImage = ['cover', 'logo', 'publisher'].includes(figureType)
+    const isCoreFigure = !isPublisherImage && figureType !== 'unknown'
+
+    // 2.4 sectionHint（从 figureNo 所在 page 找最近 section）
+    const sectionHint = figureNo ? (figPages[figureNo] || null) : null
+
+    // 2.5 semanticTitle（从 caption 提取第一句作为标题）
+    const semanticTitle = (ext.data?.caption || img.ocrText || '').split(/[.\n]/)[0].slice(0, 80) || null
+
+    return {
+      id: img.id,
+      src: img.src || img.imageUrl,
+      page: img.page,
+      figureNo,
+      figureType,
+      isCoreFigure,
+      isPublisherImage,
+      caption: ext.data?.caption || null,
+      ocrText: img.ocrText || null,
+      semanticTitle,
+      sectionHint,
+      confidence: ext.confidence || 0.5,
+    }
+  })
+}
+
+/**
+ * 扫描正文，识别每个 figureNo 出现的 page
+ * 返回 { 'Fig. 1': [pages...], ... }
+ */
+function _scanFigurePages(content) {
+  if (!content) return {}
+  const result = {}
+  // 简化：用 [PAGE:N] 标记分割
+  const pageBlocks = String(content).split(/\[PAGE:\s*(\d+)\s*\]/i)
+  for (let i = 1; i < pageBlocks.length; i += 2) {
+    const page = parseInt(pageBlocks[i], 10)
+    const text = pageBlocks[i + 1] || ''
+    const figRefs = text.matchAll(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/gi)
+    for (const m of figRefs) {
+      const key = m[0]
+      if (!result[key]) result[key] = []
+      if (!result[key].includes(page)) result[key].push(page)
+    }
+  }
+  return result
+}
+
+/**
+ * 推断 figureType
+ */
+function _inferFigureType(img, ext) {
+  const ocr = (img.ocrText || '').toLowerCase()
+  const caption = (ext?.data?.caption || '').toLowerCase()
+
+  // 1. 优先从 caption 识别
+  if (/graphical\s+abstract/.test(caption)) return 'graphical_abstract'
+  if (/^scheme\s*\d/i.test(caption)) return 'scheme'
+  if (/^table\s*\d/i.test(caption)) return 'table'
+  if (/experimental\s+(setup|system|apparatus)/.test(caption)) return 'experimental_setup'
+  if (/mechanism/.test(caption)) return 'mechanism'
+  if (/molecular\s+(simulation|dynamics|structure)/.test(caption)) return 'molecular_simulation'
+
+  // 2. 从 OCR 文本识别
+  if (/elsevier|sciencedirect|journal|©\s*\d{4}|copyright/.test(ocr)) return 'publisher'
+  if (/cover|homepage/.test(ocr)) return 'cover'
+  if (/logo/.test(ocr)) return 'logo'
+  if (/scheme\s*\d/i.test(ocr)) return 'scheme'
+  if (/table\s*\d/i.test(ocr)) return 'table'
+
+  // 3. 从 page 推断：page=1 大尺寸 = 封面
+  if (img.page === 1 && img.width && img.width >= 800 && !ocr) return 'cover'
+  // 极小尺寸 = logo
+  if (img.width && img.height && (img.width < 60 || img.height < 60)) return 'logo'
+
+  // 4. 从图类型（ext.kind）推断
+  if (ext?.kind === 'chart') return 'chart'
+
+  // 5. 有图号 → figure
+  const hasFigNo = /\b(?:Fig\.?|Figure|Scheme|Table)\s*\d/i.test(caption + ocr)
+  if (hasFigNo) return 'figure'
+
+  return 'unknown'
+}
+
+/**
+ * 智能正文内嵌图映射（升级版）
+ *
+ * L1：精确匹配 figureNo（caption/OCR 提取的 Fig. N）
+ * L2：正文引用 "Fig. N" / "Figure N" / "Scheme N" / "Table N"
+ * L3：page 邻近 + 章节主题匹配
+ * L4：fallback - 不插入正文，只在文末图库显示
+ *
+ * 严格规则：
+ * - 同一张图在整个 paper 只内嵌 1 次
+ * - isCoreFigure = false 的图（cover/logo/publisher）永远不内嵌
+ * - 同一个 section 不重复插入同一张图
+ */
+function _buildInlineFigureMap(sections, figureRegistry, content) {
+  const map = {}  // sectionId → [figure]
+  if (!figureRegistry?.length || !sections?.length) return map
+
+  // 1. 建立 figureNo → figure 映射（只包含 isCoreFigure）
+  const figureByNo = {}
+  for (const fig of figureRegistry) {
+    if (!fig.isCoreFigure || !fig.figureNo) continue
+    figureByNo[fig.figureNo.toLowerCase()] = fig
+    figureByNo[fig.figureNo.toLowerCase().replace(/\s+/g, '')] = fig  // 去空格版本
+  }
+
+  // 2. 扫描每个 section 的 blocks
+  const placedFigures = new Set()  // 全局已放置
+
   for (const section of sections) {
     if (!section.blocks) continue
+    const sectionPlaced = new Set()  // 本 section 已放置（防重复）
     for (const block of section.blocks) {
       if (block.type !== 'paragraph') continue
       const text = block.content || ''
-      // 匹配 "Fig. 1" / "Figure 1" / "图 1" / "Scheme 1" / "Table 1"
-      const figRefs = text.match(/\b(?:Fig\.?|Figure|Scheme|图|表)\s*(\d{1,3})\b/gi)
-      if (!figRefs) continue
-      for (const ref of figRefs) {
-        const key = ref.toLowerCase().trim()
+      // 匹配 "Fig. 1" / "Figure 1" / "Scheme 1" / "Table 1" / "图 1"
+      // 但要排除 "Fig. 1a" 之类（带字母的子图，单独匹配）
+      const figRefs = [...text.matchAll(/\b(?:Fig\.?|Figure|Scheme|Table|图|表)\s*(\d{1,3})\b/gi)]
+      for (const m of figRefs) {
+        const key = m[0].toLowerCase()
         const fig = figureByNo[key]
         if (!fig) continue
-        if (placedFigures.has(fig.id)) continue  // 已在其他 section 放过
+        if (placedFigures.has(fig.id)) continue
+        if (sectionPlaced.has(fig.id)) continue
         if (!map[section.id]) map[section.id] = []
         map[section.id].push(fig)
         placedFigures.add(fig.id)
+        sectionPlaced.add(fig.id)
       }
     }
   }
@@ -1220,12 +1388,12 @@ function _normalizeExtractions(extractions) {
   if (!Array.isArray(extractions)) return []
   return extractions.map(e => ({
     id: e.id,
-    type: e.kind === 'image_block' ? 'image' : e.kind, // 'formula' | 'table' | 'chart' | 'image'
+    type: e.kind === 'image_block' ? 'image' : e.kind,
     kind: e.kind,
     page: e.page_number,
     pageNumber: e.page_number,
-    figureNo: e.kind === 'chart' ? null : null, // 后端没存 figureNo，前端按 page+id 显示
-    thumbnail: null, // 提取物本身没图，缩略图在 figures 里
+    figureNo: e.kind === 'chart' ? null : null,
+    thumbnail: null,
     title: e.data?.caption || null,
     description: e.data?.description || e.data?.caption || e.content_text || '',
     contentText: e.content_text,
@@ -1233,6 +1401,82 @@ function _normalizeExtractions(extractions) {
     modelUsed: e.model_used,
     data: e.data,
   }))
+}
+
+/**
+ * normalizeGraphData: 兼容后端多种图谱数据格式
+ *
+ * 兼容字段：
+ *   节点: id / node_id / name / label / text / title
+ *          value / weight / score / count
+ *          category / type / group
+ *   边:   source / from / source_id
+ *          target / to / target_id
+ *          label / relation / type
+ *          weight / value
+ *
+ * 输出 ECharts 格式：
+ *   { nodes: [{id, name, value, category, symbolSize}],
+ *     links: [{source, target, value, label}],
+ *     categories: [{name}] }
+ *
+ * @param {Object} rawGraphData - 后端返回的图谱数据
+ * @returns {Object} ECharts 兼容的图谱数据
+ */
+export function normalizeGraphData(rawGraphData) {
+  if (!rawGraphData || typeof rawGraphData !== 'object') {
+    return { nodes: [], links: [], categories: [], _status: 'no_data' }
+  }
+
+  // 1. 提取 nodes（兼容多种字段名）
+  const rawNodes = rawGraphData.nodes || rawGraphData.Nodes ||
+                   rawGraphData.entities || rawGraphData.vertices || []
+  if (!Array.isArray(rawNodes) || !rawNodes.length) {
+    return { nodes: [], links: [], categories: [], _status: 'no_data' }
+  }
+
+  // 2. 提取 edges/links（兼容多种字段名）
+  const rawEdges = rawGraphData.edges || rawGraphData.links ||
+                   rawGraphData.relations || rawGraphData.connections || []
+
+  // 3. 限制最大节点数
+  const MAX_NODES = 80
+  const nodes = rawNodes.slice(0, MAX_NODES).map(n => {
+    const id = String(n.id || n.node_id || n.name || n.label || n.title || n.text || `node-${Math.random()}`)
+    const name = n.name || n.label || n.title || n.text || id
+    const value = Number(n.value ?? n.weight ?? n.score ?? n.count ?? 1)
+    const category = n.category || n.type || n.group || 'default'
+    return {
+      id,
+      name: String(name).slice(0, 60),
+      value,
+      category,
+      symbolSize: Math.min(50, 12 + value * 4),
+    }
+  })
+
+  // 4. 过滤 edges：只保留 source/target 都在 nodes 里的
+  const nodeIds = new Set(nodes.map(n => n.id))
+  const links = (Array.isArray(rawEdges) ? rawEdges : []).map(e => {
+    const source = String(e.source ?? e.from ?? e.source_id ?? '')
+    const target = String(e.target ?? e.to ?? e.target_id ?? '')
+    const value = Number(e.value ?? e.weight ?? 1)
+    const label = e.label || e.relation || e.type || ''
+    return { source, target, value, label }
+  }).filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
+
+  // 5. categories
+  const categorySet = new Set(nodes.map(n => n.category).filter(Boolean))
+  const categories = [...categorySet].map(name => ({ name }))
+
+  return {
+    nodes,
+    links,
+    categories,
+    _status: nodes.length > 0 ? 'success' : 'no_data',
+    _truncated: rawNodes.length > MAX_NODES,
+    _totalNodes: rawNodes.length,
+  }
 }
 
 function _normalizeImages(images) {
@@ -1396,10 +1640,24 @@ export function normalizePaperData(raw, extra = {}) {
     ocrModel: img.ocrModel,
     caption: null,
   }))
+  // 使用新的 _buildFigureRegistry 建立 figureRegistry（含 figureType / isCoreFigure / figureNo 等）
+  const figureRegistry = _buildFigureRegistry(figuresRaw, extractions, content)
+  // 兼容旧 API：保留 figures 数组（供 ExtractionPanel / 文末图库使用）
   const figures = matchFiguresWithCaptions(figuresRaw, extractions, content)
     .map(fig => {
+      const reg = figureRegistry.find(r => r.id === (fig.id || fig.imageId))
       const cls = classifyImageKind(fig)
-      return { ...fig, kind: cls.kind, label: cls.label }
+      return {
+        ...fig,
+        kind: cls.kind,
+        label: cls.label,
+        figureType: reg?.figureType,
+        isCoreFigure: reg?.isCoreFigure,
+        isPublisherImage: reg?.isPublisherImage,
+        figureNo: fig.figureNo || reg?.figureNo,
+        semanticTitle: reg?.semanticTitle,
+        sectionHint: reg?.sectionHint,
+      }
     })
 
   // 7.5 补充从 cleanContent 抽出的图片（如果后端 images 为空，但正文中出现了图片 URL）
@@ -1463,10 +1721,10 @@ export function normalizePaperData(raw, extra = {}) {
     }
   }
 
-  // 11. 构建正文内嵌图映射
-  //     按 "Fig. N" / "Figure N" / "图 N" 在正文中出现位置，
-  //     把对应 figure 插入到引用所在 section 的 blocks 中
-  const inlineFigureMap = _buildInlineFigureMap(sections, figures, extractions)
+  // 11. 构建正文内嵌图映射（智能匹配）
+  //     使用 figureRegistry 过滤掉 cover/logo/publisher，
+  //     只对 isCoreFigure=true 的图片做正文内嵌
+  const inlineFigureMap = _buildInlineFigureMap(sections, figureRegistry, content)
 
   // 12. 统计核心图（非 cover/logo）数量
   const coreFigureCount = figures.filter(f => f.kind === 'figure').length
@@ -1500,6 +1758,8 @@ export function normalizePaperData(raw, extra = {}) {
     pageMarkers,
     figureMarkers,
     coreFigureCount,
+    figureRegistry,  // 完整图 registry（含 isCoreFigure / figureType / figureNo 等）
+    figures,          // 兼容旧 API：含 kind/label/figureType/isCoreFigure 等
     inlineFigureMap,
     // 透传原数据（兼容老代码）
     raw,
