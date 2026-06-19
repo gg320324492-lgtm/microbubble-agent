@@ -735,8 +735,103 @@ describe('cleanContent', () => {
 
 
 // ============================================================
-// 图片分类测试
+// _buildFigureRegistry v27 段落级锚定测试
 // ============================================================
+
+describe('normalizePaperData - v27 inline figure 段落级锚定', () => {
+  // 用户报告的真实场景模拟数据
+  // 后端 OCR 不输出 "Fig. 1" 这种图号字符串，只输出图描述
+  // 要求：按 page 顺序兜底分配 Fig. N，确保 Elsevier logo / 期刊封面不进正文
+  const realWorldInput = {
+    id: 19,
+    title: 'O3-MNBs/H2O2 system for toluene oxidation',
+    content: 'See Fig. 1 for the heatmap.',
+    formatted_content: 'See Fig. 1 for the heatmap. Fig. 2 shows results.',
+    images: [
+      { id: 518, page_number: 1, image_url: 'a.jpg', ocr_text: 'NON SOLUS\nELSEVIER' },
+      { id: 519, page_number: 1, image_url: 'b.jpg', ocr_text: 'ELSEVIER\nJOURNAL OF HAZARDOUS MATERIALS' },
+      { id: 520, page_number: 1, image_url: 'c.jpg', ocr_text: 'Liquid Phase\nO3-MNBs\nH2O2\nOH radicals' },
+      { id: 521, page_number: 3, image_url: 'd.jpg', ocr_text: 'toluene conversion vs time' },
+      { id: 522, page_number: 4, image_url: 'e.jpg', ocr_text: 'oxidant supply chart' },
+      { id: 527, page_number: 6, image_url: 'f.jpg', ocr_text: 'economic analysis' },
+    ],
+    extractions: [
+      { id: 1, source_image_id: 518, kind: 'image_block', data: { text: 'NON SOLUS\nELSEVIER', caption: null } },
+      { id: 2, source_image_id: 519, kind: 'image_block', data: { text: 'ELSEVIER\nJOURNAL OF...', caption: null } },
+      { id: 3, source_image_id: 520, kind: 'chart', data: { description: '热力图展示甲苯转化率' } },
+      { id: 4, source_image_id: 527, kind: 'chart', data: { description: '成本对比柱状图' } },
+    ],
+  }
+
+  it('Elsevier logo / 期刊封面被识别为 publisher/cover, 不进正文', () => {
+    const paper = normalizePaperData(realWorldInput, {
+      images: realWorldInput.images,
+      extractions: realWorldInput.extractions,
+    })
+    const figs = paper.figureRegistry || []
+    const id518 = figs.find(f => f.id === 518)
+    const id519 = figs.find(f => f.id === 519)
+    expect(id518?.figureType).toBe('publisher')
+    expect(id519?.figureType).toBe('publisher')
+    expect(id518?.isCoreFigure).toBe(false)
+    expect(id519?.isCoreFigure).toBe(false)
+    expect(id518?.figureNo).toBeNull()
+    expect(id519?.figureNo).toBeNull()
+  })
+
+  it('核心图（OCR 无图号）按 page + 顺序兜底分配 Fig. 1, Fig. 2, ...', () => {
+    const paper = normalizePaperData(realWorldInput, {
+      images: realWorldInput.images,
+      extractions: realWorldInput.extractions,
+    })
+    const figs = paper.figureRegistry || []
+    const id520 = figs.find(f => f.id === 520)
+    const id521 = figs.find(f => f.id === 521)
+    const id522 = figs.find(f => f.id === 522)
+    const id527 = figs.find(f => f.id === 527)
+
+    // 核心图必须有 figureNo（兜底分配）
+    expect(id520?.figureNo).toBe('Fig. 1')
+    expect(id521?.figureNo).toBe('Fig. 2')
+    expect(id522?.figureNo).toBe('Fig. 3')
+    expect(id527?.figureNo).toBe('Fig. 4')
+    // 都是 isCoreFigure=true
+    expect(id520?.isCoreFigure).toBe(true)
+    expect(id521?.isCoreFigure).toBe(true)
+  })
+
+  it('正文 paragraph 含 Fig. N 引用 → 对应图被锚定到 paragraph 后', () => {
+    const paper = normalizePaperData(realWorldInput, {
+      images: realWorldInput.images,
+      extractions: realWorldInput.extractions,
+    })
+    // 至少 1 个 inlineFigureAnchor（Fig. 1 锚到引用它的 paragraph）
+    const anchors = paper.inlineFigureAnchors || {}
+    const anchorIds = Object.keys(anchors)
+    expect(anchorIds.length).toBeGreaterThan(0)
+
+    // 找到 Fig. 1 锚定的 paragraph
+    const fig1Anchor = Object.values(anchors).find(arr => arr.some(f => f.figureNo === 'Fig. 1'))
+    expect(fig1Anchor).toBeDefined()
+    // 该 paragraph 必须有 "Fig. 1" 文本引用
+    const fig1Pid = Object.keys(anchors).find(pid =>
+      anchors[pid].some(f => f.figureNo === 'Fig. 1')
+    )
+    expect(fig1Pid).toMatch(/__p\d+$/)
+  })
+
+  it('Elsevier logo / 期刊封面不在 inlineFigureAnchors 中', () => {
+    const paper = normalizePaperData(realWorldInput, {
+      images: realWorldInput.images,
+      extractions: realWorldInput.extractions,
+    })
+    const anchors = paper.inlineFigureAnchors || {}
+    const allAnchoredFigs = Object.values(anchors).flat()
+    const anchoredIds = new Set(allAnchoredFigs.map(f => f.id))
+    expect(anchoredIds.has(518)).toBe(false)  // Elsevier logo
+    expect(anchoredIds.has(519)).toBe(false)  // 期刊封面
+  })
+})
 
 describe('classifyImageKind', () => {
   it('Elsevier logo 识别为 cover', () => {
