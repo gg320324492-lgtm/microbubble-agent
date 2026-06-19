@@ -849,6 +849,7 @@ function _stripPublicationInfo(text) {
     /^Tel\.?\s*[:：]/i,
     /^ScienceDirect/i,
     /^journal\s+homepage/i,
+    /^Contents?\s+lists?\s+available/i,
     /^Received\s+(?:in\s+revised\s+form\s+)?\d/i,
     /^Revised\s+\d/i,
     /^Accepted\s+\d/i,
@@ -858,6 +859,27 @@ function _stripPublicationInfo(text) {
     /^\s*\[PAGE:\d+\]/i,
     /^https?:\/\/(?:dx\.)?doi\.org\//i,
     /^DOI\s*[:：]/i,
+    // 期刊名 + 卷号 + 年份（J. Hazard. Mater. 513 (2026) 142456）
+    /^[A-Z][a-z]+(?:\.\s*[A-Z][a-z]+)*\s+\d+\s*\(\d{4}\)\s*\d+/,
+    // 学校/单位地址行
+    /^a\s+School\s+of\s+/i,
+    /^b\s+College\s+of\s+/i,
+    /^c\s+State\s+Scientific/i,
+    // "Graphical abstract" 孤立行
+    /^Graphical\s+abstract\s*$/i,
+    // Highlights 标题行
+    /^Highlights?\s*$/i,
+    // 作者名列表（3+ 人名用逗号分隔，含上标 a,b,c）
+    /^[A-Z][a-z]+\s+[A-Z][a-z]+\s+[a-z](?:\s*,\s*[A-Z][a-z]+\s+[A-Z][a-z]+\s+[a-z]){2,}/,
+    // 大学/学院全名行（中文/英文）
+    /^(?:School|College|Institute|Department|University|Center|Centre|Laboratory)\s+of\s+/i,
+    // "PR China" / "PR Ch" 等国家行
+    /^PR\s+China/i,
+    /^PR\s+Ch\s*$/i,
+    // "a,*" 或 "b" 等作者上标标识行
+    /^[a-z]\s*[*†‡§]?\s*$/,
+    // blockquote 图描述残留
+    /^>\s*(?:📊|📈|📉|🖼|🧪|⚗|🔬|🔍|💠)?\s*[*_]*\s*(?:图表说明|Figure\s+caption|Table\s+caption|Caption|图表描述)/i,
   ]
   for (const line of lines) {
     const trimmed = line.trim()
