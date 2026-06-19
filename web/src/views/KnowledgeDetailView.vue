@@ -338,10 +338,23 @@ onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
 
 <style scoped>
 .knowledge-detail-page {
-  max-width: 860px;
+  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
-  padding-bottom: var(--space-8);
+  padding: 0 var(--space-6) var(--space-8);
+  box-sizing: border-box;
 }
+
+@media (min-width: 1400px) {
+  .knowledge-detail-page {
+    max-width: 1400px;
+  }
+}
+
+.detail-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 
 .detail-topbar {
   display: flex;
@@ -535,29 +548,37 @@ onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
   background: var(--color-bg-page);
   padding: var(--space-4);
   border-radius: var(--radius-md);
+  word-break: normal;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .markdown-body {
   font-size: var(--font-size-base);
-  line-height: 1.8;
+  line-height: 1.85;
   color: var(--color-text-primary);
   background: var(--color-bg-page);
   padding: var(--space-4) var(--space-6);
   border-radius: var(--radius-md);
+  word-break: normal;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .markdown-body :deep(h1) { font-size: 1.5em; font-weight: 700; margin: 1.2em 0 0.6em; padding-bottom: 0.3em; border-bottom: 2px solid var(--color-border); }
 .markdown-body :deep(h2) { font-size: 1.3em; font-weight: 600; margin: 1em 0 0.5em; }
 .markdown-body :deep(h3) { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.4em; }
-.markdown-body :deep(p) { margin: 0.5em 0; text-indent: 2em; }
+.markdown-body :deep(p) { margin: 0.5em 0; text-indent: 2em; word-break: normal; overflow-wrap: break-word; }
 .markdown-body :deep(ul), .markdown-body :deep(ol) { padding-left: 2em; margin: 0.4em 0; }
 .markdown-body :deep(li) { margin: 0.2em 0; }
 .markdown-body :deep(table) { border-collapse: collapse; width: 100%; margin: 0.8em 0; font-size: 0.9em; }
 .markdown-body :deep(th), .markdown-body :deep(td) { border: 1px solid var(--color-border); padding: 0.4em 0.6em; text-align: left; }
 .markdown-body :deep(th) { background: var(--color-bg-page); font-weight: 600; }
-.markdown-body :deep(blockquote) { border-left: 3px solid var(--color-primary); margin: 0.6em 0; padding: 0.3em 1em; color: var(--color-text-secondary); }
+.markdown-body :deep(blockquote) { border-left: 3px solid var(--color-primary); margin: 0.6em 0; padding: 0.3em 1em; color: var(--color-text-secondary); word-break: normal; }
 .markdown-body :deep(sub), .markdown-body :deep(sup) { font-size: 0.8em; }
-.markdown-body :deep(img) { max-width: 100%; border-radius: var(--radius-md); margin: 1em 0; }
+.markdown-body :deep(img) { max-width: 100%; width: auto; height: auto; border-radius: var(--radius-md); margin: 1em auto; display: block; }
+.markdown-body :deep(pre) { word-break: normal; overflow-wrap: break-word; white-space: pre-wrap; }
 
 .detail-source {
   margin-top: var(--space-4);

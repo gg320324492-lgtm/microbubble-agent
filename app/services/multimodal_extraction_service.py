@@ -230,19 +230,53 @@ class MultimodalExtractionService:
         await multimodal_extraction_service.extract_for_knowledge(knowledge_id)
     """
 
+    async def _reset_multimodal_data(self, knowledge_id: int):
+        """重跑前清空旧的 image + extraction 记录（防止重复 OCR 数据堆积）
+
+        同时清除 formatted_content / content 中的 MULTIMODAL_INLINED 标记，
+        让 inline 重跑会重新生成排版。
+        """
+        async with async_session() as db:
+            # Delete old images (cascade deletes extractions via source_image_id SET NULL)
+            await db.execute(
+                KnowledgeImage.__table__.delete().where(KnowledgeImage.knowledge_id == knowledge_id)
+            )
+            # Delete old extractions
+            from app.models.knowledge_multimodal import KnowledgeExtraction
+            await db.execute(
+                KnowledgeExtraction.__table__.delete().where(KnowledgeExtraction.knowledge_id == knowledge_id)
+            )
+            # Reset analysis_status so UI shows "analyzing" again
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if knowledge:
+                knowledge.analysis_status = "analyzing"
+                # Remove inline marker from content/formatted_content
+                if knowledge.content and self.INLINE_MARKER in knowledge.content:
+                    knowledge.content = knowledge.content.split(self.INLINE_MARKER)[0].rstrip()
+                if knowledge.formatted_content and self.INLINE_MARKER in knowledge.formatted_content:
+                    knowledge.formatted_content = knowledge.formatted_content.split(self.INLINE_MARKER)[0].rstrip()
+            await db.commit()
+
     async def extract_for_knowledge(self, knowledge_id: int):
         """异步提取指定知识条目的图片+OCR+公式/表格
 
         流程：
+        0. 清空旧 image + extraction（防止重复）
         1. 取 Knowledge 行（必须有 file_path/file_type）
         2. 从 MinIO 下载原文件
         3. file_parser_service 提取嵌入图片
         4. 过滤/缩放后上传 MinIO + 写 KnowledgeImage
         5. 并发 OCR（classify_and_extract 一次拿 5 字段）
-        6. 写 KnowledgeExtraction
+        6. 写 KnowledgeExtraction（去重：同 source_image_id 相似内容跳过）
         7. 把 LaTeX/Markdown table 拼到 formatted_content（可选）
         """
         from app.services.file_service import file_service as fs
+
+        # 0. 清空旧数据（避免重复 OCR 累积）
+        await self._reset_multimodal_data(knowledge_id)
 
         # 1. 取 Knowledge
         async with async_session() as db:
@@ -415,14 +449,23 @@ class MultimodalExtractionService:
         重要：image_records 来自 _upload_images 的另一个 session，
         不能直接 mutate（SQLAlchemy session 隔离，mutate 不会持久化）。
         必须在新 session 里 re-fetch 后再更新。
+
+        去重策略（防 OCR 重复入库）：
+        - 同一 OCR 调用只算一个 result，不会内部重复
+        - 不同图之间如果 chart_description 高度相似（前 200 字相同）跳过
+        - image_block 完全相同的 text 跳过
         """
         from sqlalchemy.orm.attributes import flag_modified
-        counts = {"formula": 0, "table": 0, "chart": 0, "image_block": 0}
+        counts = {"formula": 0, "table": 0, "chart": 0, "image_block": 0, "dedup_skipped": 0}
         # 索引 image_id → page_number/position_data（从前一个 session 的快照取）
         meta_by_id = {img.id: {
             "page_number": img.page_number,
             "position_data": img.position_data,
         } for img in image_records}
+
+        # 去重跟踪：跨图去重（同一文档内）
+        seen_chart_descs: set = set()  # 200 字前缀
+        seen_image_blocks: set = set()  # 完整内容
 
         async with async_session() as db:
             # 一次性 re-fetch 所有 image（用新 session 绑定）
@@ -500,40 +543,52 @@ class MultimodalExtractionService:
                     db.add(ext)
                     counts["table"] += 1
 
-                # 图表描述
+                # 图表描述（去重：跨图相似内容跳过）
                 if chart_desc and chart_desc.strip():
-                    ext = KnowledgeExtraction(
-                        knowledge_id=knowledge_id,
-                        source_image_id=img_id,
-                        kind=EXTRACTION_KIND_CHART,
-                        page_number=meta_by_id.get(img_id, {}).get("page_number"),
-                        position_data=meta_by_id.get(img_id, {}).get("position_data"),
-                        data={"description": chart_desc.strip()},
-                        content_text=chart_desc.strip(),
-                        confidence=0.7,
-                        model_used=model_used,
-                        source="auto",
-                    )
-                    db.add(ext)
-                    counts["chart"] += 1
+                    desc = chart_desc.strip()
+                    # 用前 200 字做去重指纹（避免 LLM 输出末尾差异）
+                    fingerprint = desc[:200]
+                    if fingerprint in seen_chart_descs:
+                        counts["dedup_skipped"] += 1
+                    else:
+                        seen_chart_descs.add(fingerprint)
+                        ext = KnowledgeExtraction(
+                            knowledge_id=knowledge_id,
+                            source_image_id=img_id,
+                            kind=EXTRACTION_KIND_CHART,
+                            page_number=meta_by_id.get(img_id, {}).get("page_number"),
+                            position_data=meta_by_id.get(img_id, {}).get("position_data"),
+                            data={"description": desc},
+                            content_text=desc,
+                            confidence=0.7,
+                            model_used=model_used,
+                            source="auto",
+                        )
+                        db.add(ext)
+                        counts["chart"] += 1
 
                 # image_block 总是记（即使没特殊提取，也有 OCR 文字）
+                # 去重：完全相同的 text 跳过（防同图重复入库）
                 if ocr_text:
                     cleaned_text = _clean_ocr_text(ocr_text)
-                    ext = KnowledgeExtraction(
-                        knowledge_id=knowledge_id,
-                        source_image_id=img_id,
-                        kind=EXTRACTION_KIND_IMAGE_BLOCK,
-                        page_number=meta_by_id.get(img_id, {}).get("page_number"),
-                        position_data=meta_by_id.get(img_id, {}).get("position_data"),
-                        data={"text": cleaned_text, "caption": caption},
-                        content_text=cleaned_text,
-                        confidence=0.6,
-                        model_used=model_used,
-                        source="auto",
-                    )
-                    db.add(ext)
-                    counts["image_block"] += 1
+                    if cleaned_text in seen_image_blocks:
+                        counts["dedup_skipped"] += 1
+                    else:
+                        seen_image_blocks.add(cleaned_text)
+                        ext = KnowledgeExtraction(
+                            knowledge_id=knowledge_id,
+                            source_image_id=img_id,
+                            kind=EXTRACTION_KIND_IMAGE_BLOCK,
+                            page_number=meta_by_id.get(img_id, {}).get("page_number"),
+                            position_data=meta_by_id.get(img_id, {}).get("position_data"),
+                            data={"text": cleaned_text, "caption": caption},
+                            content_text=cleaned_text,
+                            confidence=0.6,
+                            model_used=model_used,
+                            source="auto",
+                        )
+                        db.add(ext)
+                        counts["image_block"] += 1
 
             await db.commit()
         return counts
