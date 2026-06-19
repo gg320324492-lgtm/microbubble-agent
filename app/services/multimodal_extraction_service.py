@@ -603,8 +603,34 @@ class MultimodalExtractionService:
 
     # ── Inline placement（v2: 把图/表/公式 嵌回原文位置） ─────────
 
-    INLINE_MARKER = "<!-- MULTIMODAL_INLINED v1 -->"
+    INLINE_MARKER = "<!-- MULTIMODAL_INLINED v2 -->"
     PAGE_MARKER_RE = re.compile(r"\[PAGE:(\d+)\]")
+    FIGURE_MARKER_RE = re.compile(r"\[FIGURE:(\d+)\]")
+    # 装饰图过滤：标题/版权/封面/目录/logo 等首页元素
+    DECORATIVE_KEYWORDS = (
+        "elsevier", "journal of", "journal homepage", "www.elsevier",
+        "highlights", "highlights", "article info", "abstract",
+        "graphical abstract", "keywords:",
+    )
+
+    @classmethod
+    def _is_decorative_image(cls, img) -> bool:
+        """判断一张图是否为装饰图（journal logo / 封面 / 目录等）
+
+        装饰图特征：
+        - OCR 文字里有 ELSEVIER / Journal name / Highlights / Article info 等关键词
+        - OCR 文字太短（< 50 字符，无实质内容）
+        - 标题类文本
+        """
+        ocr = (img.ocr_text or "").lower()
+        if not ocr:
+            return True
+        if len(ocr) < 50:
+            return True
+        for kw in cls.DECORATIVE_KEYWORDS:
+            if kw in ocr:
+                return True
+        return False
 
     async def reparse_pdf_with_page_markers(self, knowledge_id: int) -> dict:
         """重新解析 PDF 加上 [PAGE:N] 标记，更新 knowledge.content
@@ -650,20 +676,21 @@ class MultimodalExtractionService:
         return {"ok": True, "new_content_length": len(new_content), "page_markers": len(self.PAGE_MARKER_RE.findall(new_content))}
 
     async def inline_extractions_to_content(self, knowledge_id: int) -> dict:
-        """用页码匹配把多模态提取物嵌回原文对应位置
+        """用 [FIGURE:N] 占位符位置把多模态提取物嵌回原文对应位置
 
         设计目标：
         - 解决用户痛点「所有图都在底下，正文只看到 Fig.5 文字」
-        - 用**页码 + [PAGE:N] 标记**定位（OCR 文字里没 Fig 编号，LLM 又太保守）
+        - 不用 page_number（首页 8 张装饰图会堆一起），用 [FIGURE:N] 占位符
+        - file_parser_service._parse_pdf 在 PDF 提图时，会在 text 里插 [FIGURE:N] 标记
+          这些标记就在 caption 旁边 = 原排版位置
         - 流程：
-          1. 找 content 里所有 [PAGE:N] 标记
-          2. 对每个 image/extraction，按其 page_number 找对应 [PAGE:N] 标记
-          3. 在 [PAGE:N] 标记后插入 inline markdown
-        - 找不到 page marker（老 content 无标记）→ 退回末尾
+          1. 找 content 里所有 [FIGURE:N] 标记
+          2. 对每张图，按 file_parser 提取时的 N 找到对应占位符
+          3. 用 markdown inline 替换占位符
+        - 装饰图（journal logo / 封面 / 目录）过滤掉
+        - 找不到占位符 / 是装饰图 → 退回末尾
         - 幂等：检查 INLINE_MARKER 避免重复插入
         """
-        import re
-
         # 1. 拿 knowledge
         async with async_session() as db:
             result = await db.execute(
@@ -672,8 +699,6 @@ class MultimodalExtractionService:
             knowledge = result.scalar_one_or_none()
             if not knowledge:
                 return {"ok": False, "reason": "knowledge_not_found"}
-            # 用 content（有 [PAGE:N] 标记）做定位基底，formatted_content 做最终展示
-            # 但 formatted_content 缺 page marker，inline 必须基于 content
             base_content = knowledge.content or ""
 
         # 2. 拿所有 images + extractions
@@ -694,9 +719,11 @@ class MultimodalExtractionService:
             )
             extractions = ext_result.scalars().all()
 
+        # 过滤装饰图：ELSEVIER / journal / highlights / 太短 OCR 等
+        # 同时排除 OCR 文字少于 30 字符的图（icon / 装饰）
         figure_images = [
             img for img in images
-            if (img.ocr_text and len(img.ocr_text) > 30)  # 排除 journal logo / 装饰
+            if (img.ocr_text and len(img.ocr_text) > 30) and not self._is_decorative_image(img)
         ]
         inline_extractions = [
             e for e in extractions
@@ -706,74 +733,132 @@ class MultimodalExtractionService:
         if not (figure_images or inline_extractions):
             return {"ok": True, "skipped": True, "reason": "no_inline_candidates"}
 
-        # 3. 找所有 [PAGE:N] 标记
-        page_marker_positions: dict = {}  # page_num -> position
-        for m in self.PAGE_MARKER_RE.finditer(base_content):
-            page_num = int(m.group(1))
-            if page_num not in page_marker_positions:
-                page_marker_positions[page_num] = m.end()  # 标记结束位置 = 插入点
+        # 3. 找所有 [FIGURE:N] 占位符位置
+        figure_positions: dict = {}  # fig_idx (int) -> position (start of [FIGURE:N])
+        for m in self.FIGURE_MARKER_RE.finditer(base_content):
+            fig_idx = int(m.group(1))
+            if fig_idx not in figure_positions:
+                figure_positions[fig_idx] = m.start()
 
-        if not page_marker_positions:
-            # 老 content 没有 page marker → 退回末尾
+        if not figure_positions:
             logger.warning(
-                f"knowledge_id={knowledge_id} content 无 [PAGE:N] 标记，"
+                f"knowledge_id={knowledge_id} content 无 [FIGURE:N] 占位符，"
                 f"请先调 reparse_pdf_with_page_markers 重解析"
             )
             return {
                 "ok": False,
-                "reason": "no_page_markers_in_content",
+                "reason": "no_figure_placeholders",
                 "hint": "POST /knowledge/{id}/reparse-pdf first",
             }
 
-        # 4. 为每个 item 找对应 page 的插入点
-        max_page = max(page_marker_positions.keys())
-        match_positions: list = []  # [(position, mid, kind, item)]
+        # 4. 对每张图，找它对应的 [FIGURE:N] 占位符
+        #    图片按 id 顺序对应 [FIGURE:1], [FIGURE:2], ...
+        #    跳过已用作装饰图的（用 id 的"figure_index"或 fallback 顺序）
+        match_positions: list = []  # [(pos, mid, kind, item)]
+        skipped_decorative = 0
 
-        for img in figure_images:
-            page = img.page_number or 1
-            if page > max_page:
-                page = max_page
-            pos = page_marker_positions.get(page)
-            if pos is not None:
-                match_positions.append((pos, img.id, "image", img))
+        # 顺序匹配：knowledge_images 按 id 升序 → 对应 figure_positions[1], [2], ...
+        # 但因为装饰图被过滤掉，需要紧凑匹配
+        # 策略：图按 id 升序，依次取下一个可用的 [FIGURE:N] 位置
+        fig_idx_iter = iter(sorted(figure_positions.keys()))
+        available_fig_indices = list(fig_idx_iter)
+        img_idx = 0
+
+        for img in images:  # 用全部 images（包括装饰）按 id 顺序对应
+            # 跳过装饰图
+            if not (img.ocr_text and len(img.ocr_text) > 30) or self._is_decorative_image(img):
+                # 占位符也要"消耗"一个（保持位置对齐）
+                if available_fig_indices:
+                    available_fig_indices.pop(0)
+                skipped_decorative += 1
+                continue
+            if not available_fig_indices:
+                # 占位符用完了
+                break
+            fig_idx = available_fig_indices.pop(0)
+            pos = figure_positions[fig_idx]
+            match_positions.append((pos, img.id, "image", img))
+            img_idx += 1
+
+        # 5. 公式 / 表格 / 图表：page_marker inline（这些在 PDF 里没有占位符）
+        #    退一步用 page-based 定位
+        page_marker_positions: dict = {}
+        for m in self.PAGE_MARKER_RE.finditer(base_content):
+            page_num = int(m.group(1))
+            if page_num not in page_marker_positions:
+                page_marker_positions[page_num] = m.end()
 
         for e in inline_extractions:
             page = e.page_number or 1
-            if page > max_page:
-                page = max_page
-            pos = page_marker_positions.get(page)
-            if pos is not None:
-                match_positions.append((pos, e.id, "extraction", e))
+            if page_marker_positions:
+                max_page = max(page_marker_positions.keys())
+                if page > max_page:
+                    page = max_page
+                pos = page_marker_positions.get(page)
+                if pos is not None:
+                    match_positions.append((pos, e.id, "extraction", e))
 
         if not match_positions:
-            return {"ok": True, "skipped": True, "reason": "no_page_matches"}
+            return {"ok": True, "skipped": True, "reason": "no_matches"}
 
-        # 5. 按位置从后往前排序，相同位置（同一页）按 ID 排序
+        # 6. 按位置从后往前排序（避免 offset 漂移）
         match_positions.sort(key=lambda x: (x[0], -x[1]), reverse=True)
 
-        # 合并同一位置的多个 item（同一页可能有多图/表）
         new_content = base_content
         inserted_mids: set = set()
-        grouped: dict = {}  # pos -> [items]
-        for pos, mid, kind, item in match_positions:
-            grouped.setdefault(pos, []).append((mid, kind, item))
 
-        # 按位置从后往前插入
-        for pos in sorted(grouped.keys(), reverse=True):
-            items_at_pos = grouped[pos]
-            md_chunks = []
-            for mid, kind, item in items_at_pos:
-                if mid in inserted_mids:
-                    continue
+        # 7. 对每个 [FIGURE:N] 位置，inline 替换
+        #    关键：把 [FIGURE:N] 占位符本身替换为 markdown
+        #    （不是插入在后面，是替换——这样图就出现在原始 PDF 排版位置）
+        for pos, mid, kind, item in match_positions:
+            if mid in inserted_mids:
+                continue
+            if kind != "image":
+                # extractions 用 page-based，继续用"插入"模式
                 inline_md = self._format_inline_markdown(kind, item)
                 if inline_md:
-                    md_chunks.append(inline_md)
+                    new_content = new_content[:pos] + "\n\n" + inline_md + "\n\n" + new_content[pos:]
                     inserted_mids.add(mid)
-            if md_chunks:
-                block = "\n\n" + "\n\n".join(md_chunks) + "\n\n"
-                new_content = new_content[:pos] + block + new_content[pos:]
+                    # 偏移调整
+                    inserted_len = len(inline_md) + 6
+                    for i, m in enumerate(match_positions):
+                        if m[1] in inserted_mids:
+                            continue
+                        if m[0] > pos:
+                            match_positions[i] = (m[0] + inserted_len, m[1], m[2], m[3])
+                continue
 
-        # 6. unmatched items → 末尾 append
+            # image: 替换 [FIGURE:N] 占位符为 inline markdown
+            inline_md = self._format_inline_markdown(kind, item)
+            if not inline_md:
+                continue
+            # 占位符长度：[FIGURE:N] 加可能的 \n
+            placeholder_end = base_content.find("\n", pos) if pos >= 0 else pos
+            if placeholder_end == -1 or placeholder_end > pos + 20:
+                placeholder_end = pos + base_content[pos:].find("]") + 1
+            else:
+                placeholder_end += 1  # 包含 \n
+            # 实际占位符 [FIGURE:N]\n 大约 12 字符
+            placeholder_text = base_content[pos:pos + 12]  # 截取占位符
+            # 安全：找到 [FIGURE:N] 结束位置（] 后到下一个 \n 或 12 字符内）
+            end_match = self.FIGURE_MARKER_RE.match(base_content[pos:pos + 15])
+            if end_match:
+                placeholder_end = pos + end_match.end()
+                # 跳过 \n
+                if base_content[placeholder_end:placeholder_end + 1] == "\n":
+                    placeholder_end += 1
+            new_content = new_content[:pos] + inline_md + "\n" + new_content[placeholder_end:]
+            inserted_mids.add(mid)
+            # 后续 item 的 pos 调整（因为 markdown 比占位符长）
+            inserted_len = len(inline_md) + 1 - (placeholder_end - pos)
+            if inserted_len != 0:
+                for i, m in enumerate(match_positions):
+                    if m[1] in inserted_mids:
+                        continue
+                    if m[0] > pos:
+                        match_positions[i] = (m[0] + inserted_len, m[1], m[2], m[3])
+
+        # 8. unmatched items（没占位符的）→ 末尾 append
         item_lookup = {img.id: ("image", img) for img in figure_images}
         for e in inline_extractions:
             item_lookup[e.id] = ("extraction", e)
@@ -785,7 +870,7 @@ class MultimodalExtractionService:
             if inline_md:
                 unmatched_to_append.append(inline_md)
 
-        # 7. 幂等检查
+        # 9. 幂等检查
         if self.INLINE_MARKER in new_content:
             new_content = new_content.split(self.INLINE_MARKER)[0].rstrip()
 
@@ -794,28 +879,28 @@ class MultimodalExtractionService:
 
         new_content += f"\n\n{self.INLINE_MARKER}\n"
 
-        # 8. 写回 formatted_content（同时保留 content 完整性）
+        # 10. 写回
         async with async_session() as db:
             result = await db.execute(
                 select(Knowledge).where(Knowledge.id == knowledge_id)
             )
             knowledge = result.scalar_one_or_none()
             if knowledge:
-                # 同时更新 formatted_content（详情页渲染）和 content（保留 page marker）
-                # 因为 base_content 是 content 本身，所以新 content 就是 base + inline
                 knowledge.content = new_content
                 knowledge.formatted_content = new_content
                 await db.commit()
 
         logger.info(
             f"inline_extractions(knowledge_id={knowledge_id}): "
-            f"matched={len(inserted_mids)} unmatched={len(unmatched_to_append)}"
+            f"matched={len(inserted_mids)} skipped_decorative={skipped_decorative} "
+            f"unmatched={len(unmatched_to_append)}"
         )
         return {
             "ok": True,
             "knowledge_id": knowledge_id,
             "matches_total": len(inserted_mids),
             "unmatched_total": len(unmatched_to_append),
+            "skipped_decorative": skipped_decorative,
             "new_content_length": len(new_content),
         }
 
