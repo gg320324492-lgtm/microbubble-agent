@@ -43,6 +43,20 @@ class Settings(BaseSettings):
     VISION_MCP_BASE_URL: str = "http://vision-mcp:8001"
     VISION_MODEL: str = "mimo-v2.5"  # 视觉服务仍使用多模态模型
 
+    # 多模态知识库 OCR（Phase 7）
+    # 后端选择：llm_vision（默认，走 vision_service）/ tesseract（本地备选，需 pytesseract + apt-get install tesseract-ocr）
+    MULTIMODAL_OCR_BACKEND: str = "llm_vision"
+    # 单文档最大提取图片数（避免 LLM OCR 成本爆炸）
+    MULTIMODAL_MAX_IMAGES_PER_DOC: int = 20
+    # 单张图片最大像素（超过等比缩小，避免 vision API 报错）
+    MULTIMODAL_MAX_IMAGE_PIXELS: int = 1568 * 1568  # ~2.5MP，Anthropic 建议 < 1568×1568
+    # 多图并发数（受 vision API rate limit 限制）
+    MULTIMODAL_OCR_CONCURRENCY: int = 4
+    # 跳过 OCR 的最小图片尺寸（像素，< 该值视为装饰/图标）
+    MULTIMODAL_MIN_IMAGE_PIXELS: int = 100 * 100  # 10k 像素 ≈ 316×316
+    # 公式/表格识别 prompt 超时（秒）
+    MULTIMODAL_OCR_TIMEOUT_SEC: int = 60
+
     # 腾讯会议
     TENCENT_MEETING_SDK_ID: str = ""
     TENCENT_MEETING_SDK_KEY: str = ""

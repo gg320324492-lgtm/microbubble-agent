@@ -92,6 +92,47 @@
         <div v-else class="detail-content">{{ knowledge.content }}</div>
       </div>
 
+      <!-- 2026-06-19 Phase 7: 多模态提取区（图片 / 公式 / 表格 / 图表） -->
+      <div v-if="knowledge.file_path" class="detail-multimodal">
+        <div class="multimodal-header">
+          <h2 class="multimodal-title">🖼️ 多模态提取</h2>
+          <el-button
+            v-if="!hasMultimodal"
+            size="small"
+            type="primary"
+            plain
+            :loading="extracting"
+            @click="handleExtractMultimodal"
+          >
+            <el-icon><MagicStick /></el-icon> 触发图片/公式/表格提取
+          </el-button>
+        </div>
+        <el-tabs v-if="hasMultimodal" v-model="activeMultimodalTab" class="multimodal-tabs">
+          <el-tab-pane name="images" :label="`图片 (${imageStats.total})`" lazy>
+            <KnowledgeImageGallery
+              :knowledge-id="knowledge.id"
+              :show-trigger="false"
+              empty-text="该知识条目暂无提取图片"
+              @updated="onGalleryUpdated"
+            />
+          </el-tab-pane>
+          <el-tab-pane name="extractions" :label="`公式/表格/图表 (${extractionTotal})`" lazy>
+            <KnowledgeExtractionsPanel
+              :knowledge-id="knowledge.id"
+              :show-trigger="false"
+              empty-text="该知识条目暂无公式/表格/图表提取"
+              @updated="onExtractionsUpdated"
+            />
+          </el-tab-pane>
+        </el-tabs>
+        <div v-else class="multimodal-empty">
+          <el-empty
+            description="该知识条目尚未触发多模态提取（仅 PDF/PPTX 文件可提取）"
+            :image-size="80"
+          />
+        </div>
+      </div>
+
       <!-- 来源 -->
       <div v-if="knowledge.source || knowledge.file_name" class="detail-source">
         <div v-if="knowledge.source">来源：{{ knowledge.source }}</div>
@@ -134,12 +175,14 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import * as echarts from 'echarts'
+import KnowledgeImageGallery from '@/components/knowledge/KnowledgeImageGallery.vue'
+import KnowledgeExtractionsPanel from '@/components/knowledge/KnowledgeExtractionsPanel.vue'
 
 const route = useRoute()
 const knowledge = ref(null)
@@ -149,6 +192,68 @@ const loading = ref(true)
 const reanalyzing = ref(false)
 const graphRef = ref(null)
 let chartInstance = null
+
+// Phase 7: 多模态提取
+const hasMultimodal = ref(false)
+const imageStats = ref({ total: 0, done: 0, failed: 0, pending: 0 })
+const extractionTotal = ref(0)
+const extracting = ref(false)
+const activeMultimodalTab = ref('images')
+
+const handleExtractMultimodal = async () => {
+  if (!knowledge.value) return
+  extracting.value = true
+  try {
+    const { data } = await axios.post(`/api/v1/knowledge/${knowledge.value.id}/extract-multimodal`)
+    if (data.ok) {
+      const msg = data.skipped
+        ? `未提取：${data.reason}`
+        : `提取完成（${data.images_total} 张图 / ${(data.extractions?.formula || 0)} 公式 / ${(data.extractions?.table || 0)} 表格）`
+      ElMessage.success(msg)
+      hasMultimodal.value = !data.skipped
+      // 切换到对应 tab 让用户立刻看到结果
+      if (!data.skipped && (data.extractions?.formula || data.extractions?.table || data.extractions?.chart)) {
+        activeMultimodalTab.value = 'extractions'
+      }
+    } else {
+      ElMessage.warning(data.error || data.reason || '提取失败')
+    }
+  } catch (e) {
+    ElMessage.error('触发提取失败：' + (e?.response?.data?.detail || e?.message || '未知错误'))
+  } finally {
+    extracting.value = false
+  }
+}
+
+const onGalleryUpdated = (stats) => {
+  if (stats) imageStats.value = stats
+}
+
+const onExtractionsUpdated = (info) => {
+  if (info?.total != null) extractionTotal.value = info.total
+}
+
+// 检测知识是否已有多模态提取
+const checkMultimodalStatus = async () => {
+  if (!knowledge.value?.file_path) return
+  try {
+    const [imgRes, extRes] = await Promise.all([
+      axios.get(`/api/v1/knowledge/${knowledge.value.id}/images`),
+      axios.get(`/api/v1/knowledge/${knowledge.value.id}/extractions`, { params: { page: 1, page_size: 1 } }),
+    ])
+    const imgs = imgRes.data?.items || []
+    imageStats.value = {
+      total: imgs.length,
+      done: imgs.filter((i) => i.ocr_status === 'done').length,
+      failed: imgs.filter((i) => i.ocr_status === 'failed').length,
+      pending: imgs.filter((i) => i.ocr_status === 'pending' || i.ocr_status === 'skipped').length,
+    }
+    extractionTotal.value = extRes.data?.total || 0
+    hasMultimodal.value = imgs.length > 0 || extractionTotal.value > 0
+  } catch (e) {
+    // 静默 — 多模态状态是辅助信息，不影响主流程
+  }
+}
 
 const renderMarkdown = (text) => {
   if (!text) return ''
@@ -179,6 +284,7 @@ const fetchDetail = async () => {
     graphData.value = graphRes.data || { nodes: [], edges: [] }
     await nextTick()
     renderGraph()
+    await checkMultimodalStatus()
   } catch (e) {
     ElMessage.error('获取知识详情失败')
   } finally {
@@ -521,5 +627,37 @@ onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
 .detail-empty {
   padding: var(--space-16);
   text-align: center;
+}
+
+/* 2026-06-19 Phase 7: 多模态区样式 */
+.detail-multimodal {
+  margin-top: var(--space-6);
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.multimodal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.multimodal-title {
+  font-weight: 600;
+  font-size: 1.1em;
+  margin: 0;
+}
+
+.multimodal-tabs {
+  margin-top: var(--space-2);
+}
+
+.multimodal-empty {
+  padding: var(--space-4) 0;
 }
 </style>

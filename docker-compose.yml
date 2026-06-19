@@ -165,6 +165,8 @@ services:
       - ./models/hf_cache:/root/.cache/huggingface
       - ./models/torch_hub:/root/.cache/torch/hub
       - ./models/modelscope:/root/.cache/modelscope
+      # 2026-06-19 Phase 7: alembic 迁移挂载（celery 也可能跑迁移相关任务）
+      - ./alembic/versions:/app/alembic/versions
     env_file:
       - .env
     environment:

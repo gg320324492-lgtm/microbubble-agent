@@ -18,6 +18,8 @@ from app.schemas.knowledge import (
     DynamicCategory, TagCloudItem, KnowledgeStats,
     QAResponse, ResearchResponse,
     ReasonRequest, ReasonResponse, ReviewQueueItem, ReviewQueueResponse,
+    KnowledgeImageItem, KnowledgeImageList, ExtractionItem, ExtractionList,
+    MultimodalExtractResponse,
 )
 from app.services.knowledge_service import KnowledgeService
 from app.services.knowledge_graph_service import KnowledgeGraphService
@@ -136,13 +138,57 @@ async def list_knowledge(
     items = result.scalars().all()
 
     # 列表不含完整 content，只生成 snippet 供卡片预览
-    for item in items:
-        if not item.summary and item.content:
-            item.snippet = item.content[:200]
-        item.content = None       # 不序列化完整内容
-        item.formatted_content = None
+    # 2026-06-19 修复: 不要直接 mutate ORM item.content=None（SQLAlchemy autoflush 会
+    # 触发 UPDATE knowledge SET content=NULL → NOT NULL 违反）
+    # 改为：转 dict 时直接不放 content/formatted_content 字段
 
-    return KnowledgeList(items=items, total=total)
+    # 2026-06-19 Phase 7: 批量拿缩略图 + 图片数（避免 N+1）
+    from app.models.knowledge_multimodal import KnowledgeImage
+    from sqlalchemy import func as sql_func
+    kb_ids = [it.id for it in items]
+    img_map: dict = {}
+    if kb_ids:
+        img_agg = await db.execute(
+            select(
+                KnowledgeImage.knowledge_id,
+                sql_func.count(KnowledgeImage.id).label("cnt"),
+                sql_func.min(KnowledgeImage.id).label("first_id"),
+            )
+            .where(KnowledgeImage.knowledge_id.in_(kb_ids))
+            .group_by(KnowledgeImage.knowledge_id)
+        )
+        img_map = {row.knowledge_id: (row.cnt, row.first_id) for row in img_agg.all()}
+        # 取首图 URL
+        first_ids = [v[1] for v in img_map.values() if v[1] is not None]
+        first_imgs = {}
+        if first_ids:
+            first_res = await db.execute(
+                select(KnowledgeImage.id, KnowledgeImage.image_url)
+                .where(KnowledgeImage.id.in_(first_ids))
+            )
+            first_imgs = {r.id: r.image_url for r in first_res.all()}
+
+    # 转 dict 形态（避免 mutate ORM 触发 autoflush）
+    list_items = []
+    for it in items:
+        snippet = it.snippet if hasattr(it, "snippet") and it.snippet else None
+        if not snippet and not it.summary and it.content:
+            snippet = it.content[:200]
+        cnt, first_id = img_map.get(it.id, (0, None))
+        list_items.append({
+            "id": it.id, "title": it.title,
+            "category": it.category, "tags": it.tags,
+            "key_concepts": it.key_concepts, "related_topics": it.related_topics,
+            "knowledge_type": it.knowledge_type, "source": it.source,
+            "source_type": it.source_type, "summary": it.summary,
+            "snippet": snippet, "analysis_status": it.analysis_status,
+            "quality_score": it.quality_score, "needs_review": it.needs_review,
+            "topic": it.topic, "created_by": it.created_by,
+            "created_at": it.created_at, "updated_at": it.updated_at,
+            "thumbnail_url": first_imgs.get(first_id) if first_id else None,
+            "image_count": cnt,
+        })
+    return KnowledgeList(items=list_items, total=total)
 
 
 @router.get("/knowledge/stats")
@@ -803,3 +849,149 @@ async def mark_reviewed(
     knowledge.needs_review = False
     await db.commit()
     return {"message": "已标记为已审阅", "id": knowledge_id}
+
+
+# ── Phase 7: 多模态提取（图片/公式/表格） ─────────────────────
+
+
+@router.get("/knowledge/{knowledge_id}/images", response_model=KnowledgeImageList)
+async def list_knowledge_images(
+    knowledge_id: int,
+    ocr_status: Optional[str] = Query(None, description="过滤 OCR 状态：pending/done/failed/skipped"),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取知识条目提取的图片列表（含 OCR 结果）"""
+    from app.models.knowledge_multimodal import KnowledgeImage
+
+    # 校验 knowledge 存在
+    k_result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    if not k_result.scalar_one_or_none():
+        raise NotFoundException("知识")
+
+    filters = [KnowledgeImage.knowledge_id == knowledge_id]
+    if ocr_status:
+        filters.append(KnowledgeImage.ocr_status == ocr_status)
+
+    items_result = await db.execute(
+        select(KnowledgeImage)
+        .where(*filters)
+        .order_by(KnowledgeImage.page_number.nulls_last(), KnowledgeImage.id)
+    )
+    items = items_result.scalars().all()
+
+    # 统计
+    status_count = {"done": 0, "failed": 0, "pending": 0, "skipped": 0}
+    for img in items:
+        status_count[img.ocr_status] = status_count.get(img.ocr_status, 0) + 1
+
+    def _to_dict(img: KnowledgeImage) -> dict:
+        return {
+            "id": img.id, "knowledge_id": img.knowledge_id,
+            "page_number": img.page_number, "width": img.width, "height": img.height,
+            "image_url": img.image_url, "mime_type": img.mime_type,
+            "file_size": img.file_size, "ocr_text": img.ocr_text,
+            "ocr_status": img.ocr_status, "ocr_error": img.ocr_error,
+            "ocr_model": img.ocr_model,
+            "ocr_at": str(img.ocr_at) if img.ocr_at else None,
+            "created_at": str(img.created_at) if img.created_at else None,
+        }
+
+    return KnowledgeImageList(
+        items=[_to_dict(i) for i in items],
+        total=len(items),
+        ocr_done=status_count["done"],
+        ocr_failed=status_count["failed"],
+        ocr_pending=status_count["pending"],
+    )
+
+
+@router.get("/knowledge/{knowledge_id}/extractions", response_model=ExtractionList)
+async def list_knowledge_extractions(
+    knowledge_id: int,
+    kind: Optional[str] = Query(None, description="过滤类型：formula/table/chart/image_block"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取知识条目的提取物列表（公式/表格/图表/OCR 块）"""
+    from app.models.knowledge_multimodal import KnowledgeExtraction
+
+    k_result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    if not k_result.scalar_one_or_none():
+        raise NotFoundException("知识")
+
+    base_filter = [
+        KnowledgeExtraction.knowledge_id == knowledge_id,
+        KnowledgeExtraction.is_active == True,
+    ]
+    if kind:
+        base_filter.append(KnowledgeExtraction.kind == kind)
+
+    # 全部统计（不分页）
+    all_result = await db.execute(
+        select(KnowledgeExtraction.kind).where(*base_filter)
+    )
+    by_kind = {"formula": 0, "table": 0, "chart": 0, "image_block": 0}
+    for row in all_result.all():
+        by_kind[row[0]] = by_kind.get(row[0], 0) + 1
+
+    # 分页
+    items_result = await db.execute(
+        select(KnowledgeExtraction)
+        .where(*base_filter)
+        .order_by(KnowledgeExtraction.kind, KnowledgeExtraction.id)
+        .offset((page - 1) * page_size).limit(page_size)
+    )
+    items = items_result.scalars().all()
+
+    def _to_dict(e: KnowledgeExtraction) -> dict:
+        return {
+            "id": e.id, "knowledge_id": e.knowledge_id,
+            "source_image_id": e.source_image_id, "kind": e.kind,
+            "page_number": e.page_number, "data": e.data,
+            "content_text": e.content_text, "confidence": e.confidence,
+            "model_used": e.model_used, "source": e.source,
+            "is_active": e.is_active,
+            "created_at": str(e.created_at) if e.created_at else None,
+        }
+
+    return ExtractionList(
+        items=[_to_dict(e) for e in items],
+        total=sum(by_kind.values()),
+        by_kind=by_kind,
+    )
+
+
+@router.post(
+    "/knowledge/{knowledge_id}/extract-multimodal",
+    response_model=MultimodalExtractResponse,
+)
+async def trigger_multimodal_extraction(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """手动触发多模态提取（PDF/PPTX 重新解析图片+OCR+公式/表格）
+
+    适用场景：
+    - 老 PDF 文档在 Phase 7 之前入库，没有提取过图片
+    - 之前 OCR 失败想重试
+    - 切换 OCR 后端后想重提
+    """
+    from app.services.multimodal_extraction_service import multimodal_extraction_service
+
+    k_result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    knowledge = k_result.scalar_one_or_none()
+    if not knowledge:
+        raise NotFoundException("知识")
+
+    try:
+        result = await multimodal_extraction_service.extract_for_knowledge(knowledge_id)
+        return MultimodalExtractResponse(**result)
+    except Exception as e:
+        logger.exception(f"多模态提取失败(knowledge_id={knowledge_id})")
+        return MultimodalExtractResponse(
+            ok=False, error=str(e), knowledge_id=knowledge_id,
+        )
