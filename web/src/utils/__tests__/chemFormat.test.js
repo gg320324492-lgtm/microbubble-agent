@@ -327,3 +327,54 @@ describe('formatScientificText - 主入口', () => {
     expect(formatScientificText('at 25 °C')).toBe('at 25 °C')
   })
 })
+
+// ============================================================
+// v27.2: 保护区机制 - 不误伤 Fig. S2 / DOI / 章节号 / 参考文献
+// ============================================================
+
+describe('formatScientificText - v27.2 保护区机制', () => {
+  it('图表引用 Fig. S2 不被误伤 (SI/Supporting 图号)', () => {
+    expect(formatScientificText('Fig. S2')).toBe('Fig. S2')
+    expect(formatScientificText('Figs. S3-S4')).toBe('Figs. S3-S4')
+    expect(formatScientificText('Fig. S10')).toBe('Fig. S10')
+    expect(formatScientificText('Fig. S1a')).toBe('Fig. S1a')
+  })
+
+  it('普通图表引用 Fig. 1 保持原样', () => {
+    expect(formatScientificText('Fig. 1')).toBe('Fig. 1')
+    expect(formatScientificText('Figs. 3-4')).toBe('Figs. 3-4')
+    expect(formatScientificText('Figure 1')).toBe('Figure 1')
+    expect(formatScientificText('Scheme 1')).toBe('Scheme 1')
+    expect(formatScientificText('Table 2')).toBe('Table 2')
+    expect(formatScientificText('Text S4')).toBe('Text S4')
+    expect(formatScientificText('Eq. 2')).toBe('Eq. 2')
+  })
+
+  it('DOI 不被误伤', () => {
+    expect(formatScientificText('DOI: 10.1016/j.scitotenv.2024.123456'))
+      .toBe('DOI: 10.1016/j.scitotenv.2024.123456')
+    expect(formatScientificText('https://doi.org/10.1234/abc.def'))
+      .toBe('https://doi.org/10.1234/abc.def')
+  })
+
+  it('参考文献 [1] [3-5] 保持原样', () => {
+    expect(formatScientificText('see [1] and [3-5]')).toBe('see [1] and [3-5]')
+    expect(formatScientificText('Refs. [1,2]')).toBe('Refs. [1,2]')
+  })
+
+  it('Section 章节号保持原样', () => {
+    expect(formatScientificText('Section 2.1')).toBe('Section 2.1')
+    expect(formatScientificText('Section 3.5.2')).toBe('Section 3.5.2')
+    expect(formatScientificText('Chapter 4')).toBe('Chapter 4')
+  })
+
+  it('保护区内混合真实化学式仍能正确处理', () => {
+    // Fig. S2 + H2O2 + 200 L·h-1
+    expect(formatScientificText('Fig. S2 shows H2O2 at 200 L·h-1'))
+      .toBe('Fig. S2 shows H₂O₂ at 200 L·h⁻¹')
+    expect(formatScientificText('Fig. 1 and O3-MNBs'))
+      .toBe('Fig. 1 and O₃-MNBs')
+    expect(formatScientificText('Section 2.1 discusses H2O2'))
+      .toBe('Section 2.1 discusses H₂O₂')
+  })
+})

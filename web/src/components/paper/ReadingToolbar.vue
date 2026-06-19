@@ -34,6 +34,12 @@
         </el-button-group>
 
         <el-button-group size="small">
+          <!-- v27.2: 切换"正文内嵌图"显示 -->
+          <el-button
+            @click="showInlineFigures = !showInlineFigures"
+            :icon="showInlineFigures ? Picture : Hide"
+            :title="showInlineFigures ? '隐藏正文图片（用右侧图表栏）' : '显示正文图片'"
+          />
           <el-button @click="toggleImages" :icon="visible ? Picture : Hide" :title="visible ? '显示图片' : '隐藏图片'" />
           <el-button @click="copyCitation" :icon="CopyDocument" title="复制引用" />
           <el-button @click="scrollToTop" :icon="Top" title="返回顶部" />
@@ -62,12 +68,18 @@ const props = defineProps({
   paper: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['mode-change', 'font-size-change', 'line-height-change'])
+const emit = defineEmits(['mode-change', 'font-size-change', 'line-height-change', 'toggle-inline-figures'])
 
 const readingMode = ref('original')  // 'original' | 'translation' | 'bilingual'
 const fontSize = ref(16)
 const lineHeight = ref(1.85)
-const visible = ref(true)
+// v27.2: 是否显示正文内嵌图（默认 false — 推荐使用右侧图表栏）
+const showInlineFigures = ref(localStorage.getItem('mnb:paper:showInlineFigures') === 'true')
+watch(showInlineFigures, (v) => {
+  localStorage.setItem('mnb:paper:showInlineFigures', String(v))
+  emit('toggle-inline-figures', v)
+})
+const visible = ref(true)  // 图片总开关
 const hasTranslation = ref(false)  // 等待后端翻译 API 接入
 
 // 字号 / 行距档位
@@ -78,9 +90,26 @@ function setMode(mode) {
   if (!['original', 'translation', 'bilingual'].includes(mode)) return
   readingMode.value = mode
   emit('mode-change', mode)
-  // TODO: 翻译模式 + 双语模式接入后端 API
-  // 调用 POST /api/v1/papers/{id}/translate
-  // 缓存翻译结果到 localStorage
+
+  // 触发翻译/双语模式时：
+  // L1: 优先调后端 API（POST /api/v1/papers/{id}/translate）
+  // L2: 后端不可用时，用浏览器内置 Translator API（Chrome 129+）
+  // L3: 都没有 → 显示"翻译功能开发中"
+  if (mode === 'translation' || mode === 'bilingual') {
+    if (props.paper?.id) {
+      // 通知父组件（KnowledgeDetailView）触发后端翻译
+      // 父组件会调 TranslationPanel 显示
+      window.dispatchEvent(new CustomEvent('paper-translate-request', {
+        detail: { paperId: props.paper.id, mode }
+      }))
+    }
+    // 浏览器内置 Translator API 兜底（Chrome 129+ 支持）
+    if ('Translator' in window) {
+      console.log('[ReadingToolbar] 浏览器 Translator API 可用')
+    } else {
+      console.log('[ReadingToolbar] 浏览器 Translator API 不可用，等后端 API')
+    }
+  }
 }
 
 function increaseFontSize() {

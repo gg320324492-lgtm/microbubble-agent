@@ -78,12 +78,16 @@ const props = defineProps({
   // v27 新 API: paragraph 级锚定 { paragraphId → [figures] }
   // paragraphId 格式: `${section.id}__p${paragraphIndex}`
   inlineFigureAnchors: { type: Object, default: () => ({}) },
+  // v27.2: 是否显示正文内嵌图（默认 false — 推荐使用右侧图表栏）
+  showInlineFigures: { type: Boolean, default: false },
 })
 
 /**
  * 获取指定 paragraph index 锚定的 figures
+ * v27.2: 默认不返回（除非 showInlineFigures=true），让右侧图表栏承担展示职责
  */
 function getAnchoredFigures(paragraphIdx) {
+  if (!props.showInlineFigures) return []
   const pid = `${props.section.id}__p${paragraphIdx}`
   return props.inlineFigureAnchors[pid] || []
 }
