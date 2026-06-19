@@ -83,7 +83,7 @@
             <el-empty description="该条目暂无正文内容" :image-size="60" />
           </div>
           <PaperSectionRenderer
-            v-for="section in paper.sections"
+            v-for="section in displaySections"
             :key="section.id"
             :section="section"
             :is-chinese="paper.isChineseHeavy"
@@ -180,14 +180,27 @@ const extractionLoading = ref(false)
 
 const hasAnyContent = computed(() => {
   if (!paper.value) return false
-  return paper.value.sections?.length > 0
+  return displaySections.value.length > 0
+})
+
+/**
+ * 用于正文区显示的 sections：
+ * - 过滤掉 preamble / highlights / graphical_abstract / article_info / keywords
+ *   （这些已经在 AbstractCard / 元信息区显示）
+ * - 保留 introduction / methods / results / conclusion / references / normal / etc.
+ */
+const displaySections = computed(() => {
+  if (!paper.value?.sections) return []
+  const skipTypes = new Set(['preamble', 'highlights', 'graphical_abstract', 'article_info', 'keywords'])
+  return paper.value.sections.filter(s => !skipTypes.has(s.type))
 })
 
 const hasAnchors = computed(() => anchorSections.value.length > 0)
 
 const anchorSections = computed(() => {
   if (!paper.value) return []
-  const { sections } = buildAnchorTree(paper.value.sections || [], {
+  // 导航也用过滤后的 sections（保持与正文一致）
+  const { sections } = buildAnchorTree(displaySections.value, {
     moduleCounts: moduleCounts.value,
   })
   return sections
