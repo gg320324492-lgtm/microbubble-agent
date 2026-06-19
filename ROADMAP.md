@@ -9,8 +9,10 @@
 - ✅ v1-v6 完整后端架构（Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery + MinIO）
 - ✅ v2/v3/v4 Agent 架构（34 个 `@tool` 装饰器工具 + 12 类 Rich Block + 多会话并行 + agent_traces 可观测性）
 - ✅ 知识库 V1 + V2（动态 LLM 分析 + 知识图谱 + RAG 问答 + 自主研究引擎 + 公式分类 + 假设生成）
+- ✅ 知识库 V3（多模态 OCR：图片 + 公式 + 表格 + 图表识别入库）
 - ✅ 会议系统 v1-v3（录音机 + 离线后处理 + ASR + 声纹 + AI 摘要 + 三级润色）
-- ✅ 声纹识别（3D-Speaker + pgvector + HNSW 索引 + 持续学习）
+- ✅ 声纹识别 v2（3D-Speaker + pgvector + HNSW 索引 + **修复 ERes2Net batch bug** 100% 段有效）
+- ✅ 会议发言人重处理流程（[reprocess_meeting.py](scripts/reprocess_meeting.py) 9 步 CLI + 主机端 wrapper）
 - ✅ 移动端 PWA 收官（18 个移动端页面 + 12 个移动端组件 + 路由级双栈 + 4 个 PWA 离线策略）
 - ✅ v2 任务提醒体系（11AM 窗口 + acknowledged 状态 + Redis 24h 去重）
 - ✅ 全量审计 5 commits（5 处 P0 + 9 处 P1 死代码清理 + 13 个孤儿文件删除）
@@ -19,7 +21,7 @@
 - ~1100+ commits / 157K+ 行代码 / 630+ 文件 / 33 开发天数
 - 9 个 Docker 服务运行中
 - 87 后端 + 73 前端 + 17 移动端 = 177 测试全过
-- 知识库 64→247 条（+183）
+- 知识库 64→247 条（+183），Phase 7 后再扩展多模态抽取
 
 ## 未来规划（从浅入深路线图）
 

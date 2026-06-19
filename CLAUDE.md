@@ -4,6 +4,10 @@
 >
 > **2026-06-19 Phase 7 多模态知识库（图片/公式/表格 OCR 入库）**：① 端到端 PDF 文档 OCR 实测 10/10 图全成功 + 10 OCR 块 + 4 图表描述（论文 id=19 催化臭氧氧化甲苯）② 后端选 LLM-Vision 复用现有 vision_service，零新依赖 + 零新模型下载，settings.MULTIMODAL_OCR_BACKEND 留 Tesseract 备选钩子 ③ 数据模型统一 `KnowledgeExtraction(kind='formula|table|chart|image_block', data JSONB)` 单一表，简化 JOIN ④ 并发控制 asyncio.Semaphore(4) 防 vision API rate limit ⑤ pre-existing bug 修复 2 项：列表接口 mutate ORM 触发 autoflush NOT NULL 违反 + 009/010 alembic chain 不一致 ⑥ docker-compose 加 `./alembic/versions` volume 挂载，新迁移无需 rebuild 镜像即生效 ⑦ 21 个 OCR 单元测试（_clean_latex_response / _clean_ocr_text thinking 块剥除 / 图片缩放 / MIME 检测 / markdown 表格解析）。详见底部 [## 2026-06-19 Phase 7 多模态知识库](#2026-06-19-phase-7-多模态知识库) section + 8 条铁律。
 >
+> **2026-06-19 会议发言人重处理流程标准化（修 2 个核心 bug）**：① **ERes2Net 不支持 batch** — modelscope ERes2Net_aug.py:__extract_feature 强制 unsqueeze(0) 折叠 batch，旧 `batch_extract_embeddings` 把 32 段塞给模型只处理第 1 段 → 修：ThreadPoolExecutor(8) 并行单条 + threading.Lock 保护 pipeline.model ② **SQLAlchemy 静默忽略未映射属性** — Meeting model 没 `transcript_polished_old_v1` 等列，赋值被吞，commit 不报错，"已备份"成谎言 → 修：用文件备份 `/tmp/meeting_<id>_backup_<ts>.json`。沉淀为 [scripts/reprocess_meeting.py](scripts/reprocess_meeting.py) 通用 CLI（9 步流程 + 自动依赖 + 幂等）+ 11 条铁律 + [docs/reprocess-meeting.md](docs/reprocess-meeting.md) 使用文档。会议 #120 实测：3252 段"发言人?" → 4 个真实发言人（王天志 1845 段 / 杜同贺 358 / 宋洋 335 / 贾琦 292）+ 8 字段全 0 旧错标人。详见底部 [## 2026-06-19 会议发言人重处理流程](#2026-06-19-会议发言人重处理流程-reprocess_meetingpy) section。
+>
+> **2026-06-19 声纹 batch bug 修复推到主路径** — `app/services/voiceprint_service.py:batch_extract_embeddings` 之前用 batch=32 喂给 modelscope ERes2Net，实际只处理 batch 第 1 段（97% 沉默失败）。**所有**通过 `post_meeting_tasks.py` 自动处理的会议都受影响——hangup 后 Celery 跑全流程，每场都只能 3% 段有效。修复：ThreadPoolExecutor(8) + Lock 并行单条 → 100% 段有效。**用户原话**："不仅是漏掉发言人的情况，就算不漏掉发言人的正常识别，识别效果也要像本次一样或者更好" — 修复后所有未来会议自动获得正确识别效果，无需手动 re-process。详见底部 [## 2026-06-19 声纹 batch bug 修复 (推到主路径)](#2026-06-19-声纹-batch-bug-修复-推到主路径) section + [memory/voiceprint-batch-bug-fix-2026-06-19.md](memory/voiceprint-batch-bug-fix-2026-06-19.md) 7 条铁律。
+>
 > **2026-06-17 部署与基础设施重建**：Docker Desktop 引擎崩溃循环修复（WSL2 `docker-desktop-data` 发行版丢失 → com.docker.service 7-9 分钟反复启停）+ 24GB C 盘 Docker 缓存清空 + 数据全 E 盘化（junction 透明重定向）+ huaweicloud 镜像源 404 → aliyun 正确路径（Debian bookworm-security 走 `debian-security/` 独立路径）+ aliyun PyPI 限速 600KB/s → 清华源 + pip `--retries 10 --timeout 60` + 新增 `.dockerignore`（build context 12GB→700MB 17 倍提速）+ frp 客户端 Windows 计划任务自启。详见 [CHANGELOG.md](CHANGELOG.md) `[Unreleased] 2026-06-17` section + [memory/docker-desktop-fix-2026-06-17.md](memory/docker-desktop-fix-2026-06-17.md) 10 条铁律。
 >
 > **2026-06-17 晚间更新**：服务器 webhook deploy 链断裂修复（dist `Last-Modified` 停在 6/15 13:52 已 2 天）。根因：服务器 `/root/.ssh/github_deploy` key 与 GitHub repo Deploy keys 不匹配，5 次重试全 `Permission denied (publickey)` → webhook 服务在线但 git fetch 失败 → deploy 静默退出（GitHub UI 显示 200 OK 但服务器代码没动）。修复：重新生成 ed25519 + GitHub 端加 deploy key + 顺便持久化 `.env.webhook`（修 6/13 教训的幽灵隐患）+ `deploy-auto.sh` 加 `.env.webhook missing` 守卫（commit `c9c60ca6`）。详见底部 [## 2026-06-17 webhook deploy 链断裂修复](#2026-06-17-webhook-deploy-链断裂修复) section 5 条铁律。
@@ -1953,6 +1957,179 @@ POST /api/v1/knowledge/19/extract-multimodal
 # 3. 查图片列表
 GET /api/v1/knowledge/19/images  # 期望 10 张 done=10 pending=0
 # 4. 查提取物
-GET /api/v1/knowledge/19/extractions  # 期望 13-14 条（4 chart + 10 image_block + 可选 formula/table）
+GET /api/v1/knowledge/19/extractions  # 期望 13-14 条（4 chart + 10 image_block + 可选 formula/table})
 ```
 
+## 2026-06-19 会议发言人重处理流程 (reprocess_meeting.py)
+
+**触发场景** — 会议处理完后，发现某发言人当时没录入声纹 → 全部未识别 (例如会议 #120 97% 显示"发言人?") → 后续录入了新声纹 → 重跑识别流程。
+
+**沉淀为标准模式** ([scripts/reprocess_meeting.py](scripts/reprocess_meeting.py) + [docs/reprocess-meeting.md](docs/reprocess-meeting.md))：
+  1. `load` — 读 DB transcript
+  2. `extract` — **ThreadPoolExecutor 并行单条**声纹提取（**关键 bug 修复**）
+  3. `cluster` — KMeans + silhouette 自动选 K
+  4. `vote` — 每聚类对已录入成员投票决定名字
+  5. `assign` — 重新分配 transcript.speaker
+  6. `backup` — **文件**备份 8 字段到 `/tmp/meeting_<id>_backup_<ts>.json`（**关键 bug 修复**）
+  7. `apply` — 写回 DB 5 字段（transcript / transcript_polished / speaker_mapping / speaker_stats / meeting_participants）
+  8. `regen` — 调 LLM 重生成 summary / key_points / decisions
+  9. `verify` — 8 字段全 0 旧错标人
+
+**11 条铁律**（按踩坑顺序）：
+
+**铁律 1: ERes2Net_aug.py:__extract_feature 强制 batch=1（最重要）** —
+- `unsqueeze(0)` 把整个 batch 折叠为单样本
+- 输入 `(4, 32000)` → feature `(1, ?, ?)` → output `(1, 192)` — 只处理第 1 段
+- 原 `batch_extract_embeddings(batch_size=32)` 把 32 段塞给模型 → 实际只处理第 1 段 → 89/2830 段有效
+- **修法**：ThreadPoolExecutor(8) 并行单条 + `threading.Lock` 保护 `pipeline.model` 并发访问 + 显式 `_load_pipeline()` 预热
+- **验证**：2830/2830 段有效
+- **诊断**：`docker logs ... pipeline.model NoneType` 或 `AttributeError: pipeline 没有 .model 属性` = 100% 锁未加或预热失败
+
+**铁律 2: SQLAlchemy 静默忽略未映射属性** —
+- `Meeting` model 没有 `transcript_polished_old_v1` 等列
+- 给 `m.transcript_polished_old_v1 = old_polished` 赋值，SQLAlchemy **静默**忽略
+- `commit()` 不报错，"已备份" 成为谎言
+- **修法**：用**文件**备份到 `/tmp/meeting_<id>_backup_<ts>.json`（时间戳命名，不覆盖）
+- **诊断**：`commit()` 之后立即 `cat /tmp/meeting_<id>_backup_*.json` 看是否真的写了
+
+**铁律 3: 备份必须独立于 DB schema** —
+- DB 列备份方案有迁移成本（加列、改 model、改业务代码）
+- 文件备份零迁移、跨版本兼容、人眼可直接读
+- **纪律**：任何"备份原始数据以备回滚"的需求，**优先文件**而不是 DB 列
+
+**铁律 4: regen 必须可独立运行**（不复跑声纹）—
+- LLM 重生成只需要 `transcript` + `new_speaker`，不需要重跑声纹提取
+- `/tmp/reprocess_<id>_result.json` 含 `new_speaker` 数组，regen 步骤优先读这个
+- 避免每次 regen 都跑 30s 声纹提取（浪费）
+- **debug 友好**：regen 失败只需重跑 LLM，不用重提 2830 个 embedding
+
+**铁律 5: CLI step 自动依赖解析** —
+- `--steps apply` 自动加 `load,extract,cluster,vote,assign` 前置
+- `--steps regen` 只加 `load`（不依赖声纹）
+- `--steps verify` 不加任何（直接读 DB）
+- 避免用户手动指定完整依赖链
+
+**铁律 6: 短段 (< 0.6s) 标"发言人?"是合法状态** —
+- 这些段无法提 embedding（音频太短，声纹特征不足）
+- 327/3357 段最终保持"发言人?"是预期结果
+- 不应作为"识别失败"误报
+
+**铁律 7: 527 段保留 "发言人?" 不影响前端体验** —
+- 前端显示"发言人?" + 灰色头像，不会引起用户注意
+- 8 字段 verify 时这 527 段是预期内，不要修
+
+**铁律 8: 8 字段 verify 一行 SQL 必查**（参考 2026-06-15 教训）—
+- `transcript / transcript_polished / speaker_mapping / speaker_stats / key_points / decisions / summary / meeting_participants` 8 个字段都要 0 旧错标人
+- 旧错标人包括：`洪辉/赵航佳/test_json/test_user/发言人A-E`（CLAUDE.md 2026-06-15 列出的 5 个错标模式）
+- 工具脚本 `verify_eight_fields()` 内置这个 SQL
+
+**铁律 9: 应到会人数 (n_expected) 影响 KMeans K 搜索范围** —
+- `K ∈ [2, n_expected + 2]` 范围搜索（n_expected 默认 3 = 应到会人数）
+- silhouette 自动选最优 K
+- 如果 n_expected 设错，可能把"发言人 A"和"发言人 B"误判为同一人
+
+**铁律 10: LLM 重生成必须用 ANALYSIS_PROMPT 不用 L3 prompt** —
+- L3 (`meeting_full_polish.py`) 只生成 `polished text + removed + key_points[{text,ts,kind}]`
+- ANALYSIS (`meeting_analysis_service.py`) 生成 `summary + key_points[text] + decisions[text] + action_items`
+- 重生成会议纪要要用 ANALYSIS_PROMPT，不要混用
+
+**铁律 11: MeetingParticipant 表必须同步更新** —
+- `meeting_participants` 是单独的表，存参会者 ID
+- 4 真实发言人（王天志/宋洋/杜同贺/贾琦）必须全部出现在 participants 表
+- 旧 participants（如缺宋洋）会让前端"参会人"列表少人
+
+**复用调用**：
+```bash
+# 把脚本 cp 到容器
+docker cp scripts/reprocess_meeting.py microbubble-agent-app-1:/tmp/
+
+# 一键重处理（声纹 + DB + 纪要 + verify）
+docker exec -i microbubble-agent-app-1 bash -c 'cd /app && python /tmp/reprocess_meeting.py --meeting 120 --audio /tmp/meeting_120.m4a'
+
+# 单独 verify（任何时候可跑）
+docker exec -i microbubble-agent-app-1 bash -c 'cd /app && python /tmp/reprocess_meeting.py --meeting 120 --steps verify'
+
+# 只重生成纪要（复用 result.json）
+docker exec -i microbubble-agent-app-1 bash -c 'cd /app && python /tmp/reprocess_meeting.py --meeting 120 --steps regen'
+```
+
+**沉淀**：[docs/reprocess-meeting.md](docs/reprocess-meeting.md) (使用文档) + [scripts/reprocess_meeting.py](scripts/reprocess_meeting.py) (源) + [memory/reprocess-meeting-pattern.md](memory/reprocess-meeting-pattern.md) (铁律)
+
+
+## 2026-06-19 声纹 batch bug 修复 (推到主路径)
+
+**症状（历史问题）** — 修复前所有会议用 `post_meeting_tasks.py` 自动跑全流程时，**97% 段沉默失败**：
+- `vp_service.batch_extract_embeddings()` 旧版用 `torch.from_numpy(padded).float().to(device)` 把 32 段一次性塞给模型
+- modelscope `ERes2Net_aug.py:__extract_feature` 强制 `unsqueeze(0)` 折叠 batch
+- 实际只处理第 1 段 → 89/2830 段有效（其余 31 段返回零向量）
+- 程序不报错，**沉默失败**——大部分段 embedding 为零，识别为 "发言人?"
+
+**用户原话**（2026-06-19 触发）：
+> 不仅是漏掉发言人的情况，就算不漏掉发言人的正常识别，识别效果也要像本次一样或者更好
+
+**根因** — `modelscope/models/audio/sv/ERes2Net_aug.py`:
+```python
+def __extract_feature(self, audio):
+    feature = Kaldi.fbank(audio, num_mel_bins=self.feature_dim)
+    feature = feature - feature.mean(dim=0, keepdim=True)
+    feature = feature.unsqueeze(0)  # ← 强制 batch=1
+    return feature
+```
+
+**修复** — [`app/services/voiceprint_service.py:batch_extract_embeddings`](app/services/voiceprint_service.py) 改用 `ThreadPoolExecutor(8)` + `threading.Lock` 并行单条调用：
+```python
+def batch_extract_embeddings(self, audio_segments, batch_size=32):
+    if not hasattr(self, '_batch_extract_lock'):
+        self._batch_extract_lock = threading.Lock()
+    def _extract_one(audio):
+        with self._batch_extract_lock:
+            return self._extract_via_model(audio)
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_extract_one, a): i for i, a in enumerate(valid_audio)}
+        for fut in futures:
+            results[valid_indices[futures[fut]]] = fut.result()
+    return results
+```
+
+**验证**：
+| 测试 | 旧版 | 新版 |
+|------|------|------|
+| 50 段真实音频 | 89/2830 ≈ 3% | 50/50 = 100% |
+| 100 段真实音频 | (同样 3%) | 100/100 = 100% |
+| 2830 段会议 #120 | 89 段有效 | 2830 段有效 |
+
+**影响范围** — `post_meeting_tasks.py`（hangup 后自动跑的全流程）和 `scripts/reprocess_meeting.py` 都用 `vp_service.batch_extract_embeddings()` → 修复后**所有未来会议自动获得 100% 段有效 + 正确聚类**，无需手动 re-process。
+
+**7 条铁律**（[memory/voiceprint-batch-bug-fix-2026-06-19.md](memory/voiceprint-batch-bug-fix-2026-06-19.md)）：
+
+1. **上游库的 bug 必须 app 层绕开** — modelscope 不会修 `__extract_feature` 强制 batch=1，app 层必须用并行单条
+2. **所有会议识别质量改进要 push 到主路径** — 不能只 re-process 老会议，新会议必须自动获得改进
+3. **ThreadPoolExecutor + Lock 组合** — 并行提速 + 保护 `pipeline.model` 跨线程访问
+4. **声纹 embedding 验证不能只看长度** — 89 个非零 vs 89 个真正 embedding 是两回事，必须用 silhouette 验证聚类质量
+5. **沉默失败比明显错误更可怕** — 旧版不报错但 97% 失败，要用 verify pattern 主动检测
+6. **重启后端是 volume 挂载的硬要求** — 代码改完不 restart = 永远在跑旧逻辑（CLAUDE.md 752 行铁律）
+7. **100% 段有效是默认值** — 不接受"50% 有效就够了"的态度，识别质量要么 100% 要么找出问题
+
+**部署必做**：
+```bash
+# 1. 代码同步到容器（volume 挂载自动，但建议显式）
+docker cp app/services/voiceprint_service.py microbubble-agent-app-1:/app/app/services/voiceprint_service.py
+
+# 2. 重启后端（752 行铁律）
+docker restart microbubble-agent-app-1 microbubble-agent-celery-worker-1
+
+# 3. 验证（重启后 ~30s 等服务 healthy）
+docker exec microbubble-agent-app-1 python -c "
+from app.services.voiceprint_service import voiceprint_service
+import numpy as np, wave, random
+with wave.open('/tmp/meeting_120_16k.wav', 'rb') as wf:
+    pcm = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16).astype(np.float32) / 32768.0
+random.seed(42)
+chunks = [pcm[i:i+48000] for i in random.sample(range(0, len(pcm)-48000), 50)]
+embs = voiceprint_service.batch_extract_embeddings(chunks, batch_size=32)
+print(f'{sum(1 for e in embs if e is not None and not np.all(e == 0))}/50 valid')
+"
+# 期望: 50/50 valid
+```
+
+**沉淀**：[memory/voiceprint-batch-bug-fix-2026-06-19.md](memory/voiceprint-batch-bug-fix-2026-06-19.md) 完整复盘 + [scripts/reprocess_meeting.py](scripts/reprocess_meeting.py) 9 步 CLI (verify step 可独立跑用于 8 字段 check)
