@@ -35,7 +35,7 @@
           @click="openImage(img)"
         >
           <div class="gallery-item-img">
-            <img :src="img.image_url" :alt="`第${img.page_number || '?'}页图${img.id}`" loading="lazy" />
+            <img :src="img.image_url" :alt="`第${img.page_number || '?'}页图${img.id}`" />
             <div v-if="img.page_number" class="gallery-item-page">P{{ img.page_number }}</div>
             <div v-if="img.ocr_status === 'failed'" class="gallery-item-badge gallery-item-badge-failed">
               <el-icon><CircleClose /></el-icon>

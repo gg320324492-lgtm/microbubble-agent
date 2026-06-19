@@ -12,7 +12,7 @@
 
     <!-- 缩略图（Phase 7 多模态：有图时显示首图） -->
     <div v-if="item.thumbnail_url" class="card-thumbnail">
-      <img :src="item.thumbnail_url" :alt="item.title" loading="lazy" />
+      <img :src="item.thumbnail_url" :alt="item.title" />
       <div v-if="item.image_count > 1" class="card-thumbnail-badge">+{{ item.image_count - 1 }}</div>
     </div>
 
