@@ -1118,14 +1118,30 @@ export function normalizePaperData(raw, extra = {}) {
   const rawContent = raw.content || ''
   const inputContent = hasFormatted ? raw.formatted_content : rawContent
 
+  // 调试：dump 中间产物到 window
+  if (typeof window !== 'undefined') {
+    window.__PAPER_INTERMEDIATE__ = {
+      rawContentLen: rawContent.length,
+      rawFormattedLen: raw.formatted_content?.length || 0,
+      hasFormatted,
+      inputContentLen: inputContent.length,
+      inputSample0: String(inputContent).slice(0, 800),
+      inputSampleMid: String(inputContent).slice(8000, 8800),
+    }
+  }
+
   // 2. 强力清洗原始内容
-  //    markdown 模式下不跑 insertSectionBreaks（会破坏 # / ## 标记）
-  //    也不跑 markdown 强调 / 行内标题拆分；只剥 HTML 属性 + 脏内容
   const cleaned = cleanContent(inputContent, {
     stripImageUrls: true,
     isMarkdown: hasFormatted,
   })
   const content = cleaned.content
+
+  if (typeof window !== 'undefined') {
+    window.__PAPER_INTERMEDIATE__.cleanedLen = content.length
+    window.__PAPER_INTERMEDIATE__.cleanedSample0 = content.slice(0, 800)
+    window.__PAPER_INTERMEDIATE__.cleanedSampleMid = content.slice(8000, 8800)
+  }
   const extraFromClean = cleaned.extractedImages || []
 
   // 3. 提取页面/图表标记
