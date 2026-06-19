@@ -1155,23 +1155,31 @@ function _inferFigureType(img, ext) {
 }
 
 /**
- * 智能正文内嵌图映射（升级版）
+ * 智能正文内嵌图锚定 (v27 升级版 - 段落级)
  *
- * L1：精确匹配 figureNo（caption/OCR 提取的 Fig. N）
- * L2：正文引用 "Fig. N" / "Figure N" / "Scheme N" / "Table N"
- * L3：page 邻近 + 章节主题匹配
- * L4：fallback - 不插入正文，只在文末图库显示
+ * 不再按"section 一次性插入所有引用图"，改为按"段落首次引用"锚定：
+ *   - 每张图插入到正文里 FIRST 出现其图号的 paragraph 后面
+ *   - 同一个 paragraph 可以锚定多张图（如果同时引用 Fig. 1 和 Fig. 2）
+ *
+ * 多级匹配策略：
+ *   L1: 精确图号匹配 (Fig. 2 ↔ 正文 "Fig. 2")
+ *   L2: caption 语义匹配 (caption keywords ∩ paragraph keywords)
+ *   L3: sectionHint 辅助匹配 (后端提供)
+ *   L4: 低置信度放弃内嵌
+ *
+ * 返回格式: { paragraphId → [figures] }
+ *   paragraphId 格式: `${sectionId}__p${paragraphIndex}`
  *
  * 严格规则：
- * - 同一张图在整个 paper 只内嵌 1 次
+ * - 同一张图在整个 paper 只内嵌 1 次（first-reference-wins）
  * - isCoreFigure = false 的图（cover/logo/publisher）永远不内嵌
- * - 同一个 section 不重复插入同一张图
+ * - 没有 figureNo 的图也不内嵌（不能机械按数组顺序）
  */
-function _buildInlineFigureMap(sections, figureRegistry, content) {
-  const map = {}  // sectionId → [figure]
-  if (!figureRegistry?.length || !sections?.length) return map
+function _buildInlineFigureAnchors(sections, figureRegistry) {
+  const anchors = {}  // paragraphId → [figure]
+  if (!figureRegistry?.length || !sections?.length) return anchors
 
-  // 1. 建立 figureNo → figure 映射（只包含 isCoreFigure）
+  // 1. 建立 figureNo → figure 映射（只包含 isCoreFigure + 有 figureNo）
   const figureByNo = {}
   for (const fig of figureRegistry) {
     if (!fig.isCoreFigure || !fig.figureNo) continue
@@ -1179,32 +1187,123 @@ function _buildInlineFigureMap(sections, figureRegistry, content) {
     figureByNo[fig.figureNo.toLowerCase().replace(/\s+/g, '')] = fig  // 去空格版本
   }
 
-  // 2. 扫描每个 section 的 blocks
   const placedFigures = new Set()  // 全局已放置
 
+  // 2. L1: 段落级图号精确匹配
   for (const section of sections) {
     if (!section.blocks) continue
-    const sectionPlaced = new Set()  // 本 section 已放置（防重复）
-    for (const block of section.blocks) {
-      if (block.type !== 'paragraph') continue
+    section.blocks.forEach((block, idx) => {
+      if (block.type !== 'paragraph') return
       const text = block.content || ''
-      // 匹配 "Fig. 1" / "Figure 1" / "Scheme 1" / "Table 1" / "图 1"
-      // 但要排除 "Fig. 1a" 之类（带字母的子图，单独匹配）
-      const figRefs = [...text.matchAll(/\b(?:Fig\.?|Figure|Scheme|Table|图|表)\s*(\d{1,3})\b/gi)]
+      const pid = `${section.id}__p${idx}`
+      const figRefs = [...text.matchAll(/\b(?:Fig\.?|Figure|Scheme|Table|图|表)\s*(\d{1,3}[a-z]?)\b/gi)]
+      const matched = []
       for (const m of figRefs) {
         const key = m[0].toLowerCase()
         const fig = figureByNo[key]
         if (!fig) continue
         if (placedFigures.has(fig.id)) continue
-        if (sectionPlaced.has(fig.id)) continue
-        if (!map[section.id]) map[section.id] = []
-        map[section.id].push(fig)
+        matched.push(fig)
         placedFigures.add(fig.id)
-        sectionPlaced.add(fig.id)
+      }
+      if (matched.length > 0) {
+        anchors[pid] = matched
+      }
+    })
+  }
+
+  // 3. L2: caption 语义匹配 (Jaccard) - 处理 L1 未匹配的图
+  const unmatchedFigures = figureRegistry.filter(
+    f => f.isCoreFigure && f.figureNo && !placedFigures.has(f.id)
+  )
+  if (unmatchedFigures.length > 0 && sections.length > 0) {
+    // 收集所有 paragraph tokens（一次性，避免重复计算）
+    const paragraphTokens = []
+    for (const section of sections) {
+      if (!section.blocks) continue
+      section.blocks.forEach((block, idx) => {
+        if (block.type !== 'paragraph') return
+        paragraphTokens.push({
+          pid: `${section.id}__p${idx}`,
+          tokens: _tokenize(block.content || ''),
+        })
+      })
+    }
+
+    for (const fig of unmatchedFigures) {
+      const figTokens = _tokenize(fig.caption || fig.semanticTitle || '')
+      if (figTokens.length === 0) continue
+
+      let bestMatch = null
+      let bestScore = 0
+      for (const pt of paragraphTokens) {
+        if (anchors[pt.pid]?.some(f => f.id === fig.id)) continue
+        const score = _jaccard(figTokens, pt.tokens)
+        if (score > bestScore) {
+          bestScore = score
+          bestMatch = pt
+        }
+      }
+
+      // 阈值 0.15: 至少 2 个关键词重叠
+      if (bestMatch && bestScore >= 0.15) {
+        if (!anchors[bestMatch.pid]) anchors[bestMatch.pid] = []
+        anchors[bestMatch.pid].push(fig)
+        placedFigures.add(fig.id)
       }
     }
   }
+
+  return anchors
+}
+
+/**
+ * 兼容旧 API: 把 paragraph anchors 合并到 section 级
+ * 注意: 实际渲染应使用 inlineFigureAnchors (paragraph 级) 而非 inlineFigureMap (section 级)
+ */
+function _buildInlineFigureMap(sections, figureRegistry, content) {
+  const paragraphAnchors = _buildInlineFigureAnchors(sections, figureRegistry)
+  const map = {}
+  for (const [pid, figures] of Object.entries(paragraphAnchors)) {
+    const sectionId = pid.split('__')[0]
+    if (!map[sectionId]) map[sectionId] = []
+    map[sectionId].push(...figures)
+  }
   return map
+}
+
+/**
+ * 文本 → 去停用词 + 长度过滤的关键词数组
+ */
+function _tokenize(text) {
+  if (!text) return []
+  return String(text)
+    .toLowerCase()
+    .replace(/[^\w一-龥]+/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length > 2 && !STOPWORDS.has(t))
+}
+
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'are', 'was', 'were',
+  'has', 'have', 'had', 'been', 'will', 'would', 'could', 'should', 'may',
+  'can', 'does', 'did', 'not', 'but', 'all', 'any', 'one', 'two', 'three',
+  'into', 'than', 'then', 'more', 'most', 'some', 'such', 'only', 'also',
+  'fig', 'figure', 'scheme', 'table', 'shown', 'show', 'shows', 'see',
+  '的', '了', '和', '与', '或', '在', '是', '为', '有', '与', '及',
+])
+
+/**
+ * Jaccard 相似度: |A ∩ B| / |A ∪ B|
+ */
+function _jaccard(a, b) {
+  if (!a.length || !b.length) return 0
+  const setA = new Set(a)
+  const setB = new Set(b)
+  let inter = 0
+  for (const t of setA) if (setB.has(t)) inter++
+  const union = setA.size + setB.size - inter
+  return union === 0 ? 0 : inter / union
 }
 
 function _detectKeywordsFromContent(content) {
@@ -1813,9 +1912,12 @@ export function normalizePaperData(raw, extra = {}) {
     }
   }
 
-  // 11. 构建正文内嵌图映射（智能匹配）
-  //     使用 figureRegistry 过滤掉 cover/logo/publisher，
-  //     只对 isCoreFigure=true 的图片做正文内嵌
+  // 11. 构建正文内嵌图锚定 (v27 - paragraph 级)
+  //     L1: 段落首次引用图号精确匹配
+  //     L2: caption 关键词 ∩ paragraph 关键词 (Jaccard)
+  //     只锚定 isCoreFigure=true 的图（cover/logo/publisher 永不进正文）
+  const inlineFigureAnchors = _buildInlineFigureAnchors(sections, figureRegistry)
+  // 兼容旧 API: section 级合并
   const inlineFigureMap = _buildInlineFigureMap(sections, figureRegistry, content)
 
   // 12. 统计核心图（非 cover/logo）数量
@@ -1853,6 +1955,7 @@ export function normalizePaperData(raw, extra = {}) {
     figureRegistry,  // 完整图 registry（含 isCoreFigure / figureType / figureNo 等）
     figures,          // 兼容旧 API：含 kind/label/figureType/isCoreFigure 等
     inlineFigureMap,
+    inlineFigureAnchors,  // v27 段落级锚定（按 paragraphId）
     // 透传原数据（兼容老代码）
     raw,
     // 元信息
