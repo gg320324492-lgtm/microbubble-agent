@@ -98,13 +98,13 @@ const INTERNAL_MARKER_RES = [
   /\[IMAGE:[^\]]*\]/g,
   /\[图\s*[Pp]?\d+\]/g, // [图 P1] 等
   // PDF 页码标记（多种格式）
-  /\[PAGE:\s*\d+\s*\]/gi,           // [PAGE:1] / [PAGE: 1]
-  /\[PAGE\s*:\s*\d+\s*\]/gi,       // 兼容空格
+  // v28 fix: 保留 [PAGE:N] 标记，让 cleanContent 后续的 extractPageMarkers 提取
+  // （之前删除 [PAGE:N] 会破坏 pageMarkers 提取 → sections 解析丢分页 → 正文被压成 1 段）
+  // 现在只在 cleanContent line 374-381 单独处理（剥独立行 + 行内其他格式），
+  // INTERNAL_MARKER_RES 不再删除 [PAGE:N]
   /\bPAGE\s*[:：]\s*\d+\b/gi,       // PAGE:1 (无方括号)
   // "T. Wang et al. 3 [PAGE:4]" → 保留作者名 + 页码，去掉 [PAGE:x]
   /([A-Z]\.\s*[A-Z][a-z]+(?:\s+et\s+al\.?)?)\s+\d+\s*\[PAGE:\s*\d+\s*\]/gi,  // 暂不激进删除（保留作者名+数字）
-  // "Journal name 513 (2026) 142456" → 这种页码信息保留为元数据，不在正文
-  /\s*\[PAGE:\s*\d+\s*\]\s*/g,      // 任何位置前后的 [PAGE:x] 单独删除
   // === v26 回归修复新增（执行顺序很重要） ===
   // 1) 中文图注（含 JSON 或纯页码）必须先剥，贪婪匹配整段 "图（P8，{...}）"
   //    若后剥则 JSON 正则先吃掉 {...}，留下孤儿 "图（P8，）" 无法再匹配
