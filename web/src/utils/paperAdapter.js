@@ -1047,6 +1047,40 @@ function _buildContentBlocks(content, options = {}) {
       continue
     }
 
+    // v28 step 38: Markdown 表格检测
+    //   特征：当前行以 | 开头 + 下一行是 |---|---|... 分隔行
+    //   处理：把连续 N 行收集成表格 block（type='table'），保留 markdown 源码让前端渲染
+    if (trimmed.startsWith('|') && trimmed.endsWith('|') && i + 1 < lines.length) {
+      const nextLine = lines[i + 1].trim()
+      // 分隔行匹配 |---|---| 或 |:---|---:| 等对齐符
+      if (/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(nextLine)) {
+        flushParagraph()
+        // 收集表头 + 分隔 + 所有数据行
+        const tableLines = [line]
+        let j = i + 1
+        while (j < lines.length) {
+          const cur = lines[j].trim()
+          if (cur.startsWith('|') && cur.endsWith('|')) {
+            tableLines.push(lines[j])
+            j++
+          } else if (cur === '') {
+            // 空行 = 表格结束（但允许后跟空行 + 表格后是其他段落）
+            break
+          } else {
+            // 非表格行，停止
+            break
+          }
+        }
+        blocks.push({
+          type: 'table',
+          content: tableLines.join('\n'),
+          page: currentPage,
+        })
+        i = j - 1  // for 循环会 i++，所以 -1
+        continue
+      }
+    }
+
     // 空行：段落结束
     if (!trimmed) {
       flushParagraph()
