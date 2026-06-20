@@ -61,7 +61,11 @@ class LLMAnalysisService:
     """基于 LLM 的内容分析：自动分类、标签、核心概念提取"""
 
     async def analyze_content(self, title: str, content: str) -> dict:
-        """分析内容，返回 {summary, category, tags, key_concepts, related_topics, knowledge_type}"""
+        """分析内容，返回 {summary, category, tags, key_concepts, related_topics, knowledge_type}
+
+        v28 step 34 修复: 之前 JSON 解析失败（如数学公式 $$x$$ 含未转义字符）直接返空，
+        整条 knowledge 卡 failed。改 fallback: 解析失败时用正则从 raw text 提取关键字段。
+        """
         try:
             client = get_anthropic_client()
             prompt = ANALYSIS_PROMPT.format(
@@ -70,26 +74,61 @@ class LLMAnalysisService:
             )
             response = await client.messages.create(
                 model=get_default_model(),
-                max_tokens=800,
-                timeout=30,
+                max_tokens=1500,  # v28 step 34: 提到 1500 给数学公式留空间
+                timeout=60,
                 thinking={'type': 'disabled'},
                 messages=[{"role": "user", "content": prompt}]
             )
             # 提取文本内容
             text = extract_text_from_response(response)
             # 解析 JSON
-            result = parse_llm_json(text)
-            # 验证必要字段
+            try:
+                result = parse_llm_json(text)
+                if result.get("summary"):
+                    return result
+            except (json.JSONDecodeError, Exception) as e:
+                logger.warning(f"LLM JSON 解析失败: {type(e).__name__}: {str(e)[:120]}")
+                # v28 step 34 fallback: 从 raw text 提取关键字段
+                result = _fallback_extract_fields(text)
+                if result.get('summary') or result.get('category'):
+                    logger.info(f"Fallback 提取成功: summary={len(result.get('summary', ''))} chars")
+                    return result
+            # 解析成功但 summary 仍空（LLM 没生成）
             if not result.get("summary"):
                 logger.warning("LLM 分析未返回 summary")
             return result
-        except json.JSONDecodeError as e:
-            logger.warning(f"LLM 分析返回非 JSON 格式: {e}")
-            # 尝试从原始响应中提取关键信息
-            return {"summary": "", "category": "", "tags": [], "key_concepts": [], "related_topics": [], "knowledge_type": "文献阅读"}
         except Exception as e:
             logger.error(f"LLM 内容分析失败: {e}")
             return {"summary": "", "category": "", "tags": [], "key_concepts": [], "related_topics": [], "knowledge_type": "文献阅读"}
+
+
+def _fallback_extract_fields(text: str) -> dict:
+    """v28 step 34 fallback: 当 LLM 返回 JSON 因数学公式等被破坏时，
+    从 raw text 用正则提取关键字段（不完美但比返空好）"""
+    import re
+    result = {
+        'summary': '', 'category': '', 'topic': '', 'tags': [],
+        'key_concepts': [], 'related_topics': [], 'knowledge_type': '',
+    }
+
+    def extract_str(key: str) -> str:
+        # 允许值中含 \" 转义
+        m = re.search(rf'"{key}"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+        return m.group(1).replace('\\"', '"').replace('\\n', '\n') if m else ''
+
+    def extract_array(key: str) -> list:
+        m = re.search(rf'"{key}"\s*:\s*\[([^\]]+)\]', text)
+        if not m:
+            return []
+        items = re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(1))
+        return [item.replace('\\"', '"') for item in items]
+
+    for f in ['summary', 'category', 'topic', 'knowledge_type']:
+        result[f] = extract_str(f)
+    result['tags'] = extract_array('tags')
+    result['key_concepts'] = extract_array('key_concepts')
+    result['related_topics'] = extract_array('related_topics')
+    return result
 
 
 llm_analysis_service = LLMAnalysisService()
