@@ -59,24 +59,33 @@
           </div>
         </section>
 
-        <!-- 知识三元组（兼容老数据） -->
+        <!-- 知识三元组（v28 step 50: 兼容两种字段格式）
+             老格式: { subject, predicate, object, condition, confidence }
+             新格式（LLM 实际输出）: { name, type, description, aliases }
+             模板用 entityField() 统一取值 -->
         <section v-if="paper.entities?.length" class="paper-entities">
-          <h3 class="entities-label">知识三元组</h3>
+          <h3 class="entities-label">知识三元组（{{ paper.entities.length }}）</h3>
           <div class="entities-list">
             <div v-for="(e, i) in paper.entities" :key="i" class="entity-card">
               <div class="entity-triple">
-                <span class="entity-subject">{{ e.subject }}</span>
-                <span class="entity-predicate">→ {{ e.predicate }} →</span>
-                <span class="entity-object">{{ e.object }}</span>
+                <span class="entity-subject">{{ entityField(e, 'subject') }}</span>
+                <span class="entity-predicate">→ {{ entityField(e, 'predicate') }} →</span>
+                <span class="entity-object">{{ entityField(e, 'object') }}</span>
               </div>
-              <div v-if="e.condition" class="entity-condition">条件: {{ e.condition }}</div>
-              <div class="entity-confidence">
-                <el-progress
-                  :percentage="Math.round((e.confidence || 0) * 100)"
-                  :stroke-width="3"
-                  :show-text="false"
-                />
-                <span class="confidence-text">{{ Math.round((e.confidence || 0) * 100) }}%</span>
+              <div v-if="entityField(e, 'condition')" class="entity-condition">条件: {{ entityField(e, 'condition') }}</div>
+              <div v-if="e.description && !entityField(e, 'object')" class="entity-description">
+                {{ e.description }}
+              </div>
+              <div class="entity-meta">
+                <span v-if="e.type" class="entity-type">{{ e.type }}</span>
+                <span class="entity-confidence">
+                  <el-progress
+                    :percentage="Math.round((e.confidence || 0) * 100)"
+                    :stroke-width="3"
+                    :show-text="false"
+                  />
+                  <span class="confidence-text">{{ Math.round((e.confidence || 0) * 100) }}%</span>
+                </span>
               </div>
             </div>
           </div>
@@ -188,6 +197,20 @@ import {
 const route = useRoute()
 const rawKnowledge = ref(null)
 const paper = ref(null)
+
+// v28 step 50: 兼容 entities 两种字段格式
+//   老格式: { subject, predicate, object, condition, confidence }
+//   新格式（LLM 实际输出）: { name, type, description, aliases }
+//   entityField() 统一取值，老数据用 subject/predicate/object，
+//   新数据用 name 替代 subject、type 替代 predicate、description 替代 object
+function entityField(e, field) {
+  if (!e) return ''
+  if (field === 'subject') return e.subject || e.name || ''
+  if (field === 'predicate') return e.predicate || e.type || ''
+  if (field === 'object') return e.object || e.description || ''
+  if (field === 'condition') return e.condition || ''
+  return e[field] || ''
+}
 const relatedKnowledge = ref([])
 const graphData = ref({ nodes: [], edges: [] })
 const graphStatus = ref('loading')  // 'loading' | 'success' | 'empty' | 'failed'
@@ -888,6 +911,30 @@ onUnmounted(() => {
 .confidence-text {
   font-size: 11px;
   color: #9CA3AF;
+}
+
+/* v28 step 50: 新格式字段 (type/description) 样式 */
+.entity-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.entity-type {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.08);
+  color: #2563EB;
+  font-weight: 500;
+}
+
+.entity-description {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 /* 正文容器（v26 回归修复：去掉 820px 限制，恢复 1180-1280px 阅读宽度） */
