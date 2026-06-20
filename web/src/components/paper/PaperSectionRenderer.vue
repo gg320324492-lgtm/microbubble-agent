@@ -102,38 +102,35 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.85
  *   img.visionConfidence ?? ext.confidence ?? 0.5
  */
 /**
- * v28 step 15 + 17: figure label 真实化
+ * v28 step 19: figure label 统一为 "Fig. N"（按 page 顺序索引从 1 开始）
  *
- * 优先级：
- * 1. `fig.figureNo` (vision model 输出的真实图号，如 "Fig. 5") → "Fig. 5"
- * 2. 没 figureNo 但有 description (extraction.data.description，含 OCR + vision 合成) → 截 30 字符
- *    格式："P3 · 折线图 - 甲苯转化率随时间变化..."
- * 3. 都没 → "第 3 页"
+ * 用户原话："正文的图片就从1数字开始吧，或者说就应该按照论文原文说的标题号来展示"
  *
- * 详细 caption / description 保留在 figcaption 渲染，不挤压 label
+ * 优先级（v28 step 19）：
+ * 1. `fig.figureNo` (vision model 输出的真实图号，如 "Fig. 5" 或 "Fig. 5e") → 保留
+ * 2. 没 figureNo → 按 page 升序分配 "Fig. 1" / "Fig. 2" ...（用户视角的顺序）
+ *
+ * 重要：label **不显示页码**（页码移到 figcaption 单独展示），
+ *      **不显示描述**（描述在 figcaption 完整展开）。
+ *      label 就是简短的 "Fig. N"，让用户一眼看清有几张图。
  */
 const _displayNoMap = computed(() => {
-  const map = new Map()  // imageId → label string
+  const map = new Map()  // imageId → "Fig. N" 字符串
   const allFigs = props.figureRegistry || []
+  // 按 page 升序排序（无 page 放最后）
   const sorted = [...allFigs].sort((a, b) => (a.page || 9999) - (b.page || 9999))
-  let idx = 0
+  let fallbackIdx = 0
   for (const f of sorted) {
     if (!f || f.isPublisherImage) continue
     if (f.kind === 'cover' || f.kind === 'logo') continue
-    idx += 1
-    const pageStr = f.page ? `P${f.page}` : null
+    fallbackIdx += 1
     let label
     if (f.figureNo) {
-      // 1. 真实图号
-      label = pageStr ? `${f.figureNo} · ${pageStr}` : f.figureNo
-    } else if (f.description || f.visualSummary || f.semanticTitle) {
-      // 2. 描述摘要（vision model 输出的图注）
-      const text = f.description || f.visualSummary || f.semanticTitle || ''
-      const summary = text.length > 28 ? text.slice(0, 28).trim() + '…' : text.trim()
-      label = pageStr ? `${pageStr} · ${summary}` : summary
+      // 1. 真实图号（vision model 识别出来）—— 保留原值，如 "Fig. 5" / "Fig. 5e"
+      label = f.figureNo
     } else {
-      // 3. 纯页码兜底
-      label = f.page ? `第 ${f.page} 页` : `图 ${idx}`
+      // 2. 兜底：按 page 顺序分配 "Fig. N"
+      label = `Fig. ${fallbackIdx}`
     }
     map.set(f.imageId ?? f.id, label)
   }
@@ -147,10 +144,13 @@ function getAnchoredFigures(paragraphIdx) {
   const filtered = props.showHighConfidenceOnly
     ? figs.filter(f => (f.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD)
     : figs
-  // 给每个 fig 注入 _displayNo，供 FigureCard 使用
+  // 给每个 fig 注入 _displayNo + _page（页码）+ _captionText（原文 caption）供 FigureCard 使用
   return filtered.map(f => ({
     ...f,
-    _displayNo: _displayNoMap.value.get(f.imageId ?? f.id) || (f.figureNo ? f.figureNo : `图`),
+    _displayNo: _displayNoMap.value.get(f.imageId ?? f.id) || 'Fig.',
+    _page: f.page,
+    _captionText: f.caption || f.semanticTitle || null,
+    _description: f.description || f.visualSummary || null,
   }))
 }
 
