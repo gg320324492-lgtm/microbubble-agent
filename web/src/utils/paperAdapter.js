@@ -2539,61 +2539,33 @@ function _alignFigureNosWithText(content, figureRegistry) {
     return figureRegistry
   }
 
-  // 1. 扫描正文所有 Fig. N 引用，按出现顺序收集
-  const figRefPattern = /\b(Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/gi
-  const references = []  // [{ figureNo, position }]
-  let m
-  while ((m = figRefPattern.exec(content)) !== null) {
-    const num = parseInt(m[2], 10)
-    if (Number.isFinite(num)) {
-      references.push({
-        num,
-        label: `${m[1].replace(/\.$/, '').charAt(0).toUpperCase() + m[1].slice(2).toLowerCase()} ${num}`,
-        position: m.index,
-      })
+  // v28 step 26: 完全按 page 顺序重排 figureNo
+  //    之前逻辑依赖 vision 输出的 figureNo + 正文引用数对不上时 L1/L2 错位
+  //    现在统一: 1) 先按 page 升序排序, 2) 按 page 顺序给所有 core fig 分配 Fig. 1, 2, 3...
+  //    3) 保留 vision 输出的"子号"(Fig. 5e / Fig. 3a 等有字母后缀) 保留
+  const isCore = (f) => f.isCoreFigure === true
+    || (f.isCoreFigure !== false
+      && !f.isPublisherImage
+      && !['cover', 'logo', 'publisher', 'unknown'].includes(f.figureType)
+      && f.kind !== 'cover' && f.kind !== 'logo')
+  // 仅对 core fig 重排
+  const coreFigs = figureRegistry
+    .filter(f => isCore(f))
+    .sort((a, b) => (a.page || 9999) - (b.page || 9999))
+  // 检查子号 (Fig. 5e) - 保留
+  const subLetterRe = /^Fig\.\s*\d+[a-z]$/i
+  let idx = 0
+  for (const f of coreFigs) {
+    idx += 1
+    if (f.figureNo && subLetterRe.test(f.figureNo)) {
+      // 子号图保留 vision 值 (用户视角 Fig. 5e 有意义)
+      f.figureNoSource = 'vision'
+      continue
     }
+    // 重置为按 page 顺序的 Fig. N
+    f.figureNo = `Fig. ${idx}`
+    f.figureNoSource = 'page_aligned'
   }
-
-  // 2. 按位置排序 + 去重
-  references.sort((a, b) => a.position - b.position)
-
-  // 3. 建立 figureNo → fig 映射（优先用已有 figureNo 匹配）
-  const figByNo = new Map()  // 'Fig. 1' → fig
-  for (const f of figureRegistry) {
-    if (f.figureNo) {
-      const m = f.figureNo.match(/(\d+)/)
-      if (m) {
-        const num = parseInt(m[1], 10)
-        figByNo.set(`Fig. ${num}`, f)
-        // 也用原值
-        figByNo.set(f.figureNo, f)
-      }
-    }
-  }
-
-  // 4. 对没 figureNo 的 fig，按引用顺序补充
-  let nextNum = 1
-  const usedNums = new Set()
-  for (const f of figureRegistry) {
-    if (f.figureNo) {
-      const m = f.figureNo.match(/(\d+)/)
-      if (m) usedNums.add(parseInt(m[1], 10))
-    }
-  }
-
-  for (const ref of references) {
-    const key = `Fig. ${ref.num}`
-    if (figByNo.has(key)) continue
-    // 找一个还没 figureNo 的 fig（按 page 顺序）分配
-    const target = figureRegistry.find(f => !f.figureNo && !usedNums.has(ref.num))
-    if (target) {
-      target.figureNo = `Fig. ${ref.num}`
-      target.figureNoSource = 'text_aligned'
-      usedNums.add(ref.num)
-      figByNo.set(key, target)
-    }
-  }
-
   return figureRegistry
 }
 
