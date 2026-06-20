@@ -83,7 +83,11 @@ class KnowledgeGraphBuilder:
             {"entities": [...], "relations": [...]}
         """
         try:
-            from app.services.llm_service import get_llm_response
+            # v28 step 47 修复: 之前 from app.services.llm_service import get_llm_response
+            # 但 llm_service.py 不存在！导致实体提取永远失败 → knowledge_entities 表只有 119 行
+            # 改用 app.core.llm（已存在）里的 get_anthropic_client
+            from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+            client = get_anthropic_client()
 
             # 截取内容避免过长
             text = f"标题: {title}\n\n内容: {content[:3000]}"
@@ -94,8 +98,15 @@ class KnowledgeGraphBuilder:
 
 {text}"""
 
-            response = await get_llm_response(prompt)
-            result = self._parse_response(response)
+            response = await client.messages.create(
+                model=get_default_model(),
+                max_tokens=2000,
+                timeout=60,
+                thinking={'type': 'disabled'},
+                messages=[{"role": "user", "content": prompt}]
+            )
+            response_text = extract_text_from_response(response)
+            result = self._parse_response(response_text)
 
             logger.info(
                 f"图谱提取完成: {title[:30]}... → "
