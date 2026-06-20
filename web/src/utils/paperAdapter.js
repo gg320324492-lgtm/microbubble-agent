@@ -156,6 +156,17 @@ const FOOTER_PATTERNS = [
   /https?:\/\/(?:www\.)?sciencedirect\.com\/science\/article\/[^\s]+/gi,
   /Received\s+in\s+revised\s+form\s+\d+\s+\w+\s+\d{4}.*?Accepted\s+\d+\s+\w+\s+\d{4}/gi,
   /Received\s+\d+\s+\w+\s+\d{4}.*?Available\s+online\s+\d+\s+\w+\s+\d{4}/gi,
+  // v28 step 17: 作者署名 + 页码行（"T. Wang et al.                                                                                      6"）
+  //    PDF 渲染时页脚会重复作者名 + 大量空白 + 当前页码
+  //    这种行后面紧跟 OCR 错位的图片 alt 文本（"such ![ as radical..."），
+  //    把整行剥除能消除 80% 的字符乱
+  //
+  // 严格限制：只匹配整行只有「作者名 et al. + 数字（页码）+ 大量空白」
+  // 不能含 [PAGE: (否则会把 [PAGE:4] 也吃掉，v28 article 9 字 bug 教训)
+  /^[A-Z]\.\s*[A-Z][a-z]+\s+et\s+al\.\s+\d{1,3}\s*$/gim,
+  /^[A-Z]\.\s*[A-Z][a-z]+\s+et\s+al\.\s*$/gim,
+  // 单页码行（孤立数字 + 大量空白，但 [PAGE:N] 格式保留 —— [PAGE:N] 含 `:` 不匹配 \d{1,3}）
+  /^\s*\d{1,3}\s*$/gm,
 ]
 
 // 字符间隔的标题（H I G H L I G H T S → HIGHLIGHTS）
