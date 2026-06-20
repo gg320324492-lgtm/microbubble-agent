@@ -1878,7 +1878,12 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
     })
 
     // 收集所有 paragraph block（跳过 preamble/highlights/abstract 等元信息 section）
-    const SKIP_SECTIONS = new Set(['preamble', 'highlights', 'keywords', 'abstract', 'article_info'])
+    // v28 step 29: 加 references/acknowledgments/conclusion
+    //    references: PaperSectionRenderer v-if="!isReferences" 不渲染 inline
+    //    acknowledgments: 致谢段不该有正文图
+    //    conclusion: 让 Fig. N 优先回到 results 段
+    //    introduction: 段内 block.page=null=0，会被 fallback 误选
+    const SKIP_SECTIONS = new Set(['preamble', 'highlights', 'keywords', 'abstract', 'article_info', 'references', 'acknowledgments', 'conclusion', 'introduction'])
     const allParagraphs = []  // [{pid, page}]
     const paragraphsByPage = {}
     for (const section of sections) {
@@ -1886,8 +1891,9 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
       if (!section.blocks) continue
       section.blocks.forEach((block, idx) => {
         if (block.type !== 'paragraph') return
+        // v28 step 29c: 保留 page=0 段落进 allParagraphs（fallback 时按 page 排序优先选 page>=1）
         const pid = `${section.id}__p${idx}`
-        const p = block.page || null
+        const p = block.page || 0
         allParagraphs.push({ pid, page: p })
         if (p) {
           if (!paragraphsByPage[p]) paragraphsByPage[p] = []
@@ -1966,7 +1972,12 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
   //    不再依赖 L1 first-reference 匹配 (vision model 经常给错位 figureNo)
   //    改为: 按 page 升序遍历 fig, 给每张 fig 分配到 page >= fig.page 的最早未占用 paragraph
   //    跳过 preamble/highlights/abstract 等元信息 section
-  const SKIP_SECTIONS = new Set(['preamble', 'highlights', 'keywords', 'abstract', 'article_info'])
+  // v28 step 29: 加 references/acknowledgments/conclusion（user 报告 Fig. 8 漏显示 - 分配到 references 段）
+  // v28 step 29b: 加 introduction（Introduction 段没 page_marker 继承，block.page=null=0，
+  //   fallback 选 page=0 段（Introduction）导致 Fig. 8 落到 Introduction 段第 1 位）
+  // v28 step 29c: 保留 page=0 段落进 allParagraphs，但 fallback 时按 page 排序优先选 page>=1 的段
+  //   之前 1885 处用 if (!block.page) return 跳过 page=0 段落 → 8 张 fig 时 Fig. 8 找不到段落 → DOM 只 7 张
+  const SKIP_SECTIONS = new Set(['preamble', 'highlights', 'keywords', 'abstract', 'article_info', 'references', 'acknowledgments', 'conclusion', 'introduction'])
   const allParagraphs = []  // [{pid, page, idx}]
   for (const section of sections) {
     if (SKIP_SECTIONS.has(section.type)) continue
@@ -1975,7 +1986,7 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
       if (block.type !== 'paragraph') return
       allParagraphs.push({
         pid: `${section.id}__p${idx}`,
-        page: block.page || 0,
+        page: block.page || 0,  // page=0 表示无 page 信息，分配优先级最低
       })
     })
   }
@@ -1990,30 +2001,28 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
   const newAnchors = {}
   const usedPids = new Set()
   for (const fig of allCoreFigs) {
-    // 找 page >= fig.page 的最早未占用 paragraph
+    // v28 step 29d 改: 允许同一 paragraph 复用（多张 fig 共用一段）
+    //    之前: usedPids 检查让 Fig. 8 永远找不到段落（所有 page>=1 段都被前 7 张占用）
+    //    现在: 移除 usedPids 概念，每张 fig 独立按 page closest 选段落
+    //    同一段多张图在 DOM 上是堆叠（acceptable for paper reader）
     let bestPara = null
-    let bestPage = Infinity
+    let bestDelta = Infinity
     for (const p of allParagraphs) {
-      if (usedPids.has(p.pid)) continue
-      if (p.page >= (fig.page || 0) && p.page < bestPage) {
+      // 优先 page >= 1 段（真实正文段），page=0 段优先级最低
+      const realDelta = Math.abs((p.page || 0) - (fig.page || 0))
+      const delta = (p.page || 0) === 0 ? realDelta + 1000 : realDelta
+      if (delta < bestDelta) {
         bestPara = p
-        bestPage = p.page
-      }
-    }
-    if (!bestPara) {
-      // 找不到, 放到最后一个未占用 paragraph
-      for (const p of allParagraphs) {
-        if (usedPids.has(p.pid)) continue
-        bestPara = p
-        break
+        bestDelta = delta
       }
     }
     if (!bestPara) continue  // 实在没位置
 
     if (!newAnchors[bestPara.pid]) newAnchors[bestPara.pid] = []
     newAnchors[bestPara.pid].push(fig)
-    usedPids.add(bestPara.pid)
+    // v28 step 29d: 不再 usedPids.add(bestPara.pid) —— 允许同段多张 fig
   }
+
   return newAnchors
 }
 
