@@ -26,6 +26,8 @@ import './assets/variables.css'
 import './assets/element-plus-overrides.css'
 import './assets/mobile-base.css'
 import './assets/nutui-theme.scss'
+// v28 step 35: MathJax CHTML 样式通过 index.html <link> 引入（CDN），
+// mathjax-full 没自带 dist css 文件
 // ElMessage / ElMessageBox 是 JS 服务调用，unplugin-vue-components 无法检测模板中的使用，需手动导入 CSS
 import 'element-plus/theme-chalk/el-message.css'
 import 'element-plus/theme-chalk/el-message-box.css'
