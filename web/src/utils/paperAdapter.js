@@ -20,6 +20,9 @@
  *   autoLinkContent(text)              - DOI/URL/邮箱自动链接
  */
 
+// v28 step 10: 引入化学式格式化器，让 paperAdapter 内部就处理 Unicode 上下标
+import { formatScientificText } from './chemFormat'
+
 // ============================================================
 // 常量：通用识别规则
 // ============================================================
@@ -1554,12 +1557,13 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
     })
   }
 
-  // 3. L2: caption 语义匹配 (Jaccard) - 处理 L1 未匹配的图
+  // 3. L2: caption 语义匹配 (Jaccard) - 处理 L1 未匹配且有 caption 的图
+  //    阈值降到 0.05（v28 step 9：vision model 经常给空 caption，但 L1 已能捕获大部分，
+  //    留 L2 兜底任何长文本图描述）
   const unmatchedFigures = figureRegistry.filter(
-    f => f.isCoreFigure && f.figureNo && !placedFigures.has(f.id)
+    f => f.isCoreFigure && !placedFigures.has(f.id)
   )
   if (unmatchedFigures.length > 0 && sections.length > 0) {
-    // 收集所有 paragraph tokens（一次性，避免重复计算）
     const paragraphTokens = []
     for (const section of sections) {
       if (!section.blocks) continue
@@ -1567,6 +1571,7 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
         if (block.type !== 'paragraph') return
         paragraphTokens.push({
           pid: `${section.id}__p${idx}`,
+          page: block.page || null,  // 段落所在页码
           tokens: _tokenize(block.content || ''),
         })
       })
@@ -1574,6 +1579,7 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
 
     for (const fig of unmatchedFigures) {
       const figTokens = _tokenize(fig.caption || fig.semanticTitle || '')
+      // 没有 caption/semanticTitle 但有 page → 跳过 L2，交给 L3 按 page 插入
       if (figTokens.length === 0) continue
 
       let bestMatch = null
@@ -1587,12 +1593,59 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
         }
       }
 
-      // 阈值 0.15: 至少 2 个关键词重叠
-      if (bestMatch && bestScore >= 0.15) {
+      // 阈值 0.05：极宽松，仅防完全无关的文本
+      if (bestMatch && bestScore >= 0.05) {
         if (!anchors[bestMatch.pid]) anchors[bestMatch.pid] = []
         anchors[bestMatch.pid].push(fig)
         placedFigures.add(fig.id)
       }
+    }
+  }
+
+  // 4. L3: 按 page 顺序就近插入（处理 vision model 没识别 figureNo 的图）
+  //    算法：取所有仍未 placed 的 isCoreFigure，按 page 升序，
+  //    找该 page 或下一页的最后一个 paragraph block，append 到该段
+  const remainingFigures = figureRegistry.filter(
+    f => f.isCoreFigure && !placedFigures.has(f.id) && f.page
+  )
+  if (remainingFigures.length > 0) {
+    // 按 (page, id) 排序 — 稳定
+    remainingFigures.sort((a, b) => (a.page || 0) - (b.page || 0))
+
+    // 建立 (page → 候选 paragraphs) 映射
+    const paragraphsByPage = {}  // page → [{pid, page, idx}]
+    for (const section of sections) {
+      if (!section.blocks) continue
+      section.blocks.forEach((block, idx) => {
+        if (block.type !== 'paragraph') return
+        const p = block.page
+        if (!p) return
+        if (!paragraphsByPage[p]) paragraphsByPage[p] = []
+        paragraphsByPage[p].push({
+          pid: `${section.id}__p${idx}`,
+          page: p,
+        })
+      })
+    }
+    const allPages = Object.keys(paragraphsByPage).map(Number).sort((a, b) => a - b)
+
+    for (const fig of remainingFigures) {
+      // 找 fig.page 或下一 page 的最后一个段落
+      let targetPage = null
+      for (const p of allPages) {
+        if (p >= (fig.page || 0)) {
+          targetPage = p
+          break
+        }
+      }
+      if (targetPage === null) continue
+      const candidates = paragraphsByPage[targetPage]
+      if (!candidates?.length) continue
+      // 取该 page 最后一个 paragraph（图片放在段末更自然）
+      const target = candidates[candidates.length - 1]
+      if (!anchors[target.pid]) anchors[target.pid] = []
+      anchors[target.pid].push(fig)
+      placedFigures.add(fig.id)
     }
   }
 
@@ -2160,6 +2213,20 @@ export function normalizePaperData(raw, extra = {}) {
       return { ...b, page: currentPage }
     })
   })
+
+  // 5.5 v28 step 10: 对英文论文的 paragraph block 应用 chemFormat（Unicode 上下标）
+  //    跳过 [PAGE:N] 标记行（避免误伤），跳过中文论文（避免把"O3" 误识别成元素）
+  if (!isEnglishPaper) {
+    // 中文论文不需要 Unicode 上下标（用户报告中文论文化学式已正确显示）
+  } else {
+    sections.forEach(section => {
+      if (!section.blocks) return
+      section.blocks.forEach(b => {
+        if (b.type !== 'paragraph' || !b.content) return
+        b.content = formatScientificText(b.content)
+      })
+    })
+  }
 
   // 6. 检测摘要和关键词
   let abstract = raw.summary || null
