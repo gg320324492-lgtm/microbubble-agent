@@ -3091,6 +3091,8 @@ export function normalizePaperData(raw, extra = {}) {
     entities: Array.isArray(raw.entities) ? raw.entities : [],
     keyConcepts: Array.isArray(raw.key_concepts) ? raw.key_concepts : [],
     relatedTopics: Array.isArray(raw.related_topics) ? raw.related_topics : [],
+    topic: raw.topic || null,  // v28 step 45: 透传 topic
+    fileType: raw.file_type || null,  // v28 step 45: 透传 file_type
     isChineseHeavy: _isChineseHeavy(content),
   }
 
