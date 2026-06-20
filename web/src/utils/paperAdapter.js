@@ -670,7 +670,41 @@ function _parseMarkdownSections(content) {
     sections.push(current)
   }
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+
+    // v28 step 42: Markdown 表格检测（在 _parseMarkdownSections 也加，
+    //   因为 formatted_content 走 parsePaperSections 路径，没表格检测就不会输出 table block）
+    if (trimmed.startsWith('|') && trimmed.endsWith('|') && i + 1 < lines.length) {
+      const nextLine = lines[i + 1].trim()
+      if (/^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?\s*$/.test(nextLine)) {
+        // 收集表头 + 分隔 + 所有数据行
+        const tableLines = [line]
+        let j = i + 1
+        while (j < lines.length) {
+          const cur = lines[j].trim()
+          if (cur.startsWith('|') && cur.endsWith('|')) {
+            tableLines.push(lines[j])
+            j++
+          } else if (cur === '') {
+            break
+          } else {
+            break
+          }
+        }
+        // 表格前可能累积了 paragraphBuf，先 flush
+        flushParagraph()
+        if (!current) current = { id: 'preamble', title: '前言', type: 'preamble', blocks: [] }
+        current.blocks.push({
+          type: 'table',
+          content: tableLines.join('\n'),
+        })
+        i = j - 1
+        continue
+      }
+    }
+
     const headingMatch = /^(#{1,4})\s+(.+)$/.exec(line)
     if (headingMatch) {
       pushCurrent()
