@@ -415,11 +415,27 @@ References
 
   it('有 formatted_content 含 [PAGE:N] (OCR 内容) 走 plain text 路径', () => {
     // v28 fix: 含 [PAGE:N] 标记 = OCR 提取的内容, 不是 LLM 真排版的 markdown
-    // 应该走 plain text 路径（markdown 解析会把整篇正文压成 preamble 空 sections）
+    // 应该走 plain text 路径（用 rawContent 解析 — 纯 OCR 文本）
+    // (rawFormatted 是混合格式: OCR 文本 + 注入的 markdown 标题,
+    //  plain text parser 不识别 ## 标题 → 0 sections)
+    // 真实 PDF: content 和 formatted_content 都含 [PAGE:N] (从同一个 OCR 提取)
     const raw = {
       id: 5,
       title: 'Markdown paper',
-      content: 'Original raw',
+      content: `[PAGE:1]
+
+Abstract
+
+This is the abstract in OCR text.
+
+[PAGE:2]
+
+1 Introduction
+
+Some intro text.
+
+[PAGE:3]
+`,
       formatted_content: `# Main Title
 
 [PAGE:1]
@@ -444,10 +460,10 @@ Some intro text.
       updated_at: '2026-06-19T10:00:00',
     }
     const paper = normalizePaperData(raw)
-    // 因为 formatted 含 [PAGE:N] → 强制 plain text
-    // plain text 解析整篇内容为 1 段（preamble）→ sections 可能就 1-2 个
-    expect(paper.sections.length).toBeGreaterThanOrEqual(0)
-    // 关键: pageMarkers 应该 ≥ 3（[PAGE:1/2/3]）
+    // formatted 含 [PAGE:N] + ## 标题 (混合) → 走 plain text 路径
+    // 用 rawContent 解析（纯 OCR 文本）
+    expect(paper.sections.length).toBeGreaterThanOrEqual(2)
+    // 关键: pageMarkers 应该 ≥ 3（从 rawContent [PAGE:1/2/3]）
     expect(paper.pageMarkers.length).toBeGreaterThanOrEqual(3)
   })
 

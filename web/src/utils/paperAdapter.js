@@ -2035,10 +2035,12 @@ export function normalizePaperData(raw, extra = {}) {
   const rawContent = raw.content || ''
   const rawFormatted = raw.formatted_content || ''
   let hasFormatted = !!(rawFormatted.trim())
-  let useRawFormatted = false
   // 检测 formatted 是否真排版：
   //   v28 fix (反向判断): 含 [PAGE:N] 标记 = OCR 提取的内容（不是 LLM 真排版）,
-  //   应该走 plain text 路径（否则 markdown 解析会把整篇正文压成 2 个空 sections）
+  //   应该走 plain text 路径。但 plain text parser 对 rawFormatted 失效
+  //   (rawFormatted 是混合格式: OCR 文本 + 注入的 markdown 标题,
+  //    plain text parser 不识别 ## 标题但 rawContent 才是纯 OCR 文本)
+  //   → 用 rawContent 走 plain text 路径
   if (hasFormatted) {
     const sameLength = Math.abs(rawFormatted.length - rawContent.length) <= Math.max(20, rawContent.length * 0.1)
     const hasMdHeading = /(?:^|\n)#{1,4}\s+\S/.test(rawFormatted)
@@ -2046,16 +2048,13 @@ export function normalizePaperData(raw, extra = {}) {
     if (sameLength && !hasMdHeading) {
       hasFormatted = false // 后端直接复制 content 到 formatted_content，当作 plain text
     } else if (hasPageMarker) {
-      // v28 fix: 有 [PAGE:N] 标记 = OCR 内容, 不是 LLM 真排版的 markdown
-      // (即使有 # 标题, 也是后端 inline 注入的多模态提取小节, 不构成真 markdown)
-      // 但仍用 rawFormatted 作 inputContent（因为它才有 [PAGE:N] 标记）
+      // v28 fix: 含 [PAGE:N] 标记的 rawFormatted 是混合格式 (OCR 文本 + 注入 markdown 标题)
+      // plain text parser 不识别 ## 标题, 但 rawContent 才是纯 OCR 文本
+      // → 用 rawContent 走 plain text 路径
       hasFormatted = false
-      useRawFormatted = true
     }
   }
-  const inputContent = hasFormatted
-    ? rawFormatted
-    : (useRawFormatted ? rawFormatted : rawContent)
+  const inputContent = hasFormatted ? rawFormatted : rawContent
 
   // 中间语言判断（用于后续中文污染过滤）
   const isEnglishPaper = !_isChineseHeavy(inputContent)
