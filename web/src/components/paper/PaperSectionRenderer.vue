@@ -117,39 +117,35 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.85
 const _displayNoMap = computed(() => {
   const map = new Map()  // imageId → "Fig. N" 字符串
   const allFigs = props.figureRegistry || []
-  // v28 step 22: 用 figureType 字段（vision model 输出）判断 publisher/logo
-  //    之前用 figure.kind（前端字段），但 figureRegistry 不含 kind → 全部判 false
-  //    导致 528 (Elsevier logo) / 529 (publisher) 被算进 fallbackIdx 计数
-  const isPublisher = (f) => f.isPublisherImage === true
-    || ['cover', 'logo', 'publisher'].includes(f.figureType)
-    || f.kind === 'cover' || f.kind === 'logo'
+  // v28 step 24: 完全重算 —— 不依赖 paperAdapter._alignFigureNosWithText
+  //    原因: 之前依赖 vision model 输出的 figureNo + 后端对齐逻辑，
+  //    但 vision 经常给错位（536 = "Fig. 1" 与 530 重复），paperAdapter 修正不可靠
+  //    现在前端直接按 page 顺序重新编号，1 张 core fig 一个 "Fig. N"
+  //    保留 vision 的"Fig. Ne"子号（如 "Fig. 5e" → "Fig. 5e"），
+  //    普通 "Fig. N" 重新编号避免冲突
+  const isCore = (f) => f.isCoreFigure === true
+    || (f.isCoreFigure !== false
+      && !f.isPublisherImage
+      && !['cover', 'logo', 'publisher', 'unknown'].includes(f.figureType)
+      && f.kind !== 'cover' && f.kind !== 'logo')
   // 按 page 升序排序（无 page 放最后）
-  const sorted = [...allFigs].sort((a, b) => (a.page || 9999) - (b.page || 9999))
-  let fallbackIdx = 0
+  const sorted = [...allFigs]
+    .filter(f => isCore(f))
+    .sort((a, b) => (a.page || 9999) - (b.page || 9999))
+  let idx = 0
   for (const f of sorted) {
-    if (!f) continue
-    if (isPublisher(f)) continue
-    fallbackIdx += 1
-    let label
-    if (f.figureNo) {
-      // 1. 真实图号（vision model 识别出来）—— 保留原值，如 "Fig. 5" / "Fig. 5e"
-      //    注意：vision 偶尔给重复 "Fig. 1" 给多张图，按 page 顺序去重（第一个 Fig. N 占 N，后续 Fig. N 转 Fig. X+idx）
-      const usedNums = new Set([...map.values()]
-        .map(v => v.match(/\d+/)?.[0])
-        .filter(Boolean)
-        .map(Number))
-      const figNoNum = parseInt(f.figureNo.match(/\d+/)?.[0] || '0', 10)
-      if (figNoNum && usedNums.has(figNoNum)) {
-        // 重复编号 → 转 fallback
-        label = `Fig. ${fallbackIdx}`
-      } else {
-        label = f.figureNo
-      }
+    idx += 1
+    // 检查 vision 给的 figureNo 是否有"子号"（如 Fig. 5e / Fig. 3a）
+    // 子号 = 数字 + 字母 格式 → 保留（用户能看到 a/b/c/d 子图）
+    const figNo = f.figureNo || ''
+    const hasSubLetter = /^Fig\.\s*\d+[a-z]$/i.test(figNo)
+    if (hasSubLetter) {
+      // 子号图：保留 vision 值（用户视角有意义）
+      map.set(f.imageId ?? f.id, figNo)
     } else {
-      // 2. 兜底：按 page 顺序分配 "Fig. N"
-      label = `Fig. ${fallbackIdx}`
+      // 普通图：按 page 顺序重新编号 Fig. 1, Fig. 2, ...
+      map.set(f.imageId ?? f.id, `Fig. ${idx}`)
     }
-    map.set(f.imageId ?? f.id, label)
   }
   return map
 })
