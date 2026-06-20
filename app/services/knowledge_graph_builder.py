@@ -181,22 +181,22 @@ class KnowledgeGraphBuilder:
         # 验证关系格式
         valid_relations = []
         entity_names = {e["name"] for e in valid_entities}
-            for r in relations:
-                if isinstance(r, dict) and "source" in r and "target" in r and "type" in r:
-                    if r["type"] in [
-                        "uses", "produces", "inhibits", "measures",
-                        "correlates", "extends", "contradicts", "prerequisite",
-                    ]:
-                        # 只保留源和目标都存在的关系
-                        if r["source"] in entity_names and r["target"] in entity_names:
-                            valid_relations.append({
-                                "source": r["source"].strip(),
-                                "target": r["target"].strip(),
-                                "type": r["type"],
-                                "reason": r.get("reason", ""),
-                            })
+        for r in relations:
+            if isinstance(r, dict) and "source" in r and "target" in r and "type" in r:
+                if r["type"] in [
+                    "uses", "produces", "inhibits", "measures",
+                    "correlates", "extends", "contradicts", "prerequisite",
+                ]:
+                    # 只保留源和目标都存在的关系
+                    if r["source"] in entity_names and r["target"] in entity_names:
+                        valid_relations.append({
+                            "source": r["source"].strip(),
+                            "target": r["target"].strip(),
+                            "type": r["type"],
+                            "reason": r.get("reason", ""),
+                        })
 
-            return {"entities": valid_entities, "relations": valid_relations}
+        return {"entities": valid_entities, "relations": valid_relations}
 
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"解析 LLM 响应失败: {e}")
