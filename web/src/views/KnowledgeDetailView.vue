@@ -25,6 +25,7 @@
         <ReadingToolbar
           :paper="paper"
           @toggle-inline-figures="v => showInlineFigures = v"
+          @toggle-high-confidence="v => showHighConfidenceOnly = v"
         />
 
         <!-- 摘要卡片 -->
@@ -96,6 +97,7 @@
             :inline-figures="getInlineFiguresFor(section)"
             :inline-figure-anchors="paper.inlineFigureAnchors || {}"
             :show-inline-figures="showInlineFigures"
+            :show-high-confidence-only="showHighConfidenceOnly"
           />
         </article>
 
@@ -244,30 +246,199 @@ const anchorModules = computed(() => {
 })
 
 /**
- * 当前激活 section id（v27.2）— 用 IntersectionObserver 检测
+ * 当前激活 section id（v28 step 5）— 用 IntersectionObserver 检测
+ *
+ * 历史教训：v27.2 留了 ref 但没接 IO，实际永远是 ''。
+ * v28 独立接 IO（不依赖 RightAnchorNav emit），监听所有 <section id="section-XXX"> 元素。
  */
 const activeSectionId = ref('')
+let sectionObserver = null
 
 /**
- * 当前 section 相关图表（v27.2 右侧随动图表栏数据源）
+ * 去除章节标题中的编号前缀（"1. Introduction" → "Introduction"）
+ * 与 RightAnchorNav 保持一致
+ */
+function _stripNumberPrefix(title) {
+  if (!title) return ''
+  return String(title).replace(/^(\d+(?:\.\d+)*)\.?\s+/, '').trim() || title
+}
+
+/**
+ * v28 step 5: 当前 section 相关图表（RightImageRail 数据源）
  *
- * 简化策略：按 page 排序的 core 图列表前 8 个
- * 高级策略：基于 anchorMap 按 sectionId 过滤（本轮先用简化版）
+ * 算法（按优先级）：
+ * 1. 过滤 publisher/logo/cover（这些不进 rail）
+ * 2. 如果有 activeSectionId 且该 section 有 title：
+ *    - 找该 section title 与图 figure.sectionHint 的关键词匹配
+ *    - 双向包含匹配（title 含 hint OR hint 含 title）
+ *    - 匹配数 >= 1 → 返回这些图
+ * 3. fallback：按 page 排序前 8 个（v27.2 行为）
+ *
+ * 优势：滚动到 "Results and Discussion" 时自动显示该 section 的图；
+ * 滚动到 "Conclusion" 时切换到 Conclusion 相关图。
  */
 const currentSectionFigures = computed(() => {
   if (!paper.value?.figures) return []
-  const allCoreFigures = (paper.value.figures || []).filter(f => {
-    // 过滤掉 cover/logo/publisher（这些不进右侧 rail）
+
+  // 1. 过滤核心图
+  const coreFigures = (paper.value.figures || []).filter(f => {
     if (f.isPublisherImage) return false
     if (f.kind === 'cover' || f.kind === 'logo') return false
-    if (!f.figureNo) return false  // 没图号的不显示在 rail
     return true
   })
-  // 按 page 排序，取前 8 个
-  return allCoreFigures
+
+  // 2. 找当前激活 section
+  const activeSection = (paper.value.sections || []).find(s => s.id === activeSectionId.value)
+  if (activeSection && activeSection.title) {
+    const sectionTitle = _stripNumberPrefix(activeSection.title).toLowerCase()
+    if (sectionTitle && sectionTitle.length > 2) {
+      // 3. sectionHint 关键词匹配
+      //    算法：sectionTitle 的核心词（>=4 字符）与 hint 的核心词取交集，>=1 个即匹配
+      //    容忍 vision model 输出 "Results and Discussion - Oxidation Efficiency"
+      //    这种完整句子（hint 不会等于 sectionTitle）
+      const sectionTitleWords = sectionTitle.split(/\s+/).filter(w => w.length >= 4)
+      const matched = coreFigures.filter(f => {
+        const hint = (f.sectionHint || '').toLowerCase()
+        if (!hint || hint.length < 3) return false
+        const hintWords = hint.split(/[\s/\-,;|()]+/).filter(w => w.length >= 4)
+        // 核心词重叠（任一方向都行）
+        const overlap = sectionTitleWords.filter(w => hintWords.includes(w))
+        if (overlap.length >= 1) return true
+        // 极端情况：hint 是简短关键词（如 "Mechanism"），且 sectionTitle 也短
+        if (hint.length <= 30 && sectionTitle.includes(hint)) return true
+        if (sectionTitle.length <= 30 && hint.includes(sectionTitle)) return true
+        return false
+      })
+      if (matched.length >= 1) {
+        return matched.slice(0, 8)
+      }
+    }
+  }
+
+  // 4. fallback：按 page 排序（v27.2 行为）
+  return coreFigures
     .slice()
     .sort((a, b) => (a.page || 0) - (b.page || 0))
     .slice(0, 8)
+})
+
+/**
+ * v28 step 5 + 8: 独立 IO 监听 sections
+ *
+ * 优化（v28 step 8）：
+ * 1. Hysteresis 滞后防跳变：当前 active 保持到 ratio < HYSTERESIS_LOWEST，
+ *    切换新 section 需要 ratio >= ACTIVATE_THRESHOLD
+ * 2. visibilityMap 随 setup 清空（旧 section id 不残留）
+ * 3. rAF 节流：IO 回调高频时合并到下一帧执行
+ * 4. fetchDetail 完成后强制 reconnect（route 切换时 section 元素可能未挂载）
+ */
+const ACTIVATE_THRESHOLD = 0.35  // 新 section 比例 >= 35% 才切到
+const HYSTERESIS_LOWEST = 0.15    // 当前 active 比例 < 15% 才让位
+let visibilityMap = new Map()
+let rafPending = false
+
+function setupSectionObserver() {
+  if (typeof IntersectionObserver === 'undefined') return
+  if (sectionObserver) {
+    sectionObserver.disconnect()
+    sectionObserver = null
+  }
+  // v28 step 8: 清空旧 map（route 切换时 section id 会变化）
+  visibilityMap = new Map()
+  sectionObserver = new IntersectionObserver((entries) => {
+    // 先记录所有 entries 的最新 ratio
+    for (const entry of entries) {
+      const rawId = entry.target.id || ''
+      const id = rawId.replace(/^section-/, '')
+      if (!id) continue
+      visibilityMap.set(id, entry.intersectionRatio)
+    }
+    // v28 step 8: rAF 节流（防连续触发性能浪费）
+    if (rafPending) return
+    rafPending = true
+    requestAnimationFrame(() => {
+      rafPending = false
+      _recomputeActiveSection()
+    })
+  }, {
+    rootMargin: '-80px 0px -60% 0px',
+    threshold: [0, 0.1, 0.25, 0.5, 0.75, 1],
+  })
+
+  // 观察所有 section 元素
+  const elements = document.querySelectorAll('[id^="section-"]')
+  elements.forEach(el => sectionObserver.observe(el))
+}
+
+/**
+ * v28 step 8: Hysteresis 算法的 active section 选择
+ *
+ * 规则：
+ * - 当前 active 仍可见（ratio >= HYSTERESIS_LOWEST）→ 保持不变（防快速滚动跳变）
+ * - 否则找 ratio 最高的 section，且 ratio >= ACTIVATE_THRESHOLD → 切换
+ * - 没 section 满足阈值（页面顶/底部）→ 清空 activeSectionId
+ */
+function _recomputeActiveSection() {
+  if (visibilityMap.size === 0) return
+  const currentId = activeSectionId.value
+  const currentRatio = currentId ? (visibilityMap.get(currentId) || 0) : 0
+
+  // 当前 active 仍可见 → 保持
+  if (currentId && currentRatio >= HYSTERESIS_LOWEST) {
+    // 即便保持也要找"更好"的（处理缓慢滚动到完全可见场景）
+    let bestId = currentId
+    let bestRatio = currentRatio
+    for (const [id, ratio] of visibilityMap.entries()) {
+      if (ratio > bestRatio) {
+        bestRatio = ratio
+        bestId = id
+      }
+    }
+    if (bestId !== currentId && bestRatio >= ACTIVATE_THRESHOLD) {
+      activeSectionId.value = bestId
+    }
+    return
+  }
+
+  // 当前 active 已滚出或不存在 → 找 ratio 最高的 section
+  let bestId = null
+  let bestRatio = 0
+  for (const [id, ratio] of visibilityMap.entries()) {
+    if (ratio > bestRatio) {
+      bestRatio = ratio
+      bestId = id
+    }
+  }
+  if (bestId && bestRatio >= ACTIVATE_THRESHOLD) {
+    if (activeSectionId.value !== bestId) {
+      activeSectionId.value = bestId
+    }
+  } else if (bestRatio === 0 && currentId) {
+    // 所有 section 都不可见（页面顶部/底部）→ 清空
+    activeSectionId.value = ''
+  }
+}
+
+/**
+ * watch displaySections 变化时重新 setup IO（章节数量变化）
+ */
+watch(displaySections, () => {
+  nextTick(() => setupSectionObserver())
+}, { deep: true })
+
+onMounted(() => {
+  fetchDetail()
+  // 等 sections 渲染完毕再接 IO
+  nextTick(() => setupSectionObserver())
+})
+
+onUnmounted(() => {
+  if (sectionObserver) {
+    sectionObserver.disconnect()
+    sectionObserver = null
+  }
+  visibilityMap.clear()
+  rafPending = false
 })
 
 const moduleCounts = computed(() => {
@@ -291,6 +462,8 @@ const moduleCounts = computed(() => {
  */
 const SHOW_INLINE_FIGURES_KEY = 'mnb:paper:showInlineFigures'
 const showInlineFigures = ref(localStorage.getItem(SHOW_INLINE_FIGURES_KEY) === 'true')
+const SHOW_HIGH_CONFIDENCE_KEY = 'mnb:paper:showHighConfidenceOnly'
+const showHighConfidenceOnly = ref(localStorage.getItem(SHOW_HIGH_CONFIDENCE_KEY) !== 'false')
 watch(showInlineFigures, (v) => {
   localStorage.setItem(SHOW_INLINE_FIGURES_KEY, String(v))
 })
@@ -376,6 +549,8 @@ const fetchDetail = async () => {
 
     await nextTick()
     renderGraph()
+    // v28 step 5: sections 渲染完成后接入 IO（监听滚动到哪个 section）
+    setupSectionObserver()
   } catch (e) {
     console.error('获取知识详情失败', e)
     ElMessage.error('获取知识详情失败')
@@ -503,7 +678,7 @@ watch(() => route.params.id, (newId) => {
   }
 })
 
-onMounted(() => fetchDetail())
+// 注意: onMounted + onUnmounted 已合并到上方 v28 step 5 IO setup 处（line 363+）
 
 onUnmounted(() => {
   if (chartInstance) chartInstance.dispose()

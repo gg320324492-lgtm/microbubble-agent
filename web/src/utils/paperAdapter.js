@@ -1135,7 +1135,7 @@ function _cleanParagraphHeavy(text) {
 function _buildFigureRegistry(images, extractions, content) {
   if (!Array.isArray(images)) return []
 
-  // 1. 构建 extractions 按 source_image_id 索引
+  // 1. 构建 extractions 按 source_image_id 索引（仍需要 caption / description / confidence）
   //    兼容三种字段名: sourceImageId (camelCase, _normalizeExtractions 输出)
   //                    source_image_id (snake_case, 后端原始)
   //                    "fig-N" 字符串 (figuresRaw 的 id)
@@ -1148,91 +1148,139 @@ function _buildFigureRegistry(images, extractions, content) {
     extByImageId[`fig-${sid}`] = ex
   }
 
-  // 2. 扫描正文，识别每个 figureNo 出现的 page
+  // 2. 扫描正文，识别每个 figureNo 出现的 page（仍用 figPages 增强 sectionHint）
   const figPages = _scanFigurePages(content)
 
-  // 3. 一次扫描：找出所有有真实 figureNo 的图，按 page 排序记下"已知图号"
-  //    L1 inference: 对没有 figureNo 的核心图，按 page + isCoreFigure 顺序兜底分配
-  //    例: page 1 上的 core 图 → Fig. 1 / Fig. 2 (按 OCR 顺序)
-  //        page 4 上的 core 图 → Fig. 5 / Fig. 6 (按 OCR 顺序)
-  const result = images.map((img, idx) => {
-    // 兼容多种 id 字段名：figuresRaw 中是 "fig-518"，但 ext 用 518
+  // ── v28 step 4 简化策略 ──
+  // 后端 vision model 已输出 12 个结构化字段（figure_no / figure_type / is_core_figure /
+  // is_publisher_image / section_hint / anchor_paragraph_index / anchor_text / vision_confidence ...）
+  // 前端不再做正则推断，直接读字段。figure_no 20% 覆盖率由 anchor_text 反推补足。
+  //
+  // Graceful Degradation：当 vision model 不可用（旧数据 / vision 调用失败 / OCR-only 数据）
+  // 时（所有 v28 字段都为 null），回退到旧的关键词推断 + L1 inference 兜底逻辑。
+  // 这是渐进式演进：旧论文 + 旧测试 + 老用户数据不会爆。
+  const result = images.map((img) => {
     const imgId = img.imageId ?? img.id
     const ext = extByImageId[imgId] || extByImageId[img.id] || {}
     const extData = ext.data || {}
 
-    // 3.1 figureNo 多源提取（按优先级尝试 6 个字段）
-    let figureNo = _extractFigureNo(img, ext)
-    let figureNoSource = figureNo ? 'extracted' : null
+    // ── 检测 vision model 是否可用 ──
+    const visionAvailable = img.figureNo != null
+      || img.figureType != null
+      || img.isCoreFigure != null
+      || img.isPublisherImage != null
+      || img.sectionHint != null
+      || img.visionConfidence != null
 
-    // 3.2 figureType 改进推断 (基于 extractions data.description 关键词)
-    const figureType = _inferFigureTypeV2(img, ext)
+    // 3.1 figureNo: vision 优先 → anchor_text fallback → 旧 _extractFigureNo
+    let figureNo = null
+    let figureNoSource = null
+    if (visionAvailable) {
+      figureNo = img.figureNo ?? null
+      if (figureNo) figureNoSource = 'vision'
+      if (!figureNo && img.anchorText) {
+        const m = img.anchorText.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+        if (m) {
+          figureNo = m[0]
+          figureNoSource = 'anchor_fallback'
+        }
+      }
+    } else {
+      // 旧 fallback：6 字段正则提取
+      figureNo = _extractFigureNoLegacy(img, ext)
+      if (figureNo) figureNoSource = 'legacy_extracted'
+    }
+
+    // 3.2 figureType: vision 优先 → 旧 _inferFigureTypeV2
+    let figureType
+    if (visionAvailable) {
+      figureType = img.figureType ?? 'figure'
+    } else {
+      figureType = _inferFigureTypeV2Legacy(img, ext)
+    }
 
     // 3.3 isCoreFigure / isPublisherImage
-    const isPublisherImage = ['cover', 'logo', 'publisher'].includes(figureType)
-    // unknown 也算 core figure（兜底，避免 OCR 无关键词时漏判）
-    // 但 page=1 + 极小 OCR + 无 description 时仍按 unknown 处理
-    const ocrText = _ocrTextOf(img)
-    const hasContent = ocrText.length > 10 || (extData.description || '').length > 10
-    const isCoreFigure = !isPublisherImage && (figureType !== 'unknown' || hasContent)
+    let isPublisherImage, isCoreFigure
+    if (visionAvailable) {
+      isPublisherImage = img.isPublisherImage === true
+      isCoreFigure = img.isCoreFigure === true
+    } else {
+      isPublisherImage = ['cover', 'logo', 'publisher'].includes(figureType)
+      const ocrText = _ocrTextOf(img)
+      const hasContent = ocrText.length > 10 || (extData.description || '').length > 10
+      isCoreFigure = !isPublisherImage && (figureType !== 'unknown' || hasContent)
+    }
 
-    // 3.4 sectionHint（从 figureNo 所在 page 找最近 section）
-    const sectionHint = figureNo ? (figPages[figureNo] || null) : null
+    // 3.4 sectionHint: vision 优先 → figPages fallback
+    let sectionHint = img.sectionHint ?? null
+    if (!sectionHint && figureNo && figPages[figureNo]) {
+      const firstPage = figPages[figureNo][0]
+      if (firstPage && img.page === firstPage) {
+        sectionHint = `Page ${firstPage}`
+      }
+    }
 
-    // 3.5 semanticTitle（从 caption 提取第一句作为标题）
+    // 3.5 semanticTitle
     const semanticTitle = (extData.caption || extData.description || _ocrTextOf(img) || '')
       .split(/[.\n]/)[0]
       .slice(0, 80) || null
 
+    // 3.6 anchor: 直接读 vision model 输出
+    const anchor = (img.anchorParagraphIndex != null && figureNo)
+      ? { paragraphIndex: img.anchorParagraphIndex, text: img.anchorText || null }
+      : null
+
     return {
-      id: img.imageId ?? img.id,  // 数字 id（兼容旧 API 查找 f.id === 518）
+      id: img.imageId ?? img.id,
       imageId: img.imageId ?? img.id,
-      rawId: img.id,  // 原始 'fig-N' 字符串 id
+      rawId: img.id,
       src: img.src || img.imageUrl || img.image_url,
       page: img.page_number || img.page,
       figureNo,
-      figureNoSource,  // 'extracted' | 'inferred' | null
+      figureNoSource,
       figureType,
       isCoreFigure,
       isPublisherImage,
+      isSupportingFigure: img.isSupportingFigure === true,
       caption: extData.caption || null,
       description: extData.description || null,
       ocrText: _ocrTextOf(img),
       semanticTitle,
       sectionHint,
-      confidence: ext.confidence || 0.5,
+      anchor,
+      confidence: img.visionConfidence ?? ext.confidence ?? 0.5,
+      visionModel: img.visionModelUsed ?? null,
+      visualSummary: img.visualSummary ?? null,
     }
   })
 
-  // 4. L1 inference: 给没有真实 figureNo 但 isCoreFigure 的图按 page 顺序兜底分配
-  //    从正文中已知图号推断最大可用 N
-  const knownFigNos = new Set()
-  for (const fig of result) {
-    if (fig.figureNo) {
-      const m = fig.figureNo.match(/\d+/)
-      if (m) knownFigNos.add(parseInt(m[0], 10))
+  // ── L1 inference fallback: 仅当 vision 不可用时启用 ──
+  // 给没有真实 figureNo 但 isCoreFigure 的图按 page 顺序兜底分配
+  if (!images.some(img => img.figureNo != null || img.figureType != null)) {
+    const knownFigNos = new Set()
+    for (const fig of result) {
+      if (fig.figureNo) {
+        const m = fig.figureNo.match(/\d+/)
+        if (m) knownFigNos.add(parseInt(m[0], 10))
+      }
     }
-  }
-
-  // 按 (page, idx) 排序的 core 图列表
-  const coreFigList = result
-    .filter(f => f.isCoreFigure)
-    .sort((a, b) => {
-      const pa = a.page || 0
-      const pb = b.page || 0
-      if (pa !== pb) return pa - pb
-      return 0  // 稳定排序保持原顺序
-    })
-
-  // 收集未分配的 core 图
-  const unassigned = coreFigList.filter(f => !f.figureNo)
-  let nextFigNo = 1
-  for (const fig of unassigned) {
-    while (knownFigNos.has(nextFigNo)) nextFigNo++
-    fig.figureNo = `Fig. ${nextFigNo}`
-    fig.figureNoSource = 'inferred'
-    knownFigNos.add(nextFigNo)
-    nextFigNo++
+    const coreFigList = result
+      .filter(f => f.isCoreFigure)
+      .sort((a, b) => {
+        const pa = a.page || 0
+        const pb = b.page || 0
+        if (pa !== pb) return pa - pb
+        return 0
+      })
+    const unassigned = coreFigList.filter(f => !f.figureNo)
+    let nextFigNo = 1
+    for (const fig of unassigned) {
+      while (knownFigNos.has(nextFigNo)) nextFigNo++
+      fig.figureNo = `Fig. ${nextFigNo}`
+      fig.figureNoSource = 'inferred'
+      knownFigNos.add(nextFigNo)
+      nextFigNo++
+    }
   }
 
   return result
@@ -1246,13 +1294,26 @@ function _ocrTextOf(img) {
 }
 
 /**
- * 从多字段提取 figureNo
+ * v28 step 4: 旧 _extractFigureNo / _inferFigureTypeV2 重命名为 *Legacy，作为 Graceful Degradation
+ *
+ * 使用场景（_buildFigureRegistry 检测到 vision 字段全 null 时调用）：
+ * - 老 PDF 数据（vision model 还未跑过）
+ * - OCR-only 数据（没调 vision_service）
+ * - vision 调用失败的图
+ *
+ * 设计原则：
+ * - 主路径 100% 用后端 vision 输出（已上线 v28 step 1-3）
+ * - 旧路径仅作向后兼容，新代码不要调用
+ * - 不要扩展 Legacy 路径（已废弃），新论文走主路径
+ */
+
+/**
+ * 从多字段提取 figureNo（Legacy，仅 Graceful Degradation 用）
  * 优先级: caption → text → description → content_text → ocr_text → page + order
  */
-function _extractFigureNo(img, ext) {
+function _extractFigureNoLegacy(img, ext) {
   const extData = ext.data || {}
 
-  // 来源 1: caption 字段 (最可能含 "Figure 1: ...")
   const captionSources = [
     extData.caption,
     extData.title,
@@ -1264,7 +1325,6 @@ function _extractFigureNo(img, ext) {
     if (m) return m[0]
   }
 
-  // 来源 2: image_block 的 text 字段 (可能含 "Figure 1: ..." 残留)
   const textSources = [
     extData.text,
     extData.content,
@@ -1276,7 +1336,6 @@ function _extractFigureNo(img, ext) {
     if (m) return m[0]
   }
 
-  // 来源 3: ocr_text / ocrText
   const ocr = _ocrTextOf(img)
   if (ocr) {
     const m = ocr.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
@@ -1287,10 +1346,9 @@ function _extractFigureNo(img, ext) {
 }
 
 /**
- * 改进的 figureType 推断（v2）
- * 基于 extractions.data.description 关键词 + ocr_text 内容
+ * Legacy figureType 推断（仅 Graceful Degradation 用）
  */
-function _inferFigureTypeV2(img, ext) {
+function _inferFigureTypeV2Legacy(img, ext) {
   const extData = ext.data || {}
   const ocr = _ocrTextOf(img).toLowerCase()
   const caption = String(extData.caption || '').toLowerCase()
@@ -1299,55 +1357,44 @@ function _inferFigureTypeV2(img, ext) {
   const allText = `${caption} ${description} ${text} ${ocr}`.slice(0, 2000)
   const imageUrl = String(img.src || img.imageUrl || img.image_url || '').toLowerCase()
 
-  // 1. 封面/logo/publisher 识别（高优先级）
   if (/elsevier|springer|wiley|copyright|©|all\s+rights\s+reserved|published\s+by|journal\s+of|contents|editorial\s+board|issn|isbn|doi\.org|sciencedirect/.test(allText)) {
     return 'publisher'
   }
   if (/cover|homepage/.test(allText)) return 'cover'
   if (/logo|watermark/.test(allText) || /logo/.test(imageUrl)) return 'logo'
 
-  // 2. 页 1 大尺寸 + 极短 OCR + 无 description → 可能是封面/logo
   const pageNum = img.page_number || img.page
   if (pageNum === 1 && (!ocr || ocr.length < 50) && !description) {
     return 'cover'
   }
 
-  // 3. 极小尺寸 → logo/装饰
   const w = img.width || 0
   const h = img.height || 0
   if (w && h && (w < 60 || h < 60)) return 'logo'
 
-  // 4. chart 类型 (来自 extractions.kind === 'chart' 或 OCR/description 含图表关键词)
-  //    中英文混合关键词，避免 OCR 描述纯英文时被漏判
   if (ext.kind === 'chart' ||
       /图表|热力图|柱状图|折线图|散点图|曲线图|条形图|饼图|分布图/.test(description) ||
       /\bchart\b|\bgraph\b|\bplot\b|\bcurve\b|\bheatmap\b|\bbar\s*chart\b|\bline\s*chart\b|\bscatter\b|\bhistogram\b/i.test(allText)) {
     return 'chart'
   }
 
-  // 5. scheme / mechanism
   if (/^scheme\s*\d/i.test(caption) || /机制|示意|流程图|scheme|mechanism/.test(allText)) {
     return 'scheme'
   }
 
-  // 6. experimental setup
   if (/实验装置|experimental|setup|apparatus|设备/.test(allText)) {
     return 'experimental_setup'
   }
 
-  // 7. molecular / simulation
   if (/molecular|simulation|dft|分子/.test(allText)) {
     return 'molecular_simulation'
   }
 
-  // 8. 有图号 → figure
   const hasFigNo = /\b(?:Fig\.?|Figure|Scheme|Table)\s*\d/i.test(allText)
   if (hasFigNo) return 'figure'
 
-  // 9. 有 OCR 文本内容 → 至少是 figure (即使 OCR 没识别出图号)
   if (ocr && ocr.length > 100) return 'figure'
 
-  // 10. 有 description → figure
   if (description && description.length > 30) return 'figure'
 
   return 'unknown'
@@ -1909,6 +1956,19 @@ function _normalizeImages(images) {
     ocrStatus: i.ocr_status,
     ocrError: i.ocr_error,
     ocrModel: i.ocr_model,
+    // ── v28 step 4: vision 模型输出的 12 个结构化字段（直接透传，不再推断） ──
+    figureNo: i.figure_no ?? null,
+    figureType: i.figure_type ?? null,
+    isCoreFigure: i.is_core_figure ?? null,
+    isPublisherImage: i.is_publisher_image ?? null,
+    isSupportingFigure: i.is_supporting_figure ?? null,
+    sectionHint: i.section_hint ?? null,
+    visualSummary: i.visual_summary ?? null,
+    anchorParagraphIndex: i.anchor_paragraph_index ?? null,
+    anchorText: i.anchor_text ?? null,
+    visionConfidence: i.vision_confidence ?? null,
+    visionModelUsed: i.vision_model_used ?? null,
+    visionAnalyzedAt: i.vision_analyzed_at ?? null,
   }))
 }
 

@@ -80,16 +80,28 @@ const props = defineProps({
   inlineFigureAnchors: { type: Object, default: () => ({}) },
   // v27.2: 是否显示正文内嵌图（默认 false — 推荐使用右侧图表栏）
   showInlineFigures: { type: Boolean, default: false },
+  // v28 step 6: 仅显示高置信度图（confidence >= HIGH_CONFIDENCE_THRESHOLD）
+  // 默认 true — vision_confidence 0.85+ 才在正文显示，避免低质量图污染阅读
+  showHighConfidenceOnly: { type: Boolean, default: true },
 })
+
+// v28 step 6: confidence 阈值常量（vision model 输出 >=0.85 视为高置信度）
+const HIGH_CONFIDENCE_THRESHOLD = 0.85
 
 /**
  * 获取指定 paragraph index 锚定的 figures
  * v27.2: 默认不返回（除非 showInlineFigures=true），让右侧图表栏承担展示职责
+ * v28 step 6: 增加 confidence >= 0.85 过滤（showHighConfidenceOnly=true 时）
+ *
+ * fig.confidence 字段来源（paperAdapter.js v28 step 4）：
+ *   img.visionConfidence ?? ext.confidence ?? 0.5
  */
 function getAnchoredFigures(paragraphIdx) {
   if (!props.showInlineFigures) return []
   const pid = `${props.section.id}__p${paragraphIdx}`
-  return props.inlineFigureAnchors[pid] || []
+  const figs = props.inlineFigureAnchors[pid] || []
+  if (!props.showHighConfidenceOnly) return figs
+  return figs.filter(f => (f.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD)
 }
 
 const referencesExpanded = ref(false)

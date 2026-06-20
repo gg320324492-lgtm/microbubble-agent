@@ -40,6 +40,15 @@
             :icon="showInlineFigures ? Picture : Hide"
             :title="showInlineFigures ? '隐藏正文图片（用右侧图表栏）' : '显示正文图片'"
           />
+          <!-- v28 step 6: 仅显示高置信度图（confidence >= 0.85） -->
+          <el-button
+            v-if="showInlineFigures"
+            @click="showHighConfidenceOnly = !showHighConfidenceOnly"
+            :icon="showHighConfidenceOnly ? Star : StarFilled"
+            :title="`仅高置信度图 (≥0.85) · 当前最高 ${maxConfidencePct}% · ${showHighConfidenceOnly ? '开' : '关'}`"
+          >
+            <span v-if="showHighConfidenceOnly" class="confidence-badge">{{ maxConfidencePct }}%</span>
+          </el-button>
           <el-button @click="toggleImages" :icon="visible ? Picture : Hide" :title="visible ? '显示图片' : '隐藏图片'" />
           <el-button @click="copyCitation" :icon="CopyDocument" title="复制引用" />
           <el-button @click="scrollToTop" :icon="Top" title="返回顶部" />
@@ -62,13 +71,13 @@
  *   mode-change, font-size-change, line-height-change
  */
 import { ref, computed, watch, onMounted } from 'vue'
-import { ZoomIn, ZoomOut, Plus, Minus, Picture, Hide, CopyDocument, Top } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Plus, Minus, Picture, Hide, CopyDocument, Top, Star, StarFilled } from '@element-plus/icons-vue'
 
 const props = defineProps({
   paper: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['mode-change', 'font-size-change', 'line-height-change', 'toggle-inline-figures'])
+const emit = defineEmits(['mode-change', 'font-size-change', 'line-height-change', 'toggle-inline-figures', 'toggle-high-confidence'])
 
 const readingMode = ref('original')  // 'original' | 'translation' | 'bilingual'
 const fontSize = ref(16)
@@ -81,6 +90,26 @@ watch(showInlineFigures, (v) => {
 })
 const visible = ref(true)  // 图片总开关
 const hasTranslation = ref(false)  // 等待后端翻译 API 接入
+
+// v28 step 6: 仅显示高置信度图（默认 true — 0.85+ 阈值）
+const showHighConfidenceOnly = ref(localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false')
+watch(showHighConfidenceOnly, (v) => {
+  localStorage.setItem('mnb:paper:showHighConfidenceOnly', String(v))
+  emit('toggle-high-confidence', v)
+})
+
+// v28 step 6: 计算当前 paper.figures 里的最高 confidence（显示在工具栏按钮上）
+// confidence 字段来源：paperAdapter.js v28 step 4 → img.visionConfidence ?? ext.confidence ?? 0.5
+const maxConfidencePct = computed(() => {
+  const figs = props.paper?.figures || []
+  if (!figs.length) return 0
+  let max = 0
+  for (const f of figs) {
+    const c = f?.confidence ?? 0
+    if (c > max) max = c
+  }
+  return Math.round(max * 100)
+})
 
 // 字号 / 行距档位
 const FONT_SIZES = [14, 15, 16, 17, 18, 20]
@@ -201,5 +230,19 @@ defineExpose({ readingMode, fontSize, lineHeight, visible })
   color: #6B7280;
   min-width: 44px;
   text-align: center;
+}
+
+/* v28 step 6: 工具栏 confidence 徽章 */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #10B981, #059669);
+  padding: 0 6px;
+  border-radius: 8px;
+  line-height: 16px;
 }
 </style>
