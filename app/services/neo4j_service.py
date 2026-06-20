@@ -8,14 +8,19 @@
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("microbubble.neo4j")
 
 # Neo4j 连接配置
-NEO4J_URI = "bolt://localhost:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "microbubble2024"
+# v28 step 52: 从环境变量读取（docker-compose 注入 NEO4J_URI=bolt://neo4j:7687），
+#   之前硬编码 localhost，app 容器内 localhost 找不到 neo4j 容器
+#   改用环境变量后，docker-compose 配 NEO4J_URI=bolt://neo4j:7687，
+#   本地裸跑用 NEO4J_URI=bolt://localhost:7687
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "microbubble2024")
 
 # 实体类型
 ENTITY_TYPES = [
