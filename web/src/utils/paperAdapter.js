@@ -408,6 +408,19 @@ export function cleanContent(text, options = {}) {
     result = result.replace(re, '')
   }
 
+  // 1.5 v28 step 16: 整段剥除「图（PN，...alt 含嵌套 []/JSON 漏闭合...）（url）」型 inline image 标记
+  //     根因：PDF 提取把多模态图注以 ![(图（P1，...（含 OCR 嵌套方括号 + JSON）...）](minio_url) 形式污染进 content
+  //     旧 markdown 提取正则 `!\[([^\]]*)\]\(([^)\s]+)\)` 失败 —— alt 包含 `]` 和 ASCII `)` (如 "(a) (b)") 都截断匹配
+  //     INTERNAL_MARKER_RES 第 5 条也匹配不上（alt 内的 ASCII `)` 打断）
+  //     修法：先用一个超宽松贪婪规则，匹配 `图（PN，` 起始的整段（跨多行、含任意字符）直到下一行的 `](http...)`
+  //     把这段作为 inline image 标记整段删除（不再尝试从中提取 url —— 后端已经有正式 images 记录）
+  result = result.replace(
+    /图\s*[（(]\s*[Pp]?\d+\s*[，,][^]*?]\(\s*https?:\/\/[^\s)]+\s*\)/g,
+    ''
+  )
+  // 兜底：如果上面规则没匹配（url 不在 `]()` 内），再剥一次「图（PN，...」到行尾
+  result = result.replace(/图\s*[（(]\s*[Pp]?\d+\s*[，,][^]*?(?=\n\n|\n\[PAGE|\n[1-9]\.\s+\w)/g, '')
+
   // 2. Markdown 图片语法 ![alt](url) → 提取到 figures，剥除
   result = result.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (m, alt, url) => {
     if (url.match(IMG_EXT_RE) || /\/minio\//.test(url)) {
