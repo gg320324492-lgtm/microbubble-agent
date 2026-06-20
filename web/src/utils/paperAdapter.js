@@ -371,7 +371,9 @@ export function cleanContent(text, options = {}) {
   //      "T. Wang et al. 3 [PAGE:4]" → "T. Wang et al."
   //      "Vol 513 (2026) 142456 [PAGE:5]" → "Vol 513 (2026) 142456"
   // 关键：用 \n 替代空格，保留行边界（防止章节标题被合并到前一/后行）
-  result = result.replace(/[ \t]*\[PAGE:\s*\d+\s*\][ \t]*\n?/gi, '\n')
+  // v28 fix: 保留 [PAGE:N] 标记（替换为 \n 会破坏后续 extractPageMarkers 提取，
+  //  导致 pageMarkers=0 → sections 解析丢失分页 → 正文被压成 1 段）
+  // 只剥除独立行的 [PAGE:N] 和行内其他形式（不影响页面 marker 提取）
   result = result.replace(/\n\[PAGE:\s*\d+\s*\][ \t]*\n?/gi, '\n')
   // 孤立的 [PAGE:x] 行（整行只有页码）
   result = result.replace(/^[ \t]*\[PAGE:\s*\d+\s*\][ \t]*$/gim, '')
@@ -2003,12 +2005,19 @@ export function normalizePaperData(raw, extra = {}) {
   const rawContent = raw.content || ''
   const rawFormatted = raw.formatted_content || ''
   let hasFormatted = !!(rawFormatted.trim())
-  // 检测 formatted 是否真排版：含 # 标题 或 与 content 长度差异 > 10%
+  // 检测 formatted 是否真排版：
+  //   1. 含 # 标题 AND
+  //   2. 含 [PAGE:N] 分页标记（否则 markdown 解析会把整篇正文压成 preamble 空 sections）
   if (hasFormatted) {
     const sameLength = Math.abs(rawFormatted.length - rawContent.length) <= Math.max(20, rawContent.length * 0.1)
     const hasMdHeading = /(?:^|\n)#{1,4}\s+\S/.test(rawFormatted)
+    const hasPageMarker = /\[PAGE:\s*\d+\s*\]/i.test(rawFormatted)
     if (sameLength && !hasMdHeading) {
       hasFormatted = false // 后端直接复制 content 到 formatted_content，当作 plain text
+    } else if (!hasPageMarker) {
+      // v28 fix: 没有 [PAGE:N] 标记时强制按 plain text 处理（OCR 风格的 formatted_content
+      //  可能含 # 标题但缺分页标记，会导致 parsePaperSections 把整篇正文压成空 sections）
+      hasFormatted = false
     }
   }
   const inputContent = hasFormatted ? rawFormatted : rawContent
@@ -2210,7 +2219,7 @@ export function normalizePaperData(raw, extra = {}) {
   const coreFigureCount = figures.filter(f => f.kind === 'figure').length
 
   // 13. 返回 PaperDetail
-  return {
+  const paperDetail = {
     id: raw.id,
     title: raw.title || '（无标题）',
     fileName: raw.file_name || null,
@@ -2253,6 +2262,24 @@ export function normalizePaperData(raw, extra = {}) {
     relatedTopics: Array.isArray(raw.related_topics) ? raw.related_topics : [],
     isChineseHeavy: _isChineseHeavy(content),
   }
+
+  // 临时诊断：暴露 paper.sections 给浏览器 console
+  if (typeof window !== 'undefined') {
+    window.__PAPER_DIAG__ = {
+      sectionsCount: paperDetail.sections.length,
+      sectionsTypes: paperDetail.sections.map(s => ({
+        type: s.type,
+        title: (s.title || '').slice(0, 40),
+        blocksCount: s.blocks?.length || 0,
+        firstBlockContentLen: s.blocks?.[0]?.content?.length || 0,
+        firstBlockPreview: s.blocks?.[0]?.content?.slice(0, 80) || '',
+      })),
+      pageMarkersCount: paperDetail.pageMarkers?.length || 0,
+      figureMarkersCount: paperDetail.figureMarkers?.length || 0,
+    }
+  }
+
+  return paperDetail
 }
 
 

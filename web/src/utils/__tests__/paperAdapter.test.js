@@ -420,13 +420,19 @@ References
       content: 'Original raw',
       formatted_content: `# Main Title
 
+[PAGE:1]
+
 ## Abstract
 
 This is the abstract in markdown.
 
+[PAGE:2]
+
 ## 1 Introduction
 
 Some intro text.
+
+[PAGE:3]
 `,
       summary: 'abstract summary',
       tags: ['x'],
