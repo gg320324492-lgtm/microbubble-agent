@@ -1788,6 +1788,11 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
 
   const placedFigures = new Set()  // 全局已放置
 
+  // v28 step 28: 同一 paragraphId 内多张 fig 按 page 升序排
+  //    之前 L1 收集 matched.push(fig) 顺序由 matchAll 决定, 与 page 无关
+  //    现在最后按 page 排
+  const sortByPage = (a, b) => (a.page || 9999) - (b.page || 9999)
+
   // 2. L1: 段落级图号精确匹配
   for (const section of sections) {
     if (!section.blocks) continue
@@ -1806,7 +1811,8 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
         placedFigures.add(fig.id)
       }
       if (matched.length > 0) {
-        anchors[pid] = matched
+        // v28 step 28: 同一段内 fig 按 page 升序排
+        anchors[pid] = matched.slice().sort(sortByPage)
       }
     })
   }
@@ -1956,7 +1962,59 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
     }
   }
 
-  return anchors
+  // v28 step 28: 完全重写 inline figure 分配
+  //    不再依赖 L1 first-reference 匹配 (vision model 经常给错位 figureNo)
+  //    改为: 按 page 升序遍历 fig, 给每张 fig 分配到 page >= fig.page 的最早未占用 paragraph
+  //    跳过 preamble/highlights/abstract 等元信息 section
+  const SKIP_SECTIONS = new Set(['preamble', 'highlights', 'keywords', 'abstract', 'article_info'])
+  const allParagraphs = []  // [{pid, page, idx}]
+  for (const section of sections) {
+    if (SKIP_SECTIONS.has(section.type)) continue
+    if (!section.blocks) continue
+    section.blocks.forEach((block, idx) => {
+      if (block.type !== 'paragraph') return
+      allParagraphs.push({
+        pid: `${section.id}__p${idx}`,
+        page: block.page || 0,
+      })
+    })
+  }
+  if (allParagraphs.length === 0) return anchors
+
+  // 收集所有 core figs 按 page 升序, 同 page 按 id 升序
+  const allCoreFigs = figureRegistry
+    .filter(f => f.isCoreFigure && f.page)
+    .sort((a, b) => (a.page || 0) - (b.page || 0) || (a.id || 0) - (b.id || 0))
+
+  // 简化策略: 收集所有 fig, 然后给每张 fig 分配到 page >= fig.page 的最早未占用 paragraph
+  const newAnchors = {}
+  const usedPids = new Set()
+  for (const fig of allCoreFigs) {
+    // 找 page >= fig.page 的最早未占用 paragraph
+    let bestPara = null
+    let bestPage = Infinity
+    for (const p of allParagraphs) {
+      if (usedPids.has(p.pid)) continue
+      if (p.page >= (fig.page || 0) && p.page < bestPage) {
+        bestPara = p
+        bestPage = p.page
+      }
+    }
+    if (!bestPara) {
+      // 找不到, 放到最后一个未占用 paragraph
+      for (const p of allParagraphs) {
+        if (usedPids.has(p.pid)) continue
+        bestPara = p
+        break
+      }
+    }
+    if (!bestPara) continue  // 实在没位置
+
+    if (!newAnchors[bestPara.pid]) newAnchors[bestPara.pid] = []
+    newAnchors[bestPara.pid].push(fig)
+    usedPids.add(bestPara.pid)
+  }
+  return newAnchors
 }
 
 /**
