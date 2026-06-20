@@ -123,11 +123,17 @@ const _displayNoMap = computed(() => {
   //    现在前端直接按 page 顺序重新编号，1 张 core fig 一个 "Fig. N"
   //    保留 vision 的"Fig. Ne"子号（如 "Fig. 5e" → "Fig. 5e"），
   //    普通 "Fig. N" 重新编号避免冲突
-  const isCore = (f) => f.isCoreFigure === true
-    || (f.isCoreFigure !== false
-      && !f.isPublisherImage
-      && !['cover', 'logo', 'publisher', 'unknown'].includes(f.figureType)
-      && f.kind !== 'cover' && f.kind !== 'logo')
+  const isCore = (f) => {
+    // v28 step 25: 显式 isPublisher 检查，避免 isCoreFigure=undefined 时被误判
+    const isPub = f.isPublisherImage === true
+      || ['cover', 'logo', 'publisher'].includes(f.figureType)
+      || f.kind === 'cover' || f.kind === 'logo'
+    if (isPub) return false
+    // 没明确说不是 core（vision 可能没给 isCoreFigure 字段）→ 视为 core
+    if (f.isCoreFigure === true) return true
+    if (f.isCoreFigure === false) return false
+    return !f.isPublisherImage && f.figureType !== 'unknown'
+  }
   // 按 page 升序排序（无 page 放最后）
   const sorted = [...allFigs]
     .filter(f => isCore(f))
