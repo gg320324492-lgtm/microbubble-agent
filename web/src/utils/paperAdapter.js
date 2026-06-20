@@ -1052,7 +1052,7 @@ function _splitLongParagraph(block, maxChars = 1000) {
   const segments = []
   let currentBuf = []
   let cumChars = 0
-  let lastSentenceEndIdx = -1  // 最近一个以 . 结尾的行 idx（在 currentBuf 内）
+  let lastSentenceEndLineIdx = -1  // 最近一个以 . 结尾的 line 在 lines 数组中的 idx
   const flush = () => {
     if (!currentBuf.length) return
     const segText = currentBuf.join('\n').trim()
@@ -1061,28 +1061,41 @@ function _splitLongParagraph(block, maxChars = 1000) {
     }
     currentBuf = []
     cumChars = 0
-    lastSentenceEndIdx = -1
+    lastSentenceEndLineIdx = -1
   }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     const trimmed = line.trim()
-    const hadSentenceEnd = currentBuf.length > 0 && lastSentenceEndIdx >= 0
 
     currentBuf.push(line)
     cumChars += line.length
 
-    // 记录最后一个以 . 结尾的行（buffer 内 idx）
+    // 记录最后一个以 . 结尾的行在 lines 数组中的 idx
     if (/[.!?]\s*$/.test(trimmed)) {
-      lastSentenceEndIdx = currentBuf.length - 1
+      lastSentenceEndLineIdx = i
     }
 
-    // 看下一行是否是段起
-    if (i + 1 < lines.length && lastSentenceEndIdx >= 0 && cumChars >= 300) {
-      // 取 buffer 中最后一个有 . 的行作为 prev
-      const prevLine = currentBuf[lastSentenceEndIdx]
+    // 仅在 lastSentenceEndLineIdx 行紧邻的下一行（即 i === lastSentenceEndLineIdx）
+    // 才检查段起。这样避免累积多行后回溯到很早的句末位置做段起判断
+    if (
+      i + 1 < lines.length &&
+      lastSentenceEndLineIdx === i &&  // 当前行就是最近句末行
+      cumChars >= 300
+    ) {
+      const prevLine = line
       const nextLine = lines[i + 1]
       if (_isParagraphStart(prevLine, nextLine, cumChars)) {
+        flush()
+      }
+    }
+
+    // v28 step 13: 下一行是图标题（Fig. N. / Table N.）时独立成段
+    //    例: "...non-mass transfer-limited processes,\nFig. 3. Effects of ..."
+    //    上行末尾是逗号不是句末，但 Fig. 3. 是独立图标题，应独立成段
+    if (i + 1 < lines.length && cumChars >= 200) {
+      const nextLine = lines[i + 1].trim()
+      if (/^(?:Fig|Figure|Scheme|Table)\.?\s*\d/i.test(nextLine)) {
         flush()
       }
     }
@@ -1688,11 +1701,17 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
   if (!figureRegistry?.length || !sections?.length) return anchors
 
   // 1. 建立 figureNo → figure 映射（只包含 isCoreFigure + 有 figureNo）
+  //    v28 step 13: 当多个图共用 figureNo（OCR 重复识别，如两张图都是 "Fig. 1"），
+  //    保留 page 最小的作为 figureByNo 命中（视觉上 reader 滚到 page=1 看到第一张 "Fig. 1"）
   const figureByNo = {}
   for (const fig of figureRegistry) {
     if (!fig.isCoreFigure || !fig.figureNo) continue
-    figureByNo[fig.figureNo.toLowerCase()] = fig
-    figureByNo[fig.figureNo.toLowerCase().replace(/\s+/g, '')] = fig  // 去空格版本
+    const key = fig.figureNo.toLowerCase()
+    const existing = figureByNo[key]
+    if (!existing || (fig.page || 0) < (existing.page || 0)) {
+      figureByNo[key] = fig
+      figureByNo[key.replace(/\s+/g, '')] = fig
+    }
   }
 
   const placedFigures = new Set()  // 全局已放置

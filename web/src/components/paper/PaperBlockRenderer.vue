@@ -1,11 +1,13 @@
 <template>
   <div class="paper-block" :class="blockClasses">
-    <!-- 页码标记 -->
-    <div v-if="block.type === 'page_marker'" class="block-page-marker">
-      <span class="page-line"></span>
-      <span class="page-label">Page {{ block.content }}</span>
-      <span class="page-line"></span>
-    </div>
+    <!-- v28 step 13: page_marker 改为不可见（仅作 page 标记供 L3 图片插入用） -->
+    <!-- 之前显示居中"Page 3"标签，PDF 阅读体验突兀；现在用最小占位 -->
+    <div
+      v-if="block.type === 'page_marker'"
+      class="block-page-marker-hidden"
+      :data-page="block.content"
+      :aria-label="`page ${block.content}`"
+    ></div>
 
     <!-- 图表占位符 -->
     <div
@@ -106,6 +108,16 @@ const renderedContent = computed(() => {
   font-weight: 600;
   color: #1F2937;
   margin: 20px 0 10px;
+}
+
+.block-page-marker-hidden {
+  /* v28 step 13: 占位 1px 让后续 paragraph block 继承 page 字段
+     视觉上完全不可见，避免突兀的"Page 3"标签打断阅读 */
+  display: block;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  visibility: hidden;
 }
 
 .block-page-marker {
