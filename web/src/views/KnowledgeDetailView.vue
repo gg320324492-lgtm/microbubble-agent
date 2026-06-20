@@ -152,13 +152,7 @@
           :sections="anchorSections"
           :modules="anchorModules"
         />
-        <!-- 右侧随动图表栏 (v27.2) -->
-        <RightImageRail
-          v-if="paper && paper.figures && paper.figures.length"
-          :figures="currentSectionFigures"
-          :active-section-id="activeSectionId"
-          class="paper-right-rail"
-        />
+        <!-- v28 step 10: 移除右侧本节图表栏 — 正文已内嵌图片，无需重复 -->
       </div>
     </div>
   </div>
@@ -182,7 +176,7 @@ import TableCard from '@/components/paper/TableCard.vue'
 import ExtractionPanel from '@/components/paper/ExtractionPanel.vue'
 import RelatedKnowledgeList from '@/components/paper/RelatedKnowledgeList.vue'
 import RightAnchorNav from '@/components/paper/RightAnchorNav.vue'
-import RightImageRail from '@/components/paper/RightImageRail.vue'
+// v28 step 10: 移除 RightImageRail（正文已自动内嵌图片，右侧重复展示已无用）
 import ReadingToolbar from '@/components/paper/ReadingToolbar.vue'
 
 import {

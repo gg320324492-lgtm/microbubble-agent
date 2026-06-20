@@ -1,196 +1,129 @@
 <template>
   <div class="reading-toolbar" v-if="visible">
     <div class="reading-toolbar-inner">
-      <div class="toolbar-left">
-        <el-button-group size="small">
-          <el-button
-            :type="readingMode === 'original' ? 'primary' : 'default'"
-            @click="setMode('original')"
-          >原文</el-button>
-          <el-button
-            :type="readingMode === 'translation' ? 'primary' : 'default'"
-            @click="setMode('translation')"
-            :disabled="!hasTranslation"
-          >翻译</el-button>
-          <el-button
-            :type="readingMode === 'bilingual' ? 'primary' : 'default'"
-            @click="setMode('bilingual')"
-            :disabled="!hasTranslation"
-          >双语</el-button>
-        </el-button-group>
-      </div>
+      <!-- 字号 / 行距（真的有用） -->
+      <el-button-group size="small">
+        <el-button @click="decreaseFontSize" :icon="ZoomOut" title="缩小字号" />
+        <span class="value-display">{{ fontSize }}px</span>
+        <el-button @click="increaseFontSize" :icon="ZoomIn" title="放大字号" />
+      </el-button-group>
 
-      <div class="toolbar-right">
-        <el-button-group size="small">
-          <el-button @click="decreaseFontSize" :icon="ZoomOut" title="缩小字号" />
-          <span class="font-size-display">{{ fontSize }}px</span>
-          <el-button @click="increaseFontSize" :icon="ZoomIn" title="放大字号" />
-        </el-button-group>
+      <el-button-group size="small">
+        <el-button @click="decreaseLineHeight" :icon="Minus" title="紧凑行距" />
+        <span class="value-display">{{ lineHeight.toFixed(2) }}</span>
+        <el-button @click="increaseLineHeight" :icon="Plus" title="宽松行距" />
+      </el-button-group>
 
-        <el-button-group size="small">
-          <el-button @click="decreaseLineHeight" :icon="Minus" title="紧凑行距" />
-          <span class="line-height-display">{{ lineHeight.toFixed(2) }}</span>
-          <el-button @click="increaseLineHeight" :icon="Plus" title="宽松行距" />
-        </el-button-group>
+      <!-- 图例切换：内嵌图 vs 隐藏图（默认内嵌 = 最自然的阅读体验） -->
+      <el-button-group size="small">
+        <el-button
+          :type="showInlineFigures ? 'primary' : 'default'"
+          @click="showInlineFigures = !showInlineFigures"
+          :icon="showInlineFigures ? Picture : Hide"
+          :title="showInlineFigures ? '隐藏正文图片' : '显示正文图片'"
+        />
+        <el-button
+          :type="showHighConfidenceOnly ? 'primary' : 'default'"
+          @click="showHighConfidenceOnly = !showHighConfidenceOnly"
+          :icon="showHighConfidenceOnly ? Star : StarFilled"
+          title="仅显示高置信度图（≥0.85）"
+        />
+      </el-button-group>
 
-        <el-button-group size="small">
-          <!-- v27.2: 切换"正文内嵌图"显示 -->
-          <el-button
-            @click="showInlineFigures = !showInlineFigures"
-            :icon="showInlineFigures ? Picture : Hide"
-            :title="showInlineFigures ? '隐藏正文图片（用右侧图表栏）' : '显示正文图片'"
-          />
-          <!-- v28 step 6: 仅显示高置信度图（confidence >= 0.85） -->
-          <el-button
-            v-if="showInlineFigures"
-            @click="showHighConfidenceOnly = !showHighConfidenceOnly"
-            :icon="showHighConfidenceOnly ? Star : StarFilled"
-            :title="`仅高置信度图 (≥0.85) · 当前最高 ${maxConfidencePct}% · ${showHighConfidenceOnly ? '开' : '关'}`"
-          >
-            <span v-if="showHighConfidenceOnly" class="confidence-badge">{{ maxConfidencePct }}%</span>
-          </el-button>
-          <el-button @click="toggleImages" :icon="visible ? Picture : Hide" :title="visible ? '显示图片' : '隐藏图片'" />
-          <el-button @click="copyCitation" :icon="CopyDocument" title="复制引用" />
-          <el-button @click="scrollToTop" :icon="Top" title="返回顶部" />
-        </el-button-group>
-      </div>
+      <!-- 章节跳转：回到顶部（实用） -->
+      <el-button-group size="small">
+        <el-button @click="scrollToTop" :icon="Top" title="返回顶部" />
+      </el-button-group>
     </div>
   </div>
 </template>
 
 <script setup>
 /**
- * ReadingToolbar - 阅读器工具栏（阶段 2 功能）
+ * ReadingToolbar v2 — 简化为 4 个真正有用的功能组
  *
- * 当前为前端组件结构预留 + 本地状态管理。
- * 翻译功能（按钮 disabled）等待后端翻译接口接入。
+ * 删除的"无用功能"：
+ * - 原文/翻译/双语模式切换（后端翻译 API 还没接入，按了只 dispatch event 不做事）
+ * - 图总开关（与内嵌图切换重复）
+ * - 复制引用（功能未实现，点了没反应）
  *
- * Props:
- *   paper - PaperDetail 对象
- * Emits:
- *   mode-change, font-size-change, line-height-change
+ * 保留的功能：
+ * - 字号、行距调整（持久化到 localStorage）
+ * - 内嵌图 / 高置信度图切换
+ * - 回到顶部
  */
-import { ref, computed, watch, onMounted } from 'vue'
-import { ZoomIn, ZoomOut, Plus, Minus, Picture, Hide, CopyDocument, Top, Star, StarFilled } from '@element-plus/icons-vue'
+import { ref, watch } from 'vue'
+import { ZoomIn, ZoomOut, Plus, Minus, Picture, Hide, Top, Star, StarFilled } from '@element-plus/icons-vue'
 
 const props = defineProps({
   paper: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['mode-change', 'font-size-change', 'line-height-change', 'toggle-inline-figures', 'toggle-high-confidence'])
+const emit = defineEmits(['toggle-inline-figures', 'toggle-high-confidence'])
 
-const readingMode = ref('original')  // 'original' | 'translation' | 'bilingual'
-const fontSize = ref(16)
-const lineHeight = ref(1.85)
-// v28: 默认显示正文内嵌图（图片自动嵌入 Fig. N 引用位置 — 像 PDF 阅读器）
+const visible = ref(true)
+const fontSize = ref(Number(localStorage.getItem('mnb:paper:fontSize')) || 16)
+const lineHeight = ref(Number(localStorage.getItem('mnb:paper:lineHeight')) || 1.85)
+
+// v28 step 10: 默认开内嵌图（读者期望 PDF 一样的体验）
 const showInlineFigures = ref(localStorage.getItem('mnb:paper:showInlineFigures') !== 'false')
+const showHighConfidenceOnly = ref(localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false')
+
+watch([fontSize, lineHeight], ([fs, lh]) => {
+  localStorage.setItem('mnb:paper:fontSize', String(fs))
+  localStorage.setItem('mnb:paper:lineHeight', String(lh))
+  // 实时应用到 article
+  const article = document.querySelector('.paper-article')
+  if (article) {
+    article.style.setProperty('--paper-font-size', `${fs}px`)
+    article.style.setProperty('--paper-line-height', String(lh))
+  }
+})
 watch(showInlineFigures, (v) => {
   localStorage.setItem('mnb:paper:showInlineFigures', String(v))
   emit('toggle-inline-figures', v)
 })
-const visible = ref(true)  // 图片总开关
-const hasTranslation = ref(false)  // 等待后端翻译 API 接入
-
-// v28 step 6: 默认显示所有图（读者像 PDF 一样看到全部图，不预设阈值过滤）
-const showHighConfidenceOnly = ref(localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false')
 watch(showHighConfidenceOnly, (v) => {
   localStorage.setItem('mnb:paper:showHighConfidenceOnly', String(v))
   emit('toggle-high-confidence', v)
-})
-
-// v28 step 6: 计算当前 paper.figures 里的最高 confidence（显示在工具栏按钮上）
-// confidence 字段来源：paperAdapter.js v28 step 4 → img.visionConfidence ?? ext.confidence ?? 0.5
-const maxConfidencePct = computed(() => {
-  const figs = props.paper?.figures || []
-  if (!figs.length) return 0
-  let max = 0
-  for (const f of figs) {
-    const c = f?.confidence ?? 0
-    if (c > max) max = c
-  }
-  return Math.round(max * 100)
 })
 
 // 字号 / 行距档位
 const FONT_SIZES = [14, 15, 16, 17, 18, 20]
 const LINE_HEIGHTS = [1.5, 1.65, 1.85, 2.0, 2.2]
 
-function setMode(mode) {
-  if (!['original', 'translation', 'bilingual'].includes(mode)) return
-  readingMode.value = mode
-  emit('mode-change', mode)
-
-  // 触发翻译/双语模式时：
-  // L1: 优先调后端 API（POST /api/v1/papers/{id}/translate）
-  // L2: 后端不可用时，用浏览器内置 Translator API（Chrome 129+）
-  // L3: 都没有 → 显示"翻译功能开发中"
-  if (mode === 'translation' || mode === 'bilingual') {
-    if (props.paper?.id) {
-      // 通知父组件（KnowledgeDetailView）触发后端翻译
-      // 父组件会调 TranslationPanel 显示
-      window.dispatchEvent(new CustomEvent('paper-translate-request', {
-        detail: { paperId: props.paper.id, mode }
-      }))
-    }
-    // 浏览器内置 Translator API 兜底（Chrome 129+ 支持）
-    if ('Translator' in window) {
-      console.log('[ReadingToolbar] 浏览器 Translator API 可用')
-    } else {
-      console.log('[ReadingToolbar] 浏览器 Translator API 不可用，等后端 API')
-    }
-  }
-}
-
 function increaseFontSize() {
   const idx = FONT_SIZES.indexOf(fontSize.value)
-  if (idx < FONT_SIZES.length - 1) {
-    fontSize.value = FONT_SIZES[idx + 1]
-    emit('font-size-change', fontSize.value)
-  }
+  if (idx < FONT_SIZES.length - 1) fontSize.value = FONT_SIZES[idx + 1]
 }
-
 function decreaseFontSize() {
   const idx = FONT_SIZES.indexOf(fontSize.value)
-  if (idx > 0) {
-    fontSize.value = FONT_SIZES[idx - 1]
-    emit('font-size-change', fontSize.value)
-  }
+  if (idx > 0) fontSize.value = FONT_SIZES[idx - 1]
 }
-
 function increaseLineHeight() {
   const idx = LINE_HEIGHTS.indexOf(lineHeight.value)
-  if (idx < LINE_HEIGHTS.length - 1) {
-    lineHeight.value = LINE_HEIGHTS[idx + 1]
-    emit('line-height-change', lineHeight.value)
-  }
+  if (idx < LINE_HEIGHTS.length - 1) lineHeight.value = LINE_HEIGHTS[idx + 1]
 }
-
 function decreaseLineHeight() {
   const idx = LINE_HEIGHTS.indexOf(lineHeight.value)
-  if (idx > 0) {
-    lineHeight.value = LINE_HEIGHTS[idx - 1]
-    emit('line-height-change', lineHeight.value)
-  }
-}
-
-function toggleImages() {
-  visible.value = !visible.value
-}
-
-function copyCitation() {
-  // TODO: 复制 APA / GB-T 7714 / BibTeX 格式引用
-  if (navigator.clipboard && props.paper) {
-    const cite = `${props.paper.title || ''} - ${(props.paper.raw?.source || 'Unknown')}`
-    navigator.clipboard.writeText(cite).catch(() => {})
-  }
+  if (idx > 0) lineHeight.value = LINE_HEIGHTS[idx - 1]
 }
 
 function scrollToTop() {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-// 暴露给父组件（KnowledgeDetailView）通过 ref 调
-defineExpose({ readingMode, fontSize, lineHeight, visible })
+// 挂载时应用持久化值到 article
+if (typeof window !== 'undefined') {
+  // 在 nextTick 应用（等 article 渲染）
+  setTimeout(() => {
+    const article = document.querySelector('.paper-article')
+    if (article) {
+      article.style.setProperty('--paper-font-size', `${fontSize.value}px`)
+      article.style.setProperty('--paper-line-height', String(lineHeight.value))
+    }
+  }, 100)
+}
 </script>
 
 <style scoped>
@@ -210,39 +143,22 @@ defineExpose({ readingMode, fontSize, lineHeight, visible })
 .reading-toolbar-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.toolbar-left,
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.font-size-display,
-.line-height-display {
+.value-display {
   display: inline-flex;
   align-items: center;
   font-size: 12px;
   color: #6B7280;
-  min-width: 44px;
-  text-align: center;
+  min-width: 50px;
+  justify-content: center;
 }
 
-/* v28 step 6: 工具栏 confidence 徽章 */
-.confidence-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #10B981, #059669);
-  padding: 0 6px;
-  border-radius: 8px;
-  line-height: 16px;
+/* 应用字号/行距到正文（动态 CSS 变量） */
+:deep(.paper-article .block-paragraph) {
+  font-size: var(--paper-font-size, 16px);
+  line-height: var(--paper-line-height, 1.85);
 }
 </style>
