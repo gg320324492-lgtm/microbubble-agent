@@ -271,8 +271,23 @@ class KnowledgeService:
         except Exception as e:
             logger.warning(f"内容排版失败(knowledge_id={knowledge_id}): {e}")
 
-        # Step 3: 确定最终状态（任一成功即为 done）
-        final_status = "done" if (embedding_ok or analysis_ok) else "failed"
+        # Step 3: 确定最终状态
+        # v28 step 32 修复: 之前 final_status = "done" if (embedding_ok or analysis_ok) else "failed"
+        #   后果: embedding 生成成功但 LLM 分析失败 → status='done' 但 summary/tags 全空
+        #   用户看到"已完成"标签，实际什么也没分析，体验差
+        # 新逻辑: 严格要求 LLM 分析完整成功才算 done（embedding 是辅助，LLM 分析是核心）
+        #   embedding_ok 单独不能算 done（否则用户看到"已完成"但卡片没数据）
+        if analysis_ok:
+            final_status = "done"
+        elif embedding_ok:
+            # LLM 失败但 embedding 成功 → 半完成状态，但不要"骗"用户是 done
+            final_status = "partial"  # 之前是 done，现在诚实标注半完成
+        else:
+            final_status = "failed"
+        logger.info(
+            f"[_analyze_and_embed] knowledge_id={knowledge_id} final_status={final_status} "
+            f"embedding_ok={embedding_ok} analysis_ok={analysis_ok}"
+        )
         async with async_session() as db:
             result = await db.execute(
                 select(Knowledge).where(Knowledge.id == knowledge_id)

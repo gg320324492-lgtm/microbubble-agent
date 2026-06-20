@@ -108,6 +108,45 @@ useThemeStore()
 // 监听 sw.js activate 钩子发的 SW_UPDATED 消息，触发自动 reload 让用户拿到新资源
 // （修复事故：之前 server 返回 octet-stream 时期 SW NetworkFirst 缓存了污染响应，
 // 现在 SW 升级会清空所有 cache + 通知客户端 reload）
+// v28 step 33: 服务器部署滞后时（如服务器 sw.js 仍是老版本），坏 SW 持续报
+// bad-precaching-response 错误且永远不更新。临时方案：直接 fetch 服务器 sw.js
+// 文本，检查是否包含黑名单字符串（如 v25 老 sw.js 含 'manifest.webmanifest' 旧路径）。
+// 命中 → 强制 unregister + 清 cache + reload。
+// 等服务器 deploy 成功后移除此黑名单。
+const SW_BLACKLIST_CONTENT_PATTERNS = [
+  '"manifest.webmanifest"',  // 老 sw.js 仍引用旧 manifest 路径（410 Gone）
+  'v25-smart-reader-2026-06-19',  // 老 SW_VERSION 字面量
+]
+
+async function checkSwBlacklist() {
+  try {
+    const r = await fetch('/sw.js', { cache: 'no-store' })
+    const text = await r.text()
+    for (const pat of SW_BLACKLIST_CONTENT_PATTERNS) {
+      if (text.includes(pat)) {
+        console.warn('[PWA] SW content blacklisted (pattern: ' + pat + '), unregistering')
+        const regs = await navigator.serviceWorker.getRegistrations()
+        for (const reg of regs) {
+          await reg.unregister()
+          console.log('[PWA] Unregistered:', reg.scope)
+        }
+        if (window.caches) {
+          const keys = await caches.keys()
+          await Promise.all(keys.map(k => caches.delete(k)))
+          console.log('[PWA] Cleared caches:', keys.length)
+        }
+        // 阻止后续 SW 注册 + reload
+        return true
+      }
+    }
+    console.log('[PWA] SW content OK, no blacklist match')
+    return false
+  } catch (e) {
+    console.warn('[PWA] Failed to check SW blacklist:', e)
+    return false
+  }
+}
+
 useRegisterSW({
   immediate: true,
   onRegisteredSW(swUrl) {
@@ -124,6 +163,17 @@ useRegisterSW({
   onRegisterError(err) {
     console.warn('[PWA] SW registration failed:', err)
   },
+})
+
+// v28 step 33: 页面加载后立即检查服务器 sw.js 内容是否在黑名单
+// 不依赖 SW 自身响应消息（坏 SW 不会响应），直接 fetch 服务器 sw.js 文本判断
+checkSwBlacklist().then((blacklisted) => {
+  if (blacklisted) {
+    // 阻止 service worker 再次自动注册（通过临时删除 registerSW 标记）
+    // 实际实现：reload 即可让浏览器看到新 sw.js 前不复活
+    console.log('[PWA] Reloading in 2s to clear bad SW...')
+    setTimeout(() => window.location.reload(), 2000)
+  }
 })
 
 app.mount('#app')

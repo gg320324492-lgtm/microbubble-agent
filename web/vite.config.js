@@ -70,8 +70,23 @@ function manifestHashPlugin() {
             return
           }
           let sw = readFileSync(swPath, 'utf-8')
-          if (sw.includes('"manifest.webmanifest"')) {
-            sw = sw.replaceAll('"manifest.webmanifest"', `"${newName}"`)
+          // v28 step 31 修复: sw.js 里实际格式是 "url":"manifest.webmanifest"
+          //   之前的 '"manifest.webmanifest"' (字符串完全匹配) 不匹配，导致 SW install 拉
+          //   旧 URL → 服务器 410 → bad-precaching-response
+          // 改为更精确的 pattern: 任意字符 + "manifest.webmanifest" (作为字符串值)
+          const PATTERNS = [
+            '"manifest.webmanifest"',  // 字符串完全匹配 (旧版本假设)
+            ':"manifest.webmanifest"', // precache entry 里的 "url":"manifest.webmanifest"
+            ':"/manifest.webmanifest"', // 带斜杠版本
+          ]
+          let matched = false
+          for (const pat of PATTERNS) {
+            if (sw.includes(pat)) {
+              sw = sw.replaceAll(pat, pat.replace('manifest.webmanifest', newName))
+              matched = true
+            }
+          }
+          if (matched) {
             writeFileSync(swPath, sw)
             console.log(`[manifest-hash-plugin] sw.js __WB_MANIFEST updated → ${newName} (attempt ${attempts})`)
           } else if (sw.includes(`"${newName}"`)) {

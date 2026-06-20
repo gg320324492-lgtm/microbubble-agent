@@ -620,12 +620,33 @@ const handleReanalyze = async () => {
   try {
     await axios.post(`/api/v1/knowledge/${paper.value.id}/reanalyze`)
     ElMessage.success('已开始重新分析')
-    paper.value.status = 'analyzing'
+    // 不再写 paper.value.status = 'analyzing' —— 后端 _analyze_and_embed 异步任务会
+    // 设置 knowledge.analysis_status = "analyzing"，前端通过定时 fetchDetail 轮询更新状态
+    // (否则 paper.value.status 永久卡在 analyzing，右上角"分析中"标签不消失)
+    startReanalyzePolling()
   } catch (e) {
     ElMessage.error('操作失败')
   } finally {
     reanalyzing.value = false
   }
+}
+
+// v28 step 30: reanalyze 后定时轮询 fetchDetail，等后端 analysis_status 变化
+// 之前: paper.value.status = 'analyzing' 永久不更新，右上角"分析中"标签不消失
+// 现在: 每 3s 拉一次 fetchDetail 直到 paper.status !== 'analyzing'
+const reanalyzePollingTimer = ref(null)
+const startReanalyzePolling = () => {
+  if (reanalyzePollingTimer.value) clearInterval(reanalyzePollingTimer.value)
+  let count = 0
+  reanalyzePollingTimer.value = setInterval(async () => {
+    count += 1
+    await fetchDetail()
+    // 最多轮询 60 次（3 分钟），超时自动停止
+    if (paper.value?.status !== 'analyzing' || count > 60) {
+      clearInterval(reanalyzePollingTimer.value)
+      reanalyzePollingTimer.value = null
+    }
+  }, 3000)
 }
 
 const graphRendered = ref(false)

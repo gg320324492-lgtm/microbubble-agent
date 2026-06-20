@@ -14,8 +14,14 @@
         <el-tag v-else-if="paper.status === 'failed'" size="small" type="danger" effect="light">
           分析失败
         </el-tag>
+        <el-tag v-else-if="paper.status === 'partial'" size="small" type="info" effect="light">
+          <el-icon><InfoFilled /></el-icon> 部分完成
+        </el-tag>
         <el-tag v-else-if="paper.status === 'done'" size="small" type="success" effect="light">
           <el-icon><CircleCheck /></el-icon> 已完成
+        </el-tag>
+        <el-tag v-else-if="paper.status === 'pending'" size="small" type="info" effect="plain">
+          <el-icon><Clock /></el-icon> 待分析
         </el-tag>
         <el-tag v-if="paper.autoResearched" size="small" type="primary" effect="light">
           <el-icon><MagicStick /></el-icon> 自主研究
@@ -80,7 +86,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled, InfoFilled, Clock } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 
 const props = defineProps({
