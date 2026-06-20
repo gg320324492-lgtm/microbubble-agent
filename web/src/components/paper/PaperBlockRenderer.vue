@@ -40,6 +40,7 @@ import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
 import { autoLinkContent } from '@/utils/paperAdapter'
 import { formatChemicalText } from '@/utils/chemFormat'
+import { renderMathInText } from '@/utils/mathFormat'
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -54,16 +55,18 @@ const blockClasses = computed(() => ({
 
 const renderedContent = computed(() => {
   const raw = props.block.content || ''
-  // 渲染管线（v26 回归修复）：
+  // 渲染管线（v28 step 35 数学公式支持）：
   //   raw (纯文本)
   //     → formatChemicalText (纯文本 + Unicode 上下标)
-  //     → autoLinkContent (escape + DOI/URL/邮箱包 <a>)
+  //     → renderMathInText (escape 全文 + 单独渲染 $$..$$ / $..$ LaTeX 公式)
+  //     → autoLinkContent (DOI/URL/邮箱包 <a>)
   //     → v-html 渲染
   //
   // 注意：formatChemicalText 已改为返回纯文本（不再返回 <span class="chem-formula">），
   // 因此 autoLinkContent 的 _escapeHtml 不会再次转义化学式 → 不会泄漏 HTML 源码。
   const formatted = props.isChinese ? raw : formatChemicalText(raw)
-  return autoLinkContent(formatted)
+  const withMath = renderMathInText(formatted)  // 关键：先公式后 link
+  return autoLinkContent(withMath)
 })
 </script>
 
