@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-20 v28 step 2-8 全部完成 — 论文图片结构化字段 + 4 篇 PDF 端到端验证 + IO Hysteresis**：①-⑥ [alembic 028](alembic/versions/028_figure_structured_fields.py) + model + multimodal 集成 ⑦ schema + API `_to_dict` 加 12 字段 ⑧ paperAdapter 简化（83/83 测试通过） ⑨ KnowledgeDetailView 独立 IO + sectionHint 核心词匹配 ⑩ PaperSectionRenderer `showHighConfidenceOnly` ≥0.85 阈值 + ReadingToolbar confidence 徽章 ⑪ **4 篇 PDF 验证：37 张图 100% vision 覆盖 + 100% publisher 准确 + 100% confidence ≥0.85** + 中文 anchor bug 修复（`\b → (?<![a-zA-Z\d_])` + 加 "图/表"）⑫ **IO Hysteresis 防跳变**：阈值 ACTIVATE_THRESHOLD=0.35 / HYSTERESIS_LOWEST=0.15 + rAF 节流（10 次 IO 触发只跑 1 次 recompute）+ visibilityMap 跨 route 清空。**8 个滚动场景全过**（快速滚动 sec2=30/sec3=20 → sec2 保持 / sec2=10/sec3=50 → sec3 / 全 0 → 清空 / 顶→s1=40 → s1）。详见底部 [## 2026-06-20 v28 论文图片结构化字段](#2026-06-20-v28-论文图片结构化字段后端集成) section + 18 条铁律。
+> **2026-06-20 v28 step 2-8 全部完成 + article 9 字 bug 修复**：①-⑥ [alembic 028](alembic/versions/028_figure_structured_fields.py) + model + multimodal 集成 ⑦ schema + API `_to_dict` 加 12 字段 ⑧ paperAdapter 简化（84/84 测试通过） ⑨ KnowledgeDetailView 独立 IO + sectionHint 核心词匹配 ⑩ PaperSectionRenderer `showHighConfidenceOnly` ≥0.85 + ReadingToolbar confidence 徽章 ⑪ **4 篇 PDF 验证**：37 张图 100% vision 覆盖 + 100% publisher 准确 + 100% confidence ≥0.85 + 中文 anchor bug 修复 ⑫ **IO Hysteresis 防跳变**：阈值 ACTIVATE_THRESHOLD=0.35 / HYSTERESIS_LOWEST=0.15 + rAF 节流 ⑬ **article 9 字 bug 修复（深坑）**：根因 INTERNAL_MARKER_RES line 105 `\bPAGE\s*[:：]\s*\d+\b` 在 `[`/`P` 之间构成 `\b` 单词边界 → 匹配 `[PAGE:1]` 的中间 `PAGE:1` 部分 → 替换为空 → `[PAGE:1]` 变 `[]` → pageMarkers=0 → sections 解析丢分页 → 正文压成 1 段 → 用户看到 9 字符（只剩 inline 注入的 "## 多模态提取/### 图表说明" 标题）。**修复**：删 INTERNAL_MARKER_RES 2 条 ([PAGE:N] 删除逻辑) + cleanContent 简化 + hasPageMarker 检测后用 rawFormatted 作 inputContent。**端到端验证**：pageMarkers=9 / sectionsCount=19 / article=40855字符（vs 修复前 9 字符）。详见底部 [## 2026-06-20 v28 论文图片结构化字段](#2026-06-20-v28-论文图片结构化字段后端集成) section + 25 条铁律。
 >
 > **2026-06-18 移动端 26 commits 全面修复（图标 + 路由 + 端点 + v-model 命名 + ASR + 被动事件 + 头像）**：① 移动端"左上角红方块"根因是 `MainLayout.vue` 缺 `Fold`/`Expand` 图标 import（commit `0e11009`）② 8/16 路由 mobile 路径错（`knowledge/MobileKnowledgeView` 等假设了子目录但实际在 `views/mobile/` 根目录，commit `025424ca`）③ 4 个移动端 API 端点缺失（`/dashboard/summary` + `/formula` + `/hypothesis` + `/memory`，commit `d671c41c` + `5f5bfd06`）④ TabBar 2500 z-index 覆盖 MobileInputBar 100 → `/chat` 路由隐藏 TabBar + 修 v-model 命名（commit `7131ad4b`），用户偏好 persistent nav 后恢复 TabBar + input 浮在 TabBar 上方（commit `c94d0603`）⑤ "正在听会"指示器点击无反应 → `MobileMeetingView` onMounted 漏处理 `route.query.resume`（commit `fc27af59`）⑥ 11 处 `v-model:show` 命名错配（prop 是 `modelValue`，commit `6b4f57d0` + `20df60db` + `607e7b06`）⑦ ASR 500 真实根因 110 字节 webm → 客户端 `<1KB` 拦截 + 服务端返 400（commit `3cd88d4a`）⑧ passive event listener 全局 patch 误伤 `touchstart` → 只对 `wheel`/`mousewheel` 强制（commit `3cd88d4a`）⑨ 知识 3 个 ActionSheet 之前是"开发中"占位 → 接通 `/knowledge` + `/knowledge/upload` + `/knowledge/research` 真实端点 ⑩ 头像同步：新建 `MemberAvatar.vue` 复用 `memberStore.getMemberAvatar(id)`，在 `CardList` 加 `avatarField` prop，Task/Task/Task/Member/Settings 全部显示真实头像。详见底部 [## 2026-06-18 移动端 26 commits 全面修复](#2026-06-18-移动端-26-commits-全面修复) section + [memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) 12 条铁律。
 >
@@ -3159,3 +3159,130 @@ curl -sk http://localhost:8000/api/v1/knowledge/19/images \
 | [app/schemas/knowledge.py](app/schemas/knowledge.py) | `KnowledgeImageItem` 加 12 Optional 字段 |
 | [app/api/v1/knowledge.py](app/api/v1/knowledge.py) | `_to_dict` 补全 12 字段输出 |
 | [web/src/utils/paperAdapter.js](web/src/utils/paperAdapter.js) | `_normalizeImages` 透传 12 字段 / `_buildFigureRegistry` 简化为读后端字段（主路径）+ Legacy graceful degradation / `_extractFigureNoLegacy` + `_inferFigureTypeV2Legacy` 重命名保留 |
+
+### v28 article 9 字 bug 修复（2026-06-20 收官）
+
+**症状**：PDF id=19 详情页 `<article>` 只渲染 9 字符 `"多模态提取图表说明"`。
+
+**诊断链路（5 步）**：
+
+```
+cleanedSample0 (cleanContent 后前 800 字符): "> 图表为热力图，标题为..."
+inputSample0  (cleanContent 前前 800 字符): "[PAGE:1]\n\n> 📊 **图表说明（P1）**..."
+                ↑ 第一个 [PAGE:1] 被吃了!
+```
+
+**根因（4 层）**：
+
+1. INTERNAL_MARKER_RES line 105: `/\bPAGE\s*[:：]\s*\d+\b/gi`
+   - `\b` 在 `[`（non-word char）和 `P`（word char）之间构成**单词边界**
+   - 匹配 `[PAGE:1]` 的**中间** `PAGE:1` 部分
+   - 替换为空 → `[PAGE:1]` 变 `[]` → pageMarkers=0
+
+2. INTERNAL_MARKER_RES line 107: `/([A-Z]\.\s*[A-Z][a-z]+(?:\s+et\s+al\.?)?)\s+\d+\s*\[PAGE:\s*\d+\s*\]/gi`
+   - 匹配 `T. Wang et al. 3 [PAGE:4]` 整段 → 删除整段
+   - PDF 上下文（作者名 + 页码）丢失
+
+3. cleanContent line 374-381：把行中/独立行 `[PAGE:N]` 替换为 `\n`
+   - cleanContent 后 `[PAGE:N]` 在 content 里**几乎不存在**（仅剩偶尔残留）
+
+4. `extractPageMarkers` → 0 markers → sections 解析丢分页 → 正文压成 1 段 → 只剩 inline 注入的"## 多模态提取" + "### 图表说明" 标题 → **9 字符**
+
+**修复（5 处）**：
+
+1. **paperAdapter.js INTERNAL_MARKER_RES 删 line 105 + line 107**（任何形式删 `[PAGE:N]` 都破坏 pageMarkers 提取）
+2. **cleanContent line 374 简化**：只处理无方括号 `PAGE:1` 形式（不影响 `[PAGE:N]`）
+3. **`hasPageMarker` 检测 + `useRawFormatted` 标志**：含 `[PAGE:N]` 时强制 plain text 路径但仍用 `rawFormatted` 作 inputContent（因为它才有 `[PAGE:N]`）
+4. **`inputContent` 选取逻辑改用三元**：`hasFormatted ? rawFormatted : (useRawFormatted ? rawFormatted : rawContent)`
+5. **测试 fixture 改 v28**：`v26 剥离 [PAGE:N]` 改成 `v28 保留 [PAGE:N]`
+
+**端到端验证**：
+
+```
+修复前                          修复后
+article 长度:   9 字符         article 长度: 40855 字符
+sectionsCount: 2              sectionsCount: 19
+pageMarkers:   0              pageMarkers: 9
+blocks[0] 内容: 0 字符         blocks[0] 内容: Abstract 1692 字符
+```
+
+### 7 条铁律
+
+**铁律 1：JavaScript `\b` 在 `[` 和 word char 之间构成单词边界**
+- `[PAGE:1]` 里的 `[` 是 non-word，`P` 是 word
+- regex `\bPAGE` 会从 `[PAGE:1]` 内部匹配 `PAGE`（前面 `]` + `[` 是 non-word）
+- 看似只匹配无方括号 `PAGE:1`，实际**误中带方括号的 `[PAGE:N]`**
+- **教训**：涉及 `[xxx:N]` 格式的 regex，必须显式 `(?<!\[)` 和 `(?!])` 限定边界
+
+**铁律 2：任何形式删 `[PAGE:N]` 都破坏 pageMarkers 提取**
+- paperAdapter 流程：`cleanContent(inputContent)` → `extractPageMarkers(content)` → sections 解析依赖 pageMarkers 拆段
+- 删 `[PAGE:N]`（无论 1 条还是 N 条 regex）→ pageMarkers=0 → 解析 fallback 把整篇正文压成 1 段
+- **教训**：保留 `[PAGE:N]` 给 extractPageMarkers 是 cleanContent 的**硬约束**
+
+**铁律 3：`\b` 在中英文混排环境永远不可靠**
+- Python/JavaScript `\b` = word boundary = `\w` 与 `\W` 之间
+- `\w` 默认 = `[a-zA-Z0-9_]`，中文不是 word char
+- 即使做 `\b → (?<![a-zA-Z\d_])` lookbehind 修复，**仍然不安全**（中文环境行为可能不一致）
+- **教训**：涉及中英文混排的 regex，**优先用 lookbehind/lookahead 限定具体字符**
+
+**铁律 4：v26 修复的副作用要警惕**
+- v26.1 修复中文图注污染（commit `2ee27015`）时加了 captionBlocks 正则
+- 这条 regex 隐式假设"OCR blockquote 段开头 `> 📊 图表说明` 是图注"，但**OCR 内容可能就是这样组织的**
+- 用户看到"修复好"但实际破坏了 page marker 提取
+- **教训**：修复一类 bug 时要 grep"所有相关 regex" + 端到端测 pageMarkers 数量
+
+**铁律 5：调试时一定要打印中间产物**
+- cleanContent 有 5+ 步处理（HTML/markdown image/URL/multimodal blocks/INTERNAL_MARKER_RES/DOI/footer）
+- 任何一步都可能删 `[PAGE:N]`
+- 本次诊断用 `__PAPER_INTERMEDIATE__.cleanedSample0` 字段对比原始 inputSample0，**立即定位是第 5 步 INTERNAL_MARKER_RES 删的**
+- **纪律**：任何 cleanContent 修复前先加中间产物输出（inputSample + cleanedSample）
+
+**铁律 6：`return_exceptions=True` 缺位导致 Promise 静默失败**
+- 用 `node /tmp/regex_test2.js` 模拟 cleanContent 步骤追踪时，**前 4 步 `[PAGE:N]` 仍 = 1**，**第 5 步骤后才变 0**
+- 没有逐步追踪根本不可能定位是哪个 regex 删的
+- **纪律**：fix regex bug 前必须 step-by-step 追踪
+
+**铁律 7：测试 fixture 要反映真实数据**
+- 测试 `"有 formatted_content (markdown) 走 markdown 解析"` 之前的 fixture 没有 `[PAGE:N]`（假装真 markdown）
+- 真实 PDF OCR 内容**总带 `[PAGE:N]`**（PDF 解析工具都加）
+- 测试通过但生产失败 = 误导
+- **纪律**：测试 fixture 必须含真实 OCR 输出特征（`[PAGE:N]` / 残留 JSON / blockquote 图表说明）
+
+### 改动文件清单
+
+| 文件 | 改动 |
+|---|---|
+| [web/src/utils/paperAdapter.js](web/src/utils/paperAdapter.js) | 删 INTERNAL_MARKER_RES line 105 + line 107（任何形式 `[PAGE:N]` 删除逻辑）+ cleanContent 简化 + hasPageMarker/useRawFormatted/inputContent 三元 |
+| [web/src/utils/__tests__/paperAdapter.test.js](web/src/utils/__tests__/paperAdapter.test.js) | v26 测试改 v28 + 新增 `有 formatted_content 含 [PAGE:N] (OCR) 走 plain text` |
+
+### git commit 链
+
+```
+e9627486 chore: 清理 paperAdapter 临时 __PAPER_DIAG__ 诊断代码
+d171df1a fix(kb): paperAdapter INTERNAL_MARKER_RES 保留 [PAGE:N] - 真正修复
+77634498 fix(kb): paperAdapter INTERNAL_MARKER_RES 不再删除 [PAGE:N]
+0d73c6a2 fix(kb): paperAdapter cleanContent 不再替换 [PAGE:N] 为 \n
+```
+
+### 诊断脚本（已移除但模式可复用）
+
+```js
+// 临时在 paperAdapter line ~2260 加的 __PAPER_DIAG__：
+window.__PAPER_DIAG__ = {
+  sectionsCount: paperDetail.sections.length,
+  sectionsTypes: paperDetail.sections.map(s => ({
+    type: s.type,
+    title: (s.title || '').slice(0, 40),
+    blocksCount: s.blocks?.length || 0,
+    firstBlockContentLen: s.blocks?.[0]?.content?.length || 0,
+    firstBlockPreview: s.blocks?.[0]?.content?.slice(0, 80) || '',
+  })),
+  pageMarkersCount: paperDetail.pageMarkers?.length || 0,
+  figureMarkersCount: paperDetail.figureMarkers?.length || 0,
+}
+
+// 然后浏览器 console：
+const d = window.__PAPER_DIAG__
+console.log('sections:', d.sectionsCount, 'pageMarkers:', d.pageMarkersCount)
+console.log('article 长度:', document.querySelector('article.paper-article')?.textContent?.length)
+```
