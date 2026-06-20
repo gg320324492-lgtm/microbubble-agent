@@ -466,25 +466,32 @@ watch(showInlineFigures, (v) => {
 function getInlineFiguresFor(section) {
   if (!paper.value || !section) return []
 
-  // 过滤函数：剔除封面/logo/publisher/无图号的图
+  // v28 step 14 修复：之前用 paper.inlineFigureMap（旧 section 级 API），
+  //    且要求 figureNo 存在（OCR 没识别 figureNo 的图全部被过滤掉）
+  //    改为读 paper.inlineFigureAnchors（paragraph 级 API，含 L1/L2/L3 全部匹配结果），
+  //    放宽过滤（只要不是 publisher/logo，figureNo 为 null 也允许）
   const isInlineEligible = (f) => {
     if (!f) return false
-    // isPublisherImage 为 true → 过滤
     if (f.isPublisherImage) return false
-    // 旧 kind 字段：cover / logo → 过滤
     if (f.kind === 'cover' || f.kind === 'logo') return false
-    // figureType 已知为 publisher/cover/logo/unknown → 过滤
     if (['cover', 'logo', 'publisher', 'unknown'].includes(f.figureType)) return false
-    // 必须有 figureNo（否则就是被机械分配的占位图）
-    if (!f.figureNo) return false
     return true
   }
 
-  // L1: inlineFigureMap（正文中 "Fig. N" 引用匹配）—— 已被 _buildInlineFigureMap 过滤 isCoreFigure
-  const fromMap = (paper.value.inlineFigureMap?.[section.id] || []).filter(isInlineEligible)
-  if (fromMap.length) return fromMap
+  // 主路径：从 inlineFigureAnchors 找该 section 的所有 paragraph figures
+  // 格式: { 'sectionId__p0': [fig, ...], 'sectionId__p1': [fig, ...] }
+  const anchors = paper.value.inlineFigureAnchors || {}
+  const sectionFigures = []
+  for (const [pid, figs] of Object.entries(anchors)) {
+    if (pid.startsWith(`${section.id}__p`)) {
+      for (const f of figs) {
+        if (isInlineEligible(f)) sectionFigures.push(f)
+      }
+    }
+  }
+  if (sectionFigures.length) return sectionFigures
 
-  // L2: figure_marker blocks（[FIGURE:N] 占位符）—— 同样过滤
+  // 兜底：figure_marker blocks（兼容旧 [FIGURE:N] 占位符）
   const figureIds = new Set()
   for (const b of (section.blocks || [])) {
     if (b.type === 'figure_marker') figureIds.add(b.content)
