@@ -14,22 +14,6 @@
         <el-button @click="increaseLineHeight" :icon="Plus" title="宽松行距" />
       </el-button-group>
 
-      <!-- 图例切换：内嵌图 vs 隐藏图（默认内嵌 = 最自然的阅读体验） -->
-      <el-button-group size="small">
-        <el-button
-          :type="showInlineFigures ? 'primary' : 'default'"
-          @click="showInlineFigures = !showInlineFigures"
-          :icon="showInlineFigures ? Picture : Hide"
-          :title="showInlineFigures ? '隐藏正文图片' : '显示正文图片'"
-        />
-        <el-button
-          :type="showHighConfidenceOnly ? 'primary' : 'default'"
-          @click="showHighConfidenceOnly = !showHighConfidenceOnly"
-          :icon="showHighConfidenceOnly ? Star : StarFilled"
-          title="仅显示高置信度图（≥0.85）"
-        />
-      </el-button-group>
-
       <!-- 章节跳转：回到顶部（实用） -->
       <el-button-group size="small">
         <el-button @click="scrollToTop" :icon="Top" title="返回顶部" />
@@ -40,34 +24,33 @@
 
 <script setup>
 /**
- * ReadingToolbar v2 — 简化为 4 个真正有用的功能组
+ * ReadingToolbar v3 — 仅保留 3 个真正有用的功能组
+ *
+ * v28 step 15: 删除「内嵌图 / 高置信度图」切换按钮 —— 图片必须自动展示
+ *    （用户原话：以后的论文有图片的都应该是自动展示的，而不是还得选择展示与否）
  *
  * 删除的"无用功能"：
- * - 原文/翻译/双语模式切换（后端翻译 API 还没接入，按了只 dispatch event 不做事）
+ * - 原文/翻译/双语模式切换（后端翻译 API 还没接入）
  * - 图总开关（与内嵌图切换重复）
- * - 复制引用（功能未实现，点了没反应）
+ * - 复制引用（功能未实现）
+ * - 内嵌图 / 高置信度图切换（v28 step 15：图片永远展示）
  *
  * 保留的功能：
  * - 字号、行距调整（持久化到 localStorage）
- * - 内嵌图 / 高置信度图切换
  * - 回到顶部
  */
 import { ref, watch } from 'vue'
-import { ZoomIn, ZoomOut, Plus, Minus, Picture, Hide, Top, Star, StarFilled } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Plus, Minus, Top } from '@element-plus/icons-vue'
 
 const props = defineProps({
   paper: { type: Object, default: () => ({}) },
 })
 
-const emit = defineEmits(['toggle-inline-figures', 'toggle-high-confidence'])
+const emit = defineEmits([])  // v28 step 15: 不再 emit 任何事件
 
 const visible = ref(true)
 const fontSize = ref(Number(localStorage.getItem('mnb:paper:fontSize')) || 16)
 const lineHeight = ref(Number(localStorage.getItem('mnb:paper:lineHeight')) || 1.85)
-
-// v28 step 10: 默认开内嵌图（读者期望 PDF 一样的体验）
-const showInlineFigures = ref(localStorage.getItem('mnb:paper:showInlineFigures') !== 'false')
-const showHighConfidenceOnly = ref(localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false')
 
 watch([fontSize, lineHeight], ([fs, lh]) => {
   localStorage.setItem('mnb:paper:fontSize', String(fs))
@@ -78,14 +61,6 @@ watch([fontSize, lineHeight], ([fs, lh]) => {
     article.style.setProperty('--paper-font-size', `${fs}px`)
     article.style.setProperty('--paper-line-height', String(lh))
   }
-})
-watch(showInlineFigures, (v) => {
-  localStorage.setItem('mnb:paper:showInlineFigures', String(v))
-  emit('toggle-inline-figures', v)
-})
-watch(showHighConfidenceOnly, (v) => {
-  localStorage.setItem('mnb:paper:showHighConfidenceOnly', String(v))
-  emit('toggle-high-confidence', v)
 })
 
 // 字号 / 行距档位
