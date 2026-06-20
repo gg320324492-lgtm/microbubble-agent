@@ -2222,7 +2222,7 @@ export function normalizePaperData(raw, extra = {}) {
   const coreFigureCount = figures.filter(f => f.kind === 'figure').length
 
   // 13. 返回 PaperDetail
-  const paperDetail = {
+  return {
     id: raw.id,
     title: raw.title || '（无标题）',
     fileName: raw.file_name || null,
@@ -2264,26 +2264,6 @@ export function normalizePaperData(raw, extra = {}) {
     keyConcepts: Array.isArray(raw.key_concepts) ? raw.key_concepts : [],
     relatedTopics: Array.isArray(raw.related_topics) ? raw.related_topics : [],
     isChineseHeavy: _isChineseHeavy(content),
-  }
-
-  // 临时诊断：暴露 paper.sections 给浏览器 console
-  if (typeof window !== 'undefined') {
-    window.__PAPER_DIAG__ = {
-      sectionsCount: paperDetail.sections.length,
-      sectionsTypes: paperDetail.sections.map(s => {
-        const fc = s.blocks?.[0]?.content
-        const fcStr = typeof fc === 'string' ? fc : (fc ? JSON.stringify(fc) : '')
-        return {
-          type: s.type,
-          title: (s.title || '').slice(0, 40),
-          blocksCount: s.blocks?.length || 0,
-          firstBlockContentLen: fcStr.length,
-          firstBlockPreview: fcStr.slice(0, 80),
-        }
-      }),
-      pageMarkersCount: paperDetail.pageMarkers?.length || 0,
-      figureMarkersCount: paperDetail.figureMarkers?.length || 0,
-    }
   }
 
   return paperDetail
