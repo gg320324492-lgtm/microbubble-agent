@@ -2,16 +2,26 @@
  * 数学公式渲染 - KaTeX 动态加载
  *
  * v28 step 41 改进: 从 MathJax v3 切换到 KaTeX
- * - KaTeX 更小 (~270KB vs MathJax 1MB+)
- * - 自带 CSS (katex.min.css 内置字体 + 样式)
- * - auto-render 扩展自动扫描整页 $..$ / $$..$$
- * - 同步渲染（不等异步），不闪源码
+ * v28 step 43 改进: 本地化字体（katex.min.css + 20 个 woff2 打包到 public/katex/），
+ *                  避免 jsdelivr CDN 慢导致的 "Slow network" 警告
+ *
+ * KaTeX 资源位置: web/public/katex/
+ *   - katex.min.css (28KB)
+ *   - fonts/*.woff2 (20 个，共 ~296KB)
+ * 全部同源加载，无跨域 CDN 慢速问题
+ *
+ * KaTeX JS 仍从 CDN 加载（小，~270KB gzip 后 ~70KB，可接受）
+ * 国内可换 bootcdn.net
  *
  * 用法：
  *   import '@/utils/mathFormat'  // 自动启动 KaTeX auto-render
  */
 
-const KATEX_CDN_CSS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css'
+// 本地化路径（同源，无 CDN 慢速问题）
+const KATEX_LOCAL_CSS = '/katex/katex.min.css'
+const KATEX_LOCAL_FONT_DIR = '/katex/fonts/'
+
+// JS 仍从 CDN（小，可接受）
 const KATEX_CDN_JS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js'
 const KATEX_AUTO_RENDER_JS = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js'
 
@@ -28,16 +38,15 @@ function loadKaTeX() {
       return
     }
 
-    // 1. 注入 CSS
+    // 1. 注入 CSS（本地路径，同源加载秒开）
     if (!document.querySelector(`link[href*="katex.min.css"]`)) {
       const link = document.createElement('link')
       link.rel = 'stylesheet'
-      link.href = KATEX_CDN_CSS
-      link.crossOrigin = 'anonymous'
+      link.href = KATEX_LOCAL_CSS
       document.head.appendChild(link)
     }
 
-    // 2. 加载 katex.min.js
+    // 2. 加载 katex.min.js（CDN，~270KB gzip 后 ~70KB）
     const katexScript = document.createElement('script')
     katexScript.src = KATEX_CDN_JS
     katexScript.defer = true
