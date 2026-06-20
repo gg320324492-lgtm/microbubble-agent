@@ -907,23 +907,65 @@ function _parsePlainTextSections(content) {
 /**
  * 拆分参考文献
  * @returns {Array<string>}
+ *
+ * v28 step 20: 之前只按 \n 切行 + 匹配 [N]，但 LLM 重排经常把多条 ref 合并到
+ * 同一个 paragraph block（用空格或合并行），按 \n 切不出多行 → 只显示 3 条。
+ * 修法：双策略 —— 先按 \n 切（旧逻辑），再按 `[N]` 切剩余块。
+ *   1. [N] 整段单独一行 → 切出来
+ *   2. 多个 [N] [M] [K] 挤在一行 → 按 [N] 切
+ *   3. 完全无 [N] 的 [55] (14), 9691-9710 格式 → 用 REFERENCE_ENTRY_RE 兜底
  */
 export function splitReferences(content) {
   if (!content) return []
-  const lines = content.split('\n')
   const entries = []
+  const seen = new Set()
+
+  const add = (raw) => {
+    const t = String(raw).replace(/\s+/g, ' ').trim()
+    // 去前导 [N] 序号（[1] 1. 2. 等都去掉）
+    const cleaned = t.replace(/^\s*(\[\d+\]|\d+\.)\s*/, '').trim()
+    if (cleaned.length < 10) return
+    // dedupe
+    if (seen.has(cleaned)) return
+    seen.add(cleaned)
+    entries.push(cleaned)
+  }
+
+  // 策略 1: 按 \n 切分（旧逻辑）
+  const lines = content.split('\n')
   let buffer = []
   for (const line of lines) {
     if (REFERENCE_ENTRY_RE.test(line)) {
       if (buffer.length) {
-        entries.push(buffer.join('\n').trim())
+        add(buffer.join('\n').trim())
         buffer = []
       }
     }
     if (line.trim()) buffer.push(line)
   }
-  if (buffer.length) entries.push(buffer.join('\n').trim())
-  return entries.filter(e => e.length > 10)
+  if (buffer.length) add(buffer.join('\n').trim())
+
+  // 策略 2: 按 [N] 切分剩余未匹配内容（v28 step 20 修 LLM 重排后多 ref 挤一行）
+  //   例: "[4] Author X... [5] Author Y... [6] Author Z..."
+  //   用 /\[(\d+)\]\s+/ 切成多段
+  const unconsumed = content
+  // 已消费的段落排除
+  for (const line of lines) {
+    if (REFERENCE_ENTRY_RE.test(line)) continue
+    if (line.match(/^\s*\[\d+\]/)) {
+      // 整行 [N] 开头但上面没被 REFERENCE_ENTRY_RE 匹配（可能是 [55] (14) 格式）
+      add(line)
+    }
+  }
+  // 用 [N] 边界切分整个 content
+  const re = /\[(\d+)\]\s+([^\[]*?)(?=\[\d+\]|$)/g
+  let m
+  while ((m = re.exec(content)) !== null) {
+    const tail = m[2].trim()
+    if (tail.length >= 10) add(`[${m[1]}] ${tail}`)
+  }
+
+  return entries
 }
 
 
@@ -2195,9 +2237,33 @@ export function buildAnchorTree(sections, options = {}) {
  * 自动链接 DOI / URL / 邮箱
  * @returns {string} HTML 字符串（已转义）
  */
+
+/**
+ * v28 step 20: 数字 → Unicode 上角标字符
+ * "12" → "¹²"（用户原话：'[12] 这样的文献引用序号要用上角标'）
+ * 用于真正的引用序号（[12] / [12,15] / [12-15]）
+ */
+function _toSuperscript(s) {
+  if (!s) return ''
+  const map = {
+    '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+    '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+    '-': '⁻', '+': '⁺', ',': '͵', ' ': ' ', '–': '–',
+  }
+  return String(s).split('').map(c => map[c] || c).join('')
+}
+
 export function autoLinkContent(text) {
   if (!text) return ''
   let escaped = _escapeHtml(text)
+
+  // v28 step 20: 引用序号 [12] / [12, 15] / [12-15] → 上角标 Unicode
+  //   限制：仅匹配 [N] / [N,M] / [N-M] 格式，数字 1-4 位（避免误伤 [12.5] 等）
+  //   必须在 DOI 规则前处理（[12] 也可能被误判为 DOI 部分）
+  escaped = escaped.replace(
+    /\[(\d{1,4}(?:\s*[,–-]\s*\d{1,4})*)\]/g,
+    (m, nums) => `[${nums.split(/\s*[,–-]\s*/).map(_toSuperscript).join(',')}]`
+  )
 
   // 先修复重复 DOI 链接（避免下面 DOI_RE 重复添加前缀）
   escaped = escaped.replace(DOI_DUP_RE, 'https://doi.org/')
