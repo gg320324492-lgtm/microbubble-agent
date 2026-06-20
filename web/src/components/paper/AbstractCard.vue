@@ -10,14 +10,14 @@
   <section v-if="paper.abstract" class="paper-abstract">
     <!-- 顶部元信息行：topic + 类型 + 字数 -->
     <div class="abstract-meta-row">
-      <span v-if="paper.topic" class="meta-topic">
+      <span v-if="topic" class="meta-topic">
         <el-icon><Aim /></el-icon>
-        {{ paper.topic }}
+        {{ topic }}
       </span>
-      <span v-if="paper.fileType === 'application/pdf'" class="meta-type">
+      <span v-if="fileType === 'application/pdf'" class="meta-type">
         <el-icon><Document /></el-icon> PDF
       </span>
-      <span v-if="paper.fileType?.includes('word')" class="meta-type">
+      <span v-if="fileType?.includes('word')" class="meta-type">
         <el-icon><Document /></el-icon> Word
       </span>
       <span class="meta-length">{{ paper.abstract.length }} 字</span>
@@ -95,8 +95,20 @@ const keywords = computed(() => {
   return Array.from(new Set(arr)).slice(0, 12)  // 最多 12 个
 })
 
-const keyConcepts = computed(() => Array.isArray(props.paper.key_concepts) ? props.paper.key_concepts : [])
-const relatedTopics = computed(() => Array.isArray(props.paper.related_topics) ? props.paper.related_topics : [])
+// v28 step 45: paperAdapter 转换字段名为 camelCase（keyConcepts / relatedTopics），
+//              同时兼容旧 API 直接传 snake_case
+const keyConcepts = computed(() => {
+  const arr = props.paper.keyConcepts || props.paper.key_concepts
+  return Array.isArray(arr) ? arr : []
+})
+const relatedTopics = computed(() => {
+  const arr = props.paper.relatedTopics || props.paper.related_topics
+  return Array.isArray(arr) ? arr : []
+})
+const topic = computed(() => props.paper.topic || props.paper.relatedKnowledge?.topic || '')
+
+// v28 step 45: fileType 也兼容 camelCase/snake_case
+const fileType = computed(() => props.paper.fileType || props.paper.file_type || '')
 </script>
 
 <style scoped>
