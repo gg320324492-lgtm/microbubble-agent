@@ -63,6 +63,27 @@ class KnowledgeImage(Base, TimestampMixin):
     ocr_model = Column(String(100), nullable=True)  # 使用的模型名（llm-vision / tesseract / paddleocr）
     ocr_at = Column(DateTime, nullable=True)
 
+    # ── v28 step 2: vision 模型输出的结构化字段（替代前端 paperAdapter 正则推断）
+    # 图号与类型
+    figure_no = Column(String(50), nullable=True)  # "Fig. 2" / "Fig. S2" / "Table 1" / "Scheme 1"
+    figure_type = Column(String(50), nullable=True)  # chart / scheme / table / cover / logo / publisher / experimental_setup / mechanism
+    is_core_figure = Column(Boolean, nullable=True)  # 是否正文核心图（不是封面/logo/补充材料）
+    is_publisher_image = Column(Boolean, nullable=True)  # 是否出版商图（Elsevier logo / 期刊封面 / 版权页）
+    is_supporting_figure = Column(Boolean, nullable=True)  # 是否补充材料图（Fig. S\d+）
+
+    # 章节定位
+    section_hint = Column(String(200), nullable=True)  # 图所属章节标题或关键词（用于 RightImageRail 匹配）
+    anchor_paragraph_index = Column(Integer, nullable=True)  # 首次引用段落索引（0-indexed，所属章节内）
+    anchor_text = Column(String(500), nullable=True)  # 首次引用句子片段（如 "shown in Fig. 2"）
+
+    # 视觉描述
+    visual_summary = Column(Text, nullable=True)  # 图的详细描述 100-300字
+
+    # Vision 模型元数据
+    vision_confidence = Column(Float, nullable=True)  # 0-1 综合置信度
+    vision_model_used = Column(String(100), nullable=True)  # 实际调用的视觉模型名（追溯用）
+    vision_analyzed_at = Column(DateTime, nullable=True)  # 视觉分析时间戳
+
     # 关系
     knowledge = relationship("Knowledge", backref="images", lazy="selectin")
     extractions = relationship(
@@ -74,6 +95,8 @@ class KnowledgeImage(Base, TimestampMixin):
     __table_args__ = (
         Index("idx_knowledge_image_status", "knowledge_id", "ocr_status"),
         Index("idx_knowledge_image_kb_page", "knowledge_id", "page_number"),
+        Index("idx_knowledge_image_figure_no", "knowledge_id", "figure_no"),  # v28 图号索引
+        Index("idx_knowledge_image_is_core", "knowledge_id", "is_core_figure"),  # v28 核心图筛选
     )
 
 

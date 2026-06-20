@@ -350,6 +350,10 @@ class MultimodalExtractionService:
         # 7. 写 KnowledgeExtraction
         extraction_counts = await self._save_extractions(knowledge_id, image_records, ocr_results)
 
+        # 7.5 v28 step 3: 后处理 anchor_paragraph_index / anchor_text
+        # （扫描 knowledge.content 找 "Fig. 2" 首次引用位置）
+        await self._compute_anchor_for_images(knowledge_id)
+
         # 8. 把 LaTeX/table 注入 formatted_content
         await self._inject_into_formatted_content(knowledge_id)
 
@@ -410,29 +414,62 @@ class MultimodalExtractionService:
     async def _ocr_images_concurrent(
         self, image_records: List[KnowledgeImage]
     ) -> List[dict]:
-        """并发 OCR 每张图片（一次 classify_and_extract 拿 5 字段）"""
+        """并发 OCR 每张图片（一次 classify_and_extract 拿 5 字段 + v28 extract_figure_structured 拿 12 结构化字段）
+
+        v28 step 3:
+        - 单张图片 = 2 次 LLM 并行调用（classify_and_extract + extract_figure_structured）
+        - 用同一个 semaphore 复用并发池（避免 vision API rate limit）
+        - 两调用任一失败不阻塞另一调用（独立 try/except）
+        - wall-clock ≈ max(t_classify, t_structured) + 网络开销，相比串行省 ~50%
+        """
         sem = ocr_service.semaphore
 
         async def _process_one(img: KnowledgeImage) -> dict:
-            async with sem:
-                # 从 MinIO 重新下载（图片对象已在 MinIO）
-                try:
-                    img_bytes = await file_service.download_file(img.image_object_name)
-                except Exception as e:
-                    return {"image_id": img.id, "ok": False, "error": f"download: {e}"}
-                try:
-                    parsed = await ocr_service.classify_and_extract(
-                        img_bytes, img.mime_type or "image/png"
-                    )
+            # 从 MinIO 重新下载（图片对象已在 MinIO）
+            try:
+                img_bytes = await file_service.download_file(img.image_object_name)
+            except Exception as e:
+                return {"image_id": img.id, "ok": False, "error": f"download: {e}"}
+
+            mime = img.mime_type or "image/png"
+
+            async def _classify():
+                async with sem:
+                    return await ocr_service.classify_and_extract(img_bytes, mime)
+
+            async def _structured():
+                async with sem:
+                    return await ocr_service.extract_figure_structured(img_bytes, mime)
+
+            # 并发跑两个 OCR 调用（共享 semaphore 池）
+            try:
+                classify_task = asyncio.create_task(_classify())
+                structured_task = asyncio.create_task(_structured())
+                classify_result, structured_result = await asyncio.gather(
+                    classify_task, structured_task, return_exceptions=True
+                )
+                # 分类调用错误
+                if isinstance(classify_result, Exception):
                     return {
                         "image_id": img.id,
-                        "ok": True,
-                        "parsed": parsed,
+                        "ok": False,
+                        "error": f"classify: {classify_result}",
+                        "structured": structured_result if isinstance(structured_result, dict) else None,
                     }
-                except (OCRBackendError, OCRUnsupportedError) as e:
-                    return {"image_id": img.id, "ok": False, "error": str(e)}
-                except Exception as e:
-                    return {"image_id": img.id, "ok": False, "error": f"unexpected: {e}"}
+                # 结构化调用错误（容错：用默认结构化字段）
+                if isinstance(structured_result, Exception):
+                    logger.warning(
+                        f"extract_figure_structured 失败（用默认值）: {structured_result}"
+                    )
+                    structured_result = None
+                return {
+                    "image_id": img.id,
+                    "ok": True,
+                    "parsed": classify_result,
+                    "structured": structured_result,  # 可能 None（出错时）
+                }
+            except Exception as e:
+                return {"image_id": img.id, "ok": False, "error": f"unexpected: {e}"}
 
         tasks = [_process_one(img) for img in image_records]
         results = await asyncio.gather(*tasks, return_exceptions=False)
@@ -488,9 +525,15 @@ class MultimodalExtractionService:
                 if not result.get("ok"):
                     img.ocr_status = "failed"
                     img.ocr_error = (result.get("error") or "")[:1000]
+                    # v28: 即使 classify 失败也尽量保留 structured（logo/封面识别仍可能成功）
+                    structured = result.get("structured")
+                    if structured:
+                        self._apply_v28_structured_fields(img, structured)
+                        img.ocr_status = "partial"
                     continue
 
                 parsed = result.get("parsed", {})
+                structured = result.get("structured") or {}
                 category = parsed.get("category", "figure")
                 ocr_text = parsed.get("text", "") or ""
                 latex = parsed.get("latex")
@@ -507,6 +550,10 @@ class MultimodalExtractionService:
                 img.ocr_status = "done"
                 img.ocr_model = model_used
                 img.ocr_at = datetime.utcnow()
+
+                # ── v28 step 3: 写入 12 个结构化字段 ──
+                if structured:
+                    self._apply_v28_structured_fields(img, structured)
 
                 # 公式提取
                 if latex and latex.strip() and latex.strip() != "NO_FORMULA":
@@ -592,6 +639,180 @@ class MultimodalExtractionService:
 
             await db.commit()
         return counts
+
+    # ── v28 step 3: 结构化字段写入 helper ─────────────────────────────────
+    def _apply_v28_structured_fields(self, img: KnowledgeImage, structured: dict) -> None:
+        """把 extract_figure_structured 返回的 9 个字段写入 KnowledgeImage
+
+        入参 structured 来自 ocr_service._parse_figure_structured_response（已包含默认值）
+        字段映射：
+            figureNo              → img.figure_no
+            figureType            → img.figure_type
+            isCoreFigure          → img.is_core_figure
+            isPublisherImage      → img.is_publisher_image
+            isSupportingFigure    → img.is_supporting_figure
+            sectionHint           → img.section_hint
+            visualSummary         → img.visual_summary
+            confidence            → img.vision_confidence
+        不写入的字段（由 _compute_anchor_for_images 后处理）：
+            anchor_paragraph_index, anchor_text
+        不写入的字段（仅审计）：
+            vision_model_used, vision_analyzed_at
+        """
+        if not structured:
+            return
+
+        # 文本字段（限长防 DB 爆）
+        figure_no = structured.get("figureNo")
+        if figure_no and figure_no != "null":
+            img.figure_no = str(figure_no)[:50]
+        figure_type = structured.get("figureType")
+        if figure_type:
+            img.figure_type = str(figure_type)[:50]
+        section_hint = structured.get("sectionHint")
+        if section_hint and section_hint != "null":
+            img.section_hint = str(section_hint)[:200]
+        visual_summary = structured.get("visualSummary")
+        if visual_summary and visual_summary != "null":
+            img.visual_summary = str(visual_summary)[:5000]
+
+        # 布尔字段（None 也写入，DB 默认 null 表示未分析）
+        is_core = structured.get("isCoreFigure")
+        if isinstance(is_core, bool):
+            img.is_core_figure = is_core
+        is_pub = structured.get("isPublisherImage")
+        if isinstance(is_pub, bool):
+            img.is_publisher_image = is_pub
+        is_supp = structured.get("isSupportingFigure")
+        if isinstance(is_supp, bool):
+            img.is_supporting_figure = is_supp
+
+        # 置信度
+        conf = structured.get("confidence")
+        if isinstance(conf, (int, float)) and 0 <= conf <= 1:
+            img.vision_confidence = float(conf)
+
+        # 审计字段
+        img.vision_model_used = settings.VISION_MODEL
+        img.vision_analyzed_at = datetime.utcnow()
+
+    async def _compute_anchor_for_images(self, knowledge_id: int) -> int:
+        """v28 step 3: 计算 anchor_paragraph_index / anchor_text
+
+        对每张有 figure_no 的 KnowledgeImage，扫描 knowledge.content 找 "Fig. N" 首次引用：
+        - anchor_paragraph_index = 在所属章节内的段落索引（0-indexed）
+        - anchor_text = 引用句片段（如 "shown in Fig. 2"）
+
+        输入：
+        - knowledge.formatted_content 或 knowledge.content（带 [PAGE:N] / [FIGURE:N] / 章节标题）
+        - knowledge_images.figure_no（如 "Fig. 2"）
+
+        输出：更新的图片数量（返回计数用于日志）
+
+        容错：
+        - figure_no 为 None 的图 → 跳过（publisher/logo/cover 无正文引用）
+        - content 为空 → 跳过
+        - 找不到引用 → anchor 保持 None（让 #6 confidence 阈值过滤时不显示）
+        - 已计算过 → 重新计算（保证最新）
+        """
+        async with async_session() as db:
+            # 取 knowledge 内容
+            k_result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = k_result.scalar_one_or_none()
+            if not knowledge:
+                return 0
+            content = knowledge.formatted_content or knowledge.content or ""
+            if not content:
+                logger.debug(f"knowledge_id={knowledge_id} content 为空，跳过 anchor 计算")
+                return 0
+
+            # 取所有有 figure_no 的 images
+            img_result = await db.execute(
+                select(KnowledgeImage)
+                .where(
+                    KnowledgeImage.knowledge_id == knowledge_id,
+                    KnowledgeImage.figure_no.isnot(None),
+                )
+                .order_by(KnowledgeImage.id)
+            )
+            images = img_result.scalars().all()
+            if not images:
+                return 0
+
+            updated = 0
+            for img in images:
+                figure_no = img.figure_no.strip()  # "Fig. 2" / "Fig. S2" / "Table 1"
+                # 转 regex: "Fig. 2" → r"Fig\.?\s*2\b"（容忍空格、缩写）
+                # 提取数字部分（Fig. S2 → "S2"）
+                m_fig = re.match(r"^(Fig\.?|Figure|Scheme|Table)\s*(\S+)$", figure_no, re.IGNORECASE)
+                if not m_fig:
+                    continue
+                keyword = m_fig.group(1)  # "Fig." / "Figure" / "Table"
+                label = m_fig.group(2)    # "2" / "S2"
+                # regex: 容忍 (Fig. | Figs. | Figure | Scheme | Table) + 空格 + 标签
+                # 不区分大小写，但 \b 对 "S2" 必须小心：用 (?!\w) 替代 \b
+                # v28 step 7: 加中文关键词 (图 | 表) — 中文论文用 "图 1" "表 2" 不带英文
+                # v28 step 7 fix: 中文环境 \b 失效（基于 [a-zA-Z0-9_]），改用 (?<![a-zA-Z]) 前置断言
+                keyword_lower = keyword.lower().rstrip('.')
+                patterns = []
+                if keyword_lower in ('fig', 'figure', 'figs'):
+                    patterns.append(re.compile(
+                        rf"(?<![a-zA-Z\d_])(?:Fig\.?|Figs\.?|Figure|图)\s*{re.escape(label)}(?!\w)",
+                        re.IGNORECASE,
+                    ))
+                elif keyword_lower == 'table':
+                    patterns.append(re.compile(
+                        rf"(?<![a-zA-Z\d_])(?:Table|表)\s*{re.escape(label)}(?!\w)",
+                        re.IGNORECASE,
+                    ))
+                elif keyword_lower == 'scheme':
+                    patterns.append(re.compile(
+                        rf"(?<![a-zA-Z\d_])Scheme\s*{re.escape(label)}(?!\w)",
+                        re.IGNORECASE,
+                    ))
+
+                # 找首次匹配位置
+                match = None
+                for pattern in patterns:
+                    match = pattern.search(content)
+                    if match:
+                        break
+                if match is None:
+                    continue
+
+                # 计算 anchor_paragraph_index（在所属章节内的段落索引）
+                # 简单策略：以 \n\n 或 [PAGE:N] 为段落分隔
+                # 找最近的上一个段落分隔点
+                para_starts = [0]
+                for sep in re.finditer(r"\n\s*\n|\[PAGE:\d+\]", content):
+                    para_starts.append(sep.end())
+                # 找 match.start() 之前的最后一个段落分隔
+                para_idx = 0
+                for i, start in enumerate(para_starts):
+                    if start <= match.start():
+                        para_idx = i
+                    else:
+                        break
+
+                # anchor_text：取 match 周围 ~80 字符作为上下文
+                ctx_start = max(0, match.start() - 40)
+                ctx_end = min(len(content), match.end() + 40)
+                anchor_text = content[ctx_start:ctx_end].strip().replace("\n", " ")
+                # 截断到 500 字符
+                anchor_text = anchor_text[:500]
+
+                img.anchor_paragraph_index = para_idx
+                img.anchor_text = anchor_text
+                updated += 1
+
+            if updated > 0:
+                await db.commit()
+                logger.info(
+                    f"knowledge_id={knowledge_id} anchor 后处理: {updated}/{len(images)} 张图有正文引用"
+                )
+            return updated
 
     async def _inject_into_formatted_content(self, knowledge_id: int):
         """把多模态提取的公式/表格追加到 formatted_content 末尾

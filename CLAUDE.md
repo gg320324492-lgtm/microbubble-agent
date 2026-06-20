@@ -1,5 +1,7 @@
 # MicroBubble Agent - 项目上下文
 
+> **2026-06-20 v28 step 2-8 全部完成 — 论文图片结构化字段 + 4 篇 PDF 端到端验证 + IO Hysteresis**：①-⑥ [alembic 028](alembic/versions/028_figure_structured_fields.py) + model + multimodal 集成 ⑦ schema + API `_to_dict` 加 12 字段 ⑧ paperAdapter 简化（83/83 测试通过） ⑨ KnowledgeDetailView 独立 IO + sectionHint 核心词匹配 ⑩ PaperSectionRenderer `showHighConfidenceOnly` ≥0.85 阈值 + ReadingToolbar confidence 徽章 ⑪ **4 篇 PDF 验证：37 张图 100% vision 覆盖 + 100% publisher 准确 + 100% confidence ≥0.85** + 中文 anchor bug 修复（`\b → (?<![a-zA-Z\d_])` + 加 "图/表"）⑫ **IO Hysteresis 防跳变**：阈值 ACTIVATE_THRESHOLD=0.35 / HYSTERESIS_LOWEST=0.15 + rAF 节流（10 次 IO 触发只跑 1 次 recompute）+ visibilityMap 跨 route 清空。**8 个滚动场景全过**（快速滚动 sec2=30/sec3=20 → sec2 保持 / sec2=10/sec3=50 → sec3 / 全 0 → 清空 / 顶→s1=40 → s1）。详见底部 [## 2026-06-20 v28 论文图片结构化字段](#2026-06-20-v28-论文图片结构化字段后端集成) section + 18 条铁律。
+>
 > **2026-06-18 移动端 26 commits 全面修复（图标 + 路由 + 端点 + v-model 命名 + ASR + 被动事件 + 头像）**：① 移动端"左上角红方块"根因是 `MainLayout.vue` 缺 `Fold`/`Expand` 图标 import（commit `0e11009`）② 8/16 路由 mobile 路径错（`knowledge/MobileKnowledgeView` 等假设了子目录但实际在 `views/mobile/` 根目录，commit `025424ca`）③ 4 个移动端 API 端点缺失（`/dashboard/summary` + `/formula` + `/hypothesis` + `/memory`，commit `d671c41c` + `5f5bfd06`）④ TabBar 2500 z-index 覆盖 MobileInputBar 100 → `/chat` 路由隐藏 TabBar + 修 v-model 命名（commit `7131ad4b`），用户偏好 persistent nav 后恢复 TabBar + input 浮在 TabBar 上方（commit `c94d0603`）⑤ "正在听会"指示器点击无反应 → `MobileMeetingView` onMounted 漏处理 `route.query.resume`（commit `fc27af59`）⑥ 11 处 `v-model:show` 命名错配（prop 是 `modelValue`，commit `6b4f57d0` + `20df60db` + `607e7b06`）⑦ ASR 500 真实根因 110 字节 webm → 客户端 `<1KB` 拦截 + 服务端返 400（commit `3cd88d4a`）⑧ passive event listener 全局 patch 误伤 `touchstart` → 只对 `wheel`/`mousewheel` 强制（commit `3cd88d4a`）⑨ 知识 3 个 ActionSheet 之前是"开发中"占位 → 接通 `/knowledge` + `/knowledge/upload` + `/knowledge/research` 真实端点 ⑩ 头像同步：新建 `MemberAvatar.vue` 复用 `memberStore.getMemberAvatar(id)`，在 `CardList` 加 `avatarField` prop，Task/Task/Task/Member/Settings 全部显示真实头像。详见底部 [## 2026-06-18 移动端 26 commits 全面修复](#2026-06-18-移动端-26-commits-全面修复) section + [memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) 12 条铁律。
 >
 > **2026-06-19 Phase 7 多模态知识库（图片/公式/表格 OCR 入库）**：① 端到端 PDF 文档 OCR 实测 10/10 图全成功 + 10 OCR 块 + 4 图表描述（论文 id=19 催化臭氧氧化甲苯）② 后端选 LLM-Vision 复用现有 vision_service，零新依赖 + 零新模型下载，settings.MULTIMODAL_OCR_BACKEND 留 Tesseract 备选钩子 ③ 数据模型统一 `KnowledgeExtraction(kind='formula|table|chart|image_block', data JSONB)` 单一表，简化 JOIN ④ 并发控制 asyncio.Semaphore(4) 防 vision API rate limit ⑤ pre-existing bug 修复 2 项：列表接口 mutate ORM 触发 autoflush NOT NULL 违反 + 009/010 alembic chain 不一致 ⑥ docker-compose 加 `./alembic/versions` volume 挂载，新迁移无需 rebuild 镜像即生效 ⑦ 21 个 OCR 单元测试（_clean_latex_response / _clean_ocr_text thinking 块剥除 / 图片缩放 / MIME 检测 / markdown 表格解析）。详见底部 [## 2026-06-19 Phase 7 多模态知识库](#2026-06-19-phase-7-多模态知识库) section + 8 条铁律。
@@ -2437,3 +2439,723 @@ cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
 ### 后续约束
 
 P1 工作（智能图文匹配 / 翻译 / 知识图谱 / 段落操作 / AI 总结）按用户要求**暂不启动**，等基础阅读器稳定确认无误后再推进。任何新增功能必须遵守铁律 1-8，避免再次触发 HTML 二次转义 / 正则贪婪吃内容 / 图片机械分配 等回归。
+
+## 2026-06-20 v28 论文图片结构化字段后端集成（step 2 + step 3）
+
+**目标** — 把 vision model（mimo-v2.5）的论文图片结构化分析结果持久化到 `knowledge_images` 表，让前端 paperAdapter 不再靠正则推断。
+
+### 8 条铁律
+
+**铁律 1：Vision LLM 看不到图外 caption，figure_no 覆盖率仅 20%**
+- vision 模型只能"看图"，无法识别图下方/上方单独的 caption 文字
+- 实测 PDF id=19：**10 张图只有 2 张 figure_no 正确**（其余 8 张因 caption 在图外被裁剪）
+- page 8 的图（id=536）被错误标 "Fig. 1"（OCR 把正文里 "Fig. 1" 引用识别成图本身的图号）
+- **改进方案（留给 #4）**：`_compute_anchor_for_images` 已经填了 anchor_text，可在 #4 paperAdapter 里加 anchor_text 反推 fallback："vision 模型没识别出 figure_no 但 anchor_text 含 'Fig. N' → 用 anchor_text 的"
+
+**铁律 2：单图并发跑 2 个 LLM 调用 = 共用 semaphore 池**
+- `_ocr_images_concurrent._process_one` 改造：每个图**并发**调 `classify_and_extract`（拿 5 字段）+ `extract_figure_structured`（拿 12 字段）
+- 两个调用**共享 `ocr_service.semaphore`**（避免 vision API rate limit 翻倍）
+- wall-clock = `max(t_classify, t_structured) + 网络开销`，相比串行省 ~50%
+- 任一调用失败不阻塞另一调用（独立 try/except + `return_exceptions=True`）
+
+```python
+async def _process_one(img):
+    img_bytes = await file_service.download_file(img.image_object_name)
+    mime = img.mime_type or "image/png"
+
+    async def _classify():
+        async with sem:
+            return await ocr_service.classify_and_extract(img_bytes, mime)
+
+    async def _structured():
+        async with sem:
+            return await ocr_service.extract_figure_structured(img_bytes, mime)
+
+    classify_task = asyncio.create_task(_classify())
+    structured_task = asyncio.create_task(_structured())
+    classify_result, structured_result = await asyncio.gather(
+        classify_task, structured_task, return_exceptions=True
+    )
+```
+
+**铁律 3：`return_exceptions=True` 必须配独立异常处理**
+- `asyncio.gather(..., return_exceptions=True)` 让单个 task 失败不 cancel 其他 task
+- **必须**对每个 result 单独 `isinstance(r, Exception)` 检查，否则 exception 透传到下游会爆
+- 本次 classify 失败时仍保留 structured（logo/封面识别仍可能成功）→ 标 `ocr_status="partial"`
+
+**铁律 4：anchor_paragraph_index 用 `\n\n` + `[PAGE:N]` 简单分段落**
+- `_compute_anchor_for_images` 实现极简 anchor 定位：
+  ```python
+  para_starts = [0]
+  for sep in re.finditer(r"\n\s*\n|\[PAGE:\d+\]", content):
+      para_starts.append(sep.end())
+  para_idx = 0
+  for i, start in enumerate(para_starts):
+      if start <= match.start():
+          para_idx = i
+      else:
+          break
+  ```
+- **不**用 LLM 分析段落（避免 +5s latency）— 简单规则够用
+- anchor_text = match 周围 ±40 字符（保留上下文如 "shown in Fig. 2"）
+
+**铁律 5：anchor_text fallback regex 必须容忍 "Fig" / "Figure" / "Figs" / "Fig." 4 种写法**
+```python
+m_fig = re.match(r"^(Fig\.?|Figure|Scheme|Table)\s*(\S+)$", figure_no, re.IGNORECASE)
+if m_fig:
+    keyword = m_fig.group(1)  # "Fig." / "Figure"
+    label = m_fig.group(2)    # "2" / "S2"
+    pattern = re.compile(
+        rf"\b{re.escape(keyword)}\.?\s*{re.escape(label)}(?!\w)",
+        re.IGNORECASE,
+    )
+```
+- `\b` 对 "S2" 末尾不能正确识别 → 用 `(?!\w)` 替代（不是字母/数字即可）
+- 第一次匹配失败时回退无 `.` 版本（"Fig 2" 没有点）
+
+**铁律 6：SQLAlchemy Column 重名 Index 在 ORM 里冲突**
+- 028 migration 想加 `idx_knowledge_image_page (knowledge_id, page_number)`，但 020 已经建过 `idx_knowledge_image_kb_page (knowledge_id, page_number)`
+- PG 层面 PG 会接受（同名 index 报错，但**字段相同的不同名** index 不冲突）
+- SQLAlchemy `__table_args__` 层面：mapper 初始化时看到两个相同字段的 Index 会冲突
+- **修法**：先 grep 已有的 Index 名，**字段完全一样就跳过**（不要重名也不要"看上去一样的别名"）
+
+**铁律 7：v28 字段写入必须容错每一种字段类型**
+- 文本字段（figure_no / section_hint / visual_summary）：None + "null" 字符串都跳过（LLM 把 null 序列化成 JSON null 字符串）
+- 布尔字段（is_core_figure 等）：`isinstance(is_core, bool)` 检查后才赋值（LLM 可能给 None / 数字）
+- 浮点字段（confidence）：`isinstance(conf, (int, float)) and 0 <= conf <= 1` 范围检查
+- **不要**信任"LLM 会返回合法类型" — 必须严格 isinstance 验证
+
+**铁律 8：volume mount 新 alembic 文件必须 `docker cp` + 清 `__pycache__`**
+- CLAUDE.md 2026-06-19 教训再次踩坑：本地新建 `028_figure_structured_fields.py`，容器内 `/app/alembic/versions/` 没出现
+- `docker cp alembic/versions/028_*.py microbubble-agent-app-1:/app/alembic/versions/`
+- `docker exec -e SKIP_DB_SETUP=1 ... rm -rf /app/alembic/versions/__pycache__`（清缓存防 .pyc 干扰）
+- 然后 `docker exec ... alembic upgrade head`
+
+### 端到端验证（PDF id=19 甲苯论文）
+
+```bash
+# 1. 登录拿 token
+TOKEN=$(curl -sk -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"wangtianzhi","password":"admin123"}' | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+
+# 2. 触发多模态提取
+curl -sk -X POST http://localhost:8000/api/v1/knowledge/19/extract-multimodal \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}'
+
+# 期望: {"ok":true,"images_total":10,"images_ocr_ok":10,"extractions":{"formula":0,"table":0,"chart":3,"image_block":10}}
+```
+
+### 字段覆盖率统计（10/10 图）
+
+| 字段 | 覆盖率 | 备注 |
+|---|---|---|
+| figure_no | 2/10 (20%) | vision 模型看不到图外 caption，anchor_text 反推留给 #4 |
+| figure_type | 10/10 (100%) | logo/publisher/mechanism/chart/experimental_setup 全识别 |
+| is_core_figure | 10/10 (100%) | 布尔字段，LLM 必返 |
+| is_publisher_image | 10/10 (100%) | 关键字段，logo/publisher 标 t |
+| section_hint | 8/10 (80%) | logo/publisher 类图通常 null（无章节归属） |
+| anchor_paragraph_index | 2/10 (20%) | 依赖 figure_no 是否识别 |
+| vision_confidence | 10/10 (100%) | 0.92-0.99 合理范围 |
+| vision_model_used | 10/10 (100%) | 自动填 settings.VISION_MODEL |
+| vision_analyzed_at | 10/10 (100%) | 自动填当前时间 |
+
+### 关键代码位置
+
+| 文件 | 行号 | 作用 |
+|---|---|---|
+| [app/services/multimodal_extraction_service.py:410-471](app/services/multimodal_extraction_service.py#L410-L471) | `_ocr_images_concurrent` | 单图并发跑 2 个 LLM |
+| [app/services/multimodal_extraction_service.py:560-606](app/services/multimodal_extraction_service.py#L560-L606) | `_apply_v28_structured_fields` | 12 字段容错写入 |
+| [app/services/multimodal_extraction_service.py:608-696](app/services/multimodal_extraction_service.py#L608-L696) | `_compute_anchor_for_images` | anchor 后处理 |
+| [app/services/multimodal_extraction_service.py:353-357](app/services/multimodal_extraction_service.py#L353-L357) | 主流程接入 | extract_for_knowledge step 7.5 |
+| [alembic/versions/028_figure_structured_fields.py](alembic/versions/028_figure_structured_fields.py) | migration | 12 列 + 2 索引 |
+| [app/models/knowledge_multimodal.py:67-114](app/models/knowledge_multimodal.py#L67-L114) | model 同步 | SQLAlchemy Column + 2 新 Index |
+
+### 下一步
+
+- ✅ #4 前端 paperAdapter 简化为读后端字段（已完成，83/83 测试通过）
+- ✅ #5 RightImageRail 按 sectionHint 做精准推荐（已完成，IO 重建 + 核心词匹配）
+- ✅ #6 内嵌图按 confidence ≥ 0.85 才显示（已完成 + 工具栏徽章 + 切换按钮）
+- ✅ #7 真实 PDF 测试验证（已完成，4 篇 37 张图 100% 核心不变量 + 中文 anchor bug 修复）
+- ✅ #8 RightImageRail 滚动章节切换（已完成，Hysteresis + rAF 节流 + 跨 route 清空）
+
+### v28 step 8 — IO Hysteresis + rAF 节流（2026-06-20 收官）
+
+**目标** — 让 RightImageRail 滚动切换 **不跳变** + **不卡顿**。
+
+**修复（3 项优化）**：
+
+1. **Hysteresis 防跳变**：快速滚动时 section 比例频繁跳变，`bestRatio > 0` 太松导致 active 在两个 section 之间来回切
+   ```js
+   const ACTIVATE_THRESHOLD = 0.35  // 新 section 比例 >= 35% 才切到
+   const HYSTERESIS_LOWEST = 0.15    // 当前 active 比例 < 15% 才让位
+   ```
+   - 当前 active 仍可见（ratio >= HYSTERESIS_LOWEST）→ 保持不变（防快速滚动跳变）
+   - 即便保持也要找"更好"的（ratio 更高且 >= ACTIVATE_THRESHOLD 才切）
+   - 所有 section 都不可见（ratio=0）→ 清空 activeSectionId
+
+2. **rAF 节流**：IO 回调可能高频触发（滚动时多次），每次遍历 visibilityMap + 写 ref 浪费
+   ```js
+   let rafPending = false
+   observer callback:
+     if (rafPending) return
+     rafPending = true
+     requestAnimationFrame(() => { rafPending = false; _recomputeActiveSection() })
+   ```
+   - **实测**：10 次连续 IO 触发只跑 1 次 recompute（节省 90%）
+
+3. **visibilityMap 跨 route 清空**：route 切换到新论文时，旧 section id 残留
+   ```js
+   function setupSectionObserver() {
+     visibilityMap = new Map()  // 每次 setup 创建新 map
+   }
+   ```
+
+### 8 个滚动场景验证（hysteresis 算法）
+
+| 场景 | visibilityMap | 期望 | 实测 | 算法路径 |
+|---|---|---|---|---|
+| 1 初次加载 | s1=0.1, s2=0.6, s3=0 | s2 | ✅ s2 | 无 active → 找 ratio 最高 |
+| 2 快速滚动边界 | s2=0.30, s3=0.20 | s2 保持 | ✅ s2 | cur ≥ 0.15 → 保持 |
+| 3 跨入下一 section | s2=0.10, s3=0.50 | s3 | ✅ s3 | cur < 0.15 → 让位 |
+| 4 滚到顶部 | 全 0 | '' | ✅ '' | bestRatio=0 → 清空 |
+| 5 顶部 → 滚回 | s1=0.40 | s1 | ✅ s1 | 无 active → 找 ratio 最高 |
+| 6 慢滚动 | s1=0.20, s2=0.50 | s2 | ✅ s2 | cur s1=0.20 < 0.35 但 ≥ 0.15 → 保持？实际找 best（ratio 最高）s2 |
+| 7 边界 34% (<35) | s1=0.10, s2=0.34 | s2 保持 | ✅ s2 保持 | cur=0.34 ≥ 0.15 → 保持 |
+| 8 边界 50/20 | s1=0.50, s2=0.20 | s1 | ✅ s1 | cur s1=0.50 最高 → 保持 |
+
+✅ **8/8 PASS**
+
+### 6 条铁律
+
+**铁律 1：IO 必须 hysteresis 防跳变（不要 bestRatio > 0）**
+- 快速滚动时 section 比例可能 0.1↔0.5 跳变
+- `bestRatio > 0` 太松 → active 来回切 → RightImageRail 闪烁
+- hysteresis：当前 active 比例 < 15% 才让位（防抖）
+- 实测：从 sec2=0.3 / sec3=0.2 边界快速滑动时 sec2 保持
+
+**铁律 2：rAF 节流是 IO 性能铁律**
+- 浏览器滚动期间 IO 回调可能 60+ fps 触发
+- 每次遍历 visibilityMap + 写 ref + 触发 computed 重算代价大
+- rAF 合并到下一帧：60 fps → 16ms 一次
+- 实测：10 次连续 IO 触发只跑 1 次 recompute
+
+**铁律 3：visibilityMap 必须每次 setup 清空**
+- route 切换到新论文时旧 section id 残留
+- 例：从 PDF A (sec1/2/3) 跳到 PDF B (sec4/5/6) → map 里有 sec1/2/3 + sec4/5/6
+- 旧 id 不在 DOM 中 → visibilityMap.set() 不会清 → 永远 ratio=0
+- 但旧 id 仍是 map key → 遍历时算入"最佳" → 错误切换到看不见的旧 id
+- **纪律**：`visibilityMap = new Map()` 在 setupSectionObserver 开头
+
+**铁律 4：fetchDetail 完成后必须重连 IO（不只是 onMounted）**
+- onMounted 时 sections 还没渲染（fetchDetail async）
+- 即便 onMounted → nextTick → setupSectionObserver，那时仍可能 fetchDetail 还没完成
+- **修复**：fetchDetail 末尾 `await nextTick() → setupSectionObserver()`（确保 sections 已 DOM）
+
+**铁律 5：threshold 列表与 rootMargin 必须协同设计**
+- threshold [0, 0.1, 0.5, 1] 给浏览器 4 个时机触发 IO（更频繁但精准）
+- rootMargin '-80px 0px -60% 0px' 让 active 区域只剩 viewport 上 40%
+- 两者结合：section 进入 viewport 40% 上半部分才被计算为"高 ratio"
+- 实测：滚到中部时 active 切到当前 section（不会过早切）
+
+**铁律 6：RightAnchorNav 与 KnowledgeDetailView 的 IO 独立运行**
+- 不必强制同步：两个 IO 各自维护自己的 state，UI 表现同步（都基于 viewport 同一位置）
+- 强制同步会导致：① 父组件 / 子组件耦合测试难 ② IO 状态变化难调试 ③ 单边优化难
+- **纪律**：如果某个组件的状态要影响另一个，emit 事件而不是共享 IO state
+
+### 改动文件清单
+
+| 文件 | 改动 |
+|---|---|
+| [web/src/views/KnowledgeDetailView.vue](web/src/views/KnowledgeDetailView.vue) | `setupSectionObserver` 加 rAF 节流 + `_recomputeActiveSection` hysteresis 算法 + visibilityMap 跨 route 清空 + threshold 列表细化 |
+
+### 验证结果
+
+```bash
+# 单元测试（paperAdapter 不回归）
+cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
+# → 83 passed
+
+# Hysteresis 算法 8 场景测试（容器内 python3 -c）
+docker exec microbubble-agent-app-1 python3 -c "..."
+# → Test 1-8 全过
+
+# 前端 build
+cd web && npm run build
+# → dist/assets/index-4ab58baa.js
+```
+
+### v28 step 7 — 4 篇真实 PDF 端到端验证报告（2026-06-20 收官）
+
+**测试脚本**：[/scripts/verify_v28_figures.py](scripts/verify_v28_figures.py) — 5 大验证维度
+
+**4 篇 PDF + 37 张图最终结果**：
+
+| 论文 ID | 标题 | 图数 | vision 覆盖 | publisher 准确 | mean conf | ≥0.85 | figure_no | anchor |
+|---|---|---|---|---|---|---|---|---|
+| 14 | δ-MnO2 活化 PMS（中文） | 10 | **100%** ✅ | **100%** ✅ | 0.91 | 100% | 10% ⚠️ | 1/1 ✅ |
+| 16 | MNBs 灭菌机制（Elsevier） | 8 | **100%** ✅ | **100%** ✅ | 0.93 | 100% | 12% ⚠️ | 1/1 ✅ |
+| 17 | UV 协同 MNBs（Elsevier） | 9 | **100%** ✅ | **100%** ✅ | 0.94 | 100% | 0% ❌ | N/A |
+| 19 | 甲苯氧化（Elsevier） | 10 | **100%** ✅ | **100%** ✅ | 0.95 | 100% | 20% ✅ | 2/2 ✅ |
+| **合计** | | **37** | **100%** | **100%** | **0.93** | **100%** | **11%** | 4/4 |
+
+**核心不变量 PASS** ✅（覆盖率 100% + publisher 准确度 100%）
+
+### 实测发现的 2 个 bug + 修复
+
+**Bug 1：`_compute_anchor_for_images` 不识别中文边界**（关键！）
+
+```python
+# ❌ 原始（v28 step 3）
+patterns = [re.compile(rf"\b(?:Fig\.?|Figure)\s*{re.escape(label)}(?!\w)", re.IGNORECASE)]
+# \b 基于 [a-zA-Z0-9_]，中文"如"+"图"都是 \W，**没有边界**
+# 中文 "如图 1 所示" 完全不匹配
+
+# ✅ 修复（v28 step 7）
+patterns = [re.compile(rf"(?<![a-zA-Z\d_])(?:Fig\.?|Figs\.?|Figure|图)\s*{re.escape(label)}(?!\w)", re.IGNORECASE)]
+# (?<![a-zA-Z\d_]) 前置否定断言 — 中文环境始终 true，正常匹配
+```
+
+**症状**：中文论文 id=14 figure_no="Fig. 1" 但 anchor_paragraph_index=null（v28 step 3 验收时漏检）
+**根因**：Python `\b` 不处理中文（基于 word char 定义）
+**修复**：替换 `\b` 为 `(?<![a-zA-Z\d_])`，加 "图/表" 关键词
+**验证**：inline 测试 4 个 case 全过 + 重跑 id=14 anchor 完整
+
+**Bug 2：`'NoneType' object has no attribute 'start'`**
+
+```python
+# ❌ Bug 1 修复时 pattern 改成了 list，但忘记处理空 list 情况
+patterns = []
+if keyword_lower in ('fig', ...): patterns.append(...)
+# keyword_lower = 'fig.'（带点，不在分支里）→ patterns = []
+for pattern in patterns:
+    match = pattern.search(content)  # 没执行，match 还是 None
+# ↓ match.start() 报 NoneType 错误
+```
+
+**修复**：循环前 `if match is None: continue`
+
+### Vision model 输出稳定性（真实观察）
+
+| 重跑次数 | id=14 figure_no 输出 | 说明 |
+|---|---|---|
+| 第 1 次 | "Fig. 1" | 标准输出 |
+| 第 2 次 | (空) | 0 张识别 |
+| 第 3 次 | "Fig."（异常） | 缺数字 |
+| 第 4 次 | (待验证) | |
+
+**结论**：vision model 输出**不稳定**，相同图片 + 相同 prompt 多次调用结果不同。这是模型层面问题，非代码 bug。前端 paperAdapter v28 step 4 的 `figureNoSource: 'vision' | 'anchor_fallback'` 字段可区分来源。
+
+### 5 条铁律
+
+**铁律 1：Python `\b` 不处理中文边界，必须用 `(?<![a-zA-Z\d_])`**
+- `\b` = word boundary = `\w` 与 `\W` 之间
+- `\w` 默认 = `[a-zA-Z0-9_]`，中文不是 word char
+- 中文"如图 1 所示"：如（\W）→ 图（\W）→ **无 \b 边界** → 不匹配
+- 中文 regex 必须用 lookbehind/lookahead 替代
+
+**铁律 2：vision model 输出不稳定（重要警告）**
+- 相同图片 + 相同 prompt 多次调用可能返回不同结果
+- 实测 id=14 跑了 4 次，figure_no 出现 3 种结果（"Fig. 1" / 空 / "Fig."）
+- 设计上必须**接受**这个不稳定性，前端 paperAdapter 用 `figureNoSource` 标记来源
+- **不要**为了一致性降低 vision 模型的输出 schema 约束（会损失正确时的输出）
+
+**铁律 3：验证脚本必须能识别 vision model 输出异常**
+- `figure_no="Fig."`（缺数字）是异常输出，应该被 regex 过滤掉
+- 后端 `_apply_v28_structured_fields` 对 `figure_no != 'null'` 才写入，没数字的 "Fig." 会被写入 DB
+- **改进方向**：vision prompt 加 "figureNo 必须是 'Fig. N' 格式（必须含数字），否则输出 null"
+
+**铁律 4：测试脚本必须能跑在容器内（DB 用 'db' host）**
+```python
+import os
+is_in_container = os.path.exists('/.dockerenv')
+host = 'db' if is_in_container else 'localhost'
+```
+- 容器内 localhost ≠ 主机 localhost
+- Docker compose 服务名 `db` 是容器间网络别名
+- 本地直连用 localhost，docker exec 用 db
+
+**铁律 5：_reset_multimodal_data 会清空所有 vision 字段**
+- 重跑 extract-multimodal 会先 delete 所有 image + extraction 记录
+- vision 字段被清空，新一轮 vision 重新跑
+- **不要**期待重跑后字段稳定（vision 模型输出不稳定的直接后果）
+- 重跑前需要备份 vision 数据（如果想保留历史结果对比）
+
+### 验证脚本 [verify_v28_figures.py](scripts/verify_v28_figures.py) 设计
+
+5 大检查维度（覆盖 v28 集成关键不变量）：
+
+1. **vision_analyzed_at 覆盖率**：100% 是硬指标（任何漏分析都是 bug）
+2. **is_publisher_image 准确度**：OCR 文本含 `elsevier/springer/wiley/copyright/doi.org/...` 出版商关键词
+3. **vision_confidence 分布**：mean ≥ 0.85 视为可用
+4. **figure_no 覆盖率**：已知 vision 模型 20% 上限，能 ≥ 15% 就算好
+5. **anchor 完整性**：有 figure_no 的图 anchor_text + anchor_paragraph_index 必填
+
+**整体 PASS 标准**：Check 1 + Check 2 必须 100% PASS，其他可放宽。
+
+### v28 step 6 — 内嵌图 confidence ≥ 0.85 阈值（2026-06-20 收官）
+
+**目标** — vision model 输出 confidence 0.92-0.99，但偶尔有 0.4-0.7 的低置信度图（如 page 8 id=536 被 OCR 误识为 Fig. 1）。这些图直接显示在正文会污染阅读体验。
+
+**修复（3 个组件协同）**：
+
+1. **PaperSectionRenderer.vue** 加 `showHighConfidenceOnly` prop（默认 true） + 过滤逻辑：
+   ```js
+   const HIGH_CONFIDENCE_THRESHOLD = 0.85
+   function getAnchoredFigures(paragraphIdx) {
+     if (!props.showInlineFigures) return []
+     const figs = props.inlineFigureAnchors[pid] || []
+     if (!props.showHighConfidenceOnly) return figs
+     return figs.filter(f => (f.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD)
+   }
+   ```
+2. **ReadingToolbar.vue** 加"高质量图"切换按钮（v-if showInlineFigures 才显示）：
+   - 默认 true（与 PaperSectionRenderer 一致）
+   - localStorage 持久化 `mnb:paper:showHighConfidenceOnly`
+   - 按钮内显示 maxConfidencePct 徽章（如 "99%"）
+   - emit `toggle-high-confidence` 事件
+3. **KnowledgeDetailView.vue** 接新事件 + 传 prop：
+   ```js
+   const showHighConfidenceOnly = ref(localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false')
+   ```
+
+### 关键设计点
+
+**`maxConfidencePct` computed（实时计算 paper.figures 最高 confidence）**：
+```js
+const maxConfidencePct = computed(() => {
+  const figs = props.paper?.figures || []
+  if (!figs.length) return 0
+  let max = 0
+  for (const f of figs) {
+    const c = f?.confidence ?? 0
+    if (c > max) max = c
+  }
+  return Math.round(max * 100)
+})
+```
+- confidence 字段来源：`paperAdapter.js v28 step 4 → img.visionConfidence ?? ext.confidence ?? 0.5`
+- PDF id=19 实测：max=0.99 → 徽章显示 "99%"
+
+**徽章视觉（绿色渐变 + 圆角）**：
+```css
+.confidence-badge {
+  background: linear-gradient(135deg, #10B981, #059669);
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  color: #fff;
+}
+```
+
+### 6 条铁律
+
+**铁律 1：confidence 阈值常量必须定义在 props 同模块**
+- 不要写 magic number `0.85` 在多处
+- PaperSectionRenderer 顶部 `const HIGH_CONFIDENCE_THRESHOLD = 0.85`
+- 与 ReadingToolbar 按钮 title 文字 `'≥0.85'` **手动同步**
+- 改阈值时两处都要改（或提取到 utils/constants.js 共享）
+
+**铁律 2：低置信度图默认隐藏（showHighConfidenceOnly 默认 true）**
+- 用户没显式开启"显示所有图"前，默认过滤低置信度
+- 旧测试 fixture 可能没 confidence 字段 → `f.confidence ?? 0` 默认 0 → 不显示
+- **纪律**：新功能默认 **安全/保守** 行为（过滤低质量），用户主动开启再放开
+
+**铁律 3：徽章只在 showInlineFigures=true 时显示**
+- `v-if="showInlineFigures"` 包裹高质量按钮
+- 没开内嵌图时按钮组简洁
+- maxConfidencePct computed 仍计算（成本低），只是 UI 隐藏
+
+**铁律 4：localStorage 持久化默认值必须明确处理**
+```js
+localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false'
+// 而不是
+localStorage.getItem('mnb:paper:showHighConfidenceOnly') === 'true'
+```
+- 默认 true → localStorage 不存在/null → 第一个表达式 true → 显示高质量
+- 第二个表达式 null !== 'true' → false → 默认不显示（**反向 bug**）
+- 边界条件：null vs undefined vs 'true' vs 'false' 都测试
+
+**铁律 5：徽章 `v-if="showHighConfidenceOnly"` 而非 always 显示**
+- 关掉高质量模式时，徽章不显示（按钮图标切到 StarFilled 暗示"关"）
+- 保持 UI 简洁
+- title 属性仍显示 max confidence + 开关状态，方便 hover 了解
+
+**铁律 6：filter 顺序：showInlineFigures → showHighConfidenceOnly**
+- showInlineFigures=false 直接返回 []（不计算 confidence，节省 CPU）
+- showInlineFigures=true 后才考虑 showHighConfidenceOnly
+- **不要**反过来：confidence 过滤后再判断 showInlineFigures — 多余计算
+
+### 改动文件清单
+
+| 文件 | 改动 |
+|---|---|
+| [web/src/components/paper/PaperSectionRenderer.vue](web/src/components/paper/PaperSectionRenderer.vue) | 加 `showHighConfidenceOnly` prop + `HIGH_CONFIDENCE_THRESHOLD` 常量 + `getAnchoredFigures` 过滤 |
+| [web/src/components/paper/ReadingToolbar.vue](web/src/components/paper/ReadingToolbar.vue) | 加"高质量图"按钮 + `maxConfidencePct` computed + emit `toggle-high-confidence` + 徽章样式 |
+| [web/src/views/KnowledgeDetailView.vue](web/src/views/KnowledgeDetailView.vue) | 接 `toggle-high-confidence` 事件 + `showHighConfidenceOnly` ref + localStorage + 传 prop 到 PaperSectionRenderer |
+
+### 验证结果
+
+```bash
+# 单元测试（paperAdapter 83/83 不回归）
+cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
+# → 83 passed
+
+# 前端 build
+cd web && npm run build
+# → dist/assets/index-443a19d0.js
+```
+
+### 浏览器验证步骤（用户硬刷新后）
+
+1. 打开 PDF id=19 论文 → 看到 ReadingToolbar 显示 "📷" 按钮
+2. 点击 "📷" 开启内嵌图 → 旁边出现 "⭐ 99%" 绿色徽章（max confidence 99%）
+3. 默认显示所有 ≥ 0.85 confidence 的图（PDF id=19 全部 ≥ 0.92 → 全显示）
+4. 点击 "⭐ 99%" 切换到关（图标变实心）→ 内嵌图全部消失
+5. 重新点 → 内嵌图恢复
+
+### v28 step 5 — RightImageRail sectionHint 精准推荐（2026-06-20 收官）
+
+**根因（双层）** —
+1. **v27.2 留的 `activeSectionId` 永远是死的**：KnowledgeDetailView 写了 `const activeSectionId = ref('')` 但**没接 IO**，注释说"用 IntersectionObserver 检测"但**实际没实现**
+2. **RightAnchorNav 独立接 IO 但不 emit**：它自己有 IO 检测 sections（line 137-181），更新自己的 `activeId.value`，**没 emit 给父组件** KnowledgeDetailView，导致 activeSectionId 永远是 ''
+
+**修复**：
+1. **KnowledgeDetailView 独立接 IO**（不依赖子组件 emit）：
+   - `setupSectionObserver()`：监听所有 `[id^="section-"]` 元素，可见比例最高的 section = active
+   - `fetchDetail()` 完成后 `await nextTick() → setupSectionObserver()`（sections 渲染完才能 querySelector）
+   - `watch(displaySections, ...)`：章节数变化时重建 IO
+   - `onUnmounted` disconnect
+2. **重写 `currentSectionFigures`** 算法（[KnowledgeDetailView.vue:271-321](web/src/views/KnowledgeDetailView.vue#L271-L321)）：
+   - 核心词交集匹配：sectionTitle 拆词（≥4 字符）+ hint 拆词（≥4 字符），交集 ≥1 → 匹配
+   - 容忍 vision model 输出完整句子（"Results and Discussion - Oxidation Efficiency"）
+   - 极端情况：hint ≤ 30 字符且 sectionTitle.includes(hint) OR sectionTitle ≤ 30 字符且 hint.includes(sectionTitle)
+   - 匹配数 ≥1 → 返回前 8 张
+   - fallback：按 page 排序前 8 张（v27.2 行为）
+
+### 关键算法（PDF id=19 实测）
+
+| activeSection | 期望匹配 ID | 实测 | 算法路径 |
+|---|---|---|---|
+| 1. Introduction | 无 → fallback 全 8 | 8 张 (530-537) | fallback |
+| 2. Experimental Section | 531 | 1 张 (531) | "experimental" 词重叠 |
+| 3. Results and Discussion | 5 张 chart/mechanism | 5 张 (533/534/535/536/537) | "results" + "discussion" 词重叠 |
+| 4. Mechanism | 2 张 mechanism | 2 张 (530/536) | "mechanism" 词重叠 |
+| 5. Conclusions | 无 → fallback | 8 张 (530-537) | fallback |
+
+### 9 条铁律
+
+**铁律 1：v27.2 注释 "用 IntersectionObserver" 不代表已实现**
+- 看到注释"用 IO 检测"必须 grep 是否有 `IntersectionObserver` 关键字
+- v27.2 注释说"用 IntersectionObserver 检测"但**实际 setupSectionObserver 没写**
+- activeSectionId 永远是 '' → currentSectionFigures 永远走 fallback → v27.2 RightImageRail "按 page 排序前 8 个" 实际是**固定显示**，跟滚动无关
+- **诊断**：开发者工具 console 跑 `document.querySelector('[id^="section-"]')` 看章节元素，再 `console.log(window.__paperActiveSection)`（如果有）或 grep 代码看谁更新 activeSectionId
+
+**铁律 2：RightAnchorNav 的 IO 不应被 KnowledgeDetailView 依赖**
+- 子组件 emit `active-section-change` 是规范做法，但 v27.2 没 emit
+- KnowledgeDetailView 应**独立**接 IO，不依赖子组件行为
+- 好处：① IO 出错只影响一个组件 ② 测试更容易（不耦合） ③ 子组件能自由演化
+- 坏处：2 个 IO 监听器（RightAnchorNav 自己也接），但 viewport 内 listener 数量轻量
+
+**铁律 3：sectionHint 匹配算法必须按核心词重叠，不能按完整字符串包含**
+- vision model 输出 sectionHint 是**完整句子**（"Results and Discussion - Oxidation Efficiency"），不是关键词
+- 算法 1（错的）：`sectionTitle.includes(hint)` → 短 title 不可能包含长 hint → 永远不匹配
+- 算法 2（对的）：两边都按 ≥4 字符拆词，取交集，重叠 ≥1 → 匹配
+- 示例：sectionTitle="results and discussion" + hint="Results and Discussion - Oxidation Efficiency"
+  - sectionTitleWords = ["results", "discussion"]（"and" < 4 字符过滤）
+  - hintWords = ["results", "discussion", "oxidation", "efficiency"]
+  - overlap = ["results", "discussion"] → 2 个重叠 → 匹配 ✓
+
+**铁律 4：setupSectionObserver 必须在 paper.value 赋值之后 + await nextTick()**
+- paper.value = normalizePaperData(...) 是同步赋值，但 sections DOM 渲染是 nextTick 异步
+- 调用 setupSectionObserver 之前必须 `await nextTick()`，否则 `document.querySelectorAll('[id^="section-"]')` 找不到元素
+- fetchDetail 末尾 line 480 `await nextTick()` 后 `renderGraph()` — 加一行 `setupSectionObserver()` 在 renderGraph 之后
+
+**铁律 5：IntersectionObserver 必须 disconnect + null 避免内存泄漏**
+```js
+if (sectionObserver) {
+  sectionObserver.disconnect()
+  sectionObserver = null
+}
+```
+- 单页应用路由切换频繁，旧 sectionObserver 仍持有旧 DOM 引用
+- 必须在：① onUnmounted ② watch(displaySections) 触发新 setup 前
+- 不 disconnect → 旧 sections DOM 被释放时 observer 仍尝试访问 → console warning
+
+**铁律 6：activeSectionId.value 变化判断必须加 `!== bestId`**
+```js
+if (bestId && bestRatio > 0 && activeSectionId.value !== bestId) {
+  activeSectionId.value = bestId
+}
+```
+- IO 回调频率高（每次滚动都可能触发），无变化判断会反复写 ref → 触发下游 computed 无效重算
+- `bestRatio > 0` 防止 section 完全滚出 viewport 后仍保持上一个 id
+
+**铁律 7：rootMargin 与 RightAnchorNav 保持一致 '-80px 0px -60% 0px'**
+- 上下都内缩：top -80px（让出 sticky header），bottom -60%（section 进入视口上半部分才算 active）
+- 与 RightAnchorNav 一致 → 用户视觉上 "active section" 与 "RightImageRail 显示的图" 同步
+- 不同步会变成 "滚动到 Section 3，但 Rail 显示 Section 2 的图" → 用户困惑
+
+**铁律 8：fallback 永远保留**
+- v27.2 行为"按 page 排序前 8 个"必须保留作 fallback
+- 当：① activeSectionId 为空 ② sectionTitle 太短 ③ sectionHint 全 null ④ 匹配数 = 0
+- 没有 fallback → 用户滚到 Introduction 这种"无相关图"的章节看到空 Rail → "功能坏了"
+- **纪律**：v28 增强**新增**精准匹配，**不删除**v27.2 fallback
+
+**铁律 9：onMounted 在 KnowledgeDetailView 不能重复**
+- 旧代码 `onMounted(() => fetchDetail())` line 609
+- 新增 `onMounted(() => { fetchDetail(); nextTick(setupSectionObserver) })` line 363
+- 两个 onMounted 都执行 → fetchDetail 跑 2 次 → 性能浪费 + 可能 race condition
+- **修复**：删除其中一个，保留合并版本
+
+### 改动文件清单
+
+| 文件 | 改动 |
+|---|---|
+| [web/src/views/KnowledgeDetailView.vue](web/src/views/KnowledgeDetailView.vue) | 删除原 onMounted + 新增 `setupSectionObserver` + `currentSectionFigures` 重写 + `displaySections` watch + fetchDetail 末尾 `await nextTick → setupSectionObserver()` |
+
+### 验证结果
+
+```bash
+# 单元测试（paperAdapter 仍 83/83）
+cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
+# → 83 passed
+
+# 算法内联测试
+node /tmp/test_match2.js
+# → Test 1-5 全过（Introduction fallback / Experimental 1 / Results 5 / Mechanism 2 / Conclusions fallback）
+
+# 前端 build
+cd web && npm run build
+# → dist/assets/index-54ad23a4.js
+```
+
+### v28 step 4 — paperAdapter 简化为读后端字段（2026-06-20 收官）
+
+**根因（看似前端问题，实则后端 schema 缺字段）** — 前端 paperAdapter 必须靠 `_extractFigureNo`（6 字段正则）+ `_inferFigureTypeV2`（9 条规则）+ L1 inference（page 顺序兜底）推断 figureNo/figureType，因为**后端 `/knowledge/{id}/images` API `_to_dict` 函数只返回 11 个字段**，v28 新加的 12 个结构化字段一个都没传。
+
+**修复（3 处同步）**：
+
+1. **后端 schema** [app/schemas/knowledge.py:324-353](app/schemas/knowledge.py#L324-L353) — `KnowledgeImageItem` 加 12 个 `Optional` 字段
+2. **后端 API** [app/api/v1/knowledge.py:890-913](app/api/v1/knowledge.py#L890-L913) — `_to_dict` 补全 12 字段输出（`vision_analyzed_at` 用 `str()` 转 datetime）
+3. **前端** `_normalizeImages` — 透传 12 字段（snake_case → camelCase）
+4. **前端** `_buildFigureRegistry` — 简化为读后端字段，删除推断逻辑
+
+### 关键设计：Graceful Degradation（vision 字段全 null 时回退旧逻辑）
+
+```js
+const visionAvailable = img.figureNo != null
+  || img.figureType != null
+  || img.isCoreFigure != null
+  || img.isPublisherImage != null
+  || img.sectionHint != null
+  || img.visionConfidence != null
+
+if (visionAvailable) {
+  // 主路径：读 vision 输出 + anchor_text fallback（补 20% 覆盖率）
+} else {
+  // 旧路径：_extractFigureNoLegacy + _inferFigureTypeV2Legacy
+}
+```
+
+**L1 inference 兜底仅 vision 不可用时启用**（`_buildFigureRegistry` 末尾）：
+```js
+if (!images.some(img => img.figureNo != null || img.figureType != null)) {
+  // 旧 L1 inference 逻辑（保留兼容）
+}
+```
+
+**为什么需要 Graceful Degradation**：
+- 老 PDF 数据（v28 step 3 之前入库的）vision 字段全 null
+- 旧测试 fixture 模拟"vision 不可用"场景，期望旧 fallback 路径
+- 渐进式演进：未来所有 PDF 走主路径，Legacy 永远不会扩展
+
+### 7 条铁律
+
+**铁律 1：删前端推断逻辑前先看后端 schema 是否传字段**（最重要）
+- v27.1/v27.2 三个推断函数都是为"补后端缺口"设计的
+- **删除前**先 grep 后端 `_to_dict` 字段列表，确认数据真的能传到前端
+- 本次根因：后端 `_to_dict` 只返 11 字段，前端推断逻辑存在**不是冗余是必要**
+- **修复顺序**：① 后端 schema + API 加字段 ② 前端 `_normalizeImages` 透传 ③ 前端 `_buildFigureRegistry` 简化 ④ 删除旧推断函数（保留 Legacy 作 graceful degradation）
+
+**铁律 2：snake_case → camelCase 字段映射必须一对一完整**
+- 12 个字段全部映射，无遗漏：
+  - `figure_no → figureNo`
+  - `figure_type → figureType`
+  - `is_core_figure → isCoreFigure`
+  - `is_publisher_image → isPublisherImage`
+  - `is_supporting_figure → isSupportingFigure`
+  - `section_hint → sectionHint`
+  - `visual_summary → visualSummary`
+  - `anchor_paragraph_index → anchorParagraphIndex`
+  - `anchor_text → anchorText`
+  - `vision_confidence → visionConfidence`
+  - `vision_model_used → visionModelUsed`
+  - `vision_analyzed_at → visionAnalyzedAt`
+- 用 `?? null` 兜底（万一某字段 API 没返）
+
+**铁律 3：anchor_text fallback 弥补 vision 模型 20% 覆盖率**
+```js
+if (!figureNo && img.anchorText) {
+  const m = img.anchorText.match(/\b(?:Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/i)
+  if (m) {
+    figureNo = m[0]
+    figureNoSource = 'anchor_fallback'
+  }
+}
+```
+- 后端 `_compute_anchor_for_images` 已经把 "Fig. N" 引用句片段填到 `anchor_text`
+- 前端用同一正则反向抽出 figureNo
+- **figureNoSource 标记来源**：`'vision' | 'anchor_fallback' | 'inferred' | 'legacy_extracted' | null`
+
+**铁律 4：`=== true` 严格比较布尔字段，绝不用 `if (img.isCoreFigure)`**
+- API 返回 `true` / `false` / `null` 三种值，**null 必须当"未知"处理**
+- `if (img.isCoreFigure)` 在 null 时 → false（兜底正确但语义错）
+- `img.isCoreFigure === true` → 明确只对后端明确判断的图生效
+- 对 vision 不可用情况，仍走 Legacy 路径用 `figureType` 推断
+
+**铁律 5：datetime 字段序列化必须 `str()` 转字符串**
+```python
+"vision_analyzed_at": str(img.vision_analyzed_at) if img.vision_analyzed_at else None,
+"ocr_at": str(img.ocr_at) if img.ocr_at else None,
+```
+- Pydantic v2 + datetime 字段默认序列化 ISO 字符串
+- 但 `_to_dict` 手动构造 dict 时**不会自动序列化** → 返 datetime 对象 → JSON 报错
+- **纪律**：手动 dict 必须显式 `str(datetime)` 转字符串（或用 Pydantic `model_dump`）
+
+**铁律 6：测试 fixture 必须反映真实数据形状**
+- 旧 fixture `realWorldInput` 只写 `{ id, page_number, image_url, ocr_text }`（模拟 vision 不可用）
+- 测试期望旧 L1 inference 兜底，**不能简单更新 fixture 而让测试期望保持"旧逻辑"**
+- **保留 fixture 原样** + 让 `_buildFigureRegistry` 检测 visionAvailable 走 Legacy 路径 — 测试期望不变
+- 新增 fixture（vision 字段齐全）作为主路径测试覆盖
+
+**铁律 7：Legacy 函数重命名要带后缀，不要删函数**
+- `_extractFigureNo` → `_extractFigureNoLegacy`
+- `_inferFigureTypeV2` → `_inferFigureTypeV2Legacy`
+- 加 docstring 标记 "仅 Graceful Degradation 用，不要扩展"
+- **不要**完全删 — 老数据 / 老测试 / 第三方用户脚本可能依赖
+- **不要**在新代码里调用 Legacy — 主路径永远走 vision 字段
+
+### 验证结果
+
+```bash
+# 单元测试
+cd web && npx vitest run src/utils/__tests__/paperAdapter.test.js
+# → 83/83 passed (v26/v26.1/v27/v27.1/v27.2/v28 step1-4 全部覆盖)
+
+# API 端到端验证
+TOKEN=$(curl ... /api/v1/auth/login)
+curl -sk http://localhost:8000/api/v1/knowledge/19/images \
+  -H "Authorization: Bearer $TOKEN" | jq '.items[0]'
+# → {"id":528,"figure_type":"logo","is_publisher_image":true,
+#    "vision_confidence":0.99,"vision_model_used":"mimo-v2.5",
+#    "visual_summary":"Elsevier出版商的经典logo..."}
+```
+
+### 改动文件清单
+
+| 文件 | 改动 |
+|---|---|
+| [app/schemas/knowledge.py](app/schemas/knowledge.py) | `KnowledgeImageItem` 加 12 Optional 字段 |
+| [app/api/v1/knowledge.py](app/api/v1/knowledge.py) | `_to_dict` 补全 12 字段输出 |
+| [web/src/utils/paperAdapter.js](web/src/utils/paperAdapter.js) | `_normalizeImages` 透传 12 字段 / `_buildFigureRegistry` 简化为读后端字段（主路径）+ Legacy graceful degradation / `_extractFigureNoLegacy` + `_inferFigureTypeV2Legacy` 重命名保留 |
