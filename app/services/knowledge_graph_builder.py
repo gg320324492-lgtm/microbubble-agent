@@ -100,7 +100,7 @@ class KnowledgeGraphBuilder:
 
             response = await client.messages.create(
                 model=get_default_model(),
-                max_tokens=2000,
+                max_tokens=4000,  # v28 step 48: 从 2000 提到 4000，避免 5400 字符的 LLM 输出被截断
                 timeout=60,
                 thinking={'type': 'disabled'},
                 messages=[{"role": "user", "content": prompt}]
@@ -119,40 +119,68 @@ class KnowledgeGraphBuilder:
             return {"entities": [], "relations": []}
 
     def _parse_response(self, response: str) -> Dict[str, List]:
-        """解析 LLM 返回的 JSON"""
-        try:
-            # 尝试提取 JSON 块
-            import re
-            json_match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
+        """解析 LLM 返回的 JSON
+
+        v28 step 48 修复: 之前严格匹配 ```json ... ``` 块，
+        但 LLM 输出被 max_tokens 截断时，闭合 ``` 缺失 → 解析失败 → entity=0。
+        新逻辑（按优先级）：
+        1. 找 ```json ... ``` 完整块
+        2. 找 ``` ... ``` 任意代码块（兼容 ```js 等）
+        3. 找第一个 { 到末尾的 JSON 段（兼容 LLM 输出截断）
+        4. 直接 parse 整个响应
+        """
+        import re
+        json_str = None
+
+        # 1. ```json ... ``` 完整块
+        m1 = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+        if m1:
+            json_str = m1.group(1)
+        else:
+            # 2. ``` ... ``` 任意代码块
+            m2 = re.search(r'```\w*\s*(.*?)\s*```', response, re.DOTALL)
+            if m2:
+                json_str = m2.group(1)
             else:
-                # 尝试直接解析整个响应
-                json_str = response.strip()
+                # 3. 第一个 { 到末尾（处理 LLM 截断在闭合 ``` 之前）
+                #    从最后一个 { 开始算（顶层对象），到末尾
+                first_brace = response.find('{')
+                if first_brace >= 0:
+                    # 从最后一个完整对象结束位置截取（找最后一个 }）
+                    last_brace = response.rfind('}')
+                    if last_brace > first_brace:
+                        json_str = response[first_brace:last_brace + 1]
 
+        if not json_str:
+            json_str = response.strip()
+
+        try:
             data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.warning(f"_parse_response JSON 失败: {e}; raw 前 200: {json_str[:200]}")
+            return {"entities": [], "relations": []}
 
-            entities = data.get("entities", [])
-            relations = data.get("relations", [])
+        entities = data.get("entities", [])
+        relations = data.get("relations", [])
 
-            # 验证实体格式
-            valid_entities = []
-            for e in entities:
-                if isinstance(e, dict) and "name" in e and "type" in e:
-                    if e["type"] in [
-                        "Concept", "Method", "Material", "Equipment",
-                        "Metric", "Person", "Organization", "Paper",
-                    ]:
-                        valid_entities.append({
-                            "name": e["name"].strip(),
-                            "type": e["type"],
-                            "description": e.get("description", ""),
-                            "aliases": e.get("aliases", []),
-                        })
+        # 验证实体格式
+        valid_entities = []
+        for e in entities:
+            if isinstance(e, dict) and "name" in e and "type" in e:
+                if e["type"] in [
+                    "Concept", "Method", "Material", "Equipment",
+                    "Metric", "Person", "Organization", "Paper",
+                ]:
+                    valid_entities.append({
+                        "name": e["name"].strip(),
+                        "type": e["type"],
+                        "description": e.get("description", ""),
+                        "aliases": e.get("aliases", []),
+                    })
 
-            # 验证关系格式
-            valid_relations = []
-            entity_names = {e["name"] for e in valid_entities}
+        # 验证关系格式
+        valid_relations = []
+        entity_names = {e["name"] for e in valid_entities}
             for r in relations:
                 if isinstance(r, dict) and "source" in r and "target" in r and "type" in r:
                     if r["type"] in [
