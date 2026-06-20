@@ -34,7 +34,7 @@
             v-for="fig in getAnchoredFigures(i)"
             :key="`fig-${fig.id}`"
             :figure="fig"
-            :figure-no="`图 ${fig.figureNo || fig.id}`"
+            :figure-no="fig._displayNo"
             :caption="fig.caption"
             compact
           />
@@ -80,9 +80,14 @@ const props = defineProps({
   inlineFigureAnchors: { type: Object, default: () => ({}) },
   // v27.2: 是否显示正文内嵌图（默认 false — 推荐使用右侧图表栏）
   showInlineFigures: { type: Boolean, default: false },
+  // v28 step 6 + 15: 内嵌图永远显示（不再有开关）
+  // 保留 prop 是为了父组件传值，v28 step 15 后父组件永远传 true
+  showInlineFigures: { type: Boolean, default: true },
   // v28 step 6: 仅显示高置信度图（confidence >= HIGH_CONFIDENCE_THRESHOLD）
   // 默认 true — vision_confidence 0.85+ 才在正文显示，避免低质量图污染阅读
   showHighConfidenceOnly: { type: Boolean, default: true },
+  // v28 step 15: paper 内所有 figure registry（用于按 page 顺序算 displayNo）
+  figureRegistry: { type: Array, default: () => [] },
 })
 
 // v28 step 6: confidence 阈值常量（vision model 输出 >=0.85 视为高置信度）
@@ -96,12 +101,45 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.85
  * fig.confidence 字段来源（paperAdapter.js v28 step 4）：
  *   img.visionConfidence ?? ext.confidence ?? 0.5
  */
+/**
+ * v28 step 15: 把 figureNo 兜底从 `fig.id` (数据库 ID) 改成 paper 内按 page 顺序的索引号
+ *
+ * 原因：vision model 经常不输出 figureNo，但 fig.id 是数据库自增 ID（如 537），
+ * 渲染成 "图 537" 用户完全看不懂。改为：图 1 / 图 2 ... 按 page 升序
+ *
+ * 同时把 page 信息整合进 figureNo (例如 "Fig. 1 · P5")，避免显示 "P9" 这种孤立标签
+ */
+const _displayNoMap = computed(() => {
+  const map = new Map()  // imageId → "图 1 (P9)" 或 "Fig. 1 (P9)"
+  const allFigs = props.figureRegistry || []
+  // 按 page 升序排序（无 page 的放最后）
+  const sorted = [...allFigs].sort((a, b) => (a.page || 9999) - (b.page || 9999))
+  let idx = 0
+  for (const f of sorted) {
+    if (!f || f.isPublisherImage) continue
+    if (f.kind === 'cover' || f.kind === 'logo') continue
+    idx += 1
+    const pageStr = f.page ? `P${f.page}` : null
+    const inner = f.figureNo
+      ? `${f.figureNo}${pageStr ? ` · ${pageStr}` : ''}`
+      : `${pageStr ? `第 ${f.page} 页` : '图'} · 顺序 ${idx}`
+    map.set(f.imageId ?? f.id, inner)
+  }
+  return map
+})
+
 function getAnchoredFigures(paragraphIdx) {
   if (!props.showInlineFigures) return []
   const pid = `${props.section.id}__p${paragraphIdx}`
   const figs = props.inlineFigureAnchors[pid] || []
-  if (!props.showHighConfidenceOnly) return figs
-  return figs.filter(f => (f.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD)
+  const filtered = props.showHighConfidenceOnly
+    ? figs.filter(f => (f.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD)
+    : figs
+  // 给每个 fig 注入 _displayNo，供 FigureCard 使用
+  return filtered.map(f => ({
+    ...f,
+    _displayNo: _displayNoMap.value.get(f.imageId ?? f.id) || (f.figureNo ? f.figureNo : `图`),
+  }))
 }
 
 const referencesExpanded = ref(false)

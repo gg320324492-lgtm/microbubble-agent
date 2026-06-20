@@ -1,10 +1,10 @@
 <template>
   <figure class="figure-card" :class="{ 'figure-card-compact': compact }">
-    <!-- 图片区域 -->
+    <!-- 图片区域（v28 step 15: PDF 风格直视图，按容器宽度 100% 撑满） -->
     <div class="figure-image-wrapper" @click="handlePreview">
       <img
         :src="figure.src || figure.imageUrl"
-        :alt="`图片 ${figure.id}`"
+        :alt="`图片 ${figureNo || figure.id}`"
         :loading="lazy ? 'lazy' : 'eager'"
         class="figure-image"
         @load="onImgLoad"
@@ -21,7 +21,6 @@
     <figcaption class="figure-caption">
       <div class="figure-caption-header">
         <span v-if="figureNo" class="figure-no">{{ figureNo }}</span>
-        <span v-if="figure.page" class="figure-page">P{{ figure.page }}</span>
         <span v-if="figure.ocrStatus && figure.ocrStatus !== 'done'" class="figure-status" :class="`status-${figure.ocrStatus}`">
           {{ statusLabel(figure.ocrStatus) }}
         </span>
@@ -44,36 +43,22 @@
       <!-- 无图注占位 -->
       <div v-if="!captionText && !figure.ocrText" class="figure-caption-empty">
         暂无图注
-        <span v-if="figure.page">· 第 {{ figure.page }} 页</span>
       </div>
     </figcaption>
 
-    <!-- 预览 dialog -->
+    <!-- 预览 dialog（全屏放大） -->
     <el-dialog
       v-model="previewVisible"
-      :title="`图片详情 #${figure.id}`"
-      width="85%"
-      top="5vh"
+      :title="figureNo || `图片 #${figure.id}`"
+      width="92%"
+      top="3vh"
       align-center
+      :show-close="true"
+      :modal="true"
+      class="figure-preview-dialog"
     >
-      <div class="preview-content">
-        <div class="preview-image-wrap">
-          <img :src="figure.src || figure.imageUrl" :alt="`图片 ${figure.id}`" class="preview-image" />
-        </div>
-        <div class="preview-info">
-          <div class="preview-info-row" v-if="figure.page">
-            <span class="preview-info-label">页码</span>
-            <span>第 {{ figure.page }} 页</span>
-          </div>
-          <div class="preview-info-row" v-if="figure.width && figure.height">
-            <span class="preview-info-label">尺寸</span>
-            <span>{{ figure.width }} × {{ figure.height }}</span>
-          </div>
-          <div v-if="figure.ocrText" class="preview-ocr">
-            <div class="preview-info-label">图中文字（系统识别）</div>
-            <pre>{{ figure.ocrText }}</pre>
-          </div>
-        </div>
+      <div class="preview-image-full">
+        <img :src="figure.src || figure.imageUrl" :alt="`图片 ${figureNo || figure.id}`" class="preview-image" />
       </div>
     </el-dialog>
   </figure>
@@ -152,33 +137,37 @@ const statusLabel = (s) => ({
   border-color: rgba(255, 122, 92, 0.2);
 }
 
+/* v28 step 15: PDF 风格直视图 —— 图片按容器宽度 100% 撑满，不限 max-height
+   （之前 max-height: 620px 强制压缩长图，点 dialog 才能看全）
+   现在 inline 模式下图片 1:1 渲染（保留 aspect-ratio），用户一眼看全 */
 .figure-image-wrapper {
   position: relative;
   background: #fafbfc;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  min-height: 200px;
-  max-height: 620px;
+  padding: 8px;
   cursor: zoom-in;
   overflow: hidden;
 }
 
 .figure-image {
+  width: 100%;
+  height: auto;
   max-width: 100%;
-  max-height: 580px;
   object-fit: contain;
   border-radius: 4px;
   display: block;
+  background: #fff;
 }
 
 .figure-skeleton {
   position: absolute;
-  inset: 0;
+  inset: 8px;
   background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
+  border-radius: 4px;
 }
 
 @keyframes shimmer {
@@ -188,11 +177,11 @@ const statusLabel = (s) => ({
 
 .figure-zoom-hint {
   position: absolute;
-  bottom: 12px;
+  top: 12px;
   right: 12px;
-  background: rgba(31, 41, 55, 0.75);
+  background: rgba(31, 41, 55, 0.78);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   padding: 4px 10px;
   border-radius: 12px;
   display: flex;
@@ -201,6 +190,7 @@ const statusLabel = (s) => ({
   opacity: 0;
   transition: opacity 0.2s;
   pointer-events: none;
+  backdrop-filter: blur(2px);
 }
 
 .figure-card:hover .figure-zoom-hint {
@@ -208,7 +198,7 @@ const statusLabel = (s) => ({
 }
 
 .figure-caption {
-  padding: 14px 20px;
+  padding: 12px 20px;
   border-top: 1px solid var(--color-border-light);
   background: #fff;
 }
@@ -216,26 +206,18 @@ const statusLabel = (s) => ({
 .figure-caption-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 6px;
   flex-wrap: wrap;
 }
 
 .figure-no {
   font-weight: 600;
   color: var(--color-primary);
-  font-size: 14px;
+  font-size: 13px;
   background: var(--color-primary-bg);
   padding: 2px 8px;
   border-radius: 4px;
-}
-
-.figure-page {
-  font-size: 11px;
-  color: #9CA3AF;
-  background: #F3F4F6;
-  padding: 2px 8px;
-  border-radius: 8px;
 }
 
 .figure-status {
@@ -255,8 +237,8 @@ const statusLabel = (s) => ({
 }
 
 .figure-caption-text {
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 13.5px;
+  line-height: 1.65;
   color: #374151;
   word-break: break-word;
 }
@@ -269,7 +251,7 @@ const statusLabel = (s) => ({
 }
 
 .figure-caption-toggle {
-  margin-top: 6px;
+  margin-top: 4px;
   background: none;
   border: none;
   color: var(--color-primary);
@@ -289,8 +271,8 @@ const statusLabel = (s) => ({
 }
 
 .figure-ocr {
-  margin-top: 10px;
-  padding-top: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px dashed var(--color-border-light);
   font-size: 12px;
   color: #6B7280;
@@ -308,7 +290,7 @@ const statusLabel = (s) => ({
 }
 
 .figure-ocr pre {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   padding: 10px;
   background: #F9FAFB;
   border-radius: 6px;
@@ -321,81 +303,32 @@ const statusLabel = (s) => ({
   overflow-y: auto;
 }
 
-/* 预览 */
-.preview-content {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 20px;
-  max-height: 75vh;
-}
-
-@media (max-width: 768px) {
-  .preview-content {
-    grid-template-columns: 1fr;
-  }
-}
-
-.preview-image-wrap {
+/* v28 step 15: 全屏预览 dialog —— 92vw × 94vh，原图按 viewport 完整渲染 */
+.preview-image-full {
   background: #fafbfc;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  max-height: 75vh;
+  max-height: 88vh;
+  min-height: 60vh;
 }
 
 .preview-image {
-  max-width: 100%;
-  max-height: 70vh;
+  width: 100%;
+  height: auto;
+  max-height: 88vh;
   object-fit: contain;
+  display: block;
 }
 
-.preview-info {
-  overflow-y: auto;
-  max-height: 75vh;
-  padding-right: 8px;
-}
-
-.preview-info-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.preview-info-label {
-  color: #6B7280;
-  font-weight: 500;
-  min-width: 60px;
-}
-
-.preview-ocr {
-  margin-top: 12px;
-}
-
-.preview-ocr pre {
-  background: #F9FAFB;
-  padding: 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  line-height: 1.6;
-  max-height: 300px;
-  overflow-y: auto;
-  margin: 6px 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* compact 模式 */
+/* compact 模式：内嵌图 — 仍 100% 撑满容器宽度，但 figure-card 周围 padding 减少 */
 .figure-card-compact .figure-image-wrapper {
-  padding: 12px;
-  min-height: 120px;
-  max-height: 240px;
+  padding: 6px;
 }
 
-.figure-card-compact .figure-image {
-  max-height: 220px;
+.figure-card-compact .figure-caption {
+  padding: 10px 16px;
 }
 </style>

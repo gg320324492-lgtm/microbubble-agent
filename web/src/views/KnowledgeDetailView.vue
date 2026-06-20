@@ -21,11 +21,9 @@
           @reanalyze="handleReanalyze"
         />
 
-        <!-- 阅读器工具栏（阶段 2：组件已就位，翻译功能待后端 API） -->
+        <!-- 阅读器工具栏（v28 step 15: 仅保留字号/行距/回顶） -->
         <ReadingToolbar
           :paper="paper"
-          @toggle-inline-figures="v => showInlineFigures = v"
-          @toggle-high-confidence="v => showHighConfidenceOnly = v"
         />
 
         <!-- 摘要卡片 -->
@@ -98,6 +96,7 @@
             :inline-figure-anchors="paper.inlineFigureAnchors || {}"
             :show-inline-figures="showInlineFigures"
             :show-high-confidence-only="showHighConfidenceOnly"
+            :figure-registry="paper.figureRegistry || []"
           />
         </article>
 
@@ -451,17 +450,18 @@ const moduleCounts = computed(() => {
  * 这些图不应该进正文，只保留在文末多模态总图库。
  */
 /**
- * v27.2: 是否显示正文内嵌图（默认 false — 使用右侧图表栏）
- * 用户可在工具栏切换
+ * v28 step 15: 图片永远自动展示（不再有开关）
+ *
+ * 历史：
+ * - v27.2: 默认 false，用右侧图表栏
+ * - v28 step 10: 默认 true（用户 PDF 阅读器一样）
+ * - v28 step 15: 永远 true，删除工具栏切换按钮
+ *
+ * 保留为 ref 是为了 prop 透传需要（PaperSectionRenderer 仍接收这两个 prop），
+ * 实际值永远是 true，外部不能修改。
  */
-const SHOW_INLINE_FIGURES_KEY = 'mnb:paper:showInlineFigures'
-// v28: 默认显示正文内嵌图（像 PDF 阅读器一样自动展示）
-const showInlineFigures = ref(localStorage.getItem(SHOW_INLINE_FIGURES_KEY) !== 'false')
-const SHOW_HIGH_CONFIDENCE_KEY = 'mnb:paper:showHighConfidenceOnly'
-const showHighConfidenceOnly = ref(localStorage.getItem(SHOW_HIGH_CONFIDENCE_KEY) !== 'false')
-watch(showInlineFigures, (v) => {
-  localStorage.setItem(SHOW_INLINE_FIGURES_KEY, String(v))
-})
+const showInlineFigures = ref(true)
+const showHighConfidenceOnly = ref(true)
 
 function getInlineFiguresFor(section) {
   if (!paper.value || !section) return []

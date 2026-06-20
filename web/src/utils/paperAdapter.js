@@ -1090,12 +1090,18 @@ function _splitLongParagraph(block, maxChars = 1000) {
       }
     }
 
-    // v28 step 13: 下一行是图标题（Fig. N. / Table N.）时独立成段
+    // v28 step 13 + 15: 下一行是图标题（Fig. N. / Table N.）时独立成段
     //    例: "...non-mass transfer-limited processes,\nFig. 3. Effects of ..."
     //    上行末尾是逗号不是句末，但 Fig. 3. 是独立图标题，应独立成段
+    //
+    // 修复 (v28 step 15): 之前用 /^(?:Fig|Figure|Scheme|Table)\.?\s*\d/i 太宽松，
+    //    会把正文里 "Fig. 5e summarizes the proposed mechanism" 误判为图 caption 拆段。
+    //    新规则：必须是「Fig. N. (大写描述)」这种 caption 格式才算图标题。
+    //    - 数字 N 必须是纯数字（1-3 位），不含字母子号（5e / 5a 不是 caption）
+    //    - 数字后必须是 `.` + 空格 + 大写字母（描述开头）
     if (i + 1 < lines.length && cumChars >= 200) {
       const nextLine = lines[i + 1].trim()
-      if (/^(?:Fig|Figure|Scheme|Table)\.?\s*\d/i.test(nextLine)) {
+      if (/^(?:Fig|Figure|Scheme|Table)\.?\s+\d{1,3}\.\s+[A-Z][a-zA-Z]/.test(nextLine)) {
         flush()
       }
     }
