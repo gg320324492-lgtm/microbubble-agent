@@ -538,8 +538,13 @@ export function extractTableMarkers(content) {
  * @returns {{ type: string, level: number } | null}
  */
 function _matchSectionTitle(text) {
-  const trimmed = text.trim()
+  let trimmed = text.trim()
   if (!trimmed || trimmed.length > 120) return null
+
+  // v28 fix: 先剥除行首 [PAGE:N] 标记（OCR 内容常粘在标题前）
+  // 例: "[PAGE:6]3.4. Anti-interference ..." → "3.4. Anti-interference ..."
+  // 否则 NUMBERED_SECTION_RE 匹配失败 → 3.4 章节被跳过（3.3 直接跳到 3.5）
+  trimmed = trimmed.replace(/^\[PAGE:\s*\d+\s*\]\s*/, '')
 
   // 尝试剥离前导编号：1 / 1.1 / 1.1.1 / 1. / 一、
   let stripped = trimmed
@@ -670,7 +675,28 @@ function _parseMarkdownSections(content) {
 }
 
 function _parsePlainTextSections(content) {
-  const lines = content.split('\n')
+  // v28 fix: 先按 \n\n 分段（PDF OCR 输出保留段间空行，是最自然的段落边界）
+  // 然后在每个段内再切 [PAGE:N] 标记 — 这样一段对应 PDF 一段
+  const paragraphs = content.split(/\n\s*\n+/)
+
+  // 把 [PAGE:N] 标记合并进前一行的末尾（OCR 有时把 [PAGE:N] 切成独立行）
+  // 例: "text.\n[PAGE:6]\nnext text" → "text. [PAGE:6]\nnext text"
+  const lines = []
+  for (const para of paragraphs) {
+    const paraLines = para.split('\n')
+    for (let i = 0; i < paraLines.length; i++) {
+      const l = paraLines[i]
+      // [PAGE:N] 单独一行 → 合并到前一行末尾
+      if (/^\s*\[PAGE:\s*\d+\s*\]\s*$/.test(l) && lines.length > 0) {
+        lines[lines.length - 1] = lines[lines.length - 1].trimEnd() + ' ' + l.trim()
+      } else {
+        lines.push(l)
+      }
+    }
+    // 段间用空行分隔
+    lines.push('')
+  }
+
   const sections = []
   let current = null
   let buffer = []
@@ -679,10 +705,14 @@ function _parsePlainTextSections(content) {
   const pushCurrent = () => {
     if (!current) return
     if (buffer.length) {
-      current.blocks.push({
-        type: 'paragraph',
-        content: buffer.join('\n').trim(),
-      })
+      // 用 \n\n 合并段落（每个段是 1 个 block）
+      const text = buffer.join('\n\n').trim()
+      if (text) {
+        current.blocks.push({
+          type: 'paragraph',
+          content: text,
+        })
+      }
       buffer = []
     }
     // 即使 blocks 为空也保留 section（让所有识别到的标题都进 sections 数组）
@@ -691,6 +721,8 @@ function _parsePlainTextSections(content) {
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]
+    // 跳过空行（已被用作段间分隔）
+    if (!line.trim()) continue
     const trimmed = line.trim()
     const match = _matchSectionTitle(trimmed)
 
@@ -720,7 +752,7 @@ function _parsePlainTextSections(content) {
     }
 
     if (current) {
-      if (trimmed) buffer.push(line)
+      buffer.push(line)
     } else {
       if (trimmed) preamble.push(line)
     }
