@@ -413,7 +413,9 @@ References
     expect(paper.figures).toHaveLength(35)
   })
 
-  it('有 formatted_content (markdown) 走 markdown 解析', () => {
+  it('有 formatted_content 含 [PAGE:N] (OCR 内容) 走 plain text 路径', () => {
+    // v28 fix: 含 [PAGE:N] 标记 = OCR 提取的内容, 不是 LLM 真排版的 markdown
+    // 应该走 plain text 路径（markdown 解析会把整篇正文压成 preamble 空 sections）
     const raw = {
       id: 5,
       title: 'Markdown paper',
@@ -433,6 +435,37 @@ This is the abstract in markdown.
 Some intro text.
 
 [PAGE:3]
+`,
+      summary: 'abstract summary',
+      tags: ['x'],
+      file_name: 'm.pdf',
+      analysis_status: 'done',
+      created_at: '2026-06-19T10:00:00',
+      updated_at: '2026-06-19T10:00:00',
+    }
+    const paper = normalizePaperData(raw)
+    // 因为 formatted 含 [PAGE:N] → 强制 plain text
+    // plain text 解析整篇内容为 1 段（preamble）→ sections 可能就 1-2 个
+    expect(paper.sections.length).toBeGreaterThanOrEqual(0)
+    // 关键: pageMarkers 应该 ≥ 3（[PAGE:1/2/3]）
+    expect(paper.pageMarkers.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('有 formatted_content 真 markdown (无 [PAGE:N]) 走 markdown 解析', () => {
+    // 真 LLM 排版的内容通常无 [PAGE:N] 标记, 应走 markdown 路径
+    const raw = {
+      id: 5,
+      title: 'Markdown paper',
+      content: 'Original raw',
+      formatted_content: `# Main Title
+
+## Abstract
+
+This is the abstract in markdown.
+
+## 1 Introduction
+
+Some intro text.
 `,
       summary: 'abstract summary',
       tags: ['x'],
@@ -642,11 +675,13 @@ describe('cleanContent', () => {
 
   // === v26 回归修复新增 ===
 
-  it('v26: 剥离残余 [PAGE:N] 标记（行尾、行中、独立行）', () => {
+  it('v28 fix: 保留 [PAGE:N] 标记（让 extractPageMarkers 提取，不再剥除）', () => {
     const text = 'T. Wang et al. 3 [PAGE:4]\nSection\n[PAGE:3]\n\nPAGE:5'
     const { content } = cleanContent(text)
-    expect(content).not.toContain('[PAGE:4]')
-    expect(content).not.toContain('[PAGE:3]')
+    // v28 fix: 保留 [PAGE:N] 让后续 extractPageMarkers 提取（删了会让 pageMarkers=0 → sections 解析失败）
+    expect(content).toContain('[PAGE:4]')
+    expect(content).toContain('[PAGE:3]')
+    // 仅剥除无方括号的 'PAGE:5'（避免误删 [PAGE:5]）
     expect(content).not.toContain('PAGE:5')
     expect(content).toContain('T. Wang et al.')
   })

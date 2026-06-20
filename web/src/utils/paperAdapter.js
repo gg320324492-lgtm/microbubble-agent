@@ -98,13 +98,14 @@ const INTERNAL_MARKER_RES = [
   /\[IMAGE:[^\]]*\]/g,
   /\[图\s*[Pp]?\d+\]/g, // [图 P1] 等
   // PDF 页码标记（多种格式）
-  // v28 fix: 保留 [PAGE:N] 标记，让 cleanContent 后续的 extractPageMarkers 提取
-  // （之前删除 [PAGE:N] 会破坏 pageMarkers 提取 → sections 解析丢分页 → 正文被压成 1 段）
-  // 现在只在 cleanContent line 374-381 单独处理（剥独立行 + 行内其他格式），
-  // INTERNAL_MARKER_RES 不再删除 [PAGE:N]
-  /\bPAGE\s*[:：]\s*\d+\b/gi,       // PAGE:1 (无方括号)
-  // "T. Wang et al. 3 [PAGE:4]" → 保留作者名 + 页码，去掉 [PAGE:x]
-  /([A-Z]\.\s*[A-Z][a-z]+(?:\s+et\s+al\.?)?)\s+\d+\s*\[PAGE:\s*\d+\s*\]/gi,  // 暂不激进删除（保留作者名+数字）
+  // v28 fix: 完整保留 [PAGE:N] 标记，让 cleanContent 后续的 extractPageMarkers 提取
+  // （任何形式的删除 [PAGE:N] 都会让 pageMarkers=0 → sections 解析失败 → 正文压成 1 段）
+  //
+  // 历史教训:
+  //   - \bPAGE\s*[:：]\s*\d+\b 会匹配 [PAGE:1] 的中间 PAGE:1 部分
+  //     （[ 是 non-word, P 是 word, 构成 \b 边界）→ 替换后 [PAGE:1] 变 []
+  //   - ([A-Z]\.\s*[A-Z][a-z]+...)\s+\d+\s*\[PAGE:\s*\d+\s*\] 会把
+  //     'T. Wang et al. 3 [PAGE:4]' 整段删除（PDF 上下文丢失）
   // === v26 回归修复新增（执行顺序很重要） ===
   // 1) 中文图注（含 JSON 或纯页码）必须先剥，贪婪匹配整段 "图（P8，{...}）"
   //    若后剥则 JSON 正则先吃掉 {...}，留下孤儿 "图（P8，）" 无法再匹配
@@ -371,13 +372,10 @@ export function cleanContent(text, options = {}) {
   //      "T. Wang et al. 3 [PAGE:4]" → "T. Wang et al."
   //      "Vol 513 (2026) 142456 [PAGE:5]" → "Vol 513 (2026) 142456"
   // 关键：用 \n 替代空格，保留行边界（防止章节标题被合并到前一/后行）
-  // v28 fix: 保留 [PAGE:N] 标记（替换为 \n 会破坏后续 extractPageMarkers 提取，
-  //  导致 pageMarkers=0 → sections 解析丢失分页 → 正文被压成 1 段）
-  // 只剥除独立行的 [PAGE:N] 和行内其他形式（不影响页面 marker 提取）
-  result = result.replace(/\n\[PAGE:\s*\d+\s*\][ \t]*\n?/gi, '\n')
-  // 孤立的 [PAGE:x] 行（整行只有页码）
-  result = result.replace(/^[ \t]*\[PAGE:\s*\d+\s*\][ \t]*$/gim, '')
-  // 行内 "PAGE:3"（无方括号，如 "Chapter 1 PAGE:3 Title"）
+  // v28 fix: 完整保留 [PAGE:N] 标记, 让后续 extractPageMarkers 提取
+  // (任何形式的删除 [PAGE:N] 都会让 pageMarkers=0, 然后 sections 解析丢分页,
+  //  正文被压成 preamble 空 sections, 用户看到 9 字符)
+  // 只处理无方括号的 "PAGE:3" 形式 (line 4):
   result = result.replace(/\s+PAGE:\s*\d+\b/gi, ' ')
 
   // 0. 先剥除 LLM blockquote 图描述（> 📊 **图表说明（Px）**\n> ... 整段）
@@ -2005,22 +2003,27 @@ export function normalizePaperData(raw, extra = {}) {
   const rawContent = raw.content || ''
   const rawFormatted = raw.formatted_content || ''
   let hasFormatted = !!(rawFormatted.trim())
+  let useRawFormatted = false
   // 检测 formatted 是否真排版：
-  //   1. 含 # 标题 AND
-  //   2. 含 [PAGE:N] 分页标记（否则 markdown 解析会把整篇正文压成 preamble 空 sections）
+  //   v28 fix (反向判断): 含 [PAGE:N] 标记 = OCR 提取的内容（不是 LLM 真排版）,
+  //   应该走 plain text 路径（否则 markdown 解析会把整篇正文压成 2 个空 sections）
   if (hasFormatted) {
     const sameLength = Math.abs(rawFormatted.length - rawContent.length) <= Math.max(20, rawContent.length * 0.1)
     const hasMdHeading = /(?:^|\n)#{1,4}\s+\S/.test(rawFormatted)
     const hasPageMarker = /\[PAGE:\s*\d+\s*\]/i.test(rawFormatted)
     if (sameLength && !hasMdHeading) {
       hasFormatted = false // 后端直接复制 content 到 formatted_content，当作 plain text
-    } else if (!hasPageMarker) {
-      // v28 fix: 没有 [PAGE:N] 标记时强制按 plain text 处理（OCR 风格的 formatted_content
-      //  可能含 # 标题但缺分页标记，会导致 parsePaperSections 把整篇正文压成空 sections）
+    } else if (hasPageMarker) {
+      // v28 fix: 有 [PAGE:N] 标记 = OCR 内容, 不是 LLM 真排版的 markdown
+      // (即使有 # 标题, 也是后端 inline 注入的多模态提取小节, 不构成真 markdown)
+      // 但仍用 rawFormatted 作 inputContent（因为它才有 [PAGE:N] 标记）
       hasFormatted = false
+      useRawFormatted = true
     }
   }
-  const inputContent = hasFormatted ? rawFormatted : rawContent
+  const inputContent = hasFormatted
+    ? rawFormatted
+    : (useRawFormatted ? rawFormatted : rawContent)
 
   // 中间语言判断（用于后续中文污染过滤）
   const isEnglishPaper = !_isChineseHeavy(inputContent)
@@ -2267,13 +2270,17 @@ export function normalizePaperData(raw, extra = {}) {
   if (typeof window !== 'undefined') {
     window.__PAPER_DIAG__ = {
       sectionsCount: paperDetail.sections.length,
-      sectionsTypes: paperDetail.sections.map(s => ({
-        type: s.type,
-        title: (s.title || '').slice(0, 40),
-        blocksCount: s.blocks?.length || 0,
-        firstBlockContentLen: s.blocks?.[0]?.content?.length || 0,
-        firstBlockPreview: s.blocks?.[0]?.content?.slice(0, 80) || '',
-      })),
+      sectionsTypes: paperDetail.sections.map(s => {
+        const fc = s.blocks?.[0]?.content
+        const fcStr = typeof fc === 'string' ? fc : (fc ? JSON.stringify(fc) : '')
+        return {
+          type: s.type,
+          title: (s.title || '').slice(0, 40),
+          blocksCount: s.blocks?.length || 0,
+          firstBlockContentLen: fcStr.length,
+          firstBlockPreview: fcStr.slice(0, 80),
+        }
+      }),
       pageMarkersCount: paperDetail.pageMarkers?.length || 0,
       figureMarkersCount: paperDetail.figureMarkers?.length || 0,
     }
