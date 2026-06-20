@@ -461,7 +461,8 @@ const moduleCounts = computed(() => {
  * 用户可在工具栏切换
  */
 const SHOW_INLINE_FIGURES_KEY = 'mnb:paper:showInlineFigures'
-const showInlineFigures = ref(localStorage.getItem(SHOW_INLINE_FIGURES_KEY) === 'true')
+// v28: 默认显示正文内嵌图（像 PDF 阅读器一样自动展示）
+const showInlineFigures = ref(localStorage.getItem(SHOW_INLINE_FIGURES_KEY) !== 'false')
 const SHOW_HIGH_CONFIDENCE_KEY = 'mnb:paper:showHighConfidenceOnly'
 const showHighConfidenceOnly = ref(localStorage.getItem(SHOW_HIGH_CONFIDENCE_KEY) !== 'false')
 watch(showInlineFigures, (v) => {

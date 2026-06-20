@@ -82,8 +82,8 @@ const emit = defineEmits(['mode-change', 'font-size-change', 'line-height-change
 const readingMode = ref('original')  // 'original' | 'translation' | 'bilingual'
 const fontSize = ref(16)
 const lineHeight = ref(1.85)
-// v27.2: 是否显示正文内嵌图（默认 false — 推荐使用右侧图表栏）
-const showInlineFigures = ref(localStorage.getItem('mnb:paper:showInlineFigures') === 'true')
+// v28: 默认显示正文内嵌图（图片自动嵌入 Fig. N 引用位置 — 像 PDF 阅读器）
+const showInlineFigures = ref(localStorage.getItem('mnb:paper:showInlineFigures') !== 'false')
 watch(showInlineFigures, (v) => {
   localStorage.setItem('mnb:paper:showInlineFigures', String(v))
   emit('toggle-inline-figures', v)
@@ -91,7 +91,7 @@ watch(showInlineFigures, (v) => {
 const visible = ref(true)  // 图片总开关
 const hasTranslation = ref(false)  // 等待后端翻译 API 接入
 
-// v28 step 6: 仅显示高置信度图（默认 true — 0.85+ 阈值）
+// v28 step 6: 默认显示所有图（读者像 PDF 一样看到全部图，不预设阈值过滤）
 const showHighConfidenceOnly = ref(localStorage.getItem('mnb:paper:showHighConfidenceOnly') !== 'false')
 watch(showHighConfidenceOnly, (v) => {
   localStorage.setItem('mnb:paper:showHighConfidenceOnly', String(v))
