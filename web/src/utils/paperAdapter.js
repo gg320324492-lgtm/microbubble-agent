@@ -2468,6 +2468,9 @@ export function normalizePaperData(raw, extra = {}) {
   }
 
   // 7. 图表清单（带 caption + figureNo + 分类）
+  //    v28 step 14 修复：之前只复制 id/page/src 等原始字段，没传 vision 字段
+  //    （figureNo/figureType/isCoreFigure/isPublisherImage/...）→ _buildFigureRegistry
+  //    走 visionAvailable=false 兜底分支，isCoreFigure 推断错，导致 inlineFigureAnchors 为空
   const figuresRaw = images.map(img => ({
     id: `fig-${img.id}`,
     imageId: img.id,
@@ -2481,6 +2484,19 @@ export function normalizePaperData(raw, extra = {}) {
     ocrError: img.ocrError,
     ocrModel: img.ocrModel,
     caption: null,
+    // v28 vision 12 字段（必须传递，否则 _buildFigureRegistry 推断错误）
+    figureNo: img.figureNo ?? null,
+    figureType: img.figureType ?? null,
+    isCoreFigure: img.isCoreFigure ?? null,
+    isPublisherImage: img.isPublisherImage ?? null,
+    isSupportingFigure: img.isSupportingFigure ?? null,
+    sectionHint: img.sectionHint ?? null,
+    visualSummary: img.visualSummary ?? null,
+    anchorParagraphIndex: img.anchorParagraphIndex ?? null,
+    anchorText: img.anchorText ?? null,
+    visionConfidence: img.visionConfidence ?? null,
+    visionModelUsed: img.visionModelUsed ?? null,
+    visionAnalyzedAt: img.visionAnalyzedAt ?? null,
   }))
   // 使用新的 _buildFigureRegistry 建立 figureRegistry（含 figureType / isCoreFigure / figureNo 等）
   const figureRegistry = _buildFigureRegistry(figuresRaw, extractions, content)
