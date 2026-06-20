@@ -93,18 +93,23 @@ class Neo4jService:
         if driver is None:
             return None
 
+        # v28 step 54: properties 默认 {} 是空 Map，Neo4j 5 报错
+        #   'Property values can only be of primitive types or arrays thereof.
+        #    Encountered: Map{}.'
+        # 修复: 只在 properties 非空时设置该字段（用 CASE WHEN + size 判断）
         query = """
         MERGE (e:%s {name: $name})
         ON CREATE SET
             e.description = $description,
             e.aliases = $aliases,
-            e.properties = $properties,
             e.knowledge_ids = $knowledge_ids,
+            e.properties = CASE WHEN size(keys($properties)) > 0 THEN $properties ELSE null END,
             e.created_at = datetime()
         ON MATCH SET
             e.description = CASE WHEN $description <> '' THEN $description ELSE e.description END,
             e.aliases = CASE WHEN size($aliases) > 0 THEN $aliases ELSE e.aliases END,
             e.knowledge_ids = CASE WHEN size($knowledge_ids) > 0 THEN $knowledge_ids ELSE e.knowledge_ids END,
+            e.properties = CASE WHEN size(keys($properties)) > 0 THEN $properties ELSE e.properties END,
             e.updated_at = datetime()
         RETURN elementId(e) AS id
         """ % entity_type
@@ -154,22 +159,64 @@ class Neo4jService:
             logger.warning(f"未知关系类型: {relation_type}")
             return False
 
-        query = """
-        MATCH (a {name: $source}), (b {name: $target})
-        MERGE (a)-[r:%s]->(b)
-        ON CREATE SET r.properties = $properties, r.created_at = datetime()
-        ON MATCH SET r.properties = CASE WHEN $properties <> {} THEN $properties ELSE r.properties END
+        # v28 step 55: 之前 r.properties = $properties 把整个 dict 作为单一属性值
+        #   触发 'Property values can only be of primitive types or arrays thereof.
+        #    Encountered: Map{...}'
+        # 修复: 把 properties 的每个 key/value 平铺为独立的 Neo4j 关系属性
+        #   knowledge_id → r.knowledge_id (long)
+        #   reason → r.reason (string)
+        #   这样 Neo4j 看到的是 primitive value，能正常存储
+        # 同时保留 r.properties 字段（向后兼容只读场景）
+        props = properties or {}
+        knowledge_id = props.get('knowledge_id')
+        reason = props.get('reason', '')
+
+        # 构建动态 SET 子句（每个 prop 一个独立的 r.<key> 字段）
+        set_clauses = ["r.created_at = datetime()"]
+        params = {
+            'source': source_name,
+            'target': target_name,
+            'reason': reason if reason else '',
+        }
+        for k, v in props.items():
+            param_key = f'p_{k}'
+            # 跳过已经在 params 里的 key
+            if param_key in params or k == 'reason':
+                continue
+            params[param_key] = v
+            set_clauses.append(f'r.{k} = ${param_key}')
+        if knowledge_id is not None:
+            params['knowledge_id'] = knowledge_id
+            set_clauses.append('r.knowledge_id = $knowledge_id')
+
+        # ON MATCH: 只更新非空字段
+        match_set_clauses = ["r.updated_at = datetime()"]
+        for k in props.keys():
+            param_key = f'p_{k}'
+            if param_key in params or k == 'reason':
+                continue
+            match_set_clauses.append(
+                f"r.{k} = CASE WHEN ${param_key} IS NOT NULL THEN ${param_key} ELSE r.{k} END"
+            )
+        if reason:
+            match_set_clauses.append("r.reason = CASE WHEN $reason <> '' THEN $reason ELSE r.reason END")
+        if knowledge_id is not None:
+            match_set_clauses.append("r.knowledge_id = CASE WHEN $knowledge_id IS NOT NULL THEN $knowledge_id ELSE r.knowledge_id END")
+
+        set_clause_str = ', '.join(set_clauses)
+        match_set_str = ', '.join(match_set_clauses)
+
+        query = f"""
+        MATCH (a {{name: $source}}), (b {{name: $target}})
+        MERGE (a)-[r:{relation_type}]->(b)
+        ON CREATE SET {set_clause_str}
+        ON MATCH SET {match_set_str}
         RETURN type(r) AS rel_type
-        """ % relation_type
+        """
 
         try:
             with driver.session() as session:
-                result = session.run(
-                    query,
-                    source=source_name,
-                    target=target_name,
-                    properties=properties or {},
-                )
+                result = session.run(query, **params)
                 record = result.single()
                 if record:
                     logger.debug(f"关系创建: {source_name} -[{relation_type}]-> {target_name}")
