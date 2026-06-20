@@ -322,7 +322,7 @@ class FormulaList(BaseModel):
 
 
 class KnowledgeImageItem(BaseModel):
-    """提取的图片（含 OCR 结果）"""
+    """提取的图片（含 OCR + v28 结构化结果）"""
     id: int
     knowledge_id: int
     page_number: Optional[int] = None
@@ -337,6 +337,20 @@ class KnowledgeImageItem(BaseModel):
     ocr_model: Optional[str] = None
     ocr_at: Optional[str] = None
     created_at: Optional[str] = None
+
+    # ── v28 step 4: vision 模型输出的结构化字段 ──
+    figure_no: Optional[str] = None  # "Fig. 2" / "Fig. S2" / "Table 1"
+    figure_type: Optional[str] = None  # chart / scheme / cover / logo / publisher / mechanism
+    is_core_figure: Optional[bool] = None
+    is_publisher_image: Optional[bool] = None
+    is_supporting_figure: Optional[bool] = None
+    section_hint: Optional[str] = None
+    visual_summary: Optional[str] = None
+    anchor_paragraph_index: Optional[int] = None
+    anchor_text: Optional[str] = None
+    vision_confidence: Optional[float] = None
+    vision_model_used: Optional[str] = None
+    vision_analyzed_at: Optional[str] = None
 
     class Config:
         from_attributes = True

@@ -897,6 +897,19 @@ async def list_knowledge_images(
             "ocr_model": img.ocr_model,
             "ocr_at": str(img.ocr_at) if img.ocr_at else None,
             "created_at": str(img.created_at) if img.created_at else None,
+            # ── v28 step 4: vision 模型输出的 12 个结构化字段 ──
+            "figure_no": img.figure_no,
+            "figure_type": img.figure_type,
+            "is_core_figure": img.is_core_figure,
+            "is_publisher_image": img.is_publisher_image,
+            "is_supporting_figure": img.is_supporting_figure,
+            "section_hint": img.section_hint,
+            "visual_summary": img.visual_summary,
+            "anchor_paragraph_index": img.anchor_paragraph_index,
+            "anchor_text": img.anchor_text,
+            "vision_confidence": img.vision_confidence,
+            "vision_model_used": img.vision_model_used,
+            "vision_analyzed_at": str(img.vision_analyzed_at) if img.vision_analyzed_at else None,
         }
 
     return KnowledgeImageList(
