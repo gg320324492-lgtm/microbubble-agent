@@ -137,6 +137,9 @@ def reformat_knowledge_task(self, knowledge_id: int):
                     # 解析 [FIGURE:N] → MinIO URL
                     formatted = await _resolve_figure_placeholders(knowledge_id, formatted)
 
+                    # v28 step 20: 补全 References 段（LLM 经常截断 refs，从 content 原始数据补）
+                    formatted = _restore_references_section(formatted, knowledge.content or '')
+
                     knowledge.formatted_content = formatted
                     await db.commit()
                     logger.info(f"[reformat] 完成: knowledge_id={knowledge_id}, formatted_len={len(formatted)}")
@@ -151,6 +154,78 @@ def reformat_knowledge_task(self, knowledge_id: int):
     except Exception as e:
         # Celery 自动重试
         raise self.retry(exc=e, countdown=60)
+
+
+def _restore_references_section(formatted: str, original_content: str) -> str:
+    """
+    v28 step 20: 补全 References 段
+
+    LLM 重排经常截断 References 段（如 p19 只写 3 条 [1] [2] [3] 就停了），
+    但 original_content（PDF 提取原始数据）里有完整 refs。
+
+    算法：
+    1. 从 formatted 找 ## References 段（可能没截断也可能截断）
+    2. 从 original_content 找 References 段（OCR 格式）
+    3. 比较两者 ref 数量，original 多就补全
+    4. 用 [N] 切分 original 的 refs，按序合并到 formatted 的 References 段
+
+    重要：只补充 "原本在 original 里的 ref"，不增加新 ref
+    """
+    if not formatted or not original_content:
+        return formatted
+
+    # 1. 找 formatted 的 References 段
+    f_ref_match = re.search(
+        r'(##?\s*References\b[\s\S]*?)(?=\n##?\s|\Z)',
+        formatted, re.IGNORECASE
+    )
+
+    # 2. 找 original_content 的 References 段（v28 step 20: 容忍前导任意非空字符）
+    #    OCR 提取的 content 经常 References 段一直延续到末尾（没有终止词），
+    #    所以兜底直接到 \Z（字符串末尾），但优先匹配终止词
+    o_ref_match = re.search(
+        r'References\s*\n([\s\S]*?)(?=\n\s*(?:Author\s+contributions|Declaration\s+of\s+competing|Graphical\s+abstract|Highlights|Acknowledgments?|Supplementary\s+material|Appendix|Notes\s+and|CRediT)\b|\Z)',
+        original_content, re.IGNORECASE
+    )
+
+    if not o_ref_match:
+        return formatted  # original 也没 References 段
+    original_refs_text = o_ref_match.group(1).strip()
+    # 从 original_refs_text 提取 [N] 开头的所有 ref（按 [N] 切分）
+    # 注意：OCR 提取的 ref 可能跨多行（每行约 70 字符软换行）
+    refs_raw = []
+    for m in re.finditer(r'\[(\d+)\]\s*([\s\S]*?)(?=\[\d+\]|\Z)', original_refs_text):
+        ref_text = re.sub(r'\s+', ' ', m.group(2)).strip()
+        if ref_text and len(ref_text) > 10:
+            refs_raw.append((int(m.group(1)), ref_text))
+
+    if not refs_raw:
+        return formatted
+
+    if f_ref_match:
+        # formatted 有 References 段：补充缺失的 [N]
+        f_ref_section = f_ref_match.group(1)
+        # 已有 [N] 集合
+        existing_nums = set()
+        for m in re.finditer(r'\[(\d+)\]', f_ref_section):
+            existing_nums.add(int(m.group(1)))
+
+        # 找缺失的 [N]
+        missing = [(n, t) for n, t in refs_raw if n not in existing_nums]
+        if not missing:
+            return formatted  # formatted 已完整
+
+        logger.info(f"[reformat] References 段缺 {len(missing)} 条（existing={sorted(existing_nums)} → adding={[n for n,_ in missing]}），从 content 补全")
+
+        # 在 References 段末尾追加缺失 refs
+        append_text = '\n\n' + '\n\n'.join(f"[{n}] {t}" for n, t in missing)
+        # 找 References 段末尾插入（保留后续其他 section）
+        return formatted[:f_ref_match.end()] + append_text + formatted[f_ref_match.end():]
+    else:
+        # formatted 完全没有 References 段：直接追加
+        logger.info(f"[reformat] formatted 缺 References 段，从 content 补 {len(refs_raw)} 条")
+        refs_text = '\n\n'.join(f"[{n}] {t}" for n, t in refs_raw)
+        return formatted.rstrip() + f"\n\n## References\n\n{refs_text}\n"
 
 
 async def _resolve_figure_placeholders(knowledge_id: int, text: str) -> str:

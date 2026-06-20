@@ -17,19 +17,19 @@
       </div>
     </div>
 
-    <!-- 元信息条 -->
+    <!-- v28 step 20: figcaption 结构改为 "Fig. N + caption 标题" 一体化展示 -->
     <figcaption class="figure-caption">
-      <div class="figure-caption-header">
-        <span v-if="figureNo" class="figure-no">{{ figureNo }}</span>
-        <span v-if="figure.page" class="figure-page">第 {{ figure.page }} 页</span>
-        <span v-if="figure.ocrStatus && figure.ocrStatus !== 'done'" class="figure-status" :class="`status-${figure.ocrStatus}`">
-          {{ statusLabel(figure.ocrStatus) }}
-        </span>
+      <!-- 第一行：Fig. N 标题 + caption 描述（标题化效果） -->
+      <div v-if="figureNo" class="figure-caption-title">
+        <span class="figure-no">{{ figureNo }}</span>
+        <span v-if="captionText" class="figure-caption-text">.{{ captionText }}</span>
       </div>
 
-      <!-- 原文图注 caption（v28 step 19: 完整展示，不截断） -->
-      <div v-if="captionText" class="figure-caption-text">
-        {{ captionText }}
+      <!-- 状态（OCR 失败/pending）—— 不展示页码，PDF 阅读体验 -->
+      <div v-if="figure.ocrStatus && figure.ocrStatus !== 'done'" class="figure-status-row">
+        <span class="figure-status" :class="`status-${figure.ocrStatus}`">
+          {{ statusLabel(figure.ocrStatus) }}
+        </span>
       </div>
 
       <!-- 描述（vision model 自动识别）—— v28 step 19: 默认折叠，避免与原文 caption 混淆 -->
@@ -219,6 +219,27 @@ const statusLabel = (s) => ({
   background: #fff;
 }
 
+/* v28 step 20: figcaption 一体化标题（Fig. N + caption 标题） */
+.figure-caption-title {
+  font-size: 14px;
+  line-height: 1.55;
+  color: #1F2937;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.figure-caption-title .figure-no {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-size: 14.5px;
+  margin-right: 4px;
+}
+
+.figure-caption-title .figure-caption-text {
+  color: #374151;
+  font-weight: 400;
+}
+
 .figure-caption-header {
   display: flex;
   align-items: center;
@@ -234,6 +255,10 @@ const statusLabel = (s) => ({
   background: var(--color-primary-bg);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.figure-status-row {
+  margin-bottom: 6px;
 }
 
 .figure-status {
