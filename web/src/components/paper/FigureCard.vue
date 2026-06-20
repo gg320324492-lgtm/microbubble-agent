@@ -21,27 +21,31 @@
     <figcaption class="figure-caption">
       <div class="figure-caption-header">
         <span v-if="figureNo" class="figure-no">{{ figureNo }}</span>
+        <span v-if="figure.page" class="figure-page">第 {{ figure.page }} 页</span>
         <span v-if="figure.ocrStatus && figure.ocrStatus !== 'done'" class="figure-status" :class="`status-${figure.ocrStatus}`">
           {{ statusLabel(figure.ocrStatus) }}
         </span>
       </div>
 
-      <!-- 图注文字（长支持展开） -->
-      <div v-if="captionText" class="figure-caption-text" :class="{ 'is-collapsed': captionCollapsed && isLongCaption }">
+      <!-- 原文图注 caption（v28 step 19: 完整展示，不截断） -->
+      <div v-if="captionText" class="figure-caption-text">
         {{ captionText }}
       </div>
-      <button v-if="isLongCaption" class="figure-caption-toggle" @click="captionCollapsed = !captionCollapsed">
-        {{ captionCollapsed ? '展开 ▾' : '收起 ▴' }}
-      </button>
 
-      <!-- 图中文字（默认折叠）— v27.2 改名 + 默认折叠 -->
+      <!-- 描述（vision model 自动识别）—— v28 step 19: 默认折叠，避免与原文 caption 混淆 -->
+      <details v-if="descriptionText" class="figure-description">
+        <summary>AI 自动识别描述</summary>
+        <p>{{ descriptionText }}</p>
+      </details>
+
+      <!-- 图中文字（默认折叠） -->
       <details v-if="hasRecognizedText" class="figure-ocr">
-        <summary>查看图中文字</summary>
+        <summary>查看图中文字（OCR 识别）</summary>
         <pre>{{ figure.ocrText }}</pre>
       </details>
 
       <!-- 无图注占位 -->
-      <div v-if="!captionText && !figure.ocrText" class="figure-caption-empty">
+      <div v-if="!captionText && !descriptionText && !figure.ocrText" class="figure-caption-empty">
         暂无图注
       </div>
     </figcaption>
@@ -78,13 +82,25 @@ const props = defineProps({
 
 const loaded = ref(false)
 const previewVisible = ref(false)
-const captionCollapsed = ref(true)
+// v28 step 19: captionText 完整展示（不截断不折叠）
+// descriptionText (vision model 识别) 默认折叠到 <details> 里
 
+/**
+ * v28 step 19: 原文 caption（来自 extractions.data.caption 或 figure.caption）
+ * 优先 props.caption（PaperSectionRenderer 传 _captionText）
+ * 否则 figure.caption
+ */
 const captionText = computed(() => {
   return props.caption || props.figure.caption || ''
 })
 
-const isLongCaption = computed(() => captionText.value.length > 200)
+/**
+ * v28 step 19: AI 识别描述（来自 extractions.data.description 或 vision model output）
+ * 默认折叠，让用户主动点开看
+ */
+const descriptionText = computed(() => {
+  return props.figure.description || props.figure.visualSummary || ''
+})
 
 /**
  * 是否显示"查看图中文字"折叠区
@@ -243,31 +259,55 @@ const statusLabel = (s) => ({
   word-break: break-word;
 }
 
-.figure-caption-text.is-collapsed {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.figure-caption-toggle {
-  margin-top: 4px;
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0;
-}
-
-.figure-caption-toggle:hover {
-  text-decoration: underline;
-}
-
 .figure-caption-empty {
   font-size: 12px;
   color: #9CA3AF;
   font-style: italic;
+}
+
+/* v28 step 19: AI 自动识别描述 (默认折叠，避免与原文 caption 混淆) */
+.figure-description {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #F9FAFB;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #4B5563;
+}
+
+.figure-description summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #6B7280;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.figure-description summary::-webkit-details-marker {
+  display: none;
+}
+
+.figure-description summary::before {
+  content: '▸';
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.figure-description[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.figure-description summary:hover {
+  color: var(--color-primary);
+}
+
+.figure-description p {
+  margin: 6px 0 0;
+  line-height: 1.6;
+  word-break: break-word;
 }
 
 .figure-ocr {

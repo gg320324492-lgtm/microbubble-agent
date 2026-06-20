@@ -89,6 +89,8 @@ const sectionIcon = (type) => {
 }
 
 // 章节 type → 显示标签（中文）
+// v28 step 19: 用户要求导航保留数字编号 (3 / 3.1 / 3.1.1)
+// 之前 stripNumberPrefix() 主动剥掉编号，现在改用 "中文章节名 + 数字编号 + 标题" 三段式
 const sectionLabel = (anchor) => {
   const typeLabelMap = {
     abstract: '摘要',
@@ -108,16 +110,21 @@ const sectionLabel = (anchor) => {
     appendix: '附录',
     preamble: '前言',
   }
-  if (anchor.type && typeLabelMap[anchor.type]) {
-    return `${typeLabelMap[anchor.type]} · ${stripNumberPrefix(anchor.title)}`
-  }
-  return stripNumberPrefix(anchor.title)
-}
+  const title = anchor.title || ''
+  // 提取编号 "1." / "3.1." / "3.1.1"
+  const numMatch = title.match(/^(\d+(?:\.\d+)*)\.?\s*/)
+  const num = numMatch ? numMatch[1] : ''
+  // 提取去掉编号后的标题
+  const titleNoNum = numMatch ? title.slice(numMatch[0].length).trim() : title
 
-// 去除章节标题中的编号前缀（"1. Introduction" → "Introduction"）
-const stripNumberPrefix = (title) => {
-  if (!title) return ''
-  return String(title).replace(/^(\d+(?:\.\d+)*)\.?\s+/, '').trim() || title
+  if (anchor.type && typeLabelMap[anchor.type]) {
+    // 中文 type + 编号 + 标题 (例: "结果与讨论 · 3. · Bubble behaviors")
+    return num
+      ? `${typeLabelMap[anchor.type]} · ${num}. ${titleNoNum}`
+      : `${typeLabelMap[anchor.type]} · ${titleNoNum}`
+  }
+  // 纯标题 + 编号
+  return num ? `${num}. ${titleNoNum}` : titleNoNum
 }
 
 function scrollToAnchor(anchor) {

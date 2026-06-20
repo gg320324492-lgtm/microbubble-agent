@@ -1877,10 +1877,36 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
         else continue
       }
 
-      // 均匀分配策略：在该 page 的 paragraphs 中按「之前已分配数」选下一个
-      const pageAllocated = candidates.reduce((acc, p) => acc + (anchors[p.pid]?.length || 0), 0)
-      const targetIdx = pageAllocated % candidates.length
-      const target = candidates[targetIdx]
+      // v28 step 19: 每个 paragraph 最多 1 张图（之前均匀分配会塞 4 张图连发）
+      //   优先选还没分配图的 paragraph
+      //   跨 page 时：找 page 距离最近的"未占位"段落
+      let target = null
+      for (const p of candidates) {
+        if (!anchors[p.pid] || anchors[p.pid].length === 0) {
+          target = p
+          break
+        }
+      }
+      if (!target) {
+        // 该 page 候选段落全被占 → 跳到下一个 page 的未占位段落
+        const figPageIdx = sortedPages.indexOf(fig.page)
+        for (let off = 1; off < sortedPages.length && !target; off++) {
+          for (const dir of [1, -1]) {
+            const idx = figPageIdx + dir * off
+            if (idx < 0 || idx >= sortedPages.length) continue
+            const nearbyPage = sortedPages[idx]
+            const nearbyParas = paragraphsByPage[nearbyPage] || []
+            for (const p of nearbyParas) {
+              if (!anchors[p.pid] || anchors[p.pid].length === 0) {
+                target = p
+                break
+              }
+            }
+            if (target) break
+          }
+        }
+        if (!target) continue  // 真没位置了，放弃
+      }
 
       if (!anchors[target.pid]) anchors[target.pid] = []
       anchors[target.pid].push(fig)
