@@ -78,7 +78,7 @@
               </div>
               <div class="entity-meta">
                 <span v-if="e.type" class="entity-type">{{ e.type }}</span>
-                <span class="entity-confidence">
+                <span v-if="e.confidence" class="entity-confidence">
                   <el-progress
                     :percentage="Math.round((e.confidence || 0) * 100)"
                     :stroke-width="3"
@@ -86,6 +86,7 @@
                   />
                   <span class="confidence-text">{{ Math.round((e.confidence || 0) * 100) }}%</span>
                 </span>
+                <span v-else class="entity-na">N/A</span>
               </div>
             </div>
           </div>
@@ -935,6 +936,14 @@ onUnmounted(() => {
   color: #6B7280;
   margin-top: 4px;
   line-height: 1.5;
+}
+
+.entity-na {
+  font-size: 11px;
+  color: #9CA3AF;
+  background: #F3F4F6;
+  padding: 1px 6px;
+  border-radius: 8px;
 }
 
 /* 正文容器（v26 回归修复：去掉 820px 限制，恢复 1180-1280px 阅读宽度） */
