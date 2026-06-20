@@ -570,13 +570,28 @@ function _matchSectionTitle(text) {
   }
 
   // 编号章节：1 / 1.1 / 1.1.1 / 1 Title / 一、xxx
+  // v28 fix: 末尾是 "-" 或 "of"/"the"/"a" 等英文小写残词 → 标记 continued，
+  //   让 _parsePlainTextSections 把下一行合并到标题末尾
+  //   例: "3.3. Influence ... O3-" → 下一行 "MNBs system" 合并 → 完整标题
+  let continued = false
+  if (stripped.endsWith('-')) {
+    continued = true
+  } else {
+    // 末尾是否英文单词残段（小写字母结尾、不在句末标点）
+    const lastWord = stripped.split(/\s+/).pop() || ''
+    if (/^[a-z]{1,5}$/.test(lastWord) && !/[.!?]$/.test(stripped)) {
+      // 短小写单词结尾且整句无终止标点 → 可能是断字
+      continued = true
+    }
+  }
+
   if (numbered) {
-    return { type: 'normal', level }
+    return { type: 'normal', level, continued }
   }
 
   // 中文编号：一、二、三、
   if (cnNumbered) {
-    return { type: 'normal', level: 1 }
+    return { type: 'normal', level: 1, continued }
   }
 
   return null
@@ -740,9 +755,36 @@ function _parsePlainTextSections(content) {
         pushCurrent()
         // 章节 type 净化：abstract/keywords/highlights/article_info 都视为 metadata
         const normalizedType = match.type
+        // v28 fix: 标题末尾断字（如 "3.3. ... O3-"）→ 把下一非空行合并到标题末尾
+        // match.continued 标志来自 _matchSectionTitle
+        let titleText = trimmed.replace(/[:：]\s*$/, '')
+        if (match.continued) {
+          for (let j = i + 1; j < lines.length; j++) {
+            const nl = lines[j]
+            if (!nl.trim()) continue
+            const nlTrimmed = nl.trim()
+            // 合并下一行（去掉末尾换行，保留单词）
+            titleText = titleText.trimEnd() + ' ' + nlTrimmed
+            // 把下一行的内容也跳过（不让它进入 buffer）
+            i = j  // for 循环 i+=1 后会到 j+1
+            break
+          }
+          // 重新评估合并后的标题是否仍 continued（最多合并 2 行）
+          if (titleText.endsWith('-') || /^[a-z]{1,5}$/.test(titleText.split(/\s+/).pop() || '')) {
+            for (let j = i + 1; j < lines.length; j++) {
+              const nl = lines[j]
+              if (!nl.trim()) continue
+              titleText = titleText.trimEnd() + ' ' + nl.trim()
+              i = j
+              break
+            }
+          }
+          // 合并后再 strip 一次 [PAGE:N] 前缀（可能跨行）
+          titleText = titleText.replace(/\[PAGE:\s*\d+\s*\]\s*/g, '').trim()
+        }
         current = {
           id: _genId('s'),
-          title: trimmed.replace(/[:：]\s*$/, ''),
+          title: titleText,
           level: match.level,
           type: normalizedType,
           blocks: [],
