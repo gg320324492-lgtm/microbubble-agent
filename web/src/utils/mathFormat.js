@@ -52,10 +52,6 @@ function loadMathJax() {
         renderActions: {
           addMenu: [0, '', ''],
         },
-        skipHtmlTags: {
-          // 跳过这些标签内的内容（避免误判）
-          '-': ['style'],
-        },
       },
     }
 
