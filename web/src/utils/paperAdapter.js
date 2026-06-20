@@ -2812,6 +2812,16 @@ export function normalizePaperData(raw, extra = {}) {
   // v28 step 21: 硬规则根据正文 "Fig. N" 引用修正 figureNo
   //    解决 "多模态的 fig7 在正文 3.4 节但标题是 fig1" 错位问题
   _alignFigureNosWithText(content, figureRegistry)
+  // v28 step 27: 把对齐后的 figureNo 同步回 figuresRaw (供 ExtractionPanel 使用)
+  //    之前 figuresRaw 保留 vision 原始 figureNo (530="Fig. 1", 536="Fig. 1" 重复),
+  //    同步后 figuresRaw 顺序与 figureRegistry 一致
+  for (const raw of figuresRaw) {
+    const reg = figureRegistry.find(r => r.imageId === raw.imageId || r.id === raw.id)
+    if (reg && reg.figureNo) {
+      raw.figureNo = reg.figureNo
+      raw.figureNoSource = reg.figureNoSource
+    }
+  }
   // 兼容旧 API：保留 figures 数组（供 ExtractionPanel / 文末图库使用）
   const figures = matchFiguresWithCaptions(figuresRaw, extractions, content)
     .map(fig => {
