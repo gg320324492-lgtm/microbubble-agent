@@ -198,10 +198,6 @@ class KnowledgeGraphBuilder:
 
         return {"entities": valid_entities, "relations": valid_relations}
 
-        except (json.JSONDecodeError, KeyError, TypeError) as e:
-            logger.warning(f"解析 LLM 响应失败: {e}")
-            return {"entities": [], "relations": []}
-
     async def build_graph_for_knowledge(
         self, knowledge_id: int, title: str, content: str
     ) -> Dict[str, int]:
