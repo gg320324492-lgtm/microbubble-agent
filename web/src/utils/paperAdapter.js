@@ -963,6 +963,136 @@ function _buildContentBlocks(content, options = {}) {
 
 
 /**
+ * v28 step 11: 把过长的 paragraph block 拆成多个 paragraph
+ *
+ * PDF 文档的软换行（每行 ~70 字符）让 paragraph block 实际包含整个章节的连续文本
+ * 用户期望"按原文段落分段"，需要在 . 句末 + 后续大写字母开头的位置断句
+ *
+ * 算法:
+ * 1. 跳过 < 200 字符的 block（不需要拆）
+ * 2. 逐句扫描（以 . ! ? 结尾为句末）
+ * 3. 检测句末后跟"段起标志"：
+ *    - 下一句首词是大写字母开头
+ *    - 且不是延续词（The/This/It/However/Moreover...）
+ *    - 且不是 Fig. N. / Table N. 这种图标题
+ *    - 且不是 T. Wang et al. 这种页脚
+ *    - 累积距离 > 300 字符（避免句内分隔）
+ * 4. 在段起处拆 block，分配同样的 page
+ */
+const PARAGRAPH_CONTINUE_WORDS = new Set([
+  'The', 'This', 'It', 'These', 'Those', 'That', 'In', 'To', 'We', 'As',
+  'However', 'Furthermore', 'Moreover', 'For', 'While', 'Where', 'Although',
+  'Since', 'Because', 'When', 'After', 'Before', 'Or', 'And', 'But', 'So',
+  'Yet', 'If', 'By', 'From', 'With', 'At', 'On', 'Through', 'Here', 'There',
+  'Thus', 'Therefore', 'Overall', 'Additionally', 'Indeed', 'Such',
+])
+
+// 元数据/页脚行（不视为段起）
+const PARAGRAPH_FOOTER_RE = /^(?:T\.|Fig\.|Table|Scheme|Journal|Available|Received|Revised|Accepted|E-?mail|Tel\.|Copyright|©|\[PAGE)/
+// 图标题 "Fig. N. ..." 整段都是 caption，不分段
+const FIG_CAPTION_START_RE = /^(?:Fig\.|Figure|Scheme|Table)\s+\d+/
+
+function _isParagraphStart(prevLine, nextLine, cumCharsSinceLastBreak) {
+  if (!prevLine || !nextLine) return false
+  if (!/\.\s*$/.test(prevLine.trim())) return false
+  const next = nextLine.trim()
+  if (!next) return false
+  if (!/^[A-Z]/.test(next)) return false
+  // 过滤元信息 / 页脚
+  if (PARAGRAPH_FOOTER_RE.test(next)) return false
+  // 图标题（Fig. 1. xxx）整段是 caption，不拆
+  if (FIG_CAPTION_START_RE.test(next)) return false
+  // 过滤延续词
+  const firstWord = next.split(/\s+/)[0].replace(/[^A-Za-z]/g, '')
+  if (PARAGRAPH_CONTINUE_WORDS.has(firstWord)) return false
+  // 累积字符 > 300 才视为真正段起（避免句内分隔）
+  if (cumCharsSinceLastBreak < 300) return false
+  return true
+}
+
+function _splitLongParagraph(block, maxChars = 1000) {
+  if (!block?.content) return [block]
+  const text = block.content
+  if (text.length < 500) return [block]  // 不长就不拆
+
+  const lines = text.split('\n')
+  const segments = []
+  let currentBuf = []
+  let cumChars = 0
+  let lastSentenceEndIdx = -1  // 最近一个以 . 结尾的行 idx（在 currentBuf 内）
+  const flush = () => {
+    if (!currentBuf.length) return
+    const segText = currentBuf.join('\n').trim()
+    if (segText) {
+      segments.push(segText)
+    }
+    currentBuf = []
+    cumChars = 0
+    lastSentenceEndIdx = -1
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    const hadSentenceEnd = currentBuf.length > 0 && lastSentenceEndIdx >= 0
+
+    currentBuf.push(line)
+    cumChars += line.length
+
+    // 记录最后一个以 . 结尾的行（buffer 内 idx）
+    if (/[.!?]\s*$/.test(trimmed)) {
+      lastSentenceEndIdx = currentBuf.length - 1
+    }
+
+    // 看下一行是否是段起
+    if (i + 1 < lines.length && lastSentenceEndIdx >= 0 && cumChars >= 300) {
+      // 取 buffer 中最后一个有 . 的行作为 prev
+      const prevLine = currentBuf[lastSentenceEndIdx]
+      const nextLine = lines[i + 1]
+      if (_isParagraphStart(prevLine, nextLine, cumChars)) {
+        flush()
+      }
+    }
+  }
+  flush()
+
+  // 合并太小的 segment 到前一个（避免出现 50 字独立段）
+  const merged = []
+  for (const seg of segments) {
+    if (merged.length && seg.length < 100) {
+      merged[merged.length - 1] += '\n' + seg
+    } else {
+      merged.push(seg)
+    }
+  }
+
+  return merged.map((text, i) => ({
+    type: 'paragraph',
+    content: text,
+    page: block.page,
+    indexInSection: i,
+  }))
+}
+
+function _splitOversizedParagraphs(sections) {
+  for (const section of sections) {
+    if (!section.blocks) continue
+    const newBlocks = []
+    for (const block of section.blocks) {
+      if (block.type !== 'paragraph') {
+        newBlocks.push(block)
+        continue
+      }
+      const split = _splitLongParagraph(block)
+      newBlocks.push(...split)
+    }
+    section.blocks = newBlocks
+  }
+  return sections
+}
+
+
+/**
  * 自动识别摘要（如果后端没返回 summary 也没 formatted_content）
  *
  * 起点：ABSTRACT / Abstract / 摘要
@@ -2214,10 +2344,15 @@ export function normalizePaperData(raw, extra = {}) {
     })
   })
 
-  // 5.5 v28 step 10: 对英文论文的 paragraph block 应用 chemFormat（Unicode 上下标）
-  //    跳过 [PAGE:N] 标记行（避免误伤），跳过中文论文（避免把"O3" 误识别成元素）
+  // 5.5 v28 step 11: 把过长的 paragraph block 按句末 + 段起标志拆成多段
+  //    PDF 文档的软换行让一个 paragraph block 实际包含整章连续文本，
+  //    用户期望"按原文段落分段"，需要按句末 + 后续大写字母开头处断句
+  _splitOversizedParagraphs(sections)
+
+  // 5.6 v28 step 10: 对英文论文的 paragraph block 应用 chemFormat（Unicode 上下标）
+  //    必须放在 _splitOversizedParagraphs 之后（避免先改字符数再 split 误判）
   if (!isEnglishPaper) {
-    // 中文论文不需要 Unicode 上下标（用户报告中文论文化学式已正确显示）
+    // 中文论文不需要 Unicode 上下标
   } else {
     sections.forEach(section => {
       if (!section.blocks) return
