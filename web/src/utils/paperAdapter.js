@@ -695,24 +695,22 @@ function _parseMarkdownSections(content) {
 function _parsePlainTextSections(content) {
   // v28 fix: 先按 \n\n 分段（PDF OCR 输出保留段间空行，是最自然的段落边界）
   // 然后在每个段内再切 [PAGE:N] 标记 — 这样一段对应 PDF 一段
+  // v28 step 12 改进：先确保 [PAGE:N] 前后有换行符（OCR 有时把 PAGE 行黏在文字后）
+  //    否则 split(/\n\s*\n+/) 会把 [PAGE:N] 吞进前后 paragraph，page 信息丢失
+  content = content
+    .replace(/([^\n])(\[PAGE:\s*\d+\s*\])/g, '$1\n$2')
+    .replace(/(\[PAGE:\s*\d+\s*\])([^\n])/g, '$1\n$2')
+
   const paragraphs = content.split(/\n\s*\n+/)
 
-  // 把 [PAGE:N] 标记合并进前一行的末尾（OCR 有时把 [PAGE:N] 切成独立行）
-  // 例: "text.\n[PAGE:6]\nnext text" → "text. [PAGE:6]\nnext text"
+  // 保留 [PAGE:N] 独立成行（不再合并到前一行末尾）
   const lines = []
   for (const para of paragraphs) {
     const paraLines = para.split('\n')
-    for (let i = 0; i < paraLines.length; i++) {
-      const l = paraLines[i]
-      // [PAGE:N] 单独一行 → 合并到前一行末尾
-      if (/^\s*\[PAGE:\s*\d+\s*\]\s*$/.test(l) && lines.length > 0) {
-        lines[lines.length - 1] = lines[lines.length - 1].trimEnd() + ' ' + l.trim()
-      } else {
-        lines.push(l)
-      }
+    for (const l of paraLines) {
+      lines.push(l)
     }
-    // 段间用空行分隔
-    lines.push('')
+    lines.push('')  // 段间用空行分隔
   }
 
   const sections = []
@@ -723,14 +721,49 @@ function _parsePlainTextSections(content) {
   const pushCurrent = () => {
     if (!current) return
     if (buffer.length) {
-      // 用 \n\n 合并段落（每个段是 1 个 block）
-      const text = buffer.join('\n\n').trim()
-      if (text) {
-        current.blocks.push({
-          type: 'paragraph',
-          content: text,
-        })
+      // v28 step 12: 把 buffer 按 [PAGE:N] / [FIGURE:N] 行切分成多个 block
+      //    之前 buffer.join('\n') 把所有行当 paragraph 文本，丢失 [PAGE:N] 信息
+      //    现在识别特殊行，提取为独立 block，paragraph 用 \n 拼剩余行
+      let currentPage = null
+      let paraBuf = []
+      const flushPara = () => {
+        if (!paraBuf.length) return
+        const text = paraBuf.join('\n').trim()
+        if (text) {
+          current.blocks.push({
+            type: 'paragraph',
+            content: text,
+            page: currentPage,
+          })
+        }
+        paraBuf = []
       }
+      for (const line of buffer) {
+        const trimmed = line.trim()
+        const pageMatch = /^\s*\[PAGE:\s*(\d+)\s*\]\s*$/i.exec(trimmed)
+        if (pageMatch) {
+          flushPara()
+          currentPage = parseInt(pageMatch[1], 10)
+          current.blocks.push({
+            type: 'page_marker',
+            content: currentPage,
+            page: currentPage,
+          })
+          continue
+        }
+        const figMatch = /^\s*\[FIGURE:([\d.a-zA-Z]+)\]\s*$/i.exec(trimmed)
+        if (figMatch) {
+          flushPara()
+          current.blocks.push({
+            type: 'figure_marker',
+            content: figMatch[1],
+            page: currentPage,
+          })
+          continue
+        }
+        paraBuf.push(line)
+      }
+      flushPara()
       buffer = []
     }
     // 即使 blocks 为空也保留 section（让所有识别到的标题都进 sections 数组）
@@ -1732,47 +1765,74 @@ function _buildInlineFigureAnchors(sections, figureRegistry) {
     }
   }
 
-  // 4. L3: 按 page 顺序就近插入（处理 vision model 没识别 figureNo 的图）
-  //    算法：取所有仍未 placed 的 isCoreFigure，按 page 升序，
-  //    找该 page 或下一页的最后一个 paragraph block，append 到该段
+  // 4. L3: 按 page 顺序 + 段落均匀分配（处理 vision model 没识别 figureNo 的图）
+  //    改进（v28 step 12）：
+  //    - 同 page 多张图分别插入不同段落（避免塞同一段）
+  //    - 跳过 preamble 段（preamble 是元信息，不应插图）
+  //    - 「该 page 内均匀分配 + 跨 page 时分配到 page 距离最近的段」
   const remainingFigures = figureRegistry.filter(
     f => f.isCoreFigure && !placedFigures.has(f.id) && f.page
   )
   if (remainingFigures.length > 0) {
     // 按 (page, id) 排序 — 稳定
-    remainingFigures.sort((a, b) => (a.page || 0) - (b.page || 0))
+    remainingFigures.sort((a, b) => {
+      const dp = (a.page || 0) - (b.page || 0)
+      return dp !== 0 ? dp : (a.id || 0) - (b.id || 0)
+    })
 
-    // 建立 (page → 候选 paragraphs) 映射
-    const paragraphsByPage = {}  // page → [{pid, page, idx}]
+    // 收集所有 paragraph block（跳过 preamble/highlights/abstract 等元信息 section）
+    const SKIP_SECTIONS = new Set(['preamble', 'highlights', 'keywords', 'abstract', 'article_info'])
+    const allParagraphs = []  // [{pid, page}]
+    const paragraphsByPage = {}
     for (const section of sections) {
+      if (SKIP_SECTIONS.has(section.type)) continue
       if (!section.blocks) continue
       section.blocks.forEach((block, idx) => {
         if (block.type !== 'paragraph') return
-        const p = block.page
-        if (!p) return
-        if (!paragraphsByPage[p]) paragraphsByPage[p] = []
-        paragraphsByPage[p].push({
-          pid: `${section.id}__p${idx}`,
-          page: p,
-        })
+        const pid = `${section.id}__p${idx}`
+        const p = block.page || null
+        allParagraphs.push({ pid, page: p })
+        if (p) {
+          if (!paragraphsByPage[p]) paragraphsByPage[p] = []
+          paragraphsByPage[p].push({ pid, page: p })
+        }
       })
     }
-    const allPages = Object.keys(paragraphsByPage).map(Number).sort((a, b) => a - b)
+    if (allParagraphs.length === 0) {
+      return anchors
+    }
+
+    const sortedPages = Object.keys(paragraphsByPage).map(Number).sort((a, b) => a - b)
 
     for (const fig of remainingFigures) {
-      // 找 fig.page 或下一 page 的最后一个段落
-      let targetPage = null
-      for (const p of allPages) {
-        if (p >= (fig.page || 0)) {
-          targetPage = p
-          break
+      // 找该 page 或 page 距离最近的段落
+      let candidates = paragraphsByPage[fig.page]
+
+      if (!candidates?.length) {
+        // 找最近的 page
+        let closestPage = null
+        let minDist = Infinity
+        for (const p of sortedPages) {
+          const dist = Math.abs(p - fig.page)
+          if (dist < minDist) {
+            minDist = dist
+            closestPage = p
+          }
         }
+        if (closestPage != null) candidates = paragraphsByPage[closestPage]
       }
-      if (targetPage === null) continue
-      const candidates = paragraphsByPage[targetPage]
-      if (!candidates?.length) continue
-      // 取该 page 最后一个 paragraph（图片放在段末更自然）
-      const target = candidates[candidates.length - 1]
+
+      if (!candidates?.length) {
+        // 极端 fallback：找第一个有 page 的段落
+        if (allParagraphs[0]) candidates = [allParagraphs[0]]
+        else continue
+      }
+
+      // 均匀分配策略：在该 page 的 paragraphs 中按「之前已分配数」选下一个
+      const pageAllocated = candidates.reduce((acc, p) => acc + (anchors[p.pid]?.length || 0), 0)
+      const targetIdx = pageAllocated % candidates.length
+      const target = candidates[targetIdx]
+
       if (!anchors[target.pid]) anchors[target.pid] = []
       anchors[target.pid].push(fig)
       placedFigures.add(fig.id)
@@ -2325,12 +2385,13 @@ export function normalizePaperData(raw, extra = {}) {
   }
 
   // 5. 给每个 section 注入 page 标记
+  //    v28 step 12 改进：plain text parser 内部已把 [PAGE:N] 提取为 page_marker block，
+  //    这里只需要从 page_marker 继承 page 字段到后续 paragraph/figure_marker blocks
   sections.forEach(section => {
     if (section.type === 'preamble') {
-      // preamble 内部按 [PAGE:N] 拆 block
       section.blocks = _buildContentBlocks(section.blocks[0]?.content || '')
-      return
     }
+    // 所有 section：从 page_marker 继承 page
     let currentPage = null
     section.blocks = section.blocks.map(b => {
       if (b.type === 'page_marker') {
