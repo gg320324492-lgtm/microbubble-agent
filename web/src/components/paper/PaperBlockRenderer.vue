@@ -28,6 +28,13 @@
       v-html="renderedContent"
     ></p>
 
+    <!-- v28 step 38: Markdown 表格 -->
+    <div
+      v-else-if="block.type === 'table'"
+      class="block-table-wrapper"
+      v-html="renderedContent"
+    ></div>
+
     <!-- 标题（section 内部小标题） -->
     <h4 v-else-if="block.type === 'heading'" class="block-heading">
       {{ block.content }}
@@ -40,7 +47,6 @@ import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
 import { autoLinkContent } from '@/utils/paperAdapter'
 import { formatChemicalText } from '@/utils/chemFormat'
-import { renderMathInText } from '@/utils/mathFormat'
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -55,19 +61,60 @@ const blockClasses = computed(() => ({
 
 const renderedContent = computed(() => {
   const raw = props.block.content || ''
-  // 渲染管线（v28 step 35 数学公式支持）：
+  // v28 step 38: Markdown 表格特殊处理（直接转 HTML，不用 autoLinkContent）
+  if (props.block.type === 'table') {
+    return renderMarkdownTable(raw)
+  }
+  // 渲染管线（v28 step 37 简化）：
   //   raw (纯文本)
   //     → formatChemicalText (纯文本 + Unicode 上下标)
-  //     → renderMathInText (escape 全文 + 单独渲染 $$..$$ / $..$ LaTeX 公式)
-  //     → autoLinkContent (DOI/URL/邮箱包 <a>)
+  //     → autoLinkContent (escape + DOI/URL/邮箱包 <a>)
   //     → v-html 渲染
-  //
-  // 注意：formatChemicalText 已改为返回纯文本（不再返回 <span class="chem-formula">），
-  // 因此 autoLinkContent 的 _escapeHtml 不会再次转义化学式 → 不会泄漏 HTML 源码。
+  //   公式渲染: 由全局 MathJax 自动 typeset 整页 #paper-content
+  //     （不在这里手动包 <span class="math">，避免 escape 后 LaTeX 命令被破坏）
   const formatted = props.isChinese ? raw : formatChemicalText(raw)
-  const withMath = renderMathInText(formatted)  // 关键：先公式后 link
-  return autoLinkContent(withMath)
+  return autoLinkContent(formatted)
 })
+
+/**
+ * v28 step 38: Markdown 表格转 HTML
+ *
+ * 输入: | col1 | col2 |\n|---|---|\n| a | b |
+ * 输出: <table><thead><tr><th>col1</th>...
+ *
+ * 安全: 每格内容 HTML escape，但保留行内公式（MathJax 会后处理）
+ */
+function renderMarkdownTable(text) {
+  if (!text || !text.trim()) return ''
+  const lines = text.split('\n').filter(l => l.trim())
+  if (lines.length < 2) return '<pre>' + text + '</pre>'
+
+  // 解析表头
+  const parseRow = (line) => {
+    // 去掉首尾 | 后 split('|')
+    let inner = line.trim()
+    if (inner.startsWith('|')) inner = inner.slice(1)
+    if (inner.endsWith('|')) inner = inner.slice(0, -1)
+    return inner.split('|').map(c => c.trim())
+  }
+
+  const headers = parseRow(lines[0])
+  // lines[1] 是分隔行 |---|---:|
+  const rows = lines.slice(2).map(parseRow)
+
+  const escape = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  const ths = headers.map(h => `<th>${escape(h)}</th>`).join('')
+  const trs = rows.map(row => {
+    const tds = row.map(c => `<td>${escape(c)}</td>`).join('')
+    return `<tr>${tds}</tr>`
+  }).join('')
+
+  return `<table class="paper-md-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
+}
 </script>
 
 <style scoped>
@@ -111,6 +158,40 @@ const renderedContent = computed(() => {
   font-weight: 600;
   color: #1F2937;
   margin: 20px 0 10px;
+}
+
+/* v28 step 38: Markdown 表格样式 */
+.block-table-wrapper {
+  margin: 16px 0;
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-light, #E5E7EB);
+}
+.block-table-wrapper :deep(.paper-md-table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  background: #fff;
+}
+.block-table-wrapper :deep(.paper-md-table th) {
+  background: #F9FAFB;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border-light, #E5E7EB);
+  color: #1F2937;
+}
+.block-table-wrapper :deep(.paper-md-table td) {
+  padding: 8px 12px;
+  border-bottom: 1px solid #F3F4F6;
+  color: #374151;
+  vertical-align: top;
+}
+.block-table-wrapper :deep(.paper-md-table tr:last-child td) {
+  border-bottom: none;
+}
+.block-table-wrapper :deep(.paper-md-table tr:hover) {
+  background: #FAFAFA;
 }
 
 .block-page-marker-hidden {

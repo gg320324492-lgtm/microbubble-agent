@@ -417,7 +417,7 @@ function _recomputeActiveSection() {
  */
 watch(displaySections, () => {
   nextTick(() => setupSectionObserver())
-  // v28 step 36: 论文 sections 变化时重渲染数学公式
+  // v28 step 37: 论文 sections 变化时重 typeset 数学公式
   nextTick(() => typesetMath())
 }, { deep: true })
 
@@ -425,11 +425,13 @@ onMounted(() => {
   fetchDetail()
   // 等 sections 渲染完毕再接 IO
   nextTick(() => setupSectionObserver())
-  // v28 step 36: 等 paper content 渲染完后 typeset 数学公式
+  // v28 step 37: 等 paper content 渲染完后 typeset 数学公式
+  //   注意：MathJax v3 startup.typeset=true 已经处理首屏，
+  //   但 SPA 路由切换到不同论文时需要重新 typeset
   nextTick(() => typesetMath())
 })
 
-// v28 step 36: typesetMath helper（懒加载 MathJax + typeset 所有 .math 元素）
+// v28 step 37: typesetMath helper（懒加载 MathJax + typeset 整个 article）
 async function typesetMath() {
   try {
     const { typesetMathJax } = await import('@/utils/mathFormat')

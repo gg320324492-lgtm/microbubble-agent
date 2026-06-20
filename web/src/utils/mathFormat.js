@@ -34,7 +34,7 @@ function loadMathJax() {
       return
     }
 
-    // 配置 MathJax v3
+    // 配置 MathJax v3（自动 typeset 整页）
     window.MathJax = {
       tex: {
         inlineMath: [['$', '$'], ['\\(', '\\)']],
@@ -43,14 +43,18 @@ function loadMathJax() {
         packages: { '[+]': ['ams', 'noerrors', 'noundefined', 'physics', 'color', 'mhchem'] },
       },
       svg: {
-        fontCache: 'none',  // 避免字体缓存 404
+        fontCache: 'none',
       },
       startup: {
-        typeset: false,  // 禁用自动 typeset，由我们手动触发
+        typeset: true,  // 自动 typeset 整页（v28 step 37）
       },
       options: {
         renderActions: {
-          addMenu: [0, '', ''],  // 禁用菜单
+          addMenu: [0, '', ''],
+        },
+        skipHtmlTags: {
+          // 跳过这些标签内的内容（避免误判）
+          '-': ['style'],
         },
       },
     }
