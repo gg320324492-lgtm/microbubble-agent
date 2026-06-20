@@ -117,17 +117,34 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.85
 const _displayNoMap = computed(() => {
   const map = new Map()  // imageId → "Fig. N" 字符串
   const allFigs = props.figureRegistry || []
+  // v28 step 22: 用 figureType 字段（vision model 输出）判断 publisher/logo
+  //    之前用 figure.kind（前端字段），但 figureRegistry 不含 kind → 全部判 false
+  //    导致 528 (Elsevier logo) / 529 (publisher) 被算进 fallbackIdx 计数
+  const isPublisher = (f) => f.isPublisherImage === true
+    || ['cover', 'logo', 'publisher'].includes(f.figureType)
+    || f.kind === 'cover' || f.kind === 'logo'
   // 按 page 升序排序（无 page 放最后）
   const sorted = [...allFigs].sort((a, b) => (a.page || 9999) - (b.page || 9999))
   let fallbackIdx = 0
   for (const f of sorted) {
-    if (!f || f.isPublisherImage) continue
-    if (f.kind === 'cover' || f.kind === 'logo') continue
+    if (!f) continue
+    if (isPublisher(f)) continue
     fallbackIdx += 1
     let label
     if (f.figureNo) {
       // 1. 真实图号（vision model 识别出来）—— 保留原值，如 "Fig. 5" / "Fig. 5e"
-      label = f.figureNo
+      //    注意：vision 偶尔给重复 "Fig. 1" 给多张图，按 page 顺序去重（第一个 Fig. N 占 N，后续 Fig. N 转 Fig. X+idx）
+      const usedNums = new Set([...map.values()]
+        .map(v => v.match(/\d+/)?.[0])
+        .filter(Boolean)
+        .map(Number))
+      const figNoNum = parseInt(f.figureNo.match(/\d+/)?.[0] || '0', 10)
+      if (figNoNum && usedNums.has(figNoNum)) {
+        // 重复编号 → 转 fallback
+        label = `Fig. ${fallbackIdx}`
+      } else {
+        label = f.figureNo
+      }
     } else {
       // 2. 兜底：按 page 顺序分配 "Fig. N"
       label = `Fig. ${fallbackIdx}`

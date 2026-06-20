@@ -2487,9 +2487,9 @@ function _stripFigureCaptionsAndAssociate(content, figuresRaw) {
 
     // 匹配 caption 段：从 token 后开始，吃掉前导空白
     // 终止：空行 / ## 标题 / 普通段（行首非 `>`/`Fig`/`Figure`/`Scheme`/`Table`）
-    // 限制最多 6 行
+    // 限制最多 5000 字符（caption 可能很长：'(a) ... (b) ... (c) ...' 多个子图说明）
     const captionMatch = after.match(
-      /^([\s\S]{0,2000}?)(\n\n|\n##\s|\n###\s|\n\*\*[A-Z]|\Z)/
+      /^([\s\S]{0,5000}?)(\n\n|\n##\s|\n###\s|\n\*\*[A-Z]|\Z)/
     )
     if (!captionMatch) continue
     const before = captionMatch[1]
@@ -2499,8 +2499,8 @@ function _stripFigureCaptionsAndAssociate(content, figuresRaw) {
     const isCaption = /Fig\.?|Figure|Scheme|Table/i.test(firstLine)
     if (!isCaption) continue
 
-    // 限制行数：取到第 5 个换行为止
-    const lines = before.split('\n').slice(0, 5)
+    // 限制行数：取到第 12 个换行为止（caption 可能很长，"(a) ... (b) ... (c) ..." 一行段就有 10+ 行）
+    const lines = before.split('\n').slice(0, 12)
     let captionText = lines.join('\n').trim()
     // 去掉前导 `>` / `> ` / blockquote 标记
     captionText = captionText.replace(/^[>＞]\s*/gm, '').trim()
@@ -2510,9 +2510,12 @@ function _stripFigureCaptionsAndAssociate(content, figuresRaw) {
     if (captionText.length > 10) {
       captions.set(imageId, captionText)
       // 从 finalResult 中删除这段 caption
-      const before = finalResult.slice(0, tokenIdx + token.length)
-      const afterRemoved = finalResult.slice(tokenIdx + token.length + before.length)
-      finalResult = before + afterRemoved
+      // v28 step 22: 修复之前变量名复用 bug（before.length 已是 tokenIdx+token.length，
+      //   又加一次导致 offset 错位）
+      const tokenEnd = tokenIdx + token.length
+      const beforeText = finalResult.slice(0, tokenEnd)
+      const afterRemoved = finalResult.slice(tokenEnd + before.length)
+      finalResult = beforeText + afterRemoved
     }
   }
 
