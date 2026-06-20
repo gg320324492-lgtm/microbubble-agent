@@ -2239,9 +2239,9 @@ export function buildAnchorTree(sections, options = {}) {
  */
 
 /**
- * v28 step 20: 数字 → Unicode 上角标字符
+ * v28 step 20 + 21: 数字 → Unicode 上角标字符
  * "12" → "¹²"（用户原话：'[12] 这样的文献引用序号要用上角标'）
- * 用于真正的引用序号（[12] / [12,15] / [12-15]）
+ * v28 step 21: 整个 [N] 包含方括号也变上角标（标准格式 [⁵,⁶] 而非 [⁵,⁶]）
  */
 function _toSuperscript(s) {
   if (!s) return ''
@@ -2249,6 +2249,7 @@ function _toSuperscript(s) {
     '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
     '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
     '-': '⁻', '+': '⁺', ',': '͵', ' ': ' ', '–': '–',
+    '[': '⁽', ']': '⁾',  // v28 step 21: 方括号也转上角标
   }
   return String(s).split('').map(c => map[c] || c).join('')
 }
@@ -2257,12 +2258,13 @@ export function autoLinkContent(text) {
   if (!text) return ''
   let escaped = _escapeHtml(text)
 
-  // v28 step 20: 引用序号 [12] / [12, 15] / [12-15] → 上角标 Unicode
+  // v28 step 20 + 21: 引用序号 [12] / [12, 15] / [12-15] → 整个上角标 Unicode
+  //   v28 step 21 改进：方括号 [ ] 也转上角标 (⁽ ⁾)
   //   限制：仅匹配 [N] / [N,M] / [N-M] 格式，数字 1-4 位（避免误伤 [12.5] 等）
   //   必须在 DOI 规则前处理（[12] 也可能被误判为 DOI 部分）
   escaped = escaped.replace(
     /\[(\d{1,4}(?:\s*[,–-]\s*\d{1,4})*)\]/g,
-    (m, nums) => `[${nums.split(/\s*[,–-]\s*/).map(_toSuperscript).join(',')}]`
+    (m, nums) => _toSuperscript(`[${nums}]`)
   )
 
   // 先修复重复 DOI 链接（避免下面 DOI_RE 重复添加前缀）
@@ -2399,6 +2401,204 @@ export function normalizeGraphData(rawGraphData) {
   }
 }
 
+/**
+ * v28 step 21: 硬规则代码从 LLM 输出里剥除 figure caption
+ *
+ * 用户原话：「Fig. 2. Effects of oxidant supply... 不应该放在正文里面，
+ * 而应该是在图片下面那个橙色的字体中显示出来，这段文字才是图片的真实信息」
+ *
+ * 背景：LLM 在重排论文时经常把图片 caption 文本（"Fig. 2. Effects of..." 段）
+ * 当作正文段落输出。这是 LLM 的常见错误，**不能靠 prompt 修正**（CLAUDE.md 经验），
+ * 必须由底层代码硬规则处理。
+ *
+ * 算法：
+ * 1. 扫描 content 找 `![alt](image_url)` 模式（markdown image 已被 _resolve_figure_placeholders 替换成 URL）
+ * 2. 紧跟 image 后 1-3 行内如有 `Fig. N. <caption text>` 模式 → 整段剥离
+ * 3. 剥离的 caption 关联到对应 image（按 URL 后缀 → imageId 映射）
+ * 4. 如果 caption 里有 figureNo，按该图号修正对应 fig 的 figureNo
+ *
+ * 输入：
+ *   content: 已 cleanContent 处理过的字符串
+ *   figuresRaw: normalizedImages 数组（含 imageId, imageUrl, figureNo, caption 等）
+ *
+ * 输出：
+ *   { content: 剥除 caption 后的内容, captions: Map<imageId, captionText> }
+ */
+function _stripFigureCaptionsAndAssociate(content, figuresRaw) {
+  if (!content || !Array.isArray(figuresRaw) || !figuresRaw.length) {
+    return { content, captions: new Map() }
+  }
+
+  // 1. 建立 URL → imageId 映射
+  //    figureUrl 形如 https://...minio.../knowledge/{id}/images/{uuid}.jpeg
+  //    用 URL 末段（uuid 字符串）作 key
+  const urlToImage = new Map()
+  for (const f of figuresRaw) {
+    const url = f.imageUrl || f.src || ''
+    if (!url) continue
+    // 取 URL 最后一段作为 key（UUID 文件名）
+    const lastSeg = url.split('/').pop() || ''
+    if (lastSeg) urlToImage.set(lastSeg, f.imageId)
+  }
+
+  const captions = new Map()  // imageId → caption 文本
+  let result = content
+
+  // 2. 找 `![...](...minio/.../UUID.ext)` 模式，紧跟 1-3 行内的 Fig. caption 段
+  //    caption 段识别: 行首 `Fig. N. ` 或 `Figure N. ` 或 `Scheme N. ` 开头
+  //    终止: 下一个空行 / 下一个 ## 标题 / 行数超过 5 行
+  const mdImageRe = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+
+  result = result.replace(mdImageRe, (m, alt, url) => {
+    // url 末段匹配 imageId
+    const lastSeg = url.split('/').pop() || ''
+    const imageId = urlToImage.get(lastSeg)
+    if (!imageId) return m  // 找不到对应 image，原样保留
+
+    // 紧跟 image 位置找 caption 段
+    // (这里 replace 只能修改匹配段，但我们要处理"紧跟"的内容 —— 用占位符策略)
+    // 改用 \0 标记 image 位置，然后在外部扫描
+    return m
+  })
+
+  // 3. 改用占位符策略: 把 `![...](url)` 替换为特殊 token，扫描 token 后续内容
+  //    然后恢复 token
+  const imagePositions = []  // [{ start, end, imageId, original }]
+  let scanned = content
+  const TOKEN_PREFIX = ' FIG'
+  const TOKEN_SUFFIX = ' '
+  scanned = scanned.replace(mdImageRe, (m, alt, url) => {
+    const lastSeg = url.split('/').pop() || ''
+    const imageId = urlToImage.get(lastSeg)
+    if (!imageId) return m
+    const token = `${TOKEN_PREFIX}${imageId}${TOKEN_SUFFIX}`
+    imagePositions.push({ token, imageId, original: m })
+    return token
+  })
+
+  // 4. 在 scanned 里找每个 image token 后续的 caption 段
+  //    caption 段定义: 紧跟 token 后 1-5 行内（直到空行 / ## 标题 / 新段落），
+  //    首行匹配 `/^[>＞\s]*(Fig\.?|Figure|Scheme|Table)\s+\d/`
+  let finalResult = scanned
+  for (const { token, imageId, original } of imagePositions) {
+    const tokenIdx = finalResult.indexOf(token)
+    if (tokenIdx < 0) continue
+    const after = finalResult.slice(tokenIdx + token.length)
+
+    // 匹配 caption 段：从 token 后开始，吃掉前导空白
+    // 终止：空行 / ## 标题 / 普通段（行首非 `>`/`Fig`/`Figure`/`Scheme`/`Table`）
+    // 限制最多 6 行
+    const captionMatch = after.match(
+      /^([\s\S]{0,2000}?)(\n\n|\n##\s|\n###\s|\n\*\*[A-Z]|\Z)/
+    )
+    if (!captionMatch) continue
+    const before = captionMatch[1]
+    // 验证这段是否真的以 Fig. N. 开头（不强求，可能 OCR 漏掉）
+    // 但必须至少含 "Fig" 或 "Figure" 才算 caption
+    const firstLine = before.split('\n').find(l => l.trim()) || ''
+    const isCaption = /Fig\.?|Figure|Scheme|Table/i.test(firstLine)
+    if (!isCaption) continue
+
+    // 限制行数：取到第 5 个换行为止
+    const lines = before.split('\n').slice(0, 5)
+    let captionText = lines.join('\n').trim()
+    // 去掉前导 `>` / `> ` / blockquote 标记
+    captionText = captionText.replace(/^[>＞]\s*/gm, '').trim()
+    // 去掉 markdown 加粗 `**...**`
+    captionText = captionText.replace(/\*\*/g, '').trim()
+
+    if (captionText.length > 10) {
+      captions.set(imageId, captionText)
+      // 从 finalResult 中删除这段 caption
+      const before = finalResult.slice(0, tokenIdx + token.length)
+      const afterRemoved = finalResult.slice(tokenIdx + token.length + before.length)
+      finalResult = before + afterRemoved
+    }
+  }
+
+  // 5. 恢复 image token 为原 markdown image
+  for (const { token, original } of imagePositions) {
+    finalResult = finalResult.replace(token, original)
+  }
+
+  return { content: finalResult, captions }
+}
+
+/**
+ * v28 step 21: 用正文首次出现的 "Fig. N" 模式修正 fig.figureNo
+ *
+ * 用户原话：「多模态中的图片命名与正文中相同一张图片的命名不一致，
+ * 比如多模态的 fig7，在正文的 3.4 节当中，但是标题却是 fig1」
+ *
+ * 算法：
+ * 1. 扫描 sections.blocks 找所有 "Fig. N" / "Figure N" 模式，记录 paragraphId → set(figureNo)
+ * 2. 已有 fig.figureNo 的图片保留（vision model 输出的）
+ * 3. 没 figureNo 但正文引用了 "Fig. N" 的图，按 page 顺序分配 N
+ */
+function _alignFigureNosWithText(content, figureRegistry) {
+  if (!content || !Array.isArray(figureRegistry) || !figureRegistry.length) {
+    return figureRegistry
+  }
+
+  // 1. 扫描正文所有 Fig. N 引用，按出现顺序收集
+  const figRefPattern = /\b(Fig\.?|Figure|Scheme|Table)\s*(\d{1,3}[a-z]?)\b/gi
+  const references = []  // [{ figureNo, position }]
+  let m
+  while ((m = figRefPattern.exec(content)) !== null) {
+    const num = parseInt(m[2], 10)
+    if (Number.isFinite(num)) {
+      references.push({
+        num,
+        label: `${m[1].replace(/\.$/, '').charAt(0).toUpperCase() + m[1].slice(2).toLowerCase()} ${num}`,
+        position: m.index,
+      })
+    }
+  }
+
+  // 2. 按位置排序 + 去重
+  references.sort((a, b) => a.position - b.position)
+
+  // 3. 建立 figureNo → fig 映射（优先用已有 figureNo 匹配）
+  const figByNo = new Map()  // 'Fig. 1' → fig
+  for (const f of figureRegistry) {
+    if (f.figureNo) {
+      const m = f.figureNo.match(/(\d+)/)
+      if (m) {
+        const num = parseInt(m[1], 10)
+        figByNo.set(`Fig. ${num}`, f)
+        // 也用原值
+        figByNo.set(f.figureNo, f)
+      }
+    }
+  }
+
+  // 4. 对没 figureNo 的 fig，按引用顺序补充
+  let nextNum = 1
+  const usedNums = new Set()
+  for (const f of figureRegistry) {
+    if (f.figureNo) {
+      const m = f.figureNo.match(/(\d+)/)
+      if (m) usedNums.add(parseInt(m[1], 10))
+    }
+  }
+
+  for (const ref of references) {
+    const key = `Fig. ${ref.num}`
+    if (figByNo.has(key)) continue
+    // 找一个还没 figureNo 的 fig（按 page 顺序）分配
+    const target = figureRegistry.find(f => !f.figureNo && !usedNums.has(ref.num))
+    if (target) {
+      target.figureNo = `Fig. ${ref.num}`
+      target.figureNoSource = 'text_aligned'
+      usedNums.add(ref.num)
+      figByNo.set(key, target)
+    }
+  }
+
+  return figureRegistry
+}
+
+
 function _normalizeImages(images) {
   if (!Array.isArray(images)) return []
   return images.map(i => ({
@@ -2502,12 +2702,24 @@ export function normalizePaperData(raw, extra = {}) {
     stripImageUrls: true,
     isMarkdown: hasFormatted,
   })
-  const content = cleaned.content
+  let content = cleaned.content
+
+  // v28 step 21: 硬规则从正文剥除 "Fig. N. <caption>" 段（v28 step 21）
+  //    LLM 经常把图注文本塞进正文，必须由代码硬剥除，不依赖 LLM 自觉
+  //    images 此时还没 normalize 完，先做基础 URL→id 映射
+  const _tempImagesForStrip = (extra.images || []).map(i => ({
+    imageId: i.id,
+    imageUrl: i.image_url,
+  }))
+  const stripResult = _stripFigureCaptionsAndAssociate(content, _tempImagesForStrip)
+  content = stripResult.content
+  // captions: imageId → caption 文本（后续 fig 注入 caption 用）
 
   if (typeof window !== 'undefined') {
     window.__PAPER_INTERMEDIATE__.cleanedLen = content.length
     window.__PAPER_INTERMEDIATE__.cleanedSample0 = content.slice(0, 800)
     window.__PAPER_INTERMEDIATE__.cleanedSampleMid = content.slice(8000, 8800)
+    window.__PAPER_INTERMEDIATE__.stripCaptionsCount = stripResult.captions.size
   }
   const extraFromClean = cleaned.extractedImages || []
 
@@ -2593,6 +2805,7 @@ export function normalizePaperData(raw, extra = {}) {
   //    v28 step 14 修复：之前只复制 id/page/src 等原始字段，没传 vision 字段
   //    （figureNo/figureType/isCoreFigure/isPublisherImage/...）→ _buildFigureRegistry
   //    走 visionAvailable=false 兜底分支，isCoreFigure 推断错，导致 inlineFigureAnchors 为空
+  //    v28 step 21: caption 优先用 _stripFigureCaptionsAndAssociate 从正文提取的（更准）
   const figuresRaw = images.map(img => ({
     id: `fig-${img.id}`,
     imageId: img.id,
@@ -2605,7 +2818,9 @@ export function normalizePaperData(raw, extra = {}) {
     ocrStatus: img.ocrStatus,
     ocrError: img.ocrError,
     ocrModel: img.ocrModel,
-    caption: null,
+    // v28 step 21: 从正文剥除的 caption 优先（比 vision 输出的更准）
+    //     兜底：vision model 的 caption (extData.caption)
+    caption: stripResult.captions.get(img.id) || null,
     // v28 vision 12 字段（必须传递，否则 _buildFigureRegistry 推断错误）
     figureNo: img.figureNo ?? null,
     figureType: img.figureType ?? null,
@@ -2622,6 +2837,10 @@ export function normalizePaperData(raw, extra = {}) {
   }))
   // 使用新的 _buildFigureRegistry 建立 figureRegistry（含 figureType / isCoreFigure / figureNo 等）
   const figureRegistry = _buildFigureRegistry(figuresRaw, extractions, content)
+
+  // v28 step 21: 硬规则根据正文 "Fig. N" 引用修正 figureNo
+  //    解决 "多模态的 fig7 在正文 3.4 节但标题是 fig1" 错位问题
+  _alignFigureNosWithText(content, figureRegistry)
   // 兼容旧 API：保留 figures 数组（供 ExtractionPanel / 文末图库使用）
   const figures = matchFiguresWithCaptions(figuresRaw, extractions, content)
     .map(fig => {
