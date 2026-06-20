@@ -451,34 +451,28 @@ class KnowledgeService:
         return knowledge
 
     async def reformat_content(self, knowledge_id: int):
-        """AI 排版整理指定知识条目的内容"""
+        """AI 排版整理指定知识条目的内容（v28 step 18: 用 Celery 抗重启）
+
+        之前用 asyncio.create_task() 在 FastAPI 进程内 spawn 任务，
+        进程重启任务丢失 → formatted_content 永远不更新。
+        改用 Celery delay() 把任务扔到 Redis broker，worker 进程重启后仍能 resume。
+        """
         knowledge = await self.get_knowledge(knowledge_id)
         if not knowledge:
             return None
 
-        asyncio.create_task(self._reformat_task(knowledge_id, knowledge.title, knowledge.content))
+        # 触发 Celery 任务（不等结果，立即返回）
+        from app.services.content_formatter_service import reformat_knowledge_task
+        reformat_knowledge_task.delay(knowledge_id)
+        logger.info(f"reformat_content: knowledge_id={knowledge_id} Celery 任务已派发")
         return knowledge
 
     async def _reformat_task(self, knowledge_id: int, title: str, content: str):
-        """后台任务：AI 排版"""
-        from app.core.database import async_session
-        from app.services.content_formatter_service import content_formatter_service
+        """v28 step 18 兼容保留：FastAPI 进程内的重排（已废弃，由 Celery task 替代）
 
-        try:
-            formatted = await content_formatter_service.format_content(title, content)
-            if formatted:
-                async with async_session() as db:
-                    result = await db.execute(
-                        select(Knowledge).where(Knowledge.id == knowledge_id)
-                    )
-                    knowledge = result.scalar_one_or_none()
-                    if knowledge:
-                        formatted = await self._resolve_figure_placeholders(knowledge_id, formatted)
-                        knowledge.formatted_content = formatted
-                        await db.commit()
-                        logger.info(f"手动排版已保存(knowledge_id={knowledge_id})")
-        except Exception as e:
-            logger.error(f"手动排版失败(knowledge_id={knowledge_id}): {e}")
+        保留仅为兼容旧测试 / 旧调用方。新代码应走 reformat_content() -> Celery delay()。
+        """
+        logger.warning("_reformat_task 已废弃，请用 Celery 任务")
 
     async def _resolve_figure_placeholders(self, knowledge_id: int, text: str) -> str:
         """将 [FIGURE:N] 占位符替换为 MinIO 中的实际图片 URL"""
