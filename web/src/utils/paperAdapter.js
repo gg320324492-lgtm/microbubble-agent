@@ -2429,14 +2429,11 @@ function _stripFigureCaptionsAndAssociate(content, figuresRaw) {
     return { content, captions: new Map() }
   }
 
-  // 1. 建立 URL → imageId 映射
-  //    figureUrl 形如 https://...minio.../knowledge/{id}/images/{uuid}.jpeg
-  //    用 URL 末段（uuid 字符串）作 key
+  // 1. URL → imageId 映射（格式 1 用：markdown image 紧跟 caption）
   const urlToImage = new Map()
   for (const f of figuresRaw) {
     const url = f.imageUrl || f.src || ''
     if (!url) continue
-    // 取 URL 最后一段作为 key（UUID 文件名）
     const lastSeg = url.split('/').pop() || ''
     if (lastSeg) urlToImage.set(lastSeg, f.imageId)
   }
@@ -2444,87 +2441,86 @@ function _stripFigureCaptionsAndAssociate(content, figuresRaw) {
   const captions = new Map()  // imageId → caption 文本
   let result = content
 
-  // 2. 找 `![...](...minio/.../UUID.ext)` 模式，紧跟 1-3 行内的 Fig. caption 段
-  //    caption 段识别: 行首 `Fig. N. ` 或 `Figure N. ` 或 `Scheme N. ` 开头
-  //    终止: 下一个空行 / 下一个 ## 标题 / 行数超过 5 行
-  const mdImageRe = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+  // ── 格式 3: 纯文本长 caption（OCR 提取，无图片包装）──
+  //    特征: 行首 Fig. N. <text> + 段长 > 100 + 含学术描述
+  //    关联: 按 page 顺序分配到 core fig
+  const coreFigs = figuresRaw.filter(f =>
+    f.imageId && f.isCoreFigure !== false && !f.isPublisherImage
+    && f.figureType !== 'cover' && f.figureType !== 'logo' && f.figureType !== 'publisher'
+  ).sort((a, b) => (a.page || 9999) - (b.page || 9999))
+  let coreFigCursor = 0
 
-  result = result.replace(mdImageRe, (m, alt, url) => {
-    // url 末段匹配 imageId
-    const lastSeg = url.split('/').pop() || ''
-    const imageId = urlToImage.get(lastSeg)
-    if (!imageId) return m  // 找不到对应 image，原样保留
-
-    // 紧跟 image 位置找 caption 段
-    // (这里 replace 只能修改匹配段，但我们要处理"紧跟"的内容 —— 用占位符策略)
-    // 改用 \0 标记 image 位置，然后在外部扫描
+  // v28 step 23: 用 [\s\S]*? 非贪婪 + 必须包含下一个段边界
+  //    之前 bug: 正则只匹配到第一个 . 后停，导致 'Fig. 2. Effects of' 后面 '(a) (b)' 漏掉
+  const longCaptionRe = /(?:^|\n)((Fig\.|Figure|Scheme|Table)\s+(\d+)\.\s+[A-Z][\s\S]{0,8000}?)(?=\n\n|\n##\s|\n###\s|\Z)/g
+  result = result.replace(longCaptionRe, (m, fullSeg, _prefix, _num) => {
+    const seg = fullSeg.trim()
+    if (seg.length < 100) return m
+    // 必须含学术描述特征
+    const isAcademic = /\(.\)|\bEffects of|\bImpact of|\bHeat map|\bSchematic|\bToluene|\bCatalytic|\bDegradation|\bConversion rate|\bMicro-nano|\binterfacial|\bO3-MNBs/i.test(seg)
+    if (!isAcademic) return m
+    while (coreFigCursor < coreFigs.length && captions.has(coreFigs[coreFigCursor].imageId)) {
+      coreFigCursor++
+    }
+    if (coreFigCursor < coreFigs.length) {
+      captions.set(coreFigs[coreFigCursor].imageId, seg)
+      coreFigCursor++
+      return m.startsWith('\n') ? '\n' : ''
+    }
     return m
   })
 
-  // 3. 改用占位符策略: 把 `![...](url)` 替换为特殊 token，扫描 token 后续内容
-  //    然后恢复 token
-  const imagePositions = []  // [{ start, end, imageId, original }]
-  let scanned = content
-  const TOKEN_PREFIX = ' FIG'
-  const TOKEN_SUFFIX = ' '
+  // ── 格式 2: blockquote 中文图注（OCR 原始格式）──
+  result = result.replace(/(?:^|\n)((?:> [^\n]*\n)+)/g, (m, bq) => {
+    if (!/(?:图表|图（\s*P|图\s*\(P|Figure|Fig\.|说明|描述)/.test(bq)) return m
+    return m.startsWith('\n') ? '\n' : ''
+  })
+
+  // ── 格式 1: markdown image 紧跟 Fig. caption (LLM 重排后 formatted_content) ──
+  const mdImageRe = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g
+  const imagePositions = []
+  let scanned = result
+  const TOKEN_PREFIX = ' FIGIMG'
   scanned = scanned.replace(mdImageRe, (m, alt, url) => {
     const lastSeg = url.split('/').pop() || ''
     const imageId = urlToImage.get(lastSeg)
     if (!imageId) return m
-    const token = `${TOKEN_PREFIX}${imageId}${TOKEN_SUFFIX}`
+    const token = TOKEN_PREFIX + imageId + ' '
     imagePositions.push({ token, imageId, original: m })
     return token
   })
 
-  // 4. 在 scanned 里找每个 image token 后续的 caption 段
-  //    caption 段定义: 紧跟 token 后 1-5 行内（直到空行 / ## 标题 / 新段落），
-  //    首行匹配 `/^[>＞\s]*(Fig\.?|Figure|Scheme|Table)\s+\d/`
-  let finalResult = scanned
   for (const { token, imageId, original } of imagePositions) {
-    const tokenIdx = finalResult.indexOf(token)
+    const tokenIdx = scanned.indexOf(token)
     if (tokenIdx < 0) continue
-    const after = finalResult.slice(tokenIdx + token.length)
-
-    // 匹配 caption 段：从 token 后开始，吃掉前导空白
-    // 终止：空行 / ## 标题 / 普通段（行首非 `>`/`Fig`/`Figure`/`Scheme`/`Table`）
-    // 限制最多 5000 字符（caption 可能很长：'(a) ... (b) ... (c) ...' 多个子图说明）
-    const captionMatch = after.match(
-      /^([\s\S]{0,5000}?)(\n\n|\n##\s|\n###\s|\n\*\*[A-Z]|\Z)/
-    )
+    const after = scanned.slice(tokenIdx + token.length)
+    const captionMatch = after.match(/^([\s\S]{0,5000}?)(\n\n|\n##\s|\n###\s|\n\*\*[A-Z]|\Z)/)
     if (!captionMatch) continue
     const before = captionMatch[1]
-    // 验证这段是否真的以 Fig. N. 开头（不强求，可能 OCR 漏掉）
-    // 但必须至少含 "Fig" 或 "Figure" 才算 caption
     const firstLine = before.split('\n').find(l => l.trim()) || ''
     const isCaption = /Fig\.?|Figure|Scheme|Table/i.test(firstLine)
     if (!isCaption) continue
 
-    // 限制行数：取到第 12 个换行为止（caption 可能很长，"(a) ... (b) ... (c) ..." 一行段就有 10+ 行）
     const lines = before.split('\n').slice(0, 12)
     let captionText = lines.join('\n').trim()
-    // 去掉前导 `>` / `> ` / blockquote 标记
-    captionText = captionText.replace(/^[>＞]\s*/gm, '').trim()
-    // 去掉 markdown 加粗 `**...**`
-    captionText = captionText.replace(/\*\*/g, '').trim()
+      .replace(/^[>＞]\s*/gm, '')
+      .replace(/\*\*/g, '')
+      .trim()
 
-    if (captionText.length > 10) {
+    if (captionText.length > 10 && !captions.has(imageId)) {
       captions.set(imageId, captionText)
-      // 从 finalResult 中删除这段 caption
-      // v28 step 22: 修复之前变量名复用 bug（before.length 已是 tokenIdx+token.length，
-      //   又加一次导致 offset 错位）
       const tokenEnd = tokenIdx + token.length
-      const beforeText = finalResult.slice(0, tokenEnd)
-      const afterRemoved = finalResult.slice(tokenEnd + before.length)
-      finalResult = beforeText + afterRemoved
+      const beforeText = scanned.slice(0, tokenEnd)
+      const afterRemoved = scanned.slice(tokenEnd + before.length)
+      scanned = beforeText + afterRemoved
     }
   }
 
-  // 5. 恢复 image token 为原 markdown image
   for (const { token, original } of imagePositions) {
-    finalResult = finalResult.replace(token, original)
+    scanned = scanned.replace(token, original)
   }
 
-  return { content: finalResult, captions }
+  return { content: scanned, captions }
 }
 
 /**
