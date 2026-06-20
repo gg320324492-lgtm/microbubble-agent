@@ -65,15 +65,48 @@ const renderedContent = computed(() => {
   if (props.block.type === 'table') {
     return renderMarkdownTable(raw)
   }
-  // 渲染管线（v28 step 37 简化）：
-  //   raw (纯文本)
-  //     → formatChemicalText (纯文本 + Unicode 上下标)
-  //     → autoLinkContent (escape + DOI/URL/邮箱包 <a>)
-  //     → v-html 渲染
-  //   公式渲染: 由全局 MathJax 自动 typeset 整页 #paper-content
-  //     （不在这里手动包 <span class="math">，避免 escape 后 LaTeX 命令被破坏）
-  const formatted = props.isChinese ? raw : formatChemicalText(raw)
-  return autoLinkContent(formatted)
+
+  // v28 step 40: 数学公式 + 普通文本分段处理
+  //   问题：之前 _escapeHtml 把 LaTeX 命令 \\gamma 转义成 \gamma，
+  //         MathJax typeset 时识别不到 \\ 转义后的命令
+  //   修复：先用占位符把公式段标记起来 → escape 全文 → 把占位符替换为
+  //         <span class="math-inline/display"> 标签（不 escape LaTeX 命令）→ MathJax 处理
+  //
+  //   渲染管线：
+  //     raw (含 $$..$$ / $..$ / \(..\) / \[..\])
+  //       → 用占位符保护公式段
+  //       → formatChemicalText (Unicode 上下标)
+  //       → escape 全文（占位符位置保留原 LaTeX）
+  //       → autoLinkContent (DOI/URL 包 <a>)
+  //       → 占位符替换为 <span class="math math-inline/display">{latex}</span>
+  //     → v-html 渲染 → MathJax.typesetPromise 处理 .math 元素
+
+  // 1. 用占位符提取公式段（保留 LaTeX 源码不 escape）
+  const placeholders = []
+  const FORMULA_RE = /(\$\$[\s\S]+?\$\$|\$[^$\n]+\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\))/g
+  let withPlaceholders = raw.replace(FORMULA_RE, (match) => {
+    const idx = placeholders.length
+    placeholders.push(match)
+    return ` MATHPLACEHOLDER${idx} `
+  })
+
+  // 2. 化学式处理 + escape 全文（占位符段因为不含 HTML 特殊字符，escape 安全）
+  const formatted = props.isChinese ? withPlaceholders : formatChemicalText(withPlaceholders)
+  const escaped = autoLinkContent(formatted)  // 已包含 _escapeHtml
+
+  // 3. 还原占位符为 MathJax span 标签（unescape 公式段，让 MathJax 直接读 LaTeX）
+  let result = escaped
+  for (let i = 0; i < placeholders.length; i++) {
+    const latex = placeholders[i]
+    const isBlock = latex.startsWith('$$') || latex.startsWith('\\[')
+    const tag = isBlock ? 'div' : 'span'
+    const className = isBlock ? 'math math-display' : 'math math-inline'
+    // 用 \\1 转义反斜杠确保在 HTML 里 LaTeX 命令原样保留
+    const latexSafe = latex.replace(/\\/g, '\\\\')
+    result = result.replace(` MATHPLACEHOLDER${i} `, `<${tag} class="${className}">${latexSafe}</${tag}>`)
+  }
+
+  return result
 })
 
 /**
