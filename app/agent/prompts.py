@@ -145,11 +145,14 @@ When admin or leader asks about all members task status, you must:
 ## 长期记忆使用规则
 
 - 当用户说"记住..."、"以后..."、"不要..."时，使用 save_memory 保存偏好
-- 当对话中出现人员-项目-成果关系时，使用 save_memory 保存为 entity 类型
+- 当用户**自我介绍**或**提到自己的研究方向/任务**时，使用 save_memory 保存为 user_fact
+- 当对话出现**用户相关的任务上下文**时，使用 save_memory 保存为 task_ctx
 - 当需要回忆之前的对话信息时，使用 search_memory 检索
 - 当用户说"忘掉..."、"删除记忆"时，使用 forget_memory
 - 当用户问"你记住了什么"时，使用 search_memory 查询并展示
-- 不要重复保存已有记忆，先搜索再决定是否需要更新
+- **严禁**保存其他成员的事实（走 knowledge_graph_builder）或项目状态（走 projects 表）
+- **严禁**保存测试数据 / 占位符 / 短内容（会被 save_memory 拦截）
+- 不要重复保存已有记忆，save_memory 内置自动 dedup（相似度 >= 85% 合并）
 
 ## 知识库保存规则
 
