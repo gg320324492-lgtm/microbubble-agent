@@ -205,6 +205,54 @@ describe('splitReferences', () => {
   it('空参考文献返回空', () => {
     expect(splitReferences('')).toEqual([])
   })
+
+  // v28 step 88: OCR 把所有 ref 压成一段（无 [N] 编号，无换行），
+  //   且混入 "Journal Pre-proof N" / "P33-39" 水印，splitReferences 必须能拆分。
+  // 用户截图（杨慈 UV/MNBs 论文）："Alapi T, Dombi A. ... Yang S, Wang Y, ..."
+  //   全部塞在一条 entry 里导致 references UI 显示 1 条。
+  it('v28 step 88: OCR 压扁的 references 仍能拆成多条', () => {
+    const refText = `References
+P33-39
+参考文献（共 1 条）
+展开全部 ▾
+Alapi T, Dombi A. Comparative study of the UV and UV/VUV-induced photolysis of phenol in aqueous solution[J]. Journal of Photochemistry and Photobiology A: Chemistry, 2007,188(2-3): 409-418. Aslan M M, Crofcheck C, Tao D, et al. Evaluation of micro-bubble size and gas hold-up in two-phase gas–liquid columns via scattered light measurements[J]. Journal of Quantitative Spectroscopy and Radiative Transfer, 2006,101(3): 527-539. Yang J. Influencing Factors and Improvement Strategies for Ultraviolet Disinfection in Sewage Treatment Plants in Shenzhen [D]. Harbin Institute of Technology, 2013. Yang S, Wang Y, Liu Y, et al. Cereulide and emetic Bacillus cereus[J]. Foods, 2023,12(4): 833.`
+
+    const refs = splitReferences(refText)
+    // 期望至少拆出 3 条：Alapi / Aslan / Yang S（Yang J. 单作者可能合并到 Yang S）
+    expect(refs.length).toBeGreaterThanOrEqual(3)
+    // 关键 ref 必须出现
+    const allText = refs.join('\n')
+    expect(allText).toContain('Alapi T, Dombi A')
+    expect(allText).toContain('Aslan M M, Crofcheck C')
+    expect(allText).toContain('Yang S, Wang Y')
+    // 不含 boilerplate
+    expect(refs.some((r) => r.startsWith('References P33-39'))).toBe(false)
+    expect(refs.some((r) => r.startsWith('参考文献'))).toBe(false)
+  })
+
+  it('v28 step 88: 剥除 Journal Pre-proof N + P33-39 水印', () => {
+    const refText = `References P33-39 Gao Y, Duan Y, Fan W, et al. Intensifying ozonation[J]. Environmental Science Journal Pre-proof 32 and Pollution Research, 2019,26: 21915-21924. Sumikura M, Hidaka M, et al. Ozone micro-bubble[J]. Water Sci Technol, 2007,56(5):53-61.`
+
+    const refs = splitReferences(refText)
+    expect(refs.length).toBeGreaterThanOrEqual(2)
+    const allText = refs.join('\n')
+    expect(allText).not.toMatch(/Journal Pre-proof/)
+    expect(allText).not.toMatch(/P33-39/)
+    expect(allText).toContain('Gao Y')
+    expect(allText).toContain('Sumikura M')
+  })
+
+  it('v28 step 88: 单作者 ref (Yang Y X. Title. [D]) 也能切分', () => {
+    // 单作者格式：Lastname F X. Title. [D]. University, Year.
+    //   不能用"Lastname F X, Author"模式切（无逗号作者列表）
+    //   改用 "卷: 页码. " 或 "Year. " 后跟单作者模式切分
+    const refText = `Yang J. Influencing Factors and Improvement Strategies for Ultraviolet Disinfection in Sewage Treatment Plants in Shenzhen [D]. Harbin Institute of Technology, 2013. Choi W, Kim S. Outbreaks[J]. Journal of food protection, 2020,83(9): 1480-1487.`
+    const refs = splitReferences(refText)
+    expect(refs.length).toBeGreaterThanOrEqual(2)
+    const allText = refs.join('\n')
+    expect(allText).toContain('Yang J. Influencing Factors')
+    expect(allText).toContain('Choi W, Kim S')
+  })
 })
 
 describe('buildAnchorTree', () => {
