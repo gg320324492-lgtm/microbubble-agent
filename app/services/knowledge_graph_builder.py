@@ -15,6 +15,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+from app.services.name_aliases import clean_text as clean_person_names, get_member_names
+
 logger = logging.getLogger("microbubble.kg_builder")
 
 # 实体类型定义
@@ -81,6 +83,8 @@ class KnowledgeGraphBuilder:
 
         Returns:
             {"entities": [...], "relations": [...]}
+
+        v28 step 60: 输入 prompt 注入真实成员名清单，输出后清洗实体里的谐音人名
         """
         try:
             # v28 step 47 修复: 之前 from app.services.llm_service import get_llm_response
@@ -92,11 +96,17 @@ class KnowledgeGraphBuilder:
             # 截取内容避免过长
             text = f"标题: {title}\n\n内容: {content[:3000]}"
 
+            # v28 step 60: 注入成员名清单
+            members = get_member_names()
+            members_hint = ""
+            if members:
+                members_hint = "\n\n本课题组成员名单（实体名必须用真实姓名，不要写谐音）: " + "、".join(members)
+
             prompt = f"""{ENTITY_TYPE_PROMPT}
 
 请从以下文本中提取实体和关系：
 
-{text}"""
+{text}{members_hint}"""
 
             response = await client.messages.create(
                 model=get_default_model(),
@@ -107,6 +117,18 @@ class KnowledgeGraphBuilder:
             )
             response_text = extract_text_from_response(response)
             result = self._parse_response(response_text)
+
+            # v28 step 60: 兜底清洗实体/关系里残留的谐音人名
+            for e in result.get("entities", []):
+                if isinstance(e, dict):
+                    for k in ("name", "description", "type"):
+                        if isinstance(e.get(k), str):
+                            e[k] = clean_person_names(e[k])
+            for r in result.get("relations", []):
+                if isinstance(r, dict):
+                    for k in ("source", "target", "reason"):
+                        if isinstance(r.get(k), str):
+                            r[k] = clean_person_names(r[k])
 
             logger.info(
                 f"图谱提取完成: {title[:30]}... → "

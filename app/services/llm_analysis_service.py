@@ -4,6 +4,7 @@ import json
 import logging
 
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
+from app.services.name_aliases import clean_text as clean_person_names, get_member_names
 
 logger = logging.getLogger("microbubble.llm_analysis")
 
@@ -65,12 +66,19 @@ class LLMAnalysisService:
 
         v28 step 34 修复: 之前 JSON 解析失败（如数学公式 $$x$$ 含未转义字符）直接返空，
         整条 knowledge 卡 failed。改 fallback: 解析失败时用正则从 raw text 提取关键字段。
+
+        v28 step 60: 输入 prompt 注入真实成员名清单，让 LLM 输出时直接用真实名
         """
         try:
             client = get_anthropic_client()
+            # v28 step 60: 注入成员名清单
+            members = get_member_names()
+            members_hint = ""
+            if members:
+                members_hint = "\n\n本课题组成员名单（必须使用真实姓名，不要写谐音）: " + "、".join(members)
             prompt = ANALYSIS_PROMPT.format(
                 title=title,
-                content=content[:3000]
+                content=content[:3000] + members_hint
             )
             response = await client.messages.create(
                 model=get_default_model(),
@@ -85,21 +93,49 @@ class LLMAnalysisService:
             try:
                 result = parse_llm_json(text)
                 if result.get("summary"):
-                    return result
+                    # v28 step 60: 兜底清洗
+                    return _clean_result_person_names(result)
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"LLM JSON 解析失败: {type(e).__name__}: {str(e)[:120]}")
                 # v28 step 34 fallback: 从 raw text 提取关键字段
                 result = _fallback_extract_fields(text)
                 if result.get('summary') or result.get('category'):
                     logger.info(f"Fallback 提取成功: summary={len(result.get('summary', ''))} chars")
-                    return result
+                    return _clean_result_person_names(result)
             # 解析成功但 summary 仍空（LLM 没生成）
             if not result.get("summary"):
                 logger.warning("LLM 分析未返回 summary")
-            return result
+            return _clean_result_person_names(result)
         except Exception as e:
             logger.error(f"LLM 内容分析失败: {e}")
             return {"summary": "", "category": "", "tags": [], "key_concepts": [], "related_topics": [], "knowledge_type": "文献阅读"}
+
+
+def _clean_result_person_names(result: dict) -> dict:
+    """v28 step 60: 清洗 LLM 输出里的人名谐音
+
+    处理 summary / category / tags[] / key_concepts[] / related_topics[] /
+    entities[].subject/object/condition / formulas[].name
+    """
+    if not isinstance(result, dict):
+        return result
+    out = dict(result)
+    for field in ("summary", "category", "knowledge_type"):
+        if isinstance(out.get(field), str):
+            out[field] = clean_person_names(out[field])
+    for field in ("tags", "key_concepts", "related_topics"):
+        val = out.get(field)
+        if isinstance(val, list):
+            out[field] = [clean_person_names(v) if isinstance(v, str) else v for v in val]
+    # entities
+    ents = out.get("entities")
+    if isinstance(ents, list):
+        for e in ents:
+            if isinstance(e, dict):
+                for k in ("subject", "predicate", "object", "condition"):
+                    if isinstance(e.get(k), str):
+                        e[k] = clean_person_names(e[k])
+    return out
 
 
 def _fallback_extract_fields(text: str) -> dict:
