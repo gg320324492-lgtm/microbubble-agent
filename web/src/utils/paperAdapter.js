@@ -947,11 +947,24 @@ function _matchSectionTitle(text) {
   }
 
   if (numbered) {
+    // v28 step 87 修复：单数字 level=1 的"编号行"极容易误吃表格行（OCR 把表格行号
+    //   "1\nIndividual MNBs treatment" 已合并成 "1 Individual MNBs treatment"，但
+    //   NUMBERED_SECTION_RE 也会匹配 "7 Fig. 1." 把页码+图注当章节标题）。
+    //   强约束：level=1 时 stripped 必须**包含** SECTION_KEYWORDS 关键词
+    //   （Introduction/Methods/Results/Discussion/Conclusion 等），否则拒绝。
+    //   level >= 2（如 2.2 / 3.4.1）保留原行为 — 这些是小章节标题，几乎不与表格行冲突。
+    if (level === 1) {
+      const isSectionHeading = SECTION_KEYWORDS.some((kw) => kw.regex.test(stripped))
+      if (!isSectionHeading) return null
+    }
     return { type: 'normal', level, continued }
   }
 
   // 中文编号：一、二、三、
   if (cnNumbered) {
+    // 同上：中文单编号也要求 stripped 命中 SECTION_KEYWORDS（中文关键词）
+    const isSectionHeading = SECTION_KEYWORDS.some((kw) => kw.regex.test(stripped))
+    if (!isSectionHeading) return null
     return { type: 'normal', level: 1, continued }
   }
 
