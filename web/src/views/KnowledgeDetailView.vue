@@ -81,10 +81,19 @@
           />
         </article>
 
-        <!-- 来源信息 -->
+        <!-- 来源信息 + 下载按钮 (v28 step 69) -->
         <div v-if="paper.raw?.source || paper.fileName" class="paper-source">
           <span v-if="paper.raw?.source">来源：{{ paper.raw.source }}</span>
           <span v-if="paper.fileName">文件：{{ paper.fileName }}</span>
+          <el-button
+            v-if="paper.raw?.file_path"
+            type="primary"
+            :icon="Download"
+            size="small"
+            class="download-btn"
+            :loading="downloading"
+            @click="downloadFile"
+          >下载原文件</el-button>
         </div>
 
         <!-- 多模态提取区（仅 PDF/PPTX 显示） -->
@@ -182,7 +191,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Share, CircleClose } from '@element-plus/icons-vue'
+import { Share, CircleClose, Download } from '@element-plus/icons-vue'
 import axios from 'axios'
 import * as echarts from 'echarts'
 
@@ -724,6 +733,31 @@ const handleReanalyze = async () => {
 // 之前: paper.value.status = 'analyzing' 永久不更新，右上角"分析中"标签不消失
 // 现在: 每 3s 拉一次 fetchDetail 直到 paper.status !== 'analyzing'
 const reanalyzePollingTimer = ref(null)
+
+// v28 step 69: 下载原文件
+const downloading = ref(false)
+async function downloadFile() {
+  if (!paper.value?.raw?.file_path) return
+  downloading.value = true
+  try {
+    const id = route.params.id
+    const response = await axios.get(`/api/v1/knowledge/${id}/download`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', paper.value.raw.file_name || `knowledge_${id}.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('下载已开始')
+  } catch (e) {
+    console.error('[downloadFile] failed:', e)
+    ElMessage.error('下载失败，文件可能已丢失')
+  } finally {
+    downloading.value = false
+  }
+}
 const startReanalyzePolling = () => {
   if (reanalyzePollingTimer.value) clearInterval(reanalyzePollingTimer.value)
   let count = 0

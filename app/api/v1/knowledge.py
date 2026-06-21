@@ -101,12 +101,18 @@ async def create_knowledge(
 async def list_knowledge(
     category: Optional[str] = None,
     keyword: Optional[str] = None,
+    has_file: Optional[bool] = Query(None, description="v28 step 69: 只返回有上传文件的条目（file_type 非空）"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """查询知识库（列表不含 content 字段，详情请调 /knowledge/{id}）"""
+    """查询知识库（列表不含 content 字段，详情请调 /knowledge/{id}）
+
+    v28 step 69: 加 has_file=true 严格过滤
+    - has_file=true: 只返回 file_type 非空（即真实上传的 PDF/Word/PPT）
+    - has_file 不传或 false: 返回全部（含 LLM 自动入库的 [拓展-XXX]）
+    """
     # 构建过滤条件
     filters = []
     if category:
@@ -120,6 +126,10 @@ async def list_knowledge(
             Knowledge.title.ilike(f"%{keyword}%") |
             Knowledge.content.ilike(f"%{keyword}%")
         )
+    # v28 step 69: has_file 过滤
+    if has_file:
+        filters.append(Knowledge.file_type.isnot(None))
+        filters.append(Knowledge.file_type != '')
 
     # 总数查询
     count_query = select(func.count()).select_from(Knowledge)
@@ -189,6 +199,9 @@ async def list_knowledge(
             "created_at": it.created_at, "updated_at": it.updated_at,
             "thumbnail_url": first_imgs.get(first_id) if first_id else None,
             "image_count": cnt,
+            "file_path": it.file_path,
+            "file_name": it.file_name,
+            "file_type": it.file_type,
         })
     return KnowledgeList(items=list_items, total=total)
 
