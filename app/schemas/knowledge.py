@@ -76,6 +76,11 @@ class KnowledgeListItem(BaseModel):
     thumbnail_url: Optional[str] = None
     image_count: int = 0
 
+    # v28 step 69: 文件元数据（用于"上传的文件"标签过滤 + 下载按钮）
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+    file_type: Optional[str] = None
+
     class Config:
         from_attributes = True
 
