@@ -1711,4 +1711,34 @@ Each test was repeated three times.`
     expect(tree.sections[0].type).toBe('methods')
     expect(tree.sections[1].type).toBe('normal')  // level=1 不向上继承
   })
+
+  // v28 step 98: OCR 工具把 'Journal Pre-proof N' 水印错误插入到英文段落中间
+  //   例: '... a MNB\nJournal Pre-proof generator (RuiDe...' → '... a MNB generator (RuiDe...'
+  //   触发条件: 前后都是小写字母（说明 Journal Pre-proof 是 OCR artifact，不是 watermark 行）
+  //   之前只剥行首 Journal Pre-proof（^...$），中间的不剥
+  it('v28 step 98: OCR 错误插入的 Journal Pre-proof 水印（段落中间）应被剥除', () => {
+    const content = `The experimental setup was composed of four primary components: a MNB
+Journal Pre-proof generator (RuiDe ZhiChuang Innovation Technology (Tianjin) Co., Ltd.), a 3 L cylindrical reactor, an UV lamp (Philips, 3 W, 100 mm length), and the necessary connecting tubing.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+
+    // 1. Journal Pre-proof 应被剥除
+    expect(cleaned.content).not.toMatch(/Journal Pre-proof/)
+
+    // 2. MNB generator 应合并（中间无换行）
+    expect(cleaned.content).toContain('MNB generator')
+    expect(cleaned.content).not.toMatch(/MNB\s*\n\s*generator/)
+  })
+
+  it('v28 step 98: 行首的 Journal Pre-proof（独立行）仍正确剥除（不破坏旧行为）', () => {
+    const content = `Some real content here.
+Journal Pre-proof
+
+More content after the watermark.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    expect(cleaned.content).not.toMatch(/Journal Pre-proof/)
+    expect(cleaned.content).toContain('Some real content here')
+    expect(cleaned.content).toContain('More content after')
+  })
 })

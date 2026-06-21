@@ -829,6 +829,11 @@ export function cleanContent(text, options = {}) {
   // 重复的 Journal Pre-proof
   result = result.replace(/(Journal Pre-proof[\s\n]*){2,}/gi, 'Journal Pre-proof\n')
   result = result.replace(/^\s*Journal Pre-proof\s*$/gim, '')
+  // v28 step 98: OCR 工具把 'Journal Pre-proof N' 水印错误插入到英文段落中间
+  //   例: '... a MNB\nJournal Pre-proof generator (RuiDe...' → '... a MNB generator (RuiDe...'
+  //   触发条件: 前后都是小写字母（说明 Journal Pre-proof 是 OCR artifact，不是 watermark 行）
+  //   替换为空格，让 step 95 lowercase+lowercase 合并把前后小写连起来
+  result = result.replace(/([a-z])\s*\n?\s*Journal Pre-proof\s*\n?\s*([a-z])/gi, '$1 $2')
 
   // 5.7 v28 step 76 + step 82: 参考文献标识统一
   //   "Reference\n参考文献（共 1 条）\n展开全部 ▾" → 统一为 References 章节
