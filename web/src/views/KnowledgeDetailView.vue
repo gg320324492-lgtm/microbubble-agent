@@ -62,8 +62,10 @@
         <!-- 论文正文（按章节渲染） -->
         <article id="paper-content" class="paper-article">
           <div v-if="!hasAnyContent && paper.raw?.content" class="paper-fallback-content">
-            <!-- v28 step 64: section 解析失败时 fallback 显示原始 markdown -->
-            <pre class="raw-content-pre">{{ paper.raw.content }}</pre>
+            <!-- v28 step 64: section 解析失败时 fallback 显示原始 markdown
+                 v28 step 77: 但 raw.content 里也含 metadata 块（如 PDF header/cite/法律声明），
+                 也要先跑 cleanContent 剥除 -->
+            <pre class="raw-content-pre">{{ cleanRawContent }}</pre>
           </div>
           <div v-else-if="!hasAnyContent" class="paper-no-content">
             <el-empty description="该条目暂无正文内容" :image-size="60" />
@@ -213,6 +215,7 @@ import {
   buildAnchorTree,
   extractFigureMarkers,
   normalizeGraphData,
+  cleanContent,
 } from '@/utils/paperAdapter'
 
 const route = useRoute()
@@ -739,6 +742,22 @@ const handleReanalyze = async () => {
 // 之前: paper.value.status = 'analyzing' 永久不更新，右上角"分析中"标签不消失
 // 现在: 每 3s 拉一次 fetchDetail 直到 paper.status !== 'analyzing'
 const reanalyzePollingTimer = ref(null)
+
+// v28 step 77: fallback 路径也要清理 metadata（PDF header/cite/法律声明）
+const cleanRawContent = computed(() => {
+  const raw = paper.value?.raw?.content
+  if (!raw) return ''
+  try {
+    if (typeof cleanContent === 'function') {
+      const result = cleanContent(raw, { stripImageUrls: true, isMarkdown: false })
+      return result?.content || raw
+    }
+  } catch (e) {
+    // fallback 失败时直接显示原文（不阻塞）
+    console.warn('[cleanRawContent] failed:', e)
+  }
+  return raw
+})
 
 // v28 step 69: 下载原文件
 const downloading = ref(false)
