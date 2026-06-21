@@ -228,14 +228,15 @@ defineEmits([
 
 .knowledge-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* v28 step 74: auto-fill minmax 让卡片自适应列数（论文少时 2 列，内容多时 3-4 列） */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-4);
 }
 
 /* 加载骨架屏 */
 .loading-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-4);
 }
 
