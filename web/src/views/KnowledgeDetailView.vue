@@ -61,7 +61,11 @@
 
         <!-- 论文正文（按章节渲染） -->
         <article id="paper-content" class="paper-article">
-          <div v-if="!hasAnyContent" class="paper-no-content">
+          <div v-if="!hasAnyContent && paper.raw?.content" class="paper-fallback-content">
+            <!-- v28 step 64: section 解析失败时 fallback 显示原始 markdown -->
+            <pre class="raw-content-pre">{{ paper.raw.content }}</pre>
+          </div>
+          <div v-else-if="!hasAnyContent" class="paper-no-content">
             <el-empty description="该条目暂无正文内容" :image-size="60" />
           </div>
           <PaperSectionRenderer
@@ -560,19 +564,51 @@ function getInlineFiguresFor(section) {
 // API
 // ============================================================
 
-const fetchDetail = async () => {
+const fetchDetail = async (retryCount = 0) => {
   loading.value = true
-  try {
-    const id = route.params.id
+  const id = route.params.id
+  if (!id) {
+    console.error('[fetchDetail] route.params.id 为空')
+    loading.value = false
+    return
+  }
 
-    // 主数据 + 关联 + 多模态状态 全部并发
+  // v28 step 64: 主数据 + 关联 + 图谱 全部并发，任一失败 fallback
+  // 首屏加载时给主数据最多 3 次重试（处理后端 cold start / 路由 race condition）
+  const fetchWithRetry = async (url, options = {}, maxRetries = 2) => {
+    let lastErr = null
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        return await axios.get(url, options)
+      } catch (e) {
+        lastErr = e
+        if (i < maxRetries) {
+          // 指数退避: 500ms, 1000ms
+          await new Promise(r => setTimeout(r, 500 * Math.pow(2, i)))
+        }
+      }
+    }
+    throw lastErr
+  }
+
+  try {
     const [detailRes, relRes, graphRes] = await Promise.all([
-      axios.get(`/api/v1/knowledge/${id}`),
+      fetchWithRetry(`/api/v1/knowledge/${id}`).catch(e => {
+        console.error('[fetchDetail] 主数据加载失败', e)
+        ElMessage.error('主数据加载失败，请稍后重试')
+        return { data: null }
+      }),
       axios.get(`/api/v1/knowledge/${id}/related`, { params: { limit: 12 } }).catch(() => ({ data: [] })),
       axios.get('/api/v1/knowledge/graph', { params: { center_id: id, depth: 1, limit: 30 } })
         .then(r => { graphStatus.value = 'success'; return r })
         .catch(e => { graphStatus.value = 'failed'; return { data: { nodes: [], edges: [] } } }),
     ])
+
+    if (!detailRes.data) {
+      paper.value = null
+      loading.value = false
+      return
+    }
 
     rawKnowledge.value = detailRes.data
     relatedKnowledge.value = relRes.data || []
@@ -1022,6 +1058,24 @@ onUnmounted(() => {
 
 .paper-no-content {
   padding: 40px 0;
+}
+
+/* v28 step 64: section 解析失败时显示原始 markdown */
+.paper-fallback-content {
+  padding: 24px;
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+}
+
+.raw-content-pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.8;
+  color: #1F2937;
+  margin: 0;
 }
 
 /* 来源信息 */
