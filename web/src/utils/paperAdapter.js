@@ -125,6 +125,10 @@ const INTERNAL_MARKER_RES = [
   // 6) agent/minio 内网图片 URL（即使在正文中也不应直接显示）
   /https?:\/\/(?:agent\.)?mnb-lab\.cn\/minio\/[^\s<>"'\)]+/gi,
   /https?:\/\/localhost:\d+\/minio\/[^\s<>"'\)]+/gi,
+  // v28 step 90: orphan PDF 页码（OCR 把页码插入英文段落开头）
+  //   例："during\n\n15 disinfection." → "during disinfection."（保留空格）
+  //   必须在 step 5.1b 软连字符合并（line 716）之后跑，否则空格被吃
+  //   这里只剥 [PAGE:N] 占位符变种（[PAGE:15]），单数字 15 由 step 5.1b 之后单独 regex 处理
   // v28 step 82: Elsevier PDF header 元信息（Reference / DOI / PII / To appear in 等）
   //   这些通常以 `Reference:\nCEJ 171737` / `DOI:\nhttps://...` / `PII:\nS1385-...` 形式出现
   //   必须按整行剥，避免干扰正文引用识别
@@ -587,8 +591,11 @@ export function cleanContent(text, options = {}) {
   // 0. 先剥除 LLM blockquote 图描述（> 📊 **图表说明（Px）**\n> ... 整段）
   //    这些是 inline 进正文的图注描述，不应作为正文段落
   //    保留为 figure caption 候选
+  // v28 step 90: 扩展 regex 匹配**通用中文图注 blockquote**（"该图由..."/"下图展示了..."/"图 X 显示..."）
+  //   之前只匹配 "图表说明"/"Figure caption" 等 LLM 风格前缀，OCR 原生中文图注（"该图由..."）漏判
+  //   修复：加入 (?:该图|下图|图\s*\d|图表|示意图) 等中文图注常见开头
   const captionBlocks = []
-  result = result.replace(/^[ \t]*>[ \t]*((?:📊|📈|📉|🖼|🧪|⚗|🔬|🔍|💠)?[ \t]*[*_]*\s*(?:图表说明|Figure\s+caption|Table\s+caption|Caption|图表描述|Figure description)[^]*?)(?=\n[ \t]*[^>]|\n\n|$)/gim, (m, captionText) => {
+  result = result.replace(/^[ \t]*>[ \t]*((?:📊|📈|📉|🖼|🧪|⚗|🔬|🔍|💠)?[ \t]*[*_]*\s*(?:图表说明|Figure\s+caption|Table\s+caption|Caption|图表描述|Figure description|该图|下图|示意图|图表)[^]*?)(?=\n[ \t]*[^>]|\n\n|$)/gim, (m, captionText) => {
     captionBlocks.push(captionText.replace(/^[ \t]*>[ \t]*/gm, '').trim())
     return '' // 整段剥除
   })
@@ -707,6 +714,13 @@ export function cleanContent(text, options = {}) {
   result = result.replace(/([a-zA-Z一-龥])\n[ \t]+([a-zA-Z一-龥])/g, '$1$2')
   // 5.1c 合并"编号. + 标题"被 step 5.1a 拆开的章节标题（"1.\nIntroduction" → "1. Introduction"）
   result = result.replace(/^(\d+(?:\.\d+)*\.)\n^([A-Z])/gm, '$1 $2')
+
+  // v28 step 90: orphan PDF 页码（OCR 把页码插入英文段落开头）
+  //   例："during\n\n15 disinfection." → "during disinfection."（保留空格）
+  //   必须放在 step 5.1b 之后（否则空格被 line 716 软连字符合并吃掉）
+  //   触发条件：行首 1-3 位数字 + 空格 + 小写单词（避免误伤 "5 patients" 真句子开头）
+  //   用 lookbehind 限定前一行是英文（避免列表项 "1. xxx" 误判）
+  result = result.replace(/(?<=[a-z])\n\s*\d{1,3}\s+(?=[a-z]{3,})/g, ' ')
 
   // 5.2 v28 step 75: HTML 实体 → Unicode 下标/上标
   //   <sub>3</sub> → ₃, <sup>-</sup> → ⁻, <sub>2</sub> → ₂ 等

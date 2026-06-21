@@ -1495,4 +1495,33 @@ and improving water biosafety. The collapse of MNBs generates microjets with vel
     expect(allBlockText).toContain('and improving water biosafety')
     expect(allBlockText).not.toMatch(/P28-29/)
   })
+
+  // v28 step 90: 中文 blockquote 图注（"该图由..."）混入英文正文 + orphan PDF 页码
+  // 用户截图（杨慈 UV/MNBs 论文）：英文段后跟 > 该图由六个子图... 长图注，然后
+  //   "15 disinfection." — OCR 把 PDF 页码 15 错误插入段落开头
+  it('v28 step 90: 中文图注剥除 + orphan PDF 页码 15 剥除（保留空格）', () => {
+    const content = `significant reduction of 29.05% over time, suggesting consumption of ionic species during
+> 该图由六个子图（a-f）组成，展示了不同处理方式（MNBs, MNBs/UV1, MNBs/UV0.5, UV1, UV0.5）下水质参数随时间（0-9分钟）的变化趋势。(a) MNBs/UV1的灭菌效率最高，接近100%；(b) TOC在初期下降后趋于稳定；(c) ORP随时间下降并稳定；(d) pH值在初期下降后保持在7-8之间；(e) CDC值在MNBs处理下较低且稳定；(f) DO值在初期略有上升后缓慢下降。
+15 disinfection. The average CDC value in the MNBs/UV1 group was 157.40 μS/cm (SD = 22.67), which was 0.29% higher than that in the MNBs/UV0.5 group.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+
+    // 1. 中文 blockquote 图注应被剥除
+    expect(cleaned.content).not.toMatch(/该图由/)
+    expect(cleaned.content).not.toMatch(/六个子图/)
+    expect(cleaned.content).not.toMatch(/灭菌效率最高/)
+
+    // 2. orphan 页码 15 应被剥除，但前后空格保留（避免 "duringdisinfection"）
+    expect(cleaned.content).not.toMatch(/\b15 disinfection/)
+    expect(cleaned.content).toMatch(/during disinfection/)
+    expect(cleaned.content).not.toMatch(/duringdisinfection/)
+
+    // 3. 正文连贯：前半段 + 后半段用空格连接，无 phantom text
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+    const allText = sections.flatMap((s) => s.blocks || []).map((b) => b.content || '').join('\n')
+    expect(allText).toContain('significant reduction of 29.05% over time')
+    expect(allText).toContain('The average CDC value in the MNBs/UV1 group')
+    expect(allText).not.toMatch(/该图由/)
+    expect(allText).not.toMatch(/\b15 disinfection/)
+  })
 })
