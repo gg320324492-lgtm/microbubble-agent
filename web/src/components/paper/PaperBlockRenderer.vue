@@ -47,6 +47,7 @@ import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
 import { autoLinkContent } from '@/utils/paperAdapter'
 import { formatChemicalText } from '@/utils/chemFormat'
+import { renderMarkdown } from '@/utils/markdown'
 
 const props = defineProps({
   block: { type: Object, required: true },
@@ -65,12 +66,58 @@ const renderedContent = computed(() => {
   if (props.block.type === 'table') {
     return renderMarkdownTable(raw)
   }
+  // v28 step 61: 检测是否含 Markdown 列表结构（- / 1. / * 开头）
+  //   之前完全靠 autoLinkContent（只 escape + URL/DOI 链接），列表项被压成纯文本
+  //   视觉上"挤一行"，GFM task list `- [ ]` 也不会变成 checkbox
+  //   修复：含 list 结构时先链接纯文本 URL/DOI，再 marked.parse 解析 list 结构
+  //   marked.parse 会自动 escape < > & 字符，且保留已生成的 <a> 标签
+  const hasMarkdownList = /(^|\n)\s*(?:[-*+]\s|\d+\.\s)/.test(raw)
+  if (hasMarkdownList) {
+    const formatted = props.isChinese ? raw : formatChemicalText(raw)
+    // 第一步：链接纯文本 URL/DOI（不 escape，让 marked 处理）
+    const linked = _linkPlainText(formatted)
+    // 第二步：marked 解析 list + escape
+    return renderMarkdown(linked)
+  }
   // v28 step 41: KaTeX auto-render 自动扫描 $..$ / $$..$$，
   // 这里不需要手工包 <span class="math">，只需 escape + link 即可。
   // KaTeX typeset 由 KnowledgeDetailView.typesetMath() 在 onMounted / watch 触发。
   const formatted = props.isChinese ? raw : formatChemicalText(raw)
   return autoLinkContent(formatted)
 })
+
+/**
+ * v28 step 61: 仅做 DOI/URL/邮箱链接，不 escape HTML
+ * 后续 marked.parse 会 escape < > & 字符，且保留 <a> 标签
+ */
+function _linkPlainText(text) {
+  if (!text) return ''
+  // DOI 链接
+  let out = text.replace(
+    /https?:\/\/(?:dx\.)?doi\.org\/(10\.\d{4,9}\/[-._;()\/:A-Z0-9]+)/gi,
+    '<a class="auto-link doi-link" href="https://doi.org/$1">$1</a>'
+  )
+  out = out.replace(
+    /(?<!doi\.org\/)(?<!href="https:\/\/doi\.org\/)\b(10\.\d{4,9}\/[-._;()\/:A-Z0-9]+)\b(?![^<]*<\/a>)/gi,
+    '<a class="auto-link doi-link" href="https://doi.org/$1">$1</a>'
+  )
+  // 普通 URL
+  out = out.replace(
+    /\bhttps?:\/\/[^\s<]+\b/g,
+    (m) => {
+      if (/\.(png|jpg|jpeg|gif|svg|webp)$/i.test(m)) return m
+      if (/\/minio\//.test(m)) return m
+      if (/doi\.org/i.test(m)) return m
+      return `<a class="auto-link url-link" href="${m}" target="_blank" rel="noopener">${m}</a>`
+    }
+  )
+  // 邮箱
+  out = out.replace(
+    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
+    (m) => `<a class="auto-link email-link" href="mailto:${m}">${m}</a>`
+  )
+  return out
+}
 
 /**
  * v28 step 38: Markdown 表格转 HTML
