@@ -1357,4 +1357,64 @@ Journal of Hazardous Materials 513 (2026) 142456
     expect(paper).toBeTruthy()
     expect(paper.sections).toBeDefined()
   })
+
+  // v28 step 87: 章节标题识别不再误吃表格行 + 页码+图注合并行
+  // 用户截图（杨慈 UV/MNBs 论文）：
+  //   "7\nFig. 1. ..." 被当章节
+  //   "1\nIndividual MNBs treatment\nMNBs" 表格行被当章节
+  //   "2.2\nPreparation of strain..." 真实章节标题保留
+  it('v28 step 87: 表格行 + 页码+图注 行不被识别为章节标题', () => {
+    const content = `7
+Fig. 1. Water treatment sterilization system based on MNBs/UV technology.
+Tab.1. Description of different treatment conditions. Serial number Treatment condition Symbol
+
+1
+Individual MNBs treatment MNBs
+2
+UV irradiation for 0.5 min in combination with MNBs treatment MNBs/UV0.5
+3
+UV irradiation for 1 min in combination with MNBs treatment MNBs/UV1
+4
+Individual UV irradiation for 0.5 min UV0.5
+5
+Individual UV irradiation for 1 min UV1
+2.2
+Preparation of strain and bacterial suspension
+In this study, the selected bacterial strain was B. cereus ATCC 11778.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+
+    // 1. 表格行 1-5 + "7 Fig. 1." 不应是独立章节标题
+    const tableRowTitles = sections.filter((s) =>
+      /^(7\s+Fig|1\s+Individual|2\s+UV|3\s+UV|4\s+Individual|5\s+Individual)/.test(s.title || '')
+    )
+    expect(tableRowTitles.length).toBe(0)
+
+    // 2. 真实章节标题 2.2 保留
+    const realChapter = sections.find((s) => /^2\.2\s+Preparation/.test(s.title || ''))
+    expect(realChapter).toBeTruthy()
+    expect(realChapter.type).toBe('normal')
+
+    // 3. 内容块含 "In this study..." 段落
+    const allBlockText = sections.flatMap((s) => s.blocks || []).map((b) => b.content || '').join('\n')
+    expect(allBlockText).toContain('In this study')
+    expect(allBlockText).toContain('Tab.1')
+    expect(allBlockText).toContain('Individual MNBs treatment MNBs')
+  })
+
+  // v28 step 87: 单数字章节编号（无小数）必须含 SECTION_KEYWORDS 才识别
+  // 否则 OCR 错误数字行（"1\n3.5 L of..." 等）会被误识别
+  it('v28 step 87: level=1 编号必须匹配 SECTION_KEYWORDS', () => {
+    // 不在关键词列表的 level=1 → 不识别为章节（落到 preamble）
+    const s1 = parsePaperSections('1 Some random text', { isMarkdown: false })
+    expect(s1.length).toBe(1) // 只有 preamble
+    expect(s1[0].type).toBe('preamble')
+
+    // SECTION_KEYWORDS 内的 → 识别为章节
+    const s2 = parsePaperSections('1 Introduction\nThis is intro.', { isMarkdown: false })
+    expect(s2.length).toBeGreaterThanOrEqual(1)
+    expect(s2.some((s) => /^1\s+Introduction/.test(s.title || ''))).toBe(true)
+    expect(s2.some((s) => s.type === 'introduction')).toBe(true)
+  })
 })
