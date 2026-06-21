@@ -661,6 +661,35 @@ export function cleanContent(text, options = {}) {
   // 3.5 v26.1: 多模态 chart 描述块（OCR 漏闭合 }）—— 必须在 INTERNAL_MARKER_RES 之前
   result = _stripMultimodalBlocks(result)
 
+  // 3.6 v28 step 101: OCR phantom 页码 + 段首单词 inline 合并
+  //   "B. cereus\n\n3\n\n(Grutsch" → "B. cereus 3 (Grutsch"（保留 3 作为 inline 页码）
+  //   "MNBs\n\ncapable of completely" → "MNBs capable of completely"（段首小写合并）
+  //   必须在 INTERNAL_MARKER_RES 之前：否则 line 205 /^\s*\d{1,3}\s*$/gm 直接删 3
+  //   触发条件：上一行末尾是小写字母/右括号/方括号（不是句末标点 . ! ?）
+  //            + \n\n + 单数字/单词 + 单空格/\n\n + 后跟小写字母/左括号
+  //   排除真段落边界：
+  //     - "here.\n\nThe" → lookbehind 是 . 不是小写 → 不匹配 ✓
+  //     - "paragraphs.\n\nMoreover," → lookbehind 是 . → 不匹配 ✓
+  //   中文段落不触发（lookbehind/lookahead 是英文字母）
+  //   两模式分开：数字模式必须后跟左括号（避免与 step 90 orphan 页码删除冲突）
+  if (!/[一-龥]/.test(result)) {
+    // 模式 A: phantom 数字 + 左括号（reference 引用 inline）
+    //   "cereus\n\n3\n\n(Grutsch" → "cereus 3 (Grutsch"
+    //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除（"during\n\n15 disinfection"）
+    result = result.replace(
+      /([a-z)\]])\s*\n\s*\n\s*(\d{1,3})\s*(?:\n\s*\n|\s)(?=\()/g,
+      '$1 $2 '
+    )
+    // 模式 B: phantom 单词（OCR 段首小写）
+    //   "MNBs\n\ncapable of" → "MNBs capable of"
+    //   "both\n\nmechanistic complementarity" → "both mechanistic complementarity"
+    //   上限 20 字符：OCR 段首单词一般是常见词（capable=7, mechanistic=11），20 留余量
+    result = result.replace(
+      /([a-z)\]])\s*\n\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
+      '$1 $2 '
+    )
+  }
+
   // 4. 系统内部标记
   for (const re of INTERNAL_MARKER_RES) {
     result = result.replace(re, '')
@@ -716,6 +745,8 @@ export function cleanContent(text, options = {}) {
   //   "bacterial\ndisinfection process" → "bacterial disinfection process"
   //   触发条件：上一行末尾小写 + 下一行开头小写（区别于独立段落的"句末标点 + 大写开头"）
   //   仅在英文段落（非中文论文）应用，避免误合并中文段落
+  //   v28 step 101 撤掉（'\n\n' 版本）—— 通用规则破坏太多现有 fixture
+  //   phantom 页码（如 'B. cereus\n\n3 (Grutsch'）保留，UI 仍可读
   if (!/[一-龥]/.test(result)) {
     result = result.replace(/([a-z])\n([a-z])/g, '$1 $2')
   }

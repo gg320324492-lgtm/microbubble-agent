@@ -1796,4 +1796,44 @@ More content after the watermark.`
       expect(cleaned.content).toContain(out.slice(0, 50))
     }
   })
+
+  // v28 step 101: OCR 把 [PAGE:N] 写成裸数字 N（phantom 页码）插入段落中间
+  //   "B. cereus\n\n3 (Grutsch et al., 2018)" → "B. cereus 3 (Grutsch et al., 2018)"
+  //   "MNBs\n\ncapable of completely..." → "MNBs capable of completely..."
+  //   触发条件：上一行末尾小写/右括号（非 . ! ? 句末标点）+ 双空行 + 下一行小写/数字/左括号
+  it('v28 step 101: OCR phantom 页码 + 段落间双空行应合并（小写/数字后）', () => {
+    const cases = [
+      {
+        in: 'associated with B. cereus\n\n3\n\n(Grutsch et al., 2018)',
+        out: 'associated with B. cereus 3 (Grutsch et al., 2018)',
+      },
+      {
+        in: 'concentration of 1 mg/L O₃ MNBs\n\ncapable of completely inactivating 10⁶ CFU/mL',
+        out: 'concentration of 1 mg/L O₃ MNBs capable of completely inactivating 10⁶ CFU/mL',
+      },
+      {
+        in: 'advantages in both\n\nmechanistic complementarity and performance enhancement',
+        out: 'advantages in both mechanistic complementarity and performance enhancement',
+      },
+    ]
+    for (const { in: input, out } of cases) {
+      const cleaned = cleanContent(input, { isMarkdown: false })
+      expect(cleaned.content).not.toMatch(/\n\n3\n\n/)
+      expect(cleaned.content).toContain(out.slice(0, 40))
+    }
+  })
+
+  // v28 step 101 不破坏真段落边界（句末标点 + 大写开头）
+  it('v28 step 101: 句末标点 + 大写开头的真段落边界应保留 \\n\\n', () => {
+    // OCR 真实风格：段落间用 \n\n 隔开（不是单 \n）
+    // "here.\n\nThe" 的 lookbehind 是 . 不是小写 → step 101 不触发 → 保留 \n\n
+    const content = `This is the first paragraph that ends here.
+
+The second paragraph starts with a capital letter and is a real paragraph boundary.`
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    // 真段落间应保留 \n\n（step 101 不应吃掉）
+    expect(cleaned.content).toContain('here.\n\nThe second')
+    // 输入有 \n\n，输出长度应 >= 输入长度（不能合并丢空行）
+    expect(cleaned.content.length).toBeGreaterThanOrEqual(content.length)
+  })
 })
