@@ -9,11 +9,12 @@ import re
 from typing import Any, Dict, List, Optional
 
 from app.core.llm import (
+    extract_text_from_response,
     get_anthropic_client,
     get_default_model,
     parse_llm_json,
-    extract_text_from_response,
 )
+from app.services.name_aliases import clean_text as clean_person_names
 
 logger = logging.getLogger("microbubble.meeting_analysis")
 
@@ -296,7 +297,16 @@ class MeetingAnalysisService:
 
         输出格式与 Meeting.transcript JSON 兼容：
         [{"speaker": "张三", "text": "..."}, ...]
+
+        v28 step 60: 额外对 speaker_mapping 做 alias 清洗（"洪辉"→"张宏魁"）
         """
+        # 清洗映射值（避免硬编码 speaker_mapping 也含谐音）
+        if speaker_mapping:
+            speaker_mapping = {
+                k: clean_person_names(v) if isinstance(v, str) else v
+                for k, v in speaker_mapping.items()
+            }
+
         entries: List[Dict[str, str]] = []
 
         # 尝试按【发言人】: 格式切分
@@ -415,11 +425,12 @@ class MeetingAnalysisService:
         # 汇总摘要
         summary = await self._merge_summaries(chunk_summaries) if chunk_summaries else ""
 
+        # v28 step 60: 清洗所有人名谐音（"洪辉"→"张宏魁" 等）
         return {
-            "summary": summary,
-            "key_points": all_key_points,
-            "decisions": all_decisions,
-            "action_items": all_action_items,
+            "summary": clean_person_names(summary),
+            "key_points": [clean_person_names(p) for p in all_key_points],
+            "decisions": [clean_person_names(d) for d in all_decisions],
+            "action_items": [clean_person_names(a) if isinstance(a, str) else a for a in all_action_items],
         }
 
     async def _analyze_chunk(self, chunk_text: str, chunk_index: int = 0, total_chunks: int = 1) -> Dict[str, Any]:
@@ -444,7 +455,9 @@ class MeetingAnalysisService:
                     }],
                 )
                 text = extract_text_from_response(response)
-                return parse_llm_json(text)
+                result = parse_llm_json(text)
+                # v28 step 60: 清洗谐音人名（让 LLM 也输出真实成员名）
+                return _clean_result_person_names(result)
             except json.JSONDecodeError:
                 if attempt == 0:
                     await asyncio.sleep(1)
@@ -585,6 +598,27 @@ class MeetingAnalysisService:
 
         stats.sort(key=lambda x: x["word_count"], reverse=True)
         return stats
+
+
+def _clean_result_person_names(result: Dict[str, Any]) -> Dict[str, Any]:
+    """v28 step 60: 清洗 LLM 输出的 summary/key_points/decisions/action_items 中的人名谐音
+
+    处理嵌套 list[str] / str / 字段缺失等情况
+    """
+    if not isinstance(result, dict):
+        return result
+    out = dict(result)
+    for field in ("summary", "title"):
+        if isinstance(out.get(field), str):
+            out[field] = clean_person_names(out[field])
+    for field in ("key_points", "decisions", "action_items"):
+        val = out.get(field)
+        if isinstance(val, list):
+            out[field] = [
+                clean_person_names(v) if isinstance(v, str) else v
+                for v in val
+            ]
+    return out
 
 
 # 全局单例

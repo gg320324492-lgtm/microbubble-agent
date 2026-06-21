@@ -6,6 +6,7 @@ import logging
 import re
 
 from app.models.knowledge import Knowledge
+from app.services.name_aliases import clean_text as clean_person_names
 
 logger = logging.getLogger("microbubble.knowledge")
 
@@ -57,7 +58,17 @@ class KnowledgeService:
         source_type: Optional[str] = None,
         created_by: Optional[int] = None
     ) -> Knowledge:
-        """创建知识条目"""
+        """创建知识条目
+
+        v28 step 60: 入库前清洗谐音人名（"洪辉"→"张宏魁" 等）
+        """
+        title = clean_person_names(title)
+        content = clean_person_names(content)
+        if category:
+            category = clean_person_names(category)
+        if tags:
+            tags = [clean_person_names(t) for t in tags]
+
         knowledge = Knowledge(
             title=title,
             content=content,
@@ -100,13 +111,29 @@ class KnowledgeService:
             await self.db.refresh(knowledge)
 
     async def update_knowledge(self, knowledge_id: int, **kwargs) -> Optional[Knowledge]:
-        """更新知识条目"""
+        """更新知识条目
+
+        v28 step 60: 更新时也清洗谐音人名
+        """
+        # 入参清洗
+        cleaned_kwargs = {}
+        for key, value in kwargs.items():
+            if isinstance(value, str):
+                cleaned_kwargs[key] = clean_person_names(value)
+            elif isinstance(value, list):
+                cleaned_kwargs[key] = [
+                    clean_person_names(v) if isinstance(v, str) else v
+                    for v in value
+                ]
+            else:
+                cleaned_kwargs[key] = value
+
         knowledge = await self.get_knowledge(knowledge_id)
         if not knowledge:
             return None
 
         content_changed = False
-        for key, value in kwargs.items():
+        for key, value in cleaned_kwargs.items():
             if hasattr(knowledge, key) and value is not None:
                 setattr(knowledge, key, value)
                 if key == "content":
