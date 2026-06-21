@@ -233,6 +233,7 @@ function _isChineseHeavy(text) {
   if (!text) return false
   const cn = (text.match(/[一-龥]/g) || []).length
   return cn > 30
+}
 
 
 // ============================================================================
@@ -245,7 +246,8 @@ function _isChineseHeavy(text) {
  * 检测内容是否是 QA 库格式（"## 问题 ... ## 回答 ..."）
  * 返回 {question, answer} 或 null
  */
-function _tryExtractQA(content) {
+// v28 step 71 + 72: 导出保证 Vite/Rollup 不会 tree-shake 掉（async chunk 加载时引用）
+export function _tryExtractQA(content) {
   if (!content || !content.trim()) return null
   // 严格匹配开头的 ## 问题 / ## 回答 块
   const m = content.match(
@@ -267,7 +269,7 @@ function _tryExtractQA(content) {
  * - "## 📋 xxx" emoji 装饰标题（保留但去除装饰）
  * - 重复的"## 总结"段落（去掉冗余）
  */
-function _cleanQAAnswer(answer) {
+export function _cleanQAAnswer(answer) {
   if (!answer) return ''
   let out = answer
 
@@ -308,7 +310,7 @@ function _cleanQAAnswer(answer) {
  *
  * PaperBlockRenderer 用专门的 Q&A 卡片样式渲染
  */
-function _buildQAPaperDetail(raw, question, answer, extra) {
+export function _buildQAPaperDetail(raw, question, answer, extra) {
   // 计算摘要：answer 前 150 字符（去 ## 标题前缀）
   const summary = (raw.summary || '')
     || answer.replace(/^#+\s*[^\n]*\n+/gm, '').slice(0, 200).trim()
@@ -345,8 +347,6 @@ function _buildQAPaperDetail(raw, question, answer, extra) {
     extra,
     _status: 'success',
   }
-}
-  return cn / Math.max(1, text.length) > 0.2
 }
 
 function _cleanText(text) {
