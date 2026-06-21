@@ -584,6 +584,45 @@ export function cleanContent(text, options = {}) {
   // 5. DOI 规范化
   result = normalizeDoiText(result)
 
+  // 5.1 v28 step 75: PDF 软连字符 + 行尾强制换行 → 合并
+  //   根因：PDF 提取把 "disin-fection" 拆成 "disin­\n        fection"，'-­' 是不可见 soft hyphen
+  //   解法：先去掉所有 soft hyphen（U+00AD），再合并 "字母 + 强制换行 + 字母" → 字母字母
+  result = result.replace(/­/g, '')
+  // 合并 "字母-换行-字母"（如 "disin\n        fection"）
+  result = result.replace(/([a-zA-Z一-龥])[ \t]*\n[ \t]*([a-zA-Z一-龥])/g, '$1$2')
+
+  // 5.2 v28 step 75: HTML 实体 → Unicode 下标/上标
+  //   <sub>3</sub> → ₃, <sup>-</sup> → ⁻, <sub>2</sub> → ₂ 等
+  const SUB_MAP = {'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉',
+                   '+':'₊','-':'₋','=':'₌','(':'₍',')':'₎','a':'ₐ','e':'ₑ','h':'ₕ','i':'ᵢ','j':'ⱼ','k':'ₖ','l':'ₗ','m':'ₘ','n':'ₙ','o':'ₒ','p':'ₚ','r':'ᵣ','s':'ₛ','t':'ₜ','u':'ᵤ','v':'ᵥ','x':'ₓ'}
+  const SUP_MAP = {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+                   '+':'⁺','-':'⁻','=':'⁼','(':'⁽',')':'⁾','a':'ᵃ','b':'ᵇ','c':'ᶜ','d':'ᵈ','e':'ᵉ','f':'ᶠ','g':'ᵍ','h':'ʰ','i':'ⁱ','j':'ʲ','k':'ᵏ','l':'ˡ','m':'ᵐ','n':'ⁿ','o':'ᵒ','p':'ᵖ','r':'ʳ','s':'ˢ','t':'ᵗ','u':'ᵘ','v':'ᵛ','w':'ʷ','x':'ˣ','y':'ʸ','z':'ᶻ'}
+  // <sub>X</sub> → Unicode sub
+  result = result.replace(/<sub>([^<]*?)<\/sub>/g, (m, content) => {
+    return content.split('').map(c => SUB_MAP[c] || c).join('')
+  })
+  // <sup>X</sup> → Unicode sup
+  result = result.replace(/<sup>([^<]*?)<\/sup>/g, (m, content) => {
+    return content.split('').map(c => SUP_MAP[c] || c).join('')
+  })
+
+  // 5.3 v28 step 75: 去除 PDF 重复引用括号 ⁽¹⁾⁽²⁾ 等保留，但 ⁽¹͵¹²͵¹⁴͵¹⁵⁾ 这种连号 PDF 软连字符分隔，合并
+  //   "⁽¹͵¹²͵¹⁴⁾" → "⁽¹⁻²⁻¹⁴⁾" 或直接保留（不强改）
+  //   只清理 ⁽͵ 这种孤立 soft hyphen
+  result = result.replace(/⁽͵/g, '⁽').replace(/͵⁾/g, '⁾').replace(/͵/g, ',')
+
+  // 5.4 v28 step 75: 章节编号与标题同行
+  //   "4.2\n内容一：..." → "4.2 内容一：..."
+  //   数字编号 + 换行 + 中文标题 → 数字编号 + 空格 + 中文
+  result = result.replace(/^(\d+(?:\.\d+)*)\s*\n\s*([^\n])/gm, '$1 $2')
+
+  // 5.5 v28 step 75: 期刊元信息块剥离（Corresponding author / Contents lists / E-mail / Received）
+  //   这些是论文 header / footer 元信息，不属于正文内容
+  result = result.replace(/Corresponding author at:[^\n]*\n[^\n]*E-mail address:[^\n]*\n?/gi, '')
+  result = result.replace(/Contents lists available at[^\n]*\n[^\n]*journal homepage:[^\n]*\n?/gi, '')
+  result = result.replace(/Received \d{1,2}\s+\w+\s+\d{4}[;\s]*/gi, '')
+  result = result.replace(/\d{4}[-\s]Elsevier[^\n]*\n[^\n]*\n?/gi, '')
+
   // 6. PDF 页脚
   for (const re of FOOTER_PATTERNS) {
     result = result.replace(re, '')
