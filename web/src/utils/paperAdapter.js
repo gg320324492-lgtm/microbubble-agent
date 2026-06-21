@@ -679,24 +679,26 @@ export function cleanContent(text, options = {}) {
   //   正确守卫应该在 lookbehind/lookahead（已限定英文），不再需要整篇判断
   // 模式 A: phantom 数字 + 左括号（reference 引用 inline）
   //   "cereus\n\n3\n\n(Grutsch" → "cereus 3 (Grutsch"
-  //   "cereus\n[PAGE:4]\n 3 (Grutsch" → "cereus 3 (Grutsch"（容忍中间 [PAGE:N] 标记）
+  //   "cereus\n[PAGE:4] 3 (Grutsch" → "cereus 3 (Grutsch"（容忍中间 [PAGE:N] 标记 + 单空格）
   //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除（"during\n\n15 disinfection"）
-  // v28 step 101 第二次修复：phantom 模式 A 中间可能夹 [PAGE:N] page marker
-  //   实际生产 input（id=17 论文）：`B. cereus \n[PAGE:4]\n \n3 \n(Grutsch`（OCR 把页码 +
-  //   Journal Pre-proof watermark + 数字 3 拆开）。中间 [PAGE:4] 阻塞原 phantom 模式。
-  //   修复：(?:\s*\[PAGE:\s*\d+\s*\]\s*)? 容忍中间 [PAGE:N] 标记
+  // v28 step 101 第三次修复：v41 只匹配 `[PAGE:N]\n3`（换行隔开），
+  //   但实际生产 input 是 `[PAGE:N] 3`（单空格隔开），v41 模式不匹配
+  //   修复：[ \t\n]* 容忍 [PAGE:N] 后任意水平空白或换行
   const beforeA = result
   result = result.replace(
-    /([a-z)\]])\s*\n(?:\s*\[PAGE:\s*\d+\s*\]\s*\n)?\s*\n?\s*(\d{1,3})\s+(?=\()/g,
+    /([a-z)\]])\s*\n(?:\s*\[PAGE:\s*\d+\s*\][ \t\n]*)?\s*(\d{1,3})\s+(?=\()/g,
     '$1 $2 '
   )
   // 模式 B: phantom 单词（OCR 段首小写）
   //   "MNBs\n\ncapable of" → "MNBs capable of"
   //   "both\n\nmechanistic complementarity" → "both mechanistic complementarity"
   //   上限 20 字符：OCR 段首单词一般是常见词（capable=7, mechanistic=11），20 留余量
+  // v28 step 101 第三次修复：模式 B 加回双空行要求（v42 错误地移除了，导致破坏
+  //   step 5.1a 单词逐行合并"Please\nalso\nnote → Please also note"）
+  //   但保留 [PAGE:N] 容忍
   const beforeB = result
   result = result.replace(
-    /([a-z)\]])\s*\n(?:\s*\[PAGE:\s*\d+\s*\]\s*\n)?\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
+    /([a-z)\]])\s*\n(?:\s*\[PAGE:\s*\d+\s*\][ \t\n]*\s*\n)?\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
     '$1 $2 '
   )
 
