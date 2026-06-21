@@ -582,6 +582,176 @@ describe('解析鲁棒性', () => {
     expect(paper).toBeTruthy()
     expect(paper.sections.length).toBeGreaterThan(0)
   })
+
+  // v28 step 82: front matter 剥离（Elsevier Pre-proof 风格）
+  it('v28 step 82: Elsevier PDF front matter 剥离 + 抽 Abstract/Keywords', () => {
+    const raw = {
+      id: 82,
+      title: 'Elsevier Pre-proof Test',
+      content: `[PAGE:1]Journal Pre-proof
+Disinfection mechanism of micro-nano bubbles
+Yang Ci, Wang Tianzhi, Liu Ziyi
+PII: S1385-8947(25)12584-9
+DOI: https://doi.org/10.1016/j.cej.2025.171737
+Reference: CEJ 171737
+To appear in:
+Received date: 17 August 2025
+Revised date: 26 November 2025
+Accepted date: 8 December 2025
+Please cite this article as: Y. Ci, W. Tianzhi, L. Ziyi, et al., Mechanism (2024)
+This is a PDF of an article that has undergone enhancements after acceptance.
+Please
+also
+note
+that,
+during
+the
+production process, errors may be discovered which could affect the content, and all legal
+disclaimers that apply to the journal pertain.
+© 2025 Published by Elsevier B.V.
+[PAGE:2]
+Abstract: This paper presents a novel micro-nano bubble system.
+Keywords: ozone, micro-nanobubble, water treatment
+[PAGE:3]
+1. Introduction
+Micro-nano bubbles are sub-millimeter gas bubbles.
+[PAGE:5]
+2. Materials and methods
+Toluene was analytical grade.
+[PAGE:8]
+3. Results
+The results show effective degradation.
+[PAGE:11]
+4. Conclusion
+Effective method.
+[PAGE:12]
+References
+[1] Smith J. Nature. 2020.
+[2] Wang L. Science. 2019.
+`,
+      summary: null,
+      tags: null,
+      file_name: 'elsevier.pdf',
+      file_type: 'application/pdf',
+      analysis_status: 'done',
+      created_at: '2026-06-19T10:00:00',
+      updated_at: '2026-06-19T10:00:00',
+    }
+    const paper = normalizePaperData(raw)
+
+    // front matter 字段应被剥离（不应作为 sections 出现）
+    const sectionContents = paper.sections.map(s => (s.content || '') + ' ' + (s.title || '')).join(' ')
+    expect(sectionContents).not.toContain('Reference: CEJ')
+    expect(sectionContents).not.toContain('Please cite this article as')
+    expect(sectionContents).not.toContain('Pleasealsonote') // word-per-line 修复
+    expect(sectionContents).not.toContain('© 2025 Published by Elsevier')
+    expect(sectionContents).not.toContain('PII: S1385')
+
+    // 1. Introduction 应该是第一个 section
+    expect(paper.sections[0].type).toBe('introduction')
+
+    // Abstract 应该被抽出（单词换行 bug 已修复）
+    expect(paper.abstract).toContain('micro-nano bubble')
+    expect(paper.abstract).not.toContain('Pleasealsonote')
+
+    // References 应该在文末并有多个
+    const refsSection = paper.sections.find(s => s.type === 'references')
+    expect(refsSection).toBeTruthy()
+    expect(paper.references.length).toBeGreaterThanOrEqual(2)
+  })
+
+  // v28 step 82: 普通 PDF (无 Elsevier 元信息) 不应触发 front matter 剥离
+  it('v28 step 82: 普通 PDF 不剥离 front matter (避免误删 Abstract section)', () => {
+    const raw = {
+      id: 83,
+      title: 'Normal Paper',
+      content: `[PAGE:1]
+Title here
+[PAGE:2]
+Abstract
+This paper presents a novel system.
+Keywords: ozone, water treatment
+[PAGE:3]
+1 Introduction
+Test intro.
+[PAGE:5]
+2 Methods
+Test methods.
+[PAGE:8]
+3 Results
+Test results.
+[PAGE:11]
+4 Conclusion
+Test conclusion.
+[PAGE:12]
+References
+[1] Smith J. Nature. 2020.
+`,
+      summary: null,
+      tags: null,
+      file_name: 'normal.pdf',
+      file_type: 'application/pdf',
+      analysis_status: 'done',
+      created_at: '2026-06-19T10:00:00',
+      updated_at: '2026-06-19T10:00:00',
+    }
+    const paper = normalizePaperData(raw)
+
+    // Abstract section 应该存在（不被剥离）
+    const types = paper.sections.map(s => s.type)
+    expect(types).toContain('abstract')
+    expect(types).toContain('introduction')
+    expect(types).toContain('methods')
+    expect(types).toContain('results')
+    expect(types).toContain('conclusion')
+    expect(types).toContain('references')
+  })
+
+  // v28 step 82: 单词逐行 OCR 修复
+  it('v28 step 82: 单词逐行 OCR 修复 (Please\\nalso\\nnote → Please also note)', () => {
+    const text = 'Please\nalso\nnote\nthat,\nduring\nthe\nproduction process, errors may be discovered.'
+    const { content } = cleanContent(text, { stripImageUrls: false, isMarkdown: false })
+    // 单短词行（Please/also/note/that,/during/the）应合并成 "Please also note that, during the"
+    expect(content).toContain('Please also note that, during the')
+    // 不应出现单词粘连
+    expect(content).not.toContain('Pleasealsonote')
+    expect(content).not.toContain('duringtheproduction')
+  })
+
+  // v28 step 82: 单词内换行不应误加空格
+  it('v28 step 82: 单词内换行不加空格 (disinfection 不会被拆)', () => {
+    const text = 'The method of disin\n        fection is well-established.'
+    const { content } = cleanContent(text, { stripImageUrls: false, isMarkdown: false })
+    expect(content).toContain('disinfection')
+    expect(content).not.toContain('disin fection')
+  })
+
+  // v28 step 82: 独立段落行不应被合并（避免段落合并）
+  it('v28 step 82: 独立段落行不合并 (Chemicals\\nToluene 保持换行)', () => {
+    const text = '2.1 Chemicals\nToluene was analytical grade.'
+    const { content } = cleanContent(text, { stripImageUrls: false, isMarkdown: false })
+    expect(content).toContain('Chemicals')
+    expect(content).toContain('Toluene')
+    // 不应合并为 ChemicalsToluene
+    expect(content).not.toContain('ChemicalsToluene')
+  })
+
+  // v28 step 82: table row 修复
+  it('v28 step 82: 表格行号 + 内容同行 (1\\nIndividual MNBs → 1 Individual MNBs)', () => {
+    const text = 'Tab.1. Description of conditions.\n1\nIndividual MNBs treatment\nMNBs\n2\nUV irradiation\nUV1'
+    const { content } = cleanContent(text, { stripImageUrls: false, isMarkdown: false })
+    // 行号 + 内容应该合并成同行
+    expect(content).toMatch(/1 Individual MNBs treatment MNBs/)
+  })
+
+  // v28 step 82: Published Journal Article 修复（核心目标：不粘连）
+  it('v28 step 82: 跨行单词不粘连 (Published\\nJournal 至少不能 PublishedJournal)', () => {
+    const text = 'Please note that Elsevier\'s sharing policy for the Published\nJournal Article applies.'
+    const { content } = cleanContent(text, { stripImageUrls: false, isMarkdown: false })
+    // 至少不应出现无空格粘连
+    expect(content).not.toContain('PublishedJournal')
+    // 完整合并需要更复杂的逻辑（边界处理由 removeFrontMatter 优先剥除此段）
+  })
 })
 
 
