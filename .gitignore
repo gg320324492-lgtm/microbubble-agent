@@ -69,3 +69,7 @@ results/smoke/
 scripts/e2e_*.py
 scripts/verify_*.py
 scripts/probe_*.py
+
+# 论文原文 PDF（不入库，桌面备份用）
+*.pdf
+!nginx/**/*.pdf
