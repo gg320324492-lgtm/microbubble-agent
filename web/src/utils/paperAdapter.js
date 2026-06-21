@@ -42,7 +42,7 @@ const SECTION_KEYWORDS = [
   { type: 'introduction', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(introduction|引言|前言|绪论|序言)\s*[:：]?\s*$/i },
   { type: 'background', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(background|研究背景|问题背景)\s*[:：]?\s*$/i },
   { type: 'methods', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(method(s|ology)?|materials?\s+and\s+method(s|ology)?|experimental(\s+(section|methods?|setup))?|材料与方法|实验方法|实验部分|方法|实验材料与方法)\s*[:：]?\s*$/i },
-  { type: 'results', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(results?(\s+and\s+discussion)?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?\s*$/i },
+  { type: 'results', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(results?(\s+and\s+(?:discussion|analysis))?|结果(与讨论|和分析)?|实验结果|结果与讨论)\s*[:：]?\s*$/i },
   { type: 'discussion', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(discussion|讨论|分析与讨论)\s*[:：]?\s*$/i },
   { type: 'conclusion', regex: /^\s*(\d+(\.\d+)*\.?\s+)?(conclusions?|总结|结论|结语|小结)\s*[:：]?\s*$/i },
   { type: 'acknowledgments', regex: /^\s*(acknowledg(e)?ments?|致谢|鸣谢)\s*[:：]?\s*$/i },
