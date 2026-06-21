@@ -672,23 +672,26 @@ export function cleanContent(text, options = {}) {
   //     - "paragraphs.\n\nMoreover," → lookbehind 是 . → 不匹配 ✓
   //   中文段落不触发（lookbehind/lookahead 是英文字母）
   //   两模式分开：数字模式必须后跟左括号（避免与 step 90 orphan 页码删除冲突）
-  if (!/[一-龥]/.test(result)) {
-    // 模式 A: phantom 数字 + 左括号（reference 引用 inline）
-    //   "cereus\n\n3\n\n(Grutsch" → "cereus 3 (Grutsch"
-    //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除（"during\n\n15 disinfection"）
-    result = result.replace(
-      /([a-z)\]])\s*\n\s*\n\s*(\d{1,3})\s*(?:\n\s*\n|\s)(?=\()/g,
-      '$1 $2 '
-    )
-    // 模式 B: phantom 单词（OCR 段首小写）
-    //   "MNBs\n\ncapable of" → "MNBs capable of"
-    //   "both\n\nmechanistic complementarity" → "both mechanistic complementarity"
-    //   上限 20 字符：OCR 段首单词一般是常见词（capable=7, mechanistic=11），20 留余量
-    result = result.replace(
-      /([a-z)\]])\s*\n\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
-      '$1 $2 '
-    )
-  }
+  //
+  // v28 step 101 修复：去掉 `if (!/[一-龥]/.test(result))` 整篇中文守卫
+  //   根因：v28 系列 PDF 都是中英混排（含中文 Abstract + 英文 Methods），整篇 result
+  //   命中中文 → 守卫 false → 整篇英文段落 phantom 也不合并 → 用户看不到效果
+  //   正确守卫应该在 lookbehind/lookahead（已限定英文），不再需要整篇判断
+  // 模式 A: phantom 数字 + 左括号（reference 引用 inline）
+  //   "cereus\n\n3\n\n(Grutsch" → "cereus 3 (Grutsch"
+  //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除（"during\n\n15 disinfection"）
+  result = result.replace(
+    /([a-z)\]])\s*\n\s*\n\s*(\d{1,3})\s*(?:\n\s*\n|\s)(?=\()/g,
+    '$1 $2 '
+  )
+  // 模式 B: phantom 单词（OCR 段首小写）
+  //   "MNBs\n\ncapable of" → "MNBs capable of"
+  //   "both\n\nmechanistic complementarity" → "both mechanistic complementarity"
+  //   上限 20 字符：OCR 段首单词一般是常见词（capable=7, mechanistic=11），20 留余量
+  result = result.replace(
+    /([a-z)\]])\s*\n\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
+    '$1 $2 '
+  )
 
   // 4. 系统内部标记
   for (const re of INTERNAL_MARKER_RES) {

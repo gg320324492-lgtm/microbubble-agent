@@ -31,7 +31,10 @@
 //   合并规则（B. cereus\n\n3\n\n(Grutsch → B. cereus 3 (Grutsch）。SW 字节未变，浏览器
 //   不会主动检测更新 → 用户继续用旧 cached index-*.js → BUMP 触发升级 + activate
 //   钩子清空所有 cache，让新 dist 生效
-const SW_VERSION = 'v38-phantom-merge-2026-06-22'
+// v28 step 101 第二次 BUMP v38 → v39：去掉整篇中文守卫 if (!/[一-龥]/.test(result))。
+//   原守卫会让中英混排 PDF（含中文 Abstract + 英文 Methods）整篇 result 命中中文
+//   → 守卫 false → 英文段落 phantom 不合并 → 用户看不到效果
+const SW_VERSION = 'v39-phantom-merge-chinese-pdf-2026-06-22'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
