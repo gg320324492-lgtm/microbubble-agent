@@ -1741,4 +1741,37 @@ More content after the watermark.`
     expect(cleaned.content).toContain('Some real content here')
     expect(cleaned.content).toContain('More content after')
   })
+
+  // v28 step 99: step 98 的边界 regex 太严格（只匹配 [a-z] 两边），实际 OCR 中
+  //   Journal Pre-proof 后跟数字（页码）也很常见，如 "B. cereusJournal Pre-proof\n3 (Grutsch et al.)"
+  //   修复：放宽为 (\S)\s*...\s*(\S)，匹配任何非空白字符
+  it('v28 step 99: Journal Pre-proof 后跟数字（页码）也能合并', () => {
+    const cases = [
+      {
+        in: 'associated with B. cereusJournal Pre-proof\n3 (Grutsch et al., 2018)',
+        out: 'associated with B. cereus 3 (Grutsch et al., 2018)',
+      },
+      {
+        in: 'compared accordingly.Journal Pre-proof\n7 Fig. 1.',
+        out: 'compared accordingly. 7 Fig. 1.',
+      },
+      {
+        in: 'with a concentration of 1 mg/L O₃ MNBsJournal Pre-proof\ncapable of completely inactivating',
+        out: 'with a concentration of 1 mg/L O₃ MNBs capable of completely inactivating',
+      },
+      {
+        in: 'in bothJournal Pre-proof\nmechanistic complementarity',
+        out: 'in both mechanistic complementarity',
+      },
+      {
+        in: 'a MNBJournal Pre-proof\ngenerator (RuiDe ZhiChuang',
+        out: 'a MNB generator (RuiDe ZhiChuang',
+      },
+    ]
+    for (const { in: input, out } of cases) {
+      const cleaned = cleanContent(input, { isMarkdown: false })
+      expect(cleaned.content).not.toMatch(/Journal Pre-proof/)
+      expect(cleaned.content).toContain(out.slice(0, 40))
+    }
+  })
 })
