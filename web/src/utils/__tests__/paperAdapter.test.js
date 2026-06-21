@@ -553,11 +553,23 @@ describe('解析鲁棒性', () => {
   })
 
   it('异常换行：OCR 断行合并', () => {
-    // simulate _cleanText
+    // simulate _cleanText — fixture 必须 > 30 中文字符才能触发 _isChineseHeavy(cn > 30)
+    // OCR 真实场景：多行短句被合并成长文档，每行 3-5 字，整篇 50+ 字
+    const ocrLikeContent = [
+      '微纳米气泡',
+      '是一种新型的',
+      '水处理技术',
+      '具有传质效率高',
+      '停留时间长',
+      '比表面积大',
+      '等诸多优点',
+      '近年来受到',
+      '广泛关注',
+    ].join('\n')
     const paper = normalizePaperData({
       id: 9,
       title: 'OCR',
-      content: '中文一\n中文二\n中文三',
+      content: ocrLikeContent,
       summary: null,
       tags: null,
       analysis_status: 'done',

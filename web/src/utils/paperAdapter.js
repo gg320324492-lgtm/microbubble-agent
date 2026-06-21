@@ -740,6 +740,15 @@ export function cleanContent(text, options = {}) {
   // 然后跑章节编号同行（5.4）
   result = result.replace(/^(\d+(?:\.\d+)*)\s*\n\s*([^\n])/gm, '$1 $2')
 
+  // v28 step 85 强制保险：如果前面 regex 没生效（生产部署某些边缘 case），
+  // 这里用最宽松的 regex 把"数字紧贴大写字母"的位置强制加空格。
+  // 例："1Individual" → "1 Individual"，"2.2Preparation" → "2.2 Preparation"
+  // 排除版本号（"v1.5a" → 保留，无空格，因为小写 'a'）
+  // 模式：行首/空格 + 数字（带或不带小数） + 大写字母 → 加空格
+  result = result.replace(/(\s|^)(\d+(?:\.\d+)*)([A-Z])/g, (m, ws, num, letter) => {
+    return ws + num + ' ' + letter
+  })
+
   // v28 step 81: PDF 提取的页码标记 P2/P4-6/P7-8 紧跟在英文章节标题后面
   //   "IntroductionP4-6Ensuring..." → "Introduction\n\nP4-6\n\nEnsuring..."
   //   "Materials and methodsP7-82.1 Test system..." → "Materials and methods\n\nP7-8\n\n2.1 Test system..."
