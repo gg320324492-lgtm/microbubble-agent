@@ -226,13 +226,13 @@ const formatDate = (dateStr) => {
   flex-shrink: 0;
 }
 
-/* 卡片内容 */
+/* 卡片内容 —— v28 step 63: padding 收紧 16→12 让卡片整体更小巧 */
 .card-body {
   flex: 1;
-  padding: var(--space-4);
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -276,25 +276,30 @@ const formatDate = (dateStr) => {
   flex-shrink: 0;
 }
 
-/* 缩略图（Phase 7 多模态） */
+/* 缩略图（Phase 7 多模态）—— v28 step 63: 120 → 96 + contain 防止 PDF 封面被裁切 */
 .card-thumbnail {
   position: relative;
   width: 100%;
-  height: 120px;
+  height: 96px;
   overflow: hidden;
-  background: var(--color-bg-secondary);
+  background: linear-gradient(135deg, #FAFAFA, #F3F4F6);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .card-thumbnail img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   transition: transform var(--duration-normal) var(--ease-out);
 }
 
 .knowledge-card:hover .card-thumbnail img {
-  transform: scale(1.05);
+  transform: scale(1.03);
 }
 
 .card-thumbnail-badge {
