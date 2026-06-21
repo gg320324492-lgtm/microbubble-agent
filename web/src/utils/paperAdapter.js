@@ -727,10 +727,16 @@ export function cleanContent(text, options = {}) {
   //   "4.2\n内容一：..." → "4.2 内容一：..."
   //   数字编号 + 换行 + 中文标题 → 数字编号 + 空格 + 中文
   // v28 step 82: 表格行号 + 内容同行（必须在 step 5.4 之前执行，避免破坏 3 行结构）
-  //   模式 1："1\nIndividual MNBs treatment\nMNBs" → "1 Individual MNBs treatment MNBs"
+  //   模式 1："1\nIndividual MNBs treatment\nMNBs" → "1 Individual MNBs treatment MNBs"（3 行结构）
   //   仅匹配短文本（≤80 字符）的单数字行（避免与段落首行编号冲突）
   //   第三行允许多种模式：纯缩写（MNBs）/ 大写开头单词（UV）/ 单词+数字（UV0.5）
   result = result.replace(/^(\d{1,2})\s*\n\s*([A-Z][^\n]{1,80}?)\s*\n\s*([A-Za-z][A-Za-z0-9.\-/]{0,15})\s*$/gm, '$1 $2 $3')
+  // v28 step 82: 表格行号 + 内容同行（2 行结构）
+  //   模式 2："2\nUV irradiation for 0.5 min in combination with MNBs treatment MNBs/UV0.5"
+  //         → "2 UV irradiation for 0.5 min in combination with MNBs treatment MNBs/UV0.5"
+  //   紧跟在 Tab. N. 描述后的单数字行 + 内容（无第 3 行）
+  //   必须 ≥20 字符的内容避免误匹配段落首行编号
+  result = result.replace(/^(\d{1,2})\s*\n\s*([A-Z][^\n]{20,150}?)\s*$/gm, '$1 $2')
   // 然后跑章节编号同行（5.4）
   result = result.replace(/^(\d+(?:\.\d+)*)\s*\n\s*([^\n])/gm, '$1 $2')
 
