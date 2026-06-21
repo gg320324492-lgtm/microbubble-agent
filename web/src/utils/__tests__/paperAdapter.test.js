@@ -1666,4 +1666,49 @@ Each test was repeated three times.`
     expect(cleaned.content).toContain('conducted.\nThe analysis')
     expect(cleaned.content).toContain('results.\nEach test')
   })
+
+  // v28 step 96: 右侧导航 buildAnchorTree 应让子章节继承父级 type
+  //   "2. Materials and methods"（methods）下的 "2.3. Experimental" / "2.4. Statistical analysis"
+  //   原识别为 type=normal（typeLabelMap 无），显示 "2.3. Experimental" 没 "材料与方法 ·" 前缀
+  //   修复：子章节（level>=2 + type=normal）继承最近的 methods/results/discussion 父级 type
+  it('v28 step 96: 子章节继承父级 type（methods/results/discussion 等）', () => {
+    const sections = [
+      { id: 's1', title: '1. Introduction', level: 1, type: 'introduction' },
+      { id: 's2', title: '2. Materials and methods', level: 1, type: 'methods' },
+      { id: 's3', title: '2.1. Test system', level: 2, type: 'normal' },
+      { id: 's4', title: '2.2. Preparation', level: 2, type: 'normal' },
+      { id: 's5', title: '2.3. Experimental', level: 2, type: 'normal' },
+      { id: 's6', title: '2.4. Statistical analysis', level: 2, type: 'normal' },
+      { id: 's7', title: '3. Results and discussion', level: 1, type: 'results' },
+      { id: 's8', title: '3.1. Disinfection efficiency', level: 2, type: 'normal' },
+    ]
+
+    const tree = buildAnchorTree(sections)
+
+    // 1. 父级 type 保持不变
+    expect(tree.sections[0].type).toBe('introduction')
+    expect(tree.sections[1].type).toBe('methods')
+    expect(tree.sections[6].type).toBe('results')
+
+    // 2. 子章节（level=2, type=normal）继承父级 type
+    expect(tree.sections[2].type).toBe('methods')  // 2.1. Test system
+    expect(tree.sections[3].type).toBe('methods')  // 2.2. Preparation
+    expect(tree.sections[4].type).toBe('methods')  // 2.3. Experimental
+    expect(tree.sections[5].type).toBe('methods')  // 2.4. Statistical analysis
+    expect(tree.sections[7].type).toBe('results')  // 3.1. Disinfection efficiency
+
+    // 3. 标题保持不变（仅 type 继承）
+    expect(tree.sections[4].title).toBe('2.3. Experimental')
+    expect(tree.sections[4].level).toBe(2)
+  })
+
+  it('v28 step 96: 不破坏 level=1 normal sections（不向上找父）', () => {
+    const sections = [
+      { id: 's1', title: '2. Materials and methods', level: 1, type: 'methods' },
+      { id: 's2', title: 'Discussion', level: 1, type: 'normal' },  // level=1 normal 不继承
+    ]
+    const tree = buildAnchorTree(sections)
+    expect(tree.sections[0].type).toBe('methods')
+    expect(tree.sections[1].type).toBe('normal')  // level=1 不向上继承
+  })
 })
