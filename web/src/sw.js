@@ -26,7 +26,8 @@
 // 'Cache.put() encountered a network error' — 老 SW 还在 stuck 在 install 失败状态
 // （老 precache 引用不存在的 index-c2fe833d.js）。BUMP 版本强制浏览器识别为新 SW
 // 重走 install 流程，激活钩子的 caches.delete 会清空老 cache。
-const SW_VERSION = 'v35-card-fallback-fetch-retry-2026-06-21'
+// v28 step 83: 升级到 v36 — 修复 v35 precache 列表包含已删除文件（VoiceTestFlow-XXX）报 404 的问题
+const SW_VERSION = 'v36-precache-purge-2026-06-21'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
