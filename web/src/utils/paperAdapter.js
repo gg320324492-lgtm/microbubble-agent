@@ -156,6 +156,23 @@ const FOOTER_PATTERNS = [
   /https?:\/\/(?:www\.)?sciencedirect\.com\/science\/article\/[^\s]+/gi,
   /Received\s+in\s+revised\s+form\s+\d+\s+\w+\s+\d{4}.*?Accepted\s+\d+\s+\w+\s+\d{4}/gi,
   /Received\s+\d+\s+\w+\s+\d{4}.*?Available\s+online\s+\d+\s+\w+\s+\d{4}/gi,
+
+  // v28 step 76: PDF Header 元信息块（CEJ Article ID + 接受日期 + 引用格式）
+  //   "CEJ 171737 To appear in: ..." "P2 Please cite this article as: ..."
+  //   "To appear in:" / "Received date:" / "Revised date:" / "Accepted date:"
+  //   "Please cite this article as:" / "This is a PDF of an article that has undergone"
+  //   "Please also note that, during the production process" / "Journal Pre-proof"
+  /\b[A-Z]{2,5}\s+\d{3,7}\s+To appear in:[^\n]*(\n(?!\n)[^\n]*){0,5}/gim,
+  /\b(?:Received|Revised|Accepted)\s+date:\s*\d{1,2}[\s\S]{0,100}\d{4}[^\n]*/gi,
+  /Please cite this article as:[^\n]*\n[^\n]*doi\.org\/[^\s]+[^\n]*/gi,
+  /This is a PDF of an article that has undergone[\s\S]{0,800}?about\/policies-and-standards\/sharing[^\n]*/gi,
+  /Please also note that, during the production process[\s\S]{0,300}?pertain\.[^\n]*/gi,
+  /As such, this version is no longer the Accepted Manuscript[\s\S]{0,300}?this version\./gi,
+  /As such, this version is no longer the Accepted Manuscript[\s\S]{0,300}?early visibility of the article\.?/gi,
+  /Journal Pre-proof\s*Journal Pre-proof/gi,
+  /^\s*Journal Pre-proof\s*$/gim,
+  // DOI 单独一行（bare DOI 行）
+  /^\s*10\.\d{4,9}\/[^\s]+\s*$/gim,
   // v28 step 17: 作者署名 + 页码行（"T. Wang et al.                                                                                      6"）
   //    PDF 渲染时页脚会重复作者名 + 大量空白 + 当前页码
   //    这种行后面紧跟 OCR 错位的图片 alt 文本（"such ![ as radical..."），
@@ -622,6 +639,26 @@ export function cleanContent(text, options = {}) {
   result = result.replace(/Contents lists available at[^\n]*\n[^\n]*journal homepage:[^\n]*\n?/gi, '')
   result = result.replace(/Received \d{1,2}\s+\w+\s+\d{4}[;\s]*/gi, '')
   result = result.replace(/\d{4}[-\s]Elsevier[^\n]*\n[^\n]*\n?/gi, '')
+
+  // 5.6 v28 step 76: Elsevier "CEJ 171737" / "P2 Please cite this article" 块
+  //   这些是 PDF header 的 article id + citation 块，应该完全剥除
+  result = result.replace(/\b[A-Z]{2,5}\s+\d{3,7}\s+To appear in:[\s\S]{0,400}?/gi, '')
+  result = result.replace(/\bP\d+\s+Please cite this article as:[\s\S]{0,400}?(?:doi\.org\/[^\s]+|10\.\d{4,9}\/[^\s]+)/gi, '')
+  // "This is a PDF of an article..." 到 "early visibility" 整段
+  result = result.replace(/This is a PDF of an article that has undergone[\s\S]{0,1500}?early visibility of the article\.?/gi, '')
+  // "Please also note that..." 到 "pertain"
+  result = result.replace(/Please also note that, during the production process[\s\S]{0,400}?pertain\./gi, '')
+  // "As such, this version is no longer the Accepted Manuscript"
+  result = result.replace(/As such, this version is no longer the Accepted Manuscript[\s\S]{0,400}?early visibility of the article\.?/gi, '')
+  // 重复的 Journal Pre-proof
+  result = result.replace(/(Journal Pre-proof[\s\n]*){2,}/gi, 'Journal Pre-proof\n')
+  result = result.replace(/^\s*Journal Pre-proof\s*$/gim, '')
+
+  // 5.7 v28 step 76: 参考文献标识统一
+  //   "Reference\n参考文献（共 1 条）\n展开全部 ▾" → 统一为 References 章节
+  result = result.replace(/参考文献[（(]共\s*\d+\s*条[）)]\s*\n?/g, '')
+  result = result.replace(/展开全部\s*[▾▼]+\s*\n?/g, '')
+  result = result.replace(/^\s*Reference\s*\n/gim, '## References\n')
 
   // 6. PDF 页脚
   for (const re of FOOTER_PATTERNS) {
