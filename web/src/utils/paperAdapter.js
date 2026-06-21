@@ -1177,11 +1177,23 @@ function _parseMarkdownSections(content) {
       }
       continue
     }
+    // v28 step 103: 空行 = 段落分隔符（Markdown 规范）
+    //   LLM reformat 输出的 formatted_content 用 `\n\n` 分段（如 "Table 1.\n\n(1) To investigate..."）
+    //   旧逻辑只在 line.trim() 真值时 push paragraphBuf，遇到空行不 flush，
+    //   导致后续内容累积到同一 paragraph，最后 join('\n') 丢失段落边界
+    if (!trimmed) {
+      if (!current) {
+        // preamble 阶段空行：忽略（preamble 最终会合并成单个 block）
+      } else {
+        flushParagraph()  // 当前段落结束，开始下一段
+      }
+      continue
+    }
     // 第一个标题之前累积为 preamble
     if (!current) {
-      if (line.trim()) preambleBuf.push(line)
+      preambleBuf.push(line)
     } else {
-      if (line.trim()) paragraphBuf.push(line)
+      paragraphBuf.push(line)
     }
   }
   pushCurrent()

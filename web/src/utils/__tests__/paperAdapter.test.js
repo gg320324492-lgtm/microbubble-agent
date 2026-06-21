@@ -1555,6 +1555,44 @@ and an UV lamp was used.`
     expect(firstBlockContent).toContain('The reactor consisted')
   })
 
+  // v28 step 103: _parseMarkdownSections 必须识别 `\n\n` 为段落分隔符
+  //   LLM reformat 输出的 formatted_content 用 `\n\n` 分段
+  //   （如 "Table 1.\n\n(1) To investigate..."），旧逻辑只在 line.trim() 真值时 push paragraphBuf，
+  //   遇到空行不 flush，导致后续内容累积到同一 paragraph，最后 join('\n') 丢失段落边界
+  // 用户场景（ID 17 UV/MNBs 论文）：section 2.1 应拆成多段（列表项 (1)/(2) 独立成段）
+  it('v28 step 103: markdown 段落 \\n\\n 分隔符应触发 flush（ID 17 reformat 场景）', () => {
+    const content = `## 2.1 Test system
+
+This study systematically evaluated the inactivation efficacy of MNBs against B. cereus under UV irradiation, employing two experimental approaches: individual treatment and combined treatment. The experimental setup was composed of four primary components: a MNB generator.
+
+(1) To investigate the individual disinfection effects of MNBs and UV irradiation on B. cereus: Bacterial suspensions with an initial concentration of 10⁷-10⁸ CFU/mL were subjected to either 3W UV irradiation or MNBs aeration separately.
+
+(2) To assess the synergistic disinfection effect of MNBs and UV irradiation on B. cereus: Bacterial suspensions with the same initial concentration were exposed to simultaneous MNBs aeration and UV irradiation.
+
+| Serial | Treatment | Symbol |
+| :--- | :--- | :--- |
+| 1 | MNBs alone | MNBs |
+| 2 | MNBs + UV | MNBs/UV |
+
+The disinfection effects were compared accordingly.`
+
+    const sections = parsePaperSections(content, { isMarkdown: true })
+    const sec = sections.find((s) => /^2\.1/.test(s.title || ''))
+    expect(sec).toBeTruthy()
+    // section 2.1 应有 ≥ 4 blocks（intro paragraph + (1) + (2) + table + closing paragraph）
+    expect(sec.blocks.length).toBeGreaterThanOrEqual(4)
+    // 列表项 (1) 应独立成段（不是和 intro 合并）
+    const block1 = sec.blocks.find((b) => b.content?.startsWith('(1)'))
+    expect(block1).toBeTruthy()
+    // 列表项 (2) 应独立成段
+    const block2 = sec.blocks.find((b) => b.content?.startsWith('(2)'))
+    expect(block2).toBeTruthy()
+    // intro 段落不应包含 (1) 内容（如果合并会出问题）
+    const introBlock = sec.blocks[0]
+    expect(introBlock.content).not.toContain('(1) To investigate')
+    expect(introBlock.content).not.toContain('(2) To assess')
+  })
+
   // v28 step 90: 中文 blockquote 图注（"该图由..."）混入英文正文 + orphan PDF 页码
   // 用户截图（杨慈 UV/MNBs 论文）：英文段后跟 > 该图由六个子图... 长图注，然后
   //   "15 disinfection." — OCR 把 PDF 页码 15 错误插入段落开头
