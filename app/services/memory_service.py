@@ -47,6 +47,7 @@ class MemoryService:
             key=key,
             importance=importance,
             source_session=source_session,
+            is_active=True,  # v28 step 66: 默认激活（避免 is_active=NULL 被过滤掉）
         )
         self.db.add(memory)
         await self.db.commit()
@@ -54,6 +55,100 @@ class MemoryService:
         # 后台生成嵌入
         await self._generate_embedding(memory, content)
         return memory
+
+    async def save_memory_dedup(
+        self,
+        user_id: int,
+        memory_type: str,
+        content: str,
+        key: Optional[str] = None,
+        importance: float = 0.7,
+        source_session: Optional[str] = None,
+    ) -> Dict:
+        """v28 step 67: save_memory 带 dedup
+
+        规则：
+        - preference 类型: 按 (user_id, key) 精确匹配；找到则更新内容 + access_count + 1
+        - 其他类型: 查找同用户同类型的所有 active 记忆，按内容相似度（SequenceMatcher）>= 0.85 视为重复
+          - 重复则合并：access_count + 1，importance 取 max，updated_at = now()
+          - 重复不新建（避免噪音）
+
+        Returns:
+            {"status": "created" | "merged" | "updated", "memory_id": int, "reason": str}
+        """
+        from difflib import SequenceMatcher
+
+        # 1. preference 类型按 key upsert
+        if memory_type == "preference" and key:
+            existing = await self._find_preference(user_id, key)
+            if existing:
+                # 内容相似度检测
+                sim = SequenceMatcher(None, existing.content or "", content).ratio()
+                if sim >= 0.85:
+                    # 重复 - 合并而非覆盖
+                    existing.access_count = (existing.access_count or 0) + 1
+                    existing.importance = max(existing.importance or 0.7, importance)
+                    existing.is_active = True
+                    await self.db.commit()
+                    return {"status": "merged", "memory_id": existing.id,
+                            "reason": f"preference key={key} 已存在，相似度={sim:.2f}"}
+                else:
+                    # 不同内容 - 真正更新（不是合并）
+                    existing.content = content
+                    existing.importance = importance
+                    existing.access_count = (existing.access_count or 0) + 1
+                    existing.is_active = True
+                    await self.db.commit()
+                    await self.db.refresh(existing)
+                    await self._generate_embedding(existing, content)
+                    return {"status": "updated", "memory_id": existing.id,
+                            "reason": f"preference key={key} 已更新（相似度 {sim:.2f} < 0.85）"}
+
+        # 2. 其他类型：按 user_fact / task_ctx / entity / summary
+        # 查找同用户同类型的所有 active 记忆
+        stmt = select(Memory).where(
+            and_(
+                Memory.user_id == user_id,
+                Memory.memory_type == memory_type,
+                Memory.is_active == True,
+            )
+        )
+        # 如果有 key，按 key 匹配
+        if key:
+            stmt = stmt.where(Memory.key == key)
+        result = await self.db.execute(stmt)
+        existing_list = result.scalars().all()
+
+        for existing in existing_list:
+            sim = SequenceMatcher(None, existing.content or "", content).ratio()
+            if sim >= 0.85:
+                # 重复 - 合并
+                existing.access_count = (existing.access_count or 0) + 1
+                existing.importance = max(existing.importance or 0.7, importance)
+                existing.is_active = True
+                # 如果新内容更长（信息更丰富），更新 content
+                if len(content) > len(existing.content or "") * 1.5:
+                    existing.content = content
+                await self.db.commit()
+                return {"status": "merged", "memory_id": existing.id,
+                        "reason": f"内容相似度 {sim:.2f} >= 0.85，access_count + 1"}
+
+        # 3. 没有重复 - 真正新建
+        memory = Memory(
+            user_id=user_id,
+            memory_type=memory_type,
+            content=content,
+            key=key,
+            importance=importance,
+            source_session=source_session,
+            is_active=True,
+        )
+        self.db.add(memory)
+        await self.db.commit()
+        await self.db.refresh(memory)
+        await self._generate_embedding(memory, content)
+        return {"status": "created", "memory_id": memory.id,
+                "reason": "新记忆"}
 
     async def _find_preference(self, user_id: int, key: str) -> Optional[Memory]:
         """查找已有的偏好记忆"""
