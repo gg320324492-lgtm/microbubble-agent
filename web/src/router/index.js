@@ -120,9 +120,7 @@ const routes = [
       },
       {
         path: 'memory',
-        name: 'Memory',
-        component: resolveMobileComponent('MemoryView', 'MobileMemoryView'),
-        meta: { title: '长期记忆', icon: 'Memo' }
+        redirect: '/knowledge?tab=memory'
       },
       {
         path: 'voiceprint',

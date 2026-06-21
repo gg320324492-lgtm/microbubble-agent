@@ -269,6 +269,76 @@
         </el-row>
       </el-tab-pane>
 
+      <!-- ===== 我的长期记忆 Tab (v28 step 68) ===== -->
+      <el-tab-pane :label="`我的长期记忆 (${memoryTotal})`" name="memory" lazy>
+        <div class="memory-toolbar">
+          <el-input
+            v-model="memorySearch.keyword"
+            name="memorySearch-keyword"
+            placeholder="搜索记忆内容..."
+            clearable
+            style="width:280px;margin-right:12px"
+            @keyup.enter="fetchMemories"
+          />
+          <el-select
+            v-model="memorySearch.type"
+            name="memorySearch-type"
+            placeholder="类型"
+            clearable
+            style="width:140px;margin-right:12px"
+            @change="fetchMemories"
+          >
+            <el-option label="全部" value="" />
+            <el-option label="偏好" value="preference" />
+            <el-option label="用户事实" value="user_fact" />
+            <el-option label="任务上下文" value="task_ctx" />
+            <el-option label="实体关系" value="entity" />
+          </el-select>
+          <el-button type="primary" :loading="memoryLoading" @click="fetchMemories">搜索</el-button>
+        </div>
+
+        <div v-if="memoryLoading && memoryList.length === 0" class="memory-loading">
+          <div v-for="i in 3" :key="i" class="skeleton-card">
+            <div class="skeleton-line w-40" />
+            <div class="skeleton-line w-90" />
+            <div class="skeleton-line w-60" />
+          </div>
+        </div>
+
+        <div v-else-if="memoryList.length === 0" class="empty-state">
+          <el-empty description="还没有记忆，与小气对话时会自动学习" :image-size="80" />
+        </div>
+
+        <div v-else class="memory-list">
+          <article v-for="item in memoryList" :key="item.id" class="memory-card">
+            <div class="memory-header">
+              <span class="memory-type-tag" :class="`type-${item.memory_type}`">
+                {{ memoryTypeNameMap[item.memory_type] || item.memory_type }}
+              </span>
+              <span class="memory-importance">
+                ⭐ {{ Math.round((item.importance || 0) * 100) }}%
+              </span>
+            </div>
+            <div v-if="item.key" class="memory-key">🔑 {{ item.key }}</div>
+            <p class="memory-content">{{ item.content }}</p>
+            <div class="memory-footer">
+              <span class="memory-time">{{ formatMemoryDate(item.created_at) }}</span>
+              <el-button text type="danger" size="small" @click="forgetMemory(item)">遗忘</el-button>
+            </div>
+          </article>
+        </div>
+
+        <div v-if="memoryTotal > memoryPageSize" class="pagination">
+          <el-pagination
+            v-model:current-page="memoryCurrentPage"
+            :page-size="memoryPageSize"
+            :total="memoryTotal"
+            layout="total, prev, pager, next"
+            @current-change="fetchMemories"
+          />
+        </div>
+      </el-tab-pane>
+
     </el-tabs>
 
     <!-- 添加/编辑知识对话框 -->
@@ -378,10 +448,12 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { useKnowledge } from '@/composables/useKnowledge'
+import { formatDateTime } from '@/utils/format'
 import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
 import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
 import KnowledgeQADialog from './knowledge/KnowledgeQADialog.vue'
@@ -410,6 +482,69 @@ const showAllKnowledge = ref(false)
 
 // Tabs
 const activeTab = ref('knowledge')
+const route = useRoute()
+// v28 step 68: 支持 ?tab=memory URL 直跳（如旧 /memory 重定向）
+if (route.query.tab === 'memory') activeTab.value = 'memory'
+
+// v28 step 68: 长期记忆 Tab 状态（合并自 MemoryView）
+const memoryList = ref([])
+const memoryTotal = ref(0)
+const memoryCurrentPage = ref(1)
+const memoryPageSize = ref(20)
+const memoryLoading = ref(false)
+const memorySearch = ref({ keyword: '', type: '' })
+
+const memoryTypeNameMap = {
+  preference: '偏好',
+  user_fact: '用户事实',
+  task_ctx: '任务上下文',
+  summary: '摘要',
+  entity: '实体关系',
+}
+
+const fetchMemories = async () => {
+  memoryLoading.value = true
+  try {
+    const params = {
+      page: memoryCurrentPage.value,
+      page_size: memoryPageSize.value,
+    }
+    if (memorySearch.value.keyword) params.keyword = memorySearch.value.keyword
+    if (memorySearch.value.type) params.memory_type = memorySearch.value.type
+    const res = await axios.get('/api/v1/memories', { params })
+    memoryList.value = res.data.items || []
+    memoryTotal.value = res.data.total || 0
+  } catch (e) {
+    console.error('[KnowledgeView] 获取长期记忆失败:', e)
+    ElMessage.error('获取长期记忆失败')
+  } finally {
+    memoryLoading.value = false
+  }
+}
+
+const forgetMemory = async (item) => {
+  try {
+    await ElMessageBox.confirm(`确定遗忘「${(item.content || '').slice(0, 30)}...」？`, '遗忘确认', {
+      type: 'warning',
+      confirmButtonText: '遗忘',
+      cancelButtonText: '取消',
+    })
+    await axios.delete(`/api/v1/memories/${item.id}`)
+    ElMessage.success('已遗忘')
+    fetchMemories()
+  } catch (e) {
+    if (e !== 'cancel') console.error(e)
+  }
+}
+
+const formatMemoryDate = (d) => formatDateTime(d)
+
+// 切到 memory tab 时拉数据（避免空数据闪烁）
+watch(activeTab, (val) => {
+  if (val === 'memory' && memoryList.value.length === 0 && !memoryLoading.value) {
+    fetchMemories()
+  }
+})
 
 // Entity tab
 const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
@@ -1261,5 +1396,86 @@ onUnmounted(() => {
   .filter-row {
     flex-direction: column;
   }
+}
+
+/* v28 step 68: 长期记忆 Tab 样式（从 MemoryView.vue 复用） */
+.memory-toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.memory-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.memory-card {
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.memory-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.15);
+}
+
+.memory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.memory-type-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.memory-type-tag.type-preference { background: #dbeafe; color: #1e40af; }
+.memory-type-tag.type-user_fact { background: #d1fae5; color: #065f46; }
+.memory-type-tag.type-task_ctx { background: #fef3c7; color: #92400e; }
+.memory-type-tag.type-summary { background: #e0e7ff; color: #3730a3; }
+.memory-type-tag.type-entity { background: #fce7f3; color: #9f1239; }
+
+.memory-importance {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.memory-key {
+  font-size: 12px;
+  color: var(--color-primary);
+  margin-bottom: 6px;
+}
+
+.memory-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #1F2937;
+  margin: 0 0 10px;
+}
+
+.memory-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 </style>
