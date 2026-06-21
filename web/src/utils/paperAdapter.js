@@ -712,6 +712,13 @@ export function cleanContent(text, options = {}) {
   //   "disin\n        fection" → "disinfection"  (有缩进)
   //   "Chemicals\nToluene" → 保持换行 (无缩进，是独立段落)
   result = result.replace(/([a-zA-Z一-龥])\n[ \t]+([a-zA-Z一-龥])/g, '$1$2')
+  // v28 step 95: OCR 把英文单词从中间断行（无缩进）
+  //   "bacterial\ndisinfection process" → "bacterial disinfection process"
+  //   触发条件：上一行末尾小写 + 下一行开头小写（区别于独立段落的"句末标点 + 大写开头"）
+  //   仅在英文段落（非中文论文）应用，避免误合并中文段落
+  if (!/[一-龥]/.test(result)) {
+    result = result.replace(/([a-z])\n([a-z])/g, '$1 $2')
+  }
   // 5.1c 合并"编号. + 标题"被 step 5.1a 拆开的章节标题（"1.\nIntroduction" → "1. Introduction"）
   result = result.replace(/^(\d+(?:\.\d+)*\.)\n^([A-Z])/gm, '$1 $2')
 

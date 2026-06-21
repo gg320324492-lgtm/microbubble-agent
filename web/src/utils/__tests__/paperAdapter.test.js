@@ -1628,4 +1628,42 @@ The pH effect was significant.`
     expect(resultsSec).toBeTruthy()
     expect(resultsSec.title).toMatch(/3\. Results and discussion/)
   })
+
+  // v28 step 95: OCR 把英文单词从中间断行（无缩进）— "bacterial\ndisinfection" 应合并
+  //   之前 step 5.1b 只匹配有缩进的续行（[ \t]+），无缩进的单词中断无法合并
+  //   触发条件：上一行末尾小写 + 下一行开头小写（区别于独立段落 "句末标点 + 大写开头"）
+  it('v28 step 95: OCR 单词内部断行（无缩进）应合并', () => {
+    const content = `3.5 The influence of ROS species in MNB water under UV irradiation on the bacterial
+disinfection process This study systematically assessed the contributions of three ROS types, including ·OH, hydrogen peroxide (H₂O₂), and superoxide radicals (·O₂⁻), to the synergistic sterilization`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+
+    // 1. "bacterial disinfection" 应合并（单空格，不是换行）
+    expect(cleaned.content).toContain('bacterial disinfection process')
+    expect(cleaned.content).not.toContain('bacterial\ndisinfection')
+
+    // 2. 标题完整（不被错误截断）
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+    const sec = sections.find((s) => /^3\.5/.test(s.title || ''))
+    expect(sec).toBeTruthy()
+    expect(sec.title).toContain('bacterial disinfection process')
+
+    // 3. 正文块以 "This study" 开头（小写 d + 上一段大写开头保持独立段）
+    const allText = sections.flatMap((s) => s.blocks || []).map((b) => b.content || '').join('\n')
+    expect(allText).toContain('This study systematically assessed')
+    // 段落边界保留（"process" 后 title 与 block 边界）
+    expect(sec.title).toMatch(/bacterial disinfection process$/)
+  })
+
+  it('v28 step 95: 句末标点 + 大写开头仍是独立段落（不误合并）', () => {
+    const content = `2.1 Materials and methods
+The experiment was conducted.
+The analysis showed significant results.
+Each test was repeated three times.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    // 句末标点 + 大写开头 = 独立段落，必须保留换行
+    expect(cleaned.content).toContain('conducted.\nThe analysis')
+    expect(cleaned.content).toContain('results.\nEach test')
+  })
 })
