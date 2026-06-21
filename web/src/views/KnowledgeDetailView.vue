@@ -189,7 +189,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Share, CircleClose, Download } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -216,6 +216,7 @@ import {
 } from '@/utils/paperAdapter'
 
 const route = useRoute()
+const router = useRouter()
 const rawKnowledge = ref(null)
 const paper = ref(null)
 
@@ -575,12 +576,17 @@ function getInlineFiguresFor(section) {
 
 const fetchDetail = async (retryCount = 0) => {
   loading.value = true
-  const id = route.params.id
-  if (!id) {
-    console.error('[fetchDetail] route.params.id 为空')
+  const rawId = route.params.id
+  // v28 step 70: route.params.id 必须是纯数字，否则跳回列表
+  //   防御误传 title/name/中文 等非数字字段导致 422
+  if (!rawId || !/^\d+$/.test(String(rawId))) {
+    console.warn('[fetchDetail] 非数字 id:', rawId, '→ 跳回列表')
+    ElMessage.warning('无效的知识条目 ID')
+    router.replace('/knowledge')
     loading.value = false
     return
   }
+  const id = rawId
 
   // v28 step 64: 主数据 + 关联 + 图谱 全部并发，任一失败 fallback
   // 首屏加载时给主数据最多 3 次重试（处理后端 cold start / 路由 race condition）
