@@ -59,39 +59,6 @@
           </div>
         </section>
 
-        <!-- 知识三元组（v28 step 50: 兼容两种字段格式）
-             老格式: { subject, predicate, object, condition, confidence }
-             新格式（LLM 实际输出）: { name, type, description, aliases }
-             模板用 entityField() 统一取值 -->
-        <section v-if="paper.entities?.length" class="paper-entities">
-          <h3 class="entities-label">知识三元组（{{ paper.entities.length }}）</h3>
-          <div class="entities-list">
-            <div v-for="(e, i) in paper.entities" :key="i" class="entity-card">
-              <div class="entity-triple">
-                <span class="entity-subject">{{ entityField(e, 'subject') }}</span>
-                <span class="entity-predicate">→ {{ entityField(e, 'predicate') }} →</span>
-                <span class="entity-object">{{ entityField(e, 'object') }}</span>
-              </div>
-              <div v-if="entityField(e, 'condition')" class="entity-condition">条件: {{ entityField(e, 'condition') }}</div>
-              <div v-if="e.description && !entityField(e, 'object')" class="entity-description">
-                {{ e.description }}
-              </div>
-              <div class="entity-meta">
-                <span v-if="e.type" class="entity-type">{{ e.type }}</span>
-                <span v-if="e.confidence" class="entity-confidence">
-                  <el-progress
-                    :percentage="Math.round((e.confidence || 0) * 100)"
-                    :stroke-width="3"
-                    :show-text="false"
-                  />
-                  <span class="confidence-text">{{ Math.round((e.confidence || 0) * 100) }}%</span>
-                </span>
-                <span v-else class="entity-na">N/A</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <!-- 论文正文（按章节渲染） -->
         <article id="paper-content" class="paper-article">
           <div v-if="!hasAnyContent" class="paper-no-content">
@@ -152,6 +119,46 @@
 
         <!-- 相关知识 -->
         <RelatedKnowledgeList :related="paper.relatedKnowledge" />
+
+        <!-- 知识三元组（v28 step 59: 移到最末尾 + 默认折叠）
+             老格式: { subject, predicate, object, condition, confidence }
+             新格式（LLM 实际输出）: { name, type, description, aliases }
+             模板用 entityField() 统一取值 -->
+        <section v-if="paper.entities?.length" class="paper-entities">
+          <el-collapse v-model="entitiesCollapsed">
+            <el-collapse-item name="entities">
+              <template #title>
+                <span class="entities-label">知识三元组（{{ paper.entities.length }}）</span>
+                <span class="entities-hint">点击展开查看 LLM 抽取的实体关系</span>
+              </template>
+              <div class="entities-list">
+                <div v-for="(e, i) in paper.entities" :key="i" class="entity-card">
+                  <div class="entity-triple">
+                    <span class="entity-subject">{{ entityField(e, 'subject') }}</span>
+                    <span class="entity-predicate">→ {{ entityField(e, 'predicate') }} →</span>
+                    <span class="entity-object">{{ entityField(e, 'object') }}</span>
+                  </div>
+                  <div v-if="entityField(e, 'condition')" class="entity-condition">条件: {{ entityField(e, 'condition') }}</div>
+                  <div v-if="e.description && !entityField(e, 'object')" class="entity-description">
+                    {{ e.description }}
+                  </div>
+                  <div class="entity-meta">
+                    <span v-if="e.type" class="entity-type">{{ e.type }}</span>
+                    <span v-if="e.confidence" class="entity-confidence">
+                      <el-progress
+                        :percentage="Math.round((e.confidence || 0) * 100)"
+                        :stroke-width="3"
+                        :show-text="false"
+                      />
+                      <span class="confidence-text">{{ Math.round((e.confidence || 0) * 100) }}%</span>
+                    </span>
+                    <span v-else class="entity-na">N/A</span>
+                  </div>
+                </div>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
+        </section>
       </main>
 
       <!-- 右侧导航（sticky） -->
@@ -506,6 +513,9 @@ const moduleCounts = computed(() => {
 const showInlineFigures = ref(true)
 const showHighConfidenceOnly = ref(true)
 
+// v28 step 59: 知识三元组默认折叠（空数组 = 全收起）
+const entitiesCollapsed = ref([])
+
 function getInlineFiguresFor(section) {
   if (!paper.value || !section) return []
 
@@ -845,21 +855,34 @@ onUnmounted(() => {
   gap: 6px;
 }
 
-/* 三元组 */
+/* 三元组（v28 step 59: 移到最末尾 + 默认折叠）*/
 .paper-entities {
   background: #fff;
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
-  padding: 16px 20px;
+  padding: 4px 20px;
   margin-bottom: 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
+/* el-collapse-item 标题里两个 span 之间的间距 */
+.paper-entities :deep(.el-collapse-item__header) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 4px;
+}
+
 .entities-label {
-  margin: 0 0 12px;
   font-size: 15px;
   font-weight: 600;
   color: #1F2937;
+}
+
+.entities-hint {
+  font-size: 12px;
+  color: #9CA3AF;
+  font-weight: normal;
 }
 
 .entities-list {
