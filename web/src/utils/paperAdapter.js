@@ -2806,15 +2806,36 @@ export function buildAnchorTree(sections, options = {}) {
   if (!Array.isArray(sections)) return { sections: [], modules: [] }
   const { moduleCounts = {} } = options
 
+  // v28 step 96: 子章节继承父级 type
+  //   场景：OCR 把 "2. Materials and methods"（type=methods）后的子章节
+  //   "2.3. Experimental" / "2.4. Statistical analysis" 识别为 normal（typeLabelMap 无）
+  //   → 右侧导航显示 "2.3. Experimental" 没 "材料与方法 ·" 前缀，看起来像丢失父级
+  //   修复：扫描 sections 数组，遇到 normal + level >= 2 时，向上找最近的 methods/results/discussion 等父 type 并继承
+  const INHERITABLE_TYPES = new Set(['methods', 'results', 'discussion', 'introduction', 'conclusion'])
   const sectionAnchors = sections
     .filter(s => s && s.title)
-    .map(s => ({
-      id: s.id,
-      title: s.title,
-      type: s.type,
-      level: s.level || 1,
-      anchor: `section-${s.id}`,
-    }))
+    .map((s, idx, arr) => {
+      let displayType = s.type
+      if ((s.type === 'normal' || !s.type) && (s.level || 1) >= 2) {
+        // 向上查找最近的 INHERITABLE_TYPES 父级
+        for (let i = idx - 1; i >= 0; i--) {
+          const parent = arr[i]
+          if (parent && INHERITABLE_TYPES.has(parent.type)) {
+            displayType = parent.type
+            break
+          }
+          // 遇到更高 level 的章节（继续向上）
+          if (parent && parent.level && parent.level < (s.level || 1)) break
+        }
+      }
+      return {
+        id: s.id,
+        title: s.title,
+        type: displayType,
+        level: s.level || 1,
+        anchor: `section-${s.id}`,
+      }
+    })
 
   // 模块入口：图表、提取物、相关知识
   const modules = []
