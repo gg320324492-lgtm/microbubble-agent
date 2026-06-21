@@ -1346,6 +1346,70 @@ export function splitReferences(content) {
     if (tail.length >= 10) add(`[${m[1]}] ${tail}`)
   }
 
+  // v28 step 88 修复：策略 3 — OCR 把所有 ref 压成一段（无 [N] 编号，无换行）。
+  //   用 "Lastname F M, Lastname F M, ... et al." 模式识别新 ref 开始，在前面插入换行。
+  //   模式：大写开头的单词（作者姓） + 1-2 个大写字母（缩写） + 逗号，
+  //         紧跟在 `.` `]` `(` `)` 之一后（避免误伤标题内的 "Photolysis of phenol"）
+  //   例："...409-418. Aslan M M, Crofcheck C, Tao D, et al. Evaluation..."
+  //     → "...409-418.\nAslan M M, Crofcheck C, Tao D, et al. Evaluation..."
+  if (entries.length <= 1) {
+    let raw = entries.length === 1 ? entries[0] : content
+    // 先剥除 Elsevier "Journal Pre-proof N" / "P33-39" 水印（OCR 工具插入的 phantom text）
+    // 这些水印打断 ref 切分（"Sewage Journal Pre-proof 35 [D]" → 误判 Yang J. ref 结束）
+    raw = raw.replace(/\bJournal\s+Pre-proof\s+\d+\b/gi, ' ')
+    raw = raw.replace(/\bP\d{1,3}-\d{1,3}\b/g, ' ')
+    // 跳过开头 boilerplate（"References P33-39 参考文献（共 1 条）展开全部 ▾" 等）
+    // 用第一个 "作者 + 缩写 + 逗号" 模式位置开始切分
+    // v28 step 88 修复：单作者 ref 开头（如 "Yang J. Title"）也要识别
+    //   → 用 |\.\s+ 兼容 "Yang J. Title" 和 "Yang J, Author"
+    const refStartMarker = /\b[A-Z][a-zÀ-ſ]+\s+[A-Z](?:\s*[A-Z])?(?:,\s|\.\s+[A-Z])/
+    const startMatch = refStartMarker.exec(raw)
+    const refBody = startMatch ? raw.slice(startMatch.index) : raw
+    // 在新 ref 作者模式前插入换行（紧跟 ". " 或 "] " 或 ") "）
+    // 注意：必须 lookbehind 限定是 ref 末尾，避免误伤 "Photochemistry and Photobiology A: Chemistry"
+    //   (中间也含 "A: Chemistry" 类似 "Author A: Title" 模式)
+    const split = refBody.replace(
+      /([\.\]:\)])\s+(?=[A-Z][a-zÀ-ſ]+\s+[A-Z](?:\s*[A-Z])?(?:,\s*&?\s*[A-Z])?(?:\s+[A-Z][a-zÀ-ſ]+)?,\s)/g,
+      '$1\n'
+    )
+    // 单作者 ref 切分：例如 "Yang J. Influencing Factors... [D]. Harbin Institute... 2013."
+    //   切分点 1：". 卷: 页码. " 后跟 "Lastname F. 大写"（单作者 . Title 模式）
+    //   例："...64(21): 2199-2206. Yang J. Influencing..." → "...2199-2206.\nYang J. Influencing..."
+    const afterVolPages = split.replace(
+      /(\d+[\-:]\d+[\-:]\d+|\d+\(\d+\)[\-:]\d+(?:[\-:]\d+)?)\.\s+(?=[A-Z][a-zÀ-ſ]+\s+[A-Z](?:\s*[A-Z])?\.\s+[A-Z])/g,
+      '$1.\n'
+    )
+    // 单作者 ref 切分点 2：". 年. " 后跟 "Lastname F. 大写"
+    //   例："... 2013. Yang S, Wang Y..." 已经被策略 A 切分 → 不需要
+    //   例："... 2013. Zhang Y. Application..." → "...2013.\nZhang Y. Application..."
+    const afterYear = afterVolPages.replace(
+      /(\b\d{4}\.)\s+(?=[A-Z][a-zÀ-ſ]+\s+[A-Z](?:\s*[A-Z])?\.\s+[A-Z])/g,
+      '$1\n'
+    )
+    const finalSplit = afterYear
+    if (finalSplit.includes('\n')) {
+      // 按换行切分，每条作为独立 reference
+      const newLines = finalSplit.split('\n').map((l) => l.trim()).filter(Boolean)
+      const seenNew = new Set()
+      const newEntries = []
+      for (const line of newLines) {
+        const cleaned = line.replace(/\s+/g, ' ').trim()
+        if (cleaned.length < 30) continue
+        // 跳过纯 boilerplate
+        if (/^(References?|参考文献|Bibliography|P\d+-\d+|展开全部|共\s*\d+\s*条)/i.test(cleaned)) continue
+        if (seenNew.has(cleaned)) continue
+        seenNew.add(cleaned)
+        newEntries.push(cleaned)
+      }
+      // v28 step 88: 切分得到 ≥2 条新 entries → 用新的完全替换 entries
+      // 旧 entries[0] 是 raw 整段，切分后 line 是它的子串但不是重复（只是 prefix）
+      if (newEntries.length >= 2) {
+        entries.length = 0
+        entries.push(...newEntries)
+      }
+    }
+  }
+
   return entries
 }
 
