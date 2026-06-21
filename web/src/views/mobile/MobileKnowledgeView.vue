@@ -103,6 +103,62 @@
           <p class="info-hint">完整分析请访问桌面端</p>
         </div>
       </div>
+
+      <!-- Tab: 我的长期记忆 (v28 step 68) -->
+      <div v-else-if="activeTab === 'memory'">
+        <div class="memory-mobile-toolbar">
+          <input
+            v-model="memorySearch.keyword"
+            type="search"
+            placeholder="搜索记忆内容..."
+            class="memory-mobile-search"
+            @keyup.enter="fetchMemories"
+          />
+          <select v-model="memorySearch.type" class="memory-mobile-select" @change="fetchMemories">
+            <option value="">全部类型</option>
+            <option value="preference">偏好</option>
+            <option value="user_fact">用户事实</option>
+            <option value="task_ctx">任务上下文</option>
+            <option value="entity">实体关系</option>
+          </select>
+        </div>
+
+        <div v-if="memoryLoading && memoryList.length === 0" class="memory-mobile-loading">
+          <div v-for="i in 3" :key="i" class="skeleton-card">
+            <div class="skeleton-line w-40" />
+            <div class="skeleton-line w-90" />
+          </div>
+        </div>
+
+        <div v-else-if="memoryList.length === 0" class="empty-state-mobile">
+          <div class="empty-icon">🧠</div>
+          <div class="empty-title">还没有记忆</div>
+          <div class="empty-hint">与小气对话时会自动学习</div>
+        </div>
+
+        <div v-else class="memory-mobile-list">
+          <article v-for="item in memoryList" :key="item.id" class="memory-mobile-card">
+            <div class="memory-mobile-header">
+              <span class="memory-mobile-type" :class="`type-${item.memory_type}`">
+                {{ memoryTypeNameMap[item.memory_type] || item.memory_type }}
+              </span>
+              <span class="memory-mobile-imp">⭐ {{ Math.round((item.importance || 0) * 100) }}%</span>
+            </div>
+            <div v-if="item.key" class="memory-mobile-key">🔑 {{ item.key }}</div>
+            <p class="memory-mobile-content">{{ item.content }}</p>
+            <div class="memory-mobile-footer">
+              <span class="memory-mobile-time">{{ formatDateTime(item.created_at) }}</span>
+              <button type="button" class="memory-mobile-forget" @click.stop="forgetMemory(item)">遗忘</button>
+            </div>
+          </article>
+        </div>
+
+        <div v-if="memoryTotal > memoryPageSize" class="pagination-mobile">
+          <button type="button" class="page-btn" :disabled="memoryCurrentPage <= 1" @click="memoryCurrentPage--; fetchMemories()">上一页</button>
+          <span class="page-info">{{ memoryCurrentPage }} / {{ Math.ceil(memoryTotal / memoryPageSize) }}</span>
+          <button type="button" class="page-btn" :disabled="memoryCurrentPage >= Math.ceil(memoryTotal / memoryPageSize)" @click="memoryCurrentPage++; fetchMemories()">下一页</button>
+        </div>
+      </div>
     </main>
 
     <!-- 搜索 Sheet -->
@@ -172,9 +228,10 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import { formatDateTime } from '@/utils/format'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
@@ -182,6 +239,60 @@ import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 
 const router = useRouter()
 const activeTab = ref('knowledge')
+const route = useRoute()
+// v28 step 68: 支持 ?tab=memory URL 直跳（如旧 /memory 重定向）
+if (route.query.tab === 'memory') activeTab.value = 'memory'
+
+// v28 step 68: 长期记忆 Tab 状态（合并自 MobileMemoryView）
+const memoryList = ref([])
+const memoryTotal = ref(0)
+const memoryCurrentPage = ref(1)
+const memoryPageSize = ref(20)
+const memoryLoading = ref(false)
+const memorySearch = ref({ keyword: '', type: '' })
+
+const memoryTypeNameMap = {
+  preference: '偏好',
+  user_fact: '用户事实',
+  task_ctx: '任务上下文',
+  summary: '摘要',
+  entity: '实体关系',
+}
+
+const fetchMemories = async () => {
+  memoryLoading.value = true
+  try {
+    const params = {
+      page: memoryCurrentPage.value,
+      page_size: memoryPageSize.value,
+    }
+    if (memorySearch.value.keyword) params.keyword = memorySearch.value.keyword
+    if (memorySearch.value.type) params.memory_type = memorySearch.value.type
+    const res = await axios.get('/api/v1/memory', { params })
+    memoryList.value = res.data.items || []
+    memoryTotal.value = res.data.total || 0
+  } catch (e) {
+    console.error('[MobileKnowledgeView] 获取长期记忆失败:', e)
+    ElMessage.error('获取长期记忆失败')
+  } finally {
+    memoryLoading.value = false
+  }
+}
+
+const forgetMemory = async (item) => {
+  try {
+    await ElMessageBox.confirm(`确定遗忘「${(item.content || '').slice(0, 30)}...」？`, '遗忘确认', {
+      type: 'warning',
+      confirmButtonText: '遗忘',
+      cancelButtonText: '取消',
+    })
+    await axios.delete(`/api/v1/memory/${item.id}`)
+    ElMessage.success('已遗忘')
+    fetchMemories()
+  } catch (e) {
+    if (e !== 'cancel') console.error(e)
+  }
+}
 
 const knowledgeList = ref([])
 const hypotheses = ref([])
@@ -204,6 +315,7 @@ const tabs = [
   { name: 'entities', label: '🔗 实体' },
   { name: 'hypotheses', label: '💡 假设' },
   { name: 'formulas', label: '🧮 公式' },
+  { name: 'memory', label: '🧠 长期记忆' },
   { name: 'health', label: '💚 健康' },
 ]
 
@@ -277,6 +389,7 @@ function switchTab(tab) {
   if (tab === 'knowledge' && knowledgeList.value.length === 0) fetchKnowledge()
   if (tab === 'hypotheses' && hypotheses.value.length === 0) fetchHypotheses()
   if (tab === 'formulas' && formulas.value.length === 0) fetchFormulas()
+  if (tab === 'memory' && memoryList.value.length === 0 && !memoryLoading.value) fetchMemories()
 }
 
 async function fetchKnowledge() {
@@ -599,4 +712,128 @@ onMounted(() => {
   cursor: pointer;
 }
 .action-btn:active { opacity: 0.8; }
+
+/* v28 step 68: 长期记忆 Tab 移动端样式 */
+.memory-mobile-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+.memory-mobile-search {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+}
+.memory-mobile-select {
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.memory-mobile-loading {
+  padding: 0 4px;
+}
+
+.memory-mobile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.memory-mobile-card {
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.memory-mobile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.memory-mobile-type {
+  display: inline-flex;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.memory-mobile-type.type-preference { background: #dbeafe; color: #1e40af; }
+.memory-mobile-type.type-user_fact { background: #d1fae5; color: #065f46; }
+.memory-mobile-type.type-task_ctx { background: #fef3c7; color: #92400e; }
+.memory-mobile-type.type-summary { background: #e0e7ff; color: #3730a3; }
+.memory-mobile-type.type-entity { background: #fce7f3; color: #9f1239; }
+
+.memory-mobile-imp {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.memory-mobile-key {
+  font-size: 11px;
+  color: var(--color-primary);
+  margin-bottom: 4px;
+}
+
+.memory-mobile-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1F2937;
+  margin: 0 0 8px;
+}
+
+.memory-mobile-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.memory-mobile-forget {
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.empty-state-mobile {
+  text-align: center;
+  padding: 40px 16px;
+}
+.empty-icon { font-size: 48px; opacity: 0.5; margin-bottom: 12px; }
+.empty-title { font-size: 16px; font-weight: 600; color: #1F2937; }
+.empty-hint { font-size: 13px; color: #6B7280; margin-top: 6px; }
+
+.pagination-mobile {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+.page-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.page-info { font-size: 13px; color: var(--color-text-secondary); }
 </style>
