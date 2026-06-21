@@ -112,12 +112,16 @@ useThemeStore()
 // 现在 SW 升级会清空所有 cache + 通知客户端 reload）
 // v28 step 33: 服务器部署滞后时（如服务器 sw.js 仍是老版本），坏 SW 持续报
 // bad-precaching-response 错误且永远不更新。临时方案：直接 fetch 服务器 sw.js
-// 文本，检查是否包含黑名单字符串（如 v25 老 sw.js 含 'manifest.webmanifest' 旧路径）。
+// 文本，检查是否包含黑名单字符串（精确匹配 SW 字面量，不匹配 index bundle 里的字符串）。
 // 命中 → 强制 unregister + 清 cache + reload。
-// 等服务器 deploy 成功后移除此黑名单。
+// v28 step 78: 之前误把 '"manifest.webmanifest"' 加进黑名单，导致新 index bundle 也命中
+//   → 无限循环 unregister + reload。改成只在 sw.js 上下文里匹配：
+//   'SW_VERSION' + 'manifest.webmanifest' + 老 SW 版本号同时存在时才算坏 SW。
 const SW_BLACKLIST_CONTENT_PATTERNS = [
-  '"manifest.webmanifest"',  // 老 sw.js 仍引用旧 manifest 路径（410 Gone）
-  'v25-smart-reader-2026-06-19',  // 老 SW_VERSION 字面量
+  // 老 sw.js 同时包含 SW_VERSION 字面量 + manifest.webmanifest 旧路径（说明是老 SW）
+  /SW_VERSION\s*=\s*["']v2[0-5]-/,
+  // 老 SW_VERSION 字面量（v28 step 33 之前的版本）
+  'v25-smart-reader-2026-06-19',
 ]
 
 async function checkSwBlacklist() {
