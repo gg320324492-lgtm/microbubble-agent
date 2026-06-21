@@ -633,6 +633,21 @@ export function cleanContent(text, options = {}) {
   //   数字编号 + 换行 + 中文标题 → 数字编号 + 空格 + 中文
   result = result.replace(/^(\d+(?:\.\d+)*)\s*\n\s*([^\n])/gm, '$1 $2')
 
+  // v28 step 81: PDF 提取的页码标记 P2/P4-6/P7-8 紧跟在英文章节标题后面
+  //   "IntroductionP4-6Ensuring..." → "Introduction\n\nP4-6\n\nEnsuring..."
+  //   "Materials and methodsP7-82.1 Test system..." → "Materials and methods\n\nP7-8\n\n2.1 Test system..."
+  //   1. 英文单词 + P + 数字 + 数字/换行 + 内容 → 英文单词 \n\n P数字 \n\n 内容
+  //   2. 章节标题 + 数字 + "." + 内容（sub-section）→ 章节标题 \n\n 数字. 内容
+  result = result.replace(
+    /([A-Za-z][a-z]+(?: [a-z]+)*)P(\d+(?:-\d+)?)([^\n])/g,
+    '$1\n\nP$2\n\n$3'
+  )
+  // 紧跟数字 + . + 标题：保留 . 作为 markdown heading 标记
+  result = result.replace(
+    /^(\d+\.\d+)\s+([A-Z][a-zA-Z\s]{2,})$/gm,
+    '$1 $2'
+  )
+
   // 5.5 v28 step 75: 期刊元信息块剥离（Corresponding author / Contents lists / E-mail / Received）
   //   这些是论文 header / footer 元信息，不属于正文内容
   result = result.replace(/Corresponding author at:[^\n]*\n[^\n]*E-mail address:[^\n]*\n?/gi, '')
