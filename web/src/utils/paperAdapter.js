@@ -181,6 +181,11 @@ const FOOTER_PATTERNS = [
   /As such, this version is no longer the Accepted Manuscript[\s\S]{0,300}?early visibility of the article\.?/gi,
   /Journal Pre-proof\s*Journal Pre-proof/gi,
   /^\s*Journal Pre-proof\s*$/gim,
+  // v28 step 89: 剥除独立行的页码范围标记（P28-29 / P33-39 / P12 等）
+  //   Elsevier Pre-proof PDF 在每段末尾插入 "P28-29" 这种 phantom 行，
+  //   混入正文中间（如 "...intrinsic tolerance mechanism\nP28-29\nand improving..."）
+  //   必须早剥除，否则 parsePaperSections 把它当 paragraph 内容
+  /^\s*P\d{1,3}(?:-\d{1,3})?\s*$/gim,
   // DOI 单独一行（bare DOI 行）
   /^\s*10\.\d{4,9}\/[^\s]+\s*$/gim,
   // v28 step 17: 作者署名 + 页码行（"T. Wang et al.                                                                                      6"）
@@ -749,6 +754,18 @@ export function cleanContent(text, options = {}) {
     return ws + num + ' ' + letter
   })
 
+  // v28 step 89: OCR 把章节标题与正文黏在一行（如 "4.2 The mechanism of continuous
+  //   sterilization by UV-enhanced MNB water Our findings reveal that..."）。
+  //   标题是 Title Case（每个词首字母大写），正文是 Sentence case（仅句首大写）。
+  //   边界信号：标题末尾小写字符 → 空白 → 正文首大写字母开头。
+  //   例："MNB water Our findings" → "MNB water\n\nOur findings"
+  //   限制：仅在 numbered section（level >= 2）后应用，避免误伤普通段落。
+  //   模式：^\d+(\.\d+)+ + 标题（[A-Z].*?[a-z]）+ 空白 + lookahead 大写
+  result = result.replace(
+    /^(\d+(?:\.\d+)+\s+[A-Z].*?[a-z])\s+(?=[A-Z][a-z]+\s)/gm,
+    '$1\n\n'
+  )
+
   // v28 step 81: PDF 提取的页码标记 P2/P4-6/P7-8 紧跟在英文章节标题后面
   //   "IntroductionP4-6Ensuring..." → "Introduction\n\nP4-6\n\nEnsuring..."
   //   "Materials and methodsP7-82.1 Test system..." → "Materials and methods\n\nP7-8\n\n2.1 Test system..."
@@ -934,11 +951,15 @@ function _matchSectionTitle(text) {
   // v28 fix: 末尾是 "-" 或 "of"/"the"/"a" 等英文小写残词 → 标记 continued，
   //   让 _parsePlainTextSections 把下一行合并到标题末尾
   //   例: "3.3. Influence ... O3-" → 下一行 "MNBs system" 合并 → 完整标题
+  // v28 step 89: continued 仅在 stripped 长度 ≤ 40 时用 lowercase 短词判定（更严格）。
+  //   长标题（如 "4.2 The mechanism of continuous sterilization by UV-enhanced MNB water"，
+  //   70 字符）末尾 "water" 是 Title Case 标题结尾（不是断字），不应触发合并下一行，
+  //   否则 OCR 黏在标题后的正文 "Our findings..." 被错误合并进 title
   let continued = false
   if (stripped.endsWith('-')) {
     continued = true
-  } else {
-    // 末尾是否英文单词残段（小写字母结尾、不在句末标点）
+  } else if (stripped.length <= 40) {
+    // 短标题末尾是否英文单词残段（小写字母结尾、不在句末标点）
     const lastWord = stripped.split(/\s+/).pop() || ''
     if (/^[a-z]{1,5}$/.test(lastWord) && !/[.!?]$/.test(stripped)) {
       // 短小写单词结尾且整句无终止标点 → 可能是断字
@@ -1182,8 +1203,11 @@ function _parsePlainTextSections(content) {
     const trimmed = line.trim()
     const match = _matchSectionTitle(trimmed)
 
-    // 标题行：要求是较短的单行，且后面有内容
-    if (match && trimmed.length < 100 && i + 1 < lines.length) {
+    // v28 step 89 修复：OCR 把章节标题与正文压成一行（无换行分隔），
+    //   trimmed 长度可能超 100。如果 trimmed 匹配 numbered section regex
+    //   （如 "4.2 The mechanism..."），仍识别为标题，但需要找到"标题/正文"边界。
+    //   放宽上限 100 → 250。超过 250 视为长正文，不当标题。
+    if (match && trimmed.length < 250 && i + 1 < lines.length) {
       // 看一下下面是否真的开始新内容（不是孤立行）
       const nextNonEmpty = lines.slice(i + 1).find(l => l.trim())
       // 编号章节或关键词章节单独成行也算
@@ -1199,6 +1223,23 @@ function _parsePlainTextSections(content) {
         // v28 fix: 标题末尾断字（如 "3.3. ... O3-"）→ 把下一非空行合并到标题末尾
         // match.continued 标志来自 _matchSectionTitle
         let titleText = trimmed.replace(/[:：]\s*$/, '')
+        // v28 step 89: OCR 把章节标题与正文压成一行 → 在标题结束后切分正文
+        //   模式：numbered section（\d+(\.\d+)+）+ 标题词 + ". " + 大写句子开头
+        //   把 ". <大写>" 之前的部分当标题，后续当正文
+        if (match.type === 'normal' && match.level >= 2 && trimmed.length > 80) {
+          // 找第一个 ". " 后跟大写字母的位置（标题结束）
+          const splitMatch = /^(\d+(?:\.\d+)*\s+[A-Z][^.]*?)\.\s+([A-Z].*)$/m.exec(trimmed)
+          if (splitMatch) {
+            titleText = splitMatch[1].trim()
+            const bodyText = splitMatch[2].trim()
+            // 把正文作为下一行内容追加到 buffer（在 pushCurrent 之后）
+            // 实际：把正文塞回 lines 让后续循环处理
+            // 简化：直接在 sections[新section].blocks 里加 paragraph
+            // 下一轮 pushCurrent() 才会执行，所以正文需要延迟处理
+            // 这里改用 lines.splice 在 lines 中插入 bodyText 作为 i+1 行
+            lines.splice(i + 1, 0, bodyText)
+          }
+        }
         if (match.continued) {
           for (let j = i + 1; j < lines.length; j++) {
             const nl = lines[j]
