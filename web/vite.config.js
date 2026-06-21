@@ -70,21 +70,17 @@ function manifestHashPlugin() {
             return
           }
           let sw = readFileSync(swPath, 'utf-8')
-          // v28 step 31 修复: sw.js 里实际格式是 "url":"manifest.webmanifest"
-          //   之前的 '"manifest.webmanifest"' (字符串完全匹配) 不匹配，导致 SW install 拉
-          //   旧 URL → 服务器 410 → bad-precaching-response
-          // 改为更精确的 pattern: 任意字符 + "manifest.webmanifest" (作为字符串值)
-          const PATTERNS = [
-            '"manifest.webmanifest"',  // 字符串完全匹配 (旧版本假设)
-            ':"manifest.webmanifest"', // precache entry 里的 "url":"manifest.webmanifest"
-            ':"/manifest.webmanifest"', // 带斜杠版本
-          ]
+          // v28 step 94 修复：vite-plugin-pwa 实际输出 "manifest.webmanifest"}]) 格式
+          //   （precache 数组末尾 entry，无前导冒号或字符串边界）。之前的 PATTERNS 数组
+          //   用了精确字符串匹配（"manifest.webmanifest" / :"manifest.webmanifest" 等）
+          //   但实际 sw.js 输出包含裸字符串，前后不是引号或冒号，导致替换失败。
+          //   → SW install 仍 precache 旧 URL → 服务器 410 → bad-precaching-response
+          //   修复：用 catch-all 正则 /\bmanifest\.webmanifest\b/g 一次性替换所有出现位置
           let matched = false
-          for (const pat of PATTERNS) {
-            if (sw.includes(pat)) {
-              sw = sw.replaceAll(pat, pat.replace('manifest.webmanifest', newName))
-              matched = true
-            }
+          if (/\bmanifest\.webmanifest\b/.test(sw)) {
+            sw = sw.replace(/\bmanifest\.webmanifest\b/g, newName)
+            matched = true
+            console.log(`[manifest-hash-plugin] catch-all regex matched → ${newName}`)
           }
           if (matched) {
             writeFileSync(swPath, sw)
