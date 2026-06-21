@@ -129,7 +129,9 @@ async function checkSwBlacklist() {
     const r = await fetch('/sw.js', { cache: 'no-store' })
     const text = await r.text()
     for (const pat of SW_BLACKLIST_CONTENT_PATTERNS) {
-      if (text.includes(pat)) {
+      // v28 step 79: 同时支持字符串（includes）和正则（test）
+      const matched = pat instanceof RegExp ? pat.test(text) : text.includes(pat)
+      if (matched) {
         console.warn('[PWA] SW content blacklisted (pattern: ' + pat + '), unregistering')
         const regs = await navigator.serviceWorker.getRegistrations()
         for (const reg of regs) {

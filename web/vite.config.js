@@ -281,7 +281,9 @@ export default defineConfig({
       injectManifest: {
         // 预缓存：JS/CSS/SVG/PNG/字体 + offline.html（真离线兜底）
         // 不预缓存 index.html：HTML 总走 NetworkFirst 拿最新
+        // v28 step 80: 不预缓存 .webmanifest（manifest 文件不需要离线缓存 + 服务器 410 拦截会触发 bad-precaching-response）
         globPatterns: ['**/*.{js,css,svg,png,ico,woff,woff2}', 'offline.html'],
+        globIgnores: ['**/*.webmanifest'],
       },
       devOptions: {
         // 开发模式禁用 service worker（避免缓存干扰调试）
