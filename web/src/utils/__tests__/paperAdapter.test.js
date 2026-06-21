@@ -1496,6 +1496,65 @@ and improving water biosafety. The collapse of MNBs generates microjets with vel
     expect(allBlockText).not.toMatch(/P28-29/)
   })
 
+  // v28 step 102: OCR 长标题含人名缩写（B./Dr./Mr.）不应被错误切成「标题/正文」
+  //   用户截图（ID 17 UV/MNBs 论文）：「2.1 Test system for the inactivation of B. Cereus
+  //   in water using MNBs combined with UV」被错误切成
+  //   title="2.1 Test system for the inactivation of B" + body="Cereus in water using MNBs combined with UV"
+  //   导致正文变成 "Cereus in water using MNBs combined with UV\nThis study..."
+  // 修复：要求 candidateTitle 必须以已知章节关键词结尾 + 切分点前不能是 1-3 字母英文缩写
+  it('v28 step 102: B./Dr./Mr. 缩写不应触发 split（ID 17 真实场景）', () => {
+    const content = `2. Materials and methods
+2.1 Test system for the inactivation of B. Cereus in water using MNBs combined with UV
+This study systematically evaluated the inactivation efficacy of MNBs against B. cereus
+under UV irradiation, employing two experimental approaches: individual treatment and
+combined treatment. The experimental setup was composed of four primary components: a MNB
+generator.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+    const sec = sections.find((s) => s.type === 'normal' && /^2\.1/.test(s.title || ''))
+    expect(sec).toBeTruthy()
+    // 标题应包含完整 "B. Cereus in water using MNBs combined with UV"
+    expect(sec.title).toContain('B. Cereus in water using MNBs combined with UV')
+    // 标题不应被错误截断在 "B" 处
+    expect(sec.title).not.toMatch(/\binactivation of B$/)
+    // 正文块不应以 "Cereus in water using MNBs" 开头（因为整行是标题的一部分）
+    const firstBlockContent = sec.blocks[0]?.content || ''
+    expect(firstBlockContent.startsWith('Cereus in water')).toBe(false)
+    // 正文应从 "This study" 开始（OCR 原 lines 数组下一行）
+    expect(firstBlockContent).toContain('This study')
+  })
+
+  it('v28 step 102: Dr./Mr. 缩写不应触发 split', () => {
+    const content = `3.1 The role of Dr. Smith in the project
+This section discusses his contributions.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+    const sec = sections.find((s) => /^3\.1/.test(s.title || ''))
+    expect(sec).toBeTruthy()
+    expect(sec.title).toContain('The role of Dr. Smith in the project')
+    expect(sec.title).not.toMatch(/\brole of Dr$/)
+    const firstBlockContent = sec.blocks[0]?.content || ''
+    expect(firstBlockContent.startsWith('Smith in the project')).toBe(false)
+  })
+
+  it('v28 step 102: 关键词结尾 + 短缩写仍可正确切分（保留 step 89 设计）', () => {
+    // step 89 的设计场景：「Materials and methods. The reactor consisted of a 3 L chamber」
+    //   末尾是关键词 "methods" → 应该切
+    const content = `2.2 Materials and methods. The reactor consisted of a 3 L cylindrical chamber
+and an UV lamp was used.`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+    const sec = sections.find((s) => /^2\.2/.test(s.title || ''))
+    expect(sec).toBeTruthy()
+    expect(sec.title).toContain('Materials and methods')
+    expect(sec.title).not.toContain('The reactor consisted')
+    const firstBlockContent = sec.blocks[0]?.content || ''
+    expect(firstBlockContent).toContain('The reactor consisted')
+  })
+
   // v28 step 90: 中文 blockquote 图注（"该图由..."）混入英文正文 + orphan PDF 页码
   // 用户截图（杨慈 UV/MNBs 论文）：英文段后跟 > 该图由六个子图... 长图注，然后
   //   "15 disinfection." — OCR 把 PDF 页码 15 错误插入段落开头

@@ -1315,18 +1315,32 @@ function _parsePlainTextSections(content) {
         // v28 step 89: OCR 把章节标题与正文压成一行 → 在标题结束后切分正文
         //   模式：numbered section（\d+(\.\d+)+）+ 标题词 + ". " + 大写句子开头
         //   把 ". <大写>" 之前的部分当标题，后续当正文
+        // v28 step 102 修复：必须严格守卫切分点
+        //   1. title 必须以章节关键词结尾（Materials/Methods/Results/Discussion 等）—— 否则 OCR
+        //      把标题里的「B. Cereus」缩写误当成"标题/正文"边界（如 ID 17：「2.1 Test system for the
+        //      inactivation of B. Cereus in water using MNBs combined with UV」被切成
+        //      title="2.1 Test system for the inactivation of B" + body="Cereus in water..."）
+        //   2. 即使切分成功，body 首字母大写词不能是单字母缩写（如 Fig/Eq/Section 等）
         if (match.type === 'normal' && match.level >= 2 && trimmed.length > 80) {
-          // 找第一个 ". " 后跟大写字母的位置（标题结束）
-          const splitMatch = /^(\d+(?:\.\d+)*\s+[A-Z][^.]*?)\.\s+([A-Z].*)$/m.exec(trimmed)
+          const splitMatch = /^(\d+(?:\.\d+)*\s+[A-Z][^.]*?)\.\s+([A-Z][a-zA-Z]+.*)$/m.exec(trimmed)
           if (splitMatch) {
-            titleText = splitMatch[1].trim()
-            const bodyText = splitMatch[2].trim()
-            // 把正文作为下一行内容追加到 buffer（在 pushCurrent 之后）
-            // 实际：把正文塞回 lines 让后续循环处理
-            // 简化：直接在 sections[新section].blocks 里加 paragraph
-            // 下一轮 pushCurrent() 才会执行，所以正文需要延迟处理
-            // 这里改用 lines.splice 在 lines 中插入 bodyText 作为 i+1 行
-            lines.splice(i + 1, 0, bodyText)
+            const candidateTitle = splitMatch[1].trim()
+            const candidateBody = splitMatch[2].trim()
+            // 守卫 1：title 必须以已知章节关键词结尾（避免 B./Dr./Mr./Mr. 等缩写误切）
+            const titleEndsWithKw = /(?:system|methods?|results?|discussion|conclusions?|introduction|study|studies|analysis|experiment|investigation|evaluation|comparison|tests?|setup|design|approach|preparation|extraction|characterization|application|model(?:ing)?|simulation)\.?$/i.test(candidateTitle)
+            // 守卫 2：切分点前不能是 1-3 字母英文缩写（看 candidateTitle 末 3 字符是不是缩写）
+            const lastWord = candidateTitle.split(/\s+/).pop() || ''
+            const isAbbrevBeforeDot = /^[A-Z]\.?$|^[A-Z][a-z]{0,2}\.?$/.test(lastWord)
+            if (titleEndsWithKw && !isAbbrevBeforeDot) {
+              titleText = candidateTitle
+              const bodyText = candidateBody
+              // 把正文作为下一行内容追加到 buffer（在 pushCurrent 之后）
+              // 实际：把正文塞回 lines 让后续循环处理
+              // 简化：直接在 sections[新section].blocks 里加 paragraph
+              // 下一轮 pushCurrent() 才会执行，所以正文需要延迟处理
+              // 这里改用 lines.splice 在 lines 中插入 bodyText 作为 i+1 行
+              lines.splice(i + 1, 0, bodyText)
+            }
           }
         }
         if (match.continued) {
