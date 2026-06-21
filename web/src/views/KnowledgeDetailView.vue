@@ -18,7 +18,9 @@
         <PaperHeader
           :paper="paper"
           :reanalyzing="reanalyzing"
+          :downloading="downloading"
           @reanalyze="handleReanalyze"
+          @download="downloadFile"
         />
 
         <!-- 阅读器工具栏（v28 step 15: 仅保留字号/行距/回顶） -->
@@ -83,19 +85,10 @@
           />
         </article>
 
-        <!-- 来源信息 + 下载按钮 (v28 step 69) -->
+        <!-- 来源信息（下载按钮已移至顶部 PaperHeader，v28 step 93） -->
         <div v-if="paper.raw?.source || paper.fileName" class="paper-source">
           <span v-if="paper.raw?.source">来源：{{ paper.raw.source }}</span>
           <span v-if="paper.fileName">文件：{{ paper.fileName }}</span>
-          <el-button
-            v-if="paper.raw?.file_path"
-            type="primary"
-            :icon="Download"
-            size="small"
-            class="download-btn"
-            :loading="downloading"
-            @click="downloadFile"
-          >下载原文件</el-button>
         </div>
 
         <!-- 多模态提取区（仅 PDF/PPTX 显示） -->

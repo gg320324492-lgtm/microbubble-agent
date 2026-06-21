@@ -34,6 +34,16 @@
           :loading="reanalyzing"
           @click="$emit('reanalyze')"
         >重新分析</el-button>
+        <!-- v28 step 93: 下载按钮移到顶部 toolbar（与状态/重新分析并列） -->
+        <el-button
+          v-if="paper.filePath"
+          size="small"
+          type="primary"
+          plain
+          :icon="Download"
+          :loading="downloading"
+          @click="$emit('download')"
+        >下载原文件</el-button>
       </div>
     </div>
 
@@ -86,15 +96,16 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled, InfoFilled, Clock } from '@element-plus/icons-vue'
+import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled, InfoFilled, Clock, Download } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 
 const props = defineProps({
   paper: { type: Object, required: true },
   reanalyzing: { type: Boolean, default: false },
+  downloading: { type: Boolean, default: false },
 })
 
-defineEmits(['reanalyze'])
+defineEmits(['reanalyze', 'download'])
 
 // 标签去重：如果 AbstractCard 已显示论文关键词，Header 只显示分类/类型标签
 // 如果 keywords 和 tags 重合度 >= 60%，Header 隐藏 tags
