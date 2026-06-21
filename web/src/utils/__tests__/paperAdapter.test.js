@@ -1465,4 +1465,34 @@ In this study, the selected bacterial strain was B. cereus ATCC 11778.`
     expect(s2.some((s) => /^1\s+Introduction/.test(s.title || ''))).toBe(true)
     expect(s2.some((s) => s.type === 'introduction')).toBe(true)
   })
+
+  // v28 step 89: OCR 把章节标题与正文黏在一行 + 混入页码范围标记（P28-29）
+  // 用户截图（杨慈 UV/MNBs 论文）："4.2\nThe mechanism of continuous sterilization
+  //   by UV-enhanced MNB water Our findings reveal that...\nP28-29\nand improving..."
+  it('v28 step 89: 标题与正文黏在一起 + P28-29 水印应被切分', () => {
+    const content = `4.2
+The mechanism of continuous sterilization by UV-enhanced MNB water Our findings reveal that MNBs/UV treatment can effectively inactivate B. cereus, with a maximum inactivation efficiency rate of 97.91%, overcoming its intrinsic tolerance mechanism
+P28-29
+and improving water biosafety. The collapse of MNBs generates microjets with velocities reaching several hundred meters per second, accompanied by localized high te`
+
+    const cleaned = cleanContent(content, { isMarkdown: false })
+
+    // 1. P28-29 应被剥除
+    expect(cleaned.content).not.toMatch(/P28-29/)
+    expect(cleaned.content).not.toMatch(/^P\d+-\d+$/m)
+
+    // 2. 标题应被识别为 4.2 normal section
+    const sections = parsePaperSections(cleaned.content, { isMarkdown: false })
+    const sec = sections.find((s) => s.type === 'normal' && /^4\.2/.test(s.title || ''))
+    expect(sec).toBeTruthy()
+    // title 只包含章节标题（不包含 "Our findings..."）
+    expect(sec.title).not.toMatch(/Our findings/)
+    expect(sec.title).toMatch(/The mechanism of continuous sterilization by UV-enhanced MNB water/)
+
+    // 3. 正文块包含 "Our findings..." 但不包含 "P28-29"
+    const allBlockText = sections.flatMap((s) => s.blocks || []).map((b) => b.content || '').join('\n')
+    expect(allBlockText).toContain('Our findings reveal that')
+    expect(allBlockText).toContain('and improving water biosafety')
+    expect(allBlockText).not.toMatch(/P28-29/)
+  })
 })
