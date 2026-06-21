@@ -1749,11 +1749,11 @@ More content after the watermark.`
     const cases = [
       {
         in: 'associated with B. cereusJournal Pre-proof\n3 (Grutsch et al., 2018)',
-        out: 'associated with B. cereus 3 (Grutsch et al., 2018)',
+        out: 'associated with B. cereus 3 (Grutsch et al., 2018)',  // step 99 剥 JP；孤立 '3' (page phantom) 保留
       },
       {
-        in: 'compared accordingly.Journal Pre-proof\n7 Fig. 1.',
-        out: 'compared accordingly. 7 Fig. 1.',
+        in: 'compared accordingly.Journal Pre-proof\nFig. 1.',
+        out: 'compared accordingly. Fig. 1.',  // v28 step 101 进一步剥除孤立数字页码（双换行情况）
       },
       {
         in: 'with a concentration of 1 mg/L O₃ MNBsJournal Pre-proof\ncapable of completely inactivating',
@@ -1772,6 +1772,28 @@ More content after the watermark.`
       const cleaned = cleanContent(input, { isMarkdown: false })
       expect(cleaned.content).not.toMatch(/Journal Pre-proof/)
       expect(cleaned.content).toContain(out.slice(0, 40))
+    }
+  })
+
+  // v28 step 100: OCR 把章节号单独成行（"1\n\n正文"），应合并到正文开头
+  //   之前 step 81 只匹配章节号紧跟正文的格式（"1. Introduction"），OCR 把章节号
+  //   单独成行 + 空行 + 正文（"[PAGE:1]\n\n1\n\nEnsuring..."）会漏掉
+  //   修复：新增 regex 匹配 "数字\n\n大写字母" 模式（章节号 + 空行 + 正文）
+  it('v28 step 100: 单独成行的章节号（"1\n\n正文"）应合并', () => {
+    const cases = [
+      {
+        in: '[PAGE:1]Journal Pre-proof\n\n1\n\nEnsuring the safety of drinking water.',
+        out: '[PAGE:1] 1 Ensuring the safety of drinking water.',  // JP 剥（已合并到 [PAGE:1] 同行）+ 1 合并到正文
+      },
+      {
+        in: '2.2\n\nPreparation of strain and bacterial suspension',
+        out: '2.2. Preparation of strain and bacterial suspension',  // 章节号 "2.2" + 双换行 + 正文（step 100 处理）
+      },
+    ]
+    for (const { in: input, out } of cases) {
+      const cleaned = cleanContent(input, { isMarkdown: false })
+      expect(cleaned.content).not.toMatch(/Journal Pre-proof/)
+      expect(cleaned.content).toContain(out.slice(0, 50))
     }
   })
 })

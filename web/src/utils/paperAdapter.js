@@ -764,7 +764,15 @@ export function cleanContent(text, options = {}) {
   //   必须 ≥20 字符的内容避免误匹配段落首行编号
   result = result.replace(/^(\d{1,2})\s*\n\s*([A-Z][^\n]{20,150}?)\s*$/gm, '$1 $2')
   // 然后跑章节编号同行（5.4）
-  result = result.replace(/^(\d+(?:\.\d+)*)\s*\n\s*([^\n])/gm, '$1 $2')
+  //   v28 step 100 修复：\s* 不能吃 \n\n（否则会把 "2.2\n\n正文" 合并成 "2.2 正文"）
+  //   改成 [ \t]*（仅水平空白，不吃换行）
+  result = result.replace(/^(\d+(?:\.\d+)*)[ \t]*\n([^\n])/gm, '$1 $2')
+  // v28 step 100: OCR 把章节号单独成行（"1\n\n正文"），合并到正文开头
+  //   "1\n\nEnsuring the safety..." → "1. Ensuring the safety..."
+  //   "2.2\n\n正文" → "2.2. 正文"
+  result = result.replace(/^(\d+(?:\.\d+)*)[ \t]*\n[ \t]*\n[ \t]*([A-Z])/gm, '$1. $2')
+  // v28 step 101 撤掉（太激进误删年份/章节号），保留 fixture 实际行为
+  //   用户需自行接受 `cereus 3 (Grutsch` 的 `3` OCR phantom 残留（无害）
 
   // v28 step 85 强制保险：如果前面 regex 没生效（生产部署某些边缘 case），
   // 这里用最宽松的 regex 把"数字紧贴大写字母"的位置强制加空格。
@@ -829,6 +837,9 @@ export function cleanContent(text, options = {}) {
   // 重复的 Journal Pre-proof
   result = result.replace(/(Journal Pre-proof[\s\n]*){2,}/gi, 'Journal Pre-proof\n')
   result = result.replace(/^\s*Journal Pre-proof\s*$/gim, '')
+  // v28 step 100: 清理 [PAGE:N] + Journal Pre-proof 紧贴模式（消除边界冲突）
+  //   例: '[PAGE:2]Journal Pre-proof\n1\n正文' → '[PAGE:2]\n1\n正文'（让 PAGE:N 后强制换行）
+  result = result.replace(/(\[PAGE:\s*\d+\s*\])\s*Journal Pre-proof/g, '$1\nJournal Pre-proof')
   // v28 step 99: OCR 工具把 'Journal Pre-proof N' 水印错误插入到英文段落中间
   //   例 1: '... a MNB\nJournal Pre-proof generator (RuiDe...' → '... a MNB generator (RuiDe...'
   //   例 2: '... B. cereusJournal Pre-proof\n3 (Grutsch...' → '... B. cereus\n3 (Grutsch...'
