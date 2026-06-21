@@ -39,6 +39,24 @@
     <h4 v-else-if="block.type === 'heading'" class="block-heading">
       {{ block.content }}
     </h4>
+
+    <!-- v28 step 71: Q&A 卡片（问题块） -->
+    <div v-else-if="block.type === 'qa_question'" class="qa-question-card">
+      <div class="qa-icon qa-icon-question">Q</div>
+      <div class="qa-content">
+        <div class="qa-label">问题</div>
+        <div class="qa-text" v-html="renderedQAContent"></div>
+      </div>
+    </div>
+
+    <!-- v28 step 71: Q&A 卡片（回答块，支持 markdown） -->
+    <div v-else-if="block.type === 'qa_answer'" class="qa-answer-card">
+      <div class="qa-icon qa-icon-answer">A</div>
+      <div class="qa-content">
+        <div class="qa-label">回答</div>
+        <div class="qa-text" v-html="renderedQAContent"></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -85,6 +103,28 @@ const renderedContent = computed(() => {
   const formatted = props.isChinese ? raw : formatChemicalText(raw)
   return autoLinkContent(formatted)
 })
+
+// v28 step 71: QA 块专用渲染（marked 解析 markdown + 保留代码块/列表）
+const renderedQAContent = computed(() => {
+  const raw = props.block.content || ''
+  if (props.block.type === 'qa_question') {
+    // 问题直接渲染（无 markdown，保持纯文本）
+    return escapeHtmlSimple(raw)
+  }
+  if (props.block.type === 'qa_answer') {
+    // 回答走 marked.parse（支持 markdown 格式）
+    return renderMarkdown(raw)
+  }
+  return ''
+})
+
+function escapeHtmlSimple(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+}
 
 /**
  * v28 step 61: 仅做 DOI/URL/邮箱链接，不 escape HTML
@@ -294,5 +334,105 @@ function renderMarkdownTable(text) {
   color: #9CA3AF;
   font-size: 11px;
   margin-left: 4px;
+}
+
+/* v28 step 71: Q&A 卡片样式 */
+.qa-question-card,
+.qa-answer-card {
+  display: flex;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid var(--color-border-light);
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.qa-question-card {
+  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  border-color: #FCD34D;
+}
+
+.qa-answer-card {
+  background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+  border-color: #93C5FD;
+}
+
+.qa-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.qa-icon-question {
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+}
+
+.qa-icon-answer {
+  background: linear-gradient(135deg, #3B82F6, #2563EB);
+}
+
+.qa-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.qa-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.qa-text {
+  font-size: 15px;
+  line-height: 1.85;
+  color: #1F2937;
+  word-break: break-word;
+}
+
+.qa-text :deep(p) {
+  margin: 0 0 10px;
+}
+.qa-text :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.qa-text :deep(h2),
+.qa-text :deep(h3),
+.qa-text :deep(h4) {
+  margin: 14px 0 8px;
+  font-weight: 600;
+  color: #111827;
+}
+.qa-text :deep(h2) { font-size: 18px; }
+.qa-text :deep(h3) { font-size: 16px; }
+.qa-text :deep(h4) { font-size: 15px; }
+.qa-text :deep(ul),
+.qa-text :deep(ol) {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.qa-text :deep(li) {
+  margin: 4px 0;
+}
+.qa-text :deep(strong) {
+  color: #111827;
+}
+.qa-text :deep(code) {
+  background: #F3F4F6;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
 }
 </style>
