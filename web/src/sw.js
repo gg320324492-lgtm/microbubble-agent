@@ -27,7 +27,11 @@
 // （老 precache 引用不存在的 index-c2fe833d.js）。BUMP 版本强制浏览器识别为新 SW
 // 重走 install 流程，激活钩子的 caches.delete 会清空老 cache。
 // v28 step 85: 升级到 v37 — paperAdapter 强制保险 fallback（不依赖前面 regex 的空格）
-const SW_VERSION = 'v37-paper-fallback-2026-06-21'
+// v28 step 101: 升级到 v38 — paperAdapter cleanContent 加 OCR phantom 页码/段首单词 inline
+//   合并规则（B. cereus\n\n3\n\n(Grutsch → B. cereus 3 (Grutsch）。SW 字节未变，浏览器
+//   不会主动检测更新 → 用户继续用旧 cached index-*.js → BUMP 触发升级 + activate
+//   钩子清空所有 cache，让新 dist 生效
+const SW_VERSION = 'v38-phantom-merge-2026-06-22'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
