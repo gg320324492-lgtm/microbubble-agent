@@ -680,18 +680,34 @@ export function cleanContent(text, options = {}) {
   // 模式 A: phantom 数字 + 左括号（reference 引用 inline）
   //   "cereus\n\n3\n\n(Grutsch" → "cereus 3 (Grutsch"
   //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除（"during\n\n15 disinfection"）
+  if (typeof window !== 'undefined') {
+    window.__PHANTOM_DEBUG__ = window.__PHANTOM_DEBUG__ || { countA: 0, countB: 0, sample: null }
+  }
+  const beforeA = result
   result = result.replace(
     /([a-z)\]])\s*\n\s*\n\s*(\d{1,3})\s*(?:\n\s*\n|\s)(?=\()/g,
     '$1 $2 '
   )
+  if (typeof window !== 'undefined' && result !== beforeA) {
+    window.__PHANTOM_DEBUG__.countA++
+    if (!window.__PHANTOM_DEBUG__.sample) {
+      window.__PHANTOM_DEBUG__.sample = { before: beforeA.slice(0, 200), after: result.slice(0, 200) }
+    }
+    console.log('[v101 phantom A] matched. before:', beforeA.slice(0, 100), 'after:', result.slice(0, 100))
+  }
   // 模式 B: phantom 单词（OCR 段首小写）
   //   "MNBs\n\ncapable of" → "MNBs capable of"
   //   "both\n\nmechanistic complementarity" → "both mechanistic complementarity"
   //   上限 20 字符：OCR 段首单词一般是常见词（capable=7, mechanistic=11），20 留余量
+  const beforeB = result
   result = result.replace(
     /([a-z)\]])\s*\n\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
     '$1 $2 '
   )
+  if (typeof window !== 'undefined' && result !== beforeB) {
+    window.__PHANTOM_DEBUG__.countB++
+    console.log('[v101 phantom B] matched. before:', beforeB.slice(0, 100), 'after:', result.slice(0, 100))
+  }
 
   // 4. 系统内部标记
   for (const re of INTERNAL_MARKER_RES) {
