@@ -118,12 +118,14 @@ useThemeStore()
 //   → 无限循环 unregister + reload。改成只在 sw.js 上下文里匹配：
 //   'SW_VERSION' + 'manifest.webmanifest' + 老 SW 版本号同时存在时才算坏 SW。
 // v28 step 83: 扩到 v36 之前的所有版本（v2[0-5] → v2[0-5]|v3[0-5]）
+// v28 step 85: 扩到 v37 之前（v(?:2[0-9]|3[0-6])），加入 v36 字面量
 const SW_BLACKLIST_CONTENT_PATTERNS = [
   // 老 sw.js 同时包含 SW_VERSION 字面量 + manifest.webmanifest 旧路径（说明是老 SW）
-  /SW_VERSION\s*=\s*["']v(?:2[0-9]|3[0-5])-/,
+  /SW_VERSION\s*=\s*["']v(?:2[0-9]|3[0-6])-/,
   // 老 SW_VERSION 字面量（v28 step 33 之前的版本）
   'v25-smart-reader-2026-06-19',
   'v35-card-fallback-fetch-retry-2026-06-21',  // v28 step 79-82 的 SW，precache 列表有 404 文件
+  'v36-precache-purge-2026-06-21',  // v28 step 83-84 的 SW，浏览器可能仍加载旧 chunk
 ]
 
 async function checkSwBlacklist() {
