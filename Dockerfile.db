@@ -5,8 +5,8 @@ RUN apk add --no-cache \
     make \
     libc-dev \
     perl \
-    llvm19 \
-    clang19 \
+    llvm21 \
+    clang21 \
     && mkdir -p /tmp/pgvector \
     && cd /tmp/pgvector \
     && wget https://github.com/pgvector/pgvector/archive/refs/tags/v0.7.0.tar.gz -O v0.7.0.tar.gz \
@@ -16,4 +16,4 @@ RUN apk add --no-cache \
     && make install \
     && cd / \
     && rm -rf /tmp/pgvector \
-    && apk del gcc make perl llvm19 clang19 libc-dev
+    && apk del gcc make perl llvm21 clang21 libc-dev
