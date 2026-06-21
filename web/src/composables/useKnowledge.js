@@ -43,7 +43,14 @@ export function useKnowledge() {
         ...params
       }
       if (searchQuery.value) queryParams.search = searchQuery.value
-      if (filterCategory.value) queryParams.category = filterCategory.value
+      // v28 step 73: "论文" chip 映射到 has_file=true（只显示真实上传文件）
+      //   其他 category 值原样传给 API
+      if (filterCategory.value === '论文') {
+        queryParams.has_file = true
+        // 不传 category，避免和 has_file 叠加（LLM 自动归档的 [拓展] 也可能被标 category=论文）
+      } else if (filterCategory.value) {
+        queryParams.category = filterCategory.value
+      }
 
       const res = await axios.get('/api/v1/knowledge', { params: queryParams })
       knowledgeList.value = res.data.items || []
