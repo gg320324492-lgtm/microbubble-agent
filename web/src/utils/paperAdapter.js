@@ -125,6 +125,16 @@ const INTERNAL_MARKER_RES = [
   // 6) agent/minio 内网图片 URL（即使在正文中也不应直接显示）
   /https?:\/\/(?:agent\.)?mnb-lab\.cn\/minio\/[^\s<>"'\)]+/gi,
   /https?:\/\/localhost:\d+\/minio\/[^\s<>"'\)]+/gi,
+  // v28 step 82: Elsevier PDF header 元信息（Reference / DOI / PII / To appear in 等）
+  //   这些通常以 `Reference:\nCEJ 171737` / `DOI:\nhttps://...` / `PII:\nS1385-...` 形式出现
+  //   必须按整行剥，避免干扰正文引用识别
+  /^\s*PII\s*[：:]\s*\S+\s*$/gim,
+  /^\s*DOI\s*[：:]\s*https?:\/\/\S+\s*$/gim,
+  /^\s*Reference\s*[：:]\s*[A-Z]{2,5}\s+\d+\s*$/gim,
+  /^\s*Received\s+date\s*[：:][^\n]*$/gim,
+  /^\s*Revised\s+date\s*[：:][^\n]*$/gim,
+  /^\s*Accepted\s+date\s*[：:][^\n]*$/gim,
+  /^\s*To\s+appear\s+in\s*[：:]?\s*$/gim,
 ]
 
 // HTML 属性残留
@@ -425,7 +435,11 @@ export function insertSectionBreaks(text) {
 
   // 多个标题合并（HIGHLIGHTSGRAPHICALABSTRACTARTICLEINFO）→ 拆成多行
   // 用大写英文单词做拆分点
-  const mergedTitleRe = /(?<![A-Z])(HIGHLIGHTS|GRAPHICAL\s+ABSTRACT|ARTICLE\s+INFO(?:RMATION)?|KEYWORDS|ABSTRACT|INTRODUCTION|MATERIALS\s+AND\s+METHODS|RESULTS?\s+AND\s+DISCUSSION|CONCLUSIONS?|REFERENCES|ACKNOWLEDGEMENTS|GRAPHICALABSTRACT|ARTICLEINFO)/gi
+  // v28 step 82 修复：原 regex 用 /gi 大小写不敏感，会把 "1. Introduction" 中的 "Introduction" 也匹配
+  //   然后插入 \n 导致 "1. \nIntroduction\n"，破坏章节标题
+  // 修复：要求标题要么全大写（HIGHLIGHTS），要么前面是空格/行首/标点（独立标题）
+  //   但绝不能作为其他单词的一部分被匹配
+  const mergedTitleRe = /(?<![A-Za-z])(HIGHLIGHTS|GRAPHICAL\s+ABSTRACT|ARTICLE\s+INFO(?:RMATION)?|KEYWORDS|ABSTRACT|INTRODUCTION|MATERIALS\s+AND\s+METHODS|RESULTS?\s+AND\s+DISCUSSION|CONCLUSIONS?|REFERENCES|ACKNOWLEDGEMENTS|GRAPHICALABSTRACT|ARTICLEINFO)(?![A-Za-z])/g
   result = result.replace(mergedTitleRe, '\n$1\n')
 
   // 同行内章节标题：句末+编号+标题
@@ -473,24 +487,66 @@ export function insertSectionBreaks(text) {
  * 返回正文从 Introduction（或第一个正文段）开始的内容
  */
 export function removeFrontMatter(content) {
-  if (!content) return { cleaned: '', abstract: null, keywords: [], hasFrontMatter: false }
+  if (!content) return { cleaned: '', abstract: null, keywords: [], frontMatter: '', hasFrontMatter: false }
 
   let result = String(content)
 
   // 1. 找第一个 Introduction / 引言 位置（正文从此开始）
+  //    容忍前置 (?:^|\n)\s* 和可选编号 (\d+(\.\d+)*\.?\s+)?
   const introMatch = result.match(/(?:^|\n)\s*(\d+(\.\d+)*\.?\s+)?(Introduction|引言|前言|绪论)\b/i)
   const introIdx = introMatch ? introMatch.index : -1
 
   if (introIdx < 0) {
     // 没找到 Introduction 起点，原样返回
-    return { cleaned: result, abstract: null, keywords: [], hasFrontMatter: false }
+    return { cleaned: result, abstract: null, keywords: [], frontMatter: '', hasFrontMatter: false }
   }
 
   const frontMatter = result.slice(0, introIdx)
   const body = result.slice(introIdx)
 
+  // v28 step 82: 仅在 front matter 含 Elsevier PDF 元信息时才触发剥离
+  //   启发式检测：① PII/DOI/Reference 标识 ② "To appear in" ③ "Please note that Elsevier" 等 boilerplate
+  //   ④ Received date / Revised date 等
+  //   否则（普通 PDF，Abstract 是独立章节）返回原内容，让 parsePaperSections 处理
+  const isElsevierPreProof = /PII\s*[：:]|DOI\s*[：:]\s*https?:\/\/|Reference\s*[：:]\s*[A-Z]{2,5}\s+\d+|To appear in|Please\s+(?:also\s+)?note\s+that\s+Elsevier|Received\s+date\s*[：:]|Revised\s+date\s*[：:]|Accepted\s+date\s*[：:]|©\s*\d{4}\s+Published by\s+Elsevier|This is a PDF of an article/i.test(frontMatter)
+
+  if (!isElsevierPreProof) {
+    // 普通论文 front matter（含独立 Abstract section）— 不剥离，让原解析器处理
+    return { cleaned: result, abstract: null, keywords: [], frontMatter: '', hasFrontMatter: false }
+  }
+
+  // 2. v28 step 82: 从 Elsevier front matter 抽出 Abstract + Keywords
+  //    Elsevier PDF 的 abstract 段通常以 "Abstract：" / "Abstract:" / "ABSTRACT" 开头
+  //    keywords 段以 "Keywords:" / "关键词" / "Key words" 开头
+  let abstract = null
+  let keywords = []
+
+  // 抽取 Abstract（关键词终止符 + Introduction 终止符）
+  const abstractMatch = frontMatter.match(/Abstract\s*[：:]\s*([\s\S]*?)(?=\n\s*(?:Keywords?|关键词|关键字|Key\s*words?|\d+\.\s*(?:Introduction|引言|前言))|$)/i)
+  if (abstractMatch) {
+    abstract = abstractMatch[1]
+      // 修复单词换行bug: "the\noverall" → "the overall" (而非 "theoverall")
+      .replace(/([A-Za-z一-龥])\s*\n\s*([A-Za-z一-龥])/g, '$1 $2')
+      // 合并多行空白
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .trim()
+  }
+
+  // 抽取 Keywords
+  const kwMatch = frontMatter.match(/Keywords?\s*[：:]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:\d+\.\s*(?:Introduction|引言)|1\.|$))/i)
+  if (kwMatch) {
+    keywords = kwMatch[1]
+      .replace(/[；;]/g, ',')  // 中英文分号统一
+      .split(/[,，]/)
+      .map(k => k.trim())
+      .filter(Boolean)
+  }
+
   return {
     cleaned: body.trim(),
+    abstract: abstract || null,
+    keywords,
     frontMatter: frontMatter.trim(),
     hasFrontMatter: true,
   }
@@ -601,12 +657,51 @@ export function cleanContent(text, options = {}) {
   // 5. DOI 规范化
   result = normalizeDoiText(result)
 
-  // 5.1 v28 step 75: PDF 软连字符 + 行尾强制换行 → 合并
+  // 5.1 v28 step 75 + step 82: PDF 软连字符 + 行尾强制换行 → 合并
   //   根因：PDF 提取把 "disin-fection" 拆成 "disin­\n        fection"，'-­' 是不可见 soft hyphen
-  //   解法：先去掉所有 soft hyphen（U+00AD），再合并 "字母 + 强制换行 + 字母" → 字母字母
+  //   解法：先去掉所有 soft hyphen（U+00AD），再合并 "字母 + 强制换行 + 字母"
+  // v28 step 82 修复：单词逐行 OCR bug（"Please\nalso\nnote" 应变 "Please already note" 而非 "Pleasealsonote"）
+  //   关键区分：① 单词内换行（如 "disin­\n        fection"）：行末是单词一部分，前面有空格缩进 → 合并
+  //              ② 单词间换行（如 "Please\nalso\nnote"）：前后都是单短词 → 加空格
+  //   关键保护：上一行是多词行（如 "1 Introduction"）→ 不要合并（保持段落边界）
   result = result.replace(/­/g, '')
-  // 合并 "字母-换行-字母"（如 "disin\n        fection"）
-  result = result.replace(/([a-zA-Z一-龥])[ \t]*\n[ \t]*([a-zA-Z一-龥])/g, '$1$2')
+  // 5.1a 单词逐行 OCR：找连续的单短词行合并（不与多词行粘连）
+  //   用 split + reduce 实现，能正确处理连续单词（"Please already\nnote" → "Please already note"）
+  //   容忍单词末尾标点（"that," / "during." / "the:" 等仍是单词 OCR 的一部分）
+  //   排除纯数字 + 标点（"1." / "2," 这种章节编号前缀不应当作单词）
+  {
+    const lines = result.split('\n')
+    const out = []
+    let runBuffer = ''  // 当前正在累积的单短词行 run
+    const flushRun = () => {
+      if (runBuffer) {
+        out.push(runBuffer)
+        runBuffer = ''
+      }
+    }
+    const isSingleShortWord = (s) => {
+      const t = s.trim()
+      // 必须以字母/中文开头（排除纯数字）
+      return t.length > 0 && t.length <= 22
+        && /^[A-Za-z一-龥][A-Za-z一-龥\-'’]*[,.!?;:]?$/.test(t)
+    }
+    for (const line of lines) {
+      if (isSingleShortWord(line)) {
+        runBuffer = runBuffer ? `${runBuffer} ${line.trim()}` : line.trim()
+      } else {
+        flushRun()
+        out.push(line)
+      }
+    }
+    flushRun()
+    result = out.join('\n')
+  }
+  // 5.1b 合并单词内换行（必须有前导空格缩进表明是续行）
+  //   "disin\n        fection" → "disinfection"  (有缩进)
+  //   "Chemicals\nToluene" → 保持换行 (无缩进，是独立段落)
+  result = result.replace(/([a-zA-Z一-龥])\n[ \t]+([a-zA-Z一-龥])/g, '$1$2')
+  // 5.1c 合并"编号. + 标题"被 step 5.1a 拆开的章节标题（"1.\nIntroduction" → "1. Introduction"）
+  result = result.replace(/^(\d+(?:\.\d+)*\.)\n^([A-Z])/gm, '$1 $2')
 
   // 5.2 v28 step 75: HTML 实体 → Unicode 下标/上标
   //   <sub>3</sub> → ₃, <sup>-</sup> → ⁻, <sub>2</sub> → ₂ 等
@@ -628,9 +723,15 @@ export function cleanContent(text, options = {}) {
   //   只清理 ⁽͵ 这种孤立 soft hyphen
   result = result.replace(/⁽͵/g, '⁽').replace(/͵⁾/g, '⁾').replace(/͵/g, ',')
 
-  // 5.4 v28 step 75: 章节编号与标题同行
+  // 5.4 v28 step 75 + step 82: 章节编号与标题同行
   //   "4.2\n内容一：..." → "4.2 内容一：..."
   //   数字编号 + 换行 + 中文标题 → 数字编号 + 空格 + 中文
+  // v28 step 82: 表格行号 + 内容同行（必须在 step 5.4 之前执行，避免破坏 3 行结构）
+  //   模式 1："1\nIndividual MNBs treatment\nMNBs" → "1 Individual MNBs treatment MNBs"
+  //   仅匹配短文本（≤80 字符）的单数字行（避免与段落首行编号冲突）
+  //   第三行允许多种模式：纯缩写（MNBs）/ 大写开头单词（UV）/ 单词+数字（UV0.5）
+  result = result.replace(/^(\d{1,2})\s*\n\s*([A-Z][^\n]{1,80}?)\s*\n\s*([A-Za-z][A-Za-z0-9.\-/]{0,15})\s*$/gm, '$1 $2 $3')
+  // 然后跑章节编号同行（5.4）
   result = result.replace(/^(\d+(?:\.\d+)*)\s*\n\s*([^\n])/gm, '$1 $2')
 
   // v28 step 81: PDF 提取的页码标记 P2/P4-6/P7-8 紧跟在英文章节标题后面
@@ -655,25 +756,38 @@ export function cleanContent(text, options = {}) {
   result = result.replace(/Received \d{1,2}\s+\w+\s+\d{4}[;\s]*/gi, '')
   result = result.replace(/\d{4}[-\s]Elsevier[^\n]*\n[^\n]*\n?/gi, '')
 
-  // 5.6 v28 step 76: Elsevier "CEJ 171737" / "P2 Please cite this article" 块
+  // 5.6 v28 step 76 + step 82: Elsevier "CEJ 171737" / "P2 Please cite this article" 块
   //   这些是 PDF header 的 article id + citation 块，应该完全剥除
   result = result.replace(/\b[A-Z]{2,5}\s+\d{3,7}\s+To appear in:[\s\S]{0,400}?/gi, '')
   result = result.replace(/\bP\d+\s+Please cite this article as:[\s\S]{0,400}?(?:doi\.org\/[^\s]+|10\.\d{4,9}\/[^\s]+)/gi, '')
   // "This is a PDF of an article..." 到 "early visibility" 整段
   result = result.replace(/This is a PDF of an article that has undergone[\s\S]{0,1500}?early visibility of the article\.?/gi, '')
-  // "Please also note that..." 到 "pertain"
-  result = result.replace(/Please also note that, during the production process[\s\S]{0,400}?pertain\./gi, '')
+  // v28 step 82: 兼容 "Please note that"（无 also）和 "Please also note that"（有 also）两种开头
+  //   + 兼容单词逐行 OCR（"Please\nalso\nnote" 在 step 5.1a 已合并为 "Please also note"）
+  //   + "early visibility" 终止符或 "pertain." 终止符
+  result = result.replace(/Please\s+(?:also\s+)?note\s+that\s*,?\s+during\s+the\s+production\s+process[\s\S]{0,800}?(?:pertain\.|early visibility)/gi, '')
+  // "Please note that Elsevier's sharing policy..." 到 "Published Journal Article applies to this version" 段
+  result = result.replace(/Please\s+note\s+that\s+Elsevier[\s\S]{0,600}?sharing#?\d?-?[Pp]ublished-[Jj]ournal-[Aa]rticle\.?/gi, '')
   // "As such, this version is no longer the Accepted Manuscript"
   result = result.replace(/As such, this version is no longer the Accepted Manuscript[\s\S]{0,400}?early visibility of the article\.?/gi, '')
+  // v28 step 82: 版权行剥离（Elsevier/Springer/Wiley 等）
+  result = result.replace(/©\s*\d{4}\s+(?:Published by|Elsevier|Springer|Wiley|American Chemical Society|IOP Publishing|Royal Society of Chemistry|IEEE)\s+(?:B\.V\.|Ltd\.|Inc\.|Chemical Society|Publishing)?[\s\S]{0,200}?(?:\n|$)/gi, '')
+  result = result.replace(/Copyright\s+(?:©|\(c\))\s*\d{4}[\s\S]{0,200}?(?:\n|$)/gi, '')
   // 重复的 Journal Pre-proof
   result = result.replace(/(Journal Pre-proof[\s\n]*){2,}/gi, 'Journal Pre-proof\n')
   result = result.replace(/^\s*Journal Pre-proof\s*$/gim, '')
 
-  // 5.7 v28 step 76: 参考文献标识统一
+  // 5.7 v28 step 76 + step 82: 参考文献标识统一
   //   "Reference\n参考文献（共 1 条）\n展开全部 ▾" → 统一为 References 章节
   result = result.replace(/参考文献[（(]共\s*\d+\s*条[）)]\s*\n?/g, '')
   result = result.replace(/展开全部\s*[▾▼]+\s*\n?/g, '')
-  result = result.replace(/^\s*Reference\s*\n/gim, '## References\n')
+  // v28 step 82: 严格限定 — 只在独立行的 References 标题才转换（避免误伤 front matter 的 "Reference: CEJ 171737"）
+  //   markdown 模式加 ## 前缀（让 parsePaperSections 当 heading 处理），plain text 模式不加
+  if (isMarkdown) {
+    result = result.replace(/^\s*References?\s*$\n?/gim, '## References\n')
+  }
+  // 兜底：剥离 front matter 中的 "Reference: <id>" 元数据（Elsevier 期刊文章 ID）
+  result = result.replace(/^\s*Reference\s*[：:]\s*[A-Z]{2,5}[\s\d]+\s*$/gim, '')
 
   // 6. PDF 页脚
   for (const re of FOOTER_PATTERNS) {
@@ -2993,17 +3107,28 @@ export function normalizePaperData(raw, extra = {}) {
   }
   const inputContent = hasFormatted ? rawFormatted : rawContent
 
+  // v28 step 82: 强力剥离 front matter (Reference / boilerplate / Title / Authors / Affiliations / Abstract)
+  //   真实 PDF 的 [PAGE:1] 之前 / Introduction 之前都是元信息（Elsevier 版权 + 作者 + 单位 + abstract）
+  //   这些应该全部剥除（abstract 单独抽出作为 paper.abstract 字段）
+  //   否则 step 76 的 `Reference` 正则会把元信息里的 "Reference: CEJ 171737" 转成 "## References\n"
+  //   出现在文章开头（用户看到的 "Reference P2 参考文献（共 1 条） 展开全部"）
+  // 策略：仅当 Introduction 之前确实有 front matter 时才剥（避免误删正文短文档）
+  const fmResult = removeFrontMatter(inputContent)
+  let frontMatterAbstract = fmResult.abstract
+  let frontMatterKeywords = fmResult.keywords
+  let useInputContent = fmResult.hasFrontMatter && fmResult.cleaned ? fmResult.cleaned : inputContent
+
   // v28 step 71: QA 库格式检测 + 早返回（不走常规 paper section 解析）
   // 早期 [拓展-XXX] LLM 自动入库的条目都是 `## 问题\n...\n## 回答\n...` 格式
   // 强制构造为 Q&A section，避免被切成 30+ 个碎 paragraph
-  const qa = _tryExtractQA(inputContent)
+  const qa = _tryExtractQA(useInputContent)
   if (qa) {
     const cleanedAnswer = _cleanQAAnswer(qa.answer)
     return _buildQAPaperDetail(raw, qa.question, cleanedAnswer, extra)
   }
 
   // 中间语言判断（用于后续中文污染过滤）
-  const isEnglishPaper = !_isChineseHeavy(inputContent)
+  const isEnglishPaper = !_isChineseHeavy(useInputContent)
 
   // 调试：dump 中间产物到 window
   if (typeof window !== 'undefined') {
@@ -3011,14 +3136,16 @@ export function normalizePaperData(raw, extra = {}) {
       rawContentLen: rawContent.length,
       rawFormattedLen: raw.formatted_content?.length || 0,
       hasFormatted,
-      inputContentLen: inputContent.length,
-      inputSample0: String(inputContent).slice(0, 800),
-      inputSampleMid: String(inputContent).slice(8000, 8800),
+      inputContentLen: useInputContent.length,
+      inputSample0: String(useInputContent).slice(0, 800),
+      inputSampleMid: String(useInputContent).slice(8000, 8800),
+      frontMatterStripped: fmResult.hasFrontMatter,
+      frontMatterLen: fmResult.frontMatter?.length || 0,
     }
   }
 
   // 2. 强力清洗原始内容
-  const cleaned = cleanContent(inputContent, {
+  const cleaned = cleanContent(useInputContent, {
     stripImageUrls: true,
     isMarkdown: hasFormatted,
   })
@@ -3100,6 +3227,14 @@ export function normalizePaperData(raw, extra = {}) {
   // 6. 检测摘要和关键词
   let abstract = raw.summary || null
   let keywords = Array.isArray(raw.tags) ? raw.tags.slice() : []
+
+  // v28 step 82: 优先用 front matter 抽出的 Abstract + Keywords（更准确）
+  if (frontMatterAbstract && (!abstract || abstract.length < frontMatterAbstract.length * 0.5)) {
+    abstract = frontMatterAbstract
+  }
+  if (frontMatterKeywords && frontMatterKeywords.length && !keywords.length) {
+    keywords = frontMatterKeywords
+  }
 
   if (!abstract && content) {
     abstract = _detectAbstractFromContent(content)
