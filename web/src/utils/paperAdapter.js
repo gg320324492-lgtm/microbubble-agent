@@ -232,6 +232,120 @@ function _escapeHtml(s) {
 function _isChineseHeavy(text) {
   if (!text) return false
   const cn = (text.match(/[一-龥]/g) || []).length
+  return cn > 30
+
+
+// ============================================================================
+// v28 step 71: QA 库条目识别 + 内容清理
+// 早期 LLM 自动入库的 [拓展-XXX] 全部是 `## 问题\n...\n## 回答\n...` 格式
+// 这些不该走 markdown 解析（会产生一堆碎 paragraph），而应渲染为 Q&A 卡片
+// ============================================================================
+
+/**
+ * 检测内容是否是 QA 库格式（"## 问题 ... ## 回答 ..."）
+ * 返回 {question, answer} 或 null
+ */
+function _tryExtractQA(content) {
+  if (!content || !content.trim()) return null
+  // 严格匹配开头的 ## 问题 / ## 回答 块
+  const m = content.match(
+    /^##\s*问题\s*\n+([\s\S]+?)\n+##\s*回答\s*\n+([\s\S]+?)(?:\n+---+\n*|\s*)$/
+  )
+  if (!m) return null
+  const question = m[1].trim()
+  const answer = m[2].trim()
+  if (!question || !answer) return null
+  // 必须中文（避免误判英文论文）
+  if (!_isChineseHeavy(content)) return null
+  return { question, answer }
+}
+
+/**
+ * 清理 QA 回答里的常见 LLM 噪声：
+ * - "王老师，您好！" 客套话
+ * - 末尾 "如果...我可以继续为您搜索..." 自生成话
+ * - "## 📋 xxx" emoji 装饰标题（保留但去除装饰）
+ * - 重复的"## 总结"段落（去掉冗余）
+ */
+function _cleanQAAnswer(answer) {
+  if (!answer) return ''
+  let out = answer
+
+  // 1. 去掉开头客套话（"X老师您好"、"您好！"、"您好：" 等）
+  out = out.replace(/^(.{0,8}老师[，,：:]?\s*)?您?[好您好][呀啊]?[！!。,\s]*?(?=根据|基于|关于|微|以下|我|对于)/u, '')
+
+  // 2. 去掉末尾 LLM 自生成话（"如果...我可以..."、"希望对您有帮助"）
+  const cutMarkers = [
+    /如果您想进一步探讨[\s\S]*$/u,
+    /如果您需要[\s\S]*$/u,
+    /希望对您[\s\S]*$/u,
+    /我可以继续[\s\S]*$/u,
+    /如您[\s\S]*?我(?:们)?可以[\s\S]*$/u,
+  ]
+  for (const re of cutMarkers) {
+    out = out.replace(re, '')
+  }
+
+  // 3. 去掉 ## 总结 / ## 结论 / ## 小结 冗余收尾（保留正文，让小标题继续）
+  // 不删除，避免破坏结构
+
+  // 4. 清理 emoji 装饰：## 📋 xxx → ## xxx
+  out = out.replace(/^##\s+([📋📌🔍💡⚙️📊🎯🏷️📝✅🔥⭐])\s*/gm, '## ')
+
+  // 5. 清理 "我为您" / "我帮您" 等 LLM 痕迹开头
+  out = out.replace(/^(我[为帮]您[一-龥]{0,20}[，,\s]*)+/u, '')
+
+  return out.trim()
+}
+
+
+/**
+ * v28 step 71: 为 QA 库条目构造简化的 PaperDetail
+ *
+ * 跳过常规的 paper section 解析，直接返回：
+ * - 1 个 section (type='qa')
+ * - 2 个 block: {type: 'qa_question', content} + {type: 'qa_answer', content}
+ *
+ * PaperBlockRenderer 用专门的 Q&A 卡片样式渲染
+ */
+function _buildQAPaperDetail(raw, question, answer, extra) {
+  // 计算摘要：answer 前 150 字符（去 ## 标题前缀）
+  const summary = (raw.summary || '')
+    || answer.replace(/^#+\s*[^\n]*\n+/gm, '').slice(0, 200).trim()
+
+  return {
+    id: raw.id,
+    title: raw.title,
+    summary,
+    section: 'qa',
+    sections: [
+      {
+        id: 'qa-section',
+        type: 'qa',
+        title: '问答',
+        blocks: [
+          { type: 'qa_question', content: question, page: null },
+          { type: 'qa_answer', content: answer, page: null },
+        ],
+      },
+    ],
+    // QA 库无关键词/实体/引用
+    references: [],
+    keywords: [],
+    keyConcepts: [],
+    relatedTopics: [],
+    entities: [],
+    images: extra.images || [],
+    extractions: extra.extractions || [],
+    inlineFigureAnchors: {},
+    figureRegistry: [],
+    pageMarkers: [],
+    figureMarkers: [],
+    raw,
+    extra,
+    _status: 'success',
+  }
+}
   return cn / Math.max(1, text.length) > 0.2
 }
 
@@ -2787,6 +2901,15 @@ export function normalizePaperData(raw, extra = {}) {
     }
   }
   const inputContent = hasFormatted ? rawFormatted : rawContent
+
+  // v28 step 71: QA 库格式检测 + 早返回（不走常规 paper section 解析）
+  // 早期 [拓展-XXX] LLM 自动入库的条目都是 `## 问题\n...\n## 回答\n...` 格式
+  // 强制构造为 Q&A section，避免被切成 30+ 个碎 paragraph
+  const qa = _tryExtractQA(inputContent)
+  if (qa) {
+    const cleanedAnswer = _cleanQAAnswer(qa.answer)
+    return _buildQAPaperDetail(raw, qa.question, cleanedAnswer, extra)
+  }
 
   // 中间语言判断（用于后续中文污染过滤）
   const isEnglishPaper = !_isChineseHeavy(inputContent)
