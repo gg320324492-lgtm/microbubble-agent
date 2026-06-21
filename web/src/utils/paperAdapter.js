@@ -3243,12 +3243,13 @@ export function normalizePaperData(raw, extra = {}) {
     const sameLength = Math.abs(rawFormatted.length - rawContent.length) <= Math.max(20, rawContent.length * 0.1)
     const hasMdHeading = /(?:^|\n)#{1,4}\s+\S/.test(rawFormatted)
     const hasPageMarker = /\[PAGE:\s*\d+\s*\]/i.test(rawFormatted)
-    if (sameLength && !hasMdHeading) {
-      hasFormatted = false // 后端直接复制 content 到 formatted_content，当作 plain text
-    } else if (hasPageMarker) {
-      // v28 fix: 含 [PAGE:N] 标记的 rawFormatted 是混合格式 (OCR 文本 + 注入 markdown 标题)
-      // plain text parser 不识别 ## 标题, 但 rawContent 才是纯 OCR 文本
-      // → 用 rawContent 走 plain text 路径
+    // v28 step 91: 含 [PAGE:N] 标记说明 formatted_content 是 OCR 文本 + 注入的伪 markdown
+    //   （多模态提取的 "## 多模态提取" 等）→ 不是真正 LLM 排版的章节结构
+    //   这种情况必须走 rawContent 路径，让 cleanContent 完整处理 OCR 残留
+    //   （Journal Pre-proof / P33-39 / 该图由 等）
+    if (hasPageMarker) {
+      hasFormatted = false
+    } else if (sameLength && !hasMdHeading) {
       hasFormatted = false
     }
   }

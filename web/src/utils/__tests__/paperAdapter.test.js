@@ -1524,4 +1524,60 @@ and improving water biosafety. The collapse of MNBs generates microjets with vel
     expect(allText).not.toMatch(/该图由/)
     expect(allText).not.toMatch(/\b15 disinfection/)
   })
+
+  // v28 step 91: paper 17 的 formatted_content 含 [PAGE:N] 标记 + 多模态注入的 ## 标题
+  //   → 必须强制走 rawContent 路径（让 cleanContent 完整处理 OCR 残留：
+  //     Journal Pre-proof / P33-39 / 该图由 / 标题/正文切分）
+  //   之前 hasMdHeading 检测太宽松（"## 多模态提取" 也算 markdown），走了 rawFormatted
+  //   → rawFormatted 没经过完整 cleanContent → references 解析失败
+  it('v28 step 91: formatted_content 含 [PAGE:N] 时强制走 rawContent 路径（references 解析正常）', () => {
+    const rawContent = `4.2 The mechanism of continuous sterilization by UV-enhanced MNB water Our findings reveal that MNBs/UV treatment can effectively inactivate B. cereus.
+
+References
+
+Alapi T, Dombi A. Comparative study[J]. Journal, 2007,188(2-3): 409-418. Yang S, Wang Y. Cereulide[J]. Foods, 2023,12(4): 833.`
+    // 模拟 paper 17：formatted_content 是 OCR 文本 + 多模态注入的 ## 标题 + [PAGE:N] 标记
+    const rawFormatted = `## 多模态提取
+
+### 提取的公式
+
+$$y=2.33x+93.53$$
+
+## Abstract
+
+This paper presents novel micro-nano bubble systems.
+${rawContent.replace('4.2 The mechanism', '## 4.2 The mechanism')}
+
+[PAGE:33]Journal Pre-proof
+Journal Pre-proof
+
+32
+
+`
+
+    const raw = {
+      id: 17,
+      title: 'Test',
+      content: rawContent,
+      formatted_content: rawFormatted,
+      summary: null, tags: null, analysis_status: 'done',
+      created_at: '2026-06-19T10:00:00', updated_at: '2026-06-19T10:00:00',
+    }
+
+    const paper = normalizePaperData(raw)
+
+    // 1. 应走 rawContent 路径 → 含 [PAGE:N] 的 rawFormatted 的 OCR 残留被剥除
+    const allText = paper.sections.flatMap((s) => s.blocks || []).map((b) => b.content || '').join('\n')
+    expect(allText).not.toMatch(/Journal Pre-proof/)
+    expect(allText).not.toMatch(/该图由/)
+
+    // 2. References 章节被识别，references array 含至少 2 条
+    expect(paper.references.length).toBeGreaterThanOrEqual(2)
+    expect(paper.references[0]).toContain('Alapi T')
+    expect(paper.references[1]).toContain('Yang S')
+
+    // 3. References section 标题被识别
+    const refSec = paper.sections.find((s) => s.type === 'references')
+    expect(refSec).toBeTruthy()
+  })
 })
