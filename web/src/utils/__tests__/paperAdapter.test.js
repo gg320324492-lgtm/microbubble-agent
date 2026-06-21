@@ -1580,4 +1580,52 @@ Journal Pre-proof
     const refSec = paper.sections.find((s) => s.type === 'references')
     expect(refSec).toBeTruthy()
   })
+
+  // v28 step 92: SECTION_KEYWORDS results regex 漏匹配 "Results and analysis"
+  //   旧 regex 只识别 "Results and discussion" 或 "结果与讨论"
+  //   但 Elsevier 等期刊常用 "3. Results and analysis" 章节标题
+  //   → 被错认为普通段落，并入上一个 section 的 block
+  it('v28 step 92: "3. Results and analysis" 应被识别为 results section', () => {
+    const content = `2.1 Materials and methods
+All chemicals were of analytical grade.
+
+Statistical analysis
+Each experiment was repeated three times.
+
+3. Results and analysis
+3.1 Disinfection efficiency
+The disinfection efficiency was 97.91% under optimal conditions.`
+
+    const sections = parsePaperSections(content, { isMarkdown: false })
+
+    // 1. 应有 3 个 sections：methods / results / normal
+    const methodsSec = sections.find((s) => s.type === 'methods')
+    const resultsSec = sections.find((s) => s.type === 'results')
+    expect(methodsSec).toBeTruthy()
+    expect(resultsSec).toBeTruthy()
+    expect(resultsSec.title).toMatch(/3\. Results and analysis/)
+
+    // 2. 3.1 Disinfection efficiency 作为 results 子章节（type=normal）
+    const disinSection = sections.find((s) => /^3\.1/.test(s.title || ''))
+    expect(disinSection).toBeTruthy()
+
+    // 3. "Statistical analysis" 段内小标题并入 methods section block
+    const methodsBlockText = methodsSec.blocks.map((b) => b.content || '').join('\n')
+    expect(methodsBlockText).toContain('Statistical analysis')
+    expect(methodsBlockText).toContain('Each experiment was repeated')
+  })
+
+  // v28 step 92: "3. Results and discussion" 也应识别（之前已支持 + 验证不破坏）
+  it('v28 step 92: "3. Results and discussion" 仍正确识别为 results', () => {
+    const content = `2 Methods
+All experiments were conducted at 25°C.
+3. Results and discussion
+3.1 Effect of pH
+The pH effect was significant.`
+
+    const sections = parsePaperSections(content, { isMarkdown: false })
+    const resultsSec = sections.find((s) => s.type === 'results')
+    expect(resultsSec).toBeTruthy()
+    expect(resultsSec.title).toMatch(/3\. Results and discussion/)
+  })
 })
