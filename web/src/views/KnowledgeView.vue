@@ -1,7 +1,7 @@
 <template>
   <div class="knowledge-view">
     <el-tabs v-model="activeTab" type="border-card" class="knowledge-tabs">
-      <el-tab-pane :label="`知识库 (${total})`" name="knowledge" lazy>
+      <el-tab-pane label="知识库" name="knowledge" lazy>
         <!-- 工具栏 -->
         <KnowledgeToolbar
           :categories="categories"
@@ -53,7 +53,7 @@
       </el-tab-pane>
 
       <!-- ===== 实体图谱 Tab ===== -->
-      <el-tab-pane :label="`实体图谱 (${entityTotal})`" name="entities" lazy>
+      <el-tab-pane label="实体图谱" name="entities" lazy>
         <!-- 搜索栏 -->
         <el-card class="filter-card">
           <el-row :gutter="12">
@@ -135,7 +135,7 @@
       </el-tab-pane>
 
       <!-- ===== 假设 Tab ===== -->
-      <el-tab-pane :label="`科研假设 (${hypothesisTotal})`" name="hypotheses" lazy>
+      <el-tab-pane label="科研假设" name="hypotheses" lazy>
         <el-card class="filter-card">
           <el-row :gutter="12" align="middle">
             <el-col :span="4">
@@ -188,7 +188,7 @@
       </el-tab-pane>
 
       <!-- ===== 公式计算 Tab ===== -->
-      <el-tab-pane :label="`公式计算 (${formulaTotal})`" name="formulas" lazy>
+      <el-tab-pane label="公式计算" name="formulas" lazy>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-card class="formula-list-card">
@@ -270,7 +270,7 @@
       </el-tab-pane>
 
       <!-- ===== 我的长期记忆 Tab (v28 step 68) ===== -->
-      <el-tab-pane :label="`我的长期记忆 (${memoryTotal})`" name="memory" lazy>
+      <el-tab-pane label="我的长期记忆" name="memory" lazy>
         <div class="memory-toolbar">
           <el-input
             v-model="memorySearch.keyword"
