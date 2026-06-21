@@ -117,13 +117,20 @@ const sectionLabel = (anchor) => {
   // 提取去掉编号后的标题
   const titleNoNum = numMatch ? title.slice(numMatch[0].length).trim() : title
 
-  if (anchor.type && typeLabelMap[anchor.type]) {
-    // 中文 type + 编号 + 标题 (例: "结果与讨论 · 3. · Bubble behaviors")
+  // v28 step 97: 只 level=1 显示中文 type prefix
+  //   level>=2 子章节只显示 "2.3. Experimental"，不重复显示 "材料与方法 · "
+  //   （父章节 2. Materials and methods 已经显示了 "材料与方法 · 2. Materials and methods"）
+  const isTopLevel = (anchor.level || 1) === 1
+
+  if (isTopLevel && anchor.type && typeLabelMap[anchor.type]) {
+    // 顶层章节：中文 type + 编号 + 标题
+    // 例: "材料与方法 · 2. Materials and methods"
     return num
       ? `${typeLabelMap[anchor.type]} · ${num}. ${titleNoNum}`
       : `${typeLabelMap[anchor.type]} · ${titleNoNum}`
   }
-  // 纯标题 + 编号
+  // 子章节或无 type 的顶层：只显示编号 + 标题
+  // 例: "2.3. Experimental" 或 "Discussion"
   return num ? `${num}. ${titleNoNum}` : titleNoNum
 }
 
