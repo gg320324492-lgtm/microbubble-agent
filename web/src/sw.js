@@ -34,7 +34,7 @@
 // v28 step 101 第二次 BUMP v38 → v39：去掉整篇中文守卫 if (!/[一-龥]/.test(result))。
 //   原守卫会让中英混排 PDF（含中文 Abstract + 英文 Methods）整篇 result 命中中文
 //   → 守卫 false → 英文段落 phantom 不合并 → 用户看不到效果
-const SW_VERSION = 'v42-phantom-page-space-2026-06-22'
+const SW_VERSION = 'v45-phantom-after-watermark-2026-06-22'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

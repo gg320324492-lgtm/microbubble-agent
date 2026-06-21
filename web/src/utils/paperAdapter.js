@@ -677,28 +677,24 @@ export function cleanContent(text, options = {}) {
   //   根因：v28 系列 PDF 都是中英混排（含中文 Abstract + 英文 Methods），整篇 result
   //   命中中文 → 守卫 false → 整篇英文段落 phantom 也不合并 → 用户看不到效果
   //   正确守卫应该在 lookbehind/lookahead（已限定英文），不再需要整篇判断
-  // 模式 A: phantom 数字 + 左括号（reference 引用 inline）
+  // 模式 A1: phantom 数字 + 左括号（reference 引用 inline, v40 原始严格双空行）
   //   "cereus\n\n3\n\n(Grutsch" → "cereus 3 (Grutsch"
-  //   "cereus\n[PAGE:4] 3 (Grutsch" → "cereus 3 (Grutsch"（容忍中间 [PAGE:N] 标记 + 单空格）
-  //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除（"during\n\n15 disinfection"）
-  // v28 step 101 第三次修复：v41 只匹配 `[PAGE:N]\n3`（换行隔开），
-  //   但实际生产 input 是 `[PAGE:N] 3`（单空格隔开），v41 模式不匹配
-  //   修复：[ \t\n]* 容忍 [PAGE:N] 后任意水平空白或换行
-  const beforeA = result
+  //   数字后必须紧跟 '(' 才合并，避免误伤 step 90 orphan 数字删除
+  // v28 step 101 第五次修复（v45）：A1 + A2 之前都跑在 step 99 OCR watermark 合并之前
+  //   但生产 input 'B. cereus\n[PAGE:4]Journal Pre-proof\nJournal Pre-proof\n \n3\n\n(Grutsch'
+  //   中 'Journal Pre-proof' 隔开 cereus 和 3，A2 不匹配
+  //   解决：把 A1 + A2 移到 step 99 之后，确保 input 已经合并 watermark
   result = result.replace(
-    /([a-z)\]])\s*\n(?:\s*\[PAGE:\s*\d+\s*\][ \t\n]*)?\s*(\d{1,3})\s+(?=\()/g,
+    /([a-z)\]])\s*\n\s*\n\s*(\d{1,3})\s*(?:\n\s*\n|\s)(?=\()/g,
     '$1 $2 '
   )
   // 模式 B: phantom 单词（OCR 段首小写）
   //   "MNBs\n\ncapable of" → "MNBs capable of"
   //   "both\n\nmechanistic complementarity" → "both mechanistic complementarity"
   //   上限 20 字符：OCR 段首单词一般是常见词（capable=7, mechanistic=11），20 留余量
-  // v28 step 101 第三次修复：模式 B 加回双空行要求（v42 错误地移除了，导致破坏
-  //   step 5.1a 单词逐行合并"Please\nalso\nnote → Please also note"）
-  //   但保留 [PAGE:N] 容忍
   const beforeB = result
   result = result.replace(
-    /([a-z)\]])\s*\n(?:\s*\[PAGE:\s*\d+\s*\][ \t\n]*\s*\n)?\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
+    /([a-z)\]])\s*\n\s*\n\s*([a-z]{1,20})\s+(?=[a-z(])/g,
     '$1 $2 '
   )
 
@@ -890,6 +886,17 @@ export function cleanContent(text, options = {}) {
   //   触发条件: 后面是数字（页码）/ 小写字母 / 大写字母开头（章节标题/正文）
   //   替换为空格，让前后内容正确合并
   result = result.replace(/(\S)\s*\n?\s*Journal Pre-proof\s*\n?\s*(\S)/g, '$1 $2')
+
+  // 模式 A2: cereus 后接 [PAGE:N] page marker 再接 phantom 数字（v45 移到 step 99 之后）
+  //   "cereus\n[PAGE:4] 3 (Grutsch" → "cereus 3 (Grutsch"
+  //   "cereus\n[PAGE:4]\n 3 (Grutsch" → "cereus 3 (Grutsch"
+  //   必须跑在 step 99 OCR watermark 合并之后（否则 Journal Pre-proof 隔开 cereus 和 3）
+  //   必须含 [PAGE:N] 标记（不像 v42 用 [ \t\n]* 容忍任何空白）
+  //   避免 'Pre-proof' 后 \n\n3 误匹配（v43 A1 双空行要求已排除）
+  result = result.replace(
+    /([a-z)\]])\s*\n\s*\[PAGE:\s*\d+\s*\][ \t\n]*\s*(\d{1,3})\s+(?=\()/g,
+    '$1 $2 '
+  )
 
   // 5.7 v28 step 76 + step 82: 参考文献标识统一
   //   "Reference\n参考文献（共 1 条）\n展开全部 ▾" → 统一为 References 章节
