@@ -4120,9 +4120,23 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   const sectionIdCounter = { s: 0 }
   const genId = () => `s_${++sectionIdCounter.s}`
 
-  const startSection = (type, title, level) => {
+  const startSection = (type, title, level, pageNum) => {
+    // v28 step 109.30: 修正 vision OCR 输出顺序 bug
+    //   vision 经常把 section heading 的内容（paragraph）输出在 heading 之前
+    //   例：[68] 3.5 内容（molecular model）[69] 3.5 heading
+    //   → heading X.Y 出现时，把上一个 section 中"同一 page 且紧邻 heading"的
+    //     最后 1 个 paragraph 块移到当前 section
+    //   保守策略：只移 1 个 block，避免误移属于前一段的内容
+    let carriedBlocks = []
     if (currentSection) {
-      // flush 当前 section
+      if (currentBlocks.length > 0) {
+        const last = currentBlocks[currentBlocks.length - 1]
+        // 只移最后 1 个 paragraph（同 page）
+        if (last.type === 'paragraph' && last.page === pageNum) {
+          carriedBlocks = currentBlocks.splice(-1, 1)
+        }
+      }
+      // flush 当前 section（剩余 blocks）
       sections.push({
         id: currentSection.id,
         title: currentSection.title,
@@ -4137,7 +4151,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       level: level || 1,
       type: type || 'normal',
     }
-    currentBlocks = []
+    // 把要移动的 block 加到新 section 的 currentBlocks 开头
+    currentBlocks = carriedBlocks
   }
 
   const flushCurrent = () => {
@@ -4164,10 +4179,10 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       }
       // v28 step 106: reference_list 块独立处理（标记为 references section 末尾）
       if (b.type === 'reference_list') {
-        if (!currentSection) startSection('references', 'References', 1)
+        if (!currentSection) startSection('references', 'References', 1, pageNum)
         else if (currentSection.type !== 'references') {
           // 开新 References section
-          startSection('references', 'References', 1)
+          startSection('references', 'References', 1, pageNum)
         }
         currentBlocks.push({
           type: 'reference_list',
@@ -4203,7 +4218,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           secType = 'normal'
           secLevel = level
         }
-        startSection(secType, title, secLevel)
+        startSection(secType, title, secLevel, pageNum)
       } else if (b.type === 'paragraph') {
         const text = _mergeOCRSoftLineBreaks((b.text || '').trim())
         if (!text) continue
@@ -4212,7 +4227,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // v28 step 109.7: 过滤 OCR 误识的图说明（"该图为..." / "This figure shows..."）
         if (isOcrFigureCaption(text)) continue
         // 没开 section 就先开一个 preamble
-        if (!currentSection) startSection('preamble', '前言', 1)
+        if (!currentSection) startSection('preamble', '前言', 1, pageNum)
         // v28 step 109.25: vision OCR 经常把 "the" + 换行 + "conversion" 拆成两段
         //   合并条件：上一段末尾无句末符号 + 本段开头小写字母 → 拼接到上一段
         const lastBlock = currentBlocks[currentBlocks.length - 1]
@@ -4287,7 +4302,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         if (img && img.isPublisherImage === true) {
           img = null
         }
-        if (!currentSection) startSection('normal', '未命名', 2)
+        if (!currentSection) startSection('normal', '未命名', 2, pageNum)
         // 把 image 关联到当前 section 最后一个 paragraph
         const pidKey = `${currentSection.id}__p${currentBlocks.length - 1}`
         if (!inlineFigureAnchors[pidKey]) inlineFigureAnchors[pidKey] = []
@@ -4344,7 +4359,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           '| ' + headers.map(() => '---').join(' | ') + ' |',
           ...rows.map(r => '| ' + r.join(' | ') + ' |'),
         ].join('\n')
-        if (!currentSection) startSection('normal', '未命名', 2)
+        if (!currentSection) startSection('normal', '未命名', 2, pageNum)
         currentBlocks.push({
           type: 'table',
           content: tableMd,
@@ -4352,7 +4367,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           caption,
         })
       } else if (b.type === 'formula') {
-        if (!currentSection) startSection('normal', '未命名', 2)
+        if (!currentSection) startSection('normal', '未命名', 2, pageNum)
         currentBlocks.push({
           type: 'formula',
           content: b.latex || '',
