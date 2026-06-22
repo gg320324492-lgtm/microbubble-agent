@@ -234,6 +234,19 @@ describe('formatRadicals - 自由基识别', () => {
     expect(formatRadicals('OH.-')).toBe('OH·-')
   })
 
+  // v28 step 109.27: OCR 把 ·OH 误识成 -OH（连字符）+ 小写词开头
+  it('-OH + 小写词开头 → ·OH（OCR radical 错误修正）', () => {
+    expect(formatRadicals('-OH generation was determined')).toBe('·OH generation was determined')
+    expect(formatRadicals('-OH produced in water')).toBe('·OH produced in water')
+    expect(formatRadicals('and -OH attack')).toBe('and ·OH attack')
+  })
+
+  it('化学键 -OH 不转换（5-OH / C-OH）', () => {
+    expect(formatRadicals('5-OH')).toBe('5-OH')
+    expect(formatRadicals('C-OH')).toBe('C-OH')
+    expect(formatRadicals('R-OH')).toBe('R-OH')
+  })
+
   it('空字符串和 null', () => {
     expect(formatRadicals('')).toBe('')
     expect(formatRadicals(null)).toBe('')

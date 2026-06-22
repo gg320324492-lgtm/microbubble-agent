@@ -286,6 +286,13 @@ const RADICAL_NORMALIZE_RE = /([A-Z][a-z]?\d*)\.([+−−-])/g
 // 自由基 ·OH / •OH 保留
 const RADICAL_PRESERVE_RE = /([·•])([A-Z][a-z]?\d*)/g
 
+// v28 step 109.27: OCR 经常把 ·OH 误识成 -OH（连字符）+ 后续小写词
+//   模式：'-OH' + 空格 + 小写字母开头（radical 描述常见开头）
+//   例：'-OH generation was determined' → '·OH generation was determined'
+//   例：'-OH produced in water' → '·OH produced in water'
+//   反例：'5-OH' / 'C-OH'（化学键前缀）不转换
+const RADICAL_HYPHEN_RE = /(^|[\s,;:(\[])(\-)OH(\s+)([a-z][a-z]*(?:\s|$))/g
+
 function formatRadicals(text) {
   if (!text) return ''
   let result = String(text)
@@ -293,6 +300,11 @@ function formatRadicals(text) {
   // 1. 规范化 OCR 脏数据: O2.- → O2·- (dot before charge → middle dot)
   result = result.replace(RADICAL_NORMALIZE_RE, (_m, base, charge) => {
     return base + '·' + charge
+  })
+
+  // 1.5 v28 step 109.27: -OH → ·OH（radical OCR 错误修正）
+  result = result.replace(RADICAL_HYPHEN_RE, (_m, pre, _hyphen, space, next) => {
+    return pre + '·OH' + space + next
   })
 
   // 2. ·OH / •OH 保持（不做转换）
