@@ -71,9 +71,10 @@ const swPath = path.join(distDir, 'sw.js')
 if (fs.existsSync(swPath)) {
   let sw = fs.readFileSync(swPath, 'utf-8')
   let changed = false
-  // catch-all 正则：替换所有 manifest.webmanifest / manifest.{任意hash}.webmanifest
-  sw = sw.replace(/\bmanifest\.[a-zA-Z0-9]*\.webmanifest\b/g, (match) => {
-    if (match === hashedName) return match  // 已是正确名字
+  //   v28 step 109.19: 修 regex — 旧版 [a-zA-Z0-9]*\.webmanifest 要求 hash 必有内容，
+  //   匹配不了 manifest.webmanifest（没 hash）。改用 /manifest(?:\.[a-zA-Z0-9]+)?\.webmanifest/
+  sw = sw.replace(/manifest(?:\.[a-zA-Z0-9]+)?\.webmanifest/g, (match) => {
+    if (match === hashedName) return match
     changed = true
     return hashedName
   })
@@ -90,7 +91,7 @@ const swJsPath = path.join(distDir, 'service-worker.js')
 if (fs.existsSync(swJsPath)) {
   let sw = fs.readFileSync(swJsPath, 'utf-8')
   let changed = false
-  sw = sw.replace(/\bmanifest\.[a-zA-Z0-9]*\.webmanifest\b/g, (match) => {
+  sw = sw.replace(/manifest(?:\.[a-zA-Z0-9]+)?\.webmanifest/g, (match) => {
     if (match === hashedName) return match
     changed = true
     return hashedName
