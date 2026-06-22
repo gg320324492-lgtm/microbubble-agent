@@ -474,6 +474,11 @@ onMounted(() => {
   //   注意：MathJax v3 startup.typeset=true 已经处理首屏，
   //   但 SPA 路由切换到不同论文时需要重新 typeset
   nextTick(() => typesetMath())
+  // v28 step 109.23: watch graphData 变化时重新渲染图谱
+  //   修复 graphRef null 时机问题 + 数据后续更新也能触发
+  watch(graphData, () => {
+    requestAnimationFrame(() => renderGraph())
+  })
 })
 
 // v28 step 37: typesetMath helper（懒加载 MathJax + typeset 整个 article）
@@ -672,8 +677,10 @@ const fetchDetail = async (retryCount = 0) => {
     // window.__PAPER_DEBUG__ = { ... }
     // console.log('[PaperDetail DEBUG]', window.__PAPER_DEBUG__)
 
-    await nextTick()
-    renderGraph()
+    // v28 step 109.23: 用 watch(graphData) + requestAnimationFrame 替代 nextTick
+    //   nextTick 不够稳：graphData 赋值后 v-if 切到 graphRef div 但 ref 未绑定
+    //   requestAnimationFrame 等下一帧 DOM 必定完成 → ref 拿到值
+    requestAnimationFrame(() => renderGraph())
     // v28 step 5: sections 渲染完成后接入 IO（监听滚动到哪个 section）
     setupSectionObserver()
   } catch (e) {
