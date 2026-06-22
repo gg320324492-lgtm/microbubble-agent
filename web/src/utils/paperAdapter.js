@@ -3916,6 +3916,20 @@ function _isReferenceParagraph(text) {
  *   也不能误杀：正常段落里的省略号"..."（如"中文摘要内容..."）
  */
 /**
+ * v28 step 109.12: 从 caption 文本提取 figureNo
+ *   vision 经常输出 "Fig. 3. Effects of complex..." 配 figure_no="Fig. 1"（错位）
+ *   caption 文本里的 figureNo 更可靠（这是 vision OCR 真实看到的标题）
+ *   返回 "Fig. N" / "Scheme N" / "Fig. S3" 等格式
+ */
+function _extractFigureNoFromCaption(caption) {
+  if (!caption) return null
+  // 匹配 "Fig. 3" / "Figure 3" / "Scheme 1" / "Fig. S3" 等
+  const m = caption.match(/^\s*((?:Fig\.?|Figure|Scheme|Table)\s*[S]?\d+[a-z]?)/i)
+  if (m) return m[1].trim().replace(/\s+/g, ' ')
+  return null
+}
+
+/**
  * v28 step 109.7: 检测 vision OCR 把图说明误当 paragraph 的情况
  *   vision 把图旁边 OCR 出的中文/英文图说明当独立段落输出
  *   特征：以"该图为/此图为/图 X" / "This figure shows" / "Fig. N is a" 等开头
@@ -4181,24 +4195,34 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         const usedImageIds = _usedImageIds
         if (!img || img.isPublisherImage === true) {
           const bFigureNo = b.figure_no || ''
-          const samePageImgs = sortedImages.filter(i =>
-            i.page === pageNum && !i.isPublisherImage && !usedImageIds.has(i.id)
-          )
+          // v28 step 109.10: page 类型归一化（vision 可能是字符串 '8' / '8.2'，DB 是数字）
+          const normalizedPageNum = String(pageNum).split('.')[0]
+          const samePageImgs = sortedImages.filter(i => {
+            const imgPage = String(i.page || i.pageNumber || '').split('.')[0]
+            return imgPage === normalizedPageNum && !i.isPublisherImage && !usedImageIds.has(i.id)
+          })
           // Level 1: 同 page + 同 figureNo
           if (bFigureNo) {
             img = samePageImgs.find(i => i.figureNo === bFigureNo || i.figure_no === bFigureNo) || null
           }
-          // Level 2: 同 page + 同 type
+          // Level 2: 同 page + 同 type（caption 含 type 名）
           if (!img && b.type === 'image') {
-            img = samePageImgs.find(i => i.figureType && b.caption?.includes(i.figureType)) || null
+            img = samePageImgs.find(i => i.figureType && b.caption?.toLowerCase().includes(i.figureType.toLowerCase())) || null
           }
           // Level 3: 同 page 的任意非 publisher 图
           if (!img) {
             img = samePageImgs[0] || null
           }
-          // Level 4: 全局未使用的非 publisher 图
+          // Level 4: 跨 page 找最近的未使用的非 publisher 图（按 page 距离排序）
           if (!img) {
-            img = sortedImages.find(i => !i.isPublisherImage && !usedImageIds.has(i.id)) || null
+            const candidates = sortedImages.filter(i =>
+              !i.isPublisherImage && !usedImageIds.has(i.id)
+            ).sort((a, b) => {
+              const distA = Math.abs(Number(String(a.page || 0).split('.')[0]) - Number(normalizedPageNum))
+              const distB = Math.abs(Number(String(b.page || 0).split('.')[0]) - Number(normalizedPageNum))
+              return distA - distB
+            })
+            img = candidates[0] || null
           }
         }
         if (img) _usedImageIds.add(img.id)
@@ -4212,10 +4236,12 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         if (!inlineFigureAnchors[pidKey]) inlineFigureAnchors[pidKey] = []
         if (img) {
           inlineFigureAnchors[pidKey].push(img)
+          // v28 step 109.12: figureNo 优先从 caption 提取（vision 经常 figure_no 与 caption 不对应）
+          const captionFigureNo = _extractFigureNoFromCaption(b.caption)
           figureRegistry.push({
             id: img.id,
             page: pageNum,
-            figureNo: img.figureNo || b.figure_no || null,
+            figureNo: captionFigureNo || img.figureNo || b.figure_no || null,
             figureType: img.figureType || null,
             caption: b.caption || null,
             isCoreFigure: img.isCoreFigure !== false,
@@ -4226,10 +4252,11 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           })
         } else {
           // 没关联到图，登记一个空 fig（保留 caption 用于显示）
+          const captionFigureNo = _extractFigureNoFromCaption(b.caption)
           figureRegistry.push({
             id: `vision-page${pageNum}-img${imgIndex}`,
             page: pageNum,
-            figureNo: b.figure_no || null,
+            figureNo: captionFigureNo || b.figure_no || null,
             figureType: null,
             caption: b.caption || null,
             isCoreFigure: true,
@@ -4371,6 +4398,18 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     figureMarkers,
     inlineFigureAnchors,
     inlineFigureMap: {},
+    // v28 step 109.13: vision 路径补 filePath/fileName/fileType，让 ExtractionPanel 显示
+    filePath: raw.file_path || null,
+    fileName: raw.file_name || null,
+    fileType: raw.file_type || null,
+    // v28 step 109.13: 补 formulas/tables/charts/extractions 兼容字段
+    formulas: extractions.filter(e => e.kind === 'formula' || e.type === 'formula'),
+    tables: extractions.filter(e => e.kind === 'table' || e.type === 'table'),
+    charts: extractions.filter(e => {
+      const k = e.kind || e.type
+      return k === 'chart' || k === 'image_block' || k === 'figure'
+    }),
+    extractions,
     raw,
     extra: { images, extractions, related, visionLayout: true },
     _status: 'success',

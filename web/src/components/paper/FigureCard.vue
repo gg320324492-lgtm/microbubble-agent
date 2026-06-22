@@ -89,9 +89,29 @@ const previewVisible = ref(false)
  * v28 step 19: 原文 caption（来自 extractions.data.caption 或 figure.caption）
  * 优先 props.caption（PaperSectionRenderer 传 _captionText）
  * 否则 figure.caption
+ *
+ * v28 step 109.11: 去掉 caption 开头的 figure no 前缀
+ *   vision OCR 经常输出 "Fig. 4. Fig. 4. Effects..." 这种重复
+ *   既然 badge 已经显示 figureNo，caption 文本就不该再带前缀
  */
 const captionText = computed(() => {
-  return props.caption || props.figure.caption || ''
+  const raw = props.caption || props.figure.caption || ''
+  if (!raw) return ''
+  const no = (props.figureNo || '').trim()
+  if (!no) return raw
+  // 匹配 "Fig. 4." / "Fig. 4 " / "Fig 4." / "Fig 4 " / "Fig.4." 等前缀
+  // 也处理 vision OCR 重复: "Fig. 4.Fig. 4. Effects..." → "Effects..."
+  const escNo = no.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // 模式：前缀 + 可选第二个重复 + 实际标题
+  const stripPatterns = [
+    new RegExp(`^${escNo}\\.?\\s*`, 'i'),                    // "Fig. 4. Effects..." → "Effects..."
+    new RegExp(`^${escNo}\\.?\\s*${escNo}\\.?\\s*`, 'i'),  // "Fig. 4.Fig. 4. Effects..." → "Effects..."
+  ]
+  let result = raw
+  for (const pat of stripPatterns) {
+    result = result.replace(pat, '')
+  }
+  return result
 })
 
 /**
