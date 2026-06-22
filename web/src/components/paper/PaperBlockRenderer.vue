@@ -20,19 +20,24 @@
       <span v-if="block.page" class="figure-page">P{{ block.page }}</span>
     </div>
 
-    <!-- v28 step 107: image_anchor 块（vision layout 输出的 inline 图片锚点） -->
+    <!-- v28 step 109: image_anchor 块（vision layout 输出的 inline 图片锚点）→ 用 FigureCard 直接显示图 -->
     <div
       v-else-if="block.type === 'image_anchor'"
       class="block-image-anchor"
       :data-page="block.page"
       :data-figure-no="block.figure_no || ''"
     >
-      <div class="image-anchor-placeholder">
+      <FigureCard
+        v-if="resolvedFigure"
+        :figure="resolvedFigure"
+        :figure-no="resolvedFigure._displayNo || block.figure_no || ''"
+        :caption="resolvedFigure._captionText || block.caption || ''"
+      />
+      <div v-else class="image-anchor-fallback">
         <el-icon><Picture /></el-icon>
         <span>图 {{ block.figure_no || '?' }}（P{{ block.page || '?' }}）</span>
-        <small class="image-anchor-hint">图片在底部图库</small>
+        <small class="image-anchor-hint">图片元数据缺失，仅显示占位</small>
       </div>
-      <div v-if="block.caption" class="image-anchor-caption">{{ block.caption }}</div>
     </div>
 
     <!-- 段落（含 auto-link） -->
@@ -78,6 +83,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
+import FigureCard from './FigureCard.vue'
 import { autoLinkContent } from '@/utils/paperAdapter'
 import { formatChemicalText } from '@/utils/chemFormat'
 import { renderMarkdown } from '@/utils/markdown'
@@ -85,6 +91,58 @@ import { renderMarkdown } from '@/utils/markdown'
 const props = defineProps({
   block: { type: Object, required: true },
   isChinese: { type: Boolean, default: false },
+  // v28 step 109: figureRegistry 传给 PaperBlockRenderer 查找 image_anchor 对应的图
+  figureRegistry: { type: Array, default: () => [] },
+})
+
+// v28 step 109: 根据 block.figure_no + block.page 在 figureRegistry 里找对应图
+//   block 是 vision 输出的 image_anchor（page, figure_no, caption）
+//   figureRegistry 里的 fig 用 figureNo / pageNumber / imageId 匹配
+const resolvedFigure = computed(() => {
+  if (props.block.type !== 'image_anchor') return null
+  const targetPage = props.block.page
+  const targetFigNo = props.block.figure_no
+  const targetCaption = props.block.caption
+
+  // 优先按 figureNo + page 匹配
+  for (const fig of props.figureRegistry) {
+    if (targetFigNo && fig.figureNo === targetFigNo) {
+      if (!targetPage || fig.page === targetPage || fig.pageNumber === targetPage) {
+        return {
+          ...fig,
+          _displayNo: fig.figureNo,
+          _captionText: targetCaption || fig.caption || '',
+        }
+      }
+    }
+  }
+  // 退化：按 page + caption 匹配
+  if (targetCaption) {
+    for (const fig of props.figureRegistry) {
+      const figCaption = fig.caption || ''
+      if ((fig.page === targetPage || fig.pageNumber === targetPage) &&
+          figCaption && figCaption.slice(0, 30) === targetCaption.slice(0, 30)) {
+        return {
+          ...fig,
+          _displayNo: fig.figureNo || targetFigNo,
+          _captionText: targetCaption,
+        }
+      }
+    }
+  }
+  // 最终退化：按 page 匹配第一张图
+  if (targetPage) {
+    for (const fig of props.figureRegistry) {
+      if (fig.page === targetPage || fig.pageNumber === targetPage) {
+        return {
+          ...fig,
+          _displayNo: fig.figureNo || targetFigNo,
+          _captionText: targetCaption || fig.caption || '',
+        }
+      }
+    }
+  }
+  return null
 })
 
 const blockClasses = computed(() => ({
@@ -302,18 +360,18 @@ function renderMarkdownTable(text) {
   visibility: hidden;
 }
 
-/* v28 step 107: image_anchor 块样式（vision layout inline 图片占位） */
+/* v28 step 109: image_anchor 块样式（vision layout inline 图片占位） */
 .block-image-anchor {
   margin: 18px 0 14px;
+}
+.image-anchor-fallback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 14px 16px;
   background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
   border-left: 4px solid #0EA5E9;
   border-radius: 8px;
-}
-.image-anchor-placeholder {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   font-size: 14px;
   font-weight: 600;
   color: #0369A1;
@@ -323,13 +381,6 @@ function renderMarkdownTable(text) {
   color: #6B7280;
   font-weight: 400;
   margin-left: auto;
-}
-.image-anchor-caption {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #374151;
-  line-height: 1.6;
-  font-style: italic;
 }
 
 .block-page-marker {
