@@ -833,6 +833,51 @@ async def reformat_knowledge(
     return knowledge
 
 
+# v28 step 105: vision 看整篇论文输出 page layout
+@router.post("/knowledge/{knowledge_id}/scan-layout")
+async def scan_paper_layout(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+):
+    """触发 vision model 扫描整篇论文，输出 page_layout（异步 Celery）"""
+    from app.services.paper_layout_service import scan_paper_layout_task
+    task = scan_paper_layout_task.delay(knowledge_id)
+    return {
+        "status": "queued",
+        "task_id": task.id,
+        "knowledge_id": knowledge_id,
+        "message": "vision model 正在扫描整篇论文，扫描完成后会写入 knowledge_layouts 表",
+    }
+
+
+@router.get("/knowledge/{knowledge_id}/layout")
+async def get_paper_layout(
+    knowledge_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取 vision 扫描的论文 layout（如有）"""
+    from app.models import KnowledgeLayout
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(KnowledgeLayout).where(KnowledgeLayout.knowledge_id == knowledge_id)
+    )
+    layout_row = result.scalar_one_or_none()
+    if not layout_row:
+        return {"knowledge_id": knowledge_id, "has_layout": False, "page_layout": None}
+
+    return {
+        "knowledge_id": knowledge_id,
+        "has_layout": True,
+        "total_pages": layout_row.total_pages,
+        "total_blocks": layout_row.total_blocks,
+        "vision_model_used": layout_row.vision_model_used,
+        "vision_analyzed_at": str(layout_row.vision_analyzed_at) if layout_row.vision_analyzed_at else None,
+        "page_layout": layout_row.page_layout,
+    }
+
+
 @router.post("/knowledge/reason", response_model=ReasonResponse)
 async def reason_knowledge(
     body: ReasonRequest,

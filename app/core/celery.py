@@ -75,6 +75,7 @@ celery_app.conf.imports = [
     "app.services.orphan_meeting_cleanup",
     "app.services.agent_trace_tasks",  # 2026-06-12 可观测性
     "app.services.content_formatter_service",  # 2026-06-20 v28 step 18 异步重排
+    "app.services.paper_layout_service",  # v28 step 105 vision 看整篇论文
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -88,6 +89,7 @@ celery_app.autodiscover_tasks(
         "app.services.orphan_meeting_cleanup",
         "app.services.agent_trace_tasks",  # 2026-06-12
         "app.services.content_formatter_service",  # 2026-06-20 v28 step 18
+        "app.services.paper_layout_service",  # v28 step 105
         "app.wechat.scheduler",
     ],
     related_name=None,

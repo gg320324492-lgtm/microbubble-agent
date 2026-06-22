@@ -1933,4 +1933,80 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     // 输入有 \n\n，输出长度应 >= 输入长度（不能合并丢空行）
     expect(cleaned.content.length).toBeGreaterThanOrEqual(content.length)
   })
+
+  // v28 step 105: vision model 扫描整篇论文输出的 page_layout → 重建 PaperDetail
+  //   vision 真正"看"了 PDF 每页（不只是单图），输出每页的 blocks 数组（按视觉顺序）
+  //   paperAdapter 优先消费 vision layout，不再依赖 regex 推断
+  it('v28 step 105: vision layout 重建 paper detail（按视觉顺序，图片精确位置）', () => {
+    const visionLayout = {
+      has_layout: true,
+      total_pages: 2,
+      total_blocks: 8,
+      vision_model_used: 'mimo-v2.5',
+      page_layout: [
+        {
+          page_number: 1,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: 'Test Paper Title' },
+            { type: 'paragraph', order: 2, text: 'Authors: John Doe, Jane Smith' },
+            { type: 'paragraph', order: 3, text: 'Abstract: This paper studies something.' },
+          ],
+        },
+        {
+          page_number: 2,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '1. Introduction' },
+            { type: 'paragraph', order: 2, text: 'This is the introduction paragraph.' },
+            { type: 'image', order: 3, image_index: 0, caption: 'Fig. 1. The system setup.', figure_no: 'Fig. 1', position: 'below_paragraph' },
+            { type: 'paragraph', order: 4, text: 'This paragraph references the figure above.' },
+            { type: 'heading', level: 1, order: 5, text: '2. Methods' },
+            { type: 'paragraph', order: 6, text: 'Methods paragraph here.' },
+            { type: 'image', order: 7, image_index: 1, caption: 'Fig. 2. The results chart.', figure_no: 'Fig. 2', position: 'below_paragraph' },
+            { type: 'table', order: 8, caption: 'Table 1. Conditions.', headers: ['A', 'B'], rows: [['1', '2']] },
+          ],
+        },
+      ],
+    }
+    const kb = {
+      id: 99,
+      title: 'Test Paper Title',
+      content: 'placeholder',
+      summary: null,
+      tags: [],
+    }
+    const images = [
+      { id: 901, page_number: 2, pageNumber: 2, image_url: '/img/1.png', figure_no: 'Fig. 1', figure_type: 'chart', is_core_figure: true, is_publisher_image: false, visual_summary: 'chart 1', section_hint: 'methods', anchor_text: null },
+      { id: 902, page_number: 2, pageNumber: 2, image_url: '/img/2.png', figure_no: 'Fig. 2', figure_type: 'chart', is_core_figure: true, is_publisher_image: false, visual_summary: 'chart 2', section_hint: 'results', anchor_text: null },
+    ]
+    const r = normalizePaperData(kb, {
+      images,
+      extractions: [],
+      related: [],
+      visionLayout,
+    })
+    // 1. 应该用 vision layout 路径
+    expect(r._source).toBe('vision_layout')
+    // 2. sections 应该识别 Introduction / Methods
+    expect(r.sections.length).toBeGreaterThanOrEqual(3)
+    const secTitles = r.sections.map(s => s.title)
+    expect(secTitles.some(t => /Introduction/.test(t))).toBe(true)
+    expect(secTitles.some(t => /Methods/.test(t))).toBe(true)
+    // 3. Introduction section 应该是 'introduction' type（不是 preamble）
+    const introSec = r.sections.find(s => /Introduction/.test(s.title))
+    expect(introSec.type).toBe('introduction')
+    // 4. Methods section 应该是 'methods' type
+    const methodsSec = r.sections.find(s => /Methods/.test(s.title))
+    expect(methodsSec.type).toBe('methods')
+    // 5. 图片应分散到 ≥ 2 个 sections（不再全挤 preamble）
+    const anchorSecIds = new Set(Object.keys(r.inlineFigureAnchors).map(p => p.split('__')[0]))
+    expect(anchorSecIds.size).toBeGreaterThanOrEqual(2)
+    // 6. figures 应该包含 vision 给的 figure_no
+    expect(r.figures.some(f => f.figureNo === 'Fig. 1')).toBe(true)
+    expect(r.figures.some(f => f.figureNo === 'Fig. 2')).toBe(true)
+    // 7. table block 应被识别
+    const allBlocks = r.sections.flatMap(s => s.blocks)
+    expect(allBlocks.some(b => b.type === 'table')).toBe(true)
+    // 8. layout stats 应该传递
+    expect(r._layoutStats.totalPages).toBe(2)
+  })
 })
