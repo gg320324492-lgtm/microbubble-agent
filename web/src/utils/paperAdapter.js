@@ -3792,37 +3792,109 @@ export function normalizePaperData(raw, extra = {}) {
  */
 function _mergeVisionPagesByNumber(pages) {
   if (!pages || !pages.length) return []
-  // v28 step 108: vision 可能把同一 page 的不同部分输出多次
-  //   旧：用 page_number + 首个 block fingerprint 去重 → 但同一 page 多次输出内容不同
-  //     时 fingerprint 不同，全部保留 → 重复 page 仍在
-  //   新：直接按 page_number 合并所有 blocks（不做 fingerprint 去重 page），
-  //     只在 block 内部用 fingerprint 去重重复 block
-  const pageMap = new Map()  // page_number -> { blocks, blockKeys }
+  // v28 step 108.1: vision 对中文论文格式（封面+摘要+目录+正文都标 page 1）经常返回
+  //   多个内容完全不同的"page N"。直接合并会把封面+摘要+章节正文塞到同一 page，
+  //   导致导航混乱。
+  //
+  // 策略：
+  // 1. 按 page_number 分组
+  // 2. 对同一 page_number 的多份输出，计算 block-level Jaccard 相似度
+  // 3. 相似度 ≥ 0.5 → 视为 vision 重复扫描同一页 → 合并 blocks（去重）
+  // 4. 相似度 < 0.5 → 视为 vision 把不同页误标为同 page_number → 按数组顺序分配
+  //    连续 page 号（page 1, page 1', page 1''...）
+  const groupsByPn = new Map()
   for (const page of pages) {
-    const pn = page.page_number
-    if (pn == null) continue
-    if (!pageMap.has(pn)) {
-      pageMap.set(pn, { page_number: pn, blocks: [], blockKeys: new Set() })
+    const pn = page.page_number ?? 0
+    if (!groupsByPn.has(pn)) groupsByPn.set(pn, [])
+    groupsByPn.get(pn).push(page)
+  }
+
+  const result = []
+  for (const [pn, group] of Array.from(groupsByPn.entries()).sort((a, b) => a[0] - b[0])) {
+    if (group.length === 1) {
+      result.push({ page_number: pn, blocks: _dedupeBlocksInPage(group[0].blocks || []) })
+      continue
     }
-    const entry = pageMap.get(pn)
-    const blocks = page.blocks || []
-    for (const b of blocks) {
-      // 去重 key: type + 内容指纹（忽略 order，vision 每次 order 重新计数）
-      let key
-      if (b.type === 'image') {
-        key = `image|${b.figure_no || ''}|${(b.caption || '').slice(0, 80)}`
-      } else {
-        key = `${b.type}|${(b.text || b.caption || '').slice(0, 80)}`
+    // 多份同一 pn 的输出，计算两两 block 内容指纹 jaccard
+    const fingerprints = group.map(p => _pageFingerprint(p.blocks || []))
+    // 看是否能合并成一个（所有两两相似度 ≥ 0.5）
+    let allSimilar = true
+    for (let i = 0; i < fingerprints.length; i++) {
+      for (let j = i + 1; j < fingerprints.length; j++) {
+        if (_jaccardV2(fingerprints[i], fingerprints[j]) < 0.5) {
+          allSimilar = false
+          break
+        }
       }
-      if (entry.blockKeys.has(key)) continue
-      entry.blockKeys.add(key)
-      entry.blocks.push(b)
+      if (!allSimilar) break
+    }
+    if (allSimilar) {
+      // 真正重复扫描，合并去重
+      const merged = []
+      const seen = new Set()
+      for (const p of group) {
+        for (const b of (p.blocks || [])) {
+          const key = _blockFingerprintV2(b)
+          if (seen.has(key)) continue
+          seen.add(key)
+          merged.push(b)
+        }
+      }
+      result.push({ page_number: pn, blocks: _dedupeBlocksInPage(merged) })
+    } else {
+      // vision 误标 page 边界：每份作为独立 page，page 号 = pn + 后缀 index
+      group.forEach((p, idx) => {
+        const pageNum = idx === 0 ? pn : `${pn}.${idx}`
+        result.push({ page_number: pageNum, blocks: _dedupeBlocksInPage(p.blocks || []) })
+      })
     }
   }
-  // 按 page_number 排序
-  return Array.from(pageMap.values())
-    .map(p => ({ page_number: p.page_number, blocks: p.blocks }))
-    .sort((a, b) => (a.page_number || 0) - (b.page_number || 0))
+  // 最终按 page_number 排序（pn.1 < pn.10 < pn.2 用自然排序）
+  return result.sort((a, b) => {
+    const aKey = String(a.page_number)
+    const bKey = String(b.page_number)
+    const aNum = parseFloat(aKey)
+    const bNum = parseFloat(bKey)
+    if (aNum !== bNum) return aNum - bNum
+    return aKey.localeCompare(bKey)
+  })
+}
+
+function _pageFingerprint(blocks) {
+  const set = new Set()
+  for (const b of blocks) {
+    set.add(_blockFingerprintV2(b))
+  }
+  return set
+}
+
+function _blockFingerprintV2(b) {
+  if (!b) return ''
+  if (b.type === 'image') {
+    return `image|${b.figure_no || ''}|${(b.caption || '').slice(0, 80)}`
+  }
+  const text = (b.text || b.caption || b.content || '').slice(0, 80)
+  return `${b.type}|${text}`
+}
+
+function _jaccardV2(setA, setB) {
+  if (!setA.size && !setB.size) return 1
+  let inter = 0
+  for (const x of setA) if (setB.has(x)) inter++
+  const union = setA.size + setB.size - inter
+  return union ? inter / union : 0
+}
+
+function _dedupeBlocksInPage(blocks) {
+  const seen = new Set()
+  const out = []
+  for (const b of blocks) {
+    const key = _blockFingerprintV2(b)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(b)
+  }
+  return out
 }
 
 /**
@@ -3834,6 +3906,52 @@ function _isReferenceParagraph(text) {
   // 形如 "[1] Smith J., ... 2024." 或 "[16] Yu, J., Le, T., ..."
   // 关键特征：以 [数字] 开头
   return /^\s*\[\d+\]\s+[A-Z]/.test(text)
+}
+
+/**
+ * v28 step 109.3: 检测 vision 误识的 TOC 条目
+ *   目录里的章节标题被 vision 当 heading 输出，如 "1 绪论.................1"
+ *   特征：含 3+ 个连续点 + 末尾页码 OR 仅页码（"50"/"52"）
+ *   不能误杀：References 正文里的 "............" 真实引用不会出现在 heading
+ *   也不能误杀：正常段落里的省略号"..."（如"中文摘要内容..."）
+ */
+function isTocEntry(text) {
+  if (!text) return false
+  // 模式 1：章节编号前缀 + 连续点 + 页码（如 "1 绪论..............1"）
+  //   关键：前面必须是数字编号（开头 ^[一二三四五六七八九十\d][\d\s.]*）
+  if (/^[\d一二三四五六七八九十]+[\d\s.]*[^\n]{1,80}\.{3,}\s*\d*\s*$/.test(text)) return true
+  // 模式 2：标题 + 2+ 空格 + 1-4 位页码（"3 结果与讨论   42"）
+  if (/^.+\s{2,}\d{1,4}\s*$/.test(text)) return true
+  // 模式 3：中文标题 + 连续点 + 页码（"摘 要...........I"）—— 不带数字前缀的中文 TOC 条目
+  if (/^[一-龥]{2,}\s*[^\n]{0,80}\.{3,}\s*[IVXLCDM\d]+\s*$/i.test(text)) return true
+  // 模式 4：纯罗马数字（"III"）—— vision 误把页码当 heading
+  if (/^\s*[IVXLCDM]+\s*$/i.test(text)) return true
+  // 模式 5：纯数字（"50"）—— 同上
+  if (/^\s*\d{1,4}\s*$/.test(text)) return true
+  return false
+}
+
+/**
+ * v28 step 109.3: 检测整页是不是"目录"页
+ *   特征：首个 heading 是 "目录" / "Table of Contents" / "Contents"
+ *   或前 3 个 heading 里有 ≥1 个目录标识
+ */
+function _isTocPage(blocks) {
+  if (!blocks || !blocks.length) return false
+  const tocKeywords = /^\s*(目录|目錄|table\s+of\s+contents|contents?|table\s+des\s+matières|inhaltsverzeichnis)\s*$/i
+  let tocHits = 0
+  let headingCount = 0
+  for (const b of blocks.slice(0, 10)) {
+    if (b.type !== 'heading') continue
+    headingCount++
+    const text = (b.text || '').trim()
+    if (tocKeywords.test(text)) tocHits++
+    // 章节标题含 "...." 也是 TOC
+    if (isTocEntry(text)) tocHits++
+  }
+  // 首个 heading 是"目录"且 TOC 条目占多数 → TOC 页
+  if (tocHits > 0 && tocHits >= headingCount * 0.5) return true
+  return false
 }
 
 /**
@@ -3993,6 +4111,10 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         const level = b.level || 1
         const title = (b.text || '').trim()
         if (!title) continue
+        // v28 step 109.3: 过滤 vision 误识的 TOC 条目
+        //   目录里的 "1 绪论..............1" / "2 试验材料与方法...5" 会被 vision 标为 heading
+        //   特征：含连续 3+ 个点 + 末尾页码 OR 含省略号
+        if (isTocEntry(title)) continue
         // 用 _matchSectionTitle 判定 type（识别 Introduction/Methods/Results 等关键词）
         const matched = _matchSectionTitle(title)
         let secType
@@ -4013,6 +4135,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       } else if (b.type === 'paragraph') {
         const text = _mergeOCRSoftLineBreaks((b.text || '').trim())
         if (!text) continue
+        // v28 step 109.3: 同样过滤 TOC 里的 paragraph（如 "摘 要..............I"）
+        if (isTocEntry(text)) continue
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1)
         currentBlocks.push({
@@ -4148,6 +4272,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   return {
     id: raw.id,
     title: raw.title,
+    status: raw.analysis_status || 'pending',  // v28 step 109.4: 同步 analysis_status 给 PaperHeader 显示
     summary: raw.summary || '',
     abstract,
     keywords,
