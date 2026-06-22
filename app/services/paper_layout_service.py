@@ -461,6 +461,10 @@ def _make_celery_task():
                                 vision_model_used=settings.VISION_MODEL,
                             )
                             db.add(layout_row)
+                        # v28 step 108: 同步更新 knowledge.analysis_status = 'completed'
+                        #   之前 vision scan 不更新状态，前端一直轮询显示"分析中"
+                        if knowledge.analysis_status == 'analyzing':
+                            knowledge.analysis_status = 'completed'
                         await db.commit()
                         return {
                             "status": "ok",

@@ -20,6 +20,21 @@
       <span v-if="block.page" class="figure-page">P{{ block.page }}</span>
     </div>
 
+    <!-- v28 step 107: image_anchor 块（vision layout 输出的 inline 图片锚点） -->
+    <div
+      v-else-if="block.type === 'image_anchor'"
+      class="block-image-anchor"
+      :data-page="block.page"
+      :data-figure-no="block.figure_no || ''"
+    >
+      <div class="image-anchor-placeholder">
+        <el-icon><Picture /></el-icon>
+        <span>图 {{ block.figure_no || '?' }}（P{{ block.page || '?' }}）</span>
+        <small class="image-anchor-hint">图片在底部图库</small>
+      </div>
+      <div v-if="block.caption" class="image-anchor-caption">{{ block.caption }}</div>
+    </div>
+
     <!-- 段落（含 auto-link） -->
     <p
       v-else-if="block.type === 'paragraph'"
@@ -285,6 +300,36 @@ function renderMarkdownTable(text) {
   margin: 0;
   padding: 0;
   visibility: hidden;
+}
+
+/* v28 step 107: image_anchor 块样式（vision layout inline 图片占位） */
+.block-image-anchor {
+  margin: 18px 0 14px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
+  border-left: 4px solid #0EA5E9;
+  border-radius: 8px;
+}
+.image-anchor-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0369A1;
+}
+.image-anchor-hint {
+  font-size: 11px;
+  color: #6B7280;
+  font-weight: 400;
+  margin-left: auto;
+}
+.image-anchor-caption {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.6;
+  font-style: italic;
 }
 
 .block-page-marker {

@@ -195,9 +195,11 @@ const isReferences = computed(() => props.section.type === 'references')
 
 const references = computed(() => {
   if (!isReferences.value) return []
+  // v28 step 107: 同时识别 paragraph（[N] 格式兜底）和 reference_list（vision 直接输出）两种 block 类型
   const text = props.section.blocks
-    .filter(b => b.type === 'paragraph')
-    .map(b => b.content)
+    .filter(b => b.type === 'paragraph' || b.type === 'reference_list')
+    .map(b => b.content || '')
+    .filter(t => t)
     .join('\n')
   return splitReferences(text)
 })

@@ -3751,29 +3751,20 @@ export function normalizePaperData(raw, extra = {}) {
  */
 function _mergeVisionPagesByNumber(pages) {
   if (!pages || !pages.length) return []
-  // v28 step 106.1: vision page 计数不稳定（同一页可能输出多次，且内容可能错位）
-  //   去重策略：按"内容指纹"合并相同 page（用首个 heading 或首个有内容的 block）
-  //   page_key = page_number + 首个 heading/paragraph 内容前 50 字符
-  //   重复 page_key 视为同一页，合并 blocks
-  const pageMap = new Map()  // page_key -> { page, blockKeys }
+  // v28 step 108: vision 可能把同一 page 的不同部分输出多次
+  //   旧：用 page_number + 首个 block fingerprint 去重 → 但同一 page 多次输出内容不同
+  //     时 fingerprint 不同，全部保留 → 重复 page 仍在
+  //   新：直接按 page_number 合并所有 blocks（不做 fingerprint 去重 page），
+  //     只在 block 内部用 fingerprint 去重重复 block
+  const pageMap = new Map()  // page_number -> { blocks, blockKeys }
   for (const page of pages) {
     const pn = page.page_number
     if (pn == null) continue
+    if (!pageMap.has(pn)) {
+      pageMap.set(pn, { page_number: pn, blocks: [], blockKeys: new Set() })
+    }
+    const entry = pageMap.get(pn)
     const blocks = page.blocks || []
-    // 用首个有内容的 block 内容前 50 字符作指纹
-    let fingerprint = ''
-    for (const b of blocks) {
-      const t = (b.text || b.caption || '').slice(0, 50).trim()
-      if (t) {
-        fingerprint = t
-        break
-      }
-    }
-    const pageKey = `${pn}|${fingerprint}`
-    if (!pageMap.has(pageKey)) {
-      pageMap.set(pageKey, { page_number: pn, blocks: [], blockKeys: new Set() })
-    }
-    const entry = pageMap.get(pageKey)
     for (const b of blocks) {
       // 去重 key: type + 内容指纹（忽略 order，vision 每次 order 重新计数）
       let key
@@ -3787,16 +3778,10 @@ function _mergeVisionPagesByNumber(pages) {
       entry.blocks.push(b)
     }
   }
-  // 按 page_number 排序（page_number 可能有重复，但用 fingerprint 区分）
+  // 按 page_number 排序
   return Array.from(pageMap.values())
     .map(p => ({ page_number: p.page_number, blocks: p.blocks }))
-    .sort((a, b) => {
-      // 按第一个 block 的最小 order 排（保证页面顺序）
-      const minOrderA = a.blocks.length ? Math.min(...a.blocks.map(b => b.order || 0)) : Infinity
-      const minOrderB = b.blocks.length ? Math.min(...b.blocks.map(b => b.order || 0)) : Infinity
-      if (minOrderA !== minOrderB) return minOrderA - minOrderB
-      return (a.page_number || 0) - (b.page_number || 0)
-    })
+    .sort((a, b) => (a.page_number || 0) - (b.page_number || 0))
 }
 
 /**
