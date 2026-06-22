@@ -122,6 +122,9 @@ class PaperLayoutService:
     ) -> dict:
         """vision model 看一页 PDF 渲染图，输出 page layout
 
+        带 429 rate limit 重试（指数退避）：vision API rate limit 时等待更长时间再重试
+        避免大批量重扫时一次性打爆 vision API。
+
         Returns:
             {"page_number": int, "blocks": [...]}
         """
@@ -131,45 +134,65 @@ class PaperLayoutService:
         # 用最强 vision model
         model = getattr(settings, 'VISION_MODEL', None) or get_default_model()
 
-        try:
-            response = await client.messages.create(
-                model=model,
-                max_tokens=8192,  # 一页可能很多 block + 长段落
-                thinking={'type': 'disabled'},
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": image_b64,
+        # 429 rate limit 重试（指数退避：2s → 5s → 10s → 20s）
+        max_retries = 4
+        wait_times = [2, 5, 10, 20]
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                response = await client.messages.create(
+                    model=model,
+                    max_tokens=8192,  # 一页可能很多 block + 长段落
+                    thinking={'type': 'disabled'},
+                    messages=[{
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": "image/png",
+                                    "data": image_b64,
+                                },
                             },
-                        },
-                        {
-                            "type": "text",
-                            "text": PROMPT_PAGE_LAYOUT,
-                        }
-                    ]
-                }]
-            )
+                            {
+                                "type": "text",
+                                "text": PROMPT_PAGE_LAYOUT,
+                            }
+                        ]
+                    }]
+                )
 
-            # 提取响应文本
-            result_text = ""
-            for block in response.content:
-                if hasattr(block, 'text'):
-                    result_text += block.text
-                elif isinstance(block, dict) and 'text' in block:
-                    result_text += block['text']
+                # 提取响应文本
+                result_text = ""
+                for block in response.content:
+                    if hasattr(block, 'text'):
+                        result_text += block.text
+                    elif isinstance(block, dict) and 'text' in block:
+                        result_text += block['text']
 
-            # 解析 JSON（容忍 ```json ... ``` 包裹）
-            parsed = self._parse_layout_response(result_text, page_number)
-            return parsed
+                # 解析 JSON（容忍 ```json ... ``` 包裹）
+                parsed = self._parse_layout_response(result_text, page_number)
+                return parsed
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                is_rate_limit = '429' in error_str or 'rate' in error_str.lower() or 'Too Many' in error_str
+                if is_rate_limit and attempt < max_retries - 1:
+                    wait_sec = wait_times[attempt] if attempt < len(wait_times) else 20
+                    logger.warning(
+                        f"[vision_layout] page {page_number} 触发 429 rate limit, "
+                        f"第 {attempt + 1}/{max_retries} 次重试, 等待 {wait_sec}s"
+                    )
+                    await asyncio.sleep(wait_sec)
+                    continue
+                # 非 429 错误或重试耗尽
+                break
 
-        except Exception as e:
-            logger.error(f"vision analyze page {page_number} 失败: {e}", exc_info=True)
-            return {"page_number": page_number, "blocks": [], "error": str(e)}
+        # 所有重试都失败
+        logger.error(f"vision analyze page {page_number} 失败: {last_error}", exc_info=True)
+        return {"page_number": page_number, "blocks": [], "error": str(last_error) if last_error else "unknown"}
 
     def _parse_layout_response(self, text: str, page_number: int) -> dict:
         """解析 vision 返回的 JSON（容忍 markdown 包裹）"""
@@ -306,8 +329,13 @@ class PaperLayoutService:
             else:
                 clean_results.append(r)
 
-        # 按 page_number 排序
-        clean_results.sort(key=lambda x: x.get("page_number", 0))
+        # 按 page_number 排序（None 排最后）
+        def _sort_key(x):
+            pn = x.get("page_number") if isinstance(x, dict) else None
+            if pn is None:
+                return (1, 0)  # None 排后面
+            return (0, pn)
+        clean_results.sort(key=_sort_key)
         return clean_results
 
 
@@ -363,6 +391,14 @@ def _make_celery_task():
                             logger.warning(f"[scan_layout] knowledge_id={knowledge_id} 无 file_path")
                             return {"status": "skipped", "reason": "no_file"}
 
+                        # 检查文件类型 — 只支持 PDF，其他类型走 LLM reformat
+                        file_type = (knowledge.file_type or '').lower()
+                        if 'pdf' not in file_type and knowledge.file_path:
+                            # 不是 PDF（docx/pptx/txt 等）— 不能用 vision scan_layout
+                            # 标记跳过，让前端走 LLM reformat 路径
+                            logger.info(f"[scan_layout] knowledge_id={knowledge_id} 非 PDF（{file_type}），跳过 vision 扫描")
+                            return {"status": "skipped", "reason": "not_pdf"}
+
                         # 下载 PDF
                         pdf_bytes = await file_service.download_file(knowledge.file_path)
                         if not pdf_bytes:
@@ -370,7 +406,12 @@ def _make_celery_task():
                             return {"status": "error", "reason": "download_failed"}
 
                         # 扫描 layout
-                        page_layouts = await paper_layout_service.scan_paper_layout(pdf_bytes)
+                        try:
+                            page_layouts = await paper_layout_service.scan_paper_layout(pdf_bytes)
+                        except Exception as scan_err:
+                            logger.error(f"[scan_layout] knowledge_id={knowledge_id} scan_paper_layout 异常: {scan_err}", exc_info=True)
+                            return {"status": "error", "reason": f"scan_exception: {scan_err}"}
+
                         if not page_layouts:
                             logger.warning(f"[scan_layout] knowledge_id={knowledge_id} 扫描结果空")
                             return {"status": "error", "reason": "scan_empty"}

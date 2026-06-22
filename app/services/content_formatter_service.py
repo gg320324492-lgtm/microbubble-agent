@@ -53,31 +53,51 @@ class ContentFormatterService:
     """使用 LLM 将 PDF 提取文本整理为结构化 Markdown"""
 
     async def format_content(self, title: str, content: str) -> str:
-        """整理内容排版，返回 Markdown 格式文本"""
-        try:
-            client = get_anthropic_client()
-            # v28 step 18: 用 replace 不用 format —— 真实 content 里有 {} (JSON 残留、citation 等)
-            #   str.format() 会把这些 {} 当占位符解析导致 "Replacement index N out of range"
-            prompt = FORMAT_PROMPT.replace('{title}', str(title)).replace('{content}', str(content)[:50000])
-            response = await client.messages.create(
-                model=get_default_model(),
-                max_tokens=16384,
-                timeout=300,
-                thinking={'type': 'disabled'},
-                messages=[{"role": "user", "content": prompt}]
-            )
-            formatted = extract_text_from_response(response)
-            if formatted and len(formatted) > 50:
-                # 后处理：移除 LLM 可能产生的删除线标记
-                formatted = re.sub(r'~~.+?~~', '', formatted)
-                logger.info(f"内容排版成功: {title}, 输出 {len(formatted)} 字符")
-                return formatted
-            else:
-                logger.warning(f"内容排版输出过短: {title}")
+        """整理内容排版，返回 Markdown 格式文本
+
+        带 429 rate limit 重试（指数退避）：vision/Claude API rate limit 时等待更长时间
+        """
+        max_retries = 3
+        wait_times = [3, 8, 15]
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                client = get_anthropic_client()
+                # v28 step 18: 用 replace 不用 format —— 真实 content 里有 {} (JSON 残留、citation 等)
+                #   str.format() 会把这些 {} 当占位符解析导致 "Replacement index N out of range"
+                prompt = FORMAT_PROMPT.replace('{title}', str(title)).replace('{content}', str(content)[:50000])
+                response = await client.messages.create(
+                    model=get_default_model(),
+                    max_tokens=16384,
+                    timeout=300,
+                    thinking={'type': 'disabled'},
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                formatted = extract_text_from_response(response)
+                if formatted and len(formatted) > 50:
+                    # 后处理：移除 LLM 可能产生的删除线标记
+                    formatted = re.sub(r'~~.+?~~', '', formatted)
+                    logger.info(f"内容排版成功: {title}, 输出 {len(formatted)} 字符")
+                    return formatted
+                else:
+                    logger.warning(f"内容排版输出过短: {title}")
+                    return ""
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                is_rate_limit = '429' in error_str or 'rate' in error_str.lower() or 'Too Many' in error_str
+                if is_rate_limit and attempt < max_retries - 1:
+                    wait_sec = wait_times[attempt] if attempt < len(wait_times) else 15
+                    logger.warning(
+                        f"内容排版 429 rate limit, 第 {attempt + 1}/{max_retries} 次重试, 等待 {wait_sec}s: {title[:40]}"
+                    )
+                    import asyncio
+                    await asyncio.sleep(wait_sec)
+                    continue
+                logger.error(f"内容排版失败: {title}, 错误: {e}")
                 return ""
-        except Exception as e:
-            logger.error(f"内容排版失败: {title}, 错误: {e}")
-            return ""
+        return ""
 
 
 content_formatter_service = ContentFormatterService()
