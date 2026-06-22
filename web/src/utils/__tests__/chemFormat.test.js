@@ -247,6 +247,13 @@ describe('formatRadicals - 自由基识别', () => {
     expect(formatRadicals('R-OH')).toBe('R-OH')
   })
 
+  // v28 step 109.29: heading 末尾的 -OH 也转换
+  it('heading 末尾的 -OH（无 trailing 词）应转为 ·OH', () => {
+    expect(formatRadicals('Fluorescence detection of coumarins -OH')).toBe('Fluorescence detection of coumarins ·OH')
+    expect(formatRadicals('Detection of -OH')).toBe('Detection of ·OH')
+    expect(formatRadicals('Section title: -OH')).toBe('Section title: ·OH')
+  })
+
   it('空字符串和 null', () => {
     expect(formatRadicals('')).toBe('')
     expect(formatRadicals(null)).toBe('')

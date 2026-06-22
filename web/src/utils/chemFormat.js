@@ -291,7 +291,10 @@ const RADICAL_PRESERVE_RE = /([·•])([A-Z][a-z]?\d*)/g
 //   例：'-OH generation was determined' → '·OH generation was determined'
 //   例：'-OH produced in water' → '·OH produced in water'
 //   反例：'5-OH' / 'C-OH'（化学键前缀）不转换
-const RADICAL_HYPHEN_RE = /(^|[\s,;:(\[])(\-)OH(\s+)([a-z][a-z]*(?:\s|$))/g
+// v28 step 109.29: heading 末尾的 -OH 也转换（如 'Fluorescence detection of coumarins -OH'）
+//   在 section title / heading 中 ·OH 通常是段尾独立 radical 符号
+//   regex 用两个分支：1) 后面跟空格 + 小写字母 2) 行尾
+const RADICAL_HYPHEN_RE = /(^|[\s,;:(\[])(\-)OH(?=\s+[a-z]|\s*$)/g
 
 function formatRadicals(text) {
   if (!text) return ''
@@ -303,8 +306,9 @@ function formatRadicals(text) {
   })
 
   // 1.5 v28 step 109.27: -OH → ·OH（radical OCR 错误修正）
-  result = result.replace(RADICAL_HYPHEN_RE, (_m, pre, _hyphen, space, next) => {
-    return pre + '·OH' + space + next
+  //   使用 lookahead (?=...) 不消耗 trailing 字符，replace 时只换 -OH 部分
+  result = result.replace(RADICAL_HYPHEN_RE, (_m, pre) => {
+    return pre + '·OH'
   })
 
   // 2. ·OH / •OH 保持（不做转换）
