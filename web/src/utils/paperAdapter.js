@@ -3916,6 +3916,34 @@ function _isReferenceParagraph(text) {
  *   也不能误杀：正常段落里的省略号"..."（如"中文摘要内容..."）
  */
 /**
+ * v28 step 109.25: 判断 vision OCR 拆错的两段是否应合并
+ *   合并条件（必须全部满足）：
+ *     1. 上一段不以句末符号结尾（., !, ?, :, ;, 。, ！, ？）
+ *     2. 本段以小写字母 / 中文起始词开头（不是新句子）
+ *     3. 上一段长度 >= 30 字符（避免误合并短 OCR 噪音）
+ *
+ *   例：
+ *     "...decline in overall conversion performance. It is worth noting that the"
+ *     "conversion for CH₃SH over the tested concentration range"
+ *     → 合并（"the" + "conversion" 显然接续）
+ */
+function _shouldMergeParagraphs(prevContent, nextContent) {
+  if (!prevContent || !nextContent) return false
+  const prev = prevContent.trim()
+  const next = nextContent.trim()
+  if (prev.length < 30) return false
+  // 上一段末尾字符
+  const lastChar = prev[prev.length - 1]
+  // 句末符号：句号/问号/感叹号/分号/冒号/引号
+  if (/[.!?;:。！？；："')\]]/.test(lastChar)) return false
+  // 本段开头是小写字母 / 中文
+  const firstChar = next[0]
+  const isLowerOrChinese = /[a-z一-龥]/.test(firstChar)
+  if (!isLowerOrChinese) return false
+  return true
+}
+
+/**
  * v28 step 109.12: 从 caption 文本提取 figureNo
  *   vision 经常输出 "Fig. 3. Effects of complex..." 配 figure_no="Fig. 1"（错位）
  *   caption 文本里的 figureNo 更可靠（这是 vision OCR 真实看到的标题）
@@ -4175,6 +4203,17 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         if (isOcrFigureCaption(text)) continue
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1)
+        // v28 step 109.25: vision OCR 经常把 "the" + 换行 + "conversion" 拆成两段
+        //   合并条件：上一段末尾无句末符号 + 本段开头小写字母 → 拼接到上一段
+        const lastBlock = currentBlocks[currentBlocks.length - 1]
+        if (lastBlock
+            && lastBlock.type === 'paragraph'
+            && _shouldMergeParagraphs(lastBlock.content, text)) {
+          // 合并：上一段内容 + 空格 + 本段
+          lastBlock.content = (lastBlock.content + ' ' + text).trim()
+          pidCounter++  // 仍计一个 pid
+          continue
+        }
         currentBlocks.push({
           type: 'paragraph',
           content: text,
