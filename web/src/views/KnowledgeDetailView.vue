@@ -105,10 +105,13 @@
           @extract="handleExtractMultimodal"
         />
 
-        <!-- 知识图谱三态：success / empty / failed -->
-        <section v-if="graphStatus === 'success' && graphRendered" class="paper-graph">
+        <!-- 知识图谱三态：success / empty / failed
+             v28 step 109.20: graphRef div 必须始终存在（renderGraph 需要它）
+             原版 v-if="graphStatus === 'success' && graphRendered" 会导致循环依赖
+             （graphRef 只在 graphRendered=true 时存在，但 renderGraph 需要 graphRef 才能 set graphRendered=true） -->
+        <section v-if="graphStatus === 'success'" class="paper-graph" :class="{ 'paper-graph-rendered': graphRendered }">
           <h2 class="graph-title">🕸️ 知识图谱</h2>
-          <div ref="graphRef" class="graph-container"></div>
+          <div ref="graphRef" class="graph-container" :style="{ display: graphRendered ? 'block' : 'none' }"></div>
         </section>
         <section v-else-if="graphStatus === 'failed'" class="paper-graph paper-graph-empty paper-graph-failed">
           <div class="graph-empty-content">
