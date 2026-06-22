@@ -635,14 +635,33 @@ const fetchDetail = async (retryCount = 0) => {
       axios.post(`/api/v1/knowledge/${id}/reformat`).catch(() => {})
     }
 
+    // v28 step 105: 后台异步触发 vision layout 扫描（如果还没扫过）
+    axios.get(`/api/v1/knowledge/${id}/layout`).then(res => {
+      if (res.data && !res.data.has_layout) {
+        axios.post(`/api/v1/knowledge/${id}/scan-layout`).catch(() => {})
+      }
+    }).catch(() => {})
+
     // 并行拉多模态数据
     await fetchMultimodalData(id)
+
+    // v28 step 105: 并行拉 vision layout（如果有，paperAdapter 优先消费）
+    let visionLayout = null
+    try {
+      const layoutRes = await axios.get(`/api/v1/knowledge/${id}/layout`)
+      if (layoutRes.data && layoutRes.data.has_layout) {
+        visionLayout = layoutRes.data
+      }
+    } catch (e) {
+      // layout 不可用不影响主流程
+    }
 
     // 适配成 PaperDetail
     paper.value = normalizePaperData(detailRes.data, {
       images: imageStats.value ? window.__paperImagesCache : [],
       extractions: window.__paperExtractionsCache || [],
       related: relatedKnowledge.value,
+      visionLayout,  // v28 step 105: 传 vision layout 给 paperAdapter
     })
 
     // 调试钩子（开发时启用，生产时注释）

@@ -1168,11 +1168,19 @@ function _parseMarkdownSections(content) {
       const level = headingMatch[1].length
       const title = headingMatch[2].trim()
       const matched = _matchSectionTitle(title)
+      // v28 step 104: H1（论文主标题，level=1）必须归类为 preamble
+      //   旧逻辑：H1 title 不匹配任何 SECTION_KEYWORDS → type='normal'
+      //   后果：preamble 段被 SKIP_SECTIONS 跳过过滤 → 8 张图 L3/L4 fallback 全塞到 preamble 段
+      //   （用户报告："图片都挤到最前面了，而且都连在一起了"）
+      //   修复：H1（level=1）无条件归类为 preamble（论文主标题永远不是 Introduction/Methods 等章节）
+      const sectionType = (level === 1)
+        ? 'preamble'
+        : (matched?.type || 'normal')
       current = {
         id: _genId('s'),
         title,
         level,
-        type: matched?.type || 'normal',
+        type: sectionType,
         blocks: [],
       }
       continue
@@ -3349,6 +3357,18 @@ export function normalizePaperData(raw, extra = {}) {
   const images = _normalizeImages(extra.images)
   const extractions = _normalizeExtractions(extra.extractions)
 
+  // v28 step 105: 如果有 vision layout（vision model 扫描整篇论文的 layout 数据），
+  //   直接用 layout 重建 sections + blocks（不依赖 regex 推断）
+  //   vision 真正"看"了整篇论文，输出每页的 heading/paragraph/image/table/formula 顺序
+  const visionLayout = extra.visionLayout
+  if (visionLayout && visionLayout.page_layout && visionLayout.page_layout.length > 0) {
+    const fromLayout = _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, extra.related || [])
+    if (fromLayout) {
+      return fromLayout
+    }
+    // layout 解析失败时 fallback 到原 regex 路径
+  }
+
   // 1. 选内容源
   //    formatted_content 仅在 LLM 真正排版过（包含 # ## 标题）时才视为 markdown
   //    否则即使有值也当 plain text 处理
@@ -3725,6 +3745,265 @@ export function normalizePaperData(raw, extra = {}) {
 export function classifySectionType(section) {
   if (!section) return 'normal'
   return section.type || 'normal'
+}
+
+
+// ============================================================================
+// v28 step 105: 从 vision model 扫描的 layout 数据重建 PaperDetail
+//   vision model 真正"看"了整篇论文 PDF，输出每页的 blocks 数组（按视觉顺序）
+//   这套数据彻底替代 regex 推断的 section 拆分 + image 位置匹配
+// ============================================================================
+
+function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, related) {
+  const pages = visionLayout.page_layout || []
+  if (!pages.length) return null
+
+  // ── 1. 按 vision 输出的 blocks 顺序遍历，构建 sections
+  //    遇到 heading 块就开新 section，否则累积到当前 section
+  const sections = []
+  let currentSection = null
+  let currentBlocks = []
+  let pageMarkers = []
+  let figureMarkers = []
+  let inlineFigureAnchors = {}
+  let figureRegistry = []
+  let pidCounter = 0
+  // 按 page 排序 images，构造全局 image_index → img 映射
+  // vision 输出的 image_index 是按扫描顺序的全局编号（跨页累积）
+  const sortedImages = images.slice().sort((a, b) => {
+    const pa = a.page || a.pageNumber || 0
+    const pb = b.page || b.pageNumber || 0
+    return pa - pb
+  })
+  const imageByGlobalIndex = {}
+  for (let i = 0; i < sortedImages.length; i++) {
+    imageByGlobalIndex[i] = sortedImages[i]
+  }
+
+  const sectionIdCounter = { s: 0 }
+  const genId = () => `s_${++sectionIdCounter.s}`
+
+  const startSection = (type, title, level) => {
+    if (currentSection) {
+      // flush 当前 section
+      sections.push({
+        id: currentSection.id,
+        title: currentSection.title,
+        level: currentSection.level,
+        type: currentSection.type,
+        blocks: currentBlocks,
+      })
+    }
+    currentSection = {
+      id: genId(),
+      title: title || '未命名',
+      level: level || 1,
+      type: type || 'normal',
+    }
+    currentBlocks = []
+  }
+
+  const flushCurrent = () => {
+    if (currentSection) {
+      sections.push({
+        id: currentSection.id,
+        title: currentSection.title,
+        level: currentSection.level,
+        type: currentSection.type,
+        blocks: currentBlocks,
+      })
+      currentSection = null
+      currentBlocks = []
+    }
+  }
+
+  for (const page of pages) {
+    const pageNum = page.page_number
+    const blocks = (page.blocks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0))
+    for (const b of blocks) {
+      if (b.type === 'page_header' || b.type === 'page_footer') {
+        // 跳过页眉页脚
+        continue
+      }
+      if (b.type === 'heading') {
+        const level = b.level || 1
+        const title = (b.text || '').trim()
+        if (!title) continue
+        // 用 _matchSectionTitle 判定 type（识别 Introduction/Methods/Results 等关键词）
+        const matched = _matchSectionTitle(title)
+        let secType
+        let secLevel
+        if (matched) {
+          secType = matched.type
+          secLevel = matched.level || level
+        } else if (level === 1) {
+          // level=1 且不匹配任何 SECTION_KEYWORDS → preamble（论文主标题/期刊名）
+          secType = 'preamble'
+          secLevel = 1
+        } else {
+          // 其他情况 → normal
+          secType = 'normal'
+          secLevel = level
+        }
+        startSection(secType, title, secLevel)
+      } else if (b.type === 'paragraph') {
+        const text = (b.text || '').trim()
+        if (!text) continue
+        // 没开 section 就先开一个 preamble
+        if (!currentSection) startSection('preamble', '前言', 1)
+        currentBlocks.push({
+          type: 'paragraph',
+          content: text,
+          page: pageNum,
+          indexInSection: currentBlocks.length,
+        })
+        pidCounter++
+      } else if (b.type === 'image') {
+        // 关联到 knowledge_images 表的图
+        const imgIndex = b.image_index || 0
+        const img = imageByGlobalIndex[imgIndex]
+        if (!currentSection) startSection('normal', '未命名', 2)
+        // 把 image 关联到当前 section 最后一个 paragraph
+        const pidKey = `${currentSection.id}__p${currentBlocks.length - 1}`
+        if (!inlineFigureAnchors[pidKey]) inlineFigureAnchors[pidKey] = []
+        if (img) {
+          inlineFigureAnchors[pidKey].push(img)
+          figureRegistry.push({
+            id: img.id,
+            page: pageNum,
+            figureNo: img.figureNo || b.figure_no || null,
+            figureType: img.figureType || null,
+            caption: b.caption || null,
+            isCoreFigure: img.isCoreFigure !== false,
+            isPublisherImage: !!img.isPublisherImage,
+            visualSummary: img.visualSummary || null,
+            sectionHint: img.sectionHint || null,
+            anchorText: img.anchorText || null,
+          })
+        } else {
+          // 没关联到图，登记一个空 fig（保留 caption 用于显示）
+          figureRegistry.push({
+            id: `vision-page${pageNum}-img${imgIndex}`,
+            page: pageNum,
+            figureNo: b.figure_no || null,
+            figureType: null,
+            caption: b.caption || null,
+            isCoreFigure: true,
+            isPublisherImage: false,
+            visualSummary: null,
+            sectionHint: null,
+            anchorText: null,
+          })
+        }
+        // 同时给当前 section 加 image 标记（让前端能渲染 image block）
+        currentBlocks.push({
+          type: 'image_anchor',
+          page: pageNum,
+          image_index: imgIndex,
+          caption: b.caption || null,
+          figure_no: b.figure_no || null,
+        })
+      } else if (b.type === 'table') {
+        const caption = b.caption || null
+        const headers = b.headers || []
+        const rows = b.rows || []
+        const tableMd = [
+          '| ' + headers.join(' | ') + ' |',
+          '| ' + headers.map(() => '---').join(' | ') + ' |',
+          ...rows.map(r => '| ' + r.join(' | ') + ' |'),
+        ].join('\n')
+        if (!currentSection) startSection('normal', '未命名', 2)
+        currentBlocks.push({
+          type: 'table',
+          content: tableMd,
+          page: pageNum,
+          caption,
+        })
+      } else if (b.type === 'formula') {
+        if (!currentSection) startSection('normal', '未命名', 2)
+        currentBlocks.push({
+          type: 'formula',
+          content: b.latex || '',
+          page: pageNum,
+        })
+      }
+    }
+    // 每页结束，记录 page_marker
+    pageMarkers.push({ page: pageNum })
+  }
+  flushCurrent()
+
+  // ── 2. 给 figures 分配 figure_no（如果 vision layout 没给，从 caption 提取）
+  for (const fig of figureRegistry) {
+    if (!fig.figureNo && fig.caption) {
+      const m = (fig.caption || '').match(/\b(Fig\.?|Figure|Table|Scheme)\s*(\d{1,3}[a-z]?)\b/i)
+      if (m) fig.figureNo = `${m[1]} ${m[2]}`.trim()
+    }
+  }
+
+  // ── 3. 构造 paper.figures（兼容 KnowledgeDetailView 旧字段）
+  const paperFigures = figureRegistry.map(f => ({
+    id: f.id,
+    imageId: typeof f.id === 'string' && f.id.startsWith('fig-') ? f.id.slice(4) : null,
+    page: f.page,
+    figureNo: f.figureNo,
+    figureType: f.figureType,
+    caption: f.caption,
+    isCoreFigure: f.isCoreFigure,
+    isPublisherImage: f.isPublisherImage,
+    visualSummary: f.visualSummary,
+    sectionHint: f.sectionHint,
+    anchorText: f.anchorText,
+    // src 从 images 找
+    src: (() => {
+      const img = images.find(i => i.id === f.imageId)
+      return img?.src || img?.imageUrl || null
+    })(),
+  }))
+
+  // ── 4. 检测 abstract（从第一页或 preamble 段）
+  let abstract = raw.summary || null
+  let keywords = Array.isArray(raw.tags) ? raw.tags.slice() : []
+  for (const sec of sections) {
+    for (const b of sec.blocks || []) {
+      if (b.type === 'paragraph' && /^\s*Abstract\s*[：:]?\s*([\s\S]*)/i.test(b.content || '')) {
+        const m = b.content.match(/^\s*Abstract\s*[：:]?\s*([\s\S]*)/i)
+        if (m && m[1] && (!abstract || abstract.length < m[1].length * 0.5)) {
+          abstract = m[1].trim()
+        }
+      }
+      if (b.type === 'paragraph' && /^\s*Keywords?\s*[：:]?\s*([\s\S]*)/i.test(b.content || '')) {
+        const m = b.content.match(/^\s*Keywords?\s*[：:]?\s*([^\n]+)/i)
+        if (m && m[1] && !keywords.length) {
+          keywords = m[1].split(/[,;；]/).map(s => s.trim()).filter(Boolean)
+        }
+      }
+    }
+  }
+
+  return {
+    id: raw.id,
+    title: raw.title,
+    summary: raw.summary || '',
+    abstract,
+    keywords,
+    sections,
+    figures: paperFigures,
+    figureRegistry: figureRegistry,
+    pageMarkers,
+    figureMarkers,
+    inlineFigureAnchors,
+    inlineFigureMap: {},
+    raw,
+    extra: { images, extractions, related, visionLayout: true },
+    _status: 'success',
+    _source: 'vision_layout',
+    _layoutStats: {
+      totalPages: visionLayout.total_pages || pages.length,
+      totalBlocks: visionLayout.total_blocks || null,
+      visionModel: visionLayout.vision_model_used || null,
+    },
+  }
 }
 
 
