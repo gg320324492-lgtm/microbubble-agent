@@ -2126,6 +2126,67 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(r.figureRegistry[0].src).toBe('https://example.com/img1.png')
   })
 
+  // v28 step 109.6: isPublisherImage 的图不应出现在 paperFigures（避免 Elsevier logo 重复）
+  //   vision 经常把 image_index=0 赋给多张图（imageByGlobalIndex[0] 是 logo）
+  //   关联到 publisher 图的 fig 应被丢弃 src
+  it('v28 step 109.6: publisher 图不应污染 paperFigures 的 src', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 3,
+      page_layout: [{
+        page_number: 1,
+        blocks: [
+          { type: 'image', order: 1, image_index: 0, figure_no: 'Fig. 1', caption: 'Fig. 1. Real' },
+          { type: 'image', order: 2, image_index: 0, figure_no: 'Fig. 2', caption: 'Fig. 2. Real but matched logo' },
+          { type: 'paragraph', order: 3, text: 'normal text after figures' },
+        ],
+      }],
+    }
+    const images = [
+      { id: 528, page_number: 1, image_url: 'https://example.com/logo.png',
+        is_publisher_image: true },  // Elsevier logo
+      { id: 529, page_number: 1, image_url: 'https://example.com/fig1.png' },
+    ]
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images, extractions: [], related: [], visionLayout })
+    // Fig. 1 和 Fig. 2 都因为 image_index=0 关联到 logo，应 src=null
+    for (const f of r.figures || []) {
+      expect(f.src).toBeNull()
+      expect(f.imageUrl).toBeNull()
+    }
+  })
+
+  // v28 step 109.7: OCR 误识的图说明段落应被过滤
+  it('v28 step 109.7: 过滤 OCR 图说明段落（该图为/This figure shows）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 5,
+      page_layout: [{
+        page_number: 1,
+        blocks: [
+          { type: 'image', order: 1, image_index: 0, figure_no: 'Fig. 1', caption: 'Fig. 1. Setup' },
+          // vision OCR 把图说明误当 paragraph
+          { type: 'paragraph', order: 2, text: '该图为一套用于微纳米气泡（MNB）处理挥发性有机物（甲苯，C7H8）的实验装置流程示意图。' },
+          { type: 'paragraph', order: 3, text: 'This figure shows the experimental setup used for testing.' },
+          // 真正的正文段落
+          { type: 'paragraph', order: 4, text: '本章主要研究了微纳米气泡在不同条件下的氧化性能。' },
+          { type: 'paragraph', order: 5, text: 'The conversion of toluene was measured under various conditions.' },
+        ],
+      }],
+    }
+    const images = [
+      { id: 528, page_number: 1, image_url: 'https://example.com/fig1.png' },
+    ]
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images, extractions: [], related: [], visionLayout })
+    const allParas = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    const paraTexts = allParas.map(b => b.content)
+    // OCR 图说明应被过滤
+    expect(paraTexts.find(t => t && t.includes('该图为一套'))).toBeUndefined()
+    expect(paraTexts.find(t => t && t.includes('This figure shows'))).toBeUndefined()
+    // 真正的正文应保留
+    expect(paraTexts.find(t => t && t.includes('本章主要研究'))).toBeTruthy()
+    expect(paraTexts.find(t => t && t.includes('conversion of toluene'))).toBeTruthy()
+  })
+
   // v28 step 109.3: vision 误识 TOC 条目应被过滤（不创建虚假 sections）
   //   目录里的 "1 绪论..............1" 被 vision 当 heading
   //   但不能误杀普通段落里的省略号 "..."

@@ -3915,6 +3915,24 @@ function _isReferenceParagraph(text) {
  *   不能误杀：References 正文里的 "............" 真实引用不会出现在 heading
  *   也不能误杀：正常段落里的省略号"..."（如"中文摘要内容..."）
  */
+/**
+ * v28 step 109.7: 检测 vision OCR 把图说明误当 paragraph 的情况
+ *   vision 把图旁边 OCR 出的中文/英文图说明当独立段落输出
+ *   特征：以"该图为/此图为/图 X" / "This figure shows" / "Fig. N is a" 等开头
+ *   这些不是正文，应丢弃（图片本身的 caption 已通过 FigureCard 显示）
+ */
+function isOcrFigureCaption(text) {
+  if (!text) return false
+  // 中文：以"该图/此图/图 X/图示/示意图"开头，且总长 < 300 字符
+  if (/^\s*(该图|此图|本图|图\s*\d+|图示|示意图)/.test(text) && text.length < 300) return true
+  // 英文：以 Fig/Figure/Scheme/This figure/This image 开头 + 描述句
+  if (/^\s*(this\s+(figure|image|scheme)|the\s+figure)\s+(shows?|depicts?|illustrates?|presents?|displays?)/i.test(text)) return true
+  if (/^\s*(fig\.?|figure|scheme)\s*\d+[a-z]?\s+(is|shows?|depicts?|illustrates?|presents?|displays?)/i.test(text)) return true
+  // "is a schematic illustration" / "is an image" 等描述句开头
+  if (/^\s*(this|it)\s+is\s+(a|an)\s+(schematic|illustration|image|diagram)/i.test(text)) return true
+  return false
+}
+
 function isTocEntry(text) {
   if (!text) return false
   // 模式 1：章节编号前缀 + 连续点 + 页码（如 "1 绪论..............1"）
@@ -4137,6 +4155,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         if (!text) continue
         // v28 step 109.3: 同样过滤 TOC 里的 paragraph（如 "摘 要..............I"）
         if (isTocEntry(text)) continue
+        // v28 step 109.7: 过滤 OCR 误识的图说明（"该图为..." / "This figure shows..."）
+        if (isOcrFigureCaption(text)) continue
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1)
         currentBlocks.push({
@@ -4149,7 +4169,13 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       } else if (b.type === 'image') {
         // 关联到 knowledge_images 表的图
         const imgIndex = b.image_index || 0
-        const img = imageByGlobalIndex[imgIndex]
+        let img = imageByGlobalIndex[imgIndex]
+        // v28 step 109.6: vision 经常把 image_index=0 赋给多张图（imageByGlobalIndex[0] 是 logo）
+        //   如果关联到的图是 publisher（Elsevier logo / cover / journal banner），
+        //   按 no-match 处理（占位 + 无 src）→ 避免 Elsevier 期刊 logo 重复显示
+        if (img && img.isPublisherImage === true) {
+          img = null
+        }
         if (!currentSection) startSection('normal', '未命名', 2)
         // 把 image 关联到当前 section 最后一个 paragraph
         const pidKey = `${currentSection.id}__p${currentBlocks.length - 1}`
@@ -4233,6 +4259,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   // 先给 figureRegistry 自己补 src/imageUrl（避免 PaperBlockRenderer._resolveFigure 拿不到）
   for (const f of figureRegistry) {
     if (f.src || f.imageUrl) continue  // 已有跳过
+    // v28 step 109.6: publisher 图跳过 src 填充
+    if (f.isPublisherImage === true) continue
     let imageId = null
     if (typeof f.id === 'number') {
       imageId = f.id
@@ -4243,6 +4271,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     }
     if (imageId != null) {
       const img = images.find(i => Number(i.id) === Number(imageId))
+      // v28 step 109.6: 防御性 publisher 过滤
+      if (img && img.isPublisherImage === true) continue
       f.src = img?.src || img?.imageUrl || null
       f.imageUrl = f.src
     }
@@ -4271,8 +4301,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       visualSummary: f.visualSummary,
       sectionHint: f.sectionHint,
       anchorText: f.anchorText,
-      src: f.src || null,
-      imageUrl: f.imageUrl || f.src || null,
+      // v28 step 109.6: publisher 图 src/imageUrl 始终 null（避免显示 Elsevier logo）
+      src: f.isPublisherImage ? null : (f.src || null),
+      imageUrl: f.isPublisherImage ? null : (f.imageUrl || f.src || null),
     }
   })
 
