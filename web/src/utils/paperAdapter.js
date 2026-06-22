@@ -4230,24 +4230,51 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   }
 
   // ── 3. 构造 paper.figures（兼容 KnowledgeDetailView 旧字段）
-  const paperFigures = figureRegistry.map(f => ({
-    id: f.id,
-    imageId: typeof f.id === 'string' && f.id.startsWith('fig-') ? f.id.slice(4) : null,
-    page: f.page,
-    figureNo: f.figureNo,
-    figureType: f.figureType,
-    caption: f.caption,
-    isCoreFigure: f.isCoreFigure,
-    isPublisherImage: f.isPublisherImage,
-    visualSummary: f.visualSummary,
-    sectionHint: f.sectionHint,
-    anchorText: f.anchorText,
-    // src 从 images 找
-    src: (() => {
-      const img = images.find(i => i.id === f.imageId)
-      return img?.src || img?.imageUrl || null
-    })(),
-  }))
+  // 先给 figureRegistry 自己补 src/imageUrl（避免 PaperBlockRenderer._resolveFigure 拿不到）
+  for (const f of figureRegistry) {
+    if (f.src || f.imageUrl) continue  // 已有跳过
+    let imageId = null
+    if (typeof f.id === 'number') {
+      imageId = f.id
+    } else if (typeof f.id === 'string' && f.id.startsWith('fig-')) {
+      imageId = f.id.slice(4)
+    } else if (typeof f.id === 'string' && /^\d+$/.test(f.id)) {
+      imageId = parseInt(f.id, 10)
+    }
+    if (imageId != null) {
+      const img = images.find(i => Number(i.id) === Number(imageId))
+      f.src = img?.src || img?.imageUrl || null
+      f.imageUrl = f.src
+    }
+  }
+  const paperFigures = figureRegistry.map(f => {
+    // v28 step 109.5: imageId 提取兼容两种 ID 形式
+    //   - vision 路径：f.id 直接是 DB 数字 ID（如 528）→ 直接用
+    //   - regex 路径：f.id 是 'fig-528' 字符串 → 剥前缀
+    let imageId = null
+    if (typeof f.id === 'number') {
+      imageId = f.id
+    } else if (typeof f.id === 'string' && f.id.startsWith('fig-')) {
+      imageId = f.id.slice(4)
+    } else if (typeof f.id === 'string' && /^\d+$/.test(f.id)) {
+      imageId = parseInt(f.id, 10)
+    }
+    return {
+      id: f.id,
+      imageId,
+      page: f.page,
+      figureNo: f.figureNo,
+      figureType: f.figureType,
+      caption: f.caption,
+      isCoreFigure: f.isCoreFigure,
+      isPublisherImage: f.isPublisherImage,
+      visualSummary: f.visualSummary,
+      sectionHint: f.sectionHint,
+      anchorText: f.anchorText,
+      src: f.src || null,
+      imageUrl: f.imageUrl || f.src || null,
+    }
+  })
 
   // ── 4. 检测 abstract（从第一页或 preamble 段）
   let abstract = raw.summary || null
