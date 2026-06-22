@@ -2148,6 +2148,89 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allParas.length).toBe(2)  // 不应合并
   })
 
+  // v28 step 109.30: vision OCR 输出顺序 bug — heading 之前的 paragraph 实际属于新 section
+  //   真实数据：page 8 上 block 顺序是
+  //     [67] paragraph "conversion for CH₃SH..." (属于 3.4)
+  //     [68] paragraph "the molecular model reveals..." (属于 3.5)
+  //     [69] heading "3.5. Interfacial microenvironment..."
+  //   vision 误把 3.5 内容输出在 heading 之前
+  //   修复：heading X.Y 出现时，把上一个 section 中"同一 page 且紧邻 heading"的
+  //         最后一个 paragraph 块移到当前 section
+  //   关键限制：只移 1 个 block（避免误移 [67] 这种属于 3.4 的内容）
+  it('v28 step 109.30: heading 之前紧邻的 paragraph 应属于新 section', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 7,
+      page_layout: [
+        {
+          page_number: 8,
+          blocks: [
+            // 3.4 标题
+            { type: 'heading', level: 1, order: 1, text: '3.4. Effects of complex environmental factors' },
+            // 3.4 内容
+            { type: 'paragraph', order: 2, text: 'CH3SH test' },
+            { type: 'paragraph', order: 3, text: 'DCM test' },
+            // 3.5 内容（被 vision 误输出在 heading 之前）
+            { type: 'paragraph', order: 4, text: 'the molecular model reveals the presence of a stable interface' },
+            // 3.5 标题
+            { type: 'heading', level: 1, order: 5, text: '3.5. Interfacial microenvironment-promoted activation' },
+            // 3.5 后续内容
+            { type: 'paragraph', order: 6, text: 'In the O3-MNBs system, the highly efficient removal' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    // 应有 2 个 section（3.4 + 3.5）
+    expect(r.sections.length).toBe(2)
+
+    // 3.4 section 应包含 'CH3SH test' 和 'DCM test'（不含 'molecular model'）
+    const sec34 = r.sections[0]
+    const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec34Paras.some(c => c.includes('CH3SH test'))).toBe(true)
+    expect(sec34Paras.some(c => c.includes('DCM test'))).toBe(true)
+    expect(sec34Paras.some(c => c.includes('molecular model'))).toBe(false)
+
+    // 3.5 section 应包含 'molecular model' 和 'O3-MNBs system'
+    const sec35 = r.sections[1]
+    const sec35Paras = sec35.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec35Paras.some(c => c.includes('molecular model'))).toBe(true)
+    expect(sec35Paras.some(c => c.includes('O3-MNBs system'))).toBe(true)
+    expect(sec35Paras.some(c => c.includes('CH3SH test'))).toBe(false)
+    expect(sec35Paras.some(c => c.includes('DCM test'))).toBe(false)
+  })
+
+  // v28 step 109.30 反例：heading 之前是不同 page 的 paragraph（不应移动）
+  it('v28 step 109.30: heading 之前跨 page 的 paragraph 不应被移动', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 7,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.4 Effects' },
+            { type: 'paragraph', order: 2, text: 'paragraph on page 7' },
+          ],
+        },
+        {
+          page_number: 8,
+          blocks: [
+            // heading 直接出现，前一段是不同 page
+            { type: 'heading', level: 1, order: 1, text: '3.5 Mechanism' },
+            { type: 'paragraph', order: 2, text: 'content of 3.5' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    // 跨 page 时不移动，page 7 的 paragraph 应保留在 3.4 section
+    const sec34 = r.sections[0]
+    const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec34Paras.some(c => c.includes('paragraph on page 7'))).toBe(true)
+  })
+
   // v28 step 109.26: 上一段末尾是开括号未闭合 → 下一段任何字符开头都应合并
   it('v28 step 109.26: 上一段末尾是开括号未闭合则合并（无论下段首字符大小写）', () => {
     const visionLayout = {
