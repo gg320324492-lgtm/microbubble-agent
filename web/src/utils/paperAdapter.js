@@ -3739,6 +3739,106 @@ export function normalizePaperData(raw, extra = {}) {
 }
 
 
+// ============================================================================
+// v28 step 106: vision layout 后处理辅助函数
+// ============================================================================
+
+/**
+ * 合并 vision layout 中重复的 page_number
+ * vision 模型 page 计数可能不稳定，导致同一页出现多次（如 page 8 出现 5 次）
+ * 按 page_number 分组，合并相同 page 的 blocks（按 order 排序拼接）
+ * 取最长 blocks 列表作主，其他页的 blocks 补到末尾（按出现顺序）
+ */
+function _mergeVisionPagesByNumber(pages) {
+  if (!pages || !pages.length) return []
+  const pageMap = new Map()  // page_number -> { page, blocks: Set(已加 block key) }
+  for (const page of pages) {
+    const pn = page.page_number
+    if (pn == null) continue
+    if (!pageMap.has(pn)) {
+      pageMap.set(pn, { page_number: pn, blocks: [], blockKeys: new Set() })
+    }
+    const entry = pageMap.get(pn)
+    const blocks = page.blocks || []
+    for (const b of blocks) {
+      // 去重 key: 用 type + 内容指纹（忽略 order，因为 vision 每次 order 重新计数）
+      //   image block: 用 type + caption 前 80 + image_index（不同 image_index 视为不同图）
+      //   其他 block: 用 type + 文本前 80
+      let key
+      if (b.type === 'image') {
+        // image 用 caption + figure_no + image_index 去重（同一 caption 视为同图）
+        key = `image|${b.figure_no || ''}|${b.caption || ''}|${b.image_index || ''}`
+      } else {
+        key = `${b.type}|${(b.text || b.caption || '').slice(0, 80)}`
+      }
+      if (entry.blockKeys.has(key)) continue
+      entry.blockKeys.add(key)
+      entry.blocks.push(b)
+    }
+  }
+  // 按 page_number 排序
+  return Array.from(pageMap.values())
+    .map(p => ({ page_number: p.page_number, blocks: p.blocks }))
+    .sort((a, b) => (a.page_number || 0) - (b.page_number || 0))
+}
+
+/**
+ * 检测 paragraph 文本是否含参考文献格式 [N] 作者...
+ * 返回 true 表示此段是参考文献条目
+ */
+function _isReferenceParagraph(text) {
+  if (!text) return false
+  // 形如 "[1] Smith J., ... 2024." 或 "[16] Yu, J., Le, T., ..."
+  // 关键特征：以 [数字] 开头
+  return /^\s*\[\d+\]\s+[A-Z]/.test(text)
+}
+
+/**
+ * 把 sections 列表中连续的 reference paragraph 抽取出来，单独成 references section
+ * 在 _buildPaperFromVisionLayout 内调用
+ */
+function _extractReferencesFromSections(sections) {
+  if (!sections?.length) return sections
+  for (const sec of sections) {
+    if (!sec.blocks?.length) continue
+    const newBlocks = []
+    let refBuffer = []
+    let inRefs = false
+    for (const b of sec.blocks) {
+      if (b.type === 'paragraph' && _isReferenceParagraph(b.content || '')) {
+        refBuffer.push(b)
+        inRefs = true
+        continue
+      }
+      if (inRefs && b.type === 'paragraph' && !_isReferenceParagraph(b.content || '')) {
+        // 连续 ref 段结束（如遇非 ref 段，把累积的 refs flush 为 reference_list block）
+        if (refBuffer.length) {
+          newBlocks.push({
+            type: 'reference_list',
+            content: refBuffer.map(r => r.content).join('\n\n'),
+            page: refBuffer[0].page,
+          })
+          refBuffer = []
+        }
+        newBlocks.push(b)
+        inRefs = false
+        continue
+      }
+      newBlocks.push(b)
+    }
+    // 末尾的 ref
+    if (refBuffer.length) {
+      newBlocks.push({
+        type: 'reference_list',
+        content: refBuffer.map(r => r.content).join('\n\n'),
+        page: refBuffer[0].page,
+      })
+    }
+    sec.blocks = newBlocks
+  }
+  return sections
+}
+
 /**
  * 把 section 列表的 type 字段标准化为前端的视图分类
  */
@@ -3757,6 +3857,13 @@ export function classifySectionType(section) {
 function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, related) {
   const pages = visionLayout.page_layout || []
   if (!pages.length) return null
+
+  // v28 step 106: 去重 page_number（vision 不稳定会重复 page 8）
+  //   按 page_number 分组，合并相同 page 的 blocks（按 order 排序拼接）
+  const mergedPages = _mergeVisionPagesByNumber(pages)
+
+  // v28 step 106: 处理 reference_list 块（vision 已识别参考文献时直接用）
+  //   同时扫描所有 paragraph 检测 [N] 开头格式（vision 没识别的兜底）
 
   // ── 1. 按 vision 输出的 blocks 顺序遍历，构建 sections
   //    遇到 heading 块就开新 section，否则累积到当前 section
@@ -3817,12 +3924,26 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     }
   }
 
-  for (const page of pages) {
+  for (const page of mergedPages) {
     const pageNum = page.page_number
     const blocks = (page.blocks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0))
     for (const b of blocks) {
       if (b.type === 'page_header' || b.type === 'page_footer') {
         // 跳过页眉页脚
+        continue
+      }
+      // v28 step 106: reference_list 块独立处理（标记为 references section 末尾）
+      if (b.type === 'reference_list') {
+        if (!currentSection) startSection('references', 'References', 1)
+        else if (currentSection.type !== 'references') {
+          // 开新 References section
+          startSection('references', 'References', 1)
+        }
+        currentBlocks.push({
+          type: 'reference_list',
+          content: b.text || '',
+          page: pageNum,
+        })
         continue
       }
       if (b.type === 'heading') {
@@ -3987,7 +4108,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     summary: raw.summary || '',
     abstract,
     keywords,
-    sections,
+    sections: _extractReferencesFromSections(sections),
     figures: paperFigures,
     figureRegistry: figureRegistry,
     pageMarkers,

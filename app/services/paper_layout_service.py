@@ -54,7 +54,9 @@ PROMPT_PAGE_LAYOUT = """你是学术论文版面分析专家。请仔细"看"这
    - 例: `{"type":"paragraph","text":"This study systematically..."}`
 
 3. **image**：图片/插图/示意图
-   - 输出 `image_index`: 该图片在页面上的序号（0, 1, 2...）
+   - **重要**：一张完整的图（含子图 a/b/c/d）算**一个** image block，不要拆分子图
+   - 如果一张图有多个子图，整体作为一个 image block 识别
+   - 输出 `image_index`: 该图片在**整篇论文**中的全局序号（0, 1, 2...，从首页累积）
    - 输出 `caption`: 图下方/上方的图注文字（如 "Fig. 1. Water treatment..."）
    - 输出 `figure_no`: 图号（如 "Fig. 1" / "Fig. S2" / "Table 1" / "Scheme 1"，无则 null）
    - 输出 `position`: 图片相对于相邻 block 的位置（"between_paragraphs" / "below_paragraph" / "above_paragraph"）
@@ -70,9 +72,21 @@ PROMPT_PAGE_LAYOUT = """你是学术论文版面分析专家。请仔细"看"这
    - 输出 `latex`: LaTeX 代码（不带 $ 包裹）
    - 例: `{"type":"formula","latex":"E = mc^2"}`
 
-6. **page_header / page_footer**：页眉/页脚（通常是页码或章节标题）
+6. **reference_list**：参考文献列表
+   - 输出 `text`: 完整参考文献内容（多条用 `\\n` 分隔，每条以 `[N]` 开头）
+   - 例: `{"type":"reference_list","text":"[1] Smith J, ... 2024. ...\\n[2] Wang T, ..."}`
+   - **重要**：参考文献必须用此类型，**不要**当作 paragraph 识别
+
+7. **page_header / page_footer**：页眉/页脚（通常是页码或章节标题）
    - 输出 `text`: 页眉/页脚文字
    - 例: `{"type":"page_header","text":"Chemical Engineering Journal 25 (2026) 142456"}`
+
+# 双列排版识别规则（重要！）
+
+部分论文（如 Elsevier、Wiley 等期刊）使用**双列排版**（左右两栏）：
+- **必须按视觉阅读顺序**：先读完**左列**所有内容（从上到下），再读**右列**所有内容（从上到下）
+- 跨栏内容（如横向大图）按视觉位置独立识别
+- 例：左列 heading "2.1 Methods" → 左列 paragraph → 右列 heading "2.2 Results" → 右列 paragraph
 
 # 输出格式（严格 JSON，不要任何额外文字）
 
@@ -85,18 +99,20 @@ PROMPT_PAGE_LAYOUT = """你是学术论文版面分析专家。请仔细"看"这
     {"type":"image","order":3,"image_index":0,"caption":"Fig. 1. Water treatment system.","figure_no":"Fig. 1","position":"below_paragraph"},
     {"type":"paragraph","order":4,"text":"The MNBs generator utilized air..."},
     {"type":"table","order":5,"caption":"Table 1. Description of different treatment conditions.","headers":["Serial number","Treatment condition","Symbol"],"rows":[["1","Individual MNBs treatment","MNBs"]]},
-    {"type":"page_footer","order":6,"text":"Chemical Engineering Journal 25 (2026) 142456"}
+    {"type":"reference_list","order":6,"text":"[1] Smith J, 2024. Title here.\\n[2] Wang T, ..."},
+    {"type":"page_footer","order":7,"text":"Chemical Engineering Journal 25 (2026) 142456"}
   ]
 }
 ```
 
 # 严格要求
-1. **顺序严格按视觉**：从上到下，同一行从左到右
-2. **保留完整文字**：不要省略段落，公式，caption
-3. **figure_no 必填**：从 caption 文本中提取 "Fig. N" / "Figure N" / "Table N" 等
-4. **caption 必填**：图注文字，无图注则 null
-5. **没识别到的字段填 null**，不要编造
-6. **只输出 JSON**，不要任何解释或前缀
+1. **顺序严格按视觉阅读顺序**：单列从上到下；双列先左列后右列
+2. **保留完整文字**：不要省略段落，公式，caption，参考文献条目
+3. **一张完整图 = 一个 image block**（不要拆分大图为多个子图）
+4. **figure_no 必填**：从 caption 文本中提取 "Fig. N" / "Figure N" / "Table N" 等
+5. **caption 必填**：图注文字，无图注则 null
+6. **没识别到的字段填 null**，不要编造
+7. **只输出 JSON**，不要任何解释或前缀
 """
 
 
@@ -134,16 +150,16 @@ class PaperLayoutService:
         # 用最强 vision model
         model = getattr(settings, 'VISION_MODEL', None) or get_default_model()
 
-        # 429 rate limit 重试（指数退避：2s → 5s → 10s → 20s）
+        # 429 rate limit 重试（指数退避：5s → 15s → 30s → 60s，加长以应付 vision API 高峰）
         max_retries = 4
-        wait_times = [2, 5, 10, 20]
+        wait_times = [5, 15, 30, 60]
         last_error = None
 
         for attempt in range(max_retries):
             try:
                 response = await client.messages.create(
                     model=model,
-                    max_tokens=8192,  # 一页可能很多 block + 长段落
+                    max_tokens=16384,  # 双列论文一页可能很多 block + 长段落（v28 step 106 提升）
                     thinking={'type': 'disabled'},
                     messages=[{
                         "role": "user",
@@ -281,7 +297,7 @@ class PaperLayoutService:
         pdf_bytes: bytes,
         total_pages: Optional[int] = None,
         max_pages: Optional[int] = None,
-        concurrency: int = 3,
+        concurrency: int = 1,  # v28 step 106.1: 降低并发避免触发 vision API 429 rate limit
     ) -> List[dict]:
         """扫描整篇论文，每页输出 layout
 

@@ -2009,4 +2009,128 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     // 8. layout stats 应该传递
     expect(r._layoutStats.totalPages).toBe(2)
   })
+
+  // v28 step 106: vision 后处理 — 合并重复 page_number
+  //   vision model 经常把 page 8 输出多次（page 计数不稳定）
+  //   paperAdapter 必须按 page_number 去重，合并相同 page 的 blocks
+  it('v28 step 106: vision page_number 重复时应合并', () => {
+    const visionLayout = {
+      has_layout: true,
+      total_pages: 9,
+      total_blocks: 30,
+      page_layout: [
+        // page 8 出现 3 次（vision 不稳定）
+        {
+          page_number: 8,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.4 Anti-interference' },
+            { type: 'paragraph', order: 2, text: 'first paragraph on page 8' },
+          ],
+        },
+        {
+          page_number: 8,
+          blocks: [
+            { type: 'paragraph', order: 3, text: 'second paragraph on page 8' },
+            { type: 'image', order: 4, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
+          ],
+        },
+        {
+          page_number: 8,
+          blocks: [
+            { type: 'image', order: 5, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
+          ],
+        },
+        // 正常 page
+        {
+          page_number: 9,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.5 Mechanism' },
+          ],
+        },
+      ],
+    }
+    const kb = { id: 99, title: 'Test', content: '', summary: null, tags: [] }
+    const images = [
+      { id: 901, page_number: 8, pageNumber: 8, image_url: '/img/4.png', figure_no: 'Fig. 4', figure_type: 'chart', is_core_figure: true, is_publisher_image: false },
+    ]
+    const r = normalizePaperData(kb, {
+      images, extractions: [], related: [], visionLayout,
+    })
+    // 合并后 page 8 只出现 1 次（3 个 blocks 唯一去重）
+    const allBlocks = r.sections.flatMap(s => s.blocks)
+    const page8Blocks = allBlocks.filter(b => b.page === 8)
+    expect(page8Blocks.length).toBe(3)  // heading + 2 paragraphs/images（image_index 重复的去重）
+    // 重复 image_index 2 的去重
+    const fig4Blocks = allBlocks.filter(b => b.figure_no === 'Fig. 4')
+    expect(fig4Blocks.length).toBe(1)
+  })
+
+  // v28 step 106: vision 输出 reference_list 类型
+  //   当 vision 识别参考文献时，paperAdapter 应作为独立 block 处理
+  it('v28 step 106: vision reference_list 应作为独立 block', () => {
+    const visionLayout = {
+      has_layout: true,
+      total_pages: 2,
+      total_blocks: 8,
+      page_layout: [
+        {
+          page_number: 1,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '5. Conclusions' },
+            { type: 'paragraph', order: 2, text: 'In conclusion, ...' },
+          ],
+        },
+        {
+          page_number: 2,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: 'References' },
+            { type: 'reference_list', order: 2, text: '[1] Smith J., 2024. Title. Journal 1, 10-20.\n[2] Wang T., 2024. Title. Journal 2, 30-40.' },
+          ],
+        },
+      ],
+    }
+    const kb = { id: 99, title: 'Test', content: '', summary: null, tags: [] }
+    const r = normalizePaperData(kb, {
+      images: [], extractions: [], related: [], visionLayout,
+    })
+    // 应该有 references section
+    const refSec = r.sections.find(s => s.type === 'references')
+    expect(refSec).toBeTruthy()
+    expect(refSec.blocks.some(b => b.type === 'reference_list')).toBe(true)
+    const refBlock = refSec.blocks.find(b => b.type === 'reference_list')
+    expect(refBlock.content).toContain('[1] Smith J.')
+    expect(refBlock.content).toContain('[2] Wang T.')
+  })
+
+  // v28 step 106: paperAdapter 兜底检测 paragraph 里的 [N] 参考文献格式
+  //   当 vision 没识别 reference_list 时，paragraph blocks 里的 [N] ... 应被提取
+  it('v28 step 106: paragraph 含 [N] 参考文献格式应自动提取', () => {
+    const visionLayout = {
+      has_layout: true,
+      total_pages: 1,
+      total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 10,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '4. Discussion' },
+            { type: 'paragraph', order: 2, text: 'The MNBs/UV system offers...', page: 10 },
+            // vision 没识别 references，但 paragraph 含 [N] 格式
+            { type: 'paragraph', order: 3, text: '[1] Smith J., Wang T., 2024. Synergistic disinfection. Chem Eng J 525, 117-128.', page: 10 },
+            { type: 'paragraph', order: 4, text: '[2] Yu J., Le T., 2023. Catalyst-free oxidation. Nat Commun 14 (1), 7514.', page: 10 },
+          ],
+        },
+      ],
+    }
+    const kb = { id: 99, title: 'Test', content: '', summary: null, tags: [] }
+    const r = normalizePaperData(kb, {
+      images: [], extractions: [], related: [], visionLayout,
+    })
+    // 应该从 paragraph 里抽出 reference_list
+    const allBlocks = r.sections.flatMap(s => s.blocks)
+    const refBlocks = allBlocks.filter(b => b.type === 'reference_list')
+    expect(refBlocks.length).toBeGreaterThanOrEqual(1)
+    expect(refBlocks[0].content).toContain('[1] Smith J.')
+    expect(refBlocks[0].content).toContain('[2] Yu J.')
+  })
 })
