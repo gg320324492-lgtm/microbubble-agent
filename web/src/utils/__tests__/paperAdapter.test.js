@@ -2011,7 +2011,7 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
   })
 
   // v28 step 108: vision 后处理 — 合并同一 page_number 的多次输出
-  //   vision model 经常把同一 page 输出多次（page 计数不稳定 + 内容错位）
+  //   vision model 经常把同一 page 输出多次（ID 19 page 8 输出 2 次完全相同）
   //   paperAdapter 必须按 page_number 合并所有 blocks，去重重复 block
   it('v28 step 108: vision page_number 重复时应合并 blocks', () => {
     const visionLayout = {
@@ -2019,18 +2019,22 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
       total_pages: 9,
       total_blocks: 30,
       page_layout: [
-        // page 8 第一次输出（前半部分）
+        // page 8 第一次输出（完整内容）
         {
           page_number: 8,
           blocks: [
             { type: 'heading', level: 1, order: 1, text: '3.4 Anti-interference' },
             { type: 'paragraph', order: 2, text: 'first paragraph on page 8' },
+            { type: 'paragraph', order: 3, text: 'second paragraph on page 8' },
+            { type: 'image', order: 4, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
           ],
         },
-        // page 8 第二次输出（后半部分，fingerprint 不同但同 page）
+        // page 8 第二次输出（内容完全相同，vision 重复扫描）
         {
           page_number: 8,
           blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.4 Anti-interference' },
+            { type: 'paragraph', order: 2, text: 'first paragraph on page 8' },
             { type: 'paragraph', order: 3, text: 'second paragraph on page 8' },
             { type: 'image', order: 4, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
           ],
@@ -2051,13 +2055,86 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     const r = normalizePaperData(kb, {
       images, extractions: [], related: [], visionLayout,
     })
-    // page 8 合并：2 paragraphs + 1 image_anchor（heading 不在 blocks 里）
+    // page 8 合并：2 paragraphs + 1 image_anchor（heading 不在 blocks 里，重复扫描去重）
     const allBlocks = r.sections.flatMap(s => s.blocks)
     const page8Blocks = allBlocks.filter(b => b.page === 8)
     expect(page8Blocks.length).toBe(3)  // 2 paragraphs + 1 image_anchor
     // Fig. 4 只出现 1 次（去重）
     const fig4Blocks = allBlocks.filter(b => b.figure_no === 'Fig. 4')
     expect(fig4Blocks.length).toBe(1)
+  })
+
+  // v28 step 108.2: 中文论文（封面+中英文摘要+目录+正文）被 vision 当成 page 1 重复
+  //   多次但内容不同 → 不应合并，应拆成独立页（page 1.1, 1.2, 1.3）
+  it('v28 step 108.2: 同一 pn 内容不同时应拆为独立页（中文论文格式）', () => {
+    const visionLayout = {
+      has_layout: true,
+      total_pages: 5,
+      total_blocks: 12,
+      page_layout: [
+        { page_number: 1, blocks: [{ type: 'paragraph', order: 1, text: '重庆大学硕士学位论文封面' }] },
+        { page_number: 1, blocks: [{ type: 'paragraph', order: 1, text: 'Research on the Control of Manganese' }] },
+        { page_number: 1, blocks: [{ type: 'heading', order: 1, text: '摘 要' }, { type: 'paragraph', order: 2, text: '中文摘要内容...' }] },
+        { page_number: 1, blocks: [{ type: 'heading', order: 1, text: 'Abstract' }, { type: 'paragraph', order: 2, text: 'English abstract content...' }] },
+        { page_number: 2, blocks: [{ type: 'heading', order: 1, text: '1 绪论' }] },
+      ],
+    }
+    const kb = { id: 100, title: 'T', content: '', summary: null, tags: [] }
+    const r = normalizePaperData(kb, { images: [], extractions: [], related: [], visionLayout })
+    // page 1 应被拆成多个不同 page (1, 1.1, 1.2, 1.3)
+    const allBlocks = r.sections.flatMap(s => s.blocks)
+    const distinctPages = new Set(allBlocks.map(b => b.page))
+    expect(distinctPages.size).toBeGreaterThanOrEqual(4)
+    // heading 顺序应保留：摘 要 + Abstract 应成为独立 section
+    const abstractSection = r.sections.find(s => s.title?.includes('摘 要'))
+    expect(abstractSection).toBeTruthy()
+    const englishAbstractSection = r.sections.find(s => s.title?.includes('Abstract'))
+    expect(englishAbstractSection).toBeTruthy()
+    // 封面 section 应只含封面内容（不含 Abstract 段落）
+    const coverSection = r.sections.find(s => s.type === 'preamble' && s.blocks[0]?.content?.includes('重庆大学'))
+    expect(coverSection).toBeTruthy()
+    expect(coverSection.blocks.find(b => b.content?.includes('Abstract'))).toBeUndefined()
+  })
+
+  // v28 step 109.3: vision 误识 TOC 条目应被过滤（不创建虚假 sections）
+  //   目录里的 "1 绪论..............1" 被 vision 当 heading
+  //   但不能误杀普通段落里的省略号 "..."
+  it('v28 step 109.3: TOC 条目过滤（不误杀正常省略号）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 3, total_blocks: 8,
+      page_layout: [
+        // 目录页
+        {
+          page_number: 2,
+          blocks: [
+            { type: 'heading', order: 1, text: '目录' },
+            { type: 'heading', order: 2, text: '1 绪论..............................1' },
+            { type: 'heading', order: 3, text: '2 试验材料与方法............5' },
+            { type: 'heading', order: 4, text: '摘 要...........I' },  // 中文 TOC 无数字前缀
+            { type: 'heading', order: 5, text: 'Abstract...........II' },
+            { type: 'paragraph', order: 6, text: '正常段落里的省略号...' },  // 不能误杀
+          ],
+        },
+        // 真正的 1 绪论正文页（章节标题+正常段落）
+        {
+          page_number: 3,
+          blocks: [
+            { type: 'heading', order: 1, text: '1 绪论' },
+            { type: 'paragraph', order: 2, text: '随着工业化进程加快...' },
+            { type: 'paragraph', order: 3, text: '研究表明存在以下问题...' },
+          ],
+        },
+      ],
+    }
+    const kb = { id: 101, title: 'T', content: '', summary: null, tags: [] }
+    const r = normalizePaperData(kb, { images: [], extractions: [], related: [], visionLayout })
+    // TOC entry heading 不应创建 sections
+    const tocSubsection = r.sections.find(s => s.title?.includes('试验材料与方法'))
+    expect(tocSubsection).toBeUndefined()
+    // 真正的 1 绪论章节应保留（section title 不含 dot leader）
+    const introSection = r.sections.find(s => s.title === '1 绪论' && s.type === 'introduction')
+    expect(introSection).toBeTruthy()
+    expect(introSection.blocks.length).toBeGreaterThanOrEqual(2)
   })
 
   // v28 step 109.1: vision 输出 paragraph text 会保留 OCR 软换行（词中断开）
