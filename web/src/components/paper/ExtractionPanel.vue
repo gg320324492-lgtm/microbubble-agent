@@ -137,7 +137,13 @@ defineEmits(['extract'])
 const activeTab = ref('images')
 
 // 核心图（figure 类型，非 cover/logo）
-const coreFigures = computed(() => props.figures.filter(f => !f.kind || f.kind === 'figure'))
+//   v28 step 109.15: 过滤 vision-page* 占位（id 是字符串占位，src 为空）
+const coreFigures = computed(() => props.figures.filter(f => {
+  if (f.kind === 'cover' || f.kind === 'logo') return false
+  if (typeof f.id === 'string' && f.id.startsWith('vision-page')) return false
+  if (!f.src) return false  // 没 src 的占位不显示
+  return !f.kind || f.kind === 'figure'
+}))
 // 封面/出版信息/logo 弱化区
 const coverFigures = computed(() => props.figures.filter(f => f.kind === 'cover' || f.kind === 'logo'))
 
