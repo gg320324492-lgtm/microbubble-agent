@@ -3751,23 +3751,34 @@ export function normalizePaperData(raw, extra = {}) {
  */
 function _mergeVisionPagesByNumber(pages) {
   if (!pages || !pages.length) return []
-  const pageMap = new Map()  // page_number -> { page, blocks: Set(已加 block key) }
+  // v28 step 106.1: vision page 计数不稳定（同一页可能输出多次，且内容可能错位）
+  //   去重策略：按"内容指纹"合并相同 page（用首个 heading 或首个有内容的 block）
+  //   page_key = page_number + 首个 heading/paragraph 内容前 50 字符
+  //   重复 page_key 视为同一页，合并 blocks
+  const pageMap = new Map()  // page_key -> { page, blockKeys }
   for (const page of pages) {
     const pn = page.page_number
     if (pn == null) continue
-    if (!pageMap.has(pn)) {
-      pageMap.set(pn, { page_number: pn, blocks: [], blockKeys: new Set() })
-    }
-    const entry = pageMap.get(pn)
     const blocks = page.blocks || []
+    // 用首个有内容的 block 内容前 50 字符作指纹
+    let fingerprint = ''
     for (const b of blocks) {
-      // 去重 key: 用 type + 内容指纹（忽略 order，因为 vision 每次 order 重新计数）
-      //   image block: 用 type + caption 前 80 + image_index（不同 image_index 视为不同图）
-      //   其他 block: 用 type + 文本前 80
+      const t = (b.text || b.caption || '').slice(0, 50).trim()
+      if (t) {
+        fingerprint = t
+        break
+      }
+    }
+    const pageKey = `${pn}|${fingerprint}`
+    if (!pageMap.has(pageKey)) {
+      pageMap.set(pageKey, { page_number: pn, blocks: [], blockKeys: new Set() })
+    }
+    const entry = pageMap.get(pageKey)
+    for (const b of blocks) {
+      // 去重 key: type + 内容指纹（忽略 order，vision 每次 order 重新计数）
       let key
       if (b.type === 'image') {
-        // image 用 caption + figure_no + image_index 去重（同一 caption 视为同图）
-        key = `image|${b.figure_no || ''}|${b.caption || ''}|${b.image_index || ''}`
+        key = `image|${b.figure_no || ''}|${(b.caption || '').slice(0, 80)}`
       } else {
         key = `${b.type}|${(b.text || b.caption || '').slice(0, 80)}`
       }
@@ -3776,10 +3787,16 @@ function _mergeVisionPagesByNumber(pages) {
       entry.blocks.push(b)
     }
   }
-  // 按 page_number 排序
+  // 按 page_number 排序（page_number 可能有重复，但用 fingerprint 区分）
   return Array.from(pageMap.values())
     .map(p => ({ page_number: p.page_number, blocks: p.blocks }))
-    .sort((a, b) => (a.page_number || 0) - (b.page_number || 0))
+    .sort((a, b) => {
+      // 按第一个 block 的最小 order 排（保证页面顺序）
+      const minOrderA = a.blocks.length ? Math.min(...a.blocks.map(b => b.order || 0)) : Infinity
+      const minOrderB = b.blocks.length ? Math.min(...b.blocks.map(b => b.order || 0)) : Infinity
+      if (minOrderA !== minOrderB) return minOrderA - minOrderB
+      return (a.page_number || 0) - (b.page_number || 0)
+    })
 }
 
 /**

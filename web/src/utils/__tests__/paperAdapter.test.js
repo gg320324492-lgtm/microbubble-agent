@@ -2011,33 +2011,32 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
   })
 
   // v28 step 106: vision 后处理 — 合并重复 page_number
-  //   vision model 经常把 page 8 输出多次（page 计数不稳定）
-  //   paperAdapter 必须按 page_number 去重，合并相同 page 的 blocks
+  //   vision model 经常把同一 page 输出多次（page 计数不稳定）
+  //   paperAdapter 必须按内容指纹去重（相同 fingerprint 视为重复）
   it('v28 step 106: vision page_number 重复时应合并', () => {
     const visionLayout = {
       has_layout: true,
       total_pages: 9,
       total_blocks: 30,
       page_layout: [
-        // page 8 出现 3 次（vision 不稳定）
+        // page 8 第一次输出（真实内容）
         {
           page_number: 8,
           blocks: [
             { type: 'heading', level: 1, order: 1, text: '3.4 Anti-interference' },
             { type: 'paragraph', order: 2, text: 'first paragraph on page 8' },
-          ],
-        },
-        {
-          page_number: 8,
-          blocks: [
             { type: 'paragraph', order: 3, text: 'second paragraph on page 8' },
             { type: 'image', order: 4, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
           ],
         },
+        // page 8 重复输出（vision 不稳定，重复相同内容）
         {
           page_number: 8,
           blocks: [
-            { type: 'image', order: 5, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
+            { type: 'heading', level: 1, order: 1, text: '3.4 Anti-interference' },
+            { type: 'paragraph', order: 2, text: 'first paragraph on page 8' },
+            { type: 'paragraph', order: 3, text: 'second paragraph on page 8' },
+            { type: 'image', order: 4, image_index: 2, caption: 'Fig. 4. Anti-interference.', figure_no: 'Fig. 4' },
           ],
         },
         // 正常 page
@@ -2056,11 +2055,11 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     const r = normalizePaperData(kb, {
       images, extractions: [], related: [], visionLayout,
     })
-    // 合并后 page 8 只出现 1 次（3 个 blocks 唯一去重）
+    // 合并后 page 8 只出现 1 次（heading 变成 section 标题，所以 sections 里 page 8 的 blocks = 3）
     const allBlocks = r.sections.flatMap(s => s.blocks)
     const page8Blocks = allBlocks.filter(b => b.page === 8)
-    expect(page8Blocks.length).toBe(3)  // heading + 2 paragraphs/images（image_index 重复的去重）
-    // 重复 image_index 2 的去重
+    expect(page8Blocks.length).toBe(3)  // 2 paragraphs + 1 image_anchor（heading 不在 blocks 里）
+    // 重复 image_index 2 的去重（同一 Fig. 4 只保留 1 个 image_anchor）
     const fig4Blocks = allBlocks.filter(b => b.figure_no === 'Fig. 4')
     expect(fig4Blocks.length).toBe(1)
   })
