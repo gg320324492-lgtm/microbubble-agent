@@ -24,6 +24,7 @@
         <PaperBlockRenderer
           :block="block"
           :is-chinese="isChinese"
+          :figure-registry="figureRegistry || []"
         />
         <!-- 段落级 inline figure 锚定: 在 paragraph block 后插入 -->
         <div
@@ -368,6 +369,8 @@ const pageRangeText = computed(() => {
   color: #4B5563;
   margin-bottom: 8px;
   word-break: break-word;
+  /* v28 step 109: 保留 \n 换行（参考文献条目内部可能有换行） */
+  white-space: pre-wrap;
 }
 
 /* 章节类型特殊样式 */
