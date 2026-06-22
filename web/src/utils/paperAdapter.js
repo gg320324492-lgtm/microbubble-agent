@@ -4052,6 +4052,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   let pageMarkers = []
   let figureMarkers = []
   let inlineFigureAnchors = {}
+  // v28 step 109.9: 跟踪已用 image id（避免 fallback 把同一图分配给多张 figure）
+  const _usedImageIds = new Set()
   let figureRegistry = []
   let pidCounter = 0
   // 按 page 排序 images，构造全局 image_index → img 映射
@@ -4170,9 +4172,37 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // 关联到 knowledge_images 表的图
         const imgIndex = b.image_index || 0
         let img = imageByGlobalIndex[imgIndex]
-        // v28 step 109.6: vision 经常把 image_index=0 赋给多张图（imageByGlobalIndex[0] 是 logo）
-        //   如果关联到的图是 publisher（Elsevier logo / cover / journal banner），
-        //   按 no-match 处理（占位 + 无 src）→ 避免 Elsevier 期刊 logo 重复显示
+        // v28 step 109.9: 智能 fallback — vision image_index 经常错位
+        //   如果命中 publisher 图，尝试 4 级 fallback 找到正确的真实图：
+        //   1. 同 page + 同 figureNo 的非 publisher 图
+        //   2. 同 page + 同 figureType 的非 publisher 图
+        //   3. 同 page 的未使用的非 publisher 图
+        //   4. 全局未使用的非 publisher 图
+        const usedImageIds = _usedImageIds
+        if (!img || img.isPublisherImage === true) {
+          const bFigureNo = b.figure_no || ''
+          const samePageImgs = sortedImages.filter(i =>
+            i.page === pageNum && !i.isPublisherImage && !usedImageIds.has(i.id)
+          )
+          // Level 1: 同 page + 同 figureNo
+          if (bFigureNo) {
+            img = samePageImgs.find(i => i.figureNo === bFigureNo || i.figure_no === bFigureNo) || null
+          }
+          // Level 2: 同 page + 同 type
+          if (!img && b.type === 'image') {
+            img = samePageImgs.find(i => i.figureType && b.caption?.includes(i.figureType)) || null
+          }
+          // Level 3: 同 page 的任意非 publisher 图
+          if (!img) {
+            img = samePageImgs[0] || null
+          }
+          // Level 4: 全局未使用的非 publisher 图
+          if (!img) {
+            img = sortedImages.find(i => !i.isPublisherImage && !usedImageIds.has(i.id)) || null
+          }
+        }
+        if (img) _usedImageIds.add(img.id)
+        // v28 step 109.6: 如果 fallback 后仍是 publisher，按 no-match 处理（占位）
         if (img && img.isPublisherImage === true) {
           img = null
         }
