@@ -2096,6 +2096,36 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(coverSection.blocks.find(b => b.content?.includes('Abstract'))).toBeUndefined()
   })
 
+  // v28 step 109.5: vision layout 路径下 imageId 提取必须兼容 DB 数字 ID
+  //   之前：imageId 提取只看 'fig-' 前缀字符串 → vision 路径用 DB 数字 ID 永远 null
+  //   结果：paperFigures[*].src 全是 null → FigureCard 的 <img src=""> 空字符串
+  //   用户 console 显示 "7 个 img 全部 src 空"
+  it('v28 step 109.5: vision 路径 imageId 提取兼容 DB 数字 ID（src 不为空）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 2,
+      page_layout: [{
+        page_number: 1,
+        blocks: [
+          { type: 'image', order: 1, image_index: 0, figure_no: 'Fig. 1', caption: 'Fig. 1. Test' },
+          { type: 'paragraph', order: 2, text: 'paragraph after figure' },
+        ],
+      }],
+    }
+    const images = [
+      { id: 528, page_number: 1, image_url: 'https://example.com/img1.png' },
+    ]
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images, extractions: [], related: [], visionLayout })
+    expect(r.figures.length).toBeGreaterThan(0)
+    // 关键：src 必须有值，不能空字符串
+    const fig = r.figures[0]
+    expect(fig.src).toBe('https://example.com/img1.png')
+    expect(fig.imageUrl).toBe('https://example.com/img1.png')
+    expect(fig.imageId).toBe(528)
+    // figureRegistry 自身也要有 src（PaperBlockRenderer._resolveFigure 读这个）
+    expect(r.figureRegistry[0].src).toBe('https://example.com/img1.png')
+  })
+
   // v28 step 109.3: vision 误识 TOC 条目应被过滤（不创建虚假 sections）
   //   目录里的 "1 绪论..............1" 被 vision 当 heading
   //   但不能误杀普通段落里的省略号 "..."
