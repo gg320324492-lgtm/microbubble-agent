@@ -1263,7 +1263,7 @@ function _parsePlainTextSections(content) {
       let paraBuf = []
       const flushPara = () => {
         if (!paraBuf.length) return
-        const text = paraBuf.join('\n').trim()
+        const text = _mergeOCRSoftLineBreaks(paraBuf.join('\n').trim())
         if (text) {
           current.blocks.push({
             type: 'paragraph',
@@ -1865,6 +1865,37 @@ function _splitOversizedParagraphs(sections) {
  *
  * 同时剥除摘要内的出版信息（Corresponding author / E-mail / Received / DOI 等）
  */
+function _mergeOCRSoftLineBreaks(text) {
+  if (!text) return text
+  // v28 step 109.1: OCR 软换行合并（vision 输出 paragraph 保留了 PDF 软换行）
+  //   软换行特征：
+  //     1. 上一行末尾是 `\\w`（非标点） + 下一行开头是小写字母 → 直接合并（无空格，PDF 单词被截断）
+  //     2. 上一行末尾是 `-\\n` + 下一行开头是字母 → 合并（去 `-`，典型 hyphenated word 断行）
+  //     3. 上一行末尾是 `\\w,` 或 `\\w)` → 改成空格（同一段内的标点切分）
+  //   真段落边界（保留 \\n\\n）：
+  //     - 上一行末尾是 `.`/`?`/`!` + 下一行是大写字母 → 段落边界
+  //     - 列表项（如 `•` / `-` 开头） → 保留 \\n
+  //     - 空行（\\n\\n） → 保留
+  let result = text
+
+  // 1. hyphenated word 断行：`word-\\nword` → `wordword`
+  result = result.replace(/([A-Za-z])-\s*\n\s*([a-z])/g, '$1$2')
+
+  // 2. 单词被换行截断（上一行末尾是 \\w + 下一行是小写）：直接合并
+  //    例: "micro-\\nnano" → "micronano", "dis-\\ninfection" → "disinfection"
+  //    例: "Micro-\\nnano bubbles" → "Micronano bubbles"（OCR 把 Micro-nano 截断成两行）
+  result = result.replace(/([A-Za-z])\s*\n\s*([a-z])/g, '$1 $2')
+
+  // 3. 列表项保留 \\n：• - * 开头 → 保留换行（但合并为 list item 之间空行）
+  //    这里不再额外处理，因为 list item 之间通常是 \\n\\n 已经是段落边界
+
+  // 4. 多余 \\n\\n + 单词 + \\n + 单词 合并（OCR 段中段间偶然 \\n\\n）
+  //    真实段落边界特征：上一行末尾是句末标点 + 下一行是大写字母
+  //    这里不做强制合并，保留 \\n\\n 让 paperAdapter 自行识别
+
+  return result
+}
+
 function _detectAbstractFromContent(content) {
   if (!content) return null
   const m = /(?:^|\n)\s*(?:abstract|摘要|内容摘要|文摘)\s*[:：]?\s*([\s\S]{20,3000}?)(?=\n\s*(?:keywords?|关键词|关键字|introduction|引言|1\s*\.?\s*Introduction|1\s*引言|1\s+引言|article\s+info|received|available\s+online|\[PAGE:))/i.exec(content)
@@ -3303,33 +3334,43 @@ function _alignFigureNosWithText(content, figureRegistry) {
 
 function _normalizeImages(images) {
   if (!Array.isArray(images)) return []
-  return images.map(i => ({
-    id: i.id,
-    page: i.page_number,
-    pageNumber: i.page_number,
-    src: i.image_url,
-    imageUrl: i.image_url,
-    width: i.width,
-    height: i.height,
-    caption: null,
-    ocrText: i.ocr_text,
-    ocrStatus: i.ocr_status,
-    ocrError: i.ocr_error,
-    ocrModel: i.ocr_model,
-    // ── v28 step 4: vision 模型输出的 12 个结构化字段（直接透传，不再推断） ──
-    figureNo: i.figure_no ?? null,
-    figureType: i.figure_type ?? null,
-    isCoreFigure: i.is_core_figure ?? null,
-    isPublisherImage: i.is_publisher_image ?? null,
-    isSupportingFigure: i.is_supporting_figure ?? null,
-    sectionHint: i.section_hint ?? null,
-    visualSummary: i.visual_summary ?? null,
-    anchorParagraphIndex: i.anchor_paragraph_index ?? null,
-    anchorText: i.anchor_text ?? null,
-    visionConfidence: i.vision_confidence ?? null,
-    visionModelUsed: i.vision_model_used ?? null,
-    visionAnalyzedAt: i.vision_analyzed_at ?? null,
-  }))
+  return images.map(i => {
+    // v28 step 109.1: 从 ocr_text 自动提取 caption 兜底（API caption 字段常为空）
+    //   优先取首段连续英文/数字（典型 Fig. 1 caption 格式）
+    let autoCaption = null
+    if (i.ocr_text) {
+      const m = i.ocr_text.match(/^[\s\S]{0,200}?((?:Fig\.?|Figure|Table|Scheme|S\.)\s*\d+[^\n]{0,150})/i)
+      if (m) autoCaption = m[1].trim()
+      else autoCaption = i.ocr_text.slice(0, 120).trim()
+    }
+    return {
+      id: i.id,
+      page: i.page_number,
+      pageNumber: i.page_number,
+      src: i.image_url,
+      imageUrl: i.image_url,
+      width: i.width,
+      height: i.height,
+      caption: autoCaption,
+      ocrText: i.ocr_text,
+      ocrStatus: i.ocr_status,
+      ocrError: i.ocr_error,
+      ocrModel: i.ocr_model,
+      // ── v28 step 4: vision 模型输出的 12 个结构化字段（直接透传，不再推断） ──
+      figureNo: i.figure_no ?? null,
+      figureType: i.figure_type ?? null,
+      isCoreFigure: i.is_core_figure ?? null,
+      isPublisherImage: i.is_publisher_image ?? null,
+      isSupportingFigure: i.is_supporting_figure ?? null,
+      sectionHint: i.section_hint ?? null,
+      visualSummary: i.visual_summary ?? null,
+      anchorParagraphIndex: i.anchor_paragraph_index ?? null,
+      anchorText: i.anchor_text ?? null,
+      visionConfidence: i.vision_confidence ?? null,
+      visionModelUsed: i.vision_model_used ?? null,
+      visionAnalyzedAt: i.vision_analyzed_at ?? null,
+    }
+  })
 }
 
 
@@ -3970,7 +4011,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         }
         startSection(secType, title, secLevel)
       } else if (b.type === 'paragraph') {
-        const text = (b.text || '').trim()
+        const text = _mergeOCRSoftLineBreaks((b.text || '').trim())
         if (!text) continue
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1)

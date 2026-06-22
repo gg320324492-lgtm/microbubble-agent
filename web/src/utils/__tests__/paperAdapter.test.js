@@ -2060,6 +2060,38 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(fig4Blocks.length).toBe(1)
   })
 
+  // v28 step 109.1: vision 输出 paragraph text 会保留 OCR 软换行（词中断开）
+  //   paperAdapter 必须合并这些软换行（hyphen + 词中断开）
+  it('v28 step 109.1: vision paragraph OCR 软换行应合并', () => {
+    const visionLayout = {
+      has_layout: true,
+      total_pages: 1,
+      total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 1,
+          blocks: [
+            // vision 保留了 OCR 软换行（PDF 原始换行，用真 \n 字符）
+            { type: 'paragraph', order: 1, text: 'Micro-nano bubbles (MNBs) have demonstrated broad applica-\ntion prospects in the field of environmental gover-\nnance due to their extremely large specific surface\narea, long residence time in water, and surface charge.' },
+          ],
+        },
+      ],
+    }
+    const kb = { id: 99, title: 'Test', content: '', summary: null, tags: [] }
+    const r = normalizePaperData(kb, {
+      images: [], extractions: [], related: [], visionLayout,
+    })
+    const para = r.sections[0]?.blocks[0]
+    expect(para).toBeTruthy()
+    // hyphen 词断行应该合并（applica-tion → application, gover-nance → governance）
+    expect(para.content).toContain('application')
+    expect(para.content).toContain('governance')
+    expect(para.content).not.toContain('applica-\ntion')
+    expect(para.content).not.toContain('gover-\nnance')
+    // 单词被换行截断（surface + area）应该合并为 surface area
+    expect(para.content).toContain('surface area')
+  })
+
   // v28 step 106: vision 输出 reference_list 类型
   //   当 vision 识别参考文献时，paperAdapter 应作为独立 block 处理
   it('v28 step 106: vision reference_list 应作为独立 block', () => {

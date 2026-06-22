@@ -102,43 +102,43 @@ const resolvedFigure = computed(() => {
   if (props.block.type !== 'image_anchor') return null
   const targetPage = props.block.page
   const targetFigNo = props.block.figure_no
-  const targetCaption = props.block.caption
+  const targetCaption = (props.block.caption || '').trim()
+  const targetCaption50 = targetCaption.slice(0, 50)
+  const targetCaption30 = targetCaption.slice(0, 30)
 
-  // 优先按 figureNo + page 匹配
-  for (const fig of props.figureRegistry) {
-    if (targetFigNo && fig.figureNo === targetFigNo) {
-      if (!targetPage || fig.page === targetPage || fig.pageNumber === targetPage) {
-        return {
-          ...fig,
-          _displayNo: fig.figureNo,
-          _captionText: targetCaption || fig.caption || '',
-        }
-      }
-    }
-  }
-  // 退化：按 page + caption 匹配
-  if (targetCaption) {
+  // 优先级 1：figureNo + page 精确匹配
+  if (targetFigNo) {
     for (const fig of props.figureRegistry) {
-      const figCaption = fig.caption || ''
-      if ((fig.page === targetPage || fig.pageNumber === targetPage) &&
-          figCaption && figCaption.slice(0, 30) === targetCaption.slice(0, 30)) {
-        return {
-          ...fig,
-          _displayNo: fig.figureNo || targetFigNo,
-          _captionText: targetCaption,
-        }
+      if (fig.figureNo === targetFigNo && (fig.page === targetPage || fig.pageNumber === targetPage || !targetPage)) {
+        return { ...fig, _displayNo: fig.figureNo, _captionText: targetCaption || fig.caption || '' }
       }
     }
   }
-  // 最终退化：按 page 匹配第一张图
+  // 优先级 2：caption 前 50 字符 + page 匹配
+  if (targetCaption50) {
+    for (const fig of props.figureRegistry) {
+      const figPage = fig.page || fig.pageNumber
+      const figCap = (fig.caption || '').slice(0, 50)
+      if (figCap && figCap === targetCaption50 && (figPage === targetPage || !targetPage)) {
+        return { ...fig, _displayNo: fig.figureNo || targetFigNo, _captionText: targetCaption || fig.caption || '' }
+      }
+    }
+  }
+  // 优先级 3：caption 前 30 字符 + page 匹配
+  if (targetCaption30) {
+    for (const fig of props.figureRegistry) {
+      const figPage = fig.page || fig.pageNumber
+      const figCap = (fig.caption || '').slice(0, 30)
+      if (figCap && figCap === targetCaption30 && (figPage === targetPage || !targetPage)) {
+        return { ...fig, _displayNo: fig.figureNo || targetFigNo, _captionText: targetCaption || fig.caption || '' }
+      }
+    }
+  }
+  // 优先级 4：仅 page 匹配（兜底）
   if (targetPage) {
     for (const fig of props.figureRegistry) {
       if (fig.page === targetPage || fig.pageNumber === targetPage) {
-        return {
-          ...fig,
-          _displayNo: fig.figureNo || targetFigNo,
-          _captionText: targetCaption || fig.caption || '',
-        }
+        return { ...fig, _displayNo: fig.figureNo || targetFigNo, _captionText: targetCaption || fig.caption || '' }
       }
     }
   }
