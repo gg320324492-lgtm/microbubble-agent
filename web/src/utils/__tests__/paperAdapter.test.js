@@ -2157,6 +2157,30 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(fig2?.src).toBeNull()
   })
 
+  // v28 step 109.12: figureNo 优先从 caption 提取（vision 经常 figure_no 与 caption 不对应）
+  it('v28 step 109.12: figureNo 优先从 caption 提取（更可靠）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 2,
+      page_layout: [{
+        page_number: 8,
+        blocks: [
+          // vision 给 figure_no="Fig. 1" 但 caption 是 "Fig. 3. Effects..." —— 错位
+          { type: 'image', order: 1, image_index: 2, figure_no: 'Fig. 1',
+            caption: 'Fig. 3. Effects of complex environmental factors on the toluene conversion' },
+        ],
+      }],
+    }
+    const images = [
+      { id: 536, page_number: 8, image_url: 'https://example.com/536.png',
+        is_publisher_image: false, is_core_figure: true, figure_type: 'chart' },
+    ]
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images, extractions: [], related: [], visionLayout })
+    // figureNo 应该从 caption 提取 = "Fig. 3"（不是 vision 的 "Fig. 1"）
+    const fig = r.figures[0]
+    expect(fig.figureNo).toBe('Fig. 3')
+  })
+
   // v28 step 109.9: vision image_index 命中 publisher 时，4 级 fallback 找真实图
   //   Level 1: 同 page + 同 figureNo
   //   Level 2: 同 page + 同 figureType
