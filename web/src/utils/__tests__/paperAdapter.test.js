@@ -2096,6 +2096,58 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(coverSection.blocks.find(b => b.content?.includes('Abstract'))).toBeUndefined()
   })
 
+  // v28 step 109.25: vision OCR 把段落错断（如 "the" + 换行 + "conversion"）应合并
+  it('v28 step 109.25: vision OCR 断错的两段应自动合并', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 3, total_blocks: 4,
+      page_layout: [
+        {
+          page_number: 3,
+          blocks: [
+            // 段 1 末尾"the"被截断（应该是和段 2 连续的）
+            { type: 'paragraph', order: 1, text: 'such as radical generation. It is worth noting that the' },
+            // 段 2 是接着的"conversion for..."
+            { type: 'paragraph', order: 2, text: 'conversion for CH₃SH over the tested concentration range.' },
+            // 段 3 真独立段落（小写开头但是另一段了？还是新话题？）
+            { type: 'paragraph', order: 3, text: 'The system showed consistently high and stable' },
+            // 段 4 应该和段 3 合并（"The system" + "showed"）
+            { type: 'paragraph', order: 4, text: 'showed consistently high and stable conversion.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allParas = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    console.log('段落数:', allParas.length)
+    for (const para of allParas) {
+      console.log('  -', para.content.slice(0, 100))
+    }
+    // 应该合并成 2 段（"the conversion for..." 和 "The system showed consistently..."）
+    expect(allParas.length).toBe(2)
+    // 关键：CH3SH 段应在第一段
+    expect(allParas[0].content).toContain('CH₃SH')
+    expect(allParas[0].content).toContain('conversion for')
+  })
+
+  // 不应合并的反例：上一段以句末符号结尾（正常段落边界）
+  it('v28 step 109.25: 上一段以句末符号结尾则不合并', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 3,
+      page_layout: [{
+        page_number: 1,
+        blocks: [
+          { type: 'paragraph', order: 1, text: 'This is a complete first paragraph that ends with a period.' },
+          { type: 'paragraph', order: 2, text: 'A new sentence starts with capital letter.' },
+        ],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allParas = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    expect(allParas.length).toBe(2)  // 不应合并
+  })
+
   // v28 step 109.5: vision layout 路径下 imageId 提取必须兼容 DB 数字 ID
   //   之前：imageId 提取只看 'fig-' 前缀字符串 → vision 路径用 DB 数字 ID 永远 null
   //   结果：paperFigures[*].src 全是 null → FigureCard 的 <img src=""> 空字符串
