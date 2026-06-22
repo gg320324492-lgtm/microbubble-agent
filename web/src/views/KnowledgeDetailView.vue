@@ -823,18 +823,7 @@ const startReanalyzePolling = () => {
 const graphRendered = ref(false)
 
 const renderGraph = () => {
-  // v28 step 109.22: 生产也输出日志（之前只在 DEV，线上完全沉默）
-  console.log('[renderGraph] start', {
-    hasGraphRef: !!graphRef.value,
-    graphDataNodes: graphData.value?.nodes?.length,
-    graphDataEdges: graphData.value?.edges?.length,
-    echartsType: typeof echarts,
-  })
   if (!graphRef.value || !graphData.value?.nodes?.length) {
-    console.warn('[renderGraph] early return', {
-      graphRefNull: !graphRef.value,
-      nodesLength: graphData.value?.nodes?.length,
-    })
     graphRendered.value = false
     return
   }
@@ -843,7 +832,6 @@ const renderGraph = () => {
     chartInstance = echarts.init(graphRef.value)
     // 使用 normalizeGraphData 适配多种字段名（id/node_id/label/value 等）
     const normalized = normalizeGraphData(graphData.value)
-    console.log('[KnowledgeGraph] normalized:', normalized._status, 'nodes:', normalized.nodes.length, 'links:', normalized.links.length)
     if (!normalized.nodes.length) {
       graphRendered.value = false
       return
@@ -865,17 +853,8 @@ const renderGraph = () => {
       }],
     })
     graphRendered.value = true
-    console.log('[renderGraph] success')
   } catch (e) {
-    // 总是输出
-    console.error('知识图谱渲染失败:', e, {
-      message: e?.message,
-      stack: e?.stack?.slice(0, 500),
-      graphStatus: graphStatus.value,
-      graphDataNodes: graphData.value?.nodes?.length,
-      hasGraphRef: !!graphRef.value,
-      echartsType: typeof echarts,
-    })
+    console.warn('知识图谱渲染失败:', e)
     graphRendered.value = false
   }
 }
