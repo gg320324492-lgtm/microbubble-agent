@@ -4178,8 +4178,11 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       }
       if (b.type === 'heading') {
         const level = b.level || 1
-        const title = (b.text || '').trim()
+        // v28 step 109.28: heading 也走 formatScientificText（之前只有 paragraph 处理）
+        //   修复章节标题里 '-OH' 不会被转为 '·OH' 的 bug
+        let title = (b.text || '').trim()
         if (!title) continue
+        title = formatScientificText(title)
         // v28 step 109.3: 过滤 vision 误识的 TOC 条目
         //   目录里的 "1 绪论..............1" / "2 试验材料与方法...5" 会被 vision 标为 heading
         //   特征：含连续 3+ 个点 + 末尾页码 OR 含省略号
@@ -4292,12 +4295,14 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           inlineFigureAnchors[pidKey].push(img)
           // v28 step 109.12: figureNo 优先从 caption 提取（vision 经常 figure_no 与 caption 不对应）
           const captionFigureNo = _extractFigureNoFromCaption(b.caption)
+          // v28 step 109.28: caption 也走 formatScientificText（化学式 OCR 修正）
+          const cleanCaption = b.caption ? formatScientificText(b.caption) : null
           figureRegistry.push({
             id: img.id,
             page: pageNum,
             figureNo: captionFigureNo || img.figureNo || b.figure_no || null,
             figureType: img.figureType || null,
-            caption: b.caption || null,
+            caption: cleanCaption,
             isCoreFigure: img.isCoreFigure !== false,
             isPublisherImage: !!img.isPublisherImage,
             visualSummary: img.visualSummary || null,
@@ -4307,6 +4312,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         } else {
           // 没关联到图，登记一个空 fig（保留 caption 用于显示）
           const captionFigureNo = _extractFigureNoFromCaption(b.caption)
+          const cleanCaption2 = b.caption ? formatScientificText(b.caption) : null
           figureRegistry.push({
             id: `vision-page${pageNum}-img${imgIndex}`,
             page: pageNum,
@@ -4321,11 +4327,12 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           })
         }
         // 同时给当前 section 加 image 标记（让前端能渲染 image block）
+        const cleanCaption3 = b.caption ? formatScientificText(b.caption) : null
         currentBlocks.push({
           type: 'image_anchor',
           page: pageNum,
           image_index: imgIndex,
-          caption: b.caption || null,
+          caption: cleanCaption3,
           figure_no: b.figure_no || null,
         })
       } else if (b.type === 'table') {
