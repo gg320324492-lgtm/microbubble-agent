@@ -24,7 +24,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 function manifestHashPlugin() {
   return {
     name: 'manifest-hash-plugin',
-    closeBundle() {
+    // v28 step 109.8: 用 writeBundle + enforce: 'post' 替代 closeBundle
+    //   之前 closeBundle 跟 vite-plugin-pwa 并行，setImmediate 重试 20 次仍被覆写
+    //   writeBundle 在所有 bundle 写盘后才触发，且 enforce: 'post' 保证在 PWA 之后跑
+    enforce: 'post',
+    writeBundle() {
       const distDir = resolve(__dirname, 'dist')
       const manifestPath = resolve(distDir, 'manifest.webmanifest')
       let content
