@@ -4209,11 +4209,12 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           if (!img && b.type === 'image') {
             img = samePageImgs.find(i => i.figureType && b.caption?.toLowerCase().includes(i.figureType.toLowerCase())) || null
           }
-          // Level 3: 同 page 的任意非 publisher 图
+          // Level 3: 同 page 的任意未使用的非 publisher 图
           if (!img) {
             img = samePageImgs[0] || null
           }
           // Level 4: 跨 page 找最近的未使用的非 publisher 图（按 page 距离排序）
+          //   v28 step 109.14: 必须排除已用 image id（避免 Fig.4 与 Scheme1 同图重复）
           if (!img) {
             const candidates = sortedImages.filter(i =>
               !i.isPublisherImage && !usedImageIds.has(i.id)
@@ -4224,6 +4225,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
             })
             img = candidates[0] || null
           }
+          // Level 5: 实在找不到未用 image，保留 null（占位，不显示 src）
         }
         if (img) _usedImageIds.add(img.id)
         // v28 step 109.6: 如果 fallback 后仍是 publisher，按 no-match 处理（占位）
@@ -4334,6 +4336,21 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       f.imageUrl = f.src
     }
   }
+  // v28 step 109.14: 按 imageId 去重（vision 不稳定会让多张 figure 拿到同一 image）
+  //   第一个拿到该 imageId 的 fig 保留 src，后续重复的清空 src（变占位）
+  const seenImageIds = new Set()
+  for (const f of figureRegistry) {
+    const iid = Number(f.id)
+    if (Number.isFinite(iid) && iid > 0) {
+      if (seenImageIds.has(iid)) {
+        // 已用过，清空 src
+        f.src = null
+        f.imageUrl = null
+      } else {
+        seenImageIds.add(iid)
+      }
+    }
+  }
   const paperFigures = figureRegistry.map(f => {
     // v28 step 109.5: imageId 提取兼容两种 ID 形式
     //   - vision 路径：f.id 直接是 DB 数字 ID（如 528）→ 直接用
@@ -4363,6 +4380,19 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       imageUrl: f.isPublisherImage ? null : (f.imageUrl || f.src || null),
     }
   })
+  // v28 step 109.14: paperFigures 也按 imageId 去重（与 figureRegistry 同步）
+  const seenIds = new Set()
+  for (const f of paperFigures) {
+    const iid = Number(f.imageId ?? f.id)
+    if (Number.isFinite(iid) && iid > 0) {
+      if (seenIds.has(iid)) {
+        f.src = null
+        f.imageUrl = null
+      } else {
+        seenIds.add(iid)
+      }
+    }
+  }
 
   // ── 4. 检测 abstract（从第一页或 preamble 段）
   let abstract = raw.summary || null
