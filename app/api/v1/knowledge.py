@@ -259,6 +259,22 @@ async def get_knowledge_graph(
     return await svc.get_knowledge_graph(center_id=center_id, depth=depth, limit=limit)
 
 
+@router.get("/knowledge/{knowledge_id}/graph", response_model=KnowledgeGraph)
+async def get_knowledge_graph_by_id(
+    knowledge_id: int,
+    depth: int = Query(2, ge=1, le=5),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """v28 step 109.18: per-id 图谱端点别名（前端 KnowledgeDetailView 调用此 URL）
+
+    与 /knowledge/graph?center_id=X 行为一致，仅 URL 形式不同。
+    """
+    svc = KnowledgeGraphService(db)
+    return await svc.get_knowledge_graph(center_id=knowledge_id, depth=depth, limit=limit)
+
+
 @router.get("/knowledge/stats/rich", response_model=KnowledgeStats)
 async def rich_knowledge_stats(
     current_user: Member = Depends(get_current_user),

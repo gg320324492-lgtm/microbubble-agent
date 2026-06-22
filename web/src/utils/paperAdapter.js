@@ -4427,6 +4427,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     summary: raw.summary || '',
     abstract,
     keywords,
+    // v28 step 109.18: vision 路径也透传 relatedKnowledge（让 RelatedKnowledgeList 渲染）
+    relatedKnowledge: Array.isArray(related) ? related : [],
     sections: _extractReferencesFromSections(sections),
     figures: paperFigures,
     figureRegistry: figureRegistry,
