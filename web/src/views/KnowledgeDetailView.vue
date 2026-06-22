@@ -111,7 +111,8 @@
              （graphRef 只在 graphRendered=true 时存在，但 renderGraph 需要 graphRef 才能 set graphRendered=true） -->
         <section v-if="graphStatus === 'success'" class="paper-graph" :class="{ 'paper-graph-rendered': graphRendered }">
           <h2 class="graph-title">🕸️ 知识图谱</h2>
-          <div ref="graphRef" class="graph-container" :style="{ display: graphRendered ? 'block' : 'none' }"></div>
+          <!-- v28 step 109.21: container 必须始终可见，否则 echarts.init() 在 0 尺寸元素上失败 -->
+          <div ref="graphRef" class="graph-container"></div>
         </section>
         <section v-else-if="graphStatus === 'failed'" class="paper-graph paper-graph-empty paper-graph-failed">
           <div class="graph-empty-content">
@@ -815,7 +816,22 @@ const startReanalyzePolling = () => {
 const graphRendered = ref(false)
 
 const renderGraph = () => {
+  // v28 step 109.21: 调试日志（找出为什么 graphRendered 一直 false）
+  if (import.meta.env.DEV) {
+    console.debug('[renderGraph] called:', {
+      hasGraphRef: !!graphRef.value,
+      graphDataNodes: graphData.value?.nodes?.length,
+      graphDataEdges: graphData.value?.edges?.length,
+      echartsLoaded: typeof echarts,
+    })
+  }
   if (!graphRef.value || !graphData.value?.nodes?.length) {
+    if (import.meta.env.DEV) {
+      console.warn('[renderGraph] early return:', {
+        graphRefNull: !graphRef.value,
+        nodesLength: graphData.value?.nodes?.length,
+      })
+    }
     graphRendered.value = false
     return
   }
@@ -849,7 +865,13 @@ const renderGraph = () => {
     })
     graphRendered.value = true
   } catch (e) {
-    console.warn('知识图谱渲染失败，降级为空状态:', e)
+    // v28 step 109.21: 总是输出错误（之前只在 DEV 输出）
+    console.warn('知识图谱渲染失败，降级为空状态:', e, {
+      graphStatus: graphStatus.value,
+      graphDataNodes: graphData.value?.nodes?.length,
+      hasGraphRef: !!graphRef.value,
+      echartsType: typeof echarts,
+    })
     graphRendered.value = false
   }
 }
