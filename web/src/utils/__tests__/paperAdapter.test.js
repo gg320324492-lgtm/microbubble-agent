@@ -2148,11 +2148,54 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     ]
     const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
       { images, extractions: [], related: [], visionLayout })
-    // Fig. 1 和 Fig. 2 都因为 image_index=0 关联到 logo，应 src=null
-    for (const f of r.figures || []) {
-      expect(f.src).toBeNull()
-      expect(f.imageUrl).toBeNull()
+    // v28 step 109.9: smart fallback — Fig. 1 命中 logo → fallback level 3（同 page 未用非 publisher）
+    //   → 找到 image 529 → 应有 src
+    //   Fig. 2 命中 logo → fallback 仍找不到（image 529 已被 Fig. 1 占用）→ src=null
+    const fig1 = r.figures.find(f => f.figureNo === 'Fig. 1')
+    const fig2 = r.figures.find(f => f.figureNo === 'Fig. 2')
+    expect(fig1?.src).toBe('https://example.com/fig1.png')
+    expect(fig2?.src).toBeNull()
+  })
+
+  // v28 step 109.9: vision image_index 命中 publisher 时，4 级 fallback 找真实图
+  //   Level 1: 同 page + 同 figureNo
+  //   Level 2: 同 page + 同 figureType
+  //   Level 3: 同 page 未用的非 publisher 图
+  //   Level 4: 全局未用的非 publisher 图
+  it('v28 step 109.9: vision image_index 错位时 fallback 到同 page 真实图', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 5, total_blocks: 4,
+      page_layout: [
+        {
+          page_number: 8,  // vision 说 Fig. 3 在 page 8
+          blocks: [
+            { type: 'image', order: 1, image_index: 0, figure_no: 'Fig. 3', caption: 'Fig. 3. Mechanism' },
+          ],
+        },
+        {
+          page_number: 8.2,
+          blocks: [
+            { type: 'image', order: 2, image_index: 0, figure_no: 'Fig. 5', caption: 'Fig. 5. Mechanism' },
+          ],
+        },
+      ],
     }
+    // image 528 (logo) 在 page 1，image 536 (真实图) 在 page 8
+    const images = [
+      { id: 528, page_number: 1, image_url: 'https://example.com/logo.png',
+        is_publisher_image: true, is_core_figure: false, figure_type: 'logo' },
+      { id: 536, page_number: 8, image_url: 'https://example.com/fig3-5.png',
+        is_publisher_image: false, is_core_figure: true, figure_type: 'mechanism' },
+    ]
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images, extractions: [], related: [], visionLayout })
+    // Fig. 3 image_index=0 → 命中 528 (logo) → fallback level 3 同 page=8 找 → 找到 536
+    const fig3 = r.figures.find(f => f.figureNo === 'Fig. 3')
+    expect(fig3?.src).toBe('https://example.com/fig3-5.png')
+    // Fig. 5 image_index=0 → 命中 528 (logo) → fallback → 同 page=8.2 没图
+    //   → level 4 全局未用 → 536 已被 Fig. 3 占用 → null
+    const fig5 = r.figures.find(f => f.figureNo === 'Fig. 5')
+    expect(fig5?.src).toBeNull()
   })
 
   // v28 step 109.7: OCR 误识的图说明段落应被过滤
