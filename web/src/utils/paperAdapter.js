@@ -3917,29 +3917,36 @@ function _isReferenceParagraph(text) {
  */
 /**
  * v28 step 109.25: 判断 vision OCR 拆错的两段是否应合并
- *   合并条件（必须全部满足）：
- *     1. 上一段不以句末符号结尾（., !, ?, :, ;, 。, ！, ？）
- *     2. 本段以小写字母 / 中文起始词开头（不是新句子）
- *     3. 上一段长度 >= 30 字符（避免误合并短 OCR 噪音）
+ *   合并条件（满足任一即合并）：
+ *     A. 上一段不以句末符号结尾 + 本段以小写字母/中文起始词开头（典型 soft break）
+ *        例：'...that the' + 'conversion for CH₃SH...'
+ *     B. 上一段末尾是未闭合的开括号 '(' 或 '[' → 括号内接续（大写数字/缩写也算）
+ *        例：'...analyzer (Malvern Panalytical' + 'ZS₉₀), and the bubble size...'
+ *     C. 上一段末尾是连字符 '-'（英文软换行）→ 拼接时不带连字符
+ *        例：'...water-' + 'treatment system'  → 'watertreatment system'
  *
- *   例：
- *     "...decline in overall conversion performance. It is worth noting that the"
- *     "conversion for CH₃SH over the tested concentration range"
- *     → 合并（"the" + "conversion" 显然接续）
+ *   其他限制：
+ *     - 上一段长度 >= 30 字符（避免误合并短 OCR 噪音）
  */
 function _shouldMergeParagraphs(prevContent, nextContent) {
   if (!prevContent || !nextContent) return false
   const prev = prevContent.trim()
   const next = nextContent.trim()
   if (prev.length < 30) return false
-  // 上一段末尾字符
+
   const lastChar = prev[prev.length - 1]
-  // 句末符号：句号/问号/感叹号/分号/冒号/引号
-  if (/[.!?;:。！？；："')\]]/.test(lastChar)) return false
-  // 本段开头是小写字母 / 中文
   const firstChar = next[0]
-  const isLowerOrChinese = /[a-z一-龥]/.test(firstChar)
-  if (!isLowerOrChinese) return false
+
+  // 情况 B: 上一段有未闭合的括号（包括圆括号、方括号、中文括号）
+  //   计数法比单字符判断更可靠（OCR 可能把 "(" 跟文本混淆）
+  //   例：'...analyzer (Malvern Panalytical' + 'ZS₉₀), and...'
+  const openCount = (prev.match(/[\(\[（]/g) || []).length
+  const closeCount = (prev.match(/[\)\]）]/g) || []).length
+  if (openCount > closeCount) return true
+
+  // 情况 A: 上一段不以句末符号结尾 + 本段小写字母 / 中文开头
+  if (/[.!?;:。！？；："')\]]/.test(lastChar)) return false
+  if (!/[a-z一-龥]/.test(firstChar)) return false
   return true
 }
 

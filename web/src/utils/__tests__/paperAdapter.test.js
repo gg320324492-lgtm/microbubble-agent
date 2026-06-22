@@ -2148,6 +2148,30 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allParas.length).toBe(2)  // 不应合并
   })
 
+  // v28 step 109.26: 上一段末尾是开括号未闭合 → 下一段任何字符开头都应合并
+  it('v28 step 109.26: 上一段末尾是开括号未闭合则合并（无论下段首字符大小写）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 3,
+      page_layout: [{
+        page_number: 1,
+        blocks: [
+          // 上段末尾是 '(' 开括号未闭合
+          { type: 'paragraph', order: 1, text: 'The zeta potential was measured using a Zetasizer nanoparticle analyzer (Malvern Panalytical' },
+          // 下段开头是大写缩写 "ZS₉₀)"，其实是上段括号内接续
+          { type: 'paragraph', order: 2, text: 'ZS₉₀), and the bubble size was measured using a nanoparticle tracking analyzer.' },
+        ],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allParas = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    // 应合并成 1 段
+    expect(allParas.length).toBe(1)
+    // 合并后内容应包含括号完整匹配
+    expect(allParas[0].content).toContain('(Malvern Panalytical ZS₉₀)')
+    expect(allParas[0].content).toContain('and the bubble size')
+  })
+
   // v28 step 109.5: vision layout 路径下 imageId 提取必须兼容 DB 数字 ID
   //   之前：imageId 提取只看 'fig-' 前缀字符串 → vision 路径用 DB 数字 ID 永远 null
   //   结果：paperFigures[*].src 全是 null → FigureCard 的 <img src=""> 空字符串
