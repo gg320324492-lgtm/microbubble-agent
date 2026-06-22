@@ -4186,13 +4186,19 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // 关联到 knowledge_images 表的图
         const imgIndex = b.image_index || 0
         let img = imageByGlobalIndex[imgIndex]
+        // v28 step 109.17: 已用过的 imageId 也触发 fallback（避免重复）
+        //   之前只在 img 为空或 publisher 时 fallback → 多张 figure 拿到同一图
+        //   现在：imageId 已被前面 figure 用了 → 触发 fallback 找别的图
+        const usedImageIds = _usedImageIds
+        if (img && img.isPublisherImage !== true && usedImageIds.has(img.id)) {
+          img = null  // 触发 fallback
+        }
         // v28 step 109.9: 智能 fallback — vision image_index 经常错位
         //   如果命中 publisher 图，尝试 4 级 fallback 找到正确的真实图：
         //   1. 同 page + 同 figureNo 的非 publisher 图
         //   2. 同 page + 同 figureType 的非 publisher 图
         //   3. 同 page 的未使用的非 publisher 图
         //   4. 全局未使用的非 publisher 图
-        const usedImageIds = _usedImageIds
         if (!img || img.isPublisherImage === true) {
           const bFigureNo = b.figure_no || ''
           // v28 step 109.10: page 类型归一化（vision 可能是字符串 '8' / '8.2'，DB 是数字）
