@@ -15,6 +15,8 @@ import {
   cleanContent,
   classifyImageKind,
   matchFiguresWithCaptions,
+  translateKeywordToEnglish,
+  translateKeywordsToEnglish,
 } from '../paperAdapter'
 
 describe('extractPageMarkers', () => {
@@ -416,7 +418,9 @@ References
     const paper = normalizePaperData(raw)
     expect(paper.isChineseHeavy).toBe(true)
     expect(paper.abstract).toBeTruthy()
-    expect(paper.keywords).toContain('臭氧')
+    // v28 step 109.37: 中文关键词已被翻译成英文
+    expect(paper.keywords).toContain('Ozone')
+    expect(paper.keywords).toContain('Micro-nanobubbles')
     const types = paper.sections.map(s => s.type)
     expect(types).toContain('abstract')
     expect(types).toContain('conclusion')
@@ -3012,5 +3016,159 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(refBlocks.length).toBeGreaterThanOrEqual(1)
     expect(refBlocks[0].content).toContain('[1] Smith J.')
     expect(refBlocks[0].content).toContain('[2] Yu J.')
+  })
+})
+
+// ============================================================
+// v28 step 109.37: 关键词中英翻译
+// ============================================================
+//
+// 用户需求：关键词也用英文显示
+// 数据库 tags 字段经常是中文（运维录入 / LLM 抽取），但 PDF 原文 Keywords 段是英文
+// _translateKeywordsToEnglish 通过 KEYWORD_ZH_TO_EN 映射表翻译中文 tags 为英文
+
+describe('v28 step 109.37: 关键词中英翻译 - translateKeywordToEnglish', () => {
+  it('完全匹配的中文关键词应翻译', () => {
+    expect(translateKeywordToEnglish('微纳米气泡')).toBe('Micro-nanobubbles')
+    expect(translateKeywordToEnglish('臭氧')).toBe('Ozone')
+    expect(translateKeywordToEnglish('过氧化氢')).toBe('Hydrogen peroxide')
+    expect(translateKeywordToEnglish('甲苯氧化')).toBe('Toluene oxidation')
+    expect(translateKeywordToEnglish('活性氧物种')).toBe('Reactive oxygen species')
+    expect(translateKeywordToEnglish('气液传质')).toBe('Gas-liquid mass transfer')
+    expect(translateKeywordToEnglish('水处理')).toBe('Water treatment')
+    expect(translateKeywordToEnglish('无催化剂')).toBe('Catalyst-free')
+  })
+
+  it('已经是英文的关键词应原样保留', () => {
+    expect(translateKeywordToEnglish('Micro-nanobubbles')).toBe('Micro-nanobubbles')
+    expect(translateKeywordToEnglish('Hydrogen peroxide')).toBe('Hydrogen peroxide')
+    expect(translateKeywordToEnglish('Toluene oxidation')).toBe('Toluene oxidation')
+    expect(translateKeywordToEnglish('Ozone')).toBe('Ozone')
+  })
+
+  it('不在映射表的中文关键词应原样保留', () => {
+    expect(translateKeywordToEnglish('未知中文术语')).toBe('未知中文术语')
+    expect(translateKeywordToEnglish('人工智能')).toBe('人工智能')
+  })
+
+  it('子串匹配：长 key 优先', () => {
+    // "微纳米气泡技术" 含 "微纳米气泡"，但 "微纳米气泡技术" 在映射表更具体
+    expect(translateKeywordToEnglish('微纳米气泡技术')).toBe('Micro-nanobubble technology')
+    expect(translateKeywordToEnglish('臭氧微纳米气泡')).toBe('Ozone micro-nanobubbles')
+    expect(translateKeywordToEnglish('高级氧化工艺')).toBe('Advanced oxidation processes')
+  })
+
+  it('空字符串和非字符串应安全返回', () => {
+    expect(translateKeywordToEnglish('')).toBe('')
+    expect(translateKeywordToEnglish(null)).toBe(null)
+    expect(translateKeywordToEnglish(undefined)).toBe(undefined)
+    expect(translateKeywordToEnglish(123)).toBe(123)
+  })
+
+  it('去除前后空白', () => {
+    expect(translateKeywordToEnglish('  微纳米气泡  ')).toBe('Micro-nanobubbles')
+    expect(translateKeywordToEnglish('\t臭氧\n')).toBe('Ozone')
+  })
+})
+
+describe('v28 step 109.37: 关键词中英翻译 - translateKeywordsToEnglish', () => {
+  it('PDF id=19 的 8 个中文关键词应正确翻译', () => {
+    // 用户提供的完整列表
+    const input = [
+      '微纳米气泡', '臭氧', '过氧化氢', '甲苯氧化',
+      '活性氧物种', '气液传质', '水处理', '无催化剂',
+    ]
+    const result = translateKeywordsToEnglish(input)
+    expect(result).toEqual([
+      'Micro-nanobubbles',
+      'Ozone',
+      'Hydrogen peroxide',
+      'Toluene oxidation',
+      'Reactive oxygen species',
+      'Gas-liquid mass transfer',
+      'Water treatment',
+      'Catalyst-free',
+    ])
+  })
+
+  it('混合中英文应只翻译中文', () => {
+    const input = ['微纳米气泡', 'Micro-nanobubbles', 'Hydrogen peroxide', '臭氧']
+    const result = translateKeywordsToEnglish(input)
+    // Micro-nanobubbles 出现两次（中文翻译 + 原文），去重保留首次
+    expect(result).toContain('Micro-nanobubbles')
+    expect(result).toContain('Hydrogen peroxide')
+    expect(result).toContain('Ozone')
+    expect(result.length).toBe(3)
+  })
+
+  it('空数组和非数组应安全返回', () => {
+    expect(translateKeywordsToEnglish([])).toEqual([])
+    expect(translateKeywordsToEnglish(null)).toEqual([])
+    expect(translateKeywordsToEnglish(undefined)).toEqual([])
+    expect(translateKeywordsToEnglish('not an array')).toEqual([])
+  })
+
+  it('过滤空字符串和非字符串', () => {
+    const input = ['微纳米气泡', '', null, undefined, '臭氧', '  ']
+    const result = translateKeywordsToEnglish(input)
+    expect(result).toEqual(['Micro-nanobubbles', 'Ozone'])
+  })
+
+  it('大小写不同的翻译结果应去重', () => {
+    const input = ['微纳米气泡', 'MICRO-NANOBUBBLES', 'micro-nanobubbles']
+    const result = translateKeywordsToEnglish(input)
+    expect(result.length).toBe(1)
+  })
+})
+
+describe('v28 step 109.37: normalizePaperData 集成 - 关键词翻译', () => {
+  it('PDF id=19 raw.tags 是中文应被翻译', () => {
+    const raw = {
+      id: 19,
+      title: 'Test',
+      content: '...',
+      summary: '...',
+      tags: ['微纳米气泡', '臭氧', '过氧化氢', '甲苯氧化', '活性氧物种', '气液传质', '水处理', '无催化剂'],
+    }
+    const r = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    expect(r.keywords).toEqual([
+      'Micro-nanobubbles',
+      'Ozone',
+      'Hydrogen peroxide',
+      'Toluene oxidation',
+      'Reactive oxygen species',
+      'Gas-liquid mass transfer',
+      'Water treatment',
+      'Catalyst-free',
+    ])
+    // tags 字段也同步翻译
+    expect(r.tags).toEqual(r.keywords)
+  })
+
+  it('PDF id=19 raw.tags 是英文应原样保留', () => {
+    const raw = {
+      id: 14,
+      title: 'Test',
+      content: '...',
+      summary: '...',
+      tags: ['Micro-nanobubbles', 'Ozone', 'Hydrogen peroxide'],
+    }
+    const r = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    expect(r.keywords).toEqual(['Micro-nanobubbles', 'Ozone', 'Hydrogen peroxide'])
+  })
+
+  it('raw.tags 为空时（从原文 content 抽）应也走翻译', () => {
+    const raw = {
+      id: 19,
+      title: 'Test',
+      content: '[PAGE:1]\nAbstract:\nThis is a test abstract.\nKeywords:\n微纳米气泡\n臭氧\n过氧化氢\n甲苯氧化\n活性氧物种\n气液传质\n水处理\n无催化剂\n[PAGE:2]\n1. Introduction\n...',
+      summary: '...',
+      tags: [],
+    }
+    const r = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    // v28 step 109.37: 期望每个关键词被独立翻译（不是合并成一个字符串）
+    expect(r.keywords.length).toBeGreaterThanOrEqual(7)
+    expect(r.keywords).toContain('Micro-nanobubbles')
+    expect(r.keywords).toContain('Ozone')
   })
 })
