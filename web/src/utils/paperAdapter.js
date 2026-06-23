@@ -4124,19 +4124,97 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   //   vision 经常把 section heading 的内容（paragraph）输出在 heading 之前
   //   例：page 8 上 vision 输出顺序是 [67] paragraph (3.4) [68] paragraph (3.5) [69] heading 3.5
   //   → heading X.Y 出现时，把上一个 section 中"同一 page 且紧邻 heading"的
-  //     最后 1 个 paragraph 块移到当前 section（追加到末尾）
-  //   保守策略：只移 1 个 block，避免误移属于前一段的内容
-  //   时序策略：用 deferredBuffer 把 misplaced block 暂存，等当前 section 结束时再追加
-  //   （保证 natural 顺序：[70] intro → [71] image → [68] misplaced）
+  //     最后 1 个 paragraph 块移到当前 section
+  //
+  //   v28 step 109.31: figure-aware 插入（不是简单追加到末尾）
+  //     用户的 paper 真实顺序：Fig. 5a 讨论 → Fig. 5 image → Fig. 5b/c 讨论 → Fig. 5d/e 讨论
+  //     但 vision 把 Fig. 5b/c 讨论放在 heading 之前，所以单独追加到末尾就破坏了顺序
+  //     算法：提取 misplaced 的最高子图字母（如 Fig. 5c），找当前 section 里引用"下一个子图"
+  //     （Fig. 5d）的 paragraph，插在它前面；找不到则按 image_anchor / earlier sub-figure 回退
   const deferredMisplacedBlocks = []
+
+  // 提取文本中的 figure 引用 [{num, letter}]
+  function _extractFigureRefs(text) {
+    if (!text) return []
+    const refs = []
+    const re = /(?:Fig\.?|Figure|Scheme)\s*(\d+)\s*([a-z])?/gi
+    let m
+    while ((m = re.exec(text)) !== null) {
+      refs.push({ num: parseInt(m[1], 10), letter: (m[2] || '').toLowerCase() })
+    }
+    return refs
+  }
+
+  // 比较 figure ref 大小（num 主排序，letter 次排序，空 letter < 'a'）
+  function _cmpFigRef(a, b) {
+    if (a.num !== b.num) return a.num - b.num
+    return a.letter.localeCompare(b.letter)
+  }
+
+  // 找 misplaced block 应该插入的位置（基于 figure 子图字母顺序）
+  function _findInsertPositionForMisplaced(currentBlocks, misplacedBlock) {
+    if (currentBlocks.length === 0) return 0
+    const text = misplacedBlock.content || misplacedBlock.text || ''
+    const figs = _extractFigureRefs(text)
+    if (figs.length === 0) return currentBlocks.length  // 无 figure 引用 → 追加末尾
+
+    // 最高子图（如 Fig. 5c 的 {5, 'c'}）
+    let highest = figs[0]
+    for (const f of figs) {
+      if (_cmpFigRef(f, highest) > 0) highest = f
+    }
+
+    // 第一优先：找引用"下一个子图"的 paragraph（图号同 + letter 更大），插在它前面
+    for (let i = 0; i < currentBlocks.length; i++) {
+      const b = currentBlocks[i]
+      if (b.type !== 'paragraph') continue
+      const bFigs = _extractFigureRefs(b.content || b.text || '')
+      for (const f of bFigs) {
+        if (f.num === highest.num && _cmpFigRef(f, highest) > 0) {
+          return i  // 插在 i 之前
+        }
+      }
+    }
+
+    // 第二优先：找同图号的 image_anchor（"Fig. 5"，无子图字母），插在它后面
+    //   典型 paper 布局：image 显示 → 后续 paragraph 讨论各子图
+    if (highest.letter) {
+      for (let i = 0; i < currentBlocks.length; i++) {
+        const b = currentBlocks[i]
+        if (b.type !== 'image_anchor' && b.type !== 'image') continue
+        const bText = b.caption || b.content || b.text || ''
+        const bFigs = _extractFigureRefs(bText)
+        for (const f of bFigs) {
+          if (f.num === highest.num && !f.letter) {
+            return i + 1  // 插在 image 之后
+          }
+        }
+      }
+    }
+
+    // 第三优先：找引用"更早子图"的 paragraph，插在它后面
+    for (let i = currentBlocks.length - 1; i >= 0; i--) {
+      const b = currentBlocks[i]
+      if (b.type !== 'paragraph') continue
+      const bFigs = _extractFigureRefs(b.content || b.text || '')
+      for (const f of bFigs) {
+        if (f.num === highest.num && _cmpFigRef(f, highest) < 0) {
+          return i + 1
+        }
+      }
+    }
+
+    return currentBlocks.length  // 兜底追加末尾
+  }
 
   const flushCurrent = () => {
     if (currentSection) {
-      // 把 deferred misplaced blocks 追加到当前 section 末尾（再 flush）
-      if (deferredMisplacedBlocks.length > 0) {
-        currentBlocks.push(...deferredMisplacedBlocks)
-        deferredMisplacedBlocks.length = 0
+      // 把 deferred misplaced blocks 按 figure-aware 位置插入
+      for (const m of deferredMisplacedBlocks) {
+        const pos = _findInsertPositionForMisplaced(currentBlocks, m)
+        currentBlocks.splice(pos, 0, m)
       }
+      deferredMisplacedBlocks.length = 0
       sections.push({
         id: currentSection.id,
         title: currentSection.title,
@@ -4151,14 +4229,13 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
 
   const startSection = (type, title, level, pageNum) => {
     if (currentSection) {
-      // Step 1: 把之前 deferred 的 misplaced blocks 追加到当前 section 末尾
-      //   （这些是上一次 startSection 转移过来的 blocks）
-      if (deferredMisplacedBlocks.length > 0) {
-        currentBlocks.push(...deferredMisplacedBlocks)
-        deferredMisplacedBlocks.length = 0
+      // Step 1: 把之前 deferred 的 misplaced blocks 按 figure-aware 位置插入当前 section
+      for (const m of deferredMisplacedBlocks) {
+        const pos = _findInsertPositionForMisplaced(currentBlocks, m)
+        currentBlocks.splice(pos, 0, m)
       }
+      deferredMisplacedBlocks.length = 0
       // Step 2: 把当前 section 末尾紧邻 heading 的 paragraph 移到 deferred buffer
-      //   （这个 block 应该属于新 section，但要追加到新 section 的末尾）
       if (currentBlocks.length > 0) {
         const last = currentBlocks[currentBlocks.length - 1]
         if (last.type === 'paragraph' && last.page === pageNum) {
@@ -4166,7 +4243,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           deferredMisplacedBlocks.push(moved)
         }
       }
-      // Step 3: flush 当前 section（不带 deferred 的 block）
+      // Step 3: flush 当前 section（不含 deferred 的 block）
       sections.push({
         id: currentSection.id,
         title: currentSection.title,

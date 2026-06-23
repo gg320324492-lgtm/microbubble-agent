@@ -2210,6 +2210,80 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(o3Idx).toBeLessThan(mmIdx)
   })
 
+  // v28 step 109.31: figure-aware 插入 — misplaced paragraph 应按子图字母顺序定位
+  //   用户的 paper 真实场景：Fig. 5a → Fig. 5 image → Fig. 5b/c → Fig. 5d/e
+  //   vision 把 Fig. 5b/c 段落输出在 heading 之前，应按子图字母顺序插入到 image_anchor 之后、Fig. 5d 之前
+  it('v28 step 109.31: misplaced paragraph 应按 figure 子图字母顺序插入', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 6,
+      page_layout: [
+        {
+          page_number: 8,
+          blocks: [
+            // 3.4 heading
+            { type: 'heading', level: 1, order: 1, text: '3.4. Effects' },
+            // 3.5 misplaced: 引用 Fig. 5b/c（应插在 Fig. 5d 之前、Fig. 5 image 之后）
+            { type: 'paragraph', order: 2, text: 'the molecular model reveals a stable interface. Fig. 5b shows charges and Fig. 5c shows orbitals' },
+            // 3.5 heading
+            { type: 'heading', level: 1, order: 3, text: '3.5. Interfacial activation' },
+            // 3.5 intro: 引用 Fig. 5a
+            { type: 'paragraph', order: 4, text: 'In the O3-MNBs system, removal is efficient. As illustrated in Fig. 5a, the interface matters.' },
+            // 3.5 Fig. 5 image
+            { type: 'image', order: 5, image_index: 0, caption: 'Fig. 5. Schematic illustration.', figure_no: 'Fig. 5' },
+            // 3.5 orbital coupling: 引用 Fig. 5d
+            { type: 'paragraph', order: 6, text: 'orbital coupling and electron transfer. Fig. 5d shows energy profiles and Fig. 5e summarizes the mechanism.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
+    expect(sec35).toBeTruthy()
+
+    const paraOrder = sec35.blocks
+      .filter(b => b.type === 'paragraph')
+      .map(b => {
+        if ((b.content || '').includes('molecular model')) return 'molecular_model'
+        if ((b.content || '').includes('O3-MNBs system')) return 'O3_MNBs_intro'
+        if ((b.content || '').includes('orbital coupling')) return 'orbital_coupling'
+        return '?'
+      })
+
+    console.log('=== 3.5 paragraph 顺序 ===')
+    paraOrder.forEach((p, i) => console.log(`  [${i}] ${p}`))
+
+    // 期望顺序：O3_MNBs_intro → molecular_model → orbital_coupling
+    expect(paraOrder).toEqual(['O3_MNBs_intro', 'molecular_model', 'orbital_coupling'])
+  })
+
+  // v28 step 109.31 反例：misplaced 无 figure 引用 → 仍追加到末尾
+  it('v28 step 109.31: misplaced 无 figure 引用时应追加到末尾（不破坏现有逻辑）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 8,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.4 Effects' },
+            { type: 'paragraph', order: 2, text: 'some text without figure references' },
+            { type: 'heading', level: 1, order: 3, text: '3.5 Mechanism' },
+            { type: 'paragraph', order: 4, text: 'first paragraph of 3.5' },
+            { type: 'paragraph', order: 5, text: 'second paragraph of 3.5' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
+    const paras = sec35.blocks.filter(b => b.type === 'paragraph')
+    // misplaced（无 fig ref）应在末尾
+    expect(paras.length).toBe(3)
+    expect(paras[2].content).toContain('without figure references')
+  })
+
   // v28 step 109.30 反例：heading 之前是不同 page 的 paragraph（不应移动）
   it('v28 step 109.30: heading 之前跨 page 的 paragraph 不应被移动', () => {
     const visionLayout = {
