@@ -4508,7 +4508,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           content: b.text || '',
           page: pageNum,
         })
-        flushDeferredForNextSection()
+        // 不立即 flush deferredForNextSection（等 image_anchor 或 flushCurrent 兜底）
         continue
       }
       if (b.type === 'heading') {
@@ -4629,7 +4629,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         for (const splitText of splitTexts) {
           _processSingleParagraph(splitText, pageNum)
         }
-        flushDeferredForNextSection()
+        // 不立即 flush deferredForNextSection（等 image_anchor 或 flushCurrent 兜底）
       } else if (b.type === 'image') {
         // 关联到 knowledge_images 表的图
         const imgIndex = b.image_index || 0
@@ -4751,7 +4751,8 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           page: pageNum,
           caption,
         })
-        flushDeferredForNextSection()
+        // 不立即 flush deferredForNextSection——等下一个 image_anchor 触发 flush
+        // （避免讨论组被挤到 table 之前，破坏视觉顺序）
       } else if (b.type === 'formula') {
         if (!currentSection) startSection('normal', '未命名', 2, pageNum)
         currentBlocks.push({
@@ -4759,7 +4760,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           content: b.latex || '',
           page: pageNum,
         })
-        flushDeferredForNextSection()
+        // 同上：等下一个 image_anchor
       }
     }
     // 每页结束，记录 page_marker
