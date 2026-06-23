@@ -4349,14 +4349,39 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       for (const m of deferredMisplacedBlocks) {
         const pos = _findInsertPositionForMisplaced(currentBlocks, m)
         currentBlocks.splice(pos, 0, m)
+        // v28 step 109.34: 插入后立即检查与前后邻居的合并
+        //   之前问题：step 109.31 插入 misplaced block 时，后面的内容已被 push 过，
+        //     没有走 step 109.25 合并逻辑，导致 molecular_model + orbital_coupling
+        //     错分成两段（用户期望合并成一段）
+        //   修复：插入后检查 prev（如果 prev 是 paragraph 且 _shouldMergeParagraphs）
+        //     或 next（同样条件），合并
+        const prevBlock = pos > 0 ? currentBlocks[pos - 1] : null
+        if (prevBlock && prevBlock.type === 'paragraph' && _shouldMergeParagraphs(prevBlock.content, m.content)) {
+          // 与 prev 合并：prev.content += m.content, 移除 m
+          prevBlock.content = (prevBlock.content + ' ' + m.content).trim()
+          currentBlocks.splice(pos, 1)
+        } else {
+          const nextBlock = currentBlocks[pos + 1]
+          if (nextBlock && nextBlock.type === 'paragraph' && _shouldMergeParagraphs(m.content, nextBlock.content)) {
+            // 与 next 合并：next.content = m.content + next.content, 移除 m
+            nextBlock.content = (m.content + ' ' + nextBlock.content).trim()
+            currentBlocks.splice(pos, 1)
+          }
+        }
       }
       deferredMisplacedBlocks.length = 0
       // Step 2: 把当前 section 末尾紧邻 heading 的 paragraph 移到 deferred buffer
+      //   v28 step 109.34: 只移"不完整段"（结尾无句末符号），完整段（以 . ! ? 结尾）
+      //   不动。否则会把正常的 3.5/4 段末段（以 "." 结尾）错移到下一 section
       if (currentBlocks.length > 0) {
         const last = currentBlocks[currentBlocks.length - 1]
         if (last.type === 'paragraph' && last.page === pageNum) {
-          const moved = currentBlocks.pop()
-          deferredMisplacedBlocks.push(moved)
+          const lastContent = (last.content || '').trim()
+          const endsIncomplete = !/[.!?。！？]\s*$/.test(lastContent)
+          if (endsIncomplete) {
+            const moved = currentBlocks.pop()
+            deferredMisplacedBlocks.push(moved)
+          }
         }
       }
       // Step 3: flush 当前 section（不含 deferred 的 block）
