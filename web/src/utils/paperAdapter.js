@@ -543,11 +543,14 @@ export function removeFrontMatter(content) {
   }
 
   // 抽取 Keywords
-  const kwMatch = frontMatter.match(/Keywords?\s*[：:]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:\d+\.\s*(?:Introduction|引言)|1\.|$))/i)
+  // v28 step 109.37: 之前只按 ,， 拆，OCR 把每个关键词放一行时（如 Elsevier 期刊）会被合并成一个字符串
+  //   改为按 ,，;\n 任一符号拆（支持逗号/分号/换行分隔）
+  //   lookahead 增加 [PAGE:N] 终止符（OCR 内容普遍含此标记）
+  const kwMatch = frontMatter.match(/Keywords?\s*[：:]?\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\s*(?:\d+\.\s*(?:Introduction|引言)|1\.|\[PAGE:|$))/i)
   if (kwMatch) {
     keywords = kwMatch[1]
       .replace(/[；;]/g, ',')  // 中英文分号统一
-      .split(/[,，]/)
+      .split(/[,，\n]+/)
       .map(k => k.trim())
       .filter(Boolean)
   }
@@ -2761,6 +2764,196 @@ function _detectKeywordsFromContent(content) {
 }
 
 
+// ============================================================
+// v28 step 109.37: 关键词中英翻译
+// ============================================================
+//
+// 原文 PDF 的 Keywords 段通常是英文（Elsevier 期刊标准格式）：
+//   Keywords:
+//   Micro-nano bubbles
+//   Hydrogen peroxide
+//   Toluene oxidation
+//   Active species
+//   Interfacial mass transfer
+//
+// 但数据库 tags 字段经常被中文标注（运维录入 / LLM 抽取）。
+// 用户要求关键词也用英文显示，所以：
+//   1. 优先直接从原文 content 抽 "Keywords:" 后英文列表（原文权威）
+//   2. 兜底把中文 tags 通过映射表翻译成英文
+//   3. 已经是英文的关键词不动（保持原样）
+//
+// ============================================================
+
+// 关键词中文 → 英文 映射表（按学科领域扩展：水处理 / 高级氧化 / 微纳米气泡）
+const KEYWORD_ZH_TO_EN = {
+  // 微纳米气泡领域
+  '微纳米气泡': 'Micro-nanobubbles',
+  '微纳米气泡技术': 'Micro-nanobubble technology',
+  '纳米气泡': 'Nanobubbles',
+  '微气泡': 'Microbubbles',
+  '超细气泡': 'Ultrafine bubbles',
+  '臭氧微纳米气泡': 'Ozone micro-nanobubbles',
+
+  // 氧化剂
+  '臭氧': 'Ozone',
+  '过氧化氢': 'Hydrogen peroxide',
+  '羟基自由基': 'Hydroxyl radical',
+  '超氧自由基': 'Superoxide radical',
+  '超氧阴离子': 'Superoxide anion',
+  '单线态氧': 'Singlet oxygen',
+  '活性氧物种': 'Reactive oxygen species',
+  '活性氧': 'Reactive oxygen species',
+  '活性物种': 'Reactive species',
+  '过硫酸盐': 'Persulfate',
+  '高锰酸钾': 'Permanganate',
+
+  // 工艺与机理
+  '高级氧化': 'Advanced oxidation',
+  '高级氧化工艺': 'Advanced oxidation processes',
+  '高级氧化技术': 'Advanced oxidation technology',
+  '臭氧氧化': 'Ozonation',
+  '催化臭氧氧化': 'Catalytic ozonation',
+  '湿式氧化': 'Wet air oxidation',
+  '芬顿': 'Fenton',
+  '光催化': 'Photocatalysis',
+  '电催化': 'Electrocatalysis',
+  '无催化剂': 'Catalyst-free',
+  '催化剂': 'Catalyst',
+  '催化': 'Catalysis',
+  '氧化': 'Oxidation',
+  '降解': 'Degradation',
+  '矿化': 'Mineralization',
+
+  // 反应物
+  '甲苯': 'Toluene',
+  '甲苯氧化': 'Toluene oxidation',
+  '苯': 'Benzene',
+  '酚': 'Phenol',
+  '挥发性有机物': 'Volatile organic compounds',
+  '挥发性有机化合物': 'Volatile organic compounds',
+  'VOCs': 'Volatile organic compounds',
+  '有机污染物': 'Organic pollutants',
+  '污染物': 'Pollutants',
+
+  // 物理化学
+  '传质': 'Mass transfer',
+  '气液传质': 'Gas-liquid mass transfer',
+  '气液界面': 'Gas-liquid interface',
+  '界面': 'Interface',
+  '界面反应': 'Interfacial reaction',
+  '界面效应': 'Interfacial effect',
+
+  // 应用领域
+  '水处理': 'Water treatment',
+  '废水处理': 'Wastewater treatment',
+  '污水处理': 'Wastewater treatment',
+  '饮用水处理': 'Drinking water treatment',
+  '地下水修复': 'Groundwater remediation',
+  '环境修复': 'Environmental remediation',
+
+  // 通用
+  '动力学': 'Kinetics',
+  '反应动力学': 'Reaction kinetics',
+  '机理': 'Mechanism',
+  '反应机理': 'Reaction mechanism',
+  '反应路径': 'Reaction pathway',
+  '密度泛函理论': 'Density functional theory',
+  'DFT计算': 'DFT calculation',
+  '分子动力学': 'Molecular dynamics',
+  '自由基': 'Radical',
+  '中间体': 'Intermediate',
+  '液相': 'Liquid phase',
+  '气相': 'Gas phase',
+  '水溶液': 'Aqueous solution',
+  '水相': 'Aqueous phase',
+  '转化率': 'Conversion',
+  '选择性': 'Selectivity',
+  '稳定性': 'Stability',
+  '经济分析': 'Economic analysis',
+}
+
+// 检测是否含中文（CJK Unified Ideographs）
+function _hasChineseChars(text) {
+  if (!text) return false
+  return /[一-鿿]/.test(text)
+}
+
+/**
+ * 把单个关键词翻译成英文（如果它是中文）
+ * - 已经是英文 / 数字 / 公式 → 原样返回
+ * - 完全匹配映射表 → 翻译
+ * - 子串匹配（如 "微纳米气泡技术" 含 "微纳米气泡"）→ 翻译成 "Micro-nanobubble technology"
+ *   （即在映射表最长 key 命中时优先用最长 key 的翻译，否则通用翻译）
+ * - 都不命中 → 原样返回
+ *
+ * @param {string} kw
+ * @returns {string}
+ */
+function _translateKeywordToEnglish(kw) {
+  if (!kw || typeof kw !== 'string') return kw
+  const trimmed = kw.trim()
+  if (!trimmed) return trimmed
+  // 已经是英文 / 不含中文 → 原样
+  if (!_hasChineseChars(trimmed)) return trimmed
+
+  // 1. 完全匹配
+  if (KEYWORD_ZH_TO_EN[trimmed]) {
+    return KEYWORD_ZH_TO_EN[trimmed]
+  }
+
+  // 2. 子串匹配：按 key 长度倒序，优先用更长的 key 匹配（避免 "微纳米气泡" 抢匹配 "微纳米气泡技术"）
+  const keys = Object.keys(KEYWORD_ZH_TO_EN).sort((a, b) => b.length - a.length)
+  for (const k of keys) {
+    if (trimmed.includes(k)) {
+      // 整词翻译 + 保留余下部分（如 "过氧化氢氧化" → "Hydrogen peroxide oxidation"）
+      const remainder = trimmed.replace(k, '').trim()
+      const translated = KEYWORD_ZH_TO_EN[k]
+      if (!remainder) return translated
+      // 余下部分递归翻译（处理复合关键词）
+      const remainderTranslated = _translateKeywordToEnglish(remainder)
+      // 如果余下部分翻译成功（不是原样返回），组合；否则保留原文
+      if (remainderTranslated !== remainder) {
+        return `${translated} ${remainderTranslated}`
+      }
+      return `${translated} ${remainder}`
+    }
+  }
+
+  // 3. 不匹配：原样返回
+  return trimmed
+}
+
+/**
+ * 把关键词数组批量翻译
+ * - 去重（保留首次出现的翻译结果）
+ * - 过滤空字符串
+ *
+ * @param {Array<string>} keywords
+ * @returns {Array<string>}
+ */
+function _translateKeywordsToEnglish(keywords) {
+  if (!Array.isArray(keywords)) return []
+  const seen = new Set()
+  const result = []
+  for (const kw of keywords) {
+    if (!kw || typeof kw !== 'string') continue
+    const translated = _translateKeywordToEnglish(kw)
+    if (!translated) continue
+    // 去重：标准化小写比较
+    const key = translated.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(translated)
+  }
+  return result
+}
+
+// 导出供单元测试 + 调试用
+export const translateKeywordToEnglish = _translateKeywordToEnglish
+export const translateKeywordsToEnglish = _translateKeywordsToEnglish
+export { KEYWORD_ZH_TO_EN }
+
+
 /**
  * 关联图与图注
  *
@@ -3586,6 +3779,11 @@ export function normalizePaperData(raw, extra = {}) {
     const detectedKw = _detectKeywordsFromContent(content)
     if (detectedKw.length) keywords = detectedKw
   }
+
+  // v28 step 109.37: 关键词翻译成英文（数据库 tags 经常是中文，用户要求英文显示）
+  //    - 已经英文的保持原样
+  //    - 中文通过 KEYWORD_ZH_TO_EN 映射表翻译
+  keywords = _translateKeywordsToEnglish(keywords)
 
   // 7. 图表清单（带 caption + figureNo + 分类）
   //    v28 step 14 修复：之前只复制 id/page/src 等原始字段，没传 vision 字段
@@ -4959,6 +5157,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       }
     }
   }
+
+  // v28 step 109.37: 关键词翻译成英文
+  keywords = _translateKeywordsToEnglish(keywords)
 
   return {
     id: raw.id,
