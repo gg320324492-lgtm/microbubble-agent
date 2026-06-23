@@ -234,9 +234,14 @@ function formatUnitExponent(text) {
 // 关键: extension 用 *? 和 \d+? 双重非贪婪，避免 O42 整体被吞作 formula
 // 例: SO42- → 优先 SO4 + 2(charge) 解析，而非 SO42(atom)
 //     O2·- → O + 2(atom) + · + -
+//     O2⋅⁻ → O + 2(atom) + ⋅ + ⁻  (v28 step 109.39: radical 扩展含 ⋅ U+22C5)
+//     O2•⁻ → O + 2(atom) + • + ⁻
 //     Fe3+ → Fe + 3(charge) + +
 //     H+   → H + sign
-const CHARGE_RE = /(?<![A-Z][a-z])([A-Z][a-z]?(?:[A-Z][a-z]?\d+?)*?)\s*(\d*)([·•]?)([+−−-])(?![A-Za-z\d])/g
+// v28 step 109.39: radical 字符集扩展 — 含 ⋅ (U+22C5) / · (U+00B7) / • (U+2022)
+//   这 3 种都是 OCR / PDF 提取器可能输出的"自由基中点"字符
+//   之前只认 [·•]，导致 "O2⋅−" 这种最常见的 PDF OCR 输出被误解析为 "O²⁻"（数字变电荷）
+const CHARGE_RE = /(?<![A-Z][a-z])([A-Z][a-z]?(?:[A-Z][a-z]?\d+?)*?)\s*(\d*)([·•⋅]?)([+−−-])(?![A-Za-z\d])/g
 
 function formatIonCharge(text) {
   if (!text) return ''
@@ -281,10 +286,16 @@ function formatIonCharge(text) {
  */
 
 // 自由基点号规范化：把 . + - 模式当作 ·⁻ (OCR 脏数据)
-const RADICAL_NORMALIZE_RE = /([A-Z][a-z]?\d*)\.([+−−-])/g
+// v28 step 109.39: 把所有可能的"radical 点号"都收齐 — . / · / • / ⋅
+//   - '.' 是 OCR 旧识别（中间 dot 误识为 ASCII period）
+//   - '·' U+00B7 是 LaTeX middle dot / keyboard 输入
+//   - '•' U+2022 是 bullet / PDF 文档默认
+//   - '⋅' U+22C5 是数学 multiplication dot / PDF 学术期刊常见
+//   都视为 radical 中点，遇到 charge 符号时归一为 '·'
+const RADICAL_NORMALIZE_RE = /([A-Z][a-z]?\d*)([·•⋅\.])([+−−-])/g
 
-// 自由基 ·OH / •OH 保留
-const RADICAL_PRESERVE_RE = /([·•])([A-Z][a-z]?\d*)/g
+// 自由基 ·OH / •OH / ⋅OH 保留（点号统一为 ·）
+const RADICAL_PRESERVE_RE = /([·•⋅])([A-Z][a-z]?\d*)/g
 
 // v28 step 109.27: OCR 经常把 ·OH 误识成 -OH（连字符）+ 后续小写词
 //   模式：'-OH' + 空格 + 小写字母开头（radical 描述常见开头）
@@ -300,8 +311,14 @@ function formatRadicals(text) {
   if (!text) return ''
   let result = String(text)
 
+  // 0. v28 step 109.39: 规范化"独立 radical + 元素"形式
+  //   •OH / ⋅OH / ·OH 都归一为 ·OH（视觉一致，font 兼容性最好）
+  //   注意: 只在 radical 单独 + 大写元素开头时归一（避免破坏 'O2·' 末尾点）
+  result = result.replace(/([·•⋅])OH\b/g, '·OH')
+
   // 1. 规范化 OCR 脏数据: O2.- → O2·- (dot before charge → middle dot)
-  result = result.replace(RADICAL_NORMALIZE_RE, (_m, base, charge) => {
+  // v28 step 109.39: 3 个 capture group (base, dot, charge)，统一归一为 ·
+  result = result.replace(RADICAL_NORMALIZE_RE, (_m, base, _dot, charge) => {
     return base + '·' + charge
   })
 
