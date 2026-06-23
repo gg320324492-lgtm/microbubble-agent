@@ -2153,16 +2153,19 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allParas.length).toBe(2)  // 不应合并
   })
 
-  // v28 step 109.30: vision OCR 输出顺序 bug — heading 之前的 paragraph 实际属于新 section
+  // v28 step 109.30 + 109.40: heading 之前紧邻的 paragraph 应属于新 section
   //   真实数据：page 8 上 block 顺序是
   //     [67] paragraph "conversion for CH₃SH..." (属于 3.4)
   //     [68] paragraph "the molecular model reveals..." (属于 3.5)
   //     [69] heading "3.5. Interfacial microenvironment..."
   //   vision 误把 3.5 内容输出在 heading 之前
-  //   修复：heading X.Y 出现时，把上一个 section 中"同一 page 且紧邻 heading"的
-  //         最后一个 paragraph 块移到当前 section
-  //   关键限制：只移 1 个 block（避免误移 [67] 这种属于 3.4 的内容）
-  it('v28 step 109.30: heading 之前紧邻的 paragraph 应属于新 section', () => {
+  // v28 step 109.40 更新: 完全禁用 Step 2 挪移逻辑（修复 PDF id=19 的 2.4 "Based on" 段错位 bug）
+  //   原挪移条件"段落末尾无句末符号"过于激进，会把完整段误挪到 deferredMisplacedBlocks，
+  //   然后 _findInsertPositionForMisplaced 兜底追加到无关 section 末尾（错位丢段）。
+  //   真实场景：vision OCR 已经把每段标成完整 paragraph block，不需要再判定"段落完整性"主动挪移。
+  //   现在：段落永远留在原 section 即便末尾看着"未完"。
+  //   此 fixture 段落 "the molecular model reveals..." 末尾无句末符号，但留在 3.4 section
+  it('v28 step 109.30 + 109.40: paragraph 留在原 section（不再挪移到下一节）', () => {
     const visionLayout = {
       has_layout: true, total_pages: 2, total_blocks: 7,
       page_layout: [
@@ -2174,7 +2177,7 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
             // 3.4 内容
             { type: 'paragraph', order: 2, text: 'CH3SH test' },
             { type: 'paragraph', order: 3, text: 'DCM test' },
-            // 3.5 内容（被 vision 误输出在 heading 之前）
+            // 3.5 内容（被 vision 误输出在 heading 之前，无句末符号结尾）
             { type: 'paragraph', order: 4, text: 'the molecular model reveals the presence of a stable interface' },
             // 3.5 标题
             { type: 'heading', level: 1, order: 5, text: '3.5. Interfacial microenvironment-promoted activation' },
@@ -2190,29 +2193,22 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     // 应有 2 个 section（3.4 + 3.5）
     expect(r.sections.length).toBe(2)
 
-    // 3.4 section 应包含 'CH3SH test' 和 'DCM test'（不含 'molecular model'）
+    // v28 step 109.40: 段落永远留在原 section（3.4）
+    //   3.4 section 应包含 'CH3SH test' / 'DCM test' / 'molecular model'
+    //   （molecular model 即便末尾无句末符号也保留，不再挪移）
     const sec34 = r.sections[0]
     const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
     expect(sec34Paras.some(c => c.includes('CH3SH test'))).toBe(true)
     expect(sec34Paras.some(c => c.includes('DCM test'))).toBe(true)
-    expect(sec34Paras.some(c => c.includes('molecular model'))).toBe(false)
+    expect(sec34Paras.some(c => c.includes('molecular model'))).toBe(true)
 
-    // 3.5 section 应包含 'molecular model' 和 'O3-MNBs system'
+    // 3.5 section 仅包含 'O3-MNBs system'（不含 molecular model）
     const sec35 = r.sections[1]
     const sec35Paras = sec35.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
-    expect(sec35Paras.some(c => c.includes('molecular model'))).toBe(true)
     expect(sec35Paras.some(c => c.includes('O3-MNBs system'))).toBe(true)
+    expect(sec35Paras.some(c => c.includes('molecular model'))).toBe(false)
     expect(sec35Paras.some(c => c.includes('CH3SH test'))).toBe(false)
     expect(sec35Paras.some(c => c.includes('DCM test'))).toBe(false)
-
-    // 顺序：O3-MNBs system (natural 3.5 content) 应在 molecular model (misplaced) 之前
-    // 用户需求："第二段才应该首先出现，之后才是这个第一段内容"
-    // 即 misplaced paragraph 应追加到 section 末尾，不抢占开头位置
-    const o3Idx = sec35Paras.findIndex(c => c.includes('O3-MNBs system'))
-    const mmIdx = sec35Paras.findIndex(c => c.includes('molecular model'))
-    expect(o3Idx).toBeGreaterThanOrEqual(0)
-    expect(mmIdx).toBeGreaterThanOrEqual(0)
-    expect(o3Idx).toBeLessThan(mmIdx)
   })
 
   // v28 step 109.31: figure-aware 插入 — misplaced paragraph 应按子图字母顺序定位
@@ -2259,8 +2255,14 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     console.log('=== 3.5 paragraph 顺序 ===')
     paraOrder.forEach((p, i) => console.log(`  [${i}] ${p}`))
 
-    // 期望顺序：O3_MNBs_intro → molecular_model → orbital_coupling
-    expect(paraOrder).toEqual(['O3_MNBs_intro', 'molecular_model', 'orbital_coupling'])
+    // 期望顺序：v28 step 109.40 禁用 Step 2 后，molecular_model 留在 3.4
+    //   3.5 段落：O3_MNBs_intro → orbital_coupling
+    expect(paraOrder).toEqual(['O3_MNBs_intro', 'orbital_coupling'])
+
+    // 验证 molecular_model 现在在 3.4 section
+    const sec34 = r.sections.find(s => (s.title || '').includes('3.4'))
+    const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec34Paras.some(c => c.includes('molecular model'))).toBe(true)
   })
 
   // v28 step 109.32: vision 误把 page header 标成 paragraph（应过滤，避免污染正文）
@@ -2345,21 +2347,28 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
       console.log(`  [${i}] "${first50}..." → "...${last50}"`)
     })
 
-    // 期望：
-    // 段 1: "In the O3-MNBs system... Fig. 5a"（独立）
-    // 段 2: molecular_model + orbital_coupling 合并成一段（关键！）
-    // 段 3: "Consistent with this..."（独立）
+    // v28 step 109.40: 段落保留在原 section（不被挪移）
+    //   段 1: "In the O3-MNBs system... Fig. 5a"（独立）
+    //   段 2: orbital_coupling（独立，不与 molecular_model 合并，因为 molecular_model 在 3.4）
+    //   段 3: "Consistent with this..."（独立）
     expect(paras.length).toBe(3)
 
-    // 段 2 包含 molecular_model 内容
-    expect(paras[1].content).toContain('the molecular model reveals')
-    // 段 2 也包含 orbital_coupling 内容（合并成功）
-    expect(paras[1].content).toContain('orbital coupling and electron transfer')
-    // 合并后应自然连接（molecular_model 在前，orbital_coupling 在后，中间是空格）
-    const mmIdx = paras[1].content.indexOf('the molecular model')
-    const ocIdx = paras[1].content.indexOf('orbital coupling')
-    expect(mmIdx).toBeGreaterThanOrEqual(0)
-    expect(ocIdx).toBeGreaterThan(mmIdx)
+    // molecular_model 现在在 3.4 section（不再挪移到 3.5）
+    const sec34 = r.sections.find(s => (s.title || '').includes('3.4'))
+    const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec34Paras.some(c => c.includes('molecular model'))).toBe(true)
+    // 3.5 不含 molecular_model
+    expect(paras.some(b => (b.content || '').includes('molecular model'))).toBe(false)
+
+    // orbital_coupling 在 3.5[1]（第二段，因为 Fig. 5 image 是 image_anchor）
+    const paraOrder = paras.map(b => {
+      const c = b.content || ''
+      if (c.includes('O3-MNBs system')) return 'O3_MNBs_intro'
+      if (c.includes('orbital coupling')) return 'orbital_coupling'
+      if (c.includes('Consistent')) return 'consistent'
+      return '?'
+    })
+    expect(paraOrder).toEqual(['O3_MNBs_intro', 'orbital_coupling', 'consistent'])
   })
 
   // v28 step 109.34 反例：插入后没有可合并的邻居 → 不动
@@ -2393,12 +2402,16 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
 
     const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
     const paras = sec35.blocks.filter(b => b.type === 'paragraph')
-    // 3 段都独立（molecular... 不完整段移到 3.5，但 next 段是大写开头 → 不合并）
-    expect(paras.length).toBe(3)
-    // 实际位置：figure-aware 插入到 In the O3-MNBs（Fig. 5a）和 Overall（Fig. 5d）之间
+    // v28 step 109.40: molecular discussion 现在保留在 3.4 section（不再挪移）
+    //   3.5 仅含 O3-MNBs intro + Overall 2 段
+    expect(paras.length).toBe(2)
     expect(paras[0].content).toContain('In the O3-MNBs')
-    expect(paras[1].content).toContain('molecular discussion')
-    expect(paras[2].content).toContain('Overall')
+    expect(paras[1].content).toContain('Overall')
+
+    // molecular discussion 在 3.4
+    const sec34 = r.sections.find(s => (s.title || '').includes('3.4'))
+    const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec34Paras.some(c => c.includes('molecular discussion'))).toBe(true)
   })
 
   // v28 step 109.34: 完整段（以 . 结尾）不应被 step 2 错移到下一 section
@@ -2639,8 +2652,11 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     })
   })
 
-  // v28 step 109.31 反例：misplaced 无 figure 引用 → 仍追加到末尾
-  it('v28 step 109.31: misplaced 无 figure 引用时应追加到末尾（不破坏现有逻辑）', () => {
+  // v28 step 109.40: 完全禁用 Step 2 挪移 — misplaced 段落永远留在原 section
+  //   旧行为：挪移到下一 section（即便无 fig ref 也会触发 prepend，但语义错位）
+  //   新行为：段落保留在 3.4 section（即便末尾看着"未完"）
+  //   修复 PDF id=19 的 2.4 Theoretical calculations 段末 "Based on" 错位 bug
+  it('v28 step 109.40: misplaced 段落永远留在原 section（不再挪移）', () => {
     const visionLayout = {
       has_layout: true, total_pages: 2, total_blocks: 5,
       page_layout: [
@@ -2658,11 +2674,19 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     }
     const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
       { images: [], extractions: [], related: [], visionLayout })
+
+    // misplaced 段落 "some text without figure references" 现在保留在 3.4
+    const sec34 = r.sections.find(s => (s.title || '').includes('3.4'))
+    const sec34Paras = sec34.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec34Paras.some(c => c.includes('without figure references'))).toBe(true)
+
+    // 3.5 仅含原本 3.5 自己的段落（不含 misplaced）
     const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
-    const paras = sec35.blocks.filter(b => b.type === 'paragraph')
-    // misplaced（无 fig ref）应在末尾
-    expect(paras.length).toBe(3)
-    expect(paras[2].content).toContain('without figure references')
+    const paras = sec35.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(paras.length).toBe(2)
+    expect(paras[0]).toContain('first paragraph of 3.5')
+    expect(paras[1]).toContain('second paragraph of 3.5')
+    expect(paras.some(c => c.includes('without figure references'))).toBe(false)
   })
 
   // v28 step 109.30 反例：heading 之前是不同 page 的 paragraph（不应移动）
@@ -3435,5 +3459,46 @@ describe('v28 step 109.39: abstract 字段 chemFormat 集成', () => {
     }
     const paper = normalizePaperData(raw, { images: [], extractions: [], related: [] })
     expect(paper.abstract).toBe(rawAbstract)
+  })
+
+  // v28 step 109.40 regression: PDF id=19 真实场景
+  //   2.4 Theoretical calculations 段末 "Based on" 无句末符号
+  //   旧逻辑会挪移到 deferredMisplacedBlocks → 错位到 3.1 末尾（用户报告）
+  //   新逻辑：段落保留在 2.4 section
+  it('v28 step 109.40 regression: 末尾无句末符号的段落保留在原 section（不再错位）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 6,
+      page_layout: [
+        {
+          page_number: 3,
+          blocks: [
+            { type: 'heading', level: 3, order: 1, text: '2.4. Theoretical calculations' },
+            // 段落末尾 "Based on" 无句末符号（PDF id=19 真实场景）
+            {
+              type: 'paragraph', order: 2,
+              text: 'All first-principles calculations were carried out within the framework of density functional theory (DFT) using BIOVIA Materials Studio. Based on',
+            },
+            { type: 'heading', level: 3, order: 3, text: '3. Results and discussion' },
+            { type: 'paragraph', order: 4, text: 'The results show that the O3-MNBs system achieved high conversion.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 19, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    // 2.4 section 应保留该段（不再挪移到 3 Results 末尾）
+    const sec24 = r.sections.find(s => (s.title || '').includes('2.4'))
+    expect(sec24).toBeTruthy()
+    const sec24Paras = sec24.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec24Paras.some(c => c.includes('first-principles calculations'))).toBe(true)
+    expect(sec24Paras.some(c => c.includes('Based on'))).toBe(true)
+
+    // 3 Results section 不应包含 2.4 的段落
+    const sec3 = r.sections.find(s => (s.title || '').includes('3. Results'))
+    if (sec3) {
+      const sec3Paras = sec3.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+      expect(sec3Paras.some(c => c.includes('first-principles'))).toBe(false)
+    }
   })
 })
