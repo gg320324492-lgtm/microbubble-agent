@@ -3095,16 +3095,18 @@ function _extractAuthorsAndJournal(content) {
     for (let i = 0; i < Math.min(lines.length, 50); i++) {
       const line = lines[i].trim()
       if (!line) continue
+      // 跳过 markdown blockquote (>) 和 image markdown (![]) — 这些是图表说明/图片 alt，不是作者
+      if (line.startsWith('>') || line.startsWith('!')) continue
       // 含 title 关键词 → 跳过
       if (TITLE_BLOCK_KEYWORDS.test(line)) continue
-      // 含 aff marker 的 author 行
+      // 含 aff marker 的 author 行（最稳的识别）
       if (/[A-Z][a-zà-ÿ'-]+\s+[A-Z][a-zà-ÿ'-]+\s+[a-z]\b/.test(line)) {
         startIdx = content.indexOf(line)
         break
       }
       // 兜底：无 aff 的 author 行（单作者）
-      if (i > 0 && /[A-Z][a-zà-ÿ'-]+\s+[A-Z][a-zà-ÿ'-]+/.test(line)) {
-        // 只在第一行（可能是 title）之外的行匹配
+      //   要求：①非首行 ②只匹配 2 个 CapitalName（防止误匹配图表描述）
+      if (i > 0 && /^[A-Z][a-zà-ÿ'-]+\s+[A-Z][a-zà-ÿ'-]+\s*$/.test(line)) {
         startIdx = content.indexOf(line)
         break
       }

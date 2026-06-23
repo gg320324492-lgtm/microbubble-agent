@@ -3313,4 +3313,39 @@ Body`
     expect(r.journal.name).toBe('Journal of Foo')
     expect(r.journal.fullCitation).toBe('Journal of Foo 1 (2024) 100')
   })
+
+  it('v28 step 109.38 regression: blockquote 中的 CapitalName 不应误抽为作者', () => {
+    // v28 step 109.38 修复前：line scanner 兜底 regex `CapitalName+CapitalName`
+    //   把 '> 图表说明中的 Toluene Conversion (%)' 误抽为 author[0]
+    const content = `[PAGE:1]
+
+> 📊 **图表说明（P1）**
+> 图表为热力图，标题为'Toluene Conversion (%)'，展示不同O₃浓度对甲苯转化率影响。
+
+Catalyst-free aqueous-phase oxidation of toluene by ozone
+micro-nanobubbles coupled with H2O2 via interfacial reactive oxygen species
+Tianzhi Wang a, Hangjia Zhao a, Yongtao Li a
+a School of Foo
+H I G H L I G H T S`
+    const r = extractAuthorsAndJournal(content)
+    expect(r.authors.length).toBe(3)
+    expect(r.authors[0].name).toBe('Tianzhi Wang')
+    expect(r.authors[0].affiliation).toBe('a')
+    // 关键 regression check：不误抽 'Toluene Conversion'
+    expect(r.authors.find(a => a.name === 'Toluene Conversion')).toBeUndefined()
+  })
+
+  it('v28 step 109.38 regression: markdown image alt 中的 CapitalName 不应误抽为作者', () => {
+    const content = `[PAGE:1]
+
+![图（P1，Liquid Phase O₃-MNBs Toluene Conversion (%) 99.40）](https://example.com/img.png)
+
+Title Here
+John Smith a
+a School of Foo
+H I G H L I G H T S`
+    const r = extractAuthorsAndJournal(content)
+    expect(r.authors.length).toBe(1)
+    expect(r.authors[0].name).toBe('John Smith')
+  })
 })
