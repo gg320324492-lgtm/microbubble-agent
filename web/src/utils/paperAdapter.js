@@ -4441,15 +4441,20 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       type: type || 'normal',
     }
     currentBlocks = []
-    // v28 step 109.36: 切到新 section 后立即把 deferredForNextSection 推到 currentBlocks 开头
-    //   这些 blocks 是 lookahead 检测到的"应该是新 section 内容"
-    //   推到开头确保出现在 image_anchor 等之前，符合逻辑顺序
-    // v28 step 109.36: 切到新 section 后把 deferredForNextSection 推到 currentBlocks 末尾
-    //   这些 blocks 是 lookahead 检测到的"应该是新 section 内容"
-    //   末尾追加确保不打断 section 内的正常 paragraph/image 顺序
-    while (deferredForNextSection.length > 0) {
-      const b = deferredForNextSection.shift()
-      currentBlocks.push(b)
+    // v28 step 109.36.2: 切到新 section 后处理 deferredForNextSection
+    //   这些 blocks 是 lookahead 检测到的"下节内容"（如 page 9 order=3 with more...）。
+    //   必须在 currentSection 已切到新 section 后再处理，避免插到旧 section 末尾。
+    //   插入到 image_anchor 之后（如果有），否则末尾。
+    if (deferredForNextSection.length > 0) {
+      let insertPos = currentBlocks.length
+      for (let i = currentBlocks.length - 1; i >= 0; i--) {
+        if (currentBlocks[i].type === 'image_anchor' || currentBlocks[i].type === 'image') {
+          insertPos = i + 1
+          break
+        }
+      }
+      currentBlocks.splice(insertPos, 0, ...deferredForNextSection)
+      deferredForNextSection.length = 0
     }
   }
 
