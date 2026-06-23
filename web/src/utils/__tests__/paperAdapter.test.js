@@ -2285,6 +2285,154 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allBlocks[0].content).toContain('orbital coupling')
   })
 
+  // v28 step 109.34: 跨 section 边界插入 deferred block 后应触发合并
+  //   真实案例：用户 paper 中 step 109.30/109.31 把 molecular_model 移到 3.5 末尾 deferred
+  //   → 后续 orbital_coupling（step 109.33 拆段后的 Part 1）被 push 到 3.5 currentBlocks
+  //   → heading 4 触发 startSection，Step 1 插入 molecular_model 时
+  //   → 之前的合并逻辑只在 _processSingleParagraph 中跑，deferred 插入时不跑
+  //   → 导致 molecular_model 和 orbital_coupling 错分成两段
+  //   修复：Step 1 插入后立即检查与 prev/next 邻居的合并
+  it('v28 step 109.34: deferred block 插入后应与下一个 paragraph 合并', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 6,
+      page_layout: [
+        {
+          page_number: 8,
+          blocks: [
+            // 3.4 heading
+            { type: 'heading', level: 1, order: 1, text: '3.4. Effects' },
+            // 3.4 末段（3.5 引导 paragraph 前一个）
+            { type: 'paragraph', order: 2, text: 'last paragraph of 3.4 ends with no period so it stays' },
+            // 3.5 misplaced: "the molecular model..." 引用 Fig. 5b/c，无句末符号结尾
+            { type: 'paragraph', order: 3, text: 'the molecular model reveals a stable interface. Fig. 5b shows charges and Fig. 5c shows orbitals' },
+            // 3.5 heading
+            { type: 'heading', level: 1, order: 4, text: '3.5. Interfacial activation' },
+            // 3.5 开头段落（Fig. 5a）
+            { type: 'paragraph', order: 5, text: 'In the O3-MNBs system. As illustrated in Fig. 5a, the interface matters.' },
+            // 3.5 Fig. 5 image
+            { type: 'image', order: 6, image_index: 0, caption: 'Fig. 5. Schematic illustration.', figure_no: 'Fig. 5' },
+          ],
+        },
+        {
+          page_number: 9,
+          blocks: [
+            // orbital coupling 段（小写开头 + Fig. 5d）→ 应与 molecular_model 合并
+            { type: 'paragraph', order: 1, text: 'orbital coupling and electron transfer. Fig. 5d shows the energy barrier is lower.' },
+            // 第二个独立段（Consistent with this...）→ 不应合并到上一段
+            { type: 'paragraph', order: 2, text: 'Consistent with this mechanistic picture, the ROS generation further supports the role of interfacial activation.' },
+            // 4. heading（触发 startSection 走 Step 1 插入 deferred molecular_model）
+            { type: 'heading', level: 1, order: 3, text: '4. Stability' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
+    expect(sec35).toBeTruthy()
+
+    const paras = sec35.blocks.filter(b => b.type === 'paragraph')
+    console.log('=== 3.5 paragraphs ===')
+    paras.forEach((p, i) => {
+      const first50 = p.content.slice(0, 60).replace(/\n/g, ' ')
+      const last50 = p.content.slice(-60).replace(/\n/g, ' ')
+      console.log(`  [${i}] "${first50}..." → "...${last50}"`)
+    })
+
+    // 期望：
+    // 段 1: "In the O3-MNBs system... Fig. 5a"（独立）
+    // 段 2: molecular_model + orbital_coupling 合并成一段（关键！）
+    // 段 3: "Consistent with this..."（独立）
+    expect(paras.length).toBe(3)
+
+    // 段 2 包含 molecular_model 内容
+    expect(paras[1].content).toContain('the molecular model reveals')
+    // 段 2 也包含 orbital_coupling 内容（合并成功）
+    expect(paras[1].content).toContain('orbital coupling and electron transfer')
+    // 合并后应自然连接（molecular_model 在前，orbital_coupling 在后，中间是空格）
+    const mmIdx = paras[1].content.indexOf('the molecular model')
+    const ocIdx = paras[1].content.indexOf('orbital coupling')
+    expect(mmIdx).toBeGreaterThanOrEqual(0)
+    expect(ocIdx).toBeGreaterThan(mmIdx)
+  })
+
+  // v28 step 109.34 反例：插入后没有可合并的邻居 → 不动
+  it('v28 step 109.34: deferred block 插入后无邻居可合并 → 不变', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 8,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.4. Effects' },
+            // misplaced: 以 "of" 结尾（无句末符号）→ step 2 会移到 deferred
+            { type: 'paragraph', order: 2, text: 'molecular discussion incomplete Fig. 5b shows charges of' },
+            { type: 'heading', level: 1, order: 3, text: '3.5. Interfacial activation' },
+            // 3.5 段大写开头，不应与上一段合并
+            { type: 'paragraph', order: 4, text: 'In the O3-MNBs system. As illustrated in Fig. 5a, the interface matters.' },
+          ],
+        },
+        {
+          page_number: 9,
+          blocks: [
+            // 3.5 末段 - 也大写开头，不应合并
+            { type: 'paragraph', order: 1, text: 'Overall, this validates the mechanism. Fig. 5d shows profiles.' },
+            { type: 'heading', level: 1, order: 2, text: '4. Stability' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
+    const paras = sec35.blocks.filter(b => b.type === 'paragraph')
+    // 3 段都独立（molecular... 不完整段移到 3.5，但 next 段是大写开头 → 不合并）
+    expect(paras.length).toBe(3)
+    // 实际位置：figure-aware 插入到 In the O3-MNBs（Fig. 5a）和 Overall（Fig. 5d）之间
+    expect(paras[0].content).toContain('In the O3-MNBs')
+    expect(paras[1].content).toContain('molecular discussion')
+    expect(paras[2].content).toContain('Overall')
+  })
+
+  // v28 step 109.34: 完整段（以 . 结尾）不应被 step 2 错移到下一 section
+  it('v28 step 109.34: 完整段（以 . 结尾）不应被 step 2 错移', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 4,
+      page_layout: [
+        {
+          page_number: 8,
+          blocks: [
+            { type: 'heading', level: 1, order: 1, text: '3.4. Effects' },
+            // misplaced 但以 "." 结尾（完整段）→ step 2 不应移动
+            { type: 'paragraph', order: 2, text: 'complete paragraph ends with period. Fig. 5b shows charges.' },
+            { type: 'heading', level: 1, order: 3, text: '3.5. Interfacial activation' },
+          ],
+        },
+        {
+          page_number: 9,
+          blocks: [
+            { type: 'paragraph', order: 1, text: 'In the O3-MNBs system. As illustrated in Fig. 5a, the interface matters.' },
+            { type: 'heading', level: 1, order: 2, text: '4. Stability' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    // 完整段留在 3.4（不移动到 3.5）
+    const sec34 = r.sections.find(s => (s.title || '').includes('3.4'))
+    expect(sec34.blocks.some(b => b.type === 'paragraph' && (b.content || '').includes('complete paragraph'))).toBe(true)
+
+    // 3.5 只有 intro 段
+    const sec35 = r.sections.find(s => (s.title || '').includes('3.5'))
+    const sec35Paras = sec35.blocks.filter(b => b.type === 'paragraph')
+    expect(sec35Paras.length).toBe(1)
+    expect(sec35Paras[0].content).toContain('In the O3-MNBs')
+  })
+
   // v28 step 109.33: vision 合并多段到一个 block 时应按过渡短语拆开
   //   真实案例：PDF id=19 page 9 vision [1] block 含两个独立段落
   //     "orbital coupling... facilitates key reaction steps."
