@@ -4931,6 +4931,18 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   // ── 4. 检测 abstract（从第一页或 preamble 段）
   let abstract = raw.summary || null
   let keywords = Array.isArray(raw.tags) ? raw.tags.slice() : []
+  // v28 step 109.36.8: 优先从 abstract section 提取（OCR 已把 "ABSTRACT" 提取为 heading，
+  //   paragraph 是 "Conventional aqueous..." 直接正文，不再含 "Abstract:" 前缀）
+  const abstractSec = sections.find(s => s.type === 'abstract' || /^abstract$/i.test(s.title || ''))
+  if (abstractSec) {
+    const firstPara = (abstractSec.blocks || []).find(b => b.type === 'paragraph')
+    if (firstPara && firstPara.content) {
+      const cleaned = firstPara.content.trim()
+      if (cleaned && (!abstract || abstract.length < cleaned.length * 0.5)) {
+        abstract = cleaned
+      }
+    }
+  }
   for (const sec of sections) {
     for (const b of sec.blocks || []) {
       if (b.type === 'paragraph' && /^\s*Abstract\s*[：:]?\s*([\s\S]*)/i.test(b.content || '')) {
