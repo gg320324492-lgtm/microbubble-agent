@@ -4024,7 +4024,10 @@ function isOcrPublicationInfo(text) {
     /^[a-z]\s+State\s+Scientific/i,
     /^[A-Z][\w\s&]+\b(?:University|Institute|Academy|College)\b/i,
     // 作者名列表（多个人名 + 上标 a,b,c）
-    /^[A-Z][a-z]+\s+[A-Z][a-z]+\s+[a-z](?:\s*,\s*[A-Z][a-z]+\s+[A-Z][a-z]+\s+[a-z]){2,}/,
+    //   格式："Tianzhi Wanga, Hangjia Zhaoa, Yongtao Lia, ..."
+    //   关键：作者名 + 姓 是连写 2 词（如 "Tianzhi Wang"），后面 ", Hangjia Zhao" 重复
+    //   至少 3 个名字（1 初始 + 2 重复）
+    /^[A-Z][a-z]+\s+[A-Z][a-z]+(?:,\s*[A-Z][a-z]+\s+[A-Z][a-z]+){2,}/,
     // PR China 国家行
     /^PR\s+China/i,
   ]
