@@ -4022,26 +4022,56 @@ function _isHeaderLine(line) {
 //   中间只换行（无空行），paperAdapter 不会自动拆段
 //   修复：检测 [.!?] + \n + 大写字母开头（含过渡短语）拆成多个段落
 //   关键约束：避免误拆被换行打断的化学式 / 表格引用 / OCR 软换行
+//
+//   v28 step 109.35: 无换行的多段也拆
+//     vision OCR 也经常把多段塞进一行（中间 1-2 个空格），导致 step 109.33 完全失效
+//     真实案例：PDF id=19 section 4 block [2] (2457 字符) 实际包含三段：
+//       "...long-term performance."
+//       "Meanwhile, CO₂ was continuously detected throughout the reaction..."
+//       "Beyond achieving high toluene removal efficiency... Supporting Information..."
+//     修复：检测 `[.!?] + 1-2 个空格 + 大写字母开头（含过渡短语）` 也拆段
+//     关键约束：只允许"硬段首词"（如 Meanwhile / Beyond / Therefore），
+//     不允许"承接句"（如 It is worth noting that / Note that / Specifically），
+//     避免误拆 step 109.25 想合并的"段中段"
 const _PARAGRAPH_TRANSITIONAL_PHRASES = [
   'Consistent with', 'Therefore', 'Furthermore', 'Moreover',
   'In addition', 'Additionally', 'In summary', 'Overall',
   'In contrast', 'By comparison', 'Based on these', 'These results',
   'However', 'Nevertheless', 'Subsequently', 'Notably',
-  'Meanwhile', 'Importantly', 'Specifically,', 'Generally',
+  'Meanwhile', 'Importantly', 'Generally',
   'To evaluate', 'To further', 'To investigate', 'In this',
-  'We propose', 'We suggest', 'It is worth', 'Note that',
+  'We propose', 'We suggest',
+  'Beyond',  // v28 step 109.35
+]
+
+// v28 step 109.35: 无换行拆段时只能用的"硬段首词"
+//   区分"承接句"（如 "It is worth noting that"、"Note that"）和"真新段"
+//   承接句通常出现在段中（如 "It is worth noting that the..."），不应拆
+//   真新段通常用 Meanwhile / Beyond / Therefore 等"明显停顿"标记
+const _PARAGRAPH_HARD_NEW_PHRASES = [
+  'Consistent with', 'Therefore', 'Furthermore', 'Moreover',
+  'In addition', 'Additionally', 'In summary', 'Overall',
+  'In contrast', 'By comparison', 'Based on these', 'These results',
+  'However', 'Nevertheless', 'Subsequently', 'Notably',
+  'Meanwhile', 'Importantly',
+  'Beyond',  // v28 step 109.35
 ]
 
 function _splitByParagraphBreak(text) {
   if (!text) return [text]
-  // 单段无换行 → 不拆
-  if (!/\n/.test(text)) return [text]
+  if (!text.includes('.') && !text.includes('!') && !text.includes('?')) return [text]
 
+  const hasNewline = /\n/.test(text)
+  // v28 step 109.35: 无换行拆段时必须有足够文本长度才能拆（避免误拆 step 109.25 想合并的"段中段"）
+  //   真实案例：section 4 block [2] 2457 字符 → 必须拆
+  //   反例：step 109.32 block 2 "species. Consistent with..." 132 字符 → 不该拆
+  const isLongEnough = text.length >= 300
   const splits = []
   let lastIdx = 0
-  // 模式：[.!?] + 空白（含 \n）+ 大写字母开头的短语
-  // 限制：下一个 "句子" 不能太长（>200 字符的通常是误判）
-  const re = /([.!?])\s*\n+\s*([A-Z][a-z]+(?:\s+\w+){0,5})/g
+  // 模式 1：换行分隔（step 109.33）—— 可用所有 _PARAGRAPH_TRANSITIONAL_PHRASES
+  // 模式 2：无换行（step 109.35）—— 只用 _PARAGRAPH_HARD_NEW_PHRASES + 必须 length >= 300
+  // 共同 regex：[.!?] + 1-3 个空白 + 大写字母开头的短语
+  const re = /([.!?])\s{1,3}\s*([A-Z][a-z]+(?:\s+\w+){0,5})/g
   let m
   while ((m = re.exec(text)) !== null) {
     const phraseStart = m.index + m[0].length - m[2].length
@@ -4052,15 +4082,22 @@ function _splitByParagraphBreak(text) {
     // 必须句末符号 + 大写开头
     if (!endsWithPunct) continue
     // 跳过缩写（"et al.", "Fig.", "Eq.", "Dr." 等）—— 后跟小写字母通常不是段尾
-    // 检测：如果句末符号前是单个字母（如 "Fig. 5" 里的 .），可能是缩写
     const charBefore = phraseStart > 0 ? text[phraseStart - 2] : ''
     if (/[A-Za-z]/.test(charBefore) && charBefore === charBefore.toLowerCase()) {
-      // 前一个字符是小写字母，可能是缩写（如 "et al."），跳过
       continue
     }
 
     // 短语含过渡词 → 拆段
-    const isTransitional = _PARAGRAPH_TRANSITIONAL_PHRASES.some(w =>
+    // 无换行（step 109.35）：只接受硬段首词 + 必须 length >= 300
+    let allowed
+    if (hasNewline) {
+      allowed = _PARAGRAPH_TRANSITIONAL_PHRASES
+    } else if (isLongEnough) {
+      allowed = _PARAGRAPH_HARD_NEW_PHRASES
+    } else {
+      allowed = []  // 无换行 + 短文本 → 不拆（让 step 109.25 决定是否合并）
+    }
+    const isTransitional = allowed.some(w =>
       phrase.startsWith(w + ' ') || phrase === w
     )
     if (!isTransitional) continue
