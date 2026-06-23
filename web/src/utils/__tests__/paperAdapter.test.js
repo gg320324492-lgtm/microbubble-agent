@@ -2199,6 +2199,15 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(sec35Paras.some(c => c.includes('O3-MNBs system'))).toBe(true)
     expect(sec35Paras.some(c => c.includes('CH3SH test'))).toBe(false)
     expect(sec35Paras.some(c => c.includes('DCM test'))).toBe(false)
+
+    // 顺序：O3-MNBs system (natural 3.5 content) 应在 molecular model (misplaced) 之前
+    // 用户需求："第二段才应该首先出现，之后才是这个第一段内容"
+    // 即 misplaced paragraph 应追加到 section 末尾，不抢占开头位置
+    const o3Idx = sec35Paras.findIndex(c => c.includes('O3-MNBs system'))
+    const mmIdx = sec35Paras.findIndex(c => c.includes('molecular model'))
+    expect(o3Idx).toBeGreaterThanOrEqual(0)
+    expect(mmIdx).toBeGreaterThanOrEqual(0)
+    expect(o3Idx).toBeLessThan(mmIdx)
   })
 
   // v28 step 109.30 反例：heading 之前是不同 page 的 paragraph（不应移动）

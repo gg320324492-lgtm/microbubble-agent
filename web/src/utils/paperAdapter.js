@@ -4120,23 +4120,53 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   const sectionIdCounter = { s: 0 }
   const genId = () => `s_${++sectionIdCounter.s}`
 
-  const startSection = (type, title, level, pageNum) => {
-    // v28 step 109.30: 修正 vision OCR 输出顺序 bug
-    //   vision 经常把 section heading 的内容（paragraph）输出在 heading 之前
-    //   例：[68] 3.5 内容（molecular model）[69] 3.5 heading
-    //   → heading X.Y 出现时，把上一个 section 中"同一 page 且紧邻 heading"的
-    //     最后 1 个 paragraph 块移到当前 section
-    //   保守策略：只移 1 个 block，避免误移属于前一段的内容
-    let carriedBlocks = []
+  // v28 step 109.30: 修正 vision OCR 输出顺序 bug
+  //   vision 经常把 section heading 的内容（paragraph）输出在 heading 之前
+  //   例：page 8 上 vision 输出顺序是 [67] paragraph (3.4) [68] paragraph (3.5) [69] heading 3.5
+  //   → heading X.Y 出现时，把上一个 section 中"同一 page 且紧邻 heading"的
+  //     最后 1 个 paragraph 块移到当前 section（追加到末尾）
+  //   保守策略：只移 1 个 block，避免误移属于前一段的内容
+  //   时序策略：用 deferredBuffer 把 misplaced block 暂存，等当前 section 结束时再追加
+  //   （保证 natural 顺序：[70] intro → [71] image → [68] misplaced）
+  const deferredMisplacedBlocks = []
+
+  const flushCurrent = () => {
     if (currentSection) {
+      // 把 deferred misplaced blocks 追加到当前 section 末尾（再 flush）
+      if (deferredMisplacedBlocks.length > 0) {
+        currentBlocks.push(...deferredMisplacedBlocks)
+        deferredMisplacedBlocks.length = 0
+      }
+      sections.push({
+        id: currentSection.id,
+        title: currentSection.title,
+        level: currentSection.level,
+        type: currentSection.type,
+        blocks: currentBlocks,
+      })
+      currentSection = null
+      currentBlocks = []
+    }
+  }
+
+  const startSection = (type, title, level, pageNum) => {
+    if (currentSection) {
+      // Step 1: 把之前 deferred 的 misplaced blocks 追加到当前 section 末尾
+      //   （这些是上一次 startSection 转移过来的 blocks）
+      if (deferredMisplacedBlocks.length > 0) {
+        currentBlocks.push(...deferredMisplacedBlocks)
+        deferredMisplacedBlocks.length = 0
+      }
+      // Step 2: 把当前 section 末尾紧邻 heading 的 paragraph 移到 deferred buffer
+      //   （这个 block 应该属于新 section，但要追加到新 section 的末尾）
       if (currentBlocks.length > 0) {
         const last = currentBlocks[currentBlocks.length - 1]
-        // 只移最后 1 个 paragraph（同 page）
         if (last.type === 'paragraph' && last.page === pageNum) {
-          carriedBlocks = currentBlocks.splice(-1, 1)
+          const moved = currentBlocks.pop()
+          deferredMisplacedBlocks.push(moved)
         }
       }
-      // flush 当前 section（剩余 blocks）
+      // Step 3: flush 当前 section（不带 deferred 的 block）
       sections.push({
         id: currentSection.id,
         title: currentSection.title,
@@ -4151,22 +4181,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       level: level || 1,
       type: type || 'normal',
     }
-    // 把要移动的 block 加到新 section 的 currentBlocks 开头
-    currentBlocks = carriedBlocks
-  }
-
-  const flushCurrent = () => {
-    if (currentSection) {
-      sections.push({
-        id: currentSection.id,
-        title: currentSection.title,
-        level: currentSection.level,
-        type: currentSection.type,
-        blocks: currentBlocks,
-      })
-      currentSection = null
-      currentBlocks = []
-    }
+    currentBlocks = []
   }
 
   for (const page of mergedPages) {
