@@ -17,6 +17,7 @@ import {
   matchFiguresWithCaptions,
   translateKeywordToEnglish,
   translateKeywordsToEnglish,
+  extractAuthorsAndJournal,
 } from '../paperAdapter'
 
 describe('extractPageMarkers', () => {
@@ -3170,5 +3171,146 @@ describe('v28 step 109.37: normalizePaperData 集成 - 关键词翻译', () => {
     expect(r.keywords.length).toBeGreaterThanOrEqual(7)
     expect(r.keywords).toContain('Micro-nanobubbles')
     expect(r.keywords).toContain('Ozone')
+  })
+})
+
+
+// ============================================================
+// v28 step 109.38: 作者 + 期刊 + 机构 提取
+// ============================================================
+//
+// 用户反馈：PaperHeader 顶部 UI 应该展示论文的所有作者和期刊名。
+// PDF 原文包含：
+//   - 作者行（"Name1 a, Name2 b, Name3 c, Name4 a,*"）
+//   - 机构行（"a School of...", "b College of...", "c State..."）
+//   - 期刊头（"Journal of Hazardous Materials 513 (2026) 142456"）
+//
+// _extractAuthorsAndJournal 从原文 content 抽这些结构化信息。
+
+describe('v28 step 109.38: extractAuthorsAndJournal', () => {
+  it('PDF id=19: 完整 Elsevier 格式', () => {
+    const content = `Catalyst-free aqueous-phase oxidation of toluene by ozone
+micro-nanobubbles coupled with H2O2 via interfacial reactive
+oxygen species
+Tianzhi Wang a, Hangjia Zhao a, Yongtao Li a, Ziyue Jiang b, Lingye Zhang b, Andrei Ivanets c
+,
+Fawei Lin a,*
+a School of Environmental Science and Engineering, Tianjin University/Tianjin Key Lab of Biomass/Wastes Utilization, Tianjin 300072, PR China
+b College of energy environment and safety engineering, China Jiliang University, Hangzhou 310018, PR China
+c State Scientific Institution, Institute of General and Inorganic Chemistry of National Academy of Sciences of Belarus, Minsk 220072, Belarus
+H I G H L I G H T S
+T. Wang et al.
+Journal of Hazardous Materials 513 (2026) 142456
+A B S T R A C T
+Conventional aqueous ozonation...`
+    const r = extractAuthorsAndJournal(content)
+
+    // Authors: 7 人 + 通讯作者标记
+    expect(r.authors.length).toBe(7)
+    expect(r.authors[0]).toMatchObject({ name: 'Tianzhi Wang', affiliation: 'a' })
+    expect(r.authors[1].name).toBe('Hangjia Zhao')
+    expect(r.authors[3].name).toBe('Ziyue Jiang')
+    expect(r.authors[6]).toMatchObject({ name: 'Fawei Lin', affiliation: 'a', isCorresponding: true })
+
+    // Affiliations: 3 个机构
+    expect(r.affiliations.length).toBe(3)
+    expect(r.affiliations[0].id).toBe('a')
+    expect(r.affiliations[0].name).toContain('School of Environmental')
+    expect(r.affiliations[1].id).toBe('b')
+    expect(r.affiliations[2].id).toBe('c')
+
+    // Journal
+    expect(r.journal.name).toBe('Journal of Hazardous Materials')
+    expect(r.journal.volume).toBe('513')
+    expect(r.journal.year).toBe('2026')
+    expect(r.journal.articleId).toBe('142456')
+    expect(r.journal.fullCitation).toBe('Journal of Hazardous Materials 513 (2026) 142456')
+  })
+
+  it('空 content 返回空结构', () => {
+    const r = extractAuthorsAndJournal('')
+    expect(r.authors).toEqual([])
+    expect(r.affiliations).toEqual([])
+    expect(r.journal.name).toBeNull()
+    expect(r.doi).toBeNull()
+  })
+
+  it('null/undefined content 安全返回', () => {
+    expect(extractAuthorsAndJournal(null).authors).toEqual([])
+    expect(extractAuthorsAndJournal(undefined).authors).toEqual([])
+  })
+
+  it('单作者无机构', () => {
+    const content = `Some Title
+John Smith
+H I G H L I G H T S
+A B S T R A C T
+Body`
+    const r = extractAuthorsAndJournal(content)
+    expect(r.authors.length).toBe(1)
+    expect(r.authors[0].name).toBe('John Smith')
+  })
+
+  it('通用期刊名提取（不在白名单）', () => {
+    const content = `Title
+John Smith a
+a School of X
+H I G H L I G H T S
+Letters in Organic Chemistry 25 (2024) 1234
+A B S T R A C T`
+    const r = extractAuthorsAndJournal(content)
+    // 通用模式匹配 Letters/Reviews/Advances/Journal
+    expect(r.journal.name).toBe('Letters in Organic Chemistry')
+    expect(r.journal.volume).toBe('25')
+    expect(r.journal.year).toBe('2024')
+    expect(r.journal.articleId).toBe('1234')
+  })
+
+  it('DOI 提取（doi.org 格式）', () => {
+    const content = `Title
+Author a
+a School
+H I G H L I G H T S
+Journal of Foo 1 (2024) 100
+A B S T R A C T
+Body. See https://doi.org/10.1016/j.foo.2024.100 for details.`
+    const r = extractAuthorsAndJournal(content)
+    expect(r.doi).toBe('10.1016/j.foo.2024.100')
+  })
+
+  it('DOI 提取（DOI: 前缀格式）', () => {
+    const content = `Title
+Author a
+a School
+Journal of Foo 1 (2024) 100
+DOI: 10.1234/foo.bar.2024.001
+A B S T R A C T`
+    const r = extractAuthorsAndJournal(content)
+    expect(r.doi).toBe('10.1234/foo.bar.2024.001')
+  })
+
+  it('集成测试：normalizePaperData 注入 authors/journal/affiliations', () => {
+    const content = `Title
+John Smith a, Jane Doe b
+a School of Foo, City
+b University of Bar
+H I G H L I G H T S
+Journal of Foo 1 (2024) 100
+A B S T R A C T
+Body`
+    const raw = {
+      id: 99,
+      title: 'Title',
+      content,
+      summary: '',
+      tags: [],
+    }
+    const r = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    expect(r.authors.length).toBe(2)
+    expect(r.authors[0].name).toBe('John Smith')
+    expect(r.authors[1].name).toBe('Jane Doe')
+    expect(r.affiliations.length).toBe(2)
+    expect(r.journal.name).toBe('Journal of Foo')
+    expect(r.journal.fullCitation).toBe('Journal of Foo 1 (2024) 100')
   })
 })

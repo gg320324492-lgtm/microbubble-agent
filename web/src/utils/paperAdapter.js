@@ -2951,7 +2951,250 @@ function _translateKeywordsToEnglish(keywords) {
 // 导出供单元测试 + 调试用
 export const translateKeywordToEnglish = _translateKeywordToEnglish
 export const translateKeywordsToEnglish = _translateKeywordsToEnglish
+export const extractAuthorsAndJournal = _extractAuthorsAndJournal
 export { KEYWORD_ZH_TO_EN }
+
+
+// ============================================================
+// v28 step 109.38: 作者 + 期刊 + 机构 提取
+// ============================================================
+//
+// PDF 原文典型格式（Elsevier）：
+//   Tianzhi Wang a, Hangjia Zhao a, Yongtao Li a, Ziyue Jiang b, ...
+//   ,
+//   Fawei Lin a,*
+//   a School of Environmental Science and Engineering, Tianjin University/...
+//   b College of energy environment and safety engineering, China Jiliang University, ...
+//   c State Scientific Institution, Institute of General and Inorganic Chemistry of ...
+//
+// 期刊头（页眉反复出现，常见 Elsevier）：
+//   T. Wang et al.
+//   Journal of Hazardous Materials 513 (2026) 142456
+//
+// 提取策略：
+// 1. 作者行：1 个或多个 "Name [a-z]" 用逗号分隔（可能含 * 对应通讯作者）
+// 2. 机构行：以小写字母 + 空格开头的段落（OCR 可能跨行）
+// 3. 期刊头：含 "Journal of" + 卷期号 + DOI 标识
+//
+// 返回结构：
+//   {
+//     authors: [{name, affiliation, isCorresponding}],
+//     affiliations: [{id, name}],
+//     journal: {name, volume, year, articleId},
+//     doi: '10.1016/j.jhazmat.2026.142456'
+//   }
+
+// 期刊白名单（按需扩展）+ 通用正则
+const KNOWN_JOURNALS = [
+  'Journal of Hazardous Materials',
+  'Chemical Engineering Journal',
+  'Water Research',
+  'Environmental Science & Technology',
+  'Environmental Science and Technology',
+  'Science of the Total Environment',
+  'Separation and Purification Technology',
+  'Chemosphere',
+  'Applied Catalysis B: Environmental',
+  'Chemical Engineering Science',
+  'Journal of Cleaner Production',
+  'Bioresource Technology',
+  'Journal of Water Process Engineering',
+  'Process Safety and Environmental Protection',
+  'Journal of Environmental Chemical Engineering',
+  'Environmental Pollution',
+]
+
+/**
+ * 从原文 content 抽作者行 + 机构行 + 期刊头
+ * 容错：
+ *   - 作者行可能跨页（OCR 软换行）
+ *   - 机构行可能多个 \n 连接
+ *   - 期刊头只在第一页 + 后续页眉出现（取第一个）
+ *
+ * @param {string} content
+ * @returns {{
+ *   authors: Array<{name:string, affiliation:string, isCorresponding:boolean}>,
+ *   affiliations: Array<{id:string, name:string}>,
+ *   journal: {name:string|null, volume:string|null, year:string|null, articleId:string|null, fullCitation:string|null},
+ *   doi: string|null
+ * }}
+ */
+function _extractAuthorsAndJournal(content) {
+  const empty = {
+    authors: [],
+    affiliations: [],
+    journal: { name: null, volume: null, year: null, articleId: null, fullCitation: null },
+    doi: null,
+  }
+  if (!content) return empty
+
+  // === 1. 期刊头提取（多模式） ===
+  let journalInfo = { name: null, volume: null, year: null, articleId: null, fullCitation: null }
+  // 模式 A: 已知期刊名（优先匹配，更可靠）
+  for (const jName of KNOWN_JOURNALS) {
+    const esc = jName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    // 期刊名 + 卷 + 年份 + 文章号
+    const re = new RegExp(`(${esc})(?:\\s+(\\d{2,4}))(?:\\s*\\((\\d{4})\\))?\\s+(\\d{4,8})?`)
+    const m = content.match(re)
+    if (m) {
+      journalInfo = {
+        name: jName,
+        volume: m[2] || null,
+        year: m[3] || null,
+        articleId: m[4] || null,
+        fullCitation: [jName, m[2], m[3] ? `(${m[3]})` : '', m[4]].filter(Boolean).join(' '),
+      }
+      break
+    }
+  }
+  // 模式 B: 通用（Journal of XXX / Letters in XXX / Reviews of XXX）
+  if (!journalInfo.name) {
+    // 通用正则：JOURNAL_KEYWORD + in/of + 名 + 卷(1-4 位) + 年(4位) + 文章号
+    const re = /((?:Journal|Reviews?|Letters|Advances|Proceedings)\s+(?:of|in|on)\s+[A-Z][A-Za-z&'\- ]+?)\s+(\d{1,4})\s*\((\d{4})\)\s*(\d{1,8})/
+    const m = content.match(re)
+    if (m) {
+      journalInfo = {
+        name: m[1].trim(),
+        volume: m[2],
+        year: m[3],
+        articleId: m[4],
+        fullCitation: `${m[1].trim()} ${m[2]} (${m[3]}) ${m[4]}`,
+      }
+    }
+  }
+
+  // === 2. DOI 提取 ===
+  let doi = null
+  const mDoi = content.match(/(?:https?:\/\/(?:dx\.)?doi\.org\/|doi\.org\/|\bDOI\s*[:：]\s*)(10\.\d{4,9}\/[-._;()\/:A-Z0-9]+)/i)
+  if (mDoi) doi = mDoi[1]
+
+  // === 3. 作者 + 机构提取 ===
+  //   策略：找 content 中第一个 author 模式（"Name Name [a-z]"），从那开始
+  //   抽 authors 直到遇到非 author 模式（机构关键词 "School/University/..."）
+  //   然后抽 affiliations 直到 HIGHLIGHTS / ARTICLE INFO / ABSTRACT 等元数据
+  const authors = []
+  const affiliations = []
+
+  try {
+    // 步骤 3.1：定位 author block 起点 + 终点
+    //   起点：第一个 author pattern
+    //   终点：第一个机构关键词或元数据标记
+
+    // author pattern 起点：
+    //   优先匹配带 aff marker 的（"CapitalName CapitalName [a-z]"），这通常是 author 行
+    //   兜底匹配无 aff 的（用于单作者论文），但放在后面避免误吸 title
+    //   按行扫描，避免 title 误吸（title 通常较短且不含 [a-z] aff marker）
+    const TITLE_BLOCK_KEYWORDS = /\b(?:Title|Paper|Article|Abstract|Introduction|Conclusion|Background|Overview|Review|Study|Keywords?|Highlights|ARTICLE|ABSTRACT|HIGHLIGHTS|Keywords)\b/i
+
+    // 按行扫描：找到第一个"作者行"
+    // 1) 优先匹配带 aff 的行
+    // 2) 检查该行不含 title 关键词
+    // 3) 检查该行至少 2 个 "CapitalName" token
+    const lines = content.split('\n')
+    let startIdx = -1
+    for (let i = 0; i < Math.min(lines.length, 50); i++) {
+      const line = lines[i].trim()
+      if (!line) continue
+      // 含 title 关键词 → 跳过
+      if (TITLE_BLOCK_KEYWORDS.test(line)) continue
+      // 含 aff marker 的 author 行
+      if (/[A-Z][a-zà-ÿ'-]+\s+[A-Z][a-zà-ÿ'-]+\s+[a-z]\b/.test(line)) {
+        startIdx = content.indexOf(line)
+        break
+      }
+      // 兜底：无 aff 的 author 行（单作者）
+      if (i > 0 && /[A-Z][a-zà-ÿ'-]+\s+[A-Z][a-zà-ÿ'-]+/.test(line)) {
+        // 只在第一行（可能是 title）之外的行匹配
+        startIdx = content.indexOf(line)
+        break
+      }
+    }
+    if (startIdx < 0) {
+      return { authors, affiliations, journal: journalInfo, doi }
+    }
+
+    // 终点：找第一个机构关键词或元数据标记
+    //   元数据标记：HIGHLIGHTS / A B S T R A C T (OCR) / ARTICLE INFO / [PAGE:
+    //   机构关键词：School / College / University / Institute 等（小写字母开头）
+    const endMarkers = [
+      /\n\s*(?:H\s*I\s*G\s*H\s*L\s*I\s*G\s*H\s*T\s*S|A\s*R\s*T\s*I\s*C\s*L\s*E|ARTICLE\s+INFO|Highlights|A\s*B\s*S\s+T\s*R\s*A\s*C\s*T|ABSTRACT|Keywords|关键词|\[\s*PAGE)/i,
+      // 也匹配机构关键词（lowercase + School/University 等），用于分隔
+      // 但这是 STRICT 匹配，避免误伤（OCR 里 School/University 一定紧跟 lowercase 字母）
+    ]
+    let endIdx = content.length
+    for (const re of endMarkers) {
+      const m = content.match(re)
+      if (m && m.index > startIdx && m.index < endIdx) endIdx = m.index
+    }
+
+    // author + affiliation 块（不限定长短）
+    const block = content.slice(startIdx, endIdx)
+
+    // 步骤 3.2：合并软换行 + 清理
+    const cleaned = block.replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim()
+
+    // 步骤 3.3：抽 authors
+    //   模式：Name(s) + 空格 + [a-z] + 可选 * (通讯作者)
+    //   终止：name 含机构关键词 OR name 前一个词是 "of/the/and/for" 等介词
+    const INSTITUTION_KEYWORDS = /(?:School|College|Institute|Academy|Department|State\s+Scientific|Faculty|Key\s+Lab|Laboratory|Hospital|Center\s+for|Center\s+of|Tianjin\s+University|China\s+Jiliang)/
+    const GENERIC_PREPOSITION = /^(?:of|the|for|and|in|on|at|by|with|via|from|to|de|la|le|is|are|has|have)$/i
+    // 放宽：支持无 affiliation marker 的 author（仅 Name Name）
+    //   同时支持 "Fawei Lin a,*" 这种行尾 * 标记
+    //   用 lookahead 检查 match 末尾 8 字符内是否有 *
+    const authorRegex = /([A-Z][a-zà-ÿ'-]+(?:\s+[A-Z][a-zà-ÿ'-]+){1,3})(?:\s+([a-z]))?\s*,?(\*?)(?=\s|,|$)/g
+    let mAuth
+    while ((mAuth = authorRegex.exec(cleaned)) !== null) {
+      const name = mAuth[1].trim()
+      const aff = mAuth[2] || null
+      const isCorresponding = mAuth[3] === '*'
+      // 要求至少有 affiliation marker 或者连续多个无 aff 的 author（单作者论文）
+      if (!aff && authors.length > 0) {
+        break
+      }
+      // 1. name 含机构关键词 → 停止
+      if (INSTITUTION_KEYWORDS.test(name)) break
+      // 1.5. name 任意词是 title 关键词 → 停止（说明把 title 误当 author）
+      const TITLE_KEYWORDS = /\b(?:Title|Paper|Article|Abstract|Introduction|Conclusion|Background|Overview|Review|Study)\b/i
+      if (TITLE_KEYWORDS.test(name)) continue
+      // 2. 前一个词是介词 → 这是机构名一部分
+      const contextBefore = cleaned.slice(Math.max(0, mAuth.index - 30), mAuth.index)
+      const lastWordMatch = contextBefore.match(/\b([a-zA-Z]+)\s*$/)
+      if (lastWordMatch && GENERIC_PREPOSITION.test(lastWordMatch[1])) continue
+      authors.push({
+        name,
+        affiliation: aff || '?',
+        isCorresponding,
+      })
+    }
+
+    // 步骤 3.4：抽 affiliations（在同一 block 内）
+    //   模式：[a-z] + 空格 + 机构关键词 + 内容（到下一个机构 marker 或元数据标记前）
+    //   找到所有 "a School of..." / "b College of..." / "c State..."
+    //   不要求结尾 "."，因为 OCR 可能跨多行
+    // 简化版：只匹配到第一个逗号或元数据标记前
+const affRegex = /([a-z])\s+(School\s+of[^,]+|College\s+of[^,]+|Institute\s+of[^,]+|Academy\s+of[^,]+|Department\s+of[^,]+|State\s+[^,]+|Faculty\s+of[^,]+|Research\s+of[^,]+|Laboratory\s+of[^,]+|Hospital\s+[^,]+|University\s+of[^,]+|[A-Z][a-z]+\s+University[^,]+)/g
+    let mAff
+    // 限制最大机构数为 authors 中实际用到的 aff 数量 + 1（避免误匹配）
+    const maxAffs = (authors.length ? new Set(authors.map(a => a.affiliation)).size : 10)
+    while ((mAff = affRegex.exec(cleaned)) !== null) {
+      if (affiliations.length >= maxAffs) break
+      const id = mAff[1]
+      const name = mAff[2].trim().replace(/\s+/g, ' ')
+      if (!affiliations.find(a => a.id === id)) {
+        affiliations.push({ id, name })
+      }
+    }
+  } catch (e) {
+    if (typeof console !== 'undefined') console.warn('[extractAuthorsAndJournal] error:', e)
+  }
+
+  return {
+    authors,
+    affiliations,
+    journal: journalInfo,
+    doi,
+  }
+}
 
 
 /**
@@ -3943,9 +4186,16 @@ export function normalizePaperData(raw, extra = {}) {
     summary: abstract,
     abstract,
     keywords,
-    authors: [],
-    journal: null,
-    doi: null,
+    // v28 step 109.38: 作者/期刊/DOI 从原文 content 提取
+    ...(function () {
+      const info = _extractAuthorsAndJournal(inputContent)
+      return {
+        authors: info.authors,
+        affiliations: info.affiliations,
+        journal: info.journal,
+        doi: info.doi,
+      }
+    })(),
     sections,
     figures,
     tables: extractions.filter(e => e.kind === 'table'),
@@ -5168,6 +5418,16 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     summary: raw.summary || '',
     abstract,
     keywords,
+    // v28 step 109.38: 作者/期刊/DOI 从原文 content 提取（vision 路径也走同一函数）
+    ...(function () {
+      const info = _extractAuthorsAndJournal(raw.content || '')
+      return {
+        authors: info.authors,
+        affiliations: info.affiliations,
+        journal: info.journal,
+        doi: info.doi,
+      }
+    })(),
     // v28 step 109.18: vision 路径也透传 relatedKnowledge（让 RelatedKnowledgeList 渲染）
     relatedKnowledge: Array.isArray(related) ? related : [],
     sections: _extractReferencesFromSections(sections),

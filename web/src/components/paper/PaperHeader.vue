@@ -50,7 +50,59 @@
     <!-- 标题与分类 -->
     <h1 class="paper-title">{{ paper.title || '（无标题）' }}</h1>
 
-    <!-- 元信息条 -->
+    <!-- v28 step 109.38: 作者列表（含通讯作者标记 + 机构上标） -->
+    <div v-if="paper.authors && paper.authors.length" class="paper-authors-block">
+      <div class="authors-row">
+        <span class="authors-label">
+          <el-icon><User /></el-icon>
+          作者
+        </span>
+        <span class="authors-list">
+          <template v-for="(author, idx) in paper.authors" :key="idx">
+            <span class="author-chip">
+              <span class="author-name">{{ author.name }}</span>
+              <sup class="author-aff">{{ author.affiliation }}</sup>
+              <span v-if="author.isCorresponding" class="corresponding-mark" title="通讯作者">*</span>
+            </span>
+            <span v-if="idx < paper.authors.length - 1" class="author-sep">·</span>
+          </template>
+        </span>
+      </div>
+    </div>
+
+    <!-- v28 step 109.38: 机构列表 -->
+    <div v-if="paper.affiliations && paper.affiliations.length" class="paper-affiliations-block">
+      <div class="affs-list">
+        <div v-for="(aff, idx) in paper.affiliations" :key="idx" class="aff-item">
+          <sup class="aff-marker">{{ aff.id }}</sup>
+          <span class="aff-name">{{ aff.name }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- v28 step 109.38: 期刊 / DOI 信息条 -->
+    <div v-if="paper.journal && paper.journal.name" class="paper-journal-bar">
+      <div class="journal-info">
+        <el-icon class="journal-icon"><Reading /></el-icon>
+        <span class="journal-name">{{ paper.journal.name }}</span>
+        <span v-if="paper.journal.volume" class="journal-vol">{{ paper.journal.volume }}</span>
+        <span v-if="paper.journal.year" class="journal-year">({{ paper.journal.year }})</span>
+        <span v-if="paper.journal.articleId" class="journal-id">{{ paper.journal.articleId }}</span>
+      </div>
+      <a
+        v-if="paper.doi"
+        :href="`https://doi.org/${paper.doi}`"
+        target="_blank"
+        rel="noopener"
+        class="doi-link"
+        :title="`DOI: ${paper.doi}`"
+      >
+        <el-icon><Link /></el-icon>
+        <span class="doi-text">doi:{{ paper.doi }}</span>
+      </a>
+    </div>
+
+    <!-- 元信息条（分类/类型/文件/上传时间） -->
     <div class="paper-meta-bar">
       <div v-if="paper.category" class="meta-item">
         <span class="meta-label">分类</span>
@@ -96,7 +148,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled, InfoFilled, Clock, Download } from '@element-plus/icons-vue'
+import { ArrowLeft, Loading, CircleCheck, MagicStick, WarningFilled, InfoFilled, Clock, Download, User, Reading, Link } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 
 const props = defineProps({
@@ -168,6 +220,199 @@ const headerTags = computed(() => {
   word-break: break-word;
 }
 
+/* ========== v28 step 109.38: 作者块 ========== */
+.paper-authors-block {
+  margin-bottom: 12px;
+  padding: 12px 0;
+  border-bottom: 1px dashed rgba(255, 122, 92, 0.15);
+}
+
+.authors-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.authors-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding-top: 2px;
+}
+
+.authors-list {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.7;
+}
+
+.author-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  font-size: 14px;
+  color: #1F2937;
+}
+
+.author-name {
+  font-weight: 500;
+}
+
+.author-aff {
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 1px;
+  line-height: 1;
+  position: relative;
+  top: -4px;
+}
+
+.corresponding-mark {
+  color: #DC2626;
+  font-size: 14px;
+  font-weight: 700;
+  margin-left: 2px;
+  cursor: help;
+}
+
+.author-sep {
+  color: #D1D5DB;
+  font-size: 12px;
+}
+
+/* ========== v28 step 109.38: 机构块 ========== */
+.paper-affiliations-block {
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed rgba(255, 122, 92, 0.15);
+}
+
+.affs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.aff-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #4B5563;
+}
+
+.aff-marker {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 3px;
+}
+
+.aff-name {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ========== v28 step 109.38: 期刊 / DOI 条 ========== */
+.paper-journal-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #FFF8F5 0%, #FFFDFB 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 122, 92, 0.15);
+}
+
+.journal-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #1F2937;
+}
+
+.journal-icon {
+  color: var(--color-primary);
+  font-size: 16px;
+}
+
+.journal-name {
+  font-weight: 600;
+  font-style: italic;
+}
+
+.journal-vol {
+  color: #4B5563;
+  font-weight: 500;
+}
+
+.journal-year {
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.journal-id {
+  color: #1F2937;
+  font-weight: 600;
+  font-family: 'Consolas', 'Monaco', monospace;
+  background: rgba(255, 122, 92, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.doi-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 4px 10px;
+  background: #fff;
+  border: 1px solid rgba(255, 122, 92, 0.25);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.doi-link:hover {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.doi-text {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 12px;
+}
+
+/* ========== 元信息条 ========== */
 .paper-meta-bar {
   display: flex;
   flex-wrap: wrap;
@@ -253,6 +498,13 @@ const headerTags = computed(() => {
   }
   .file-name {
     max-width: 160px;
+  }
+  .author-name {
+    font-size: 13px;
+  }
+  .paper-journal-bar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>
