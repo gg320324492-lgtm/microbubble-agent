@@ -4002,6 +4002,35 @@ function isOcrPageHeader(text) {
   return allHeaderLines
 }
 
+// v28 step 109.36.6: 检测 OCR 误识为 paragraph 的出版信息
+//   出现在 Abstract / References / Conclusion 等结构性 section 时应该被过滤
+//   （* Corresponding author / E-mail address / DOI / Received / 学校地址 等）
+function isOcrPublicationInfo(text) {
+  if (!text) return false
+  const t = text.trim()
+  if (t.length > 1500) return false  // 太长不像出版信息
+  // 整段含这些关键词就过滤
+  const markers = [
+    /^\s*\*\s*Corresponding\s+author/i,
+    /^E-?mail\s+address\s*[:：]/i,
+    /^https?:\/\/(?:dx\.)?doi\.org\//i,
+    /^Received\s+(?:in\s+revised\s+form\s*)?\d/i,
+    /^Available\s+online\s+\d/i,
+    /^©\s*\d{4}\s+(?:Elsevier|ScienceDirect|Wiley|Springer)/i,
+    /0304-3894\/©/,
+    // 学校/单位地址行（出现在 Abstract 后）
+    /^[a-z]\s+School\s+of\s+/i,
+    /^[a-z]\s+College\s+of\s+/i,
+    /^[a-z]\s+State\s+Scientific/i,
+    /^[A-Z][\w\s&]+\b(?:University|Institute|Academy|College)\b/i,
+    // 作者名列表（多个人名 + 上标 a,b,c）
+    /^[A-Z][a-z]+\s+[A-Z][a-z]+\s+[a-z](?:\s*,\s*[A-Z][a-z]+\s+[A-Z][a-z]+\s+[a-z]){2,}/,
+    // PR China 国家行
+    /^PR\s+China/i,
+  ]
+  return markers.some(re => re.test(t))
+}
+
 function _isHeaderLine(line) {
   if (!line) return false
   // 作者行："T. Wang et al." / "X. Lastname et al." / "X. Lastname, Y. Lastname et al."
@@ -4549,6 +4578,15 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // v28 step 109.32: 过滤 vision 误识的页眉（"T. Wang et al. Journal of..."）
         //   vision 把页眉标成 paragraph 后会被 step 109.25 合并到正文，必须提前过滤
         if (isOcrPageHeader(text)) continue
+        // v28 step 109.36.6: 过滤 OCR 误识为 paragraph 的出版信息
+        //   仅在结构性 section (abstract/conclusion/references/preamble) 内过滤，
+        //   因为这些 section 紧跟 OCR 元信息（Corresponding author / DOI / Received 等）
+        if (currentSection && (currentSection.type === 'abstract' ||
+            currentSection.type === 'conclusion' ||
+            currentSection.type === 'references' ||
+            currentSection.type === 'preamble')) {
+          if (isOcrPublicationInfo(text)) continue
+        }
         // v28 step 109.36: lookahead 检测 paragraph 是否属于下一节
         //   vision OCR 经常把下节内容输出在 heading 之前（如 page 9 order=3 是 4 节内容，
         //   但 heading 4 在 order=4）。如果 paragraph 引用的图号大于下一节范围内任何图号，
