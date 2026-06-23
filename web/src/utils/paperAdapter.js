@@ -4035,7 +4035,7 @@ function _isHeaderLine(line) {
 //     避免误拆 step 109.25 想合并的"段中段"
 const _PARAGRAPH_TRANSITIONAL_PHRASES = [
   'Consistent with', 'Therefore', 'Furthermore', 'Moreover',
-  'In addition', 'Additionally', 'In summary', 'Overall',
+  'In addition', 'Additionally', 'In summary',
   'In contrast', 'By comparison', 'Based on these', 'These results',
   'However', 'Nevertheless', 'Subsequently', 'Notably',
   'Meanwhile', 'Importantly', 'Generally',
@@ -4444,6 +4444,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     // v28 step 109.36: 切到新 section 后立即把 deferredForNextSection 推到 currentBlocks 开头
     //   这些 blocks 是 lookahead 检测到的"应该是新 section 内容"
     //   推到开头确保出现在 image_anchor 等之前，符合逻辑顺序
+    // v28 step 109.36: 切到新 section 后把 deferredForNextSection 推到 currentBlocks 末尾
+    //   这些 blocks 是 lookahead 检测到的"应该是新 section 内容"
+    //   末尾追加确保不打断 section 内的正常 paragraph/image 顺序
     while (deferredForNextSection.length > 0) {
       const b = deferredForNextSection.shift()
       currentBlocks.push(b)
