@@ -4289,6 +4289,17 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   //   每段独立判断是否合并到上一段
   function _processSingleParagraph(text, pageNum) {
     if (!text || !text.trim()) return
+    // v28 step 109.36.6.3: 提前过滤出版元信息（避免被 deferredMisplacedBlocks 路径绕过守卫）
+    //   之前守卫只在 paragraph 直接处理分支生效，deferred 路径（OCR 错位段插入）
+    //   直接 splice 到 currentBlocks 跳过了守卫
+    if (currentSection && (currentSection.type === 'abstract' ||
+        currentSection.type === 'conclusion' ||
+        currentSection.type === 'references' ||
+        currentSection.type === 'preamble' ||
+        currentSection.type === 'article_info' ||
+        currentSection.type === 'highlights')) {
+      if (isOcrPublicationInfo(text)) return
+    }
     const lastBlock = currentBlocks[currentBlocks.length - 1]
     if (lastBlock
         && lastBlock.type === 'paragraph'
