@@ -519,12 +519,12 @@ export function removeFrontMatter(content) {
   //   否则（普通 PDF，Abstract 是独立章节）返回原内容，让 parsePaperSections 处理
   const isElsevierPreProof = /PII\s*[：:]|DOI\s*[：:]\s*https?:\/\/|Reference\s*[：:]\s*[A-Z]{2,5}\s+\d+|To appear in|Please\s+(?:also\s+)?note\s+that\s+Elsevier|Received\s+date\s*[：:]|Revised\s+date\s*[：:]|Accepted\s+date\s*[：:]|©\s*\d{4}\s+Published by\s+Elsevier|This is a PDF of an article/i.test(frontMatter)
 
-  if (!isElsevierPreProof) {
-    // 普通论文 front matter（含独立 Abstract section）— 不剥离，让原解析器处理
+  if (!isElsevierPreProof && !/^\s*Abstract\s*[：:]/im.test(frontMatter)) {
+    // 普通论文 front matter（无 Abstract 段）— 不剥离，让原解析器处理
     return { cleaned: result, abstract: null, keywords: [], frontMatter: '', hasFrontMatter: false }
   }
 
-  // 2. v28 step 82: 从 Elsevier front matter 抽出 Abstract + Keywords
+  // 2. v28 step 82: 从 front matter 抽出 Abstract + Keywords
   //    Elsevier PDF 的 abstract 段通常以 "Abstract：" / "Abstract:" / "ABSTRACT" 开头
   //    keywords 段以 "Keywords:" / "关键词" / "Key words" 开头
   let abstract = null
@@ -4573,7 +4573,15 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         let secLevel
         if (matched) {
           secType = matched.type
-          secLevel = matched.level || level
+          // v28 step 109.36.7: Abstract / Conclusion / References 等独立结构性 section
+          //   没有 number 前缀（OCR 只有 "ABSTRACT"），level=undefined。
+          //   这些 section 与 "1. Introduction" 同级别，强制 level=1 让前端渲染
+          //   用相同的 h2 + 左侧锚点 + RightAnchorNav 跟踪
+          if (secType === 'abstract' || secType === 'conclusion' || secType === 'references') {
+            secLevel = 1
+          } else {
+            secLevel = matched.level || level
+          }
         } else if (level === 1) {
           // level=1 且不匹配任何 SECTION_KEYWORDS → preamble（论文主标题/期刊名）
           secType = 'preamble'
