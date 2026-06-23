@@ -2258,6 +2258,64 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(paraOrder).toEqual(['O3_MNBs_intro', 'molecular_model', 'orbital_coupling'])
   })
 
+  // v28 step 109.32: vision 误把 page header 标成 paragraph（应过滤，避免污染正文）
+  it('v28 step 109.32: vision 误识的页眉 paragraph 应被过滤', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 9,
+          blocks: [
+            // 模拟 vision 误分类：作者行 + 期刊行被标成 paragraph
+            { type: 'paragraph', order: 1, text: 'T. Wang et al.\nJournal of Hazardous Materials 513 (2026) 142456' },
+            // 真正的正文段
+            { type: 'paragraph', order: 2, text: 'orbital coupling and electron transfer between toluene and the oxidizing species. Consistent with these results, the free-energy profiles in Fig. 5d demonstrate the mechanism.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allBlocks = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    // 页眉应被过滤，只剩 1 个正文段
+    expect(allBlocks.length).toBe(1)
+    // 正文段不应包含页眉内容
+    expect(allBlocks[0].content).not.toContain('T. Wang et al')
+    expect(allBlocks[0].content).not.toContain('Journal of Hazardous Materials')
+    expect(allBlocks[0].content).toContain('orbital coupling')
+  })
+
+  // v28 step 109.32: page header 不应与 adjacent paragraph 合并
+  it('v28 step 109.32: 页眉段不与正文段合并（step 109.25 合并前置过滤）', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 5,
+      page_layout: [
+        {
+          page_number: 9,
+          blocks: [
+            // 真实正文段（uppercase + period 结尾 → 不应被合并）
+            { type: 'paragraph', order: 1, text: 'first paragraph ends with period.' },
+            // 页眉段（无 period 结尾，vision 误识为可合并的段）
+            { type: 'paragraph', order: 2, text: 'T. Wang et al.\nJournal of Hazardous Materials 513 (2026) 142456' },
+            // 第二段正文
+            { type: 'paragraph', order: 3, text: 'second paragraph of body.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allBlocks = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    // 应该是 2 段（first + second），页眉被过滤
+    expect(allBlocks.length).toBe(2)
+    expect(allBlocks[0].content).toContain('first paragraph')
+    expect(allBlocks[1].content).toContain('second paragraph')
+    // 不能有页眉内容残留
+    allBlocks.forEach(b => {
+      expect(b.content).not.toContain('T. Wang et al')
+    })
+  })
+
   // v28 step 109.31 反例：misplaced 无 figure 引用 → 仍追加到末尾
   it('v28 step 109.31: misplaced 无 figure 引用时应追加到末尾（不破坏现有逻辑）', () => {
     const visionLayout = {
