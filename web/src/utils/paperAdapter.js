@@ -4623,7 +4623,17 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // v28 step 109.33: 段落内分拆（vision 把多段合并到一个 block 时按过渡短语拆开）
         //   例："facilitates key reaction steps.\nConsistent with this mechanistic picture..."
         //   → 拆成两个独立 block，由 step 109.25 决定是否真合并
-        const splitTexts = _splitByParagraphBreak(text)
+        //   v28 step 109.36.5: Abstract / Conclusion / References 等"独立段落结构"section
+        //     不应用 step 109.33 拆段（这些 section 的 paragraph 本来就是一段长文本，
+        //     含 By/Although/Overall 等过渡词不应该拆成多段）。
+        //   只对正文 sections (results/discussion) 启用拆段。
+        const isStructuralSection = currentSection && (
+          currentSection.type === 'abstract' ||
+          currentSection.type === 'conclusion' ||
+          currentSection.type === 'references' ||
+          currentSection.type === 'preamble'
+        )
+        const splitTexts = isStructuralSection ? [text] : _splitByParagraphBreak(text)
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1, pageNum)
         for (const splitText of splitTexts) {
