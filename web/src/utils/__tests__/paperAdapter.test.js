@@ -2541,6 +2541,68 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allBlocks[0].content).toContain('Consistent with')
   })
 
+  // v28 step 109.36: lookahead 把下节内容推迟到新 section
+  //   真实案例：PDF id=19 page 9 vision [2] = "orbital coupling... oxygen species." (3.5 节内容)
+  //   [3] = "with more comprehensive monitoring..." (4 节内容但 OCR 放在 heading 4 之前)
+  //   [4] = heading "4. Stability and economic analysis"
+  //   → paragraph 3 引用的图号 (Fig. 6) > 当前 section (3.5) 的图号 (Fig. 5) → 推迟到 4 节
+  it('v28 step 109.36: paragraph 引用下节图号 + 同 page 紧跟 heading → 推迟到下节', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 4,
+      page_layout: [{
+        page_number: 9,
+        blocks: [
+          // 3.5 节内容：引用 Fig. 5
+          { type: 'heading', level: 3, order: 1, text: '3.5. Microenvironment' },
+          { type: 'paragraph', order: 2, text: 'orbital coupling and electron transfer between toluene and the oxidizing species. Consistent with these results, the free-energy profiles in Fig. 5d demonstrate the energy barrier is lower.' },
+          // 错位：本应是 4 节内容（引用 Fig. 6），但放在 heading 4 之前
+          { type: 'paragraph', order: 3, text: 'with more comprehensive monitoring required. As shown in Fig. 6b-c, the cost is mainly O3 generation. Therefore, this work demonstrates competitive OPEX.' },
+          // 4 节 heading
+          { type: 'heading', level: 2, order: 4, text: '4. Stability and economic analysis' },
+        ],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const sec35 = r.sections.find(s => /3\.5/.test(s.title || ''))
+    const sec4 = r.sections.find(s => /4\.\s+Stability/.test(s.title || ''))
+    expect(sec35).toBeTruthy()
+    expect(sec4).toBeTruthy()
+    const sec35Paras = (sec35.blocks || []).filter(b => b.type === 'paragraph')
+    const sec4Paras = (sec4.blocks || []).filter(b => b.type === 'paragraph')
+    // 3.5 应该有 orbital coupling 段
+    expect(sec35Paras.some(b => b.content.includes('orbital coupling'))).toBe(true)
+    // 3.5 不应该有 with more comprehensive（已被推迟到 4 节）
+    expect(sec35Paras.some(b => b.content.includes('with more comprehensive'))).toBe(false)
+    // 4 节应该有 with more comprehensive 段
+    expect(sec4Paras.some(b => b.content.includes('with more comprehensive'))).toBe(true)
+  })
+
+  // v28 step 109.36 反例：paragraph 引用同节图号 → 不推迟
+  it('v28 step 109.36: paragraph 引用同节图号 → 不推迟', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 3,
+      page_layout: [{
+        page_number: 9,
+        blocks: [
+          { type: 'heading', level: 2, order: 1, text: '3. Results' },
+          { type: 'paragraph', order: 2, text: 'As shown in Fig. 3a, the conversion increased with time. In contrast, Fig. 3b shows the opposite trend.' },
+          { type: 'heading', level: 2, order: 3, text: '4. Discussion' },
+        ],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const sec3 = r.sections.find(s => /3\.\s*Results/.test(s.title || ''))
+    const sec4 = r.sections.find(s => /4\.\s*Discussion/.test(s.title || ''))
+    expect(sec3).toBeTruthy()
+    expect(sec4).toBeTruthy()
+    const sec3Paras = (sec3.blocks || []).filter(b => b.type === 'paragraph')
+    const sec4Paras = (sec4.blocks || []).filter(b => b.type === 'paragraph')
+    // Fig. 3 引用应在 3 节（heading 4 也只引用 Fig. 3 → nextMaxNum=0 → 不推迟）
+    expect(sec3Paras.some(b => b.content.includes('Fig. 3a'))).toBe(true)
+  })
+
   // v28 step 109.32: page header 不应与 adjacent paragraph 合并
   it('v28 step 109.32: 页眉段不与正文段合并（step 109.25 合并前置过滤）', () => {
     const visionLayout = {
