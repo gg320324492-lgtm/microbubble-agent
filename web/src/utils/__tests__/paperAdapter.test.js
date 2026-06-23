@@ -2285,6 +2285,70 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allBlocks[0].content).toContain('orbital coupling')
   })
 
+  // v28 step 109.33: vision 合并多段到一个 block 时应按过渡短语拆开
+  //   真实案例：PDF id=19 page 9 vision [1] block 含两个独立段落
+  //     "orbital coupling... facilitates key reaction steps."
+  //     "Consistent with this mechanistic picture... reactive oxygen species."
+  it('v28 step 109.33: vision 合并多段到一个 block 时按过渡短语拆开', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 4,
+      page_layout: [
+        {
+          page_number: 9,
+          blocks: [
+            // heading 3.5
+            { type: 'heading', level: 1, order: 1, text: '3.5 Mechanism' },
+            // vision 把两个段合并到一个 block
+            { type: 'paragraph', order: 2, text: 'orbital coupling and electron transfer. Consistent with these results, energy barrier is lower. Therefore, the interface facilitates key reaction steps.\nConsistent with this mechanistic picture, the measured OH concentrations further support the role of interfacial ROS generation.' },
+            // 真正的第二段（用大写开头 + 过渡短语验证）
+            { type: 'paragraph', order: 3, text: 'Furthermore, the experiment validates the proposed mechanism.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allBlocks = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    // 应该拆成 3 段
+    // Para 1: "orbital coupling... facilitates key reaction steps." （中间 .\nConsistent with 触发拆段）
+    // Para 2: "Consistent with this mechanistic picture... interfacial ROS generation."
+    // Para 3: "Furthermore, the experiment validates..."
+    // （顺序：拆分后由 step 109.25 决定是否合并）
+    console.log('=== 段落数 ===')
+    console.log('共', allBlocks.length, '段')
+    allBlocks.forEach((b, i) => {
+      console.log(`[${i}] (${b.content.length} chars) "${b.content.slice(0, 80)}..."`)
+    })
+
+    // 第一段：以 "orbital coupling" 开头
+    expect(allBlocks[0].content).toContain('orbital coupling')
+    // 至少一段以 "Consistent with this" 开头
+    const hasConsistent = allBlocks.some(b => b.content.startsWith('Consistent with this'))
+    expect(hasConsistent).toBe(true)
+    // 至少一段以 "Furthermore" 开头
+    const hasFurthermore = allBlocks.some(b => b.content.startsWith('Furthermore'))
+    expect(hasFurthermore).toBe(true)
+  })
+
+  // v28 step 109.33 反例：换行不在句末符号后 → 不应误拆
+  it('v28 step 109.33: 软换行（句中换行）不应触发段落分拆', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 2,
+      page_layout: [{
+        page_number: 1,
+        blocks: [
+          // 软换行（行末无句末符号）→ 不拆段
+          { type: 'paragraph', order: 1, text: 'this is a long sentence that\ncontinues on the next line but is still\none paragraph logically' },
+        ],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allBlocks = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    expect(allBlocks.length).toBe(1)
+    expect(allBlocks[0].content).toContain('one paragraph logically')
+  })
+
   // v28 step 109.32: page header 不应与 adjacent paragraph 合并
   it('v28 step 109.32: 页眉段不与正文段合并（step 109.25 合并前置过滤）', () => {
     const visionLayout = {

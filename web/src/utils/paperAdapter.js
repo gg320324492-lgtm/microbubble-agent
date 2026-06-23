@@ -4015,6 +4015,66 @@ function _isHeaderLine(line) {
   return false
 }
 
+// v28 step 109.33: 段落内分拆（vision OCR 经常把多个段落合并到同一个 block）
+//   真实案例：PDF id=19 page 9 vision [1] block 包含两个独立段落：
+//     "orbital coupling... facilitates key reaction steps."
+//     "Consistent with this mechanistic picture... reactive oxygen species."
+//   中间只换行（无空行），paperAdapter 不会自动拆段
+//   修复：检测 [.!?] + \n + 大写字母开头（含过渡短语）拆成多个段落
+//   关键约束：避免误拆被换行打断的化学式 / 表格引用 / OCR 软换行
+const _PARAGRAPH_TRANSITIONAL_PHRASES = [
+  'Consistent with', 'Therefore', 'Furthermore', 'Moreover',
+  'In addition', 'Additionally', 'In summary', 'Overall',
+  'In contrast', 'By comparison', 'Based on these', 'These results',
+  'However', 'Nevertheless', 'Subsequently', 'Notably',
+  'Meanwhile', 'Importantly', 'Specifically,', 'Generally',
+  'To evaluate', 'To further', 'To investigate', 'In this',
+  'We propose', 'We suggest', 'It is worth', 'Note that',
+]
+
+function _splitByParagraphBreak(text) {
+  if (!text) return [text]
+  // 单段无换行 → 不拆
+  if (!/\n/.test(text)) return [text]
+
+  const splits = []
+  let lastIdx = 0
+  // 模式：[.!?] + 空白（含 \n）+ 大写字母开头的短语
+  // 限制：下一个 "句子" 不能太长（>200 字符的通常是误判）
+  const re = /([.!?])\s*\n+\s*([A-Z][a-z]+(?:\s+\w+){0,5})/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    const phraseStart = m.index + m[0].length - m[2].length
+    const phraseEnd = phraseStart + m[2].length
+    const phrase = m[2].trim()
+    const endsWithPunct = (m[1] === '.' || m[1] === '!' || m[1] === '?')
+
+    // 必须句末符号 + 大写开头
+    if (!endsWithPunct) continue
+    // 跳过缩写（"et al.", "Fig.", "Eq.", "Dr." 等）—— 后跟小写字母通常不是段尾
+    // 检测：如果句末符号前是单个字母（如 "Fig. 5" 里的 .），可能是缩写
+    const charBefore = phraseStart > 0 ? text[phraseStart - 2] : ''
+    if (/[A-Za-z]/.test(charBefore) && charBefore === charBefore.toLowerCase()) {
+      // 前一个字符是小写字母，可能是缩写（如 "et al."），跳过
+      continue
+    }
+
+    // 短语含过渡词 → 拆段
+    const isTransitional = _PARAGRAPH_TRANSITIONAL_PHRASES.some(w =>
+      phrase.startsWith(w + ' ') || phrase === w
+    )
+    if (!isTransitional) continue
+
+    // 拆段点：句末符号位置之后
+    splits.push(text.slice(lastIdx, phraseStart))
+    lastIdx = phraseStart
+  }
+
+  if (lastIdx === 0) return [text]
+  splits.push(text.slice(lastIdx))
+  return splits.filter(s => s.trim())
+}
+
 function isTocEntry(text) {
   if (!text) return false
   // 模式 1：章节编号前缀 + 连续点 + 页码（如 "1 绪论..............1"）
@@ -4152,6 +4212,29 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
 
   const sectionIdCounter = { s: 0 }
   const genId = () => `s_${++sectionIdCounter.s}`
+
+  // v28 step 109.25 + 109.33: 处理单个 paragraph（合并 + push）
+  //   抽出为函数是为了支持 step 109.33 的段落分拆（一个 vision block 可能拆成多段）
+  //   每段独立判断是否合并到上一段
+  function _processSingleParagraph(text, pageNum) {
+    if (!text || !text.trim()) return
+    const lastBlock = currentBlocks[currentBlocks.length - 1]
+    if (lastBlock
+        && lastBlock.type === 'paragraph'
+        && _shouldMergeParagraphs(lastBlock.content, text)) {
+      // 合并：上一段内容 + 空格 + 本段
+      lastBlock.content = (lastBlock.content + ' ' + text).trim()
+      pidCounter++
+      return
+    }
+    currentBlocks.push({
+      type: 'paragraph',
+      content: text,
+      page: pageNum,
+      indexInSection: currentBlocks.length,
+    })
+    pidCounter++
+  }
 
   // v28 step 109.30: 修正 vision OCR 输出顺序 bug
   //   vision 经常把 section heading 的内容（paragraph）输出在 heading 之前
@@ -4354,26 +4437,15 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // v28 step 109.32: 过滤 vision 误识的页眉（"T. Wang et al. Journal of..."）
         //   vision 把页眉标成 paragraph 后会被 step 109.25 合并到正文，必须提前过滤
         if (isOcrPageHeader(text)) continue
+        // v28 step 109.33: 段落内分拆（vision 把多段合并到一个 block 时按过渡短语拆开）
+        //   例："facilitates key reaction steps.\nConsistent with this mechanistic picture..."
+        //   → 拆成两个独立 block，由 step 109.25 决定是否真合并
+        const splitTexts = _splitByParagraphBreak(text)
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1, pageNum)
-        // v28 step 109.25: vision OCR 经常把 "the" + 换行 + "conversion" 拆成两段
-        //   合并条件：上一段末尾无句末符号 + 本段开头小写字母 → 拼接到上一段
-        const lastBlock = currentBlocks[currentBlocks.length - 1]
-        if (lastBlock
-            && lastBlock.type === 'paragraph'
-            && _shouldMergeParagraphs(lastBlock.content, text)) {
-          // 合并：上一段内容 + 空格 + 本段
-          lastBlock.content = (lastBlock.content + ' ' + text).trim()
-          pidCounter++  // 仍计一个 pid
-          continue
+        for (const splitText of splitTexts) {
+          _processSingleParagraph(splitText, pageNum)
         }
-        currentBlocks.push({
-          type: 'paragraph',
-          content: text,
-          page: pageNum,
-          indexInSection: currentBlocks.length,
-        })
-        pidCounter++
       } else if (b.type === 'image') {
         // 关联到 knowledge_images 表的图
         const imgIndex = b.image_index || 0
