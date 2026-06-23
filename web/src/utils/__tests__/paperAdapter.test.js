@@ -2497,6 +2497,50 @@ The second paragraph starts with a capital letter and is a real paragraph bounda
     expect(allBlocks[0].content).toContain('one paragraph logically')
   })
 
+  // v28 step 109.35: OCR 把多段塞进一行（中间仅 1-2 空格）也应拆
+  //   真实案例：PDF id=19 section 4 block [2] (2457 字符) 包含三段
+  //   step 109.33 只处理换行分隔；新规则处理无换行的多段
+  it('v28 step 109.35: 无换行长文本含 Meanwhile / Beyond 等硬段首词应拆段', () => {
+    const longText = 'with more comprehensive monitoring are still required to evaluate its long-term performance. Meanwhile, CO₂ was continuously detected throughout the reaction, indicating the mineralization of toluene. Beyond achieving high toluene removal efficiency, the system also demonstrates excellent stability over 7 days of continuous operation. The relevant assumptions, parameters, and detailed calculation procedures are provided in the Supporting Information (Text S3 and Table S1).'
+    expect(longText.length).toBeGreaterThan(300)  // 触发长度阈值
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 1,
+      page_layout: [{
+        page_number: 4,
+        blocks: [{ type: 'paragraph', order: 1, text: longText }],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allBlocks = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    // 应拆成 3 段
+    expect(allBlocks.length).toBe(3)
+    expect(allBlocks[0].content).toContain('with more comprehensive')
+    expect(allBlocks[1].content).toContain('Meanwhile')
+    expect(allBlocks[1].content).not.toContain('Beyond achieving')
+    expect(allBlocks[2].content).toContain('Beyond achieving')
+    expect(allBlocks[2].content).toContain('Supporting Information')
+  })
+
+  // v28 step 109.35 反例：无换行 + 短文本 → 不拆（避免误拆 step 109.25 想合并的"段中段"）
+  it('v28 step 109.35: 无换行短文本不应拆段（让 step 109.25 决定）', () => {
+    const shortText = 'orbital coupling and electron transfer between toluene and the oxidizing species. Consistent with these results, the free-energy profiles demonstrate the mechanism.'
+    expect(shortText.length).toBeLessThan(300)  // 不触发长度阈值
+    const visionLayout = {
+      has_layout: true, total_pages: 1, total_blocks: 1,
+      page_layout: [{
+        page_number: 1,
+        blocks: [{ type: 'paragraph', order: 1, text: shortText }],
+      }],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+    const allBlocks = r.sections.flatMap(s => s.blocks || []).filter(b => b.type === 'paragraph')
+    // 应保持 1 段
+    expect(allBlocks.length).toBe(1)
+    expect(allBlocks[0].content).toContain('Consistent with')
+  })
+
   // v28 step 109.32: page header 不应与 adjacent paragraph 合并
   it('v28 step 109.32: 页眉段不与正文段合并（step 109.25 合并前置过滤）', () => {
     const visionLayout = {
