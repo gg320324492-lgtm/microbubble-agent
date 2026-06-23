@@ -3982,6 +3982,39 @@ function isOcrFigureCaption(text) {
   return false
 }
 
+// v28 step 109.32: vision OCR 经常把页眉误识为 paragraph
+//   真实案例：PDF id=19 page 9 上 "T. Wang et al. Journal of Hazardous Materials
+//     513 (2026) 142456" 被 vision 标为 type=paragraph（不是 page_header）
+//   → step 109.25 合并逻辑看到末尾无句末符号 + 下段开头小写 → 合并到正文
+//   → "orbital coupling" 段前面多了 "T. Wang et al.\nJournal of Hazardous Materials..."
+//   修复：检测文本是否纯页眉内容（作者行 + 期刊行），是的话跳过整段
+function isOcrPageHeader(text) {
+  if (!text) return false
+  const t = text.trim()
+  if (t.length > 500) return false  // 太长不像页眉
+  const lines = t.split(/\n+/).map(l => l.trim()).filter(l => l.length > 0)
+  if (lines.length === 0) return false
+  // 所有非空行都必须像页眉行（作者行 / 期刊行 / 纯数字页码）
+  let allHeaderLines = true
+  for (const line of lines) {
+    if (!_isHeaderLine(line)) { allHeaderLines = false; break }
+  }
+  return allHeaderLines
+}
+
+function _isHeaderLine(line) {
+  if (!line) return false
+  // 作者行："T. Wang et al." / "X. Lastname et al." / "X. Lastname, Y. Lastname et al."
+  if (/^[A-Z]\.\s+[A-Z][a-z]+(\s*,?\s*[A-Z]\.\s*[A-Z][a-z]+)*\s*,?\s*(et\s+al\.?)?$/i.test(line)) return true
+  // 期刊行："Journal of Hazardous Materials 513 (2026) 142456"
+  // 通用模式：Journal ... Vol (Year) Pages / Vol., Issue (Year) Pages
+  if (/^Journal\s+of\s+[A-Z][\w\s&]+(\s+\d+)?\s*\(?\d{4}\)?\s+\d+/i.test(line)) return true
+  if (/^[A-Z][\w\s]+\s+\d+\s*\(\d{4}\)\s+\d+\s*$/.test(line)) return true  // "Hazardous Materials 513 (2026) 142456"
+  // 纯数字页码："7" / "513"
+  if (/^\d{1,5}$/.test(line)) return true
+  return false
+}
+
 function isTocEntry(text) {
   if (!text) return false
   // 模式 1：章节编号前缀 + 连续点 + 页码（如 "1 绪论..............1"）
@@ -4318,6 +4351,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         if (isTocEntry(text)) continue
         // v28 step 109.7: 过滤 OCR 误识的图说明（"该图为..." / "This figure shows..."）
         if (isOcrFigureCaption(text)) continue
+        // v28 step 109.32: 过滤 vision 误识的页眉（"T. Wang et al. Journal of..."）
+        //   vision 把页眉标成 paragraph 后会被 step 109.25 合并到正文，必须提前过滤
+        if (isOcrPageHeader(text)) continue
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1, pageNum)
         // v28 step 109.25: vision OCR 经常把 "the" + 换行 + "conversion" 拆成两段
