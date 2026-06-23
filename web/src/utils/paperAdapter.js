@@ -5103,6 +5103,32 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         if (!text) continue
         // v28 step 109.3: 同样过滤 TOC 里的 paragraph（如 "摘 要..............I"）
         if (isTocEntry(text)) continue
+        // v28 step 109.41: 智能识别 paragraph 形式的子节标题
+        //   vision OCR 经常把子节标题（如 "3.2. Effect of oxidant supply..."）错标为 paragraph
+        //   特征：纯标题文本 + 含编号前缀 (\d+(\.\d+)*\.) + 长度 ≤ 80 字符 + 不含中文/长句
+        //   PDF id=19 真实案例：3.2 / 3.3 heading 被错标为 paragraph，导致导航不显示
+        if (currentSection && currentSection.type !== 'preamble' && currentSection.type !== 'abstract') {
+          const trimmedText = text.trim()
+          // 单行（不含换行）+ 短 + 编号开头 + 后跟标题词
+          const titleLike = /^\s*(\d+(?:\.\d+)*\.?)\s+([A-Z一-龥][^.!?\n]{0,80})\s*$/.exec(trimmedText)
+          if (titleLike) {
+            // 后续 paragraph 必须存在（避免误把孤立的"3.2"行识别为标题）
+            // 用 lookahead 查下一个 block 是 paragraph（视为正文）
+            const myKey2 = `${pageNum}:${b.order}`
+            const myIdx2 = blockIndexByKey.get(myKey2)
+            const nextBlock = (myIdx2 !== undefined && myIdx2 + 1 < allBlocksFlat.length)
+              ? allBlocksFlat[myIdx2 + 1]
+              : null
+            if (nextBlock && nextBlock.type === 'paragraph' && nextBlock._pageNum === pageNum) {
+              const headingText = trimmedText
+              const matched2 = _matchSectionTitle(headingText)
+              const secType2 = matched2?.type || 'normal'
+              const secLevel2 = matched2?.level || (titleLike[1].split('.').length)
+              startSection(secType2, headingText, secLevel2, pageNum)
+              continue
+            }
+          }
+        }
         // v28 step 109.7: 过滤 OCR 误识的图说明（"该图为..." / "This figure shows..."）
         if (isOcrFigureCaption(text)) continue
         // v28 step 109.32: 过滤 vision 误识的页眉（"T. Wang et al. Journal of..."）

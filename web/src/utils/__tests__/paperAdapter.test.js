@@ -3501,4 +3501,55 @@ describe('v28 step 109.39: abstract 字段 chemFormat 集成', () => {
       expect(sec3Paras.some(c => c.includes('first-principles'))).toBe(false)
     }
   })
+
+  // v28 step 109.41 regression: vision OCR 错把子节标题标为 paragraph（PDF id=19 真实场景）
+  //   3.2 / 3.3 heading 被 OCR 标为 paragraph block，导航里看不到
+  //   修复：paperAdapter 在 paragraph 处理时智能识别 "N.M. 标题词" 模式提升为 heading
+  it('v28 step 109.41 regression: paragraph 形式的子节标题应被识别为 heading', () => {
+    const visionLayout = {
+      has_layout: true, total_pages: 2, total_blocks: 8,
+      page_layout: [
+        {
+          page_number: 4,
+          blocks: [
+            // 父级 3. heading（必须有，否则 paragraph 智能识别不会触发）
+            { type: 'heading', level: 1, order: 1, text: '3. Results and discussion' },
+          ],
+        },
+        {
+          page_number: 5,
+          blocks: [
+            // 3.1 heading
+            { type: 'heading', level: 3, order: 1, text: '3.1. Evaluation of bubble behaviors' },
+            { type: 'paragraph', order: 2, text: '3.1 content paragraph' },
+            // 3.2 标题被错标为 paragraph（PDF id=19 真实场景）
+            { type: 'paragraph', order: 3, text: '3.2. Effect of oxidant supply on toluene conversion and mineralization' },
+            // 3.2 正文
+            { type: 'paragraph', order: 4, text: 'The temporal evolution of toluene conversion under different O3 concentrations is shown in Fig. 2a.' },
+            // 3.3 标题也被错标为 paragraph
+            { type: 'paragraph', order: 5, text: '3.3. Influence of complex environments on toluene removal' },
+            // 3.3 正文
+            { type: 'paragraph', order: 6, text: 'After confirming the system has good performance, this paper further investigated.' },
+          ],
+        },
+      ],
+    }
+    const r = normalizePaperData({ id: 99, title: 'T', content: '', summary: null, tags: [] },
+      { images: [], extractions: [], related: [], visionLayout })
+
+    // 应该有 3.2 和 3.3 sections
+    const sec32 = r.sections.find(s => (s.title || '').includes('3.2'))
+    const sec33 = r.sections.find(s => (s.title || '').includes('3.3'))
+    expect(sec32).toBeTruthy()
+    expect(sec33).toBeTruthy()
+
+    // 3.2 section 包含自己的正文（不含 3.3 内容）
+    const sec32Paras = sec32.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec32Paras.some(c => c.includes('temporal evolution'))).toBe(true)
+    expect(sec32Paras.some(c => c.includes('After confirming'))).toBe(false)
+
+    // 3.3 section 包含自己的正文
+    const sec33Paras = sec33.blocks.filter(b => b.type === 'paragraph').map(b => b.content)
+    expect(sec33Paras.some(c => c.includes('After confirming'))).toBe(true)
+  })
 })
