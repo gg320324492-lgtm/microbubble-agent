@@ -4050,7 +4050,7 @@ const _PARAGRAPH_TRANSITIONAL_PHRASES = [
 //   真新段通常用 Meanwhile / Beyond / Therefore 等"明显停顿"标记
 const _PARAGRAPH_HARD_NEW_PHRASES = [
   'Consistent with', 'Therefore', 'Furthermore', 'Moreover',
-  'In addition', 'Additionally', 'In summary', 'Overall',
+  'In addition', 'Additionally', 'In summary',
   'In contrast', 'By comparison', 'Based on these', 'These results',
   'However', 'Nevertheless', 'Subsequently', 'Notably',
   'Meanwhile', 'Importantly',
@@ -4285,6 +4285,10 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   //     算法：提取 misplaced 的最高子图字母（如 Fig. 5c），找当前 section 里引用"下一个子图"
   //     （Fig. 5d）的 paragraph，插在它前面；找不到则按 image_anchor / earlier sub-figure 回退
   const deferredMisplacedBlocks = []
+  // v28 step 109.36: 推迟到下一个 section 的 blocks（不是上一个 section）
+  //   lookahead 发现 paragraph 引用图号 > 当前 section → 不进 currentSection
+  //   进 deferredForNextSection，等下一个 heading 触发后插入新 section 开头
+  const deferredForNextSection = []
 
   // 提取文本中的 figure 引用 [{num, letter}]
   function _extractFigureRefs(text) {
@@ -4437,12 +4441,38 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       type: type || 'normal',
     }
     currentBlocks = []
+    // v28 step 109.36: 切到新 section 后立即把 deferredForNextSection 推到 currentBlocks 开头
+    //   这些 blocks 是 lookahead 检测到的"应该是新 section 内容"
+    //   推到开头确保出现在 image_anchor 等之前，符合逻辑顺序
+    while (deferredForNextSection.length > 0) {
+      const b = deferredForNextSection.shift()
+      currentBlocks.push(b)
+    }
+  }
+
+  // v28 step 109.36: 预处理所有 blocks 平铺数组（用于 lookahead）
+  //   vision OCR 经常把下一节的 paragraph 输出在 heading 之前（page 9 order=3 是 4 节内容
+  //   但 heading 4 在 order=4）。Lookahead 让 paragraph 处理时能 peek 下一个 heading。
+  const allBlocksFlat = []
+  for (const page of mergedPages) {
+    const pageNum = page.page_number
+    const blocks = (page.blocks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0))
+    for (const b of blocks) {
+      allBlocksFlat.push({ ...b, _pageNum: pageNum })
+    }
+  }
+  // 构造 (pageNum, order) → block 在 flat 数组中的索引
+  const blockIndexByKey = new Map()
+  for (let i = 0; i < allBlocksFlat.length; i++) {
+    const b = allBlocksFlat[i]
+    blockIndexByKey.set(`${b._pageNum}:${b.order}`, i)
   }
 
   for (const page of mergedPages) {
     const pageNum = page.page_number
     const blocks = (page.blocks || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0))
-    for (const b of blocks) {
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const b = blocks[bi]
       if (b.type === 'page_header' || b.type === 'page_footer') {
         // 跳过页眉页脚
         continue
@@ -4499,6 +4529,77 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // v28 step 109.32: 过滤 vision 误识的页眉（"T. Wang et al. Journal of..."）
         //   vision 把页眉标成 paragraph 后会被 step 109.25 合并到正文，必须提前过滤
         if (isOcrPageHeader(text)) continue
+        // v28 step 109.36: lookahead 检测 paragraph 是否属于下一节
+        //   vision OCR 经常把下节内容输出在 heading 之前（如 page 9 order=3 是 4 节内容，
+        //   但 heading 4 在 order=4）。如果 paragraph 引用的图号大于下一节范围内任何图号，
+        //   且同 page 紧跟 heading（level >= 2），paragraph 应推迟到下一节。
+        //   算法：检查 lookahead 中下一个 heading，引用的图号是上限
+        const myKey = `${pageNum}:${b.order}`
+        const myIdx = blockIndexByKey.get(myKey)
+        let skipToNextSection = false
+        if (myIdx !== undefined && currentSection) {
+          // 收集当前 section 已知的图号范围（从 currentBlocks 累积）
+          let curSectionMaxFig = 0
+          for (const cb of currentBlocks) {
+            if (cb.type === 'paragraph' || cb.type === 'image_anchor') {
+              const cbText = cb.content || cb.caption || ''
+              for (const f of _extractFigureRefs(cbText)) {
+                if (f.num > curSectionMaxFig) curSectionMaxFig = f.num
+              }
+            }
+          }
+          // 守卫：currentSection 必须已经有 ≥1 个段落/图，才能触发 lookahead 推迟
+          //   否则会把"第一个 paragraph（属于本节）"也推迟到下节
+          if (curSectionMaxFig === 0 && currentBlocks.length === 0) {
+            // 跳过 lookahead（保留本节）
+          } else {
+            for (let look = myIdx + 1; look < Math.min(allBlocksFlat.length, myIdx + 4); look++) {
+              const next = allBlocksFlat[look]
+              if (next.type === 'heading' && next._pageNum === pageNum && (next.level || 1) >= 2) {
+                const myFigs = _extractFigureRefs(text)
+                if (myFigs.length > 0) {
+                  let myMaxNum = 0
+                  for (const f of myFigs) if (f.num > myMaxNum) myMaxNum = f.num
+                  // 关键判断：我引用的图号 > 当前 section 已知的最大图号 → 推迟到下节
+                  if (myMaxNum > curSectionMaxFig) {
+                    skipToNextSection = true
+                  }
+                }
+                break
+              }
+              if (next.type === 'image' || next.type === 'image_anchor') {
+                const caption = next.caption || next.text || ''
+                const nextFigs = _extractFigureRefs(caption)
+                if (nextFigs.length > 0) {
+                  const myFigs2 = _extractFigureRefs(text)
+                  if (myFigs2.length > 0) {
+                    let myMaxNum = 0
+                    for (const f of myFigs2) if (f.num > myMaxNum) myMaxNum = f.num
+                    let nextMaxNum = 0
+                    for (const f of nextFigs) if (f.num > nextMaxNum) nextMaxNum = f.num
+                    if (myMaxNum > nextMaxNum) {
+                      skipToNextSection = true
+                      break
+                    }
+                  }
+                }
+                continue
+              }
+            }
+          }
+        }
+        if (skipToNextSection) {
+          const splitTexts = _splitByParagraphBreak(text)
+          if (!currentSection) startSection('preamble', '前言', 1, pageNum)
+          for (const splitText of splitTexts) {
+            deferredForNextSection.push({
+              type: 'paragraph',
+              content: splitText,
+              page: pageNum,
+            })
+          }
+          continue
+        }
         // v28 step 109.33: 段落内分拆（vision 把多段合并到一个 block 时按过渡短语拆开）
         //   例："facilitates key reaction steps.\nConsistent with this mechanistic picture..."
         //   → 拆成两个独立 block，由 step 109.25 决定是否真合并
