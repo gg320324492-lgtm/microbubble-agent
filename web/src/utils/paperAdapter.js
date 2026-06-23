@@ -4018,6 +4018,8 @@ function isOcrPublicationInfo(text) {
     /^Available\s+online\s+\d/i,
     /^©\s*\d{4}\s+(?:Elsevier|ScienceDirect|Wiley|Springer)/i,
     /0304-3894\/©/,
+    // Keywords 块（出版元信息，已被 normalizePaperData 抽到 keywords 字段）
+    /^Keywords?\s*[:：]/i,
     // 学校/单位地址行（出现在 Abstract 后）
     /^[a-z]\s+School\s+of\s+/i,
     /^[a-z]\s+College\s+of\s+/i,
