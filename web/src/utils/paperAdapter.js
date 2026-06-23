@@ -4273,6 +4273,26 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     pidCounter++
   }
 
+  // v28 step 109.36.2: flush deferredForNextSection 到当前 section
+  //   智能选择插入位置：
+  //   - 如果 currentBlocks 已经包含 image_anchor → 插入到最后一个 image_anchor 之后（讨论组跟在图后）
+  //   - 否则（无 image_anchor 的 section，如 step 109.36 fixture）→ 插入到 currentBlocks 末尾
+  //   调用时机：每次 push paragraph/image/table/formula 后
+  function flushDeferredForNextSection() {
+    if (deferredForNextSection.length === 0) return
+    // 找最后一个 image_anchor 位置
+    let insertPos = currentBlocks.length  // 默认末尾
+    for (let i = currentBlocks.length - 1; i >= 0; i--) {
+      const b = currentBlocks[i]
+      if (b && (b.type === 'image_anchor' || b.type === 'image')) {
+        insertPos = i + 1
+        break
+      }
+    }
+    currentBlocks.splice(insertPos, 0, ...deferredForNextSection)
+    deferredForNextSection.length = 0
+  }
+
   // v28 step 109.30: 修正 vision OCR 输出顺序 bug
   //   vision 经常把 section heading 的内容（paragraph）输出在 heading 之前
   //   例：page 8 上 vision 输出顺序是 [67] paragraph (3.4) [68] paragraph (3.5) [69] heading 3.5
@@ -4372,6 +4392,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         currentBlocks.splice(pos, 0, m)
       }
       deferredMisplacedBlocks.length = 0
+      // v28 step 109.36.2: flush 兜底处理 deferredForNextSection 残留
+      //   （例如 step 109.36 fixture：4 节只有 1 个 heading 触发，flushCurrent 是唯一 flush 时机）
+      flushDeferredForNextSection()
       sections.push({
         id: currentSection.id,
         title: currentSection.title,
@@ -4441,21 +4464,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       type: type || 'normal',
     }
     currentBlocks = []
-    // v28 step 109.36.2: 切到新 section 后处理 deferredForNextSection
-    //   这些 blocks 是 lookahead 检测到的"下节内容"（如 page 9 order=3 with more...）。
-    //   必须在 currentSection 已切到新 section 后再处理，避免插到旧 section 末尾。
-    //   插入到 image_anchor 之后（如果有），否则末尾。
-    if (deferredForNextSection.length > 0) {
-      let insertPos = currentBlocks.length
-      for (let i = currentBlocks.length - 1; i >= 0; i--) {
-        if (currentBlocks[i].type === 'image_anchor' || currentBlocks[i].type === 'image') {
-          insertPos = i + 1
-          break
-        }
-      }
-      currentBlocks.splice(insertPos, 0, ...deferredForNextSection)
-      deferredForNextSection.length = 0
-    }
+    // v28 step 109.36.2: startSection 不立即 flush deferredForNextSection
+    //   让 paragraph/image/table/formula push 后的 helper 智能判断 image_anchor 位置
+    //   flushCurrent 也兜底（处理没有更多 push 的 section）
   }
 
   // v28 step 109.36: 预处理所有 blocks 平铺数组（用于 lookahead）
@@ -4497,6 +4508,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           content: b.text || '',
           page: pageNum,
         })
+        flushDeferredForNextSection()
         continue
       }
       if (b.type === 'heading') {
@@ -4617,6 +4629,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         for (const splitText of splitTexts) {
           _processSingleParagraph(splitText, pageNum)
         }
+        flushDeferredForNextSection()
       } else if (b.type === 'image') {
         // 关联到 knowledge_images 表的图
         const imgIndex = b.image_index || 0
@@ -4721,6 +4734,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           caption: cleanCaption3,
           figure_no: b.figure_no || null,
         })
+        flushDeferredForNextSection()
       } else if (b.type === 'table') {
         const caption = b.caption || null
         const headers = b.headers || []
@@ -4737,6 +4751,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           page: pageNum,
           caption,
         })
+        flushDeferredForNextSection()
       } else if (b.type === 'formula') {
         if (!currentSection) startSection('normal', '未命名', 2, pageNum)
         currentBlocks.push({
@@ -4744,6 +4759,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
           content: b.latex || '',
           page: pageNum,
         })
+        flushDeferredForNextSection()
       }
     }
     // 每页结束，记录 page_marker
