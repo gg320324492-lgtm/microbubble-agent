@@ -9,6 +9,12 @@
        核心概念 / 关联主题 完全移除（与关键词高度重复）
   -->
   <section v-if="paper.abstract" class="paper-abstract">
+    <!-- v28 step 109.36.9: 标题让用户知道这是 Abstract（之前只有 topic + 字数） -->
+    <h2 class="abstract-title">
+      <el-icon><Document /></el-icon>
+      Abstract
+    </h2>
+
     <!-- 顶部元信息行：topic + 字数 -->
     <div class="abstract-meta-row">
       <span v-if="topic" class="meta-topic">
@@ -37,7 +43,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { Aim } from '@element-plus/icons-vue'
+import { Aim, Document } from '@element-plus/icons-vue'
 import { autoLinkContent } from '@/utils/paperAdapter'
 
 const props = defineProps({
@@ -67,6 +73,21 @@ const topic = computed(() => props.paper.topic || '')
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 20px;
+}
+
+/* v28 step 109.36.9: Abstract 标题（让用户知道这段是什么） */
+.abstract-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-primary);
+  margin: 0 0 10px 0;
+}
+
+.abstract-title .el-icon {
+  font-size: 18px;
 }
 
 .abstract-meta-row {
