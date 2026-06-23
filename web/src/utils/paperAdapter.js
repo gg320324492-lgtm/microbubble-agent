@@ -4745,7 +4745,7 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   // v28 step 109.25 + 109.33: 处理单个 paragraph（合并 + push）
   //   抽出为函数是为了支持 step 109.33 的段落分拆（一个 vision block 可能拆成多段）
   //   每段独立判断是否合并到上一段
-  function _processSingleParagraph(text, pageNum) {
+  function _processSingleParagraph(text, pageNum, options = {}) {
     if (!text || !text.trim()) return
     // v28 step 109.36.6.3: 提前过滤出版元信息（避免被 deferredMisplacedBlocks 路径绕过守卫）
     //   之前守卫只在 paragraph 直接处理分支生效，deferred 路径（OCR 错位段插入）
@@ -4772,6 +4772,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       content: text,
       page: pageNum,
       indexInSection: currentBlocks.length,
+      // v28 step 109.40: 携带 _skipToNextSection 标志，让 startSection 的 Step 2
+      //   挪移条件更精准（仅挪已确认属下一节的段）
+      _skipToNextSection: options.skipToNextSection || false,
     })
     pidCounter++
   }
@@ -4832,11 +4835,16 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
   }
 
   // 找 misplaced block 应该插入的位置（基于 figure 子图字母顺序）
+  // 返回 -1 表示"无合适位置（无 fig ref）"，调用方应 prepend 到 section 开头
   function _findInsertPositionForMisplaced(currentBlocks, misplacedBlock) {
     if (currentBlocks.length === 0) return 0
     const text = misplacedBlock.content || misplacedBlock.text || ''
     const figs = _extractFigureRefs(text)
-    if (figs.length === 0) return currentBlocks.length  // 无 figure 引用 → 追加末尾
+    // v28 step 109.40: 无 figure 引用 → 不追加到末尾（可能错位），改 prepend
+    //   PDF id=19 的 2.4 段末 "Based on"（含 Fig. 1 引用 → 会走下方逻辑）走的是
+    //   另一种 fallback。但其他无 fig 引用的段（如纯说明段）应 prepend 到开头，
+    //   避免被插入到完全无关 section 末尾
+    if (figs.length === 0) return -1
 
     // 最高子图（如 Fig. 5c 的 {5, 'c'}）
     let highest = figs[0]
@@ -4884,7 +4892,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       }
     }
 
-    return currentBlocks.length  // 兜底追加末尾
+    // 兜底：含 fig 引用但找不到匹配位置 → 也 prepend（v28 step 109.40 修复）
+    //   避免段落被错位追加到完全无关 section 末尾
+    return -1
   }
 
   const flushCurrent = () => {
@@ -4892,7 +4902,14 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       // 把 deferred misplaced blocks 按 figure-aware 位置插入
       for (const m of deferredMisplacedBlocks) {
         const pos = _findInsertPositionForMisplaced(currentBlocks, m)
-        currentBlocks.splice(pos, 0, m)
+        // v28 step 109.40: -1 = 无合适位置（无 fig 引用）→ prepend 到 section 开头
+        //   修复 bug：原本 splice(currentBlocks.length, 0, m) 会把 paragraph 追加到
+        //   完全无关 section 末尾（PDF id=19 的 2.4 段末 "Based on" 错位到 3.1 最后）
+        if (pos === -1) {
+          currentBlocks.unshift(m)
+        } else {
+          currentBlocks.splice(pos, 0, m)
+        }
       }
       deferredMisplacedBlocks.length = 0
       // v28 step 109.36.2: flush 兜底处理 deferredForNextSection 残留
@@ -4914,25 +4931,37 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
     if (currentSection) {
       // Step 1: 把之前 deferred 的 misplaced blocks 按 figure-aware 位置插入当前 section
       for (const m of deferredMisplacedBlocks) {
-        const pos = _findInsertPositionForMisplaced(currentBlocks, m)
-        currentBlocks.splice(pos, 0, m)
+        let pos = _findInsertPositionForMisplaced(currentBlocks, m)
+        // v28 step 109.40: -1 = 无 fig 引用 → prepend 到当前 section 开头（避免
+        //   被错位追加到 section 末尾，PDF id=19 的 2.4 "Based on" 段就是这个 bug）
+        let prepended = false
+        if (pos === -1) {
+          currentBlocks.unshift(m)
+          pos = 0
+          prepended = true
+        } else {
+          currentBlocks.splice(pos, 0, m)
+        }
         // v28 step 109.34: 插入后立即检查与前后邻居的合并
         //   之前问题：step 109.31 插入 misplaced block 时，后面的内容已被 push 过，
         //     没有走 step 109.25 合并逻辑，导致 molecular_model + orbital_coupling
         //     错分成两段（用户期望合并成一段）
         //   修复：插入后检查 prev（如果 prev 是 paragraph 且 _shouldMergeParagraphs）
         //     或 next（同样条件），合并
-        const prevBlock = pos > 0 ? currentBlocks[pos - 1] : null
-        if (prevBlock && prevBlock.type === 'paragraph' && _shouldMergeParagraphs(prevBlock.content, m.content)) {
-          // 与 prev 合并：prev.content += m.content, 移除 m
-          prevBlock.content = (prevBlock.content + ' ' + m.content).trim()
-          currentBlocks.splice(pos, 1)
-        } else {
-          const nextBlock = currentBlocks[pos + 1]
-          if (nextBlock && nextBlock.type === 'paragraph' && _shouldMergeParagraphs(m.content, nextBlock.content)) {
-            // 与 next 合并：next.content = m.content + next.content, 移除 m
-            nextBlock.content = (m.content + ' ' + nextBlock.content).trim()
+        // v28 step 109.40: prepended 模式下跳过 prev 合并（避免和第一段错位合并）
+        if (!prepended) {
+          const prevBlock = pos > 0 ? currentBlocks[pos - 1] : null
+          if (prevBlock && prevBlock.type === 'paragraph' && _shouldMergeParagraphs(prevBlock.content, m.content)) {
+            // 与 prev 合并：prev.content += m.content, 移除 m
+            prevBlock.content = (prevBlock.content + ' ' + m.content).trim()
             currentBlocks.splice(pos, 1)
+          } else {
+            const nextBlock = currentBlocks[pos + 1]
+            if (nextBlock && nextBlock.type === 'paragraph' && _shouldMergeParagraphs(m.content, nextBlock.content)) {
+              // 与 next 合并：next.content = m.content + next.content, 移除 m
+              nextBlock.content = (m.content + ' ' + nextBlock.content).trim()
+              currentBlocks.splice(pos, 1)
+            }
           }
         }
       }
@@ -4940,13 +4969,32 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
       // Step 2: 把当前 section 末尾紧邻 heading 的 paragraph 移到 deferred buffer
       //   v28 step 109.34: 只移"不完整段"（结尾无句末符号），完整段（以 . ! ? 结尾）
       //   不动。否则会把正常的 3.5/4 段末段（以 "." 结尾）错移到下一 section
-      if (currentBlocks.length > 0) {
+      // v28 step 109.40: 挪移前记录 paragraph 的"原 section id"和"原 page"。
+      //   当 _findInsertPositionForMisplaced 找不到合适位置（无 fig ref 或都 miss）时，
+      //   兜底改为 prepend 到 next section 开头（而不是追加到末尾），
+      //   这样 paragraph 仍属于新 section（语义上正确）。
+      //   PDF id=19 的 2.4 段末 "Based on" 无句末符号被挪移后，原本被兜底追加到
+      //   3.1 末尾（错位到与 3.1 内容完全无关的位置），现在改为 prepend 到
+      //   3 Results section 开头（更合理的归属）。
+      // v28 step 109.40: 完全禁用 Step 2 挪移逻辑
+      //   原挪移条件"段落末尾无句末符号"过于激进，会把完整段（如 PDF id=19 的 2.4
+      //   末尾 "Based on"）误挪到 deferredMisplacedBlocks，最终 _findInsertPositionForMisplaced
+      //   兜底追加到无关 section 末尾（错位丢段）。
+      //   真实场景：vision OCR 已经把每段标成完整 paragraph block，不需要再判定
+      //   "段落完整性"主动挪移。段落留在原 section 即便末尾看着"未完"，
+      //   也比错位到无关 section 好得多。
+      //   副作用：step 109.30 测试 fixture（"the molecular model reveals..." 无句末）
+      //   不再被挪移，段落保留在 3.4 section。测试期望已更新（见 paperAdapter.test.js
+      //   v28 step 109.30 + 109.40 注释）。
+      if (false) {
         const last = currentBlocks[currentBlocks.length - 1]
-        if (last.type === 'paragraph' && last.page === pageNum) {
+        if (last.type === 'paragraph' && last.page === pageNum && !last._originalSectionId) {
           const lastContent = (last.content || '').trim()
           const endsIncomplete = !/[.!?。！？]\s*$/.test(lastContent)
           if (endsIncomplete) {
             const moved = currentBlocks.pop()
+            moved._originalSectionId = currentSection.id
+            moved._originalSectionTitle = currentSection.title
             deferredMisplacedBlocks.push(moved)
           }
         }
@@ -5157,7 +5205,9 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
         // 没开 section 就先开一个 preamble
         if (!currentSection) startSection('preamble', '前言', 1, pageNum)
         for (const splitText of splitTexts) {
-          _processSingleParagraph(splitText, pageNum)
+          // v28 step 109.40: 传 skipToNextSection 给 _processSingleParagraph，
+          //   让 startSection Step 2 精准挪移（仅 lookahead 确认的段落）
+          _processSingleParagraph(splitText, pageNum, { skipToNextSection })
         }
         // 不立即 flush deferredForNextSection（等 image_anchor 或 flushCurrent 兜底）
       } else if (b.type === 'image') {
