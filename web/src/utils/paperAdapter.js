@@ -4020,6 +4020,14 @@ export function normalizePaperData(raw, extra = {}) {
     abstract = _stripPublicationInfo(abstract)
     abstract = abstract.replace(/^[\s\]\}>]+/, '').trim()
   }
+
+  // v28 step 109.39: abstract 字段也要走 formatScientificText
+  //    否则 abstract 中的化学式/上下标/自由基符号（如 O₂⋅⁻、⋅OH、O₃-MNBs、H₂O₂）保留 OCR 原始字符，
+  //    前端 AbstractCard 只调用 autoLinkContent（不做化学式格式化），导致 abstract 显示与正文不一致。
+  //    apply to abstract before it goes to PaperHeader / AbstractCard
+  if (abstract) {
+    abstract = formatScientificText(abstract)
+  }
   if (content && !keywords.length) {
     const detectedKw = _detectKeywordsFromContent(content)
     if (detectedKw.length) keywords = detectedKw
@@ -5412,6 +5420,11 @@ function _buildPaperFromVisionLayout(raw, visionLayout, images, extractions, rel
 
   // v28 step 109.37: 关键词翻译成英文
   keywords = _translateKeywordsToEnglish(keywords)
+
+  // v28 step 109.39: abstract 也走 formatScientificText（让 O₂⋅⁻ / O₃-MNBs / H₂O₂ 都正确格式化）
+  if (abstract) {
+    abstract = formatScientificText(abstract)
+  }
 
   return {
     id: raw.id,

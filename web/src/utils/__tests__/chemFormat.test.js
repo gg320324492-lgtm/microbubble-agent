@@ -200,6 +200,38 @@ describe('formatIonCharge - 离子电荷识别', () => {
     // 半角负号 - (U+2212 已在上方)
   })
 
+  // v28 step 109.39: radical 字符集扩展 — 含 ⋅ (U+22C5) / · (U+00B7) / • (U+2022)
+  //   之前只认 [·•]，导致 "O2⋅−"（PDF 学术期刊最常见的 radical 写法）被误解析为 "O²⁻"
+  //   注意：单独调 formatIonCharge 只处理 charge/formula，下标由 formatChemicalFormula 负责
+  //   完整流水线 formatScientificText 才同时转下标 + 电荷
+  it('O2 + ⋅ (U+22C5) radical + charge (主入口)', () => {
+    // ⋅ 后面跟 ⁻ (Unicode 上标) — PDF 学术期刊最常见
+    expect(formatScientificText('O2⋅⁻')).toBe('O₂⋅⁻')
+    // ⋅ 后面跟 − (Unicode 减号) — 之前失败
+    expect(formatScientificText('O2⋅−')).toBe('O₂·⁻')
+    // ⋅ 后面跟 - (ASCII)
+    expect(formatScientificText('O2⋅-')).toBe('O₂·⁻')
+  })
+
+  it('O2 + • (U+2022) radical + charge (主入口)', () => {
+    expect(formatScientificText('O2•⁻')).toBe('O₂•⁻')
+    expect(formatScientificText('O2•−')).toBe('O₂·⁻')
+    expect(formatScientificText('O2•-')).toBe('O₂·⁻')
+  })
+
+  it('O2 + · (U+00B7) radical + charge (regression)', () => {
+    expect(formatScientificText('O2·⁻')).toBe('O₂·⁻')
+    expect(formatScientificText('O2·−')).toBe('O₂·⁻')
+    expect(formatScientificText('O2·-')).toBe('O₂·⁻')
+  })
+
+  // v28 step 109.39: 验证 CHARGE_RE 的非贪婪行为 — radical 存在时 digit 优先留在 formula
+  //   实际：O2⋅- 走 CHARGE_RE 匹配为 formulaPart=O2（digit=0+radical=⋅+sign=-）
+  //   内部 formattedFormula 替换 O2 → O₂, - 转 ⁻ 上标 → 输出 O₂⋅⁻
+  it('O2 + ⋅ + charge (formatIonCharge 单独调 - digit 留在 formula)', () => {
+    expect(formatIonCharge('O2⋅-')).toBe('O₂⋅⁻')
+  })
+
   it('不误伤公式 + 连接符', () => {
     // O3-MNBs: formula + connector + word，不应被当成 O3 + 电荷
     expect(formatIonCharge('O3-MNBs')).toBe('O3-MNBs')
@@ -226,7 +258,12 @@ describe('formatIonCharge - 离子电荷识别', () => {
 describe('formatRadicals - 自由基识别', () => {
   it('保持 ·OH 形式', () => {
     expect(formatRadicals('·OH')).toBe('·OH')
-    expect(formatRadicals('•OH')).toBe('•OH')
+  })
+
+  // v28 step 109.39: 所有 radical 点号归一为 ·OH（视觉一致 + font 兼容性最好）
+  it('•OH / ⋅OH 归一为 ·OH', () => {
+    expect(formatRadicals('•OH')).toBe('·OH')
+    expect(formatRadicals('⋅OH')).toBe('·OH')
   })
 
   it('OCR 脏数据 . 替换为 ·', () => {
@@ -252,6 +289,19 @@ describe('formatRadicals - 自由基识别', () => {
     expect(formatRadicals('Fluorescence detection of coumarins -OH')).toBe('Fluorescence detection of coumarins ·OH')
     expect(formatRadicals('Detection of -OH')).toBe('Detection of ·OH')
     expect(formatRadicals('Section title: -OH')).toBe('Section title: ·OH')
+  })
+
+  // v28 step 109.39: radical 字符集扩展 — 含 ⋅ (U+22C5) / · (U+00B7) / • (U+2022) / . (ASCII)
+  //   之前 RADICAL_NORMALIZE_RE 只认 . 模式，现在 4 种都规范化
+  it('PDF 学术期刊常见 radical 字符集（⋅ / • / · / .）', () => {
+    // ⋅ (U+22C5) 是 PDF 学术期刊最常见
+    expect(formatRadicals('O2⋅-')).toBe('O2·-')
+    // • (U+2022) 是 bullet / PDF 默认
+    expect(formatRadicals('O2•-')).toBe('O2·-')
+    // · (U+00B7) LaTeX middle dot
+    expect(formatRadicals('O2·-')).toBe('O2·-')
+    // . (ASCII) OCR 旧识别 — 已有
+    expect(formatRadicals('O2.-')).toBe('O2·-')
   })
 
   it('空字符串和 null', () => {

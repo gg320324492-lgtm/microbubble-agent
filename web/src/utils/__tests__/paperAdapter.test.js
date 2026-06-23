@@ -3349,3 +3349,91 @@ H I G H L I G H T S`
     expect(r.authors[0].name).toBe('John Smith')
   })
 })
+
+// ============================================================
+// v28 step 109.39: paper.abstract 字段走 formatScientificText
+//   用户报告：abstract 中 O2•− 等 radical 上下标没渲染正确
+//   根因：abstract 字段直接走原文（OCR 字符），没经过 chemFormat 流水线
+//   修复：normalizePaperData / _buildPaperFromVisionLayout 末尾对 abstract 调 formatScientificText
+// ============================================================
+
+describe('v28 step 109.39: abstract 字段 chemFormat 集成', () => {
+  it('PDF id=19 真实 abstract 文本 - O₂⋅⁻/O₃-MNBs/H₂O₂/⋅OH 全部格式化', () => {
+    // 真实 OCR 文本（来自 paper 19 /tmp/p19_full.json）
+    const rawAbstract = 'A process coupling ozone micro-nanobubbles (O3-MNBs) with H2O2 was developed. The mechanism involves O2⋅⁻-associated pathways and ⋅OH-associated pathways. O3-MNBs and H2O2 both contribute.'
+    const raw = {
+      id: 19,
+      title: 'Test paper',
+      content: `[PAGE:1]\nAbstract: ${rawAbstract}\nKeywords: x\n[PAGE:2]\n1 Introduction\ntext`,
+      summary: rawAbstract,
+      tags: ['test'],
+    }
+    const paper = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    // 验证 abstract 已格式化
+    expect(paper.abstract).toBeTruthy()
+    // O3-MNBs 应该是 O₃-MNBs（下标）
+    expect(paper.abstract).toContain('O₃-MNBs')
+    // H2O2 应该是 H₂O₂
+    expect(paper.abstract).toContain('H₂O₂')
+    // O2⋅⁻ 应该保持原样（已经是规范 Unicode）
+    expect(paper.abstract).toContain('O₂⋅⁻')
+    // ⋅OH 归一为 ·OH（v28 step 109.39: 所有 radical 字符归一）
+    expect(paper.abstract).toContain('·OH')
+    // 不应含原始 O3 / H2O2 / O2
+    expect(paper.abstract).not.toMatch(/\bO3-MNBs\b/)
+    expect(paper.abstract).not.toMatch(/\bH2O2\b/)
+  })
+
+  it('abstract 含 • 字符（OCR 旧 radical）- 归一为 ·', () => {
+    const rawAbstract = 'The mechanism involves O2•- and •OH radical pathways.'
+    const raw = {
+      id: 20,
+      title: 'Test',
+      content: `[PAGE:1]\nAbstract: ${rawAbstract}\nKeywords: x\n[PAGE:2]\n1 Introduction\ntext`,
+      summary: rawAbstract,
+    }
+    const paper = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    // O2•- 应该被 formatScientificText 处理为 O₂·⁻
+    expect(paper.abstract).toContain('O₂·⁻')
+    expect(paper.abstract).toContain('·OH')
+    // • 不应再出现
+    expect(paper.abstract).not.toContain('•')
+  })
+
+  it('abstract 含 ⋅ OCR variant - 保持 ⋅', () => {
+    const rawAbstract = 'O2⋅- and ⋅OH radical pathways.'
+    const raw = {
+      id: 21,
+      title: 'Test',
+      content: `[PAGE:1]\nAbstract: ${rawAbstract}\nKeywords: x\n[PAGE:2]\n1 Introduction\ntext`,
+      summary: rawAbstract,
+    }
+    const paper = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    // O2⋅- 走 formatScientificText → O₂·⁻（- 转 ⁻, 数字变下标）
+    expect(paper.abstract).toContain('O₂·⁻')
+  })
+
+  it('不破坏 plain text abstract（无化学式）', () => {
+    const rawAbstract = 'A novel approach for water treatment without any chemicals.'
+    const raw = {
+      id: 22,
+      title: 'Test',
+      content: `[PAGE:1]\nAbstract: ${rawAbstract}\nKeywords: x\n[PAGE:2]\n1 Introduction\ntext`,
+      summary: rawAbstract,
+    }
+    const paper = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    expect(paper.abstract).toBe(rawAbstract)
+  })
+
+  it('不破坏中文 abstract', () => {
+    const rawAbstract = '本研究开发了一种无需催化剂的臭氧微纳米气泡工艺'
+    const raw = {
+      id: 23,
+      title: '中文测试',
+      content: `[PAGE:1]\n摘要：${rawAbstract}\n关键词：x\n[PAGE:2]\n1 引言\ntext`,
+      summary: rawAbstract,
+    }
+    const paper = normalizePaperData(raw, { images: [], extractions: [], related: [] })
+    expect(paper.abstract).toBe(rawAbstract)
+  })
+})
