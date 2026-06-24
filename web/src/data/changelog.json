@@ -154,6 +154,156 @@
   ],
   "changelog": [
     {
+      "date": "2026-06-24",
+      "title": "sentence-transformers 5.6.0 跨 3 大版本升级（Phase 1+2 收官）",
+      "tag": "功能",
+      "pain_point": "ST 2.3.1→5.6.0 + 删 170 行 Qwen3 wrapper + Qwen3 max_seq_length 4x→32K + qa-bench 38%→42%"
+    },
+    {
+      "date": "2026-06-24",
+      "title": "CLAUDE.md 新增 5 大铁律（清华源/ONNX/docker build/Qwen3 native/3 phase）",
+      "tag": "优化",
+      "pain_point": "sentence-transformers 5.6.0 升级踩坑经验沉淀"
+    },
+    {
+      "date": "2026-06-24",
+      "title": "v29 step 3 原子切换：drop + rename embedding_v2 → embedding",
+      "tag": "功能",
+      "pain_point": "Qwen3 全量迁移收官，知识库列原子切换"
+    },
+    {
+      "date": "2026-06-23",
+      "title": "v29 step 2 收官：alembic 030 + ORM 双列 + 重算 350/351 条知识",
+      "tag": "功能",
+      "pain_point": "text2vec 768d → Qwen3 1024d 全量迁移 + 知识库重算"
+    },
+    {
+      "date": "2026-06-23",
+      "title": "v29 step 2：Qwen3-Embedding-0.6B wrapper + 双模型 dispatch",
+      "tag": "功能",
+      "pain_point": "Qwen3-Embedding-0.6B 1024d wrapper（后来被 ST 5.6.0 升级替代）"
+    },
+    {
+      "date": "2026-06-23",
+      "title": "v29 step 1：GPU 启用 + device 自动检测",
+      "tag": "优化",
+      "pain_point": "EMBEDDING_DEVICE=auto + torch.cuda 可用性验证"
+    },
+    {
+      "date": "2026-06-20",
+      "title": "v28 论文图片结构化字段后端集成（8 phases 收官）",
+      "tag": "功能",
+      "pain_point": "alembic 028 + 12 列 + 4 篇 PDF 37 张图 100% 核心不变量 + paperAdapter 简化"
+    },
+    {
+      "date": "2026-06-20",
+      "title": "v28 article 9 字 bug 修复（深坑：INTERNAL_MARKER_RES 误删 [PAGE:N]）",
+      "tag": "修复",
+      "pain_point": "正则 \\b 在 [ 和 word char 之间构边界，匹配 [PAGE:N] 中间部分"
+    },
+    {
+      "date": "2026-06-20",
+      "title": "v28 RightImageRail IO Hysteresis + rAF 节流",
+      "tag": "优化",
+      "pain_point": "ACTIVE_THRESHOLD=0.35 / HYSTERESIS_LOWEST=0.15 防快速滚动跳变"
+    },
+    {
+      "date": "2026-06-20",
+      "title": "v28 内嵌图 confidence ≥ 0.85 阈值（PaperSectionRenderer + ReadingToolbar 徽章）",
+      "tag": "功能",
+      "pain_point": "vision model 低置信度图默认隐藏，工具栏显示 max confidence 徽章"
+    },
+    {
+      "date": "2026-06-19",
+      "title": "Phase 7 多模态知识库（图片/公式/表格/图表 OCR 入库）",
+      "tag": "功能",
+      "pain_point": "PDF/PPTX 多模态 LLM-Vision 抽取，4 篇 PDF 10/10 端到端"
+    },
+    {
+      "date": "2026-06-19",
+      "title": "会议发言人重处理流程标准化（reprocess_meeting.py 9 步 CLI）",
+      "tag": "功能",
+      "pain_point": "历史会议声纹识别错误批量重处理（load→extract→cluster→vote→assign→backup→apply→regen→verify）"
+    },
+    {
+      "date": "2026-06-19",
+      "title": "声纹 batch bug 修复推到主路径（ERes2Net 强制 batch=1）",
+      "tag": "修复",
+      "pain_point": "modelscope __extract_feature 强制 unsqueeze(0) → ThreadPoolExecutor(8) + Lock 并行单条"
+    },
+    {
+      "date": "2026-06-18",
+      "title": "三连环修复（EP useOrderedChildren null + MeetingRoomView + /auth/me 限流）",
+      "tag": "修复",
+      "pain_point": "Vite plugin patch EP 源码 + 桌面'正在听会'指示器不接进度 + /auth/me 完全豁免"
+    },
+    {
+      "date": "2026-06-18",
+      "title": "m4a 录音处理全链路优化（celery-worker GPU 化 + batch voiceprint 24x）",
+      "tag": "优化",
+      "pain_point": "2.9h m4a 一次性处理 + GPU 利用率提升"
+    },
+    {
+      "date": "2026-06-18",
+      "title": "移动端 26 commits 全面修复（图标/路由/端点/v-model/ASR/被动事件/头像）",
+      "tag": "修复",
+      "pain_point": "MainLayout 缺图标 + 8 路由路径错 + 4 端点缺失 + 11 处 v-model 命名错配"
+    },
+    {
+      "date": "2026-06-17",
+      "title": "部署与基础设施重建（Docker Desktop 引擎崩溃 + 镜像源治理 + 数据 E 盘化）",
+      "tag": "修复",
+      "pain_point": "WSL docker-desktop-data 丢失 + 阿里云 404 + aliyun PyPI 限速 + frp 用户级 AtLogOn"
+    },
+    {
+      "date": "2026-06-17",
+      "title": "webhook deploy 链断裂修复（server-side key 轮换 + .env.webhook 持久化）",
+      "tag": "修复",
+      "pain_point": "github_deploy SSH key 不匹配 + .env.webhook 仍可能在重启时丢"
+    },
+    {
+      "date": "2026-06-15",
+      "title": "Agent 质量 + qa-bench 闭环（5 大根因 + 360 题 84% 高分率）",
+      "tag": "修复",
+      "pain_point": "TOOL_REGISTRY 未注册 + LLM 代理 fake tool_call + dead import + 长期记忆干扰 + synthesis 阶段 fake XML 泄露"
+    },
+    {
+      "date": "2026-06-15",
+      "title": "LLM 元话语/thinking 文本泄露修复（双管齐下）",
+      "tag": "修复",
+      "pain_point": "prompts.py 硬规则 + 后端 _strip_meta_thinking 兜底 + SSE done.text_without_json"
+    },
+    {
+      "date": "2026-06-15",
+      "title": "Rich Block 统一包装铁律（杨慈是谁呀'暂无成员'修复）",
+      "tag": "修复",
+      "pain_point": "agentic_loop 双路径都需保证 data 形态统一（query_members→members[], get_member_profile→包装）"
+    },
+    {
+      "date": "2026-06-15",
+      "title": "任务提醒体系 v2 全面优化（11AM 窗口 + acknowledged 状态）",
+      "tag": "优化",
+      "pain_point": "用户半夜收提醒 + '收到'不联动 ack → 统一 11AM 推送 + 任何消息即 ack"
+    },
+    {
+      "date": "2026-06-15",
+      "title": "会议 #95 声纹重置 + KMeans 重识别",
+      "tag": "修复",
+      "pain_point": "speaker_mapping 全错标 + Whisper 幻觉段污染 + psycopg2 transaction rollback"
+    },
+    {
+      "date": "2026-06-15",
+      "title": "移动端'声纹测试'是真识别测试不是麦克风测试（VoiceTestFlow 5 态）",
+      "tag": "修复",
+      "pain_point": "桌面端调用 /voiceprint/test，移动端只做 getUserMedia 没调识别 API"
+    },
+    {
+      "date": "2026-06-14",
+      "title": "方案 C：Agent 单阶段流式渐进综合架构（eager-juggling-dewdrop）",
+      "tag": "功能",
+      "pain_point": "取消 brief/detail 双层 → 单阶段流式综合（intent → agentic_loop → critique → done）"
+    },
+    {
       "date": "2026-06-13",
       "title": "edge-tts 6.1.9 → 7.2.8 修复 TTS 403 Forbidden",
       "tag": "修复",
