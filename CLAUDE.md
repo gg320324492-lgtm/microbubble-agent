@@ -1,5 +1,7 @@
 # MicroBubble Agent - 项目上下文
 
+> **2026-06-25 v31.2.1 rate-limit 边界强化**：v31.2 (commit `c2c5066e`) IP 维度限流 + /analytics 豁免 + 可选 auth 端到端 4 边界实测（16 场景全 PASS）后 2 个非阻塞 follow-up 顺手做掉：① **get_client_ip XFF 空 IP 兜底** — `X-Forwarded-For: , 1.2.3.4` / `"   "` / `",,,,,"` 全部 `split(",")[0].strip() = ""` → 空 IP 作为限流 key 共享 200/min 配额（Nginx 通常不让空 XFF 穿透，但后端必须独立防御）；修：`app/core/rate_limit.py:156 get_client_ip` 加 `if ip: return ip; return "unknown"` 兜底 + 7 行 docstring。② **`/auth/analytics/...` 嵌套 bypass 防御** — `_get_rate_limit_type` 顺序 2 (`if "/analytics" in path`) 在顺序 3 (`if "/auth/" in path`) 之前，未来加 `POST /api/v1/auth/analytics/export` 会先命中 substring → unlimited → 绕过 /auth/ 敏感端点 20/min；修：顺序 2 前置守卫 `not path.startswith("/api/v1/auth/")`，**不调换顺序**（会破坏已确认的 /analytics POST=unlimited 设计）。详见底部 [## 2026-06-25 v31.2.1 rate-limit 边界强化](#2026-06-25-v3121-rate-limit-边界强化) section + 2 条铁律 + 11 case 纯函数 mock 端到端验证全 PASS。
+>
 > **2026-06-20 v28 step 2-8 全部完成 + article 9 字 bug 修复**：①-⑥ [alembic 028](alembic/versions/028_figure_structured_fields.py) + model + multimodal 集成 ⑦ schema + API `_to_dict` 加 12 字段 ⑧ paperAdapter 简化（84/84 测试通过） ⑨ KnowledgeDetailView 独立 IO + sectionHint 核心词匹配 ⑩ PaperSectionRenderer `showHighConfidenceOnly` ≥0.85 + ReadingToolbar confidence 徽章 ⑪ **4 篇 PDF 验证**：37 张图 100% vision 覆盖 + 100% publisher 准确 + 100% confidence ≥0.85 + 中文 anchor bug 修复 ⑫ **IO Hysteresis 防跳变**：阈值 ACTIVATE_THRESHOLD=0.35 / HYSTERESIS_LOWEST=0.15 + rAF 节流 ⑬ **article 9 字 bug 修复（深坑）**：根因 INTERNAL_MARKER_RES line 105 `\bPAGE\s*[:：]\s*\d+\b` 在 `[`/`P` 之间构成 `\b` 单词边界 → 匹配 `[PAGE:1]` 的中间 `PAGE:1` 部分 → 替换为空 → `[PAGE:1]` 变 `[]` → pageMarkers=0 → sections 解析丢分页 → 正文压成 1 段 → 用户看到 9 字符（只剩 inline 注入的 "## 多模态提取/### 图表说明" 标题）。**修复**：删 INTERNAL_MARKER_RES 2 条 ([PAGE:N] 删除逻辑) + cleanContent 简化 + hasPageMarker 检测后用 rawFormatted 作 inputContent。**端到端验证**：pageMarkers=9 / sectionsCount=19 / article=40855字符（vs 修复前 9 字符）。详见底部 [## 2026-06-20 v28 论文图片结构化字段](#2026-06-20-v28-论文图片结构化字段后端集成) section + 25 条铁律。
 >
 > **2026-06-18 移动端 26 commits 全面修复（图标 + 路由 + 端点 + v-model 命名 + ASR + 被动事件 + 头像）**：① 移动端"左上角红方块"根因是 `MainLayout.vue` 缺 `Fold`/`Expand` 图标 import（commit `0e11009`）② 8/16 路由 mobile 路径错（`knowledge/MobileKnowledgeView` 等假设了子目录但实际在 `views/mobile/` 根目录，commit `025424ca`）③ 4 个移动端 API 端点缺失（`/dashboard/summary` + `/formula` + `/hypothesis` + `/memory`，commit `d671c41c` + `5f5bfd06`）④ TabBar 2500 z-index 覆盖 MobileInputBar 100 → `/chat` 路由隐藏 TabBar + 修 v-model 命名（commit `7131ad4b`），用户偏好 persistent nav 后恢复 TabBar + input 浮在 TabBar 上方（commit `c94d0603`）⑤ "正在听会"指示器点击无反应 → `MobileMeetingView` onMounted 漏处理 `route.query.resume`（commit `fc27af59`）⑥ 11 处 `v-model:show` 命名错配（prop 是 `modelValue`，commit `6b4f57d0` + `20df60db` + `607e7b06`）⑦ ASR 500 真实根因 110 字节 webm → 客户端 `<1KB` 拦截 + 服务端返 400（commit `3cd88d4a`）⑧ passive event listener 全局 patch 误伤 `touchstart` → 只对 `wheel`/`mousewheel` 强制（commit `3cd88d4a`）⑨ 知识 3 个 ActionSheet 之前是"开发中"占位 → 接通 `/knowledge` + `/knowledge/upload` + `/knowledge/research` 真实端点 ⑩ 头像同步：新建 `MemberAvatar.vue` 复用 `memberStore.getMemberAvatar(id)`，在 `CardList` 加 `avatarField` prop，Task/Task/Task/Member/Settings 全部显示真实头像。详见底部 [## 2026-06-18 移动端 26 commits 全面修复](#2026-06-18-移动端-26-commits-全面修复) section + [memory/mobile-fixes-2026-06-18.md](memory/mobile-fixes-2026-06-18.md) 12 条铁律。
@@ -3429,6 +3431,161 @@ docker compose build --build-arg HTTPS_PROXY=http://host.docker.internal:7890 --
 | 5. qa-bench 限流 (concurrency=4) | 37/50 ERROR 全部 429 | 改 concurrency=1 | 10 min 排查 |
 | 6. ONNX "加速" 反向 | GPU 上慢 12-22x | 跳过 Phase 3，保留 torch | 30 min 严谨测试 |
 | 7. 容器 `HF_HUB_OFFLINE=1` 默认 | ONNX 拉不到 model 文件 | 临时 `HF_HUB_OFFLINE=0` 测试，生产用预下载 | 5 min |
+
+## 2026-06-25 v31.2.1 rate-limit 边界强化（XFF 空 IP 兜底 + auth/analytics 嵌套防御）
+
+> **触发**：v31.2 (commit `c2c5066e`) 引入 IP 维度限流 + `/analytics` 豁免 + 可选 auth。端到端 4 边界实测（16 场景全 PASS）发现 2 个非阻塞 follow-up：(1) `get_client_ip` XFF 空 IP 无兜底 (2) `/auth/analytics/...` 嵌套路径未来有 bypass 隐患（短期无安全风险，防御性编程顺手做）。
+> **commit**：`fix(v31.2.1): rate-limit 边界强化 (XFF 空 IP 兜底 + /auth/analytics 嵌套防御)`
+
+### 2 条铁律
+
+#### 铁律 1：XFF 空 IP 必须兜底，禁止空字符串作为限流 key
+
+**症状**：
+- 端到端实测边界 3：用 `X-Forwarded-For: , 1.2.3.4` 命中 `get_client_ip()` → `split(",")[0].strip()` = `""` → 多请求共享空 IP key
+- 同边界：纯空格 `"   "` / 多段空 `",,,,,"` 全部触发同样 bug
+- 攻击场景：攻击者绕过 Nginx 直接打后端，可构造空 XFF 让多请求共享 200/min read 配额
+- **Nginx 通常不会让空 XFF 穿透**，所以生产环境实际不可达；但代码层面属于"输入未净化 → 限流失效"
+
+**根因**：
+```python
+# app/core/rate_limit.py:156-160 (v31.2 旧实现)
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()   # ← 空字符串也能通过
+    return request.client.host if request.client else "unknown"
+```
+
+`if forwarded:` 守卫拦的是"无 XFF 头"（falsy：None / 空串），但**不拦"XFF 首段为空字符串"**。`split(",")[0].strip() = ""` 是 truthy 路径执行结果，但语义上等同于无 IP。
+
+**修复**（v31.2.1）：
+```python
+def get_client_ip(request: Request) -> str:
+    """获取真实客户端 IP（按 XFF 优先级回退，v31.2.1 修复空 IP 兜底）
+
+    优先级:
+      1. X-Forwarded-For 第一段（反向代理标准，左数最近为真实客户端）
+      2. request.client.host（直连 / 测试环境）
+      3. "unknown"（兜底，禁止返回空字符串）
+
+    v31.2.1 修复: XFF 首段为空（", 1.2.3.4" / "   " / ",,,,,"）时，
+    旧实现 .split(",")[0].strip() 返空串 → 多请求共享空 IP key 触发共享配额.
+    现统一兜底为 "unknown"，让 Nginx 通常无此问题的前提下，万一绕过 Nginx
+    直打后端的攻击者也无法用空 XFF 共享 200/min 配额.
+    """
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        ip = forwarded.split(",")[0].strip()
+        if ip:                                  # v31.2.1: 空 IP 必须兜底
+            return ip
+        return "unknown"
+    return request.client.host if request.client else "unknown"
+```
+
+**回归验证**（8 个 XFF 场景全 PASS）：
+- ✅ `XFF: "1.2.3.4"` → `"1.2.3.4"`（不变）
+- ✅ `XFF: "1.2.3.4, 5.6.7.8"` → `"1.2.3.4"`（不变）
+- ✅ `XFF: 10 段` → 第 1 段（不变，端到端实测 C1 remaining = A2 remaining - 1）
+- ✅ 无 XFF + 有 client → `client.host`（不变）
+- ✅ 无 XFF + 无 client → `"unknown"`（不变）
+- ✅ `XFF: ", 1.2.3.4"` → 修复前 `""`（bypass）→ 修复后 `"unknown"`
+- ✅ `XFF: "   "` → 修复前 `""` → 修复后 `"unknown"`
+- ✅ `XFF: ",,,,,"` → 修复前 `""` → 修复后 `"unknown"`
+
+**教训**：
+1. **`if X:` 不等于 `if X is not None and X != "":`**——truthy 守卫漏掉"空字符串"是 Python 经典坑。任何"XFF / query param / header value"类外部输入，必须显式 `if not X:` 兜底
+2. **限流 key 必须有 fallback 值**——空字符串 key 表面看"无 IP"，实际是个**有效共享 key**（多个空 IP 请求汇聚）。fallback 到固定字符串（如 `"unknown"`）才能让所有"无 IP"请求受 200/min 配额约束
+3. **Nginx 反代层净化不等于后端可不做防御**——Nginx 通常过滤空 XFF，但攻击者绕过 Nginx 直打后端（端口扫描 / SSRF / WAF 漏配）时，后端必须有独立净化
+
+#### 铁律 2：substring 路径匹配必须显式排除嵌套 bypass
+
+**症状**：
+- v31.2 引入 `if "/analytics" in path: return "unlimited"`（POST/PATCH/PUT）保护埋点端点
+- `_get_rate_limit_type` 顺序 2（`/analytics`）在顺序 3（`/auth/`）**之前**
+- 隐患：若未来加路由 `POST /api/v1/auth/analytics/export`，`"/analytics" in path` 命中 → 顺序 2 优先 → unlimited → 绕过 `/auth/` 敏感端点 20/min 限流
+- **当前路由表里没有这种嵌套路径**，短期无安全风险，但 follow-up 防御性编程更好
+- 端到端实测边界 4：`POST /api/v1/auth/analytics/test`（不存在路由）→ 404 + **无 X-RateLimit-* 头**（unlimited 路径生效），确认 substring 命中绕过 `/auth/` 限流
+
+**根因**：
+顺序 2 优先于顺序 3，substring `"/analytics" in path` 命中所有包含 analytics 字符串的路径。设计时假设"analytics 端点都在 `/api/v1/analytics/...` 下"，但未在代码层面强制此假设——**业务语义边界 ≠ 字符串前缀边界**。
+
+**修复**（v31.2.1，方案 B1：前置精确排除）：
+```python
+# 顺序 2 (v31.2.1 改)
+if "/analytics" in path and not path.startswith("/api/v1/auth/"):
+    if method in ("POST", "PATCH", "PUT"):
+        return "unlimited"
+    return "read"
+```
+
+**为什么不调换顺序**（方案 X，已 explore agent 提议但被否决）：
+- 调换后 `if "/auth/" in path` 先命中 → 现有 `POST /api/v1/analytics/search-event` 走 `/auth/` 顺序 3 细分 → 非 sensitive 写操作 → **write tier 30/min** 而非 unlimited
+- 用户已明确确认 `/analytics` POST/PATCH 该 unlimited（前端每次搜索 2 次埋点，30/min 不够）
+- **结论：必须用守卫（方案 B1），不能动顺序**
+
+**B1 vs B2 vs B3 三方案对比**：
+| 方案 | 改动量 | 未来扩展性 | 不破坏当前行为 | 推荐 |
+|---|---|---|---|---|
+| **B1** `/analytics` 分支前置守卫 `not path.startswith("/api/v1/auth/")` | +1 行 | 中（auth 子路径除外，其他顶级 analytics 不需要改） | ✅ | ✅ **选 B1** |
+| B2 `/auth/` 分支后置守卫 `not "/analytics" in path` | +1 行 | 中 | ✅ | 备选 |
+| B3 改 `/analytics` substring 为精确列表 | 重写整段 | 低（每加一个 analytics 端点必须改白名单） | ❌ 需列出所有 endpoint | ❌ |
+
+**选 B1 核心理由**：
+1. **意图清晰**：`/analytics` 分支顶部写"analytics 豁免但 auth 子路径例外"——读代码的人立刻知道"豁免是有边界的"
+2. **扩展性最优**：未来加 `/api/v1/dashboard/analytics/...` 仍可走原 `/analytics` 分支（守卫是 `startswith("/api/v1/auth/")` 不是 `startswith("/api/v1/")`）
+3. **改动最小**：1 行 if 守卫 + 4 行注释，diff 干净
+
+**回归验证**（11 个 case 纯函数 mock 全 PASS，详见 [scripts/verify_v31_2_1_nested_path.py](scripts/verify_v31_2_1_nested_path.py)）：
+- ✅ `POST /api/v1/analytics/search-event` → 守卫不命中 → unlimited（保留）
+- ✅ `PATCH /api/v1/analytics/search-event/{id}/click` → 守卫不命中 → unlimited（保留）
+- ✅ `GET /api/v1/analytics/stats` → 守卫不命中 → read（保留）
+- ✅ `GET /api/v1/analytics/logs` → 守卫不命中 → read（保留）
+- ✅ `POST /api/v1/auth/login` → 守卫命中 → 跳过 /analytics → 走 /auth/ 顺序 3 → 命中 _AUTH_SENSITIVE_PATHS → **auth tier 20/min**（保留）
+- ✅ `POST /api/v1/auth/refresh` / `change-password` / `reset-password` / `init-password` → 同上，auth tier（保留）
+- ✅ `GET /api/v1/auth/me` → 顺序 1 命中 _AUTH_UNLIMITED_PATHS → unlimited（保留）
+- ✅ `PUT /api/v1/auth/profile` → 守卫命中 → /auth/ 顺序 3 → 写操作 → write tier 30/min（保留）
+- ✅ **未来** `POST /api/v1/auth/analytics/export` → 守卫命中 → 跳过 /analytics → 走 /auth/ 顺序 3 → 非 sensitive 写操作 → **write tier 30/min**（修复）
+- ✅ **未来** `GET /api/v1/auth/analytics/dashboard` → 守卫命中 → /auth/ 顺序 3 → 读操作 → read tier 200/min（修复）
+- ✅ `path = "/api/v1/authentication"`（不含 `/auth/`）→ `/auth/` 顺序 3 不命中（注意是 `"/auth/" in path` 不是 `startswith`）→ default `read`（不变）
+
+**教训**：
+1. **substring 路径匹配 = 业务假设在字符串里**——`"/analytics" in path` 隐式假设"所有 analytics 端点都是 `/api/v1/analytics/...`"，但代码里**没有任何地方** enforce 这个假设。一旦未来路由前缀变化或嵌套，假设失效
+2. **判定顺序 = 隐式优先级契约**——`_get_rate_limit_type` 顺序 2 优先 3 是"用户确认 `/analytics` 端点该 unlimited"的实现。但如果未来加 `/api/v1/auth/analytics`，substring 匹配会**自动**让顺序 2 优先 → 改不改？**这是个 bug，不是个 feature**——必须用守卫把"非 auth 子路径"显式圈出来
+3. **Don't move order, add guards**——"调换判定顺序"是最便宜的修复（diff 1 行），但会破坏现有合法端点行为。**守卫（guard）是更 surgical 的修复**：保留所有合法路径行为，只在异常路径上刹车
+
+### 端到端验证（脚本 + 实测）
+
+**新增 2 个 probe 脚本**：
+- [scripts/verify_v31_2_1_xff_empty.py](scripts/verify_v31_2_1_xff_empty.py) — 验证 Bug 1（XFF 空 IP 兜底）
+- [scripts/verify_v31_2_1_nested_path.py](scripts/verify_v31_2_1_nested_path.py) — 验证 Bug 2（嵌套路径判定顺序）
+
+**已有 probe 脚本回归**：
+- [scripts/probe_analytics.mjs](scripts/probe_analytics.mjs) — 4 个 /analytics endpoint 端到端
+- [scripts/probe_boundary3_xff.py](scripts/probe_boundary3_xff.py) — XFF 真实 IP 维度限流
+
+### 部署必做
+
+```bash
+# 1. 重启 app container (CLAUDE.md 752 行铁律)
+docker compose restart app
+
+# 2. 跑回归 + 新增 probe
+python scripts/probe_boundary3_xff.py           # XFF 真实 IP 维度限流 (已有, 不能回归)
+python scripts/verify_v31_2_1_xff_empty.py     # XFF 空 IP 兜底 (新增)
+python scripts/verify_v31_2_1_nested_path.py  # 嵌套路径判定 (新增)
+
+# 3. 验证
+# probe_boundary4: XFF ", 1.2.3.4" / "   " / ",,,,," → 期望 "unknown" key 独立配额
+# probe_boundary5: 11 个 case 全 PASS（4 个 analytics endpoint + 5 个 auth sensitive + /auth/me + 2 个未来嵌套）
+```
+
+### 沉淀
+
+- **修改文件 2 个**：`app/core/rate_limit.py`（+13 行：7 行 docstring + 6 行逻辑）+ `CLAUDE.md`（顶部 1 行快讯 + 底部 ~150 行章节）
+- **新增文件 3 个**：`scripts/verify_v31_2_1_xff_empty.py` + `scripts/verify_v31_2_1_nested_path.py` + `CHANGELOG.md` 顶部新 section
+- **风险等级**：极低（无 alembic 迁移、无前端 rebuild、无 Docker 镜像变更，2 处都是加守卫/兜底，不是改语义）
+- **回滚成本**：`git revert` 30 秒完成
 
 **总耗时约 4 小时**（含多次 docker rebuild 12 min + qa-bench 50 题 15 min 跑分 ×3 次）
 ```

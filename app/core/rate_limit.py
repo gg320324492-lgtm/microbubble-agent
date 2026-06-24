@@ -69,7 +69,11 @@ def _get_rate_limit_type(request: Request) -> str:
 
     # v31.2: 检索质量埋点端点 - POST/PATCH 完全豁免（前端每次搜索 2 次埋点, 不该限流）,
     # GET stats/logs 走 read tier (200/min) 防滥用.
-    if "/analytics" in path:
+    # v31.2.1 防御: 若路径是 /api/v1/auth/ 下的"auth 子路径嵌入 analytics 字符串"
+    # (e.g. 未来加 POST /api/v1/auth/analytics/export), 不应走 /analytics 豁免
+    # —— 顺序 2 优先顺序 3, 会被绕过 /auth/ 敏感端点 20/min 限流. 守卫: /auth/
+    # 子路径必须走下方 /auth/ 细分分支（按 sensitive/write/read 分级）.
+    if "/analytics" in path and not path.startswith("/api/v1/auth/"):
         if method in ("POST", "PATCH", "PUT"):
             return "unlimited"
         return "read"
@@ -154,7 +158,22 @@ login_limiter = RateLimiter(max_attempts=5, window_seconds=300)
 
 
 def get_client_ip(request: Request) -> str:
+    """获取真实客户端 IP（按 XFF 优先级回退，v31.2.1 修复空 IP 兜底）
+
+    优先级:
+      1. X-Forwarded-For 第一段（反向代理标准，左数最近为真实客户端）
+      2. request.client.host（直连 / 测试环境）
+      3. "unknown"（兜底，禁止返回空字符串）
+
+    v31.2.1 修复: XFF 首段为空（", 1.2.3.4" / "   " / ",,,,,"）时，
+    旧实现 .split(",")[0].strip() 返空串 → 多请求共享空 IP key 触发共享配额.
+    现统一兜底为 "unknown"，让 Nginx 通常无此问题的前提下，万一绕过 Nginx
+    直打后端的攻击者也无法用空 XFF 共享 200/min 配额.
+    """
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        ip = forwarded.split(",")[0].strip()
+        if ip:                                  # v31.2.1: 空 IP 必须兜底
+            return ip
+        return "unknown"
     return request.client.host if request.client else "unknown"
