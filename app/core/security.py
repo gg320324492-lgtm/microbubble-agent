@@ -178,3 +178,46 @@ async def get_current_admin_user(
     return current_user
 
 
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+        HTTPBearer(auto_error=False)
+    ),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[Member]:
+    """
+    可选认证 — v31.2 analytics 埋点用
+
+    行为:
+      - 未带 token → None (匿名)
+      - 带无效 token → None (视为匿名)
+      - 带有效 token + 用户存在 + is_active=True → Member
+      - 带有效 token 但用户不存在 / is_active=False → None (防止被禁用户发埋点)
+
+    与 get_current_user 的区别:
+      - 不抛 401, 永远返回 Optional[Member]
+      - 适合"埋点 / 公开统计"场景, 登录用户绑 user_id, 匿名写 NULL
+
+    参考:
+      - plan: v31.2 安全加固章节 (可选 auth 模式)
+      - app/api/v1/analytics.py (POST search-event + PATCH click)
+    """
+    if not credentials:
+        return None
+    try:
+        payload = decode_token(credentials.credentials)
+    except HTTPException:
+        return None  # 无效 token → 视为匿名
+    if payload.get("type") != "access":
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    result = await db.execute(
+        select(Member).where(Member.id == int(user_id))
+    )
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        return None
+    return user
+
+

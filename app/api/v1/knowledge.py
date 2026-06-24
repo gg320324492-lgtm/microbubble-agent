@@ -330,6 +330,8 @@ async def semantic_search(
                             embedding_model=embedding_model,
                             source="knowledge_search_semantic",
                             session_id=None,
+                            # v31.2: 登录用户绑 user_id (匿名写 NULL)
+                            user_id=current_user.id if current_user else None,
                         )
                         log_db.add(log)
                         await log_db.commit()

@@ -4,16 +4,19 @@
   - POST /analytics/search-event  记录搜索事件 (query + top_ids), 返回 search_event_id
   - PATCH /analytics/search-event/{id}/click  记录点击 (clicked_id + click_position)
   - GET /analytics/stats?days=7  返回核心指标 (CTR / 零点击率 / 平均位置 / 按 model 分组)
+  - GET /analytics/logs          返回最近 N 条搜索日志 (详细列表)
 
 设计决策:
-  - 不强制 auth (匿名 session_id 足够区分用户; 搜索功能可不登录)
+  - v31.2: POST/PATCH 加 Optional auth (登录用户绑 user_id, 匿名 NULL)
+  - GET stats/logs 仍无需 auth (聚合数据 + 列表不含 PII)
   - embedding_model 从环境变量读 (EMBEDDING_MODEL_NAME), 零前端复杂度, 一致性最高
   - top_ids 用 PG ARRAY(Integer) 存 (pgvector 原生支持)
 
 参考:
-  - app/models/search_log.py (SearchLog model)
+  - app/models/search_log.py (SearchLog model + user_id 列 v31.2)
+  - app/core/security.py (get_current_user_optional v31.2)
   - app/api/v1/dashboard.py (stats endpoint 风格)
-  - plan: .claude/plans/breezy-discovering-ripple.md (v31)
+  - plan: .claude/plans/breezy-discovering-ripple.md (v31 + v31.2)
 """
 import logging
 import os
@@ -26,6 +29,8 @@ from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import get_current_user_optional
+from app.models.member import Member
 from app.models.search_log import SearchLog
 
 logger = logging.getLogger("microbubble.analytics")
@@ -75,10 +80,13 @@ class ClickResponse(BaseModel):
 async def record_search_event(
     payload: SearchEventRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[Member] = Depends(get_current_user_optional),
 ):
     """用户发起搜索时调用. 返回 search_event_id, 后续 click 用 PATCH 更新.
 
     embedding_model 从环境变量 EMBEDDING_MODEL_NAME 读 (后端单一来源, 零前端复杂度).
+
+    v31.2: 登录用户绑 user_id, 匿名写 NULL (便于 per-user 聚合).
     """
     embedding_model = os.getenv(
         "EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B"
@@ -90,12 +98,15 @@ async def record_search_event(
         embedding_model=embedding_model,
         session_id=payload.session_id,
         source=payload.source or "knowledge_search",
+        user_id=current_user.id if current_user else None,
     )
     db.add(log)
     await db.commit()
     await db.refresh(log)
     logger.debug(
-        f"search-event id={log.id} query='{payload.query[:30]}' model={embedding_model} top_n={len(payload.top_ids)}"
+        f"search-event id={log.id} query='{payload.query[:30]}' "
+        f"model={embedding_model} top_n={len(payload.top_ids)} "
+        f"user_id={log.user_id}"
     )
     return SearchEventResponse(search_event_id=log.id)
 
@@ -109,17 +120,27 @@ async def record_click(
     event_id: int,
     payload: ClickRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[Member] = Depends(get_current_user_optional),
 ):
-    """用户点击某条搜索结果时调用. 更新 SearchLog 的点击位置."""
+    """用户点击某条搜索结果时调用. 更新 SearchLog 的点击位置.
+
+    v31.2: PATCH 时如果用户已登录, 覆盖 user_id (POST 匿名 → PATCH 已登录的场景,
+    写入真实归属; 便于 per-user 分析 "哪些用户常点哪些位置").
+    """
     log = await db.get(SearchLog, event_id)
     if not log:
         raise HTTPException(status_code=404, detail=f"search_event {event_id} not found")
 
     log.clicked_id = payload.clicked_id
     log.click_position = payload.click_position
+    # v31.2: PATCH 时如果有 user, 覆盖 (POST 匿名 → PATCH 登录补归属)
+    if current_user:
+        log.user_id = current_user.id
     await db.commit()
     logger.debug(
-        f"click event={event_id} clicked_id={payload.clicked_id} position={payload.click_position}"
+        f"click event={event_id} clicked_id={payload.clicked_id} "
+        f"position={payload.click_position} "
+        f"user_id={current_user.id if current_user else None}"
     )
     return ClickResponse(ok=True)
 
