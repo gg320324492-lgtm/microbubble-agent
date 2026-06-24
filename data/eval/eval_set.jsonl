@@ -1,0 +1,38 @@
+{"source": "qa-bench", "id": "A01", "category": "member", "intent": "search_info", "question": "杨慈是研究什么的？", "must_contain": ["饮用水安全", "蜡样芽孢杆菌", "微生物消杀"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A02", "category": "member", "intent": "search_info", "question": "宋洋做什么方向？", "must_contain": ["饮用水处理", "管网生物膜", "膜耦合"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A06", "category": "member", "intent": "search_info", "question": "雒培媛 现在在哪？", "must_contain": ["同济大学", "博士"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A07", "category": "member", "intent": "search_info", "question": "李胜景 做什么", "must_contain": ["水产养殖", "高密度", "无抗鱼"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A10", "category": "member", "intent": "search_info", "question": "王天志 组长的研究方向", "must_contain": ["微纳米气泡技术", "副教授"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A11", "category": "member", "intent": "search_info", "question": "查一下余歆睿", "must_contain": ["藻华控制", "小球藻"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A12", "category": "member", "intent": "search_info", "question": "胡小琪 的研究", "must_contain": ["黑臭水体", "泥/水界面", "微生境"], "relevant_knowledge_ids": []}
+{"source": "qa-bench", "id": "A13", "category": "member", "intent": "search_info", "question": "张懿 干什么的", "must_contain": ["智能化运行", "发生器参数", "在线监测"], "relevant_knowledge_ids": []}
+{"source": "synthetic", "id": "S171", "category": "FAQ", "intent": "search_info", "question": "[拓展-S67] 微纳米气泡的 CNKI 中文核心论文统计", "must_contain": ["拓展", "微纳米气泡的", "CNKI"], "relevant_knowledge_ids": [171]}
+{"source": "synthetic", "id": "S36", "category": "FAQ", "intent": "search_info", "question": "[拓展-S19] 微纳米气泡对蜡样芽孢杆菌等致病菌的消杀机制", "must_contain": ["拓展"], "relevant_knowledge_ids": [36]}
+{"source": "synthetic", "id": "S7", "category": "标准", "intent": "search_info", "question": "COD检测标准方法", "must_contain": ["COD", "检测标准方法"], "relevant_knowledge_ids": [7]}
+{"source": "synthetic", "id": "S246", "category": "综述", "intent": "search_info", "question": "[拓展-AA25] 微纳米气泡 + 低碳", "must_contain": ["拓展", "AA", "微纳米气泡"], "relevant_knowledge_ids": [246]}
+{"source": "synthetic", "id": "S78", "category": "综述", "intent": "search_info", "question": "[拓展-S13] 微纳米气泡在农业（土壤修复、灌溉）上的研究进展", "must_contain": ["拓展", "微纳米气泡在农业", "土壤修复"], "relevant_knowledge_ids": [78]}
+{"source": "synthetic", "id": "S70", "category": "标准", "intent": "search_info", "question": "[拓展-S03] 微纳米气泡在饮用水处理中的国标是什么？GB 5749-2022 对浊度/微生物指标的要求", "must_contain": ["拓展", "GB", "对浊度"], "relevant_knowledge_ids": [70]}
+{"source": "synthetic", "id": "S65", "category": "FAQ", "intent": "search_info", "question": "[拓展-S56] 微纳米气泡的 zeta 电位调控方法", "must_contain": ["拓展", "微纳米气泡的", "zeta"], "relevant_knowledge_ids": [65]}
+{"source": "synthetic", "id": "S43", "category": "标准", "intent": "search_info", "question": "[拓展-S30] 微纳米气泡相关的国家/行业标准目录", "must_contain": ["拓展", "微纳米气泡相关的国家", "行业标准目录"], "relevant_knowledge_ids": [43]}
+{"source": "synthetic", "id": "S34", "category": "FAQ", "intent": "search_info", "question": "[拓展-S17] 什么是脉冲放电法（PEM）？与微纳米气泡的关系", "must_contain": ["拓展", "什么是脉冲放电法", "PEM"], "relevant_knowledge_ids": [34]}
+{"source": "synthetic", "id": "S196", "category": "论文", "intent": "search_info", "question": "[拓展-Z04] 徐佳乐 博士学术报告讲了什么", "must_contain": ["拓展", "徐佳乐", "博士学术报告讲了什么"], "relevant_knowledge_ids": [196]}
+{"source": "synthetic", "id": "S147", "category": "FAQ", "intent": "search_info", "question": "[拓展-S37] 什么是微泡浮选（microflotation）？与微纳米气泡区别", "must_contain": ["拓展", "什么是微泡浮选", "与微纳米气泡区别"], "relevant_knowledge_ids": [147]}
+{"source": "synthetic", "id": "S30", "category": "综述", "intent": "search_info", "question": "[拓展-S13] 微纳米气泡在农业（土壤修复、灌溉）上的研究进展", "must_contain": ["拓展", "微纳米气泡在农业", "土壤修复"], "relevant_knowledge_ids": [30]}
+{"source": "synthetic", "id": "S159", "category": "案例", "intent": "search_info", "question": "[拓展-S52] 国内外微纳米气泡相关的科技公司（10 家代表）", "must_contain": ["拓展", "家代表"], "relevant_knowledge_ids": [159]}
+{"source": "synthetic", "id": "S116", "category": "综述", "intent": "search_info", "question": "[拓展-S61] 微纳米气泡在生物医药的 FDA 认证进展", "must_contain": ["拓展", "FDA", "认证进展"], "relevant_knowledge_ids": [116]}
+{"source": "synthetic", "id": "S14", "category": "饮用水深度处理与锰污染控制", "intent": "search_info", "question": "δ-MnO2活化PMS强化NaClO预氧化对有机微污染原水中锰污染控制研究", "must_contain": ["MnO", "活化", "PMS"], "relevant_knowledge_ids": [14]}
+{"source": "synthetic", "id": "S12", "category": "气泡基础特性与研究方向", "intent": "search_info", "question": "微纳米气泡课题组研究方向与技术简介", "must_contain": ["直径", "nm", "的核心特性"], "relevant_knowledge_ids": [12]}
+{"source": "synthetic", "id": "S31", "category": "综述", "intent": "search_info", "question": "[拓展-S14] 微纳米气泡的工业级发生器（10m³/h 以上）品牌和案例", "must_contain": ["拓展", "以上", "品牌和案例"], "relevant_knowledge_ids": [31]}
+{"source": "synthetic", "id": "S63", "category": "综述", "intent": "search_info", "question": "[拓展-S53] 微纳米气泡在石油天然气工业的应用（提高采收率）", "must_contain": ["拓展", "提高采收率"], "relevant_knowledge_ids": [63]}
+{"source": "synthetic", "id": "S67", "category": "综述", "intent": "search_info", "question": "[拓展-S59] 微纳米气泡在造纸行业的应用", "must_contain": ["拓展"], "relevant_knowledge_ids": [67]}
+{"source": "synthetic", "id": "S137", "category": "FAQ", "intent": "search_info", "question": "[拓展-S25] 微纳米气泡的国家自然科学基金立项方向有哪些？", "must_contain": ["拓展"], "relevant_knowledge_ids": [137]}
+{"source": "synthetic", "id": "S162", "category": "手册", "intent": "search_info", "question": "[拓展-S56] 微纳米气泡的 zeta 电位调控方法", "must_contain": ["拓展", "微纳米气泡的", "zeta"], "relevant_knowledge_ids": [162]}
+{"source": "synthetic", "id": "S251", "category": "综述", "intent": "search_info", "question": "[拓展-AA27] 微纳米气泡 + ESG", "must_contain": ["拓展", "AA", "微纳米气泡"], "relevant_knowledge_ids": [251]}
+{"source": "synthetic", "id": "S151", "category": "案例", "intent": "search_info", "question": "[拓展-S41] 微纳米气泡技术在污水处理厂升级改造中的实际案例", "must_contain": ["拓展"], "relevant_knowledge_ids": [151]}
+{"source": "synthetic", "id": "S58", "category": "综述", "intent": "search_info", "question": "[拓展-S46] 微纳米气泡的 CFD 模拟方法", "must_contain": ["拓展", "微纳米气泡的", "CFD"], "relevant_knowledge_ids": [58]}
+{"source": "synthetic", "id": "S174", "category": "综述", "intent": "search_info", "question": "[拓展-S72] 微纳米气泡在半导体晶圆清洗的应用", "must_contain": ["拓展"], "relevant_knowledge_ids": [174]}
+{"source": "synthetic", "id": "S225", "category": "综述", "intent": "search_info", "question": "[拓展-AA10] 微纳米气泡 + 深海", "must_contain": ["拓展", "AA", "微纳米气泡"], "relevant_knowledge_ids": [225]}
+{"source": "synthetic", "id": "S115", "category": "综述", "intent": "search_info", "question": "[拓展-S59] 微纳米气泡在造纸行业的应用", "must_contain": ["拓展"], "relevant_knowledge_ids": [115]}
+{"source": "synthetic", "id": "S64", "category": "综述", "intent": "search_info", "question": "[拓展-S54] 微纳米气泡的国家级科研项目布局（十三五、十四五）", "must_contain": ["拓展", "十三五", "十四五"], "relevant_knowledge_ids": [64]}
+{"source": "synthetic", "id": "S122", "category": "笔记", "intent": "search_info", "question": "[拓展-S06] 国内外做微纳米气泡研究的重点实验室/团队有哪些？", "must_contain": ["拓展", "团队有哪些"], "relevant_knowledge_ids": [122]}
+{"source": "synthetic", "id": "S158", "category": "FAQ", "intent": "search_info", "question": "[拓展-S51] 什么是微流控芯片产生微纳米气泡？", "must_contain": ["拓展"], "relevant_knowledge_ids": [158]}

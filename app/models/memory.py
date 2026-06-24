@@ -22,7 +22,7 @@ class Memory(Base, TimestampMixin):
     memory_type = Column(String(20), nullable=False)  # preference/summary/entity
     key = Column(String(200))           # 偏好键名
     content = Column(Text, nullable=False)
-    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B)
+    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(Vector(1024), nullable=True)
     importance = Column(Float, default=1.0)  # 0.0-1.0，随时间衰减
     access_count = Column(Integer, default=0)
