@@ -153,7 +153,7 @@ const renderModelChart = () => {
       {
         name: '搜索量',
         type: 'bar',
-        data: entries.map(([, v]) => v.total_searches),
+        data: entries.map(([, v]) => v.searches),
         itemStyle: { color: '#409EFF' },
         yAxisIndex: 0,
       },
@@ -186,7 +186,7 @@ const renderSourceChart = () => {
         center: ['50%', '45%'],
         data: entries.map(([k, v]) => ({
           name: sourceLabel(k),
-          value: v.total_searches,
+          value: v.searches,
           itemStyle: { color: sourceColor(k) },
         })),
         label: { formatter: '{b}\n{d}%', fontSize: 11 },
