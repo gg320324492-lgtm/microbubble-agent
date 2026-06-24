@@ -78,15 +78,64 @@
         "iOS Safari + Android Chrome 全兼容",
         "Playwright 5 viewport × 13 页面视觉回归测试"
       ]
+    },
+    {
+      "category": "LLM",
+      "icon": "🧠",
+      "items": [
+        "Agent 质量 + qa-bench 闭环（5 大根因，360 题 84% 高分率）",
+        "LLM 元话语/thinking 文本泄露修复（双管齐下）",
+        "Rich Block 统一包装铁律（杨慈是谁呀'暂无成员'修复）",
+        "方案 C：Agent 单阶段流式渐进综合架构（取消 brief/detail 双层）",
+        "v2 任务提醒体系（11AM 窗口 + acknowledged 状态 + 任何消息即 ack）",
+        "QA-bench 50 题工具（runner.py + 自动检测）"
+      ]
+    },
+    {
+      "category": "Embedding",
+      "icon": "🔢",
+      "items": [
+        "sentence-transformers 5.6.0 跨 3 大版本升级（删 170 行 Qwen3 wrapper）",
+        "v29 Qwen3 全量迁移收官（GPU + Qwen3 wrapper + alembic 030 + 列原子切换）",
+        "ST 5.6.0 Pooling include_prompt → Qwen3 native loading 可行",
+        "Qwen3 max_seq_length 2048 → 32768 (4x 上下文)",
+        "知识库 350/351 条全量重算（text2vec 768d → Qwen3 1024d）",
+        "sentence-transformers ONNX 在 GPU 上反优化 12-22x 实测（决策跳过）"
+      ]
+    },
+    {
+      "category": "知识库",
+      "icon": "📚",
+      "items": [
+        "Phase 7 多模态 OCR（图片/公式/表格/图表识别入库，4 篇 PDF 100% 端到端）",
+        "v28 智能论文阅读器（4 篇 PDF 37 张图 100% 核心不变量 + 12 列结构化字段）",
+        "v28 article 9 字 bug 修复（深坑：INTERNAL_MARKER_RES 误删 [PAGE:N]）",
+        "v28 内嵌图 confidence ≥ 0.85 阈值 + ReadingToolbar 徽章",
+        "v28 RightImageRail sectionHint 精准推荐（核心词交集匹配）",
+        "v28 IO Hysteresis + rAF 节流（防快速滚动跳变）",
+        "paperAdapter 简化为读后端 vision 字段（graceful degradation 保留）"
+      ]
+    },
+    {
+      "category": "会议",
+      "icon": "🎙️",
+      "items": [
+        "会议发言人重处理流程标准化（reprocess_meeting.py 9 步 CLI + 主机端 wrapper）",
+        "声纹 batch bug 修复推到主路径（ERes2Net 强制 batch=1 → 100% 段有效）",
+        "会议 #95 声纹重置 + KMeans 重识别（8 字段 verify）",
+        "m4a 录音处理全链路优化（celery-worker GPU 化 + batch voiceprint 24x 加速）",
+        "三级润色流水线（L1 实时透传 + L2 聚批 + L3 全文精润色）",
+        "edge-tts 6.1.9 → 7.2.8 修复 TTS 403 Forbidden（Microsoft 端点策略升级）"
+      ]
     }
   ],
   "todos": [
     {
       "id": 7,
-      "name": "多模态知识库",
-      "cycle": "4-6 周",
+      "name": "✅ 多模态知识库（已完成）",
+      "cycle": "已完成 2026-06-19",
       "priority": "高",
-      "desc": "图片/公式/表格识别入库"
+      "desc": "Phase 7 多模态 OCR 收官：图片/公式/表格/图表识别入库，4 篇 PDF 10/10 端到端通过"
     },
     {
       "id": 8,
@@ -100,7 +149,7 @@
       "name": "课题组知识图谱可视化",
       "cycle": "3-4 周",
       "priority": "中",
-      "desc": "实体关系网络+交互式探索"
+      "desc": "实体关系网络+交互式探索（V2 已有数据，V3 缺 UI）"
     },
     {
       "id": 11,
@@ -118,10 +167,10 @@
     },
     {
       "id": 16,
-      "name": "深度论文理解",
-      "cycle": "4-6 周",
+      "name": "深度论文理解（v28 部分完成）",
+      "cycle": "v28 已完成 8 phases / 剩余 4-6 周",
       "priority": "高",
-      "desc": "论文解析+关键信息提取+对比"
+      "desc": "v28 智能论文阅读器已完成 12 列结构化字段+内嵌图+IO Hysteresis。剩余：跨论文对比分析+趋势发现+自动综述"
     },
     {
       "id": 19,
@@ -150,6 +199,27 @@
       "cycle": "8-10 周",
       "priority": "高",
       "desc": "热点预测+空白发现+方向规划"
+    },
+    {
+      "id": 30,
+      "name": "修 LLM 决策问题（qa-bench 19 FAIL）",
+      "cycle": "1-2 周",
+      "priority": "高",
+      "desc": "qa-bench 50 题 19 FAIL：fake_xml_leaked 10 + missing_tools 8 + intent_mismatch 8（与 ST 升级无关）"
+    },
+    {
+      "id": 31,
+      "name": "transformers 5.x 兼容性测试",
+      "cycle": "1 周",
+      "priority": "中",
+      "desc": "ST 5.6.0 兼容 transformers 4.41-6.0，但项目用 4.57.6 长期看必升 5.x，需提前验证"
+    },
+    {
+      "id": 32,
+      "name": "v28 step 109.x 持续打磨",
+      "cycle": "按需",
+      "priority": "低",
+      "desc": "v28 paper reader 打磨线暂停在 step 109.41，等用户报新 bug 再继续"
     }
   ],
   "changelog": [
