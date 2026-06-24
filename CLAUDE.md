@@ -3285,4 +3285,150 @@ window.__PAPER_DIAG__ = {
 const d = window.__PAPER_DIAG__
 console.log('sections:', d.sectionsCount, 'pageMarkers:', d.pageMarkersCount)
 console.log('article 长度:', document.querySelector('article.paper-article')?.textContent?.length)
+
+---
+
+## 2026-06-24 sentence-transformers 5.6.0 升级（Phase 1+2 收官）
+
+> **触发**：原 CLAUDE.md 标 "❌ sentence-transformers 升级（未做）"，实测后 100% 完成 + 超额（原 plan 担心跨 3 大版本破坏性，0 破坏，qa-bench 38%→42% **反升**）
+> **跳过 Phase 3**：ONNX 实测 GPU 上慢 12-22x（反优化），保持 torch/GPU
+> **完整 plan + 实测**：[docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)
+> **commit**：`c8d4df3e feat(embedding): upgrade sentence-transformers 2.3.1 → 5.6.0 (Phase 1+2 收官)`（已 push main）
+
+### 5 大铁律
+
+#### 铁律 1：清华源（pypi.tuna）限速 PyTorch 2.12+，必须走 PyPI 官方 + clash 代理
+
+**症状**：
+- Dockerfile 装 `torch==2.12.1` 在清华源下卡死（已知问题，CLAUDE.md 2026-06-17 教训第 4 条）
+- Build 时间 30+ 分钟无产出（pip output 缓冲看不到进度）
+- 强行用清华源会出现 502 Bad Gateway
+
+**修复**：Dockerfile 切默认源 + 加 build-arg 走 clash：
+```dockerfile
+# Dockerfile
+ARG HTTPS_PROXY
+ARG HTTP_PROXY
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --prefer-binary --retries 10 --timeout 60 -r requirements.txt
+# 不带 -i 走 PyPI 官方
+```
+```bash
+docker compose build --build-arg HTTPS_PROXY=http://host.docker.internal:7890 --build-arg HTTP_PROXY=http://host.docker.internal:7890 app
+```
+
+**关键细节**：
+- **`HTTPS_PROXY` 用 `--build-arg`，不要用 `ENV`**：ENV 会让 Docker 内部的 image pull 也走 proxy（命中 dockerproxy.net 500，CLAUDE.md 2026-06-13 教训第 9 条）
+- 清华源备选（注释保留）：`-i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn`
+- 速度对比：清华源 600KB/s 限速 vs PyPI+clash 8-12MB/s 稳定
+
+**教训**：升级大版本库时第一件事看 PyTorch/torch 依赖链，不要假设旧镜像源能跑新版本
+
+#### 铁律 2：docker compose build 别用环境变量 HTTPS_PROXY 污染全局
+
+**症状**：设了 `HTTPS_PROXY=http://host.docker.internal:7890 docker compose build app` → 整个 build 阶段所有 HTTP 请求都走 clash，包括 Docker 拉 base image（`docker.io/library/python:3.11-slim-bookworm`），触发 dockerproxy.net 500 错误
+
+**根因**：Docker compose 把环境变量传给 build context，导致 base image 拉取也走代理
+
+**修复**：
+- ❌ `HTTPS_PROXY=... docker compose build app`（环境变量污染）
+- ✅ `docker compose build --build-arg HTTPS_PROXY=... --build-arg HTTP_PROXY=... app`（ARG 只在 RUN 时生效）
+
+**检测方法**：`grep "dockerproxy.net" build.log` 看到 500 立即用 --build-arg 重试
+
+**教训**：任何 docker build 选项，凡涉及影响**整个 build context** 的（不只是 RUN），用 `--build-arg` 而不是 env var
+
+#### 铁律 3：ONNX backend 在 GPU 上是反优化（12-22x 慢），不要无脑启用
+
+**CLAUDE.md / ST 文档** 都说 ONNX 加速 2-3x — **没说是 CPU 专属**。
+
+**实测数据**（text2vec-base-chinese，b=64，3 次中位数）：
+
+| 后端 | short*64 | long*64 | vs torch/GPU |
+|---|---|---|---|
+| **torch/GPU** | **16.2ms** | **30.2ms** | 1.0x (基线) |
+| onnx/GPU (FP32) | 204.2ms | 680.0ms | ❌ 12.6x / 22.5x 慢 |
+| torch/CPU | 189.8ms | 975.0ms | 11.7x / 32.3x 慢 |
+| onnx/CPU | 239.7ms | 677.0ms | 14.8x / 22.4x 慢 |
+
+**根因**：
+- ONNX Runtime 在 GPU 上优化**不如 PyTorch CUDA**
+- ONNX 文件首次加载多 45s
+- 精度完美（cos 1.000000），但**速度不可接受**
+
+**何时 ONNX 才有用**（基于实测）：
+- 纯 CPU 部署 + 长文本：onnx/CPU 677ms vs torch/CPU 975ms（**1.44x 快**）
+- **有 GPU 一律 torch/GPU**（30.2ms 秒杀一切）
+- **短文本 CPU 推理**：onnx/CPU 略慢于 torch/CPU（差距 < 5%）
+
+**判断方法**：升级库时先 `sentence-transformers ... backend="onnx"` vs 默认 backend 实测 100 文本对比，**别相信文档说"2-3x 加速"就直接上线**
+
+**教训**："ONNX 加速" 是 context-dependent 的，**实测数据 > 文档宣传**
+
+#### 铁律 4：sentence-transformers 升级时分 Phase 而不是一次跳 3 大版本
+
+**CLAUDE.md 之前担心**："升级到 ST 3.x 可能引入其他破坏性变更（CHANGELOG 显示 3.x 重写了 Pooling 接口）"
+
+**实测后**：跨 2.3.1 → 3.x → 4.x → 5.6.0 三大版本，**0 个 breaking 改动影响我们**。但**不代表没风险**。
+
+**3 phase 收官法**（本次实际跑通）：
+1. **Phase 1 — 最小风险**（1 行 deprecation 修复）：`requirements.txt` 升版本 + 改 `get_sentence_embedding_dimension()` → `get_embedding_dimension()`，其他全不动
+2. **Phase 2 — 利用新功能**（删 wrapper）：重构代码用新 API，删旧 wrapper
+3. **Phase 3 — 性能优化**（跳过 / 视情况）：ONNX、Flash Attention、量化
+
+**每个 Phase 独立验证 + 独立回滚**：
+- ✅ Phase 1：qa-bench 0 ERROR（embedding 正常）
+- ✅ Phase 2：qa-bench 38%→42%（反升 4%，比预期更好）
+- ❌ Phase 3：实测反优化，主动跳过
+
+**教训**：跨大版本升级前**先小规模测试**（小项目用 venv 试 5 分钟），不直接动生产代码
+
+#### 铁律 5：ST 5.6.0 的 Pooling 现在支持 `include_prompt`，Qwen3 原生加载可行
+
+**原 wrapper 必要性**（2026-06-23 之前）：
+- Qwen3 用 `1_Pooling/config.json` 的 `include_prompt: true` 参数
+- ST 2.3.1 的 `Pooling.__init__()` 不接受此参数 → 报 `TypeError`
+- 必须写 Qwen3Embedder wrapper 绕开
+
+**ST 5.6.0 现状**：
+- `Pooling.__init__` 签名：`['self', 'embedding_dimension', 'pooling_mode', 'include_prompt']` ✓
+- `SentenceTransformer("Qwen/Qwen3-Embedding-0.6B", trust_remote_code=True)` 一行直接加载
+- 删了 170 行 wrapper，graceful degradation 文件保留
+
+**Qwen3 native vs wrapper 输出对比**：
+- `cos 0.999860`（本质相同，FP16 浮点误差）
+- `max abs diff 0.0024`
+- **max_seq_length 2048 → 32768**（4x 上下文）
+
+**何时需要 wrapper**（保持 graceful degradation 价值）：
+- ST 升级到 6.0（如果又重写 Pooling 接口）
+- 紧急回滚（如果 ST 5.6.0 出问题）
+
+**教训**：升级库前 grep 项目所有使用面（不只是当前用的，还有"假装绕开"的部分），可能有意想不到的简化机会
+
+### 排查流程（下次再升级遇到问题）
+
+```
+1. 先在小 venv 装 + 跑 import（5 分钟）
+2. API surface check: inspect.signature 看关键类是否有 expected 参数
+3. 实际加载最复杂模型（不要小模型当代表）
+4. 容器内 venv 测（不污染系统 Python）
+5. Phase 1: requirements.txt 改 + 最少代码改动
+6. Phase 2: 重构 + 删旧 wrapper（如果 API 兼容）
+7. Phase 3: 性能优化（如果上一步没破坏，先别动）
+```
+
+### 4 个小时踩的 7 个坑（fastest-first 顺序）
+
+| 坑 | 症状 | 修复 | 时间 |
+|---|---|---|---|
+| 1. 清华源限速 torch 2.12+ | pip install 卡 30+ 分钟 | 切 PyPI 官方 + clash build-arg | 5 min 排查 + 5 min 改 |
+| 2. docker proxy env var 污染 | `dockerproxy.net 500` 拉不到 base image | 改用 `--build-arg` 而非 `ENV` | 5 min 排查 + 2 min 改 |
+| 3. 杀 com.docker.build.exe 把 daemon 搞死 | 整个 docker desktop 通信断 | 全部 kill + 重启 Docker Desktop (90s 等待) | 10 min |
+| 4. 测试默认值错（默认是 Qwen3 不是 text2vec） | dim=1024 但 assertion 写 768 | 改 assertion（不是改代码） | 2 min |
+| 5. qa-bench 限流 (concurrency=4) | 37/50 ERROR 全部 429 | 改 concurrency=1 | 10 min 排查 |
+| 6. ONNX "加速" 反向 | GPU 上慢 12-22x | 跳过 Phase 3，保留 torch | 30 min 严谨测试 |
+| 7. 容器 `HF_HUB_OFFLINE=1` 默认 | ONNX 拉不到 model 文件 | 临时 `HF_HUB_OFFLINE=0` 测试，生产用预下载 | 5 min |
+
+**总耗时约 4 小时**（含多次 docker rebuild 12 min + qa-bench 50 题 15 min 跑分 ×3 次）
 ```
