@@ -74,22 +74,19 @@ const loadAll = async () => {
 }
 
 // v31.1 fix: setOption 后强制同步容器尺寸
-// 真根因: echarts.init() 第二次调用时如果容器是 hidden / 刚 unmount, 内部 canvas 默认 100x150
-// ResizeObserver 只在尺寸变化时触发, 容器尺寸从 init 那一刻就不变 → 永远不触发
-// 解决: setOption 之前 explicit resize 用 clientWidth/clientHeight
-const ensureChartSize = (chart, refEl) => {
-  if (!chart || !refEl) return
-  const w = refEl.clientWidth
-  const h = refEl.clientHeight
-  if (w > 0 && h > 0) {
-    chart.resize({ width: w, height: h })
-  }
+// 真根因: echarts.init() 时如果容器是 hidden / 0 尺寸, canvas 默认 100x150
+// chart.resize() 不会改 canvas.width/height (只改渲染坐标)
+// 唯一方法: init 时显式传 width/height
+const initChart = (refEl) => {
+  if (!refEl) return null
+  const w = refEl.clientWidth || refEl.getBoundingClientRect().width || 534
+  const h = refEl.clientHeight || refEl.getBoundingClientRect().height || 260
+  return echarts.init(refEl, null, { width: w, height: h })
 }
 
 const renderTrendChart = () => {
   if (!trendChartRef.value || !stats.value) return
-  trendChart = trendChart || echarts.init(trendChartRef.value)
-  ensureChartSize(trendChart, trendChartRef.value)
+  trendChart = trendChart || initChart(trendChartRef.value)
   const trend = stats.value.trend || []
   trendChart.setOption({
     grid: { left: 50, right: 60, top: 40, bottom: 30 },
@@ -136,8 +133,7 @@ const renderTrendChart = () => {
 
 const renderModelChart = () => {
   if (!modelChartRef.value || !stats.value) return
-  modelChart = modelChart || echarts.init(modelChartRef.value)
-  ensureChartSize(modelChart, modelChartRef.value)
+  modelChart = modelChart || initChart(modelChartRef.value)
   const byModel = stats.value.by_model || {}
   const entries = Object.entries(byModel)
   modelChart.setOption({
@@ -174,8 +170,7 @@ const renderModelChart = () => {
 
 const renderSourceChart = () => {
   if (!sourceChartRef.value || !stats.value) return
-  sourceChart = sourceChart || echarts.init(sourceChartRef.value)
-  ensureChartSize(sourceChart, sourceChartRef.value)
+  sourceChart = sourceChart || initChart(sourceChartRef.value)
   const bySource = stats.value.by_source || {}
   const entries = Object.entries(bySource)
   sourceChart.setOption({
