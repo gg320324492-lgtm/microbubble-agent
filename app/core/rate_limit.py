@@ -67,6 +67,13 @@ def _get_rate_limit_type(request: Request) -> str:
     if path in _AUTH_UNLIMITED_PATHS:
         return "unlimited"
 
+    # v31.2: 检索质量埋点端点 - POST/PATCH 完全豁免（前端每次搜索 2 次埋点, 不该限流）,
+    # GET stats/logs 走 read tier (200/min) 防滥用.
+    if "/analytics" in path:
+        if method in ("POST", "PATCH", "PUT"):
+            return "unlimited"
+        return "read"
+
     # /auth/ 路径细分（4 类）：
     #  1. 白名单内（login/refresh/change-password 等敏感） → auth tier (20/min)
     #  2. 写操作（PUT /auth/profile 等） → write tier (30/min)
@@ -92,8 +99,13 @@ def _get_rate_limit_type(request: Request) -> str:
 
 
 def _get_client_key(request: Request) -> str:
-    """获取客户端标识（IP + 用户）"""
-    client_ip = request.client.host if request.client else "unknown"
+    """获取客户端标识（IP + 用户）
+
+    v31.2: 改用 get_client_ip() 而非 request.client.host
+    - 旧: 生产环境 Nginx 反向代理后 client.host 全部 127.0.0.1, 限流退化为全站共享额度
+    - 新: get_client_ip() 正确读 X-Forwarded-For 头, 真实 per-IP 限流
+    """
+    client_ip = get_client_ip(request)
     user_id = getattr(request.state, "user_id", None)
     if user_id:
         return f"{client_ip}:user:{user_id}"

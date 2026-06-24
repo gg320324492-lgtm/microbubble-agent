@@ -34,6 +34,7 @@ from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -62,6 +63,16 @@ class SearchLog(Base, TimestampMixin):
     )  # e.g. 'Qwen/Qwen3-Embedding-0.6B'
     top_ids = Column(ARRAY(Integer), nullable=False)  # top-K 检索结果 ID (按相似度排序)
 
+    # v31.2: 归属列 (可选 auth 用户, 匿名 NULL)
+    # nullable=True: 匿名用户发埋点时 user_id=NULL
+    # ondelete=SET NULL: 成员删除时保留历史埋点记录 (不丢历史)
+    user_id = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # 点击行为 (前端后续 PATCH 更新)
     clicked_id = Column(Integer, nullable=True)
     click_position = Column(Integer, nullable=True)  # 1-based, 在 top_ids 中的位置
@@ -80,6 +91,8 @@ class SearchLog(Base, TimestampMixin):
         Index("idx_search_logs_created_at", "created_at"),
         Index("idx_search_logs_query_model", "query", "embedding_model"),
         Index("idx_search_logs_source_created", "source", "created_at"),
+        # v31.2: 复合索引 (按用户按时段聚合, per-user analytics 主查询路径)
+        Index("idx_search_logs_user_created", "user_id", "created_at"),
         # gin trigram 索引: 模糊匹配重复 query
         # 注: pg_trgm 扩展可能未启用, alembic 迁移用 SQL 'CREATE EXTENSION IF NOT EXISTS pg_trgm'
     )
