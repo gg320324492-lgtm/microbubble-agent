@@ -16,6 +16,7 @@ from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory
 from app.models.meeting_template import MeetingTemplate  # Wave 3b
 from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
+from app.models.search_log import SearchLog  # v31 检索质量埋点
 
 __all__ = [
     "Member",
@@ -36,4 +37,5 @@ __all__ = [
     "KnowledgeImage",       # Phase 7 多模态
     "KnowledgeExtraction",  # Phase 7 多模态
     "KnowledgeLayout",      # Phase 8 vision 看整篇
+    "SearchLog",             # v31 检索质量埋点
 ]

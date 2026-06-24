@@ -310,6 +310,34 @@ async def semantic_search(
     """语义搜索（RAG）"""
     service = KnowledgeService(db)
     results = await service.search_semantic(query=query, top_k=top_k, category=category)
+
+    # v31 埋点: 异步写入 (不阻塞响应)
+    if results:
+        import asyncio
+        from app.models.search_log import SearchLog
+        from app.core.database import async_session
+        import os
+        top_ids = [r["id"] for r in results if isinstance(r, dict) and "id" in r]
+        if top_ids:
+            embedding_model = os.getenv("EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B")
+
+            async def _log_search():
+                try:
+                    async with async_session() as log_db:
+                        log = SearchLog(
+                            query=query,
+                            top_ids=top_ids,
+                            embedding_model=embedding_model,
+                            source="knowledge_search_semantic",
+                            session_id=None,
+                        )
+                        log_db.add(log)
+                        await log_db.commit()
+                except Exception:
+                    pass  # 埋点失败静默
+
+            asyncio.create_task(_log_search())
+
     return results
 
 
