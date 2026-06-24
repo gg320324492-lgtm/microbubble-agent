@@ -2,14 +2,14 @@
 
 背景:
   v29 把 embedding 模型从 shibing624/text2vec-base-chinese (768d) 切换到
-  Qwen3-Embedding-0.6B (1024d)。已通过 alembic 030 迁移加 embedding_v2 列 (双列并存),
-  ORM 也加了 embedding_v2 字段。本模块负责把现有数据的 embedding 重算到新列。
+  Qwen3-Embedding-0.6B (1024d)。已通过 alembic 030 迁移加 embedding 列 (双列并存),
+  ORM 也加了 embedding 字段。本模块负责把现有数据的 embedding 重算到新列。
 
 策略:
-  - recalc_one_embedding(table, row_id): 单条重算 (幂等: WHERE embedding_v2 IS NULL)
+  - recalc_one_embedding(table, row_id): 单条重算 (幂等: WHERE embedding IS NULL)
   - recalc_all_embeddings(table, batch_size): 全表入口, 找 IS NULL 行分批派发
   - 进度写 Redis key embedding_recompute:progress:{table} = {done, total, percent}
-  - 重算覆盖率 100% 后手工 ALTER TABLE ... DROP COLUMN embedding + RENAME embedding_v2 TO embedding
+  - 重算覆盖率 100% 后手工 ALTER TABLE ... DROP COLUMN embedding + RENAME embedding TO embedding
 
 Celery 跨 event loop 修复:
   reminder_service.py:548-583 的标准模板 — 每个 Celery 任务内创建独立的
@@ -116,7 +116,7 @@ async def _update_progress(redis_client, table: str, done: int, total: int) -> N
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=30, name="app.services.embedding_recalc.recalc_one_embedding")
 def recalc_one_embedding(self, table: str, row_id: int):
-    """单条 embedding 重算 (幂等: WHERE embedding_v2 IS NULL)
+    """单条 embedding 重算 (幂等: WHERE embedding IS NULL)
 
     Args:
         table: 表名 (knowledge / memories / meetings / knowledge_entities)
@@ -135,7 +135,7 @@ def recalc_one_embedding(self, table: str, row_id: int):
                 row = await db.get(Model, row_id)
                 if row is None:
                     return {"status": "skipped", "table": table, "row_id": row_id, "reason": "not_found"}
-                if row.embedding_v2 is not None:
+                if row.embedding is not None:
                     return {"status": "skipped", "table": table, "row_id": row_id, "reason": "already_done"}
                 text = _get_embedding_text(table, row)
                 if not text:
@@ -145,7 +145,7 @@ def recalc_one_embedding(self, table: str, row_id: int):
                 text = text[:6000]
                 embedding = await generate_embedding(text)
                 if embedding:
-                    row.embedding_v2 = embedding
+                    row.embedding = embedding
                     await db.commit()
                     return {"status": "done", "table": table, "row_id": row_id, "dim": len(embedding)}
                 else:
@@ -163,7 +163,7 @@ def recalc_one_embedding(self, table: str, row_id: int):
 
 @celery_app.task(name="app.services.embedding_recalc.recalc_all_embeddings")
 def recalc_all_embeddings(table: str, batch_size: int = 50):
-    """全表重算入口: 找出 embedding_v2 IS NULL 的行, 分批派发到 recalc_one_embedding.
+    """全表重算入口: 找出 embedding IS NULL 的行, 分批派发到 recalc_one_embedding.
 
     Args:
         table: 表名 (字符串, 必填)
@@ -181,10 +181,10 @@ def recalc_all_embeddings(table: str, batch_size: int = 50):
             async with session_factory() as db:
                 total = await db.scalar(select(func.count(Model.id)))
                 pending = await db.scalar(
-                    select(func.count(Model.id)).where(Model.embedding_v2.is_(None))
+                    select(func.count(Model.id)).where(Model.embedding.is_(None))
                 )
                 result = await db.execute(
-                    select(Model.id).where(Model.embedding_v2.is_(None)).limit(batch_size)
+                    select(Model.id).where(Model.embedding.is_(None)).limit(batch_size)
                 )
                 row_ids = [r[0] for r in result.fetchall()]
                 for row_id in row_ids:

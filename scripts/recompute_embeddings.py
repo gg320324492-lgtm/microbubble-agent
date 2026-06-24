@@ -1,7 +1,7 @@
 """Embedding 全量重算脚本 (v29 Qwen3-Embedding 切换)
 
 背景:
-  alembic 030 迁移加了 embedding_v2 列 (1024d). 本脚本覆盖所有 embedding_v2 IS NULL
+  alembic 030 迁移加了 embedding 列 (1024d). 本脚本覆盖所有 embedding IS NULL
   的行, 用当前 EMBEDDING_MODEL_NAME (默认 Qwen3-Embedding-0.6B) 重算并写入.
 
 为什么用同步脚本不用 Celery:
@@ -30,7 +30,7 @@ TABLES = ["knowledge", "memories", "meetings", "knowledge_entities"]
 
 
 async def recompute_table(table: str) -> dict:
-    """重算单表的 embedding_v2 (WHERE embedding_v2 IS NULL)"""
+    """重算单表的 embedding (WHERE embedding IS NULL)"""
     from sqlalchemy import select, func
 
     model_name_map = {
@@ -50,7 +50,7 @@ async def recompute_table(table: str) -> dict:
     async with async_session() as db:
         total = await db.scalar(select(func.count(Model.id)))
         pending_q = await db.execute(
-            select(Model.id).where(Model.embedding_v2.is_(None))
+            select(Model.id).where(Model.embedding.is_(None))
         )
         row_ids = [r[0] for r in pending_q.fetchall()]
         if not row_ids:
@@ -63,7 +63,7 @@ async def recompute_table(table: str) -> dict:
             if row is None:
                 skipped += 1
                 continue
-            if row.embedding_v2 is not None:
+            if row.embedding is not None:
                 skipped += 1
                 continue
             text = _get_embedding_text(table, row)
@@ -73,7 +73,7 @@ async def recompute_table(table: str) -> dict:
             text = text[:6000]  # 截断超长文本
             embedding = await generate_embedding(text)
             if embedding and len(embedding) == 1024:
-                row.embedding_v2 = embedding
+                row.embedding = embedding
                 await db.commit()
                 done += 1
             else:
@@ -125,7 +125,7 @@ async def main():
     print(f"=== 重算完成: 总耗时 {total_time:.1f}s, 成功 {total_done}, 失败 {total_failed} ===")
     print()
     print("验证 (SELECT COUNT):")
-    print("  SELECT 'knowledge', COUNT(*) AS total, COUNT(embedding_v2) AS done FROM knowledge")
+    print("  SELECT 'knowledge', COUNT(*) AS total, COUNT(embedding) AS done FROM knowledge")
     print("  -- 期望 done = total (100%)")
 
 
