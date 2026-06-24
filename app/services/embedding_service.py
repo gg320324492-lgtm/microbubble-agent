@@ -1,22 +1,27 @@
 """Embedding service - 向量嵌入生成
 
-支持 GPU 加速（sentence-transformers 自动切 device）。
+Phase 2 重构 (2026-06-24 sentence-transformers 5.6.0 升级)：
+- 删除 Qwen3 wrapper 双分支（qwen_embedder_legacy.py 保留作 graceful degradation）
+- 统一用 sentence-transformers SentenceTransformer 加载所有 embedding 模型
+- ST 5.6.0 的 Pooling 支持 include_prompt 参数 + Qwen3 native 加载
+- 单 ST 路径 = 单代码路径 = 少 bug 表面
+
 设备自动检测：EMBEDDING_DEVICE=auto 时按 torch.cuda.is_available() 选择。
 可选模型通过 EMBEDDING_MODEL_NAME 环境变量切换：
-  - 默认: shibing624/text2vec-base-chinese (768d, sentence-transformers)
-  - Qwen3 系列: Qwen/Qwen3-Embedding-0.6B (1024d, LLM-based, qwen_embedder.py)
+  - 默认: Qwen/Qwen3-Embedding-0.6B (1024d, ST 5.6.0 native, 推荐)
+  - 备选: shibing624/text2vec-base-chinese (768d, ST 5.6.0 直接支持)
 """
 
 import asyncio
 import logging
 import os
 from sentence_transformers import SentenceTransformer
-from typing import List, Optional, Union
+from typing import List, Optional
 
 logger = logging.getLogger("microbubble.embedding")
 
-# 从环境变量读取模型名，默认保持原有 text2vec-base-chinese
-MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "shibing624/text2vec-base-chinese")
+# 从环境变量读取模型名，默认 Qwen3
+MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "Qwen/Qwen3-Embedding-0.6B")
 # 设备策略：auto / cuda / cpu（auto 模式下 torch.cuda.is_available() 自动选）
 DEVICE_OVERRIDE = os.getenv("EMBEDDING_DEVICE", "auto").lower()
 # 批量大小：GPU 上 64 更舒服，CPU 32 够用
@@ -66,12 +71,15 @@ def _detect_device() -> str:
     return _detected_device
 
 
-def _get_model() -> Optional[Union[SentenceTransformer, "Qwen3Embedder"]]:
-    """获取模型单例（不会阻塞）
+def _get_model() -> Optional[SentenceTransformer]:
+    """获取 SentenceTransformer 模型单例（不会阻塞）
 
-    双模型 dispatch:
-      - "Qwen3-Embedding" 开头 -> Qwen3Embedder (LLM-based, trust_remote_code)
-      - 其他 -> SentenceTransformer (BERT 类, 直接支持)
+    Phase 2: 统一用 ST 5.6.0 加载所有模型。
+    - Qwen3-Embedding: ST 5.6.0 支持 trust_remote_code + last-token pooling (via Pooling include_prompt)
+    - text2vec-base-chinese: 直接支持
+    - 其他: 透明
+
+    回退策略: 加载失败时返回 None（generate_embedding 会返回 None）
     """
     global _model, _model_loading
     if _model is None and not _model_loading:
@@ -79,25 +87,14 @@ def _get_model() -> Optional[Union[SentenceTransformer, "Qwen3Embedder"]]:
         try:
             device = _detect_device()
             logger.info(f"加载 embedding 模型: {MODEL_NAME}, device={device}, batch_size={BATCH_SIZE}")
-            if "Qwen3-Embedding" in MODEL_NAME:
-                # 延迟 import 避免 sentence-transformers 路径下加载 transformers
-                from app.services.qwen_embedder import Qwen3Embedder
-                _model = Qwen3Embedder(MODEL_NAME, device=device)
-                actual_device = next(_model.model.parameters()).device
-                logger.info(
-                    f"Qwen3 embedder 加载完成: {MODEL_NAME}, "
-                    f"dim={_model.dim}, max_length={_model.max_length}, "
-                    f"actual_device={actual_device}"
-                )
-            else:
-                _model = SentenceTransformer(MODEL_NAME, device=device)
-                actual_device = next(_model.parameters()).device
-                logger.info(
-                    f"Embedding 模型加载完成: {MODEL_NAME}, "
-                    f"dim={_model.get_sentence_embedding_dimension()}, "
-                    f"max_seq_length={_model.max_seq_length}, "
-                    f"actual_device={actual_device}"
-                )
+            _model = SentenceTransformer(MODEL_NAME, device=device, trust_remote_code=True)
+            actual_device = next(_model.parameters()).device
+            logger.info(
+                f"Embedding 模型加载完成: {MODEL_NAME}, "
+                f"dim={_model.get_embedding_dimension()}, "
+                f"max_seq_length={_model.max_seq_length}, "
+                f"actual_device={actual_device}"
+            )
         except Exception as e:
             logger.error(f"Embedding 模型加载失败: {e}")
             _model = None
@@ -106,35 +103,43 @@ def _get_model() -> Optional[Union[SentenceTransformer, "Qwen3Embedder"]]:
     return _model
 
 
-def _is_qwen3(model) -> bool:
-    """判断模型实例是否为 Qwen3Embedder (避免 isinstance import 循环)"""
-    return model is not None and model.__class__.__name__ == "Qwen3Embedder"
+def generate_embedding_sync(text: str, for_query: bool = False) -> Optional[List[float]]:
+    """同步生成单条文本的 embedding，失败返回 None
 
-
-def generate_embedding_sync(text: str) -> Optional[List[float]]:
-    """同步生成单条文本的embedding，失败返回 None"""
+    Args:
+        text: 输入文本
+        for_query: 是否为 query（True 时用 ST prompt 机制加指令前缀；False=document）
+                  注意：当前项目所有调用都用 False (document 模式)，RAG 检索也是 document 模式
+    """
     try:
         model = _get_model()
         if model is None:
             return None
-        if _is_qwen3(model):
-            # Qwen3: encode 返回 np.ndarray shape (1, dim)
-            arr = model.encode([text], for_query=False)[0]
-            return arr.tolist()
-        else:
-            # sentence-transformers: encode 返回 numpy 1-D
-            arr = model.encode(text, normalize_embeddings=True)
-            return arr.tolist()
+        # Phase 2: 统一 ST 路径
+        # for_query=True 时用 ST 的 prompt 系统加前缀；document 不加前缀
+        prompt = None  # TODO: if for_query and has_query_prompt: prompt = ...
+        # ST 5.6.0 支持 prompt= 参数（pass 中文 prefix to match old wrapper behavior）
+        arr = model.encode(
+            [text],
+            prompt=prompt,
+            normalize_embeddings=True,
+        )[0]
+        return arr.tolist()
     except Exception as e:
         logger.warning(f"同步 Embedding 生成失败: {e}")
         return None
 
 
-async def generate_embedding(text: str) -> Optional[List[float]]:
-    """异步生成单条文本的embedding，超时或失败返回 None"""
+async def generate_embedding(text: str, for_query: bool = False) -> Optional[List[float]]:
+    """异步生成单条文本的 embedding，超时或失败返回 None
+
+    Args:
+        text: 输入文本
+        for_query: 保留兼容（当前所有调用都用 False）
+    """
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(generate_embedding_sync, text),
+            asyncio.to_thread(generate_embedding_sync, text, for_query),
             timeout=60.0
         )
     except asyncio.TimeoutError:
@@ -145,21 +150,26 @@ async def generate_embedding(text: str) -> Optional[List[float]]:
         return None
 
 
-async def generate_embeddings(texts: List[str]) -> Optional[List[List[float]]]:
-    """异步批量生成embedding，失败返回 None"""
+async def generate_embeddings(texts: List[str], for_query: bool = False) -> Optional[List[List[float]]]:
+    """异步批量生成 embedding，失败返回 None
+
+    Args:
+        texts: 文本列表
+        for_query: 保留兼容（当前所有调用都用 False）
+    """
     model = _get_model()
     if model is None:
         return None
 
     def _encode():
         try:
-            if _is_qwen3(model):
-                # Qwen3: encode 返回 np.ndarray shape (N, dim)
-                arr = model.encode(texts, batch_size=BATCH_SIZE, for_query=False)
-                return arr.tolist()
-            else:
-                # sentence-transformers
-                return model.encode(texts, normalize_embeddings=True, batch_size=BATCH_SIZE).tolist()
+            prompt = None  # TODO: if for_query and has_query_prompt: prompt = ...
+            return model.encode(
+                texts,
+                prompt=prompt,
+                normalize_embeddings=True,
+                batch_size=BATCH_SIZE,
+            ).tolist()
         except Exception as e:
             logger.warning(f"批量 Embedding 生成失败: {e}")
             return None

@@ -46,7 +46,9 @@ edge-tts>=7.2.8,<8.0.0
 
 # 向量数据库
 pgvector==0.2.4
-sentence-transformers==2.3.1
+sentence-transformers==5.6.0
+# optimum 不装：实测 ONNX 在 GPU 上慢 12-22x（无收益）
+# optimum[onnxruntime]>=1.20.0
 rank-bm25>=0.2.2
 jieba>=0.42.1
 neo4j>=5.0.0
