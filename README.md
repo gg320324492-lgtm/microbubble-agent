@@ -7,16 +7,28 @@
 ## 功能
 
 - **智能对话** - 文字/语音/图片/文件多模态 Agent，SSE 流式 + Rich Block 渲染
-- **知识库** - 文献管理（PDF/Word/Excel/PPT/Markdown）、pgvector 语义搜索、RAG 问答、知识图谱
+- **知识库 V1+V2+V3** - 文献管理（PDF/Word/Excel/PPT/Markdown）、pgvector 语义搜索（**Qwen3-Embedding-0.6B 1024d**）、RAG 问答、知识图谱、**多模态 OCR**（图片/公式/表格/图表识别入库，4 篇 PDF 100% 端到端）
+- **v28 智能论文阅读器** - PDF 12 列结构化字段 + 内嵌图 confidence ≥ 0.85 + IO Hysteresis 防跳变 + RightImageRail 精准推荐
 - **任务管理** - 创建/分配/追踪 + 软删除垃圾桶（3 天自动清除，5 级紧急度颜色）
 - **主动提醒** - 企业微信推送（11:00 AM 北京时间窗口，Redis 24h 去重）
 - **会议系统** - 录音机模式（点"开始听会"即录）+ 离线后处理（ASR + 声纹 + AI 摘要）
-- **声纹识别** - 3D-Speaker ERes2Net + pgvector 实时识别发言人
+- **声纹识别** - 3D-Speaker ERes2Net + pgvector 实时识别发言人（100% 段有效，已修 ERes2Net batch bug）
 - **项目管理** - 课题/里程碑/进度追踪
 - **企业微信** - 群机器人对话 + 任务派发 + 到期提醒
 - **长期记忆** - 用户偏好 + 对话摘要 + 知识图谱
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
+
+## 最新里程碑（2026-06-24）
+
+- ✅ **sentence-transformers 5.6.0 升级** — 跨 3 大版本 0 破坏，删 170 行 Qwen3 wrapper，Qwen3 max_seq_length 4x → 32K，qa-bench 38%→42%（commit `c8d4df3e`）
+- ✅ **v29 Qwen3 全量迁移** — GPU 启用 + Qwen3 wrapper + alembic 030 + 知识库 350/351 重算 + 列原子切换
+- ✅ **v28 智能论文阅读器** — 8 phases 100% 收官，4 篇 PDF 37 张图 100% 核心不变量 + article 9 字 bug 修复
+- ✅ **Phase 7 多模态知识库** — 图片/公式/表格/图表 OCR 入库
+
+详见 [CHANGELOG.md](CHANGELOG.md) 最新条目 + [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)
+
+**统计**（app/stats.json, 2026-06-24）：**~1342 commits / 183K+ 行代码 / 676 文件 / 40 开发天数**（vue 46.8K / python 52.0K / markdown 42.7K / config 14.3K / javascript 17.8K / html 3.5K / shell 3.1K / typescript 1.4K / css 1.4K）
 
 ## 技术栈
 
