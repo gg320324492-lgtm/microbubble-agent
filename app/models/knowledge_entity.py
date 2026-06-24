@@ -16,7 +16,7 @@ class KnowledgeEntity(Base, TimestampMixin):
     confidence = Column(Float, default=0.5)
     source_knowledge_ids = Column(ARRAY(Integer), default=[])
     occurrence_count = Column(Integer, default=1)
-    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B)
+    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(Vector(1024), nullable=True)
 
 

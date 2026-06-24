@@ -72,13 +72,17 @@ async def recompute_table(table: str) -> dict:
                 continue
             text = text[:6000]  # 截断超长文本
             embedding = await generate_embedding(text)
-            if embedding and len(embedding) == 1024:
+            # 期望维度从模型 dim 动态读取 (text2vec=768, Qwen3-0.6B=1024)
+            from app.services.embedding_service import _get_model
+            m = _get_model()
+            expected_dim = m.get_embedding_dimension() if m and hasattr(m, "get_embedding_dimension") else 768
+            if embedding and len(embedding) == expected_dim:
                 row.embedding = embedding
                 await db.commit()
                 done += 1
             else:
                 failed += 1
-                logger_msg = f"[{table}] {row_id}: dim={len(embedding) if embedding else 0} (期望 1024)"
+                logger_msg = f"[{table}] {row_id}: dim={len(embedding) if embedding else 0} (期望 {expected_dim})"
                 print(f"  ⚠️ 失败: {logger_msg}")
             if i % 20 == 0:
                 print(f"  [{table}] 进度: {i}/{len(row_ids)}, done={done}, skipped={skipped}, failed={failed}")

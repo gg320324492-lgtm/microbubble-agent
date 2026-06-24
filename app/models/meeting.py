@@ -58,7 +58,7 @@ class Meeting(Base, TimestampMixin):
 
     # Wave 3a: 跨会议关联
     agenda = Column(JSON, nullable=True)
-    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B)
+    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(Vector(1024), nullable=True)
     related_meeting_ids = Column(JSON, nullable=True)
 

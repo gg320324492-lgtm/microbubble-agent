@@ -40,7 +40,7 @@ class Knowledge(Base, TimestampMixin):
     summary = Column(Text, nullable=True)  # LLM 生成的摘要
     formatted_content = Column(Text, nullable=True)  # AI 排版后的 Markdown 内容
 
-    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B)
+    # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(Vector(1024), nullable=True)
 
     # 创建者
