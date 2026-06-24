@@ -28,14 +28,16 @@ RUN apt-get update && apt-get install -y --fix-missing \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装Python依赖
-# 清华源 + pip 重试机制（解决大文件 IncompleteRead 断连问题）
+# PyPI 官方源（清华源/aliyun 同步 torch 2.12+ 慢，2026-06-24 ST 5.6.0 升级）
+# clash 代理只对 pip install 生效，不影响 Docker 内部 registry（避免 dockerproxy.net 500）
+# 清华源备选（注释保留）：-i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn
 COPY requirements.txt .
+ARG HTTPS_PROXY
+ARG HTTP_PROXY
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --prefer-binary \
         --retries 10 --timeout 60 \
-        -r requirements.txt \
-        -i https://pypi.tuna.tsinghua.edu.cn/simple/ \
-        --trusted-host pypi.tuna.tsinghua.edu.cn
+        -r requirements.txt
 
 # 复制应用代码
 COPY . .
