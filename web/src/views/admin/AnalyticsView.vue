@@ -99,6 +99,10 @@ const renderTrendChart = () => {
         yAxisIndex: 0,
         itemStyle: { color: '#409EFF' },
         areaStyle: { color: 'rgba(64,158,255,0.1)' },
+        // v31.1 fix: 单点时 line 不可见, 加 symbol 强制显示
+        symbol: 'circle',
+        symbolSize: 8,
+        showSymbol: true,
       },
       {
         name: '零点击率',
@@ -108,6 +112,9 @@ const renderTrendChart = () => {
         yAxisIndex: 1,
         itemStyle: { color: '#F56C6C' },
         lineStyle: { type: 'dashed' },
+        symbol: 'circle',
+        symbolSize: 8,
+        showSymbol: true,
       },
     ],
   })
@@ -161,7 +168,10 @@ const renderSourceChart = () => {
     series: [
       {
         type: 'pie',
-        radius: ['40%', '65%'],
+        // v31.1 fix: 容器 534x260, radius 65% = 169px 半径, center 45% 顶部 = y=117
+        // 外圆 169 + center 117 = 286 超出 260 → 饼图底部被裁切
+        // 改为 50% 居中 + 缩小 radius 到 35%/55% 留 30px 边距
+        radius: ['25%', '50%'],
         center: ['50%', '45%'],
         data: entries.map(([k, v]) => ({
           name: sourceLabel(k),
@@ -180,14 +190,47 @@ const handleResize = () => {
   sourceChart?.resize()
 }
 
+// v31.1 fix: 嵌入 el-tab-pane 时 chart container 默认 display:none
+// echarts init 拿到 100x150 默认尺寸, 切到 tab 后不会自动 resize → 图表不显示
+// ResizeObserver 监听容器尺寸变化 (display:none→block 也会触发), 自动重绘
+let trendObserver = null
+let modelObserver = null
+let sourceObserver = null
+
+const setupResizeObservers = () => {
+  if (trendChartRef.value && !trendObserver) {
+    trendObserver = new ResizeObserver(() => trendChart?.resize())
+    trendObserver.observe(trendChartRef.value)
+  }
+  if (modelChartRef.value && !modelObserver) {
+    modelObserver = new ResizeObserver(() => modelChart?.resize())
+    modelObserver.observe(modelChartRef.value)
+  }
+  if (sourceChartRef.value && !sourceObserver) {
+    sourceObserver = new ResizeObserver(() => sourceChart?.resize())
+    sourceObserver.observe(sourceChartRef.value)
+  }
+}
+
 onMounted(() => {
   loadAll()
   window.addEventListener('resize', handleResize)
+  // 等 onMounted + 数据加载完成后 chart 已 init, 此时绑 observer 触发初次 resize
+  // (observer 第一次 entry 是当前尺寸, 如果是 0 (display:none), resize 无效;
+  //  等切到 tab 触发的第二次 entry 才是真实尺寸 → resize 生效)
+  nextTick(() => {
+    setupResizeObservers()
+    handleResize()  // 兜底
+  })
 })
 
 // v31.1: 嵌入式使用 (ProjectStatsView tab 切换会 unmount/remount), 必须清理
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  trendObserver?.disconnect()
+  modelObserver?.disconnect()
+  sourceObserver?.disconnect()
+  trendObserver = modelObserver = sourceObserver = null
   trendChart?.dispose()
   modelChart?.dispose()
   sourceChart?.dispose()
