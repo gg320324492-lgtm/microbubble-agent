@@ -40,8 +40,10 @@ class Knowledge(Base, TimestampMixin):
     summary = Column(Text, nullable=True)  # LLM 生成的摘要
     formatted_content = Column(Text, nullable=True)  # AI 排版后的 Markdown 内容
 
-    # 向量嵌入 (pgvector Vector(768))
+    # 向量嵌入 (pgvector Vector(768), 旧 text2vec-base-chinese 维度)
     embedding = Column(Vector(768), nullable=True)
+    # v29: Qwen3-Embedding-0.6B (1024d) 双列并存期, 重算覆盖率 100% 后手工 ALTER RENAME
+    embedding_v2 = Column("embedding_v2", Vector(1024), nullable=True)
 
     # 创建者
     created_by = Column(Integer, ForeignKey("members.id"))

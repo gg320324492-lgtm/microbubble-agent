@@ -22,8 +22,10 @@ class Memory(Base, TimestampMixin):
     memory_type = Column(String(20), nullable=False)  # preference/summary/entity
     key = Column(String(200))           # 偏好键名
     content = Column(Text, nullable=False)
-    # 向量嵌入 (pgvector Vector(768))
+    # 向量嵌入 (pgvector Vector(768), 旧 text2vec-base-chinese 维度)
     embedding = Column(Vector(768), nullable=True)
+    # v29: Qwen3-Embedding-0.6B (1024d) 双列并存期
+    embedding_v2 = Column("embedding_v2", Vector(1024), nullable=True)
     importance = Column(Float, default=1.0)  # 0.0-1.0，随时间衰减
     access_count = Column(Integer, default=0)
     last_accessed_at = Column(DateTime, nullable=True)
