@@ -42,7 +42,7 @@
 
 ### 1. 智能对话 Agent
 
-Agent 是整个系统的核心，拥有 **15 个工具能力**：
+Agent 是整个系统的核心，拥有 **34 个 `@tool` 装饰器工具**（v2/v3/v4 累计）：
 
 | 工具 | 能力 |
 |------|------|
@@ -76,10 +76,13 @@ Agent 是整个系统的核心，拥有 **15 个工具能力**：
 
 ### 4. 知识库
 
-- **语义搜索**：基于 pgvector + text2vec-base-chinese 的真实向量相似度搜索
-- **文件上传**：支持 PDF / Word / Excel / TXT / Markdown，自动提取文本
+- **语义搜索**：基于 pgvector + Qwen3-Embedding-0.6B (1024d) 的真实向量相似度搜索（v29 升级，text2vec-base-chinese 768d 已退役）
+- **文件上传**：支持 PDF / Word / Excel / PPT / TXT / Markdown，自动提取文本
 - **AI 自动处理**：上传后自动生成摘要、关键词、分类标签
 - **对话知识入库**：Agent 自动将对话中有价值的内容保存到知识库
+- **多模态 OCR**（Phase 7）— 上传 PDF/PPT 时自动识别图片、公式、表格、图表并入库，4 篇 PDF 端到端验证 100% 核心不变量
+- **知识图谱 + 实体融合**：跨文档实体自动融合，ECharts 力导向图可视化
+- **公式自动分类**（6 大类 24 子分类）+ 32 个内置微纳米气泡领域公式
 
 ### 5. 长期记忆
 
@@ -192,31 +195,47 @@ microbubble-agent/
 │   ├── schemas/       # Pydantic 验证模型
 │   ├── services/      # 业务服务层（12 个服务）
 │   ├── voice/         # 语音（ASR、TTS、SILK 转换）
+│   ├── services/      # 业务服务层（20+ 个服务，含 embedding/reranker/voiceprint/multimodal）
+│   ├── voice/         # 语音（ASR、TTS、SILK 转换、3D-Speaker 声纹）
 │   └── wechat/        # 企业微信（消息、身份、分析、调度）
 ├── web/               # Vue 3 前端
 │   └── src/
-│       ├── views/     # 页面（Chat/Dashboard/Task/Member/...）
+│       ├── views/     # 页面（Chat/Dashboard/Task/Member/...18 个核心 + 18 个移动端）
+│       ├── components/ # 组件（12 类 Rich Block + 移动端 NutUI）
 │       ├── stores/    # Pinia 状态管理
-│       └── router/   # Vue Router
-├── scripts/           # 部署脚本
+│       └── router/   # Vue Router（桌面+移动双栈）
+├── scripts/           # 部署 + 运维脚本（含 reprocess_meeting 9 步 CLI）
 ├── frp/               # FRP 内网穿透配置
-├── docker-compose.yml  # 7 服务编排
-└── alembic/           # 数据库迁移
+├── docker-compose.yml  # 9 服务编排（app/db/redis/minio/neo4j/whisper/vision-mcp/celery）
+├── alembic/           # 数据库迁移（020+ 个 revision）
+├── docs/              # 部署/迁移/纪要标准/QA-bench 报告
+├── memory/            # （项目根目录）事件复盘笔记
+└── CHANGELOG.md       # 完整更新日志（按日期组织）
 ```
 
 ---
 
-## 八、当前状态
+## 八、当前状态（2026-06-24）
 
-| 功能 | 状态 |
+| 功能模块 | 状态 |
 |------|------|
-| 网页端对话 | ✅ 已上线 |
-| 微信插件对话 | ✅ 已上线 |
-| 任务管理（创建/分配/追踪） | ✅ 已上线 |
-| 企业微信通知提醒 | ✅ 已上线 |
-| 知识库（语义搜索+文件上传） | ✅ 已上线 |
-| 长期记忆系统 | ✅ 已上线 |
-| 联网搜索（搜狗+必应） | ✅ 已上线 |
-| 语音交互（输入+播报） | ✅ 已上线 |
-| 会议转录+自动总结 | ✅ 已上线 |
-| 腾讯会议 API | ⚠️ 代码完成，待配置凭据 |
+| **Phase 1-7 完整后端架构**（FastAPI + SQLAlchemy + PG + Redis + Celery + MinIO） | ✅ 已上线 |
+| **v2/v3/v4 Agent 架构**（34 个 `@tool` + 12 类 Rich Block + 多会话并行 + agent_traces 可观测性） | ✅ 已上线 |
+| **知识库 V1**（pgvector 语义搜索 + RAG 问答 + 自主研究） | ✅ 已上线 |
+| **知识库 V2**（动态 LLM 分析 + 知识图谱 + 实体融合 + 公式分类） | ✅ 已上线 |
+| **知识库 V3 多模态 OCR**（图片/公式/表格/图表识别入库，4 篇 PDF 100% 端到端） | ✅ 已上线 |
+| **v28 智能论文阅读器**（12 列结构化字段 + 内嵌图 + IO Hysteresis + RightImageRail） | ✅ 已上线 |
+| **v29 Qwen3 全量迁移**（GPU 启用 + Qwen3-Embedding-0.6B 1024d + 知识库 350/351 重算 + 列原子切换） | ✅ 已上线 |
+| **sentence-transformers 5.6.0 升级**（跨 3 大版本，删 170 行 wrapper，32K 上下文） | ✅ 已上线 |
+| **会议系统 v1-v3**（录音机 + ASR + 声纹 + AI 摘要 + 三级润色） | ✅ 已上线 |
+| **声纹识别 v2**（3D-Speaker + pgvector + HNSW + 修复 ERes2Net batch bug 100% 段有效） | ✅ 已上线 |
+| **会议发言人重处理流程**（[reprocess_meeting.py](scripts/reprocess_meeting.py) 9 步 CLI） | ✅ 已上线 |
+| **v2 任务提醒体系**（11AM 窗口 + acknowledged 状态 + Redis 24h 去重） | ✅ 已上线 |
+| **移动端 PWA**（18 移动端页面 + 12 移动端组件 + 路由级双栈 + 4 个 PWA 离线策略） | ✅ 已上线 |
+| **企业微信集成**（群机器人 + 任务派发 + 到期提醒 + 微信插件） | ✅ 已上线 |
+| **🐰 宠物乐园**（仪表盘两只 CSS 3D 兔子 + 60fps 自主走动 + XP 成长） | ✅ 已上线 |
+| **腾讯会议 API** | ⚠️ 代码完成，待配置凭据 |
+
+**统计**：~1100+ commits / 157K+ 行代码 / 630+ 文件 / 35+ 开发天数
+**测试**：87 后端 + 73 前端 + 17 移动端 + 8 ST 集成 = 185 测试全过
+**知识库**：64→247+ 条（+183，Phase 7 后多模态抽取继续扩展）

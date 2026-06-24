@@ -3,25 +3,34 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-06-19）
+## 当前状态（2026-06-24）
 
 **已交付**：
 - ✅ v1-v6 完整后端架构（Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery + MinIO）
 - ✅ v2/v3/v4 Agent 架构（34 个 `@tool` 装饰器工具 + 12 类 Rich Block + 多会话并行 + agent_traces 可观测性）
 - ✅ 知识库 V1 + V2（动态 LLM 分析 + 知识图谱 + RAG 问答 + 自主研究引擎 + 公式分类 + 假设生成）
-- ✅ 知识库 V3（多模态 OCR：图片 + 公式 + 表格 + 图表识别入库）
+- ✅ 知识库 V3（多模态 OCR：图片 + 公式 + 表格 + 图表识别入库，10/10 PDF 端到端通过）
 - ✅ 会议系统 v1-v3（录音机 + 离线后处理 + ASR + 声纹 + AI 摘要 + 三级润色）
 - ✅ 声纹识别 v2（3D-Speaker + pgvector + HNSW 索引 + **修复 ERes2Net batch bug** 100% 段有效）
 - ✅ 会议发言人重处理流程（[reprocess_meeting.py](scripts/reprocess_meeting.py) 9 步 CLI + 主机端 wrapper）
 - ✅ 移动端 PWA 收官（18 个移动端页面 + 12 个移动端组件 + 路由级双栈 + 4 个 PWA 离线策略）
 - ✅ v2 任务提醒体系（11AM 窗口 + acknowledged 状态 + Redis 24h 去重）
 - ✅ 全量审计 5 commits（5 处 P0 + 9 处 P1 死代码清理 + 13 个孤儿文件删除）
+- ✅ **v28 智能论文阅读器**（8 phases + step 109.x 打磨：4 篇 PDF 37 张图 100% 核心不变量 + 12 列结构化字段 + 内嵌图 confidence 阈值 + IO Hysteresis 防跳变）
+- ✅ **v29 Qwen3 全量迁移**（GPU 启用 + Qwen3 wrapper + 双模型 dispatch + alembic 030 + 知识库 350/351 条重算 + 列原子切换）
+- ✅ **sentence-transformers 5.6.0 升级**（跨 3 大版本，0 breaking，删 170 行 wrapper，Qwen3 max_seq_length 4x → 32K，qa-bench 38%→42%）
 
-**统计**：
-- ~1100+ commits / 157K+ 行代码 / 630+ 文件 / 33 开发天数
+**统计**（[app/stats.json](app/stats.json), 2026-06-24）：
+- **~1342 commits / 183K+ 行代码 / 676 文件 / 40 开发天数**
 - 9 个 Docker 服务运行中
-- 87 后端 + 73 前端 + 17 移动端 = 177 测试全过
-- 知识库 64→247 条（+183），Phase 7 后再扩展多模态抽取
+- 87 后端 + 73 前端 + 17 移动端 + 8 ST 集成 = 185 测试全过
+- 知识库 64→247+ 条（+183，Phase 7 后再扩展多模态抽取）
+- **2026-06-24 起 6 大铁律沉淀**（清华源/ONNX 反优化/docker build 污染等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
+
+**最新里程碑**：
+- 🆕 [v28 论文图片结构化字段后端集成](docs/upgrade-sentence-transformers-plan.md) - 8 phases
+- 🆕 [v29 Qwen3 全量迁移](CHANGELOG.md#2026-06-24-v29-qwen3-全量迁移收官step-3-原子切换) - 3 steps
+- 🆕 [sentence-transformers 5.6.0 升级](CHANGELOG.md#2026-06-24-sentence-transformers-560-升级phase-12-收官phase-3-跳过) - 跨 3 大版本
 
 ## 未来规划（从浅入深路线图）
 

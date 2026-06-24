@@ -2,6 +2,69 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [2026-06-24] sentence-transformers 5.6.0 升级（Phase 1+2 收官，Phase 3 跳过）
+
+### 🎉 P0 升级：跨 3 大版本 ST 升级（29 个月 +）
+
+- **触发** — 原 CLAUDE.md 标"❌ sentence-transformers 升级（未做）"，因 Qwen3 团队用 `include_prompt` 参数 + ST 2.3.1 Pooling 不支持 → 必须用 Qwen3Embedder wrapper 绕开
+- **commit** — `c8d4df3e feat(embedding): upgrade sentence-transformers 2.3.1 → 5.6.0 (Phase 1+2 收官)`（已 push main）
+- **Phase 1（最小风险）** — `requirements.txt` 升 `sentence-transformers==5.6.0` + 修 1 行 deprecation（`get_sentence_embedding_dimension()` → `get_embedding_dimension()`）
+- **Phase 2（用新功能）** — 删 `qwen_embedder.py` (170 行) → 改名 `qwen_embedder_legacy.py` (DEPRECATED 注释保留作 graceful degradation) + `embedding_service.py` 重构为单 ST 路径
+- **Phase 3（性能优化）** — 实测 **ONNX 在 GPU 上慢 12-22x**（反优化）→ 主动跳过，保持 torch/GPU
+- **关键修复** — Dockerfile 切 PyPI 官方源（清华源限速 torch 2.12+，需 clash 代理 build-arg）
+- **收益（vs 原 plan 预估）**：
+  - Qwen3 max_seq_length 2048 → **32768** (4x)
+  - 删 170 行 wrapper（计划估 130）
+  - 单 ST 路径 = 少 bug 表面
+  - **0 embedding 错误**
+  - qa-bench 50 题：**38% → 42%**（反升 4%，超预期）
+- **6 大铁律沉淀** — [CLAUDE.md](CLAUDE.md) 新增 "2026-06-24 sentence-transformers 5.6.0 升级" section：
+  - 清华源限速 → PyPI 官方 + clash build-arg
+  - docker build env var 污染 → 用 `--build-arg`
+  - **ONNX 在 GPU 反优化**（实测数据：torch/GPU 30ms vs onnx/GPU 680ms）
+  - ST 跨大版本 3 phase 收官法
+  - ST 5.6.0 Pooling `include_prompt` 参数 → Qwen3 native loading 可行
+  - Qwen3 native vs wrapper cos 0.999860（实质相同）
+- **新文档** — [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)（完整 plan + 实测结果）
+- **新测试** — [tests/test_st5_compat.py](tests/test_st5_compat.py)（8 个 ST 5.6 集成测试，需 `RUN_INTEGRATION=1` 跑）
+
+### 📚 CLAUDE.md 5 大新铁律沉淀（commit `468c2b86`）
+
+- 清华源（pypi.tuna）限速 PyTorch 2.12+ → PyPI 官方 + clash 代理 build-arg
+- docker build env var 污染 → 用 `--build-arg` 而非 `ENV`
+- ONNX backend 在 GPU 上是反优化（12-22x 慢），不是"2-3x 通用加速"
+- ST 跨大版本升级 3 phase 收官法（Phase 1 最小风险 → Phase 2 用新功能 → Phase 3 性能优化）
+- ST 5.6.0 Pooling `include_prompt` 参数 → Qwen3 native loading 可行
+
+## [2026-06-24] v29 Qwen3 全量迁移收官（step 3 原子切换）
+
+### 🎉 v29 step 3：embedding 列原子切换（commit `5db74ff3`）
+
+- **背景** — v29 三步走把 embedding 模型从 text2vec-base-chinese (768d) 切换到 Qwen3-Embedding-0.6B (1024d)
+- **step 1**（commit `ac29356c`）— GPU 启用 + device 自动检测
+- **step 2**（commit `65e612f4` + `641f9cd1`）— Qwen3 wrapper + 双模型 dispatch + alembic 030 双列 + 重算 350/351 条知识
+- **step 3**（commit `5db74ff3`）— 原子切换：drop `embedding_v2` 列 + rename `embedding_v2` → `embedding`
+- **意义** — 知识库 embedding 全部从 text2vec 升到 Qwen3 1024d，为 ST 5.6.0 升级铺路（同一 session 接着做）
+
+## [2026-06-20~23] v28 论文图片结构化字段 + paper reader 打磨
+
+### 🎉 v28 主体 8 phases 100% 完成
+
+- **Phase 1** — alembic 028 + model + multimodal 集成（12 列 + 2 索引）
+- **Phase 2** — schema + API `_to_dict` 加 12 字段
+- **Phase 3** — paperAdapter 简化为读后端字段（graceful degradation 保留）
+- **Phase 4** — 4 篇 PDF 真实测试验证（37 张图 100% 核心不变量）
+- **Phase 5** — 内嵌图 confidence ≥ 0.85 阈值
+- **Phase 6** — RightImageRail sectionHint 精准推荐（核心词交集匹配）
+- **Phase 7** — IO Hysteresis + rAF 节流（防跳变 + 性能）
+- **Phase 8** — article 9 字 bug 修复（深坑：INTERNAL_MARKER_RES line 105 `\bPAGE\s*[:：]\s*\d+\b` 在 `[` 和 word char 之间构边界 → 误删 `[PAGE:N]` → pageMarkers=0 → sections 解析丢分页 → 正文压成 1 段）
+
+### 🛠 v28 step 109.x 持续打磨（40+ commits，2026-06-21~22）
+
+- step 109.30-109.41 paper reader 微调（abstract 提取 / author regex / heading 智能识别 / chemFormat radical 字符集扩展等）
+- 最新：`b8d94d4c fix(paper): v28 step 109.41 paragraph 形式子节标题智能识别为 heading`
+- **状态**：打磨线**暂停在 109.41**（如无新需求无需继续）
+
 ## [2026-06-19] 声纹识别核心修复 + 会议发言人重处理流程标准化
 
 ### 🐛 P0 修复：声纹 batch bug 推到主路径（影响所有会议）

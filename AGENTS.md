@@ -6,12 +6,12 @@
 
 - 后端: Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery
 - 前端: Vue 3 + Vite + Element Plus
-- AI: Codex API (Sonnet) + faster-whisper + pgvector
+- AI: Claude API (Sonnet) + mimo-v2.5 多模态 + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
 ## 当前开发阶段
 
-**Phase 1-6 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已全面升级为**实时声纹识别通话系统**，支持粘贴文本 AI 自动分析、实时语音转写 + 声纹识别 + AI 对话。**2026-06-03 最新进展**：垃圾桶系统 4 bug 全修（commit `dc93bff`）+ 精准倒计时双行显示（`b91e429` `46f04ab`）+ beat 调度 1h（`47fb2c9`）+ Webhook 性能 0.001s 响应（`7ec6ce0`）。详见 [ROADMAP.md](ROADMAP.md#-项目当前状态速查2026-06-03) 和 [README.md](README.md#当前状态2026-06-03)。
+**Phase 1-7 全部完成，部署已上线。** 知识库已升级为**自主进化的课题组知识大脑**（含多模态 OCR），会议系统已升级为**实时声纹识别通话系统**。**2026-06-24 最新进展** — sentence-transformers 5.6.0 跨 3 大版本升级（commit `c8d4df3e`）+ 删 170 行 Qwen3 wrapper + Qwen3 max_seq_length 4x 升到 32K + qa-bench 38%→42%。详见 [CHANGELOG.md](CHANGELOG.md#2026-06-24-sentence-transformers-560-升级phase-12-收官phase-3-跳过) 和 [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)。
 
 **2026-06-12 重大进展** — 详见 [CLAUDE.md](CLAUDE.md) 同日条目与 [README.md](README.md#当前状态2026-06-12)。要点：①会议录音全栈防御机制 5 阶段完成（解决 #84 案例"58 分钟录音断网丢失"）②webhint paint keyframes 治理（49+ 报告清零）③会议详情页 transcriptEntries / polish-text 400 双 bug 修复 ④Vite hash 改 hex 真正消除 cache-busting 误报 ⑤**会议查询 bug 双层根因修复**（`app/agent/core.py:911` 函数体内 `from X import Y` 触发 UnboundLocalError + LLM 撒谎模式 → 删冗余 import + 补 `prompts.py` "工具调用黄金规则 (CRITICAL)" + `tools.py` 中 `query_meetings` 描述改为「【必调工具】」）。详见 `CLAUDE.md` 第 145-149 行（晚间教训）和 `README.md` 近期新增第 25 行。
 
@@ -105,11 +105,11 @@
 - 前端 ProjectView 调用了 DELETE /projects/{id}（已实现），MeetingView 的 PUT/DELETE 端点已实现
 - 无用依赖已清理（langchain, chromadb, sentence-transformers, pyannote 已移除，minio 已恢复用于文件上传）
 - 登录页硬编码账号已移除，改为"请联系管理员获取账号密码"
-- Agent 的 `generate_project_plan` 工具会调用 Codex API 两次（生成计划 + 对话），注意 token 消耗
+- Agent 的 `generate_project_plan` 工具会调用 Claude API 两次（生成计划 + 对话），注意 token 消耗
 - 企业微信已上线，腾讯会议凭据待配置（详见 ROADMAP.md）
 - 部署架构：云服务器跑 Nginx+FRP+Webhook(9001)，本地电脑跑全部 Docker 服务，FRP 穿透 8000/9000/2222 端口
 - Webhook 自动部署：GitHub push → Nginx /webhook 代理 → webhook.py (9001) → deploy-auto.sh → npm build → nginx reload，已端到端验证
-- Codex API 使用代理地址（`CLAUDE_BASE_URL`），支持第三方 API 中转
+- Claude API 使用代理地址（`CLAUDE_BASE_URL`），支持第三方 API 中转
 - **文件上传 prefix 参数** — `app/api/v1/upload.py` 中 `prefix` 使用 `Form("uploads")` 而非 `Query`，因为前端通过 FormData 发送该字段。若误用 `Query`，prefix 会静默回退到默认值 `"uploads"`，导致头像等文件存到错误前缀
 - **铃铛提醒去重** — `_create_default_reminders()` 为每个任务创建 1-2 个 reminder（分级预警），但通知 API 必须按 task 去重。`GET /reminders` 使用 PostgreSQL `DISTINCT ON (task_id)` + `ORDER BY task_id, remind_at` 保留最早提醒，`pending-count` 使用 `COUNT(DISTINCT task_id)`。任何时候修改提醒相关查询，都要确保前端铃铛不会因一个任务多个 reminder 而重复显示
 - **云服务器资源限制** — 阿里云 2核2G，严禁在云服务器上运行 `npm run build`（Next.js 构建会 OOM 导致 SSH 断开）。所有前端构建在本地 Windows（32核+GPU）完成，静态产物上传到服务器
@@ -232,10 +232,10 @@
   - **三级润色流水线**（2026-06-02）— 实时转录常出现 ASR 幻觉（"你和我一样""一二三四"等），单段润色无上下文。**改用三级**：
     1. **L1 实时透传** — 每段 ASR 立即推原文 + `status: "raw"`，前端"实时"徽章
     2. **L2 聚批润色**（`app/services/meeting_batch_polisher.py`）— 每 30s 或攒满 5 段触发 1 次 LLM（`mimo-v2.5`），复用 `polish_segments_with_lock` 已有 Redis 锁 + 24h 缓存，推 `transcript_batch_polished` 消息
-    3. **L3 全文精润色**（`app/services/meeting_full_polisher.py`）— hangup 时触发 1 次高质量 Sonnet（`Codex-sonnet-4-20250514`），分块 + 跨块 context，**删除 ASR 幻觉孤立短句**（`removed: true` 字段），持久化到 `meeting.transcript_polished` JSON 列
+    3. **L3 全文精润色**（`app/services/meeting_full_polisher.py`）— hangup 时触发 1 次高质量 Sonnet（`claude-sonnet-4-20250514`），分块 + 跨块 context，**删除 ASR 幻觉孤立短句**（`removed: true` 字段），持久化到 `meeting.transcript_polished` JSON 列
     - **关键纪律**：兜底段满检测（`voice.py` LiveSegmenter 分支）也**必须调用声纹识别**（之前硬编码 "发言人"，导致用户看不到内容）
     - **降级**：LLM 失败时 `_fallback_polished` 返回原文，前端 `status` 保持 `raw`（不报错，不丢内容）
-    - **配置**（`app/config.py`）：`POLISH_BATCH_INTERVAL_SECONDS=30` / `POLISH_BATCH_MAX_SEGMENTS=5` / `FULL_POLISH_MODEL=Codex-sonnet-4-20250514` / `FULL_POLISH_CHUNK_CHARS=4000` / `TRANSCRIPT_BUFFER_MAX_ENTRIES=1000`
+    - **配置**（`app/config.py`）：`POLISH_BATCH_INTERVAL_SECONDS=30` / `POLISH_BATCH_MAX_SEGMENTS=5` / `FULL_POLISH_MODEL=claude-sonnet-4-20250514` / `FULL_POLISH_CHUNK_CHARS=4000` / `TRANSCRIPT_BUFFER_MAX_ENTRIES=1000`
   - **async session 中不要访问 lazy relationship**（2026-06-02 commit `6bc9687`）— `meeting.participants` / `meeting.related` / `meeting.speaker_stats` 等关系属性在 async session 中**没有**预加载（`selectinload()`）时，访问触发 lazy load → 走同步 IO → `sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here`。**WS 表现**：服务端 1011 close → 客户端重连 → 服务端又触发同一 lazy load → 循环（用户看到"重连中"永远不停）。**修复**：`await db.refresh(meeting, attribute_names=["participants"])` 预加载，或**避免访问关系属性**（润色/metadata context 不依赖关系）。**错误指纹**：traceback 含 `strategies.py:1130 _emit_lazyload` 关键字 → 100% 是这个错
   - **会议上下文 metadata 字段选型**（2026-06-02）— `meeting_context` / `meeting_metadata` 等**不依赖** lazy 关系。L2/L3 润色需要的 `title`（column 属性，**不**触发 lazy load）/ `participants`（lazy 关系，**会**触发）/ `topic_line` / `context_segments` 字段应该用 column 字段或显式空值构造
 

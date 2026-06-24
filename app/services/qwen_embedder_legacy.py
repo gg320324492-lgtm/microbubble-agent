@@ -1,9 +1,20 @@
-"""Qwen3 Embedder - LLM-based embedding via HuggingFace transformers
+"""Qwen3 Embedder [LEGACY] - **DEPRECATED 2026-06-24**
 
-为什么需要这个文件：
+Why this file exists (HISTORICAL):
 - sentence-transformers==2.3.1 不支持 LLM-based embedding 的 last-token pooling
 - Qwen3-Embedding-0.6B 是基于 Qwen3-0.6B LLM 的 embedding 模型
 - 必须用 transformers.AutoModel + trust_remote_code + 自定义 last-token pooling
+
+Why this is now legacy:
+- **升级到 sentence-transformers==5.6.0 (commit Phase 1/2, 2026-06-24)**
+- ST 5.6.0 的 Pooling 模块支持 `include_prompt` 参数
+- ST 5.6.0 可以直接 `SentenceTransformer("Qwen/Qwen3-Embedding-0.6B")` 加载
+- 删前实测：ST 原生 vs wrapper 输出 cos 0.999860 (实质相同)
+- 删后实测：embedding_service.py 现在用 ST 原生 + prompt= 参数传中文 query 指令
+
+This file is kept ONLY as graceful degradation fallback. Do NOT extend.
+- 测试用：tests/test_st5_compat.py::test_qwen3_native_vs_wrapper_output_match
+- 紧急回滚：embedding_service.py 可改回用 create_qwen_embedder() 即可
 
 替代 sentence-transformers 的 SentenceTransformer.encode 调用：
 - 用法兼容：encode([text]) -> np.ndarray, dim=1024, normalized
