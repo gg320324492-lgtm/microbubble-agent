@@ -12,7 +12,7 @@
  *   2026-06-25 v31 注: 本页只展示统计, 不写数据, 暂不强制 admin 校验,
  *   普通用户可看 (不暴露敏感信息). 后端如果未来要加校验, 在 analytics.py 加 admin 守卫即可.
  */
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -183,6 +183,15 @@ const handleResize = () => {
 onMounted(() => {
   loadAll()
   window.addEventListener('resize', handleResize)
+})
+
+// v31.1: 嵌入式使用 (ProjectStatsView tab 切换会 unmount/remount), 必须清理
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  trendChart?.dispose()
+  modelChart?.dispose()
+  sourceChart?.dispose()
+  trendChart = modelChart = sourceChart = null
 })
 </script>
 

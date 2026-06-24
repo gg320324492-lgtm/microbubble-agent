@@ -6,8 +6,12 @@
       <p class="page-subtitle">项目从建立至今的全历程开发信息</p>
     </div>
 
-    <!-- 项目体量 -->
-    <el-card class="stats-card fade-slide-up stagger-1" shadow="hover">
+    <!-- Tabs: 项目历程 + 检索质量监控 (v31) -->
+    <el-tabs v-model="activeTab" class="project-stats-tabs">
+      <!-- Tab 1: 项目历程 (原内容) -->
+      <el-tab-pane label="项目历程" name="overview">
+        <!-- 项目体量 -->
+        <el-card class="stats-card fade-slide-up stagger-1" shadow="hover">
       <template #header>
         <div class="card-header">
           <span class="card-title">
@@ -146,6 +150,13 @@
         </el-timeline-item>
       </el-timeline>
     </el-card>
+      </el-tab-pane>
+
+      <!-- Tab 2: 检索质量监控 (v31) — 嵌入 AnalyticsView 组件 -->
+      <el-tab-pane label="检索质量" name="analytics">
+        <AnalyticsView />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -153,6 +164,10 @@
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import changelogData from '@/data/changelog.json'
+import AnalyticsView from '@/views/admin/AnalyticsView.vue'  // v31 检索质量监控
+
+// v31 tab 切换: 'overview' = 项目历程, 'analytics' = 检索质量
+const activeTab = ref('overview')
 
 const data = ref(changelogData)
 const stats = ref({

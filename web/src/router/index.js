@@ -145,13 +145,6 @@ const routes = [
         name: 'AgentTraces',
         component: resolveMobileComponent('admin/AgentTracesView', 'admin/MobileAgentTracesView'),
         meta: { title: 'Agent Trace 监控' }
-      },
-      {
-        // v31 检索质量监控: 移动端复用桌面版 (用户决定)
-        path: 'admin/analytics',
-        name: 'Analytics',
-        component: resolveMobileComponent('admin/AnalyticsView', ''),
-        meta: { title: '检索质量监控' }
       }
     ]
   }
