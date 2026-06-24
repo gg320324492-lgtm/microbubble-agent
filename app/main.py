@@ -12,7 +12,7 @@ from app.config import settings
 # 避免 chat 第一次请求时 TOOL_REGISTRY 还是空的（导致模型在 content 里 fake tool_call，
 # fake parser 解析后 dispatch_tool 又报 TOOL_NOT_FOUND）
 import app.agent.tools  # noqa: F401  ← 关键！触发 tools/__init__.py 链式 import
-from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording, dashboard, admin
+from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording, dashboard, admin, analytics
 from app.api.v1.dashboard import mobile_router as mobile_aliases  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 from app.core.database import engine, Base
 from app.core.redis import close_redis
@@ -152,6 +152,7 @@ app.include_router(voiceprint.router, prefix="/api/v1", tags=["声纹识别"])
 app.include_router(meeting_progress.router, prefix="/api/v1", tags=["会议进度"])
 app.include_router(meeting_template.router, prefix="/api/v1", tags=["会议模板"])
 app.include_router(dashboard.router, prefix="/api/v1", tags=["项目动态"])
+app.include_router(analytics.router, prefix="/api/v1", tags=["检索质量"])  # v31 检索质量监控埋点
 app.include_router(admin.router, prefix="/api/v1", tags=["管理"])
 
 

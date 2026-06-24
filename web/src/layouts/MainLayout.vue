@@ -56,7 +56,7 @@
         </el-menu-item>
       </el-menu>
 
-      <!-- 侧边栏底部 - 项目动态 -->
+      <!-- 侧边栏底部 - 项目动态 + 检索质量监控 (v31) -->
       <div class="sidebar-bottom">
         <div
           class="sidebar-bottom-item"
@@ -65,6 +65,15 @@
         >
           <el-icon><DataBoard /></el-icon>
           <span v-show="!isCollapse">项目动态</span>
+        </div>
+        <div
+          class="sidebar-bottom-item"
+          :class="{ active: currentRoute.startsWith('/admin/analytics') }"
+          @click="router.push('/admin/analytics')"
+          title="v31 检索质量监控"
+        >
+          <el-icon><DataAnalysis /></el-icon>
+          <span v-show="!isCollapse">检索质量</span>
         </div>
       </div>
     </el-aside>
@@ -182,7 +191,7 @@ import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useIsMobile } from '@/composables/useIsMobile'
 import MobileTabBar from '@/components/mobile/TabBar.vue'
-import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, DataAnalysis, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import

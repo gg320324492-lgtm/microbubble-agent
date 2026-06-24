@@ -314,6 +314,8 @@ export function useChatStream() {
     targetSessionId: string,
     signal?: AbortSignal
   ) {
+    // v31 埋点: Agent 调用 search_knowledge 时暂存 query, tool_result 时连同 top_ids 一起 POST
+    let pendingAgentSearchQuery: string | null = null
     // targetSessionId 是 sendMessage 启动时捕获的闭包变量
     for await (const evt of sseFetch(
       '/api/v1/chat/stream',
@@ -374,6 +376,13 @@ export function useChatStream() {
             name: evt.tool_name,
             state: 'running',
           })
+          // v31 埋点: 暂存 query, 等待 tool_result 一起 POST
+          if (evt.tool_name === 'search_knowledge' && evt.tool_input) {
+            pendingAgentSearchQuery =
+              (evt.tool_input.query as string) ||
+              (evt.tool_input as Record<string, unknown>).q as string ||
+              ''
+          }
           break
         case 'tool_result': {
           // [snapshot] 工具调用结果
@@ -381,6 +390,30 @@ export function useChatStream() {
           if (last && last.type === 'tool' && last.name === evt.tool_name) {
             last.state = 'done'
             last.duration_ms = evt.tool_duration_ms
+          }
+          // v31 埋点: 收到 search_knowledge 结果, POST 到 analytics (含 top_ids)
+          if (
+            evt.tool_name === 'search_knowledge' &&
+            pendingAgentSearchQuery &&
+            evt.tool_output &&
+            Array.isArray((evt.tool_output as Record<string, unknown>).results)
+          ) {
+            const results = (evt.tool_output as { results: Array<{ id: number }> }).results
+            const topIds = results.map((r) => r.id).filter((id): id is number => typeof id === 'number').slice(0, 20)
+            if (topIds.length > 0) {
+              // 动态 import 避免循环依赖
+              import('@/api/analytics')
+                .then(({ recordSearchEvent }) => {
+                  recordSearchEvent({
+                    query: pendingAgentSearchQuery as string,
+                    top_ids: topIds,
+                    source: 'agent_chat',
+                    session_id: localStorage.getItem('mnb:search_analytics:session_id') || undefined,
+                  }).catch(() => { /* 埋点失败静默 */ })
+                })
+                .catch(() => { /* import 失败静默 */ })
+            }
+            pendingAgentSearchQuery = null
           }
           break
         }

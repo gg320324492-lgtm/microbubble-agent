@@ -25,7 +25,7 @@
           @show-hypotheses="activeTab = 'hypotheses'"
           @show-all-categories="showAllCategories = true"
           @show-all="showAllKnowledge = true"
-          @view-detail="$router.push('/knowledge/' + $event)"
+          @view-detail="handleViewDetail"
           @edit="editKnowledge"
           @delete="handleDeleteKnowledge"
           @download="downloadFile"
@@ -453,6 +453,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { useKnowledge } from '@/composables/useKnowledge'
+import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
 import { formatDateTime } from '@/utils/format'
 import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
 import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
@@ -485,6 +486,9 @@ const activeTab = ref('knowledge')
 const route = useRoute()
 // v28 step 68: 支持 ?tab=memory URL 直跳（如旧 /memory 重定向）
 if (route.query.tab === 'memory') activeTab.value = 'memory'
+
+// v31 检索质量埋点
+const searchAnalytics = useSearchAnalyticsStore()
 
 // v28 step 68: 长期记忆 Tab 状态（合并自 MemoryView）
 const memoryList = ref([])
@@ -581,10 +585,24 @@ const knowledgeForm = ref({
 
 // ── 搜索和筛选 ──
 
-const handleSearch = (query) => {
+const handleSearch = async (query) => {
   searchQuery.value = query
   currentPage.value = 1
-  fetchKnowledge()
+  await fetchKnowledge()
+  // v31 埋点: 搜索事件 (query + top_ids)
+  const topIds = knowledgeList.value.map(k => k.id)
+  if (topIds.length > 0) {
+    searchAnalytics.startSearch(query, topIds, 'knowledge_search')
+  }
+}
+
+// v31 埋点: 点击结果 (找位置 + 调 recordClick + 路由跳转)
+const handleViewDetail = (id) => {
+  const position = knowledgeList.value.findIndex(k => k.id === id) + 1
+  if (position > 0) {
+    searchAnalytics.recordClick(id, position)
+  }
+  $router.push('/knowledge/' + id)
 }
 
 const handleFilter = (filters) => {
