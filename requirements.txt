@@ -30,6 +30,9 @@ modelscope>=1.14.0
 torch>=2.0.0
 torchaudio>=2.0.0
 addict
+# 2026-06-24 v29 Qwen3-Embedding-0.6B: LLM-based embedding wrapper
+accelerate>=0.34
+# transformers>=4.45 / safetensors>=0.4 已在 torch 依赖链中装好, 无需重复声明
 datasets
 sortedcontainers       # modelscope/datasets 传递依赖
 simplejson             # modelscope 传递依赖（CLAUDE.md 模型依赖安装 提示）
