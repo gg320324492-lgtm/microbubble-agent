@@ -22,7 +22,7 @@ const initialized = ref(false)
  */
 function startRecording(meetingId, title = '') {
   recordingMeetingId.value = meetingId
-  recordingMeetingTitle.value = title || `听会 #${meetingId}`
+  recordingMeetingTitle.value = title || `正在听会（ID ${meetingId}`
   // 持久化到 sessionStorage，刷新页面也能恢复
   sessionStorage.setItem('recording_meeting_id', String(meetingId))
   sessionStorage.setItem('recording_meeting_title', recordingMeetingTitle.value)
@@ -64,7 +64,7 @@ async function checkActiveRecording() {
     const cached = sessionStorage.getItem('recording_meeting_id')
     if (cached) {
       recordingMeetingId.value = Number(cached)
-      recordingMeetingTitle.value = sessionStorage.getItem('recording_meeting_title') || `听会 #${cached}`
+      recordingMeetingTitle.value = sessionStorage.getItem('recording_meeting_title') || `正在听会（ID ${cached}`
     }
   }
 }

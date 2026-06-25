@@ -40,7 +40,7 @@
 // → SPA 加载失败。BUMP SW_VERSION 触发浏览器重新 install → activate 钩子
 // caches.keys() + Promise.all(keys.map(caches.delete)) 清空所有 cache → postMessage
 // SW_UPDATED → main.js 监听 → window.location.reload() 闭环。
-const SW_VERSION = 'v54-kb-router-fix-2026-06-26'
+const SW_VERSION = 'v55-recording-title-rename-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
