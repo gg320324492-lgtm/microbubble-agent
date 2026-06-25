@@ -154,10 +154,11 @@ const subtitleText = computed(() => {
   return 'AI 正在分析录音内容'
 })
 
-// 2026-06-25 新增：动态提示文案
-// - 处理中：显示当前 stage 名 + "请勿关闭此页面"
-// - 完成态：告诉用户可关闭，从会议详情查看
-// - 错误态：提示重试或联系管理员
+// 2026-06-25 v2：分阶段"可关闭"边界
+// - 上传期（progress 空）：强提示"请勿关闭"，保护音频上传
+// - Celery 启动后（progress 有值）：友好提示"可关闭"，后端独立处理
+// - 完成态：引导去会议详情查看
+// - 错误态：兜底提示重试
 const dynamicHint = computed(() => {
   if (error.value) {
     return '处理失败，请稍后重试或联系管理员'
@@ -165,11 +166,12 @@ const dynamicHint = computed(() => {
   if (done.value) {
     return '处理已完成，您可以关闭此页面，稍后从会议详情查看纪要'
   }
-  const stageLabel = stages.find(s => s.key === progress.value?.stage)?.label
-  if (stageLabel) {
-    return `当前：${stageLabel}，请勿关闭此页面`
+  // Celery 已启动（WS 收到第一帧 stage 消息）→ 可安全关闭
+  if (progress.value?.stage) {
+    return '后台处理中，您可关闭此页面，结果将保存到会议详情'
   }
-  return '准备中，请勿关闭此页面'
+  // 前端还在 await upload + stop-recording，必须等
+  return '正在上传音频，请勿关闭此页面'
 })
 
 function isStageDone(idx) {
