@@ -40,7 +40,11 @@
 // → SPA 加载失败。BUMP SW_VERSION 触发浏览器重新 install → activate 钩子
 // caches.keys() + Promise.all(keys.map(caches.delete)) 清空所有 cache → postMessage
 // SW_UPDATED → main.js 监听 → window.location.reload() 闭环。
-const SW_VERSION = 'v56-title-paren-fix-2026-06-26'
+// v57: 2026-06-26 修复录音会议室"返回（录音继续）"router.back → router.replace(meetings/{id})。
+// handleBack 在 if(isGlobalRecorderActive) 分支调用 router.back()，从聊天页 Rich Block 进入
+// 的用户 history 栈前一条是 /chat，router.back() 把用户弹回聊天页（不是用户期望的"返回"）。
+// 改成 router.replace(/meetings/{id}) 与 onProgressClose 行为镜像，跳到稳定的会议详情页。
+const SW_VERSION = 'v57-meeting-back-fix-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
