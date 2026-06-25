@@ -80,8 +80,8 @@
 
           <!-- 底部提示 -->
           <div class="sheet-hint">
-            <p>预计 30-60 秒</p>
-            <p>您可以先切换到其他页面</p>
+            <p>{{ dynamicHint }}</p>
+            <p v-if="!done && !error" class="hint-subtle">预计 30-60 秒</p>
           </div>
 
           <!-- 完成操作 -->
@@ -152,6 +152,24 @@ const subtitleText = computed(() => {
   if (error.value) return '请稍后重试或联系管理员'
   if (done.value) return '摘要 / 要点 / 决议 已生成'
   return 'AI 正在分析录音内容'
+})
+
+// 2026-06-25 新增：动态提示文案
+// - 处理中：显示当前 stage 名 + "请勿关闭此页面"
+// - 完成态：告诉用户可关闭，从会议详情查看
+// - 错误态：提示重试或联系管理员
+const dynamicHint = computed(() => {
+  if (error.value) {
+    return '处理失败，请稍后重试或联系管理员'
+  }
+  if (done.value) {
+    return '处理已完成，您可以关闭此页面，稍后从会议详情查看纪要'
+  }
+  const stageLabel = stages.find(s => s.key === progress.value?.stage)?.label
+  if (stageLabel) {
+    return `当前：${stageLabel}，请勿关闭此页面`
+  }
+  return '准备中，请勿关闭此页面'
 })
 
 function isStageDone(idx) {
@@ -449,6 +467,11 @@ onBeforeUnmount(() => {
   line-height: 1.6;
 }
 .sheet-hint p { margin: 2px 0; }
+.sheet-hint .hint-subtle {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.75;
+}
 
 /* 操作 */
 .done-actions {
