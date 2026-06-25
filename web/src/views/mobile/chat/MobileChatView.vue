@@ -201,16 +201,29 @@ async function sendMessage() {
   // 2026-06-14 修复：发送前**强制**滚到底（nextTick + force=true），
   // 跳过 isAtBottom 守卫，确保 user 消息立刻可见
   nextTick(() => messageListRef.value?.scrollToBottom(true))
-  await sendMessageStream({
-    text,
-    file: selectedFile.value,
-    image: selectedImage.value,
-  })
-  // 2026-06-14 修复：发送后**强制**滚到底，让 assistant 占位（typing bubble）可见
-  nextTick(() => messageListRef.value?.scrollToBottom(true))
+  // 2026-06-25 修复：乐观清空输入框（移到 await 之前）
+  // 之前: inputText.value = '' 在 await 之后，导致 race condition / 异步异常吞掉时输入框残留
+  const pendingText = text
+  const pendingFile = selectedFile.value
+  const pendingImage = selectedImage.value
   inputText.value = ''
   selectedImage.value = null
   selectedFile.value = null
+  try {
+    await sendMessageStream({
+      text: pendingText,
+      file: pendingFile,
+      image: pendingImage,
+    })
+  } catch (e) {
+    // 发送失败，回滚（useChatStream 内部 try/catch 不 rethrow，但保险起见）
+    inputText.value = pendingText
+    selectedFile.value = pendingFile
+    selectedImage.value = pendingImage
+    throw e
+  }
+  // 2026-06-14 修复：发送后**强制**滚到底，让 assistant 占位（typing bubble）可见
+  nextTick(() => messageListRef.value?.scrollToBottom(true))
 }
 
 function onStopGeneration() {
