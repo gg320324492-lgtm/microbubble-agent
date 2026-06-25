@@ -185,14 +185,13 @@ async function handleBack() {
           type: 'warning',
         }
       )
-      // 录音中"返回（录音继续）"必须 router.replace 到稳定页（id 已知走详情，否则走列表）。
-      // 禁用 router.back()：从聊天页 Rich Block 进入的用户 history 栈前一条是 /chat，
-      // router.back() 会把用户弹回聊天页（用户反馈 2026-06-26）。
-      if (meetingId.value) {
-        router.replace(`/meetings/${meetingId.value}`)
-      } else {
-        router.replace('/meetings')
-      }
+      // 录音中"返回（录音继续）"跳到录音计时页 /meetings/room，与底部"正在听会"
+      // 浮动胶囊的最终目标一致（见 MainLayout.goToRecording + MobileMeetingView.onMounted
+      // 的 ?resume= 拦截逻辑）。Vue Router 4 在当前已处于 /meetings/room 时
+      // short-circuit → 等价于关闭弹窗后留在原页（计时器+波形+录音不间断）。
+      // 用户反馈 2026-06-26：原 /meetings/{id} 跳到静态详情页失去了实时
+      // 计时器+音频波形视图，期望的是"和胶囊一样"留在录音室。
+      router.replace('/meetings/room')
     } catch {
       return  // 用户取消
     }
