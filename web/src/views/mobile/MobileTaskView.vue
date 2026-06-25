@@ -59,6 +59,13 @@
       >
         <template #item-actions="{ item }">
           <div class="task-actions">
+            <!-- 2026-06-25: 完成按钮（之前 PR #8a 重构遗漏） -->
+            <button
+              type="button"
+              class="action-btn"
+              :class="item.status === 'done' ? 'success' : 'primary'"
+              @click.stop="toggleTaskStatus(item)"
+            >{{ item.status === 'done' ? '↶ 取消' : '完成' }}</button>
             <button type="button" class="action-btn" @click.stop="editTask(item)">✏️</button>
             <button
               type="button"
@@ -124,7 +131,7 @@ const memberStore = useMemberStore()
 
 const {
   tasks, total, currentPage, pageSize, loading,
-  filters, fetchTasks, deleteTask,
+  filters, fetchTasks, deleteTask, updateTask,  // 2026-06-25: 加 updateTask
 } = useTask()
 
 const activeTab = ref('all')
@@ -262,6 +269,22 @@ async function handleDelete(task) {
   }
 }
 
+/**
+ * 2026-06-25: 切换任务状态（完成 / 取消完成）
+ * 与桌面端 TaskView.vue:489-498 一致，复用 useTask().updateTask
+ * @param {Object} task - 任务对象
+ */
+async function toggleTaskStatus(task) {
+  const newStatus = task.status === 'done' ? 'in_progress' : 'done'
+  try {
+    await updateTask(task.id, { status: newStatus })
+    ElMessage.success(newStatus === 'done' ? '已完成' : '已恢复进行中')
+  } catch (e) {
+    const msg = e.response?.data?.error?.message || '状态更新失败'
+    ElMessage.error(msg)
+  }
+}
+
 function onTaskSaved() {
   editingTask.value = null
   showCreate.value = false
@@ -384,5 +407,16 @@ onMounted(() => {
 .action-btn.danger {
   background: var(--color-danger-bg);
   color: var(--color-danger, #F56C6C);
+}
+/* 2026-06-25: 完成按钮（primary 状态）+ 取消完成（success 状态） */
+.action-btn.primary {
+  background: var(--color-primary);
+  color: white;
+  border: 1px solid var(--color-primary);
+}
+.action-btn.success {
+  background: var(--color-success-bg, #f0f9eb);
+  color: var(--color-success, #67c23a);
+  border: 1px solid var(--color-success, #67c23a);
 }
 </style>
