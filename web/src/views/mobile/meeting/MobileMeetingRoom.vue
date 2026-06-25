@@ -117,21 +117,21 @@ const showProgress = ref(false)
 const showHelp = ref(false)
 
 const pageTitle = computed(() => {
-  if (meetingId.value) return `正在听会（ID ${meetingId.value}`
+  if (meetingId.value) return `正在听会（ID ${meetingId.value}）`
   return '开始听会'
 })
 
 async function onRecordingStart() {
   // 录音真实开始后，创建会议拿 meetingId（与桌面端 MeetingRoom 同款链路）
   if (meetingId.value) {
-    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}`)
+    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}）`)
     ElMessage.success('继续听会')
     return
   }
   try {
     const res = await axios.post('/api/v1/meetings/start-recording')
     meetingId.value = res.data.id
-    startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}`)
+    startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}）`)
     ElMessage.success('开始听会')
   } catch (err) {
     ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
