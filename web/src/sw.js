@@ -44,7 +44,12 @@
 // handleBack 在 if(isGlobalRecorderActive) 分支调用 router.back()，从聊天页 Rich Block 进入
 // 的用户 history 栈前一条是 /chat，router.back() 把用户弹回聊天页（不是用户期望的"返回"）。
 // 改成 router.replace(/meetings/{id}) 与 onProgressClose 行为镜像，跳到稳定的会议详情页。
-const SW_VERSION = 'v57-meeting-back-fix-2026-06-26'
+// v58: 2026-06-26 v57 fix 仍然不对（用户反馈）。v57 跳到 /meetings/{id} 详情页失去了
+// 实时计时器+音频波形视图，用户期望的是"和底部胶囊一样"留在录音室。改成
+// router.replace('/meetings/room')，与 MainLayout.goToRecording + MeetingView/MobileMeetingView
+// 的 ?resume= 拦截逻辑最终目标一致。Vue Router 4 在当前已处于 /meetings/room 时
+// short-circuit → 等价于关闭弹窗后留在原页（计时器+波形+录音不间断）。
+const SW_VERSION = 'v58-meeting-room-timer-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
