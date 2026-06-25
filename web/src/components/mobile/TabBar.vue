@@ -31,6 +31,8 @@
  * TabBar.vue — 移动端底部导航（基于 NutUI nut-tabbar）
  *
  * PR #2: 5 项底部导航（首页 / 智能对话 / 任务 / 知识 / 我的）
+ * 2026-06-25 调整: 5 项保持，"对话"放正中间（第 3 位），
+ *                删去"知识"，换成"听会"（/meetings）。
  * 物理隔离：仅 isMobile 时渲染（MainLayout.vue 控制）
  *
  * 注意：使用 Element Plus 图标（项目已统一），通过 v-for 动态渲染
@@ -44,13 +46,14 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 
-// 5 项导航（按使用频率排序：首页 / 聊天 / 任务 / 知识 / 我的）
+// 5 项导航（2026-06-25 调整：对话居中，知识 → 听会）
+// 顺序：首页 / 听会 / 对话(中间) / 任务 / 我的
 const items = [
   { name: 'dashboard', path: '/dashboard', title: '首页', icon: 'home' },
-  { name: 'chat', path: '/chat', title: '对话', icon: 'chat' },
-  { name: 'tasks', path: '/tasks', title: '任务', icon: 'list' },
-  { name: 'knowledge', path: '/knowledge', title: '知识', icon: 'document' },
-  { name: 'settings', path: '/settings', title: '我的', icon: 'user' },
+  { name: 'meetings',  path: '/meetings',  title: '听会', icon: 'microphone' },
+  { name: 'chat',      path: '/chat',      title: '对话', icon: 'chat' },
+  { name: 'tasks',     path: '/tasks',     title: '任务', icon: 'list' },
+  { name: 'settings',  path: '/settings',  title: '我的', icon: 'user' },
 ]
 
 const activeRoute = computed(() => {
