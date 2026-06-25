@@ -1,5 +1,6 @@
 """全站 API 限流器 — 按类型分级"""
 
+import re
 import time
 from collections import defaultdict
 from fastapi import Request, HTTPException, status
@@ -54,6 +55,22 @@ _AUTH_UNLIMITED_PATHS = frozenset({
     "/api/v1/auth/me",  # 当前用户信息（高频 polling：页面加载/Pinia 初始化/token 校验/reactive 触发）
 })
 
+# v31.2.2: 检索质量埋点端点精确路径匹配 (取代 v31.2.1 的 substring "/analytics")
+# 用 regex 而非 frozenset, 是因为 PATCH /search-event/{event_id}/click 含动态 event_id
+# 之前用 substring "/analytics" 匹配会导致未来加 /api/v1/auth/analytics/... 嵌套路径
+# 绕过 /auth/ 限流 (v31.2.1 用 startswith 守卫临时挡, B3 方案彻底消除 substring 风险)
+# 4 个 endpoint:
+#   POST   /api/v1/analytics/search-event
+#   PATCH  /api/v1/analytics/search-event/{event_id}/click  (event_id 必须 int)
+#   GET    /api/v1/analytics/stats
+#   GET    /api/v1/analytics/logs
+_ANALYTICS_PATH_RE = re.compile(
+    r"^/api/v1/analytics/search-event$"
+    r"|^/api/v1/analytics/search-event/\d+/click$"
+    r"|^/api/v1/analytics/stats$"
+    r"|^/api/v1/analytics/logs$"
+)
+
 
 def _get_rate_limit_type(request: Request) -> str:
     """根据请求路径和方法判断限流类型
@@ -69,11 +86,11 @@ def _get_rate_limit_type(request: Request) -> str:
 
     # v31.2: 检索质量埋点端点 - POST/PATCH 完全豁免（前端每次搜索 2 次埋点, 不该限流）,
     # GET stats/logs 走 read tier (200/min) 防滥用.
-    # v31.2.1 防御: 若路径是 /api/v1/auth/ 下的"auth 子路径嵌入 analytics 字符串"
-    # (e.g. 未来加 POST /api/v1/auth/analytics/export), 不应走 /analytics 豁免
-    # —— 顺序 2 优先顺序 3, 会被绕过 /auth/ 敏感端点 20/min 限流. 守卫: /auth/
-    # 子路径必须走下方 /auth/ 细分分支（按 sensitive/write/read 分级）.
-    if "/analytics" in path and not path.startswith("/api/v1/auth/"):
+    # v31.2.1 防御: substring "/analytics" + startswith("/api/v1/auth/") 守卫
+    # v31.2.2 B3 方案: 改用 _ANALYTICS_PATH_RE 精确路径匹配, 彻底消除 substring
+    # 误匹配风险. 例如未来加 POST /api/v1/auth/analytics/export 不会命中 regex
+    # (因为 regex 只匹配 /api/v1/analytics/ 前缀), 自动走下方 /auth/ 细分.
+    if _ANALYTICS_PATH_RE.match(path):
         if method in ("POST", "PATCH", "PUT"):
             return "unlimited"
         return "read"
@@ -116,6 +133,40 @@ def _get_client_key(request: Request) -> str:
     return f"{client_ip}:anon"
 
 
+def _try_attach_user_id(request: Request) -> None:
+    """v31.2.2: 尝试从 Authorization Bearer token 解析 user_id 写入 request.state.
+
+    行为:
+      - 无 Authorization header → 不写, user_id=None (走 {ip}:anon 配额)
+      - 无效/过期 token → 不写, user_id=None (同匿名, 不抛 401)
+      - 有效 access token → 解析 payload, 写入 request.state.user_id = int(sub)
+
+    注意: 这是限流 middleware 用的**轻量级**token 解析, 不查 DB (性能考虑).
+    即使 token 对应的 member 已被删, user_id 仍写入 (限流 key 仍独立).
+    真鉴权由 Depends(get_current_user) / Depends(get_current_user_optional) 在 endpoint
+    入口处理. 这里只用作限流维度的 key.
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return
+    token = auth[7:]  # 去掉 "Bearer " 前缀
+    try:
+        # 复用 security.decode_token, 但加 import 守卫避免循环引用
+        from app.core.security import decode_token
+        payload = decode_token(token)
+    except Exception:
+        return  # 无效/过期 token → 视为匿名, 不写 user_id
+    if payload.get("type") != "access":
+        return
+    sub = payload.get("sub")
+    if not sub:
+        return
+    try:
+        request.state.user_id = int(sub)
+    except (ValueError, TypeError):
+        return  # sub 不是 int → 静默忽略
+
+
 async def rate_limit_middleware(request: Request, call_next):
     """全站限流中间件"""
     from starlette.responses import JSONResponse
@@ -123,6 +174,12 @@ async def rate_limit_middleware(request: Request, call_next):
     # 跳过健康检查和 WebSocket
     if request.url.path in ("/health", "/docs", "/openapi.json"):
         return await call_next(request)
+
+    # v31.2.2: 解析 Bearer token (optional, 不强制登录) 写入 request.state.user_id
+    # 解析成功 → user_id 用于限流 key ({ip}:user:{uid}) —— 登录用户独立配额
+    # 解析失败 / 无 token → user_id=None → 限流 key 用 {ip}:anon —— 按 IP 限流
+    # 这让 _get_client_key 自动按登录维度区分, 不再退化到全站共享 200/min
+    _try_attach_user_id(request)
 
     limit_type = _get_rate_limit_type(request)
     # 2026-06-18 /auth/me 等安全只读端点完全不限流（JWT 已鉴权）
