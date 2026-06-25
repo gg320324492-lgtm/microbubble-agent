@@ -134,7 +134,7 @@ const {
   filters, fetchTasks, deleteTask, updateTask,  // 2026-06-25: 加 updateTask
 } = useTask()
 
-const activeTab = ref('all')
+const activeTab = ref('in_progress')  // 2026-06-25: 删除"全部" tab，默认显示"进行中"
 const showFilter = ref(false)
 const showCreate = ref(false)
 const editingTask = ref(null)
@@ -145,8 +145,8 @@ const activeFilters = ref({
   assignee_id: filters.value.assignee_id || '',
 })
 
+// 2026-06-25: 删除"全部" tab，只保留"进行中"和"已完成"两个
 const tabs = [
-  { label: '全部', value: 'all' },
   { label: '进行中', value: 'in_progress' },
   { label: '已完成', value: 'done' },
 ]
@@ -175,10 +175,8 @@ const searchFilters = computed(() => [
 
 // 过滤后的任务
 const filteredTasks = computed(() => {
-  let list = tasks.value || []
-  if (activeTab.value !== 'all') {
-    list = list.filter((t) => t.status === activeTab.value)
-  }
+  // 2026-06-25: 删除 'all' 分支，直接按状态过滤
+  let list = (tasks.value || []).filter((t) => t.status === activeTab.value)
   // 处理查询参数 overdue
   if (route.query.overdue === 'true') {
     list = list.filter((t) => {
@@ -208,8 +206,9 @@ const fieldConfig = computed(() => ({
 
 // 切换 tab
 function switchTab(tab) {
+  // 2026-06-25: 简化（不再有 'all' → '' 转换）
   activeTab.value = tab
-  filters.value.status = tab === 'all' ? '' : tab
+  filters.value.status = tab
   currentPage.value = 1
   fetchTasks()
 }
@@ -309,8 +308,9 @@ function formatDue(d) {
 }
 
 onMounted(() => {
-  // 处理 ?status=xxx & overdue=true 查询参数
-  if (route.query.status) {
+  // 2026-06-25: 加白名单校验，防止 ?status=todo 等无效值进入 activeTab
+  const VALID_TABS = ['in_progress', 'done']
+  if (route.query.status && VALID_TABS.includes(route.query.status)) {
     activeTab.value = route.query.status
     filters.value.status = route.query.status
   } else if (route.query.overdue === 'true') {
