@@ -97,8 +97,10 @@ function handleSwitch(name) {
   min-height: var(--touch-target-min, 44px);
   transition: background 0.25s ease, transform 0.25s ease;
 }
-/* 2026-06-25: iOS 风格卡片背景 (active 项) */
-:deep(.nut-tabbar-item.active) {
+/* 2026-06-25: iOS 风格卡片背景 (active 项)
+   注意: NutUI 4 不加 .active class，而是用反向命名 .nut-tabbar-item__icon--unactive
+   所以 active 选择器是 :not(.nut-tabbar-item__icon--unactive) */
+:deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
   color: var(--color-primary);
   background: var(--color-primary-bg);
   border-radius: 10px;
@@ -107,14 +109,14 @@ function handleSwitch(name) {
   position: relative;
   z-index: 1;
 }
-[data-theme="dark"] :deep(.nut-tabbar-item.active) {
+[data-theme="dark"] :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
   background: rgba(255, 122, 92, 0.18);
 }
-:deep(.nut-tabbar-item.active .nut-tabbar-item-icon) {
+:deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .nut-tabbar-item-icon) {
   transform: scale(1.08);
   transition: transform 0.25s ease;
 }
-:deep(.nut-tabbar-item.active .tabbar-label) {
+:deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .tabbar-label) {
   font-weight: 700;
   font-size: 12px;
   transition: all 0.25s ease;
