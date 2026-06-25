@@ -144,7 +144,8 @@ const { connect, disconnect, progress, done, error } = useMeetingProgress()
 const titleText = computed(() => {
   if (error.value) return '处理失败'
   if (done.value) return '会议纪要已生成'
-  return '正在处理会议...'
+  // 2026-06-25 集成时改文案，与桌面端 ProcessingDialog 保持一致
+  return 'AI 正在整理会议纪要...'
 })
 
 const subtitleText = computed(() => {
@@ -206,7 +207,12 @@ function confettiStyle(i) {
 
 // 生命周期
 onMounted(() => {
-  connect(props.meetingId)
+  // 2026-06-25 修复：必须传 token，否则后端 WS URL 拼成 ?token=undefined → 鉴权拒绝
+  const token = localStorage.getItem('access_token')
+  if (token) {
+    connect(props.meetingId, token)
+  }
+  // 无 token 时由 composable 内部 ws.onerror 触发 error.value = '连接失败'
 })
 
 onBeforeUnmount(() => {
