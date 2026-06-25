@@ -95,9 +95,29 @@ function handleSwitch(name) {
 :deep(.nut-tabbar-item) {
   color: var(--color-text-secondary);
   min-height: var(--touch-target-min, 44px);
+  transition: background 0.25s ease, transform 0.25s ease;
 }
+/* 2026-06-25: iOS 风格卡片背景 (active 项) */
 :deep(.nut-tabbar-item.active) {
   color: var(--color-primary);
+  background: var(--color-primary-bg);
+  border-radius: 10px;
+  margin: 6px 4px;
+  padding: 4px 0;
+  position: relative;
+  z-index: 1;
+}
+[data-theme="dark"] :deep(.nut-tabbar-item.active) {
+  background: rgba(255, 122, 92, 0.18);
+}
+:deep(.nut-tabbar-item.active .nut-tabbar-item-icon) {
+  transform: scale(1.08);
+  transition: transform 0.25s ease;
+}
+:deep(.nut-tabbar-item.active .tabbar-label) {
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.25s ease;
 }
 
 .tabbar-label {
