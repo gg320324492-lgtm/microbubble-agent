@@ -169,7 +169,10 @@ const sessionsList = computed(() => sessionsStore.sortedSessions)
 // 当前标题
 const currentTitle = computed(() => {
   const session = sessionsStore.currentSession()
-  return session?.title || '小气'
+  const title = session?.title || '小气'
+  // 2026-06-25: 限制 MobileHeader 标题最多 10 字 + 截断符
+  // 防止 localStorage 残留 session.title 是用户消息全文
+  return title.length > 10 ? title.slice(0, 10) + '…' : title
 })
 
 const actionSheet = ref({

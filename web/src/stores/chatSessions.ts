@@ -107,8 +107,10 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
       s.messageCount = messageCount
       s.preview = lastMessage.slice(0, 50)
       // 首条 user 消息时自动用其作为标题
+      // 2026-06-25: 限制 10 字（与 MobileHeader currentTitle 一致）
+      // 之前 30 字在移动端 header 太长，会显示完整聊天消息内容
       if (s.messageCount === 1 && lastMessage) {
-        s.title = lastMessage.slice(0, 30)
+        s.title = lastMessage.slice(0, 10) || '新对话'
       }
     }
   }

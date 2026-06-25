@@ -74,17 +74,10 @@
       <!-- 顶部栏 -->
       <el-header class="header">
         <div class="header-left">
-          <el-icon :class="['collapse-btn', { 'collapse-btn-mobile': isMobile }]" @click="toggleSidebar">
-            <template v-if="!isMobile">
-              <Fold v-if="!isCollapse" />
-              <Expand v-else />
-            </template>
-            <template v-else>
-              <Transition name="icon-swap" mode="out-in">
-                <Fold v-if="!showMobileMenu" key="fold" />
-                <Expand v-else key="expand" />
-              </Transition>
-            </template>
+          <!-- 2026-06-25: 移动端不显示折叠按钮（避免与 MobileHeader 的 ≡ 重复，且 TabBar 已替代主导航） -->
+          <el-icon v-if="!isMobile" :class="['collapse-btn', { 'collapse-btn-mobile': isMobile }]" @click="toggleSidebar">
+            <Fold v-if="!isCollapse" />
+            <Expand v-else />
           </el-icon>
           <el-breadcrumb v-if="!isMobile" separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
