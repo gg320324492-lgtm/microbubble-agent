@@ -9,7 +9,7 @@
             class="header-btn"
             aria-label="返回"
             title="返回"
-            @click="onClose"
+            @click="onCancel"
           >✕</button>
           <h2 class="flow-title">声纹录入</h2>
           <div class="header-spacer" />
@@ -273,6 +273,13 @@ function selectMethod(m) {
   step.value = 2
 }
 
+// 用户主动取消（顶部 ✕ 按钮）—— 不 emit success
+// onClose 仅用于真实成功路径（成功页"完成"按钮 + API 成功后自动关闭）
+function onCancel() {
+  cleanup()
+  emit('update:modelValue', false)
+}
+
 function onClose() {
   cleanup()
   emit('update:modelValue', false)
@@ -403,7 +410,7 @@ async function onSubmit() {
     })
     if (res.data?.success !== false) {
       uploadSuccess.value = true
-      ElMessage.success('声纹录入成功')
+      // toast 由父组件 onEnrollSuccess 统一显示（避免双 toast）
       // 自动关闭
       setTimeout(() => {
         onClose()
