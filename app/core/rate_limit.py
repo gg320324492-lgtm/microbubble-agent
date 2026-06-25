@@ -36,6 +36,7 @@ _rate_limiters = {
     "write": RateLimiter(max_attempts=30, window_seconds=60),    # 写操作：30次/分钟
     "read": RateLimiter(max_attempts=200, window_seconds=60),    # 读操作：200次/分钟
     "upload": RateLimiter(max_attempts=10, window_seconds=60),   # 上传：10次/分钟
+    "sse": RateLimiter(max_attempts=10, window_seconds=60),      # v31.2.3: SSE 长连接 10次/分钟
 }
 
 # /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
@@ -71,6 +72,20 @@ _ANALYTICS_PATH_RE = re.compile(
     r"|^/api/v1/analytics/logs$"
 )
 
+# v31.2.3: SSE (text/event-stream) 长连接端点精确路径匹配
+# 当前: POST /api/v1/chat/stream (Agent 对话流式输出)
+# 未来加其他 SSE 端点, 扩展 regex 即可 (例如语音 TTS stream)
+_SSE_PATH_RE = re.compile(
+    r"^/api/v1/chat/stream$"
+)
+
+# v31.2.3: /auth/ 路径前缀匹配 (取代 substring "/auth/" in path)
+# 之前 substring '"/auth/" in path' 会误匹配 /api/v1/authentication/...
+# (不带 / 后缀但含 "auth" 子串). prefix 匹配要求路径以 '/api/v1/auth/'
+# 开头或严格等于 '/api/v1/auth', 彻底消除 substring 误匹配风险.
+def _is_under_auth(path: str) -> bool:
+    return path == "/api/v1/auth" or path.startswith("/api/v1/auth/")
+
 
 def _get_rate_limit_type(request: Request) -> str:
     """根据请求路径和方法判断限流类型
@@ -83,6 +98,14 @@ def _get_rate_limit_type(request: Request) -> str:
     # /auth/me 等高频只读端点 → 不限流（JWT 鉴权已防滥用）
     if path in _AUTH_UNLIMITED_PATHS:
         return "unlimited"
+
+    # v31.2.3: SSE 长连接 (text/event-stream) 独立 tier
+    # SSE 一次连接占用几秒到几分钟 (流式 chat), 按 read tier 200/min 算只能
+    # 并发 200 个用户, 太少. 单独给 10/min 配额, 让前端能区分流式限流 vs 普通读.
+    # 当前只 1 个 SSE 端点: POST /api/v1/chat/stream (Agent 对话)
+    # 未来加其他 SSE 端点, 在 _SSE_PATH_RE 加 regex 即可
+    if _SSE_PATH_RE.match(path):
+        return "sse"
 
     # v31.2: 检索质量埋点端点 - POST/PATCH 完全豁免（前端每次搜索 2 次埋点, 不该限流）,
     # GET stats/logs 走 read tier (200/min) 防滥用.
@@ -100,7 +123,9 @@ def _get_rate_limit_type(request: Request) -> str:
     #  2. 写操作（PUT /auth/profile 等） → write tier (30/min)
     #  3. 其他 /auth/* 只读 → read tier (200/min)
     #  4. 其他 /auth/* 未列出 → auth tier fallback（防 401 风暴）
-    if "/auth/" in path:
+    # v31.2.3: 改用 _is_under_auth() prefix 匹配, 取代 substring "/auth/" in path
+    # (修复 /api/v1/authentication/... 等带 auth 子串但非 /auth/ 路径的误匹配)
+    if _is_under_auth(path):
         if path in _AUTH_SENSITIVE_PATHS:
             return "auth"
         if method in ("POST", "PUT", "PATCH", "DELETE"):
@@ -201,11 +226,14 @@ async def rate_limit_middleware(request: Request, call_next):
     response = await call_next(request)
 
     # 添加限流信息到响应头
+    # v31.2.3: 加 X-RateLimit-Policy 让前端能识别触发的 tier,
+    # 用于 tier-aware UX (auth 429 → 跳登录页; read 429 → 降级到缓存)
     limiter._cleanup(client_key)
     remaining = limiter.max_attempts - len(limiter._attempts[client_key])
     response.headers["X-RateLimit-Limit"] = str(limiter.max_attempts)
     response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
     response.headers["X-RateLimit-Reset"] = str(int(time.time() + limiter.window_seconds))
+    response.headers["X-RateLimit-Policy"] = limit_type
 
     return response
 
