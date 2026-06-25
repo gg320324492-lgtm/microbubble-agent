@@ -4,11 +4,13 @@
       <template #right>
         <button
           type="button"
-          class="header-action"
-          aria-label="会议信息"
-          title="会议信息"
-          @click="showInfoSheet = true"
-        >ℹ️</button>
+          class="header-action danger"
+          aria-label="删除会议"
+          title="删除会议"
+          @click="handleDelete"
+        >
+          <el-icon :size="20"><Delete /></el-icon>
+        </button>
       </template>
     </PageHeader>
 
@@ -33,6 +35,16 @@
         <div class="hero-status">
           <span class="status-dot" :class="'status-' + meeting.status" />
           <span class="status-text">{{ getStatusLabel(meeting.status) }}</span>
+        </div>
+
+        <!-- 操作区 (audio_url 存在时显示，2026-06-25 从 Sheet 迁移) -->
+        <div v-if="meeting.audio_url" class="hero-actions">
+          <button type="button" class="action-btn primary" @click="playAudio">
+            🔊 播放录音
+          </button>
+          <button type="button" class="action-btn" @click="handleStartLive">
+            🎤 重新听会
+          </button>
         </div>
       </div>
 
@@ -145,84 +157,7 @@
       <p>加载中...</p>
     </div>
 
-    <!-- 会议信息 Sheet（替代桌面右侧 side 栏） -->
-    <Teleport to="body">
-      <Transition name="info-sheet">
-        <div v-if="showInfoSheet" class="info-overlay" @click.self="showInfoSheet = false">
-          <div class="info-panel">
-            <div class="info-header">
-              <h3>会议信息</h3>
-              <button type="button" @click="showInfoSheet = false">✕</button>
-            </div>
-
-            <div v-if="meeting" class="info-content">
-              <div class="info-row">
-                <span class="info-label">主题</span>
-                <span class="info-value">{{ meeting.title }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">时间</span>
-                <span class="info-value">{{ formatDate(meeting.start_time) }}</span>
-              </div>
-              <div v-if="meeting.location" class="info-row">
-                <span class="info-label">地点</span>
-                <span class="info-value">{{ meeting.location }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">状态</span>
-                <span class="info-value">{{ getStatusLabel(meeting.status) }}</span>
-              </div>
-
-              <div v-if="meeting.participants?.length" class="info-section">
-                <div class="info-section-title">参与人 ({{ meeting.participants.length }})</div>
-                <div class="participants-list">
-                  <div
-                    v-for="p in meeting.participants"
-                    :key="p.member_id"
-                    class="participant-item"
-                  >
-                    <div class="participant-avatar">{{ p.name?.charAt(0) || '?' }}</div>
-                    <span>{{ p.name }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="meeting.description" class="info-section">
-                <div class="info-section-title">说明</div>
-                <p class="info-description">{{ meeting.description }}</p>
-              </div>
-
-              <div v-if="meeting.agenda?.length" class="info-section">
-                <div class="info-section-title">议题</div>
-                <ol class="agenda-list">
-                  <li v-for="(a, i) in meeting.agenda" :key="i">{{ a }}</li>
-                </ol>
-              </div>
-
-              <div class="info-actions">
-                <button
-                  v-if="meeting.audio_url"
-                  type="button"
-                  class="info-btn primary"
-                  @click="playAudio"
-                >🔊 播放录音</button>
-                <button
-                  v-if="meeting.audio_url"
-                  type="button"
-                  class="info-btn"
-                  @click="handleStartLive"
-                >🎤 重新听会</button>
-                <button
-                  type="button"
-                  class="info-btn danger"
-                  @click="handleDelete"
-                >🗑 删除会议</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- 会议信息 Sheet 已删除 (2026-06-25) - 删除入口移到 PageHeader，操作移到 hero-card -->
   </div>
 </template>
 
@@ -240,6 +175,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import axios from 'axios'
 import PageHeader from '@/components/mobile/PageHeader.vue'
@@ -250,7 +186,6 @@ const router = useRouter()
 const meeting = ref(null)
 const loading = ref(true)
 const activeTab = ref('minutes')
-const showInfoSheet = ref(false)
 
 const tabs = computed(() => [
   { name: 'minutes', label: '纪要' },
@@ -325,7 +260,6 @@ function handleStartLive() {
 }
 
 async function handleDelete() {
-  showInfoSheet.value = false
   try {
     await ElMessageBox.confirm('确定删除此会议？', '删除确认', {
       confirmButtonText: '删除',
@@ -634,151 +568,46 @@ watch(() => route.params.id, fetchMeeting)
   font-size: 18px;
   color: var(--color-text-regular);
   cursor: pointer;
-}
-.header-action:active { background: var(--color-primary-bg); }
-
-/* Info Sheet */
-.info-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 4000;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: flex-end;
-}
-.info-panel {
-  width: 100%;
-  max-height: 80vh;
-  background: var(--color-bg-card);
-  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
-  padding: 16px 16px calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px));
-  overflow-y: auto;
-}
-.info-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-.info-header h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: var(--font-weight-semibold, 600);
-}
-.info-header button {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: transparent;
-  border: none;
-  font-size: 18px;
-  color: var(--color-text-regular);
-  cursor: pointer;
-}
-
-.info-row {
-  display: flex;
-  padding: 8px 0;
-  font-size: 13px;
-}
-.info-label {
-  flex: 0 0 60px;
-  color: var(--color-text-secondary);
-}
-.info-value {
-  flex: 1;
-  color: var(--color-text-primary);
-}
-
-.info-section {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-light);
-}
-.info-section-title {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin-bottom: 8px;
-  font-weight: var(--font-weight-medium, 500);
-}
-
-.participants-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
-}
-.participant-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--color-text-primary);
-}
-.participant-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-.info-description {
-  font-size: 13px;
-  color: var(--color-text-regular);
-  line-height: 1.6;
-  white-space: pre-wrap;
+.header-action:active { background: var(--color-primary-bg); }
+/* 2026-06-25: 删除会议按钮样式 (红色明显) */
+.header-action.danger {
+  color: var(--color-danger, #F56C6C);
 }
-.agenda-list {
-  padding-left: 20px;
-  font-size: 13px;
-  color: var(--color-text-regular);
-  line-height: 1.7;
+.header-action.danger:active {
+  background: var(--color-danger-bg);
 }
-.agenda-list li { margin-bottom: 4px; }
 
-.info-actions {
-  margin-top: 20px;
+/* 2026-06-25: hero-card 操作区 (从 Sheet 迁移) */
+.hero-actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 12px;
 }
-.info-btn {
-  padding: 12px;
+.action-btn {
+  padding: 10px 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-bg-card);
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-primary);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  text-align: left;
 }
-.info-btn:active { background: var(--color-bg-hover); }
-.info-btn.primary {
+.action-btn:active { background: var(--color-bg-hover); }
+.action-btn.primary {
   background: var(--color-primary);
   color: white;
   border-color: var(--color-primary);
 }
-.info-btn.danger {
-  background: var(--color-danger-bg);
-  color: var(--color-danger, #F56C6C);
-  border-color: var(--color-danger, #F56C6C);
+.action-btn.primary:active {
+  background: var(--color-primary-light);
 }
 
-.info-sheet-enter-active, .info-sheet-leave-active {
-  transition: opacity 0.25s ease;
-}
-.info-sheet-enter-active .info-panel, .info-sheet-leave-active .info-panel {
-  transition: transform 0.3s ease;
-}
-.info-sheet-enter-from, .info-sheet-leave-to { opacity: 0; }
-.info-sheet-enter-from .info-panel, .info-sheet-leave-to .info-panel {
-  transform: translateY(100%);
-}
+/* 2026-06-25: Info Sheet CSS 已删除 (相关功能已迁移到 PageHeader + hero-card) */
 </style>
