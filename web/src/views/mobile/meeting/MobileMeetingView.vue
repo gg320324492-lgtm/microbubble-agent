@@ -140,7 +140,71 @@
               <span class="action-icon" style="background: #909399">🎙</span>
               <span>声纹识别测试</span>
             </button>
+            <button
+              id="meeting-voiceprint-enroll"
+              type="button"
+              name="meeting-voiceprint-enroll"
+              class="action-item"
+              aria-label="录入声纹"
+              title="录入声纹"
+              @click="handleEnrollVoice"
+            >
+              <span class="action-icon" style="background: #409EFF">🎙️</span>
+              <span>录入声纹</span>
+            </button>
             <button type="button" class="action-item cancel" @click="showActionSheet = false">取消</button>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 录入声纹：成员选择 Sheet（点 "录入声纹" ActionSheet 项后弹出） -->
+    <Teleport to="body">
+      <Transition name="member-picker-sheet">
+        <div v-if="showEnrollPicker" class="member-picker-overlay" @click.self="closeEnrollPicker">
+          <div class="member-picker-panel" :style="{ paddingBottom: 'calc(16px + var(--sab, 0px) + var(--tabbar-height, 56px))' }">
+            <div class="member-picker-handle" />
+            <div class="member-picker-header">
+              <h3>选择要录入声纹的成员</h3>
+              <button
+                type="button"
+                class="member-picker-close"
+                aria-label="关闭"
+                title="关闭"
+                @click="closeEnrollPicker"
+              >✕</button>
+            </div>
+
+            <div v-if="loadingMembers" class="member-picker-loading">
+              <div class="loading-spinner" />
+              <span>加载成员列表…</span>
+            </div>
+
+            <div v-else-if="availableMembers.length === 0" class="member-picker-empty">
+              暂无可录入的成员
+            </div>
+
+            <div v-else class="member-picker-list">
+              <button
+                v-for="m in availableMembers"
+                :key="m.id"
+                type="button"
+                class="member-picker-item"
+                @click="selectMemberForEnroll(m)"
+              >
+                <div class="picker-avatar">{{ m.name?.charAt(0) || '?' }}</div>
+                <div class="picker-info">
+                  <div class="picker-name">{{ m.name }}</div>
+                  <div class="picker-meta">
+                    <span v-if="m.voice_enrolled_at" class="status-enrolled">
+                      ✓ 已录入（{{ m.voice_sample_count || 1 }} 次）
+                    </span>
+                    <span v-else class="status-pending">未录入</span>
+                  </div>
+                </div>
+                <span class="picker-arrow">›</span>
+              </button>
+            </div>
           </div>
         </div>
       </Transition>
@@ -182,6 +246,14 @@
     <!-- 声纹识别测试全屏（ActionSheet 入口，复用声纹中心同款） -->
     <VoiceTestFlow v-model="showVoiceTest" />
 
+    <!-- 录入声纹全屏（ActionSheet → 成员选择 → 复用声纹中心同款） -->
+    <VoiceprintEnrollFlow
+      v-if="enrollingMember"
+      v-model="showEnroll"
+      :member="enrollingMember"
+      @success="onEnrollSuccess"
+    />
+
     <!-- 粘贴转录分析（复用桌面端 el-dialog 组件，isMobile 模式自动 95vw 适配） -->
     <PasteAnalyzeDialog ref="pasteAnalyzeDialogRef" @saved="onMeetingSaved" />
   </div>
@@ -199,12 +271,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMeeting } from '@/composables/useMeeting'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
+import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -219,8 +293,15 @@ const showActionSheet = ref(false)
 const showSearch = ref(false)
 const showCreateDialog = ref(false)
 const showVoiceTest = ref(false)
+const showEnrollPicker = ref(false)
+const showEnroll = ref(false)
 const pasteAnalyzeDialogRef = ref(null)
 const searchInputRef = ref(null)
+
+// 录入声纹：成员选择状态
+const loadingMembers = ref(false)
+const availableMembers = ref([])
+const enrollingMember = ref(null)
 
 // 日期范围快速筛选
 const activeDateFilter = ref('all')
@@ -294,6 +375,45 @@ function handleVoiceTest() {
   showActionSheet.value = false
   // 复用声纹中心同款 VoiceTestFlow（POST /api/v1/voiceprint/test 全链路）
   showVoiceTest.value = true
+}
+function handleEnrollVoice() {
+  showActionSheet.value = false
+  // 关闭 ActionSheet 后打开成员选择 Sheet（fetch 在打开时拉取）
+  fetchMembersForEnroll()
+  showEnrollPicker.value = true
+}
+async function fetchMembersForEnroll() {
+  loadingMembers.value = true
+  try {
+    // 包含已录入和未录入的成员（支持"重新录入"场景）
+    const res = await axios.get('/api/v1/members', {
+      params: { page_size: 100 },
+    })
+    availableMembers.value = res.data?.items || []
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('加载成员列表失败')
+    availableMembers.value = []
+  } finally {
+    loadingMembers.value = false
+  }
+}
+function closeEnrollPicker() {
+  showEnrollPicker.value = false
+}
+function selectMemberForEnroll(m) {
+  enrollingMember.value = m
+  showEnrollPicker.value = false
+  // 等 picker sheet 关闭动画结束再开 enroll flow（避免叠加渲染）
+  setTimeout(() => {
+    showEnroll.value = true
+  }, 250)
+}
+function onEnrollSuccess() {
+  showEnroll.value = false
+  enrollingMember.value = null
+  // 录入成功后刷新成员列表（再打开 picker 时状态最新）
+  ElMessage.success('声纹录入成功')
 }
 
 function onMeetingSaved() {
@@ -751,6 +871,133 @@ onMounted(() => {
 }
 .search-sheet-enter-from, .search-sheet-leave-to { opacity: 0; }
 .search-sheet-enter-from .search-panel, .search-sheet-leave-to .search-panel {
+  transform: translateY(100%);
+}
+
+/* 录入声纹：成员选择 Sheet（与 MobileVoiceprintView 成员详情 Sheet 同款样式） */
+.member-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4500;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-end;
+}
+.member-picker-panel {
+  width: 100%;
+  background: var(--color-bg-card);
+  border-radius: var(--sheet-radius, 16px) var(--sheet-radius, 16px) 0 0;
+  padding: 8px 20px;
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+}
+.member-picker-handle {
+  width: var(--sheet-handle-w, 36px);
+  height: var(--sheet-handle-h, 4px);
+  background: var(--color-border);
+  border-radius: 2px;
+  margin: 0 auto 12px;
+  flex-shrink: 0;
+}
+.member-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.member-picker-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold, 600);
+}
+.member-picker-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+}
+.member-picker-loading {
+  padding: 32px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+.member-picker-empty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+.member-picker-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 0;
+}
+.member-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+}
+.member-picker-item:active { background: var(--color-bg-hover); }
+.picker-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: white;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold, 600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.picker-info { flex: 1; min-width: 0; }
+.picker-name {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+.picker-meta {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.status-enrolled { color: var(--color-success, #67C23A); }
+.status-pending { color: var(--color-text-placeholder); }
+.picker-arrow {
+  font-size: 18px;
+  color: var(--color-text-placeholder);
+  flex-shrink: 0;
+}
+.member-picker-sheet-enter-active, .member-picker-sheet-leave-active {
+  transition: opacity 0.25s ease;
+}
+.member-picker-sheet-enter-active .member-picker-panel,
+.member-picker-sheet-leave-active .member-picker-panel {
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.member-picker-sheet-enter-from, .member-picker-sheet-leave-to { opacity: 0; }
+.member-picker-sheet-enter-from .member-picker-panel,
+.member-picker-sheet-leave-to .member-picker-panel {
   transform: translateY(100%);
 }
 </style>
