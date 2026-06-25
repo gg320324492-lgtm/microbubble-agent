@@ -177,12 +177,19 @@ async function handleBack() {
           type: 'warning',
         }
       )
-      router.back()
+      // 录音中"返回（录音继续）"必须 router.replace 到稳定页（id 已知走详情，否则走列表）。
+      // 禁用 router.back()：从聊天页 Rich Block 进入的用户 history 栈前一条是 /chat，
+      // router.back() 会把用户弹回聊天页（用户反馈 2026-06-26）。
+      if (meetingId.value) {
+        router.replace(`/meetings/${meetingId.value}`)
+      } else {
+        router.replace('/meetings')
+      }
     } catch {
       return  // 用户取消
     }
   } else {
-    router.back()
+    router.back()  // 未录音场景保留 router.back()：真正的"返回"语义，跳回来源页
   }
 }
 
