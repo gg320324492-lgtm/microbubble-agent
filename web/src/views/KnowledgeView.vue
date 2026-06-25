@@ -259,7 +259,7 @@
                     <span class="step-var">{{ step.variable }}</span> = {{ step.value }} {{ step.unit }}
                   </div>
                 </div>
-                <div v-if="selectedFormula.knowledge_id" class="calc-source">来源: <a @click="$router.push('/knowledge/' +selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
+                <div v-if="selectedFormula.knowledge_id" class="calc-source">来源: <a @click="router.push('/knowledge/' +selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
               </div>
             </el-card>
             <el-card v-else class="calculator-card">
@@ -414,7 +414,7 @@
     <KnowledgeQADialog
       v-model:visible="showQADialog"
       :is-mobile="isMobile"
-      @navigate="$router.push('/knowledge/' + $event)"
+      @navigate="router.push('/knowledge/' + $event)"
     />
 
     <!-- 文件上传对话框 -->
@@ -436,7 +436,7 @@
         <el-divider />
         <div class="entity-detail-section">
           <h4>来源文档 ({{ entityDetail.sources?.length || 0 }})</h4>
-          <div v-for="src in entityDetail.sources" :key="src.id" class="source-item clickable" @click="$router.push('/knowledge/' +src.id); showEntityDetailDialog = false">
+          <div v-for="src in entityDetail.sources" :key="src.id" class="source-item clickable" @click="router.push('/knowledge/' +src.id); showEntityDetailDialog = false">
             {{ src.title }}
             <el-tag size="small">{{ src.category }}</el-tag>
           </div>
@@ -448,7 +448,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -484,6 +484,7 @@ const showAllKnowledge = ref(false)
 // Tabs
 const activeTab = ref('knowledge')
 const route = useRoute()
+const router = useRouter()
 // v28 step 68: 支持 ?tab=memory URL 直跳（如旧 /memory 重定向）
 if (route.query.tab === 'memory') activeTab.value = 'memory'
 
@@ -602,7 +603,7 @@ const handleViewDetail = (id) => {
   if (position > 0) {
     searchAnalytics.recordClick(id, position)
   }
-  $router.push('/knowledge/' + id)
+  router.push('/knowledge/' + id)
 }
 
 const handleFilter = (filters) => {
