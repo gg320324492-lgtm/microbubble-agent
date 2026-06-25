@@ -200,6 +200,7 @@ import axios from 'axios'
 import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
 import { getStatusType, getPriorityType, getStatusLabel, getPriorityLabel } from '@/utils/task'
+import { groupTasksByAssignee } from '@/utils/taskGroup'  // 2026-06-26: 从本文件抽出，移动端按人分组视图复用
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useTask } from '@/composables/useTask'
@@ -249,32 +250,7 @@ const toggleGroup = (assigneeId) => {
   collapsedGroups.value[assigneeId] = !collapsedGroups.value[assigneeId]
 }
 
-// 按负责人分组
-function groupTasksByAssignee(taskList) {
-  const groups = {}
-  for (const task of taskList) {
-    const id = task.assignee_id != null ? task.assignee_id : 'unassigned'
-    if (!groups[id]) {
-      groups[id] = { assignee_id: id, tasks: [] }
-    }
-    groups[id].tasks.push(task)
-  }
-  // 组内按优先级（高>中>低），同优先级按截止时间（早→晚）
-  const priorityOrder = { high: 3, medium: 2, low: 1 }
-  for (const g of Object.values(groups)) {
-    g.tasks.sort((a, b) => {
-      const pDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0)
-      if (pDiff !== 0) return pDiff
-      if (!a.due_date && !b.due_date) return 0
-      if (!a.due_date) return 1
-      if (!b.due_date) return -1
-      return dayjs(a.due_date).diff(dayjs(b.due_date))
-    })
-  }
-  return Object.values(groups).sort((a, b) => {
-    return b.tasks.length - a.tasks.length
-  })
-}
+// 2026-06-26: groupTasksByAssignee 已抽到 utils/taskGroup.js，这里直接 import
 
 const groupedActiveTasks = computed(() => groupTasksByAssignee(activeTasks.value))
 const groupedDoneTasks = computed(() => groupTasksByAssignee(doneTasks.value))

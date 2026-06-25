@@ -44,37 +44,76 @@
         </button>
       </div>
 
-      <!-- 列表 -->
-      <CardList
-        :items="filteredTasks"
-        :field-config="fieldConfig"
-        :avatar-field="(t) => t.assignee_id"
-        :loading="loading"
-        empty-icon="📋"
-        empty-title="暂无任务"
-        empty-hint="点击右上角 + 创建任务"
-        :has-more="hasMore"
-        @item-click="viewDetail"
-        @load-more="loadMore"
-      >
-        <template #item-actions="{ item }">
-          <div class="task-actions">
-            <!-- 2026-06-25: 完成按钮（之前 PR #8a 重构遗漏） -->
-            <button
-              type="button"
-              class="action-btn"
-              :class="item.status === 'done' ? 'success' : 'primary'"
-              @click.stop="toggleTaskStatus(item)"
-            >{{ item.status === 'done' ? '↶ 取消' : '完成' }}</button>
-            <button type="button" class="action-btn" @click.stop="editTask(item)">✏️</button>
-            <button
-              type="button"
-              class="action-btn danger"
-              @click.stop="handleDelete(item)"
-            >🗑</button>
+      <!-- 列表：2026-06-26 按负责人分组（一人一头像，下方罗列任务） -->
+      <div v-if="loading && groupedTasks.length === 0" class="loading-state">
+        <div class="empty-icon">⏳</div>
+        <div class="empty-hint">加载中...</div>
+      </div>
+
+      <div v-else-if="groupedTasks.length === 0" class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">暂无任务</div>
+        <div class="empty-hint">点击右上角 + 创建任务</div>
+      </div>
+
+      <div v-else class="task-groups">
+        <section
+          v-for="(group, gIdx) in groupedTasks"
+          :key="group.assignee_id"
+          class="task-group fade-slide-up"
+          :style="{ animationDelay: `${gIdx * 0.05}s` }"
+        >
+          <!-- 组头：带头像 + 名字 + 任务数 + 折叠箭头 -->
+          <header class="task-group-header" @click="toggleGroup(group.assignee_id)">
+            <MemberAvatar
+              :member-id="group.assignee_id === 'unassigned' ? null : group.assignee_id"
+              :member-name="getGroupName(group.assignee_id)"
+              :size="36"
+              class="group-avatar"
+            />
+            <span class="group-name">{{ getGroupName(group.assignee_id) }}</span>
+            <span class="group-count">{{ group.tasks.length }}项</span>
+            <span
+              class="collapse-icon"
+              :class="{ collapsed: collapsedGroups[group.assignee_id] }"
+            >›</span>
+          </header>
+
+          <!-- 组内任务列表：复用 CardList（不传 avatar-field，避免与组头重复） -->
+          <div v-show="!collapsedGroups[group.assignee_id]" class="task-group-list">
+            <CardList
+              :items="group.tasks"
+              :field-config="fieldConfig"
+              :avatar-field="null"
+              :loading="false"
+              :has-more="false"
+              :show-end-hint="false"
+              empty-icon=""
+              empty-title=""
+              empty-hint=""
+              @item-click="editTask"
+            >
+              <template #item-actions="{ item }">
+                <div class="task-actions">
+                  <!-- 2026-06-25: 完成按钮（之前 PR #8a 重构遗漏） -->
+                  <button
+                    type="button"
+                    class="action-btn"
+                    :class="item.status === 'done' ? 'success' : 'primary'"
+                    @click.stop="toggleTaskStatus(item)"
+                  >{{ item.status === 'done' ? '↶ 取消' : '完成' }}</button>
+                  <button type="button" class="action-btn" @click.stop="editTask(item)">✏️</button>
+                  <button
+                    type="button"
+                    class="action-btn danger"
+                    @click.stop="handleDelete(item)"
+                  >🗑</button>
+                </div>
+              </template>
+            </CardList>
           </div>
-        </template>
-      </CardList>
+        </section>
+      </div>
 
       <!-- 分页信息 -->
       <div v-if="total > pageSize" class="pagination-info">
@@ -124,6 +163,8 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileTaskCreateForm from '@/components/mobile/MobileTaskCreateForm.vue'
+import MemberAvatar from '@/components/mobile/MemberAvatar.vue'  // 2026-06-26: 按负责人分组的组头头像
+import { groupTasksByAssignee } from '@/utils/taskGroup'  // 2026-06-26: 从 TaskView 抽出共用
 
 const router = useRouter()
 const route = useRoute()
@@ -187,13 +228,34 @@ const filteredTasks = computed(() => {
   return list
 })
 
+// 2026-06-26: 按负责人分组（一人一头像，下方罗列任务）
+const groupedTasks = computed(() => groupTasksByAssignee(filteredTasks.value))
+
+// 2026-06-26: 折叠状态（默认全部展开，reactive 对象跨 tab 共享）
+const collapsedGroups = ref({})
+function toggleGroup(id) {
+  collapsedGroups.value[id] = !collapsedGroups.value[id]
+}
+
+// 2026-06-26: 组名（unassigned 走中文，其他走 memberStore）
+function getGroupName(id) {
+  if (id === 'unassigned') return '未分配'
+  return memberStore.getMemberName(id) || '未知成员'
+}
+
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 const hasMore = computed(() => currentPage.value < totalPages.value)
 
 // CardList 配置
 const fieldConfig = computed(() => ({
   title: (t) => t.title,
-  subtitle: (t) => `${memberStore.getMemberName(t.assignee_id) || '未分配'}${t.due_date ? ` · ${formatDue(t.due_date)}` : ''}`,
+  // 2026-06-26: 分组后组内都是同一人，不再重复显示负责人名
+  subtitle: (t) => {
+    const parts = []
+    if (t.status) parts.push(getStatusLabel(t.status))
+    if (t.due_date) parts.push(formatDue(t.due_date))
+    return parts.join(' · ')
+  },
   badge: (t) => ({
     label: getPriorityLabel(t.priority),
     type: t.priority === 'high' ? 'danger' : t.priority === 'medium' ? 'warning' : 'info',
@@ -418,5 +480,81 @@ onMounted(() => {
   background: var(--color-success-bg, #f0f9eb);
   color: var(--color-success, #67c23a);
   border: 1px solid var(--color-success, #67c23a);
+}
+
+/* 2026-06-26: 按负责人分组 UI（一组一人一头像 + 任务罗列） */
+.task-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mobile-section-gap, 16px);
+}
+.task-group {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border-light);
+}
+.task-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--color-bg-card);
+}
+.task-group-header:active { background: var(--color-bg-hover); }
+.group-avatar { flex-shrink: 0; }
+.group-name {
+  flex: 1;
+  font-size: var(--font-size-md, 15px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+.group-count {
+  font-size: var(--font-size-xs, 12px);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill, 10px);
+}
+.collapse-icon {
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  transition: transform 0.2s;
+  display: inline-block;
+}
+.collapse-icon.collapsed { transform: rotate(-90deg); }
+.task-group-list { padding: 0 0 12px; }
+/* 组内 CardList 视觉调整：扁平任务条，去外层圆角 */
+.task-group-list :deep(.list-body) {
+  padding: 0 12px;
+  gap: 8px;
+}
+.task-group-list :deep(.list-item) {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+}
+/* 加载中态 / 空态 */
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 60px 16px;
+  color: var(--color-text-secondary);
+}
+.loading-state .empty-icon,
+.empty-state .empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.empty-state .empty-title {
+  font-size: var(--font-size-lg, 18px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 8px;
+}
+.empty-state .empty-hint {
+  font-size: var(--font-size-sm, 13px);
+  color: var(--color-text-secondary);
 }
 </style>
