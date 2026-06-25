@@ -5,7 +5,7 @@
 POST /merge-chunks, GET /upload-status。
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, Query, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -28,10 +28,8 @@ async def start_recording(
 ):
     """创建录音会议（零配置，自动生成标题）"""
     now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
-    # 标题使用北京时间（UTC+8）
-    local_now = now + timedelta(hours=8)
     meeting = Meeting(
-        title=f"听会 {local_now.strftime('%m-%d %H:%M')}",
+        title="正在听会",  # 占位，commit 拿到 id 后补全为 "正在听会（ID {id}）"
         start_time=now,
         status="recording",
         recording_started_at=now,
@@ -40,6 +38,11 @@ async def start_recording(
         created_by=current_user.id,
     )
     db.add(meeting)
+    await db.commit()
+    await db.refresh(meeting)
+    # 用真实 id 补全占位 title（与前端"正在听会（ID X）"格式对齐 — 旧版"听会 MM-DD HH:MM"
+    # 时戳格式用户反馈不直观，"ID X" 明确表示录音中 + 数据库 id 标识）
+    meeting.title = f"正在听会（ID {meeting.id}）"
     await db.commit()
     await db.refresh(meeting)
     return {

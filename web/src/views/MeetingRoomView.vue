@@ -110,14 +110,14 @@ const showProgress = ref(false)
 const showHelp = ref(false)
 
 const pageTitle = computed(() => {
-  if (meetingId.value) return `正在听会（ID ${meetingId.value}`
+  if (meetingId.value) return `正在听会（ID ${meetingId.value}）`
   return '开始听会'
 })
 
 async function onRecordingStart() {
   // 恢复模式：已有 meetingId，跳过创建（与桌面端 MeetingRoom.vue 同款逻辑）
   if (meetingId.value) {
-    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}`)
+    startRecording(meetingId.value, `正在听会（ID ${meetingId.value}）`)
     ElMessage.success('继续听会')
     return
   }
@@ -125,7 +125,7 @@ async function onRecordingStart() {
   try {
     const res = await axios.post('/api/v1/meetings/start-recording')
     meetingId.value = res.data.id
-    startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}`)
+    startRecording(res.data.id, res.data.title || `正在听会（ID ${res.data.id}）`)
     ElMessage.success('开始听会')
   } catch (err) {
     ElMessage.error('创建会议失败: ' + (err.response?.data?.detail || err.message))
