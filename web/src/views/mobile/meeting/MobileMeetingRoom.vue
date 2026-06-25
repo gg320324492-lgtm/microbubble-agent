@@ -26,8 +26,8 @@
       />
     </main>
 
-    <!-- 后台处理进度（el-dialog 在窄屏会自动撑成 ~100vw） -->
-    <ProcessingDialog
+    <!-- 后台处理进度（移动端底部 sheet，2026-06-25 从 ProcessingDialog 切换到 ProcessingSheet） -->
+    <ProcessingSheet
       v-if="showProgress"
       :meeting-id="meetingId"
       @close="onProgressClose"
@@ -102,7 +102,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import AudioRecorder from '@/components/AudioRecorder.vue'
-import ProcessingDialog from '@/components/ProcessingDialog.vue'
+import ProcessingSheet from '@/components/mobile/ProcessingSheet.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
