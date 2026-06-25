@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import Optional
+from datetime import datetime, timedelta
 import json
 import logging
 
@@ -82,9 +83,18 @@ async def list_meetings(
     )
 
     if date_from:
-        query = query.where(Meeting.start_time >= date_from)
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.where(Meeting.start_time >= df)
+        except ValueError:
+            pass
     if date_to:
-        query = query.where(Meeting.start_time <= date_to)
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d")
+            # +1 天包含当天
+            query = query.where(Meeting.start_time < dt + timedelta(days=1))
+        except ValueError:
+            pass
     if keyword:
         query = query.where(Meeting.title.contains(keyword))
     if status:
