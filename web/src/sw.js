@@ -34,7 +34,13 @@
 // v28 step 101 第二次 BUMP v38 → v39：去掉整篇中文守卫 if (!/[一-龥]/.test(result))。
 //   原守卫会让中英混排 PDF（含中文 Abstract + 英文 Methods）整篇 result 命中中文
 //   → 守卫 false → 英文段落 phantom 不合并 → 用户看不到效果
-const SW_VERSION = 'v52-chat-input-clear-2026-06-25'
+// v53: 2026-06-26 用户报告"网页进不去"白屏 → 典型 SW 污染症状（CLAUDE.md 2026-06-13
+// 沉淀的同类事故）。本次 commit 只改 src/views/* + 新建 utils，未 BUMP SW，导致浏览器
+// SW 字节未变 → 不触发 install → 老 cache（含 octet-stream / 旧 chunk 路径）继续生效
+// → SPA 加载失败。BUMP SW_VERSION 触发浏览器重新 install → activate 钩子
+// caches.keys() + Promise.all(keys.map(caches.delete)) 清空所有 cache → postMessage
+// SW_UPDATED → main.js 监听 → window.location.reload() 闭环。
+const SW_VERSION = 'v53-task-grouping-fix-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
