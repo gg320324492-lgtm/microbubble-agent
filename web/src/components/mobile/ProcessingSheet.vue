@@ -80,7 +80,7 @@
 
           <!-- 底部提示 -->
           <div class="sheet-hint">
-            <p>{{ dynamicHint }}</p>
+            <p :class="hintClass">{{ dynamicHint }}</p>
             <p v-if="!done && !error" class="hint-subtle">预计 30-60 秒</p>
           </div>
 
@@ -172,6 +172,15 @@ const dynamicHint = computed(() => {
   }
   // 前端还在 await upload + stop-recording，必须等
   return '正在上传音频，请勿关闭此页面'
+})
+
+// 2026-06-25 v3：动态提示文案颜色 class
+// 配合 sheet-hint 的 4 个状态色，让 dynamicHint 视觉权重更高
+const hintClass = computed(() => {
+  if (error.value) return 'hint-text-danger'
+  if (done.value) return 'hint-text-success'
+  if (progress.value?.stage) return 'hint-text-primary'
+  return 'hint-text-warning'  // 上传期
 })
 
 function isStageDone(idx) {
@@ -474,6 +483,20 @@ onBeforeUnmount(() => {
   font-size: 11px;
   opacity: 0.75;
 }
+
+/* 2026-06-25 v3：dynamicHint 按状态着色 + 加粗 */
+.hint-text-warning,
+.hint-text-primary,
+.hint-text-success,
+.hint-text-danger {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0 0 4px 0 !important;
+}
+.hint-text-warning { color: var(--color-warning, #E6A23C); }
+.hint-text-primary { color: var(--color-primary, #FF7A5C); }
+.hint-text-success { color: var(--color-success, #67C23A); }
+.hint-text-danger  { color: var(--color-danger, #F56C6C); }
 
 /* 操作 */
 .done-actions {
