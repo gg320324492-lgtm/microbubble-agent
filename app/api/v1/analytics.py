@@ -232,6 +232,41 @@ async def get_stats(
         for r in by_source_result
     }
 
+    # v31.2.4: 按 user_id 分组 (per-user dashboard)
+    # JOIN members 取真实名字, NULL user_id = 匿名用户
+    # 仅显示有搜索量的用户 (searches > 0), top 20 by 搜索量
+    by_user_result = await db.execute(
+        text("""
+            SELECT
+                COALESCE(m.id::text, 'anonymous') AS user_key,
+                COALESCE(m.name, '匿名用户') AS user_name,
+                COALESCE(m.username, '') AS username,
+                COUNT(*) AS searches,
+                COUNT(sl.clicked_id) AS clicks,
+                AVG(sl.click_position) FILTER (WHERE sl.clicked_id IS NOT NULL) AS avg_pos
+            FROM search_logs sl
+            LEFT JOIN members m ON sl.user_id = m.id
+            WHERE sl.created_at >= :cutoff
+            GROUP BY COALESCE(m.id::text, 'anonymous'), COALESCE(m.name, '匿名用户'), COALESCE(m.username, '')
+            HAVING COUNT(*) > 0
+            ORDER BY searches DESC
+            LIMIT 20
+        """),
+        {"cutoff": cutoff},
+    )
+    by_user = [
+        {
+            "user_id": r[0] if r[0] != "anonymous" else None,
+            "name": r[1],
+            "username": r[2],
+            "searches": int(r[3]),
+            "clicks": int(r[4]),
+            "any_click_rate": round(int(r[4]) / int(r[3]), 4) if int(r[3]) > 0 else 0,
+            "avg_click_position": round(float(r[5]), 2) if r[5] is not None else None,
+        }
+        for r in by_user_result
+    ]
+
     # 趋势: 最近 days 天的每日搜索量
     trend_result = await db.execute(
         text("""
@@ -267,6 +302,7 @@ async def get_stats(
         "zero_click_rate": zero_click_rate,
         "avg_click_position": round(avg_click_pos, 2) if avg_click_pos is not None else None,
         "by_model": by_model,
+        "by_user": by_user,  # v31.2.4: per-user dashboard 维度
         "by_source": by_source,
         "trend": trend,
     }
