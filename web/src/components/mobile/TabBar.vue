@@ -57,8 +57,11 @@ const items = [
 ]
 
 const activeRoute = computed(() => {
-  // 取最高优先级匹配的路由 name
-  return route.name || route.path.replace('/', '') || 'dashboard'
+  // 2026-06-25: 转小写匹配 item.name
+  // router.name 是 'Dashboard' 大写，item.name 是 'dashboard' 小写
+  // NutUI 4 strict equality 'Dashboard' === 'dashboard' → false
+  // 所以所有 tab 一直处于 unactive 状态 (历史 bug，之前没人验证过)
+  return (route.name || route.path.replace('/', '') || 'dashboard').toString().toLowerCase()
 })
 
 function handleSwitch(name) {
