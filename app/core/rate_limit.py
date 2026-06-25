@@ -7,7 +7,11 @@ from fastapi import Request, HTTPException, status
 
 
 class RateLimiter:
-    """基于滑动窗口的内存限流器"""
+    """基于滑动窗口的内存限流器
+
+    v31.2.x 默认使用. 优势: 零依赖, 快 (<1ms check).
+    劣势: docker compose restart 全清零, 攻击者赶在窗口重置前打满.
+    """
 
     def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
         self.max_attempts = max_attempts
@@ -28,6 +32,86 @@ class RateLimiter:
 
     def record(self, key: str):
         self._attempts[key].append(time.time())
+
+
+class AsyncRedisRateLimiter:
+    """基于 Redis ZSET 的滑动窗口限流器 (v31.2.4)
+
+    ZSET key: "rl:{tier}:{client_key}", score=timestamp, value=timestamp (str)
+    check 流程:
+      1. ZREMRANGEBYSCORE 清窗口外的旧 timestamp
+      2. ZCARD 计数
+      3. 若 >= max_attempts → 429
+      4. 否则 ZADD 新 timestamp + EXPIRE 窗口+1s
+
+    优势:
+      - 抗 docker restart (Redis 持久化, 默认 RDB 每分钟 snapshot)
+      - 跨实例共享 (未来多 worker / 多 pod)
+      - 真实滑动窗口 (vs 内存版 ZADD 后 N 个 timestamp)
+    劣势:
+      - Redis 不可用时需要 fallback (不能拒绝所有请求)
+      - 单次 check 多 1 次 round-trip (~1ms)
+
+    当前状态: 已实现并 verify 通过, 但默认**未启用**. middleware 仍用 RateLimiter.
+    启用方法: 修改 _rate_limiters 实例化代码, 把 RateLimiter 换成 AsyncRedisRateLimiter.
+    """
+
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+
+    def _redis_key(self, key: str) -> str:
+        return f"rl:{key}"  # rl = rate limit
+
+    async def check(self, key: str):
+        """async check, 返回 None = 通过, raise HTTPException = 限流"""
+        from app.core.redis import get_redis
+        try:
+            r = await get_redis()
+            now = time.time()
+            cutoff = now - self.window_seconds
+            rkey = self._redis_key(key)
+            # 1. 清窗口外
+            await r.zremrangebyscore(rkey, 0, cutoff)
+            # 2. 计数
+            count = await r.zcard(rkey)
+            if count >= self.max_attempts:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"请求过于频繁，请 {self.window_seconds} 秒后重试",
+                )
+        except HTTPException:
+            raise  # 429 必须抛
+        except Exception:
+            # Redis 不可用 / 网络错 → 静默降级, 不阻断请求
+            pass
+
+    async def record(self, key: str):
+        """async record, 失败也静默降级"""
+        from app.core.redis import get_redis
+        try:
+            r = await get_redis()
+            now = time.time()
+            rkey = self._redis_key(key)
+            # ZADD 新 timestamp + EXPIRE 窗口+1s (清理用)
+            await r.zadd(rkey, {str(now): now})
+            await r.expire(rkey, self.window_seconds + 1)
+        except Exception:
+            pass  # Redis 故障 → 静默降级, 不阻断
+
+    async def remaining(self, key: str) -> int:
+        """返当前剩余配额 (给响应头 X-RateLimit-Remaining 用)"""
+        from app.core.redis import get_redis
+        try:
+            r = await get_redis()
+            now = time.time()
+            cutoff = now - self.window_seconds
+            rkey = self._redis_key(key)
+            await r.zremrangebyscore(rkey, 0, cutoff)
+            count = await r.zcard(rkey)
+            return max(0, self.max_attempts - count)
+        except Exception:
+            return self.max_attempts  # fallback: 不知道, 返满配额
 
 
 # 分级限流器实例

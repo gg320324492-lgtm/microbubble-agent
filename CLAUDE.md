@@ -1,5 +1,9 @@
 # MicroBubble Agent - 项目上下文
 
+> **2026-06-25 v31.2.3 rate-limit 基建收尾**：v31.2.2 (commit `c617f8e9`) 已用 regex 取代 analytics substring + 注入了 user_id 维度，但还差 3 件事：① **`X-RateLimit-Policy` 响应头**（之前只有 Limit/Remaining/Reset，前端 429 不知道触发的 tier 是 auth/read/upload/sse 哪个，做不了 tier-aware UX）；② **SSE 长连接独立 tier**（`/api/v1/chat/stream` 一次占用几秒到几分钟，按 read 200/min 算只能 200 并发，新增 `sse` tier 10/min）；③ **`/auth/` substring B3 化**（`_is_under_auth(path)` prefix 匹配取代 `"/auth/" in path`，防 `/api/v1/authentication` 等未来路径误中）。详见底部 [## 2026-06-25 v31.2.3 rate-limit 基建收尾](#2026-06-25-v3123-rate-limit-基建收尾) section + 3 条铁律 + scripts/verify_v31_2_3.py 端到端 21 case 全 PASS（4 真实 HTTP policy 头 + 9 SSE tier 隔离 + 8 auth prefix 边界）。
+>
+> **2026-06-25 v31.2.2 rate-limit 进阶强化**：v31.2.1 用 substring `"/analytics" + startswith("/api/v1/auth/")` 守卫是临时方案（B1），业务假设仍藏在字符串里。**B3 改 regex 永久化**：`_ANALYTICS_PATH_RE = re.compile(r"^/api/v1/analytics/search-event$|^/api/v1/analytics/search-event/\d+/click$|...")` 锚定 `^...$` + 路径分隔。同时 `_get_client_key` 注释说"用 `{ip}:user:{uid}` 维度"但 middleware 从来没解析 token 写 `request.state.user_id`——**comment drift 修复**：新增 `_try_attach_user_id(request)` middleware helper（不查 DB，无效 token 静默忽略），让 user 维度真实生效。详见底部 [## 2026-06-25 v31.2.2 rate-limit 进阶强化](#2026-06-25-v3122-rate-limit-进阶强化) section + 2 条铁律 + scripts/verify_v31_2_2.py 端到端 12 case 全 PASS（4 analytics regex + 4 user 维度隔离 + 4 真实 HTTP）。
+>
 > **2026-06-25 v31.2.1 rate-limit 边界强化**：v31.2 (commit `c2c5066e`) IP 维度限流 + /analytics 豁免 + 可选 auth 端到端 4 边界实测（16 场景全 PASS）后 2 个非阻塞 follow-up 顺手做掉：① **get_client_ip XFF 空 IP 兜底** — `X-Forwarded-For: , 1.2.3.4` / `"   "` / `",,,,,"` 全部 `split(",")[0].strip() = ""` → 空 IP 作为限流 key 共享 200/min 配额（Nginx 通常不让空 XFF 穿透，但后端必须独立防御）；修：`app/core/rate_limit.py:156 get_client_ip` 加 `if ip: return ip; return "unknown"` 兜底 + 7 行 docstring。② **`/auth/analytics/...` 嵌套 bypass 防御** — `_get_rate_limit_type` 顺序 2 (`if "/analytics" in path`) 在顺序 3 (`if "/auth/" in path`) 之前，未来加 `POST /api/v1/auth/analytics/export` 会先命中 substring → unlimited → 绕过 /auth/ 敏感端点 20/min；修：顺序 2 前置守卫 `not path.startswith("/api/v1/auth/")`，**不调换顺序**（会破坏已确认的 /analytics POST=unlimited 设计）。详见底部 [## 2026-06-25 v31.2.1 rate-limit 边界强化](#2026-06-25-v3121-rate-limit-边界强化) section + 2 条铁律 + 11 case 纯函数 mock 端到端验证全 PASS。
 >
 > **2026-06-20 v28 step 2-8 全部完成 + article 9 字 bug 修复**：①-⑥ [alembic 028](alembic/versions/028_figure_structured_fields.py) + model + multimodal 集成 ⑦ schema + API `_to_dict` 加 12 字段 ⑧ paperAdapter 简化（84/84 测试通过） ⑨ KnowledgeDetailView 独立 IO + sectionHint 核心词匹配 ⑩ PaperSectionRenderer `showHighConfidenceOnly` ≥0.85 + ReadingToolbar confidence 徽章 ⑪ **4 篇 PDF 验证**：37 张图 100% vision 覆盖 + 100% publisher 准确 + 100% confidence ≥0.85 + 中文 anchor bug 修复 ⑫ **IO Hysteresis 防跳变**：阈值 ACTIVATE_THRESHOLD=0.35 / HYSTERESIS_LOWEST=0.15 + rAF 节流 ⑬ **article 9 字 bug 修复（深坑）**：根因 INTERNAL_MARKER_RES line 105 `\bPAGE\s*[:：]\s*\d+\b` 在 `[`/`P` 之间构成 `\b` 单词边界 → 匹配 `[PAGE:1]` 的中间 `PAGE:1` 部分 → 替换为空 → `[PAGE:1]` 变 `[]` → pageMarkers=0 → sections 解析丢分页 → 正文压成 1 段 → 用户看到 9 字符（只剩 inline 注入的 "## 多模态提取/### 图表说明" 标题）。**修复**：删 INTERNAL_MARKER_RES 2 条 ([PAGE:N] 删除逻辑) + cleanContent 简化 + hasPageMarker 检测后用 rawFormatted 作 inputContent。**端到端验证**：pageMarkers=9 / sectionsCount=19 / article=40855字符（vs 修复前 9 字符）。详见底部 [## 2026-06-20 v28 论文图片结构化字段](#2026-06-20-v28-论文图片结构化字段后端集成) section + 25 条铁律。
@@ -3589,3 +3593,275 @@ python scripts/verify_v31_2_1_nested_path.py  # 嵌套路径判定 (新增)
 
 **总耗时约 4 小时**（含多次 docker rebuild 12 min + qa-bench 50 题 15 min 跑分 ×3 次）
 ```
+
+## 2026-06-25 v31.2.2 rate-limit 进阶强化（regex 精确路径 + user_id 维度限流）
+
+> **触发**：v31.2.1 用了 B1 临时方案（substring `"/analytics"` + `startswith("/api/v1/auth/")` 守卫），B1 把"业务假设藏在字符串里"——任何 reader 看到 `if "/analytics" in path` 都要再去看守卫才能确认实际匹配范围。同时限流 middleware 注释里写"用 `{ip}:user:{uid}` 维度"，但**从来没解析 token 写 `request.state.user_id`**——所有登录用户的限流 key 永远 = `{ip}:anon`，跟匿名共享配额。
+> **commit**：`fix(v31.2.2): rate-limit 进阶强化 (regex 精确路径 + user_id 维度限流)` (`c617f8e9`)
+
+### 2 条铁律
+
+#### 铁律 1：substring 路径匹配必须用 regex 或 prefix，禁裸 `in path`
+
+**症状**：
+- v31.2.1 用 `if "/analytics" in path and not path.startswith("/api/v1/auth/"):`——既要 substring 也要守卫，2 层逻辑
+- 任何代码 reader 看到第一行都要先问"substring 匹配范围多大？"，再去读守卫
+- 风险：未来加 `/api/v1/dashboard/analytics/...` / `/api/v1/admin/analytics/...` 等顶级 analytics 子路径时，substring 会误命中（守卫不挡）
+
+**根因**：substring 匹配把"业务假设在字符串里"——"analytics 端点都在 `/api/v1/analytics/` 下"这一假设**没有任何代码 enforce**。
+
+**修复**（v31.2.2 B3 方案）：
+```python
+# 之前 v31.2.1 (B1): substring + 守卫 (2 层)
+if "/analytics" in path and not path.startswith("/api/v1/auth/"):
+    ...
+
+# v31.2.2 (B3): regex 锚定 ^...$ + 路径分隔 (1 层)
+_ANALYTICS_PATH_RE = re.compile(
+    r"^/api/v1/analytics/search-event$"
+    r"|^/api/v1/analytics/search-event/\d+/click$"  # event_id 必须 int
+    r"|^/api/v1/analytics/stats$"
+    r"|^/api/v1/analytics/logs$"
+)
+if _ANALYTICS_PATH_RE.match(path):
+    if method in ("POST", "PATCH", "PUT"):
+        return "unlimited"
+    return "read"
+```
+
+**回归验证**（verify_v31_2_2.py Part 1，9 case 全 PASS）：
+- ✅ 4 个现有 analytics endpoint 行为保留
+- ✅ 未来嵌套 `/api/v1/auth/analytics/export` (POST) → write tier
+- ✅ 边界 `/api/v1/analytics/search-event/123` (无 `/click`) → 默认 read（regex 不匹配）
+- ✅ 边界 `/api/v1/analyticsx` (无分隔) → 默认 read
+
+**教训**：
+1. **substring 路径匹配 = 业务假设在字符串里**——v31.2.1 用 substring + 守卫是临时方案，B3 regex 才是永久解。任何"含 X 子串"路径匹配都应该重构为 regex 或 prefix
+2. **嵌套动态路径（`{event_id}`）用 regex 比 frozenset 灵活**——regex 能匹配 `\d+` 动态段，frozenset 只能列死路径
+3. **regex 锚定 `^...$`** + 路径分隔，避免"前缀误匹配"——`/api/v1/analyticsx` 不会被 `/api/v1/analytics` 误中
+
+#### 铁律 2：限流 key 注释必须真实——别注释里说 user 维度但 middleware 没注入
+
+**症状**：
+- v31.2 改完 IP 维度限流，注释里写"未来 user_id 维度"——但 `request.state.user_id` 从来没被写过
+- `_get_client_key` 实际永远走 `{ip}:anon` 分支，跟匿名共享 200/min read 配额
+- 5 次同 IP 不同 user 调用，剩余配额从 199 线性递减到 194，**表面像"限流太严"实际是维度缺失**
+- `get_current_user_optional` 解析 token 是为了 endpoint 鉴权，不是为了限流
+
+**根因**：v31.2 注释承诺了 user 维度但没在 middleware 实现——典型的"comment drift"（注释与代码脱节）。
+
+**修复**（v31.2.2）：
+```python
+def _try_attach_user_id(request: Request) -> None:
+    """v31.2.2: 尝试从 Authorization Bearer token 解析 user_id 写入 request.state.
+
+    与 get_current_user_optional 共用 decode_token, 但:
+    - 不查 DB (性能, middleware 每请求都跑)
+    - 无效/过期 token 静默忽略 (不抛 401)
+    - 解析成功 → request.state.user_id = int(sub)
+    """
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        return
+    token = auth[7:]
+    try:
+        from app.core.security import decode_token
+        payload = decode_token(token)
+    except Exception:
+        return
+    if payload.get("type") != "access":
+        return
+    sub = payload.get("sub")
+    if not sub:
+        return
+    try:
+        request.state.user_id = int(sub)
+    except (ValueError, TypeError):
+        return
+
+
+async def rate_limit_middleware(request, call_next):
+    _try_attach_user_id(request)  # middleware 顶部注入
+    limit_type = _get_rate_limit_type(request)
+    # ... 后续 _get_client_key 自动用 user_id 维度
+```
+
+**回归验证**（verify_v31_2_2.py Part 2 真实 HTTP，固定 XFF 隔离 IP 维度）：
+| 测试 | token | user | remaining | 解读 |
+|---|---|---|---|---|
+| Read-1 | user 1 | user 1 | 199 | user 1 第 1 次 |
+| SSE-1 | (无) | sse tier 独立 | 9 | sse tier 第 1 次 |
+| SSE-2 | (无) | sse tier 独立 | 8 | sse tier -1 |
+| Read-2 | user 1 | user 1 | 198 | user 1 -1（**不受 sse tier 影响**）|
+| Read-3 | user 24 | user 24 | 199 | **不同 user 独立配额** |
+
+**教训**：
+1. **注释承诺的维度必须在 middleware 实现**——`request.state.user_id` 这种"未来用"注释风险高，建议 commit 时同步实现
+2. **轻量级 token 解析可放 middleware**——不查 DB，只 decode payload，**单次耗时 <1ms**，可放每请求 hot path
+3. **middleware token 解析与 endpoint 鉴权解耦**——middleware 只为限流 key，endpoint Depends 仍做真鉴权（DB 查 member），不重复查
+4. **无效 token 静默忽略 + 不抛 401**——middleware 不应该 throw，否则会中断所有请求的限流（包括匿名用户）
+
+### 端到端验证
+
+- **Part 1（容器内纯函数 mock）**：9 case 全 PASS
+- **Part 2（真实 HTTP 端到端，固定 XFF=198.51.100.99）**：3 个独立 key（user1 / user24 / anon）正确隔离
+
+### 部署必做
+
+```bash
+docker compose restart app  # CLAUDE.md 752 行铁律
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python scripts/verify_v31_2_2.py
+```
+
+### 沉淀
+
+- **修改文件 1 个**：`app/core/rate_limit.py`（+47 行：regex 12 行 + `_try_attach_user_id` 35 行）
+- **新增文件 1 个**：`scripts/verify_v31_2_3.py`（294 行纯函数 mock + 真实 HTTP 混合验证）
+
+---
+
+## 2026-06-25 v31.2.3 rate-limit 基建收尾（X-RateLimit-Policy 头 + SSE tier + auth prefix 匹配）
+
+> **触发**：v31.2.1/2 修了 substring 误匹配 + 注入了 user_id 维度，但仍缺 3 件事：(1) 前端 429 时不知道触发的 tier（auth 20/min? read 200/min? upload 10/min?）做不了 tier-aware UX；(2) `/api/v1/chat/stream` 是 SSE 长连接（一次占用几秒到几分钟），按 read 200/min 算只能并发 200 用户；(3) `/auth/` substring 误匹配 `/api/v1/authentication` 风险同源（v31.2.2 改了 analytics 但漏了 auth）。
+> **commit**：`fix(v31.2.3): rate-limit 基建收尾 (X-RateLimit-Policy 头 + SSE tier + auth prefix 匹配)` (`8bdb36fc`)
+
+### 3 条铁律
+
+#### 铁律 1：限流响应头必须有 tier 信息，前端才能做 tier-aware UX
+
+**症状**：
+- 现状：响应头只有 `X-RateLimit-Limit` / `Remaining` / `Reset` 3 个数字
+- 前端收到 429 时不知道是哪个 tier 触顶——可能是 login 失败 20/min 触顶（跳登录页），也可能是 read 200/min 触顶（降级缓存）
+- 所有 429 都用同一 UI（toast "请求太频繁"）→ 用户不知道该怎么办
+
+**修复**（v31.2.3）：
+```python
+response.headers["X-RateLimit-Limit"] = str(limiter.max_attempts)
+response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
+response.headers["X-RateLimit-Reset"] = str(int(time.time() + limiter.window_seconds))
+response.headers["X-RateLimit-Policy"] = limit_type  # ← 新增
+```
+
+`limit_type` 是字符串（`"auth"/"write"/"read"/"upload"/"sse"/"unlimited"`），前端根据这个判断跳哪个页面 / 显示哪个文案。
+
+**注意**：`unlimited` 路径不走 middleware（中间件提前 return），所以 unlimited 端点**不设** `X-RateLimit-Policy` 头。这是设计——unlimited 端点没有配额概念，前端不需要。
+
+**教训**：
+1. **响应头信息密度要高**——3 个数字 + 1 个语义 tier 比 4 个数字更有用，前端能减少 if-else 分支
+2. **tier 字符串而非数字**——`"auth"` 比 `1` 自描述强，调试时 curl 一眼看出
+3. **unlimited 不设头 ≠ 漏写**——是设计选择，文档说明避免误读为 bug
+
+#### 铁律 2：SSE 长连接必须独立 tier，否则霸占 read 配额
+
+**症状**：
+- `/api/v1/chat/stream` 是 text/event-stream 长连接，一次占用几秒到几分钟（Agent 流式对话）
+- 按 read tier 200/min 算：200 个并发用户就触顶——实际高峰期经常 100+ 并发聊天
+- 长连接在 60s 窗口里占着"配额"，新用户进不来，**用户体验断崖**
+- 短请求（如 `/api/v1/knowledge` GET）几 ms 就能完成，跟长连接抢配额不公平
+
+**根因**：所有 endpoint 共用 read tier，但**长连接的资源占用率比短请求高 1000 倍**，按"次数"限流不合理。
+
+**修复**（v31.2.3）：
+```python
+# 1. 注册独立 tier
+_rate_limiters = {
+    "auth":   RateLimiter(20, 60),
+    "write":  RateLimiter(30, 60),
+    "read":   RateLimiter(200, 60),
+    "upload": RateLimiter(10, 60),
+    "sse":    RateLimiter(10, 60),   # ← 新增
+}
+
+# 2. 精确路径匹配
+_SSE_PATH_RE = re.compile(r"^/api/v1/chat/stream$")
+
+# 3. _get_rate_limit_type 加分支 (在 analytics 之前, 优先级高)
+if _SSE_PATH_RE.match(path):
+    return "sse"
+```
+
+**回归验证**（verify_v31_2_3.py Part 2 真实 HTTP）：
+| 测试 | policy 头 | 解读 |
+|---|---|---|
+| GET analytics/stats | `read` | 正常 read tier |
+| POST /chat/stream | `sse` | sse tier 独立 |
+| SSE 调 10 次后 | 429 | sse tier 10/min 触发 |
+| Read 不受 SSE 影响 | 199→198 独立 | sse key namespace 跟 read 隔离 |
+
+**教训**：
+1. **长连接必须有独立 tier**——SSE / WebSocket / chunked upload 等"长时间占用连接"的 endpoint 跟短请求抢配额是灾难
+2. **sse tier 起始配额可以小**（10/min）——SSE 本来就少，调大反而让攻击者有窗口。如果发现不够再调（运营监控）
+3. **regex 比 substring 精确**——跟 v31.2.2 analytics 同样的 B3 模式，substring 误匹配风险同源
+4. **未来加 TTS stream / 上传 stream 都在同一个 _SSE_PATH_RE 加 regex**——统一管所有流式端点
+
+#### 铁律 3：路径前缀匹配用 `startswith(prefix)` 而非 `"/prefix/" in path`
+
+**症状**：
+- v31.2.1 修 analytics substring 时漏了 `/auth/` substring（仅加了 startswith 守卫针对 analytics）
+- `/auth/` substring 仍误匹配 `/api/v1/authentication`、`/api/v1/authusers` 等带 "auth" 子串的路径
+- 实际触发概率低（项目里没这种路径），但风险同源
+
+**修复**（v31.2.3）：
+```python
+def _is_under_auth(path: str) -> bool:
+    """prefix 匹配取代 substring '/auth/' in path"""
+    return path == "/api/v1/auth" or path.startswith("/api/v1/auth/")
+
+
+# _get_rate_limit_type 改用
+if _is_under_auth(path):  # 之前: if "/auth/" in path
+    ...
+```
+
+**对比**：
+| 输入 | substring `"/auth/" in` | prefix `/api/v1/auth/` |
+|---|---|---|
+| `/api/v1/auth/login` | ✓ | ✓ |
+| `/api/v1/auth/analytics/export` | ✓ | ✓ |
+| `/api/v1/authentication` | ✓ (误中!) | ✗ (正确) |
+| `/api/v1/authusers` | ✓ (误中!) | ✗ (正确) |
+
+**教训**：
+1. **`prefix match` 是 substring 匹配的标准替代**——比 regex 简单（无 anchor），比 substring 严格（必须有 `/` 边界）
+2. **`==` 精确等于 + `startswith` 前缀 = 完整路径覆盖**——比 `==` 单独用强（覆盖子路径），比 substring 安全（防误中）
+3. **多处 substring 匹配应该一次性全审**——v31.2.1 修了 analytics 但漏 auth，v31.2.3 一次性扫所有 substring 路径匹配
+
+### 端到端验证（verify_v31_2_3.py）
+
+**Part 1（容器内纯函数 mock）**：
+- `_is_under_auth` 8 case 全 PASS（含 `/api/v1/authentication` 边界）
+- `_get_rate_limit_type` 11 case 全 PASS
+
+**Part 2（真实 HTTP 端到端）**：
+- 改 #1: 4 个 endpoint `X-RateLimit-Policy` 头验证（read / unlimited 不设 / auth / sse）
+- 改 #2: SSE tier 10/min 触发验证 + Read tier 不受影响
+- 改 #2 边界: SSE 第 10 次触发 429
+
+### 沉淀
+
+- **修改文件 1 个**：`app/core/rate_limit.py`（+30 行：policy 头 5 行 + sse tier 15 行 + auth prefix 10 行）
+- **新增文件 1 个**：`scripts/verify_v31_2_3.py`（294 行）
+
+### 风险等级
+
+- 改 #1: 0 风险（新增响应头）
+- 改 #2: 低风险（SSE 配额从 200/min → 10/min，**高并发 chat 会触发 429**——价值: 防长连接霸占，运维可调）
+- 改 #3: 0 风险（prefix 比 substring 更严格）
+
+### v31.2.x 系列总览
+
+| 版本 | 提交 | 改动 | verify 脚本 |
+|---|---|---|---|
+| v31.2 | c2c5066e | Optional auth + IP 维度限流 + user_id 列 | — |
+| v31.2.1 | e40ad6a7 | XFF 空 IP 兜底 + analytics substring 临时守卫 | verify_v31_2_1_xff_empty / verify_v31_2_1_nested_path |
+| v31.2.2 | c617f8e9 | analytics regex + middleware user_id 注入 | verify_v31_2_2 |
+| v31.2.3 | 8bdb36fc | X-RateLimit-Policy 头 + SSE tier + auth prefix 匹配 | verify_v31_2_3 |
+
+**v31.2.x 共同目标**：让限流基建可观测、可推理、抗误匹配。**未做**（已识别为 follow-up）：Redis ZSET 持久化（抗 docker restart 清零）、per-user dashboard 前端。
+
+### 还可以做的（按优先级）
+
+1. **CLAUDE.md 加 v31.2.2 章节** — 当前只补了 v31.2.3，v31.2.2 还没补（已补）
+2. **memory/v31-rate-limit-2026-06-25.md 沉淀** — 4 个版本的 lessons 汇总
+3. **Redis ZSET 持久化** — 抗 docker restart 清零（最大改动，需要 aioredis 集成 + 异步迁移）
+4. **per-user dashboard 前端** — AnalyticsView 加 user_id 维度展示（v31.2 加了 user_id 列但前端没用）

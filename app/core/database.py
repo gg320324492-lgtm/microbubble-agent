@@ -8,7 +8,8 @@ engine = create_async_engine(
     settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
     echo=settings.APP_DEBUG,
     pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    connect_args={"server_settings": {"client_encoding": "utf8"}},  # v31.2.4: 修 raw text() 查询中文乱码
 )
 
 # 创建会话工厂
