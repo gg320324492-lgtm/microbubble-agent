@@ -251,7 +251,10 @@ onMounted(async () => {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 2000;
+  /* v59 (2026-06-26) 抬到 5000：旧 2000 被 TabBar (z=2500) + 录音胶囊 (z=2900)
+     覆盖，底部 sheet 看起来被遮挡。与 ProcessingSheet (4500) / VoiceTestFlow (5000)
+     同档，确保 sheet 完全浮在所有元素之上。 */
+  z-index: 5000;
   display: flex;
   align-items: flex-end;
   backdrop-filter: blur(4px);

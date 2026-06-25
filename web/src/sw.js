@@ -49,7 +49,13 @@
 // router.replace('/meetings/room')，与 MainLayout.goToRecording + MeetingView/MobileMeetingView
 // 的 ?resume= 拦截逻辑最终目标一致。Vue Router 4 在当前已处于 /meetings/room 时
 // short-circuit → 等价于关闭弹窗后留在原页（计时器+波形+录音不间断）。
-const SW_VERSION = 'v58-meeting-room-timer-2026-06-26'
+// v59: 2026-06-26 用户反馈两个新 bug (1) 听会房间"使用说明" sheet 被底部 TabBar (z=2500)
+// + 录音胶囊 (z=2900) 覆盖 → MobileMeetingRoom.vue .help-overlay z-index 2000 → 5000。
+// (2) 移动端 TabBar 切深色模式不变色 → 双根因修复：TabBar.vue 删 hardcoded
+// inactive-color="#909399" / active-color="#FF7A5C" 属性（阻断 NutUI CSS 变量级联），
+// nutui-theme.scss [data-theme="dark"] 块补 --nut-tabbar-active-color #FF9D85 +
+// --nut-tabbar-inactive-color #a6a9ad 覆盖。SW BUMP 触发浏览器重新 install。
+const SW_VERSION = 'v59-help-sheet-tabbar-darkmode-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

@@ -9,8 +9,6 @@
       safe-area-inset-bottom
       placeholder
       bottom
-      inactive-color="#909399"
-      active-color="#FF7A5C"
       @switch="handleSwitch"
     >
       <nut-tabbar-item

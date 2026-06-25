@@ -81,6 +81,11 @@
   --nut-background-color2: #2a2d35;
   --nut-background-color3: #2a2d35;
 
+  /* v59 (2026-06-26) 新增：之前缺这俩 dark 覆盖，TabBar 即使删了 hardcoded
+     inactive-color="#909399" / active-color="#FF7A5C" 也只会回退到 :root 浅色值。
+     复用 dark 模式主色 + info 色，与 variables.css 暗色调色板一致。 */
+  --nut-tabbar-active-color: #FF9D85;     /* 选中 tab 图标/文字 = dark --nut-primary-color */
+  --nut-tabbar-inactive-color: #a6a9ad;   /* 未选 tab = dark --color-info (variables.css:533) */
   --nut-tabbar-border-top: 1px solid #3a3d45;
   --nut-cell-border-bottom: 1px solid #3a3d45;
   --nut-input-border-color: #3a3d45;
