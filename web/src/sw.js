@@ -165,7 +165,17 @@
 //     unassigned-group / 骨架屏）
 // (4) DashboardPet.vue: 末尾追加非 scoped dark 块（speech-bubble 白底→深色 +
 //     XP 条 / 小三角等细节）
-const SW_VERSION = 'v69-p0-foundation-2026-06-26'
+// v69 P1a: 2026-06-26 多主题切换基建。
+// (1) variables.css 末尾追加 6 套主题色板（orange/ocean/forest × light/dark），
+//     用 [data-accent="X"] + [data-theme="dark"][data-accent="X"] 双轴选择器
+//     覆盖 16+ 变量（primary / primary-bg / sidebar / shadow / 渐变 5 条）
+// (2) useThemeStore: 新增 accent ref（orange|ocean|forest） + setAccent 方法，
+//     监听 accent 变化时同步写 data-accent + localStorage
+// (3) SettingsView: 主题色 picker UI 升级为 3 个 swatch 按钮（带 Check 圈 + active
+//     边框 + hover translateY + focus-visible outline），CSS 变量驱动颜色
+// (4) variables.css: 加 --theme-transition 让主题切换时 bg/border/color/box-shadow
+//     走 280ms ease 过渡，避免生硬跳变
+const SW_VERSION = 'v69-p1a-multitheme-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
