@@ -150,7 +150,22 @@
 //     - dark mode 用 :global([data-theme="dark"]) 避开 scoped + [data-theme]
 //       的 specificity 坑（继承 v60/v61 教训），独立给玻璃背景 rgba(42,45,53,0.7)
 //     - 改密码卡片改名为"账号安全"（语义更准确）
-const SW_VERSION = 'v68-settings-glass-2026-06-26'
+// v69 P0: 2026-06-26 桌面端 dark mode 全面重构。
+// (1) variables.css: 补 5 个未覆盖令牌（--color-bg-warm / --color-bg-sidebar /
+//     --color-sidebar-border / --color-border / --color-primary-border）+ 更新
+//     --color-text-secondary 提亮（#909399 → #a8aab0 提对比度）+ 7 个阴影变量
+//     全部重定义（dark 模式 rgba(0,0,0,.3-.6) 替代 light 的 .04-.12）+ 渐变
+//     库（5 个 dashboard 渐变 dark 用 rgba 透明而非亮色块）+ 14 个 EP 组件
+//     完整 dark 覆盖（el-tag 背景/文字、el-button 4 状态色、el-checkbox/radio/
+//     tabs/form/input 等）
+// (2) MainLayout.vue: 末尾追加非 scoped dark 块覆盖侧栏/顶栏/通知/录音 banner/
+//     移动端 drawer（v60-v67 教训：dark 跨组件规则必须非 scoped）
+// (3) Dashboard.vue: 3 个 stat-icon 行内 style 重构为 class + 末尾追加非 scoped
+//     dark 块（hero / stat-card / group-header / task-row / view-all-btn /
+//     unassigned-group / 骨架屏）
+// (4) DashboardPet.vue: 末尾追加非 scoped dark 块（speech-bubble 白底→深色 +
+//     XP 条 / 小三角等细节）
+const SW_VERSION = 'v69-p0-foundation-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

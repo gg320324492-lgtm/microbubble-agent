@@ -82,7 +82,7 @@
       <template v-else>
         <el-col :xs="12" :sm="6">
           <div class="stat-card stat-card-primary fade-slide-up stagger-1">
-            <div class="stat-icon-wrap" style="background: linear-gradient(135deg, #FFF0ED 0%, #FFE4DC 100%)">
+            <div class="stat-icon-wrap stat-icon-wrap--in-progress">
               <el-icon size="28" style="color: #FF7A5C"><Clock /></el-icon>
             </div>
             <div class="stat-content">
@@ -94,7 +94,7 @@
         </el-col>
         <el-col :xs="12" :sm="6">
           <div class="stat-card stat-card-success fade-slide-up stagger-2">
-            <div class="stat-icon-wrap" style="background: linear-gradient(135deg, #F0F9EB 0%, #DCFCE7 100%)">
+            <div class="stat-icon-wrap stat-icon-wrap--done">
               <el-icon size="28" style="color: #67C23A"><CircleCheck /></el-icon>
             </div>
             <div class="stat-content">
@@ -106,7 +106,7 @@
         </el-col>
         <el-col :xs="12" :sm="6">
           <div class="stat-card stat-card-danger fade-slide-up stagger-4 clickable" :class="{ 'has-danger': dashboardData.summary?.overdue_tasks > 0 }" @click="$router.push('/tasks?overdue=true')">
-            <div class="stat-icon-wrap" style="background: linear-gradient(135deg, #FEF0F0 0%, #FEE2E2 100%)">
+            <div class="stat-icon-wrap stat-icon-wrap--overdue">
               <el-icon size="28" style="color: #F56C6C"><Warning /></el-icon>
             </div>
             <div class="stat-content">
@@ -511,7 +511,7 @@ onMounted(() => {
 
 /* ===== 欢迎区 ===== */
 .welcome-section {
-  background: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
+  background: var(--gradient-welcome-hero); /* v69 P0: 用 CSS 变量，dark 模式自动压暗 */
   border-radius: var(--radius-xl);
   padding: 28px 32px;
   margin-bottom: 20px;
@@ -676,6 +676,10 @@ onMounted(() => {
   justify-content: center;
   flex-shrink: 0;
 }
+/* v69 P0: stat-icon 渐变改用 CSS 变量（dark 模式变量已在 variables.css 中切换到 rgba 透明） */
+.stat-icon-wrap--in-progress { background: var(--gradient-stat-in-progress); }
+.stat-icon-wrap--done        { background: var(--gradient-stat-done); }
+.stat-icon-wrap--overdue     { background: var(--gradient-stat-overdue); }
 
 .stat-content { flex: 1; min-width: 0; }
 .stat-label { font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: 4px; }
@@ -779,7 +783,7 @@ onMounted(() => {
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, var(--color-bg-warm) 0%, var(--color-primary-bg) 100%);
+  background: var(--gradient-group-header); /* v69 P0: 用 CSS 变量，dark 模式自动切深灰→半透明橙 */
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   user-select: none;
@@ -788,6 +792,9 @@ onMounted(() => {
 }
 .group-header:hover {
   background: linear-gradient(135deg, var(--color-primary-bg) 0%, #FFE4DC 100%);
+}
+[data-theme="dark"] .group-header:hover {
+  background: linear-gradient(135deg, var(--color-bg-hover) 0%, var(--color-primary-bg) 100%);
 }
 .group-header::before {
   content: '';
@@ -860,4 +867,66 @@ onMounted(() => {
 
 /* ===== 通用覆盖 ===== */
 .content-card :deep(.el-card__header) { padding: 16px 20px; border-bottom: none; }
+</style>
+
+<!-- v69 P0: Dashboard dark mode 覆盖（v60-v67 教训：dark 跨组件规则必须非 scoped） -->
+<style>
+  /* === 状态卡 === */
+  [data-theme="dark"] .stat-card {
+    background: var(--color-bg-card);
+    border-color: var(--color-border-base);
+    box-shadow: var(--shadow-sm);
+  }
+  [data-theme="dark"] .stat-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-primary-border);
+  }
+  [data-theme="dark"] .stat-value { color: var(--color-text-primary); }
+  [data-theme="dark"] .stat-label { color: var(--color-text-secondary); }
+  [data-theme="dark"] .stat-hint { color: var(--color-text-placeholder); }
+  [data-theme="dark"] .stat-card-danger.has-danger { background: var(--color-danger-bg); border-color: rgba(247, 137, 137, 0.5); }
+
+  /* === 任务配对卡 group-header（已在 scoped 改用变量，dark 块仅保 hover） === */
+  [data-theme="dark"] .group-header {
+    border-bottom-color: var(--color-border-light);
+  }
+  [data-theme="dark"] .group-name { color: var(--color-text-primary); }
+  [data-theme="dark"] .group-info .task-count { color: var(--color-text-secondary); }
+
+  /* === task-row（子任务） === */
+  [data-theme="dark"] .task-row { border-bottom-color: var(--color-border-light); }
+  [data-theme="dark"] .task-row:hover { background: var(--color-bg-hover); }
+  [data-theme="dark"] .task-row.overdue { background: rgba(247, 137, 137, 0.08); }
+  [data-theme="dark"] .task-row.overdue:hover { background: rgba(247, 137, 137, 0.15); }
+  [data-theme="dark"] .task-title { color: var(--color-text-primary); }
+  [data-theme="dark"] .task-due { color: var(--color-text-regular); } /* v69 提亮（之前 #909399 太暗） */
+  [data-theme="dark"] .task-due.overdue { color: #f78989; }
+
+  /* === 章节标题 + 查看全部 === */
+  [data-theme="dark"] .section-title { color: var(--color-text-primary); }
+  [data-theme="dark"] .view-all-btn { color: var(--color-primary); }
+  [data-theme="dark"] .view-all-btn:hover { color: var(--color-primary-light); }
+
+  /* === unassigned / 空状态 === */
+  [data-theme="dark"] .group-header.unassigned-group {
+    background: var(--color-bg-card);
+    border-color: var(--color-border-base);
+  }
+  [data-theme="dark"] .unassigned-label { color: var(--color-text-regular); }
+  [data-theme="dark"] .empty-state,
+  [data-theme="dark"] .no-data { color: var(--color-text-secondary); }
+
+  /* === 加载/骨架 === */
+  [data-theme="dark"] .skeleton-card,
+  [data-theme="dark"] .skeleton-group-header,
+  [data-theme="dark"] .skeleton-task-row {
+    background: var(--color-bg-card);
+    border-color: var(--color-border-base);
+  }
+
+  /* === 动画相关（hero 在 dark 模式文字保持白色） === */
+  [data-theme="dark"] .welcome-text { color: #fff; }
+  [data-theme="dark"] .tip-text { color: rgba(255, 255, 255, 0.9); }
+  [data-theme="dark"] .btn-welcome { color: #fff; }
+  [data-theme="dark"] .btn-welcome-secondary { color: #fff; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); }
 </style>
