@@ -364,7 +364,7 @@ const formulaFieldConfig = computed(() => ({
 }))
 
 const createActions = [
-  { name: '手动添加', icon: '✏️', color: '#FF7A5C' },
+  { name: '手动添加', icon: '✏️', color: 'var(--color-primary)' },
   { name: '上传文件', icon: '📁', color: '#67C23A' },
   { name: 'AI 自动研究', icon: '🤖', color: '#E6A23C' },
 ]

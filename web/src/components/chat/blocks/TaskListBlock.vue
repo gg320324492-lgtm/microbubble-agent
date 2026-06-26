@@ -67,7 +67,7 @@ const goToTask = (id) => { if (id) router.push(`/tasks?task_id=${id}`) }
 
 <style scoped>
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #FF7A5C; }
+.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .task-item { padding: 10px 0; border-top: 1px solid #f0f1f3; cursor: pointer; transition: background 0.15s; }
 .task-item:first-of-type { border-top: none; }
@@ -75,15 +75,15 @@ const goToTask = (id) => { if (id) router.push(`/tasks?task_id=${id}`) }
 .task-row1 { display: flex; align-items: center; gap: 8px; }
 .priority-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .task-title { flex: 1; font-weight: 500; font-size: 14px; }
-.status { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #f0f4f8; color: #666; }
+.status { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #f0f4f8; color: var(--color-text-regular); }
 .status.done { background: #e8f5e9; color: #2e7d32; }
 .status.in_progress { background: #fff7e6; color: #d4880f; }
 .status.blocked { background: #ffebee; color: #c62828; }
 .task-row2 { display: flex; gap: 12px; font-size: 12px; color: #888; margin-top: 4px; flex-wrap: wrap; }
-.meta.overdue { color: #f56c6c; font-weight: 500; }
+.meta.overdue { color: var(--color-danger); font-weight: 500; }
 .progress-bar { height: 4px; background: #f0f1f3; border-radius: 2px; margin-top: 6px; overflow: hidden; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, #FF7A5C, #FFB347); transition: width 0.3s; }
 .tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-.tag { font-size: 11px; background: #f0f4f8; color: #666; padding: 1px 6px; border-radius: 8px; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 13px; }
+.tag { font-size: 11px; background: #f0f4f8; color: var(--color-text-regular); padding: 1px 6px; border-radius: 8px; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

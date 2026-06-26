@@ -205,7 +205,14 @@
 // (2) 知识库 4 个 tab 顶部白边：el-tabs--border-card 外层 + .filter-card scoped
 //     块没设 background / border-color。修复：全局 dark 块加 .el-tabs--border-card
 //     + .el-card 覆盖 background + border-color。
-const SW_VERSION = 'v70-p0p5-whites-2026-06-26'
+// v70 P1: 2026-06-26 字面色批量替换 - 主题色 / 状态色 / 文本色
+// 3 个并行 agent 处理：
+// (1) 品牌色 #FF7A5C/#FF9D85/#E85A3A/#FFB347 (~22 处) → var(--color-primary/-light/-dark/accent)
+// (2) EP 调色板 #F56C6C/#67C23A/#E6A23C/#909399/#409EFF (~70 处) → var(--color-danger/-success/-warning/-info/-primary)
+// (3) 文本色 #333/#666/#999/#555 (~60 处) → var(--color-text-primary/-regular/-secondary)
+// 合计 ~150 处字面色替换，dark 模式变量在 variables.css:507+ 已重定义，6 主题
+// 切换自动响应。例外保留：linear-gradient 内、JS string、var(...,#xxx) fallback。
+const SW_VERSION = 'v70-p1-palette-tokens-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

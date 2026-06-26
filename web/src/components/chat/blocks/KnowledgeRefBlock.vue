@@ -40,16 +40,16 @@ const goToKnowledge = (id) => { if (id) router.push(`/knowledge/${id}`) }
 
 <style scoped>
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #FF7A5C; }
+.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .ref-item { padding: 10px 0; border-top: 1px solid #f0f1f3; cursor: pointer; transition: background 0.15s; }
 .ref-item:first-of-type { border-top: none; }
 .ref-item:hover { background: #fafbfc; margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
-.ref-title { font-weight: 500; font-size: 14px; color: #FF7A5C; }
-.ref-content { font-size: 13px; color: #555; margin-top: 4px; line-height: 1.5; }
+.ref-title { font-weight: 500; font-size: 14px; color: var(--color-primary); }
+.ref-content { font-size: 13px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }
 .ref-meta { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .meta { font-size: 11px; color: #888; }
-.meta.score { color: #e6a23c; font-weight: 500; }
-.tag { font-size: 11px; background: #f0f4f8; color: #666; padding: 1px 6px; border-radius: 8px; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 13px; }
+.meta.score { color: var(--color-warning); font-weight: 500; }
+.tag { font-size: 11px; background: #f0f4f8; color: var(--color-text-regular); padding: 1px 6px; border-radius: 8px; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

@@ -101,7 +101,7 @@ const chartOption = computed(() => {
         radius: ['40%', '70%'],
         center: ['50%', '45%'],
         data: [
-          { value: stats.value.active || 0, name: '进行中', itemStyle: { color: '#FF7A5C' } },
+          { value: stats.value.active || 0, name: '进行中', itemStyle: { color: 'var(--color-primary)' } },
           { value: stats.value.paused || 0, name: '已暂停', itemStyle: { color: '#E6A23C' } },
           { value: stats.value.completed || 0, name: '已完成', itemStyle: { color: '#67C23A' } },
         ],

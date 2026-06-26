@@ -44,7 +44,7 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
 
 <style scoped>
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #FF7A5C; }
+.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .member-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #f0f1f3; }
 .member-item:first-of-type { border-top: none; }
@@ -58,5 +58,5 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
 .skills { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .skill { font-size: 11px; background: #e8f4ff; color: #1976d2; padding: 1px 6px; border-radius: 8px; }
 .bio { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.5; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 13px; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

@@ -83,7 +83,7 @@
         <el-col :xs="12" :sm="6">
           <div class="stat-card stat-card-primary fade-slide-up stagger-1">
             <div class="stat-icon-wrap stat-icon-wrap--in-progress">
-              <el-icon size="28" style="color: #FF7A5C"><Clock /></el-icon>
+              <el-icon size="28" style="color: var(--color-primary)"><Clock /></el-icon>
             </div>
             <div class="stat-content">
               <div class="stat-label">进行中</div>
@@ -95,7 +95,7 @@
         <el-col :xs="12" :sm="6">
           <div class="stat-card stat-card-success fade-slide-up stagger-2">
             <div class="stat-icon-wrap stat-icon-wrap--done">
-              <el-icon size="28" style="color: #67C23A"><CircleCheck /></el-icon>
+              <el-icon size="28" style="color: var(--color-success)"><CircleCheck /></el-icon>
             </div>
             <div class="stat-content">
               <div class="stat-label">已完成</div>
@@ -107,7 +107,7 @@
         <el-col :xs="12" :sm="6">
           <div class="stat-card stat-card-danger fade-slide-up stagger-4 clickable" :class="{ 'has-danger': dashboardData.summary?.overdue_tasks > 0 }" @click="$router.push('/tasks?overdue=true')">
             <div class="stat-icon-wrap stat-icon-wrap--overdue">
-              <el-icon size="28" style="color: #F56C6C"><Warning /></el-icon>
+              <el-icon size="28" style="color: var(--color-danger)"><Warning /></el-icon>
             </div>
             <div class="stat-content">
               <div class="stat-label">已逾期</div>
@@ -163,7 +163,7 @@
             <el-avatar
               v-if="group.assignee_id === 'unassigned'"
               :size="40"
-              style="background: #409EFF"
+              style="background: var(--color-primary)"
               class="avatar group-avatar"
               alt="系统"
             >
@@ -777,7 +777,7 @@ onMounted(() => {
   border: 1px solid rgba(64,158,255,0.2);
   border-radius: var(--radius-lg);
 }
-.unassigned-label { color: #409EFF; font-weight: var(--font-weight-bold); }
+.unassigned-label { color: var(--color-primary); font-weight: var(--font-weight-bold); }
 .group-header {
   display: flex;
   align-items: center;

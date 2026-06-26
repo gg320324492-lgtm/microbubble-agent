@@ -223,7 +223,7 @@ function onLongPress(e) {
 
 /* 错误 */
 .msg-error {
-  color: #f56c6c;
+  color: var(--color-danger);
   font-size: 12px;
   margin-top: 6px;
 }

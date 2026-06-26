@@ -65,18 +65,18 @@ const goToMeeting = () => {
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .card-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .icon { font-size: 18px; }
-.title { flex: 1; font-weight: 600; font-size: 14px; color: #FF7A5C; }
-.meta { font-size: 11px; color: #999; display: flex; gap: 6px; align-items: center; }
+.title { flex: 1; font-weight: 600; font-size: 14px; color: var(--color-primary); }
+.meta { font-size: 11px; color: var(--color-text-secondary); display: flex; gap: 6px; align-items: center; }
 .truncated-badge { background: #ffebee; color: #c62828; padding: 1px 6px; border-radius: 8px; font-size: 10px; }
-.toggle { font-size: 12px; color: #999; }
+.toggle { font-size: 12px; color: var(--color-text-secondary); }
 .preview { margin-top: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px; }
-.preview-line { font-size: 12px; color: #555; line-height: 1.7; }
-.preview-line .speaker { color: #FF7A5C; font-weight: 500; }
-.more { font-size: 11px; color: #999; margin-top: 4px; text-align: center; }
+.preview-line { font-size: 12px; color: var(--color-text-regular); line-height: 1.7; }
+.preview-line .speaker { color: var(--color-primary); font-weight: 500; }
+.more { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; text-align: center; }
 .full-transcript { margin-top: 8px; max-height: 400px; overflow-y: auto; padding: 4px 0; }
 .dialogue-line { padding: 6px 0; font-size: 13px; line-height: 1.7; border-bottom: 1px dashed #f0f1f3; }
 .dialogue-line:last-child { border-bottom: none; }
-.dialogue-line .speaker { display: inline-block; min-width: 80px; color: #FF7A5C; font-weight: 500; margin-right: 8px; }
-.dialogue-line .text { color: #333; }
+.dialogue-line .speaker { display: inline-block; min-width: 80px; color: var(--color-primary); font-weight: 500; margin-right: 8px; }
+.dialogue-line .text { color: var(--color-text-primary); }
 .card-footer { margin-top: 8px; text-align: right; }
 </style>

@@ -294,7 +294,7 @@ const passwordFields = computed(() => [
 
 // 头像操作
 const avatarActions = [
-  { name: '拍照', icon: '📷', color: '#FF7A5C' },
+  { name: '拍照', icon: '📷', color: 'var(--color-primary)' },
   { name: '从相册选择', icon: '🖼️', color: '#67C23A' },
   { name: '恢复默认头像', icon: '🔄', color: '#909399' },
 ]

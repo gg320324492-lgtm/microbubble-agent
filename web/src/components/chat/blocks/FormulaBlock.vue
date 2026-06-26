@@ -84,22 +84,22 @@ const sourceTypeLabel = (s) => {
 
 <style scoped>
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #FF7A5C; }
+.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .formula-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
 .formula-item:first-of-type { border-top: none; }
 .formula-row1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .formula-name { font-weight: 500; font-size: 14px; }
-.source-badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #f0f4f8; color: #666; }
-.confidence { font-size: 11px; color: #e6a23c; font-weight: 500; }
+.source-badge { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: #f0f4f8; color: var(--color-text-regular); }
+.confidence { font-size: 11px; color: var(--color-warning); font-weight: 500; }
 .latex { background: #fafbfc; padding: 8px 12px; border-radius: 6px; margin-top: 6px; font-family: 'Cambria Math', 'Times New Roman', serif; font-size: 14px; }
 .latex code { background: transparent; padding: 0; }
-.result { font-size: 13px; margin-top: 6px; color: #333; }
-.unit { color: #999; font-size: 12px; }
+.result { font-size: 13px; margin-top: 6px; color: var(--color-text-primary); }
+.unit { color: var(--color-text-secondary); font-size: 12px; }
 .variables { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
-.var-label { font-size: 11px; color: #999; }
+.var-label { font-size: 11px; color: var(--color-text-secondary); }
 .var-chip { font-size: 11px; background: #fff7e6; color: #d4880f; padding: 2px 8px; border-radius: 8px; font-family: monospace; }
-.var-unit { color: #999; margin-left: 2px; }
+.var-unit { color: var(--color-text-secondary); margin-left: 2px; }
 .formula-actions { margin-top: 8px; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 13px; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

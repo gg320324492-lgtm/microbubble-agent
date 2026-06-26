@@ -272,7 +272,7 @@ function drawWaveform() {
       ctx.bezierCurveTo(cpx, prev.y, cpx, points[i].y, points[i].x, points[i].y)
     }
   }
-  ctx.strokeStyle = '#FF7A5C'
+  ctx.strokeStyle = 'var(--color-primary)'
   ctx.lineWidth = 2
   ctx.stroke()
 
@@ -338,10 +338,10 @@ onUnmounted(() => {
 
 .test-hint {
   text-align: center;
-  color: #666;
+  color: var(--color-text-regular);
 }
 .test-hint p { margin: 4px 0; }
-.hint-sub { font-size: 13px; color: #999; }
+.hint-sub { font-size: 13px; color: var(--color-text-secondary); }
 
 .record-area {
   display: flex;
@@ -379,7 +379,7 @@ onUnmounted(() => {
 .timer {
   font-size: 18px;
   font-weight: 600;
-  color: #FF7A5C;
+  color: var(--color-primary);
 }
 
 .waveform-canvas {
@@ -412,7 +412,7 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   border: 4px solid #eee;
-  border-top-color: #FF7A5C;
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -431,7 +431,7 @@ onUnmounted(() => {
 }
 .step-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
 .step-info { flex: 1; }
-.step-name { font-weight: 600; font-size: 14px; color: #333; }
+.step-name { font-weight: 600; font-size: 14px; color: var(--color-text-primary); }
 .step-detail { font-size: 13px; margin-top: 2px; }
 .step-detail.status-ok { color: #52c41a; }
 .step-detail.status-warn { color: #faad14; }
@@ -453,8 +453,8 @@ onUnmounted(() => {
 }
 .result-badge.success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
 .result-badge.fail { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
-.result-speaker { font-size: 22px; font-weight: 700; margin-top: 8px; color: #333; }
+.result-speaker { font-size: 22px; font-weight: 700; margin-top: 8px; color: var(--color-text-primary); }
 .result-confidence { font-size: 14px; color: #888; margin-top: 4px; }
-.result-transcript { font-size: 14px; color: #666; margin-top: 8px; font-style: italic; }
-.result-hint { font-size: 13px; color: #999; margin-top: 8px; }
+.result-transcript { font-size: 14px; color: var(--color-text-regular); margin-top: 8px; font-style: italic; }
+.result-hint { font-size: 13px; color: var(--color-text-secondary); margin-top: 8px; }
 </style>

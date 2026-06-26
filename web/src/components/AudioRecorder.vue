@@ -190,7 +190,7 @@ async function generateWaveform() {
   ctx.fillStyle = '#f5f5f5'
   ctx.fillRect(0, 0, width, height)
 
-  ctx.fillStyle = '#FF7A5C'
+  ctx.fillStyle = 'var(--color-primary)'
   const mid = height / 2
   for (let i = 0; i < waveformData.length; i++) {
     const { min, max } = waveformData[i]
@@ -263,14 +263,14 @@ defineExpose({
   transition: all 0.2s;
 }
 .btn-start:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(255,122,92,0.4); }
-.recorder-hint { color: #999; font-size: 13px; margin-top: 12px; }
-.resume-hint { color: #FF7A5C; font-weight: 600; font-size: 14px; background: rgba(255,122,92,0.08); padding: 8px 16px; border-radius: 8px; }
+.recorder-hint { color: var(--color-text-secondary); font-size: 13px; margin-top: 12px; }
+.resume-hint { color: var(--color-primary); font-weight: 600; font-size: 14px; background: rgba(255,122,92,0.08); padding: 8px 16px; border-radius: 8px; }
 
 /* recording */
 .recorder-active { text-align: center; }
-.recorder-status { font-size: 16px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 8px; justify-content: center; }
-.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #F56C6C; animation: pulse 1.5s infinite; }
-.rec-dot.paused { animation: none; background: #E6A23C; }
+.recorder-status { font-size: 16px; font-weight: 600; color: var(--color-text-primary); display: flex; align-items: center; gap: 8px; justify-content: center; }
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-danger); animation: pulse 1.5s infinite; }
+.rec-dot.paused { animation: none; background: var(--color-warning); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .recorder-timer { font-size: 48px; font-weight: 300; font-family: 'SF Mono', 'Cascadia Code', monospace; color: #2D2D2D; margin: 20px 0; }
 .volume-bars { display: flex; gap: 6px; align-items: flex-end; justify-content: center; height: 44px; margin: 16px 0; }
@@ -280,15 +280,15 @@ defineExpose({
   padding: 10px 28px; font-size: 15px; font-weight: 600;
   border: none; border-radius: 24px; cursor: pointer; transition: all 0.2s;
 }
-.btn-pause, .btn-resume { background: #f0f0f0; color: #333; }
+.btn-pause, .btn-resume { background: #f0f0f0; color: var(--color-text-primary); }
 .btn-pause:hover, .btn-resume:hover { background: #e0e0e0; }
-.btn-stop { background: #F56C6C; color: #fff; }
+.btn-stop { background: var(--color-danger); color: #fff; }
 .btn-stop:hover { background: #E65D5D; }
 
 /* stopped */
 .recorder-stopped { text-align: center; width: 100%; max-width: 600px; }
-.recorder-done { font-size: 20px; font-weight: 700; color: #333; }
-.recorder-duration { font-size: 14px; color: #999; margin: 4px 0 20px; }
+.recorder-done { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+.recorder-duration { font-size: 14px; color: var(--color-text-secondary); margin: 4px 0 20px; }
 .waveform-canvas {
   width: 100%; height: 80px; border-radius: 8px; cursor: pointer;
   border: 1px solid #eee;
@@ -299,5 +299,5 @@ defineExpose({
   background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: #fff;
   font-size: 16px; cursor: pointer;
 }
-.playback-time { font-size: 13px; color: #666; font-family: 'SF Mono', 'Cascadia Code', monospace; }
+.playback-time { font-size: 13px; color: var(--color-text-regular); font-family: 'SF Mono', 'Cascadia Code', monospace; }
 </style>

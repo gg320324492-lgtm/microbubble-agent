@@ -299,7 +299,7 @@
           <template #header><span>听会</span></template>
           <MeetingRoom v-if="showCallRoom" @call-ended="onCallEnded" style="height: 400px" />
           <div v-else class="call-placeholder" @click="startLiveCall">
-            <el-icon size="40" color="#FF7A5C"><Microphone /></el-icon>
+            <el-icon size="40" color="var(--color-primary)"><Microphone /></el-icon>
             <p>点击开始听会</p>
           </div>
         </el-card>
@@ -796,18 +796,18 @@ onMounted(async () => {
   height: 8px;
   border-radius: 50%;
 }
-.status-badge.status-scheduled { background: #f4f4f5; color: #909399; }
-.status-badge.status-scheduled .status-dot { background: #909399; }
-.status-badge.status-recording { background: #fff0ed; color: #FF7A5C; }
-.status-badge.status-recording .status-dot { background: #FF7A5C; animation: dot-pulse 1.2s infinite; }
-.status-badge.status-processing { background: #fdf6ec; color: #E6A23C; }
-.status-badge.status-processing .status-dot { background: #E6A23C; animation: dot-pulse 1.5s infinite; }
-.status-badge.status-completed { background: #f0f9eb; color: #67C23A; }
-.status-badge.status-completed .status-dot { background: #67C23A; }
-.status-badge.status-cancelled { background: #f4f4f5; color: #909399; }
-.status-badge.status-cancelled .status-dot { background: #909399; opacity: 0.5; }
-.status-badge.status-error { background: #fef0f0; color: #F56C6C; }
-.status-badge.status-error .status-dot { background: #F56C6C; }
+.status-badge.status-scheduled { background: #f4f4f5; color: var(--color-info); }
+.status-badge.status-scheduled .status-dot { background: var(--color-info); }
+.status-badge.status-recording { background: #fff0ed; color: var(--color-primary); }
+.status-badge.status-recording .status-dot { background: var(--color-primary); animation: dot-pulse 1.2s infinite; }
+.status-badge.status-processing { background: #fdf6ec; color: var(--color-warning); }
+.status-badge.status-processing .status-dot { background: var(--color-warning); animation: dot-pulse 1.5s infinite; }
+.status-badge.status-completed { background: #f0f9eb; color: var(--color-success); }
+.status-badge.status-completed .status-dot { background: var(--color-success); }
+.status-badge.status-cancelled { background: #f4f4f5; color: var(--color-info); }
+.status-badge.status-cancelled .status-dot { background: var(--color-info); opacity: 0.5; }
+.status-badge.status-error { background: #fef0f0; color: var(--color-danger); }
+.status-badge.status-error .status-dot { background: var(--color-danger); }
 
 @keyframes dot-pulse {
   0%, 100% { opacity: 1; scale: 1; }

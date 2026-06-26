@@ -350,13 +350,13 @@ watch(() => props.modelValue, (v) => {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #f56c6c;
+  background: var(--color-danger);
   animation: pulse 1s infinite;
 }
 .recording-time {
   font-family: monospace;
   font-size: 20px;
-  color: #f56c6c;
+  color: var(--color-danger);
   font-weight: 600;
 }
 @keyframes pulse {

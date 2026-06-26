@@ -89,7 +89,7 @@ const statusLabel = (s) => {
 .card-header {
   display: flex; align-items: center; gap: 8px;
   font-weight: 600; font-size: 14px;
-  margin-bottom: 10px; color: #FF7A5C;
+  margin-bottom: 10px; color: var(--color-primary);
 }
 .icon { font-size: 18px; }
 .meeting-item {
@@ -102,16 +102,16 @@ const statusLabel = (s) => {
 .meeting-item:hover { background: #fafbfc; margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
 .meeting-title { font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 6px; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.meeting-meta { display: flex; gap: 12px; font-size: 12px; color: #999; margin-top: 4px; flex-wrap: wrap; }
-.meeting-summary { font-size: 13px; color: #555; margin-top: 6px; line-height: 1.5; }
-.meeting-agenda { font-size: 12px; color: #666; margin-top: 4px; }
+.meeting-meta { display: flex; gap: 12px; font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; flex-wrap: wrap; }
+.meeting-summary { font-size: 13px; color: var(--color-text-regular); margin-top: 6px; line-height: 1.5; }
+.meeting-agenda { font-size: 12px; color: var(--color-text-regular); margin-top: 4px; }
 .meeting-stats { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .stat {
   font-size: 11px;
   background: #f0f4f8;
   padding: 2px 8px;
   border-radius: 10px;
-  color: #555;
+  color: var(--color-text-regular);
 }
 .stat.audio { background: #fff7e6; color: #d4880f; }
 .meeting-participants { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
@@ -122,6 +122,6 @@ const statusLabel = (s) => {
   padding: 2px 8px;
   border-radius: 10px;
 }
-.more { font-size: 11px; color: #999; padding: 2px 4px; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 13px; }
+.more { font-size: 11px; color: var(--color-text-secondary); padding: 2px 4px; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

@@ -109,7 +109,7 @@
           <div class="action-panel">
             <div class="action-title">会议操作</div>
             <button type="button" class="action-item" @click="handleCreateMeeting">
-              <span class="action-icon" style="background: #FF7A5C">+</span>
+              <span class="action-icon" style="background: var(--color-primary)">+</span>
               <span>手动创建</span>
             </button>
             <button
@@ -121,11 +121,11 @@
               title="粘贴转录分析"
               @click="handlePasteAnalyze"
             >
-              <span class="action-icon" style="background: #67C23A">📋</span>
+              <span class="action-icon" style="background: var(--color-success)">📋</span>
               <span>粘贴转录分析</span>
             </button>
             <button type="button" class="action-item" @click="handleStartLive">
-              <span class="action-icon" style="background: #E6A23C">🎤</span>
+              <span class="action-icon" style="background: var(--color-warning)">🎤</span>
               <span>开始听会</span>
             </button>
             <button
@@ -137,7 +137,7 @@
               title="声纹识别测试"
               @click="handleVoiceTest"
             >
-              <span class="action-icon" style="background: #909399">🎙</span>
+              <span class="action-icon" style="background: var(--color-info)">🎙</span>
               <span>声纹识别测试</span>
             </button>
             <button
@@ -149,7 +149,7 @@
               title="录入我的声纹"
               @click="handleEnrollVoice"
             >
-              <span class="action-icon" style="background: #409EFF">🎙️</span>
+              <span class="action-icon" style="background: var(--color-primary)">🎙️</span>
               <span>录入我的声纹</span>
             </button>
             <button type="button" class="action-item cancel" @click="showActionSheet = false">取消</button>
@@ -500,7 +500,7 @@ onMounted(() => {
   flex-shrink: 0;
   margin-top: 6px;
 }
-.status-dot.status-scheduled { background: #909399; }
+.status-dot.status-scheduled { background: var(--color-info); }
 .status-dot.status-recording { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
 .status-dot.status-processing { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
 .status-dot.status-completed { background: var(--color-success, #67C23A); }
