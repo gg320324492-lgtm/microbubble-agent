@@ -142,6 +142,9 @@ services:
       - ./models:/app/models
       - ./models/hf_cache:/root/.cache/huggingface
       - ./whisper_entrypoint.sh:/app/entrypoint.sh
+      # v31.3.1: bind mount 源码 → 修改本地 whisper_server.py 后 docker compose restart 即可生效,
+      # 不再需要 docker cp (旧 Dockerfile COPY 烧进镜像, 源码改动不生效)
+      - ./app/whisper_server.py:/app/whisper_server.py:ro
     entrypoint: ["bash", "/app/entrypoint.sh"]
     environment:
       - MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
