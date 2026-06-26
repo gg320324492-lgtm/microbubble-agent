@@ -115,6 +115,9 @@
             </div>
           </el-popover>
 
+          <!-- v68 (2026-06-26): 主题切换按钮（铃铛之后、用户 dropdown 之前） -->
+          <ThemeToggleButton />
+
           <el-dropdown>
             <div class="user-info">
               <el-avatar :size="32" :src="userAvatar" :alt="username" icon="UserFilled" />
@@ -175,6 +178,8 @@ import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useIsMobile } from '@/composables/useIsMobile'
 import MobileTabBar from '@/components/mobile/TabBar.vue'
+// v68 (2026-06-26): 桌面端顶栏主题切换按钮（与移动端 MobileHeader 风格一致）
+import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
