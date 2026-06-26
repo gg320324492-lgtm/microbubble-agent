@@ -90,7 +90,19 @@
 // 选择器，直接命中 NutUI 实际设色的子元素，特异性 (0,2,0) vs NutUI (0,1,0) 胜出。
 // 教训：编译正确 ≠ 业务生效——必须验证选择器命中的元素确实是想要染色的元素，
 // CSS color 继承会被子元素直接声明覆盖。
-const SW_VERSION = 'v63-tabbar-inactive-icon-selector-2026-06-26'
+// v64: 2026-06-26 v63 部署后用户截图反馈"底部导航栏全白的"。诊断：v62/v63 只把
+// .nut-tabbar-item 颜色移到非 scoped 块，但漏了 .mobile-tabbar 容器背景。
+// 容器背景 dark 模式还在 scoped <style> 块，scoped CSS 编译 [data-theme="dark"]
+// .mobile-tabbar 时把 data-v 错误附加到属性选择器（同 v60 教训），编译产物
+// [data-theme=dark] .mobile-tabbar[data-v-xxx] 要求同一元素同时有两属性——
+// <html> 只有 data-theme，<nav> 只有 data-v，**永不匹配** → dark 容器背景
+// 永远不生效，TabBar 一直是 rgba(255,255,255,0.92) 白底半透明。
+// 修复：把 .mobile-tabbar 容器背景 dark 覆盖也移到非 scoped 块。
+// 教训：v62/v63 教训只覆盖到 .nut-tabbar-item，漏了 .mobile-tabbar 容器。
+// 任何 [data-theme="dark"] 在 scoped 块里都触发同一 Vue scoped bug，**所有 dark 模式
+// scoped 规则都要迁移到非 scoped 块**。下次添加 dark 模式前先检查该组件是否在
+// scoped 块写过 [data-theme="dark"] 规则，统统迁移。
+const SW_VERSION = 'v64-tabbar-container-background-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
