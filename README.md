@@ -19,8 +19,13 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
-## 最新里程碑（2026-06-24）
+## 最新里程碑（2026-06-26）
 
+- ✅ **v31.3.1 whisper 容器 bind mount** — Dockerfile 删 `COPY` + bind mount `./app/whisper_server.py:/app/whisper_server.py:ro`，本地改源码 → `docker compose restart whisper` 即生效（commit `3f9411cb`）
+- ✅ **v31.3 Whisper 常驻 + 推理加速** — 模型常驻 GPU 8GB（chat ASR 时效性优先），实测加载 18s / 端到端 ASR 1s（commit `93de5151`）
+- ✅ **v31.2.5 rate-limit Redis ZSET 持久化** — `AsyncRedisRateLimiter` 启用替换 `RateLimiter`，抗 `docker compose restart` 清零，5 verify 脚本全 PASS（commit `0ea97c95`）
+- ✅ **v31.2.x rate-limit 基建收官** — XFF 空 IP 兜底 + analytics regex 永久化 + `request.state.user_id` 维度 + `X-RateLimit-Policy` 头 + SSE tier 10/min + auth prefix match
+- ✅ **v31 检索质量监控埋点** — 3 endpoint + 5 指标 dashboard + per-user 维度 + qa-bench 360 题 + 50 高分自动入库
 - ✅ **sentence-transformers 5.6.0 升级** — 跨 3 大版本 0 破坏，删 170 行 Qwen3 wrapper，Qwen3 max_seq_length 4x → 32K，qa-bench 38%→42%（commit `c8d4df3e`）
 - ✅ **v29 Qwen3 全量迁移** — GPU 启用 + Qwen3 wrapper + alembic 030 + 知识库 350/351 重算 + 列原子切换
 - ✅ **v28 智能论文阅读器** — 8 phases 100% 收官，4 篇 PDF 37 张图 100% 核心不变量 + article 9 字 bug 修复
@@ -28,7 +33,7 @@
 
 详见 [CHANGELOG.md](CHANGELOG.md) 最新条目 + [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)
 
-**统计**（app/stats.json, 2026-06-24）：**~1342 commits / 183K+ 行代码 / 676 文件 / 40 开发天数**（vue 46.8K / python 52.0K / markdown 42.7K / config 14.3K / javascript 17.8K / html 3.5K / shell 3.1K / typescript 1.4K / css 1.4K）
+**统计**（app/stats.json, 2026-06-26）：**~1380+ commits / 187K+ 行代码 / 690+ 文件 / 42 开发天数**（vue 47.5K / python 53.2K / markdown 43.0K / config 14.6K / javascript 18.5K / html 3.7K / shell 3.2K / typescript 1.5K / css 1.5K）
 
 ## 技术栈
 
