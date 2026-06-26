@@ -223,7 +223,7 @@
 // (3) 文本色 #333/#666/#999/#555 (~60 处) → var(--color-text-primary/-regular/-secondary)
 // 合计 ~150 处字面色替换，dark 模式变量在 variables.css:507+ 已重定义，6 主题
 // 切换自动响应。例外保留：linear-gradient 内、JS string、var(...,#xxx) fallback。
-const SW_VERSION = 'v72-stylelint-std-cleanup-2026-06-27'
+const SW_VERSION = 'v73-fallback-orphans-ci-2026-06-27'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

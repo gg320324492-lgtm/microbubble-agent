@@ -352,7 +352,7 @@ watch(() => props.knowledgeId, () => fetchImages(), { immediate: true })
   background: var(--color-bg-secondary);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  font-family: var(--font-family-mono, 'Courier New', monospace);
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   line-height: 1.6;
   white-space: pre-wrap;
