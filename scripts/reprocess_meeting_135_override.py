@@ -259,8 +259,12 @@ async def apply_override(meeting_id: int, new_speaker: list, target_names: list,
                     new_mapping[f"cluster_{i}"] = name
             m.speaker_mapping = new_mapping
 
-            # 5. 清空 speaker_stats, regen 后 LLM 重新生成
-            m.speaker_stats = []
+            # 5. 计算 speaker_stats (P0: 之前清空后没补, 前端显示空)
+            # 用权威函数 MeetingAnalysisService.compute_speaker_stats 输出 schema A
+            # (前端 SpeakerStatsCard 期望的格式: name/turn_count/word_count/speaking_ratio/...)
+            from app.services.meeting_analysis_service import meeting_analysis
+            m.speaker_stats = meeting_analysis.compute_speaker_stats(m.transcript or [])
+            logger.info(f"speaker_stats 计算: {len(m.speaker_stats)} 位发言人")
 
             # 6. 重建 meeting_participants (P0: 修 #135 头部头像)
             # 参考 scripts/reprocess_meeting.py:apply_to_db line 387-401 已有的同样逻辑
