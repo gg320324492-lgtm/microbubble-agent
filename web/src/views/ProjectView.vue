@@ -561,4 +561,15 @@ onMounted(() => {
   background: var(--color-primary-bg);
   color: var(--color-primary);
 }
+/* v69 P1b fix-2: 详情 dialog 内的项目成员 tag / 里程碑 / 项目描述 提亮 */
+[data-theme="dark"] .project-detail h4 { color: var(--color-text-primary); }
+[data-theme="dark"] .detail-field-label { color: var(--color-text-secondary); }
+[data-theme="dark"] .detail-field-value { color: var(--color-text-primary); }
+[data-theme="dark"] .milestone-item {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .milestone-title { color: var(--color-text-primary); }
+[data-theme="dark"] .milestone-desc { color: var(--color-text-secondary); }
+[data-theme="dark"] .member-tag-item { background: var(--color-bg-hover); }
 </style>
