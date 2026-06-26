@@ -118,7 +118,7 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
   gap: 8px;
   width: 100%;
   padding: 10px 14px;
-  background: #f5f7fa;
+  background: var(--color-bg-page);
   border: 1px solid var(--color-border, #e4e7ed);
   border-radius: 8px;
   cursor: pointer;
@@ -166,7 +166,7 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
 }
 
 .rich-collapse-btn:hover {
-  background: #f5f7fa;
+  background: var(--color-bg-page);
   color: var(--color-primary, #FF7A5C);
 }
 </style>

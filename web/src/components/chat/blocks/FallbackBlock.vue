@@ -24,7 +24,7 @@ const html = computed(() => {
 
 <style scoped>
 .fallback-block {
-  background: #fafbfc;
+  background: var(--color-bg-warm);
   border-left: 3px solid var(--color-primary);
   padding: 8px 12px;
   margin: 8px 0;

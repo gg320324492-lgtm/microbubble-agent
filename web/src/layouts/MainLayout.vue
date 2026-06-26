@@ -594,10 +594,10 @@ const formatTime = (t) => {
   left: 0;
   width: 260px;
   height: 100%;
-  background: #fff;
+  background: var(--color-bg-card);
   overflow-y: auto;
   padding: 20px 12px;
-  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-sidebar);
 }
 
 .mobile-drawer-brand {

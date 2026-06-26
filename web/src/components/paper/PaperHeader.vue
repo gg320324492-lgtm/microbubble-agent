@@ -180,7 +180,7 @@ const headerTags = computed(() => {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   padding: 24px 28px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   border: 1px solid var(--color-border-light);
   margin-bottom: 24px;
 }
@@ -373,7 +373,7 @@ const headerTags = computed(() => {
 }
 
 .journal-year {
-  color: #6B7280;
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 
@@ -395,7 +395,7 @@ const headerTags = computed(() => {
   text-decoration: none;
   font-size: 13px;
   padding: 4px 10px;
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid rgba(255, 122, 92, 0.25);
   border-radius: 6px;
   transition: all 0.15s ease;
@@ -431,7 +431,7 @@ const headerTags = computed(() => {
 }
 
 .meta-label {
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-size: 12px;
 }
 

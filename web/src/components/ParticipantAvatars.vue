@@ -88,7 +88,7 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
 
 .avatar-item {
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xs);
   cursor: pointer;
   transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
   flex-shrink: 0;
@@ -96,7 +96,7 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
 
 .avatar-item:hover {
   transform: scale(1.12);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm); /* hover 时略强（原 0.15 → 0.06 in light / 0.4 in dark 已有） */
   z-index: 100 !important;
 }
 

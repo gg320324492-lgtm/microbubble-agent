@@ -266,12 +266,12 @@ onMounted(fetchTraces)
 .total-info { text-align: right; color: var(--color-text-secondary); font-size: 12px; margin-top: 12px; }
 .trace-detail h3 { font-size: 14px; margin: 16px 0 8px; color: var(--color-primary); }
 .trace-detail .json {
-  background: #fafbfc; padding: 10px 12px; border-radius: 6px;
+  background: var(--color-bg-warm); padding: 10px 12px; border-radius: 6px;
   font-size: 12px; color: var(--color-text-primary); max-height: 300px; overflow: auto;
   white-space: pre-wrap; word-break: break-all;
 }
 .trace-detail .json.error { color: var(--color-danger); }
-.tool-call { padding: 8px 12px; background: #fafbfc; border-radius: 6px; margin-bottom: 6px; }
+.tool-call { padding: 8px 12px; background: var(--color-bg-warm); border-radius: 6px; margin-bottom: 6px; }
 .tc-header { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 .tc-header .duration { font-size: 11px; color: var(--color-text-secondary); }
 .rich-block-tag { display: inline-flex; gap: 6px; padding: 4px 0; margin-right: 8px; }

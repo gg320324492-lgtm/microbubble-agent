@@ -769,7 +769,7 @@ onMounted(() => {
   height: 34px !important;
   padding: 0 !important;
   border: 1.5px solid var(--color-border) !important;
-  background: #fff !important;
+  background: var(--color-bg-card) !important;
   transition: all 0.2s ease !important;
 }
 .action-btn:hover {

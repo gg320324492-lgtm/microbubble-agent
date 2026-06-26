@@ -96,7 +96,7 @@ const topic = computed(() => props.paper.topic || '')
   gap: 12px;
   margin-bottom: 10px;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   flex-wrap: wrap;
 }
 
@@ -124,7 +124,7 @@ const topic = computed(() => props.paper.topic || '')
 .meta-length {
   margin-left: auto;
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 .abstract-text {
@@ -154,13 +154,13 @@ const topic = computed(() => props.paper.topic || '')
 
 .keywords-label {
   font-size: 13px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   font-weight: 500;
   margin-right: 4px;
 }
 
 .keyword-tag {
-  background: #fff;
+  background: var(--color-bg-card);
   color: var(--color-primary);
   border: 1px solid rgba(255, 122, 92, 0.3);
 }

@@ -62,14 +62,14 @@ const goToMeeting = () => {
 </template>
 
 <style scoped>
-.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .icon { font-size: 18px; }
 .title { flex: 1; font-weight: 600; font-size: 14px; color: var(--color-primary); }
 .meta { font-size: 11px; color: var(--color-text-secondary); display: flex; gap: 6px; align-items: center; }
 .truncated-badge { background: #ffebee; color: #c62828; padding: 1px 6px; border-radius: 8px; font-size: 10px; }
 .toggle { font-size: 12px; color: var(--color-text-secondary); }
-.preview { margin-top: 8px; padding: 8px 12px; background: #fafbfc; border-radius: 6px; }
+.preview { margin-top: 8px; padding: 8px 12px; background: var(--color-bg-warm); border-radius: 6px; }
 .preview-line { font-size: 12px; color: var(--color-text-regular); line-height: 1.7; }
 .preview-line .speaker { color: var(--color-primary); font-weight: 500; }
 .more { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; text-align: center; }

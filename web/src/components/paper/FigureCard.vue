@@ -160,7 +160,7 @@ const statusLabel = (s) => ({
 
 <style scoped>
 .figure-card {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   overflow: hidden;
@@ -169,7 +169,7 @@ const statusLabel = (s) => ({
 }
 
 .figure-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-md);
   border-color: rgba(255, 122, 92, 0.2);
 }
 
@@ -178,7 +178,7 @@ const statusLabel = (s) => ({
    现在 inline 模式下图片 1:1 渲染（保留 aspect-ratio），用户一眼看全 */
 .figure-image-wrapper {
   position: relative;
-  background: #fafbfc;
+  background: var(--color-bg-warm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -194,7 +194,7 @@ const statusLabel = (s) => ({
   object-fit: contain;
   border-radius: 4px;
   display: block;
-  background: #fff;
+  background: var(--color-bg-card);
 }
 
 .figure-skeleton {
@@ -236,7 +236,7 @@ const statusLabel = (s) => ({
 .figure-caption {
   padding: 12px 20px;
   border-top: 1px solid var(--color-border-light);
-  background: #fff;
+  background: var(--color-bg-card);
 }
 
 /* v28 step 20: figcaption 一体化标题（Fig. N + caption 标题） */
@@ -306,7 +306,7 @@ const statusLabel = (s) => ({
 
 .figure-caption-empty {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-style: italic;
 }
 
@@ -323,7 +323,7 @@ const statusLabel = (s) => ({
 .figure-description summary {
   cursor: pointer;
   font-weight: 500;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   user-select: none;
   list-style: none;
   display: flex;
@@ -360,7 +360,7 @@ const statusLabel = (s) => ({
   padding-top: 8px;
   border-top: 1px dashed var(--color-border-light);
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
 }
 
 .figure-ocr summary {
@@ -390,7 +390,7 @@ const statusLabel = (s) => ({
 
 /* v28 step 15: 全屏预览 dialog —— 92vw × 94vh，原图按 viewport 完整渲染 */
 .preview-image-full {
-  background: #fafbfc;
+  background: var(--color-bg-warm);
   border-radius: 6px;
   display: flex;
   align-items: center;

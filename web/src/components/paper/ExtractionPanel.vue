@@ -164,12 +164,12 @@ const typeLabel = (kind) => ({
 
 <style scoped>
 .extraction-panel {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 20px 24px;
   margin: 0 0 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
 }
 
 .extraction-header {
@@ -202,7 +202,7 @@ const typeLabel = (kind) => ({
 .extraction-empty {
   text-align: center;
   padding: 32px 20px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 .extraction-empty-icon {
@@ -214,12 +214,12 @@ const typeLabel = (kind) => ({
 .extraction-empty-text {
   font-size: 14px;
   margin: 8px 0 4px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
 }
 
 .extraction-empty-hint {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   margin: 0;
 }
 
@@ -247,12 +247,12 @@ const typeLabel = (kind) => ({
   background: #F9FAFB;
   border-radius: 6px;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   margin-bottom: 4px;
 }
 
 .cover-info-icon {
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 .extraction-list {
@@ -268,7 +268,7 @@ const typeLabel = (kind) => ({
 }
 
 .chart-card {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-left: 3px solid #F59E0B;
   border-radius: 8px;
@@ -277,7 +277,7 @@ const typeLabel = (kind) => ({
 }
 
 .chart-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-header {
@@ -286,7 +286,7 @@ const typeLabel = (kind) => ({
   gap: 8px;
   margin-bottom: 8px;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   flex-wrap: wrap;
 }
 
@@ -297,14 +297,14 @@ const typeLabel = (kind) => ({
 
 .chart-page {
   background: #F3F4F6;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   padding: 1px 6px;
   border-radius: 6px;
   font-size: 11px;
 }
 
 .chart-confidence {
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-size: 11px;
 }
 

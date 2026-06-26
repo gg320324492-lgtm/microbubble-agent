@@ -55,7 +55,7 @@ const renderedTable = computed(() => {
 
 <style scoped>
 .table-card {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-left: 3px solid #10B981;
   border-radius: 8px;
@@ -65,7 +65,7 @@ const renderedTable = computed(() => {
 }
 
 .table-card:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-sm);
 }
 
 .table-header {
@@ -75,7 +75,7 @@ const renderedTable = computed(() => {
   margin-bottom: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
 }
 
 .table-icon {
@@ -89,14 +89,14 @@ const renderedTable = computed(() => {
 
 .table-page {
   background: #F3F4F6;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   padding: 1px 6px;
   border-radius: 6px;
   font-size: 11px;
 }
 
 .table-confidence {
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-size: 11px;
 }
 
@@ -162,7 +162,7 @@ const renderedTable = computed(() => {
 
 .table-empty {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-style: italic;
   text-align: center;
   padding: 12px;

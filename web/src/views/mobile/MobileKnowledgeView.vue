@@ -726,7 +726,7 @@ onMounted(() => {
   padding: 0 12px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-bg-card);
   font-size: 14px;
 }
 .memory-mobile-select {
@@ -734,7 +734,7 @@ onMounted(() => {
   padding: 0 8px;
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--color-bg-card);
   font-size: 13px;
 }
 
@@ -750,7 +750,7 @@ onMounted(() => {
 }
 
 .memory-mobile-card {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 10px;
   padding: 12px 14px;
@@ -790,7 +790,7 @@ onMounted(() => {
 .memory-mobile-content {
   font-size: 13px;
   line-height: 1.6;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 0 0 8px;
 }
 
@@ -815,8 +815,8 @@ onMounted(() => {
   padding: 40px 16px;
 }
 .empty-icon { font-size: 48px; opacity: 0.5; margin-bottom: 12px; }
-.empty-title { font-size: 16px; font-weight: 600; color: #1F2937; }
-.empty-hint { font-size: 13px; color: #6B7280; margin-top: 6px; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
+.empty-hint { font-size: 13px; color: var(--color-text-secondary); margin-top: 6px; }
 
 .pagination-mobile {
   display: flex;
@@ -830,7 +830,7 @@ onMounted(() => {
   padding: 0 12px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-bg-card);
   font-size: 13px;
   cursor: pointer;
 }

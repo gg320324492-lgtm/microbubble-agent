@@ -88,7 +88,7 @@ function close() {
   max-width: 320px;
   height: 100%;
   background: var(--color-bg-card);
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-sidebar);
   display: flex;
   flex-direction: column;
   pointer-events: auto;

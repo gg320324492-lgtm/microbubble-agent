@@ -302,7 +302,7 @@ const formatDate = (dateStr) => {
 .hero-action-btn {
   border: none;
   background: rgba(255, 255, 255, 0.5);
-  color: #1F2937;
+  color: var(--color-text-primary);
   width: 28px;
   height: 28px;
   border-radius: 6px;

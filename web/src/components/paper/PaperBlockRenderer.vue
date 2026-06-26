@@ -327,7 +327,7 @@ function renderMarkdownTable(text) {
   width: 100%;
   border-collapse: collapse;
   font-size: 13.5px;
-  background: #fff;
+  background: var(--color-bg-card);
 }
 .block-table-wrapper :deep(.paper-md-table th) {
   background: #F9FAFB;
@@ -378,7 +378,7 @@ function renderMarkdownTable(text) {
 }
 .image-anchor-hint {
   font-size: 11px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   font-weight: 400;
   margin-left: auto;
 }
@@ -399,7 +399,7 @@ function renderMarkdownTable(text) {
 
 .page-label {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   background: #F3F4F6;
   padding: 2px 10px;
   border-radius: 10px;
@@ -427,7 +427,7 @@ function renderMarkdownTable(text) {
 }
 
 .figure-page {
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-size: 11px;
   margin-left: 4px;
 }
@@ -439,10 +439,10 @@ function renderMarkdownTable(text) {
   gap: 14px;
   margin: 14px 0;
   padding: 16px 18px;
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  box-shadow: var(--shadow-sm);
 }
 
 .qa-question-card {
@@ -485,7 +485,7 @@ function renderMarkdownTable(text) {
 .qa-label {
   font-size: 12px;
   font-weight: 600;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 6px;

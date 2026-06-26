@@ -500,7 +500,7 @@ onUnmounted(() => {
 .query-cell {
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 12px;
-  background: #f5f7fa;
+  background: var(--color-bg-page);
   padding: 2px 6px;
   border-radius: 3px;
 }

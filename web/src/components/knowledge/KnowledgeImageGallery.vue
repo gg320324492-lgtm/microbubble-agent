@@ -362,6 +362,6 @@ watch(() => props.knowledgeId, () => fetchImages(), { immediate: true })
 
 .ocr-error {
   color: var(--color-danger, #f56c6c);
-  background: #fef0f0;
+  background: var(--color-danger-bg);
 }
 </style>
