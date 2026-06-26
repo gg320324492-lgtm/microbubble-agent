@@ -260,7 +260,7 @@
                       <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
                     </div>
                     <div v-if="!entry.removed" class="transcript-text">
-                      {{ entry.text }}
+                      {{ getPolishedText(entry, i) }}
                     </div>
                     <div v-else class="transcript-text removed">
                       <el-icon><Delete /></el-icon>
@@ -419,6 +419,46 @@ const transcriptEntries = computed(() => {
   return merged
 })
 
+// 存储润色后的文本（polish-text 端点已用 Redis 缓存 (key=polish:{meeting_id}:{text_hash}, TTL=24h),
+// 同一段文本二次请求直接命中缓存, 0 LLM 调用. 因此 autoPolishIfNeeded 重复跑也无性能损耗）
+const polishedTexts = ref({})
+
+async function autoPolishIfNeeded() {
+  if (!meeting.value) return
+  const entries = transcriptEntries.value
+  // 并发上限 3 (避免打爆后端 LLM 队列), 单条 fail 不影响其他
+  const CONCURRENCY = 3
+  let cursor = 0
+  async function worker() {
+    while (cursor < entries.length) {
+      const i = cursor++
+      const entry = entries[i]
+      if (!entry) continue
+      const trimmed = (entry.text || '').trim()
+      if (trimmed.length < 3) continue
+      // 跳过: DB 中 transcript_polished[i].text 已与原 transcript[i].text 不同 (= 已润色)
+      const origIdx = entry._origIndex ?? i
+      const polEntry = meeting.value.transcript_polished?.[origIdx]
+      const rawEntry = meeting.value.transcript?.[origIdx]
+      if (polEntry && rawEntry && polEntry.text !== rawEntry.text) continue
+      try {
+        const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
+          text: entry.text,
+        })
+        const polished = res.data.polished
+        if (polished && polished !== entry.text) {
+          polishedTexts.value[i] = polished
+        }
+      } catch { /* 静默 */ }
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
+}
+
+function getPolishedText(entry, index) {
+  return polishedTexts.value[index] || entry.text
+}
+
 // 2026-06-26 新增: 头部头像 fallback — meeting.participants 为空时, 从 transcript[].speaker 去重
 const effectiveParticipants = computed(() => {
   if (meeting.value?.participants?.length) return meeting.value.participants
@@ -512,6 +552,10 @@ const fetchMeeting = async () => {
   try {
     const res = await axios.get(`/api/v1/meetings/${route.params.id}`)
     meeting.value = res.data
+    // 异步触发润色: 后端已用 Redis 缓存 (key=polish:{meeting_id}:{text_hash}, TTL=24h),
+    // 同一段文本二次请求直接命中缓存, 重复跑也无性能损耗. 用 requestIdleCallback 不阻塞渲染.
+    const schedule = window.requestIdleCallback || ((cb) => setTimeout(cb, 800))
+    schedule(() => autoPolishIfNeeded())
     // 如果没有发言统计但有转录，自动获取统计数据
     if (!meeting.value.speaker_stats && meeting.value.transcript?.length) {
       try {
