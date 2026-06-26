@@ -463,12 +463,64 @@ def post_meeting_process(self, meeting_id: int):
                     )
                     representative_matches[cid] = SpeakerMatch(name=name, member_id=member_id, confidence=conf)
 
+                # 2026-06-26 优化: 加载 context (summary + history) 提升 vote 准确率
+                from app.services.voiceprint_voting import (
+                    extract_context_speakers, resolve_context_to_names,
+                    get_recent_meeting_speakers,
+                )
+                ctx_raw = extract_context_speakers(meeting)
+                ctx_names = await resolve_context_to_names(ctx_raw, db) if ctx_raw else set()
+                history_ctx = await get_recent_meeting_speakers(meeting_id, db, lookback_count=10, lookback_days=90)
+                if history_ctx:
+                    ctx_names = ctx_names | history_ctx
+                if ctx_names:
+                    logger.info(f"[vote] 用 context 过滤 enrolled: {ctx_names}")
+
+                # 2026-06-26 优化: 用新 vote_with_quality_gates 替代 finalize_cluster_speakers
+                # 加载 enrolled 4-tuple (含 sample_count)
+                from app.models.member import Member
+                from sqlalchemy import select
+                enrolled_result = await db.execute(
+                    select(Member).where(Member.voice_embedding.isnot(None))
+                )
+                enrolled_members = enrolled_result.scalars().all()
+                enrolled = [
+                    (m.id, m.name, np.array(m.voice_embedding, dtype=np.float32), m.voice_sample_count or 1)
+                    for m in enrolled_members if m.voice_embedding is not None
+                ]
+                if ctx_names:
+                    enrolled_filtered = [e for e in enrolled if e[1] in ctx_names]
+                    if enrolled_filtered:
+                        enrolled = enrolled_filtered
+
+                # 构造 seg_embs (从 cluster_representatives 推, 不全精度但够 vote)
+                # 实际是: 每段 embedding 已经在 seg_embeddings 里, 直接用
+                from app.services.voiceprint_voting import vote_with_quality_gates
+                # 段级 vote (cluster 内每段 vs enrolled 找最近邻) 用 vote_with_quality_gates
+                # labels = clusters
+                cluster_names_v2 = vote_with_quality_gates(
+                    seg_embeddings, clusters, enrolled,
+                    context_names=None,  # 已经手动过滤 enrolled
+                    center_dist_threshold=0.75, min_votes=3, votes_ratio_threshold=0.30,
+                )
+                # 合并 representative_matches (如果 v2 没找到但 representative 有)
+                for cid, match in representative_matches.items():
+                    if cid in cluster_names_v2 and cluster_names_v2[cid][0] is None and match.name and match.confidence > 0.35:
+                        cluster_names_v2[cid] = (match.name, match.confidence, 1, sum(1 for c in clusters if c == cid))
+                # 兼容旧逻辑
                 speaker_assignment_result = finalize_cluster_speakers(
                     cluster_ids=unique_clusters,
                     cluster_votes=cluster_votes,
                     representative_matches=representative_matches,
                 )
-                cluster_to_name = speaker_assignment_result.cluster_to_name
+                # 优先用 v2 结果, fallback 旧结果
+                cluster_to_name = {}
+                for cid in unique_clusters:
+                    v2 = cluster_names_v2.get(cid, (None, 0.0, 0, 0))
+                    if v2[0]:
+                        cluster_to_name[cid] = v2[0]
+                    else:
+                        cluster_to_name[cid] = speaker_assignment_result.cluster_to_name.get(cid, f"发言人{chr(65+cid)}")
                 known_names_set = {
                     name for name in cluster_to_name.values()
                     if name and not name.startswith("发言人")
@@ -490,7 +542,7 @@ def post_meeting_process(self, meeting_id: int):
                     else:
                         seg["speaker"] = "发言人?"
 
-                logger.info(f"声纹聚类完成: {len(known_names_set)} 位发言人, 已知={[n for n in known_names_set if not n.startswith('发言人')]}")
+                logger.info(f"声纹聚类完成 (v2 优化): {len(known_names_set)} 位发言人, 已知={[n for n in known_names_set if not n.startswith('发言人')]}")
 
                 # 后处理：统计确认
                 speaker_set = set(seg.get("speaker", "?") for seg in transcript_segments)
