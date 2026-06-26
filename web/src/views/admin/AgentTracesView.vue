@@ -277,3 +277,25 @@ onMounted(fetchTraces)
 .rich-block-tag { display: inline-flex; gap: 6px; padding: 4px 0; margin-right: 8px; }
 .rb-title { font-size: 12px; color: #666; }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .page-header h2 { color: var(--color-text-primary); }
+[data-theme="dark"] .page-header .desc { color: var(--color-text-secondary); }
+[data-theme="dark"] .time { color: var(--color-text-regular); }
+[data-theme="dark"] .muted { color: var(--color-text-placeholder); }
+[data-theme="dark"] .total-info { color: var(--color-text-secondary); }
+[data-theme="dark"] .trace-detail h3 { color: var(--color-primary); }
+[data-theme="dark"] .trace-detail .json {
+  background: var(--color-bg-page);
+  color: var(--color-text-regular);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .trace-detail .json.error { color: var(--color-danger); }
+[data-theme="dark"] .tool-call {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .tc-header .duration { color: var(--color-text-secondary); }
+[data-theme="dark"] .rb-title { color: var(--color-text-secondary); }
+</style>

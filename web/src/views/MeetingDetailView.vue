@@ -1147,3 +1147,71 @@ onMounted(async () => {
   .hero-title { font-size: 18px; }
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .detail-hero {
+  background: linear-gradient(180deg, var(--color-bg-card) 0%, var(--color-bg-page) 100%);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .status-badge.status-scheduled {
+  background: rgba(144, 147, 153, 0.18);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .status-badge.status-scheduled .status-dot { background: var(--color-text-secondary); }
+[data-theme="dark"] .status-badge.status-recording {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .status-badge.status-recording .status-dot { background: var(--color-primary); }
+[data-theme="dark"] .status-badge.status-processing {
+  background: var(--color-warning-bg);
+  color: var(--color-warning, #E6A23C);
+}
+[data-theme="dark"] .status-badge.status-processing .status-dot { background: var(--color-warning, #E6A23C); }
+[data-theme="dark"] .status-badge.status-completed {
+  background: var(--color-success-bg);
+  color: var(--color-success, #67C23A);
+}
+[data-theme="dark"] .status-badge.status-completed .status-dot { background: var(--color-success, #67C23A); }
+[data-theme="dark"] .status-badge.status-cancelled {
+  background: rgba(144, 147, 153, 0.18);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .status-badge.status-cancelled .status-dot { background: var(--color-text-secondary); }
+[data-theme="dark"] .status-badge.status-error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger, #F56C6C);
+}
+[data-theme="dark"] .status-badge.status-error .status-dot { background: var(--color-danger, #F56C6C); }
+[data-theme="dark"] .detail-main {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .detail-tabs :deep(.el-tabs__header) {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .call-placeholder {
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .call-placeholder:hover {
+  background: var(--color-primary-bg);
+}
+[data-theme="dark"] .point-item:hover {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .transcript-line {
+  background: var(--color-border);
+}
+[data-theme="dark"] .item-row {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .item-row:hover,
+[data-theme="dark"] .item-row:focus-within {
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-bg);
+}
+[data-theme="dark"] .related-item {
+  border-bottom-color: var(--color-border);
+}
+</style>

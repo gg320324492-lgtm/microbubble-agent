@@ -1245,3 +1245,74 @@ onUnmounted(() => {
   color: var(--color-danger);
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .paper-detail-page {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .paper-concepts {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .concept-label { color: var(--color-text-secondary); }
+[data-theme="dark"] .paper-entities {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .entities-label { color: var(--color-text-primary); }
+[data-theme="dark"] .entities-hint { color: var(--color-text-secondary); }
+[data-theme="dark"] .entity-card {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .entity-predicate { color: var(--color-text-secondary); }
+[data-theme="dark"] .entity-object { color: var(--color-text-primary); }
+[data-theme="dark"] .entity-condition { color: var(--color-text-secondary); }
+[data-theme="dark"] .entity-type {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+}
+[data-theme="dark"] .entity-description { color: var(--color-text-secondary); }
+[data-theme="dark"] .entity-na {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .confidence-text { color: var(--color-text-secondary); }
+[data-theme="dark"] .paper-article {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .paper-article :deep(.block-paragraph) {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .paper-fallback-content {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .raw-content-pre { color: var(--color-text-regular); }
+[data-theme="dark"] .paper-source {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .paper-graph {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .graph-title { color: var(--color-text-primary); }
+[data-theme="dark"] .paper-graph-empty {
+  background: var(--color-bg-page);
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .graph-empty-icon { color: var(--color-text-placeholder); }
+[data-theme="dark"] .graph-empty-text { color: var(--color-text-secondary); }
+[data-theme="dark"] .graph-empty-hint { color: var(--color-text-secondary); }
+[data-theme="dark"] .paper-graph-failed {
+  border-color: rgba(245, 108, 108, 0.4);
+  background: var(--color-danger-bg);
+}
+</style>

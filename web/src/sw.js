@@ -175,7 +175,13 @@
 //     边框 + hover translateY + focus-visible outline），CSS 变量驱动颜色
 // (4) variables.css: 加 --theme-transition 让主题切换时 bg/border/color/box-shadow
 //     走 280ms ease 过渡，避免生硬跳变
-const SW_VERSION = 'v69-p1a-multitheme-2026-06-26'
+// v69 P1b: 2026-06-26 11 桌面视图 dark 适配。
+// ChatViewSSE + AgentTracesView + TaskTrash + TaskView + MeetingView +
+// MeetingDetailView + KnowledgeView + KnowledgeDetailView + ProjectView +
+// MemberView 共 10 个文件末尾追加非 scoped <style> 块（v60-v67 教训：必须非
+// scoped）。共 ~110 条 dark 规则覆盖 hardcoded 颜色（#fff/#333/#666/#999/
+// rgba(255,255,255,...) 等），全部用 var(--color-*) 变量驱动。
+const SW_VERSION = 'v69-p1b-views-dark-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

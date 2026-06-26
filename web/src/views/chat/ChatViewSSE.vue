@@ -614,3 +614,57 @@ onUnmounted(() => {
   .chat-immersive { border-radius: 0; height: calc(100vh - 56px); }
 }
 </style>
+
+<!-- v69 P1b: ChatViewSSE dark mode 覆盖（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .chat-header {
+  background: rgba(26, 29, 35, 0.85);
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .bot-status,
+[data-theme="dark"] .time-divider,
+[data-theme="dark"] .msg-meta { color: var(--color-text-secondary); }
+[data-theme="dark"] .bot-bubble {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .msg-content :deep(pre),
+[data-theme="dark"] .msg-content :deep(code) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .welcome-hero h2 { color: var(--color-text-primary); }
+[data-theme="dark"] .welcome-hero p { color: var(--color-text-secondary); }
+[data-theme="dark"] .quick-btn {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-base);
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .quick-btn:hover {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .input-bar {
+  background: rgba(26, 29, 35, 0.85);
+  border-top-color: var(--color-border-light);
+}
+[data-theme="dark"] .input-core {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .input-textarea { color: var(--color-text-primary); }
+[data-theme="dark"] .input-textarea::placeholder { color: var(--color-text-placeholder); }
+[data-theme="dark"] .jump-to-bottom {
+  background: var(--color-bg-card);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .jump-to-bottom:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+[data-theme="dark"] .msg-content :deep(a) { color: var(--color-primary-light); }
+</style>

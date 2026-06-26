@@ -487,3 +487,30 @@ onMounted(() => {
   box-shadow: var(--shadow-primary);
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .member-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="dark"] .member-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+[data-theme="dark"] .detail-item {
+  color: var(--color-text-regular);
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .member-actions .el-button:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .member-avatar :deep(.el-avatar) {
+  box-shadow: var(--shadow-md);
+}
+[data-theme="dark"] .member-avatar :deep(.el-avatar):hover {
+  box-shadow: var(--shadow-primary);
+}
+</style>

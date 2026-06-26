@@ -818,3 +818,64 @@ onMounted(() => {
   }
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .filter-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .task-list-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .paired-header {
+  border-bottom-color: var(--color-border);
+}
+[data-theme="dark"] .paired-row {
+  border-bottom-color: var(--color-border);
+}
+[data-theme="dark"] .paired-col-left {
+  border-right-color: var(--color-border);
+}
+[data-theme="dark"] .selection-info {
+  background: rgba(144, 147, 153, 0.12);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .selection-info.is-active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .task-group {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .group-header {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .group-header:hover {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .task-row {
+  border-bottom-color: var(--color-border);
+}
+[data-theme="dark"] .task-row.overdue {
+  background: rgba(255, 77, 77, 0.08);
+}
+[data-theme="dark"] .task-row.done-row.is-selected {
+  background: var(--color-primary-bg);
+  border-left-color: var(--color-primary);
+}
+[data-theme="dark"] .complete-btn--outline {
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .complete-btn--outline:hover {
+  background: rgba(82, 196, 26, 0.12);
+}
+[data-theme="dark"] .complete-btn--done {
+  color: #fff;
+}
+[data-theme="dark"] .trash-tab-label:hover {
+  background: rgba(144, 147, 153, 0.14);
+}
+</style>

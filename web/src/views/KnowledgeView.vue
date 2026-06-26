@@ -1498,3 +1498,77 @@ onUnmounted(() => {
   color: var(--color-text-secondary);
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .knowledge-tabs :deep(.el-tabs__header) {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .health-summary {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .entity-graph-panel,
+[data-theme="dark"] .entity-list-panel {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .panel-header {
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .entity-card {
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .entity-pagination {
+  border-top-color: var(--color-border-light);
+}
+[data-theme="dark"] .hypothesis-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .hypothesis-actions {
+  border-top-color: var(--color-border-light);
+}
+[data-theme="dark"] .calc-result {
+  background: var(--color-success-bg);
+}
+[data-theme="dark"] .calc-steps {
+  border-top-color: var(--color-border-light);
+}
+[data-theme="dark"] .memory-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .memory-card:hover {
+  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.25);
+}
+[data-theme="dark"] .memory-type-tag.type-preference {
+  background: rgba(30, 64, 175, 0.18);
+  color: #93c5fd;
+}
+[data-theme="dark"] .memory-type-tag.type-user_fact {
+  background: rgba(6, 95, 70, 0.22);
+  color: #6ee7b7;
+}
+[data-theme="dark"] .memory-type-tag.type-task_ctx {
+  background: rgba(146, 64, 14, 0.22);
+  color: #fcd34d;
+}
+[data-theme="dark"] .memory-type-tag.type-summary {
+  background: rgba(55, 48, 163, 0.22);
+  color: #c4b5fd;
+}
+[data-theme="dark"] .memory-type-tag.type-entity {
+  background: rgba(159, 18, 57, 0.22);
+  color: #fbcfe8;
+}
+[data-theme="dark"] .memory-content {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .entity-list-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-text-placeholder);
+}
+[data-theme="dark"] .entity-card-active {
+  background: var(--color-primary-bg);
+  box-shadow: 0 0 0 2px var(--color-primary-border);
+}
+</style>

@@ -995,3 +995,80 @@ onMounted(() => {
   }
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .meeting-item {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .meeting-time-block {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .item-row {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .action-btn {
+  background: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+}
+[data-theme="dark"] .action-phone {
+  border-color: rgba(255, 122, 92, 0.4) !important;
+}
+[data-theme="dark"] .action-phone:hover {
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.4);
+}
+[data-theme="dark"] .action-view {
+  color: #66b1ff !important;
+  border-color: rgba(64, 158, 255, 0.4) !important;
+}
+[data-theme="dark"] .action-view:hover {
+  background: #409EFF !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.4);
+}
+[data-theme="dark"] .action-generate {
+  color: #85ce61 !important;
+  border-color: rgba(103, 194, 58, 0.4) !important;
+}
+[data-theme="dark"] .action-generate:hover {
+  background: #67C23A !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.4);
+}
+[data-theme="dark"] .action-edit {
+  color: #b1b3b8 !important;
+  border-color: rgba(144, 147, 153, 0.4) !important;
+}
+[data-theme="dark"] .action-edit:hover {
+  background: #909399 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(144, 147, 153, 0.4);
+}
+[data-theme="dark"] .action-delete {
+  color: #f89898 !important;
+  border-color: rgba(245, 108, 108, 0.4) !important;
+}
+[data-theme="dark"] .action-delete:hover {
+  background: #F56C6C !important;
+  color: #fff !important;
+  box-shadow: 0 2px 8px rgba(245, 108, 108, 0.4);
+}
+[data-theme="dark"] .template-picker {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .template-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .template-card.active {
+  background: linear-gradient(135deg, rgba(255, 122, 92, 0.08), rgba(255, 179, 71, 0.08));
+}
+[data-theme="dark"] .tpl-action:hover {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .meeting-info-bar {
+  border-bottom-color: var(--color-border);
+}
+</style>

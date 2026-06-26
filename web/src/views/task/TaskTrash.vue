@@ -516,3 +516,27 @@ function formatAutoDeleteExact(autoDeleteAt) {
   50% { opacity: 1; }
 }
 </style>
+
+<style>
+/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
+[data-theme="dark"] .batch-count { color: var(--color-text-secondary); }
+[data-theme="dark"] .mobile-pagination {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .page-actions button {
+  border-color: var(--color-border);
+  background: var(--color-bg-page);
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .auto-delete-imminent { color: #ff6b6b; }
+[data-theme="dark"] .auto-delete-urgent { color: #ff9d85; }
+[data-theme="dark"] .auto-delete-warning { color: #fbbf24; }
+[data-theme="dark"] .mobile-action-btn.restore {
+  background: var(--color-success-bg);
+  color: var(--color-success, #67C23A);
+}
+[data-theme="dark"] .mobile-action-btn.delete {
+  background: var(--color-danger-bg);
+  color: var(--color-danger, #F56C6C);
+}
+</style>
