@@ -213,4 +213,25 @@ function handleSwitch(name) {
   background: rgb(26, 29, 35);
   border-top-color: var(--color-border-base);
 }
+
+/* v67 (2026-06-26) 修复 .nut-tabbar 子元素白色盖住父元素：v66 后 .mobile-tabbar
+   (父) 已经是深色 rgb(26,29,35)，但 NutUI 内部的 .nut-tabbar 元素（子）有自己
+   的 background: var(--nut-white, #fff) 规则直接设白色，覆盖了 .mobile-tabbar
+   的深色背景。NutUI 有 .nut-theme-dark .nut-tabbar 的 dark 模式 fallback（用
+   --nut-dark-background），但项目用 [data-theme="dark"] 不是 .nut-theme-dark，
+   所以 NutUI 的 dark 规则不生效。
+   修复：直接给 .nut-tabbar 加 [data-theme="dark"] 覆盖，背景设 rgb(26,29,35)
+   与父元素同步。特异性 (0,2,0) vs NutUI .nut-tabbar (0,1,0) 胜出。
+   .nut-tabbar__placeholder 是 NutUI 的 placeholder 元素（TabBar.vue 用了
+   placeholder prop），也加覆盖兜底。
+   教训：CSS 框架的子组件（NutUI/MUI/Element Plus 等）会用 CSS 变量 + class
+   设自己的主题，但它们的 dark class（.nut-theme-dark）通常和我们项目的
+   [data-theme="dark"] 不一致——必须为每个有 background 的子组件单独写
+   [data-theme="dark"] 覆盖，不能假设"父元素深色子元素就深色"。 */
+[data-theme="dark"] .nut-tabbar,
+[data-theme="dark"] .nut-tabbar__placeholder {
+  background: rgb(26, 29, 35);
+  border-top: 1px solid var(--color-border-base);
+  border-bottom: 1px solid var(--color-border-base);
+}
 </style>
