@@ -223,29 +223,44 @@
                   </div>
                   <div class="transcript-body">
                     <div class="transcript-header">
-                      <el-select
-                        :model-value="entry.speaker || '未知'"
-                        size="small"
-                        class="transcript-speaker-select"
-                        filterable
-                        :loading="savingTranscriptSpeaker === i"
+                      <el-popover
+                        :width="200"
+                        placement="bottom-start"
+                        trigger="click"
+                        :show-arrow="false"
                         :disabled="savingTranscriptSpeaker === i"
-                        @change="(val) => saveTranscriptSpeaker(i, val)"
                       >
-                        <el-option
-                          v-for="option in speakerOptions"
-                          :key="option"
-                          :label="option"
-                          :value="option"
-                        />
-                      </el-select>
+                        <template #reference>
+                          <button
+                            class="speaker-name-btn"
+                            :class="{ saving: savingTranscriptSpeaker === i }"
+                            :title="`点击修改发言人（当前：${entry.speaker || '未知'}）`"
+                          >
+                            {{ entry.speaker || '未知' }}
+                          </button>
+                        </template>
+                        <el-select
+                          :model-value="entry.speaker || '未知'"
+                          size="small"
+                          filterable
+                          :loading="savingTranscriptSpeaker === i"
+                          :disabled="savingTranscriptSpeaker === i"
+                          @change="(val) => saveTranscriptSpeaker(i, val)"
+                        >
+                          <el-option
+                            v-for="option in speakerOptions"
+                            :key="option"
+                            :label="option"
+                            :value="option"
+                          />
+                        </el-select>
+                      </el-popover>
                       <el-tag v-if="entry.removed" size="small" type="info" effect="plain">已过滤</el-tag>
                       <el-tag v-else-if="entry.polish_failed" size="small" type="warning" effect="plain">降级</el-tag>
                       <span v-if="entry.ts" class="transcript-ts">{{ formatTs(entry.ts) }}</span>
                     </div>
                     <div v-if="!entry.removed" class="transcript-text">
-                      {{ getPolishedText(entry, i) }}
-                      <el-tag v-if="polishingIndex === i" size="small" type="warning" class="polish-tag">润色中</el-tag>
+                      {{ entry.text }}
                     </div>
                     <div v-else class="transcript-text removed">
                       <el-icon><Delete /></el-icon>
@@ -337,38 +352,6 @@ const editingMinutes = ref(false)
 const showCallRoom = ref(false)
 const saving = ref(false)
 const savingTranscriptSpeaker = ref(null)
-const polishingIndex = ref(null)
-
-async function polishMergedText(index) {
-  if (!meeting.value) return
-  const text = transcriptEntries.value[index]?.text || ''
-  if (text.trim().length < 3) {
-    ElMessage.warning('文本太短，无需润色')
-    return
-  }
-  polishingIndex.value = index
-  try {
-    const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
-      text,
-    })
-    const polished = res.data.polished
-    if (polished && polished !== transcriptEntries.value[index].text) {
-      // 更新合并前的原始条目中的第一条
-      const origIdx = transcriptEntries.value[index]._origIndex ?? index
-      if (meeting.value.transcript && meeting.value.transcript[origIdx]) {
-        meeting.value.transcript[origIdx].text = polished
-      }
-      if (meeting.value.transcript_polished && meeting.value.transcript_polished[origIdx]) {
-        meeting.value.transcript_polished[origIdx].text = polished
-      }
-      ElMessage.success('已润色')
-    }
-  } catch {
-    ElMessage.error('润色失败')
-  } finally {
-    polishingIndex.value = null
-  }
-}
 const activeTab = ref('minutes')
 
 const relatedMeetings = ref([])
@@ -433,43 +416,8 @@ const transcriptEntries = computed(() => {
   }
   merged.push(current)
 
-  // 标记合并条目，触发自动润色
-  merged.forEach((entry, i) => {
-    if (entry._origIndex !== undefined && raw[entry._origIndex]?.text !== entry.text) {
-      // 必须 trim 后 ≥3 字才有润色价值（后端要求 ≥3 strip 字符）
-      const trimmed = (entry.text || '').trim()
-      entry._needsPolish = trimmed.length > 20
-    }
-  })
   return merged
 })
-
-// 存储润色后的文本
-const polishedTexts = ref({})
-
-async function autoPolishIfNeeded() {
-  if (!meeting.value) return
-  for (let i = 0; i < transcriptEntries.value.length; i++) {
-    const entry = transcriptEntries.value[i]
-    if (!entry._needsPolish || polishedTexts.value[i]) continue
-    // 双重防御：即使 _needsPolish 为 true，发送前仍校验 trim 长度
-    const text = (entry.text || '').trim()
-    if (text.length < 3) continue
-    try {
-      const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
-        text: entry.text,
-      })
-      const polished = res.data.polished
-      if (polished && polished !== entry.text) {
-        polishedTexts.value[i] = polished
-      }
-    } catch { /* 静默 */ }
-  }
-}
-
-function getPolishedText(entry, index) {
-  return polishedTexts.value[index] || entry.text
-}
 
 // 2026-06-26 新增: 头部头像 fallback — meeting.participants 为空时, 从 transcript[].speaker 去重
 const effectiveParticipants = computed(() => {
@@ -564,8 +512,6 @@ const fetchMeeting = async () => {
   try {
     const res = await axios.get(`/api/v1/meetings/${route.params.id}`)
     meeting.value = res.data
-    // 延迟触发自动润色（等 DOM 渲染完）
-    setTimeout(() => autoPolishIfNeeded(), 500)
     // 如果没有发言统计但有转录，自动获取统计数据
     if (!meeting.value.speaker_stats && meeting.value.transcript?.length) {
       try {
@@ -982,10 +928,26 @@ onMounted(async () => {
 .transcript-speaker-select {
   width: 90px;
 }
-.polish-text-btn {
-  margin-left: 6px;
-  font-size: 12px;
-  vertical-align: middle;
+.speaker-name-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary, #303133);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-width: 64px;
+  text-align: left;
+}
+.speaker-name-btn:hover {
+  background: var(--color-bg-page, #f5f7fa);
+  border-color: var(--color-border-light, #ebeef5);
+}
+.speaker-name-btn.saving {
+  opacity: 0.5;
+  cursor: wait;
 }
 .point-text {
   flex: 1;
