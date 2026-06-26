@@ -963,3 +963,90 @@ const formatTime = (t) => {
   }
 }
 </style>
+
+<!-- v69 P0: MainLayout dark mode 覆盖（v60-v67 教训：dark 跨组件规则必须放非 scoped 块） -->
+<style>
+  /* === 侧边栏 === */
+  [data-theme="dark"] .aside {
+    background: var(--color-bg-sidebar);
+    border-right-color: var(--color-sidebar-border);
+    box-shadow: var(--shadow-sidebar);
+  }
+  [data-theme="dark"] .sidebar-logo {
+    background: transparent;
+    color: var(--color-text-primary);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+  [data-theme="dark"] .sidebar-menu .el-menu-item,
+  [data-theme="dark"] .sidebar-menu .el-sub-menu__title {
+    color: var(--color-text-regular);
+  }
+  [data-theme="dark"] .sidebar-menu .el-menu-item:hover,
+  [data-theme="dark"] .sidebar-menu .el-sub-menu__title:hover {
+    background-color: rgba(255, 122, 92, 0.08) !important;
+    color: var(--color-primary) !important;
+  }
+  [data-theme="dark"] .sidebar-menu .el-menu-item.is-active {
+    background-color: var(--color-primary-bg) !important;
+    color: var(--color-primary) !important;
+  }
+  [data-theme="dark"] .sidebar-bottom {
+    border-top: 1px solid var(--color-border-light);
+    background: transparent;
+  }
+  [data-theme="dark"] .sidebar-bottom-item {
+    color: var(--color-text-secondary);
+  }
+  [data-theme="dark"] .sidebar-bottom-item:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+  }
+
+  /* === 顶栏 === */
+  [data-theme="dark"] .header {
+    background: var(--color-bg-card);
+    border-bottom: 1px solid var(--color-border-light);
+  }
+  [data-theme="dark"] .bell-icon,
+  [data-theme="dark"] .collapse-btn,
+  [data-theme="dark"] .breadcrumb-text {
+    color: var(--color-text-regular);
+  }
+  [data-theme="dark"] .bell-icon:hover,
+  [data-theme="dark"] .collapse-btn:hover,
+  [data-theme="dark"] .breadcrumb-text:hover {
+    background: var(--color-bg-hover);
+  }
+  [data-theme="dark"] .user-info { color: var(--color-text-primary); }
+  [data-theme="dark"] .user-info:hover { background: var(--color-bg-warm); }
+  [data-theme="dark"] .user-name { color: var(--color-text-primary); }
+  [data-theme="dark"] .user-role { color: var(--color-text-secondary); }
+
+  /* === 通知面板（之前是硬编码 light 孤岛） === */
+  [data-theme="dark"] .notification-panel {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-base);
+    box-shadow: var(--shadow-md);
+  }
+  [data-theme="dark"] .notification-header {
+    border-bottom: 1px solid var(--color-border-light);
+    color: var(--color-text-primary);
+  }
+  [data-theme="dark"] .notification-item {
+    border-bottom: 1px solid var(--color-border-light);
+  }
+  [data-theme="dark"] .notification-item:hover { background: var(--color-bg-hover); }
+  [data-theme="dark"] .notification-item .notification-title { color: var(--color-text-primary); }
+  [data-theme="dark"] .notification-item .notification-time { color: var(--color-text-secondary); }
+
+  /* === 录音 banner + 浮动胶囊 === */
+  [data-theme="dark"] .recording-banner,
+  [data-theme="dark"] .global-recorder-pulse {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-base);
+    color: var(--color-text-primary);
+  }
+
+  /* === 移动端 drawer === */
+  [data-theme="dark"] .mobile-drawer { background: var(--color-bg-card) !important; }
+</style>

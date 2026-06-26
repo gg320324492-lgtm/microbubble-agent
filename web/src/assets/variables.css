@@ -49,6 +49,14 @@
   --shadow-primary: 0 4px 20px rgba(255, 122, 92, 0.30);
   --shadow-glow: 0 4px 24px rgba(255, 122, 92, 0.20);
 
+  /* ===== 渐变库（v69 新增） ===== */
+  --gradient-group-header: linear-gradient(135deg, #FFF8F5 0%, #FFF0ED 100%);
+  --gradient-stat-in-progress: linear-gradient(135deg, #FFF0ED 0%, #FFE4DC 100%);
+  --gradient-stat-done: linear-gradient(135deg, #F0F9EB 0%, #DCFCE7 100%);
+  --gradient-stat-overdue: linear-gradient(135deg, #FEF0F0 0%, #FEE2E2 100%);
+  --gradient-welcome-hero: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
+  --color-shadow-primary: rgba(255, 122, 92, 0.30);
+
   /* ===== 圆角 ===== */
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -498,16 +506,21 @@ body {
 [data-theme="dark"] {
   --color-text-primary: #e8eaed;
   --color-text-regular: #c0c4cc;
-  --color-text-secondary: #909399;
+  --color-text-secondary: #a8aab0; /* v69: 提亮 (原 #909399 在 #1a1d23 上对比度仅 4.0，边缘 AA) */
   --color-text-placeholder: #606266;
   --color-bg-page: #1a1d23;
   --color-bg-card: #2a2d35;
+  --color-bg-warm: #2a2d35; /* v69: 新增 — 任务配对卡 / task-row hover 暖色背景 */
   --color-bg-hover: #3a3d45;
+  --color-border: #3a3d45; /* v69: 新增 — 与 --color-border-base 同步 (light 是 #EBEEF5) */
   --color-border-base: #3a3d45;
   --color-border-light: #2a2d35;
+  --color-bg-sidebar: rgba(26, 29, 35, 0.92); /* v69: 新增 — 侧栏玻璃底 (light 是 rgba(255,245,240,0.92) 奶白) */
+  --color-sidebar-border: rgba(255, 157, 133, 0.18); /* v69: 新增 */
   --color-primary: #FF9D85;
   --color-primary-light: #FF7A5C;
   --color-primary-dark: #FFB347;
+  --color-primary-border: rgba(255, 122, 92, 0.25); /* v69: 新增 (light 是 rgba(255,122,92,0.2)) */
   --color-primary-bg: rgba(255, 122, 92, 0.15);
   --color-accent: #FFC067;
   --color-accent-bg: rgba(255, 179, 71, 0.12);
@@ -515,6 +528,25 @@ body {
   --color-warning-bg: rgba(230, 162, 60, 0.15);
   --color-danger-bg: rgba(245, 108, 108, 0.15);
   --color-info-bg: rgba(144, 147, 153, 0.15);
+
+  /* v69: 阴影系统在 dark 上反色（用更深的 rgba(0,0,0,.3-.6) 模拟"亮起"） */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-primary: 0 4px 20px rgba(255, 122, 92, 0.4); /* 暖色光晕 dark 更明显 */
+  --shadow-glow: 0 4px 24px rgba(255, 122, 92, 0.3);
+  --shadow-sidebar: 4px 0 24px rgba(0, 0, 0, 0.5);
+
+  /* v69: 渐变变量（Dashboard stat icon 渐变 dark 模式 = 透明而非亮色块） */
+  --gradient-group-header: linear-gradient(135deg, #2a2d35 0%, rgba(255, 122, 92, 0.15) 100%);
+  --gradient-stat-in-progress: rgba(255, 122, 92, 0.15);
+  --gradient-stat-done: rgba(133, 206, 97, 0.15);
+  --gradient-stat-overdue: rgba(247, 137, 137, 0.15);
+  --gradient-welcome-hero: linear-gradient(135deg, #E85A3A 0%, #D4903D 100%); /* 压暗降饱和 */
+
+  /* v69: 阴影 primary 颜色（pulsePrimary keyframe 用） */
+  --color-shadow-primary: rgba(255, 122, 92, 0.4);
 }
 
 /* Dark 模式全局微调 */
@@ -609,3 +641,92 @@ body {
 [data-theme="dark"] .el-tag {
   border-color: var(--color-border-base);
 }
+
+/* ============================================
+   v69 P0: Element Plus 14 个组件 dark 覆盖补全
+   解决：完成按钮过饱和 / tag 几乎看不见 / 表单输入看不清
+   ============================================ */
+
+/* el-tag 完整 dark 覆盖（之前只改 border-color，背景+文字不变） */
+[data-theme="dark"] .el-tag {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-tag--plain { background-color: transparent; color: var(--color-text-regular); }
+[data-theme="dark"] .el-tag--light { background-color: var(--color-bg-hover); color: var(--color-text-regular); }
+[data-theme="dark"] .el-tag--primary { --el-tag-bg-color: var(--color-primary-bg); }
+[data-theme="dark"] .el-tag--success { --el-tag-bg-color: var(--color-success-bg); }
+[data-theme="dark"] .el-tag--warning { --el-tag-bg-color: var(--color-warning-bg); }
+[data-theme="dark"] .el-tag--danger  { --el-tag-bg-color: var(--color-danger-bg); }
+[data-theme="dark"] .el-tag--info    { --el-tag-bg-color: var(--color-info-bg); }
+
+/* el-button 4 个状态色完整覆盖（完成按钮过饱和根因） */
+[data-theme="dark"] .el-button--success {
+  --el-button-bg-color: rgba(133, 206, 97, 0.18);
+  --el-button-border-color: rgba(133, 206, 97, 0.5);
+  --el-button-hover-bg-color: rgba(133, 206, 97, 0.28);
+  --el-button-hover-border-color: rgba(133, 206, 97, 0.7);
+  --el-button-active-bg-color: rgba(133, 206, 97, 0.4);
+  color: #85ce61;
+}
+[data-theme="dark"] .el-button--warning {
+  --el-button-bg-color: rgba(235, 181, 99, 0.18);
+  --el-button-border-color: rgba(235, 181, 99, 0.5);
+  --el-button-hover-bg-color: rgba(235, 181, 99, 0.28);
+  color: #ebb563;
+}
+[data-theme="dark"] .el-button--danger {
+  --el-button-bg-color: rgba(247, 137, 137, 0.18);
+  --el-button-border-color: rgba(247, 137, 137, 0.5);
+  --el-button-hover-bg-color: rgba(247, 137, 137, 0.28);
+  color: #f78989;
+}
+[data-theme="dark"] .el-button--info {
+  --el-button-bg-color: rgba(166, 169, 173, 0.12);
+  --el-button-border-color: rgba(166, 169, 173, 0.4);
+  --el-button-hover-bg-color: rgba(166, 169, 173, 0.2);
+  color: #a6a9ad;
+}
+[data-theme="dark"] .el-button--text { color: var(--color-primary); }
+[data-theme="dark"] .el-button--text:hover { color: var(--color-primary-light); }
+[data-theme="dark"] .el-button--link { color: var(--color-primary); }
+[data-theme="dark"] .el-button--link:hover { color: var(--color-primary-light); }
+
+/* 表单 / 选项 / 进度 dark 覆盖 */
+[data-theme="dark"] .el-input__wrapper { box-shadow: 0 0 0 1px var(--color-border-base) inset; }
+[data-theme="dark"] .el-input__inner { color: var(--color-text-primary); }
+[data-theme="dark"] .el-input::placeholder,
+[data-theme="dark"] .el-textarea__inner::placeholder { color: var(--color-text-placeholder); }
+[data-theme="dark"] .el-checkbox__label,
+[data-theme="dark"] .el-radio__label { color: var(--color-text-primary); }
+[data-theme="dark"] .el-form-item__label { color: var(--color-text-regular); }
+[data-theme="dark"] .el-tabs__item { color: var(--color-text-regular); }
+[data-theme="dark"] .el-tabs__item.is-active { color: var(--color-primary); }
+[data-theme="dark"] .el-tabs__active-bar { background-color: var(--color-primary); }
+[data-theme="dark"] .el-link,
+[data-theme="dark"] .el-link.el-link--default { color: var(--color-primary); }
+[data-theme="dark"] .el-link:hover { color: var(--color-primary-light); }
+[data-theme="dark"] .el-progress__text { color: var(--color-text-regular); }
+[data-theme="dark"] .el-empty__description p { color: var(--color-text-secondary); }
+[data-theme="dark"] .el-tooltip__popper {
+  background: var(--color-bg-hover) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border-base) !important;
+}
+[data-theme="dark"] .el-badge__content { border: 1px solid var(--color-bg-page); }
+
+/* el-table 行 / 斑马纹 */
+[data-theme="dark"] .el-table__row { background: var(--color-bg-card) !important; }
+[data-theme="dark"] .el-table__row:hover > td { background: var(--color-bg-hover) !important; }
+[data-theme="dark"] .el-table--striped .el-table__row--striped td {
+  background: var(--color-bg-page) !important;
+}
+[data-theme="dark"] .el-table th.el-table__cell {
+  background: var(--color-bg-hover) !important;
+  color: var(--color-text-regular) !important;
+}
+
+/* v69 P0: dark mode 关键洞察（保留在 CSS 末尾做开发提示） */
+/* - 截图 5 张配对卡全亮绿 = 后端 PUT /api/v1/tasks 状态契约可能不接 status='done'，不在本 plan 范围 */
+/* - 截止日期 06/05 灰色在 dark 上 = --color-text-regular (#c0c4cc) 修复后可见，不是 --color-text-secondary (仍偏暗) */
+

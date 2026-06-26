@@ -978,3 +978,29 @@ onUnmounted(() => {
   100% { transform: translate(var(--dx), var(--dy)) scale(1.3); opacity: 0; }
 }
 </style>
+
+<!-- v69 P0: DashboardPet dark mode 覆盖（v60-v67 教训：dark 跨组件规则必须非 scoped） -->
+<style>
+  /* 气泡（之前硬编码 #fff 白底在 dark 上戳一坨纯白） */
+  [data-theme="dark"] .speech-bubble {
+    background: var(--color-bg-card);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border-base);
+    box-shadow: var(--shadow-md);
+  }
+  [data-theme="dark"] .pet-world:first-child .speech-bubble::after,
+  [data-theme="dark"] .speech-bubble::after {
+    border-top-color: var(--color-bg-card);
+  }
+  [data-theme="dark"] .pet-world:nth-child(2) .speech-bubble::after {
+    border-bottom-color: var(--color-bg-card);
+  }
+  [data-theme="dark"] .speech-text { color: var(--color-text-primary); }
+
+  /* XP 条（在 hero 上保持半透明白底） */
+  [data-theme="dark"] .xp-bar-bg { background: rgba(255, 255, 255, 0.15) !important; }
+  [data-theme="dark"] .xp-bar-fill { background: linear-gradient(90deg, #81C784, #66BB6A); }
+  [data-theme="dark"] .xp-label { color: rgba(255, 255, 255, 0.95); }
+  [data-theme="dark"] .xp-name { background: rgba(0, 0, 0, 0.55); color: #fff; }
+  [data-theme="dark"] .xp-name-divider { background: rgba(255, 255, 255, 0.3); }
+</style>
