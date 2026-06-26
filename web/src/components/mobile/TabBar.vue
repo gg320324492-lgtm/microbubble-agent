@@ -192,4 +192,18 @@ function handleSwitch(name) {
 [data-theme="dark"] .nut-tabbar-item__icon--unactive {
   color: var(--color-text-regular);
 }
+
+/* v64 (2026-06-26) 修复 .mobile-tabbar 容器背景：v62/v63 只把 nut-tabbar-item
+   颜色移到这里，但漏了 .mobile-tabbar 容器背景。容器背景 dark 模式还在 scoped
+   <style> 块里：scoped CSS 编译 [data-theme="dark"] .mobile-tabbar 时把 data-v 错误
+   附加到属性选择器（同 v60 教训），编译产物 [data-theme=dark] .mobile-tabbar
+   [data-v-xxx] 要求同一元素同时有两属性——<html> 只有 data-theme，<nav> 只有
+   data-v，**永不匹配** → dark 容器背景永远不生效，TabBar 一直是白底
+   （rgba(255,255,255,0.92) 半透明叠加在深色页面背景上呈现奶油色）。
+   用户截图反馈"底部导航栏全白的"就是这个 bug。
+   修复：把 .mobile-tabbar dark 背景也移到非 scoped 块。 */
+[data-theme="dark"] .mobile-tabbar {
+  background: rgba(26, 29, 35, 0.92);
+  border-top-color: var(--color-border-base);
+}
 </style>
