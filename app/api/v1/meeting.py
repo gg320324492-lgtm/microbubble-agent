@@ -432,6 +432,55 @@ async def polish_text(
     return {"polished": polished}
 
 
+@router.post("/meetings/{meeting_id}/polish-text-batch")
+async def polish_text_batch(
+    meeting_id: int,
+    body: dict,
+    current_user: Member = Depends(get_current_user),
+):
+    """批量润色多条文本（v31.3.2: 解决 83 段会议一次性 83 个 polish-text 触发 write tier 30/min 限流）
+
+    输入: {"texts": ["text1", "text2", ...]}
+    输出: {"polished": ["polished1", "polished2", ...]}
+
+    实现要点:
+      - 内部循环调 polish_segments_with_cache（每条文本独立 cache key, 复用已有 Redis 缓存）
+      - 整个批次对外只算 1 个 write tier 请求（rate-limit middleware 在路由外计数）
+      - 上限 200 条/批（防恶意 payload + LLM token 超限）
+      - 空字符串 / 过短文本直接返回原文（与单文本端点行为一致）
+
+    为什么需要：单文本 polish-text 在前端 autoPolishIfNeeded 并发 3 调用 N 条转录
+    → 83 条会议触发 ~83 次 POST → write tier 30/min 在 ~30 条后全 429。
+    batch 端点把这 83 次 HTTP 请求压缩到 1 次，从根本上避开限流。
+    """
+    texts = body.get("texts", [])
+    if not isinstance(texts, list):
+        raise HTTPException(status_code=400, detail="texts 必须是数组")
+    if len(texts) > 200:
+        raise HTTPException(status_code=400, detail=f"单批最多 200 条（当前 {len(texts)} 条）")
+    if not texts:
+        return {"polished": []}
+
+    from app.services.meeting_ai_polish import polish_segments_with_cache
+
+    polished_list = []
+    for text in texts:
+        if not text or not isinstance(text, str) or len(text.strip()) < 3:
+            # 空 / 过短：原样返回（与单文本端点 '文本太短' 异常不同——批量场景下保持对齐友好）
+            polished_list.append(text)
+            continue
+        # 每条文本独立 cache key（hash 仅基于单条 segment）→ 复用已有 Redis 缓存
+        result = await polish_segments_with_cache(
+            meeting_id=meeting_id,
+            segments=[{"speaker": "未知", "text": text, "ts": 0.0}],
+            meeting_context={"title": "", "participants": [], "topic": None, "context": None},
+        )
+        polished = result["polished"][0]["text"] if result.get("polished") and result["polished"] else text
+        polished_list.append(polished)
+
+    return {"polished": polished_list}
+
+
 @router.patch("/meetings/{meeting_id}/transcript-speaker")
 async def update_transcript_speaker(
     meeting_id: int,
