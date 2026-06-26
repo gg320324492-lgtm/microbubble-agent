@@ -68,11 +68,7 @@ test.describe('Mobile 核心页面视觉回归 (v76.2 baseline 对比)', () => {
     })
   }
 
-  test('PWA manifest 可访问 (含视觉基线对比意义)', async ({ page }) => {
-    const response = await page.goto(`${BASE_URL}/manifest.webmanifest`)
-    expect(response.status()).toBe(200)
-    const manifest = await response.json()
-    expect(manifest.name).toBe('微纳米气泡课题组智能助手')
-    expect(manifest.theme_color).toBe('#FF7A5C')
-  })
+  // v76.2h: PWA manifest 测试不属于视觉回归范畴, 移到独立 spec
+  // (dev server 上 /manifest.webmanifest 404, 仅 build 产物有效)
+  // 视觉回归 spec 应只关注截图 baseline 对比
 })
