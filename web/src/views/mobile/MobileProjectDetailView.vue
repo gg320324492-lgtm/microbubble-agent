@@ -256,7 +256,7 @@ onMounted(async () => {
   font-size: 18px;
   font-weight: var(--font-weight-semibold, 600);
   flex: 1;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .hero-desc {
   margin: 0 0 16px;
@@ -301,7 +301,7 @@ onMounted(async () => {
 .info-value {
   flex: 1;
   color: var(--color-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .members-list {

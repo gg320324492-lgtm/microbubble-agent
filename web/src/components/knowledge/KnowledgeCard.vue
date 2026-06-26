@@ -426,7 +426,7 @@ const formatDate = (dateStr) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   flex-shrink: 0;
 }
 
@@ -448,7 +448,7 @@ const formatDate = (dateStr) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   flex: 1;
   min-height: 0;
 }

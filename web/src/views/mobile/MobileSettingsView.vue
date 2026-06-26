@@ -563,7 +563,7 @@ onMounted(async () => {
 .readonly-value {
   flex: 1;
   color: var(--color-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* 退出 */

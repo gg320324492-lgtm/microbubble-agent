@@ -312,7 +312,7 @@ const typeLabel = (kind) => ({
   font-size: 13px;
   line-height: 1.7;
   color: var(--color-text-secondary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 </style>

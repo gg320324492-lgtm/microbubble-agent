@@ -283,7 +283,7 @@ function renderMarkdownTable(text) {
   line-height: 1.85;
   color: var(--color-text-primary);
   margin: 0 0 14px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   overflow-wrap: break-word;
   text-indent: 0;
 }
@@ -495,7 +495,7 @@ function renderMarkdownTable(text) {
   font-size: 15px;
   line-height: 1.85;
   color: var(--color-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .qa-text :deep(p) {

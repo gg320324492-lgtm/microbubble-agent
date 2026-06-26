@@ -140,7 +140,7 @@ function handleSwitch(name) {
    把后代选择器和 :deep() 部分都丢了——而且这条规则会作用到 <html> 而不是 .nut-tabbar-item！
    所以 v61 还是错的。
 
-   v62 终极修复：把 dark mode 规则移到 Vue SFC 的**第二个非 scoped <style> 块**。
+   v62 终极修复：把 dark mode 规则移到 Vue SFC 的**第二个非 scoped \3c style> 块**。
    非 scoped 块不会附加 data-v，规则全局生效，直接命中 NutUI 元素。 */
 :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .nut-tabbar-item-icon) {
   transform: scale(1.08);
@@ -195,7 +195,7 @@ function handleSwitch(name) {
 
 /* v64 (2026-06-26) 修复 .mobile-tabbar 容器背景：v62/v63 只把 nut-tabbar-item
    颜色移到这里，但漏了 .mobile-tabbar 容器背景。容器背景 dark 模式还在 scoped
-   <style> 块里：scoped CSS 编译 [data-theme="dark"] .mobile-tabbar 时把 data-v 错误
+   \3c style> 块里：scoped CSS 编译 [data-theme="dark"] .mobile-tabbar 时把 data-v 错误
    附加到属性选择器（同 v60 教训），编译产物 [data-theme=dark] .mobile-tabbar
    [data-v-xxx] 要求同一元素同时有两属性——<html> 只有 data-theme，<nav> 只有
    data-v，**永不匹配** → dark 容器背景永远不生效，TabBar 一直是白底

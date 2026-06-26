@@ -343,7 +343,7 @@ watch(() => props.knowledgeId, () => fetchExtractions(), { immediate: true })
   line-height: 1.6;
   color: var(--color-text-primary);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   background: var(--color-bg-secondary);
   padding: var(--space-2);
   border-radius: var(--radius-sm);
@@ -390,7 +390,7 @@ watch(() => props.knowledgeId, () => fetchExtractions(), { immediate: true })
   font-size: var(--font-size-sm);
   line-height: 1.6;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   max-height: 60vh;
   overflow-y: auto;
 }

@@ -136,34 +136,30 @@
                 <div v-if="groupedKeyPoints.length" class="section">
                   <h4>讨论要点</h4>
 
-                  <!-- v70 P3: TL;DR 重点摘要卡 (顶部醒目位置, 防止 20+ 条密密麻麻) -->
+                  <!-- v70 P3: TL;DR 重点摘要卡 (保留, 用户认可作为辅助) -->
                   <div v-if="meeting.key_points?.length > 3" class="tldr-card fade-slide-up">
                     <div class="tldr-header">
                       <el-icon class="tldr-icon"><StarFilled /></el-icon>
                       <span class="tldr-title">重点摘要</span>
-                      <span class="tldr-count">共 {{ meeting.key_points.length }} 条要点 · 默认显示前 3 条</span>
+                      <span class="tldr-count">共 {{ meeting.key_points.length }} 条要点</span>
                     </div>
                     <ul class="tldr-list">
                       <li v-for="(item, i) in meeting.key_points.slice(0, 3)" :key="'tldr'+i" class="tldr-item">{{ item }}</li>
                     </ul>
                   </div>
 
+                  <!-- v71 P1: 每张发言人卡片默认展开, 常驻前 8 条, 超过 8 条显示"展开全部"按钮 -->
                   <div v-for="(group, gi) in groupedKeyPoints" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
-                    <!-- v70 P3: 卡片头部可点击折叠/展开 -->
-                    <div class="speaker-row clickable" :class="{ expanded: expandedGroups.has(gi) }" @click="toggleGroup(gi)">
+                    <div class="speaker-row">
                       <template v-if="group.speaker">
                         <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
                         <span class="speaker-name">{{ group.speaker }}</span>
                       </template>
                       <span v-else class="speaker-name speaker-name--anonymous">未识别发言人</span>
                       <span class="speaker-count">{{ group.items.length }} 条要点</span>
-                      <el-icon class="toggle-icon" :class="{ rotated: expandedGroups.has(gi) }">
-                        <ArrowDown />
-                      </el-icon>
                     </div>
-                    <!-- v70 P3: 默认折叠, 展开后限制显示 MAX_PER_GROUP=5 条 -->
-                    <ul v-if="expandedGroups.has(gi)" class="points-list">
-                      <li v-for="(item, ii) in group.items.slice(0, MAX_PER_GROUP)" :key="ii" class="point-item" @click.stop="editingPoint = (editingPoint === `key_points.${gi}.${ii}` ? null : `key_points.${gi}.${ii}`)">
+                    <ul class="points-list">
+                      <li v-for="(item, ii) in (expandedFullGroups.has(gi) ? group.items : group.items.slice(0, MAX_PER_GROUP_DEFAULT))" :key="ii" class="point-item" @click.stop="editingPoint = (editingPoint === `key_points.${gi}.${ii}` ? null : `key_points.${gi}.${ii}`)">
                         <span class="point-text">{{ item }}</span>
                         <el-select
                           v-if="editingPoint === `key_points.${gi}.${ii}`"
@@ -178,21 +174,37 @@
                           <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
                         </el-select>
                       </li>
-                      <li v-if="group.items.length > MAX_PER_GROUP" class="more-items">
-                        <span class="more-text">还有 {{ group.items.length - MAX_PER_GROUP }} 条要点未展开（详见会议转录 tab）</span>
+                      <!-- 超过 8 条 + 未展开全部 → 显示"展开全部"按钮 -->
+                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && !expandedFullGroups.has(gi)" class="more-items">
+                        <el-button text size="small" type="primary" class="more-items-button" @click="expandGroupFull(gi)">
+                          <el-icon><ArrowDown /></el-icon>
+                          展开全部（剩 {{ group.items.length - MAX_PER_GROUP_DEFAULT }} 条）
+                        </el-button>
+                      </li>
+                      <!-- 展开全部后 → 显示"收起"按钮 -->
+                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && expandedFullGroups.has(gi)" class="more-items">
+                        <el-button text size="small" type="primary" class="more-items-button" @click="collapseGroupFull(gi)">
+                          <el-icon><ArrowUp /></el-icon>
+                          收起
+                        </el-button>
                       </li>
                     </ul>
                   </div>
                 </div>
                 <div v-if="groupedDecisions.length" class="section">
-                  <h4>决议事项</h4>
+                  <h4>决议事项 <span class="agenda-count">共 {{ groupedDecisions.reduce((s, g) => s + g.items.length, 0) }} 项</span></h4>
                   <div v-for="(group, gi) in groupedDecisions" :key="gi" class="speaker-group fade-slide-up" :style="{ animationDelay: (gi * 80) + 'ms' }">
-                    <div v-if="group.speaker" class="speaker-row">
-                      <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
-                      <span class="speaker-name">{{ group.speaker }}</span>
+                    <!-- v71 P1: 决议区统一 8 条常驻 + per-card 展开全部 -->
+                    <div class="speaker-row">
+                      <template v-if="group.speaker">
+                        <el-avatar :size="24" :src="getSpeakerAvatar(group.speaker)" class="speaker-avatar" :alt="`${group.speaker}的头像`">{{ group.speaker[0] }}</el-avatar>
+                        <span class="speaker-name">{{ group.speaker }}</span>
+                      </template>
+                      <span v-else class="speaker-name speaker-name--anonymous">未识别发言人</span>
+                      <span class="speaker-count">{{ group.items.length }} 条决议</span>
                     </div>
                     <ul class="decisions-list">
-                      <li v-for="(item, ii) in group.items" :key="ii" class="point-item" @click="editingPoint = (editingPoint === `decisions.${gi}.${ii}` ? null : `decisions.${gi}.${ii}`)">
+                      <li v-for="(item, ii) in (expandedFullDecisions.has(gi) ? group.items : group.items.slice(0, MAX_PER_GROUP_DEFAULT))" :key="ii" class="point-item" @click.stop="editingPoint = (editingPoint === `decisions.${gi}.${ii}` ? null : `decisions.${gi}.${ii}`)">
                         <span class="point-text">{{ item }}</span>
                         <el-select
                           v-if="editingPoint === `decisions.${gi}.${ii}`"
@@ -207,17 +219,38 @@
                           <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name" :value="m.name" />
                         </el-select>
                       </li>
+                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && !expandedFullDecisions.has(gi)" class="more-items">
+                        <el-button text size="small" type="primary" class="more-items-button" @click="expandDecisionFull(gi)">
+                          <el-icon><ArrowDown /></el-icon>
+                          展开全部（剩 {{ group.items.length - MAX_PER_GROUP_DEFAULT }} 条）
+                        </el-button>
+                      </li>
+                      <li v-if="group.items.length > MAX_PER_GROUP_DEFAULT && expandedFullDecisions.has(gi)" class="more-items">
+                        <el-button text size="small" type="primary" class="more-items-button" @click="collapseDecisionFull(gi)">
+                          <el-icon><ArrowUp /></el-icon>
+                          收起
+                        </el-button>
+                      </li>
                     </ul>
                   </div>
                 </div>
                 <div v-if="meeting.agenda?.length" class="section">
-                  <h4>议程</h4>
-                  <ol class="agenda-list">
-                    <li v-for="(item, idx) in meeting.agenda" :key="idx">
-                      <span :class="{ done: item.done }">{{ item.text || item }}</span>
-                      <el-tag v-if="item.done" type="success" size="small">已完成</el-tag>
-                    </li>
-                  </ol>
+                  <h4>议程 <span class="agenda-count">共 {{ meeting.agenda.length }} 项</span></h4>
+                  <!-- v71 P1: 议程改 el-timeline + 数字圆点 dot (项目内 ProjectView 模式) -->
+                  <el-timeline class="agenda-timeline">
+                    <el-timeline-item
+                      v-for="(item, idx) in meeting.agenda"
+                      :key="idx"
+                      :timestamp="`议程 ${idx + 1}`"
+                      placement="top"
+                      type="primary"
+                    >
+                      <template #dot>
+                        <div class="agenda-dot">{{ idx + 1 }}</div>
+                      </template>
+                      <div class="agenda-text">{{ item }}</div>
+                    </el-timeline-item>
+                  </el-timeline>
                 </div>
                 <el-button v-if="!editingMinutes" size="small" class="edit-minutes-btn" @click="enterEditMinutes">
                   <el-icon><Edit /></el-icon> 编辑纪要
@@ -357,7 +390,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ArrowDown, StarFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ArrowDown, ArrowUp, StarFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
@@ -383,18 +416,27 @@ const relatedMeetings = ref([])
 
 const editingPoint = ref(null)  // 当前编辑的要点 ID
 
-// v70 P3: 会议纪要视觉精简 (CLAUDE.md 2026-06-26 用户反馈: 20+ 条密密麻麻不像纪要)
-// 每张发言人卡片默认折叠, 顶部加 TL;DR 摘要卡, 单卡上限 5 条
-const expandedGroups = ref(new Set())  // 展开的 group 索引集合 (默认全折叠)
-const MAX_PER_GROUP = 5  // 每张卡片展开时最多显示 5 条要点
-function toggleGroup(gi) {
-  if (expandedGroups.value.has(gi)) {
-    expandedGroups.value.delete(gi)
-  } else {
-    expandedGroups.value.add(gi)
-  }
-  // 触发响应式更新 (Set 不是 ref-reactive, 需要手动重赋值)
-  expandedGroups.value = new Set(expandedGroups.value)
+// v71 P1: 会议纪要视觉迭代 (CLAUDE.md 用户反馈: v70 P3 默认全折叠看不到内容)
+// 每张发言人卡片默认展开, 常驻上限 8 条, 超过 8 条显示"展开全部"按钮按需展开
+const expandedFullGroups = ref(new Set())  // 哪些 group 展开了"全部" (默认空 Set = 全显示前 8 条)
+const expandedFullDecisions = ref(new Set())  // 决议区独立 Set (与 key_points 状态隔离)
+const MAX_PER_GROUP_DEFAULT = 8  // 每张卡片默认显示前 N 条要点
+
+function expandGroupFull(gi) {
+  expandedFullGroups.value.add(gi)
+  expandedFullGroups.value = new Set(expandedFullGroups.value)
+}
+function collapseGroupFull(gi) {
+  expandedFullGroups.value.delete(gi)
+  expandedFullGroups.value = new Set(expandedFullGroups.value)
+}
+function expandDecisionFull(gi) {
+  expandedFullDecisions.value.add(gi)
+  expandedFullDecisions.value = new Set(expandedFullDecisions.value)
+}
+function collapseDecisionFull(gi) {
+  expandedFullDecisions.value.delete(gi)
+  expandedFullDecisions.value = new Set(expandedFullDecisions.value)
 }
 
 // 单独更改某条要点/决议的发言人（仅影响这一条）
@@ -987,20 +1029,8 @@ onMounted(async () => {
   gap: 8px;
   margin-bottom: 6px;
 }
-.speaker-row.clickable {
-  cursor: pointer;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm, 4px);
-  transition: background 0.15s ease;
-  user-select: none;
-}
-.speaker-row.clickable:hover {
-  background: var(--color-bg-page, #f5f7fa);
-}
-.speaker-row.expanded {
-  background: var(--color-bg-warm, rgba(255, 122, 92, 0.06));
-  margin-bottom: 8px;
-}
+/* v71 P1: 移除 .speaker-row.clickable / .expanded / .toggle-icon / .rotated (默认展开, 不再折叠) */
+/* .speaker-row 仅作为 flex 容器, 不再有 clickable 行为 */
 .speaker-avatar {
   flex-shrink: 0;
 }
@@ -1019,24 +1049,17 @@ onMounted(async () => {
   font-weight: normal;
   margin-left: auto;
 }
-.toggle-icon {
-  font-size: 14px;
-  color: var(--color-text-secondary, #909399);
-  transition: transform 0.25s ease;
-  flex-shrink: 0;
-}
-.toggle-icon.rotated {
-  transform: rotate(180deg);
-}
+
+/* v71 P1: 展开全部/收起按钮 (per-card) */
 .more-items {
   list-style: none;
-  margin-top: 4px;
-  padding-left: 4px;
+  margin-top: 6px;
+  padding-left: 0;
 }
-.more-text {
-  font-size: 12px;
-  color: var(--color-text-secondary, #909399);
-  font-style: italic;
+.more-items-button {
+  font-size: 13px;
+  padding: 4px 0;
+  margin-left: -4px;
 }
 
 /* v70 P3: TL;DR 顶部摘要卡 (防止 20+ 条密密麻麻不像纪要) */
@@ -1136,20 +1159,36 @@ onMounted(async () => {
 .decisions-list li::marker {
   color: var(--color-warning, #E6A23C);
 }
-.agenda-list {
-  padding-left: 20px;
-  margin: 0;
+
+/* v71 P1: 议程 timeline 样式 (替换旧 .agenda-list) */
+.agenda-count {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--color-text-secondary, #909399);
+  margin-left: 8px;
 }
-.agenda-list li {
-  margin-bottom: 6px;
-  font-size: 14px;
+.agenda-timeline {
+  padding-left: 4px;
+  margin-top: 4px;
+}
+.agenda-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary, #FF7A5C);
+  color: #fff;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 0 0 3px var(--color-bg-card, #fff);
 }
-.agenda-list .done {
-  text-decoration: line-through;
-  color: var(--color-text-secondary, #909399);
+.agenda-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-regular, #606266);
+  padding: 4px 0;
 }
 .edit-minutes-btn {
   margin-top: 8px;

@@ -154,7 +154,7 @@ const truncate = (text, n) => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .related-card:hover .related-card-title {

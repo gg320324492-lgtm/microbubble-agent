@@ -456,7 +456,7 @@ watch(
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .item-subtitle {
   font-size: 12px;
@@ -495,7 +495,7 @@ watch(
 .field-value {
   flex: 1;
   color: var(--color-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Meta */

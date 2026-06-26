@@ -245,7 +245,7 @@ const statusLabel = (s) => ({
   line-height: 1.55;
   color: var(--color-text-primary);
   margin-bottom: 6px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .figure-caption-title .figure-no {
@@ -301,7 +301,7 @@ const statusLabel = (s) => ({
   font-size: 13.5px;
   line-height: 1.65;
   color: var(--color-text-regular);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .figure-caption-empty {
@@ -352,7 +352,7 @@ const statusLabel = (s) => ({
 .figure-description p {
   margin: 6px 0 0;
   line-height: 1.6;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .figure-ocr {
@@ -380,7 +380,7 @@ const statusLabel = (s) => ({
   background: var(--color-bg-card);
   border-radius: 6px;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   font-family: 'SF Mono', Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;

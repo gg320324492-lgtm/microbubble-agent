@@ -876,7 +876,7 @@ onUnmounted(() => {
   animation: pet-bubble-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   max-width: 240px;
   min-width: 60px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: normal;
   text-align: left;
 }

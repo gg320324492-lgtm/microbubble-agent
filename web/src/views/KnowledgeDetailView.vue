@@ -1101,7 +1101,7 @@ onUnmounted(() => {
   line-height: 1.85;
   color: var(--color-text-primary);
   margin: 0 0 16px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   overflow-wrap: break-word;
   text-indent: 0;
   max-width: 100%;
@@ -1149,7 +1149,7 @@ onUnmounted(() => {
 
 .raw-content-pre {
   white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow-wrap: break-word;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 1.8;

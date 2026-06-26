@@ -32,7 +32,12 @@
     "declaration-block-no-redundant-longhand-properties": null,
     "length-zero-no-unit": null,
     "number-max-precision": null,
-    "media-feature-name-no-vendor-prefix": null
+    "media-feature-name-no-vendor-prefix": null,
+    "selector-pseudo-class-no-unknown": [true, {
+      "ignorePseudoClasses": ["deep", "slotted", "global"]
+    }],
+    "font-family-name-quotes": null,
+    "comment-whitespace-inside": null
   },
   "overrides": [
     {

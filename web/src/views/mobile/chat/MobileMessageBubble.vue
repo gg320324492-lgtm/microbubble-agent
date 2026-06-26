@@ -139,8 +139,8 @@ function onLongPress(e) {
   border-radius: 18px;
   line-height: 1.55;
   font-size: 15px;
-  word-wrap: break-word;
-  word-break: break-word;
+  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   -webkit-user-select: text;
   user-select: text;
 }
