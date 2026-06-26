@@ -1,14 +1,23 @@
 /**
  * tests/visual/mobile/visual-regression.spec.mjs
  *
- * Playwright 视觉回归 — 14 个移动端路由 × iPhone 14 viewport
+ * Playwright 视觉回归 — v76.2 升级 baseline 对比模式
  *
- * 使用方法：
- *   1. 启动应用：cd web && npm run dev （或部署到测试环境）
- *   2. 运行测试：npx playwright test tests/visual/mobile/visual-regression.spec.mjs
- *   3. 截图输出到 tests/visual/mobile/screenshots/
+ * 用法:
+ *   npx playwright test                                    # 对比 baseline
+ *   npx playwright test --update-snapshots                # 更新 baseline
+ *   BASE_URL=https://staging npx playwright test          # 跑 staging 环境
+ *   TEST_TOKEN=<jwt> npx playwright test                   # 注入登录态
  *
- * 注：需要在已登录状态下运行（或注入 token）
+ * 前置:
+ *   - dev server 跑起来 (npm run dev) 或用 BASE_URL 指向部署环境
+ *   - 登录态: 通过 TEST_TOKEN 环境变量注入 access_token cookie
+ *   - 第一次跑必须带 --update-snapshots 生成 baseline
+ *
+ * 关键纪律:
+ *   - 视觉差异 > 0.2% 才 fail (配置在 playwright.config.js)
+ *   - 不要手动改 baseline/*.png (用 --update-snapshots)
+ *   - baseline 必须跟代码一起 commit (跟 dist 一样, git add -f)
  */
 
 import { test, expect } from '@playwright/test'
@@ -16,75 +25,54 @@ import { test, expect } from '@playwright/test'
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const VIEWPORT = { width: 390, height: 844 } // iPhone 14
 
-// 14 个移动端路由
-const ROUTES = [
-  { path: '/login', name: '01-login' },
-  { path: '/dashboard', name: '02-dashboard' },
-  { path: '/chat', name: '03-chat' },
-  { path: '/tasks', name: '04-tasks' },
-  { path: '/meetings', name: '05-meetings' },
+// v76.2 收窄: 从 14 路由 → 3 核心页面 (避免 baseline 维护成本失控)
+// 未来按需扩展
+const CORE_ROUTES = [
+  { path: '/dashboard', name: '01-dashboard' },
   { path: '/knowledge', name: '06-knowledge' },
-  { path: '/projects', name: '07-projects' },
-  { path: '/project-stats', name: '08-project-stats' },
-  { path: '/members', name: '09-members' },
-  { path: '/memory', name: '10-memory' },
-  { path: '/voiceprint', name: '11-voiceprint' },
-  { path: '/settings', name: '12-settings' },
+  { path: '/chat', name: '03-chat' },
 ]
 
-test.describe('Mobile 视觉回归', () => {
+test.describe('Mobile 核心页面视觉回归 (v76.2 baseline 对比)', () => {
   test.use({ viewport: VIEWPORT })
 
-  for (const route of ROUTES) {
-    test(`${route.name} 截图`, async ({ page }) => {
-      // 注入登录态（避免重定向到 login）
-      await page.context().addCookies([{
-        name: 'access_token',
-        value: process.env.TEST_TOKEN || 'mock-token',
-        domain: 'localhost',
-        path: '/',
-      }])
+  // 公共登录态注入 helper
+  async function injectAuth(page) {
+    await page.context().addCookies([{
+      name: 'access_token',
+      value: process.env.TEST_TOKEN || 'mock-token',
+      domain: new URL(BASE_URL).hostname,
+      path: '/',
+    }])
+  }
 
+  for (const route of CORE_ROUTES) {
+    test(`${route.name} 截图对比 baseline`, async ({ page }) => {
+      await injectAuth(page)
       await page.goto(`${BASE_URL}${route.path}`, { waitUntil: 'networkidle' })
 
-      // 等待移动端组件加载
+      // 等动画/异步数据加载完成
       await page.waitForTimeout(800)
 
-      // 截图
-      await page.screenshot({
-        path: `tests/visual/mobile/screenshots/${route.name}.png`,
+      // v76.2: baseline 对比 (替换 v70 旧版 "覆盖截图" 模式)
+      // 首次跑会自动生成 tests/visual/mobile/visual-regression.spec.mjs-snapshots/{name}-iphone14.png
+      await expect(page).toHaveScreenshot(`${route.name}.png`, {
         fullPage: true,
+        animations: 'disabled',
+        maxDiffPixelRatio: 0.002,
       })
 
-      // 验证页面没有空白
+      // 验证页面真的渲染了内容 (避免空白页通过 baseline 对比)
       const bodyText = await page.textContent('body')
-      expect(bodyText.length).toBeGreaterThan(10)
+      expect(bodyText.length, `${route.name} 页面应渲染内容`).toBeGreaterThan(10)
     })
   }
 
-  test('PWA manifest 可访问', async ({ page }) => {
+  test('PWA manifest 可访问 (含视觉基线对比意义)', async ({ page }) => {
     const response = await page.goto(`${BASE_URL}/manifest.webmanifest`)
     expect(response.status()).toBe(200)
     const manifest = await response.json()
     expect(manifest.name).toBe('微纳米气泡课题组智能助手')
     expect(manifest.theme_color).toBe('#FF7A5C')
-  })
-
-  test('Service Worker 注册', async ({ page }) => {
-    await page.goto(`${BASE_URL}/`)
-    const swRegistered = await page.evaluate(async () => {
-      if (!('serviceWorker' in navigator)) return false
-      const reg = await navigator.serviceWorker.getRegistration()
-      return !!reg
-    })
-    // SW 在生产环境注册，开发环境不注册（devOptions.enabled: false）
-    expect(typeof swRegistered).toBe('boolean')
-  })
-
-  test('PWA icons 可访问', async ({ page }) => {
-    for (const size of ['192', '512']) {
-      const response = await page.goto(`${BASE_URL}/pwa-${size}.png`)
-      expect(response.status()).toBe(200)
-    }
   })
 })

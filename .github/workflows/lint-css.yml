@@ -13,6 +13,18 @@ on:
       - "web/src/**"
       - "web/.stylelintrc.json"
       - "web/package.json"
+  # v76.4: 允许手动触发 baseline-guard, 输入 max-increase 临时放宽门禁
+  # 用法: Actions → Lint CSS → Run workflow → 输入 max_increase + tracking_issue
+  workflow_dispatch:
+    inputs:
+      max_increase:
+        description: "允许临时增加的 stylelint 错误数 (默认 0 = hard fail on any error)"
+        required: false
+        default: "0"
+      tracking_issue:
+        description: "临时放宽门禁对应的 issue 编号 (如 #123), 用于审计追溯"
+        required: false
+        default: ""
 
 jobs:
   stylelint:
@@ -40,8 +52,9 @@ jobs:
 
       # 检查 var(--token, ...) 中 token 都在 variables.css 定义（v73 沉淀，v74 改 hard fail）
       - name: Check token orphans
-        run: bash scripts/check-token-orphans.sh
+        run: bash scripts/check-token-orphans.sh --ci-mode
         # v74: 移除 continue-on-error (白名单已覆盖 --i 等设计意图, 真 orphan 必须 fail)
+        # v76.5: 加 --ci-mode 输出 ::error file=...,line=... annotation, PR 视图显示错误位置
 
       # 同时跑 vitest 兜底（stylelint 漏掉的逻辑错误）
       - name: Run unit tests (smoke)
@@ -108,10 +121,36 @@ jobs:
           echo "${EMOJI} 趋势: $BASELINE → $CURRENT ($TREND)"
 
       - name: Baseline gate (must be 0)
+        # v76.4: 接受 workflow_dispatch inputs.max_increase 临时放宽门禁
+        # PR 自动触发 max_increase=0 (hard fail); workflow_dispatch 输入 N 允许临时增加 N 错误
         if: steps.current.outputs.current != '0'
+        env:
+          # 默认 0 (hard fail), workflow_dispatch 触发时用输入值
+          MAX_INCREASE: ${{ github.event.inputs.max_increase || '0' }}
+          TRACKING_ISSUE: ${{ github.event.inputs.tracking_issue || '' }}
         run: |
           CURRENT=${{ steps.current.outputs.current }}
-          echo "::error::Stylelint found $CURRENT errors (baseline violation, must be 0)"
+          BASELINE=${{ steps.baseline.outputs.baseline }}
+          DIFF=$((CURRENT - BASELINE))
+
+          if [ "$DIFF" -le "$MAX_INCREASE" ]; then
+            # ✅ 允许临时增加 (在 max_increase 范围内)
+            echo "::warning::Stylelint errors: $BASELINE → $CURRENT (+${DIFF}), within max_increase=${MAX_INCREASE}"
+            if [ -n "$TRACKING_ISSUE" ]; then
+              echo "::notice::Tracked by ${TRACKING_ISSUE} (manual override)"
+            fi
+            exit 0
+          fi
+
+          # ❌ 超出 max_increase, hard fail
+          if [ "$MAX_INCREASE" -gt 0 ]; then
+            echo "::error::Stylelint errors increased +${DIFF}, exceeds max_increase=${MAX_INCREASE} (current=$CURRENT, baseline=$BASELINE)"
+          else
+            echo "::error::Stylelint found $CURRENT errors (baseline violation, must be 0)"
+          fi
+          if [ -n "$TRACKING_ISSUE" ]; then
+            echo "::notice::Requested override with ${TRACKING_ISSUE}, but max_increase exceeded"
+          fi
           cd web && npm run lint:css 2>&1 | tail -30
           exit 1
 
@@ -135,3 +174,85 @@ jobs:
       - name: ✅ Stylelint 0 errors (baseline maintained)
         if: steps.current.outputs.current == '0'
         run: echo "✅ Stylelint 0 errors (baseline maintained)"
+
+  # v76.2: 视觉回归 baseline 对比 job
+  # 第一次跑会生成 baseline png, 后续跑对比 baseline, 视觉变化 > 0.2% fail
+  visual-regression:
+    name: Visual regression (mobile 3 页面 baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      # Build + 启动 preview server (后台跑, 跑完测试后 kill)
+      - name: Build + serve
+        working-directory: web
+        run: |
+          npm run build
+          npx vite preview --port 4173 --host 0.0.0.0 &
+          PREVIEW_PID=$!
+          for i in {1..30}; do
+            curl -s http://localhost:4173 > /dev/null && break
+            sleep 1
+          done
+          echo "PREVIEW_PID=$PREVIEW_PID" >> $GITHUB_ENV
+
+      - name: Run visual regression
+        working-directory: web
+        env:
+          BASE_URL: http://localhost:4173
+          TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
+        run: |
+          # main branch 自动接受 (首次生成 baseline); PR 跑对比模式 (fail 阻止 merge)
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "::notice::main branch 跑 baseline 生成模式"
+            npx playwright test --update-snapshots
+          else
+            echo "::notice::PR 跑 baseline 对比模式"
+            npx playwright test
+          fi
+        # PR 失败时不停 (让 artifact upload 步骤能跑)
+
+      # PR 跑视觉回归 fail 时, 上传 diff png 让 reviewer 看
+      - name: Upload visual diff artifacts
+        if: failure() || success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-visual-diff
+          path: web/test-results/
+          retention-days: 7
+
+      # main branch 自动 commit baseline png (v76.2: baseline 跟 dist 一样 git add -f)
+      - name: Auto-commit baseline update (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f web/tests/visual/mobile/visual-regression.spec.mjs-snapshots/
+          if git diff --cached --quiet; then
+            echo "无 baseline 变更"
+          else
+            git commit -m "test(visual): 自动更新 baseline (v76.2 visual regression job)"
+            git push
+          fi
+
+      # cleanup: kill preview server
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -n "$PREVIEW_PID" ]; then kill $PREVIEW_PID 2>/dev/null || true; fi
