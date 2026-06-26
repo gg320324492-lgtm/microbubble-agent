@@ -32,6 +32,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_optional
 from app.models.member import Member
 from app.models.search_log import SearchLog
+from app.config import settings
 
 logger = logging.getLogger("microbubble.analytics")
 
@@ -233,7 +234,9 @@ async def get_stats(
     }
 
     # v31.2.4: 按 user_id 分组 (per-user dashboard)
-    # JOIN members 取真实名字, NULL user_id = 匿名用户
+    # JOIN members 取真实名字 + avatar, NULL user_id = 匿名用户
+    # v68 fix: 加 m.avatar + 前端用 row.avatar 完整 URL, 避免
+    #   前端再请求 /api/v1/members/{id}/avatar (端点不存在 → 404)
     # 仅显示有搜索量的用户 (searches > 0), top 20 by 搜索量
     by_user_result = await db.execute(
         text("""
@@ -241,28 +244,45 @@ async def get_stats(
                 COALESCE(m.id::text, 'anonymous') AS user_key,
                 COALESCE(m.name, '匿名用户') AS user_name,
                 COALESCE(m.username, '') AS username,
+                m.avatar AS avatar_object_name,
                 COUNT(*) AS searches,
                 COUNT(sl.clicked_id) AS clicks,
                 AVG(sl.click_position) FILTER (WHERE sl.clicked_id IS NOT NULL) AS avg_pos
             FROM search_logs sl
             LEFT JOIN members m ON sl.user_id = m.id
             WHERE sl.created_at >= :cutoff
-            GROUP BY COALESCE(m.id::text, 'anonymous'), COALESCE(m.name, '匿名用户'), COALESCE(m.username, '')
+            GROUP BY COALESCE(m.id::text, 'anonymous'), COALESCE(m.name, '匿名用户'),
+                     COALESCE(m.username, ''), m.avatar
             HAVING COUNT(*) > 0
             ORDER BY searches DESC
             LIMIT 20
         """),
         {"cutoff": cutoff},
     )
+
+    def _resolve_avatar(obj_name: str | None) -> str | None:
+        """把 members.avatar (object_name 或已是完整 URL) 解析为前端可直接用的 URL
+        镜像 app/api/v1/auth.py:_resolve_avatar_url 的逻辑, 避免依赖私有函数"""
+        if not obj_name:
+            return None
+        site_prefix = f"https://{settings.SITE_DOMAIN}/minio/"
+        if obj_name.startswith(site_prefix):
+            return obj_name
+        if obj_name.startswith("http://") or obj_name.startswith("https://"):
+            return obj_name
+        # 默认按 MinIO bucket + object_name 拼接
+        return f"https://{settings.SITE_DOMAIN}/minio/{settings.MINIO_BUCKET}/{obj_name}"
+
     by_user = [
         {
             "user_id": r[0] if r[0] != "anonymous" else None,
             "name": r[1],
             "username": r[2],
-            "searches": int(r[3]),
-            "clicks": int(r[4]),
-            "any_click_rate": round(int(r[4]) / int(r[3]), 4) if int(r[3]) > 0 else 0,
-            "avg_click_position": round(float(r[5]), 2) if r[5] is not None else None,
+            "avatar": _resolve_avatar(r[3]),
+            "searches": int(r[4]),
+            "clicks": int(r[5]),
+            "any_click_rate": round(int(r[5]) / int(r[4]), 4) if int(r[4]) > 0 else 0,
+            "avg_click_position": round(float(r[6]), 2) if r[6] is not None else None,
         }
         for r in by_user_result
     ]
