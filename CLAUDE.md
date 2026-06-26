@@ -4385,3 +4385,131 @@ curl whisper:8002/health  # 验证生效
 7e0976d8 feat(web): v69 P1b 10 desktop views dark mode coverage
 ```
 
+---
+
+## 2026-06-26 pre-commit hook 自动 add web/dist/（CLAUDE.md 教训第 4 次沉淀后兜底）
+
+> **触发**：v70 P2 commit `f6a2bc3d` 漏 add 95 个新 dist 文件 → 服务器 `index-fc61064b.js` + `index-bc336882.css` 404 + SPA fallback 返 `text/html` → 整站白屏。项目内**第 4 次**踩同一坑（前 3 次：2026-06-03 / 2026-06-10 / 2026-06-14），必须用 hook 兜底防止再犯。
+
+### 触发场景（每次踩坑都是这个模式）
+
+1. 改 `web/src/*.vue`（或 `web/src/**/*.js/css`）
+2. 跑 `npm run build` 产出新 hash 文件（`index-<8hex>.js` 等）
+3. `git commit` 漏 `git add -f web/dist/` ← **因为 `web/dist/` 在 `.gitignore` 第 50 行**
+4. **`git add -A` 会静默跳过 .gitignore 内文件**（CLAUDE.md 2026-06-10 + 2026-06-14 教训），不报错不警告
+5. 服务器 pull 后只看到 src 改动 → `index.html` 引用新 hash 但 dist 里没有 → 404 + SPA fallback → **整站白屏**
+
+### 修复：pre-commit hook 自动检测 + 自动 add（不 block）
+
+**两个文件**：
+
+1. **`scripts/check-dist-before-commit.sh`**（git tracked 业务逻辑，可独立调用）
+   - 检测 staged 是否有 `web/src/` 改动（没改 → 静默跳过，不影响 docs/CI 提交）
+   - 检测本地 `web/dist/assets/` 下是否有 hash 命名的 build 产物不在 HEAD
+   - 两个条件都满足 → echo 警告 + 自动 `git add -f web/dist/` + 继续 commit
+   - **不 hard block**——只 hash 命名的 build 产物被 add，不误 add user 手动放的文件
+
+2. **`.git/hooks/pre-commit`**（不 git tracked，跟现有 post-commit 风格一致）
+   - 薄 wrapper，调用上面的脚本
+   - 跟项目已有 `.git/hooks/post-commit`（自动 push origin main）风格统一
+
+### 5 条铁律
+
+#### 铁律 1：改了 `web/src/` 必跑 `npm run build` + commit 前必看 dist
+
+```
+# 修改 web/src/ 后标准流程:
+vim web/src/components/Foo.vue
+cd web && npm run build   # ← 必跑, 产新 hash
+cd ..
+git add web/src/          # ← 改动
+# commit 时 hook 会自动 add -f web/dist/ (无需手动)
+git commit -m "..."
+```
+
+#### 铁律 2：hook 触发条件是"src 改动 + 本地有新 dist hash 产物"
+
+不是所有 dist 文件都自动 add（避免误 add 用户临时文件），只匹配 `<name>-<8 hex char>.{js,css}` 命名格式（vite build 标准产物）。
+
+**正例**（被自动 add）：
+- `index-fc61064b.js`
+- `index-bc336882.css`
+- `KnowledgeDetailView-51a5191c.js`
+- `useTask-6d8aef01.js`
+
+**反例**（不被 hook add）：
+- `_noise.txt`（无 hash 后缀）
+- `manual-draft.js`（无 8 hex 后缀）
+- `sw.js` / `index.html`（HEAD 已跟踪，hook 不动）
+
+#### 铁律 3：hook 不是 hard block，是自动 add + 警告
+
+```
+⚠️  [pre-commit] 检测到 web/src/ 改动 + 本地有 95 个未 tracked 的 web/dist/ build 产物
+   防止漏 commit dist 触发服务器 404 (CLAUDE.md 2026-06-26 教训 f6a2bc3d)
+
+未 tracked dist 文件 (前 10):
+   web/dist/assets/AgentTracesView-3d0812de.css
+   ...
+
+🔧 自动执行: git add -f web/dist/ (绕过 .gitignore 第 50 行 'web/dist/')
+
+✅ [pre-commit] 已 staged 95 个 web/dist/ 文件，commit 继续
+```
+
+**优点**：
+- 不 block docs/CI/test commit（无 src 改动就跳过）
+- 不误 add user 临时文件（只匹配 hash 命名）
+- 自动修复不报错（CLAUDE.md 多次强调"自动 + 提示 > block + 让人手动"）
+- 用户从输出能知道发生了什么（不会困惑）
+
+#### 铁律 4：测试 commit 触发的 post-commit 自动 push 必须警惕
+
+**事故复盘（2026-06-26 测试时踩坑）**：
+- 用临时文件 + `git commit` 真触发 hook 测试（不是独立调用）
+- hook 工作完美（自动 add dist）
+- 但 commit 触发**现有 post-commit hook**（自动 `git push origin main`）→ 测试 commit 推到 origin/main
+- 撤销测试 commit 时 `git revert HEAD` 撤销错了（HEAD 已 reset，撤销了 ef5db3b6 真修复）→ 又触发 post-commit 自动 push
+- 最后用 `git push origin ef5db3b6:main --force-with-lease` 强制回滚
+
+**纪律**：
+- **测试 hook 用 `sh scripts/check-dist-before-commit.sh` 独立调用**，不要真 commit
+- 真要测真 commit，用 `git commit --no-verify` 跳过 hook（但 pre-commit hook 测试就用真 commit）
+- 测试 commit 触发的 post-commit 推 push 必须立刻 `git reset --hard origin/main` 撤销
+- **`git revert HEAD` 永远先看 HEAD 是哪个 commit**（reset --soft 后 HEAD 变了）
+
+#### 铁律 5：新成员必须手动 setup hook（git untracked 文件）
+
+`.git/hooks/pre-commit` 不在 git tracked 里（新 clone 仓库的人不会有），必须手动 setup：
+
+```bash
+# 新成员首次 clone 后:
+cp scripts/check-dist-before-commit.sh .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+sh -n .git/hooks/pre-commit  # syntax check
+```
+
+或者用 `git config core.hooksPath .githooks` 切到 tracked 目录（本项目目前用 `.git/hooks/` 跟 post-commit 一致，**未采用**）。
+
+### 部署必做
+
+```bash
+# 1. 本地测试 hook 工作
+sh scripts/check-dist-before-commit.sh   # 应静默 (无 src 改动)
+# 然后修改 web/src/ 后 git add web/src/ 后再跑，应自动 add dist
+
+# 2. commit hook 脚本
+git add scripts/check-dist-before-commit.sh .git/hooks/pre-commit
+git commit -m "feat(hooks): pre-commit auto-add web/dist/ (CLAUDE.md 2026-06-26 教训)"
+# post-commit hook 自动 push 到 origin main
+# webhook 自动 deploy 服务器
+```
+
+### 沉淀
+
+- **新增文件 1 个**：`scripts/check-dist-before-commit.sh`（git tracked，可独立调用）
+- **薄 wrapper**：`.git/hooks/pre-commit`（不 git tracked，跟 post-commit 一致）
+- **CLAUDE.md 教训第 4 次永久化**：2026-06-03 / 2026-06-10 / 2026-06-14 / 2026-06-26 + hook 兜底
+- **风险等级**：0 风险（hook 不 block，只自动 add + 提示）
+- **未来改进**：如项目多人协作，可改用 `.githooks/` + `core.hooksPath`（避免每人手动 setup）
+
