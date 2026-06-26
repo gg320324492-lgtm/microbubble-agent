@@ -104,7 +104,7 @@ const truncate = (text, n) => {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .related-count {
@@ -147,7 +147,7 @@ const truncate = (text, n) => {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: #1F2937;
+  color: var(--color-text-primary);
   line-height: 1.4;
   flex: 1;
   display: -webkit-box;

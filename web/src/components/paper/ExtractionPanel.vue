@@ -190,7 +190,7 @@ const typeLabel = (kind) => ({
   margin: 0 0 6px;
   font-size: 18px;
   font-weight: 700;
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .extraction-stats {

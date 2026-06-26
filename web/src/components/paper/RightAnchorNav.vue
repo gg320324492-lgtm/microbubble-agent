@@ -238,7 +238,7 @@ onUnmounted(() => {
 .anchor-nav-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1F2937;
+  color: var(--color-text-primary);
   white-space: nowrap;
 }
 

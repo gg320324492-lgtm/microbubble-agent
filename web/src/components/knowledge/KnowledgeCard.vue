@@ -414,11 +414,11 @@ const formatDate = (dateStr) => {
   white-space: nowrap;
 }
 
-/* 标题 - 限 2 行 */
+/* 标题 - 限 2 行（v70 P0 急修：#1F2937 → token 响应主题） */
 .card-title {
   font-size: 14px;
   font-weight: 600;
-  color: #1F2937;
+  color: var(--color-text-primary);
   line-height: 1.45;
   margin: 0;
   display: -webkit-box;

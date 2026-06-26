@@ -130,7 +130,7 @@ const topic = computed(() => props.paper.topic || '')
 .abstract-text {
   font-size: 15px;
   line-height: 1.85;
-  color: #1F2937;
+  color: var(--color-text-primary);
   word-break: break-word;
   margin-bottom: 10px;
 }

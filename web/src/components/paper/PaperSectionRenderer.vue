@@ -269,7 +269,7 @@ const pageRangeText = computed(() => {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: #1F2937;
+  color: var(--color-text-primary);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -336,7 +336,7 @@ const pageRangeText = computed(() => {
 
 .references-label {
   font-weight: 600;
-  color: #1F2937;
+  color: var(--color-text-primary);
   font-size: 14px;
 }
 

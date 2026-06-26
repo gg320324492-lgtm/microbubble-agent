@@ -190,7 +190,12 @@
 // (3) KnowledgeView memory-card background: #fff → var(--color-bg-card)
 // (4) VoiceprintCard.vue background: #fff → var(--color-bg-card)（组件单独
 //     追加非 scoped dark 块，host.vue 内 P1b 没覆盖到）
-const SW_VERSION = 'v69-p1b-fix3-elcard-2026-06-26'
+// v70 P0: 2026-06-26 全项目字面色急修。
+// 根因：KnowledgeCard.vue:421 .card-title color:#1F2937 与 dark 卡片背景对比度
+// 仅 1.04:1，标题完全看不见。修复：32 处字面量 #1F2937/#374151/#111827 →
+// var(--color-text-primary/regular)。覆盖 13 个文件：KnowledgeCard + 11 个
+// paper 子组件 + KnowledgeView + KnowledgeDetailView。dark 模式变量在
+// variables.css:507+ 已重定义，无需其他 dark 覆盖。
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

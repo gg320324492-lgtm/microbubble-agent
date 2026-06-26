@@ -1486,7 +1486,7 @@ onUnmounted(() => {
 .memory-content {
   font-size: 14px;
   line-height: 1.7;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 0 0 10px;
 }
 

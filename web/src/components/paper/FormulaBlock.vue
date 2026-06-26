@@ -77,7 +77,7 @@ defineProps({
   font-family: 'KaTeX_Main', 'Latin Modern Math', 'Times New Roman', serif;
   font-size: 14px;
   line-height: 1.6;
-  color: #1F2937;
+  color: var(--color-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-x: auto;
