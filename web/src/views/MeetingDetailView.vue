@@ -1403,7 +1403,7 @@ onMounted(async () => {
   border-bottom-color: var(--color-border);
 }
 
-/* v70 P3: TL;DR 卡 + 折叠卡片 dark mode */
+/* v70 P3 TL;DR 卡 dark mode + v71 P1 议程 timeline dark mode (v60-v67 教训: 必须非 scoped 块) */
 [data-theme="dark"] .tldr-card {
   background: linear-gradient(135deg, rgba(255, 179, 71, 0.08), rgba(255, 122, 92, 0.04));
   border-color: rgba(255, 179, 71, 0.25);
@@ -1411,10 +1411,17 @@ onMounted(async () => {
 [data-theme="dark"] .tldr-item {
   border-left-color: rgba(255, 179, 71, 0.35);
 }
-[data-theme="dark"] .speaker-row.clickable:hover {
-  background: var(--color-bg-page);
+/* v71 P1: 议程 timeline dark mode */
+[data-theme="dark"] .agenda-dot {
+  background: var(--color-primary);
+  color: var(--color-bg-card);
+  box-shadow: 0 0 0 3px var(--color-bg-card);
 }
-[data-theme="dark"] .speaker-row.expanded {
-  background: var(--color-primary-bg);
+[data-theme="dark"] .agenda-text {
+  color: var(--color-text-regular);
 }
+[data-theme="dark"] .agenda-count {
+  color: var(--color-text-secondary);
+}
+/* v71 P1: 移除 .speaker-row.clickable / .expanded dark (不再折叠) */
 </style>
