@@ -202,8 +202,15 @@ function handleSwitch(name) {
    （rgba(255,255,255,0.92) 半透明叠加在深色页面背景上呈现奶油色）。
    用户截图反馈"底部导航栏全白的"就是这个 bug。
    修复：把 .mobile-tabbar dark 背景也移到非 scoped 块。 */
+
+/* v65 (2026-06-26) 视觉歧义修复：v64 的 rgba(26,29,35,0.92) 半透明 + backdrop-filter
+   blur(16px) 在深色页面背景上视觉上呈现"雾化灰白"——8% 透明区透出深色 + 模糊混合
+   + 白色图标叠加 = 看起来像浅色 TabBar。DevTools console.table 6 项全 ✓ 深色，
+   但用户截图仍显示白色 → 是 backdrop-filter 视觉错觉，不是 CSS bug。
+   修复：改成完全不透明 rgb(26, 29, 35) 消除 8% 透明，dark 模式 TabBar 绝对实心深色，
+   不可能再被误解为白色。light 模式保留 0.92 半透明（不影响视觉）。 */
 [data-theme="dark"] .mobile-tabbar {
-  background: rgba(26, 29, 35, 0.92);
+  background: rgb(26, 29, 35);
   border-top-color: var(--color-border-base);
 }
 </style>

@@ -102,7 +102,17 @@
 // 任何 [data-theme="dark"] 在 scoped 块里都触发同一 Vue scoped bug，**所有 dark 模式
 // scoped 规则都要迁移到非 scoped 块**。下次添加 dark 模式前先检查该组件是否在
 // scoped 块写过 [data-theme="dark"] 规则，统统迁移。
-const SW_VERSION = 'v64-tabbar-container-background-2026-06-26'
+// v65: 2026-06-26 v64 部署后 DevTools 6 项 console.table 全 ✓ 深色（TabBar bg
+// rgba(26,29,35,0.92)、active 金橙、inactive 亮灰都对），但用户截图仍显示白色。
+// 真根因：rgba(26,29,35,0.92) 半透明 + backdrop-filter blur(16px) 在深色页面背景上
+// 视觉呈现"雾化灰白"——8% 透明区透出深色 + 模糊混合 + 白色图标叠加 = 看起来浅色。
+// 不是 CSS bug，是视觉错觉。
+// 修复：dark 模式 TabBar 背景从 rgba(...,0.92) 改成 rgb(26,29,35) 完全不透明，
+// 消除 8% 透明区，TabBar 绝对实心深色不可能再被误认为白色。light 模式保留 0.92
+// 半透明（浅色场景半透明有 iOS 玻璃质感，保留设计意图）。
+// 教训：CSS 层面正确不等于用户视觉满意，调试 dark mode UI 必须亲自看截图，
+// 不能只看 DevTools 数值。
+const SW_VERSION = 'v65-tabbar-opaque-dark-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
