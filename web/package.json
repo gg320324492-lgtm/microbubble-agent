@@ -11,7 +11,9 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "lint:css": "stylelint \"src/**/*.{vue,css,scss}\"",
-    "lint:css:fix": "stylelint --fix \"src/**/*.{vue,css,scss}\""
+    "lint:css:fix": "stylelint --fix \"src/**/*.{vue,css,scss}\"",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -33,6 +35,7 @@
     "workbox-window": "^7.4.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/test-utils": "^2.4.11",
     "fake-indexeddb": "^6.2.5",

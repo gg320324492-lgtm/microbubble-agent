@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-26 当前任务链**：[v31.3.1 whisper 容器 bind mount](##2026-06-26-v3131-whisper-容器-bind-mount解决dockerfile-copy-烧镜像陷阱) → [v31.3 Whisper 常驻 + 推理加速](##2026-06-26-v313-whisper-常驻--推理加速) → [v31.2.5 rate-limit Redis ZSET 持久化](##2026-06-26-v3125-rate-limit-收官redis-zset-持久化)。**当前主线**：Whisper 模型常驻 GPU 8GB（18s 加载一次），flash_attention 暂禁用（Blackwell sm_120 + ctranslate2 4.8.0 不支持，等上游补 sm_120 flash attn 2 内核）。
+> **2026-06-26 当前任务链**：[v76 CSS 工程化 5 件套收官](##2026-06-26-v76-css-工程化-5-件套收官useviewport--ci-mode--max-increase--组件级-css-测试--视觉回归) → [v31.3.1 whisper 容器 bind mount](##2026-06-26-v3131-whisper-容器-bind-mount解决dockerfile-copy-烧镜像陷阱) → [v31.3 Whisper 常驻 + 推理加速](##2026-06-26-v313-whisper-常驻--推理加速)。**当前主线**：CSS 防御体系 v76 全闭环（token orphan CI annotation + baseline-guard max-increase 手动 override + 组件级 CSS 变量测试 + Playwright 视觉回归 baseline 对比）。
 >
 > 历史节点（按时间倒序）：[v31.2.3](##2026-06-25-v3123-rate-limit-基建收尾) → [v31.2.2](##2026-06-25-v3122-rate-limit-进阶强化) → [v31.2.1](##2026-06-25-v3121-rate-limit-边界强化) → [v31.2](##v312-检索质量监控埋点可选-auth--ip-维度限流--user_id-列) → [v28 论文图片结构化字段](##2026-06-20-v28-论文图片结构化字段后端集成) → [2026-06-18 移动端 26 commits 全面修复](##2026-06-18-移动端-26-commits-全面修复)。
 >
@@ -4512,4 +4512,189 @@ git commit -m "feat(hooks): pre-commit auto-add web/dist/ (CLAUDE.md 2026-06-26 
 - **CLAUDE.md 教训第 4 次永久化**：2026-06-03 / 2026-06-10 / 2026-06-14 / 2026-06-26 + hook 兜底
 - **风险等级**：0 风险（hook 不 block，只自动 add + 提示）
 - **未来改进**：如项目多人协作，可改用 `.githooks/` + `core.hooksPath`（避免每人手动 setup）
+
+---
+
+## 2026-06-26 v76 CSS 工程化 5 件套收官（useViewport + ci-mode + max-increase + 组件级 CSS 测试 + 视觉回归）
+
+> **触发**：v75 完成 baseline-guard 加 PR annotation 后用户给了 5 个后续任务，一次性收官。**核心价值**：CSS 防御体系从"运行时崩溃 → 用户看见"升级为"CI 拦截 → 0 视觉回归"。
+> **commit 链**：(待 push)
+
+### 5 大改进总览
+
+| # | 改进 | 文件 | 关键效果 |
+|---|------|------|---------|
+| v76.1 | 删除死 useViewport.test 占位 | `web/src/composables/__tests__/useViewport.test.js` | 不再 skip 占位 |
+| v76.5 | token orphan `--ci-mode` 输出 GitHub Actions annotation | `scripts/check-token-orphans.sh` + `.github/workflows/lint-css.yml` | PR 视图显示 `::error file=...line=...` 红 ✗ |
+| v76.4 | baseline-guard 加 `--max-increase` workflow_dispatch 参数 | `.github/workflows/lint-css.yml` | 手动 override 临时允许 +N 错误，配 issue 跟踪 |
+| v76.3 | CSS variable 测试扩展到组件级 | `web/src/components/chat/blocks/__tests__/HypothesisBlock.spec.js` | 14 个 test 验证 HypothesisBlock mounted 状态下 token 解析 |
+| v76.2 | vitest 视觉回归 (Playwright baseline 对比) | `web/playwright.config.js` + `tests/visual/mobile/visual-regression.spec.mjs` + workflow | 3 核心页面截图对比 0.2% 像素容差 |
+
+### v76.1 useViewport test 占位删除
+
+**根因**：`useViewport` composable 已被 `useIsMobile` 完全替代（同样 4 档断点 + dpr + portrait 检测）。test 文件只剩 `describe.skip` 占位 — 删了不影响功能。
+
+**纪律**：skip test 是**技术债**，长期留着没价值。要么重建 composable，要么删 test 文件。
+
+### v76.5 token orphan `--ci-mode`（已实现）
+
+**核心代码**（`scripts/check-token-orphans.sh`）：
+```bash
+# v76.5: --ci-mode 输出 GitHub Actions annotation
+# 格式: ::error file=$file,line=$lineno::var($token) is not defined
+```
+
+**CI 集成**：
+```yaml
+- name: Check token orphans
+  run: bash scripts/check-token-orphans.sh --ci-mode
+```
+
+**测试验证**：
+- ✅ 默认模式（人类可读）：`ORPHAN: var(--definitely-not-defined-token, ...) at web/src/assets/_orphan_test.css:1`
+- ✅ CI 模式：`::error file=web/src/assets/_orphan_test.css,line=1::var(--definitely-not-defined-token) is not defined in variables.css / nutui-theme.scss / mobile-base.css`
+- ✅ CI 模式 clean：`::notice::Token orphan check: 0 orphans, 2 whitelisted`
+
+**2 条铁律**：
+1. **`grep -rEn` 带 file:line 是 annotation 必需** — 旧版 `grep -rEho` 只有 token 名无位置，CI annotation 没 file/line 没法在 PR 视图定位
+2. **CI 模式静默 vs 默认模式详尽** — CI 日志用 `::notice` 一行汇总（GitHub Actions 摘要），人类终端看详细列表
+
+### v76.4 baseline-guard `--max-increase`
+
+**核心代码**（`lint-css.yml` workflow_dispatch）：
+```yaml
+workflow_dispatch:
+  inputs:
+    max_increase:
+      description: "允许临时增加的 stylelint 错误数 (默认 0 = hard fail on any error)"
+      default: "0"
+    tracking_issue:
+      description: "临时放宽门禁对应的 issue 编号 (如 #123), 用于审计追溯"
+      default: ""
+```
+
+**Gate 逻辑**（v76.4 改）：
+```bash
+DIFF=$((CURRENT - BASELINE))
+if [ "$DIFF" -le "$MAX_INCREASE" ]; then
+  echo "::warning::Stylelint errors: $BASELINE → $CURRENT (+${DIFF}), within max_increase=${MAX_INCREASE}"
+  if [ -n "$TRACKING_ISSUE" ]; then
+    echo "::notice::Tracked by ${TRACKING_ISSUE} (manual override)"
+  fi
+  exit 0
+fi
+# 超出门禁 → hard fail
+```
+
+**5 条铁律**：
+1. **PR 触发默认 max_increase=0** — 不破坏 PR 自动 fail 机制
+2. **workflow_dispatch 触发用输入值** — 手动 override 路径
+3. **diff = current - baseline** — 不是 absolute，是**增量**，baseline 已经是 0 时 diff = current
+4. **tracking_issue 用于审计** — 临时放宽必须有 issue 可查，否则乱用导致技术债
+5. **`::warning` + `::notice` 而非 `::error`** — `::warning` 不阻断 PR 但在 GitHub Actions summary 显示
+
+### v76.3 组件级 CSS variable 测试
+
+**核心代码**（`HypothesisBlock.spec.js`）：
+```javascript
+const wrapper = mount(HypothesisBlock, {
+  props: propsData,
+  attachTo: document.body,  // ← v76.3 关键: 挂到 DOM 树
+})
+```
+
+**2 条铁律（踩坑沉淀）**：
+1. **`attachTo: document.body` 是 jsdom CSS 变量解析必需** — 默认 mount 出来的 wrapper.element 是 detached node，jsdom `getComputedStyle` 返回空 token 值。v75 SpeakerSearchSheet 已经踩过同款坑
+2. **同一 case 内动态切换 `data-theme` attribute 不可靠** — jsdom CSSOM 缓存导致第二次 `getComputedStyle` 拿到旧值。解法：**两次独立 mount + `wrapper.unmount() + body.innerHTML = ''` 重置**
+
+**测试矩阵**：
+- 6 主题组合 × 5 关键 token × 2 case (空 items / 有 items) = 60 断言
+- 3 accent primary 互不相同 + light/dark bg-card 互不相同
+- 14/14 PASS（v74 9 个 + v76.3 14 个 = 23/23 PASS）
+
+### v76.2 Playwright 视觉回归（**完整实现**）
+
+**核心设计**：
+- **config** (`web/playwright.config.js`)：3 路由 baseline + maxDiffPixelRatio 0.2% + threshold 0.1 + fullPage true + animations disabled
+- **spec** (`tests/visual/mobile/visual-regression.spec.mjs`)：从 14 路由**收窄到 3 核心**（dashboard / knowledge / chat），用 `toHaveScreenshot` API
+- **baseline 目录** (`tests/visual/mobile/visual-regression.spec.mjs-snapshots/`)：存 baseline png（`.gitignore` 内，必须 `git add -f` 强提）
+- **workflow job** (`lint-css.yml:visual-regression`)：build + preview server + 跑测试 + main 自动更新 baseline + PR 失败时 upload diff artifact
+
+**使用方法**：
+```bash
+# 首次生成 baseline (本地)
+BASE_URL=http://localhost:3000 TEST_TOKEN=<jwt> npx playwright test --update-snapshots
+
+# 后续跑对比
+npx playwright test
+
+# 故意视觉变更 (确认预期)
+npx playwright test --update-snapshots
+git add -f tests/visual/
+```
+
+**5 条铁律**：
+1. **baseline png 在 .gitignore 必须 `git add -f`** — 跟 web/dist/ 同款坑（CLAUDE.md 2026-06-26 教训）
+2. **`maxDiffPixelRatio: 0.002` (0.2%) 而非 0** — anti-aliasing / 字体 sub-pixel 渲染抖动会有微小差异，0.2% 是平衡点
+3. **`animations: 'disabled'` 必须** — baseline 不稳定主因是动画/transition 在不同时间点截图
+4. **路由数收窄到 3（dashboard/knowledge/chat）** — 14 路由 baseline 维护成本失控，先覆盖最常用 3 个，未来按需扩展
+5. **main branch 自动 `--update-snapshots` + auto-commit baseline** — `github-actions[bot]` 用户提交 baseline png，省人工
+
+**风险**：
+- `TEST_TOKEN` secret 必须在 repo Settings → Secrets 添加（否则 visual-regression job 跑测试时拿不到登录态，所有页面 redirect 到 login → 截图永远是 login 页 → baseline fail）
+- 第一次跑必须有人手动 `npx playwright test --update-snapshots` 生成 baseline 并 git add -f commit（CI auto-commit 仅 main branch push 触发）
+
+### v76 整体价值
+
+**CSS 防御体系**：
+```
+v70 字面色审计 (570 处)
+v71 stylelint 0 错误基线
+v72 stylelint-config-standard 清理 (139 → 0)
+v73 token orphan 检测 + 真实 7 orphan 修复
+v74 baseline-guard trend + 9-token cssVariable test
+v75 PR annotation + 9 旧 fail 修复 + pre-commit 1.5 step
+v76 ci-mode + max-increase + 组件级 CSS 测试 + 视觉回归
+         ↓
+       完整闭环：lint 0 → token 全定义 → 组件 mounted 验证 → 视觉 diff 拦截
+```
+
+**vs v75 状态**：
+- v75：CI 拦截 token orphan + stylelint 错误，PR 视图能看见但**视觉看不见**的 bug 抓不到
+- v76：新增 Playwright 视觉回归，**像素级 diff 抓"看着不对"**（CSS 改了字号 / dark 模式变量失效 / 移动端 padding 错位）
+
+### 部署必做
+
+```bash
+# 1. 安装 Playwright 浏览器 (本地开发机)
+cd web && npx playwright install chromium
+
+# 2. (用户首次必须) 生成 baseline
+# 起 dev server 后跑:
+BASE_URL=http://localhost:3000 TEST_TOKEN=<jwt> npm run test:visual:update
+
+# 3. 提交 baseline png (git add -f!)
+git add -f web/tests/visual/mobile/visual-regression.spec.mjs-snapshots/
+git commit -m "test(visual): v76.2 初始 baseline (dashboard/knowledge/chat)"
+
+# 4. (可选) 改 .github repo settings 加 TEST_TOKEN secret
+
+# 5. push → CI 自动跑视觉回归
+git push origin main
+```
+
+### 沉淀统计
+
+- **新增文件 4 个**：
+  - `web/playwright.config.js` (60 行)
+  - `web/tests/visual/mobile/visual-regression.spec.mjs-snapshots/.gitkeep` (placeholder)
+  - `web/src/components/chat/blocks/__tests__/HypothesisBlock.spec.js` (200 行, 14 test PASS)
+  - `scripts/check-token-orphans.sh` 改 60 行（+`--ci-mode` flag + grep file:line）
+- **修改文件 3 个**：
+  - `.github/workflows/lint-css.yml`（+workflow_dispatch inputs + visual-regression job）
+  - `web/package.json`（+`@playwright/test` devDep + 2 scripts）
+  - `web/tests/visual/mobile/visual-regression.spec.mjs`（重写为 toHaveScreenshot baseline 模式，14 路由 → 3 路由）
+- **删除文件 1 个**：
+  - `web/src/composables/__tests__/useViewport.test.js`（dead 占位）
+- **测试通过**：vitest 23/23 (v74 9 + v76.3 14)
 

@@ -1,0 +1,14 @@
+# 这个目录存 Playwright 视觉回归 baseline 截图
+#
+# 文件命名规则: tests/visual/mobile/visual-regression.spec.mjs-snapshots/{test-name}-{project}.png
+#
+# 首次生成:
+#   npx playwright test --update-snapshots
+#
+# 更新 baseline (确认视觉变更预期后):
+#   npx playwright test --update-snapshots
+#   git add -f tests/visual/
+#   git commit -m "test(visual): 更新 baseline"
+#
+# 注意: baseline png 在 .gitignore 内 (tests/visual/mobile/visual-regression.spec.mjs-snapshots/),
+# 必须 git add -f 强制提交, 否则 CI 跑测试找不到 baseline
