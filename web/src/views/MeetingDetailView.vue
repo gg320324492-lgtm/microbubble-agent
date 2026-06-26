@@ -129,23 +129,16 @@
 
               <!-- 展示态 -->
               <template v-else>
-                <div v-if="meeting.summary" class="section">
-                  <h4>摘要</h4>
-                  <p class="summary-text">{{ meeting.summary }}</p>
-                </div>
                 <div v-if="groupedKeyPoints.length" class="section">
                   <h4>讨论要点</h4>
 
-                  <!-- v70 P3: TL;DR 重点摘要卡 (保留, 用户认可作为辅助) -->
-                  <div v-if="meeting.key_points?.length > 3" class="tldr-card fade-slide-up">
+                  <!-- v72 P1: 摘要 + 重点摘要 合并, 主题色 TL;DR 卡显示 meeting.summary 完整段落 -->
+                  <div v-if="meeting.summary" class="tldr-card fade-slide-up">
                     <div class="tldr-header">
                       <el-icon class="tldr-icon"><StarFilled /></el-icon>
-                      <span class="tldr-title">重点摘要</span>
-                      <span class="tldr-count">共 {{ meeting.key_points.length }} 条要点</span>
+                      <span class="tldr-title">会议摘要</span>
                     </div>
-                    <ul class="tldr-list">
-                      <li v-for="(item, i) in meeting.key_points.slice(0, 3)" :key="'tldr'+i" class="tldr-item">{{ item }}</li>
-                    </ul>
+                    <p class="tldr-summary">{{ meeting.summary }}</p>
                   </div>
 
                   <!-- v71 P1: 每张发言人卡片默认展开, 常驻前 8 条, 超过 8 条显示"展开全部"按钮 -->
@@ -1014,12 +1007,6 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--color-text-primary, #2d2d2d);
 }
-.summary-text {
-  margin: 0;
-  line-height: 1.7;
-  font-size: 14px;
-  color: var(--color-text-regular, #606266);
-}
 .speaker-group {
   margin-bottom: 12px;
 }
@@ -1062,10 +1049,14 @@ onMounted(async () => {
   margin-left: -4px;
 }
 
-/* v70 P3: TL;DR 顶部摘要卡 (防止 20+ 条密密麻麻不像纪要) */
+/* v72 P1: TL;DR 主题色卡 (v70 P3 容器 + 主题色自适应) */
 .tldr-card {
-  background: linear-gradient(135deg, rgba(255, 179, 71, 0.10), rgba(255, 122, 92, 0.06));
-  border: 1px solid rgba(255, 179, 71, 0.30);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 10%, transparent),
+    color-mix(in srgb, var(--color-primary) 6%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
   border-radius: var(--radius-md, 8px);
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -1077,7 +1068,7 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 .tldr-icon {
-  color: var(--color-warning, #E6A23C);
+  color: var(--color-primary);
   font-size: 16px;
 }
 .tldr-title {
@@ -1085,26 +1076,11 @@ onMounted(async () => {
   font-weight: 700;
   color: var(--color-text-primary, #303133);
 }
-.tldr-count {
-  font-size: 12px;
-  color: var(--color-text-secondary, #909399);
-  margin-left: auto;
-}
-.tldr-list {
-  list-style: none;
-  padding: 0;
+.tldr-summary {
   margin: 0;
-}
-.tldr-item {
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.75;
   color: var(--color-text-regular, #606266);
-  padding: 4px 0 4px 10px;
-  border-left: 2px solid rgba(255, 179, 71, 0.5);
-  margin-bottom: 4px;
-}
-.tldr-item:last-child {
-  margin-bottom: 0;
 }
 .point-item {
   cursor: pointer;
@@ -1403,13 +1379,14 @@ onMounted(async () => {
   border-bottom-color: var(--color-border);
 }
 
-/* v70 P3 TL;DR 卡 dark mode + v71 P1 议程 timeline dark mode (v60-v67 教训: 必须非 scoped 块) */
+/* v72 P1 TL;DR 主题色卡 dark mode + v71 P1 议程 timeline dark mode (v60-v67 教训: 必须非 scoped 块) */
 [data-theme="dark"] .tldr-card {
-  background: linear-gradient(135deg, rgba(255, 179, 71, 0.08), rgba(255, 122, 92, 0.04));
-  border-color: rgba(255, 179, 71, 0.25);
-}
-[data-theme="dark"] .tldr-item {
-  border-left-color: rgba(255, 179, 71, 0.35);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-primary) 8%, transparent),
+    color-mix(in srgb, var(--color-primary) 4%, transparent)
+  );
+  border-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 /* v71 P1: 议程 timeline dark mode */
 [data-theme="dark"] .agenda-dot {
