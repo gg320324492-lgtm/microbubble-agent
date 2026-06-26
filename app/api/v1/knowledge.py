@@ -259,6 +259,24 @@ async def get_knowledge_graph(
     return await svc.get_knowledge_graph(center_id=center_id, depth=depth, limit=limit)
 
 
+@router.get("/knowledge/entities/graph", response_model=dict)
+async def get_entity_graph(
+    entity_id: Optional[int] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取实体图谱（节点=实体，边=共现关系）
+
+    v69 P1b fix: 必须放在 /knowledge/{knowledge_id}/graph 之前注册——
+    FastAPI 按注册顺序匹配路径，否则 /knowledge/entities/graph 会被
+    /knowledge/{knowledge_id}/graph 拦截（knowledge_id="entities" 解析失败 → 422）
+    """
+    from app.services.entity_service import EntityService
+    svc = EntityService(db)
+    return await svc.get_entity_graph(entity_id=entity_id, limit=limit)
+
+
 @router.get("/knowledge/{knowledge_id}/graph", response_model=KnowledgeGraph)
 async def get_knowledge_graph_by_id(
     knowledge_id: int,
@@ -471,19 +489,6 @@ async def search_entities(
         subject=subject, predicate=predicate, object_q=object_q,
         keyword=keyword, page=page, page_size=page_size,
     )
-
-
-@router.get("/knowledge/entities/graph", response_model=dict)
-async def get_entity_graph(
-    entity_id: Optional[int] = Query(None),
-    limit: int = Query(50, ge=1, le=200),
-    current_user: Member = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """获取实体图谱（节点=实体，边=共现关系）"""
-    from app.services.entity_service import EntityService
-    svc = EntityService(db)
-    return await svc.get_entity_graph(entity_id=entity_id, limit=limit)
 
 
 @router.get("/knowledge/entities/{entity_id}", response_model=dict)
