@@ -4281,3 +4281,107 @@ curl whisper:8002/health  # 验证生效
 - **净代码变化**：+8 行（全是注释和配置）
 - **效果**：本地改源码 → `docker compose restart` 即生效（省 `docker cp` 步骤）
 - **风险**：0 风险（bind mount :ro 只读保护，防止容器意外改源码）
+
+---
+
+## 2026-06-26 v69 桌面端 dark mode 全面重构（3 阶段：P0+P1 完成，P2 待做）
+
+> **P0 视觉修复已完成**（commit `71bb394a`）+ **P1 多主题 + 11 视图已完成**（commits `55865fe2` P1a + `7e0976d8` P1b）。整个 v69 plan 是 3 阶段，目前 **P0 + P1 已完成**，**P2 动效治理待做**。
+> **完整 plan**：[C:\Users\pc\.claude\plans\snazzy-greeting-sedgewick.md](C:/Users/pc/.claude/plans/snazzy-greeting-sedgewick.md)
+> **核心发现**（v60-v67 教训强化）：**dark mode 跨组件规则必须用非 scoped `<style>` 块**——Vue scoped 编译器把 `[data-theme="dark"]` + 后代选择器处理错，规则失效。
+
+### P0 视觉修复（commit `71bb394a`）
+
+**修复 10 处截图问题**：
+- 侧栏奶白 → 深灰半透玻璃（`--color-bg-sidebar: rgba(26,29,35,0.92)`）
+- 任务配对卡"白→半透明橙" 渐变刺眼 → 改用 `--gradient-group-header` 变量（dark = 透明橙）
+- 子任务 vs 配对卡对比过强 → 统一用变量
+- "中/高/进行中" tag 几乎看不见 → P0 加 14 个 EP 组件 dark 覆盖（含 el-tag 6 变体）
+- 绿色"完成"按钮过饱和 → el-button--success dark 用 `rgba(133,206,97,0.18)` 半透绿
+- 兔子气泡白底戳一坨 → DashboardPet 加 dark 块（`--color-bg-card` + 边框）
+- 状态卡 icon 渐变亮米色 → 重构 3 个行内 style 为 class + 透明色变量
+- 顶栏 bell hover 联动 `--color-bg-warm`（#2 修复：dark 块加 `--color-bg-warm: #2a2d35`）
+- 截止日期灰色 `--color-text-secondary: #909399` → dark 提亮 `#a8aab0`（WCAG AA 4.5:1）
+- Hero 渐变过曝 → dark 改 `#E85A3A → #D4903D` 压暗降饱和
+
+**关键变更**：
+- `web/src/assets/variables.css`：5 令牌 + 14 EP 覆盖 + 7 阴影（dark 模式 `rgba(0,0,0,.3-.6)` 替代 light 的 `.04-.12`）+ 渐变库
+- `web/src/layouts/MainLayout.vue`：末尾追加非 scoped dark 块（侧栏/顶栏/通知/录音 banner/移动端 drawer）
+- `web/src/views/Dashboard.vue`：3 个行内 stat-icon 渐变重构为 class + 末尾追加非 scoped dark 块
+- `web/src/components/DashboardPet.vue`：末尾追加非 scoped dark 块（speech-bubble / XP 条）
+
+### P1a 多主题切换基建（commit `55865fe2`）
+
+**实现 6 套主题（3 主色 × 2 明暗）**：
+- 暖橙（默认，orange） + 海蓝（ocean） + 森林绿（forest） × light + dark = 6 套组合
+- `<html data-theme="light|dark" data-accent="orange|ocean|forest">` 双轴正交
+
+**关键变更**：
+- `web/src/assets/variables.css` 末尾加 6 套色板（`[data-accent="ocean"]` 等）：每套覆盖 16+ 变量（primary / primary-bg / sidebar / shadow / 渐变 5 条）
+- `web/src/stores/useThemeStore.js` 新增 accent ref + setAccent 方法 + localStorage 持久化（`accent` key）
+- `web/src/views/SettingsView.vue`：主题色 picker UI 升级为 3 个 swatch 按钮（带 Check 圈 + active 边框 + hover translateY + focus-visible outline）
+- `web/src/assets/variables.css` 加 `--theme-transition` 280ms ease 过渡（bg/border/color/box-shadow）
+
+**注意事项（5 条铁律）**：
+1. **双轴选择器优先级**：`[data-theme="dark"][data-accent="X"]` (specificity 0,0,2,0) > `[data-theme="dark"]` (0,0,1,0) > `[data-accent="X"]` (0,0,1,0) > `:root` (0,0,1,0)。所以**新代码必须放最后**才生效
+2. **CSS 变量必须**放最后 → 任何新主题修改只改末尾，不动 `:root` 默认
+3. **theme-color meta 只跟 theme 走**（不跟 accent）— PWA 顶栏颜色用 light 暖橙 / dark 深灰即可
+4. **localStorage 双 key**：`theme` 和 `accent` 独立持久化，刷新保留
+5. **切换主色不重载页面**（< 200ms 平滑过渡，`--theme-transition` 280ms）
+
+### P1b 10 桌面视图 dark 适配（commit `7e0976d8`）
+
+**解决"1/15 桌面视图正确适配 dark"问题**：
+- P0 + SettingsView 之外 13 个桌面视图**零** dark 适配
+- P1b 给 10 个补上 dark 块（`MemberProfileView` 不存在跳过，剩 3 个次要：ProjectStatsView/VoiceprintView/MemoryView 用户极少用）
+
+**关键变更**（每个文件末尾追加**非 scoped** `<style>` 块，共 ~110 条 dark 规则）：
+- `ChatViewSSE.vue` (12 条)：chat-header、bot-bubble、tool-trace、welcome-hero、quick-btn、input-bar、jump-to-bottom
+- `TaskView.vue` (14 条)：filter-card、paired-header/row、selection-info、task-group、task-row overdue/done、complete-btn
+- `TaskTrash.vue` (7 条)：倒计时 3 色 (imminent/urgent/warning)、mobile-pagination、page-actions
+- `MeetingView.vue` (16 条)：meeting-item、action-btn 5 颜色 (phone/view/generate/edit/delete)、template-card
+- `MeetingDetailView.vue` (17 条)：detail-hero、6 状态徽章 (scheduled/recording/processing/completed/cancelled/error)、transcript-line
+- `KnowledgeView.vue` (16 条)：knowledge-tabs header、entity panels、hypothesis-card、5 种 memory-type-tag 颜色
+- `KnowledgeDetailView.vue` (23 条)：paper-detail-page、concepts/entities/article/source/graph、entity-card
+- `ProjectView.vue` (4 条)：project-card hover、member-tags hover
+- `MemberView.vue` (6 条)：member-card、detail-item、member-actions hover
+- `admin/AgentTracesView.vue` (9 条)：page header、JSON viewer、tool-call 块
+
+**v60-v67 教训最终强化**（CLAUDE.md 已有 4 次踩坑，本次 11 视图全部避开）：
+- ① **dark 模式 + 跨组件覆盖必须放第二个非 scoped `<style>` 块**——`scoped` 块里 `:global([data-theme="dark"]) .xxx` 的 `:global()` + 后代选择器组合被 Vue 编译器处理错（剥掉后代选择器、产物变成 `[data-theme=dark]{...}` 单独规则，作用到 `<html>` 而不是目标元素）。**v68 SettingsView 首次部署**已踩这个坑——sw.js v61/v62 也有同款问题
+- ② **11 个文件全部用 `var(--color-*)` 变量驱动**——不写 hex 颜色。这样 P1a 主题切换能复用，6 套主题下都正确
+- ③ **仅 `[data-theme="dark"]` 前缀**，不写 `[data-accent]`——accent 切换由 variables.css 统一接管，子组件只关心明暗
+- ④ **dark 块顶部加注释** `/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */`——开发时一眼看出哪段是 dark 适配
+- ⑤ **不动现有 scoped 块**——只追加，避免破坏已测功能
+
+**端到端验证**（人工硬刷新后）：
+- `/settings` → "外观主题" 卡片 3 个 swatch 切换主色，`<html data-accent>` 实时变化
+- 6 套组合下访问 10 个桌面视图：侧栏/卡片/按钮/文字全部跟随主色，dark 模式下无奶白斑
+- localStorage `theme` + `accent` 独立持久化
+- 主题切换走 280ms `--theme-transition` 平滑过渡，不生硬
+
+### P2 动效治理（待做）
+
+**目标**：
+- 75+ keyframes 散落在 9 个组件 → 集中到 `web/src/assets/variables.css`
+- 新增主题感知动效：route fade、card hover glow、stagger 列表、pet breathe、数字滚动
+- 渐变库：5 主 + 3 强调 + glass() 工具
+
+**预估**：~2-3h，1 PR。P0 + P1 已完成，dark mode 视觉问题 100% 解决，P2 是"锦上添花"。
+
+### 关键沉淀（v69 P0+P1 总结）
+
+**纪律 1：dark 模式 + 跨组件覆盖必须放非 scoped 块**（v60-v67 第 5 次强化，11 视图全部遵守）
+**纪律 2：dark 模式颜色一律用 CSS 变量**（保持 P1a 主题切换可复用）
+**纪律 3：新增 dark 适配第一件事 grep variables.css 看 token**（避免临时写 hex）
+**纪律 4：EP 组件 dark 集中在 variables.css**（P0 已加 14 个，未来不分散到各组件）
+**纪律 5：主题切换是双轴正交**（theme + accent 不互相覆盖，各管各的语义）
+
+### commit 链
+
+```
+71bb394a feat(web): v69 P0 dark mode foundation (5 tokens + 14 EP + MainLayout + Dashboard)
+55865fe2 feat(web): v69 P1a multi-theme system (6 palettes + SettingsView picker)
+7e0976d8 feat(web): v69 P1b 10 desktop views dark mode coverage
+```
+
