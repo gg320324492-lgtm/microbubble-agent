@@ -262,11 +262,37 @@ async def apply_override(meeting_id: int, new_speaker: list, target_names: list,
             # 5. 清空 speaker_stats, regen 后 LLM 重新生成
             m.speaker_stats = []
 
-            # 6. 更新 meeting_participants (用 target_names)
-            # 暂时不动, 等 LLM regen 完再补
+            # 6. 重建 meeting_participants (P0: 修 #135 头部头像)
+            # 参考 scripts/reprocess_meeting.py:apply_to_db line 387-401 已有的同样逻辑
+            from app.models.meeting import MeetingParticipant
+            from sqlalchemy import select, delete
+            real_speakers = [n for n in target_names if n and not n.startswith("发言人")]
+            result = await db.execute(select(Member).where(Member.name.in_(real_speakers)))
+            name_to_member = {m_.name: m_ for m_ in result.scalars().all()}
+            await db.execute(delete(MeetingParticipant).where(MeetingParticipant.meeting_id == meeting_id))
+            for name in real_speakers:
+                member = name_to_member.get(name)
+                if not member:
+                    logger.warning(f"未找到成员: {name}")
+                    continue
+                db.add(MeetingParticipant(meeting_id=meeting_id, member_id=member.id, role="participant"))
+                logger.info(f"添加参与者: {name} (id={member.id})")
+
+            # 7. 自动生成会议标题 (P1: 修 "正在听会（ID X）" 占位)
+            from app.services.meeting_analysis_service import meeting_analysis
+            transcript_text = "\n".join(
+                f"{seg.get('speaker', '未知')}: {seg.get('text_polished', seg.get('text', ''))}"
+                for seg in m.transcript
+            )
+            if len(transcript_text) >= 10:
+                new_title = await meeting_analysis.generate_title(transcript_text)
+                if new_title and new_title != "未命名会议":
+                    old_title = m.title
+                    m.title = new_title
+                    logger.info(f"标题自动生成: '{old_title}' → '{new_title}'")
 
             await db.commit()
-            logger.info(f"✅ 8 字段应用完成 (transcript + transcript_polished + speaker_mapping + speaker_stats)")
+            logger.info(f"✅ 8 字段应用完成 (transcript + transcript_polished + speaker_mapping + speaker_stats + meeting_participants + title)")
             return {"backup_path": str(backup_path), "applied": True}
     finally:
         await engine.dispose()
