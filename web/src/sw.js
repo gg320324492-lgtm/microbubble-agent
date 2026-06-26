@@ -124,7 +124,20 @@
 // 教训：dark mode 容器背景涉及**两条 CSS 规则**（scoped + 非 scoped），任何一处
 // 不透明值都会被高特异性那条胜出，必须**两处同步修改**。下次添加 dark 模式 UI
 // 先 grep 现有 scoped 块是否已有同名 dark 规则，全量同步。
-const SW_VERSION = 'v66-tabbar-scoped-dark-opaque-2026-06-26'
+// v67: 2026-06-26 v66 部署后 console.table 显示 .mobile-tabbar bg-color 是
+// rgb(26,29,35) 深色 ✓，但 .nut-tabbar bg-color 是 rgb(255,255,255) 白色 ✗
+// → TabBar 仍显示白色。根因：NutUI 内部 .nut-tabbar 子元素有自己的
+// `background: var(--nut-white, #fff)` 规则直接设白色，**盖住**了父元素
+// .mobile-tabbar 的深色背景。CSS background 不继承，子元素直接设 background
+// 就会覆盖视觉。
+// 修复：在非 scoped 块加 [data-theme="dark"] .nut-tabbar 覆盖，深色与父元素同步。
+// 教训：CSS 框架子组件（NutUI/MUI/EP 等）的 dark class（.nut-theme-dark /
+// .dark 等）通常和项目自己的 [data-theme="dark"] 不一致——必须为每个有
+// background 的子组件单独写覆盖，不能假设父元素深色子元素就深色。
+// NutUI 有 .nut-theme-dark .nut-tabbar 的 dark 模式 fallback（用 --nut-dark-background），
+// 但项目用 [data-theme="dark"] 不触发 NutUI 的 dark class，所以 NutUI 的
+// dark 规则完全不生效——必须手动覆盖。
+const SW_VERSION = 'v67-tabbar-nutui-internal-dark-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
