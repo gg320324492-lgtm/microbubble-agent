@@ -38,24 +38,26 @@ jobs:
         working-directory: web
         run: npm run lint:css
 
-      # 检查 var(--token, ...) 中 token 都在 variables.css 定义（v73 沉淀）
+      # 检查 var(--token, ...) 中 token 都在 variables.css 定义（v73 沉淀，v74 改 hard fail）
       - name: Check token orphans
         run: bash scripts/check-token-orphans.sh
-        continue-on-error: true  # 临时允许 --i 等本地计算变量 warning
+        # v74: 移除 continue-on-error (白名单已覆盖 --i 等设计意图, 真 orphan 必须 fail)
 
       # 同时跑 vitest 兜底（stylelint 漏掉的逻辑错误）
       - name: Run unit tests (smoke)
         working-directory: web
         run: npm run test:unit -- --run --reporter=dot 2>&1 | tail -30
-        continue-on-error: true  # 不阻断 stylelint 主检查
+        continue-on-error: true  # 不阻断 stylelint 主检查 (test failure 是另一回事)
 
-  # P3 守卫：v70/v71/v72 累计的 0 错误基线
+  # P3 守卫：v70/v71/v72 累计的 0 错误基线 + v74 趋势统计
   stylelint-baseline-guard:
-    name: Stylelint 0 errors baseline
+    name: Stylelint 0 errors baseline + trend
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50  # v74: 取最近 50 commit 用于趋势对比
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -63,15 +65,49 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - working-directory: web
         run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Count errors (must be 0)
+
+      - name: Get current error count
+        id: current
         working-directory: web
         run: |
           OUTPUT=$(npm run lint:css 2>&1)
-          ERROR_COUNT=$(echo "$OUTPUT" | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
-          echo "Stylelint error count: $ERROR_COUNT"
-          if [ "$ERROR_COUNT" -gt 0 ]; then
-            echo "::error::Stylelint found $ERROR_COUNT errors (baseline violation)"
-            echo "$OUTPUT" | tail -30
+          CURRENT=$(echo "$OUTPUT" | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "current_error_count=$CURRENT" >> "$GITHUB_ENV"
+          echo "📊 当前错误数: $CURRENT"
+
+      - name: Get baseline error count from last commit
+        id: baseline
+        run: |
+          # v74: 从 main 上次 commit 跑一次 lint 取基线数
+          # 用 git stash 临时回到 HEAD~1, 跑 lint, 然后 stash pop
+          git stash --include-untracked > /dev/null 2>&1 || true
+          BASELINE=$(cd web && (npm run lint:css 2>&1 || true) | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
+          git stash pop > /dev/null 2>&1 || true
+          echo "baseline=$BASELINE" >> "$GITHUB_OUTPUT"
+          echo "📊 上次 commit 基线: $BASELINE"
+
+      - name: Trend comparison
+        if: steps.current.outputs.current != steps.baseline.outputs.baseline
+        run: |
+          CURRENT=${{ steps.current.outputs.current }}
+          BASELINE=${{ steps.baseline.outputs.baseline }}
+          DIFF=$((CURRENT - BASELINE))
+          if [ "$DIFF" -gt 0 ]; then
+            TREND="🔺 +${DIFF}"
+            EMOJI="❌"
+          else
+            TREND="🔻 ${DIFF}"
+            EMOJI="✅"
+          fi
+          echo "${EMOJI} 趋势: $BASELINE → $CURRENT ($TREND)"
+
+      - name: Baseline gate (must be 0)
+        run: |
+          CURRENT=${{ steps.current.outputs.current }}
+          if [ "$CURRENT" -gt 0 ]; then
+            echo "::error::Stylelint found $CURRENT errors (baseline violation, must be 0)"
+            cd web && npm run lint:css 2>&1 | tail -30
             exit 1
           fi
           echo "✅ Stylelint 0 errors (baseline maintained)"

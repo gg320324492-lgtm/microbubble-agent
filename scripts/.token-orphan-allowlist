@@ -1,0 +1,7 @@
+# scripts/.token-orphan-allowlist
+# var(--token, ...) 中允许的本地计算变量 (一行一个, # 开头是注释)
+# v74 沉淀: 这些 token 不入全局 token 系统, 只在特定文件本地使用
+# 添新项前请先考虑: 是不是该在 variables.css 补个真 token?
+
+# MainLayout.vue stagger 动画计算变量 (CSS 动画 index 0-2)
+--i
