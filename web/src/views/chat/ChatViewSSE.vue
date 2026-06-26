@@ -566,7 +566,7 @@ onUnmounted(() => {
 .msg-row.user { justify-content: flex-end; }
 .msg-row.bot { justify-content: flex-start; }
 
-.bubble { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; word-wrap: break-word; }
+.bubble { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; overflow-wrap: break-word; }
 .user-bubble {
   background: linear-gradient(135deg, #FF7A5C, #FF9D85);
   /* stylelint-disable-next-line color-named */

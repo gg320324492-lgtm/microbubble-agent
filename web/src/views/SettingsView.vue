@@ -830,7 +830,7 @@ function formatDateTime(iso) {
   line-height: 1.4;
 }
 
-/* Dark mode 规则移到非 scoped 块（见下方 <style> 块）—
+/* Dark mode 规则移到非 scoped 块（见下方 \3c style> 块）—
    v68 首次部署尝试 :global([data-theme="dark"]) .glass-card 在 scoped 块里，
    Vue 编译器把 :global() + 后代选择器处理错：编译产物变成
    [data-theme=dark]{...} 单独的规则，剥掉了 .glass-card，作用到 <html> 而不是卡片

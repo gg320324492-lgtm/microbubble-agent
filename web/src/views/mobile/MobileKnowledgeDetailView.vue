@@ -373,7 +373,7 @@ onMounted(() => {
   color: var(--color-text-primary);
   line-height: 1.7;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .source-text {
   color: var(--color-primary);

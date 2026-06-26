@@ -131,7 +131,7 @@ const topic = computed(() => props.paper.topic || '')
   font-size: 15px;
   line-height: 1.85;
   color: var(--color-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
   margin-bottom: 10px;
 }
 

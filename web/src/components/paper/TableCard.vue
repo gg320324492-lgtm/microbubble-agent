@@ -152,7 +152,7 @@ const renderedTable = computed(() => {
 .table-fallback pre {
   margin: 0;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   font-family: 'SF Mono', Consolas, monospace;
   font-size: 12px;
   line-height: 1.6;

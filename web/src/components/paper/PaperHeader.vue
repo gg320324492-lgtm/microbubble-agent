@@ -217,7 +217,7 @@ const headerTags = computed(() => {
   color: var(--color-text-primary);
   margin: 0 0 16px;
   max-width: 100%;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* ========== v28 step 109.38: 作者块 ========== */

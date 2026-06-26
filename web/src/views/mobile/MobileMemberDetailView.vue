@@ -292,7 +292,7 @@ onMounted(() => {
 .info-value {
   flex: 1;
   color: var(--color-text-primary);
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .bio-text {
   margin: 0;

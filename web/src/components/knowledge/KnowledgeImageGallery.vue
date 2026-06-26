@@ -356,7 +356,7 @@ watch(() => props.knowledgeId, () => fetchImages(), { immediate: true })
   font-size: var(--font-size-sm);
   line-height: 1.6;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   max-height: 300px;
   overflow-y: auto;
   margin-top: var(--space-2);

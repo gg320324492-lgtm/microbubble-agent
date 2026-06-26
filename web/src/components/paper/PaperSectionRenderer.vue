@@ -271,7 +271,7 @@ const pageRangeText = computed(() => {
   font-weight: 700;
   color: var(--color-text-primary);
   line-height: 1.4;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .section-meta {
@@ -368,7 +368,7 @@ const pageRangeText = computed(() => {
   line-height: 1.7;
   color: var(--color-text-secondary);
   margin-bottom: 8px;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   /* v28 step 109: 保留 \n 换行（参考文献条目内部可能有换行） */
   white-space: pre-wrap;
 }

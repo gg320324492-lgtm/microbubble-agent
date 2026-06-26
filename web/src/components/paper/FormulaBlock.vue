@@ -79,7 +79,7 @@ defineProps({
   line-height: 1.6;
   color: var(--color-text-primary);
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   overflow-x: auto;
 }
 

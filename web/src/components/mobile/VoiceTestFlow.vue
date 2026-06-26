@@ -742,7 +742,7 @@ onUnmounted(cleanup)
 .result-badge.fail { background: rgba(255, 77, 79, 0.1); color: var(--color-danger); border: 1px solid #ffccc7; }
 .result-speaker { font-size: 22px; font-weight: 700; margin-top: 8px; color: var(--color-text-primary); }
 .result-confidence { font-size: 14px; color: var(--color-text-secondary); margin-top: 4px; }
-.result-transcript { font-size: 14px; color: var(--color-text-regular); margin-top: 8px; font-style: italic; word-break: break-word; }
+.result-transcript { font-size: 14px; color: var(--color-text-regular); margin-top: 8px; font-style: italic; overflow-wrap: anywhere; }
 .result-hint { font-size: 13px; color: var(--color-text-secondary); margin-top: 8px; }
 
 /* 帮助 */
