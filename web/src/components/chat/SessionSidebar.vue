@@ -123,13 +123,13 @@ const onRename = async (session) => {
   transition: background 0.15s;
 }
 .session-item:hover { background: rgba(255, 122, 92, 0.08); }
-.session-item.active { background: rgba(255, 122, 92, 0.15); border-left: 3px solid #FF7A5C; }
-.session-title { font-size: 13px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.session-meta { display: flex; gap: 8px; font-size: 11px; color: #999; margin-top: 4px; }
+.session-item.active { background: rgba(255, 122, 92, 0.15); border-left: 3px solid var(--color-primary); }
+.session-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-meta { display: flex; gap: 8px; font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
 .session-preview { font-size: 11px; color: #888; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-actions { position: absolute; right: 8px; top: 8px; display: none; }
 .session-item:hover .session-actions { display: flex; gap: 2px; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 12px; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 12px; }
 </style>
 
 <!-- v69 P1b fix-2: SessionSidebar dark 覆盖（v60-v67 教训：必须非 scoped） -->

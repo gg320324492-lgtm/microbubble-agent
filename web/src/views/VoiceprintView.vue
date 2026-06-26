@@ -94,5 +94,5 @@ function onJump(meetingId) {
   gap: 16px;
   margin-top: 16px;
 }
-.loading, .empty { padding: 40px; text-align: center; color: #999; }
+.loading, .empty { padding: 40px; text-align: center; color: var(--color-text-secondary); }
 </style>

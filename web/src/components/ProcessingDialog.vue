@@ -14,7 +14,7 @@
       </div>
 
       <div class="processing-icon">
-        <el-icon v-if="!done" class="is-loading" :size="60" color="#FF7A5C"><Loading /></el-icon>
+        <el-icon v-if="!done" class="is-loading" :size="60" color="var(--color-primary)"><Loading /></el-icon>
         <div v-else class="done-icon">✅</div>
       </div>
       <h2 class="processing-title">{{ titleText }}</h2>
@@ -247,10 +247,10 @@ if (token) {
   align-items: center;
   justify-content: center;
   background: #f0f0f0;
-  color: #999;
+  color: var(--color-text-secondary);
 }
 .is-done .timeline-dot {
-  background: #67c23a;
+  background: var(--color-success);
   color: white;
 }
 .is-current .timeline-dot {
@@ -259,7 +259,7 @@ if (token) {
   animation: pulse 1.5s infinite;
 }
 .is-failed .timeline-dot {
-  background: #f56c6c;
+  background: var(--color-danger);
   color: white;
 }
 .dot-empty {
@@ -278,12 +278,12 @@ if (token) {
 }
 .stage-detail {
   font-size: 13px;
-  color: #999;
+  color: var(--color-text-secondary);
   margin-top: 4px;
 }
 .hint {
   margin-top: 40px;
-  color: #999;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 .done-actions {

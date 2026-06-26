@@ -59,7 +59,7 @@ const renderChart = () => {
       grid: { left: 50, right: 20, top: 50, bottom: 40 },
       xAxis: { type: 'category', data: xData },
       yAxis: { type: 'value' },
-      series: [{ type: 'bar', data: series, itemStyle: { color: '#FF7A5C' } }],
+      series: [{ type: 'bar', data: series, itemStyle: { color: 'var(--color-primary)' } }],
     }
   }
   chartInstance.setOption(option)
@@ -84,7 +84,7 @@ watch(() => props.block.data, (v) => { data.value = v; renderChart() })
 <style scoped>
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .chart-canvas { width: 100%; height: 300px; }
-.empty { text-align: center; color: #999; padding: 40px 0; }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 40px 0; }
 .empty p { margin: 4px 0; }
 .empty .hint { font-size: 12px; color: #ccc; font-family: monospace; }
 </style>

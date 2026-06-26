@@ -115,14 +115,14 @@ function onManualRetry() {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #67C23A;
+  background: var(--color-success);
 }
 
-.dot-offline { background: #F56C6C; }
+.dot-offline { background: var(--color-danger); }
 
 .pulse-green .dot { animation: pulse 1.5s infinite; }
-.pulse-orange .dot { background: #FFB347; animation: pulse 1s infinite; }
-.pulse-red .dot { background: #F56C6C; animation: pulse 0.8s infinite; }
+.pulse-orange .dot { background: var(--color-accent); animation: pulse 1s infinite; }
+.pulse-red .dot { background: var(--color-danger); animation: pulse 0.8s infinite; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; scale: 1; }
@@ -132,7 +132,7 @@ function onManualRetry() {
 .badge-text { flex: 1; }
 
 .badge-action {
-  background: #FF7A5C;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 14px;

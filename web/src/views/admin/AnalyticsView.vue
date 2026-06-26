@@ -324,7 +324,7 @@ onUnmounted(() => {
       <el-card class="chart-card" shadow="never" v-if="Object.keys(stats.by_model || {}).length <= 1">
         <div class="empty-tip">
           <p>当前只有 <strong>{{ Object.keys(stats.by_model || {})[0] }}</strong> 一个模型的数据。</p>
-          <p style="font-size:12px;color:#909399;margin-top:8px">
+          <p style="font-size:12px;color:var(--color-info);margin-top:8px">
             未来如果切到其他模型（如 Qwen3-Embedding-8B / bge-m3），这里会按模型分组显示对比。
           </p>
         </div>
@@ -344,13 +344,13 @@ onUnmounted(() => {
               <el-avatar v-if="row.user_id" :size="28" :src="row.avatar || undefined">
                 {{ row.name?.[0] || '?' }}
               </el-avatar>
-              <el-avatar v-else :size="28" style="background:#909399">
+              <el-avatar v-else :size="28" style="background:var(--color-info)">
                 ?
               </el-avatar>
               <div>
                 <div style="font-weight:500">{{ row.name }}</div>
-                <div v-if="row.username" style="font-size:11px;color:#909399">@{{ row.username }}</div>
-                <div v-else style="font-size:11px;color:#909399">(匿名用户)</div>
+                <div v-if="row.username" style="font-size:11px;color:var(--color-info)">@{{ row.username }}</div>
+                <div v-else style="font-size:11px;color:var(--color-info)">(匿名用户)</div>
               </div>
             </div>
           </template>
@@ -432,7 +432,7 @@ onUnmounted(() => {
 }
 .page-header .desc {
   margin: 0;
-  color: #909399;
+  color: var(--color-info);
   font-size: 13px;
 }
 .filter-card {
@@ -455,7 +455,7 @@ onUnmounted(() => {
 }
 .metric-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-info);
   margin-bottom: 6px;
 }
 .metric-value {
@@ -463,9 +463,9 @@ onUnmounted(() => {
   font-weight: 600;
   color: #303133;
 }
-.metric-value.good { color: #67C23A; }
-.metric-value.warn { color: #E6A23C; }
-.metric-value.danger { color: #F56C6C; }
+.metric-value.good { color: var(--color-success); }
+.metric-value.warn { color: var(--color-warning); }
+.metric-value.danger { color: var(--color-danger); }
 .metric-hint {
   font-size: 11px;
   color: #C0C4CC;

@@ -139,7 +139,7 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
 }
 
 .rich-summary-toggle {
-  color: #909399;
+  color: var(--color-info);
   font-size: 12px;
 }
 

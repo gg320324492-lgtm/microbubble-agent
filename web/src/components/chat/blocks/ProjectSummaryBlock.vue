@@ -84,32 +84,32 @@ const taskStatusLabel = (s) => ({
 
 <style scoped>
 .rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: #FF7A5C; }
+.card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .project-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
 .project-item:first-of-type { border-top: none; }
-.project-title { font-weight: 600; font-size: 15px; color: #FF7A5C; }
-.project-desc { font-size: 12px; color: #666; margin-top: 4px; line-height: 1.5; }
+.project-title { font-weight: 600; font-size: 15px; color: var(--color-primary); }
+.project-desc { font-size: 12px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }
 .task-stats { margin-top: 8px; }
 .stat-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; }
-.stat-label { color: #999; }
-.stat-value { font-weight: 600; color: #333; }
+.stat-label { color: var(--color-text-secondary); }
+.stat-value { font-weight: 600; color: var(--color-text-primary); }
 .stat-pill { font-size: 11px; padding: 1px 8px; border-radius: 10px; }
 .stat-pill.in-progress { background: #fff7e6; color: #d4880f; }
 .stat-pill.done { background: #e8f5e9; color: #2e7d32; }
 .stat-pill.overdue { background: #ffebee; color: #c62828; }
 .progress-bar { position: relative; height: 6px; background: #f0f1f3; border-radius: 3px; margin-top: 6px; overflow: hidden; }
-.progress-done { position: absolute; left: 0; top: 0; height: 100%; background: #67c23a; }
-.progress-active { position: absolute; top: 0; height: 100%; background: #FFB347; }
-.section-label { font-size: 12px; font-weight: 500; color: #555; margin-top: 8px; margin-bottom: 4px; }
+.progress-done { position: absolute; left: 0; top: 0; height: 100%; background: var(--color-success); }
+.progress-active { position: absolute; top: 0; height: 100%; background: var(--color-accent); }
+.section-label { font-size: 12px; font-weight: 500; color: var(--color-text-regular); margin-top: 8px; margin-bottom: 4px; }
 .milestone-item { display: flex; gap: 8px; padding: 3px 0; font-size: 12px; align-items: center; }
-.ms-name { flex: 1; color: #333; }
+.ms-name { flex: 1; color: var(--color-text-primary); }
 .ms-date { color: #888; }
-.ms-status { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #f0f4f8; color: #666; }
+.ms-status { font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #f0f4f8; color: var(--color-text-regular); }
 .recent-task { display: flex; gap: 8px; padding: 4px 6px; font-size: 12px; border-radius: 4px; cursor: pointer; align-items: center; }
 .recent-task:hover { background: #fafbfc; }
-.task-title { flex: 1; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-title { flex: 1; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-assignee { color: #888; font-size: 11px; }
-.task-status { font-size: 11px; color: #999; }
-.empty { text-align: center; color: #999; padding: 20px 0; font-size: 13px; }
+.task-status { font-size: 11px; color: var(--color-text-secondary); }
+.empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

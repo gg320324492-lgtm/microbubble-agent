@@ -187,8 +187,8 @@ const resetFilters = () => {
 }
 
 .toolbar-actions .el-button--warning {
-  background: #e6a23c;
-  border-color: #e6a23c;
+  background: var(--color-warning);
+  border-color: var(--color-warning);
   color: #fff;
 }
 

@@ -259,23 +259,23 @@ onMounted(fetchTraces)
 <style scoped>
 .agent-traces-view { padding: 20px; }
 .page-header h2 { margin: 0 0 4px; font-size: 22px; color: #2d2d2d; }
-.page-header .desc { margin: 0 0 20px; color: #999; font-size: 13px; }
+.page-header .desc { margin: 0 0 20px; color: var(--color-text-secondary); font-size: 13px; }
 .filter-card, .table-card { margin-bottom: 16px; }
-.time { font-family: monospace; font-size: 12px; color: #555; }
+.time { font-family: monospace; font-size: 12px; color: var(--color-text-regular); }
 .muted { color: #ccc; }
-.total-info { text-align: right; color: #999; font-size: 12px; margin-top: 12px; }
-.trace-detail h3 { font-size: 14px; margin: 16px 0 8px; color: #FF7A5C; }
+.total-info { text-align: right; color: var(--color-text-secondary); font-size: 12px; margin-top: 12px; }
+.trace-detail h3 { font-size: 14px; margin: 16px 0 8px; color: var(--color-primary); }
 .trace-detail .json {
   background: #fafbfc; padding: 10px 12px; border-radius: 6px;
-  font-size: 12px; color: #333; max-height: 300px; overflow: auto;
+  font-size: 12px; color: var(--color-text-primary); max-height: 300px; overflow: auto;
   white-space: pre-wrap; word-break: break-all;
 }
-.trace-detail .json.error { color: #f56c6c; }
+.trace-detail .json.error { color: var(--color-danger); }
 .tool-call { padding: 8px 12px; background: #fafbfc; border-radius: 6px; margin-bottom: 6px; }
 .tc-header { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
-.tc-header .duration { font-size: 11px; color: #999; }
+.tc-header .duration { font-size: 11px; color: var(--color-text-secondary); }
 .rich-block-tag { display: inline-flex; gap: 6px; padding: 4px 0; margin-right: 8px; }
-.rb-title { font-size: 12px; color: #666; }
+.rb-title { font-size: 12px; color: var(--color-text-regular); }
 </style>
 
 <style>

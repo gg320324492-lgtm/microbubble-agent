@@ -506,7 +506,7 @@ onUnmounted(() => {
   border-bottom: 1px solid #f5c2c7;
 }
 .nb-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: #f56c6c;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--color-danger);
   animation: pulse 1.5s infinite;
 }
 @keyframes pulse {
@@ -527,8 +527,8 @@ onUnmounted(() => {
 .bot-msg-avatar { background: linear-gradient(135deg, #FF7A5C, #FFB347); flex-shrink: 0; }
 .header-text { line-height: 1.2; }
 .bot-name { font-weight: 600; font-size: 15px; }
-.bot-status { font-size: 12px; color: #999; display: flex; align-items: center; gap: 4px; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #67c23a; }
+.bot-status { font-size: 12px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
 
 .messages { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
 
@@ -559,7 +559,7 @@ onUnmounted(() => {
   color: white;
   transform: translateX(-50%) translateY(-2px);
 }
-.time-divider { text-align: center; font-size: 12px; color: #999; margin: 16px 0; }
+.time-divider { text-align: center; font-size: 12px; color: var(--color-text-secondary); margin: 16px 0; }
 
 .msg-row { display: flex; margin-bottom: 16px; gap: 8px; }
 .msg-row.user { justify-content: flex-end; }
@@ -569,10 +569,10 @@ onUnmounted(() => {
 .user-bubble { background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: white; border-bottom-right-radius: 6px; }
 .bot-bubble { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-bottom-left-radius: 6px; }
 
-.tool-trace { margin-bottom: 12px; padding: 8px 12px; background: #fafbfc; border-radius: 8px; border-left: 3px solid #FF7A5C; }
-.trace-item { font-size: 12px; color: #666; padding: 2px 0; }
-.trace-item.running { color: #FF7A5C; }
-.trace-item .duration { color: #999; font-size: 11px; }
+.tool-trace { margin-bottom: 12px; padding: 8px 12px; background: #fafbfc; border-radius: 8px; border-left: 3px solid var(--color-primary); }
+.trace-item { font-size: 12px; color: var(--color-text-regular); padding: 2px 0; }
+.trace-item.running { color: var(--color-primary); }
+.trace-item .duration { color: var(--color-text-secondary); font-size: 11px; }
 
 /* 2026-06-14 收官：thinking toggle 按钮激活态高亮 */
 .thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: rgba(255, 122, 92, 0.08); }
@@ -584,22 +584,22 @@ onUnmounted(() => {
 .msg-content :deep(code) { background: #f6f8fa; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
 
 .rich-blocks { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-.msg-error { color: #f56c6c; font-size: 13px; margin-top: 8px; }
-.msg-meta { font-size: 11px; color: #999; margin-top: 8px; display: flex; gap: 12px; }
+.msg-error { color: var(--color-danger); font-size: 13px; margin-top: 8px; }
+.msg-meta { font-size: 11px; color: var(--color-text-secondary); margin-top: 8px; display: flex; gap: 12px; }
 
 .typing-bubble { display: inline-flex; gap: 4px; }
-.typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: #FF7A5C; animation: td 1.4s infinite; }
+.typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); animation: td 1.4s infinite; }
 .typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
 .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes td { 0%, 60%, 100% { transform: scale(1); opacity: 0.5; } 30% { transform: scale(1.4); opacity: 1; } }
 
 .welcome-hero { text-align: center; padding: 60px 20px 20px; }
 .hero-avatar { background: linear-gradient(135deg, #FF7A5C, #FFB347); margin-bottom: 16px; }
-.welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: #333; }
-.welcome-hero p { color: #666; margin: 0 0 24px; }
+.welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }
+.welcome-hero p { color: var(--color-text-regular); margin: 0 0 24px; }
 .quick-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .quick-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: white; border: 1px solid #e0e0e0; border-radius: 20px; cursor: pointer; transition: all 0.2s; }
-.quick-btn:hover { border-color: #FF7A5C; color: #FF7A5C; transform: translateY(-1px); }
+.quick-btn:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
 .qa-icon { font-size: 18px; }
 
 .input-bar { padding: 16px 20px; background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); border-top: 1px solid #eee; }

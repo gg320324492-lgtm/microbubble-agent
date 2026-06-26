@@ -68,10 +68,10 @@ function barColor(value) {
 .name {
   font-weight: 500;
   flex: 1;
-  color: #333;
+  color: var(--color-text-primary);
 }
 .samples {
-  color: #999;
+  color: var(--color-text-secondary);
   font-size: 11px;
 }
 </style>

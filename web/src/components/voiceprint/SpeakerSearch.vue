@@ -66,6 +66,6 @@ async function loadAll() {
   margin-bottom: 4px;
 }
 .meeting-title { color: #ff7a5c; font-weight: 500; }
-.confidence { color: #999; }
-.result-text { font-size: 13px; color: #333; }
+.confidence { color: var(--color-text-secondary); }
+.result-text { font-size: 13px; color: var(--color-text-primary); }
 </style>

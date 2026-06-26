@@ -338,7 +338,7 @@ watch(() => route.params.id, fetchMeeting)
   height: 8px;
   border-radius: 50%;
 }
-.status-dot.status-scheduled { background: #909399; }
+.status-dot.status-scheduled { background: var(--color-info); }
 .status-dot.status-recording,
 .status-dot.status-processing { background: var(--color-warning, #E6A23C); animation: pulse-dot 1s infinite; }
 .status-dot.status-completed { background: var(--color-success, #67C23A); }

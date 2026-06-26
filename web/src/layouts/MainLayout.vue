@@ -107,7 +107,7 @@
                   </div>
                   <el-button type="primary" size="small" class="mark-read-btn" @click="handleMarkAllRead">全部标为已读</el-button>
                 </template>
-                <p v-else style="color:#909399;text-align:center;padding:20px 0">暂无新提醒</p>
+                <p v-else style="color:var(--color-info);text-align:center;padding:20px 0">暂无新提醒</p>
               </div>
               <div class="notification-panel-footer">
                 <el-button text size="small" @click="router.push({ path: '/tasks', query: { assignee_id: userStore.userInfo?.id } })">查看我的任务</el-button>
@@ -632,7 +632,7 @@ const formatTime = (t) => {
   padding: 0 12px;
   margin: 4px 0;
   border-radius: 12px;
-  color: #333;
+  color: var(--color-text-primary);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -643,7 +643,7 @@ const formatTime = (t) => {
 }
 
 .mobile-drawer-item.active {
-  background: #FF7A5C;
+  background: var(--color-primary);
   color: #fff;
 }
 
@@ -804,7 +804,7 @@ const formatTime = (t) => {
 
 .notification-item-time {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-info);
 }
 
 .mark-read-btn {

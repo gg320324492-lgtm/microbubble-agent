@@ -201,12 +201,12 @@ defineExpose({
 }
 
 .record-btn.recording {
-  background: #f56c6c;
+  background: var(--color-danger);
   animation: pulse 1.5s infinite;
 }
 
 .record-btn.processing {
-  background: #909399;
+  background: var(--color-info);
   cursor: not-allowed;
 }
 
@@ -235,11 +235,11 @@ defineExpose({
 
 .record-tip {
   font-size: 12px;
-  color: #909399;
+  color: var(--color-info);
 }
 
 .recording-text {
-  color: #f56c6c;
+  color: var(--color-danger);
   font-weight: bold;
 }
 
@@ -253,7 +253,7 @@ defineExpose({
 .wave-bar {
   width: 3px;
   height: 20px;
-  background: #f56c6c;
+  background: var(--color-danger);
   border-radius: 2px;
   animation: wave 0.8s ease-in-out infinite;
   transform-origin: center center;

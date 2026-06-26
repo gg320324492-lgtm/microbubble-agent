@@ -181,7 +181,7 @@ function drawWaveformAt(ratio) {
     const x = (i / decodedWaveform.length) * W
 
     if (x <= playedX) {
-      ctx.fillStyle = '#FF7A5C'
+      ctx.fillStyle = 'var(--color-primary)'
     } else {
       ctx.fillStyle = '#ddd'
     }
