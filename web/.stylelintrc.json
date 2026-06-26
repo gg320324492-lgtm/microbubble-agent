@@ -1,0 +1,58 @@
+{
+  "extends": [
+    "stylelint-config-standard"
+  ],
+  "customSyntax": "postcss-html",
+  "rules": {
+    "color-no-invalid-hex": true,
+    "color-no-hex": null,
+    "color-named": ["never", { "ignore": ["inside-function"] }],
+    "alpha-value-notation": null,
+    "color-function-notation": null,
+    "color-function-alias-notation": null,
+    "color-hex-length": null,
+    "comment-empty-line-before": null,
+    "declaration-empty-line-before": null,
+    "declaration-block-single-line-max-declarations": null,
+    "rule-empty-line-before": null,
+    "at-rule-empty-line-before": null,
+    "selector-class-pattern": null,
+    "no-descending-specificity": null,
+    "custom-property-pattern": null,
+    "keyframes-name-pattern": null,
+    "media-feature-range-notation": null,
+    "no-duplicate-selectors": null,
+    "no-empty-source": null,
+    "import-notation": null,
+    "value-keyword-case": null,
+    "selector-not-notation": null,
+    "property-no-vendor-prefix": null,
+    "property-no-unknown": null,
+    "shorthand-property-no-redundant-values": null,
+    "declaration-block-no-redundant-longhand-properties": null,
+    "length-zero-no-unit": null,
+    "number-max-precision": null,
+    "media-feature-name-no-vendor-prefix": null
+  },
+  "overrides": [
+    {
+      "files": ["**/*.vue", "**/*.css", "**/*.scss"],
+      "rules": {
+        "declaration-property-value-disallowed-list": {
+          "/^color$/": ["/^#[0-9a-fA-F]{3,8}$/"],
+          "/^background(-color)?$/": ["/^#[0-9a-fA-F]{3,8}$/"]
+        }
+      }
+    }
+  ],
+  "ignoreFiles": [
+    "src/assets/variables.css",
+    "src/assets/nutui-theme.scss",
+    "src/assets/mobile-base.css",
+    "node_modules/**",
+    "dist/**",
+    "**/dist/**",
+    "public/**",
+    "coverage/**"
+  ]
+}
