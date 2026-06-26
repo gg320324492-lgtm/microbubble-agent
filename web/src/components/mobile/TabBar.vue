@@ -181,4 +181,15 @@ function handleSwitch(name) {
   color: var(--color-accent);        /* dark=#FFC067 金橙，比 #FF9D85 亮更区分 */
   background: rgba(255, 179, 71, 0.18); /* 金橙调背景与 #FFC067 协调 */
 }
+
+/* v63 (2026-06-26) 修复 inactive tab icon 颜色：v62 上面第一条规则
+   [data-theme="dark"] .nut-tabbar-item 设的是父元素 color，但 NutUI 编译 CSS
+   rule 15 直接在子元素 .nut-tabbar-item__icon--unactive 上设
+   color: var(--nut-black, #000)，本项目 nutui-theme.scss:35 定义 --nut-black = #2D2D2D。
+   子元素直接设色切断继承 → v62 的父规则对 inactive icon 无效 → 图标仍是 #2D2D2D。
+   修复：直接命中 NutUI 实际设色的子元素选择器 .nut-tabbar-item__icon--unactive。
+   特异性对比: NutUI rule 15 = (0,1,0)，本规则 = (0,2,0)，胜出。 */
+[data-theme="dark"] .nut-tabbar-item__icon--unactive {
+  color: var(--color-text-regular);
+}
 </style>

@@ -80,7 +80,17 @@
 // <style> 块**。非 scoped 块不附加 data-v，规则全局生效直接命中 NutUI 元素。
 // 教训：dark mode 跨组件（特别是 NutUI 第三方元素）覆盖优先用非 scoped <style> 块，
 // 不要在 scoped 块里玩 [attr] + :deep() 或 :global() 组合——Vue 编译器有 3 层坑。
-const SW_VERSION = 'v62-tabbar-darkmode-global-style-2026-06-26'
+// v63: 2026-06-26 v62 部署后用户反馈 inactive icon 仍不变。诊断：v62 第一条规则
+// [data-theme="dark"] .nut-tabbar-item { color: var(--color-text-regular) }
+// 设的是父元素 .nut-tabbar-item 的 color，但 NutUI 编译 CSS rule 15 直接在
+// 子元素 .nut-tabbar-item__icon--unactive 上设 color: var(--nut-black, #000)
+// （本项目 nutui-theme.scss:35 定义 --nut-black = #2D2D2D）——子元素直接设色
+// 切断 CSS 继承，所以 inactive icon 颜色在 dark 模式仍 = #2D2D2D。
+// 修复：在非 scoped 块追加 [data-theme="dark"] .nut-tabbar-item__icon--unactive
+// 选择器，直接命中 NutUI 实际设色的子元素，特异性 (0,2,0) vs NutUI (0,1,0) 胜出。
+// 教训：编译正确 ≠ 业务生效——必须验证选择器命中的元素确实是想要染色的元素，
+// CSS color 继承会被子元素直接声明覆盖。
+const SW_VERSION = 'v63-tabbar-inactive-icon-selector-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
