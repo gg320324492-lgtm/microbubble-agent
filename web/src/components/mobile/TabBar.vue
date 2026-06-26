@@ -113,6 +113,27 @@ function handleSwitch(name) {
 [data-theme="dark"] :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
   background: rgba(255, 122, 92, 0.18);
 }
+
+/* v60 (2026-06-26) 修复深色模式 TabBar 颜色"看不出变化"：
+   根因：上面 .nut-tabbar-item 用 var(--color-text-secondary)，但 variables.css:501
+   在 light/dark 都保持 #909399（次要文字色设计上不变）。所以 inactive 在深色模式
+   看起来和浅色一样——用户感知"没变"。
+   active 用 var(--color-primary) 在 dark = #FF9D85，与 light = #FF7A5C 差异只有
+   亮度 +15%，也几乎看不出。
+   修复：在 [data-theme="dark"] 块覆盖两个颜色：
+   - inactive: var(--color-text-regular) = #c0c4cc (dark)，亮灰与 #1a1d23 背景清晰对比
+   - active: var(--color-accent) = #FFC067 (dark)，金橙比 #FF9D85 更亮更区分
+   纪律：NutUI 内部的 nut-tabbar-item__icon--unactive 选择器用的是
+   --nut-dark-color-gray / --nut-text-color，**不消费** --nut-tabbar-inactive-color；
+   所以 v59 在 nutui-theme.scss 加的 --nut-tabbar-*-color 实际只影响 tips 角标。
+   真正驱动 TabBar 颜色的是这里 scoped :deep(...) CSS，必须改这里 + dark 覆盖。 */
+[data-theme="dark"] :deep(.nut-tabbar-item) {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
+  color: var(--color-accent);
+  background: rgba(255, 179, 71, 0.18); /* dark active 背景：与 #FFC067 金橙协调 */
+}
 :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .nut-tabbar-item-icon) {
   transform: scale(1.08);
   transition: transform 0.25s ease;
