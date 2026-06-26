@@ -331,6 +331,48 @@ onUnmounted(() => {
       </el-card>
     </div>
 
+    <!-- v31.2.4: per-user dashboard (top 20 用户维度) -->
+    <el-card v-if="stats && stats.by_user && stats.by_user.length > 0" class="chart-card" shadow="never" style="margin-top:16px">
+      <template #header><div class="chart-title">👤 用户维度分析 (Top 20)</div></template>
+      <el-table :data="stats.by_user" stripe size="default" max-height="500">
+        <el-table-column label="用户" min-width="180">
+          <template #default="{ row }">
+            <div style="display:flex;align-items:center;gap:8px">
+              <!-- v68.1 (2026-06-26) 修复 avatar 404: 后端 by_user 已返回完整 URL 字段 row.avatar,
+                   之前前端调 /api/v1/members/{id}/avatar 但端点不存在 → 404.
+                   改用 row.avatar 完整 URL, 失败时 fallback 到首字. -->
+              <el-avatar v-if="row.user_id" :size="28" :src="row.avatar || undefined">
+                {{ row.name?.[0] || '?' }}
+              </el-avatar>
+              <el-avatar v-else :size="28" style="background:#909399">
+                ?
+              </el-avatar>
+              <div>
+                <div style="font-weight:500">{{ row.name }}</div>
+                <div v-if="row.username" style="font-size:11px;color:#909399">@{{ row.username }}</div>
+                <div v-else style="font-size:11px;color:#909399">(匿名用户)</div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="searches" label="搜索次数" width="110" sortable />
+        <el-table-column prop="clicks" label="点击次数" width="100" sortable />
+        <el-table-column label="任何点击率" width="120" sortable :sort-by="(row) => row.any_click_rate">
+          <template #default="{ row }">
+            <el-tag :type="row.any_click_rate > 0.3 ? 'success' : (row.any_click_rate > 0.1 ? 'warning' : 'danger')" size="small">
+              {{ (row.any_click_rate * 100).toFixed(1) }}%
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="平均点击位置" width="130">
+          <template #default="{ row }">
+            <span v-if="row.avg_click_position !== null">{{ row.avg_click_position.toFixed(2) }}</span>
+            <span v-else style="color:#c0c4cc">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
     <!-- 详细搜索日志 -->
     <el-card class="logs-card" shadow="never">
       <template #header>
