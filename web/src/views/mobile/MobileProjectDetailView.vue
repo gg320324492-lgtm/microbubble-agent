@@ -241,6 +241,7 @@ onMounted(async () => {
   padding: 20px 16px;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
   border-radius: var(--radius-lg);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .hero-header {

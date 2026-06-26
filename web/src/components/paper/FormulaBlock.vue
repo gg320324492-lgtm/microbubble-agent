@@ -57,7 +57,7 @@ defineProps({
 }
 
 .formula-page {
-  background: #F3F4F6;
+  background: var(--color-border-light);
   color: var(--color-text-secondary);
   padding: 1px 6px;
   border-radius: 6px;
@@ -72,7 +72,7 @@ defineProps({
 .formula-content {
   margin: 0;
   padding: 12px 16px;
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   border-radius: 6px;
   font-family: 'KaTeX_Main', 'Latin Modern Math', 'Times New Roman', serif;
   font-size: 14px;

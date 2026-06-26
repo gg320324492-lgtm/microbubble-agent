@@ -114,7 +114,7 @@ const topic = computed(() => props.paper.topic || '')
   align-items: center;
   gap: 4px;
   background: rgba(59, 130, 246, 0.08);
-  color: #2563EB;
+  color: var(--color-primary);
   padding: 2px 8px;
   border-radius: 8px;
   font-size: 11px;
@@ -136,7 +136,7 @@ const topic = computed(() => props.paper.topic || '')
 }
 
 .abstract-text :deep(.auto-link) {
-  color: #2563EB;
+  color: var(--color-primary);
   text-decoration: none;
 }
 .abstract-text :deep(.auto-link:hover) {

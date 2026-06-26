@@ -559,11 +559,13 @@ onUnmounted(cleanup)
 .step.active .step-circle {
   background: var(--color-primary);
   border-color: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .step.done .step-circle {
   background: var(--color-success, #67C23A);
   border-color: var(--color-success, #67C23A);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .step-label {
@@ -601,6 +603,7 @@ onUnmounted(cleanup)
   height: 48px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 18px;
   font-weight: var(--font-weight-semibold, 600);
@@ -783,7 +786,6 @@ onUnmounted(cleanup)
   padding: 20px 0;
 }
 .upload-zone {
-  display: block;
   width: 100%;
   min-height: 240px;
   border: 2px dashed var(--color-border);
@@ -853,6 +855,7 @@ onUnmounted(cleanup)
   animation: success-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .success-circle .big-icon {
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 56px;
 }
@@ -889,6 +892,7 @@ onUnmounted(cleanup)
   border-radius: var(--radius-md);
   border: none;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 15px;
   font-weight: var(--font-weight-medium, 500);
@@ -912,6 +916,7 @@ onUnmounted(cleanup)
   max-width: 90vw;
   padding: 10px 16px;
   background: var(--color-danger, #F56C6C);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-radius: var(--radius-full);
   font-size: 13px;

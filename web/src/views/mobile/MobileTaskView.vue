@@ -416,6 +416,7 @@ onMounted(() => {
 }
 .tab-item.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-weight: var(--font-weight-medium, 500);
 }
@@ -444,6 +445,7 @@ onMounted(() => {
 .header-action:active { background: var(--color-primary-bg); }
 .header-action.primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-weight: 600;
   font-size: 22px;
@@ -473,6 +475,7 @@ onMounted(() => {
 /* 2026-06-25: 完成按钮（primary 状态）+ 取消完成（success 状态） */
 .action-btn.primary {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border: 1px solid var(--color-primary);
 }

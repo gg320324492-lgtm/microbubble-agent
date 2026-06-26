@@ -126,7 +126,7 @@ const onRename = async (session) => {
 .session-item.active { background: rgba(255, 122, 92, 0.15); border-left: 3px solid var(--color-primary); }
 .session-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-meta { display: flex; gap: 8px; font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
-.session-preview { font-size: 11px; color: #888; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-preview { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-actions { position: absolute; right: 8px; top: 8px; display: none; }
 .session-item:hover .session-actions { display: flex; gap: 2px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 12px; }

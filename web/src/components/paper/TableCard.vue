@@ -57,7 +57,7 @@ const renderedTable = computed(() => {
 .table-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
-  border-left: 3px solid #10B981;
+  border-left: 3px solid var(--color-success);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 14px;
@@ -84,11 +84,11 @@ const renderedTable = computed(() => {
 
 .table-no {
   font-weight: 600;
-  color: #10B981;
+  color: var(--color-success);
 }
 
 .table-page {
-  background: #F3F4F6;
+  background: var(--color-border-light);
   color: var(--color-text-secondary);
   padding: 1px 6px;
   border-radius: 6px;
@@ -123,7 +123,7 @@ const renderedTable = computed(() => {
 }
 
 .table-wrapper :deep(.paper-table th) {
-  background: #F3F4F6;
+  background: var(--color-border-light);
   font-weight: 600;
   text-align: left;
   padding: 8px 12px;
@@ -135,16 +135,16 @@ const renderedTable = computed(() => {
 .table-wrapper :deep(.paper-table td) {
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border-light);
-  color: #4B5563;
+  color: var(--color-text-secondary);
   vertical-align: top;
 }
 
 .table-wrapper :deep(.paper-table tr:hover td) {
-  background: #FAFAFA;
+  background: var(--color-bg-page);
 }
 
 .table-fallback {
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   border-radius: 6px;
   padding: 10px 12px;
 }

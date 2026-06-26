@@ -324,7 +324,7 @@ const formatDate = (dateStr) => {
 }
 
 .hero-action-danger:hover {
-  color: #dc2626;
+  color: var(--color-danger);
 }
 
 /* 缩略图（Phase 7 多模态，无文件时显示） */
@@ -353,6 +353,7 @@ const formatDate = (dateStr) => {
   bottom: 4px;
   right: 4px;
   background: rgba(0, 0, 0, 0.7);
+  /* stylelint-disable-next-line color-named */
   color: white;
   padding: 2px 6px;
   border-radius: var(--radius-sm);

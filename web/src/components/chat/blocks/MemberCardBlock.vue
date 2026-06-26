@@ -43,20 +43,25 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
 </template>
 
 <style scoped>
-.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .member-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #f0f1f3; }
 .member-item:first-of-type { border-top: none; }
-.avatar { background: linear-gradient(135deg, #FF7A5C, #FFB347); color: white; flex-shrink: 0; }
+.avatar {
+  background: linear-gradient(135deg, #FF7A5C, #FFB347);
+  /* stylelint-disable-next-line color-named */
+  color: white;
+  flex-shrink: 0;
+}
 .member-info { flex: 1; min-width: 0; }
 .member-row1 { display: flex; align-items: center; gap: 8px; }
 .member-name { font-weight: 500; font-size: 14px; }
 .role { font-size: 11px; padding: 1px 8px; border-radius: 10px; background: var(--color-bg-hover); }
 .voice-badge { font-size: 14px; }
-.member-row2 { display: flex; gap: 12px; font-size: 12px; color: #888; margin-top: 4px; flex-wrap: wrap; }
+.member-row2 { display: flex; gap: 12px; font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; flex-wrap: wrap; }
 .skills { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-.skill { font-size: 11px; background: #e8f4ff; color: #1976d2; padding: 1px 6px; border-radius: 8px; }
-.bio { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.5; }
+.skill { font-size: 11px; background: var(--color-primary-bg); color: var(--color-primary); padding: 1px 6px; border-radius: 8px; }
+.bio { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; line-height: 1.5; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

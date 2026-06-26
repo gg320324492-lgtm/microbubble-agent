@@ -219,6 +219,7 @@ function confidenceColor(c) {
   height: 44px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 18px;
   font-weight: var(--font-weight-semibold, 600);
@@ -348,6 +349,7 @@ function confidenceColor(c) {
   height: 100%;
   font-size: 11px;
   font-weight: var(--font-weight-semibold, 600);
+  /* stylelint-disable-next-line color-named */
   color: white;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
 }

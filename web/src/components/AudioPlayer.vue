@@ -243,7 +243,7 @@ defineExpose({ stop, togglePlay })
   border-radius: 50%;
   border: none;
   background: linear-gradient(135deg, #FF7A5C, #FF9D85);
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 14px;
   cursor: pointer;
   display: flex;

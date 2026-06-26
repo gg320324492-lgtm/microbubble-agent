@@ -340,7 +340,6 @@ watch(() => props.knowledgeId, () => fetchExtractions(), { immediate: true })
 }
 
 .extraction-text {
-  font-size: var(--font-size-sm);
   line-height: 1.6;
   color: var(--color-text-primary);
   white-space: pre-wrap;

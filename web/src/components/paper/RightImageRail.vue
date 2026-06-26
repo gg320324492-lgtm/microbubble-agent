@@ -148,7 +148,7 @@ function handleClick(fig) {
 }
 
 .rail-item {
-  background: #FAFAFA;
+  background: var(--color-bg-page);
   border: 1px solid var(--color-border-light);
   border-radius: 8px;
   overflow: hidden;
@@ -185,7 +185,7 @@ function handleClick(fig) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 18px;
   opacity: 0;
   transition: opacity 0.15s;
@@ -220,7 +220,7 @@ function handleClick(fig) {
 .rail-page {
   font-size: 10px;
   color: var(--color-text-placeholder);
-  background: #F3F4F6;
+  background: var(--color-border-light);
   padding: 1px 5px;
   border-radius: 6px;
 }
@@ -249,7 +249,7 @@ function handleClick(fig) {
 .rail-preview-caption {
   margin-top: 12px;
   padding: 12px;
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.6;

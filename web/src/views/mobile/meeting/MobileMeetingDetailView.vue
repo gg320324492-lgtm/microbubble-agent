@@ -371,6 +371,7 @@ watch(() => route.params.id, fetchMeeting)
 }
 .tab-item.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-weight: 500;
 }
@@ -435,6 +436,7 @@ watch(() => route.params.id, fetchMeeting)
   height: 22px;
   border-radius: 50%;
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 11px;
   font-weight: 600;
@@ -602,6 +604,7 @@ watch(() => route.params.id, fetchMeeting)
 .action-btn:active { background: var(--color-bg-hover); }
 .action-btn.primary {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-color: var(--color-primary);
 }

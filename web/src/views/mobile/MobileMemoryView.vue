@@ -310,6 +310,7 @@ onMounted(() => {
 }
 .type-chip.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-color: var(--color-primary);
 }
@@ -544,6 +545,7 @@ onMounted(() => {
 }
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 

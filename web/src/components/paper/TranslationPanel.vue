@@ -68,7 +68,7 @@ const translations = ref([])
   justify-content: space-between;
   padding: 12px 20px;
   border-bottom: 1px solid var(--color-border-light);
-  background: #F9FAFB;
+  background: var(--color-bg-card);
 }
 
 .panel-title {
@@ -97,8 +97,8 @@ const translations = ref([])
 
 .translation-item {
   padding: 12px 16px;
-  background: #F0F7FF;
-  border-left: 3px solid #3B82F6;
+  background: var(--color-primary-bg);
+  border-left: 3px solid var(--color-primary);
   border-radius: 4px;
 }
 
@@ -112,6 +112,6 @@ const translations = ref([])
 .translated-text {
   font-size: 14px;
   line-height: 1.7;
-  color: #1E3A8A;
+  color: var(--color-primary);
 }
 </style>

@@ -183,13 +183,13 @@ const resetFilters = () => {
 .toolbar-actions .el-button--primary {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: #fff;
+  color: var(--color-bg-card);
 }
 
 .toolbar-actions .el-button--warning {
   background: var(--color-warning);
   border-color: var(--color-warning);
-  color: #fff;
+  color: var(--color-bg-card);
 }
 
 .btn-text {

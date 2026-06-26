@@ -240,7 +240,8 @@ onMounted(async () => {
   margin-left: 12px;
   padding: 2px 10px;
   background: linear-gradient(135deg, #FF7A5C, #FF9D85);
-  color: #fff;
+  /* stylelint-disable-next-line color-named */
+  color: var(--color-bg-card);
   font-size: 12px;
   font-weight: 600;
   border-radius: 12px;

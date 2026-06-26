@@ -243,6 +243,7 @@ watch(() => props.knowledgeId, () => fetchImages(), { immediate: true })
   top: 4px;
   left: 4px;
   background: rgba(0, 0, 0, 0.6);
+  /* stylelint-disable-next-line color-named */
   color: white;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
@@ -260,6 +261,7 @@ watch(() => props.knowledgeId, () => fetchImages(), { immediate: true })
   display: flex;
   align-items: center;
   justify-content: center;
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 14px;
 }

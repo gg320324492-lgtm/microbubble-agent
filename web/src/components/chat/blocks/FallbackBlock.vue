@@ -32,5 +32,5 @@ const html = computed(() => {
   font-size: 13px;
 }
 .fb-title { font-weight: 600; margin-bottom: 4px; }
-.fb-content :deep(pre) { background: white; padding: 6px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+.fb-content :deep(pre) { background: var(--color-bg-card); padding: 6px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
 </style>

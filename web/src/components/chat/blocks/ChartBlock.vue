@@ -82,9 +82,9 @@ watch(() => props.block.data, (v) => { data.value = v; renderChart() })
 </template>
 
 <style scoped>
-.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .chart-canvas { width: 100%; height: 300px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 40px 0; }
 .empty p { margin: 4px 0; }
-.empty .hint { font-size: 12px; color: #ccc; font-family: monospace; }
+.empty .hint { font-size: 12px; color: var(--color-border-light); font-family: monospace; }
 </style>

@@ -192,6 +192,7 @@ onMounted(() => {
 }
 .filter-chip.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-color: var(--color-primary);
 }

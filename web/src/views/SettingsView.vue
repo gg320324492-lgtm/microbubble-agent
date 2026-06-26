@@ -624,7 +624,7 @@ function formatDateTime(iso) {
   align-items: center;
   gap: 20px;
   padding: 24px 28px;
-  color: #fff;
+  color: var(--color-bg-card);
 }
 .hero-avatar {
   border: 4px solid rgba(255, 255, 255, 0.9);
@@ -640,7 +640,7 @@ function formatDateTime(iso) {
   margin: 0 0 6px;
   font-size: 22px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-bg-card);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 .hero-meta {
@@ -652,25 +652,25 @@ function formatDateTime(iso) {
 .hero-email {
   font-size: 13px;
   opacity: 0.92;
-  color: #fff;
+  color: var(--color-bg-card);
 }
 .hero-edit-btn {
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.25);
   border-color: rgba(255, 255, 255, 0.5);
-  color: #fff;
+  color: var(--color-bg-card);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 .hero-edit-btn:hover {
   background: rgba(255, 255, 255, 0.35);
   border-color: rgba(255, 255, 255, 0.8);
-  color: #fff;
+  color: var(--color-bg-card);
 }
 .hero-card :deep(.el-tag) {
   background: rgba(255, 255, 255, 0.25);
   border-color: rgba(255, 255, 255, 0.4);
-  color: #fff;
+  color: var(--color-bg-card);
 }
 
 /* ===== 玻璃态卡片 ===== */
@@ -780,7 +780,7 @@ function formatDateTime(iso) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 12px;
   font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
@@ -890,7 +890,7 @@ function formatDateTime(iso) {
 [data-theme="dark"] .hero-edit-btn {
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.3);
-  color: #fff;
+  color: var(--color-bg-card);
 }
 [data-theme="dark"] .hero-edit-btn:hover {
   background: rgba(255, 255, 255, 0.22);

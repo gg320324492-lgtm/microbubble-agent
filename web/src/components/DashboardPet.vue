@@ -714,7 +714,7 @@ onUnmounted(() => {
   left: 2px;
   width: 3px;
   height: 3px;
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 50%;
   opacity: 0.9;
 }
@@ -727,7 +727,7 @@ onUnmounted(() => {
   position: absolute;
   top: 12px;
   font-size: 14px;
-  color: #FF5E5E;
+  color: var(--color-danger);
   z-index: 6;
   animation: pet-heartbeat 0.5s ease-in-out infinite;
   filter: drop-shadow(0 1px 2px rgba(255,60,60,0.3));
@@ -745,7 +745,7 @@ onUnmounted(() => {
   top: 21px;
   width: 14px;
   height: 3px;
-  background: #5A4535;
+  background: var(--color-bg-warm);
   border-radius: 2px;
   z-index: 6;
   opacity: 0.8;
@@ -945,7 +945,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   font-size: 10px;
-  color: #fff;
+  color: var(--color-bg-card);
   white-space: nowrap;
   background: rgba(0,0,0,0.45);
   border-radius: 10px;
@@ -1001,6 +1001,6 @@ onUnmounted(() => {
   [data-theme="dark"] .xp-bar-bg { background: rgba(255, 255, 255, 0.15) !important; }
   [data-theme="dark"] .xp-bar-fill { background: linear-gradient(90deg, #81C784, #66BB6A); }
   [data-theme="dark"] .xp-label { color: rgba(255, 255, 255, 0.95); }
-  [data-theme="dark"] .xp-name { background: rgba(0, 0, 0, 0.55); color: #fff; }
+  [data-theme="dark"] .xp-name { background: rgba(0, 0, 0, 0.55); color: var(--color-bg-card); }
   [data-theme="dark"] .xp-name-divider { background: rgba(255, 255, 255, 0.3); }
 </style>

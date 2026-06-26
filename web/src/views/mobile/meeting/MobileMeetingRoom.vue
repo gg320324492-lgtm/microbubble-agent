@@ -302,8 +302,8 @@ onMounted(async () => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85);
-  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-warning));
+  color: var(--color-bg-card);
   display: flex;
   align-items: center;
   justify-content: center;

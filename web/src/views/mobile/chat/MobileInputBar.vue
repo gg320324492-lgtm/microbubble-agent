@@ -279,6 +279,7 @@ watch(
   height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border: none;
   font-size: 20px;

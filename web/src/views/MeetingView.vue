@@ -776,19 +776,19 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 .action-phone { color: var(--color-primary) !important; border-color: rgba(255,122,92,0.3) !important; }
-.action-phone:hover { background: var(--color-primary) !important; color: #fff !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(255,122,92,0.3); }
+.action-phone:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(255,122,92,0.3); }
 
 .action-view { color: var(--color-primary) !important; border-color: rgba(64,158,255,0.3) !important; }
-.action-view:hover { background: var(--color-primary) !important; color: #fff !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(64,158,255,0.3); }
+.action-view:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(64,158,255,0.3); }
 
 .action-generate { color: var(--color-success) !important; border-color: rgba(103,194,58,0.3) !important; }
-.action-generate:hover { background: var(--color-success) !important; color: #fff !important; border-color: var(--color-success) !important; box-shadow: 0 2px 8px rgba(103,194,58,0.3); }
+.action-generate:hover { background: var(--color-success) !important; color: var(--color-bg-card) !important; border-color: var(--color-success) !important; box-shadow: 0 2px 8px rgba(103,194,58,0.3); }
 
 .action-edit { color: var(--color-info) !important; border-color: rgba(144,147,153,0.3) !important; }
-.action-edit:hover { background: var(--color-info) !important; color: #fff !important; border-color: var(--color-info) !important; box-shadow: 0 2px 8px rgba(144,147,153,0.3); }
+.action-edit:hover { background: var(--color-info) !important; color: var(--color-bg-card) !important; border-color: var(--color-info) !important; box-shadow: 0 2px 8px rgba(144,147,153,0.3); }
 
 .action-delete { color: var(--color-danger) !important; border-color: rgba(245,108,108,0.3) !important; }
-.action-delete:hover { background: var(--color-danger) !important; color: #fff !important; border-color: var(--color-danger) !important; box-shadow: 0 2px 8px rgba(245,108,108,0.3); }
+.action-delete:hover { background: var(--color-danger) !important; color: var(--color-bg-card) !important; border-color: var(--color-danger) !important; box-shadow: 0 2px 8px rgba(245,108,108,0.3); }
 
 /* 纪要编辑列表 */
 .minutes-textarea :deep(.el-textarea__inner) { border-radius: var(--radius-md); border-color: var(--color-border); }
@@ -842,7 +842,7 @@ onMounted(() => {
   border: 1px solid var(--color-border, #e4e7ed);
   border-radius: 6px;
   padding: 10px 12px;
-  background: white;
+  background: var(--color-bg-card);
   cursor: pointer;
   transition: all 0.15s ease;
   position: relative;
@@ -1016,43 +1016,43 @@ onMounted(() => {
   border-color: rgba(255, 122, 92, 0.4) !important;
 }
 [data-theme="dark"] .action-phone:hover {
-  color: #fff !important;
+  color: var(--color-bg-card) !important;
   box-shadow: 0 2px 8px rgba(255, 122, 92, 0.4);
 }
 [data-theme="dark"] .action-view {
-  color: #66b1ff !important;
+  color: var(--color-primary) !important;
   border-color: rgba(64, 158, 255, 0.4) !important;
 }
 [data-theme="dark"] .action-view:hover {
   background: var(--color-primary) !important;
-  color: #fff !important;
+  color: var(--color-bg-card) !important;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.4);
 }
 [data-theme="dark"] .action-generate {
-  color: #85ce61 !important;
+  color: var(--color-success) !important;
   border-color: rgba(103, 194, 58, 0.4) !important;
 }
 [data-theme="dark"] .action-generate:hover {
   background: var(--color-success) !important;
-  color: #fff !important;
+  color: var(--color-bg-card) !important;
   box-shadow: 0 2px 8px rgba(103, 194, 58, 0.4);
 }
 [data-theme="dark"] .action-edit {
-  color: #b1b3b8 !important;
+  color: var(--color-text-secondary) !important;
   border-color: rgba(144, 147, 153, 0.4) !important;
 }
 [data-theme="dark"] .action-edit:hover {
   background: var(--color-info) !important;
-  color: #fff !important;
+  color: var(--color-bg-card) !important;
   box-shadow: 0 2px 8px rgba(144, 147, 153, 0.4);
 }
 [data-theme="dark"] .action-delete {
-  color: #f89898 !important;
+  color: var(--color-danger) !important;
   border-color: rgba(245, 108, 108, 0.4) !important;
 }
 [data-theme="dark"] .action-delete:hover {
   background: var(--color-danger) !important;
-  color: #fff !important;
+  color: var(--color-bg-card) !important;
   box-shadow: 0 2px 8px rgba(245, 108, 108, 0.4);
 }
 [data-theme="dark"] .template-picker {

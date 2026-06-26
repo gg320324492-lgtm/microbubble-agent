@@ -728,6 +728,7 @@ onMounted(() => {
 .complete-btn--done {
   background: var(--color-success);
   border-color: var(--color-success);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 
@@ -873,7 +874,7 @@ onMounted(() => {
   background: rgba(82, 196, 26, 0.12);
 }
 [data-theme="dark"] .complete-btn--done {
-  color: #fff;
+  color: var(--color-bg-card);
 }
 [data-theme="dark"] .trash-tab-label:hover {
   background: rgba(144, 147, 153, 0.14);

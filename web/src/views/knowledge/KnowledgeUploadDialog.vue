@@ -130,7 +130,7 @@ const onUpload = async () => {
 }
 
 .upload-ai-notice {
-  background: #ecf5ff;
+  background: var(--color-primary-bg);
 }
 
 .upload-multimodal-notice {

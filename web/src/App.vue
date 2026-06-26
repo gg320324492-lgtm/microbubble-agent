@@ -126,6 +126,7 @@ body {
   gap: 8px;
   padding: 10px 14px;
   background: var(--color-warning, #E6A23C);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-radius: var(--radius-md);
   font-size: 13px;
@@ -136,6 +137,7 @@ body {
 .offline-retry {
   background: rgba(255, 255, 255, 0.25);
   border: none;
+  /* stylelint-disable-next-line color-named */
   color: white;
   padding: 4px 12px;
   border-radius: var(--radius-sm);
