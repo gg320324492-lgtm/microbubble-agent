@@ -489,6 +489,24 @@ async def regen_summary(meeting_id: int, real_speakers: list, workdir: str = "/t
         m.summary = (result.get("summary", "") or "").strip()
         m.key_points = result.get("key_points", [])
         m.decisions = result.get("decisions", [])
+
+        # 2026-06-26 新增: 自动生成会议标题 (覆盖 "正在听会" / "未命名会议" 占位)
+        need_title = (
+            not m.title
+            or (m.title or "").startswith("听会")
+            or m.title == "未命名会议"
+        )
+        if need_title:
+            try:
+                from app.services.meeting_analysis_service import meeting_analysis
+                new_title = await meeting_analysis.generate_title(transcript_text)
+                if new_title and new_title != "未命名会议":
+                    old_title = m.title
+                    m.title = new_title
+                    logger.info(f"标题自动生成: '{old_title}' → '{new_title}'")
+            except Exception as e:
+                logger.warning(f"标题自动生成失败 (保留原标题): {e}")
+
         await db.commit()
         backup_file = str(backup_path)
 

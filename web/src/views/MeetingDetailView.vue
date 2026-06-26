@@ -55,7 +55,7 @@
         <!-- 参与者头像 -->
         <div class="hero-participants">
           <ParticipantAvatars
-            :participants="meeting.participants || []"
+            :participants="effectiveParticipants"
             :max-display="8"
             :size="36"
           />
@@ -470,6 +470,22 @@ async function autoPolishIfNeeded() {
 function getPolishedText(entry, index) {
   return polishedTexts.value[index] || entry.text
 }
+
+// 2026-06-26 新增: 头部头像 fallback — meeting.participants 为空时, 从 transcript[].speaker 去重
+const effectiveParticipants = computed(() => {
+  if (meeting.value?.participants?.length) return meeting.value.participants
+  const transcript = meeting.value?.transcript || []
+  const seen = new Set()
+  const list = []
+  for (const seg of transcript) {
+    const sp = seg.speaker
+    if (!sp || sp.startsWith('发言人') || sp === '?') continue
+    if (seen.has(sp)) continue
+    seen.add(sp)
+    list.push({ name: sp })
+  }
+  return list
+})
 
 const speakerOptions = computed(() => {
   const options = new Set()
