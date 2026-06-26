@@ -4050,7 +4050,7 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 | 配置 | 加载时间 | 加载后 GPU | del 后 GPU | 释放 |
 |---|---|---|---|---|
 | **基线**（当前） | 18.40s | 8.0 GB | 4.3 GB | -3.7 GB |
-| **flash_attention=True** | 18.96s | 7.95 GB | 4.2 GB | -3.75 GB | ⚠️ Blackwell (RTX 5090) 暂不支持, ctranslate2 4.8 flash attn 2 报错 "not supported", **实际部署 flash_attention=False** |
+| **flash_attention=True** | 18.96s | 7.95 GB | 4.2 GB | -3.75 GB | ⚠️ Blackwell sm_120 不支持, ctranslate2 4.8.0 (latest 2026-06-06) transcribe() 时 RuntimeError "Flash attention 2 is not supported" (faster_whisper/transcribe.py:1446 self.model.generate()), **实际部署 flash_attention=False**, 等上游补 sm_120 flash attn 2 内核 |
 | files= (file-like) | segfault | - | - | ❌ 不可用 |
 | files= (BytesIO) | OOM killed | - | - | ❌ 不可用 |
 
@@ -4086,7 +4086,7 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 2. **低频 vs 高频使用要明确分场景**：本项目每天 2-3 次会议 + 不定时聊天语音 → 用户判断"高频场景（聊天）更重要"
 3. **8GB 不是一个数字**：在 RTX 5090 上 8GB 可忽略，在 RTX 3060 8GB 上就是 100% 占满—— **决策要结合硬件**
 
-#### 铁律 2：`flash_attention=True` 不加速加载，只加速推理 — 且 Blackwell (RTX 5090) 暂不支持
+#### 铁律 2：`flash_attention=True` 不加速加载，只加速推理 — 且 Blackwell sm_120 当前不支持
 
 **症状**（决策前的误解）：
 - "flash attention 应该加载也快吧？" —— **实测错**
@@ -4097,12 +4097,26 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 - 模型**加载**只读 weight + 上传 GPU + 分配 workspace，**不跑 forward**
 - 所以 flash_attention 不影响加载时间
 
-**Blackwell 架构不支持（2026-06-26 实测）**：
-- 实际部署 RTX 5090 (sm_120, Blackwell) + ctranslate2 4.8
-- 启用 `flash_attention=True` → `/transcribe` 返 **HTTP 500 "Flash attention 2 is not supported"**
-- ctranslate2 4.8 的 flash attn 2 内核未适配 Blackwell sm_120
-- **实际部署**: `flash_attention=False`，等 ctranslate2 升级（5.x+）后开启
-- 代码已注释保留，未来升级一行切换
+**Blackwell sm_120 当前不支持（2026-06-26 实测）**：
+- 实际部署 RTX 5090 (sm_120, Blackwell) + ctranslate2 **4.8.0 (latest, 2026-06-06 发布)**
+- 启用 `flash_attention=True`：
+  - ✅ `WhisperModel(...)` 构造成功（ctranslate2 加载 + 分配 workspace 没问题）
+  - ❌ `_model.transcribe(...)` 触发 `RuntimeError: Flash attention 2 is not supported`
+  - 错误位置：`faster_whisper/transcribe.py:1446 self.model.generate()`
+- **实测路径**：`scripts/probe_flash_blackwell.py`（容器内跑）
+- **ctranslate2 上游**：
+  - GitHub 搜索 "flash + blackwell + sm_120" 0 issue，"sm_120" 仅 2 个不相关
+  - 上游**还没意识到** sm_120 flash attn 2 缺失
+- **不要等 5.0+**（CLAUDE.md 之前猜测 5.0+，**实际 PyPI 最新就是 4.8.0**）
+- **等上游补 sm_120 flash attn 2 内核**才能用，跟踪：https://github.com/OpenNMT/CTranslate2/releases
+
+**CTranslate2 4.6.2 已加 sm_120 基础支持**（release notes 提及 "Disable INT8 for sm120 - Blackwell GPUs"），说明 sm_120 是**编译过**的，但 flash attn 2 内核没补全。
+
+**代码注释保留开关**：
+```python
+# flash_attention=True,  # ← 暂禁用, ctranslate2 4.8 不支持 Blackwell sm_120
+```
+一行注释 + 一行启用，未来 ctranslate2 升级一行切换。
 
 **真正收益**（架构支持时）：
 - **推理**：attention forward 提速 30-50%（短文本少，长文本多）
@@ -4114,6 +4128,8 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 2. **加载 vs 推理分开测**：ctranslate2 的 flash_attention 只影响 forward，不影响 load
 3. **新架构 (Blackwell sm_120) 兼容性**: 新 GPU 出来老库可能不支持，**实测**最稳，不要只看 spec
 4. **优化开关写在代码里注释好**: flash_attention 一行注释，未来升级一行启用
+5. **不要凭印象估版本号**: 之前猜"5.0+ 才支持"实际 4.8.0 已是最新——查 PyPI + GitHub releases 才是真相
+6. **错误位置很具体**: RuntimeError 在 `transcribe.py:1446 self.model.generate()` —— 加载过 + 转录挂，**两个阶段必须分开测**
 
 #### 铁律 3：`files=` 文档有但不能用（file-like segfault / BytesIO OOM）
 

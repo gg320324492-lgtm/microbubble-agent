@@ -47,20 +47,22 @@ def _load_model_sync() -> None:
 
     v31.3 关键:
     1. lazy import faster_whisper (避免模块加载时初始化 CUDA context)
-    2. flash_attention 可选 (RTX 5090 Blackwell 架构 ctranslate2 4.8 暂不支持,
-       实际部署 disable. 保留代码便于未来 ctranslate2 升级后开启)
+    2. flash_attention 验证: 模型构造可过, 但 transcribe() 时报 'Flash attention 2 is not supported'
+       (ctranslate2 4.8.0 不含 sm_120 flash attn 2 内核, 上游 2026-06-06 发布, 最新版)
+       实测位置: faster_whisper/transcribe.py:1446 self.model.generate()
+       GitHub 搜索无相关 issue (上游未意识到). 保持 flash_attention=False.
     """
     global _model
     print(f"[WHISPER] 加载模型 {MODEL_SIZE} (device={DEVICE}, compute_type={COMPUTE_TYPE})...", flush=True)
     t0 = time.time()
     from faster_whisper import WhisperModel
-    # v31.3: flash_attention=False (RTX 5090 Blackwell 暂不支持 ctranslate2 4.8 flash attn 2)
-    # 未来 ctranslate2 升级后可改回 flash_attention=True 提速 30-50%
+    # flash_attention=False: ctranslate2 4.8.0 (latest as of 2026-06-26) 不支持 sm_120 flash attn 2
+    # 升级跟踪: https://github.com/OpenNMT/CTranslate2/releases
     _model = WhisperModel(
         MODEL_SIZE,
         device=DEVICE,
         compute_type=COMPUTE_TYPE,
-        # flash_attention=True,  # ← 暂禁用, ctranslate2 4.8 不支持 Blackwell 架构
+        # flash_attention=True,  # ← 暂禁用, ctranslate2 4.8 不支持 Blackwell sm_120
     )
     gpu_mib = _get_gpu_memory_mib()
     print(
