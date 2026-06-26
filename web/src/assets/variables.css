@@ -659,6 +659,18 @@ body {
   background-color: var(--color-bg-card);
   color: var(--color-text-primary);
 }
+/* v70 P0.5: 剩余白边修复（CSS 变量必须在元素自身覆盖，不能在 <html> 父级覆盖） */
+[data-theme="dark"] .el-card.is-always-shadow,
+[data-theme="dark"] .el-card.is-always-shadow .el-card__body {
+  background-color: var(--color-bg-card) !important;
+  --el-card-bg-color: var(--color-bg-card);
+  border-color: var(--color-border-light) !important;
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-tabs--border-card {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-light);
+}
 /* el-empty illustration 默认浅色背景（SVG 容器 + svg path），dark 必须改色 */
 [data-theme="dark"] .el-empty {
   background-color: transparent;

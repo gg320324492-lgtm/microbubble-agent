@@ -196,7 +196,16 @@
 // var(--color-text-primary/regular)。覆盖 13 个文件：KnowledgeCard + 11 个
 // paper 子组件 + KnowledgeView + KnowledgeDetailView。dark 模式变量在
 // variables.css:507+ 已重定义，无需其他 dark 覆盖。
-const SW_VERSION = 'v70-p0-color-token-2026-06-26'
+// v70 P0.5: 2026-06-26 剩余白边修复（CSS 变量继承机制）。
+// (1) 公式计算器右面板 <el-card class="calculator-card"> 仍白色：根因是 EP 的
+//     .el-card 在元素自身声明 --el-card-bg-color: var(--el-fill-color-blank)
+//     (光模式 #fff)，v69 P1b fix-3 在 <html> 父级覆盖无效——元素自身声明胜出
+//     继承。修复：在 .el-card.is-always-shadow 选择器上重声明变量 + 直接
+//     设 background-color !important，特异性 0,0,2,0 > EP 默认 0,0,1,0。
+// (2) 知识库 4 个 tab 顶部白边：el-tabs--border-card 外层 + .filter-card scoped
+//     块没设 background / border-color。修复：全局 dark 块加 .el-tabs--border-card
+//     + .el-card 覆盖 background + border-color。
+const SW_VERSION = 'v70-p0p5-whites-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
