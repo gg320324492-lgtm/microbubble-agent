@@ -1,8 +1,34 @@
 <template>
   <div class="settings-view fade-slide-up">
     <div class="settings-grid">
-      <!-- 个人资料卡片 -->
-      <el-card class="settings-card">
+      <!-- v68 (2026-06-26) Hero 卡片（全宽渐变）：头像 + 姓名 + 角色 + 邮箱 + 编辑按钮 -->
+      <section class="hero-card">
+        <div class="hero-bg" />
+        <div class="hero-content">
+          <el-avatar
+            :size="88"
+            :key="previewAvatarUrl"
+            :src="previewAvatarUrl || userStore.userInfo?.avatar"
+            :alt="`${userStore.userInfo?.name || '用户'}的头像`"
+            icon="UserFilled"
+            class="hero-avatar"
+          />
+          <div class="hero-info">
+            <h2 class="hero-name">{{ form.name || '未设置姓名' }}</h2>
+            <div class="hero-meta">
+              <el-tag :type="roleTagType" size="small" effect="dark">{{ form.roleLabel }}</el-tag>
+              <span v-if="form.email" class="hero-email">{{ form.email }}</span>
+            </div>
+          </div>
+          <el-button type="primary" plain round class="hero-edit-btn" @click="scrollToProfile">
+            <el-icon><Edit /></el-icon>
+            <span>编辑资料</span>
+          </el-button>
+        </div>
+      </section>
+
+      <!-- 个人资料卡片（v68 加 glass-card class） -->
+      <el-card class="settings-card glass-card" id="profile-card">
         <template #header>
           <div class="card-header">
             <el-icon><User /></el-icon>
@@ -61,12 +87,12 @@
         </el-form>
       </el-card>
 
-      <!-- 修改密码卡片 -->
-      <el-card class="settings-card">
+      <!-- 修改密码卡片（v68 改名为"账号安全" + glass-card） -->
+      <el-card class="settings-card glass-card">
         <template #header>
           <div class="card-header">
             <el-icon><Lock /></el-icon>
-            <span>修改密码</span>
+            <span>账号安全</span>
           </div>
         </template>
 
@@ -87,8 +113,8 @@
         </el-form>
       </el-card>
 
-      <!-- 通知偏好卡片（v2 11AM 单一窗口） -->
-      <el-card class="settings-card" v-loading="prefsLoading">
+      <!-- 通知偏好卡片（v68 加 glass-card） -->
+      <el-card class="settings-card glass-card" v-loading="prefsLoading">
         <template #header>
           <div class="card-header">
             <el-icon><Bell /></el-icon>
@@ -155,6 +181,39 @@
           </el-form-item>
         </el-form>
       </el-card>
+
+      <!-- v68 (2026-06-26) 外观主题卡片（新） -->
+      <el-card class="settings-card glass-card theme-card">
+        <template #header>
+          <div class="card-header">
+            <el-icon><Brush /></el-icon>
+            <span>外观主题</span>
+          </div>
+        </template>
+
+        <el-form label-width="100px">
+          <el-form-item label="深色模式">
+            <el-switch
+              v-model="isDark"
+              active-text="深色"
+              inactive-text="浅色"
+              name="prefs-dark-mode"
+              aria-label="深色模式"
+              title="深色模式"
+            />
+            <div class="form-help">
+              当前主题：<strong>{{ themeModeLabel }}</strong> · 也可在顶栏右侧 ☀️/🌙 快速切换
+            </div>
+          </el-form-item>
+
+          <el-form-item label="主题色">
+            <el-radio-group v-model="themeColor" disabled>
+              <el-radio-button value="orange">活力橙</el-radio-button>
+            </el-radio-group>
+            <div class="form-help">更多主题色即将推出</div>
+          </el-form-item>
+        </el-form>
+      </el-card>
     </div>
   </div>
 </template>
@@ -163,12 +222,29 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
-import { User, Lock, Camera, Bell } from '@element-plus/icons-vue'
+import { User, Lock, Camera, Bell, Edit, Brush } from '@element-plus/icons-vue'
+// v68 (2026-06-26): 主题切换接入 useThemeStore（之前桌面 SettingsView 没有主题入口）
+import { useThemeStore } from '@/stores/useThemeStore'
 import { useUserStore } from '@/stores/user'
 import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 
 const userStore = useUserStore()
+const themeStore = useThemeStore()
 const userInfo = computed(() => userStore.userInfo)
+
+// v68: 主题切换（双向绑定到 el-switch）
+const isDark = computed({
+  get: () => themeStore.isDark,
+  set: (v) => themeStore.set(v ? 'dark' : 'light'),
+})
+const themeModeLabel = computed(() => (isDark.value ? '深色' : '浅色'))
+// 主题色占位（未来扩展，预留 UI）
+const themeColor = ref('orange')
+
+// v68: Hero "编辑资料" 按钮 → 平滑滚动到下方 profile-card
+function scrollToProfile() {
+  document.getElementById('profile-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
 const roleTagMap = { admin: 'danger', leader: 'warning', member: '' }
@@ -480,9 +556,18 @@ function formatDateTime(iso) {
 </script>
 
 <style scoped>
+/* ============================================================
+   v68 (2026-06-26) SettingsView 全面视觉升级
+   - 玻璃态卡片（backdrop-filter blur + 半透明白色）
+   - 顶部 Hero 渐变卡（avatar + 姓名 + 角色 + 邮箱 + 编辑）
+   - 卡片 hover translateY(-2px) 浮起
+   - Dark mode 用 :global([data-theme="dark"]) 避开 scoped [data-theme] specificity 坑
+   - 参考 MainLayout.vue:317-320 (.aside 玻璃) + MobileHeader.vue:60-69 (dark glass)
+     + Dashboard.vue:782-790 (渐变 hero) 范式统一
+   ============================================================ */
 .settings-view {
-  padding: 24px;
-  max-width: 960px;
+  padding: 28px;
+  max-width: 1080px;
   margin: 0 auto;
 }
 
@@ -492,8 +577,102 @@ function formatDateTime(iso) {
   gap: 24px;
 }
 
+/* ===== Hero 卡片（全宽渐变） ===== */
+.hero-card {
+  grid-column: 1 / -1;
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  min-height: 140px;
+}
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.4) 0%, transparent 50%),
+    linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+}
+.hero-content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px 28px;
+  color: #fff;
+}
+.hero-avatar {
+  border: 4px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.2);  /* fallback when avatar missing */
+}
+.hero-info {
+  flex: 1;
+  min-width: 0;
+}
+.hero-name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hero-email {
+  font-size: 13px;
+  opacity: 0.92;
+  color: #fff;
+}
+.hero-edit-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.hero-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(255, 255, 255, 0.8);
+  color: #fff;
+}
+.hero-card :deep(.el-tag) {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #fff;
+}
+
+/* ===== 玻璃态卡片 ===== */
+.glass-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-lg);
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+}
+.glass-card :deep(.el-card__header) {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: transparent;
+}
+.glass-card :deep(.el-card__body) {
+  background: transparent;
+}
+
 .settings-card {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
 }
 
@@ -551,6 +730,27 @@ function formatDateTime(iso) {
   font-size: 14px;
 }
 
+/* ===== 主题卡片特有样式 ===== */
+.theme-card :deep(.el-form-item__content) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.form-help {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+}
+
+/* Dark mode 规则移到非 scoped 块（见下方 <style> 块）—
+   v68 首次部署尝试 :global([data-theme="dark"]) .glass-card 在 scoped 块里，
+   Vue 编译器把 :global() + 后代选择器处理错：编译产物变成
+   [data-theme=dark]{...} 单独的规则，剥掉了 .glass-card，作用到 <html> 而不是卡片
+   （与 sw.js v61 教训同款）。 */
+
 @media (max-width: 768px) {
   .settings-view {
     padding: 12px;
@@ -564,5 +764,51 @@ function formatDateTime(iso) {
   .settings-form :deep(.el-form-item__label) {
     width: 64px !important;
   }
+
+  .hero-card {
+    min-height: auto;
+  }
+
+  .hero-content {
+    padding: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .hero-name {
+    font-size: 18px;
+  }
+
+  .hero-edit-btn {
+    margin-left: auto;
+  }
+}
+</style>
+
+<!-- v68 dark mode 规则必须放非 scoped 块（继承 sw.js v61/v62 教训）：
+     scoped 块里 :global([data-theme="dark"]) .xxx 的 :global() + 后代选择器组合
+     会被 Vue 编译器处理错（剥掉后代选择器、产物变成 [data-theme=dark]{...} 单独规则
+     作用到 <html> 而不是目标元素）。非 scoped 块彻底绕过 Vue scoped 编译。 -->
+<style>
+[data-theme="dark"] .glass-card {
+  background: rgba(42, 45, 53, 0.7);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .glass-card .el-card__header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .hero-bg {
+  background:
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
+    linear-gradient(135deg, #FF6B4A 0%, #FFB347 100%);
+}
+[data-theme="dark"] .hero-edit-btn {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+[data-theme="dark"] .hero-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.6);
 }
 </style>

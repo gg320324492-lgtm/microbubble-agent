@@ -137,7 +137,20 @@
 // NutUI 有 .nut-theme-dark .nut-tabbar 的 dark 模式 fallback（用 --nut-dark-background），
 // 但项目用 [data-theme="dark"] 不触发 NutUI 的 dark class，所以 NutUI 的
 // dark 规则完全不生效——必须手动覆盖。
-const SW_VERSION = 'v67-tabbar-nutui-internal-dark-2026-06-26'
+// v68: 2026-06-26 桌面端主题切换按钮 + SettingsView 视觉升级。
+// (1) 新增 ThemeToggleButton.vue 共享组件（36px 圆形 ☀️/🌙 emoji 按钮，
+//     hover scale(1.1) + 主色背景 + 阴影），MainLayout 顶栏铃铛之后接入。
+//     桌面端终于有全局主题切换入口（之前只在 ChatViewSSE 页内）。
+// (2) SettingsView.vue 全面视觉升级：
+//     - 顶部新增 Hero 卡片（grid-column: 1/-1 全宽）= 大头像 88px + 姓名 +
+//       角色 tag + 邮箱 + "编辑资料"按钮，背景 linear-gradient 主色→强调色
+//     - 4 张功能卡片统一加 .glass-card class = backdrop-filter: blur(12px) +
+//       rgba(255,255,255,0.7) 半透明 + hover translateY(-2px) 浮起
+//     - 新增"外观主题"卡片（grid 4）= el-switch 深色模式 + 占位主题色 radio
+//     - dark mode 用 :global([data-theme="dark"]) 避开 scoped + [data-theme]
+//       的 specificity 坑（继承 v60/v61 教训），独立给玻璃背景 rgba(42,45,53,0.7)
+//     - 改密码卡片改名为"账号安全"（语义更准确）
+const SW_VERSION = 'v68-settings-glass-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
