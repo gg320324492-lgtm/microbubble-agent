@@ -1567,6 +1567,31 @@ onUnmounted(() => {
 [data-theme="dark"] .entity-list-scroll::-webkit-scrollbar-thumb {
   background: var(--color-text-placeholder);
 }
+/* v69 P1b fix-2: formula 计算器面板 + 公式列表卡（el-card dark 覆盖未生效场景） */
+[data-theme="dark"] .formula-list-card,
+[data-theme="dark"] .calculator-card,
+[data-theme="dark"] .formula-list-card .el-card__body,
+[data-theme="dark"] .calculator-card .el-card__body {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+/* el-empty SVG 默认浅色背景，filter:invert 适配 dark */
+[data-theme="dark"] .el-empty__image svg,
+[data-theme="dark"] .el-empty__image img {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+[data-theme="dark"] .el-empty__description p {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .formula-item {
+  background: transparent;
+}
+[data-theme="dark"] .formula-item:hover {
+  background: var(--color-info-bg);
+}
+[data-theme="dark"] .formula-selected {
+  background: var(--color-primary-bg);
+}
 [data-theme="dark"] .entity-card-active {
   background: var(--color-primary-bg);
   box-shadow: 0 0 0 2px var(--color-primary-border);

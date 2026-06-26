@@ -131,3 +131,24 @@ const onRename = async (session) => {
 .session-item:hover .session-actions { display: flex; gap: 2px; }
 .empty { text-align: center; color: #999; padding: 20px 0; font-size: 12px; }
 </style>
+
+<!-- v69 P1b fix-2: SessionSidebar dark 覆盖（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .session-sidebar {
+  background: var(--color-bg-card);
+  border-right-color: var(--color-border-base);
+}
+[data-theme="dark"] .sidebar-header {
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .session-item:hover {
+  background: rgba(255, 122, 92, 0.18);
+}
+[data-theme="dark"] .session-item.active {
+  background: rgba(255, 122, 92, 0.22);
+}
+[data-theme="dark"] .session-title { color: var(--color-text-primary); }
+[data-theme="dark"] .session-meta { color: var(--color-text-secondary); }
+[data-theme="dark"] .session-preview { color: var(--color-text-secondary); }
+[data-theme="dark"] .empty { color: var(--color-text-secondary); }
+</style>
