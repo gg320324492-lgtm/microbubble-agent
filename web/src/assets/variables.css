@@ -90,6 +90,9 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
+  /* ===== 字体族 ===== */
+  --font-family-mono: 'Courier New', Courier, monospace;
+
   /* ===== 侧边栏宽度 ===== */
   --sidebar-width: 220px;
   --sidebar-collapsed-width: 64px;

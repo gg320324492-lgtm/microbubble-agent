@@ -47,7 +47,7 @@ const theme = useThemeStore()
 }
 .theme-toggle-btn:hover {
   background: var(--color-primary-bg);
-  border-color: var(--color-primary-light-7, #f0a78a);
+  border-color: var(--color-primary-light, #FF9D85);
   transform: scale(1.1);
   box-shadow: 0 2px 8px rgba(255, 122, 92, 0.2);
 }

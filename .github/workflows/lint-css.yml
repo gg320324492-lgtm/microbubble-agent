@@ -1,0 +1,77 @@
+name: Lint CSS
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "web/src/**"
+      - "web/.stylelintrc.json"
+      - "web/package.json"
+  push:
+    branches: [main]
+    paths:
+      - "web/src/**"
+      - "web/.stylelintrc.json"
+      - "web/package.json"
+
+jobs:
+  stylelint:
+    name: Stylelint (CSS / Vue)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Run Stylelint
+        working-directory: web
+        run: npm run lint:css
+
+      # 检查 var(--token, ...) 中 token 都在 variables.css 定义（v73 沉淀）
+      - name: Check token orphans
+        run: bash scripts/check-token-orphans.sh
+        continue-on-error: true  # 临时允许 --i 等本地计算变量 warning
+
+      # 同时跑 vitest 兜底（stylelint 漏掉的逻辑错误）
+      - name: Run unit tests (smoke)
+        working-directory: web
+        run: npm run test:unit -- --run --reporter=dot 2>&1 | tail -30
+        continue-on-error: true  # 不阻断 stylelint 主检查
+
+  # P3 守卫：v70/v71/v72 累计的 0 错误基线
+  stylelint-baseline-guard:
+    name: Stylelint 0 errors baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - working-directory: web
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Count errors (must be 0)
+        working-directory: web
+        run: |
+          OUTPUT=$(npm run lint:css 2>&1)
+          ERROR_COUNT=$(echo "$OUTPUT" | grep -oE '[0-9]+ problems? \([0-9]+ errors?' | grep -oE '\([0-9]+ errors?' | grep -oE '[0-9]+' || echo "0")
+          echo "Stylelint error count: $ERROR_COUNT"
+          if [ "$ERROR_COUNT" -gt 0 ]; then
+            echo "::error::Stylelint found $ERROR_COUNT errors (baseline violation)"
+            echo "$OUTPUT" | tail -30
+            exit 1
+          fi
+          echo "✅ Stylelint 0 errors (baseline maintained)"

@@ -519,7 +519,7 @@ onMounted(() => {
   color: var(--color-primary);
   background: var(--color-primary-bg);
   padding: 2px 8px;
-  border-radius: var(--radius-pill, 10px);
+  border-radius: var(--radius-full, 9999px);
 }
 .collapse-icon {
   font-size: 18px;

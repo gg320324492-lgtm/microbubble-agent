@@ -76,10 +76,10 @@ function onManualRetry() {
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
-  background: var(--bg-card, #fff);
+  background: var(--color-bg-card, #fff);
   box-shadow: var(--shadow-sm, 0 2px 8px rgba(0,0,0,0.08));
-  border: 1px solid var(--border-color, #eee);
-  color: var(--text-primary, #333);
+  border: 1px solid var(--color-border, #eee);
+  color: var(--color-text-primary, #333);
   margin: 12px auto;
   max-width: 90%;
   transition: all 0.2s;

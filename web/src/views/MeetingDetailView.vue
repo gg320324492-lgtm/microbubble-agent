@@ -1176,7 +1176,7 @@ onMounted(async () => {
   height: 24px;
   border-radius: 50%;
   background: var(--color-primary, #FF7A5C);
-  color: #fff;
+  color: var(--color-bg-card);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -537,7 +537,7 @@ onMounted(() => {
   justify-content: space-between;
   margin-bottom: 16px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--color-border-lighter, #ebeef5);
+  border-bottom: 1px solid var(--color-border-light, #ebeef5);
 }
 .paired-header-left,
 .paired-header-right {
@@ -548,7 +548,7 @@ onMounted(() => {
 .paired-row {
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--color-border-lighter, #ebeef5);
+  border-bottom: 1px solid var(--color-border-light, #ebeef5);
   padding: 12px 0;
 }
 .paired-row:last-child {
@@ -567,7 +567,7 @@ onMounted(() => {
   min-width: 0;
 }
 .paired-col-left {
-  border-right: 1px solid var(--color-border-lighter, #ebeef5);
+  border-right: 1px solid var(--color-border-light, #ebeef5);
   padding-right: 16px;
 }
 .paired-col-right {

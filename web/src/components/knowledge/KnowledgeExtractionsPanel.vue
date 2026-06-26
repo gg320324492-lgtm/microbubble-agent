@@ -347,7 +347,7 @@ watch(() => props.knowledgeId, () => fetchExtractions(), { immediate: true })
   background: var(--color-bg-secondary);
   padding: var(--space-2);
   border-radius: var(--radius-sm);
-  font-family: var(--font-family-mono, 'Courier New', monospace);
+  font-family: var(--font-family-mono);
   font-size: 12px;
   max-height: 200px;
   overflow-y: auto;
@@ -386,7 +386,7 @@ watch(() => props.knowledgeId, () => fetchExtractions(), { immediate: true })
   background: var(--color-bg-secondary);
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  font-family: var(--font-family-mono, 'Courier New', monospace);
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   line-height: 1.6;
   white-space: pre-wrap;
