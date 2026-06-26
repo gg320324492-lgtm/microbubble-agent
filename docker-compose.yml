@@ -147,6 +147,7 @@ services:
       - MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
       - DEVICE=${WHISPER_DEVICE:-cuda}
       - HF_ENDPOINT=${HF_ENDPOINT:-}
+      # v31.3 (2026-06-26): 模型常驻 GPU (~8 GB), 不再需要 idle timeout 配置
     deploy:
       resources:
         reservations:
