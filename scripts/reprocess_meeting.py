@@ -365,23 +365,12 @@ async def apply_to_db(meeting_id: int, new_speaker: list, backup: bool = True, w
         m.speaker_mapping = new_mapping
         result["updated_fields"].append(f"speaker_mapping ({len(new_mapping)} 条)")
 
-        # 4. speaker_stats
-        ctr = Counter()
-        dur = Counter()
-        chars = Counter()
-        for i, seg in enumerate(new_t_list):
-            name = new_speaker[i] if i < len(new_speaker) else "发言人?"
-            if not name.startswith("发言人") and name != "?":
-                ctr[name] += 1
-                dur[name] += float(seg.get("end", 0)) - float(seg.get("start", 0))
-                chars[name] += len(seg.get("text", ""))
-        new_stats = [
-            {"name": name, "segments": ctr[name], "duration_sec": round(dur[name], 1), "chars": chars[name]}
-            for name in ctr
-        ]
-        new_stats.sort(key=lambda x: -x["segments"])
-        m.speaker_stats = new_stats
-        result["updated_fields"].append(f"speaker_stats ({len(new_stats)} 条)")
+        # 4. speaker_stats (2026-06-26 改用 compute_speaker_stats 输出 schema A)
+        # 原 schema B (name/segments/duration_sec/chars) 不兼容前端 SpeakerStatsCard
+        # 期望 schema A (name/turn_count/word_count/speaking_ratio/avg_turn_length/topics)
+        from app.services.meeting_analysis_service import meeting_analysis
+        m.speaker_stats = meeting_analysis.compute_speaker_stats(new_t_list)
+        result["updated_fields"].append(f"speaker_stats ({len(m.speaker_stats)} 条)")
 
         # 5. meeting_participants
         real_speakers = list({n for n in new_speaker if n and not n.startswith("发言人")})
@@ -506,6 +495,11 @@ async def regen_summary(meeting_id: int, real_speakers: list, workdir: str = "/t
                     logger.info(f"标题自动生成: '{old_title}' → '{new_title}'")
             except Exception as e:
                 logger.warning(f"标题自动生成失败 (保留原标题): {e}")
+
+        # 2026-06-26 新增: 计算 speaker_stats (P0: 之前 regen 阶段漏了, 前端发言统计 tab 一直空)
+        # 复用权威函数, 输出 schema A (前端 SpeakerStatsCard 期望的 name/turn_count/word_count/speaking_ratio)
+        from app.services.meeting_analysis_service import meeting_analysis
+        m.speaker_stats = meeting_analysis.compute_speaker_stats(m.transcript or [])
 
         await db.commit()
         backup_file = str(backup_path)
