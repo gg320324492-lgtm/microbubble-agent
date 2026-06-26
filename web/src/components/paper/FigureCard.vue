@@ -243,7 +243,7 @@ const statusLabel = (s) => ({
 .figure-caption-title {
   font-size: 14px;
   line-height: 1.55;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin-bottom: 6px;
   word-break: break-word;
 }
@@ -256,7 +256,7 @@ const statusLabel = (s) => ({
 }
 
 .figure-caption-title .figure-caption-text {
-  color: #374151;
+  color: var(--color-text-regular);
   font-weight: 400;
 }
 
@@ -300,7 +300,7 @@ const statusLabel = (s) => ({
 .figure-caption-text {
   font-size: 13.5px;
   line-height: 1.65;
-  color: #374151;
+  color: var(--color-text-regular);
   word-break: break-word;
 }
 

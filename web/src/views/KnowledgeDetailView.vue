@@ -991,7 +991,7 @@ onUnmounted(() => {
 .entities-label {
   font-size: 15px;
   font-weight: 600;
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .entities-hint {
@@ -1031,7 +1031,7 @@ onUnmounted(() => {
 }
 
 .entity-object {
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .entity-condition {
@@ -1099,7 +1099,7 @@ onUnmounted(() => {
 .paper-article :deep(.block-paragraph) {
   font-size: 16px;
   line-height: 1.85;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 0 0 16px;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -1153,7 +1153,7 @@ onUnmounted(() => {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 1.8;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
@@ -1185,7 +1185,7 @@ onUnmounted(() => {
   margin: 0 0 12px;
   font-size: 18px;
   font-weight: 700;
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .graph-container {

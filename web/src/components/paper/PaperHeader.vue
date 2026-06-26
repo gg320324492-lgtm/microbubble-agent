@@ -214,7 +214,7 @@ const headerTags = computed(() => {
   font-size: 26px;
   font-weight: 700;
   line-height: 1.4;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 0 0 16px;
   max-width: 100%;
   word-break: break-word;
@@ -260,7 +260,7 @@ const headerTags = computed(() => {
   align-items: baseline;
   gap: 1px;
   font-size: 14px;
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .author-name {
@@ -354,7 +354,7 @@ const headerTags = computed(() => {
   gap: 6px;
   flex-wrap: wrap;
   font-size: 14px;
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 
 .journal-icon {
@@ -378,7 +378,7 @@ const headerTags = computed(() => {
 }
 
 .journal-id {
-  color: #1F2937;
+  color: var(--color-text-primary);
   font-weight: 600;
   font-family: 'Consolas', 'Monaco', monospace;
   background: rgba(255, 122, 92, 0.1);
@@ -436,7 +436,7 @@ const headerTags = computed(() => {
 }
 
 .meta-value {
-  color: #1F2937;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 

@@ -103,7 +103,7 @@ const renderedTable = computed(() => {
 .table-caption {
   margin-bottom: 8px;
   font-size: 13px;
-  color: #374151;
+  color: var(--color-text-regular);
   font-weight: 500;
   font-style: italic;
   line-height: 1.6;
@@ -128,7 +128,7 @@ const renderedTable = computed(() => {
   text-align: left;
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border);
-  color: #1F2937;
+  color: var(--color-text-primary);
   white-space: nowrap;
 }
 

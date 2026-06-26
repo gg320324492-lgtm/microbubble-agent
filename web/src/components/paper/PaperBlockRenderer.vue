@@ -281,7 +281,7 @@ function renderMarkdownTable(text) {
 .block-paragraph {
   font-size: 15.5px;
   line-height: 1.85;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 0 0 14px;
   word-break: break-word;
   overflow-wrap: break-word;
@@ -312,7 +312,7 @@ function renderMarkdownTable(text) {
 .block-heading {
   font-size: 16px;
   font-weight: 600;
-  color: #1F2937;
+  color: var(--color-text-primary);
   margin: 20px 0 10px;
 }
 
@@ -335,12 +335,12 @@ function renderMarkdownTable(text) {
   text-align: left;
   padding: 8px 12px;
   border-bottom: 1px solid var(--color-border-light, #E5E7EB);
-  color: #1F2937;
+  color: var(--color-text-primary);
 }
 .block-table-wrapper :deep(.paper-md-table td) {
   padding: 8px 12px;
   border-bottom: 1px solid #F3F4F6;
-  color: #374151;
+  color: var(--color-text-regular);
   vertical-align: top;
 }
 .block-table-wrapper :deep(.paper-md-table tr:last-child td) {
@@ -494,7 +494,7 @@ function renderMarkdownTable(text) {
 .qa-text {
   font-size: 15px;
   line-height: 1.85;
-  color: #1F2937;
+  color: var(--color-text-primary);
   word-break: break-word;
 }
 
@@ -509,7 +509,7 @@ function renderMarkdownTable(text) {
 .qa-text :deep(h4) {
   margin: 14px 0 8px;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-text-primary);
 }
 .qa-text :deep(h2) { font-size: 18px; }
 .qa-text :deep(h3) { font-size: 16px; }
@@ -523,7 +523,7 @@ function renderMarkdownTable(text) {
   margin: 4px 0;
 }
 .qa-text :deep(strong) {
-  color: #111827;
+  color: var(--color-text-primary);
 }
 .qa-text :deep(code) {
   background: #F3F4F6;
