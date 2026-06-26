@@ -493,40 +493,47 @@ const transcriptEntries = computed(() => {
   return merged
 })
 
-// 存储润色后的文本（polish-text 端点已用 Redis 缓存 (key=polish:{meeting_id}:{text_hash}, TTL=24h),
-// 同一段文本二次请求直接命中缓存, 0 LLM 调用. 因此 autoPolishIfNeeded 重复跑也无性能损耗）
+// 存储润色后的文本
+// v31.3.2 修复: 改用 polish-text-batch 单次调用, 避免 83 段会议触发 write tier 30/min 限流
+// (单文本 polish-text 端点虽然 Redis 缓存命中 0 LLM, 但 rate-limit middleware 每次请求都计数,
+//  并发 3 × 83 段 = ~83 POST, 30/min 限流后段全部 429, console 30+ 个重复错误像 Vue loop)
 const polishedTexts = ref({})
 
 async function autoPolishIfNeeded() {
   if (!meeting.value) return
   const entries = transcriptEntries.value
-  // 并发上限 3 (避免打爆后端 LLM 队列), 单条 fail 不影响其他
-  const CONCURRENCY = 3
-  let cursor = 0
-  async function worker() {
-    while (cursor < entries.length) {
-      const i = cursor++
-      const entry = entries[i]
-      if (!entry) continue
-      const trimmed = (entry.text || '').trim()
-      if (trimmed.length < 3) continue
-      // 跳过: DB 中 transcript_polished[i].text 已与原 transcript[i].text 不同 (= 已润色)
-      const origIdx = entry._origIndex ?? i
-      const polEntry = meeting.value.transcript_polished?.[origIdx]
-      const rawEntry = meeting.value.transcript?.[origIdx]
-      if (polEntry && rawEntry && polEntry.text !== rawEntry.text) continue
-      try {
-        const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text`, {
-          text: entry.text,
-        })
-        const polished = res.data.polished
-        if (polished && polished !== entry.text) {
-          polishedTexts.value[i] = polished
-        }
-      } catch { /* 静默 */ }
-    }
+  if (!entries.length) return
+
+  // 收集需要润色的 entries (跳过 DB 中已润色 / 短文本)
+  const pending = []  // { i, text }
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+    if (!entry) continue
+    const trimmed = (entry.text || '').trim()
+    if (trimmed.length < 3) continue
+    const origIdx = entry._origIndex ?? i
+    const polEntry = meeting.value.transcript_polished?.[origIdx]
+    const rawEntry = meeting.value.transcript?.[origIdx]
+    // 跳过: DB 中 transcript_polished[i].text 已与原 transcript[i].text 不同 (= 已润色)
+    if (polEntry && rawEntry && polEntry.text !== rawEntry.text) continue
+    pending.push({ i, text: entry.text })
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()))
+  if (!pending.length) return
+
+  // 单次批量端点调用（替代之前的 83 个并发单文本 POST）
+  // 端点内部按文本独立 Redis 缓存, 命中率高
+  try {
+    const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text-batch`, {
+      texts: pending.map(p => p.text),
+    })
+    const polishedArr = res.data?.polished || []
+    for (let k = 0; k < pending.length && k < polishedArr.length; k++) {
+      const polished = polishedArr[k]
+      if (polished && polished !== pending[k].text) {
+        polishedTexts.value[pending[k].i] = polished
+      }
+    }
+  } catch { /* 静默失败 - 后端 Redis 命中率高, 单次失败不阻塞阅读 */ }
 }
 
 function getPolishedText(entry, index) {
