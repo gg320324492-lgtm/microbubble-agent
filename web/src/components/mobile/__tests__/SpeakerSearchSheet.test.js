@@ -33,10 +33,18 @@ const makeHistory = () => [
 const factory = (props = {}) => mount(SpeakerSearchSheet, {
   props: { modelValue: true, member: makeMember(), ...props },
   global: { plugins: [router] },
+  // v75 修复: 组件用 <Teleport to="body">, 必须 attachTo: document.body
+  // 否则 Teleport 内容发到没挂载的 body, wrapper.findAll 找不到 .history-item
+  attachTo: document.body,
 })
 
 describe('SpeakerSearchSheet', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // v75 修复: 组件用 <Teleport to="body">, attachTo 后 teleport 内容在 document.body
+    // 前一个 case 渲染的内容会污染下一个 case, 必须每次清
+    document.body.innerHTML = ''
+  })
 
   it('modelValue=false 时不渲染根容器', () => {
     const wrapper = factory({ modelValue: false })
@@ -52,50 +60,62 @@ describe('SpeakerSearchSheet', () => {
 
   it('API 返回 history 后渲染历史项', async () => {
     axios.get.mockResolvedValueOnce({ data: makeHistory() })
-    const wrapper = factory()
+    factory()
     await flushPromises()
-    const items = wrapper.findAll('.history-item')
+    // v75 修复: 组件 <Teleport to="body">, 用 document.querySelectorAll 跨 Teleport 查
+    const items = document.body.querySelectorAll('.history-item')
     expect(items.length).toBe(2)
   })
 
   it('空 history 显示空态', async () => {
     axios.get.mockResolvedValueOnce({ data: [] })
-    const wrapper = factory()
+    factory()
     await flushPromises()
-    expect(wrapper.find('.empty-state').exists()).toBe(true)
-    expect(wrapper.find('.empty-title').text()).toBe('暂无说话记录')
+    // v75: 跨 Teleport 查
+    expect(document.body.querySelector('.empty-state')).not.toBeNull()
+    expect(document.body.querySelector('.empty-title')?.textContent).toBe('暂无说话记录')
   })
 
   it('点关闭按钮 emit update:modelValue=false', async () => {
     axios.get.mockResolvedValueOnce({ data: makeHistory() })
     const wrapper = factory()
     await flushPromises()
-    await wrapper.find('.close-btn').trigger('click')
+    // v75: 跨 Teleport 触发 click (wrapper.find 查不到 teleport 出来的元素)
+    const closeBtn = document.body.querySelector('.close-btn')
+    expect(closeBtn).not.toBeNull()
+    closeBtn.click()
+    await flushPromises()
     expect(wrapper.emitted('update:modelValue')).toBeTruthy()
     expect(wrapper.emitted('update:modelValue')[0]).toEqual([false])
   })
 
   it('高置信度进度条宽度 = Math.round(confidence*100)%', async () => {
     axios.get.mockResolvedValueOnce({ data: makeHistory() })
-    const wrapper = factory()
+    factory()
     await flushPromises()
-    const fills = wrapper.findAll('.confidence-fill')
-    expect(fills[0].attributes('style')).toContain('width: 92%')
-    expect(fills[1].attributes('style')).toContain('width: 65%')
+    // v75: 跨 Teleport 查
+    const fills = document.body.querySelectorAll('.confidence-fill')
+    expect(fills[0].getAttribute('style')).toContain('width: 92%')
+    expect(fills[1].getAttribute('style')).toContain('width: 65%')
   })
 
   it('API 失败显示错误 toast', async () => {
     axios.get.mockRejectedValueOnce(new Error('网络错误'))
-    const wrapper = factory()
+    factory()
     await flushPromises()
-    expect(wrapper.find('.error-toast').exists()).toBe(true)
+    // v75: 跨 Teleport 查
+    expect(document.body.querySelector('.error-toast')).not.toBeNull()
   })
 
   it('点 history item 跳 /mobile/meetings/{id}', async () => {
     axios.get.mockResolvedValueOnce({ data: makeHistory() })
-    const wrapper = factory()
+    factory()
     await flushPromises()
-    await wrapper.findAll('.history-item')[0].trigger('click')
+    // v75: 跨 Teleport 触发 click
+    const items = document.body.querySelectorAll('.history-item')
+    expect(items.length).toBe(2)
+    items[0].click()
+    await flushPromises()
     expect(router.currentRoute.value.path).toBe('/mobile/meetings/10')
   })
 })

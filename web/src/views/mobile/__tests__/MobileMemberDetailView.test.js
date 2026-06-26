@@ -51,7 +51,11 @@ const factory = async (routeParams = { id: '1' }) => {
 
 describe('MobileMemberDetailView', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    // v75 修复: clearAllMocks 只清 mock.calls/history, 不清 mockImplementationOnce 队列
+    // 第 2 case 用 mockImplementationOnce(() => new Promise(() => {})) 永不 resolve
+    // 第 3 case mockRejectedValueOnce 只是加到 queue 末尾, 取的还是第 1 个 = 永不 resolve
+    // 修法: 用 mockReset 清掉所有 queue + implementation
+    vi.resetAllMocks()
   })
 
   it('未传 id 时显示空态', async () => {
