@@ -58,14 +58,14 @@ async function loadAll() {
   border-bottom: 1px solid #eee;
   cursor: pointer;
 }
-.result-item:hover { background: #f9f9f9; }
+.result-item:hover { background: var(--color-bg-page); }
 .result-meta {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
   margin-bottom: 4px;
 }
-.meeting-title { color: #ff7a5c; font-weight: 500; }
+.meeting-title { color: var(--color-primary); font-weight: 500; }
 .confidence { color: var(--color-text-secondary); }
 .result-text { font-size: 13px; color: var(--color-text-primary); }
 </style>

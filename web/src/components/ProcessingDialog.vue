@@ -246,27 +246,30 @@ if (token) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0f0f0;
+  background: var(--color-border-light);
   color: var(--color-text-secondary);
 }
 .is-done .timeline-dot {
   background: var(--color-success);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .is-current .timeline-dot {
-  background: #ff7a5c;
+  background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   animation: pulse 1.5s infinite;
 }
 .is-failed .timeline-dot {
   background: var(--color-danger);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .dot-empty {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ccc;
+  background: var(--color-border-light);
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }

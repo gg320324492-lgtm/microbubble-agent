@@ -837,7 +837,7 @@ onMounted(async () => {
 }
 .status-badge.status-scheduled { background: var(--color-info-bg); color: var(--color-info); }
 .status-badge.status-scheduled .status-dot { background: var(--color-info); }
-.status-badge.status-recording { background: #fff0ed; color: var(--color-primary); }
+.status-badge.status-recording { background: var(--color-primary-bg); color: var(--color-primary); }
 .status-badge.status-recording .status-dot { background: var(--color-primary); animation: dot-pulse 1.2s infinite; }
 .status-badge.status-processing { background: var(--color-warning-bg); color: var(--color-warning); }
 .status-badge.status-processing .status-dot { background: var(--color-warning); animation: dot-pulse 1.5s infinite; }

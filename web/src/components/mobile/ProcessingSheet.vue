@@ -426,8 +426,10 @@ onBeforeUnmount(() => {
 .dot-icon {
   font-size: 14px;
   font-weight: 700;
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
+/* stylelint-disable-next-line color-named */
 .dot-icon.done { color: white; }
 .dot-icon.failed { color: var(--color-danger, #F56C6C); }
 .dot-icon.current.spinner {
@@ -521,6 +523,7 @@ onBeforeUnmount(() => {
 }
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 

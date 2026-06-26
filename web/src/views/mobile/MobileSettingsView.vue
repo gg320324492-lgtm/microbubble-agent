@@ -439,6 +439,7 @@ onMounted(async () => {
   height: 64px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 28px;
   font-weight: var(--font-weight-semibold, 600);

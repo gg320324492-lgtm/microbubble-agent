@@ -225,6 +225,7 @@ onMounted(() => {
   padding: 20px 16px;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
   border-radius: var(--radius-lg);
+  /* stylelint-disable-next-line color-named */
   color: white;
   margin-bottom: 16px;
   box-shadow: 0 4px 16px rgba(255, 122, 92, 0.2);

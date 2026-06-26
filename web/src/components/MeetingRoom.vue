@@ -116,6 +116,6 @@ function onProgressClose() {
   padding: 12px 20px; background: rgba(255,255,255,0.85);
   backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.05);
 }
-.room-title { font-size: 15px; font-weight: 600; color: #2D2D2D; }
+.room-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
 .room-main { flex: 1; display: flex; align-items: center; justify-content: center; }
 </style>

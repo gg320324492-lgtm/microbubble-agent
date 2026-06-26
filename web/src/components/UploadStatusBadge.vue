@@ -88,19 +88,19 @@ function onManualRetry() {
 .upload-status-badge.is-offline {
   background: rgba(245, 108, 108, 0.08);
   border-color: rgba(245, 108, 108, 0.3);
-  color: #C45656;
+  color: var(--color-danger);
 }
 
 .upload-status-badge.is-uploading {
   background: rgba(255, 179, 71, 0.08);
   border-color: rgba(255, 179, 71, 0.3);
-  color: #B86A1B;
+  color: var(--color-warning);
 }
 
 .upload-status-badge.is-complete {
   background: rgba(103, 194, 58, 0.08);
   border-color: rgba(103, 194, 58, 0.3);
-  color: #4A8B2E;
+  color: var(--color-success);
 }
 
 .badge-icon {
@@ -133,7 +133,7 @@ function onManualRetry() {
 
 .badge-action {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-bg-card);
   border: none;
   border-radius: 14px;
   padding: 4px 12px;
@@ -141,7 +141,7 @@ function onManualRetry() {
   cursor: pointer;
   transition: all 0.15s;
 }
-.badge-action:hover { background: #FF6347; }
+.badge-action:hover { background: var(--color-danger); }
 
 /* Transition */
 .badge-fade-enter-active,

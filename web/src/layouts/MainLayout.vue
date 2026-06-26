@@ -346,7 +346,7 @@ const formatTime = (t) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--color-bg-card);
   flex-shrink: 0;
   box-shadow: var(--shadow-primary);
 }
@@ -402,7 +402,7 @@ const formatTime = (t) => {
 
 .sidebar-menu .el-menu-item.is-active {
   background: var(--color-primary) !important;
-  color: #ffffff !important;
+  color: var(--color-bg-card) !important;
   font-weight: var(--font-weight-bold);
 }
 
@@ -450,7 +450,7 @@ const formatTime = (t) => {
 
 .sidebar-bottom-item.active {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-bg-card);
   font-weight: var(--font-weight-bold);
 }
 
@@ -609,7 +609,7 @@ const formatTime = (t) => {
   margin-bottom: 8px;
   font-size: 18px;
   font-weight: 700;
-  color: #2D2D2D;
+  color: var(--color-text-primary);
 }
 
 .mobile-drawer-logo {
@@ -620,7 +620,7 @@ const formatTime = (t) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--color-bg-card);
   flex-shrink: 0;
 }
 
@@ -644,7 +644,7 @@ const formatTime = (t) => {
 
 .mobile-drawer-item.active {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-bg-card);
 }
 
 /* ===== 移动端抽屉过渡动画 ===== */
@@ -756,7 +756,7 @@ const formatTime = (t) => {
 .notification-panel-title {
   font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
   padding-bottom: 12px;
   border-bottom: 1px solid #EBEEF5;
   margin-bottom: 12px;
@@ -769,7 +769,7 @@ const formatTime = (t) => {
 .notification-panel-body p {
   margin: 0 0 12px;
   font-size: 14px;
-  color: #606266;
+  color: var(--color-text-regular);
 }
 
 .notification-item {
@@ -794,7 +794,7 @@ const formatTime = (t) => {
 .notification-item-title {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--color-text-primary);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -829,7 +829,7 @@ const formatTime = (t) => {
   gap: 10px;
   padding: 12px 20px;
   background: linear-gradient(135deg, #FF7A5C 0%, #FF6B6B 100%);
-  color: #fff;
+  color: var(--color-bg-card);
   border-radius: 50px;
   box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
   cursor: pointer;
@@ -848,7 +848,7 @@ const formatTime = (t) => {
 .recording-dot {
   width: 10px;
   height: 10px;
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 50%;
   flex-shrink: 0;
   animation: recording-pulse 1.5s ease-in-out infinite;

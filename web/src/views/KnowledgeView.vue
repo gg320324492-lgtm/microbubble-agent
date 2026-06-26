@@ -1466,11 +1466,11 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-.memory-type-tag.type-preference { background: #dbeafe; color: #1e40af; }
-.memory-type-tag.type-user_fact { background: #d1fae5; color: #065f46; }
-.memory-type-tag.type-task_ctx { background: #fef3c7; color: #92400e; }
-.memory-type-tag.type-summary { background: #e0e7ff; color: #3730a3; }
-.memory-type-tag.type-entity { background: #fce7f3; color: #9f1239; }
+.memory-type-tag.type-preference { background: var(--color-primary-bg); color: var(--color-primary); }
+.memory-type-tag.type-user_fact { background: var(--color-success-bg); color: var(--color-success); }
+.memory-type-tag.type-task_ctx { background: var(--color-warning-bg); color: var(--color-warning); }
+.memory-type-tag.type-summary { background: var(--color-primary-bg); color: var(--color-primary); }
+.memory-type-tag.type-entity { background: var(--color-primary-bg); color: var(--color-primary); }
 
 .memory-importance {
   font-size: 12px;
@@ -1543,23 +1543,23 @@ onUnmounted(() => {
 }
 [data-theme="dark"] .memory-type-tag.type-preference {
   background: rgba(30, 64, 175, 0.18);
-  color: #93c5fd;
+  color: var(--color-primary);
 }
 [data-theme="dark"] .memory-type-tag.type-user_fact {
   background: rgba(6, 95, 70, 0.22);
-  color: #6ee7b7;
+  color: var(--color-success);
 }
 [data-theme="dark"] .memory-type-tag.type-task_ctx {
   background: rgba(146, 64, 14, 0.22);
-  color: #fcd34d;
+  color: var(--color-warning);
 }
 [data-theme="dark"] .memory-type-tag.type-summary {
   background: rgba(55, 48, 163, 0.22);
-  color: #c4b5fd;
+  color: var(--color-primary);
 }
 [data-theme="dark"] .memory-type-tag.type-entity {
   background: rgba(159, 18, 57, 0.22);
-  color: #fbcfe8;
+  color: var(--color-primary);
 }
 [data-theme="dark"] .memory-content {
   color: var(--color-text-regular);

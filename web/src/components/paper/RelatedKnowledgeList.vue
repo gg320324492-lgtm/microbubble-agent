@@ -201,7 +201,7 @@ const truncate = (text, n) => {
 
 .related-empty-icon {
   font-size: 36px;
-  color: #D1D5DB;
+  color: var(--color-border-light);
   margin-bottom: 8px;
 }
 

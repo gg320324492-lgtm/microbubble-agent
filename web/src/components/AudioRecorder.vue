@@ -258,7 +258,7 @@ defineExpose({
 .recorder-icon { font-size: 64px; margin-bottom: 20px; }
 .btn-start {
   padding: 16px 48px; font-size: 18px; font-weight: 700;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: #fff;
+  background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: var(--color-bg-card);
   border: none; border-radius: 32px; cursor: pointer;
   transition: all 0.2s;
 }
@@ -272,7 +272,7 @@ defineExpose({
 .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-danger); animation: pulse 1.5s infinite; }
 .rec-dot.paused { animation: none; background: var(--color-warning); }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-.recorder-timer { font-size: 48px; font-weight: 300; font-family: 'SF Mono', 'Cascadia Code', monospace; color: #2D2D2D; margin: 20px 0; }
+.recorder-timer { font-size: 48px; font-weight: 300; font-family: 'SF Mono', 'Cascadia Code', monospace; color: var(--color-text-primary); margin: 20px 0; }
 .volume-bars { display: flex; gap: 6px; align-items: flex-end; justify-content: center; height: 44px; margin: 16px 0; }
 .vol-bar { width: 8px; background: linear-gradient(to top, #FF7A5C, #FFB347); border-radius: 4px; transition: height 0.1s; }
 .recorder-controls { display: flex; gap: 16px; margin-top: 24px; }
@@ -280,10 +280,10 @@ defineExpose({
   padding: 10px 28px; font-size: 15px; font-weight: 600;
   border: none; border-radius: 24px; cursor: pointer; transition: all 0.2s;
 }
-.btn-pause, .btn-resume { background: #f0f0f0; color: var(--color-text-primary); }
-.btn-pause:hover, .btn-resume:hover { background: #e0e0e0; }
-.btn-stop { background: var(--color-danger); color: #fff; }
-.btn-stop:hover { background: #E65D5D; }
+.btn-pause, .btn-resume { background: var(--color-border-light); color: var(--color-text-primary); }
+.btn-pause:hover, .btn-resume:hover { background: var(--color-border-light); }
+.btn-stop { background: var(--color-danger); color: var(--color-bg-card); }
+.btn-stop:hover { background: var(--color-danger); }
 
 /* stopped */
 .recorder-stopped { text-align: center; width: 100%; max-width: 600px; }
@@ -296,7 +296,7 @@ defineExpose({
 .playback-controls { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 12px; }
 .btn-play {
   width: 40px; height: 40px; border-radius: 50%; border: none;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: #fff;
+  background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: var(--color-bg-card);
   font-size: 16px; cursor: pointer;
 }
 .playback-time { font-size: 13px; color: var(--color-text-regular); font-family: 'SF Mono', 'Cascadia Code', monospace; }

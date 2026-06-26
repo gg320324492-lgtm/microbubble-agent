@@ -1007,7 +1007,7 @@ onUnmounted(() => {
 }
 
 .entity-card {
-  background: #FAFAFA;
+  background: var(--color-bg-page);
   border-radius: 8px;
   padding: 10px 14px;
 }
@@ -1065,7 +1065,7 @@ onUnmounted(() => {
   padding: 1px 8px;
   border-radius: 8px;
   background: rgba(59, 130, 246, 0.08);
-  color: #2563EB;
+  color: var(--color-primary);
   font-weight: 500;
 }
 
@@ -1079,7 +1079,7 @@ onUnmounted(() => {
 .entity-na {
   font-size: 11px;
   color: var(--color-text-placeholder);
-  background: #F3F4F6;
+  background: var(--color-border-light);
   padding: 1px 6px;
   border-radius: 8px;
 }
@@ -1203,7 +1203,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #FAFAFA;
+  background: var(--color-bg-page);
   border: 1px dashed var(--color-border-light);
 }
 
@@ -1217,7 +1217,7 @@ onUnmounted(() => {
 
 .graph-empty-icon {
   font-size: 28px;
-  color: #D1D5DB;
+  color: var(--color-border-light);
   margin-bottom: 4px;
 }
 
@@ -1270,7 +1270,7 @@ onUnmounted(() => {
 [data-theme="dark"] .entity-condition { color: var(--color-text-secondary); }
 [data-theme="dark"] .entity-type {
   background: rgba(59, 130, 246, 0.18);
-  color: #93c5fd;
+  color: var(--color-primary);
 }
 [data-theme="dark"] .entity-description { color: var(--color-text-secondary); }
 [data-theme="dark"] .entity-na {

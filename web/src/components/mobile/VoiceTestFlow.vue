@@ -627,6 +627,7 @@ onUnmounted(cleanup)
   border-radius: 50%;
   border: none;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 16px;
   font-weight: var(--font-weight-medium, 500);
@@ -665,6 +666,7 @@ onUnmounted(cleanup)
 }
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -736,8 +738,8 @@ onUnmounted(cleanup)
   font-weight: 600;
   font-size: 15px;
 }
-.result-badge.success { background: rgba(82, 196, 26, 0.1); color: #52c41a; border: 1px solid #b7eb8f; }
-.result-badge.fail { background: rgba(255, 77, 79, 0.1); color: #ff4d4f; border: 1px solid #ffccc7; }
+.result-badge.success { background: rgba(82, 196, 26, 0.1); color: var(--color-success); border: 1px solid #b7eb8f; }
+.result-badge.fail { background: rgba(255, 77, 79, 0.1); color: var(--color-danger); border: 1px solid #ffccc7; }
 .result-speaker { font-size: 22px; font-weight: 700; margin-top: 8px; color: var(--color-text-primary); }
 .result-confidence { font-size: 14px; color: var(--color-text-secondary); margin-top: 4px; }
 .result-transcript { font-size: 14px; color: var(--color-text-regular); margin-top: 8px; font-style: italic; word-break: break-word; }

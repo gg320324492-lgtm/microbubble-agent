@@ -257,7 +257,7 @@ onUnmounted(() => {
 }
 
 .anchor-nav-toggle:hover {
-  background: #F3F4F6;
+  background: var(--color-border-light);
   color: var(--color-primary);
 }
 
@@ -292,7 +292,7 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 13px;
   line-height: 1.5;
-  color: #4B5563;
+  color: var(--color-text-secondary);
   transition: all 0.15s;
   margin-bottom: 2px;
   position: relative;
@@ -370,7 +370,7 @@ onUnmounted(() => {
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 12.5px;
-  color: #4B5563;
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.15s;
 }

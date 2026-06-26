@@ -294,13 +294,13 @@ function renderMarkdownTable(text) {
 }
 
 .block-paragraph :deep(.auto-link) {
-  color: #2563EB;
+  color: var(--color-primary);
   text-decoration: none;
   transition: color 0.15s;
 }
 
 .block-paragraph :deep(.auto-link:hover) {
-  color: #1D4ED8;
+  color: var(--color-primary);
   text-decoration: underline;
 }
 
@@ -330,7 +330,7 @@ function renderMarkdownTable(text) {
   background: var(--color-bg-card);
 }
 .block-table-wrapper :deep(.paper-md-table th) {
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   font-weight: 600;
   text-align: left;
   padding: 8px 12px;
@@ -339,7 +339,7 @@ function renderMarkdownTable(text) {
 }
 .block-table-wrapper :deep(.paper-md-table td) {
   padding: 8px 12px;
-  border-bottom: 1px solid #F3F4F6;
+  border-bottom: 1px solid var(--color-border-light);
   color: var(--color-text-regular);
   vertical-align: top;
 }
@@ -347,7 +347,7 @@ function renderMarkdownTable(text) {
   border-bottom: none;
 }
 .block-table-wrapper :deep(.paper-md-table tr:hover) {
-  background: #FAFAFA;
+  background: var(--color-bg-page);
 }
 
 .block-page-marker-hidden {
@@ -374,7 +374,7 @@ function renderMarkdownTable(text) {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #0369A1;
+  color: var(--color-primary);
 }
 .image-anchor-hint {
   font-size: 11px;
@@ -400,7 +400,7 @@ function renderMarkdownTable(text) {
 .page-label {
   font-size: 11px;
   color: var(--color-text-placeholder);
-  background: #F3F4F6;
+  background: var(--color-border-light);
   padding: 2px 10px;
   border-radius: 10px;
   font-weight: 500;
@@ -417,7 +417,7 @@ function renderMarkdownTable(text) {
   border: 1px dashed rgba(255, 179, 71, 0.4);
   border-radius: 6px;
   font-size: 12px;
-  color: #B45309;
+  color: var(--color-warning);
   font-weight: 500;
   scroll-margin-top: 80px;
 }
@@ -465,7 +465,7 @@ function renderMarkdownTable(text) {
   justify-content: center;
   font-weight: 700;
   font-size: 16px;
-  color: #fff;
+  color: var(--color-bg-card);
   margin-top: 2px;
 }
 
@@ -526,7 +526,7 @@ function renderMarkdownTable(text) {
   color: var(--color-text-primary);
 }
 .qa-text :deep(code) {
-  background: #F3F4F6;
+  background: var(--color-border-light);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 13px;

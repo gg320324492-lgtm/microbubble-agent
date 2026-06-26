@@ -207,7 +207,7 @@ const typeLabel = (kind) => ({
 
 .extraction-empty-icon {
   font-size: 36px;
-  color: #D1D5DB;
+  color: var(--color-border-light);
   margin-bottom: 8px;
 }
 
@@ -244,7 +244,7 @@ const typeLabel = (kind) => ({
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   border-radius: 6px;
   font-size: 12px;
   color: var(--color-text-secondary);
@@ -270,7 +270,7 @@ const typeLabel = (kind) => ({
 .chart-card {
   background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
-  border-left: 3px solid #F59E0B;
+  border-left: 3px solid var(--color-warning);
   border-radius: 8px;
   padding: 12px 16px;
   transition: box-shadow 0.2s;
@@ -292,11 +292,11 @@ const typeLabel = (kind) => ({
 
 .chart-type {
   font-weight: 600;
-  color: #F59E0B;
+  color: var(--color-warning);
 }
 
 .chart-page {
-  background: #F3F4F6;
+  background: var(--color-border-light);
   color: var(--color-text-secondary);
   padding: 1px 6px;
   border-radius: 6px;
@@ -311,7 +311,7 @@ const typeLabel = (kind) => ({
 .chart-description {
   font-size: 13px;
   line-height: 1.7;
-  color: #4B5563;
+  color: var(--color-text-secondary);
   word-break: break-word;
   white-space: pre-wrap;
 }

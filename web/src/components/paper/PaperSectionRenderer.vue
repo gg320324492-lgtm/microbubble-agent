@@ -277,7 +277,7 @@ const pageRangeText = computed(() => {
 .section-meta {
   font-size: 12px;
   color: var(--color-text-placeholder);
-  background: #F3F4F6;
+  background: var(--color-border-light);
   padding: 2px 8px;
   border-radius: 8px;
   white-space: nowrap;
@@ -304,7 +304,7 @@ const pageRangeText = computed(() => {
 .paragraph-inline-figures {
   margin: 12px 0 16px;
   padding: 12px 16px;
-  background: #FAFAFA;
+  background: var(--color-bg-page);
   border: 1px solid var(--color-border-light);
   border-left: 3px solid var(--color-primary);
   border-radius: 6px;
@@ -322,7 +322,7 @@ const pageRangeText = computed(() => {
 .section-references {
   margin-top: 16px;
   padding: 16px 20px;
-  background: #FAFAFA;
+  background: var(--color-bg-page);
   border: 1px solid var(--color-border-light);
   border-radius: 8px;
 }
@@ -366,7 +366,7 @@ const pageRangeText = computed(() => {
 .reference-item {
   font-size: 13px;
   line-height: 1.7;
-  color: #4B5563;
+  color: var(--color-text-secondary);
   margin-bottom: 8px;
   word-break: break-word;
   /* v28 step 109: 保留 \n 换行（参考文献条目内部可能有换行） */
@@ -394,7 +394,7 @@ const pageRangeText = computed(() => {
 }
 
 .section-type-references {
-  background: #FAFAFA;
+  background: var(--color-bg-page);
   border-radius: 10px;
   padding: 16px 20px;
 }

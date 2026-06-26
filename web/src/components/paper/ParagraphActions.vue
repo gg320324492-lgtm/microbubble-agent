@@ -102,18 +102,18 @@ function handleAsk() {
 .paragraph-translation {
   margin-top: 8px;
   padding: 10px 12px;
-  background: #F0F7FF;
-  border-left: 3px solid #3B82F6;
+  background: var(--color-primary-bg);
+  border-left: 3px solid var(--color-primary);
   border-radius: 4px;
   font-size: 14px;
   line-height: 1.7;
-  color: #1E3A8A;
+  color: var(--color-primary);
 }
 
 .translation-label {
   font-size: 11px;
   font-weight: 600;
-  color: #3B82F6;
+  color: var(--color-primary);
   margin-bottom: 4px;
 }
 </style>

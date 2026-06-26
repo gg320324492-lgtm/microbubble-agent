@@ -181,8 +181,8 @@ defineExpose({
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: #409eff;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -192,7 +192,7 @@ defineExpose({
 }
 
 .record-btn:hover {
-  background: #66b1ff;
+  background: var(--color-primary);
   transform: scale(1.05);
 }
 

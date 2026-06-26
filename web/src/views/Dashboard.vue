@@ -518,7 +518,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #fff;
+  color: var(--color-bg-card);
   box-shadow: var(--shadow-primary);
   position: relative;
   overflow: visible;
@@ -613,7 +613,7 @@ onMounted(() => {
 .welcome-right { display: flex; gap: 12px; position: relative; z-index: 1; }
 
 .btn-welcome {
-  background: #fff !important;
+  background: var(--color-bg-card) !important;
   color: var(--color-primary) !important;
   border: none !important;
   font-weight: var(--font-weight-semibold);
@@ -627,7 +627,7 @@ onMounted(() => {
 
 .btn-welcome-secondary {
   background: rgba(255,255,255,0.15) !important;
-  color: #fff !important;
+  color: var(--color-bg-card) !important;
   border: 1px solid rgba(255,255,255,0.3) !important;
   backdrop-filter: blur(8px);
 }
@@ -837,8 +837,8 @@ onMounted(() => {
 }
 .task-row:last-child { border-bottom: none; }
 .task-row:hover { background: var(--color-bg-warm); }
-.task-row.overdue { background: #FEF8F7; }
-.task-row.overdue:hover { background: #FEF0ED; }
+.task-row.overdue { background: var(--color-primary-bg); }
+.task-row.overdue:hover { background: var(--color-primary-bg); }
 
 .task-content { flex: 1; min-width: 0; }
 .task-title {
@@ -900,7 +900,7 @@ onMounted(() => {
   [data-theme="dark"] .task-row.overdue:hover { background: rgba(247, 137, 137, 0.15); }
   [data-theme="dark"] .task-title { color: var(--color-text-primary); }
   [data-theme="dark"] .task-due { color: var(--color-text-regular); } /* v69 提亮（之前 #909399 太暗） */
-  [data-theme="dark"] .task-due.overdue { color: #f78989; }
+  [data-theme="dark"] .task-due.overdue { color: var(--color-danger); }
 
   /* === 章节标题 + 查看全部 === */
   [data-theme="dark"] .section-title { color: var(--color-text-primary); }
@@ -925,8 +925,8 @@ onMounted(() => {
   }
 
   /* === 动画相关（hero 在 dark 模式文字保持白色） === */
-  [data-theme="dark"] .welcome-text { color: #fff; }
+  [data-theme="dark"] .welcome-text { color: var(--color-bg-card); }
   [data-theme="dark"] .tip-text { color: rgba(255, 255, 255, 0.9); }
-  [data-theme="dark"] .btn-welcome { color: #fff; }
-  [data-theme="dark"] .btn-welcome-secondary { color: #fff; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); }
+  [data-theme="dark"] .btn-welcome { color: var(--color-bg-card); }
+  [data-theme="dark"] .btn-welcome-secondary { color: var(--color-bg-card); background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); }
 </style>

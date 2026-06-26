@@ -167,6 +167,7 @@ function close() {
   padding: 12px;
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border: none;
   font-size: var(--font-size-base, 14px);

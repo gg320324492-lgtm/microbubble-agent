@@ -278,7 +278,7 @@ const headerTags = computed(() => {
 }
 
 .corresponding-mark {
-  color: #DC2626;
+  color: var(--color-danger);
   font-size: 14px;
   font-weight: 700;
   margin-left: 2px;
@@ -286,7 +286,7 @@ const headerTags = computed(() => {
 }
 
 .author-sep {
-  color: #D1D5DB;
+  color: var(--color-border-light);
   font-size: 12px;
 }
 
@@ -309,7 +309,7 @@ const headerTags = computed(() => {
   gap: 8px;
   font-size: 13px;
   line-height: 1.6;
-  color: #4B5563;
+  color: var(--color-text-secondary);
 }
 
 .aff-marker {
@@ -368,7 +368,7 @@ const headerTags = computed(() => {
 }
 
 .journal-vol {
-  color: #4B5563;
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 
@@ -403,7 +403,7 @@ const headerTags = computed(() => {
 
 .doi-link:hover {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-bg-card);
   border-color: var(--color-primary);
 }
 
@@ -442,7 +442,7 @@ const headerTags = computed(() => {
 
 .category-chip {
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-bg-card);
   padding: 2px 10px;
   border-radius: 4px;
   font-size: 12px;
@@ -450,7 +450,7 @@ const headerTags = computed(() => {
 
 .type-chip {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-bg-card);
   padding: 2px 10px;
   border-radius: 4px;
   font-size: 12px;
@@ -481,7 +481,7 @@ const headerTags = computed(() => {
   padding: 10px 14px;
   background: var(--color-danger-bg);
   border: 1px solid #fab6b6;
-  color: #c45656;
+  color: var(--color-danger);
   border-radius: 8px;
   font-size: 13px;
   display: flex;

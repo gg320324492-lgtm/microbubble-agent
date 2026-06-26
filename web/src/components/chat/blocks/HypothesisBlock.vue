@@ -41,13 +41,19 @@ const priorityColor = (p) => ({ high: '#f56c6c', medium: '#e6a23c', low: '#90939
 </template>
 
 <style scoped>
-.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .hyp-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
 .hyp-item:first-of-type { border-top: none; }
 .hyp-row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
-.status { font-size: 11px; padding: 2px 8px; border-radius: 10px; color: white; }
+.status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  /* stylelint-disable-next-line color-named */
+  color: white;
+}
 .priority { font-size: 12px; font-weight: 500; }
 .confidence { font-size: 11px; color: var(--color-text-secondary); }
 .statement { font-size: 14px; color: var(--color-text-primary); line-height: 1.6; font-weight: 500; }

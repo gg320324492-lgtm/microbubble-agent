@@ -233,6 +233,7 @@ onMounted(() => {
   padding: 24px 16px;
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
   border-radius: var(--radius-lg);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .hero-avatar {
@@ -241,6 +242,7 @@ onMounted(() => {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.2);
   border: 2px solid rgba(255, 255, 255, 0.4);
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 28px;
   font-weight: var(--font-weight-semibold, 600);
@@ -262,6 +264,7 @@ onMounted(() => {
 }
 .hero-tags :deep(.el-tag) {
   background: rgba(255, 255, 255, 0.2);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.3);
 }

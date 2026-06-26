@@ -124,12 +124,12 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
   cursor: pointer;
   text-align: left;
   font-size: 13px;
-  color: #303133;
+  color: var(--color-text-primary);
   transition: background 0.2s, border-color 0.2s;
 }
 
 .rich-summary:hover {
-  background: #ecf5ff;
+  background: var(--color-primary-bg);
   border-color: var(--color-primary, #FF7A5C);
 }
 
@@ -145,7 +145,7 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
 
 .rich-expanded {
   position: relative;
-  background: white;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light, #ebeef5);
   border-radius: 8px;
   padding: 8px;
@@ -160,7 +160,7 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 11px;
-  color: #606266;
+  color: var(--color-text-regular);
   cursor: pointer;
   z-index: 1;
 }

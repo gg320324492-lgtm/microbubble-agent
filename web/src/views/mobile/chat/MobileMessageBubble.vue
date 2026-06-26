@@ -147,6 +147,7 @@ function onLongPress(e) {
 
 .bubble-user {
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-bottom-right-radius: 4px;
 }

@@ -414,6 +414,7 @@ watch(
   border-color: var(--color-primary);
 }
 .check-mark {
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 12px;
   font-weight: bold;

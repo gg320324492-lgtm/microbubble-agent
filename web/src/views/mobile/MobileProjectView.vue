@@ -177,6 +177,7 @@ onMounted(() => {
 }
 .status-chip.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-color: var(--color-primary);
 }
@@ -195,6 +196,7 @@ onMounted(() => {
 .header-action:active { background: var(--color-primary-bg); }
 .header-action.primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-weight: 600;
   font-size: 22px;

@@ -93,7 +93,7 @@
                   :size="24"
                   :alt="`${memberStore.getMemberName(row.assignee_id)}的头像`"
                 />
-                <el-avatar v-else :size="24" style="background: #409eff" :alt="`${memberStore.getMemberName(row.assignee_id)}的头像`">
+                <el-avatar v-else :size="24" style="background: var(--color-primary)" :alt="`${memberStore.getMemberName(row.assignee_id)}的头像`">
                   {{ memberStore.getMemberName(row.assignee_id).charAt(0) }}
                 </el-avatar>
                 <span>{{ memberStore.getMemberName(row.assignee_id) }}</span>
@@ -479,20 +479,20 @@ function formatAutoDeleteExact(autoDeleteAt) {
 
 /* <= 0h：已过期 */
 .auto-delete-imminent {
-  color: #d73838;
+  color: var(--color-danger);
   font-weight: var(--font-weight-bold);
   animation: pulse-danger 1.2s ease-in-out infinite;
 }
 
 /* < 6h：紧急 */
 .auto-delete-urgent {
-  color: #e85a4f;
+  color: var(--color-danger);
   font-weight: var(--font-weight-semibold);
 }
 
 /* 6-24h：警告 */
 .auto-delete-warning {
-  color: #f59e0b;
+  color: var(--color-warning);
   font-weight: var(--font-weight-medium);
 }
 
@@ -528,9 +528,9 @@ function formatAutoDeleteExact(autoDeleteAt) {
   background: var(--color-bg-page);
   color: var(--color-text-regular);
 }
-[data-theme="dark"] .auto-delete-imminent { color: #ff6b6b; }
-[data-theme="dark"] .auto-delete-urgent { color: #ff9d85; }
-[data-theme="dark"] .auto-delete-warning { color: #fbbf24; }
+[data-theme="dark"] .auto-delete-imminent { color: var(--color-danger); }
+[data-theme="dark"] .auto-delete-urgent { color: var(--color-warning); }
+[data-theme="dark"] .auto-delete-warning { color: var(--color-warning); }
 [data-theme="dark"] .mobile-action-btn.restore {
   background: var(--color-success-bg);
   color: var(--color-success, #67C23A);

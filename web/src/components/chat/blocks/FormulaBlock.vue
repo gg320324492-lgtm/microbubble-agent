@@ -83,7 +83,7 @@ const sourceTypeLabel = (s) => {
 </template>
 
 <style scoped>
-.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .formula-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
@@ -98,7 +98,7 @@ const sourceTypeLabel = (s) => {
 .unit { color: var(--color-text-secondary); font-size: 12px; }
 .variables { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
 .var-label { font-size: 11px; color: var(--color-text-secondary); }
-.var-chip { font-size: 11px; background: #fff7e6; color: #d4880f; padding: 2px 8px; border-radius: 8px; font-family: monospace; }
+.var-chip { font-size: 11px; background: var(--color-warning-bg); color: var(--color-warning); padding: 2px 8px; border-radius: 8px; font-family: monospace; }
 .var-unit { color: var(--color-text-secondary); margin-left: 2px; }
 .formula-actions { margin-top: 8px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }

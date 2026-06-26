@@ -216,7 +216,7 @@ const statusLabel = (s) => ({
   top: 12px;
   right: 12px;
   background: rgba(31, 41, 55, 0.78);
-  color: #fff;
+  color: var(--color-bg-card);
   font-size: 11px;
   padding: 4px 10px;
   border-radius: 12px;
@@ -314,10 +314,10 @@ const statusLabel = (s) => ({
 .figure-description {
   margin-top: 8px;
   padding: 8px 12px;
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   border-radius: 6px;
   font-size: 12.5px;
-  color: #4B5563;
+  color: var(--color-text-secondary);
 }
 
 .figure-description summary {
@@ -366,7 +366,7 @@ const statusLabel = (s) => ({
 .figure-ocr summary {
   cursor: pointer;
   font-weight: 500;
-  color: #4B5563;
+  color: var(--color-text-secondary);
   user-select: none;
 }
 
@@ -377,7 +377,7 @@ const statusLabel = (s) => ({
 .figure-ocr pre {
   margin: 6px 0 0;
   padding: 10px;
-  background: #F9FAFB;
+  background: var(--color-bg-card);
   border-radius: 6px;
   white-space: pre-wrap;
   word-break: break-word;

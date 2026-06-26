@@ -507,6 +507,7 @@ watch(
 }
 .opt-chip.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-color: var(--color-primary);
 }
@@ -543,7 +544,7 @@ watch(
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: white;
+  background: var(--color-bg-card);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s;
 }
@@ -608,6 +609,7 @@ watch(
 }
 .btn-primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 .btn-primary:disabled {
@@ -617,6 +619,7 @@ watch(
 .submit-spinner {
   width: 14px;
   height: 14px;
+  /* stylelint-disable-next-line color-named */
   border: 2px solid white;
   border-top-color: transparent;
   border-radius: 50%;

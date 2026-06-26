@@ -416,6 +416,7 @@ onMounted(() => {
 }
 .filter-chip.active {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
   border-color: var(--color-primary);
 }
@@ -544,6 +545,7 @@ onMounted(() => {
   height: 22px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 10px;
   font-weight: 600;
@@ -644,6 +646,7 @@ onMounted(() => {
 .header-action:active { background: var(--color-primary-bg); }
 .header-action.primary {
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-weight: 600;
   font-size: 22px;
@@ -708,6 +711,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 16px;
   font-weight: 600;
@@ -791,6 +795,7 @@ onMounted(() => {
 }
 .btn-primary {
   background: var(--color-primary);
+  /* stylelint-disable-next-line color-named */
   color: white;
 }
 

@@ -258,11 +258,11 @@ onMounted(fetchTraces)
 
 <style scoped>
 .agent-traces-view { padding: 20px; }
-.page-header h2 { margin: 0 0 4px; font-size: 22px; color: #2d2d2d; }
+.page-header h2 { margin: 0 0 4px; font-size: 22px; color: var(--color-text-primary); }
 .page-header .desc { margin: 0 0 20px; color: var(--color-text-secondary); font-size: 13px; }
 .filter-card, .table-card { margin-bottom: 16px; }
 .time { font-family: monospace; font-size: 12px; color: var(--color-text-regular); }
-.muted { color: #ccc; }
+.muted { color: var(--color-border-light); }
 .total-info { text-align: right; color: var(--color-text-secondary); font-size: 12px; margin-top: 12px; }
 .trace-detail h3 { font-size: 14px; margin: 16px 0 8px; color: var(--color-primary); }
 .trace-detail .json {

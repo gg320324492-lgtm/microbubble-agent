@@ -367,7 +367,7 @@ onUnmounted(() => {
         <el-table-column label="平均点击位置" width="130">
           <template #default="{ row }">
             <span v-if="row.avg_click_position !== null">{{ row.avg_click_position.toFixed(2) }}</span>
-            <span v-else style="color:#c0c4cc">—</span>
+            <span v-else style="color:var(--color-text-placeholder)">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -440,7 +440,7 @@ onUnmounted(() => {
 }
 .filter-card .meta {
   margin-left: 16px;
-  color: #606266;
+  color: var(--color-text-regular);
   font-size: 13px;
 }
 .metric-row {
@@ -461,14 +461,14 @@ onUnmounted(() => {
 .metric-value {
   font-size: 26px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 .metric-value.good { color: var(--color-success); }
 .metric-value.warn { color: var(--color-warning); }
 .metric-value.danger { color: var(--color-danger); }
 .metric-hint {
   font-size: 11px;
-  color: #C0C4CC;
+  color: var(--color-text-placeholder);
   margin-top: 4px;
 }
 .chart-row {
@@ -483,7 +483,7 @@ onUnmounted(() => {
 .chart-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
 }
 .chart-canvas {
   width: 100%;
@@ -492,7 +492,7 @@ onUnmounted(() => {
 .empty-tip {
   padding: 40px 20px;
   text-align: center;
-  color: #606266;
+  color: var(--color-text-regular);
 }
 .logs-card {
   margin-bottom: 16px;
@@ -506,7 +506,7 @@ onUnmounted(() => {
 }
 .model-cell {
   font-size: 11px;
-  color: #606266;
+  color: var(--color-text-regular);
   word-break: break-all;
 }
 </style>

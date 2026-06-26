@@ -79,7 +79,7 @@ const statusLabel = (s) => {
 
 <style scoped>
 .rich-card {
-  background: white;
+  background: var(--color-bg-card);
   border: 1px solid #e8eaed;
   border-radius: 10px;
   padding: 12px 14px;
@@ -113,12 +113,12 @@ const statusLabel = (s) => {
   border-radius: 10px;
   color: var(--color-text-regular);
 }
-.stat.audio { background: #fff7e6; color: #d4880f; }
+.stat.audio { background: var(--color-warning-bg); color: var(--color-warning); }
 .meeting-participants { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .participant {
   font-size: 11px;
-  background: #e8f4ff;
-  color: #1976d2;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   padding: 2px 8px;
   border-radius: 10px;
 }

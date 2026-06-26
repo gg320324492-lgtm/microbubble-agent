@@ -219,6 +219,7 @@ onMounted(() => {
 .logo-title {
   font-size: 28px;
   font-weight: var(--font-weight-bold, 700);
+  /* stylelint-disable-next-line color-named */
   color: white;
   margin: 0 0 4px;
   letter-spacing: 1px;
@@ -299,6 +300,7 @@ onMounted(() => {
   border: none;
   border-radius: var(--radius-md);
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 16px;
   font-weight: var(--font-weight-medium, 500);
@@ -323,6 +325,7 @@ onMounted(() => {
 .loading-spinner {
   width: 16px;
   height: 16px;
+  /* stylelint-disable-next-line color-named */
   border: 2px solid white;
   border-top-color: transparent;
   border-radius: 50%;

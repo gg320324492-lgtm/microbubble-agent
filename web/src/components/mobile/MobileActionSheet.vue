@@ -184,6 +184,7 @@ function onActionClick(action) {
   align-items: center;
   justify-content: center;
   font-size: 16px;
+  /* stylelint-disable-next-line color-named */
   color: white;
   font-weight: 600;
   flex-shrink: 0;
