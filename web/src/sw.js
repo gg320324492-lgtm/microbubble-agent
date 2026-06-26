@@ -196,6 +196,7 @@
 // var(--color-text-primary/regular)。覆盖 13 个文件：KnowledgeCard + 11 个
 // paper 子组件 + KnowledgeView + KnowledgeDetailView。dark 模式变量在
 // variables.css:507+ 已重定义，无需其他 dark 覆盖。
+const SW_VERSION = 'v70-p0-color-token-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
