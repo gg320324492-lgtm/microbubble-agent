@@ -127,13 +127,21 @@ function handleSwitch(name) {
    --nut-dark-color-gray / --nut-text-color，**不消费** --nut-tabbar-inactive-color；
    所以 v59 在 nutui-theme.scss 加的 --nut-tabbar-*-color 实际只影响 tips 角标。
    真正驱动 TabBar 颜色的是这里 scoped :deep(...) CSS，必须改这里 + dark 覆盖。 */
-[data-theme="dark"] :deep(.nut-tabbar-item) {
-  color: var(--color-text-regular);
-}
-[data-theme="dark"] :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
-  color: var(--color-accent);
-  background: rgba(255, 179, 71, 0.18); /* dark active 背景：与 #FFC067 金橙协调 */
-}
+
+/* v61 (2026-06-26) 修复 v60 编译 bug：Vue 3 scoped CSS 组合 [attr] 属性选择器
+   + :deep() 有坑。v60 写 [data-theme="dark"] :deep(.nut-tabbar-item)，
+   编译器把 data-v-2c0c6d65 加到了 [data-theme="dark"] 上而不是 :deep 内部选择器，
+   编译产物为 [data-theme=dark][data-v-2c0c6d65] .nut-tabbar-item，
+   需要同一个元素同时有两个属性才匹配——但 <html> 只有 data-theme，
+   <nav> 只有 data-v，**永远不匹配**。
+   修复：先试 :global([data-theme="dark"]) :deep(.nut-tabbar-item)，
+   但 Vue 把 :global() 后面的 :deep() + 后代选择器组合处理错了：
+   编译产物变成 [data-theme=dark]{color:var(--color-accent)} 单独的规则，
+   把后代选择器和 :deep() 部分都丢了——而且这条规则会作用到 <html> 而不是 .nut-tabbar-item！
+   所以 v61 还是错的。
+
+   v62 终极修复：把 dark mode 规则移到 Vue SFC 的**第二个非 scoped <style> 块**。
+   非 scoped 块不会附加 data-v，规则全局生效，直接命中 NutUI 元素。 */
 :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .nut-tabbar-item-icon) {
   transform: scale(1.08);
   transition: transform 0.25s ease;
@@ -154,5 +162,23 @@ function handleSwitch(name) {
 :deep(.nut-tabbar-item-icon) {
   font-size: 22px;
   line-height: 22px;
+}
+</style>
+
+<!-- v62 (2026-06-26) 第二个非 scoped <style> 块：dark mode 覆盖 NutUI TabBar 颜色。
+     为什么需要非 scoped：v60 的 [data-theme="dark"] :deep(.nut-tabbar-item) 被 Vue
+     scoped CSS 编译器把 data-v 错误附加到 [data-theme="dark"] 上，规则永远不匹配；
+     v61 试 :global() :deep() 组合也被 Vue 处理错（编译产物是单独的 [data-theme=dark]
+     规则，作用于 <html> 而不是 .nut-tabbar-item，且后一条规则被丢弃）。
+     非 scoped 块彻底绕过 Vue scoped 编译，规则全局生效直接命中 NutUI 元素。
+     纪律：Vue SFC 中如果 dark mode 规则要跨组件生效（如 NutUI 第三方元素），
+     优先用第二个非 scoped <style> 块，不要在 scoped 块里玩 [attr] + :deep() 组合。 -->
+<style>
+[data-theme="dark"] .nut-tabbar-item {
+  color: var(--color-text-regular); /* dark=#c0c4cc 亮灰，与 #1a1d23 背景对比清晰 */
+}
+[data-theme="dark"] .nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) {
+  color: var(--color-accent);        /* dark=#FFC067 金橙，比 #FF9D85 亮更区分 */
+  background: rgba(255, 179, 71, 0.18); /* 金橙调背景与 #FFC067 协调 */
 }
 </style>

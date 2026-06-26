@@ -66,7 +66,21 @@
 // 用 var(--color-text-regular) = #c0c4cc，active 用 var(--color-accent) = #FFC067。
 // 纪律沉淀：NutUI 主题定制优先改 项目 scoped CSS + [data-theme="dark"] 覆盖，
 // 不要期望 nutui-theme.scss 改 --nut-tabbar-*-color 生效。
-const SW_VERSION = 'v60-tabbar-darkmode-real-fix-2026-06-26'
+// v61: 2026-06-26 v60 部署后用户反馈还是不变。诊断：Vue 3 scoped CSS 编译 [attr]
+// 属性选择器 + :deep() 有坑——把 data-v-2c0c6d65 加到了 [data-theme="dark"] 上
+// 而不是 :deep() 内的 .nut-tabbar-item，编译产物为
+// [data-theme=dark][data-v-2c0c6d65] .nut-tabbar-item，
+// 需要同一个元素同时拥有两个属性才匹配——但 <html> 只有 data-theme="dark"，
+// <nav class="mobile-tabbar"> 只有 data-v-2c0c6d65，**永远不匹配**。
+// 修复尝试 v61：用 :global([data-theme="dark"]) 显式让属性选择器脱离 Vue scope，
+// 但 Vue 编译器把 :global() + :deep() + 后代选择器组合处理错——
+// 编译产物变 [data-theme=dark]{color:var(--color-accent);background:#ffb3472e}
+// 单独的规则（后代选择器和 :deep() 部分被丢），且这条规则会作用到 <html> 上！
+// v62: 2026-06-26 终极修复——把 dark mode 规则移到 Vue SFC 的**第二个非 scoped
+// <style> 块**。非 scoped 块不附加 data-v，规则全局生效直接命中 NutUI 元素。
+// 教训：dark mode 跨组件（特别是 NutUI 第三方元素）覆盖优先用非 scoped <style> 块，
+// 不要在 scoped 块里玩 [attr] + :deep() 或 :global() 组合——Vue 编译器有 3 层坑。
+const SW_VERSION = 'v62-tabbar-darkmode-global-style-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
