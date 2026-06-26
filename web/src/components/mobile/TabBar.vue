@@ -85,7 +85,7 @@ function handleSwitch(name) {
 
 /* Dark mode */
 [data-theme="dark"] .mobile-tabbar {
-  background: rgba(26, 29, 35, 0.92);
+  background: rgb(26, 29, 35);
   border-top-color: var(--color-border-base);
 }
 
