@@ -635,12 +635,37 @@ body {
 [data-theme="dark"] .el-overlay-dialog {
   background-color: rgba(0, 0, 0, 0.6);
 }
-/* el-empty illustration 默认白色背景（SVG 容器），dark 必须改成透明 */
+/* v69 P1b fix-3: el-card 必须同时改 --el-card-bg-color EP 变量 + background-color（EP 用
+   CSS 变量控制 card 背景，直接设 background-color 不够——变量优先级盖过直接属性） */
+[data-theme="dark"] {
+  --el-card-bg-color: var(--color-bg-card);
+  --el-empty-fill-color-0: transparent;
+  --el-empty-fill-color-1: transparent;
+  --el-empty-fill-color-2: transparent;
+  --el-empty-fill-color-3: transparent;
+  --el-empty-fill-color-4: transparent;
+  --el-empty-fill-color-5: transparent;
+  --el-empty-fill-color-6: transparent;
+  --el-empty-fill-color-7: transparent;
+  --el-empty-fill-color-8: transparent;
+  --el-empty-fill-color-9: transparent;
+}
+[data-theme="dark"] .el-card {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-card__header,
+[data-theme="dark"] .el-card__body {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+/* el-empty illustration 默认浅色背景（SVG 容器 + svg path），dark 必须改色 */
 [data-theme="dark"] .el-empty {
   background-color: transparent;
 }
-[data-theme="dark"] .el-empty__image {
-  filter: invert(1) hue-rotate(180deg) brightness(0.9);
+[data-theme="dark"] .el-empty__image svg,
+[data-theme="dark"] .el-empty__image img {
+  filter: invert(0.88) hue-rotate(180deg);
 }
 [data-theme="dark"] .el-popper,
 [data-theme="dark"] .el-select-dropdown,

@@ -190,7 +190,7 @@
 // (3) KnowledgeView memory-card background: #fff → var(--color-bg-card)
 // (4) VoiceprintCard.vue background: #fff → var(--color-bg-card)（组件单独
 //     追加非 scoped dark 块，host.vue 内 P1b 没覆盖到）
-const SW_VERSION = 'v69-p1b-fix2-whites-2026-06-26'
+const SW_VERSION = 'v69-p1b-fix3-elcard-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
