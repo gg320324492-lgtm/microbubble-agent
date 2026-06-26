@@ -556,6 +556,8 @@ async def main():
     parser.add_argument("--n-expected", type=int, default=3, help="应到会人数（用于 KMeans K 搜索范围）")
     parser.add_argument("--skip-backup", action="store_true", help="不备份旧字段（用于调试）")
     parser.add_argument("--workdir", type=str, default="/tmp", help="中间结果输出目录")
+    parser.add_argument("--learn", action="store_true",
+                        help="apply 后自动调 learn_from_verified_segments, 把 verified 段累积到 member.voice_embedding (下次识别率提升)")
     args = parser.parse_args()
 
     steps = set(args.steps.split(","))
@@ -599,8 +601,10 @@ async def main():
         logger.info(f"[2/extract] {n_valid}/{len(transcript)} 段有效")
 
     if "cluster" in steps:
-        labels, n_clusters, silhouette = cluster_embeddings(seg_embs, args.n_expected)
-        logger.info(f"[3/cluster] K={n_clusters}, silhouette={silhouette:.3f}")
+        # 2026-06-26 优化: 用 smart_select_k 综合 silhouette + 平衡度 + n_expected 评分
+        from app.services.voiceprint_voting import smart_select_k
+        labels, n_clusters, silhouette, _all_scores = smart_select_k(seg_embs, n_expected=args.n_expected)
+        logger.info(f"[3/cluster] smart_select_k K={n_clusters}, composite={silhouette:.3f}")
 
     if "vote" in steps:
         from app.config import settings as _s
@@ -611,20 +615,45 @@ async def main():
             _s.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
         )
         sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        # 加载 enrolled (4-tuple 含 sample_count)
         async with sf() as db:
             r = await db.execute(
                 select(Member).where(Member.voice_embedding.isnot(None))
             )
             enrolled = [
-                (m.id, m.name, np.array(m.voice_embedding, dtype=np.float32))
+                (m.id, m.name, np.array(m.voice_embedding, dtype=np.float32), m.voice_sample_count or 1)
                 for m in r.scalars().all()
                 if m.voice_embedding is not None
             ]
-        logger.info(f"[4/vote] 已录入声纹成员: {len(enrolled)} 人")
-        cluster_names = vote_names_by_cluster(seg_embs, labels, enrolled)
+            # 2026-06-26 优化: 用 meeting context (summary / description / history) 过滤 enrolled
+            from app.models.meeting import Meeting
+            from app.services.voiceprint_voting import (
+                extract_context_speakers, resolve_context_to_names,
+                get_recent_meeting_speakers,
+            )
+            meeting_obj = await db.get(Meeting, meeting_id)
+            ctx_raw = extract_context_speakers(meeting_obj)
+            ctx = await resolve_context_to_names(ctx_raw, db) if ctx_raw else set()
+            history_ctx = await get_recent_meeting_speakers(meeting_id, db, lookback_count=10, lookback_days=90)
+            if history_ctx:
+                ctx = ctx | history_ctx
+            logger.info(f"[4/vote] 已录入声纹成员: {len(enrolled)} 人, context={ctx if ctx else '(无)'}")
+        await engine.dispose()
+
+        # 2026-06-26 优化: 用 vote_with_quality_gates (Hungarian + sample_count penalty + 4 质量门)
+        from app.services.voiceprint_voting import vote_with_quality_gates
+        cluster_names = vote_with_quality_gates(
+            seg_embs, labels, enrolled, context_names=ctx if ctx else None,
+            center_dist_threshold=0.75, min_votes=3, votes_ratio_threshold=0.30,
+        )
 
     if "assign" in steps:
-        new_speaker, speaker_label_to_name = assign_speakers(transcript, labels, seg_embs, cluster_names)
+        # 2026-06-26 优化: 用 assign_with_strict_threshold (conf > 0.50 + votes_ratio >= 0.5)
+        from app.services.voiceprint_voting import assign_with_strict_threshold
+        new_speaker, speaker_label_to_name = assign_with_strict_threshold(
+            transcript, labels, cluster_names,
+            conf_threshold=0.50, votes_ratio_threshold=0.5,
+        )
         # 保存中间结果
         with open(result_path, "w", encoding="utf-8") as f:
             json.dump({
@@ -637,7 +666,7 @@ async def main():
                                   for cid, (n, c, v, t) in cluster_names.items()},
                 "speaker_label_to_name": speaker_label_to_name,
                 "new_speaker": new_speaker,
-                "enrolled_members": [{"id": mid, "name": n} for mid, n, _ in enrolled],
+                "enrolled_members": [{"id": item[0], "name": item[1]} for item in enrolled],
             }, f, ensure_ascii=False, indent=2)
         new_t_list = [
             {**seg, "speaker": new_speaker[i]}
@@ -652,6 +681,38 @@ async def main():
         logger.info(f"[6,7/apply] 备份文件: {apply_result['backup_file']}")
         logger.info(f"[6,7/apply] 更新: {apply_result['updated_fields']}")
         logger.info(f"[6,7/apply] 参与者: {apply_result['added_participants']}")
+
+        # 2026-06-26 新增: --learn 自动累积 verified 段到 member.voice_embedding
+        if args.learn and seg_embs is not None:
+            from app.services.voiceprint_voting import learn_from_verified_segments
+            from app.models.member import Member
+            from sqlalchemy import select
+            from collections import defaultdict
+            engine_l = create_async_engine(
+                settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+            )
+            sf_l = async_sessionmaker(engine_l, class_=AsyncSession, expire_on_commit=False)
+            # 构造 member_id → [seg_emb] 从 cluster_names 映射
+            member_to_segs = defaultdict(list)
+            for cid, (name, conf, votes, total) in cluster_names.items():
+                if not name:
+                    continue
+                # 拿 member_id
+                # 用现有的 enrolled 列表
+                for item in enrolled:
+                    if item[1] == name:
+                        mid = item[0]
+                        for i, lab in enumerate(labels):
+                            if lab == cid and seg_embs[i] is not None and not np.all(np.array(seg_embs[i]) == 0):
+                                member_to_segs[mid].append(seg_embs[i])
+                        break
+            async with sf_l() as db:
+                learned = await learn_from_verified_segments(dict(member_to_segs), db, max_segments_per_member=15)
+            await engine_l.dispose()
+            if learned:
+                logger.info(f"[6.5/learn] 累积 {sum(learned.values())} 段到 {len(learned)} 个 member, 下次会议识别率提升")
+            else:
+                logger.warning("[6.5/learn] 未累积任何段 (cluster_names 全是 None)")
 
     if "regen" in steps:
         # regen 优先复用已有 result.json（避免重跑声纹提取）
