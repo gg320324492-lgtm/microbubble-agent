@@ -207,10 +207,27 @@
           </el-form-item>
 
           <el-form-item label="主题色">
-            <el-radio-group v-model="themeColor" disabled>
-              <el-radio-button value="orange">活力橙</el-radio-button>
-            </el-radio-group>
-            <div class="form-help">更多主题色即将推出</div>
+            <div class="theme-swatches" role="radiogroup" aria-label="主题色">
+              <button
+                v-for="opt in accentOptions"
+                :key="opt.value"
+                type="button"
+                role="radio"
+                :aria-checked="themeStore.accent === opt.value"
+                :aria-label="opt.label"
+                :title="opt.label"
+                class="theme-swatch"
+                :class="{ 'is-active': themeStore.accent === opt.value }"
+                :style="{ background: opt.preview }"
+                @click="themeStore.setAccent(opt.value)"
+              >
+                <el-icon v-if="themeStore.accent === opt.value" class="theme-swatch-check"><Check /></el-icon>
+                <span class="theme-swatch-name">{{ opt.label }}</span>
+              </button>
+            </div>
+            <div class="form-help">
+              当前主色：<strong>{{ activeAccentLabel }}</strong> · 支持 6 种组合（3 主色 × 明暗）
+            </div>
           </el-form-item>
         </el-form>
       </el-card>
@@ -222,7 +239,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
-import { User, Lock, Camera, Bell, Edit, Brush } from '@element-plus/icons-vue'
+import { User, Lock, Camera, Bell, Edit, Brush, Check } from '@element-plus/icons-vue'
 // v68 (2026-06-26): 主题切换接入 useThemeStore（之前桌面 SettingsView 没有主题入口）
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUserStore } from '@/stores/user'
@@ -239,7 +256,15 @@ const isDark = computed({
 })
 const themeModeLabel = computed(() => (isDark.value ? '深色' : '浅色'))
 // 主题色占位（未来扩展，预留 UI）
-const themeColor = ref('orange')
+// v69 P1: 3 套主色 picker，调用 themeStore.setAccent 切换
+const accentOptions = [
+  { value: 'orange', label: '活力橙', preview: 'linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%)' },
+  { value: 'ocean',  label: '海蓝',   preview: 'linear-gradient(135deg, #4A90E2 0%, #5AD8A6 100%)' },
+  { value: 'forest', label: '森林绿', preview: 'linear-gradient(135deg, #4CAF50 0%, #FFB74D 100%)' },
+]
+const activeAccentLabel = computed(
+  () => accentOptions.find((o) => o.value === themeStore.accent)?.label || '活力橙'
+)
 
 // v68: Hero "编辑资料" 按钮 → 平滑滚动到下方 profile-card
 function scrollToProfile() {
@@ -738,6 +763,66 @@ function formatDateTime(iso) {
   gap: 4px;
 }
 
+/* v69 P1: 主题色 swatches（3 个色块，active 有白圈+Check） */
+.theme-swatches {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.theme-swatch {
+  position: relative;
+  width: 84px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  border: 2px solid transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out),
+              border-color var(--duration-fast) var(--ease-out);
+  outline: none;
+  padding: 0;
+}
+.theme-swatch:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.theme-swatch:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+.theme-swatch.is-active {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+.theme-swatch-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--color-primary);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+.theme-swatch-name {
+  position: relative;
+  z-index: 1;
+}
+
 .form-help {
   margin-top: 6px;
   font-size: 12px;
@@ -810,5 +895,10 @@ function formatDateTime(iso) {
 [data-theme="dark"] .hero-edit-btn:hover {
   background: rgba(255, 255, 255, 0.22);
   border-color: rgba(255, 255, 255, 0.6);
+}
+/* v69 P1: theme-swatch dark 模式强调边框（用高亮白边框 + 阴影增强 active 感） */
+[data-theme="dark"] .theme-swatch.is-active {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.18), var(--shadow-primary);
 }
 </style>

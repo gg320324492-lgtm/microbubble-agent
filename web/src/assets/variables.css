@@ -730,3 +730,110 @@ body {
 /* - 截图 5 张配对卡全亮绿 = 后端 PUT /api/v1/tasks 状态契约可能不接 status='done'，不在本 plan 范围 */
 /* - 截止日期 06/05 灰色在 dark 上 = --color-text-regular (#c0c4cc) 修复后可见，不是 --color-text-secondary (仍偏暗) */
 
+/* ============================================
+   v69 P1: 6 套主题色板（双轴正交）
+   <html data-theme="light|dark" data-accent="orange|ocean|forest">
+   - light/orange: 复用 :root 默认值，不重复定义
+   - dark/orange:   复用 [data-theme="dark"] 默认值，不重复定义
+   - ocean/forest:  每个组合单独定义变量覆盖
+   ============================================ */
+
+/* === 海蓝 light === */
+[data-accent="ocean"] {
+  --color-primary: #4A90E2;
+  --color-primary-light: #6BABFF;
+  --color-primary-dark: #2E6BB8;
+  --color-primary-bg: #E8F2FE;
+  --color-primary-border: rgba(74, 144, 226, 0.22);
+  --color-accent: #5AD8A6;
+  --color-accent-bg: #E6F8F1;
+  --color-shadow-primary: rgba(74, 144, 226, 0.30);
+  --color-bg-sidebar: rgba(232, 242, 254, 0.92);
+  --color-sidebar-border: rgba(74, 144, 226, 0.14);
+  --shadow-primary: 0 4px 20px rgba(74, 144, 226, 0.30);
+  --shadow-glow: 0 4px 24px rgba(74, 144, 226, 0.20);
+  --shadow-sidebar: 4px 0 24px rgba(74, 144, 226, 0.08);
+  --gradient-welcome-hero: linear-gradient(135deg, #4A90E2 0%, #5AD8A6 100%);
+  --gradient-group-header: linear-gradient(135deg, #E8F2FE 0%, #E6F8F1 100%);
+  --gradient-stat-in-progress: linear-gradient(135deg, #E8F2FE 0%, #D5E8FA 100%);
+  --gradient-stat-done: linear-gradient(135deg, #E6F8F1 0%, #D0F0E2 100%);
+  --gradient-stat-overdue: linear-gradient(135deg, #FCE8E8 0%, #FAD5D5 100%);
+}
+
+/* === 森林绿 light === */
+[data-accent="forest"] {
+  --color-primary: #4CAF50;
+  --color-primary-light: #66BB6A;
+  --color-primary-dark: #2E7D32;
+  --color-primary-bg: #E8F5E9;
+  --color-primary-border: rgba(76, 175, 80, 0.22);
+  --color-accent: #FFB74D;
+  --color-accent-bg: #FFF5E5;
+  --color-shadow-primary: rgba(76, 175, 80, 0.30);
+  --color-bg-sidebar: rgba(232, 245, 233, 0.92);
+  --color-sidebar-border: rgba(76, 175, 80, 0.14);
+  --shadow-primary: 0 4px 20px rgba(76, 175, 80, 0.30);
+  --shadow-glow: 0 4px 24px rgba(76, 175, 80, 0.20);
+  --shadow-sidebar: 4px 0 24px rgba(76, 175, 80, 0.08);
+  --gradient-welcome-hero: linear-gradient(135deg, #4CAF50 0%, #FFB74D 100%);
+  --gradient-group-header: linear-gradient(135deg, #E8F5E9 0%, #FFF5E5 100%);
+  --gradient-stat-in-progress: linear-gradient(135deg, #E8F5E9 0%, #D5EBD7 100%);
+  --gradient-stat-done: linear-gradient(135deg, #E6F8F1 0%, #D0F0E2 100%);
+  --gradient-stat-overdue: linear-gradient(135deg, #FCE8E8 0%, #FAD5D5 100%);
+}
+
+/* === 海蓝 dark === */
+[data-theme="dark"][data-accent="ocean"] {
+  --color-primary: #6BABFF;
+  --color-primary-light: #8DC0FF;
+  --color-primary-dark: #4A90E2;
+  --color-primary-bg: rgba(74, 144, 226, 0.18);
+  --color-primary-border: rgba(74, 144, 226, 0.30);
+  --color-accent: #7DE0BA;
+  --color-accent-bg: rgba(90, 216, 166, 0.14);
+  --color-shadow-primary: rgba(74, 144, 226, 0.45);
+  --color-bg-sidebar: rgba(18, 26, 38, 0.92);
+  --color-sidebar-border: rgba(107, 171, 255, 0.22);
+  --shadow-primary: 0 4px 20px rgba(74, 144, 226, 0.45);
+  --shadow-glow: 0 4px 24px rgba(74, 144, 226, 0.35);
+  --gradient-welcome-hero: linear-gradient(135deg, #2E6BB8 0%, #3FA483 100%);
+  --gradient-group-header: linear-gradient(135deg, #2a2d35 0%, rgba(74, 144, 226, 0.18) 100%);
+  --gradient-stat-in-progress: rgba(74, 144, 226, 0.18);
+  --gradient-stat-done: rgba(133, 206, 97, 0.18);
+  --gradient-stat-overdue: rgba(247, 137, 137, 0.18);
+}
+
+/* === 森林绿 dark === */
+[data-theme="dark"][data-accent="forest"] {
+  --color-primary: #66BB6A;
+  --color-primary-light: #81C784;
+  --color-primary-dark: #4CAF50;
+  --color-primary-bg: rgba(76, 175, 80, 0.18);
+  --color-primary-border: rgba(76, 175, 80, 0.30);
+  --color-accent: #FFCA80;
+  --color-accent-bg: rgba(255, 183, 77, 0.14);
+  --color-shadow-primary: rgba(76, 175, 80, 0.45);
+  --color-bg-sidebar: rgba(18, 28, 22, 0.92);
+  --color-sidebar-border: rgba(102, 187, 106, 0.22);
+  --shadow-primary: 0 4px 20px rgba(76, 175, 80, 0.45);
+  --shadow-glow: 0 4px 24px rgba(76, 175, 80, 0.35);
+  --gradient-welcome-hero: linear-gradient(135deg, #2E7D32 0%, #C68A3A 100%);
+  --gradient-group-header: linear-gradient(135deg, #2a2d35 0%, rgba(76, 175, 80, 0.18) 100%);
+  --gradient-stat-in-progress: rgba(76, 175, 80, 0.18);
+  --gradient-stat-done: rgba(133, 206, 97, 0.18);
+  --gradient-stat-overdue: rgba(247, 137, 137, 0.18);
+}
+
+/* === 主题切换过渡（v69 P1：让切换看起来"丝滑"而非生硬） === */
+:root {
+  --theme-transition: background-color 280ms ease, border-color 280ms ease,
+                      color 280ms ease, box-shadow 280ms ease;
+}
+body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
+.el-menu-item, .el-input__wrapper, .el-tag, .el-link, .el-tabs__item,
+[class*="-card"], [class*="-row"], [class*="-section"], [class*="-header"],
+[class*="-button"], [class*="-tag"] {
+  transition: var(--theme-transition);
+}
+
+
