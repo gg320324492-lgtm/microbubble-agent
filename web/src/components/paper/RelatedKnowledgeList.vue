@@ -85,12 +85,12 @@ const truncate = (text, n) => {
 
 <style scoped>
 .related-knowledge {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 20px 24px;
   margin: 0 0 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
 }
 
 .related-header {
@@ -109,7 +109,7 @@ const truncate = (text, n) => {
 
 .related-count {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 .related-grid {
@@ -119,7 +119,7 @@ const truncate = (text, n) => {
 }
 
 .related-card {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 10px;
   padding: 14px 16px;
@@ -167,7 +167,7 @@ const truncate = (text, n) => {
 
 .related-card-reason {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -177,7 +177,7 @@ const truncate = (text, n) => {
 
 .related-card-summary {
   font-size: 12.5px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   line-height: 1.6;
 }
 
@@ -196,7 +196,7 @@ const truncate = (text, n) => {
 .related-empty {
   text-align: center;
   padding: 32px 20px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 .related-empty-icon {

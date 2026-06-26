@@ -104,7 +104,7 @@ const onRename = async (session) => {
 .session-sidebar {
   display: flex; flex-direction: column;
   width: 240px;
-  background: #fafbfc;
+  background: var(--color-bg-warm);
   border-right: 1px solid #e8eaed;
   transition: width 0.2s ease;
   flex-shrink: 0;

@@ -549,7 +549,7 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-md);
   z-index: 10;
   transition: background 0.2s, color 0.2s, transform 0.2s;
 }
@@ -567,9 +567,9 @@ onUnmounted(() => {
 
 .bubble { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; word-wrap: break-word; }
 .user-bubble { background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: white; border-bottom-right-radius: 6px; }
-.bot-bubble { background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-bottom-left-radius: 6px; }
+.bot-bubble { background: white; box-shadow: var(--shadow-sm); border-bottom-left-radius: 6px; }
 
-.tool-trace { margin-bottom: 12px; padding: 8px 12px; background: #fafbfc; border-radius: 8px; border-left: 3px solid var(--color-primary); }
+.tool-trace { margin-bottom: 12px; padding: 8px 12px; background: var(--color-bg-warm); border-radius: 8px; border-left: 3px solid var(--color-primary); }
 .trace-item { font-size: 12px; color: var(--color-text-regular); padding: 2px 0; }
 .trace-item.running { color: var(--color-primary); }
 .trace-item .duration { color: var(--color-text-secondary); font-size: 11px; }
@@ -580,8 +580,8 @@ onUnmounted(() => {
 .msg-content :deep(p) { margin: 0 0 8px; }
 .msg-content :deep(p:last-child) { margin-bottom: 0; }
 .msg-content :deep(ul), .msg-content :deep(ol) { padding-left: 20px; }
-.msg-content :deep(pre) { background: #f6f8fa; padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
-.msg-content :deep(code) { background: #f6f8fa; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+.msg-content :deep(pre) { background: var(--color-bg-page); padding: 8px 12px; border-radius: 6px; overflow-x: auto; }
+.msg-content :deep(code) { background: var(--color-bg-page); padding: 2px 6px; border-radius: 3px; font-size: 13px; }
 
 .rich-blocks { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .msg-error { color: var(--color-danger); font-size: 13px; margin-top: 8px; }
@@ -631,7 +631,6 @@ onUnmounted(() => {
 [data-theme="dark"] .bot-bubble {
   background: var(--color-bg-card);
   color: var(--color-text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .msg-content :deep(pre),
 [data-theme="dark"] .msg-content :deep(code) {
@@ -665,7 +664,6 @@ onUnmounted(() => {
   background: var(--color-bg-card);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
 }
 [data-theme="dark"] .jump-to-bottom:hover {
   background: var(--color-primary);

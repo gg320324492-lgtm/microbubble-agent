@@ -90,11 +90,11 @@ function handleClick(fig) {
 
 <style scoped>
 .right-image-rail {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 12px 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   position: sticky;
   top: 88px;
   max-height: calc(100vh - 110px);
@@ -132,7 +132,7 @@ function handleClick(fig) {
   align-items: center;
   gap: 6px;
   padding: 20px 8px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-size: 12px;
 }
 
@@ -163,7 +163,7 @@ function handleClick(fig) {
 
 .rail-thumb {
   position: relative;
-  background: #fff;
+  background: var(--color-bg-card);
   padding: 8px;
   height: 100px;
   display: flex;
@@ -197,7 +197,7 @@ function handleClick(fig) {
 
 .rail-meta {
   padding: 8px 10px;
-  background: #fff;
+  background: var(--color-bg-card);
   border-top: 1px solid var(--color-border-light);
 }
 
@@ -219,7 +219,7 @@ function handleClick(fig) {
 
 .rail-page {
   font-size: 10px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   background: #F3F4F6;
   padding: 1px 5px;
   border-radius: 6px;
@@ -228,7 +228,7 @@ function handleClick(fig) {
 .rail-caption {
   font-size: 11px;
   line-height: 1.5;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -253,7 +253,7 @@ function handleClick(fig) {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1.6;
-  color: #374151;
+  color: var(--color-text-regular);
   text-align: left;
 }
 </style>

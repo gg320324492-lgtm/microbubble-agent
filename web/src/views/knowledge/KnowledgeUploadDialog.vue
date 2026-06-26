@@ -134,7 +134,7 @@ const onUpload = async () => {
 }
 
 .upload-multimodal-notice {
-  background: #f0f9eb;
+  background: var(--color-success-bg);
   margin-top: -4px;
 }
 </style>

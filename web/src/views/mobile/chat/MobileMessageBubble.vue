@@ -155,7 +155,7 @@ function onLongPress(e) {
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-light);
   border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-xs);
 }
 
 [data-theme="dark"] .bubble-assistant {

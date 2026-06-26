@@ -297,7 +297,7 @@ defineExpose({ stop, togglePlay })
   padding: 2px 8px;
   border: 1px solid var(--color-border, #dcdfe6);
   border-radius: var(--radius-sm, 4px);
-  background: #fff;
+  background: var(--color-bg-card);
   color: var(--color-text-secondary, #909399);
   font-size: 12px;
   cursor: pointer;

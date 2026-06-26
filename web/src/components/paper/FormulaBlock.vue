@@ -24,7 +24,7 @@ defineProps({
 
 <style scoped>
 .formula-block {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-left: 3px solid var(--color-primary);
   border-radius: 8px;
@@ -34,7 +34,7 @@ defineProps({
 }
 
 .formula-block:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-sm);
 }
 
 .formula-header {
@@ -44,7 +44,7 @@ defineProps({
   margin-bottom: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
 }
 
 .formula-icon {
@@ -58,14 +58,14 @@ defineProps({
 
 .formula-page {
   background: #F3F4F6;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   padding: 1px 6px;
   border-radius: 6px;
   font-size: 11px;
 }
 
 .formula-confidence {
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-size: 11px;
 }
 
@@ -86,7 +86,7 @@ defineProps({
 .formula-caption {
   margin-top: 8px;
   font-size: 13px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   font-style: italic;
   line-height: 1.6;
 }

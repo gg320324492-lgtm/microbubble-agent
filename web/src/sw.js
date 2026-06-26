@@ -212,7 +212,18 @@
 // (3) 文本色 #333/#666/#999/#555 (~60 处) → var(--color-text-primary/-regular/-secondary)
 // 合计 ~150 处字面色替换，dark 模式变量在 variables.css:507+ 已重定义，6 主题
 // 切换自动响应。例外保留：linear-gradient 内、JS string、var(...,#xxx) fallback。
-const SW_VERSION = 'v70-p1-palette-tokens-2026-06-26'
+// v70 P2: 2026-06-26 灰阶/背景/阴影批量替换 ~170 处
+// (1) Tailwind 灰阶 #1F2937/#374151/#6B7280/#9CA3AF/#111827 (~30 处) → var(--color-text-*)token
+// (2) EP 浅背景 #f5f7fa/#fafbfc/#f0f9eb/#fef0f0/#fdf6ec/#f4f4f5/#f0f4f8 (~65 处) → var(--color-bg-*/color-success-bg/...)
+// (3) 白色 #fff (22 文件 33 处) → var(--color-bg-card)（保留彩色按钮白字、hero 白字、Design tokens 兜底）
+// (4) rgba(0,0,0,*) 阴影 (23 文件 40 处) → var(--shadow-xs/sm/md/lg/sidebar)
+// 4 处 dark-mode box-shadow 冗余 override 删除（var(--shadow-*) 在 dark 模式自动重定义）
+// (1) 品牌色 #FF7A5C/#FF9D85/#E85A3A/#FFB347 (~22 处) → var(--color-primary/-light/-dark/accent)
+// (2) EP 调色板 #F56C6C/#67C23A/#E6A23C/#909399/#409EFF (~70 处) → var(--color-danger/-success/-warning/-info/-primary)
+// (3) 文本色 #333/#666/#999/#555 (~60 处) → var(--color-text-primary/-regular/-secondary)
+// 合计 ~150 处字面色替换，dark 模式变量在 variables.css:507+ 已重定义，6 主题
+// 切换自动响应。例外保留：linear-gradient 内、JS string、var(...,#xxx) fallback。
+const SW_VERSION = 'v70-p2-grays-shadows-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

@@ -41,7 +41,7 @@ const priorityColor = (p) => ({ high: '#f56c6c', medium: '#e6a23c', low: '#90939
 </template>
 
 <style scoped>
-.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+.rich-card { background: white; border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
 .hyp-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
@@ -52,6 +52,6 @@ const priorityColor = (p) => ({ high: '#f56c6c', medium: '#e6a23c', low: '#90939
 .confidence { font-size: 11px; color: var(--color-text-secondary); }
 .statement { font-size: 14px; color: var(--color-text-primary); line-height: 1.6; font-weight: 500; }
 .rationale { font-size: 12px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }
-.validation { font-size: 12px; color: var(--color-success); margin-top: 4px; padding: 6px 8px; background: #f0f9eb; border-radius: 4px; }
+.validation { font-size: 12px; color: var(--color-success); margin-top: 4px; padding: 6px 8px; background: var(--color-success-bg); border-radius: 4px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
 </style>

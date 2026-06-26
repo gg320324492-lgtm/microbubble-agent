@@ -105,7 +105,7 @@ onUnmounted(() => {
 /* 全局 body 字体（保持与原 App.vue 一致） */
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background-color: #f5f7fa;
+  background-color: var(--color-bg-page);
 }
 
 #app {

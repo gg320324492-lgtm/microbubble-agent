@@ -54,11 +54,11 @@ const translations = ref([])
 
 <style scoped>
 .translation-panel {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -79,7 +79,7 @@ const translations = ref([])
 
 .panel-status {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   margin-right: 8px;
 }
 
@@ -104,7 +104,7 @@ const translations = ref([])
 
 .original-text {
   font-size: 13px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   margin-bottom: 6px;
   font-style: italic;
 }

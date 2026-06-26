@@ -864,13 +864,13 @@ onUnmounted(() => {
 .speech-bubble {
   position: absolute;
   bottom: calc(100% + 8px);
-  background: #fff;
+  background: var(--color-bg-card);
   color: var(--color-text-primary);
   border-radius: 12px;
   padding: 6px 14px;
   font-size: 12px;
   line-height: 1.5;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.15);
+  box-shadow: var(--shadow-md);
   z-index: 100;
   pointer-events: none;
   animation: pet-bubble-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);

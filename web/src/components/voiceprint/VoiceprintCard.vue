@@ -36,7 +36,7 @@ function barColor(value) {
 .voiceprint-card {
   display: inline-block;
   padding: 12px;
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;

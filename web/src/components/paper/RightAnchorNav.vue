@@ -211,14 +211,14 @@ onUnmounted(() => {
 .right-anchor-nav {
   position: sticky;
   top: 88px;
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 12px 0;
   max-height: calc(100vh - 110px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   transition: width 0.2s;
 }
 
@@ -250,7 +250,7 @@ onUnmounted(() => {
   background: none;
   border: none;
   cursor: pointer;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   font-size: 14px;
   padding: 4px;
   border-radius: 4px;
@@ -349,7 +349,7 @@ onUnmounted(() => {
 .anchor-level-4 {
   padding-left: 46px;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
 }
 
 .anchor-modules {

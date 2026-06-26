@@ -211,7 +211,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   margin: 0 auto 16px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
 }
 .logo-icon {
   font-size: 40px;
@@ -234,7 +234,7 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.95);
   border-radius: var(--radius-xl, 16px);
   padding: 24px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-lg);
   backdrop-filter: blur(8px);
 }
 

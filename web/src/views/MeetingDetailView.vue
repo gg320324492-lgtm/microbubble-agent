@@ -796,17 +796,17 @@ onMounted(async () => {
   height: 8px;
   border-radius: 50%;
 }
-.status-badge.status-scheduled { background: #f4f4f5; color: var(--color-info); }
+.status-badge.status-scheduled { background: var(--color-info-bg); color: var(--color-info); }
 .status-badge.status-scheduled .status-dot { background: var(--color-info); }
 .status-badge.status-recording { background: #fff0ed; color: var(--color-primary); }
 .status-badge.status-recording .status-dot { background: var(--color-primary); animation: dot-pulse 1.2s infinite; }
-.status-badge.status-processing { background: #fdf6ec; color: var(--color-warning); }
+.status-badge.status-processing { background: var(--color-warning-bg); color: var(--color-warning); }
 .status-badge.status-processing .status-dot { background: var(--color-warning); animation: dot-pulse 1.5s infinite; }
-.status-badge.status-completed { background: #f0f9eb; color: var(--color-success); }
+.status-badge.status-completed { background: var(--color-success-bg); color: var(--color-success); }
 .status-badge.status-completed .status-dot { background: var(--color-success); }
-.status-badge.status-cancelled { background: #f4f4f5; color: var(--color-info); }
+.status-badge.status-cancelled { background: var(--color-info-bg); color: var(--color-info); }
 .status-badge.status-cancelled .status-dot { background: var(--color-info); opacity: 0.5; }
-.status-badge.status-error { background: #fef0f0; color: var(--color-danger); }
+.status-badge.status-error { background: var(--color-danger-bg); color: var(--color-danger); }
 .status-badge.status-error .status-dot { background: var(--color-danger); }
 
 @keyframes dot-pulse {
@@ -851,7 +851,7 @@ onMounted(async () => {
 .detail-main {
   flex: 1;
   overflow-y: auto;
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: var(--radius-lg, 12px);
   border: 1px solid var(--color-border, #ebeef5);
 }

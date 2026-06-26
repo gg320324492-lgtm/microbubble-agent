@@ -84,7 +84,7 @@ const statusLabel = (s) => {
   border-radius: 10px;
   padding: 12px 14px;
   margin: 8px 0;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: var(--shadow-xs);
 }
 .card-header {
   display: flex; align-items: center; gap: 8px;
@@ -99,7 +99,7 @@ const statusLabel = (s) => {
   transition: background 0.15s;
 }
 .meeting-item:first-of-type { border-top: none; }
-.meeting-item:hover { background: #fafbfc; margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
+.meeting-item:hover { background: var(--color-bg-warm); margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
 .meeting-title { font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 6px; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .meeting-meta { display: flex; gap: 12px; font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; flex-wrap: wrap; }
@@ -108,7 +108,7 @@ const statusLabel = (s) => {
 .meeting-stats { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
 .stat {
   font-size: 11px;
-  background: #f0f4f8;
+  background: var(--color-bg-hover);
   padding: 2px 8px;
   border-radius: 10px;
   color: var(--color-text-regular);

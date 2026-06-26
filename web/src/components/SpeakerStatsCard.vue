@@ -73,7 +73,7 @@ function formatWordCount(count) {
 .speaker-avatar {
   flex-shrink: 0;
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-xs);
 }
 
 .speaker-info {

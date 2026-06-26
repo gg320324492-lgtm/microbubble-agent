@@ -276,7 +276,7 @@ const pageRangeText = computed(() => {
 
 .section-meta {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   background: #F3F4F6;
   padding: 2px 8px;
   border-radius: 8px;
@@ -314,7 +314,7 @@ const pageRangeText = computed(() => {
 }
 
 .paragraph-inline-figures :deep(.figure-card) {
-  background: #fff;
+  background: var(--color-bg-card);
   border-radius: 4px;
 }
 

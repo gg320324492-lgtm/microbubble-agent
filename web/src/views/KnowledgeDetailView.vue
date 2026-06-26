@@ -880,7 +880,7 @@ onUnmounted(() => {
 .paper-detail-page {
   width: 100%;
   min-height: 100%;
-  background: #F5F7FA;
+  background: var(--color-bg-page);
   padding: 0;
   box-sizing: border-box;
 }
@@ -937,12 +937,12 @@ onUnmounted(() => {
 
 /* 核心概念 */
 .paper-concepts {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -959,7 +959,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   flex-shrink: 0;
   min-width: 70px;
 }
@@ -972,12 +972,12 @@ onUnmounted(() => {
 
 /* 三元组（v28 step 59: 移到最末尾 + 默认折叠）*/
 .paper-entities {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 4px 20px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
 }
 
 /* el-collapse-item 标题里两个 span 之间的间距 */
@@ -996,7 +996,7 @@ onUnmounted(() => {
 
 .entities-hint {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   font-weight: normal;
 }
 
@@ -1026,7 +1026,7 @@ onUnmounted(() => {
 }
 
 .entity-predicate {
-  color: #6B7280;
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 
@@ -1036,7 +1036,7 @@ onUnmounted(() => {
 
 .entity-condition {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   margin-top: 4px;
 }
 
@@ -1049,7 +1049,7 @@ onUnmounted(() => {
 
 .confidence-text {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 /* v28 step 50: 新格式字段 (type/description) 样式 */
@@ -1071,14 +1071,14 @@ onUnmounted(() => {
 
 .entity-description {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   margin-top: 4px;
   line-height: 1.5;
 }
 
 .entity-na {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
   background: #F3F4F6;
   padding: 1px 6px;
   border-radius: 8px;
@@ -1086,12 +1086,12 @@ onUnmounted(() => {
 
 /* 正文容器（v26 回归修复：去掉 820px 限制，恢复 1180-1280px 阅读宽度） */
 .paper-article {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 32px 44px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   max-width: 100%;       /* 恢复撑满主列，不再 820px 居中挤压 */
   overflow: hidden;
 }
@@ -1142,7 +1142,7 @@ onUnmounted(() => {
 /* v28 step 64: section 解析失败时显示原始 markdown */
 .paper-fallback-content {
   padding: 24px;
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
 }
@@ -1161,11 +1161,11 @@ onUnmounted(() => {
 .paper-source {
   margin: 16px 0;
   padding: 10px 16px;
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 8px;
   font-size: 12px;
-  color: #6B7280;
+  color: var(--color-text-secondary);
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
@@ -1173,12 +1173,12 @@ onUnmounted(() => {
 
 /* 知识图谱 */
 .paper-graph {
-  background: #fff;
+  background: var(--color-bg-card);
   border: 1px solid var(--color-border-light);
   border-radius: 12px;
   padding: 20px 24px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
 }
 
 .graph-title {
@@ -1224,17 +1224,17 @@ onUnmounted(() => {
 .graph-empty-text {
   font-size: 13px;
   font-weight: 500;
-  color: #6B7280;
+  color: var(--color-text-secondary);
 }
 
 .graph-empty-hint {
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--color-text-placeholder);
 }
 
 .paper-graph-failed {
   border-color: #fde2e2;
-  background: #fef0f0;
+  background: var(--color-danger-bg);
 }
 
 .paper-graph-failed .graph-empty-icon {
@@ -1254,13 +1254,11 @@ onUnmounted(() => {
 [data-theme="dark"] .paper-concepts {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .concept-label { color: var(--color-text-secondary); }
 [data-theme="dark"] .paper-entities {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .entities-label { color: var(--color-text-primary); }
 [data-theme="dark"] .entities-hint { color: var(--color-text-secondary); }
@@ -1283,7 +1281,6 @@ onUnmounted(() => {
 [data-theme="dark"] .paper-article {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .paper-article :deep(.block-paragraph) {
   color: var(--color-text-regular);
@@ -1301,7 +1298,6 @@ onUnmounted(() => {
 [data-theme="dark"] .paper-graph {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .graph-title { color: var(--color-text-primary); }
 [data-theme="dark"] .paper-graph-empty {
