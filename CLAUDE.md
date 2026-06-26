@@ -1,5 +1,7 @@
 # MicroBubble Agent - 项目上下文
 
+> **2026-06-26 v31.2.5 rate-limit 收官（启用 Redis ZSET 持久化）**：v31.2.4 已实现 `AsyncRedisRateLimiter`（基于 Redis ZSET 滑动窗口）并通过 7 phase 单元测试，但 `_rate_limiters` 字典里全是 `RateLimiter`（in-memory），新类未接入。**v31.2.5 启用**：`app/core/rate_limit.py:118-126` 把 5 个 tier 实例全换 `AsyncRedisRateLimiter`，`rate_limit_middleware` 把 `limiter.check()` / `limiter.record()` / `len(_attempts)` 全 await 化。**关键收益**：抗 `docker compose restart`（v31.2.0-2.4 内存版一重启全清零，攻击者赶在窗口重置前打满）。**端到端验证**：[scripts/verify_v31_2_5_restart.py](scripts/verify_v31_2_5_restart.py) — 灌 9 次 SSE（ZCARD=9）→ `docker compose restart app` → 重启后第 2 次请求触发 429（旧 9 + 新 1 = 10 ≥ max_attempts）。**全量回归**：v31.2.1 XFF 空 IP / v31.2.1 nested path / v31.2.2 / v31.2.3 / Redis limiter 5 个 verify 脚本全 PASS。详见底部 [## 2026-06-26 v31.2.5 rate-limit 收官](#2026-06-26-v3125-rate-limit-收官redis-zset-持久化) section + 4 条铁律。
+>
 > **2026-06-25 v31.2.3 rate-limit 基建收尾**：v31.2.2 (commit `c617f8e9`) 已用 regex 取代 analytics substring + 注入了 user_id 维度，但还差 3 件事：① **`X-RateLimit-Policy` 响应头**（之前只有 Limit/Remaining/Reset，前端 429 不知道触发的 tier 是 auth/read/upload/sse 哪个，做不了 tier-aware UX）；② **SSE 长连接独立 tier**（`/api/v1/chat/stream` 一次占用几秒到几分钟，按 read 200/min 算只能 200 并发，新增 `sse` tier 10/min）；③ **`/auth/` substring B3 化**（`_is_under_auth(path)` prefix 匹配取代 `"/auth/" in path`，防 `/api/v1/authentication` 等未来路径误中）。详见底部 [## 2026-06-25 v31.2.3 rate-limit 基建收尾](#2026-06-25-v3123-rate-limit-基建收尾) section + 3 条铁律 + scripts/verify_v31_2_3.py 端到端 21 case 全 PASS（4 真实 HTTP policy 头 + 9 SSE tier 隔离 + 8 auth prefix 边界）。
 >
 > **2026-06-25 v31.2.2 rate-limit 进阶强化**：v31.2.1 用 substring `"/analytics" + startswith("/api/v1/auth/")` 守卫是临时方案（B1），业务假设仍藏在字符串里。**B3 改 regex 永久化**：`_ANALYTICS_PATH_RE = re.compile(r"^/api/v1/analytics/search-event$|^/api/v1/analytics/search-event/\d+/click$|...")` 锚定 `^...$` + 路径分隔。同时 `_get_client_key` 注释说"用 `{ip}:user:{uid}` 维度"但 middleware 从来没解析 token 写 `request.state.user_id`——**comment drift 修复**：新增 `_try_attach_user_id(request)` middleware helper（不查 DB，无效 token 静默忽略），让 user 维度真实生效。详见底部 [## 2026-06-25 v31.2.2 rate-limit 进阶强化](#2026-06-25-v3122-rate-limit-进阶强化) section + 2 条铁律 + scripts/verify_v31_2_2.py 端到端 12 case 全 PASS（4 analytics regex + 4 user 维度隔离 + 4 真实 HTTP）。
@@ -3856,8 +3858,151 @@ if _is_under_auth(path):  # 之前: if "/auth/" in path
 | v31.2.1 | e40ad6a7 | XFF 空 IP 兜底 + analytics substring 临时守卫 | verify_v31_2_1_xff_empty / verify_v31_2_1_nested_path |
 | v31.2.2 | c617f8e9 | analytics regex + middleware user_id 注入 | verify_v31_2_2 |
 | v31.2.3 | 8bdb36fc | X-RateLimit-Policy 头 + SSE tier + auth prefix 匹配 | verify_v31_2_3 |
+| v31.2.4 | c1046b41 | AsyncRedisRateLimiter 类实现 + memory 沉淀 + by_user dashboard | verify_redis_rate_limiter |
+| v31.2.5 | (pending) | **启用 AsyncRedisRateLimiter 替换 RateLimiter** | verify_v31_2_5_restart |
 
-**v31.2.x 共同目标**：让限流基建可观测、可推理、抗误匹配。**未做**（已识别为 follow-up）：Redis ZSET 持久化（抗 docker restart 清零）、per-user dashboard 前端。
+**v31.2.x 共同目标**：让限流基建可观测、可推理、抗误匹配、抗重启。
+
+---
+
+## 2026-06-26 v31.2.5 rate-limit 收官（Redis ZSET 持久化）
+
+> **触发**：v31.2.4 (commit `c1046b41`) 已实现 `AsyncRedisRateLimiter` 类（Redis ZSET 滑动窗口）并 7 phase 端到端测试全 PASS，但 `_rate_limiters` 字典里仍是 `RateLimiter`（in-memory dict），新类未接入 middleware。**v31.2.5 启用**让 5 个 tier 真正用 Redis 持久化。
+> **commit**：`fix(v31.2.5): 启用 AsyncRedisRateLimiter 替换 RateLimiter (抗 docker restart)`
+
+### 改了什么
+
+**文件 1**：`app/core/rate_limit.py`
+- `_rate_limiters` 5 个 tier 实例全部从 `RateLimiter` 改为 `AsyncRedisRateLimiter`（auth/write/read/upload/sse）
+- `rate_limit_middleware` 中 3 处同步调用 await 化：
+  - `limiter.check(client_key)` → `await limiter.check(client_key)`
+  - `limiter.record(client_key)` → `await limiter.record(client_key)`
+  - `limiter._cleanup(client_key) + len(limiter._attempts[client_key])` → `await limiter.remaining(client_key)`（Redis 版返回剩余配额，O(1) ZCARD）
+- `AsyncRedisRateLimiter` class docstring 更新"当前状态 v31.2.5: **已启用**"
+
+### 4 条铁律
+
+#### 铁律 1：check + record 必须分开（不能合并成"check + record"一次调用）
+
+**症状**（v31.2.5 抗重启测试踩坑）：
+- 第 9 次请求灌满 ZSET = 9
+- `docker compose restart app`（抗重启关键场景）
+- 重启后第 1 次请求 → middleware check 看 ZSET = 9 → 9 < 10 通过 → record → ZSET = 10
+- 此时响应头 `X-RateLimit-Remaining = 0`，**但 status = 200/422**，不是 429
+- 重启后第 2 次请求 → check 看 ZSET = 10 → 10 >= 10 → **429** 触发
+
+**根因**：`check` 只看现有 count，触发条件是 `count >= max_attempts`。`record` 在 check 通过后才把当前 timestamp 加进去。这意味着 **最后一次"合法"请求**（把 count 推到 max）跟 **第一次"非法"请求**（触发 429）之间永远差 1 次。
+
+**为什么必须分开**（不合并成 "check_and_record" 一次调用）：
+1. **记录失败的请求会污染计数**：业务代码 raise 异常前如果已经 record，下次请求看到旧 record 但实际是上次的错误
+2. **endpoint 5xx 不应消耗配额**：用户失败了的写操作不应该计入 limit（fail-open 原则）
+3. **race condition**：并发场景下合并调用需要分布式锁，分开则 Redis 自身的 ZADD 原子性已经够了
+
+**教训**：限流 middleware 设计必须区分"check 是否通过"和"记录一次请求"。前者是 predicate，后者是副作用。中间件先 check → endpoint 执行 → record。这跟 GC 的"标记-清除"分两阶段是同一个道理。
+
+#### 铁律 2：uvicorn 写响应头是小写，自定义 dict 必须 lowercase key
+
+**症状**（v31.2.5 verify 脚本踩坑）：
+- 实测 `curl -i` 看到 `x-ratelimit-policy: sse`（小写）
+- 但 verify 脚本用 socket 自己 parse 响应头，dict key 是 `X-RateLimit-Policy`（原始大小写）
+- `headers.get("X-RateLimit-Policy")` 永远 None
+- Python `requests` / `urllib` 自动处理大小写不敏感（用 case-insensitive dict），**但 raw socket 自己 parse 必须手动 lowercase**
+
+**修复**：
+```python
+headers = {}
+for line in lines[1:]:
+    if ":" in line:
+        k, v = line.split(":", 1)
+        headers[k.strip().lower()] = v.strip()  # ← lowercase 兜底
+```
+
+**教训**：
+- HTTP/1.1 spec 要求 header name case-insensitive（RFC 7230 §3.2）
+- **uvicorn 实现**: 直接用小写（出于性能考虑，避免规范化）
+- **urllib / requests**: 自动 normalize 成 Title-Case（`X-RateLimit-Policy`），用 `headers.get` 不分大小写
+- **raw socket 自己 parse**: 必须显式 lowercase，否则 `headers.get("X-RateLimit-Policy")` 在 uvicorn 响应下永远 None
+- **诊断技巧**: `print([k for k in headers if "limit" in k])` 一次性看所有 key，避免盲猜
+
+#### 铁律 3：socket 流式响应读响应头必须用 `\r\n\r\n` 而不是空 recv
+
+**症状**（v31.2.5 verify 脚本又踩坑）：
+- SSE 长连接（POST /chat/stream）调用 `urllib.request.urlopen()` 会**永远阻塞等流式 body**
+- 之前我用 `socket.create_connection` + `s.sendall(req)` + `while b"\r\n\r\n" not in buf` 正确读响应头就 close
+- 但最开始实现里我用 `"\r\n".join(req_lines) + payload.decode()` 把 payload decode 再 encode——payload 是 `b'{"messages":[...]}'` 是 ASCII json，没问题
+- 实际踩坑：line `payload.decode()` 是冗余（payload 是 bytes，加 decode 后 .encode() 等价），但更严重的是 line 47 多了一个 `""` 空字符串导致请求头多一个 `\r\n` —— uvicorn 仍能解析但 Content-Length 不对会断开
+
+**修复**：
+```python
+raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
+# headers 整段一次 encode, + payload bytes 直接拼接
+```
+
+**教训**：
+- SSE / chunked 长连接必须**主动断 socket**，不能等 urllib body 读完
+- raw socket 写 HTTP 请求最稳的格式：headers 字符串 join + 一次 encode + 直接 + payload bytes
+- 任何 `headers + payload.decode()` 模式都是埋雷（bytes/str 混用，特殊字符 decode 报错）
+- **诊断**: `curl -i --max-time 3 <url>` 看响应头是更快的金标准（避免 raw socket 调试）
+
+#### 铁律 4：Redis 限流"抗重启"必须 ZSET 持久化才能真生效
+
+**症状**（v31.2.0-2.4 已知缺陷）：
+- 内存版 `RateLimiter` 用 `defaultdict(list)` 在 process memory 存 timestamp
+- `docker compose restart app` 进程重启 → `defaultdict` 整个清零
+- 攻击者脚本每 30 秒打满 200/min → 重启瞬间清零 → 立刻又能打 200
+- 单进程无所谓（生产就一个 uvicorn 进程），但**重启清零**是真问题
+
+**v31.2.5 修复**：
+- `AsyncRedisRateLimiter` 用 Redis ZSET 存 timestamp（score = unix time）
+- check: ZREMRANGEBYSCORE 清窗口外 → ZCARD 计数 → >= max_attempts 触发 429
+- record: ZADD 新 timestamp + EXPIRE 窗口+1s（Redis 自动清理）
+- middleware 全 await 化（每次 check/record 多 1 次 Redis round-trip ~1ms）
+
+**抗重启实测**（[scripts/verify_v31_2_5_restart.py](scripts/verify_v31_2_5_restart.py)）：
+| 阶段 | 期望 | 实测 | 解读 |
+|---|---|---|---|
+| 1. 灌 9 次 SSE | remaining 9→1 | ✅ 9→8→7→6→5→4→3→2→1 | ZSET 累加正确 |
+| 2. ZSET ZCARD | 9 | ✅ 9 | Redis 持久化生效 |
+| 3. docker compose restart app | healthy after 2s | ✅ 2s | 进程重启完成 |
+| 4. 重启后第 1 次 | remaining=0 | ✅ 0 | 旧 9 + 新 1 = 10 |
+| 5. 重启后第 2 次 | 429 | ✅ 429 | 10 >= 10 触发 |
+
+**教训**：
+- in-memory 限流只适合**单进程** + **不重启**场景
+- 任何"会话粘性" / "购物车" / "限流计数" 类状态，**生产环境必须持久化**到 Redis/PostgreSQL
+- v31.2.4 设计时就预留了 `AsyncRedisRateLimiter` 类（silent degradation try/except）但**没接 middleware**——这种"有备胎不上备胎"是技术债，必须在后续 commit 替换
+- **silent degradation 设计**：Redis 不可用时 `await limiter.check()` / `await limiter.record()` 内部 `try/except Exception: pass`，不阻断请求。这是**安全降级** vs **硬错误**的取舍
+
+### 端到端验证（5 个脚本全 PASS）
+
+| 脚本 | 测试场景 | 结果 |
+|---|---|---|
+| verify_redis_rate_limiter.py | AsyncRedisRateLimiter 类核心（7 phase） | ✅ 7/7 PASS |
+| verify_v31_2_1_xff_empty.py | XFF 空 IP 兜底 | ✅ 8/8 PASS |
+| verify_v31_2_1_nested_path.py | /auth/analytics 嵌套守卫 | ✅ 13/13 PASS |
+| verify_v31_2_2.py | analytics regex + user_id 维度 | ✅ 13/13 PASS |
+| verify_v31_2_3.py | X-RateLimit-Policy 头 + SSE tier + auth prefix | ✅ 21/21 PASS |
+| **verify_v31_2_5_restart.py** (新) | **抗 docker restart** | ✅ **5/5 PASS** |
+
+### 沉淀
+
+- **修改文件 1 个**：`app/core/rate_limit.py`（+12 行 / -7 行 = 净 +5 行：5 个 tier 实例化 + 3 处 await + 1 处注释 + 1 处 docstring）
+- **新增文件 1 个**：`scripts/verify_v31_2_5_restart.py`（210 行，含 raw socket SSE 流式响应解析）
+- **回归不破坏**：v31.2.1/2/3/4 全部 55 case 仍 PASS
+- **风险等级**：低（middleware 内部替换，无 API 行为变化；check + record 仍是分开调用；silent degradation 兜底 Redis 故障）
+
+### v31.2.x 系列总览（更新）
+
+| 版本 | 提交 | 改动 | verify 脚本 |
+|---|---|---|---|
+| v31.2 | c2c5066e | Optional auth + IP 维度限流 + user_id 列 | — |
+| v31.2.1 | e40ad6a7 | XFF 空 IP 兜底 + analytics substring 临时守卫 | verify_v31_2_1_xff_empty / verify_v31_2_1_nested_path |
+| v31.2.2 | c617f8e9 | analytics regex + middleware user_id 注入 | verify_v31_2_2 |
+| v31.2.3 | 8bdb36fc | X-RateLimit-Policy 头 + SSE tier + auth prefix 匹配 | verify_v31_2_3 |
+| v31.2.4 | c1046b41 | AsyncRedisRateLimiter 类实现 + memory 沉淀 + by_user dashboard | verify_redis_rate_limiter |
+| **v31.2.5** | **(本次)** | **启用 AsyncRedisRateLimiter 替换 RateLimiter (抗 docker restart)** | **verify_v31_2_5_restart** |
+
+**v31.2.x 共同目标**：让限流基建可观测、可推理、抗误匹配、抗重启。**全部完成**。
 
 ### 还可以做的（按优先级）
 

@@ -52,8 +52,8 @@ class AsyncRedisRateLimiter:
       - Redis 不可用时需要 fallback (不能拒绝所有请求)
       - 单次 check 多 1 次 round-trip (~1ms)
 
-    当前状态: 已实现并 verify 通过, 但默认**未启用**. middleware 仍用 RateLimiter.
-    启用方法: 修改 _rate_limiters 实例化代码, 把 RateLimiter 换成 AsyncRedisRateLimiter.
+    当前状态 (v31.2.5): **已启用**, _rate_limiters 全部实例化本类.
+    RateLimiter (内存版) 保留供 login_limiter 等向后兼容场景.
     """
 
     def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
@@ -115,12 +115,15 @@ class AsyncRedisRateLimiter:
 
 
 # 分级限流器实例
+# v31.2.5: 切到 AsyncRedisRateLimiter（Redis ZSET 持久化）
+# 优势: 抗 docker compose restart, 跨实例共享, 真实滑动窗口
+# 劣势: 多 1 次 Redis round-trip (~1ms), Redis 不可用时静默降级 (try/except)
 _rate_limiters = {
-    "auth": RateLimiter(max_attempts=20, window_seconds=60),      # 真认证动作：登录/刷新/改密 20次/分钟
-    "write": RateLimiter(max_attempts=30, window_seconds=60),    # 写操作：30次/分钟
-    "read": RateLimiter(max_attempts=200, window_seconds=60),    # 读操作：200次/分钟
-    "upload": RateLimiter(max_attempts=10, window_seconds=60),   # 上传：10次/分钟
-    "sse": RateLimiter(max_attempts=10, window_seconds=60),      # v31.2.3: SSE 长连接 10次/分钟
+    "auth": AsyncRedisRateLimiter(max_attempts=20, window_seconds=60),      # 真认证动作：登录/刷新/改密 20次/分钟
+    "write": AsyncRedisRateLimiter(max_attempts=30, window_seconds=60),     # 写操作：30次/分钟
+    "read": AsyncRedisRateLimiter(max_attempts=200, window_seconds=60),     # 读操作：200次/分钟
+    "upload": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),    # 上传：10次/分钟
+    "sse": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),       # v31.2.3: SSE 长连接 10次/分钟
 }
 
 # /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
@@ -277,7 +280,13 @@ def _try_attach_user_id(request: Request) -> None:
 
 
 async def rate_limit_middleware(request: Request, call_next):
-    """全站限流中间件"""
+    """全站限流中间件
+
+    v31.2.5: 切到 AsyncRedisRateLimiter (Redis ZSET 持久化)
+    - 抗 docker compose restart (Redis 默认 RDB 每分钟 snapshot)
+    - 跨实例共享 (未来多 worker / 多 pod)
+    - Redis 故障时静默降级 (limiter.check/record 内部 try/except)
+    """
     from starlette.responses import JSONResponse
 
     # 跳过健康检查和 WebSocket
@@ -298,22 +307,22 @@ async def rate_limit_middleware(request: Request, call_next):
     client_key = f"{limit_type}:{_get_client_key(request)}"
 
     try:
-        limiter.check(client_key)
+        await limiter.check(client_key)
     except HTTPException as e:
         return JSONResponse(
             status_code=e.status_code,
             content={"error": {"code": "RATE_LIMIT_EXCEEDED", "message": e.detail}},
         )
 
-    limiter.record(client_key)
+    await limiter.record(client_key)
 
     response = await call_next(request)
 
     # 添加限流信息到响应头
     # v31.2.3: 加 X-RateLimit-Policy 让前端能识别触发的 tier,
     # 用于 tier-aware UX (auth 429 → 跳登录页; read 429 → 降级到缓存)
-    limiter._cleanup(client_key)
-    remaining = limiter.max_attempts - len(limiter._attempts[client_key])
+    # v31.2.5: remaining 从 Redis (await limiter.remaining) 而非内存 dict 读
+    remaining = await limiter.remaining(client_key)
     response.headers["X-RateLimit-Limit"] = str(limiter.max_attempts)
     response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
     response.headers["X-RateLimit-Reset"] = str(int(time.time() + limiter.window_seconds))
