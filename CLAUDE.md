@@ -1,5 +1,7 @@
 # MicroBubble Agent - 项目上下文
 
+> **2026-06-26 v31.3.1 whisper 容器 bind mount**：v31.3 commit (`93de5151`) 后发现部署需要 `docker cp app/whisper_server.py microbubble-agent-whisper-1:/app/whisper_server.py`（因为 [Dockerfile.whisper:40](Dockerfile.whisper#L40) `COPY app/whisper_server.py .` 把源码烧进镜像，本地改源码后 `docker compose restart` 不生效）。违反 CLAUDE.md "Dockerfile 只装系统依赖 / 源码走 bind mount" 最佳实践 → **v31.3.1 修复**：[Dockerfile.whisper](Dockerfile.whisper) 删 `COPY` + [docker-compose.yml](docker-compose.yml) 加 `- ./app/whisper_server.py:/app/whisper_server.py:ro` bind mount。**优势**：本地改源码 → `docker compose restart whisper` 即可生效（省 docker cp 步骤）。**端到端验证**：改本地加 print 标记 → restart → logs 看到标记 → 删除标记 → restart → logs 干净（bind mount 双向同步）。详见底部 [## 2026-06-26 v31.3.1 whisper 容器 bind mount](#2026-06-26-v3131-whisper-容器-bind-mount解决dockerfile-copy-烧镜像陷阱) section + 3 条新铁律。
+>
 > **2026-06-26 v31.3 Whisper 常驻 + 推理加速**：v31.2 之前 working tree 里有 `lazy load + 10 分钟空闲卸载` 方案（`whisper_server.py` +183 行），但用户决策"为保证聊天 ASR 短语音时效性，模型常驻 GPU 8GB" → **回滚到简单模式**：启动时一次性加载，永不卸载。**加 `flash_attention=True`**（ctranslate2 4.8+ 支持）→ 推理提速 30-50%（长录音收益明显）。**代码净减 ~80 行**（删 `_do_release_model` / `_idle_checker_loop` / `_ensure_model_loaded` / 状态变量），加 5 行。**实测数据修正**（CLAUDE.md 之前估的"28GB → 500MB"和"10-15s 加载"严重偏离）：实测加载 **18s**、加载后 GPU **8 GB**、`del` 后 **4.3 GB**、释放比 **3.7 GB**（估的 28GB 是开发者凭印象，没实测）。详见底部 [## 2026-06-26 v31.3 Whisper 常驻 + 推理加速](#2026-06-26-v313-whisper-常驻--推理加速) section + 3 条铁律。
 >
 > **2026-06-26 v31.2.5 rate-limit 收官（启用 Redis ZSET 持久化）**：v31.2.4 已实现 `AsyncRedisRateLimiter`（基于 Redis ZSET 滑动窗口）并通过 7 phase 单元测试，但 `_rate_limiters` 字典里全是 `RateLimiter`（in-memory），新类未接入。**v31.2.5 启用**：`app/core/rate_limit.py:118-126` 把 5 个 tier 实例全换 `AsyncRedisRateLimiter`，`rate_limit_middleware` 把 `limiter.check()` / `limiter.record()` / `len(_attempts)` 全 await 化。**关键收益**：抗 `docker compose restart`（v31.2.0-2.4 内存版一重启全清零，攻击者赶在窗口重置前打满）。**端到端验证**：[scripts/verify_v31_2_5_restart.py](scripts/verify_v31_2_5_restart.py) — 灌 9 次 SSE（ZCARD=9）→ `docker compose restart app` → 重启后第 2 次请求触发 429（旧 9 + 新 1 = 10 ≥ max_attempts）。**全量回归**：v31.2.1 XFF 空 IP / v31.2.1 nested path / v31.2.2 / v31.2.3 / Redis limiter 5 个 verify 脚本全 PASS。详见底部 [## 2026-06-26 v31.2.5 rate-limit 收官](#2026-06-26-v3125-rate-limit-收官redis-zset-持久化) section + 4 条铁律。
@@ -4167,3 +4169,118 @@ docker exec microbubble-agent-whisper-1 nvidia-smi --query-gpu=memory.used --for
   - 会议 ASR 推理速度：flash_attention 30-50% 加速（长录音明显）
   - 文档准确：CLAUDE.md 实测数据替代估算
 - **风险**：0 风险（启动加载 + 永不卸载 = 最简单模式，lifespan finally 不释放也无所谓，进程退出 OS 自动回收）
+
+---
+
+## 2026-06-26 v31.3.1 whisper 容器 bind mount（解决"Dockerfile COPY 烧镜像"陷阱）
+
+> **触发**：v31.3 commit (`93de5151`) 后发现部署需要 `docker cp app/whisper_server.py microbubble-agent-whisper-1:/app/whisper_server.py`（因为 Dockerfile.whisper 用 `COPY app/whisper_server.py .` 烧进镜像，本地改源码后 `docker compose restart` 不生效）。违反 CLAUDE.md "镜像只装系统依赖 / 源码走 bind mount" 最佳实践，触发 v31.3.1 修复。
+> **commit**：`fix(whisper): bind mount 源码 + Dockerfile 删 COPY (本地改代码后 restart 即生效)`
+
+### 改了什么
+
+**文件 1**：[Dockerfile.whisper](Dockerfile.whisper)
+- 删 `COPY app/whisper_server.py .`（源码不再烧进镜像）
+- 加 6 行注释解释为什么用 bind mount（CLAUDE.md 7a 教训）
+
+**文件 2**：[docker-compose.yml:143](docker-compose.yml#L143) whisper volumes
+- 加 `- ./app/whisper_server.py:/app/whisper_server.py:ro`（bind mount，:ro 只读保护）
+- 加注释说明 v31.3.1
+
+### 端到端验证
+
+| 步骤 | 期望 | 实测 |
+|---|---|---|
+| `docker compose build whisper` | 镜像重建成功（cache 命中，0.2s） | ✅ 0.2s |
+| `docker compose up -d whisper` | 容器重建（volume 改动必须 recreate） | ✅ Recreated |
+| 修改本地 `app/whisper_server.py`（加 print 标记） | restart 后 logs 显示新 print | ✅ `[WHISPER] 启动加载模型... (bind mount 验证 v31.3.1)` |
+| 删除测试 print + restart | logs 恢复原版 | ✅ 干净 |
+| `docker compose restart whisper` | 模型 18s 重启, GPU 7.4 GB | ✅ 17.9s, 7591 MiB |
+
+### 3 条新铁律
+
+#### 铁律 1：Dockerfile COPY 源码是反模式（除 entrypoint.sh 等启动脚本外）
+
+**症状**：v31.3 commit 后用户每次改 `whisper_server.py` 都需要 `docker cp` 手动同步，违反 Docker 12-factor "build once, deploy anywhere" 原则。
+
+**根因**：[Dockerfile.whisper:40](Dockerfile.whisper#L40) `COPY app/whisper_server.py .` 把源码烧进镜像层。本地改源码后：
+- `docker compose restart` 用旧镜像（restart 不重建）
+- `docker compose up -d` 检测到 volumes 变化 → recreate 容器（如果加了 bind mount）→ 容器读 bind mount 的新源码 ✅
+- **或者** rebuild 镜像（需要时间，但能保证多实例一致性）
+
+**正确方案**：
+- **源码**走 bind mount（本地改动 → restart 即生效）
+- **系统依赖 + Python 包**走 Dockerfile RUN（启动时按需拉）
+- **模型文件**走 volume（如 `./models:/app/models`，避免每次 rebuild 重下 2.88GB 模型）
+- **entrypoint.sh 等启动脚本**：可 COPY（不常改）或 bind mount（常改）
+
+**教训**：
+1. **Dockerfile 应该是"安装依赖"的角色，不是"打包应用"的角色** —— 镜像层只装系统包 + Python 包，源码走 bind mount
+2. **volume 改动触发 recreate，restart 不触发** —— 加 bind mount 后必须 `docker compose up -d` 才能看到新 mount
+3. **CLAUDE.md 7a 教训"只重启容器不重读 env"**：同样适用源码 —— bind mount 才是修这个问题的根本方案
+
+#### 铁律 2：debug print 必须放在执行路径上，否则看不见
+
+**症状**：v31.3.1 验证时，第一次 `echo >> /app/whisper_server.py` 加了 `print("[TEST-BIND-MOUNT] ...")` 在文件末尾（line 235），**但 logs 里看不到**。
+
+**根因**：
+- `print` 加在 `if __name__ == "__main__":` 之后
+- Docker `CMD ["python3", "whisper_server.py"]` 通过 `python3 -m whisper_server` 或 `python3 whisper_server.py` 启动
+- 这两种方式都不会执行 `__main__` block（除非 `-m` 模式下文件名为 `__main__.py`）
+- 真正执行的是 uvicorn 加载 module，module-level print + lifespan print 才会出现
+
+**正确 debug 位置**：
+- ✅ module-level top（文件最顶部 `print("loaded", flush=True)`）
+- ✅ lifespan 钩子内（启动时必经）
+- ✅ `/health` / `/transcribe` 端点内（请求时触发）
+- ❌ `if __name__ == "__main__"` 内（uvicorn 启动不会执行）
+
+**教训**：
+1. **uvicorn 启动 Flask-style FastAPI**：不会执行 `__main__` block
+2. **debug 标记放 lifespan 钩子**：100% 会跑，logs 必出现
+3. **不要 hack `__main__` 块加测试代码**：要么写独立 verify 脚本，要么改 lifespan
+
+#### 铁律 3：容器 `bash -c "head file"` 时 docker exec 有 cwd 解析 bug
+
+**症状**：`docker exec microbubble-agent-whisper-1 head /app/whisper_server.py` 报 `cannot open 'C:/Program Files/Git/app/whisper_server.py' for reading`（Windows 路径格式）。
+
+**根因**：Docker Desktop on Windows 的 docker exec **参数解析有问题**——直接把 `/app/whisper_server.py` 翻译成本地 Windows 路径 `C:/Program Files/Git/app/whisper_server.py`，找不到文件报错。
+
+**修复**：用 `bash -c "head /app/whisper_server.py"`（双引号包裹命令，bash 解释 `/app/` 是容器内路径）：
+```bash
+docker exec microbubble-agent-whisper-1 bash -c "head /app/whisper_server.py"
+```
+
+或者指定 workdir：
+```bash
+docker exec -w /app microbubble-agent-whisper-1 head whisper_server.py
+# 但 -w 在某些 docker 版本会报 "Cwd must be an absolute path"
+```
+
+**教训**：
+1. **docker exec 在 Windows 上有路径翻译 bug** —— 绝对路径参数会被错误处理
+2. **bash -c "..." 是最稳的 escape** —— bash 解析后命令是容器原生 Linux 路径
+3. **验证 docker exec 工作的金标准**：先 `docker exec X bash -c "pwd && ls"` 看容器内当前目录
+4. **CLAUDE.md 已有类似教训**（多次踩这个坑），但还会再犯，因为这是 Docker Desktop 的"半翻译"行为
+
+### 部署必做
+
+```bash
+# 首次部署（删 COPY 后必须 rebuild）
+docker compose build whisper
+docker compose up -d whisper
+
+# 后续开发（改源码后）
+vim app/whisper_server.py
+docker compose restart whisper
+sleep 25  # 等 18s 模型加载
+curl whisper:8002/health  # 验证生效
+```
+
+### 沉淀
+
+- **修改文件 2 个**：Dockerfile.whisper（-1 行 COPY + +6 行注释）+ docker-compose.yml（+3 行 bind mount）
+- **新增 0 文件**
+- **净代码变化**：+8 行（全是注释和配置）
+- **效果**：本地改源码 → `docker compose restart` 即生效（省 `docker cp` 步骤）
+- **风险**：0 风险（bind mount :ro 只读保护，防止容器意外改源码）
