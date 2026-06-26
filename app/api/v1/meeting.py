@@ -420,9 +420,11 @@ async def polish_text(
     if not text or len(text.strip()) < 3:
         raise HTTPException(status_code=400, detail="文本太短")
 
-    from app.services.meeting_ai_polish import polish_segments
+    from app.services.meeting_ai_polish import polish_segments_with_cache
 
-    result = await polish_segments(
+    # 用缓存版 (meeting_id 隔离 Redis key), 同一段文本二次请求直接命中缓存, 0 LLM 调用
+    result = await polish_segments_with_cache(
+        meeting_id=meeting_id,
         segments=[{"speaker": "未知", "text": text, "ts": 0.0}],
         meeting_context={"title": "", "participants": [], "topic": None, "context": None},
     )
