@@ -112,7 +112,19 @@
 // 半透明（浅色场景半透明有 iOS 玻璃质感，保留设计意图）。
 // 教训：CSS 层面正确不等于用户视觉满意，调试 dark mode UI 必须亲自看截图，
 // 不能只看 DevTools 数值。
-const SW_VERSION = 'v65-tabbar-opaque-dark-2026-06-26'
+// v66: 2026-06-26 v65 部署后 console.table 显示 TabBar bg 仍是 rgba(26,29,35,0.92)
+// 半透明，根本没生效。原因：CSS 同时存在 2 条 dark 规则——
+//   Rule 1: [data-theme="dark"] .mobile-tabbar[data-v-xxx] → rgba(26,29,35,0.92)
+//           (scoped v64 留尾，特异性 0,3,0)
+//   Rule 2: [data-theme="dark"] .mobile-tabbar → rgb(26,29,35)
+//           (非 scoped v65 新加，特异性 0,2,0)
+// Rule 1 特异性更高胜出 → 仍是半透明。v65 只改了非 scoped 那条，漏了原 scoped
+// 那条仍是 0.92 透明。修复：把原 scoped 那条的值从 rgba(26,29,35,0.92) 改成
+// rgb(26,29,35) 完全不透明，与非 scoped 规则值一致。
+// 教训：dark mode 容器背景涉及**两条 CSS 规则**（scoped + 非 scoped），任何一处
+// 不透明值都会被高特异性那条胜出，必须**两处同步修改**。下次添加 dark 模式 UI
+// 先 grep 现有 scoped 块是否已有同名 dark 规则，全量同步。
+const SW_VERSION = 'v66-tabbar-scoped-dark-opaque-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
