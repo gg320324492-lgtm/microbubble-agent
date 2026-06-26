@@ -2,6 +2,7 @@
 
 > **v70 P3 沉淀**（2026-06-26）：本文档作为新组件开发第一手参考。新增任何颜色都必须从本文档选 token，不允许直接写 `#xxx`。
 > **自动化守卫**：`npm run lint:css` 会拦截 `color: #xxx` / `background: #xxx` 字面（除 `rgba()` 透明色 + `currentColor` + `variables.css` 定义 token 本身 + 合法设计意图白名单）。
+> **v73 沉淀**（2026-06-27）：`var(--token, #fallback)` 形式**允许保留**——fallback 是 token 缺失时的安全网，stylelint **不**拦截（属性值是 `var()` 函数不是裸 `#hex`）。全项目 217 处 fallback 全部是常用 token（`--color-primary` / `--color-danger` / `--color-success` 等），无需清理。
 
 ---
 
@@ -323,4 +324,102 @@ cd web && npm run lint:css:fix
 
 ---
 
-**最后更新**：2026-06-26（v70 P3 沉淀）
+## 13. v73 Fallback 政策（217 处 var fallback 不清理）
+
+### 13.1 现象
+
+v70 P3 Stylelint 守卫**只**拦截裸 `#hex` 字面（`color: #fff` / `background: #000`），**不**拦截 `var(--token, #hex)` 形式。实际项目中保留 217 处 `var(--xxx, #fallback)` 形式（统计时间：v73 启动）。
+
+### 13.2 高频 fallback 模式
+
+| 形式 | 数量 | 含义 |
+|---|---:|---|
+| `var(--color-danger, #F56C6C)` | 40 | 危险色 fallback |
+| `var(--color-success, #67C23A)` | 28 | 成功色 fallback |
+| `var(--color-primary, #FF7A5C)` | 24 | 主色 fallback |
+| `var(--color-warning, #E6A23C)` | 20 | 警告色 fallback |
+| `var(--color-text-secondary, #909399)` | 16 | 文本 fallback |
+| 其它 `--color-*` | 89 | 各种 token fallback |
+
+### 13.3 为什么保留 fallback
+
+1. **防御性编程**：如果 `variables.css` 删了某个 token，fallback 兜底避免样式白屏
+2. **变量调试**：DevTools 临时删 `--color-x` 可看 fallback 实际值，无需翻 variables.css
+3. **零运行时成本**：CSS 解析时 var() 命中第一参就 short-circuit，fallback 不读
+4. **视觉无差异**：变量已定义，fallback 永远不触发
+5. **不浪费 bundle**：fallback 字符串不进 JS，CSS 压缩后保留
+
+### 13.4 反例（不推荐形式）
+
+```css
+/* ❌ 反模式 1: fallback 是字面色但 token 名是缩写（易读错） */
+.x { color: var(--c-p, #f57) }
+
+/* ❌ 反模式 2: fallback 跟 token 实际值不一致（误导） */
+:root { --color-primary: #FF7A5C; }
+.x { color: var(--color-primary, #F00) }  /* fallback 写错 */
+
+/* ❌ 反模式 3: 嵌套 var fallback（CSS 不支持） */
+.x { color: var(--color-x, var(--color-y, #fff)) }  /* 第二参必须是字面 */
+```
+
+### 13.5 正例（推荐形式）
+
+```css
+/* ✅ 正模式 1: fallback = token 在 variables.css 的实际 light 值 */
+.x { color: var(--color-primary, #FF7A5C) }
+
+/* ✅ 正模式 2: EP 调色板用 EP 实际值 */
+.x { color: var(--color-danger, #F56C6C) }
+
+/* ✅ 正模式 3: NutUI 变量兜底 */
+.x { color: var(--nut-white, #fff) }
+```
+
+### 13.6 何时应该清 fallback
+
+唯一场景：token 在 `variables.css` **已经**删了，fallback 仍保留 → 100% 应该删 fallback，否则误导后续开发者以为"变量还在"。
+
+**验证命令**（v73 实测找到 6 个真 orphan）：
+```bash
+cd e:/microbubble-agent
+# 列出所有 fallback + 对应 token 在 3 个全局 CSS 文件是否仍存在
+grep -rEho 'var\(--[a-z-]+,' web/src/ | sort -u | while read v; do
+  token=$(echo "$v" | sed 's/var(\(--[^,]*\).*/\1/')
+  if ! grep -qE "(^|\s)${token}(\s|:)" \
+      web/src/assets/variables.css \
+      web/src/assets/nutui-theme.scss \
+      web/src/assets/mobile-base.css 2>/dev/null; then
+    echo "ORPHAN: $v (token=$token)"
+  fi
+done
+```
+
+### 13.8 v73 实测 orphan 修复记录
+
+| Orphan token | 文件:行 | 修复 |
+|---|---|---|
+| `--color-border-lighter` | TaskView.vue:540,551,570 | → `--color-border-light`（variables.css 实际存在） |
+| `--bg-card` | UploadStatusBadge.vue:79 | → `--color-bg-card` |
+| `--border-color` | UploadStatusBadge.vue:81 | → `--color-border` |
+| `--text-primary` | UploadStatusBadge.vue:82 | → `--color-text-primary` |
+| `--radius-pill` | MobileTaskView.vue:522 | → `--radius-full`（9999px 等价 pill 圆角） |
+| `--color-primary-light-7` | ThemeToggleButton.vue:50 + MainLayout.vue:532（v73 二次扫描发现） | → `--color-primary-light`（实际 light 值 `#FF9D85`） |
+| `--font-family-mono` | KnowledgeExtractionsPanel.vue:350,389 + KnowledgeImageGallery.vue:355 | **新增 token** `--font-family-mono: 'Courier New', Courier, monospace` + 3 处改用 token（无 fallback） |
+| `--nut-white` / `--nut-black` | TabBar.vue:188,219 | **合法**（定义在 `nutui-theme.scss:35-36`，不在 variables.css） |
+| `--i` | MainLayout.vue:720,724 | **保留**（CSS 动画 stagger 计数器，本地无 token 必要） |
+
+**结果**：7 个真 orphan 全部修复（5 个改 token 名 + 1 个新增 token + 1 个 `--i` 保留为本地计算变量），2 个真合法（nutui 主题）。`npm run lint:css` 0 errors，`bash scripts/check-token-orphans.sh` 仅 1 个本地计算变量 `--i` 命中（设计意图保留）。
+
+**新增脚本** `scripts/check-token-orphans.sh`：CI 集成时可加进 lint-css.yml 跑，确保未来新增 var fallback 必查 token 定义。
+
+### 13.7 沉淀纪律
+
+1. **fallback 不清理是设计决策**，不是技术债
+2. **写 fallback 时复制 variables.css 实际值**，不要凭印象写
+3. **CI 不会拦截**（stylelint 只扫裸 `#hex`），但人工 code review 必查
+4. **删 variables.css token 时同步删所有 fallback**——避免孤儿
+
+---
+
+**最后更新**：2026-06-27（v73 fallback 政策 + CI 集成）
