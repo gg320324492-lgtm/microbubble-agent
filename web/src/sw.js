@@ -55,7 +55,18 @@
 // inactive-color="#909399" / active-color="#FF7A5C" 属性（阻断 NutUI CSS 变量级联），
 // nutui-theme.scss [data-theme="dark"] 块补 --nut-tabbar-active-color #FF9D85 +
 // --nut-tabbar-inactive-color #a6a9ad 覆盖。SW BUMP 触发浏览器重新 install。
-const SW_VERSION = 'v59-help-sheet-tabbar-darkmode-2026-06-26'
+// v60: 2026-06-26 v59 部署后用户反馈"还是没变深色"。诊断发现：(a) NutUI 内部 inactive
+// icon 选择器 nut-tabbar-item__icon--unactive 实际用 --nut-dark-color-gray /
+// --nut-text-color 而不是 --nut-tabbar-inactive-color，所以 v59 在 nutui-theme.scss
+// 加的 inactive 变量**根本没被消费**。(b) TabBar.vue :deep(.nut-tabbar-item) 用
+// var(--color-text-secondary)，但该变量在 variables.css:501 设计上 light/dark 都
+// 保持 #909399 不变（次要文字色需要稳定的中性灰）。所以 inactive 颜色"看不出变化"。
+// (c) active 用 var(--color-primary) = dark #FF9D85 与 light #FF7A5C，亮度差仅 +15%，
+// 视觉差异太小。修复：TabBar.vue 加 [data-theme="dark"] :deep(...) 覆盖，inactive
+// 用 var(--color-text-regular) = #c0c4cc，active 用 var(--color-accent) = #FFC067。
+// 纪律沉淀：NutUI 主题定制优先改 项目 scoped CSS + [data-theme="dark"] 覆盖，
+// 不要期望 nutui-theme.scss 改 --nut-tabbar-*-color 生效。
+const SW_VERSION = 'v60-tabbar-darkmode-real-fix-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
