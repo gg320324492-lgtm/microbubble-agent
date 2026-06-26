@@ -75,3 +75,19 @@ function barColor(value) {
   font-size: 11px;
 }
 </style>
+
+<!-- v69 P1b fix: VoiceprintCard dark 覆盖（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .voiceprint-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-base);
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="dark"] .voiceprint-card:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+[data-theme="dark"] .name { color: var(--color-text-primary); }
+[data-theme="dark"] .samples { color: var(--color-text-secondary); }
+</style>

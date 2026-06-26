@@ -615,12 +615,16 @@ onUnmounted(() => {
 }
 </style>
 
-<!-- v69 P1b: ChatViewSSE dark mode 覆盖（v60-v67 教训：必须非 scoped） -->
+<!-- v69 P1b fix: ChatViewSSE dark mode 覆盖（v60-v67 教训：必须非 scoped） -->
 <style>
+[data-theme="dark"] .chat-immersive {
+  background: linear-gradient(180deg, #1a1d23 0%, #0e1015 100%);
+}
 [data-theme="dark"] .chat-header {
   background: rgba(26, 29, 35, 0.85);
   border-bottom-color: var(--color-border-light);
 }
+[data-theme="dark"] .messages { background: transparent; }
 [data-theme="dark"] .bot-status,
 [data-theme="dark"] .time-divider,
 [data-theme="dark"] .msg-meta { color: var(--color-text-secondary); }
@@ -634,6 +638,7 @@ onUnmounted(() => {
   background: var(--color-bg-hover);
   color: var(--color-text-primary);
 }
+[data-theme="dark"] .welcome-hero { color: var(--color-text-primary); }
 [data-theme="dark"] .welcome-hero h2 { color: var(--color-text-primary); }
 [data-theme="dark"] .welcome-hero p { color: var(--color-text-secondary); }
 [data-theme="dark"] .quick-btn {

@@ -181,7 +181,16 @@
 // MemberView 共 10 个文件末尾追加非 scoped <style> 块（v60-v67 教训：必须非
 // scoped）。共 ~110 条 dark 规则覆盖 hardcoded 颜色（#fff/#333/#666/#999/
 // rgba(255,255,255,...) 等），全部用 var(--color-*) 变量驱动。
-const SW_VERSION = 'v69-p1b-views-dark-2026-06-26'
+// v69 P1b fix: 2026-06-26 截图发现 4 处仍白色，修复：
+// (1) variables.css 加 el-dialog 完整 dark 覆盖（之前只覆盖 el-drawer，导致
+//     ProjectView 3 个 dialog 创建/编辑/详情 白色）+ el-empty illustration
+//     filter:invert 适配 dark（"请从左侧选择一个公式" 空状态）
+// (2) ChatViewSSE chat-immersive 渐变在 scoped 块被 [data-v-xxx] specificity
+//     抢赢 → 在非 scoped 块重新声明 dark 渐变；messages 加 background:transparent
+// (3) KnowledgeView memory-card background: #fff → var(--color-bg-card)
+// (4) VoiceprintCard.vue background: #fff → var(--color-bg-card)（组件单独
+//     追加非 scoped dark 块，host.vue 内 P1b 没覆盖到）
+const SW_VERSION = 'v69-p1b-fix-whites-2026-06-26'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

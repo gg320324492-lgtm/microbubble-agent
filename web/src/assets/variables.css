@@ -602,6 +602,46 @@ body {
   color: var(--color-text-primary);
   border-bottom-color: var(--color-border-base);
 }
+/* v69 P1b fix: el-dialog 完整 dark 覆盖（之前只覆盖了 el-drawer，导致 ProjectView
+   项目详情/创建/编辑 dialog 白色。el-dialog 内部 7 处需要改：dialog本体 / header / body /
+   title / footer / close button / mask） */
+[data-theme="dark"] .el-dialog {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-base);
+}
+[data-theme="dark"] .el-dialog__header {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border-base);
+}
+[data-theme="dark"] .el-dialog__title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-dialog__body {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-dialog__footer {
+  border-top: 1px solid var(--color-border-base);
+  background-color: var(--color-bg-card);
+}
+[data-theme="dark"] .el-dialog__close {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .el-dialog__close:hover {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-overlay-dialog {
+  background-color: rgba(0, 0, 0, 0.6);
+}
+/* el-empty illustration 默认白色背景（SVG 容器），dark 必须改成透明 */
+[data-theme="dark"] .el-empty {
+  background-color: transparent;
+}
+[data-theme="dark"] .el-empty__image {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9);
+}
 [data-theme="dark"] .el-popper,
 [data-theme="dark"] .el-select-dropdown,
 [data-theme="dark"] .el-dropdown-menu {
