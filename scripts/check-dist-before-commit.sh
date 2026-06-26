@@ -38,6 +38,28 @@ if [ -z "$(git diff --cached --name-only -- 'web/src/')" ]; then
     exit 0
 fi
 
+# ---- 1.5 v75: Token orphan 检测（防止 var(--xxx, ...) 引用未定义 token）----
+# 集成到 pre-commit 避免 push 后 CI 才报错, dev 体验更早发现问题
+if [ -x "scripts/check-token-orphans.sh" ]; then
+    ORPHAN_OUTPUT=$(bash scripts/check-token-orphans.sh 2>&1) || true
+    ORPHAN_COUNT=$(echo "$ORPHAN_OUTPUT" | grep -oE '[0-9]+ 真 orphan' | grep -oE '[0-9]+' | head -1)
+    if [ -n "$ORPHAN_COUNT" ] && [ "$ORPHAN_COUNT" -gt 0 ]; then
+        echo ""
+        echo "❌ [pre-commit] 发现 $ORPHAN_COUNT 个 var(--token) orphan (CLAUDE.md v73 沉淀)"
+        echo "   token 不在 variables.css / nutui-theme.scss / mobile-base.css 定义"
+        echo "   修复选项:"
+        echo "   1) 改对 token 名 (推荐, 项目已有 token)"
+        echo "   2) 在 variables.css 补 token 定义"
+        echo "   3) 加到 scripts/.token-orphan-allowlist (仅设计意图)"
+        echo ""
+        echo "📋 orphan 详情:"
+        echo "$ORPHAN_OUTPUT" | grep "ORPHAN:" | sed 's/^/   /'
+        echo ""
+        echo "🛑 pre-commit 中止 (commit 失败), 修复后重试"
+        exit 1
+    fi
+fi
+
 # ---- 2. 检测本地 web/dist/ 是否有"新" hash 产物 ----
 # HEAD 跟踪的 dist 文件
 head_dist=$(git ls-tree -r --name-only HEAD -- 'web/dist/' 2>/dev/null || true)

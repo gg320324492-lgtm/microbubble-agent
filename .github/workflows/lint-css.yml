@@ -75,6 +75,11 @@ jobs:
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "current_error_count=$CURRENT" >> "$GITHUB_ENV"
           echo "📊 当前错误数: $CURRENT"
+          # v75: 解析每条 error 详情 (file:line) 用于 PR annotation
+          echo "error_details<<EOF" >> "$GITHUB_OUTPUT"
+          # stylelint 输出格式: src/path/file.vue:LINE:COL  ✖  message  rule-name
+          echo "$OUTPUT" | grep -E "✖" | head -50 >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Get baseline error count from last commit
         id: baseline
@@ -103,11 +108,30 @@ jobs:
           echo "${EMOJI} 趋势: $BASELINE → $CURRENT ($TREND)"
 
       - name: Baseline gate (must be 0)
+        if: steps.current.outputs.current != '0'
         run: |
           CURRENT=${{ steps.current.outputs.current }}
-          if [ "$CURRENT" -gt 0 ]; then
-            echo "::error::Stylelint found $CURRENT errors (baseline violation, must be 0)"
-            cd web && npm run lint:css 2>&1 | tail -30
-            exit 1
-          fi
-          echo "✅ Stylelint 0 errors (baseline maintained)"
+          echo "::error::Stylelint found $CURRENT errors (baseline violation, must be 0)"
+          cd web && npm run lint:css 2>&1 | tail -30
+          exit 1
+
+      - name: PR annotation (v75)
+        if: github.event_name == 'pull_request' && steps.current.outputs.current != '0'
+        run: |
+          # v75: 解析每条 stylelint error 输出 ::error file=...line=... annotation
+          # GitHub Actions 自动在 PR 视图显示错误位置
+          cd web
+          ERROR_DETAILS='${{ steps.current.outputs.error_details }}'
+          while IFS= read -r line; do
+            # 解析 src/path:LINE:COL  ✖  message  rule-name
+            FILE=$(echo "$line" | grep -oE '^[^ ]+\.(vue|css|scss)' | head -1)
+            LINENUM=$(echo "$line" | grep -oE ':[0-9]+:[0-9]+' | head -1 | cut -d: -f2)
+            MESSAGE=$(echo "$line" | sed -E 's/^.*✖[[:space:]]+//' | sed -E 's/[[:space:]]+[a-z][a-z-]*$//')
+            if [ -n "$FILE" ] && [ -n "$LINENUM" ]; then
+              echo "::error file=$FILE,line=$LINENUM::$MESSAGE"
+            fi
+          done <<< "$ERROR_DETAILS"
+
+      - name: ✅ Stylelint 0 errors (baseline maintained)
+        if: steps.current.outputs.current == '0'
+        run: echo "✅ Stylelint 0 errors (baseline maintained)"
