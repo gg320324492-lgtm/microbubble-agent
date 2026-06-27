@@ -852,12 +852,7 @@ const formatTime = (t) => {
   background: var(--color-bg-card);
   border-radius: 50%;
   flex-shrink: 0;
-  animation: recording-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes recording-pulse {
-  0%, 100% { opacity: 1; scale: 1; }
-  50% { opacity: 0.5; scale: 1.3; }
+  animation: var(--animation-recording-pulse);
 }
 
 .recording-text {
@@ -897,19 +892,10 @@ const formatTime = (t) => {
 
 /* 录音指示器入场/退场动画 */
 .recording-banner-enter-active {
-  animation: banner-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: var(--animation-banner-in);
 }
 .recording-banner-leave-active {
-  animation: banner-out 0.25s ease-in both;
-}
-
-@keyframes banner-in {
-  from { opacity: 0; transform: translateY(20px) scale(0.9); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes banner-out {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(20px) scale(0.9); }
+  animation: var(--animation-banner-out);
 }
 
 /* 窄屏适配（PR #2 增强：考虑 TabBar + Safe Area） */

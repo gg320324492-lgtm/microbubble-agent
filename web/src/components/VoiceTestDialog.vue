@@ -367,14 +367,9 @@ onUnmounted(() => {
 }
 .mic-button:hover { transform: scale(1.05); }
 .mic-button.recording {
-  animation: pulse 1.2s infinite;
+  animation: var(--animation-pulse);
   background: linear-gradient(135deg, #ff4444, #ff6b6b);
   box-shadow: 0 4px 20px rgba(255, 68, 68, 0.5);
-}
-
-@keyframes pulse {
-  0%, 100% { scale: 1; }
-  50% { scale: 1.08; }
 }
 
 .timer {
@@ -417,7 +412,6 @@ onUnmounted(() => {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { rotate: 360deg; } }
 
 .result-area {
   width: 100%;

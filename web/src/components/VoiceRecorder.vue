@@ -202,17 +202,12 @@ defineExpose({
 
 .record-btn.recording {
   background: var(--color-danger);
-  animation: pulse 1.5s infinite;
+  animation: var(--animation-pulse);
 }
 
 .record-btn.processing {
   background: var(--color-info);
   cursor: not-allowed;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
 }
 
 .recording-icon {

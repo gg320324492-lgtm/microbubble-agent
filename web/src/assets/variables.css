@@ -131,6 +131,24 @@
   --ease-out: ease-out;
   --ease-in-out: ease-in-out;
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* v77 P2.6-D.2 缓动函数 token 化（吸收 17+ 散落 cubic-bezier） */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);              /* Material Accelerate */
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);       /* 9 处移动端 sheet 专用 */
+  --ease-spring: cubic-bezier(0.2, 0.7, 0.2, 1);      /* 1 处 MobileMeetingRoom 专用 */
+
+  /* v77 P2.6-D.2 关键帧 token 化（让组件引用 var() 而非 name，dark override 友好） */
+  --animation-fadeSlideUp: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+  --animation-slideDownFade: slideDownFade var(--duration-slower) var(--ease-out) both;
+  --animation-slideRightFade: slideRightFade var(--duration-slow) var(--ease-out) both;
+  --animation-pulse: pulse 1.5s var(--ease-in-out) infinite;
+  --animation-spin: spin 0.8s linear infinite;
+  --animation-shimmer: shimmer 1.5s linear infinite;
+  --animation-banner-in: banner-in 0.4s var(--ease-bounce) both;
+  --animation-banner-out: banner-out 0.25s var(--ease-in) both;
+  --animation-recording-pulse: recording-pulse 1.5s var(--ease-in-out) infinite;
+  --animation-confetti-fall: confetti-fall 1.5s var(--ease-out) forwards;
+  --animation-done-bounce: done-bounce 0.5s var(--ease-bounce) both;
+  --animation-btn-glow: btn-glow 2s var(--ease-in-out) infinite;
 
   /* ===== 断点（CSS @media 数值必须硬写 CSS 不支持变量，这里仅作文档参考；JS 在 useIsMobile.js 中维护） =====
      xs  < 480px    iPhone SE 一代等极小屏
@@ -270,17 +288,7 @@ body {
   }
 }
 
-/* 脉冲呼吸 */
-@keyframes pulse {
-  0%, 100% {
-    opacity: 0.6;
-    scale: 1;
-  }
-  50% {
-    opacity: 1;
-    scale: 1.05;
-  }
-}
+/* 脉冲呼吸 (v77 P2.6-D.2: 内部重复清理, 保留 line 313 权威版, 删除此处早期定义) */
 
 /* 旋转进入 */
 @keyframes rotateIn {
