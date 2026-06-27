@@ -65,6 +65,13 @@ class MeetingResponse(MeetingBase):
     status: str
     created_by: Optional[int] = None
     created_at: datetime
+    # 2026-06-27 新增：用于刷新后回填录音状态（计时器 + chunk 续传）
+    recording_started_at: Optional[datetime] = None
+    audio_url: Optional[str] = None
+    audio_duration: Optional[int] = None
+    upload_status: Optional[str] = None
+    last_chunk_index: Optional[int] = None
+    total_chunks: Optional[int] = None
 
     class Config:
         from_attributes = True

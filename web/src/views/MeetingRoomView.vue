@@ -1,7 +1,7 @@
 <template>
   <div class="desktop-meeting-room">
     <!-- 顶部栏（桌面端：用 el-page-header 替代移动端 PageHeader） -->
-    <header class="room-header">
+    <header class="room-header glass glass-lg">
       <el-page-header :icon="ArrowLeft" @back="handleBack">
         <template #content>
           <span class="room-title">{{ pageTitle }}</span>
@@ -104,7 +104,12 @@ import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 const router = useRouter()
 const route = useRoute()
 const { startRecording, stopRecording, recordingMeetingId } = useRecordingState()
-const { start: startGlobalRecorder, isActive: isGlobalRecorderActive } = useGlobalRecorder()
+const {
+  start: startGlobalRecorder,
+  isActive: isGlobalRecorderActive,
+  resumeFromStartedAt,
+  setChunkStartIndex,
+} = useGlobalRecorder()
 
 const recorderRef = ref(null)
 const meetingId = ref(null)
@@ -210,6 +215,17 @@ async function handleBack() {
 //   用户需手动再点按钮 → UX 不符合"点胶囊即接续"的预期。
 //   本次 v2 在 query.resume 命中后自动 await startGlobalRecorder()，让 MediaRecorder 启动，
 //   AudioRecorder 状态从 idle → recording，按钮自动切到"录音中"+ 暂停/结束控件。
+//
+// 2026-06-27 v3 修：刷新后接续录音（计时器 + chunk 续传不覆盖）。
+//   v2 修好后：MediaRecorder 启动成功，pageTitle 显示"正在听会（ID 152）"，
+//   但 elapsed 永远从 0 开始（useGlobalRecorder 是模块级单例，刷新即重置），
+//   且新 MediaRecorder 的 chunkIndex 从 0 起，会覆盖 MinIO 上已上传的旧 chunks。
+//   修复：在 startGlobalRecorder() 之前并行拉取：
+//     a) GET /api/v1/meetings/{id} → recording_started_at (ISO) → resumeFromStartedAt
+//        计算 (now - start) / 1000 秒数并设给 elapsed，setInterval 启动后从该值 +1
+//     b) GET /api/v1/meetings/{id}/upload-status → last_chunk_index → setChunkStartIndex(+1)
+//        让 ondataavailable 从正确 index 开始上传，merge 时拼回完整录音
+//   两个新 API 都必须在 start() 之前同步调用（JS 单线程 + MediaRecorder.start(1000) 1s 缓冲保护）。
 onMounted(async () => {
   // 1) 优先用 query 显式 ID（不依赖 useRecordingState 状态机）
   const resumeFromQuery = route.query.resume
@@ -225,6 +241,26 @@ onMounted(async () => {
         startRecording(id, `正在听会（ID ${id}）`)
       }
       console.warn('[MeetingRoomView] 优先使用 query.resume 初始化 meetingId =', id)
+
+      // === v3: 刷新后接续录音（计时器 + chunk 续传） ===
+      // 必须先 setElapsed + setChunkStartIndex，再 startGlobalRecorder()
+      try {
+        const [meetingRes, uploadRes] = await Promise.all([
+          axios.get(`/api/v1/meetings/${id}`),
+          axios.get(`/api/v1/meetings/${id}/upload-status`).catch(() => null),
+        ])
+        // 计时器：从 recording_started_at 计算已录制秒数
+        if (meetingRes.data?.recording_started_at) {
+          resumeFromStartedAt(meetingRes.data.recording_started_at)
+        }
+        // chunk 续传：从 last_chunk_index + 1 继续上传
+        const lastChunk = uploadRes?.data?.last_chunk_index ?? -1
+        if (lastChunk >= 0) {
+          setChunkStartIndex(lastChunk + 1)
+        }
+      } catch (err) {
+        console.warn('[MeetingRoomView] 取回填数据失败 (使用默认 elapsed=0, chunk=0):', err.message)
+      }
 
       // v2: 自动启动 MediaRecorder 接续录音
       try {
@@ -261,9 +297,9 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 (assets/glass.css)
+     删硬编码 rgba(255,255,255,0.92) 解决 dark mode 白戳一坨 + 6 主题不跟随 */
+  border-bottom: 1px solid var(--color-border-light);
   position: sticky;
   top: 0;
   z-index: 10;
