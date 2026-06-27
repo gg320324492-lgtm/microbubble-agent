@@ -445,13 +445,14 @@ function renderMarkdownTable(text) {
   box-shadow: var(--shadow-sm);
 }
 
+/* v77 P2.5.4: paper 渐变 token 化（dark 模式自动适配为半透明品牌色） */
 .qa-question-card {
-  background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  background: var(--gradient-paper-qa-q);
   border-color: #FCD34D;
 }
 
 .qa-answer-card {
-  background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+  background: var(--gradient-paper-qa-a);
   border-color: #93C5FD;
 }
 

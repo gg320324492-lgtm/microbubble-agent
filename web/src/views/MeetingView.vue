@@ -1023,8 +1023,9 @@ onMounted(() => {
   color: var(--color-primary) !important;
   border-color: rgba(64, 158, 255, 0.4) !important;
 }
+/* v77 P2.5.4: fix --color-primary (橙) → --color-info (蓝) - 之前 dark hover 蓝按钮跳橙是 bug */
 [data-theme="dark"] .action-view:hover {
-  background: var(--color-primary) !important;
+  background: var(--color-info) !important;
   color: var(--color-bg-card) !important;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.4);
 }

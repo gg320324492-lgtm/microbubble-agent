@@ -70,9 +70,10 @@ function formatWordCount(count) {
   gap: 12px;
 }
 
+/* v77 P2.5.4: 头像白边 token 化（dark 模式下融入卡片背景） */
 .speaker-avatar {
   flex-shrink: 0;
-  border: 2px solid #fff;
+  border: 2px solid var(--color-bg-card, #fff);
   box-shadow: var(--shadow-xs);
 }
 

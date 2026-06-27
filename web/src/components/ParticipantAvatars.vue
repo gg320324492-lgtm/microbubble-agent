@@ -86,8 +86,9 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
   gap: 8px;
 }
 
+/* v77 P2.5.4: 头像白边 token 化（dark 模式下融入卡片背景，light = #fff 完全等价） */
 .avatar-item {
-  border: 2px solid #fff;
+  border: 2px solid var(--color-bg-card, #fff);
   box-shadow: var(--shadow-xs);
   cursor: pointer;
   transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
@@ -100,13 +101,14 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
   z-index: 100 !important;
 }
 
+/* v77 P2.5.4: 头像白边 token 化（同上） */
 .avatar-overflow {
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: var(--color-bg-page, #f5f7fa);
-  border: 2px solid #fff;
+  border: 2px solid var(--color-bg-card, #fff);
   color: var(--color-text-secondary, #909399);
   font-weight: 600;
   flex-shrink: 0;

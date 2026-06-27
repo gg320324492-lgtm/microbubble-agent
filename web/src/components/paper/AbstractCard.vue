@@ -66,8 +66,9 @@ const topic = computed(() => props.paper.topic || '')
 </script>
 
 <style scoped>
+/* v77 P2.5.4: paper 渐变 token 化（dark 自动适配） */
 .paper-abstract {
-  background: linear-gradient(135deg, #FFF8F5 0%, #FFFDFB 100%);
+  background: var(--gradient-paper-warm);
   border: 1px solid rgba(var(--color-primary-rgb), 0.12);
   border-left: 4px solid var(--color-primary);
   border-radius: 12px;
