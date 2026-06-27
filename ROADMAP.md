@@ -3,15 +3,21 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-06-27）
+## 当前状态（2026-06-28）
 
 **已交付**：
+- 🆕 **v77 P2.6 视觉体系 4 子任务全面收官**（7 commits：A/B/C/D 阶段）：
+  - **v77 P2.6-D**（4 commits `19f42924` + `2096d3e0` + `fe896004` + `b251fc22`）— PWA Service Worker 强化（Background Sync 4 写场景 + Navigation Preload + Local Notification）+ 动效治理（6 处重复 keyframes 清理 + 12 --animation-* + 3 --ease-*）+ CSS-in-JS 收敛（3 处 avatar color → .avatar-color-N 枚举 class）+ Baseline 扩到 9 路由（+projects /+members /+project-stats）
+  - **v77 P2.6-C**（commit `db3a31e1`）— EP 多主题透传补全（143 条规则）+ Mobile baseline 6 路由 + 登录态双注入修复
+  - **v77 P2.6-B**（commit `8905003a`）— Bug 修复（PaperHeader plain 按钮 dark bug）+ 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由
+  - **v77 P2.6-A**（commit `36049629`）— paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化（移动端 9/15 → 15/15 + Rich Block 11/11 dark 化收官）
+- 🆕 **3 个生产 bug 修复** — pgvector embedding truth value bug + SQLAlchemy JSONB flag_modified + AudioPlayer Infinity:NaN（详见 [memory/embedding-truth-value-bug-2026-06-28.md](memory/embedding-truth-value-bug-2026-06-28.md) + [memory/sqlalchemy-jsonb-flag-modified-2026-06-28.md](memory/sqlalchemy-jsonb-flag-modified-2026-06-28.md) + [memory/audio-player-infinity-duration-2026-06-28.md](memory/audio-player-infinity-duration-2026-06-28.md)）
 - 🆕 **会议 153 ASR 谐音/错识全链路清洗 hook** — `name_aliases` 扩容 7 条会议 153 真实误识 + `post_meeting_tasks` hook 推到主路径，所有未来会议自动清洗（[memory/name-aliases-phonetic-correction-2026-06-27.md](memory/name-aliases-phonetic-correction-2026-06-27.md)）
 - ✅ v1-v6 完整后端架构（Python 3.11 + FastAPI + SQLAlchemy + PostgreSQL + Redis + Celery + MinIO）
 - ✅ v2/v3/v4 Agent 架构（34 个 `@tool` 装饰器工具 + 12 类 Rich Block + 多会话并行 + agent_traces 可观测性）
 - ✅ 知识库 V1 + V2（动态 LLM 分析 + 知识图谱 + RAG 问答 + 自主研究引擎 + 公式分类 + 假设生成）
 - ✅ 知识库 V3（多模态 OCR：图片 + 公式 + 表格 + 图表识别入库，10/10 PDF 端到端通过）
-- ✅ 会议系统 v1-v4（录音机 + 离线后处理 + ASR + 声纹 + AI 摘要 + 三级润色 + **v70~v73 视觉迭代**）
+- ✅ 会议系统 v1-v4（录音机 + 离线后处理 + ASR + 声纹 + AI 摘要 + 三级润色 + **v70~v73 视觉迭代 + v77 P2.6 dark 化**）
 - ✅ 声纹识别 v2（3D-Speaker + pgvector + HNSW 索引 + **修复 ERes2Net batch bug** 100% 段有效）
 - ✅ 会议发言人重处理流程（[reprocess_meeting.py](scripts/reprocess_meeting.py) 9 步 CLI + 主机端 wrapper）
 - ✅ 移动端 PWA 收官（18 个移动端页面 + 12 个移动端组件 + 路由级双栈 + 4 个 PWA 离线策略）
@@ -30,14 +36,16 @@
 - ✅ **v74/v75/v76 测试基建**（CSS variable 6 主题组合自动化 + 9 个旧 fail 修复 + 视觉回归 5 件套）
 - ✅ **pre-commit hook auto-add web/dist/**（CLAUDE.md 教训第 4 次沉淀后兜底）
 
-**统计**（[app/stats.json](app/stats.json), 2026-06-27 自动重算）：
-- **1434 commits / 286K 行代码 / 804 文件 / 43 开发天数**
+**统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：
+- **1468 commits / 283K 行代码 / 738 文件 / 44 开发天数**
 - 9 个 Docker 服务运行中
 - 87 后端 + 73 前端 + 17 移动端 + 8 ST 集成 + 11 visual-regression = 196+ 测试
 - 知识库 64→247+ 条（+183，Phase 7 后再扩展多模态抽取）
-- **2026-06-24~27 起 12+ 铁律沉淀**（清华源/ONNX 反优化/docker build 污染/pre-commit hook/dist 漏 commit/Stylelint 等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
+- **2026-06-24~28 起 16+ 铁律沉淀**（清华源/ONNX 反优化/docker build 污染/pre-commit hook/dist 漏 commit/Stylelint/PowerShell BOM/Background Sync/playwright dev server/token 渐进收敛 等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
 
 **最新里程碑**：
+- 🆕 [v77 P2.6 视觉体系 4 子任务全面收官（A/B/C/D）](CHANGELOG.md#2026-06-28-v77-p26-视觉体系-4-子任务全面收官abc-d-共-7-commits) - 7 commits + 143 条 dark 规则 + 18 张 baseline
+- 🆕 [3 个生产 bug 修复](CHANGELOG.md#2026-06-28-3-个生产-bug-修复会议-64-报-500--audioplayer-infinitynan) - pgvector truth value + SQLAlchemy JSONB + AudioPlayer Infinity
 - 🆕 [会议 153 ASR 谐音/错识全链路清洗 hook](CHANGELOG.md#2026-06-27-会议-153-asr-谐音错识全链路清洗-hookname_aliases-推到主路径) - name_aliases 推到主路径 + 7 条防御性映射
 - 🆕 [v76.2 视觉回归测试 5 件套收官](CHANGELOG.md#2026-06-27-v762-视觉回归测试-5-件套收官) - Playwright baseline + CI hard fail
 - 🆕 [v72 P1 摘要+重点摘要合并主题色卡](CHANGELOG.md#2026-06-27-v72-p1-会议纪要-摘要-重点摘要-合并) - color-mix + var(--color-primary)
@@ -80,6 +88,24 @@
 | **Phase 19** | 课题组专属 AI 研究员（自主研究 + 假设验证 + 论文草稿 + 实验设计） | 8-12 周 |
 
 ## 近期完成（按主题）
+
+### 🎨 2026-06-27~28 v77 P2.6 视觉体系 4 子任务全面收官
+
+- **v77 P2.6-A**（commit `36049629`）— paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化（移动端 9/15 → 15/15 + Rich Block 11/11 dark 化收官）
+- **v77 P2.6-B**（commit `8905003a`）— PaperHeader plain 按钮 dark bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由
+- **v77 P2.6-C**（commit `db3a31e1`）— EP 多主题透传补全（143 条规则：el-tree-select / date-picker / table 展开行 / cascader / transfer 等）+ Mobile Baseline 6 路由 + 登录态双注入（cookie + localStorage 解决 baseline 拍登录页）
+- **v77 P2.6-D**（4 commits `19f42924` + `2096d3e0` + `fe896004` + `b251fc22`）— PWA Service Worker 强化（Background Sync 4 写场景 + Navigation Preload + Local Notification）+ 动效治理（6 处重复 keyframes 清理 + 12 --animation-* + 3 --ease-*）+ CSS-in-JS 收敛（3 处 avatar color → .avatar-color-N 枚举 class）+ Baseline 9 路由（+projects /+members /+project-stats）
+- **4 条新铁律**（[memory/v77-p26-d-swng-anim-css-baseline.md](memory/v77-p26-d-swng-anim-css-baseline.md)）：
+  ① PowerShell `Set-Content -Encoding UTF8` 写 UTF-8 BOM 是隐形地雷
+  ② Background Sync 仅适合幂等短写请求（SSE/WS/大文件不能加）
+  ③ playwright baseline 必须 dev server 后台启（nohup + sleep 12 兜底）
+  ④ token 化拆分渐进优于一次性铺开（先 5-10% 关键部分 + 每步 build 验证）
+
+### 🐛 2026-06-28 三个生产 bug 修复（会议 64 报 500 系列）
+
+- **pgvector embedding truth value bug** — `if not embedding:` 对 numpy.ndarray 抛 `ValueError: truth value ambiguous` → 改 `is None`，2 处生产代码修复 + 3 case 验证
+- **SQLAlchemy JSONB flag_modified bug** — `Meeting.transcript_polished` 内部元素 mutate 后 `commit()` 静默不持久化 → 改 `flag_modified(m, "field")` 强制 UPDATE
+- **AudioPlayer Infinity:NaN 修复** — `audio.duration` 初始 `Infinity`（WebM 流式 metadata 还没解析），UI 显示 "Infinity:NaN" → 加 `duration` prop + `formatTime` 防御 `Number.isFinite` + 后端预知时长
 
 ### 🛠 2026-06-19 全量审计 + CardList 修复 + 开始听会配置
 
