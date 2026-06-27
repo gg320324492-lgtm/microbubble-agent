@@ -523,8 +523,8 @@ onUnmounted(() => {
   border-bottom: 1px solid #eee;
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
-.bot-avatar { background: linear-gradient(135deg, #FF7A5C, #FFB347); }
-.bot-msg-avatar { background: linear-gradient(135deg, #FF7A5C, #FFB347); flex-shrink: 0; }
+.bot-avatar { background: var(--gradient-welcome-hero); }
+.bot-msg-avatar { background: var(--gradient-welcome-hero); flex-shrink: 0; }
 .header-text { line-height: 1.2; }
 .bot-name { font-weight: 600; font-size: 15px; }
 .bot-status { font-size: 12px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
@@ -568,7 +568,7 @@ onUnmounted(() => {
 
 .bubble { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; overflow-wrap: break-word; }
 .user-bubble {
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85);
+  background: var(--gradient-welcome-hero);
   /* stylelint-disable-next-line color-named */
   color: white;
   border-bottom-right-radius: 6px;
@@ -581,7 +581,7 @@ onUnmounted(() => {
 .trace-item .duration { color: var(--color-text-secondary); font-size: 11px; }
 
 /* 2026-06-14 收官：thinking toggle 按钮激活态高亮 */
-.thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: rgba(255, 122, 92, 0.08); }
+.thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: var(--color-primary-bg); }
 
 .msg-content :deep(p) { margin: 0 0 8px; }
 .msg-content :deep(p:last-child) { margin-bottom: 0; }
@@ -600,7 +600,7 @@ onUnmounted(() => {
 @keyframes td { 0%, 60%, 100% { transform: scale(1); opacity: 0.5; } 30% { transform: scale(1.4); opacity: 1; } }
 
 .welcome-hero { text-align: center; padding: 60px 20px 20px; }
-.hero-avatar { background: linear-gradient(135deg, #FF7A5C, #FFB347); margin-bottom: 16px; }
+.hero-avatar { background: var(--gradient-welcome-hero); margin-bottom: 16px; }
 .welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }
 .welcome-hero p { color: var(--color-text-regular); margin: 0 0 24px; }
 .quick-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
@@ -617,7 +617,7 @@ onUnmounted(() => {
   height: 34px;
   padding: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, #FF7A5C, #FFB347);
+  background: var(--gradient-welcome-hero);
   border: none;
   /* stylelint-disable-next-line color-named */
   color: white;
