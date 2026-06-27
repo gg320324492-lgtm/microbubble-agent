@@ -549,6 +549,37 @@ onMounted(async () => {
   gap: 12px;
 }
 
+/* v76.6 fix: 更新日志 el-tag 文字加深 + 字重 700 + 边框加粗
+   原因: EP el-tag default effect = 浅色背景 (--el-color-primary-light-9 ≈ #FDF2EF)
+   + 主色文字 (--el-color-primary). 在 6 主题下 coral/ocean/forest 文字都是中亮色,
+   浅背景+中亮文字对比度仅 ~2.5:1, 不到 WCAG AA 4.5:1.
+   修法: scoped 强制覆盖 text-color 用 EP 自带 dark 变体 + 字重 700 + 边框 2px.
+   兼容 6 主题: --el-color-*-dark-2 在 6 主题全定义, 不需写 6 套. */
+.log-meta .el-tag {
+  font-weight: 700 !important;
+  border-width: 2px !important;
+}
+
+.log-meta .el-tag.el-tag--primary {
+  --el-tag-text-color: var(--el-color-primary-dark-2);
+}
+
+.log-meta .el-tag.el-tag--success {
+  --el-tag-text-color: var(--el-color-success-dark-2);
+}
+
+.log-meta .el-tag.el-tag--danger {
+  --el-tag-text-color: var(--el-color-danger-dark-2);
+}
+
+.log-meta .el-tag.el-tag--warning {
+  --el-tag-text-color: var(--el-color-warning-dark-2);
+}
+
+.log-meta .el-tag.el-tag--info {
+  --el-tag-text-color: var(--el-color-info-dark-2);
+}
+
 .log-pain {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);

@@ -4642,6 +4642,159 @@ git add -f tests/visual/
 4. **路由数收窄到 3（dashboard/knowledge/chat）** — 14 路由 baseline 维护成本失控，先覆盖最常用 3 个，未来按需扩展
 5. **main branch 自动 `--update-snapshots` + auto-commit baseline** — `github-actions[bot]` 用户提交 baseline png，省人工
 
+---
+
+## v76 完整收官教训集（2026-06-26 → 2026-06-27，6 大坑 + 修复链）
+
+> **来源**：v76 跑通 GitHub Actions 3 jobs 期间踩的 6 个真实坑。每个坑都让 workflow fail → 修复 → commit → push → 再 fail。**未来任何 CI workflow 改动都先看这一节**。
+
+### 教训 1：`npm install` 异常中断 → lock 与 package.json 不同步 → CI EUSAGE
+
+**症状**：CI 跑 `npm ci` 报 `Missing: @playwright/test@1.61.1 in lock file`，但本地 `npm run test:visual` 正常工作。
+
+**根因**：本地 `npm install --save-dev @playwright/test` 时进程**异常终止**（Ctrl-C / cache 锁 / 网络瞬断），导致 `package.json` 改了但 `package-lock.json` 没同步写入。
+
+**修复**：
+```bash
+cd web && npm install --prefer-offline  # 强制重新同步 lockfile
+git diff web/package-lock.json          # 必须有改动 (added 3 packages)
+git add web/package-lock.json
+git commit -m "chore: 同步 package-lock.json"
+```
+
+**纪律**：
+- **永远 `npm ci` 在 CI 跑**（严格校验 lock 与 json 同步）
+- **永远 `npm install` 在本地**（自动同步 lock）
+- **本地 `npm install` 后必查 `git diff package-lock.json`**（确认 lock 真同步了）
+- commit 前必须同时 add `package.json` + `package-lock.json`
+
+### 教训 2：workflow paths filter 必须包含 lockfile
+
+**症状**：commit lockfile 同步后 GitHub Actions 不触发新 run，CI 仍显示旧 fail run。
+
+**根因**：`.github/workflows/lint-css.yml` 的 `paths` filter 包含 `web/src/**` + `web/.stylelintrc.json` + `web/package.json`，**但没包含 `web/package-lock.json`**。GitHub 看到 commit 不匹配 paths → 不触发 workflow。
+
+**修复**：paths 加 4 个关键路径：
+```yaml
+paths:
+  - "web/src/**"
+  - "web/.stylelintrc.json"
+  - "web/package.json"
+  - "web/package-lock.json"
+  - "web/playwright.config.js"
+  - "web/tests/**"
+```
+
+**纪律**：
+- 任何新增的关键文件必须在 paths 里（否则改了不触发 CI）
+- workflow_dispatch 不受 paths 限制（仍可手动跑）
+- 改 workflow yml 本身也不会触发该 workflow（GitHub 防递归）—— **必须用户手动 UI Run**
+
+### 教训 3：改 workflow yml 自身不触发该 workflow run
+
+**症状**：commit `d0f2f212`（只改 `.github/workflows/lint-css.yml` 的 paths），webhook 成功触发 deploy，**但 GitHub Actions 列表没新 run**。
+
+**根因**：GitHub 防递归——**workflow 文件改动不会自动触发该 workflow**。
+
+**修复**：用户去 GitHub UI → Actions → Lint CSS → "Run workflow" 按钮手动触发。
+
+**纪律**：
+- 改 yml 后想验证，**必须用户手动 Run workflow**
+- 不能假设 webhook 会自动跑
+- **值得沉淀**：每次改 workflow yml 都告诉用户"你需要在 GitHub UI 点 Run workflow 验证"
+
+### 教训 4：workflow_dispatch / push / pull_request 是 3 个独立触发器
+
+**症状**：用户 UI Run workflow 触发 visual-regression job，但 job 走到 PR 分支逻辑（对比模式）→ 找不到 baseline → fail。
+
+**根因**：旧版条件 `if event_name == 'push' && ref == 'refs/heads/main'` 太严格。`workflow_dispatch` 不属于 push，跳到 else 分支跑对比模式。
+
+**修复**：按"维护 baseline 还是对比 baseline"分类：
+```bash
+if [ "${{ github.event_name }}" = "pull_request" ]; then
+  # PR 跑对比模式 (fail 阻止 merge)
+  npx playwright test
+else
+  # push main + workflow_dispatch 都跑 update-snapshots (auto-commit baseline)
+  npx playwright test --update-snapshots
+fi
+```
+
+**纪律**：
+- 触发器逻辑必须 **按功能意图分类**，不按 push/pr 字面分类
+- `workflow_dispatch` 应与 `push main` 同属"维护模式"（手动维护 baseline）
+- `pull_request` 才是"对比模式"（保护代码不破坏视觉）
+
+### 教训 5：GitHub Actions bot 默认 read-only，push 需要 `permissions: contents: write`
+
+**症状**：visual-regression job auto-commit baseline png 时 `git push` 报 403 拒绝。
+
+**根因**：GitHub 默认 workflow permissions = read-only。即使 git remote 配了 github-actions[bot]，bot 也没 push 权限（保护 main 不被误推）。
+
+**修复**：
+```yaml
+# workflow 顶部加 permissions 声明
+permissions:
+  contents: write
+```
+
+**纪律**：
+- 任何 workflow 里要 `git push` 必须在 yml 顶部加 `permissions: contents: write`
+- 或者在 repo Settings → Actions → General → Workflow permissions 改 "Read and write"（org 级别）
+- 优先 yml 内声明（更精细控制 + 不污染 org settings）
+
+### 教训 6：Playwright baseline 按 OS suffix 区分（*-linux.png / *-win32.png / *-darwin.png）
+
+**症状**：本地 Windows 生成的 baseline 是 `01-dashboard-mobile-iphone14-win32.png`，但 GitHub Actions Linux runner 期望 `01-dashboard-mobile-iphone14-linux.png`，baseline 找不到 → "不存在快照，写入实际"。
+
+**根因**：Playwright 设计——同一 spec 在不同 OS 跑生成不同 baseline（mac/win32/linux 后缀）。本地 baseline **不能跨平台共用**。
+
+**修复**：不在本地 commit baseline png，**让 CI 在云端 first run 自动生成 + auto-commit**。workflow 已配：
+- main push / workflow_dispatch → `--update-snapshots` → 生成 linux baseline
+- auto-commit baseline png → push 到 main
+- 下次 PR → 对比 linux baseline
+
+**纪律**：
+- **不要本地 commit baseline png**（跨平台失效）
+- 让 CI 云端生成 baseline（最权威、跨开发者一致）
+- 首次跑 baseline 必须用 `--update-snapshots`（accept mode）不能 fail
+- PWA manifest spec 属于 build-only 测试（vite preview 才有效），移到 `tests/visual/local-only/` 不被 CI 扫
+
+### 总结表：v76 6 大坑的修复 commit 链
+
+| 坑 | commit | 改了什么 |
+|----|--------|---------|
+| 1 | `e92b571c` | 同步 package-lock.json（加 @playwright/test 1.61.1） |
+| 2 | `d0f2f212` | paths filter 加 package-lock + playwright config + tests |
+| 3 | - | 无 commit（用户手动 Run workflow） |
+| 4 | `e3c3c423` | workflow_dispatch 也走 update-snapshots 模式 |
+| 5 | `babbc764` | workflow 加 `permissions: contents: write` |
+| 6 | `f08e1858` | 删 baseline png + 移 PWA spec 到 local-only |
+
+### 元教训
+
+**v76 这套"防御体系"（v70-v76 累计 7 个 commit 链）跑通后，整个 CSS 工程闭环**：
+
+```
+本地开发:
+  ↓ npm run lint:css (0 errors)
+  ↓ npm run test:unit (396 tests)
+  ↓ (可选) npm run test:visual --update-snapshots
+  ↓ git commit
+  ↓ pre-commit hook 自动 add dist + token orphan 检查
+  ↓ git push
+
+GitHub CI:
+  ↓ npm ci 通过 (lock 与 json 同步)
+  ↓ stylelint job: lint:css + token orphan --ci-mode + vitest smoke
+  ↓ stylelint-baseline-guard job: 0 errors + trend + PR annotation
+  ↓ visual-regression job (push/workflow_dispatch): 自动生成 baseline + auto-commit
+  ↓ visual-regression job (PR): 对比 baseline, 视觉差异 > 0.2% 阻止 merge
+  ↓ webhook deploy
+```
+
+**价值**：PR 红 ✗ 提前拦截视觉 bug，不让用户看到奶白 / 错位 / 错色。
+
 **风险**：
 - `TEST_TOKEN` secret 必须在 repo Settings → Secrets 添加（否则 visual-regression job 跑测试时拿不到登录态，所有页面 redirect 到 login → 截图永远是 login 页 → baseline fail）
 - 第一次跑必须有人手动 `npx playwright test --update-snapshots` 生成 baseline 并 git add -f commit（CI auto-commit 仅 main branch push 触发）
