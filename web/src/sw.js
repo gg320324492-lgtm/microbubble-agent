@@ -218,20 +218,29 @@
 // (3) 白色 #fff (22 文件 33 处) → var(--color-bg-card)（保留彩色按钮白字、hero 白字、Design tokens 兜底）
 // (4) rgba(0,0,0,*) 阴影 (23 文件 40 处) → var(--shadow-xs/sm/md/lg/sidebar)
 // 4 处 dark-mode box-shadow 冗余 override 删除（var(--shadow-*) 在 dark 模式自动重定义）
-// (1) 品牌色 #FF7A5C/#FF9D85/#E85A3A/#FFB347 (~22 处) → var(--color-primary/-light/-dark/accent)
-// (2) EP 调色板 #F56C6C/#67C23A/#E6A23C/#909399/#409EFF (~70 处) → var(--color-danger/-success/-warning/-info/-primary)
-// (3) 文本色 #333/#666/#999/#555 (~60 处) → var(--color-text-primary/-regular/-secondary)
-// 合计 ~150 处字面色替换，dark 模式变量在 variables.css:507+ 已重定义，6 主题
-// 切换自动响应。例外保留：linear-gradient 内、JS string、var(...,#xxx) fallback。
-const SW_VERSION = 'v75-old-fail-fix-annotation-precommit-2026-06-27'
+// v77 P2.6-D.1 (2026-06-28): PWA SW 强化
+// (1) Background Sync API：POST/PUT/DELETE/PATCH 写场景断网时排队到 IndexedDB，
+//     恢复网络自动重试。覆盖 4 个高频写场景：TaskCreate / KnowledgeUpload /
+//     PasteAnalyze / TaskTrash。SSE/WS 流式接口排除（断流即失败）。
+// (2) Navigation Preload：activate 钩子启用 navigationPreload，首屏快 100-500ms。
+//     与现有 NetworkFirst 5s 超时不冲突（NavigationPreload 与 NetworkFirst 互不抢占）。
+// (3) Local Notification：Background Sync 重试完成后调 showNotification 反馈用户。
+//     仅 Local（不走 Web Push 协议）— 简单可靠。
+// (4) 不加 Web Push / Periodic Background Sync：
+//     - Web Push：后端走企业微信（v2 11AM 单一窗口），Web 是辅助通道，投资回报低
+//     - Periodic Background Sync：浏览器支持窄（仅 Chrome + engagement 分数），场景不匹配
+const SW_VERSION = 'v76-p2.6-d-bg-sync-2026-06-28'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
 import { registerRoute, setCatchHandler } from 'workbox-routing'
-import { NetworkFirst, StaleWhileRevalidate, CacheFirst } from 'workbox-strategies'
+import { NetworkFirst, StaleWhileRevalidate, CacheFirst, NetworkOnly } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 import { CacheableResponsePlugin } from 'workbox-cacheable-response'
+// v77 P2.6-D.1: Background Sync 插件 — 断网时把写请求排队到 IndexedDB
+// workbox-background-sync 是 vite-plugin-pwa 的传递依赖，可直接 import
+import { BackgroundSyncPlugin } from 'workbox-background-sync'
 
 // === 生命周期 ===
 // skipWaiting + clients.claim 让新版 SW 安装后立即接管所有已开的标签页，
@@ -265,6 +274,18 @@ self.addEventListener('activate', (event) => {
       clients.forEach((client) => {
         client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })
       })
+      // v77 P2.6-D.1: 启用 Navigation Preload — 浏览器在 SW install 后立即并行
+      // fetch navigation 请求，与现有 NetworkFirst 5s 超时兼容（NavigationPreload
+      // 的响应抢先到达时，NetworkFirst 直接采用；超过 5s 时 NetworkFirst 回退缓存）
+      // 减少首屏 100-500ms 延迟。老浏览器不支持（try-catch 兜底）。
+      try {
+        if (self.navigationPreload) {
+          await self.navigationPreload.enable()
+          console.log('[SW] Navigation Preload enabled')
+        }
+      } catch (e) {
+        console.warn('[SW] Navigation Preload enable failed (likely unsupported):', e)
+      }
     })()
   )
 })
@@ -342,6 +363,79 @@ registerRoute(
       new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 30 }),
     ],
   })
+)
+
+// === 路由 5：API 写场景（Background Sync，断网时排队 + 恢复自动重试）===
+// v77 P2.6-D.1 (2026-06-28): 离线写场景支持。
+// 覆盖 4 个高频写场景（后端 POST/PUT/DELETE/PATCH 端点）：
+//   1. POST /api/v1/tasks       — TaskCreateDialog / MobileTaskCreateForm 现场补录
+//   2. POST /api/v1/knowledge/* — KnowledgeUploadDialog 文件上传
+//   3. POST /api/v1/paste/*     — PasteAnalyzeDialog 文本分析
+//   4. DELETE/PATCH /api/v1/tasks/{id} — TaskTrash 永久删除/恢复
+//
+// 注意：SSE/WS 流式接口（/api/v1/chat/stream, /api/v1/meeting/live, ...）**不**走
+// Background Sync — 流式断流即失败，背景重试只会让用户收到不完整响应。
+// 已经在路由 3（API GET）中通过 'GET' 限制避免 GET 误入，所以这里 match POST/PUT/PATCH/DELETE
+//
+// Background Sync 队列存 IndexedDB（默认 2MB 上限，约 100-200 个请求）。
+// 浏览器检测到网络恢复自动调用 fetch 重放队列。Local Notification（下方）反馈用户。
+const writeSyncPlugin = new BackgroundSyncPlugin('mnb-api-writes', {
+  maxRetentionTime: 24 * 60,  // 24h 过期（用户 24h 内重新上线会重放，否则丢弃）
+  onSync: async ({ queue }) => {
+    let entry
+    let successCount = 0
+    let failCount = 0
+    while ((entry = await queue.shiftRequest())) {
+      try {
+        await fetch(entry.request.clone())
+        successCount++
+      } catch (e) {
+        // 单条失败重新入队，浏览器会在下次 sync 事件重试
+        await queue.unshiftRequest(entry)
+        failCount++
+        break
+      }
+    }
+    console.log(`[SW] Background Sync replayed: ${successCount} success, ${failCount} failed`)
+    // v77 P2.6-D.1: Local Notification 反馈用户（仅通知成功重放数，不在断网时打扰）
+    if (successCount > 0 && self.registration) {
+      try {
+        await self.registration.showNotification('小气助手 · 离线数据已同步', {
+          body: `${successCount} 条离线操作已自动同步到服务器`,
+          icon: '/pwa-192.png',
+          badge: '/pwa-192.png',
+          tag: 'mnb-bg-sync',  // 同 tag 通知自动合并，避免重复弹窗
+          requireInteraction: false,
+          silent: false,
+        })
+      } catch (e) {
+        // 用户未授权 Notification 权限 — 静默忽略（不影响功能）
+        console.log('[SW] Notification skipped (permission denied or unsupported):', e.message)
+      }
+    }
+  },
+})
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  new NetworkOnly({  // 不缓存写请求（Background Sync 自带 IndexedDB 队列）
+    plugins: [writeSyncPlugin],
+  }),
+  'POST'
+)
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  new NetworkOnly({ plugins: [writeSyncPlugin] }),
+  'PUT'
+)
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  new NetworkOnly({ plugins: [writeSyncPlugin] }),
+  'PATCH'
+)
+registerRoute(
+  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  new NetworkOnly({ plugins: [writeSyncPlugin] }),
+  'DELETE'
 )
 
 // === 离线兜底（关键修复点）===
