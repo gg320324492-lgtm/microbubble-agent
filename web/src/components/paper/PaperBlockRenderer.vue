@@ -414,7 +414,7 @@ function renderMarkdownTable(text) {
   margin: 18px 0 10px;
   padding: 4px 10px;
   background: var(--color-accent-bg);
-  border: 1px dashed rgba(255, 179, 71, 0.4);
+  border: 1px dashed rgba(var(--color-accent-rgb), 0.4);
   border-radius: 6px;
   font-size: 12px;
   color: var(--color-warning);

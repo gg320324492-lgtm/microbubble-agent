@@ -304,7 +304,7 @@ watch(() => route.params.id, fetchMeeting)
   margin-bottom: 12px;
 }
 [data-theme="dark"] .hero-card {
-  background: linear-gradient(135deg, rgba(255, 122, 92, 0.12), rgba(255, 179, 71, 0.08));
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.12), rgba(var(--color-accent-rgb), 0.08));
 }
 .hero-title {
   font-size: 17px;

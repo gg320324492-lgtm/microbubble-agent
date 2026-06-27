@@ -132,7 +132,7 @@ const truncate = (text, n) => {
 
 .related-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 4px 12px rgba(255, 122, 92, 0.1);
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.1);
   transform: translateY(-1px);
 }
 

@@ -242,7 +242,7 @@ defineExpose({ stop, togglePlay })
   height: 36px;
   border-radius: 50%;
   border: none;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
   color: var(--color-bg-card);
   font-size: 14px;
   cursor: pointer;
@@ -251,9 +251,9 @@ defineExpose({ stop, togglePlay })
   justify-content: center;
   flex-shrink: 0;
   transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.3);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
 }
-.play-btn:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(255, 122, 92, 0.4); }
+.play-btn:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.4); }
 .play-btn:active { transform: scale(0.95); }
 
 .play-icon { margin-left: 2px; }
@@ -279,7 +279,7 @@ defineExpose({ stop, togglePlay })
   bottom: 0;
   width: 2px;
   background: var(--color-primary, #FF7A5C);
-  box-shadow: 0 0 6px rgba(255, 122, 92, 0.5);
+  box-shadow: 0 0 6px rgba(var(--color-primary-rgb), 0.5);
   pointer-events: none;
   transition: left 0.1s linear;
 }

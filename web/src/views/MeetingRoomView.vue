@@ -239,7 +239,7 @@ onMounted(async () => {
   display: inline-block;
   margin-left: 12px;
   padding: 2px 10px;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
   /* stylelint-disable-next-line color-named */
   color: var(--color-bg-card);
   font-size: 12px;

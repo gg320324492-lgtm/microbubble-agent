@@ -589,7 +589,7 @@ onUnmounted(() => {
   height: 100%;
 }
 .bunny:hover {
-  filter: drop-shadow(0 8px 18px rgba(255,122,92,0.25)) brightness(1.05);
+  filter: drop-shadow(0 8px 18px rgba(var(--color-primary-rgb),0.25)) brightness(1.05);
 }
 .bunny-body.walking {
   animation: pet-walk 0.35s ease-in-out infinite;

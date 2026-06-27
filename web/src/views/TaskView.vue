@@ -606,7 +606,7 @@ onMounted(() => {
 }
 .selection-info.is-active {
   color: var(--color-primary);
-  background: rgba(255, 122, 92, 0.08);
+  background: rgba(var(--color-primary-rgb), 0.08);
   font-weight: 600;
 }
 .edit-mode-btn {
@@ -700,7 +700,7 @@ onMounted(() => {
 
 .task-row.done-row.is-selected {
   opacity: 1;
-  background: rgba(255, 122, 92, 0.08);
+  background: rgba(var(--color-primary-rgb), 0.08);
   border-left: 3px solid var(--color-primary);
   padding-left: 9px;  /* 补偿 border-left 3px，避免布局抖动 */
   margin-left: -3px;

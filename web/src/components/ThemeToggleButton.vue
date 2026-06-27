@@ -49,7 +49,7 @@ const theme = useThemeStore()
   background: var(--color-primary-bg);
   border-color: var(--color-primary-light, #FF9D85);
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.2);
 }
 .theme-toggle-btn:active {
   transform: scale(0.95);
@@ -72,8 +72,8 @@ const theme = useThemeStore()
   border-color: rgba(255, 255, 255, 0.1);
 }
 [data-theme="dark"] .theme-toggle-btn:hover {
-  background: rgba(255, 122, 92, 0.15);
-  border-color: rgba(255, 157, 133, 0.5);
-  box-shadow: 0 2px 12px rgba(255, 122, 92, 0.3);
+  background: rgba(var(--color-primary-rgb), 0.15);
+  border-color: rgba(var(--color-primary-light-rgb), 0.5);
+  box-shadow: 0 2px 12px rgba(var(--color-primary-rgb), 0.3);
 }
 </style>

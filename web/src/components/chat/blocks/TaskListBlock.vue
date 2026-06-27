@@ -82,7 +82,7 @@ const goToTask = (id) => { if (id) router.push(`/tasks?task_id=${id}`) }
 .task-row2 { display: flex; gap: 12px; font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; flex-wrap: wrap; }
 .meta.overdue { color: var(--color-danger); font-weight: 500; }
 .progress-bar { height: 4px; background: var(--color-info-bg); border-radius: 2px; margin-top: 6px; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, #FF7A5C, #FFB347); transition: width 0.3s; }
+.progress-fill { height: 100%; background: var(--gradient-welcome-hero); transition: width 0.3s; }
 .tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .tag { font-size: 11px; background: var(--color-bg-hover); color: var(--color-text-regular); padding: 1px 6px; border-radius: 8px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }

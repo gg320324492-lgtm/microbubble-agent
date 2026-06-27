@@ -115,7 +115,7 @@ function formatWordCount(count) {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #FF7A5C, #FFB347);
+  background: var(--gradient-welcome-hero);
   border-radius: 4px;
   transition: width 0.6s ease-out;
   min-width: 2px;

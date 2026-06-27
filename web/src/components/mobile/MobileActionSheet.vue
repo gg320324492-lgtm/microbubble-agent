@@ -69,7 +69,7 @@ const props = defineProps({
   title: { type: String, default: '' },
   actions: { type: Array, default: () => [] },
   /** 自定义主题色（用于图标背景） */
-  primaryColor: { type: String, default: '#FF7A5C' },
+  primaryColor: { type: String, default: 'var(--color-primary)' },
   /** 点击 action 后是否自动关闭 */
   autoClose: { type: Boolean, default: true },
 })

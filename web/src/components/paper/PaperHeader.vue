@@ -224,7 +224,7 @@ const headerTags = computed(() => {
 .paper-authors-block {
   margin-bottom: 12px;
   padding: 12px 0;
-  border-bottom: 1px dashed rgba(255, 122, 92, 0.15);
+  border-bottom: 1px dashed rgba(var(--color-primary-rgb), 0.15);
 }
 
 .authors-row {
@@ -294,7 +294,7 @@ const headerTags = computed(() => {
 .paper-affiliations-block {
   margin-bottom: 14px;
   padding-bottom: 14px;
-  border-bottom: 1px dashed rgba(255, 122, 92, 0.15);
+  border-bottom: 1px dashed rgba(var(--color-primary-rgb), 0.15);
 }
 
 .affs-list {
@@ -345,7 +345,7 @@ const headerTags = computed(() => {
   padding: 10px 14px;
   background: linear-gradient(135deg, #FFF8F5 0%, #FFFDFB 100%);
   border-radius: 8px;
-  border: 1px solid rgba(255, 122, 92, 0.15);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.15);
 }
 
 .journal-info {
@@ -381,7 +381,7 @@ const headerTags = computed(() => {
   color: var(--color-text-primary);
   font-weight: 600;
   font-family: 'Consolas', 'Monaco', monospace;
-  background: rgba(255, 122, 92, 0.1);
+  background: rgba(var(--color-primary-rgb), 0.1);
   padding: 1px 6px;
   border-radius: 4px;
   font-size: 13px;
@@ -396,7 +396,7 @@ const headerTags = computed(() => {
   font-size: 13px;
   padding: 4px 10px;
   background: var(--color-bg-card);
-  border: 1px solid rgba(255, 122, 92, 0.25);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.25);
   border-radius: 6px;
   transition: all 0.15s ease;
 }

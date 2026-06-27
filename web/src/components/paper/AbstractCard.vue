@@ -68,7 +68,7 @@ const topic = computed(() => props.paper.topic || '')
 <style scoped>
 .paper-abstract {
   background: linear-gradient(135deg, #FFF8F5 0%, #FFFDFB 100%);
-  border: 1px solid rgba(255, 122, 92, 0.12);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.12);
   border-left: 4px solid var(--color-primary);
   border-radius: 12px;
   padding: 16px 20px;
@@ -149,7 +149,7 @@ const topic = computed(() => props.paper.topic || '')
   flex-wrap: wrap;
   gap: 6px;
   padding-top: 10px;
-  border-top: 1px dashed rgba(255, 122, 92, 0.2);
+  border-top: 1px dashed rgba(var(--color-primary-rgb), 0.2);
 }
 
 .keywords-label {
@@ -162,6 +162,6 @@ const topic = computed(() => props.paper.topic || '')
 .keyword-tag {
   background: var(--color-bg-card);
   color: var(--color-primary);
-  border: 1px solid rgba(255, 122, 92, 0.3);
+  border: 1px solid rgba(var(--color-primary-rgb), 0.3);
 }
 </style>

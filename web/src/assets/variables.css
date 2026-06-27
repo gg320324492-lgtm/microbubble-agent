@@ -15,6 +15,14 @@
   --color-accent: #FFB347;
   --color-accent-bg: #FFF8ED;
 
+  /* ===== RGB 三元组 token (v76.6 主题化收官) =====
+     用于 rgba(var(--color-primary-rgb), 0.X) 写法，6 套主题自动跟随。
+     解决大量 box-shadow / hover-bg / border 等需要 alpha 的地方。
+     不要再硬编码 rgba(255, 122, 92, X) ！ */
+  --color-primary-rgb: 255, 122, 92;
+  --color-primary-light-rgb: 255, 157, 133;
+  --color-accent-rgb: 255, 179, 71;
+
   /* ===== 功能色 ===== */
   --color-success: #67C23A;
   --color-success-bg: #F0F9EB;
@@ -540,6 +548,9 @@ body {
   --color-primary-bg: rgba(255, 122, 92, 0.15);
   --color-accent: #FFC067;
   --color-accent-bg: rgba(255, 179, 71, 0.12);
+  --color-primary-rgb: 255, 157, 133;  /* v76.6: dark orange --color-primary = #FF9D85 */
+  --color-primary-light-rgb: 255, 122, 92;  /* dark orange --color-primary-light = #FF7A5C */
+  --color-accent-rgb: 255, 192, 103;  /* dark orange --color-accent = #FFC067 */
   --color-success-bg: rgba(103, 194, 58, 0.15);
   --color-warning-bg: rgba(230, 162, 60, 0.15);
   --color-danger-bg: rgba(245, 108, 108, 0.15);
@@ -839,6 +850,9 @@ body {
   --color-primary-bg: #E8F2FE;
   --color-primary-border: rgba(74, 144, 226, 0.22);
   --color-accent: #5AD8A6;
+  --color-primary-rgb: 74, 144, 226;   /* v76.6: ocean light --color-primary = #4A90E2 */
+  --color-primary-light-rgb: 107, 171, 255;  /* --color-primary-light = #6BABFF */
+  --color-accent-rgb: 90, 216, 166;    /* --color-accent = #5AD8A6 */
   --color-accent-bg: #E6F8F1;
   --color-shadow-primary: rgba(74, 144, 226, 0.30);
   --color-bg-sidebar: rgba(232, 242, 254, 0.92);
@@ -861,6 +875,9 @@ body {
   --color-primary-bg: #E8F5E9;
   --color-primary-border: rgba(76, 175, 80, 0.22);
   --color-accent: #FFB74D;
+  --color-primary-rgb: 76, 175, 80;    /* v76.6: forest light --color-primary = #4CAF50 */
+  --color-primary-light-rgb: 102, 187, 106;  /* --color-primary-light = #66BB6A */
+  --color-accent-rgb: 255, 183, 77;    /* --color-accent = #FFB74D (forest 金橙不变) */
   --color-accent-bg: #FFF5E5;
   --color-shadow-primary: rgba(76, 175, 80, 0.30);
   --color-bg-sidebar: rgba(232, 245, 233, 0.92);
@@ -883,6 +900,9 @@ body {
   --color-primary-bg: rgba(74, 144, 226, 0.18);
   --color-primary-border: rgba(74, 144, 226, 0.30);
   --color-accent: #7DE0BA;
+  --color-primary-rgb: 107, 171, 255;  /* v76.6: dark ocean --color-primary = #6BABFF */
+  --color-primary-light-rgb: 141, 192, 255;  /* --color-primary-light = #8DC0FF */
+  --color-accent-rgb: 125, 224, 186;   /* --color-accent = #7DE0BA */
   --color-accent-bg: rgba(90, 216, 166, 0.14);
   --color-shadow-primary: rgba(74, 144, 226, 0.45);
   --color-bg-sidebar: rgba(18, 26, 38, 0.92);
@@ -904,6 +924,9 @@ body {
   --color-primary-bg: rgba(76, 175, 80, 0.18);
   --color-primary-border: rgba(76, 175, 80, 0.30);
   --color-accent: #FFCA80;
+  --color-primary-rgb: 102, 187, 106;  /* v76.6: dark forest --color-primary = #66BB6A */
+  --color-primary-light-rgb: 129, 199, 132;  /* --color-primary-light = #81C784 */
+  --color-accent-rgb: 255, 202, 128;   /* --color-accent = #FFCA80 */
   --color-accent-bg: rgba(255, 183, 77, 0.14);
   --color-shadow-primary: rgba(76, 175, 80, 0.45);
   --color-bg-sidebar: rgba(18, 28, 22, 0.92);

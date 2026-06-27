@@ -174,7 +174,7 @@ const handleLogin = async () => {
 .login-button:hover {
   transform: translateY(-2px);
   filter: brightness(1.08);
-  box-shadow: 0 8px 24px rgba(255, 122, 92, 0.40);
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb), 0.40);
 }
 
 .login-button:active {

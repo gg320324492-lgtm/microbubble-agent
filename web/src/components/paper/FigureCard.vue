@@ -170,7 +170,7 @@ const statusLabel = (s) => ({
 
 .figure-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: rgba(255, 122, 92, 0.2);
+  border-color: rgba(var(--color-primary-rgb), 0.2);
 }
 
 /* v28 step 15: PDF 风格直视图 —— 图片按容器宽度 100% 撑满，不限 max-height

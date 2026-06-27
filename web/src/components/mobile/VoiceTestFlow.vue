@@ -632,7 +632,7 @@ onUnmounted(cleanup)
   font-size: 16px;
   font-weight: var(--font-weight-medium, 500);
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(255, 122, 92, 0.3);
+  box-shadow: 0 8px 24px rgba(var(--color-primary-rgb), 0.3);
   -webkit-tap-highlight-color: transparent;
 }
 .big-btn:active { transform: scale(0.97); }

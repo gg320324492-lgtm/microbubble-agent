@@ -1280,7 +1280,7 @@ onMounted(async () => {
   padding: 6px 10px; background: var(--color-bg-page, #f5f7fa); border-radius: var(--radius-md, 8px);
   border: 1px solid transparent; transition: all 0.2s;
 }
-.item-row:hover, .item-row:focus-within { border-color: rgba(255, 122, 92, 0.3); background: var(--color-primary-bg, #fff0ed); }
+.item-row:hover, .item-row:focus-within { border-color: rgba(var(--color-primary-rgb), 0.3); background: var(--color-primary-bg, #fff0ed); }
 .item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary, #FF7A5C); }
 .decision-dot { background: var(--color-warning, #E6A23C); }
 .item-row .el-input { flex: 1; }
