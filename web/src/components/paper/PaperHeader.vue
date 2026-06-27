@@ -343,7 +343,8 @@ const headerTags = computed(() => {
   gap: 12px;
   margin-bottom: 14px;
   padding: 10px 14px;
-  background: linear-gradient(135deg, #FFF8F5 0%, #FFFDFB 100%);
+  /* v77 P2.5.4: paper 渐变 token 化（dark 自动适配） */
+  background: var(--gradient-paper-warm);
   border-radius: 8px;
   border: 1px solid rgba(var(--color-primary-rgb), 0.15);
 }

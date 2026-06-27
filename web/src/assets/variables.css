@@ -66,6 +66,11 @@
   --gradient-welcome-hero: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
   /* v77 P2.5.2: KnowledgeCard .card-thumbnail 空态渐变（light/dark 自动切换） */
   --gradient-thumbnail-empty: linear-gradient(135deg, #FAFAFA 0%, #F3F4F6 100%);
+  /* v77 P2.5.4: paper 详情页米色/暖色渐变（dark override 在 [data-theme="dark"] 块内） */
+  --gradient-paper-warm: linear-gradient(135deg, #FFF8F5 0%, #FFFDFB 100%);
+  --gradient-paper-qa-q: linear-gradient(135deg, #FEF3C7, #FDE68A);
+  --gradient-paper-qa-a: linear-gradient(135deg, #EFF6FF, #DBEAFE);
+  --gradient-paper-success: linear-gradient(135deg, #F0F9EB 0%, #FAFFF7 100%);
   --color-shadow-primary: rgba(255, 122, 92, 0.30);
 
   /* ===== v77 P2: 3 强调渐变（CLAUDE.md:4365-4372 plan 第 2 项）=====
@@ -665,6 +670,12 @@ body {
 
   /* v77 P2.5.2: KnowledgeCard .card-thumbnail dark 模式 = 深灰渐变（与 #1a1d23 dark 主题色融合） */
   --gradient-thumbnail-empty: linear-gradient(135deg, #2c2f37 0%, #1a1d23 100%);
+
+  /* v77 P2.5.4: paper 详情页米色渐变 dark 适配（浅米色 → 半透明品牌色，避免 dark 模式下刺眼） */
+  --gradient-paper-warm: rgba(255, 122, 92, 0.10);
+  --gradient-paper-qa-q: rgba(245, 158, 11, 0.15);
+  --gradient-paper-qa-a: rgba(59, 130, 246, 0.15);
+  --gradient-paper-success: rgba(103, 194, 58, 0.12);
 
   /* v69: 阴影 primary 颜色（pulsePrimary keyframe 用） */
   --color-shadow-primary: rgba(255, 122, 92, 0.4);

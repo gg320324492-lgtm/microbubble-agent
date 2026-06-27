@@ -378,8 +378,9 @@ const pageRangeText = computed(() => {
   color: var(--color-primary);
 }
 
+/* v77 P2.5.4: paper 渐变 token 化 */
 .section-type-conclusion {
-  background: linear-gradient(135deg, #F0F9EB 0%, #FAFFF7 100%);
+  background: var(--gradient-paper-success);
   border: 1px solid #C6E8B0;
   border-radius: 10px;
   padding: 16px 20px;
