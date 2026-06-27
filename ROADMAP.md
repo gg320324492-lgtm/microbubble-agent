@@ -48,6 +48,155 @@
 - 🆕 [v31.3 Whisper 常驻 + 推理加速](CHANGELOG.md#2026-06-26-v31-3-whisper-常驻--推理加速用户决策chat-asr-时效性优先) - 模型常驻 GPU 8GB
 - 🆕 [v31.2.5 rate-limit Redis ZSET 持久化](CHANGELOG.md#2026-06-26-v31-2-5-rate-limit-收官启用-redis-zset-持久化) - 抗 docker restart
 
+## 🆕 待做：产品扩展（商业化 + 多组织 + 桌面 + APP）
+
+> **2026-06-28 决策沉淀**：在 Phase 7~20 现有高优/中优/低优路线图基础上，新增产品级扩展方向。完整规划见 [docs/product-expansion-plan.md](docs/product-expansion-plan.md)（待补充）+ plan 文件 [C:\Users\pc\.claude\plans\exe-logical-pie.md](C:/Users/pc/.claude/plans/exe-logical-pie.md)。
+>
+> **核心战略**：1 个前置 P0（40 人天，单租户内打地基）+ 6 个 Phase（24 人月 / 18 月工期）。从"内部 Web 工具"→"多组织 SaaS + 桌面 + 三端 APP"。
+
+### 前置 P0（必须先完成，否则后期改造 10 倍成本）[40 人天]
+
+- [ ] **#PRE-001** [5d][infra][P0] 24 张表加 `organization_id` 占位列（NULL 允许）+ GIN 索引 — **多租户改造前置占位**
+- [ ] **#PRE-002** [8d][auth][P0] OAuth provider 抽象层 + JWT refresh rotation 框架
+- [ ] **#PRE-003** [5d][infra][P0] PG 备份 + 监控 + 慢查询日志（pg_stat_statements + P95 < 200ms 告警）
+- [ ] **#PRE-004** [4d][frontend][P0] 前端 API 层加 `X-Organization-ID` header 透传 + Pinia store 改造
+- [ ] **#PRE-005** [6d][infra][P0] 审计日志中间件（写操作 + 登录 + 切换组织 + 异步队列 + 归档）
+- [ ] **#PRE-006** [4d][infra][P0] 限流扩展到组织维度（5 tier → 组织 × 用户双维度）
+- [ ] **#PRE-007** [5d][backend][P0] Celery 任务加 `organization_id` 上下文传递（`task_context` 装饰器）
+- [ ] **#PRE-008** [3d][infra][P0] 部署架构文档化（Docker Compose 9 服务拆分到 K8s / 阿里云 ACK）
+- [ ] **#PRE-009** [30-60d][legal][P0] **软著申请（中国版权中心，不可压缩 30-60 天，今天就启动）**
+- [ ] **#PRE-010** [5d][legal][P0] 法务合规检查（个保法 + 数据安全法 + 用户协议 + 隐私协议 + 科研数据出境评估）
+
+### Phase 0：正式数据库 [3 人月]
+
+- [ ] **#P0-001** RDS PostgreSQL 16 HA 主从迁移（阿里云，自动备份 7 天 + PITR）
+- [ ] **#P0-002** pgvector HNSW 索引重建（数据量 > 1000 万时 HNSW 优势明显）
+- [ ] **#P0-003** Prometheus + Grafana + AlertManager（CPU / 内存 / 连接数 / 副本延迟）
+- [ ] **#P0-004** Loki + Promtail 日志聚合（替代 SSH 看日志）
+- [ ] **#P0-005** Sentry 前后端错误聚合
+- [ ] **#P0-006** 9 个 Docker 服务拆分到 K8s namespace
+- [ ] **#P0-007** 阿里云 OSS 冷数据归档（90 天后转归档存储）
+- [ ] **#P0-008** 灾备演练：RPO < 5 分钟，RTO < 30 分钟
+
+### Phase 1：认证扩展 [3 人月]
+
+- [ ] **#P1-001** OAuth provider 抽象层（`app/services/auth/providers/base.py`）
+- [ ] **#P1-002** 阿里云短信 SDK（手机号验证码，5 分钟 TTL，防刷 1 分钟 1 次）
+- [ ] **#P1-003** 微信开放平台网站应用（PC 扫码登录，14 步标准流程）
+- [ ] **#P1-004** 微信开放平台移动应用（独立 appid，资质认证 600 元/年）
+- [ ] **#P1-005** JWT refresh token rotation（24h access + 30d refresh，单次使用）
+- [ ] **#P1-006** 双因子认证（组织维度配置，可开关）
+- [ ] **#P1-007** 设备指纹 + 异地登录告警
+- [ ] **#P1-008** 密码强度策略升级（zxcvbn 评分）
+- [ ] **#P1-009** 第三方登录首次绑定手机号流程
+
+### Phase 2：多组织 SaaS [6 人月] ⚠️ **最高优先级**
+
+- [ ] **#P2-001** `organizations` + `org_members` + `org_invitations` 表
+- [ ] **#P2-002** PostgreSQL Row Level Security（RLS）策略，24 张表全加
+- [ ] **#P2-003** `OrganizationMixin` + SQLAlchemy event listener（自动注入 WHERE）
+- [ ] **#P2-004** API 层 `Depends(get_current_org)` 强制校验
+- [ ] **#P2-005** 子域名路由（`{org_slug}.agent.example.com` + Let's Encrypt 通配 HTTPS 证书）
+- [ ] **#P2-006** 组织切换器（Web 顶栏 + 移动端 + 桌面托盘菜单）
+- [ ] **#P2-007** 创建 / 加入 / 邀请组织流程（链接 / 二维码 / 邮件，72 小时过期）
+- [ ] **#P2-008** 三级 RBAC（组织管理员 / 普通成员 / 访客）
+- [ ] **#P2-009** 组织级配额（成员数 / 存储 / API 调用 / GPU 分钟数）
+- [ ] **#P2-010** 数据迁移脚本（现有 20 人数据合并到默认"原始课题组"组织）
+- [ ] **#P2-011** 灰度方案（先 1 个外部组织白名单，全量后 30 天清理）
+
+**3 层数据隔离防御**：API 层（`Depends(get_current_org)`）+ ORM 层（`OrganizationMixin`）+ DB 层（PG RLS 兜底）
+
+### Phase 3：桌面 EXE [4 人月]
+
+- [ ] **#P3-001** Electron MVP（Windows + macOS + Linux）
+- [ ] **#P3-002** Tauri 并行试点（验证可行性，3 月后决策）
+- [ ] **#P3-003** 自动更新（Electron Updater / Tauri updater）
+- [ ] **#P3-004** 系统托盘 + 全局快捷键（Ctrl+Shift+A 唤起搜索）
+- [ ] **#P3-005** 离线缓存（IndexedDB + Service Worker）+ 增量同步
+- [ ] **#P3-006** Windows EV 代码签名（DigiCert ¥4000/年）
+- [ ] **#P3-007** macOS Developer ID 签名 + Notarization 公证
+- [ ] **#P3-008** Linux AppImage / deb / rpm 三格式打包
+- [ ] **#P3-009** 协议注册（agent:// scheme）+ 文件关联（.pdf / .docx 拖入）
+
+### Phase 4：移动 APP [6 人月] ⚠️ **最大工程量**
+
+- [ ] **#P4-001** Flutter 3.24+ 框架定型（Dart 3.5）
+- [ ] **#P4-002** 业务逻辑 TypeScript → Dart 移植（或 WebView 容器嵌入 H5 保守方案）
+- [ ] **#P4-003** 微信开放平台移动应用 appid（独立申请）
+- [ ] **#P4-004** 极光推送 JPush（多厂商通道：华为 / 小米 / OPPO / vivo / 魅族 / iOS APNs）
+- [ ] **#P4-005** iOS TestFlight 内测（90 天有效期）
+- [ ] **#P4-006** App Store 上架（首次 2-4 周审核，避免 4.7/4.2 拒绝）
+- [ ] **#P4-007** Android 华为应用市场上架（最严，软著必填）
+- [ ] **#P4-008** Android 小米 / OPPO / vivo / 应用宝多商店上架
+- [ ] **#P4-009** 鸿蒙 NEXT 适配（Flutter 鸿蒙版 alpha 或原生 ArkTS 重写，预留 ¥30-50 万）
+- [ ] **#P4-010** ICP 备案 + 公安备案（7-15 工作日）
+- [ ] **#P4-011** 移动端专属（摄像头扫码 / 生物识别 / 后台保活）
+- [ ] **#P4-012** 离线缓存（SQLite / Hive）+ 增量同步
+
+### Phase 5：商业化 [2 人月]
+
+- [ ] **#P5-001** 订阅模型 3 档（基础版 ¥299/月/20人 / 专业版 ¥999/月/50人 / 企业版 ¥9999/月/200人，学校 8 折）
+- [ ] **#P5-002** 微信支付 V3 集成
+- [ ] **#P5-003** 支付宝 APP 支付集成
+- [ ] **#P5-004** 14 天免费试用流程
+- [ ] **#P5-005** 续费 / 降级 / 退款流程
+- [ ] **#P5-006** 发票系统（电子发票 + 增值税专票申请）
+- [ ] **#P5-007** 学校 / 院系返点接口（10-20%）
+- [ ] **#P5-008** 价格表页 + 商务对接入口
+- [ ] **#P5-009** 销售漏斗 UTM 追踪 + 转化看板
+
+### 关键决策（2026-06-28 拍板）
+
+| # | 决策 | 拍板方案 |
+|---|------|----------|
+| 1 | 多租户数据库 | ✅ 阿里云 RDS PostgreSQL HA（省心优先） |
+| 2 | 桌面框架 | ✅ Electron MVP + Tauri 并行试点（3 月后决策） |
+| 3 | 移动框架 | ✅ Flutter 3.24+（性能 + 跨端） |
+| 4 | 鸿蒙策略 | ✅ 预留 ¥30-50 万原生重写预算 |
+| 5 | 商业化时间窗 | ✅ 边做边邀请（6 月起白名单） |
+| 6 | 数据合规 | ✅ 承诺"数据不出境"，用户协议明示 |
+| 7 | 付费模型 | ✅ 混合模式（基础版按组织，专业版按成员数），学校 8 折 |
+| 8 | 招人 vs 外包 | ✅ 1 名 Flutter 全职 + 鸿蒙必要时外包 |
+
+### 关键风险
+
+| ID | 风险 | 等级 | 缓解 |
+|----|------|------|------|
+| RISK-01 | 鸿蒙 NEXT 2026-10 强制下架 Android APK，三方适配成本不可预估 | 高 | ¥30-50 万原生预算 + 1-2 人常驻 |
+| RISK-02 | PG RLS 性能损耗 5-15% | 中 | 预读 + Redis 缓存 + 慢查询监控 |
+| RISK-03 | 多租户改造后期成本是前期 10 倍 | 高 | **强制 PRE-001 占位列** |
+| RISK-04 | 软著申请 30-60 天 | 高 | **今天就启动**（PRE-009） |
+| RISK-05 | 微信网站应用与移动应用 appid 不互通 | 中 | 同时申请两个 appid |
+| RISK-06 | macOS Notarization 公证被拒 | 中 | electron-builder 默认配置 + 测试机预审 |
+| RISK-07 | 科研数据涉及人类遗传资源 / 数据出境 | 高 | 限定境内服务器 + 法务预审 |
+| RISK-08 | App Store 4.7 / 4.2 拒绝，延期 2-4 周 | 中 | 提前对照审核指南 + 多次 TestFlight |
+| RISK-09 | Electron 内存占用 200-400MB | 中 | Tauri 试点（5-10MB） |
+| RISK-10 | 微信支付 V3 + 商户号审核 7-15 工作日 | 中 | 提前 30 天准备 |
+| RISK-11 | 20 人历史数据迁移跨用户引用断裂 | 中 | 引用图分析 + 2 周 buffer |
+| RISK-12 | Celery ORM 与 RLS 兼容 | 中 | `task_context` 装饰器统一 |
+
+### 里程碑 KPI
+
+- **6 月**：1-2 个外部课题组试用 + 软著到手 + 多组织 MVP
+- **12 月**：5-10 个课题组付费 + 月活 100-300 + 桌面三平台 + iOS/Android 上线
+- **18 月**：20+ 课题组 + 月活 500-1000 + 鸿蒙 + 微信小程序 + 盈亏平衡倒计时
+- **24 月**：50+ 课题组 + 月活 2000+ + 双端占比 > 60% + ARR > ¥200 万
+
+### 团队配置
+
+- **短期 6 月**：前端 2 + 后端 2 + 移动 1 + 运维 0.5 + PM 0.5 = **6 人**
+- **长期 12 月**：前端 3 + 后端 3 + 移动 2 + 运维 1 + 测试 1 + PM 1 + 运营 0.5 = **11.5 人**
+- **招人顺序**：移动 Flutter（最稀缺 40-60K/月）→ 后端 RLS 专家 → 鸿蒙原生 → K8s 运维 → 科研背景 PM
+
+### 立即启动项（本周内）
+
+- ✅ **今天启动软著申请**（PRE-009，30-60 天不可压缩）
+- ✅ **本周启动 PRE-001**（24 张表加 `organization_id` 占位列 + alembic 035 migration）
+- ✅ **本月完成 PRE-002**（OAuth provider 抽象层）
+- ✅ **本月启动 Phase 0**（RDS PostgreSQL HA 迁移）
+
+---
+
 ## 未来规划（从浅入深路线图）
 
 ### 🔴 高优先级（核心能力扩展）
