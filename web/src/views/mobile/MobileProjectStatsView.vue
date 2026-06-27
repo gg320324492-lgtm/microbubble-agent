@@ -271,3 +271,25 @@ onMounted(() => {
   color: var(--color-text-regular);
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* ECharts 调色板由 MobileECharts JS 端 getComputedStyle 自动适配（v77 P2.6-B） */
+[data-theme="dark"] .stats-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .stats-card .card-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .stats-summary-item {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .stats-summary-num {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .stats-summary-label {
+  color: var(--color-text-secondary);
+}
+</style>

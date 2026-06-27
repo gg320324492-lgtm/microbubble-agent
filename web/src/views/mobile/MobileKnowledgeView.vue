@@ -840,3 +840,42 @@ onMounted(() => {
 .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .page-info { font-size: 13px; color: var(--color-text-secondary); }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* 知识库 tab / 卡片 / 搜索 / 分页在 dark 模式适配 */
+[data-theme="dark"] .tab-bar {
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .tab-item.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+[data-theme="dark"] .search-input {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .knowledge-card:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .knowledge-card .card-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .knowledge-card .card-snippet {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .knowledge-card .card-meta {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .page-btn {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .page-btn:not(:disabled):active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+</style>

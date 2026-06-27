@@ -561,3 +561,40 @@ onMounted(() => {
   color: var(--color-text-secondary);
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* filter sheet / 状态徽章 / 任务卡在 dark 模式适配 */
+[data-theme="dark"] .header-action.primary {
+  background: var(--color-primary);
+  color: var(--color-bg-card);
+}
+[data-theme="dark"] .header-action.primary:active {
+  background: var(--color-primary);
+  opacity: 0.85;
+}
+[data-theme="dark"] .status-badge.status-todo,
+[data-theme="dark"] .status-badge.status-in_progress {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .status-badge.status-done {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+[data-theme="dark"] .priority-pill.priority-high {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+[data-theme="dark"] .priority-pill.priority-medium {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+[data-theme="dark"] .priority-pill.priority-low {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+[data-theme="dark"] .task-card:active {
+  background: var(--color-bg-hover);
+}
+</style>

@@ -40,6 +40,54 @@ const props = defineProps({
   theme: { type: String, default: '' },
 })
 
+// v77 P2.6-B: ECharts 调色板改用 getComputedStyle 读 token（与 v77 P2.6-A ChartBlock 同模式）
+// 解决 6 主题（3 主色 × 2 明暗）下 ECharts 颜色不随主题切换的问题
+const getPalette = () => {
+  const root = document.documentElement
+  const get = (token) => getComputedStyle(root).getPropertyValue(token).trim()
+  const isDark = root.dataset.theme === 'dark'
+  return isDark
+    ? {
+        text: get('--color-text-regular'),
+        textDim: get('--color-text-secondary'),
+        gridLine: get('--color-border-base'),
+        tooltipBg: get('--color-bg-card'),
+        tooltipBorder: get('--color-border-base'),
+      }
+    : {
+        text: get('--color-text-primary'),
+        textDim: get('--color-text-secondary'),
+        gridLine: get('--color-border-light'),
+        tooltipBg: get('--color-bg-card'),
+        tooltipBorder: get('--color-border-light'),
+      }
+}
+
+const applyThemeToOption = (opt) => {
+  const palette = getPalette()
+  if (!opt) return opt
+  if (opt.title && typeof opt.title === 'object' && opt.title.text) {
+    opt.title.textStyle = { ...(opt.title.textStyle || {}), color: palette.text }
+  }
+  if (opt.legend) {
+    opt.legend.textStyle = { ...(opt.legend.textStyle || {}), color: palette.text }
+  }
+  if (opt.xAxis) {
+    const xs = Array.isArray(opt.xAxis) ? opt.xAxis : [opt.xAxis]
+    xs.forEach((ax) => { ax.axisLabel = { ...(ax.axisLabel || {}), color: palette.textDim } })
+  }
+  if (opt.yAxis) {
+    const ys = Array.isArray(opt.yAxis) ? opt.yAxis : [opt.yAxis]
+    ys.forEach((ay) => { ay.axisLabel = { ...(ay.axisLabel || {}), color: palette.textDim } })
+  }
+  if (opt.tooltip) {
+    opt.tooltip.backgroundColor = palette.tooltipBg
+    opt.tooltip.borderColor = palette.tooltipBorder
+    opt.tooltip.textStyle = { ...(opt.tooltip.textStyle || {}), color: palette.text }
+  }
+  return opt
+}
+
 const emit = defineEmits(['click', 'finished'])
 
 const chartRef = ref(null)
@@ -47,6 +95,7 @@ const { isMobile, width } = useIsMobile()
 let chartInstance = null
 let resizeObserver = null
 let longPressTimer = null
+let themeObserver = null  // v77 P2.6-B: 监听 <html data-theme> 变化 → 重渲 ECharts
 
 // ============================================================================
 // 移动端适配 option
@@ -148,7 +197,7 @@ function initChart() {
     chartInstance = echarts.init(chartRef.value, props.theme || undefined, {
       renderer: 'canvas',
     })
-    chartInstance.setOption(adaptOption(props.option))
+    chartInstance.setOption(applyThemeToOption(adaptOption(props.option)))
     chartInstance.on('click', (params) => emit('click', params))
     chartInstance.on('finished', () => emit('finished'))
   } catch (e) {
@@ -164,7 +213,7 @@ function resizeChart() {
 
 function updateOption() {
   if (!chartInstance) return
-  chartInstance.setOption(adaptOption(props.option), true) // notMerge
+  chartInstance.setOption(applyThemeToOption(adaptOption(props.option)), true) // notMerge
 }
 
 // ============================================================================
@@ -212,6 +261,17 @@ onMounted(async () => {
     chartRef.value.addEventListener('touchend', onTouchEnd)
     chartRef.value.addEventListener('touchcancel', onTouchEnd)
   }
+
+  // v77 P2.6-B: 监听 <html data-theme> 变化 → 重新应用主题色 + 重渲
+  themeObserver = new MutationObserver(() => {
+    if (chartInstance) {
+      chartInstance.setOption(applyThemeToOption(adaptOption(props.option)), true)
+    }
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
 })
 
 onBeforeUnmount(() => {
@@ -226,6 +286,7 @@ onBeforeUnmount(() => {
   } else {
     window.removeEventListener('resize', resizeChart)
   }
+  if (themeObserver) themeObserver.disconnect()  // v77 P2.6-B
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null
@@ -259,5 +320,14 @@ watch(width, () => resizeChart())
 .mobile-echarts {
   width: 100%;
   position: relative;
+}
+</style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* MobileECharts 调色板走 JS getComputedStyle 自动适配 dark/light/accent */
+[data-theme="dark"] .mobile-echarts {
+  /* tooltip 背景由 ECharts setOption 注入 token 值；这里只确保容器背景不漏色 */
+  background: transparent;
 }
 </style>

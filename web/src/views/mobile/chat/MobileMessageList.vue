@@ -217,3 +217,26 @@ defineExpose({ scrollToBottom })
   font-size: 18px;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* 消息列表 + 时间分割 + 引用块在 dark 模式适配 */
+[data-theme="dark"] .message-time-divider {
+  color: var(--color-text-placeholder);
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .message-quote {
+  background: var(--color-bg-page);
+  border-left: 3px solid var(--color-primary);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .qa-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .qa-card.active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+</style>

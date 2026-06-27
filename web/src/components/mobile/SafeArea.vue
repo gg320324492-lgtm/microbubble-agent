@@ -70,3 +70,12 @@ const areaStyle = computed(() => {
   /* 通过 padding 实现 safe area 适配，父容器需要 flex 布局 */
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* SafeArea 是布局占位组件，渲染时无可见元素（aria-hidden=true） */
+/* 此处仅在 visible=true 模式下确保占位颜色不与 dark 模式背景冲突 */
+[data-theme="dark"] .safe-area[aria-hidden="true"][style*="background"] {
+  background: transparent;
+}
+</style>

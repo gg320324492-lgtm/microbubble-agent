@@ -591,3 +591,32 @@ onMounted(async () => {
   font-size: 10px;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .settings-group {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .settings-item {
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .settings-item .item-label {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .settings-item .item-desc {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .theme-swatch {
+  border: 2px solid var(--color-border-light);
+}
+[data-theme="dark"] .theme-swatch.active {
+  border-color: var(--color-primary);
+}
+[data-theme="dark"] .logout-btn {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+</style>

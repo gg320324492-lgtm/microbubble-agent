@@ -34,3 +34,29 @@ const html = computed(() => {
 .fb-title { font-weight: 600; margin-bottom: 4px; }
 .fb-content :deep(pre) { background: var(--color-bg-card); padding: 6px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .fallback-block {
+  background: var(--color-bg-warm);
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .fb-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .fb-content {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .fb-content :deep(pre) {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .fb-content :deep(code) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .fb-content :deep(a) {
+  color: var(--color-primary);
+}
+</style>

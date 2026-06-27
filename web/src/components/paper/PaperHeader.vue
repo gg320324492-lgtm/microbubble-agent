@@ -510,3 +510,17 @@ const headerTags = computed(() => {
   }
 }
 </style>
+
+<!-- v77 P2.6-B: dark 模式下 plain 按钮可读性修复（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .paper-header-toolbar-right .el-button.is-plain {
+  background: transparent;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+[data-theme="dark"] .paper-header-toolbar-right .el-button.is-plain:hover {
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+</style>
