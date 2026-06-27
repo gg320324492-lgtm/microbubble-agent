@@ -49,6 +49,11 @@ htmlcov/
 node_modules/
 web/dist/
 .webpack/
+# Playwright 测试输出
+test-results/
+web/test-results/
+playwright-report/
+web/playwright-report/
 
 # FRP
 frpc
