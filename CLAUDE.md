@@ -4961,3 +4961,140 @@ docker exec microbubble-agent-app-1 python /tmp/reprocess_meeting.py --meeting 1
 - **新增文件 1 个**：`memory/name-aliases-phonetic-correction-2026-06-27.md`
 - **CLAUDE.md 教训沉淀**：所有"会议人名 / 声纹 / 文本"类质量改进必须**push 到主路径 hook**，不靠 re-process 历史数据。
 
+
+---
+
+## 2026-06-27 v77 P2.6-B 收官 — Bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由
+
+> **触发**：v77 P2.6-A（commit `36049629`）收官发现 1 个 minor bug（PaperHeader plain 按钮 dark 模式灰白），用户决策"按最完整最彻底来"+"一步一步来" → P2.6-B 阶段一次性收官移动端 100% dark 化 + Rich Block 100% dark 化 + Desktop baseline 6 路由建立
+> **commit**：`8905003a feat(visual): v77 P2.6-B 收官 (Bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由)`
+> **沉淀 memory**：[memory/v77-p26-b-mobile-dark-and-desktop-baseline.md](memory/v77-p26-b-mobile-dark-and-desktop-baseline.md)
+
+### 4 子任务（顺序执行）
+
+#### 子任务 1：Bug 修复（5 min）
+- PaperHeader "下载原文件" `el-button type="primary" plain` 在 dark 模式 + 主题色背景下 hover 状态叠加 `--el-fill-color-light` 半透明产生灰白
+- 末尾非 scoped `[data-theme="dark"]` 块覆盖 `.paper-header-toolbar-right .el-button.is-plain`
+- 关键：**只覆盖 paper-header-toolbar-right 内的 plain 按钮**（不影响其他 el-button plain）
+
+#### 子任务 2.1：FallbackBlock dark 化（10 min）
+- 唯一缺 dark 块的 Rich Block（11/11 = 100% 收官）
+- 覆盖 `.fallback-block` / `.fb-title` / `.fb-content` / `:deep(pre)` / `:deep(code)` / `:deep(a)`
+- 参考模板：`web/src/components/chat/blocks/TranscriptBlock.vue`（同目录最近邻）
+
+#### 子任务 2.2：移动端 6 组件 dark 化（40 min）
+- LongPressWrapper / MemberAvatar / PageHeader / MobileTaskCreateForm / SafeArea（5 个简单 dark 块）
+- **MobileECharts 重点**：JS 端 getComputedStyle 调色板（与 v77 P2.6-A ChartBlock 同模式）
+  - `getPalette()` 根据 `document.documentElement.dataset.theme === 'dark'` 切换 dark/light 调色板
+  - `applyThemeToOption(opt)` 注入到 title/legend/xAxis/yAxis/tooltip
+  - `MutationObserver` 监听 `<html data-theme>` 变化 → 重渲 ECharts
+  - 全部 6 组件 dark 化后：移动端 9/15 → 15/15 = 100%
+
+#### 子任务 2.3：移动端 14 view dark 化（3h 10min）
+按视觉权重 + 使用频率分 3 组：
+- **核心 3**（1h）：MobileDashboard / MobileTaskView / MobileKnowledgeView
+- **中高 4**（1h 10min）：MobileMemberView / MobileSettingsView / MobileLoginView / MobileProjectView
+- **辅助 7**（1h）：MobileMemberDetailView / MobileProjectDetailView / MobileProjectStatsView / MobileTaskTrash / MobileMeetingRoom / MobileMessageList / MobileRichCard
+- 全部用末尾非 scoped `[data-theme="dark"]` 块模式
+- 14 view dark 化后：移动端 11/25 → 25/25 = 100%
+
+#### 子任务 3：Playwright Desktop Baseline 6 路由（2h）
+- `web/tests/visual/desktop/visual-regression.spec.mjs`（约 80 行）
+- 6 路由：dashboard / chat / knowledge + **tasks / meetings / settings**（与 mobile 端 3 路由对齐 + 桌面 3 新增）
+- 6 baseline png 已生成（6/6 PASS），待 CI Linux runner 重写后缀为 -linux.png
+
+### 4 条新铁律
+
+#### 铁律 1：dark 模式跨组件覆盖必须非 scoped `<style>` 块（第 5 次强化）
+- v60-v67 教训反复踩坑
+- 22 个 v77 P2.6-B 移动端 view/component 全部遵守
+- 关键：dark 块顶部加 `/* v77 P2.6-B: dark mode 覆盖（v60-v67 教训：必须非 scoped） */` 注释
+- 调试技巧：grep `</style>` 看末尾第二个 style 块位置
+
+#### 铁律 2：JS 端 ECharts 调色板用 getComputedStyle 读 token
+- v77 P2.6-A ChartBlock + v77 P2.6-B MobileECharts 同模式
+- ECharts 不感知 CSS theme，必须在 setOption 时注入主题色
+- `getPalette(isDark)` 返回 `{text, textDim, gridLine, tooltipBg, tooltipBorder}` 5 色
+- `MutationObserver` 监听 `<html data-theme>` 变化 → 重渲（disconnect 在 onBeforeUnmount）
+
+#### 铁律 3：Stylelint 禁用 hex 颜色 + 禁用 `white` 命名色
+- 项目 `.stylelintrc.json` 配置 `declaration-property-value-disallowed-list` 禁 hex 颜色（color/background）
+- 也禁 `color-named: never`（除了 inside-function）
+- 修复：dark 模式占位文字用 `var(--color-bg-card)` 代替 `#ffffff` 或 `white`
+- **不要**用 `white` / `black` 等命名色（触发 stylelint 错误）
+
+#### 铁律 4：Playwright baseline 接受 CI auto-commit 平台后缀差异
+- 本地 Windows 跑出来 baseline 是 `-win32.png` 后缀
+- CI Linux runner 跑会重写为 `-linux.png`
+- 接受这个机制（v76 教训扩展）
+- snapshots 目录不在 .gitignore，正常 `git add` 即可（不需要 -f）
+- 验证：`git diff --cached --stat` 看 png 文件名
+
+### 端到端验证
+
+```bash
+# 1. 编译
+cd /e/microbubble-agent/web && npm run build
+# 期望：0 警告
+
+# 2. token orphan
+bash scripts/check-token-orphans.sh
+# 期望：0 真 orphan, 2 白名单跳过
+
+# 3. Stylelint
+cd /e/microbubble-agent/web && npx stylelint 'src/**/*.{vue,css}'
+# 期望：0 errors
+
+# 4. Playwright desktop baseline 生成
+TEST_TOKEN=<jwt> npx playwright test --project=desktop-chrome --update-snapshots
+# 期望：6/6 PASS
+
+# 5. Playwright desktop baseline 对比
+TEST_TOKEN=<jwt> npx playwright test --project=desktop-chrome
+# 期望：6/6 PASS
+```
+
+### 部署必做
+
+```bash
+# 1. 验证容器状态
+docker compose ps | grep -E "frontend|app"  # 应 healthy
+
+# 2. 验证 CDN/静态资源
+curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/
+# 期望：200
+
+# 3. 验证 dark 模式切换（浏览器 DevTools 切 localStorage theme=dark）
+# 期望：移动端 14 view + 6 组件 + 1 Block dark 模式无奶白斑
+
+# 4. Playwright CI 跑（自动）
+# - push main → GitHub Actions 跑 visual-regression job
+# - 自动更新 baseline 为 -linux.png 后缀（覆盖本地 -win32.png）
+# - 后续 PR 对比 -linux.png baseline
+```
+
+### 沉淀统计
+
+- **修改文件 22 个**（移动端 6 组件 + 14 view + PaperHeader bug fix + FallbackBlock + MobileECharts）
+- **新增文件 1 个**（web/tests/visual/desktop/visual-regression.spec.mjs）
+- **新增 baseline 6 个 png**（snapshot 目录）
+- **CSS 净增 ~530 行**（22 文件 × ~25 行/文件 dark 块）
+- **JS 净增 ~60 行**（MobileECharts getPalette + applyThemeToOption + MutationObserver）
+- **总计 +590 行 / -3 行 = 净 +587 行**
+
+### 关键 commit 链
+
+```
+8905003a feat(visual): v77 P2.6-B 收官 (Bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由)
+36049629 fix(visual): v77 P2.6-A paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化  (前置)
+64fbff4b ... (P2.5.4 前置)
+```
+
+### 不在本次范围
+
+- EP el-cascader / el-tree-select 多主题透传 → 留给 v77 P2.6-C
+- Mobile 6 路由 baseline 扩（mobile 当前只有 dashboard/chat/knowledge）→ 留给后续 baseline 扩
+- KnowledgeView 1599 行拆分 → 留给代码质量轮次
+- agentic_loop.py 1370 行拆分 → 留给后端代码质量轮次
+- 后端 alembic 033 / agent_traces 清理 → 留给后端运维轮次
+- desktop baseline 6 png 的 -win32.png → -linux.png 重写 → CI auto-commit
