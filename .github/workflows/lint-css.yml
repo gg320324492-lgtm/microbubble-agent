@@ -32,6 +32,10 @@ on:
         required: false
         default: ""
 
+# v76.3p: 给 workflow write 权限 (auto-commit baseline png 需要 push)
+permissions:
+  contents: write
+
 jobs:
   stylelint:
     name: Stylelint (CSS / Vue)
@@ -189,6 +193,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
