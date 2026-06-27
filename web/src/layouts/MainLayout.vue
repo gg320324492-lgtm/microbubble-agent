@@ -30,7 +30,7 @@
     <el-aside
       v-if="!isMobile"
       :width="sidebarWidth"
-      class="aside"
+      class="aside glass glass-lg"
     >
       <div class="logo">
         <div class="logo-icon">
@@ -319,8 +319,9 @@ const formatTime = (t) => {
 
 /* ===== 桌面端侧边栏 ===== */
 .aside {
+  /* v77 P2.5: backdrop-filter 由 .glass 工具类提供 (assets/glass.css)
+     保留 --color-bg-sidebar 专属 token 风格（不与 .glass 默认 --color-bg-card 冲突） */
   background: var(--color-bg-sidebar);
-  backdrop-filter: blur(16px);
   border-right: 1px solid var(--color-sidebar-border);
   box-shadow: var(--shadow-sidebar);
   transition: width 0.3s;

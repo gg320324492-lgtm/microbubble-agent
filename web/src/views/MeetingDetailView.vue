@@ -520,17 +520,38 @@ async function autoPolishIfNeeded() {
   }
   if (!pending.length) return
 
-  // 单次批量端点调用（替代之前的 83 个并发单文本 POST）
-  // 端点内部按文本独立 Redis 缓存, 命中率高
+  // 按 200 条分块（后端 polish-text-batch 端点硬上限 200 条/批，防 LLM token 超限）
+  // 长会议 #120 (3357 段) / #95 (333 段) / #151 (426 段) 不分块会触发 400
+  const BATCH_SIZE = 200
+  const chunks = []
+  for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+    chunks.push(pending.slice(i, i + BATCH_SIZE))
+  }
+
+  // 并发请求所有 chunk（每块 1 次 HTTP，仍比 83 个并发单文本 POST 少 99% 请求数）
   try {
-    const res = await axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text-batch`, {
-      texts: pending.map(p => p.text),
-    })
-    const polishedArr = res.data?.polished || []
-    for (let k = 0; k < pending.length && k < polishedArr.length; k++) {
-      const polished = polishedArr[k]
-      if (polished && polished !== pending[k].text) {
-        polishedTexts.value[pending[k].i] = polished
+    const responses = await Promise.all(
+      chunks.map(chunk =>
+        axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text-batch`, {
+          texts: chunk.map(p => p.text),
+        }).catch(() => null)  // 单 chunk 失败不影响其他 chunk
+      )
+    )
+    let pendingIdx = 0
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const res = responses[ci]
+      const chunk = chunks[ci]
+      const polishedArr = res?.data?.polished
+      if (!polishedArr) {
+        pendingIdx += chunk.length
+        continue
+      }
+      for (let k = 0; k < chunk.length && k < polishedArr.length; k++) {
+        const polished = polishedArr[k]
+        if (polished && polished !== pending[pendingIdx].text) {
+          polishedTexts.value[pending[pendingIdx].i] = polished
+        }
+        pendingIdx++
       }
     }
   } catch { /* 静默失败 - 后端 Redis 命中率高, 单次失败不阻塞阅读 */ }

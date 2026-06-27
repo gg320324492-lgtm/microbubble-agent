@@ -28,7 +28,7 @@
       </section>
 
       <!-- 个人资料卡片（v68 加 glass-card class） -->
-      <el-card class="settings-card glass-card" id="profile-card">
+      <el-card class="settings-card glass glass-lg" id="profile-card">
         <template #header>
           <div class="card-header">
             <el-icon><User /></el-icon>
@@ -88,7 +88,7 @@
       </el-card>
 
       <!-- 修改密码卡片（v68 改名为"账号安全" + glass-card） -->
-      <el-card class="settings-card glass-card">
+      <el-card class="settings-card glass glass-lg">
         <template #header>
           <div class="card-header">
             <el-icon><Lock /></el-icon>
@@ -114,7 +114,7 @@
       </el-card>
 
       <!-- 通知偏好卡片（v68 加 glass-card） -->
-      <el-card class="settings-card glass-card" v-loading="prefsLoading">
+      <el-card class="settings-card glass glass-lg" v-loading="prefsLoading">
         <template #header>
           <div class="card-header">
             <el-icon><Bell /></el-icon>
@@ -183,7 +183,7 @@
       </el-card>
 
       <!-- v68 (2026-06-26) 外观主题卡片（新） -->
-      <el-card class="settings-card glass-card theme-card">
+      <el-card class="settings-card glass glass-lg theme-card">
         <template #header>
           <div class="card-header">
             <el-icon><Brush /></el-icon>
@@ -674,25 +674,23 @@ function formatDateTime(iso) {
 }
 
 /* ===== 玻璃态卡片 ===== */
-.glass-card {
+/* v77 P2.5: backdrop-filter / 半透 background / border 由 .glass 工具类提供 (assets/glass.css)
+   保留 hover 上浮 + EP 子组件穿透（:deep） */
+.settings-card.glass {
   border-radius: var(--radius-xl);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   box-shadow: var(--shadow-lg);
   transition: transform 200ms ease-out, box-shadow 200ms ease-out;
 }
-.glass-card:hover {
+.settings-card.glass:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
 }
-.glass-card :deep(.el-card__header) {
+.settings-card.glass :deep(.el-card__header) {
   padding: 16px 20px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   background: transparent;
 }
-.glass-card :deep(.el-card__body) {
+.settings-card.glass :deep(.el-card__body) {
   background: transparent;
 }
 
@@ -875,13 +873,7 @@ function formatDateTime(iso) {
      会被 Vue 编译器处理错（剥掉后代选择器、产物变成 [data-theme=dark]{...} 单独规则
      作用到 <html> 而不是目标元素）。非 scoped 块彻底绕过 Vue scoped 编译。 -->
 <style>
-[data-theme="dark"] .glass-card {
-  background: rgba(42, 45, 53, 0.7);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-[data-theme="dark"] .glass-card .el-card__header {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-}
+/* v77 P2.5: .glass 工具类自带 dark mode 适配, 无需手动覆盖 */
 [data-theme="dark"] .hero-bg {
   background:
     radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
