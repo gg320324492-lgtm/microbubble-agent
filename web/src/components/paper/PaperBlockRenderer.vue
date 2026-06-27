@@ -369,8 +369,9 @@ function renderMarkdownTable(text) {
   align-items: center;
   gap: 10px;
   padding: 14px 16px;
-  background: linear-gradient(135deg, #F0F9FF, #E0F2FE);
-  border-left: 4px solid #0EA5E9;
+  /* v77 P2.6-A: paper 渐变 token 化（dark 自动适配） */
+  background: var(--gradient-paper-qa-a);
+  border-left: 4px solid var(--color-primary);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
@@ -446,14 +447,15 @@ function renderMarkdownTable(text) {
 }
 
 /* v77 P2.5.4: paper 渐变 token 化（dark 模式自动适配为半透明品牌色） */
+/* v77 P2.6-A: dark mode 适配（qa border 在 dark 下用半透明品牌色，避免太亮） */
 .qa-question-card {
   background: var(--gradient-paper-qa-q);
-  border-color: #FCD34D;
+  border-color: rgba(245, 158, 11, 0.4);
 }
 
 .qa-answer-card {
   background: var(--gradient-paper-qa-a);
-  border-color: #93C5FD;
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .qa-icon {
