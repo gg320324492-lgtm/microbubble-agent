@@ -2,6 +2,115 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [2026-06-27] v76.2 视觉回归测试 5 件套收官
+
+### 🧪 v76.2 视觉回归：baseline + ci-mode + max-increase + 组件级 CSS
+
+- **commit** — `f19cb780 test(visual): v76.2 baseline + ci-mode + max-increase + 组件级 CSS 测试 (5 件套收官)`
+- **5 件套** — Playwright baseline 截图 + ci-mode（非交互运行）+ max-increase 容差 + 组件级 CSS 测试 + PWA manifest 拆分 spec
+- **CI 集成** — `test:visual` 脚本 + `test-results/` 排除 gitignore，PR 即时反馈视觉回归
+- **配合 v74 CSS variable 自动化** — 字面色回归即时拦截
+- **覆盖组件级 CSS** — 单组件样式独立测（不依赖整页渲染）
+
+## [2026-06-27] v75 测试稳定性 + v76 PWA manifest test
+
+### 🧪 v75/v76 测试稳定性双轨
+
+- **v75 commit** — `ee46c34a test(web): v75 9 个旧 fail 修复 + PR annotation + token orphan pre-commit 拦截`
+- **v76 fix** — `a2a11505 fix(visual): PWA manifest test 拆出 visual-regression spec`（独立跑避免被主 spec 阻断）
+- **修复 9 个旧 fail** — timeout 配置 + 异步 mock + DOM 节点选择器适配
+- **PR annotation** — 测试失败时 GitHub PR 自动 comment 链接到具体失败截图
+- **token orphan 拦截** — pre-commit 检测 git tracked 但 reference 不到的 token key（防组件删了但 token 还留着 → build warning 噪音）
+
+## [2026-06-27] v74 CSS variable 6 主题组合自动化测试
+
+### 🎨 v74 CI 拦截字面色回归
+
+- **commit** — `0f77bc29 test(web): v74 CSS variable 6 主题组合自动化测试 + CI hard fail + token 白名单`
+- **6 主题组合自动化** — orange/ocean/forest × light/dark 全覆盖
+- **CI hard fail** — 任何字面色回归立即阻止合并
+- **token 白名单** — 允许的 hex 颜色清单（图标 logo 等例外）
+
+## [2026-06-27] v73 fallback 政策章节补全
+
+### 🎨 v73 fallback orphan 修复 + font-mono token
+
+- **commit 1** — `1707c660 fix(web): v73 fallback orphan 修复 + CI 集成 + font-mono token`
+- **commit 2** — `d8ae2a2f docs: v73 fallback 政策章节补全 (1707c660 漏 commit)`
+- **fallback orphan 修复** — CSS fallback 变量写法规范化（`var(--token, #hex)` 但 #hex 不在 token 系统 → 警告）
+- **CI 集成** — 自动检测孤儿 fallback
+- **font-mono token** — 新增 `--font-mono` 统一 SF Mono / Cascadia Code / 系统中文字体
+
+## [2026-06-27] v72 P1 会议纪要"摘要 + 重点摘要"合并
+
+### 🎨 v72 P1 主题色 TL;DR 卡显示摘要段落
+
+- **commit** — `eed0c409 feat(meeting): v72 P1 摘要+重点摘要合并 - 主题色 TL;DR 卡显示摘要段落`
+- **用户原话** — "把这两个内容合并，直接显示下面这个橙色底的内容就可以了" + "要根据整体的主题颜色来改变，不一定一直是橙色底，看主题是什么颜色"
+- **核心改动** — 删独立"摘要"section（line 133-136） + TL;DR 卡内容从 `meeting.key_points.slice(0,3)` bullet 改为 `meeting.summary` 完整段落 + 卡标题"重点摘要"→"会议摘要"
+- **主题色策略** — `color-mix(in srgb, var(--color-primary) 10%/6%/30%, transparent)` 让卡背景/边框跟随当前主题（orange/ocean/forest × light/dark = 6 套组合）
+- **dark mode** — 透明度降至 8%/4%/25% 避免在深背景上刺眼
+- **零后端 / 零新依赖 / 零 mobile 改动**
+- **复用** — v70 P3 的 `.tldr-card` 容器 + v71 P1 的 `.fade-slide-up` 入场动画
+- **CSS Color Module Level 5** — `color-mix()` Chrome 111+ / Firefox 113+ / Safari 16.2+ 原生支持
+
+## [2026-06-27] v71 P1 议程 timeline + 每 speaker 8 条常驻
+
+### 🎨 v71 P1 会议纪要视觉迭代
+
+- **commit** — `46c85892 feat(meeting): v71 P1 议程 timeline + 每 speaker 8 条常驻 + per-card 展开全部`
+- **议程 timeline** — `el-timeline` 替换旧 `.agenda-list`，金橙圆 dot 显示数字（ProjectView 同款模式）
+- **每 speaker 8 条常驻** — 默认折叠改为默认展开，每张发言人卡片常驻前 8 条要点/决议，超过 8 条显示 "▼ 展开全部（剩 N 条）" 按钮
+- **per-card 展开状态隔离** — `expandedFullGroups: Set<gi>` + `expandedFullDecisions: Set<gi>`（互不影响）
+- **复用 v70 P3 `.speaker-group` / `.fade-slide-up`** — 零新动画
+- **dark mode** — 议程 timeline dot 用 `var(--color-primary)` + `box-shadow: 0 0 0 3px var(--color-bg-card)` 维持外圈效果
+
+## [2026-06-27] v70 P0~P3 字面色 → token + 会议纪要 TL;DR
+
+### 🎨 v70 字面色 token 化 4 阶段（P0~P3）
+
+- **commit P0** — `e4b2eec3 feat(web): v70 P0 字面色急修 - 知识卡 + paper 子模块 32 处 #1F2937→token`
+- **commit P0.5** — `6d192718 fix(web): v70 P0.5 剩余白边 - el-card 自身重声明 --el-card-bg-color + el-tabs--border-card dark 覆盖`
+- **commit P1** — `5ea74dd5 feat(web): v70 P1 主色/状态色/文本色批量替换 ~170 处字面色 → token`
+- **commit P2** — `f6a2bc3d feat(web): v70 P2 灰阶/背景/阴影批量替换 ~170 处 + 4 处 dark-mode 冗余删除`
+- **commit P3** — `bd41497e feat(meeting): v70 P3 会议纪要视觉精简 - 顶部 TL;DR + 默认折叠发言人卡片`
+- **commit P3 预防** — `7ee757cf feat(web): v70 P3 预防机制 - Stylelint 字面色禁用 + docs/color-tokens.md`
+- **commit 性能** — `5914a563 perf(meeting): polish-text Redis 缓存 + 前端非阻塞润色` + `9986eb67 perf(meeting): 转录记录 tab 加速 (删除 LLM polish + 替换 el-select 为 popover)`
+- **效果** — ~340 处 hex 替换为 `var(--color-*)` token，dark mode 全面修复（之前散落的 `[data-theme="dark"]` 冗余删除）
+- **TL;DR 卡** — v70 P3 引入"会议重点摘要"卡，v72 P1 改为显示 `meeting.summary` 段落
+
+## [2026-06-26] pre-commit hook auto-add web/dist/
+
+### 🪝 pre-commit hook：dist 漏 commit 自动兜底
+
+- **commit** — `6565415a feat(hooks): pre-commit auto-add web/dist/ (CLAUDE.md 2026-06-26 教训)`
+- **背景** — v70 P2 commit `f6a2bc3d` 漏 add 95 个新 dist 文件 → 服务器 `index-fc61064b.js` 404 + SPA fallback 返 `text/html` → 整站白屏
+- **CLAUDE.md 教训第 4 次沉淀** — 2026-06-03 / 2026-06-10 / 2026-06-14 / 2026-06-26 同坑
+- **解决方案** — `scripts/check-dist-before-commit.sh` 自动检测 `web/src/` 改动 + 本地有未 tracked 的 `web/dist/assets/` hash 命名文件 → 自动 `git add -f web/dist/`
+- **不 hard block** — 只 hash 命名格式（`<name>-<8 hex char>.{js,css}`）被 add，不误 add user 临时文件
+- **新成员 setup** — `cp scripts/check-dist-before-commit.sh .git/hooks/pre-commit && chmod +x`
+
+## [2026-06-26] v69 P0+P1 desktop dark mode 全面重构（3 阶段）
+
+### 🎨 v69 dark mode 3 阶段收官
+
+- **P0 commit** — `71bb394a feat(web): v69 P0 dark mode foundation (5 tokens + 14 EP + MainLayout + Dashboard)`
+- **P1a commit** — `55865fe2 feat(web): v69 P1a multi-theme system (6 palettes + SettingsView picker)`
+- **P1b commit** — `7e0976d8 feat(web): v69 P1b 10 desktop views dark mode coverage`
+- **P0 修复 10 处截图问题** — 侧栏奶白→深灰玻璃态 / 任务配对卡对比过强 / EP 组件 dark 覆盖 14 个 / Hero 渐变过曝 / WCAG AA 4.5:1 文字对比
+- **P1a 6 套主题** — orange/ocean/forest × light/dark = 6 组合，`<html data-theme data-accent>` 双轴正交，`color-mix(in srgb, var(--color-primary) X%, transparent)` 自适应
+- **P1b 10 桌面视图 dark 适配** — ChatViewSSE / TaskView / TaskTrash / MeetingView / MeetingDetailView / KnowledgeView / KnowledgeDetailView / ProjectView / MemberView / admin/AgentTracesView
+- **v60-v67 教训最终强化** — dark 模式 + 跨组件覆盖必须**非 scoped** `<style>` 块（Vue scoped 编译器剥 `:global()` 后代选择器）
+
+## [2026-06-26] v68 桌面主题切换按钮 + SettingsView 玻璃态
+
+### 🎨 v68 主题切换 UI 入口
+
+- **commit** — `2cb2287e feat(web): v68 桌面端主题切换按钮 + SettingsView 玻璃态视觉升级`
+- **桌面端主题切换按钮** — 顶栏直接挂（v67 PWA 入口 / 移动端 fallback 桌面版）
+- **SettingsView 玻璃态** — `backdrop-filter: blur(20px)` + 半透明背景 + 主题色边框
+- **铺垫** — v69 P0+P1 多主题切换基建
+
 ## [2026-06-26] v31.3.1 whisper 容器 bind mount
 
 ### 🔧 v31.3.1 修复：whisper 容器源码自动同步
