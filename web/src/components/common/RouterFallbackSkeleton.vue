@@ -79,7 +79,7 @@ defineProps({
 }
 
 [data-theme="dark"] .skeleton-hero {
-  background: rgba(255, 122, 92, 0.12);
+  background: rgba(var(--color-primary-rgb), 0.12);
 }
 
 /* 卡片骨架 */

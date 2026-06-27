@@ -154,7 +154,7 @@ const currentDate = computed(() => {
 
 // 快捷入口
 const quickActions = [
-  { icon: '💬', label: '智能对话', path: '/chat', bg: 'linear-gradient(135deg, #FF7A5C, #FFB347)' },
+  { icon: '💬', label: '智能对话', path: '/chat', bg: 'var(--gradient-welcome-hero)' },
   { icon: '✅', label: '我的任务', path: '/tasks', bg: 'linear-gradient(135deg, #67C23A, #95D475)' },
   { icon: '🎤', label: '会议', path: '/meetings', bg: 'linear-gradient(135deg, #E6A23C, #F3D178)' },
   { icon: '📚', label: '知识库', path: '/knowledge', bg: 'linear-gradient(135deg, #409EFF, #79BBFF)' },
@@ -228,7 +228,7 @@ onMounted(() => {
   /* stylelint-disable-next-line color-named */
   color: white;
   margin-bottom: 16px;
-  box-shadow: 0 4px 16px rgba(255, 122, 92, 0.2);
+  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.2);
 }
 .welcome-content { flex: 1; }
 .greeting {

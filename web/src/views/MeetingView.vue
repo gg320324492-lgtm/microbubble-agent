@@ -775,8 +775,8 @@ onMounted(() => {
 .action-btn:hover {
   transform: translateY(-1px);
 }
-.action-phone { color: var(--color-primary) !important; border-color: rgba(255,122,92,0.3) !important; }
-.action-phone:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(255,122,92,0.3); }
+.action-phone { color: var(--color-primary) !important; border-color: rgba(var(--color-primary-rgb),0.3) !important; }
+.action-phone:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.3); }
 
 .action-view { color: var(--color-primary) !important; border-color: rgba(64,158,255,0.3) !important; }
 .action-view:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(64,158,255,0.3); }
@@ -849,13 +849,13 @@ onMounted(() => {
 }
 .template-card:hover {
   border-color: var(--color-primary, #FF7A5C);
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.12);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.12);
   transform: translateY(-1px);
 }
 .template-card.active {
   border-color: var(--color-primary, #FF7A5C);
-  background: linear-gradient(135deg, rgba(255, 122, 92, 0.04), rgba(255, 179, 71, 0.04));
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.18);
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.04), rgba(var(--color-accent-rgb), 0.04));
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.18);
 }
 .template-card-name {
   font-size: 13px;
@@ -1013,11 +1013,11 @@ onMounted(() => {
   border-color: var(--color-border) !important;
 }
 [data-theme="dark"] .action-phone {
-  border-color: rgba(255, 122, 92, 0.4) !important;
+  border-color: rgba(var(--color-primary-rgb), 0.4) !important;
 }
 [data-theme="dark"] .action-phone:hover {
   color: var(--color-bg-card) !important;
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.4);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.4);
 }
 [data-theme="dark"] .action-view {
   color: var(--color-primary) !important;
@@ -1063,7 +1063,7 @@ onMounted(() => {
   border-color: var(--color-border);
 }
 [data-theme="dark"] .template-card.active {
-  background: linear-gradient(135deg, rgba(255, 122, 92, 0.08), rgba(255, 179, 71, 0.08));
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.08), rgba(var(--color-accent-rgb), 0.08));
 }
 [data-theme="dark"] .tpl-action:hover {
   background: var(--color-bg-page);

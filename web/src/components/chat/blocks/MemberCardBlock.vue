@@ -49,7 +49,7 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
 .member-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #f0f1f3; }
 .member-item:first-of-type { border-top: none; }
 .avatar {
-  background: linear-gradient(135deg, #FF7A5C, #FFB347);
+  background: var(--gradient-welcome-hero);
   /* stylelint-disable-next-line color-named */
   color: white;
   flex-shrink: 0;

@@ -24,10 +24,13 @@ defineEmits(['select'])
 
 function barColor(value) {
   // value 范围 [-1, 1]（embedding 归一化后）
+  // v76.6: 从 <html> 读 CSS 变量，让 bar 颜色跟随主题
+  const primaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--color-primary-rgb').trim() || '255, 122, 92'
+  const infoRgb = '64, 158, 255'  // 信息蓝作为"负向"色 (距离近) 仍保留
   if (value > 0) {
-    return `rgba(255, 122, 92, ${value})`
+    return `rgba(${primaryRgb}, ${value})`
   } else {
-    return `rgba(64, 158, 255, ${-value})`
+    return `rgba(${infoRgb}, ${-value})`
   }
 }
 </script>
@@ -44,8 +47,8 @@ function barColor(value) {
 }
 .voiceprint-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 122, 92, 0.2);
-  border-color: #ff7a5c;
+  box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.2);
+  border-color: var(--color-primary);
 }
 .fingerprint {
   display: flex;

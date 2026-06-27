@@ -391,7 +391,7 @@ const formatTime = (t) => {
 }
 
 .sidebar-menu .el-menu-item:hover {
-  background: rgba(255, 122, 92, 0.12) !important;
+  background: rgba(var(--color-primary-rgb), 0.12) !important;
   color: var(--color-primary);
 }
 
@@ -444,7 +444,7 @@ const formatTime = (t) => {
 }
 
 .sidebar-bottom-item:hover {
-  background: rgba(255, 122, 92, 0.1);
+  background: rgba(var(--color-primary-rgb), 0.1);
   color: var(--color-primary);
 }
 
@@ -503,7 +503,7 @@ const formatTime = (t) => {
 }
 
 .collapse-btn-mobile:hover {
-  background: rgba(255, 122, 92, 0.2);
+  background: rgba(var(--color-primary-rgb), 0.2);
 }
 
 .header-right {
@@ -531,7 +531,7 @@ const formatTime = (t) => {
   background: var(--color-primary-bg);
   border-color: var(--color-primary-light, #FF9D85);
   transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.2);
 }
 
 .user-info {
@@ -615,7 +615,7 @@ const formatTime = (t) => {
 .mobile-drawer-logo {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
+  background: var(--gradient-welcome-hero);
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -639,7 +639,7 @@ const formatTime = (t) => {
 }
 
 .mobile-drawer-item:active {
-  background: rgba(255, 122, 92, 0.1);
+  background: rgba(var(--color-primary-rgb), 0.1);
 }
 
 .mobile-drawer-item.active {
@@ -788,7 +788,7 @@ const formatTime = (t) => {
 }
 
 .notification-item:hover {
-  background: rgba(255, 122, 92, 0.06);
+  background: rgba(var(--color-primary-rgb), 0.06);
 }
 
 .notification-item-title {
@@ -828,10 +828,10 @@ const formatTime = (t) => {
   align-items: center;
   gap: 10px;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #FF7A5C 0%, #FF6B6B 100%);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-danger));
   color: var(--color-bg-card);
   border-radius: 50px;
-  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 20px rgba(var(--color-primary-rgb), 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
@@ -865,7 +865,7 @@ const formatTime = (t) => {
 
 /* 离线状态 — 胶囊变橙红色，加警告图标 */
 .recording-indicator.is-offline {
-  background: linear-gradient(135deg, #F56C6C, #FF9D85);
+  background: linear-gradient(135deg, var(--color-danger), var(--color-primary-light));
   box-shadow: 0 4px 16px rgba(245, 108, 108, 0.5);
 }
 .recording-indicator.is-offline:hover {
@@ -983,7 +983,7 @@ const formatTime = (t) => {
   }
   [data-theme="dark"] .sidebar-menu .el-menu-item:hover,
   [data-theme="dark"] .sidebar-menu .el-sub-menu__title:hover {
-    background-color: rgba(255, 122, 92, 0.08) !important;
+    background-color: rgba(var(--color-primary-rgb), 0.08) !important;
     color: var(--color-primary) !important;
   }
   [data-theme="dark"] .sidebar-menu .el-menu-item.is-active {

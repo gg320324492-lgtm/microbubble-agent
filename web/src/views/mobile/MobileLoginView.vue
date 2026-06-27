@@ -310,7 +310,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 16px rgba(255, 122, 92, 0.3);
+  box-shadow: 0 4px 16px rgba(var(--color-primary-rgb), 0.3);
   margin-top: 8px;
   -webkit-tap-highlight-color: transparent;
 }

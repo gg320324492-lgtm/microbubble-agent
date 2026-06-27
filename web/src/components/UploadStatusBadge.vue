@@ -92,8 +92,8 @@ function onManualRetry() {
 }
 
 .upload-status-badge.is-uploading {
-  background: rgba(255, 179, 71, 0.08);
-  border-color: rgba(255, 179, 71, 0.3);
+  background: rgba(var(--color-accent-rgb), 0.08);
+  border-color: rgba(var(--color-accent-rgb), 0.3);
   color: var(--color-warning);
 }
 

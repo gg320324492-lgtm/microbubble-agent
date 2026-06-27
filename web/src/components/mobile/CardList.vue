@@ -391,7 +391,7 @@ watch(
   border-color: var(--color-border-base);
 }
 [data-theme="dark"] .list-item.selected {
-  background: rgba(255, 122, 92, 0.15);
+  background: rgba(var(--color-primary-rgb), 0.15);
   border-color: var(--color-primary);
 }
 

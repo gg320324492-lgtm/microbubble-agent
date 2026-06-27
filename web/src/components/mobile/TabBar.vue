@@ -111,7 +111,7 @@ function handleSwitch(name) {
   z-index: 1;
 }
 [data-theme="dark"] :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
-  background: rgba(255, 122, 92, 0.18);
+  background: rgba(var(--color-primary-rgb), 0.18);
 }
 
 /* v60 (2026-06-26) 修复深色模式 TabBar 颜色"看不出变化"：
@@ -179,7 +179,7 @@ function handleSwitch(name) {
 }
 [data-theme="dark"] .nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) {
   color: var(--color-accent);        /* dark=#FFC067 金橙，比 #FF9D85 亮更区分 */
-  background: rgba(255, 179, 71, 0.18); /* 金橙调背景与 #FFC067 协调 */
+  background: rgba(var(--color-accent-rgb), 0.18); /* 金橙调背景与 #FFC067 协调 */
 }
 
 /* v63 (2026-06-26) 修复 inactive tab icon 颜色：v62 上面第一条规则

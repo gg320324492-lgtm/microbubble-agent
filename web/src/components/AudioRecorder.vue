@@ -258,13 +258,13 @@ defineExpose({
 .recorder-icon { font-size: 64px; margin-bottom: 20px; }
 .btn-start {
   padding: 16px 48px; font-size: 18px; font-weight: 700;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: var(--color-bg-card);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--color-bg-card);
   border: none; border-radius: 32px; cursor: pointer;
   transition: all 0.2s;
 }
-.btn-start:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(255,122,92,0.4); }
+.btn-start:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(var(--color-primary-rgb), 0.4); }
 .recorder-hint { color: var(--color-text-secondary); font-size: 13px; margin-top: 12px; }
-.resume-hint { color: var(--color-primary); font-weight: 600; font-size: 14px; background: rgba(255,122,92,0.08); padding: 8px 16px; border-radius: 8px; }
+.resume-hint { color: var(--color-primary); font-weight: 600; font-size: 14px; background: rgba(var(--color-primary-rgb), 0.08); padding: 8px 16px; border-radius: 8px; }
 
 /* recording */
 .recorder-active { text-align: center; }
@@ -274,7 +274,7 @@ defineExpose({
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .recorder-timer { font-size: 48px; font-weight: 300; font-family: 'SF Mono', 'Cascadia Code', monospace; color: var(--color-text-primary); margin: 20px 0; }
 .volume-bars { display: flex; gap: 6px; align-items: flex-end; justify-content: center; height: 44px; margin: 16px 0; }
-.vol-bar { width: 8px; background: linear-gradient(to top, #FF7A5C, #FFB347); border-radius: 4px; transition: height 0.1s; }
+.vol-bar { width: 8px; background: var(--gradient-welcome-hero); border-radius: 4px; transition: height 0.1s; }
 .recorder-controls { display: flex; gap: 16px; margin-top: 24px; }
 .btn-pause, .btn-resume, .btn-stop {
   padding: 10px 28px; font-size: 15px; font-weight: 600;
@@ -296,7 +296,7 @@ defineExpose({
 .playback-controls { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 12px; }
 .btn-play {
   width: 40px; height: 40px; border-radius: 50%; border: none;
-  background: linear-gradient(135deg, #FF7A5C, #FF9D85); color: var(--color-bg-card);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--color-bg-card);
   font-size: 16px; cursor: pointer;
 }
 .playback-time { font-size: 13px; color: var(--color-text-regular); font-family: 'SF Mono', 'Cascadia Code', monospace; }

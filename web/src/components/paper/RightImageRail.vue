@@ -121,7 +121,7 @@ function handleClick(fig) {
   font-size: 11px;
   font-weight: 500;
   color: var(--color-primary, #FF7A5C);
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  background: var(--color-primary-bg, rgba(var(--color-primary-rgb), 0.1));
   padding: 1px 6px;
   border-radius: 8px;
 }
@@ -212,7 +212,7 @@ function handleClick(fig) {
   font-size: 11px;
   font-weight: 600;
   color: var(--color-primary, #FF7A5C);
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  background: var(--color-primary-bg, rgba(var(--color-primary-rgb), 0.1));
   padding: 1px 6px;
   border-radius: 4px;
 }

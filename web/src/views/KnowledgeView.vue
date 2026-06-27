@@ -1447,7 +1447,7 @@ onUnmounted(() => {
 
 .memory-card:hover {
   border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.15);
 }
 
 .memory-header {
@@ -1539,7 +1539,7 @@ onUnmounted(() => {
   border-color: var(--color-border-light);
 }
 [data-theme="dark"] .memory-card:hover {
-  box-shadow: 0 2px 8px rgba(255, 122, 92, 0.25);
+  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.25);
 }
 [data-theme="dark"] .memory-type-tag.type-preference {
   background: rgba(30, 64, 175, 0.18);
