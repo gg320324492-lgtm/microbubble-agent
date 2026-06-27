@@ -339,7 +339,7 @@
         <!-- 录音回放 -->
         <el-card v-if="meeting.audio_url" class="side-card">
           <template #header><span>🎙️ 录音回放</span></template>
-          <AudioPlayer :src="getAudioSrc(meeting.audio_url)" />
+          <AudioPlayer :src="getAudioSrc(meeting.audio_url)" :duration="meeting.audio_duration" />
           <div v-if="meeting.audio_duration" class="audio-meta">
             录音时长: {{ formatDuration(meeting.audio_duration) }}
           </div>

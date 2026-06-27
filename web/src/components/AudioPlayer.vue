@@ -41,6 +41,13 @@ const props = defineProps({
   src: { type: String, default: '' },
   /** 预生成的波形数据 [{min, max}]，可选，不传则运行时解码 */
   waveformData: { type: Array, default: null },
+  /**
+   * 预知时长（秒），由父组件从后端 meeting.audio_duration 传入。
+   * 用于解决 WebM/Opus 等流式音频在 buffer 完之前 audio.duration === Infinity
+   * 导致显示 "Infinity:NaN" 的问题（2026-06-28 教训）。
+   * loadedmetadata 触发后若 audio.duration 是有限值, 会覆盖 prop.
+   */
+  duration: { type: Number, default: null },
 })
 
 const audioRef = ref(null)
@@ -48,7 +55,7 @@ const canvasRef = ref(null)
 const waveformWrapRef = ref(null)
 const isPlaying = ref(false)
 const currentTime = ref(0)
-const duration = ref(0)
+const duration = ref(props.duration || 0)
 const progress = ref(0)
 const playbackRate = ref(1)
 
@@ -88,7 +95,13 @@ function cycleSpeed() {
 
 function onLoadedMetadata() {
   if (!audioRef.value) return
-  duration.value = audioRef.value.duration
+  // audio.duration 可能是 Infinity (流式 WebM/Opus 还未完全缓冲) — 此时保留 prop 提供的预知时长
+  const metaDuration = audioRef.value.duration
+  if (Number.isFinite(metaDuration) && metaDuration > 0) {
+    duration.value = metaDuration
+  } else if (props.duration) {
+    duration.value = props.duration
+  }
   audioRef.value.playbackRate = playbackRate.value
   nextTick(() => generateWaveform())
 }
@@ -192,7 +205,7 @@ function drawWaveformAt(ratio) {
 // ===== 格式化 =====
 
 function formatTime(sec) {
-  if (!sec || isNaN(sec)) return '00:00'
+  if (!sec || isNaN(sec) || !Number.isFinite(sec) || sec < 0) return '00:00'
   const m = Math.floor(sec / 60)
   const s = Math.floor(sec % 60)
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
@@ -205,6 +218,7 @@ watch(() => props.src, (newSrc) => {
     isPlaying.value = false
     currentTime.value = 0
     progress.value = 0
+    duration.value = props.duration || 0  // 切歌时用新 prop 预知时长 (避免 Infinity)
     decodedWaveform = null
   }
 })
