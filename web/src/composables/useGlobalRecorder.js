@@ -16,6 +16,7 @@ let audioChunks = []
 let timerInterval = null
 let animationFrame = null
 let chunkIndex = 0              // 已发出的 chunk 序号（仅 start 时重置）
+let recorderStartEpoch = null  // 2026-06-27 新增：本次录音会话的 wall clock 起点（毫秒）
 const chunkCallbacks = []       // 外部 chunk 钩子（阶段1: 边录边传持久化用）
 
 // ===== 响应式状态（UI 绑定） =====
@@ -30,9 +31,13 @@ async function start() {
   if (state.value === 'recording' || state.value === 'paused') return
 
   state.value = 'recording'
-  elapsed.value = 0
+  // 2026-06-27 改：不再无条件清零 elapsed。
+  // 手动 start() 路径（用户点"开始听会"）elapsed 默认 0 → 行为不变。
+  // 刷新恢复路径（MeetingRoomView 先调 setElapsed(N) 再 start()）保留 N，
+  // 让 setInterval 从 N+1 起跳，实现"计时器接续"。
   isPaused.value = false
-  chunkIndex = 0
+  if (!recorderStartEpoch) recorderStartEpoch = Date.now()
+  // chunkIndex 不重置 — 留给 setChunkStartIndex() 控制（刷新后从 last_chunk_index+1 续传）
 
   mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
 
@@ -164,6 +169,57 @@ function reset() {
   isPaused.value = false
   audioChunks = []
   chunkIndex = 0
+  recorderStartEpoch = null
+}
+
+/**
+ * 2026-06-27 新增：显式设置 elapsed 秒数。
+ * 用于刷新后从后端回填真实已录制时长。**必须在 start() 之前调用**，
+ * 因为 start() 启动的 setInterval 会从 elapsed.value +1 起跳。
+ * @param {number} seconds
+ */
+function setElapsed(seconds) {
+  const n = Math.max(0, Math.floor(Number(seconds) || 0))
+  elapsed.value = n
+}
+
+/**
+ * 2026-06-27 新增：从后端返回的 recording_started_at ISO 字符串恢复 elapsed。
+ * 计算 (now - startedAt) / 1000 秒数并设给 elapsed。
+ * @param {string} isoDatetime - 后端 MeetingResponse.recording_started_at
+ */
+function resumeFromStartedAt(isoDatetime) {
+  if (!isoDatetime) return
+  const startMs = new Date(isoDatetime).getTime()
+  if (Number.isNaN(startMs)) {
+    console.warn('[useGlobalRecorder] resumeFromStartedAt: invalid datetime', isoDatetime)
+    return
+  }
+  const elapsedSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000))
+  setElapsed(elapsedSec)
+  recorderStartEpoch = startMs
+  console.warn('[useGlobalRecorder] 恢复 elapsed =', elapsedSec, '秒 (from', isoDatetime, ')')
+}
+
+/**
+ * 2026-06-27 新增：设置下一次 chunk 的起始 index。
+ * 用于刷新后从后端 last_chunk_index + 1 继续上传，避免覆盖已上传的 chunks。
+ * **必须在 start() 之前调用**，否则 ondataavailable 第一次触发时 chunkIndex 已经从默认值 0 ++。
+ * @param {number} startIndex - 期望的起始 index（通常是 last_chunk_index + 1）
+ */
+function setChunkStartIndex(startIndex) {
+  const n = Math.max(0, Math.floor(Number(startIndex) || 0))
+  chunkIndex = n
+  console.warn('[useGlobalRecorder] 设置 chunk 起始 index =', n)
+}
+
+/**
+ * 2026-06-27 新增：获取当前 MediaRecorder 已发出的最大 chunk_index。
+ * idle/stopped 时返回 0；recording 中返回 next index。
+ * @returns {number}
+ */
+function getChunkStartIndex() {
+  return chunkIndex
 }
 
 /**
@@ -202,5 +258,10 @@ export function useGlobalRecorder() {
     getAudioBlob,
     // 阶段 1 新增：chunk 回调钩子
     onChunk,
+    // 2026-06-27 新增：刷新后接续录音支持
+    setElapsed,
+    resumeFromStartedAt,
+    setChunkStartIndex,
+    getChunkStartIndex,
   }
 }

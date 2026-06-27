@@ -109,7 +109,12 @@ import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 
 const router = useRouter()
 const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
-const { isActive: isGlobalRecorderActive } = useGlobalRecorder()
+const {
+  isActive: isGlobalRecorderActive,
+  start: startGlobalRecorder,
+  resumeFromStartedAt,
+  setChunkStartIndex,
+} = useGlobalRecorder()
 
 const recorderRef = ref(null)
 const meetingId = ref(null)
@@ -202,10 +207,46 @@ async function handleBack() {
 
 // 恢复模式：用户从浮动胶囊或其他页面跳回 → 复用 sessionStorage / 后端的 meetingId
 // 这样停止录音时能 POST 到正确的 /meetings/{id}/upload-audio
+//
+// 2026-06-27 v3 镜像：刷新后接续录音（与桌面端 MeetingRoomView 同款逻辑）。
+// 1) 校验后端 recording 状态（checkActiveRecording）→ 拿到 recordingMeetingId
+// 2) 同步本地 meetingId 给 onAudioReady 上传用
+// 3) 并行 fetch /meetings/{id} 和 /upload-status：
+//    - recording_started_at → resumeFromStartedAt 回填 elapsed
+//    - last_chunk_index → setChunkStartIndex(+1) 续传不覆盖
+// 4) await startGlobalRecorder() 启动 MediaRecorder（v2 同款）
 onMounted(async () => {
   await checkActiveRecording()  // 异步校验后端 recording 状态
   if (recordingMeetingId.value && !meetingId.value) {
     meetingId.value = recordingMeetingId.value
+  }
+
+  // 仅当有 active recording 时才回填 + 自动启动（避免空跑）
+  if (recordingMeetingId.value) {
+    const id = recordingMeetingId.value
+    try {
+      const [meetingRes, uploadRes] = await Promise.all([
+        axios.get(`/api/v1/meetings/${id}`),
+        axios.get(`/api/v1/meetings/${id}/upload-status`).catch(() => null),
+      ])
+      if (meetingRes.data?.recording_started_at) {
+        resumeFromStartedAt(meetingRes.data.recording_started_at)
+      }
+      const lastChunk = uploadRes?.data?.last_chunk_index ?? -1
+      if (lastChunk >= 0) {
+        setChunkStartIndex(lastChunk + 1)
+      }
+    } catch (err) {
+      console.warn('[MobileMeetingRoom] 取回填数据失败:', err.message)
+    }
+
+    // 镜像桌面端 v2：自动启动 MediaRecorder 接续录音
+    try {
+      await startGlobalRecorder()
+      console.warn('[MobileMeetingRoom] 自动启动 MediaRecorder 成功, meetingId =', id)
+    } catch (err) {
+      console.warn('[MobileMeetingRoom] 自动启动 MediaRecorder 失败 (可能麦克风权限):', err.message)
+    }
   }
 })
 </script>
