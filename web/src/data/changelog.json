@@ -224,6 +224,48 @@
   ],
   "changelog": [
     {
+      "date": "2026-06-28",
+      "tag": "功能",
+      "title": "v77 P2.6-D PWA SW 强化 + 动效治理 + CSS-in-JS 收敛 + Baseline 9 路由",
+      "pain_point": "Background Sync 4 写场景 + Navigation Preload + Local Notification + 6 处重复 keyframes 清理 + 12 --animation-* + 3 处 avatar runtime style → .avatar-color-N 枚举 class + 18 张新 baseline PNG"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "功能",
+      "title": "v77 P2.6-C EP 多主题透传补全 (143 条规则) + Mobile baseline 6 路由",
+      "pain_point": "el-tree-select / date-picker 弹层 / table 展开行 + 登录态双注入（cookie + localStorage）修 baseline 拍登录页"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "修复",
+      "title": "v77 P2.6-B Bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由",
+      "pain_point": "PaperHeader plain 按钮 dark bug + FallbackBlock dark 化 + 移动端 25/25 + Rich Block 11/11 dark 化收官"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "功能",
+      "title": "v77 P2.6-A paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化",
+      "pain_point": "ChartBlock JS 端 getComputedStyle + ECharts 注入主题色 + MutationObserver 监听 data-theme 重渲"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "修复",
+      "title": "3 个生产 bug 修复（会议 64 报 500 + AudioPlayer Infinity:NaN）",
+      "pain_point": "pgvector embedding truth value bug (not numpy_array → is None) + SQLAlchemy JSONB flag_modified + AudioPlayer Infinity:NaN 防御"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "会议 153 ASR 谐音/错识全链路清洗 hook",
+      "pain_point": "name_aliases.HARDCODED_ALIASES 扩容 7 条 + post_meeting_tasks hook 推到主路径（铜鹤/同客/铜棍 → 杜同贺）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v77 P2.6-A paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化 (前置 P2.6-B)",
+      "pain_point": "ChartBlock JS 端 getComputedStyle + ECharts 注入主题色 + MutationObserver 监听 data-theme 重渲"
+    },
+    {
       "date": "2026-06-27",
       "tag": "修复",
       "title": "v76.6 智能对话框全元素跟随主题色",
