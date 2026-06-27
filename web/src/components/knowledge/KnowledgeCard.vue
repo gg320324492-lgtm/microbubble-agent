@@ -16,13 +16,13 @@
         <div v-if="item.image_count" class="file-hero-imgs">{{ item.image_count }} 张图</div>
       </div>
       <div class="file-hero-actions" @click.stop>
-        <button class="hero-action-btn" title="下载原文件" @click="$emit('download', item)">
+        <button class="hero-action-btn glass-sm" title="下载原文件" @click="$emit('download', item)">
           <el-icon><Download /></el-icon>
         </button>
-        <button class="hero-action-btn" title="编辑" @click="$emit('edit', item)">
+        <button class="hero-action-btn glass-sm" title="编辑" @click="$emit('edit', item)">
           <el-icon><Edit /></el-icon>
         </button>
-        <button class="hero-action-btn hero-action-danger" title="删除" @click="$emit('delete', item)">
+        <button class="hero-action-btn glass-sm hero-action-danger" title="删除" @click="$emit('delete', item)">
           <el-icon><Delete /></el-icon>
         </button>
       </div>
@@ -301,7 +301,8 @@ const formatDate = (dateStr) => {
 
 .hero-action-btn {
   border: none;
-  background: rgba(255, 255, 255, 0.5);
+  /* v77 P2.5.2: backdrop-filter + 半透 background 由 .glass-sm 工具类提供 (assets/glass.css)
+     删硬编码 rgba(255,255,255,0.5)，dark mode 不再撕裂 */
   color: var(--color-text-primary);
   width: 28px;
   height: 28px;
@@ -314,7 +315,8 @@ const formatDate = (dateStr) => {
 }
 
 .hero-action-btn:hover {
-  background: rgba(255, 255, 255, 0.9);
+  /* hover 状态走 .glass 同款 token（dark mode 自动深灰） */
+  background: rgba(var(--color-bg-card-rgb), 0.9);
   transform: scale(1.05);
 }
 
@@ -333,7 +335,8 @@ const formatDate = (dateStr) => {
   width: 100%;
   height: 80px;
   overflow: hidden;
-  background: linear-gradient(135deg, #FAFAFA, #F3F4F6);
+  /* v77 P2.5.2: 渐变改 token（light/dark 自动切换，dark=#2c2f37→#1a1d23） */
+  background: var(--gradient-thumbnail-empty);
   flex-shrink: 0;
   display: flex;
   align-items: center;

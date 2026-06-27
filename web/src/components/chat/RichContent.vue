@@ -151,22 +151,7 @@ const displaySummary = computed(() => props.block.summary || autoSummary.value)
   padding: 8px;
 }
 
-.rich-collapse-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid var(--color-border, #e4e7ed);
-  border-radius: 4px;
-  padding: 2px 8px;
-  font-size: 11px;
-  color: var(--color-text-regular);
-  cursor: pointer;
-  z-index: 1;
-}
-
-.rich-collapse-btn:hover {
-  background: var(--color-bg-page);
-  color: var(--color-primary, #FF7A5C);
-}
+/* v77 P2.5.2: 删除孤儿 .rich-collapse-btn 规则（模板里已无对应元素，
+   原硬编码 rgba(255,255,255,0.95) 无存在意义）。折叠交互由 .rich-summary
+   整行按钮承担（见 L89-99）。 */
 </style>
