@@ -69,7 +69,8 @@ WHITELISTED_COUNT=0
 
 # v76.5: 用 grep -n 取文件:行号 (CI 模式用得上)
 # 格式: web/src/path/Foo.vue:42:var(--color-x, ...
-TOKENS=$(grep -rEn 'var\(--[a-z0-9_-]+,' web/src/ 2>/dev/null | sort -u)
+# v76.s3: 排除 web/src/data/ 数据文件 (JSON 里的 var() 字符串是描述性文本, 非真实 CSS 代码)
+TOKENS=$(grep -rEn 'var\(--[a-z0-9_-]+,' web/src/ --exclude-dir=data 2>/dev/null | sort -u)
 
 # 关联数组收集 orphan 的 (file, line, token) (按 token 名聚合, 但保留每个 occurrence)
 declare -a ORPHAN_LINES  # 形式: "file:line|token|full_var_call"
