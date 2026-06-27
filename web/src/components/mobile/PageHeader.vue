@@ -1,5 +1,5 @@
 <template>
-  <header class="mobile-page-header" :style="headerStyle">
+  <header class="mobile-page-header glass glass-lg" :style="headerStyle">
     <div class="header-inner" :style="innerStyle">
       <!-- 左侧：返回按钮（slot 也可覆盖） -->
       <div class="header-left">
@@ -86,15 +86,8 @@ function onBack() {
   left: 0;
   right: 0;
   z-index: 100;
-  background: var(--color-bg-card);
+  /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 */
   border-bottom: 1px solid var(--color-border);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
-
-[data-theme="dark"] .mobile-page-header {
-  background: rgba(42, 45, 53, 0.92);
-  border-bottom-color: var(--color-border-base);
 }
 
 .header-inner {

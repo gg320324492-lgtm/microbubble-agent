@@ -1,6 +1,6 @@
 <template>
   <nav
-    class="mobile-tabbar"
+    class="mobile-tabbar glass glass-lg"
     role="navigation"
     aria-label="主导航"
   >
@@ -77,16 +77,8 @@ function handleSwitch(name) {
   right: 0;
   bottom: 0;
   z-index: 2500; /* 高于一般内容，低于录音 FAB */
-  background: rgba(255, 255, 255, 0.92);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 */
   border-top: 1px solid var(--color-border);
-}
-
-/* Dark mode */
-[data-theme="dark"] .mobile-tabbar {
-  background: rgb(26, 29, 35);
-  border-top-color: var(--color-border-base);
 }
 
 /* 调整 NutUI tabbar 默认样式 */

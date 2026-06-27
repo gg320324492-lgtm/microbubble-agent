@@ -417,7 +417,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <footer class="input-bar">
+    <footer class="input-bar glass glass-lg">
       <div class="input-core">
         <div class="input-actions-left">
           <el-button text @click="triggerImageUpload"><span class="iconfont">🖼️</span></el-button>
@@ -600,7 +600,10 @@ onUnmounted(() => {
 .quick-btn:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
 .qa-icon { font-size: 18px; }
 
-.input-bar { padding: 16px 20px; background: rgba(255,255,255,0.85); backdrop-filter: blur(20px); border-top: 1px solid #eee; }
+/* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 (assets/glass.css)
+   blur 20px 降到 .glass-lg 默认 16px（dark mode 自动适配收益更大）
+   border-top #eee 硬编码 → var(--color-border-light) */
+.input-bar { padding: 16px 20px; border-top: 1px solid var(--color-border-light); }
 .input-core { display: flex; align-items: center; gap: 8px; background: var(--color-bg-card); border: 1px solid #e0e0e0; border-radius: 20px; padding: 4px 8px; }
 .input-actions-left { display: flex; gap: 4px; }
 .input-textarea { flex: 1; border: none; outline: none; resize: none; font: inherit; padding: 8px; max-height: 120px; background: transparent; }
@@ -658,10 +661,7 @@ onUnmounted(() => {
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
-[data-theme="dark"] .input-bar {
-  background: rgba(26, 29, 35, 0.85);
-  border-top-color: var(--color-border-light);
-}
+/* v77 P2.5.1: .input-bar dark mode 由 .glass 工具类自动处理 */
 [data-theme="dark"] .input-core {
   background: var(--color-bg-card);
   border-color: var(--color-border-base);
