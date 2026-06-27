@@ -304,3 +304,26 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .detail-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .detail-section .section-title {
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .detail-item {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .detail-item .item-label {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .skill-chip {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+</style>

@@ -304,3 +304,29 @@ onMounted(() => {
 }
 .action-btn:active { opacity: 0.7; }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .member-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .member-card:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .member-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .member-meta {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .member-tag {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .action-btn {
+  background: var(--color-bg-page);
+  color: var(--color-text-regular);
+  border: 1px solid var(--color-border-light);
+}
+</style>

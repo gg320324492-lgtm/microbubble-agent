@@ -151,3 +151,15 @@ function onBack() {
   margin-top: -3px;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* .glass 工具类在 dark 模式自动适配，但 header-bottom-border 与 hairline 需明确 */
+[data-theme="dark"] .mobile-page-header {
+  border-bottom: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .header-back:active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+</style>

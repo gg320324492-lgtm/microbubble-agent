@@ -373,3 +373,31 @@ onMounted(() => {
   cursor: not-allowed;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .trash-item {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .trash-item .task-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .countdown-imminent {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+[data-theme="dark"] .countdown-urgent {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+[data-theme="dark"] .countdown-warning {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .page-actions button {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+}
+</style>

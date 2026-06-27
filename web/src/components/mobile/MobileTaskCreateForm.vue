@@ -158,3 +158,12 @@ async function onSubmit(submittedForm) {
   }
 }
 </script>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* 本组件是 MobileFormSheet 包装，MobileFormSheet 自身已有 dark 块覆盖 */
+/* 此处仅处理 ElMessage 弹窗在 dark 模式的边框微调 */
+[data-theme="dark"] .el-message {
+  border: 1px solid var(--color-border-light);
+}
+</style>

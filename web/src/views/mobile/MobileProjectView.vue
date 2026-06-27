@@ -229,3 +229,26 @@ onMounted(() => {
   transition: width 0.3s;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .project-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .project-card:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .project-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .project-desc {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .progress-bar-wrap {
+  background: var(--color-border-light);
+}
+[data-theme="dark"] .project-meta {
+  color: var(--color-text-placeholder);
+}
+</style>

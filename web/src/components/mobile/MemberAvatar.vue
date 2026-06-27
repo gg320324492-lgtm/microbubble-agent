@@ -67,3 +67,12 @@ const bgColor = computed(() => {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 })
 </script>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* el-avatar 在 dark 模式无内置样式覆盖，确保占位文字浅色（hash 色背景深，文字需要浅色才可读） */
+[data-theme="dark"] .el-avatar {
+  color: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+</style>

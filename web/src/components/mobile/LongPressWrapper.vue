@@ -46,3 +46,11 @@ const { bind, isPressing } = useLongPress(props.delay, (e) => {
   opacity: 0.7;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .long-press-wrapper {
+  /* 组件本身无背景色，但确保子元素在 dark 下不被父容器透出的暗色影响可读性 */
+  color: var(--color-text-regular);
+}
+</style>

@@ -383,3 +383,32 @@ onMounted(async () => {
   transform: translateY(100%);
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* 全屏听会底色 + 头像 + 波形条 + 状态徽章在 dark 模式适配 */
+[data-theme="dark"] .mobile-meeting-room {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .room-toolbar {
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .toolbar-btn {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .toolbar-btn.active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .speaker-avatar {
+  border: 2px solid var(--color-primary);
+}
+[data-theme="dark"] .speaker-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .help-panel {
+  background: var(--color-bg-card);
+  color: var(--color-text-regular);
+}
+</style>

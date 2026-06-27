@@ -46,3 +46,18 @@ const resolved = computed(() => RichContent)
   max-width: 100%;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* MobileRichCard 是 RichContent 包装；内嵌 10 个 Rich Block 已有 dark 块（v77 P2.6-A 验证） */
+[data-theme="dark"] .mobile-rich-card .rich-card {
+  background: var(--color-bg-card);
+  color: var(--color-text-regular);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .mobile-rich-card pre,
+[data-theme="dark"] .mobile-rich-card code {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+</style>

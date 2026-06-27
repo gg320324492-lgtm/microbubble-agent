@@ -340,3 +340,34 @@ onMounted(() => {
 }
 .login-hint p { margin: 0; }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+/* 登录页背景渐变 + 表单卡片 + input 在 dark 模式适配 */
+[data-theme="dark"] .login-page {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .login-bg-decor::before,
+[data-theme="dark"] .login-bg-decor::after {
+  /* dark 模式装饰渐变压暗 */
+  opacity: 0.5;
+}
+[data-theme="dark"] .login-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .login-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .login-subtitle {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .login-input :deep(.el-input__wrapper) {
+  background: var(--color-bg-page);
+  box-shadow: 0 0 0 1px var(--color-border-light) inset;
+}
+[data-theme="dark"] .login-input :deep(.el-input__inner) {
+  color: var(--color-text-primary);
+}
+</style>

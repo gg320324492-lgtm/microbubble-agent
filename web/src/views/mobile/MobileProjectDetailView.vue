@@ -375,3 +375,26 @@ onMounted(async () => {
   margin-top: 4px;
 }
 </style>
+
+<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<style>
+[data-theme="dark"] .project-hero {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .milestone-item {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
+}
+[data-theme="dark"] .milestone-item.completed {
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+[data-theme="dark"] .milestone-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .member-chip {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+</style>
