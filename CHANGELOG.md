@@ -2,6 +2,43 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [2026-06-27] 会议 153 ASR 谐音/错识全链路清洗 hook（name_aliases 推到主路径）
+
+### 🎯 修复目标
+
+会议 153 transcript ASR 反复误识"杜同贺"为"铜鹤/同客/铜棍"，导致 key_points/decisions/summary 都带错人名。手动补 `HARDCODED_ALIASES` 治标不治本（旧会议无法回填 + 新会议仍会误识）。
+
+### 🛠️ 3 处联动改动
+
+**1. `app/services/name_aliases.py` — `HARDCODED_ALIASES` 字典扩容**
+- 新增 7 条会议 153 真实 ASR 误识：`铜鹤/同客/铜棍/同合/童鹤/铜和/铜合` → `杜同贺`
+- 合并 `speaker_assignment.py` 的 `PHONETIC_CORRECTIONS`（避免双表遗漏）：`杜同河/吴梦全/吴孟全/吴孟拴/王天之/王田志/赵航嘉/赵航家` 等 8 条
+- 防御性映射（"同音字"如 `同合/童鹤/铜和/铜合`）—— 把 ASR 已观察到的错识提前封堵
+
+**2. `app/services/post_meeting_tasks.py:709-720` — 后处理 hook 推到主路径**
+```python
+# 2026-06-27 谐音清洗 hook：对每段 transcript text 跑 name_aliases
+from app.services.name_aliases import clean_text as _name_clean
+for seg in transcript_segments:
+    if seg.get("text"):
+        seg["text"] = _name_clean(seg["text"])
+    if seg.get("text_polished"):
+        seg["text_polished"] = _name_clean(seg["text_polished"])
+```
+- 嵌入 `post_meeting_process` 流程，对 `text` + `text_polished` 都跑一遍
+- 老的 speaker name 修正 + 文本清洗**两端都覆盖**
+
+**3. 链路验证（自动生效，无需手动 re-process）**
+- 未来所有新会议 `post_meeting_process` 自动调用 → key_points/decisions/summary 不再含错人名
+- 历史会议建议跑 `scripts/reprocess_meeting.py --meeting <id>` 一键回填（详见 [docs/reprocess-meeting.md](docs/reprocess-meeting.md)）
+
+### 📚 沉淀
+
+- 新增 [memory/name-aliases-phonetic-correction-2026-06-27.md](memory/name-aliases-phonetic-correction-2026-06-27.md)
+- 7 条铁律（双表合并 / 防御性映射 / hook 入口位置 / clean_text 幂等性 / fuzzy 阈值 / 测试覆盖 / 增量更新流程）
+
+---
+
 ## [2026-06-27] v76 CSS 工程化 5 件套收官
 
 ### 🎨 v76.5 token orphan `--ci-mode` GitHub Actions annotation
