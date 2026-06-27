@@ -12,7 +12,7 @@
     <div v-if="member" class="enroll-dialog">
       <div class="member-summary">
         <el-avatar v-if="member.avatar" :size="48" :src="member.avatar" :alt="`${member.name}的头像`" />
-        <el-avatar v-else :size="48" :style="{ background: avatarColor }" :alt="`${member.name}的头像`">
+        <el-avatar v-else :size="48" :class="`avatar-color-${avatarIndex}`" :alt="`${member.name}的头像`">
           {{ member.name.charAt(0) }}
         </el-avatar>
         <div>
@@ -152,10 +152,10 @@ const dialogTitle = computed(() => {
     : `录入 ${props.member.name} 的声纹`
 })
 
-const avatarColor = computed(() => {
-  if (!props.member) return '#909399'
-  const colors = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399']
-  return colors[props.member.name.charCodeAt(0) % colors.length]
+// v77 P2.6-D.3: 改用 .avatar-color-N 枚举 class（runtime-style-tokens.scss 定义 8 色）
+const avatarIndex = computed(() => {
+  if (!props.member) return 4
+  return props.member.name.charCodeAt(0) % 8
 })
 
 // 录音相关

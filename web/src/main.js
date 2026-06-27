@@ -26,6 +26,7 @@ import './assets/variables.css'
 import './assets/element-plus-overrides.css'
 import './assets/glass.css'  // v77 P2: 玻璃态工具类 (6 主题自适应 + dark mode 适配)
 import './assets/pet-animations.css'  // v77 P2: DashboardPet 9 个 pet-* keyframes 抽离
+import './assets/styles/_runtime-style-tokens.scss'  // v77 P2.6-D.3: CSS-in-JS 收敛 (14 个枚举 class)
 import './assets/mobile-base.css'
 import './assets/nutui-theme.scss'
 // v28 step 35: MathJax CHTML 样式通过 index.html <link> 引入（CDN），

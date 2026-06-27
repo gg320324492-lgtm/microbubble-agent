@@ -66,7 +66,7 @@
 
         <div class="member-avatar">
           <el-avatar v-if="member.avatar" :size="64" :src="member.avatar" :alt="`${member.name}的头像`" />
-          <el-avatar v-else :size="64" :style="{ background: getAvatarColor(member.name) }" :alt="`${member.name}的头像`">
+          <el-avatar v-else :size="64" :class="`avatar-color-${getAvatarIndex(member.name)}`" :alt="`${member.name}的头像`">
             {{ member.name.charAt(0) }}
           </el-avatar>
         </div>
@@ -343,10 +343,9 @@ const resetForm = () => {
 }
 
 // 辅助函数
-const getAvatarColor = (name) => {
-  const colors = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399']
-  const index = name.charCodeAt(0) % colors.length
-  return colors[index]
+const getAvatarIndex = (name) => {
+  // v77 P2.6-D.3: 改用 .avatar-color-N 枚举 class（runtime-style-tokens.scss 定义 8 色）
+  return name.charCodeAt(0) % 8
 }
 
 const getRoleType = (role) => {

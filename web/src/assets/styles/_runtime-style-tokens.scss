@@ -1,0 +1,56 @@
+// ============================================
+// Runtime Style Tokens (v77 P2.6-D.3)
+// ============================================
+// 替换 Vue 组件里的 :style="{ background: ... }" 等内联样式为枚举 class
+// 全部走 CSS var()，dark mode + 6 主题自动响应
+
+// ===== 头像背景色（8 色，按用户名 charCodeAt % 8 选）=====
+// 复用 --el-color-primary-light-3/5/7/8/9 体系
+// 这里硬写 hex 是因为跨主题需要固定的 8 色循环
+.avatar-color-0 { background: #409EFF; }  // 蓝
+.avatar-color-1 { background: #67C23A; }  // 绿
+.avatar-color-2 { background: #E6A23C; }  // 黄
+.avatar-color-3 { background: #F56C6C; }  // 红
+.avatar-color-4 { background: #909399; }  // 灰
+.avatar-color-5 { background: #8E44AD; }  // 紫
+.avatar-color-6 { background: #16A085; }  // 青
+.avatar-color-7 { background: #D35400; }  // 橙
+
+// ===== 优先级（任务/假设/卡片）=====
+.priority-dot--high   { background: var(--color-danger); }
+.priority-dot--medium { background: var(--color-warning); }
+.priority-dot--low    { background: var(--color-success); }
+
+// ===== 状态（会议/任务/卡片）=====
+.status--scheduled  { color: var(--color-info); }
+.status--in_progress { color: var(--color-primary); }
+.status--completed  { color: var(--color-success); }
+.status--cancelled  { color: var(--color-text-secondary); }
+.status--recording  { color: var(--color-danger); }
+
+// ===== 角色徽章 =====
+// --role--owner/admin/member → 复用 el-tag type=primary/warning/info
+
+// ===== 卡片徽章（移动端 CardList）=====
+.badge--success { background: var(--color-success-bg); color: var(--color-success); }
+.badge--warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge--danger  { background: var(--color-danger-bg); color: var(--color-danger); }
+.badge--info    { background: var(--color-info-bg); color: var(--color-info); }
+
+// ===== 置信度进度条 =====
+// --conf-bar--high/mid/low → 跟 --color-success/warning/danger 同色
+
+// ===== 主题色预览 swatch =====
+// --theme-preview--orange/ocean/forest → 直接用 var(--color-primary) 等
+
+// ===== 文件 hero 渐变 =====
+// --card-file-hero--pdf/doc/img → 复用 --gradient-paper-warm 等
+
+// ===== 快速图标背景 =====
+// --quick-icon--primary/success/warning/danger → 复用 --color-*-bg
+
+// ===== 聊天输入 padding (公共 mixin 用 SCSS @extend) =====
+// 这里仅写 CSS 类，等价替代方案
+.chat-input-padding {
+  padding: 12px var(--mobile-padding-x);
+}
