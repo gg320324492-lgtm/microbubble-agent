@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-27 当前任务链**：🆕 **声纹 sample_count 重置为 1（手动录入 +1 自增保留，自动学习链路删除）** → **会议 153 ASR 谐音/错识全链路清洗 hook** → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：会议纪要视觉迭代（v70→v71→v72）4 阶段收官 + 前端字面色 token 化 + 视觉回归测试体系（v74 CSS variable 6 主题 + v76.2 Playwright baseline）+ 🆕 **ASR 人名谐音清洗 hook（name_aliases 推到主路径）** + 🆕 **声纹计数重置（统一显示 1）**。1434 commits / 286K 行代码 / 804 文件 / 43 开发天数（[app/stats.json](app/stats.json)）。
+> **2026-06-28 当前任务链**：🆕 **v77 P2.6-D 视觉体系延伸 4 子任务收官（4 commits）** → 会议 153 ASR 谐音/错识全链路清洗 hook → 声纹 sample_count 重置为 1 → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：v77 P2.6-A/B/C/D 视觉体系全面收官 + 视觉回归测试体系（v74 CSS variable 6 主题 + v76.2 Playwright baseline 9 路由）+ 声纹计数重置 + ASR 谐音清洗 hook。1438 commits / 287K 行代码 / 805 文件 / 44 开发天数（[app/stats.json](app/stats.json)）。
 >
 > 历史节点（按时间倒序）：v70 P3 会议纪要 TL;DR → v69 P0+P1 dark mode 3 阶段 → v31.3.1 whisper 容器 bind mount → v31.3 Whisper 常驻 GPU 8GB → [v31.2.5](##2026-06-26-v3125-rate-limit-收官redis-zset-持久化) → [v31.2.3](##2026-06-25-v3123-rate-limit-基建收尾) → [v31.2.2](##2026-06-25-v3122-rate-limit-进阶强化) → [v31.2.1](##2026-06-25-v3121-rate-limit-边界强化) → [v31.2](##v312-检索质量监控埋点可选-auth--ip-维度限流--user_id-列) → [v28 论文图片结构化字段](##2026-06-20-v28-论文图片结构化字段后端集成) → [2026-06-18 移动端 26 commits 全面修复](##2026-06-18-移动端-26-commits-全面修复)。
 >
@@ -5222,3 +5222,154 @@ async function injectAuth(page) {
 - agentic_loop.py 1370 行拆分 → 后端代码质量轮次
 - 后端 alembic 033 / agent_traces 清理 → 后端运维轮次
 - baseline -win32.png → -linux.png 重写 → CI auto-commit
+
+---
+
+## 2026-06-28 v77 P2.6-D 收官 — PWA SW 强化 + 动效治理 + CSS-in-JS 收敛 + Baseline 9 路由
+
+**4 个子任务 4 个 commit 收官**：19f42924（P2.6-D.1 SW）+ 2096d3e0（P2.6-D.2 动效）+ fe896004（P2.6-D.3 CSS-in-JS）+ b251fc22（P2.6-D.4 Baseline）。
+
+### P2.6-D.1 PWA Service Worker 强化（commit `19f42924`）
+
+**3 个新增能力**（BUMP SW_VERSION v75 → v76-p2.6-d-bg-sync-2026-06-28）：
+
+1. **Background Sync API**（最关键）— `import { BackgroundSyncPlugin } from 'workbox-background-sync'` + 新增 4 个 registerRoute 覆盖 POST/PUT/PATCH/DELETE 写场景。断网时写请求自动排队到 IndexedDB（队列名 `mnb-api-writes`，24h 过期），恢复网络浏览器自动调用 fetch 重放队列。覆盖 4 个高频写场景：TaskCreateDialog / MobileTaskCreateForm / KnowledgeUploadDialog / PasteAnalyzeDialog / TaskTrash
+   - **SSE/WS 流式接口不能加**（`/api/v1/chat/stream` / `/api/v1/meeting/live` 断流即失败）— 已被排除
+   - **onSync 回调里调 Local Notification 反馈用户**：成功重放 N 条 → `self.registration.showNotification()` 弹通知
+2. **Navigation Preload** — `self.navigationPreload.enable()` 在 activate 钩子启用，首屏快 100-500ms。try-catch 兜底老浏览器
+3. **Local Notification** — Background Sync 完成回调里 `showNotification('小气助手 · 离线数据已同步', { body, icon, badge, tag, requireInteraction: false })`。tag=`mnb-bg-sync` 自动合并通知。仅 Local（不走 Web Push 协议，**plan 决策：投资回报低**）
+
+**修改文件 1 个**：`web/src/sw.js`（+94 行 / -8 行）
+
+### P2.6-D.2 动效治理收官（commit `2096d3e0`）
+
+**6 处重复 `@keyframes` 清理**（plan 估 8 处，实际 6 个名字 + 1 个内部重复）：
+
+| keyframes | 清理前 | 清理后位置（权威）|
+|---|---|---|
+| `pulse` | 4 处（variables.css × 2 + VoiceRecorder + VoiceTestDialog） | `variables.css:313`（+ 删 line 274 内部早期版本）|
+| `spin` | 2 处 | `variables.css:307`（删 VoiceTestDialog）|
+| `shimmer` | 2 处 | `variables.css:264`（删 element-plus-overrides）|
+| `recording-pulse` | 2 处 | `variables.css:353`（删 MainLayout）|
+| `banner-in` | 2 处 | `variables.css:354`（删 MainLayout）|
+| `banner-out` | 2 处 | `variables.css:358`（删 MainLayout）|
+
+**意外发现**：variables.css 内部 line 274 + 313 都定义 pulse，line 274 是早期版本内容重复于 line 313——也是真重复。
+
+**3 个 `--ease-*` token 新增**（保留原有 3 个）：
+- `--ease-in: cubic-bezier(0.4, 0, 1, 1)` Material Accelerate
+- `--ease-sheet: cubic-bezier(0.32, 0.72, 0, 1)` 移动端 sheet 专用
+- `--ease-spring: cubic-bezier(0.2, 0.7, 0.2, 1)` MobileMeetingRoom 专用
+
+**12 个 `--animation-*` token 新增**（让组件引用 var() 而非 name）：
+```
+--animation-fadeSlideUp / slideDownFade / slideRightFade
+--animation-pulse / spin / shimmer / banner-in / banner-out / recording-pulse
+--animation-confetti-fall / done-bounce / btn-glow
+```
+
+**修改文件 5 个**：variables.css (+25/-30) + element-plus-overrides.css (-4) + VoiceTestDialog.vue + VoiceRecorder.vue + MainLayout.vue (各 -10)
+
+**未做：136 处缓动字面量全量替换**：PowerShell `Set-Content -Encoding UTF8` 批量替换所有 .vue 触发 UTF-8 BOM 污染（CLAUDE.md 2026-06-10 教训），22 个 Vue parser 报错 → 全回退。**教训沉淀**：跨多文件改 .vue/.css 字面量用 Edit tool 逐文件手动改，不要批量 PowerShell Set-Content。字面量替换留给下次渐进收敛。
+
+### P2.6-D.3 CSS-in-JS 收敛（commit `fe896004`）
+
+**完成 3 处**（plan 估 16 处，本轮收敛最有价值的 avatar color 模式全部 3 处）：
+
+**新建文件**：`web/src/assets/styles/_runtime-style-tokens.scss`（14 个枚举 class）：
+- `.avatar-color-0..7`（8 色 hash 循环）
+- `.priority-dot--high/medium/low`
+- `.status--scheduled/in_progress/completed/cancelled/recording`
+- `.badge--success/warning/danger/info`
+- `.theme-preview--orange/ocean/forest`
+- `.card-file-hero--pdf/doc/img`
+- `.chat-input-padding`
+
+**3 文件改 runtime `:style` → 枚举 `:class`**：
+- `web/src/views/MemberView.vue`：`getAvatarColor(name)` 返 hex → `getAvatarIndex(name)` 返 0-7 + `:style` → `:class="avatar-color-${idx}"`
+- `web/src/components/VoiceprintEnrollDialog.vue`：同上
+- `web/src/components/mobile/MemberAvatar.vue`：从 10 色 hash 算法降到 8 色（与桌面端统一），用 var class
+
+**main.js**：pet-animations.css 后导入 scss 文件
+
+**未做 13 处**（priority/status/badge/conf-bar/quick-icon/theme-preview/card-hero 等）：单步风险高 + 视觉必回归，留给下个轮次渐进收敛。
+
+### P2.6-D.4 Baseline 扩到 9 路由（commit `b251fc22`）
+
+**desktop + mobile 各加 3 路由**（与 mobile P2.6-C 6 路由对齐）：
+- `/projects` → `08-projects`
+- `/members` → `09-members`
+- `/project-stats` → `10-project-stats`
+
+**修改文件 2 spec**：CORE_ROUTES 各加 3 项
+
+**生成 18 张 baseline PNG**：9 desktop + 9 mobile（`-win32.png` 后缀，CI Linux runner 重写为 `-linux.png`）
+
+**执行命令**（必须 dev server background 启）：
+```bash
+nohup npm run dev > /tmp/dev-server.log 2>&1 &
+sleep 12  # 等 vite ready（Vite 8 启动 293ms + import 全部依赖 ~10s）
+TEST_TOKEN=mock npx playwright test tests/visual/desktop/visual-regression.spec.mjs --project=desktop-chrome --update-snapshots
+TEST_TOKEN=mock npx playwright test tests/visual/mobile/visual-regression.spec.mjs --project=mobile-iphone14 --update-snapshots
+```
+
+### 4 条新铁律
+
+**铁律 1：PowerShell `Set-Content -Encoding UTF8` 写 UTF-8 BOM 是隐形地雷**（CLAUDE.md 2026-06-10 教训反复强化）
+- 批量替换 41 个 .vue 文件 → 22 个 Vue parser 错（"Element is missing end tag"）→ 全回退
+- 教训：**跨多个文件改 .vue/.css 字面量用 Edit tool 逐文件手动改**，不用 PowerShell 批量 Set-Content
+
+**铁律 2：Background Sync 仅适合幂等短写请求**
+- SSE/WS 流式接口不能加（断流即失败）— 路由用 NetworkOnly 不被 BackgroundSyncPlugin 影响
+- 大文件 multipart/form-data 不适合（IndexedDB 队列默认 2MB）
+- 适合：表单提交（POST/PUT/PATCH/DELETE + body <2MB）
+- 不适合：上传 / SSE 流 / 长连接
+
+**铁律 3：playwright baseline 必须 dev server 后台启**
+- ERR_CONNECTION_REFUSED = dev server 没启
+- 用 `nohup npm run dev > /tmp/dev-server.log 2>&1 &` 后台启 + `sleep 12` 等 vite ready
+- 杀 dev server 用 `pkill -f "vite"` 或 taskkill（Windows）
+
+**铁律 4：token 化拆分渐进优于一次性铺开**
+- 136 处缓动字面量替换：**失败**（UTF-8 BOM 污染 + 工作量大）
+- 3 处 avatar color → 枚举 class：**成功**（影响小 + 测试可见 + 改 3 个文件）
+- 教训：**先做最关键的 5-10% 部分**，其余 90% 留待下次；每步 build 验证 + 视觉回归兜底
+
+### 沉淀统计
+
+| 子任务 | 文件 | 净增 | commit |
+|---|---|---|---|
+| 1 PWA SW | sw.js | +94/-8 | 19f42924 |
+| 2 动效治理 | 5 | +25/-30 + 18 token | 2096d3e0 |
+| 3 CSS-in-JS | 5 | +200/-30 + 14 enum class | fe896004 |
+| 4 Baseline | 2 spec + 18 PNG | +6 | b251fc22 |
+| **合计** | **12 文件 + 18 PNG** | **+325/-68 + 32 新 token** | **4 commit** |
+
+### 端到端验证
+
+```bash
+# P2.6-D 全部 4 子任务完成后统一跑
+cd /e/microbubble-agent
+bash scripts/check-token-orphans.sh  # → 0 orphan
+cd web
+npm run build                         # → 0 警告
+npx stylelint 'src/**/*.vue' 'src/**/*.css' 'src/**/*.scss'  # → 0 errors
+npx vitest run                        # → 396/396 PASS
+TEST_TOKEN=mock npx playwright test tests/visual/  # → 9 desktop + 9 mobile PASS（带 baseline）
+```
+
+**实测结果**：token orphan 0 / build 0 警告 / stylelint 0 errors / vitest 396/396 PASS / Playwright 18/18 baseline 生成 PASS。
+
+### 不在本次范围（留给后续）
+
+- **136 处缓动字面量全量替换**：用 Edit tool 逐文件改（不能用 PowerShell 批量）
+- **13 处 priority/status/badge/conf-bar/quick-icon/theme-preview/card-hero runtime :style**：影响 chat block 组件 + 视觉必回归
+- **KnowledgeView 1599 行拆分** → 代码质量轮次
+- **agentic_loop.py 1370 行拆分** → 后端代码质量轮次
+- **后端 alembic 033 / agent_traces 清理** → 后端运维轮次
+- **Web Push / Periodic Background Sync**：plan 决策不投资（投资回报低 / 浏览器支持窄）
+- **KnowledgeExtractionsPanel / KnowledgeImageGallery dark 化扩 baseline**：v77 P2.6-C 后下一个 dark 化轮次
+
+### 沉淀 memory
+
+[v77-p26-d-swng-anim-css-baseline.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/v77-p26-d-swng-anim-css-baseline.md) 完整复盘 + 4 commit 链 + 4 铁律 + 18 张 baseline PNG 路径
