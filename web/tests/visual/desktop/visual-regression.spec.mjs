@@ -46,14 +46,22 @@ const CORE_ROUTES = [
 test.describe('Desktop 核心页面视觉回归 (v77 P2.6-B baseline 对比)', () => {
   test.use({ viewport: VIEWPORT })
 
-  // 公共登录态注入 helper（与 mobile spec 一致）
+  // 公共登录态注入 helper（v77 P2.6-C 双注入修复，与 mobile spec 同步）
   async function injectAuth(page) {
+    const token = process.env.TEST_TOKEN || 'mock-token'
+
+    // 1. Cookie 注入（兼容 axios withCredentials）
     await page.context().addCookies([{
       name: 'access_token',
-      value: process.env.TEST_TOKEN || 'mock-token',
+      value: token,
       domain: new URL(BASE_URL).hostname,
       path: '/',
     }])
+
+    // 2. localStorage 注入（关键！router 守卫读 localStorage.getItem('access_token') 校验）
+    await page.addInitScript((tk) => {
+      localStorage.setItem('access_token', tk)
+    }, token)
   }
 
   for (const route of CORE_ROUTES) {
