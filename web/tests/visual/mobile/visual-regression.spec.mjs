@@ -1,7 +1,7 @@
 /**
  * tests/visual/mobile/visual-regression.spec.mjs
  *
- * Playwright 视觉回归 — v76.2 升级 baseline 对比模式
+ * Playwright 视觉回归 — v77 P2.6-C 扩展到 6 路由 (与 desktop 对齐)
  *
  * 用法:
  *   npx playwright test                                    # 对比 baseline
@@ -11,13 +11,15 @@
  *
  * 前置:
  *   - dev server 跑起来 (npm run dev) 或用 BASE_URL 指向部署环境
- *   - 登录态: 通过 TEST_TOKEN 环境变量注入 access_token cookie
+ *   - 登录态: TEST_TOKEN 注入 cookie + localStorage (双注入, v77 P2.6-C 修复)
  *   - 第一次跑必须带 --update-snapshots 生成 baseline
  *
  * 关键纪律:
  *   - 视觉差异 > 0.2% 才 fail (配置在 playwright.config.js)
  *   - 不要手动改 baseline/*.png (用 --update-snapshots)
  *   - baseline 必须跟代码一起 commit (跟 dist 一样, git add -f)
+ *   - 登录态必须双注入: cookie (axios withCredentials) + localStorage (router 守卫读)
+ *   - 仅 cookie 注入会导致 router 守卫拦截重定向 /login (历史踩坑, 3 张旧 baseline 字节数完全相同 = 登录页)
  */
 
 import { test, expect } from '@playwright/test'
@@ -25,25 +27,37 @@ import { test, expect } from '@playwright/test'
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const VIEWPORT = { width: 390, height: 844 } // iPhone 14
 
-// v76.2 收窄: 从 14 路由 → 3 核心页面 (避免 baseline 维护成本失控)
-// 未来按需扩展
+// v77 P2.6-C: 从 3 路由扩到 6 路由 (与 desktop 对齐)
 const CORE_ROUTES = [
   { path: '/dashboard', name: '01-dashboard' },
   { path: '/knowledge', name: '06-knowledge' },
   { path: '/chat', name: '03-chat' },
+  // v77 P2.6-C 新增
+  { path: '/tasks', name: '04-tasks' },
+  { path: '/meetings', name: '05-meetings' },
+  { path: '/settings', name: '07-settings' },
 ]
 
-test.describe('Mobile 核心页面视觉回归 (v76.2 baseline 对比)', () => {
+test.describe('Mobile 核心页面视觉回归 (v77 P2.6-C 6 路由 baseline 对比)', () => {
   test.use({ viewport: VIEWPORT })
 
-  // 公共登录态注入 helper
+  // 公共登录态注入 helper (v77 P2.6-C 双注入修复)
   async function injectAuth(page) {
+    const token = process.env.TEST_TOKEN || 'mock-token'
+
+    // 1. Cookie 注入 (兼容 axios withCredentials)
     await page.context().addCookies([{
       name: 'access_token',
-      value: process.env.TEST_TOKEN || 'mock-token',
+      value: token,
       domain: new URL(BASE_URL).hostname,
       path: '/',
     }])
+
+    // 2. localStorage 注入 (关键！router 守卫读 localStorage.getItem('access_token') 校验)
+    // addInitScript 在每个 page navigation 前注入，刷新页面也保留
+    await page.addInitScript((tk) => {
+      localStorage.setItem('access_token', tk)
+    }, token)
   }
 
   for (const route of CORE_ROUTES) {
@@ -54,7 +68,7 @@ test.describe('Mobile 核心页面视觉回归 (v76.2 baseline 对比)', () => {
       // 等动画/异步数据加载完成
       await page.waitForTimeout(800)
 
-      // v76.2: baseline 对比 (替换 v70 旧版 "覆盖截图" 模式)
+      // v77 P2.6-C: baseline 对比
       // 首次跑会自动生成 tests/visual/mobile/visual-regression.spec.mjs-snapshots/{name}-iphone14.png
       await expect(page).toHaveScreenshot(`${route.name}.png`, {
         fullPage: true,

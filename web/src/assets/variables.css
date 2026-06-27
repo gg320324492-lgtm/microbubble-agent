@@ -935,6 +935,414 @@ body {
   color: var(--color-text-regular) !important;
 }
 
+/* ============================================
+   v77 P2.6-C: Element Plus 组件 dark 模式多主题透传补全
+   - P0 三组件修复当前暗色可见 bug
+   - P1 三组件提升暗色勉强可读
+   - P2 五组件预留（cascader / transfer / autocomplete / color-picker / slider）
+   - 全部用 var(--color-*) token，6 主题自动跟随
+   - 插入位置: L936 后 / accent 块前，避免破坏现有 14 EP 覆盖
+   ============================================ */
+
+/* ---- P0 (a) el-tree / el-tree-select（20 条）---- */
+/* 唯一使用点: KnowledgeView.vue:197 公式分类筛选 */
+/* dark 模式下拉全白 bug 修复 */
+[data-theme="dark"] .el-tree,
+[data-theme="dark"] .el-tree-select__popper .el-tree,
+[data-theme="dark"] .el-tree-virtual-list {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-tree__empty-block,
+[data-theme="dark"] .el-tree__empty-text {
+  background-color: transparent;
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-tree-node__content:hover,
+[data-theme="dark"] .el-tree-node__content.focused {
+  background-color: var(--color-bg-hover);
+}
+[data-theme="dark"] .el-tree-node.is-current > .el-tree-node__content,
+[data-theme="dark"] .el-tree-node.is-checked > .el-tree-node__content {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+[data-theme="dark"] .el-tree-node__expand-icon,
+[data-theme="dark"] .el-tree-node__loading-icon {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .el-tree-node.is-leaf {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-tree-select__wrapper {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-tree-select__placeholder {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-tree-select__caret,
+[data-theme="dark"] .el-tree-select__suffix {
+  color: var(--color-text-secondary);
+}
+
+/* ---- P0 (b) el-date-picker / el-time-picker 弹层（30 条）---- */
+/* 9 个 view/dialog 用了时间选择器，弹层全白 bug 修复 */
+[data-theme="dark"] .el-date-editor.el-input,
+[data-theme="dark"] .el-date-editor.el-input__wrapper {
+  background-color: var(--color-bg-card);
+}
+[data-theme="dark"] .el-picker-panel,
+[data-theme="dark"] .el-date-picker,
+[data-theme="dark"] .el-date-range-picker,
+[data-theme="dark"] .el-time-panel,
+[data-theme="dark"] .el-time-select-panel,
+[data-theme="dark"] .el-month-table,
+[data-theme="dark"] .el-year-table {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-date-picker__header,
+[data-theme="dark"] .el-date-range-picker__header {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-date-picker__icon,
+[data-theme="dark"] .el-date-picker__time-header {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .el-date-table th,
+[data-theme="dark"] .el-month-table th,
+[data-theme="dark"] .el-year-table th {
+  color: var(--color-text-secondary);
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-date-table td,
+[data-theme="dark"] .el-month-table td,
+[data-theme="dark"] .el-year-table td {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-date-table td.available:hover,
+[data-theme="dark"] .el-month-table td:hover,
+[data-theme="dark"] .el-year-table td:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-date-table td.today {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+[data-theme="dark"] .el-date-table td.current,
+[data-theme="dark"] .el-month-table td.current,
+[data-theme="dark"] .el-year-table td.current {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-date-table td.next-month,
+[data-theme="dark"] .el-date-table td.prev-month {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-time-spinner__item {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-time-spinner__item:hover {
+  background-color: var(--color-bg-hover);
+}
+[data-theme="dark"] .el-time-spinner__item.active {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+[data-theme="dark"] .el-picker-panel__sidebar {
+  background-color: var(--color-bg-page);
+  border-right-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-picker-panel__shortcut {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-picker-panel__shortcut:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-date-range-picker__content {
+  border-left-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-time-panel__footer,
+[data-theme="dark"] .el-picker-panel__footer {
+  border-top-color: var(--color-border-light);
+  background-color: var(--color-bg-page);
+}
+
+/* ---- P0 (c) el-table 展开行 + 边框 + filter + sort（25 条）---- */
+/* 8+ 表格的展开行白底 + 边框 + filter 面板白底修复 */
+[data-theme="dark"] .el-table__expanded-cell {
+  background-color: var(--color-bg-page);
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-table__expand-icon {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .el-table__expand-icon:hover {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-table__placeholder {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-table__fixed,
+[data-theme="dark"] .el-table__fixed-header,
+[data-theme="dark"] .el-table__fixed-body-wrapper {
+  background-color: var(--color-bg-card);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+}
+[data-theme="dark"] .el-table__header-wrapper,
+[data-theme="dark"] .el-table__body-wrapper,
+[data-theme="dark"] .el-table__footer-wrapper {
+  background-color: var(--color-bg-card);
+}
+[data-theme="dark"] .el-table__filter {
+  background-color: var(--color-bg-card);
+}
+[data-theme="dark"] .el-table__filter-panel {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-table__filter-list {
+  background-color: var(--color-bg-card);
+}
+[data-theme="dark"] .el-table__filter-item {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-table__filter-item:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-table__sort-icon {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-table__sort-icon.is-active {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-table__column-filter-trigger:hover {
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-table-column--selection .el-checkbox__inner {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-table--border::after,
+[data-theme="dark"] .el-table--border::before,
+[data-theme="dark"] .el-table--border th.el-table__cell,
+[data-theme="dark"] .el-table--border td.el-table__cell {
+  border-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-table td.el-table__cell.is-leaf {
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-table--enable-row-hover .el-table__row:hover > td {
+  background-color: var(--color-bg-hover);
+}
+/* tree-table 模式 (ProjectView / AnalyticsView 嵌套数据) */
+[data-theme="dark"] .el-table--tree-table .el-table__row td {
+  border-bottom-color: var(--color-border-light);
+}
+
+/* ---- P1 (d) el-select 子级（10 条）---- */
+[data-theme="dark"] .el-select__placeholder,
+[data-theme="dark"] .el-select-v2__placeholder {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-select__caret,
+[data-theme="dark"] .el-select__suffix,
+[data-theme="dark"] .el-select-v2__suffix {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .el-select__tags-text {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-select-dropdown__item.selected,
+[data-theme="dark"] .el-select-dropdown__item.is-hovering {
+  color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+  font-weight: var(--font-weight-semibold);
+}
+[data-theme="dark"] .el-select-dropdown__item.is-disabled {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-select-group__title {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  padding: 8px 12px 4px;
+}
+
+/* ---- P1 (e) el-dropdown 子级 + popper.is-light（5 条 + popper 共用 1 条）---- */
+[data-theme="dark"] .el-dropdown-menu__item {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-dropdown-menu__item:not(.is-disabled):hover,
+[data-theme="dark"] .el-dropdown-menu__item:focus {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-dropdown-menu__item.is-disabled {
+  color: var(--color-text-placeholder);
+}
+[data-theme="dark"] .el-dropdown-menu__item--divided {
+  border-top-color: var(--color-border-light);
+}
+
+/* ---- P1 (f) el-tooltip / el-popover 暗 popper + .is-light/.is-dark 统一（6 条）---- */
+/* 关键：统一修复 6 类 popper 的 light/dark box（tooltip / popover / dropdown / select / cascader / date-picker） */
+[data-theme="dark"] .el-popper.is-light {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+  color: var(--color-text-regular);
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.4);
+}
+[data-theme="dark"] .el-popper.is-light .el-popper__arrow::before {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-popper.is-dark {
+  background-color: var(--color-text-primary);
+  color: var(--color-bg-card);
+}
+[data-theme="dark"] .el-popper.is-dark .el-popper__arrow::before {
+  background-color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+[data-theme="dark"] .el-popover__title {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-border-light);
+}
+
+/* ============================================
+   v77 P2.6-C: EP 组件 dark 覆盖预留（当前 0 处使用，未来启用时直接复制激活）
+   ============================================ */
+
+/* ---- P2 (g) el-cascader / el-cascader-panel RESERVED（10 条，0 使用）---- */
+/* v77 P2.6-A 文档曾提及 cascader，实际项目未启用；预留规则等真用时激活 */
+[data-theme="dark"] .el-cascader__dropdown,
+[data-theme="dark"] .el-cascader-menu,
+[data-theme="dark"] .el-cascader-menu__wrap {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-cascader-node:not(.is-disabled):hover,
+[data-theme="dark"] .el-cascader-node.in-active-path,
+[data-theme="dark"] .el-cascader-node.is-active {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-cascader__tags .el-tag {
+  background-color: var(--color-bg-page);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-cascader__suggestion-item:hover,
+[data-theme="dark"] .el-cascader__suggestion-item.is-checked {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-cascader__empty-text {
+  color: var(--color-text-placeholder);
+}
+
+/* ---- P2 (h) el-transfer RESERVED（12 条，0 使用）---- */
+[data-theme="dark"] .el-transfer,
+[data-theme="dark"] .el-transfer-panel,
+[data-theme="dark"] .el-transfer-panel__header,
+[data-theme="dark"] .el-transfer-panel__body,
+[data-theme="dark"] .el-transfer-panel__list {
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-transfer-panel__header {
+  background-color: var(--color-bg-page);
+  border-bottom-color: var(--color-border-light);
+}
+[data-theme="dark"] .el-transfer-panel__item {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-transfer-panel__item:hover {
+  background-color: var(--color-bg-hover);
+}
+[data-theme="dark"] .el-transfer-panel__item.is-checked {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .el-transfer-panel__filter {
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-transfer__button {
+  background-color: var(--color-primary);
+  color: #fff;
+}
+
+/* ---- P2 (i) el-autocomplete RESERVED（6 条，0 使用）---- */
+[data-theme="dark"] .el-autocomplete-suggestion,
+[data-theme="dark"] .el-autocomplete-suggestion__list,
+[data-theme="dark"] .el-autocomplete-suggestion__wrap {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-autocomplete-suggestion__item {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .el-autocomplete-suggestion__item:hover,
+[data-theme="dark"] .el-autocomplete-suggestion__item.is-active {
+  background-color: var(--color-bg-hover);
+  color: var(--color-primary);
+}
+
+/* ---- P2 (j) el-color-picker RESERVED（12 条，0 使用）---- */
+[data-theme="dark"] .el-color-picker,
+[data-theme="dark"] .el-color-picker__trigger,
+[data-theme="dark"] .el-color-picker__color,
+[data-theme="dark"] .el-color-picker__color-inner,
+[data-theme="dark"] .el-color-picker__empty {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-color-dropdown,
+[data-theme="dark"] .el-color-picker__panel,
+[data-theme="dark"] .el-color-picker__swatches,
+[data-theme="dark"] .el-color-predefine {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-color-predefine__color-selector {
+  border-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-color-picker__svpanel,
+[data-theme="dark"] .el-color-picker__hue-slider,
+[data-theme="dark"] .el-color-picker__alpha-slider {
+  background-color: var(--color-bg-page);
+}
+
+/* ---- P2 (k) el-slider RESERVED（7 条，0 使用）---- */
+[data-theme="dark"] .el-slider__runway {
+  background-color: var(--color-border-base);
+}
+[data-theme="dark"] .el-slider__bar {
+  background-color: var(--color-primary);
+}
+[data-theme="dark"] .el-slider__button {
+  border-color: var(--color-primary);
+  background-color: #fff;
+}
+[data-theme="dark"] .el-slider__button-wrapper:hover .el-slider__button,
+[data-theme="dark"] .el-slider__button:hover {
+  border-color: var(--color-primary-light);
+}
+[data-theme="dark"] .el-slider__marks-text {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .el-slider__marks-text.is-active {
+  color: var(--color-primary);
+}
+
 /* v69 P0: dark mode 关键洞察（保留在 CSS 末尾做开发提示） */
 /* - 截图 5 张配对卡全亮绿 = 后端 PUT /api/v1/tasks 状态契约可能不接 status='done'，不在本 plan 范围 */
 /* - 截止日期 06/05 灰色在 dark 上 = --color-text-regular (#c0c4cc) 修复后可见，不是 --color-text-secondary (仍偏暗) */
