@@ -24,6 +24,8 @@ import { createPinia } from 'pinia'
 // 4. nutui-theme.scss NutUI 4 主题变量（PR #2 新增）
 import './assets/variables.css'
 import './assets/element-plus-overrides.css'
+import './assets/glass.css'  // v77 P2: 玻璃态工具类 (6 主题自适应 + dark mode 适配)
+import './assets/pet-animations.css'  // v77 P2: DashboardPet 9 个 pet-* keyframes 抽离
 import './assets/mobile-base.css'
 import './assets/nutui-theme.scss'
 // v28 step 35: MathJax CHTML 样式通过 index.html <link> 引入（CDN），

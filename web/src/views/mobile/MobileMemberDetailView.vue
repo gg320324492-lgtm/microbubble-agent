@@ -207,8 +207,6 @@ onMounted(() => {
   animation: spin 0.8s linear infinite;
   margin: 0 auto;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-
 .empty-state {
   text-align: center;
   padding: 80px 20px;

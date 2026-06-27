@@ -735,10 +735,6 @@ onUnmounted(cleanup)
   border: 4px solid var(--color-danger, #F56C6C);
   animation: pulse-ring 1.2s infinite;
 }
-@keyframes pulse-ring {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
 .rec-time {
   font-size: 28px;
   font-weight: var(--font-weight-bold, 700);
@@ -779,8 +775,6 @@ onUnmounted(cleanup)
   background: var(--color-danger, #F56C6C);
   animation: pulse 1s infinite;
 }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
 /* 上传 */
 .upload-mode {
   padding: 20px 0;
@@ -839,10 +833,6 @@ onUnmounted(cleanup)
   border-radius: 2px;
   animation: progress-anim 1.5s ease infinite;
 }
-@keyframes progress-anim {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
 .success-circle {
   width: 100px;
   height: 100px;
@@ -858,10 +848,6 @@ onUnmounted(cleanup)
   /* stylelint-disable-next-line color-named */
   color: white;
   font-size: 56px;
-}
-@keyframes success-pop {
-  0% { transform: scale(0); }
-  100% { transform: scale(1); }
 }
 .success-hint,
 .confirm-hint {
@@ -925,11 +911,6 @@ onUnmounted(cleanup)
   z-index: 5100;
   animation: toast-in 0.3s ease;
 }
-@keyframes toast-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
 /* 进出动画 */
 .enroll-flow-enter-active, .enroll-flow-leave-active {
   transition: opacity 0.3s ease;

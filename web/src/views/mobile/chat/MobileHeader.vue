@@ -137,8 +137,4 @@ defineEmits(['open-menu', 'toggle-theme'])
   animation: pulse-dot 1.2s infinite;
 }
 
-@keyframes pulse-dot {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.4); }
-}
 </style>

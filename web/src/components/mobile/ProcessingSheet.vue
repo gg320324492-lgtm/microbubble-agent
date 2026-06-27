@@ -318,8 +318,6 @@ onBeforeUnmount(() => {
 .done-icon {
   font-size: 24px;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-
 .sheet-title {
   font-size: 16px;
   font-weight: var(--font-weight-semibold, 600);
@@ -357,17 +355,6 @@ onBeforeUnmount(() => {
   border-radius: 2px;
   animation: confetti-fall 2s ease-out forwards;
 }
-@keyframes confetti-fall {
-  0% {
-    transform: translateY(0) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(80vh) rotate(720deg);
-    opacity: 0;
-  }
-}
-
 /* 时间线 */
 .timeline {
   display: flex;

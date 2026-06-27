@@ -608,8 +608,6 @@ onUnmounted(cleanup)
 .rec-dot.spinner-dot {
   background: var(--color-primary);
 }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
 /* 控制 */
 .controls {
   width: 100%;
@@ -693,8 +691,6 @@ onUnmounted(cleanup)
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-
 /* 结果 */
 .result-area {
   width: 100%;

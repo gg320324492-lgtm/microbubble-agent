@@ -244,11 +244,6 @@ function onLongPress(e) {
 }
 .typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
 .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes td {
-  0%, 60%, 100% { transform: scale(1); opacity: 0.5; }
-  30% { transform: scale(1.4); opacity: 1; }
-}
-
 /* 完成态 */
 .msg-meta {
   font-size: 11px;

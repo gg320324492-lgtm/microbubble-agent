@@ -507,11 +507,6 @@ onMounted(() => {
 .status-dot.status-completed { background: var(--color-success, #67C23A); }
 .status-dot.status-cancelled { background: var(--color-info, #909399); }
 .status-dot.status-error { background: var(--color-danger, #F56C6C); }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
 .card-meta {
   display: flex;
   flex-wrap: wrap;
@@ -618,11 +613,6 @@ onMounted(() => {
 .skeleton-line.w-60 { width: 60%; }
 .skeleton-line.w-90 { width: 90%; }
 .skeleton-line.w-40 { width: 40%; }
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
 /* 分页信息 */
 .pagination-info {
   text-align: center;

@@ -625,8 +625,6 @@ watch(
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-
 /* 进出动画 */
 .form-sheet-enter-active, .form-sheet-leave-active {
   transition: opacity 0.25s ease;

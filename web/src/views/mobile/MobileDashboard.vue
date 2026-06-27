@@ -320,13 +320,26 @@ onMounted(() => {
   -webkit-tap-highlight-color: transparent;
 }
 .stat-card:active { opacity: 0.7; }
+
+/* v77 P2: PAINT-free pulse-bg - 用 opacity overlay 替代 background: 切换
+   background 切换触发 paint (整个元素背景重绘), opacity 仅 composite.
+   高亮态用 ::after 叠加危险色背景, opacity 0↔1 脉冲. */
 .stat-card.highlight {
-  background: var(--color-danger-bg);
-  animation: pulse-bg 1.5s ease infinite;
+  position: relative;
 }
-@keyframes pulse-bg {
-  0%, 100% { background: var(--color-bg-card); }
-  50% { background: var(--color-danger-bg); }
+.stat-card.highlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-bg);
+  opacity: 0;
+  animation: pulse-bg-opacity 1.5s ease infinite;
+  pointer-events: none;
+}
+@keyframes pulse-bg-opacity {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
 .stat-num {
   font-size: 24px;
@@ -442,8 +455,4 @@ onMounted(() => {
 }
 .skeleton-line.w-60 { width: 60%; }
 .skeleton-line.w-90 { width: 90%; }
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
 </style>

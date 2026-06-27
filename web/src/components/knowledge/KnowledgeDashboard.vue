@@ -277,11 +277,6 @@ defineEmits([
   margin-bottom: 0;
 }
 
-@keyframes skeleton-loading {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
-}
-
 /* 空状态 */
 .empty-state {
   padding: var(--space-10) 0;

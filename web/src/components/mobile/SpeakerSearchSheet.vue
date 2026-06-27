@@ -255,8 +255,6 @@ function confidenceColor(c) {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-
 .error-toast {
   background: var(--color-danger-bg);
   color: var(--color-danger, #F56C6C);

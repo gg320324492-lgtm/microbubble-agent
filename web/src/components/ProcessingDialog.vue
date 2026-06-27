@@ -183,12 +183,6 @@ if (token) {
   line-height: 1;
   animation: done-bounce 0.5s ease-out;
 }
-@keyframes done-bounce {
-  0% { scale: 0.3; opacity: 0; }
-  50% { scale: 1.1; }
-  100% { scale: 1; opacity: 1; }
-}
-
 /* Confetti */
 .confetti-container {
   position: absolute;
@@ -205,16 +199,6 @@ if (token) {
   top: -10px;
   border-radius: 2px;
   animation: confetti-fall 2.5s ease-out forwards;
-}
-@keyframes confetti-fall {
-  0% {
-    transform: translateY(0) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(400px) rotate(720deg);
-    opacity: 0;
-  }
 }
 .processing-title {
   font-size: 24px;
@@ -271,10 +255,6 @@ if (token) {
   border-radius: 50%;
   background: var(--color-border-light);
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
 .stage-name {
   font-size: 16px;
   font-weight: 500;
@@ -296,9 +276,5 @@ if (token) {
 }
 .btn-pulse {
   animation: btn-glow 2s ease-in-out infinite;
-}
-@keyframes btn-glow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
 }
 </style>

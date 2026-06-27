@@ -1,0 +1,46 @@
+/* ===== v77 P2: glass() 工具 (2026-06-27) =====
+   18 处散落 backdrop-filter 统一收敛到工具类.
+   6 主题自适应：用 var(--color-bg-card-rgb) + var(--color-primary-rgb) 自动跟随主题.
+   用法: <div class="glass glass-md">  或  <div class="glass glass-lg">
+
+   -webkit-backdrop-filter 前缀：Safari iOS PWA 兼容 (CLAUDE.md v68 实践经验)
+   dark mode 透明度降低：避免在深色背景上玻璃效果过度刺眼 */
+
+/* 共享 CSS 变量：玻璃透明度（dark mode 降低） */
+:root {
+  --glass-blur-sm: 4px;
+  --glass-blur-md: 8px;
+  --glass-blur-lg: 16px;
+  --glass-opacity-light: 0.6;
+  --glass-opacity-dark: 0.4;
+}
+
+[data-theme="dark"] {
+  --glass-opacity-light: 0.15;
+  --glass-opacity-dark: 0.25;
+}
+
+/* 基础 glass (8px blur, light 模式 0.6 透明度) */
+.glass {
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  background: rgba(var(--color-bg-card-rgb, 255, 255, 255), var(--glass-opacity-light));
+  border: 1px solid rgba(var(--color-primary-rgb, 255, 122, 92), 0.2);
+  transition: backdrop-filter var(--duration-normal) var(--ease-out),
+              background var(--duration-normal) var(--ease-out);
+}
+
+[data-theme="dark"] .glass {
+  background: rgba(var(--color-bg-card-rgb, 26, 29, 35), var(--glass-opacity-dark));
+}
+
+/* blur 变体 */
+.glass-sm {
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+}
+
+.glass-lg {
+  backdrop-filter: blur(var(--glass-blur-lg));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg));
+}
