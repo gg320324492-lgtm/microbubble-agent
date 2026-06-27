@@ -230,8 +230,7 @@ class VoiceprintService:
     async def enroll_member(
         self, db: AsyncSession, member_id: int, audio: np.ndarray
     ) -> bool:
-        """录入成员声纹。
-
+        """录入成员声纹（用户主动录入）。
         多次录入时取均值以提升准确度。
         """
         from app.models.member import Member

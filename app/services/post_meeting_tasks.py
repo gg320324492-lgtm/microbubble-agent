@@ -676,43 +676,6 @@ def post_meeting_process(self, meeting_id: int):
                         db.add(MeetingParticipant(meeting_id=meeting_id, member_id=mid, role="participant"))
                         logger.info(f"自动添加参与者: member_id={mid}")
 
-                # ===== 阶段 2.8: 声纹持续学习（用本次识别结果强化已有声纹） =====
-                from datetime import datetime, timezone
-                learned_count = 0
-                for cid in unique_clusters:
-                    if cid < 0 or cid >= len(cluster_representatives):
-                        continue
-                    sp_name = cluster_to_name.get(cid, "")
-                    if not sp_name or sp_name.startswith("发言人"):
-                        continue
-                    # 找到对应成员
-                    member_id = all_members.get(sp_name)
-                    if not member_id:
-                        continue
-                    # 加权平均更新声纹
-                    try:
-                        emb_new = cluster_representatives[cid]
-                        from app.models.member import Member as MemberModel2
-                        from sqlalchemy import select as sa_select3
-                        member_row = await db.execute(sa_select3(MemberModel2).where(MemberModel2.id == member_id))
-                        member = member_row.scalar_one_or_none()
-                        if not member:
-                            continue
-                        if member.voice_embedding is not None and member.voice_sample_count > 0:
-                            old = np.array(member.voice_embedding, dtype=np.float32)
-                            wt = member.voice_sample_count / (member.voice_sample_count + 1)
-                            emb_new = old * wt + emb_new * (1 - wt)
-                        member.voice_embedding = emb_new.tolist()
-                        member.voice_sample_count = (member.voice_sample_count or 0) + 1
-                        member.voice_enrolled_at = datetime.now(timezone.utc).replace(tzinfo=None)
-                        learned_count += 1
-                        logger.info(f"声纹学习: {sp_name}(id={member_id}) 第{member.voice_sample_count}次更新")
-                    except Exception as e:
-                        logger.warning(f"声纹学习失败 {sp_name}: {e}")
-                if learned_count > 0:
-                    await db.commit()
-                    logger.info(f"声纹持续学习完成: {learned_count} 人已更新")
-
                 # ===== 阶段 3: AI 分析 =====
                 await update_progress(meeting_id, ProgressStage.GENERATING_ANALYSIS, detail="AI 分析会议内容", redis_override=redis_client)
                 from app.services.meeting_analysis_service import meeting_analysis
