@@ -2,6 +2,97 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [2026-06-28] v77 P2.6 视觉体系 4 子任务全面收官（A/B/C/D 共 7 commits）
+
+### 🎯 v77 P2.6 整体目标
+
+v76 CSS 工程化 + 视觉回归测试收官后，v77 P2.6 把视觉体系向前再推 4 步：(A) paper 组件 + ChartBlock token dark 化 → (B) 移动端 100% dark 化 + Desktop baseline → (C) EP 多主题透传 + Mobile baseline → (D) PWA SW + 动效治理 + CSS-in-JS 收敛 + Baseline 9 路由。
+
+### 🎨 [2026-06-28] v77 P2.6-D — PWA SW 强化 + 动效治理 + CSS-in-JS 收敛 + Baseline 9 路由（4 commits）
+
+**4 个子任务 + 4 commit**（19f42924 + 2096d3e0 + fe896004 + b251fc22 + 94bbe3c6 沉淀）：
+
+**1. P2.6-D.1 PWA Service Worker 强化（commit `19f42924`）**
+- **Background Sync API** — 4 个 registerRoute 覆盖 POST/PUT/PATCH/DELETE（TaskCreate / KnowledgeUpload / PasteAnalyze / TaskTrash），断网时排队到 IndexedDB（队列名 `mnb-api-writes`，24h 过期），恢复网络浏览器自动调用 fetch 重放。SSE/WS 流式接口排除（断流即失败）
+- **Navigation Preload** — `self.navigationPreload.enable()` 在 activate 钩子启用，首屏快 100-500ms
+- **Local Notification** — Background Sync onSync 回调里 `self.registration.showNotification()` 反馈"已离线排队 X 条"，tag=`mnb-bg-sync` 自动合并通知。仅 Local 不走 Web Push 协议
+- **BUMP SW_VERSION v75 → v76-p2.6-d-bg-sync-2026-06-28**（强增 SW 字节变化触发浏览器升级）
+
+**2. P2.6-D.2 动效治理收官（commit `2096d3e0`）**
+- 6 处重复 `@keyframes` 清理（pulse / spin / shimmer / recording-pulse / banner-in / banner-out）—— 收敛到 variables.css 单一权威
+- 3 个 `--ease-*` token 新增：`--ease-in / --ease-sheet / --ease-spring`
+- 12 个 `--animation-*` token 新增（dark override 友好，组件引用 var() 而非 name）
+
+**3. P2.6-D.3 CSS-in-JS 收敛（commit `fe896004`）**
+- 新建 `web/src/assets/styles/_runtime-style-tokens.scss`：14 个枚举 class
+- 3 处 avatar color runtime `:style` → `.avatar-color-N` 枚举 class（MemberView / VoiceprintEnrollDialog / mobile/MemberAvatar）
+- 136 处缓动字面量全量替换 + 13 处 runtime style 收敛 **未做**（PowerShell UTF-8 BOM 风险 + 单步影响大，留给后续）
+
+**4. P2.6-D.4 Baseline 扩到 9 路由（commit `b251fc22`）**
+- desktop + mobile 各加 3 路由：+ `/projects` / `/members` / `/project-stats`
+- 18 张新 baseline PNG 生成（9 desktop + 9 mobile，-win32.png 后缀，CI Linux 重写 -linux.png）
+- 复用 v77 P2.6-C 双注入 helper（cookie + addInitScript localStorage）
+
+**4 条铁律沉淀**（[memory/v77-p26-d-swng-anim-css-baseline.md](memory/v77-p26-d-swng-anim-css-baseline.md)）：
+- ① PowerShell `Set-Content -Encoding UTF8` 写 UTF-8 BOM 是隐形地雷（CLAUDE.md 2026-06-10 教训反复强化）
+- ② Background Sync 仅适合幂等短写请求（SSE/WS/大文件 multipart 不能加）
+- ③ playwright baseline 必须 dev server 后台启（nohup + sleep 12 + ERR_CONNECTION_REFUSED 兜底）
+- ④ token 化拆分渐进优于一次性铺开（先 5-10% 关键部分 + 每步 build 验证 + 视觉回归兜底）
+
+**端到端验证**：token orphan 0 / build 0 警告 / stylelint 0 errors / vitest 396/396 PASS / Playwright 18/18 baseline 生成 PASS
+
+### 🔌 [2026-06-28] v77 P2.6-C — EP 多主题透传补全 + Mobile Baseline 6 路由（commit `db3a31e1`）
+
+- **143 条 dark 规则**追加到 variables.css（L936 后 +430 行）：
+  - P0 三组件（75 条）：el-tree / el-tree-select（20） + el-date-picker / time-picker 弹层（30） + el-table 展开行/边框/filter/sort（25）
+  - P1 三组件（21 条）：el-select 子级 + el-dropdown + el-tooltip / el-popover
+  - P2 五组件预留（47 条）：el-cascader / el-transfer / el-autocomplete / el-color-picker / el-slider
+- **Mobile Baseline 扩到 6 路由**（与 desktop 对齐）：+ `/tasks` / `/meetings` / `/settings`
+- **登录态双注入修复**：router 守卫读 `localStorage.getItem('access_token')` 校验，仅 cookie 注入会让 baseline 拍到登录页（历史证据：v76.2 收窄的 3 张 mobile baseline 字节数完全相同 = 登录页最简字节数）。修复：cookie + addInitScript localStorage 双注入
+- **mock 数据限制**：本地 mock-token 环境下 5 张 mobile baseline 字节数相同（mock API 返回相同默认空状态），CI 环境下用真实 JWT 渲染真实数据
+
+### 📱 [2026-06-27] v77 P2.6-B — Bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由（commit `8905003a`）
+
+- **Bug 修复**：PaperHeader "下载原文件" `el-button type="primary" plain` 在 dark 模式 + 主题色背景下 hover 状态叠加 `--el-fill-color-light` 半透明产生灰白
+- **FallbackBlock dark 化**：唯一缺 dark 块的 Rich Block（11/11 = 100% 收官）
+- **移动端 6 组件 dark 化**（5 简单 + MobileECharts 重点）：JS 端 getComputedStyle 调色板 + MutationObserver 监听 `<html data-theme>` 变化
+- **移动端 14 view dark 化**：核心 3（MobileDashboard / MobileTaskView / MobileKnowledgeView）+ 中高 4（MobileMember/Settings/Login/Project）+ 辅助 7（MobileMemberDetail/ProjectDetail/ProjectStats/TaskTrash/MeetingRoom/MessageList/RichCard）
+- **Desktop Baseline 6 路由**：dashboard / chat / knowledge + **tasks / meetings / settings**（与 mobile 对齐）
+- **全部用末尾非 scoped `<style>` 块模式**（v60-v67 教训第 5 次强化）
+
+### 🎨 [2026-06-27] v77 P2.6-A — paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化（commit `36049629`）
+
+- 14 个 paper 相关组件（PaperSectionRenderer / PaperBlockRenderer / PaperHeader / PaperFigure / PaperTOC 等）+ 桌面 5 view（KnowledgeDetailView / PaperReaderView 等）dark 化
+- **ChartBlock token dark 化重点**：JS 端 getComputedStyle 读 token + ECharts 注入主题色 + MutationObserver 监听 data-theme 变化重渲
+- 移动端 9/15 → 15/15 = 100% + Rich Block 11/11 = 100% dark 化收官（前置 P2.6-B）
+
+---
+
+## [2026-06-28] 3 个生产 bug 修复（会议 64 报 500 + AudioPlayer Infinity:NaN）
+
+### 🐛 [2026-06-28] pgvector embedding truth value bug（会议 64 报 500）
+
+- **症状** — 会议 64 polished 调用时 `not numpy_array` 抛 `ValueError: The truth value of an array with more than one element is ambiguous`
+- **根因** — `if not embedding:` 这种隐式 truthy 检查对 numpy.ndarray 返回 `ValueError`（数组有 > 1 个元素时），必须显式 `is None`
+- **修复** — 2 处生产代码改成 `embedding is None`，加 3 case 单元测试覆盖
+- **沉淀** — [memory/embedding-truth-value-bug-2026-06-28.md](memory/embedding-truth-value-bug-2026-06-28.md)
+
+### 🐛 [2026-06-28] SQLAlchemy JSONB flag_modified bug（会议 64 polished mirror 不持久化）
+
+- **症状** — `Meeting.transcript_polished` 内部元素 mutate 后 `commit()` 静默不持久化（前端仍显示旧值）
+- **根因** — SQLAlchemy 默认**不**自动 flag JSONB 字段内部修改，必须显式 `flag_modified(m, "field")` 强制 UPDATE
+- **修复** — `meeting_service.py` mutate 后加 `flag_modified(meeting, "transcript_polished")`
+- **沉淀** — [memory/sqlalchemy-jsonb-flag-modified-2026-06-28.md](memory/sqlalchemy-jsonb-flag-modified-2026-06-28.md)
+
+### 🐛 [2026-06-28] AudioPlayer Infinity:NaN 修复（WebM 流式音频时长）
+
+- **症状** — `audio.duration` 初始值是 `Infinity`（WebM 流式音频 metadata 还没解析），UI 显示 "Infinity:NaN"
+- **根因** — `<audio>` element 加载流式音频时 `duration` 属性在 metadata 加载前是 `Infinity`，`formatTime(duration)` 计算秒数时 `Infinity - currentTime = NaN`
+- **修复** — 加 `duration` prop 接收后端预知时长 + `formatTime` 防御 `Number.isFinite` + 后端在 audio 端点返 `Content-Length` / `X-Audio-Duration` 头
+- **沉淀** — [memory/audio-player-infinity-duration-2026-06-28.md](memory/audio-player-infinity-duration-2026-06-28.md)
+
+---
+
 ## [2026-06-27] 会议 153 ASR 谐音/错识全链路清洗 hook（name_aliases 推到主路径）
 
 ### 🎯 修复目标
