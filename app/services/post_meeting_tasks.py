@@ -709,6 +709,15 @@ def post_meeting_process(self, meeting_id: int):
                 meeting.key_points = [_apply_text_corrections(kp, TEXT_CORRECTIONS) for kp in (meeting.key_points or [])]
                 meeting.decisions = [_apply_text_corrections(d, TEXT_CORRECTIONS) for d in (meeting.decisions or [])]
 
+                # 2026-06-27 谐音清洗 hook：对每段 transcript text 跑 name_aliases
+                # 把 ASR 误识的"铜鹤/同客/铜棍"等替换为真实成员名"杜同贺"
+                from app.services.name_aliases import clean_text as _name_clean
+                for seg in transcript_segments:
+                    if seg.get("text"):
+                        seg["text"] = _name_clean(seg["text"])
+                    if seg.get("text_polished"):
+                        seg["text_polished"] = _name_clean(seg["text_polished"])
+
                 # 保存转写结果（原始 + 润色版）
                 meeting.transcript = transcript_segments
                 meeting.speaker_mapping = speaker_mapping

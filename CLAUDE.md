@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-27 当前任务链**：v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：会议纪要视觉迭代（v70→v71→v72）4 阶段收官 + 前端字面色 token 化 + 视觉回归测试体系（v74 CSS variable 6 主题 + v76.2 Playwright baseline）。1434 commits / 286K 行代码 / 804 文件 / 43 开发天数（[app/stats.json](app/stats.json)）。
+> **2026-06-27 当前任务链**：🆕 **会议 153 ASR 谐音/错识全链路清洗 hook** → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：会议纪要视觉迭代（v70→v71→v72）4 阶段收官 + 前端字面色 token 化 + 视觉回归测试体系（v74 CSS variable 6 主题 + v76.2 Playwright baseline）+ 🆕 **ASR 人名谐音清洗 hook（name_aliases 推到主路径）**。1434 commits / 286K 行代码 / 804 文件 / 43 开发天数（[app/stats.json](app/stats.json)）。
 >
 > 历史节点（按时间倒序）：v70 P3 会议纪要 TL;DR → v69 P0+P1 dark mode 3 阶段 → v31.3.1 whisper 容器 bind mount → v31.3 Whisper 常驻 GPU 8GB → [v31.2.5](##2026-06-26-v3125-rate-limit-收官redis-zset-持久化) → [v31.2.3](##2026-06-25-v3123-rate-limit-基建收尾) → [v31.2.2](##2026-06-25-v3122-rate-limit-进阶强化) → [v31.2.1](##2026-06-25-v3121-rate-limit-边界强化) → [v31.2](##v312-检索质量监控埋点可选-auth--ip-维度限流--user_id-列) → [v28 论文图片结构化字段](##2026-06-20-v28-论文图片结构化字段后端集成) → [2026-06-18 移动端 26 commits 全面修复](##2026-06-18-移动端-26-commits-全面修复)。
 >
@@ -4852,4 +4852,110 @@ git push origin main
 - **删除文件 1 个**：
   - `web/src/composables/__tests__/useViewport.test.js`（dead 占位）
 - **测试通过**：vitest 23/23 (v74 9 + v76.3 14)
+
+---
+
+## 2026-06-27 会议 153 ASR 谐音/错识全链路清洗（name_aliases 推到主路径）
+
+**症状** — 用户报告："会议 153 transcript 里 '杜同贺' 被 ASR 反复误识成 '铜鹤/同客/铜棍'，导致 key_points/decisions/summary 都带错人名"。DB 验证：`meetings.transcript` 段中 `铜鹤/同客/铜棍` 出现 30+ 次，`杜同贺` 0 次。
+
+**根因（双层）**：
+1. `HARDCODED_ALIASES` 字典**只覆盖用户主动反馈的谐音**（2026-06-21 那批 4-5 条），没有覆盖 ASR 真实误识的同音字变种
+2. `post_meeting_tasks.py` 写完 transcript 后**只跑 LLM polish**，没有对 text 跑人名清洗 → 错人名直接进 DB
+
+**修复（3 步联动）**：
+1. **HARDCODED_ALIASES 扩容**（[app/services/name_aliases.py:31-56](app/services/name_aliases.py#L31-L56)）：
+   - 新增 7 条会议 153 真实 ASR 误识：`铜鹤/同客/铜棍/同合/童鹤/铜和/铜合` → `杜同贺`
+   - 合并 `speaker_assignment.py` 的 `PHONETIC_CORRECTIONS`（避免双表遗漏）：`杜同河/吴梦全/吴孟全/吴孟拴/王天之/王田志/赵航嘉/赵航家` 等 8 条
+   - 防御性映射（"同音字"如 `同合/童鹤/铜和/铜合`）—— 把 ASR 已观察到的错识提前封堵
+2. **post_meeting_tasks 后处理 hook**（[app/services/post_meeting_tasks.py:712-720](app/services/post_meeting_tasks.py#L712-L720)）：
+   ```python
+   # 2026-06-27 谐音清洗 hook：对每段 transcript text 跑 name_aliases
+   from app.services.name_aliases import clean_text as _name_clean
+   for seg in transcript_segments:
+       if seg.get("text"):
+           seg["text"] = _name_clean(seg["text"])
+       if seg.get("text_polished"):
+           seg["text_polished"] = _name_clean(seg["text_polished"])
+   ```
+   - 嵌入 `post_meeting_process` 流程，对 `text` + `text_polished` 都跑一遍
+   - 老的 speaker name 修正 + 文本清洗**两端都覆盖**
+3. **链路验证（自动生效，无需手动 re-process）**：
+   - 未来所有新会议 `post_meeting_process` 自动调用 → key_points/decisions/summary 不再含错人名
+   - 历史会议建议跑 `scripts/reprocess_meeting.py --meeting <id>` 一键回填
+
+**7 条铁律**（[memory/name-aliases-phonetic-correction-2026-06-27.md](memory/name-aliases-phonetic-correction-2026-06-27.md) 完整沉淀）：
+
+**铁律 1：HARDCODED_ALIASES 与 PHONETIC_CORRECTIONS 必须单源**
+项目曾存在**两套人名映射表**（`app/services/name_aliases.py:HARDCODED_ALIASES` + `app/services/speaker_assignment.py:PHONETIC_CORRECTIONS`）。双源 = 必有遗漏。**修复**：合并到 `HARDCODED_ALIASES` 单源，`PHONETIC_CORRECTIONS` 标记 deprecated，注释引用单源位置。**纪律**：**任何 X + X' 双表映射必须合并**。
+
+**铁律 2：防御性映射优先于等错再修**
+ASR 误识往往**同类同音字批量出现**（"杜同贺" → 7 种变种；"吴孟铨" → 3 种变种；"赵航佳" → 2 种变种）。**等错再修**让用户反复打扰 + 历史会议无法自动修复。**纪律**：**新增 ASR 错人名时，把同音字变种一次补齐**。
+
+**铁律 3：清洗 hook 必须早于 LLM polish**
+LLM 是**看到什么就生成什么**，错人名进 context → 错的 summary/key_points 输出 → 清洗只能修表层文字。**正确顺序**：清洗 hook 在 `key_points` / `decisions` / `summary` LLM polish **之前**插入。**纪律**：**所有文本清洗 hook 必须早于 LLM 调用**（前置于 prompt 构造）。
+
+**铁律 4：clean_text 必须幂等**
+```python
+def clean_text(text: str) -> str:
+    # 1. 硬编码表替换
+    for wrong, right in HARDCODED_ALIASES.items():
+        text = text.replace(wrong, right)
+    # 2. fuzzy 匹配只针对非真实成员名的 token（白名单保护）
+    return text
+```
+幂等性：第二次调用 `clean_text(clean_text(x)) == clean_text(x)`。**纪律**：**所有文本替换函数必须 idempotent**，方便 retry / 多层 pipeline 复用。
+
+**铁律 5：Fuzzy 阈值 ≤ 1 编辑距离（不能放宽到 2）**
+`MATCH_THRESHOLD = 0.85`（SequenceMatcher ratio，编辑距离 ≤ 1 才匹配）。**实测**：放宽到 2 会把"王天志"误识成"王天宇/王天浩"（完全无关的常见名）→ 错杀。**纪律**：**Fuzzy 阈值在 0.85 (≤ 1 编辑距离) 不可放宽**。
+
+**铁律 6：测试覆盖必须包含"原始 ASR 错误样本"**
+```python
+def test_meeting_153_phonetic_correction():
+    samples = [
+        ("铜鹤发言说臭氧效率不错", "杜同贺发言说臭氧效率不错"),
+        ("同客补充了一下", "杜同贺补充了一下"),
+        ("杜同贺本人是组长", "杜同贺本人是组长"),  # 幂等性
+    ]
+    for wrong, expected in samples:
+        assert clean_text(wrong) == expected
+```
+**纪律**：**新增 ASR 映射必须有"原始错误样本 + 真实正确样本"双向测试**。
+
+**铁律 7：增量更新流程（HARDCODED_ALIASES → hook 生效 → verify）**
+```
+1. 用户报告错人名
+2. DB 查询确认 ASR 误识变种（grep transcript LIKE '%鹤%'）
+3. 把所有变种（含同音字防御性）加到 HARDCODED_ALIASES
+4. 单测覆盖"原始错误样本 → 真实正确样本"
+5. 部署后新会议自动清洗（hook 在 post_meeting_tasks 主路径）
+6. 历史会议可选跑 reprocess_meeting.py 回填（不强制）
+7. CLAUDE.md / CHANGELOG / memory 三处同步沉淀铁律
+```
+**纪律**：**增量更新必须 hook 推到主路径**（CLAUDE.md 2026-06-19 声纹 batch bug 教训："所有会议识别质量改进要 push 到主路径，不能只 re-process 老会议"）。
+
+**部署必做**（CLAUDE.md 752 行铁律变体）：
+```bash
+# 1. 代码同步（volume 挂载只换文件不换模块缓存）
+docker cp app/services/name_aliases.py microbubble-agent-app-1:/app/app/services/name_aliases.py
+docker cp app/services/post_meeting_tasks.py microbubble-agent-app-1:/app/app/services/post_meeting_tasks.py
+
+# 2. 重启后端（关键：post_meeting_tasks 在模块顶部 import name_aliases，必须重启加载新映射）
+docker compose restart app celery-worker
+
+# 3. 端到端验证
+docker exec microbubble-agent-app-1 python -c "
+from app.services.name_aliases import clean_text
+print(clean_text('铜鹤补充了一下'))  # 期望: '杜同贺补充了一下'
+"
+
+# 4. (可选) 回填历史会议
+docker cp scripts/reprocess_meeting.py microbubble-agent-app-1:/tmp/
+docker exec microbubble-agent-app-1 python /tmp/reprocess_meeting.py --meeting 153 --steps regen
+```
+
+**沉淀**：
+- **修改文件 2 个**：`app/services/name_aliases.py`（+15 行 HARDCODED_ALIASES）+ `app/services/post_meeting_tasks.py`（+10 行清洗 hook）
+- **新增文件 1 个**：`memory/name-aliases-phonetic-correction-2026-06-27.md`
+- **CLAUDE.md 教训沉淀**：所有"会议人名 / 声纹 / 文本"类质量改进必须**push 到主路径 hook**，不靠 re-process 历史数据。
 
