@@ -224,6 +224,204 @@
   ],
   "changelog": [
     {
+      "date": "2026-06-27",
+      "tag": "修复",
+      "title": "v76.6 智能对话框全元素跟随主题色",
+      "pain_point": "修 3 类硬编码橙色残留（EP --el-color-primary 映射 + ChatViewSSE 5 渐变 + SessionSidebar rgba → CSS 变量）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "优化",
+      "title": "v76 follow-up CI + 视觉回归基建 4 commit",
+      "pain_point": "paths filter 扩 3 路径 + lockfile 同步 + 删 baseline png + workflow_dispatch update-snapshots 模式"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "修复",
+      "title": "v31.3.2 polish-text 批量端点",
+      "pain_point": "修 83 段会议并发触发 write tier 30/min 限流（HTTP 请求 1/N）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v76.2 视觉回归测试 5 件套收官",
+      "pain_point": "Playwright baseline + ci-mode + max-increase + 组件级 CSS 测试"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "修复",
+      "title": "v76 PWA manifest test 拆分",
+      "pain_point": "拆出 visual-regression spec 独立跑避免被主 spec 阻断"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "优化",
+      "title": "v75 测试稳定性 9 个旧 fail 修复",
+      "pain_point": "timeout 配置 + 异步 mock + DOM 节点选择器适配 + PR annotation + token orphan pre-commit 拦截"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v74 CSS variable 6 主题组合自动化测试",
+      "pain_point": "CI hard fail + token 白名单，6 主题组合下字面色回归即时拦截"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "修复",
+      "title": "v73 fallback 政策章节补全 + font-mono token",
+      "pain_point": "CSS fallback 变量写法规范化（带默认值的 CSS 变量但默认值不在 token 系统 → 警告）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v72 P1 摘要+重点摘要合并主题色 TL;DR 卡",
+      "pain_point": "color-mix() 让卡背景/边框跟随 6 主题自适应，dark 模式透明度降至 8%/4%/25%"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "优化",
+      "title": "v72 stylelint 139 → 0 清理",
+      "pain_point": "99 个 selector-pseudo-class-no-unknown (Vue :deep()) + 31 个 word-break: break-word"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v71 P1 议程 timeline + 每 speaker 8 条常驻",
+      "pain_point": "el-timeline 金橙圆 dot + per-card 展开全部（expandedFullGroups 状态隔离）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "优化",
+      "title": "v71 stylelint 322 → 0 清理",
+      "pain_point": "3 并行 agent 清 color-named white 88 → 0 等 P3 守卫规则命中错误"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v70 P0~P3 字面色 → token 4 阶段",
+      "pain_point": "~340 处 hex 替换为 var(--color-*) token，dark mode 全面修复"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "功能",
+      "title": "v70 P3 预防机制 Stylelint 字面色禁用",
+      "pain_point": "Stylelint 规则拦截后续字面色回退 + docs/color-tokens.md"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "修复",
+      "title": "v70 P0 SW_VERSION 注释块误删修复",
+      "pain_point": "补回 const SW_VERSION 修 SW ReferenceError 白屏（v70 P0 仅加注释漏补声明）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "修复",
+      "title": "v70 P2 漏 commit dist 兜底",
+      "pain_point": "服务器 dist 404 兜底（git add -A 静默跳过 .gitignore 内文件）"
+    },
+    {
+      "date": "2026-06-27",
+      "tag": "优化",
+      "title": "v70 polish-text Redis 缓存 + 转录 tab 加速",
+      "pain_point": "Redis 24h 缓存命中免 LLM 调用 + 删转录 tab 重复 LLM polish + el-select 换 popover"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "功能",
+      "title": "pre-commit hook auto-add web/dist/",
+      "pain_point": "CLAUDE.md 教训第 4 次沉淀后自动兜底（防 git add -A 静默跳过 .gitignore 内 dist）"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "功能",
+      "title": "v69 P0+P1 dark mode 3 阶段",
+      "pain_point": "5 tokens + 14 EP dark 覆盖 + 6 主题切换（orange/ocean/forest × light/dark）+ 10 桌面视图适配"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "v69 P1b fix 系列 3 commit",
+      "pain_point": "el-dialog/chat-immersive/memory-card/公式面板/项目详情等白边清理"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "优化",
+      "title": "5 组件深度优化",
+      "pain_point": "会议 #135 韩/张识别率 0% → 80%"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "会议 #135 标题自动生成 + 发言统计 tab",
+      "pain_point": "schema 统一 + 头部头像显示真实发言人"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "知识图谱路由顺序修 422",
+      "pain_point": "entities/graph 必须在 /{knowledge_id}/graph 之前注册"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "功能",
+      "title": "v68 桌面主题切换按钮 + SettingsView 玻璃态",
+      "pain_point": "顶栏挂主题切换 + backdrop-filter: blur(20px)"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "v31.3.1 whisper 容器 bind mount",
+      "pain_point": "删 Dockerfile COPY 源码反模式 + bind mount 源码（本地改 restart 即生效）"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "优化",
+      "title": "v31.3 whisper 模型常驻 GPU 8GB",
+      "pain_point": "删懒加载 + 10 分钟空闲卸载 183 行，模型常驻 8GB 换 chat ASR 0.5-3s 响应"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "v31.3.1 flash_attention 注释更新",
+      "pain_point": "实测 ctranslate2 4.8 仍不支持 Blackwell sm_120，等上游补内核"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "v31.2.5 启用 AsyncRedisRateLimiter 抗 docker restart",
+      "pain_point": "5 tier 全部切 Redis ZSET，重启后 ZSET 不清零（之前内存版一重启全清零）"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "功能",
+      "title": "v31.2.4 Redis ZSET 持久化 + per-user dashboard",
+      "pain_point": "AsyncRedisRateLimiter 类 + by_user SQL 聚合 + 中文乱码修复"
+    },
+    {
+      "date": "2026-06-26",
+      "tag": "修复",
+      "title": "Docker Desktop 引擎崩溃 + 镜像源治理",
+      "pain_point": "WSL docker-desktop-data 重建 + aliyun 正确路径 + 清华 pip --retries 10 + 数据 E 盘化"
+    },
+    {
+      "date": "2026-06-25",
+      "tag": "功能",
+      "title": "v31.2.3 rate-limit 基建收尾 3 件套",
+      "pain_point": "X-RateLimit-Policy 响应头 + SSE tier 10/min + auth prefix 匹配替代 substring"
+    },
+    {
+      "date": "2026-06-25",
+      "tag": "优化",
+      "title": "v31.2.2 analytics regex + user_id 维度",
+      "pain_point": "substring→regex 锚定 ^...$ 永久化 + middleware 注入 user_id（comment drift 修复）"
+    },
+    {
+      "date": "2026-06-25",
+      "tag": "修复",
+      "title": "v31.2.1 XFF 空 IP 兜底 + /auth/analytics 嵌套防御",
+      "pain_point": "XFF \", 1.2.3.4\" / \"   \" 全部 → \"unknown\"，防绕过 Nginx 攻击者用空 XFF 共享配额"
+    },
+    {
       "date": "2026-06-24",
       "title": "sentence-transformers 5.6.0 跨 3 大版本升级（Phase 1+2 收官）",
       "tag": "功能",
