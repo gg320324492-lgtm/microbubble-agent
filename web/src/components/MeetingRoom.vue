@@ -105,17 +105,18 @@ function onProgressClose() {
 </script>
 
 <style scoped>
+/* v77: dark mode 背景跟随主题 (3 处硬编码浅色→token) */
 .meeting-room {
   display: flex; flex-direction: column;
   height: 100%; min-height: 400px;
-  background: linear-gradient(180deg, #f8f9fb 0%, #fefefe 100%);
+  background: var(--color-bg-card);
   border-radius: var(--radius-lg, 12px); overflow: hidden;
 }
 .room-header {
   display: flex; align-items: center; justify-content: center;
-  padding: 12px 20px; background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding: 12px 20px; background: var(--color-bg-card);
+  backdrop-filter: blur(12px); border-bottom: 1px solid var(--color-border-base);
 }
 .room-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
-.room-main { flex: 1; display: flex; align-items: center; justify-content: center; }
+.room-main { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--color-bg-page); }
 </style>
