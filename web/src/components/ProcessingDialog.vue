@@ -18,6 +18,7 @@
         <div v-else class="done-icon">✅</div>
       </div>
       <h2 class="processing-title">{{ titleText }}</h2>
+      <p class="subtitle">{{ subtitleText }}</p>
 
       <div class="timeline">
         <div
@@ -44,7 +45,10 @@
         </div>
       </div>
 
-      <p class="hint">预计 30-60 秒，您可以先看看其他内容</p>
+      <div class="hint-block">
+        <p :class="hintClass">{{ dynamicHint }}</p>
+        <p v-if="!done && !error" class="hint-subtle">预计 30-60 秒</p>
+      </div>
 
       <div v-if="done" class="done-actions">
         <el-button type="primary" class="btn-pulse" @click="goToDetail">查看纪要</el-button>
@@ -117,6 +121,36 @@ const titleText = computed(() => {
   if (done.value) return '✅ 处理完成'
   if (error.value) return '⚠️ 连接失败'
   return 'AI 正在整理会议纪要...'
+})
+
+// 2026-06-27 与移动端 ProcessingSheet subtitleText/dynamicHint/hintClass 完全镜像
+// (4 状态 split 是用户的核心 UX 需求,不能简化)
+const subtitleText = computed(() => {
+  if (error.value) return '请稍后重试或联系管理员'
+  if (done.value) return '摘要 / 要点 / 决议 已生成'
+  return 'AI 正在分析录音内容'
+})
+
+const dynamicHint = computed(() => {
+  if (error.value) {
+    return '处理失败，请稍后重试或联系管理员'
+  }
+  if (done.value) {
+    return '处理已完成，您可以关闭此页面，稍后从会议详情查看纪要'
+  }
+  // Celery 已启动 (WS 收到第一帧 stage 消息) → 可安全关闭
+  if (progress.value?.stage) {
+    return '后台处理中，您可关闭此页面，结果将保存到会议详情'
+  }
+  // 前端还在 await upload + stop-recording，必须等
+  return '正在上传音频，请勿关闭此页面'
+})
+
+const hintClass = computed(() => {
+  if (error.value) return 'hint-text-danger'
+  if (done.value) return 'hint-text-success'
+  if (progress.value?.stage) return 'hint-text-primary'
+  return 'hint-text-warning'  // 上传期
 })
 
 function isStageDone(idx) {
@@ -202,7 +236,7 @@ if (token) {
 }
 .processing-title {
   font-size: 24px;
-  margin-bottom: 40px;
+  margin-bottom: 12px;
   color: var(--color-text-primary, #333);
 }
 .timeline {
@@ -264,10 +298,36 @@ if (token) {
   color: var(--color-text-secondary);
   margin-top: 4px;
 }
-.hint {
-  margin-top: 40px;
-  color: var(--color-text-secondary);
+.subtitle {
+  margin: 0 0 32px;
   font-size: 14px;
+  color: var(--color-text-secondary);
+}
+.hint-block {
+  margin-top: 32px;
+  text-align: center;
+  line-height: 1.6;
+}
+.hint-block p { margin: 2px 0; }
+
+/* 2026-06-27 移植移动端 dynamicHint 按状态着色 + 加粗 */
+.hint-text-warning,
+.hint-text-primary,
+.hint-text-success,
+.hint-text-danger {
+  font-weight: 600;
+  font-size: 13px;
+  margin: 0 0 4px 0 !important;
+}
+.hint-text-warning { color: var(--color-warning, #E6A23C); }
+.hint-text-primary { color: var(--color-primary, #FF7A5C); }
+.hint-text-success { color: var(--color-success, #67C23A); }
+.hint-text-danger  { color: var(--color-danger,  #F56C6C); }
+
+.hint-subtle {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  opacity: 0.75;
 }
 .done-actions {
   margin-top: 24px;

@@ -1,7 +1,7 @@
 <template>
   <div class="meeting-room">
     <!-- 顶部栏 -->
-    <header class="room-header">
+    <header class="room-header glass glass-lg">
       <span class="room-title">{{ pageTitle }}</span>
     </header>
 
@@ -114,8 +114,7 @@ function onProgressClose() {
 }
 .room-header {
   display: flex; align-items: center; justify-content: center;
-  padding: 12px 20px; background: var(--color-bg-card);
-  backdrop-filter: blur(12px); border-bottom: 1px solid var(--color-border-base);
+  padding: 12px 20px; border-bottom: 1px solid var(--color-border-base);
 }
 .room-title { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
 .room-main { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--color-bg-page); }

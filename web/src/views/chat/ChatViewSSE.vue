@@ -297,7 +297,7 @@ onUnmounted(() => {
 
       <div class="chat-main">
         <!-- 顶部 -->
-        <header class="chat-header">
+        <header class="chat-header glass glass-lg">
           <div class="header-left">
             <el-button text size="small" @click="sidebarCollapsed = !sidebarCollapsed" title="切换侧栏">
               <span style="font-size: 16px;">☰</span>
@@ -514,9 +514,7 @@ onUnmounted(() => {
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 20px;
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border-light);
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .bot-avatar { background: var(--gradient-welcome-hero); }

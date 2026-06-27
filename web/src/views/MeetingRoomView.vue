@@ -77,7 +77,8 @@
  * 与 MobileMeetingRoom 的关键差异：
  *   ① 顶栏用 el-page-header（非移动端 PageHeader 组件）
  *   ② 帮助用 el-dialog（非移动端底部 sheet）
- *   ③ onMounted 同样调 checkActiveRecording()，复用 useRecordingState.recordingMeetingId
+ *   ③ onMounted 优先用 route.query.resume 初始化 meetingId + startRecording 同步到 store
+ *     （不调 checkActiveRecording 避免后端 title 覆盖触发 reactive storm）
  *
  * 链路：
  *   handleStart() → AudioRecorder.start()
@@ -102,7 +103,7 @@ import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 
 const router = useRouter()
 const route = useRoute()
-const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
+const { startRecording, stopRecording, recordingMeetingId } = useRecordingState()
 const { start: startGlobalRecorder, isActive: isGlobalRecorderActive } = useGlobalRecorder()
 
 const recorderRef = ref(null)
@@ -215,9 +216,14 @@ onMounted(async () => {
   if (resumeFromQuery && !meetingId.value) {
     const id = Number(resumeFromQuery)
     if (!Number.isNaN(id) && id > 0) {
+      // 仅当 store 没值或值不同时才调 startRecording，避免与 MainLayout 已 set 的状态冲突
+      // 重复 set 同一值会触发 Vue 3 notify 链 → set value → trigger → notify 循环
+      // (因为 startRecording 内部 set recordingMeetingTitle，placeholder 与后端真实 title
+      // 不同时 hasChanged 检测到变化 → element-plus 内部 ref cascade → console 风暴)
       meetingId.value = id
-      // 同步到全局状态，保证顶部胶囊、MainLayout 状态一致
-      startRecording(id, `正在听会（ID ${id}）`)
+      if (recordingMeetingId.value !== id) {
+        startRecording(id, `正在听会（ID ${id}）`)
+      }
       console.warn('[MeetingRoomView] 优先使用 query.resume 初始化 meetingId =', id)
 
       // v2: 自动启动 MediaRecorder 接续录音
@@ -230,12 +236,15 @@ onMounted(async () => {
       }
     }
   }
-  // 2) 强制重新查后端（绕过 initialized 短路），保证 sessionStorage / 后端 / 模块级 ref 三者一致
-  await checkActiveRecording({ force: true })
-  // 3) 兜底：useRecordingState 同步后的值覆盖到本地 ref（仅当本地还没值时）
-  if (recordingMeetingId.value && !meetingId.value) {
-    meetingId.value = recordingMeetingId.value
-  }
+  // 移除 v1 的 layer 2/3 (checkActiveRecording({ force:true }) + fallback re-assign)：
+  //   layer 2 会用后端真实 title 重新 set recordingMeetingTitle（与 layer 1 的 placeholder 不同），
+  //   触发 Vue 3 notify 链 → set value → trigger → notify 循环（reactive storm），
+  //   console 出现大量 element-plus-desktop stack trace。
+  //   修复依据：layer 1 已足以让 pageTitle 显示"正在听会（ID 149）"且 recordingMeetingId
+  //   在 store 里可用。MainLayout.onMounted 早已初始化 store (initialized=true)，
+  //   后续非 force 调用会 short-circuit 不会重复 fetch。
+  // 兜底：MeetingRoomView template 仍读 recordingMeetingId.value 显示 resume-badge，
+  //   假设 store 正确（MainLayout 处理过）。
 })
 </script>
 
