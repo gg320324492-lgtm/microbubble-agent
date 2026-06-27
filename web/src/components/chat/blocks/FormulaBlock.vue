@@ -64,7 +64,7 @@ const sourceTypeLabel = (s) => {
         <span v-if="f.source_type" class="source-badge">{{ sourceTypeLabel(f.source_type) }}</span>
         <span v-if="f.confidence != null" class="confidence">⭐ {{ (f.confidence * 100).toFixed(0) }}%</span>
       </div>
-      <div v-if="f.latex || f.expression" class="latex">
+      <div v-if="f.latex || f.expression" class="latex glass-sm">
         <code>{{ formatLatex(f.latex) || f.expression }}</code>
       </div>
       <div v-if="f.result_unit" class="result">= ... <span class="unit">{{ f.result_unit }}</span></div>
@@ -83,10 +83,10 @@ const sourceTypeLabel = (s) => {
 </template>
 
 <style scoped>
-.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
-.formula-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
+.formula-item { padding: 10px 0; border-top: 1px solid var(--color-border-light); }
 .formula-item:first-of-type { border-top: none; }
 .formula-row1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .formula-name { font-weight: 500; font-size: 14px; }
@@ -102,4 +102,14 @@ const sourceTypeLabel = (s) => {
 .var-unit { color: var(--color-text-secondary); margin-left: 2px; }
 .formula-actions { margin-top: 8px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
+
+/* v77 P2.5.3: dark mode 适配
+   .latex 用 .glass-sm 工具类（已含 dark 自适应），
+   .formula-item 加半透背景提升对比（dark 下区分外层卡片） */
+[data-theme="dark"] .formula-item {
+  background: rgba(var(--color-bg-card-rgb), 0.6);
+  border-radius: 6px;
+  margin: 4px -8px;
+  padding: 10px 8px;
+}
 </style>

@@ -34,8 +34,10 @@ const goToMeeting = (id) => {
 }
 
 const statusColor = (s) => {
-  const map = { completed: '#67c23a', scheduled: '#909399', recording: '#f56c6c', processing: '#e6a23c' }
-  return map[s] || '#909399'
+  // v77 P2.5.3: getComputedStyle 读 token 实色值（dark 模式下自动切换到 #85ce61/#a8aab0/#f78989/#eebe77）
+  const map = { completed: '--color-success', scheduled: '--color-text-secondary', recording: '--color-danger', processing: '--color-warning' }
+  const token = map[s] || '--color-text-secondary'
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
 }
 
 const statusLabel = (s) => {
@@ -80,7 +82,7 @@ const statusLabel = (s) => {
 <style scoped>
 .rich-card {
   background: var(--color-bg-card);
-  border: 1px solid #e8eaed;
+  border: 1px solid var(--color-border-light);
   border-radius: 10px;
   padding: 12px 14px;
   margin: 8px 0;
@@ -94,7 +96,7 @@ const statusLabel = (s) => {
 .icon { font-size: 18px; }
 .meeting-item {
   padding: 10px 0;
-  border-top: 1px solid #f0f1f3;
+  border-top: 1px solid var(--color-border-light);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -124,4 +126,9 @@ const statusLabel = (s) => {
 }
 .more { font-size: 11px; color: var(--color-text-secondary); padding: 2px 4px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
+
+/* v77 P2.5.3: dark mode hover 反馈（light 下 --color-bg-warm 与 --color-bg-hover 同色，dark 下变深） */
+[data-theme="dark"] .meeting-item:hover {
+  background: var(--color-bg-hover);
+}
 </style>

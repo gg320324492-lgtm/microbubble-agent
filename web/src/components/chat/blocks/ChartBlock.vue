@@ -6,6 +6,9 @@
  *
  * 当前为简化版：折线图 + 柱状图 + 饼图三种基本图表。
  * 完整 ECharts 集成可在后续接入。
+ *
+ * v77 P2.5.3: ECharts theme 适配（MutationObserver 监听 <html data-theme> → 重渲）
+ * ECharts 不感知 CSS theme，必须在 setOption 时注入主题色，主题切换时重渲。
  */
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import * as echarts from 'echarts/core'
@@ -17,9 +20,42 @@ echarts.use([LineChart, BarChart, PieChart, TitleComponent, TooltipComponent, Gr
 
 const props = defineProps({ block: { type: Object, required: true } })
 const chartRef = ref(null)
-let chartInstance = null
-
 const data = ref(props.block.data || {})
+let chartInstance = null
+let themeObserver = null
+
+// v77 P2.5.3: ECharts theme 调色板（与 variables.css dark token 对齐）
+const getPalette = (isDark) => isDark
+  ? {
+      text: '#a8aab0',       // 与 --color-text-secondary dark 一致
+      textDim: '#5a5d65',    // 与 --color-text-placeholder dark 一致
+      gridLine: '#3a3d45',   // 与 --color-border-base dark 一致
+      tooltipBg: 'rgba(42,45,53,0.95)',  // 与 --color-bg-card dark 一致
+      tooltipBorder: '#3a3d45',
+    }
+  : {
+      text: '#2D2D2D',
+      textDim: '#909399',
+      gridLine: '#ebeef5',
+      tooltipBg: 'rgba(255,255,255,0.95)',
+      tooltipBorder: '#ebeef5',
+    }
+
+const isDarkTheme = () => document.documentElement.dataset.theme === 'dark'
+
+// 注入主题色到所有 textStyle / axisLabel / tooltip
+const applyTheme = (option, palette) => {
+  if (option.title) option.title.textStyle = { color: palette.text }
+  if (option.legend) option.legend.textStyle = { color: palette.text }
+  if (option.xAxis) option.xAxis.axisLabel = { color: palette.textDim }
+  if (option.yAxis) option.yAxis.axisLabel = { color: palette.textDim }
+  if (option.tooltip) {
+    option.tooltip.backgroundColor = palette.tooltipBg
+    option.tooltip.borderColor = palette.tooltipBorder
+    option.tooltip.textStyle = { color: palette.text }
+  }
+  return option
+}
 
 const renderChart = () => {
   if (!chartRef.value) return
@@ -31,9 +67,9 @@ const renderChart = () => {
   const xData = data.value.x_data || data.value.labels || []
   const series = data.value.series || []
 
-  let option
+  let baseOption
   if (type === 'pie') {
-    option = {
+    baseOption = {
       title: { text: title, left: 'center' },
       tooltip: { trigger: 'item' },
       legend: { orient: 'vertical', left: 'left' },
@@ -44,7 +80,7 @@ const renderChart = () => {
       }],
     }
   } else if (type === 'line') {
-    option = {
+    baseOption = {
       title: { text: title, left: 'center' },
       tooltip: { trigger: 'axis' },
       grid: { left: 50, right: 20, top: 50, bottom: 40 },
@@ -53,20 +89,35 @@ const renderChart = () => {
       series: [{ type: 'line', data: series, smooth: true, areaStyle: {} }],
     }
   } else {
-    option = {
+    baseOption = {
       title: { text: title, left: 'center' },
       tooltip: { trigger: 'axis' },
       grid: { left: 50, right: 20, top: 50, bottom: 40 },
       xAxis: { type: 'category', data: xData },
       yAxis: { type: 'value' },
-      series: [{ type: 'bar', data: series, itemStyle: { color: 'var(--color-primary)' } }],
+      series: [{ type: 'bar', data: series }],
     }
   }
-  chartInstance.setOption(option)
+
+  chartInstance.setOption(applyTheme(baseOption, getPalette(isDarkTheme())))
 }
 
-onMounted(renderChart)
-onUnmounted(() => { if (chartInstance) chartInstance.dispose() })
+onMounted(() => {
+  renderChart()
+  // v77 P2.5.3: 监听 <html data-theme> 变化 → 重渲 ECharts
+  themeObserver = new MutationObserver(() => {
+    if (chartInstance) renderChart()
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+})
+
+onUnmounted(() => {
+  if (chartInstance) chartInstance.dispose()
+  if (themeObserver) themeObserver.disconnect()
+})
 
 watch(() => props.block.data, (v) => { data.value = v; renderChart() })
 </script>
@@ -82,7 +133,7 @@ watch(() => props.block.data, (v) => { data.value = v; renderChart() })
 </template>
 
 <style scoped>
-.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .chart-canvas { width: 100%; height: 300px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 40px 0; }
 .empty p { margin: 4px 0; }
