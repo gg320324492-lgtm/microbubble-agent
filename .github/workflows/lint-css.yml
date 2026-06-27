@@ -224,13 +224,16 @@ jobs:
           BASE_URL: http://localhost:4173
           TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
         run: |
-          # main branch 自动接受 (首次生成 baseline); PR 跑对比模式 (fail 阻止 merge)
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "::notice::main branch 跑 baseline 生成模式"
-            npx playwright test --update-snapshots
-          else
-            echo "::notice::PR 跑 baseline 对比模式"
+          # v76.3n: 三模式
+          # - workflow_dispatch (手动) → 维护 baseline (update-snapshots)
+          # - push to main → 维护 baseline (update-snapshots, auto-commit)
+          # - pull_request → 对比 baseline (fail 阻止 merge)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "::notice::PR 跑 baseline 对比模式 (fail 阻止 merge)"
             npx playwright test
+          else
+            echo "::notice::${{ github.event_name }} 跑 baseline 生成模式 (auto-commit)"
+            npx playwright test --update-snapshots
           fi
         # PR 失败时不停 (让 artifact upload 步骤能跑)
 
@@ -243,9 +246,10 @@ jobs:
           path: web/test-results/
           retention-days: 7
 
-      # main branch 自动 commit baseline png (v76.2: baseline 跟 dist 一样 git add -f)
-      - name: Auto-commit baseline update (main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      # main push / workflow_dispatch 自动 commit baseline png
+# v76.3n: 不再限定 main branch, 所有非 PR 触发都更新 baseline
+      - name: Auto-commit baseline update
+        if: github.event_name != 'pull_request'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -253,7 +257,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "无 baseline 变更"
           else
-            git commit -m "test(visual): 自动更新 baseline (v76.2 visual regression job)"
+            git commit -m "test(visual): 自动更新 baseline (v76.3n visual regression job)"
             git push
           fi
 
