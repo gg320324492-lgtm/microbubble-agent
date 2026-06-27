@@ -28,6 +28,7 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const VIEWPORT = { width: 390, height: 844 } // iPhone 14
 
 // v77 P2.6-C: 从 3 路由扩到 6 路由 (与 desktop 对齐)
+// v77 P2.6-D.4: 扩到 9 路由 (+projects /members /project-stats)
 const CORE_ROUTES = [
   { path: '/dashboard', name: '01-dashboard' },
   { path: '/knowledge', name: '06-knowledge' },
@@ -36,6 +37,10 @@ const CORE_ROUTES = [
   { path: '/tasks', name: '04-tasks' },
   { path: '/meetings', name: '05-meetings' },
   { path: '/settings', name: '07-settings' },
+  // v77 P2.6-D.4 新增
+  { path: '/projects', name: '08-projects' },
+  { path: '/members', name: '09-members' },
+  { path: '/project-stats', name: '10-project-stats' },
 ]
 
 test.describe('Mobile 核心页面视觉回归 (v77 P2.6-C 6 路由 baseline 对比)', () => {
