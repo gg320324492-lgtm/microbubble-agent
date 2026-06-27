@@ -8,7 +8,7 @@
   <el-avatar
     v-else
     :size="size"
-    :style="{ background: bgColor }"
+    :class="`avatar-color-${avatarIndex}`"
     :alt="`${memberName}的头像`"
   >
     {{ memberName?.charAt(0) || '?' }}
@@ -53,18 +53,14 @@ const memberName = computed(() => {
   return ''
 })
 
-// 头像背景色（按用户名 hash 选）
-const AVATAR_COLORS = [
-  '#FF7A5C', '#FFB347', '#67C23A', '#409EFF', '#E6A23C',
-  '#F56C6C', '#909399', '#9B59B6', '#1ABC9C', '#3498DB',
-]
-const bgColor = computed(() => {
+// v77 P2.6-D.3: 改用 .avatar-color-N 枚举 class（runtime-style-tokens.scss 定义 8 色）
+const avatarIndex = computed(() => {
   const name = memberName.value || '?'
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)
   }
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+  return Math.abs(hash) % 8
 })
 </script>
 
