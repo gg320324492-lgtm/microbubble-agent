@@ -24,22 +24,27 @@ const data = ref(props.block.data || {})
 let chartInstance = null
 let themeObserver = null
 
-// v77 P2.5.3: ECharts theme 调色板（与 variables.css dark token 对齐）
-const getPalette = (isDark) => isDark
-  ? {
-      text: '#a8aab0',       // 与 --color-text-secondary dark 一致
-      textDim: '#5a5d65',    // 与 --color-text-placeholder dark 一致
-      gridLine: '#3a3d45',   // 与 --color-border-base dark 一致
-      tooltipBg: 'rgba(42,45,53,0.95)',  // 与 --color-bg-card dark 一致
-      tooltipBorder: '#3a3d45',
-    }
-  : {
-      text: '#2D2D2D',
-      textDim: '#909399',
-      gridLine: '#ebeef5',
-      tooltipBg: 'rgba(255,255,255,0.95)',
-      tooltipBorder: '#ebeef5',
-    }
+// v77 P2.6-A: ECharts theme 调色板改用 getComputedStyle 读 token（与 v77 P2.5.3 MeetingCard statusColor 同模式）
+// 8 个裸 hex → 6 个 token，dark/light/accent 3 轴自动适配，6 主题一致
+const getPalette = (isDark) => {
+  const root = document.documentElement
+  const get = (token) => getComputedStyle(root).getPropertyValue(token).trim()
+  return isDark
+    ? {
+        text: get('--color-text-regular'),
+        textDim: get('--color-text-secondary'),
+        gridLine: get('--color-border-base'),
+        tooltipBg: get('--color-bg-card'),
+        tooltipBorder: get('--color-border-base'),
+      }
+    : {
+        text: get('--color-text-primary'),
+        textDim: get('--color-text-secondary'),
+        gridLine: get('--color-border-light'),
+        tooltipBg: get('--color-bg-card'),
+        tooltipBorder: get('--color-border-light'),
+      }
+}
 
 const isDarkTheme = () => document.documentElement.dataset.theme === 'dark'
 

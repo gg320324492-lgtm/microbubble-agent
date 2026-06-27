@@ -481,7 +481,8 @@ const headerTags = computed(() => {
   margin-top: 12px;
   padding: 10px 14px;
   background: var(--color-danger-bg);
-  border: 1px solid #fab6b6;
+  /* v77 P2.6-A: dark 模式下亮红边框过亮，改半透明 */
+  border: 1px solid rgba(247, 137, 137, 0.4);
   color: var(--color-danger);
   border-radius: 8px;
   font-size: 13px;
