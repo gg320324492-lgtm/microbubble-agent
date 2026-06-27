@@ -317,8 +317,4 @@ watch(
   background: var(--color-danger, #F56C6C);
   animation: pulse 1s infinite;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
 </style>

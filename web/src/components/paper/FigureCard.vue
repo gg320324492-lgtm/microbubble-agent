@@ -200,15 +200,27 @@ const statusLabel = (s) => ({
 .figure-skeleton {
   position: absolute;
   inset: 8px;
-  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
+  background: var(--color-bg-secondary);
   border-radius: 4px;
+  overflow: hidden;
 }
 
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+/* v77 P2: PAINT-free shimmer - 用伪元素 + transform 替代 background-position
+   全局 shimmer (variables.css:249) 用 translateX 滑动, GPU 友好.
+   伪元素宽度 50% 作为渐变带, 从容器左侧外滑到右侧外. */
+.figure-skeleton::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    var(--color-bg-hover) 50%,
+    transparent 100%);
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
 }
 
 .figure-zoom-hint {

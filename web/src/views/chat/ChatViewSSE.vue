@@ -509,10 +509,6 @@ onUnmounted(() => {
   width: 8px; height: 8px; border-radius: 50%; background: var(--color-danger);
   animation: pulse 1.5s infinite;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
 .msg-enter-active { transition: all 0.25s ease; }
 .msg-enter-from { opacity: 0; transform: translateY(8px); }
 .chat-header {
@@ -597,8 +593,6 @@ onUnmounted(() => {
 .typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--color-primary); animation: td 1.4s infinite; }
 .typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
 .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes td { 0%, 60%, 100% { transform: scale(1); opacity: 0.5; } 30% { transform: scale(1.4); opacity: 1; } }
-
 .welcome-hero { text-align: center; padding: 60px 20px 20px; }
 .hero-avatar { background: var(--gradient-welcome-hero); margin-bottom: 16px; }
 .welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }

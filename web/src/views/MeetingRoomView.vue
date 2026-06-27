@@ -103,7 +103,7 @@ import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 const router = useRouter()
 const route = useRoute()
 const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
-const { isActive: isGlobalRecorderActive } = useGlobalRecorder()
+const { start: startGlobalRecorder, isActive: isGlobalRecorderActive } = useGlobalRecorder()
 
 const recorderRef = ref(null)
 const meetingId = ref(null)
@@ -197,11 +197,18 @@ async function handleBack() {
 // 这样停止录音时能 POST 到正确的 /meetings/{id}/upload-audio
 // 桌面端原本 MeetingView.resumeRecording() 是开 dialog，现在改成导航到本页走同一逻辑
 //
-// 2026-06-27 修：三层防御修复"显示开始听会"bug。
+// 2026-06-27 v1 修：三层防御修复 pageTitle 显示"开始听会"bug。
 //   1) 优先用 query.resume（来自 MainLayout.goToRecording → MeetingView.resumeRecording
 //      显式传入），不依赖 useRecordingState 状态机
 //   2) 强制重新查后端（绕过 initialized 短路），保证 sessionStorage / 后端 / 模块级 ref 三者一致
 //   3) 兜底：useRecordingState 同步后的值覆盖到本地 ref（仅当本地还没值时）
+//
+// 2026-06-27 v2 修：自动启动 MediaRecorder 接续录音。
+//   v1 修好后 pageTitle 显示"正在听会（ID 140）"，但 AudioRecorder 按钮仍显示"开始听会"
+//   （因为 isActive() 检查 useGlobalRecorder.state，浏览器刷新后 state 回到 idle），
+//   用户需手动再点按钮 → UX 不符合"点胶囊即接续"的预期。
+//   本次 v2 在 query.resume 命中后自动 await startGlobalRecorder()，让 MediaRecorder 启动，
+//   AudioRecorder 状态从 idle → recording，按钮自动切到"录音中"+ 暂停/结束控件。
 onMounted(async () => {
   // 1) 优先用 query 显式 ID（不依赖 useRecordingState 状态机）
   const resumeFromQuery = route.query.resume
@@ -212,6 +219,15 @@ onMounted(async () => {
       // 同步到全局状态，保证顶部胶囊、MainLayout 状态一致
       startRecording(id, `正在听会（ID ${id}）`)
       console.warn('[MeetingRoomView] 优先使用 query.resume 初始化 meetingId =', id)
+
+      // v2: 自动启动 MediaRecorder 接续录音
+      try {
+        await startGlobalRecorder()
+        console.warn('[MeetingRoomView] 自动启动 MediaRecorder 成功, meetingId =', id)
+      } catch (err) {
+        console.warn('[MeetingRoomView] 自动启动 MediaRecorder 失败 (可能麦克风权限), 用户需手动点开始:', err.message)
+        ElMessage.warning('请点击"开始听会"按钮手动启动录音（可能需要授权麦克风权限）')
+      }
     }
   }
   // 2) 强制重新查后端（绕过 initialized 短路），保证 sessionStorage / 后端 / 模块级 ref 三者一致

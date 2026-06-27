@@ -344,8 +344,6 @@ watch(() => route.params.id, fetchMeeting)
 .status-dot.status-completed { background: var(--color-success, #67C23A); }
 .status-dot.status-cancelled { background: var(--color-info, #909399); }
 .status-dot.status-error { background: var(--color-danger, #F56C6C); }
-@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-
 /* Tab bar */
 .tab-bar {
   display: flex;
@@ -558,8 +556,6 @@ watch(() => route.params.id, fetchMeeting)
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-
 /* Header action */
 .header-action {
   width: 36px;

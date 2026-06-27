@@ -890,11 +890,6 @@ onMounted(async () => {
 .status-badge.status-error { background: var(--color-danger-bg); color: var(--color-danger); }
 .status-badge.status-error .status-dot { background: var(--color-danger); }
 
-@keyframes dot-pulse {
-  0%, 100% { opacity: 1; scale: 1; }
-  50% { opacity: 0.5; scale: 1.4; }
-}
-
 .hero-meta {
   display: flex;
   align-items: center;
@@ -1303,11 +1298,6 @@ onMounted(async () => {
 .fade-slide-up {
   animation: fadeSlideUp 300ms ease-out both;
 }
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 /* ====== 响应式 ====== */
 @media (max-width: 768px) {
   .meeting-detail { height: auto; }

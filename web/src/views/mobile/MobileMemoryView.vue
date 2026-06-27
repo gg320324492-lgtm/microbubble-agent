@@ -440,11 +440,6 @@ onMounted(() => {
 .skeleton-line.w-60 { width: 60%; }
 .skeleton-line.w-90 { width: 90%; }
 .skeleton-line.w-40 { width: 40%; }
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
-
 /* 分页 */
 .pagination {
   display: flex;

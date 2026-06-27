@@ -42,6 +42,7 @@
   --color-border-light: #F0F0F0;
   --color-bg-page: #F5F7FA;
   --color-bg-card: #FFFFFF;
+  --color-bg-card-rgb: 255, 255, 255; /* v77 P2: glass.css 玻璃态工具 6 主题自适应 */
   --color-bg-warm: #FFF8F5;
 
   /* ===== 侧边栏玻璃拟态 ===== */
@@ -64,6 +65,13 @@
   --gradient-stat-overdue: linear-gradient(135deg, #FEF0F0 0%, #FEE2E2 100%);
   --gradient-welcome-hero: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
   --color-shadow-primary: rgba(255, 122, 92, 0.30);
+
+  /* ===== v77 P2: 3 强调渐变（CLAUDE.md:4365-4372 plan 第 2 项）=====
+     6 主题自适应：默认 light orange, dark + 4 accent 各覆盖.
+     用法: background: var(--gradient-cta-button); 等 */
+  --gradient-cta-button: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  --gradient-progress-bar: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  --gradient-overlay-dark: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.6) 100%);
 
   /* ===== 圆角 ===== */
   --radius-sm: 4px;
@@ -279,6 +287,86 @@ body {
     rotate: 0deg;
     scale: 1;
   }
+}
+
+/* ===== v77 P2 动效治理：13 个权威 keyframe (2026-06-27) =====
+   33 处散落 keyframes 已统一到此处。任何组件需要动效时直接：
+     animation: <name> var(--duration-*) var(--ease-*) both;
+   禁止在 .vue scoped 块内重新定义同名 keyframe。
+   6 主题下表现一致（keyframe 不涉及颜色），主题感知靠 color-mix() + token。 */
+
+/* 通用：spinner / loader (13 处重复 → 1 处权威)
+   优先用独立 `rotate:` 绕开 webhint paint 警告 (CLAUDE.md:772 范例) */
+@keyframes spin {
+  to { rotate: 360deg; }
+}
+
+/* 通用：脉冲 (15 处重复 → 1 处权威, opacity + 独立 scale)
+   0%/100% 静默, 50% 高亮, 1.05x 放大 */
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; scale: 1; }
+  50% { opacity: 1; scale: 1.05; }
+}
+
+/* 通用：脉冲 - 危险态 (TaskTrash 倒计时) */
+@keyframes pulse-danger {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* 通用：脉冲 - 警告态 (TaskTrash 倒计时) */
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* 通用：脉冲 - 圆点 (typing dots 等待状态, 5 处重复 → 1 处) */
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.3); opacity: 1; }
+}
+
+/* 通用：typing dots 三点弹跳 (ChatViewSSE 等待中, 2 处重复 → 1 处)
+   注意保留 transform: scale() (CLAUDE.md:776 "保留 transform: translate*() 不动" 的扩展, scale 不在此列) */
+@keyframes td {
+  0%, 60%, 100% { transform: scale(1); opacity: 0.5; }
+  30% { transform: scale(1.4); opacity: 1; }
+}
+
+/* 通用：彩纸掉落 (ProcessingDialog + ProcessingSheet 完成态) */
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(400px) rotate(720deg); opacity: 0; }
+}
+
+/* 通用：完成弹跳 (ProcessingDialog 5 阶段全完成) */
+@keyframes done-bounce {
+  0% { scale: 0.3; }
+  60% { scale: 1.1; }
+  100% { scale: 1; }
+}
+
+/* 通用：按钮发光 (ProcessingDialog CTA) */
+@keyframes btn-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* 通用：录音 banner 弹入 (MainLayout 录音状态条) */
+@keyframes banner-in {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes banner-out {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-100%); opacity: 0; }
+}
+
+/* 通用：录音胶囊脉冲 (MainLayout 浮动胶囊) */
+@keyframes recording-pulse {
+  0%, 100% { scale: 1; opacity: 1; }
+  50% { scale: 1.3; opacity: 0.7; }
 }
 
 /* ===== 动画类 ===== */
@@ -534,6 +622,7 @@ body {
   --color-text-placeholder: #606266;
   --color-bg-page: #1a1d23;
   --color-bg-card: #2a2d35;
+  --color-bg-card-rgb: 42, 45, 53; /* v77 P2: dark 模式玻璃态背景 */
   --color-bg-warm: #2a2d35; /* v69: 新增 — 任务配对卡 / task-row hover 暖色背景 */
   --color-bg-hover: #3a3d45;
   --color-border: #3a3d45; /* v69: 新增 — 与 --color-border-base 同步 (light 是 #EBEEF5) */

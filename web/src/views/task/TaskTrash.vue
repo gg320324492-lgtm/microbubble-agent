@@ -506,15 +506,6 @@ function formatAutoDeleteExact(autoDeleteAt) {
   color: var(--color-text-placeholder);
 }
 
-@keyframes pulse-danger {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes pulse-warning {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
 </style>
 
 <style>

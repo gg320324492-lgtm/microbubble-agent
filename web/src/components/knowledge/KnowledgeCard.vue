@@ -511,16 +511,6 @@ const formatDate = (dateStr) => {
   animation: pulse 1.5s infinite;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 /* 响应式 */
 @media (max-width: 768px) {
   .knowledge-card {

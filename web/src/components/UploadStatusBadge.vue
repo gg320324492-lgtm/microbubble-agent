@@ -124,11 +124,6 @@ function onManualRetry() {
 .pulse-orange .dot { background: var(--color-accent); animation: pulse 1s infinite; }
 .pulse-red .dot { background: var(--color-danger); animation: pulse 0.8s infinite; }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; scale: 1; }
-  50% { opacity: 0.5; scale: 1.2; }
-}
-
 .badge-text { flex: 1; }
 
 .badge-action {

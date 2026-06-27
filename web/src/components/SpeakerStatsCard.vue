@@ -138,8 +138,4 @@ function formatWordCount(count) {
   animation: fadeSlideUp 300ms ease-out both;
 }
 
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 </style>

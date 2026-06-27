@@ -149,8 +149,4 @@ defineProps({
 .w-90 { width: 90%; }
 .w-100 { width: 100%; }
 
-@keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
 </style>

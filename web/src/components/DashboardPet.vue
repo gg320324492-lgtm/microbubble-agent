@@ -598,12 +598,6 @@ onUnmounted(() => {
   opacity: 0.8;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
 }
-@keyframes pet-walk {
-  0%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-6px); }
-  60% { transform: translateY(-2px); }
-}
-
 /* ===== 3D 身体 ===== */
 .body {
   position: absolute;
@@ -620,11 +614,6 @@ onUnmounted(() => {
     0 4px 8px rgba(0,0,0,0.06);
   animation: pet-breathe 4s ease-in-out infinite;
 }
-@keyframes pet-breathe {
-  0%, 100% { transform: scaleY(1) scaleX(1); }
-  50% { transform: scaleY(1.04) scaleX(0.97); }
-}
-
 /* ===== 3D 头（chibi大脸） ===== */
 .head {
   position: absolute;
@@ -734,11 +723,6 @@ onUnmounted(() => {
 }
 .heart-left { left: 6px; }
 .heart-right { right: 6px; }
-@keyframes pet-heartbeat {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.3); }
-}
-
 /* 睡觉眼 */
 .sleep-eye {
   position: absolute;
@@ -817,11 +801,6 @@ onUnmounted(() => {
 .leg-front-right { right: 8px; }
 .bunny.walking .leg-front-left { animation: pet-leg 0.35s ease-in-out infinite; }
 .bunny.walking .leg-front-right { animation: pet-leg 0.35s ease-in-out infinite 0.17s; }
-@keyframes pet-leg {
-  0%, 100% { transform: translateY(0) scaleY(1); }
-  50% { transform: translateY(-4px) scaleY(0.85); }
-}
-
 /* ===== 毛茸茸圆尾巴 ===== */
 .tail {
   position: absolute;
@@ -855,11 +834,6 @@ onUnmounted(() => {
   animation: pet-float 2s ease-in-out infinite;
   filter: drop-shadow(0 2px 4px rgba(255,180,0,0.4));
 }
-@keyframes pet-float {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50% { transform: translateX(-50%) translateY(-4px); }
-}
-
 /* ===== 对话气泡 ===== */
 .speech-bubble {
   position: absolute;
@@ -894,11 +868,6 @@ onUnmounted(() => {
   left: auto;
   right: 14px;
 }
-@keyframes pet-bubble-in {
-  from { opacity: 0; transform: translateY(6px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
 /* ===== 睡觉 Zzz ===== */
 .sleep-zzz {
   position: absolute;
@@ -909,11 +878,6 @@ onUnmounted(() => {
   pointer-events: none;
   animation: pet-zzz 2.5s ease-out infinite;
 }
-@keyframes pet-zzz {
-  0% { opacity: 1; transform: translate(0, 0) scale(0.8); }
-  100% { opacity: 0; transform: translate(8px, -20px) scale(1.2); }
-}
-
 /* ===== XP 进度条 ===== */
 .xp-bar-wrap {
   position: absolute;
@@ -961,21 +925,11 @@ onUnmounted(() => {
   position: absolute; font-size: 13px;
   animation: pet-lu-burst 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
-@keyframes pet-lu-burst {
-  0% { transform: translate(0, 0) scale(0); opacity: 1; }
-  50% { opacity: 1; }
-  100% { transform: translate(var(--lx), var(--ly)) scale(1.8); opacity: 0; }
-}
-
 /* ===== 爱心粒子 ===== */
 .particles { position: absolute; top: 35%; left: 35%; z-index: 30; pointer-events: none; }
 .particle {
   position: absolute; font-size: 11px;
   animation: pet-particle-up ease-out forwards;
-}
-@keyframes pet-particle-up {
-  0% { transform: translate(0, 0) scale(0.5); opacity: 1; }
-  100% { transform: translate(var(--dx), var(--dy)) scale(1.3); opacity: 0; }
 }
 </style>
 

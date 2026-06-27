@@ -228,11 +228,6 @@ defineExpose({
   animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .record-tip {
   font-size: 12px;
   color: var(--color-info);

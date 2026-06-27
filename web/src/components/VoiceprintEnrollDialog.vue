@@ -359,10 +359,6 @@ watch(() => props.modelValue, (v) => {
   color: var(--color-danger);
   font-weight: 600;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; scale: 1; }
-  50% { opacity: 0.5; scale: 1.2; }
-}
 .recorded-actions {
   display: flex;
   flex-direction: column;

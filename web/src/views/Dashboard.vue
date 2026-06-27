@@ -542,11 +542,6 @@ onMounted(() => {
   top: 20px; right: 200px;
   animation: pet-cloud-drift 25s ease-in-out infinite 5s;
 }
-@keyframes pet-cloud-drift {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(-30px); }
-}
-
 /* 太阳 */
 .welcome-sun {
   position: absolute;
@@ -558,11 +553,6 @@ onMounted(() => {
   pointer-events: none;
   animation: pet-sun-glow 3s ease-in-out infinite;
 }
-@keyframes pet-sun-glow {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
 /* 宠物区域 — 填充中间空间，给兔子最大活动范围 */
 .welcome-pets {
   flex: 1;
@@ -597,11 +587,6 @@ onMounted(() => {
   animation: pet-grass-sway 3s ease-in-out infinite;
   pointer-events: none;
 }
-@keyframes pet-grass-sway {
-  0%, 100% { transform: rotate(-3deg); }
-  50% { transform: rotate(3deg); }
-}
-
 .welcome-left { flex: 1; position: relative; z-index: 1; }
 .greeting { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); margin-bottom: 8px; }
 .date-time { display: flex; gap: 12px; margin-bottom: 12px; opacity: 0.9; font-size: var(--font-size-sm); }

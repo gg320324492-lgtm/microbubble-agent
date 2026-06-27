@@ -271,7 +271,6 @@ defineExpose({
 .recorder-status { font-size: 16px; font-weight: 600; color: var(--color-text-primary); display: flex; align-items: center; gap: 8px; justify-content: center; }
 .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-danger); animation: pulse 1.5s infinite; }
 .rec-dot.paused { animation: none; background: var(--color-warning); }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 .recorder-timer { font-size: 48px; font-weight: 300; font-family: 'SF Mono', 'Cascadia Code', monospace; color: var(--color-text-primary); margin: 20px 0; }
 .volume-bars { display: flex; gap: 6px; align-items: flex-end; justify-content: center; height: 44px; margin: 16px 0; }
 .vol-bar { width: 8px; background: var(--gradient-welcome-hero); border-radius: 4px; transition: height 0.1s; }
