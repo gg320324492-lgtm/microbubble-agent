@@ -186,11 +186,22 @@ function setElapsed(seconds) {
 /**
  * 2026-06-27 新增：从后端返回的 recording_started_at ISO 字符串恢复 elapsed。
  * 计算 (now - startedAt) / 1000 秒数并设给 elapsed。
+ *
+ * 时区修复（2026-06-27 v3.1）：后端存的 naive datetime 是 **UTC**（数据库
+ * current_setting('TIMEZONE')='UTC'），前端 `new Date(isoString)` 默认按
+ * 浏览器本地时区解析 → 北京时间差 +8 小时，elapsed 永远多算 8 小时。
+ * 修复：解析时强制追加 'Z' 后缀（UTC）→ `new Date(iso+Z).getTime()` 正确。
+ * 已带 'Z' 或 '+HH:MM' 偏移的字符串原样使用（不重复加）。
  * @param {string} isoDatetime - 后端 MeetingResponse.recording_started_at
  */
 function resumeFromStartedAt(isoDatetime) {
   if (!isoDatetime) return
-  const startMs = new Date(isoDatetime).getTime()
+  // v3.1 时区修复：naive datetime 视为 UTC，显式加 'Z' 后缀
+  let isoStr = String(isoDatetime).trim()
+  if (!isoStr.endsWith('Z') && !/[\-+]\d{2}:?\d{2}$/.test(isoStr)) {
+    isoStr = isoStr + 'Z'
+  }
+  const startMs = new Date(isoStr).getTime()
   if (Number.isNaN(startMs)) {
     console.warn('[useGlobalRecorder] resumeFromStartedAt: invalid datetime', isoDatetime)
     return
@@ -198,7 +209,7 @@ function resumeFromStartedAt(isoDatetime) {
   const elapsedSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000))
   setElapsed(elapsedSec)
   recorderStartEpoch = startMs
-  console.warn('[useGlobalRecorder] 恢复 elapsed =', elapsedSec, '秒 (from', isoDatetime, ')')
+  console.warn('[useGlobalRecorder] 恢复 elapsed =', elapsedSec, '秒 (from', isoStr, ')')
 }
 
 /**
