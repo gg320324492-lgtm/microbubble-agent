@@ -122,8 +122,8 @@ const onRename = async (session) => {
   cursor: pointer;
   transition: background 0.15s;
 }
-.session-item:hover { background: rgba(255, 122, 92, 0.08); }
-.session-item.active { background: rgba(255, 122, 92, 0.15); border-left: 3px solid var(--color-primary); }
+.session-item:hover { background: var(--color-primary-bg); }
+.session-item.active { background: var(--color-primary-bg); border-left: 3px solid var(--color-primary); }
 .session-title { font-size: 13px; font-weight: 500; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .session-meta { display: flex; gap: 8px; font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; }
 .session-preview { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -142,10 +142,10 @@ const onRename = async (session) => {
   border-bottom-color: var(--color-border-light);
 }
 [data-theme="dark"] .session-item:hover {
-  background: rgba(255, 122, 92, 0.18);
+  background: var(--color-primary-bg);
 }
 [data-theme="dark"] .session-item.active {
-  background: rgba(255, 122, 92, 0.22);
+  background: var(--color-primary-bg);
 }
 [data-theme="dark"] .session-title { color: var(--color-text-primary); }
 [data-theme="dark"] .session-meta { color: var(--color-text-secondary); }
