@@ -1,6 +1,6 @@
 <template>
   <footer
-    class="mobile-input-bar"
+    class="mobile-input-bar glass glass-lg"
     :style="{ paddingBottom: inputPaddingBottom }"
   >
     <!-- 选中预览 -->
@@ -180,17 +180,10 @@ watch(
      这样两个组件都在底部，input 不覆盖 TabBar */
   bottom: var(--tabbar-height, 56px);
   z-index: 1100; /* 高于 TabBar 内容（TabBar 容器 z=2500，input bar 视觉在上层） */
-  background: var(--color-bg-card);
+  /* v77 P2.5.1: backdrop-filter + 半透 background 由 .glass 工具类提供 */
   border-top: 1px solid var(--color-border);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
   /* 底部 padding 由 inputPaddingBottom prop 动态控制（键盘高度 + safe-area） */
   padding-top: 8px;
-}
-
-[data-theme="dark"] .mobile-input-bar {
-  background: rgba(42, 45, 53, 0.92);
-  border-top-color: var(--color-border-base);
 }
 
 .attachment-preview {
