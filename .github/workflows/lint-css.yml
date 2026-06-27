@@ -7,12 +7,18 @@ on:
       - "web/src/**"
       - "web/.stylelintrc.json"
       - "web/package.json"
+      - "web/package-lock.json"
+      - "web/playwright.config.js"
+      - "web/tests/**"
   push:
     branches: [main]
     paths:
       - "web/src/**"
       - "web/.stylelintrc.json"
       - "web/package.json"
+      - "web/package-lock.json"
+      - "web/playwright.config.js"
+      - "web/tests/**"
   # v76.4: 允许手动触发 baseline-guard, 输入 max-increase 临时放宽门禁
   # 用法: Actions → Lint CSS → Run workflow → 输入 max_increase + tracking_issue
   workflow_dispatch:
