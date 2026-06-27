@@ -396,8 +396,13 @@ async function onLiveCallEnd() {
 // 用户点击"正在听会"胶囊后看不到明确的"继续听会"提示。新建 MeetingRoomView.vue
 // 桌面端用 el-page-header 全屏布局 + onMounted 自动 checkActiveRecording()，
 // 与 MobileMeetingRoom 镜像对齐
+//
+// 2026-06-27 修：把 resumeId 通过 ?resume=X 显式传给 /meetings/room，
+// 即使 useRecordingState.checkActiveRecording() 因 initialized 短路没同步到 meetingId，
+// MeetingRoomView 也能从 query 拿到正确 ID 显示"正在听会（ID N）"
+// 修复场景：桌面端"正在听会"胶囊点击后跳到 /meetings/room 显示"开始听会"的 bug
 const resumeRecording = (meetingId) => {
-  router.replace('/meetings/room')
+  router.replace({ path: '/meetings/room', query: { resume: meetingId } })
 }
 
 const meetingForm = ref({

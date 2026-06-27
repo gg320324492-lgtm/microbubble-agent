@@ -91,7 +91,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, QuestionFilled } from '@element-plus/icons-vue'
 import axios from 'axios'
@@ -101,6 +101,7 @@ import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 
 const router = useRouter()
+const route = useRoute()
 const { startRecording, stopRecording, recordingMeetingId, checkActiveRecording } = useRecordingState()
 const { isActive: isGlobalRecorderActive } = useGlobalRecorder()
 
@@ -195,8 +196,27 @@ async function handleBack() {
 // 恢复模式：用户从浮动胶囊或其他页面跳回 → 复用 sessionStorage / 后端的 meetingId
 // 这样停止录音时能 POST 到正确的 /meetings/{id}/upload-audio
 // 桌面端原本 MeetingView.resumeRecording() 是开 dialog，现在改成导航到本页走同一逻辑
+//
+// 2026-06-27 修：三层防御修复"显示开始听会"bug。
+//   1) 优先用 query.resume（来自 MainLayout.goToRecording → MeetingView.resumeRecording
+//      显式传入），不依赖 useRecordingState 状态机
+//   2) 强制重新查后端（绕过 initialized 短路），保证 sessionStorage / 后端 / 模块级 ref 三者一致
+//   3) 兜底：useRecordingState 同步后的值覆盖到本地 ref（仅当本地还没值时）
 onMounted(async () => {
-  await checkActiveRecording()
+  // 1) 优先用 query 显式 ID（不依赖 useRecordingState 状态机）
+  const resumeFromQuery = route.query.resume
+  if (resumeFromQuery && !meetingId.value) {
+    const id = Number(resumeFromQuery)
+    if (!Number.isNaN(id) && id > 0) {
+      meetingId.value = id
+      // 同步到全局状态，保证顶部胶囊、MainLayout 状态一致
+      startRecording(id, `正在听会（ID ${id}）`)
+      console.warn('[MeetingRoomView] 优先使用 query.resume 初始化 meetingId =', id)
+    }
+  }
+  // 2) 强制重新查后端（绕过 initialized 短路），保证 sessionStorage / 后端 / 模块级 ref 三者一致
+  await checkActiveRecording({ force: true })
+  // 3) 兜底：useRecordingState 同步后的值覆盖到本地 ref（仅当本地还没值时）
   if (recordingMeetingId.value && !meetingId.value) {
     meetingId.value = recordingMeetingId.value
   }
