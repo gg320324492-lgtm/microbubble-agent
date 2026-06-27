@@ -7,13 +7,20 @@
 const props = defineProps({ block: { type: Object, required: true } })
 const items = (props.block.data || {}).items || []
 
-const statusColor = (s) => ({
-  proposed: '#909399', validated: '#67c23a', rejected: '#f56c6c',
-}[s] || '#909399')
+const statusColor = (s) => {
+  // v77 P2.5.3: getComputedStyle 读 token 实色值
+  const map = { proposed: '--color-text-secondary', validated: '--color-success', rejected: '--color-danger' }
+  const token = map[s] || '--color-text-secondary'
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+}
 const statusLabel = (s) => ({
   proposed: '提议中', validated: '已验证', rejected: '已否定',
 }[s] || s)
-const priorityColor = (p) => ({ high: '#f56c6c', medium: '#e6a23c', low: '#909399' }[p] || '#909399')
+const priorityColor = (p) => {
+  const map = { high: '--color-danger', medium: '--color-warning', low: '--color-text-secondary' }
+  const token = map[p] || '--color-text-secondary'
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+}
 </script>
 
 <template>
@@ -41,10 +48,10 @@ const priorityColor = (p) => ({ high: '#f56c6c', medium: '#e6a23c', low: '#90939
 </template>
 
 <style scoped>
-.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
-.hyp-item { padding: 10px 0; border-top: 1px solid #f0f1f3; }
+.hyp-item { padding: 10px 0; border-top: 1px solid var(--color-border-light); }
 .hyp-item:first-of-type { border-top: none; }
 .hyp-row1 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
 .status {
@@ -60,4 +67,12 @@ const priorityColor = (p) => ({ high: '#f56c6c', medium: '#e6a23c', low: '#90939
 .rationale { font-size: 12px; color: var(--color-text-regular); margin-top: 4px; line-height: 1.5; }
 .validation { font-size: 12px; color: var(--color-success); margin-top: 4px; padding: 6px 8px; background: var(--color-success-bg); border-radius: 4px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
+
+/* v77 P2.5.3: dark mode hover */
+[data-theme="dark"] .hyp-item:hover {
+  background: var(--color-bg-hover);
+  margin: 0 -8px;
+  padding: 10px 8px;
+  border-radius: 6px;
+}
 </style>

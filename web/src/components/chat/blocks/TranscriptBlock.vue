@@ -62,7 +62,7 @@ const goToMeeting = () => {
 </template>
 
 <style scoped>
-.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
 .icon { font-size: 18px; }
 .title { flex: 1; font-weight: 600; font-size: 14px; color: var(--color-primary); }
@@ -74,9 +74,18 @@ const goToMeeting = () => {
 .preview-line .speaker { color: var(--color-primary); font-weight: 500; }
 .more { font-size: 11px; color: var(--color-text-secondary); margin-top: 4px; text-align: center; }
 .full-transcript { margin-top: 8px; max-height: 400px; overflow-y: auto; padding: 4px 0; }
-.dialogue-line { padding: 6px 0; font-size: 13px; line-height: 1.7; border-bottom: 1px dashed #f0f1f3; }
+.dialogue-line { padding: 6px 0; font-size: 13px; line-height: 1.7; border-bottom: 1px dashed var(--color-border-light); }
 .dialogue-line:last-child { border-bottom: none; }
 .dialogue-line .speaker { display: inline-block; min-width: 80px; color: var(--color-primary); font-weight: 500; margin-right: 8px; }
 .dialogue-line .text { color: var(--color-text-primary); }
 .card-footer { margin-top: 8px; text-align: right; }
+
+/* v77 P2.5.3: dark mode 适配 */
+[data-theme="dark"] .preview {
+  /* light 下 --color-bg-warm 与 --color-bg-hover 同色（#f5f7fa），dark 下变 --color-bg-hover 区分外层卡片 */
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .dialogue-line:hover {
+  background: var(--color-bg-hover);
+}
 </style>

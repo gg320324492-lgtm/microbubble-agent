@@ -8,7 +8,12 @@ const props = defineProps({ block: { type: Object, required: true } })
 const members = (props.block.data || {}).members || []
 
 const roleLabel = (r) => ({ admin: '管理员', leader: '组长', member: '成员' }[r] || r || '成员')
-const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#909399' }[r] || '#909399')
+const roleColor = (r) => {
+  // v77 P2.5.3: getComputedStyle 读 token 实色值
+  const map = { admin: '--color-danger', leader: '--color-warning', member: '--color-text-secondary' }
+  const token = map[r] || '--color-text-secondary'
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+}
 </script>
 
 <template>
@@ -43,10 +48,10 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
 </template>
 
 <style scoped>
-.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
-.member-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #f0f1f3; }
+.member-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border-light); }
 .member-item:first-of-type { border-top: none; }
 .avatar {
   background: var(--gradient-welcome-hero);
@@ -64,4 +69,12 @@ const roleColor = (r) => ({ admin: '#f56c6c', leader: '#e6a23c', member: '#90939
 .skill { font-size: 11px; background: var(--color-primary-bg); color: var(--color-primary); padding: 1px 6px; border-radius: 8px; }
 .bio { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; line-height: 1.5; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
+
+/* v77 P2.5.3: dark mode 适配 */
+[data-theme="dark"] .member-item:hover {
+  background: var(--color-bg-hover);
+  margin: 0 -8px;
+  padding: 10px 8px;
+  border-radius: 6px;
+}
 </style>

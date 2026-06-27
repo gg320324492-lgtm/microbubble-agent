@@ -39,10 +39,10 @@ const goToKnowledge = (id) => { if (id) router.push(`/knowledge/${id}`) }
 </template>
 
 <style scoped>
-.rich-card { background: var(--color-bg-card); border: 1px solid #e8eaed; border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
+.rich-card { background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 10px; padding: 12px 14px; margin: 8px 0; box-shadow: var(--shadow-xs); }
 .card-header { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 10px; color: var(--color-primary); }
 .icon { font-size: 18px; }
-.ref-item { padding: 10px 0; border-top: 1px solid #f0f1f3; cursor: pointer; transition: background 0.15s; }
+.ref-item { padding: 10px 0; border-top: 1px solid var(--color-border-light); cursor: pointer; transition: background 0.15s; }
 .ref-item:first-of-type { border-top: none; }
 .ref-item:hover { background: var(--color-bg-warm); margin: 0 -8px; padding: 10px 8px; border-radius: 6px; }
 .ref-title { font-weight: 500; font-size: 14px; color: var(--color-primary); }
@@ -52,4 +52,9 @@ const goToKnowledge = (id) => { if (id) router.push(`/knowledge/${id}`) }
 .meta.score { color: var(--color-warning); font-weight: 500; }
 .tag { font-size: 11px; background: var(--color-bg-hover); color: var(--color-text-regular); padding: 1px 6px; border-radius: 8px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 13px; }
+
+/* v77 P2.5.3: dark mode hover */
+[data-theme="dark"] .ref-item:hover {
+  background: var(--color-bg-hover);
+}
 </style>
