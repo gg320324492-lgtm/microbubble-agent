@@ -596,7 +596,7 @@ onUnmounted(() => {
 .welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }
 .welcome-hero p { color: var(--color-text-regular); margin: 0 0 24px; }
 .quick-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-.quick-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--color-bg-card); border: 1px solid #e0e0e0; border-radius: 20px; cursor: pointer; transition: all 0.2s; }
+.quick-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 20px; cursor: pointer; transition: all 0.2s; }
 .quick-btn:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
 .qa-icon { font-size: 18px; }
 
@@ -604,7 +604,7 @@ onUnmounted(() => {
    blur 20px 降到 .glass-lg 默认 16px（dark mode 自动适配收益更大）
    border-top #eee 硬编码 → var(--color-border-light) */
 .input-bar { padding: 16px 20px; border-top: 1px solid var(--color-border-light); }
-.input-core { display: flex; align-items: center; gap: 8px; background: var(--color-bg-card); border: 1px solid #e0e0e0; border-radius: 20px; padding: 4px 8px; }
+.input-core { display: flex; align-items: center; gap: 8px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 20px; padding: 4px 8px; }
 .input-actions-left { display: flex; gap: 4px; }
 .input-textarea { flex: 1; border: none; outline: none; resize: none; font: inherit; padding: 8px; max-height: 120px; background: transparent; }
 .send-btn {

@@ -9,14 +9,14 @@
 
     <main class="login-main" :style="{ paddingTop: 'calc(60px + var(--sat))' }">
       <div class="logo-section">
-        <div class="logo-circle">
+        <div class="logo-circle glass-lg">
           <span class="logo-icon">💬</span>
         </div>
         <h1 class="logo-title">小气助手</h1>
         <p class="logo-subtitle">微纳米气泡课题组智能 Agent</p>
       </div>
 
-      <form class="login-form" @submit.prevent="handleLogin">
+      <form class="login-form glass-lg" @submit.prevent="handleLogin">
         <div class="form-field">
           <span class="field-icon">👤</span>
           <input
@@ -206,7 +206,8 @@ onMounted(() => {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
+  /* v77 P2.5.2: backdrop-filter + 半透 background 由 .glass-lg 工具类提供 (assets/glass.css)
+     删硬编码 rgba(255,255,255,0.95)，dark mode 不再撕裂白，6 主题自动跟随 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -232,11 +233,11 @@ onMounted(() => {
 
 /* 表单 */
 .login-form {
-  background: rgba(255, 255, 255, 0.95);
+  /* v77 P2.5.2: backdrop-filter + 半透 background 由 .glass-lg 工具类提供 (assets/glass.css)
+     删硬编码 rgba(255,255,255,0.95) + blur(8px)，dark mode 不再撕裂白 */
   border-radius: var(--radius-xl, 16px);
   padding: 24px;
   box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(8px);
 }
 
 .form-field {

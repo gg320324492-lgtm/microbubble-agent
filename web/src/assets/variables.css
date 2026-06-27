@@ -64,6 +64,8 @@
   --gradient-stat-done: linear-gradient(135deg, #F0F9EB 0%, #DCFCE7 100%);
   --gradient-stat-overdue: linear-gradient(135deg, #FEF0F0 0%, #FEE2E2 100%);
   --gradient-welcome-hero: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%);
+  /* v77 P2.5.2: KnowledgeCard .card-thumbnail 空态渐变（light/dark 自动切换） */
+  --gradient-thumbnail-empty: linear-gradient(135deg, #FAFAFA 0%, #F3F4F6 100%);
   --color-shadow-primary: rgba(255, 122, 92, 0.30);
 
   /* ===== v77 P2: 3 强调渐变（CLAUDE.md:4365-4372 plan 第 2 项）=====
@@ -660,6 +662,9 @@ body {
   --gradient-stat-done: rgba(133, 206, 97, 0.15);
   --gradient-stat-overdue: rgba(247, 137, 137, 0.15);
   --gradient-welcome-hero: linear-gradient(135deg, #E85A3A 0%, #D4903D 100%); /* 压暗降饱和 */
+
+  /* v77 P2.5.2: KnowledgeCard .card-thumbnail dark 模式 = 深灰渐变（与 #1a1d23 dark 主题色融合） */
+  --gradient-thumbnail-empty: linear-gradient(135deg, #2c2f37 0%, #1a1d23 100%);
 
   /* v69: 阴影 primary 颜色（pulsePrimary keyframe 用） */
   --color-shadow-primary: rgba(255, 122, 92, 0.4);
