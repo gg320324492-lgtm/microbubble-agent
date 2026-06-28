@@ -191,34 +191,12 @@
 
     <!-- 实时转写对话框（已废弃，录音机模式无需实时转写） -->
 
-    <!-- 会议纪要对话框 -->
-    <el-dialog v-model="showMinutesDialog" title="会议纪要" :width="isMobile ? '90vw' : '600px'" top="5vh">
-      <div v-if="currentMeeting" class="minutes-content">
-        <h3>{{ currentMeeting.title }}</h3>
-        <div class="minutes-time">
-          {{ formatDate(currentMeeting.start_time) }}
-        </div>
-
-        <div v-if="currentMeeting.summary" class="minutes-section">
-          <h4>会议摘要</h4>
-          <p>{{ currentMeeting.summary }}</p>
-        </div>
-
-        <div v-if="currentMeeting.key_points?.length" class="minutes-section">
-          <h4>讨论要点</h4>
-          <ul>
-            <li v-for="(point, i) in currentMeeting.key_points" :key="i">{{ point }}</li>
-          </ul>
-        </div>
-
-        <div v-if="currentMeeting.decisions?.length" class="minutes-section">
-          <h4>决议事项</h4>
-          <ul>
-            <li v-for="(decision, i) in currentMeeting.decisions" :key="i">{{ decision }}</li>
-          </ul>
-        </div>
-      </div>
-    </el-dialog>
+    <!-- 会议纪要对话框 — v77 P2.6-F.2: 抽到 MeetingMinutesDialog 子组件 -->
+    <MeetingMinutesDialog
+      v-model="showMinutesDialog"
+      :meeting="currentMeeting"
+      :is-mobile="isMobile"
+    />
 
     <!-- 听会对话框 -->
     <el-dialog
@@ -271,6 +249,7 @@ import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
+import MeetingMinutesDialog from '@/components/meeting/MeetingMinutesDialog.vue'
 import { Delete, Document, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -523,7 +502,7 @@ const viewMeeting = (meeting) => {
 const formatMonth = (date) => dayjs(date).add(8, 'hour').format('M月')
 const formatDay = (date) => dayjs(date).add(8, 'hour').format('D')
 const formatHour = (date) => dayjs(date).add(8, 'hour').format('HH:mm')
-const formatDate = (date) => formatDateTime(date)
+// v77 P2.6-F.2 Step 2: formatDate 删（纪要 dialog 搬到 MeetingMinutesDialog 内部有自己的 formatDate）
 
 onMounted(() => {
   fetchMeetings()
