@@ -258,7 +258,7 @@ defineExpose({
 .recorder-icon { font-size: 64px; margin-bottom: 20px; }
 .btn-start {
   padding: 16px 48px; font-size: 18px; font-weight: 700;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--color-bg-card);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--el-color-white);
   border: none; border-radius: 32px; cursor: pointer;
   transition: all 0.2s;
 }
@@ -281,7 +281,7 @@ defineExpose({
 }
 .btn-pause, .btn-resume { background: var(--color-border-light); color: var(--color-text-primary); }
 .btn-pause:hover, .btn-resume:hover { background: var(--color-border-light); }
-.btn-stop { background: var(--color-danger); color: var(--color-bg-card); }
+.btn-stop { background: var(--color-danger); color: var(--el-color-white); }
 .btn-stop:hover { background: var(--color-danger); }
 
 /* stopped */
@@ -295,7 +295,7 @@ defineExpose({
 .playback-controls { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 12px; }
 .btn-play {
   width: 40px; height: 40px; border-radius: 50%; border: none;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--color-bg-card);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--el-color-white);
   font-size: 16px; cursor: pointer;
 }
 .playback-time { font-size: 13px; color: var(--color-text-regular); font-family: 'SF Mono', 'Cascadia Code', monospace; }

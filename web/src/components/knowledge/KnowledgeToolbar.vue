@@ -30,7 +30,7 @@
         <el-icon><Upload /></el-icon>
         <span class="btn-text">上传文件</span>
       </el-button>
-      <el-button type="warning" @click="$emit('qa')">
+      <el-button type="primary" @click="$emit('qa')">
         <el-icon><MagicStick /></el-icon>
         <span class="btn-text">AI问答</span>
       </el-button>
@@ -183,13 +183,7 @@ const resetFilters = () => {
 .toolbar-actions .el-button--primary {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--color-bg-card);
-}
-
-.toolbar-actions .el-button--warning {
-  background: var(--color-warning);
-  border-color: var(--color-warning);
-  color: var(--color-bg-card);
+  color: var(--el-color-white);
 }
 
 .btn-text {

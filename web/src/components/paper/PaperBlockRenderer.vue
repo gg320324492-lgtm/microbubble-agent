@@ -477,7 +477,7 @@ function renderMarkdownTable(text) {
 }
 
 .qa-icon-answer {
-  background: linear-gradient(135deg, #3B82F6, #2563EB);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
 }
 
 .qa-content {

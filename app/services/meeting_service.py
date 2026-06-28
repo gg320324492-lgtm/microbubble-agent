@@ -503,7 +503,9 @@ async def find_related_meetings(
 ) -> List[Dict[str, Any]]:
     """跨会议相似度匹配（top-3）"""
     current = await db.get(Meeting, meeting_id)
-    if not current or not current.embedding:
+    # 必须用 is None 不用 not: pgvector embedding 是 numpy 数组,
+    # `not numpy_array` 会抛 "truth value ambiguous" (2026-06-28 教训: 会议 64 报 500)
+    if current is None or current.embedding is None:
         return []
 
     stmt = (

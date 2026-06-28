@@ -99,7 +99,9 @@ class DynamicTaxonomyService:
             select(Knowledge).where(Knowledge.id == knowledge_id)
         )
         target = result.scalar_one_or_none()
-        if not target or not target.embedding:
+        # 必须用 is None 不用 not: pgvector embedding 是 numpy 数组,
+        # `not numpy_array` 会抛 "truth value ambiguous" (2026-06-28 教训)
+        if target is None or target.embedding is None:
             return None
 
         # 找最相似的有分类的条目

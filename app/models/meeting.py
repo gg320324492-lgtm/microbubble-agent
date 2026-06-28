@@ -27,6 +27,11 @@ class Meeting(Base, TimestampMixin):
     transcript = Column(JSON)  # 实时转写内容
     transcript_polished = Column(JSON)  # 2026-06-02 L3 全文精润色结果（hangup 后 Claude Sonnet 全文润色）
     summary = Column(Text)  # 会议摘要
+
+    # 2026-06-27 P2-2: cluster_id 注入历史（便于 rollback 工具按时间戳回溯）
+    # 结构: [{ts, source, injector, n_segments, kmeans_k, cluster_to_name, notes}, ...]
+    # source: "inject_083" | "reprocess_meeting" | "purify" | "rollback"
+    cluster_id_history = Column(JSON, nullable=True, default=list)
     key_points = Column(ARRAY(String))  # 讨论要点
     decisions = Column(ARRAY(String))  # 决议事项
 

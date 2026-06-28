@@ -776,19 +776,19 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 .action-phone { color: var(--color-primary) !important; border-color: rgba(var(--color-primary-rgb),0.3) !important; }
-.action-phone:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.3); }
+.action-phone:hover { background: var(--color-primary) !important; color: var(--el-color-white) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.3); }
 
-.action-view { color: var(--color-primary) !important; border-color: rgba(64,158,255,0.3) !important; }
-.action-view:hover { background: var(--color-primary) !important; color: var(--color-bg-card) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(64,158,255,0.3); }
+.action-view { color: var(--color-primary) !important; border-color: rgba(var(--color-primary-rgb),0.3) !important; }
+.action-view:hover { background: var(--color-primary) !important; color: var(--el-color-white) !important; border-color: var(--color-primary) !important; box-shadow: 0 2px 8px rgba(var(--color-primary-rgb),0.3); }
 
 .action-generate { color: var(--color-success) !important; border-color: rgba(103,194,58,0.3) !important; }
-.action-generate:hover { background: var(--color-success) !important; color: var(--color-bg-card) !important; border-color: var(--color-success) !important; box-shadow: 0 2px 8px rgba(103,194,58,0.3); }
+.action-generate:hover { background: var(--color-success) !important; color: var(--el-color-white) !important; border-color: var(--color-success) !important; box-shadow: 0 2px 8px rgba(103,194,58,0.3); }
 
 .action-edit { color: var(--color-info) !important; border-color: rgba(144,147,153,0.3) !important; }
-.action-edit:hover { background: var(--color-info) !important; color: var(--color-bg-card) !important; border-color: var(--color-info) !important; box-shadow: 0 2px 8px rgba(144,147,153,0.3); }
+.action-edit:hover { background: var(--color-info) !important; color: var(--el-color-white) !important; border-color: var(--color-info) !important; box-shadow: 0 2px 8px rgba(144,147,153,0.3); }
 
 .action-delete { color: var(--color-danger) !important; border-color: rgba(245,108,108,0.3) !important; }
-.action-delete:hover { background: var(--color-danger) !important; color: var(--color-bg-card) !important; border-color: var(--color-danger) !important; box-shadow: 0 2px 8px rgba(245,108,108,0.3); }
+.action-delete:hover { background: var(--color-danger) !important; color: var(--el-color-white) !important; border-color: var(--color-danger) !important; box-shadow: 0 2px 8px rgba(245,108,108,0.3); }
 
 /* 纪要编辑列表 */
 .minutes-textarea :deep(.el-textarea__inner) { border-radius: var(--radius-md); border-color: var(--color-border); }
@@ -1016,7 +1016,7 @@ onMounted(() => {
   border-color: rgba(var(--color-primary-rgb), 0.4) !important;
 }
 [data-theme="dark"] .action-phone:hover {
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.4);
 }
 [data-theme="dark"] .action-view {
@@ -1026,7 +1026,7 @@ onMounted(() => {
 /* v77 P2.5.4: fix --color-primary (橙) → --color-info (蓝) - 之前 dark hover 蓝按钮跳橙是 bug */
 [data-theme="dark"] .action-view:hover {
   background: var(--color-info) !important;
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   box-shadow: 0 2px 8px rgba(64, 158, 255, 0.4);
 }
 [data-theme="dark"] .action-generate {
@@ -1035,7 +1035,7 @@ onMounted(() => {
 }
 [data-theme="dark"] .action-generate:hover {
   background: var(--color-success) !important;
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   box-shadow: 0 2px 8px rgba(103, 194, 58, 0.4);
 }
 [data-theme="dark"] .action-edit {
@@ -1044,7 +1044,7 @@ onMounted(() => {
 }
 [data-theme="dark"] .action-edit:hover {
   background: var(--color-info) !important;
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   box-shadow: 0 2px 8px rgba(144, 147, 153, 0.4);
 }
 [data-theme="dark"] .action-delete {
@@ -1053,7 +1053,7 @@ onMounted(() => {
 }
 [data-theme="dark"] .action-delete:hover {
   background: var(--color-danger) !important;
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   box-shadow: 0 2px 8px rgba(245, 108, 108, 0.4);
 }
 [data-theme="dark"] .template-picker {
@@ -1071,5 +1071,18 @@ onMounted(() => {
 }
 [data-theme="dark"] .meeting-info-bar {
   border-bottom-color: var(--color-border);
+}
+
+/* v77 P2.6-D: ocean / forest 主题 dialog header 装饰 + 模板卡选中态 */
+[data-accent="ocean"] .el-dialog__header,
+[data-accent="forest"] .el-dialog__header {
+  background: var(--color-primary-bg);
+  border-bottom: 1px solid var(--color-primary-border);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+}
+[data-theme="dark"][data-accent="ocean"] .el-dialog__header,
+[data-theme="dark"][data-accent="forest"] .el-dialog__header {
+  background: rgba(var(--color-primary-rgb), 0.10);
 }
 </style>

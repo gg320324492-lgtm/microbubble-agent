@@ -201,13 +201,13 @@ defineEmits([
 
 .category-active {
   background: var(--color-primary) !important;
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   border-color: var(--color-primary) !important;
 }
 
 .category-active .category-count {
   background: rgba(255, 255, 255, 0.2);
-  color: var(--color-bg-card);
+  color: var(--el-color-white);
 }
 
 .category-count {
