@@ -182,10 +182,15 @@ const resetFilters = () => {
 
 .toolbar-actions .el-button--primary {
   /* v77 P2.6-D 终极对齐: 复制 KnowledgeDashboard .category-active 视觉
-     - 圆角 + 加粗 + 紧凑 padding → 跟 "全部" chip 看着一样厚重
-     - !important 4 个属性 → 防 EP 默认 button 残留阴影/边框
-     - EP --el-color-primary 实色 (而非 var(--color-primary)) → 6 主题稳定 */
+     - 关键: 覆盖 EP 的 --el-button-bg-color CSS 变量 (不是 background-color 属性!)
+       EP 内部 .el-button 用 background-color: var(--el-button-bg-color)
+       之前我只设 background-color 被 EP 的 var(--el-button-bg-color) 覆盖 → 白底
+     - 加 background-image: none 防 EP 默认渐变
+     - 圆角 + 加粗 + 紧凑 padding → 跟 "全部" chip 视觉一致 */
+  --el-button-bg-color: var(--el-color-primary) !important;
+  --el-button-border-color: var(--el-color-primary) !important;
   background-color: var(--el-color-primary) !important;
+  background-image: none !important;
   border-color: var(--el-color-primary) !important;
   color: var(--el-color-white) !important;
   font-weight: 600 !important;
