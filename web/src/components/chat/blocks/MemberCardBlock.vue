@@ -8,11 +8,10 @@ const props = defineProps({ block: { type: Object, required: true } })
 const members = (props.block.data || {}).members || []
 
 const roleLabel = (r) => ({ admin: '管理员', leader: '组长', member: '成员' }[r] || r || '成员')
-const roleColor = (r) => {
-  // v77 P2.5.3: getComputedStyle 读 token 实色值
-  const map = { admin: '--color-danger', leader: '--color-warning', member: '--color-text-secondary' }
-  const token = map[r] || '--color-text-secondary'
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+// v77 P2.6-E.1: 收敛 roleColor 改成 class 拼接（_runtime-style-tokens.scss .role--*）
+const roleClass = (r) => {
+  const valid = ['admin', 'leader', 'member']
+  return valid.includes(r) ? r : 'member'
 }
 </script>
 
@@ -29,7 +28,7 @@ const roleColor = (r) => {
       <div class="member-info">
         <div class="member-row1">
           <span class="member-name">{{ m.name }}</span>
-          <span class="role" :style="{ color: roleColor(m.role) }">{{ roleLabel(m.role) }}</span>
+          <span class="role" :class="`role--${roleClass(m.role)}`">{{ roleLabel(m.role) }}</span>
           <span v-if="m.voice_enrolled" class="voice-badge">🎙️</span>
         </div>
         <div class="member-row2">

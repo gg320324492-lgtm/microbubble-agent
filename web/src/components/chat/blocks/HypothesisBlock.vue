@@ -29,8 +29,8 @@ const priorityClass = (p) => {
     </div>
     <div v-for="h in items" :key="h.id" class="hyp-item">
       <div class="hyp-row1">
-        <span class="status" :style="{ background: statusColor(h.status) }">{{ statusLabel(h.status) }}</span>
-        <span v-if="h.priority" class="priority" :style="{ color: priorityColor(h.priority) }">
+        <span class="status" :class="`hyp-status--${hypStatusClass(h.status)}`">{{ statusLabel(h.status) }}</span>
+        <span v-if="h.priority" class="priority" :class="`priority-dot--${priorityClass(h.priority)}`">
           {{ h.priority === 'high' ? '高优' : h.priority === 'medium' ? '中优' : '低优' }}
         </span>
         <span v-if="h.confidence != null" class="confidence">置信度 {{ (h.confidence * 100).toFixed(0) }}%</span>

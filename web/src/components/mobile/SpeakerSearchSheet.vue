@@ -58,7 +58,8 @@
               <div class="confidence-bar" :title="`置信度 ${Math.round(h.confidence * 100)}%`">
                 <div
                   class="confidence-fill"
-                  :style="{ width: `${Math.round(h.confidence * 100)}%`, background: confidenceColor(h.confidence) }"
+                  :class="confBarClass(h.confidence)"
+                  :style="{ width: `${Math.round(h.confidence * 100)}%` }"
                 />
                 <span class="confidence-text">{{ Math.round(h.confidence * 100) }}%</span>
               </div>
@@ -142,10 +143,11 @@ function formatDate(t) {
   return dayjs(t).format('YYYY-MM-DD HH:mm')
 }
 
-function confidenceColor(c) {
-  if (c >= 0.8) return 'var(--color-success, #67C23A)'
-  if (c >= 0.6) return 'var(--color-warning, #E6A23C)'
-  return 'var(--color-danger, #F56C6C)'
+// v77 P2.6-E.1: 收敛 confidenceColor 为 class 拼接（_runtime-style-tokens.scss .conf-bar--*）
+function confBarClass(c) {
+  if (c >= 0.8) return 'conf-bar--high'
+  if (c >= 0.6) return 'conf-bar--mid'
+  return 'conf-bar--low'
 }
 </script>
 
