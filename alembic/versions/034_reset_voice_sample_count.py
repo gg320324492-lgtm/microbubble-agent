@@ -19,7 +19,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "034_reset_voice_sample_count"
-down_revision: Union[str, None] = "033_mvh"
+down_revision: Union[str, None] = "031_search_log"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

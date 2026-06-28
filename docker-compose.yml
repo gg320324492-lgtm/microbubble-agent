@@ -28,6 +28,8 @@ services:
       - ./models/hf_cache:/root/.cache/huggingface
       - ./models/torch_hub:/root/.cache/torch/hub
       - ./models/modelscope:/root/.cache/modelscope
+      # 2026-06-27 P2-2: alembic 挂载 (新迁移即时生效无需 rebuild 25GB 镜像)
+      - ./alembic/versions:/app/alembic/versions
     env_file:
       - .env
     environment:

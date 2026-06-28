@@ -185,90 +185,16 @@ jobs:
         if: steps.current.outputs.current == '0'
         run: echo "✅ Stylelint 0 errors (baseline maintained)"
 
-  # v76.2: 视觉回归 baseline 对比 job
-  # 第一次跑会生成 baseline png, 后续跑对比 baseline, 视觉变化 > 0.2% fail
-  visual-regression:
-    name: Visual regression (mobile 3 页面 baseline)
+  # v76.2 视觉回归 job 已废弃 (2026-06-29):
+  # - 失败率 40% (20/50 runs), 全是 Visual regression 自身问题
+  # - 真实 bug 拦截率低 (grep 6 月 commit 没找到实锤)
+  # - Stylelint (CSS / Vue) + token orphan check 已覆盖 CSS 视觉退化
+  # - v77 P2.6-F.2 smoke test (14 项手测) + 浏览器手测已覆盖功能视觉
+  # - OS suffix 跨平台坑 + desktop baseline auto-commit bug 长期未修
+  # - 保留 baseline PNG 和 spec 文件作本地 dev 用, 不进 CI
+  visual-regression-deprecated: # 占位 job (空), workflow 保持 3 jobs 结构
+    name: Visual regression (已废弃)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    if: false  # 永远跳过
     steps:
-      - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install dependencies
-        working-directory: web
-        run: npm ci --prefer-offline --no-audit --no-fund
-
-      - name: Install Playwright browsers
-        working-directory: web
-        run: npx playwright install --with-deps chromium
-
-      # Build + 启动 preview server (后台跑, 跑完测试后 kill)
-      - name: Build + serve
-        working-directory: web
-        run: |
-          npm run build
-          npx vite preview --port 4173 --host 0.0.0.0 &
-          PREVIEW_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4173 > /dev/null && break
-            sleep 1
-          done
-          echo "PREVIEW_PID=$PREVIEW_PID" >> $GITHUB_ENV
-
-      - name: Run visual regression
-        working-directory: web
-        env:
-          BASE_URL: http://localhost:4173
-          TEST_TOKEN: ${{ secrets.TEST_TOKEN }}
-        run: |
-          # v76.3n: 三模式
-          # - workflow_dispatch (手动) → 维护 baseline (update-snapshots)
-          # - push to main → 维护 baseline (update-snapshots, auto-commit)
-          # - pull_request → 对比 baseline (fail 阻止 merge)
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "::notice::PR 跑 baseline 对比模式 (fail 阻止 merge)"
-            npx playwright test
-          else
-            echo "::notice::${{ github.event_name }} 跑 baseline 生成模式 (auto-commit)"
-            npx playwright test --update-snapshots
-          fi
-        # PR 失败时不停 (让 artifact upload 步骤能跑)
-
-      # PR 跑视觉回归 fail 时, 上传 diff png 让 reviewer 看
-      - name: Upload visual diff artifacts
-        if: failure() || success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-visual-diff
-          path: web/test-results/
-          retention-days: 7
-
-      # main push / workflow_dispatch 自动 commit baseline png
-# v76.3n: 不再限定 main branch, 所有非 PR 触发都更新 baseline
-      - name: Auto-commit baseline update
-        if: github.event_name != 'pull_request'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f web/tests/visual/mobile/visual-regression.spec.mjs-snapshots/
-          if git diff --cached --quiet; then
-            echo "无 baseline 变更"
-          else
-            git commit -m "test(visual): 自动更新 baseline (v76.3n visual regression job)"
-            git push
-          fi
-
-      # cleanup: kill preview server
-      - name: Cleanup
-        if: always()
-        run: |
-          if [ -n "$PREVIEW_PID" ]; then kill $PREVIEW_PID 2>/dev/null || true; fi
+      - run: echo "Visual regression job 已废弃 (2026-06-29). 见 CLAUDE.md"

@@ -198,6 +198,51 @@ def _build_plan_step_input(tool_name: str, intent, messages: list[dict]) -> dict
     return {}
 
 
+# 概念问 4 域 → 4 tool 硬下限 (#042 - 2026-06-28 chat agent 架构级集成)
+# 对齐 prompts.py _CROSS_DOMAIN_SYNTHESIS_SECTION 章节顺序 (知识 → 公式 → 假设 → 成员)
+# 与 #086 prompt 软规则协同: prompt 让 LLM 写"4 域综合", 代码保证 context 全
+CONCEPT_DOMAIN_TOOLS: tuple[str, ...] = (
+    "search_knowledge",   # 知识域
+    "list_formulas",      # 公式域
+    "list_hypotheses",    # 假设域
+    "query_members",      # 成员域
+)
+
+
+def _expand_concept_to_four_domain(planned: list[str]) -> list[str]:
+    """explain_concept 4 域代码强制 fan-out (#042)
+
+    规则:
+      1. 保留 planned 原顺序 + 原 tool (不删 LLM 已 planned 的, 包括非 4 域 tool)
+      2. 追加缺失的 4 域 tool, 按 CONCEPT_DOMAIN_TOOLS 顺序补
+      3. 截断到 settings.AGENT_PLAN_STEP_MAX (默认 5), 超出部分丢弃
+      4. 返回新 list (不修改原参数)
+
+    示例:
+      planned=['search_knowledge']
+        → 补 list_formulas + list_hypotheses + query_members = 4
+      planned=['search_knowledge', 'get_meeting_transcript']
+        → 保留 + 补 3 个 = 5
+      planned=['search_knowledge', 'list_formulas', 'query_members']
+        → 保留 + 补 1 个 list_hypotheses = 4
+      planned=['a', 'b', 'c', 'd', 'e', 'f']
+        → 已 ≥MAX → 截断为前 5 个
+
+    不变量:
+      - len(result) ≤ AGENT_PLAN_STEP_MAX
+      - 4 域 tool 全部或部分包含 (取决于 LLM 给了几个 + MAX 限制)
+      - 原 planned 中 tool 全部保留 (除非超出 MAX 被截断)
+    """
+    planned_set = set(planned)
+    expanded = list(planned)
+    for tool in CONCEPT_DOMAIN_TOOLS:
+        if tool not in planned_set:
+            expanded.append(tool)
+    # 截断到 MAX (保留 LLM 优先调的工具, 多余 4 域丢弃)
+    expanded = expanded[: settings.AGENT_PLAN_STEP_MAX]
+    return expanded
+
+
 def _extract_tool_uses(response) -> list[dict]:
     """从 Anthropic Message 响应中提取 tool_use 列表
 
@@ -547,6 +592,19 @@ class AgenticLoop:
                 and intent.confidence >= settings.AGENT_PLAN_STEP_MIN_CONFIDENCE):
                 # dedup (保留首次出现顺序) + 截断到 AGENT_PLAN_STEP_MAX
                 planned = list(dict.fromkeys(intent.suggested_tools))[: settings.AGENT_PLAN_STEP_MAX]
+
+                # ===== #042: explain_concept 4 域代码强制 fan-out =====
+                # 仅 explain_concept + flag 开启时, 检测缺 4 域 → 强制补齐
+                # (与 #086 prompt 软规则协同, prompt 让 LLM 写得好, 代码保证 context 全)
+                if (settings.AGENT_CROSS_DOMAIN_FANOUT_ENABLED
+                    and intent.category == IntentCategory.EXPLAIN_CONCEPT):
+                    expanded = _expand_concept_to_four_domain(planned)
+                    if len(expanded) > len(planned):
+                        logger.info(
+                            f"#042 fan-out: planned {len(planned)} → {len(expanded)} tools "
+                            f"(added: {[t for t in expanded if t not in planned]})"
+                        )
+                        planned = expanded
 
                 # [snapshot] plan_step pending (让前端先看到意图)
                 yield StreamEvent(

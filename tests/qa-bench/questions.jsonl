@@ -53,6 +53,11 @@
 {"id": "F03", "category": "concept", "question": "什么是溃灭？", "expect": {"intent_any": ["explain_concept", "search_info"]}}
 {"id": "F04", "category": "concept", "question": "超声法的优缺点", "expect": {"intent_any": ["explain_concept", "search_info"]}}
 {"id": "F05", "category": "concept", "question": "加压溶气法怎么工作？", "expect": {"intent_any": ["explain_concept", "search_info"]}}
+{"id": "D11", "category": "concept", "question": "什么是 DLVO 理论？", "expect": {"intent_any": ["explain_concept", "search_info"], "tools_must_all": ["search_knowledge", "list_formulas", "list_hypotheses", "query_members"]}}
+{"id": "D12", "category": "concept", "question": "解释一下亨利常数", "expect": {"intent_any": ["explain_concept", "search_info"], "tools_must_all": ["search_knowledge", "list_formulas", "list_hypotheses", "query_members"]}}
+{"id": "D13", "category": "concept", "question": "什么是 Smoluchowski 公式？", "expect": {"intent_any": ["explain_concept", "search_info"], "tools_must_all": ["search_knowledge", "list_formulas", "list_hypotheses", "query_members"]}}
+{"id": "D14", "category": "concept", "question": "zeta 电位如何测量？", "expect": {"intent_any": ["explain_concept", "search_info"], "tools_must_all": ["search_knowledge", "list_formulas", "list_hypotheses", "query_members"]}}
+{"id": "D15", "category": "concept", "question": "微纳米气泡的稳定性原理是什么？", "expect": {"intent_any": ["explain_concept", "search_info"], "tools_must_all": ["search_knowledge", "list_formulas", "list_hypotheses", "query_members"]}}
 {"id": "G01", "category": "multiturn", "question": "杨慈", "expect": {"intent": "search_info", "tools": ["get_member_profile"]}}
 {"id": "G02", "category": "multiturn", "question": "她的研究方向", "expect": {"intent": "explain_concept"}}
 {"id": "G03", "category": "multiturn", "question": "她有什么任务？", "expect": {"intent": "data_query", "tools": ["query_tasks"]}}

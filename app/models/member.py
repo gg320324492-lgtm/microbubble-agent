@@ -38,6 +38,12 @@ class Member(Base, TimestampMixin):
     voice_enrolled_at = Column(DateTime)  # 声纹录入时间
     voice_sample_count = Column(Integer, default=0)  # 采样次数
 
+    # 声纹确认 (2026-06-28 增量 Cross-Anchor 策略):
+    # voice_confirmed_at IS NOT NULL = anchor (永不再修改 embedding)
+    voice_confirmed_at = Column(DateTime(timezone=True), nullable=True)  # 用户确认时间
+    voice_confirmed_by = Column(String(50), nullable=True)  # 确认者 (username 或 "user")
+    voice_confirmed_meeting_id = Column(Integer, nullable=True)  # 触发的会议 ID (audit)
+
     # 关系
     assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assignee_id")
     created_tasks = relationship("Task", back_populates="creator", foreign_keys="Task.created_by")

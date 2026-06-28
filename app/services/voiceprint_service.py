@@ -16,6 +16,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.member import Member
 
 logger = logging.getLogger("microbubble.voiceprint")
 
@@ -248,6 +249,8 @@ class VoiceprintService:
             # 加权平均（已有的权重更大）
             weight = member.voice_sample_count / (member.voice_sample_count + 1)
             embedding = old * weight + embedding * (1 - weight)
+            # 2026-06-28 修复: 加权平均后归一化 (避免 norm 累加导致后续 cosine 距离失真)
+            embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
 
         member.voice_embedding = embedding.tolist()
         member.voice_sample_count = (member.voice_sample_count or 0) + 1
@@ -365,6 +368,67 @@ class VoiceprintService:
             }
             for m in members
         ]
+
+    async def get_anchor_members(self, db: AsyncSession) -> List[Member]:
+        """获取已 confirmed 的 anchor 成员 (增量 Cross-Anchor 流程专用)
+
+        Anchor 定义: voice_confirmed_at IS NOT NULL 的成员
+        性质: embedding 永不再修改 (strict pipeline 跳过)
+
+        Returns:
+            List[Member]: anchor 成员列表 (已 .scalars().all() 取值)
+        """
+        from app.models.member import Member
+        result = await db.execute(
+            select(Member).where(
+                Member.voice_embedding.isnot(None),
+                Member.voice_confirmed_at.isnot(None),
+            ).order_by(Member.voice_confirmed_at)
+        )
+        return list(result.scalars().all())
+
+    async def identify_speaker_anchored(
+        self, db: AsyncSession, audio: np.ndarray
+    ) -> Tuple[Optional[str], Optional[int], float]:
+        """只跟已 confirmed 的 anchor 比较 (incremental cross-anchor 流程)
+
+        与 identify_speaker 的区别:
+        - identify_speaker: 跟所有 enrolled members 比 (旧)
+        - identify_speaker_anchored: 只跟 anchor (voice_confirmed_at IS NOT NULL) 比 (新)
+
+        Returns:
+            Tuple[name, member_id, confidence] - 同 identify_speaker 格式
+            - 如果最近 anchor cos_dist < MATCH_THRESHOLD: 返回该 anchor
+            - 否则: (None, None, 1 - min_dist) 表示"未识别" (新成员)
+
+        用途:
+            incremental_anchor.py 主流程, 用已确认的 anchor 识别会议段,
+            减少误识 (不与未确认成员 embedding 比较, 避免污染误判)
+        """
+        from app.models.member import Member
+
+        self._load_pipeline()
+        emb = self.extract_embedding(audio)
+        anchors = await self.get_anchor_members(db)
+
+        if not anchors:
+            return None, None, 0.0
+
+        emb_np = np.asarray(emb, dtype=np.float32)
+        distances = []
+        for m in anchors:
+            m_emb = np.asarray(m.voice_embedding, dtype=np.float32)
+            cd = float(cosine(emb_np, m_emb))
+            distances.append((m, cd))
+
+        distances.sort(key=lambda x: x[1])
+        nearest, dist = distances[0]
+        confidence = float(1.0 - min(dist, 1.0))
+
+        if dist < MATCH_THRESHOLD:
+            return nearest.name, nearest.id, confidence
+        else:
+            return None, None, confidence
 
 
 # 全局单例

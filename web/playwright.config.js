@@ -16,6 +16,12 @@ import { defineConfig, devices } from '@playwright/test'
  *   第一次跑: 生成 tests/visual/mobile/screenshots/{name}-{viewport}.png 作 baseline
  *   后续跑:  重新截图, 像素 diff 超过 maxDiffPixelRatio (默认 0.2 = 20%) 报错
  *   故意改:  --update-snapshots 更新 baseline 并 git commit
+ *
+ * v77 状态 (2026-06-29): CI 中已禁用 visual-regression job (40% 失败率, 价值低于成本)
+ *   - baseline png 已 git rm (保留 spec 作本地 dev 用)
+ *   - desktop project + spec 已删 (长期 workflow bug 未修)
+ *   - mobile project + spec 保留 (本地 dev 用)
+ *   - CLAUDE.md 章节 "v76 视觉回归废弃决策" 记录原因
  */
 export default defineConfig({
   testDir: './tests/visual',
@@ -28,7 +34,7 @@ export default defineConfig({
   workers: 1, // 视觉回归对像素严格, 单 worker 避免竞态
   reporter: process.env.CI ? 'github' : 'list',
 
-  // baseline 对比核心配置
+  // baseline 对比核心配置 (本地 dev 用, CI 已禁用)
   expect: {
     toHaveScreenshot: {
       // 允许 0.2% 像素差异 (anti-aliasing / 字体 sub-pixel 渲染抖动)
@@ -50,6 +56,7 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
 
+  // v77 (2026-06-29): 仅保留 mobile project (本地 dev 用), desktop 已废弃
   projects: [
     {
       name: 'mobile-iphone14',
@@ -65,10 +72,12 @@ export default defineConfig({
       },
       testMatch: /mobile\/.*\.spec\.mjs/,
     },
-    {
-      name: 'desktop-chrome',
-      use: { ...devices['Desktop Chrome'] },
-      testMatch: /desktop\/.*\.spec\.mjs/,
-    },
+    // v77 废弃: desktop-chrome project (workflow bug 长期未修, desktop baseline 永远 fail)
+    // 如本地需要 desktop 视觉回归调试, 手动注释下方代码块并提供 -linux baseline
+    // {
+    //   name: 'desktop-chrome',
+    //   use: { ...devices['Desktop Chrome'] },
+    //   testMatch: /desktop\/.*\.spec\.mjs/,
+    // },
   ],
 })
