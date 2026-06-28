@@ -253,6 +253,18 @@ def evaluate_expectation(
                 "note": "tools_any — 任一即可",
             })
 
+    # tools_must_all（全部必须，hard fail, #042 fan-out 门禁）
+    if "tools_must_all" in expect:
+        must_tools = set(expect["tools_must_all"])
+        actual_tools = set(actual.get("tools_called", []))
+        missing = sorted(must_tools - actual_tools)
+        if missing:
+            issues.append({
+                "type": "missing_required_tools",  # 不同于 missing_tools — 区分 hard fail
+                "missing": missing,
+                "note": "tools_must_all — 全部必须 (#042 fan-out 门禁)",
+            })
+
     # must_contain
     if "must_contain" in expect:
         content = actual.get("content", "")

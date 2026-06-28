@@ -107,6 +107,57 @@ class ChatEngine:
             # intent 分类失败不阻塞（降级已在 classify_intent 内部处理）
             logger.warning(f"intent classification failed at top-level: {e}")
 
+        # 1b. Intent-Aware Gate (#001b - 2026-06-28 chat agent 质量优化)
+        # 根据意图分类附加对应回复指南 section：
+        # - CASUAL_CHAT → ≤50 字简短回复（避免"你好"被硬塞 300 字）
+        # - DATA_QUERY/EXECUTE_ACTION → 直接展示工具结果，不展开
+        # - SEARCH_INFO/EXPLAIN_CONCEPT/RECOMMEND_PERSON → ≥300 字 + 三段式 + 引用
+        # feature flag AGENT_INTENT_AWARE_PROMPTS 控制开关，便于紧急回滚
+        if settings.AGENT_INTENT_AWARE_PROMPTS:
+            from app.agent.prompts import get_intent_aware_guidelines
+            intent_category = intent.category.value if intent else None
+            intent_section = get_intent_aware_guidelines(intent_category)
+            if intent_section:
+                system = system + "\n" + intent_section
+                logger.debug(
+                    f"intent-aware gate applied: intent={intent_category}, "
+                    f"added {len(intent_section)} chars"
+                )
+
+        # 1c. Primitive Recognition Gate (#083 - 2026-06-28 chat agent 质量优化)
+        # 仅在深度场景（search_info / explain_concept / recommend_person）追加
+        # 5 大原意识别 section，引导 LLM 先识别用户输入属于 任务/会议/知识/公式/假设
+        # 中的哪一种，再决定调什么工具、如何回复。
+        # 闲聊/数据场景不挂这个 section（避免干扰快速回答）。
+        # feature flag AGENT_PRIMITIVE_RECOGNITION 控制开关，便于紧急回滚
+        if settings.AGENT_PRIMITIVE_RECOGNITION and intent_category in {
+            "search_info", "explain_concept", "recommend_person"
+        }:
+            from app.agent.prompts import get_primitive_recognition_section
+            primitive_section = get_primitive_recognition_section()
+            if primitive_section:
+                system = system + "\n" + primitive_section
+                logger.debug(
+                    f"primitive-recognition gate applied: intent={intent_category}, "
+                    f"added {len(primitive_section)} chars"
+                )
+
+        # 1d. Cross-Domain Synthesis Gate (#086 - 2026-06-28 chat agent 质量优化)
+        # 仅在 explain_concept 场景触发, 强制 LLM 调 4 工具跨 4 域
+        # (知识 + 公式 + 假设 + 成员), 让概念问回答覆盖 5 维度
+        # (原理+公式+我们的研究+我们的假设+我们的研究人员)
+        # 不挂 search_info (找具体论文/资料) 和 recommend_person (找人) 场景
+        # feature flag AGENT_CROSS_DOMAIN_SYNTHESIS 控制开关
+        if settings.AGENT_CROSS_DOMAIN_SYNTHESIS and intent_category == "explain_concept":
+            from app.agent.prompts import get_cross_domain_synthesis_section
+            cross_domain_section = get_cross_domain_synthesis_section()
+            if cross_domain_section:
+                system = system + "\n" + cross_domain_section
+                logger.debug(
+                    f"cross-domain-synthesis gate applied: intent={intent_category}, "
+                    f"added {len(cross_domain_section)} chars"
+                )
+
         # 2. Agentic Loop + Trace 持久化（async with 异常安全）
         trace = TraceCollector(
             user_id=user_id,

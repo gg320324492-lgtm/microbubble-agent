@@ -154,6 +154,7 @@ class Settings(BaseSettings):
     AGENT_PLAN_STEP_ENABLED: bool = True           # #041: Phase 0 强制 plan_step 总开关 (Haiku suggested_tools → agentic_loop 主动 dispatch)
     AGENT_PLAN_STEP_MAX: int = 5                   # #041: Phase 0 最多 dispatch 几个 tool (建议 1-3 避免过度调度)
     AGENT_PLAN_STEP_MIN_CONFIDENCE: float = 0.5    # #041: intent confidence < 此值不挂计划 (避免 hallucinated tools)
+    AGENT_CROSS_DOMAIN_FANOUT_ENABLED: bool = True  # #042: explain_concept 时代码层强制补齐 4 域工具 (不依赖 LLM 自觉, 与 #086 prompt 软规则协同)
 
     class Config:
         env_file = ".env"

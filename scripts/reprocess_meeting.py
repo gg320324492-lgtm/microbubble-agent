@@ -389,6 +389,24 @@ async def apply_to_db(meeting_id: int, new_speaker: list, backup: bool = True, w
             db.add(MeetingParticipant(meeting_id=meeting_id, member_id=member.id, role="participant"))
             result["added_participants"].append(f"{name} (id={member.id})")
 
+        # 2026-06-27 P2-2: 追加 cluster_id_history entry (便于 rollback 工具按时间戳回溯)
+        history_entry = {
+            "ts": datetime.utcnow().isoformat(),
+            "source": "reprocess_meeting",
+            "injector": "scripts/reprocess_meeting.py",
+            "n_segments": len(new_t_list),
+            "n_real_speakers": len(real_speakers),
+            "real_speakers": real_speakers,
+            "speaker_mapping": dict(new_mapping),
+            "notes": "P0/P1 优化后 apply_to_db 重写 transcript.speaker (含 cluster_id 注入)",
+        }
+        # 重新 fetch m (上面 mutate 过了)
+        m = await db.get(Meeting, meeting_id)
+        if m.cluster_id_history is None:
+            m.cluster_id_history = []
+        m.cluster_id_history.append(history_entry)
+        result["updated_fields"].append(f"cluster_id_history (+1 entry, now {len(m.cluster_id_history)})")
+
         await db.commit()
         result["real_speakers"] = real_speakers
 
@@ -569,8 +587,19 @@ async def main():
     parser.add_argument("--skip-backup", action="store_true", help="不备份旧字段（用于调试）")
     parser.add_argument("--workdir", type=str, default="/tmp", help="中间结果输出目录")
     parser.add_argument("--learn", action="store_true",
-                        help="apply 后自动调 learn_from_verified_segments, 把 verified 段累积到 member.voice_embedding (下次识别率提升)")
+                        help="apply 后自动调 learn_from_verified_segments, 把 verified 段累积到 member.voice_embedding. "
+                             "⚠️ 2026-06-27 用户决策: 自动学习永远删除, 默认 False. "
+                             "只有用户主动找我'现在优化某 member 声纹'时才用, 且必须先 dry-run.")
     args = parser.parse_args()
+
+    if args.learn:
+        logger.warning(
+            "=" * 80 + "\n"
+            "⚠️ --learn 启用: 自动学习将累积 verified 段到 member.voice_embedding.\n"
+            "   2026-06-27 用户决策: 自动学习永远删除, 默认 False.\n"
+            "   只有用户主动要求时才用, 且必须先 dry-run 确认影响范围.\n"
+            "=" * 80
+        )
 
     steps = set(args.steps.split(","))
     meeting_id = args.meeting
