@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip } from 'element-plus'
 import MeetingCreateDialog from '../MeetingCreateDialog.vue'
 
 // Mock useMeeting composable
@@ -24,6 +25,11 @@ describe('MeetingCreateDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  // 全局注册 Element Plus 组件 (jsdom 不挂载 el-* 组件导致 button 找不到)
+  const globalComponents = {
+    ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip,
+  }
 
   it('组件正确挂载', () => {
     const wrapper = mount(MeetingCreateDialog, {
@@ -88,5 +94,63 @@ describe('MeetingCreateDialog', () => {
     })
     expect(wrapper.props('editingId')).toBe(1)
     expect(wrapper.props('editingData')).toEqual(editingData)
+  })
+
+  // v77 P2.6-F.3: '存为新模板' 按钮 + emit save-template 测试
+  it('存为新模板功能在新建模式触发 emit (按钮 v-if !editingId)', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: { visible: true, editingId: null },
+    })
+    wrapper.vm.form.title = '测试会议'
+    wrapper.vm.onSaveAsTemplate()
+    expect(wrapper.emitted('save-template'), '新建模式应触发 save-template emit').toBeTruthy()
+  })
+
+  it('存为新模板功能在编辑模式不触发 (按钮 v-if 编辑模式隐藏)', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: { visible: true, editingId: 5 },
+    })
+    wrapper.vm.form.title = '测试会议'
+    wrapper.vm.onSaveAsTemplate()
+    expect(wrapper.emitted('save-template'), '编辑模式不应触发 save-template emit').toBeFalsy()
+  })
+
+  it('点击存为新模板 → emit save-template 携带 form 数据', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: { visible: true, editingId: null },
+    })
+    // 设置 form 数据 (通过 vm 直接访问, 绕开 jsdom el-input 渲染)
+    wrapper.vm.form.title = '周三组会'
+    wrapper.vm.form.description = '周内复盘'
+    wrapper.vm.form.agenda = ['议题 1', '议题 2', '']  // 含空字符串验证 filter
+    wrapper.vm.form.participants = [1, 2]
+    wrapper.vm.form.location = '会议室 A'
+    // 调用 onSaveAsTemplate (直接调方法比 click 按钮更可靠)
+    wrapper.vm.onSaveAsTemplate()
+    await wrapper.vm.$nextTick()
+    // 验证 emit
+    const events = wrapper.emitted()
+    expect(events['save-template'], '应 emit save-template').toBeTruthy()
+    expect(events['save-template'][0][0]).toMatchObject({
+      name: '周三组会',
+      title_template: '周三组会',
+      description: '周内复盘',
+      default_duration_minutes: 60,
+      default_location: '会议室 A',
+      default_participant_ids: [1, 2],
+    })
+    // agenda 应过滤空字符串
+    expect(events['save-template'][0][0].agenda).toEqual(['议题 1', '议题 2'])
+  })
+
+  it('无标题时点击存为新模板 → 不 emit + 弹 warning', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: { visible: true, editingId: null }
+    })
+    wrapper.vm.form.title = ''
+    wrapper.vm.onSaveAsTemplate()
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['save-template'], '无标题不应 emit').toBeFalsy()
   })
 })

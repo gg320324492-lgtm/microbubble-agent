@@ -253,6 +253,12 @@ const onSubmit = async () => {
 // 将当前 form 数据转换为 MeetingTemplateDialog editingTemplate 格式, emit 'save-template'
 // 父 MeetingView 接收后打开 MeetingTemplateDialog (editingTemplate = templateData, 走编辑模式)
 const onSaveAsTemplate = () => {
+  // 双重防御: v-if !editingId 在 UI 层隐藏按钮, 函数层再检查一次
+  // 防止程序化调用 (如 console / 测试 / 快捷键) 在编辑模式下意外触发
+  if (props.editingId) {
+    ElMessage.warning('编辑模式下不能保存为模板')
+    return
+  }
   if (!form.value.title?.trim()) {
     ElMessage.warning('请先填写会议主题, 再保存为模板')
     return
