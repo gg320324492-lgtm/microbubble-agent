@@ -7,19 +7,17 @@
 const props = defineProps({ block: { type: Object, required: true } })
 const items = (props.block.data || {}).items || []
 
-const statusColor = (s) => {
-  // v77 P2.5.3: getComputedStyle 读 token 实色值
-  const map = { proposed: '--color-text-secondary', validated: '--color-success', rejected: '--color-danger' }
-  const token = map[s] || '--color-text-secondary'
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+// v77 P2.6-E.1: 收敛 statusColor/priorityColor 改成 class 拼接
+const hypStatusClass = (s) => {
+  const valid = ['proposed', 'validated', 'rejected']
+  return valid.includes(s) ? s : 'proposed'
 }
 const statusLabel = (s) => ({
   proposed: '提议中', validated: '已验证', rejected: '已否定',
 }[s] || s)
-const priorityColor = (p) => {
-  const map = { high: '--color-danger', medium: '--color-warning', low: '--color-text-secondary' }
-  const token = map[p] || '--color-text-secondary'
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+const priorityClass = (p) => {
+  const valid = ['high', 'medium', 'low']
+  return valid.includes(p) ? p : 'low'
 }
 </script>
 

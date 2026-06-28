@@ -33,11 +33,11 @@ const goToMeeting = (id) => {
   if (id) router.push(`/meetings/${id}`)
 }
 
-const statusColor = (s) => {
-  // v77 P2.5.3: getComputedStyle 读 token 实色值（dark 模式下自动切换到 #85ce61/#a8aab0/#f78989/#eebe77）
-  const map = { completed: '--color-success', scheduled: '--color-text-secondary', recording: '--color-danger', processing: '--color-warning' }
-  const token = map[s] || '--color-text-secondary'
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+const statusClass = (s) => {
+  // v77 P2.6-E.1: 收敛 statusColor() 改成 class 拼接（_runtime-style-tokens.scss .status--* / .status-dot--*）
+  // 颜色映射与原 runtime :style 完全一致 (scoped dark mode 适配在 token 自身)
+  const valid = ['scheduled', 'in_progress', 'completed', 'cancelled', 'recording', 'processing']
+  return valid.includes(s) ? s : 'scheduled'
 }
 
 const statusLabel = (s) => {
@@ -54,13 +54,13 @@ const statusLabel = (s) => {
     </div>
     <div v-for="m in meetings" :key="m.id || m.meeting_id" class="meeting-item" @click="goToMeeting(m.id || m.meeting_id)">
       <div class="meeting-title">
-        <span class="status-dot" :style="{ background: statusColor(m.status) }" />
+        <span class="status-dot" :class="`status-dot--${statusClass(m.status)}`" />
         {{ m.title }}
       </div>
       <div class="meeting-meta">
         <span class="time">{{ formatDate(m.start_time) }}</span>
         <span v-if="m.location" class="location">📍 {{ m.location }}</span>
-        <span v-if="m.status" class="status" :style="{ color: statusColor(m.status) }">{{ statusLabel(m.status) }}</span>
+        <span v-if="m.status" class="status" :class="`status--${statusClass(m.status)}`">{{ statusLabel(m.status) }}</span>
       </div>
       <div v-if="m.summary" class="meeting-summary">{{ m.summary.slice(0, 100) }}{{ m.summary.length > 100 ? '...' : '' }}</div>
       <div v-if="m.agenda_summary" class="meeting-agenda">📋 {{ m.agenda_summary }}</div>
