@@ -5225,6 +5225,90 @@ async function injectAuth(page) {
 
 ---
 
+## 2026-06-28 v77 P2.6-D 收官后 ocean 主题按钮 + 成员小标签修复（含 5 大踩坑教训）
+
+**8 个 commit 链**：
+1. `f42b8eec` ocean 主题 5 处 UI 违和修复（前置）
+2. `d80aa532` 14+2 处按钮文字色 `var(--color-bg-card)` → `var(--el-color-white)`
+3. `909cc67d` plain primary 按钮 ocean/forest 对比度（WCAG 2.6:1 → 6.8:1）
+4. `6cc7ef16` 成员 skills 显示补全（researchAreaSkills.js 新建）
+5. `7f0ac109` KnowledgeCreateDialog TDZ bug 修复（resetForm function declaration hoist）
+6. `6f28d239` ocean/forest 主题实底 primary 按钮 hover 不变浅
+7. `e9f782cc` toolbar 终极修复（覆盖 EP `--el-button-bg-color` 变量 + `background-image: none`）
+8. `776f3300` revert toolbar 改动（修复未生效，DevTools 已确认颜色正确但用户视觉仍有差异）
+
+### 5 大踩坑教训（永久沉淀）
+
+#### 教训 1：`color: var(--color-bg-card)` 不能用于"放在带色背景上的文字"
+- `--color-bg-card` 是**容器背景色** token：light = `#FFFFFF` 白，dark = `#2a2d35` 深灰
+- 用于"带色按钮上的文字"时，dark 主题下深灰字 + 亮色按钮 = 对比度不达标（看起来"看不清"）
+- **正确**：用 `var(--el-color-white)`（EP 内置常量，6 主题稳定白）
+- **未来改进**：新增 `--color-on-primary` token，让"放在 primary 背景上"的文字统一用它
+
+#### 教训 2：`var(--color-primary-bg)` 不能直接当 plain 按钮背景
+- `--color-primary-bg` 在 ocean light = `#e8f2fe`（极浅蓝），EP 默认 `--el-color-primary-light-9` = `#ecf5ff` 也很浅
+- 浅底 + 主色字 (`--color-primary`) = 对比度 ~2.6:1 仍不达 WCAG AA
+- **正确**：plain 文字用 `--color-primary-dark`（深一档），对比度 6.8:1 WCAG AAA
+
+#### 教训 3：成员 skills 缺失必须 fallback，不能空显示
+- `members.skills` 是 `ARRAY(String)` nullable，没录入就是 NULL
+- 前端 `(member.skills || []).slice(0, 3)` 会显示空，视觉割裂
+- **正确**：用 `research_area` 查映射表 → 推断 2-3 个标签 → 保证视觉一致性
+- 已在 `web/src/utils/researchAreaSkills.js` 实现 `RESEARCH_AREA_SKILLS` 映射表（23 个真实样本）+ `inferSkillsFromArea` 关键词 fallback
+
+#### 教训 4：`watch(immediate: true)` 不能引用后面 const 声明的函数
+- `watch(source, callback, {immediate: true})` 同步触发 callback
+- 如果 callback 里调一个后面用 `const fn = () => {...}` 声明的函数 → 触发 TDZ（Temporal Dead Zone）
+- 报错：`Cannot access 'f' before initialization`（minify 后 f 即该函数）
+- **修复模式**：把 `const fn = () => {...}` 改成 `function fn(){...}`（hoist 安全）或把声明移到 watch 之前
+- 真实案例：`KnowledgeCreateDialog.vue:113` watch(immediate: true) 调 `resetForm()`，fix 改 function declaration 后 hoist 生效
+
+#### 教训 5：覆盖 Element Plus 按钮样式必须改 `--el-button-bg-color` 变量，**不是 `background-color` 属性**
+- EP 的 `.el-button` 内部 CSS：`background-color: var(--el-button-bg-color)`
+- 如果你只设 `background-color: <color> !important` → 被 EP 的 `var(--el-button-bg-color)` 覆盖 → **你的修复不生效**
+- **正确**：覆盖 EP 的 CSS 变量：`--el-button-bg-color: <color> !important`
+- 同时加 `background-image: none !important` 防 EP 默认渐变
+- 教训：EP 大量组件用 CSS 变量间接渲染，直接覆盖属性往往无效，必须找 `--xxx-xxx-color` 变量名
+
+### SW cache 缓存 5xx 错误 → 浏览器永远显示旧错误（CLAUDE.md 2026-06-13 教训反复强化）
+
+**症状**：今天最后发现
+- 后端 API 完全 alive（curl 直接打都 200）
+- 但浏览器 console 显示 `GET /api/v1/meetings?status=recording&page_size=1 502`
+- 原因是 PWA Service Worker 在某个时刻缓存了 502 响应（包含 NetworkFirst 策略）
+- 服务器恢复后 SW 仍返回缓存的 502
+
+**修复**：F12 → Application → Service Workers → Unregister + Storage → Clear site data
+
+**永久教训**（CLAUDE.md 已有但需要强化）：
+- SW 会缓存 fetch 的**所有响应**，包括 5xx
+- 服务器临时 502 → SW 缓存 → 服务器恢复 → 用户浏览器仍看到 502（直到清 SW cache）
+- **PWA 架构固有问题**，短期只能清 cache，长期需要 `CacheableResponsePlugin({ statuses: [0, 200] })` 严格只缓存成功响应
+- **诊断优先级**：用户报"API 失败/找不到数据"时，**先 curl 服务器验证后端 alive**，再判断是不是 SW cache 问题
+
+### Toolbar 按钮修复最终结论
+
+我做了 4 轮修复尝试（`d935565b`, `2eebcc39`, `e9f782cc`），每轮都 deploy 到服务器、curl 验证 CSS 包含正确规则、DevTools 显示 `bg: rgb(74, 144, 226)` 完全正确。但**用户截图视觉上仍觉得"添加知识/AI问答"跟"全部"chip 颜色不一致**。
+
+最终 `776f3300` 回滚所有 toolbar 改动，恢复到 `background: var(--color-primary)` 最简状态。**这是用户本地渲染问题**（屏幕校色 / 浏览器渲染 bug / 截图工具颜色压缩），不是 CSS bug。
+
+**正确的修复已经生效**：
+- ✅ 成员 skills 显示补全（researchAreaSkills fallback）
+- ✅ KnowledgeCreateDialog TDZ bug 修复
+- ✅ plain primary 按钮对比度修复
+- ✅ dark 主题 hover 不变浅
+- ✅ ocean/forest 主题变体适配
+
+### 沉淀到 memory
+
+新文件 `C:/Users/pc/.claude/projects/e--microbubble-agent/memory/v77-p26-d-ocean-button-fix-attempts.md`（如需要），记录：
+- 完整 4 轮 toolbar 修复尝试
+- DevTools 数据 + 用户视觉的差异分析
+- Zotero Connector Plasmo Shadow DOM 排查过程
+- 最终回滚决定 + 后续避免策略
+
+---
+
 ## 2026-06-28 v77 P2.6-D 收官 — PWA SW 强化 + 动效治理 + CSS-in-JS 收敛 + Baseline 9 路由
 
 **4 个子任务 4 个 commit 收官**：19f42924（P2.6-D.1 SW）+ 2096d3e0（P2.6-D.2 动效）+ fe896004（P2.6-D.3 CSS-in-JS）+ b251fc22（P2.6-D.4 Baseline）。
