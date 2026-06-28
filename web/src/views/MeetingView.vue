@@ -254,7 +254,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -262,7 +262,6 @@ import dayjs from 'dayjs'
 import { formatDateTime } from '@/utils/format'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
-import { useUserStore } from '@/stores/user'
 import { useMeeting } from '@/composables/useMeeting'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
@@ -272,12 +271,11 @@ import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
-import { Phone, Edit, Delete, Document, MagicStick, Plus, Microphone, Clock, List, Location, Search } from '@element-plus/icons-vue'
+import { Delete, Document, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
 const memberStore = useMemberStore()
-const userStore = useUserStore()
 
 // 全局录音状态
 const { recordingMeetingId: globalRecordingId, startRecording, stopRecording } = useRecordingState()
@@ -294,8 +292,6 @@ const {
 const isMobile = ref(window.innerWidth <= 768)
 const showCreateDialog = ref(false)
 const showMinutesDialog = ref(false)
-const showTranscriptDialog = ref(false)
-const liveTranscriptRef = ref(null)
 const pasteAnalyzeDialogRef = ref(null)
 const meetingRoomRef = ref(null)
 
@@ -414,9 +410,8 @@ const meetingForm = ref({
 })
 
 // === 2026-06-03 重构：会议模板内嵌到 MeetingView ===
+// v77 P2.6-F.2 Step 1: builtinTemplates/customTemplates/applyTemplate 已删（MeetingCreateDialog 有自己的副本）
 const templates = ref([])
-const builtinTemplates = computed(() => templates.value.filter(t => t.is_builtin))
-const customTemplates = computed(() => templates.value.filter(t => !t.is_builtin))
 
 async function loadTemplates() {
   try {
@@ -425,31 +420,6 @@ async function loadTemplates() {
   } catch (e) {
     console.warn('加载会议模板失败', e)
   }
-}
-
-// 应用模板：填字段（保留用户已填）+ 提示
-function applyTemplate(tpl) {
-  if (!tpl) return
-  meetingForm.value.templateId = tpl.id
-  // 仅在字段为空时填充（用户已填写的优先）
-  if (tpl.title_template && !meetingForm.value.title) {
-    meetingForm.value.title = tpl.title_template
-      .replace('{date}', dayjs().format('YYYY-MM-DD'))
-      .replace('{project_name}', '新项目')
-  }
-  if (tpl.description && !meetingForm.value.description) {
-    meetingForm.value.description = tpl.description
-  }
-  if (tpl.agenda && tpl.agenda.length && (!meetingForm.value.agenda || meetingForm.value.agenda.length === 0)) {
-    meetingForm.value.agenda = [...tpl.agenda]
-  }
-  if (tpl.default_participant_ids && tpl.default_participant_ids.length && (!meetingForm.value.participants || meetingForm.value.participants.length === 0)) {
-    meetingForm.value.participants = [...tpl.default_participant_ids]
-  }
-  if (tpl.default_location && !meetingForm.value.location) {
-    meetingForm.value.location = tpl.default_location
-  }
-  ElMessage.success(`已应用模板：${tpl.name}`)
 }
 
 // === 模板 CRUD（行内） ===
@@ -547,37 +517,7 @@ const viewMeeting = (meeting) => {
   router.push(`/meetings/${meeting.id}`)
 }
 
-// 查看纪要
-const viewMinutes = (meeting) => {
-  currentMeeting.value = meeting
-  showMinutesDialog.value = true
-}
-
-// 开始实时转写
-const startTranscript = (meeting) => {
-  currentMeeting.value = meeting
-  showTranscriptDialog.value = true
-}
-
-// 转写完成回调
-const onTranscriptComplete = async (transcriptItems) => {
-  console.log('转写完成，共', transcriptItems.length, '条记录')
-  ElMessage.success(`转写完成，共 ${transcriptItems.length} 条记录`)
-  showTranscriptDialog.value = false
-  fetchMeetings()
-}
-
-// 生成纪要
-const generateMinutes = async (meeting) => {
-  try {
-    ElMessage.info('正在生成会议纪要...')
-    await axios.post(`/api/v1/meetings/${meeting.id}/generate-minutes`)
-    ElMessage.success('会议纪要生成成功')
-    fetchMeetings()
-  } catch (e) {
-    ElMessage.error('生成失败')
-  }
-}
+// v77 P2.6-F.2 Step 1: viewMinutes / startTranscript / onTranscriptComplete / generateMinutes 已删（0 调用方）
 
 // 辅助函数（数据库存 UTC，显示北京时间 UTC+8）
 const formatMonth = (date) => dayjs(date).add(8, 'hour').format('M月')
