@@ -109,6 +109,13 @@ const form = ref({
 
 const saving = ref(false)
 
+// 必须先定义 resetForm 再 watch(immediate: true)，否则 immediate 同步触发回调时
+// 触发 const TDZ 报错: "Cannot access 'resetForm' before initialization"
+// v77 P2.6-D 修复: function declaration 而非 const arrow，hoist 安全
+function resetForm() {
+  form.value = { title: '', category: '', tags: [], content: '', source: '' }
+}
+
 // v77 P2.6-E.3: 监听 editingItem 变化回填表单
 watch(() => props.editingItem, (val) => {
   if (val) {
@@ -117,10 +124,6 @@ watch(() => props.editingItem, (val) => {
     resetForm()
   }
 }, { immediate: true })
-
-const resetForm = () => {
-  form.value = { title: '', category: '', tags: [], content: '', source: '' }
-}
 
 const handleSave = async () => {
   if (!form.value.title || !form.value.content) {
