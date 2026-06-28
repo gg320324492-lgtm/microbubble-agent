@@ -181,15 +181,18 @@ const resetFilters = () => {
 }
 
 .toolbar-actions .el-button--primary {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--el-color-white);
+  /* v77 P2.6-D 终极修复: 直接用 EP 的 --el-color-primary 实色 (#409EFF)
+     而非 var(--color-primary) — 后者在 ocean light 下被某条规则覆盖变浅
+     + 加 !important 防 EP 默认 + 其他全局规则覆盖 */
+  background-color: var(--el-color-primary) !important;
+  border-color: var(--el-color-primary) !important;
+  color: var(--el-color-white) !important;
 
-  --el-button-hover-bg-color: var(--color-primary-dark);
-  --el-button-hover-border-color: var(--color-primary-dark);
-  --el-button-hover-text-color: var(--el-color-white);
-  --el-button-active-bg-color: var(--color-primary-dark);
-  --el-button-active-border-color: var(--color-primary-dark);
+  --el-button-hover-bg-color: var(--el-color-primary-light-3) !important;
+  --el-button-hover-border-color: var(--el-color-primary-light-3) !important;
+  --el-button-hover-text-color: var(--el-color-white) !important;
+  --el-button-active-bg-color: var(--el-color-primary-dark-2) !important;
+  --el-button-active-border-color: var(--el-color-primary-dark-2) !important;
 }
 
 .btn-text {
