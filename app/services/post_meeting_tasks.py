@@ -323,40 +323,37 @@ def post_meeting_process(self, meeting_id: int):
                 )
                 logger.info(f"批量声纹提取完成：{sum(1 for e in seg_embeddings if e is not None)} 段有效")
 
-                # 2.3 统一聚类所有段的声纹
+                # 2.3 统一聚类所有段的声纹（v2026-06-27 改进：用 smart_select_k 选最优 K）
                 from collections import Counter
+                from app.services.voiceprint_voting import smart_select_k
 
-                # 贪心聚类（不限人数）
-                cluster_centers = []
-                cluster_representatives = []
-                clusters = []
-
-                for i, emb in enumerate(seg_embeddings):
-                    if emb is None:
-                        clusters.append(-1)
-                        continue
-
-                    if not cluster_centers:
-                        cluster_centers.append(emb)
-                        cluster_representatives.append(emb)
-                        clusters.append(0)
-                        continue
-
-                    best_cluster = -1
-                    best_sim = -1
-                    for ci, center in enumerate(cluster_centers):
-                        sim = cosine_similarity(emb, center)
-                        if sim > best_sim:
-                            best_sim = sim
-                            best_cluster = ci
-
-                    # 相似度 >= 0.40 归为已有聚类
-                    if best_sim >= 0.40:
-                        clusters.append(best_cluster)
-                    else:
-                        clusters.append(len(cluster_centers))
-                        cluster_centers.append(emb)
-                        cluster_representatives.append(emb)
+                # n_expected 用常数 3（投票时 ctx_names 还没定义，python 闭包 lazy 求值会 UnboundLocalError）
+                _n_expected = 3
+                logger.info(f"v2026-06-27 smart_select_k 启动, n_expected={_n_expected}")
+                _labels, _optimal_k, _opt_score, _all_scores = smart_select_k(
+                    seg_embs=seg_embeddings,
+                    n_expected=_n_expected,
+                    min_k=2,
+                    max_k=8,
+                )
+                logger.info(
+                    f"smart_select_k 选定 K={_optimal_k} (composite={_opt_score:.3f}, n_expected={_n_expected})"
+                )
+                clusters = list(_labels)
+                unique_clusters = sorted(set(c for c in clusters if c >= 0))
+                # 用均值 + L2 normalize 作 cluster_center
+                cluster_centers = [None] * (max(unique_clusters) + 1) if unique_clusters else []
+                cluster_representatives = [None] * (max(unique_clusters) + 1) if unique_clusters else []
+                for _cid in unique_clusters:
+                    _members = [seg_embeddings[i] for i in range(len(seg_embeddings)) if clusters[i] == _cid]
+                    _valid_members = [m for m in _members if m is not None and not np.all(np.array(m) == 0)]
+                    if _valid_members:
+                        _center = np.mean(_valid_members, axis=0)
+                        _norm = np.linalg.norm(_center)
+                        if _norm > 0:
+                            _center = _center / _norm
+                        cluster_centers[_cid] = _center
+                        cluster_representatives[_cid] = _valid_members[0]
 
                 # 2.4 识别每个段落的发言人（用声纹查询，不依赖聚类）
                 unique_clusters = set(c for c in clusters if c >= 0)
@@ -534,13 +531,18 @@ def post_meeting_process(self, meeting_id: int):
                     )
 
                 # 2.9 分配发言人到每个段
+                # v2026-06-27 修复：speaker_mapping 用 cluster_id（聚类级）而非 speaker_label（段级）
+                # 之前用 seg["speaker_label"] 索引产生 400+ 个 keys（每段一个）
+                # 正确做法：用 seg["cluster_id"] = clusters[i] 索引，只有 3 个 keys
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] >= 0:
                         seg["speaker"] = cluster_to_name[clusters[i]]
+                        seg["cluster_id"] = int(clusters[i])  # 给每段加 cluster_id 字段
                         if not seg["speaker"].startswith("发言人"):
-                            speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = seg["speaker"]
+                            speaker_mapping[f"cluster_{clusters[i]}"] = seg["speaker"]
                     else:
                         seg["speaker"] = "发言人?"
+                        seg["cluster_id"] = -1
 
                 logger.info(f"声纹聚类完成 (v2 优化): {len(known_names_set)} 位发言人, 已知={[n for n in known_names_set if not n.startswith('发言人')]}")
 
@@ -583,11 +585,11 @@ def post_meeting_process(self, meeting_id: int):
                             cluster_to_name[cid] = name_corrections[cluster_to_name[cid]]
                     logger.info(f"名字校对完成: 纠正了 {len(name_corrections)} 个名字")
 
-                # 更新 speaker_mapping
+                # 更新 speaker_mapping（v2026-06-27 修复：用 cluster_id 而非 speaker_label）
                 for seg in transcript_segments:
                     sp = seg.get("speaker", "")
-                    if not sp.startswith("发言人") and seg.get("speaker_label"):
-                        speaker_mapping[seg["speaker_label"]] = sp
+                    if not sp.startswith("发言人") and seg.get("cluster_id") is not None and seg.get("cluster_id") >= 0:
+                        speaker_mapping[f"cluster_{seg['cluster_id']}"] = sp
 
                 logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
 

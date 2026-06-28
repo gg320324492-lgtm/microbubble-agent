@@ -518,7 +518,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: var(--color-bg-card);
+  color: var(--el-color-white);
   box-shadow: var(--shadow-primary);
   position: relative;
   overflow: visible;
@@ -612,7 +612,7 @@ onMounted(() => {
 
 .btn-welcome-secondary {
   background: rgba(255,255,255,0.15) !important;
-  color: var(--color-bg-card) !important;
+  color: var(--el-color-white) !important;
   border: 1px solid rgba(255,255,255,0.3) !important;
   backdrop-filter: blur(8px);
 }

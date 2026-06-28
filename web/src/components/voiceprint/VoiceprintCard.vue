@@ -25,7 +25,7 @@ defineEmits(['select'])
 function barColor(value) {
   // value 范围 [-1, 1]（embedding 归一化后）
   // v76.6: 从 <html> 读 CSS 变量，让 bar 颜色跟随主题
-  const primaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--color-primary-rgb').trim() || '255, 122, 92'
+  const primaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--color-primary-rgb').trim() || '64, 158, 255'
   const infoRgb = '64, 158, 255'  // 信息蓝作为"负向"色 (距离近) 仍保留
   if (value > 0) {
     return `rgba(${primaryRgb}, ${value})`
@@ -43,7 +43,7 @@ function barColor(value) {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  border: 1px solid #eee;
+  border: 1px solid var(--color-border-light);
 }
 .voiceprint-card:hover {
   transform: translateY(-2px);

@@ -512,4 +512,27 @@ onMounted(() => {
 [data-theme="dark"] .member-avatar :deep(.el-avatar):hover {
   box-shadow: var(--shadow-primary);
 }
+
+/* v77 P2.6-D: ocean / forest 主题 chips 适配（成员 skills / grade） */
+/* el-tag type=info 默认浅灰底+灰字在 ocean 主题下看不清 → 改为主题浅色 */
+[data-accent="ocean"] .member-skills .el-tag,
+[data-accent="ocean"] .member-info .el-tag {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+[data-accent="forest"] .member-skills .el-tag,
+[data-accent="forest"] .member-info .el-tag {
+  background: var(--color-primary-bg);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+}
+/* dark + ocean/forest 组合加深 */
+[data-theme="dark"][data-accent="ocean"] .member-skills .el-tag,
+[data-theme="dark"][data-accent="ocean"] .member-info .el-tag,
+[data-theme="dark"][data-accent="forest"] .member-skills .el-tag,
+[data-theme="dark"][data-accent="forest"] .member-info .el-tag {
+  background: rgba(var(--color-primary-rgb), 0.18);
+  border-color: rgba(var(--color-primary-rgb), 0.30);
+}
 </style>

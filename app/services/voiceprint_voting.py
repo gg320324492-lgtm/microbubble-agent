@@ -18,8 +18,14 @@
 使用:
   from app.services.voiceprint_voting import (
       smart_select_k, vote_with_quality_gates, assign_with_strict_threshold,
-      extract_context_speakers, learn_from_successful_segments,
+      extract_context_speakers, learn_from_verified_segments,
   )
+
+P2-1 备注 (2026-06-27 用户决策"自动学习永远删除"):
+  - learn_from_verified_segments 函数已实现, 修复 reprocess_meeting.py 的 ImportError
+  - 但 **任何自动流程都不调用** (reprocess_meeting --learn 默认 False)
+  - 只有用户主动找我"现在优化某 member 声纹"时, 我才会人工调用
+  - 调用前必先 dry_run=True, 再 dry_run=False 实际写入
 """
 import logging
 import re
@@ -27,6 +33,7 @@ from collections import Counter
 from typing import Optional
 
 import numpy as np
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -39,21 +46,32 @@ def smart_select_k(
     n_expected: int = 3,
     min_k: int = 2,
     max_k: int = 8,
+    silhouette_min_floor: float = 0.40,
+    sil_low_threshold: float = 0.30,
 ) -> tuple:
     """综合 silhouette + 平衡度 + n_expected 接近度 选最优 K
 
     原算法缺陷: 只看 silhouette, 低 separation 永远选 K=2
     改进: silhouette 0.4 + 平衡度 0.3 + n_expected 接近 0.3
 
+    2026-06-27 P0-1 改进 (083 事件):
+      原 composite = sil*0.4 + balance*0.3 + proximity*0.3, proximity 在 sil=0.4 时已占主导
+      → 083 实际 K=2 但 n_expected=3 + proximity 强拉 K=3, 强分产生伪簇
+      修复: 加 silhouette_min_floor + sil_low_threshold 分层评分
+        - sil >= floor: 现状 (proximity 0.3)
+        - floor > sil >= low: proximity 线性降权 0.3 → 0.1 (边界)
+        - sil < low: 完全不信任 n_expected (proximity=0), 只看 sil+balance
+
     Returns:
         (labels, k, score, all_scores) — labels 与 seg_embs 等长 (-1 表示 invalid)
+        all_scores["_meta"] 含 quality_meta: {"low_quality": bool, "best_sil": float, "best_k": int}
     """
     from sklearn.cluster import KMeans
     from sklearn.metrics import silhouette_score
 
     valid = np.array([e for e in seg_embs if e is not None and not np.all(np.array(e) == 0)])
     if len(valid) < 2:
-        return [-1] * len(seg_embs), 1, -1.0, {}
+        return [-1] * len(seg_embs), 1, -1.0, {"_meta": {"low_quality": True, "best_sil": -1.0, "best_k": 1}}
 
     # K 搜索范围: [max(2, n_expected-2), min(max_k, n_expected+2)]
     # 这样既能覆盖 n_expected 附近的 K, 又不会在 n_expected=10 时只搜 2-5
@@ -63,10 +81,11 @@ def smart_select_k(
         k_min, k_max = 2, min(max_k, len(valid) - 1)
     k_options = list(range(k_min, k_max + 1))
     if not k_options:
-        return [-1] * len(seg_embs), 1, -1.0, {}
+        return [-1] * len(seg_embs), 1, -1.0, {"_meta": {"low_quality": True, "best_sil": -1.0, "best_k": 1}}
 
     all_scores = {}
     best_k, best_score = k_options[0], -1.0
+    best_sil = -1.0
 
     for k in k_options:
         try:
@@ -87,13 +106,25 @@ def smart_select_k(
         else:
             proximity = 0.5
 
-        # 综合评分
-        composite = sil * 0.4 + balance * 0.3 + proximity * 0.3
-        all_scores[k] = {"sil": sil, "balance": balance, "proximity": proximity, "composite": composite}
-        logger.info(f"  K={k} silhouette={sil:.3f} balance={balance:.3f} proximity={proximity:.3f} → composite={composite:.3f}")
+        # 2026-06-27 P0-1: 分层评分 — silhouette 低时降低 proximity 权重
+        if sil >= silhouette_min_floor:
+            # 正常情况: 现状权重
+            w_sil, w_balance, w_prox = 0.4, 0.3, 0.3
+        elif sil >= sil_low_threshold:
+            # 边界: proximity 权重线性插值 0.3 → 0.1
+            w_prox = 0.1 + 0.2 * (sil - sil_low_threshold) / max(silhouette_min_floor - sil_low_threshold, 1e-8)
+            w_sil, w_balance = 0.5, 0.4 - (w_prox - 0.1)
+        else:
+            # 极差: 完全不信任 n_expected
+            w_sil, w_balance, w_prox = 0.6, 0.4, 0.0
+
+        composite = sil * w_sil + balance * w_balance + proximity * w_prox
+        all_scores[k] = {"sil": sil, "balance": balance, "proximity": proximity, "composite": composite, "weights": (w_sil, w_balance, w_prox)}
+        logger.info(f"  K={k} silhouette={sil:.3f} balance={balance:.3f} proximity={proximity:.3f} → composite={composite:.3f} (w_sil={w_sil:.2f} w_balance={w_balance:.2f} w_prox={w_prox:.2f})")
 
         if composite > best_score:
             best_k, best_score = k, composite
+            best_sil = sil
 
     # 用 best_k 跑 KMeans 生成 labels
     km = KMeans(n_clusters=best_k, random_state=42, n_init=10).fit(valid)
@@ -104,7 +135,20 @@ def smart_select_k(
             labels[i] = int(km.labels_[j])
             j += 1
 
-    logger.info(f"[smart_select_k] 选 K={best_k} (composite={best_score:.3f}, n_expected={n_expected})")
+    # 2026-06-27 P0-1: quality_meta 嵌入 all_scores["_meta"] (backward-compat, 调用方不解包 _meta)
+    all_scores["_meta"] = {
+        "low_quality": best_sil < silhouette_min_floor,
+        "best_sil": best_sil,
+        "best_k": best_k,
+        "silhouette_min_floor": silhouette_min_floor,
+    }
+    if all_scores["_meta"]["low_quality"]:
+        logger.warning(
+            f"[smart_select_k] 聚类质量低 (best_sil={best_sil:.3f} < floor={silhouette_min_floor}), "
+            f"proximity 权重被压低, K={best_k} 胜出可能不准确, 建议人工复核"
+        )
+
+    logger.info(f"[smart_select_k] 选 K={best_k} (composite={best_score:.3f}, n_expected={n_expected}, best_sil={best_sil:.3f})")
     return labels, best_k, best_score, all_scores
 
 
@@ -129,6 +173,95 @@ def _cluster_center(emb_list: list) -> Optional[np.ndarray]:
     if norm > 0:
         center = center / norm
     return center
+
+
+def _merge_homogeneous_clusters(
+    cluster_info: dict,
+    unique_cids: list,
+    merge_threshold: float = 0.85,
+) -> tuple:
+    """2026-06-27 P0-2: 合并 cluster_centers cos 过于相似的 cluster (视为同说话人)
+
+    083 事件: cluster_centers 之间 cos=0.92+ 强分簇, 但实际只有 2 个说话人.
+    本函数检测 pairwise cos > merge_threshold 的 cluster 对, 用 union-find 合并 votes/seg_confs/total.
+
+    Args:
+        cluster_info: cid → {"center", "total", "name_votes", "seg_confs"}
+        unique_cids: sorted list of cluster IDs (>= 0)
+        merge_threshold: cos similarity 上限 (cos sim > threshold 视为同说话人)
+
+    Returns:
+        (new_cluster_info, cid_to_root):
+          - new_cluster_info: {root_cid → merged {"center", "total", "name_votes", "seg_confs", "merged_from": [...]}}
+          - cid_to_root: {original_cid → root_cid}
+    """
+    if len(unique_cids) <= 1:
+        return cluster_info, {c: c for c in unique_cids}
+
+    # union-find
+    parent = {c: c for c in unique_cids}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    # pairwise cos 检查
+    centers = {c: cluster_info[c]["center"] for c in unique_cids if cluster_info[c].get("center") is not None}
+    cids_with_center = sorted(centers.keys())
+    merge_pairs = []
+    for i in range(len(cids_with_center)):
+        for j in range(i + 1, len(cids_with_center)):
+            ci, cj = centers[cids_with_center[i]], centers[cids_with_center[j]]
+            # cos similarity (1 - cos_distance)
+            sim = 1.0 - _cosine_distance(ci, cj)
+            if sim > merge_threshold:
+                union(cids_with_center[i], cids_with_center[j])
+                merge_pairs.append((cids_with_center[i], cids_with_center[j], sim))
+
+    if not merge_pairs:
+        return cluster_info, {c: c for c in unique_cids}
+
+    logger.warning(
+        f"[_merge_homogeneous] 合并 {len(merge_pairs)} 对 cos>{merge_threshold} cluster: "
+        f"{[(a, b, round(s, 3)) for a, b, s in merge_pairs]}"
+    )
+
+    # 重新聚合 (按 root 合并)
+    root_to_cids = {}
+    for c in cids_with_center:
+        root_to_cids.setdefault(find(c), []).append(c)
+
+    new_cluster_info = {}
+    for root, group in root_to_cids.items():
+        if len(group) == 1:
+            new_cluster_info[root] = cluster_info[group[0]]
+        else:
+            combined_votes = Counter()
+            combined_confs = {}
+            total = 0
+            for cid in group:
+                combined_votes.update(cluster_info[cid]["name_votes"])
+                for n, confs in cluster_info[cid]["seg_confs"].items():
+                    combined_confs.setdefault(n, []).extend(confs)
+                total += cluster_info[cid]["total"]
+            # center 用 group 中第一个 (近似)
+            new_cluster_info[root] = {
+                "center": cluster_info[group[0]]["center"],
+                "total": total,
+                "name_votes": combined_votes,
+                "seg_confs": combined_confs,
+                "merged_from": group,
+            }
+
+    cid_to_root = {c: find(c) for c in unique_cids}
+    return new_cluster_info, cid_to_root
 
 
 def vote_with_quality_gates(
@@ -223,6 +356,18 @@ def vote_with_quality_gates(
             "seg_confs": seg_confs,
         }
 
+    # Step 1.5: 2026-06-27 P0-2 — 合并 cluster_centers cos 过于相似的 cluster (强分簇防护)
+    cluster_info, cid_to_root = _merge_homogeneous_clusters(
+        cluster_info, unique_cids, merge_threshold=0.85
+    )
+    # 后续 dist_matrix 用合并后的 cluster_info (merged root cids)
+    merged_cids = sorted(cluster_info.keys())
+    if len(merged_cids) < len(unique_cids):
+        logger.info(
+            f"[vote] cluster_centers 合并后 {len(unique_cids)} → {len(merged_cids)} 个聚类, "
+            f"cid_to_root={cid_to_root}"
+        )
+
     # Step 2: 算 K×N 距离矩阵 + 段级 + 中心距离
     # 优先用 Hungarian (scipy.optimize.linear_sum_assignment) 找最优配对
     try:
@@ -231,10 +376,10 @@ def vote_with_quality_gates(
     except ImportError:
         use_hungarian = False
 
-    n_cids = len(unique_cids)
+    n_cids = len(merged_cids)
     n_enrolled = len(enrolled_filtered)
 
-    # 距离矩阵: cid × enrolled
+    # 距离矩阵: cid × enrolled (使用 merged_cids)
     dist_matrix = np.full((n_cids, n_enrolled), 999.0, dtype=np.float32)
     # sample_count weight: 解决 samples=1 的人 (张宏魁, 韩重阳) 被 samples=10 的人抢走
     # weight = min(samples, 3) / 3 → samples=1: 0.33, samples=3+: 1.0
@@ -247,7 +392,7 @@ def vote_with_quality_gates(
             sc = 1
         sample_weight[j] = min(sc, 3) / 3.0
 
-    for i, cid in enumerate(unique_cids):
+    for i, cid in enumerate(merged_cids):
         center = cluster_info[cid]["center"]
         if center is None:
             continue
@@ -274,7 +419,7 @@ def vote_with_quality_gates(
         for r, c in zip(row_ind, col_ind):
             if cost[r, c] >= 999.0:
                 continue
-            cid = unique_cids[r]
+            cid = merged_cids[r]
             mid, name, _ = enrolled_filtered[c][0], enrolled_filtered[c][1], enrolled_filtered[c][2]
             # 用真实距离 (无 penalty) 做门控判断
             real_dist = float(dist_matrix[r, c] * sample_weight[c])
@@ -288,7 +433,7 @@ def vote_with_quality_gates(
     else:
         # Fallback: greedy 按 effective cost 排
         candidates = []
-        for r, cid in enumerate(unique_cids):
+        for r, cid in enumerate(merged_cids):
             for j in range(n_enrolled):
                 if dist_matrix[r, j] >= center_dist_threshold:
                     continue
@@ -298,7 +443,7 @@ def vote_with_quality_gates(
             if cid in cid_to_name or j in used_enrolled_idx:
                 continue
             mid, name, _ = enrolled_filtered[j][0], enrolled_filtered[j][1], enrolled_filtered[j][2]
-            real_dist = float(dist_matrix[unique_cids.index(cid), j] * sample_weight[j])
+            real_dist = float(dist_matrix[merged_cids.index(cid), j] * sample_weight[j])
             votes = cluster_info[cid]["name_votes"].get(name, 0)
             ratio = votes / max(cluster_info[cid]["total"], 1)
             confs = cluster_info[cid]["seg_confs"].get(name, [])
@@ -306,8 +451,64 @@ def vote_with_quality_gates(
             cid_to_name[cid] = (name, avg_conf, votes, ratio, real_dist, mid)
             used_enrolled_idx.add(j)
 
-    # Step 3: 应用 4 道质量门控
-    for cid in unique_cids:
+    # Step 2.5: 2026-06-27 P1-1 — 投票一致性覆盖 Hungarian (votes 大多数原则)
+    # 场景: Hungarian 1对1 强制牺牲次优配对 (083 场景: cluster_1+cluster_2 都投票给"杜同贺",
+    #       但 cluster_2 距离更近 → Hungarian 把"杜同贺"给 cluster_2, cluster_1 配给"王天志").
+    #       如果 cluster_1 的段级 votes 75% 投"杜同贺", 且"杜同贺"在 cluster_1 的距离
+    #       比"王天志"显著更近 (差距 > 0.05) → 覆盖 Hungarian 为 votes 多数 name.
+    # 触发条件 (3 项 AND):
+    #   1. votes 强烈倾向某 name (mc_ratio >= 0.5)
+    #   2. most_common != Hungarian 选中 (被 1对1 强制牺牲)
+    #   3. most_common dist < Hungarian 选中 dist - 0.05 (显著更近)
+    post_audit_p11 = []
+    for cid in merged_cids:
+        if cid not in cid_to_name:
+            continue
+        name, avg_conf, votes, ratio, center_dist, mid = cid_to_name[cid]
+        if name is None:
+            continue
+        name_votes = cluster_info[cid]["name_votes"]
+        if not name_votes:
+            continue
+        total = cluster_info[cid]["total"]
+        mc_name, mc_votes = name_votes.most_common(1)[0]
+        mc_ratio = mc_votes / max(total, 1)
+        # 条件 1+2: votes 强烈倾向其他 name (不是 Hungarian 选中)
+        if mc_name == name or mc_ratio < 0.5:
+            continue
+        # 找 most_common 在 enrolled_filtered 的 idx
+        mc_idx = next((j for j, item in enumerate(enrolled_filtered) if item[1] == mc_name), None)
+        if mc_idx is None:
+            continue
+        mc_dist = float(dist_matrix[merged_cids.index(cid), mc_idx])
+        # 条件 3: most_common dist 显著更近 (>0.05)
+        if mc_dist < center_dist - 0.05:
+            mc_mid = next(item[0] for item in enrolled_filtered if item[1] == mc_name)
+            old_pair = cid_to_name[cid]
+            logger.warning(
+                f"[P1-1] 聚类 {cid} ({total} 段, votes {mc_votes}/{total}): "
+                f"Hungarian={name} (dist={center_dist:.3f}) → "
+                f"覆盖为 votes most_common={mc_name} "
+                f"({mc_votes} votes, ratio={mc_ratio:.2f}, dist={mc_dist:.3f})"
+            )
+            cid_to_name[cid] = (mc_name, avg_conf, mc_votes, mc_ratio, mc_dist, mc_mid)
+            post_audit_p11.append({
+                "cid": cid,
+                "hungarian_name": old_pair[0],
+                "most_common_name": mc_name,
+                "votes": mc_votes,
+                "ratio": round(mc_ratio, 3),
+                "hungarian_dist": round(old_pair[4], 3),
+                "most_common_dist": round(mc_dist, 3),
+            })
+    if post_audit_p11:
+        logger.warning(
+            f"[P1-1] 覆盖了 {len(post_audit_p11)} 个聚类的 Hungarian 配对, "
+            f"段级投票更接近真相 (votes_ratio >= 0.5 + dist 显著更近)"
+        )
+
+    # Step 3: 应用 4 道质量门控 (用 merged_cids, 因为 cluster_info 已合并)
+    for cid in merged_cids:
         total = cluster_info[cid]["total"]
         if cid not in cid_to_name:
             logger.info(f"  聚类 {cid} ({total} 段): ❌ 无 Hungarian 配对 (超阈值或 enrolled 不够)")
@@ -336,6 +537,13 @@ def vote_with_quality_gates(
                 f"  聚类 {cid} ({total} 段, votes={votes}/{total}, ratio={ratio:.2f}): "
                 f"{name} avg_conf={avg_conf:.3f} center_dist={center_dist:.3f} ✅"
             )
+
+    # 2026-06-27 P0-2: 把 root_cid 的 cluster_names 复制回 original_cid
+    # 让 assign_with_strict_threshold 阶段按 labels[原始 cid] 能找到 (无缝对接)
+    if cid_to_root:
+        for orig_cid, root_cid in cid_to_root.items():
+            if orig_cid != root_cid and orig_cid not in cluster_names and root_cid in cluster_names:
+                cluster_names[orig_cid] = cluster_names[root_cid]
 
     return cluster_names
 
@@ -573,4 +781,237 @@ async def get_recent_meeting_speakers(
     names = {m.name for m in rm.scalars().all() if m.name}
     logger.info(f"[context_history] 会议 #{meeting_id} 历史 {len(historical)} 场, 找到 {len(names)} 个相关人: {names}")
     return names
+
+
+# ============================================================================
+# Component H: 从 verified 段累积到 member.voice_embedding (P2-1, 2026-06-27)
+# ============================================================================
+async def learn_from_verified_segments(
+    member_to_segs: dict,
+    db,
+    max_segments_per_member: int = 15,
+    distance_warn_threshold: float = 0.5,
+    dry_run: bool = False,
+) -> dict:
+    """从已验证的段 embedding 累积到 member.voice_embedding (修复 ImportError)
+
+    2026-06-27 P2-1 实现 (与 2026-06-27 用户决策"自动学习永远删除"一致):
+      - 函数实现并部署, 修复 reprocess_meeting.py:699 的 ImportError
+      - 默认 **任何自动流程都不调用** (reprocess_meeting --learn 默认 False,
+        post_meeting_tasks 永不调用)
+      - 只有用户主动找我"现在优化某 member 声纹"时, 我才会人工调用
+      - 调用前必须先 dry_run=True 看影响范围, 再 dry_run=False 实际写入
+
+    Args:
+        member_to_segs: {member_id: [seg_emb, seg_emb, ...]}
+                       每 member 最多 max_segments_per_member 个段 (按距离排序取最近)
+        db: AsyncSession
+        max_segments_per_member: 每 member 最多累积多少段 (默认 15, 防 embedding drift)
+        distance_warn_threshold: cos_dist 上限, 超过则拒绝合并 (默认 0.5)
+                                防 083 类污染: cluster→member 映射错误导致坏段混入
+        dry_run: True 只输出报告, 不修改 DB (默认 False)
+
+    Returns:
+        {member_id: learned_count} — 每 member 实际累积的段数 (0 表示拒绝或跳过)
+    """
+    from app.models.member import Member
+    from app.models.member_voice_history import MemberVoiceHistory
+    from datetime import datetime
+
+    report = {"applied": {}, "rejected": {}, "skipped": {}}
+
+    if not member_to_segs:
+        logger.warning("[learn] member_to_segs 为空, 无操作")
+        return {}
+
+    for member_id, segs in member_to_segs.items():
+        if not segs:
+            continue
+
+        # 过滤有效段
+        valid_segs = [np.array(e, dtype=np.float32) for e in segs if e is not None and not np.all(np.array(e) == 0)]
+        if not valid_segs:
+            continue
+
+        # 读 member 当前 voice_embedding + sample_count
+        result = await db.execute(select(Member).where(Member.id == member_id))
+        member = result.scalar_one_or_none()
+        if not member:
+            logger.warning(f"[learn] member_id={member_id} 不存在, 跳过")
+            report["skipped"][member_id] = "member_not_found"
+            continue
+
+        old_embedding = None
+        if member.voice_embedding is not None and len(member.voice_embedding) > 0:
+            old_embedding = np.array(member.voice_embedding, dtype=np.float32)
+        old_count = member.voice_sample_count or 0
+
+        # 算新段均值 (作为 new cluster center)
+        new_center = np.mean(valid_segs, axis=0)
+        new_center_norm = np.linalg.norm(new_center)
+        if new_center_norm > 0:
+            new_center = new_center / new_center_norm
+
+        # 限制 max_segments_per_member: 按距离旧 embedding 排序取最近 max_segments
+        if len(valid_segs) > max_segments_per_member:
+            if old_embedding is not None and not np.all(old_embedding == 0):
+                # 按距离旧 embedding 排序
+                dists = [_cosine_distance(s, old_embedding) for s in valid_segs]
+                sorted_idx = sorted(range(len(dists)), key=lambda i: dists[i])
+                valid_segs = [valid_segs[i] for i in sorted_idx[:max_segments_per_member]]
+                logger.info(
+                    f"[learn] member {member_id}: {len(segs)} 段 → 截取最近 {max_segments_per_member} 段"
+                )
+            else:
+                # 没旧 embedding, 取前 max_segments_per_member 段
+                valid_segs = valid_segs[:max_segments_per_member]
+
+        # 重新算 new_center (用截取后的段)
+        new_center = np.mean(valid_segs, axis=0)
+        new_center_norm = np.linalg.norm(new_center)
+        if new_center_norm > 0:
+            new_center = new_center / new_center_norm
+
+        # 计算 new_center vs 旧 embedding 的 cos_dist
+        if old_embedding is not None and not np.all(old_embedding == 0):
+            a_n = old_embedding / (np.linalg.norm(old_embedding) + 1e-8)
+            b_n = new_center / (np.linalg.norm(new_center) + 1e-8)
+            cos_dist = float(1.0 - np.dot(a_n, b_n))
+        else:
+            cos_dist = 0.0  # 没有旧 embedding, distance 无意义
+
+        # === 决策 ===
+        if cos_dist > distance_warn_threshold:
+            # ❗ 距离过大 → 拒绝合并 (083 类污染防护)
+            reason = f"cos_dist={cos_dist:.3f} > {distance_warn_threshold} (新段与旧 embedding 距离过远, 可能 cluster→member 映射错误)"
+            if dry_run:
+                logger.warning(f"[learn][DRY-RUN] ❌ member {member_id}: REJECTED — {reason}")
+            else:
+                # 写 source="learn_rejected" audit
+                history = MemberVoiceHistory(
+                    member_id=member_id,
+                    source="learn_rejected",
+                    old_embedding=list(old_embedding) if old_embedding is not None else None,
+                    new_embedding=new_center.tolist(),  # 即使拒绝也记录 "本想用的" embedding
+                    sample_count_before=old_count,
+                    sample_count_after=old_count,  # count 不变
+                    weight=None,
+                    notes=f"learn REJECTED ({len(valid_segs)} segs, {reason})",
+                )
+                db.add(history)
+                logger.warning(f"[learn] ❌ member {member_id}: REJECTED — {reason}")
+            report["rejected"][member_id] = {
+                "cos_dist": round(cos_dist, 3),
+                "seg_count": len(valid_segs),
+                "reason": reason,
+            }
+            continue
+
+        # 加权平均合并
+        M = len(valid_segs)
+        if old_embedding is None or not np.any(old_embedding):
+            # 没旧 embedding → 直接用 new_center (sample_count 重置为 M)
+            new_embedding = new_center
+            new_count = max(1, M)
+            weight_old = 0.0
+            strategy = "learn_set_initial"
+        else:
+            N = old_count
+            total = N + M
+            weight_old = N / total
+            weight_new = M / total
+            new_embedding = weight_old * old_embedding + weight_new * new_center
+            new_embedding_norm = np.linalg.norm(new_embedding)
+            if new_embedding_norm > 0:
+                new_embedding = new_embedding / new_embedding_norm
+            new_count = N + M
+            strategy = "learn_weighted_avg"
+
+        if dry_run:
+            logger.info(
+                f"[learn][DRY-RUN] ✓ member {member_id}: {strategy} "
+                f"({M} segs, cos_dist={cos_dist:.3f}, "
+                f"weight_old={weight_old:.3f}, count {old_count}+{M}={new_count})"
+            )
+            report["applied"][member_id] = {
+                "seg_count": M,
+                "cos_dist": round(cos_dist, 3),
+                "strategy": strategy,
+                "weight_old": round(weight_old, 3),
+                "old_count": old_count,
+                "new_count": new_count,
+                "dry_run": True,
+            }
+        else:
+            # 写 source="learn_from_verified" audit
+            history = MemberVoiceHistory(
+                member_id=member_id,
+                source="learn_from_verified",
+                old_embedding=list(old_embedding) if old_embedding is not None else None,
+                new_embedding=new_embedding.tolist(),
+                sample_count_before=old_count,
+                sample_count_after=new_count,
+                weight=weight_old,
+                notes=(
+                    f"learn {strategy} ({M} new segs, "
+                    f"cos_dist={cos_dist:.3f}, weight_old={weight_old:.3f}, "
+                    f"dry_run_threshold={distance_warn_threshold})"
+                ),
+            )
+            db.add(history)
+
+            # 更新 member
+            member.voice_embedding = new_embedding.tolist()
+            member.voice_sample_count = new_count
+            member.voice_enrolled_at = datetime.utcnow()
+
+            logger.info(
+                f"[learn] ✓ member {member_id}: {strategy} "
+                f"sample_count {old_count}+{M}={new_count}, cos_dist={cos_dist:.3f}"
+            )
+            report["applied"][member_id] = {
+                "seg_count": M,
+                "cos_dist": round(cos_dist, 3),
+                "strategy": strategy,
+                "weight_old": round(weight_old, 3),
+                "old_count": old_count,
+                "new_count": new_count,
+                "dry_run": False,
+            }
+
+    if not dry_run:
+        await db.commit()
+        logger.info(
+            f"[learn] 已提交: applied={len(report['applied'])} "
+            f"rejected={len(report['rejected'])} skipped={len(report['skipped'])}"
+        )
+    else:
+        logger.info(
+            f"[learn][DRY-RUN] 报告: applied={len(report['applied'])} "
+            f"rejected={len(report['rejected'])} skipped={len(report['skipped'])}"
+        )
+
+    # 兼容旧调用方: 返回 {member_id: learned_count}
+    return {mid: info.get("seg_count", 0) if isinstance(info, dict) else 0
+            for mid, info in report["applied"].items()}
+
+
+# 向后兼容 alias (旧 docstring 提到的函数名)
+async def learn_from_successful_segments(
+    member_to_segs: dict,
+    db,
+    max_segments_per_member: int = 15,
+) -> dict:
+    """向后兼容 alias → learn_from_verified_segments
+
+    旧 docstring 提到此函数名, 但实际调用方都用 learn_from_verified_segments。
+    保留作 alias 以防 docstring 误导。
+    """
+    return await learn_from_verified_segments(
+        member_to_segs=member_to_segs,
+        db=db,
+        max_segments_per_member=max_segments_per_member,
+        distance_warn_threshold=0.5,
+        dry_run=False,
+    )
 
