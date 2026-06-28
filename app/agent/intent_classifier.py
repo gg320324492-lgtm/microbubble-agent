@@ -82,6 +82,20 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之
   "reasoning": "一句话分类理由"
 }}
 
+建议工具 (suggested_tools) 填写规则 (必读，影响 Phase 0 强制执行):
+- 从 34 个工具里选 1-3 个最相关的（**不要超过 3 个**，避免过度调度）:
+  检索类: search_knowledge / web_search
+  公式类: list_formulas / get_formula
+  假设类: get_hypothesis / list_hypotheses
+  成员类: query_members / get_member_profile
+  任务类: query_tasks / get_task_detail
+  会议类: list_meetings / get_meeting_transcript
+  项目类: list_projects / get_project_summary
+- search_info → 必填 ["search_knowledge"] 或 ["web_search"]
+- explain_concept → 必填 ["search_knowledge", "list_formulas"] 或 ["search_knowledge", "get_hypothesis"]
+- casual_chat → 必填 []（**严禁**填工具）
+- 任何场景 confidence < 0.5 时 → suggested_tools 设为 []（避免 hallucinated tools）
+
 用户问题：{question}
 """
 

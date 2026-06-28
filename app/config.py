@@ -148,6 +148,12 @@ class Settings(BaseSettings):
     AGENT_REFLECTION_ENABLED: bool = True  # 关闭 Reflection 单点
     AGENT_COMPRESSION_ENABLED: bool = True  # 关闭 Haiku 压缩单点
     AGENT_NEW_ARCHITECTURE_ENABLED: bool = True  # 整个新架构全局开关，False 时走 chat_engine_legacy
+    AGENT_INTENT_AWARE_PROMPTS: bool = True  # #001b: 根据意图分类附加回复指南（闲聊/数据/深度 三类分支）
+    AGENT_PRIMITIVE_RECOGNITION: bool = True  # #083: 在深度场景附加 5 大原意识别 section（任务/会议/知识/公式/假设）
+    AGENT_CROSS_DOMAIN_SYNTHESIS: bool = True  # #086: 在 explain_concept 场景附加跨域综合规则 section (≥3 域 4 工具硬下限)
+    AGENT_PLAN_STEP_ENABLED: bool = True           # #041: Phase 0 强制 plan_step 总开关 (Haiku suggested_tools → agentic_loop 主动 dispatch)
+    AGENT_PLAN_STEP_MAX: int = 5                   # #041: Phase 0 最多 dispatch 几个 tool (建议 1-3 避免过度调度)
+    AGENT_PLAN_STEP_MIN_CONFIDENCE: float = 0.5    # #041: intent confidence < 此值不挂计划 (避免 hallucinated tools)
 
     class Config:
         env_file = ".env"
