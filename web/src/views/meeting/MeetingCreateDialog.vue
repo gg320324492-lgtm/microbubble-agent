@@ -130,6 +130,17 @@
     </el-form>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
+      <!-- v77 P2.6-F.3: '存为新模板' 按钮 - 仅在新建模式显示 -->
+      <el-button
+        v-if="!editingId"
+        type="warning"
+        plain
+        @click="onSaveAsTemplate"
+        title="将当前表单保存为模板, 下次可快速套用"
+      >
+        <el-icon><Document /></el-icon>
+        存为新模板
+      </el-button>
       <el-button type="primary" @click="onSubmit">{{ editingId ? '保存' : '创建' }}</el-button>
     </template>
   </el-dialog>
@@ -236,6 +247,30 @@ const onSubmit = async () => {
   } catch (e) {
     ElMessage.error(props.editingId ? '更新失败' : '创建失败')
   }
+}
+
+// v77 P2.6-F.3: '存为新模板' 按钮处理
+// 将当前 form 数据转换为 MeetingTemplateDialog editingTemplate 格式, emit 'save-template'
+// 父 MeetingView 接收后打开 MeetingTemplateDialog (editingTemplate = templateData, 走编辑模式)
+const onSaveAsTemplate = () => {
+  if (!form.value.title?.trim()) {
+    ElMessage.warning('请先填写会议主题, 再保存为模板')
+    return
+  }
+  const templateData = {
+    name: form.value.title,           // 用会议主题做模板名
+    title_template: form.value.title,  // 标题模板 (简单复用)
+    description: form.value.description || '',
+    default_duration_minutes: 60,     // 默认 60 分钟 (MeetingCreateDialog 无此字段)
+    default_location: form.value.location || '',
+    default_participant_ids: form.value.participants || [],
+    agenda: (form.value.agenda || []).filter(a => a?.trim()),
+  }
+  emit('save-template', templateData)
+  // 不关闭 dialog — 让用户在 MeetingTemplateDialog 中继续编辑/提交
+  // 父组件接 event 后会:
+  //   1. 关闭 MeetingCreateDialog (showCreateDialog = false)
+  //   2. 打开 MeetingTemplateDialog (showTemplateDialog = true, editingTemplate = templateData)
 }
 
 const onClose = () => {
