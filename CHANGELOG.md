@@ -2,6 +2,76 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [2026-06-28] v77 P2.6-F.2 MeetingView 1088 → 359 行拆分（5 commits）
+
+v77 P2.6 视觉收官后，把会议管理主页面 MeetingView 也做同样的"主 View + 子组件 + CSS 独立"拆分。同时按用户决策把听会 UX 从弹窗改成全屏（与移动端对齐）。
+
+### 拆分 5 commits 链
+
+| Commit | 主题 | 行数变化 |
+|---|---|---|
+| `298ed5c5` | Step 1 dead code 清理（未用 imports/refs/functions） | -60 |
+| `f2eb8cfc` | Step 2 抽 MeetingMinutesDialog 子组件 + 7 个 Vitest 单测 | -21 + 86 + 7 测试 |
+| `a3663d04` | Step 3 抽 MeetingTemplateDialog 子组件 + TDZ 防御 + 12 个 Vitest 单测 | -125 + 180 + 12 测试 |
+| `e5ba60e2` | Step 4 听会 UI 全屏化 + style 拆到独立 meeting-view.css | -729 + 498 |
+| (本 commit) | docs 更新沉淀 | + 5 章节 |
+
+### 听会 UX 全屏化（用户决策 2026-06-28）
+
+| 维度 | 旧 | 新 |
+|---|---|---|
+| 点击"开始听会" | 800px 弹窗 + MeetingRoom 内嵌 | 跳全屏 `/meetings/room` MeetingRoomView |
+| 无会议时 | MeetingRoom 内部隐式创建 | MeetingRoomView.onRecordingStart 自动 POST `/start-recording` 建会（line 124-140）|
+| UX | 弹窗可被覆盖/焦点丢失 | 全屏沉浸，与移动端对齐 |
+
+**核心证据**：[MeetingRoomView.vue:124-140](web/src/views/MeetingRoomView.vue#L124-L140) `onRecordingStart` 已支持无 meetingId 自动建会。
+
+### TDZ 防御核心（commit 7f0ac109 教训第 1 次复用）
+
+`resetForm` 必须 `function declaration` 而非 `const arrow`：
+- `watch(immediate: true)` 同步触发时会捕获 TDZ
+- 12 个测试覆盖 mount + watch 回填 + submit POST/PUT + emit + resetForm
+
+### 复用模式（v77 P2.6-E.3 已验证）
+
+1. **v-model bridge**: `computed { get, set }` 桥接 modelValue prop（父直接 `v-model`）
+2. **el-pagination**: `:current-page + @current-change`（MeetingTemplateDialog 不涉及）
+3. **dark 块非 scoped**（v60-v67 教训第 7 次强化）
+4. **TDZ 防御 function declaration**
+
+### 5 条新铁律
+
+1. **v-model bridge 模式可复用**：computed { get, set } 桥接 modelValue prop 是 Vue 3 子组件 dialog 的标准模式
+2. **TDZ 防御必须 function declaration**：watch(immediate: true) + resetForm 永远不能 const arrow，commit 7f0ac109 第 1 次复用
+3. **scoped CSS → 全局 CSS 时必须验证类名 unique**：grep 全项目确认类名不重名，否则全局污染
+4. **props 依赖的死代码必须先 grep 验证**：MeetingCreateDialog 通过 `:editing-id`/`:editing-data`/`:templates` 引用父 state，父删了子必崩
+5. **桌面/移动 UX 必须对齐**：录音机这种"长连接 + 后台处理"场景，弹窗 UX 在 dialog 关闭后状态丢失。统一走全屏 MeetingRoomView + `router.replace('/meetings/room')`，MeetingRoomView 接管录音/上传/后处理
+
+### 行数核算
+
+| 阶段 | MeetingView.vue | 子组件 | CSS | 总代码 |
+|---|---|---|---|---|
+| 拆前 | 1088 | 0 (MeetingCreateDialog 332 不变) | 0 | 1088 |
+| Step 1 dead code | 1028 | 0 | 0 | 1028 (-60) |
+| Step 2 MinutesDialog | 1007 | +86 + 7 测试 | 0 | 1090 (+62) |
+| Step 3 TemplateDialog | 882 | +180 + 12 测试 | 0 | 1450 (+360) |
+| Step 4 style 拆 + 全屏化 | **359** | +0 (保留) | +498 | 1457 (+7) |
+| **净变化** | **-729 (-67%)** | **+266 + 19 测试** | **+498** | **+369 (+34%)** |
+
+### Round 1 验证全 PASS
+
+- npm run build 0 警告
+- stylelint 0 errors（移除 `:deep()` Vue PostCSS 语法 + 注释去 `<style>` 字面文本）
+- vitest 415 PASS（含 19 个新增 MeetingTemplateDialog/MinutesDialog 测试）
+
+### 沉淀位置
+
+- [memory/v77-p26-f-2-meeting-view-split.md](memory/v77-p26-f-2-meeting-view-split.md)（新建，完整复盘）
+- CLAUDE.md 加 v77 P2.6-F.2 章节
+- ROADMAP.md 更新最近完成
+
+---
+
 ## [2026-06-28] v77 P2.6-E/F 视觉/代码质量延伸（4 commits）
 
 v77 P2.6 视觉体系 4 子任务收官后，把 P2.6-D "不在本次范围"列表里 3 项 deferred work 一次性收官：(E.1) CSS-in-JS 收官 + (E.2) 缓动字面量 token 化 + (E.3) KnowledgeView 1599→501 行拆分 + (F.1) transition: all token 化。

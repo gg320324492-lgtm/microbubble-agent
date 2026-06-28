@@ -6,6 +6,11 @@
 ## 当前状态（2026-06-28）
 
 **已交付**：
+- 🆕 **v77 P2.6-F.2 MeetingView 1088 → 359 行拆分（5 commits）**：
+  - **v77 P2.6-F.2 Step 4**（commit `e5ba60e2`）— 听会 UX 全屏化（800px 弹窗 → `/meetings/room` 全屏 MeetingRoomView，与移动端对齐）+ style 拆到独立 `web/src/views/meeting/meeting-view.css`（498 行）
+  - **v77 P2.6-F.2 Step 3**（commit `a3663d04`）— 抽 `MeetingTemplateDialog` 子组件（MeetingView -125 行, 新组件 180 行 + 12 Vitest 单测覆盖 TDZ 防御）
+  - **v77 P2.6-F.2 Step 2**（commit `f2eb8cfc`）— 抽 `MeetingMinutesDialog` 子组件（MeetingView -21 行, 新组件 86 行 + 7 Vitest 单测）
+  - **v77 P2.6-F.2 Step 1**（commit `298ed5c5`）— MeetingView 死代码清理（未用 imports/refs/functions -60 行）
 - 🆕 **v77 P2.6-E/F 视觉/代码质量延伸（4 commits）**：
   - **v77 P2.6-F.1**（commit `e362ad8e`）— transition: all 0.Xs token 化（27 处 / 17 文件 → `var(--transition-all-*)`）+ scripts/replace-transition-all-literals.js Node.js 脚本
   - **v77 P2.6-E.3**（commit `c06482b5`）— KnowledgeView 1599 → 501 行拆分（抽 4 tab + 1 dialog 5 个新组件，entityChartInstance 生命周期从父移到子避免内存泄漏）
