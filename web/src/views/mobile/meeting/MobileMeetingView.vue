@@ -712,7 +712,7 @@ onMounted(() => {
   transition: opacity 0.25s ease;
 }
 .action-sheet-enter-active .action-panel, .action-sheet-leave-active .action-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .action-sheet-enter-from, .action-sheet-leave-to { opacity: 0; }
 .action-sheet-enter-from .action-panel, .action-sheet-leave-to .action-panel {

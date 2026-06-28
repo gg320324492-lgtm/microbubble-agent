@@ -479,7 +479,7 @@ onMounted(() => {
 }
 .action-sheet-enter-active .action-sheet-panel,
 .action-sheet-leave-active .action-sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .action-sheet-enter-from,
 .action-sheet-leave-to {

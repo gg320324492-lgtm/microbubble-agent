@@ -91,7 +91,7 @@ const overflowCount = computed(() => Math.max(0, displayList.value.length - prop
   border: 2px solid var(--color-bg-card, #fff);
   box-shadow: var(--shadow-xs);
   cursor: pointer;
-  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
   flex-shrink: 0;
 }
 

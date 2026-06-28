@@ -470,7 +470,7 @@ function formatAutoDeleteExact(autoDeleteAt) {
 
 .auto-delete-icon {
   font-size: 12px;
-  animation: pulse-warning 2s ease-in-out infinite;
+  animation: pulse-warning 2s var(--ease-in-out) infinite;
 }
 
 .auto-delete-none {
@@ -481,7 +481,7 @@ function formatAutoDeleteExact(autoDeleteAt) {
 .auto-delete-imminent {
   color: var(--color-danger);
   font-weight: var(--font-weight-bold);
-  animation: pulse-danger 1.2s ease-in-out infinite;
+  animation: pulse-danger 1.2s var(--ease-in-out) infinite;
 }
 
 /* < 6h：紧急 */

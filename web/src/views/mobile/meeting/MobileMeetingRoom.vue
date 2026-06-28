@@ -372,7 +372,7 @@ onMounted(async () => {
 }
 .help-sheet-enter-active .help-panel,
 .help-sheet-leave-active .help-panel {
-  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition: transform 0.3s var(--ease-spring);
 }
 .help-sheet-enter-from,
 .help-sheet-leave-to {

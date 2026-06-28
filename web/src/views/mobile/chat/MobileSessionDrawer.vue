@@ -95,7 +95,7 @@ function close() {
   /* iOS 顶部安全区 */
   padding-top: var(--sat);
   transform: translateX(-100%);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.3s var(--ease-bounce);
 }
 
 [data-theme="dark"] .session-drawer-body {
@@ -110,7 +110,7 @@ function close() {
 }
 .session-drawer-enter-active .session-drawer-body,
 .session-drawer-leave-active .session-drawer-body {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.3s var(--ease-bounce);
 }
 .session-drawer-enter-from .session-drawer-mask,
 .session-drawer-leave-to .session-drawer-mask {

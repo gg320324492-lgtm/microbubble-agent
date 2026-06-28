@@ -842,7 +842,7 @@ onUnmounted(cleanup)
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: success-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: success-pop 0.4s var(--ease-bounce);
 }
 .success-circle .big-icon {
   /* stylelint-disable-next-line color-named */

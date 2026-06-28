@@ -373,7 +373,7 @@ const formatTime = (t) => {
   color: var(--color-text-primary);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-base);
-  transition: all 200ms ease-out;
+  transition: all 200ms var(--ease-out);
   position: relative;
   overflow: hidden;
 }
@@ -388,7 +388,7 @@ const formatTime = (t) => {
   height: 0;
   background: var(--color-primary);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  transition: all 200ms ease-out;
+  transition: all 200ms var(--ease-out);
 }
 
 .sidebar-menu .el-menu-item:hover {
@@ -480,7 +480,7 @@ const formatTime = (t) => {
   cursor: pointer;
   font-size: 20px;
   color: var(--color-text-secondary);
-  transition: color 200ms ease-out;
+  transition: color 200ms var(--ease-out);
   padding: 6px;
   border-radius: var(--radius-md);
 }
@@ -519,7 +519,7 @@ const formatTime = (t) => {
 
 .bell-icon {
   cursor: pointer;
-  transition: all 200ms ease-out;
+  transition: all 200ms var(--ease-out);
   color: var(--color-text-regular, #606266);
   padding: 10px;
   border-radius: 50%;
@@ -542,7 +542,7 @@ const formatTime = (t) => {
   cursor: pointer;
   padding: 6px 10px;
   border-radius: var(--radius-lg);
-  transition: background 200ms ease-out;
+  transition: background 200ms var(--ease-out);
 }
 
 .user-info:hover {
@@ -652,10 +652,10 @@ const formatTime = (t) => {
 
 /* --- 根容器淡入 --- */
 .mobile-drawer-enter-active {
-  transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.35s var(--ease-in-out);
 }
 .mobile-drawer-leave-active {
-  transition: opacity 0.3s cubic-bezier(0.4, 0, 1, 1);
+  transition: opacity 0.3s var(--ease-in);
 }
 .mobile-drawer-enter-from,
 .mobile-drawer-leave-to {
@@ -664,10 +664,10 @@ const formatTime = (t) => {
 
 /* --- 遮罩：淡入 + backdrop-blur 渐变 --- */
 .mobile-drawer-enter-active .mobile-drawer-mask {
-  animation: drawer-mask-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: drawer-mask-in 0.35s var(--ease-in-out) both;
 }
 .mobile-drawer-leave-active .mobile-drawer-mask {
-  animation: drawer-mask-out 0.3s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: drawer-mask-out 0.3s var(--ease-in) both;
 }
 
 @keyframes drawer-mask-in {
@@ -681,10 +681,10 @@ const formatTime = (t) => {
 
 /* --- 抽屉主体：弹性滑入 + 干脆滑出 --- */
 .mobile-drawer-enter-active .mobile-drawer-body {
-  animation: drawer-slide-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: drawer-slide-in 0.4s var(--ease-bounce) both;
 }
 .mobile-drawer-leave-active .mobile-drawer-body {
-  animation: drawer-slide-out 0.28s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: drawer-slide-out 0.28s var(--ease-in) both;
 }
 
 @keyframes drawer-slide-in {
@@ -698,11 +698,11 @@ const formatTime = (t) => {
 
 /* --- 品牌区：logo 缩放弹出 + 文字淡入 --- */
 .mobile-drawer-enter-active .mobile-drawer-logo {
-  animation: logo-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: logo-pop-in 0.4s var(--ease-bounce) both;
   animation-delay: 80ms;
 }
 .mobile-drawer-enter-active .mobile-drawer-brand span {
-  animation: brand-text-in 0.3s ease-out both;
+  animation: brand-text-in 0.3s var(--ease-out) both;
   animation-delay: 120ms;
 }
 
@@ -717,7 +717,7 @@ const formatTime = (t) => {
 
 /* --- 菜单项：弹簧逐个弹出 + 反向退出 --- */
 .mobile-drawer-enter-active .mobile-drawer-item {
-  animation: drawer-item-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: drawer-item-in 0.45s var(--ease-bounce) both;
   animation-delay: calc(var(--i, 0) * 60ms + 180ms);
 }
 .mobile-drawer-leave-active .mobile-drawer-item {
@@ -737,7 +737,7 @@ const formatTime = (t) => {
 /* --- 汉堡图标旋转过渡 --- */
 .icon-swap-enter-active,
 .icon-swap-leave-active {
-  transition: all 0.25s ease-out;
+  transition: all 0.25s var(--ease-out);
 }
 .icon-swap-enter-from {
   opacity: 0;
@@ -869,7 +869,7 @@ const formatTime = (t) => {
 }
 .recording-warning {
   font-size: 14px;
-  animation: recording-pulse 1s ease-in-out infinite;
+  animation: recording-pulse 1s var(--ease-in-out) infinite;
 }
 
 .recording-title {

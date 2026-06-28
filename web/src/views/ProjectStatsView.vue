@@ -527,7 +527,7 @@ onMounted(async () => {
 .lang-bar-fill {
   height: 100%;
   border-radius: 5px;
-  transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: width 1.2s var(--ease-bounce);
   min-width: 4px;
 }
 

@@ -42,7 +42,7 @@ const theme = useThemeStore()
   border: 1px solid rgba(144, 147, 153, 0.15);
   background: rgba(144, 147, 153, 0.1);
   cursor: pointer;
-  transition: all 200ms ease-out;
+  transition: all 200ms var(--ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 .theme-toggle-btn:hover {
@@ -57,7 +57,7 @@ const theme = useThemeStore()
 .theme-icon {
   font-size: 18px;
   line-height: 1;
-  transition: transform 250ms ease-out;
+  transition: transform 250ms var(--ease-out);
   display: inline-block;
 }
 .theme-toggle-btn:hover .theme-icon {

@@ -128,13 +128,16 @@
   --duration-counter: 500ms;
 
   /* ===== 动画曲线 ===== */
-  --ease-out: ease-out;
-  --ease-in-out: ease-in-out;
+  /* v77 P2.6-E.2: --ease-out 升级 Material Decelerate（CSS standard ease-out ≈ cubic-bezier(0, 0, 0.58, 1)，差异 < 5%） */
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);             /* Material Decelerate（升级自 ease-out 关键字） */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);        /* Material Standard */
   --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* v77 P2.6-D.2 缓动函数 token 化（吸收 17+ 散落 cubic-bezier） */
   --ease-in: cubic-bezier(0.4, 0, 1, 1);              /* Material Accelerate */
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);       /* 9 处移动端 sheet 专用 */
   --ease-spring: cubic-bezier(0.2, 0.7, 0.2, 1);      /* 1 处 MobileMeetingRoom 专用 */
+  /* v77 P2.6-E.2: --ease-quad 新增（DashboardPet:926 outlier） */
+  --ease-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);  /* easeOutQuad - 慢启动慢结束 */
 
   /* v77 P2.6-D.2 关键帧 token 化（让组件引用 var() 而非 name，dark override 友好） */
   --animation-fadeSlideUp: fadeSlideUp var(--duration-slow) var(--ease-out) both;
