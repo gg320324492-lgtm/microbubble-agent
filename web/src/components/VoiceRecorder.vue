@@ -187,7 +187,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: var(--transition-all-slower);
   user-select: none;
 }
 

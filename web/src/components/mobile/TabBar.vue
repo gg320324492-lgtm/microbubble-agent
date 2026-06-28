@@ -141,7 +141,7 @@ function handleSwitch(name) {
 :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) .tabbar-label) {
   font-weight: 700;
   font-size: 12px;
-  transition: all 0.25s ease;
+  transition: var(--transition-all-slow) ease;
 }
 
 .tabbar-label {

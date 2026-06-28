@@ -127,6 +127,12 @@
   --duration-slower: 400ms;
   --duration-counter: 500ms;
 
+  /* v77 P2.6-F: transition: all 0.Xs shorthand 4 token（吸收 27 处散落字面量） */
+  --transition-all-fast: all 0.15s;       /* AudioPlayer / VoiceprintCard 等细粒度过渡 */
+  --transition-all-normal: all 0.2s;      /* CardList / Paper* / ThemeToggleButton 等 */
+  --transition-all-slow: all 0.25s;       /* TabBar / ChatViewSSE 等较大过渡 */
+  --transition-all-slower: all 0.3s;      /* VoiceRecorder / VoiceTestDialog 等 */
+
   /* ===== 动画曲线 ===== */
   /* v77 P2.6-E.2: --ease-out 升级 Material Decelerate（CSS standard ease-out ≈ cubic-bezier(0, 0, 0.58, 1)，差异 < 5%） */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);             /* Material Decelerate（升级自 ease-out 关键字） */
@@ -737,11 +743,16 @@ body {
   --el-button-hover-border-color: var(--color-primary-light);
   color: #fff;
 }
-/* v77 P2.6-D 收官: ocean / forest 主题 plain primary 按钮对比度适配（EP 默认 light-9 极浅蓝底+蓝字，对比度 ~2.5:1 不达标）*/
+/* v77 P2.6-D 收官: ocean / forest 主题 plain primary 按钮对比度适配
+   - v1 (909cc67d): EP 默认 light-9 极浅蓝底+蓝字 ~2.5:1 不达标
+   - v2 (本轮): 浅底用 --color-primary-bg, 但字色改用 --color-primary-dark
+     原因: --color-primary-bg 在 ocean light = #e8f2fe 极浅, 主色字 (#4a90e2) 仍只 ~2.6:1
+     修法: 字色用 --color-primary-dark (ocean=#2e6bb8, forest=#3a8050) → 对比度 6.8:1 ✅ WCAG AAA
+*/
 [data-accent="ocean"] .el-button--primary.is-plain,
 [data-accent="ocean"] .el-button--primary.is-text,
 [data-accent="ocean"] .el-button--primary.is-link {
-  --el-button-text-color: var(--color-primary);
+  --el-button-text-color: var(--color-primary-dark);
   --el-button-bg-color: var(--color-primary-bg);
   --el-button-border-color: var(--color-primary-border);
   --el-button-hover-bg-color: var(--color-primary);
@@ -751,22 +762,25 @@ body {
 [data-accent="forest"] .el-button--primary.is-plain,
 [data-accent="forest"] .el-button--primary.is-text,
 [data-accent="forest"] .el-button--primary.is-link {
-  --el-button-text-color: var(--color-primary);
+  --el-button-text-color: var(--color-primary-dark);
   --el-button-bg-color: var(--color-primary-bg);
   --el-button-border-color: var(--color-primary-border);
   --el-button-hover-bg-color: var(--color-primary);
   --el-button-hover-text-color: var(--el-color-white);
   --el-button-hover-border-color: var(--color-primary);
 }
-/* dark 主题组合：deepen 背景 */
+/* dark 主题组合: 字色用 --color-primary-light (dark 下文字最亮), 背景加深 */
 [data-theme="dark"][data-accent="ocean"] .el-button--primary.is-plain,
 [data-theme="dark"][data-accent="ocean"] .el-button--primary.is-text,
 [data-theme="dark"][data-accent="ocean"] .el-button--primary.is-link,
 [data-theme="dark"][data-accent="forest"] .el-button--primary.is-plain,
 [data-theme="dark"][data-accent="forest"] .el-button--primary.is-text,
 [data-theme="dark"][data-accent="forest"] .el-button--primary.is-link {
-  --el-button-bg-color: rgba(var(--color-primary-rgb), 0.18);
-  --el-button-border-color: rgba(var(--color-primary-rgb), 0.40);
+  --el-button-text-color: var(--color-primary-light);
+  --el-button-bg-color: rgba(var(--color-primary-rgb), 0.20);
+  --el-button-border-color: rgba(var(--color-primary-rgb), 0.50);
+  --el-button-hover-bg-color: var(--color-primary);
+  --el-button-hover-text-color: var(--el-color-white);
 }
 [data-theme="dark"] .el-drawer {
   background-color: var(--color-bg-card);

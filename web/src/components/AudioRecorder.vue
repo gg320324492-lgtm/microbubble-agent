@@ -260,7 +260,7 @@ defineExpose({
   padding: 16px 48px; font-size: 18px; font-weight: 700;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light)); color: var(--el-color-white);
   border: none; border-radius: 32px; cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
 }
 .btn-start:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(var(--color-primary-rgb), 0.4); }
 .recorder-hint { color: var(--color-text-secondary); font-size: 13px; margin-top: 12px; }
@@ -277,7 +277,7 @@ defineExpose({
 .recorder-controls { display: flex; gap: 16px; margin-top: 24px; }
 .btn-pause, .btn-resume, .btn-stop {
   padding: 10px 28px; font-size: 15px; font-weight: 600;
-  border: none; border-radius: 24px; cursor: pointer; transition: all 0.2s;
+  border: none; border-radius: 24px; cursor: pointer; transition: var(--transition-all-normal);
 }
 .btn-pause, .btn-resume { background: var(--color-border-light); color: var(--color-text-primary); }
 .btn-pause:hover, .btn-resume:hover { background: var(--color-border-light); }

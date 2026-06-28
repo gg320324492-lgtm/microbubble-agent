@@ -94,21 +94,13 @@
 
         <div class="member-skills">
           <el-tag
-            v-for="skill in (member.skills || []).slice(0, 3)"
+            v-for="skill in displaySkills(member)"
             :key="skill"
             size="small"
             type="info"
             style="margin: 2px"
           >
             {{ skill }}
-          </el-tag>
-          <el-tag
-            v-if="(member.skills || []).length > 3"
-            size="small"
-            type="info"
-            style="margin: 2px"
-          >
-            +{{ member.skills.length - 3 }}
           </el-tag>
         </div>
 
@@ -217,6 +209,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useMemberStore } from '@/stores/member'
 import VoiceprintEnrollDialog from '@/components/VoiceprintEnrollDialog.vue'
+import { getDisplaySkills } from '@/utils/researchAreaSkills'
 
 const router = useRouter()
 const memberStore = useMemberStore()
@@ -358,6 +351,9 @@ const getRoleLabel = (role) => {
   return map[role] || role
 }
 
+// v77 P2.6-D: 成员 skills 缺失时用 research_area 推断 fallback（最多 3 个标签）
+const displaySkills = (member) => getDisplaySkills(member)
+
 onMounted(() => {
   memberStore.refreshMembers()
 })
@@ -456,6 +452,18 @@ onMounted(() => {
 
 .member-skills {
   margin-bottom: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.member-skills .el-tag {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .member-actions {

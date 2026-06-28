@@ -509,7 +509,7 @@ onUnmounted(() => {
   width: 8px; height: 8px; border-radius: 50%; background: var(--color-danger);
   animation: pulse 1.5s infinite;
 }
-.msg-enter-active { transition: all 0.25s ease; }
+.msg-enter-active { transition: var(--transition-all-slow) ease; }
 .msg-enter-from { opacity: 0; transform: translateY(8px); }
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -596,7 +596,7 @@ onUnmounted(() => {
 .welcome-hero h2 { font-size: 24px; margin: 0 0 8px; color: var(--color-text-primary); }
 .welcome-hero p { color: var(--color-text-regular); margin: 0 0 24px; }
 .quick-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-.quick-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 20px; cursor: pointer; transition: all 0.2s; }
+.quick-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 20px; cursor: pointer; transition: var(--transition-all-normal); }
 .quick-btn:hover { border-color: var(--color-primary); color: var(--color-primary); transform: translateY(-1px); }
 .qa-icon { font-size: 18px; }
 

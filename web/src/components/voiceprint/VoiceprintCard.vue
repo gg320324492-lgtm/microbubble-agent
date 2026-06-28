@@ -42,7 +42,7 @@ function barColor(value) {
   background: var(--color-bg-card);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
   border: 1px solid var(--color-border-light);
 }
 .voiceprint-card:hover {

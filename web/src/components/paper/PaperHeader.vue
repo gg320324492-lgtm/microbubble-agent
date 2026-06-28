@@ -399,7 +399,7 @@ const headerTags = computed(() => {
   background: var(--color-bg-card);
   border: 1px solid rgba(var(--color-primary-rgb), 0.25);
   border-radius: 6px;
-  transition: all 0.15s ease;
+  transition: var(--transition-all-fast) ease;
 }
 
 .doi-link:hover {
