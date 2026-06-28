@@ -181,29 +181,15 @@ const resetFilters = () => {
 }
 
 .toolbar-actions .el-button--primary {
-  /* v77 P2.6-D 终极对齐: 复制 KnowledgeDashboard .category-active 视觉
-     - 关键: 覆盖 EP 的 --el-button-bg-color CSS 变量 (不是 background-color 属性!)
-       EP 内部 .el-button 用 background-color: var(--el-button-bg-color)
-       之前我只设 background-color 被 EP 的 var(--el-button-bg-color) 覆盖 → 白底
-     - 加 background-image: none 防 EP 默认渐变
-     - 圆角 + 加粗 + 紧凑 padding → 跟 "全部" chip 视觉一致 */
-  --el-button-bg-color: var(--el-color-primary) !important;
-  --el-button-border-color: var(--el-color-primary) !important;
-  background-color: var(--el-color-primary) !important;
-  background-image: none !important;
-  border-color: var(--el-color-primary) !important;
-  color: var(--el-color-white) !important;
-  font-weight: 600 !important;
-  border-radius: var(--radius-full) !important;
-  padding: 8px 20px !important;
-  box-shadow: none !important;
-  outline: none !important;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--el-color-white);
 
-  --el-button-hover-bg-color: var(--el-color-primary-light-3) !important;
-  --el-button-hover-border-color: var(--el-color-primary-light-3) !important;
-  --el-button-hover-text-color: var(--el-color-white) !important;
-  --el-button-active-bg-color: var(--el-color-primary-dark-2) !important;
-  --el-button-active-border-color: var(--el-color-primary-dark-2) !important;
+  --el-button-hover-bg-color: var(--color-primary-dark);
+  --el-button-hover-border-color: var(--color-primary-dark);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-active-bg-color: var(--color-primary-dark);
+  --el-button-active-border-color: var(--color-primary-dark);
 }
 
 .btn-text {
