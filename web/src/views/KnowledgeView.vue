@@ -31,7 +31,7 @@
           @download="downloadFile"
         />
 
-        <!-- 健康度摘要（health badge 替代 KnowledgeHealth 独立页） -->
+        <!-- 健康度摘要 -->
         <div class="health-summary" v-if="!loading">
           <el-tag type="info" size="small" effect="plain">📚 知识 {{ total }}</el-tag>
           <el-tag type="success" size="small" effect="plain">🔗 实体 {{ entityTotal }}</el-tag>
@@ -40,7 +40,6 @@
           <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
         </div>
 
-        <!-- 分页（查看全部时显示） -->
         <div v-if="showAllKnowledge && total > pageSize" class="pagination">
           <el-pagination
             v-model:current-page="currentPage"
@@ -52,363 +51,57 @@
         </div>
       </el-tab-pane>
 
-      <!-- ===== 实体图谱 Tab ===== -->
+      <!-- ===== 实体图谱 Tab (v77 P2.6-E.3 拆分到 KnowledgeEntityTab.vue) ===== -->
       <el-tab-pane label="实体图谱" name="entities" lazy>
-        <!-- 搜索栏 -->
-        <el-card class="filter-card">
-          <el-row :gutter="12">
-            <el-col :span="5">
-              <el-input v-model="entitySearch.subject" name="entitySearch-subject" placeholder="主体" clearable @keyup.enter="searchEntitiesLocal" />
-            </el-col>
-            <el-col :span="5">
-              <el-input v-model="entitySearch.predicate" name="entitySearch-predicate" placeholder="关系" clearable @keyup.enter="searchEntitiesLocal" />
-            </el-col>
-            <el-col :span="6">
-              <el-input v-model="entitySearch.keyword" name="entitySearch-keyword" placeholder="关键字搜索" clearable @keyup.enter="searchEntitiesLocal" />
-            </el-col>
-            <el-col :span="4">
-              <el-button type="primary" @click="searchEntitiesLocal">搜索实体</el-button>
-            </el-col>
-            <el-col :span="4">
-              <el-button @click="fetchEntityGraphLocal" :loading="entityGraphLoading">刷新图谱</el-button>
-            </el-col>
-          </el-row>
-        </el-card>
-
-        <!-- 图谱联动布局 -->
-        <div class="entity-linked-view">
-          <!-- 左侧：力导向图 -->
-          <div class="entity-graph-panel">
-            <div class="panel-header">
-              <h3 class="panel-title">🔗 关系网络</h3>
-              <span class="panel-hint">点击节点查看详情</span>
-            </div>
-            <div v-if="entityGraphData.nodes.length === 0" class="graph-empty">
-              <el-empty description="暂无图谱数据，点击「加载图谱」" :image-size="80" />
-            </div>
-            <div v-else ref="entityGraphRef" class="entity-graph-container"></div>
-          </div>
-
-          <!-- 右侧：实体列表 -->
-          <div class="entity-list-panel">
-            <div class="panel-header">
-              <h3 class="panel-title">📋 实体列表</h3>
-              <span class="panel-count">{{ entityList.length }} 个实体</span>
-            </div>
-            <div v-if="entityList.length === 0" class="list-empty">
-              <el-empty description="暂无实体数据" :image-size="60" />
-            </div>
-            <div v-else class="entity-list-scroll">
-              <div
-                v-for="e in entityList"
-                :key="e.id"
-                class="entity-card"
-                :class="{ 'entity-card-active': selectedEntityId === e.id }"
-                @click="handleEntityClick(e)"
-              >
-                <div class="entity-triple">
-                  <span class="entity-subject">{{ e.subject }}</span>
-                  <span class="entity-predicate">{{ e.predicate }}</span>
-                  <span class="entity-object">{{ e.object }}</span>
-                </div>
-                <div v-if="e.condition" class="entity-condition-text">条件: {{ e.condition }}</div>
-                <div class="entity-meta">
-                  <span class="meta-item">{{ e.source_count }} 篇文档</span>
-                  <span class="meta-item">{{ e.occurrence_count }} 次出现</span>
-                  <span class="meta-confidence">
-                    <el-progress :percentage="Math.round(e.confidence * 100)" :stroke-width="3" :show-text="false" style="width:60px" />
-                  </span>
-                </div>
-              </div>
-            </div>
-            <el-pagination
-              v-if="entityTotal > 0"
-              v-model:current-page="entityPage"
-              :page-size="20"
-              :total="entityTotal"
-              layout="total, prev, pager, next"
-              @current-change="searchEntitiesLocal"
-              class="entity-pagination"
-            />
-          </div>
-        </div>
+        <KnowledgeEntityTab
+          ref="entityTabRef"
+          :entity-list="entityList"
+          :entity-total="entityTotal"
+          :entity-page="entityPage"
+          :entity-graph-data="entityGraphData"
+          @refresh="handleEntityRefresh"
+          @show-entity-detail="showEntityDetail"
+        />
       </el-tab-pane>
 
-      <!-- ===== 假设 Tab ===== -->
+      <!-- ===== 假设 Tab (v77 P2.6-E.3 拆分到 KnowledgeHypothesisTab.vue) ===== -->
       <el-tab-pane label="科研假设" name="hypotheses" lazy>
-        <el-card class="filter-card">
-          <el-row :gutter="12" align="middle">
-            <el-col :span="4">
-              <el-select v-model="hypothesisFilter.status" name="hypothesisFilter-status" placeholder="状态" clearable @change="fetchHypotheses">
-                <el-option label="已提出" value="proposed" />
-                <el-option label="已验证" value="validated" />
-                <el-option label="已否决" value="rejected" />
-              </el-select>
-            </el-col>
-            <el-col :span="4">
-              <el-select v-model="hypothesisFilter.priority" name="hypothesisFilter-priority" placeholder="优先级" clearable @change="fetchHypotheses">
-                <el-option label="高" value="high" />
-                <el-option label="中" value="medium" />
-                <el-option label="低" value="low" />
-              </el-select>
-            </el-col>
-            <el-col :span="6">
-              <el-input v-model="hypothesisTopic" name="hypothesisTopic" placeholder="研究领域（留空=全局）" clearable />
-            </el-col>
-            <el-col :span="5">
-              <el-button type="primary" :loading="hypothesisGenerating" @click="generateHypotheses">
-                <el-icon><MagicStick /></el-icon> 生成假设
-              </el-button>
-            </el-col>
-          </el-row>
-        </el-card>
-
-        <div v-if="hypothesisGenerating" class="qa-loading">🔬 正在分析实体关系并生成假设...</div>
-
-        <div v-else class="hypothesis-grid">
-          <div v-for="h in hypothesisList" :key="h.id" class="hypothesis-card" :class="'hypothesis-' + h.status">
-            <div class="hypothesis-header">
-              <el-tag :type="hypothesisStatusTag(h.status)" size="small">{{ hypothesisStatusLabel(h.status) }}</el-tag>
-              <el-tag :type="h.priority === 'high' ? 'danger' : h.priority === 'medium' ? 'warning' : 'info'" size="small" effect="plain">
-                {{ h.priority === 'high' ? '高优先' : h.priority === 'medium' ? '中优先' : '低优先' }}
-              </el-tag>
-              <span class="hypothesis-confidence">{{ Math.round(h.confidence * 100) }}%</span>
-            </div>
-            <div class="hypothesis-statement">{{ h.statement }}</div>
-            <div v-if="h.rationale" class="hypothesis-rationale"><strong>推导依据:</strong> {{ h.rationale }}</div>
-            <div v-if="h.suggested_experiment" class="hypothesis-experiment"><strong>实验建议:</strong> {{ h.suggested_experiment }}</div>
-            <div class="hypothesis-actions" v-if="h.status === 'proposed'">
-              <el-button size="small" type="success" @click="validateHypothesis(h.id, 'validated')">验证通过</el-button>
-              <el-button size="small" type="danger" @click="validateHypothesis(h.id, 'rejected')">否决</el-button>
-            </div>
-          </div>
-        </div>
-        <el-pagination v-if="hypothesisTotal > 0" v-model:current-page="hypothesisPage" :page-size="20"
-          :total="hypothesisTotal" layout="total, prev, pager, next" @current-change="fetchHypotheses" style="margin-top:12px" />
+        <KnowledgeHypothesisTab
+          ref="hypothesisTabRef"
+          :hypothesis-list="hypothesisList"
+          :hypothesis-total="hypothesisTotal"
+          :hypothesis-page="hypothesisPage"
+          @refresh="handleHypothesisRefresh"
+        />
       </el-tab-pane>
 
-      <!-- ===== 公式计算 Tab ===== -->
+      <!-- ===== 公式计算 Tab (v77 P2.6-E.3 拆分到 KnowledgeFormulaTab.vue) ===== -->
       <el-tab-pane label="公式计算" name="formulas" lazy>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-card class="formula-list-card">
-              <div class="formula-list-header">
-                <div class="formula-filter-row">
-                  <el-tree-select
-                    v-model="formulaCategoryFilter"
-                    :data="formulaCategories"
-                    :props="{ label: 'display_name', value: 'id', children: 'children' }"
-                    placeholder="全部分类"
-                    clearable
-                    filterable
-                    style="width:160px"
-                    @change="fetchFormulas"
-                  />
-                  <el-select v-model="formulaSourceFilter" name="formulaSourceFilter" placeholder="来源" clearable @change="fetchFormulas" style="width:100px">
-                    <el-option label="内置公式" value="builtin" />
-                    <el-option label="文档提取" value="extracted" />
-                  </el-select>
-                  <el-input v-model="formulaKeyword" name="formulaKeyword" placeholder="搜索公式" clearable @keyup.enter="fetchFormulas" style="width:150px" />
-                </div>
-              </div>
-              <div v-if="formulaList.length === 0" class="empty-state">
-                <el-empty description="暂无公式。上传含数学公式的文档后系统将自动提取。" />
-              </div>
-              <div v-for="f in formulaList" :key="f.id" class="formula-item"
-                :class="{ 'formula-selected': selectedFormula?.id === f.id }" @click="selectFormula(f)">
-                <div class="formula-name">{{ f.name }}</div>
-                <div class="formula-latex">{{ f.formula_latex }}</div>
-                <div class="formula-meta">
-                  <el-tag size="small">{{ f.domain || '未分类' }}</el-tag>
-                  <el-tag v-if="f.source_type === 'builtin'" size="small" type="success" style="margin-left:4px">内置</el-tag>
-                  <el-tag v-else-if="f.source_type === 'extracted'" size="small" type="info" style="margin-left:4px">提取</el-tag>
-                  <span class="formula-unit">→ {{ f.result_unit }}</span>
-                </div>
-                <div v-if="f.category_name" class="formula-category-path">{{ f.category_name }}</div>
-              </div>
-              <el-pagination v-if="formulaTotal > 20" v-model:current-page="formulaPage" :page-size="20"
-                :total="formulaTotal" layout="prev, pager, next" size="small" @current-change="fetchFormulas" />
-            </el-card>
-          </el-col>
-          <el-col :span="12">
-            <el-card v-if="selectedFormula" class="calculator-card">
-              <h3>{{ selectedFormula.name }}</h3>
-              <div v-if="selectedFormula.category_name" class="calc-category-path">分类: {{ selectedFormula.category_name }}</div>
-              <div class="formula-meta" style="margin-top:4px">
-                <el-tag v-if="selectedFormula.source_type === 'builtin'" size="small" type="success">内置公式</el-tag>
-                <el-tag v-else-if="selectedFormula.source_type === 'extracted'" size="small" type="info">文档提取</el-tag>
-              </div>
-              <div class="calculator-formula">{{ selectedFormula.formula_latex }}</div>
-              <el-divider />
-              <el-form label-width="150px">
-                <el-form-item v-for="(meta, varName) in selectedFormula.variables" :key="varName"
-                  :label="`${meta.description || varName} (${meta.unit || ''})`">
-                  <el-input-number v-model="calcInputs[varName]" :step="0.1" :precision="4" style="width:180px" />
-                </el-form-item>
-                <el-form-item>
-                  <el-button type="primary" :loading="calcLoading" @click="runCalculation">计算</el-button>
-                </el-form-item>
-              </el-form>
-              <div v-if="calcResult" class="calc-result">
-                <div class="calc-value">
-                  结果: <strong>{{ calcResult.value }}</strong> <span class="calc-unit">{{ calcResult.unit }}</span>
-                </div>
-                <div v-if="calcResult.steps" class="calc-steps">
-                  <div class="steps-title">计算步骤</div>
-                  <div v-for="(step, i) in calcResult.steps" :key="i" class="calc-step">
-                    <span class="step-var">{{ step.variable }}</span> = {{ step.value }} {{ step.unit }}
-                  </div>
-                </div>
-                <div v-if="selectedFormula.knowledge_id" class="calc-source">来源: <a @click="router.push('/knowledge/' +selectedFormula.knowledge_id)">知识条目 #{{ selectedFormula.knowledge_id }}</a></div>
-              </div>
-            </el-card>
-            <el-card v-else class="calculator-card">
-              <el-empty description="请从左侧选择一个公式" />
-            </el-card>
-          </el-col>
-        </el-row>
+        <KnowledgeFormulaTab
+          ref="formulaTabRef"
+          :formula-list="formulaList"
+          :formula-total="formulaTotal"
+          :formula-page="formulaPage"
+          :formula-categories="formulaCategories"
+          @refresh="handleFormulaRefresh"
+        />
       </el-tab-pane>
 
-      <!-- ===== 我的长期记忆 Tab (v28 step 68) ===== -->
+      <!-- ===== 我的长期记忆 Tab (v77 P2.6-E.3 拆分到 KnowledgeMemoryTab.vue) ===== -->
       <el-tab-pane label="我的长期记忆" name="memory" lazy>
-        <div class="memory-toolbar">
-          <el-input
-            v-model="memorySearch.keyword"
-            name="memorySearch-keyword"
-            placeholder="搜索记忆内容..."
-            clearable
-            style="width:280px;margin-right:12px"
-            @keyup.enter="fetchMemories"
-          />
-          <el-select
-            v-model="memorySearch.type"
-            name="memorySearch-type"
-            placeholder="类型"
-            clearable
-            style="width:140px;margin-right:12px"
-            @change="fetchMemories"
-          >
-            <el-option label="全部" value="" />
-            <el-option label="偏好" value="preference" />
-            <el-option label="用户事实" value="user_fact" />
-            <el-option label="任务上下文" value="task_ctx" />
-            <el-option label="实体关系" value="entity" />
-          </el-select>
-          <el-button type="primary" :loading="memoryLoading" @click="fetchMemories">搜索</el-button>
-        </div>
-
-        <div v-if="memoryLoading && memoryList.length === 0" class="memory-loading">
-          <div v-for="i in 3" :key="i" class="skeleton-card">
-            <div class="skeleton-line w-40" />
-            <div class="skeleton-line w-90" />
-            <div class="skeleton-line w-60" />
-          </div>
-        </div>
-
-        <div v-else-if="memoryList.length === 0" class="empty-state">
-          <el-empty description="还没有记忆，与小气对话时会自动学习" :image-size="80" />
-        </div>
-
-        <div v-else class="memory-list">
-          <article v-for="item in memoryList" :key="item.id" class="memory-card">
-            <div class="memory-header">
-              <span class="memory-type-tag" :class="`type-${item.memory_type}`">
-                {{ memoryTypeNameMap[item.memory_type] || item.memory_type }}
-              </span>
-              <span class="memory-importance">
-                ⭐ {{ Math.round((item.importance || 0) * 100) }}%
-              </span>
-            </div>
-            <div v-if="item.key" class="memory-key">🔑 {{ item.key }}</div>
-            <p class="memory-content">{{ item.content }}</p>
-            <div class="memory-footer">
-              <span class="memory-time">{{ formatMemoryDate(item.created_at) }}</span>
-              <el-button text type="danger" size="small" @click="forgetMemory(item)">遗忘</el-button>
-            </div>
-          </article>
-        </div>
-
-        <div v-if="memoryTotal > memoryPageSize" class="pagination">
-          <el-pagination
-            v-model:current-page="memoryCurrentPage"
-            :page-size="memoryPageSize"
-            :total="memoryTotal"
-            layout="total, prev, pager, next"
-            @current-change="fetchMemories"
-          />
-        </div>
+        <KnowledgeMemoryTab ref="memoryTabRef" />
       </el-tab-pane>
-
     </el-tabs>
 
-    <!-- 添加/编辑知识对话框 -->
-    <el-dialog
+    <!-- 添加/编辑知识对话框 (v77 P2.6-E.3 拆分到 KnowledgeCreateDialog.vue) -->
+    <KnowledgeCreateDialog
       v-model="showCreateDialog"
-      :title="editingKnowledge ? '编辑知识' : '添加知识'"
-      :width="isMobile ? '90vw' : '600px'"
-      top="8vh"
-      destroy-on-close
-      :close-on-click-modal="false"
-    >
-      <el-form :model="knowledgeForm" label-width="80px">
-        <el-form-item label="标题" required>
-          <el-input v-model="knowledgeForm.title" name="knowledgeForm-title" placeholder="请输入标题" />
-        </el-form-item>
-        <el-form-item label="分类">
-          <el-select v-model="knowledgeForm.category" name="knowledgeForm-category" placeholder="选择分类" filterable allow-create clearable>
-            <el-option-group label="预设分类">
-              <el-option label="📄 论文" value="论文" />
-              <el-option label="🔬 方法" value="方法" />
-              <el-option label="📏 标准" value="标准" />
-              <el-option label="📖 综述" value="综述" />
-              <el-option label="💡 案例" value="案例" />
-              <el-option label="❓ FAQ" value="FAQ" />
-              <el-option label="📝 笔记" value="笔记" />
-              <el-option label="📚 手册" value="手册" />
-            </el-option-group>
-            <el-option-group label="动态分类" v-if="categories.length > 0">
-              <el-option
-                v-for="cat in categories"
-                :key="cat.name"
-                :label="`${cat.name} (${cat.count})`"
-                :value="cat.name"
-              />
-            </el-option-group>
-          </el-select>
-        </el-form-item>
-        <el-form-item label="标签">
-          <el-select
-            v-model="knowledgeForm.tags" name="knowledgeForm-tags"
-            multiple
-            filterable
-            allow-create
-            placeholder="输入标签"
-          >
-            <el-option
-              v-for="tag in hotTags"
-              :key="tag.name"
-              :label="`${tag.name} (${tag.count})`"
-              :value="tag.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="内容" required>
-          <el-input
-            v-model="knowledgeForm.content" name="knowledgeForm-content"
-            type="textarea"
-            :rows="8"
-            placeholder="请输入知识内容"
-          />
-        </el-form-item>
-        <el-form-item label="来源">
-          <el-input v-model="knowledgeForm.source" name="knowledgeForm-source" placeholder="来源链接或文件路径" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveKnowledge">{{ editingKnowledge ? '保存' : '添加' }}</el-button>
-      </template>
-    </el-dialog>
+      :editing-item="editingKnowledge"
+      :categories="categories"
+      :hot-tags="hotTags"
+      :is-mobile="isMobile"
+      @saved="onCreateSaved"
+    />
 
     <!-- AI 问答对话框 -->
     <KnowledgeQADialog
@@ -447,20 +140,36 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+/**
+ * KnowledgeView.vue — 知识库主入口（v77 P2.6-E.3 简化版）
+ *
+ * v77 P2.6-E.3: 1599 行 → ~300 行（拆分 4 tabs + 1 dialog 到 components/knowledge/）
+ * 5 个 tab 子组件:
+ *   - KnowledgeToolbar (已存在)
+ *   - KnowledgeDashboard (已存在)
+ *   - KnowledgeEntityTab (v77 P2.6-E.3 新增)
+ *   - KnowledgeHypothesisTab (v77 P2.6-E.3 新增)
+ *   - KnowledgeFormulaTab (v77 P2.6-E.3 新增)
+ *   - KnowledgeMemoryTab (v77 P2.6-E.3 新增)
+ * 1 个 dialog 抽出:
+ *   - KnowledgeCreateDialog (v77 P2.6-E.3 新增)
+ */
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { MagicStick } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { useKnowledge } from '@/composables/useKnowledge'
 import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
-import { formatDateTime } from '@/utils/format'
 import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
 import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
+import KnowledgeEntityTab from '@/components/knowledge/KnowledgeEntityTab.vue'
+import KnowledgeHypothesisTab from '@/components/knowledge/KnowledgeHypothesisTab.vue'
+import KnowledgeFormulaTab from '@/components/knowledge/KnowledgeFormulaTab.vue'
+import KnowledgeMemoryTab from '@/components/knowledge/KnowledgeMemoryTab.vue'
+import KnowledgeCreateDialog from '@/components/knowledge/KnowledgeCreateDialog.vue'
 import KnowledgeQADialog from './knowledge/KnowledgeQADialog.vue'
 import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
 
-// 使用 composable（共享状态 + API）
 const {
   knowledgeList, total, currentPage, pageSize, loading,
   searchQuery, filterCategory,
@@ -481,123 +190,34 @@ const editingKnowledge = ref(null)
 const showAllCategories = ref(false)
 const showAllKnowledge = ref(false)
 
-// Tabs
 const activeTab = ref('knowledge')
 const route = useRoute()
 const router = useRouter()
-// v28 step 68: 支持 ?tab=memory URL 直跳（如旧 /memory 重定向）
 if (route.query.tab === 'memory') activeTab.value = 'memory'
 
-// v31 检索质量埋点
 const searchAnalytics = useSearchAnalyticsStore()
 
-// v28 step 68: 长期记忆 Tab 状态（合并自 MemoryView）
-const memoryList = ref([])
-const memoryTotal = ref(0)
-const memoryCurrentPage = ref(1)
-const memoryPageSize = ref(20)
-const memoryLoading = ref(false)
-const memorySearch = ref({ keyword: '', type: '' })
-
-const memoryTypeNameMap = {
-  preference: '偏好',
-  user_fact: '用户事实',
-  task_ctx: '任务上下文',
-  summary: '摘要',
-  entity: '实体关系',
-}
-
-const fetchMemories = async () => {
-  memoryLoading.value = true
-  try {
-    const params = {
-      page: memoryCurrentPage.value,
-      page_size: memoryPageSize.value,
-    }
-    if (memorySearch.value.keyword) params.keyword = memorySearch.value.keyword
-    if (memorySearch.value.type) params.memory_type = memorySearch.value.type
-    const res = await axios.get('/api/v1/memories', { params })
-    memoryList.value = res.data.items || []
-    memoryTotal.value = res.data.total || 0
-  } catch (e) {
-    console.error('[KnowledgeView] 获取长期记忆失败:', e)
-    ElMessage.error('获取长期记忆失败')
-  } finally {
-    memoryLoading.value = false
-  }
-}
-
-const forgetMemory = async (item) => {
-  try {
-    await ElMessageBox.confirm(`确定遗忘「${(item.content || '').slice(0, 30)}...」？`, '遗忘确认', {
-      type: 'warning',
-      confirmButtonText: '遗忘',
-      cancelButtonText: '取消',
-    })
-    await axios.delete(`/api/v1/memories/${item.id}`)
-    ElMessage.success('已遗忘')
-    fetchMemories()
-  } catch (e) {
-    if (e !== 'cancel') console.error(e)
-  }
-}
-
-const formatMemoryDate = (d) => formatDateTime(d)
-
-// 切到 memory tab 时拉数据（避免空数据闪烁）
-watch(activeTab, (val) => {
-  if (val === 'memory' && memoryList.value.length === 0 && !memoryLoading.value) {
-    fetchMemories()
-  }
-})
-
-// Entity tab
-const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
-const entityGraphRef = ref(null)
-let entityChartInstance = null
+// Entity tab 状态
 const showEntityDetailDialog = ref(false)
 const entityDetail = ref(null)
-const selectedEntityId = ref(null)
-const entityGraphLoading = ref(false)
 
-// Hypothesis tab
-const hypothesisFilter = ref({ status: '', priority: '' })
-const hypothesisTopic = ref('')
-const hypothesisGenerating = ref(false)
-
-// Formula tab
-const formulaCategoryFilter = ref(null)
-const formulaKeyword = ref('')
-const formulaSourceFilter = ref('')
-const formulaDomains = ref([])
-const selectedFormula = ref(null)
-const calcInputs = ref({})
-const calcResult = ref(null)
-const calcLoading = ref(false)
-
-// 表单
-const knowledgeForm = ref({
-  title: '',
-  category: '',
-  tags: [],
-  content: '',
-  source: ''
-})
+// 子组件 refs（v77 P2.6-E.3: 用于 watch activeTab 时主动 fetch）
+const entityTabRef = ref(null)
+const hypothesisTabRef = ref(null)
+const formulaTabRef = ref(null)
+const memoryTabRef = ref(null)
 
 // ── 搜索和筛选 ──
-
 const handleSearch = async (query) => {
   searchQuery.value = query
   currentPage.value = 1
   await fetchKnowledge()
-  // v31 埋点: 搜索事件 (query + top_ids)
   const topIds = knowledgeList.value.map(k => k.id)
   if (topIds.length > 0) {
     searchAnalytics.startSearch(query, topIds, 'knowledge_search')
   }
 }
 
-// v31 埋点: 点击结果 (找位置 + 调 recordClick + 路由跳转)
 const handleViewDetail = (id) => {
   const position = knowledgeList.value.findIndex(k => k.id === id) + 1
   if (position > 0) {
@@ -607,11 +227,9 @@ const handleViewDetail = (id) => {
 }
 
 const handleFilter = (filters) => {
-  // 处理高级筛选
   if (filters.category) {
     filterCategory.value = filters.category
   }
-  // 其他筛选条件可以扩展
   currentPage.value = 1
   fetchKnowledge()
 }
@@ -623,47 +241,18 @@ const handleCategoryFilter = (category) => {
 }
 
 const handleTimeFilter = (range) => {
-  // 时间筛选逻辑
   console.log('Time filter:', range)
 }
 
-// ── 保存/编辑 ──
-
-const saveKnowledge = async () => {
-  if (!knowledgeForm.value.title || !knowledgeForm.value.content) {
-    ElMessage.warning('请填写标题和内容')
-    return
-  }
-  try {
-    if (editingKnowledge.value) {
-      await axios.put(`/api/v1/knowledge/${editingKnowledge.value.id}`, knowledgeForm.value)
-      ElMessage.success('知识更新成功')
-    } else {
-      await axios.post('/api/v1/knowledge', knowledgeForm.value)
-      ElMessage.success('知识添加成功')
-    }
-    showCreateDialog.value = false
-    editingKnowledge.value = null
-    resetForm()
-    fetchKnowledge()
-    fetchStats()
-    fetchCategories()
-  } catch (e) {
-    ElMessage.error('操作失败')
-  }
-}
-
+// ── 增删改 ──
 const editKnowledge = (item) => {
   editingKnowledge.value = item
-  knowledgeForm.value = { ...item }
   showCreateDialog.value = true
 }
 
 const downloadFile = async (item) => {
   try {
-    const response = await axios.get(`/api/v1/knowledge/${item.id}/download`, {
-      responseType: 'blob'
-    })
+    const response = await axios.get(`/api/v1/knowledge/${item.id}/download`, { responseType: 'blob' })
     const url = window.URL.createObjectURL(new Blob([response.data]))
     const link = document.createElement('a')
     link.href = url
@@ -687,22 +276,55 @@ const handleDeleteKnowledge = async (item) => {
   }
 }
 
-// ── 上传成功回调 ──
 const onUploadSuccess = () => {
   fetchKnowledge()
   fetchStats()
 }
 
-const resetForm = () => {
-  knowledgeForm.value = { title: '', category: '', tags: [], content: '', source: '' }
+const onCreateSaved = () => {
+  fetchKnowledge()
+  fetchStats()
+  fetchCategories()
 }
 
 const openQADialog = () => {
   showQADialog.value = true
 }
 
-// ── 监听 ──
+// ── 子组件事件回调 ──
+const handleEntityRefresh = (payload) => {
+  if (payload.list !== undefined) {
+    entityList.value = payload.list
+    entityTotal.value = payload.total
+  }
+  if (payload.graph !== undefined) {
+    entityGraphData.value = payload.graph
+  }
+}
 
+const handleHypothesisRefresh = (payload) => {
+  if (payload.list !== undefined) {
+    hypothesisList.value = payload.list
+    hypothesisTotal.value = payload.total
+  }
+}
+
+const handleFormulaRefresh = (payload) => {
+  if (payload.list !== undefined) {
+    formulaList.value = payload.list
+    formulaTotal.value = payload.total
+  }
+}
+
+const showEntityDetail = async (id) => {
+  try {
+    const res = await axios.get(`/api/v1/knowledge/entities/${id}`)
+    entityDetail.value = res.data
+    showEntityDetailDialog.value = true
+  } catch (e) { ElMessage.error('获取实体详情失败') }
+}
+
+// ── 监听 ──
 watch(filterCategory, () => {
   currentPage.value = 1
   fetchKnowledge()
@@ -712,6 +334,25 @@ watch(searchQuery, (val) => {
   if (!val) {
     currentPage.value = 1
     fetchKnowledge()
+  }
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'entities') {
+    if (entityTabRef.value) {
+      entityTabRef.value.searchEntitiesLocal()
+      entityTabRef.value.fetchEntityGraphLocal()
+    }
+  }
+  if (tab === 'hypotheses') {
+    hypothesisTabRef.value?.fetchHypotheses()
+  }
+  if (tab === 'formulas') {
+    formulaTabRef.value?.fetchFormulas()
+    fetchFormulaCategories()
+  }
+  if (tab === 'memory') {
+    memoryTabRef.value?.fetchMemories()
   }
 })
 
@@ -726,187 +367,8 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 })
 
-// ── Entity methods ──
-
-const searchEntitiesLocal = async () => {
-  try {
-    const params = { ...entitySearch.value, page: entityPage.value, page_size: 20 }
-    Object.keys(params).forEach(k => { if (!params[k]) delete params[k] })
-    await searchEntities(params)
-  } catch (e) { ElMessage.error('实体搜索失败') }
-}
-
-const fetchEntityGraphLocal = async () => {
-  entityGraphLoading.value = true
-  try {
-    await fetchEntityGraph()
-    // 等待 DOM 更新后再渲染图谱
-    await nextTick()
-    setTimeout(() => {
-      renderEntityGraph()
-      entityGraphLoading.value = false
-    }, 100)
-  } catch (e) {
-    console.error('实体图谱加载失败:', e)
-    entityGraphLoading.value = false
-  }
-}
-
-const renderEntityGraph = async () => {
-  if (!entityGraphRef.value || entityGraphData.value.nodes.length === 0) return
-  const echarts = await import('echarts')
-  if (entityChartInstance) entityChartInstance.dispose()
-  entityChartInstance = echarts.init(entityGraphRef.value)
-  const cats = [...new Set(entityGraphData.value.nodes.map(n => n.predicate || '其他'))]
-  const colors = ['#FF7A5C', '#FFB347', '#5470c6', '#91cc75', '#ee6666', '#73c0de', '#fc8452']
-  const option = {
-    tooltip: { formatter: p => p.dataType === 'node' ? `${p.data.subject}<br/>${p.data.predicate} → ${p.data.object}` : `共现权重: ${p.data.weight || 1}` },
-    legend: { data: cats.slice(0, 7), bottom: 0 },
-    series: [{
-      type: 'graph', layout: 'force', roam: true, draggable: true,
-      force: { repulsion: 200, edgeLength: [100, 300] },
-      data: entityGraphData.value.nodes.map(n => ({
-        name: String(n.id), subject: n.subject, predicate: n.predicate, object: n.object, entityId: n.id,
-        symbolSize: Math.max(15, Math.min(40, (n.occurrence_count || 1) * 6)),
-        category: n.predicate || '其他', itemStyle: { color: colors[cats.indexOf(n.predicate || '其他') % colors.length] },
-      })),
-      categories: cats.slice(0, 7).map((c, i) => ({ name: c, itemStyle: { color: colors[i % colors.length] } })),
-      links: entityGraphData.value.edges.map(e => ({ source: String(e.source), target: String(e.target), weight: e.weight })),
-      lineStyle: { opacity: 0.4, curveness: 0.2 },
-      label: { show: true, formatter: p => p.data.subject.length > 8 ? p.data.subject.slice(0, 8) + '...' : p.data.subject, fontSize: 10 },
-      emphasis: {
-        focus: 'adjacency',
-        lineStyle: { width: 3 }
-      }
-    }],
-  }
-  entityChartInstance.setOption(option)
-
-  // 图谱节点点击 → 列表联动
-  entityChartInstance.on('click', (params) => {
-    if (params.dataType === 'node' && params.data.entityId) {
-      selectedEntityId.value = params.data.entityId
-
-      // 滚动到列表中对应的卡片
-      const card = document.querySelector(`.entity-card-active`)
-      if (card) {
-        card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-
-      // 显示详情
-      showEntityDetail(params.data.entityId)
-    }
-  })
-}
-
-const showEntityDetail = async (id) => {
-  try {
-    const res = await axios.get(`/api/v1/knowledge/entities/${id}`)
-    entityDetail.value = res.data
-    showEntityDetailDialog.value = true
-  } catch (e) { ElMessage.error('获取实体详情失败') }
-}
-
-// 处理实体点击（列表 → 图谱联动）
-const handleEntityClick = (entity) => {
-  selectedEntityId.value = entity.id
-
-  // 高亮图谱中对应的节点
-  if (entityChartInstance && entityGraphData.value.nodes.length > 0) {
-    const nodeIndex = entityGraphData.value.nodes.findIndex(n => n.id === entity.id)
-    if (nodeIndex >= 0) {
-      entityChartInstance.dispatchAction({
-        type: 'highlight',
-        seriesIndex: 0,
-        dataIndex: nodeIndex
-      })
-      // 滚动到图谱位置
-      entityGraphRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }
-
-  // 显示详情
-  showEntityDetail(entity.id)
-}
-
-// ── Hypothesis methods ──
-
-const generateHypotheses = async () => {
-  hypothesisGenerating.value = true
-  try {
-    await axios.post('/api/v1/knowledge/hypotheses', {
-      topic: hypothesisTopic.value || null,
-      count: 3,
-    })
-    hypothesisGenerating.value = false
-    await fetchHypotheses()
-    ElMessage.success('假设生成完成')
-  } catch (e) {
-    hypothesisGenerating.value = false
-    ElMessage.error('假设生成失败')
-  }
-}
-
-const hypothesisStatusTag = (s) => s === 'validated' ? 'success' : s === 'rejected' ? 'danger' : 'warning'
-const hypothesisStatusLabel = (s) => s === 'validated' ? '已验证' : s === 'rejected' ? '已否决' : '已提出'
-
-const validateHypothesis = async (id, status) => {
-  try {
-    await axios.post(`/api/v1/knowledge/hypotheses/${id}/validate`, { status })
-    ElMessage.success(status === 'validated' ? '已标记为验证通过' : '已否决')
-    await fetchHypotheses()
-  } catch (e) { ElMessage.error('操作失败') }
-}
-
-// ── Formula methods ──
-
-const fetchFormulaDomains = async () => {
-  try {
-    const res = await axios.get('/api/v1/knowledge/formulas/domains')
-    formulaDomains.value = res.data || []
-  } catch (e) { console.error('获取公式领域失败:', e) }
-}
-
-const selectFormula = (f) => {
-  selectedFormula.value = f
-  calcInputs.value = {}
-  calcResult.value = null
-  if (f.variables) {
-    for (const [k, meta] of Object.entries(f.variables)) {
-      calcInputs.value[k] = meta.default ?? 0
-    }
-  }
-}
-
-const runCalculation = async () => {
-  if (!selectedFormula.value) return
-  calcLoading.value = true
-  calcResult.value = null
-  try {
-    const res = await axios.post('/api/v1/knowledge/formulas/calculate', {
-      formula_id: selectedFormula.value.id,
-      variables: calcInputs.value,
-    })
-    calcResult.value = res.data
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '计算失败')
-  } finally { calcLoading.value = false }
-}
-
-// ── Tab watcher ──
-
-watch(activeTab, (tab) => {
-  if (tab === 'entities') { searchEntitiesLocal(); fetchEntityGraphLocal() }
-  if (tab === 'hypotheses') fetchHypotheses()
-  if (tab === 'formulas') { fetchFormulas(); fetchFormulaCategories() }
-})
-
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (entityChartInstance) {
-    entityChartInstance.dispose()
-    entityChartInstance = null
-  }
 })
 </script>
 
@@ -918,7 +380,6 @@ onUnmounted(() => {
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
-/* ── Tabs ── */
 .knowledge-tabs {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -951,13 +412,6 @@ onUnmounted(() => {
   padding: var(--space-4);
 }
 
-/* ── Filter Card ── */
-.filter-card {
-  margin-bottom: var(--space-4);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-}
-
 .health-summary {
   display: flex;
   flex-wrap: wrap;
@@ -969,101 +423,12 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
 }
 
-/* ── Entity ── */
-.entity-linked-view {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-  margin-top: var(--space-4);
-}
-
-.entity-graph-panel,
-.entity-list-panel {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-4);
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.panel-title {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.panel-hint,
-.panel-count {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.entity-graph-container {
-  height: 500px;
-  width: 100%;
-}
-
-.graph-empty,
-.list-empty {
+.entity-triple-large {
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 300px;
-}
-
-.entity-list-scroll {
-  max-height: 500px;
-  overflow-y: auto;
-  padding: var(--space-3);
-}
-
-.entity-list-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.entity-list-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.entity-list-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-text-placeholder);
-  border-radius: 3px;
-}
-
-.entity-card {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-light);
-  margin-bottom: var(--space-2);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.entity-card:hover {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-
-.entity-card-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-  box-shadow: 0 0 0 2px var(--color-primary-border);
-}
-
-.entity-triple {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-4);
 }
 
 .entity-subject {
@@ -1089,37 +454,6 @@ onUnmounted(() => {
   margin-bottom: var(--space-2);
 }
 
-.entity-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.meta-confidence {
-  margin-left: auto;
-}
-
-.entity-pagination {
-  padding: var(--space-3);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.entity-triple-large {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-lg);
-  margin-bottom: var(--space-4);
-}
-
 .entity-detail-section h4 {
   margin: 0 0 var(--space-3) 0;
   color: var(--color-text-primary);
@@ -1139,238 +473,8 @@ onUnmounted(() => {
   background: var(--color-primary-bg);
 }
 
-/* ── Hypothesis ── */
-.hypothesis-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: var(--space-4);
-}
-
-.hypothesis-card {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  border: 1px solid var(--color-border);
-  transition: all var(--duration-normal) var(--ease-out);
-}
-
-.hypothesis-card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-.hypothesis-proposed {
-  border-left: 4px solid var(--color-warning);
-}
-
-.hypothesis-validated {
-  border-left: 4px solid var(--color-success);
-}
-
-.hypothesis-rejected {
-  border-left: 4px solid var(--color-danger);
-}
-
-.hypothesis-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-}
-
-.hypothesis-confidence {
-  margin-left: auto;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-primary);
-}
-
-.hypothesis-statement {
-  font-size: var(--font-size-md);
-  color: var(--color-text-primary);
-  line-height: 1.6;
-  margin-bottom: var(--space-3);
-}
-
-.hypothesis-rationale,
-.hypothesis-experiment {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin-bottom: var(--space-2);
-}
-
-.hypothesis-actions {
-  display: flex;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border-light);
-}
-
-/* ── Formula ── */
-.formula-list-card {
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-}
-
-.formula-list-header {
-  margin-bottom: var(--space-3);
-}
-
-.filter-row {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-}
-
-.formula-item {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--duration-fast) var(--ease-out);
-  margin-bottom: var(--space-2);
-}
-
-.formula-item:hover {
-  background: var(--color-info-bg);
-}
-
-.formula-selected {
-  background: var(--color-primary-bg);
-  border: 1px solid var(--color-primary-border);
-}
-
-.formula-name {
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-1);
-}
-
-.formula-latex {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  font-family: 'Courier New', monospace;
-  margin-bottom: var(--space-2);
-}
-
-.formula-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.formula-unit {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.formula-category-path {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-1);
-}
-
-/* ── Calculator ── */
-.calculator-card {
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-  position: sticky;
-  top: var(--space-4);
-}
-
-.calculator-card h3 {
-  margin: 0 0 var(--space-2) 0;
-  color: var(--color-text-primary);
-}
-
-.calc-category-path {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-2);
-}
-
-.calculator-formula {
-  font-size: var(--font-size-md);
-  font-family: 'Courier New', monospace;
-  color: var(--color-primary);
-  padding: var(--space-3);
-  background: var(--color-info-bg);
-  border-radius: var(--radius-md);
-  margin: var(--space-3) 0;
-  text-align: center;
-}
-
-.calc-result {
-  margin-top: var(--space-4);
-  padding: var(--space-4);
-  background: var(--color-success-bg);
-  border-radius: var(--radius-md);
-}
-
-.calc-value {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-.calc-unit {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-}
-
-.calc-steps {
-  margin-top: var(--space-3);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border-light);
-}
-
-.steps-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-2);
-}
-
-.calc-step {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-1);
-}
-
-.step-var {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-primary);
-}
-
-.calc-source {
-  margin-top: var(--space-2);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
-
-.calc-source a {
-  color: var(--color-primary);
-  cursor: pointer;
-}
-
-.calc-source a:hover {
-  text-decoration: underline;
-}
-
-/* ── Common ── */
 .clickable {
   cursor: pointer;
-}
-
-.empty-state {
-  padding: var(--space-10) 0;
-}
-
-.qa-loading {
-  text-align: center;
-  padding: var(--space-10);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-md);
 }
 
 .pagination {
@@ -1379,123 +483,10 @@ onUnmounted(() => {
   justify-content: flex-end;
 }
 
-/* ── 响应式 ── */
-@media (max-width: 1200px) {
-  .entity-linked-view {
-    grid-template-columns: 1fr;
-  }
-
-  .entity-graph-container {
-    height: 400px;
-  }
-}
-
 @media (max-width: 768px) {
   .knowledge-tabs :deep(.el-tabs__content) {
     padding: var(--space-3);
   }
-
-  .entity-linked-view {
-    grid-template-columns: 1fr;
-    gap: var(--space-3);
-  }
-
-  .entity-graph-container {
-    height: 300px;
-  }
-
-  .entity-list-scroll {
-    max-height: 400px;
-  }
-
-  .hypothesis-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .filter-row {
-    flex-direction: column;
-  }
-}
-
-/* v28 step 68: 长期记忆 Tab 样式（从 MemoryView.vue 复用） */
-.memory-toolbar {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.memory-loading {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-}
-
-.memory-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.memory-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
-  border-radius: 10px;
-  padding: 14px 16px;
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.memory-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.15);
-}
-
-.memory-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.memory-type-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.memory-type-tag.type-preference { background: var(--color-primary-bg); color: var(--color-primary); }
-.memory-type-tag.type-user_fact { background: var(--color-success-bg); color: var(--color-success); }
-.memory-type-tag.type-task_ctx { background: var(--color-warning-bg); color: var(--color-warning); }
-.memory-type-tag.type-summary { background: var(--color-primary-bg); color: var(--color-primary); }
-.memory-type-tag.type-entity { background: var(--color-primary-bg); color: var(--color-primary); }
-
-.memory-importance {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-}
-
-.memory-key {
-  font-size: 12px;
-  color: var(--color-primary);
-  margin-bottom: 6px;
-}
-
-.memory-content {
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--color-text-primary);
-  margin: 0 0 10px;
-}
-
-.memory-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: var(--color-text-secondary);
 }
 </style>
 
@@ -1507,93 +498,5 @@ onUnmounted(() => {
 [data-theme="dark"] .health-summary {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
-}
-[data-theme="dark"] .entity-graph-panel,
-[data-theme="dark"] .entity-list-panel {
-  background: var(--color-bg-card);
-}
-[data-theme="dark"] .panel-header {
-  border-bottom-color: var(--color-border-light);
-}
-[data-theme="dark"] .entity-card {
-  border-color: var(--color-border-light);
-}
-[data-theme="dark"] .entity-pagination {
-  border-top-color: var(--color-border-light);
-}
-[data-theme="dark"] .hypothesis-card {
-  background: var(--color-bg-card);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .hypothesis-actions {
-  border-top-color: var(--color-border-light);
-}
-[data-theme="dark"] .calc-result {
-  background: var(--color-success-bg);
-}
-[data-theme="dark"] .calc-steps {
-  border-top-color: var(--color-border-light);
-}
-[data-theme="dark"] .memory-card {
-  background: var(--color-bg-card);
-  border-color: var(--color-border-light);
-}
-[data-theme="dark"] .memory-card:hover {
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.25);
-}
-[data-theme="dark"] .memory-type-tag.type-preference {
-  background: rgba(30, 64, 175, 0.18);
-  color: var(--color-primary);
-}
-[data-theme="dark"] .memory-type-tag.type-user_fact {
-  background: rgba(6, 95, 70, 0.22);
-  color: var(--color-success);
-}
-[data-theme="dark"] .memory-type-tag.type-task_ctx {
-  background: rgba(146, 64, 14, 0.22);
-  color: var(--color-warning);
-}
-[data-theme="dark"] .memory-type-tag.type-summary {
-  background: rgba(55, 48, 163, 0.22);
-  color: var(--color-primary);
-}
-[data-theme="dark"] .memory-type-tag.type-entity {
-  background: rgba(159, 18, 57, 0.22);
-  color: var(--color-primary);
-}
-[data-theme="dark"] .memory-content {
-  color: var(--color-text-regular);
-}
-[data-theme="dark"] .entity-list-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-text-placeholder);
-}
-/* v69 P1b fix-2: formula 计算器面板 + 公式列表卡（el-card dark 覆盖未生效场景） */
-[data-theme="dark"] .formula-list-card,
-[data-theme="dark"] .calculator-card,
-[data-theme="dark"] .formula-list-card .el-card__body,
-[data-theme="dark"] .calculator-card .el-card__body {
-  background-color: var(--color-bg-card);
-  color: var(--color-text-primary);
-}
-/* el-empty SVG 默认浅色背景，filter:invert 适配 dark */
-[data-theme="dark"] .el-empty__image svg,
-[data-theme="dark"] .el-empty__image img {
-  filter: invert(0.9) hue-rotate(180deg);
-}
-[data-theme="dark"] .el-empty__description p {
-  color: var(--color-text-secondary);
-}
-[data-theme="dark"] .formula-item {
-  background: transparent;
-}
-[data-theme="dark"] .formula-item:hover {
-  background: var(--color-info-bg);
-}
-[data-theme="dark"] .formula-selected {
-  background: var(--color-primary-bg);
-}
-[data-theme="dark"] .entity-card-active {
-  background: var(--color-primary-bg);
-  box-shadow: 0 0 0 2px var(--color-primary-border);
 }
 </style>
