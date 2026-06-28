@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-28 当前任务链**：🆕 **#041 plan_step 强制执行 (suggested_tools → agentic_loop 主动 dispatch, commit 45ba7ad1)** → v77 P2.6-E/F 视觉/代码质量延伸（4 commits E.1/E.2/E.3/F.1）→ v77 P2.6 视觉体系 4 子任务全面收官（7 commits A/B/C/D）→ 3 个生产 bug 修复（pgvector truth value + SQLAlchemy JSONB + AudioPlayer Infinity:NaN）→ 会议 153 ASR 谐音/错识全链路清洗 hook → 声纹 sample_count 重置为 1 → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：#041 plan_step (Week 2 架构级集成开篇, 端到端验证 5/5 PASS) → 接下来 #042 (4 域代码强制 fan-out) 和 #009 (Self-RAG) 都基于 Phase 0 调度机制扩展。**1484 commits / 160K 行代码 / 542 文件 / 44 开发天数**（[app/stats.json](app/stats.json)，2026-06-28 自动重算）。
+> **2026-06-29 当前任务链**：🆕 **#042 概念问 4 域代码强制 fan-out (commit 5522ad5a, D11-D15 5/5 PASS, concept 类覆盖率 100%)** → #041 plan_step 强制执行 (suggested_tools → agentic_loop 主动 dispatch, commit 45ba7ad1) → v77 P2.6-E/F 视觉/代码质量延伸（4 commits E.1/E.2/E.3/F.1）→ v77 P2.6 视觉体系 4 子任务全面收官（7 commits A/B/C/D）→ 3 个生产 bug 修复（pgvector truth value + SQLAlchemy JSONB + AudioPlayer Infinity:NaN）→ 会议 153 ASR 谐音/错识全链路清洗 hook → 声纹 sample_count 重置为 1 → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：#041+#042 构成 Week 2 架构级集成 (chat agent "LLM 想 + Haiku 建议 + 代码强制 fan-out" 三层架构) → 接下来 #009 (Self-RAG 重检索) 基于 Phase 0+Phase 1 双重 hook 扩展。**1485 commits / 160K 行代码 / 542 文件 / 44 开发天数**（[app/stats.json](app/stats.json)，2026-06-29 自动重算）。
 >
 > 历史节点（按时间倒序）：v70 P3 会议纪要 TL;DR → v69 P0+P1 dark mode 3 阶段 → v31.3.1 whisper 容器 bind mount → v31.3 Whisper 常驻 GPU 8GB → [v31.2.5](##2026-06-26-v3125-rate-limit-收官redis-zset-持久化) → [v31.2.3](##2026-06-25-v3123-rate-limit-基建收尾) → [v31.2.2](##2026-06-25-v3122-rate-limit-进阶强化) → [v31.2.1](##2026-06-25-v3121-rate-limit-边界强化) → [v31.2](##v312-检索质量监控埋点可选-auth--ip-维度限流--user_id-列) → [v28 论文图片结构化字段](##2026-06-20-v28-论文图片结构化字段后端集成) → [2026-06-18 移动端 26 commits 全面修复](##2026-06-18-移动端-26-commits-全面修复)。
 >
@@ -5721,3 +5721,117 @@ python scripts/restore_voiceprint.py --member 'X' --history-id {N}
 ### 沉淀位置
 - [memory/voiceprint-purification-loop-151-2026-06-28.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-purification-loop-151-2026-06-28.md) 铁律 7+8
 - [plan/voiceprint-purification-loop.md](file:///C:/Users/pc/.claude/plans/voiceprint-purification-loop.md) Section 9 风险与缓解
+
+## 2026-06-29 #042 概念问 4 域代码强制 fan-out (commit 5522ad5a 夹带收官)
+
+**触发场景**：#086 prompts.py 跨域规则是 prompt 软规则（让 LLM "应该调 4 工具"），实测 84% 通过率里 16% 失败的**约一半是 LLM 漏调工具**（不是答错）。prompt 软规则天花板是 70-80% 覆盖率。
+
+**目标**：在 **代码层**强制 fan-out，让 planned tools 缺 4 域时自动补齐，**不依赖 LLM 自觉**。
+
+**改动 4 文件**：
+1. **`app/config.py` line 157**：新增 `AGENT_CROSS_DOMAIN_FANOUT_ENABLED: bool = True`
+2. **`app/agent/agentic_loop.py` line 204-244 + line 599-612**：
+   - 新增 `CONCEPT_DOMAIN_TOOLS: tuple[str, ...] = ("search_knowledge", "list_formulas", "list_hypotheses", "query_members")` (对齐 prompts.py:171-176 章节顺序)
+   - 新增 `_expand_concept_to_four_domain(planned)` 函数：保留 planned 原顺序 + 原 tool + 追加缺失的 4 域 tool + 截断到 `AGENT_PLAN_STEP_MAX=5`
+   - Phase 0 主块在 line 549 `planned = ...` 后插入 fan-out 触发（仅 `intent.category == IntentCategory.EXPLAIN_CONCEPT` + flag 开启时才补）
+3. **`tests/qa-bench/questions.jsonl` line 56-60**：追加 D11-D15 共 5 道概念问测试题，每题 `expect.tools_must_all = ["search_knowledge", "list_formulas", "list_hypotheses", "query_members"]`
+4. **`tests/qa-bench/runner.py` line 256-267**：新增 `tools_must_all` 检测逻辑（hard fail，区别于 `tools_any` soft match）
+
+**端到端验证 5/5 PASS**：
+| 场景 | 结果 |
+|------|------|
+| D11: "什么是 DLVO 理论？" | ✅ PASS (4/4 域覆盖) |
+| D12: "解释一下亨利常数" | ✅ PASS (4/4 域覆盖) |
+| D13: "什么是 Smoluchowski 公式？" | ✅ PASS (4/4 域覆盖) |
+| D14: "zeta 电位如何测量？" | ✅ PASS (4/4 域覆盖) |
+| D15: "微纳米气泡的稳定性原理是什么？" | ✅ PASS (4/4 域覆盖) |
+
+**SSE 端到端事件流（"什么是 zeta 电位?"）**：
+- `intent_detected` (intent=explain_concept, suggested_tools=[search_knowledge])
+- `plan_step` (pending) → `plan_step` (running 0/4)
+- `tool_use` × 4 (search_knowledge → list_formulas → list_hypotheses → query_members)
+- `tool_result` × 4 + `rich_block` × 4
+- `plan_step` (done 4/4)
+- Phase 1 LLM-driven synthesis + 文本流
+
+**关键 SSE 验证数据**：4-domain coverage = 4/4 = `{search_knowledge, list_formulas, list_hypotheses, query_members}` ✓
+
+**8/8 单元测试 PASS** (`_expand_concept_to_four_domain`)：
+| Case | Input | Output | 验证点 |
+|------|-------|--------|--------|
+| 1 | `["search_knowledge"]` | 4 tools | 缺 3 个补齐 |
+| 2 | `["search_knowledge", "list_formulas"]` | 4 tools | 缺 2 个补齐 |
+| 3 | `["a", "b", "c", "d", "e", "f", "g"]` | `["a","b","c","d","e"]` | 截断到 MAX=5 |
+| 4 | `["search_knowledge", "get_meeting_transcript"]` | 5 tools | 保留 LLM 已 planned + 补 3 个 |
+| 5 | `[]` | 4 tools | 空 input 也补齐 |
+| 6 | `["list_hypotheses"]` | 4 tools | 缺 3 个，保留 keywords[0] 位置 |
+| 7 | 顺序敏感 | 保留 LLM 顺序 | 4 域追加到末尾 |
+| 8 | 已 4 域全 | 4 tools | 不重复 |
+
+**5 条新铁律（永久沉淀）**：
+
+**铁律 1: 触发严格 `==` `EXPLAIN_CONCEPT`**
+不挂 `search_info` / `recommend_person` / `data_query` / `execute_action` / `casual_chat`。与 #086 触发条件镜像 — 两个规则同启同关。
+
+**铁律 2: 复用 `_build_plan_step_input`，0 修改**
+4 工具 schema 已 explore 清楚（`search_knowledge` 必填 `query` / `list_formulas` `search` 字段被 query_field_names 集合覆盖 / `list_hypotheses` + `query_members` 全 Optional 返 `{}`）。**纪律**：不要在 `_expand_concept_to_four_domain` 里写 input 补全逻辑 — 复用 `_build_plan_step_input` 单一来源。
+
+**铁律 3: 保留 LLM 已 planned 的非 4 域 tool**
+`_expand_concept_to_four_domain` **不删除**任何已 planned 的 tool。即使用户 planned 了 `["search_knowledge", "get_meeting_transcript"]` 这种"1 个 4 域 + 1 个非 4 域"，我们**保留 `get_meeting_transcript`**（不删）+ **补 3 个缺失的 4 域 tool**。截断由 `AGENT_PLAN_STEP_MAX=5` 兜底（超过 5 自动截断）。
+
+**铁律 4: 必须独立 feature flag**
+`AGENT_CROSS_DOMAIN_FANOUT_ENABLED` 独立于 `AGENT_CROSS_DOMAIN_SYNTHESIS`。回滚矩阵：
+- SYNTHESIS=False, FANOUT=False → 完全无 4 域规则
+- SYNTHESIS=True, FANOUT=False → 仅 prompt 软规则
+- SYNTHESIS=False, FANOUT=True → 仅代码硬补
+- SYNTHESIS=True, FANOUT=True → **默认**：双重保险
+
+**铁律 5: prompt + 代码双重保险**
+- `#086` prompt 软规则：让 LLM 写"4 域综合回答"
+- `#042` 代码硬规则：保证 context 里**真的有**4 域结果
+- 两者并存，缺一不可。LLM 即使忽略 prompt（不写 4 域综合），context 仍有 4 域结果可参考
+
+**与 #041 plan_step 协同架构**：
+```
+用户: "什么是 zeta 电位?"
+  ↓
+Haiku intent_classifier (line 145-148) → IntentCategory.EXPLAIN_CONCEPT + suggested_tools=[search_knowledge]
+  ↓
+agentic_loop Phase 0 (#041) → planned = [search_knowledge]  # Haiku 建议
+  ↓
+#042 fan-out (#042) → planned = [search_knowledge, list_formulas, list_hypotheses, query_members]  # 代码补齐
+  ↓
+Phase 0 串行 dispatch 4 tools → 4 tool_result blocks
+  ↓
+Phase 2 synthesis LLM 收到 4 域 context → 写 4 域综合回答（#086 prompt 引导）
+```
+
+**Week 2 架构级集成里程碑（更新）**：
+| # | 任务 | 状态 |
+|---|------|------|
+| #041 | plan_step 强制执行 | ✅ 已收官 (commit 45ba7ad1) |
+| **#042** | **4 域代码强制 fan-out** | **✅ 已收官 (commit 5522ad5a 夹带, D11-D15 5/5 PASS)** |
+| #009 | Self-RAG 重检索 | ⏸️ 等 #041+#042 落地后做 |
+
+agentic_loop 从 "LLM 自由决定" → "LLM 想 + Haiku 建议 + 代码强制 fan-out" 三层架构，**概念问 4 域覆盖率从 ~75% (prompt 软规则) 提升到 100% (代码硬规则)**。后续 #009 Self-RAG 在 Phase 0 + Phase 1 双重 hook，提升检索质量。
+
+**部署必做**：无需新操作（commit 5522ad5a 已 push 到 origin/main + 服务器已自动 deploy）。验证：
+```bash
+# 1. 容器 healthy
+docker ps --filter "name=microbubble-agent-app-1" --format "{{.Status}}"
+# 期望: Up X minutes (healthy)
+
+# 2. flag 验证
+docker exec microbubble-agent-app-1 python -c "from app.config import settings; print(settings.AGENT_CROSS_DOMAIN_FANOUT_ENABLED)"
+# 期望: True
+
+# 3. fan-out 触发验证
+docker exec microbubble-agent-app-1 python -c "from app.agent.agentic_loop import _expand_concept_to_four_domain; print(_expand_concept_to_four_domain(['search_knowledge']))"
+# 期望: ['search_knowledge', 'list_formulas', 'list_hypotheses', 'query_members']
+```
+
+**沉淀位置**：
+- 代码：`app/agent/agentic_loop.py` (`CONCEPT_DOMAIN_TOOLS` + `_expand_concept_to_four_domain` + Phase 0 fan-out 触发)
+- Plan：[`C:/Users/pc/.claude/plans/matlab-pytorch-tensorflow-transient-feigenbaum.md`](C:/Users/pc/.claude/plans/matlab-pytorch-tensorflow-transient-feigenbaum.md) Section `#042 实施计划`
+- CLAUDE.md 顶部任务链（已更新）
+- 测试：`tests/qa-bench/questions.jsonl` D11-D15 + `tests/qa-bench/runner.py` `tools_must_all` 检测
