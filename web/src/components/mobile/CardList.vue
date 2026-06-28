@@ -408,7 +408,7 @@ watch(
   justify-content: center;
   flex-shrink: 0;
   margin-top: 2px;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
 }
 .list-item.selected .checkbox {
   background: var(--color-primary);

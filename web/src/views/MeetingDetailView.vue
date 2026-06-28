@@ -1011,7 +1011,7 @@ onMounted(async () => {
   cursor: pointer;
   border: 2px dashed var(--color-border, #ebeef5);
   border-radius: var(--radius-lg, 12px);
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
 }
 .call-placeholder:hover {
   border-color: var(--color-primary, #FF7A5C);
@@ -1130,7 +1130,7 @@ onMounted(async () => {
   font-weight: 500;
   color: var(--color-text-primary, #303133);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: var(--transition-all-fast) ease;
   min-width: 64px;
   text-align: left;
 }
@@ -1294,7 +1294,7 @@ onMounted(async () => {
 .item-row {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 10px; background: var(--color-bg-page, #f5f7fa); border-radius: var(--radius-md, 8px);
-  border: 1px solid transparent; transition: all 0.2s;
+  border: 1px solid transparent; transition: var(--transition-all-normal);
 }
 .item-row:hover, .item-row:focus-within { border-color: rgba(var(--color-primary-rgb), 0.3); background: var(--color-primary-bg, #fff0ed); }
 .item-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--color-primary, #FF7A5C); }

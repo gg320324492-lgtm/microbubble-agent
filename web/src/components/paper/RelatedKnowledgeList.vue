@@ -124,7 +124,7 @@ const truncate = (text, n) => {
   border-radius: 10px;
   padding: 14px 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
   display: flex;
   flex-direction: column;
   gap: 8px;

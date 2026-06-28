@@ -737,7 +737,7 @@ const formatTime = (t) => {
 /* --- 汉堡图标旋转过渡 --- */
 .icon-swap-enter-active,
 .icon-swap-leave-active {
-  transition: all 0.25s var(--ease-out);
+  transition: var(--transition-all-slow) var(--ease-out);
 }
 .icon-swap-enter-from {
   opacity: 0;
@@ -836,7 +836,7 @@ const formatTime = (t) => {
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: var(--transition-all-normal) ease;
   backdrop-filter: blur(12px);
   user-select: none;
 }

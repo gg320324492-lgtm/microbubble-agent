@@ -360,7 +360,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: var(--transition-all-slower);
   /* stylelint-disable-next-line color-named */
   color: white;
   box-shadow: 0 4px 15px rgba(255, 122, 92, 0.4);

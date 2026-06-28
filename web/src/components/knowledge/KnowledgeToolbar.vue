@@ -184,6 +184,12 @@ const resetFilters = () => {
   background: var(--color-primary);
   border-color: var(--color-primary);
   color: var(--el-color-white);
+
+  --el-button-hover-bg-color: var(--color-primary-dark);
+  --el-button-hover-border-color: var(--color-primary-dark);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-active-bg-color: var(--color-primary-dark);
+  --el-button-active-border-color: var(--color-primary-dark);
 }
 
 .btn-text {

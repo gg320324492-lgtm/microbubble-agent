@@ -264,7 +264,7 @@ defineExpose({ stop, togglePlay })
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
   box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.3);
 }
 .play-btn:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(var(--color-primary-rgb), 0.4); }
@@ -315,7 +315,7 @@ defineExpose({ stop, togglePlay })
   color: var(--color-text-secondary, #909399);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-all-fast);
   flex-shrink: 0;
 }
 .speed-btn:hover {

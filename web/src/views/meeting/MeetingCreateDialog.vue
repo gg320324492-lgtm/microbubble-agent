@@ -269,7 +269,7 @@ const onClose = () => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
   min-width: 120px;
 }
 .template-card:hover {

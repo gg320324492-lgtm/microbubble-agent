@@ -770,7 +770,7 @@ onMounted(() => {
   padding: 0 !important;
   border: 1.5px solid var(--color-border) !important;
   background: var(--color-bg-card) !important;
-  transition: all 0.2s ease !important;
+  transition: var(--transition-all-normal) ease !important;
 }
 .action-btn:hover {
   transform: translateY(-1px);
@@ -796,7 +796,7 @@ onMounted(() => {
 .item-row {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 10px; background: var(--color-bg-page); border-radius: var(--radius-md);
-  border: 1px solid transparent; transition: all 0.2s;
+  border: 1px solid transparent; transition: var(--transition-all-normal);
 }
 .item-row:hover, .item-row:focus-within {
   border-color: var(--color-primary-border); background: var(--color-primary-bg);
@@ -844,7 +844,7 @@ onMounted(() => {
   padding: 10px 12px;
   background: var(--color-bg-card);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: var(--transition-all-fast) ease;
   position: relative;
 }
 .template-card:hover {

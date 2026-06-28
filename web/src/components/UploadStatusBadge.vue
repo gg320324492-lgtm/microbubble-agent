@@ -82,7 +82,7 @@ function onManualRetry() {
   color: var(--color-text-primary, #333);
   margin: 12px auto;
   max-width: 90%;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
 }
 
 .upload-status-badge.is-offline {
@@ -134,7 +134,7 @@ function onManualRetry() {
   padding: 4px 12px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-all-fast);
 }
 .badge-action:hover { background: var(--color-danger); }
 

@@ -703,7 +703,7 @@ onUnmounted(cleanup)
   cursor: pointer;
   position: relative;
   -webkit-tap-highlight-color: transparent;
-  transition: all 0.2s;
+  transition: var(--transition-all-normal);
 }
 .record-circle:active { transform: scale(0.97); }
 .record-circle.recording {

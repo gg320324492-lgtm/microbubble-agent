@@ -293,7 +293,7 @@ onUnmounted(() => {
   font-size: 13px;
   line-height: 1.5;
   color: var(--color-text-secondary);
-  transition: all 0.15s;
+  transition: var(--transition-all-fast);
   margin-bottom: 2px;
   position: relative;
 }
@@ -372,7 +372,7 @@ onUnmounted(() => {
   font-size: 12.5px;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-all-fast);
 }
 
 .anchor-module-item:hover {
