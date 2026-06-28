@@ -734,6 +734,37 @@ body {
   --el-button-hover-border-color: var(--color-primary-light);
   color: #fff;
 }
+/* v77 P2.6-D 收官: ocean / forest 主题 plain primary 按钮对比度适配（EP 默认 light-9 极浅蓝底+蓝字，对比度 ~2.5:1 不达标）*/
+[data-accent="ocean"] .el-button--primary.is-plain,
+[data-accent="ocean"] .el-button--primary.is-text,
+[data-accent="ocean"] .el-button--primary.is-link {
+  --el-button-text-color: var(--color-primary);
+  --el-button-bg-color: var(--color-primary-bg);
+  --el-button-border-color: var(--color-primary-border);
+  --el-button-hover-bg-color: var(--color-primary);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-hover-border-color: var(--color-primary);
+}
+[data-accent="forest"] .el-button--primary.is-plain,
+[data-accent="forest"] .el-button--primary.is-text,
+[data-accent="forest"] .el-button--primary.is-link {
+  --el-button-text-color: var(--color-primary);
+  --el-button-bg-color: var(--color-primary-bg);
+  --el-button-border-color: var(--color-primary-border);
+  --el-button-hover-bg-color: var(--color-primary);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-hover-border-color: var(--color-primary);
+}
+/* dark 主题组合：deepen 背景 */
+[data-theme="dark"][data-accent="ocean"] .el-button--primary.is-plain,
+[data-theme="dark"][data-accent="ocean"] .el-button--primary.is-text,
+[data-theme="dark"][data-accent="ocean"] .el-button--primary.is-link,
+[data-theme="dark"][data-accent="forest"] .el-button--primary.is-plain,
+[data-theme="dark"][data-accent="forest"] .el-button--primary.is-text,
+[data-theme="dark"][data-accent="forest"] .el-button--primary.is-link {
+  --el-button-bg-color: rgba(var(--color-primary-rgb), 0.18);
+  --el-button-border-color: rgba(var(--color-primary-rgb), 0.40);
+}
 [data-theme="dark"] .el-drawer {
   background-color: var(--color-bg-card);
   color: var(--color-text-primary);

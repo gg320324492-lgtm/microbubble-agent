@@ -16,11 +16,10 @@ const formatDate = (d) => {
   catch { return d }
 }
 
-const priorityColor = (p) => {
-  // v77 P2.5.3: getComputedStyle 读 token 实色值
-  const map = { high: '--color-danger', medium: '--color-warning', low: '--color-text-secondary' }
-  const token = map[p] || '--color-text-secondary'
-  return getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+const priorityClass = (p) => {
+  // v77 P2.6-E.1: 收敛 priorityColor 改成 class 拼接（_runtime-style-tokens.scss .priority-dot--*）
+  const map = { high: 'priority-dot--high', medium: 'priority-dot--medium', low: 'priority-dot--low' }
+  return map[p] || 'priority-dot--low'
 }
 
 const statusLabel = (s) => {
@@ -46,7 +45,7 @@ const goToTask = (id) => { if (id) router.push(`/tasks?task_id=${id}`) }
     </div>
     <div v-for="t in tasks" :key="t.id" class="task-item" @click="goToTask(t.id)">
       <div class="task-row1">
-        <span class="priority-dot" :style="{ background: priorityColor(t.priority) }" />
+        <span class="priority-dot" :class="priorityClass(t.priority)" />
         <span class="task-title">{{ t.title }}</span>
         <span class="status" :class="t.status">{{ statusLabel(t.status) }}</span>
       </div>
