@@ -21,6 +21,11 @@
 
 ## 最新里程碑（2026-06-28）
 
+- 🆕 **v77 P2.6-E/F 视觉/代码质量延伸（4 commits）**
+  - **P2.6-E.1 CSS-in-JS 收官**（commit `ed5e5e16`，8 处 runtime `:style` → 7 个枚举 class，scss 55→105 行）
+  - **P2.6-E.2 缓动字面量 token 化**（commit `dcd1657b`，70 处 → `var(--ease-*)` + `--ease-out` 升级 Material Decelerate + `--ease-quad` 新增 + scripts/replace-easing-literals.js Node.js 脚本）
+  - **P2.6-E.3 KnowledgeView 拆分**（commit `c06482b5`，1599 → 501 行，抽 4 tab + 1 dialog 5 个组件，entityChartInstance 生命周期从父移到子避免内存泄漏）
+  - **P2.6-F.1 transition: all token 化**（commit `e362ad8e`，27 处 / 17 文件 → `var(--transition-all-*)` + scripts/replace-transition-all-literals.js）
 - 🆕 **v77 P2.6 视觉体系 4 子任务全面收官（A/B/C/D 共 7 commits）**
   - **P2.6-A paper 14 组件 + 桌面 5 view + ChartBlock token dark 全面化**（commit `36049629`，移动端 9/15 → 15/15 + Rich Block 11/11 dark 化收官）
   - **P2.6-B Bug 修复 + 移动端 14 view + 6 组件 + 1 Block dark 化 + Desktop Baseline 6 路由**（commit `8905003a`，PaperHeader plain 按钮 dark bug + FallbackBlock dark 化）
@@ -46,7 +51,7 @@
 
 详见 [CHANGELOG.md](CHANGELOG.md) 最新条目 + [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)
 
-**统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：**1468 commits / 283K 行代码 / 738 文件 / 44 开发天数**（json 80.9K / py 58.4K / md 50.1K / vue 49.8K / js 18.6K / sql 11.2K / html 3.5K / css 2.2K / scss 0.1K）
+**统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：**1483 commits / 160K 行代码 / 542 文件 / 44 开发天数**（py 48.4K / vue 42.8K / md 32.1K / js 17.2K / json 11.2K / html 3.5K / css 1.8K / sh 1.7K / ts 1.4K / scss 0.2K / sql 0.1K）
 
 ## 技术栈
 

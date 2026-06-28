@@ -2,6 +2,129 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [2026-06-28] v77 P2.6-E/F 视觉/代码质量延伸（4 commits）
+
+v77 P2.6 视觉体系 4 子任务收官后，把 P2.6-D "不在本次范围"列表里 3 项 deferred work 一次性收官：(E.1) CSS-in-JS 收官 + (E.2) 缓动字面量 token 化 + (E.3) KnowledgeView 1599→501 行拆分 + (F.1) transition: all token 化。
+
+### 🎨 [2026-06-28] v77 P2.6-E.1 CSS-in-JS 收官（commit `ed5e5e16`）
+
+8 处 runtime `:style` → 7 个枚举 class，`_runtime-style-tokens.scss` 55 → 105 行：
+
+| 枚举 class | 文件 | 替换 runtime `:style` |
+|---|---|---|
+| `.priority-dot--{high,medium,low}` | TaskListBlock | `priorityColor(priority)` |
+| `.status-dot--{scheduled,in_progress,completed,cancelled,recording,processing}` | MeetingCard | `statusColor(status)` 背景圆点 |
+| `.status--*`（color） | MeetingCard | `statusColor(status)` 文字色 |
+| `.hyp-status--{proposed,validated,rejected}` | HypothesisBlock | `statusColor(status)` badge 背景 |
+| `.role--{owner,admin,leader,member}` | MemberCardBlock | `roleColor(role)` |
+| `.bar--{low,mid,high}` | VoiceprintCard | `barColor(value)`（per-pixel rgba 保留） |
+| `.conf-bar--{high,mid,low}` | SpeakerSearchSheet + MobileKnowledgeDetailView | `confidenceColor(confidence)` |
+| `.quick-icon--{chat,task,meeting,knowledge,me}` | MobileDashboard | `action.bg`（5 项专属渐变） |
+| `.theme-preview--{orange,ocean,forest}` | SettingsView | `opt.preview`（3 项主题色） |
+| `.card-file-hero--{pdf,word,ppt,excel,other}` | KnowledgeCard | `fileHeroGradient`（5 类文件） |
+| `.category-badge--<14 类>` | KnowledgeCard | `accentColor + '15'` |
+
+**保留不替换**（按 plan "真 dynamic 必须保留"原则）：
+- `VoiceprintCard` bar — per-pixel `rgba()` 基于 value (-1~1)，必须 inline
+- `MobileKnowledgeDetailView` conf-bar width-only dynamic（无 color）
+
+**颜色修正**（scss 初版与原 runtime 不一致）：
+- `priority-dot--low`: `--color-success`（绿）→ `--color-text-secondary`（灰）
+- `role--admin`: `--color-warning`（黄）→ `--color-danger`（红）
+- `theme-preview--ocean/forest`: hex 与原 `accentOptions.preview` 对齐
+
+**token orphan 0 / stylelint 0 errors / vitest 396 PASS / build 0 警告**
+
+### ⚙️ [2026-06-28] v77 P2.6-E.2 缓动字面量 token 化（commit `dcd1657b`）
+
+70 处 → `var(--ease-*)` + 升级 `--ease-out` + 新增 `--ease-quad`：
+
+- **variables.css line 130-140 升级**：
+  - `--ease-out: ease-out` → `cubic-bezier(0, 0, 0.2, 1)` Material Decelerate（BC break 视觉差异 < 5%，Playwright 0.2% 阈值兜底）
+  - `--ease-in-out: ease-in-out` → `cubic-bezier(0.4, 0, 0.2, 1)` Material Standard
+  - 新增 `--ease-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94)`（DashboardPet:926 outlier）
+- **`scripts/replace-easing-literals.js`** Node.js 脚本（CLAUDE.md PowerShell UTF-8 BOM 第 4 次教训强化）：
+  - 121 个 .vue/.css/.scss 文件扫描
+  - 7 个 regex 模式（cubic-bezier 6 类 + 关键字 ease-out/ease-in-out）
+  - 负向 word-boundary `(?<![-a-zA-Z0-9_])...(?![-a-zA-Z0-9_])` 防止误匹配
+  - 排除 variables.css 自身 + _runtime-style-tokens.scss
+  - UTF-8 无 BOM 写（`fs.writeFileSync(path, content, 'utf8')`）
+- 实际替换 **70 处**（plan 估 145，实际更少 = 95 处是误算或重复模式）
+
+### 🧩 [2026-06-28] v77 P2.6-E.3 KnowledgeView 1599 → 501 行拆分（commit `c06482b5`）
+
+抽 5 个新组件到 `web/src/components/knowledge/`：
+
+| 新组件 | 行数 | 职责 |
+|---|---|---|
+| `KnowledgeEntityTab.vue` | 415 | 实体图谱 tab + ECharts force layout |
+| `KnowledgeHypothesisTab.vue` | 218 | 假设列表 + generate + validate |
+| `KnowledgeFormulaTab.vue` | 356 | 公式列表 + 计算器面板 |
+| `KnowledgeMemoryTab.vue` | 283 | 长期记忆 tab（懒加载，初始不 fetch） |
+| `KnowledgeCreateDialog.vue` | 142 | 知识添加/编辑对话框 |
+
+**关键架构改进**：
+- `entityChartInstance` 生命周期从 `KnowledgeView` 移到 `KnowledgeEntityTab` 内部
+- 子组件 `onBeforeUnmount(() => entityChartInstance.dispose())` 避免内存泄漏
+- 父组件 `onUnmounted` 不再 dispose ECharts（避免时序错位）
+
+**Vue 3 编译期坑修复**：
+- `<el-dialog :model-value="modelValue">` → 编译错误 `v-model cannot be used on a prop`
+- 改用 computed `{ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) }` 桥接
+- `<el-pagination v-model:current-page="entityPage">` → 同样编译错误（entityPage 是 prop）
+- 改用 `:current-page` + `@current-change="(p) => $emit('page-change', p)"`，父组件 emit 接收
+
+**净行数变化**：原 1599 → 5 子组件共 1414 行 + 主 View 501 行 = 1915 行（净 +316 行，dark 块 + 注释重复成本）
+
+**未达 350 行目标**（plan 估） — 实际 501 行（实体 detail dialog 留在父 + 5 imports + dark 块）。**核心拆分目标达成**：每个 tab 独立可测、可维护。
+
+### ⚡ [2026-06-28] v77 P2.6-F.1 transition: all 0.Xs token 化（commit `e362ad8e`）
+
+27 处 / 17 文件 → `var(--transition-all-*)`：
+
+- **variables.css line 125-129 新增 4 个 token**：
+  - `--transition-all-fast: all 0.15s`（AudioPlayer / VoiceprintCard 等细粒度）
+  - `--transition-all-normal: all 0.2s`（CardList / Paper* / ThemeToggleButton）
+  - `--transition-all-slow: all 0.25s`（TabBar / ChatViewSSE 等较大过渡）
+  - `--transition-all-slower: all 0.3s`（VoiceRecorder / VoiceTestDialog）
+- **`scripts/replace-transition-all-literals.js`** Node.js 脚本：
+  - 4 个 regex（最长到最短，避免 0.2s 误匹配 0.25s）
+  - 负向 word-boundary `(?!\w)` 防止误匹配
+  - 排除 variables.css 自身 + _runtime-style-tokens.scss
+
+**不替换**（保留手工处理）：
+- `transition: all Xs ease`（含 ease 关键字，~7 处）
+- `transition: all Xs !important`（1 处）
+
+**13 处剩余 runtime `:style` 调查结论**（plan 误估）：
+- 全项目 grep 55 处 `:style="{"`，剔除 P2.6-E.1 已处理的 + 真正动态的
+- 剩余 35 处全是**真正动态**：width % (进度条) / height px (波形条) / animationDelay (stagger CSS var) / zIndex (层叠) / fontSize dynamic (avatar size)
+- **无法**也不应该抽 class（per-instance dynamic values）
+
+**commit 推送踩坑**：
+- 本地 `git add web/src/` 时不应包含其他窗口的 untracked 文件 — `researchAreaSkills.js` 是其他窗口 P2.6-D 收官产物被一并 stage
+- 修复：commit 后立即 `git rm --cached researchAreaSkills.js` + `git commit --amend`，再用 `git push --force-with-lease` 覆盖远端
+
+**token orphan 0 / stylelint 0 errors / vitest 396 PASS / build 0 警告**
+
+### 📚 沉淀（4 commit 链 + 5 铁律）
+
+完整复盘见 [memory/v77-p26-e-and-f-visual-quality.md](memory/v77-p26-e-and-f-visual-quality.md)
+
+**4 条铁律**：
+1. **v-model 不能直接绑定子组件 props**（Vue 3 编译期错误）→ 用 `:model-value` + `@update:model-value` 或 computed `{ get, set }` 桥接
+2. **el-pagination v-model:current-page 在子组件 props 场景必须改用 :current-page + @current-change**，父用 emit('page-change', p) 接收
+3. **Node.js 脚本批量替换 .vue/.css 字面量时，正则必须用 word-boundary `(?!\w)` 避免 0.2s 误匹配 0.25s**（CLAUDE.md PowerShell UTF-8 BOM 第 4 次教训延伸）
+4. **拆分巨型主 View 时，状态所有权（如 ECharts instance）必须从父移到子组件**，子组件 onBeforeUnmount dispose 避免内存泄漏
+5. **本地 `git add web/src/` 前先 `git status --short` 确认 staged diff 干净**，避免其他窗口 untracked 文件被一并 stage
+
+### 不在本次范围（CLAUDE.md 顶部"不在本次范围"）
+
+- MeetingView 1088 行拆分（plan 估 1653 实际 1088）— defer（复杂 CRUD + 6 dialogs，2-3h 重构风险高）
+- agentic_loop.py 1123 行拆分（plan 估 1370 实际 1123）— defer（后端核心模块）
+- Web Push Notification / Periodic Background Sync — 后端走企业微信，投资回报低
+- 后端 alembic 033 / agent_traces 清理 — 后端运维轮次
+
 ## [2026-06-28] v77 P2.6 视觉体系 4 子任务全面收官（A/B/C/D 共 7 commits）
 
 ### 🎯 v77 P2.6 整体目标

@@ -225,6 +225,30 @@
   "changelog": [
     {
       "date": "2026-06-28",
+      "tag": "优化",
+      "title": "v77 P2.6-F transition: all 0.Xs token 化 (27 处 → var(--transition-all-*))",
+      "pain_point": "新增 4 个 --transition-all-fast/normal/slow/slower token + scripts/replace-transition-all-literals.js Node.js 脚本（UTF-8 无 BOM）+ 17 文件 27 处自动替换"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "重构",
+      "title": "v77 P2.6-E.3 KnowledgeView 1599 → 501 行拆分 (4 tab + 1 dialog 抽组件)",
+      "pain_point": "抽 KnowledgeEntityTab (含 ECharts force layout) / HypothesisTab / FormulaTab / MemoryTab / CreateDialog 5 个新组件，entityChartInstance 生命周期从父移到子避免内存泄漏"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "功能",
+      "title": "v77 P2.6-E.2 缓动字面量 token 化收官 (70 处 → var(--ease-*))",
+      "pain_point": "--ease-out 升级 Material Decelerate (cubic-bezier(0, 0, 0.2, 1)) + --ease-quad 新增 (DashboardPet outlier) + scripts/replace-easing-literals.js Node.js 脚本"
+    },
+    {
+      "date": "2026-06-28",
+      "tag": "重构",
+      "title": "v77 P2.6-E.1 CSS-in-JS 收官 (8 处 runtime :style → 7 个枚举 class)",
+      "pain_point": "_runtime-style-tokens.scss 55 → 105 行，新增 status-dot--* (6) / role--* (4) / bar--* / conf-bar--* / quick-icon--* / theme-preview--* / card-file-hero--* / category-badge--* 枚举类，VoiceprintCard per-pixel rgba 保留"
+    },
+    {
+      "date": "2026-06-28",
       "tag": "功能",
       "title": "v77 P2.6-D PWA SW 强化 + 动效治理 + CSS-in-JS 收敛 + Baseline 9 路由",
       "pain_point": "Background Sync 4 写场景 + Navigation Preload + Local Notification + 6 处重复 keyframes 清理 + 12 --animation-* + 3 处 avatar runtime style → .avatar-color-N 枚举 class + 18 张新 baseline PNG"
