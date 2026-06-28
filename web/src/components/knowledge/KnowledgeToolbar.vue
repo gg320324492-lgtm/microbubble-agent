@@ -181,12 +181,18 @@ const resetFilters = () => {
 }
 
 .toolbar-actions .el-button--primary {
-  /* v77 P2.6-D 终极修复: 直接用 EP 的 --el-color-primary 实色 (#409EFF)
-     而非 var(--color-primary) — 后者在 ocean light 下被某条规则覆盖变浅
-     + 加 !important 防 EP 默认 + 其他全局规则覆盖 */
+  /* v77 P2.6-D 终极对齐: 复制 KnowledgeDashboard .category-active 视觉
+     - 圆角 + 加粗 + 紧凑 padding → 跟 "全部" chip 看着一样厚重
+     - !important 4 个属性 → 防 EP 默认 button 残留阴影/边框
+     - EP --el-color-primary 实色 (而非 var(--color-primary)) → 6 主题稳定 */
   background-color: var(--el-color-primary) !important;
   border-color: var(--el-color-primary) !important;
   color: var(--el-color-white) !important;
+  font-weight: 600 !important;
+  border-radius: var(--radius-full) !important;
+  padding: 8px 20px !important;
+  box-shadow: none !important;
+  outline: none !important;
 
   --el-button-hover-bg-color: var(--el-color-primary-light-3) !important;
   --el-button-hover-border-color: var(--el-color-primary-light-3) !important;
