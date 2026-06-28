@@ -45,8 +45,11 @@
 
 // ===== 角色徽章 =====
 // v77 P2.6-E.1: 收敛 MemberCardBlock.vue:32 runtime :style
+// 原 roleColor 映射: admin=danger, leader=warning, member=text-secondary
+// owner 是 plan 预留(未在原代码出现)，保持 primary
 .role--owner  { color: var(--color-primary); font-weight: 600; }
-.role--admin  { color: var(--color-warning); font-weight: 600; }
+.role--admin  { color: var(--color-danger); font-weight: 600; }
+.role--leader { color: var(--color-warning); font-weight: 600; }
 .role--member { color: var(--color-text-secondary); }
 
 // ===== 卡片徽章（移动端 CardList）=====
@@ -69,27 +72,52 @@
 
 // ===== 快速图标背景 (mobile Dashboard) =====
 // v77 P2.6-E.1: 收敛 MobileDashboard.vue:27 action.bg runtime :style
+// 通用 4 色类 + mobile Dashboard 5 项专属渐变
 .quick-icon--primary { background: var(--color-primary-bg); color: var(--color-primary); }
 .quick-icon--success { background: var(--color-success-bg); color: var(--color-success); }
 .quick-icon--warning { background: var(--color-warning-bg); color: var(--color-warning); }
 .quick-icon--danger  { background: var(--color-danger-bg); color: var(--color-danger); }
+.quick-icon--chat     { background: var(--gradient-welcome-hero); }
+.quick-icon--task     { background: linear-gradient(135deg, #67C23A, #95D475); }
+.quick-icon--meeting  { background: linear-gradient(135deg, #E6A23C, #F3D178); }
+.quick-icon--knowledge { background: linear-gradient(135deg, #409EFF, #79BBFF); }
+.quick-icon--me       { background: linear-gradient(135deg, #909399, #B9BCC1); }
 
 // ===== 主题色预览 swatch (SettingsView) =====
 // v77 P2.6-E.1: 收敛 SettingsView.vue:221 opt.preview runtime :style
-.theme-preview--orange { background: linear-gradient(135deg, #FF7A5C, #FFB347); }
-.theme-preview--ocean  { background: linear-gradient(135deg, #2563EB, #06B6D4); }
-.theme-preview--forest { background: linear-gradient(135deg, #059669, #10B981); }
+// 颜色与原 accentOptions.preview 完全一致（视觉零变化）
+.theme-preview--orange { background: linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%); }
+.theme-preview--ocean  { background: linear-gradient(135deg, #4A90E2 0%, #5AD8A6 100%); }
+.theme-preview--forest { background: linear-gradient(135deg, #4CAF50 0%, #FFB74D 100%); }
 
 // ===== 文件 hero 渐变 (KnowledgeCard) =====
 // v77 P2.6-E.1: 收敛 KnowledgeCard.vue:12 fileHeroGradient runtime :style
-.card-file-hero--pdf { background: var(--gradient-paper-warm); }
-.card-file-hero--doc { background: var(--gradient-paper-cool); }
-.card-file-hero--img { background: var(--gradient-paper-neutral); }
+// 5 类文件 type → 5 个类（颜色与原 fileTypeInfo.gradient 完全一致）
+.card-file-hero--pdf   { background: linear-gradient(135deg, #FEE2E2 0%, #FCA5A5 100%); }
+.card-file-hero--word  { background: linear-gradient(135deg, #DBEAFE 0%, #93C5FD 100%); }
+.card-file-hero--ppt   { background: linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%); }
+.card-file-hero--excel { background: linear-gradient(135deg, #D1FAE5 0%, #6EE7B7 100%); }
+.card-file-hero--other { background: linear-gradient(135deg, #E5E7EB 0%, #9CA3AF 100%); }
 
 // ===== category-badge dynamic (KnowledgeCard) =====
 // v77 P2.6-E.1: 命名约定 .category-badge--<知识分类 name 小写连字符>
-// 共用 EP --el-color-* 体系, 直接在 template 拼字符串
-// 实际颜色由 KnowledgeCard.vue 内的 helper 动态生成 inline class 名
+// 颜色映射与原 categoryColors 完全一致（视觉零变化）
+// 14 类知识 + 1 fallback；颜色 0x15 alpha 用 rgba 形式（不靠 hex alpha 简写避免浏览器兼容问题）
+.category-badge--default     { background: rgba(255, 122, 92, 0.15); color: #FF7A5C; }
+.category-badge--微纳米气泡   { background: rgba(255, 122, 92, 0.15); color: #FF7A5C; }
+.category-badge--水处理      { background: rgba(84, 112, 198, 0.15); color: #5470c6; }
+.category-badge--农业        { background: rgba(145, 204, 117, 0.15); color: #91cc75; }
+.category-badge--消毒        { background: rgba(238, 102, 102, 0.15); color: #ee6666; }
+.category-badge--测量        { background: rgba(115, 192, 222, 0.15); color: #73c0de; }
+.category-badge--应用        { background: rgba(252, 132, 82, 0.15);  color: #fc8452; }
+.category-badge--论文        { background: rgba(59, 130, 246, 0.15);  color: #3b82f6; }
+.category-badge--方法        { background: rgba(139, 92, 246, 0.15);  color: #8b5cf6; }
+.category-badge--标准        { background: rgba(245, 158, 11, 0.15);  color: #f59e0b; }
+.category-badge--综述        { background: rgba(16, 185, 129, 0.15);  color: #10b981; }
+.category-badge--案例        { background: rgba(249, 115, 22, 0.15);  color: #f97316; }
+.category-badge--FAQ        { background: rgba(236, 72, 153, 0.15);  color: #ec4899; }
+.category-badge--笔记        { background: rgba(99, 102, 241, 0.15);  color: #6366f1; }
+.category-badge--手册        { background: rgba(20, 184, 166, 0.15);  color: #14b8a6; }
 
 // ===== 聊天输入 padding (公共 mixin 用 SCSS @extend) =====
 .chat-input-padding {

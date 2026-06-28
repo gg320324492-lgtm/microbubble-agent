@@ -217,8 +217,7 @@
                 :aria-label="opt.label"
                 :title="opt.label"
                 class="theme-swatch"
-                :class="{ 'is-active': themeStore.accent === opt.value }"
-                :style="{ background: opt.preview }"
+                :class="[opt.previewClass, { 'is-active': themeStore.accent === opt.value }]"
                 @click="themeStore.setAccent(opt.value)"
               >
                 <el-icon v-if="themeStore.accent === opt.value" class="theme-swatch-check"><Check /></el-icon>
@@ -257,10 +256,11 @@ const isDark = computed({
 const themeModeLabel = computed(() => (isDark.value ? '深色' : '浅色'))
 // 主题色占位（未来扩展，预留 UI）
 // v69 P1: 3 套主色 picker，调用 themeStore.setAccent 切换
+// v77 P2.6-E.1: 收敛 preview → previewClass（_runtime-style-tokens.scss .theme-preview--*）
 const accentOptions = [
-  { value: 'orange', label: '活力橙', preview: 'linear-gradient(135deg, #FF7A5C 0%, #FFB347 100%)' },
-  { value: 'ocean',  label: '海蓝',   preview: 'linear-gradient(135deg, #4A90E2 0%, #5AD8A6 100%)' },
-  { value: 'forest', label: '森林绿', preview: 'linear-gradient(135deg, #4CAF50 0%, #FFB74D 100%)' },
+  { value: 'orange', label: '活力橙', previewClass: 'theme-preview--orange' },
+  { value: 'ocean',  label: '海蓝',   previewClass: 'theme-preview--ocean' },
+  { value: 'forest', label: '森林绿', previewClass: 'theme-preview--forest' },
 ]
 const activeAccentLabel = computed(
   () => accentOptions.find((o) => o.value === themeStore.accent)?.label || '活力橙'

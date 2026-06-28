@@ -24,7 +24,7 @@
           class="quick-item"
           @click="$router.push(action.path)"
         >
-          <div class="quick-icon" :style="{ background: action.bg }">
+          <div class="quick-icon" :class="action.colorClass">
             {{ action.icon }}
           </div>
           <div class="quick-label">{{ action.label }}</div>
@@ -153,12 +153,13 @@ const currentDate = computed(() => {
 })
 
 // 快捷入口
+// v77 P2.6-E.1: bg → colorClass（_runtime-style-tokens.scss .quick-icon--*）
 const quickActions = [
-  { icon: '💬', label: '智能对话', path: '/chat', bg: 'var(--gradient-welcome-hero)' },
-  { icon: '✅', label: '我的任务', path: '/tasks', bg: 'linear-gradient(135deg, #67C23A, #95D475)' },
-  { icon: '🎤', label: '会议', path: '/meetings', bg: 'linear-gradient(135deg, #E6A23C, #F3D178)' },
-  { icon: '📚', label: '知识库', path: '/knowledge', bg: 'linear-gradient(135deg, #409EFF, #79BBFF)' },
-  { icon: '👤', label: '我的', path: '/settings', bg: 'linear-gradient(135deg, #909399, #B9BCC1)' },
+  { icon: '💬', label: '智能对话', path: '/chat', colorClass: 'quick-icon--chat' },
+  { icon: '✅', label: '我的任务', path: '/tasks', colorClass: 'quick-icon--task' },
+  { icon: '🎤', label: '会议', path: '/meetings', colorClass: 'quick-icon--meeting' },
+  { icon: '📚', label: '知识库', path: '/knowledge', colorClass: 'quick-icon--knowledge' },
+  { icon: '👤', label: '我的', path: '/settings', colorClass: 'quick-icon--me' },
 ]
 
 // 加载数据

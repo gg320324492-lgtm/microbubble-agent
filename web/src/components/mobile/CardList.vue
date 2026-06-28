@@ -70,7 +70,7 @@
               </div>
             </div>
             <div v-if="getField(item, 'badge')" class="item-badge">
-              <span class="badge-tag" :style="badgeStyle(getField(item, 'badge'))">
+              <span class="badge-tag" :class="badgeClass(getField(item, 'badge'))" :style="badgeStyle(getField(item, 'badge'))">
                 {{ getField(item, 'badge').label || getField(item, 'badge') }}
               </span>
             </div>
@@ -227,19 +227,20 @@ function formatField(item, field) {
   return ''
 }
 
+// v77 P2.6-E.1: 收敛 badgeStyle 为 class 拼接（_runtime-style-tokens.scss .badge--*）
+// 保留 badge.bg / badge.color 覆盖能力（dynamic），缺失时 fallback 到 badge--* class
+function badgeClass(badge) {
+  if (!badge || typeof badge !== 'object') return ''
+  const valid = ['primary', 'success', 'warning', 'danger', 'info']
+  return valid.includes(badge.type) ? `badge--${badge.type}` : 'badge--info'
+}
 function badgeStyle(badge) {
   if (!badge || typeof badge !== 'object') return {}
-  const colorMap = {
-    primary: { bg: 'var(--color-primary-bg)', color: 'var(--color-primary)' },
-    success: { bg: 'var(--color-success-bg)', color: 'var(--color-success)' },
-    warning: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
-    danger: { bg: 'var(--color-danger-bg)', color: 'var(--color-danger)' },
-    info: { bg: 'var(--color-info-bg)', color: 'var(--color-info)' },
-  }
-  const style = colorMap[badge.type] || colorMap.info
+  // 仅在 badge 提供 dynamic bg/color 时返回 inline style（覆盖 .badge--* class）
+  if (!badge.bg && !badge.color) return {}
   return {
-    background: badge.bg || style.bg,
-    color: badge.color || style.color,
+    ...(badge.bg ? { background: badge.bg } : {}),
+    ...(badge.color ? { color: badge.color } : {}),
   }
 }
 

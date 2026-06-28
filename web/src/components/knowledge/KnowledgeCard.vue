@@ -9,7 +9,7 @@
     @click="$emit('click', item)"
   >
     <!-- v28 step 74: 卡片顶部 - 文件 hero（上传的文件显示大图标）/ 或 缩略图 -->
-    <div v-if="hasFile" class="card-file-hero" :style="{ background: fileHeroGradient }">
+    <div v-if="hasFile" class="card-file-hero" :class="fileTypeInfo.heroClass">
       <div class="file-hero-icon">{{ fileHeroIcon }}</div>
       <div class="file-hero-info">
         <div class="file-hero-type">{{ fileTypeLabel }}</div>
@@ -37,7 +37,7 @@
       <!-- 头部：分类 + 状态 -->
       <div class="card-header">
         <div class="card-category">
-          <span class="category-badge" :style="{ background: accentColor + '15', color: accentColor }">
+          <span class="category-badge" :class="categoryBadgeClass">
             {{ categoryIcon }} {{ item.category || '未分类' }}
           </span>
           <span v-if="item.topic" class="topic-badge">{{ item.topic }}</span>
@@ -102,13 +102,14 @@ defineEmits(['click', 'edit', 'delete', 'download'])
 // v28 step 74: 上传文件卡片专用 computed
 const hasFile = computed(() => !!props.item.file_path)
 
+// v77 P2.6-E.1: heroClass 替代 gradient（_runtime-style-tokens.scss .card-file-hero--*）
 const fileTypeInfo = computed(() => {
   const ft = props.item.file_type || ''
   if (ft === 'application/pdf' || ft.includes('pdf')) {
     return {
       icon: '📕',
       label: 'PDF',
-      gradient: 'linear-gradient(135deg, #FEE2E2 0%, #FCA5A5 100%)',
+      heroClass: 'card-file-hero--pdf',
       textColor: '#991B1B',
     }
   }
@@ -116,7 +117,7 @@ const fileTypeInfo = computed(() => {
     return {
       icon: '📘',
       label: 'Word',
-      gradient: 'linear-gradient(135deg, #DBEAFE 0%, #93C5FD 100%)',
+      heroClass: 'card-file-hero--word',
       textColor: '#1E40AF',
     }
   }
@@ -124,7 +125,7 @@ const fileTypeInfo = computed(() => {
     return {
       icon: '📙',
       label: 'PPT',
-      gradient: 'linear-gradient(135deg, #FEF3C7 0%, #FCD34D 100%)',
+      heroClass: 'card-file-hero--ppt',
       textColor: '#92400E',
     }
   }
@@ -132,40 +133,20 @@ const fileTypeInfo = computed(() => {
     return {
       icon: '📗',
       label: 'Excel',
-      gradient: 'linear-gradient(135deg, #D1FAE5 0%, #6EE7B7 100%)',
+      heroClass: 'card-file-hero--excel',
       textColor: '#065F46',
     }
   }
   return {
     icon: '📄',
     label: '文件',
-    gradient: 'linear-gradient(135deg, #E5E7EB 0%, #9CA3AF 100%)',
+    heroClass: 'card-file-hero--other',
     textColor: '#374151',
   }
 })
 
 const fileHeroIcon = computed(() => fileTypeInfo.value.icon)
-const fileHeroGradient = computed(() => fileTypeInfo.value.gradient)
 const fileTypeLabel = computed(() => fileTypeInfo.value.label)
-
-// 分类颜色映射
-// 分类颜色映射
-const categoryColors = {
-  '微纳米气泡': '#FF7A5C',
-  '水处理': '#5470c6',
-  '农业': '#91cc75',
-  '消毒': '#ee6666',
-  '测量': '#73c0de',
-  '应用': '#fc8452',
-  '论文': '#3b82f6',
-  '方法': '#8b5cf6',
-  '标准': '#f59e0b',
-  '综述': '#10b981',
-  '案例': '#f97316',
-  'FAQ': '#ec4899',
-  '笔记': '#6366f1',
-  '手册': '#14b8a6'
-}
 
 // 分类图标映射
 const categoryIcons = {
@@ -179,9 +160,10 @@ const categoryIcons = {
   '手册': '📚'
 }
 
-const accentColor = computed(() => {
+// v77 P2.6-E.1: 替代 category-badge inline :style（_runtime-style-tokens.scss .category-badge--*）
+const categoryBadgeClass = computed(() => {
   const cat = props.item.category
-  return categoryColors[cat] || '#FF7A5C'
+  return cat ? `category-badge--${cat}` : 'category-badge--default'
 })
 
 const categoryIcon = computed(() => {
