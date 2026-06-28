@@ -30,7 +30,7 @@ from app.agent.critic import (
     inject_suggestion_to_system,
     should_retry,
 )
-from app.agent.intent_classifier import IntentResult
+from app.agent.intent_classifier import IntentCategory, IntentResult
 from app.agent.protocol import RichBlock, StreamEvent
 from app.agent.result_compressor import (
     CompressionResult,
@@ -40,6 +40,7 @@ from app.agent.result_compressor import (
 )
 from app.agent.tool_registry import (
     ToolContext,
+    ToolNotFoundError,
     dispatch_tool,
     get_all_tool_schemas,
 )
@@ -151,6 +152,50 @@ def _normalize_fake_tool_input(name: str, input_dict: dict) -> dict:
     except Exception as e:
         logger.warning(f"_normalize_fake_tool_input({name}) failed: {e}")
         return input_dict
+
+
+def _build_plan_step_input(tool_name: str, intent, messages: list[dict]) -> dict:
+    """Phase 0: 基于 intent.keywords 智能补全 tool input (#041)
+
+    规则 (按优先级):
+    1. 工具无必填字段 → {}
+    2. 工具有必填 query 类字段 (query / keyword / search_text / q / text / search) → intent.keywords[0] 或 _last_user_text(messages)
+    3. 工具有必填 name 类字段 → intent.keywords[0] (允许 None 让 Pydantic 报错暴露给前端)
+    4. 其他必填字段 → {} (让 Pydantic 报错, 优雅降级, 不假数据)
+
+    设计原则:
+    - 不假数据: 宁可 Pydantic 报错让前端看到 status=error, 也不要 LLM 凭"想当然"填假值
+    - 不读 ctx 注入字段: user_id / channel_user_id / ctx 是 dispatcher 自动注入, 不能出现在 input 里
+    """
+    from app.agent.tool_registry import TOOL_REGISTRY
+
+    td = TOOL_REGISTRY.get(tool_name)
+    if not td:
+        return {}
+    fields = td.input_model.model_fields
+    required_fields = [
+        fname for fname, finfo in fields.items()
+        if finfo.is_required() and fname not in {"user_id", "channel_user_id", "ctx"}
+    ]
+    if not required_fields:
+        return {}
+
+    query_field_names = {"query", "keyword", "search_text", "q", "text", "search"}
+    name_field_names = {"name", "member_name", "task_name", "formula_name"}
+
+    # 优先用 keywords[0], fallback _last_user_text (前 50 字符)
+    keyword = (
+        intent.keywords[0] if intent.keywords else _last_user_text(messages)[:50]
+    )
+
+    for rf in required_fields:
+        if rf in query_field_names:
+            return {rf: keyword}
+        if rf in name_field_names:
+            return {rf: keyword}
+        # 其他必填字段返回空 (让 Pydantic 报错)
+        return {}
+    return {}
 
 
 def _extract_tool_uses(response) -> list[dict]:
@@ -491,6 +536,116 @@ class AgenticLoop:
         t0 = time.monotonic()
 
         try:
+            # ===== Phase 0: 强制 plan_step (#041 - 2026-06-28 chat agent 架构级集成) =====
+            # Haiku 输出的 suggested_tools → agentic_loop 主动 dispatch (代码层强制, 不靠 LLM)
+            # 仅 search_info + explain_concept 两个 deep intent 走 Phase 0
+            # (data_query / execute_action / recommend_person / casual_chat 跳过, 避免误调)
+            # feature flag AGENT_PLAN_STEP_ENABLED 控制总开关
+            if (settings.AGENT_PLAN_STEP_ENABLED
+                and intent.category in {IntentCategory.SEARCH_INFO, IntentCategory.EXPLAIN_CONCEPT}
+                and intent.suggested_tools
+                and intent.confidence >= settings.AGENT_PLAN_STEP_MIN_CONFIDENCE):
+                # dedup (保留首次出现顺序) + 截断到 AGENT_PLAN_STEP_MAX
+                planned = list(dict.fromkeys(intent.suggested_tools))[: settings.AGENT_PLAN_STEP_MAX]
+
+                # [snapshot] plan_step pending (让前端先看到意图)
+                yield StreamEvent(
+                    type="plan_step",
+                    step="phase0_plan",
+                    plan_status="pending",
+                    label=f"📋 准备执行计划 ({len(planned)} 个工具)...",
+                )
+                # [snapshot] plan_step running (启动第一个 tool 前)
+                yield StreamEvent(
+                    type="plan_step",
+                    step="phase0_plan",
+                    plan_status="running",
+                    label=f"📋 执行计划中 (0/{len(planned)})...",
+                )
+
+                plan_step_results: list[dict] = []
+                success_count = 0
+                for idx, tool_name in enumerate(planned):
+                    tool_use_id = f"plan_{idx:02d}_{tool_name}"
+
+                    # 智能补全 tool input (基于 intent.keywords)
+                    input_payload = _build_plan_step_input(tool_name, intent, messages)
+
+                    # [snapshot] tool_use
+                    yield StreamEvent(
+                        type="tool_use",
+                        tool_name=tool_name,
+                        tool_use_id=tool_use_id,
+                        tool_input=input_payload,
+                    )
+
+                    # dispatch (dispatch_tool 内置完整错误处理: ToolNotFoundError 会抛, 其他包成 dict)
+                    try:
+                        result = await dispatch_tool(tool_name, input_payload, ctx)
+                    except ToolNotFoundError:
+                        # LLM 输出非法工具名 → warning + 跳过, 不阻断 Phase 0
+                        logger.warning(f"plan_step tool {tool_name} not found, skip")
+                        yield StreamEvent(
+                            type="plan_step",
+                            step="phase0_plan",
+                            plan_status="running",
+                            label=f"⚠️ 工具 {tool_name} 不存在, 跳过",
+                        )
+                        continue
+                    except Exception as e:
+                        result = {"status": "error", "code": "TOOL_EXECUTION_ERROR", "message": str(e)}
+                        logger.error(f"plan_step {tool_name} failed: {e}", exc_info=True)
+
+                    # [snapshot] tool_result
+                    yield StreamEvent(
+                        type="tool_result",
+                        tool_name=tool_name,
+                        tool_use_id=tool_use_id,
+                        tool_output=result if isinstance(result, dict) else {"result": str(result)},
+                    )
+
+                    # Rich Block 检测 (复用 Phase 1 同一函数)
+                    rb = _extract_rich_block(tool_name, result)
+                    if rb:
+                        rich_blocks.append(rb)
+                        yield StreamEvent(type="rich_block", block=rb)
+
+                    tool_calls.append({"name": tool_name, "input": input_payload, "output": result})
+                    plan_step_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": json.dumps(result, ensure_ascii=False, default=str),
+                    })
+                    success_count += 1
+
+                    # [snapshot] plan_step running (每个 tool 完成后更新进度)
+                    yield StreamEvent(
+                        type="plan_step",
+                        step="phase0_plan",
+                        plan_status="running",
+                        label=f"📋 执行计划中 ({success_count}/{len(planned)})...",
+                    )
+
+                # 注入 messages (Anthropic tool_use 协议格式, 与 Phase 1 一致)
+                # 关键: 每个 tool_result 是独立 block + tool_use_id 对应 (让 Phase 2 grounding 看得到)
+                if plan_step_results:
+                    messages.append({
+                        "role": "assistant",
+                        "content": [{
+                            "type": "text",
+                            "text": f"[计划阶段] 我已主动查询 {success_count} 个工具获取背景信息。",
+                        }],
+                    })
+                    messages.append({"role": "user", "content": plan_step_results})
+
+                # [snapshot] plan_step done
+                yield StreamEvent(
+                    type="plan_step",
+                    step="phase0_plan",
+                    plan_status="done",
+                    label=f"📋 计划完成 ({success_count}/{len(planned)})",
+                )
+
             # ===== Phase 1: 工具循环 =====
             for round_idx in range(max_rounds):
                 try:
