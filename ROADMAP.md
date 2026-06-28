@@ -6,6 +6,11 @@
 ## 当前状态（2026-06-28）
 
 **已交付**：
+- 🆕 **v77 P2.6-E/F 视觉/代码质量延伸（4 commits）**：
+  - **v77 P2.6-F.1**（commit `e362ad8e`）— transition: all 0.Xs token 化（27 处 / 17 文件 → `var(--transition-all-*)`）+ scripts/replace-transition-all-literals.js Node.js 脚本
+  - **v77 P2.6-E.3**（commit `c06482b5`）— KnowledgeView 1599 → 501 行拆分（抽 4 tab + 1 dialog 5 个新组件，entityChartInstance 生命周期从父移到子避免内存泄漏）
+  - **v77 P2.6-E.2**（commit `dcd1657b`）— 缓动字面量 token 化（70 处 → `var(--ease-*)` + `--ease-out` 升级 Material Decelerate + `--ease-quad` 新增 + scripts/replace-easing-literals.js Node.js 脚本）
+  - **v77 P2.6-E.1**（commit `ed5e5e16`）— CSS-in-JS 收官（8 处 runtime `:style` → 7 个枚举 class，scss 55→105 行）
 - 🆕 **v77 P2.6 视觉体系 4 子任务全面收官**（7 commits：A/B/C/D 阶段）：
   - **v77 P2.6-D**（4 commits `19f42924` + `2096d3e0` + `fe896004` + `b251fc22`）— PWA Service Worker 强化（Background Sync 4 写场景 + Navigation Preload + Local Notification）+ 动效治理（6 处重复 keyframes 清理 + 12 --animation-* + 3 --ease-*）+ CSS-in-JS 收敛（3 处 avatar color → .avatar-color-N 枚举 class）+ Baseline 扩到 9 路由（+projects /+members /+project-stats）
   - **v77 P2.6-C**（commit `db3a31e1`）— EP 多主题透传补全（143 条规则）+ Mobile baseline 6 路由 + 登录态双注入修复
@@ -37,13 +42,14 @@
 - ✅ **pre-commit hook auto-add web/dist/**（CLAUDE.md 教训第 4 次沉淀后兜底）
 
 **统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：
-- **1468 commits / 283K 行代码 / 738 文件 / 44 开发天数**
+- **1483 commits / 160K 行代码 / 542 文件 / 44 开发天数**
 - 9 个 Docker 服务运行中
 - 87 后端 + 73 前端 + 17 移动端 + 8 ST 集成 + 11 visual-regression = 196+ 测试
 - 知识库 64→247+ 条（+183，Phase 7 后再扩展多模态抽取）
-- **2026-06-24~28 起 16+ 铁律沉淀**（清华源/ONNX 反优化/docker build 污染/pre-commit hook/dist 漏 commit/Stylelint/PowerShell BOM/Background Sync/playwright dev server/token 渐进收敛 等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
+- **2026-06-24~28 起 20+ 铁律沉淀**（清华源/ONNX 反优化/docker build 污染/pre-commit hook/dist 漏 commit/Stylelint/PowerShell BOM/Background Sync/playwright dev server/token 渐进收敛/v-model 子组件 props 禁用/word-boundary 正则 等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
 
 **最新里程碑**：
+- 🆕 [v77 P2.6-E/F 视觉/代码质量延伸（4 commits）](CHANGELOG.md#2026-06-28-v77-p26-ef-视觉代码质量延伸-4-commits) - CSS-in-JS 收官 + 缓动 token 化 + KnowledgeView 拆分 + transition: all token 化
 - 🆕 [v77 P2.6 视觉体系 4 子任务全面收官（A/B/C/D）](CHANGELOG.md#2026-06-28-v77-p26-视觉体系-4-子任务全面收官abc-d-共-7-commits) - 7 commits + 143 条 dark 规则 + 18 张 baseline
 - 🆕 [3 个生产 bug 修复](CHANGELOG.md#2026-06-28-3-个生产-bug-修复会议-64-报-500--audioplayer-infinitynan) - pgvector truth value + SQLAlchemy JSONB + AudioPlayer Infinity
 - 🆕 [会议 153 ASR 谐音/错识全链路清洗 hook](CHANGELOG.md#2026-06-27-会议-153-asr-谐音错识全链路清洗-hookname_aliases-推到主路径) - name_aliases 推到主路径 + 7 条防御性映射
@@ -88,6 +94,18 @@
 | **Phase 19** | 课题组专属 AI 研究员（自主研究 + 假设验证 + 论文草稿 + 实验设计） | 8-12 周 |
 
 ## 近期完成（按主题）
+
+### 🎨 2026-06-28 v77 P2.6-E/F 视觉/代码质量延伸（4 commits）
+
+- **v77 P2.6-E.1 CSS-in-JS 收官**（commit `ed5e5e16`）— 8 处 runtime `:style` → 7 个枚举 class（status-dot--* / role--* / bar--* / conf-bar--* / quick-icon--* / theme-preview--* / card-file-hero--* / category-badge--*）；`_runtime-style-tokens.scss` 55 → 105 行；VoiceprintCard 保留 per-pixel rgba()（dynamic 必须保留）
+- **v77 P2.6-E.2 缓动字面量 token 化**（commit `dcd1657b`）— 70 处 → `var(--ease-*)`；`--ease-out` 升级 Material Decelerate `cubic-bezier(0, 0, 0.2, 1)`（BC break < 5%）；新增 `--ease-quad`（DashboardPet outlier）；`scripts/replace-easing-literals.js` Node.js 脚本（UTF-8 无 BOM）
+- **v77 P2.6-E.3 KnowledgeView 拆分**（commit `c06482b5`）— 1599 → 501 行（-68%），抽 4 tab + 1 dialog 5 个新组件：KnowledgeEntityTab（含 ECharts force layout + entityChartInstance 内部 lifecycle dispose）/ HypothesisTab / FormulaTab / MemoryTab / CreateDialog；el-pagination v-model:current-page 改为 :current-page + @current-change 避免子组件 props 直接 v-model 编译错误
+- **v77 P2.6-F.1 transition: all token 化**（commit `e362ad8e`）— 27 处 / 17 文件 → `var(--transition-all-fast/normal/slow/slower)`；`scripts/replace-transition-all-literals.js` Node.js 脚本（正则 word-boundary 避免误匹配 0.2s vs 0.25s）；剩余 7 处 `transition: all Xs ease` 字面量（含 !important）保留手工处理
+- **4 条新铁律**（[memory/v77-p26-e-and-f-visual-quality.md](memory/v77-p26-e-and-f-visual-quality.md)）：
+  ① v-model 不能直接绑定子组件 props（Vue 3 编译期错误）→ 用 `:model-value` + `@update:model-value` 或 computed `{ get, set }` 桥接
+  ② el-pagination v-model:current-page 在子组件 props 场景必须改用 :current-page + @current-change，父用 emit('page-change', p) 接收
+  ③ Node.js 脚本批量替换 .vue/.css 字面量时，正则必须用 word-boundary `(?!\w)` 避免 0.2s 误匹配 0.25s
+  ④ 拆分巨型主 View 时，状态所有权（如 ECharts instance）必须从父移到子组件，子组件 onBeforeUnmount dispose 避免内存泄漏
 
 ### 🎨 2026-06-27~28 v77 P2.6 视觉体系 4 子任务全面收官
 
