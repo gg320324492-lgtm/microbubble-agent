@@ -143,6 +143,7 @@
       :editing-data="editingMeetingData"
       :templates="templates"
       @success="onMeetingSaved"
+      @save-template="onSaveAsTemplate"
     />
 
     <!-- 2026-06-03 新增：模板编辑对话框 — v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件 -->
@@ -318,6 +319,17 @@ const editingTemplate = ref(null)
 const onTemplateSaved = async () => {
   editingTemplate.value = null
   await loadTemplates()
+}
+
+// v77 P2.6-F.3: '存为新模板' 事件处理
+// MeetingCreateDialog 填好表单 → emit('save-template', templateData) →
+//   1. 关闭 MeetingCreateDialog
+//   2. 设置 editingTemplate = templateData (MeetingTemplateDialog 走编辑模式但视觉是"预填的新模板")
+//   3. 打开 MeetingTemplateDialog, 用户继续调整后提交 → customTemplates 新增 1 条
+const onSaveAsTemplate = (templateData) => {
+  showCreateDialog.value = false
+  editingTemplate.value = templateData
+  showTemplateDialog.value = true
 }
 
 // 关闭会议创建对话框时清理 templateId 高亮
