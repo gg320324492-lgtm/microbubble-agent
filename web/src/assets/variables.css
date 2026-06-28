@@ -782,6 +782,21 @@ body {
   --el-button-hover-bg-color: var(--color-primary);
   --el-button-hover-text-color: var(--el-color-white);
 }
+/* v77 P2.6-D 修复: ocean/forest 主题下实底 primary 按钮 hover 不变浅
+   - 根因: dark 主题默认 .el-button--primary hover 用 --color-primary-light
+     ocean dark = #6babff 浅蓝, white 文字对比度 ~3:1 不达标
+     forest dark = #85ce61 浅绿, white 文字对比度 ~2:1 严重不达标
+   - 修法: 强制 hover 沿用实底色 --color-primary, 白字保持
+*/
+[data-accent="ocean"] .el-button--primary,
+[data-accent="forest"] .el-button--primary {
+  --el-button-hover-bg-color: var(--color-primary);
+  --el-button-hover-border-color: var(--color-primary);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-active-bg-color: var(--color-primary-dark);
+  --el-button-active-border-color: var(--color-primary-dark);
+  color: var(--el-color-white);
+}
 [data-theme="dark"] .el-drawer {
   background-color: var(--color-bg-card);
   color: var(--color-text-primary);
