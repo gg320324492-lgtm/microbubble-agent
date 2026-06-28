@@ -145,49 +145,14 @@
       @success="onMeetingSaved"
     />
 
-    <!-- 2026-06-03 新增：模板编辑对话框（创建/编辑自定义模板） -->
-    <el-dialog v-model="showTemplateDialog" :title="editingTemplateId ? '编辑模板' : '存为新模板'" :width="isMobile ? '92vw' : '500px'" top="8vh">
-      <el-form :model="templateForm" label-width="80px">
-        <el-form-item label="模板名称" required>
-          <el-input v-model="templateForm.name" name="template-form-name" placeholder="如：组会、组内复盘..." maxlength="50" show-word-limit />
-        </el-form-item>
-        <el-form-item label="默认时长">
-          <el-input-number v-model="templateForm.default_duration_minutes" name="template-form-duration" :min="15" :max="240" :step="15" />
-          <span class="form-hint">分钟</span>
-        </el-form-item>
-        <el-form-item label="默认地点">
-          <el-input v-model="templateForm.default_location" name="template-form-location" placeholder="可选，如：组会室、腾讯会议..." maxlength="100" />
-        </el-form-item>
-        <el-form-item label="会议说明">
-          <el-input v-model="templateForm.description" name="template-form-description" type="textarea" :rows="2" placeholder="可选" />
-        </el-form-item>
-        <el-form-item label="标题模板">
-          <el-input v-model="templateForm.title_template" name="template-form-title-template" placeholder="可选，支持 {date} 占位符" maxlength="100" />
-          <div class="form-hint">如：组会 - {date}</div>
-        </el-form-item>
-        <el-form-item label="默认议题">
-          <div class="item-list" style="width:100%">
-            <div v-for="(item, idx) in templateForm.agenda" :key="idx" class="item-row">
-              <span class="item-dot" />
-              <el-input v-model="templateForm.agenda[idx]" :name="`template-form-agenda-${idx}`" placeholder="议题描述" />
-              <el-button :icon="Delete" circle size="small" class="item-del" @click="templateForm.agenda.splice(idx, 1)" />
-            </div>
-            <el-button dashed size="small" class="item-add" @click="templateForm.agenda.push('')">
-              <el-icon><Plus /></el-icon> 添加议题
-            </el-button>
-          </div>
-        </el-form-item>
-        <el-form-item label="默认参与人">
-          <el-select v-model="templateForm.default_participant_ids" name="template-form-participants" multiple filterable collapse-tags collapse-tags-tooltip placeholder="可选" style="width:100%">
-            <el-option v-for="member in members" :key="member.id" :label="member.name" :value="member.id" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showTemplateDialog = false">取消</el-button>
-        <el-button type="primary" @click="submitTemplate">{{ editingTemplateId ? '保存' : '创建' }}</el-button>
-      </template>
-    </el-dialog>
+    <!-- 2026-06-03 新增：模板编辑对话框 — v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件 -->
+    <MeetingTemplateDialog
+      v-model="showTemplateDialog"
+      :editing-template="editingTemplate"
+      :members="members"
+      :is-mobile="isMobile"
+      @saved="onTemplateSaved"
+    />
 
     <!-- 实时转写对话框（已废弃，录音机模式无需实时转写） -->
 
@@ -250,6 +215,7 @@ import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import MeetingMinutesDialog from '@/components/meeting/MeetingMinutesDialog.vue'
+import MeetingTemplateDialog from '@/components/meeting/MeetingTemplateDialog.vue'
 import { Delete, Document, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -401,85 +367,14 @@ async function loadTemplates() {
   }
 }
 
-// === 模板 CRUD（行内） ===
+// === 模板 CRUD（v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件） ===
+// 父 MeetingView 只保留 dialog 开关 + 当前编辑模板引用，表单 + submit + reset 都搬到子组件
 const showTemplateDialog = ref(false)
-const editingTemplateId = ref(null)
-const templateForm = ref({
-  name: '',
-  description: '',
-  title_template: '',
-  default_duration_minutes: 60,
-  default_location: '',
-  default_participant_ids: [],
-  agenda: [],
-})
+const editingTemplate = ref(null)
 
-function resetTemplateForm() {
-  templateForm.value = {
-    name: '',
-    description: '',
-    title_template: '',
-    default_duration_minutes: 60,
-    default_location: '',
-    default_participant_ids: [],
-    agenda: [],
-  }
-  editingTemplateId.value = null
-}
-
-function showTemplateForm(tpl = null) {
-  if (tpl) {
-    // 编辑模式
-    editingTemplateId.value = tpl.id
-    templateForm.value = {
-      name: tpl.name || '',
-      description: tpl.description || '',
-      title_template: tpl.title_template || '',
-      default_duration_minutes: tpl.default_duration_minutes || 60,
-      default_location: tpl.default_location || '',
-      default_participant_ids: tpl.default_participant_ids || [],
-      agenda: tpl.agenda ? [...tpl.agenda] : [],
-    }
-  } else {
-    // 新建模式
-    resetTemplateForm()
-  }
-  showTemplateDialog.value = true
-}
-
-async function submitTemplate() {
-  if (!templateForm.value.name?.trim()) {
-    ElMessage.error('请填写模板名称')
-    return
-  }
-  try {
-    const payload = { ...templateForm.value }
-    if (editingTemplateId.value) {
-      await axios.put(`/api/v1/meeting-templates/${editingTemplateId.value}`, payload)
-      ElMessage.success('模板已更新')
-    } else {
-      await axios.post('/api/v1/meeting-templates', payload)
-      ElMessage.success('模板已创建')
-    }
-    showTemplateDialog.value = false
-    await loadTemplates()
-  } catch (e) {
-    ElMessage.error(`保存失败：${e.response?.data?.detail || e.message}`)
-  }
-}
-
-async function deleteTemplate(tpl) {
-  try {
-    await ElMessageBox.confirm(`删除自定义模板 "${tpl.name}"？`, '确认', { type: 'warning' })
-  } catch { return }
-  try {
-    await axios.delete(`/api/v1/meeting-templates/${tpl.id}`)
-    ElMessage.success('已删除')
-    if (meetingForm.value.templateId === tpl.id) meetingForm.value.templateId = null
-    await loadTemplates()
-  } catch (e) {
-    ElMessage.error(`删除失败：${e.response?.data?.detail || e.message}`)
-  }
+const onTemplateSaved = async () => {
+  editingTemplate.value = null
+  await loadTemplates()
 }
 
 // 关闭会议创建对话框时清理 templateId 高亮
