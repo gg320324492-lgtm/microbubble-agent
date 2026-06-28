@@ -228,7 +228,7 @@ function onActionClick(action) {
 }
 .action-sheet-enter-active .sheet-panel,
 .action-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .action-sheet-enter-from, .action-sheet-leave-to { opacity: 0; }
 .action-sheet-enter-from .sheet-panel,

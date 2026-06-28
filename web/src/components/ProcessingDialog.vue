@@ -215,7 +215,7 @@ if (token) {
 .done-icon {
   font-size: 60px;
   line-height: 1;
-  animation: done-bounce 0.5s ease-out;
+  animation: done-bounce 0.5s var(--ease-out);
 }
 /* Confetti */
 .confetti-container {
@@ -232,7 +232,7 @@ if (token) {
   position: absolute;
   top: -10px;
   border-radius: 2px;
-  animation: confetti-fall 2.5s ease-out forwards;
+  animation: confetti-fall 2.5s var(--ease-out) forwards;
 }
 .processing-title {
   font-size: 24px;
@@ -335,6 +335,6 @@ if (token) {
   z-index: 1;
 }
 .btn-pulse {
-  animation: btn-glow 2s ease-in-out infinite;
+  animation: btn-glow 2s var(--ease-in-out) infinite;
 }
 </style>

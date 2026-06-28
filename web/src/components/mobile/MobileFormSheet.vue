@@ -631,7 +631,7 @@ watch(
 }
 .form-sheet-enter-active .sheet-panel,
 .form-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .form-sheet-enter-from, .form-sheet-leave-to { opacity: 0; }
 .form-sheet-enter-from .sheet-panel,

@@ -358,7 +358,7 @@ function confBarClass(c) {
   transition: opacity 0.25s ease;
 }
 .speaker-sheet-enter-active .sheet-panel, .speaker-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .speaker-sheet-enter-from, .speaker-sheet-leave-to { opacity: 0; }
 .speaker-sheet-enter-from .sheet-panel, .speaker-sheet-leave-to .sheet-panel {

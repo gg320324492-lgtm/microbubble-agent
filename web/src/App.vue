@@ -148,7 +148,7 @@ body {
 .offline-retry:active { background: rgba(255, 255, 255, 0.4); }
 
 .offline-banner-enter-active, .offline-banner-leave-active {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s;
+  transition: transform 0.3s var(--ease-bounce), opacity 0.3s;
 }
 .offline-banner-enter-from, .offline-banner-leave-to {
   transform: translateY(100%);

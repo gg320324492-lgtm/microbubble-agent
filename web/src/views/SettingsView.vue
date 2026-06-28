@@ -679,7 +679,7 @@ function formatDateTime(iso) {
 .settings-card.glass {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
-  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+  transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
 .settings-card.glass:hover {
   transform: translateY(-2px);

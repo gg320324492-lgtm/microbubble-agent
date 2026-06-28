@@ -118,7 +118,7 @@ function formatWordCount(count) {
   height: 100%;
   background: var(--gradient-welcome-hero);
   border-radius: 4px;
-  transition: width 0.6s ease-out;
+  transition: width 0.6s var(--ease-out);
   min-width: 2px;
 }
 
@@ -136,7 +136,7 @@ function formatWordCount(count) {
 
 /* 入场动画 */
 .fade-slide-up {
-  animation: fadeSlideUp 300ms ease-out both;
+  animation: fadeSlideUp 300ms var(--ease-out) both;
 }
 
 </style>

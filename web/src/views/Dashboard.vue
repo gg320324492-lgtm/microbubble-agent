@@ -356,7 +356,7 @@ const animateNumber = (el, target) => {
   const animate = (currentTime) => {
     const elapsed = currentTime - startTime
     const progress = Math.min(elapsed / duration, 1)
-    const eased = 1 - Math.pow(1 - progress, 3) // ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3) // var(--ease-out) cubic
     el.textContent = Math.round(eased * targetNum)
     if (progress < 1) requestAnimationFrame(animate)
   }
@@ -535,12 +535,12 @@ onMounted(() => {
 .cloud-1 {
   width: 120px; height: 50px;
   top: 8px; right: 60px;
-  animation: pet-cloud-drift 20s ease-in-out infinite;
+  animation: pet-cloud-drift 20s var(--ease-in-out) infinite;
 }
 .cloud-2 {
   width: 80px; height: 35px;
   top: 20px; right: 200px;
-  animation: pet-cloud-drift 25s ease-in-out infinite 5s;
+  animation: pet-cloud-drift 25s var(--ease-in-out) infinite 5s;
 }
 /* 太阳 */
 .welcome-sun {
@@ -551,7 +551,7 @@ onMounted(() => {
   border-radius: 50%;
   box-shadow: 0 0 30px rgba(255, 200, 80, 0.6), 0 0 70px rgba(255, 180, 60, 0.3);
   pointer-events: none;
-  animation: pet-sun-glow 3s ease-in-out infinite;
+  animation: pet-sun-glow 3s var(--ease-in-out) infinite;
 }
 /* 宠物区域 — 填充中间空间，给兔子最大活动范围 */
 .welcome-pets {
@@ -584,7 +584,7 @@ onMounted(() => {
   bottom: 4px;
   font-size: 16px;
   z-index: 2;
-  animation: pet-grass-sway 3s ease-in-out infinite;
+  animation: pet-grass-sway 3s var(--ease-in-out) infinite;
   pointer-events: none;
 }
 .welcome-left { flex: 1; position: relative; z-index: 1; }

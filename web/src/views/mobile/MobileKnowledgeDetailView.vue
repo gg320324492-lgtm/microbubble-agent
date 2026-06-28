@@ -460,7 +460,7 @@ onMounted(() => {
   transition: opacity 0.25s ease;
 }
 .toc-sheet-enter-active .toc-panel, .toc-sheet-leave-active .toc-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .toc-sheet-enter-from, .toc-sheet-leave-to { opacity: 0; }
 .toc-sheet-enter-from .toc-panel, .toc-sheet-leave-to .toc-panel {

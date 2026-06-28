@@ -1317,7 +1317,7 @@ onMounted(async () => {
 
 /* ====== 入场动画 ====== */
 .fade-slide-up {
-  animation: fadeSlideUp 300ms ease-out both;
+  animation: fadeSlideUp 300ms var(--ease-out) both;
 }
 /* ====== 响应式 ====== */
 @media (max-width: 768px) {

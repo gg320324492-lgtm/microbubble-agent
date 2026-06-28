@@ -549,7 +549,7 @@ onMounted(() => {
 }
 .edit-sheet-enter-active .sheet-panel,
 .edit-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .edit-sheet-enter-from, .edit-sheet-leave-to { opacity: 0; }
 .edit-sheet-enter-from .sheet-panel,

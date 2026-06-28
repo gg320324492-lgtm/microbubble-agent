@@ -360,7 +360,7 @@ onMounted(() => {
   transition: opacity 0.25s ease;
 }
 .detail-sheet-enter-active .sheet-panel, .detail-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .detail-sheet-enter-from, .detail-sheet-leave-to { opacity: 0; }
 .detail-sheet-enter-from .sheet-panel, .detail-sheet-leave-to .sheet-panel {

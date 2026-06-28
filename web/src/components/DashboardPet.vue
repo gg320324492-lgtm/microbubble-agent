@@ -579,7 +579,7 @@ onUnmounted(() => {
   position: absolute;
   width: 65px;
   height: 80px;
-  transition: transform 0.15s ease-out;
+  transition: transform 0.15s var(--ease-out);
   z-index: 10;
   filter: drop-shadow(0 6px 12px rgba(0,0,0,0.12));
   transform-style: preserve-3d;
@@ -592,7 +592,7 @@ onUnmounted(() => {
   filter: drop-shadow(0 8px 18px rgba(var(--color-primary-rgb),0.25)) brightness(1.05);
 }
 .bunny-body.walking {
-  animation: pet-walk 0.35s ease-in-out infinite;
+  animation: pet-walk 0.35s var(--ease-in-out) infinite;
 }
 .bunny.sleeping {
   opacity: 0.8;
@@ -612,7 +612,7 @@ onUnmounted(() => {
     inset 0 -6px 12px rgba(180,140,120,0.2),
     inset 0 4px 8px rgba(255,255,255,0.6),
     0 4px 8px rgba(0,0,0,0.06);
-  animation: pet-breathe 4s ease-in-out infinite;
+  animation: pet-breathe 4s var(--ease-in-out) infinite;
 }
 /* ===== 3D 头（chibi大脸） ===== */
 .head {
@@ -628,7 +628,7 @@ onUnmounted(() => {
     inset 0 -5px 10px rgba(180,140,120,0.15),
     inset 0 6px 8px rgba(255,255,255,0.5),
     0 3px 6px rgba(0,0,0,0.05);
-  animation: pet-breathe 4s ease-in-out infinite 0.5s;
+  animation: pet-breathe 4s var(--ease-in-out) infinite 0.5s;
 }
 
 /* ===== 3D 耳朵（更立体） ===== */
@@ -640,7 +640,7 @@ onUnmounted(() => {
   border-radius: 45% 45% 30% 30%;
   z-index: 3;
   transform-origin: bottom center;
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.3s var(--ease-bounce);
   box-shadow:
     inset 0 3px 6px rgba(255,255,255,0.4),
     inset 0 -4px 8px rgba(180,130,100,0.15),
@@ -718,7 +718,7 @@ onUnmounted(() => {
   font-size: 14px;
   color: var(--color-danger);
   z-index: 6;
-  animation: pet-heartbeat 0.5s ease-in-out infinite;
+  animation: pet-heartbeat 0.5s var(--ease-in-out) infinite;
   filter: drop-shadow(0 1px 2px rgba(255,60,60,0.3));
 }
 .heart-left { left: 6px; }
@@ -799,8 +799,8 @@ onUnmounted(() => {
 }
 .leg-front-left { left: 8px; }
 .leg-front-right { right: 8px; }
-.bunny.walking .leg-front-left { animation: pet-leg 0.35s ease-in-out infinite; }
-.bunny.walking .leg-front-right { animation: pet-leg 0.35s ease-in-out infinite 0.17s; }
+.bunny.walking .leg-front-left { animation: pet-leg 0.35s var(--ease-in-out) infinite; }
+.bunny.walking .leg-front-right { animation: pet-leg 0.35s var(--ease-in-out) infinite 0.17s; }
 /* ===== 毛茸茸圆尾巴 ===== */
 .tail {
   position: absolute;
@@ -831,7 +831,7 @@ onUnmounted(() => {
   transform: translateX(-50%);
   font-size: 16px;
   z-index: 11;
-  animation: pet-float 2s ease-in-out infinite;
+  animation: pet-float 2s var(--ease-in-out) infinite;
   filter: drop-shadow(0 2px 4px rgba(255,180,0,0.4));
 }
 /* ===== 对话气泡 ===== */
@@ -847,7 +847,7 @@ onUnmounted(() => {
   box-shadow: var(--shadow-md);
   z-index: 100;
   pointer-events: none;
-  animation: pet-bubble-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: pet-bubble-in 0.3s var(--ease-bounce);
   max-width: 240px;
   min-width: 60px;
   overflow-wrap: anywhere;
@@ -876,7 +876,7 @@ onUnmounted(() => {
   font-size: 14px;
   z-index: 15;
   pointer-events: none;
-  animation: pet-zzz 2.5s ease-out infinite;
+  animation: pet-zzz 2.5s var(--ease-out) infinite;
 }
 /* ===== XP 进度条 ===== */
 .xp-bar-wrap {
@@ -902,7 +902,7 @@ onUnmounted(() => {
   height: 100%;
   background: linear-gradient(90deg, #81C784, #66BB6A);
   border-radius: 3px;
-  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: width 0.6s var(--ease-bounce);
 }
 .xp-label {
   display: flex;
@@ -923,13 +923,13 @@ onUnmounted(() => {
 .level-up-effect { position: absolute; top: 50%; left: 50%; z-index: 25; pointer-events: none; }
 .lu-particle {
   position: absolute; font-size: 13px;
-  animation: pet-lu-burst 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation: pet-lu-burst 2.2s var(--ease-quad) forwards;
 }
 /* ===== 爱心粒子 ===== */
 .particles { position: absolute; top: 35%; left: 35%; z-index: 30; pointer-events: none; }
 .particle {
   position: absolute; font-size: 11px;
-  animation: pet-particle-up ease-out forwards;
+  animation: pet-particle-up var(--ease-out) forwards;
 }
 </style>
 

@@ -390,7 +390,7 @@ onUnmounted(() => {
   inset: -8px;
   border-radius: 50%;
   border: 2px solid rgba(255, 122, 92, 0.4);
-  animation: mic-pulse-ring 1.5s ease-out infinite;
+  animation: mic-pulse-ring 1.5s var(--ease-out) infinite;
 }
 
 @keyframes mic-pulse-ring {

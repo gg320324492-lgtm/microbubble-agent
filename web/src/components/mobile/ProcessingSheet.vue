@@ -353,7 +353,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: -10px;
   border-radius: 2px;
-  animation: confetti-fall 2s ease-out forwards;
+  animation: confetti-fall 2s var(--ease-out) forwards;
 }
 /* 时间线 */
 .timeline {
@@ -519,7 +519,7 @@ onBeforeUnmount(() => {
   transition: opacity 0.25s ease;
 }
 .processing-sheet-enter-active .sheet-panel, .processing-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .processing-sheet-enter-from, .processing-sheet-leave-to { opacity: 0; }
 .processing-sheet-enter-from .sheet-panel, .processing-sheet-leave-to .sheet-panel {

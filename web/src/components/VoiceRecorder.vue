@@ -245,7 +245,7 @@ defineExpose({
   height: 20px;
   background: var(--color-danger);
   border-radius: 2px;
-  animation: wave 0.8s ease-in-out infinite;
+  animation: wave 0.8s var(--ease-in-out) infinite;
   transform-origin: center center;
 }
 

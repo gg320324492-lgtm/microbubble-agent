@@ -54,7 +54,7 @@
 }
 .el-progress-bar__inner.is-indeterminate,
 .el-progress-bar__inner:not(.el-progress-bar__inner--striped):not(.el-progress-bar__inner--striped-flow) {
-  animation: mb-indeterminate 2s ease-in-out infinite !important;
+  animation: mb-indeterminate 2s var(--ease-in-out) infinite !important;
 }
 
 /* ===== 骨架屏闪烁动画 ===== */
@@ -78,5 +78,5 @@
     rgba(255, 255, 255, 0.4) 50%,
     transparent 100%
   );
-  animation: el-skeleton-loading 1.8s ease-in-out infinite;
+  animation: el-skeleton-loading 1.8s var(--ease-in-out) infinite;
 }

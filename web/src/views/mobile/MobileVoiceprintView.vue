@@ -438,7 +438,7 @@ onMounted(() => {
   transition: opacity 0.25s ease;
 }
 .member-sheet-enter-active .sheet-panel, .member-sheet-leave-active .sheet-panel {
-  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform 0.3s var(--ease-sheet);
 }
 .member-sheet-enter-from, .member-sheet-leave-to { opacity: 0; }
 .member-sheet-enter-from .sheet-panel, .member-sheet-leave-to .sheet-panel {
