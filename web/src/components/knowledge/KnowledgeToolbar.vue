@@ -196,6 +196,14 @@ const resetFilters = () => {
   margin-left: var(--space-1);
 }
 
+/* v77+: 局部覆盖全局 .btn-text utility 的灰色 — 恢复父 button color 继承
+   全局 .btn-text 是给 ghost 风格按钮用的 utility (variables.css:532),
+   这里复用了同名 class 作为 <el-button> 内部 span, 灰色会覆盖父级 white.
+   见 C:/Users/pc/.claude/plans/ai-reactive-candy.md */
+.toolbar-actions .btn-text {
+  color: inherit;
+}
+
 /* 高级筛选面板 */
 .advanced-filters {
   padding-top: var(--space-3);
