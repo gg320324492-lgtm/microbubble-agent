@@ -78,7 +78,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
 import { Microphone } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -98,6 +98,14 @@ let timerInterval = null
 let animFrameId = null
 let analyserNode = null
 let freqDataArray = null
+
+// v60-v67 Canvas 教训的姊妹篇: Canvas API 不支持 var(--token), 必须用 getComputedStyle 读 RGB
+// 主题切换时需重绘 (因 Canvas 像素不会自动跟随 CSS variable 变化)
+function readRgbVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+
+let themeObserver = null
 
 // 平滑后的频率数据（用于衰减动画）
 let smoothedData = null
@@ -236,11 +244,14 @@ function drawWaveform() {
     })
   }
 
-  // 绘制填充区域（渐变）
+  // 绘制填充区域（渐变）— Canvas 不支持 var() 必须用 getComputedStyle 读 RGB
+  // 警告色用 --color-accent-rgb (v76.6 token 体系已铺设, 6 主题自动跟随)
+  const primaryRgb = readRgbVar('--color-primary-rgb') || '255, 122, 92'
+  const accentRgb = readRgbVar('--color-accent-rgb') || '255, 179, 71'
   const gradient = ctx.createLinearGradient(0, 0, 0, H)
-  gradient.addColorStop(0, 'rgba(255, 122, 92, 0.6)')
-  gradient.addColorStop(0.5, 'rgba(255, 179, 71, 0.3)')
-  gradient.addColorStop(1, 'rgba(255, 122, 92, 0.05)')
+  gradient.addColorStop(0, `rgba(${primaryRgb}, 0.6)`)
+  gradient.addColorStop(0.5, `rgba(${accentRgb}, 0.3)`)
+  gradient.addColorStop(1, `rgba(${primaryRgb}, 0.05)`)
 
   ctx.beginPath()
   ctx.moveTo(0, H)
@@ -272,12 +283,12 @@ function drawWaveform() {
       ctx.bezierCurveTo(cpx, prev.y, cpx, points[i].y, points[i].x, points[i].y)
     }
   }
-  ctx.strokeStyle = 'var(--color-primary)'
+  ctx.strokeStyle = `rgb(${primaryRgb})`  // Canvas 不支持 var(), 用 getComputedStyle 读的 RGB
   ctx.lineWidth = 2
   ctx.stroke()
 
   // 发光效果
-  ctx.shadowColor = 'rgba(255, 122, 92, 0.4)'
+  ctx.shadowColor = `rgba(${primaryRgb}, 0.4)`
   ctx.shadowBlur = 8
   ctx.stroke()
   ctx.shadowBlur = 0
@@ -319,6 +330,28 @@ function onClose() {
   }
   resetTest()
 }
+
+onMounted(() => {
+  // 监听 <html data-theme> 切换 → 重绘 Canvas (因 Canvas 像素不自动跟随 CSS 变量)
+  // 只在录音中重绘 (没在录音时没有 Canvas 动画循环, 也无需重绘)
+  themeObserver = new MutationObserver(() => {
+    if (state.value === 'recording' && animFrameId) {
+      // RAF 循环每帧调 drawWaveform, 主题切换时下一帧自动用新 RGB
+      // 不需主动触发 (Canvas 不会"过期", 下一帧读到的就是新 CSS 变量值)
+    }
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-accent'],
+  })
+})
+
+onBeforeUnmount(() => {
+  if (themeObserver) {
+    themeObserver.disconnect()
+    themeObserver = null
+  }
+})
 
 onUnmounted(() => {
   if (state.value === 'recording') {
