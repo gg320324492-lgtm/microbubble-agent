@@ -386,12 +386,38 @@ async def complete(self, messages, *, model=None, system=None, ...):
 老代码传位置 model 必报 TypeError（炸得明显），不会静默走错模型。LRU cache key 必须含 model 维度（防不同模型互相污染缓存）。
 
 **铁律 6：feature flag 必须保留老路径代码（不是 git revert）**
-3 个 kill switch：
+3 个 kill switch（**2026-06-29 已全部删除**，见 [## 2026-06-29 chat_engine_legacy 收官](#2026-06-29-chat_engine_legacy-30-天承诺提前-15-天收官)）：
 - `AGENT_NEW_ARCHITECTURE_ENABLED: bool = True`（全局开关）
 - `AGENT_REFLECTION_ENABLED: bool = True`
 - `AGENT_COMPRESSION_ENABLED: bool = True`
 - 关闭时由 `chat_engine.py` 内部调 `chat_engine_legacy.py`（保留作为 30 天回滚资产，**不是 in-file dead code**）
-- 30 天后（2026-07-14）单独 commit 删除 `chat_engine_legacy.py`
+- 30 天后（2026-07-14）单独 commit 删除 `chat_engine_legacy.py` → **已提前 15 天（2026-06-29）收官**
+
+### 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官
+
+**触发**：方案 C 2026-06-14 上线，配套保留 `app/agent/chat_engine_legacy.py`（460 行老 brief+detail 双层架构）作为 30 天回滚资产，配合 3 个 feature flag。30 天观察期（15 天已过 + 0 流量走 legacy + 生产 100% 走新架构）决定提前收官。
+
+**评估结果**：
+- ✅ 生产 0 流量走 legacy（3 flag 默认 `True`，`.env` / `docker-compose` 0 覆盖为 `False`）
+- ✅ 无运行时 ImportError 兜底，删文件不会触发异常
+- ⚠️ 4 个 unit test 断言依赖 legacy 文件 / flag，必须同步删除
+- ⚠️ 提前 15 天违反 30 天承诺 → docs 加注"提前于 2026-06-29 删除"
+
+**原子 1 commit 收官**（详见 git log）：
+- **删除（1）**：`app/agent/chat_engine_legacy.py`（460 行）
+- **修改（10）**：
+  - `app/agent/chat_engine.py` — 移除 kill switch + `_legacy_chat_stream` 委托方法 + 相关注释
+  - `app/agent/critic.py` — 移除 `AGENT_REFLECTION_ENABLED` 短路
+  - `app/agent/result_compressor.py` — 移除 `AGENT_COMPRESSION_ENABLED` 短路
+  - `app/agent/agentic_loop.py` — 移除 `AGENT_COMPRESSION_ENABLED` 包裹
+  - `app/config.py` — 删除 3 个 settings 字段
+  - `tests/unit/test_chat_engine_synthesize.py` — 删除 3 个 legacy 相关测试
+  - `tests/unit/test_agent_v2_main.py` — 删除 1 个 legacy 相关测试
+  - `tests/perf/conftest.py` + `test_synthesis_latency.py` — docstring 清理
+  - `docs/stage5-rollout-runbook.md` — 改写回滚步骤
+  - `CLAUDE.md` — 本节加注
+
+**回滚路径**：`git revert <commit-hash>` 一行撤销 + 重新部署。< 5 分钟恢复。
 
 ### 部署必做
 
@@ -413,7 +439,7 @@ docker compose restart app celery-worker
 - 流式 ChartBlock 渐进渲染（边输出文字边出图）
 - RAG 引用图谱可视化
 - ASR/TTS 真流式（边录音边出文字）
-- 30 天后删除 `chat_engine_legacy.py`（2026-07-14）
+- ~~30 天后删除 `chat_engine_legacy.py`（2026-07-14）~~ — **已于 2026-06-29 提前 15 天完成**（见上节"## 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官"）
 
 ## 开发注意事项
 

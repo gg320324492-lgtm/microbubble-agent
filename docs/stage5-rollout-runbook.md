@@ -111,7 +111,15 @@ docker exec -it microbubble-agent-postgres-1 psql -U postgres -d microbubble -c 
 # 期望：至少 1 行（证明铁律 4 同步落库生效）
 ```
 
-如果没看到 abort 记录 → 同步落库没工作，回滚 `AGENT_NEW_ARCHITECTURE_ENABLED=false` 退到 legacy。
+如果没看到 abort 记录 → 同步落库没工作，**回滚路径（2026-06-29 更新）**：
+```bash
+# 方案 C 30 天回滚窗口已于 2026-06-29 提前结束
+# AGENT_NEW_ARCHITECTURE_ENABLED flag 已删除，不能再切到 chat_engine_legacy
+# 真回滚路径: git revert <chat_engine_legacy 删除 commit> + 重新部署
+git revert <commit-hash> && git push origin main
+# 或: 部署上一个 stable 版本的 dist 镜像
+# 回滚预期时间: < 5 分钟 (revert + push + webhook 触发 deploy)
+```
 
 ## 5. 🧪 Playwright 视觉回归测试（可选，5 个 viewport × 2 状态）
 

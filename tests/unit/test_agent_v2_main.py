@@ -120,11 +120,11 @@ class TestChatEngine:
     def test_engine_has_methods(self):
         engine = ChatEngine()
         # 2026-06-14 方案 C Stage 2：ChatEngine 重写为单阶段流式
+        # 2026-06-29 收官：_legacy_chat_stream kill switch 已删除（30 天回滚承诺提前收官）
         assert hasattr(engine, "chat_with_brief_and_detail"), "薄壳保留（旧 API 兼容）"
         assert hasattr(engine, "chat_stream"), "薄壳保留（旧 API 兼容）"
         assert hasattr(engine, "synthesize_stream"), "新主入口（方案 C 核心）"
-        assert hasattr(engine, "_legacy_chat_stream"), "Kill switch 退回老实现（铁律 6）"
-        # 删除的旧方法（_generate_with_tools / _append_detail_background 已迁到 agentic_loop.py）
+        # 删除的旧方法（_generate_with_tools / _append_detail_background / _legacy_chat_stream）
 
     def test_last_user_text(self):
         msgs = [
@@ -216,11 +216,8 @@ class TestBackwardCompat:
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from app.agent.core import agent  # noqa: F401
 
-    def test_legacy_chat_engine_file_still_exists(self):
-        """chat_engine_legacy.py 仍保留（30 天回滚资产，铁律 6）"""
-        from pathlib import Path
-        legacy_path = Path(__file__).parent.parent.parent / "app" / "agent" / "chat_engine_legacy.py"
-        assert legacy_path.exists(), "chat_engine_legacy.py 应保留（30 天回滚资产）"
+    # 2026-06-29 已删除（chat_engine_legacy.py 30 天回滚承诺提前收官）:
+    # - test_legacy_chat_engine_file_still_exists: 断言 chat_engine_legacy.py 存在 (现文件已删除)
 
     def test_dispatch_legacy_removed(self):
         """dispatch_legacy 函数已被删除（Stage 5 收尾）"""

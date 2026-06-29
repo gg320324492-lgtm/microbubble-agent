@@ -7,8 +7,8 @@ Stage 0 预算（被 Plan agent 6 修正后）：
 - synthesis_p95_max_s: 8.0s → 10.0s（不含 retry 慢路径）
 - synthesis_p95_with_retry_max_s: 16.0s（独立慢路径基线）
 
-Stage 0 旧 brief/detail 基线保留为参考值，但新代码不再产出 brief/detail 事件
-（仍走 chat_engine_legacy.py 时测出 brief 性能）。
+2026-06-29 收官：chat_engine_legacy.py 已删除（30 天回滚承诺提前收官），
+新代码已无 brief/detail 双层事件路径，仅保留 synthesis P95 / first-byte 基线。
 """
 
 import pytest

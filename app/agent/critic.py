@@ -95,17 +95,6 @@ async def critique_response(
     - 失败：返回 score=0 + addresses_question=True（Plan agent 5c：吞掉异常，不阻塞主流程）
     - 不直接 yield SSE 事件，由调用方决定
     """
-    if not settings.AGENT_REFLECTION_ENABLED:
-        # 关闭 Reflection 时直接返回「通过」
-        return CritiqueResult(
-            score=10,
-            addresses_question=True,
-            has_synthesis=True,
-            has_citations=True,
-            missing=[],
-            suggestion="",
-        )
-
     # 1. 准备 prompt
     tool_call_summary = "\n".join(
         f"- {tc.get('name', '?')}({list(tc.get('input', {}).keys())})"

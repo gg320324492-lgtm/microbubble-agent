@@ -766,19 +766,18 @@ class AgenticLoop:
                         # [snapshot] rich_block
                         yield StreamEvent(type="rich_block", block=rb)
 
-                    # 压缩（如启用 + 触发条件满足）
+                    # 压缩（如触发条件满足）
                     compression: Optional[CompressionResult] = None
-                    if settings.AGENT_COMPRESSION_ENABLED:
-                        try:
-                            compression = await compress_tool_result(
-                                user_question=_last_user_text(messages),
-                                intent=intent,
-                                tool_name=tu["name"],
-                                raw_result=result if isinstance(result, dict) else {},
-                                ctx=ctx,
-                            )
-                        except Exception as e:
-                            logger.warning(f"compress_tool_result failed: {e}")
+                    try:
+                        compression = await compress_tool_result(
+                            user_question=_last_user_text(messages),
+                            intent=intent,
+                            tool_name=tu["name"],
+                            raw_result=result if isinstance(result, dict) else {},
+                            ctx=ctx,
+                        )
+                    except Exception as e:
+                        logger.warning(f"compress_tool_result failed: {e}")
 
                     if compression:
                         # [snapshot] tool_compressed

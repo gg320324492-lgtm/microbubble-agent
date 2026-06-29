@@ -1,7 +1,7 @@
 """2026-06-14 方案 C Stage 3：方案 C 新架构的性能基线测试
 
-Stage 0 旧 brief_latency 测试保留为 deprecated（仅跑 chat_engine_legacy 时用）。
-本测试覆盖新 synthesize_stream 流程的 P95 / first-byte / 各阶段延迟。
+2026-06-29 收官：chat_engine_legacy.py 已删除，新代码仅跑 synthesize_stream
+单阶段流式综合流程。本测试覆盖 P95 / first-byte / 各阶段延迟。
 
 跑法：
   pytest tests/perf/test_synthesis_latency.py -v

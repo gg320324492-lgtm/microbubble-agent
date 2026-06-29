@@ -144,10 +144,8 @@ class Settings(BaseSettings):
     AGENT_REFLECTION_THRESHOLD: int = 7  # 自评 < 阈值触发 retry
     AGENT_MAX_REFLECTION_RETRIES: int = 1  # 防爆炸：最多 retry 1 次
     AGENT_RESULT_CACHE_TTL_SEC: int = 300  # 同问题 5min 复用 final synthesis
-    # Kill switches（紧急时刻一键降级，改 .env + restart 生效）
-    AGENT_REFLECTION_ENABLED: bool = True  # 关闭 Reflection 单点
-    AGENT_COMPRESSION_ENABLED: bool = True  # 关闭 Haiku 压缩单点
-    AGENT_NEW_ARCHITECTURE_ENABLED: bool = True  # 整个新架构全局开关，False 时走 chat_engine_legacy
+    # 历史（2026-06-29 已删除）: AGENT_REFLECTION_ENABLED / AGENT_COMPRESSION_ENABLED /
+    #   AGENT_NEW_ARCHITECTURE_ENABLED — 30 天回滚承诺提前 15 天收官, 真回滚路径: git revert
     AGENT_INTENT_AWARE_PROMPTS: bool = True  # #001b: 根据意图分类附加回复指南（闲聊/数据/深度 三类分支）
     AGENT_PRIMITIVE_RECOGNITION: bool = True  # #083: 在深度场景附加 5 大原意识别 section（任务/会议/知识/公式/假设）
     AGENT_CROSS_DOMAIN_SYNTHESIS: bool = True  # #086: 在 explain_concept 场景附加跨域综合规则 section (≥3 域 4 工具硬下限)
