@@ -514,3 +514,18 @@
 [data-theme="dark"][data-accent="forest"] .el-dialog__header {
   background: rgba(var(--color-primary-rgb), 0.10);
 }
+/* v77 P2.6-G.1: 移动端 long-press 视觉反馈 (LongPressWrapper 内部 + 卡片整体 hover 反馈) */
+.long-press-wrapper {
+  /* LongPressWrapper 内置 opacity: 0.7 is-pressing, 这里补 dark 模式 + 不影响卡片布局 */
+  display: contents;
+}
+[data-theme="dark"] .long-press-wrapper {
+  color: var(--color-text-regular);
+}
+
+/* v77 P2.6-G.1: 移动端模板卡片触摸反馈 (active 状态) */
+.template-card.builtin:active,
+.template-card.custom:active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease-out;
+}
