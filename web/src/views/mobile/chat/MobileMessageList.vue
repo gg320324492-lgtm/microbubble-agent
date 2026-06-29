@@ -207,7 +207,7 @@ defineExpose({ scrollToBottom })
   font-size: 13px;
   color: var(--color-text-primary);
   -webkit-tap-highlight-color: transparent;
-  transition: all 150ms;
+  transition: all var(--transition-all-fast);
 }
 .quick-btn:active {
   border-color: var(--color-primary);

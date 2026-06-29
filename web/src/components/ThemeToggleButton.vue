@@ -42,7 +42,7 @@ const theme = useThemeStore()
   border: 1px solid rgba(144, 147, 153, 0.15);
   background: rgba(144, 147, 153, 0.1);
   cursor: pointer;
-  transition: all 200ms var(--ease-out);
+  transition: all var(--transition-all-normal) var(--ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 .theme-toggle-btn:hover {
