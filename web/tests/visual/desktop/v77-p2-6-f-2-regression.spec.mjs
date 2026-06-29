@@ -397,13 +397,120 @@ test.describe('Round 8: 14 项浏览器手测清单', () => {
 })
 
 // ════════════════════════════════════════════════════
+// v77 P2.6-F.5: builtin 一键复制 + is_active toggle (B-13/B-14/B-15)
+// ════════════════════════════════════════════════════
+
+test('B-13 builtin 复制: hover → 复制 → 列表 +1 (custom 副本含 "(副本)" 后缀)', async ({ page }) => {
+  test.setTimeout(30000)
+  await page.goto(`${BASE_URL}/meetings`)
+  await waitForLoaded(page)
+  await page.getByRole('button', { name: /手动创建/ }).click()
+  await waitForLoaded(page)
+
+  // 数一下当前 custom 数量 (复制后应 +1)
+  const customBefore = await page.locator('.template-card.custom').count()
+
+  // 第一个 builtin hover → 复制
+  const firstBuiltin = page.locator('.template-card.builtin').first()
+  await firstBuiltin.hover()
+  await waitForLoaded(page)
+  const cloneBtn = firstBuiltin.locator('.tpl-action[aria-label="复制为自定义模板"]')
+  await expect(cloneBtn, 'hover 应显示复制按钮').toBeVisible()
+  await cloneBtn.click()
+  await waitForLoaded(page)
+
+  // 等待 loadTemplates + 复制反馈
+  await page.waitForTimeout(2000)
+
+  // 验证 custom 数量 +1
+  const customAfter = await page.locator('.template-card.custom').count()
+  expect(customAfter, '复制后 custom 数量应 +1').toBe(customBefore + 1)
+
+  // 关闭 dialog
+  await page.locator('.el-dialog').getByRole('button', { name: /取消/ }).click()
+  await page.goto(`${BASE_URL}/meetings`)
+  await waitForLoaded(page)
+})
+
+test('B-14 builtin is_active toggle: 关掉第一个 builtin → disabled class + 重新启用', async ({ page }) => {
+  test.setTimeout(30000)
+  await page.goto(`${BASE_URL}/meetings`)
+  await waitForLoaded(page)
+  await page.getByRole('button', { name: /手动创建/ }).click()
+  await waitForLoaded(page)
+
+  const firstBuiltin = page.locator('.template-card.builtin').first()
+  const sw = firstBuiltin.locator('.builtin-active-switch')
+  await expect(sw, 'builtin 卡片应有 is_active switch').toBeVisible()
+
+  // toggle 关掉
+  await sw.click()
+  await waitForLoaded(page)
+  await page.waitForTimeout(2000)  // 等待 PUT + loadTemplates
+
+  // 验证已 disabled (重新 query 因为 loadTemplates 重渲染)
+  const isDisabled = await page.locator('.template-card.builtin').first()
+    .evaluate(el => el.classList.contains('disabled'))
+  expect(isDisabled, 'toggle 关掉后应有 disabled class').toBe(true)
+
+  // 重新启用 (test pollution 修复)
+  const swAfter = page.locator('.template-card.builtin').first().locator('.builtin-active-switch')
+  await swAfter.click()
+  await page.waitForTimeout(2000)
+  const isDisabledAfter = await page.locator('.template-card.builtin').first()
+    .evaluate(el => el.classList.contains('disabled'))
+  expect(isDisabledAfter, '重新启用后 disabled class 应消失').toBe(false)
+
+  await page.locator('.el-dialog').getByRole('button', { name: /取消/ }).click()
+  await page.goto(`${BASE_URL}/meetings`)
+  await waitForLoaded(page)
+})
+
+test('B-15 builtin disabled 时点击卡片不触发 applyTemplate (不弹 ElMessage)', async ({ page }) => {
+  test.setTimeout(30000)
+  await page.goto(`${BASE_URL}/meetings`)
+  await waitForLoaded(page)
+  await page.getByRole('button', { name: /手动创建/ }).click()
+  await waitForLoaded(page)
+
+  // 第一个 builtin 应是启用
+  const firstBuiltin = page.locator('.template-card.builtin').first()
+  const sw = firstBuiltin.locator('.builtin-active-switch')
+  await sw.click()  // 关闭
+  await page.waitForTimeout(2000)
+
+  // 重新进入 dialog (force re-render)
+  await page.goto(`${BASE_URL}/meetings`)
+  await waitForLoaded(page)
+  await page.getByRole('button', { name: /手动创建/ }).click()
+  await waitForLoaded(page)
+
+  // 现在第一个 builtin 应该是 disabled
+  const disabledCard = page.locator('.template-card.builtin.disabled').first()
+  await expect(disabledCard).toBeVisible()
+  await disabledCard.click()
+  await page.waitForTimeout(800)
+
+  // 不应有 "已应用模板" ElMessage (click 不触发)
+  const appliedMsg = page.getByText(/已应用模板/)
+  await expect(appliedMsg).toHaveCount(0)
+
+  // 重新启用 (cleanup)
+  const swCleanup = disabledCard.locator('.builtin-active-switch')
+  await swCleanup.click()
+  await page.waitForTimeout(2000)
+  await page.locator('.el-dialog').getByRole('button', { name: /取消/ }).click()
+})
+
+// ════════════════════════════════════════════════════
 // Round 6 + 8 报告生成
 // ════════════════════════════════════════════════════
 
 test.afterAll(async () => {
-  console.log('\n=== v77 P2.6-F.2 + P2.6-F.4 自动化验证报告 ===')
+  console.log('\n=== v77 P2.6-F.2 + F.4 + F.5 自动化验证报告 ===')
   console.log('Round 6 (主题): 6 主题 × /meetings 截图已保存到 test-results/round-6-themes/')
-  console.log('Round 8 (功能): 14 项浏览器手测清单已自动化 (A-01~A-03, B-04~B-12, C-11~C-13)')
+  console.log('Round 8 (功能): 17 项浏览器手测清单已自动化 (A-01~A-03, B-04~B-15, C-11~C-13)')
   console.log('P2.6-F.4 新增: B-11 (custom 编辑) + B-12 (popconfirm 取消) 验证 hover 按钮闭环')
+  console.log('P2.6-F.5 新增: B-13 (builtin 复制) + B-14 (is_active toggle) + B-15 (disabled 点击不触发)')
   console.log('主题截图: test-results/round-6-themes/01-light-orange-meetings.png ... 06-dark-forest-meetings.png')
 })
