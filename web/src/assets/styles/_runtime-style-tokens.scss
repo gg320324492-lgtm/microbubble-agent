@@ -59,7 +59,9 @@
 .badge--info    { background: var(--color-info-bg); color: var(--color-info); }
 
 // ===== 声纹 bar 渐变 (VoiceprintCard.vue) =====
-// v77 P2.6-E.1: 收敛 VoiceprintCard.vue:8 barColor(value) runtime :style
+// v77 P2.6-E.1: 铺设 class 钩子 (zero consumer, 0 consumer)
+// v77 P2.6-G.2: 启用 — VoiceprintCard.vue getBarClass(value) 取代原 barColor() runtime :style
+// 阈值 0.33 / 0.66 (per-card max 归一化) 切 3 档, 6 主题通过 --color-warning / --color-success 自动跟随
 .bar--low    { background: var(--color-warning-bg); }
 .bar--mid    { background: linear-gradient(90deg, var(--color-warning) 0%, var(--color-success) 100%); }
 .bar--high   { background: var(--color-success); }
