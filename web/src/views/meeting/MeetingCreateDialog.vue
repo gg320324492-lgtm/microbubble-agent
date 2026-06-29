@@ -19,15 +19,36 @@
             v-for="tpl in builtinTemplates"
             :key="tpl.id"
             class="template-card builtin"
-            :class="{ active: form.templateId === tpl.id }"
-            @click="applyTemplate(tpl)"
+            :class="{ active: form.templateId === tpl.id, disabled: !tpl.is_active }"
+            @click="tpl.is_active && applyTemplate(tpl)"
           >
+            <!-- v77 P2.6-F.5: builtin 卡片 hover 复制按钮 (CSS 已就绪 + builtin trigger 规则) -->
+            <div class="template-card-actions">
+              <el-icon
+                class="tpl-action"
+                title="复制为自定义模板"
+                aria-label="复制为自定义模板"
+                @click.stop="$emit('clone-template', tpl.id)"
+              >
+                <DocumentCopy />
+              </el-icon>
+            </div>
             <div class="template-card-name">{{ tpl.name }}<el-tag size="small" type="info" effect="plain">内置</el-tag></div>
             <div class="template-card-desc">{{ tpl.description || '—' }}</div>
             <div class="template-card-meta">
               <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
               <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
             </div>
+            <!-- v77 P2.6-F.5: builtin 卡片右侧 el-switch 启用/禁用 -->
+            <el-switch
+              :model-value="tpl.is_active"
+              class="builtin-active-switch"
+              inline-prompt
+              active-text="启用"
+              inactive-text="禁用"
+              @click.stop
+              @update:model-value="(val) => $emit('toggle-active', { id: tpl.id, is_active: val })"
+            />
           </div>
           <div
             v-for="tpl in customTemplates"
@@ -179,7 +200,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Clock, List, Plus, Delete, Edit } from '@element-plus/icons-vue'
+import { Document, Clock, List, Plus, Delete, Edit, DocumentCopy } from '@element-plus/icons-vue'
 import { useMeeting } from '@/composables/useMeeting'
 import { useMemberStore } from '@/stores/member'
 import dayjs from 'dayjs'
@@ -191,7 +212,7 @@ const props = defineProps({
   templates: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['success', 'save-template', 'delete-template'])
+const emit = defineEmits(['success', 'save-template', 'delete-template', 'clone-template', 'toggle-active'])
 
 const visible = defineModel('visible', { default: false })
 const { createMeeting, updateMeeting } = useMeeting()

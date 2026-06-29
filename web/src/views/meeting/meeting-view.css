@@ -308,6 +308,8 @@
   transition: opacity 0.15s;
 }
 .template-card.custom:hover .template-card-actions { opacity: 1; }
+/* v77 P2.6-F.5: builtin 卡片 hover 也显示 actions (复制按钮) */
+.template-card.builtin:hover .template-card-actions { opacity: 1; }
 .tpl-action {
   cursor: pointer;
   padding: 2px;
@@ -316,6 +318,19 @@
 }
 .tpl-action:hover { background: var(--color-bg-page, #fafafa); }
 .tpl-action.danger { color: var(--color-danger); }
+
+/* v77 P2.6-F.5: builtin 卡片禁用态视觉 */
+.template-card.builtin.disabled { opacity: 0.5; cursor: not-allowed; }
+.template-card.builtin.disabled:hover { border-color: var(--color-border); }
+
+/* v77 P2.6-F.5: builtin 卡片右侧 el-switch 定位 */
+.template-card.builtin { position: relative; padding-right: 50px; }
+.builtin-active-switch {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  transform: scale(0.85);
+}
 .template-empty {
   grid-column: 1 / -1;
   text-align: center;
@@ -481,6 +496,8 @@
 [data-theme="dark"] .tpl-action:hover {
   background: var(--color-bg-page);
 }
+/* v77 P2.6-F.5: builtin 卡片禁用态 dark 模式透明度调整 */
+[data-theme="dark"] .template-card.builtin.disabled { opacity: 0.4; }
 [data-theme="dark"] .meeting-info-bar {
   border-bottom-color: var(--color-border);
 }
