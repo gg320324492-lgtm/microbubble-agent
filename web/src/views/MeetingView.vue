@@ -145,6 +145,8 @@
       @success="onMeetingSaved"
       @save-template="onSaveAsTemplate"
       @delete-template="onDeleteTemplate"
+      @clone-template="onCloneTemplate"
+      @toggle-active="onToggleActive"
     />
 
     <!-- 2026-06-03 新增：模板编辑对话框 — v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件 -->
@@ -342,6 +344,30 @@ const onDeleteTemplate = async (templateId) => {
     await loadTemplates()  // 刷新 templates ref → customTemplates 列表自动减 1
   } catch (e) {
     ElMessage.error(`删除失败：${e.response?.data?.detail || e.message}`)
+  }
+}
+
+// v77 P2.6-F.5: 一键复制 builtin 为 custom 副本 (后端 POST /meeting-templates/{id}/clone)
+const onCloneTemplate = async (templateId) => {
+  if (!templateId) return
+  try {
+    const resp = await axios.post(`/api/v1/meeting-templates/${templateId}/clone`)
+    ElMessage.success(`已复制: ${resp.data.name}`)
+    await loadTemplates()  // 刷新 templates ref → customTemplates 列表自动 +1
+  } catch (e) {
+    ElMessage.error(`复制失败: ${e.response?.data?.detail || e.message}`)
+  }
+}
+
+// v77 P2.6-F.5: 切换 builtin is_active (后端 PUT 端点已支持 is_active 字段)
+const onToggleActive = async ({ id, is_active }) => {
+  if (!id) return
+  try {
+    await axios.put(`/api/v1/meeting-templates/${id}`, { is_active })
+    ElMessage.success(is_active ? '已启用' : '已禁用')
+    await loadTemplates()  // 刷新 templates ref → builtin 卡片 disabled class 自动更新
+  } catch (e) {
+    ElMessage.error(`操作失败: ${e.response?.data?.detail || e.message}`)
   }
 }
 
