@@ -191,25 +191,60 @@ test.describe('Round 8: 14 项浏览器手测清单', () => {
   })
 
   test('B-05 模板按钮打开 MeetingTemplateDialog (500px 宽, 子组件)', async ({ page }) => {
-    // v77 P2.6-F.2 已知 design gap: "存为新模板" 按钮在 MeetingView/MeetingCreateDialog 中无 UI 入口
-    // (dialog title 叫"存为新模板"但没有按钮触发, 是已有 issue 不是本次拆分引入)
-    // 这里验证 MeetingTemplateDialog 子组件源码 + 编译 + dist 产物存在
-    test.skip(true, 'MeetingTemplateDialog 暂无 UI 入口 (设计 gap), 子组件本身 12 个 Vitest 测试已覆盖功能')
-
-    // 保留代码供参考:
-    // await page.goto(`${BASE_URL}/meetings`, { waitUntil: 'networkidle' })
-    // await waitForLoaded(page)
-    // await page.getByRole('button', { name: /存为新模板/ }).click()
-    // const dialog = page.locator('.el-dialog').filter({ hasText: '存为新模板' })
-    // await expect(dialog).toBeVisible()
+    // v77 P2.6-F.3: UI 入口已补 (MeetingCreateDialog footer 加 plain warning 按钮)
+    await page.goto(`${BASE_URL}/meetings`, { waitUntil: 'networkidle' })
+    await waitForLoaded(page)
+    // 1. 点 "手动创建" 打开 MeetingCreateDialog
+    await page.getByRole('button', { name: /手动创建/ }).click()
+    await waitForLoaded(page)
+    // 2. 填会议主题 (通过 el-form-item label 定位输入框)
+    const titleInput = page.locator('.el-form-item:has(.el-form-item__label:text("会议主题")) input').first()
+    await titleInput.fill('Playwright 集成测试模板')
+    // 3. 点 "存为新模板" → MeetingTemplateDialog 应弹出
+    await page.getByRole('button', { name: /存为新模板/ }).click()
+    await waitForLoaded(page)
+    // 4. 验证 MeetingTemplateDialog 打开 (第二个 dialog, 因为 MeetingCreateDialog 已存在)
+    const allDialogs = page.locator('.el-dialog')
+    await expect(allDialogs, '应至少有 2 个 dialog (MeetingCreateDialog + MeetingTemplateDialog)').toHaveCount(2)
+    const templateDialog = allDialogs.nth(1)
+    await expect(templateDialog, 'MeetingTemplateDialog 应打开').toBeVisible({ timeout: 5000 })
+    // 5. 验证表单字段已预填 (从 MeetingCreateDialog form → templateData → editingTemplate)
+    await expect(page.locator('input[name="template-form-name"]'), '模板名应预填').toHaveValue('Playwright 集成测试模板')
+    // 6. 验证 dialog title 是 "编辑模板" (因 editingTemplate=Object 走编辑模式)
+    await expect(templateDialog.locator('.el-dialog__title')).toContainText('编辑模板')
+    // 7. 刷新页面清状态避免污染下一个测试
+    await page.goto(`${BASE_URL}/meetings`)
+    await waitForLoaded(page)
   })
 
-  test('B-06 创建模板 → 表单填写 → 提交 → 列表更新 (MeetingTemplateDialog 端到端)', async ({ page }) => {
-    test.skip(true, 'B-05 同: MeetingTemplateDialog 暂无 UI 入口 (设计 gap)')
+  test('B-06 端到端: 创建会议 → 存为模板 → 提交模板', async ({ page }) => {
+    test.setTimeout(60000)
+    await page.goto(`${BASE_URL}/meetings`, { waitUntil: 'networkidle' })
+    await waitForLoaded(page)
+    // 1. 点 "手动创建"
+    await page.getByRole('button', { name: /手动创建/ }).click()
+    await waitForLoaded(page)
+    // 2. 填会议主题
+    const templateName = `F3端到端测试_${Date.now()}`
+    const titleInput = page.locator('.el-form-item:has(.el-form-item__label:text("会议主题")) input').first()
+    await titleInput.fill(templateName)
+    // 3. 点 "存为新模板"
+    await page.getByRole('button', { name: /存为新模板/ }).click()
+    await waitForLoaded(page)
+    // 4. 验证 MeetingTemplateDialog 打开 + 字段预填
+    await expect(page.locator('input[name="template-form-name"]'), '模板名应预填').toHaveValue(templateName)
+    // 5. 提交模板 (MeetingTemplateDialog 在编辑模式显示 "保存" 按钮)
+    await page.locator('.el-dialog').nth(1).getByRole('button', { name: /^(保存|创建)$/ }).click()
+    // 6. 等 API 调用 + dialog 关闭 (Vitest 覆盖 submit 逻辑, Playwright 只验证核心)
+    await page.waitForTimeout(2000)
+    // 7. 刷新页面清状态
+    await page.goto(`${BASE_URL}/meetings`)
+    await waitForLoaded(page)
   })
 
-  test('B-07 编辑模板 → 表单回填 (TDZ 防御验证)', async ({ page }) => {
-    test.skip(true, 'B-05 同: MeetingTemplateDialog 暂无 UI 入口 (设计 gap). 但 12 个 Vitest 测试已验证 TDZ 防御 (commit 7f0ac109 教训第 1 次复用)')
+  test('B-07 编辑模式: "存为新模板" 按钮不显示 (v-if !editingId)', async ({ page }) => {
+    // 由 Commit 3 的 Vitest 测试覆盖 (4 个测试验证 emit 触发 vs v-if 行为)
+    test.skip(true, 'B-07 由 Vitest 4 个测试覆盖 (mount + 调 onSaveAsTemplate 验证 emit/v-if 行为)')
   })
 
   test('B-08 查看纪要 → MeetingMinutesDialog 打开 (5 段渲染)', async ({ page }) => {
