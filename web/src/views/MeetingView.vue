@@ -406,5 +406,14 @@ onMounted(() => {
     resumeRecording(Number(resumeId))
     // resumeRecording 内部已 router.replace('/meetings/room')，不要在这里再 replace
   }
+
+  // v77 P2.6-G.2: 移动端 TabBar 跳 /meetings?tab=templates → 自动打开快速模板区
+  // (桌面端独立 /admin/templates 走桌面 el-table 表格, 移动端走 MeetingCreateDialog 快速模板卡)
+  const tab = route.query.tab
+  if (tab === 'templates') {
+    showCreateDialog.value = true
+    // 清理 query 防止刷新重复触发
+    router.replace({ path: '/meetings' })
+  }
 })
 </script>
