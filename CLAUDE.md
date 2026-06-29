@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-30 当前任务链**：🆕 **前端视觉 5 件套 + 视觉收官延伸（8 commits）**（KnowledgeToolbar 4 按钮 class 冲突 + MemberView ghost primary 对比度 + VoiceprintView 波形 alpha 归一化 + SettingsView Hero 跟随主题 + VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep 安装 + nginx 3 commits HSTS server-block + 4 location + gzip_types 13 MIME 扩展）→ 🆕 **Knowledge 卡 `analysis_status` 真 bug 修复（commit `3653890b`）**（Step 7 `_reset_multimodal_data` 无条件覆盖终态 → 加 `reset_status=False` 参数 + Step 8 最终终态防御 + UI partial tag + DB 清理 2 张预存 stuck 卡（KB #14 #19 5 月遗留））→ 🆕 **#043 账号持久化聊天历史（Phase 1+2+3 收官 5/8）** → #042 概念问 4 域代码强制 fan-out（commit 5522ad5a, D11-D15 5/5 PASS）→ #041 plan_step 强制执行 → v77 P2.6-E/F 视觉/代码质量延伸（4 commits）→ v77 P2.6 视觉体系 4 子任务全面收官 → 3 个生产 bug 修复。**当前主线**：**#009 (Self-RAG 重检索)** 基于 Phase 0+Phase 1 双重 hook 扩展 → #043 Phase 4 前端 store 重构。**1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 自动重算）。
+> **2026-06-30 当前任务链**：🆕 **前端视觉 5 件套 + 视觉收官延伸（8 commits）**（KnowledgeToolbar 4 按钮 class 冲突 + MemberView ghost primary 对比度 + VoiceprintView 波形 alpha 归一化 + SettingsView Hero 跟随主题 + VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep 安装 + nginx 3 commits HSTS server-block + 4 location + gzip_types 13 MIME 扩展）→ 🆕 **Knowledge 卡 `analysis_status` 真 bug 修复（commit `3653890b`）**（Step 7 `_reset_multimodal_data` 无条件覆盖终态 → 加 `reset_status=False` 参数 + Step 8 最终终态防御 + UI partial tag + DB 清理 2 张预存 stuck 卡（KB #14 #19 5 月遗留））→ 🆕 **#043 账号持久化聊天历史（Phase 4+5 收官 6/8, Phase 6 UI 升级待启动）** → #042 概念问 4 域代码强制 fan-out（commit 5522ad5a, D11-D15 5/5 PASS）→ #041 plan_step 强制执行 → v77 P2.6-E/F 视觉/代码质量延伸（4 commits）→ v77 P2.6 视觉体系 4 子任务全面收官 → 3 个生产 bug 修复。**当前主线**：**#043 Phase 6 UI 升级**（搜索栏 + 标签 chip + 分享对话框 + 导出对话框 + 移动端长按 ActionSheet，约 6-8h，PR 3）→ **#009 (Self-RAG 重检索)** 基于 Phase 0+Phase 1 双重 hook 扩展。**1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 自动重算）。
 >
 > **2026-06-30 前端视觉 5 件套 + nginx HSTS + Knowledge 卡 status 真 bug 修复（11 commits 收尾）**：① **KnowledgeToolbar 4 按钮**（commit `558962b1`）—— `.btn-text` utility class 同名冲突，scoped `color: inherit` 恢复继承 ② **MemberView 录入声纹 ghost primary**（commit 845803c3）—— `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600` ③ **VoiceprintView 波形颜色不一致**（commit 36e64fb4）—— 老成员 stale embedding |value|≈0 alpha≈0 不可见，`barColor()` per-card max 归一化 + min alpha floor 0.12 + NaN 守卫 ④ **SettingsView Hero 跟随主题**（commit `054668f7`）—— non-scoped `[data-theme=dark].hero-bg` 写死 `#FF6B4A→#FFB347` source 顺序靠后赢 cascade ⑤ **VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep**（commit `e3b32b86`）—— 全项目扫描 38 个非 scoped style 块 + 1 个 mobile inline style 全部干净 ⑥ **nginx HSTS server-block + gzip_types 扩展**（3 commits `71e743f7` + `289338fb` + `34128fbd`）—— `strict-transport-security 12→0 errors/route`，gzip_types 加 `font/woff2`/`application/wasm`/`application/manifest+json`/`image/x-icon`/`image/vnd.microsoft.icon`/`font/woff` 6 个 MIME ⑦ **Knowledge 卡 `analysis_status` 真 bug**（commit `3653890b`）—— Step 7 `_reset_multimodal_data` 无条件覆盖终态，加 `reset_status=False` 参数 + Step 8 最终终态防御 + UI partial tag ⑧ **webhint 二次扫描 + DB stuck 卡清理** —— strict-transport-security **0 errors**（9 路由全过），KB #14 #19（5 月预存 stuck 卡）验证 content 完整性 + UPDATE → done，全表 **0 stuck 'analyzing'**。沉淀 memory 8 个：[btn-text-class-name-clash.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/btn-text-class-name-clash.md) + [plain-primary-contrast.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/plain-primary-contrast.md) + [voiceprint-bar-color-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-bar-color-2026-06-29.md) + [scoped-vs-non-scoped-hardcoded-override-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/scoped-vs-non-scoped-hardcoded-override-2026-06-29.md) + [visual-cleanup-extension-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/visual-cleanup-extension-2026-06-29.md) + [nginx-hsts-gzip-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/nginx-hsts-gzip-2026-06-29.md) + [knowledge-status-pipeline-vs-manual-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-status-pipeline-vs-manual-2026-06-30.md) + [knowledge-stuck-status-cleanup-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-stuck-status-cleanup-2026-06-30.md)。
 >
@@ -134,7 +134,7 @@
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
 - **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**PWA 4 策略**：manifest + service worker（workbox）预缓存 app shell + useSafeArea 读 iPhone 安全区 + 离线 IndexedDB 兜底。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
 
-## 2026-06-29 #043 账号持久化聊天历史（Phase 1+2+3 收官，待 Phase 4）
+## 2026-06-29 #043 账号持久化聊天历史（Phase 4+5 收官 6/8, Phase 6 UI 升级待启动）
 
 > **用户原始需求**：每个人与小气助手的对话的聊天记录要跟随账号一直记住，就像 ChatGPT、豆包一样。用户登录就可以看到过往聊天记录。
 >
@@ -181,15 +181,16 @@ docker compose restart app celery-worker
 - 越权访问：`WHERE user_id = current_user.id` 强制 + 单元测试
 - alembic 链断：接 `038_*` 下游（v77 P2.6-F.5 cloned_from_id 已存在）
 
-**进度跟踪**（5/8 phase 收官）：
+**进度跟踪**（6/8 phase 收官）：
 - [x] Phase 1：ORM + alembic（commit 558962b1）
 - [x] Phase 2：11 API 端点（commit 558962b1）
 - [x] Phase 3：流式持久化（commit 5bf7c5c7）
-- [ ] Phase 4：前端 store
-- [ ] Phase 5：旧数据迁移
-- [ ] Phase 6：UI 升级
-- [ ] Phase 7：Celery 清理
-- [ ] Phase 8：测试 + 沉淀
+- [x] Phase 4：前端 store（commit af8c8f7d）
+- [x] Phase 5：旧数据迁移（commit af8c8f7d）
+- [x] Phase 4+5 fix：sync_from_local tz-aware datetime 500 bug（commit a1dfca2c，2026-06-30）
+- [ ] Phase 6：UI 升级（搜索栏 + 标签 chip + 分享对话框 + 导出对话框 + 移动端长按 ActionSheet）
+- [ ] Phase 7：Celery 30 天清理（`cleanup_soft_deleted_sessions` 每天凌晨 3:30）
+- [ ] Phase 8：测试 + 沉淀（4 后端 + 2 前端单测 + 10 E2E + memory 沉淀）
 
 **Phase 3 已沉淀的 5 条新铁律**（详见 [memory/chat-history-stream-persistence-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-stream-persistence-2026-06-29.md)）：
 1. **流式 chat 持久化必须入场 append user** — 不能 defer 到流结束（中断时 user 消息就丢）
