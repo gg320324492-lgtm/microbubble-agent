@@ -405,7 +405,7 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/element-plus/')) return 'element-plus-desktop'
           if (id.includes('node_modules/@nutui/nutui/')) return 'nutui-mobile'
-          if (id.includes('node_modules/echarts/') || id.includes('node_modules/vue-echarts/')) return 'echarts'
+          if (id.includes('node_modules/echarts/')) return 'echarts'
           // v28 step 101 fix: paperAdapter.js 152KB 大文件，Vite 默认 treeshake
           //   把整个文件消除（named import 无 side effect）。强制独立 chunk 避免被消除
           if (id.includes('src/utils/paperAdapter') || id.includes('src/utils/chemFormat')) {
