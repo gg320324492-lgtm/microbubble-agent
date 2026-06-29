@@ -70,6 +70,9 @@ StreamEventType = Literal[
     "synthesis_start",   # [snapshot] 综合阶段开始（无 delta，仅阶段标记），后续 text_delta 是最终答案
     "critique",          # [snapshot] 自评结果，含 score/addresses_question/has_synthesis/suggestion
     "retry",             # [snapshot] critique 低分触发重试，前端必须清空 content 准备接收新 text_delta
+    # ===== 2026-06-29 #043 账号持久化聊天历史 — 持久化事件 =====
+    "message_persisted", # [snapshot] 消息已落库（chat_messages 表），含 message_id/role/client_msg_id/is_partial
+    "sync_required",     # [snapshot] 流式中断，前端需重新拉历史（含 reason: aborted|error）
 ]
 
 
@@ -124,6 +127,14 @@ class StreamEvent(BaseModel):
     # retry
     retry_reason: Optional[str] = None
     retry_count: Optional[int] = None
+    # ===== 2026-06-29 #043 持久化事件字段 =====
+    # message_persisted
+    message_id: Optional[int] = None  # chat_messages.id
+    persisted_role: Optional[Literal["user", "assistant", "system", "tool"]] = None
+    persisted_client_msg_id: Optional[str] = None
+    persisted_is_partial: Optional[bool] = None
+    # sync_required
+    sync_reason: Optional[str] = None  # "aborted" | "error"
 
     def to_sse(self) -> str:
         """序列化为 SSE data 帧"""

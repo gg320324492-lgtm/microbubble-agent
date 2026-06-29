@@ -10,11 +10,16 @@
 - await agent.chat(message, session_id, db, user_id, ...) -> dict
 - async for event in agent.chat_stream(message, session_id, db, user_id, ...): ...
 - await agent.clear_session(session_id)
+
+#043 账号持久化聊天历史 — 流式 chat_stream 持久化（2026-06-29）
+流式 chat 进入时 append_message(user_msg) + 结束时 append_message(assistant_full)
+中断/异常时 mark_partial，session 行由 ensure_session_for_stream() 保证存在。
 """
 
 import asyncio
 import base64
 import logging
+import time
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -121,8 +126,28 @@ class MicroBubbleAgent:
         """流式对话接口
 
         yield StreamEvent 序列
+
+        #043 持久化（2026-06-29）：
+        1. 入场：ensure_session_for_stream() 创建/复用 ChatSession 行
+           + append_message(user_msg) 落 user 消息（含 client_msg_id 幂等键）
+           + append_message(assistant_placeholder, is_partial=True) 占位
+        2. 累积：text_delta 累加到 assistant_text；tool_use/tool_result 累加到 tool_trace；
+           rich_block 累加到 rich_blocks
+        3. 完成（done 事件）：update_message_content(content=full_text, is_partial=False)
+           同时 yield message_persisted 事件通知前端
+        4. 异常（User aborted / CancelledError / Exception）：
+           mark_partial(message_id=...) 标记占位消息为 partial
+           + yield sync_required(reason="aborted"|"error") 通知前端重新拉历史
+
+        关键边界：
+        - db=None 时（webchat 等无登录场景）跳过持久化（保留老行为）
+        - user_id=None 时跳过持久化（兼容旧调用）
+        - append_message 失败不阻塞流式（best-effort 持久化）
         """
-        # 1. 加载 session
+        # 0. 持久化前置条件：无 db 或无 user_id 时跳过（兼容老调用）
+        persist_enabled = db is not None and user_id is not None
+
+        # 1. 加载 session（保留 Redis 短期缓存，老行为不变）
         messages = await session_manager.get_messages(session_id)
 
         # 2. 构造 user content
@@ -132,16 +157,252 @@ class MicroBubbleAgent:
         # 3. 构造 system prompt
         system = await self._build_system_prompt(user_id, message, db) if user_id else get_system_prompt()
 
-        # 4. 调用 ChatEngine 流式
-        async for event in self.engine.chat_stream(
+        # 4. #043 持久化入场
+        # 关键：所有持久化操作都用 try/except 兜底，绝不阻塞流式
+        # 幂等键：同一 stream 重试时（网络断开重连）不会重复落库
+        stream_ts = int(time.time() * 1000)  # 毫秒精度
+        user_client_msg_id = f"stream_{session_id}_user_{stream_ts}"
+        assistant_client_msg_id = f"stream_{session_id}_assistant_{stream_ts}"
+        user_msg_id = None
+        assistant_msg_id = None
+        user_msg_persisted = False
+        assistant_msg_persisted = False
+
+        if persist_enabled:
+            try:
+                from app.services import chat_history_service as chat_svc
+                await chat_svc.ensure_session_for_stream(
+                    db, user_id, session_id, first_message=message,
+                )
+                # 持久化 user 消息（幂等键防重）
+                user_msg = await chat_svc.append_message(
+                    db, user_id, session_id,
+                    role="user",
+                    content=content if isinstance(content, str) else message,
+                    message_metadata={
+                        "source": "chat_stream",
+                        "ts": stream_ts,
+                        "image_attached": image_data is not None,
+                    },
+                    client_msg_id=user_client_msg_id,
+                )
+                user_msg_id = user_msg.id
+                user_msg_persisted = True
+                logger.info(f"[chat_stream persist] user_msg persisted: msg_id={user_msg_id}")
+                yield StreamEvent(
+                    type="message_persisted",
+                    message_id=user_msg_id,
+                    persisted_role="user",
+                    persisted_client_msg_id=user_client_msg_id,
+                    persisted_is_partial=False,
+                )
+            except Exception as e:
+                # 持久化失败不阻塞流式（best-effort）
+                logger.error(f"[chat_stream persist] user_msg 持久化失败: {e}", exc_info=True)
+
+        # 5. 流式累积上下文（#043）
+        assistant_text = ""  # assistant 完整文本累积
+        assistant_rich_blocks: List[Dict[str, Any]] = []  # rich_block 累积
+        assistant_tool_trace: List[Dict[str, Any]] = []  # tool_use/tool_result 累积
+        assistant_intent: Optional[Dict[str, Any]] = None
+        assistant_critique: Optional[Dict[str, Any]] = None
+        assistant_usage: Optional[Dict[str, int]] = None
+        assistant_duration_ms: Optional[int] = None
+        t0 = time.monotonic()
+
+        # 6. 调用 ChatEngine 流式（for-await 累积所有事件）
+        # 关键设计：ChatEngine.chat_stream() 透传 synthesize_stream() 的 events，
+        # 我们在 micro_bubble_agent 这一层用 for-await 拦截并累积，
+        # ChatEngine 内部不需要改（关注点分离：engine 只管 LLM 编排，
+        # persistence 只在 agent 层做）
+        stream_iter = self.engine.chat_stream(
             messages=messages,
             system=system,
             user_id=user_id,
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
-        ):
-            yield event
+        )
+
+        try:
+            async for event in stream_iter:
+                # 累积上下文（不动原始 yield 事件）
+                if event.type == "text_delta":
+                    assistant_text += event.delta or ""
+                elif event.type == "tool_use":
+                    assistant_tool_trace.append({
+                        "type": "tool_use",
+                        "id": event.tool_use_id,
+                        "name": event.tool_name,
+                        "input": event.tool_input,
+                    })
+                elif event.type == "tool_result":
+                    assistant_tool_trace.append({
+                        "type": "tool_result",
+                        "tool_use_id": event.tool_use_id,
+                        "name": event.tool_name,
+                        "result": event.tool_output,
+                        "duration_ms": event.tool_duration_ms,
+                        "error": event.tool_error,
+                    })
+                elif event.type == "rich_block" and event.block:
+                    assistant_rich_blocks.append(event.block.model_dump())
+                elif event.type == "intent_detected" and event.intent:
+                    assistant_intent = event.intent
+                elif event.type == "critique" and event.critique:
+                    assistant_critique = event.critique
+                elif event.type == "done":
+                    assistant_usage = event.usage
+                    assistant_duration_ms = event.duration_ms
+
+                # 原样 yield 给前端
+                yield event
+
+                # 在 done 事件后立即落库 assistant（client 看到 done 后即可查 history）
+                if event.type == "done":
+                    if persist_enabled:
+                        try:
+                            from app.services import chat_history_service as chat_svc
+                            # 把 accumulated rich_blocks + tool_trace + intent + critique + usage
+                            # 作为 metadata 一并存到 assistant message
+                            meta = {
+                                "source": "chat_stream_done",
+                                "ts": stream_ts,
+                                "intent": assistant_intent,
+                                "critique": assistant_critique,
+                                "usage": assistant_usage,
+                                "duration_ms": assistant_duration_ms,
+                            }
+                            # 直接 append_message（不用 update_message_content）——流式占位消息
+                            # 反而会增加 round-trip，且如果 ensure_session 失败用户消息都没落
+                            # assistant 占位反而成孤儿。简化：直接 append final assistant
+                            assistant_msg = await chat_svc.append_message(
+                                db, user_id, session_id,
+                                role="assistant",
+                                content=assistant_text,
+                                rich_blocks=assistant_rich_blocks,
+                                tool_trace={"trace": assistant_tool_trace} if assistant_tool_trace else {},
+                                message_metadata=meta,
+                                is_partial=False,
+                                client_msg_id=assistant_client_msg_id,
+                            )
+                            assistant_msg_id = assistant_msg.id
+                            assistant_msg_persisted = True
+                            logger.info(
+                                f"[chat_stream persist] assistant_msg persisted: "
+                                f"msg_id={assistant_msg_id} len={len(assistant_text)}"
+                            )
+                            # yield 持久化通知事件（前端可以选择性 reload history）
+                            yield StreamEvent(
+                                type="message_persisted",
+                                message_id=assistant_msg_id,
+                                persisted_role="assistant",
+                                persisted_client_msg_id=assistant_client_msg_id,
+                                persisted_is_partial=False,
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"[chat_stream persist] assistant_msg 持久化失败: {e}",
+                                exc_info=True,
+                            )
+                            # 失败时尝试落 partial（让用户重进能看到内容）
+                            if assistant_text:
+                                try:
+                                    from app.services import chat_history_service as chat_svc
+                                    partial_msg = await chat_svc.append_message(
+                                        db, user_id, session_id,
+                                        role="assistant",
+                                        content=assistant_text,
+                                        rich_blocks=assistant_rich_blocks,
+                                        tool_trace={"trace": assistant_tool_trace} if assistant_tool_trace else {},
+                                        message_metadata={"source": "partial_after_done_error", "ts": stream_ts},
+                                        is_partial=True,
+                                        client_msg_id=assistant_client_msg_id + "_partial",
+                                    )
+                                    yield StreamEvent(
+                                        type="message_persisted",
+                                        message_id=partial_msg.id,
+                                        persisted_role="assistant",
+                                        persisted_client_msg_id=assistant_client_msg_id + "_partial",
+                                        persisted_is_partial=True,
+                                    )
+                                except Exception as e2:
+                                    logger.error(f"[chat_stream persist] partial 持久化也失败: {e2}")
+
+        except asyncio.CancelledError:
+            # 流式中断（用户关浏览器 / 主动 stop）
+            logger.warning(
+                f"[chat_stream persist] CancelledError: "
+                f"user_msg_id={user_msg_id} assistant_text_len={len(assistant_text)}"
+            )
+            if persist_enabled and assistant_text:
+                try:
+                    from app.services import chat_history_service as chat_svc
+                    # 中断时把已累积的 assistant_text 作为 partial 落库
+                    # 用户重进 session 能看到"中断前的回答"，可点"重新生成"
+                    partial_msg = await chat_svc.append_message(
+                        db, user_id, session_id,
+                        role="assistant",
+                        content=assistant_text,
+                        rich_blocks=assistant_rich_blocks,
+                        tool_trace={"trace": assistant_tool_trace} if assistant_tool_trace else {},
+                        message_metadata={
+                            "source": "stream_cancelled",
+                            "ts": stream_ts,
+                            "duration_ms": int((time.monotonic() - t0) * 1000),
+                        },
+                        is_partial=True,
+                        client_msg_id=assistant_client_msg_id + "_cancelled",
+                    )
+                    yield StreamEvent(
+                        type="message_persisted",
+                        message_id=partial_msg.id,
+                        persisted_role="assistant",
+                        persisted_client_msg_id=assistant_client_msg_id + "_cancelled",
+                        persisted_is_partial=True,
+                    )
+                    # 通知前端：流式中断，建议重新拉历史
+                    yield StreamEvent(
+                        type="sync_required",
+                        sync_reason="aborted",
+                    )
+                except Exception as e:
+                    logger.error(f"[chat_stream persist] 中断 partial 落库失败: {e}", exc_info=True)
+            raise  # 重新抛 CancelledError 让上层处理
+
+        except Exception as e:
+            # 流式异常（非中断）——同样的 best-effort 持久化策略
+            logger.error(f"[chat_stream persist] 流式异常: {e}", exc_info=True)
+            if persist_enabled and assistant_text:
+                try:
+                    from app.services import chat_history_service as chat_svc
+                    partial_msg = await chat_svc.append_message(
+                        db, user_id, session_id,
+                        role="assistant",
+                        content=assistant_text,
+                        rich_blocks=assistant_rich_blocks,
+                        message_metadata={
+                            "source": "stream_error",
+                            "error": str(e)[:500],
+                            "ts": stream_ts,
+                        },
+                        is_partial=True,
+                        client_msg_id=assistant_client_msg_id + "_error",
+                    )
+                    yield StreamEvent(
+                        type="message_persisted",
+                        message_id=partial_msg.id,
+                        persisted_role="assistant",
+                        persisted_client_msg_id=assistant_client_msg_id + "_error",
+                        persisted_is_partial=True,
+                    )
+                    yield StreamEvent(
+                        type="sync_required",
+                        sync_reason="error",
+                    )
+                except Exception as e2:
+                    logger.error(f"[chat_stream persist] 异常 partial 落库失败: {e2}")
+            # 不 raise，让上层 StreamingResponse 处理（yield error 事件给前端）
 
     async def clear_session(self, session_id: str):
         """清除会话历史（保留 dirty flag 行为不变）

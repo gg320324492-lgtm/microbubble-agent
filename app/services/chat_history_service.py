@@ -769,4 +769,143 @@ async def cleanup_soft_deleted_sessions(db: AsyncSession, cutoff_date: datetime)
     )
     result = await db.execute(stmt)
     await db.commit()
-    return result.rowcount
+    return result.rowcount or 0
+
+
+# ============================================================================
+# 2026-06-29 #043 Phase 3 — 流式 chat 持久化专用 helper
+# ============================================================================
+
+async def ensure_session_for_stream(
+    db: AsyncSession,
+    user_id: int,
+    session_id: str,
+    *,
+    first_message: Optional[str] = None,
+) -> ChatSession:
+    """流式 chat 入场前确保 ChatSession 行存在（idempotent）
+
+    背景：流式 chat_stream() 不知道 session 是否已被前端创建（前端可能
+    直接调 /chat/stream 跳过 /chat/sessions 创建）。本函数保证：
+    - session_id 已存在 → 复用（不做任何修改）
+    - session_id 不存在 → 创建（标题 = first_message 前 30 字符 或 默认"新对话"）
+
+    注意：本函数**不写 user_msg**——append_message 单独负责。两者解耦保证：
+    1. 流式中断时 user_msg 已落库但 assistant 没写 → 用户重进能看到问题
+    2. 流式完全成功 → user + assistant 各一条消息
+
+    越权防护：如果 session 存在但 user_id 不匹配，抛 NotFoundException
+    """
+    # 已存在（按 (id, user_id) 查找）
+    existing = await get_session(db, user_id, session_id, include_deleted=True)
+    if existing is not None:
+        return existing
+
+    # 不存在 → 创建（标题 = 首条消息前 30 字符）
+    title = "新对话"
+    if first_message:
+        title = first_message[:30] + ("..." if len(first_message) > 30 else "")
+    now = datetime.utcnow()
+    session = ChatSession(
+        id=session_id,
+        user_id=user_id,
+        title=title,
+        preview=(first_message[:200] if first_message else ""),
+        last_message_at=None,
+        message_count=0,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(session)
+    await db.flush()
+    logger.info(f"ensure_session_for_stream: 新建 sid={session_id} user={user_id}")
+    return session
+
+
+async def mark_message_partial(
+    db: AsyncSession,
+    user_id: int,
+    session_id: str,
+    *,
+    client_msg_id: Optional[str] = None,
+    message_id: Optional[int] = None,
+) -> Optional[ChatMessage]:
+    """标记消息为 partial（流式中断时调用）
+
+    优先按 message_id 找（流式期间已落库的 placeholder）；
+    fallback 按 client_msg_id 找（流式结束时还没 flush 时用）。
+
+    越权防护：通过 session_id + user_id 验证
+    """
+    if message_id is not None:
+        msg = await db.get(ChatMessage, message_id)
+        if msg is None:
+            return None
+        # 越权防护
+        await get_session(db, user_id, msg.session_id)
+        msg.is_partial = True
+        await db.commit()
+        return msg
+
+    if client_msg_id is not None:
+        stmt = select(ChatMessage).where(
+            and_(
+                ChatMessage.session_id == session_id,
+                ChatMessage.client_msg_id == client_msg_id,
+            )
+        )
+        msg = (await db.execute(stmt)).scalar_one_or_none()
+        if msg is None:
+            return None
+        await get_session(db, user_id, session_id)  # 越权防护
+        msg.is_partial = True
+        await db.commit()
+        return msg
+
+    return None
+
+
+async def update_message_content(
+    db: AsyncSession,
+    user_id: int,
+    message_id: int,
+    *,
+    content: Optional[str] = None,
+    rich_blocks: Optional[List[Dict[str, Any]]] = None,
+    tool_trace: Optional[Dict[str, Any]] = None,
+    is_partial: Optional[bool] = None,
+    message_metadata: Optional[Dict[str, Any]] = None,
+) -> Optional[ChatMessage]:
+    """更新已落库的消息（流式 final 时把 placeholder 替换为完整内容）
+
+    流式场景：流开始时 append_message(user_msg) + append_message(assistant_placeholder, is_partial=True)
+    流结束时 update_message_content(content=full_text, is_partial=False, rich_blocks=[...])
+
+    JSONB 字段必须 flag_modified 才能触发 UPDATE（CLAUDE.md 2026-06-28 教训）
+    """
+    msg = await db.get(ChatMessage, message_id)
+    if msg is None:
+        return None
+    # 越权防护
+    await get_session(db, user_id, msg.session_id)
+
+    if content is not None:
+        msg.content = content
+    if is_partial is not None:
+        msg.is_partial = is_partial
+    if rich_blocks is not None:
+        from sqlalchemy.orm.attributes import flag_modified
+        msg.rich_blocks = rich_blocks
+        flag_modified(msg, "rich_blocks")
+    if tool_trace is not None:
+        from sqlalchemy.orm.attributes import flag_modified
+        msg.tool_trace = tool_trace
+        flag_modified(msg, "tool_trace")
+    if message_metadata is not None:
+        from sqlalchemy.orm.attributes import flag_modified
+        msg.message_metadata = message_metadata
+        flag_modified(msg, "message_metadata")
+
+    await db.commit()
+    await db.refresh(msg)
+    return msg
