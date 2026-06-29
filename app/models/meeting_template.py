@@ -21,6 +21,8 @@ class MeetingTemplate(Base, TimestampMixin):
     is_builtin = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     created_by = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True)
+    # v77 P2.6-F.5: 复制追溯字段 (FK self-reference, NULL = 原始 builtin, 非 NULL = 从 builtin 派生的 custom)
+    cloned_from_id = Column(Integer, ForeignKey("meeting_templates.id", ondelete="SET NULL"), nullable=True, index=True)
 
     creator = relationship("Member")
 
