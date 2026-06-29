@@ -740,6 +740,37 @@ body {
    [data-accent="..."] attribute block 显式设 --el-color-primary 解决 (specificity 0,1,1 > EP :root)。
    不再需要 .el-button--primary.is-plain/is-text/is-link 单独覆盖 — 根因修了后 symptom 自动消失。
    之前 909cc67d / 6f28d239 / d80aa532 这 3 个 commit 的 workaround 已全部失效（CDP 验证），删除。*/
+
+/* v77+2026-06-29 fix: 上述 P2.6 修复只覆盖 button 实底, 没用 ghost (is-plain/is-text) 按钮.
+   ghost primary 按钮 (如 MemberView "录入声纹") 在 6 主题下默认回退到 EP 默认配色:
+     bg = --el-color-primary-light-9 (极浅)
+     text = --el-color-primary (主色)
+   默认 orange 主题: 浅珊瑚底+珊瑚字 = ~2.5:1 (WCAG AA 不达标)
+   forest light: 浅绿底+中绿字 = ~2.7:1 (绿底绿字感知更差)
+   修复: 显式设 --el-button-text-color = --color-primary-dark (深一档主色) + font-weight: 600 加粗 */
+.el-button--primary.is-plain,
+.el-button--primary.is-text,
+.el-button--primary.is-link {
+  --el-button-text-color: var(--color-primary-dark);
+  --el-button-bg-color: var(--color-primary-bg);
+  --el-button-border-color: var(--color-primary-border);
+  --el-button-hover-bg-color: var(--color-primary);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-hover-border-color: var(--color-primary);
+  font-weight: 600;
+}
+/* specificity (0,3,0) > (0,2,0) — [data-accent] 块对 accent 主题覆盖 default 规则 */
+[data-accent] .el-button--primary.is-plain,
+[data-accent] .el-button--primary.is-text,
+[data-accent] .el-button--primary.is-link {
+  --el-button-text-color: var(--color-primary-dark);
+  --el-button-bg-color: var(--color-primary-bg);
+  --el-button-border-color: var(--color-primary-border);
+  --el-button-hover-bg-color: var(--color-primary);
+  --el-button-hover-text-color: var(--el-color-white);
+  --el-button-hover-border-color: var(--color-primary);
+  font-weight: 600;
+}
 [data-theme="dark"] .el-drawer {
   background-color: var(--color-bg-card);
   color: var(--color-text-primary);
