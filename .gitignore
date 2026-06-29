@@ -63,6 +63,9 @@ frpc.exe
 # Claude Code
 .claude/
 
+# webhint / hint 一次性 audit 报告 (diagnostic output)
+web/hint-report/
+
 # 构建产物
 *.tar.gz
 

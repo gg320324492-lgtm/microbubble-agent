@@ -1,0 +1,13 @@
+{
+  "extends": ["webhint-recommended"],
+  "connector": { "name": "jsdom" },
+  "formatters": ["summary"],
+  "hints": {
+    "http-cache": "off",
+    "no-immutable": "off",
+    "no-cache-busting": "off",
+    "content-type-options": "off",
+    "meta-theme-color": "off",
+    "axe": "off"
+  }
+}
