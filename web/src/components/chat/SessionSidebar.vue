@@ -4,15 +4,18 @@
  *
  * 240px 折叠侧栏，会话列表 + 切换 / 删除 / 重命名
  * 持久化：useChatSessionsStore（localStorage）
+ * 同步状态：useChatHistoryStore（#043 服务端同步徽章）
  */
 import { computed } from 'vue'
 import { useChatSessionsStore } from '@/stores/chatSessions'
+import { useChatHistoryStore } from '@/stores/chatHistory'  // #043
 import { ElMessageBox, ElMessage } from 'element-plus'
 
 const emit = defineEmits(['switch', 'create'])
 const props = defineProps({ collapsed: { type: Boolean, default: false } })
 
 const store = useChatSessionsStore()
+const chatHistoryStore = useChatHistoryStore()  // #043 同步状态徽章
 
 const formatTime = (iso) => {
   if (!iso) return ''
@@ -76,6 +79,15 @@ const onRename = async (session) => {
         <span class="icon">＋</span>
       </el-button>
     </div>
+    <!-- #043: 同步状态徽章（loading / error） -->
+    <div v-if="!collapsed && chatHistoryStore.syncStatus === 'syncing'" class="sync-badge sync-loading">
+      <span class="sync-icon rotating">⟳</span>
+      <span class="sync-text">同步中...</span>
+    </div>
+    <div v-else-if="!collapsed && chatHistoryStore.syncStatus === 'error' && chatHistoryStore.syncError" class="sync-badge sync-error">
+      <span class="sync-icon">⚠</span>
+      <span class="sync-text" :title="chatHistoryStore.syncError">同步失败</span>
+    </div>
     <div v-if="!collapsed" class="session-list">
       <div
         v-for="s in store.sortedSessions"
@@ -84,7 +96,12 @@ const onRename = async (session) => {
         :class="{ active: s.id === store.currentId }"
         @click="onSwitch(s.id)"
       >
-        <div class="session-title">{{ s.title || '新对话' }}</div>
+        <div class="session-title">
+          <span>{{ s.title || '新对话' }}</span>
+          <!-- #043: 服务端同步状态小标记 -->
+          <span v-if="s._isLocalOnly" class="local-only-tag" title="仅本地（未同步到云端）">本地</span>
+          <span v-else-if="s._syncStatus === 'synced'" class="synced-tag" title="已同步到云端">✓</span>
+        </div>
         <div class="session-meta">
           <span class="time">{{ formatTime(s.updatedAt) }}</span>
           <span v-if="s.messageCount" class="count">{{ s.messageCount }} 条</span>
@@ -130,6 +147,54 @@ const onRename = async (session) => {
 .session-actions { position: absolute; right: 8px; top: 8px; display: none; }
 .session-item:hover .session-actions { display: flex; gap: 2px; }
 .empty { text-align: center; color: var(--color-text-secondary); padding: 20px 0; font-size: 12px; }
+
+/* #043 同步状态徽章 */
+.sync-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.sync-badge.sync-loading {
+  background: rgba(64, 158, 255, 0.1);
+  color: var(--el-color-primary);
+}
+.sync-badge.sync-error {
+  background: rgba(245, 108, 108, 0.1);
+  color: var(--el-color-danger);
+}
+.sync-icon { font-size: 12px; }
+.sync-icon.rotating {
+  display: inline-block;
+  animation: mb-sync-rotate 1s linear infinite;
+}
+@keyframes mb-sync-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* #043 同步状态小标记（session-title 右侧） */
+.local-only-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 2px;
+  background: var(--color-text-placeholder, #c0c4cc);
+  color: var(--el-color-white);
+  font-size: 9px;
+  line-height: 14px;
+  vertical-align: middle;
+}
+.synced-tag {
+  margin-left: 6px;
+  color: var(--el-color-success);
+  font-size: 10px;
+  vertical-align: middle;
+}
+.session-title { display: flex; align-items: center; gap: 4px; }
 </style>
 
 <!-- v69 P1b fix-2: SessionSidebar dark 覆盖（v60-v67 教训：必须非 scoped） -->
@@ -151,4 +216,17 @@ const onRename = async (session) => {
 [data-theme="dark"] .session-meta { color: var(--color-text-secondary); }
 [data-theme="dark"] .session-preview { color: var(--color-text-secondary); }
 [data-theme="dark"] .empty { color: var(--color-text-secondary); }
+
+/* #043 dark 模式覆盖 */
+[data-theme="dark"] .sync-badge.sync-loading {
+  background: rgba(64, 158, 255, 0.18);
+  color: var(--el-color-primary-light-3);
+}
+[data-theme="dark"] .sync-badge.sync-error {
+  background: rgba(245, 108, 108, 0.18);
+  color: var(--el-color-danger-light-3);
+}
+[data-theme="dark"] .local-only-tag {
+  background: var(--color-text-secondary, #909399);
+}
 </style>
