@@ -45,6 +45,8 @@ class TemplateResponse(BaseModel):
     default_location: Optional[str]
     is_builtin: bool
     is_active: bool
+    created_by: Optional[int] = None
+    cloned_from_id: Optional[int] = None  # v77 P2.6-F.5: 复制追溯 (NULL=原始 builtin)
 
 
 @router.get("", response_model=List[TemplateResponse])
@@ -119,4 +121,6 @@ def _to_response(t: MeetingTemplate) -> TemplateResponse:
         default_location=t.default_location,
         is_builtin=t.is_builtin,
         is_active=t.is_active,
+        created_by=t.created_by,
+        cloned_from_id=t.cloned_from_id,
     )
