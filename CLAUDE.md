@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-29 当前任务链**：🆕 **#042 概念问 4 域代码强制 fan-out (commit 5522ad5a, D11-D15 5/5 PASS, concept 类覆盖率 100%)** → #041 plan_step 强制执行 (suggested_tools → agentic_loop 主动 dispatch, commit 45ba7ad1) → v77 P2.6-E/F 视觉/代码质量延伸（4 commits E.1/E.2/E.3/F.1）→ v77 P2.6 视觉体系 4 子任务全面收官（7 commits A/B/C/D）→ 3 个生产 bug 修复（pgvector truth value + SQLAlchemy JSONB + AudioPlayer Infinity:NaN）→ 会议 153 ASR 谐音/错识全链路清洗 hook → 声纹 sample_count 重置为 1 → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：#041+#042 构成 Week 2 架构级集成 (chat agent "LLM 想 + Haiku 建议 + 代码强制 fan-out" 三层架构) → 接下来 #009 (Self-RAG 重检索) 基于 Phase 0+Phase 1 双重 hook 扩展。**1485 commits / 160K 行代码 / 542 文件 / 44 开发天数**（[app/stats.json](app/stats.json)，2026-06-29 自动重算）。
+> **2026-06-29 当前任务链**：🆕 **#043 账号持久化聊天历史（ChatGPT 模式，Phase 1+2+3 收官 5/8，Phase 4 前端 store 待启动）**（Phase 1+2 commit `558962b1`, Phase 3 commit `5bf7c5c7`，25 e2e PASS） → #042 概念问 4 域代码强制 fan-out (commit 5522ad5a, D11-D15 5/5 PASS, concept 类覆盖率 100%) → #041 plan_step 强制执行 (suggested_tools → agentic_loop 主动 dispatch, commit 45ba7ad1) → v77 P2.6-E/F 视觉/代码质量延伸（4 commits E.1/E.2/E.3/F.1）→ v77 P2.6 视觉体系 4 子任务全面收官（7 commits A/B/C/D）→ 3 个生产 bug 修复（pgvector truth value + SQLAlchemy JSONB + AudioPlayer Infinity:NaN）→ 会议 153 ASR 谐音/错识全链路清洗 hook → 声纹 sample_count 重置为 1 → v76.2 视觉回归 5 件套收官 → v72 P1 摘要+重点摘要合并主题色 TL;DR 卡 → v71 P1 议程 timeline + 每 speaker 8 条常驻 → v70 P0~P3 字面色 token 化 → v69 P0+P1 dark mode 全面重构 → v68 桌面主题切换。**当前主线**：#043 Phase 4 前端 store 重构（让流式持久化真正让前端 store 接入 + 旧数据迁移） → #009 (Self-RAG 重检索) 基于 Phase 0+Phase 1 双重 hook 扩展。**1486 commits / 160K 行代码 / 542 文件 / 44 开发天数**（[app/stats.json](app/stats.json)，2026-06-29 自动重算）。
 >
 > 历史节点（按时间倒序）：v70 P3 会议纪要 TL;DR → v69 P0+P1 dark mode 3 阶段 → v31.3.1 whisper 容器 bind mount → v31.3 Whisper 常驻 GPU 8GB → [v31.2.5](##2026-06-26-v3125-rate-limit-收官redis-zset-持久化) → [v31.2.3](##2026-06-25-v3123-rate-limit-基建收尾) → [v31.2.2](##2026-06-25-v3122-rate-limit-进阶强化) → [v31.2.1](##2026-06-25-v3121-rate-limit-边界强化) → [v31.2](##v312-检索质量监控埋点可选-auth--ip-维度限流--user_id-列) → [v28 论文图片结构化字段](##2026-06-20-v28-论文图片结构化字段后端集成) → [2026-06-18 移动端 26 commits 全面修复](##2026-06-18-移动端-26-commits-全面修复)。
 >
@@ -131,6 +131,79 @@
 - **任务权限模型** — 所有成员可见全部任务（降低认知负担），仅创建人/负责人/管理员可编辑、删除、恢复、永久删除
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
 - **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**PWA 4 策略**：manifest + service worker（workbox）预缓存 app shell + useSafeArea 读 iPhone 安全区 + 离线 IndexedDB 兜底。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
+
+## 2026-06-29 #043 账号持久化聊天历史（Phase 1+2+3 收官，待 Phase 4）
+
+> **用户原始需求**：每个人与小气助手的对话的聊天记录要跟随账号一直记住，就像 ChatGPT、豆包一样。用户登录就可以看到过往聊天记录。
+>
+> **痛点（现状）**：前端 100% `localStorage`（`chat_msgs_<sid>` + `chat_sessions_v3`），per-browser 不跨账号。换浏览器/换电脑/清缓存/移动端新设备 = 历史清零。多人共用一台电脑 = A 账号登入看到 B 账号的会话。后端 Redis `agent_session:{sid}:msgs` 有持久化但**无 user_id 反查**，且 `micro_bubble_agent.py:111 chat_stream()` 流式场景**不写 Redis**。
+
+**用户决策**（2026-06-29）：
+- 存储后端：**PostgreSQL SQL 表**（质量与效果最好；不是 Redis 扩展）
+- 旧数据迁移：**首次登录自动迁移 localStorage → server**
+- 功能范围：**尽可能全**（搜索 + 导出 + 标签/收藏/归档 + 分享链接 + 软删除 + 跨设备同步）
+
+**完整规划**：[C:/Users/pc/.claude/plans/chatgpt-structured-floyd.md](C:/Users/pc/.claude/plans/chatgpt-structured-floyd.md)（8 phase / 22-30h / 3 PR 收官）
+
+**8 phase 实施计划**：
+1. ✅ **Phase 1（commit `558962b1` 收官）**：ORM 模型 + alembic `039_chat_history.py`（chat_sessions / chat_messages / chat_shares 三表 + 索引 + 触发器）+ Pydantic schemas
+2. ✅ **Phase 2（commit `558962b1` 收官）**：11 个后端 API 端点（`/chat/sessions` CRUD + `/messages` + `/export` + `/share` + `/search` + `/sync` + `/shares/{token}`）— 17/17 e2e PASS
+3. ✅ **Phase 3（commit `5bf7c5c7` 收官）**：流式 chat 持久化修复（`micro_bubble_agent.py:111` + `partial_assistant_buffer` + SSE 事件 `message_persisted` / `sync_required`）— 25/25 e2e PASS
+4. ⏸ **Phase 4（待启动）**：前端 store 重构（chatHistory.ts + chatSessions.ts 同步 + useChatStream 持久化钩子 + 监听 sync_required 自动 reload）
+5. ⏸ **Phase 5（待启动）**：旧数据自动迁移（useChatMigration.js + localStorage `chat_migrated_v1` 标记 + 幂等键）
+6. ⏸ **Phase 6（待启动）**：UI 升级（搜索栏 + 标签 chip + 分享对话框 + 导出对话框 + 移动端长按 ActionSheet）
+7. ⏸ **Phase 7（待启动）**：Celery 30 天清理任务（`cleanup_soft_deleted_sessions` 每天凌晨 3:30）
+8. ⏸ **Phase 8（待启动）**：测试 + memory 沉淀（4 后端 + 2 前端单测 + 10 E2E + memory/chat-history-persistent-2026-06-29.md）
+
+**PR 分批**：
+- PR 1（Phase 1-3+7-8，~10h）✅ 已收官（含 558962b1 + 5bf7c5c7 + 后续 Phase 7/8）
+- PR 2（Phase 4-5，~6h）⏸ 待启动
+- PR 3（Phase 6，~8h）⏸ 待启动
+
+**复用现有 utilities**：`app.core.security.get_current_user`（JWT 鉴权） / `app.core.rate_limit`（write tier 30/min） / `app.services.task_service.auto_purge_trash_task`（30 天清理模式） / `web/src/composables/chat/useChatStream.ts`（多会话并行 8 铁律保留） / v77 P2.6-C EP 多主题透传 dark mode 适配
+
+**部署必做**（CLAUDE.md 752 行铁律）：
+```bash
+# 1. 跑迁移
+docker cp alembic/versions/039_chat_history.py microbubble-agent-app-1:/app/alembic/versions/
+docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__
+docker exec microbubble-agent-app-1 alembic upgrade head
+# 2. 重启后端
+docker compose restart app celery-worker
+# 3. 验证表（chat_sessions / chat_messages / chat_shares）
+```
+
+**关键风险与缓解**：
+- 流式 chat 中断 → partial 消息：`is_partial=True` 标记 + 重新生成机制（Phase 3 SSE 限制：连接断开时 partial 可能不落库，但 user 必落）
+- localStorage 迁移冲突：`client_msg_id` 幂等键 + `last_synced_at` 时间戳
+- 越权访问：`WHERE user_id = current_user.id` 强制 + 单元测试
+- alembic 链断：接 `038_*` 下游（v77 P2.6-F.5 cloned_from_id 已存在）
+
+**进度跟踪**（5/8 phase 收官）：
+- [x] Phase 1：ORM + alembic（commit 558962b1）
+- [x] Phase 2：11 API 端点（commit 558962b1）
+- [x] Phase 3：流式持久化（commit 5bf7c5c7）
+- [ ] Phase 4：前端 store
+- [ ] Phase 5：旧数据迁移
+- [ ] Phase 6：UI 升级
+- [ ] Phase 7：Celery 清理
+- [ ] Phase 8：测试 + 沉淀
+
+**Phase 3 已沉淀的 5 条新铁律**（详见 [memory/chat-history-stream-persistence-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-stream-persistence-2026-06-29.md)）：
+1. **流式 chat 持久化必须入场 append user** — 不能 defer 到流结束（中断时 user 消息就丢）
+2. **assistant 落库必须在 done 事件 yield 之后立即** — 客户端收到 done 后才看到 message_persisted，事件顺序清晰
+3. **CancelledError 必须 try/except + 落 partial + 重 raise** — 不能吞，否则上层不知道中断 SSE 不关闭
+4. **JSONB 字段 mutate 后必须 `flag_modified`** — CLAUDE.md 2026-06-28 教训（rich_blocks / tool_trace / message_metadata 全部要）
+5. **持久化失败必须 best-effort** — 所有持久化操作 try/except + logger.error(exc_info=True)，不阻塞流式（用户体验优先）
+
+**Phase 4-8 待补铁律**（Phase 8 沉淀后回填）：
+6. 跨设备同步：消息主存 PostgreSQL，Redis 仅短期缓存
+7. 软删除：30 天保留期（与 task / meeting 对齐）
+8. 越权防护：所有查询 `WHERE user_id = current_user.id`
+9. 迁移幂等：`client_msg_id` 唯一约束 + `last_synced_at` 增量同步
+10. 异步不阻塞登录：迁移后台跑，UI 立即可用
+11. localStorage 兜底：网络失败降级到本地，下次重试
+12. 大消息（>1MB）：file_url 存 MinIO，content 只存路径
 
 ## 代码质量规范（2026-06-04 升级）
 
@@ -6115,3 +6188,118 @@ builtin 卡片右侧 el-switch
 - **5 个 commit** (model+alembic / service+endpoint / frontend dialog / frontend view / playwright+docs)
 - **6 条铁律** (复制必加后缀 / is_active builtin 专属 / disabled 双重防护 / cloned_from_id 审计追溯 / update_template 注释一致 / 一键复制 UX 闭环)
 - **19 个 Vitest 测试** (F.3 8 + F.4 4 + F.5 4 + 旧 3) + 9 个 pytest (6 old + 3 new) + 17 项 Playwright Round 8 (F.3 2 + F.4 2 + F.5 3 + 旧 10)
+
+---
+
+## v77 P2.6-G.1 收官 — 移动端模板卡 long-press 操作菜单入口（3 commits）
+
+> **commits**: `18f91942` (1) + `70735fba` (2) + 待 commit (3)，2026-06-29 已 push origin/main
+> **沉淀 memory**: [memory/v77-p26-g-1-mobile-long-press.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/v77-p26-g-1-mobile-long-press.md)
+
+### Context
+
+v77 P2.6-F.5 收官时在 CLAUDE.md P2.6-F.5 章节"不在本次范围"明确留给未来 2 项任务，本次只做其中**必做**的 1 项：
+
+**移动端模板卡操作入口**
+- 桌面端通过 hover 浮出图标（复制/编辑/删除）+ builtin 卡片右侧 el-switch（F.4/F.5 已实现）
+- **移动端无 hover 概念**，用户根本碰不到这些按钮 → 移动端功能**完全不可达**
+- 解决：**long-press 600ms 替代 hover**（触觉反馈 + 卡片高亮 + 弹底部 ActionSheet）
+- 复用已有 `LongPressWrapper.vue` (600ms 触发 + navigator.vibrate) + `MobileActionSheet.vue` (iOS 风格底部菜单)
+
+**用户决策（2026-06-29）**：
+- **long-press 方案**（不是 ⋮ 按钮方案）— 与 P2.6-G.1 plan 一致
+- 移动端模板卡 long-press 弹菜单，菜单含：
+  - **builtin 卡片** → 📋 复制为自定义
+  - **custom 卡片** → 📝 编辑 / 📋 复制（再派生一份）/ 🗑️ 删除（二次确认）
+- **移动端必须隐藏桌面端控件**（避免视觉混乱 + 触屏 hover 不可达）
+
+### 3 commits 链
+
+```
+18f91942 feat(meeting): v77 P2.6-G.1 移动端模板卡 long-press 操作菜单入口
+70735fba test(meeting): v77 P2.6-G.1 加 10 个移动端单测 (long-press + ActionSheet + 3 种 actions)
+待 commit test(visual): v77 P2.6-G.1 mobile Playwright M-13~M-16 + memory 沉淀
+```
+
+### 5 条新铁律（永久沉淀）
+
+**铁律 1：移动端 long-press 是 hover 的等价物，不是替代品**
+- 桌面端 hover → 移动端 long-press 600ms 是 **触觉反馈** vs **视觉反馈** 的对应关系
+- long-press 触发后立即 `navigator.vibrate(10ms)` 短震（项目 LongPressWrapper 已实现）
+- 不要试图"缩短到 300ms"或"加 indicator" — 600ms 是行业标准（iOS/Android long-press）
+- 桌面端 LongPressWrapper 永远不渲染（`v-if="isMobile"`），长按事件在桌面端根本不会触发
+
+**铁律 2：LongPressWrapper 必须作为卡片外层 div 包裹整个卡片**
+- LongPressWrapper 渲染为 `<div class="long-press-wrapper" v-bind="bind">`（useLongPress composable）
+- 用 `display: contents` 不创建 box，事件通过 `v-bind="bind"` 监听 touchstart/move/end/cancel
+- 包裹整张卡片 = "摸到卡任意位置都能长按"，符合直觉
+- 测试用 `wrapper.findAllComponents(LongPressWrapper)` 验证数量（桌面 0 + mobile 2）
+
+**铁律 3：移动端删除二次确认必须用 ElMessageBox.confirm 不用 el-popconfirm**
+- 桌面端删除用 `el-popconfirm` 内嵌在卡片内（F.4 已实现）
+- 移动端删除在 MobileActionSheet callback 内 → **不能再内嵌 el-popconfirm**（ActionSheet 已关闭后弹 popconfirm UI 错位）
+- 正确做法：callback 内 `await ElMessageBox.confirm(...)` 弹标准确认弹窗
+- 优势：ElMessageBox 在桌面/移动端都正常工作，无需做 2 套
+
+**铁律 4：桌面端 hover 按钮 + el-switch 在移动端必须用 `v-if="!isMobile"` 隐藏**
+- 移动端用户看不见 hover 按钮，看见会困惑（"为什么有这个按钮但点不到"）
+- 移动端 el-switch 触屏区域太小易误触
+- 单一组件双模式 vs 拆 2 个组件：选择前者，代码 0 冗余 + 维护成本低
+- 关键纪律：**桌面端 0 行为变化**（`v-if="!isMobile"` 完全保留桌面元素，默认 isMobile=false desktop 桌面端测试 19/19 PASSED）
+
+**铁律 5：mobileActions callback 直接调 emit，不复用桌面 hover handler**
+- 桌面端 hover 按钮 → `onEditTpl(tpl)` 函数 → emit
+- 移动端 action callback → **直接调 emit 或调函数**，避免再新增 MobileCreateDialog 函数
+- 优势：移动端 action 与桌面端 emit 协议完全一致，父 MeetingView 0 改动
+- 未来如需差异化（移动端特殊反馈如 toast），在 callback 内包装，不影响桌面端
+
+### 端到端验证
+
+```bash
+# 1. backend 0 改动 (无需 restart)
+# 2. 前端
+cd web
+npm run build
+npx stylelint 'src/**/*.vue' 'src/**/*.css'
+npx vitest run    # 29/29 PASSED (19 旧 + 10 新)
+
+# 3. Playwright mobile (新建 mobile-long-press.spec.mjs)
+TEST_TOKEN=<jwt> npx playwright test \
+  tests/visual/mobile/mobile-long-press.spec.mjs \
+  --project=mobile-iphone14
+# 期望: M-13/M-14 PASSED + M-15/M-16 test.skip (依赖初始数据)
+
+# 4. commit + push
+git add -A web/src/views/meeting/ web/tests/visual/mobile/mobile-long-press.spec.mjs
+git add -f web/dist/
+git commit -m "feat(meeting): v77 P2.6-G.1 移动端 long-press + ActionSheet (3 commits)"
+git push origin main
+# webhook auto-deploy
+```
+
+### 端到端 UX 闭环（移动端）
+
+```
+mobile 模板卡 (4 builtin + 用户自定义)
+   ↓ 手指按住 600ms
+   ↓ 手机短震一下 (navigator.vibrate)
+   ↓ 卡片轻微缩小 (scale(0.98) 触摸反馈)
+   ↓
+弹出底部 MobileActionSheet
+   ↓
+用户选操作 (autoClose=true 自动关闭 sheet)
+   ↓
+emit 复用 F.5 协议:
+   ├── clone-template    → MeetingView.onCloneTemplate → POST /meeting-templates/{id}/clone
+   ├── toggle-active     → MeetingView.onToggleActive → PUT /meeting-templates/{id} {is_active}
+   ├── save-template     → MeetingView.onSaveAsTemplate → 打开 MeetingTemplateDialog edit 模式
+   └── delete-template   → MeetingView.onDeleteTemplate → DELETE /meeting-templates/{id}
+```
+
+### 沉淀统计
+
+- **修改 4 文件**: MeetingCreateDialog.vue + meeting-view.css + test file + new mobile-long-press.spec.mjs
+- **新建 1 文件**: mobile-long-press.spec.mjs (4 个 M-13~M-16 集成测试)
+- **5 条铁律**（永久沉淀 CLAUDE.md）: long-press hover 等价物 / LongPressWrapper 包裹 / ElMessageBox.confirm / 桌面端 v-if 隐藏 / callback 直接 emit
+- **29 个 Vitest**（19 旧 + 10 新）+ **4 个 mobile Playwright** (M-13~M-16)
+- **净行数**: +678 行（-72 旧代码）
