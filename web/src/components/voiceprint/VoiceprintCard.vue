@@ -5,7 +5,7 @@
         v-for="(value, i) in member.embedding"
         :key="i"
         class="bar"
-        :style="{ background: barColor(value) }"
+        :class="getBarClass(value)"
       ></div>
     </div>
     <div class="meta">
@@ -24,13 +24,13 @@ const props = defineProps({
 })
 defineEmits(['select'])
 
-// v77+2026-06-29 fix: per-card max 归一化声纹波形
-// 根因: 老成员 embedding 是早期 pipeline 产出, 分量普遍接近 0 (sample_count 重置后没重算)
-//       直接用 |value| 作 alpha 会让老成员波形几乎不可见 (~0.01 alpha)
-//       新录入成员 embedding 值域 [-0.5, 0.5] 健康, 显示为半透明蓝
-// 修复: per-card 计算 maxAbs, alpha = |value| / maxAbs 让每张卡用满 [0,1] 范围
-//       + min floor 0.12 确保每条 bar 至少有一点颜色
-//       + Number.isFinite 守卫 NaN/null/undefined
+// v77 P2.6-G.2: 收敛 bar 颜色到 .bar--low/mid/high 枚举 class
+// 根因: 老版本 barColor() runtime :style + 硬编码 '64, 158, 255' 蓝 + rgba alpha 计算
+//       不感知 6 主题, dark/ocean/forest 全部用 primary 单一色调
+// 修复: per-card max 归一化 (避免老成员 embedding 全 0 不可见) + 0.33/0.66 阈值切 3 档 class
+//       class 由 _runtime-style-tokens.scss 提供 (--color-warning-bg / --color-warning → --color-success 渐变)
+//       6 主题自动跟随 token, dark mode 由 token 自身 dark 覆盖
+//       + Number.isFinite 守卫 NaN/null/undefined 兜底为 .bar--low
 const maxAbs = computed(() => {
   const emb = props.member?.embedding
   if (!Array.isArray(emb) || emb.length === 0) return 0
@@ -42,30 +42,18 @@ const maxAbs = computed(() => {
   return max
 })
 
-const MIN_ALPHA = 0.12  // floor: 保证最弱 bar 仍有颜色
-
-function barColor(value) {
-  // v76.6: 从 <html> 读 CSS 变量，让 bar 颜色跟随主题
-  const primaryRgb = getComputedStyle(document.documentElement).getPropertyValue('--color-primary-rgb').trim() || '64, 158, 255'
-  const infoRgb = '64, 158, 255'  // 信息蓝作为"负向"色 (距离近) 仍保留
-
+// per-card 归一化: |value| / maxAbs 比值切 3 档
+// 0.33 / 0.66 阈值保证同一张卡内 3 档都有合理分布
+// maxAbs=0 兜底: 全部 .bar--low
+function getBarClass(value) {
   const numValue = Number(value)
-  if (!Number.isFinite(numValue)) {
-    // NaN / null / undefined 兜底: 用 floor 透明度
-    return `rgba(${primaryRgb}, ${MIN_ALPHA})`
+  if (!Number.isFinite(numValue) || maxAbs.value === 0) {
+    return 'bar--low'
   }
-
-  // per-card 归一化: alpha = |value| / maxAbs
-  const max = maxAbs.value
-  let alpha
-  if (max > 0) {
-    alpha = Math.max(MIN_ALPHA, Math.abs(numValue) / max)
-  } else {
-    // embedding 全为 0 / NaN 兜底: 全部用 floor
-    alpha = MIN_ALPHA
-  }
-
-  return `rgba(${numValue >= 0 ? primaryRgb : infoRgb}, ${alpha})`
+  const ratio = Math.abs(numValue) / maxAbs.value
+  if (ratio >= 0.66) return 'bar--high'
+  if (ratio >= 0.33) return 'bar--mid'
+  return 'bar--low'
 }
 </script>
 
