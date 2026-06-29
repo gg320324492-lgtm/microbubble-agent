@@ -71,7 +71,7 @@
               class="option-card"
               @click="selectMethod('upload')"
             >
-              <div class="option-icon" style="background: linear-gradient(135deg, #67C23A, #95D475)">📁</div>
+              <div class="option-icon" style="background: linear-gradient(135deg, var(--color-success, #67C23A), #95D475)">📁</div>
               <div class="option-info">
                 <div class="option-title">上传音频文件</div>
                 <div class="option-desc">wav / mp3 / m4a</div>
