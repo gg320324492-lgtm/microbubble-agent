@@ -10,9 +10,10 @@ export function useKnowledge() {
   const loading = ref(false)
   const searchQuery = ref('')
   const filterCategory = ref('')
+  const filterSourceType = ref('')  // #043: 自动拓展走 source_type 过滤, 与 category 互斥
 
   // 统计
-  const statsData = ref({ total: 0, categories: {} })
+  const statsData = ref({ total: 0, categories: {}, source_types: {} })
   const categories = ref([])
   const hotTags = ref([])
 
@@ -43,9 +44,13 @@ export function useKnowledge() {
         ...params
       }
       if (searchQuery.value) queryParams.search = searchQuery.value
-      // v28 step 73: "论文" chip 映射到 has_file=true（只显示真实上传文件）
-      //   其他 category 值原样传给 API
-      if (filterCategory.value === '论文') {
+      // #043: 自动拓展走 source_type 过滤, 与 category 互斥 (同一时间只挂一个)
+      if (filterSourceType.value) {
+        queryParams.source_type = filterSourceType.value
+        // 不传 category / has_file
+      } else if (filterCategory.value === '论文') {
+        // v28 step 73: "论文" chip 映射到 has_file=true（只显示真实上传文件）
+        //   其他 category 值原样传给 API
         queryParams.has_file = true
         // 不传 category，避免和 has_file 叠加（LLM 自动归档的 [拓展] 也可能被标 category=论文）
       } else if (filterCategory.value) {
@@ -138,7 +143,7 @@ export function useKnowledge() {
   return {
     // 状态
     knowledgeList, total, currentPage, pageSize, loading,
-    searchQuery, filterCategory,
+    searchQuery, filterCategory, filterSourceType,  // #043
     statsData, categories, hotTags,
     entityList, entityTotal, entityPage, entityGraphData,
     hypothesisList, hypothesisTotal, hypothesisPage,
