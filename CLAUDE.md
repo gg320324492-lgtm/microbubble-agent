@@ -6734,3 +6734,47 @@ emit 复用 F.5 协议:
 - **5 条铁律**（永久沉淀 CLAUDE.md）: long-press hover 等价物 / LongPressWrapper 包裹 / ElMessageBox.confirm / 桌面端 v-if 隐藏 / callback 直接 emit
 - **29 个 Vitest**（19 旧 + 10 新）+ **4 个 mobile Playwright** (M-13~M-16)
 - **净行数**: +678 行（-72 旧代码）
+
+## voiceprint 视觉收官 (5 commits + 1 合并, 任务号 voiceprint-2026-06-30, 2026-06-30)
+
+**5 commits 链**:
+- `d01420dd` refactor(voiceprint): 收敛 VoiceprintCard bar 颜色到 .bar--low/mid/high class
+- `30f788bd` fix(voiceprint-2026-06-30): ConfidenceChart ECharts 主题感知
+- `fe368f3e` fix(voiceprint-2026-06-30): VoiceTestDialog Canvas getComputedStyle 读主题色
+- `afacdc7e` test(voiceprint-2026-06-30): VoiceprintCard getBarClass 阈值 8 个单测 (462/462 PASS)
+- `6e30dda9` test(voiceprint-2026-06-30): Playwright 6 主题桌面+移动端 smoke test
+- line 74 VoiceprintEnrollFlow 改动被其他窗口 785b6ae9 合并 (diff 100% 一致)
+
+**5 条新铁律**:
+1. **Canvas API 不支持 `var(--token)` 字符串** — `ctx.strokeStyle = 'var(--color-primary)'` 渲染成黑色 fallback。必须 `getComputedStyle(...).getPropertyValue('--color-primary-rgb').trim()` 读 RGB。
+2. **主题切换必须主动重绘 Canvas / ECharts** — Canvas 像素 + ECharts option 都是 static snapshot, MutationObserver 监听 `<html data-theme>` / `<data-accent>` attribute 变化后调 `render()` / `chart.setOption()`。ECharts 还要把 RGB 转 hex: `'#' + rgb.split(',').map(s => parseInt(s.trim(), 10).toString(16).padStart(2, '0')).join('')`
+3. **颜色硬编码收敛走 3 优先级** — ① CSS 变量 class (`.bar--low/mid/high`) ② `var(--token, #HEX)` fallback ③ inline `var()` 仅 CSS 支持, 绝不给 Canvas/ECharts
+4. **per-card max 归一化保留 + 全局阈值 class 收敛** — v77 P2.6-D.3 收敛 runtime `:style` 不会丢 per-card 归一化: maxAbs computed 保留, class 按 `|value|/maxAbs` 0.33/0.66 切 3 档, NaN/null/undefined 兜底 `.bar--low`
+5. **任务号冲突处理** — 多个 Claude 窗口同时工作不要用未来任务号 (v77 P2.6-G.2), 用**自定义子任务号** (voiceprint-2026-06-30) 隔离范围。`git add <精确文件>` 防止 auto-stage 其他窗口 working tree 改动, commit 后立即 push 防 timeout 后被其他窗口抢先 merge
+
+**关键代码**:
+```js
+// 1. Canvas RGB 读取
+function readRgbVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+}
+const primaryRgb = readRgbVar('--color-primary-rgb') || '255, 122, 92'
+ctx.strokeStyle = `rgb(${primaryRgb})`  // OK, 不 'var(--color-primary)'
+
+// 2. 主题切换重绘
+let themeObserver = null
+onMounted(() => {
+  themeObserver = new MutationObserver(() => {
+    if (chartInstance) render()
+  })
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme', 'data-accent'],
+  })
+})
+onBeforeUnmount(() => {
+  if (themeObserver) { themeObserver.disconnect(); themeObserver = null }
+})
+```
+
+**关联 commit**: commit `36e64fb4 fix(voiceprint): 声纹中心波形颜色不一致修复` 提供 per-card max 归一化 + min alpha 0.12 + NaN 守卫, 本收官在其基础上收敛 class
