@@ -4,8 +4,12 @@
 - 主入口 `synthesize_stream()` 编排 4 个 Agent 模块（intent → agentic_loop → critique）
 - 取消 brief/detail 双层：content = synthesis_text（单阶段综合输出）
 - TraceCollector 用 `async with` 包裹：异常时同步落库（铁律 4）
-- Kill switch：AGENT_NEW_ARCHITECTURE_ENABLED=False 时走 chat_engine_legacy
 - 保留旧 API 签名（chat_stream / chat_with_brief_and_detail）以兼容 micro_bubble_agent
+
+历史（2026-06-29 已删除）：
+- chat_engine_legacy.py (30 天回滚资产，已在 2026-06-29 提前 15 天收官)
+- AGENT_NEW_ARCHITECTURE_ENABLED 等 3 个 feature flag 已全部移除
+- 真回滚路径: git revert <删除 commit> + 重新部署
 """
 
 import asyncio
@@ -40,7 +44,6 @@ class ChatEngine:
     Stage 2 重写后职责清晰：
     1. 入口：`synthesize_stream()` 编排 intent → agentic_loop → critique（流式 yield）
     2. 薄壳：`chat_stream()` / `chat_with_brief_and_detail()` 兼容老 API
-    3. 旧实现：`chat_engine_legacy.py`（30 天回滚资产）
     """
 
     def __init__(self, llm=None):
@@ -68,9 +71,6 @@ class ChatEngine:
         3. AgenticLoop.run：tool loop → synthesis stream → critique → retry → done
         4. done 事件含 usage + duration_ms
 
-        Kill switch（铁律 6）：
-        AGENT_NEW_ARCHITECTURE_ENABLED=False → 退到 chat_engine_legacy
-
         Yields:
         - intent_detected [snapshot]
         - tool_use / tool_result / tool_compressed (loop)
@@ -82,14 +82,6 @@ class ChatEngine:
         - text_delta [increment] (retry 流式)
         - done [snapshot] | error [snapshot]
         """
-        # Kill switch：紧急回滚到老路径（铁律 6）
-        if not settings.AGENT_NEW_ARCHITECTURE_ENABLED:
-            async for evt in self._legacy_chat_stream(
-                messages, system, user_id, db, channel_user_id, session_id,
-            ):
-                yield evt
-            return
-
         # 1. 意图分类
         ctx = ToolContext(
             db=db,
@@ -329,36 +321,9 @@ class ChatEngine:
             "is_brief": False,  # deprecated 永远 False
         }
 
-    # =========================================================================
-    # 内部：legacy fallback（铁律 6 kill switch）
-    # =========================================================================
-
-    async def _legacy_chat_stream(
-        self,
-        messages: List[Dict],
-        system: str,
-        user_id: Optional[int],
-        db,
-        channel_user_id: Optional[str],
-        session_id: str,
-    ) -> AsyncIterator[StreamEvent]:
-        """退到 chat_engine_legacy.py 的旧实现（30 天回滚资产）"""
-        from app.agent.chat_engine_legacy import ChatEngine as LegacyChatEngine
-
-        legacy = LegacyChatEngine()
-        async for evt in legacy.chat_stream(
-            messages=messages,
-            system=system,
-            user_id=user_id,
-            db=db,
-            channel_user_id=channel_user_id,
-            session_id=session_id,
-        ):
-            yield evt
-
 
 # ============================================================================
-# 辅助函数（与 chat_engine_legacy 同源，供 legacy fallback 引用）
+# 辅助函数（独立工具函数，供 chat_engine 各方法使用）
 # ============================================================================
 
 
@@ -386,7 +351,7 @@ def _block_dump(block) -> Dict:
 
 
 def _extract_rich_block(tool_name: str, result: Dict) -> Optional[RichBlock]:
-    """从工具结果中提取 RichBlock（与原实现兼容，供 chat_engine_legacy 调用）"""
+    """从工具结果中提取 RichBlock（与原实现兼容）"""
     from typing import get_args
 
     from app.agent.protocol import RichBlockType

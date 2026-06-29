@@ -123,9 +123,6 @@ async def compress_tool_result(
     触发条件：raw_result 包含 > AGENT_COMPRESSION_THRESHOLD 条记录
     失败行为：返回 None（不阻塞，主模型看原始结果）
     """
-    if not settings.AGENT_COMPRESSION_ENABLED:
-        return None
-
     # 1. 提取数据列表
     items, key_name = _extract_items(raw_result)
     if not items or len(items) <= settings.AGENT_COMPRESSION_THRESHOLD:
