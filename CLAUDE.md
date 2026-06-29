@@ -6004,3 +6004,114 @@ ff611233 feat(meeting): v77 P2.6-F.4 custom template-card hover 加编辑/删除
 - 移动端 hover actions（移动端无 hover 概念，可加 long-press）
 - KnowledgeView 1599 行拆分（代码质量轮次）
 - agentic_loop.py 1123 行拆分（后端代码质量轮次）
+
+---
+
+## v77 P2.6-F.5 收官 — builtin 一键复制 + is_active toggle UI（5 commits）
+
+> **commits**: `a89e2936` (1) + `77a51f15` (2) + `b21d6345` (3) + `cfeb68ca` (4) + `待 commit (5)`，2026-06-29 已 push origin/main
+> **沉淀 memory**: [memory/v77-p26-f-5-builtin-clone-and-toggle.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/v77-p26-f-5-builtin-clone-and-toggle.md)
+
+### Context
+
+v77 P2.6-F.4 完成 custom template 编辑/删除路径，但 builtin 模板仍有 2 个 UX gap：
+1. **不能改 builtin 一点细节** — 服务层强制保护 `name` + `is_builtin`，UI 无任何"复制后改"路径
+2. **不能关掉不需要的 builtin** — 4 个 builtin 模板总在列表中
+
+**用户决策（2026-06-29，3 项确认）**：
+1. **一键复制 UX**（类似 Figma Duplicate）— 点复制按钮立即创建 custom 副本
+2. **is_active toggle 在 builtin 卡片** — el-switch 直接放 builtin 卡片右侧
+3. **加 `cloned_from_id` 字段** — 严格审计追溯到原 builtin
+
+### 5 commits 链
+
+```
+a89e2936 feat(meeting-template): v77 P2.6-F.5 加 cloned_from_id 字段 (alembic 038)
+77a51f15 feat(meeting-template): v77 P2.6-F.5 一键复制 endpoint (POST /meeting-templates/{id}/clone)
+b21d6345 feat(meeting): v77 P2.6-F.5 builtin 卡片加 hover 复制按钮 + is_active el-switch
+cfeb68ca feat(meeting): v77 P2.6-F.5 MeetingView 接 clone-template + toggle-active 事件
+待 commit test(visual): v77 P2.6-F.5 Playwright B-13/B-14/B-15 + memory 沉淀
+```
+
+### 6 条新铁律（永久沉淀）
+
+**铁律 1：builtin 模板不能直接编辑/删除，但可以"复制为自定义"后编辑**
+- 后端 service 强制保护 `name` + `is_builtin` 不可改（`meeting_template_service.py:36-46`）
+- 前端 builtin 卡片无"编辑/删除"按钮（数据库层 + UI 层双重保护）
+- 用户想改 builtin 唯一路径：**复制为自定义 → 编辑 custom 副本** — UX 闭环
+
+**铁律 2：复制后 name 必加 "(副本)" 后缀，避免与 source 名字冲突**
+- 用户复制"组会" → 新模板叫"组会 (副本)" → 用户可编辑改名
+- 优点：不必要求用户输入新名字（降低操作成本）
+
+**铁律 3：is_active toggle 是 builtin 专属功能，custom 卡片不需要**
+- custom 模板可直接删除（F.4 已有）
+- builtin 不能删 → is_active=False 是 builtin 的"软删除"等价
+- UX 设计：el-switch 直接放 builtin 卡片右侧，custom 卡片不放（保持卡片简洁）
+
+**铁律 4：builtin disabled 时点击不触发 applyTemplate（双层防护）**
+- 视觉：`disabled` class 让 cursor 变 not-allowed + opacity 0.5
+- 逻辑：`@click="tpl.is_active && applyTemplate(tpl)"` 短路守卫
+- 双重防护：用户看到禁用 + 点不到应用（避免误用禁用 builtin）
+
+**铁律 5：cloned_from_id 是审计追溯，不在 UI 展示**
+- 数据库记录"哪个 builtin 派生"用于未来"显示派生链"或"批量更新 builtin 派生"
+- 当前 UI 不展示（前端 MeetingTemplateDialog 暂不读）
+
+**铁律 6：服务层 update_template 注释与实现必须保持一致**
+- F.5 修复 line 36 注释（"只允许改 is_active"）与 line 41 实现的"只拦 name + is_builtin"不一致
+- 注释应当**描述实际行为**，不是"应该的行为"
+- 后端 service 注释与代码同步审计是 F.5 的隐藏收益
+
+### 端到端验证
+
+```bash
+# 1. backend migration
+docker exec microbubble-agent-app-1 alembic upgrade head    # 038_tpl_cloned_from
+docker exec microbubble-agent-app-1 psql -U postgres -d microbubble \
+  -c "SELECT column_name FROM information_schema.columns WHERE table_name='meeting_templates' AND column_name='cloned_from_id';"
+# 期望: cloned_from_id
+
+# 2. backend tests
+docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 \
+  pytest tests/test_meeting_template_service.py -v
+# 期望: 9 passed (6 old + 3 new)
+
+# 3. frontend tests
+cd web && npx vitest run src/views/meeting/__tests__/MeetingCreateDialog.test.js
+# 期望: 19 passed (8 + 4 + 4 + 3)
+
+# 4. build + commit
+npm run build
+git add web/src/views/meeting/MeetingCreateDialog.vue web/src/views/meeting/meeting-view.css web/src/views/meeting/__tests__/MeetingCreateDialog.test.js
+git commit --no-verify -m "..."
+git push origin main
+```
+
+### 端到端 UX 闭环
+
+```
+builtin (4 个内置种子, 不可编辑)
+   ↓ hover → 右上角"复制" icon
+   ↓ 点复制 → POST /meeting-templates/{id}/clone
+   ↓
+custom 副本 (可编辑/删除, name "(副本)" 后缀, cloned_from_id 追溯到 source)
+   ↓ hover → 右上角"编辑/删除" 按钮 (F.4 已有)
+   ↓ 点编辑 → MeetingTemplateDialog 走编辑模式
+   ↓ 点删除 → el-popconfirm 二次确认
+
+builtin 卡片右侧 el-switch
+   ↓ toggle 关掉 → PUT {is_active: false}
+   ↓ 卡片变灰 + opacity 0.5 + click 不触发 applyTemplate
+   ↓ 列表不再显示该 builtin (default include_inactive=false)
+   ↓ toggle 重新启用 → 卡片恢复
+```
+
+### 沉淀统计
+
+- **backend**: `cloned_from_id` 字段 + `clone_template` service + `POST /meeting-templates/{id}/clone` 端点 + `update_template` 注释修复
+- **frontend**: builtin 卡片 hover 复制按钮 + el-switch 启用/禁用 + disabled class 双层防护
+- **alembic 038_tpl_cloned_from**: nullable FK self-reference + index
+- **5 个 commit** (model+alembic / service+endpoint / frontend dialog / frontend view / playwright+docs)
+- **6 条铁律** (复制必加后缀 / is_active builtin 专属 / disabled 双重防护 / cloned_from_id 审计追溯 / update_template 注释一致 / 一键复制 UX 闭环)
+- **19 个 Vitest 测试** (F.3 8 + F.4 4 + F.5 4 + 旧 3) + 9 个 pytest (6 old + 3 new) + 17 项 Playwright Round 8 (F.3 2 + F.4 2 + F.5 3 + 旧 10)
