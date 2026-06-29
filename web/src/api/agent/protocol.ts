@@ -28,6 +28,9 @@ export type StreamEventType =
   | 'synthesis_start'   // [snapshot] 综合阶段开始（无 delta）
   | 'critique'          // [snapshot] 自评结果
   | 'retry'             // [snapshot] critique 低分触发重试，前端必须清空 content
+  // ===== 2026-06-29 #043 新增 2 种事件 =====
+  | 'message_persisted' // [snapshot] 后端已落库某条消息（user 流开始时 + assistant 流结束时 各 yield 一次）
+  | 'sync_required'     // [snapshot] 流式中断/异常，前端需重新拉历史（流中断兜底）
 
 export type RichBlockType =
   | 'meeting'
@@ -124,4 +127,11 @@ export interface StreamEvent {
   // retry
   retry_reason?: string
   retry_count?: number
+  // ===== #043 新增字段（message_persisted 事件） =====
+  message_id?: number                                   // server message id
+  persisted_role?: 'user' | 'assistant' | 'system' | 'tool'
+  persisted_client_msg_id?: string                      // 幂等键
+  persisted_is_partial?: boolean                       // 是否 partial（流式中断标记）
+  // ===== #043 新增字段（sync_required 事件） =====
+  sync_reason?: 'aborted' | 'error'                     // 中断原因
 }

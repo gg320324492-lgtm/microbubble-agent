@@ -21,6 +21,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { sseFetch } from '@/api/agent/sse'
 import { useChatSessionsStore } from '@/stores/chatSessions'
+import { useChatHistoryStore } from '@/stores/chatHistory'
 
 // ============================================================================
 // 类型定义
@@ -58,6 +59,13 @@ export interface ChatMessage {
   plan?: Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
   critique?: { score: number; addresses_question?: boolean; has_synthesis?: boolean; has_citations?: boolean; suggestion?: string }
   retryCount?: number
+  // ===== #043 新增字段（服务端持久化追踪） =====
+  /** 服务端 message id（持久化成功后填入） */
+  server_id?: number
+  /** 客户端消息 id（幂等键，用于重试不重复写） */
+  client_msg_id?: string
+  /** 是否 partial（流式中断标记） */
+  is_partial?: boolean
 }
 
 export interface SendOptions {
@@ -128,6 +136,7 @@ export function useChatStream() {
   // 会话 store 集成
   // --------------------------------------------------------------------------
   const sessionsStore = useChatSessionsStore()
+  const chatHistoryStore = useChatHistoryStore()  // #043 服务端持久化
   sessionsStore.migrateFromV1()
   if (!sessionsStore.currentSession()) {
     sessionsStore.createSession()
@@ -250,8 +259,23 @@ export function useChatStream() {
       richBlocks: [],
       timestamp: new Date().toISOString(),
       type: img ? 'image' : file ? 'file' : 'text',
+      // #043: 客户端幂等键（用于重试不重复写 server）
+      client_msg_id: `chat_user_${targetSessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     }
     targetMsgs.push(userMsg)
+
+    // #043: user 消息 fire-and-forget 持久化到 server
+    // CLAUDE.md 2026-06-12 "持久化失败必须 best-effort" 铁律 — appendMessageAsync 内部已 try/except
+    chatHistoryStore.appendMessageAsync(targetSessionId, {
+      role: 'user',
+      content,
+      rich_blocks: [],
+      tool_trace: {},
+      message_metadata: { source: 'chat_stream_user' },
+      client_msg_id: userMsg.client_msg_id,
+    }).then((persisted) => {
+      if (persisted?.id) userMsg.server_id = persisted.id
+    })
 
     // Assistant 占位
     const assistantMsg: ChatMessage = {
@@ -518,7 +542,45 @@ export function useChatStream() {
           if (evt.text_without_json != null && evt.text_without_json !== currentAssistant.content) {
             currentAssistant.content = evt.text_without_json
           }
+          // #043: 标记 assistant 已完成（server_id 会在 message_persisted 事件里设置）
+          currentAssistant.state = 'idle'
           break
+
+        // ===== #043 新增事件处理 =====
+        case 'message_persisted': {
+          // [snapshot] 后端已落库某条消息（user 流开始时 + assistant 流结束时 各 yield 一次）
+          // CLAUDE.md 2026-06-29 #043 Phase 3 铁律 2："assistant 落库必须在 done 事件 yield 之后立即"
+          // — 即后端 done 后才会 yield 这个事件，前端收到时 server 已持久化
+          const role = evt.persisted_role
+          if (role === 'assistant' && currentAssistant) {
+            currentAssistant.server_id = evt.message_id
+            currentAssistant.client_msg_id = evt.persisted_client_msg_id || currentAssistant.client_msg_id
+            currentAssistant.is_partial = evt.persisted_is_partial ?? false
+          }
+          if (role === 'user' && evt.persisted_client_msg_id) {
+            // 找到对应 userMsg，更新 server_id（幂等键命中所以 server 返回的 id 一致）
+            const matched = messagesBySession.value[targetSessionId]
+              ?.find(m => m.role === 'user' && m.client_msg_id === evt.persisted_client_msg_id)
+            if (matched) matched.server_id = evt.message_id
+          }
+          // SSE 收到 message_persisted 不 debounce localStorage（数据已稳定在 server）
+          break
+        }
+
+        case 'sync_required': {
+          // [snapshot] 流式中断 / 异常，前端需重新拉历史（CLAUDE.md 2026-06-29 #043 Phase 3 已知限制兜底）
+          // evt.sync_reason = 'aborted' | 'error'
+          console.warn(`[useChatStream] sync_required: reason=${evt.sync_reason}`)
+          // 异步 reload 当前会话消息（不阻塞 UI，让后台 SSE 走完 cleanup）
+          chatHistoryStore.refreshSession(targetSessionId).then((msgs) => {
+            if (msgs && Array.isArray(msgs)) {
+              // 替换当前会话的 messages（server 数据为准，避免本地状态错乱）
+              messagesBySession.value[targetSessionId] = msgs.map(serverToClient)
+              persistSessionSync(targetSessionId)
+            }
+          })
+          break
+        }
       }
       // 流式增量持久化（防后台丢数据；debounce 100ms）
       persistSessionDebounced(targetSessionId)
@@ -538,12 +600,29 @@ export function useChatStream() {
       const assistant = activeAssistantMap.value[sid]
       if (assistant && assistant.state === 'streaming') {
         assistant.state = 'aborted'
+        assistant.is_partial = true  // #043: 流式中断标记
         // 后续 SSE 事件被忽略（state !== 'streaming'，switch case 不再处理）
         // 立即关闭 loading
         sendingSessions.delete(sid)
       }
       // 立即持久化（用户可能直接关页面）
       persistSessionSync(sid)
+      // #043: 通知 server 标记 partial（best-effort，不阻塞 stop UI）
+      // 即使 server 没收到，前端 state='aborted' + is_partial=true 已足够本地持久化
+      if (assistant?.content !== undefined) {
+        const partialContent = assistant.content || ''
+        chatHistoryStore.appendMessageAsync(sid, {
+          role: 'assistant',
+          content: partialContent,
+          rich_blocks: assistant.richBlocks || [],
+          tool_trace: assistant.toolTrace || [],
+          message_metadata: { source: 'stream_partial_aborted' },
+          client_msg_id: `stream_${sid}_assistant_partial_${Date.now()}`,
+          is_partial: true,
+        }).then((persisted) => {
+          if (persisted?.id) assistant.server_id = persisted.id
+        })
+      }
     }
   }
 
@@ -649,12 +728,58 @@ export function useChatStream() {
   // --------------------------------------------------------------------------
   // 生命周期
   // --------------------------------------------------------------------------
-  onMounted(() => {
+
+  // #043: Server → Client 消息映射（sync_required refreshSession 用）
+  function serverToClient(serverMsg: any): ChatMessage {
+    return {
+      id: `server_${serverMsg.id}`,
+      role: serverMsg.role === 'assistant' ? 'assistant' : serverMsg.role === 'user' ? 'user' : 'assistant',
+      content: serverMsg.content || '',
+      richBlocks: serverMsg.rich_blocks || [],
+      toolTrace: serverMsg.tool_trace || [],
+      timestamp: serverMsg.created_at || new Date().toISOString(),
+      server_id: serverMsg.id,
+      client_msg_id: serverMsg.client_msg_id,
+      is_partial: !!serverMsg.is_partial,
+      state: 'idle',
+    }
+  }
+
+  onMounted(async () => {
     ensureSessionLoaded(sessionId.value)
     if ((messagesBySession.value[sessionId.value] || []).length === 0) {
       messagesBySession.value[sessionId.value] = [
         createAssistantGreeting('你好！我是"小气"，课题组智能助手。有什么可以帮你的吗？'),
       ]
+    }
+
+    // #043: 服务端数据补充（background sync，不阻塞 UI）
+    // 只有登录后才有 token，否则跳过（Phase 5 迁移会等登录态再跑）
+    const hasToken = !!localStorage.getItem('access_token')
+    if (hasToken && chatHistoryStore.syncStatus === 'idle') {
+      try {
+        await chatHistoryStore.loadFromServer()
+        // 把 server 会话列表同步到侧栏 store（保持 UI 一致）
+        sessionsStore.mergeServerList(chatHistoryStore.serverSessions)
+      } catch (e: any) {
+        // 服务端加载失败 → 保留 localStorage 兜底，不阻塞 UI
+        console.warn('[useChatStream] 服务端加载失败，保留 localStorage:', e?.message)
+      }
+    }
+
+    // #043: Phase 5 旧数据自动迁移（登录后 1 秒异步跑）
+    if (hasToken) {
+      setTimeout(async () => {
+        try {
+          const { useChatMigration } = await import('@/composables/chat/useChatMigration')
+          const result = await useChatMigration().migrateLocalToServer()
+          if (result?.migrated && result.migrated > 0) {
+            console.info(`[useChatStream] 旧数据已迁移: ${result.migrated} 条`)
+          }
+        } catch (e: any) {
+          console.warn('[useChatStream] 旧数据迁移失败:', e?.message)
+        }
+      }, 1000)
     }
   })
 

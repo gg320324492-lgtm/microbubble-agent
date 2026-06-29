@@ -44,6 +44,14 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('user_info')
     delete axios.defaults.headers.common['Authorization']
     userInfo.value = null
+
+    // #043: 退出登录清空 chatHistory store（防止下一用户看到上一用户数据 = 越权）
+    // CLAUDE.md 2026-06-15 "退出登录清空" 铁律
+    import('@/stores/chatHistory').then(({ useChatHistoryStore }) => {
+      try {
+        useChatHistoryStore().reset()
+      } catch (e) { /* store 没初始化也无害 */ }
+    })
   }
 
   return { userInfo, notificationCount, notifications, username, userRole, loadFromStorage, fetchNotificationCount, fetchNotifications, logout }
