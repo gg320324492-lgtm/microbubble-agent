@@ -2,6 +2,81 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [Unreleased] 2026-06-30 — 前端视觉 5 件套 + nginx HSTS + Knowledge 卡 status 真 bug 修复
+
+### 新增功能
+
+#### nginx HSTS server-level + gzip_types 扩展（基础设施真实安全加固，3 commits）
+
+| Commit | 主题 |
+|---|---|
+| `71e743f7` | HSTS server-block + gzip_types 扩展 (agent + mnb-lab 各一处) |
+| `289338fb` | 4 个 location 补 HSTS（/favicon.ico / /sw.js / /manifest.webmanifest / static regex）|
+| `34128fbd` | agent `/` location HSTS 升级 includeSubDomains 对齐 |
+
+- **真实安全问题**：webhint 一次性 audit 发现所有 9 路由缺 `Strict-Transport-Security` header（12 errors/route）
+- **修复**：所有 HTTPS response 都包含 `Strict-Transport-Security: max-age=63072000; includeSubDomains`（2 年 HSTS，符合 hstspreload 资格）
+- **gzip_types 扩展**：从 9 MIME 增到 15 MIME，加 `font/woff2` / `application/wasm` / `application/manifest+json` / `image/x-icon` / `image/vnd.microsoft.icon` / `font/woff`（nginx server-context 完全覆盖陷阱，CLAUDE.md 2026-06-13 铁律）
+- **webhint 二次扫描验证**：strict-transport-security 9 路由全部 0 errors；http-compression 1-14 errors/route → 3-11 errors/route（部分 MIME 仍不压缩，留待后续）
+
+### Bug 修复
+
+#### 前端视觉 5 件套（前端组件视觉不一排查）
+
+| Commit | 文件 | 根因 | 修法 |
+|---|---|---|---|
+| `558962b1` | KnowledgeToolbar 4 按钮 | 全局 `.btn-text` utility class 同名，scoped 子选择器用同名导致 cascade 被打断 | scoped `color: inherit` |
+| `845803c3` | MemberView 录入声纹 | ghost primary 按钮在 orange 主题下完全没规则，回退 EP 默认低对比度 | `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600` |
+| `36e64fb4` | VoiceprintView 波形 | 老成员 stale embedding |value|≈0 alpha≈0 不可见 | `barColor()` per-card max 归一化 + min alpha floor 0.12 + NaN 守卫 |
+| `054668f7` | SettingsView Hero 卡片 | non-scoped `[data-theme=dark].hero-bg` 写死 `#FF6B4A→#FFB347` hex，source 顺序靠后赢 cascade | 2 处 linear-gradient → `var(--gradient-welcome-hero)` |
+| `558962b1` (also) | VoiceprintEnrollFlow mobile icon | template inline `style=""` 写死硬编码橙渐变 | `var(--gradient-welcome-hero)` |
+| `e3b32b86` | 5 处 transition 字面量 | P2.6-E.2/F.1 残留 `transition: all 200ms var(--ease-out)` 等 | 替换 `var(--transition-all-normal)` + `var(--transition-all-fast)` |
+
+#### Knowledge 卡 `analysis_status` 真 bug
+
+| Commit | 文件 | 根因 | 修法 |
+|---|---|---|---|
+| `3653890b` | `multimodal_extraction_service.py` | Step 7 调 `_reset_multimodal_data` 无条件覆盖终态（即使 Step 3 已写 done） | 加 `reset_status=False` 参数（默认安全），pipeline 传 False / manual UI 传 True |
+| `3653890b` | `knowledge_service.py` | 上游 Step 3 写完 done 后下游仍可能覆盖 | Step 8 最终终态防御（pipeline 末尾检查 status 写回 final_status）|
+| `3653890b` | `KnowledgeCard.vue` | UI 不识别 `partial` 状态 | 加 `partial` tag (type=info, "部分完成") |
+
+- **遗留清理**：DB 全表扫到 2 张 5 月预存 stuck 卡（KB #14 #19），验证 content/embedding/summary 完整后 UPDATE → done
+- **最终状态**：全表 199 done / 1 completed (legacy) / 0 analyzing / 0 pending
+
+### 运维 / 工具
+
+- `e3b32b86` chore(audit): webhint devDep + .hintrc.json（一次性 audit tool，不集成 CI，符合 CLAUDE.md 2026-06-29 v76 视觉回归废弃决策）
+
+### 测试
+
+- vitest 全部 427/427 PASS（+4 新增 transition token 测试）
+- Playwright 16/16 smoke test PASS
+- 端到端：KB #282 创建后 status pending → done 在 1 秒内
+- 文件-backed KB #19 验证 reset_status True/False 双向切换正确
+
+### 沉淀 memory（8 个新增）
+
+- [btn-text-class-name-clash.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/btn-text-class-name-clash.md)
+- [plain-primary-contrast.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/plain-primary-contrast.md)
+- [voiceprint-bar-color-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-bar-color-2026-06-29.md)
+- [scoped-vs-non-scoped-hardcoded-override-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/scoped-vs-non-scoped-hardcoded-override-2026-06-29.md)
+- [visual-cleanup-extension-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/visual-cleanup-extension-2026-06-29.md)
+- [nginx-hsts-gzip-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/nginx-hsts-gzip-2026-06-29.md)
+- [knowledge-status-pipeline-vs-manual-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-status-pipeline-vs-manual-2026-06-30.md)
+- [knowledge-stuck-status-cleanup-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-stuck-status-cleanup-2026-06-30.md)
+
+### 部署
+
+- `docker compose restart app celery-worker`（CLAUDE.md 752 行铁律 — volume 挂载只换文件不换模块缓存）
+- nginx 自动部署 via webhook（CLAUDE.md 2026-06-17 链路）
+
+### 风险评估
+
+- **HSTS max-age=63072000**：2 年不可撤销；浏览器收到后即使服务撤换证书也不可恢复 HTTP。本项目所有子域名都永久 HTTPS（HSTS 安全），但 first-time 部署前要 staging 验证
+- **Knowledge 卡 status 修复**：pure additive param + defensive fallback，0 风险
+
+---
+
 ## [2026-06-28] v77 P2.6-F.2 MeetingView 1088 → 359 行拆分（5 commits）
 
 v77 P2.6 视觉收官后，把会议管理主页面 MeetingView 也做同样的"主 View + 子组件 + CSS 独立"拆分。同时按用户决策把听会 UX 从弹窗改成全屏（与移动端对齐）。

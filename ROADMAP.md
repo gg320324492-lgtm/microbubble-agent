@@ -3,9 +3,30 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-06-28）
+## 当前状态（2026-06-30）
 
 **已交付**：
+- 🆕 **前端视觉 5 件套 + 视觉收官延伸（11 commits 收尾 2026-06-30）**：
+  - **KnowledgeToolbar 4 按钮**（commit `558962b1`）—— `.btn-text` utility class 同名冲突修复
+  - **MemberView 录入声纹 ghost primary**（commit 845803c3）—— `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600`
+  - **VoiceprintView 波形颜色不一致**（commit 36e64fb4）—— 老成员 stale embedding |value|≈0 alpha≈0 不可见，`barColor()` per-card max 归一化 + min alpha floor 0.12
+  - **SettingsView Hero 跟随主题**（commit `054668f7`）—— non-scoped `[data-theme=dark].hero-bg` 硬编码 hex 永远赢 scoped 变量
+  - **VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep**（commit `e3b32b86`）—— 全项目扫描 38 个非 scoped style 块 + 1 mobile inline style 全部干净
+- 🆕 **nginx HSTS server-level + gzip_types 扩展（3 commits 真实安全加固）**：
+  - commit `71e743f7` — HSTS server-block + gzip_types 扩展 (agent + mnb-lab)
+  - commit `289338fb` — 4 个 location 补 HSTS（/favicon.ico / /sw.js / /manifest.webmanifest / static regex）
+  - commit `34128fbd` — agent `/` location HSTS 升级 includeSubDomains 对齐
+  - **效果**：`strict-transport-security 12→0 errors/route`（9 路由全过），`gzip_types` 9 → 15 MIME（含 `font/woff2` / `application/wasm` 等）
+- 🆕 **Knowledge 卡 `analysis_status` 真 bug 修复（commit `3653890b`）**：
+  - Step 7 `_reset_multimodal_data` 无条件覆盖终态 → 加 `reset_status=False` 参数（区分 pipeline vs manual UI）
+  - `_run_analyze_and_embed` 末尾加 Step 8 最终终态防御
+  - `KnowledgeCard.vue` 加 `partial` 状态 tag
+  - **DB 清理**：2 张 5 月预存 stuck 卡（KB #14 #19）验证 content 完整后 UPDATE → done
+  - **全表状态**：199 done / 1 completed (legacy) / **0 analyzing** / 0 pending
+- 🆕 **v77 P2.6-G.2 meeting-template batch + bar color enum class**：
+  - `d01420dd` refactor(voiceprint): 收敛 VoiceprintCard bar 颜色到 .bar--low/mid/high class
+  - `8c14a0c8` / `95e53955` / `31acafcb` / `d5521a70` meeting-template batch/list endpoint + 11 个 service 单测
+  - `0c96331f` admin 桌面端 el-table + MeetingView query.tab
 - 🆕 **v77 P2.6-F.2 MeetingView 1088 → 359 行拆分（5 commits）**：
   - **v77 P2.6-F.2 Step 4**（commit `e5ba60e2`）— 听会 UX 全屏化（800px 弹窗 → `/meetings/room` 全屏 MeetingRoomView，与移动端对齐）+ style 拆到独立 `web/src/views/meeting/meeting-view.css`（498 行）
   - **v77 P2.6-F.2 Step 3**（commit `a3663d04`）— 抽 `MeetingTemplateDialog` 子组件（MeetingView -125 行, 新组件 180 行 + 12 Vitest 单测覆盖 TDZ 防御）
@@ -47,7 +68,7 @@
 - ✅ **pre-commit hook auto-add web/dist/**（CLAUDE.md 教训第 4 次沉淀后兜底）
 
 **统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：
-- **1483 commits / 160K 行代码 / 542 文件 / 44 开发天数**
+- **1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 自动重算）
 - 9 个 Docker 服务运行中
 - 87 后端 + 73 前端 + 17 移动端 + 8 ST 集成 + 11 visual-regression = 196+ 测试
 - 知识库 64→247+ 条（+183，Phase 7 后再扩展多模态抽取）
