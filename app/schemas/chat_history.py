@@ -96,7 +96,10 @@ class ChatMessageOut(BaseModel):
     content: str
     rich_blocks: List[Dict[str, Any]]
     tool_trace: Dict[str, Any]
-    message_metadata: Dict[str, Any] = Field(alias="metadata")
+    # 注意: 不用 alias="metadata" 因为 SQLAlchemy ORM 对象有内置 .metadata 属性
+    # (sqlalchemy.MetaData 类), 会导致 Pydantic from_attributes 误读
+    # 改用 validation_alias 直接读 ORM 的 message_metadata 属性
+    message_metadata: Dict[str, Any] = Field(validation_alias="message_metadata", serialization_alias="metadata")
     is_partial: bool
     is_deleted: bool
     client_msg_id: Optional[str] = None

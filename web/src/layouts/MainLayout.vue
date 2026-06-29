@@ -373,7 +373,7 @@ const formatTime = (t) => {
   color: var(--color-text-primary);
   font-weight: var(--font-weight-medium);
   font-size: var(--font-size-base);
-  transition: all 200ms var(--ease-out);
+  transition: all var(--transition-all-normal) var(--ease-out);
   position: relative;
   overflow: hidden;
 }
@@ -388,7 +388,7 @@ const formatTime = (t) => {
   height: 0;
   background: var(--color-primary);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  transition: all 200ms var(--ease-out);
+  transition: all var(--transition-all-normal) var(--ease-out);
 }
 
 .sidebar-menu .el-menu-item:hover {
@@ -519,7 +519,7 @@ const formatTime = (t) => {
 
 .bell-icon {
   cursor: pointer;
-  transition: all 200ms var(--ease-out);
+  transition: all var(--transition-all-normal) var(--ease-out);
   color: var(--color-text-regular, #606266);
   padding: 10px;
   border-radius: 50%;

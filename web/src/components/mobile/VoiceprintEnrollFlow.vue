@@ -58,7 +58,7 @@
               class="option-card"
               @click="selectMethod('record')"
             >
-              <div class="option-icon" style="background: linear-gradient(135deg, #FF7A5C, #FFB347)">🎤</div>
+              <div class="option-icon" style="background: var(--gradient-welcome-hero)">🎤</div>
               <div class="option-info">
                 <div class="option-title">麦克风录制</div>
                 <div class="option-desc">实时录音（推荐）</div>

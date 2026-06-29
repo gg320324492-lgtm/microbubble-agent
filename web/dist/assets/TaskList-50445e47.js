@@ -1,0 +1,1 @@
+import{Mn as e,Qn as t,Yn as n,qn as r,vr as i}from"./element-plus-desktop-960c759e.js";import{t as a}from"./useTask-dddf189d.js";var o={class:`task-list`},s={__name:`TaskList`,setup(s,{expose:c}){let{tasks:l,loading:u,fetchTasks:d}=a();return r(()=>{d()}),c({fetchTasks:d}),(r,a)=>(n(),e(`div`,o,[t(r.$slots,`default`,{tasks:i(l),loading:i(u)})]))}};export{s as default};
