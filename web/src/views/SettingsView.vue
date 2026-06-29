@@ -616,7 +616,7 @@ function formatDateTime(iso) {
   inset: 0;
   background:
     radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.4) 0%, transparent 50%),
-    linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    var(--gradient-welcome-hero);
 }
 .hero-content {
   position: relative;
@@ -877,7 +877,7 @@ function formatDateTime(iso) {
 [data-theme="dark"] .hero-bg {
   background:
     radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
-    linear-gradient(135deg, #FF6B4A 0%, #FFB347 100%);
+    var(--gradient-welcome-hero);
 }
 [data-theme="dark"] .hero-edit-btn {
   background: rgba(255, 255, 255, 0.12);
