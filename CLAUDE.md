@@ -5835,3 +5835,146 @@ docker exec microbubble-agent-app-1 python -c "from app.agent.agentic_loop impor
 - Plan：[`C:/Users/pc/.claude/plans/matlab-pytorch-tensorflow-transient-feigenbaum.md`](C:/Users/pc/.claude/plans/matlab-pytorch-tensorflow-transient-feigenbaum.md) Section `#042 实施计划`
 - CLAUDE.md 顶部任务链（已更新）
 - 测试：`tests/qa-bench/questions.jsonl` D11-D15 + `tests/qa-bench/runner.py` `tools_must_all` 检测
+
+---
+
+## v77 P2.6-F.4 收官 — custom template-card hover 编辑/删除按钮（custom template 生命周期闭环）
+
+> **commit**：`ff611233` (1) + `2bebb295` (2) + `76da9319` (3) + 待 commit (4)，2026-06-29 全部已 push origin/main
+> **沉淀 memory**：[memory/v77-p26-f-4-template-card-hover-actions.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/v77-p26-f-4-template-card-hover-actions.md)
+
+### 4 子任务（顺序执行）
+
+#### 子任务 1：MeetingCreateDialog hover actions（commit 1）
+- `.template-card.custom` 内部最前加 `.template-card-actions` 容器（builtin 卡片不加）
+- 2 个 icon: Edit + Delete
+- Edit: `emit('save-template', {id, ...tpl})` → 复用 P2.6-F.3 emit → MeetingView.onSaveAsTemplate → MeetingTemplateDialog 走编辑模式
+- Delete: `el-popconfirm` 二次确认 → `emit('delete-template', tpl.id)`
+- 关键：`@click.stop` 防止外层 card applyTemplate 误触发
+- onEditTpl 函数（测试可调 `wrapper.vm.onEditTpl(tpl)` 验证 emit）
+
+#### 子任务 2：MeetingView onDeleteTemplate（commit 2）
+- `@delete-template="onDeleteTemplate"` 监听
+- handler: `axios.delete(/api/v1/meeting-templates/{id})` + `loadTemplates` + ElMessage 反馈
+- 复用 P2.6-F.3 onSaveAsTemplate 处理 edit（无新 handler）
+- 0 后端改动（DELETE 路由已存在 meeting_template.py:98-107）
+
+#### 子任务 3：Vitest 4 个单测（commit 3）
+- custom 显示 actions, builtin 不显示 (filter 验证)
+- onEditTpl → emit save-template 携带 tpl.id (MeetingTemplateDialog 走 edit)
+- el-popconfirm @confirm → emit delete-template tpl.id
+- @click.stop 防止外层 card applyTemplate 误触发 (mock 验证)
+- 复用 P2.6-F.3 wrapper.vm 模式 (jsdom el-icon click 不可靠)
+- 419 → 423 PASS（4 新增）
+
+#### 子任务 4：Playwright B-11/B-12 + docs（commit 4）
+- B-11: 前置创建 custom template → re-open → hover → 点编辑 → MeetingTemplateDialog 打开 + 字段预填验证
+- B-12: hover → 点删除 → el-popconfirm 出现 → 点取消（避免 test pollution）
+- selector 复用 `.tpl-action[aria-label="编辑模板"|"删除模板"]`（P2.6-F.4 唯一暴露）
+- Round 8: 14 项 → 16 项 (12 passed + 4 skipped + 0 failed)
+
+### 5 条新铁律
+
+**铁律 1：CSS 先行原则 — 当 CSS 已为某 UI feature 设计好但 markup 缺失时，完成 markup 而非重写 CSS**
+- v77 P2.6-F.4 完美示范：`meeting-view.css:304-318` 早在 P2.6-F.2 拆分时已写好 `.template-card-actions` + `.tpl-action` 完整样式（hover-fade + danger 配色），但一直没人写 markup
+- **判断 CSS 是否就绪的快捷方法**：grep 类名 → 项目内有匹配且类名带 hover/transition 等动态样式 → **完成 markup**
+- **反模式**：直接在 template 加 inline `:style` 或写新 CSS（重复劳动）
+- **未来启示**：v77 P2.6-D/CSS-in-JS 收官阶段也大量出现"CSS 已就绪 + markup 缺"模式（如 `.avatar-color-0..7` 8 色枚举），优先补 markup 而不是改 CSS
+
+**铁律 2：hover-reveal action button 必须 `@click.stop` 防止外层 card 误触发**
+- 任何嵌套在可点击卡内的 hover-show 按钮（编辑/删除/更多）都必须 `@click.stop` 防冒泡
+- el-popconfirm 的 `#reference` slot 内按钮**尤其**要 stop — popconfirm 需要 click 触发但外层 card 不应顺带触发
+- **测试方法**：mock `applyTemplate = vi.fn()` + 调 onEditTpl + 验证 mock 未被调
+- **真实代价**：漏了 @click.stop → 用户点删除时顺带触发 applyTemplate，把即将删除的模板套用到当前会议 → 删除后 apply 状态错乱（致命 UX bug）
+
+**铁律 3：destructive action 必须 el-popconfirm 二次确认 + 自定义按钮文案**
+- 删除/批量清除等不可逆操作 → 必须 `el-popconfirm` 包裹
+- 自定义 `confirm-button-text`（"删除" 而非 "确定"）+ `cancel-button-text`（"取消"）
+- title 必须含 "此操作不可撤销" 警示
+- 匹配已有模式：`MeetingView.vue:112-118` 删除会议按钮就是 el-popconfirm wrapper
+- **目的**：降低误操作率（"确定"按钮太通用，用户不会三思）
+
+**铁律 4：复用已有 emit + editingTemplate trick 是单 dialog 多用途的优雅模式**
+- 子组件不必区分 "edit" vs "create" — `editingTemplate=null` = create, `editingTemplate=Object` = edit
+- 父组件同一 emit (`save-template`) 同时承载 create-from-meeting (F.3) 和 edit-existing (F.4) 两种语义
+- 前提：子组件内部 `if (editingTemplate.value?.id) PUT else POST` 分叉（MeetingTemplateDialog line 156）
+- 优势：减少 emit 总数 → 减少父 handler → 更易测试 + 维护
+- **本项目应用**：`save-template` 已被 F.3 + F.4 复用，未来还可以承载 "从会议纪要生成模板"（F.3 同模式），不需新增 emit
+
+**铁律 5：Playwright destructive 测试用 popconfirm 取消而不是确认**
+- 测试删除按钮时点 "取消" 而非 "确定"，避免 test pollution（删了真实数据导致后续测试数据丢失）
+- 验证逻辑：popconfirm 出现 + 文案正确 + 取消后 card 仍在
+- **独立"真删测试"**留给 manual smoke（DB 重 seed 后跑）
+- **本项目 B-12 应用**：hover → 点删除 → popconfirm 出现 → 点取消 → 验证 card 仍在 → 关闭 dialog
+
+### 端到端验证
+
+```bash
+# 1. 编译
+cd /e/microbubble-agent/web && npm run build
+# 期望: 0 警告
+
+# 2. token orphan
+bash scripts/check-token-orphans.sh
+# 期望: 0 真 orphan
+
+# 3. Stylelint
+cd /e/microbubble-agent/web && npx stylelint 'src/**/*.{vue,css}'
+# 期望: 0 errors
+
+# 4. Vitest
+cd /e/microbubble-agent/web && npx vitest run
+# 期望: 423/423 PASS (419 + 4 新增)
+
+# 5. Playwright 16 项
+TEST_TOKEN=<jwt> npx playwright test \
+  tests/visual/desktop/v77-p2-6-f-2-regression.spec.mjs \
+  --project=desktop-chrome
+# 期望: 12 passed + 4 skipped + 0 failed
+```
+
+### 部署必做
+
+```bash
+# 1. 验证容器状态
+docker compose ps | grep -E "app|frontend"  # 应 healthy
+
+# 2. 验证 dist 资源
+curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/
+# 期望: 200
+
+# 3. 浏览器端到端验证
+# - 打开 /meetings → 点"手动创建" → 看到 template-picker
+# - hover custom template → 右上角浮出 2 个 icon 按钮
+# - 点编辑 → MeetingTemplateDialog 打开, 字段预填
+# - 点删除 → popconfirm 弹出 + 二次确认
+```
+
+### 沉淀统计
+
+- **修改文件 4 个**（source 3 + spec 1）
+- **新建 memory 1 个**（v77-p26-f-4-template-card-hover-actions.md, 195 行）
+- **修改 MEMORY.md 1 行**（索引）
+- **修改 CLAUDE.md 1 章**（本章节）
+- **0 CSS 改动**（meeting-view.css:304-318 已就绪）
+- **0 dialog 改动**（MeetingTemplateDialog 已支持 editingTemplate=Object 走编辑）
+- **0 后端改动**（PUT/DELETE 路由已存在）
+- **行数**：441 / -9 = 净 +432 行
+
+### 关键 commit 链
+
+```
+76da9319 test(meeting): v77 P2.6-F.4 加 4 个单测 (hover actions + edit/delete emit + click.stop)
+2bebb295 feat(meeting): v77 P2.6-F.4 MeetingView 接 delete-template 事件 + axios.delete
+ff611233 feat(meeting): v77 P2.6-F.4 custom template-card hover 加编辑/删除按钮
+6a8e8cd8 test(visual): v77 P2.6-F.3 解开 B-05/B-06 skip (前置)
+```
+
+### 不在本次范围（留给 v77 P2.6-F.5）
+
+- builtin 模板"复制为自定义"按钮
+- 模板批量管理页面（overkill）
+- 后端 is_active 字段 toggle UI
+- 移动端 hover actions（移动端无 hover 概念，可加 long-press）
+- KnowledgeView 1599 行拆分（代码质量轮次）
+- agentic_loop.py 1123 行拆分（后端代码质量轮次）

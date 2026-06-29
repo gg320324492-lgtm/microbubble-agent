@@ -272,6 +272,83 @@ test.describe('Round 8: 14 项浏览器手测清单', () => {
     }
   })
 
+  // v77 P2.6-F.4: custom template-card hover 加编辑/删除按钮 (复用 P2.6-F.3 save-template emit + el-popconfirm)
+  test('B-11 custom template 编辑: hover → 点编辑 → MeetingTemplateDialog 打开 + 字段预填', async ({ page }) => {
+    test.setTimeout(30000)
+    await page.goto(`${BASE_URL}/meetings`, { waitUntil: 'networkidle' })
+    await waitForLoaded(page)
+
+    // 前置: 用 B-06 模式创建 1 个 custom template (没有 custom 时没法测 hover)
+    await page.getByRole('button', { name: /手动创建/ }).click()
+    await waitForLoaded(page)
+    const templateName = `F4_edit_${Date.now()}`
+    await page.locator('.el-form-item:has(.el-form-item__label:text("会议主题")) input').first().fill(templateName)
+    await page.getByRole('button', { name: /存为新模板/ }).click()
+    await waitForLoaded(page)
+    await page.locator('.el-dialog').nth(1).getByRole('button', { name: /^(保存|创建)$/ }).click()
+    await page.waitForTimeout(2000)
+
+    // 核心: re-open, hover, 点编辑
+    await page.goto(`${BASE_URL}/meetings`, { waitUntil: 'networkidle' })
+    await waitForLoaded(page)
+    await page.getByRole('button', { name: /手动创建/ }).click()
+    await waitForLoaded(page)
+
+    // 1. 找到含 templateName 的 custom card
+    const customCard = page.locator('.template-card.custom', { hasText: templateName })
+    await expect(customCard, `custom card "${templateName}" 应存在`).toBeVisible()
+    // 2. hover 显示 actions
+    await customCard.hover()
+    await waitForLoaded(page)
+    // 3. 点编辑 (.tpl-action[aria-label="编辑模板"])
+    const editBtn = customCard.locator('.tpl-action[aria-label="编辑模板"]')
+    await expect(editBtn, 'hover 应显示编辑按钮').toBeVisible()
+    await editBtn.click()
+    await waitForLoaded(page)
+    // 4. MeetingTemplateDialog 打开 (第二个 dialog)
+    const templateDialog = page.locator('.el-dialog').nth(1)
+    await expect(templateDialog, 'MeetingTemplateDialog 应打开').toBeVisible({ timeout: 5000 })
+    // 5. 验证字段预填
+    await expect(page.locator('input[name="template-form-name"]'), '模板名应预填').toHaveValue(templateName)
+    // 6. dialog title 是 "编辑模板" (editingTemplate=Object 走编辑模式)
+    await expect(templateDialog.locator('.el-dialog__title')).toContainText('编辑模板')
+    // 清理: 取消 dialog
+    await templateDialog.getByRole('button', { name: /取消/ }).click()
+    await page.waitForTimeout(500)
+  })
+
+  test('B-12 custom template 删除: hover → 点删除 → popconfirm 出现 (取消避免 test pollution)', async ({ page }) => {
+    test.setTimeout(30000)
+    await page.goto(`${BASE_URL}/meetings`, { waitUntil: 'networkidle' })
+    await waitForLoaded(page)
+    await page.getByRole('button', { name: /手动创建/ }).click()
+    await waitForLoaded(page)
+
+    // 0 custom 跳过 (需先 B-06 创建)
+    const customCount = await page.locator('.template-card.custom').count()
+    test.skip(customCount === 0, 'B-12 跳过: 需先用 B-06 创建 custom template')
+
+    const customCard = page.locator('.template-card.custom').first()
+    const cardName = (await customCard.locator('.template-card-name').textContent())?.trim() || ''
+    // hover 显示 actions
+    await customCard.hover()
+    await waitForLoaded(page)
+    // 点删除 (.tpl-action[aria-label="删除模板"])
+    const deleteBtn = customCard.locator('.tpl-action[aria-label="删除模板"]')
+    await expect(deleteBtn, 'hover 应显示删除按钮').toBeVisible()
+    await deleteBtn.click()
+    await waitForLoaded(page)
+    // popconfirm 出现
+    const popconfirm = page.locator('.el-popconfirm')
+    await expect(popconfirm, 'el-popconfirm 应弹出').toBeVisible({ timeout: 3000 })
+    await expect(popconfirm, `popconfirm 应含"确定删除此模板"`).toContainText('确定删除此模板')
+    // 点取消 → card 仍在 (避免 test pollution)
+    await popconfirm.getByRole('button', { name: /取消/ }).click()
+    await page.waitForTimeout(500)
+    const stillExists = await page.locator('.template-card.custom', { hasText: cardName }).count()
+    expect(stillExists, `取消后 "${cardName}" card 应仍在`).toBeGreaterThan(0)
+  })
+
   // ─── C. dark mode × 3 主题视觉验证 (合并避免 worker timeout) ───
 
   test('C-11~C-13 dark mode × orange/ocean/forest 主题验证', async ({ page }) => {
@@ -324,8 +401,9 @@ test.describe('Round 8: 14 项浏览器手测清单', () => {
 // ════════════════════════════════════════════════════
 
 test.afterAll(async () => {
-  console.log('\n=== v77 P2.6-F.2 自动化验证报告 ===')
+  console.log('\n=== v77 P2.6-F.2 + P2.6-F.4 自动化验证报告 ===')
   console.log('Round 6 (主题): 6 主题 × /meetings 截图已保存到 test-results/round-6-themes/')
-  console.log('Round 8 (功能): 14 项浏览器手测清单已自动化 (A-01~A-03, B-04~B-10, C-11~C-13)')
+  console.log('Round 8 (功能): 14 项浏览器手测清单已自动化 (A-01~A-03, B-04~B-12, C-11~C-13)')
+  console.log('P2.6-F.4 新增: B-11 (custom 编辑) + B-12 (popconfirm 取消) 验证 hover 按钮闭环')
   console.log('主题截图: test-results/round-6-themes/01-light-orange-meetings.png ... 06-dark-forest-meetings.png')
 })

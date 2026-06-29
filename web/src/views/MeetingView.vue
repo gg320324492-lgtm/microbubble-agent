@@ -144,6 +144,7 @@
       :templates="templates"
       @success="onMeetingSaved"
       @save-template="onSaveAsTemplate"
+      @delete-template="onDeleteTemplate"
     />
 
     <!-- 2026-06-03 新增：模板编辑对话框 — v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件 -->
@@ -330,6 +331,18 @@ const onSaveAsTemplate = (templateData) => {
   showCreateDialog.value = false
   editingTemplate.value = templateData
   showTemplateDialog.value = true
+}
+
+// v77 P2.6-F.4: 删除 custom template (后端 DELETE 路由已存在 meeting_template.py:98-107)
+const onDeleteTemplate = async (templateId) => {
+  if (!templateId) return
+  try {
+    await axios.delete(`/api/v1/meeting-templates/${templateId}`)
+    ElMessage.success('模板已删除')
+    await loadTemplates()  // 刷新 templates ref → customTemplates 列表自动减 1
+  } catch (e) {
+    ElMessage.error(`删除失败：${e.response?.data?.detail || e.message}`)
+  }
 }
 
 // 关闭会议创建对话框时清理 templateId 高亮
