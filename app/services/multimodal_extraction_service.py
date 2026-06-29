@@ -230,13 +230,32 @@ class MultimodalExtractionService:
         await multimodal_extraction_service.extract_for_knowledge(knowledge_id)
     """
 
-    async def _reset_multimodal_data(self, knowledge_id: int):
+    async def _reset_multimodal_data(self, knowledge_id: int, reset_status: bool = False):
         """重跑前清空旧的 image + extraction 记录（防止重复 OCR 数据堆积）
 
         同时清除 formatted_content / content 中的 MULTIMODAL_INLINED 标记，
         让 inline 重跑会重新生成排版。
+
+        2026-06-29 修复：只有当 knowledge 有 file_path（PDF/PPTX 文件）时才重置
+        analysis_status='analyzing'。没有 file_path 的卡片（如对话创建、纯文本）
+        不触发任何重置，避免覆盖上游 _analyze_and_embed Step 3 已设的 'done' 终态。
+
+        2026-06-30 修复：加 reset_status 参数控制是否触碰 status，区分 caller 上下文:
+        - reset_status=False (默认, pipeline 调用): 保留上游已写终态，不翻 status
+        - reset_status=True (manual UI / POST /extract-multimodal 调用): 显式翻 'analyzing'
+        修复根因: pipeline Step 7 调 _reset_multimodal_data 把 'done' 覆盖回 'analyzing'
+        且后续再无人写终态 → 卡 'analyzing' 永久.
         """
         async with async_session() as db:
+            # 先取 Knowledge 行（判断是否有 file_path）
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            knowledge = result.scalar_one_or_none()
+            if not knowledge:
+                return
+            has_file = bool(knowledge.file_path)
+
             # Delete old images (cascade deletes extractions via source_image_id SET NULL)
             await db.execute(
                 KnowledgeImage.__table__.delete().where(KnowledgeImage.knowledge_id == knowledge_id)
@@ -246,21 +265,21 @@ class MultimodalExtractionService:
             await db.execute(
                 KnowledgeExtraction.__table__.delete().where(KnowledgeExtraction.knowledge_id == knowledge_id)
             )
-            # Reset analysis_status so UI shows "analyzing" again
-            result = await db.execute(
-                select(Knowledge).where(Knowledge.id == knowledge_id)
-            )
-            knowledge = result.scalar_one_or_none()
-            if knowledge:
+
+            # 仅在 (有 file_path) AND (reset_status=True) 时才重置 status='analyzing'
+            # - reset_status=False (pipeline 默认): 保留上游 _run_analyze_and_embed 已设终态
+            # - reset_status=True (manual UI): 显式重置为 'analyzing' 反馈用户
+            # 没有 file_path 的卡片保持上游已设的终态（done/partial/failed）
+            if has_file and reset_status:
                 knowledge.analysis_status = "analyzing"
-                # Remove inline marker from content/formatted_content
-                if knowledge.content and self.INLINE_MARKER in knowledge.content:
-                    knowledge.content = knowledge.content.split(self.INLINE_MARKER)[0].rstrip()
-                if knowledge.formatted_content and self.INLINE_MARKER in knowledge.formatted_content:
-                    knowledge.formatted_content = knowledge.formatted_content.split(self.INLINE_MARKER)[0].rstrip()
+            # Remove inline marker from content/formatted_content
+            if knowledge.content and self.INLINE_MARKER in knowledge.content:
+                knowledge.content = knowledge.content.split(self.INLINE_MARKER)[0].rstrip()
+            if knowledge.formatted_content and self.INLINE_MARKER in knowledge.formatted_content:
+                knowledge.formatted_content = knowledge.formatted_content.split(self.INLINE_MARKER)[0].rstrip()
             await db.commit()
 
-    async def extract_for_knowledge(self, knowledge_id: int):
+    async def extract_for_knowledge(self, knowledge_id: int, reset_status: bool = False):
         """异步提取指定知识条目的图片+OCR+公式/表格
 
         流程：
@@ -272,11 +291,18 @@ class MultimodalExtractionService:
         5. 并发 OCR（classify_and_extract 一次拿 5 字段）
         6. 写 KnowledgeExtraction（去重：同 source_image_id 相似内容跳过）
         7. 把 LaTeX/Markdown table 拼到 formatted_content（可选）
+
+        2026-06-30 修复: 加 reset_status 参数转发给 _reset_multimodal_data.
+        - reset_status=False (默认, pipeline 调用): 不翻 status, 保留上游终态
+        - reset_status=True (manual UI POST /extract-multimodal): 翻 'analyzing'
         """
         from app.services.file_service import file_service as fs
 
         # 0. 清空旧数据（避免重复 OCR 累积）
-        await self._reset_multimodal_data(knowledge_id)
+        # 2026-06-30 修复: pipeline 调用传 reset_status=False，保留上游已写的
+        # analysis_status 终态 (done/partial/failed). 不再被 _reset_multimodal_data
+        # 覆盖回 'analyzing' 导致状态卡死.
+        await self._reset_multimodal_data(knowledge_id, reset_status=reset_status)
 
         # 1. 取 Knowledge
         async with async_session() as db:

@@ -57,6 +57,14 @@
           >
             失败
           </el-tag>
+          <el-tag
+            v-if="item.analysis_status === 'partial'"
+            size="small"
+            type="info"
+            effect="light"
+          >
+            <span class="status-dot status-partial"></span> 部分完成
+          </el-tag>
         </div>
       </div>
 

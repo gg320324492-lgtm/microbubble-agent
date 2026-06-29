@@ -266,9 +266,12 @@ async def _run_analyze_and_embed(
 
     # Step 7: 多模态提取（图片 OCR / 公式 / 表格） — Phase 7
     # 仅当文件是 PDF/PPTX 且有 file_path 时触发
+    # 2026-06-30 修复: pipeline 调用显式传 reset_status=False, 保留 Step 3 已写终态
     try:
         from app.services.multimodal_extraction_service import multimodal_extraction_service
-        extraction_result = await multimodal_extraction_service.extract_for_knowledge(knowledge_id)
+        extraction_result = await multimodal_extraction_service.extract_for_knowledge(
+            knowledge_id, reset_status=False
+        )
         if extraction_result.get("ok") and not extraction_result.get("skipped"):
             logger.info(
                 f"多模态提取完成(knowledge_id={knowledge_id}): "
@@ -291,6 +294,29 @@ async def _run_analyze_and_embed(
             )
     except Exception as e:
         logger.warning(f"多模态 inline 失败(knowledge_id={knowledge_id}): {e}", exc_info=True)
+
+    # Step 8 (2026-06-30 修复): 最终终态写入防御
+    # 即使 Step 7 multimodal reset 覆盖了 status (虽然已加 reset_status=False 但仍
+    # 可能因 race condition / 旧版本 cache 覆盖), 这里再次写回 final_status.
+    # 保证: 不管 pipeline 中间状态如何翻转, 最终用户看到的就是 final_status (done/partial/failed).
+    try:
+        async with session_factory() as db:
+            result = await db.execute(
+                select(Knowledge).where(Knowledge.id == knowledge_id)
+            )
+            k = result.scalar_one_or_none()
+            if k and k.analysis_status != final_status:
+                logger.warning(
+                    f"[_run_analyze_and_embed] Step 7/7b 覆盖了 status, "
+                    f"恢复 final_status={final_status} (was={k.analysis_status})"
+                )
+                k.analysis_status = final_status
+                await db.commit()
+    except Exception as e:
+        logger.error(
+            f"[_run_analyze_and_embed] Step 8 最终终态写入失败: {e}",
+            exc_info=True,
+        )
 
 
 @celery_app.task(

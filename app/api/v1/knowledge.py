@@ -1205,7 +1205,11 @@ async def trigger_multimodal_extraction(
         raise NotFoundException("知识")
 
     try:
-        result = await multimodal_extraction_service.extract_for_knowledge(knowledge_id)
+        # 2026-06-30 修复: manual UI 调用传 reset_status=True 翻 'analyzing'
+        # 给用户反馈"重新提取中"，与 pipeline Step 7 行为区分
+        result = await multimodal_extraction_service.extract_for_knowledge(
+            knowledge_id, reset_status=True
+        )
         return MultimodalExtractResponse(**result)
     except Exception as e:
         logger.exception(f"多模态提取失败(knowledge_id={knowledge_id})")
@@ -1398,7 +1402,9 @@ async def reprocess_all_multimodal(
                     results.append(entry)
                     continue
 
-                extract_result = await multimodal_extraction_service.extract_for_knowledge(k.id)
+                extract_result = await multimodal_extraction_service.extract_for_knowledge(
+                    k.id, reset_status=True  # 2026-06-30: admin 批量重处理是 manual 操作，翻 'analyzing'
+                )
                 extract_ok = extract_result.get("ok") and not extract_result.get("skipped")
                 images_count = extract_result.get("images_total", 0) if extract_ok else 0
 
