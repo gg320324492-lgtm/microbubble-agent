@@ -4160,8 +4160,21 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 | 脚本 | 测试场景 | 结果 |
 |---|---|---|
 | `scripts/verify_login_redis.py` | 5 次错误密码 → 429 + Retry-After + 抗 restart | ✅ 5/5 阶段 PASS |
-| `tests/test_auth.py::test_login_rate_limit_returns_retry_after` | 单元级 429 + Retry-After | ✅ 逻辑验证（test DB 不可用，仅 e2e） |
-| 现有 `tests/test_auth.py` 6 个 | login/me/refresh/change-password 全路径 | ✅ 不回归 |
+| `tests/test_auth.py::test_login_rate_limit_returns_retry_after` | 单元级 429 + Retry-After | ✅ pytest-asyncio>=0.25 后 PASS |
+| 现有 `tests/test_auth.py` 6 个 | login/me/refresh/change-password 全路径 | ⚠️ 4/6 有 pre-existing test 隔离 bug（test_member fixture 不清理）, 与 v31.2.6 无关 |
+
+### pytest-asyncio 升级（v31.2.6 附带）
+
+`requirements.txt` 把 `pytest-asyncio==0.23.2` → `pytest-asyncio>=0.25,<1.0`。原因：
+
+- pytest.ini 配置了 `asyncio_default_fixture_loop_scope = session` 和 `asyncio_default_test_loop_scope = session`，**这两个选项 0.23.2 不识别**（PytestConfigWarning: Unknown config option）
+- 导致 `setup_db` (scope=session) 和 `client`/`test_member` (scope=function) 各自创建 event loop，跨 loop 共享 `engine` 报 `Future attached to different loop`
+- 0.25+ 支持这两个配置 → engine 在 session scope 共享 loop，所有 fixture 在同一 loop 跑
+
+**新增 `test_login_rate_limit_returns_retry_after` 设计要点**：
+- 用 `X-Forwarded-For: 203.0.113.66`（RFC 5737 TEST-NET-3）固定 Redis key 为 `rl:login:203.0.113.66`，**不依赖 `request.client.host` 在不同 pytest-asyncio 版本下的行为差异**（0.23.2 = "testclient"，0.25+ = "127.0.0.1"）
+- 不依赖 `test_member` fixture（避免 conftest.py 中 pre-existing 测试隔离 bug：fixture 不清理导致 `ix_members_username` UNIQUE 冲突）
+- 错误密码永远 401，与 user 是否存在无关
 
 ### 与 v31.2.x 历史对齐
 
