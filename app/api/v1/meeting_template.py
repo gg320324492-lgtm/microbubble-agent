@@ -109,6 +109,27 @@ async def delete_meeting_template(
     return {"status": "deleted", "id": template_id}
 
 
+@router.post("/{template_id}/clone", response_model=TemplateResponse, status_code=201)
+async def clone_meeting_template(
+    template_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v77 P2.6-F.5: 一键复制 builtin 为 custom 副本
+
+    - 复制 source 全部非元字段 + 强制 is_builtin=False + name "(副本)" 后缀
+    - cloned_from_id 记录复制追溯
+    - 必须登录（已 require auth）
+    - 404: source_id 不存在
+    """
+    clone = await svc.clone_template(
+        db, source_id=template_id, current_user_id=current_user.id,
+    )
+    if not clone:
+        raise HTTPException(status_code=404, detail=f"模板 {template_id} 不存在")
+    return _to_response(clone)
+
+
 def _to_response(t: MeetingTemplate) -> TemplateResponse:
     return TemplateResponse(
         id=t.id,
