@@ -1,21 +1,78 @@
 """会议模板服务"""
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime, timedelta
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.meeting_template import MeetingTemplate
 
 
-async def list_templates(db: AsyncSession, include_inactive: bool = False) -> List[MeetingTemplate]:
-    """列出所有模板（默认仅 active）"""
-    stmt = select(MeetingTemplate).order_by(
+async def list_templates(
+    db: AsyncSession,
+    include_inactive: bool = False,
+    search: Optional[str] = None,
+    type_filter: Optional[str] = None,    # 'builtin' | 'custom' | None(全部)
+    status_filter: Optional[str] = None,  # 'active' | 'inactive' | None(全部)
+    page: int = 1,
+    page_size: int = 20,
+) -> Tuple[List[MeetingTemplate], int]:
+    """列出模板 (v77 P2.6-G.2 支持 search/filter/pagination)
+
+    Args:
+        include_inactive: 是否包含 is_active=False (默认 False 保持向后兼容)
+        search: 按 name ILIKE 模糊匹配 (PostgreSQL 大小写不敏感,中文模糊匹配原生支持)
+        type_filter: 'builtin' | 'custom' | None(全部)
+        status_filter: 'active' | 'inactive' | None(全部)
+        page: 1-based 页码
+        page_size: 每页条数 (默认 20)
+
+    Returns:
+        (items, total) - items 是当页列表,total 是总条数 (分页前的总数)
+    """
+    query = select(MeetingTemplate)
+    count_query = select(func.count(MeetingTemplate.id))
+
+    # 应用 include_inactive 过滤
+    if not include_inactive:
+        query = query.where(MeetingTemplate.is_active == True)  # noqa: E712
+        count_query = count_query.where(MeetingTemplate.is_active == True)  # noqa: E712
+
+    # 应用 search 过滤 (按 name ILIKE 模糊匹配)
+    if search:
+        search_pattern = f"%{search}%"
+        query = query.where(MeetingTemplate.name.ilike(search_pattern))
+        count_query = count_query.where(MeetingTemplate.name.ilike(search_pattern))
+
+    # 应用 type_filter
+    if type_filter == 'builtin':
+        query = query.where(MeetingTemplate.is_builtin == True)  # noqa: E712
+        count_query = count_query.where(MeetingTemplate.is_builtin == True)  # noqa: E712
+    elif type_filter == 'custom':
+        query = query.where(MeetingTemplate.is_builtin == False)  # noqa: E712
+        count_query = count_query.where(MeetingTemplate.is_builtin == False)  # noqa: E712
+
+    # 应用 status_filter (与 include_inactive 协同: include_inactive 是粗粒度,status_filter 是细粒度)
+    if status_filter == 'active':
+        query = query.where(MeetingTemplate.is_active == True)  # noqa: E712
+        count_query = count_query.where(MeetingTemplate.is_active == True)  # noqa: E712
+    elif status_filter == 'inactive':
+        query = query.where(MeetingTemplate.is_active == False)  # noqa: E712
+        count_query = count_query.where(MeetingTemplate.is_active == False)  # noqa: E712
+
+    # 排序 + 分页
+    query = query.order_by(
         MeetingTemplate.is_builtin.desc(), MeetingTemplate.name
     )
-    if not include_inactive:
-        stmt = stmt.where(MeetingTemplate.is_active == True)  # noqa: E712
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
+
+    # 执行查询
+    items_result = await db.execute(query)
+    items = items_result.scalars().all()
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    return list(items), total
 
 
 async def get_template(db: AsyncSession, template_id: int) -> Optional[MeetingTemplate]:
