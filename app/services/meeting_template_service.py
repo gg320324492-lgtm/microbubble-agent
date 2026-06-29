@@ -192,3 +192,72 @@ def apply_template_to_meeting_data(
     if template.default_location and not data.get("location"):
         data["location"] = template.default_location
     return data
+
+
+# v77 P2.6-G.2: 批量操作 (模板管理页 /admin/templates 桌面端批量管理用)
+
+
+async def batch_toggle_active(
+    db: AsyncSession,
+    template_ids: List[int],
+    is_active: bool,
+) -> int:
+    """v77 P2.6-G.2: 批量启用/禁用模板
+
+    Args:
+        template_ids: 模板 ID 列表
+        is_active: 目标状态 (True=启用 / False=禁用)
+
+    Returns:
+        实际更新的条数
+
+    Notes:
+        - builtin 模板允许 toggle (与 F.5 单条 update_template 一致: is_active 不保护)
+        - builtin disable = 软删除等价 (用户隐藏 builtin 但保留数据)
+    """
+    if not template_ids:
+        return 0
+    result = await db.execute(
+        select(MeetingTemplate).where(MeetingTemplate.id.in_(template_ids))
+    )
+    templates = result.scalars().all()
+    updated = 0
+    for t in templates:
+        t.is_active = is_active
+        updated += 1
+    await db.commit()
+    return updated
+
+
+async def batch_delete_templates(
+    db: AsyncSession,
+    template_ids: List[int],
+) -> Tuple[int, List[int]]:
+    """v77 P2.6-G.2: 批量删除模板
+
+    Args:
+        template_ids: 模板 ID 列表
+
+    Returns:
+        (deleted_count, skipped_builtin_ids) - 实际删除数 + 跳过的 builtin ID 列表
+
+    Notes:
+        - builtin 模板自动跳过 (与单条 delete_template 一致)
+        - 返回 skipped_builtin 让前端 toast 明确告知"X 个内置模板已跳过"
+    """
+    if not template_ids:
+        return 0, []
+    result = await db.execute(
+        select(MeetingTemplate).where(MeetingTemplate.id.in_(template_ids))
+    )
+    templates = result.scalars().all()
+    deleted = 0
+    skipped_builtin = []
+    for t in templates:
+        if t.is_builtin:
+            skipped_builtin.append(t.id)
+            continue
+        await db.delete(t)
+        deleted += 1
+    await db.commit()
+    return deleted, skipped_builtin
