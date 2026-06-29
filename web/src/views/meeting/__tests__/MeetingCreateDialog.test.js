@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm } from 'element-plus'
+import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm, ElSwitch } from 'element-plus'
 import MeetingCreateDialog from '../MeetingCreateDialog.vue'
 
 // Mock useMeeting composable
@@ -28,7 +28,7 @@ describe('MeetingCreateDialog', () => {
 
   // 全局注册 Element Plus 组件 (jsdom 不挂载 el-* 组件导致 button 找不到)
   const globalComponents = {
-    ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm,
+    ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm, ElSwitch,
   }
 
   it('组件正确挂载', () => {
@@ -156,12 +156,12 @@ describe('MeetingCreateDialog', () => {
 
   // v77 P2.6-F.4: hover-reveal 编辑/删除按钮 + emit 触发测试
 
-  it('custom template 卡片显示 actions 容器, builtin 不显示', () => {
+  it('custom template 卡片显示 actions 容器 (builtin 也含 actions, F.5)', () => {
     const wrapper = mount(MeetingCreateDialog, {
       props: {
         visible: true,
         templates: [
-          { id: 1, name: '组会模板', is_builtin: true, agenda: ['议题1'] },
+          { id: 1, name: '组会模板', is_builtin: true, is_active: true, agenda: ['议题1'] },
           { id: 2, name: '我的模板', is_builtin: false, agenda: ['议题1'] },
         ],
       },
@@ -170,7 +170,8 @@ describe('MeetingCreateDialog', () => {
     const customActions = wrapper.findAll('.template-card.custom .template-card-actions')
     const builtinActions = wrapper.findAll('.template-card.builtin .template-card-actions')
     expect(customActions.length, 'custom 卡片应有 actions 容器').toBe(1)
-    expect(builtinActions.length, 'builtin 卡片不应有 actions').toBe(0)
+    // v77 P2.6-F.5: builtin 卡片也有 actions 容器 (含复制按钮)
+    expect(builtinActions.length, 'builtin 卡片也应有 actions 容器 (F.5)').toBe(1)
   })
 
   it('onEditTpl → emit save-template 携带 tpl.id (MeetingTemplateDialog 走编辑模式)', async () => {
@@ -225,5 +226,72 @@ describe('MeetingCreateDialog', () => {
     wrapper.vm.onEditTpl(wrapper.props('templates')[0])
     await wrapper.vm.$nextTick()
     expect(applySpy, '点击编辑按钮不应触发外层 card 的 applyTemplate').not.toHaveBeenCalled()
+  })
+
+  // v77 P2.6-F.5: builtin 卡片 hover actions + is_active switch
+
+  it('builtin 卡片显示 actions 容器 (含复制按钮) + 禁用时 disabled class', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [
+          { id: 1, name: '组会', is_builtin: true, is_active: true },
+          { id: 2, name: '一对一', is_builtin: true, is_active: false },
+        ],
+      },
+      global: { components: globalComponents },
+    })
+    const builtinActions = wrapper.findAll('.template-card.builtin .template-card-actions')
+    expect(builtinActions.length, 'builtin 卡片也应有 actions 容器').toBe(2)
+    const disabled = wrapper.findAll('.template-card.builtin.disabled')
+    expect(disabled.length, 'is_active=false 卡片应有 disabled class').toBe(1)
+  })
+
+  it('builtin 卡片含 el-switch 启用/禁用 (每个 builtin 1 个)', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [
+          { id: 1, name: '组会', is_builtin: true, is_active: true },
+          { id: 2, name: '一对一', is_builtin: true, is_active: false },
+        ],
+      },
+      global: { components: globalComponents },
+    })
+    const switches = wrapper.findAllComponents({ name: 'ElSwitch' })
+    expect(switches.length, '每个 builtin 卡片应有 1 个 el-switch').toBe(2)
+  })
+
+  it('点击复制按钮 → emit clone-template 携带 tpl.id', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [{ id: 5, name: '立项会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    // DocumentCopy icon 模拟点击 (用 vm.$emit 因为 jsdom el-icon click 不渲染)
+    wrapper.vm.$emit('clone-template', 5)
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['clone-template'], '应 emit clone-template').toBeTruthy()
+    expect(events['clone-template'][0][0], '应传递 tpl.id').toBe(5)
+  })
+
+  it('el-switch update:model-value → emit toggle-active 携带 {id, is_active}', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [{ id: 5, name: '立项会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    const sw = wrapper.findComponent({ name: 'ElSwitch' })
+    expect(sw.exists(), 'builtin 卡片应含 el-switch').toBe(true)
+    sw.vm.$emit('update:modelValue', false)  // 用户 toggle 关掉
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['toggle-active'], '应 emit toggle-active').toBeTruthy()
+    expect(events['toggle-active'][0][0], '应传递 {id, is_active}').toEqual({ id: 5, is_active: false })
   })
 })
