@@ -263,6 +263,14 @@ async def chat_stream_route(
     - detail          {delta}  【详细】完整文本
     - error           {code, message}
     - done            {usage, duration_ms, session_id}
+    - message_persisted  [snapshot] #043 持久化成功（user 落库后 + assistant 落库后 各一次）
+    - sync_required      [snapshot] 流式中断/异常，建议重新拉历史（reason: aborted|error）
+
+    #043 持久化（2026-06-29）：
+    - 入场时 user 消息落到 chat_messages 表（含 client_msg_id 幂等键）
+    - 流结束时 assistant 消息落库（含完整 accumulated text + rich_blocks + tool_trace）
+    - 中断（CancelledError）时已累积 assistant text 作为 is_partial=True 落库
+    - 异常（非中断）时同样落 partial + yield sync_required
     """
     async def event_generator() -> AsyncIterator[str]:
         try:
