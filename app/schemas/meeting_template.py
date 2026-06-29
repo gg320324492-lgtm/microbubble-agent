@@ -59,3 +59,17 @@ class TemplateListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# v77 P2.6-G.2: 批量操作请求模型
+
+
+class BatchToggleActiveRequest(BaseModel):
+    """批量启用/禁用模板请求体"""
+    ids: List[int]
+    is_active: bool
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除模板请求体"""
+    ids: List[int]
