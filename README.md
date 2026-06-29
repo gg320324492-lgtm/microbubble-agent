@@ -19,8 +19,29 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
-## 最新里程碑（2026-06-28）
+## 最新里程碑（2026-06-30）
 
+- 🆕 **nginx HSTS server-level + gzip_types 扩展（3 commits 真实安全加固）**：
+  - commit `71e743f7` — HSTS server-block + gzip_types 扩展（agent + mnb-lab 各一处）
+  - commit `289338fb` — 4 个 location 补 HSTS（/favicon.ico / /sw.js / /manifest.webmanifest / static regex）
+  - commit `34128fbd` — agent `/` location HSTS 升级 includeSubDomains 对齐
+  - **效果**：`strict-transport-security 12→0 errors/route`（9 路由全过），`gzip_types` 9 → 15 MIME（含 `font/woff2` / `application/wasm` 等）
+- 🆕 **Knowledge 卡 `analysis_status` 真 bug 修复（commit `3653890b`）**：
+  - Step 7 `_reset_multimodal_data` 加 `reset_status=False` 参数（区分 pipeline vs manual UI）
+  - `_run_analyze_and_embed` 末尾加 Step 8 最终终态防御
+  - `KnowledgeCard.vue` 加 `partial` 状态 tag
+  - **DB 清理**：2 张 5 月预存 stuck 卡（KB #14 #19）验证 content 完整后 UPDATE → done
+  - **全表状态**：199 done / 1 completed (legacy) / **0 analyzing** / 0 pending
+- 🆕 **前端视觉 5 件套（5 commits 一日扫清）**：
+  - **KnowledgeToolbar 4 按钮**（commit `558962b1`）—— `.btn-text` utility class 同名冲突修复
+  - **MemberView 录入声纹 ghost primary**（commit 845803c3）—— `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600`
+  - **VoiceprintView 波形颜色不一致**（commit 36e64fb4）—— 老成员 stale embedding |value|≈0 alpha≈0 不可见，`barColor()` per-card max 归一化 + min alpha floor 0.12
+  - **SettingsView Hero 跟随主题**（commit `054668f7`）—— non-scoped `[data-theme=dark].hero-bg` 硬编码 hex 永远赢 scoped 变量
+  - **VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep**（commit `e3b32b86`）—— 全项目扫描 38 个非 scoped style 块 + 1 mobile inline style 全部干净
+- 🆕 **v77 P2.6-G.2 meeting-template batch + bar color enum class**：
+  - commit `d01420dd` refactor(voiceprint): 收敛 VoiceprintCard bar 颜色到 .bar--low/mid/high class
+  - `8c14a0c8` / `95e53955` / `31acafcb` / `d5521a70` meeting-template batch/list endpoint + 11 个 service 单测
+  - `0c96331f` admin 桌面端 el-table + MeetingView query.tab
 - 🆕 **v77 P2.6-E/F 视觉/代码质量延伸（4 commits）**
   - **P2.6-E.1 CSS-in-JS 收官**（commit `ed5e5e16`，8 处 runtime `:style` → 7 个枚举 class，scss 55→105 行）
   - **P2.6-E.2 缓动字面量 token 化**（commit `dcd1657b`，70 处 → `var(--ease-*)` + `--ease-out` 升级 Material Decelerate + `--ease-quad` 新增 + scripts/replace-easing-literals.js Node.js 脚本）
@@ -51,7 +72,7 @@
 
 详见 [CHANGELOG.md](CHANGELOG.md) 最新条目 + [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)
 
-**统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：**1483 commits / 160K 行代码 / 542 文件 / 44 开发天数**（py 48.4K / vue 42.8K / md 32.1K / js 17.2K / json 11.2K / html 3.5K / css 1.8K / sh 1.7K / ts 1.4K / scss 0.2K / sql 0.1K）
+**统计**（[app/stats.json](app/stats.json), 2026-06-30 自动重算）：**1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（py 48.4K / vue 42.8K / md 32.1K / js 17.2K / json 11.2K / html 3.5K / css 1.8K / sh 1.7K / ts 1.4K / scss 0.2K / sql 0.1K）
 
 ## 技术栈
 
