@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip } from 'element-plus'
+import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm } from 'element-plus'
 import MeetingCreateDialog from '../MeetingCreateDialog.vue'
 
 // Mock useMeeting composable
@@ -28,7 +28,7 @@ describe('MeetingCreateDialog', () => {
 
   // 全局注册 Element Plus 组件 (jsdom 不挂载 el-* 组件导致 button 找不到)
   const globalComponents = {
-    ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip,
+    ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm,
   }
 
   it('组件正确挂载', () => {
@@ -152,5 +152,78 @@ describe('MeetingCreateDialog', () => {
     await wrapper.vm.$nextTick()
     const events = wrapper.emitted()
     expect(events['save-template'], '无标题不应 emit').toBeFalsy()
+  })
+
+  // v77 P2.6-F.4: hover-reveal 编辑/删除按钮 + emit 触发测试
+
+  it('custom template 卡片显示 actions 容器, builtin 不显示', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [
+          { id: 1, name: '组会模板', is_builtin: true, agenda: ['议题1'] },
+          { id: 2, name: '我的模板', is_builtin: false, agenda: ['议题1'] },
+        ],
+      },
+      global: { components: globalComponents },
+    })
+    const customActions = wrapper.findAll('.template-card.custom .template-card-actions')
+    const builtinActions = wrapper.findAll('.template-card.builtin .template-card-actions')
+    expect(customActions.length, 'custom 卡片应有 actions 容器').toBe(1)
+    expect(builtinActions.length, 'builtin 卡片不应有 actions').toBe(0)
+  })
+
+  it('onEditTpl → emit save-template 携带 tpl.id (MeetingTemplateDialog 走编辑模式)', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [{ id: 99, name: '我的组会', is_builtin: false, agenda: ['议题1', '议题2'] }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.onEditTpl(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['save-template'], '应 emit save-template').toBeTruthy()
+    expect(events['save-template'][0][0]).toMatchObject({
+      name: '我的组会',
+      id: 99,
+      agenda: ['议题1', '议题2'],
+    })
+  })
+
+  it('el-popconfirm @confirm → emit delete-template tpl.id', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [{ id: 99, name: '我的组会', is_builtin: false }],
+      },
+      global: { components: globalComponents },
+    })
+    const popconfirm = wrapper.findComponent(ElPopconfirm)
+    expect(popconfirm.exists(), 'custom 卡片应包含 el-popconfirm').toBe(true)
+    // 模拟用户点 popconfirm 的 "确定" 按钮
+    popconfirm.vm.$emit('confirm')
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['delete-template'], 'popconfirm confirm 应触发 delete-template emit').toBeTruthy()
+    expect(events['delete-template'][0][0], '应传递 tpl.id').toBe(99)
+  })
+
+  it('@click.stop 防止外层 card applyTemplate 误触发 (mock applyTemplate 未被调)', async () => {
+    const applySpy = vi.fn()
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [{ id: 99, name: '我的组会', is_builtin: false }],
+      },
+      global: { components: globalComponents },
+    })
+    // mock applyTemplate (单测模拟外层 card 的 @click handler)
+    wrapper.vm.applyTemplate = applySpy
+    // 调 onEditTpl (等价于用户 hover card 后点编辑按钮, click.stop 阻止冒泡)
+    wrapper.vm.onEditTpl(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    expect(applySpy, '点击编辑按钮不应触发外层 card 的 applyTemplate').not.toHaveBeenCalled()
   })
 })
