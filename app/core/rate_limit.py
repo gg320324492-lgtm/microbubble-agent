@@ -52,8 +52,8 @@ class AsyncRedisRateLimiter:
       - Redis 不可用时需要 fallback (不能拒绝所有请求)
       - 单次 check 多 1 次 round-trip (~1ms)
 
-    当前状态 (v31.2.5): **已启用**, _rate_limiters 全部实例化本类.
-    RateLimiter (内存版) 保留供 login_limiter 等向后兼容场景.
+    当前状态 (v31.2.6): 全站统一使用本类 (含 login_limiter).
+    RateLimiter (内存版) 保留为向后兼容类, 当前已无 caller.
     """
 
     def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
@@ -79,6 +79,7 @@ class AsyncRedisRateLimiter:
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"请求过于频繁，请 {self.window_seconds} 秒后重试",
+                    headers={"Retry-After": str(self.window_seconds)},  # v31.2.6
                 )
         except HTTPException:
             raise  # 429 必须抛
@@ -312,6 +313,7 @@ async def rate_limit_middleware(request: Request, call_next):
         return JSONResponse(
             status_code=e.status_code,
             content={"error": {"code": "RATE_LIMIT_EXCEEDED", "message": e.detail}},
+            headers=dict(e.headers) if e.headers else None,  # v31.2.6 转发 Retry-After
         )
 
     await limiter.record(client_key)
@@ -331,8 +333,13 @@ async def rate_limit_middleware(request: Request, call_next):
     return response
 
 
-# 保留旧的登录限流器（向后兼容）
-login_limiter = RateLimiter(max_attempts=5, window_seconds=300)
+# v31.2.6: login_limiter 切到 Redis ZSET 持久化 (抗 docker restart / 跨 worker 共享).
+# 与 middleware auth tier 区别: middleware 是 20/min (覆盖所有 _AUTH_SENSITIVE_PATHS),
+# login_limiter 是更严的 5/300s (仅登录密码错误) — 防爆破.
+# 调用方 auth.py 用 "login:" 前缀 → Redis key 变 rl:login:{ip}, 与 middleware 的
+# rl:auth:{ip}:... 等 tier prefix 命名一致.
+# AsyncRedisRateLimiter.check 抛出的 HTTPException 已带 Retry-After 头 (v31.2.6).
+login_limiter = AsyncRedisRateLimiter(max_attempts=5, window_seconds=300)
 
 
 def get_client_ip(request: Request) -> str:
