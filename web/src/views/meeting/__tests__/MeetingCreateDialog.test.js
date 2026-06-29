@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm, ElSwitch } from 'element-plus'
+import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
+import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MeetingCreateDialog from '../MeetingCreateDialog.vue'
 
 // Mock useMeeting composable
@@ -29,6 +31,7 @@ describe('MeetingCreateDialog', () => {
   // 全局注册 Element Plus 组件 (jsdom 不挂载 el-* 组件导致 button 找不到)
   const globalComponents = {
     ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElCheckbox, ElIcon, ElDivider, ElTag, ElTooltip, ElPopconfirm, ElSwitch,
+    LongPressWrapper, MobileActionSheet,
   }
 
   it('组件正确挂载', () => {
@@ -293,5 +296,179 @@ describe('MeetingCreateDialog', () => {
     const events = wrapper.emitted()
     expect(events['toggle-active'], '应 emit toggle-active').toBeTruthy()
     expect(events['toggle-active'][0][0], '应传递 {id, is_active}').toEqual({ id: 5, is_active: false })
+  })
+
+  // v77 P2.6-G.1: 移动端 long-press 操作菜单入口
+
+  it('isMobile=true 时模板卡用 LongPressWrapper 包裹 (mobile-only 分支)', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [
+          { id: 1, name: '组会', is_builtin: true, is_active: true },
+          { id: 2, name: '我的模板', is_builtin: false },
+        ],
+      },
+      global: { components: globalComponents },
+    })
+    // LongPressWrapper 作为卡片外层 wrapper 渲染
+    const longPress = wrapper.findAllComponents(LongPressWrapper)
+    expect(longPress.length, 'mobile 每个模板卡 1 个 LongPressWrapper').toBe(2)
+    // 桌面 hover 按钮不渲染 (mobile-only)
+    const desktopActions = wrapper.findAll('.template-card-actions')
+    expect(desktopActions.length, '移动端桌面 hover 按钮应隐藏').toBe(0)
+  })
+
+  it('isMobile=true 时 builtin 卡片 el-switch 隐藏 (移到 ActionSheet 菜单里)', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 1, name: '组会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    const switches = wrapper.findAllComponents({ name: 'ElSwitch' })
+    expect(switches.length, '移动端 el-switch 应隐藏').toBe(0)
+  })
+
+  it('isMobile=false (default) 时桌面 hover 按钮 + el-switch 仍渲染, LongPressWrapper 不渲染', () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        templates: [{ id: 1, name: '组会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    const desktopActions = wrapper.findAll('.template-card-actions')
+    expect(desktopActions.length, '桌面端 .template-card-actions 应渲染').toBe(1)
+    const switches = wrapper.findAllComponents({ name: 'ElSwitch' })
+    expect(switches.length, '桌面端 el-switch 应渲染').toBe(1)
+    // LongPressWrapper 在桌面端不渲染 (v-if=isMobile 隔离)
+    const longPress = wrapper.findAllComponents(LongPressWrapper)
+    expect(longPress.length, '桌面端 LongPressWrapper 应不渲染').toBe(0)
+  })
+
+  it('openMobileActions(tpl) 设置 activeMobileTpl + 显示 ActionSheet', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 5, name: '组会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    // 直接调函数 (jsdom LongPressWrapper @longpress 不可靠)
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.showMobileActionSheet, 'ActionSheet 应显示').toBe(true)
+    expect(wrapper.vm.activeMobileTpl?.id).toBe(5)
+  })
+
+  it('mobileActions 对 builtin(启用) 生成 复制 + 禁用 2 个 action', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 5, name: '组会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    const actions = wrapper.vm.mobileActions
+    expect(actions.length).toBe(2)
+    expect(actions[0].name).toBe('复制为自定义模板')
+    expect(actions[1].name).toBe('禁用模板')  // is_active=true → 禁用
+  })
+
+  it('mobileActions 对 builtin(禁用) 显示 复制 + 启用 action', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 5, name: '组会', is_builtin: true, is_active: false }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    const actions = wrapper.vm.mobileActions
+    expect(actions.length).toBe(2)
+    expect(actions[1].name).toBe('启用模板')
+  })
+
+  it('mobileActions 对 custom 生成 编辑 + 复制 + 删除 3 个 action (删除标 danger)', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 99, name: '我的模板', is_builtin: false }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    const actions = wrapper.vm.mobileActions
+    expect(actions.length).toBe(3)
+    expect(actions.map(a => a.name)).toEqual(['编辑模板', '复制为新模板', '删除模板'])
+    expect(actions[2].danger, '删除操作应标 danger (MobileActionSheet 红色显示)').toBe(true)
+  })
+
+  it('mobileActions[0].callback (复制) → emit clone-template 携带 tpl.id', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 5, name: '组会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    // 直接调 callback 触发 emit (MobileActionSheet autoClose=true 后回调执行)
+    wrapper.vm.mobileActions[0].callback()
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['clone-template'], '复制 action 应 emit clone-template').toBeTruthy()
+    expect(events['clone-template'][0][0]).toBe(5)
+  })
+
+  it('mobileActions[1].callback (禁用) → emit toggle-active 携带 {id, is_active: false}', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 5, name: '组会', is_builtin: true, is_active: true }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    // mobileActions[1] 是禁用按钮 (is_active=true → 显示禁用)
+    wrapper.vm.mobileActions[1].callback()
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['toggle-active']).toBeTruthy()
+    expect(events['toggle-active'][0][0]).toEqual({ id: 5, is_active: false })
+  })
+
+  it('mobileActions custom[0].callback (编辑) → 复用 onEditTpl → emit save-template', async () => {
+    const wrapper = mount(MeetingCreateDialog, {
+      props: {
+        visible: true,
+        isMobile: true,
+        templates: [{ id: 99, name: '我的模板', is_builtin: false }],
+      },
+      global: { components: globalComponents },
+    })
+    wrapper.vm.openMobileActions(wrapper.props('templates')[0])
+    await wrapper.vm.$nextTick()
+    wrapper.vm.mobileActions[0].callback()  // 编辑模板
+    await wrapper.vm.$nextTick()
+    const events = wrapper.emitted()
+    expect(events['save-template'], '编辑 action 应 emit save-template (复用 F.4 流程)').toBeTruthy()
+    expect(events['save-template'][0][0].id, 'save-template 携带 tpl.id').toBe(99)
   })
 })
