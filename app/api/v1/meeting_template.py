@@ -1,62 +1,50 @@
 """会议模板 REST API"""
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.member import Member
 from app.models.meeting_template import MeetingTemplate
+from app.schemas.meeting_template import (
+    TemplateCreate, TemplateUpdate, TemplateResponse, TemplateListResponse,
+)
 from app.services import meeting_template_service as svc
 
 router = APIRouter(prefix="/meeting-templates", tags=["会议模板"])
 
 
-class TemplateCreate(BaseModel):
-    name: str
-    title_template: Optional[str] = None
-    description: Optional[str] = None
-    agenda: Optional[List[str]] = None
-    default_duration_minutes: Optional[int] = 60
-    default_participant_ids: Optional[List[int]] = None
-    default_location: Optional[str] = None
-
-
-class TemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    title_template: Optional[str] = None
-    description: Optional[str] = None
-    agenda: Optional[List[str]] = None
-    default_duration_minutes: Optional[int] = None
-    default_participant_ids: Optional[List[int]] = None
-    default_location: Optional[str] = None
-    is_active: Optional[bool] = None
-
-
-class TemplateResponse(BaseModel):
-    id: int
-    name: str
-    title_template: Optional[str]
-    description: Optional[str]
-    agenda: Optional[List[str]]
-    default_duration_minutes: Optional[int]
-    default_participant_ids: Optional[List[int]]
-    default_location: Optional[str]
-    is_builtin: bool
-    is_active: bool
-    created_by: Optional[int] = None
-    cloned_from_id: Optional[int] = None  # v77 P2.6-F.5: 复制追溯 (NULL=原始 builtin)
-
-
-@router.get("", response_model=List[TemplateResponse])
+@router.get("", response_model=TemplateListResponse)
 async def list_meeting_templates(
     include_inactive: bool = False,
+    search: Optional[str] = None,         # 按 name ILIKE 模糊匹配
+    type: Optional[str] = None,           # 'builtin' | 'custom' | None(全部)
+    status: Optional[str] = None,         # 'active' | 'inactive' | None(全部)
+    page: int = 1,                        # 1-based 页码
+    page_size: int = 20,                  # 每页条数
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    templates = await svc.list_templates(db, include_inactive=include_inactive)
-    return [_to_response(t) for t in templates]
+    """v77 P2.6-G.2: 列模板支持 search/filter/pagination
+
+    响应: TemplateListResponse {items, total, page, page_size}
+    """
+    items, total = await svc.list_templates(
+        db,
+        include_inactive=include_inactive,
+        search=search,
+        type_filter=type,
+        status_filter=status,
+        page=page,
+        page_size=page_size,
+    )
+    return TemplateListResponse(
+        items=[_to_response(t) for t in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("", response_model=TemplateResponse, status_code=201)
@@ -144,4 +132,7 @@ def _to_response(t: MeetingTemplate) -> TemplateResponse:
         is_active=t.is_active,
         created_by=t.created_by,
         cloned_from_id=t.cloned_from_id,
+        # v77 P2.6-G.2: 暴露时间戳 (TimestampMixin 提供)
+        created_at=t.created_at,
+        updated_at=t.updated_at,
     )
