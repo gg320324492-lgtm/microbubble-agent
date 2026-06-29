@@ -68,9 +68,13 @@ async def login(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    """用户登录（5分钟内最多5次尝试）"""
+    """用户登录（5分钟内最多5次尝试）
+
+    v31.2.6: 限流器切到 Redis ZSET (抗 docker restart / 跨 worker 共享).
+    触发 429 时响应自动带 Retry-After: 300 头 (来自 AsyncRedisRateLimiter).
+    """
     client_ip = get_client_ip(request)
-    login_limiter.check(client_ip)
+    await login_limiter.check(f"login:{client_ip}")  # v31.2.6: await + "login:" 前缀
 
     # 查询用户
     result = await db.execute(
@@ -80,11 +84,11 @@ async def login(
 
     # 验证用户存在且密码正确
     if not user or not user.password_hash:
-        login_limiter.record(client_ip)
+        await login_limiter.record(f"login:{client_ip}")  # v31.2.6
         raise AuthException("用户名或密码错误")
 
     if not verify_password(login_data.password, user.password_hash):
-        login_limiter.record(client_ip)
+        await login_limiter.record(f"login:{client_ip}")  # v31.2.6
         raise AuthException("用户名或密码错误")
 
     # 检查用户是否被禁用

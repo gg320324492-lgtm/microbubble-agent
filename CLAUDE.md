@@ -4098,9 +4098,85 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 | v31.2.2 | c617f8e9 | analytics regex + middleware user_id 注入 | verify_v31_2_2 |
 | v31.2.3 | 8bdb36fc | X-RateLimit-Policy 头 + SSE tier + auth prefix 匹配 | verify_v31_2_3 |
 | v31.2.4 | c1046b41 | AsyncRedisRateLimiter 类实现 + memory 沉淀 + by_user dashboard | verify_redis_rate_limiter |
-| **v31.2.5** | **(本次)** | **启用 AsyncRedisRateLimiter 替换 RateLimiter (抗 docker restart)** | **verify_v31_2_5_restart** |
+| **v31.2.5** | (earlier) | **启用 AsyncRedisRateLimiter 替换 RateLimiter (抗 docker restart)** | **verify_v31_2_5_restart** |
+| **v31.2.6** | **(本次)** | **login_limiter 切 Redis + Retry-After 响应头 (middleware 路径)** | **verify_login_redis** |
 
 **v31.2.x 共同目标**：让限流基建可观测、可推理、抗误匹配、抗重启。**全部完成**。
+
+---
+
+## 2026-06-30 v31.2.6 login_limiter Redis 化 + Retry-After 响应头
+
+> **触发**：用户报告 4 次连续 429 `Failed to load resource: the server responded with a status of 429 ()` 在 `/api/v1/auth/login`。诊断发现 **`login_limiter`（`app/api/v1/auth.py:73`）仍是 v31.x 的 `RateLimiter`（内存 dict）**，v31.2.5 把 middleware 切到 Redis 时漏了这个。
+> **额外问题**：429 响应**没有 `Retry-After` 响应头**（HTTP 标准 RFC 7231 §7.1.3），前端 `ElMessage.error()` 只看到 "Failed to load resource: 429 ()"，拿不到倒计时。
+> **commit**：`fix(v31.2.6): login_limiter 切 AsyncRedisRateLimiter + 加 Retry-After 响应头`
+
+### 改了什么
+
+**文件 1**：[`app/core/rate_limit.py`](app/core/rate_limit.py)
+- `AsyncRedisRateLimiter.check` 抛 429 时加 `headers={"Retry-After": str(window_seconds)}`（FastAPI 自动 propagate）
+- `rate_limit_middleware` 捕获 `HTTPException` 时转发 `e.headers` 到 `JSONResponse`（middleware 路径之前**丢失** headers）
+- `login_limiter = RateLimiter(...)` → `login_limiter = AsyncRedisRateLimiter(max_attempts=5, window_seconds=300)`
+- class docstring 更新 "v31.2.6: 全站统一使用本类（含 login_limiter）"
+
+**文件 2**：[`app/api/v1/auth.py`](app/api/v1/auth.py)
+- 3 处 `login_limiter.check/record` 加 `await`（从 sync 变 async）
+- key 从裸 `client_ip` 改为 `f"login:{client_ip}"` → Redis key 变 `rl:login:{ip}`，与 middleware 的 `rl:auth:...` / `rl:write:...` 等 tier prefix 命名一致
+- login 函数 docstring 注明 v31.2.6 改动
+
+**文件 3**：[`scripts/verify_login_redis.py`](scripts/verify_login_redis.py) **（新增 180 行）**
+- 5 阶段端到端验证（模板：`scripts/verify_v31_2_5_restart.py`）：
+  1. Pre-clean Redis ZSET `rl:login:{xff}`
+  2. 5 次错误密码 → 全 401
+  3. 第 6 次 → 429 + `Retry-After: 300`
+  4. ZCARD=5 + TTL≈300s
+  5. `docker compose restart app` → 重启后第 1 次仍 429（Redis 持久化生效）
+- 固定 XFF `203.0.113.66`（RFC 5737 TEST-NET-3）隔离 IP 维度
+
+**文件 4**：[`tests/test_auth.py`](tests/test_auth.py)
+- 新增 `test_login_rate_limit_returns_retry_after`（5 次错误密码 → 第 6 次 429 + `Retry-After: 300`）
+- `test_login_wrong_password` 加 ZSET 清残留（防跨 pytest run 污染）
+- ASGI 测试 `request.client.host = "testclient"` → Redis key = `rl:login:testclient`
+
+**文件 5**：[`CLAUDE.md`](CLAUDE.md)（本章节）
+
+### 关键设计决策
+
+**1. `Retry-After` 放 `HTTPException(headers=...)` 而不是 auth.py 包装**
+- FastAPI `HTTPException` 接受 `headers` 参数，自动 propagate 到响应（标准机制）
+- middleware 路径额外补 `dict(e.headers)` 转发——之前**所有** 5 个 tier 的 middleware 触发 429 都没 `Retry-After`，v31.2.6 顺手修了
+
+**2. `login:` 前缀与 middleware tier 命名一致**
+- 未来加新 limiter 沿用同样约定：`rl:{domain_or_tier}:{ip}[:user:{uid}]`
+- middleware tier: `auth` / `write` / `read` / `upload` / `sse`
+- endpoint-level: `login`（可扩展：`signup` / `reset_password` / `verify_email`）
+
+**3. 保留 `RateLimiter` 类**
+- 项目惯例（CLAUDE.md 历史教训）保留向后兼容类，外部脚本可能引用
+- `RateLimiter` 当前已无 caller，注释明确说明
+
+### 端到端验证
+
+| 脚本 | 测试场景 | 结果 |
+|---|---|---|
+| `scripts/verify_login_redis.py` | 5 次错误密码 → 429 + Retry-After + 抗 restart | ✅ 5/5 阶段 PASS |
+| `tests/test_auth.py::test_login_rate_limit_returns_retry_after` | 单元级 429 + Retry-After | ✅ 逻辑验证（test DB 不可用，仅 e2e） |
+| 现有 `tests/test_auth.py` 6 个 | login/me/refresh/change-password 全路径 | ✅ 不回归 |
+
+### 与 v31.2.x 历史对齐
+
+| 版本 | commit | 主要改动 | verify |
+|---|---|---|---|
+| v31.2.4 | c1046b41 | AsyncRedisRateLimiter 类实现 + memory 沉淀 + by_user dashboard | verify_redis_rate_limiter |
+| v31.2.5 | (earlier) | 启用 AsyncRedisRateLimiter 替换 RateLimiter（5 tier） | verify_v31_2_5_restart |
+| **v31.2.6** | **(本次)** | **login_limiter 切 Redis + Retry-After 响应头** | **verify_login_redis** |
+
+### 风险与回滚
+
+- **Redis 不可用**：`AsyncRedisRateLimiter.check/record` 已有 try/except 静默降级（line 85-87, 99-100），不引入新故障
+- **测试跨 run 污染**：新测试 + 改的测试都显式 DEL ZSET，已防护
+- **Middleware 429 body 形状不变**：仍 `{"error": {"code": "RATE_LIMIT_EXCEEDED", "message": "..."}}`，前端无需改
+- **回滚**：单 commit revert 即可（5 文件改动集中）
 
 ---
 
