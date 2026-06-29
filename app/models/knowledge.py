@@ -31,7 +31,8 @@ class Knowledge(Base, TimestampMixin):
 
     # 来源
     source = Column(String(500))  # 来源链接或文件路径
-    source_type = Column(String(50))  # paper/notes/sop/manual/conversation/auto_research
+    source_type = Column(String(50))  # paper/notes/sop/manual/conversation/auto_research/auto_expansion/chat
+    meta = Column(JSONB, nullable=True)  # #043: 自动拓展条目的 RichBlock 数据 + qa-bench 元信息
 
     # 文件上传
     file_path = Column(String(500), nullable=True)  # MinIO object_name

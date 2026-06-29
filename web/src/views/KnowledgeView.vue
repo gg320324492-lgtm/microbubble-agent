@@ -18,8 +18,11 @@
           :categories="categories"
           :recent-items="knowledgeList"
           :active-category="filterCategory"
+          :active-source-type="filterSourceType"
+          :source-type-stats="statsData.source_types || {}"
           :loading="loading"
           @filter-category="handleCategoryFilter"
+          @filter-source-type="handleSourceTypeFilter"
           @filter-time="handleTimeFilter"
           @show-entities="activeTab = 'entities'"
           @show-hypotheses="activeTab = 'hypotheses'"
@@ -172,7 +175,7 @@ import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
 
 const {
   knowledgeList, total, currentPage, pageSize, loading,
-  searchQuery, filterCategory,
+  searchQuery, filterCategory, filterSourceType,  // #043
   statsData, categories, hotTags,
   entityList, entityTotal, entityPage, entityGraphData,
   hypothesisList, hypothesisTotal, hypothesisPage,
@@ -227,8 +230,16 @@ const handleViewDetail = (id) => {
 }
 
 const handleFilter = (filters) => {
-  if (filters.category) {
+  // #043: filter-source-type 与 filter-category 互斥
+  if (filters.sourceType) {
+    filterSourceType.value = filters.sourceType
+    filterCategory.value = ''
+  } else if (filters.category) {
     filterCategory.value = filters.category
+    filterSourceType.value = ''
+  } else {
+    filterCategory.value = ''
+    filterSourceType.value = ''
   }
   currentPage.value = 1
   fetchKnowledge()
@@ -236,6 +247,15 @@ const handleFilter = (filters) => {
 
 const handleCategoryFilter = (category) => {
   filterCategory.value = category
+  filterSourceType.value = ''  // #043: 互斥
+  currentPage.value = 1
+  fetchKnowledge()
+}
+
+const handleSourceTypeFilter = (sourceType) => {
+  // #043: 自动拓展 chip 点击
+  filterSourceType.value = sourceType
+  filterCategory.value = ''  // 互斥
   currentPage.value = 1
   fetchKnowledge()
 }
@@ -325,7 +345,8 @@ const showEntityDetail = async (id) => {
 }
 
 // ── 监听 ──
-watch(filterCategory, () => {
+// #043: filterCategory + filterSourceType 互斥, 任一变化都触发重新查询
+watch([filterCategory, filterSourceType], () => {
   currentPage.value = 1
   fetchKnowledge()
 })

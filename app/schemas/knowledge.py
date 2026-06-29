@@ -44,6 +44,7 @@ class KnowledgeResponse(KnowledgeBase):
     entities: Optional[list] = None
     needs_review: Optional[bool] = False
     topic: Optional[str] = None
+    meta: Optional[dict] = None  # #043: 自动拓展条目的 RichBlock 数据 + qa-bench 元信息
     created_by: Optional[int] = None
     created_at: datetime
     updated_at: datetime
@@ -80,6 +81,9 @@ class KnowledgeListItem(BaseModel):
     file_path: Optional[str] = None
     file_name: Optional[str] = None
     file_type: Optional[str] = None
+
+    # #043: 自动拓展条目的 RichBlock 数据 + qa-bench 元信息
+    meta: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -409,4 +413,37 @@ class MultimodalExtractResponse(BaseModel):
     images_ocr_ok: Optional[int] = None
     extractions: Optional[dict] = None
     error: Optional[str] = None
+
+
+# ============================================================================
+# #043 自动拓展 schemas (2026-06-29 chat agent 知识闭环)
+# ============================================================================
+
+
+class AutoExpansionItemRequest(BaseModel):
+    """单条自动拓展入库请求 (来自 qa-bench save_to_kb.py)"""
+    qa_id: str
+    question: str
+    content: str
+    scope: Optional[str] = None  # qa-bench scope: core/method/industry/application/academic/policy/theory/emerging
+    score: Optional[int] = None  # qa-bench auto_score (1-5)
+    intent: Optional[str] = None  # 意图分类 (explain_concept / search_info / ...)
+    tool_calls: Optional[list] = None  # RichBlock 模式: 工具调用列表
+    rich_blocks: Optional[list] = None  # RichBlock 模式: Rich Block 列表
+
+
+class AutoExpansionIngestRequest(BaseModel):
+    """批量自动拓展入库请求"""
+    items: List[AutoExpansionItemRequest]
+    min_score: int = 4  # 用户决策: 默认 ≥4/5
+    min_content_length: int = 200  # 用户决策: 默认 ≥200 字
+    allowed_intents: List[str] = ["explain_concept", "search_info"]  # 用户决策: 多条件组合
+
+
+class AutoExpansionIngestResponse(BaseModel):
+    """批量自动拓展入库响应"""
+    saved: int
+    skipped: int
+    errors: List[str] = []
+    knowledge_ids: List[int] = []
 

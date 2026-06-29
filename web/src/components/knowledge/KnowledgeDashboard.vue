@@ -21,8 +21,12 @@
           v-for="cat in presetCategories"
           :key="cat.name"
           class="category-chip"
-          :class="{ 'category-active': activeCategory === cat.name }"
-          @click="$emit('filter-category', cat.name)"
+          :class="{
+            'category-active': cat.isSystem
+              ? (activeSourceType === cat.sourceType)
+              : (activeCategory === cat.name),
+          }"
+          @click="handleCategoryClick(cat)"
         >
           {{ cat.icon }} {{ cat.name }}
           <span class="category-count" v-if="getCategoryCount(cat.name) > 0">{{ getCategoryCount(cat.name) }}</span>
@@ -85,6 +89,8 @@ const props = defineProps({
   categories: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   activeCategory: { type: String, default: '' },
+  activeSourceType: { type: String, default: '' },  // #043
+  sourceTypeStats: { type: Object, default: () => ({}) },  // #043
   loading: { type: Boolean, default: false }
 })
 
@@ -97,23 +103,15 @@ const presetCategories = [
   { name: '案例', icon: '💡' },
   { name: 'FAQ', icon: '❓' },
   { name: '笔记', icon: '📝' },
-  { name: '手册', icon: '📚' }
+  { name: '手册', icon: '📚' },
+  // #043: 系统分类 (走 source_type 过滤不走 category)
+  { name: '自动拓展', icon: '✨', isSystem: true, sourceType: 'auto_expansion' }
 ]
 
-// 动态分类（排除预设分类）
-const dynamicCategories = computed(() => {
-  const presetNames = presetCategories.map(c => c.name)
-  return props.categories.filter(c => !presetNames.includes(c.name)).slice(0, 6)
-})
-
-// 获取分类数量
-const getCategoryCount = (categoryName) => {
-  const found = props.categories.find(c => c.name === categoryName)
-  return found ? found.count : 0
-}
-
-defineEmits([
+// #043: chip 点击分流 (system chip 走 source_type, 其他走 category)
+const emit = defineEmits([
   'filter-category',
+  'filter-source-type',
   'filter-time',
   'show-entities',
   'show-hypotheses',
@@ -124,6 +122,35 @@ defineEmits([
   'delete',
   'download'
 ])
+
+const handleCategoryClick = (cat) => {
+  if (cat.isSystem) {
+    emit('filter-source-type', cat.sourceType)
+  } else {
+    emit('filter-category', cat.name)
+  }
+}
+
+// 动态分类（排除预设分类）
+const dynamicCategories = computed(() => {
+  const presetNames = presetCategories.map(c => c.name)
+  return props.categories.filter(c => !presetNames.includes(c.name)).slice(0, 6)
+})
+
+// 获取分类数量 (system chip 从 sourceTypeStats 拿, 其他从 categories 拿)
+const SYSTEM_CATEGORY_TO_SOURCE_TYPE = {
+  '自动拓展': 'auto_expansion'
+}
+
+const getCategoryCount = (categoryName) => {
+  // #043: 系统分类走 sourceTypeStats (如 auto_expansion 计数)
+  const sourceTypeKey = SYSTEM_CATEGORY_TO_SOURCE_TYPE[categoryName]
+  if (sourceTypeKey && props.sourceTypeStats?.[sourceTypeKey] !== undefined) {
+    return props.sourceTypeStats[sourceTypeKey]
+  }
+  const found = props.categories.find(c => c.name === categoryName)
+  return found ? found.count : 0
+}
 </script>
 
 <style scoped>

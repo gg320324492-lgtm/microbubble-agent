@@ -36,6 +36,36 @@
             :class="{ active: form.templateId === tpl.id }"
             @click="applyTemplate(tpl)"
           >
+            <!-- v77 P2.6-F.4: hover-reveal 编辑/删除按钮 (meeting-view.css:304-318 CSS 已就绪) -->
+            <div class="template-card-actions">
+              <!-- 编辑: 复用 save-template emit,MeetingView.onSaveAsTemplate 走编辑模式 -->
+              <el-icon
+                class="tpl-action"
+                title="编辑模板"
+                aria-label="编辑模板"
+                @click.stop="onEditTpl(tpl)"
+              >
+                <Edit />
+              </el-icon>
+              <!-- 删除: el-popconfirm 二次确认 (参考 MeetingView.vue:112-118 模式) -->
+              <el-popconfirm
+                title="确定删除此模板？此操作不可撤销。"
+                confirm-button-text="删除"
+                cancel-button-text="取消"
+                @confirm="$emit('delete-template', tpl.id)"
+              >
+                <template #reference>
+                  <el-icon
+                    class="tpl-action danger"
+                    title="删除模板"
+                    aria-label="删除模板"
+                    @click.stop
+                  >
+                    <Delete />
+                  </el-icon>
+                </template>
+              </el-popconfirm>
+            </div>
             <div class="template-card-name">{{ tpl.name }}</div>
             <div class="template-card-desc">{{ tpl.description || '（无说明）' }}</div>
             <div class="template-card-meta">
@@ -149,7 +179,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Clock, List, Plus, Delete } from '@element-plus/icons-vue'
+import { Document, Clock, List, Plus, Delete, Edit } from '@element-plus/icons-vue'
 import { useMeeting } from '@/composables/useMeeting'
 import { useMemberStore } from '@/stores/member'
 import dayjs from 'dayjs'
@@ -161,7 +191,7 @@ const props = defineProps({
   templates: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['success', 'save-template'])
+const emit = defineEmits(['success', 'save-template', 'delete-template'])
 
 const visible = defineModel('visible', { default: false })
 const { createMeeting, updateMeeting } = useMeeting()
@@ -277,6 +307,22 @@ const onSaveAsTemplate = () => {
   // 父组件接 event 后会:
   //   1. 关闭 MeetingCreateDialog (showCreateDialog = false)
   //   2. 打开 MeetingTemplateDialog (showTemplateDialog = true, editingTemplate = templateData)
+}
+
+// v77 P2.6-F.4: 编辑已有的 custom template
+// 复用 P2.6-F.3 的 save-template emit — id 字段让 MeetingTemplateDialog 走 PUT 而非 POST (line 156)
+const onEditTpl = (tpl) => {
+  if (!tpl) return
+  emit('save-template', {
+    id: tpl.id,                                              // 关键: 走 PUT path
+    name: tpl.name,
+    title_template: tpl.title_template,
+    description: tpl.description,
+    default_duration_minutes: tpl.default_duration_minutes,
+    default_location: tpl.default_location,
+    default_participant_ids: tpl.default_participant_ids ? [...tpl.default_participant_ids] : [],
+    agenda: tpl.agenda ? [...tpl.agenda] : [],
+  })
 }
 
 const onClose = () => {

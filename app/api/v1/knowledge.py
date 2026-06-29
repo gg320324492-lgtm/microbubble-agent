@@ -22,6 +22,7 @@ from app.schemas.knowledge import (
     ReasonRequest, ReasonResponse, ReviewQueueItem, ReviewQueueResponse,
     KnowledgeImageItem, KnowledgeImageList, ExtractionItem, ExtractionList,
     MultimodalExtractResponse,
+    AutoExpansionIngestRequest, AutoExpansionIngestResponse,  # #043
 )
 from app.services.knowledge_service import KnowledgeService
 from app.services.knowledge_graph_service import KnowledgeGraphService
@@ -102,6 +103,7 @@ async def list_knowledge(
     category: Optional[str] = None,
     keyword: Optional[str] = None,
     has_file: Optional[bool] = Query(None, description="v28 step 69: 只返回有上传文件的条目（file_type 非空）"),
+    source_type: Optional[str] = Query(None, description="#043: 按 source_type 过滤（auto_expansion / auto_research / conversation / paper / chat）"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: Member = Depends(get_current_user),
@@ -112,6 +114,10 @@ async def list_knowledge(
     v28 step 69: 加 has_file=true 严格过滤
     - has_file=true: 只返回 file_type 非空（即真实上传的 PDF/Word/PPT）
     - has_file 不传或 false: 返回全部（含 LLM 自动入库的 [拓展-XXX]）
+
+    #043: 加 source_type 过滤（用于自动拓展分类 chip）
+    - source_type=auto_expansion: 只返回 qa-bench 自动入库条目
+    - 与 category 互斥（前者过滤 source_type，后者过滤 category）
     """
     # 构建过滤条件
     filters = []
@@ -130,6 +136,9 @@ async def list_knowledge(
     if has_file:
         filters.append(Knowledge.file_type.isnot(None))
         filters.append(Knowledge.file_type != '')
+    # #043: source_type 过滤
+    if source_type:
+        filters.append(Knowledge.source_type == source_type)
 
     # 总数查询
     count_query = select(func.count()).select_from(Knowledge)
@@ -202,6 +211,7 @@ async def list_knowledge(
             "file_path": it.file_path,
             "file_name": it.file_name,
             "file_type": it.file_type,
+            "meta": it.meta,  # #043: 自动拓展条目的 RichBlock 数据
         })
     return KnowledgeList(items=list_items, total=total)
 
@@ -211,7 +221,10 @@ async def knowledge_stats(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """知识库分类统计"""
+    """知识库分类统计
+
+    #043: 加 source_types 分布 (用于 Dashboard 自动拓展 chip 计数)
+    """
     result = await db.execute(
         select(
             Knowledge.category,
@@ -221,7 +234,22 @@ async def knowledge_stats(
     rows = result.all()
     categories = {row[0] or "未分类": row[1] for row in rows}
     total = sum(categories.values())
-    return {"total": total, "categories": categories}
+
+    # #043: source_type 分布
+    st_result = await db.execute(
+        select(
+            Knowledge.source_type,
+            func.count(Knowledge.id)
+        ).where(Knowledge.source_type.isnot(None))
+        .group_by(Knowledge.source_type)
+    )
+    source_types = {row[0]: row[1] for row in st_result.all()}
+
+    return {
+        "total": total,
+        "categories": categories,
+        "source_types": source_types,
+    }
 
 
 @router.get("/knowledge/categories", response_model=List[DynamicCategory])
@@ -466,6 +494,71 @@ async def create_from_chat(
         created_by=current_user.id
     )
     return knowledge
+
+
+@router.post(
+    "/knowledge/from-auto-expansion",
+    response_model=AutoExpansionIngestResponse,
+    status_code=201,
+)
+async def create_from_auto_expansion(
+    req: AutoExpansionIngestRequest,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """#043 批量接收 qa-bench 高分问答, 写入知识库 (source_type='auto_expansion')
+
+    质量门 (用户决策: 多条件组合):
+      - score >= req.min_score (默认 4/5)
+      - content 长度 >= req.min_content_length (默认 200)
+      - intent ∈ req.allowed_intents (默认 [explain_concept, search_info])
+
+    客户端: tests/qa-bench/save_to_kb.py 改造后调用
+    服务端: 按 source='qa-bench:qa_id' 幂等查重 (重复 qa_id 不会创建新行)
+    """
+    service = KnowledgeService(db)
+    saved = 0
+    skipped = 0
+    errors: list[str] = []
+    knowledge_ids: list[int] = []
+    for it in req.items:
+        try:
+            # 质量门 1: 分数
+            if (it.score or 0) < req.min_score:
+                skipped += 1
+                continue
+            # 质量门 2: content 长度
+            if not it.content or len(it.content) < req.min_content_length:
+                skipped += 1
+                continue
+            # 质量门 3: intent 白名单
+            if req.allowed_intents and it.intent not in req.allowed_intents:
+                skipped += 1
+                continue
+            # 入库 (含幂等)
+            result = await service.create_from_auto_expansion(
+                qa_id=it.qa_id,
+                question=it.question,
+                content=it.content,
+                scope=it.scope,
+                score=it.score,
+                intent=it.intent,
+                tool_calls=it.tool_calls,
+                rich_blocks=it.rich_blocks,
+            )
+            if result:
+                saved += 1
+                if result.id not in knowledge_ids:
+                    knowledge_ids.append(result.id)
+        except Exception as e:
+            errors.append(f"{it.qa_id}: {str(e)[:200]}")
+            logger.exception(f"[#043] 自动拓展入库失败 (qa_id={it.qa_id})")
+    return AutoExpansionIngestResponse(
+        saved=saved,
+        skipped=skipped,
+        errors=errors,
+        knowledge_ids=knowledge_ids,
+    )
 
 
 # ── P0: Entity-Level Knowledge Graph ──
