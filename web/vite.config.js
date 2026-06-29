@@ -205,6 +205,62 @@ function epUnregisterPaneNullPatchPlugin() {
   }
 }
 
+// zrender wheel/touchstart/touchmove listener 缺 {passive:false} 导致 preventDefault 被拒
+// （"Unable to preventDefault inside passive event listener invocation" 警告刷屏）。
+// 根因：zrender 5.6.1 / 6.x 的 HandlerProxy.js:236 mountSingleDOMEventListener 调用
+// addEventListener(..., opt) 时 opt=undefined，modern Chromium 把 wheel/touchstart
+// 默认当 passive:true 处理。当 ECharts RoamController 处理滚轮 zoom 调
+// eventTool.stop(e.event) → e.preventDefault() 时被浏览器拒绝 + 打印警告。
+// 修复：在 build 阶段 transform HandlerProxy.js，给 wheel/mousewheel/touchstart/
+// touchmove 这 4 个 nativeEventName 显式传 {passive:false}，浏览器从此允许
+// preventDefault()。功能完全不变（zoom 仍工作，只是 prevDefault 不再被拒）。
+// 已对比 echarts 5.6.0 / 6.1.0 tarball，zrender HandlerProxy.js 完全一致，6.x 也没修。
+// 因此升级 echarts 主版本无法解决，必须在 build 产物层 patch。
+// 与 vueBumNullPatchPlugin / epUnregisterPaneNullPatchPlugin 同款"上游已知 bug 但未修"策略。
+// 升级 zrender 后若上游修了（pattern miss），console.warn '[zrender-passive-wheel-patch]
+// pattern not found, skipped (zrender version may have changed)'，届时删除本 plugin。
+function zrenderPassiveWheelPatchPlugin() {
+  return {
+    name: 'zrender-passive-wheel-patch',
+    enforce: 'pre',
+    transform(code, id) {
+      // 只 patch zrender 的 HandlerProxy.js（lib/ 或 es/ 都兼容；当前 5.6.1 用 lib/）
+      if (!/node_modules\/zrender\/(lib|es)\/dom\/HandlerProxy\.js$/.test(id)) {
+        return null
+      }
+      // 防重复 patch
+      if (code.includes('/* patch:zrender-passive-wheel */')) {
+        return null
+      }
+      // 定位 addEventListener 调用 + 函数声明
+      // zrender 5.6.1 / 6.x 源码结构：
+      //   function mountSingleDOMEventListener(scope, nativeEventName, listener, opt) {
+      //     scope.mounted[nativeEventName] = listener;
+      //     scope.listenerOpts[nativeEventName] = opt;
+      //     addEventListener(scope.domTarget, nativeEventName, listener, opt);
+      //   }
+      const callPattern = /addEventListener\(scope\.domTarget,\s*nativeEventName,\s*listener,\s*opt\);/
+      const callMatch = code.match(callPattern)
+      if (!callMatch) {
+        console.warn('[zrender-passive-wheel-patch] pattern not found, skipped (zrender version may have changed)')
+        return null
+      }
+      // 注入：把 addEventListener 第 4 个参数 opt 替换为 _patchedOpt，并在前面声明。
+      // _patchedOpt 在 nativeEventName 是 wheel/mousewheel/touchstart/touchmove 时
+      // 合并 {passive:false}（保留 opt 已有字段如 capture:true）
+      const patched = code.replace(
+        callPattern,
+        `var _patchedOpt = (nativeEventName === 'wheel' || nativeEventName === 'mousewheel' || nativeEventName === 'touchstart' || nativeEventName === 'touchmove') ? Object.assign({ passive: false }, opt || {}) : opt; /* patch:zrender-passive-wheel */ addEventListener(scope.domTarget, nativeEventName, listener, _patchedOpt);`
+      )
+      console.log('[zrender-passive-wheel-patch] applied to', id)
+      return {
+        code: patched,
+        map: null,
+      }
+    },
+  }
+}
+
 // PostCSS 插件：剥离 -moz-appearance（webhint: 应使用标准 appearance，已有 CSS 覆盖补全）
 const stripMozAppearance = {
   postcssPlugin: 'strip-moz-appearance',
@@ -298,6 +354,8 @@ export default defineConfig({
     vueBumNullPatchPlugin(),
     // EP useOrderedChildren.removeChild null guard — 见 epUnregisterPaneNullPatchPlugin 注释
     epUnregisterPaneNullPatchPlugin(),
+    // zrender wheel/touchstart listener 加 {passive:false} — 见上面 zrenderPassiveWheelPatchPlugin 注释
+    zrenderPassiveWheelPatchPlugin(),
   ],
   css: {
     postcss: {
