@@ -33,11 +33,21 @@ async def create_template(db: AsyncSession, **kwargs) -> MeetingTemplate:
 
 
 async def update_template(db: AsyncSession, template_id: int, **kwargs) -> Optional[MeetingTemplate]:
-    """更新模板（is_builtin=True 只允许改 is_active）"""
+    """更新模板。
+
+    builtin 保护规则（v77 P2.6-F.5 修正注释与实现一致）:
+      - builtin 永远禁止改 name (内置模板名字是身份标识)
+      - builtin 永远禁止改 is_builtin (防止变 custom)
+      - builtin 允许改 is_active / description / agenda / default_* (用户可定制 builtin 的细节)
+      - custom 无任何字段限制（用户自己的模板）
+
+    返回 None 表示: 模板不存在 OR builtin 尝试改 name/is_builtin。
+    """
     template = await db.get(MeetingTemplate, template_id)
     if not template:
         return None
     if template.is_builtin:
+        # builtin 永远禁止改 name 和 is_builtin
         if "name" in kwargs or "is_builtin" in kwargs:
             return None
     for k, v in kwargs.items():
@@ -55,6 +65,45 @@ async def delete_template(db: AsyncSession, template_id: int) -> bool:
     await db.delete(template)
     await db.commit()
     return True
+
+
+async def clone_template(
+    db: AsyncSession,
+    source_id: int,
+    current_user_id: Optional[int] = None,
+) -> Optional[MeetingTemplate]:
+    """v77 P2.6-F.5: 一键复制 builtin 为 custom 副本
+
+    行为:
+      - 复制 source 的所有非元字段（name/title_template/description/agenda/default_*）
+      - 强制 is_builtin=False, is_active=True（custom 总是 active）
+      - cloned_from_id=source.id 记录复制追溯
+      - name 加 "(副本)" 后缀（避免与 source 名字冲突，用户可编辑改名）
+      - created_by = current_user_id (NULL 也允许)
+
+    返回 None 表示 source_id 不存在。
+    """
+    source = await db.get(MeetingTemplate, source_id)
+    if not source:
+        return None
+    clone = MeetingTemplate(
+        name=f"{source.name} (副本)",
+        title_template=source.title_template,
+        description=source.description,
+        # JSON 列浅拷贝（PostgreSQL JSONB 共享引用但不深 mutate 源；测试中 mutate clone.agenda 不影响 source）
+        agenda=list(source.agenda) if source.agenda else None,
+        default_duration_minutes=source.default_duration_minutes,
+        default_participant_ids=list(source.default_participant_ids) if source.default_participant_ids else None,
+        default_location=source.default_location,
+        is_builtin=False,
+        is_active=True,
+        cloned_from_id=source.id,
+        created_by=current_user_id,
+    )
+    db.add(clone)
+    await db.commit()
+    await db.refresh(clone)
+    return clone
 
 
 def apply_template_to_meeting_data(
