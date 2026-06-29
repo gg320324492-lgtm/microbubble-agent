@@ -197,18 +197,11 @@
   --vh: 100vh; /* 默认 fallback */
   --dvh: 100dvh; /* 现代浏览器优先 */
 
-  /* ===== Element Plus primary 颜色 token 映射 (v76.6 fix) =====
-     让 <el-button type="primary"> / el-link--primary / el-tag--primary 等
-     EP 组件自动跟随我们的主题色，无需每个组件 .el-button--primary 单独写。
-     之前 SessionSidebar 的 "+新对话" 按钮在 green/ocean 主题下仍是 EP 默认蓝色。
-     必须同时覆盖 -light-3/5/7/8/9/-dark-2 变体（EP 内部用这 6 档生成浅色 hover）*/
-  --el-color-primary: var(--color-primary);
-  --el-color-primary-light-3: var(--color-primary-light);
-  --el-color-primary-light-5: var(--color-primary-light);
-  --el-color-primary-light-7: var(--color-primary-light);
-  --el-color-primary-light-8: var(--color-primary-light);
-  --el-color-primary-light-9: var(--color-primary-light);
-  --el-color-primary-dark-2: var(--color-primary-dark);
+  /* v77 P2.6 fix: --el-color-primary 映射已移到 [data-accent="..."] attribute block 内
+     (specificity 0,1,1 > EP :root 0,0,1)。原因：EP on-demand CSS (el-button.css 等) 加载晚于 variables.css
+     EP 自己的 :root { --el-color-primary: #409eff } 后加载会覆盖 :root 映射，
+     导致 ocean/forest 主题按钮白字（对比度 1.05:1 严重不达 WCAG AA）。
+     attribute block 永远赢 EP :root，且影响所有引用 --el-color-primary 的 EP 组件。*/
 }
 
 /* 移动端字号缩放（mobile-first） */
@@ -743,60 +736,10 @@ body {
   --el-button-hover-border-color: var(--color-primary-light);
   color: #fff;
 }
-/* v77 P2.6-D 收官: ocean / forest 主题 plain primary 按钮对比度适配
-   - v1 (909cc67d): EP 默认 light-9 极浅蓝底+蓝字 ~2.5:1 不达标
-   - v2 (本轮): 浅底用 --color-primary-bg, 但字色改用 --color-primary-dark
-     原因: --color-primary-bg 在 ocean light = #e8f2fe 极浅, 主色字 (#4a90e2) 仍只 ~2.6:1
-     修法: 字色用 --color-primary-dark (ocean=#2e6bb8, forest=#3a8050) → 对比度 6.8:1 ✅ WCAG AAA
-*/
-[data-accent="ocean"] .el-button--primary.is-plain,
-[data-accent="ocean"] .el-button--primary.is-text,
-[data-accent="ocean"] .el-button--primary.is-link {
-  --el-button-text-color: var(--color-primary-dark);
-  --el-button-bg-color: var(--color-primary-bg);
-  --el-button-border-color: var(--color-primary-border);
-  --el-button-hover-bg-color: var(--color-primary);
-  --el-button-hover-text-color: var(--el-color-white);
-  --el-button-hover-border-color: var(--color-primary);
-}
-[data-accent="forest"] .el-button--primary.is-plain,
-[data-accent="forest"] .el-button--primary.is-text,
-[data-accent="forest"] .el-button--primary.is-link {
-  --el-button-text-color: var(--color-primary-dark);
-  --el-button-bg-color: var(--color-primary-bg);
-  --el-button-border-color: var(--color-primary-border);
-  --el-button-hover-bg-color: var(--color-primary);
-  --el-button-hover-text-color: var(--el-color-white);
-  --el-button-hover-border-color: var(--color-primary);
-}
-/* dark 主题组合: 字色用 --color-primary-light (dark 下文字最亮), 背景加深 */
-[data-theme="dark"][data-accent="ocean"] .el-button--primary.is-plain,
-[data-theme="dark"][data-accent="ocean"] .el-button--primary.is-text,
-[data-theme="dark"][data-accent="ocean"] .el-button--primary.is-link,
-[data-theme="dark"][data-accent="forest"] .el-button--primary.is-plain,
-[data-theme="dark"][data-accent="forest"] .el-button--primary.is-text,
-[data-theme="dark"][data-accent="forest"] .el-button--primary.is-link {
-  --el-button-text-color: var(--color-primary-light);
-  --el-button-bg-color: rgba(var(--color-primary-rgb), 0.20);
-  --el-button-border-color: rgba(var(--color-primary-rgb), 0.50);
-  --el-button-hover-bg-color: var(--color-primary);
-  --el-button-hover-text-color: var(--el-color-white);
-}
-/* v77 P2.6-D 修复: ocean/forest 主题下实底 primary 按钮 hover 不变浅
-   - 根因: dark 主题默认 .el-button--primary hover 用 --color-primary-light
-     ocean dark = #6babff 浅蓝, white 文字对比度 ~3:1 不达标
-     forest dark = #85ce61 浅绿, white 文字对比度 ~2:1 严重不达标
-   - 修法: 强制 hover 沿用实底色 --color-primary, 白字保持
-*/
-[data-accent="ocean"] .el-button--primary,
-[data-accent="forest"] .el-button--primary {
-  --el-button-hover-bg-color: var(--color-primary);
-  --el-button-hover-border-color: var(--color-primary);
-  --el-button-hover-text-color: var(--el-color-white);
-  --el-button-active-bg-color: var(--color-primary-dark);
-  --el-button-active-border-color: var(--color-primary-dark);
-  color: var(--el-color-white);
-}
+/* v77 P2.6 fix: ocean/forest/light 主题 plain primary 按钮对比度已通过
+   [data-accent="..."] attribute block 显式设 --el-color-primary 解决 (specificity 0,1,1 > EP :root)。
+   不再需要 .el-button--primary.is-plain/is-text/is-link 单独覆盖 — 根因修了后 symptom 自动消失。
+   之前 909cc67d / 6f28d239 / d80aa532 这 3 个 commit 的 workaround 已全部失效（CDP 验证），删除。*/
 [data-theme="dark"] .el-drawer {
   background-color: var(--color-bg-card);
   color: var(--color-text-primary);
@@ -1426,6 +1369,21 @@ body {
    - ocean/forest:  每个组合单独定义变量覆盖
    ============================================ */
 
+/* === 暖橙 light (默认主题) === */
+[data-accent="orange"] {
+  /* v77 P2.6 fix: EP primary token 在 attribute block 内映射 (specificity 0,1,1 > EP :root 0,0,1)
+     之前 :root 块定义 --el-color-primary: var(--color-primary)，但 EP on-demand CSS 加载晚于 variables.css
+     EP 自己的 :root { --el-color-primary: #409eff } 后加载覆盖，导致 ocean/forest 主题按钮变白字
+     把 EP token 显式设到 attribute block 内，attribute selector specificity 永远赢 EP :root */
+  --el-color-primary: #FF7A5C;
+  --el-color-primary-light-3: #FF9D85;
+  --el-color-primary-light-5: #FF9D85;
+  --el-color-primary-light-7: #FF9D85;
+  --el-color-primary-light-8: #FF9D85;
+  --el-color-primary-light-9: #FF9D85;
+  --el-color-primary-dark-2: #E85A3A;
+}
+
 /* === 海蓝 light === */
 [data-accent="ocean"] {
   --color-primary: #4A90E2;
@@ -1449,6 +1407,14 @@ body {
   --gradient-stat-in-progress: linear-gradient(135deg, #E8F2FE 0%, #D5E8FA 100%);
   --gradient-stat-done: linear-gradient(135deg, #E6F8F1 0%, #D0F0E2 100%);
   --gradient-stat-overdue: linear-gradient(135deg, #FCE8E8 0%, #FAD5D5 100%);
+  /* v77 P2.6 fix: EP primary token 在 attribute block 内映射，specificity (0,1,1) > EP :root (0,0,1) */
+  --el-color-primary: #4A90E2;
+  --el-color-primary-light-3: #6BABFF;
+  --el-color-primary-light-5: #6BABFF;
+  --el-color-primary-light-7: #6BABFF;
+  --el-color-primary-light-8: #6BABFF;
+  --el-color-primary-light-9: #6BABFF;
+  --el-color-primary-dark-2: #2E6BB8;
 }
 
 /* === 森林绿 light === */
@@ -1474,6 +1440,14 @@ body {
   --gradient-stat-in-progress: linear-gradient(135deg, #E8F5E9 0%, #D5EBD7 100%);
   --gradient-stat-done: linear-gradient(135deg, #E6F8F1 0%, #D0F0E2 100%);
   --gradient-stat-overdue: linear-gradient(135deg, #FCE8E8 0%, #FAD5D5 100%);
+  /* v77 P2.6 fix: EP primary token 在 attribute block 内映射 */
+  --el-color-primary: #4CAF50;
+  --el-color-primary-light-3: #66BB6A;
+  --el-color-primary-light-5: #66BB6A;
+  --el-color-primary-light-7: #66BB6A;
+  --el-color-primary-light-8: #66BB6A;
+  --el-color-primary-light-9: #66BB6A;
+  --el-color-primary-dark-2: #2E7D32;
 }
 
 /* === 海蓝 dark === */
@@ -1498,6 +1472,14 @@ body {
   --gradient-stat-in-progress: rgba(74, 144, 226, 0.18);
   --gradient-stat-done: rgba(133, 206, 97, 0.18);
   --gradient-stat-overdue: rgba(247, 137, 137, 0.18);
+  /* v77 P2.6 fix: EP primary token in dark mode (specificity (0,2,1) > EP :root) */
+  --el-color-primary: #6BABFF;
+  --el-color-primary-light-3: #8DC0FF;
+  --el-color-primary-light-5: #8DC0FF;
+  --el-color-primary-light-7: #8DC0FF;
+  --el-color-primary-light-8: #8DC0FF;
+  --el-color-primary-light-9: #8DC0FF;
+  --el-color-primary-dark-2: #4A90E2;
 }
 
 /* === 森林绿 dark === */
@@ -1522,6 +1504,26 @@ body {
   --gradient-stat-in-progress: rgba(76, 175, 80, 0.18);
   --gradient-stat-done: rgba(133, 206, 97, 0.18);
   --gradient-stat-overdue: rgba(247, 137, 137, 0.18);
+  /* v77 P2.6 fix: EP primary token in dark mode */
+  --el-color-primary: #66BB6A;
+  --el-color-primary-light-3: #81C784;
+  --el-color-primary-light-5: #81C784;
+  --el-color-primary-light-7: #81C784;
+  --el-color-primary-light-8: #81C784;
+  --el-color-primary-light-9: #81C784;
+  --el-color-primary-dark-2: #4CAF50;
+}
+
+/* === 暖橙 dark === */
+[data-theme="dark"][data-accent="orange"] {
+  /* v77 P2.6 fix: EP primary token in dark mode */
+  --el-color-primary: #FF9D85;
+  --el-color-primary-light-3: #FF7A5C;
+  --el-color-primary-light-5: #FF7A5C;
+  --el-color-primary-light-7: #FF7A5C;
+  --el-color-primary-light-8: #FF7A5C;
+  --el-color-primary-light-9: #FF7A5C;
+  --el-color-primary-dark-2: #FFB347;
 }
 
 /* === 主题切换过渡（v69 P1：让切换看起来"丝滑"而非生硬） === */
