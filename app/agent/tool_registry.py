@@ -55,6 +55,9 @@ class ToolContext:
         redis=None,  # aioredis.Redis | None；intent_classifier / result_compressor 用
         llm=None,    # LLMClient | None；agentic_loop / critic 用，None 时调用方临时创建
         loop_id: str = "",  # debugging：记录当前 event loop 标识，便于排查跨 loop 问题
+        # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle 优先于 settings 全局开关）
+        self_rag_enabled: Optional[bool] = None,  # True=跑 Phase 0.5 gate, False=跳过, None=用 settings.AGENT_SELF_RAG_ENABLED
+        synthesis_model_override: Optional[str] = None,  # 覆盖 settings.AGENT_SYNTHESIS_MODEL 的 synthesis 模型
     ):
         self.db = db
         self.user_id = user_id
@@ -64,6 +67,8 @@ class ToolContext:
         self.redis = redis
         self.llm = llm
         self.loop_id = loop_id
+        self.self_rag_enabled = self_rag_enabled
+        self.synthesis_model_override = synthesis_model_override
         # 2026-06-14 收官：grounding 守卫用 — 工具返回里出现过的成员 ID + 姓名
         # agentic_loop._extract_rich_block_json 解析 LLM 输出的 rich_block.data 时
         # 校验 name 是否在这个集合里，否则丢弃（防 LLM 凭空捏造成员名）

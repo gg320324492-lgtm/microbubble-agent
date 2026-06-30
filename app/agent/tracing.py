@@ -106,6 +106,9 @@ class TraceCollector:
         self.compression_applied_count: int = 0
         self.critique_score: Optional[int] = None
         self.retry_count: int = 0
+        # 2026-06-30 #009 Self-RAG: judge 评估结果 mirror 到 agent_traces
+        self.retrieval_quality_score: Optional[float] = None
+        self.retrieval_attempts: Optional[int] = None
 
     # ---- 记录方法 ----
 
@@ -162,6 +165,11 @@ class TraceCollector:
     def set_critique(self, score: int, retry_count: int = 0):
         self.critique_score = score
         self.retry_count = retry_count
+
+    def set_retrieval_quality(self, score: float, attempts: int = 0):
+        """2026-06-30 #009: 记录 Self-RAG judge 最终评估（便于 agent_traces 表聚合分析）"""
+        self.retrieval_quality_score = score
+        self.retrieval_attempts = attempts
 
     # ---- 生命周期：同步 context manager（兼容老代码） ----
 
@@ -319,6 +327,11 @@ class TraceCollector:
                     trace_row.critique_score = payload.get("critique_score")
                 if hasattr(trace_row, "retry_count"):
                     trace_row.retry_count = payload.get("retry_count", 0)
+                # 2026-06-30 #009 Self-RAG
+                if hasattr(trace_row, "retrieval_quality_score"):
+                    trace_row.retrieval_quality_score = payload.get("retrieval_quality_score")
+                if hasattr(trace_row, "retrieval_attempts"):
+                    trace_row.retrieval_attempts = payload.get("retrieval_attempts", 0)
                 db.add(trace_row)
                 logger.info(f"_persist_now: 准备 INSERT trace session={payload.get('session_id')} status={self.status}")
                 await db.commit()
@@ -392,4 +405,7 @@ class TraceCollector:
             "compression_applied_count": self.compression_applied_count,
             "critique_score": self.critique_score,
             "retry_count": self.retry_count,
+            # 2026-06-30 #009 Self-RAG
+            "retrieval_quality_score": self.retrieval_quality_score,
+            "retrieval_attempts": self.retrieval_attempts,
         }

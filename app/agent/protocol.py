@@ -73,6 +73,9 @@ StreamEventType = Literal[
     # ===== 2026-06-29 #043 账号持久化聊天历史 — 持久化事件 =====
     "message_persisted", # [snapshot] 消息已落库（chat_messages 表），含 message_id/role/client_msg_id/is_partial
     "sync_required",     # [snapshot] 流式中断，前端需重新拉历史（含 reason: aborted|error）
+    # ===== 2026-06-30 #009 Self-RAG 重检索 — retrieval 事件 =====
+    "retrieval_assessment", # [snapshot] Self-RAG judge 评估结果，含 confidence/can_answer/missing/reason/reretrieved/attempt/latency_ms
+    "reretrieval",         # [snapshot] 正在重新检索（含 refined_query/attempt），前端可显示"🔍 正在重新检索..."动画
 ]
 
 
@@ -135,6 +138,19 @@ class StreamEvent(BaseModel):
     persisted_is_partial: Optional[bool] = None
     # sync_required
     sync_reason: Optional[str] = None  # "aborted" | "error"
+    # ===== 2026-06-30 #009 Self-RAG retrieval 字段 =====
+    # retrieval_assessment / reretrieval (同一 retrieval dict, phase 区分)
+    retrieval: Optional[dict[str, Any]] = None  # {
+                                                #   "phase": "assessment" | "reretrieval",
+                                                #   "confidence": float,
+                                                #   "can_answer": bool,
+                                                #   "missing": str,
+                                                #   "reason": str,
+                                                #   "reretrieved": bool,
+                                                #   "attempt": int,
+                                                #   "refined_query": str,
+                                                #   "latency_ms": int,
+                                                # }
 
     def to_sse(self) -> str:
         """序列化为 SSE data 帧"""
