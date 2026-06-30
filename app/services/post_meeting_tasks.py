@@ -327,33 +327,37 @@ def post_meeting_process(self, meeting_id: int):
                 from collections import Counter
                 from app.services.voiceprint_voting import smart_select_k
 
-                # n_expected 用常数 3（投票时 ctx_names 还没定义，python 闭包 lazy 求值会 UnboundLocalError）
-                _n_expected = 3
-                logger.info(f"v2026-06-27 smart_select_k 启动, n_expected={_n_expected}")
-                _labels, _optimal_k, _opt_score, _all_scores = smart_select_k(
+                # 注意: ctx_names 在 line 472 才定义（python 闭包 lazy 求值）
+                # 这里只能用常数 3 作为 n_expected 默认值
+                n_expected = 3
+                logger.info(f"v2026-06-27 smart_select_k 启动, n_expected={n_expected}")
+
+                labels, optimal_k, opt_score, all_scores = smart_select_k(
                     seg_embs=seg_embeddings,
-                    n_expected=_n_expected,
+                    n_expected=n_expected,
                     min_k=2,
                     max_k=8,
                 )
                 logger.info(
-                    f"smart_select_k 选定 K={_optimal_k} (composite={_opt_score:.3f}, n_expected={_n_expected})"
+                    f"smart_select_k 选定 K={optimal_k} (composite={opt_score:.3f}, n_expected={n_expected})"
                 )
-                clusters = list(_labels)
+
+                clusters = list(labels)
                 unique_clusters = sorted(set(c for c in clusters if c >= 0))
-                # 用均值 + L2 normalize 作 cluster_center
+
+                # 用均值 + L2 normalize 作 cluster_center（更鲁棒）
                 cluster_centers = [None] * (max(unique_clusters) + 1) if unique_clusters else []
                 cluster_representatives = [None] * (max(unique_clusters) + 1) if unique_clusters else []
-                for _cid in unique_clusters:
-                    _members = [seg_embeddings[i] for i in range(len(seg_embeddings)) if clusters[i] == _cid]
-                    _valid_members = [m for m in _members if m is not None and not np.all(np.array(m) == 0)]
-                    if _valid_members:
-                        _center = np.mean(_valid_members, axis=0)
-                        _norm = np.linalg.norm(_center)
-                        if _norm > 0:
-                            _center = _center / _norm
-                        cluster_centers[_cid] = _center
-                        cluster_representatives[_cid] = _valid_members[0]
+                for cid in unique_clusters:
+                    members = [seg_embeddings[i] for i in range(len(seg_embeddings)) if clusters[i] == cid]
+                    valid_members = [m for m in members if m is not None and not np.all(np.array(m) == 0)]
+                    if valid_members:
+                        center = np.mean(valid_members, axis=0)
+                        norm = np.linalg.norm(center)
+                        if norm > 0:
+                            center = center / norm
+                        cluster_centers[cid] = center
+                        cluster_representatives[cid] = valid_members[0]
 
                 # 2.4 识别每个段落的发言人（用声纹查询，不依赖聚类）
                 unique_clusters = set(c for c in clusters if c >= 0)
@@ -531,18 +535,13 @@ def post_meeting_process(self, meeting_id: int):
                     )
 
                 # 2.9 分配发言人到每个段
-                # v2026-06-27 修复：speaker_mapping 用 cluster_id（聚类级）而非 speaker_label（段级）
-                # 之前用 seg["speaker_label"] 索引产生 400+ 个 keys（每段一个）
-                # 正确做法：用 seg["cluster_id"] = clusters[i] 索引，只有 3 个 keys
                 for i, seg in enumerate(transcript_segments):
                     if clusters[i] >= 0:
                         seg["speaker"] = cluster_to_name[clusters[i]]
-                        seg["cluster_id"] = int(clusters[i])  # 给每段加 cluster_id 字段
                         if not seg["speaker"].startswith("发言人"):
-                            speaker_mapping[f"cluster_{clusters[i]}"] = seg["speaker"]
+                            speaker_mapping[seg.get("speaker_label", f"speaker_{i}")] = seg["speaker"]
                     else:
                         seg["speaker"] = "发言人?"
-                        seg["cluster_id"] = -1
 
                 logger.info(f"声纹聚类完成 (v2 优化): {len(known_names_set)} 位发言人, 已知={[n for n in known_names_set if not n.startswith('发言人')]}")
 
@@ -585,84 +584,13 @@ def post_meeting_process(self, meeting_id: int):
                             cluster_to_name[cid] = name_corrections[cluster_to_name[cid]]
                     logger.info(f"名字校对完成: 纠正了 {len(name_corrections)} 个名字")
 
-                # 更新 speaker_mapping（v2026-06-27 修复：用 cluster_id 而非 speaker_label）
+                # 更新 speaker_mapping
                 for seg in transcript_segments:
                     sp = seg.get("speaker", "")
-                    if not sp.startswith("发言人") and seg.get("cluster_id") is not None and seg.get("cluster_id") >= 0:
-                        speaker_mapping[f"cluster_{seg['cluster_id']}"] = sp
+                    if not sp.startswith("发言人") and seg.get("speaker_label"):
+                        speaker_mapping[seg["speaker_label"]] = sp
 
                 logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
-
-                # ===== 阶段 1.7: 低占比发言人过滤 (2026-06-30 铁律) =====
-                # 触发条件 (任一):
-                #   - 单段最大时长 < 1.5s
-                #   - 总发言时长 < 3.0s
-                #   - 总时长占比 < 5%
-                # 同步回写 transcript_segments[].speaker = "发言人?"
-                # 见 plans/15-17-18-cozy-bengio.md
-                # 原因: 像王天志 (samples=384) 这种声纹强的成员, 若只在会议里出现一两句
-                #       "只言片语、占比极低" 的发言, 八成是误识, 应剔除避免下游 summary 引用.
-                _LOW_FILTER_MIN_MAX_SEG_DUR = 1.5
-                _LOW_FILTER_MIN_TOTAL_DUR = 3.0
-                _LOW_FILTER_MIN_RATIO = 0.05
-
-                _cluster_stats = {}  # cluster_id -> [max_dur, total_dur, seg_count]
-                for seg in transcript_segments:
-                    cid = seg.get("cluster_id")
-                    if cid is None or cid < 0:
-                        continue
-                    try:
-                        seg_dur = float(seg.get("end", 0)) - float(seg.get("start", 0))
-                    except (TypeError, ValueError):
-                        continue
-                    if seg_dur <= 0:
-                        continue
-                    if cid not in _cluster_stats:
-                        _cluster_stats[cid] = [seg_dur, seg_dur, 1]
-                    else:
-                        _cluster_stats[cid][0] = max(_cluster_stats[cid][0], seg_dur)
-                        _cluster_stats[cid][1] += seg_dur
-                        _cluster_stats[cid][2] += 1
-
-                _grand_total = sum(s[1] for s in _cluster_stats.values())
-                _filtered_clusters = []
-                for cid, (max_dur, total_dur, seg_count) in _cluster_stats.items():
-                    ratio = total_dur / _grand_total if _grand_total > 0 else 0
-                    if (max_dur < _LOW_FILTER_MIN_MAX_SEG_DUR
-                            or total_dur < _LOW_FILTER_MIN_TOTAL_DUR
-                            or ratio < _LOW_FILTER_MIN_RATIO):
-                        _filtered_clusters.append(cid)
-
-                if _filtered_clusters:
-                    # 从 speaker_mapping 删 cluster_N
-                    for cid in _filtered_clusters:
-                        _key = f"cluster_{cid}"
-                        if _key in speaker_mapping:
-                            removed_name = speaker_mapping.pop(_key)
-                            logger.info(
-                                f"[low_occupancy_filter] 剔除 {_key}={removed_name}: "
-                                f"max_seg={_cluster_stats[cid][0]:.2f}s, "
-                                f"total={_cluster_stats[cid][1]:.2f}s, "
-                                f"ratio={(_cluster_stats[cid][1]/_grand_total if _grand_total else 0):.3f}"
-                            )
-                    # 同步回写 transcript_segments[].speaker = "发言人?"
-                    # 关键: 不改这个会让 MeetingParticipant 自增 (line 666) 误加入被过滤的人
-                    # 注意: 跳过"发言人?" (已未识别), 但要改"发言人A/B/C" (误识) + "王天志" 等真名字
-                    _filtered_set = set(_filtered_clusters)
-                    _synced_count = 0
-                    for seg in transcript_segments:
-                        if seg.get("cluster_id") in _filtered_set:
-                            sp = seg.get("speaker")
-                            if sp and not sp.startswith("发言人?"):
-                                seg["speaker"] = "发言人?"
-                                _synced_count += 1
-                    logger.info(
-                        f"[low_occupancy_filter] 共剔除 {len(_filtered_clusters)} 个 cluster, "
-                        f"回写 transcript {len(_filtered_clusters)} 个 cluster 的 {_synced_count} 段"
-                    )
-                else:
-                    logger.info(f"[low_occupancy_filter] 无低占比 cluster, 跳过")
-                # 阶段 1.7 end
 
                 # ===== 阶段 1.8: 规则标点补充（兜底 AI 润色失败的情况） =====
                 def _add_punctuation(text: str) -> str:
