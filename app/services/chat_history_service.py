@@ -782,11 +782,18 @@ async def export_session(
 # ============================================================================
 
 async def cleanup_soft_deleted_sessions(db: AsyncSession, cutoff_date: datetime) -> int:
-    """物理清除 30 天前软删除的会话（CASCADE 自动清 messages + shares）"""
+    """物理清除 30 天前软删除的会话（CASCADE 自动清 messages + shares）
+
+    #043 Phase 7 关键修复：cutoff_date 入参可能是 tz-aware（Phase 7 Celery task
+    用 datetime.now(timezone.utc)），但 chat_sessions.deleted_at 是 naive 列。
+    asyncpg 报 "can't subtract offset-naive and offset-aware datetimes" 500。
+    统一 _to_naive_datetime helper 处理（CLAUDE.md 2026-06-05 教训复用）。
+    """
+    cutoff_naive = _to_naive_datetime(cutoff_date)
     stmt = delete(ChatSession).where(
         and_(
             ChatSession.deleted_at.isnot(None),
-            ChatSession.deleted_at < cutoff_date,
+            ChatSession.deleted_at < cutoff_naive,
         )
     )
     result = await db.execute(stmt)

@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # 2026-06-03：硬编码 3 改为可配置，运维/测试时可临时缩短（如 0 立即清空）
     TRASH_RETENTION_DAYS: int = 3
 
+    # 2026-06-30 #043 Phase 7：聊天会话软删除保留天数（与 task 垃圾桶对齐 30 天可配）
+    # 软删除 30 天后 Celery beat 物理清除 chat_sessions/messages/shares（CASCADE）
+    # 运维/测试时可临时缩短（如 0 立即清空）— 与 TRASH_RETENTION_DAYS 范式一致
+    CHAT_HISTORY_RETENTION_DAYS: int = 30
+
     # 2026-06-19：开始听会 → 不再自动从会议决策/action items 创建任务
     # 关闭后 _auto_create_task_from_meeting 不再被调用，user 需手动建任务
     # 设 True 可恢复旧行为（不推荐，决策不一定都该是任务）
@@ -153,6 +158,17 @@ class Settings(BaseSettings):
     AGENT_PLAN_STEP_MAX: int = 5                   # #041: Phase 0 最多 dispatch 几个 tool (建议 1-3 避免过度调度)
     AGENT_PLAN_STEP_MIN_CONFIDENCE: float = 0.5    # #041: intent confidence < 此值不挂计划 (避免 hallucinated tools)
     AGENT_CROSS_DOMAIN_FANOUT_ENABLED: bool = True  # #042: explain_concept 时代码层强制补齐 4 域工具 (不依赖 LLM 自觉, 与 #086 prompt 软规则协同)
+
+    # 2026-06-30 #009: Self-RAG retrieval gate (Phase 0.5)
+    # - judge 模型默认 Haiku 4.5 (走 Anthropic 协议, 跟 compressor/intent 同模型, 延迟 ~300ms)
+    # - 30 天回滚承诺（2026-07-30 截止）：AGENT_SELF_RAG_ENABLED=false 关闭，无需代码回滚
+    AGENT_SELF_RAG_ENABLED: bool = True               # Phase 0.5 总开关 (用户 toggle + settings 双层)
+    AGENT_SELF_RAG_THRESHOLD: float = 0.6             # confidence >= 此值 → 不重检索
+    AGENT_SELF_RAG_RELAXED_THRESHOLD: float = 0.4     # can_answer=true 且 confidence >= 此值 → 不重检索（有答案优于无）
+    AGENT_SELF_RAG_MAX_RERETRIEVE: int = 1            # 最多重检索次数 (硬上限 2 防爆炸)
+    AGENT_SELF_RAG_MAX_CONTEXT_DOCS: int = 8          # 合并后上下文最大文档数
+    AGENT_SELF_RAG_MODEL: str = ""                    # judge 模型, 空=AGENT_REFLECTION_MODEL (生产建议改 claude-haiku-4-5-20251001)
+    AGENT_SELF_RAG_JUDGE_TIMEOUT_MS: int = 3000       # judge 超时, 触发 default-on-fail
 
     class Config:
         env_file = ".env"
