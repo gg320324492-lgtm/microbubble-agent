@@ -1,7 +1,11 @@
 <template>
   <div class="meeting-view">
-    <!-- 顶部操作栏 -->
-    <el-card class="filter-card">
+    <!-- v78 UI redesign: 2 tabs (会议列表 / 模板管理) — 替代独立 /admin/templates 路由 -->
+    <el-tabs v-model="activeTab" class="meeting-tabs">
+      <!-- Tab 1: 会议列表 (原内容) -->
+      <el-tab-pane label="会议列表" name="meetings">
+        <!-- 顶部操作栏 -->
+        <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
         <el-col :xs="12" :sm="6" :md="4">
           <el-date-picker
@@ -133,6 +137,21 @@
         />
       </div>
     </el-card>
+      </el-tab-pane>
+
+      <!-- Tab 2: 模板管理 (从 /admin/templates 移入) -->
+      <el-tab-pane label="模板管理" name="templates">
+        <TemplatesPanel
+          ref="templatesPanelRef"
+          @edit="onEditTemplate"
+          @delete="onDeleteTemplate"
+          @clone="onCloneTemplate"
+          @toggle-active="onToggleActive"
+          @batch-toggle-active="onBatchToggleActive"
+          @batch-delete="onBatchDeleteTemplates"
+        />
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 创建会议对话框 -->
     <!-- 创建/编辑会议对话框 -->
@@ -202,11 +221,17 @@ import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import MeetingMinutesDialog from '@/components/meeting/MeetingMinutesDialog.vue'
 import MeetingTemplateDialog from '@/components/meeting/MeetingTemplateDialog.vue'
+import TemplatesPanel from '@/components/meeting/TemplatesPanel.vue'
 import { Delete, Document, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const route = useRoute()
 const memberStore = useMemberStore()
+
+// v78 UI redesign: 2 tabs (会议列表 / 模板管理)
+const activeTab = ref('meetings')
+const templatesPanelRef = ref(null)
 
 // 全局录音状态（v77 P2.6-F.2 Step 4: 听会流程改走 /meetings/room 全屏 MeetingRoomView，仅保留 startRecording/stopRecording 用于 onMounted 恢复检查）
 const { recordingMeetingId: globalRecordingId, startRecording, stopRecording } = useRecordingState()
@@ -319,12 +344,7 @@ async function loadTemplates() {
 const showTemplateDialog = ref(false)
 const editingTemplate = ref(null)
 
-const onTemplateSaved = async () => {
-  editingTemplate.value = null
-  await loadTemplates()
-}
-
-// v77 P2.6-F.3: '存为新模板' 事件处理
+// v77 P2.6-F.3: '存为新模板' 事件处理 (line 444 已重写为新版, 包含 templatesPanelRef 刷新)
 // MeetingCreateDialog 填好表单 → emit('save-template', templateData) →
 //   1. 关闭 MeetingCreateDialog
 //   2. 设置 editingTemplate = templateData (MeetingTemplateDialog 走编辑模式但视觉是"预填的新模板")
@@ -369,6 +389,57 @@ const onToggleActive = async ({ id, is_active }) => {
   } catch (e) {
     ElMessage.error(`操作失败: ${e.response?.data?.detail || e.message}`)
   }
+}
+
+// v78 UI redesign: TemplatesPanel emit 'edit' → 打开 MeetingTemplateDialog (不再是 toast)
+const onEditTemplate = (template) => {
+  editingTemplate.value = template
+  showTemplateDialog.value = true
+}
+
+// v78 UI redesign: 批量启用/禁用 (TemplatesPanel batch-toggle-active event)
+const onBatchToggleActive = async ({ ids, is_active }) => {
+  if (!ids || !ids.length) return
+  try {
+    const res = await axios.post('/api/v1/meeting-templates/batch-toggle-active', { ids, is_active })
+    ElMessage.success(`已批量${is_active ? '启用' : '禁用'} ${res.data.updated} 个模板`)
+    await loadTemplates()
+    templatesPanelRef.value?.fetchTemplates?.()
+  } catch (e) {
+    ElMessage.error(`批量操作失败: ${e.response?.data?.detail || e.message}`)
+  }
+}
+
+// v78 UI redesign: 批量删除 (TemplatesPanel batch-delete event, 二次确认后调 API)
+const onBatchDeleteTemplates = async (ids) => {
+  if (!ids || !ids.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确定批量删除 ${ids.length} 个模板?此操作不可撤销,内置模板自动跳过。`,
+      '批量删除确认',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 用户取消
+  }
+  try {
+    const res = await axios.post('/api/v1/meeting-templates/batch-delete', { ids })
+    const skipMsg = res.data.skipped_builtin?.length
+      ? `, ${res.data.skipped_builtin.length} 个内置模板已跳过`
+      : ''
+    ElMessage.success(`已删除 ${res.data.deleted} 个模板${skipMsg}`)
+    await loadTemplates()
+    templatesPanelRef.value?.fetchTemplates?.()
+  } catch (e) {
+    ElMessage.error(`批量删除失败: ${e.response?.data?.detail || e.message}`)
+  }
+}
+
+// v78 UI redesign: '存为新模板' 事件后, 编辑模式存完刷新 TemplatesPanel
+const onTemplateSaved = async () => {
+  editingTemplate.value = null
+  await loadTemplates()
+  templatesPanelRef.value?.fetchTemplates?.()
 }
 
 // 关闭会议创建对话框时清理 templateId 高亮

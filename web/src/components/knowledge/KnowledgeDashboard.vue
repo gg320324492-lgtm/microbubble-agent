@@ -58,20 +58,6 @@
     <div class="recent-section">
       <div class="section-header">
         <h3 class="section-title">📋 最近知识</h3>
-        <div class="section-actions">
-          <!-- 2026-06-30 续集 5 (KB 数据清洁 C): dedup toggle (受控于 KnowledgeView + localStorage)
-               默认 ON: 同 title 分组取 id 最小, 视觉去重.
-               OFF: 全部显示 (调试/审计场景, 用户可临时切回看原始 3 份).
-               注: stats 数字仍是物理行数, toggle 仅影响显示策略, 不动 DB. -->
-          <el-switch
-            :model-value="dedupEnabled"
-            inline-prompt
-            active-text="去重"
-            inactive-text="全部"
-            size="small"
-            @update:model-value="(val) => $emit('toggle-dedup', val)"
-          />
-        </div>
       </div>
 
       <div v-if="loading" class="loading-grid">
@@ -119,9 +105,7 @@ const props = defineProps({
   activeSourceType: { type: String, default: '' },  // #043
   sourceTypeStats: { type: Object, default: () => ({}) },  // #043
   loading: { type: Boolean, default: false },
-  loadError: { type: String, default: null },  // 2026-06-30: 三态空态 (loading/error/empty)
-  // 2026-06-30 续集 5: dedup toggle (受控, 父级 KnowledgeView 是 localStorage source of truth)
-  dedupEnabled: { type: Boolean, default: true }
+  loadError: { type: String, default: null }  // 2026-06-30: 三态空态 (loading/error/empty)
 })
 
 // 预设分类
@@ -150,8 +134,7 @@ const emit = defineEmits([
   'edit',
   'delete',
   'download',
-  'retry',  // 2026-06-30: loadError 三态空态, 错误时重试
-  'toggle-dedup'  // 2026-06-30 续集 5: dedup toggle ON/OFF, 父级同步 localStorage
+  'retry'  // 2026-06-30: loadError 三态空态, 错误时重试
 ])
 
 const handleCategoryClick = (cat) => {
@@ -195,14 +178,12 @@ const getCategoryCount = (categoryName) => {
   return found ? found.count : 0
 }
 
-// 2026-06-30 续集 5 (KB 数据清洁 C 方案): 显示策略 computed
-// dedup ON: 按 title 分组, 每组取 id 最小 (KB 后端已保证同 title md5 一致性, 故分组等价)
-// dedup OFF: 全部显示 (调试/审计用, 用户可临时切回看原始 3 份)
-// stats 数字 (props.recentItems.length) 不变, 不影响 total 显示
+// 2026-06-30 续集 5 (KB 数据清洁 C 方案): 默认去重显示策略
+// 按 title 分组, 每组取 id 最小 (KB 后端已保证同 title md5 一致性, 故分组等价)
+// 不暴露 UI toggle: dedup 是"把损坏的视觉体验还原成可用状态"的兜底,
+// 不是用户可选配置. 隐藏 toggle = 默认"dedup ON", 永不"OFF".
+// stats 数字 (props.recentItems.length) 不变, 不影响 total 显示.
 const displayedItems = computed(() => {
-  if (!props.dedupEnabled) {
-    return props.recentItems
-  }
   // 按 title 分组, 取 id 最小
   const seen = new Map()  // title → item
   for (const item of props.recentItems) {
