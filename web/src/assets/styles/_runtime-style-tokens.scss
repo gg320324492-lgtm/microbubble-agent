@@ -61,10 +61,14 @@
 // ===== 声纹 bar 渐变 (VoiceprintCard.vue) =====
 // v77 P2.6-E.1: 铺设 class 钩子 (zero consumer, 0 consumer)
 // v77 P2.6-G.2: 启用 — VoiceprintCard.vue getBarClass(value) 取代原 barColor() runtime :style
-// 阈值 0.33 / 0.66 (per-card max 归一化) 切 3 档, 6 主题通过 --color-warning / --color-success 自动跟随
-.bar--low    { background: var(--color-warning-bg); }
-.bar--mid    { background: linear-gradient(90deg, var(--color-warning) 0%, var(--color-success) 100%); }
-.bar--high   { background: var(--color-success); }
+// v77 P2.6-G.3: 走专用 --vp-bar-* token，6 主题独立覆盖
+//   (不再借用 --color-warning/--color-success，避免 ocean/forest 主题下仍显示绿/黄)
+.bar--low    { background: var(--vp-bar-low); }
+.bar--mid    { background: var(--vp-bar-mid); }
+.bar--high   { background: var(--vp-bar-high); }
+
+// v77 P2.6-G.3: 主题切换时 bar 平滑过渡 (与 --theme-transition 同 280ms，避免竖条瞬切)
+.bar { transition: background 280ms ease, background-color 280ms ease; }
 
 // ===== 置信度进度条 (SpeakerSearchSheet + MobileKnowledgeDetailView) =====
 // v77 P2.6-E.1: 收敛两处 confidenceColor runtime :style
