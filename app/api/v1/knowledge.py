@@ -258,6 +258,99 @@ async def knowledge_stats(
     }
 
 
+@router.get("/knowledge/auto-intake-summary")
+async def auto_intake_summary(
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """W5 T5.4 + W6 D5: KB 自动入库监控 summary
+
+    给 ProjectStatsView 第 3 个 tab (KB 入库监控) 提供数据源.
+    字段:
+      - today_intake: 今日入库条数
+      - weekly_intake: 7日入库趋势 (list of 7 ints)
+      - hit_rate: KB 命中率 (0-1)
+      - negative_feedback_rate: 负反馈率 (0-1)
+      - rollback_count: 7 天内 rollback 次数
+      - last_update: summary 文件最后更新 timestamp
+      - gray_scale_enabled: 灰度开关状态 (0/5/25/100)
+
+    数据源:
+      - data/auto_intake_summary.json (save_to_kb.py 写入)
+      - DB 实时聚合: 今日 / 7 日 入库量
+      - data/auto_intake_rollback_*.json (rollback 任务写入)
+    """
+    from datetime import datetime, timedelta
+    from pathlib import Path
+
+    result = {
+        "today_intake": 0,
+        "weekly_intake": [0] * 7,
+        "hit_rate": 0.0,
+        "negative_feedback_rate": 0.0,
+        "rollback_count": 0,
+        "last_update": None,
+        "gray_scale_enabled": 0,
+        "total_in_db": 0,
+    }
+
+    # 1. 读 save_to_kb.py 输出的 summary 文件
+    summary_path = Path("data/auto_intake_summary.json")
+    if summary_path.exists():
+        try:
+            import json
+            summary_data = json.loads(summary_path.read_text(encoding="utf-8"))
+            result["last_update"] = summary_data.get("timestamp")
+            result["gray_scale_enabled"] = 100 if summary_data.get("gray_flag_enabled") else 0
+        except Exception:
+            pass
+
+    # 2. DB 聚合: 今日 + 7 日入库量 (source_type='auto_expansion')
+    today = datetime.now().date()
+    week_ago = today - timedelta(days=6)
+
+    today_count_result = await db.execute(
+        select(func.count(Knowledge.id))
+        .where(Knowledge.source_type == "auto_expansion")
+        .where(func.date(Knowledge.created_at) == today)
+    )
+    result["today_intake"] = today_count_result.scalar() or 0
+
+    weekly_counts = []
+    for d_offset in range(6, -1, -1):
+        d = today - timedelta(days=d_offset)
+        c_result = await db.execute(
+            select(func.count(Knowledge.id))
+            .where(Knowledge.source_type == "auto_expansion")
+            .where(func.date(Knowledge.created_at) == d)
+        )
+        weekly_counts.append(c_result.scalar() or 0)
+    result["weekly_intake"] = weekly_counts
+
+    # 3. DB 总数
+    total_result = await db.execute(
+        select(func.count(Knowledge.id))
+        .where(Knowledge.source_type == "auto_expansion")
+    )
+    result["total_in_db"] = total_result.scalar() or 0
+
+    # 4. 读 rollback 报告 (7 天内)
+    rollback_dir = Path("data")
+    if rollback_dir.exists():
+        for rb_path in sorted(rollback_dir.glob("auto_intake_rollback_*.json"), reverse=True):
+            try:
+                rb_data = json.loads(rb_path.read_text(encoding="utf-8"))
+                rb_ts = datetime.fromisoformat(rb_data.get("timestamp", "1970-01-01"))
+                if (datetime.now() - rb_ts).days <= 7:
+                    result["rollback_count"] += rb_data.get("deleted_count", 0)
+            except Exception:
+                pass
+
+    # 5. 命中率 / 负反馈率 (留 0 待 W6 T6.4 反馈模块接入)
+    # 暂用 stub 0.0, 后续 W6 T6.4 接入 feedback 表后填充
+    return result
+
+
 @router.get("/knowledge/categories", response_model=List[DynamicCategory])
 async def get_categories(
     current_user: Member = Depends(get_current_user),

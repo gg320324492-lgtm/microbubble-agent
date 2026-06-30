@@ -2,6 +2,249 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [Unreleased] 2026-06-30 — v78 UI redesign + #009 Self-RAG + qa-bench v3.0 (W1-W6) + Whisper→SenseVoice + KB 清洁 + KB 入库监控 + 声纹循环净化收官
+
+### 🆕 v78 UI redesign — 3-zone 对话窗口 + EP icons + 4-attr a11y（commit `34e82fd9`）
+
+**用户痛点**：当前对话窗口"组件全部塞主列"，长时间对话左侧 SessionSidebar 会因新消息 push 而跳动；emoji 图标 (🧠) 在 EP 主题下不跟色；a11y 4-attr 缺失 100+ 处。
+
+**核心改造**：
+- **SessionSidebar overlap 修复** — 改用 `flex min-width:0` 防止 ellipsis 失效 + 右键 / 长按上下文菜单替代 hover (移动端可达性)
+- **sortedSessions 置顶冒泡** — pin 会话永远在最上面（之前 pin 在底部，UX 难找）
+- **NavRail.vue** — 新左侧 nav rail 组件 (桌面端 56px 宽，3-zone 布局)
+- **ChatViewSSE 3-zone 重构** — `≡` (会话列表) / `ChatBreadcrumb` (面包屑) / `+` FAB (新建) 替代 toolbar 杂乱布局
+- **ThinkingModeSwitch segmented** — 替代 🧠/🧠 双 toggle 冲突（CLAUDE.md v78 教训 #2 强化）
+- **移动端 EP icons 同步** — NutUI 4 也用 Element Plus icon (避免双套 icon 维护成本)
+- **variables.css** — 新增 `--icon-size-*` token (4 档: xs/sm/md/lg) 统一图标尺寸
+
+**8 条新铁律** 永久沉淀 [memory/v78-ui-redesign-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/v78-ui-redesign-2026-06-30.md)：
+1. **绝对定位 + hover-only 必重叠** — flex 布局不创建 containing block
+2. **双 toggle 同 emoji 必冲突** — segmented control 一次只能选一个
+3. **EP icon 永远优于 emoji** — 6 主题 token 透传 + dark mode + a11y 全套支持
+4. **a11y 4-attr 100%** — `id` + `name` + `aria-label` + `title` 任何交互元素
+5. **sortedSessions pin-bubble** — 置顶用 `Array.unshift` 而非 sort 回调
+6. **flex min-width:0 是 ellipsis 充要条件** — 父级缺这个 children ellipsis 永远失效
+7. **dark 非 scoped 块 v60-v67** — 任何 dark mode 跨组件覆盖必须放非 scoped 块
+8. **单 + FAB 替代语义模糊 button** — 单一"+"按钮 + 上下文菜单比 toolbar 4 button 更直观
+
+### 🆕 #009 Self-RAG 重检索 + 用户深度思考开关（4 commits：`740ac4c1` + `a49bd644` + 后续 hook 收尾）
+
+**触发场景**：用户问"什么是 DLVO 理论?"，Agent 给出答案但用户怀疑 "是不是答非所问"——希望 Agent 在回答前**先评估自己检索质量**，如果 score 低就**重检索**。
+
+**核心架构（Phase 0.5 双重 hook）**：
+- **Phase 0 入口 hook** — 检索完成后立即调 `assess_retrieval_quality()` (Haiku 极快 judge，800ms 内)
+- **Phase 1 后置 hook** — synthesize 完成后调 `refine_query_with_context()` 用对话上下文改写 query
+- **3-tier 阈值分档** (W4 收官)：
+  - **高** (≥0.8) — 检索质量好，**直接出**
+  - **中高** (≥0.6) — 不重检索
+  - **中** (≥0.4) + can_answer=True — 不重检索
+  - **低** (<0.4) — 触发重检索（reretrieve_ 前缀 + 改进 query）
+- **前端 useUiStore useDeepThinking** — 开关默认 ON，用户可关闭减少 token 消耗
+- **ToolContext 2 kwarg 透传** — `ctx.retrieval_quality` + `ctx.refined_query`
+- **7 个 AGENT_SELF_RAG_* flag** — 默认开启，可独立配置
+
+**8 条新铁律** 永久沉淀 [memory/self-rag-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/self-rag-2026-06-30.md)：
+1. **tool_use 配对** — refine 改写 query 后必须重 dispatch tool_use
+2. **default-on-fail** — judge 失败时**默认通过**（保守策略，避免误拦截）
+3. **双层控制 per-request + settings** — 前端开关 + 后端 flag 双重保险
+4. **rerank_score 合并去重** — 重检索时去重，保留高 score
+5. **reretrieve_ 前缀** — 内部标识，用户消息不带这个前缀
+6. **只对 search_info + explain_concept 触发** — 闲聊 / 任务创建不评估
+7. **user_message 透传** — judge 必须看完整对话上下文
+8. **dark 非 scoped 块** — settings 开关 toggle 也要走 dark 覆盖
+
+**端到端验证**：W3 实测发现 Self-RAG 回归 bug (`MicroBubbleAgent.chat_stream` 缺 model 参数) → 立即修复 → smoke 5/5 PASS
+
+### 🆕 qa-bench v3.0 完整收官（W1-W6 6 周冲刺）
+
+**6 阶段交付**：
+- **W1 基建**（commit `d5b6e6c5`） — 700 题题库（业务 500 + P 高级 100 + K 横切 100）+ 3 个 P0 检测器（stream_interrupt / tool_error_propagated / first_token_latency）+ 7 维评分
+- **W2 题库生产** — 229 手工 + 107 DB + 144 模板 + 15 expert = 535 题合并去重
+- **W3 跑测 + 维度报告** — 端到端 SSE 跑测发现 Self-RAG 回归 bug + intent 标签重生成 + 14 业务域 × 6 intent × 4 难度矩阵
+- **W4 高级能力专项** — P 高级 102 题 + 3-tier 阈值分档实施在 `agentic_loop.py:615-665`
+- **W5 KB 入库 + 回归 + 稳定性** — `save_to_kb.py` 5 道防线（分数 ≥ 4 / 内容 ≥ 200 字 / 意图白名单 / 灰度 `--enable-intake` / 备份 + 7 天 rollback）+ 200 题 smoke 套件 + 回归基线 v3.0 锁定
+- **W6 D5 KB 入库监控** + 7 维雷达图 + ROI 100-150% 报告 + 8 项决策清单
+
+**关键文件**：
+- `tests/qa-bench/{runner.py, gen780.py, questions_*.jsonl, dashboard/}` — 跑测基础设施
+- `tests/qa-bench/save_to_kb.py` — 自动入库（5 防线）
+- `scripts/auto_intake_rollback.py` — 7 天自动清理 `source_type='auto_expansion'`
+- `scripts/gen_advanced_report.py` / `gen_final_report.py` / `gen_dim_report.py` / `aggregate_metrics.py` — 报告生成
+- `.github/workflows/qa-bench-smoke.yml` — CI 200 题 5min 80% 阈值门禁
+- `web/src/composables/useKbMonitor.js` — KB 监控 polling 5min (Q5)
+- `web/src/views/ProjectStatsView.vue` — D5 KB 入库监控 tab（第 3 个 tab）
+
+**8 大铁律** 永久沉淀 6 个 memory：
+- [qa-bench-v3-w1-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/qa-bench-v3-w1-2026-06-30.md) — 7 维评分 + 3 检测器
+- [qa-bench-v3-w2-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/qa-bench-v3-w2-2026-06-30.md) — 题库生产 7 铁律
+- [qa-bench-v3-w3-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/qa-bench-v3-w3-2026-06-30.md) — 端到端跑测发现 bug
+- [qa-bench-v3-w4-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/qa-bench-v3-w4-2026-06-30.md) — 3-tier 阈值分档
+- [qa-bench-v3-w5-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/qa-bench-v3-w5-2026-06-30.md) — KB 入库 5 防线
+- [qa-bench-v3-w6-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/qa-bench-v3-w6-2026-06-30.md) — ROI 100-150% + 8 项决策
+
+### 🆕 KB 数据清洁：B 物理删 + C 前端 dedup toggle（commit `cfd486b6`）
+
+**触发场景**：196 张 KB 卡片，49 张 title 重复（每 title 3 份），其中 1 组字节完全相同（sha256 严格 3 份完全相同），其余 48 组字节不一致（历史快照，LLM 不同 run 输出差异）。
+
+**用户决策**：B + C 两步 — B 物理删字节完全相同副本（1 条）+ C 前端 dedup toggle 隐藏其他重复（可逆）。**拒绝 D 重建合并**（5x 工作量 + 10x 风险换 0 用户感知收益）。
+
+**B 脚本**（[scripts/migrate_kb_dedup_titles.py](scripts/migrate_kb_dedup_titles.py)）~560 行 + 19 单测：
+- **5 类引用防御**：`knowledge_relations` (CASCADE) + `knowledge_images` (CASCADE) + `knowledge_extractions` (CASCADE) + `knowledge_gaps` (ARRAY) + `rag_evaluations.context` (Text)
+- **保守策略**：任一 id 被引用 → 整组跳过
+- **JSON 备份**：`backups/kb-dedup-20260630/kb_dedup_backup_20260630_132119.json`（28936 字节，1 条待恢复）
+
+**C 前端**：`KnowledgeDashboard.vue` + `KnowledgeView.vue` 加 dedup toggle
+- 默认 ON（localStorage key `mnb:kb:dedupView`）
+- 不影响 stats 计数（后端按物理行数 `auto_expansion=179`）— 仅影响"📋 最近知识"显示策略
+- 切换 OFF 调试/审计场景用
+
+**8 条新铁律** 永久沉淀 CLAUDE.md "续集 5" section + memory：
+- FK 防御不是可选项（DELETE 触发 CASCADE 需应用层主动查引用）
+- `knowledge_gaps.knowledge_ids` 是 ARRAY 不是 FK（用 `&&` 不用 `=`）
+- `rag_evaluations.context` ILIKE 数字边界陷阱（Python regex `(?<!\d)<kid>(?!\d)` 验证）
+- 同 title 但 md5 不全同 → 整组保留（"看起来重复"可能是历史快照）
+- DELETE 不可逆 → JSON 备份是底线
+- dedup toggle 是"显示策略"不是"数据操作"
+- localStorage key 必须带项目前缀 (`mnb:kb:dedupView`)
+- 持久化同步单向 UI → localStorage（不是双向）
+
+### 🆕 KB 卡片 source_type 重分类（commit `9964f7e4`）
+
+**触发场景**：180 张 `[拓展-XX]` 前缀的卡片实际是 LLM 自动入库的，但入库时 `source_type` 字段未写为 `'auto_expansion'`，导致 `✨ 自动拓展` chip 显示 0 条。
+
+**修复**：`scripts/migrate_kb_source_type.py` 单事务 UPDATE 180 条 `source_type = 'auto_expansion'`
+- **踩坑**：SQLAlchemy `regexp_match(r'^\[拓展[^\]]*\]')` 报 191 条 vs psql 报 180（11 条误伤）
+- **根因**：Python raw string `r'\['` 在 SQLAlchemy 表达式里是 2 字符 (`\` + `[`)，传给 PG regex 引擎后 `\` 转义层级不一致
+- **修复**：改用 `Knowledge.title.startswith("[拓展")` (SQL 层 `LIKE 'X%'`) 完全避开正则转义陷阱
+
+**新铁律 7**：SQLAlchemy regex 转义陷阱 — 优先 `startswith/endswith/contains` (SQL 层 LIKE)，不要用 `regexp_match`。
+
+**实际执行**：180 条重分类 + 11 条 NULL（早期手写不动）+ 0 source_type 误伤
+
+### 🆕 Whisper → SenseVoice 迁移收官（commit `9effb8ed`）
+
+**触发场景**：`docs/asr-alternatives.md` 列 17 个 Whisper 替代品，**`docs/asr-benchmark-2026-06-30.md`** 给出 5 维度实测对比：
+- **VRAM**：SenseVoice 0.93 GB vs Whisper 8.0 GB (**-88%**)
+- **RTF**：0.01-0.09 vs 0.08-0.25 (**3-25x 加速**)
+- **中文 CER**：15.6% vs 25.7% (改善 39%)
+- **20 min 会议覆盖**：500 字 vs 105 字 (**4.7x**)
+- **中文标点 + ITN 原生支持**
+
+**迁移方案**：单模型 + chunked 推理（60s chunk + `cache={}`）— 避免 20 min 长会议 OOM（peak 25.77 GB）。
+
+**新 memory 沉淀**：[asr-migration-sensevoice-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/asr-migration-sensevoice-2026-06-30.md) — SenseVoice 1.1GB peak VRAM (vs Whisper 8GB) + 3h 会议 10.7s (-170×) + chunked 推理 (60s + cache={}) + torch 2.7+cu128 支持 RTX 5090 sm_120 + 内联 strip_all_tags 避免跨容器 import + 4 大铁律
+
+### 🆕 KB 入库监控 D5（commits `ee442125` + `9ea0f87d`）
+
+**触发场景**：W6 决策清单 D5 — KB 自动入库需要 dashboard 监控，否则"入库了 / 命中率多少 / 是否需要回滚"无任何可视信号。
+
+**实现**：
+- **后端** — `GET /api/v1/knowledge/auto-intake-summary`（today_intake + weekly_intake[7] + hit_rate + negative_feedback_rate + rollback_count + total_in_db=179）
+- **前端** — `web/src/composables/useKbMonitor.js`（polling 5min setInterval）+ `web/src/views/ProjectStatsView.vue` 第 3 个 tab（4 metric card + 7 日趋势 CSS 柱状图 + 系统状态卡）
+- **移动端不动**（用户决策）
+
+**Bug 修复**（commit `9ea0f87d`）：D5 监控全 0 时改用 empty placeholder + 灰色 bar + today 高亮 — 避免误导用户认为"今天没数据是 bug"。
+
+**2 铁律**：lightningcss 不支持自定义 `@keyframes` 改用 Element Plus `is-loading` / 错误时保留旧数据不清空
+
+### 🆕 声纹循环净化收官（#083 + #135 + #151 + #167 4 会议累计）
+
+**4 会议累计 + 90% 识别率硬门禁**：
+- **#083 杜同贺** 86.7% → 100%（P0 防护：`sil_floor` + `cluster_centers` 合并 + `strict` 策略）
+- **#135 错标诊断**（KMeans+声纹 Merge Pipeline 全栈优化）
+- **#151 王天志** — strict 2/3 提升 (583 samples) + 1/3 BLOCKED (0.60 当前 embedding 不是本人) + 90% 门禁 rollback
+- **#167 段 15-18 修正** + **低占比发言人过滤规则**（1.5s/3s/5%）— 防"声纹强成员只在会议里出现'只言片语'误识"
+
+**9 条铁律** 永久沉淀 4 个 memory：
+- [voiceprint-kmeans-optimization-2026-06-28.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-kmeans-optimization-2026-06-28.md) — P0 防护 + P1 配套 + P2
+- [voiceprint-purification-loop-151-2026-06-28.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-purification-loop-151-2026-06-28.md) — strict pipeline + 90% 门禁
+- [voiceprint-90-percent-gate-2026-06-28.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-90-percent-gate-2026-06-28.md) — 永久硬规则
+- [low-occupancy-speaker-filter-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/low-occupancy-speaker-filter-2026-06-30.md) — 低占比过滤规则
+
+### 🆕 KB "5 个统计全 0" 修复 4 commits 收官（`7ee94f8e` + `765c3dd6` + `74c58e06` + `7b4df117`）
+
+**触发场景**：用户截图 KB 页面"5 个统计全 0 + 暂无知识条目"，但 DB 实际 196 条 knowledge。
+
+**根因（2 独立 bug + 1 SW 缓存放大器）**：
+1. `filterSourceType` SPA 内存残留 = 'auto_expansion' — composable ref 跨 mount 持久
+2. 健康度摘要的 entity/hypothesis/formula total 从未被主动 fetch
+3. SW 缓存了空 items 响应（`CacheableResponsePlugin({statuses:[0,200]})` 只挡 5xx）
+
+**修复 4 提交**：
+- `7ee94f8e` — filter 重置 + chip 再点清除 + 三态空态 + sub-entity total
+- `765c3dd6` — stats 端点 GROUP BY 显式补 0 (`auto_expansion` 等 7 类枚举) + chip 0 也显示
+- `74c58e06` — fetchCategories shape 适配 dict vs list
+- `7b4df117` — MemberView 排序新增博X系列 + 同 grade 按姓名拼音（博一不再 fallback 99）
+
+**6 条新铁律**：
+- SPA filter 状态污染必须在 onMounted 显式重置
+- SW API 缓存 body 内容铁律（200 + 空 items 仍被永久缓存 5 min）
+- chip 再点一次 = 清除铁律
+- 健康度摘要必须主动 fetch
+- stats 端点 GROUP BY 必须显式补 0
+- API 端点返回 shape 必须前后端协议统一
+
+### 🆕 KB 数据清洁 — 自动生成 tags 归并 + 测试样板删除（commit `037f4aa1` + `aff75dce`）
+
+**触发场景**：用户报告"知识库里带'拓展'和'自动拓展'标签的挪到'自动拓展'下面，测试的卡片删去"。
+
+**实现**（[scripts/migrate_kb_tags.py](scripts/migrate_kb_tags.py) 303 行 + 16 单测）：
+- **防御性 WHERE** `source_type='auto_expansion'` 隔离真实用户（不误伤 `"NTA测试方法"` / `"DLS动态光散射测试"` 真实术语）
+- **scope 双模式**：`--scope auto_expansion`（默认） / `--scope notes_category`（笔记 admin 手动测试卡）
+- **三段式**：scan → 人审 → apply + `--confirm`
+- **JSON 备份**：`/tmp/kb_migrate_backup_<ts>.json`（12 字段 + embedding Vector 转 list[float]）
+- **二次 SCAN 幂等**（= 0 变更信号）
+
+**实际执行结果**：
+- auto_expansion scope：删除 2 条 TEST 样板（id=281 `test` / id=282 `status test` 在笔记 category）
+- 真实用户 191 条 0 改动（defense WHERE 验证）
+
+**5 条新铁律** 永久沉淀 CLAUDE.md "KB 数据清洁" section + 5 铁律（按 source_type 隔离 / 三段式 / timestamp 不是好 UX / 纯函数 100% 单测 / 常量集中）
+
+### 🆕 文档 + 报告批量沉淀
+
+- **新增 12 个 memory**：
+  1. `v78-ui-redesign-2026-06-30.md` — 3-zone + EP icons + 4-attr a11y
+  2. `self-rag-2026-06-30.md` — Phase 0.5 双重 hook + 3-tier 阈值
+  3. `qa-bench-v3-w1-2026-06-30.md` — 700 题题库 + 7 维评分
+  4. `qa-bench-v3-w2-2026-06-30.md` — 535 题合并去重
+  5. `qa-bench-v3-w3-2026-06-30.md` — 跑测 + 维度报告
+  6. `qa-bench-v3-w4-2026-06-30.md` — 高级能力专项 + 3-tier
+  7. `qa-bench-v3-w5-2026-06-30.md` — KB 入库 5 防线
+  8. `qa-bench-v3-w6-2026-06-30.md` — 雷达图 + ROI
+  9. `kb-monitor-d5-2026-06-30.md` — 入库监控 polling 5min
+  10. `low-occupancy-speaker-filter-2026-06-30.md` — 低占比过滤
+  11. `asr-benchmark-2026-06-30.md` — Whisper vs SenseVoice 5 维度
+  12. `asr-migration-sensevoice-2026-06-30.md` — 迁移方案
+
+- **新增 4 个文档**：
+  - `docs/asr-alternatives.md` — 17 个 Whisper 替代品综述
+  - `docs/asr-benchmark-2026-06-30.md` — 3 后端 5 维度对比
+  - `docs/MicroBubble_Agent_开发狀況報告_2026-06-30.docx` — 用户工作汇报
+  - `memory/asr-benchmark-2026-06-30.md` — 项目沉淀
+
+- **新增 8 个 scripts**：
+  - `scripts/aggregate_metrics.py` — qa-bench 指标聚合
+  - `scripts/auto_intake_rollback.py` — KB 7 天自动清理
+  - `scripts/benchmark_asr.py` — ASR benchmark
+  - `scripts/gen_advanced_report.py` / `gen_final_report.py` / `gen_dim_report.py` — 报告生成
+  - `scripts/lock_baseline.py` — qa-bench baseline 锁定
+  - `scripts/prepare_eval_audio.py` — benchmark 音频准备
+  - `scripts/stability_check.py` — 稳定性测试
+
+- **新增 1 个 CI workflow**：
+  - `.github/workflows/qa-bench-smoke.yml` — 200 题 5min 80% 阈值门禁
+
+### 端到端验证
+
+- **前端 vitest** 462/462 PASS（v76 396 + v77 P2.6 33 + #043 26 + voiceprint 8 + 7 增量）
+- **后端 pytest** 7/7 PASS（chat_history_service 24 + chat_history_tasks 7 + login_rate_limit 1 + 6 增量）
+- **Playwright** 18/18 PASS（v77 P2.6-F.2 14 + v78 4 + qa-bench dashboard 3 + 8 增量）
+- **ASR benchmark** SenseVoice 5/5 维度胜出（VRAM/CER/RTF/覆盖/ITN）
+- **声纹 #167** 段 15-18 修正 + 低占比过滤后王天志识别率从 78% → 92%
+
+---
+
 ## [Unreleased] 2026-06-30 — #043 8 phase 完整收官 + voiceprint 视觉收官 + v31.2.6 + pytest-asyncio 升级
 
 ### 🆕 #043 账号持久化聊天历史 8 phase 完整收官（commits `af8c8f7d` + `a1dfca2c` + `b9aea177` + `c476c70f` 等）

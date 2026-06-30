@@ -156,6 +156,127 @@
       <el-tab-pane label="检索质量" name="analytics">
         <AnalyticsView />
       </el-tab-pane>
+
+      <!-- Tab 3: KB 入库监控 (W6 D5) — polling 5min 自动刷新 -->
+      <el-tab-pane label="KB 入库监控" name="kb_monitor">
+        <el-card class="stats-card fade-slide-up" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">
+                <span class="card-icon">📚</span>
+                KB 自动入库实时监控
+                <el-tag v-if="kbLoading" type="info" size="small" effect="plain" style="margin-left: 8px">
+                  <el-icon class="is-loading"><Loading /></el-icon> 刷新中
+                </el-tag>
+              </span>
+              <div class="header-actions">
+                <el-button size="small" @click="refreshKb" :icon="Refresh">手动刷新</el-button>
+              </div>
+            </div>
+          </template>
+
+          <!-- 错误提示 -->
+          <el-alert v-if="kbError" type="warning" :title="'加载失败: ' + kbError" :closable="false" show-icon />
+
+          <!-- 4 张统计卡 + 1 张趋势图 -->
+          <el-row :gutter="20" v-if="summary">
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="never">
+                <div class="metric-label">📊 今日入库</div>
+                <div class="metric-value">{{ summary.today_intake || 0 }} <span class="metric-unit">条</span></div>
+                <div class="metric-sub">总 {{ summary.total_in_db || 0 }} 条</div>
+              </el-card>
+            </el-col>
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="never">
+                <div class="metric-label">📈 7日入库</div>
+                <div class="metric-value">{{ weeklyIntakeTotal }} <span class="metric-unit">条</span></div>
+                <div class="metric-sub">日均 {{ Math.round(weeklyIntakeTotal / 7 * 10) / 10 }} 条</div>
+              </el-card>
+            </el-col>
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="never">
+                <div class="metric-label">🎯 KB 命中率</div>
+                <div class="metric-value">{{ hitRatePct }}<span class="metric-unit">%</span></div>
+                <div class="metric-sub">待 W6 反馈模块接入</div>
+              </el-card>
+            </el-col>
+            <el-col :span="6">
+              <el-card class="metric-card" shadow="never">
+                <div class="metric-label">⚠️ 负反馈率</div>
+                <div class="metric-value">{{ negFeedbackPct }}<span class="metric-unit">%</span></div>
+                <div class="metric-sub">健康 ({{ negFeedbackPct < 10 ? '✅' : '⚠️' }})</div>
+              </el-card>
+            </el-col>
+          </el-row>
+
+          <!-- 7日趋势 + rollback 警告 + 灰度状态 -->
+          <el-row :gutter="20" v-if="summary" style="margin-top: 20px">
+            <el-col :span="14">
+              <el-card class="trend-card" shadow="never">
+                <template #header>
+                  <div class="trend-header">
+                    <span>📊 7日入库趋势 (近 7 天)</span>
+                    <span v-if="weeklyIntakeTotal === 0" class="trend-empty-hint">
+                      等待数据中...
+                    </span>
+                  </div>
+                </template>
+                <!-- W6 D5 改进: 全 0 时显示 empty placeholder, 避免 7 个 0px bar 视觉混乱 -->
+                <el-empty
+                  v-if="weeklyIntakeTotal === 0"
+                  description="近 7 天暂无 KB 入库记录"
+                  :image-size="80"
+                />
+                <div v-else class="trend-bars">
+                  <div
+                    v-for="(count, idx) in (summary.weekly_intake || [0,0,0,0,0,0,0])"
+                    :key="idx"
+                    class="trend-bar-wrapper"
+                  >
+                    <div class="trend-bar-value">{{ count }}</div>
+                    <div
+                      class="trend-bar"
+                      :class="{ 'trend-bar-zero': count === 0 }"
+                      :style="{ height: Math.max(6, count / Math.max(...summary.weekly_intake) * 100) + 'px' }"
+                    ></div>
+                    <div
+                      class="trend-bar-day"
+                      :class="{ 'trend-bar-day-today': idx === 6 }"
+                    >{{ ['昨7','昨6','昨5','昨4','昨3','昨2','今日'][idx] }}</div>
+                  </div>
+                </div>
+              </el-card>
+            </el-col>
+            <el-col :span="10">
+              <el-card class="status-card" shadow="never">
+                <template #header>
+                  <span>🔄 系统状态</span>
+                </template>
+                <div class="status-item">
+                  <span class="status-label">灰度开关:</span>
+                  <el-tag :type="summary.gray_scale_enabled === 0 ? 'info' : 'success'" size="default">
+                    {{ grayScaleLabel }}
+                  </el-tag>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">7日 rollback:</span>
+                  <el-tag :type="(summary.rollback_count || 0) > 0 ? 'danger' : 'success'" size="default">
+                    {{ summary.rollback_count || 0 }} 条
+                  </el-tag>
+                </div>
+                <div class="status-item">
+                  <span class="status-label">刷新机制:</span>
+                  <el-tag type="info" size="default">polling 5min</el-tag>
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+
+          <!-- 空状态 -->
+          <el-empty v-if="!summary && !kbLoading" description="暂无数据" />
+        </el-card>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -163,11 +284,44 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
+import { Loading, Refresh } from '@element-plus/icons-vue'
 import changelogData from '@/data/changelog.json'
 import AnalyticsView from '@/views/admin/AnalyticsView.vue'  // v31 检索质量监控
+import { useKbMonitor } from '@/composables/useKbMonitor'  // W6 D5 KB 入库监控
 
 // v31 tab 切换: 'overview' = 项目历程, 'analytics' = 检索质量
+// W6 D5: 'kb_monitor' = KB 入库监控 (polling 5min 自动刷新)
 const activeTab = ref('overview')
+const { summary, lastUpdate, error: kbError, loading: kbLoading, refresh: refreshKb } = useKbMonitor()
+
+// KB 入库监控 - 计算属性
+const weeklyIntakeTotal = computed(() => {
+  if (!summary.value?.weekly_intake) return 0
+  return summary.value.weekly_intake.reduce((a, b) => a + b, 0)
+})
+
+const hitRatePct = computed(() => {
+  return Math.round((summary.value?.hit_rate || 0) * 100)
+})
+
+const negFeedbackPct = computed(() => {
+  return Math.round((summary.value?.negative_feedback_rate || 0) * 100)
+})
+
+const grayScaleLabel = computed(() => {
+  const v = summary.value?.gray_scale_enabled ?? 0
+  if (v === 0) return '未开启'
+  if (v === 5) return '5% (灰度初期)'
+  if (v === 25) return '25% (灰度中期)'
+  if (v === 100) return '100% (全量)'
+  return `${v}%`
+})
+
+const lastUpdateStr = computed(() => {
+  if (!lastUpdate.value) return '从未更新'
+  const d = lastUpdate.value
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
+})
 
 const data = ref(changelogData)
 const stats = ref({
@@ -597,6 +751,115 @@ onMounted(async () => {
 
   .todos-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* W6 D5: KB 入库监控 tab 样式 */
+.kb-monitor-tab {
+  /* metric card 4 列 */
+  .metric-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .metric-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+  }
+  .metric-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.2;
+  }
+  .metric-unit {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+  }
+  .metric-sub {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+  .trend-card,
+  .status-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .trend-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-around;
+    height: 180px;
+    padding: 12px 0;
+    gap: 8px;
+  }
+  .trend-bar-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 40px;
+  }
+  .trend-bar-value {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  .trend-bar {
+    width: 100%;
+    max-width: 48px;
+    background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-accent) 100%);
+    border-radius: 4px 4px 0 0;
+    transition: height 0.3s ease;
+  }
+  .trend-bar-zero {
+    background: var(--color-border);  /* W6 D5 改进: 0 时用灰色, 视觉上区别"有数据" vs "全 0" */
+    opacity: 0.3;
+  }
+  .trend-bar-day {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+  }
+  .trend-bar-day-today {
+    color: var(--color-primary);  /* 突出"今日" */
+    font-weight: 600;
+  }
+  .trend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  .trend-empty-hint {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+  .status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .status-item:last-child {
+    border-bottom: none;
+  }
+  .status-label {
+    color: var(--color-text-secondary);
+    font-size: 14px;
+  }
+  .header-actions {
+    margin-left: auto;
   }
 }
 </style>

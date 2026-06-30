@@ -298,6 +298,179 @@ def evaluate_expectation(
     return issues
 
 
+# === 7 维评分（v3.0） ===
+# 权重（可配置 — 默认基于 plan 3.2 节）
+DIM_WEIGHTS = {
+    "intent": 0.10,
+    "tool": 0.25,
+    "content": 0.30,
+    "rich": 0.05,
+    "defense": 0.15,
+    "perf": 0.10,
+    "consistency": 0.05,
+}
+
+# 分级阈值（按 plan 3.2 节）
+GRADE_THRESHOLDS = {
+    "A": (90, 100),
+    "B": (75, 89),
+    "C": (60, 74),
+    "D": (40, 59),
+    "F": (0, 39),
+}
+
+
+def score_seven_dim(
+    expect: Dict[str, Any],
+    actual: Dict[str, Any],
+    auto_issues: List[Dict[str, Any]],
+    expect_issues: List[Dict[str, Any]],
+    duration_ms: int,
+) -> Dict[str, Any]:
+    """7 维评分（v3.0）
+
+    Returns:
+        {
+            "dim_scores": {"intent": 1.0, "tool": 0.5, ...},  # 0-1
+            "total_score": 84,  # 0-100
+            "grade": "B",
+            "veto": False,  # True if content<0.5 or defense<0.7
+        }
+    """
+    dim_scores = {}
+
+    # 1. Intent 正确性
+    expect_intent = expect.get("intent") or expect.get("intent_any")
+    if expect_intent is None:
+        dim_scores["intent"] = 1.0  # 无强制要求 = 满分
+    elif expect.get("intent") and expect["intent"] == actual.get("intent"):
+        dim_scores["intent"] = 1.0
+    elif expect.get("intent_any") and actual.get("intent") in expect["intent_any"]:
+        dim_scores["intent"] = 1.0
+    else:
+        dim_scores["intent"] = 0.0
+
+    # 2. Tool 选择
+    actual_tools = set(actual.get("tools_called", []))
+    if expect.get("tools_must_all"):
+        must_tools = set(expect["tools_must_all"])
+        if must_tools <= actual_tools:
+            dim_scores["tool"] = 1.0
+        else:
+            dim_scores["tool"] = 0.0
+    elif expect.get("tools"):
+        expected_tools = set(expect["tools"])
+        if expected_tools <= actual_tools:
+            dim_scores["tool"] = 1.0
+        elif expected_tools & actual_tools:
+            dim_scores["tool"] = 0.5
+        else:
+            dim_scores["tool"] = 0.0
+    elif expect.get("tools_any"):
+        any_tools = set(expect["tools_any"])
+        if any_tools & actual_tools:
+            dim_scores["tool"] = 1.0
+        else:
+            dim_scores["tool"] = 0.0
+    else:
+        dim_scores["tool"] = 1.0  # 无强制要求 = 满分
+
+    # 3. Content 准确性
+    content = actual.get("content", "")
+    content_score = 1.0
+    if expect.get("must_contain"):
+        miss = [t for t in expect["must_contain"] if t not in content]
+        if miss:
+            content_score -= 0.4 * len(miss) / len(expect["must_contain"])
+    if expect.get("must_contain_any"):
+        any_hit = False
+        for group in expect["must_contain_any"]:
+            if all(t in content for t in group):
+                any_hit = True
+                break
+        if not any_hit:
+            content_score -= 0.4
+    if expect.get("must_contain_keywords"):
+        miss = [k for k in expect["must_contain_keywords"] if k not in content]
+        if miss:
+            content_score -= 0.3 * len(miss) / len(expect["must_contain_keywords"])
+    if expect.get("must_not_contain"):
+        bad = [t for t in expect["must_not_contain"] if t in content]
+        if bad:
+            content_score -= 0.5 * len(bad) / len(expect["must_not_contain"])
+    if expect.get("forbidden_names"):
+        bad = [n for n in expect["forbidden_names"] if n in content]
+        if bad:
+            content_score -= 0.5
+    # min_length / max_length
+    if expect.get("min_length") and len(content) < expect["min_length"]:
+        content_score -= 0.2
+    if expect.get("max_length") and len(content) > expect["max_length"] * 1.5:  # 超 50% 算超
+        content_score -= 0.2
+    dim_scores["content"] = max(0.0, min(1.0, content_score))
+
+    # 4. Rich Block 合规
+    has_rich = any(
+        e.get("type") == "rich_block"
+        for e in actual.get("_events", [])  # 事件流（需传入）
+    )
+    if expect.get("rich_block_required"):
+        dim_scores["rich"] = 1.0 if has_rich else 0.0
+    else:
+        dim_scores["rich"] = 1.0  # 无要求 = 满分
+
+    # 5. 防御性（基于 auto_issues 数量）
+    # 0 issues = 1.0, 1 issue = 0.7, 2 = 0.4, ≥3 = 0.0
+    n_defense_issues = sum(1 for i in auto_issues if i.get("severity") == "fail" or i.get("type") in (
+        "fake_xml_leaked", "placeholder_text", "hallucinated_names",
+        "forbidden_names_appeared", "found_forbidden_terms",
+        "stream_no_done", "stream_error_event", "tool_error_propagated", "llm_excuse_no_tool_error",
+        "technical_leak", "stream_aborted",
+    ))
+    if n_defense_issues == 0:
+        dim_scores["defense"] = 1.0
+    elif n_defense_issues == 1:
+        dim_scores["defense"] = 0.7
+    elif n_defense_issues == 2:
+        dim_scores["defense"] = 0.4
+    else:
+        dim_scores["defense"] = 0.0
+
+    # 6. 性能（duration 评分）
+    if duration_ms <= DURATION_WARN_S * 1000:
+        dim_scores["perf"] = 1.0
+    elif duration_ms <= DURATION_FAIL_S * 1000:
+        dim_scores["perf"] = 0.6
+    else:
+        dim_scores["perf"] = 0.2
+
+    # 7. 一致性（暂无数据时给满分 — W3 阶段实现 idempotency 后接入）
+    dim_scores["consistency"] = 1.0
+
+    # 总分
+    total = sum(dim_scores[k] * DIM_WEIGHTS[k] for k in DIM_WEIGHTS) * 100
+
+    # 一票否决
+    veto = dim_scores["content"] < 0.5 or dim_scores["defense"] <= 0.7
+    if veto:
+        # 一票否决：降到 F 级别
+        total = min(total, 39.0)
+
+    # 分级
+    grade = "F"
+    for g, (low, high) in GRADE_THRESHOLDS.items():
+        if low <= total <= high:
+            grade = g
+            break
+
+    return {
+        "dim_scores": dim_scores,
+        "total_score": round(total, 1),
+        "grade": grade,
+        "veto": veto,
+    }
+
+
 async def run_single_question(
     client: httpx.AsyncClient,
     question_data: Dict[str, Any],
@@ -383,15 +556,43 @@ async def run_single_question(
     # 期望对比
     expect_issues = evaluate_expectation(expect, actual)
 
+    # v3.0: 集成 3 个新 P0 检测器
+    try:
+        from detectors.stream_interrupt import detect_stream_interrupt
+        for issue in detect_stream_interrupt(events):
+            auto_issues.append(issue)
+    except Exception as e:
+        pass  # 检测器加载失败不影响主流程
+    try:
+        from detectors.tool_error_propagated import detect_tool_error_propagated
+        tool_results = collect_tool_results(events)
+        for issue in detect_tool_error_propagated(content, tool_results):
+            auto_issues.append(issue)
+    except Exception:
+        pass
+    try:
+        from detectors.first_token_latency import detect_first_token_latency
+        for issue in detect_first_token_latency(events):
+            auto_issues.append(issue)
+    except Exception:
+        pass
+
     all_issues = auto_issues + expect_issues
     has_critical = any(
         i["type"] in (
             "fake_xml_leaked", "placeholder_text", "hallucinated_names",
             "forbidden_names_appeared", "missing_tools", "missing_required_terms",
             "found_forbidden_terms", "duration_too_long",
+            "stream_no_done", "stream_error_event", "tool_error_propagated",
+            "llm_excuse_no_tool_error", "technical_leak",
         )
         for i in all_issues
     )
+
+    # v3.0: 7 维评分
+    actual["_events"] = events  # 注入 events 供 score_seven_dim 用
+    seven_dim = score_seven_dim(expect, actual, auto_issues, expect_issues, duration_ms)
+    actual.pop("_events", None)  # 清理临时字段
 
     return {
         "id": qid,
@@ -402,6 +603,7 @@ async def run_single_question(
         "issues": all_issues,
         "has_critical_issue": has_critical,
         "verdict": "FAIL" if has_critical else ("WARN" if all_issues else "PASS"),
+        "seven_dim": seven_dim,  # v3.0 新增
     }
 
 
@@ -483,6 +685,30 @@ async def main():
             summary["issue_distribution"][t] = summary["issue_distribution"].get(t, 0) + 1
 
     # 写 json
+    # v3.0: 汇总 7 维分数
+    dim_totals = {k: 0.0 for k in DIM_WEIGHTS}
+    dim_count = 0
+    grade_dist = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+    veto_count = 0
+    for r in results:
+        if "seven_dim" not in r:
+            continue
+        dim_count += 1
+        for k, v in r["seven_dim"]["dim_scores"].items():
+            dim_totals[k] += v
+        grade_dist[r["seven_dim"]["grade"]] = grade_dist.get(r["seven_dim"]["grade"], 0) + 1
+        if r["seven_dim"]["veto"]:
+            veto_count += 1
+    if dim_count:
+        dim_avg = {k: round(v / dim_count, 3) for k, v in dim_totals.items()}
+    else:
+        dim_avg = {}
+    summary["seven_dim"] = {
+        "dim_avg": dim_avg,
+        "grade_dist": grade_dist,
+        "veto_count": veto_count,
+        "total_scored": dim_count,
+    }
     (output_dir / "results.json").write_text(
         json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -508,6 +734,24 @@ async def main():
     md.append("|---|---|")
     for t, c in sorted(summary["issue_distribution"].items(), key=lambda x: -x[1]):
         md.append(f"| `{t}` | {c} |")
+
+    # v3.0: 7 维评分汇总
+    if summary.get("seven_dim", {}).get("total_scored", 0) > 0:
+        sd = summary["seven_dim"]
+        md.append("\n## 7 维评分汇总 (v3.0)\n")
+        md.append(f"**评分题数**: {sd['total_scored']} | **一票否决**: {sd['veto_count']}\n")
+        md.append("\n### 维度均分\n")
+        md.append("| 维度 | 权重 | 均分 |")
+        md.append("|---|---|---|")
+        for k, w in DIM_WEIGHTS.items():
+            md.append(f"| {k} | {int(w*100)}% | {sd['dim_avg'].get(k, 0):.2f} |")
+        md.append("\n### 分级分布\n")
+        md.append("| 等级 | 范围 | 题数 |")
+        md.append("|---|---|---|")
+        for g in ["A", "B", "C", "D", "F"]:
+            range_str = f"{GRADE_THRESHOLDS[g][0]}-{GRADE_THRESHOLDS[g][1]}"
+            md.append(f"| {g} | {range_str} | {sd['grade_dist'].get(g, 0)} |")
+
     md.append("\n## 失败题详情\n")
     for r in results:
         if r.get("verdict") not in ("FAIL", "WARN"):

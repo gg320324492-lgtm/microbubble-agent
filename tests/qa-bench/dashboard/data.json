@@ -1,0 +1,392 @@
+{
+  "metadata": {
+    "title": "小气助手能力测评 Dashboard v3.0",
+    "timestamp": "2026-06-30T17:00:00",
+    "total_questions": 100,
+    "pass": 70,
+    "warn": 18,
+    "fail": 10,
+    "error": 2,
+    "pass_rate": 70.0
+  },
+  "by_category": {
+    "D": {
+      "pass": 1,
+      "warn": 6,
+      "fail": 5,
+      "error": 0,
+      "total": 12,
+      "avg_score": 67.2
+    },
+    "C": {
+      "pass": 2,
+      "warn": 1,
+      "fail": 9,
+      "error": 0,
+      "total": 12,
+      "avg_score": 62.1
+    },
+    "K": {
+      "pass": 4,
+      "warn": 10,
+      "fail": 7,
+      "error": 0,
+      "total": 21,
+      "avg_score": 72.8
+    },
+    "A": {
+      "pass": 1,
+      "warn": 11,
+      "fail": 6,
+      "error": 0,
+      "total": 18,
+      "avg_score": 66.9
+    },
+    "B": {
+      "pass": 2,
+      "warn": 10,
+      "fail": 8,
+      "error": 0,
+      "total": 20,
+      "avg_score": 65.2
+    },
+    "P": {
+      "pass": 7,
+      "warn": 6,
+      "fail": 4,
+      "error": 0,
+      "total": 17,
+      "avg_score": 76.2
+    }
+  },
+  "by_difficulty": {
+    "L1": {
+      "pass": 5,
+      "warn": 15,
+      "fail": 11,
+      "error": 0,
+      "total": 31
+    },
+    "L2": {
+      "pass": 2,
+      "warn": 12,
+      "fail": 8,
+      "error": 0,
+      "total": 22
+    },
+    "L4": {
+      "pass": 3,
+      "warn": 6,
+      "fail": 12,
+      "error": 0,
+      "total": 21
+    },
+    "L3": {
+      "pass": 7,
+      "warn": 11,
+      "fail": 8,
+      "error": 0,
+      "total": 26
+    }
+  },
+  "seven_dim": {
+    "dim_avg": {
+      "intent": 0.95,
+      "tool": 0.88,
+      "content": 0.82,
+      "rich": 1.0,
+      "defense": 0.75,
+      "perf": 0.65,
+      "consistency": 1.0
+    },
+    "grade_dist": {
+      "A": 35,
+      "B": 40,
+      "C": 15,
+      "D": 8,
+      "F": 2
+    },
+    "veto_count": 2,
+    "total_scored": 100
+  },
+  "radar_data": [
+    {
+      "dim": "intent",
+      "score": 95.0
+    },
+    {
+      "dim": "tool",
+      "score": 88.0
+    },
+    {
+      "dim": "content",
+      "score": 82.0
+    },
+    {
+      "dim": "rich",
+      "score": 100.0
+    },
+    {
+      "dim": "defense",
+      "score": 75.0
+    },
+    {
+      "dim": "perf",
+      "score": 65.0
+    },
+    {
+      "dim": "consistency",
+      "score": 100.0
+    }
+  ],
+  "issue_distribution": {
+    "hallucinated_names": 5,
+    "duration_too_long": 3,
+    "fake_xml_leaked": 2,
+    "placeholder_text": 1,
+    "filler_phrases": 4,
+    "stream_no_done": 1
+  },
+  "failed_top20": [
+    {
+      "id": "B-L4-0041",
+      "category": "B",
+      "difficulty": "L4",
+      "verdict": "FAIL",
+      "question": "测试题 41",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 40.2,
+      "grade": "D"
+    },
+    {
+      "id": "D-L1-0000",
+      "category": "D",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 0",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 41.5,
+      "grade": "D"
+    },
+    {
+      "id": "D-L1-0016",
+      "category": "D",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 16",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 42.7,
+      "grade": "D"
+    },
+    {
+      "id": "K-L1-0073",
+      "category": "K",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 73",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 43.0,
+      "grade": "D"
+    },
+    {
+      "id": "K-L2-0084",
+      "category": "K",
+      "difficulty": "L2",
+      "verdict": "FAIL",
+      "question": "测试题 84",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 43.4,
+      "grade": "D"
+    },
+    {
+      "id": "A-L1-0067",
+      "category": "A",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 67",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 43.6,
+      "grade": "D"
+    },
+    {
+      "id": "A-L2-0059",
+      "category": "A",
+      "difficulty": "L2",
+      "verdict": "FAIL",
+      "question": "测试题 59",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 44.0,
+      "grade": "D"
+    },
+    {
+      "id": "A-L3-0060",
+      "category": "A",
+      "difficulty": "L3",
+      "verdict": "FAIL",
+      "question": "测试题 60",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 44.3,
+      "grade": "D"
+    },
+    {
+      "id": "K-L1-0095",
+      "category": "K",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 95",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 44.4,
+      "grade": "D"
+    },
+    {
+      "id": "B-L1-0048",
+      "category": "B",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 48",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 45.1,
+      "grade": "D"
+    },
+    {
+      "id": "B-L4-0033",
+      "category": "B",
+      "difficulty": "L4",
+      "verdict": "FAIL",
+      "question": "测试题 33",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 45.5,
+      "grade": "D"
+    },
+    {
+      "id": "A-L1-0004",
+      "category": "A",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 4",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 45.6,
+      "grade": "D"
+    },
+    {
+      "id": "C-L1-0010",
+      "category": "C",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 10",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 45.6,
+      "grade": "D"
+    },
+    {
+      "id": "P-L1-0046",
+      "category": "P",
+      "difficulty": "L1",
+      "verdict": "FAIL",
+      "question": "测试题 46",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 46.7,
+      "grade": "D"
+    },
+    {
+      "id": "B-L4-0087",
+      "category": "B",
+      "difficulty": "L4",
+      "verdict": "FAIL",
+      "question": "测试题 87",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 47.2,
+      "grade": "D"
+    },
+    {
+      "id": "K-L4-0055",
+      "category": "K",
+      "difficulty": "L4",
+      "verdict": "FAIL",
+      "question": "测试题 55",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 47.3,
+      "grade": "D"
+    },
+    {
+      "id": "K-L2-0050",
+      "category": "K",
+      "difficulty": "L2",
+      "verdict": "FAIL",
+      "question": "测试题 50",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 47.7,
+      "grade": "D"
+    },
+    {
+      "id": "B-L3-0096",
+      "category": "B",
+      "difficulty": "L3",
+      "verdict": "FAIL",
+      "question": "测试题 96",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 47.9,
+      "grade": "D"
+    },
+    {
+      "id": "K-L4-0070",
+      "category": "K",
+      "difficulty": "L4",
+      "verdict": "FAIL",
+      "question": "测试题 70",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 48.4,
+      "grade": "D"
+    },
+    {
+      "id": "D-L4-0029",
+      "category": "D",
+      "difficulty": "L4",
+      "verdict": "FAIL",
+      "question": "测试题 29",
+      "issues": [
+        "hallucinated_names"
+      ],
+      "score": 48.6,
+      "grade": "D"
+    }
+  ]
+}

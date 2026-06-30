@@ -129,6 +129,10 @@ class MicroBubbleAgent:
         image_media_type: str = "image/png",
         user_id: Optional[int] = None,
         channel_user_id: Optional[str] = None,
+        # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
+        *,
+        model: Optional[str] = None,
+        use_self_rag: Optional[bool] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式对话接口
 

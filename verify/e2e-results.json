@@ -1,0 +1,97 @@
+[
+  {
+    "test": "1. KnowledgeCreateDialog TDZ fix",
+    "pass": true,
+    "details": {
+      "dialogVisible": true,
+      "dialogTitle": "添加知识",
+      "tdzErrors": [],
+      "consoleErrors": []
+    }
+  },
+  {
+    "test": "2. Meeting fullscreen UI",
+    "pass": true,
+    "details": {
+      "currentUrl": "http://localhost:3000/meetings/room",
+      "isFullscreen": true,
+      "hasOverlay": false,
+      "hasPageHeader": true,
+      "pageErrors": [
+        "Cannot read properties of null (reading 'type')"
+      ]
+    }
+  },
+  {
+    "test": "3. Ocean theme primary plain button contrast",
+    "pass": true,
+    "details": {
+      "dataAccent": "ocean",
+      "buttonsFound": 5,
+      "buttonStyles": [
+        {
+          "bg": "rgb(236, 245, 255)",
+          "color": "rgb(64, 158, 255)",
+          "text": "录入声纹"
+        },
+        {
+          "bg": "rgb(236, 245, 255)",
+          "color": "rgb(64, 158, 255)",
+          "text": "录入声纹"
+        },
+        {
+          "bg": "rgb(236, 245, 255)",
+          "color": "rgb(64, 158, 255)",
+          "text": "录入声纹"
+        },
+        {
+          "bg": "rgb(236, 245, 255)",
+          "color": "rgb(64, 158, 255)",
+          "text": "录入声纹"
+        },
+        {
+          "bg": "rgb(236, 245, 255)",
+          "color": "rgb(64, 158, 255)",
+          "text": "录入声纹"
+        }
+      ],
+      "hasContrast": true
+    }
+  },
+  {
+    "test": "4. KnowledgeView 5 tabs",
+    "pass": true,
+    "details": {
+      "tabsFound": [
+        "知识库",
+        "实体图谱",
+        "科研假设",
+        "公式计算",
+        "我的长期记忆"
+      ],
+      "tabResults": [
+        {
+          "tab": "知识库",
+          "errors": []
+        },
+        {
+          "tab": "实体图谱",
+          "errors": []
+        },
+        {
+          "tab": "科研假设",
+          "errors": []
+        },
+        {
+          "tab": "公式计算",
+          "errors": []
+        },
+        {
+          "tab": "我的长期记忆",
+          "errors": []
+        }
+      ],
+      "tabsWithErrors": 0
+    }
+  }
+]

@@ -19,7 +19,21 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
-## 最新里程碑（2026-06-30）
+## 最新里程碑（2026-06-30 晚班）
+
+- 🆕 **v78 UI redesign — 3-zone 对话窗口 + EP icons + 4-attr a11y（commit `34e82fd9`）** — SessionSidebar overlap 修复 (`flex min-width:0`) + 右键/long-press 上下文菜单 + sortedSessions 置顶冒泡 + 新 NavRail.vue + ChatViewSSE 3-zone 重构 + ThinkingModeSwitch segmented 替代双 toggle 冲突 + 移动端 EP icons 同步 + `--icon-size-*` token；8 条新铁律
+- 🆕 **#009 Self-RAG 重检索 + 用户深度思考开关（4 commits）** — Phase 0.5 双重 hook（Haiku judge 800ms + refined_query）+ 3-tier 阈值分档（高≥0.8 直接出 / 中高≥0.6 不重 / 中≥0.4+can_answer 不重 / 低<0.4 触发重检索）+ 前端 useUiStore useDeepThinking + 7 个 AGENT_SELF_RAG_* flag；8 条新铁律
+- 🆕 **qa-bench v3.0 6 周冲刺完整收官** — 700 题题库（业务 500 + P 高级 100 + K 横切 100）+ 3 个 P0 检测器 + 7 维评分 + 535 题合并去重 + 14 业务域 × 6 intent × 4 难度矩阵 + KB 入库 5 防线 + 200 题 smoke 套件 + 7 维雷达图 + ROI 100-150% + 8 项决策清单；GitHub Actions CI 200 题 5min 80% 阈值门禁
+- 🆕 **Whisper → SenseVoice 迁移收官（commit `9effb8ed`）** — 5 维度实测对比 SenseVoice 全胜：VRAM 0.93 vs 8.0 GB (-88%) / RTF 0.01-0.09 vs 0.08-0.25 (3-25x) / 中文 CER 15.6 vs 25.7% (改善 39%) / 20 min 会议覆盖 500 vs 105 字 (4.7x) / 中文标点 + ITN 原生支持；chunked 推理 (60s + `cache={}`) 防长会议 OOM；torch 2.7+cu128 支持 RTX 5090 sm_120
+- 🆕 **KB 数据清洁：B 物理删 1 字节相同副本 + C 前端 dedup toggle（commit `cfd486b6`）** — `scripts/migrate_kb_dedup_titles.py` 5 类 FK 防御 (`knowledge_relations`/`images`/`extractions`/`gaps` ARRAY/`rag_evaluations.context` ILIKE) + 19 单测全 PASS + JSON 备份 28936 字节 + 前端 dedup toggle 默认 ON (`localStorage` key `mnb:kb:dedupView` 仅影响显示策略，不动 stats)；8 条新铁律
+- 🆕 **KB 卡片 source_type 重分类（commit `9964f7e4`）** — 180 张 `[拓展-XX]` 卡片从 NULL 重分类到 `auto_expansion`（chip 显示 0 → 180），用 `Knowledge.title.startswith("[拓展")` 避开 SQLAlchemy `regexp_match` 转义陷阱（11 条早期手写数据不动）
+- 🆕 **KB 入库监控 D5（commits `ee442125` + `9ea0f87d`）** — 后端 `GET /api/v1/knowledge/auto-intake-summary`（today_intake + weekly_intake[7] + hit_rate + negative_feedback_rate + rollback_count + total_in_db=179）+ 前端 `useKbMonitor.js` polling 5min + ProjectStatsView 第 3 个 tab（4 metric card + 7 日趋势 CSS 柱状图 + 系统状态卡）+ empty placeholder + today 高亮；2 铁律
+- 🆕 **声纹循环净化 4 会议累计收官** — #083 杜同贺 86.7%→100% + #135 错标诊断 + #151 王天志 90% 门禁 rollback + #167 段 15-18 修正 + **低占比发言人过滤规则**（1.5s/3s/5%）；9 条铁律 + 4 个 memory 沉淀
+- 🆕 **KB "5 个统计全 0" 修复 4 commits 收官** — `7ee94f8e` filter 重置 + chip 再点清除 + 三态空态 + sub-entity total / `765c3dd6` stats GROUP BY 显式补 0 / `74c58e06` fetchCategories shape 适配 dict vs list / `7b4df117` MemberView 排序博X系列；6 条新铁律
+- 🆕 **KB 数据清洁 — 自动生成 tags 归并 + 测试样板删除（commit `037f4aa1` + `aff75dce`）** — `scripts/migrate_kb_tags.py` 303 行 + 16 单测全 PASS + scope 双模式（auto_expansion 默认 / notes_category）+ 防御性 WHERE `source_type='auto_expansion'` 隔离真实用户 + 三段式（scan → 人审 → apply + `--confirm`）+ JSON 备份 12 字段 + 真实用户 0 改动
+- 🆕 **v78 UI redesign** + **#009 Self-RAG** + **qa-bench v3.0** + **Whisper→SenseVoice** + **KB 清洁** + **声纹循环净化** + 12 个 memory + 4 文档 + 8 scripts + 1 CI workflow 新增 — **详见 [CHANGELOG.md](CHANGELOG.md) [Unreleased] section**
+
+## 历史里程碑（2026-06-30 早班）
 
 - 🆕 **#043 账号持久化聊天历史 8 phase 完整收官（ChatGPT/Doubao 模式）** — PostgreSQL 三表 + 11 API + 流式持久化 + localStorage 自动迁移 + UI 升级（搜索/分享/导出/标签）+ Celery 30 天清理 + 12 条新铁律（vitest 492/492 + pytest 7/7 PASS）
 - 🆕 **voiceprint 视觉收官（5 commits，voiceprint-2026-06-30 任务号）** — VoiceprintCard class 化 + VoiceTestDialog Canvas getComputedStyle + ConfidenceChart ECharts 主题色 + Vitest 阈值 8 个单测 + Playwright 6 主题 smoke test；5 条新铁律

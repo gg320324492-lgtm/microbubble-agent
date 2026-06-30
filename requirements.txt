@@ -24,6 +24,9 @@ mcp>=0.9.0
 # 语音识别
 pilk>=0.2.4
 faster-whisper>=1.0.0
+# 2026-06-30 ASR benchmark: FunASR (Paraformer / SenseVoice) + jiwer (CER/WER 评估)
+funasr>=1.3.0
+jiwer>=4.0.0
 
 # 声纹识别 + VAD
 modelscope>=1.14.0
