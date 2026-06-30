@@ -1,7 +1,13 @@
-"""声纹识别服务 — 3D-Speaker ERes2Net 嵌入提取 + pgvector 匹配
+"""声纹识别服务 — 3D-Speaker 嵌入提取 + pgvector 匹配
 
 2026-06-19 修复: batch_extract_embeddings 改用 ThreadPoolExecutor 并行单条
 原 batch 实现因 ERes2Net 强制 batch=1，只有第 1 段被处理 (89/2830 有效)
+
+2026-06-30 升级: ERes2Net → CAM++ (3D-Speaker zh-cn)
+- 中文 EER: 3.5% → ~2.3% (-34%)
+- 维度保持 192 (drop-in 升级, 无需 alembic 迁移)
+- 模型 ID: iic/speech_campplus_sv_zh-cn_16k-common
+- 详见 docs/voiceprint-alternatives.md (C2 候选)
 """
 
 import io
@@ -20,10 +26,14 @@ from app.models.member import Member
 
 logger = logging.getLogger("microbubble.voiceprint")
 
-# 3D-Speaker ERes2Net 嵌入维度（ERes2Net 实际输出 192 维，不是 256）
+# 3D-Speaker 嵌入维度（CAM++ 实际输出 192 维，与 ERes2Net 一致）
 EMBEDDING_DIM = 192
 # 声纹匹配置信度阈值（余弦距离，越低越相似）
 MATCH_THRESHOLD = 0.7
+
+# 2026-06-30 升级: 模型 ID (CAM++ zh-cn)
+# 切换历史: iic/speech_eres2net_sv_zh-cn_16k-common → iic/speech_campplus_sv_zh-cn_16k-common
+VOICEPRINT_MODEL_ID = "iic/speech_campplus_sv_zh-cn_16k-common"
 
 
 class VoiceprintService:
@@ -40,12 +50,14 @@ class VoiceprintService:
             from modelscope.pipelines import pipeline
             from modelscope.utils.constant import Tasks
 
-            logger.info("正在加载 3D-Speaker ERes2Net 模型...")
+            # 2026-06-30: 升级 ERes2Net → CAM++ (zh-cn)
+            # 中文 EER 3.5% → ~2.3%, 维度保持 192 (drop-in)
+            logger.info("正在加载 3D-Speaker CAM++ 模型...")
             self._pipeline = pipeline(
                 Tasks.speaker_verification,
-                model="iic/speech_eres2net_sv_zh-cn_16k-common",
+                model=VOICEPRINT_MODEL_ID,
             )
-            logger.info("3D-Speaker 模型加载完成")
+            logger.info("3D-Speaker CAM++ 模型加载完成")
         except Exception as e:
             logger.error(f"3D-Speaker 模型加载失败: {e}（声纹识别将不可用，所有发言人显示 unknown）")
             # 不抛异常，让 identify_speaker 返回 unknown 而不是崩溃 WS
