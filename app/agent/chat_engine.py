@@ -62,6 +62,9 @@ class ChatEngine:
         db=None,
         channel_user_id: Optional[str] = None,
         session_id: str = "default",
+        # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle 优先于 settings 全局开关）
+        self_rag_enabled: Optional[bool] = None,
+        synthesis_model_override: Optional[str] = None,
     ) -> AsyncIterator[StreamEvent]:
         """方案 C 单阶段流式综合主入口
 
@@ -167,6 +170,9 @@ class ChatEngine:
             channel_user_id=channel_user_id,
             trace=trace,
             llm=self.llm,  # 显式注入，避免 agentic_loop 走全局 LLMClient 单例（跨 loop 安全）
+            # 2026-06-30 #009: 透传 per-request override
+            self_rag_enabled=self_rag_enabled,
+            synthesis_model_override=synthesis_model_override,
         )
 
         loop = AgenticLoop()
@@ -178,6 +184,7 @@ class ChatEngine:
                     intent=intent or IntentResult(category=IntentCategory.SEARCH_INFO, confidence=0.0),
                     ctx=ctx,
                     max_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
+                    user_message=_last_user_text(messages),  # #009 Self-RAG gate 用
                 ):
                     # 收集 trace 数据
                     if evt.type == "tool_use":
@@ -216,6 +223,10 @@ class ChatEngine:
         db=None,
         channel_user_id: Optional[str] = None,
         session_id: str = "default",
+        # 2026-06-30 #009 Self-RAG: per-request 覆盖
+        *,
+        self_rag_enabled: Optional[bool] = None,
+        synthesis_model_override: Optional[str] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式接口 — 内部转给 synthesize_stream
 
@@ -228,6 +239,9 @@ class ChatEngine:
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
+            # 2026-06-30 #009 透传 per-request override
+            self_rag_enabled=self_rag_enabled,
+            synthesis_model_override=synthesis_model_override,
         ):
             yield evt
 
@@ -245,6 +259,10 @@ class ChatEngine:
         session_id: str = "default",
         image_data: Optional[bytes] = None,
         image_media_type: str = "image/png",
+        # 2026-06-30 #009 Self-RAG: per-request 覆盖
+        *,
+        self_rag_enabled: Optional[bool] = None,
+        synthesis_model_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """非流式接口 — 消费 synthesize_stream 收集为 dict
 
@@ -281,6 +299,9 @@ class ChatEngine:
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
+            # 2026-06-30 #009 透传 per-request override
+            self_rag_enabled=self_rag_enabled,
+            synthesis_model_override=synthesis_model_override,
         ):
             if evt.type == "text_delta":
                 content += evt.delta or ""

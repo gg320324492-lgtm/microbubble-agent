@@ -31,6 +31,22 @@ export type StreamEventType =
   // ===== 2026-06-29 #043 新增 2 种事件 =====
   | 'message_persisted' // [snapshot] 后端已落库某条消息（user 流开始时 + assistant 流结束时 各 yield 一次）
   | 'sync_required'     // [snapshot] 流式中断/异常，前端需重新拉历史（流中断兜底）
+  // ===== 2026-06-30 #009 Self-RAG 新增 2 种事件 =====
+  | 'retrieval_assessment' // [snapshot] Self-RAG judge 评估结果（confidence/can_answer/missing/reretrieved）
+  | 'reretrieval'         // [snapshot] 正在重新检索（refined_query/attempt），前端显示"🔍 正在重新检索..."动画
+
+/** Self-RAG 检索评估 + 重检索 (retrieval_assessment / reretrieval 事件) */
+export interface RetrievalInfo {
+  phase: 'assessment' | 'reretrieval'
+  confidence?: number          // 0-1
+  can_answer?: boolean         // judge 判断检索能否回答问题
+  missing?: string             // 缺什么信息
+  reason?: string
+  reretrieved?: boolean        // 是否触发了重检索
+  attempt?: number             // 第几次重检索（0 = 首次, 1 = 第 1 次 reretrieve）
+  refined_query?: string       // 改写后的 query
+  latency_ms?: number          // judge 调用耗时
+}
 
 export type RichBlockType =
   | 'meeting'
@@ -134,4 +150,6 @@ export interface StreamEvent {
   persisted_is_partial?: boolean                       // 是否 partial（流式中断标记）
   // ===== #043 新增字段（sync_required 事件） =====
   sync_reason?: 'aborted' | 'error'                     // 中断原因
+  // ===== #009 新增字段（retrieval_assessment / reretrieval 事件） =====
+  retrieval?: RetrievalInfo
 }

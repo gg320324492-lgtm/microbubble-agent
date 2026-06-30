@@ -54,6 +54,9 @@ class ChatRequest(BaseModel):
     """对话请求"""
     message: str
     session_id: str = "default"
+    # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle）
+    model: Optional[str] = None  # 覆盖 settings.AGENT_SYNTHESIS_MODEL
+    use_self_rag: Optional[bool] = None  # 覆盖 settings.AGENT_SELF_RAG_ENABLED
 
 
 class ChatResponse(BaseModel):
@@ -100,6 +103,9 @@ async def chat(
         session_id=request.session_id,
         db=db,
         user_id=current_user.id,
+        # 2026-06-30 #009 Self-RAG: per-request override
+        model=request.model,
+        use_self_rag=request.use_self_rag,
     )
     return ChatResponse(
         content=result["content"],
@@ -279,6 +285,9 @@ async def chat_stream_route(
                 session_id=request.session_id,
                 db=db,
                 user_id=current_user.id,
+                # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
+                model=request.model,
+                use_self_rag=request.use_self_rag,
             ):
                 yield event.to_sse()
         except Exception as e:

@@ -551,6 +551,205 @@ class AgenticLoop:
     def __init__(self):
         pass  # 全部通过 ctx 注入（铁律 1）
 
+    async def _run_self_rag_gate(
+        self,
+        user_message: str,
+        tool_calls: list[dict],
+        plan_step_results: list[dict],
+        messages: list[dict],
+        intent: IntentResult,
+        ctx: ToolContext,
+    ) -> AsyncIterator[StreamEvent]:
+        """2026-06-30 #009 Self-RAG Phase 0.5 gate
+
+        评估 plan_step 阶段 search_knowledge 检索质量.
+        低质量时改写 query 重检索, 最多 settings.AGENT_SELF_RAG_MAX_RERETRIEVE 次.
+        每次重检索 yield tool_use + tool_result + messages.append 配对 (CLAUDE.md 2026-06-14 铁律: 必须 balanced).
+        """
+        from app.services.self_rag import (
+            get_context_compressor,
+            get_self_rag_checker,
+        )
+
+        # 1. 提取 plan_step 里 search_knowledge 工具结果
+        search_k_results: list[dict] = []
+        for tc in tool_calls:
+            if tc.get("name") == "search_knowledge":
+                output = tc.get("output")
+                if isinstance(output, dict) and output.get("status") == "success":
+                    for r in output.get("results", []):
+                        if isinstance(r, dict):
+                            search_k_results.append(r)
+
+        if not search_k_results:
+            return  # 没 search_knowledge 调过, gate 无意义
+
+        # 2. 限定 doc 数 (避免单轮太多 doc 把 judge 撑爆)
+        max_docs = settings.AGENT_SELF_RAG_MAX_CONTEXT_DOCS
+        if len(search_k_results) > max_docs:
+            search_k_results = search_k_results[:max_docs]
+
+        # 3. 压缩成 judge 用的 context 字符串
+        compressor = get_context_compressor()
+        judge_model = (
+            settings.AGENT_SELF_RAG_MODEL
+            if settings.AGENT_SELF_RAG_MODEL
+            else settings.AGENT_REFLECTION_MODEL
+        )
+        checker = get_self_rag_checker()
+        reretrieve_count = 0
+        refined_queries: list[str] = []
+        final_assessment: dict = {}
+        # 4. Phase 0.5 循环: 每次重检索后再 judge (最多 MAX 次)
+        while True:
+            compressed = await compressor.compress(user_message, search_k_results)
+            if compressed == "知识库中暂无相关内容。":
+                # 检索没结果, judge 默认通过即可, 不浪费 LLM call
+                break
+
+            assessment = await checker.check_relevance(
+                user_message, compressed, model=judge_model
+            )
+            confidence = assessment.get("confidence", 0.0)
+            can_answer = assessment.get("can_answer", False)
+            final_assessment = assessment
+
+            # 5. 决策: 通过 / 重检索 / 强制退出
+            if confidence >= settings.AGENT_SELF_RAG_THRESHOLD:
+                break
+            if can_answer and confidence >= settings.AGENT_SELF_RAG_RELAXED_THRESHOLD:
+                break
+            if reretrieve_count >= settings.AGENT_SELF_RAG_MAX_RERETRIEVE:
+                logger.warning(
+                    f"🛑 [self_rag] max_reretrieve_reached: query='{user_message[:50]}...' "
+                    f"final_confidence={confidence:.2f} attempts={reretrieve_count+1}"
+                )
+                break
+
+            # 6. 重检索
+            refined_query = checker.refine_query(
+                user_message, assessment.get("missing", ""), intent.keywords
+            )
+            refined_queries.append(refined_query)
+
+            # [snapshot] retrieval_assessment (重检索前先报告当前评估)
+            yield StreamEvent(
+                type="retrieval_assessment",
+                retrieval={
+                    "phase": "assessment",
+                    "confidence": confidence,
+                    "can_answer": can_answer,
+                    "missing": assessment.get("missing", ""),
+                    "reason": assessment.get("reason", ""),
+                    "reretrieved": True,
+                    "attempt": reretrieve_count,
+                    "latency_ms": assessment.get("latency_ms", 0),
+                },
+            )
+
+            # [snapshot] reretrieval
+            yield StreamEvent(
+                type="reretrieval",
+                retrieval={
+                    "phase": "reretrieval",
+                    "refined_query": refined_query,
+                    "attempt": reretrieve_count,
+                },
+            )
+
+            # 7. 调 search_knowledge 重检索
+            tool_use_id = f"reretrieve_{reretrieve_count}_search_knowledge"
+            input_payload = {"query": refined_query}
+            yield StreamEvent(
+                type="tool_use",
+                tool_name="search_knowledge",
+                tool_use_id=tool_use_id,
+                tool_input=input_payload,
+            )
+            try:
+                new_result = await dispatch_tool("search_knowledge", input_payload, ctx)
+            except Exception as e:
+                logger.error(f"self_rag reretrieve {reretrieve_count} failed: {e}", exc_info=True)
+                new_result = {
+                    "status": "error",
+                    "code": "TOOL_EXECUTION_ERROR",
+                    "message": str(e),
+                }
+            yield StreamEvent(
+                type="tool_result",
+                tool_name="search_knowledge",
+                tool_use_id=tool_use_id,
+                tool_output=new_result if isinstance(new_result, dict) else {"result": str(new_result)},
+            )
+
+            # 8. 合并到 messages + tool_calls + plan_step_results
+            new_content = json.dumps(new_result, ensure_ascii=False, default=str)
+            messages.append({
+                "role": "assistant",
+                "content": [{"type": "text", "text": f"[Self-RAG 重检索 #{reretrieve_count}] 使用改写 query 重检索"}],
+            })
+            messages.append({
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": new_content,
+                }],
+            })
+            tool_calls.append({
+                "name": "search_knowledge",
+                "input": input_payload,
+                "output": new_result,
+            })
+            plan_step_results.append({
+                "type": "tool_result",
+                "tool_use_id": tool_use_id,
+                "content": new_content,
+            })
+
+            # 9. 更新 search_k_results (合并去重, 按 rerank_score 降序)
+            new_results = []
+            if isinstance(new_result, dict) and new_result.get("status") == "success":
+                new_results = new_result.get("results", []) or []
+            existing_ids = {r.get("id") for r in search_k_results if r.get("id") is not None}
+            for r in new_results:
+                if isinstance(r, dict) and r.get("id") not in existing_ids:
+                    search_k_results.append(r)
+                    existing_ids.add(r.get("id"))
+            search_k_results.sort(
+                key=lambda r: r.get("rerank_score") or r.get("normalized_score") or 0,
+                reverse=True,
+            )
+            if len(search_k_results) > max_docs:
+                search_k_results = search_k_results[:max_docs]
+
+            reretrieve_count += 1
+
+        # 10. 出口: yield 最终 retrieval_assessment
+        yield StreamEvent(
+            type="retrieval_assessment",
+            retrieval={
+                "phase": "assessment",
+                "confidence": final_assessment.get("confidence", 0.0),
+                "can_answer": final_assessment.get("can_answer", True),
+                "missing": final_assessment.get("missing", ""),
+                "reason": final_assessment.get("reason", ""),
+                "reretrieved": reretrieve_count > 0,
+                "attempt": reretrieve_count,
+                "latency_ms": final_assessment.get("latency_ms", 0),
+            },
+        )
+
+        # 11. 持久化到 trace
+        if ctx.trace is not None:
+            try:
+                ctx.trace.set_retrieval_quality(
+                    score=final_assessment.get("confidence", 0.0),
+                    attempts=reretrieve_count,
+                )
+            except Exception as e:
+                logger.warning(f"set_retrieval_quality failed: {e}")
+
     async def run(
         self,
         messages: list[dict],
@@ -558,6 +757,7 @@ class AgenticLoop:
         intent: IntentResult,
         ctx: ToolContext,
         max_rounds: Optional[int] = None,
+        user_message: str = "",  # 2026-06-30 #009: Self-RAG gate 用, 留空时降级为不跑 gate
     ) -> AsyncIterator[StreamEvent]:
         """主入口 — 5 阶段编排
 
@@ -703,6 +903,26 @@ class AgenticLoop:
                     plan_status="done",
                     label=f"📋 计划完成 ({success_count}/{len(planned)})",
                 )
+
+                # ===== Phase 0.5: Self-RAG Retrieval Gate (#009 - 2026-06-30) =====
+                # plan_step 完成后, 用 Haiku judge 评估检索质量.
+                # 低质量时改写 query 重检索 (最多 AGENT_SELF_RAG_MAX_RERETRIEVE 次, 默认 1).
+                # 双层控制: ctx.self_rag_enabled (per-request, 用户 toggle) > settings.AGENT_SELF_RAG_ENABLED (全局).
+                self_rag_active = (
+                    ctx.self_rag_enabled
+                    if ctx.self_rag_enabled is not None
+                    else settings.AGENT_SELF_RAG_ENABLED
+                )
+                if self_rag_active and intent.category in {IntentCategory.SEARCH_INFO, IntentCategory.EXPLAIN_CONCEPT}:
+                    async for gate_evt in self._run_self_rag_gate(
+                        user_message=user_message,
+                        tool_calls=tool_calls,
+                        plan_step_results=plan_step_results,
+                        messages=messages,
+                        intent=intent,
+                        ctx=ctx,
+                    ):
+                        yield gate_evt
 
             # ===== Phase 1: 工具循环 =====
             for round_idx in range(max_rounds):

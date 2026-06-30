@@ -65,6 +65,9 @@ const toggleTheme = () => themeStore.toggle()
 const uiStore = useUiStore()
 const showThinking = computed(() => uiStore.showThinking)
 const toggleThinking = () => uiStore.toggleThinking()
+// 2026-06-30 #009 Self-RAG 深度思考 toggle
+const useDeepThinking = computed(() => uiStore.useDeepThinking)
+const toggleDeepThinking = () => uiStore.toggleDeepThinking()
 
 // ============================================================================
 // UI 状态（仅桌面端）
@@ -377,6 +380,16 @@ onUnmounted(() => {
             >
               {{ showThinking ? '🧠' : '💭' }}
             </el-button>
+            <!-- 2026-06-30 #009 Self-RAG 深度思考 toggle -->
+            <el-button
+              text
+              @click="toggleDeepThinking"
+              :title="useDeepThinking ? '深度思考（已启用, 带 Self-RAG 重检索）' : '快速回答（已启用, 跳过 judge）'"
+              :aria-label="useDeepThinking ? '深度思考' : '快速回答'"
+              :class="['depth-toggle', { active: useDeepThinking }]"
+            >
+              {{ useDeepThinking ? '🧠' : '⚡' }}
+            </el-button>
             <el-button text @click="toggleTheme" :title="isDark ? '切换浅色' : '切换深色'">
               {{ isDark ? '☀️' : '🌙' }}
             </el-button>
@@ -650,6 +663,13 @@ onUnmounted(() => {
 
 /* 2026-06-14 收官：thinking toggle 按钮激活态高亮 */
 .thinking-toggle.active { color: var(--color-primary, #FF7A5C); background: var(--color-primary-bg); }
+/* 2026-06-30 #009 Self-RAG 深度思考 toggle 激活态高亮 */
+.depth-toggle.active { color: var(--color-primary, #FF7A5C); background: var(--color-primary-bg); }
+/* 2026-06-30 #009 retrieval_assessment 状态徽章 */
+.retrieval-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: var(--color-text-secondary); background: var(--color-bg-warm); }
+.retrieval-badge.reretrieved { color: var(--color-primary); background: var(--color-primary-bg); }
+.retrieval-badge.pulse { animation: badgePulse 1.4s ease-in-out infinite; }
+@keyframes badgePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 .msg-content :deep(p) { margin: 0 0 8px; }
 .msg-content :deep(p:last-child) { margin-bottom: 0; }
@@ -705,6 +725,9 @@ onUnmounted(() => {
 [data-theme="dark"] .chat-immersive {
   background: linear-gradient(180deg, #1a1d23 0%, #0e1015 100%);
 }
+[data-theme="dark"] .depth-toggle.active { color: var(--color-primary); background: var(--color-primary-bg); }
+[data-theme="dark"] .retrieval-badge { background: var(--color-bg-warm); color: var(--color-text-secondary); }
+[data-theme="dark"] .retrieval-badge.reretrieved { color: var(--color-primary); background: var(--color-primary-bg); }
 [data-theme="dark"] .chat-header {
   background: rgba(26, 29, 35, 0.85);
   border-bottom-color: var(--color-border-light);
