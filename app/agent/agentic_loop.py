@@ -615,24 +615,60 @@ class AgenticLoop:
             final_assessment = assessment
 
             # 5. 决策: 通过 / 重检索 / 强制退出
-            if confidence >= settings.AGENT_SELF_RAG_THRESHOLD:
+            # W4 T3.4: 3-tier 分级 (高≥0.8 直接出 / 中≥0.6 不重检索 / 低<0.4 触发重检索)
+            HIGH_CONFIDENCE = 0.8
+            tier = "unknown"
+            if confidence >= HIGH_CONFIDENCE:
+                # 高置信度: 直接出, 跳过 RAG reretrieve
+                tier = "high"
+                logger.info(f"✅ [self_rag] high_confidence={confidence:.2f} (≥{HIGH_CONFIDENCE}), skip reretrieve")
+            elif confidence >= settings.AGENT_SELF_RAG_THRESHOLD:
+                # 中高置信度 (>= 0.6): 跳出
+                tier = "mid_high"
+                logger.info(f"✓ [self_rag] mid_high_confidence={confidence:.2f} (≥{settings.AGENT_SELF_RAG_THRESHOLD})")
+            elif can_answer and confidence >= settings.AGENT_SELF_RAG_RELAXED_THRESHOLD:
+                # 中置信度 (>= 0.4) + can_answer: 跳出
+                tier = "mid"
+                logger.info(f"~ [self_rag] mid_confidence={confidence:.2f} can_answer=True, accept anyway")
+            else:
+                # 低置信度: 触发重检索 (除非已达上限)
+                tier = "low"
+                if reretrieve_count >= settings.AGENT_SELF_RAG_MAX_RERETRIEVE:
+                    logger.warning(
+                        f"🛑 [self_rag] max_reretrieve_reached: query='{user_message[:50]}...' "
+                        f"final_confidence={confidence:.2f} attempts={reretrieve_count+1}"
+                    )
+                    tier = "low_max_reached"
+                else:
+                    logger.info(f"↻ [self_rag] low_confidence={confidence:.2f}, triggering reretrieve #{reretrieve_count+1}")
+                    # [snapshot] retrieval_assessment (重检索前先报告当前评估)
+                    yield StreamEvent(
+                        type="retrieval_assessment",
+                        retrieval={
+                            "phase": "assessment",
+                            "confidence": confidence,
+                            "can_answer": can_answer,
+                            "missing": assessment.get("missing", ""),
+                            "reason": assessment.get("reason", ""),
+                            "reretrieved": False,  # W4 T3.4: 还未真正 reretrieve
+                            "attempt": reretrieve_count,
+                            "tier": tier,
+                            "latency_ms": assessment.get("latency_ms", 0),
+                        },
+                    )
+                    # 继续循环, 进入重检索流程 (注意: break/continue 由外层 for 控制)
+            # 决策标记结束, 继续到外层循环
+            # 跳出内层: 如果是高/中/中低, 我们退出 Self-RAG; 如果是 low, 外层 for 继续
+            if tier in ("high", "mid_high", "mid", "low_max_reached"):
                 break
-            if can_answer and confidence >= settings.AGENT_SELF_RAG_RELAXED_THRESHOLD:
-                break
-            if reretrieve_count >= settings.AGENT_SELF_RAG_MAX_RERETRIEVE:
-                logger.warning(
-                    f"🛑 [self_rag] max_reretrieve_reached: query='{user_message[:50]}...' "
-                    f"final_confidence={confidence:.2f} attempts={reretrieve_count+1}"
-                )
-                break
-
-            # 6. 重检索
+            # 否则 tier == "low" 且未到 max, 继续外层 for
+            # 不 break, 但需要在重检索前计算 refined_query (W4 T3.4 集成)
             refined_query = checker.refine_query(
                 user_message, assessment.get("missing", ""), intent.keywords
             )
             refined_queries.append(refined_query)
 
-            # [snapshot] retrieval_assessment (重检索前先报告当前评估)
+            # [snapshot] retrieval_assessment
             yield StreamEvent(
                 type="retrieval_assessment",
                 retrieval={
@@ -643,6 +679,7 @@ class AgenticLoop:
                     "reason": assessment.get("reason", ""),
                     "reretrieved": True,
                     "attempt": reretrieve_count,
+                    "tier": tier,
                     "latency_ms": assessment.get("latency_ms", 0),
                 },
             )

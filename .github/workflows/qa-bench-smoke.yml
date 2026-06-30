@@ -1,0 +1,137 @@
+name: QA Bench Smoke (200 questions, < 5 min)
+
+# v3.0 计划 — 每次 PR 跑 200 题 smoke 子集
+# 700 题全量太慢（5+ 小时），所以跑 hot_path 标签的 200 题
+# 5 分钟内必须通过，否则 PR 红 ✗ 阻断 merge
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/agent/**"
+      - "app/services/chat_history*.py"
+      - "app/services/self_rag.py"
+      - "app/services/reminder_*.py"
+      - "app/config.py"
+      - "tests/qa-bench/**"
+      - ".github/workflows/qa-bench-smoke.yml"
+  push:
+    branches: [main]
+    paths:
+      - "app/agent/**"
+      - "app/services/chat_history*.py"
+      - "app/services/self_rag.py"
+      - "tests/qa-bench/**"
+      - ".github/workflows/qa-bench-smoke.yml"
+  workflow_dispatch:
+    inputs:
+      question_count:
+        description: "跑题数 (默认 200 smoke, 0 = 全量 700)"
+        required: false
+        default: "200"
+
+permissions:
+  contents: read
+
+jobs:
+  qa-bench-smoke:
+    name: QA Bench 200 题 Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --prefer-binary --retries 10 --timeout 60 httpx
+
+      - name: Wait for backend health
+        run: |
+          # 启动后端（dev 模式）
+          docker compose up -d postgres redis app celery-worker
+          # 等后端 healthy（最长 60s）
+          for i in {1..30}; do
+            if curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1; then
+              echo "✓ Backend healthy"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "✗ Backend startup timeout"
+              docker compose logs app | tail -50
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Generate 700 题题库
+        working-directory: tests/qa-bench
+        run: |
+          python gen780.py --output questions_780.jsonl --schema-only
+          # 验证题数
+          wc -l questions_780.jsonl
+
+      - name: Run 200 题 smoke
+        working-directory: tests/qa-bench
+        env:
+          API_BASE: http://localhost:8000
+          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          # 截取前 200 题（hot_path 优先）
+          head -200 questions_780.jsonl > smoke_200.jsonl
+          python runner.py \
+            --token "${QA_TOKEN:-mock}" \
+            --questions smoke_200.jsonl \
+            --output results/smoke \
+            --concurrency 4
+          # 期望 5 分钟内完成
+          if [ -f results/smoke/results.json ]; then
+            echo "✓ Smoke 200 题完成"
+            cat results/smoke/report.md | head -50
+          else
+            echo "✗ Smoke 失败"
+            exit 1
+          fi
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-bench-smoke-report
+          path: tests/qa-bench/results/smoke/
+          retention-days: 14
+
+      - name: Fail if pass_rate < 80%
+        if: always()
+        working-directory: tests/qa-bench
+        run: |
+          if [ -f results/smoke/results.json ]; then
+            PASS_RATE=$(python -c "
+import json
+with open('results/smoke/results.json') as f:
+    d = json.load(f)
+total = d['summary']['total']
+pass_ = d['summary']['pass']
+print(round(pass_ / max(total, 1) * 100, 1))
+")
+            echo "Smoke 通过率: ${PASS_RATE}%"
+            # 阈值 80% — 跌至 80% 以下 PR 红 ✗
+            python -c "
+import sys
+pass_rate = float('${PASS_RATE}')
+threshold = 80.0
+if pass_rate < threshold:
+    print(f'❌ 通过率 {pass_rate}% < 阈值 {threshold}%, PR 阻断')
+    sys.exit(1)
+else:
+    print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, PR 通过')
+"
+          fi

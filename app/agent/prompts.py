@@ -164,7 +164,19 @@ _PRIMITIVE_RECOGNITION_SECTION = """\
 
 _CROSS_DOMAIN_SYNTHESIS_SECTION = """\
 
-## 跨域综合规则 (CROSS-DOMAIN SYNTHESIS — 2026-06-28 #086 chat agent 质量优化)
+## 跨域综合规则 (CROSS-DOMAIN SYNTHESIS — 2026-06-28 #086 + 2026-06-30 #086 W3 强化)
+
+### 4 域综合 5-段 Checklist (W3 T3.3 强化 — LLM 输出前自检)
+
+【回答写完后, LLM 必须逐项检查以下 5 点, 全部 ✅ 才能发出去】
+
+- □ **1. 知识域 (search_knowledge)**: 回答中有原理/定义段 + RAG 引用 [1][2]?
+- □ **2. 公式域 (list_formulas)**: 回答中有 1-3 个公式 + 代入示例?
+- □ **3. 假设域 (list_hypotheses)**: 回答中有本组相关假设 + 验证状态?
+- □ **4. 成员域 (query_members)**: 回答中有 1-3 个成员姓名 + research_area?
+- □ **5. 综合段 (Synthesize)**: 4 域内容在文末"综合"段串联成 1 段自然语言 (不机械罗列)?
+
+**任一未打勾** → LLM 必须重写或**显式说明"假设库暂无 X 相关研究"** (合规但需透明)。
 
 【硬规则 - 仅 explain_concept 场景】当用户问"什么是 X" / "X 的原理" / "X 怎么算" / "X 怎么测" / "X 怎么用" / 解释某概念时, **必须强制调 4 个工具跨 4 个域**, 缺一即违反规则.
 

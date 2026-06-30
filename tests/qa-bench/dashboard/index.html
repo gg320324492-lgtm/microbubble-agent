@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小气助手能力测评 Dashboard v3.0</title>
+  <!-- Chart.js 4.x (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --color-primary: #FF7A5C;
+      --color-bg-page: #fafafa;
+      --color-bg-card: #ffffff;
+      --color-text-primary: #1f2937;
+      --color-text-secondary: #6b7280;
+      --color-border: #e5e7eb;
+      --color-pass: #10b981;
+      --color-warn: #f59e0b;
+      --color-fail: #ef4444;
+      --color-error: #9ca3af;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --color-bg-page: #0f172a;
+        --color-bg-card: #1e293b;
+        --color-text-primary: #f3f4f6;
+        --color-text-secondary: #9ca3af;
+        --color-border: #334155;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--color-bg-page);
+      color: var(--color-text-primary);
+      line-height: 1.5;
+      padding: 20px;
+    }
+
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    h2 { font-size: 18px; margin: 20px 0 12px; }
+    h3 { font-size: 14px; color: var(--color-text-secondary); font-weight: 500; }
+
+    .container { max-width: 1400px; margin: 0 auto; }
+
+    .meta {
+      color: var(--color-text-secondary);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-pass { border-left: 4px solid var(--color-pass); }
+    .card-warn { border-left: 4px solid var(--color-warn); }
+    .card-fail { border-left: 4px solid var(--color-fail); }
+    .card-score { border-left: 4px solid var(--color-primary); }
+
+    .card .label { color: var(--color-text-secondary); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+    .card .sub { color: var(--color-text-secondary); font-size: 12px; margin-top: 4px; }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .chart-container {
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      height: 320px;
+    }
+
+    .chart-container h2 { margin-top: 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    th { background: var(--color-bg-page); font-weight: 600; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-pass { background: rgba(16, 185, 129, 0.1); color: var(--color-pass); }
+    .badge-warn { background: rgba(245, 158, 11, 0.1); color: var(--color-warn); }
+    .badge-fail { background: rgba(239, 68, 68, 0.1); color: var(--color-fail); }
+    .badge-error { background: rgba(156, 163, 175, 0.1); color: var(--color-error); }
+
+    .grade-A { color: var(--color-pass); font-weight: 600; }
+    .grade-B { color: #3b82f6; font-weight: 600; }
+    .grade-C { color: var(--color-warn); font-weight: 600; }
+    .grade-D { color: #f97316; font-weight: 600; }
+    .grade-F { color: var(--color-fail); font-weight: 600; }
+
+    .dim-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .dim-bar .name { width: 80px; font-size: 13px; }
+    .dim-bar .bar { flex: 1; height: 16px; background: var(--color-border); border-radius: 8px; overflow: hidden; }
+    .dim-bar .fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
+    .dim-bar .pct { width: 50px; text-align: right; font-size: 12px; color: var(--color-text-secondary); }
+
+    footer {
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-border);
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 小气助手能力测评 Dashboard</h1>
+    <div class="meta" id="meta">加载中...</div>
+
+    <!-- 汇总卡片 -->
+    <div class="summary-cards" id="summary-cards"></div>
+
+    <!-- 图表区域 -->
+    <div class="grid-2">
+      <div class="chart-container">
+        <h2>按业务域得分</h2>
+        <canvas id="chart-by-category"></canvas>
+      </div>
+      <div class="chart-container">
+        <h2>7 维能力雷达图</h2>
+        <canvas id="chart-radar"></canvas>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="chart-container">
+        <h2>按难度分布</h2>
+        <canvas id="chart-by-difficulty"></canvas>
+      </div>
+      <div class="chart-container">
+        <h2>问题类型分布（TOP 10）</h2>
+        <canvas id="chart-issues"></canvas>
+      </div>
+    </div>
+
+    <!-- 7 维详情 -->
+    <h2>7 维评分详情</h2>
+    <div class="card" id="seven-dim-detail"></div>
+
+    <!-- 失败题 TOP 20 -->
+    <h2>失败题 TOP 20（按分数升序）</h2>
+    <div class="card">
+      <table id="failed-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>域</th>
+            <th>难度</th>
+            <th>等级</th>
+            <th>分数</th>
+            <th>问题</th>
+            <th>失败检测器</th>
+          </tr>
+        </thead>
+        <tbody id="failed-tbody"></tbody>
+      </table>
+    </div>
+
+    <footer>
+      测评时间: <span id="footer-ts"></span> | 数据来源: qa-bench/runner.py v3.0 | v0.0.1 (2026-06-30)
+    </footer>
+  </div>
+
+  <script>
+    // 加载 data.json
+    fetch('./data.json')
+      .then(r => r.json())
+      .then(data => render(data))
+      .catch(err => {
+        document.getElementById('meta').textContent = '❌ 加载 data.json 失败: ' + err.message;
+        console.error(err);
+      });
+
+    function render(data) {
+      const meta = data.metadata;
+      document.getElementById('meta').textContent =
+        `${meta.timestamp} | 总题数 ${meta.total_questions} | 通过率 ${meta.pass_rate}%`;
+
+      // 汇总卡片
+      const cards = document.getElementById('summary-cards');
+      cards.innerHTML = `
+        <div class="card card-score"><div class="label">总题数</div><div class="value">${meta.total_questions}</div></div>
+        <div class="card card-pass"><div class="label">PASS</div><div class="value">${meta.pass}</div><div class="sub">${(meta.pass / Math.max(meta.total_questions, 1) * 100).toFixed(1)}%</div></div>
+        <div class="card card-warn"><div class="label">WARN</div><div class="value">${meta.warn}</div><div class="sub">${(meta.warn / Math.max(meta.total_questions, 1) * 100).toFixed(1)}%</div></div>
+        <div class="card card-fail"><div class="label">FAIL</div><div class="value">${meta.fail}</div><div class="sub">${(meta.fail / Math.max(meta.total_questions, 1) * 100).toFixed(1)}%</div></div>
+        <div class="card card-score"><div class="label">ERROR</div><div class="value">${meta.error}</div><div class="sub">连接/异常</div></div>
+      `;
+
+      // 按业务域柱状图
+      const catLabels = Object.keys(data.by_category);
+      const catPass = catLabels.map(c => data.by_category[c].pass);
+      const catWarn = catLabels.map(c => data.by_category[c].warn);
+      const catFail = catLabels.map(c => data.by_category[c].fail);
+      new Chart(document.getElementById('chart-by-category'), {
+        type: 'bar',
+        data: {
+          labels: catLabels,
+          datasets: [
+            { label: 'PASS', data: catPass, backgroundColor: '#10b981' },
+            { label: 'WARN', data: catWarn, backgroundColor: '#f59e0b' },
+            { label: 'FAIL', data: catFail, backgroundColor: '#ef4444' },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } },
+          scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+        },
+      });
+
+      // 7 维雷达图
+      const radarLabels = data.radar_data.map(d => d.dim);
+      const radarScores = data.radar_data.map(d => d.score);
+      new Chart(document.getElementById('chart-radar'), {
+        type: 'radar',
+        data: {
+          labels: radarLabels,
+          datasets: [{
+            label: '维度均分',
+            data: radarScores,
+            backgroundColor: 'rgba(255, 122, 92, 0.2)',
+            borderColor: '#FF7A5C',
+            borderWidth: 2,
+            pointBackgroundColor: '#FF7A5C',
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { r: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } } },
+        },
+      });
+
+      // 按难度柱状图
+      const diffLabels = Object.keys(data.by_difficulty).sort();
+      const diffPass = diffLabels.map(d => data.by_difficulty[d].pass);
+      const diffFail = diffLabels.map(d => data.by_difficulty[d].fail);
+      new Chart(document.getElementById('chart-by-difficulty'), {
+        type: 'bar',
+        data: {
+          labels: diffLabels,
+          datasets: [
+            { label: 'PASS', data: diffPass, backgroundColor: '#10b981' },
+            { label: 'FAIL', data: diffFail, backgroundColor: '#ef4444' },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+
+      // 问题类型分布
+      const issues = Object.entries(data.issue_distribution)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+      new Chart(document.getElementById('chart-issues'), {
+        type: 'bar',
+        data: {
+          labels: issues.map(([k]) => k),
+          datasets: [{
+            label: '次数',
+            data: issues.map(([, v]) => v),
+            backgroundColor: '#f59e0b',
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true } },
+        },
+      });
+
+      // 7 维详情
+      const dimWeights = { intent: 10, tool: 25, content: 30, rich: 5, defense: 15, perf: 10, consistency: 5 };
+      const dimAvg = data.seven_dim.dim_avg || {};
+      const dimDetail = document.getElementById('seven-dim-detail');
+      dimDetail.innerHTML = Object.entries(dimAvg).map(([k, v]) => `
+        <div class="dim-bar">
+          <span class="name">${k}</span>
+          <div class="bar"><div class="fill" style="width: ${(v * 100).toFixed(0)}%"></div></div>
+          <span class="pct">${(v * 100).toFixed(0)}% (${dimWeights[k] || 0}%)</span>
+        </div>
+      `).join('');
+
+      // 失败题 TOP 20
+      const failedTbody = document.getElementById('failed-tbody');
+      failedTbody.innerHTML = data.failed_top20.map(f => `
+        <tr>
+          <td><code>${f.id}</code></td>
+          <td>${f.category}</td>
+          <td>${f.difficulty}</td>
+          <td><span class="grade-${f.grade}">${f.grade}</span></td>
+          <td>${f.score.toFixed(1)}</td>
+          <td title="${f.question}">${f.question.substring(0, 50)}...</td>
+          <td>${f.issues.map(i => `<span class="badge badge-fail">${i}</span>`).join(' ')}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('footer-ts').textContent = meta.timestamp;
+    }
+  </script>
+</body>
+</html>

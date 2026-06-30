@@ -3,9 +3,33 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-06-30）
+## 当前状态（2026-06-30 晚班收官）
 
-**已交付**：
+**已交付（晚班新增）**：
+- 🆕 **v78 UI redesign — 3-zone 对话窗口 + EP icons + 4-attr a11y（commit `34e82fd9`）** — SessionSidebar overlap 修复（`flex min-width:0`）+ 右键/long-press 上下文菜单 + sortedSessions 置顶冒泡 + NavRail.vue + ChatViewSSE 3-zone 重构（`≡` / `ChatBreadcrumb` / `+FAB`）+ ThinkingModeSwitch segmented（替代 🧠/🧠 双 toggle 冲突）+ 移动端 EP icons 同步 + variables.css `--icon-size-*` token；8 条新铁律
+- 🆕 **#009 Self-RAG 重检索 + 用户深度思考开关（4 commits `740ac4c1` + `a49bd644` + 后续 hook 收尾）** — Phase 0.5 双重 hook（Haiku judge 800ms + refined_query）+ **3-tier 阈值分档**（高≥0.8 直接出 / 中高≥0.6 不重 / 中≥0.4+can_answer 不重 / 低<0.4 触发重检索）+ 前端 useUiStore useDeepThinking + 7 个 AGENT_SELF_RAG_* flag + `agentic_loop.py:615-665` 实施；8 条新铁律
+- 🆕 **qa-bench v3.0 6 周冲刺完整收官（W1-W6 6 阶段交付）**：
+  - **W1 基建**（commit `d5b6e6c5`） — 700 题题库（业务 500 + P 高级 100 + K 横切 100）+ 3 个 P0 检测器（stream_interrupt / tool_error_propagated / first_token_latency）+ 7 维评分
+  - **W2 题库生产** — 229 手工 + 107 DB + 144 模板 + 15 expert = **535 题合并去重**
+  - **W3 跑测 + 维度报告** — 端到端 SSE 跑测发现 Self-RAG 回归 bug（`MicroBubbleAgent.chat_stream` 缺 model 参数）+ intent 标签重生成 + 14 业务域 × 6 intent × 4 难度矩阵
+  - **W4 高级能力专项** — P 高级 102 题（Self-RAG 21 + fan-out 21 + plan_step 15 + 持久化 15 + abort 15 + grounding 15）+ 3-tier 阈值分档实施
+  - **W5 KB 入库 + 回归 + 稳定性** — `save_to_kb.py` 5 道防线（分数≥4 / 内容≥200字 / 意图白名单 / 灰度 `--enable-intake` / 备份+7天rollback）+ 200 题 smoke 套件 + 回归基线 v3.0 锁定
+  - **W6 D5 KB 入库监控** + 7 维雷达图 + ROI 100-150% + 8 项决策清单
+  - **关键文件**：`tests/qa-bench/{runner.py, gen780.py, questions_*.jsonl, dashboard/}` + `scripts/{auto_intake_rollback.py, gen_advanced_report.py, gen_final_report.py, gen_dim_report.py, aggregate_metrics.py, lock_baseline.py, stability_check.py}` + `.github/workflows/qa-bench-smoke.yml` (CI 200 题 5min 80% 阈值)
+- 🆕 **Whisper → SenseVoice 迁移收官（commit `9effb8ed`）** — 5 维度实测对比 SenseVoice 全胜：VRAM 0.93 vs 8.0 GB (-88%) / RTF 0.01-0.09 vs 0.08-0.25 (3-25x) / 中文 CER 15.6 vs 25.7% (改善 39%) / 20 min 会议覆盖 500 vs 105 字 (4.7x) / 中文标点 + ITN 原生支持；chunked 推理 (60s + `cache={}`) 防 20 min 长会议 OOM (peak 25.77 GB → 安全)；torch 2.7+cu128 支持 RTX 5090 sm_120；内联 `strip_all_tags` 避免跨容器 import
+- 🆕 **KB 数据清洁：B 物理删 + C 前端 dedup toggle（commit `cfd486b6`）** — `scripts/migrate_kb_dedup_titles.py` ~560 行 + 19 单测全 PASS + 5 类 FK 防御（`knowledge_relations` CASCADE + `images` CASCADE + `extractions` CASCADE + `gaps` ARRAY `&&` + `rag_evaluations.context` ILIKE 数字边界）+ JSON 备份 `backups/kb-dedup-20260630/`（28936 字节，1 条待恢复）+ 前端 dedup toggle 默认 ON（`mnb:kb:dedupView`，仅影响"📋 最近知识"显示策略，不动 stats 计数）；8 条新铁律
+- 🆕 **KB 卡片 source_type 重分类（commit `9964f7e4`）** — 180 张 `[拓展-XX]` 卡片从 NULL → `'auto_expansion'`（chip 显示 0 → 180）+ 踩坑：SQLAlchemy `regexp_match` 转义陷阱（11 条误伤）→ 改用 `Knowledge.title.startswith("[拓展")` (SQL 层 `LIKE 'X%'`)
+- 🆕 **KB 入库监控 D5（commits `ee442125` + `9ea0f87d`）** — 后端 `GET /api/v1/knowledge/auto-intake-summary`（today_intake + weekly_intake[7] + hit_rate + negative_feedback_rate + rollback_count + total_in_db=179）+ 前端 `web/src/composables/useKbMonitor.js`（polling 5min Q5 setInterval）+ `web/src/views/ProjectStatsView.vue` 第 3 个 tab（4 metric card + 7 日趋势 CSS 柱状图 + 系统状态卡）+ empty placeholder + today 高亮（防误导）
+- 🆕 **声纹循环净化 4 会议累计收官** — #083 杜同贺 86.7%→100%（P0 防护 `sil_floor` + `cluster_centers` 合并 + `strict` 策略）+ #135 错标诊断 + **#151 王天志 90% 识别率硬门禁 rollback** + **#167 段 15-18 修正 + 低占比发言人过滤规则（1.5s/3s/5%）**；9 条铁律 + 4 个 memory 沉淀
+- 🆕 **KB "5 个统计全 0" 修复 4 commits 收官（`7ee94f8e` + `765c3dd6` + `74c58e06` + `7b4df117`）** — filter 残留重置 + SW 缓存空 items 拒绝 + 三态空态（loading/error/empty）+ sub-entity total 主动 fetch + stats GROUP BY 显式补 0 + fetchCategories shape dict vs list 适配 + MemberView 排序博X系列；6 条新铁律
+- 🆕 **KB 数据清洁 — 自动生成 tags 归并 + 测试样板删除（commit `037f4aa1` + `aff75dce`）** — `scripts/migrate_kb_tags.py` 303 行 + 16 单测 + scope 双模式（`auto_expansion` 默认 / `notes_category` 笔记 admin 手动测试卡）+ 防御性 WHERE `source_type='auto_expansion'` 隔离真实用户（不误伤 `"NTA测试方法"` / `"DLS动态光散射测试"` 真实术语）+ 三段式（scan → 人审 → apply + `--confirm`）+ JSON 备份 12 字段 + 真实用户 0 改动
+- 🆕 **文档 + 报告批量沉淀**：
+  - **新增 12 个 memory**（含 v78 / self-rag / qa-bench-v3 w1-w6 / kb-monitor / low-occupancy / asr-migration）
+  - **新增 4 个文档**：`docs/asr-alternatives.md` + `docs/asr-benchmark-2026-06-30.md` + `docs/MicroBubble_Agent_开发狀況報告_2026-06-30.docx` + `memory/asr-benchmark-2026-06-30.md`
+
+---
+
+## 历史状态（2026-06-30 早班）
 - 🆕 **前端视觉 5 件套 + 视觉收官延伸（11 commits 收尾 2026-06-30）**：
   - **KnowledgeToolbar 4 按钮**（commit `558962b1`）—— `.btn-text` utility class 同名冲突修复
   - **MemberView 录入声纹 ghost primary**（commit 845803c3）—— `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600`
