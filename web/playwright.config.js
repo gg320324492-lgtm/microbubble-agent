@@ -73,11 +73,11 @@ export default defineConfig({
       testMatch: /mobile\/.*\.spec\.mjs/,
     },
     // v77 废弃: desktop-chrome project (workflow bug 长期未修, desktop baseline 永远 fail)
-    // 如本地需要 desktop 视觉回归调试, 手动注释下方代码块并提供 -linux baseline
-    // {
-    //   name: 'desktop-chrome',
-    //   use: { ...devices['Desktop Chrome'] },
-    //   testMatch: /desktop\/.*\.spec\.mjs/,
-    // },
+    // W6 D6 templates-tab-integration 端到端验证 (单次临时启用)
+    {
+      name: 'desktop-chrome',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: /desktop\/.*\.spec\.mjs/,
+    },
   ],
 })
