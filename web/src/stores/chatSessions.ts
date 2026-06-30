@@ -86,9 +86,14 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
   const sessions = ref<ChatSession[]>(initial.sessions || [])
   const currentId = ref<string | null>(initial.currentId)
 
-  // 排序：按 updatedAt 倒序
+  // 排序：v78 UI-redesign — 置顶冒泡到顶，同优先级内按 updatedAt 倒序
   const sortedSessions = computed(() =>
-    [...sessions.value].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))
+    [...sessions.value].sort((a, b) => {
+      const ap = a.is_pinned ? 1 : 0
+      const bp = b.is_pinned ? 1 : 0
+      if (ap !== bp) return bp - ap
+      return (b.updatedAt || '').localeCompare(a.updatedAt || '')
+    })
   )
 
   // 自动持久化

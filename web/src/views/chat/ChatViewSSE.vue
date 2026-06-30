@@ -20,12 +20,15 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, Search } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny } from '@element-plus/icons-vue'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
 // #043 Phase 6 UI 升级
 import SearchPalette from '@/components/chat/SearchPalette.vue'
+// v78 UI-redesign：3-zone 新组件
+import ChatBreadcrumb from '@/components/chat/ChatBreadcrumb.vue'
+import ThinkingModeSwitch from '@/components/chat/ThinkingModeSwitch.vue'
 import ShareDialog from '@/components/chat/ShareDialog.vue'
 import ExportDialog from '@/components/chat/ExportDialog.vue'
 import TagsEditor from '@/components/chat/TagsEditor.vue'
@@ -33,6 +36,7 @@ import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'
+import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -57,6 +61,9 @@ const {
 // ============================================================================
 const themeStore = useThemeStore()
 const isDark = computed(() => themeStore.isDark)
+
+// v78 UI-redesign: 顶部 [+] FAB 用 store 直接创建会话
+const chatSessionsStore = useChatSessionsStore()
 const toggleTheme = () => themeStore.toggle()
 
 // ============================================================================
@@ -97,6 +104,11 @@ const dialogSession = ref<any>(null)
 function onShareSession(session: any) {
   dialogSession.value = session
   showShareDialog.value = true
+}
+
+// v78 UI-redesign: 顶栏 [+] 新对话按钮 - 调用 store.createSession 简化版
+function onNewSession() {
+  chatSessionsStore.createSession()
 }
 function onExportSession(session: any) {
   dialogSession.value = session
@@ -344,56 +356,37 @@ onUnmounted(() => {
       />
 
       <div class="chat-main">
-        <!-- 顶部 -->
+        <!-- v78 UI-redesign 3-zone 顶栏 -->
         <header class="chat-header glass glass-lg">
           <div class="header-left">
-            <el-button text size="small" @click="sidebarCollapsed = !sidebarCollapsed" title="切换侧栏">
-              <span style="font-size: 16px;">☰</span>
+            <el-button
+              id="chat-header-sidebar-toggle"
+              name="chat-header-sidebar-toggle"
+              text
+              size="small"
+              @click="sidebarCollapsed = !sidebarCollapsed"
+              aria-label="切换侧栏"
+              title="切换侧栏"
+            >
+              <el-icon><component :is="sidebarCollapsed ? 'Expand' : 'Fold'" /></el-icon>
             </el-button>
-            <el-avatar :size="36" class="bot-avatar" alt="小气助手头像" title="小气助手">
-              <el-icon><ChatDotRound /></el-icon>
-            </el-avatar>
-            <div class="header-text">
-              <div class="bot-name">小气</div>
-              <div class="bot-status">
-                <span class="status-dot" />
-                <span v-if="isCurrentSessionSending">生成中...</span>
-                <span v-else>在线</span>
-              </div>
-            </div>
+          </div>
+          <div class="header-center">
+            <ChatBreadcrumb :status="isCurrentSessionSending ? 'generating' : 'idle'" />
           </div>
           <div class="header-right">
             <el-button
-              text
-              @click="showSearchPalette = true"
-              title="搜索会话（⌘K / Ctrl+K）"
-              aria-label="搜索会话"
+              id="chat-header-new-session"
+              name="chat-header-new-session"
+              type="primary"
+              round
+              size="default"
+              aria-label="新建对话"
+              title="新建对话"
+              @click="onNewSession"
             >
-              <el-icon><Search /></el-icon>
+              <el-icon><Plus /></el-icon>
             </el-button>
-            <el-button
-              text
-              @click="toggleThinking"
-              :title="showThinking ? '隐藏思考过程' : '显示思考过程'"
-              :aria-label="showThinking ? '隐藏思考过程' : '显示思考过程'"
-              :class="['thinking-toggle', { active: showThinking }]"
-            >
-              {{ showThinking ? '🧠' : '💭' }}
-            </el-button>
-            <!-- 2026-06-30 #009 Self-RAG 深度思考 toggle -->
-            <el-button
-              text
-              @click="toggleDeepThinking"
-              :title="useDeepThinking ? '深度思考（已启用, 带 Self-RAG 重检索）' : '快速回答（已启用, 跳过 judge）'"
-              :aria-label="useDeepThinking ? '深度思考' : '快速回答'"
-              :class="['depth-toggle', { active: useDeepThinking }]"
-            >
-              {{ useDeepThinking ? '🧠' : '⚡' }}
-            </el-button>
-            <el-button text @click="toggleTheme" :title="isDark ? '切换浅色' : '切换深色'">
-              {{ isDark ? '☀️' : '🌙' }}
-            </el-button>
-            <el-button text @click="clearChat">清空对话</el-button>
           </div>
         </header>
 
@@ -483,12 +476,45 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- v78 UI-redesign: 思考模式分段控件 (输入栏上方) -->
+    <div class="thinking-switch-row">
+      <ThinkingModeSwitch />
+    </div>
+
     <footer class="input-bar glass glass-lg">
       <div class="input-core">
         <div class="input-actions-left">
-          <el-button text @click="triggerImageUpload"><span class="iconfont">🖼️</span></el-button>
-          <el-button text @click="triggerFileUpload"><span class="iconfont">📎</span></el-button>
-          <el-button text @click="toggleVoiceMode" :type="voiceMode ? 'primary' : ''"><span class="iconfont">🎤</span></el-button>
+          <el-button
+            id="chat-image-upload-btn"
+            name="chat-image-upload"
+            text
+            aria-label="上传图片"
+            title="上传图片"
+            @click="triggerImageUpload"
+          >
+            <el-icon :size="18"><Picture /></el-icon>
+          </el-button>
+          <el-button
+            id="chat-file-upload-btn"
+            name="chat-file-upload"
+            text
+            aria-label="上传文件"
+            title="上传文件"
+            @click="triggerFileUpload"
+          >
+            <el-icon :size="18"><Paperclip /></el-icon>
+          </el-button>
+          <el-button
+            id="chat-voice-toggle-btn"
+            name="chat-voice-toggle"
+            text
+            :type="voiceMode ? 'primary' : ''"
+            aria-label="录音"
+            title="录音"
+            @click="toggleVoiceMode"
+          >
+            <el-icon :size="18"><Microphone /></el-icon>
+          </el-button>
         </div>
         <textarea
           ref="textareaRef"
@@ -505,6 +531,8 @@ onUnmounted(() => {
         />
         <el-button
           v-if="!isCurrentSessionSending"
+          id="chat-send-btn"
+          name="chat-send"
           type="primary"
           class="send-btn"
           :disabled="!inputText.trim()"
@@ -512,18 +540,20 @@ onUnmounted(() => {
           title="发送消息"
           @click="sendMessage()"
         >
-          <span>↑</span>
+          <el-icon :size="18"><Promotion /></el-icon>
         </el-button>
         <!-- 2026-06-14 方案 C Stage 4：停止生成按钮（流式中变 ⏹） -->
         <el-button
           v-else
+          id="chat-stop-btn"
+          name="chat-stop"
           type="danger"
           class="stop-btn"
           aria-label="停止生成"
           title="停止生成"
           @click="stopGeneration()"
         >
-          <span>⏹</span>
+          <el-icon :size="18"><VideoPause /></el-icon>
         </el-button>
       </div>
       <input
@@ -599,17 +629,30 @@ onUnmounted(() => {
 .msg-enter-active { transition: var(--transition-all-slow) ease; }
 .msg-enter-from { opacity: 0; transform: translateY(8px); }
 .chat-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;  /* v78 3-zone: 左 / 中 / 右 */
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--color-border-light);
+  min-height: 56px;
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
+.header-center { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.header-right { display: flex; align-items: center; gap: 4px; }
 .bot-avatar { background: var(--gradient-welcome-hero); }
 .bot-msg-avatar { background: var(--gradient-welcome-hero); flex-shrink: 0; }
 .header-text { line-height: 1.2; }
 .bot-name { font-weight: 600; font-size: 15px; }
 .bot-status { font-size: 12px; color: var(--color-text-secondary); display: flex; align-items: center; gap: 4px; }
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
+
+/* v78 UI-redesign: 思考模式 segmented control 行 (在消息区和输入栏之间) */
+.thinking-switch-row {
+  display: flex; align-items: center; justify-content: center;
+  padding: 6px 20px;
+  border-top: 1px solid var(--color-border-light);
+}
 
 .messages { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
 
