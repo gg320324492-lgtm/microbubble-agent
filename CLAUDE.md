@@ -7274,3 +7274,45 @@ git push origin main
 #    caches.keys() + delete 清空所有 cache → 几秒白屏 → 之后 196 数据正常
 ```
 
+
+### 续集 2：stats 端点 source_types GROUP BY 不含 0 group 导致 chip 视觉空白 (2026-06-30 17:16)
+
+**触发场景** — 用户反馈: "你给出这个自动拓展的浏览器检测指令，目前还是空白"。前 4 个修复 commit `7ee94f8e` 已 push, 后端 stats 端点新代码已 docker cp + 重启。curl 验证 `auto_expansion: 0` 已在响应里, **但用户浏览器 chip 仍看不到数字**。
+
+**根因（更隐蔽的 bug）**:
+1. `app/api/v1/knowledge.py:228-246` `/knowledge/stats` 端点用 `SELECT source_type, COUNT(*) ... GROUP BY source_type` — **`GROUP BY` 不返回 count=0 的 group**
+2. `auto_expansion` 清空后, `source_types` dict 只有 `{"conversation": 4, "meeting": 1}` 不含 `auto_expansion` key
+3. `KnowledgeDashboard.vue:169` `if (sourceTypeKey && props.sourceTypeStats?.[sourceTypeKey] !== undefined)` 因 undefined 走 fallback → `props.categories.find(c => c.name === '自动拓展')` 也找不到 → 返回 0
+4. `v-if="getCategoryCount(cat.name) > 0"` 0 不显示 → **chip 上没数字 → 视觉看起来"空白"**
+
+**双层修复**:
+- **后端** (`app/api/v1/knowledge.py:246-251`): 显式补 0 防止 GROUP BY 漏 group
+  ```python
+  for st in ("auto_expansion", "auto_research", "conversation", "meeting", "paper", "chat"):
+      source_types.setdefault(st, 0)
+  ```
+- **前端** (`web/src/components/knowledge/KnowledgeDashboard.vue:32-37`): system chip 0 也显示数字
+  ```html
+  <span v-if="cat.isSystem || getCategoryCount(cat.name) > 0" ...>{{ getCategoryCount(cat.name) }}</span>
+  ```
+
+**新增铁律 5**:
+- **stats 端点 GROUP BY 必须显式补 0** — `GROUP BY` 不返回 count=0 的 group, 前端拿不到 key 就会显示空白/异常. dashboard 统计端点必须对所有"业务可见枚举"显式补 0, 不依赖 SQL 隐式行为.
+- 适用场景: `/api/v1/knowledge/stats` / `/api/v1/chat/stats` / `/api/v1/task/stats` 等任何 dashboard 统计端点
+
+**用户浏览器侧必要操作** — 即使后端代码已修复, **浏览器 PWA SW 可能仍是 v76** (缓存了空 items 响应, 字节未变就不会更新 SW). 用户必须:
+1. DevTools → Application → Service Workers → 找到当前 SW → 点 **Unregister**
+2. DevTools → Application → Storage → **Clear site data**
+3. 硬刷新 **Ctrl+Shift+R** / **Cmd+Shift+R**
+4. DevTools → Network → Disable cache 勾选 (调试期间)
+5. 重新登录 → 进 /knowledge → 应看到:
+   - 底部 5 个统计: 知识 196 / 分类 15 / 实体 ? / 假设 ? / 公式 ?
+   - 顶部 chip: ✨ 自动拓展 **0** (灰色小数字, 表示该分类已空, 引导用户去其他分类)
+
+**端到端验证** (curl 端到端):
+```bash
+TOKEN=$(curl -sk -X POST http://localhost:8000/api/v1/auth/login -H "Content-Type: application/json" -d '{"username":"wangtianzhi","password":"admin123"}' | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+curl -sk -H "Authorization: Bearer $TOKEN" "http://localhost:8000/api/v1/knowledge/stats" | python -m json.tool | grep -A 8 "source_types"
+# 期望: "auto_expansion": 0 在 source_types dict 里
+```
+

@@ -236,6 +236,9 @@ async def knowledge_stats(
     total = sum(categories.values())
 
     # #043: source_type 分布
+    # 2026-06-30 修复: GROUP BY 不返回 count=0 的 group, 导致 auto_expansion
+    # 清空时 chip 上没数字 → 用户视觉看到"自动拓展是空白的".
+    # 显式补 0 防止前端 chip "v-if count > 0" 直接不渲染数字
     st_result = await db.execute(
         select(
             Knowledge.source_type,
@@ -244,6 +247,9 @@ async def knowledge_stats(
         .group_by(Knowledge.source_type)
     )
     source_types = {row[0]: row[1] for row in st_result.all()}
+    # 显式补 count=0 的 source_type (Dashboard chip 必须能拿到值才能渲染)
+    for st in ("auto_expansion", "auto_research", "conversation", "meeting", "paper", "chat"):
+        source_types.setdefault(st, 0)
 
     return {
         "total": total,
