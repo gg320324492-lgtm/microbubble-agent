@@ -6,31 +6,41 @@
     <!-- 选中预览 -->
     <div v-if="selectedImage || selectedFile" class="attachment-preview">
       <span v-if="selectedImage" class="attachment-tag">
-        🖼 {{ selectedImage.name }}
+        <el-icon :size="14" class="attachment-icon"><Picture /></el-icon>
+        {{ selectedImage.name }}
         <button type="button" @click="clearImage" aria-label="移除图片">✕</button>
       </span>
       <span v-if="selectedFile" class="attachment-tag">
-        📎 {{ selectedFile.name }}
+        <el-icon :size="14" class="attachment-icon"><Paperclip /></el-icon>
+        {{ selectedFile.name }}
         <button type="button" @click="clearFile" aria-label="移除文件">✕</button>
       </span>
     </div>
 
     <div class="input-row">
       <button
+        id="mobile-input-image"
+        name="mobile-input-image"
         type="button"
         class="action-btn"
-        :aria-label="'上传图片'"
+        aria-label="上传图片"
         title="图片"
         @click="$emit('image')"
-      >🖼️</button>
+      >
+        <el-icon :size="20"><Picture /></el-icon>
+      </button>
 
       <button
+        id="mobile-input-file"
+        name="mobile-input-file"
         type="button"
         class="action-btn"
-        :aria-label="'上传文件'"
+        aria-label="上传文件"
         title="文件"
         @click="$emit('file')"
-      >📎</button>
+      >
+        <el-icon :size="20"><Paperclip /></el-icon>
+      </button>
 
       <textarea
         ref="textareaRef"
@@ -47,25 +57,35 @@
 
       <button
         v-if="isSending"
+        id="mobile-input-stop"
+        name="mobile-input-stop"
         type="button"
         class="stop-btn"
         aria-label="停止生成"
         title="停止生成"
         @click="$emit('stop')"
-      >⏹</button>
+      >
+        <el-icon :size="20"><VideoPause /></el-icon>
+      </button>
       <button
         v-else-if="modelValue.trim() || selectedImage || selectedFile"
+        id="mobile-input-send"
+        name="mobile-input-send"
         type="button"
         class="send-btn"
         aria-label="发送"
         title="发送"
         @click="$emit('send')"
-      >↑</button>
+      >
+        <el-icon :size="20"><Promotion /></el-icon>
+      </button>
       <button
         v-else
+        id="mobile-input-voice"
+        name="mobile-input-voice"
         type="button"
         class="voice-btn"
-        :aria-label="'按住说话'"
+        aria-label="按住说话"
         title="按住说话"
         @touchstart.prevent="onVoiceStart"
         @touchend="onVoiceEnd"
@@ -73,7 +93,9 @@
         @mousedown.prevent="onVoiceStart"
         @mouseup="onVoiceEnd"
         @mouseleave="onVoiceEnd"
-      >🎤</button>
+      >
+        <el-icon :size="20"><Microphone /></el-icon>
+      </button>
     </div>
 
     <!-- 录音提示 -->
@@ -97,6 +119,7 @@
  */
 
 import { ref, watch } from 'vue'
+import { Picture, Paperclip, Promotion, VideoPause, Microphone } from '@element-plus/icons-vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },

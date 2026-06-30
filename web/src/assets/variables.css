@@ -172,6 +172,14 @@
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
 
+  /* ===== v78 图标系统（统一 EP icon 尺寸） =====
+     EP icon 默认 1em×1em（16-20px），nav 用 --icon-size-md，按钮内 sm，FAB 用 lg */
+  --icon-size-xs: 12px;
+  --icon-size-sm: 16px;
+  --icon-size-md: 18px;
+  --icon-size-lg: 20px;
+  --icon-size-xl: 28px;
+
   /* ===== 触觉目标尺寸（Apple HIG 44pt / Material Design 48dp / WCAG AAA） ===== */
   --touch-target-min: 44px;
   --touch-target-comfort: 48px;

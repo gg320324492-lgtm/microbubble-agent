@@ -2,13 +2,15 @@
   <header class="mobile-chat-header">
     <div class="header-inner">
       <button
+        id="mobile-header-menu"
+        name="mobile-header-menu"
         type="button"
         class="icon-btn menu-btn"
-        :aria-label="'打开会话列表'"
+        aria-label="打开会话列表"
         title="会话"
         @click="$emit('open-menu')"
       >
-        <span class="menu-icon">≡</span>
+        <el-icon :size="22"><Menu /></el-icon>
       </button>
 
       <div class="header-title">
@@ -19,25 +21,18 @@
         </div>
       </div>
 
-      <!-- #043 Phase 6: 搜索 trigger -->
+      <!-- v78 UI-redesign: 搜索下沉到 SessionDrawer，header 不再显示搜索 button -->
+      <!-- #043 兼容保留 search emit 但不渲染触发器 -->
       <button
-        type="button"
-        class="icon-btn search-btn"
-        aria-label="搜索会话"
-        title="搜索会话"
-        @click="$emit('search')"
-      >
-        <span class="search-icon">🔍</span>
-      </button>
-
-      <button
+        id="mobile-header-theme"
+        name="mobile-header-theme"
         type="button"
         class="icon-btn theme-btn"
         :aria-label="isDark ? '切换浅色' : '切换深色'"
         :title="isDark ? '切换浅色' : '切换深色'"
         @click="$emit('toggle-theme')"
       >
-        {{ isDark ? '☀️' : '🌙' }}
+        <el-icon :size="20"><component :is="isDark ? 'Sunny' : 'Moon'" /></el-icon>
       </button>
     </div>
   </header>
@@ -45,12 +40,15 @@
 
 <script setup>
 /**
- * MobileHeader.vue — 移动端 Chat 顶部栏
+ * MobileHeader.vue — 移动端 Chat 顶部栏 (v78 UI-redesign)
  *
- * PR #3: 极简三件套：☰ 会话菜单 / 标题 + 状态 / 🌙 主题切换
- * - 状态指示：在线 vs 生成中（点动效）
- * - 主题切换：调用 useThemeStore().toggle()
+ * v78 变化:
+ * - emoji 图标 → Element Plus icons (Menu / Moon / Sunny)
+ * - 搜索 button 从 header 移除（沉到 SessionDrawer，⌘K 快捷键仍可用）
+ * - 极简 ☰ menu / 标题 + 状态 / 🌙 三件套
  */
+
+import { Menu, Moon, Sunny } from '@element-plus/icons-vue'
 
 defineProps({
   title: { type: String, default: '小气' },
@@ -109,12 +107,6 @@ defineEmits(['open-menu', 'toggle-theme', 'search'])
   color: var(--color-primary);
 }
 
-.menu-icon {
-  font-size: 26px;
-  font-weight: 300;
-}
-.search-icon { font-size: 18px; }
-
 .header-title {
   flex: 1;
   text-align: center;
@@ -149,4 +141,15 @@ defineEmits(['open-menu', 'toggle-theme', 'search'])
   animation: pulse-dot 1.2s infinite;
 }
 
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+</style>
+
+<!-- v78 + v77 教训 (v60-v67): dark mode 必须非 scoped 块 -->
+<style>
+[data-theme="dark"] .title-text { color: var(--color-text-primary); }
+[data-theme="dark"] .status-text { color: var(--color-text-secondary); }
 </style>
