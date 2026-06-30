@@ -135,24 +135,56 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
-  # Whisper语音识别服务 (GPU模式)
-  whisper:
+  # ⚠️ Whisper 退役 (2026-06-30 ASR 迁移到 SenseVoice)
+  # 保留 Dockerfile.whisper / whisper_entrypoint.sh / whisper_server.py 作为紧急回滚路径
+  # 启动回滚: docker compose up -d whisper (前提: GPU 显存充足 8 GB)
+  # 配置文件保留: app/config.py WHISPER_* / app/voice/asr.py 注释掉的 fallback 逻辑
+  # 详见 plan: woolly-pondering-muffin.md (CLAUDE.md 顶部任务链)
+  #
+  # whisper:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.whisper
+  #   volumes:
+  #     - ./models:/app/models
+  #     - ./models/hf_cache:/root/.cache/huggingface
+  #     - ./whisper_entrypoint.sh:/app/entrypoint.sh
+  #     - ./app/whisper_server.py:/app/whisper_server.py:ro
+  #   entrypoint: ["bash", "/app/entrypoint.sh"]
+  #   environment:
+  #     - MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
+  #     - DEVICE=${WHISPER_DEVICE:-cuda}
+  #     - HF_ENDPOINT=${HF_ENDPOINT:-}
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+  #   mem_limit: 4g
+  #   restart: unless-stopped
+
+  # 2026-06-30 ASR 迁移: SenseVoice 服务 (唯一 ASR 后端, 单模型策略)
+  # 内存占用 ~1 GB (vs Whisper 8 GB), RTF 0.001 (1000× real-time)
+  # 长音频自动 chunked (60s × N, cache={}) 避免 OOM
+  # 长会议 (>= 10 min) 自动 fallback 到 Whisper (见 app/voice/asr.py 路由层)
+  sensevoice:
     build:
       context: .
-      dockerfile: Dockerfile.whisper
+      dockerfile: Dockerfile.funasr
     volumes:
       - ./models:/app/models
       - ./models/hf_cache:/root/.cache/huggingface
-      - ./whisper_entrypoint.sh:/app/entrypoint.sh
-      # v31.3.1: bind mount 源码 → 修改本地 whisper_server.py 后 docker compose restart 即可生效,
-      # 不再需要 docker cp (旧 Dockerfile COPY 烧进镜像, 源码改动不生效)
-      - ./app/whisper_server.py:/app/whisper_server.py:ro
+      - ./models/modelscope:/root/.cache/modelscope
+      - ./funasr_entrypoint.sh:/app/entrypoint.sh
+      # bind mount 源码 → 修改本地 sensevoice_server.py 后 docker compose restart 即可生效
+      - ./app/sensevoice_server.py:/app/sensevoice_server.py:ro
     entrypoint: ["bash", "/app/entrypoint.sh"]
     environment:
-      - MODEL_SIZE=${WHISPER_MODEL_SIZE:-large-v3}
-      - DEVICE=${WHISPER_DEVICE:-cuda}
-      - HF_ENDPOINT=${HF_ENDPOINT:-}
-      # v31.3 (2026-06-26): 模型常驻 GPU (~8 GB), 不再需要 idle timeout 配置
+      - MODEL=${SENSEVOICE_MODEL:-iic/SenseVoiceSmall}
+      - DEVICE=${SENSEVOICE_DEVICE:-cuda}
+      - DEFAULT_BATCH_SIZE_S=${SENSEVOICE_BATCH_SIZE_S:-60}
     deploy:
       resources:
         reservations:
