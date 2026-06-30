@@ -79,7 +79,17 @@ export function useKnowledge() {
   const fetchCategories = async () => {
     try {
       const res = await axios.get('/api/v1/knowledge/categories')
-      categories.value = res.data.categories || []
+      // 2026-06-30 修复: 后端返回 {name: count} dict (15 keys), 不能当 list 用
+      // 兼容两种格式: 1) dict {综述: 78, FAQ: 53, ...}  2) list [{name, count}, ...]
+      const cats = res.data.categories
+      if (Array.isArray(cats)) {
+        categories.value = cats
+      } else if (cats && typeof cats === 'object') {
+        // dict 格式: 转 list, 让下游 categories.length / categories.find 都正常工作
+        categories.value = Object.entries(cats).map(([name, count]) => ({ name, count }))
+      } else {
+        categories.value = []
+      }
     } catch (e) {
       console.error('获取分类失败:', e)
     }
