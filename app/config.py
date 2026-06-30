@@ -75,10 +75,19 @@ class Settings(BaseSettings):
     WECHAT_API_BASE_URL: str = "https://qyapi.weixin.qq.com"
     WECHAT_EXTERNAL_SENDER: str = ""  # 外部联系人消息的发送者（企业微信userid）
 
-    # Whisper
+    # Whisper (2026-06-30 ASR 迁移: 退役中, 留作紧急回滚)
     WHISPER_MODEL_SIZE: str = "large-v3"
     WHISPER_DEVICE: str = "cuda"
     WHISPER_SERVICE_URL: str = "http://whisper:8002"
+
+    # 2026-06-30 ASR 迁移: SenseVoice-Small (新默认 ASR 后端)
+    # 实测: 1.1 GB peak VRAM (vs Whisper 8 GB), RTF 0.001 (1000× real-time)
+    # 详见 docs/asr-benchmark-2026-06-30.md
+    SENSEVOICE_MODEL: str = "iic/SenseVoiceSmall"
+    SENSEVOICE_DEVICE: str = "cuda"
+    SENSEVOICE_SERVICE_URL: str = "http://sensevoice:8003"
+    # ASR 后端路由: sensevoice (新默认) / whisper (紧急回滚)
+    ASR_DEFAULT_BACKEND: str = "sensevoice"
 
     # Claude 生成参数
     CLAUDE_MAX_TOKENS: int = 8192

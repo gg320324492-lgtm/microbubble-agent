@@ -1,0 +1,60 @@
+FROM python:3.11-slim-bookworm
+
+# 阿里云镜像源 (bookworm-security 路径已正确支持)
+# 2026-06-30 ASR 迁移: 与 Dockerfile.whisper 镜像源一致
+RUN rm -f /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm main contrib\n' > /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian bookworm-updates main contrib\n' >> /etc/apt/sources.list && \
+    printf 'deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib\n' >> /etc/apt/sources.list
+
+# Install system dependencies (with retry for transient 502 Bad Gateway)
+RUN apt-get update && apt-get install -y --fix-missing \
+    ffmpeg \
+    libavformat-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libswscale-dev \
+    libswresample-dev \
+    pkg-config \
+    || (apt-get update && apt-get install -y --fix-missing --no-install-recommends \
+        ffmpeg libavformat-dev libavcodec-dev libavdevice-dev \
+        libavutil-dev libavfilter-dev libswscale-dev libswresample-dev \
+        pkg-config) \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 2026-06-30 ASR 迁移: 安装 FunASR + SenseVoice + torch 依赖
+# 关键 1: 必须自带 torch (sensevoice 容器与 app 容器独立, 不能假设继承)
+# 关键 2: torch 2.4.0 不支持 sm_120 (Blackwell RTX 5090), 必须用 torch 2.7+ 才支持
+# 关键 3: torch CUDA wheel 走 PyPI 官方 cu128 源 (清华源限速 torch 2.12+)
+RUN pip3 install --no-cache-dir --upgrade pip && \
+    pip3 install --no-cache-dir --prefer-binary \
+    --extra-index-url https://download.pytorch.org/whl/cu128 \
+    torch==2.7.0 \
+    torchaudio==2.7.0 \
+    && \
+    pip3 install --no-cache-dir --prefer-binary \
+    funasr>=1.3.0 \
+    modelscope>=1.14.0 \
+    nvidia-cublas-cu12 \
+    nvidia-cuda-nvrtc-cu12 \
+    fastapi uvicorn python-multipart
+
+# 设置CUDA库路径（与 whisper 一致）
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.11/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.11/site-packages/nvidia/cuda_nvrtc/lib
+
+# v31.3.1 同样适用: bind mount source → docker compose restart 即生效
+# docker-compose.yml: ./app/sensevoice_server.py:/app/sensevoice_server.py:ro
+
+# 环境变量
+ENV MODEL=iic/SenseVoiceSmall
+ENV DEVICE=cuda
+
+# 暴露端口（8003 与 whisper 8002 区分）
+EXPOSE 8003
+
+# 启动命令 - 使用自定义 FastAPI 服务
+CMD ["python3", "sensevoice_server.py"]
