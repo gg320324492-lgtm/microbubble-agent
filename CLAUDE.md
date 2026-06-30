@@ -7174,3 +7174,103 @@ docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
 - id=2 `NTA测试方法` → NTA粒径分析 category → **保留** ✅ (术语)
 - id=3 `DLS动态光散射测试` → NTA粒径分析 category → **保留** ✅ (术语)
 
+
+---
+
+## 2026-06-30 知识库页面"5 个统计全 0 + 暂无知识条目"修复
+
+> **触发场景** — 用户截图反馈 `/knowledge` 页面: 底部 5 个统计 tag (知识 0 / 实体 0 / 假设 0 / 公式 0 / 分类 0) + "最近知识"区域显示"暂无知识条目，点击上方按钮添加"。但 DB 实际 196 条 knowledge, 后端 API curl 全部正常返回 total=196。
+> **commit 链**：(4 commit 一次 PR)
+> 1. `feat(web): onMounted 重置 filter 状态 + chip 再点清除 (修复 A)`
+> 2. `feat(sw): BUMP SW_VERSION + cacheWillUpdate 拒绝空 items (修复 B)`
+> 3. `feat(web): fetchKnowledge/fetchStats 加 try/catch + loadError (修复 C)`
+> 4. `feat(web): 健康度摘要 onMounted 主动 fetch sub-entity total (修复 D)`
+
+### 根因（2 个独立 bug 叠加 + 1 个 SW 缓存放大器）
+
+1. **`filterSourceType` SPA 内存残留 = 'auto_expansion'`** — `useKnowledge` 是 composable 不是 store, ref 跨 mount 持久存活; 用户上次点过"✨ 自动拓展" chip, `filterSourceType` 永远停在 `'auto_expansion'` → `fetchKnowledge` 拼 `?source_type=auto_expansion` → 后端正确返回 0 条 → 前端 `items=[]` + `total=0` → "暂无知识" + "知识 0"
+2. **健康度摘要的 entity/hypothesis/formula total 从未被主动 fetch** — `KnowledgeView.vue:38-44` 3 个 ref 永远停在 `0` 初值 (`useKnowledge.js:22/29/33`), 与 `total/categories` 不同步 → 即使根因 1 修了让"知识=196", 这 3 个仍是 0
+3. **Service Worker 缓存了空 items 响应** — `sw.js:333-344` API 路由 `NetworkFirst` 5 min + `CacheableResponsePlugin({statuses:[0,200]})` **只挡 5xx, 不挡 200 + 空 items**, 5 min 内反复命中脏缓存 → 修复完代码也得等 5 min 或 unregister SW
+
+### 4 条新铁律（永久沉淀）
+
+**铁律 1 — SPA filter 状态污染铁律**
+- 任何"进入页面默认显示全部"的需求, 都必须在 `onMounted` 显式 `filterX.value = ''` 重置, **不能依赖 composable 初值**
+- 反例: `useKnowledge.js:13` `filterSourceType = ref('')` 默认值正确, 但 SPA 内存 state 污染让 ref 永远停在用户上次点过的值
+- 修复 commit: A (KnowledgeView.vue onMounted L384-389 加 filterSourceType/filterCategory/searchQuery 重置)
+- 适用场景: useKnowledge / useTask / useMeeting 等所有"composable 暴露 filter ref"的页面
+
+**铁律 2 — SW API 缓存 body 内容铁律**
+- `CacheableResponsePlugin({statuses:[0,200]})` 只挡 5xx, **200 + 空 items 仍被永久缓存 5 min**
+- 反例: KB 数据迁移清空某些 source_type 后, 5 min 内所有客户端都会拿到"伪空数据" → 用户视觉看到"5 个全 0"
+- 修复 commit: B (`sw.js` 加 `noEmptyItemsPlugin` 检查 `items.length === 0 && total === 0` 时返 null 拒绝入 cache)
+- 适用场景: 任何 PWA / 离线应用 / 慢网络环境的 API 缓存层
+- **下次 SW BUMP 必带 cacheWillUpdate 拒绝空 items** (否则 CLAUDE.md 2026-06-13 教训二次发生)
+
+**铁律 3 — chip 再点一次 = 清除铁律**
+- 任何 dashboard 过滤 chip 必须实现"已 active 时再点 = 清空过滤 + 回到全部"
+- 反例: `KnowledgeDashboard.vue:126-132` `handleCategoryClick` 旧版只 emit 一次, 用户点过"✨ 自动拓展"后 ref 永远停在 `'auto_expansion'`
+- 修复 commit: A (`handleCategoryClick` 加 `isAlreadyActive` 判断, active 时 emit 空字符串)
+- 适用场景: el-checkbox-button / el-radio-button / 自定义 chip / navbar tab 等任何"可切换的过滤控件"
+
+**铁律 4 — 健康度摘要必须主动 fetch 铁律**
+- 任何"页面顶部 stats 摘要"不能只在 onMounted fetch 主数据, **必须并发/串行拉所有 sub-entity 的 total**
+- 反例: `KnowledgeView.vue:38-44` 的"实体/假设/公式"3 个 ref 永远停在 0, 用户看到"3 个 0 + 1 个正确 + 1 个正确"的混乱快照
+- 修复 commit: D (onMounted 追加 `searchEntities/fetchHypotheses/fetchFormulas` 三个 page_size=1 total-only fetch)
+- 适用场景: dashboard / overview / home 页面的 stats 摘要, 任何"主数据 + 关联子实体计数"展示
+
+### 实施要点
+
+**方案 A — filter 残留** (commit 1):
+- `web/src/views/KnowledgeView.vue` L384-389: `onMounted` 重置 `filterSourceType/filterCategory/searchQuery/currentPage = 1` 再 fetch
+- `web/src/views/KnowledgeView.vue` L349-352: `watch([filterCategory, filterSourceType], ..., { deep: true })`
+- `web/src/components/knowledge/KnowledgeDashboard.vue` L126-132: `handleCategoryClick` 加 `isAlreadyActive` 判断
+
+**方案 B — SW 缓存** (commit 2):
+- `web/src/sw.js` L232: `SW_VERSION = 'v77-kb-empty-state-fix-2026-06-30'`
+- `web/src/sw.js` L17-23 注释: v77 BUMP 说明
+- `web/src/sw.js` L329-358: API 路由 plugins 数组**插入首位**新增 `noEmptyItemsPlugin` (cacheWillUpdate 拒绝 `items.length === 0 && total === 0`)
+
+**方案 C — fetch 错误处理** (commit 3):
+- `web/src/composables/useKnowledge.js` L16: 新增 `loadError = ref(null)`
+- `web/src/composables/useKnowledge.js` L38-79: `fetchKnowledge` 加 try/catch, 失败时 `loadError.value = e.message`, `knowledgeList=[]` 兜底, `loadError=null` 成功时重置
+- `web/src/composables/useKnowledge.js` L84-94: `fetchStats` catch 兜底 `statsData = { total:0, ... }`
+- `web/src/components/knowledge/KnowledgeDashboard.vue` L57-67: 三态空态 (loading/error/empty)
+- `web/src/components/knowledge/KnowledgeDashboard.vue` L88-95: props 加 `loadError`, emits 加 `retry`
+- `web/src/views/KnowledgeView.vue` L17-37: 父级传 `:load-error="loadError"` + `@retry="fetchKnowledge"`
+
+**方案 D — sub-entity total 同步** (commit 4):
+- `web/src/views/KnowledgeView.vue` L401-403: onMounted 追加 3 个 total-only fetch (page_size=1)
+  ```js
+  searchEntities({ page: 1, page_size: 1 })
+  fetchHypotheses({ page: 1, page_size: 1 })
+  fetchFormulas({ page: 1, page_size: 1 })
+  ```
+
+### 端到端验证
+
+1. **本地 build**: `cd web && npm run build` → 期望 0 报错 ✅
+2. **单测**: `npx vitest run` → 期望 492/492 PASS (无 regression) ✅
+3. **dev server + 硬刷**: `pnpm dev` + 浏览器 DevTools → Application → Clear storage (含 SW) → hard reload → 期望 "知识 196 / 分类 15"
+4. **filter 残留复现**: 点 `✨ 自动拓展` chip → 看到 0 → 再点一次 → 期望回到 196 (验证 A)
+5. **SW 缓存复现**: DevTools → Network → Disable cache 取消勾选 → 点 `✨ 自动拓展` 多次 → 期望新请求走 network, 5 min 内不会拿到空缓存 (验证 B)
+6. **三态空态**: 临时把 API URL 改错 → 期望 "加载失败" 提示 + "重试" 按钮 (验证 C)
+7. **跨浏览器**: chrome / edge / safari / 隐身模式各一次
+
+### 部署必做 (CLAUDE.md 752 行铁律)
+
+```bash
+# 1. 重新 build
+cd web && npm run build
+
+# 2. commit (pre-commit hook 自动 add web/dist/)
+cd .. && git add src/sw.js src/views/KnowledgeView.vue src/components/knowledge/KnowledgeDashboard.vue src/composables/useKnowledge.js CLAUDE.md
+git commit -m "feat(web): fix KB 5 全 0 误报 (filter残留 + SW缓存 + 三态空态 + sub-entity total)"
+
+# 3. push (webhook 自动 deploy 服务器)
+git push origin main
+
+# 4. 用户端: 首次访问新 SW 会拉取 → skipWaiting() 激活 → activate 钩子
+#    caches.keys() + delete 清空所有 cache → 几秒白屏 → 之后 196 数据正常
+```
+

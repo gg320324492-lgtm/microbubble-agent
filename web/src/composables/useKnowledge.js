@@ -17,6 +17,9 @@ export function useKnowledge() {
   const categories = ref([])
   const hotTags = ref([])
 
+  // 2026-06-30 错误状态: 用于前端区分"加载失败"和"真无数据"两种空态
+  const loadError = ref(null)
+
   // 实体图谱
   const entityList = ref([])
   const entityTotal = ref(0)
@@ -60,6 +63,14 @@ export function useKnowledge() {
       const res = await axios.get('/api/v1/knowledge', { params: queryParams })
       knowledgeList.value = res.data.items || []
       total.value = res.data.pagination?.total || res.data.total || 0
+      loadError.value = null
+    } catch (e) {
+      // 2026-06-30 修复: 显式暴露错误, 让 UI 区分"接口失败"和"真没数据"
+      // 旧版只在 finally 重置 loading, 失败时 knowledgeList=[] / total=0 与"真没数据"无差别
+      console.error('[useKnowledge] fetchKnowledge failed:', e)
+      loadError.value = e.response?.data?.detail || e.message || '加载知识列表失败'
+      knowledgeList.value = []
+      total.value = 0
     } finally {
       loading.value = false
     }
@@ -80,6 +91,8 @@ export function useKnowledge() {
       statsData.value = res.data
     } catch (e) {
       console.error('获取统计失败:', e)
+      // 兜底空结构, 避免 health-summary tag 模板拿 undefined
+      statsData.value = { total: 0, categories: {}, source_types: {} }
     }
   }
 
@@ -144,7 +157,7 @@ export function useKnowledge() {
     // 状态
     knowledgeList, total, currentPage, pageSize, loading,
     searchQuery, filterCategory, filterSourceType,  // #043
-    statsData, categories, hotTags,
+    statsData, categories, hotTags, loadError,  // 2026-06-30: loadError 区分失败 vs 空
     entityList, entityTotal, entityPage, entityGraphData,
     hypothesisList, hypothesisTotal, hypothesisPage,
     formulaList, formulaTotal, formulaPage, formulaCategories,

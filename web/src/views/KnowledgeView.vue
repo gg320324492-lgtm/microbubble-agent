@@ -21,6 +21,7 @@
           :active-source-type="filterSourceType"
           :source-type-stats="statsData.source_types || {}"
           :loading="loading"
+          :load-error="loadError"
           @filter-category="handleCategoryFilter"
           @filter-source-type="handleSourceTypeFilter"
           @filter-time="handleTimeFilter"
@@ -32,6 +33,7 @@
           @edit="editKnowledge"
           @delete="handleDeleteKnowledge"
           @download="downloadFile"
+          @retry="fetchKnowledge"
         />
 
         <!-- 健康度摘要 -->
@@ -176,7 +178,7 @@ import KnowledgeUploadDialog from './knowledge/KnowledgeUploadDialog.vue'
 const {
   knowledgeList, total, currentPage, pageSize, loading,
   searchQuery, filterCategory, filterSourceType,  // #043
-  statsData, categories, hotTags,
+  statsData, categories, hotTags, loadError,  // 2026-06-30
   entityList, entityTotal, entityPage, entityGraphData,
   hypothesisList, hypothesisTotal, hypothesisPage,
   formulaList, formulaTotal, formulaPage, formulaCategories,
@@ -346,10 +348,11 @@ const showEntityDetail = async (id) => {
 
 // ── 监听 ──
 // #043: filterCategory + filterSourceType 互斥, 任一变化都触发重新查询
+// 2026-06-30: 加 deep + immediate 防止 ref 值相同但对象内存地址不同导致漏触发
 watch([filterCategory, filterSourceType], () => {
   currentPage.value = 1
   fetchKnowledge()
-})
+}, { deep: true })
 
 watch(searchQuery, (val) => {
   if (!val) {
@@ -382,9 +385,25 @@ const handleResize = () => {
 }
 
 onMounted(() => {
+  // 2026-06-30 修复: SPA 状态污染防御
+  // useKnowledge 是 composable 不是 store, ref 跨 mount 持久存活。
+  // 用户上次点过"✨ 自动拓展"chip → filterSourceType 永远停在 'auto_expansion'
+  // → fetchKnowledge 拼 ?source_type=auto_expansion → 0 条 → "暂无知识" + 5 个全 0
+  // 每次进入 /knowledge 都从干净状态开始, 与"chip 是临时过滤器"的产品语义一致
+  filterSourceType.value = ''
+  filterCategory.value = ''
+  searchQuery.value = ''
+  currentPage.value = 1
+
   fetchKnowledge()
   fetchStats()
   fetchCategories()
+  // 2026-06-30 修复 D: 健康度摘要的 entity/hyp/formula total 同步
+  // 旧版这三个 ref 永远停在 0 初值, 必须在 onMounted 主动 fetch (page_size=1 只拿 total)
+  searchEntities({ page: 1, page_size: 1 })
+  fetchHypotheses({ page: 1, page_size: 1 })
+  fetchFormulas({ page: 1, page_size: 1 })
+
   window.addEventListener('resize', handleResize)
 })
 

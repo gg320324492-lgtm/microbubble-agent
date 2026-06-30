@@ -14,6 +14,8 @@
 // 2. `setCatchHandler` 兜底：路由处理 throw 时（真正离线 + 没缓存）才返回
 //    offline.html，配合 retry 按钮 + online 事件监听器自动刷新。
 
+// 2026-06-30 v77 BUMP：fix 5 个统计全 0 误报 + filter 残留; activate 钩子清空 api-cache
+//   让修复后的 URL 不命中旧 cache; 同步加 noEmptyItemsPlugin 拒绝空 items 永久缓存
 // 2026-06-13 事故修复：BUMP 每次部署递增，触发 SW 字节变化让浏览器检测到新 SW
 // → 立即 skipWaiting() 激活 → activate 钩子清空所有 cache（包括被污染的 documents）
 // → 用户下次访问拿到的就是新资源（不受之前 octet-stream 缓存影响）
@@ -229,7 +231,9 @@
 // (4) 不加 Web Push / Periodic Background Sync：
 //     - Web Push：后端走企业微信（v2 11AM 单一窗口），Web 是辅助通道，投资回报低
 //     - Periodic Background Sync：浏览器支持窄（仅 Chrome + engagement 分数），场景不匹配
-const SW_VERSION = 'v76-p2.6-d-bg-sync-2026-06-28'
+// 2026-06-30 v77 BUMP：fix 5 个统计全 0 误报 + filter 残留; activate 钩子清空 api-cache
+//   让修复后的 URL 不命中旧 cache; 同步加 noEmptyItemsPlugin 拒绝空 items 永久缓存
+const SW_VERSION = 'v77-kb-empty-state-fix-2026-06-30'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
@@ -327,15 +331,34 @@ registerRoute(
   new StaleWhileRevalidate({ cacheName: 'static-resources' })
 )
 
-// === 路由 3：API GET（5 分钟缓存 + 仅 2xx）===
+// === 路由 3：API GET（5 分钟缓存 + 仅 2xx + 拒绝空 items 缓存）===
 // 阿里云 FRP 隧道偶发慢，5s 内无响应回退到 5 分钟内的旧响应
 // 2026-06-13 教训：必须 CacheableResponsePlugin 限制只缓存 0/200，避免 5xx 被永久缓存
+// 2026-06-30 v77 教训：CacheableResponsePlugin 只按 status 过滤, 不看 body 内容
+//   200 + items.length === 0 + total === 0 仍会被永久缓存 5 min
+//   KB 数据迁移清空某些 source_type 后, 5 min 内所有客户端都会拿到"伪空数据"
+//   解决: 加 cacheWillUpdate 拒绝这类响应入 cache, 强制下次走 network
+const noEmptyItemsPlugin = {
+  cacheWillUpdate: async ({ response }) => {
+    if (!response) return null
+    if (response.status !== 200) return null
+    try {
+      const clone = response.clone()
+      const body = await clone.json()
+      if (Array.isArray(body?.items) && body.items.length === 0 && (body?.total === 0 || body?.pagination?.total === 0)) {
+        return null
+      }
+    } catch { /* 非 JSON 视为正常 */ }
+    return response
+  }
+}
 registerRoute(
   ({ url }) => url.pathname.startsWith('/api/v1/'),
   new NetworkFirst({
     cacheName: 'api-cache',
     networkTimeoutSeconds: 5,
     plugins: [
+      noEmptyItemsPlugin,
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 300 }),
     ],
