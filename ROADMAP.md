@@ -67,11 +67,11 @@
 - ✅ **v74/v75/v76 测试基建**（CSS variable 6 主题组合自动化 + 9 个旧 fail 修复 + 视觉回归 5 件套）
 - ✅ **pre-commit hook auto-add web/dist/**（CLAUDE.md 教训第 4 次沉淀后兜底）
 
-**统计**（[app/stats.json](app/stats.json), 2026-06-28 自动重算）：
-- **1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 自动重算）
+**统计**（[app/stats.json](app/stats.json), 2026-06-30 自动重算）：
+- **1545 commits / 313K 行代码 / 799 文件 / 46 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 01:12 自动重算）
 - 9 个 Docker 服务运行中
 - 87 后端 + 73 前端 + 17 移动端 + 8 ST 集成 + 11 visual-regression = 196+ 测试
-- 知识库 64→247+ 条（+183，Phase 7 后再扩展多模态抽取）
+- 知识库 64→247+ → 350+ 条（Qwen3 重算后，alembic 030 双列原子切换 text2vec 768d → Qwen3-Embedding-0.6B 1024d）
 - **2026-06-24~28 起 20+ 铁律沉淀**（清华源/ONNX 反优化/docker build 污染/pre-commit hook/dist 漏 commit/Stylelint/PowerShell BOM/Background Sync/playwright dev server/token 渐进收敛/v-model 子组件 props 禁用/word-boundary 正则 等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
 
 **最新里程碑**：
@@ -94,8 +94,8 @@
 
 | Phase | 目标 | 周期 | 状态 |
 |-------|------|------|------|
-| **#043** | **账号持久化聊天历史（ChatGPT 模式）** — chat_sessions + chat_messages + chat_shares 三表 + 11 API + 流式持久化 + localStorage 自动迁移 + 搜索/导出/标签/分享 + 软删除 30 天清理 | 3-4 天 | **Phase 1+2+3 收官 5/8**（Phase 4 前端 store 待启动，commit `558962b1` + `5bf7c5c7`, 25 e2e PASS） |
-| **Phase 7** | 多模态知识库（图片/公式/表格识别入库） | 4-6 周 | 待启动 |
+| **#043** | **账号持久化聊天历史（ChatGPT 模式）** — chat_sessions + chat_messages + chat_shares 三表 + 11 API + 流式持久化 + localStorage 自动迁移 + 搜索/导出/标签/分享 + 软删除 30 天清理 | 3-4 天 | **✅ 8/8 phase 完整收官**（commits `558962b1` + `5bf7c5c7` + `af8c8f7d` + `a1dfca2c` + `b9aea177` 等，Phase 6 UI 升级 11 sub-tasks + Phase 7 Celery 30 天清理 + Phase 8 测试沉淀 + 12 条铁律） |
+| **Phase 7** | 多模态知识库（图片/公式/表格识别入库） | 4-6 周 | **✅ 已完成 V3**（2026-06-19 收官，knowledge_images + knowledge_extractions 两表 + 21 个 OCR 单测 + 4 篇 PDF 端到端 100% 通过） |
 | **Phase 8** | 科研数据自动备份（DB + 文件定时备份 + 异地容灾） | 2-3 周 | 待启动 |
 | **Phase 11** | 智能实验记录本（结构化记录 + 模板 + 搜索 + 版本控制） | 4-6 周 | 待启动 |
 | **Phase 12** | 科研协作工作流（任务分配 + 进度追踪 + 评审流程 + 通知提醒） | 4-6 周 | 待启动 |
