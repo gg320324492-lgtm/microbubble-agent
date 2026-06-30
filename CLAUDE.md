@@ -7348,3 +7348,57 @@ curl -sk -H "Authorization: Bearer $TOKEN" "http://localhost:8000/api/v1/knowled
   实际是 `stats` 内嵌的 `categories` dict + 独立 `categories` 端点 dict 是巧合 (后端均走 `get_dynamic_categories`),
   但前端在 `useKnowledge` 当 list 用, 是不一致来源.
 
+
+### 续集 4: 180 张 [拓展-XX] 卡片 source_type 重分类 (2026-06-30 18:50)
+
+**触发场景** — 用户截图反馈 KB 页面有 12+ 张卡 title 是 `[拓展-V01]/[拓展-AA27]/[拓展-S05]` 等前缀,
+但点击 `✨ 自动拓展` chip 0 条 (我之前说"auto_expansion 是空的")。
+真相: 180 张 title 带 `[拓展-` 前缀的卡片是 LLM/上游脚本自动入库的, 但入库时
+未写 `source_type='auto_expansion'` 字段, 导致 chip 走 source_type 过滤看不到这 180 张。
+
+**用户决策 (截图 1 后)**:
+> "所有自动入库的拓展卡片都需要分类到自动拓展下, 另外这个 180 个拓展也是自动入库的, 也要分到自动拓展下"
+
+→ 把这 180 张的 source_type 全部从 NULL 改成 'auto_expansion'.
+
+**实现** — `scripts/migrate_kb_source_type.py` (226 行) + `tests/test_migrate_kb_source_type.py` (108 行):
+- 只 UPDATE 不 DELETE → 无 JSON 备份需求, 但仍走 dry-run → --confirm 二次确认门 (UX 一致性)
+- 防御性 WHERE: `source_type IS NULL` (跳过已 'auto_expansion' 的)
+- 一次性单事务包裹, 失败回滚
+
+**踩坑 1 (关键)**: SQLAlchemy `Knowledge.title.regexp_match(r'^\[拓展[^\]]*\]')` 报 191 条, psql 报 180
+- 11 条误伤 (id=1 微纳米气泡基本概念 / 2 NTA测试方法 / 3 DLS动态光散射测试 / 4-7 早期手写 / 14/16/17/19 论文)
+- 根因: Python raw string `r'\['` 在 SQLAlchemy 表达式里是 2 字符 (`\` + `[`), 传给 PG regex 引擎后 `\` 被解释为转义但层级不一致, 实际匹配范围超出预期
+- 修复: 改用 `Knowledge.title.startswith("[拓展")` (SQL 层 `LIKE 'X%'`) 完全避开正则转义陷阱
+- 验证: 改后 180 条 = psql 一致
+
+**踩坑 2 (次要)**: TITLE_PREFIX_PATTERN 在主脚本里没引用, 只 test 文件用
+- 修复: 删主脚本里的 regex 定义, 在 test 文件本地重新定义 (测试专用, 不污染生产代码)
+
+**新铁律 7**:
+- **SQLAlchemy regex 转义陷阱** — `r'\['` 在 Python 是 2 字符 (`\` + `[`), 传给 PG regex 引擎后
+  `\` 转义层级不一致, 实际匹配范围与 Python `re` 模块不同. SQLAlchemy 字符串过滤场景
+  **优先用 `String.startswith/endswith/contains`** (SQL 层 LIKE), 不要用 `regexp_match`.
+  仅当必须用 regex 时, 用 `func.regexp_match(Knowledge.title, r"^pattern$", "g")`
+  让 PG 端直接接 raw pattern string.
+- 适用: SQLAlchemy + asyncpg + PG `~` / `regexp_match` 的所有过滤场景
+
+**实际执行结果**:
+| 阶段 | 结果 |
+|------|------|
+| 单测 | 7/7 PASS (含 startswith 边界 + 各种变体 title) |
+| SCAN (修前) | 191 条 (误伤 11 条早期手写数据) |
+| SCAN (修后) | 180 条 ✅ (psql 一致) |
+| APPLY (--confirm) | 单事务 UPDATE 180 条 source_type = 'auto_expansion' ✅ |
+| 幂等 (二次 SCAN) | 0 条命中 ✅ |
+| SQL 双确认 | source_type 分布: auto_expansion=180, NULL=11 (早期手写), conversation=4, meeting=1 ✅ |
+| /knowledge/stats 端点 | source_types.auto_expansion = 180 ✅ |
+
+**11 条 NULL (早期手写数据, 不动)**: id=1/2/3/4/5/6/7/14/16/17/19 — 5/17/2026 入库, title
+是中文术语 (NTA/DLS/气泡稳定性) 或英文论文, 不带 [拓展 前缀 → 不在本次迁移范围.
+
+**用户硬刷浏览器 (F12 → Application → Service Workers → Unregister →
+Storage → Clear site data → Ctrl+Shift+R) 后应看到**:
+- 顶部 chip: `✨ 自动拓展 180` (不再是 0, 因为后端 source_type 已改)
+- 点 chip: 显示 180 张 [拓展-XX] 卡片
+- 底部统计: 知识 196 / 分类 15 / 实体 132 / 假设 6 / 公式 36
