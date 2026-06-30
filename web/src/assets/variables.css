@@ -210,6 +210,13 @@
      EP 自己的 :root { --el-color-primary: #409eff } 后加载会覆盖 :root 映射，
      导致 ocean/forest 主题按钮白字（对比度 1.05:1 严重不达 WCAG AA）。
      attribute block 永远赢 EP :root，且影响所有引用 --el-color-primary 的 EP 组件。*/
+
+  /* ===== 声纹 bar 渐变 (VoiceprintCard.vue) — v77 P2.6-G.3 =====
+     6 主题独立覆盖（弱信号→强信号）：light/orange 默认用 warning→primary 渐变（暖色），ocean 用蓝调，forest 用绿调。
+     不复用 --color-warning/--color-success（避免影响 .badge--success / .status--completed / EP el-tag--success 等其它语义绿/黄消费者）。*/
+  --vp-bar-low:  #FDF6EC;
+  --vp-bar-mid:  linear-gradient(90deg, #E6A23C 0%, #FF7A5C 100%);
+  --vp-bar-high: #FF7A5C;
 }
 
 /* 移动端字号缩放（mobile-first） */
@@ -697,6 +704,11 @@ body {
 
   /* v69: 阴影 primary 颜色（pulsePrimary keyframe 用） */
   --color-shadow-primary: rgba(255, 122, 92, 0.4);
+
+  /* v77 P2.6-G.3: voiceprint bar dark/orange (压暗降饱和度) */
+  --vp-bar-low:  rgba(255, 122, 92, 0.18);
+  --vp-bar-mid:  linear-gradient(90deg, #ebb563 0%, #FF9D85 100%);
+  --vp-bar-high: #FF9D85;
 }
 
 /* Dark 模式全局微调 */
@@ -1454,6 +1466,11 @@ body {
   --el-color-primary-light-8: #6BABFF;
   --el-color-primary-light-9: #6BABFF;
   --el-color-primary-dark-2: #2E6BB8;
+
+  /* v77 P2.6-G.3: voiceprint bar 跟随海蓝主题 */
+  --vp-bar-low:  #E8F2FE;
+  --vp-bar-mid:  linear-gradient(90deg, #5EA1FF 0%, #1890FF 100%);
+  --vp-bar-high: #1890FF;
 }
 
 /* === 森林绿 light === */
@@ -1487,6 +1504,11 @@ body {
   --el-color-primary-light-8: #66BB6A;
   --el-color-primary-light-9: #66BB6A;
   --el-color-primary-dark-2: #2E7D32;
+
+  /* v77 P2.6-G.3: voiceprint bar 跟随森林主题 */
+  --vp-bar-low:  #F0F9EB;
+  --vp-bar-mid:  linear-gradient(90deg, #95DE64 0%, #52C41A 100%);
+  --vp-bar-high: #52C41A;
 }
 
 /* === 海蓝 dark === */
@@ -1519,6 +1541,11 @@ body {
   --el-color-primary-light-8: #8DC0FF;
   --el-color-primary-light-9: #8DC0FF;
   --el-color-primary-dark-2: #4A90E2;
+
+  /* v77 P2.6-G.3: voiceprint bar dark/ocean */
+  --vp-bar-low:  rgba(74, 144, 226, 0.18);
+  --vp-bar-mid:  linear-gradient(90deg, #6BABFF 0%, #4A90E2 100%);
+  --vp-bar-high: #6BABFF;
 }
 
 /* === 森林绿 dark === */
@@ -1551,6 +1578,11 @@ body {
   --el-color-primary-light-8: #81C784;
   --el-color-primary-light-9: #81C784;
   --el-color-primary-dark-2: #4CAF50;
+
+  /* v77 P2.6-G.3: voiceprint bar dark/forest */
+  --vp-bar-low:  rgba(76, 175, 80, 0.18);
+  --vp-bar-mid:  linear-gradient(90deg, #95DE64 0%, #66BB6A 100%);
+  --vp-bar-high: #66BB6A;
 }
 
 /* === 暖橙 dark === */
