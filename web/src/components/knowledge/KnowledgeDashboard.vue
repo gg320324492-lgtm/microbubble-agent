@@ -62,6 +62,13 @@
         </div>
       </div>
 
+      <!-- 2026-06-30 三态空态: loading / error / empty -->
+      <div v-else-if="loadError" class="empty-state">
+        <el-empty :description="`加载失败: ${loadError}`" :image-size="80">
+          <el-button type="primary" @click="$emit('retry')">重试</el-button>
+        </el-empty>
+      </div>
+
       <div v-else-if="recentItems.length === 0" class="empty-state">
         <el-empty description="暂无知识条目，点击上方按钮添加" />
       </div>
@@ -91,7 +98,8 @@ const props = defineProps({
   activeCategory: { type: String, default: '' },
   activeSourceType: { type: String, default: '' },  // #043
   sourceTypeStats: { type: Object, default: () => ({}) },  // #043
-  loading: { type: Boolean, default: false }
+  loading: { type: Boolean, default: false },
+  loadError: { type: String, default: null }  // 2026-06-30: 三态空态 (loading/error/empty)
 })
 
 // 预设分类
@@ -120,10 +128,23 @@ const emit = defineEmits([
   'view-detail',
   'edit',
   'delete',
-  'download'
+  'download',
+  'retry'  // 2026-06-30: loadError 三态空态, 错误时重试
 ])
 
 const handleCategoryClick = (cat) => {
+  // 2026-06-30 修复: chip 再点一次 = 清除过滤
+  // 旧版只 emit 一次 → 用户点过 "✨ 自动拓展" 后 ref 永远停在 'auto_expansion'
+  // → fetchKnowledge 永远拼 source_type=auto_expansion → 0 条 → 5 个统计全 0
+  // 现在: 已 active 时再点 = emit 空字符串, 父级 handleFilter 走"清空"分支
+  const isAlreadyActive = cat.isSystem
+    ? (props.activeSourceType === cat.sourceType)
+    : (props.activeCategory === cat.name)
+  if (isAlreadyActive) {
+    emit('filter-source-type', '')
+    emit('filter-category', '')
+    return
+  }
   if (cat.isSystem) {
     emit('filter-source-type', cat.sourceType)
   } else {
