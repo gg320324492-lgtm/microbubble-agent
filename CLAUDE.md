@@ -7316,3 +7316,35 @@ curl -sk -H "Authorization: Bearer $TOKEN" "http://localhost:8000/api/v1/knowled
 # 期望: "auto_expansion": 0 在 source_types dict 里
 ```
 
+
+### 续集 3：fetchCategories shape 解析 bug (2026-06-30 17:27)
+
+**触发场景** — 用户硬刷后反馈截图: 底部 `分类 0` 应该是 15 (其他 chip 都显示数字, 唯独"分类"统计错)。
+
+**根因**:
+- `app/api/v1/knowledge.py:230-235` `/knowledge/categories` 端点返回 `{categories: {综述: 78, FAQ: 53, ..., NTA粒径分析: 2}}` (dict)
+- `web/src/composables/useKnowledge.js:71` `categories.value = res.data.categories || []` 当 res.data.categories 是 dict 时 → `categories.value` = `{}` (空 dict, truthy, 跳过 `|| []`)
+- `KnowledgeView.vue:45` `{{ categories.length }}` 渲染 → `undefined.length` → 显示 0
+
+**修复** (1 处):
+- `web/src/composables/useKnowledge.js:82-93` 加 shape 适配, 兼容 dict 和 list 两种格式
+  ```js
+  const cats = res.data.categories
+  if (Array.isArray(cats)) {
+    categories.value = cats
+  } else if (cats && typeof cats === 'object') {
+    categories.value = Object.entries(cats).map(([name, count]) => ({ name, count }))
+  } else {
+    categories.value = []
+  }
+  ```
+
+**新增铁律 6**:
+- **API 端点返回 shape 必须前后端协议统一** — 同一类数据在不同端点返回 dict vs list 是隐性 API 风险.
+  任何 "X 端点返回 dict, Y 端点返回 list of dict" 都是设计味道, 应该:
+  1. 首选: 后端统一为同一 shape (建议 list of {name, count}, 前端好处理且支持任意顺序)
+  2. 次选: 前端做 shape 适配 (本次修复)
+- 适用: `/knowledge/categories` (dict) vs `/knowledge/stats` (dict + categories dict 内嵌)
+  实际是 `stats` 内嵌的 `categories` dict + 独立 `categories` 端点 dict 是巧合 (后端均走 `get_dynamic_categories`),
+  但前端在 `useKnowledge` 当 list 用, 是不一致来源.
+
