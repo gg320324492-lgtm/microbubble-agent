@@ -51,11 +51,17 @@ log = logging.getLogger("migrate_kb_tags")
 
 # ── 规则常量 ──────────────────────────────────────────────────────
 AUTO_SOURCE_TYPE = "auto_expansion"  # 自动对话生成 source_type
-EXPANSION_TAGS = {"拓展", "自动拓展", "拓展测试"}  # 严格相等命中（仅在 auto_expansion 范围内）
+NOTES_CATEGORY = "笔记"  # 笔记 category (admin 手动测试常用)
+EXPANSION_TAGS = {"拓展", "自动拓展", "拓展测试"}  # 严格相等命中
 NORMALIZED_TAG = "自动拓展"  # 归并目标
-# 删除关键词 (子串匹配任一) — 中英双语都覆盖 ([自动拓展-S-TEST01] 这类测试样板)
+# 删除关键词 (子串匹配任一) — 中英双语都覆盖
 TITLE_DELETE_KEYWORDS = ("测试", "TEST")  # tuple: 子串命中任一即删
 TITLE_DELETE_KEYWORD_LEGACY = "测试"  # 仅用于备份 JSON metadata label (向后兼容)
+# 范围模式
+SCOPE_AUTO = "auto_expansion"  # 自动生成 source_type (默认)
+SCOPE_NOTES = "notes_category"  # 笔记 category
+# 笔记 category 模式下额外识别英文小写 'test' (admin 手动加的测试卡片常用)
+TITLE_DELETE_KEYWORDS_NOTES = ("测试", "TEST", "test")  # 含小写 test 覆盖 admin 手动加的 'test'/'status test'
 
 # 输出
 BACKUP_PREFIX = "kb_migrate_backup"
@@ -128,10 +134,14 @@ async def _ensure_kb_model():
     return Knowledge
 
 
-async def scan_kb(engine) -> ScanReport:
-    """全表扫描:
-      1. WHERE source_type='auto_expansion' → 分两类（tag_changes / delete_candidates）
-      2. WHERE source_type != 'auto_expansion' → 统计真实用户条目带"拓展"tag 数
+async def scan_kb(engine, scope: str = SCOPE_AUTO) -> ScanReport:
+    """全表扫描, 范围由 scope 决定:
+      - SCOPE_AUTO ('auto_expansion'): WHERE source_type='auto_expansion'
+      - SCOPE_NOTES ('notes_category'): WHERE category='笔记'
+
+    在范围内:
+      1. normalize_tags → 分两类（tag_changes / delete_candidates）
+      2. 范围外但带"拓展"tag 的真值条目统计 (公示用, 不动)
     """
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -140,21 +150,36 @@ async def scan_kb(engine) -> ScanReport:
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     report = ScanReport()
+    # 范围外的字段也存, 用于 backup JSON metadata
+    report.scope = scope  # type: ignore[attr-defined]
+    # 范围相关的 delete keywords (notes 模式额外加 "test" 小写)
+    delete_keywords = TITLE_DELETE_KEYWORDS_NOTES if scope == SCOPE_NOTES else TITLE_DELETE_KEYWORDS
 
     async with sf() as db:
-        # 1) 自动生成范围
-        stmt_auto = select(
-            Knowledge.id,
-            Knowledge.title,
-            Knowledge.tags,
-            Knowledge.source_type,
-            Knowledge.created_at,
-        ).where(Knowledge.source_type == AUTO_SOURCE_TYPE)
-        rows_auto = (await db.execute(stmt_auto)).all()
-        report.auto_total = len(rows_auto)
+        # 1) 范围内条目
+        if scope == SCOPE_AUTO:
+            stmt_scope = select(
+                Knowledge.id,
+                Knowledge.title,
+                Knowledge.tags,
+                Knowledge.source_type,
+                Knowledge.created_at,
+            ).where(Knowledge.source_type == AUTO_SOURCE_TYPE)
+        elif scope == SCOPE_NOTES:
+            stmt_scope = select(
+                Knowledge.id,
+                Knowledge.title,
+                Knowledge.tags,
+                Knowledge.source_type,
+                Knowledge.created_at,
+            ).where(Knowledge.category == NOTES_CATEGORY)
+        else:
+            raise ValueError(f"未知的 scope: {scope}")
+        rows_scope = (await db.execute(stmt_scope)).all()
+        report.auto_total = len(rows_scope)
 
         tag_distribution: dict[str, int] = {}
-        for r in rows_auto:
+        for r in rows_scope:
             new_tags, changed = normalize_tags(list(r.tags) if r.tags else None)
             if changed:
                 report.tag_changes.append(
@@ -166,11 +191,11 @@ async def scan_kb(engine) -> ScanReport:
                         created_at=r.created_at,
                     )
                 )
-            # 顺便统计实际 tag 分布
             if r.tags:
                 for t in r.tags:
                     tag_distribution[t] = tag_distribution.get(t, 0) + 1
-            if should_delete(r.title):
+            # 用 scope 专属 delete keywords 判断
+            if any(kw in (r.title or "") for kw in delete_keywords):
                 report.delete_candidates.append(
                     DeleteCandidate(
                         id=r.id,
@@ -181,19 +206,20 @@ async def scan_kb(engine) -> ScanReport:
                     )
                 )
 
-        # 2) 真实用户范围（不在本次修改范围内，只为公示）
-        stmt_real = select(Knowledge.id, Knowledge.title, Knowledge.tags).where(
-            (Knowledge.source_type.is_(None) | (Knowledge.source_type != AUTO_SOURCE_TYPE))
-            & Knowledge.tags.op("&&")(list(EXPANSION_TAGS))
-        )
-        rows_real = (await db.execute(stmt_real)).all()
-        report.real_user_with_expansion_tag_count = len(rows_real)
-        report.real_user_with_expansion_tag_sample = [
-            {"id": r.id, "title": (r.title or "")[:80], "tags": list(r.tags)}
-            for r in rows_real[:10]
-        ]
+        # 2) 范围外 (但仍带"拓展"tag) — 仅 SCOPE_AUTO 模式有意义 (auto 模式公示真实用户误标)
+        if scope == SCOPE_AUTO:
+            stmt_real = select(Knowledge.id, Knowledge.title, Knowledge.tags).where(
+                (Knowledge.source_type.is_(None) | (Knowledge.source_type != AUTO_SOURCE_TYPE))
+                & Knowledge.tags.op("&&")(list(EXPANSION_TAGS))
+            )
+            rows_real = (await db.execute(stmt_real)).all()
+            report.real_user_with_expansion_tag_count = len(rows_real)
+            report.real_user_with_expansion_tag_sample = [
+                {"id": r.id, "title": (r.title or "")[:80], "tags": list(r.tags)}
+                for r in rows_real[:10]
+            ]
 
-        # 把 tag 分布附到 report 上（用 attribute 动态赋值，避开 dataclass 字段定义）
+        # 把 tag 分布附到 report 上
         report.tag_distribution = tag_distribution  # type: ignore[attr-defined]
 
     return report
@@ -242,8 +268,12 @@ async def fetch_backup_rows(engine, ids: list[int]) -> list[dict]:
         return out
 
 
-async def apply_changes(engine, tag_changes: list[TagChange], delete_ids: list[int]) -> tuple[int, int]:
-    """单事务: 先 DELETE 后 UPDATE (仅 source_type='auto_expansion' 防御性 WHERE).
+async def apply_changes(engine, tag_changes: list[TagChange], delete_ids: list[int], scope: str = SCOPE_AUTO) -> tuple[int, int]:
+    """单事务: 先 DELETE 后 UPDATE.
+
+    scope 决定 WHERE 防御子句:
+      - SCOPE_AUTO: source_type='auto_expansion' (默认)
+      - SCOPE_NOTES: category='笔记'
 
     返回 (实际更新条数, 实际删除条数).
     """
@@ -252,6 +282,14 @@ async def apply_changes(engine, tag_changes: list[TagChange], delete_ids: list[i
 
     Knowledge = await _ensure_kb_model()
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    # 根据 scope 构造防御性 WHERE
+    if scope == SCOPE_AUTO:
+        scope_filter = Knowledge.source_type == AUTO_SOURCE_TYPE
+    elif scope == SCOPE_NOTES:
+        scope_filter = Knowledge.category == NOTES_CATEGORY
+    else:
+        raise ValueError(f"未知的 scope: {scope}")
 
     n_updated = 0
     n_deleted = 0
@@ -262,7 +300,7 @@ async def apply_changes(engine, tag_changes: list[TagChange], delete_ids: list[i
                 result = await db.execute(
                     delete(Knowledge).where(
                         Knowledge.id.in_(delete_ids),
-                        Knowledge.source_type == AUTO_SOURCE_TYPE,
+                        scope_filter,  # 防御性
                     )
                 )
                 n_deleted = result.rowcount or 0
@@ -276,7 +314,7 @@ async def apply_changes(engine, tag_changes: list[TagChange], delete_ids: list[i
                     update(Knowledge)
                     .where(
                         Knowledge.id == c.id,
-                        Knowledge.source_type == AUTO_SOURCE_TYPE,  # 防御性
+                        scope_filter,  # 防御性 (与 DELETE 一致)
                     )
                     .values(tags=c.new_tags)
                 )
@@ -317,9 +355,18 @@ def print_scan_table(report: ScanReport, limit: int) -> None:
     auto_changed = len(report.tag_changes)
     auto_delete = len(report.delete_candidates)
     tag_distribution = getattr(report, "tag_distribution", {})
+    scope = getattr(report, "scope", SCOPE_AUTO)
+    scope_label = (
+        f"自动生成 (source_type='{AUTO_SOURCE_TYPE}')" if scope == SCOPE_AUTO
+        else f"笔记 category (category='{NOTES_CATEGORY}')"
+    )
+    delete_keywords = (
+        TITLE_DELETE_KEYWORDS_NOTES if scope == SCOPE_NOTES
+        else TITLE_DELETE_KEYWORDS
+    )
 
     log.info("=" * 60)
-    log.info("=== 自动生成 (source_type='%s') 总览 ===", AUTO_SOURCE_TYPE)
+    log.info("=== %s 总览 ===", scope_label)
     log.info("  总条目: %d", report.auto_total)
     log.info("  Tags 命中 EXPANSION_TAGS: %d 条", auto_changed)
     if tag_distribution:
@@ -329,7 +376,7 @@ def print_scan_table(report: ScanReport, limit: int) -> None:
             log.info("    分布: %s", rel_dist)
     log.info(
         "  删除候选 (title 含 %s 任一): %d 条",
-        " OR ".join(repr(k) for k in TITLE_DELETE_KEYWORDS),
+        " OR ".join(repr(k) for k in delete_keywords),
         auto_delete,
     )
     log.info("")
@@ -363,29 +410,43 @@ def print_scan_table(report: ScanReport, limit: int) -> None:
     log.info("")
 
     log.info("--- 真实用户条目命中'拓展'tag (仅展示, 不动) ---")
-    log.info(
-        "  共 %d 条 (source_type != '%s') 带'拓展'类 tag → 本脚本不动",
-        report.real_user_with_expansion_tag_count,
-        AUTO_SOURCE_TYPE,
-    )
+    if scope == SCOPE_AUTO:
+        log.info(
+            "  共 %d 条 (source_type != '%s') 带'拓展'类 tag → 本脚本不动",
+            report.real_user_with_expansion_tag_count,
+            AUTO_SOURCE_TYPE,
+        )
+    else:
+        log.info(
+            "  scope=notes_category 模式: 仅看 category='笔记' 内的 '拓展' tag, 不动其他 category"
+        )
     for s in report.real_user_with_expansion_tag_sample:
         log.info("  [%d] %s | tags=%r", s["id"], s["title"][:40], s["tags"])
     log.info("")
 
     log.info("=== 修改范围汇总 ===")
-    log.info("  自动生成内 tags 变更: %d 条", auto_changed)
-    log.info("  自动生成内删除: %d 条", auto_delete)
-    log.info("  真实用户条目: 0 条改动 (本脚本不动)")
+    log.info("  %s 内 tags 变更: %d 条", scope_label, auto_changed)
+    log.info("  %s 内删除: %d 条", scope_label, auto_delete)
+    if scope == SCOPE_AUTO:
+        log.info("  真实用户条目: 0 条改动 (本脚本不动)")
+    else:
+        log.info("  非本范围 (非 %s) 条目: 0 条改动 (本脚本不动)", scope_label)
 
 
 # ── 主流程 ────────────────────────────────────────────────────────
 async def main() -> int:
     p = argparse.ArgumentParser(
-        description="KB 一次性迁移: 自动生成条目 tags 归并 + title 测试删除",
+        description="KB 一次性迁移: 自动生成/笔记条目 tags 归并 + title 测试样板删除",
     )
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--scan", action="store_true", help="只查询不写库, 打印 plan 表")
     g.add_argument("--apply", action="store_true", help="实际写库, 要求显式 --confirm")
+    p.add_argument(
+        "--scope",
+        choices=[SCOPE_AUTO, SCOPE_NOTES],
+        default=SCOPE_AUTO,
+        help=f"范围模式 (默认 {SCOPE_AUTO}, 笔记 category 模式额外加 'test' 小写匹配)",
+    )
     p.add_argument(
         "--confirm",
         action="store_true",
@@ -406,16 +467,16 @@ async def main() -> int:
 
     try:
         if args.scan:
-            log.info("[SCAN] 模式: 只查询不写库")
-            report = await scan_kb(engine)
+            log.info("[SCAN] 模式: 只查询不写库, scope=%s", args.scope)
+            report = await scan_kb(engine, scope=args.scope)
             print_scan_table(report, args.limit)
             return 0
 
         # ── apply 流程 ──
-        log.info("[APPLY] 模式: 实际写库")
+        log.info("[APPLY] 模式: 实际写库, scope=%s", args.scope)
 
         # 1) re-scan (防数据漂移)
-        report = await scan_kb(engine)
+        report = await scan_kb(engine, scope=args.scope)
         log.info(
             "  re-scan 结果: tags 变更 %d 条, 删除候选 %d 条",
             len(report.tag_changes),
@@ -446,6 +507,7 @@ async def main() -> int:
             engine,
             report.tag_changes,
             delete_ids,
+            scope=args.scope,
         )
         log.info("[APPLY] ✅ 完成: tags 替换 %d 条, 删除 %d 条", n_updated, n_deleted)
         log.info("[APPLY] 备份文件保留: %s", backup_path)

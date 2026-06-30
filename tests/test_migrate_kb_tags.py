@@ -19,7 +19,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 from migrate_kb_tags import (  # noqa: E402
     EXPANSION_TAGS,
     NORMALIZED_TAG,
+    NOTES_CATEGORY,
+    SCOPE_AUTO,
+    SCOPE_NOTES,
     TITLE_DELETE_KEYWORDS,
+    TITLE_DELETE_KEYWORDS_NOTES,
     normalize_tags,
     should_delete,
 )
@@ -126,3 +130,20 @@ def test_constants_consistent():
     assert NORMALIZED_TAG in EXPANSION_TAGS
     assert "测试" in TITLE_DELETE_KEYWORDS
     assert "TEST" in TITLE_DELETE_KEYWORDS
+
+
+def test_notes_scope_keywords_extended():
+    """笔记 category 模式额外加 'test' 小写, 覆盖 admin 手动加的 'test'/'status test' 卡片"""
+    # 自动模式: 小写 'test' 不命中 (是 admin 录入的真正单词, 不应被误删)
+    assert "test" not in TITLE_DELETE_KEYWORDS
+    assert "test" in TITLE_DELETE_KEYWORDS_NOTES
+    # 笔记模式必须含自动模式的所有关键词
+    for kw in TITLE_DELETE_KEYWORDS:
+        assert kw in TITLE_DELETE_KEYWORDS_NOTES
+
+
+def test_scope_constants():
+    """scope 常量稳定, CLI 不会因为改了字符串导致脚本无法调用"""
+    assert SCOPE_AUTO == "auto_expansion"
+    assert SCOPE_NOTES == "notes_category"
+    assert NOTES_CATEGORY == "笔记"

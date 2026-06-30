@@ -7139,3 +7139,38 @@ docker cp microbubble-agent-app-1:/tmp/kb_migrate_backup_<TS>.json ./backups/kb-
 docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
   -c "SELECT source_type, COUNT(*) FROM knowledge GROUP BY source_type;"
 ```
+
+### 续集 1：笔记 category 模式 (`--scope notes_category`, 2026-06-30 16:51)
+
+**触发场景** — 用户截图反馈"笔记 category 还有 2 条 test 卡片没删" (id=281 `test` / id=282 `status test`, 都是 admin 手动录入, **无** `source_type='auto_expansion'`)。
+
+**用户决策**："仅删 admin 手动测试卡片" — 扩展规则到 `category='笔记'` 范围, 不动其他 category (NTA粒径分析/方法/论文 等)。
+
+**实现** — 5 处代码变更 + 3 个新单测:
+- `AUTO_SOURCE_TYPE` + `NOTES_CATEGORY` + `SCOPE_AUTO` + `SCOPE_NOTES` + `TITLE_DELETE_KEYWORDS_NOTES` 常量
+- `scan_kb()` 加 `scope` 参数, WHERE 条件根据 scope 切换 `source_type='auto_expansion'` ↔ `category='笔记'`
+- `apply_changes()` 加 `scope` 参数, DELETE/UPDATE WHERE 子句同步切换 (防御性 + 防止跨 scope 误删)
+- `print_scan_table()` 标题/汇总行按 scope 切换文案
+- `main()` argparse 加 `--scope {auto_expansion,notes_category}` (默认 auto_expansion 保持向后兼容)
+- `TITLE_DELETE_KEYWORDS_NOTES = ("测试", "TEST", "test")` 比 auto 模式额外加小写 "test" (admin 手动加的 'test'/'status test')
+
+**实际执行** —
+| 阶段 | 结果 |
+|------|------|
+| 单测 | 16/16 PASS (新增 2 case: `test_notes_scope_keywords_extended` + `test_scope_constants`) |
+| `--scan --scope notes_category` | 笔记 category 共 24 条 / 删除候选 2 条 (id=281/282) / 0 tag 变更 |
+| `--apply --confirm --scope notes_category` | 备份 `/tmp/kb_migrate_backup_20260630_085122.json` (1651 字节) → 单事务 → **删除 2 条** |
+| 备份拷回 | `backups/kb-migrate-20260630/kb_migrate_backup_20260630_085122.json` |
+| 二次 SCAN (幂等) | 0 删除候选 ✅ |
+| SQL 双确认 | (1) 笔记 category 内"测试"/"test"/"TEST" = 0 (2) 笔记 category 24→22 (3) id=2/3 NTA/DLS 术语 100% 保留 (4) source_type 分布: 真实用户 193→191 (admin 手动加 2 条删除), 其他不变 ✅ |
+
+**关键决策 — 为什么 notes 模式额外加 'test' 小写关键词**:
+- 自动模式 (auto_expansion) 严格只匹配 "测试"/"TEST": "test" 小写通常是文档正文里的英文单词, **不删** (避免误伤学术文档)
+- 笔记模式 (notes_category) 加 "test" 小写: admin 手动加的 'test'/'status test' 整张卡片就是测试性质 (标题就是 'test'), **要删**
+
+**用户截图里看到的 4 张卡** (apply 前):
+- id=281 `test` → 笔记 + 'test' 子串 → **删** ✅
+- id=282 `status test` → 笔记 + 'test' 子串 → **删** ✅
+- id=2 `NTA测试方法` → NTA粒径分析 category → **保留** ✅ (术语)
+- id=3 `DLS动态光散射测试` → NTA粒径分析 category → **保留** ✅ (术语)
+
