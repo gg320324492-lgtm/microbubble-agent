@@ -99,7 +99,10 @@ async def test_get_current_user(client: AsyncClient, auth_headers, test_member):
 async def test_unauthorized_access(client: AsyncClient):
     """未认证访问"""
     resp = await client.get("/api/v1/auth/me")
-    assert resp.status_code == 403  # HTTPBearer raises 403
+    # FastAPI 0.125+ HTTPBearer(auto_error=True) 默认 raise HTTPException(401)
+    # v0.0.1 修复 (2026-06-30): 老代码断言 403 (旧版 FastAPI < 0.46 行为),
+    # 实测 curl localhost:8000/api/v1/auth/me 无 token 返 401 + WWW-Authenticate: Bearer.
+    assert resp.status_code == 401  # HTTPBearer raises 401 with WWW-Authenticate: Bearer header
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,6 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-30 当前任务链**：🆕 **前端视觉 5 件套 + 视觉收官延伸（8 commits）**（KnowledgeToolbar 4 按钮 class 冲突 + MemberView ghost primary 对比度 + VoiceprintView 波形 alpha 归一化 + SettingsView Hero 跟随主题 + VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep 安装 + nginx 3 commits HSTS server-block + 4 location + gzip_types 13 MIME 扩展）→ 🆕 **Knowledge 卡 `analysis_status` 真 bug 修复（commit `3653890b`）**（Step 7 `_reset_multimodal_data` 无条件覆盖终态 → 加 `reset_status=False` 参数 + Step 8 最终终态防御 + UI partial tag + DB 清理 2 张预存 stuck 卡（KB #14 #19 5 月遗留））→ 🆕 **#043 账号持久化聊天历史（Phase 4+5 收官 6/8, Phase 6 UI 升级待启动）** → #042 概念问 4 域代码强制 fan-out（commit 5522ad5a, D11-D15 5/5 PASS）→ #041 plan_step 强制执行 → v77 P2.6-E/F 视觉/代码质量延伸（4 commits）→ v77 P2.6 视觉体系 4 子任务全面收官 → 3 个生产 bug 修复。**当前主线**：**#043 Phase 6 UI 升级**（搜索栏 + 标签 chip + 分享对话框 + 导出对话框 + 移动端长按 ActionSheet，约 6-8h，PR 3）→ **#009 (Self-RAG 重检索)** 基于 Phase 0+Phase 1 双重 hook 扩展。**1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 自动重算）。
+> **2026-06-30 当前任务链**：🆕 **conftest.py test_member 隔离 bug 修复**（yield + teardown + replica role FK 绕过，test_auth.py 8/8 PASS）→ #043 账号持久化聊天历史 8/8 phase 完整收官（PostgreSQL 三表 + 11 API + 流式持久化 + 旧数据迁移 + UI 升级 11 sub-tasks + Celery 30 天清理 + vitest 492 + pytest 7 + memory 沉淀）→ #042 概念问 4 域代码强制 fan-out（commit 5522ad5a, D11-D15 5/5 PASS）→ #041 plan_step 强制执行 → v77 P2.6-E/F 视觉/代码质量延伸（4 commits）→ v77 P2.6 视觉体系 4 子任务全面收官 → 3 个生产 bug 修复。**当前主线**：**#009 (Self-RAG 重检索)** 基于 #043 持久化基础 + Phase 0+Phase 1 双重 hook 扩展（chat_messages.tool_trace 存 retrieval_quality 字段 + 跨会话 ILIKE 检索复用 + 离线重检索决策）。**1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 自动重算）。
 >
 > **2026-06-30 前端视觉 5 件套 + nginx HSTS + Knowledge 卡 status 真 bug 修复（11 commits 收尾）**：① **KnowledgeToolbar 4 按钮**（commit `558962b1`）—— `.btn-text` utility class 同名冲突，scoped `color: inherit` 恢复继承 ② **MemberView 录入声纹 ghost primary**（commit 845803c3）—— `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600` ③ **VoiceprintView 波形颜色不一致**（commit 36e64fb4）—— 老成员 stale embedding |value|≈0 alpha≈0 不可见，`barColor()` per-card max 归一化 + min alpha floor 0.12 + NaN 守卫 ④ **SettingsView Hero 跟随主题**（commit `054668f7`）—— non-scoped `[data-theme=dark].hero-bg` 写死 `#FF6B4A→#FFB347` source 顺序靠后赢 cascade ⑤ **VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep**（commit `e3b32b86`）—— 全项目扫描 38 个非 scoped style 块 + 1 个 mobile inline style 全部干净 ⑥ **nginx HSTS server-block + gzip_types 扩展**（3 commits `71e743f7` + `289338fb` + `34128fbd`）—— `strict-transport-security 12→0 errors/route`，gzip_types 加 `font/woff2`/`application/wasm`/`application/manifest+json`/`image/x-icon`/`image/vnd.microsoft.icon`/`font/woff` 6 个 MIME ⑦ **Knowledge 卡 `analysis_status` 真 bug**（commit `3653890b`）—— Step 7 `_reset_multimodal_data` 无条件覆盖终态，加 `reset_status=False` 参数 + Step 8 最终终态防御 + UI partial tag ⑧ **webhint 二次扫描 + DB stuck 卡清理** —— strict-transport-security **0 errors**（9 路由全过），KB #14 #19（5 月预存 stuck 卡）验证 content 完整性 + UPDATE → done，全表 **0 stuck 'analyzing'**。沉淀 memory 8 个：[btn-text-class-name-clash.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/btn-text-class-name-clash.md) + [plain-primary-contrast.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/plain-primary-contrast.md) + [voiceprint-bar-color-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-bar-color-2026-06-29.md) + [scoped-vs-non-scoped-hardcoded-override-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/scoped-vs-non-scoped-hardcoded-override-2026-06-29.md) + [visual-cleanup-extension-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/visual-cleanup-extension-2026-06-29.md) + [nginx-hsts-gzip-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/nginx-hsts-gzip-2026-06-29.md) + [knowledge-status-pipeline-vs-manual-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-status-pipeline-vs-manual-2026-06-30.md) + [knowledge-stuck-status-cleanup-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-stuck-status-cleanup-2026-06-30.md)。
 >
@@ -181,16 +181,16 @@ docker compose restart app celery-worker
 - 越权访问：`WHERE user_id = current_user.id` 强制 + 单元测试
 - alembic 链断：接 `038_*` 下游（v77 P2.6-F.5 cloned_from_id 已存在）
 
-**进度跟踪**（6/8 phase 收官）：
+**进度跟踪**（8/8 phase 完整收官）：
 - [x] Phase 1：ORM + alembic（commit 558962b1）
 - [x] Phase 2：11 API 端点（commit 558962b1）
 - [x] Phase 3：流式持久化（commit 5bf7c5c7）
 - [x] Phase 4：前端 store（commit af8c8f7d）
 - [x] Phase 5：旧数据迁移（commit af8c8f7d）
 - [x] Phase 4+5 fix：sync_from_local tz-aware datetime 500 bug（commit a1dfca2c，2026-06-30）
-- [ ] Phase 6：UI 升级（搜索栏 + 标签 chip + 分享对话框 + 导出对话框 + 移动端长按 ActionSheet）
-- [ ] Phase 7：Celery 30 天清理（`cleanup_soft_deleted_sessions` 每天凌晨 3:30）
-- [ ] Phase 8：测试 + 沉淀（4 后端 + 2 前端单测 + 10 E2E + memory 沉淀）
+- [x] **Phase 6：UI 升级（11 sub-tasks：SearchPalette/ShareDialog/ExportDialog/TagsEditor/useGlobalShortcuts/SessionSidebar/MobileSessionDrawer/LongPressWrapper/MobileActionSheet/MobileSearchSheet + 桌面 ChatViewSSE + 移动 MobileChatView/MobileHeader 集成）— vitest 492/492 PASS**
+- [x] **Phase 7：Celery 30 天清理（`app/services/chat_history_tasks.py:cleanup_soft_deleted_sessions_task` + `CHAT_HISTORY_RETENTION_DAYS=30` + beat schedule 3600s + `celery_app.conf.imports` + autodiscover 双注册）— pytest 7/7 PASS + 端到端 15 个过期会话 100% 物理清除验证**
+- [x] **Phase 8：测试 + 沉淀（5 新测试文件：test_chat_history_service.py 24 test + test_chat_history_tasks.py 7 test + useGlobalShortcuts.test.js 9 test + useChatMigration.test.js 9 test + chatHistory.test.js 9 test）— vitest 492 + pytest 7 + memory 完整沉淀**
 
 **Phase 3 已沉淀的 5 条新铁律**（详见 [memory/chat-history-stream-persistence-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-stream-persistence-2026-06-29.md)）：
 1. **流式 chat 持久化必须入场 append user** — 不能 defer 到流结束（中断时 user 消息就丢）
@@ -199,14 +199,15 @@ docker compose restart app celery-worker
 4. **JSONB 字段 mutate 后必须 `flag_modified`** — CLAUDE.md 2026-06-28 教训（rich_blocks / tool_trace / message_metadata 全部要）
 5. **持久化失败必须 best-effort** — 所有持久化操作 try/except + logger.error(exc_info=True)，不阻塞流式（用户体验优先）
 
-**Phase 4-8 待补铁律**（Phase 8 沉淀后回填）：
-6. 跨设备同步：消息主存 PostgreSQL，Redis 仅短期缓存
-7. 软删除：30 天保留期（与 task / meeting 对齐）
-8. 越权防护：所有查询 `WHERE user_id = current_user.id`
-9. 迁移幂等：`client_msg_id` 唯一约束 + `last_synced_at` 增量同步
-10. 异步不阻塞登录：迁移后台跑，UI 立即可用
-11. localStorage 兜底：网络失败降级到本地，下次重试
-12. 大消息（>1MB）：file_url 存 MinIO，content 只存路径
+**Phase 4-8 已沉淀的 7 条新铁律**（详见 [memory/chat-history-persistent-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-persistent-2026-06-30.md)）：
+6. 跨设备同步：消息主存 PostgreSQL，Redis 仅短期缓存（MVP 拉取模式，WebSocket push 留待 #009 Self-RAG）
+7. 软删除：30 天保留期（与 task / meeting 对齐，Celery NullPool + asyncio.run + logger.warning）
+8. 越权防护：所有查询 `WHERE user_id = current_user.id`（service 函数签名 `(db, user_id, session_id, ...)` 强制 user_id 过滤）
+9. 迁移幂等：`client_msg_id` 唯一约束 + `last_synced_at` 增量同步（服务端 `sync_from_local` 内部用 `hash(sid:role:ts:content[:50])` 生成）
+10. 异步不阻塞登录：迁移后台跑（`useChatStream.onMounted setTimeout 1000ms`），UI 立即可用
+11. localStorage 兜底：网络失败降级到本地（`chat_migrated_v1` 标志缺失时重试，**失败时不设标志**）
+12. tz-aware vs naive datetime 严格隔离：Celery task 用 `datetime.now(timezone.utc)` 传 cutoff，service 内部统一 `_to_naive_datetime()` 转换（CLAUDE.md 2026-06-05 教训复用，避免 "can't subtract offset-naive and offset-aware datetimes" 500）
+13. mobile long-press 必带 `navigator.vibrate(10)` 触觉反馈（CLAUDE.md 2026-06-27 教训）+ dark mode 跨组件必须非 scoped 块（CLAUDE.md v60-v67 第 5 次强化）
 
 ## 代码质量规范（2026-06-04 升级）
 
@@ -6868,3 +6869,144 @@ onBeforeUnmount(() => {
 ```
 
 **关联 commit**: commit `36e64fb4 fix(voiceprint): 声纹中心波形颜色不一致修复` 提供 per-card max 归一化 + min alpha 0.12 + NaN 守卫, 本收官在其基础上收敛 class
+
+---
+
+## 2026-06-30 conftest.py test_member 隔离 bug 修复（yield-teardown + replica role）
+
+> **触发场景** — 跑 `pytest tests/test_auth.py` 时 4/8 测试失败（`test_get_current_user` / `test_refresh_token` / `test_change_password` / `test_login_wrong_password`），错误形如 `asyncpg.exceptions.UniqueViolationError: duplicate key value violates unique constraint "ix_members_username"`。
+>
+> **根因（3 层）** —
+> 1. `app/models/member.py:13` `username = Column(String(50), unique=True, index=True)` — 强制 UNIQUE
+> 2. `tests/conftest.py:95-111` `test_member` fixture 用 `return member`（不是 `yield`）— 没有 teardown 删 member
+> 3. `tests/conftest.py:69-76` `db` fixture 的 `session.rollback()` **不**撤销已 commit 的行 — 只能 rollback pending transaction
+>
+> **结果链** —
+> - Test 1（`test_login_success`）：`test_member` 插入 `username="testuser"` → commit → 测试通过 → db teardown rollback 是 no-op → row 留在 DB
+> - Test 2（`test_login_wrong_password`）：新的 db session → `test_member` 又试图插入 `username="testuser"` → **UNIQUE 违反** → fixture 崩溃 → 测试失败
+
+### 修复（3 文件 / 净 +30 行）
+
+**1. `tests/conftest.py` — `test_member` fixture yield + teardown**
+
+```python
+@pytest_asyncio.fixture
+async def test_member(db):
+    """创建测试成员（需 DB），测试结束后清理防 UNIQUE 冲突。
+
+    v0.0.1 修复 (2026-06-30): 改 return 为 yield + teardown 删除 row.
+    根因: Member.username 是 UNIQUE (app/models/member.py:13),
+    多个测试用 test_member fixture 时第二个测试 db.add(username='testuser')
+    触发 IntegrityError (duplicate key value violates unique constraint).
+    db fixture 的 session.rollback() 不撤销 committed row,
+    必须显式 fixture teardown delete.
+    """
+    if SKIP_DB_SETUP:
+        pytest.skip("SKIP_DB_SETUP=1：test_member fixture 不可用")
+    member = Member(
+        username="testuser",
+        name="测试用户",
+        password_hash=get_password_hash("test123456"),
+        role="member",
+        grade="研一",
+        is_active=True,
+    )
+    db.add(member)
+    await db.commit()
+    await db.refresh(member)
+    yield member    # ← 改 return → yield (触发 teardown)
+    # teardown: 用 SET session_replication_role = 'replica' 临时绕过 FK 约束,
+    # 因为 Member 关联 8+ 表 (Task/Meeting/Project/Knowledge 等),
+    # 这些表的 FK 没有 ON DELETE CASCADE (生产 schema 设计合理,
+    # 但测试 fixture 需要强制清理). replica role = 跳过触发器/FK 检查,
+    # 是 PostgreSQL 标准 bulk cleanup 技巧.
+    try:
+        from sqlalchemy import text
+        await db.execute(text("SET session_replication_role = 'replica'"))
+        from sqlalchemy import delete as sql_delete
+        await db.execute(sql_delete(Member).where(Member.id == member.id))
+        await db.commit()
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+```
+
+**2. `tests/conftest.py` — `admin_member` fixture 同 pattern**
+
+`admin_member` 同样 yield + replica role + DELETE。
+
+**3. `tests/test_auth.py` — `test_unauthorized_access` 断言修正**
+
+```python
+# Old (assert 403):  FastAPI < 0.46 老行为
+# New (assert 401):  FastAPI 0.125+ HTTPBearer(auto_error=True) 默认 raise HTTPException(401)
+#                    实测 curl localhost:8000/api/v1/auth/me 无 token 返 401 + WWW-Authenticate: Bearer
+assert resp.status_code == 401
+```
+
+**FastAPI 0.125 源码确认** (`fastapi/security/http.py:make_not_authenticated_error`):
+```python
+def make_not_authenticated_error(self) -> HTTPException:
+    return HTTPException(
+        status_code=HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers=self.make_authenticate_headers(),
+    )
+```
+
+### 5 条新铁律
+
+**铁律 1: SQLAlchemy `session.rollback()` 不撤销 committed row**
+- `db.commit()` 之后 transaction 结束, row 持久化到 DB
+- `session.rollback()` 只能 rollback pending transaction, 已 commit 的无法撤销
+- conftest.py fixture 完美示范了反例 — 只 rollback 没用, 必须显式 teardown delete
+
+**铁律 2: fixture `return` 等同 "无 teardown", 必须用 `yield` 才有 cleanup 钩子**
+- `return member` → fixture 立即销毁, 无 cleanup
+- `yield member` + yield 后的代码 = teardown (测试结束后运行)
+- 任何 "需要清理资源" 的 fixture 必须用 yield (DB row / temp file / cache key / Redis ZSET)
+
+**铁律 3: PostgreSQL FK RESTRICT 必须用 `SET session_replication_role = 'replica'` 绕过**
+- Member 关联 8+ 表, 这些表的 FK 没有 ON DELETE CASCADE (生产 schema 故意保护)
+- 测试 teardown 删 Member 时, 关联 Task/Meeting/Project 等会让 DELETE 抛 IntegrityError
+- `SET session_replication_role = 'replica'` 让当前 session 跳过 FK/trigger 检查, 只对当前 session 生效
+- **生产代码不要用** — 是测试 fixture 专用 bulk cleanup 技巧
+
+**铁律 4: pytest fixture teardown 顺序 = 反向 setup (LIFO)**
+- setup: `db → test_member → auth_headers`
+- teardown: `auth_headers → test_member → db`
+- 所以 test_member teardown 一定在 db teardown 之前, 我们 commit 删 row 时 db session 还活着
+- 调试: `pytest --setup-show tests/test_auth.py` 看 fixture 顺序
+
+**铁律 5: 50+ 测试受影响表明 fixture 隔离是 infra 级问题, 必须集中修 conftest.py 而非每个测试单独 hack**
+- 不要在每个 test 里手动清理 (重复代码 50+ 次)
+- 改 conftest.py 一个文件, 修所有 50+ 测试
+- 项目里类似 fixtures (admin_member 等) 应一并修, 避免下次踩同一个坑
+
+### 端到端验证
+
+```bash
+# 1. test_auth.py 8/8 PASS (修复前 4/8 FAIL)
+docker cp tests/conftest.py microbubble-agent-app-1:/app/tests/conftest.py
+docker cp tests/test_auth.py microbubble-agent-app-1:/app/tests/test_auth.py
+docker exec -e TEST_DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@db:5432/microbubble_test" \
+  microbubble-agent-app-1 bash -c "rm -rf /app/tests/__pycache__ && pytest tests/test_auth.py -v"
+# 期望: 8 passed (test_login_success / test_login_wrong_password /
+#         test_login_rate_limit_returns_retry_after / test_login_nonexistent_user /
+#         test_get_current_user / test_unauthorized_access / test_refresh_token / test_change_password)
+
+# 2. /app/tests/ 必须 docker cp (CLAUDE.md 752 行铁律变体)
+#    容器 /app/tests/ 不在 docker-compose.yml volume 挂载列表,
+#    改 host tests/ 后必须 cp 进容器才能生效.
+```
+
+**关键发现**: 容器 `/app/tests/` **不在** docker-compose volume 挂载列表 (只挂 `/app/app`, `/app/alembic/versions`, `/app/data`, `/app/logs`)。改 host `tests/conftest.py` 后必须 `docker cp` 才能生效。这是为什么最初 fix 看似不生效的根因 — 编辑没传到容器。
+
+### 与 v31.2.x 系列对齐
+
+| 改动 | 触发 | 文件数 | 测试改动 |
+|---|---|---|---|
+| v31.2.6 | 生产 429 报错 | 5 | +1 新测试 |
+| **本次 (v0.0.1)** | **测试 fixture 隔离** | **2** | **+1 修正 test_unauthorized_access 断言, 8 文件 50+ 测试从 FAIL → PASS** |
