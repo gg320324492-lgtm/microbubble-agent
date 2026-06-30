@@ -19,6 +19,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 const STORAGE_KEY = 'mnb:ui:showThinking'
+const DEPTH_STORAGE_KEY = 'mnb:ui:useDeepThinking'  // 2026-06-30 #009 Self-RAG
 
 function readInitial() {
   if (typeof localStorage === 'undefined') return false
@@ -29,12 +30,28 @@ function readInitial() {
   }
 }
 
+function readDepthInitial() {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    return localStorage.getItem(DEPTH_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export const useUiStore = defineStore('ui', () => {
   const showThinking = ref(readInitial())
+  const useDeepThinking = ref(readDepthInitial())  // 2026-06-30 #009 Self-RAG: 用户 toggle 深度思考
 
   watch(showThinking, (v) => {
     try {
       localStorage.setItem(STORAGE_KEY, v ? '1' : '0')
+    } catch { /* ignore */ }
+  })
+
+  watch(useDeepThinking, (v) => {
+    try {
+      localStorage.setItem(DEPTH_STORAGE_KEY, v ? '1' : '0')
     } catch { /* ignore */ }
   })
 
@@ -46,10 +63,21 @@ export const useUiStore = defineStore('ui', () => {
     showThinking.value = !!v
   }
 
+  function toggleDeepThinking() {
+    useDeepThinking.value = !useDeepThinking.value
+  }
+
+  function setUseDeepThinking(v) {
+    useDeepThinking.value = !!v
+  }
+
   return {
     showThinking,
+    useDeepThinking,
     toggleThinking,
     setShowThinking,
+    toggleDeepThinking,
+    setUseDeepThinking,
   }
 })
 

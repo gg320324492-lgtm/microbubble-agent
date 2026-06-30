@@ -89,6 +89,31 @@
           </div>
           <span class="item-arrow">›</span>
         </button>
+
+        <!-- 2026-06-30 #009 Self-RAG 深度思考 toggle -->
+        <button
+          type="button"
+          class="settings-item"
+          @click="toggleDeepThinking"
+          aria-label="切换回答深度"
+        >
+          <div class="item-icon" style="background: var(--color-primary-bg)">
+            {{ useDeepThinking ? '🧠' : '⚡' }}
+          </div>
+          <div class="item-info">
+            <div class="item-title">回答深度</div>
+            <div class="item-desc">
+              当前：{{ useDeepThinking ? '深度思考（带 Self-RAG 重检索）' : '快速回答（跳过 judge 评估）' }}
+            </div>
+          </div>
+          <el-switch
+            :model-value="useDeepThinking"
+            inline-prompt
+            active-text="深度"
+            inactive-text="快速"
+            @update:model-value="toggleDeepThinking"
+          />
+        </button>
       </section>
 
       <!-- 只读信息 -->
@@ -188,6 +213,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/useThemeStore'
+import { useUiStore } from '@/stores/useUiStore'  // 2026-06-30 #009 Self-RAG 深度思考 toggle
 import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
@@ -197,6 +223,9 @@ import MemberAvatar from '@/components/mobile/MemberAvatar.vue'
 const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const uiStore = useUiStore()  // 2026-06-30 #009 Self-RAG
+const useDeepThinking = computed(() => uiStore.useDeepThinking)
+const toggleDeepThinking = () => uiStore.toggleDeepThinking()
 
 const userInfo = computed(() => userStore.userInfo)
 

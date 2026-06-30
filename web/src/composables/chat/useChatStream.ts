@@ -22,6 +22,7 @@ import { ElMessage } from 'element-plus'
 import { sseFetch } from '@/api/agent/sse'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
+import { useUiStore } from '@/stores/useUiStore'
 
 // ============================================================================
 // 类型定义
@@ -59,6 +60,11 @@ export interface ChatMessage {
   plan?: Array<{ step: string; tool?: string; status: 'pending' | 'running' | 'done' }>
   critique?: { score: number; addresses_question?: boolean; has_synthesis?: boolean; has_citations?: boolean; suggestion?: string }
   retryCount?: number
+  // ===== 2026-06-30 #009 Self-RAG 新增字段 =====
+  /** Self-RAG judge 最终评估 (前端可显示 confidence/can_answer badge) */
+  retrievalAssessment?: { phase?: string; confidence?: number; can_answer?: boolean; missing?: string; reretrieved?: boolean; attempt?: number; latency_ms?: number }
+  /** 正在重新检索动画 (reretrieval event → tool_result 后自动 false) */
+  reretrieving?: boolean
   // ===== #043 新增字段（服务端持久化追踪） =====
   /** 服务端 message id（持久化成功后填入） */
   server_id?: number
@@ -137,6 +143,7 @@ export function useChatStream() {
   // --------------------------------------------------------------------------
   const sessionsStore = useChatSessionsStore()
   const chatHistoryStore = useChatHistoryStore()  // #043 服务端持久化
+  const ui = useUiStore()  // 2026-06-30 #009 Self-RAG: 读 useDeepThinking toggle
   sessionsStore.migrateFromV1()
   if (!sessionsStore.currentSession()) {
     sessionsStore.createSession()
@@ -341,9 +348,16 @@ export function useChatStream() {
     // v31 埋点: Agent 调用 search_knowledge 时暂存 query, tool_result 时连同 top_ids 一起 POST
     let pendingAgentSearchQuery: string | null = null
     // targetSessionId 是 sendMessage 启动时捕获的闭包变量
+    // 2026-06-30 #009: 读 useUiStore.useDeepThinking + useThemeStore.accent 塞 fetch body
+    const useDeepThinking = ui.useDeepThinking
     for await (const evt of sseFetch(
       '/api/v1/chat/stream',
-      { message: content, session_id: targetSessionId },
+      {
+        message: content,
+        session_id: targetSessionId,
+        use_self_rag: useDeepThinking,  // null = 不传（后端用 settings 全局）
+        // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
+      },
       { signal }
     )) {
       const currentAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg
@@ -414,6 +428,10 @@ export function useChatStream() {
           if (last && last.type === 'tool' && last.name === evt.tool_name) {
             last.state = 'done'
             last.duration_ms = evt.tool_duration_ms
+          }
+          // 2026-06-30 #009: Self-RAG 重检索 tool_result → 关闭 reretrieving 动画
+          if (evt.tool_use_id?.startsWith('reretrieve_') && currentAssistant.reretrieving) {
+            currentAssistant.reretrieving = false
           }
           // v31 埋点: 收到 search_knowledge 结果, POST 到 analytics (含 top_ids)
           if (
@@ -510,6 +528,33 @@ export function useChatStream() {
               label: `📊 自评 ${evt.critique.score}/10`,
             })
           }
+          break
+        }
+        case 'retrieval_assessment': {
+          // 2026-06-30 #009 Self-RAG: judge 评估结果
+          currentAssistant.retrievalAssessment = evt.retrieval || null
+          // 渲染徽章 (reretrieved 状态在 UI 显示 🔍 重新检索)
+          if (evt.retrieval?.reretrieved) {
+            currentAssistant.toolTrace!.push({
+              type: 'thinking',
+              label: `🔍 Self-RAG 重新检索 (attempt #${evt.retrieval.attempt ?? 0}, confidence=${(evt.retrieval.confidence ?? 0).toFixed(2)})`,
+            })
+          } else if (evt.retrieval && !evt.retrieval.can_answer && (evt.retrieval.confidence ?? 1) < 0.6) {
+            currentAssistant.toolTrace!.push({
+              type: 'thinking',
+              label: `⚠️ 知识库信息有限 (confidence=${(evt.retrieval.confidence ?? 0).toFixed(2)}, 缺: ${evt.retrieval.missing?.slice(0, 40) || '—'})`,
+            })
+          }
+          break
+        }
+        case 'reretrieval': {
+          // 2026-06-30 #009 Self-RAG: 正在重新检索动画
+          currentAssistant.reretrieving = true
+          currentAssistant.toolTrace!.push({
+            type: 'thinking',
+            label: `🔍 正在重新检索: "${evt.retrieval?.refined_query?.slice(0, 50) || '...'}"`,
+          })
+          // 配套 tool_result 后会自动关闭
           break
         }
         case 'retry': {

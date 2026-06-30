@@ -59,6 +59,10 @@ class MicroBubbleAgent:
         image_media_type: str = "image/png",
         user_id: Optional[int] = None,
         channel_user_id: Optional[str] = None,
+        # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
+        *,
+        model: Optional[str] = None,
+        use_self_rag: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """对话接口（非流式）
 
@@ -96,6 +100,9 @@ class MicroBubbleAgent:
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
+            # 2026-06-30 #009 透传 per-request override
+            self_rag_enabled=use_self_rag,
+            synthesis_model_override=model,
         )
 
         # 5. 持久化 session（截断到 window size）
@@ -222,6 +229,9 @@ class MicroBubbleAgent:
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
+            # 2026-06-30 #009 透传 per-request override
+            self_rag_enabled=use_self_rag,
+            synthesis_model_override=model,
         )
 
         try:
