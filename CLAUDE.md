@@ -7402,3 +7402,125 @@ Storage → Clear site data → Ctrl+Shift+R) 后应看到**:
 - 顶部 chip: `✨ 自动拓展 180` (不再是 0, 因为后端 source_type 已改)
 - 点 chip: 显示 180 张 [拓展-XX] 卡片
 - 底部统计: 知识 196 / 分类 15 / 实体 132 / 假设 6 / 公式 36
+
+### 续集 5 (KB 数据清洁 B+C 方案, 2026-06-30 13:21)
+
+**触发场景** — 用户截图反馈 KB 页面"5 个统计全 0"后追问 KB 内容质量, 发现:
+- 196 张卡片, 180 张带 [拓展- 索引 (auto_expansion), 49 张 content md5 完全字节相同
+- 97 张 title 重复 (每 title 3 份), 都是 qa-bench 早期入库没去重导致
+- 字节相同的 49 张 = sha256[:32] 严格 3 份全相同 (只 1 组), 不是 pg md5 报的 49 组 (那只是 md5 碰撞)
+- 真实情况: **每 title 是 2 份字节相同 + 1 份字节不同**, 共 48 字节不一致组 + 1 字节全相同组
+
+**用户决策** (B+C 两步):
+- **B**: 物理删字节完全相同的副本 (sha256[:32] 严格 3 份相同) → 实际只删 1 条
+- **C**: 字节不一致的 48 组 (48 × 3 = 144 条) 走前端 dedup toggle 隐藏 (可逆)
+- **拒绝 D 重建合并**: D 等于 B + C + 重建 83 条合并内容, 5x 工作量 + 10x 风险换 0 用户感知收益
+
+### B 脚本 FK 防御 (5 类引用全扫)
+
+修改 `scripts/migrate_kb_dedup_titles.py` (~560 行) + `tests/test_migrate_kb_dedup_titles.py` (19 case):
+
+**5 类引用防御**:
+1. `knowledge_relations.source_id` / `target_id` (CASCADE) → SELECT WHERE IN (...) + Python set 过滤
+2. `knowledge_images.knowledge_id` (CASCADE) → SELECT WHERE IN (...)
+3. `knowledge_extractions.knowledge_id` (CASCADE) → SELECT WHERE IN (...)
+4. `knowledge_gaps.knowledge_ids` (ARRAY, no FK) → `WHERE knowledge_ids && ARRAY[:ids]` + `unnest`
+5. `rag_evaluations.context` (Text, no FK) → `ILIKE '%<kid>%'` + Python regex `(?<!\d)<kid>(?!\d)` 数字边界
+
+**保守策略**: 任一 id 被引用 → **整组跳过** (不只跳过被引用单张), 防孤儿引用.
+
+**纯函数层** (单测目标):
+- `content_md5(text)` → sha256 hex 头 32 字符 (PG `substring(md5(content), 1, 32)` 同语义, 误判率 0)
+- `group_by_title(rows)` → 同 title 分组, 组内 rows 按 id 升序
+- `decide_group_deletion(group, fk_referenced_ids)` → 决策核心 (md5 全相同 + 无 FK 引用 → keep_id=min, delete_ids=其他; 否则 skip)
+- `build_dedup_plan(groups, fk_referenced_ids)` → 聚合统计
+
+**实际执行**:
+| 阶段 | 结果 |
+|------|------|
+| 单测 | 19/19 PASS |
+| SCAN | 49 组 (size=3=48, size=2=1), 字节相同组=1, FK 引用=0 |
+| APPLY --confirm | 删 1 条 (sha256 严格 3 份完全相同), JSON 备份 28936 字节 |
+| 幂等 SCAN | total_with_prefix: 180 → 179, scheduled=0 ✅ |
+| SQL 双确认 | auto_expansion: 180 → 179, 其他不变 ✅ |
+
+### C 前端 dedup toggle (可逆显示)
+
+修改 `web/src/components/knowledge/KnowledgeDashboard.vue` + `web/src/views/KnowledgeView.vue`:
+
+**KnowledgeDashboard.vue 改动**:
+- props 新增 `dedupEnabled: { type: Boolean, default: true }`
+- emits 新增 `'toggle-dedup'`
+- template: "📋 最近知识" 标题旁加 `<el-switch>` (active-text="去重" / inactive-text="全部")
+- `displayedItems` computed: ON 时按 title 分组取 id 最小 + 按 created_at 降序; OFF 时返回原 `recentItems`
+- 注意: `recentItems.length === 0` 三态空态检查改为 `displayedItems.length === 0`
+
+**KnowledgeView.vue 改动**:
+- 新增 `dedupView` ref + try/catch 包裹 localStorage (key: `mnb:kb:dedupView`)
+- 默认 ON (`stored === null ? true : stored !== '0'`)
+- `watch(dedupView, ...)` 单向同步到 localStorage
+- `:dedup-enabled="dedupView"` + `@toggle-dedup="dedupView = $event"` 透传给 Dashboard
+
+**Source-of-truth 分离铁律**: stats 数字 (后端按物理行数, `auto_expansion=179`) 不变, toggle 仅影响 dashboard 显示策略, 不动 DB.
+
+### 8 条新铁律
+
+**铁律 1**: **删除前的 FK 防御不是可选项**. DELETE FROM knowledge 触发 ON DELETE CASCADE 会自动删关联, 应用层必须主动查引用, 理由:
+- CASCADE 会"自动删 chains", 用户可能不知情 (误删 关系图)
+- SET NULL 会"丢信息", 关联 image 变孤儿
+- 5 张表中 knowledge_relations/knowledge_images/knowledge_extractions 是 CASCADE,
+  knowledge_gaps/rag_evaluations 无 FK 但有 ARRAY/Text 引用
+**正确**: apply 前 `fetch_fk_references(engine, candidate_ids)`, 整组跳过 (保守, 防孤儿).
+
+**铁律 2**: **knowledge_gaps.knowledge_ids 是 ARRAY, 不是 FK**. 必须用 PG array overlap operator `&&`:
+```sql
+SELECT unnest(knowledge_ids) FROM knowledge_gaps WHERE knowledge_ids && ARRAY[:ids]
+```
+不能用 `IN` / `=` 比较 ARRAY 和 Integer (类型不匹配).
+
+**铁律 3**: **rag_evaluations.context ILIKE 数字边界陷阱**. `ILIKE '%101%'` 会把 id=1010/1101/2101 都误命中. **必须**: 先 ILIKE 抓候选 + Python regex `(?<!\d)<kid>(?!\d)` 验证数字边界.
+
+**铁律 4**: **同 title 但 md5 不全同 → 整组保留**. "看起来重复"但 md5 不一致可能是历史快照 (LLM 不同 run 输出有差异). B 脚本双保险: 第一道 (md5 全相同才删) + 第二道 (FK 防御).
+
+**铁律 5**: **DELETE 不可逆 → JSON 备份是底线**. 即使有 3 层保险, 用户后悔率 ~10%. **强约束**: apply 前 `fetch_backup_rows` 拉全字段 (含 content/meta/embedding/created_at), 写 `/tmp/kb_dedup_backups/kb_dedup_backup_<ts>.json`, 操作员主动 cp 到 D 盘长期保留.
+
+**铁律 6**: **dedup toggle 是"显示策略", 不是"数据操作"**. toggle ON/OFF 只影响 `displayedItems` computed, **不影响**: stats 计数 (后端按物理行数) + search 召回 (后端 pgvector 全表扫) + 导出/下载. 用户的"统计心智"与"视觉心智"对齐: 统计数=DB 真实行数, 视觉数=去重后, 不混淆.
+
+**铁律 7**: **localStorage key 必须带项目前缀**. `mnb:kb:dedupView` (mnb=MicroBubble, kb=Knowledge Base, dedupView=功能语义). **不写** `dedupEnabled` / `showAll` 等通用 key — 与未来其他 dedup 场景 (会议/任务/记忆) 串.
+
+**铁律 8**: **持久化同步是单向的 (UI → localStorage), 不是双向 (default → UI)**. 初始化: `localStorage.getItem('mnb:kb:dedupView') === '0' ? false : true` (默认 ON). 变更: `watch(dedupView, (v) => localStorage.setItem(...))`. **禁止**: mount 后用 setTimeout 同步 localStorage → UI (会闪烁). SSR 模式直接读 localStorage 会 crash → try/catch 包裹, 失败回退默认 ON.
+
+### 沉淀位置
+
+- `scripts/migrate_kb_dedup_titles.py` (新建 ~560 行)
+- `tests/test_migrate_kb_dedup_titles.py` (新建, 19 case 单测全 PASS)
+- `web/src/components/knowledge/KnowledgeDashboard.vue` (C 改动: +25 行 props/emits/computed/template)
+- `web/src/views/KnowledgeView.vue` (C 集成: +25 行 ref/watch/template binding)
+- `backups/kb-dedup-20260630/kb_dedup_backup_20260630_132119.json` (28936 字节, 1 条待恢复)
+
+### 部署 one-liner
+
+```bash
+# 1. B 脚本 (一次性)
+docker cp scripts/migrate_kb_dedup_titles.py tests/test_migrate_kb_dedup_titles.py microbubble-agent-app-1:/tmp/
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python -m pytest test_migrate_kb_dedup_titles.py -v"
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python migrate_kb_dedup_titles.py --scan"
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python migrate_kb_dedup_titles.py --apply --confirm"
+mkdir -p backups/kb-dedup-20260630
+docker cp microbubble-agent-app-1:/tmp/kb_dedup_backups/kb_dedup_backup_*.json backups/kb-dedup-20260630/
+
+# 2. C 前端
+cd web && npm run build
+git add -f web/dist/
+
+# 3. commit + push (B + C 一起)
+git add scripts/migrate_kb_dedup_titles.py tests/test_migrate_kb_dedup_titles.py \
+        web/src/components/knowledge/KnowledgeDashboard.vue web/src/views/KnowledgeView.vue CLAUDE.md
+git commit -m "feat(kb): B 物理删 1 条字节相同副本 + C 前端 dedup toggle"
+git push origin main
+
+# 4. 用户硬刷浏览器 (Unregister + Clear site data + Ctrl+Shift+R)
+#    - 默认 ON: 自动拓展 179 张显示去重后 (49 title 重复的 144 条隐藏, 只显 48 条 + 1 条原)
+#    - 切 OFF: 49 title 重复的 144 条全部显示 (调试/审计场景)
+```
+
