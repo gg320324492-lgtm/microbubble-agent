@@ -2,11 +2,74 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
-## [Unreleased] 2026-06-30 — 前端视觉 5 件套 + nginx HSTS + Knowledge 卡 status 真 bug 修复
+## [Unreleased] 2026-06-30 — #043 8 phase 完整收官 + voiceprint 视觉收官 + v31.2.6 + pytest-asyncio 升级
 
-### 新增功能
+### 🆕 #043 账号持久化聊天历史 8 phase 完整收官（commits `af8c8f7d` + `a1dfca2c` + `b9aea177` + `c476c70f` 等）
 
-#### nginx HSTS server-level + gzip_types 扩展（基础设施真实安全加固，3 commits）
+**用户决策**：每个人与小气助手的对话历史像 ChatGPT/豆包一样跟随账号一直记住。当前痛点：前端 100% `localStorage`（per-browser 不跨账号），后端 Redis 持久化但不反查 user_id，移动端新设备 = 历史清零，多人共用一台电脑 = 看到别人会话。
+
+- **Phase 1**：ORM 模型 + alembic `039_chat_history.py`（chat_sessions / chat_messages / chat_shares 三表 + 索引 + 触发器）
+- **Phase 2**：11 个后端 API 端点（`/chat/sessions` CRUD + `/messages` + `/export` + `/share` + `/search` + `/sync` + `/shares/{token}`）
+- **Phase 3**：流式 chat 持久化修复（`micro_bubble_agent.py:111` + `partial_assistant_buffer` + SSE 事件 `message_persisted` / `sync_required`）
+- **Phase 4**：前端 store 重构（chatHistory.ts + chatSessions.ts 同步 + useChatStream 持久化钩子）
+- **Phase 5**：旧数据自动迁移（useChatMigration.js + `chat_migrated_v1` 标记 + 幂等键 `client_msg_id`）
+- **Phase 6**：UI 升级（SearchPalette/ShareDialog/ExportDialog/TagsEditor/useGlobalShortcuts/SessionSidebar/MobileSessionDrawer/LongPressWrapper/MobileActionSheet/MobileSearchSheet + ChatViewSSE + MobileChatView/MobileHeader 集成）
+- **Phase 7**：Celery 30 天清理（`app/services/chat_history_tasks.py:cleanup_soft_deleted_sessions_task` + `CHAT_HISTORY_RETENTION_DAYS=30` + beat schedule 3600s）
+- **Phase 8**：测试 + memory 沉淀（5 新测试文件 + 12 条铁律）
+
+**端到端验证**：vitest 492/492 + pytest 7/7 + 端到端 15 个过期会话 100% 物理清除验证
+
+### 🆕 voiceprint 视觉收官（5 commits + 1 合并，voiceprint-2026-06-30 任务号）
+
+| Commit | 主题 |
+|---|---|
+| `d01420dd` | refactor(voiceprint): 收敛 VoiceprintCard bar 颜色到 .bar--low/mid/high class |
+| `30f788bd` | fix(voiceprint-2026-06-30): ConfidenceChart ECharts 主题感知 |
+| `fe368f3e` | fix(voiceprint-2026-06-30): VoiceTestDialog Canvas getComputedStyle 读主题色 |
+| `afacdc7e` | test(voiceprint-2026-06-30): VoiceprintCard getBarClass 阈值 8 个单测 (462/462 PASS) |
+| `6e30dda9` | test(voiceprint-2026-06-30): Playwright 6 主题桌面+移动端 smoke test |
+
+**关键修复**：
+- **Canvas 不支持 `var(--token)` 字符串** → 必须 `getComputedStyle(...).getPropertyValue('--token-rgb')` 读 RGB 后再 `rgb(...)` 注入
+- **主题切换必须主动重绘 Canvas / ECharts** → MutationObserver 监听 `<html data-theme>` / `<data-accent>` attribute 变化后调 `render()` / `chart.setOption()`
+- **VoiceprintCard 保留 per-card max 归一化** → v77 P2.6-D.3 class 收敛不会丢 dynamic 值，maxAbs computed 保留 + class 按 `|value|/maxAbs` 切 3 档 + NaN/null/undefined 兜底 `.bar--low`
+- **5 条新铁律** 永久沉淀 memory/[voiceprint-2026-06-30.md](memory/voiceprint-2026-06-30.md)
+
+### 🆕 v31.2.6 login_limiter Redis 化 + Retry-After 响应头（commit `c476c70f`）
+
+**触发**：用户报告 4 次连续 429 在 `/api/v1/auth/login`。诊断发现 `login_limiter` 仍是 v31.x 的 `RateLimiter`（内存 dict），v31.2.5 把 middleware 切到 Redis 时漏了这个；429 响应没有 `Retry-After` header（HTTP 标准 RFC 7231 §7.1.3）。
+
+**修复**：
+- `app/core/rate_limit.py`：`AsyncRedisRateLimiter.check` 抛 429 时加 `headers={"Retry-After": str(window_seconds)}`，middleware 路径转发 `e.headers` 到 `JSONResponse`
+- `app/api/v1/auth.py`：`login_limiter = AsyncRedisRateLimiter(max_attempts=5, window_seconds=300)` + 3 处 await 化 + key 加 `login:` 前缀（与 middleware tier 命名一致）
+- 新增 `scripts/verify_login_redis.py`（5 阶段端到端验证）：错误密码 → 429 + Retry-After=300 + 抗 docker restart
+- 新增 `tests/test_auth.py::test_login_rate_limit_returns_retry_after`
+
+**pytest-asyncio 升级附带**：0.23.2 → 0.25（修 `asyncio_default_fixture_loop_scope = session` 配置识别，跨 event loop Future 错误）
+
+### 🆕 sync_from_local tz-aware datetime 500 bug（commit `a1dfca2c`）
+
+**症状**：前端 useChatMigration 上传 localStorage 历史时，`sync_from_local` 接口 500
+**根因**：客户端发 `client_updated_at` 时带 `tzinfo`（`datetime.now(timezone.utc)`），PostgreSQL `TIMESTAMP WITHOUT TIME ZONE` 列接收报 `can't subtract offset-naive and offset-aware datetimes`
+**修复**：`sync_from_local` 内部统一 `_to_naive_datetime()` 转换（CLAUDE.md 2026-06-05 教训复用，#043 phase 4-5 12 条铁律第 6 条明确）
+
+### 沉淀 memory（4 个新增）
+
+- [chat-history-persistent-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-persistent-2026-06-30.md) — #043 8 phase 完整收官 + 12 条新铁律
+- [chat-history-stream-persistence-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-stream-persistence-2026-06-29.md) — Phase 3 流式持久化 5 条铁律
+- [voiceprint-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-2026-06-30.md) — voiceprint 视觉收官 5 条铁律
+- [knowledge-status-pipeline-vs-manual-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-status-pipeline-vs-manual-2026-06-30.md) — KB #282 pending→done in 1s
+- [knowledge-stuck-status-cleanup-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-stuck-status-cleanup-2026-06-30.md) — webhint 二次扫描 + 2 stuck 卡清理
+
+### 端到端验证
+
+- vitest **492/492 PASS**（含 #043 Phase 6 新增组件 + voiceprint 阈值单测）
+- pytest **7/7 PASS**（chat_history_service 24 + chat_history_tasks 7 + test_login_rate_limit 1）
+- Playwright **16/16 PASS**（含 voiceprint 6 主题 smoke test + #043 B-17~B-20 templates）
+
+---
+
+## [2026-06-30] 前端视觉 5 件套 + nginx HSTS + Knowledge 卡 status 真 bug 修复（11 commits 收尾）
 
 | Commit | 主题 |
 |---|---|

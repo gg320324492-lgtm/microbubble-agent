@@ -21,6 +21,9 @@
 
 ## 最新里程碑（2026-06-30）
 
+- 🆕 **#043 账号持久化聊天历史 8 phase 完整收官（ChatGPT/Doubao 模式）** — PostgreSQL 三表 + 11 API + 流式持久化 + localStorage 自动迁移 + UI 升级（搜索/分享/导出/标签）+ Celery 30 天清理 + 12 条新铁律（vitest 492/492 + pytest 7/7 PASS）
+- 🆕 **voiceprint 视觉收官（5 commits，voiceprint-2026-06-30 任务号）** — VoiceprintCard class 化 + VoiceTestDialog Canvas getComputedStyle + ConfidenceChart ECharts 主题色 + Vitest 阈值 8 个单测 + Playwright 6 主题 smoke test；5 条新铁律
+- 🆕 **v31.2.6 login_limiter Redis 化 + Retry-After 响应头** — `AsyncRedisRateLimiter` 替换内存 `RateLimiter`，登录端点 5/min + 429 响应头 `Retry-After: 300`（HTTP RFC 7231 §7.1.3 合规）+ pytest-asyncio 0.23.2 → 0.25 升级
 - 🆕 **nginx HSTS server-level + gzip_types 扩展（3 commits 真实安全加固）**：
   - commit `71e743f7` — HSTS server-block + gzip_types 扩展（agent + mnb-lab 各一处）
   - commit `289338fb` — 4 个 location 补 HSTS（/favicon.ico / /sw.js / /manifest.webmanifest / static regex）
