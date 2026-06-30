@@ -42,6 +42,21 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
   /** 同步错误信息（侧栏徽章显示用） */
   const syncError = ref<string | null>(null)
 
+  // ===== #043 Phase 6 新增 state =====
+
+  /** 搜索结果（Cmd/Ctrl+K 跨会话搜索） */
+  const searchResults = ref<{ items: any[]; total: number; page: number }>({
+    items: [],
+    total: 0,
+    page: 1,
+  })
+
+  /** 当前分享链接 token（ShareDialog 显示用） */
+  const shareToken = ref<string | null>(null)
+
+  /** 当前导出 blob（ExportDialog 触发浏览器下载用） */
+  const exportBlob = ref<Blob | null>(null)
+
   // ============================================================================
   // Computed
   // ============================================================================
@@ -197,6 +212,69 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
     lastSyncedAt.value = null
     syncStatus.value = 'idle'
     syncError.value = null
+    // Phase 6 新增 state 也要清空
+    searchResults.value = { items: [], total: 0, page: 1 }
+    shareToken.value = null
+    exportBlob.value = null
+  }
+
+  // ============================================================================
+  // #043 Phase 6 新增 actions — 搜索 / 分享 / 导出
+  // ============================================================================
+
+  /**
+   * 跨会话搜索（按消息内容 ILIKE 匹配，最少 2 字符）
+   * @returns {Promise<{items, total, page}>} 失败返空结果
+   */
+  async function searchSessions(query: string, opts: { page?: number; pageSize?: number } = {}) {
+    if (!query || query.trim().length < 2) {
+      searchResults.value = { items: [], total: 0, page: 1 }
+      return searchResults.value
+    }
+    try {
+      const data = await chatHistoryApi.searchSessions(query, {
+        page: opts.page ?? 1,
+        pageSize: opts.pageSize ?? 20,
+      })
+      searchResults.value = data
+      return data
+    } catch (e: any) {
+      console.error(`[chatHistory] searchSessions 失败: q=${query}`, e?.response?.data?.detail || e?.message)
+      return { items: [], total: 0, page: 1 }
+    }
+  }
+
+  /**
+   * 生成分享链接
+   * @returns {Promise<{id, share_url, permission, expires_at} | null>}
+   */
+  async function createShareLink(sid: string, opts: { permission?: 'read' | 'write'; expiresHours?: number } = {}) {
+    try {
+      const result = await chatHistoryApi.createShare(sid, {
+        permission: opts.permission ?? 'read',
+        ...(opts.expiresHours ? { expiresHours: opts.expiresHours } : {}),
+      })
+      shareToken.value = result?.share_url || null
+      return result
+    } catch (e: any) {
+      console.error(`[chatHistory] createShareLink 失败: sid=${sid}`, e?.response?.data?.detail || e?.message)
+      return null
+    }
+  }
+
+  /**
+   * 导出为 Markdown / JSON blob
+   * @returns {Promise<Blob | null>}
+   */
+  async function exportToFile(sid: string, opts: { format?: 'md' | 'json' } = {}) {
+    try {
+      const blob = await chatHistoryApi.exportSession(sid, { format: opts.format ?? 'md' })
+      exportBlob.value = blob
+      return blob
+    } catch (e: any) {
+      console.error(`[chatHistory] exportToFile 失败: sid=${sid}`, e?.response?.data?.detail || e?.message)
+      return null
+    }
   }
 
   // ============================================================================
@@ -210,6 +288,10 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
     lastSyncedAt,
     syncStatus,
     syncError,
+    // Phase 6 新增 state
+    searchResults,
+    shareToken,
+    exportBlob,
     // computed
     pendingSyncCount,
     hasServerSessions,
@@ -222,5 +304,9 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
     deleteServerSession,
     updateServerSession,
     reset,
+    // Phase 6 新增 actions
+    searchSessions,
+    createShareLink,
+    exportToFile,
   }
 })

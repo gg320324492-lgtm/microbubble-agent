@@ -264,6 +264,68 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     }
   }
 
+  // ============================================================================
+  // #043 Phase 6 新增 — 本地 mutation helpers（双向同步 server）
+  // ============================================================================
+
+  /**
+   * 设置标签（本地立即更新 + 异步 PATCH server）
+   * CLAUDE.md 2026-06-15 "持久化失败必须 best-effort" 铁律：失败不阻塞 UI
+   */
+  async function setTags(id: string, tags: string[]) {
+    const s = sessions.value.find(s => s.id === id)
+    if (s) {
+      s.tags = [...tags]
+      s._syncStatus = 'pending'
+    }
+    try {
+      const { useChatHistoryStore } = await import('@/stores/chatHistory')
+      const updated = await useChatHistoryStore().updateServerSession(id, { tags: [...tags] })
+      if (s) s._syncStatus = updated ? 'synced' : 'error'
+    } catch (e) {
+      if (s) s._syncStatus = 'error'
+      console.warn('[chatSessions] setTags server sync failed:', e)
+    }
+  }
+
+  /**
+   * 设置收藏（本地立即更新 + 异步 PATCH server）
+   */
+  async function setPinned(id: string, isPinned: boolean) {
+    const s = sessions.value.find(s => s.id === id)
+    if (s) {
+      s.is_pinned = isPinned
+      s._syncStatus = 'pending'
+    }
+    try {
+      const { useChatHistoryStore } = await import('@/stores/chatHistory')
+      const updated = await useChatHistoryStore().updateServerSession(id, { is_pinned: isPinned })
+      if (s) s._syncStatus = updated ? 'synced' : 'error'
+    } catch (e) {
+      if (s) s._syncStatus = 'error'
+      console.warn('[chatSessions] setPinned server sync failed:', e)
+    }
+  }
+
+  /**
+   * 设置归档（本地立即更新 + 异步 PATCH server）
+   */
+  async function setArchived(id: string, isArchived: boolean) {
+    const s = sessions.value.find(s => s.id === id)
+    if (s) {
+      s.is_archived = isArchived
+      s._syncStatus = 'pending'
+    }
+    try {
+      const { useChatHistoryStore } = await import('@/stores/chatHistory')
+      const updated = await useChatHistoryStore().updateServerSession(id, { is_archived: isArchived })
+      if (s) s._syncStatus = updated ? 'synced' : 'error'
+    } catch (e) {
+      if (s) s._syncStatus = 'error'
+      console.warn('[chatSessions] setArchived server sync failed:', e)
+    }
+  }
+
   return {
     sessions,
     currentId,
@@ -279,5 +341,9 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     mergeServerList,
     markSyncStatus,
     markSynced,
+    // #043 Phase 6 新增 — 本地 mutation helpers
+    setTags,
+    setPinned,
+    setArchived,
   }
 })

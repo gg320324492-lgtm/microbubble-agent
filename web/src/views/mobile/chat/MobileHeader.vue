@@ -19,6 +19,17 @@
         </div>
       </div>
 
+      <!-- #043 Phase 6: 搜索 trigger -->
+      <button
+        type="button"
+        class="icon-btn search-btn"
+        aria-label="搜索会话"
+        title="搜索会话"
+        @click="$emit('search')"
+      >
+        <span class="search-icon">🔍</span>
+      </button>
+
       <button
         type="button"
         class="icon-btn theme-btn"
@@ -47,7 +58,7 @@ defineProps({
   isDark: { type: Boolean, default: false },
 })
 
-defineEmits(['open-menu', 'toggle-theme'])
+defineEmits(['open-menu', 'toggle-theme', 'search'])
 </script>
 
 <style scoped>
@@ -102,6 +113,7 @@ defineEmits(['open-menu', 'toggle-theme'])
   font-size: 26px;
   font-weight: 300;
 }
+.search-icon { font-size: 18px; }
 
 .header-title {
   flex: 1;

@@ -6,6 +6,7 @@
       :is-dark="isDark"
       @open-menu="showDrawer = true"
       @toggle-theme="onToggleTheme"
+      @search="onOpenSearch"
     />
 
     <MobileSessionDrawer
@@ -14,6 +15,13 @@
       :current-id="sessionId"
       @create="handleCreateSession"
       @switch="handleSwitchSession"
+      @search="onOpenSearch"
+      @share="onShareSession"
+      @export="onExportSession"
+      @edit-tags="onEditTagsSession"
+      @rename="onRenameSession"
+      @delete="onDeleteSession"
+      @toggle-pin="onTogglePinSession"
     />
 
     <main
@@ -100,6 +108,30 @@
       :title="'上传文件'"
       @change="handleFileSelect"
     />
+
+    <!-- #043 Phase 6: 移动端搜索 sheet / 分享 / 导出 / 标签编辑 dialog -->
+    <MobileSearchSheet
+      v-if="showSearch"
+      v-model:show="showSearch"
+      title="搜索会话"
+      placeholder="输入关键词（按消息内容）"
+      @confirm="onSearchConfirm"
+    />
+    <ShareDialog
+      v-if="dialogSession"
+      v-model="showShareDialog"
+      :session="dialogSession"
+    />
+    <ExportDialog
+      v-if="dialogSession"
+      v-model="showExportDialog"
+      :session="dialogSession"
+    />
+    <TagsEditor
+      v-if="dialogSession"
+      v-model="showTagsEditor"
+      :session="dialogSession"
+    />
   </div>
 </template>
 
@@ -132,6 +164,12 @@ import MobileHeader from './MobileHeader.vue'
 import MobileSessionDrawer from './MobileSessionDrawer.vue'
 import MobileMessageList from './MobileMessageList.vue'
 import MobileInputBar from './MobileInputBar.vue'
+// #043 Phase 6
+import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
+import ShareDialog from '@/components/chat/ShareDialog.vue'
+import ExportDialog from '@/components/chat/ExportDialog.vue'
+import TagsEditor from '@/components/chat/TagsEditor.vue'
+import { ElMessageBox } from 'element-plus'
 
 const theme = useThemeStore()
 const network = useNetworkStatus()
@@ -158,6 +196,74 @@ const isDark = computed(() => theme.isDark)
 const inputText = ref('')
 const selectedImage = ref(null)
 const selectedFile = ref(null)
+
+// #043 Phase 6
+const showSearch = ref(false)
+const showShareDialog = ref(false)
+const showExportDialog = ref(false)
+const showTagsEditor = ref(false)
+const dialogSession = ref(null)
+
+function onOpenSearch() {
+  showSearch.value = true
+}
+
+async function onSearchConfirm({ keyword }) {
+  if (!keyword || keyword.length < 2) {
+    ElMessage.warning('请输入至少 2 个字符')
+    return
+  }
+  // 复用桌面 SearchPalette 数据流：调 store + 把结果显示
+  const { useChatHistoryStore } = await import('@/stores/chatHistory')
+  const result = await useChatHistoryStore().searchSessions(keyword)
+  if (!result.items?.length) {
+    ElMessage.info(`没有找到包含「${keyword}」的会话`)
+    return
+  }
+  // 简化 UX：弹 ElMessageBox.alert 显示前 5 条结果
+  const top = result.items.slice(0, 5)
+  const lines = top.map((it) => `• ${it.session_title}：${it.snippet}`).join('\n')
+  ElMessageBox.alert(lines, `${result.total} 条匹配`, {
+    confirmButtonText: '知道了',
+  }).catch(() => {})
+}
+
+function onShareSession(s) {
+  dialogSession.value = s
+  showShareDialog.value = true
+}
+function onExportSession(s) {
+  dialogSession.value = s
+  showExportDialog.value = true
+}
+function onEditTagsSession(s) {
+  dialogSession.value = s
+  showTagsEditor.value = true
+}
+function onRenameSession(s) {
+  // 复用 desktop 模式：弹 ElMessageBox.prompt
+  ElMessageBox.prompt('新会话标题：', '重命名', {
+    inputValue: s.title,
+    confirmButtonText: '保存',
+    cancelButtonText: '取消',
+  }).then(({ value }) => {
+    sessionsStore.renameSession(s.id, value.trim() || s.title)
+    ElMessage.success('已重命名')
+  }).catch(() => {})
+}
+async function onDeleteSession(s) {
+  try {
+    await ElMessageBox.confirm(`删除会话「${s.title}」？此操作不可撤销。`, '确认删除', {
+      type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消',
+    })
+    sessionsStore.deleteSession(s.id)
+    ElMessage.success('已删除')
+  } catch {}
+}
+async function onTogglePinSession(s) {
+  await sessionsStore.setPinned(s.id, !s.is_pinned)
+  ElMessage.success(s.is_pinned ? '已收藏' : '已取消收藏')
+}
 const imageInputRef = ref(null)
 const fileInputRef = ref(null)
 const messageListRef = ref(null)
