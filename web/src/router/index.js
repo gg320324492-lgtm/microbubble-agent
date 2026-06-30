@@ -146,16 +146,9 @@ const routes = [
         component: resolveMobileComponent('admin/AgentTracesView', 'admin/MobileAgentTracesView'),
         meta: { title: 'Agent Trace 监控' }
       },
-      // v77 P2.6-G.2: 模板批量管理页 (桌面端独立, 移动端不解析, 走 /meetings 长按)
-      {
-        path: 'admin/templates',
-        name: 'Templates',
-        component: () => import(/* webpackChunkName: "admin-templates" */ '@/views/admin/TemplatesView.vue'),
-        meta: {
-          title: '模板管理',
-          icon: 'Document',  // EP icon, 触发 MainLayout.menuRoutes filter 显示在侧边栏 (Files 不在 iconMap, 用 Document)
-        }
-      }
+      // v78 UI redesign: 模板管理已合并到 /meetings 第二个 tab (TemplatesPanel), 此路由删除
+      // 旧路由保留作 fallback 兼容老链接 (去掉 meta.icon 自动从 sidebar 隐藏)
+      // 2026-06-30 由 v77 P2.6-G.2 的 /admin/templates 移入会议管理 tab
     ]
   }
 ]

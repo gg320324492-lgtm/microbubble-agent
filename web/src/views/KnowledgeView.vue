@@ -22,7 +22,6 @@
           :source-type-stats="statsData.source_types || {}"
           :loading="loading"
           :load-error="loadError"
-          :dedup-enabled="dedupView"
           @filter-category="handleCategoryFilter"
           @filter-source-type="handleSourceTypeFilter"
           @filter-time="handleTimeFilter"
@@ -34,7 +33,6 @@
           @delete="handleDeleteKnowledge"
           @download="downloadFile"
           @retry="fetchKnowledge"
-          @toggle-dedup="dedupView = $event"
         />
 
         <!-- 健康度摘要 -->
@@ -194,29 +192,6 @@ const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
 const showAllCategories = ref(false)
-
-// 2026-06-30 续集 5 (KB 数据清洁 C 方案): dedup toggle 持久化
-// localStorage key: 'mnb:kb:dedupView'
-// 值: '1' = ON (默认, 同 title 只显 1 张), '0' = OFF (调试/审计用, 看原始 3 份)
-// 设计: UI → localStorage 单向同步 (避免 mount 后 setTimeout 闪烁)
-//      SSR/禁用 localStorage → 默认 ON (try/catch 包裹, 静默回退)
-const DEDUP_STORAGE_KEY = 'mnb:kb:dedupView'
-const dedupView = ref((() => {
-  try {
-    const stored = localStorage.getItem(DEDUP_STORAGE_KEY)
-    return stored === null ? true : stored !== '0'
-  } catch (e) {
-    return true
-  }
-})())
-
-watch(dedupView, (v) => {
-  try {
-    localStorage.setItem(DEDUP_STORAGE_KEY, v ? '1' : '0')
-  } catch (e) {
-    // 静默: 隐私模式可能禁用 localStorage, 不影响 toggle 功能
-  }
-})
 
 const activeTab = ref('knowledge')
 const route = useRoute()

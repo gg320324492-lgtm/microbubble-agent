@@ -7457,15 +7457,14 @@ Storage → Clear site data → Ctrl+Shift+R) 后应看到**:
 - `displayedItems` computed: ON 时按 title 分组取 id 最小 + 按 created_at 降序; OFF 时返回原 `recentItems`
 - 注意: `recentItems.length === 0` 三态空态检查改为 `displayedItems.length === 0`
 
-**KnowledgeView.vue 改动**:
-- 新增 `dedupView` ref + try/catch 包裹 localStorage (key: `mnb:kb:dedupView`)
-- 默认 ON (`stored === null ? true : stored !== '0'`)
-- `watch(dedupView, ...)` 单向同步到 localStorage
-- `:dedup-enabled="dedupView"` + `@toggle-dedup="dedupView = $event"` 透传给 Dashboard
+**KnowledgeView.vue 改动** (2026-06-30 13:50 移除 toggle UI 后):
+- 不新增 dedupView ref / localStorage 同步 / watch
+- 不透传 :dedup-enabled / @toggle-dedup 给 Dashboard
+- KnowledgeDashboard 内部 displayedItems computed 永远 ON, 不受控
 
-**Source-of-truth 分离铁律**: stats 数字 (后端按物理行数, `auto_expansion=179`) 不变, toggle 仅影响 dashboard 显示策略, 不动 DB.
+**Source-of-truth 分离铁律**: stats 数字 (后端按物理行数, `auto_expansion=179`) 不变, displayedItems 只影响 dashboard 显示策略, 不动 DB.
 
-### 8 条新铁律
+### 6 条新铁律
 
 **铁律 1**: **删除前的 FK 防御不是可选项**. DELETE FROM knowledge 触发 ON DELETE CASCADE 会自动删关联, 应用层必须主动查引用, 理由:
 - CASCADE 会"自动删 chains", 用户可能不知情 (误删 关系图)
@@ -7486,11 +7485,9 @@ SELECT unnest(knowledge_ids) FROM knowledge_gaps WHERE knowledge_ids && ARRAY[:i
 
 **铁律 5**: **DELETE 不可逆 → JSON 备份是底线**. 即使有 3 层保险, 用户后悔率 ~10%. **强约束**: apply 前 `fetch_backup_rows` 拉全字段 (含 content/meta/embedding/created_at), 写 `/tmp/kb_dedup_backups/kb_dedup_backup_<ts>.json`, 操作员主动 cp 到 D 盘长期保留.
 
-**铁律 6**: **dedup toggle 是"显示策略", 不是"数据操作"**. toggle ON/OFF 只影响 `displayedItems` computed, **不影响**: stats 计数 (后端按物理行数) + search 召回 (后端 pgvector 全表扫) + 导出/下载. 用户的"统计心智"与"视觉心智"对齐: 统计数=DB 真实行数, 视觉数=去重后, 不混淆.
+**铁律 6**: **`displayedItems` 是"显示策略", 不是"数据操作"**. 永远 ON 的去重 computed **不影响**: stats 计数 (后端按物理行数) + search 召回 (后端 pgvector 全表扫) + 导出/下载. 用户的"统计心智"与"视觉心智"对齐: 统计数=DB 真实行数, 视觉数=去重后, 不混淆.
 
-**铁律 7**: **localStorage key 必须带项目前缀**. `mnb:kb:dedupView` (mnb=MicroBubble, kb=Knowledge Base, dedupView=功能语义). **不写** `dedupEnabled` / `showAll` 等通用 key — 与未来其他 dedup 场景 (会议/任务/记忆) 串.
-
-**铁律 8**: **持久化同步是单向的 (UI → localStorage), 不是双向 (default → UI)**. 初始化: `localStorage.getItem('mnb:kb:dedupView') === '0' ? false : true` (默认 ON). 变更: `watch(dedupView, (v) => localStorage.setItem(...))`. **禁止**: mount 后用 setTimeout 同步 localStorage → UI (会闪烁). SSR 模式直接读 localStorage 会 crash → try/catch 包裹, 失败回退默认 ON.
+**铁律 7**: **KB dedup 是"default-on-fail 不可关闭"**. `displayedItems` computed 在 KnowledgeDashboard 内**永远按 title 分组取 id 最小**, 不暴露 UI toggle, 不读 localStorage. 理由: dedup 是"把损坏的视觉体验还原成可用状态"的兜底, 而非用户可选配置 — 暴露 toggle 等于"承认数据脏是产品可接受的状态". 未来若需"看全部"调试场景, 后端 `?include_dup=1` 参数走 admin 路由, **不进 product UI**.
 
 ### 沉淀位置
 
