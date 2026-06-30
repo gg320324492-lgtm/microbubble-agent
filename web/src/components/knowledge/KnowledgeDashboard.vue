@@ -71,9 +71,6 @@
             size="small"
             @update:model-value="(val) => $emit('toggle-dedup', val)"
           />
-          <el-button text size="small" @click="$emit('show-all')">
-            查看全部
-          </el-button>
         </div>
       </div>
 
@@ -149,7 +146,6 @@ const emit = defineEmits([
   'show-entities',
   'show-hypotheses',
   'show-all-categories',
-  'show-all',
   'view-detail',
   'edit',
   'delete',
