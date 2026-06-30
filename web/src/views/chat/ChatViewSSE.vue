@@ -20,10 +20,16 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, Search } from '@element-plus/icons-vue'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
+// #043 Phase 6 UI 升级
+import SearchPalette from '@/components/chat/SearchPalette.vue'
+import ShareDialog from '@/components/chat/ShareDialog.vue'
+import ExportDialog from '@/components/chat/ExportDialog.vue'
+import TagsEditor from '@/components/chat/TagsEditor.vue'
+import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import { useChatStream } from '@/composables/chat/useChatStream'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'
@@ -77,6 +83,38 @@ const loading = ref(false)
 
 // 网络状态
 const { online: isOnline } = useNetworkStatus()
+
+// #043 Phase 6 UI 升级：搜索 / 分享 / 导出 / 标签编辑
+const showSearchPalette = ref(false)
+const showShareDialog = ref(false)
+const showExportDialog = ref(false)
+const showTagsEditor = ref(false)
+const dialogSession = ref<any>(null)
+
+function onShareSession(session: any) {
+  dialogSession.value = session
+  showShareDialog.value = true
+}
+function onExportSession(session: any) {
+  dialogSession.value = session
+  showExportDialog.value = true
+}
+function onEditTagsSession(session: any) {
+  dialogSession.value = session
+  showTagsEditor.value = true
+}
+function onSearchSelect(payload: { sessionId: string; messageId?: number }) {
+  // 切到对应 session（messagesBySession 已加载则滚到底/高亮 messageId）
+  if (payload?.sessionId) {
+    onSwitchSession(payload.sessionId)
+  }
+}
+
+// 全局快捷键（Cmd/Ctrl+K 弹搜索，Esc 关搜索）
+useGlobalShortcuts({
+  'mod+k': () => { showSearchPalette.value = true },
+  'escape': () => { if (showSearchPalette.value) showSearchPalette.value = false },
+})
 
 // ============================================================================
 // 滚动到底部（智能 sticky scroll）
@@ -293,7 +331,14 @@ onUnmounted(() => {
 
     <div class="chat-layout">
       <!-- 侧栏 -->
-      <SessionSidebar :collapsed="sidebarCollapsed" @create="onCreateSession" @switch="onSwitchSession" />
+      <SessionSidebar
+        :collapsed="sidebarCollapsed"
+        @create="onCreateSession"
+        @switch="onSwitchSession"
+        @share="onShareSession"
+        @export="onExportSession"
+        @edit-tags="onEditTagsSession"
+      />
 
       <div class="chat-main">
         <!-- 顶部 -->
@@ -315,6 +360,14 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="header-right">
+            <el-button
+              text
+              @click="showSearchPalette = true"
+              title="搜索会话（⌘K / Ctrl+K）"
+              aria-label="搜索会话"
+            >
+              <el-icon><Search /></el-icon>
+            </el-button>
             <el-button
               text
               @click="toggleThinking"
@@ -484,6 +537,27 @@ onUnmounted(() => {
     </footer>
       </div>
     </div>
+
+    <!-- #043 Phase 6: 全局搜索 / 分享 / 导出 / 标签编辑 dialog -->
+    <SearchPalette
+      v-model="showSearchPalette"
+      @select="onSearchSelect"
+    />
+    <ShareDialog
+      v-if="dialogSession"
+      v-model="showShareDialog"
+      :session="dialogSession"
+    />
+    <ExportDialog
+      v-if="dialogSession"
+      v-model="showExportDialog"
+      :session="dialogSession"
+    />
+    <TagsEditor
+      v-if="dialogSession"
+      v-model="showTagsEditor"
+      :session="dialogSession"
+    />
   </div>
 </template>
 
