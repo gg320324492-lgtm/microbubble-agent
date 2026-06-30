@@ -1,6 +1,8 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-06-30 当前任务链**：🆕 **conftest.py test_member 隔离 bug 修复**（yield + teardown + replica role FK 绕过，test_auth.py 8/8 PASS）→ #043 账号持久化聊天历史 8/8 phase 完整收官（PostgreSQL 三表 + 11 API + 流式持久化 + 旧数据迁移 + UI 升级 11 sub-tasks + Celery 30 天清理 + vitest 492 + pytest 7 + memory 沉淀）→ #042 概念问 4 域代码强制 fan-out（commit 5522ad5a, D11-D15 5/5 PASS）→ #041 plan_step 强制执行 → v77 P2.6-E/F 视觉/代码质量延伸（4 commits）→ v77 P2.6 视觉体系 4 子任务全面收官 → 3 个生产 bug 修复。**当前主线**：**#009 (Self-RAG 重检索)** 基于 #043 持久化基础 + Phase 0+Phase 1 双重 hook 扩展（chat_messages.tool_trace 存 retrieval_quality 字段 + 跨会话 ILIKE 检索复用 + 离线重检索决策）。**1545 commits / 313K 行代码 / 799 文件 / 46 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 01:12 自动重算）。
+# MicroBubble Agent - 项目上下文
+
+> **2026-06-30 当前任务链**：🆕 **KB 数据清洁：自动生成内容 tags 归并 + 测试/TEST 样板删除**（[scripts/migrate_kb_tags.py](scripts/migrate_kb_tags.py) 一次性脚本：source_type='auto_expansion' 防御性 WHERE + 14 单测 PASS + dry-run / --confirm 二次确认门 + JSON 文件备份 100% 可恢复）→ conftest.py test_member 隔离 bug 修复 → #043 账号持久化聊天历史 8/8 phase 完整收官 → #042 概念问 4 域代码强制 fan-out（commit 5522ad5a, D11-D15 5/5 PASS）→ #041 plan_step 强制执行 → v77 P2.6-E/F 视觉/代码质量延伸（4 commits）→ v77 P2.6 视觉体系 4 子任务全面收官 → 3 个生产 bug 修复。**当前主线**：**#009 (Self-RAG 重检索)** 基于 #043 持久化基础 + Phase 0+Phase 1 双重 hook 扩展（chat_messages.tool_trace 存 retrieval_quality 字段 + 跨会话 ILIKE 检索复用 + 离线重检索决策）。**1545 commits / 313K 行代码 / 799 文件 / 46 开发天数**（[app/stats.json](app/stats.json)，2026-06-30 01:12 自动重算）。
 >
 > **2026-06-30 前端视觉 5 件套 + nginx HSTS + Knowledge 卡 status 真 bug 修复（11 commits 收尾）**：① **KnowledgeToolbar 4 按钮**（commit `558962b1`）—— `.btn-text` utility class 同名冲突，scoped `color: inherit` 恢复继承 ② **MemberView 录入声纹 ghost primary**（commit 845803c3）—— `variables.css` 加 default + `[data-accent]` 双块规则 + `font-weight:600` ③ **VoiceprintView 波形颜色不一致**（commit 36e64fb4）—— 老成员 stale embedding |value|≈0 alpha≈0 不可见，`barColor()` per-card max 归一化 + min alpha floor 0.12 + NaN 守卫 ④ **SettingsView Hero 跟随主题**（commit `054668f7`）—— non-scoped `[data-theme=dark].hero-bg` 写死 `#FF6B4A→#FFB347` source 顺序靠后赢 cascade ⑤ **VoiceprintEnrollFlow mobile icon + 5 处 transition token + webhint devDep**（commit `e3b32b86`）—— 全项目扫描 38 个非 scoped style 块 + 1 个 mobile inline style 全部干净 ⑥ **nginx HSTS server-block + gzip_types 扩展**（3 commits `71e743f7` + `289338fb` + `34128fbd`）—— `strict-transport-security 12→0 errors/route`，gzip_types 加 `font/woff2`/`application/wasm`/`application/manifest+json`/`image/x-icon`/`image/vnd.microsoft.icon`/`font/woff` 6 个 MIME ⑦ **Knowledge 卡 `analysis_status` 真 bug**（commit `3653890b`）—— Step 7 `_reset_multimodal_data` 无条件覆盖终态，加 `reset_status=False` 参数 + Step 8 最终终态防御 + UI partial tag ⑧ **webhint 二次扫描 + DB stuck 卡清理** —— strict-transport-security **0 errors**（9 路由全过），KB #14 #19（5 月预存 stuck 卡）验证 content 完整性 + UPDATE → done，全表 **0 stuck 'analyzing'**。沉淀 memory 8 个：[btn-text-class-name-clash.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/btn-text-class-name-clash.md) + [plain-primary-contrast.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/plain-primary-contrast.md) + [voiceprint-bar-color-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/voiceprint-bar-color-2026-06-29.md) + [scoped-vs-non-scoped-hardcoded-override-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/scoped-vs-non-scoped-hardcoded-override-2026-06-29.md) + [visual-cleanup-extension-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/visual-cleanup-extension-2026-06-29.md) + [nginx-hsts-gzip-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/nginx-hsts-gzip-2026-06-29.md) + [knowledge-status-pipeline-vs-manual-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-status-pipeline-vs-manual-2026-06-30.md) + [knowledge-stuck-status-cleanup-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/knowledge-stuck-status-cleanup-2026-06-30.md)。
 >
@@ -7010,3 +7012,130 @@ docker exec -e TEST_DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@
 |---|---|---|---|
 | v31.2.6 | 生产 429 报错 | 5 | +1 新测试 |
 | **本次 (v0.0.1)** | **测试 fixture 隔离** | **2** | **+1 修正 test_unauthorized_access 断言, 8 文件 50+ 测试从 FAIL → PASS** |
+
+---
+
+## 2026-06-30 KB 数据清洁：自动生成内容 tags 归并 + 测试/TEST 样板删除
+
+> **触发场景** — 用户报告"知识库里带'拓展'和'自动拓展'标签的挪到'自动拓展'下面，测试的卡片删去"，用户确认意图：**只动自动对话生成的 (`source_type='auto_expansion'`) 内容，与真实用户数据严格隔离**。
+> **commit**：`scripts/migrate_kb_tags.py` (303 行) + `tests/test_migrate_kb_tags.py` (108 行) + `backups/kb-migrate-20260630/kb_migrate_backup_20260630_083833.json` (27.8 KB)
+
+### Context 与用户二次澄清
+
+用户两次澄清后的最终语义：
+1. **核心目标**："**自动对话生成的**内容都挪动到自动拓展里面" — 把"自动对话生成"和"真实用户对话/上传内容"**严格分开**
+2. **真实用户条目不动**：source_type='auto_expansion' 防御性 WHERE 子句过滤
+3. **删除范围扩展**：除中文"测试"外，英文"TEST"也匹配（覆盖自动拓展 `[自动拓展-S-TEST##]` 样板）
+4. **方式**：Python 一次性脚本（参照 `scripts/reprocess_meeting.py` 范式）
+
+### 实际数据摸底结果（apply 前的现状）
+
+| source_type | 条目数 | 含"测试" title | 带"拓展" tag |
+|---|---|---|---|
+| NULL/空 (真实用户) | **193** | 2 (NTA测试方法 / DLS动态光散射测试) | 0 |
+| conversation | 4 | 0 | 0 |
+| meeting | 1 | 0 | 0 |
+| **auto_expansion** | **2** | 0 中文，但英文 TEST01/TEST02 | 0 (已规范) |
+
+**关键发现**：自动生成范围本来就近乎干净（tags 0 变更，仅 2 条 TEST 样板待删）
+
+### 关键决策
+
+| 决策项 | 选择 | 理由 |
+|--------|------|------|
+| **作用范围** | **`source_type='auto_expansion'` 防御性 WHERE** | 用户原话"自动对话生成的...与真实用户的对话以及上传内容分开" |
+| tags 匹配模式 | **严格相等**：`tag in {"拓展", "自动拓展", "拓展测试"}` | 防止误伤 `micro拓展22`、`method:拓展论` 这类语义无关的 tag |
+| title 匹配模式 | **子串匹配 (中英双语)**：`"测试" in title or "TEST" in title` | 覆盖自动拓展 `[自动拓展-S-TEST##]` 样板 |
+| 二次确认门 | **`--apply --confirm` 显式 flag**（非 timestamp path mismatch） | 初次实现 timestamp 路径对比失败率 100%（datetime.now() 每次都变），改用简单显式 flag 等效语义 |
+| 备份格式 | **JSON 文件**（含 content/tags/source_type/meta/embedding/created_at/updated_at 完整字段） | 100% 可恢复；JSON 比 pickle 安全可读 |
+| 事务 | **单事务包裹**：DELETE + UPDATE 一起 commit | 失败整批回滚，避免半生不熟 |
+| 幂等性 | **二次跑 tag_change=0 + delete=0** | 终验信号 |
+| alembic | **不动** | 无 schema 变更，迁移链保持干净 |
+
+### 实际执行结果
+
+| 阶段 | 结果 |
+|------|------|
+| **SCAN 1 步** (扩展 title keywords 前) | 自动生成内 0 变更 / 0 删除 |
+| **规则扩展** | TITLE_DELETE_KEYWORDS = ("测试", "TEST") 增加 TEST01/TEST02 样板匹配 |
+| **SCAN 2 步** (扩展后) | 自动生成内 0 变更 / **2 删除候选** |
+| **APPLY 步** (--apply --confirm) | 备份 `/tmp/kb_migrate_backup_20260630_083833.json` (含 2 条) → 单事务 → **删除 2 条** |
+| **备份拷回** | `backups/kb-migrate-20260630/kb_migrate_backup_20260630_083833.json` (27817 字节) |
+| **SCAN 3 步 (幂等证明)** | 自动生成 0 条 / tags 0 变更 / 0 删除 → ✅ 终验通过 |
+| **SQL 双确认** | (1) source_type 分布: 真实用户/conv/meeting 不变, auto_expansion 2→0 (2) 全表 title 含"测试"/"TEST"仅剩真实用户 2 条 (id=2 NTA, id=3 DLS) → **真实用户 0 改动** ✅ |
+
+### 5 条新铁律（沉淀）
+
+**铁律 1：KB 数据清理必须按 `source_type` 隔离自动/真实用户**
+- 不要一刀切扫全表 (`DELETE FROM knowledge WHERE title LIKE '%测试%'`) — 会误伤真实用户真值
+- 真实用户真值案例：`"NTA测试方法"` (术语)、`"DLS动态光散射测试"` (术语) — 这些**绝对不能删**
+- **正确**：`DELETE FROM knowledge WHERE source_type='auto_expansion' AND title LIKE ...` (防御性 WHERE)
+- 真实用户数据 0 改动是硬安全指标，apply 后必须 SQL 验证
+
+**铁律 2：删除数据任务必须三段式（scan → 人审 → apply + --confirm）+ JSON 文件备份**
+- `--scan` 模式输出 plan 表 + 删除清单（红色高亮）→ 让人眼逐条审核
+- `--apply` 不带 `--confirm` flag 时脚本自动拒绝（DRY RUN），防复制粘贴旧命令误删
+- `--apply --confirm` 前必须写 JSON 备份到 `/tmp/kb_migrate_backup_<ts>.json`
+- 备份内容必须**完整可恢复**：id / title / content / tags / source_type / meta / embedding / created_at / updated_at / created_by / analysis_status / key_concepts / related_topics
+- 任何"删除 N 条"的脚本都必须满足此铁律
+
+**铁律 3：timestamp path mismatch 不是好的二次确认 UX**
+- 初次实现：`--apply --confirm-from-backup <path>` 要求 `path == 本次生成的路径`
+- 问题：`datetime.now()` 每次跑都不同，用户必须 copy-paste 上一轮的路径提示，**失败率 100%**（每次 apply 都因时间戳漂移被拒）
+- **改成显式 `--confirm` flag 等效语义**：用户必须主动加 `--confirm` 才写库（更直接、更易记、更不易失败）
+- **教训**：防止自动机制 vs 用户易用性冲突时，**用户易用性 + 显式意图**优先
+
+**铁律 4：纯函数（不依赖 IO）的关键逻辑必须 100% 单测覆盖**
+- `normalize_tags` / `should_delete` 是纯函数，8+ 个 case 覆盖（命中/严格/顺序/去重/幂等/中文/英文/None）
+- `scripts/test_migrate_kb_tags.py` 14/14 PASS 是迁移"安全双保险"
+- 即使 SQL 摸底看漏了某个边界，CI 单测会保证核心逻辑不被破坏
+
+**铁律 5：规则常量必须放在文件顶部 + 单测补 CI 回归**
+- `EXPANSION_TAGS = {"拓展", "自动拓展", "拓展测试"}` 改动只改 1 处
+- `TITLE_DELETE_KEYWORDS = ("测试", "TEST")` 改成 ("测试",) 会让 TEST01/TEST02 不被删（不报错，但用户期望不符）
+- 单测 `test_constants_consistent` 守住这些常量的"应该是这样"的语义
+
+### 与现有范式对齐
+
+| 设计点 | reprocess_meeting.py 范式 | migrate_kb_tags.py 实际实现 |
+|--------|--------------------------|-----------------------------|
+| 数据库连接 | sync engine | **async engine** (与现有 KB 模型一致，避免 layer 不匹配) |
+| 备份路径 | `/tmp/meeting_<id>_backup_<ts>.json` | `/tmp/kb_migrate_backup_<ts>.json` |
+| 备份内容 | 8 字段 JSON | **12 字段 + embedding Vector 转 list[float]** |
+| 二次确认 | 默认 dry-run + `--skip-backup` debug flag | **默认拒绝 + `--confirm` 必须显式** (铁律 3 教训改良) |
+| 防御性 WHERE | 无（按 ID 操作） | **`source_type='auto_expansion'` 防御真实用户** |
+| 单测位置 | tests/reprocess_meeting.py 不存在 | **tests/test_migrate_kb_tags.py 14 PASS** (铁律 4) |
+
+### 后续可做 follow-up（本次范围外）
+
+1. `scripts/restore_kb_from_backup.py` — 读 JSON 备份重建条目 + Vector embedding 重建（当前备份完整，恢复工具留作下次）
+2. 把 tags 归并规则写进 `app/services/knowledge_service.py` 长期生效（防新碎片）
+3. 加 `lint_kb_tags` Celery beat 任务，每周扫一次异常 tag 命名
+4. 类似 `micro拓展22` 这类"看似相关实际无关"的 tag 长期命名规范
+5. **真实用户条目中误标的"拓展"tag** — 摸底显示当前 0 条，未来清理脚本可复用同 `source_type != 'auto_expansion' AND tags && ARRAY[...]` 模式
+
+### 部署 / 使用 one-liner
+
+```bash
+# 1. SANITY (单测)
+docker cp scripts/migrate_kb_tags.py tests/test_migrate_kb_tags.py microbubble-agent-app-1:/tmp/
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python -m pytest test_migrate_kb_tags.py -v"
+# 期望: 14 passed
+
+# 2. SCAN (预览)
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python migrate_kb_tags.py --scan --limit 50"
+
+# 3. APPLY (两次确认才能写库)
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python migrate_kb_tags.py --apply"
+# 退出码 1, 输出 "DRY RUN: --apply 但未传 --confirm"
+
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 bash -c "cd /tmp && python migrate_kb_tags.py --apply --confirm"
+# 输出: [APPLY] ✅ 完成: tags 替换 N 条, 删除 M 条
+
+# 4. 拷回备份
+docker cp microbubble-agent-app-1:/tmp/kb_migrate_backup_<TS>.json ./backups/kb-migrate-YYYYMMDD/
+
+# 5. 验证 (SQL)
+docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
+  -c "SELECT source_type, COUNT(*) FROM knowledge GROUP BY source_type;"
+```
