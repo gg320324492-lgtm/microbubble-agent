@@ -406,6 +406,7 @@ class VoiceprintService:
             减少误识 (不与未确认成员 embedding 比较, 避免污染误判)
         """
         from app.models.member import Member
+        from scipy.spatial.distance import cosine
 
         self._load_pipeline()
         emb = self.extract_embedding(audio)
