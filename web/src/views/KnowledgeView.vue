@@ -29,7 +29,6 @@
           @show-entities="activeTab = 'entities'"
           @show-hypotheses="activeTab = 'hypotheses'"
           @show-all-categories="showAllCategories = true"
-          @show-all="showAllKnowledge = true"
           @view-detail="handleViewDetail"
           @edit="editKnowledge"
           @delete="handleDeleteKnowledge"
@@ -47,7 +46,7 @@
           <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
         </div>
 
-        <div v-if="showAllKnowledge && total > pageSize" class="pagination">
+        <div v-if="total > pageSize" class="pagination">
           <el-pagination
             v-model:current-page="currentPage"
             :page-size="pageSize"
@@ -195,7 +194,6 @@ const showQADialog = ref(false)
 const showUploadDialog = ref(false)
 const editingKnowledge = ref(null)
 const showAllCategories = ref(false)
-const showAllKnowledge = ref(false)
 
 // 2026-06-30 续集 5 (KB 数据清洁 C 方案): dedup toggle 持久化
 // localStorage key: 'mnb:kb:dedupView'
