@@ -214,18 +214,24 @@ import { getDisplaySkills } from '@/utils/researchAreaSkills'
 const router = useRouter()
 const memberStore = useMemberStore()
 
-// 年级排序（从高到低）
+// 年级排序（从高到低）。2026-06-30 修复：
+//  - 新增博士年级（博三/博二/博一）位置 4-6，放在副教授/博士后之后、研三之前
+//  - 同 grade 内按姓名拼音升序（localeCompare zh-CN）
+//  - fallback 99 用于未知 grade，避免被排到首/末位，兜底按姓名拼音排
 const GRADE_ORDER = {
-  '教授': 1, '副教授': 2, '博士后': 3, '博士': 4,
-  '研三': 5, '研二': 6, '研一': 7,
-  '大四': 8, '大三': 9, '大二': 10, '大一': 11,
-  '已毕业': 12
+  '教授': 1, '副教授': 2, '博士后': 3,
+  '博三': 4, '博二': 5, '博一': 6,
+  '研三': 7, '研二': 8, '研一': 9,
+  '大四': 10, '大三': 11, '大二': 12, '大一': 13,
+  '已毕业': 14
 }
 const members = computed(() => {
   return [...memberStore.members].sort((a, b) => {
-    const orderA = GRADE_ORDER[a.grade] || 99
-    const orderB = GRADE_ORDER[b.grade] || 99
+    const orderA = GRADE_ORDER[a.grade] ?? 99
+    const orderB = GRADE_ORDER[b.grade] ?? 99
     if (orderA !== orderB) return orderA - orderB
+    // 同 grade 内按姓名拼音升序
+    return (a.name || '').localeCompare(b.name || '', 'zh-CN')
     return a.name.localeCompare(b.name, 'zh-CN')
   })
 })
