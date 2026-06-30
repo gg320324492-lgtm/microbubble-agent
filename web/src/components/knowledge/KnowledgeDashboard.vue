@@ -29,7 +29,16 @@
           @click="handleCategoryClick(cat)"
         >
           {{ cat.icon }} {{ cat.name }}
-          <span class="category-count" v-if="getCategoryCount(cat.name) > 0">{{ getCategoryCount(cat.name) }}</span>
+          <!-- 2026-06-30: system chip 0 也显示, 避免"自动拓展清空后整张图看起来是空白的".
+               system chip 走 sourceTypeStats, 后端已显式补 0; 这里只对 system chip 强制显示 0,
+               普通 category 走 categories 数组不存在即 0, 仍按 v-if 隐藏避免视觉噪音. -->
+          <span
+            v-if="cat.isSystem || getCategoryCount(cat.name) > 0"
+            class="category-count"
+            :class="{ 'category-count-empty': cat.isSystem && getCategoryCount(cat.name) === 0 }"
+          >
+            {{ getCategoryCount(cat.name) }}
+          </span>
         </div>
         <!-- 动态分类（排除已有的预设分类） -->
         <div
