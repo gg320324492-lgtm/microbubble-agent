@@ -63,6 +63,10 @@ web/**/_token.json
 # 未来若有合法 _*.json (如下划线配置), 取消下方注释; 当前 0 合法
 # !路径/_config.json
 
+# .env 备份 (含旧 SECRET_KEY 等敏感配置, 教训: 2026-07-01 secret rotation)
+.env.backup-*
+.env.*.bak
+
 # 前端
 node_modules/
 web/dist/
