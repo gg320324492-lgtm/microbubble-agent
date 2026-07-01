@@ -37,8 +37,9 @@
               v-if="member.voice_enrolled_at"
               size="small"
               type="success"
+              class="voice-tag"
             >🎤 已录入声纹</el-tag>
-            <el-tag v-else size="small" type="warning">未录入声纹</el-tag>
+            <el-tag v-else size="small" type="warning" class="voice-tag">未录入声纹</el-tag>
           </div>
         </section>
 
