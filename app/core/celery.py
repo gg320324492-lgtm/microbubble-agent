@@ -92,6 +92,8 @@ celery_app.conf.imports = [
     "app.services.knowledge_service",  # 2026-06-29 修复 #257 异步分析
     "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
     "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
+    "app.services.thumbnail_tasks",  # 2026-07-01 课题组网盘 PR5 缩略图生成
+    "app.services.storage_tasks",  # 2026-07-01 课题组网盘 PR5 配额重算 + 分片 session 清理
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）

@@ -165,6 +165,25 @@ class FileService:
                 response.release_conn()
         return await asyncio.to_thread(_download)
 
+    def download_file_sync(self, object_name: str) -> bytes:
+        """同步下载文件内容 (PR5 分片 chunk 拼接用)
+
+        已经在 asyncio.to_thread 包装的函数内调用, 不需要再嵌套.
+        走 minio get_object 流式读 + release_conn.
+
+        Args:
+            object_name: MinIO 中的对象路径
+
+        Returns:
+            文件二进制数据
+        """
+        response = self.client.get_object(self.bucket, object_name)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
     async def list_objects(self, prefix: str = "") -> list:
         """列出指定前缀下的对象"""
         def _list():
