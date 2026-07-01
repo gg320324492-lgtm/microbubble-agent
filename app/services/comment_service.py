@@ -66,13 +66,34 @@ class CommentService:
         try:
             usernames = notification_service.parse_mentions_from_text(content)
             if usernames:
-                # username → user_id 转换 (case-insensitive 精确匹配)
-                stmt = select(Member.id, Member.username).where(
-                    Member.username.in_(usernames)
-                )
-                rows = (await db.execute(stmt)).all()
-                name_to_id = {row.username: row.id for row in rows}
-                mentioned_user_ids = list(set(name_to_id.values()) - {user_id})  # 去重 + 排除自己
+                # v2 PR6-P4 修复: 原 query 用 Member.username (登录用户名, 全小写),
+                # 真实用户输入习惯是 @WangTianZhi / @nuyoah. (wechat_id, 混合大小写 + 含 .)
+                # 99% 用户 @ 不到正确用户 — bug 自 PR6 上线以来一直存在
+                # 修法: 三路匹配 (wechat_id / username / name), 都 case-insensitive
+                # 优先级: wechat_id > username > name (避免 name 重名歧义)
+                all_stmt = select(Member.id, Member.username, Member.wechat_id, Member.name)
+                all_rows = (await db.execute(all_stmt)).all()
+                # 三 key 索引: 任何一种匹配就算
+                wechat_id_map: dict[str, int] = {}
+                username_map: dict[str, int] = {}
+                name_map: dict[str, int] = {}
+                for row in all_rows:
+                    if row.wechat_id:
+                        wechat_id_map[row.wechat_id.lower()] = row.id
+                    if row.username:
+                        username_map[row.username.lower()] = row.id
+                    if row.name:
+                        name_map[row.name] = row.id  # 中文名 case-sensitive (中文无大小写)
+                # 用户输入 username 小写后查 id (优先级 1: wechat_id, 2: username, 3: name)
+                seen: set[int] = set()
+                for u in usernames:
+                    u_lower = u.lower()
+                    uid = wechat_id_map.get(u_lower) or username_map.get(u_lower) or name_map.get(u)
+                    if uid and uid not in seen:
+                        seen.add(uid)
+                        mentioned_user_ids.append(uid)
+                # 排除自己 (避免自提醒噪音)
+                mentioned_user_ids = [uid for uid in mentioned_user_ids if uid != user_id]
 
             comment.mentions = mentioned_user_ids or None
         except Exception as e:

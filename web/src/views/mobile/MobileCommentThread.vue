@@ -97,6 +97,7 @@
     <!-- Sticky 底部发布栏 -->
     <div class="mct-compose">
       <el-input
+        ref="inputRef"
         v-model="newContent"
         type="textarea"
         :rows="1"
@@ -105,7 +106,35 @@
         :maxlength="1000"
         show-word-limit
         class="mct-input"
+        @input="onContentInput"
+        @keydown="onContentKeydown"
+        @blur="onContentBlur"
       />
+      <!-- @username autocomplete dropdown (v2 PR6-P4 mobile 镜像) -->
+      <div
+        v-if="mention.isOpen.value && mention.rawCandidates.value.length > 0"
+        class="mct-mention-dropdown"
+        role="listbox"
+      >
+        <div
+          v-for="(m, idx) in mention.rawCandidates.value"
+          :key="m.id"
+          class="mct-mention-item"
+          :class="{ active: idx === mention.selectedIndex.value }"
+          role="option"
+          :aria-selected="idx === mention.selectedIndex.value"
+          @mousedown.prevent="onMentionItemClick(idx)"
+          @mouseenter="mention.selectedIndex.value = idx"
+        >
+          <el-avatar :size="24" :src="m.avatar" class="mct-mention-avatar">
+            {{ (m.name || '?').slice(0, 1) }}
+          </el-avatar>
+          <div class="mct-mention-info">
+            <div class="mct-mention-name">{{ m.name }}</div>
+            <div class="mct-mention-username">@{{ m.wechat_id || m.username }}</div>
+          </div>
+        </div>
+      </div>
       <button
         type="button"
         class="mct-post-btn"
@@ -138,6 +167,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { useNotificationsStore } from '@/composables/useNotifications'
+import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
 
 const props = defineProps({
   fileId: { type: Number, required: true },
@@ -150,6 +180,29 @@ const newContent = ref('')
 const posting = ref(false)
 const loading = ref(false)
 const usernameMap = ref({})
+const membersList = ref([])
+const inputRef = ref(null)
+
+// v2 PR6-P4: @username autocomplete (mobile 镜像, 与 desktop 共享 composable)
+const mention = useMentionAutocomplete({
+  textareaRef: inputRef,
+  members: membersList,
+  onSelect: (member, ctx) => {
+    if (!ctx || ctx.triggerPos < 0) return
+    const before = newContent.value.substring(0, ctx.triggerPos)
+    const after = newContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
+    const mentionText = `@${member.wechat_id || member.username} `
+    newContent.value = before + mentionText + after
+    setTimeout(() => {
+      const ta = inputRef.value?.$el?.querySelector?.('textarea')
+      if (ta) {
+        const newPos = before.length + mentionText.length
+        ta.focus()
+        ta.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  },
+})
 
 const comments = computed(() => store.commentsByFileId[props.fileId] || [])
 
@@ -180,7 +233,7 @@ function formatTime(iso) {
  *
  * 与 desktop CommentThread.vue formatContent 完全镜像 (DRY):
  * - 必须先 escape HTML 防 XSS
- * - @username 匹配 _MENTION_PATTERN: @([一-龥A-Za-z]{1,16})
+ * - @username 匹配 _MENTION_PATTERN: @([一-龥A-Za-z0-9_.\-]{1,32}) (PR6-P4 修复: 加 0-9_.-)
  */
 function formatContent(raw) {
   if (!raw) return ''
@@ -191,7 +244,7 @@ function formatContent(raw) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
   return escaped.replace(
-    /@([一-龥A-Za-z]{1,16})/g,
+    /@([一-龥A-Za-z0-9_.\-]{1,32})/g,
     '<span class="mention">@$1</span>',
   )
 }
@@ -229,10 +282,31 @@ async function batchResolveUsernames() {
       map[m.id] = m.username || m.name
     }
     usernameMap.value = map
+    // v2 PR6-P4: 同时填充 membersList 给 autocomplete
+    if (membersList.value.length === 0) {
+      membersList.value = (resp.data.items || []).map((m) => ({
+        id: m.id,
+        username: m.username,
+        wechat_id: m.wechat_id,
+        name: m.name,
+        avatar: m.avatar,
+        role: m.role,
+      }))
+    }
   } catch (e) {
     // ignore — fallback 到 id
   }
 }
+
+// v2 PR6-P4: autocomplete 事件桥
+function onContentInput() { mention.refresh() }
+function onContentKeydown(event) {
+  if (mention.handleKeydown(event)) return
+}
+function onContentBlur() {
+  setTimeout(() => mention.close(), 150)
+}
+function onMentionItemClick(index) { mention.selectCandidate(index) }
 
 async function fetchComments() {
   if (!props.fileId) return
@@ -443,6 +517,57 @@ watch(() => props.fileId, (newId) => {
   flex: 1;
 }
 
+/* v2 PR6-P4: @username autocomplete dropdown (mobile 紧凑布局) */
+.mct-compose {
+  position: relative;  /* anchor for mct-mention-dropdown */
+}
+.mct-mention-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
+  background: var(--color-bg-card, #fff);
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+.mct-mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.mct-mention-item.active {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.08));
+}
+.mct-mention-avatar {
+  flex-shrink: 0;
+}
+.mct-mention-info {
+  flex: 1;
+  min-width: 0;
+}
+.mct-mention-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary, #303133);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mct-mention-username {
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+  font-family: monospace;
+}
+
 .mct-post-btn {
   flex-shrink: 0;
   height: 36px;
@@ -496,6 +621,15 @@ watch(() => props.fileId, (newId) => {
 [data-theme="dark"] .mct-compose {
   background: var(--color-bg-card, #2a2d35);
   border-top-color: var(--color-border-light, #3a3d45);
+}
+
+[data-theme="dark"] .mct-mention-dropdown {
+  background: var(--color-bg-card, #2a2d35);
+  border-color: var(--color-border-light, #3a3d45);
+}
+
+[data-theme="dark"] .mct-mention-item.active {
+  background: rgba(255, 122, 92, 0.16);
 }
 
 [data-theme="dark"] .mct-delete-btn:active {
