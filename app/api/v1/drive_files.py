@@ -1554,3 +1554,122 @@ async def get_thumbnail(
         thumbnail_status=k.thumbnail_status or "pending",
         thumbnail_url=thumb_url,
     )
+
+
+# ============================================================
+# v2 PR8.5: 移动端聚合 feed 端点 (减少移动端 N 次请求)
+# ============================================================
+
+class MobileFeedResponse(BaseModel):
+    """PR8.5 mobile feed 响应 (一次返回驱动网盘首页所有数据)
+    设计要点:
+      - 一次 HTTP 请求 = 减少移动端 N 次往返 (网络延迟对移动端敏感)
+      - 各 section 独立 try/except, 失败不阻塞其他 section
+      - limit 参数控制每个 section 大小, 默认 10
+    """
+    recent: List[dict] = Field(default_factory=list)
+    starred: List[dict] = Field(default_factory=list)
+    team: List[dict] = Field(default_factory=list)
+    trash_count: int = 0
+    unread_notifications: int = 0
+    storage_used_bytes: int = 0
+    storage_quota_bytes: int = 0
+    generated_at: str = ""
+
+
+@router.get("/mobile-feed", response_model=MobileFeedResponse)
+async def get_mobile_feed(
+    limit: int = Query(10, ge=1, le=50, description="每个 section 返回条数"),
+    user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """v2 PR8.5: 移动端首页聚合 (4 sections + 2 stats)
+
+    Sections:
+      - recent: 最近修改 drive 文件 (visibility 含自己可见)
+      - starred: 用户收藏
+      - team: 团队空间最新
+      - (server-side) trash_count + unread_notifications
+
+    失败隔离: 任一 section 失败时返空列表, 不抛 5xx 让整个 feed 失败
+    """
+    from datetime import datetime, timezone
+    svc = DriveService(db)
+    feed = MobileFeedResponse(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+    # recent
+    try:
+        items, _ = await svc.list_files(
+            current_user_id=user.id, sort_by="updated_at", sort_order="desc",
+            page=1, page_size=limit,
+        )
+        feed.recent = [_drive_file_to_dict(f, user.id) for f in items]
+    except Exception as e:
+        logger.warning(f"[MobileFeed] recent failed: {e}")
+
+    # starred
+    try:
+        items, _ = await svc.list_files(
+            current_user_id=user.id, sort_by="starred_at", sort_order="desc",
+            page=1, page_size=limit, starred_only=True,
+        )
+        feed.starred = [_drive_file_to_dict(f, user.id) for f in items]
+    except Exception as e:
+        logger.warning(f"[MobileFeed] starred failed: {e}")
+
+    # team (visibility=team)
+    try:
+        items, _ = await svc.list_files(
+            current_user_id=user.id, sort_by="updated_at", sort_order="desc",
+            page=1, page_size=limit, visibility_filter="team",
+        )
+        feed.team = [_drive_file_to_dict(f, user.id) for f in items]
+    except Exception as e:
+        logger.warning(f"[MobileFeed] team failed: {e}")
+
+    # trash count (PR2 已实现 list_trash)
+    try:
+        _, total = await svc.list_trash(current_user_id=user.id, page=1, page_size=1)
+        feed.trash_count = total
+    except Exception as e:
+        logger.warning(f"[MobileFeed] trash_count failed: {e}")
+
+    # unread notifications (PR6)
+    try:
+        from app.services.notification_service import notification_service
+        unread = await notification_service.count_unread(db, user_id=user.id)
+        feed.unread_notifications = unread
+    except Exception as e:
+        logger.warning(f"[MobileFeed] unread_notifications failed: {e}")
+
+    # storage stats (PR5 引入 file_size 列后启用 used_bytes/quota_bytes)
+    try:
+        stats = await svc.storage_stats(user.id)
+        # 当前 PR2 阶段 storage_stats 仅返 file_count + by_visibility,
+        # used_bytes/quota_bytes 留 0 等 PR5 引入 size 列后填充
+        feed.storage_used_bytes = 0
+        feed.storage_quota_bytes = 0
+    except Exception as e:
+        logger.warning(f"[MobileFeed] storage stats failed: {e}")
+
+    return feed
+
+
+def _drive_file_to_dict(file: Knowledge, user_id: int) -> dict:
+    """PR8.5 helper: Knowledge → mobile feed dict
+
+    复用 drive_service 已有 _to_dict 模式 (如果有), 这里独立实现避免循环 import
+    """
+    return {
+        "id": file.id,
+        "title": file.title,
+        "file_name": file.file_name,
+        "file_type": file.file_type,
+        "file_size": file.file_size,
+        "visibility": file.visibility,
+        "is_starred": bool(getattr(file, "is_starred", False)),
+        "updated_at": file.updated_at.isoformat() if file.updated_at else None,
+        "folder_id": getattr(file, "folder_id", None),
+    }
