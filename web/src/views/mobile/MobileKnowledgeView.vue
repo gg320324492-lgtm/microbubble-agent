@@ -94,6 +94,18 @@
         />
       </div>
 
+      <!-- Tab: 文件 (PR4.2 课题组网盘) -->
+      <div v-else-if="activeTab === 'files'">
+        <MobileFileList
+          @file-preview="onMobileFilePreview"
+          @file-download="onMobileFileDownload"
+          @file-rename="onMobileFileRename"
+          @file-update-visibility="onMobileFileUpdateVisibility"
+          @file-extract-to-kb="onMobileFileExtractToKb"
+          @file-delete="onMobileFileDelete"
+        />
+      </div>
+
       <!-- Tab: 健康度 -->
       <div v-else-if="activeTab === 'health'">
         <div class="info-pane">
@@ -236,6 +248,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
+import MobileFileList from './MobileFileList.vue'  // PR4.2 课题组网盘移动端
 
 const router = useRouter()
 const activeTab = ref('knowledge')
@@ -312,6 +325,7 @@ const total = ref(0)
 
 const tabs = [
   { name: 'knowledge', label: '📚 知识' },
+  { name: 'files', label: '📁 文件' },  // PR4.2 课题组网盘 (第 7 tab)
   { name: 'entities', label: '🔗 实体' },
   { name: 'hypotheses', label: '💡 假设' },
   { name: 'formulas', label: '🧮 公式' },
@@ -462,6 +476,95 @@ function viewHypothesis(item) {
 function viewFormula(item) {
   // 公式详情：路由跳到桌面版（公式计算器已在桌面 KnowledgeView 实现）
   router.push({ path: '/knowledge', query: { tab: 'formulas', id: item.id } })
+}
+
+// === PR4.2 移动端文件操作 handlers ===
+// 6 个事件从 MobileFileList emit 出来:
+//   file-preview / file-download / file-rename / file-update-visibility / file-extract-to-kb / file-delete
+// PR4.4 完善真功能 (现在用占位让 PR4.2 编译通过 + 跑得通)
+// ElMessage/ElMessageBox 已在文件顶部 import
+
+async function onMobileFilePreview(file) {
+  // PR4.6: 接入 FilePreviewDialog
+  ElMessage.info(`预览功能待 PR4.6 接入: ${file.title || file.file_name}`)
+}
+
+async function onMobileFileDownload(file) {
+  // PR4.4: 用 FileCard 同款 downloadFile 模式
+  try {
+    const response = await axios.get(`/api/v1/drive/files/${file.id}/download`, { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', file.file_name || file.title || 'download')
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error('下载失败')
+  }
+}
+
+async function onMobileFileRename(file) {
+  // PR4.4: 弹输入框
+  try {
+    const { value: newName } = await ElMessageBox.prompt('新文件名', '重命名', {
+      inputValue: file.file_name || file.title || '',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+    })
+    if (newName && newName !== file.file_name) {
+      await axios.put(`/api/v1/drive/files/${file.id}`, { file_name: newName })
+      ElMessage.success('已重命名')
+      // 通知 MobileFileList 刷新 (PR4.4 改 emit refresh)
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '重命名失败')
+  }
+}
+
+async function onMobileFileUpdateVisibility(file) {
+  // PR4.4: 弹 visibility 单选
+  const visibilities = [
+    { value: 'private', label: '🔒 私有' },
+    { value: 'team', label: '👥 团队' },
+    { value: 'public', label: '🌐 公开' },
+  ]
+  try {
+    const { value } = await ElMessageBox({
+      title: '改可见性',
+      message: '选择新的可见性',
+      showCancelButton: true,
+    })
+    // 简化: 直接用 prompt
+    const newVis = prompt('可见性: private / team / public', file.visibility || 'team')
+    if (newVis && ['private', 'team', 'public'].includes(newVis)) {
+      await axios.put(`/api/v1/drive/files/${file.id}`, { visibility: newVis })
+      ElMessage.success('已更新')
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '更新失败')
+  }
+}
+
+async function onMobileFileExtractToKb(file) {
+  // PR4.5: 接入 MobileExtractToKBSheet
+  ElMessage.info(`加入公共知识库功能待 PR4.5 接入: ${file.file_name}`)
+}
+
+async function onMobileFileDelete(file) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除文件 "${file.title || file.file_name}" 吗？此操作可在 3 天内从回收站恢复。`,
+      '删除确认',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await axios.delete(`/api/v1/drive/files/${file.id}`)
+    ElMessage.success('已删除')
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
+  }
 }
 
 function editKnowledge(item) {

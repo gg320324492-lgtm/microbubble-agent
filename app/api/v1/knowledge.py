@@ -141,7 +141,12 @@ async def list_knowledge(
         filters.append(Knowledge.source_type == source_type)
 
     # 总数查询
-    count_query = select(func.count()).select_from(Knowledge)
+    # 2026-07-01 PR4.1 修复: count_query 也需 storage_mode='kb' 过滤
+    # (否则 total 包含 drive 文件数, 但 items 不含 → total > items count 显示 bug)
+    count_query = select(func.count()).select_from(Knowledge).where(
+        Knowledge.deleted_at.is_(None),
+        Knowledge.storage_mode == "kb",
+    )
     if filters:
         count_query = count_query.where(*filters)
     total_result = await db.execute(count_query)
@@ -149,7 +154,12 @@ async def list_knowledge(
 
     # 分页查询 — content 字段只取前 200 字符作为 snippet，不返回完整内容
     # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL 过滤, 软删除条目不显示
-    query = select(Knowledge).where(Knowledge.deleted_at.is_(None))
+    # 2026-07-01 PR4.1 修复: 加 storage_mode='kb' 硬过滤, drive 文件不出现在 KB 列表
+    # (drive 文件只在 /api/v1/drive/files 出现, 这是 PR1 plan 核心隐私边界)
+    query = select(Knowledge).where(
+        Knowledge.deleted_at.is_(None),
+        Knowledge.storage_mode == "kb",
+    )
     if filters:
         query = query.where(*filters)
     query = query.order_by(Knowledge.created_at.desc())
@@ -213,6 +223,11 @@ async def list_knowledge(
             "file_name": it.file_name,
             "file_type": it.file_type,
             "meta": it.meta,  # #043: 自动拓展条目的 RichBlock 数据
+            # 2026-07-01 PR4.1: 暴露 storage_mode/folder_id/visibility
+            # 移动端需要 storage_mode 显示徽章, folder_id 跳 drive, visibility 排序
+            "storage_mode": it.storage_mode,
+            "folder_id": it.folder_id,
+            "visibility": it.visibility,
         })
     return KnowledgeList(items=list_items, total=total)
 
@@ -864,7 +879,15 @@ async def get_knowledge(
     db: AsyncSession = Depends(get_db)
 ):
     """获取知识详情"""
-    result = await db.execute(select(Knowledge).where(Knowledge.id == knowledge_id))
+    # 2026-07-01 PR4.1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
+    # (否则 drive 文件可以通过 id 直接 GET 详情 → 绕过 list 端点过滤)
+    result = await db.execute(
+        select(Knowledge).where(
+            Knowledge.id == knowledge_id,
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "kb",
+        )
+    )
     knowledge = result.scalar_one_or_none()
 
     if not knowledge:
