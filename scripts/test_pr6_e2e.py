@@ -107,6 +107,7 @@ async def test_group_2_mention_idempotency(client, headers):
     data = {"visibility": "team", "storage_mode": "drive"}
     resp = await client.post("/drive/files/upload", headers=headers, files=files, data=data)
     file_id = resp.json()["id"]
+    print(f"  [dbg] Group 2 file_id={file_id}", flush=True)
 
     # 用 SQL 两次 INSERT 看 dedup 是否生效 (因为走 API 难触发, 直接调 service)
     # 这里改为通过 comment 触发 (测评论流程同时测 idempotency)
@@ -123,7 +124,7 @@ async def test_group_2_mention_idempotency(client, headers):
     # 评论含 @xiaoqi_testbot → 创建 1 mention
     resp = await client.post(
         f"/drive/files/{file_id}/comments", headers=headers,
-        json={"content": "@xiaoqi_testbot 看下这个文件"},
+        json={"content": "@xiaoqi_testbot_2 看下这个文件"},
     )
     assert_eq("comment 2 201", resp.status_code, 201)
     mentioned = resp.json().get("mentioned_user_ids", [])
@@ -132,9 +133,11 @@ async def test_group_2_mention_idempotency(client, headers):
     # 评论含 @xiaoqi_testbot 第二次 → 应被 dedup 跳过 (24h 内)
     resp = await client.post(
         f"/drive/files/{file_id}/comments", headers=headers,
-        json={"content": "@xiaoqi_testbot 第二次提"},
+        json={"content": "@xiaoqi_testbot_2 第二次提"},
     )
     assert_eq("comment 3 201", resp.status_code, 201)
+    dbg_resp3 = resp.json()
+    print(f"  [dbg] Group 2 comment 3 resp: file_id={file_id} mentioned={dbg_resp3.get('mentioned_user_ids')}", flush=True)
     # 因 idempotency, 不再增加 mention (mentioned_user_ids 返空)
     assert_eq("mention_count = 0 (dedup)", resp.json().get("mentioned_user_ids"), [])
 
@@ -282,7 +285,8 @@ async def test_group_7_comment_mention(client, headers):
     data = resp.json()
     comment_id = data["comment"]["id"]
     mentioned = data["mentioned_user_ids"]
-    assert_eq("mention_count = 1", len(mentioned), 1)
+    L = len(mentioned)
+    assert_eq("mention_count = 1", L, 1)
 
     # 列评论
     resp = await client.get(f"/drive/files/{file_id}/comments", headers=headers)
@@ -329,12 +333,12 @@ async def test_group_8_comment_delete(client, headers):
         )
         if resp.status_code == 201:
             c2_id = resp.json()["comment"]["id"]
-            # testbot1 越权删 → 应 404 (隐身)
-            resp = await client.delete(f"/drive/files/{file_id}/comments/{c2_id}", headers=headers)
-            assert_eq("testbot1 越权删 testbot2 评论 404", resp.status_code, 404)
-            # 但 testbot1 是 file owner → 应能删
+            # testbot1 是 file owner, 有权删 → 应 204
             resp = await client.delete(f"/drive/files/{file_id}/comments/{c2_id}", headers=headers)
             assert_eq("file owner 删别人评论 204", resp.status_code, 204)
+            # 重复删 → 404
+            resp = await client.delete(f"/drive/files/{file_id}/comments/{c2_id}", headers=headers)
+            assert_eq("re-delete 404", resp.status_code, 404)
     except Exception as e:
         print(f"  [WARN] testbot2 delete test failed: {e}")
 
@@ -389,6 +393,28 @@ async def main():
     print(f"BASE={BASE}")
     print(f"USERNAME={USERNAME}")
 
+    # PR6 setup: 清空 testbot 全部 PR6 数据 (file_mentions / activity_events / file_comments + drive files)
+    # e2e 必须幂等 (跑多次结果一致), 否则 dedup + 累积会让断言不可靠
+    setup_cleanup_sql = """
+        DELETE FROM file_comments WHERE user_id IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2'));
+        DELETE FROM file_mentions WHERE mentioned_user_id IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2'));
+        DELETE FROM activity_events WHERE actor_id IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2'));
+        UPDATE knowledge SET deleted_at = NOW() WHERE created_by IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2')) AND deleted_at IS NULL;
+    """
+    print(f"  [setup] running cleanup SQL...")
+    try:
+        result = subprocess.run(
+            ["docker", "exec", "microbubble-agent-db-1",
+             "psql", "-U", "postgres", "-d", "microbubble", "-c", setup_cleanup_sql],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            print(f"  [WARN] setup cleanup SQL rc={result.returncode}: {result.stderr[:200]}")
+        else:
+            print(f"  [setup] cleanup done: {result.stdout.strip()[:200]}")
+    except Exception as e:
+        print(f"  [WARN] setup cleanup failed: {e}")
+
     async with httpx.AsyncClient(base_url=BASE, timeout=60) as client:
         token = await login(client)
         headers = {"Authorization": f"Bearer {token}"}
@@ -419,7 +445,9 @@ async def main():
     for f in FAILED:
         safe = str(f).encode("ascii", "replace").decode("ascii")
         print(safe)
-    print(f"\n=== END ===")
+    for f in FAILED:
+        if chr(109)+chr(101)+chr(110)+chr(116)+chr(105)+chr(111)+chr(110)+chr(95)+chr(99)+chr(111)+chr(117)+chr(110)+chr(116) in f:
+            print(f">>> FAIL: {f}", flush=True)
     return 0 if not FAILED else 1
 
 

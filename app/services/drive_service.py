@@ -1131,6 +1131,21 @@ class DriveService:
             if fid not in existing_ids:
                 skipped.append(fid)
         await self.db.commit()
+        # PR6: 活动动态流 (批量删除 = 每个被删文件一条 delete event)
+        try:
+            for f in files:
+                if f.deleted_at is not None and f.id not in skipped:
+                    await activity_service.log(
+                        self.db,
+                        actor_id=current_user_id,
+                        action="delete",
+                        target_type="file",
+                        target_id=f.id,
+                        target_name=f.file_name,
+                    )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.batch_soft_delete] activity log 失败: {e}")
         logger.info(
             f"[DriveService.batch_soft_delete] requested={len(file_ids)} "
             f"deleted={deleted} skipped={len(skipped)}"
