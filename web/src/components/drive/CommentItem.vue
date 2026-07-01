@@ -30,6 +30,8 @@
         <div class="comment-meta">
           <strong class="comment-author">{{ comment.user_name || `用户 #${comment.user_id}` }}</strong>
           <span class="comment-time">{{ formatTime(comment.created_at) }}</span>
+        <!-- v2 PR6-P6: 已编辑标记 (mentions 变化 / 或 service 端加 edited_at 后更精准) -->
+        <span v-if="comment._edited" class="comment-edited-tag" title="此评论已编辑">已编辑</span>
           <el-popconfirm
             v-if="canDelete(comment)"
             title="确认删除此评论?"
@@ -68,6 +70,17 @@
           >
             <el-icon><ChatDotRound /></el-icon>
             回复
+          </button>
+          <button
+            v-if="canEdit(comment)"
+            type="button"
+            class="comment-edit-btn"
+            :aria-label="`编辑 ${comment.user_name || '评论'}`"
+            :title="`编辑 (5 分钟内可改)`"
+            @click="toggleEditForm"
+          >
+            <el-icon><Edit /></el-icon>
+            编辑
           </button>
           <button
             v-if="(comment.replies && comment.replies.length > 0) || (comment.reply_count > 0 && repliesCollapsed)"
@@ -140,6 +153,60 @@
       </div>
     </div>
 
+    <!-- v2 PR6-P6: inline 编辑输入框 (owner only, 5 分钟窗口) -->
+    <div v-if="showEditForm" class="comment-edit-form">
+      <el-input
+        ref="editInputRef"
+        v-model="editContent"
+        type="textarea"
+        :rows="3"
+        placeholder="编辑评论..."
+        :maxlength="2000"
+        show-word-limit
+        resize="none"
+        class="comment-edit-input"
+        @input="onEditInput"
+        @keydown="onEditKeydown"
+        @blur="onEditBlur"
+      />
+      <div
+        v-if="editMention.isOpen.value && editMention.rawCandidates.value.length > 0"
+        class="mention-dropdown"
+        role="listbox"
+      >
+        <div
+          v-for="(m, idx) in editMention.rawCandidates.value"
+          :key="m.id"
+          class="mention-item"
+          :class="{ active: idx === editMention.selectedIndex.value }"
+          role="option"
+          :aria-selected="idx === editMention.selectedIndex.value"
+          @mousedown.prevent="onEditMentionItemClick(idx)"
+          @mouseenter="editMention.selectedIndex.value = idx"
+        >
+          <el-avatar :size="22" :src="m.avatar" class="mention-avatar">
+            {{ (m.name || '?').slice(0, 1) }}
+          </el-avatar>
+          <div class="mention-info">
+            <div class="mention-name">{{ m.name }}</div>
+            <div class="mention-username">@{{ m.wechat_id || m.username }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="comment-edit-actions">
+        <el-button size="small" @click="cancelEdit">取消</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          :disabled="!canPostEdit"
+          :loading="editing"
+          @click="submitEdit"
+        >
+          保存
+        </el-button>
+      </div>
+    </div>
+
     <!-- 递归: 子评论 (depth+1) -->
     <div v-if="comment.replies && comment.replies.length > 0 && !repliesCollapsed" class="comment-replies">
       <CommentItem
@@ -161,10 +228,13 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, ArrowUp, Edit } from '@element-plus/icons-vue'
 import { useNotificationsStore } from '@/composables/useNotifications'
 import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
 import { useCommentTree, MAX_COMMENT_DEPTH } from '@/composables/useCommentTree'
+
+// v2 PR6-P6: 编辑窗口 (秒), 与后端 COMMENT_EDIT_WINDOW_SECONDS=300 镜像
+const COMMENT_EDIT_WINDOW_SECONDS = 300
 
 const props = defineProps({
   comment: { type: Object, required: true },
@@ -187,6 +257,12 @@ const replying = ref(false)
 const repliesCollapsed = ref(false)
 const replyInputRef = ref(null)
 
+// v2 PR6-P6: 编辑表单 state (与 reply 完全独立)
+const showEditForm = ref(false)
+const editContent = ref('')
+const editing = ref(false)
+const editInputRef = ref(null)
+
 const mention = useMentionAutocomplete({
   textareaRef: replyInputRef,
   members: props.membersList,
@@ -206,6 +282,44 @@ const mention = useMentionAutocomplete({
     }, 0)
   },
 })
+
+// v2 PR6-P6: edit 独立 mention autocomplete 实例
+const editMention = useMentionAutocomplete({
+  textareaRef: editInputRef,
+  members: props.membersList,
+  onSelect: (member, ctx) => {
+    if (!ctx || ctx.triggerPos < 0) return
+    const before = editContent.value.substring(0, ctx.triggerPos)
+    const after = editContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
+    const mentionText = `@${member.wechat_id || member.username} `
+    editContent.value = before + mentionText + after
+    setTimeout(() => {
+      const ta = editInputRef.value?.$el?.querySelector?.('textarea')
+      if (ta) {
+        const newPos = before.length + mentionText.length
+        ta.focus()
+        ta.setSelectionRange(newPos, newPos)
+      }
+    }, 0)
+  },
+})
+
+// v2 PR6-P6: edit 模式 computed
+const canPostEdit = computed(() => {
+  const t = editContent.value.trim()
+  return t.length > 0 && t.length <= 2000 && !editing.value
+})
+
+// v2 PR6-P6: 是否可编辑 (owner only + 5 分钟窗口)
+function canEdit(c) {
+  if (!props.currentUserId) return false
+  if (c.user_id !== props.currentUserId) return false
+  if (!c.created_at) return false
+  const t = new Date(c.created_at).getTime()
+  if (isNaN(t)) return false
+  const elapsed = (Date.now() - t) / 1000
+  return elapsed <= COMMENT_EDIT_WINDOW_SECONDS
+}
 
 const canPostReply = computed(() => {
   const t = replyContent.value.trim()
@@ -315,6 +429,72 @@ function onReplyBlur() {
   setTimeout(() => mention.close(), 150)
 }
 function onMentionItemClick(index) { mention.selectCandidate(index) }
+
+// ===== v2 PR6-P6: 编辑 handlers =====
+
+function toggleEditForm() {
+  showEditForm.value = !showEditForm.value
+  if (showEditForm.value) {
+    // 初始化为当前评论内容
+    editContent.value = props.comment.content || ''
+    showReplyForm.value = false  // 关闭 reply form 避免冲突
+    nextTick(() => {
+      const ta = editInputRef.value?.$el?.querySelector?.('textarea')
+      ta?.focus()
+    })
+  }
+}
+
+function cancelEdit() {
+  showEditForm.value = false
+  editContent.value = ''
+  editMention.close()
+}
+
+async function submitEdit() {
+  const trimmed = editContent.value.trim()
+  if (!trimmed) return
+  editing.value = true
+  try {
+    const resp = await store.updateComment(props.fileId, props.comment.id, trimmed)
+    const mc = resp.mentioned_user_ids?.length || 0
+    ElMessage.success(
+      mc > 0 ? `评论已编辑, 提醒 ${mc} 人` : '评论已编辑',
+    )
+    editContent.value = ''
+    showEditForm.value = false
+    editMention.close()
+  } catch (e) {
+    const detail = e.response?.data?.detail || e.message
+    if (detail && (detail.includes('编辑窗口已过') || detail.includes('无权编辑'))) {
+      ElMessage.error(`编辑失败: ${detail}`)
+      // 5 分钟窗口已过: 关闭 form 避免再次尝试
+      if (detail.includes('编辑窗口已过')) {
+        showEditForm.value = false
+        editContent.value = ''
+      }
+    } else if (detail) {
+      ElMessage.error(`编辑失败: ${detail}`)
+    } else {
+      ElMessage.error('编辑失败')
+    }
+  } finally {
+    editing.value = false
+  }
+}
+
+function onEditInput() { editMention.refresh() }
+function onEditKeydown(event) {
+  if (editMention.handleKeydown(event)) return
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault()
+    submitEdit()
+  }
+}
+function onEditBlur() {
+  setTimeout(() => editMention.close(), 150)
+}
+function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
 </script>
 
 <style scoped>
@@ -510,5 +690,68 @@ function onMentionItemClick(index) { mention.selectCandidate(index) }
 [data-theme="dark"] .mention-item:hover,
 [data-theme="dark"] .mention-item.active {
   background: rgba(255, 122, 92, 0.16);
+}
+
+/* ===== v2 PR6-P6: edit form + edited tag ===== */
+.comment-edit-form {
+  margin: 8px 0 8px 38px;  /* 与 reply form 对齐缩进 */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: 8px;
+}
+.comment-edit-input {
+  width: 100%;
+}
+.comment-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.comment-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #909399);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.comment-edit-btn:hover {
+  color: var(--color-primary, #ff7a5c);
+}
+.comment-edited-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--color-text-placeholder, #c0c4cc);
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: 2px;
+  vertical-align: middle;
+}
+</style>
+
+<!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
+<style>
+[data-theme="dark"] .comment-edit-form {
+  background: var(--color-bg-card, #1e1f24);
+}
+[data-theme="dark"] .comment-edited-tag {
+  color: var(--color-text-secondary, #a8aab0);
+  background: var(--color-bg-page, #2a2d35);
+}
+[data-theme="dark"] .comment-edit-btn {
+  color: var(--color-text-secondary, #a8aab0);
+}
+[data-theme="dark"] .comment-edit-btn:hover {
+  color: var(--color-primary, #ff7a5c);
 }
 </style>

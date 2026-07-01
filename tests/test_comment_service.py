@@ -200,3 +200,116 @@ class TestCountForFile:
         )
         after = await comment_service.count_for_file(db, file_id=540)
         assert after == before + 1
+
+
+# ────────────────────────────────────────────────────────
+# 5. update_comment 集成测试 (v2 PR6-P6) (8 case)
+# ────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+class TestUpdateComment:
+    """v2 PR6-P6: update_comment — owner only + 5 分钟窗口 + 422 错误"""
+
+    async def test_update_success(self, db):
+        """owner 编辑成功 + content 更新 + mentions 重新解析"""
+        c, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="原始内容",
+        )
+        new_content = "编辑后内容 @WangTianZhi"
+        c2, new_mentions = await comment_service.update_comment(
+            db, comment_id=c.id, user_id=59, new_content=new_content,
+        )
+        assert c2.id == c.id
+        assert c2.content == new_content
+        # @WangTianZhi 解析为 username (lowercase), case-insensitive
+        assert isinstance(new_mentions, list)
+
+    async def test_update_nonexistent_comment_raises(self, db):
+        """编辑不存在的评论 → ValueError (HTTP 422)"""
+        with pytest.raises(ValueError, match="评论不存在"):
+            await comment_service.update_comment(
+                db, comment_id=99999999, user_id=59, new_content="edit",
+            )
+
+    async def test_update_other_user_comment_raises(self, db):
+        """非 owner 编辑 → ValueError (无权限)"""
+        c, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="user 59 的评论",
+        )
+        with pytest.raises(ValueError, match="无权编辑"):
+            await comment_service.update_comment(
+                db, comment_id=c.id, user_id=58, new_content="试图编辑别人的",
+            )
+
+    async def test_update_empty_content_raises(self, db):
+        """空内容 → ValueError"""
+        c, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="原始",
+        )
+        with pytest.raises(ValueError, match="内容不能为空"):
+            await comment_service.update_comment(
+                db, comment_id=c.id, user_id=59, new_content="   ",
+            )
+
+    async def test_update_too_long_content_raises(self, db):
+        """超长内容 (>2000 字符) → ValueError"""
+        c, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="原始",
+        )
+        long_content = "x" * 2001
+        with pytest.raises(ValueError, match="超长"):
+            await comment_service.update_comment(
+                db, comment_id=c.id, user_id=59, new_content=long_content,
+            )
+
+    async def test_update_preserves_thread_depth(self, db):
+        """编辑不改变 thread_depth / parent_comment_id / reply_count (结构不动)"""
+        # 顶层评论
+        c, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="顶层",
+        )
+        c2, _ = await comment_service.update_comment(
+            db, comment_id=c.id, user_id=59, new_content="顶层编辑后",
+        )
+        assert c2.thread_depth == c.thread_depth == 0
+        assert c2.parent_comment_id == c.parent_comment_id
+        assert c2.reply_count == c.reply_count == 0
+
+    async def test_update_preserves_reply_structure(self, db):
+        """编辑父评论不影响子评论 + reply_count 仍正确"""
+        parent, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="父评论",
+        )
+        # 加 1 个 reply (reply_count 应该 = 1)
+        await comment_service.create_comment(
+            db, file_id=540, user_id=58, content="reply 1", parent_comment_id=parent.id,
+        )
+        # 编辑父评论
+        parent2, _ = await comment_service.update_comment(
+            db, comment_id=parent.id, user_id=59, new_content="父评论编辑后",
+        )
+        # reply_count 仍是 1 (结构不动)
+        assert parent2.reply_count == 1
+        assert parent2.content == "父评论编辑后"
+
+    async def test_update_window_exceeded_raises(self, db):
+        """5 分钟窗口外编辑 → ValueError (人工把 created_at 改到 6 分钟前)"""
+        from sqlalchemy import update as sql_update
+        c, _ = await comment_service.create_comment(
+            db, file_id=540, user_id=59, content="6 分钟前创建的",
+        )
+        # 倒推 created_at 到 6 分钟前 (360s)
+        from datetime import timedelta
+        old_time = datetime.utcnow() - timedelta(seconds=360)
+        await db.execute(
+            sql_update(FileComment)
+            .where(FileComment.id == c.id)
+            .values(created_at=old_time)
+        )
+        await db.commit()
+        await db.refresh(c)
+        # 编辑应被拒绝
+        with pytest.raises(ValueError, match="编辑窗口已过"):
+            await comment_service.update_comment(
+                db, comment_id=c.id, user_id=59, new_content="试图改",
+            )

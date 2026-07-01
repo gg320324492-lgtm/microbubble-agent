@@ -203,6 +203,46 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
+  /**
+   * v2 PR6-P6: 编辑评论 (owner only, 5 分钟窗口)
+   * @param fileId - 文件 id
+   * @param commentId - 评论 id
+   * @param newContent - 新内容
+   * @returns {Promise<{ comment, mentioned_user_ids }>}
+   *
+   * 422 错误 (评论不存在 / 无权编辑 / 编辑窗口已过 / 内容空/超长)
+   * 全部抛 error, caller 用 try/catch + ElMessage 处理
+   */
+  async function updateComment(fileId, commentId, newContent) {
+    try {
+      const resp = await axios.patch(
+        `${API_BASE}/drive/files/${fileId}/comments/${commentId}`,
+        { content: newContent },
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      // 本地替换原 comment 的 content + mentions (其他字段不动)
+      const existing = commentsByFileId.value[fileId] || []
+      const updated = existing.map((c) => {
+        if (c.id === commentId) {
+          return {
+            ...c,
+            content: resp.data.comment.content,
+            mentions: resp.data.comment.mentions,
+          }
+        }
+        return c
+      })
+      commentsByFileId.value = {
+        ...commentsByFileId.value,
+        [fileId]: updated,
+      }
+      return resp.data
+    } catch (e) {
+      console.error('[Notify] updateComment failed:', e)
+      throw e
+    }
+  }
+
   function bindWsHandlers() {
     if (wsHandlersBound) return
     const ws = getWsClient()
@@ -274,6 +314,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     fetchComments,
     postComment,
     postReply,
+    updateComment,
     deleteComment,
     startWs,
     stopWs,

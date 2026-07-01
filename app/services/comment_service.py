@@ -35,6 +35,11 @@ logger = logging.getLogger(__name__)
 # depth=2 是允许的最后一层回复, 再回复会被 reject (depth=3 不允许)
 MAX_COMMENT_DEPTH = 2
 
+# v2 PR6-P6: 评论编辑窗口 (秒) — 5 分钟内 owner 可编辑
+# 5 分钟是 GitHub issue comment / Slack message edit 的标准窗口
+# 超过窗口: 返回 422 (前端隐藏编辑按钮), 鼓励用户"如需修改请发新评论"
+COMMENT_EDIT_WINDOW_SECONDS = 300
+
 
 class CommentService:
     """v2 PR6: file_comments CRUD + mention 解析 + PR6-P5 threading"""
@@ -225,6 +230,127 @@ class CommentService:
         stmt = stmt.order_by(FileComment.created_at.desc()).limit(limit)
         rows = (await db.execute(stmt)).all()
         return [(row[0], row[1]) for row in rows]
+
+    @staticmethod
+    async def update_comment(
+        db: AsyncSession,
+        *,
+        comment_id: int,
+        user_id: int,
+        new_content: str,
+    ) -> Tuple[FileComment, List[str]]:
+        """v2 PR6-P6: 编辑评论 (owner only + 5 分钟窗口)
+
+        Args:
+            comment_id: 评论 id
+            user_id: 编辑者 id (必须 = comment.user_id)
+            new_content: 新内容 (非空, ≤2000 字符)
+
+        Returns:
+            (更新后的 FileComment, 新 mention user_id 列表)
+
+        Raises:
+            ValueError: 4 类错误 → HTTP 422
+              - "评论不存在"
+              - "无权编辑" (user_id != comment.user_id)
+              - "编辑窗口已过" (now - created_at > 5 min)
+              - "内容为空" / "内容超长"
+        """
+        # 1) 取 comment
+        comment = (await db.execute(
+            select(FileComment).where(FileComment.id == comment_id)
+        )).scalar_one_or_none()
+        if comment is None:
+            raise ValueError(f"评论不存在: id={comment_id}")
+
+        # 2) owner 校验
+        if comment.user_id != user_id:
+            logger.warning(f"[Comment] 越权编辑: user={user_id} comment={comment_id} owner={comment.user_id}")
+            raise ValueError("无权编辑此评论")
+
+        # 3) 5 分钟编辑窗口校验 (now - created_at)
+        now = datetime.utcnow()
+        if comment.created_at is None:
+            # created_at 不应该为 None (DB DEFAULT now()), 防御性 fallback
+            logger.warning(f"[Comment] created_at is None for id={comment_id}")
+        else:
+            elapsed = (now - comment.created_at).total_seconds()
+            if elapsed > COMMENT_EDIT_WINDOW_SECONDS:
+                raise ValueError(
+                    f"编辑窗口已过: {int(elapsed)}s > {COMMENT_EDIT_WINDOW_SECONDS}s"
+                )
+
+        # 4) 内容校验
+        cleaned = (new_content or "").strip()
+        if not cleaned:
+            raise ValueError("评论内容不能为空")
+        if len(cleaned) > 2000:
+            raise ValueError(f"评论内容超长: {len(cleaned)} > 2000")
+
+        # 5) 重解析 @ mentions (用户改了内容, 新的 @ 列表)
+        new_mentioned_ids: List[int] = []
+        try:
+            usernames = notification_service.parse_mentions_from_text(cleaned)
+            if usernames:
+                # v2 PR6-P4: 3 路匹配 + case-insensitive (与 create_comment 镜像)
+                all_stmt = select(Member.id, Member.username, Member.wechat_id, Member.name)
+                all_rows = (await db.execute(all_stmt)).all()
+                wechat_id_map: dict[str, int] = {}
+                username_map: dict[str, int] = {}
+                name_map: dict[str, int] = {}
+                for row in all_rows:
+                    if row.wechat_id:
+                        wechat_id_map[row.wechat_id.lower()] = row.id
+                    if row.username:
+                        username_map[row.username.lower()] = row.id
+                    if row.name:
+                        name_map[row.name] = row.id
+                seen: set[int] = set()
+                for u in usernames:
+                    u_lower = u.lower()
+                    uid = wechat_id_map.get(u_lower) or username_map.get(u_lower) or name_map.get(u)
+                    if uid and uid not in seen:
+                        seen.add(uid)
+                        new_mentioned_ids.append(uid)
+                new_mentioned_ids = [uid for uid in new_mentioned_ids if uid != user_id]
+        except Exception as e:
+            logger.warning(f"[Comment] edit @ 解析失败: {e}", exc_info=True)
+
+        # 6) 写新 content + mentions
+        # NOTE: 不加 edited_at 列 (overkill), 前端通过对比 mentions 差异显示"已编辑"标记
+        comment.content = cleaned
+        comment.mentions = new_mentioned_ids or None
+
+        # 7) activity log (action="edit_comment" 与 create_comment 区分)
+        try:
+            from app.services.activity_service import activity_service
+            f = (await db.execute(select(Knowledge.file_name).where(Knowledge.id == comment.file_id))).scalar_one_or_none()
+            await activity_service.log(
+                db,
+                actor_id=user_id,
+                action="edit_comment",
+                target_type="file",
+                target_id=comment.file_id,
+                target_name=f,
+                metadata={
+                    "comment_id": comment.id,
+                    "parent_comment_id": comment.parent_comment_id,
+                    "thread_depth": comment.thread_depth,
+                    "content_preview": cleaned[:80],
+                    "mention_count": len(new_mentioned_ids),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"[Comment] edit activity log 失败: {e}", exc_info=True)
+
+        await db.commit()
+        await db.refresh(comment)
+
+        logger.info(
+            f"[Comment] edited id={comment.id} by user={user_id} "
+            f"mentions={len(new_mentioned_ids)}"
+        )
+        return comment, new_mentioned_ids
 
     @staticmethod
     async def delete_comment(

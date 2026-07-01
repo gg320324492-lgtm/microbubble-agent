@@ -11,6 +11,7 @@
 - GET    /api/v1/drive/files/{file_id}/comments      列评论
 - POST   /api/v1/drive/files/{file_id}/comments      写评论 (自动解析 @)
 - DELETE /api/v1/drive/files/{file_id}/comments/{cid} 删评论 (owner of comment OR owner of file)
+- PATCH  /api/v1/drive/files/{file_id}/comments/{cid} 编辑评论 (v2 PR6-P6: owner only, 5 分钟窗口)
 """
 import logging
 from datetime import datetime
@@ -108,6 +109,17 @@ class CommentCreateRequest(BaseModel):
 
 class CommentCreateResponse(BaseModel):
     """POST 评论响应 (含 mention 列表)"""
+    comment: CommentItem
+    mentioned_user_ids: List[int]
+
+
+class CommentUpdateRequest(BaseModel):
+    """v2 PR6-P6: PATCH 评论请求体 (仅 content, owner only, 5 分钟窗口)"""
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class CommentUpdateResponse(BaseModel):
+    """v2 PR6-P6: PATCH 评论响应 (含新 mentions 列表)"""
     comment: CommentItem
     mentioned_user_ids: List[int]
 
@@ -353,3 +365,47 @@ async def delete_file_comment(
     )
     if not ok:
         raise HTTPException(status_code=404, detail="评论不存在或无权访问")
+
+
+@router.patch("/drive/files/{file_id}/comments/{comment_id}", response_model=CommentUpdateResponse)
+async def update_file_comment(
+    file_id: int,
+    comment_id: int,
+    payload: CommentUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR6-P6: 编辑评论 (owner only + 5 分钟窗口)
+
+    422 错误码:
+      - "评论不存在" / "无权编辑此评论"
+      - "编辑窗口已过" (now - created_at > 300s)
+      - "评论内容不能为空" / "评论内容超长"
+    """
+    try:
+        comment, mentioned_user_ids = await comment_service.update_comment(
+            db,
+            comment_id=comment_id,
+            user_id=user.id,
+            new_content=payload.content,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    user_names = await _batch_user_names(db, [user.id])
+
+    return CommentUpdateResponse(
+        comment=CommentItem(
+            id=comment.id,
+            file_id=comment.file_id,
+            user_id=comment.user_id,
+            user_name=user_names.get(user.id),
+            content=comment.content,
+            mentions=comment.mentions,
+            parent_comment_id=comment.parent_comment_id,
+            thread_depth=comment.thread_depth,
+            reply_count=comment.reply_count,
+            created_at=str(comment.created_at) if comment.created_at else None,
+        ),
+        mentioned_user_ids=mentioned_user_ids,
+    )
