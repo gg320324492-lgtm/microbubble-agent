@@ -19,7 +19,7 @@ import io
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,6 +71,9 @@ class DriveFileItem(BaseModel):
     file_hash: Optional[str] = None
     is_latest: bool = True
     version_number: int = 1
+    # v2 PR5: 缩略图字段
+    thumbnail_path: Optional[str] = None
+    thumbnail_status: str = "pending"  # pending | ready | failed
 
     class Config:
         from_attributes = True
@@ -100,6 +103,63 @@ class StorageStatsResponse(BaseModel):
     active: bool = True
 
 
+# === v2 PR5 Schemas: 配额 + 分片 + 缩略图 ===
+
+class StorageQuotaResponse(BaseModel):
+    """GET /api/v1/drive/storage-quota 响应"""
+    user_id: int
+    used_bytes: int
+    quota_bytes: int
+    percent: float
+    file_count: int
+    is_over_quota: bool
+    updated_at: Optional[str] = None
+
+
+class ChunkedUploadInitRequest(BaseModel):
+    """POST /api/v1/drive/files/upload/init 请求"""
+    file_name: str = Field(..., max_length=500)
+    file_size: int = Field(..., gt=0, le=2 * 1024 * 1024 * 1024)  # 上限 2GB
+    total_chunks: int = Field(..., ge=1, le=2000)
+    file_hash: Optional[str] = Field(None, max_length=64)
+    folder_id: Optional[int] = None
+    visibility: str = "team"
+
+
+class ChunkedUploadInitResponse(BaseModel):
+    """POST /api/v1/drive/files/upload/init 响应"""
+    upload_id: str  # session_id
+    object_name: str  # 临时占位
+    total_chunks: int
+    chunk_size_hint: int = 5 * 1024 * 1024  # 5MB 提示
+    uploaded_chunks: List[int] = []
+    expires_at: str
+
+
+class ChunkedUploadStatusResponse(BaseModel):
+    """GET /api/v1/drive/files/upload/{id} 响应 (断点续传)"""
+    upload_id: str
+    file_name: str
+    file_size: int
+    total_chunks: int
+    uploaded_chunks: List[int]
+    status: str  # active | completed | aborted
+    expires_at: str
+
+
+class ChunkedUploadCompleteRequest(BaseModel):
+    """POST /api/v1/drive/files/upload/{id}/complete 请求"""
+    change_note: Optional[str] = Field(None, max_length=500)
+
+
+class ThumbnailResponse(BaseModel):
+    """GET /api/v1/drive/files/{id}/thumbnail 响应 (返 URL)"""
+    file_id: int
+    thumbnail_path: Optional[str] = None
+    thumbnail_status: str  # pending | ready | failed
+    thumbnail_url: Optional[str] = None  # MinIO 公开读 URL 或 None
+
+
 def _to_item(k: Knowledge) -> DriveFileItem:
     return DriveFileItem(
         id=k.id,
@@ -124,6 +184,8 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         file_hash=k.file_hash,        # PR4
         is_latest=bool(k.is_latest),  # PR4
         version_number=k.version_number or 1,  # PR4
+        thumbnail_path=k.thumbnail_path,  # PR5
+        thumbnail_status=k.thumbnail_status or "pending",  # PR5
     )
 
 
@@ -220,6 +282,15 @@ async def upload_drive_file(
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
+
+    # PR5: Fire-and-forget 缩略图生成 + 配额重算
+    try:
+        from app.services.thumbnail_tasks import generate_thumbnail_task
+        from app.services.storage_tasks import recalc_user_storage_task
+        generate_thumbnail_task.delay(knowledge.id)
+        recalc_user_storage_task.delay(current_user.id)
+    except Exception as e:
+        logger.warning(f"[drive.upload] fire Celery 失败 (非阻塞): {e}")
 
     logger.info(
         f"[drive.upload] id={knowledge.id} file_name={real_filename} "
@@ -1287,4 +1358,199 @@ async def restore_file_version(
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
     await db.refresh(new_k)
-    return _to_item(new_k, viewer_id=user.id)
+    return _to_item(new_k)
+
+
+# ============================================================
+# v2 PR5: 配额 + 分片上传 + 断点续传 + 缩略图 (2026-07-01)
+# ============================================================
+
+
+@router.get("/storage-quota", response_model=StorageQuotaResponse)
+async def get_storage_quota(
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 获取当前用户的网盘配额详情
+
+    返回:
+    - used_bytes / quota_bytes / percent: 用于 UI badge 颜色阈值 (≥80% 黄, ≥95% 红)
+    - file_count: 活跃 drive 文件数
+    - is_over_quota: 已超额 (≤0)
+    """
+    svc = DriveService(db)
+    return await svc.get_storage_quota(user.id)
+
+
+@router.post("/files/upload/init", response_model=ChunkedUploadInitResponse)
+async def init_chunked_upload(
+    body: ChunkedUploadInitRequest,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 初始化分片上传 session
+
+    配额检查: 文件大小超配额返 413
+    24h TTL: session.expires_at = now + 24h
+
+    返回 upload_id, 前端 chunk 0 写到 PUT /files/upload/{id}/chunk/0
+    """
+    svc = DriveService(db)
+    try:
+        session = await svc.init_chunked_upload(
+            user_id=user.id,
+            file_name=body.file_name,
+            file_size=body.file_size,
+            total_chunks=body.total_chunks,
+            file_hash=body.file_hash,
+            folder_id=body.folder_id,
+            visibility=body.visibility,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    return ChunkedUploadInitResponse(
+        upload_id=session.id,
+        object_name=f"drive-uploads/{session.id}/final",
+        total_chunks=session.total_chunks,
+        chunk_size_hint=5 * 1024 * 1024,
+        uploaded_chunks=list(session.uploaded_chunks or []),
+        expires_at=session.expires_at.isoformat(),
+    )
+
+
+@router.put("/files/upload/{upload_id}/chunk/{chunk_index}")
+async def upload_chunk(
+    upload_id: str,
+    chunk_index: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 上传单个 chunk (raw bytes body, NOT multipart)
+
+    - session 不存在 / 已完成 / 已过期 → 404
+    - chunk_index 越界 → 400
+    - 成功返回 {uploaded_chunks: [0, 1, ...], total_chunks}
+
+    注: 接收 raw bytes 而非 multipart File, 避免 5MB+ chunk 走 multipart 编码膨胀 33%
+    """
+    chunk_data = await request.body()
+    if not chunk_data:
+        raise HTTPException(status_code=400, detail="chunk body 为空")
+
+    svc = DriveService(db)
+    try:
+        session = await svc.upload_chunk(
+            session_id=upload_id,
+            user_id=user.id,
+            chunk_index=chunk_index,
+            chunk_data=chunk_data,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    return {
+        "upload_id": upload_id,
+        "uploaded_chunks": list(session.uploaded_chunks or []),
+        "total_chunks": session.total_chunks,
+    }
+
+
+@router.get("/files/upload/{upload_id}", response_model=ChunkedUploadStatusResponse)
+async def get_chunked_upload_status(
+    upload_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 断点续传 - 查 session 已传 chunks 列表
+
+    前端 reload 后调此端点 → 拿到 uploaded_chunks → 跳过这些索引
+    """
+    svc = DriveService(db)
+    session = await svc.get_chunked_session(upload_id, user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session 不存在或无权访问")
+
+    return ChunkedUploadStatusResponse(
+        upload_id=session.id,
+        file_name=session.file_name,
+        file_size=session.file_size,
+        total_chunks=session.total_chunks,
+        uploaded_chunks=list(session.uploaded_chunks or []),
+        status=session.status,
+        expires_at=session.expires_at.isoformat(),
+    )
+
+
+@router.post("/files/upload/{upload_id}/complete", response_model=DriveFileItem)
+async def complete_chunked_upload(
+    upload_id: str,
+    body: ChunkedUploadCompleteRequest = ChunkedUploadCompleteRequest(),
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 完成分片上传 → 拼接 → 创建 Knowledge 行
+
+    前置条件: 全部 chunks 已传 (uploaded_chunks == total_chunks)
+    副作用:
+    - session.status='completed'
+    - Fire-and-forget: 重算配额 + 生成缩略图
+    - 清 MinIO staging objects
+    """
+    svc = DriveService(db)
+    try:
+        new_file = await svc.complete_chunked_upload(
+            session_id=upload_id,
+            user_id=user.id,
+            change_note=body.change_note,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    return _to_item(new_file)
+
+
+@router.post("/files/upload/{upload_id}/abort", status_code=204)
+async def abort_chunked_upload(
+    upload_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 中止分片上传 + 清 MinIO staging"""
+    svc = DriveService(db)
+    success = await svc.abort_chunked_upload(upload_id, user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session 不存在或已完成")
+
+
+@router.get("/files/{file_id}/thumbnail", response_model=ThumbnailResponse)
+async def get_thumbnail(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR5: 获取文件缩略图信息
+
+    - status=ready → 返 thumbnail_url (MinIO 公开读 URL, 前端 <img src>)
+    - status=pending → 返 null URL, 前端 fallback 到 type icon
+    - status=failed → 同 pending, UI 可显示 retry 按钮
+
+    越权: 必须能 _can_see_file 才返 (复用 drive_service.get_file 路径)
+    """
+    svc = DriveService(db)
+    k = await svc.get_file(file_id, user.id)
+    if not k:
+        raise HTTPException(status_code=404, detail="文件不存在或无权访问")
+
+    thumb_url = None
+    if k.thumbnail_status == "ready" and k.thumbnail_path:
+        # 用 file_service.get_url 返 MinIO 公开读 URL
+        thumb_url = file_service.get_url(k.thumbnail_path, expires=3600)
+
+    return ThumbnailResponse(
+        file_id=file_id,
+        thumbnail_path=k.thumbnail_path,
+        thumbnail_status=k.thumbnail_status or "pending",
+        thumbnail_url=thumb_url,
+    )

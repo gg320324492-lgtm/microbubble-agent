@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, ARRAY, DateTime, JSON
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, Text, ARRAY, DateTime, JSON
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from app.core.database import Base
@@ -43,6 +43,15 @@ class Member(Base, TimestampMixin):
     voice_confirmed_at = Column(DateTime(timezone=True), nullable=True)  # 用户确认时间
     voice_confirmed_by = Column(String(50), nullable=True)  # 确认者 (username 或 "user")
     voice_confirmed_meeting_id = Column(Integer, nullable=True)  # 触发的会议 ID (audit)
+
+    # ==================== v2 PR5 网盘配额 2026-07-01 ====================
+    # drive_quota_bytes: 总配额 (默认 10GB); admin 可单独调
+    # drive_used_bytes: 已用字节数 (sum of file_size WHERE storage_mode='drive' AND deleted_at IS NULL)
+    # drive_quota_updated_at: drive_used_bytes 重算时间 (Celery hourly 重算)
+    drive_quota_bytes = Column(BigInteger, nullable=False, server_default="10737418240")  # 10 GB
+    drive_used_bytes = Column(BigInteger, nullable=False, server_default="0")
+    drive_quota_updated_at = Column(DateTime, nullable=True)
+    # ==================== /v2 PR5 ====================
 
     # 关系
     assigned_tasks = relationship("Task", back_populates="assignee", foreign_keys="Task.assignee_id")

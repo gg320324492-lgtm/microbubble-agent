@@ -40,9 +40,17 @@
       </el-tooltip>
     </div>
 
-    <!-- 大图标 -->
+    <!-- 大图标 / 缩略图 (PR5: thumbnail_status='ready' 时显示 <img>) -->
     <div class="file-card-icon">
-      <el-icon :size="viewMode === 'grid' ? 56 : 32">
+      <img
+        v-if="thumbnailUrl && file.storage_mode === 'drive'"
+        :src="thumbnailUrl"
+        :alt="file.title || file.file_name"
+        class="file-card-thumb"
+        @load="onThumbLoad"
+        @error="onThumbError"
+      />
+      <el-icon v-else :size="viewMode === 'grid' ? 56 : 32">
         <component :is="iconComponent" />
       </el-icon>
     </div>
@@ -122,8 +130,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import {
   Document, Picture, VideoCamera, Headset, Download, View, MoreFilled,
   Tickets, DataAnalysis, Star, StarFilled  // v2 PR2
@@ -180,6 +189,38 @@ function handleDownload() {
   const url = `/api/v1/drive/files/${props.file.id}/download?disposition=attachment`
   window.open(url, '_blank')
 }
+
+// === v2 PR5: 缩略图 (优先用后端给的 thumbnail_url, 懒加载) ===
+const thumbnailUrl = ref(null)
+
+async function loadThumbnail() {
+  // 触发条件: storage_mode=drive + thumbnail_status='ready' (其他状态不请求, 走 type icon fallback)
+  if (props.file.storage_mode !== 'drive') return
+  if (props.file.thumbnail_status !== 'ready') return
+  try {
+    const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/thumbnail`)
+    if (resp.data.thumbnail_url) {
+      thumbnailUrl.value = resp.data.thumbnail_url
+    }
+  } catch (e) {
+    // 失败 silent fallback 到 type icon
+    thumbnailUrl.value = null
+  }
+}
+
+function onThumbLoad() {
+  // 缩略图加载成功 (留作埋点 hook)
+}
+
+function onThumbError() {
+  // MinIO URL 过期 / bucket 不可达 → fallback 到 type icon
+  thumbnailUrl.value = null
+}
+
+// PR5: onMounted 触发懒加载 (不要 watch props.file 避免滚动时反复请求)
+onMounted(() => {
+  loadThumbnail()
+})
 </script>
 
 <style scoped>
@@ -266,6 +307,15 @@ function handleDownload() {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* v2 PR5: 缩略图 (替代 type icon) */
+.file-card-thumb {
+  max-width: 80px;
+  max-height: 80px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: var(--color-bg-light, #fafbfc);
 }
 
 .file-card.is-private .file-card-icon {

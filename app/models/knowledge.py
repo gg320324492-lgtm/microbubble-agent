@@ -90,6 +90,16 @@ class Knowledge(Base, TimestampMixin):
     version_number = Column(Integer, nullable=False, server_default="1")
     # ==================== /v2 PR4 ====================
 
+    # ==================== v2 PR5 缩略图字段 2026-07-01 ====================
+    # thumbnail_path: MinIO object_name (thumbnails/{file_id}.jpg), NULL = 未生成
+    # thumbnail_status: pending | ready | failed
+    # thumbnail_generated_at: 生成完成时间戳
+    # 部分索引: ix_knowledge_thumb_pending (WHERE status='pending' AND storage_mode='drive')
+    thumbnail_path = Column(String(500), nullable=True)
+    thumbnail_status = Column(String(16), nullable=False, server_default="pending")
+    thumbnail_generated_at = Column(DateTime, nullable=True)
+    # ==================== /v2 PR5 ====================
+
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 
@@ -156,3 +166,44 @@ class KnowledgeVersion(Base):
     uploaded_by = Column(Integer, ForeignKey("members.id"), nullable=False)
     change_note = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default="now()")
+
+
+class ChunkedUploadSession(Base):
+    """分片上传 + 断点续传 session (v2 PR5 引入)
+
+    设计原则 (简化版, 不走 S3 真分片 API):
+    - 前端把大文件切成 N 个 chunk (默认 5MB/chunk), 顺序 POST /files/upload/chunk/{idx}
+    - 每个 chunk 完整写入 MinIO 的临时 staging object (upload_id/chunk_{idx})
+    - /complete 把所有 chunks 顺序拼接 → 最终 object_name → 创建 Knowledge 行
+    - /abort 删除 staging object 和 session
+
+    断点续传:
+    - 前端 reload 页面 / 切换网络 → 从 localStorage 读 upload_id → GET /files/upload/{id}
+    - 端点返 { uploaded_chunks: [0,1,3], total_chunks: 5 } → 前端跳 4 和 2 重传
+    - 服务端按需从已上传 chunks 拼接到当前位置
+
+    字段:
+    - id: uuid hex (32 chars), upload_id
+    - uploaded_chunks: 已成功上传的 chunk 索引列表 (ARRAY)
+    - status: active | completed | aborted | expired
+    - expires_at: 24h 后, Celery beat 清理
+    """
+    __tablename__ = "chunked_upload_sessions"
+
+    id = Column(String(32), primary_key=True)
+    user_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True)
+    file_name = Column(String(500), nullable=False)
+    file_size = Column(BigInteger, nullable=False)
+    file_hash = Column(String(64), nullable=True)
+    folder_id = Column(Integer, nullable=True)
+    visibility = Column(String(16), nullable=False, server_default="team")
+    total_chunks = Column(Integer, nullable=False)
+    uploaded_chunks = Column(ARRAY(Integer), nullable=False, server_default="{}")
+    status = Column(String(16), nullable=False, server_default="active")
+    object_name = Column(String(500), nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default="now()")
+    expires_at = Column(DateTime, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<ChunkedUploadSession(id='{self.id[:8]}...', user_id={self.user_id}, status='{self.status}', chunks={len(self.uploaded_chunks or [])}/{self.total_chunks})>"
