@@ -764,3 +764,99 @@ curl https://agent.mnb-lab.cn/health
 | 模型下载超时 | 在 `.env` 中设置 `HF_ENDPOINT=https://hf-mirror.com` |
 | 端口冲突 | `sudo netstat -tlnp \| grep -E "80\|443\|8000\|9000"` |
 | 前端白屏 | `ls web/dist/index.html`（不存在则 `cd web && npm run build`） |
+
+## 八、新成员 setup（CLAUDE.md 2026-07-01 安全事件沉淀）
+
+新成员 clone 项目后，**必须**做 3 步才能正常工作：
+
+```bash
+# 1. 配置 .env
+cp .env.example .env
+# ⚠️ SECRET_KEY 必须用强随机, 不能用默认占位符 change-this-to-a-...
+python -c "import secrets; print(secrets.token_urlsafe(64))"  # 生成新密钥
+# 编辑 .env 替换 SECRET_KEY= 这行
+
+# 2. 安装 git hooks (防御未来 secrets/dist 误提交)
+bash scripts/setup-hooks.sh
+
+# 3. 验证 hooks 配置正确
+bash scripts/setup-hooks.sh --check
+# 期望输出:
+#   ✅ pre-commit 已正确配置 (secrets + dist)
+#   ✅ post-commit 已正确配置 (auto-push main)
+```
+
+**setup-hooks.sh 安装的 hooks**：
+
+| Hook | 行为 | 防什么 |
+|------|------|--------|
+| `pre-commit` | secrets check (hard block) | admin JWT / refresh token / `_login.json` 等敏感文件入库 |
+| `pre-commit` | dist check (soft auto-fix) | 漏 `git add -f web/dist/` 触发服务器 404（CLAUDE.md 2026-06-26 教训） |
+| `pre-commit` | token-orphan (hard block) | `var(--xxx)` 引用未定义 CSS token |
+| `post-commit` | auto `git push origin main` | 手动 push 易忘，main 分支自动 push |
+
+**如果旧 hook 已存在**：`setup-hooks.sh` 会备份到 `pre-commit.bak.<timestamp>` 再覆盖，不会丢旧逻辑。
+
+**检查模式（CI 或新成员验证用）**：
+
+```bash
+bash scripts/setup-hooks.sh --check
+# exit 0 = 全部正确; exit 1 = 有 hook 缺失或过时
+```
+
+### 8.1 故障排查：hook 不工作
+
+| 症状 | 修复 |
+|------|------|
+| `git commit` 没自动跑 secrets check | `bash scripts/setup-hooks.sh` 重装 |
+| hook 脚本没执行权限 | `chmod +x .git/hooks/pre-commit .git/hooks/post-commit` |
+| Windows Git Bash 报 `'\r': command not found` | hook 文件应是 LF 换行（不是 CRLF），用 `dos2unix .git/hooks/pre-commit` 修复 |
+| 修改 `.env` 后旧 JWT 仍 401 | SECRET_KEY 变了，强制重新登录（用 `username` + 新密码） |
+
+### 8.2 SECRET_KEY 轮换（安全事件响应）
+
+```bash
+# 1. 生成新密钥
+NEW_SECRET=$(python -c "import secrets; print(secrets.token_urlsafe(64))")
+
+# 2. 备份 + 替换
+cp .env .env.backup-$(date +%Y%m%d)
+sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$NEW_SECRET|" .env
+
+# 3. 重启 backend (新密钥生效)
+docker compose restart app celery-worker celery-beat
+
+# 4. 验证旧 token 失效
+FAKE_TOKEN="eyJ...fake..."
+curl -sk -o /dev/null -w "%{http_code}\n" http://localhost:8000/api/v1/auth/me \
+    -H "Authorization: Bearer $FAKE_TOKEN"
+# 期望: 401 (旧 secret 签的 token)
+```
+
+⚠️ **轮换后所有用户必须重新登录**（access_token + refresh_token 全部失效）。
+
+### 8.3 admin 密码重置
+
+```bash
+# 在容器内 (有 bcrypt + DB 连接)
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 python << 'PYEOF'
+import asyncio
+from sqlalchemy import text
+from app.core.database import async_session
+from app.core.security import get_password_hash
+
+async def main():
+    new_hash = get_password_hash("新密码")
+    async with async_session() as s:
+        await s.execute(
+            text("UPDATE members SET password_hash = :h WHERE role = 'admin'"),
+            {"h": new_hash}
+        )
+        await s.commit()
+    print(f"已重置所有 admin 密码 (hash prefix: {new_hash[:30]})")
+
+asyncio.run(main())
+PYEOF
+```
+
+⚠️ **不要用 123456 这种弱密码**！bot/dictionary 攻击秒破。建议强随机 + 16 字符以上 + 字母数字符号混合。
