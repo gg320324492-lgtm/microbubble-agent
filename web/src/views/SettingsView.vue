@@ -71,7 +71,7 @@
           <!-- 只读信息 -->
           <el-divider />
           <el-form-item label="角色">
-            <el-tag :type="roleTagType">{{ form.roleLabel }}</el-tag>
+            <el-tag :type="roleTagType" class="role-tag">{{ form.roleLabel }}</el-tag>
           </el-form-item>
           <el-form-item label="年级">
             <span class="readonly-text">{{ form.grade || '未填写' }}</span>

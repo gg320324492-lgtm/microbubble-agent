@@ -155,8 +155,8 @@ test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
     await page2.goto(`${BASE_URL}${memberId}`, { waitUntil: 'networkidle' })
     await page2.waitForTimeout(800)
 
-    // 断言 hero-tags 第一个 el-tag (role chip) 主色实色
-    const heroStyle = await getChipStyle(page2, '.hero-tags .el-tag')
+    // 断言 1: hero-tags 第一个 el-tag (role chip) 主色实色
+    const heroStyle = await getChipStyle(page2, '.hero-tags > .el-tag:not(.voice-tag)')
     if (!heroStyle) {
       test.skip(true, 'mobile detail 页没渲染 hero-tags (可能 mock data 缺)')
       return
@@ -172,6 +172,56 @@ test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
     }
     if (heroStyle.fontWeight !== '600') {
       throw new Error(`mobile hero role chip font-weight expected 600, got ${heroStyle.fontWeight}`)
+    }
+
+    // 断言 2: voice-tag (如果存在) 仍走 success/warning (排除规则生效)
+    const voiceStyle = await getChipStyle(page2, '.hero-tags .voice-tag')
+    if (voiceStyle) {
+      // voice 应该 *不是* 主色实色 — 是 EP success 绿 / warning 黄
+      const voiceRgb = parseRgb(voiceStyle.bg)
+      const primaryRgb = parseRgb('rgb(255, 122, 92)')
+      const sameAsPrimary = voiceRgb && primaryRgb && voiceRgb.every((v, i) => Math.abs(v - primaryRgb[i]) < 5)
+      if (sameAsPrimary) {
+        throw new Error(`voice-tag 被强制覆盖成主色 — :not(.voice-tag) 排除规则没生效. 实际 bg=${voiceStyle.bg} (text="${voiceStyle.text}")`)
+      }
+      console.log(`P0-2 voice-tag 排除 OK: bg=${voiceStyle.bg} text="${voiceStyle.text}"`)
+    } else {
+      console.log('P0-2 voice-tag 在当前 mock 数据中不存在 (该成员 voice_enrolled_at 为空), 排除规则未实测')
+    }
+  })
+
+  // Step 2 P0-3: SettingsView "角色" chip 主色实色
+  test('P0-3: SettingsView 角色 chip 主色实色 (orange/light)', async ({ page }) => {
+    await setupPage(page, { theme: 'light', accent: 'orange' })
+    await page.goto(`${BASE_URL}/settings`, { waitUntil: 'networkidle' })
+    await page.waitForTimeout(800)
+
+    const roleTagStyle = await page.evaluate(() => {
+      const el = document.querySelector('.el-form .role-tag')
+      if (!el) return null
+      const cs = getComputedStyle(el)
+      return {
+        bg: cs.backgroundColor,
+        color: cs.color,
+        fontWeight: cs.fontWeight,
+        text: el.textContent.trim().slice(0, 12),
+      }
+    })
+    if (!roleTagStyle) {
+      test.skip(true, 'SettingsView 没渲染 .role-tag (可能用户 admin role 或 form 未加载)')
+      return
+    }
+    const expectedRgb = parseRgb('rgb(255, 122, 92)')
+    const actualRgb = parseRgb(roleTagStyle.bg)
+    const bgMatch = actualRgb && expectedRgb && actualRgb.every((v, i) => Math.abs(v - expectedRgb[i]) < 5)
+    if (!bgMatch) {
+      throw new Error(`SettingsView .role-tag bg expected rgb(255, 122, 92), got ${roleTagStyle.bg} (text="${roleTagStyle.text}")`)
+    }
+    if (!roleTagStyle.color.includes('255, 255, 255')) {
+      throw new Error(`SettingsView .role-tag color expected white, got ${roleTagStyle.color}`)
+    }
+    if (roleTagStyle.fontWeight !== '600') {
+      throw new Error(`SettingsView .role-tag font-weight expected 600, got ${roleTagStyle.fontWeight}`)
     }
   })
 })
