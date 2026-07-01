@@ -1,0 +1,1 @@
+import{$n as e,Vr as t,hr as n,vr as r,xr as i}from"./element-plus-desktop-e74e196a.js";import{t as a}from"./useTask-b9e2f5bc.js";var o={class:`task-list`},s={__name:`TaskList`,setup(s,{expose:c}){let{tasks:l,loading:u,fetchTasks:d}=a();return n(()=>{d()}),c({fetchTasks:d}),(n,a)=>(r(),e(`div`,o,[i(n.$slots,`default`,{tasks:t(l),loading:t(u)})]))}};export{s as default};

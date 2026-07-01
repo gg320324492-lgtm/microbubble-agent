@@ -295,7 +295,14 @@ class DriveService:
         elif not include_deleted:
             filters.append(Knowledge.deleted_at.is_(None))
         if folder_id is not None:
+            # v2 PR3 修复: folder_id 显式时只返该 folder 的文件
             filters.append(Knowledge.folder_id == folder_id)
+        elif folder_id is None:
+            # v2 PR3 修复: 默认 (folder_id=None) 是"顶级根目录", 仅 folder_id IS NULL
+            # 之前不过滤会把子目录里的文件也带回来, 与 DesktopDriveView UI 不一致
+            # (DesktopDriveView 'selectedFolderId.value = null' = 顶级, 用户期望"只看根")
+            # 行为兼容: 不动 service 调用方, 默认语义升级
+            filters.append(Knowledge.folder_id.is_(None))
         if visibility_filter:
             filters.append(Knowledge.visibility == visibility_filter)
         if starred_only:

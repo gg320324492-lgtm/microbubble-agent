@@ -34,6 +34,7 @@
           @delete="handleDeleteKnowledge"
           @download="downloadFile"
           @retry="fetchKnowledge"
+          @navigate="handleDashboardNavigate"
         />
 
         <!-- 健康度摘要 -->
@@ -43,6 +44,17 @@
           <el-tag type="warning" size="small" effect="plain">🧪 假设 {{ hypothesisTotal }}</el-tag>
           <el-tag type="primary" size="small" effect="plain">📐 公式 {{ formulaTotal }}</el-tag>
           <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
+          <!-- v2 PR3: 跳转 chip 到网盘 -->
+          <el-tag
+            class="health-summary-drive-chip"
+            type="danger"
+            size="small"
+            effect="plain"
+            @click="$router.push('/drive')"
+            style="cursor: pointer;"
+          >
+            📁 网盘 →
+          </el-tag>
         </div>
 
         <div v-if="total > pageSize" class="pagination">
@@ -228,6 +240,11 @@ const handleViewDetail = (id) => {
     searchAnalytics.recordClick(id, position)
   }
   router.push('/knowledge/' + id)
+}
+
+// v2 PR3: KB Dashboard 跳转 chip (📁 网盘 → /drive) — 走 router.push
+const handleDashboardNavigate = (route) => {
+  router.push(route)
 }
 
 const handleFilter = (filters) => {
@@ -537,5 +554,18 @@ onUnmounted(() => {
 [data-theme="dark"] .health-summary {
   background: var(--color-bg-card);
   border-color: var(--color-border-light);
+}
+[data-theme="dark"] .health-summary-drive-chip {
+  background: var(--color-danger-bg, rgba(245, 108, 108, 0.12));
+  color: var(--color-danger);
+}
+</style>
+
+<!-- v2 PR3: 📁 网盘 chip hover 高亮 (scoped, 仅 light 主题需要) -->
+<style scoped>
+.health-summary-drive-chip:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  transition: transform 0.15s var(--ease-out, ease);
 }
 </style>

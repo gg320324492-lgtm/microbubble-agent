@@ -22,9 +22,10 @@
           :key="cat.name"
           class="category-chip"
           :class="{
-            'category-active': cat.isSystem
+            'category-active': !cat.isNavigate && (cat.isSystem
               ? (activeSourceType === cat.sourceType)
-              : (activeCategory === cat.name),
+              : (activeCategory === cat.name)),
+            'is-navigate': cat.isNavigate
           }"
           @click="handleCategoryClick(cat)"
         >
@@ -119,10 +120,12 @@ const presetCategories = [
   { name: '笔记', icon: '📝' },
   { name: '手册', icon: '📚' },
   // #043: 系统分类 (走 source_type 过滤不走 category)
-  { name: '自动拓展', icon: '✨', isSystem: true, sourceType: 'auto_expansion' }
+  { name: '自动拓展', icon: '✨', isSystem: true, sourceType: 'auto_expansion' },
+  // v2 PR3: 跳转 chip 到网盘 (独立 chip 类型 isNavigate, 走 router push)
+  { name: '网盘', icon: '📁', isNavigate: true, route: '/drive' }
 ]
 
-// #043: chip 点击分流 (system chip 走 source_type, 其他走 category)
+// #043: chip 点击分流 (system chip 走 source_type, 其他走 category; v2 PR3 加 isNavigate 跳路由)
 const emit = defineEmits([
   'filter-category',
   'filter-source-type',
@@ -134,10 +137,16 @@ const emit = defineEmits([
   'edit',
   'delete',
   'download',
-  'retry'  // 2026-06-30: loadError 三态空态, 错误时重试
+  'retry',  // 2026-06-30: loadError 三态空态, 错误时重试
+  'navigate'  // v2 PR3: 跳转 chip emit, 父级响应 router.push
 ])
 
 const handleCategoryClick = (cat) => {
+  // v2 PR3: 跳转 chip 不参与过滤, 直接 emit navigate 让父级 router.push
+  if (cat.isNavigate) {
+    emit('navigate', cat.route)
+    return
+  }
   // 2026-06-30 修复: chip 再点一次 = 清除过滤
   // 旧版只 emit 一次 → 用户点过 "✨ 自动拓展" 后 ref 永远停在 'auto_expansion'
   // → fetchKnowledge 永远拼 source_type=auto_expansion → 0 条 → 5 个统计全 0
@@ -273,6 +282,17 @@ const displayedItems = computed(() => {
   background: var(--color-primary-bg);
   color: var(--color-primary);
   border-color: var(--color-primary-border);
+}
+
+/* v2 PR3: 跳转 chip 用 danger 边框 (与"入网盘"色系匹配) — 不是 filter chip, 永远不 active */
+.category-chip.is-navigate {
+  border-color: var(--color-danger-border, rgba(245, 108, 108, 0.3));
+  color: var(--color-danger, #f56c6c);
+}
+.category-chip.is-navigate:hover {
+  background: var(--color-danger-bg, rgba(245, 108, 108, 0.12));
+  color: var(--color-danger, #f56c6c);
+  border-color: var(--color-danger, #f56c6c);
 }
 
 .category-active {
