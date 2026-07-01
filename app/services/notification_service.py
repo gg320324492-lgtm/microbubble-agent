@@ -33,7 +33,7 @@ from app.models.member import Member
 logger = logging.getLogger(__name__)
 
 # @ 提及正则: @张三 / @王天志 (中文 2-4 字)
-_MENTION_PATTERN = re.compile(r"@([一-龥A-Za-z]{1,16})")
+_MENTION_PATTERN = re.compile(r"@([一-龥A-Za-z0-9_]{1,32})")
 
 
 class NotificationService:

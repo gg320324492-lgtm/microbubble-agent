@@ -78,16 +78,20 @@ class CommentService:
         except Exception as e:
             logger.warning(f"[Comment] @ 解析失败: {e}", exc_info=True)
 
-        # 3) 批量写 file_mention
+        # 3) 批量写 file_mention (24h dedup; 返 [新创建的] 列表而非输入列表)
+        new_mentioned_ids: List[int] = []
         if mentioned_user_ids:
             try:
-                await notification_service.create_bulk_mentions(
+                new_mentions = await notification_service.create_bulk_mentions(
                     db,
                     file_id=file_id,
                     mentioned_user_ids=mentioned_user_ids,
                     mentioned_by=user_id,
                     context="comment",
                 )
+                new_mentioned_ids = [m.mentioned_user_id for m in new_mentions]
+                # 更新 comment.mentions 为 [新创建] (而不是 [输入]) — 反映真实触发
+                comment.mentions = new_mentioned_ids or None
             except Exception as e:
                 logger.warning(f"[Comment] mention 创建失败: {e}", exc_info=True)
 
@@ -117,9 +121,9 @@ class CommentService:
 
         logger.info(
             f"[Comment] created id={comment.id} file={file_id} user={user_id} "
-            f"mentions={len(mentioned_user_ids)}"
+            f"mentions={len(new_mentioned_ids)} (input={len(mentioned_user_ids)})"
         )
-        return comment, mentioned_user_ids
+        return comment, new_mentioned_ids
 
     @staticmethod
     async def list_comments(
