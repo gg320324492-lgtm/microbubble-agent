@@ -64,6 +64,9 @@ class DriveFileItem(BaseModel):
     download_count: int = 0
     share_token: Optional[str] = None
     share_expires_at: Optional[str] = None
+    # v2 PR2: 收藏字段
+    is_starred: bool = False
+    starred_at: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -112,6 +115,8 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         download_count=k.download_count or 0,
         share_token=k.share_token,
         share_expires_at=str(k.share_expires_at) if k.share_expires_at else None,
+        is_starred=bool(k.is_starred),
+        starred_at=str(k.starred_at) if k.starred_at else None,
     )
 
 
@@ -225,20 +230,42 @@ async def list_drive_files(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
     include_deleted: bool = Query(False),
+    # v2 PR2: sort + filter 新参数
+    sort_by: Optional[str] = Query(
+        None,
+        description="排序字段: created_at | updated_at | file_name | starred_at",
+    ),
+    sort_order: Optional[str] = Query("desc", description="asc | desc"),
+    starred_only: bool = Query(False, description="仅显示收藏"),
+    file_type: Optional[str] = Query(
+        None,
+        description="类型过滤: pdf | image | video | office | text",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """列 drive 文件 (含越权过滤: private 仅 owner 可见)"""
+    """列 drive 文件 (含越权过滤: private 仅 owner 可见)
+
+    v2 PR2: 支持 sort_by/sort_order/starred_only/file_type.
+    - sort_by 默认 None = 维持原 created_at desc 行为 (向后兼容)
+    """
     svc = DriveService(db)
-    items, total = await svc.list_files(
-        current_user_id=current_user.id,
-        folder_id=folder_id,
-        visibility_filter=visibility,
-        storage_mode="drive",
-        include_deleted=include_deleted,
-        page=page,
-        page_size=page_size,
-    )
+    try:
+        items, total = await svc.list_files(
+            current_user_id=current_user.id,
+            folder_id=folder_id,
+            visibility_filter=visibility,
+            storage_mode="drive",
+            include_deleted=include_deleted,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by or "created_at",
+            sort_order=sort_order or "desc",
+            starred_only=starred_only,
+            file_type=file_type,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
     return DriveFileListResponse(
         items=[_to_item(x) for x in items],
         total=total,
@@ -341,6 +368,236 @@ async def extract_to_kb(
     if f is None:
         raise HTTPException(status_code=404, detail="file 不存在或非 owner")
     return _to_item(f)
+
+
+# ==========================================================
+# v2 PR2: 回收站 + 收藏 + 批量操作
+# ==========================================================
+
+
+class TrashListResponse(BaseModel):
+    """v2 PR2: 回收站列表响应 (复用 DriveFileListResponse schema)"""
+    items: List[DriveFileItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class StarredListResponse(BaseModel):
+    """v2 PR2: 收藏列表响应"""
+    items: List[DriveFileItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class ToggleStarResponse(BaseModel):
+    """v2 PR2: 收藏切换响应"""
+    file_id: int
+    is_starred: bool
+    starred_at: Optional[str] = None
+
+
+class BatchIdsRequest(BaseModel):
+    """v2 PR2: 通用 batch ids body"""
+    file_ids: List[int]
+
+
+class BatchMoveRequest(BaseModel):
+    """v2 PR2: 批量移动请求体"""
+    file_ids: List[int]
+    target_folder_id: Optional[int] = None  # None = 顶级
+
+
+class BatchVisibilityRequest(BaseModel):
+    """v2 PR2: 批量改可见性请求体"""
+    file_ids: List[int]
+    visibility: str  # private | team | public
+
+
+class BatchOperationResponse(BaseModel):
+    """v2 PR2: 批量操作统一响应"""
+    succeeded_count: int
+    skipped_ids: List[int]
+    skipped_reasons: Optional[dict] = None  # {file_id: "越权/folder不兼容/不在trash/..."}
+
+
+# ---------- 收藏 ----------
+
+@router.post("/files/{file_id}/toggle-star", response_model=ToggleStarResponse)
+async def toggle_file_star(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """切换文件收藏状态 (owner only). 隐身 404 给非 owner."""
+    svc = DriveService(db)
+    f = await svc.toggle_star_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+    return ToggleStarResponse(
+        file_id=f.id,
+        is_starred=bool(f.is_starred),
+        starred_at=str(f.starred_at) if f.starred_at else None,
+    )
+
+
+# ---------- 收藏列表 ----------
+
+@router.get("/starred", response_model=StarredListResponse)
+async def list_starred_files(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    sort_by: Optional[str] = Query("starred_at", description="starred_at | created_at | updated_at"),
+    sort_order: Optional[str] = Query("desc"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """列我收藏的文件 (仅 created_by == me)."""
+    svc = DriveService(db)
+    items, total = await svc.list_starred(
+        current_user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by or "starred_at",
+        sort_order=sort_order or "desc",
+    )
+    return StarredListResponse(
+        items=[_to_item(x) for x in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+# ---------- 回收站 ----------
+
+@router.get("/trash", response_model=TrashListResponse)
+async def list_trash_files(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    sort_by: Optional[str] = Query("deleted_at"),
+    sort_order: Optional[str] = Query("desc"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """列回收站文件 (软删的 drive 文件, 仅 owner)."""
+    svc = DriveService(db)
+    items, total = await svc.list_trash(
+        current_user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by or "deleted_at",
+        sort_order=sort_order or "desc",
+    )
+    return TrashListResponse(
+        items=[_to_item(x) for x in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/trash/permanent-delete", response_model=BatchOperationResponse)
+async def permanent_delete_files(
+    payload: BatchIdsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量物理删除回收站中的文件 (owner only, 不可逆)."""
+    svc = DriveService(db)
+    deleted, skipped = await svc.permanent_delete_batch(
+        payload.file_ids, current_user_id=current_user.id,
+    )
+    return BatchOperationResponse(
+        succeeded_count=deleted,
+        skipped_ids=skipped,
+        skipped_reasons={fid: "不在回收站/不存在/非 owner" for fid in skipped},
+    )
+
+
+# ---------- 批量操作 ----------
+
+@router.post("/files/batch-soft-delete", response_model=BatchOperationResponse)
+async def batch_soft_delete_files(
+    payload: BatchIdsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量软删 (进入回收站)."""
+    svc = DriveService(db)
+    deleted, skipped = await svc.batch_soft_delete(
+        payload.file_ids, current_user_id=current_user.id,
+    )
+    return BatchOperationResponse(
+        succeeded_count=deleted,
+        skipped_ids=skipped,
+        skipped_reasons={fid: "不存在/非 owner" for fid in skipped},
+    )
+
+
+@router.post("/files/batch-restore", response_model=BatchOperationResponse)
+async def batch_restore_files(
+    payload: BatchIdsRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量从回收站恢复."""
+    svc = DriveService(db)
+    restored, skipped = await svc.batch_restore(
+        payload.file_ids, current_user_id=current_user.id,
+    )
+    return BatchOperationResponse(
+        succeeded_count=restored,
+        skipped_ids=skipped,
+        skipped_reasons={fid: "不在回收站/不存在/非 owner" for fid in skipped},
+    )
+
+
+@router.post("/files/batch-move", response_model=BatchOperationResponse)
+async def batch_move_files(
+    payload: BatchMoveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量移动到 folder (target_folder_id=None = 顶级)."""
+    svc = DriveService(db)
+    try:
+        moved, skipped = await svc.batch_move(
+            payload.file_ids,
+            target_folder_id=payload.target_folder_id,
+            current_user_id=current_user.id,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    return BatchOperationResponse(
+        succeeded_count=moved,
+        skipped_ids=skipped,
+        skipped_reasons={fid: "folder 上限/不存在/非 owner" for fid in skipped},
+    )
+
+
+@router.post("/files/batch-update-visibility", response_model=BatchOperationResponse)
+async def batch_update_files_visibility(
+    payload: BatchVisibilityRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量改可见性 (folder 上限校验)."""
+    svc = DriveService(db)
+    try:
+        updated, skipped = await svc.batch_update_visibility(
+            payload.file_ids,
+            new_visibility=payload.visibility,
+            current_user_id=current_user.id,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    return BatchOperationResponse(
+        succeeded_count=updated,
+        skipped_ids=skipped,
+        skipped_reasons={fid: "folder 上限/不存在/非 owner" for fid in skipped},
+    )
 
 
 # === 容量统计 ===

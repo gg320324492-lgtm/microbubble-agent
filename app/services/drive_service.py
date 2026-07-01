@@ -227,6 +227,11 @@ class DriveService:
         include_deleted: bool = False,
         page: int = 1,
         page_size: int = 50,
+        # v2 PR2: 新增 sort + filter 参数 (默认行为向后兼容)
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        starred_only: bool = False,
+        file_type: Optional[str] = None,
     ) -> Tuple[List[Knowledge], int]:
         """列 drive 文件 (含列表 SQL 越权防御)
 
@@ -237,20 +242,69 @@ class DriveService:
             storage_mode: 默认 drive (filter out kb)
             include_deleted: True = 含已软删 (admin)
             page, page_size: 分页
+            sort_by: 排序字段 (默认 created_at)
+            sort_order: asc / desc
+            starred_only: 仅 is_starred=true
+            file_type: pdf/image/video/office/text
 
         Returns:
             (items, total)
+        """
+        return await self._list_files_impl(
+            current_user_id=current_user_id,
+            folder_id=folder_id,
+            visibility_filter=visibility_filter,
+            storage_mode=storage_mode,
+            include_deleted=include_deleted,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            starred_only=starred_only,
+            file_type=file_type,
+        )
+
+    async def _list_files_impl(
+        self,
+        *,
+        current_user_id: int,
+        folder_id: Optional[int],
+        visibility_filter: Optional[str],
+        storage_mode: str,
+        include_deleted: bool,
+        page: int,
+        page_size: int,
+        sort_by: str,                # created_at | updated_at | file_name | file_size | starred_at
+        sort_order: str,             # asc | desc
+        starred_only: bool,
+        file_type: Optional[str],    # pdf | image | video | office | text | (None=全部)
+        deleted_only: bool = False,  # v2 PR2: trash 模式 exclusive filter
+    ) -> Tuple[List[Knowledge], int]:
+        """v2 PR2: 拆出 list_files 内部实现, 支持 sort_by / sort_order / starred_only / file_type.
+
+        对外保持向后兼容 (list_files 默认 sort=created_at desc).
+        v2 PR2: deleted_only=True 时仅返 deleted_at IS NOT NULL (回收站专用).
         """
         stmt = select(Knowledge)
         count_stmt = select(func.count(Knowledge.id))
 
         filters = [Knowledge.storage_mode == storage_mode]
-        if not include_deleted:
+        if deleted_only:
+            # 回收站模式: 只看 deleted_at IS NOT NULL (排除正常的活跃文件)
+            filters.append(Knowledge.deleted_at.isnot(None))
+        elif not include_deleted:
             filters.append(Knowledge.deleted_at.is_(None))
         if folder_id is not None:
             filters.append(Knowledge.folder_id == folder_id)
         if visibility_filter:
             filters.append(Knowledge.visibility == visibility_filter)
+        if starred_only:
+            filters.append(Knowledge.is_starred.is_(True))
+        if file_type:
+            # file_type 是扩展名大写组: pdf / image / video / office / text
+            ext_predicate = self._build_file_type_predicate(file_type)
+            if ext_predicate is not None:
+                filters.append(ext_predicate)
 
         # 核心隐私边界: private 文件仅 owner 可见
         visibility_see_cond = or_(
@@ -262,8 +316,12 @@ class DriveService:
         stmt = stmt.where(and_(*filters))
         count_stmt = count_stmt.where(and_(*filters))
 
-        # 排序: 最新的在前
-        stmt = stmt.order_by(Knowledge.created_at.desc())
+        # 排序
+        sort_column = self._resolve_sort_column(sort_by)
+        if sort_order == "asc":
+            stmt = stmt.order_by(sort_column.asc())
+        else:
+            stmt = stmt.order_by(sort_column.desc())
 
         # 分页
         offset = (page - 1) * page_size
@@ -275,6 +333,44 @@ class DriveService:
         total = count_result.scalar() or 0
 
         return items, total
+
+    @staticmethod
+    def _resolve_sort_column(sort_by: str):
+        """v2 PR2: 把前端 sort_by 字符串映射到 Knowledge 列对象.
+
+        'deleted_at' 是回收站专属, fallback 到 updated_at (回收站里 updated_at 通常是删除时间).
+        """
+        mapping = {
+            "created_at": Knowledge.created_at,
+            "updated_at": Knowledge.updated_at,
+            "file_name": Knowledge.file_name,
+            "starred_at": Knowledge.starred_at,
+            "deleted_at": Knowledge.updated_at,  # 回收站 fallback
+        }
+        if sort_by not in mapping:
+            raise DriveServiceError(f"不支持的排序字段 '{sort_by}'", status_code=400)
+        return mapping[sort_by]
+
+    @staticmethod
+    def _build_file_type_predicate(file_type: str):
+        """v2 PR2: 把文件类型枚举映射到 file_name 后缀 LIKE 条件.
+
+        返回 SQLAlchemy 列表达式 (用于 .where()), 无效类型返 None (不过滤).
+        """
+        type_to_ext = {
+            "pdf":   [".pdf"],
+            "image": [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"],
+            "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv"],
+            "office": [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"],
+            "text":  [".txt", ".md", ".log", ".csv"],
+        }
+        exts = type_to_ext.get(file_type.lower())
+        if not exts:
+            return None
+        # 用 OR 串接: file_name ILIKE '%.pdf' OR file_name ILIKE '%.jpg' ...
+        from sqlalchemy import or_ as _or
+        predicates = [Knowledge.file_name.ilike(f"%{ext}") for ext in exts]
+        return _or(*predicates)
 
     async def get_file(self, file_id: int, current_user_id: int) -> Optional[Knowledge]:
         """获取 drive 文件详情 (含越权防御)
@@ -741,3 +837,362 @@ class DriveService:
             f"folder={f.folder_id}"
         )
         return f
+
+    # ============================================================
+    # v2 PR2 收藏 / 回收站 / 批量操作
+    # ============================================================
+
+    async def toggle_star_file(self, file_id: int, current_user_id: int) -> Optional[Knowledge]:
+        """切换文件收藏状态 (owner only, 360° 翻转 is_starred).
+
+        Returns: 更新后的 Knowledge, None = 文件不存在或非 owner.
+        """
+        f = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id == file_id,
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        f = f.scalar_one_or_none()
+        if f is None or f.created_by != current_user_id:
+            return None  # 隐身
+        if f.is_starred:
+            f.is_starred = False
+            f.starred_at = None
+            action = "unstar"
+        else:
+            f.is_starred = True
+            f.starred_at = _to_naive_dt(datetime.now(timezone.utc))
+            action = "star"
+        await self.db.commit()
+        await self.db.refresh(f)
+        logger.info(f"[DriveService.toggle_star_file] id={f.id} {action}")
+        return f
+
+    async def list_trash(
+        self,
+        *,
+        current_user_id: int,
+        page: int = 1,
+        page_size: int = 50,
+        sort_by: str = "deleted_at",
+        sort_order: str = "desc",
+    ) -> Tuple[List[Knowledge], int]:
+        """v2 PR2: 列回收站文件 (软删的 drive 文件).
+
+        - 仅返回 created_by == current_user_id 的 (owner 隔离)
+        - deleted_at 必然非空
+        - 排序默认 deleted_at desc (最近删除在前)
+        - 注意: 这里**不**走 _list_files_impl, 因为要排除 storage_mode filter
+          (回收站也是 drive 文件, storage_mode='drive' 一致, 但 include_deleted=True 即可)
+        """
+        return await self._list_files_impl(
+            current_user_id=current_user_id,
+            folder_id=None,            # 回收站跨 folder 看
+            visibility_filter=None,    # 回收站混合
+            storage_mode="drive",
+            include_deleted=False,     # 用 deleted_only 替代 (exclusive filter)
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            starred_only=False,
+            file_type=None,
+            deleted_only=True,         # v2 PR2 fix: 仅 deleted_at IS NOT NULL
+        )
+
+    async def list_starred(
+        self,
+        *,
+        current_user_id: int,
+        page: int = 1,
+        page_size: int = 50,
+        sort_by: str = "starred_at",
+        sort_order: str = "desc",
+    ) -> Tuple[List[Knowledge], int]:
+        """v2 PR2: 列收藏文件 (is_starred=true).
+
+        - 仅返回 created_by == current_user_id (owner 隔离, 不让看别人收藏)
+        - sort_by 默认 starred_at desc (最近收藏在前)
+        """
+        return await self._list_files_impl(
+            current_user_id=current_user_id,
+            folder_id=None,
+            visibility_filter=None,
+            storage_mode="drive",
+            include_deleted=False,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            starred_only=True,         # ⭐ 关键
+            file_type=None,
+        )
+
+    async def batch_soft_delete(
+        self,
+        file_ids: List[int],
+        current_user_id: int,
+    ) -> Tuple[int, List[int]]:
+        """v2 PR2: 批量软删 (owner only, 非 owner 的 id 静默跳过).
+
+        Returns: (deleted_count, skipped_ids)
+        """
+        if not file_ids:
+            return 0, []
+        result = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id.in_(file_ids),
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        files = list(result.scalars().all())
+        now = _to_naive_dt(datetime.now(timezone.utc))
+        skipped = []
+        deleted = 0
+        for f in files:
+            if f.created_by != current_user_id:
+                skipped.append(f.id)
+                continue
+            f.deleted_at = now
+            deleted += 1
+        # 不在 file_ids 里的也入 skipped (前端提示 "id=X 不存在")
+        existing_ids = {f.id for f in files}
+        for fid in file_ids:
+            if fid not in existing_ids:
+                skipped.append(fid)
+        await self.db.commit()
+        logger.info(
+            f"[DriveService.batch_soft_delete] requested={len(file_ids)} "
+            f"deleted={deleted} skipped={len(skipped)}"
+        )
+        return deleted, skipped
+
+    async def batch_restore(
+        self,
+        file_ids: List[int],
+        current_user_id: int,
+    ) -> Tuple[int, List[int]]:
+        """v2 PR2: 批量恢复 (从回收站清 deleted_at).
+
+        - 仅 restore created_by == current_user_id 的
+        - 不在 trash 的 (deleted_at IS NULL) 也入 skipped
+        Returns: (restored_count, skipped_ids)
+        """
+        if not file_ids:
+            return 0, []
+        result = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id.in_(file_ids),
+                Knowledge.deleted_at.isnot(None),  # 必须真在 trash
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        files = list(result.scalars().all())
+        skipped = []
+        restored = 0
+        for f in files:
+            if f.created_by != current_user_id:
+                skipped.append(f.id)
+                continue
+            f.deleted_at = None
+            restored += 1
+        existing_ids = {f.id for f in files}
+        for fid in file_ids:
+            if fid not in existing_ids:
+                skipped.append(fid)
+        await self.db.commit()
+        logger.info(
+            f"[DriveService.batch_restore] requested={len(file_ids)} "
+            f"restored={restored} skipped={len(skipped)}"
+        )
+        return restored, skipped
+
+    async def batch_move(
+        self,
+        file_ids: List[int],
+        target_folder_id: Optional[int],
+        current_user_id: int,
+    ) -> Tuple[int, List[int]]:
+        """v2 PR2: 批量移动到 folder (target_folder_id=None = 顶级).
+
+        - 仅 owner 可移动
+        - target_folder 必须存在 + owner 一致
+        - 移动时 file.visibility 不得超过 folder.visibility (继承规则)
+        Returns: (moved_count, skipped_ids)
+        """
+        if not file_ids:
+            return 0, []
+        # 校验 target folder
+        target_folder = None
+        if target_folder_id is not None:
+            target_folder = await self.get_folder(target_folder_id)
+            if target_folder is None:
+                raise DriveServiceError(
+                    f"目标文件夹 id={target_folder_id} 不存在",
+                    status_code=404,
+                )
+            if target_folder.owner_id != current_user_id:
+                raise DriveServiceError(
+                    "无权操作他人的文件夹",
+                    status_code=403,
+                )
+        result = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id.in_(file_ids),
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        files = list(result.scalars().all())
+        skipped = []
+        moved = 0
+        for f in files:
+            if f.created_by != current_user_id:
+                skipped.append(f.id)
+                continue
+            if target_folder is not None:
+                self._validate_visibility_inherits(f.visibility, target_folder.visibility)
+            f.folder_id = target_folder_id
+            moved += 1
+        existing_ids = {f.id for f in files}
+        for fid in file_ids:
+            if fid not in existing_ids:
+                skipped.append(fid)
+        await self.db.commit()
+        logger.info(
+            f"[DriveService.batch_move] requested={len(file_ids)} "
+            f"moved={moved} skipped={len(skipped)} target={target_folder_id}"
+        )
+        return moved, skipped
+
+    async def batch_update_visibility(
+        self,
+        file_ids: List[int],
+        new_visibility: str,
+        current_user_id: int,
+    ) -> Tuple[int, List[int]]:
+        """v2 PR2: 批量改可见性 (private | team | public).
+
+        - 仅 owner 可改
+        - 越权 (folder 上限) 的文件入 skipped (不抛错, 让用户知道哪些被跳过)
+        Returns: (updated_count, skipped_ids)
+        """
+        if new_visibility not in ("private", "team", "public"):
+            raise DriveServiceError(
+                f"非法 visibility '{new_visibility}'",
+                status_code=400,
+            )
+        if not file_ids:
+            return 0, []
+        result = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id.in_(file_ids),
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        files = list(result.scalars().all())
+        skipped = []
+        updated = 0
+        for f in files:
+            if f.created_by != current_user_id:
+                skipped.append(f.id)
+                continue
+            if f.folder_id is not None:
+                folder = await self.get_folder(f.folder_id)
+                if folder is not None:
+                    try:
+                        self._validate_visibility_inherits(new_visibility, folder.visibility)
+                    except DriveServiceError:
+                        skipped.append(f.id)
+                        continue
+            f.visibility = new_visibility
+            updated += 1
+        existing_ids = {f.id for f in files}
+        for fid in file_ids:
+            if fid not in existing_ids:
+                skipped.append(fid)
+        await self.db.commit()
+        logger.info(
+            f"[DriveService.batch_update_visibility] requested={len(file_ids)} "
+            f"updated={updated} skipped={len(skipped)} vis={new_visibility}"
+        )
+        return updated, skipped
+
+    async def permanent_delete(
+        self,
+        file_id: int,
+        current_user_id: int,
+    ) -> bool:
+        """v2 PR2: 物理删除 (从回收站彻底删除, owner only).
+
+        Returns: True=成功, False=不存在或非 owner.
+        """
+        f = await self.db.execute(
+            select(Knowledge).where(Knowledge.id == file_id)
+        )
+        f = f.scalar_one_or_none()
+        if f is None or f.created_by != current_user_id:
+            return False
+        # 如果有 MinIO 对象, 删掉 (best-effort)
+        if f.file_path:
+            try:
+                file_service.delete_file(f.file_path)
+            except Exception as e:
+                logger.warning(
+                    f"[DriveService.permanent_delete] minio delete failed "
+                    f"id={f.id} path={f.file_path}: {e}"
+                )
+        await self.db.delete(f)
+        await self.db.commit()
+        logger.info(f"[DriveService.permanent_delete] id={f.id}")
+        return True
+
+    async def permanent_delete_batch(
+        self,
+        file_ids: List[int],
+        current_user_id: int,
+    ) -> Tuple[int, List[int]]:
+        """v2 PR2: 批量物理删除 (从回收站彻底删除一批).
+
+        Returns: (deleted_count, skipped_ids)
+        """
+        if not file_ids:
+            return 0, []
+        result = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id.in_(file_ids),
+                Knowledge.deleted_at.isnot(None),  # 必须真在 trash
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        files = list(result.scalars().all())
+        skipped = []
+        deleted = 0
+        for f in files:
+            if f.created_by != current_user_id:
+                skipped.append(f.id)
+                continue
+            # best-effort 删 MinIO 对象
+            if f.file_path:
+                try:
+                    file_service.delete_file(f.file_path)
+                except Exception as e:
+                    logger.warning(
+                        f"[DriveService.permanent_delete_batch] minio delete failed "
+                        f"id={f.id}: {e}"
+                    )
+            await self.db.delete(f)
+            deleted += 1
+        existing_ids = {f.id for f in files}
+        for fid in file_ids:
+            if fid not in existing_ids:
+                skipped.append(fid)
+        await self.db.commit()
+        logger.info(
+            f"[DriveService.permanent_delete_batch] requested={len(file_ids)} "
+            f"deleted={deleted} skipped={len(skipped)}"
+        )
+        return deleted, skipped

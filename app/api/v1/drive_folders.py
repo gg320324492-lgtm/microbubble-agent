@@ -249,3 +249,30 @@ async def restore_folder(
     if f is None:
         raise HTTPException(status_code=404, detail="folder 不存在或非 owner")
     return _to_item(f)
+
+
+# ============================================================
+# v2 PR2: folder 回收站列表端点 (与文件回收站对称)
+# ============================================================
+
+
+@router.get("/trash/list", response_model=FolderListResponse)
+async def list_trash_folders(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """列回收站中的 folder (deleted_at IS NOT NULL, 仅 owner)."""
+    svc = FolderService(db)
+    items, total = await svc.list_trash_folders(
+        current_user_id=current_user.id,
+        page=page,
+        page_size=page_size,
+    )
+    return FolderListResponse(
+        items=[_to_item(x) for x in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )

@@ -69,6 +69,14 @@ class Knowledge(Base, TimestampMixin):
     share_password = Column(String(64), nullable=True)
     # ==================== /v2 PR1 ====================
 
+    # ==================== v2 PR2 收藏星标 2026-07-01 ====================
+    # is_starred: 用户收藏标记 (True=收藏, False=普通)
+    # starred_at: 收藏时间 (用于 sort by starred_at desc; 取消收藏时重置为 NULL)
+    # 索引: ix_knowledge_starred (partial WHERE is_starred = true, alembic 043)
+    is_starred = Column(Boolean, nullable=False, server_default="false")
+    starred_at = Column(DateTime, nullable=True)
+    # ==================== /v2 PR2 ====================
+
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 

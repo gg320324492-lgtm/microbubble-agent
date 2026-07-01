@@ -51,18 +51,61 @@
       </div>
     </div>
 
+    <!-- v2 PR2: 排序 + 类型过滤 chip 行 -->
+    <div class="drive-filter-bar">
+      <div class="drive-filter-bar-left">
+        <el-dropdown trigger="click" @command="handleSortChange">
+          <el-button :icon="Sort">
+            排序: {{ sortLabel }}
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="created_at:desc">最新上传 ⬇️</el-dropdown-item>
+              <el-dropdown-item command="created_at:asc">最新上传 ⬆️</el-dropdown-item>
+              <el-dropdown-item command="updated_at:desc">最近修改 ⬇️</el-dropdown-item>
+              <el-dropdown-item command="file_name:asc">文件名 A-Z</el-dropdown-item>
+              <el-dropdown-item command="file_name:desc">文件名 Z-A</el-dropdown-item>
+              <el-dropdown-item command="starred_at:desc">收藏时间 ⬇️</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-dropdown trigger="click" @command="handleFileTypeChange">
+          <el-button :icon="Filter">
+            类型: {{ fileTypeLabel }}
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item :command="null">全部类型</el-dropdown-item>
+              <el-dropdown-item command="pdf">📄 PDF</el-dropdown-item>
+              <el-dropdown-item command="image">🖼️ 图片</el-dropdown-item>
+              <el-dropdown-item command="video">🎬 视频</el-dropdown-item>
+              <el-dropdown-item command="office">📊 Office</el-dropdown-item>
+              <el-dropdown-item command="text">📝 文本</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+      <div class="drive-filter-bar-right">
+        <span class="filter-stat">共 {{ total }} 项</span>
+      </div>
+    </div>
+
     <!-- 主体布局: 左侧 FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
     <div class="drive-main" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
-        <!-- PR3.2: FolderTree 组件 (含 FolderTreeNode 递归) -->
+        <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
         <FolderTree
           :folder-tree="folderTree"
           :selected-folder-id="selectedFolderId"
           :expanded-folder-ids="expandedFolderIds"
           :loading="treeLoading"
           :load-error="treeLoadError"
+          :special-view="specialView"
           @update:selected-folder-id="selectedFolderId = $event"
+          @update:special-view="specialView = $event"
           @toggle-expanded="toggleExpandedFolder"
           @retry="fetchFolderTree"
         />
@@ -72,11 +115,29 @@
         <div class="drive-breadcrumb">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/drive' }">我的网盘</el-breadcrumb-item>
-            <el-breadcrumb-item v-if="selectedFolderId">
+            <el-breadcrumb-item v-if="specialView === 'starred'">⭐ 我的收藏</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="selectedFolderId">
               文件夹 #{{ selectedFolderId }}
             </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
+
+        <!-- v2 PR2: 多选批量 toolbar (sticky 在 grid 上方) -->
+        <BatchActionToolbar
+          v-if="specialView !== 'trash'"
+          :selected-count="selectedFileIds.length"
+          :total-count="driveFiles.length"
+          context="files"
+          @select-all="selectAll"
+          @clear="clearSelection"
+          @batch-delete="handleBatchDelete"
+          @batch-move="handleBatchMove"
+          @batch-share="handleBatchShare"
+          @batch-download="handleBatchDownload"
+          @batch-update-visibility="handleBatchUpdateVisibility"
+          @batch-toggle-star="handleBatchToggleStar"
+        />
 
         <div class="drive-file-area">
           <!-- PR3.3: FileGrid 组件 -->
@@ -89,7 +150,7 @@
             :loading="filesLoading"
             :load-error="filesLoadError"
             :view-mode="viewMode"
-            :is-top-level="selectedFolderId === null"
+            :is-top-level="selectedFolderId === null && specialView === null"
             @retry="fetchDriveFiles"
             @file-click="handleFileClick"
             @file-preview="handleFilePreview"
@@ -100,6 +161,7 @@
             @file-share-link="handleFileShareLink"
             @file-delete="handleFileDelete"
             @toggle-select="toggleFileSelect"
+            @file-toggle-star="handleFileToggleStar"
             @page-change="onPageChange"
           />
         </div>
@@ -177,10 +239,12 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { Search, UploadFilled, Folder, Plus, Grid, List, Files } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Search, UploadFilled, Folder, Plus, Grid, List, Files, Sort, Filter, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
+import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
@@ -190,6 +254,8 @@ import ShareDialog from '@/components/drive/ShareDialog.vue'  // v2 PR1
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
+
+const router = useRouter()  // v2 PR2: 回收站路由跳转
 
 // === 文件夹树 (PR3.2 接入) ===
 const {
@@ -204,7 +270,7 @@ const {
   renameFolder: doRenameFolder
 } = useFolderTree()
 
-// === 文件列表 (PR3.3 接入 + v2 PR1) ===
+// === 文件列表 (PR3.3 接入 + v2 PR1 + v2 PR2 sort/filter/star/batch) ===
 const {
   driveFiles,
   total,
@@ -214,6 +280,7 @@ const {
   loadError: filesLoadError,
   selectedFileIds,
   fetchFiles: fetchDriveFiles,
+  fetchStarred,
   deleteFile,
   renameFile,
   moveFile,
@@ -221,14 +288,148 @@ const {
   extractToKb: doExtractToKb,
   createShareLink,
   revokeShareLink,
+  toggleStar,
+  batchSoftDelete,
+  batchMove: doBatchMove,
+  batchUpdateVisibility: doBatchUpdateVisibility,
   toggleSelect: toggleFileSelect,
-  clearSelection
+  clearSelection,
+  selectAll,
+  // v2 PR2: sort/filter state (双向绑定, 切文件夹/特殊视图保留)
+  sortBy, sortOrder, starredOnly, fileType
 } = useDriveFiles()
 
 // === 状态 ===
 const selectedFolderId = ref(null)
 const viewMode = ref('grid')  // grid | list
 const searchQuery = ref('')
+// v2 PR2: 特殊视图 (null | 'starred' | 'trash')
+const specialView = ref(null)
+
+// v2 PR2: sort/filter 标签 (computed)
+const SORT_LABELS = {
+  'created_at:desc': '最新上传 ⬇️',
+  'created_at:asc': '最新上传 ⬆️',
+  'updated_at:desc': '最近修改 ⬇️',
+  'file_name:asc': '文件名 A-Z',
+  'file_name:desc': '文件名 Z-A',
+  'starred_at:desc': '收藏时间 ⬇️',
+}
+const FILE_TYPE_LABELS = {
+  pdf: '📄 PDF', image: '🖼️ 图片', video: '🎬 视频',
+  office: '📊 Office', text: '📝 文本'
+}
+const sortLabel = computed(() => {
+  const key = `${sortBy.value}:${sortOrder.value}`
+  return SORT_LABELS[key] || SORT_LABELS['created_at:desc']
+})
+const fileTypeLabel = computed(() =>
+  fileType.value ? FILE_TYPE_LABELS[fileType.value] || fileType.value : '全部类型'
+)
+
+// v2 PR2: handlers
+function handleSortChange(cmd) {
+  const [sb, so] = cmd.split(':')
+  sortBy.value = sb
+  sortOrder.value = so
+  currentPage.value = 1
+  reloadCurrentView()
+}
+
+function handleFileTypeChange(cmd) {
+  fileType.value = cmd
+  currentPage.value = 1
+  reloadCurrentView()
+}
+
+async function reloadCurrentView() {
+  if (specialView.value === 'starred') {
+    starredOnly.value = true
+    await fetchStarred()
+  } else if (specialView.value === 'trash') {
+    // 跳到独立路由 (PR2 设计)
+    router.push('/drive/trash')
+  } else {
+    starredOnly.value = false
+    await fetchDriveFiles({ folder_id: selectedFolderId.value })
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedFileIds.value.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除 ${selectedFileIds.value.length} 个文件吗?`,
+      '批量删除',
+      { type: 'warning' }
+    )
+    const resp = await batchSoftDelete(selectedFileIds.value)
+    if (resp.skipped_ids?.length) {
+      ElMessage.warning(`已删除 ${resp.succeeded_count} 个, 跳过 ${resp.skipped_ids.length} 个`)
+    } else {
+      ElMessage.success(`已删除 ${resp.succeeded_count} 个文件`)
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
+  }
+}
+
+async function handleBatchMove() {
+  if (!selectedFileIds.value.length) return
+  moveTargetFileId.value = selectedFileIds.value  // 复用 MoveDialog
+  showMoveDialog.value = true
+}
+
+async function handleBatchShare() {
+  ElMessage.info('批量分享: 暂未实现, 请逐个使用分享按钮')
+}
+
+async function handleBatchDownload() {
+  ElMessage.info('批量下载: 暂未实现, 请逐个下载')
+}
+
+async function handleBatchUpdateVisibility(visibility) {
+  if (!selectedFileIds.value.length) return
+  try {
+    const resp = await doBatchUpdateVisibility(selectedFileIds.value, visibility)
+    if (resp.skipped_ids?.length) {
+      ElMessage.warning(`已改 ${resp.succeeded_count} 个, 跳过 ${resp.skipped_ids.length} 个 (folder 上限)`)
+    } else {
+      ElMessage.success(`已改 ${resp.succeeded_count} 个文件可见性为 ${visibility}`)
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '改可见性失败')
+  }
+}
+
+async function handleBatchToggleStar() {
+  if (!selectedFileIds.value.length) return
+  // 全部切换为 is_starred=true (简化 UX, 第二次点击取消)
+  let success = 0, fail = 0
+  for (const id of selectedFileIds.value) {
+    try {
+      const target = driveFiles.value.find(f => f.id === id)
+      if (target && !target.is_starred) {
+        await toggleStar(id)
+        success++
+      } else if (target && target.is_starred) {
+        await toggleStar(id)
+        success++
+      }
+    } catch (e) {
+      fail++
+    }
+  }
+  ElMessage.success(`已切换 ${success} 个文件收藏状态${fail ? `, 失败 ${fail}` : ''}`)
+}
+
+async function handleFileToggleStar(file) {
+  try {
+    await toggleStar(file.id)
+  } catch (e) {
+    ElMessage.error(e.message || '切换收藏失败')
+  }
+}
 
 // === PR3.5 文件夹拖拽 (主区域作为 drop zone) ===
 const driveMainRef = ref(null)
@@ -301,6 +502,24 @@ watch(selectedFolderId, (newId, oldId) => {
   if (newId !== oldId) {
     currentPage.value = 1
     fetchDriveFiles({ folder_id: newId })
+  }
+})
+
+// v2 PR2: 监听 specialView (starred | trash | null)
+watch(specialView, async (newView) => {
+  if (newView === 'starred') {
+    starredOnly.value = true
+    await fetchStarred()
+  } else if (newView === 'trash') {
+    // 跳到独立路由
+    router.push('/drive/trash')
+  } else {
+    starredOnly.value = false
+    if (selectedFolderId.value !== null) {
+      await fetchDriveFiles({ folder_id: selectedFolderId.value })
+    } else {
+      await fetchDriveFiles({ folder_id: null })
+    }
   }
 })
 
@@ -648,6 +867,23 @@ const currentPathDisplay = computed(() => {
   font-size: 11px;
   color: var(--color-text-placeholder, #909399);
   margin: 4px 0 0;
+}
+
+/* v2 PR2: 排序 + 类型过滤 bar */
+.drive-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 12px;
+  gap: 12px;
+}
+.drive-filter-bar-left {
+  display: flex;
+  gap: 8px;
+}
+.filter-stat {
+  font-size: 13px;
+  color: var(--color-text-secondary, #606266);
 }
 </style>
 

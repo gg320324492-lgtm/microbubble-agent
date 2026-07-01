@@ -31,6 +31,15 @@
       <el-checkbox :model-value="selected" @change="$emit('toggle-select', file.id)" />
     </div>
 
+    <!-- v2 PR2: 收藏按钮 (右上角镜像 checkbox 位置, 始终可见) -->
+    <div class="file-card-star" @click.stop="$emit('toggle-star', file)">
+      <el-tooltip :content="file.is_starred ? '取消收藏' : '加入收藏'" placement="top">
+        <el-icon :size="18" :class="{ 'is-starred': file.is_starred }">
+          <component :is="file.is_starred ? StarFilled : Star" />
+        </el-icon>
+      </el-tooltip>
+    </div>
+
     <!-- 大图标 -->
     <div class="file-card-icon">
       <el-icon :size="viewMode === 'grid' ? 56 : 32">
@@ -79,7 +88,10 @@
           <el-button size="small" :icon="MoreFilled" circle @click.stop />
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="rename">重命名</el-dropdown-item>
+              <el-dropdown-item command="toggle-star">
+                {{ file.is_starred ? '⭐ 取消收藏' : '⭐ 加入收藏' }}
+              </el-dropdown-item>
+              <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
               <el-dropdown-item command="move">移动</el-dropdown-item>
               <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
@@ -110,7 +122,7 @@ import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Document, Picture, VideoCamera, Headset, Download, View, MoreFilled,
-  Tickets, DataAnalysis  // PPT/Excel 占位
+  Tickets, DataAnalysis, Star, StarFilled  // v2 PR2
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -120,7 +132,7 @@ const props = defineProps({
   viewMode: { type: String, default: 'grid' }  // grid | list
 })
 
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'delete'])
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'delete', 'toggle-star'])
 
 // === 图标按 file_type 分类 ===
 const iconComponent = computed(() => {
@@ -219,6 +231,28 @@ function handleDownload() {
   top: 8px;
   left: 8px;
   z-index: 1;
+}
+
+/* v2 PR2: 收藏按钮 (右上角镜像 checkbox) */
+.file-card-star {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.file-card-star:hover {
+  background: var(--color-bg-hover, #f5f7fa);
+}
+.file-card-star .el-icon {
+  color: var(--color-text-placeholder, #909399);
+  transition: color 0.15s;
+}
+.file-card-star .el-icon.is-starred {
+  color: var(--color-warning, #e6a23c);  /* 收藏后金色 */
 }
 
 /* icon */

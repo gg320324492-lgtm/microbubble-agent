@@ -1,5 +1,5 @@
 // useDriveFiles.js — 课题组网盘 PR3.3 drive 文件列表 composable
-// 2026-07-01
+// 2026-07-01 (v2 PR2 加 sort/filter/star/batch)
 
 import { ref, computed, watch } from 'vue'
 import axios from 'axios'
@@ -16,6 +16,10 @@ import axios from 'axios'
  * - 后端硬过滤: private 文件仅 owner 可见
  * - 前端不传 user_id, 由后端 JWT 推断
  *
+ * v2 PR2 新增:
+ * - sort_by / sort_order / starred_only / file_type state + 透传 fetchFiles
+ * - toggleStar / listStarred / listTrash / batchSoftDelete / batchRestore / batchMove / batchUpdateVisibility / permanentDeleteBatch
+ *
  * 错误处理:
  * - loadError 区分"加载失败"和"真无文件"两种空态
  */
@@ -28,6 +32,12 @@ export function useDriveFiles() {
   const loading = ref(false)
   const loadError = ref(null)
   const selectedFileIds = ref([])  // 多选
+
+  // v2 PR2: sort + filter state (用户切换后调 fetchFiles 会自动带上)
+  const sortBy = ref('created_at')      // created_at | updated_at | file_name | starred_at
+  const sortOrder = ref('desc')         // asc | desc
+  const starredOnly = ref(false)        // 仅收藏
+  const fileType = ref(null)            // pdf | image | video | office | text | null
 
   // === 计算属性 ===
   const isEmpty = computed(() =>
@@ -43,8 +53,18 @@ export function useDriveFiles() {
       const queryParams = {
         page: currentPage.value,
         page_size: pageSize.value,
+        sort_by: sortBy.value,
+        sort_order: sortOrder.value,
+        starred_only: starredOnly.value ? 'true' : 'false',
+        ...(fileType.value ? { file_type: fileType.value } : {}),
         ...params
       }
+      // 删 None / 空字符串 params (避免污染 URL)
+      Object.keys(queryParams).forEach(k => {
+        if (queryParams[k] === null || queryParams[k] === '' || queryParams[k] === undefined) {
+          delete queryParams[k]
+        }
+      })
       const resp = await axios.get('/api/v1/drive/files', { params: queryParams })
       driveFiles.value = resp.data.items || []
       total.value = resp.data.total || 0
@@ -140,6 +160,151 @@ export function useDriveFiles() {
     }
   }
 
+  // ============================================================
+  // v2 PR2: 收藏 + 回收站 + 批量操作
+  // ============================================================
+
+  const toggleStar = async (id) => {
+    try {
+      const resp = await axios.post(`/api/v1/drive/files/${id}/toggle-star`)
+      // 局部刷新: 更新目标文件的 is_starred + starred_at
+      const target = driveFiles.value.find(f => f.id === id)
+      if (target) {
+        target.is_starred = resp.data.is_starred
+        target.starred_at = resp.data.starred_at
+      }
+      // starredOnly 模式下如果取消收藏要从列表移除
+      if (starredOnly.value && !resp.data.is_starred) {
+        driveFiles.value = driveFiles.value.filter(f => f.id !== id)
+        total.value = Math.max(0, total.value - 1)
+      }
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.detail || '切换收藏失败')
+    }
+  }
+
+  const fetchStarred = async (params = {}) => {
+    loading.value = true
+    loadError.value = null
+    try {
+      const queryParams = {
+        page: currentPage.value,
+        page_size: pageSize.value,
+        sort_by: sortBy.value,
+        sort_order: sortOrder.value,
+        ...params
+      }
+      Object.keys(queryParams).forEach(k => {
+        if (queryParams[k] === null || queryParams[k] === '' || queryParams[k] === undefined) {
+          delete queryParams[k]
+        }
+      })
+      const resp = await axios.get('/api/v1/drive/starred', { params: queryParams })
+      driveFiles.value = resp.data.items || []
+      total.value = resp.data.total || 0
+      selectedFileIds.value = []
+    } catch (e) {
+      loadError.value = e.response?.data?.detail || '收藏列表加载失败'
+      driveFiles.value = []
+      total.value = 0
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const fetchTrash = async (params = {}) => {
+    loading.value = true
+    loadError.value = null
+    try {
+      const queryParams = {
+        page: currentPage.value,
+        page_size: pageSize.value,
+        ...params
+      }
+      const resp = await axios.get('/api/v1/drive/trash', { params: queryParams })
+      driveFiles.value = resp.data.items || []
+      total.value = resp.data.total || 0
+      selectedFileIds.value = []
+    } catch (e) {
+      loadError.value = e.response?.data?.detail || '回收站加载失败'
+      driveFiles.value = []
+      total.value = 0
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const batchSoftDelete = async (fileIds) => {
+    try {
+      const resp = await axios.post('/api/v1/drive/files/batch-soft-delete', { file_ids: fileIds })
+      // 局部刷新: 从列表移除
+      driveFiles.value = driveFiles.value.filter(f => !fileIds.includes(f.id))
+      total.value = Math.max(0, total.value - resp.data.succeeded_count)
+      selectedFileIds.value = []
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.detail || '批量删除失败')
+    }
+  }
+
+  const batchRestore = async (fileIds) => {
+    try {
+      const resp = await axios.post('/api/v1/drive/files/batch-restore', { file_ids: fileIds })
+      driveFiles.value = driveFiles.value.filter(f => !fileIds.includes(f.id))
+      total.value = Math.max(0, total.value - resp.data.succeeded_count)
+      selectedFileIds.value = []
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.detail || '批量恢复失败')
+    }
+  }
+
+  const batchMove = async (fileIds, targetFolderId) => {
+    try {
+      const resp = await axios.post('/api/v1/drive/files/batch-move', {
+        file_ids: fileIds,
+        target_folder_id: targetFolderId
+      })
+      driveFiles.value = driveFiles.value.filter(f => !fileIds.includes(f.id))
+      total.value = Math.max(0, total.value - resp.data.succeeded_count)
+      selectedFileIds.value = []
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.detail || '批量移动失败')
+    }
+  }
+
+  const batchUpdateVisibility = async (fileIds, visibility) => {
+    try {
+      const resp = await axios.post('/api/v1/drive/files/batch-update-visibility', {
+        file_ids: fileIds,
+        visibility
+      })
+      // 局部更新 visibility
+      for (const f of driveFiles.value) {
+        if (fileIds.includes(f.id) && !resp.data.skipped_ids?.includes(f.id)) {
+          f.visibility = visibility
+        }
+      }
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.detail || '批量改可见性失败')
+    }
+  }
+
+  const permanentDeleteBatch = async (fileIds) => {
+    try {
+      const resp = await axios.post('/api/v1/drive/trash/permanent-delete', { file_ids: fileIds })
+      driveFiles.value = driveFiles.value.filter(f => !fileIds.includes(f.id))
+      total.value = Math.max(0, total.value - resp.data.succeeded_count)
+      selectedFileIds.value = []
+      return resp.data
+    } catch (e) {
+      throw new Error(e.response?.data?.detail || '物理删除失败')
+    }
+  }
+
   // === 内部辅助 ===
   function toggleSelect(id) {
     if (selectedFileIds.value.includes(id)) {
@@ -166,6 +331,11 @@ export function useDriveFiles() {
     loading,
     loadError,
     selectedFileIds,
+    // v2 PR2: sort/filter state
+    sortBy,
+    sortOrder,
+    starredOnly,
+    fileType,
     // 计算
     isEmpty,
     hasSelection,
@@ -178,6 +348,16 @@ export function useDriveFiles() {
     extractToKb,
     createShareLink,
     revokeShareLink,
+    // v2 PR2 新方法
+    toggleStar,
+    fetchStarred,
+    fetchTrash,
+    batchSoftDelete,
+    batchRestore,
+    batchMove,
+    batchUpdateVisibility,
+    permanentDeleteBatch,
+    // 内部
     toggleSelect,
     clearSelection,
     selectAll
