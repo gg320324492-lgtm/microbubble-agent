@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     # 文件上传大小限制（MB）
     MAX_UPLOAD_SIZE_MB: int = 50
 
+    # 2026-07-01 课题组网盘: drive 文件 + 孤儿 folder 软删除保留天数 (与 task/chat 清理模式对齐)
+    DRIVE_RETENTION_DAYS: int = 3
+
     # CORS 允许的源（逗号分隔，空则使用默认值）
     CORS_ORIGINS: str = ""
 
