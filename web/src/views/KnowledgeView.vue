@@ -11,6 +11,7 @@
           @qa="openQADialog"
           @entities="activeTab = 'entities'"
           @filter="handleFilter"
+          @go-drive="$router.push('/drive')"
         />
 
         <!-- Dashboard -->
