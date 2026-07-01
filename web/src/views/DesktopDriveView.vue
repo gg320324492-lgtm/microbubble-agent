@@ -30,8 +30,8 @@
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-button-group>
-          <el-button :icon="UploadFilled" disabled>上传文件</el-button>
-          <el-button :icon="Folder" disabled>上传文件夹</el-button>
+          <el-button :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
+          <el-button :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
           <el-button :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
         </el-button-group>
         <el-button-group class="drive-view-toggle">
@@ -131,6 +131,13 @@
       :file-id="moveTargetFileId"
       @move="onMoveFile"
     />
+
+    <!-- PR3.6 DriveUploadDialog (含文件夹拖拽 + storage_mode drive) -->
+    <DriveUploadDialog
+      v-model="showUploadDialog"
+      :default-folder-id="selectedFolderId"
+      @uploaded="onFilesUploaded"
+    />
   </div>
 </template>
 
@@ -143,6 +150,7 @@ import FileGrid from '@/components/drive/FileGrid.vue'
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
+import DriveUploadDialog from '@/components/drive/DriveUploadDialog.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
@@ -206,6 +214,24 @@ const renameTarget = ref(null)
 const renameTargetType = ref('file')  // file | folder
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
+
+// === PR3.6 上传 dialog 状态 ===
+const showUploadDialog = ref(false)
+const folderUploadInputRef = ref(null)
+
+// === PR3.6 handlers ===
+function triggerFolderUpload() {
+  // webkitdirectory 模式: 只能选文件夹, Firefox 不支持
+  // 实际: 复用 DriveUploadDialog 的拖拽 (useFolderDropZone 已支持 webkitGetAsEntry)
+  // 这里弹 DriveUploadDialog 提示用户用拖拽
+  ElMessage.info('请在打开的对话框中拖拽文件夹到上传区 (Chrome/Edge/Safari)')
+  showUploadDialog.value = true
+}
+
+function onFilesUploaded({ count, folderId }) {
+  // 上传完成后刷新当前文件夹的文件列表
+  fetchDriveFiles({ folder_id: folderId ?? selectedFolderId.value })
+}
 
 // === 生命周期 ===
 onMounted(async () => {
