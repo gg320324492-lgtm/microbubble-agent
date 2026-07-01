@@ -58,6 +58,12 @@ class Knowledge(Base, TimestampMixin):
     deleted_at = Column(DateTime, nullable=True, index=True)
     # ==================== /课题组网盘 ====================
 
+    # ==================== PR2.7 分享链接 + 下载计数 2026-07-01 ====================
+    download_count = Column(Integer, nullable=False, server_default="0")   # 原子计数
+    share_token = Column(String(32), nullable=True)                         # 公开分享 token
+    share_expires_at = Column(DateTime, nullable=True)                       # 到期时间
+    # ==================== /PR2.7 ====================
+
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 

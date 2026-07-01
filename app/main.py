@@ -159,6 +159,7 @@ app.include_router(chat_history.router, prefix="/api/v1", tags=["聊天历史"])
 app.include_router(admin.router, prefix="/api/v1", tags=["管理"])
 app.include_router(drive_folders.router, prefix="/api/v1", tags=["网盘文件夹"])  # PR2.4
 app.include_router(drive_files.router, prefix="/api/v1", tags=["网盘文件"])  # PR2.5
+app.include_router(drive_files.share_router, prefix="/api/v1", tags=["网盘公开分享"])  # PR2.7
 
 
 @app.get("/")
