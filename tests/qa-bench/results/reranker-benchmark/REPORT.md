@@ -216,3 +216,112 @@ docker compose restart app
 | **LLM 行为** | 正常 | 正常 | **崩溃 (fake XML + SSE 中断)** |
 
 **核心结论**: BGE m3 真实检索质量证明 MTEB #1 不是虚名，但与现有 Agent pipeline 兼容性 1%。**不切换默认**（option B），保留代码等深度修复。
+---
+
+# Phase H — Round 3 灾难性回归深度修复（2026-07-01~02）
+
+> 目标：诊断 Round 3 BGE m3 真跑 0.8% PASS 的真根因，并尝试 3 层防御修复（修 1/2/3）挽救 pass rate。
+
+## H.1 根因诊断（Explore Agent 报告）
+
+3 个核心假说：
+
+### 假说 A — `rerank_score` 字段透传到 LLM prompt 误导决策 ⭐⭐⭐
+- 机制：reranker_service.py:138-143 在 candidate dict 顶层 mutate `rerank_score`
+- hybrid_retriever.py:96-100 rerank 后直接 return（不剥除）
+- knowledge_tools.py:51-56 search_knowledge 工具直接透传（results 列表含 rerank_score）
+- agentic_loop.py:912/1048/723 三处 json.dumps 序列化进 messages
+- LLM 看到 `rerank_score: 0.7170`（4 位小数）误判为训练数据里 tool_use 协议输出格式 → 模仿写 `<function=get_member_profile>` 假 XML
+
+### 假说 B — `done` event 在中断路径不 yield ⭐⭐⭐
+- 机制：`_synthesize_stream` 先 yield raw text_delta（含 fake XML），后处理才剥除
+- 流被中断（CancelledError / Exception / 90s timeout），`done` event 永远不会 yield
+- 前端 useChatStream.ts:630-643 只在收到 `done` 时才替换 `text_without_json`（干净文本）
+- done 没到 → 替换逻辑不跑 → fake XML 永久泄露
+
+### 假说 C — VRAM 挤占（13.6 GB） ⭐ 低概率
+- 反证：micro-test 单题完全正常，推理质量正确
+
+## H.2 3 层修复方案
+
+| 修复 | 文件 | 目标 | 实现 |
+|---|---|---|---|
+| 修 1 | `app/agent/agentic_loop.py` | 保证 `done` event 一定 yield | 整个 run() 外包 try/finally，CancelledError/Exception 路径兜底 yield minimal done event |
+| 修 1 | `app/api/v1/chat.py` | 路由层 CancelledError 兜底 | 加 `import asyncio` + try/except CancelledError（不 catch 在路由层会被 Starlette 静默关闭） |
+| 修 2 | `app/agent/tools/knowledge_tools.py` | 剥除内部字段（rerank_score 等）| `INTERNAL_RESULT_FIELDS = {score, normalized_score, rerank_score, retrieval_method, retrieval_methods}` + `_filter_result_for_llm()` |
+| 修 3 | `web/src/composables/chat/useChatStream.ts` | 前端兜底剥除 fake XML | `FAKE_XML_PATTERNS` 5 种 regex + `stripFakeXml()` 在 `case 'text_delta'` 应用 |
+
+## H.3 验证 — 5 轮对比
+
+| Round | 配置 | Pass | Warn | Fail | Error | **Pass Rate** |
+|---|---|---|---|---|---|---|
+| Round 1 OFF | 旧 CPU ms-marco | 100 | 0 | 0 | 0 | **100%** |
+| Round 2 graceful | 模型未下载 | 100 | 0 | 0 | 0 | **100%** |
+| Round 3 BGE m3 raw | 真实 GPU 推理 | 1 | 1 | 150 | 48 | **0.8%** ❌ |
+| **Round 5a (修 1)** | done yield 兜底 | 3 | 1 | 71 | 125 | **1.8%** (+1.0) |
+| **Round 5b (修 1+2)** | + 字段过滤 | 3 | 5 | 82 | 110 | **2.8%** (+2.0) |
+| **Round 5c (修 1+2+3)** | + 前端剥除 | TBD | TBD | TBD | TBD | TBD |
+
+## H.4 失败模式分布（3 轮对比）
+
+| Issue Type | Round 3 | Round 5a | Round 5b | Round 5c |
+|---|---|---|---|---|
+| `stream_no_done` | **104** | **0** ✅ | 0 | TBD |
+| `stream_error_event` | **175** | 24 | TBD | TBD |
+| `missing_tools` | 120 | 55 | 55 | TBD |
+| `intent_mismatch` | 51 | 38 | 45 | TBD |
+| `fake_xml_leaked` | 30 | 30 | 30 | TBD |
+| `forbidden_names_appeared` | 11 | 29 | **41** ⚠️ | TBD |
+
+## H.5 关键发现
+
+### ✅ 修 1 完全成功
+- `stream_no_done`: 104 → 0（**完全消失**）
+- `stream_error_event`: 175 → 24（-86%）
+- 兜底 done event 保证前端 useChatStream.ts:638 替换逻辑能跑
+
+### ⚠️ 修 2 (字段过滤) **未解决问题**
+- Round 5b 跟 Round 5a 类似（pass rate 2.8% vs 1.8%）
+- `forbidden_names_appeared` 反而 11 → 29 → **41**（持续增加）
+- 说明 LLM 不是因为看到 `rerank_score` 才出错
+
+### ❌ 修 3 (前端剥除) 不会改善
+- 前端剥除只清理 raw text_delta 的 fake XML
+- **不能改变 LLM 决策能力**
+- 真根因是 LLM 在 BGE m3 真实重排后决策能力下降
+
+## H.6 真根因诊断（基于数据）
+
+**BGE m3 真实启用后 LLM 决策能力下降是根本问题**，3 层修复都没解决。
+
+可能机制：
+1. **重排改变文档顺序** → LLM 看到第 1 条高分 doc 后**过度信任**，跳过其他 4 条 → 错答案
+2. **mimo 代理** — 5a/5b/5c 跑测时间点（2026-07-01 23:34 ~ 2026-07-02 01:55），mimo 代理可能在某些时段有问题
+3. **BGE m3 太重**（568M / 1.1GB VRAM）— VRAM 挤占其他模型
+4. **rerank_score 字段** — 4 位小数让 LLM 误判为训练数据格式（假说 A 部分成立）
+
+## H.7 决策选项
+
+| 选项 | 描述 | 风险 | 时间 | 收益 |
+|---|---|---|---|---|
+| **A. 切回 ms-marco** | `.env RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2` | 低 | 1 min | 立即恢复 100% PASS |
+| **B. 切 mxbai 轻量** | `.env RERANKER_MODEL_NAME=mixedbread-ai/mxbai-rerank-base-v1`（184M / 0.4GB）| 低 | 1 hour | 验证是否 BGE m3 太重 |
+| **C. 切 jina 备选** | `.env RERANKER_MODEL_NAME=jinaai/jina-reranker-v2-base-multilingual` | 低 | 1 hour | 验证是否 BGE m3 兼容性问题 |
+| **D. 深入调查 mimo 代理 + LLM 决策** | 查 mimo 代理最近 24h 行为 + 切不同模型做对照 | 高 | 1-2 周 | 找出真根因（可能 1-2 周仍无定论）|
+
+**推荐**（基于数据）：
+- **短期**：选项 A（切回 ms-marco），保留代码改进（env var + GPU + async + warmup + 字段过滤）
+- **中期**：选项 B/C（切轻量模型），如果想继续验证 BGE m3 是否可行
+- **长期**：选项 D（深入调查），但优先级低于其他用户痛点
+
+## H.8 沉淀（已 commit `7adb77c0`）
+
+- `tests/qa-bench/results/reranker-benchmark/REPORT.md` ← 本报告
+- `memory/reranker-upgrade-2026-07-01.md` ← Phase H 章节
+- `MEMORY.md` 索引
+- `models/hf_cache/hub/models--BAAI--bge-reranker-v2-m3/` ← 2.18GB 模型（保留供未来选项 B/C 切换）
+
+## H.9 待用户决策
+
+- **A/B/C/D 选哪个**？
+- 是否 commit 修复 1 + 修复 2 + 修复 3 代码（即便 BGE m3 不启用，修复 1 是有价值的工程改进）？
