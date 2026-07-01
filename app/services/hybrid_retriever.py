@@ -142,7 +142,12 @@ class HybridRetriever:
         from sqlalchemy import select
         from app.models.knowledge import Knowledge
 
-        stmt = select(Knowledge)
+        # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
+        # drive 模式原始文件不入 BM25 索引, 软删除条目不索引
+        stmt = select(Knowledge).where(
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "kb",
+        )
         if category:
             stmt = stmt.where(Knowledge.category == category)
         result = await self.db.execute(stmt)

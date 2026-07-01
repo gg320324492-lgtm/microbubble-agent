@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, Float, Boolean
+from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -47,8 +47,19 @@ class Knowledge(Base, TimestampMixin):
     # 创建者
     created_by = Column(Integer, ForeignKey("members.id"))
 
+    # ==================== 课题组网盘 (Lab Group Drive) 2026-07-01 ====================
+    # storage_mode: kb (传统 KB 卡片) | drive (网盘原始文件，不入 embedding 索引)
+    # visibility: private (仅 owner 可见) | team (全员可见) | public (含外部分享)
+    # folder_id: NULL = 顶级目录，指向 folders.id (Folders 表自引用 parent_id)
+    # deleted_at: 软删除时间戳，NULL = 活跃，Celery beat 3 天后物理删除
+    storage_mode = Column(String(16), nullable=False, server_default="kb", index=True)
+    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True)
+    visibility = Column(String(16), nullable=False, server_default="team", index=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    # ==================== /课题组网盘 ====================
+
     def __repr__(self):
-        return f"<Knowledge(id={self.id}, title='{self.title}')>"
+        return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 
 
 class KnowledgeRelation(Base, TimestampMixin):

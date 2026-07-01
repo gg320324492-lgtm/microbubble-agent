@@ -148,7 +148,8 @@ async def list_knowledge(
     total = total_result.scalar() or 0
 
     # 分页查询 — content 字段只取前 200 字符作为 snippet，不返回完整内容
-    query = select(Knowledge)
+    # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL 过滤, 软删除条目不显示
+    query = select(Knowledge).where(Knowledge.deleted_at.is_(None))
     if filters:
         query = query.where(*filters)
     query = query.order_by(Knowledge.created_at.desc())
@@ -836,8 +837,12 @@ async def get_review_queue(
     db: AsyncSession = Depends(get_db)
 ):
     """获取待审阅的知识条目（矛盾检测标记）"""
+    # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL 过滤
     result = await db.execute(
-        select(Knowledge).where(Knowledge.needs_review == True)
+        select(Knowledge).where(
+            Knowledge.deleted_at.is_(None),
+            Knowledge.needs_review == True,
+        )
     )
     items = result.scalars().all()
     return ReviewQueueResponse(
@@ -1461,8 +1466,10 @@ async def reprocess_all_multimodal(
     from app.services.multimodal_extraction_service import multimodal_extraction_service
 
     # 1. 找出所有有 file_path 的知识
+    # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL 过滤
     file_type_filter = f"%{file_type}%" if file_type else "%"
     q = select(Knowledge).where(
+        Knowledge.deleted_at.is_(None),
         Knowledge.file_path.isnot(None),
         Knowledge.file_type.ilike(file_type_filter),
     ).order_by(Knowledge.id).limit(limit)

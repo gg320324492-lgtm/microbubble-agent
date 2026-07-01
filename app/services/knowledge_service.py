@@ -399,7 +399,8 @@ class KnowledgeService:
         keyword: Optional[str] = None
     ) -> List[Knowledge]:
         """查询知识列表"""
-        query = select(Knowledge)
+        # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL 过滤, 软删除条目不返回
+        query = select(Knowledge).where(Knowledge.deleted_at.is_(None))
         filters = []
 
         if category:
@@ -793,9 +794,14 @@ class KnowledgeService:
             if query_embedding is None:
                 return await self._search_keyword_fallback(query, top_k, category)
 
+            # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
+            # drive 模式不入 embedding 索引, 软删除条目不可检索
             stmt = select(
                 Knowledge,
                 Knowledge.embedding.cosine_distance(query_embedding).label("distance")
+            ).where(
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "kb",
             )
 
             if category:
@@ -825,10 +831,15 @@ class KnowledgeService:
 
     async def _search_keyword_fallback(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
         """关键词搜索回退"""
-        stmt = select(Knowledge).where(or_(
-            Knowledge.title.ilike(f"%{query}%"),
-            Knowledge.content.ilike(f"%{query}%")
-        ))
+        # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
+        stmt = select(Knowledge).where(
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "kb",
+            or_(
+                Knowledge.title.ilike(f"%{query}%"),
+                Knowledge.content.ilike(f"%{query}%")
+            )
+        )
         if category:
             stmt = stmt.where(Knowledge.category == category)
         stmt = stmt.limit(top_k)

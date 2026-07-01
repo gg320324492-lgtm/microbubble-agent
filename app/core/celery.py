@@ -65,6 +65,12 @@ celery_app.conf.update(
             "task": "app.services.chat_history_tasks.cleanup_soft_deleted_sessions_task",
             "schedule": 3600.0,  # 每 1 小时扫描（retention=30 天时误差 < 0.14%）
         },
+        # 2026-07-01 课题组网盘 PR1: drive 文件 + 孤儿 folder 3 天物理清除
+        # 对齐 task/chat 清理模式 + 1h 调度频率
+        "drive-cleanup-expired": {
+            "task": "app.services.drive_cleanup_tasks.cleanup_expired_drive_files_task",
+            "schedule": 3600.0,  # 每 1 小时扫描（retention=3 天时误差 < 1.4%）
+        },
     },
 )
 
@@ -85,6 +91,7 @@ celery_app.conf.imports = [
     "app.services.embedding_recalc",  # v29 Qwen3-Embedding 全量重算
     "app.services.knowledge_service",  # 2026-06-29 修复 #257 异步分析
     "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
+    "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -101,6 +108,7 @@ celery_app.autodiscover_tasks(
         "app.services.paper_layout_service",  # v28 step 105
         "app.services.knowledge_service",  # 2026-06-29 修复 #257
         "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
+        "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
         "app.wechat.scheduler",
     ],
     related_name=None,
