@@ -1,6 +1,20 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 早班收官 当前任务链**：🆕 **v2 网盘 PR6-P4 @username autocomplete 收官**（7 文件改动 / +600+ 行）= **修复 PR6 自上线以来一直被忽略的 3 个 mention 解析 bug** + 新增 autocomplete UX 闭环。
+> **2026-07-02 当前任务链**：🆕 **v2 网盘 PR7 收官 + Group 3 submit hang 修复收尾**（1 alembic migration + 1 test assertion fix）= 8/8 e2e groups 全 PASS (34/34 断言)。
+> **2 个真根因**（CLAUDE.md 永久沉淀铁律）：
+> ① **HTTP submit 实际 201 OK, 不是 hang** — 上一次会话提交时 stale code state 触发 500 误判 hang。验证方法：直接 service 调成功 + HTTP 端到端 201 + 删除 stale .pyc (CLAUDE.md 7a 教训强化)
+> ② **alembic 048 server_default="now()" 字面量化陷阱** — PG 某些版本把字符串 `'now()'` 当字面量（执行时间戳），后续 INSERT 全部用同一固定时间。**修复**：050_audit_log_now_default `ALTER COLUMN ... SET DEFAULT now()` 让 INSERT 时刻调用 now() 函数
+> **e2e 跑前/跑后**：
+> - 跑前: 28/34 PASS (Group 3 submit hang + Group 6 rows=0 + Group 3 detail assertion)
+> - 跑后: 34/34 PASS, audit actions 实时写入 (read|6, file_request_submit|3, write|2)
+> **4 新铁律（永久沉淀）**：
+> ① **alembic server_default='now()' 字面量化陷阱** — `pg_get_expr(adbin, adrelid)` 必须返回 `now()` 函数, 不是 `'2026-07-01 18:24:25'::timestamp` 字面量。验证 SQL: `SELECT pg_get_expr(d.adbin, d.adrelid) FROM pg_attrdef d WHERE adrelid='table'::regclass AND ...`。修复: 单独 alembic 迁移 ALTER COLUMN SET DEFAULT now()
+> ② **e2e test assertion 必须基于真实 service 错误文本** — 不能凭印象写期望值。实际 service: `"不允许的文件类型 '.exe'，仅支持 pdf, txt"`, 断言应 `assert_true(..., "不允许" in detail)`, 不是 `"不支持"`
+> ③ **alembic 多 head 必须建 merge point** — 多窗口并行 PR6-P4 + PR7 各自加 050 migration, 跑 `alembic upgrade head` 报 "Multiple head revisions", 必须显式 `alembic upgrade <specific_target>` 或建 051 merge
+> ④ **HTTP 错误必须看真实 response body** — traceback 误导常见: traceback line 270 (import 行) 但实际错误来自 line 283 (13 行后), Python traceback 只标"引发异常的最后一行"+ import 触发。诊断方法: `docker exec app python -c "service_call()"` 直接调确认
+> **Commit**: `2c36605d fix(drive): v2 PR7 收官 - audit_log.created_at now() default + test assertion` 已 push origin/main.
+>
+> **2026-07-02 早班收官 历史任务链**：v2 网盘 PR6-P4 @username autocomplete 收官（7 文件改动 / +600+ 行）= **修复 PR6 自上线以来一直被忽略的 3 个 mention 解析 bug** + 新增 autocomplete UX 闭环。
 > **3 个 mention 解析 bug 修复**（CLAUDE.md 永久沉淀铁律）：
 > ① **后端 regex 不能匹配含 `.` 的 wechat_id** (nuyoah. / WuWei. / HALO. 等真实用户名) — 修复后端 `_MENTION_PATTERN = @([一-龥A-Za-z0-9_.\-]{1,32})`。
 > ② **前端 regex 同步** (desktop + mobile `CommentThread.vue` 都用 `@([一-龥A-Za-z]{1,16})` 太严且不匹配中文) — 修：均改为 `@([一-龥A-Za-z0-9_.\-]{1,32})` 与后端 **完全镜像**。
