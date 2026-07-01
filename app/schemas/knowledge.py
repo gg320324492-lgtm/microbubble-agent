@@ -49,6 +49,12 @@ class KnowledgeResponse(KnowledgeBase):
     created_at: datetime
     updated_at: datetime
 
+    # 2026-07-01 PR4.1: 详情端点也要返 storage_mode/folder_id/visibility
+    # 移动端详情页需要 storage_mode 决定是否显示"📚 加入公共知识库"按钮
+    storage_mode: Optional[str] = "kb"
+    folder_id: Optional[int] = None
+    visibility: Optional[str] = "team"
+
     class Config:
         from_attributes = True
 
@@ -84,6 +90,13 @@ class KnowledgeListItem(BaseModel):
 
     # #043: 自动拓展条目的 RichBlock 数据 + qa-bench 元信息
     meta: Optional[dict] = None
+
+    # 2026-07-01 课题组网盘 PR4.1: 修复 PR2.6 漏的 storage_mode/folder_id 字段
+    # 原因: PR2.6 加 storage_mode 列后, list_knowledge API 未硬过滤 + schema 未暴露字段
+    # 移动端需要这两个字段显示 "📁 网盘 / 📚 KB" 徽章 + 跳转 /drive 用
+    storage_mode: Optional[str] = "kb"  # 'kb' | 'drive'
+    folder_id: Optional[int] = None
+    visibility: Optional[str] = "team"  # 'private' | 'team' | 'public'
 
     class Config:
         from_attributes = True
