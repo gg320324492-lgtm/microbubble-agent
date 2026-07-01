@@ -1,159 +1,218 @@
-# #001 BGE m3 Reranker Upgrade — Benchmark Report (2026-07-01)
+# #001 BGE m3 Reranker Upgrade — Final Benchmark Report (2026-07-01)
 
 > **目标**：用 cross-encoder reranking (BGE m3) 取代 Self-RAG #009 judge 路径，提升 KB 检索质量。
 >
-> **状态**：代码改动 ✅ 完成；HF mirror 阻塞 ⚠️ 不能下载 BGE m3 真模型，graceful degradation 验证 pipeline。
+> **最终结论**（2026-07-01 23:34）：**❌ BGE m3 实跑是灾难性退步 — 100% → 0.8% PASS rate**。LLM 行为异常（fake XML 输出 + SSE 流中断 + missing_tools）。需要回滚到 ms-marco 或保留 BGE m3 代码但调查根因。
 
-## 1. Benchmark 数据
+---
 
-| Round | 配置 | Pass Rate | Avg Duration | rerank_score 字段 |
+## 1. 最终 Benchmark 数据 — 三方对比
+
+| Round | 配置 | 总数 | **PASS** | WARN | FAIL | ERROR | **Pass Rate** | Avg Duration |
+|---|---|---|---|---|---|---|---|---|
+| **Round 1 OFF** | `enable_rerank=False` (旧 CPU ms-marco baseline) | 100 | **100** | 0 | 0 | 0 | **100%** | 10.2s |
+| **Round 2 graceful** | `enable_rerank=True` + graceful degradation (模型未下载) | 100 | **100** | 0 | 0 | 0 | **100%** | 11.3s |
+| **Round 3 BGE m3 GPU** | `enable_rerank=True` + 真实 BGE m3 GPU 推理 | 200 | **1** | 1 | 150 | 48 | **0.8%** ❌ | 9.9s |
+
+**Delta** (Round 3 vs Round 1):
+- Pass rate: **-99.2 percentage points** (-100% 相对)
+- Avg duration: -0.3s (略快，但因大量流中断提前结束)
+- LLM 决策: 从"调真实工具"变为"输出 fake XML"
+
+**Round 1 + Round 2 都 100% PASS 证明代码改动本身零回归**，Round 3 1% PASS 是 **BGE m3 真实加载后导致**。
+
+---
+
+## 2. Round 3 BGE m3 真实加载验证
+
+### 2.1 模型加载成功
+
+```bash
+$ docker exec microbubble-agent-app-1 python -c "..."
+Loading CrossEncoder BGE m3 on GPU...
+Load time: 18.23s
+Score (related): 0.9984
+Score (irrelevant template): 1.6e-5
+GPU memory: 2.15 GB (FP16)
+```
+
+✅ Cross-encoder 模型加载、GPU 推理、batch 推理全部 OK。
+
+### 2.2 HF cache 手工装配 (curl + 离线装配)
+
+因 huggingface_hub Python API 在容器内 SSL EOF，**绕过方式**：
+```bash
+# 1. host 直连 hf-mirror.com 下载（curl 成功，python 失败）
+curl -L https://hf-mirror.com/BAAI/bge-reranker-v2-m3/resolve/main/model.safetensors -o model.safetensors
+# 2. 手工装配 HF cache 标准结构
+mkdir -p models/hf_cache/hub/models--BAAI--bge-reranker-v2-m3/snapshots/{commit_hash}/
+mv downloading/* models/.../snapshots/{commit_hash}/
+echo -n "{commit_hash}" > models/.../refs/main
+# 3. HF_HUB_OFFLINE=1 时 snapshot_download 自动识别本地 cache
+```
+
+✅ 容器内 `HF_HUB_OFFLINE=1` + snapshot_download 成功解析全部 6 个文件 (config + model.safetensors + tokenizer + sentencepiece + special_tokens_map)。
+
+### 2.3 rerank_score ≠ score（真实重排生效）
+
+A-L1-0002 "杜同贺是学生吗？他的研究方向是什么？" 调 search_knowledge 后：
+
+| Rank | ID | score | rerank_score | title (mojibake 恢复后) |
 |---|---|---|---|---|
-| **Round 1 OFF** | `enable_rerank=False` | **100/100 (100%)** | 9.3s | ❌ 无（三路检索） |
-| **Round 2 ON** | `enable_rerank=True` (graceful) | **100/100 (100%)** | 10.5s | ✅ 有（=score fallback） |
+| 1 | 187 | 0.4116 | **0.9081** | [拓展-U03] 杜同贺+水研究... |
+| 2 | 218 | 0.2337 | **0.7514** | [拓展-U09] 谁和谁有共同研究方向 |
+| 3 | 208 | 0.2995 | **0.5673** | [拓展-U07] 课题组成员... |
+| 4 | 253 | 0.2386 | **0.5341** | 实验相关... |
+| 5 | 257 | 0.3867 | **0.0027** | 赵航佳研究方向 |
 
-**Delta**: pass rate 0% (天花板)，avg latency +1.2s（rerank code path 仍在跑，即使 graceful degrade）
+✅ BGE m3 **完美排序** — 杜同贺相关 3 条排前 3，不相关"赵航佳"被降到末尾。但 LLM 决策崩溃。
 
-## 2. Micro-test 直接验证 rerank pipeline
+---
 
-100 题 smoke benchmark 用 `run_qa4.py` 没收集 `tool_results` 字段（仅 `tools_called` + `content`）。
-直接 chat 调用查证：
+## 3. Round 3 失败根因诊断
+
+### 3.1 失败模式分布
+
+| Issue Type | 次数 | 占比 | 含义 |
+|---|---|---|---|
+| `stream_error_event` | 175 | **87.5%** | SSE 流中检测到 error/abort 事件 |
+| `missing_tools` | 120 | 60% | 期望调用的工具 LLM 没调 |
+| `stream_no_done` | 104 | 52% | SSE 流提前断开无 done 事件 |
+| `intent_mismatch` | 51 | 25.5% | LLM 意图分类错误 |
+| `fake_xml_leaked` | 30 | 15% | LLM 输出 `<function=...>` 假工具调用 |
+| `forbidden_names_appeared` | 11 | 5.5% | 答案含错误人名 |
+
+### 3.2 同一题目 Round 1 vs Round 3 对比（A-L1-0002 "杜同贺是学生吗？"）
+
+| 维度 | Round 1 OFF | Round 3 BGE m3 |
+|---|---|---|
+| verdict | **PASS** | **FAIL** |
+| duration | 5.9s | 8.6s |
+| tools_called | (空) | ['query_members', 'search_knowledge', 'search_knowledge'] |
+| content | "王天志导师是杜同贺..." | `"<tool_call>\n<function=get_member_profile>\n<parameter=name>杜同贺</parameter>\n</function>\n</tool_call>"` |
+
+**关键观察**: LLM 之前能正常回答 + 调工具；BGE m3 真实加载后 LLM **决定不调真实工具**，改输出 fake XML。
+
+### 3.3 根因假说（待验证）
+
+1. **VRAM 挤占**: BGE m3 占 2.15 GB，加上 Qwen3 Embedding (1.2 GB) + 其他模型，**总 VRAM 13.6 GB**。可能影响 LLM (Claude API 不在本机但 embedding/voice 等本机模型可能被影响)。
+2. **rerank_score 字段扰乱 LLM**: BGE m3 在 search_knowledge tool_result 中加入 `rerank_score` 字段（与 score 不同），LLM 看到新字段可能误判格式而走 fake XML 路径。
+3. **GPU 推理延迟影响 SSE 流**: BGE m3 batch 推理每条 ~30ms，**25 candidates × 30ms = 750ms** rerank 阻塞 SSE 发出第一个 text_delta。LLM 拿到 tool_result 后可能因上下文格式变化而错误决策。
+4. **LLM 决策改变 (chat/stream 流程问题)**: 真实 rerank 改变了检索结果排序，LLM 看到不同内容后 panic 输出 fake XML。
+
+### 3.4 排除项
+
+- ❌ BGE m3 模型本身坏（micro-test 验证推理质量正确：0.9984 vs 1.6e-5）
+- ❌ HF cache 损坏（snapshot_download 成功 + 文件完整）
+- ❌ 网络/代理问题（curl + Python urllib + HF offline 三种方式都验证可用）
+- ❌ SSE tier 限流（已临时调到 500/min，仍失败）
+
+---
+
+## 4. 关键决策
+
+### 决策选项
+
+| 选项 | 描述 | 风险 | 收益 |
+|---|---|---|---|
+| **A. 完全回滚** | `.env RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2` | 无（恢复 100% PASS） | 失去 BGE m3 中文能力 |
+| **B. 保留代码，回退默认** | 保留 BGE m3 GPU 路径，但 .env 默认改回 ms-marco | 低 | 未来可手动切换 |
+| **C. 深入调查根因后修复** | 调查 LLM 行为改变根因，可能需要 rerank_score 字段重命名或 SSE 流改造 | 中（多天工作量） | 修好后获得 BGE m3 中文+学术检索能力 |
+| **D. 切换轻量模型** | 用 mxbai-rerank-base-v1 (184M / 0.4GB VRAM) 替代 | 低 | 验证是否 BGE m3 太重导致 |
+
+### 推荐（option B）
+
+**保留代码改进**（env var + GPU device detect + async + warmup），**回退默认到 ms-marco**。
+
+理由：
+- BGE m3 真模型验证：rerank 质量极佳（id=187 排第一）
+- 但 LLM 行为改变导致 99% 退化 — 短期不可接受
+- 保留代码：未来可一键切换（`RERANKER_MODEL_NAME=BAAI/bge-reranker-v2-m3`）
+- 真正修复需要更深的 SSE / LLM 流程排查（3-5 天）
+
+### 实施步骤
 
 ```bash
-# "什么是 zeta 电位" 触发 search_knowledge
-→ 1 tool_result events
-→ docs returned: 5
-→ [0] id=257 title=赵航佳研究方向 rerank_score=0.3668 score=0.3668 norm=1.0
-→ [1] id=141 title=微纳米气泡+超细微气泡: UFB相关 rerank_score=0.2981 ...
-```
+# 1. 修改 .env 默认模型
+sed -i 's/RERANKER_MODEL_NAME=BAAI\/bge-reranker-v2-m3/RERANKER_MODEL_NAME=cross-encoder\/ms-marco-MiniLM-L-6-v2/' .env
 
-✅ **rerank_score 字段被正确添加**（pipeline 正常，graceful 时 = original score）
+# 2. docker-compose.yml 默认同步
+# (已在 env var `${RERANKER_MODEL_NAME:-...}` 默认值)
 
-## 3. 基础设施约束
-
-### 3.1 HF mirror 阻塞
-
-```bash
-$ curl -sk --max-time 5 https://hf-mirror.com/  →  不可达 (no route / 403)
-$ HF_HUB_OFFLINE=0 python -c 'huggingface_hub.snapshot_download("cross-encoder/ms-marco-MiniLM-L-6-v2")'
-→ LocalEntryNotFoundError: cannot find in local cache + cannot reach remote
-```
-
-`app/config.py` line 88 `HF_HUB_OFFLINE=1` (CLAUDE.md 2026-06-24 教训：防止 SSL 握手抖动)
-但加上 HF mirror (hf-mirror.com) 也不通 → **整个容器无法下载任何新 HF 模型**
-
-### 3.2 ms-marco cache 不完整
-
-`/root/.cache/huggingface/hub/models--cross-encoder--ms-marco-MiniLM-L-6-v2/` 仅有 `refs/main`，**无 snapshots 目录** = 模型从未真正下载
-
-### 3.3 影响
-
-| 阶段 | 状态 |
-|---|---|
-| `CrossEncoder(MODEL_NAME)` import | ✅ |
-| `CrossEncoder(MODEL_NAME).predict(...)` | ❌ RuntimeError "We couldn't connect to hf-mirror.com to load the files" |
-| Graceful degradation | ✅ 按原始 score 排序返回，pipeline 完整 |
-
-## 4. 待网络恢复后实跑（roadmap）
-
-网络恢复后 (`hf-mirror.com` 可达)：
-
-```bash
-# 1. 临时关 HF_HUB_OFFLINE 下载 BGE m3 (2.3GB)
-docker exec -i microbubble-agent-app-1 bash -c "
-  HF_HUB_OFFLINE=0 python -c '
-  from huggingface_hub import snapshot_download
-  snapshot_download(\"BAAI/bge-reranker-v2-m3\")
-  '
-"
-
-# 2. 设置 BGE m3 模型 (改 container .env, 然后 docker restart)
-docker exec -i microbubble-agent-app-1 bash -c "sed -i 's/RERANKER_MODEL_NAME=.*/RERANKER_MODEL_NAME=BAAI\/bge-reranker-v2-m3/' /app/.env"
+# 3. Restart
 docker compose restart app
-
-# 3. 验证加载日志
-docker logs microbubble-agent-app-1 --tail 30 2>&1 | grep "Cross-encoder"
-# 期望: 加载 Cross-encoder 模型: BAAI/bge-reranker-v2-m3 on cuda
-# 期望: Cross-encoder 模型加载完成
-
-# 4. VRAM 检查
-nvidia-smi --query-gpu=memory.used --format=csv,noheader
-# 期望: 比 baseline + ~1.1GB (FP16)
-
-# 5. 跑 Round 3 BGE m3 GPU
-python /tmp/run_qa4.py "$TOKEN" tests/qa-bench/questions_smoke_200.jsonl \
-  tests/qa-bench/results/reranker-benchmark/round3-bge-m3 100 2
-
-# 6. 对比 3 round
-# Round 1 (no rerank) vs Round 2 (graceful) vs Round 3 (BGE m3 GPU)
-# 期望 Round 3: B 类别召回率提升 + 内容质量更准 (avg_duration 应 ~9s, 比 Round 2 的 10.5s 略快)
 ```
 
-## 5. 关键发现与改进
+未来如需启用 BGE m3：
+```bash
+# 单行切换
+sed -i 's/RERANKER_MODEL_NAME=cross-encoder\/ms-marco-MiniLM-L-6-v2/RERANKER_MODEL_NAME=BAAI\/bge-reranker-v2-m3/' .env
+docker compose restart app
+```
 
-### 5.1 ✅ 完成的代码改动
+---
 
-1. **`app/services/reranker_service.py` 全面重写**：
-   - env var 配置 (RERANKER_MODEL_NAME/DEVICE/MAX_LENGTH/BATCH_SIZE)
-   - device 检测 (`_detect_device()` mirror embedding_service.py 模式)
-   - GPU 推理 (CrossEncoder 加 `device=` 参数)
-   - async wrapper (`rerank_async` 用 run_in_executor 不阻塞 event loop)
-   - warmup API (避免首次 rerank 8-10s 冷启动)
-   - is_loaded/model_name/device properties
-   - graceful degradation 保留 (model 加载失败/预测失败时按原始 score 排序)
+## 5. 5 新铁律（永久沉淀）
 
-2. **`app/services/hybrid_retriever.py`**：
-   - `candidate_k = top_k * 5` (从 3 → 5，更大候选池给 rerank)
-   - `rerank_async(query, normalized, top_k=top_k)` (从 sync → async)
+### 铁律 1: HF cache 手工装配可绕过 SSL EOF 死结
+- huggingface_hub Python API 在容器内 SSL EOF 时，**curl 直连 hf-mirror.com 仍可用**
+- 手工装配 `{models--org--name}/snapshots/{commit_hash}/` + `refs/main` 文件
+- HF_HUB_OFFLINE=1 时 `snapshot_download` 自动识别本地 cache
 
-3. **`tests/qa-bench/detectors/retrieval_recall.py` 新建** (P1)：
-   - 用 `ground_truth_refs` (kb://a/a1-x1 格式) 算 recall@5 + MRR
-   - 集成到 `tests/qa-bench/runner.py` (line 580-588)
+### 铁律 2: CrossEncoder + GPU 加载时间 18s 但推理 <30ms
+- 冷启动一次性 18.23s（acceptable）
+- 单对推理 0.316s（首次有 CUDA kernel 编译）
+- batch 5+ 对 23ms（GPU 推理极致）
+- 必须 `warmup()` 在 lifespan startup 调一次，避免首次请求慢
 
-4. **`.env` + `docker-compose.yml`**：4 个 env var 接入 (app + celery-worker)
+### 铁律 3: graceful degradation 必保留
+- 即使 BGE m3 加载失败，pipeline 完整（rerank_score = score fallback）
+- Round 2 graceful degradation = 100% PASS 证明 pipeline 完整
+- Round 3 真实加载 = 1% PASS 证明不是 pipeline 问题，是 LLM 行为变化问题
 
-5. **`app/agent/tools/knowledge_tools.py`**：`enable_rerank` 通过 `RERANKER_BENCHMARK_ENABLED` env var 控制（benchmark 专用）
+### 铁律 4: Benchmark 数据必须分轮保存
+- 每次 config 变化都新建 round1-off / round2-on / round3-bge-m3 子目录
+- REPORT.md 持续累加
+- 三方对比表可一次看清楚升级 vs baseline 真实差距
 
-### 5.2 ⚠️ Graceful Degradation 验证（无真模型情况下）
+### 铁律 5: LLM 行为变化是 cross-encoder rerank 的隐藏风险（**最重要**）
+- 检索结果改变 → LLM 看到不同 context → 可能输出 fake XML
+- 这个风险**不能靠 micro-test 单一 question 发现**（micro-test 时 LLM 恰好正确响应）
+- **必须** 全量 benchmark 200 题才能暴露
+- 解决方案：rerank_score 字段名可能扰乱 LLM（待验证）/ rerank 限制 + JSON 强制（待设计）
 
-- Model load 失败 → graceful degradation 返回原序（pipeline 完整）
-- 100 题 PASS 率 100% = 改代码未引入回归
-- micro-test 直接调 chat/stream → rerank_score 字段正确添加
-- 端到端 `Cross-encoder 不可用，按原始 score 排序` 日志符合预期
+---
 
-### 5.3 ❌ 待办（网络恢复后）
+## 6. 待研究 (C 选项调查清单)
 
-- [ ] 下载 BGE m3 (2.3GB) + 实跑 Round 3
-- [ ] 对比 Round 1/2/3 三轮 pass_rate + avg_duration + retrieval_recall detector 命中率
-- [ ] Round 3 PASS → 标记为生产默认
-- [ ] Round 3 召回率 < Round 2 → 调 candidate_k 5 → 7 或换 jina-reranker
+- [ ] Round 4 隔离测试：仅 25 题搜索知识类（去掉 missing_tools / intent_mismatch 噪音）— 看 BGE m3 对纯搜索类问题是否退化
+- [ ] Round 5 rerank_score 字段重命名：score → rank_score / cross_encoder_score，看是否消除 fake XML
+- [ ] Round 6 切换 mxbai-rerank-base-v1（轻量 0.4GB）：验证是否 BGE m3 太大导致 VRAM 挤占
+- [ ] Round 7 BGE m3 + 限制 rerank 输入长度（max_length 256 vs 512）：看是否长 content 让 LLM 误解
+- [ ] 调查 agentic_loop.py:agentic_loop.run() 在收到 rerank_score 字段后的 prompt 构造，看是否引导 LLM 输出 fake XML
 
-## 6. 沉淀
+---
 
-### 6.1 已知约束
+## 7. 沉淀 memory
 
-- **HF mirror 必须可达才能下载模型** (CLAUDE.md 2026-06-24 升级 sentence-transformers 时的隐患)
-- `HF_HUB_OFFLINE=1` 是"防止抖动"的安全网，但加上 mirror 不通 = 完全离线
-- 解决路径：网络恢复后再下 BGE m3
+[memory/reranker-upgrade-2026-07-01.md](../../../memory/reranker-upgrade-2026-07-01.md) — 包含 5 铁律 + Round 1/2 数据
 
-### 6.2 Graceful Degradation 价值
+新增章节:
+- **Round 3 BGE m3 真实数据** (上方 §3)
+- **3-way 对比 + 决策** (上方 §1 + §4)
+- **HF cache 手工装配** (上方 §5 铁律 1)
+- **LLM 行为变化风险** (上方 §5 铁律 5)
 
-- 即使新模型加载失败，旧行为（按 score 排序）仍 100% pass
-- **新增 `enable_rerank` 开关**允许运营即时切回 fallback（不用改代码）
-- pipeline 改动是**纯增量**，不影响其他 3 路检索
+---
 
-### 6.3 Run Qa4.py 局限
+## 8. 总结
 
-- 只收集 `tools_called` (names) 和 `content` (text concat)，没收集 `tool_results` 完整 dict
-- 改进方向：加 `tool_results: List[dict]` 字段 + `rerank_score_present: bool` 字段
-- 短期绕过：用 micro-test 直接调 chat/stream 验证 rerank_score 字段
+| 指标 | Round 1 OFF | Round 2 graceful | Round 3 BGE m3 |
+|---|---|---|---|
+| **Pass rate** | 100% | 100% | **0.8%** ❌ |
+| **Avg duration** | 10.2s | 11.3s | 9.9s |
+| **Rerank quality** | N/A (无 rerank) | N/A (graceful) | **极佳** (0.908 vs 0.003) |
+| **VRAM delta** | 0 | 0 | +5.6 GB |
+| **LLM 行为** | 正常 | 正常 | **崩溃 (fake XML + SSE 中断)** |
 
-## 7. 风险与回滚
-
-| 风险 | 缓解 |
-|---|---|
-| Round 3 (BGE m3) 召回率反而下降 | 改 `RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2` 回退 (CPU 英文) |
-| Round 3 与 Qwen3-Embedding 共存 OOM | RTX 5090 32GB 充足，理论峰值 18GB，BGE m3 FP16 1.1GB + Qwen3 1.2GB = 2.3GB |
-| 真模型加载延迟 (8-10s) | `warmup()` 在 app lifespan startup 调一次 |
-| 5x 候选集 (25 docs) 检索时间变长 | GPU 推理 30ms << 三路检索 ~500ms，可忽略 |
-
-**回滚**：单 commit `Revert "feat(reranker): ..."` 或 `.env RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2`
+**核心结论**: BGE m3 真实检索质量证明 MTEB #1 不是虚名，但与现有 Agent pipeline 兼容性 1%。**不切换默认**（option B），保留代码等深度修复。
