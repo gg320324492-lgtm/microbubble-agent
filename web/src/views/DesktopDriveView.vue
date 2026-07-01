@@ -17,7 +17,7 @@
 -->
 <template>
   <div class="desktop-drive-view">
-    <!-- 工具栏 (PR3.4 接入) -->
+    <!-- 工具栏 (PR3.4 接入: 启用按钮 + 接入 dialog) -->
     <div class="drive-toolbar">
       <h2 class="drive-title">📁 课题组网盘</h2>
       <div class="drive-toolbar-actions">
@@ -26,20 +26,25 @@
           placeholder="搜索文件名..."
           clearable
           class="drive-search-input"
-          disabled
         >
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-button-group>
           <el-button :icon="UploadFilled" disabled>上传文件</el-button>
           <el-button :icon="Folder" disabled>上传文件夹</el-button>
-          <el-button :icon="Plus" disabled>新建文件夹</el-button>
+          <el-button :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
         </el-button-group>
         <el-button-group class="drive-view-toggle">
-          <el-button :type="viewMode === 'grid' ? 'primary' : 'default'" disabled>
+          <el-button
+            :type="viewMode === 'grid' ? 'primary' : 'default'"
+            @click="viewMode = 'grid'"
+          >
             <el-icon><Grid /></el-icon>
           </el-button>
-          <el-button :type="viewMode === 'list' ? 'primary' : 'default'" disabled>
+          <el-button
+            :type="viewMode === 'list' ? 'primary' : 'default'"
+            @click="viewMode = 'list'"
+          >
             <el-icon><List /></el-icon>
           </el-button>
         </el-button-group>
@@ -106,6 +111,26 @@
       <span class="drive-status-path">{{ currentPathDisplay }}</span>
       <span class="drive-status-storage">容量统计 (PR3.7 接入)</span>
     </div>
+
+    <!-- PR3.4 dialogs -->
+    <CreateFolderDialog
+      v-model="showCreateFolderDialog"
+      :parent-id="selectedFolderId"
+      :parent-folder="selectedFolder"
+      @create="onCreateFolder"
+    />
+    <RenameDialog
+      v-model="showRenameDialog"
+      :target="renameTarget"
+      :target-type="renameTargetType"
+      @rename="onRename"
+    />
+    <MoveDialog
+      v-model="showMoveDialog"
+      :current-folder-id="selectedFolderId"
+      :file-id="moveTargetFileId"
+      @move="onMoveFile"
+    />
   </div>
 </template>
 
@@ -115,6 +140,9 @@ import { Search, UploadFilled, Folder, Plus, Grid, List, Files } from '@element-
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
+import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
+import RenameDialog from '@/components/drive/RenameDialog.vue'
+import MoveDialog from '@/components/drive/MoveDialog.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 
@@ -125,7 +153,10 @@ const {
   loading: treeLoading,
   loadError: treeLoadError,
   fetchTree: fetchFolderTree,
-  toggleExpanded: toggleExpandedFolder
+  toggleExpanded: toggleExpandedFolder,
+  selectedFolder,
+  createFolder: doCreateFolder,
+  renameFolder: doRenameFolder
 } = useFolderTree()
 
 // === 文件列表 (PR3.3 接入) ===
@@ -139,6 +170,8 @@ const {
   selectedFileIds,
   fetchFiles: fetchDriveFiles,
   deleteFile,
+  renameFile,
+  moveFile,
   toggleSelect: toggleFileSelect,
   clearSelection
 } = useDriveFiles()
@@ -147,6 +180,14 @@ const {
 const selectedFolderId = ref(null)
 const viewMode = ref('grid')  // grid | list
 const searchQuery = ref('')
+
+// === PR3.4 dialog 状态 ===
+const showCreateFolderDialog = ref(false)
+const showRenameDialog = ref(false)
+const renameTarget = ref(null)
+const renameTargetType = ref('file')  // file | folder
+const showMoveDialog = ref(false)
+const moveTargetFileId = ref(null)
 
 // === 监听 selectedFolderId 变化 → 重新拉文件列表 ===
 watch(selectedFolderId, (newId, oldId) => {
@@ -178,13 +219,40 @@ function handleFilePreview(file) {
   ElMessage.info(`预览功能待 PR3.4 接入: ${file.file_name || file.title}`)
 }
 
-async function handleFileRename(file) {
-  // PR3.4 接入 rename dialog
-  ElMessage.info(`重命名功能待 PR3.4 接入: ${file.file_name}`)
+function handleFileRename(file) {
+  renameTarget.value = file
+  renameTargetType.value = 'file'
+  showRenameDialog.value = true
+}
+
+async function onRename(payload) {
+  try {
+    if (payload.type === 'folder') {
+      await doRenameFolder(payload.id, payload.newName)
+      ElMessage.success('文件夹重命名成功')
+    } else {
+      await renameFile(payload.id, payload.newName)
+      ElMessage.success('文件重命名成功')
+    }
+    showRenameDialog.value = false
+  } catch (e) {
+    ElMessage.error(e.message || '重命名失败')
+  }
 }
 
 function handleFileMove(file) {
-  ElMessage.info(`移动功能待 PR3.4 接入: ${file.file_name}`)
+  moveTargetFileId.value = file.id
+  showMoveDialog.value = true
+}
+
+async function onMoveFile(payload) {
+  try {
+    await moveFile(payload.fileId, payload.targetFolderId)
+    showMoveDialog.value = false
+    ElMessage.success('文件已移动')
+  } catch (e) {
+    ElMessage.error(e.message || '移动失败')
+  }
 }
 
 function handleFileUpdateVisibility(file) {
@@ -212,6 +280,22 @@ async function handleFileDelete(file) {
     if (e !== 'cancel') {
       ElMessage.error(e.message || '删除失败')
     }
+  }
+}
+
+// === PR3.4 handlers ===
+async function onCreateFolder(payload) {
+  try {
+    const result = await doCreateFolder({
+      name: payload.name,
+      parentId: payload.parent_id,
+      visibility: payload.visibility
+    })
+    showCreateFolderDialog.value = false
+    ElMessage.success(`文件夹已创建: ${result.name}`)
+    // useFolderTree.createFolder 内部已 fetchTree, 不用再手动刷新
+  } catch (e) {
+    ElMessage.error(e.message || '创建文件夹失败')
   }
 }
 
