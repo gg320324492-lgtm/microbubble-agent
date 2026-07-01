@@ -189,8 +189,12 @@ export function useChatStream() {
   // 持久化工具
   // --------------------------------------------------------------------------
 
-  /** 同步写入（不 debounce）— 切会话/卸载/发送完成时调用 */
-  function persistSessionSync(id: string) {
+  /**
+   * 同步写入（不 debounce）— 切会话/卸载/发送完成时调用
+   * @param opts.updateActivity=false 跳过 updateActivity(2026-07-01 修复:
+   *   切会话/卸载只持久化消息数据,不应触发会话"上浮"副作用)
+   */
+  function persistSessionSync(id: string, opts: { updateActivity?: boolean } = {}) {
     const msgs = messagesBySession.value[id] || []
     const slice = msgs.slice(-MESSAGES_SLICE_KEEP)
     try {
@@ -203,7 +207,9 @@ export function useChatStream() {
         localStorage.setItem(LEGACY_MESSAGES_KEY, JSON.stringify(slice))
       } catch { /* ignore */ }
     }
-    if (sessionsStore.currentSession()) {
+    // 2026-07-01 修复:只有真实对话活动(发消息)才更新 session activity
+    // 切会话/卸载不触发上浮(用户澄清:点击≠对话)
+    if (opts.updateActivity !== false && sessionsStore.currentSession()) {
       const lastMsg = msgs[msgs.length - 1]
       sessionsStore.updateActivity(id, msgs.length, lastMsg?.content || '')
     }
@@ -240,18 +246,19 @@ export function useChatStream() {
   // --------------------------------------------------------------------------
 
   function onCreateSession() {
-    persistSessionSync(sessionId.value)
+    persistSessionSync(sessionId.value, { updateActivity: false })  // 2026-07-01:新会话 createSession 自己设 updatedAt=now
     sessionsStore.createSession()
     const newId = sessionsStore.currentId || sessionId.value
     sessionId.value = newId
     messagesBySession.value[newId] = [createAssistantGreeting('新对话，有什么可以帮你的吗？')]
     loadedSessions.add(newId)
-    persistSessionSync(newId)
+    persistSessionSync(newId, { updateActivity: false })  // 2026-07-01:同上,避免重复 bump
   }
 
   function onSwitchSession(id: string) {
     if (id === sessionId.value) return
-    persistSessionSync(sessionId.value) // 切走前快照（含正在生成的流式部分）
+    // 2026-07-01:切会话 = 纯选中,不更新活动(用户澄清:点击≠对话)
+    persistSessionSync(sessionId.value, { updateActivity: false }) // 切走前快照（含正在生成的流式部分）
     ensureSessionLoaded(id)
     sessionId.value = id
   }
@@ -897,8 +904,9 @@ export function useChatStream() {
       } catch { /* ignore */ }
     }
     // 持久化所有 session（含后台流式生成的内容）
+    // 2026-07-01:关闭页面不更新活动(避免所有 session updatedAt 重置为"刚刚"→ 顺序丢失)
     for (const id of Object.keys(messagesBySession.value)) {
-      persistSessionSync(id)
+      persistSessionSync(id, { updateActivity: false })
     }
   })
 

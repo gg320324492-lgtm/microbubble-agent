@@ -229,6 +229,7 @@ onUpdated(() => {
       <div
         v-for="s in filteredSessions"
         :key="s.id"
+        :data-session-id="s.id"
         class="session-item"
         :class="{ active: s.id === store.currentId }"
         @click="onSwitch(s.id)"
