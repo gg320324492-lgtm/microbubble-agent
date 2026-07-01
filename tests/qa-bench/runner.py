@@ -576,6 +576,14 @@ async def run_single_question(
             auto_issues.append(issue)
     except Exception:
         pass
+    # 2026-07-01 新增 retrieval_recall 检测器 (P1, BGE m3 reranker 升级伴随)
+    try:
+        from detectors.retrieval_recall import detect_retrieval_recall
+        gt_refs = question_data.get("ground_truth_refs", []) or []
+        for issue in detect_retrieval_recall(events, gt_refs):
+            auto_issues.append(issue)
+    except Exception:
+        pass
 
     all_issues = auto_issues + expect_issues
     has_critical = any(

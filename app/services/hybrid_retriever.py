@@ -47,7 +47,9 @@ class HybridRetriever:
             检索结果列表
         """
         # 候选集数量（重排序前多取一些）
-        candidate_k = top_k * 3 if enable_rerank else top_k
+        # 2026-07-01 BGE m3: top_k * 5 → 25 candidates before rerank (从 15 扩到 25)
+        # 理由: cross-encoder 对更大候选集更稳定, GPU 推理 30ms 可忽略
+        candidate_k = top_k * 5 if enable_rerank else top_k
 
         # 并发执行三路检索
         tasks = []
@@ -90,11 +92,11 @@ class HybridRetriever:
         # 分数归一化
         normalized = self._normalize_scores(merged)
 
-        # 重排序
+        # 重排序 (2026-07-01 BGE m3: rerank_async 不阻塞 event loop)
         if enable_rerank and len(normalized) > 1:
             from app.services.reranker_service import get_reranker_service
             reranker = get_reranker_service()
-            reranked = reranker.rerank(query, normalized, top_k=top_k)
+            reranked = await reranker.rerank_async(query, normalized, top_k=top_k)
             return reranked
 
         # 不重排序时按归一化分数排序
