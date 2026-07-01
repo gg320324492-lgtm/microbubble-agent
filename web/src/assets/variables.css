@@ -1597,25 +1597,45 @@ body {
   --el-color-primary-dark-2: #FFB347;
 }
 
-/* === 成员 grade chip (实色主色 + 白字, 6 主题自动适配) ===
+/* === 成员 grade + role chip (实色主色 + 白字, 6 主题自动适配) ===
    v77 前 MemberView L530-551 已有 ocean/forest 主题重染 (浅主色底 + 主色字)
    该方案对比度差: 主色字落半透明主色底几乎看不清.
    本块用实色 var(--color-primary) + 白字 + font-weight 600, 6 主题下均高对比.
+   v78 上一轮 (.grade-tag) 扩成 .member-info .el-tag + .hero-tags .el-tag
+   覆盖 MemberView L78 + MobileMemberDetailView L34 的 role chip (与 grade chip 同款).
+   voice-tag (success/warning) 用 :not(.voice-tag) 排除, 保留 EP 语义色.
+   .member-skills 仅 .grade-tag 升级 — skill 数组 tag (装备研发等) 仍走原 ocean/forest 重染.
    位置选在 6 主题变量定义完后, 而非 .el-tag dark 块附近 (L924-935),
    是为了"主题变量"和"使用主题变量的组件 class"分层组织.
-   !important 是为防止 v77 后续 P2.6 series 引入新 .el-tag dark 重染时反向覆盖. */
-.member-info .grade-tag,
-.member-skills .grade-tag,
-.hero-tags .grade-tag {
+   !important 是为防止 v77 P2.6-D L530-551 老的 ocean/forest 重染块反向覆盖. */
+.member-info .el-tag,
+.hero-tags > .el-tag:not(.voice-tag),
+.member-skills .grade-tag {
   background-color: var(--color-primary) !important;
   border-color: var(--color-primary) !important;
   color: var(--el-color-white) !important;
   font-weight: 600;
 }
 
-[data-theme="dark"] .member-info .grade-tag,
-[data-theme="dark"] .member-skills .grade-tag,
-[data-theme="dark"] .hero-tags .grade-tag {
+[data-theme="dark"] .member-info .el-tag,
+[data-theme="dark"] .hero-tags > .el-tag:not(.voice-tag),
+[data-theme="dark"] .member-skills .grade-tag {
+  background-color: rgba(var(--color-primary-rgb), 0.55) !important;
+  border-color: rgba(var(--color-primary-rgb), 0.70) !important;
+  color: var(--el-color-white) !important;
+}
+
+/* === SettingsView 等孤立位置的 role chip ===
+   用专属 .role-tag class, 不会被 .member-info / .hero-tags 容器选择器覆盖. */
+.settings-form .role-tag,
+.el-form .role-tag {
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--el-color-white) !important;
+  font-weight: 600;
+}
+[data-theme="dark"] .settings-form .role-tag,
+[data-theme="dark"] .el-form .role-tag {
   background-color: rgba(var(--color-primary-rgb), 0.55) !important;
   border-color: rgba(var(--color-primary-rgb), 0.70) !important;
   color: var(--el-color-white) !important;
