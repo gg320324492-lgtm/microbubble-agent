@@ -51,8 +51,8 @@
       </div>
     </div>
 
-    <!-- 主体布局: 左侧 FolderTree + 右侧 FileGrid -->
-    <div class="drive-main">
+    <!-- 主体布局: 左侧 FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
+    <div class="drive-main" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
         <!-- PR3.2: FolderTree 组件 (含 FolderTreeNode 递归) -->
@@ -135,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { Search, UploadFilled, Folder, Plus, Grid, List, Files } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
@@ -145,6 +145,7 @@ import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
+import { useFolderDropZone } from '@/composables/useFolderDropZone'
 
 // === 文件夹树 (PR3.2 接入) ===
 const {
@@ -181,6 +182,23 @@ const selectedFolderId = ref(null)
 const viewMode = ref('grid')  // grid | list
 const searchQuery = ref('')
 
+// === PR3.5 文件夹拖拽 (主区域作为 drop zone) ===
+const driveMainRef = ref(null)
+const { isDragging, bind: bindDropZone, unbind: unbindDropZone } = useFolderDropZone({
+  onFilesDropped: ({ entries, source }) => {
+    // PR3.5 仅显示拖拽信息, 实际上传逻辑留给 PR3.6 dialog
+    const fileCount = entries.length
+    const folderCount = new Set(entries.map(e => e.relativePath.split('/').slice(0, -1).join('/'))).size
+    ElMessage.info(
+      `检测到 ${fileCount} 个文件 (${folderCount} 个文件夹), 来源=${source}.\n上传功能待 PR3.6 接入`
+    )
+    // 临时打印相对路径 (调试)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DropZone] entries:', entries.map(e => e.relativePath).slice(0, 5))
+    }
+  }
+})
+
 // === PR3.4 dialog 状态 ===
 const showCreateFolderDialog = ref(false)
 const showRenameDialog = ref(false)
@@ -188,6 +206,22 @@ const renameTarget = ref(null)
 const renameTargetType = ref('file')  // file | folder
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
+
+// === 生命周期 ===
+onMounted(async () => {
+  fetchFolderTree()
+  fetchDriveFiles({ folder_id: null })
+  // PR3.5: 等 DOM ready 后绑定主区域为 drop zone
+  await nextTick()
+  if (driveMainRef.value) {
+    bindDropZone(driveMainRef.value)
+  }
+})
+
+// 切换路由时清理 (避免内存泄漏)
+onBeforeUnmount(() => {
+  unbindDropZone()
+})
 
 // === 监听 selectedFolderId 变化 → 重新拉文件列表 ===
 watch(selectedFolderId, (newId, oldId) => {
@@ -353,6 +387,37 @@ const currentPathDisplay = computed(() => {
   display: flex;
   flex: 1;
   min-height: 0;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.drive-main.is-drag-over::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px dashed var(--color-primary, #409eff);
+  background: var(--color-primary-light-9, #ecf5ff);
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 10;
+  border-radius: 4px;
+}
+
+.drive-main.is-drag-over::after {
+  content: '松开上传文件 (PR3.6 接入上传逻辑)';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 24px;
+  background: var(--color-primary, #409eff);
+  color: var(--el-color-white, #fff);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 11;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
 }
 
 .drive-sidebar {
