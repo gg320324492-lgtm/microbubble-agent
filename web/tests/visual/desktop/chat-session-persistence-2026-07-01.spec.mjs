@@ -205,3 +205,84 @@ test.describe('chat-session-persistence-2026-07-01: 修复 1a/1b/1c 端到端', 
     console.log('per-user 命名空间 keys:', perUserKeys)
   })
 })
+
+
+// ★ 2026-07-01 bug 4: 删除会话后刷新不再复活
+// 根因: store.deleteSession 只动本地,服务端没收到 DELETE → refresh 后 mergeServerList 复活
+// 修复: deleteSession 内部调 useChatHistoryStore().deleteServerSession(id, { hard: true })
+test('I: 删除已同步会话后刷新不再复活 (bug 4)', async ({ page }) => {
+  await setupPage(page)
+  await page.waitForTimeout(3000)
+
+  // 1. 初始会话数
+  const initialCount = await page.locator('.session-item').count()
+  console.log(`[I.1] 初始会话数: ${initialCount}`)
+
+  // 2. 选第 5 个 session(避免最顶/最底)
+  const targetIdx = Math.min(4, initialCount - 1)
+  const target = await page.locator('.session-item').nth(targetIdx).evaluate(el => ({
+    id: el.dataset.sessionId,
+    title: el.querySelector('.session-title-text')?.textContent || '',
+  }))
+  console.log(`[I.2] 目标 session (idx=${targetIdx}): ${target.id.slice(0, 30)}...`)
+
+  // 3. 验证服务端有这条(走 API 直接查)
+  const serverHas = await page.evaluate(async (id) => {
+    const r = await fetch('/api/v1/chat/sessions', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    const data = await r.json()
+    const sessions = data.sessions || data.items || []
+    return sessions.some(s => s.id === id)
+  }, target.id)
+  console.log(`[I.3] 服务端有这个 session: ${serverHas}`)
+  if (!serverHas) {
+    test.skip(true, '目标 session 不在服务端,无法验证 bug 4')
+    return
+  }
+
+  // 4. 调 store.deleteSession(走真实代码路径,而不是直接改 localStorage)
+  //    store 删除应同时:本地 splice + 调服务端 DELETE
+  //    通过页面内的 store instance 调用(用 pinia devtools API)
+  await page.evaluate(async (id) => {
+    // 通过 window.__PINIA__ 拿 store(若未暴露,则直接 fallback localStorage 模拟)
+    // 这里优先用真实 store.deleteSession,因为这是验证修复的关键
+    const stores = document.querySelector('#app')?.__vue_app__?.config?.globalProperties?.$pinia?._s
+    if (stores) {
+      const cs = stores.get('chatSessions')
+      if (cs) cs.deleteSession(id)
+    }
+  }, target.id)
+  // 等待异步 DELETE 完成
+  await page.waitForTimeout(2000)
+
+  // 5. ★ 关键:硬刷新页面
+  console.log(`[I.4] 硬刷新...`)
+  await page.reload()
+  await page.waitForTimeout(3500)
+
+  // 6. 验证:被删的 session 不应在 DOM 中
+  const stillExists = await page.locator(`[data-session-id="${target.id}"]`).count()
+  const finalCount = await page.locator('.session-item').count()
+  console.log(`[I.5] 刷新后: total=${finalCount}, 目标 session 在 DOM=${stillExists}`)
+
+  // 7. 再次直查服务端,确认服务端已删除
+  const serverStillHas = await page.evaluate(async (id) => {
+    const r = await fetch('/api/v1/chat/sessions', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` }
+    })
+    const data = await r.json()
+    const sessions = data.sessions || data.items || []
+    return sessions.some(s => s.id === id)
+  }, target.id)
+  console.log(`[I.6] 服务端现在有这个 session: ${serverStillHas}`)
+
+  if (stillExists === 0 && !serverStillHas) {
+    console.log(`\n✅ Bug 4 修复生效`)
+  } else {
+    console.log(`\n❌ Bug 4 仍存在(stillExists=${stillExists}, serverStillHas=${serverStillHas})`)
+  }
+
+  expect(stillExists, '★ 核心:刷新后被删 session 应不复活').toBe(0)
+  expect(serverStillHas, '★ 服务端应已 hard-delete(列表中不应再返回)').toBe(false)
+})

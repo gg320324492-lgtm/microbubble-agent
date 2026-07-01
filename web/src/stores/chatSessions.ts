@@ -155,6 +155,13 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     return false
   }
 
+  /**
+   * 删除会话(本地 + 服务端)
+   * - 本地立即 splice,UI 立刻响应
+   * - 异步调服务端 hard delete(参考 setTags/setPinned best-effort 模式)
+   * - 失败 best-effort:console.warn(不阻塞 UI,不回滚本地)
+   * - 2026-07-01 修复:之前只动本地,导致 refresh 后 mergeServerList 复活
+   */
   function deleteSession(id: string) {
     const idx = sessions.value.findIndex(s => s.id === id)
     if (idx < 0) return
@@ -162,6 +169,16 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     if (currentId.value === id) {
       currentId.value = sessions.value[0]?.id || null
     }
+    // ★ 2026-07-01:同步服务端(用户决策 hard delete,UI 文案"不可撤销")
+    ;(async () => {
+      try {
+        const { useChatHistoryStore } = await import('@/stores/chatHistory')
+        await useChatHistoryStore().deleteServerSession(id, { hard: true })
+      } catch (e) {
+        // best-effort:失败时刷新页面会让会话复活(虽然不理想,但比"用户看到已删除又出现"更糟的是"操作被撤销")
+        console.warn('[chatSessions] deleteServerSession failed:', e)
+      }
+    })()
   }
 
   function renameSession(id: string, newTitle: string) {

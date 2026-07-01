@@ -178,3 +178,73 @@ describe('chatSessions store — mergeServerList currentId repair (bug 1b)', () 
     expect(store.sessions.length).toBe(0)
   })
 })
+
+
+// ============================================================================
+// 2026-07-01 bug 4: deleteSession 必须同步调服务端,避免 refresh 复活
+// ============================================================================
+
+describe('chatSessions store — deleteSession 同步服务端 (2026-07-01 bug 4)', () => {
+  // mock useChatHistoryStore().deleteServerSession — 必须在 import store 之前
+  let mockDeleteServerSession
+  beforeEach(() => {
+    mockDeleteServerSession = vi.fn().mockResolvedValue({ ok: true })
+    vi.doMock('@/stores/chatHistory', () => ({
+      useChatHistoryStore: () => ({
+        deleteServerSession: mockDeleteServerSession,
+      }),
+    }))
+  })
+
+  afterEach(() => {
+    vi.doUnmock('@/stores/chatHistory')
+  })
+
+  it('本地立即 splice(UI 立刻响应)', async () => {
+    // 重新 import store 以应用 mock
+    const { useChatSessionsStore: useStore } = await import('@/stores/chatSessions')
+    const store = useStore()
+    const a = store.createSession('a')
+    const b = store.createSession('b')
+    expect(store.sessions.length).toBe(2)
+
+    store.deleteSession(a.id)
+    // 本地立即少 1
+    expect(store.sessions.length).toBe(1)
+    expect(store.sessions[0].id).toBe(b.id)
+  })
+
+  it('★ 核心:删除后调服务端 deleteServerSession({ hard: true })', async () => {
+    const { useChatSessionsStore: useStore } = await import('@/stores/chatSessions')
+    const store = useStore()
+    const session = store.createSession('test-session')
+    store.deleteSession(session.id)
+    await nextTick()
+    // 等待 microtask
+    await new Promise(r => setTimeout(r, 10))
+    expect(mockDeleteServerSession).toHaveBeenCalledWith(session.id, { hard: true })
+  })
+
+  it('服务端失败 best-effort:不阻塞 UI,不回滚', async () => {
+    mockDeleteServerSession = vi.fn().mockRejectedValue(new Error('network'))
+    vi.doMock('@/stores/chatHistory', () => ({
+      useChatHistoryStore: () => ({
+        deleteServerSession: mockDeleteServerSession,
+      }),
+    }))
+    const { useChatSessionsStore: useStore } = await import('@/stores/chatSessions')
+    const store = useStore()
+    const a = store.createSession('a')
+    const b = store.createSession('b')
+
+    // 即使服务端会失败,本地也要正常删除
+    expect(() => store.deleteSession(a.id)).not.toThrow()
+    await nextTick()
+    await new Promise(r => setTimeout(r, 10))
+    // 本地只剩 b(不回滚)
+    expect(store.sessions.length).toBe(1)
+    expect(store.sessions[0].id).toBe(b.id)
+    // 服务端被调了
+    expect(mockDeleteServerSession).toHaveBeenCalled()
+  })
+})
