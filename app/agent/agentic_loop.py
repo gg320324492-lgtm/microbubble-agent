@@ -807,11 +807,70 @@ class AgenticLoop:
         - retry (条件性)
         - text_delta (重试流式)
         - done
+
+        2026-07-02 Round 5a 修复：整个生成器外包 try/finally 兜底保证 done event 至少
+        yield 一次。否则 CancelledError / Exception 路径只 raise 不 yield done → 前端
+        useChatStream.ts:638 text_without_json 替换逻辑不跑 → fake XML 永久泄露
+        → qa-bench runner 检测到 stream_no_done 触发 FAIL。
         """
         if max_rounds is None:
             max_rounds = settings.AGENT_MAX_TOOL_ROUNDS
 
         llm = ctx.llm or LLMClient()
+        accumulated_text = ""
+        rich_blocks: list[RichBlock] = []
+        tool_calls: list[dict] = []
+        t0 = time.monotonic()
+        done_event_yielded = False  # 2026-07-02 Round 5a: 标记 done 是否已 yield
+
+        # 2026-07-02 Round 5a: 用 _run_inner 包内部逻辑，外层 try/finally 兜底
+        async def _run_inner() -> AsyncIterator[StreamEvent]:
+            nonlocal done_event_yielded
+            async for evt in self._run_legacy(messages, system, intent, ctx, max_rounds, user_message,
+                                             llm, t0=t0):
+                if evt.type == "done":
+                    done_event_yielded = True
+                yield evt
+
+        try:
+            async for evt in _run_inner():
+                yield evt
+        finally:
+            # 2026-07-02 Round 5a: 兜底保证 done event 一定 yield 一次
+            # 适用场景: CancelledError / Exception / 任何提前退出的路径
+            if not done_event_yielded:
+                duration_ms = int((time.monotonic() - t0) * 1000)
+                logger.warning(
+                    f"agentic_loop run() 流被中断但 done 未 yield，兜底 yield minimal done event "
+                    f"(duration_ms={duration_ms})"
+                )
+                yield StreamEvent(
+                    type="done",
+                    duration_ms=duration_ms,
+                    session_id=ctx.trace.session_id if ctx.trace else None,
+                    text_without_json=None,  # 无干净文本，前端不替换 content
+                )
+
+    async def _run_legacy(
+        self,
+        messages: list[dict],
+        system: str,
+        intent: IntentResult,
+        ctx: ToolContext,
+        max_rounds: int,
+        user_message: str,
+        llm,
+        t0: float,
+    ) -> AsyncIterator[StreamEvent]:
+        """2026-07-02 Round 5a: 原始 run() 逻辑重构到内部方法
+
+        所有原代码不变，仅 try/except/finally 块稍作调整（最外层已包 try/finally）。
+        """
+        accumulated_text = ""
+        rich_blocks: list[RichBlock] = []
+        tool_calls: list[dict] = []
+
+        try:
         accumulated_text = ""
         rich_blocks: list[RichBlock] = []
         tool_calls: list[dict] = []
