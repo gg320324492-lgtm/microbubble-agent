@@ -1,100 +1,50 @@
 <!--
-  MobileCommentThread.vue — v2 PR6-P3 移动端评论组件
+  MobileCommentThread.vue — v2 PR6 移动端评论组件 (PR6-P3 + PR6-P5 mobile 镜像)
 
-  与 desktop CommentThread.vue 共享 useNotificationsStore
-  (避免重复实现 fetchComments/postComment/deleteComment)
-
-  差异 (vs desktop):
-  - 紧凑布局: 单行 textarea (1 row, 自动 expand), 头像 32px
-  - Sticky 底部发布栏 (input + post button 一行)
-  - 错误用 ElMessage (不用 el-alert 阻塞)
-  - 列表卡片间距更小 (mobile 屏小)
-
-  Props:
-  - fileId: number 必填
-  - currentUserId: number? 默认 null
-  - isFileOwner: boolean 默认 false
-
-  设计:
-  - 复用 store (避免重复逻辑)
-  - @username 高亮渲染复用 desktop 同款 XSS escape + regex
-  - 删除用 ElMessageBox.confirm (mobile 上比 el-popconfirm 体验更好)
-
-  Dark mode: 非 scoped 块 (v60-v67 教训)
+  v2 PR6-P5 threading: 完全复用 desktop CommentItem 组件
+  v2 PR6-P4 autocomplete: 共享 useMentionAutocomplete composable
 -->
 <template>
   <div class="mobile-comment-thread">
-    <!-- 标题 -->
     <div class="mct-header">
       <h3>
         <el-icon><ChatDotRound /></el-icon>
         评论
         <el-badge
-          v-if="comments.length > 0"
-          :value="comments.length"
+          v-if="treeTop.length > 0"
+          :value="treeTop.length"
           :max="99"
           class="mct-count"
         />
       </h3>
     </div>
 
-    <!-- 加载态 -->
-    <div v-if="loading && comments.length === 0" class="mct-loading">
+    <div v-if="loading && treeTop.length === 0" class="mct-loading">
       <el-icon class="is-loading"><Loading /></el-icon>
       <span>加载评论中...</span>
     </div>
 
-    <!-- 空态 -->
-    <div v-else-if="comments.length === 0" class="mct-empty">
+    <div v-else-if="treeTop.length === 0" class="mct-empty">
       <el-icon :size="36"><ChatDotRound /></el-icon>
       <p>暂无评论</p>
       <p class="hint">在下方输入框写下第一条评论</p>
     </div>
 
-    <!-- 评论列表 (倒序) -->
+    <!-- v2 PR6-P5: 评论树 (复用 desktop CommentItem 组件) -->
     <ul v-else class="mct-list">
-      <li
-        v-for="c in comments"
-        :key="c.id"
-        class="mct-item"
-      >
-        <el-avatar
-          :size="32"
-          :src="userAvatarUrl(c.user_id)"
-          class="mct-avatar"
-        >
-          {{ (c.user_name || '?').slice(0, 1) }}
-        </el-avatar>
-        <div class="mct-body">
-          <div class="mct-meta">
-            <strong class="mct-author">{{ c.user_name || `用户 #${c.user_id}` }}</strong>
-            <span class="mct-time">{{ formatTime(c.created_at) }}</span>
-            <button
-              v-if="canDelete(c)"
-              type="button"
-              class="mct-delete-btn"
-              aria-label="删除评论"
-              title="删除评论"
-              @click="onDelete(c)"
-            >
-              删除
-            </button>
-          </div>
-          <div class="mct-content" v-html="formatContent(c.content)" />
-          <div v-if="c.mentions && c.mentions.length > 0" class="mct-mentions">
-            <span
-              v-for="mid in c.mentions"
-              :key="mid"
-              class="mct-mention-tag"
-            >
-              @{{ usernameById(mid) }}
-            </span>
-          </div>
-        </div>
+      <li v-for="top in treeTop" :key="top.id" class="mct-top">
+        <CommentItem
+          :comment="top"
+          :depth="0"
+          :file-id="props.fileId"
+          :current-user-id="props.currentUserId"
+          :is-file-owner="props.isFileOwner"
+          :members-list="membersList"
+          :username-map="usernameMap"
+        />
       </li>
     </ul>
 
-    <!-- Sticky 底部发布栏 -->
     <div class="mct-compose">
       <el-input
         ref="inputRef"
@@ -151,23 +101,14 @@
 </template>
 
 <script setup>
-/**
- * MobileCommentThread.vue — 移动端评论组件
- *
- * 与 desktop 共享 useNotificationsStore (零业务逻辑重复)
- *
- * 关键设计:
- * 1. 完全复用 store (fetchComments/postComment/deleteComment) — 不写第二份
- * 2. XSS escape + @username 高亮复用 desktop 同款 regex
- * 3. 删除用 ElMessageBox.confirm (mobile 体验 > el-popconfirm)
- * 4. username 缓存单次批查 /api/v1/members (避免 N+1)
- */
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { useNotificationsStore } from '@/composables/useNotifications'
 import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
+import { useCommentTree } from '@/composables/useCommentTree'
+import CommentItem from '@/components/drive/CommentItem.vue'
 
 const props = defineProps({
   fileId: { type: Number, required: true },
@@ -176,6 +117,8 @@ const props = defineProps({
 })
 
 const store = useNotificationsStore()
+const { buildCommentTree } = useCommentTree()
+
 const newContent = ref('')
 const posting = ref(false)
 const loading = ref(false)
@@ -183,7 +126,6 @@ const usernameMap = ref({})
 const membersList = ref([])
 const inputRef = ref(null)
 
-// v2 PR6-P4: @username autocomplete (mobile 镜像, 与 desktop 共享 composable)
 const mention = useMentionAutocomplete({
   textareaRef: inputRef,
   members: membersList,
@@ -205,6 +147,7 @@ const mention = useMentionAutocomplete({
 })
 
 const comments = computed(() => store.commentsByFileId[props.fileId] || [])
+const treeTop = computed(() => buildCommentTree(comments.value).top)
 
 const placeholder = computed(() => {
   if (!props.currentUserId) return '请先登录后再评论'
@@ -226,27 +169,6 @@ function formatTime(iso) {
   if (sec < 3600) return `${Math.floor(sec / 60)} 分钟前`
   if (sec < 86400) return `${Math.floor(sec / 3600)} 小时前`
   return new Date(iso).toLocaleDateString('zh-CN')
-}
-
-/**
- * 渲染评论内容 + 解析 @username 为高亮 span
- *
- * 与 desktop CommentThread.vue formatContent 完全镜像 (DRY):
- * - 必须先 escape HTML 防 XSS
- * - @username 匹配 _MENTION_PATTERN: @([一-龥A-Za-z0-9_.\-]{1,32}) (PR6-P4 修复: 加 0-9_.-)
- */
-function formatContent(raw) {
-  if (!raw) return ''
-  const escaped = raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-  return escaped.replace(
-    /@([一-龥A-Za-z0-9_.\-]{1,32})/g,
-    '<span class="mention">@$1</span>',
-  )
 }
 
 function canDelete(comment) {
@@ -282,7 +204,6 @@ async function batchResolveUsernames() {
       map[m.id] = m.username || m.name
     }
     usernameMap.value = map
-    // v2 PR6-P4: 同时填充 membersList 给 autocomplete
     if (membersList.value.length === 0) {
       membersList.value = (resp.data.items || []).map((m) => ({
         id: m.id,
@@ -294,11 +215,10 @@ async function batchResolveUsernames() {
       }))
     }
   } catch (e) {
-    // ignore — fallback 到 id
+    // ignore
   }
 }
 
-// v2 PR6-P4: autocomplete 事件桥
 function onContentInput() { mention.refresh() }
 function onContentKeydown(event) {
   if (mention.handleKeydown(event)) return
@@ -341,15 +261,14 @@ async function onPost() {
 }
 
 async function onDelete(comment) {
-  // v2 PR6-P3: mobile 端删除用 ElMessageBox.confirm (el-popconfirm 不适合 mobile)
   try {
-    await ElMessageBox.confirm('确认删除此评论？', '删除确认', {
+    await ElMessageBox.confirm('确认删除此评论?', '删除确认', {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
       type: 'warning',
     })
   } catch {
-    return // 取消
+    return
   }
   try {
     await store.deleteComment(props.fileId, comment.id)
@@ -373,7 +292,7 @@ watch(() => props.fileId, (newId) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding-bottom: 80px; /* 留空间给 sticky 底部输入栏 */
+  padding-bottom: 80px;
 }
 
 .mct-header {
@@ -424,80 +343,6 @@ watch(() => props.fileId, (newId) => {
   gap: 12px;
 }
 
-.mct-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px;
-  background: var(--color-bg-page, #f5f7fa);
-  border-radius: 8px;
-}
-
-.mct-avatar {
-  flex-shrink: 0;
-}
-
-.mct-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.mct-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  font-size: 13px;
-}
-
-.mct-author {
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
-}
-
-.mct-time {
-  font-size: 12px;
-  color: var(--color-text-secondary, #909399);
-}
-
-.mct-delete-btn {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--color-danger, #f56c6c);
-  font-size: 12px;
-  padding: 2px 6px;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.mct-delete-btn:active {
-  background: var(--color-bg-hover, #f5f7fa);
-}
-
-.mct-content {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--color-text-primary, #303133);
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-
-.mct-mentions {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.mct-mention-tag {
-  font-size: 11px;
-  padding: 2px 6px;
-  background: var(--color-primary-light-9, #ecf5ff);
-  color: var(--color-primary, #409eff);
-  border-radius: 10px;
-}
-
 /* Sticky 底部发布栏 */
 .mct-compose {
   position: sticky;
@@ -517,9 +362,9 @@ watch(() => props.fileId, (newId) => {
   flex: 1;
 }
 
-/* v2 PR6-P4: @username autocomplete dropdown (mobile 紧凑布局) */
+/* v2 PR6-P4: mobile 紧凑 mention dropdown */
 .mct-compose {
-  position: relative;  /* anchor for mct-mention-dropdown */
+  position: relative;
 }
 .mct-mention-dropdown {
   position: absolute;
@@ -604,18 +449,10 @@ watch(() => props.fileId, (newId) => {
 }
 </style>
 
-<!--
-  v60-v67 教训: dark mode 跨组件覆盖必须放非 scoped <style> 块
-  下方 dark 块覆盖 mobile 专属样式 (sticky 底部栏 / 输入框 / 标签 chip)
--->
+<!-- v60-v67 教训: dark mode 跨组件覆盖必须放非 scoped <style> 块 -->
 <style>
 [data-theme="dark"] .mobile-comment-thread {
   background: var(--color-bg-page, #1a1d23);
-}
-
-[data-theme="dark"] .mct-item {
-  background: var(--color-bg-card, #2a2d35);
-  border: 1px solid var(--color-border-light, #3a3d45);
 }
 
 [data-theme="dark"] .mct-compose {
@@ -630,15 +467,6 @@ watch(() => props.fileId, (newId) => {
 
 [data-theme="dark"] .mct-mention-item.active {
   background: rgba(255, 122, 92, 0.16);
-}
-
-[data-theme="dark"] .mct-delete-btn:active {
-  background: var(--color-bg-hover, #3a3d45);
-}
-
-[data-theme="dark"] .mct-mention-tag {
-  background: rgba(64, 158, 255, 0.15);
-  color: var(--color-primary-light-3, #79bbff);
 }
 
 [data-theme="dark"] .mention {

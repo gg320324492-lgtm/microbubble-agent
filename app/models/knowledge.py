@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index
+from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -274,10 +274,14 @@ class FileComment(Base):
     - user_id: 评论者
     - content: 评论内容 (纯文本,前端 Markdown 渲染)
     - mentions: ARRAY 冗余存 user_id 列表 (前端 O(1) 显示 '王天志 提到 你')
+    - parent_comment_id: 自引用 FK, NULL = 顶层评论 (v2 PR6-P5 threading)
+    - thread_depth: 0/1/2 (顶层/回复/回复的回复), MAX_DEPTH=3 (v2 PR6-P5)
+    - reply_count: 冗余存, 加快 tree list 渲染 (v2 PR6-P5)
 
     关联:
     - file_id → knowledge.id (CASCADE)
     - user_id → members.id (SET NULL = 用户注销保留评论)
+    - parent_comment_id → file_comments.id (CASCADE, 子评论随父删)
     """
     __tablename__ = "file_comments"
 
@@ -286,10 +290,18 @@ class FileComment(Base):
     user_id = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True)
     content = Column(Text, nullable=False)
     mentions = Column(ARRAY(Integer), nullable=True)
+    parent_comment_id = Column(
+        BigInteger, ForeignKey("file_comments.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
+    thread_depth = Column(SmallInteger, nullable=False, server_default="0")
+    reply_count = Column(Integer, nullable=False, server_default="0")
     created_at = Column(DateTime, nullable=False, server_default="now()")
 
     def __repr__(self):
-        return f"<FileComment(id={self.id}, file_id={self.file_id}, user_id={self.user_id})>"
+        return (
+            f"<FileComment(id={self.id}, file_id={self.file_id}, user_id={self.user_id}, "
+            f"parent_id={self.parent_comment_id}, depth={self.thread_depth})>"
+        )
 
 
 class FileRequest(Base):

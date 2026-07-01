@@ -1,22 +1,28 @@
-"""comment_service — v2 PR6 文件评论服务
+"""comment_service — v2 PR6 文件评论服务 + PR6-P5 threading
 
 职责:
 1. create_comment(): 写评论 + 自动解析 @ 提及 (同步创建 file_mention)
+   - v2 PR6-P5: 加 parent_comment_id 参数, 自动算 thread_depth, MAX_DEPTH=2 截断
 2. list_comments(): 列文件评论 (按时间倒序,含 user_name 冗余)
 3. delete_comment(): 删评论 (owner or file owner 才能删)
-4. update_comment(): 编辑评论 (owner only)
+   - v2 PR6-P5: CASCADE 自动删所有 child replies
 
 设计要点:
 - 评论写入与 mention 解析在同一事务 (commit 顺序: comment 先 add + flush 拿 id → 写 mention)
 - mentions ARRAY 字段存 user_id 列表 (前端 O(1) 显示 '@王天志')
 - 软删除: 删除评论 = 物理删 (评论字数短, 无需软删)
 - activity_events.comment: 评论创建后 log 一条活动
+- v2 PR6-P5 threading:
+  - parent_comment_id: NULL = 顶层评论, 整数 = 该评论的回复
+  - thread_depth: 0/1/2 (顶层/回复/回复的回复), MAX_DEPTH=2 (硬上限)
+  - reply_count: 父评论的回复数 +1 (触发 reply notification 时同步更新)
+  - 删除评论 → CASCADE 自动删所有子评论
 """
 import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from sqlalchemy import select, and_, delete
+from sqlalchemy import select, and_, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import FileComment, Knowledge
@@ -25,9 +31,13 @@ from app.services.notification_service import notification_service
 
 logger = logging.getLogger(__name__)
 
+# v2 PR6-P5: 评论嵌套最大深度 (顶层 depth=0, 允许 depth=0/1/2 共 3 层)
+# depth=2 是允许的最后一层回复, 再回复会被 reject (depth=3 不允许)
+MAX_COMMENT_DEPTH = 2
+
 
 class CommentService:
-    """v2 PR6: file_comments CRUD + mention 解析"""
+    """v2 PR6: file_comments CRUD + mention 解析 + PR6-P5 threading"""
 
     @staticmethod
     async def create_comment(
@@ -36,13 +46,15 @@ class CommentService:
         file_id: int,
         user_id: int,
         content: str,
+        parent_comment_id: Optional[int] = None,
     ) -> Tuple[FileComment, List[str]]:
-        """创建评论 + 自动 @ 解析
+        """创建评论 + 自动 @ 解析 (+ v2 PR6-P5 嵌套 + reply notification)
 
         Args:
             file_id: 评论的文件 id
             user_id: 评论者 id
             content: 评论内容 (含 @username 触发 mention)
+            parent_comment_id: 父评论 id (v2 PR6-P5, None=顶层评论)
 
         Returns:
             (FileComment 实例, mention user_id 列表)
@@ -50,30 +62,48 @@ class CommentService:
         Note:
             - 同一事务: comment 写 + 解析 + mention 批量创建
             - 自动跳过 @ 自己 (避免自提醒噪音)
+            - v2 PR6-P5: 校验 parent_comment.thread_depth < MAX_COMMENT_DEPTH
+              否则 raise ValueError (HTTP 422)
         """
-        # 1) 写 comment
+        # 1) v2 PR6-P5: 校验 parent_comment + 计算 thread_depth
+        parent: Optional[FileComment] = None
+        thread_depth = 0  # 顶层
+        if parent_comment_id is not None:
+            parent = (await db.execute(
+                select(FileComment).where(FileComment.id == parent_comment_id)
+            )).scalar_one_or_none()
+            if parent is None:
+                raise ValueError(f"父评论不存在: id={parent_comment_id}")
+            if parent.file_id != file_id:
+                raise ValueError(f"父评论不属于该文件: parent.file_id={parent.file_id}, file_id={file_id}")
+            if parent.thread_depth >= MAX_COMMENT_DEPTH:
+                raise ValueError(
+                    f"评论嵌套深度超限: 父评论 depth={parent.thread_depth}, "
+                    f"最大允许 {MAX_COMMENT_DEPTH} (总 3 层)"
+                )
+            thread_depth = parent.thread_depth + 1
+
+        # 2) 写 comment
         comment = FileComment(
             file_id=file_id,
             user_id=user_id,
             content=content,
-            mentions=None,  # 后面填
+            mentions=None,
+            parent_comment_id=parent_comment_id,
+            thread_depth=thread_depth,
+            reply_count=0,
         )
         db.add(comment)
-        await db.flush()  # 拿 comment.id 但不 commit
+        await db.flush()
 
-        # 2) 解析 @username → user_id 列表
+        # 3) 解析 @username → user_id 列表
         mentioned_user_ids: List[int] = []
         try:
             usernames = notification_service.parse_mentions_from_text(content)
             if usernames:
-                # v2 PR6-P4 修复: 原 query 用 Member.username (登录用户名, 全小写),
-                # 真实用户输入习惯是 @WangTianZhi / @nuyoah. (wechat_id, 混合大小写 + 含 .)
-                # 99% 用户 @ 不到正确用户 — bug 自 PR6 上线以来一直存在
-                # 修法: 三路匹配 (wechat_id / username / name), 都 case-insensitive
-                # 优先级: wechat_id > username > name (避免 name 重名歧义)
+                # v2 PR6-P4 修复: 三路匹配, case-insensitive
                 all_stmt = select(Member.id, Member.username, Member.wechat_id, Member.name)
                 all_rows = (await db.execute(all_stmt)).all()
-                # 三 key 索引: 任何一种匹配就算
                 wechat_id_map: dict[str, int] = {}
                 username_map: dict[str, int] = {}
                 name_map: dict[str, int] = {}
@@ -83,8 +113,7 @@ class CommentService:
                     if row.username:
                         username_map[row.username.lower()] = row.id
                     if row.name:
-                        name_map[row.name] = row.id  # 中文名 case-sensitive (中文无大小写)
-                # 用户输入 username 小写后查 id (优先级 1: wechat_id, 2: username, 3: name)
+                        name_map[row.name] = row.id
                 seen: set[int] = set()
                 for u in usernames:
                     u_lower = u.lower()
@@ -92,14 +121,13 @@ class CommentService:
                     if uid and uid not in seen:
                         seen.add(uid)
                         mentioned_user_ids.append(uid)
-                # 排除自己 (避免自提醒噪音)
                 mentioned_user_ids = [uid for uid in mentioned_user_ids if uid != user_id]
 
             comment.mentions = mentioned_user_ids or None
         except Exception as e:
             logger.warning(f"[Comment] @ 解析失败: {e}", exc_info=True)
 
-        # 3) 批量写 file_mention (24h dedup; 返 [新创建的] 列表而非输入列表)
+        # 4) 批量写 file_mention (24h dedup)
         new_mentioned_ids: List[int] = []
         if mentioned_user_ids:
             try:
@@ -111,15 +139,40 @@ class CommentService:
                     context="comment",
                 )
                 new_mentioned_ids = [m.mentioned_user_id for m in new_mentions]
-                # 更新 comment.mentions 为 [新创建] (而不是 [输入]) — 反映真实触发
                 comment.mentions = new_mentioned_ids or None
             except Exception as e:
                 logger.warning(f"[Comment] mention 创建失败: {e}", exc_info=True)
 
-        # 4) activity log
+        # 5) v2 PR6-P5: reply notification (顶层评论不发, 仅 reply 才发)
+        reply_notified_user_id: Optional[int] = None
+        if parent is not None and parent.user_id and parent.user_id != user_id:
+            try:
+                if parent.user_id not in mentioned_user_ids:
+                    await notification_service.create_mention(
+                        db,
+                        file_id=file_id,
+                        mentioned_user_id=parent.user_id,
+                        mentioned_by=user_id,
+                        context=f"reply:{comment.id}",
+                    )
+                    reply_notified_user_id = parent.user_id
+            except Exception as e:
+                logger.warning(f"[Comment] reply notification 失败: {e}", exc_info=True)
+
+        # 6) v2 PR6-P5: 父评论 reply_count +1
+        if parent is not None:
+            try:
+                await db.execute(
+                    update(FileComment)
+                    .where(FileComment.id == parent.id)
+                    .values(reply_count=FileComment.reply_count + 1)
+                )
+            except Exception as e:
+                logger.warning(f"[Comment] reply_count 更新失败: {e}", exc_info=True)
+
+        # 7) activity log
         try:
             from app.services.activity_service import activity_service
-            # 取 file_name 冗余存
             f = (await db.execute(select(Knowledge.file_name).where(Knowledge.id == file_id))).scalar_one_or_none()
             await activity_service.log(
                 db,
@@ -130,8 +183,11 @@ class CommentService:
                 target_name=f,
                 metadata={
                     "comment_id": comment.id,
+                    "parent_comment_id": parent_comment_id,
+                    "thread_depth": thread_depth,
                     "content_preview": content[:80],
                     "mention_count": len(mentioned_user_ids),
+                    "reply_notified": reply_notified_user_id,
                 },
             )
         except Exception as e:
@@ -142,7 +198,8 @@ class CommentService:
 
         logger.info(
             f"[Comment] created id={comment.id} file={file_id} user={user_id} "
-            f"mentions={len(new_mentioned_ids)} (input={len(mentioned_user_ids)})"
+            f"parent={parent_comment_id} depth={thread_depth} "
+            f"mentions={len(new_mentioned_ids)} reply_notified={reply_notified_user_id}"
         )
         return comment, new_mentioned_ids
 
@@ -156,13 +213,7 @@ class CommentService:
     ) -> List[Tuple[FileComment, Optional[str]]]:
         """列文件评论 (按时间倒序)
 
-        Args:
-            file_id: 文件 id
-            limit: 上限
-            before_id: cursor (id < before_id)
-
-        Returns:
-            [(FileComment, user_name)] 列表 (user_name 可能 None = 用户被删)
+        v2 PR6-P5: 返回 flat list, 前端根据 parent_comment_id 组装 tree
         """
         stmt = select(FileComment, Member.username).outerjoin(
             Member, Member.id == FileComment.user_id
@@ -184,26 +235,43 @@ class CommentService:
     ) -> bool:
         """删除评论 (owner of comment OR owner of file)
 
-        Returns:
-            True 成功, False 越权/不存在
+        v2 PR6-P5: CASCADE 自动删所有 child replies
         """
-        # 取 comment + file owner
         stmt = (
-            select(FileComment.user_id, Knowledge.created_by)
+            select(FileComment.user_id, FileComment.parent_comment_id, Knowledge.created_by)
             .outerjoin(Knowledge, Knowledge.id == FileComment.file_id)
             .where(FileComment.id == comment_id)
         )
         row = (await db.execute(stmt)).first()
         if not row:
             return False
-        comment_owner, file_owner = row
+        comment_owner, parent_comment_id, file_owner = row
         if user_id != comment_owner and user_id != file_owner:
             logger.warning(f"[Comment] 越权删除: user={user_id} comment={comment_id}")
             return False
 
+        # v2 PR6-P5: 删 comment 前先 count children
+        child_count = 0
+        if parent_comment_id is None:
+            child_stmt = select(FileComment.id).where(FileComment.parent_comment_id == comment_id)
+            child_count = len((await db.execute(child_stmt)).all())
+
         await db.execute(delete(FileComment).where(FileComment.id == comment_id))
+        # cascade 自动删 children, reply_count 需手动维护
+        if parent_comment_id is not None:
+            # 非顶层被删: 其父评论 reply_count -1 (无论此评论有多少子孙)
+            await db.execute(
+                update(FileComment)
+                .where(FileComment.id == parent_comment_id)
+                .values(reply_count=FileComment.reply_count - 1)
+            )
+        elif child_count > 0:
+            pass  # 顶层被删 + 有子: cascade 自动删, 顶层也删, reply_count 无意义
         await db.commit()
-        logger.info(f"[Comment] deleted id={comment_id} by user={user_id}")
+        logger.info(
+            f"[Comment] deleted id={comment_id} by user={user_id} "
+            f"parent={parent_comment_id} children_cascade={child_count}"
+        )
         return True
 
     @staticmethod

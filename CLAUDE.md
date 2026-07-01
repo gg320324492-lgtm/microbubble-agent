@@ -1,6 +1,45 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 当前任务链**：🆕 **v2 网盘 PR7 收官 + Group 3 submit hang 修复收尾**（1 alembic migration + 1 test assertion fix）= 8/8 e2e groups 全 PASS (34/34 断言)。
+> **2026-07-02 当前任务链**：🆕 **v78 "团队协作" 导航合并收官**（8 新文件 + 13 改/删 + +1995/-575 行）= **项目/成员/声纹 3 个独立路由合并为 1 个 `/workspace` el-tabs 路由**（仿 v77 P2.6-G.2 MeetingView + TemplatesPanel 范例）。
+> **用户决策 (AskUserQuestion 4 项)**:
+> ① 命名 `团队协作`（中性，覆盖 3 域）/ ② 项目动态硬编码入口不动 / ③ 旧路由 `/projects` `/members` `/voiceprint` 完全删除（含详情子路由）/ ④ 移动 TabBar 5 项保持不变，workspace 入口走 MainLayout 抽屉 menuRoutes
+> **核心改动**:
+> ① **`router/index.js` 删 5 条旧路由**（`/projects` `/projects/:id` `/members` `/members/:id` `/voiceprint`）+ 加 `/workspace`（meta.icon='Files', meta.title='团队协作'）
+> ② **桌面 `WorkspaceView.vue`** + 3 子 Panel (`ProjectsPanel` / `MembersPanel` / `VoiceprintsPanel`) — `el-tabs` 3 pane + query.tab URL 同步 + 项目/成员详情用 `el-dialog` 弹层（替代原 detail 路由）
+> ③ **移动 `MobileWorkspaceView.vue`** + 3 子 Panel (`MobileProjectsPanel` / `MobileMembersPanel` / `MobileVoiceprintsPanel`) — 顶栏 `PageHeader` + 横向滑动 tab strip + `keep-alive` 包裹 + `Teleport` 内嵌详情 sheet 弹层
+> ④ **MainLayout iconMap** 删 `mic: Microphone` 别名 + `/workspace` 走 `Files` 图标（v62-v67 铁律：menuRoutes filter `r.meta?.icon` 自动出现，MainLayout 零业务改动）
+> ⑤ **NavRail** "项目" 入口改 `/workspace?tab=projects`（避免 404）
+> ⑥ **删除 8 个旧 View**（桌面 3 + 移动 5）+ **MobileMemberDetailView.test.js** + **3 个 spec 修复**（grade-tag / v77-p2-6-f-2-regression / mobile visual-regression）
+> ⑦ **CLAUDE.md 铁律强化**：`menuRoutes` 自动按 `meta.icon` 过滤（v62-v67 L1114）+ 详情走 dialog/sheet 弹层优先于独立路由（v78 新增铁律，避免删除详情路由后移动端 404）
+> **顺手修复的预存 bug**:
+> - `MemberView.vue:235` unreachable `return a.name.localeCompare(...)`（v78 拆分时删除）
+> - `MobileProjectView.vue:137` `router.push('/mobile/projects/${id}')` 路由不存在（v78 删除文件即修）
+> - `MobileProjectDetailView.vue:159` `router.push('/mobile/members/${memberId}')` 路由不存在（同上）
+> - `MobileMemberView.vue:170` `router.push('/mobile/members/${member.id}')` 路由不存在（同上）
+> - `MobileVoiceprintView.vue:39` `router.push('/members')` 旧路由（v78 改 `/workspace?tab=members`）
+> **端到端验证清单 (P0-21)**:
+> 桌面 `/workspace?tab=projects` 自动定位 projects tab + 点击 tab 切换 URL query 同步 + `/workspace?tab=voiceprint` 落到声纹 tab + 侧栏仅 1 项"团队协作" + 侧栏底部"项目动态"仍存在 + 桌面成员→录入声纹 (`VoiceprintEnrollDialog` 弹) + 声纹 tab→点击卡片 (`el-drawer` 50% 详情) + 项目 tab→创建/编辑/详情 3 dialog 正常 + `/projects` `/members` `/voiceprint` 404（用户接受）/ 移动 TabBar 5 项不变 / 移动 MainLayout 抽屉"团队协作"菜单出现 / 移动端 3 tab 切换正常 / 移动成员→录入声纹 (`VoiceprintEnrollFlow` 流程) / dark mode 切换 / build 0 警告 / vitest / Playwright baseline 重生成。
+>
+> ---
+> **2026-07-02 早班收官 历史任务链**：🆕 **v2 网盘 PR6-P5 comment threading 收官**（12 文件改动 / +1595 行）= **文件评论嵌套 (max 3 层)** + reply notification + 跨窗口 dirty 文件管理。
+> **架构亮点**：
+> ① **后端 model 增 3 列** — `parent_comment_id` (BigInteger FK self CASCADE) + `thread_depth` (SmallInteger 0/1/2) + `reply_count` (Integer 冗余)。MAX_DEPTH=2 硬上限 (顶层/回复/回复的回复)。alembic 050 加 2 索引 (`ix_file_comments_parent` / `ix_file_comments_file_parent`)
+> ② **comment_service 加 4 段逻辑** — 校验 parent + 计算 depth (parent+1) → 批量 @mention (24h dedup) → reply notification (顶层不发, parent.user_id != 当前 user 才发, context=`reply:N`) → 父评论 reply_count +1
+> ③ **comment 422 错误处理** — parent 不存在 / 跨文件 / depth 超限 → FastAPI HTTPException 422 (前端 toast 显式提示)
+> ④ **删评论 reply_count 回退** — 删非顶层 → 父 reply_count -1 (CASCADE 自动删子孙, reply_count 只算"直接子")
+> ⑤ **前端 CommentItem.vue 递归组件** — 自带内联 reply form + own useMentionAutocomplete 实例 (与顶层隔离) + 缩进 24px/depth + depth=2 隐藏"回复"按钮 + dark mode 非 scoped 块
+> ⑥ **useCommentTree composable** — `buildCommentTree(flatList)` O(n) 组装树 + `canReply(comment)` depth 守卫 + `countRepliesRecursive(comment)` 递归计数 (孤儿 parent fallback 顶层)
+> ⑦ **store.postReply + parent_comment_id** — 422 错误透传 caller, 父评论 reply_count +1 (本地状态同步)
+> **E2E 验证**: 5/5 scenarios PASS (顶层 depth=0 + 回复 depth=1 + 回复的回复 depth=2 + 第 4 层 reject 422 + 孤儿 reject 422 + reply_count=1)。
+> **vitest**: 535/535 PASS (新增 17 useCommentTree case: buildCommentTree 7 + canReply 5 + countRepliesRecursive 3 + MAX_COMMENT_DEPTH 1 + null 安全)。
+> **pytest**: 23/23 PASS (新增 11 TestThreading + 3 TestThreadingDelete + 修 1 pre-existing dedup issue)。
+> **5 新铁律 (永久沉淀)**：
+> ① **MAX_DEPTH=2 (3 层) 是评论 UX 黄金分割** — 更多层视觉拥挤 (缩进 48px 已达桌面屏极限) + 1 用户几乎不读超过 3 层 + 维护成本陡增
+> ② **reply notification 复用 `create_mention` 不走 `create_bulk_mentions`** — bulk 是为多 @ 设计的 (24h dedup), reply 是单条, 走单条路径更清晰且 context 可注入 `reply:comment_id` (前端可跳到新评论)
+> ③ **递归 CommentItem 自带 own state** — showReplyForm / repliesCollapsed / replyContent 都在子组件内 (不污染父), 多个 reply form 同时展开不冲突
+> ④ **buildCommentTree 孤儿 fallback 顶层** — parent 已被删时, 子评论仍显示在顶层 (避免数据丢失, 用户能看到"原 reply")
+> ⑤ **删非顶层 reply_count -1** — reply_count 是"直接子数"语义, 删一个非顶层 = -1 (不管此评论有多少子孙), 顶层被删 + cascade 删子不需要回退 (顶层没了, reply_count 无意义)
+> **未实现增量** (留给 PR6-P6+): comment edit (service 已有, 缺 REST endpoint + 前端 edit dialog) / rich notification title+body / Celery beat cleanup_old_mentions (30 天) / mention username uniqueness check。
 > **2 个真根因**（CLAUDE.md 永久沉淀铁律）：
 > ① **HTTP submit 实际 201 OK, 不是 hang** — 上一次会话提交时 stale code state 触发 500 误判 hang。验证方法：直接 service 调成功 + HTTP 端到端 201 + 删除 stale .pyc (CLAUDE.md 7a 教训强化)
 > ② **alembic 048 server_default="now()" 字面量化陷阱** — PG 某些版本把字符串 `'now()'` 当字面量（执行时间戳），后续 INSERT 全部用同一固定时间。**修复**：050_audit_log_now_default `ALTER COLUMN ... SET DEFAULT now()` 让 INSERT 时刻调用 now() 函数
@@ -5663,9 +5702,11 @@ async function injectAuth(page) {
 ### P2.6-D.4 Baseline 扩到 9 路由（commit `b251fc22`）
 
 **desktop + mobile 各加 3 路由**（与 mobile P2.6-C 6 路由对齐）：
-- `/projects` → `08-projects`
-- `/members` → `09-members`
+- ~~`/projects` → `08-projects`~~（v78 合并到 `/workspace`，已删）
+- ~~`/members` → `09-members`~~（v78 合并到 `/workspace`，已删）
 - `/project-stats` → `10-project-stats`
+
+**v78 收官更新 (2026-07-02)**：CORE_ROUTES 第 8/9 路由改 `/workspace?tab=projects` (08-workspace-projects) + `/workspace?tab=members` (09-workspace-members)。原 `08-projects` / `09-members` baseline PNG 已废（如存在），CI 重新跑 `--update-snapshots` 生成新 baseline。
 
 **修改文件 2 spec**：CORE_ROUTES 各加 3 项
 

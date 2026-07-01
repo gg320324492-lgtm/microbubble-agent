@@ -1,21 +1,10 @@
 <!--
-  CommentThread.vue — v2 PR6 文件评论组件
+  CommentThread.vue — v2 PR6 文件评论组件 (desktop)
 
-  功能:
-  - 列出文件评论（按 created_at 倒序）
-  - 发布评论（自动解析 @username + 触发 mention + activity log）
-  - 删除自己的评论 (owner or file owner)
-  - 空态 / 加载态 / 错误态
-
-  Props:
-  - fileId: number 必填
-
-  设计:
-  - 复用 useNotificationsStore (fetchComments / postComment / deleteComment)
-  - @ 自动 mention: 通过 postComment 后端自动解析 (@wangtianzhi 而非 @王天志)
-  - 不做客户端 mention autocomplete (PR8 增强项)
-
-  Dark mode: 非 scoped 块 (v60-v67 教训)
+  v2 PR6-P5 threading:
+  - 顶层评论用 CommentItem 递归渲染 (含内联 reply + 嵌套子评论)
+  - 自身只保留"顶层评论"列表 + "发布顶层评论"输入框
+  - @username autocomplete 复用 useMentionAutocomplete composable (PR6-P4)
 -->
 <template>
   <div class="comment-thread">
@@ -23,8 +12,8 @@
       <h3>
         评论
         <el-badge
-          v-if="comments.length > 0"
-          :value="comments.length"
+          v-if="treeTop.length > 0"
+          :value="treeTop.length"
           :max="99"
           class="comment-thread-count"
         />
@@ -38,61 +27,28 @@
     </div>
 
     <!-- 空态 -->
-    <div v-else-if="comments.length === 0" class="comment-thread-empty">
+    <div v-else-if="treeTop.length === 0" class="comment-thread-empty">
       <el-icon :size="32"><ChatDotRound /></el-icon>
       <p>暂无评论</p>
       <p class="hint">在下方输入框写下第一条评论 (支持 @username)</p>
     </div>
 
-    <!-- 评论列表 (倒序) -->
+    <!-- v2 PR6-P5: 评论树 (顶层 + 嵌套 replies, 递归渲染) -->
     <ul v-else class="comment-thread-list">
-      <li
-        v-for="c in comments"
-        :key="c.id"
-        class="comment-item"
-      >
-        <el-avatar
-          :size="36"
-          :src="userAvatarUrl(c.user_id)"
-          class="comment-avatar"
-        >
-          {{ (c.user_name || '?').slice(0, 1) }}
-        </el-avatar>
-        <div class="comment-body">
-          <div class="comment-meta">
-            <strong class="comment-author">{{ c.user_name || `用户 #${c.user_id}` }}</strong>
-            <span class="comment-time">{{ formatTime(c.created_at) }}</span>
-            <el-popconfirm
-              v-if="canDelete(c)"
-              title="确认删除此评论？"
-              confirm-button-text="删除"
-              cancel-button-text="取消"
-              @confirm="onDelete(c)"
-            >
-              <template #reference>
-                <el-button
-                  link
-                  size="small"
-                  type="danger"
-                  class="comment-delete-btn"
-                  aria-label="删除评论"
-                >
-                  删除
-                </el-button>
-              </template>
-            </el-popconfirm>
-          </div>
-          <div class="comment-content" v-html="formatContent(c.content)" />
-          <div v-if="c.mentions && c.mentions.length > 0" class="comment-mentions">
-            <span class="mention-tag" v-for="mid in c.mentions" :key="mid">
-              @{{ usernameById(mid) }}
-            </span>
-          </div>
-        </div>
+      <li v-for="top in treeTop" :key="top.id" class="comment-thread-top">
+        <CommentItem
+          :comment="top"
+          :depth="0"
+          :file-id="props.fileId"
+          :current-user-id="props.currentUserId"
+          :is-file-owner="props.isFileOwner"
+          :members-list="membersList"
+          :username-map="usernameMap"
+        />
       </li>
     </ul>
 
-    <!-- 发布输入框 -->
+    <!-- 发布输入框 (顶层评论) -->
     <div class="comment-thread-compose">
       <el-input
         ref="inputRef"
@@ -168,6 +124,8 @@ import { Loading, ChatDotRound } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { useNotificationsStore } from '@/composables/useNotifications'
 import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
+import { useCommentTree } from '@/composables/useCommentTree'
+import CommentItem from '@/components/drive/CommentItem.vue'
 
 const props = defineProps({
   fileId: { type: Number, required: true },
@@ -177,26 +135,26 @@ const props = defineProps({
 
 const route = useRoute()
 const store = useNotificationsStore()
+const { buildCommentTree } = useCommentTree()
+
 const newContent = ref('')
 const posting = ref(false)
 const loading = ref(false)
 const errorMsg = ref(null)
-const usernameMap = ref({})  // { user_id: username } 缓存
-const membersList = ref([])   // {id, username, wechat_id, name, avatar, role}[]
-const inputRef = ref(null)    // el-input ref (拿内部 textarea)
+const usernameMap = ref({})
+const membersList = ref([])
+const inputRef = ref(null)
 
-// v2 PR6-P4: @username autocomplete (useMentionAutocomplete composable)
+// v2 PR6-P4: @username autocomplete (顶层输入框)
 const mention = useMentionAutocomplete({
   textareaRef: inputRef,
   members: membersList,
   onSelect: (member, ctx) => {
-    // 替换 @user 部分为完整 username (含 @ 前缀)
     if (!ctx || ctx.triggerPos < 0) return
     const before = newContent.value.substring(0, ctx.triggerPos)
     const after = newContent.value.substring(ctx.triggerPos + 1 + ctx.query.length)
     const mentionText = `@${member.wechat_id || member.username} `
     newContent.value = before + mentionText + after
-    // 移动光标到 mention 之后
     setTimeout(() => {
       const ta = inputRef.value?.$el?.querySelector?.('textarea')
       if (ta) {
@@ -209,6 +167,7 @@ const mention = useMentionAutocomplete({
 })
 
 const comments = computed(() => store.commentsByFileId[props.fileId] || [])
+const treeTop = computed(() => buildCommentTree(comments.value).top)
 
 const placeholder = computed(() => {
   if (!props.currentUserId) return '请先登录后再评论'
@@ -232,41 +191,13 @@ function formatTime(iso) {
   return new Date(iso).toLocaleDateString('zh-CN')
 }
 
-/**
- * 渲染评论内容 + 解析 @username 为高亮 span
- *
- * 注意:
- * - 必须 escapeHtml 防 XSS (content 是用户输入)
- * - @username 来自后端 mention 解析结果 (comment.mentions[] 里的 user_id)
- * - 这里只 highlight 已经在 mention 列表里的 username, 不在列表里的 @xxx 当纯文本
- * - PR6-P4 修复: regex 镜像后端 @([一-龥A-Za-z0-9_.\-]{1,32}) (含 nuyoah./WuWei. 等)
- */
-function formatContent(raw) {
-  if (!raw) return ''
-  // 1. escape HTML
-  const escaped = raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-  // 2. @username 高亮 (匹配 _MENTION_PATTERN)
-  // 复用后端 regex 语义: @([一-龥A-Za-z0-9_.\-]{1,32}) (PR6-P4 修复 + 镜像)
-  return escaped.replace(
-    /@([一-龥A-Za-z0-9_.\-]{1,32})/g,
-    '<span class="mention">@$1</span>'
-  )
-}
-
 function canDelete(comment) {
   if (!props.currentUserId) return false
-  // 评论 owner 或 文件 owner 可删
   return comment.user_id === props.currentUserId || props.isFileOwner
 }
 
 function userAvatarUrl(userId) {
   if (!userId) return ''
-  // 头像 URL 模式: /api/v1/members/{id}/avatar
   return `/api/v1/members/${userId}/avatar`
 }
 
@@ -280,7 +211,6 @@ async function fetchComments() {
   errorMsg.value = null
   try {
     await store.fetchComments(props.fileId)
-    // 解析后获取所有 user_id 的 username (单次批查)
     await batchResolveUsernames()
   } catch (e) {
     errorMsg.value = e.message || '加载评论失败'
@@ -300,7 +230,6 @@ async function batchResolveUsernames() {
   const missing = [...userIds].filter((id) => !usernameMap.value[id])
   if (missing.length === 0) return
   try {
-    // 一次性查 members 列表 (简单实现, 规模不大)
     const resp = await axios.get('/api/v1/members', {
       headers: { Authorization: `Bearer ${localStorage.getItem('access_token') || ''}` },
     })
@@ -309,8 +238,6 @@ async function batchResolveUsernames() {
       map[m.id] = m.username || m.name
     }
     usernameMap.value = map
-    // v2 PR6-P4: 同时更新 membersList 给 @ autocomplete 用
-    // 缓存可让 dropdown 跨 comment 共享, 减少 fetch
     if (membersList.value.length === 0) {
       membersList.value = (resp.data.items || []).map((m) => ({
         id: m.id,
@@ -322,31 +249,22 @@ async function batchResolveUsernames() {
       }))
     }
   } catch (e) {
-    // ignore — fallback 到 id
+    // ignore
   }
 }
 
-// v2 PR6-P4: input/keydown/blur 事件 → autocomplete
-function onContentInput() {
-  mention.refresh()
-}
+function onContentInput() { mention.refresh() }
 function onContentKeydown(event) {
-  // 优先让 autocomplete 处理键盘事件 (return true 即已 preventDefault)
   if (mention.handleKeydown(event)) return
-  // 父组件可继续用 Enter 发评论 (textarea 默认换行, 我们不强制)
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-    // Ctrl+Enter = 发评论 (避免与 autocomplete Enter 冲突)
     event.preventDefault()
     onPost()
   }
 }
 function onContentBlur() {
-  // 延迟关闭, 允许 mousedown 选中 candidate (mousedown.prevent 阻止 blur 触发)
   setTimeout(() => mention.close(), 150)
 }
-function onMentionItemClick(index) {
-  mention.selectCandidate(index)
-}
+function onMentionItemClick(index) { mention.selectCandidate(index) }
 
 async function onPost() {
   const trimmed = newContent.value.trim()
@@ -356,7 +274,6 @@ async function onPost() {
   try {
     const resp = await store.postComment(props.fileId, trimmed)
     newContent.value = ''
-    // 提示 mention 数量
     if (resp.mentioned_user_ids && resp.mentioned_user_ids.length > 0) {
       ElMessage.success(`评论已发布, 提醒了 ${resp.mentioned_user_ids.length} 人`)
     } else {
@@ -370,20 +287,10 @@ async function onPost() {
   }
 }
 
-async function onDelete(comment) {
-  try {
-    await store.deleteComment(props.fileId, comment.id)
-    ElMessage.success('评论已删除')
-  } catch (e) {
-    errorMsg.value = e.message || '删除失败'
-  }
-}
-
 onMounted(() => {
   fetchComments()
 })
 
-// fileId 变化时刷新
 watch(() => props.fileId, (newId) => {
   if (newId) fetchComments()
 })
@@ -443,84 +350,11 @@ watch(() => props.fileId, (newId) => {
   gap: 16px;
 }
 
-.comment-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  background: var(--color-bg-page, #f5f7fa);
-  border-radius: 8px;
-  transition: background 0.15s;
-}
-
-.comment-avatar {
-  flex-shrink: 0;
-}
-
-.comment-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.comment-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  font-size: 13px;
-}
-
-.comment-author {
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
-}
-
-.comment-time {
-  font-size: 11px;
-  color: var(--color-text-secondary, #909399);
-}
-
-.comment-delete-btn {
-  margin-left: auto;
-  font-size: 12px;
-}
-
-.comment-content {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--color-text-primary, #303133);
-  overflow-wrap: anywhere;
-  word-break: normal;
-  white-space: pre-wrap;
-}
-
-.comment-content :deep(.mention) {
-  color: var(--color-primary, #FF7A5C);
-  font-weight: 600;
-  background: rgba(255, 122, 92, 0.08);
-  padding: 1px 4px;
-  border-radius: 3px;
-}
-
-.comment-mentions {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.mention-tag {
-  font-size: 11px;
-  padding: 2px 6px;
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.12));
-  color: var(--color-primary, #FF7A5C);
-  border-radius: 10px;
-}
-
 .comment-thread-compose {
   margin-top: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--color-border-light, #ebeef5);
+  position: relative;
 }
 
 .comment-thread-actions {
@@ -547,15 +381,12 @@ watch(() => props.fileId, (newId) => {
   margin-top: 8px;
 }
 
-/* v2 PR6-P4: @username autocomplete dropdown */
-.comment-thread-compose {
-  position: relative;  /* anchor for mention-dropdown */
-}
+/* v2 PR6-P4: 顶层 compose 的 mention dropdown */
 .mention-dropdown {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 100%;  /* display above input (与 chat-style 弹窗一致) */
+  bottom: 100%;
   margin-bottom: 4px;
   background: var(--color-bg-card, #fff);
   border: 1px solid var(--color-border-light, #ebeef5);
@@ -606,14 +437,6 @@ watch(() => props.fileId, (newId) => {
 }
 
 /* Dark mode 非 scoped 块 (v60-v67 教训) */
-[data-theme="dark"] .comment-item {
-  background: var(--color-bg-page, #2a2d35);
-}
-
-[data-theme="dark"] .comment-content :deep(.mention) {
-  background: rgba(255, 122, 92, 0.16);
-}
-
 [data-theme="dark"] .comment-thread-compose {
   border-top-color: var(--color-border-dark, rgba(255, 255, 255, 0.08));
 }
