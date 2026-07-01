@@ -1,0 +1,259 @@
+/**
+ * useNotifications.js — v2 PR6 通知 + 活动 + 评论 composable
+ *
+ * 提供:
+ * - notifications[]: 当前用户 mentions (倒序)
+ * - unreadCount: 未读数 (红点数字)
+ * - activities[]: 活动动态流
+ * - commentsByFileId: { file_id: [comments] }
+ *
+ * 操作:
+ * - fetchNotifications / fetchUnreadCount / markRead / markAllRead
+ * - fetchActivities
+ * - fetchComments / postComment / deleteComment
+ *
+ * 自动:
+ * - WS 收到 'mention' 事件 → 增量 prepend notifications + 重新拉 unreadCount
+ * - WS 收到 'activity' 事件 → 增量 prepend activities
+ * - 30s polling unreadCount (兜底, WS 断时仍能显示)
+ */
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+import axios from 'axios'
+import getWsClient from '@/utils/wsClient'
+
+const API_BASE = '/api/v1'
+
+function getAuthToken() {
+  return localStorage.getItem('access_token') || ''
+}
+
+export const useNotificationsStore = defineStore('notifications', () => {
+  const notifications = ref([])
+  const unreadCount = ref(0)
+  const activities = ref([])
+  const commentsByFileId = ref({})  // { file_id: [{ id, ... }] }
+  const loadingNotifications = ref(false)
+  const loadingActivities = ref(false)
+  const wsConnected = ref(false)
+  let pollTimer = null
+  let wsHandlersBound = false
+
+  async function fetchNotifications(unreadOnly = false, limit = 50) {
+    loadingNotifications.value = true
+    try {
+      const resp = await axios.get(`${API_BASE}/notifications`, {
+        params: { unread_only: unreadOnly, limit },
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      notifications.value = resp.data.items || []
+      unreadCount.value = resp.data.unread_count || 0
+      return resp.data
+    } catch (e) {
+      console.error('[Notify] fetchNotifications failed:', e)
+      throw e
+    } finally {
+      loadingNotifications.value = false
+    }
+  }
+
+  async function fetchUnreadCount() {
+    try {
+      const resp = await axios.get(`${API_BASE}/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      unreadCount.value = resp.data.unread_count || 0
+      return resp.data.unread_count
+    } catch (e) {
+      console.debug('[Notify] fetchUnreadCount failed:', e)
+      return 0
+    }
+  }
+
+  async function markRead(mentionId) {
+    try {
+      await axios.post(
+        `${API_BASE}/notifications/${mentionId}/read`,
+        {},
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      const item = notifications.value.find((n) => n.id === mentionId)
+      if (item && !item.is_read) {
+        item.is_read = true
+        item.read_at = new Date().toISOString()
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+      }
+    } catch (e) {
+      console.error('[Notify] markRead failed:', e)
+    }
+  }
+
+  async function markAllRead() {
+    try {
+      const resp = await axios.post(
+        `${API_BASE}/notifications/read-all`,
+        {},
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      notifications.value.forEach((n) => {
+        n.is_read = true
+        n.read_at = new Date().toISOString()
+      })
+      unreadCount.value = 0
+      return resp.data.marked_count
+    } catch (e) {
+      console.error('[Notify] markAllRead failed:', e)
+    }
+  }
+
+  async function fetchActivities(scope = 'team', beforeId = null, limit = 50) {
+    loadingActivities.value = true
+    try {
+      const resp = await axios.get(`${API_BASE}/activities`, {
+        params: { scope, before_id: beforeId, limit },
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      activities.value = resp.data.items || []
+      return resp.data
+    } catch (e) {
+      console.error('[Notify] fetchActivities failed:', e)
+      throw e
+    } finally {
+      loadingActivities.value = false
+    }
+  }
+
+  async function fetchComments(fileId) {
+    try {
+      const resp = await axios.get(`${API_BASE}/drive/files/${fileId}/comments`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      commentsByFileId.value = { ...commentsByFileId.value, [fileId]: resp.data.items || [] }
+      return resp.data.items
+    } catch (e) {
+      console.error('[Notify] fetchComments failed:', e)
+      return []
+    }
+  }
+
+  async function postComment(fileId, content) {
+    try {
+      const resp = await axios.post(
+        `${API_BASE}/drive/files/${fileId}/comments`,
+        { content },
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      // prepend to local cache
+      const existing = commentsByFileId.value[fileId] || []
+      commentsByFileId.value = {
+        ...commentsByFileId.value,
+        [fileId]: [resp.data.comment, ...existing],
+      }
+      return resp.data
+    } catch (e) {
+      console.error('[Notify] postComment failed:', e)
+      throw e
+    }
+  }
+
+  async function deleteComment(fileId, commentId) {
+    try {
+      await axios.delete(`${API_BASE}/drive/files/${fileId}/comments/${commentId}`, {
+        headers: { Authorization: `Bearer ${getAuthToken()}` },
+      })
+      const existing = commentsByFileId.value[fileId] || []
+      commentsByFileId.value = {
+        ...commentsByFileId.value,
+        [fileId]: existing.filter((c) => c.id !== commentId),
+      }
+    } catch (e) {
+      console.error('[Notify] deleteComment failed:', e)
+    }
+  }
+
+  function bindWsHandlers() {
+    if (wsHandlersBound) return
+    const ws = getWsClient()
+    ws.on('open', () => {
+      wsConnected.value = true
+    })
+    ws.on('close', () => {
+      wsConnected.value = false
+    })
+    ws.on('mention', async (data) => {
+      // 增量 prepend (避免重拉)
+      notifications.value = [
+        {
+          id: data.id,
+          file_id: data.file_id,
+          mentioned_by: data.mentioned_by,
+          context: data.context,
+          is_read: false,
+          created_at: data.created_at || new Date().toISOString(),
+        },
+        ...notifications.value,
+      ]
+      unreadCount.value = unreadCount.value + 1
+    })
+    ws.on('activity', (data) => {
+      activities.value = [data, ...activities.value].slice(0, 100)
+    })
+    wsHandlersBound = true
+  }
+
+  function startWs() {
+    const token = getAuthToken()
+    if (!token) return
+    const ws = getWsClient()
+    bindWsHandlers()
+    ws.connect(token)
+  }
+
+  function stopWs() {
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+    const ws = getWsClient()
+    ws.disconnect()
+    wsConnected.value = false
+  }
+
+  function startPolling(intervalMs = 30000) {
+    if (pollTimer) return
+    pollTimer = setInterval(() => {
+      fetchUnreadCount()
+    }, intervalMs)
+  }
+
+  return {
+    notifications,
+    unreadCount,
+    activities,
+    commentsByFileId,
+    loadingNotifications,
+    loadingActivities,
+    wsConnected,
+    fetchNotifications,
+    fetchUnreadCount,
+    markRead,
+    markAllRead,
+    fetchActivities,
+    fetchComments,
+    postComment,
+    deleteComment,
+    startWs,
+    stopWs,
+    startPolling,
+  }
+})
+
+export function useNotifications() {
+  const store = useNotificationsStore()
+  return {
+    store,
+    ...store,
+  }
+}
+
+export default useNotifications

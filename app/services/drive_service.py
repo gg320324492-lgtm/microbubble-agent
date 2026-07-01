@@ -30,6 +30,9 @@ from app.models.folder import Folder, VISIBILITY_ORDER
 from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession  # PR5: 断点续传
 from app.models.member import Member
 from app.services.file_service import file_service
+# PR6: activity + notification 集成
+from app.services.activity_service import activity_service
+from app.services.notification_service import notification_service
 
 logger = logging.getLogger("microbubble.drive")
 
@@ -288,6 +291,25 @@ class DriveService:
             f"visibility={visibility} folder_id={folder_id} "
             f"file_size={file_size} file_hash={'<set>' if file_hash else None}"
         )
+        # PR6: 活动动态流 (上传事件) — best-effort 不阻塞
+        try:
+            await activity_service.log(
+                self.db,
+                actor_id=created_by or owner_id,
+                action="upload",
+                target_type="file",
+                target_id=knowledge.id,
+                target_name=knowledge.file_name,
+                metadata={
+                    "visibility": visibility,
+                    "folder_id": folder_id,
+                    "file_size": file_size,
+                },
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.create_file] activity log 失败 (非阻塞): {e}")
+
         return knowledge
 
     async def list_files(
@@ -528,6 +550,29 @@ class DriveService:
             f"[DriveService.update_file] id={file.id} visibility={file.visibility} "
             f"folder_id={file.folder_id}"
         )
+        # PR6: 活动动态流 — best-effort 不阻塞
+        try:
+            meta = {}
+            if title is not None:
+                meta["new_title"] = title
+            if file_name is not None:
+                meta["new_file_name"] = file_name
+            if visibility is not None:
+                meta["new_visibility"] = visibility
+            if folder_id is not None and folder_id != file.folder_id:
+                meta["new_folder_id"] = folder_id
+            await activity_service.log(
+                self.db,
+                actor_id=current_user_id,
+                action="rename" if (file_name is not None or title is not None) else "move",
+                target_type="file",
+                target_id=file.id,
+                target_name=file.file_name,
+                metadata=meta,
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.update_file] activity log 失败: {e}")
         return file
 
     async def soft_delete_file(
@@ -553,6 +598,19 @@ class DriveService:
         file.deleted_at = _to_naive_dt(datetime.now(timezone.utc))
         await self.db.commit()
         logger.info(f"[DriveService.soft_delete_file] id={file.id}")
+        # PR6: 活动动态流
+        try:
+            await activity_service.log(
+                self.db,
+                actor_id=current_user_id,
+                action="delete",
+                target_type="file",
+                target_id=file.id,
+                target_name=file.file_name,
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.soft_delete_file] activity log 失败: {e}")
         return True
 
     async def restore_file(
@@ -571,6 +629,19 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(file)
         logger.info(f"[DriveService.restore_file] id={file.id}")
+        # PR6: 活动动态流
+        try:
+            await activity_service.log(
+                self.db,
+                actor_id=current_user_id,
+                action="restore",
+                target_type="file",
+                target_id=file.id,
+                target_name=file.file_name,
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.restore_file] activity log 失败: {e}")
         return file
 
     # ==========================================================================
@@ -780,6 +851,23 @@ class DriveService:
             f"[DriveService.create_share_link] id={f.id} token={token[:8]}... "
             f"expires={f.share_expires_at} password={'yes' if password_hash else 'no'}"
         )
+        # PR6: 活动动态流 + 文件 owner 自提醒 (通知 owner 分享成功)
+        try:
+            await activity_service.log(
+                self.db,
+                actor_id=current_user_id,
+                action="share",
+                target_type="file",
+                target_id=f.id,
+                target_name=f.file_name,
+                metadata={
+                    "expires_at": str(f.share_expires_at),
+                    "password_required": bool(password_hash),
+                },
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.create_share_link] activity log 失败: {e}")
         return f
 
     async def revoke_share_link(
@@ -1642,6 +1730,23 @@ class DriveService:
             f"restored_from_v{kv.version_number} → new_v{new_version_number} "
             f"new_id={new_k.id} copy_bytes={copied_size}"
         )
+        # PR6: 活动动态流
+        try:
+            await activity_service.log(
+                self.db,
+                actor_id=uploader_id,
+                action="version_restore",
+                target_type="file",
+                target_id=new_k.id,
+                target_name=new_k.file_name,
+                metadata={
+                    "restored_from_version": kv.version_number,
+                    "new_version": new_version_number,
+                },
+            )
+            await self.db.commit()
+        except Exception as e:
+            logger.debug(f"[DriveService.restore_version] activity log 失败: {e}")
         return new_k
 
     # ========================================================================

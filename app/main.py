@@ -16,6 +16,8 @@ from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, vo
 from app.api.v1 import drive_folders  # PR2.4 课题组网盘 folder CRUD
 from app.api.v1 import drive_files  # PR2.5 课题组网盘 file CRUD + multipart upload
 from app.api.v1 import upload_multipart  # PR2.8 通用分片上传 3 端点
+from app.api.v1 import ws_notifications  # PR6: WebSocket 通知推送
+from app.api.v1 import notifications  # PR6: 通知 + 活动 + 评论 8 REST API
 from app.api.v1.dashboard import mobile_router as mobile_aliases  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 from app.core.database import engine, Base
 from app.core.redis import close_redis
@@ -162,6 +164,8 @@ app.include_router(drive_folders.router, prefix="/api/v1", tags=["网盘文件�
 app.include_router(drive_files.router, prefix="/api/v1", tags=["网盘文件"])  # PR2.5
 app.include_router(drive_files.share_router, prefix="/api/v1", tags=["网盘公开分享"])  # PR2.7
 app.include_router(upload_multipart.router, prefix="/api/v1", tags=["分片上传"])  # PR2.8
+app.include_router(ws_notifications.router, prefix="/api/v1")  # PR6: WebSocket /api/v1/ws/notifications
+app.include_router(notifications.router)  # PR6: 通知 + 活动 + 评论 (router 自带 /api/v1 prefix)  # noqa
 
 
 @app.get("/")
