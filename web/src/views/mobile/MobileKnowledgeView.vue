@@ -423,6 +423,7 @@ const createActions = [
   // PR4.3: 1 个新增 ("📁 入网盘") + 现有 3 个保留 (向后兼容)
   { name: '手动添加', icon: '✏️', color: 'var(--color-primary)' },
   { name: '上传文件', icon: '📚', color: '#67C23A', subtitle: '入知识库 + 自动解析' },  // PR4.3 标注语义
+  { name: '拍照上传', icon: '📷', color: '#909399', subtitle: '摄像头拍照入网盘' },  // PR4.7 capture API
   { name: 'AI 自动研究', icon: '🤖', color: '#E6A23C' },
   { name: '入网盘', icon: '📁', color: '#409EFF', subtitle: '原始文件归档' },  // PR4.3 新增
 ]
