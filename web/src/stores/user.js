@@ -52,6 +52,37 @@ export const useUserStore = defineStore('user', () => {
         useChatHistoryStore().reset()
       } catch (e) { /* store 没初始化也无害 */ }
     })
+
+    // ★ 2026-07-01 修复 bug 1c: 退出登录时清空所有 chat 相关 localStorage
+    // 防御跨用户污染：用户 A 的 sessionId 留在 localStorage → 用户 B 登录后
+    // 用 A 的 sessionId 发请求 → 后端 ensure_session_for_stream 看到
+    // session_id 不属于 B → 静默创建新行(标题"新对话") → 重复 bug
+    const CHAT_KEYS = [
+      'chat_sessions_v3',
+      'chat_current_session_v3',
+      'chat_migrated_v1',
+      'mnb:search_analytics:session_id',
+    ]
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i)
+      if (!k) continue
+      if (
+        k.startsWith('chat_sessions_v3__u') ||
+        k.startsWith('chat_current_session_v3__u') ||
+        k.startsWith('chat_msgs_') ||
+        k === 'chat_messages_v2' || k === 'chat_session_id' || k === 'chat_messages_v1'
+      ) {
+        localStorage.removeItem(k)
+      }
+    }
+    CHAT_KEYS.forEach(k => localStorage.removeItem(k))
+
+    // 同步重置 chatSessions store（in-memory）— 防止下次登录沿用旧 sessions 数组
+    import('@/stores/chatSessions').then(({ useChatSessionsStore }) => {
+      try {
+        useChatSessionsStore().$reset()
+      } catch (e) { /* store 没初始化也无害 */ }
+    })
   }
 
   return { userInfo, notificationCount, notifications, username, userRole, loadFromStorage, fetchNotificationCount, fetchNotifications, logout }

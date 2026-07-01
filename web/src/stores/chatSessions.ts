@@ -18,8 +18,28 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 
-const STORAGE_KEY = 'chat_sessions_v3'
-const CURRENT_KEY = 'chat_current_session_v3'
+// === 2026-07-01: per-user localStorage key（防御 1c 跨用户污染） ===
+// 旧 key (chat_sessions_v3) 不带 userId 后缀，logout 切换用户后本地的
+// sessionId/currentId 会被新用户继承，导致后端 ensure_session_for_stream
+// 看到不属于本用户的 session_id 静默创建新行 ("新对话" 重复 bug 根因 1d)。
+// 修复: 用 per-user 后缀 (chat_sessions_v3__u<id>)，并在 logout 时整体清空。
+const STORAGE_KEY_BASE = 'chat_sessions_v3'
+const CURRENT_KEY_BASE = 'chat_current_session_v3'
+
+function readUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('user_info')
+    if (!raw) return null
+    const id = String(JSON.parse(raw)?.id ?? '')
+    return id || null
+  } catch {
+    return null
+  }
+}
+
+function userKey(base: string, userId: string | null): string {
+  return userId ? `${base}__u${userId}` : `${base}__anon`
+}
 
 // 内部标记字段（不写入 localStorage，避免污染用户数据）
 const INTERNAL_FIELDS = new Set(['_isLocalOnly', '_syncStatus'])
@@ -42,7 +62,10 @@ function deserializeSession(obj: any): ChatSession {
 
 function loadFromStorage() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const userId = readUserId()
+    const newKey = userKey(STORAGE_KEY_BASE, userId)
+    // 优先新 key，fallback 旧 key（向后兼容一次，老用户迁移后下次 save 写新 key）
+    const raw = localStorage.getItem(newKey) || localStorage.getItem(STORAGE_KEY_BASE)
     if (!raw) return { sessions: [], currentId: null }
     const parsed = JSON.parse(raw)
     const sessions = Array.isArray(parsed.sessions)
@@ -56,9 +79,14 @@ function loadFromStorage() {
 
 function saveToStorage(sessions: ChatSession[], currentId: string | null) {
   try {
+    const userId = readUserId()
+    const newKey = userKey(STORAGE_KEY_BASE, userId)
     const clean = sessions.map(serializeSession)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions: clean, currentId }))
-    if (currentId) localStorage.setItem(CURRENT_KEY, currentId)
+    localStorage.setItem(newKey, JSON.stringify({ sessions: clean, currentId }))
+    if (currentId) localStorage.setItem(userKey(CURRENT_KEY_BASE, userId), currentId)
+    // 清理老非 namespace key（一次）
+    localStorage.removeItem(STORAGE_KEY_BASE)
+    localStorage.removeItem(CURRENT_KEY_BASE)
   } catch (e) {
     console.warn('会话持久化失败', e)
   }
@@ -187,6 +215,9 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
    * 从服务端会话列表合并到本地（保留本地标记，覆盖服务端元数据）
    * - 已存在的本地 session：更新 title/preview/updatedAt/is_pinned/is_archived/tags，标记 _isLocalOnly=false
    * - 仅 server 有 / 仅本地有：保留两侧
+   * - ★ 2026-07-01 修复 bug 1b: merge 完成后 repair currentId
+   *   旧实现: currentId 保留指向已删除的本地 id → currentSession() 返回 null
+   *   → useChatStream 触发 createSession() 重新 mint 新 id → 重复 "新对话"
    */
   function mergeServerList(serverSessions: any[]) {
     if (!Array.isArray(serverSessions)) return
@@ -197,6 +228,7 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
 
     const mergedLocal: ChatSession[] = []
     const seenServerIds = new Set<string>()
+    const previousCurrentId = currentId.value  // ★ 修复 1b: merge 之前先快照
 
     // 1. 先处理 server 列表（服务端为权威）
     for (const server of serverSessions) {
@@ -248,6 +280,50 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     }
 
     sessions.value = mergedLocal
+
+    // ★ 关键修复 1b: repair currentId
+    // 1) local currentId 仍是 server-confirmed session → 保留
+    if (previousCurrentId && mergedLocal.some(s => s.id === previousCurrentId && !s._isLocalOnly)) {
+      currentId.value = previousCurrentId
+      return
+    }
+    // 2) 选最近活动(非 archived)服务端会话（用户决策 2026-07-01: 自动恢复最近）
+    const activeServer = mergedLocal
+      .filter(s => !s._isLocalOnly && !s.is_archived)
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0]
+    if (activeServer) { currentId.value = activeServer.id; return }
+    // 3) 选最近 local-only 会话（待迁移,用户曾经在这会话里写过消息）
+    const localOnly = mergedLocal
+      .filter(s => s._isLocalOnly)
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))[0]
+    if (localOnly) { currentId.value = localOnly.id; return }
+    // 4) 都没有 → null（不 mint，UI 显示空状态）
+    currentId.value = null
+  }
+
+  /**
+   * ★ 2026-07-01: pickInitialSessionId 纯函数（供 useChatStream 调）
+   * 给定 server list / local currentId / local session ids，选出初始 sessionId。
+   * 用户决策: 登录后服务端有会话时自动恢复最近（ChatGPT/豆包模式）。
+   * 返回 null = 让 UI 显示空状态 + "新对话" 按钮，**不**自动 mint。
+   */
+  function pickInitialSessionId(input: {
+    serverSessions: Array<{ id: string; updated_at?: string; is_archived?: boolean }>
+    localCurrentId: string | null
+    localSessionIds: string[]
+  }): string | null {
+    const { serverSessions, localCurrentId, localSessionIds } = input
+    const localIdSet = new Set(localSessionIds)
+    // 1) local currentId 在服务端存在 → 保留
+    if (localCurrentId && serverSessions.some(s => s.id === localCurrentId)) return localCurrentId
+    // 2) local currentId 只在本地(待迁移) → 保留
+    if (localCurrentId && localIdSet.has(localCurrentId)) return localCurrentId
+    // 3) 选最近活动服务端会话
+    const active = serverSessions
+      .filter(s => !s.is_archived)
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0]
+    if (active) return active.id
+    return null
   }
 
   /**
@@ -350,5 +426,7 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     setTags,
     setPinned,
     setArchived,
+    // 2026-07-01 修复 bug 1a/1b：登录/同步后纯函数选 session
+    pickInitialSessionId,
   }
 })

@@ -372,3 +372,105 @@ class TestCleanup:
         msg_stmt = select(ChatMessage).where(ChatMessage.session_id == "cascade_test")
         msgs = (await db.execute(msg_stmt)).scalars().all()
         assert len(msgs) == 0
+
+
+# ============================================================================
+# 2026-07-01 ensure_session_for_stream 跨用户污染检测测试
+# ============================================================================
+
+class TestEnsureSessionForStreamCrossUser:
+    """bug 1d: detect cross-user session_id 污染,记录 WARN 日志
+
+    场景:
+    - 客户端 logout 时 localStorage 残留旧 user 的 sessionId
+    - 新 user 登录后用旧 id 发请求
+    - 后端 get_session(user_id, session_id) 找不到
+    - 旧实现: 静默创建新行(标题"新对话")
+    - 新实现: 检测到 (id) 存在但 (user_id) 不匹配 → WARN 日志,但仍创建(向后兼容)
+    """
+
+    @pytest.mark.asyncio
+    async def test_existing_session_for_current_user_returns_normally(
+        self, db, test_member
+    ):
+        """happy path: 自己的 session 直接返回,无 WARN"""
+        from app.services.chat_history_service import ensure_session_for_stream
+        await create_session(
+            db, user_id=test_member.id, client_session_id="my_session_1"
+        )
+        result = await ensure_session_for_stream(
+            db, user_id=test_member.id, session_id="my_session_1"
+        )
+        assert result is not None
+        assert result.id == "my_session_1"
+        assert result.user_id == test_member.id
+
+    @pytest.mark.asyncio
+    async def test_new_session_created_for_first_message(self, db, test_member):
+        """happy path: session 不存在,创建新行"""
+        from app.services.chat_history_service import ensure_session_for_stream
+        result = await ensure_session_for_stream(
+            db, user_id=test_member.id, session_id="new_session_1",
+            first_message="你好"
+        )
+        assert result.id == "new_session_1"
+        assert result.title == "你好"
+        assert result.user_id == test_member.id
+
+    @pytest.mark.asyncio
+    async def test_cross_user_session_id_logs_warning_before_integrity_error(
+        self, db, test_member, caplog
+    ):
+        """bug 1d: 检测跨用户 session_id 污染 → WARN 日志(行为仍保持向后兼容)
+
+        实际行为:
+        - ChatSession.id 是 PK (String(64), primary_key=True)
+        - 同 id 跨 user 实际会触发 IntegrityError(INSERT 失败)
+        - 旧实现: WARN 没记录,问题难定位
+        - 新实现: WARN 在 INSERT 前记录,运维监控可见
+        - 业务影响: 该请求会 500(因为 INSERT 失败),前端需:
+          (a) logout 时清空 localStorage(已修 1c)
+          (b) 登录时 pickInitialSessionId 选 server 已存在 id(已修 1b)
+        """
+        from app.services.chat_history_service import ensure_session_for_stream
+        from sqlalchemy.exc import IntegrityError
+        import logging
+
+        # user A 先创建 session
+        await create_session(
+            db, user_id=test_member.id, client_session_id="leaked_id_2"
+        )
+
+        # user B 试图用 leaked_id_2 → 触发 IntegrityError
+        # 但 WARN 应在 IntegrityError 之前记录
+        with caplog.at_level(logging.WARNING, logger='app.services.chat_history_service'):
+            with pytest.raises(IntegrityError):
+                await ensure_session_for_stream(
+                    db, user_id=test_member.id + 888, session_id="leaked_id_2",
+                )
+            # 必须 rollback 才能让后续 query 正常
+            await db.rollback()
+
+        # 验证 WARN 日志被记录(监控可见)
+        warning_msgs = [r.message for r in caplog.records if r.levelname == 'WARNING']
+        cross_user_warns = [m for m in warning_msgs if 'CROSS-USER' in m]
+        assert len(cross_user_warns) >= 1, f"Expected CROSS-USER WARN, got: {warning_msgs}"
+        # 警告里应包含 user_id 信息便于排查
+        assert any('belongs to user_id' in m for m in cross_user_warns)
+
+    @pytest.mark.asyncio
+    async def test_idempotent_for_same_user(self, db, test_member):
+        """happy path: 同一 user 重复 ensure → 返回同一个 ChatSession,无重复创建"""
+        from app.services.chat_history_service import ensure_session_for_stream
+        result1 = await ensure_session_for_stream(
+            db, user_id=test_member.id, session_id="idem_test"
+        )
+        result2 = await ensure_session_for_stream(
+            db, user_id=test_member.id, session_id="idem_test",
+            first_message="second call"
+        )
+        # 两次应该返回同一行(idempotent),且 title 不被覆盖
+        assert result1.id == result2.id == "idem_test"
+        # 第二次调用 title 应该仍是 "新对话"(first_message 不会覆盖)
+        # 实际行为: get_session 返回已有,直接 return existing
+        assert result2.title == result1.title

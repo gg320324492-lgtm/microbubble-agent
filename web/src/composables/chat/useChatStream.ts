@@ -99,12 +99,21 @@ const MESSAGES_SLICE_KEEP = 200
 export function useChatStream() {
   // --------------------------------------------------------------------------
   // 当前显示的会话 ID（UI 层可读写）
+  // ★ 2026-07-01 修复 bug 1a: 初始 sessionId 优先用 sessionsStore 的 currentId
+  // 旧实现: localStorage 直接读 SESSION_KEY → 跨用户污染时拿到旧 user 的 id
+  // → 服务端 ensure_session_for_stream 静默创建新行 → 重复 "新对话"
+  // 新实现: 让 store 在 onMounted 之后用 pickInitialSessionId 选（详见 onMounted）
+  // 初始值仍读 localStorage（兼容无 store / SSR / 第一次加载场景），
+  // 实际"选 sessionId" 逻辑在 store 调用 resolveInitialSessionId()。
   // --------------------------------------------------------------------------
-  const sessionId = ref<string>(
-    localStorage.getItem(SESSION_KEY) ||
-    localStorage.getItem(LEGACY_KEY) ||
-    `user_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-  )
+  const initialFromStorage = (() => {
+    try {
+      return localStorage.getItem(SESSION_KEY) ||
+             localStorage.getItem(LEGACY_KEY) ||
+             ''
+    } catch { return '' }
+  })()
+  const sessionId = ref<string>(initialFromStorage)
 
   // --------------------------------------------------------------------------
   // 修复 4 核心：6 个 per-session 数据结构
@@ -140,16 +149,40 @@ export function useChatStream() {
 
   // --------------------------------------------------------------------------
   // 会话 store 集成
+  // ★ 2026-07-01 修复 bug 1a: 移除自动 createSession()
+  // 旧实现: if (!currentSession()) createSession()  → 每次 mount 都 mint 新 id
+  // 新实现: 解析现有候选（store 已加载的 currentId / 第一个 local session），
+  // 都不存在 → sessionId 留空，UI 显示空状态 + "新对话" 按钮。
+  // 服务端同步后的真实初始 sessionId 在 onMounted 阶段用 pickInitialSessionId 选。
   // --------------------------------------------------------------------------
   const sessionsStore = useChatSessionsStore()
   const chatHistoryStore = useChatHistoryStore()  // #043 服务端持久化
   const ui = useUiStore()  // 2026-06-30 #009 Self-RAG: 读 useDeepThinking toggle
   sessionsStore.migrateFromV1()
-  if (!sessionsStore.currentSession()) {
-    sessionsStore.createSession()
+
+  function resolveInitialSessionId(): string {
+    // 1) store 已有 currentSession → 优先用
+    if (sessionsStore.currentSession()) return sessionsStore.currentId as string
+    // 2) store 有 sessions 但 currentId 没匹配 → 选第一个
+    const first = sessionsStore.sessions[0]
+    if (first) {
+      sessionsStore.switchSession(first.id)
+      return first.id
+    }
+    // 3) store 空(首次加载) → fallback 到 localStorage 初始值
+    // 这是关键: 单测 mock localStorage 但不通过 store 时,需要 fallback
+    if (initialFromStorage) {
+      sessionsStore.switchSession(initialFromStorage)
+      return initialFromStorage
+    }
+    return ''  // 真的空:UI 显示空状态 + "新对话" 按钮
   }
-  if (sessionsStore.currentId) {
-    sessionId.value = sessionsStore.currentId
+
+  const initialId = resolveInitialSessionId()
+  if (initialId) {
+    sessionId.value = initialId
+  } else {
+    sessionId.value = ''  // 显式空字符串（避免 undefined 走兜底 mint）
   }
 
   // --------------------------------------------------------------------------
@@ -251,6 +284,17 @@ export function useChatStream() {
     const img = opts.image ?? null
     if (!content && !img && !file) return
     if (sendingSessions.has(sessionId.value)) return
+
+    // ★ 2026-07-01 修复 bug 1a: 无 session 时(用户首次发消息) → 创建一个
+    // 这是用户主动发消息的入口,符合"除非用户自己创建,不然不创建"的产品决策
+    if (!sessionId.value) {
+      sessionsStore.createSession()
+      const newId = sessionsStore.currentId
+      if (!newId) return
+      sessionId.value = newId
+      messagesBySession.value[newId] = []
+      loadedSessions.add(newId)
+    }
 
     // ★ 关键：捕获目标 sessionId 到闭包（防止 SSE yield 时用户已切走）
     const targetSessionId = sessionId.value
@@ -806,6 +850,23 @@ export function useChatStream() {
         await chatHistoryStore.loadFromServer()
         // 把 server 会话列表同步到侧栏 store（保持 UI 一致）
         sessionsStore.mergeServerList(chatHistoryStore.serverSessions)
+        // ★ 2026-07-01 修复 bug 1b: 同步完成后用纯函数重选 sessionId
+        // 用户决策: 服务端有会话时自动恢复最近(ChatGPT/豆包模式)
+        const picked = sessionsStore.pickInitialSessionId({
+          serverSessions: chatHistoryStore.serverSessions,
+          localCurrentId: sessionsStore.currentId,
+          localSessionIds: sessionsStore.sessions.map(s => s.id),
+        })
+        if (picked && picked !== sessionsStore.currentId) {
+          sessionsStore.switchSession(picked)
+        }
+        if (picked) {
+          sessionId.value = picked
+          ensureSessionLoaded(picked)
+        } else {
+          // 都没找到(首次登录 or 服务端 0 会话)→ 留空
+          sessionId.value = ''
+        }
       } catch (e: any) {
         // 服务端加载失败 → 保留 localStorage 兜底，不阻塞 UI
         console.warn('[useChatStream] 服务端加载失败，保留 localStorage:', e?.message)
