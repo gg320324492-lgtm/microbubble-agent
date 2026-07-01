@@ -224,4 +224,49 @@ test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
       throw new Error(`SettingsView .role-tag font-weight expected 600, got ${roleTagStyle.fontWeight}`)
     }
   })
+
+  // Step 3 P0-4: .role--member 视觉权重重齐 font-weight: 600
+  // 用 Stylesheet API 直接读规则 — 不依赖 MemberCardBlock 是否真渲染
+  test('P0-4: .role--member font-weight 600 (像 admin/leader 一样视觉权重重齐)', async ({ page }) => {
+    await setupPage(page, { theme: 'light', accent: 'orange' })
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded' })
+
+    // 注入临时 DOM 元素测 computed style (不依赖业务组件渲染)
+    await page.evaluate(() => {
+      const el = document.createElement('span')
+      el.className = 'role role--member'
+      el.id = 'p0-4-probe'
+      document.body.appendChild(el)
+    })
+
+    const fontWeight = await page.evaluate(() => {
+      const el = document.getElementById('p0-4-probe')
+      return getComputedStyle(el).fontWeight
+    })
+
+    // 也从 stylesheet API 拿到源规则确认
+    const cssText = await page.evaluate(() => {
+      const text = '.role--member{color:var(--color-text-secondary);font-weight:600}'
+      // 该字符串就是 dist/css 里编译产物的关键内容, 用 specificity + selectorText 验
+      for (const sheet of document.styleSheets) {
+        try {
+          for (const rule of sheet.cssRules) {
+            if (rule.selectorText && rule.selectorText.includes('.role--member') && !rule.selectorText.includes('member-card')) {
+              return rule.cssText
+            }
+          }
+        } catch (e) {}
+      }
+      return null
+    })
+    console.log(`P0-4 stylesheet API 找到 .role--member 规则: ${cssText}`)
+
+    if (fontWeight !== '600') {
+      throw new Error(`.role--member font-weight expected 600, got ${fontWeight}. stylesheet rule: ${cssText}`)
+    }
+    // 编译后的 cssText 是 "font-weight: 600" (minify 后空格可能保留)
+    if (!cssText || !/\bfont-weight:\s*600\b/.test(cssText)) {
+      throw new Error(`stylesheet .role--member 规则没找到 / 不含 font-weight: 600. cssText: ${cssText}`)
+    }
+  })
 })

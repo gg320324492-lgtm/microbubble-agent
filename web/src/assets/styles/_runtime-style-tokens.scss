@@ -47,10 +47,11 @@
 // v77 P2.6-E.1: 收敛 MemberCardBlock.vue:32 runtime :style
 // 原 roleColor 映射: admin=danger, leader=warning, member=text-secondary
 // owner 是 plan 预留(未在原代码出现)，保持 primary
+// v78: .role--member 加 font-weight: 600 跟其他 3 个 role 视觉权重重齐
 .role--owner  { color: var(--color-primary); font-weight: 600; }
 .role--admin  { color: var(--color-danger); font-weight: 600; }
 .role--leader { color: var(--color-warning); font-weight: 600; }
-.role--member { color: var(--color-text-secondary); }
+.role--member { color: var(--color-text-secondary); font-weight: 600; }
 
 // ===== 卡片徽章（移动端 CardList）=====
 .badge--success { background: var(--color-success-bg); color: var(--color-success); }
