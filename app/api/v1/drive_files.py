@@ -61,6 +61,9 @@ class DriveFileItem(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     deleted_at: Optional[str] = None
+    download_count: int = 0
+    share_token: Optional[str] = None
+    share_expires_at: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -105,6 +108,9 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         created_at=str(k.created_at) if k.created_at else None,
         updated_at=str(k.updated_at) if k.updated_at else None,
         deleted_at=str(k.deleted_at) if k.deleted_at else None,
+        download_count=k.download_count or 0,
+        share_token=k.share_token,
+        share_expires_at=str(k.share_expires_at) if k.share_expires_at else None,
     )
 
 
@@ -390,6 +396,9 @@ async def download_drive_file(
         pass
     filename = f.file_name or f.title or f"file_{f.id}"
 
+    # PR2.7: 原子 +1 下载计数
+    new_count = await svc.increment_download_count(file_id)
+
     # Range 头解析
     range_header = request.headers.get("Range")
     if range_header:
@@ -605,3 +614,147 @@ async def _collect_folder_files(
 
 # === Stats 补 time import ===
 from datetime import datetime as _dt_now
+
+
+# ==========================================================================
+# PR2.7 分享链接 + 公开下载
+# ==========================================================================
+
+class ShareLinkRequest(BaseModel):
+    expires_in_days: int = 7
+
+
+class ShareLinkResponse(BaseModel):
+    file_id: int
+    token: str
+    share_url: str
+    expires_at: Optional[str] = None
+
+
+@router.post("/files/{file_id}/share-link", response_model=ShareLinkResponse)
+async def create_share_link(
+    file_id: int,
+    payload: ShareLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """生成 drive 文件公开分享链接 (owner only)
+
+    返回 token + 完整 share_url + expires_at
+    """
+    svc = DriveService(db)
+    try:
+        f = await svc.create_share_link(
+            file_id,
+            current_user_id=current_user.id,
+            expires_in_days=payload.expires_in_days,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+
+    # share_url 用 settings.PUBLIC_BASE_URL (前端拼) - 这里用相对路径
+    share_url = f"/drive/share/{f.share_token}"
+    return ShareLinkResponse(
+        file_id=f.id,
+        token=f.share_token,
+        share_url=share_url,
+        expires_at=str(f.share_expires_at) if f.share_expires_at else None,
+    )
+
+
+@router.delete("/files/{file_id}/share-link", status_code=204)
+async def revoke_share_link(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """撤销 share link (清 token)"""
+    svc = DriveService(db)
+    ok = await svc.revoke_share_link(file_id, current_user_id=current_user.id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+    return
+
+
+# === 公开 share 端点 (无需 JWT, token 验证) ===
+
+# 注: 放在前缀 /drive/share 路径下, router prefix = /drive
+# 实际 URL: GET /api/v1/drive/share/{token}
+# 为简化, 把 share 端点放到 root 上
+# 但 FastAPI router prefix 是 /drive, 加 /share/{token} 即可
+# 这里用独立 APIRouter 避免与 /files/{file_id} 冲突
+share_router = APIRouter(prefix="/drive/share", tags=["网盘公开分享"])
+
+
+@share_router.get("/{token}")
+async def public_download_by_token(
+    token: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """公开分享下载 (无 JWT, 仅 token 验证)
+
+    GET /api/v1/drive/share/{token} -> 流式下载
+    """
+    svc = DriveService(db)
+    f = await svc.get_by_share_token(token)
+    if f is None:
+        raise HTTPException(status_code=404, detail="分享链接不存在或已过期")
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="分享文件无 MinIO 对象")
+
+    # 公开访问: 不需要 visibility 校验 (token 本身代表 owner 主动授权)
+    # 但仍原子 +1 下载计数
+    new_count = await svc.increment_download_count(f.id)
+
+    filename = f.file_name or f.title or f"file_{f.id}"
+    content_type = f.file_type or "application/octet-stream"
+    encoded = quote(filename)
+    file_size = await _get_object_size(f.file_path)
+
+    # Range 支持 (与 /files/{id}/download 一致)
+    range_header = request.headers.get("Range")
+    if range_header:
+        m = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if m and file_size is not None:
+            start = int(m.group(1))
+            end_str = m.group(2)
+            if end_str:
+                end = min(int(end_str), file_size - 1)
+            else:
+                end = file_size - 1
+            length = end - start + 1
+            async def _range_stream():
+                chunk = await _download_range(f.file_path, start, length)
+                yield chunk
+            return StreamingResponse(
+                _range_stream(),
+                status_code=206,
+                media_type=content_type,
+                headers={
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(length),
+                    "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+                },
+            )
+
+    # 完整下载
+    headers = {
+        "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+        "Accept-Ranges": "bytes",
+    }
+    if file_size is not None:
+        headers["Content-Length"] = str(file_size)
+
+    async def _full_stream():
+        data = await file_service.download_file(f.file_path)
+        yield data
+
+    return StreamingResponse(
+        _full_stream(),
+        media_type=content_type,
+        headers=headers,
+    )

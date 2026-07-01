@@ -16,6 +16,7 @@
   3. listing 时 SQL hard-filter private → created_by=current_user_id
 """
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
@@ -456,3 +457,111 @@ class DriveService:
             "by_visibility": vis_counts,
             "active": True,
         }
+
+    # ==========================================================================
+    # PR2.7 分享链接 + 下载计数
+    # ==========================================================================
+
+    async def increment_download_count(self, file_id: int) -> int:
+        """原子 +1 下载计数, 返回新值"""
+        result = await self.db.execute(
+            update(Knowledge)
+            .where(
+                Knowledge.id == file_id,
+                Knowledge.storage_mode == "drive",
+                Knowledge.deleted_at.is_(None),
+            )
+            .values(download_count=Knowledge.download_count + 1)
+            .returning(Knowledge.download_count)
+        )
+        row = result.first()
+        if row is None:
+            return 0
+        return row[0]
+
+    async def create_share_link(
+        self,
+        file_id: int,
+        current_user_id: int,
+        *,
+        expires_in_days: int = 7,
+    ) -> Optional[Knowledge]:
+        """生成公开分享 token (owner only)
+
+        - token: 32 字符 secrets.token_urlsafe
+        - expires: now + expires_in_days
+        - owner only (private 仍能生成, 因为是"主动决定暴露")
+        """
+        if expires_in_days < 1 or expires_in_days > 365:
+            raise DriveServiceError(
+                f"expires_in_days {expires_in_days} 超出范围 [1, 365]",
+                status_code=400,
+            )
+        f = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id == file_id,
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        f = f.scalar_one_or_none()
+        if f is None or f.created_by != current_user_id:
+            return None
+
+        # 32 字符 token (44 字符 url-safe base64)
+        token = secrets.token_urlsafe(24)[:32]
+        f.share_token = token
+        f.share_expires_at = _to_naive_dt(
+            datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+        )
+        await self.db.commit()
+        await self.db.refresh(f)
+        logger.info(
+            f"[DriveService.create_share_link] id={f.id} token={token[:8]}... "
+            f"expires={f.share_expires_at}"
+        )
+        return f
+
+    async def revoke_share_link(
+        self,
+        file_id: int,
+        current_user_id: int,
+    ) -> bool:
+        """撤销分享链接 (清 token + expires)"""
+        f = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id == file_id,
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        f = f.scalar_one_or_none()
+        if f is None or f.created_by != current_user_id:
+            return False
+        f.share_token = None
+        f.share_expires_at = None
+        await self.db.commit()
+        return True
+
+    async def get_by_share_token(self, token: str) -> Optional[Knowledge]:
+        """通过 token 公开访问 (无 JWT, 用于 /drive/share/{token} 端点)"""
+        if not token:
+            return None
+        f = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.share_token == token,
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        f = f.scalar_one_or_none()
+        if f is None:
+            return None
+        # 校验 expires
+        if f.share_expires_at is not None:
+            expires_naive = _to_naive_dt(f.share_expires_at)
+            now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+            if expires_naive < now_naive:
+                logger.info(f"[DriveService.get_by_share_token] token={token[:8]}... 已过期")
+                return None
+        return f
