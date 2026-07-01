@@ -115,7 +115,8 @@ async def test_group_3_submit_public(client, token):
         files=files, data=data,
     )
     assert_eq("exe rejected 422", resp.status_code, 422)
-    assert_true("detail mentions not allowed", "不支持" in (resp.json().get("detail") or ""))
+    # 实际 service 错误: "不允许的文件类型 '.exe'，仅支持 pdf, txt"
+    assert_true("detail mentions not allowed", "不允许" in (resp.json().get("detail") or ""))
 
     # 必填姓名缺失 → 422
     files = {"file": ("ok.pdf", b"%PDF", "application/pdf")}
