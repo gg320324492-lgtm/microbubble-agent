@@ -129,6 +129,14 @@ const routes = [
         meta: { title: '声纹库中心', icon: 'mic' }
       },
       {
+        // PR3.1: 课题组网盘 (Lab Group Drive) - 桌面端主视图, 移动端 PR4 复用 KB 第 6 tab
+        path: 'drive',
+        name: 'Drive',
+        // 桌面 DesktopDriveView (本 PR3 创建), 移动端 MobileDriveView (PR4)
+        component: resolveMobileComponent('DesktopDriveView', 'mobile/MobileDriveView'),
+        meta: { title: '课题组网盘', icon: 'Files' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: resolveMobileComponent('SettingsView', 'MobileSettingsView'),
