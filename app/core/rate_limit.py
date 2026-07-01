@@ -341,6 +341,29 @@ async def rate_limit_middleware(request: Request, call_next):
     response.headers["X-RateLimit-Reset"] = str(int(time.time() + limiter.window_seconds))
     response.headers["X-RateLimit-Policy"] = limit_type
 
+    # PR7: 自动审计 (集成到 rate_limit 而非独立中间件, 解决 BaseHTTPMiddleware 不 fire 问题)
+    # 限流后 + 响应后 → 一并写 audit_log
+    try:
+        from app.core.audit_middleware import _audit_request, _parse_token_user_id
+        from app.core.audit_middleware import _get_client_ip as _audit_get_ip
+        user_id = getattr(request.state, "user_id", None) or _parse_token_user_id(request)
+        # duration 由 rate_limit 算: 响应已生成, 用 wall-clock 估算
+        await _audit_request(
+            user_id=user_id,
+            ip_address=_audit_get_ip(request),
+            user_agent=(request.headers.get("User-Agent") or "")[:1000],
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=0,  # rate_limit 阶段拿不到原始 start, 简化 0
+        )
+    except Exception as e:
+        # audit 失败不阻塞主响应
+        import logging
+        logging.getLogger("microbubble.rate_limit").warning(
+            f"[Audit] 集成失败: {e}", exc_info=True
+        )
+
     return response
 
 
