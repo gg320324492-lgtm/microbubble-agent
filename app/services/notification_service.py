@@ -32,8 +32,11 @@ from app.models.member import Member
 
 logger = logging.getLogger(__name__)
 
-# @ 提及正则: @张三 / @王天志 (中文 2-4 字)
-_MENTION_PATTERN = re.compile(r"@([一-龥A-Za-z0-9_]{1,32})")
+# @ 提及正则: @张三 / @WangTianZhi / @nuyoah. (中文 2-4 字 + 英文 + 数字 + ._-)
+# v2 PR6-P4 修复: 原 regex @([一-龥A-Za-z0-9_]{1,32}) 不能匹配 wechat_id 含 '.'
+# (nuyoah. / WuWei. / HALO. 等真实用户名), 永久被忽略
+# 扩到允许 '.', '-', '_' + max 32 char, 与前端 regex 完全镜像 (CLAUDE.md 铁律)
+_MENTION_PATTERN = re.compile(r"@([一-龥A-Za-z0-9_.\-]{1,32})")
 
 
 class NotificationService:

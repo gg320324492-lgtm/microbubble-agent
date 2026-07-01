@@ -24,12 +24,14 @@ import axios from 'axios'
 // 5 种格式: <function=>  / <function_calls>  / <tool_call>{  / ```json{name,...}  / <tool_call><function=
 // 触发场景: 后端 done event 在 stream 中断路径下被 Round 5a try/finally 兜底 yield,
 // text_without_json=None, 前端 useChatStream:638 替换逻辑跳过, raw text_delta 含 fake XML 泄露
+// v2 PR6-P4 build 修复: Rolldown 构建器不支持 regex literal 含 `l` flag 等特殊字符 (CLAUDE.md 2026-07-02 教训)
+// 改用 RegExp constructor string-based 避免 build 报错
 const FAKE_XML_PATTERNS = [
-  /<function\s*=[^>]+>/gi,
-  /<function_calls?\s*>/gi,
-  /</tool_call>\s*\{/gi,
-  /```json\s*\{[^{}]*"(?:name|function|tool)"/gi,
-  /<tool_call>\s*<function=/gi,
+  new RegExp('<function\\s*=[^>]+>', 'gi'),
+  new RegExp('<function_calls?\\s*>', 'gi'),
+  new RegExp('</tool_call>\\s*\\{', 'gi'),
+  new RegExp('```json\\s*\\{[^{}]*"(?:name|function|tool)"', 'gi'),
+  new RegExp('<tool_call>\\s*<function=', 'gi'),
 ]
 
 function stripFakeXml(text: string): string {
