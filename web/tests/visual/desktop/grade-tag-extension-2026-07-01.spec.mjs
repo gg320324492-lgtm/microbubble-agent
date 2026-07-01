@@ -81,11 +81,12 @@ function parseRgb(rgbStr) {
 }
 
 test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
-  test('P0-1: 桌面 /members grade + role chip 6 主题验证', async ({ page }) => {
+  test('P0-1: 桌面 /workspace?tab=members grade + role chip 6 主题验证', async ({ page }) => {
     const failures = []
     for (const t of THEMES) {
       await setupPage(page, { theme: t.theme, accent: t.accent })
-      await page.goto(`${BASE_URL}/members`, { waitUntil: 'networkidle' })
+      // v78 合并: 原 /members 路由已删, 改为 /workspace?tab=members
+      await page.goto(`${BASE_URL}/workspace?tab=members`, { waitUntil: 'networkidle' })
       await page.waitForTimeout(800)
 
       // 断言 1: <html data-theme> data-accent 已切
@@ -97,6 +98,8 @@ test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
       expect(dataset.accent, `${t.name}: accent`).toBe(t.accent)
 
       // 断言 2: 第一张成员卡 grade chip computed style
+      // v78: el-tab-pane 懒加载, 等动画/渲染完成再查
+      await page.waitForSelector('.member-card .member-info .el-tag', { timeout: 5000 }).catch(() => {})
       const gradeSel = '.member-card .member-info .el-tag.grade-tag, .member-card .member-info .el-tag'
       const gradeStyle = await getChipStyle(page, gradeSel)
       if (!gradeStyle) {
@@ -124,12 +127,13 @@ test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
     if (failures.length) {
       console.error('P0-1 failures:\n' + failures.map(f => ' - ' + f).join('\n'))
     }
-    expect(failures, `P0-1 桌面 /members ${failures.length} 处失败:\n${failures.join('\n')}`).toHaveLength(0)
+    expect(failures, `P0-1 桌面 /workspace?tab=members ${failures.length} 处失败:\n${failures.join('\n')}`).toHaveLength(0)
   })
 
-  // 简化移动测试: 默认 theme/orange 已切 dark 时验证 hero-tags (mobile 路由只测一主题组合)
-  test('P0-2: 移动 /members/{name} hero-tags role chip (orange/light)', async ({ page, browser }) => {
-    // 模拟移动 viewport
+  // v78 合并后: 移动端成员详情改走 /workspace?tab=members 内嵌 dialog
+  // 详情 dialog 由 WorkspaceView 顶层 el-dialog 控制, 移动端 sheet 已被 MobileMembersPanel 接管
+  // 这里直接测试移动 workspace 列表卡的 chip 主色实色 (mobile 路径, viewport=390)
+  test('P0-2: 移动 /workspace?tab=members 成员卡 chip 主色实色 (orange/light)', async ({ page, browser }) => {
     const ctx = await browser.newContext({
       viewport: { width: 390, height: 844 },
       deviceScaleFactor: 3,
@@ -138,55 +142,27 @@ test.describe('v78 Step 1: 成员 card chip 主色实色 + 白字', () => {
     })
     const page2 = await ctx.newPage()
     await setupPage(page2, { theme: 'light', accent: 'orange' })
-    await page2.goto(`${BASE_URL}/members`, { waitUntil: 'networkidle' })
+    await page2.goto(`${BASE_URL}/workspace?tab=members`, { waitUntil: 'networkidle' })
     await page2.waitForTimeout(800)
-    // 拿到第一个成员 id, 跳转详情
-    const memberId = await page2.evaluate(() => {
-      const link = document.querySelector('.member-card a[href*="/members/"]')
-      if (link) return link.getAttribute('href')
-      // 试着找任意 members/N
-      const any = document.querySelector('a[href*="/members/"]')
-      return any ? any.getAttribute('href') : null
-    })
-    if (!memberId) {
-      test.skip(true, '没找到成员详情链接')
-      return
-    }
-    await page2.goto(`${BASE_URL}${memberId}`, { waitUntil: 'networkidle' })
-    await page2.waitForTimeout(800)
-
-    // 断言 1: hero-tags 第一个 el-tag (role chip) 主色实色
-    const heroStyle = await getChipStyle(page2, '.hero-tags > .el-tag:not(.voice-tag)')
-    if (!heroStyle) {
-      test.skip(true, 'mobile detail 页没渲染 hero-tags (可能 mock data 缺)')
+    // 等 el-tab-pane 懒加载
+    await page2.waitForSelector('.member-card .member-info .el-tag', { timeout: 5000 }).catch(() => {})
+    // 移动端 CardList 渲染的字段结构同桌面 (MobileMembersPanel 内)
+    const gradeStyle = await getChipStyle(page2, '.member-card .member-info .el-tag.grade-tag, .member-card .member-info .el-tag')
+    if (!gradeStyle) {
+      test.skip(true, 'mobile /workspace?tab=members 没渲染 .member-info .el-tag (可能 mock data 缺)')
       return
     }
     const expectedRgb = parseRgb('rgb(255, 122, 92)')
-    const actualRgb = parseRgb(heroStyle.bg)
+    const actualRgb = parseRgb(gradeStyle.bg)
     const bgMatch = actualRgb && expectedRgb && actualRgb.every((v, i) => Math.abs(v - expectedRgb[i]) < 5)
     if (!bgMatch) {
-      throw new Error(`mobile hero role chip bg expected rgb(255, 122, 92), got ${heroStyle.bg} (text="${heroStyle.text}")`)
+      throw new Error(`mobile member grade chip bg expected rgb(255, 122, 92), got ${gradeStyle.bg} (text="${gradeStyle.text}")`)
     }
-    if (!heroStyle.color.includes('255, 255, 255')) {
-      throw new Error(`mobile hero role chip color expected white, got ${heroStyle.color}`)
+    if (!gradeStyle.color.includes('255, 255, 255')) {
+      throw new Error(`mobile member grade chip color expected white, got ${gradeStyle.color}`)
     }
-    if (heroStyle.fontWeight !== '600') {
-      throw new Error(`mobile hero role chip font-weight expected 600, got ${heroStyle.fontWeight}`)
-    }
-
-    // 断言 2: voice-tag (如果存在) 仍走 success/warning (排除规则生效)
-    const voiceStyle = await getChipStyle(page2, '.hero-tags .voice-tag')
-    if (voiceStyle) {
-      // voice 应该 *不是* 主色实色 — 是 EP success 绿 / warning 黄
-      const voiceRgb = parseRgb(voiceStyle.bg)
-      const primaryRgb = parseRgb('rgb(255, 122, 92)')
-      const sameAsPrimary = voiceRgb && primaryRgb && voiceRgb.every((v, i) => Math.abs(v - primaryRgb[i]) < 5)
-      if (sameAsPrimary) {
-        throw new Error(`voice-tag 被强制覆盖成主色 — :not(.voice-tag) 排除规则没生效. 实际 bg=${voiceStyle.bg} (text="${voiceStyle.text}")`)
-      }
-      console.log(`P0-2 voice-tag 排除 OK: bg=${voiceStyle.bg} text="${voiceStyle.text}"`)
-    } else {
-      console.log('P0-2 voice-tag 在当前 mock 数据中不存在 (该成员 voice_enrolled_at 为空), 排除规则未实测')
+    if (gradeStyle.fontWeight !== '600') {
+      throw new Error(`mobile member grade chip font-weight expected 600, got ${gradeStyle.fontWeight}`)
     }
   })
 

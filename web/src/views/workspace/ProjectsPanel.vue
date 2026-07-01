@@ -1,5 +1,5 @@
 <template>
-  <div class="project-view">
+  <div class="projects-panel">
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
@@ -26,7 +26,7 @@
         :key="project.id"
         class="project-card"
         shadow="hover"
-        @click="viewProject(project)"
+        @click="$emit('open-detail', project)"
       >
         <div class="project-header">
           <el-tag :type="getStatusType(project.status)" size="small">
@@ -196,72 +196,35 @@
         <el-button type="primary" @click="updateProject">保存</el-button>
       </template>
     </el-dialog>
-
-    <!-- 项目详情对话框 -->
-    <el-dialog v-model="showDetailDialog" title="项目详情" :width="isMobile ? '95vw' : '700px'" top="5vh">
-      <div v-if="currentProject" class="project-detail">
-        <h2>{{ currentProject.name }}</h2>
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="状态">
-            <el-tag :type="getStatusType(currentProject.status)">
-              {{ getStatusLabel(currentProject.status) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="研究方向">{{ currentProject.research_area || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="开始日期">{{ formatDate(currentProject.start_date) }}</el-descriptions-item>
-          <el-descriptions-item label="结束日期">{{ formatDate(currentProject.end_date) }}</el-descriptions-item>
-          <el-descriptions-item label="项目描述" :span="2">{{ currentProject.description || '-' }}</el-descriptions-item>
-        </el-descriptions>
-
-        <h4 style="margin-top: 20px;">项目成员</h4>
-        <div class="member-tags">
-          <el-tag
-            v-for="memberId in currentProject.members"
-            :key="memberId"
-            style="margin: 4px"
-          >
-            {{ getMemberName(memberId) }}
-          </el-tag>
-        </div>
-
-        <h4 style="margin-top: 20px;">里程碑</h4>
-        <el-timeline>
-          <el-timeline-item
-            v-for="milestone in milestones"
-            :key="milestone.id"
-            :timestamp="formatDate(milestone.due_date)"
-            placement="top"
-          >
-            <el-card>
-              <h4>{{ milestone.name }}</h4>
-              <p>{{ milestone.description }}</p>
-            </el-card>
-          </el-timeline-item>
-        </el-timeline>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
+/**
+ * ProjectsPanel.vue — v78 "团队协作" 项目 tab 子组件
+ *
+ * 从原 web/src/views/ProjectView.vue 拆出 (2026-07-02):
+ * - 保留: 项目卡片列表 + 创建/编辑 dialog + filters 状态
+ * - 移除: 项目详情 dialog (由父 WorkspaceView 接管, 通过 emit 'open-detail' 触发)
+ * - 详情走 WorkspaceView 顶层 el-dialog (统一位置 + 跨 tab 共享)
+ */
+
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import dayjs from 'dayjs'
 import { formatDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
+
+defineEmits(['open-detail'])
 
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
 
 const isMobile = ref(window.innerWidth <= 768)
 const projects = ref([])
-const milestones = ref([])
 const showCreateDialog = ref(false)
-const showDetailDialog = ref(false)
 const showEditDialog = ref(false)
 const editingProjectId = ref(null)
-const currentProject = ref(null)
 
 const filters = ref({
   status: ''
@@ -286,9 +249,6 @@ const fetchProjects = async () => {
   }
 }
 
-// 获取成员列表（使用 store）
-const fetchMembers = () => memberStore.fetchMembers()
-
 // 创建项目
 const createProject = async () => {
   if (!projectForm.value.name) {
@@ -312,20 +272,6 @@ const createProject = async () => {
     fetchProjects()
   } catch (e) {
     ElMessage.error('创建失败')
-  }
-}
-
-// 查看项目详情
-const viewProject = async (project) => {
-  currentProject.value = project
-  showDetailDialog.value = true
-
-  // 获取里程碑
-  try {
-    const res = await axios.get(`/api/v1/projects/${project.id}/milestones`)
-    milestones.value = res.data || []
-  } catch (e) {
-    console.error('获取里程碑失败:', e)
   }
 }
 
@@ -407,9 +353,6 @@ const deleteProject = async (project) => {
   }
 }
 
-// 辅助函数
-const getMemberName = (id) => memberStore.getMemberName(id)
-
 const getStatusType = (status) => {
   const map = { active: 'success', paused: 'warning', completed: 'info', archived: 'info' }
   return map[status] || 'info'
@@ -424,19 +367,15 @@ watch(filters, () => fetchProjects(), { deep: true })
 
 onMounted(() => {
   fetchProjects()
-  fetchMembers()
 })
 </script>
 
 <style scoped>
-
-.project-view {
-  height: 100%;
-  overflow-y: auto;
+.projects-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
+  padding: 16px 0;
 }
 
 .filter-card {
@@ -517,37 +456,10 @@ onMounted(() => {
   color: var(--color-text-regular);
   margin-bottom: var(--space-2);
 }
-
-.member-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.member-tags .el-tag {
-  border-radius: var(--radius-full);
-  transition: all var(--duration-fast) var(--ease-out);
-}
-
-.member-tags .el-tag:hover {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-
-.project-detail h2 {
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-5);
-}
-
-.project-detail h4 {
-  color: var(--color-text-primary);
-  margin-bottom: var(--space-3);
-  font-weight: var(--font-weight-semibold);
-}
 </style>
 
+<!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
 <style>
-/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
 [data-theme="dark"] .project-card {
   background: var(--color-bg-card);
   border-color: var(--color-border);
@@ -557,19 +469,4 @@ onMounted(() => {
   border-color: var(--color-primary);
   box-shadow: var(--shadow-primary);
 }
-[data-theme="dark"] .member-tags .el-tag:hover {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-/* v69 P1b fix-2: 详情 dialog 内的项目成员 tag / 里程碑 / 项目描述 提亮 */
-[data-theme="dark"] .project-detail h4 { color: var(--color-text-primary); }
-[data-theme="dark"] .detail-field-label { color: var(--color-text-secondary); }
-[data-theme="dark"] .detail-field-value { color: var(--color-text-primary); }
-[data-theme="dark"] .milestone-item {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-base);
-}
-[data-theme="dark"] .milestone-title { color: var(--color-text-primary); }
-[data-theme="dark"] .milestone-desc { color: var(--color-text-secondary); }
-[data-theme="dark"] .member-tag-item { background: var(--color-bg-hover); }
 </style>

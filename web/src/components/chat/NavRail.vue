@@ -26,7 +26,7 @@ const navItems = [
   { name: 'task', label: '任务', icon: List, route: '/tasks' },
   { name: 'meeting', label: '会议', icon: Calendar, route: '/meetings' },
   { name: 'knowledge', label: '知识', icon: DataAnalysis, route: '/knowledge' },
-  { name: 'project', label: '项目', icon: Document, route: '/projects' },
+  { name: 'workspace', label: '协作', icon: Document, route: '/workspace?tab=projects' },
   { name: 'hypothesis', label: '假设', icon: Notebook, route: '/hypotheses' },
 ]
 

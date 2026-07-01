@@ -29,6 +29,7 @@ const VIEWPORT = { width: 390, height: 844 } // iPhone 14
 
 // v77 P2.6-C: 从 3 路由扩到 6 路由 (与 desktop 对齐)
 // v77 P2.6-D.4: 扩到 9 路由 (+projects /members /project-stats)
+// v78: /projects /members 合并到 /workspace, 仍 9 路由
 const CORE_ROUTES = [
   { path: '/dashboard', name: '01-dashboard' },
   { path: '/knowledge', name: '06-knowledge' },
@@ -37,9 +38,9 @@ const CORE_ROUTES = [
   { path: '/tasks', name: '04-tasks' },
   { path: '/meetings', name: '05-meetings' },
   { path: '/settings', name: '07-settings' },
-  // v77 P2.6-D.4 新增
-  { path: '/projects', name: '08-projects' },
-  { path: '/members', name: '09-members' },
+  // v78: 项目/成员合并到 /workspace, 声纹也包含在 workspace 第 3 个 tab
+  { path: '/workspace?tab=projects', name: '08-workspace-projects' },
+  { path: '/workspace?tab=members', name: '09-workspace-members' },
   { path: '/project-stats', name: '10-project-stats' },
 ]
 

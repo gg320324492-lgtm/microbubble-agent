@@ -19,19 +19,31 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
-// 2026-07-02 Round 5c: 前端兜底剥除 fake XML
+// 2026-07-02 Round 5c + Phase I 修复: 前端兜底剥除 fake XML
 // 镜像 Python app/agent/agentic_loop.py:_strip_fake_tool_calls (line 394-419)
 // 5 种格式: <function=>  / <function_calls>  / <tool_call>{  / ```json{name,...}  / <tool_call><function=
 // 触发场景: 后端 done event 在 stream 中断路径下被 Round 5a try/finally 兜底 yield,
 // text_without_json=None, 前端 useChatStream:638 替换逻辑跳过, raw text_delta 含 fake XML 泄露
 // v2 PR6-P4 build 修复: Rolldown 构建器不支持 regex literal 含 `l` flag 等特殊字符 (CLAUDE.md 2026-07-02 教训)
 // 改用 RegExp constructor string-based 避免 build 报错
+//
+// Phase I 修复 (2026-07-02): Round 5c 只剥"开始标记"(如 <function=...>)而保留中间
+// <parameter>...</parameter></function></tool_call> 内容, 导致 A-L2-0006 类 fake XML 仍泄露.
+// 修复: 加 3 条"整块匹配"pattern, 完整剥除 <function=...>...</function> 整块.
 const FAKE_XML_PATTERNS = [
+  // 单标记型 (Round 5c 原有, 保留兼容)
   new RegExp('<function\\s*=[^>]+>', 'gi'),
   new RegExp('<function_calls?\\s*>', 'gi'),
   new RegExp('</tool_call>\\s*\\{', 'gi'),
   new RegExp('```json\\s*\\{[^{}]*"(?:name|function|tool)"', 'gi'),
   new RegExp('<tool_call>\\s*<function=', 'gi'),
+  // Phase I 新增: 整块剥除 (含 <parameter>...</parameter></function></tool_call> 完整内容)
+  // 1. <tool_call><function=...>...</function></tool_call> 完整块 (含任意字符含换行, 但非贪婪)
+  new RegExp('<tool_call>[\\s\\S]*?<function=[\\s\\S]*?<\\/function>\\s*</tool_call>', 'gi'),
+  // 2. <tool_call><function=...>...</parameter></function></tool_call> (parameter 含嵌套花括号, 用平衡匹配兜底)
+  new RegExp('<tool_call>\\s*<function=[\\s\\S]*?<\\/parameter>\\s*<\\/function>\\s*</tool_call>', 'gi'),
+  // 3. 孤立的 <function=...>...</function></tool_call></tool_call> (无 <tool_call> wrapper 的兜底)
+  new RegExp('<function=[\\s\\S]*?<\\/parameter>\\s*<\\/function>', 'gi'),
 ]
 
 function stripFakeXml(text: string): string {
@@ -39,6 +51,14 @@ function stripFakeXml(text: string): string {
   let result = text
   for (const pattern of FAKE_XML_PATTERNS) {
     result = result.replace(pattern, '')
+  }
+  // 多轮 replace (pattern.exec 全局匹配, replace 一次可能漏)
+  for (let i = 0; i < 3; i++) {
+    const before = result
+    for (const pattern of FAKE_XML_PATTERNS) {
+      result = result.replace(pattern, '')
+    }
+    if (result === before) break  // 无变化则退出
   }
   return result
 }

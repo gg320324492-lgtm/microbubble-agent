@@ -1,5 +1,5 @@
 <template>
-  <div class="member-view">
+  <div class="members-panel">
     <!-- 顶部操作栏 -->
     <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
@@ -64,14 +64,14 @@
           </el-tooltip>
         </div>
 
-        <div class="member-avatar">
+        <div class="member-avatar" @click="$emit('open-detail', member)">
           <el-avatar v-if="member.avatar" :size="64" :src="member.avatar" :alt="`${member.name}的头像`" />
           <el-avatar v-else :size="64" :class="`avatar-color-${getAvatarIndex(member.name)}`" :alt="`${member.name}的头像`">
             {{ member.name.charAt(0) }}
           </el-avatar>
         </div>
 
-        <div class="member-info">
+        <div class="member-info" @click="$emit('open-detail', member)">
           <h3 class="member-name">{{ member.name }}</h3>
           <el-tag size="small" class="grade-tag">{{ member.grade }}</el-tag>
           <div class="member-role">
@@ -115,7 +115,7 @@
             {{ member.voice_enrolled_at ? '更新声纹' : '录入声纹' }}
           </el-button>
           <el-button text type="primary" size="small" @click="editMember(member)">编辑</el-button>
-          <el-button text size="small" @click="viewTasks(member)">查看任务</el-button>
+          <el-button text size="small" @click="$emit('open-detail', member)">详情</el-button>
         </div>
       </el-card>
     </div>
@@ -202,16 +202,26 @@
 </template>
 
 <script setup>
+/**
+ * MembersPanel.vue — v78 "团队协作" 成员 tab 子组件
+ *
+ * 从原 web/src/views/MemberView.vue 拆出 (2026-07-02):
+ * - 保留: 成员卡片列表 + 创建/编辑 dialog + 声纹录入弹窗 + skills 显示
+ * - 移除: 路由 viewTasks (跳 /tasks) — 合并后从成员卡片不再做跨域跳转
+ * - 移除: 不可达 return a.name.localeCompare(b.name, 'zh-CN') bug (CLAUDE.md 教训, 2026-06-15)
+ * - 详情: emit 'open-detail' 给父 WorkspaceView 弹 dialog (替代原详情跳转路由)
+ */
+
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Microphone, Search, Plus, Location, Message } from '@element-plus/icons-vue'
-import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useMemberStore } from '@/stores/member'
 import VoiceprintEnrollDialog from '@/components/VoiceprintEnrollDialog.vue'
 import { getDisplaySkills } from '@/utils/researchAreaSkills'
 
-const router = useRouter()
+defineEmits(['open-detail'])
+
 const memberStore = useMemberStore()
 
 // 年级排序（从高到低）。2026-06-30 修复：
@@ -232,7 +242,6 @@ const members = computed(() => {
     if (orderA !== orderB) return orderA - orderB
     // 同 grade 内按姓名拼音升序
     return (a.name || '').localeCompare(b.name || '', 'zh-CN')
-    return a.name.localeCompare(b.name, 'zh-CN')
   })
 })
 
@@ -293,11 +302,6 @@ const editMember = (member) => {
   const { avatar: _avatar, ...rest } = member
   memberForm.value = { ...rest }
   showCreateDialog.value = true
-}
-
-// 查看成员任务
-const viewTasks = (member) => {
-  router.push({ path: '/tasks', query: { assignee_id: member.id } })
 }
 
 // 打开声纹录入弹窗
@@ -366,11 +370,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.member-view {
+.members-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
+  padding: 16px 0;
 }
 
 .filter-card {
@@ -416,10 +420,12 @@ onMounted(() => {
 
 .member-avatar {
   margin-bottom: var(--space-4);
+  cursor: pointer;
 }
 
 .member-info {
   margin-bottom: var(--space-4);
+  cursor: pointer;
 }
 
 .member-name {
@@ -501,8 +507,8 @@ onMounted(() => {
 }
 </style>
 
+<!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
 <style>
-/* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
 [data-theme="dark"] .member-card {
   background: var(--color-bg-card);
   border-color: var(--color-border);
@@ -528,7 +534,6 @@ onMounted(() => {
 }
 
 /* v77 P2.6-D: ocean / forest 主题 chips 适配（成员 skills / grade） */
-/* el-tag type=info 默认浅灰底+灰字在 ocean 主题下看不清 → 改为主题浅色 */
 [data-accent="ocean"] .member-skills .el-tag,
 [data-accent="ocean"] .member-info .el-tag {
   background: var(--color-primary-bg);
@@ -541,7 +546,6 @@ onMounted(() => {
   border-color: var(--color-primary-border);
   color: var(--color-primary);
 }
-/* dark + ocean/forest 组合加深 */
 [data-theme="dark"][data-accent="ocean"] .member-skills .el-tag,
 [data-theme="dark"][data-accent="ocean"] .member-info .el-tag,
 [data-theme="dark"][data-accent="forest"] .member-skills .el-tag,
@@ -550,4 +554,3 @@ onMounted(() => {
   border-color: rgba(var(--color-primary-rgb), 0.30);
 }
 </style>
-// minor cleanup

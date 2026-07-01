@@ -185,14 +185,14 @@ import MobileTabBar from '@/components/mobile/TabBar.vue'
 import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 // v2 PR6: 网盘协作通知 (@ 提醒 + 评论) + WS 推送
 import NotificationBell from '@/components/common/NotificationBell.vue'
-import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
+// v78: 删除 mic 别名 (声纹已合并到 /workspace 走 Files 图标)
 const iconMap = {
   Odometer, ChatDotRound, List, VideoCamera, Folder,
   User, Document, Memo, Setting, Files,
-  mic: Microphone,  // 声纹库图标
 }
 
 const route = useRoute()
@@ -233,7 +233,10 @@ const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
-  return (mainRoute?.children || []).filter(r => r.meta?.icon)
+  // v2 PR7: drive/trash 和 drive/activity 已迁移到 DriveSubSidebar（网盘页面内子侧边栏），
+  // 主侧边栏不再单独显示这 2 项
+  const HIDDEN_PATHS = new Set(['drive/trash', 'drive/activity'])
+  return (mainRoute?.children || []).filter(r => r.meta?.icon && !HIDDEN_PATHS.has(r.path))
 })
 
 // PR #2: isMobile 改用 useIsMobile composable（matchMedia + 防抖）

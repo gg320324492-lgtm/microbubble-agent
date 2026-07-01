@@ -277,7 +277,10 @@ class Neo4jService:
 
         try:
             with driver.session() as session:
-                result = session.run(cypher, query=query, limit=limit)
+                # 2026-07-02 Phase I 修复：Neo4j 6.x driver 把第一个位置参数当 query=cypher,
+                # 又显式 query=query → "Session.run() got multiple values for argument 'query'"
+                # 修复：用 parameters= dict 包参数，避免与 cypher 形参同名冲突
+                result = session.run(cypher, parameters={"query": query, "limit": limit})
                 return [
                     {
                         "name": r["name"],
