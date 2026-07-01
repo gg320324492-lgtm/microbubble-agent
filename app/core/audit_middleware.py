@@ -135,7 +135,7 @@ async def _audit_request(
                 resource_id=resource_id,
                 status_code=status_code,
                 duration_ms=duration_ms,
-                meta_data=None,  # PR7 column name = meta_data (not metadata)
+                metadata=None,  # PR7 audit_service.log kwarg = metadata (mapped to meta_data col)
             )
     except Exception as e:
         # audit 失败绝对不能阻塞主请求

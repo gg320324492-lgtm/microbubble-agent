@@ -151,6 +151,14 @@ const routes = [
         meta: { title: '活动动态', icon: 'Bell' }
       },
       {
+        // v2 PR7: 文件请求管理 (Dropbox 招牌 "收作业" 创建/关闭页)
+        // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
+        path: 'drive/requests',
+        name: 'DriveFileRequests',
+        component: resolveMobileComponent('desktop/FileRequestListView', 'mobile/MobileDriveTrashView'),
+        meta: { title: '文件请求', icon: 'Promotion' }
+      },
+      {
         // v2 PR6-P2 + PR6-P3: 文件详情页
         // 桌面端: FileDetailView (左右 2 栏)
         // 移动端: MobileFileDetailView (单列 + sticky 顶部 + bottom action sheet)
@@ -178,10 +186,26 @@ const routes = [
         component: resolveMobileComponent('admin/AgentTracesView', 'admin/MobileAgentTracesView'),
         meta: { title: 'Agent Trace 监控' }
       },
+      {
+        // v2 PR7: 审计日志 (admin only, 后端 Depends(get_current_admin) 兜底)
+        path: 'admin/audit',
+        name: 'AdminAudit',
+        component: () => import('@/views/admin/AuditLogView.vue'),
+        meta: { title: '审计日志', icon: 'Lock' }
+      },
       // v78 UI redesign: 模板管理已合并到 /meetings 第二个 tab (TemplatesPanel), 此路由删除
       // 旧路由保留作 fallback 兼容老链接 (去掉 meta.icon 自动从 sidebar 隐藏)
       // 2026-06-30 由 v77 P2.6-G.2 的 /admin/templates 移入会议管理 tab
     ]
+  },
+  {
+    // v2 PR7: 公开文件请求提交页 (无需登录, 纯匿名)
+    // router.beforeEach 守卫白名单 bypass
+    path: '/r/:token',
+    name: 'PublicFileRequestSubmit',
+    component: () => import('@/views/public/FileRequestSubmitView.vue'),
+    meta: { title: '提交文件', public: true, noAuth: true },  // noAuth 标志守卫跳过
+    props: true,
   }
 ]
 
@@ -192,6 +216,11 @@ const router = createRouter({
 
 // 路由守卫（保持原样）
 router.beforeEach((to, from, next) => {
+  // v2 PR7: 公开路由 (e.g. /r/:token 文件请求提交) 跳过 auth 检查
+  if (to.meta?.noAuth) {
+    return next()
+  }
+
   const token = localStorage.getItem('access_token')
 
   if (to.meta.requiresAuth && !token) {

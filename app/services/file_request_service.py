@@ -264,21 +264,35 @@ class FileRequestService:
         }
 
         # 调 DriveService.create_file (走完整管线: MinIO + quota + activity)
-        # 注意: create_file 当前要求 owner_id, 这里用 created_by 作为 owner
         # drive_service 是 class-based, 用 DriveService(db) 实例化
-        drive_svc = DriveService(db)
-        new_file = await drive_svc.create_file(
-            owner_id=req.created_by,
-            file_name=file_name,
-            file_content=file_content,
+        # PR7: create_file 接受 file_path (str) 而非 file_content (bytes)
+        # 先 upload 到 MinIO, 再调 create_file 写元数据
+        from app.services.file_service import file_service
+        upload_result = await file_service.upload_file(
+            file_data=file_content,
+            filename=file_name,
             content_type=content_type,
+            prefix="uploads/file_requests",
+        )
+        object_name = upload_result["object_name"]
+
+        drive_svc = DriveService(db)
+        # Knowledge 模型 file_path 字段存 MinIO object_name
+        # title 字段是 display 标题 (PR6 前端也用 file_name 当 title)
+        # meta (含 uploader_name/request_id) 不传 — create_file 签名不接受, 留 Knowledge 行不带
+        new_file = await drive_svc.create_file(
+            title=file_name,
+            content=f"[file_request] token={req.token[:8]}*** uploader={meta['uploader_name']}",
+            file_path=object_name,
+            file_name=file_name,
+            file_type=content_type,
             file_size=file_size,
+            owner_id=req.created_by,
             visibility=visibility,
             storage_mode="drive",
             folder_id=req.target_folder_id,
             source_type="drive",  # 走 drive 路径 (不入 knowledge index)
             created_by=req.created_by,
-            meta=meta,
         )
 
         # 6) submission_count + 1 + activity
