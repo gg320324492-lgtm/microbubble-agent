@@ -26,6 +26,7 @@ from app.agent.tools import research_tools  # noqa: F401
 from app.agent.tools import graph_tools  # noqa: F401
 from app.agent.tools import transcript_tools  # noqa: F401
 from app.agent.tools import meeting_create_tools  # noqa: F401
+from app.agent.tools import drive_tools  # noqa: F401  # PR2.9 课题组网盘工具
 
 # 兼容旧 import 路径：旧 core.py 仍 `from app.agent.tools import TOOLS`
 # 由于 app/agent/tools.py 文件被忽略（Python 优先选包），在此 shim 导出
@@ -50,5 +51,6 @@ __all__ = [
     "graph_tools",
     "transcript_tools",
     "meeting_create_tools",
+    "drive_tools",
     "TOOLS",
 ]
