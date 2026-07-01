@@ -38,6 +38,11 @@
         <el-icon><Share /></el-icon>
         <span class="btn-text">实体图谱</span>
       </el-button>
+      <!-- PR3.7: 跳转课题组网盘 (drive 文件独立路由 /drive, KB 页面不显示) -->
+      <el-button @click="$emit('go-drive')">
+        <el-icon><Files /></el-icon>
+        <span class="btn-text">📁 课题组网盘</span>
+      </el-button>
     </div>
 
     <!-- 高级筛选面板 -->
@@ -117,7 +122,7 @@
 
 <script setup>
 import { ref, reactive } from 'vue'
-import { Search, Plus, Upload, MagicStick, Share, Filter } from '@element-plus/icons-vue'
+import { Search, Plus, Upload, MagicStick, Share, Filter, Files } from '@element-plus/icons-vue'
 
 const props = defineProps({
   categories: { type: Array, default: () => [] }
