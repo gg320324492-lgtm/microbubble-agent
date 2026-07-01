@@ -45,11 +45,23 @@ docker-compose.override.yml
 htmlcov/
 .pytest_cache/
 
-# qa-bench / 端到端测试的临时凭据（含 admin JWT，绝不能入库）
-tests/qa-bench/_login.json
-tests/qa-bench/_token.txt
-tests/qa-bench/_*.json
-!tests/qa-bench/questions.jsonl
+# 端到端测试 / 验证脚本的临时凭据（含 admin JWT / refresh token，绝不能入库）
+# 教训: 2026-07-01 commit 6573f2b3 + f8ee071b 删 tests/qa-bench/_login.json 后沉淀
+# (实际历史仍含真 JWT, 必须 git filter-repo 重写 + 改 admin 密码)
+# 覆盖 tests/ scripts/ web/ 三个根, 所有子目录
+tests/**/_login.json
+tests/**/_token.txt
+tests/**/_token.json
+scripts/**/_login.json
+scripts/**/_token.txt
+scripts/**/_token.json
+web/**/_login.json
+web/**/_token.txt
+web/**/_token.json
+# 兜底: 所有下划线开头的 .json (临时 seed / cache / 中间产物)
+**/_*.json
+# 未来若有合法 _*.json (如下划线配置), 取消下方注释; 当前 0 合法
+# !路径/_config.json
 
 # 前端
 node_modules/
