@@ -124,6 +124,8 @@ import { ElMessage } from 'element-plus'
 import { UploadFilled, Document } from '@element-plus/icons-vue'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
 import { useFolderTree } from '@/composables/useFolderTree'
+import { useFileHash } from '@/composables/useFileHash'   // PR4
+import { useDriveFiles } from '@/composables/useDriveFiles' // PR4
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -143,6 +145,10 @@ const fileInputRef = ref(null)
 const fileItems = ref([])  // [{ file, relativePath, status, progress }]
 const uploading = ref(false)
 const uploadedCount = ref(0)
+
+// PR4: useFileHash (复用同一个 worker 实例避免重复创建) + useDriveFiles (instantUpload)
+const { calc: calcHash } = useFileHash()
+const { instantUpload } = useDriveFiles()
 
 const form = reactive({
   folderId: props.defaultFolderId,
@@ -270,8 +276,42 @@ async function onSubmit() {
 }
 
 async function uploadOne(item) {
-  // 大于 50MB 走 multipart, 小于走 single endpoint (PR2.8 已实现)
+  // v2 PR4: 秒传先查 hash, 命中走零带宽 dedup (仅小文件)
+  // 大文件 multipart 暂不秒传 (PR5 范围)
   const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024  // 50MB
+
+  // PR4 step 1: 算 hash (仅小文件, 大文件 multipart 不秒传)
+  if (item.file.size < SMALL_FILE_THRESHOLD && item.file.size < 100 * 1024 * 1024) {
+    item.status = 'hashing'
+    item.progress = 0
+    try {
+      const fileHash = await calcHash(item.file)
+      item.fileHash = fileHash
+
+      // PR4 step 2: 查 instant-upload
+      item.status = 'checking-instant'
+      const instant = await instantUpload({
+        fileHash,
+        fileName: item.file.name,
+        fileSize: item.file.size,
+        folderId: form.folderId || null,
+        visibility: form.visibility,
+      })
+
+      if (instant.instant) {
+        // PR4 step 3a: 命中秒传 → 跳过文件上传
+        item.status = 'done-instant'
+        item.dedupSavedBytes = instant.dedup_saved_bytes
+        item.fileId = instant.file_id
+        item.progress = 100
+        return  // 秒传完成, 不走 multipart
+      }
+      // instant=false → 走老路径
+    } catch (e) {
+      // hash 失败 / instant-upload 报错 → 不阻塞, 降级到普通上传
+      console.warn('[PR4] hash/instant-upload 失败, 降级普通上传:', e)
+    }
+  }
 
   item.status = 'uploading'
   item.progress = 0

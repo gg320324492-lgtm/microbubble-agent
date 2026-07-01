@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime
+from sqlalchemy import Column, Integer, BigInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -77,6 +77,19 @@ class Knowledge(Base, TimestampMixin):
     starred_at = Column(DateTime, nullable=True)
     # ==================== /v2 PR2 ====================
 
+    # ==================== v2 PR4 秒传 + 版本历史 2026-07-01 ====================
+    # file_size: 文件字节大小（之前硬编码 0, 044 后真值; dedup_saved_bytes 计算 + UI 显示用）
+    # file_hash: MD5/SHA256 hex hash (64 chars); 部分索引 WHERE deleted_at IS NULL AND storage_mode='drive'
+    # is_latest: 当前活跃版本标记 (True=显示给用户的最新版本); 多版本时旧行 = False
+    # parent_version_id: 父版本 ID (Self FK ON DELETE SET NULL); 同一文件多版本时记录历史链
+    # version_number: 版本号 (v1 / v2 / v3...); 新上传默认 1, 创建版本时 +1
+    file_size = Column(BigInteger, nullable=True)
+    file_hash = Column(String(64), nullable=True)
+    is_latest = Column(Boolean, nullable=False, server_default="true")
+    parent_version_id = Column(Integer, ForeignKey("knowledge.id", ondelete="SET NULL"), nullable=True)
+    version_number = Column(Integer, nullable=False, server_default="1")
+    # ==================== /v2 PR4 ====================
+
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 
@@ -118,3 +131,28 @@ class RAGEvaluation(Base, TimestampMixin):
     answer_relevancy = Column(Float, nullable=True)  # 回答是否切题
     context_precision = Column(Float, nullable=True)  # 检索结果排序是否合理
     context_recall = Column(Float, nullable=True)     # 是否检索到了所有相关信息
+
+
+class KnowledgeVersion(Base):
+    """文件版本历史明细 (v2 PR4 引入)
+
+    与 Knowledge (file_size/file_hash/is_latest/version_number) 配套:
+    - knowledge 行的 is_latest=True 是当前用户看到的"活版本"
+    - 每次 create_version() 会:
+      1. 把旧 is_latest 翻 False (Knowledge 行保留, 历史可追溯)
+      2. 新建一行 Knowledge (is_latest=True, version_number+=1, parent_version_id=旧.id)
+      3. 在 knowledge_versions 写一条明细 (file_hash + file_size + uploaded_by + change_note)
+
+    恢复版本 = create_version 同流程, 但从历史 object_name 重新 copy_object 取得数据
+    ON DELETE CASCADE: 删 file 行 (is_latest=True) 时, 所有历史版本明细自动清
+    """
+    __tablename__ = "knowledge_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False, index=True)
+    version_number = Column(Integer, nullable=False)
+    file_hash = Column(String(64), nullable=False)
+    file_size = Column(BigInteger, nullable=False)
+    uploaded_by = Column(Integer, ForeignKey("members.id"), nullable=False)
+    change_note = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default="now()")

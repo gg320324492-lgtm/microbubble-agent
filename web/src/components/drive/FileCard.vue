@@ -100,6 +100,10 @@
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
                 🔗 生成分享链接
               </el-dropdown-item>
+              <!-- v2 PR4: 版本历史 (仅 drive 文件, 当前版本始终 ≥1) -->
+              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="version-history">
+                🕘 版本历史
+              </el-dropdown-item>
               <el-dropdown-item divided command="delete">
                 <span style="color: var(--color-danger);">删除</span>
               </el-dropdown-item>
@@ -132,7 +136,7 @@ const props = defineProps({
   viewMode: { type: String, default: 'grid' }  // grid | list
 })
 
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'delete', 'toggle-star'])
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'version-history', 'delete', 'toggle-star'])
 
 // === 图标按 file_type 分类 ===
 const iconComponent = computed(() => {

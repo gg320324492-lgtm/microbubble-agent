@@ -3,7 +3,7 @@ from app.models.task import Task, TaskDependency
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.project import Project, Milestone
 from app.models.folder import Folder  # 2026-07-01 课题组网盘
-from app.models.knowledge import Knowledge
+from app.models.knowledge import Knowledge, KnowledgeVersion  # PR4: 秒传 + 版本历史
 from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
 from app.models.knowledge_hypothesis import KnowledgeHypothesis
 from app.models.knowledge_formula import KnowledgeFormula
@@ -31,6 +31,7 @@ __all__ = [
     "Milestone",
     "Folder",  # 2026-07-01 课题组网盘
     "Knowledge",
+    "KnowledgeVersion",  # PR4: 秒传 + 版本历史
     "Reminder",
     "Memory",
     "Feedback",

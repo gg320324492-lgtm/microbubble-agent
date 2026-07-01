@@ -322,6 +322,51 @@ export function useDriveFiles() {
     selectedFileIds.value = driveFiles.value.map(f => f.id)
   }
 
+  // ============================================================
+  // v2 PR4: 文件秒传 + 版本历史
+  // ============================================================
+
+  /**
+   * 秒传查询 — POST /files/instant-upload
+   * @returns {Promise<{instant: boolean, file_id?: number, dedup_saved_bytes?: number, upload_url?: string}>}
+   */
+  async function instantUpload({ fileHash, fileName, fileSize, folderId = null, visibility = 'team' }) {
+    const resp = await axios.post('/api/v1/drive/files/instant-upload', {
+      file_hash: fileHash,
+      file_name: fileName,
+      file_size: fileSize,
+      folder_id: folderId,
+      visibility,
+    })
+    return resp.data
+  }
+
+  /**
+   * 列文件版本历史 — GET /files/{id}/versions
+   * @returns {Promise<Array>} VersionItem[]
+   */
+  async function listVersions(fileId) {
+    const resp = await axios.get(`/api/v1/drive/files/${fileId}/versions`)
+    return resp.data
+  }
+
+  /**
+   * 恢复历史版本 — POST /files/{id}/versions/{vid}/restore
+   * @returns {Promise<object>} 新 Knowledge 行 (is_latest=True)
+   */
+  async function restoreVersion(fileId, versionId, changeNote = null) {
+    const resp = await axios.post(
+      `/api/v1/drive/files/${fileId}/versions/${versionId}/restore`,
+      changeNote ? { change_note: changeNote } : {},
+    )
+    return resp.data
+  }
+
+  /** 获取文件下载 URL (用于历史版本"下载"按钮) */
+  function downloadFileUrl(file) {
+    return `/api/v1/drive/files/${file.id}/download`
+  }
+
   return {
     // 状态
     driveFiles,
@@ -357,6 +402,11 @@ export function useDriveFiles() {
     batchMove,
     batchUpdateVisibility,
     permanentDeleteBatch,
+    // v2 PR4 新方法
+    instantUpload,
+    listVersions,
+    restoreVersion,
+    downloadFileUrl,
     // 内部
     toggleSelect,
     clearSelection,
