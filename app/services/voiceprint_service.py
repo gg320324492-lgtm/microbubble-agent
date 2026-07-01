@@ -2,9 +2,6 @@
 
 2026-06-19 修复: batch_extract_embeddings 改用 ThreadPoolExecutor 并行单条
 原 batch 实现因 ERes2Net 强制 batch=1，只有第 1 段被处理 (89/2830 有效)
-
-2026-06-30: CAM++ (zh-cn) 跨会议识别率不达标 (cosine ~1.0 vs anchor, intra-class 0.62-0.77)
-回滚到 ERes2Net baseline。详见 docs/voiceprint-alternatives.md 评测报告。
 """
 
 import io
@@ -28,7 +25,6 @@ EMBEDDING_DIM = 192
 # 声纹匹配置信度阈值（余弦距离，越低越相似）
 MATCH_THRESHOLD = 0.7
 
-# 2026-06-30: 恢复 ERes2Net baseline (CAM++ 跨会议识别率不达标)
 VOICEPRINT_MODEL_ID = "iic/speech_eres2net_sv_zh-cn_16k-common"
 
 
@@ -46,7 +42,6 @@ class VoiceprintService:
             from modelscope.pipelines import pipeline
             from modelscope.utils.constant import Tasks
 
-            # 2026-06-30: 恢复 ERes2Net baseline
             logger.info("正在加载 3D-Speaker ERes2Net 模型...")
             self._pipeline = pipeline(
                 Tasks.speaker_verification,

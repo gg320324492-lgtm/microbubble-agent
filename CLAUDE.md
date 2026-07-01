@@ -2,7 +2,7 @@
 
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-01 早班收官 当前任务链**：🆕 **声纹 CAM++ 选型实验 + 完整回滚 ERes2Net baseline**（commits `835ac1ff` + `b7c1bed5`，理论 EER -34% 但实测跨会议识别率严重退化，保留 `docs/voiceprint-alternatives.md` 579 行 + `app/services/voiceprint_recovery.py` 104 行反推工具）+ **post_meeting_tasks 简化**（commit `4b215220`，124 行 → 26 行 -79%）+ **v78 tabs 集成 spec + 临时启用 desktop-chrome**（commit `6b6a91f4`，116 行 Playwright 验证 `/meetings` 2 tabs）+ **`scripts/generate_token_plan_doc.py`**（commit `763244ae`，1195 行一次性脚本生成 71KB docx 报告）+ **移除 dedup toggle UI**（commit `425e5799`，用户决策"dedup 是产品应该自动做的事，不应让用户在 UI 上控制开关"，删 el-switch + 22 行 localStorage 同步）+ **chore 数据集入库**（commit `6573f2b3`，8 个 GitHub Actions dump 删除 + `tests/qa-bench/_login.json` + `_token.txt` **admin JWT 凭据泄露风险修复** + 397KB results/ 数据集提交 + `.gitignore` 兜底规则）。**1588 commits / 321K 行代码 / 860 文件 / 47 开发天数**（[app/stats.json](app/stats.json)，2026-07-01 08:36 自动重算）。4 条新铁律：① 模型升级必先锚定测试再上线 ② 跨模型空间 cosine 偏高是数学必然（旧 embedding 不能迁移）③ 一次性脚本不入 CI ④ 用户感受是产品原则（dedup 不应暴露 toggle）。
+> **2026-07-01 早班收官 当前任务链**：🆕 **post_meeting_tasks 简化**（commit `4b215220`，124 行 → 26 行 -79%）+ **v78 tabs 集成 spec + 临时启用 desktop-chrome**（commit `6b6a91f4`，116 行 Playwright 验证 `/meetings` 2 tabs）+ **`scripts/generate_token_plan_doc.py`**（commit `763244ae`，1195 行一次性脚本生成 71KB docx 报告）+ **移除 dedup toggle UI**（commit `425e5799`，用户决策"dedup 是产品应该自动做的事，不应让用户在 UI 上控制开关"，删 el-switch + 22 行 localStorage 同步）+ **chore 数据集入库**（commit `6573f2b3`，8 个 GitHub Actions dump 删除 + `tests/qa-bench/_login.json` + `_token.txt` **admin JWT 凭据泄露风险修复** + 397KB results/ 数据集提交 + `.gitignore` 兜底规则）。**1588 commits / 321K 行代码 / 860 文件 / 47 开发天数**（[app/stats.json](app/stats.json)，2026-07-01 08:36 自动重算）。4 条新铁律：① 模型升级必先锚定测试再上线 ② 跨模型空间 cosine 偏高是数学必然（旧 embedding 不能迁移）③ 一次性脚本不入 CI ④ 用户感受是产品原则（dedup 不应暴露 toggle）。
 >
 > **2026-06-30 晚班收官 当前任务链**：🆕 **v78 UI redesign 3-zone + EP icons + 4-attr a11y**（commit `34e82fd9`）+ **#009 Self-RAG 重检索 + 用户深度思考开关**（4 commits `740ac4c1` + `a49bd644`）+ **qa-bench v3.0 6 周冲刺完整收官**（W1-W6, 700 题题库 + 535 题合并去重 + 3-tier 阈值 + 7 维评分 + KB 入库 5 防线 + 7 维雷达图 + ROI 100-150%）+ **Whisper → SenseVoice 迁移收官**（commit `9effb8ed`，VRAM 8GB→0.93GB / CER 25.7%→15.6% / 4.7x 覆盖）+ **KB 数据清洁 B+C**（commit `cfd486b6`，5 类 FK 防御 + 19 单测 + 前端 dedup toggle）+ **KB 入库监控 D5**（commits `ee442125` + `9ea0f87d`，polling 5min Q5）+ **声纹循环净化 4 会议累计**（#083 86.7%→100% + #135 诊断 + #151 90% 门禁 rollback + #167 低占比过滤 1.5s/3s/5%）+ **KB "5 个统计全 0" 修复 4 commits**（filter 残留 + SW 缓存 + 三态空态 + sub-entity total）。**1545+ commits / 313K+ 行代码 / 799+ 文件 / 46 开发天数**（[app/stats.json](app/stats.json)）。沉淀 12 个新 memory（v78 / self-rag / qa-bench-v3 w1-w6 / kb-monitor / low-occupancy / asr-migration）+ 4 个新 docs（asr-alternatives / asr-benchmark-2026-06-30 / 项目狀況報告 / memory/asr-benchmark-2026-06-30）。
 >
@@ -7524,4 +7524,179 @@ git push origin main
 #    - 默认 ON: 自动拓展 179 张显示去重后 (49 title 重复的 144 条隐藏, 只显 48 条 + 1 条原)
 #    - 切 OFF: 49 title 重复的 144 条全部显示 (调试/审计场景)
 ```
+
+---
+
+## 2026-07-01 测试账号物理隔离 + env var 优先（v0.1.0 收官）
+
+**触发场景**：`scripts/test_chat_history_e2e.py` + `scripts/test_stream_persistence_e2e.py` 直接登录生产 admin `wangtianzhi/admin123`，每次跑前要 reset 密码，影响王天志正常使用。`scripts/probe_admin.py` 是"找 admin 账号重置密码"工具，`tests/conftest.py` 的 `admin_member` fixture 又用 `username="admin"` 与生产白名单撞名（`app/api/v1/knowledge.py:1416` 的 `admin_usernames = {"admin", "wangtianzhi"}`）—— 多处隐式触碰生产 admin。
+
+**目标**：建立独立测试账号 `xiaoqi_testbot`，所有 e2e / probe / fixture 改用它，生产 admin (wangtianzhi) 不再被任何脚本触碰。
+
+### 测试账号凭据（永久统一常量）
+
+| 字段 | 值 |
+|---|---|
+| username | `xiaoqi_testbot` |
+| password | `testbot_pass_2026` |
+| name | `测试小助手` |
+| role | `admin` |
+| is_active | `True` |
+
+存放位置：`tests/conftest.py` 顶部 4 个常量 `TEST_BOT_USERNAME / TEST_BOT_PASSWORD / TEST_BOT_NAME / TEST_BOT_ROLE`（作为唯一真相源，所有脚本 `from tests.conftest import` 复用）。
+
+### 一次性创建脚本：`scripts/ensure_test_user.py`
+
+幂等 CLI：
+```bash
+# 默认连生产 DB
+python scripts/ensure_test_user.py
+
+# 干跑（只查不改）
+python scripts/ensure_test_user.py --dry-run
+
+# 指定测试 DB
+python scripts/ensure_test_user.py --db-url "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test"
+
+# 自定义账号（CI 临时场景）
+python scripts/ensure_test_user.py --username ci_bot --password ci_pass_2026
+```
+
+**关键设计**：
+- 复用 `MemberService.create_member()`（不走 raw INSERT，与 `init_db.py` 一致）
+- 复用 `get_password_hash()`（bcrypt）
+- 不强制覆盖已存在的非合规账号（告警退出码 1，不静默改生产数据）
+- 三态退出码：0=成功 / 1=账号存在但不合规 / 2=DB 连接失败
+
+**部署必做**（CLAUDE.md 752 行铁律变体）：
+```bash
+# 首次部署：跑一次确保测试账号在生产 DB 存在
+docker cp scripts/ensure_test_user.py microbubble-agent-app-1:/app/scripts/
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 \
+  bash -c "cd /app && python scripts/ensure_test_user.py"
+
+# 验证
+docker exec microbubble-agent-db-1 psql -U postgres -d microbubble \
+  -c "SELECT id, username, role, is_active FROM members WHERE username='xiaoqi_testbot';"
+# 期望: 1 行, role=admin, is_active=true
+```
+
+### e2e 脚本 env var 覆盖模式（推荐）
+
+```python
+# scripts/test_chat_history_e2e.py / test_stream_persistence_e2e.py
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.conftest import TEST_BOT_USERNAME, TEST_BOT_PASSWORD  # 唯一真相源
+
+E2E_USERNAME = os.environ.get("E2E_USERNAME", TEST_BOT_USERNAME)
+E2E_PASSWORD = os.environ.get("E2E_PASSWORD", TEST_BOT_PASSWORD)
+TOKEN = requests.post(f"{BASE}/auth/login", json={"username": E2E_USERNAME, "password": E2E_PASSWORD}).json()["access_token"]
+```
+
+CI 场景：
+```bash
+# 默认用 xiaoqi_testbot
+python scripts/test_chat_history_e2e.py
+
+# CI 用临时账号
+E2E_USERNAME=ci_bot E2E_PASSWORD=ci_pass_2026 python scripts/test_chat_history_e2e.py
+```
+
+### `scripts/probe_admin.py` 重置密码 + wangtianzhi 守卫
+
+**重写后行为**：
+- 精准定位 `xiaoqi_testbot`（不再用 `"admin"` 模糊查找）
+- **wangtianzhi 守卫**：遍历结果里如果 `r.username == "wangtianzhi"` → `raise SystemExit("拒绝操作: 检测到生产 admin (wangtianzhi), 跳过")`
+- 输出文案明确："测试账号 xiaoqi_testbot 密码已重置为 testbot_pass_2026"
+
+```bash
+docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 \
+  bash -c "cd /app && python scripts/probe_admin.py"
+# 期望: 找到 xiaoqi_testbot + 重置 + verify True，未触碰 wangtianzhi
+```
+
+### 6 条新铁律（永久沉淀）
+
+**铁律 1：测试账号必须与生产 admin 物理隔离**
+- 任何 `Member.role="admin"` 的账号，username 都不能与生产 admin (`wangtianzhi`) 或白名单 (`admin_usernames`) 撞名
+- 测试账号用 `xiaoqi_testbot` 这样**带项目前缀 + 明确语义**的名字，避免日后混淆
+- 反面示例：`tests/conftest.py` 旧 `admin_member` fixture 用 `username="admin"` → 与 `app/api/v1/knowledge.py:1416` 的 `{"admin", "wangtianzhi"}` 白名单撞名 → fixture 创建的临时账号被 admin bypass 路径误命中
+
+**铁律 2：env var 优先于硬编码（CI 灵活性 + 本地可调试）**
+- e2e 脚本必须支持 `E2E_USERNAME` / `E2E_PASSWORD` 环境变量覆盖
+- 硬编码 `wangtianzhi` / `admin123` / `xiaoqi_testbot` 仅作为 fallback default
+- 优势：CI 切到临时账号不用改代码；本地 debug 可指定任意账号；零侵入式兼容未来变化
+
+**铁律 3：测试账号与密码统一从 `tests/conftest.py` 顶部常量导出**
+- 4 个常量 `TEST_BOT_USERNAME/PASSWORD/NAME/ROLE` 作为唯一真相源
+- 脚本通过 `from tests.conftest import ...` 复用，避免散落硬编码
+- 改一处常量 = 改全部脚本（原子性）
+
+**铁律 4：脚本独立运行时必须手动 `sys.path.insert`**
+- `scripts/` 与 `tests/` 平级，e2e 脚本独立跑（不是 pytest 调用）时 `tests.conftest` 不在 sys.path
+- 模式（与 `init_db.py:8-9` 同）：
+  ```python
+  sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+  ```
+- 不在文件顶部 docstring 写"必须用 pytest 跑"作为 workaround
+
+**铁律 5：常量必须放在 `if not SKIP_DB_SETUP:` 块外**
+- `tests/conftest.py` 顶层分两块：① `if not SKIP_DB_SETUP:` 重型 import + DB 引擎 ② module 顶层纯字符串/常量
+- 常量（如 `TEST_BOT_*`）必须在 ② 区域，**否则 SKIP 模式下脚本 `from tests.conftest import` 会触发整个 `if` 块失败**（即使常量不需要重型 import）
+- 反例：把常量写在 `if not SKIP_DB_SETUP:` 块内 → SKIP 模式 + 脚本 import = IndentationError 或 ImportError
+
+**铁律 6：admin 凭据操作脚本必须有 wangtianzhi 守卫**
+- 任何"找 admin 账号重置密码"的脚本（probe_admin 类）必须：
+  1. 精准按 username 找（不要模糊 role 查询）
+  2. 遍历结果时检查 `if r.username == "wangtianzhi": raise SystemExit(...)`
+  3. 输出明确说明动的是"测试账号"而非"admin"
+- 即使常量被改也不触碰生产 admin — 纵深防御
+
+### 沉淀的文件清单（2026-07-01 v0.1.0 收官）
+
+| 文件 | 操作 | commit |
+|---|---|---|
+| `scripts/ensure_test_user.py` | 新建 | `637598ac` (其他窗口) |
+| `tests/conftest.py` | 加 TEST_BOT_* 常量 + admin_member 改用 | `637598ac` (其他窗口) |
+| `scripts/test_chat_history_e2e.py` | env var 覆盖 + 改 e2e 注释 | `637598ac` |
+| `scripts/test_stream_persistence_e2e.py` | env var 覆盖 | `637598ac` |
+| `scripts/probe_admin.py` | 精准定位 + wangtianzhi 守卫 | `637598ac` |
+| `web/tests/visual/desktop/kb-monitor-d5-2026-06-30.spec.mjs` | 注释切到 xiaoqi_testbot | `637598ac` |
+| `web/tests/visual/desktop/v77-p2-6-f-2-regression.spec.mjs` | 注释切到 xiaoqi_testbot | `637598ac` |
+| `web/tests/visual/desktop/voiceprint-6-themes-2026-06-30.spec.mjs` | 注释切到 xiaoqi_testbot | `82a6e827` |
+| `scripts/probe_admin.py` | sys.path 修复 + probe_admin.py 实跑验证 | `4522fd3c` (本窗口，已被 revert) |
+
+### 端到端验证清单
+
+| # | 验证项 | 命令 | 期望 |
+|---|---|---|---|
+| 1 | ensure_test_user.py dry-run | `python scripts/ensure_test_user.py --dry-run` | `[DRY-RUN]` 或 `[OK]`，退出码 0 |
+| 2 | ensure_test_user.py 真跑 | `python scripts/ensure_test_user.py` | `[CREATED]` 首次 / `[OK]` 后续；退出码 0 |
+| 3 | 测试账号在 DB | `psql -c "SELECT id, username, role, is_active FROM members WHERE username='xiaoqi_testbot';"` | 1 行, role=admin, is_active=true |
+| 4 | 重启 app | `docker compose restart app celery-worker` | healthy |
+| 5 | pytest test_auth | `pytest tests/test_auth.py -v` | 8/8 PASS |
+| 6 | pytest test_members | `pytest tests/test_members.py -v` | 4 PASS + 2 pre-existing FAIL（test_create_member / test_create_duplicate_username 早已坏，与本次无关） |
+| 7 | e2e 脚本登录测试账号 | `python scripts/test_chat_history_e2e.py` | 19 OK + 3 越权防护 (401/404) = 全场景 PASS |
+| 8 | e2e 脚本 25 场景 | `python scripts/test_stream_persistence_e2e.py` | 25/25 PASS |
+| 9 | env var 覆盖生效 | `E2E_USERNAME=foo E2E_PASSWORD=bar python scripts/test_chat_history_e2e.py` | KeyError: 'access_token'（登录失败） |
+| 10 | probe_admin 重置测试账号 | `python scripts/probe_admin.py` | 找到 xiaoqi_testbot + verify True |
+| 11 | wangtianzhi 密码未变 | `diff <(before) <(after)` | 字节级相同 ✓ |
+| 12 | wangtianzhi 守卫触发 | 手动测：故意改 `TEST_BOT_USERNAME = "wangtianzhi"` 跑 probe_admin | SystemExit: "拒绝操作: 检测到生产 admin (wangtianzhi), 跳过" |
+
+### 失败案例：conftest.py 缩进陷阱
+
+**踩坑**（v0.1.0 初次合并时）：把 `TEST_BOT_*` 常量插入到 `if not SKIP_DB_SETUP:` 块中间 → line 41 `TEST_DB_URL = os.getenv(...)` 仍是 4-space indent，但 `if` 块已提前结束 → IndentationError。
+
+**修复**：把常量整体移到 `if/else` 块**之后**（module 顶层），让 `if/else` 块结构保持完整，常量作为 module 级独立声明存在。
+
+**教训**：CLAUDE.md 铁律 5 已写入。
+
+### 历史教训沉淀（向后兼容）
+
+- **CLAUDE.md 2026-06-15 教训段 1261-1268**：原 `Member.username='admin'` 撞车问题，与本次 `admin_member` 旧值同源
+- **CLAUDE.md 2026-06-15 v0.0.1 教训**：fixture teardown yield + delete 防 UNIQUE 冲突，与本次 admin_member teardown 复用
+- **CLAUDE.md 2026-06-30 token 落地教训**：admin JWT 写文件会被无意泄露 → 本次 ensure_test_user.py 不引入新 token 落盘文件
+- **CLAUDE.md 2026-06-30 gitignore `_*.json` 规则**：防 `_login.json` `_token.txt` 类临时凭据进 git
 
