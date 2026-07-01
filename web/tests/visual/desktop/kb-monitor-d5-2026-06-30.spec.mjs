@@ -14,12 +14,14 @@
  * 前置:
  *   - dev server 跑起来 (npm run dev) 或 BASE_URL 指向部署环境
  *   - TEST_TOKEN 环境变量注入真实 JWT
+ *   - 测试账号 xiaoqi_testbot/testbot_pass_2026 已创建
+ *     (跑一次 `python scripts/ensure_test_user.py`)
  *
  * 运行:
  *   BASE_URL=http://localhost:3004 \
  *   TEST_TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
  *     -H "Content-Type: application/json" \
- *     -d '{"username":"wangtianzhi","password":"admin123"}' \
+ *     -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' \
  *     | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])") \
  *     npx playwright test tests/visual/desktop/kb-monitor-d5-2026-06-30.spec.mjs
  *
@@ -27,6 +29,7 @@
  *   - 真实 JWT token (mock-token 会被后端拒)
  *   - 验证 6 个核心断言 (3 tab + 4 metric + 7 trend bar)
  *   - 截图保存到 test-results/kb-monitor-d5/
+ *   - 2026-07-01 起从 wangtianzhi 物理隔离到测试账号, 避免 e2e reset 影响真实使用
  */
 
 import { test, expect } from '@playwright/test'

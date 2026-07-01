@@ -2,6 +2,94 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [Unreleased] 2026-07-01 — 声纹 CAM++ 选型实验 + 回滚 + 模板 v78 tabs 集成 + 项目状况报告 + qa-bench 数据集入库
+
+### 🆕 声纹模型选型实验：CAM++ 升级 + 锚定测试 + 完整回滚
+
+**触发场景**：用户原话"想看看新模型能不能再提升一点"。从 ERes2Net (iic/speech_eres2net_sv_zh-cn_16k-common, 维度 192) 升级到 CAM++ (iic/speech_campplus_sv_zh-cn_16k-common, 维度同样 192，drop-in 升级)。
+
+**关键实测结论（commit `835ac1ff`）**：
+- 理论收益：中文 EER 3.5% → ~2.3% (-34%)
+- **但实测锚定测试结果不达标**（commit `b7c1bed5` revert）：
+  - CAM++ vs anchor ERes2Net cosine: avg 1.045 (数学上接近正交，**跨模型空间无意义**)
+  - intra-class cosine: 周之超 0.72 / 贾琦 0.77 / 陈金薪 0.63 (远低于 ERes2Net 0.99)
+  - 5 个 voice_confirmed 用户认可成员测试：跨会议识别率严重退化
+- **回滚决策**：
+  1. 跨模型空间 cosine 偏高是数学必然，旧 embedding 不能迁移
+  2. 短段 (1-3s) intra-class 一致性差，影响实际会议表现
+  3. 重新录入 5 个 anchor + 用户重新确认工作量大
+- **保留资产**：
+  - `docs/voiceprint-alternatives.md` (579 行) — 决策依据 (C2 候选完整评测报告)
+  - `app/services/voiceprint_recovery.py` (104 行) — 反推公式工具，永久保留
+- **未来升级路径建议**：先用 30+ sample_count 成员做完整 anchor 流程 → ≥5min 完整会议做 intra-class 测试 → 用户手动确认新 anchor 后再上线
+
+### 🆕 post_meeting_tasks 简化 + 变量命名清理（commit `4b215220`）
+
+- 移除下划线前缀临时变量（`_n_expected` / `_labels` / `_optimal_k` 等）→ 直接命名（`n_expected` / `labels` / `optimal_k`）
+- 同步重命名 `cluster_centers` / `cluster_representatives` 计算逻辑
+- **124 行 → 26 行**（净 -98 行，-79%）
+- 修复 UnboundLocalError 闭包 lazy 求值隐患（CLAUDE.md 2026-06-29 教训）
+
+### 🆕 v78 tabs 集成 spec + 临时启用 desktop-chrome（commit `6b6a91f4`）
+
+- **新增** `web/tests/visual/desktop/templates-tab-integration-2026-06-30.spec.mjs` (116 行)
+  - `/meetings` 页面 2 tabs 集成（会议列表 / 模板管理）
+  - 模板管理 tab 渲染 builtin + custom 模板
+  - 编辑按钮真正打开 MeetingTemplateDialog（不再 toast）
+  - 批量操作 toolbar（启用/禁用/删除）端到端验证
+- **`web/playwright.config.js`**：临时启用 desktop-chrome project (W6 D6 验证用)
+  - v77 废弃注释保留（workflow bug 长期未修，desktop baseline 永远 fail）
+  - 本次 commit 仅一次性启用，验证完恢复注释
+
+### 🆕 `scripts/generate_token_plan_doc.py` — 项目状况报告 Word 生成（commit `763244ae`）
+
+- 用于申请更大 token plan 计划的 Word 文档生成
+- 数据来源：CLAUDE.md（项目上下文）+ memory/（75+ 沉淀）
+- 生成日期：2026-06-30
+- **1195 行**（一次性脚本，用于报告申请，不入 CI）
+- 依赖：python-docx
+- 产物：`docs/MicroBubble_Agent_开发状况报告_2026-06-30.docx`（71KB）
+
+### 🆕 移除 dedup toggle UI + displayedItems 永远 default-on（commit `425e5799`）
+
+**用户决策原话**："现在可以了，但是这个去重按钮是干啥的？不应该出现这个按钮，显示在前端的信息就应该是已经自动去重的内容"。
+
+**改动**：
+- 删 `el-switch` 按钮（line 61-74）+ `section-actions` div 包裹
+- 删 `dedupEnabled` prop + `toggle-dedup` emit
+- 简化 `displayedItems` computed：去掉 `if (!props.dedupEnabled)` 分支，永远按 title 分组取 id 最小
+- 同步删 `dedupView` ref + `DEDUP_STORAGE_KEY` 常量 + `watch(localStorage)` 同步（22 行）
+
+**dedup 是产品应该自动做的事**：B 脚本（`scripts/migrate_kb_dedup_titles.py`）已删 1 条字节完全相同副本 + 后端保证同 title md5 一致性，前端永远 default-on。toggle 失去存在意义，移除。
+
+### 🆕 chore(data+test): commit qa-bench v3 W3-W6 交付 + ASR benchmark 2026-06-30 + .gitignore 兜底 admin token（commit `6573f2b3`）
+
+**未跟踪项审计清理**：
+- 删除 8 个 GitHub Actions 调试 dump（`jobs*.json` / `runs*.json`, ~1MB）+ `joblog.txt`（403 错误）+ `results/onebyone_test.jsonl`（未引用 dev fixture）
+- 删除 `tests/qa-bench/_login.json` + `_token.txt`（**含 admin JWT token, exp 2026-07-21, 凭据泄露风险**）
+- 提交 `results/asr_benchmark_2026-06-30/`（105KB，memory asr-benchmark-2026-06-30 引用）
+- 提交 `tests/qa-bench/results/`（292KB，W3 dimension_report + W5 advanced + W6 final_delivery + smoke + stability_round1）
+- **`.gitignore` 加 `_login.json` / `_token.txt` / `*.json` 兜底规则防再泄露**
+
+### 📊 项目统计更新
+
+| 指标 | 旧值 (2026-06-30 早班) | 新值 (2026-07-01) |
+|------|---------------------|------------------|
+| Git commits | 1545 | **1588** (+43) |
+| Tracked files | 799 | **1202** (含 git tracked 含 dist) |
+| Source files only | ~313K | **196K**（去除 dist/models/data）|
+| Memory 文件 | 10（项目内）+ 57（harness）| **10（项目内）+ 57（harness）**（无新增沉淀）|
+| Dev days | 46 | **47** |
+
+### 🎯 4 条新铁律
+
+1. **模型升级必须先做锚定测试再上线**：CAM++ 理论 EER 改善 -34%，但实测跨会议识别率严重退化。**规则**：任何声纹模型升级 ≥ 5 个 voice_confirmed 成员锚定测试 + 跨会议识别率 ≥ ERes2Net baseline 才能上。**反例**：只看 model card 上的 EER 是误导。
+2. **跨模型空间 cosine 偏高是数学必然**：不同模型产出的 embedding 不在同一向量空间，cosine 接近 1.0（正交）不代表"识别失败"，**代表空间不兼容**，无法直接对比。升级维度必须重新录入所有用户声纹。
+3. **一次性脚本不入 CI**：generate_token_plan_doc.py 是 Word 报告生成器，运行耗时长（1195 行），不参与自动化测试。**保留原则**：写在 `scripts/` + docstring 标注"一次性脚本"。
+4. **用户感受是产品原则**：dedup 是产品应该自动做的事，不应在 UI 上暴露 toggle 让用户控制。"显示在前端的信息就应该是已经自动去重的内容" — 这是产品哲学，比"防御性兜底 toggle"更对。
+
+---
+
 ## [Unreleased] 2026-06-30 — v78 UI redesign + #009 Self-RAG + qa-bench v3.0 (W1-W6) + Whisper→SenseVoice + KB 清洁 + KB 入库监控 + 声纹循环净化收官
 
 ### 🆕 v78 UI redesign — 3-zone 对话窗口 + EP icons + 4-attr a11y（commit `34e82fd9`）

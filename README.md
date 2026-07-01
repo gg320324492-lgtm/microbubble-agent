@@ -19,7 +19,18 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
-## 最新里程碑（2026-06-30 晚班）
+## 最新里程碑（2026-07-01 早班）
+
+- 🆕 **声纹 CAM++ 选型实验 + 完整回滚（commits `835ac1ff` + `b7c1bed5`）** — 升级 ERes2Net → CAM++ (3D-Speaker zh-cn，维度 192 drop-in) → 理论中文 EER 改善 -34% → **实测 5 个 voice_confirmed 成员锚定测试失败**（CAM++ vs anchor ERes2Net cosine 1.045 接近正交 + intra-class 0.63-0.77 远低于 ERes2Net 0.99）→ **完整回滚 ERes2Net baseline**。保留资产：`docs/voiceprint-alternatives.md` (579 行) + `app/services/voiceprint_recovery.py` (104 行反推工具)；4 条新铁律（模型升级必锚定测试 / 跨模型空间 cosine 数学必然 / 一次性脚本不入 CI / 用户感受是产品原则）
+- 🆕 **post_meeting_tasks 简化（commit `4b215220`）** — 124 行 → 26 行 (-98, -79%)，移除下划线前缀临时变量 → 直接命名 + 修复 UnboundLocalError 闭包 lazy 求值隐患
+- 🆕 **v78 tabs 集成 spec + 临时启用 desktop-chrome（commit `6b6a91f4`）** — 116 行 Playwright spec 验证 `/meetings` 2 tabs 集成 + 批量操作 toolbar + 编辑按钮真实打开 MeetingTemplateDialog
+- 🆕 **`scripts/generate_token_plan_doc.py` 项目状况报告 Word 生成（commit `763244ae`）** — 1195 行一次性脚本（不入 CI），产物 71KB docx
+- 🆕 **移除 dedup toggle UI + displayedItems 永远 default-on（commit `425e5799`）** — 用户决策"dedup 是产品应该自动做的事，不应让用户在 UI 上控制开关"，删 el-switch + 22 行 localStorage 同步代码
+- 🆕 **chore: qa-bench v3 W3-W6 数据集 + ASR benchmark 入库 + .gitignore 兜底 admin token（commit `6573f2b3`）** — 8 个 GitHub Actions dump + `_login.json` + `_token.txt` **admin JWT 凭据泄露风险修复** + 397KB results/ 数据集提交 + `.gitignore` 兜底规则防再泄露
+
+---
+
+## 历史里程碑（2026-06-30 晚班）
 
 - 🆕 **v78 UI redesign — 3-zone 对话窗口 + EP icons + 4-attr a11y（commit `34e82fd9`）** — SessionSidebar overlap 修复 (`flex min-width:0`) + 右键/long-press 上下文菜单 + sortedSessions 置顶冒泡 + 新 NavRail.vue + ChatViewSSE 3-zone 重构 + ThinkingModeSwitch segmented 替代双 toggle 冲突 + 移动端 EP icons 同步 + `--icon-size-*` token；8 条新铁律
 - 🆕 **#009 Self-RAG 重检索 + 用户深度思考开关（4 commits）** — Phase 0.5 双重 hook（Haiku judge 800ms + refined_query）+ 3-tier 阈值分档（高≥0.8 直接出 / 中高≥0.6 不重 / 中≥0.4+can_answer 不重 / 低<0.4 触发重检索）+ 前端 useUiStore useDeepThinking + 7 个 AGENT_SELF_RAG_* flag；8 条新铁律
@@ -89,7 +100,7 @@
 
 详见 [CHANGELOG.md](CHANGELOG.md) 最新条目 + [docs/upgrade-sentence-transformers-plan.md](docs/upgrade-sentence-transformers-plan.md)
 
-**统计**（[app/stats.json](app/stats.json), 2026-06-30 自动重算）：**1544 commits / 160K 行代码 / 542 文件 / 45 开发天数**（py 48.4K / vue 42.8K / md 32.1K / js 17.2K / json 11.2K / html 3.5K / css 1.8K / sh 1.7K / ts 1.4K / scss 0.2K / sql 0.1K）
+**统计**（[app/stats.json](app/stats.json), 2026-07-01 自动重算）：**1588 commits / 321K 行代码 / 860 文件 / 47 开发天数**（py 74.9K / vue 53.2K / html 83.9K / md 51.1K / config 25.5K / js 23.5K / shell 3.4K / css 3.1K / ts 2.2K / docker 0.2K / other 0.1K / sql 0.1K）
 
 ## 技术栈
 

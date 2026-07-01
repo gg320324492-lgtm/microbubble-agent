@@ -3,7 +3,21 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-06-30 晚班收官）
+## 当前状态（2026-07-01 早班收官）
+
+**已交付（2026-07-01 早班新增）**：
+- 🆕 **声纹 CAM++ 选型实验 + 完整回滚（commits `835ac1ff` + `b7c1bed5`）** — 升级 ERes2Net → CAM++ (iic/speech_campplus_sv_zh-cn_16k-common, 维度 192 drop-in) → 中文 EER 3.5% → ~2.3% (理论 -34%) → **但实测锚定测试失败**（CAM++ vs anchor ERes2Net cosine 1.045 接近正交 + intra-class 0.63-0.77 远低于 ERes2Net 0.99）→ **完整回滚到 ERes2Net baseline**。保留资产：`docs/voiceprint-alternatives.md` (579 行 C2 候选完整评测) + `app/services/voiceprint_recovery.py` (104 行反推公式工具)。未来升级路径：30+ sample_count 成员完整 anchor → ≥5min 完整会议 intra-class 测试 → 用户手动确认新 anchor 后再上线
+- 🆕 **post_meeting_tasks 简化（commit `4b215220`）** — 124 行 → 26 行 (-98, -79%)，移除下划线前缀临时变量 (`_n_expected`/`_labels`/`_optimal_k`) → 直接命名 + 同步重命名 `cluster_centers`/`cluster_representatives` + 修复 UnboundLocalError 闭包 lazy 求值隐患
+- 🆕 **v78 tabs 集成 spec + 临时启用 desktop-chrome（commit `6b6a91f4`）** — `web/tests/visual/desktop/templates-tab-integration-2026-06-30.spec.mjs` (116 行) 端到端验证 `/meetings` 2 tabs 集成（会议列表 / 模板管理）+ 批量操作 toolbar + 编辑按钮真实打开 MeetingTemplateDialog；`web/playwright.config.js` 临时启用 desktop-chrome project
+- 🆕 **`scripts/generate_token_plan_doc.py` 项目状况报告 Word 生成（commit `763244ae`）** — 1195 行一次性脚本（不入 CI），依赖 python-docx，产物 `docs/MicroBubble_Agent_开发状况报告_2026-06-30.docx` (71KB)
+- 🆕 **移除 dedup toggle UI + displayedItems 永远 default-on（commit `425e5799`）** — 用户决策"dedup 是产品应该自动做的事，不应让用户在 UI 上控制开关"。删 `el-switch` + `dedupEnabled` prop + `toggle-dedup` emit + `dedupView` ref + `DEDUP_STORAGE_KEY` 常量 + `watch(localStorage)` 同步（22 行）；`displayedItems` computed 永远按 title 分组取 id 最小
+- 🆕 **chore: qa-bench v3 W3-W6 数据集 + ASR benchmark 入库 + .gitignore 兜底 admin token（commit `6573f2b3`）** — 8 个 GitHub Actions dump 删除 + `tests/qa-bench/_login.json` + `_token.txt` **admin JWT 凭据泄露风险修复** + `results/asr_benchmark_2026-06-30/` (105KB) + `tests/qa-bench/results/` (292KB) 提交 + `.gitignore` 加 `_login.json` / `_token.txt` / `*.json` 兜底规则
+
+**统计（2026-07-01 自动重算）**：**1588 commits / 196K 行源代码（去除 dist/models/data） / 1202 git tracked 文件 / 47 开发天数**
+
+---
+
+## 历史状态（2026-06-30 晚班收官）
 
 **已交付（晚班新增）**：
 - 🆕 **v78 UI redesign — 3-zone 对话窗口 + EP icons + 4-attr a11y（commit `34e82fd9`）** — SessionSidebar overlap 修复（`flex min-width:0`）+ 右键/long-press 上下文菜单 + sortedSessions 置顶冒泡 + NavRail.vue + ChatViewSSE 3-zone 重构（`≡` / `ChatBreadcrumb` / `+FAB`）+ ThinkingModeSwitch segmented（替代 🧠/🧠 双 toggle 冲突）+ 移动端 EP icons 同步 + variables.css `--icon-size-*` token；8 条新铁律

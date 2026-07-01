@@ -10,15 +10,21 @@
 """
 
 import json
-import requests
-import time
+import os
 import sys
+import time
 import urllib.request
+
+import requests
+
+# 测试账号 (从 conftest 常量导, 避免与生产 admin wangtianzhi 物理隔离被破坏)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.conftest import TEST_BOT_USERNAME, TEST_BOT_PASSWORD  # noqa: E402
 
 BASE = "http://localhost:8000/api/v1"
 TS = int(time.time())
-USER_A = "wangtianzhi"
-USER_A_PASS = "admin123"
+USER_A = os.environ.get("E2E_USERNAME", TEST_BOT_USERNAME)
+USER_A_PASS = os.environ.get("E2E_PASSWORD", TEST_BOT_PASSWORD)
 
 # 拿 token（用 helper）
 def login(username, password):
@@ -90,7 +96,7 @@ def main():
 
     print("=== 0. Setup ===")
     token_a = login(USER_A, USER_A_PASS)
-    check("login as wangtianzhi", token_a is not None)
+    check(f"login as {USER_A}", token_a is not None)
 
     # ==========================================================================
     # 场景 1：流式 chat 完成 → user + assistant 都落库

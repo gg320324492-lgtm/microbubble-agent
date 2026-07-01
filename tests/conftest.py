@@ -29,6 +29,15 @@ if not SKIP_DB_SETUP:
     from app.main import app  # noqa: E402
     from app.models.member import Member  # noqa: E402
 
+# ── 测试账号常量 (v0.1.0, 2026-07-01) ──────────────────────────
+# 测试账号与生产 admin (wangtianzhi) 物理隔离, 避免 e2e reset 密码影响真实使用.
+# 配套脚本: scripts/ensure_test_user.py (一次性创建) + E2E_USERNAME/E2E_PASSWORD env 覆盖.
+# 放在 if not SKIP_DB_SETUP 分支外, 让脚本 `from tests.conftest import TEST_BOT_USERNAME` 在 SKIP 模式也能工作.
+TEST_BOT_USERNAME = "xiaoqi_testbot"
+TEST_BOT_PASSWORD = "testbot_pass_2026"
+TEST_BOT_NAME = "测试小助手"
+TEST_BOT_ROLE = "admin"
+
     TEST_DB_URL = os.getenv(
         "TEST_DATABASE_URL",
         "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test",
@@ -144,14 +153,19 @@ async def admin_member(db):
     """创建管理员成员（需 DB），测试结束后清理防 UNIQUE 冲突。
 
     v0.0.1 修复 (2026-06-30): 改 return 为 yield + teardown, 与 test_member 同 pattern.
+
+    v0.1.0 修改 (2026-07-01): username/password/name 切到测试账号 xiaoqi_testbot.
+    原 username="admin"/password="admin123" 与 app/api/v1/knowledge.py:1416 admin 白名单
+    (`{"admin", "wangtianzhi"}`) 撞车, 易被 admin bypass 路径误命中. 改用 TEST_BOT_* 常量 —
+    生产 admin (wangtianzhi) 不再被 fixture 隐式关联.
     """
     if SKIP_DB_SETUP:
         pytest.skip("SKIP_DB_SETUP=1：admin_member fixture 不可用")
     member = Member(
-        username="admin",
-        name="管理员",
-        password_hash=get_password_hash("admin123"),
-        role="admin",
+        username=TEST_BOT_USERNAME,
+        name=TEST_BOT_NAME,
+        password_hash=get_password_hash(TEST_BOT_PASSWORD),
+        role="admin",  # 保留 hardcoded, 不引用 TEST_BOT_ROLE — fixture 与 conftest 常量最小耦合
         is_active=True,
     )
     db.add(member)
