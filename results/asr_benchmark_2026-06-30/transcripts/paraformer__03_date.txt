@@ -1,0 +1,9 @@
+=== paraformer | 03_date.wav ===
+Raw text (length=39):
+二 零 二 六 年 六 月 三 十 日 下 午 三 点 准 时 开 始 会 议
+
+Clean text (length=20):
+二零二六年六月三十日下午三点准时开始会议
+
+=== Ground truth ===
+二零二六年六月三十日下午三点准时开始会议。

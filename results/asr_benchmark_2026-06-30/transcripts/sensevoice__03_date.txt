@@ -1,0 +1,9 @@
+=== sensevoice | 03_date.wav ===
+Raw text (length=59):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>2026年6月30日下午3点准时开始会议。
+
+Clean text (length=21):
+2026年6月30日下午3点准时开始会议。
+
+=== Ground truth ===
+二零二六年六月三十日下午三点准时开始会议。

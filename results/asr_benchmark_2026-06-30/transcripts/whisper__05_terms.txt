@@ -1,0 +1,9 @@
+=== whisper | 05_terms.wav ===
+Raw text (length=21):
+纬纳米气泡的zeta电位与表面张力密切相关
+
+Clean text (length=21):
+纬纳米气泡的zeta电位与表面张力密切相关
+
+=== Ground truth ===
+微纳米气泡的 zeta 电位与表面张力密切相关。

@@ -1,0 +1,9 @@
+=== sensevoice | 02_numbers.wav ===
+Raw text (length=53):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>项目预算共计1234567元。
+
+Clean text (length=15):
+项目预算共计1234567元。
+
+=== Ground truth ===
+项目预算共计一百二十三万四千五百六十七元。

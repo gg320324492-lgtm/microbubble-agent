@@ -1,0 +1,9 @@
+=== sensevoice | 01_basics.wav ===
+Raw text (length=54):
+<|zh|><|HAPPY|><|Speech|><|withitn|>今天天气真好，我们一起去公园散步吧。
+
+Clean text (length=18):
+今天天气真好，我们一起去公园散步吧。
+
+=== Ground truth ===
+今天天气真好，我们一起去公园散步吧。

@@ -1,0 +1,9 @@
+=== paraformer | 01_basics.wav ===
+Raw text (length=31):
+今 天 天 气 真 好 我 们 一 起 去 公 园 散 步 吧
+
+Clean text (length=16):
+今天天气真好我们一起去公园散步吧
+
+=== Ground truth ===
+今天天气真好，我们一起去公园散步吧。

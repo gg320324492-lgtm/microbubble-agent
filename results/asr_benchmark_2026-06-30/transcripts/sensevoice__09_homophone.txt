@@ -1,0 +1,9 @@
+=== sensevoice | 09_homophone.wav ===
+Raw text (length=54):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>他的事迹已被列入公司的发展计划。
+
+Clean text (length=16):
+他的事迹已被列入公司的发展计划。
+
+=== Ground truth ===
+他的事迹已被列入公司的发展计划。

@@ -1,0 +1,9 @@
+=== sensevoice | 06_phone.wav ===
+Raw text (length=64):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>请拨打13800138000转6号分机联系王工程师。
+
+Clean text (length=26):
+请拨打13800138000转6号分机联系王工程师。
+
+=== Ground truth ===
+请拨打 13800138000 转 6 号分机联系王工程师。

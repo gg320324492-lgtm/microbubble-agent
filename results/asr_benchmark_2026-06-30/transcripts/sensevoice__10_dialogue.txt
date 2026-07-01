@@ -1,0 +1,9 @@
+=== sensevoice | 10_dialogue.wav ===
+Raw text (length=60):
+<|zh|><|HAPPY|><|Speech|><|withitn|>您说我们需要测试一下，然后呢好的，那就这样办吧。
+
+Clean text (length=24):
+您说我们需要测试一下，然后呢好的，那就这样办吧。
+
+=== Ground truth ===
+您说，我们需要测试一下。然后呢？好的，那就这样办吧。

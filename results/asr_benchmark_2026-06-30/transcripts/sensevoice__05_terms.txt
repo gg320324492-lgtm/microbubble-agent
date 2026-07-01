@@ -1,0 +1,9 @@
+=== sensevoice | 05_terms.wav ===
+Raw text (length=60):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>微纳米气泡的zeta电位与表面张力密切相关。
+
+Clean text (length=22):
+微纳米气泡的zeta电位与表面张力密切相关。
+
+=== Ground truth ===
+微纳米气泡的 zeta 电位与表面张力密切相关。
