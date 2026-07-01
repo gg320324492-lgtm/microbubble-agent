@@ -1,0 +1,47 @@
+[
+  {
+    "backend": "paraformer",
+    "audio": "01_basics.wav",
+    "duration_sec": 3.912,
+    "rtf_median": -1.0,
+    "elapsed_median_sec": -1.0,
+    "vram_peak_gb": -1.0,
+    "vram_resident_gb": -1.0,
+    "raw_cer": 0.8888888888888888,
+    "filtered_cer": 0.1111111111111111,
+    "raw_hallucination_count": 0,
+    "filtered_hallucination_count": 0,
+    "punctuation_present": false,
+    "text_len": 16
+  },
+  {
+    "backend": "paraformer",
+    "audio": "02_numbers.wav",
+    "duration_sec": 4.608,
+    "rtf_median": -1.0,
+    "elapsed_median_sec": -1.0,
+    "vram_peak_gb": -1.0,
+    "vram_resident_gb": -1.0,
+    "raw_cer": 0.9523809523809523,
+    "filtered_cer": 0.047619047619047616,
+    "raw_hallucination_count": 0,
+    "filtered_hallucination_count": 0,
+    "punctuation_present": false,
+    "text_len": 20
+  },
+  {
+    "backend": "paraformer",
+    "audio": "03_date.wav",
+    "duration_sec": 4.656,
+    "rtf_median": -1.0,
+    "elapsed_median_sec": -1.0,
+    "vram_peak_gb": -1.0,
+    "vram_resident_gb": -1.0,
+    "raw_cer": 0.9523809523809523,
+    "filtered_cer": 0.047619047619047616,
+    "raw_hallucination_count": 0,
+    "filtered_hallucination_count": 0,
+    "punctuation_present": false,
+    "text_len": 20
+  }
+]

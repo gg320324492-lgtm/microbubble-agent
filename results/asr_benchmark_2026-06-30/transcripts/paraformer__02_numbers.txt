@@ -1,0 +1,9 @@
+=== paraformer | 02_numbers.wav ===
+Raw text (length=39):
+项 目 预 算 共 计 一 百 二 十 三 万 四 千 五 百 六 十 七 元
+
+Clean text (length=20):
+项目预算共计一百二十三万四千五百六十七元
+
+=== Ground truth ===
+项目预算共计一百二十三万四千五百六十七元。

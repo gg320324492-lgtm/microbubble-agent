@@ -1,0 +1,1449 @@
+{
+  "summary": {
+    "timestamp": "2026-06-30T17:00:00",
+    "total": 100,
+    "pass": 70,
+    "warn": 18,
+    "fail": 10,
+    "error": 2,
+    "by_category": {},
+    "issue_distribution": {
+      "hallucinated_names": 5,
+      "duration_too_long": 3,
+      "fake_xml_leaked": 2,
+      "placeholder_text": 1,
+      "filler_phrases": 4,
+      "stream_no_done": 1
+    },
+    "seven_dim": {
+      "dim_avg": {
+        "intent": 0.95,
+        "tool": 0.88,
+        "content": 0.82,
+        "rich": 1.0,
+        "defense": 0.75,
+        "perf": 0.65,
+        "consistency": 1.0
+      },
+      "grade_dist": {
+        "A": 35,
+        "B": 40,
+        "C": 15,
+        "D": 8,
+        "F": 2
+      },
+      "veto_count": 2,
+      "total_scored": 100
+    }
+  },
+  "results": [
+    {
+      "id": "D-L1-0000",
+      "category": "D",
+      "difficulty": "L1",
+      "question": "测试题 0",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 41.5,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "C-L2-0001",
+      "category": "C",
+      "difficulty": "L2",
+      "question": "测试题 1",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 53.4,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L1-0002",
+      "category": "D",
+      "difficulty": "L1",
+      "question": "测试题 2",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 80.6,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L1-0003",
+      "category": "K",
+      "difficulty": "L1",
+      "question": "测试题 3",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 75.4,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0004",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 4",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 45.6,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L1-0005",
+      "category": "B",
+      "difficulty": "L1",
+      "question": "测试题 5",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 73.7,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L4-0006",
+      "category": "D",
+      "difficulty": "L4",
+      "question": "测试题 6",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 53.2,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L3-0007",
+      "category": "K",
+      "difficulty": "L3",
+      "question": "测试题 7",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 88.6,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L2-0008",
+      "category": "A",
+      "difficulty": "L2",
+      "question": "测试题 8",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 81.9,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "C-L3-0009",
+      "category": "C",
+      "difficulty": "L3",
+      "question": "测试题 9",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.3,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "C-L1-0010",
+      "category": "C",
+      "difficulty": "L1",
+      "question": "测试题 10",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 45.6,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "A-L3-0011",
+      "category": "A",
+      "difficulty": "L3",
+      "question": "测试题 11",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 90.8,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L3-0012",
+      "category": "K",
+      "difficulty": "L3",
+      "question": "测试题 12",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 88.4,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L4-0013",
+      "category": "D",
+      "difficulty": "L4",
+      "question": "测试题 13",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 72.2,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L1-0014",
+      "category": "P",
+      "difficulty": "L1",
+      "question": "测试题 14",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 73.1,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L3-0015",
+      "category": "D",
+      "difficulty": "L3",
+      "question": "测试题 15",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 74.6,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L1-0016",
+      "category": "D",
+      "difficulty": "L1",
+      "question": "测试题 16",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 42.7,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L3-0017",
+      "category": "B",
+      "difficulty": "L3",
+      "question": "测试题 17",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 99.1,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L1-0018",
+      "category": "B",
+      "difficulty": "L1",
+      "question": "测试题 18",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 62.8,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L3-0019",
+      "category": "P",
+      "difficulty": "L3",
+      "question": "测试题 19",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.8,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "C-L2-0020",
+      "category": "C",
+      "difficulty": "L2",
+      "question": "测试题 20",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 80.2,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L1-0021",
+      "category": "D",
+      "difficulty": "L1",
+      "question": "测试题 21",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 76.5,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L2-0022",
+      "category": "B",
+      "difficulty": "L2",
+      "question": "测试题 22",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.8,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "P-L3-0023",
+      "category": "P",
+      "difficulty": "L3",
+      "question": "测试题 23",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 99.4,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L2-0024",
+      "category": "D",
+      "difficulty": "L2",
+      "question": "测试题 24",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 81.1,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L2-0025",
+      "category": "A",
+      "difficulty": "L2",
+      "question": "测试题 25",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 89.3,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "C-L4-0026",
+      "category": "C",
+      "difficulty": "L4",
+      "question": "测试题 26",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 56.1,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L3-0027",
+      "category": "B",
+      "difficulty": "L3",
+      "question": "测试题 27",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 52.8,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L4-0028",
+      "category": "P",
+      "difficulty": "L4",
+      "question": "测试题 28",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 93.1,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L4-0029",
+      "category": "D",
+      "difficulty": "L4",
+      "question": "测试题 29",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 48.6,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L2-0030",
+      "category": "B",
+      "difficulty": "L2",
+      "question": "测试题 30",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 84.7,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L3-0031",
+      "category": "K",
+      "difficulty": "L3",
+      "question": "测试题 31",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 84.8,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L4-0032",
+      "category": "P",
+      "difficulty": "L4",
+      "question": "测试题 32",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 61.7,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L4-0033",
+      "category": "B",
+      "difficulty": "L4",
+      "question": "测试题 33",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 45.5,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "A-L1-0034",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 34",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.2,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L4-0035",
+      "category": "B",
+      "difficulty": "L4",
+      "question": "测试题 35",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 75.8,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L4-0036",
+      "category": "P",
+      "difficulty": "L4",
+      "question": "测试题 36",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 75.8,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L3-0037",
+      "category": "P",
+      "difficulty": "L3",
+      "question": "测试题 37",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 98.3,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0038",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 38",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 80.9,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L3-0039",
+      "category": "K",
+      "difficulty": "L3",
+      "question": "测试题 39",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 86.1,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "C-L1-0040",
+      "category": "C",
+      "difficulty": "L1",
+      "question": "测试题 40",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 57.6,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L4-0041",
+      "category": "B",
+      "difficulty": "L4",
+      "question": "测试题 41",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 40.2,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "D-L3-0042",
+      "category": "D",
+      "difficulty": "L3",
+      "question": "测试题 42",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 98.3,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L1-0043",
+      "category": "B",
+      "difficulty": "L1",
+      "question": "测试题 43",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 92.2,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "C-L2-0044",
+      "category": "C",
+      "difficulty": "L2",
+      "question": "测试题 44",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.2,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L1-0045",
+      "category": "B",
+      "difficulty": "L1",
+      "question": "测试题 45",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 75.9,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L1-0046",
+      "category": "P",
+      "difficulty": "L1",
+      "question": "测试题 46",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 46.7,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "C-L3-0047",
+      "category": "C",
+      "difficulty": "L3",
+      "question": "测试题 47",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 54.4,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L1-0048",
+      "category": "B",
+      "difficulty": "L1",
+      "question": "测试题 48",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 45.1,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "P-L1-0049",
+      "category": "P",
+      "difficulty": "L1",
+      "question": "测试题 49",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 98.7,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L2-0050",
+      "category": "K",
+      "difficulty": "L2",
+      "question": "测试题 50",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 47.7,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "P-L2-0051",
+      "category": "P",
+      "difficulty": "L2",
+      "question": "测试题 51",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 55.9,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L4-0052",
+      "category": "K",
+      "difficulty": "L4",
+      "question": "测试题 52",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 97.9,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L2-0053",
+      "category": "K",
+      "difficulty": "L2",
+      "question": "测试题 53",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 82.8,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L3-0054",
+      "category": "P",
+      "difficulty": "L3",
+      "question": "测试题 54",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 66.3,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L4-0055",
+      "category": "K",
+      "difficulty": "L4",
+      "question": "测试题 55",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 47.3,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L1-0056",
+      "category": "B",
+      "difficulty": "L1",
+      "question": "测试题 56",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 60.3,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L2-0057",
+      "category": "K",
+      "difficulty": "L2",
+      "question": "测试题 57",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 75.3,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0058",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 58",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 82.5,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L2-0059",
+      "category": "A",
+      "difficulty": "L2",
+      "question": "测试题 59",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 44.0,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "A-L3-0060",
+      "category": "A",
+      "difficulty": "L3",
+      "question": "测试题 60",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 44.3,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L3-0061",
+      "category": "B",
+      "difficulty": "L3",
+      "question": "测试题 61",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 80.1,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L2-0062",
+      "category": "B",
+      "difficulty": "L2",
+      "question": "测试题 62",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 83.4,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L4-0063",
+      "category": "K",
+      "difficulty": "L4",
+      "question": "测试题 63",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 54.6,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L4-0064",
+      "category": "P",
+      "difficulty": "L4",
+      "question": "测试题 64",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 51.4,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L4-0065",
+      "category": "A",
+      "difficulty": "L4",
+      "question": "测试题 65",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 61.3,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L4-0066",
+      "category": "P",
+      "difficulty": "L4",
+      "question": "测试题 66",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 91.8,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0067",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 67",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 43.6,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "D-L3-0068",
+      "category": "D",
+      "difficulty": "L3",
+      "question": "测试题 68",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 88.0,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L2-0069",
+      "category": "A",
+      "difficulty": "L2",
+      "question": "测试题 69",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 51.5,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L4-0070",
+      "category": "K",
+      "difficulty": "L4",
+      "question": "测试题 70",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 48.4,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L3-0071",
+      "category": "B",
+      "difficulty": "L3",
+      "question": "测试题 71",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 67.8,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L4-0072",
+      "category": "A",
+      "difficulty": "L4",
+      "question": "测试题 72",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 88.5,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L1-0073",
+      "category": "K",
+      "difficulty": "L1",
+      "question": "测试题 73",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 43.0,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "K-L1-0074",
+      "category": "K",
+      "difficulty": "L1",
+      "question": "测试题 74",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 98.1,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L2-0075",
+      "category": "B",
+      "difficulty": "L2",
+      "question": "测试题 75",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 64.4,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L2-0076",
+      "category": "P",
+      "difficulty": "L2",
+      "question": "测试题 76",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 91.9,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L2-0077",
+      "category": "A",
+      "difficulty": "L2",
+      "question": "测试题 77",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 62.7,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L3-0078",
+      "category": "P",
+      "difficulty": "L3",
+      "question": "测试题 78",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 95.6,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L3-0079",
+      "category": "P",
+      "difficulty": "L3",
+      "question": "测试题 79",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 65.4,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "D-L4-0080",
+      "category": "D",
+      "difficulty": "L4",
+      "question": "测试题 80",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.3,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "C-L2-0081",
+      "category": "C",
+      "difficulty": "L2",
+      "question": "测试题 81",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 98.1,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L1-0082",
+      "category": "K",
+      "difficulty": "L1",
+      "question": "测试题 82",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 84.9,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0083",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 83",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 75.1,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L2-0084",
+      "category": "K",
+      "difficulty": "L2",
+      "question": "测试题 84",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 43.4,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "K-L1-0085",
+      "category": "K",
+      "difficulty": "L1",
+      "question": "测试题 85",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 91.1,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0086",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 86",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 80.5,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L4-0087",
+      "category": "B",
+      "difficulty": "L4",
+      "question": "测试题 87",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 47.2,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "K-L2-0088",
+      "category": "K",
+      "difficulty": "L2",
+      "question": "测试题 88",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 74.7,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0089",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 89",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 65.2,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L3-0090",
+      "category": "K",
+      "difficulty": "L3",
+      "question": "测试题 90",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 96.1,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "B-L3-0091",
+      "category": "B",
+      "difficulty": "L3",
+      "question": "测试题 91",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 54.3,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "P-L2-0092",
+      "category": "P",
+      "difficulty": "L2",
+      "question": "测试题 92",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 80.3,
+        "grade": "B",
+        "veto": false
+      }
+    },
+    {
+      "id": "C-L4-0093",
+      "category": "C",
+      "difficulty": "L4",
+      "question": "测试题 93",
+      "verdict": "FAIL",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 59.0,
+        "grade": "D",
+        "veto": false
+      }
+    },
+    {
+      "id": "A-L1-0094",
+      "category": "A",
+      "difficulty": "L1",
+      "question": "测试题 94",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 67.5,
+        "grade": "C",
+        "veto": false
+      }
+    },
+    {
+      "id": "K-L1-0095",
+      "category": "K",
+      "difficulty": "L1",
+      "question": "测试题 95",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 44.4,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "B-L3-0096",
+      "category": "B",
+      "difficulty": "L3",
+      "question": "测试题 96",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 47.9,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "C-L1-0097",
+      "category": "C",
+      "difficulty": "L1",
+      "question": "测试题 97",
+      "verdict": "PASS",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 92.8,
+        "grade": "A",
+        "veto": false
+      }
+    },
+    {
+      "id": "C-L3-0098",
+      "category": "C",
+      "difficulty": "L3",
+      "question": "测试题 98",
+      "verdict": "FAIL",
+      "issues": [
+        {
+          "type": "hallucinated_names"
+        }
+      ],
+      "seven_dim": {
+        "total_score": 49.5,
+        "grade": "D",
+        "veto": true
+      }
+    },
+    {
+      "id": "K-L3-0099",
+      "category": "K",
+      "difficulty": "L3",
+      "question": "测试题 99",
+      "verdict": "WARN",
+      "issues": [],
+      "seven_dim": {
+        "total_score": 76.7,
+        "grade": "B",
+        "veto": false
+      }
+    }
+  ]
+}

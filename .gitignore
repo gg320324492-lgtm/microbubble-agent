@@ -45,6 +45,12 @@ docker-compose.override.yml
 htmlcov/
 .pytest_cache/
 
+# qa-bench / 端到端测试的临时凭据（含 admin JWT，绝不能入库）
+tests/qa-bench/_login.json
+tests/qa-bench/_token.txt
+tests/qa-bench/_*.json
+!tests/qa-bench/questions.jsonl
+
 # 前端
 node_modules/
 web/dist/

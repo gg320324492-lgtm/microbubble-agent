@@ -1,0 +1,9 @@
+=== whisper | 04_mixed.wav ===
+Raw text (length=26):
+我们需要用AI模型解决hallucination问题
+
+Clean text (length=26):
+我们需要用AI模型解决hallucination问题
+
+=== Ground truth ===
+我们需要用 AI 模型解决 hallucination 问题。

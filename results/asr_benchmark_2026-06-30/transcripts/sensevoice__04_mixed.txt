@@ -1,0 +1,9 @@
+=== sensevoice | 04_mixed.wav ===
+Raw text (length=64):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>我们需要用AI模型解决halucination问题。
+
+Clean text (length=26):
+我们需要用AI模型解决halucination问题。
+
+=== Ground truth ===
+我们需要用 AI 模型解决 hallucination 问题。

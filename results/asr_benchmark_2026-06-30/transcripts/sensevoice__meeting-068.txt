@@ -1,0 +1,6 @@
+=== sensevoice | meeting-068.webm ===
+Raw text (length=82):
+<|zh|><|NEUTRAL|><|Speech|><|withitn|>行师就开始说吧，开始吧，你说吧，随便说还刚把数据整理氧感觉乳白程以是装置装置压记录氧只。
+
+Clean text (length=44):
+行师就开始说吧，开始吧，你说吧，随便说还刚把数据整理氧感觉乳白程以是装置装置压记录氧只。

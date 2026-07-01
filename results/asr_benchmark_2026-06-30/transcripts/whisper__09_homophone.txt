@@ -1,0 +1,9 @@
+=== whisper | 09_homophone.wav ===
+Raw text (length=15):
+它的试剂已被列入公司的发展计划
+
+Clean text (length=15):
+它的试剂已被列入公司的发展计划
+
+=== Ground truth ===
+他的事迹已被列入公司的发展计划。

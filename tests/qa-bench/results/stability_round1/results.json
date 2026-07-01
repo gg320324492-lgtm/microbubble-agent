@@ -1,0 +1,1913 @@
+{
+  "summary": {
+    "timestamp": "2026-06-30T20:56:24.909167",
+    "total": 3,
+    "pass": 0,
+    "warn": 0,
+    "fail": 3,
+    "error": 0,
+    "by_category": {
+      "A": {
+        "pass": 0,
+        "warn": 0,
+        "fail": 3,
+        "error": 0
+      }
+    },
+    "issue_distribution": {
+      "stream_no_done": 2,
+      "stream_error_event": 2,
+      "missing_tools": 1,
+      "fake_xml_leaked": 1
+    },
+    "seven_dim": {
+      "dim_avg": {
+        "intent": 1.0,
+        "tool": 0.667,
+        "content": 0.5,
+        "rich": 1.0,
+        "defense": 0.5,
+        "perf": 1.0,
+        "consistency": 1.0
+      },
+      "grade_dist": {
+        "A": 0,
+        "B": 0,
+        "C": 0,
+        "D": 0,
+        "F": 3
+      },
+      "veto_count": 3,
+      "total_scored": 3
+    }
+  },
+  "results": [
+    {
+      "id": "A-L1-0001",
+      "category": "A",
+      "question": "王天志是干什么的？",
+      "expect": {
+        "intent": "search_info",
+        "tools_any": [
+          "query_members"
+        ],
+        "tools_must_all": [],
+        "must_contain_any": [
+          [
+            "王天志"
+          ],
+          [
+            "博士生"
+          ]
+        ],
+        "forbidden_names": [
+          "杜同贺",
+          "赵航佳",
+          "杨慈",
+          "宋洋",
+          "贾琦",
+          "李胜景",
+          "李松泽",
+          "周之超",
+          "苏杭",
+          "王田志",
+          "邹雨",
+          "梁博",
+          "雒培媛",
+          "李胜奕",
+          "吴梦全",
+          "吴孟全",
+          "吴孟拴",
+          "赵航家",
+          "王天之",
+          "洪辉",
+          "李子涵",
+          "张红",
+          "刘红",
+          "韩梅",
+          "陈伟",
+          "测试",
+          "test_json",
+          "test_user"
+        ],
+        "must_contain_keywords": [],
+        "min_length": 20,
+        "max_length": 300,
+        "rich_block_required": false,
+        "domain_check": null
+      },
+      "actual": {
+        "intent": "search_info",
+        "tools_called": [
+          "search_knowledge",
+          "query_members",
+          "search_knowledge"
+        ],
+        "tool_inputs": [
+          {
+            "name": "search_knowledge",
+            "input": {
+              "query": "王天志"
+            }
+          },
+          {
+            "name": "query_members",
+            "input": {}
+          },
+          {
+            "name": "search_knowledge",
+            "input": {
+              "query": "[当前时间: 2026-06-30 20:55] 王天志是干什么的？ 王天志 干什么的 研究方向"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "search_knowledge",
+            "result": {
+              "status": "success",
+              "count": 5,
+              "results": [
+                {
+                  "id": 68,
+                  "title": "[拓展-S61] 微纳米气泡在生物医药的 FDA 认证进展",
+                  "content": "## 问题\n微纳米气泡在生物医药的 FDA 认证进展\n\n## 回答\n王天志老师，您好！\n\n关于**微纳米气泡在生物医药领域的FDA认证进展**，我进行了多轮搜索（知识库、中文互联网、英文互联网），以下是综合整理的结果：\n\n---\n\n## 一、已获FDA批准的微纳米气泡相关产品\n\n### 1. 超声微泡造影剂（最成熟的FDA认证应用）\n\n这是微纳米气泡在生物医药领域**唯一已实现FDA批准上市**的类别：\n\n| 产品名称 | 公司 | FDA批准时间 | 适应症 |\n|---------|------|------------|--------|\n| **Definity (Perflutren)** | Lantheus Medical Imaging | 2001年 | 心脏超声造影 |\n| **SonoVue (Lumason)** | Bracco | 2014年 | 心脏及非心脏超声造影 |\n| **Optison** | GE Healthcare | 1997年 | 心脏超声造影 |\n\n**技术原理**：这些产品使用磷脂包裹的全氟化碳微泡（直径1-5μm），作为超声造影剂增",
+                  "category": "综述",
+                  "tags": [
+                    "微纳米气泡",
+                    "超声造影剂",
+                    "药物递送",
+                    "FDA认证",
+                    "纳米颗粒",
+                    "磷脂包裹",
+                    "全氟化碳",
+                    "监管路径"
+                  ],
+                  "source": null,
+                  "score": 3.097,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 1.0,
+                  "rerank_score": 3.097
+                },
+                {
+                  "id": 165,
+                  "title": "[拓展-S61] 微纳米气泡在生物医药的 FDA 认证进展",
+                  "content": "## 问题\r\n微纳米气泡在生物医药的 FDA 认证进展\r\n\r\n## 回答\r\n王天志老师，您好！\r\n\r\n关于**微纳米气泡在生物医药领域的FDA认证进展**，我进行了多轮搜索（知识库、中文互联网、英文互联网），以下是综合整理的结果：\r\n\r\n---\r\n\r\n## 一、已获FDA批准的微纳米气泡相关产品\r\n\r\n### 1. 超声微泡造影剂（最成熟的FDA认证应用）\r\n\r\n这是微纳米气泡在生物医药领域**唯一已实现FDA批准上市**的类别：\r\n\r\n| 产品名称 | 公司 | FDA批准时间 | 适应症 |\r\n|---------|------|------------|--------|\r\n| **Definity (Perflutren)** | Lantheus Medical Imaging | 2001年 | 心脏超声造影 |\r\n| **SonoVue (Lumason)** | Bracco | 2014年 | 心脏及非心脏超声造影 |\r\n| **Optison** | GE Healthcare | 1997年 | 心脏超声造影 |\r\n\r\n**技术原理**：这些产品使用磷脂包裹的全氟",
+                  "category": "综述",
+                  "tags": [
+                    "微纳米气泡",
+                    "超声造影剂",
+                    "FDA认证",
+                    "药物递送",
+                    "全氟化碳",
+                    "磷脂包裹",
+                    "纳米气泡",
+                    "声孔效应"
+                  ],
+                  "source": null,
+                  "score": 3.097,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 1.0,
+                  "rerank_score": 3.097
+                },
+                {
+                  "id": 116,
+                  "title": "[拓展-S61] 微纳米气泡在生物医药的 FDA 认证进展",
+                  "content": "## 问题\r\n微纳米气泡在生物医药的 FDA 认证进展\r\n\r\n## 回答\r\n王天志老师，您好！\r\n\r\n关于**微纳米气泡在生物医药领域的FDA认证进展**，我进行了多轮搜索（知识库、中文互联网、英文互联网），以下是综合整理的结果：\r\n\r\n---\r\n\r\n## 一、已获FDA批准的微纳米气泡相关产品\r\n\r\n### 1. 超声微泡造影剂（最成熟的FDA认证应用）\r\n\r\n这是微纳米气泡在生物医药领域**唯一已实现FDA批准上市**的类别：\r\n\r\n| 产品名称 | 公司 | FDA批准时间 | 适应症 |\r\n|---------|------|------------|--------|\r\n| **Definity (Perflutren)** | Lantheus Medical Imaging | 2001年 | 心脏超声造影 |\r\n| **SonoVue (Lumason)** | Bracco | 2014年 | 心脏及非心脏超声造影 |\r\n| **Optison** | GE Healthcare | 1997年 | 心脏超声造影 |\r\n\r\n**技术原理**：这些产品使用磷脂包裹的全氟",
+                  "category": "综述",
+                  "tags": [
+                    "微纳米气泡",
+                    "FDA认证",
+                    "超声造影剂",
+                    "药物递送",
+                    "纳米颗粒",
+                    "监管路径",
+                    "临床试验"
+                  ],
+                  "source": null,
+                  "score": 3.097,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 1.0,
+                  "rerank_score": 3.097
+                },
+                {
+                  "id": 150,
+                  "title": "[拓展-S40] 微纳米气泡与臭氧联用消毒副产物（DBP）控制",
+                  "content": "## 问题\r\n微纳米气泡与臭氧联用消毒副产物（DBP）控制\r\n\r\n## 回答\r\n王天志老师，您好！关于**微纳米气泡与臭氧联用控制消毒副产物（DBP）**这个课题，我结合知识库和最新文献为您梳理如下：\r\n\r\n---\r\n\r\n## 一、背景与问题\r\n\r\n传统氯消毒会产生三卤甲烷（THMs）、卤乙酸（HAAs）等消毒副产物（DBPs），具有致癌、致畸风险。臭氧作为强氧化剂，本身不产生卤代副产物，但存在以下挑战：\r\n\r\n1. **溴酸盐（BrO₃⁻）风险**：含溴水体中臭氧氧化会生成致癌性溴酸盐\r\n2. **臭氧利用率低**：传统臭氧曝气传质效率有限，臭氧分解快\r\n3. **DBP前体物去除不彻底**：仅靠臭氧难以完全矿化有机前体物\r\n\r\n---\r\n\r\n## 二、微纳米气泡+臭氧联用的控制机制\r\n\r\n### 1. **强化传质，降低臭氧投量**\r\n- 纳米气泡（<1μm）比表面积巨大，臭氧传质效率提升**3-5倍**\r\n- 气泡内压高（拉普拉斯效应），臭氧溶解度增强\r\n- **关键优势**：相同灭活效果下，臭氧投量可降低30-50%，从源头减少DBP前体物氧化副产物\r\n\r\n### 2. **气",
+                  "category": "笔记",
+                  "tags": [
+                    "微纳米气泡",
+                    "臭氧",
+                    "消毒副产物",
+                    "溴酸盐",
+                    "传质效率",
+                    "羟基自由基",
+                    "水处理"
+                  ],
+                  "source": null,
+                  "score": 3.0938,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.9989,
+                  "rerank_score": 3.0938
+                },
+                {
+                  "id": 53,
+                  "title": "[拓展-S40] 微纳米气泡与臭氧联用消毒副产物（DBP）控制",
+                  "content": "## 问题\n微纳米气泡与臭氧联用消毒副产物（DBP）控制\n\n## 回答\n王天志老师，您好！关于**微纳米气泡与臭氧联用控制消毒副产物（DBP）**这个课题，我结合知识库和最新文献为您梳理如下：\n\n---\n\n## 一、背景与问题\n\n传统氯消毒会产生三卤甲烷（THMs）、卤乙酸（HAAs）等消毒副产物（DBPs），具有致癌、致畸风险。臭氧作为强氧化剂，本身不产生卤代副产物，但存在以下挑战：\n\n1. **溴酸盐（BrO₃⁻）风险**：含溴水体中臭氧氧化会生成致癌性溴酸盐\n2. **臭氧利用率低**：传统臭氧曝气传质效率有限，臭氧分解快\n3. **DBP前体物去除不彻底**：仅靠臭氧难以完全矿化有机前体物\n\n---\n\n## 二、微纳米气泡+臭氧联用的控制机制\n\n### 1. **强化传质，降低臭氧投量**\n- 纳米气泡（<1μm）比表面积巨大，臭氧传质效率提升**3-5倍**\n- 气泡内压高（拉普拉斯效应），臭氧溶解度增强\n- **关键优势**：相同灭活效果下，臭氧投量可降低30-50%，从源头减少DBP前体物氧化副产物\n\n### 2. **气泡崩溃产生羟基自由基（·OH）**\n- 纳米气泡崩",
+                  "category": "笔记",
+                  "tags": [
+                    "微纳米气泡",
+                    "臭氧",
+                    "消毒副产物",
+                    "溴酸盐",
+                    "羟基自由基",
+                    "传质效率",
+                    "水处理",
+                    "DBP前体物"
+                  ],
+                  "source": null,
+                  "score": 3.0938,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.9989,
+                  "rerank_score": 3.0938
+                }
+              ],
+              "rich_block_type": "knowledge_ref"
+            }
+          },
+          {
+            "name": "query_members",
+            "result": {
+              "status": "success",
+              "count": 28,
+              "members": [
+                {
+                  "id": 22,
+                  "name": "周之超",
+                  "grade": "大三",
+                  "research_area": "表面污染去除",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "表面去除",
+                    "文献调研",
+                    "实验辅助"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T08:22:36.702062+00:00",
+                  "bio": "参与表面污染去除实验与数据整理，支持文献调研与材料准备",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/b01932141f184cfba641549deb812752.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 9,
+                  "name": "关小未",
+                  "grade": "研二",
+                  "research_area": "盐碱土改良",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "盐碱土修复",
+                    "种养系统",
+                    "农业应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "关注盐碱土改良与高效种养场景中的微纳米气泡应用路径",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/d62b2cf6363d4e6989b0ca6462fc8759.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 13,
+                  "name": "宋洋",
+                  "grade": "研二",
+                  "research_area": "饮用水处理",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "生物稳定性",
+                    "管网生物膜",
+                    "膜耦合"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-26T03:58:30.043697+00:00",
+                  "bio": "微纳米气泡饮用水处理组，研究气泡与膜的耦合应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/bfa35e46d45f4138b843a9a86c6e3b46.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 6,
+                  "name": "耿嘉栋",
+                  "grade": "研一",
+                  "research_area": "装备开发",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "装备开发",
+                    "系统集成",
+                    "发生器优化"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "面向工程化落地，参与发生器结构优化与系统集成验证",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/2fd38934a1fe438eb0c629495f404154.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 8,
+                  "name": "董昊宇",
+                  "grade": "研二",
+                  "research_area": "农业应用",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "农业应用",
+                    "水-土环境",
+                    "增效应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "探索微纳米气泡在农业水-土环境中的增效应用与评价方法",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/8f73fda0ff5641be9075e1f3f4fb26b2.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 25,
+                  "name": "孟祥琪",
+                  "grade": "大三",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 26,
+                  "name": "吴怡霏",
+                  "grade": "研一",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 27,
+                  "name": "蒋芦笛",
+                  "grade": "研二",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 17,
+                  "name": "李锐远",
+                  "grade": "研三",
+                  "research_area": "管网水质",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "生物膜控制",
+                    "管网系统",
+                    "水质稳定"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "研究微纳米气泡在管网生物膜控制与水质稳定性提升中的作用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/b15758696a0c484a8cce247d5f0e0f5d.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 28,
+                  "name": "刘莫菲",
+                  "grade": "研一",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/avatars/390779688fdc4663bdcb281f1323b82b.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 12,
+                  "name": "刘子毅",
+                  "grade": "研二",
+                  "research_area": "水质评价",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "过程评价",
+                    "数据分析",
+                    "水质提升"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "构建水质提升工艺的评价体系与实验数据处理流程",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/0f53a747c9784ecd85be9d9681e21725.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 4,
+                  "name": "陈天祥",
+                  "grade": "研一",
+                  "research_area": "表面清洗技术",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "清洗工艺",
+                    "去除工艺",
+                    "表面清洗"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "构建微纳米气泡清洗/去除工艺并评估关键去污指标",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/de3a120c4ac744a98af2f83ea55a4555.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 23,
+                  "name": "邓国祥",
+                  "grade": "大三",
+                  "research_area": "自由基研究",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "实验辅助",
+                    "数据分析",
+                    "自由基"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "参与溃灭与自由基相关实验辅助与基础数据分析",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/18524abc3e22409a8ce880bfc72764ce.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 18,
+                  "name": "杨慈",
+                  "grade": "研三",
+                  "research_area": "饮用水安全",
+                  "email": "yc3259672120@163.com",
+                  "role": "member",
+                  "skills": [
+                    "饮用水安全",
+                    "蜡样芽孢杆菌",
+                    "微生物消杀"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T18:05:34.671596+00:00",
+                  "bio": "探索微纳米气泡在饮用水安全保障领域的应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/4465d00074114a738a68cfd66675c9b1.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 10,
+                  "name": "胡小琪",
+                  "grade": "研二",
+                  "research_area": "黑臭水体",
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "臭氧微纳米气泡对黑臭水体泥/水界面微生境修复机理研究",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/3f2df0f2eeb24fa99f8b0a964fad8fbe.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 21,
+                  "name": "贾琦",
+                  "grade": "大四",
+                  "research_area": "表面清洗",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "实验辅助",
+                    "数据整理",
+                    "表面清洗"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T08:22:36.714907+00:00",
+                  "bio": "参与表面清洗去除实验与指标测定，协助数据整理与记录",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/9b857218ea02421e9ab2a43d5d8193bd.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 58,
+                  "name": "刘子煜",
+                  "grade": "研一",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 19,
+                  "name": "余歆睿",
+                  "grade": "研三",
+                  "research_area": "藻华控制",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "藻华控制",
+                    "水质净化",
+                    "小球藻抑制"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-26T12:51:22.740694+00:00",
+                  "bio": "探索微纳米气泡技术在藻华控制与水质净化领域的应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/74b2f106d8db4f808a0211ad0d1c3f5a.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 11,
+                  "name": "李胜景",
+                  "grade": "研二",
+                  "research_area": "水产养殖",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "高密度养殖",
+                    "无抗鱼养殖",
+                    "水产应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.887268+00:00",
+                  "bio": "微纳米气泡应用于高密度无抗鱼养殖",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/5b53c176e76341b68448ab1fe3088b19.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 2,
+                  "name": "赵航佳",
+                  "grade": "博一",
+                  "research_area": "黑臭水体治理",
+                  "email": "zhaohangjia@tju.edu.cn",
+                  "role": "admin",
+                  "skills": [
+                    "臭氧微纳米气泡",
+                    "底泥-水界面",
+                    "污染物去除"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.864159+00:00",
+                  "bio": "围绕微纳米气泡在黑臭水体治理中的应用开展研究，重点关注微纳米气泡与底泥-水界面污染物之间的相互作用机制",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/c68e8860d14e45a694d38f4676c3975c.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 14,
+                  "name": "王书馨",
+                  "grade": "研二",
+                  "research_area": "农业灌溉",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "农业应用",
+                    "土壤修复",
+                    "工程化应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.876069+00:00",
+                  "bio": "探索微纳米气泡在农业灌溉与土壤修复中的工程化应用方法",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/d30728cdcb184f88a899dc14870b75dc.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 5,
+                  "name": "张懿",
+                  "grade": "研一",
+                  "research_area": "智能化运行",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "发生器优化",
+                    "在线监测",
+                    "过程控制"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.889449+00:00",
+                  "bio": "面向智能化运行，探索发生器参数优化与在线监测/控制思路",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/48d05f9d7b564663840f77e5c008d0ef.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 16,
+                  "name": "韩重阳",
+                  "grade": "研三",
+                  "research_area": "设备开发",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "装备研发",
+                    "工程验证",
+                    "发生器优化"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.881851+00:00",
+                  "bio": "面向设备开发，推进发生器与供气/供水单元的工程优化与验证",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/9889a513e6164985becddaf1bcf50e8c.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 7,
+                  "name": "陈金薪",
+                  "grade": "研二",
+                  "research_area": "气泡成核过程调控",
+                  "email": null,
+                  "role": "leader",
+                  "skills": [
+                    "自由基",
+                    "界面反应",
+                    "气泡溃灭"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-29T07:00:08.060169+00:00",
+                  "bio": "解析气泡溃灭过程的界面活化特征与·OH生成动力学",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/1c10b451e7ee4ba69a24b3314fb8f416.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 1,
+                  "name": "王天志",
+                  "grade": "副教授",
+                  "research_area": "微纳米气泡技术与应用",
+                  "email": null,
+                  "role": "admin",
+                  "skills": [
+                    "项目管理",
+                    "气泡生成",
+                    "水处理",
+                    "技术产业化"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T10:10:11.738703+00:00",
+                  "bio": "副教授，课题组负责人，长期从事微纳米气泡技术研究与应用开发",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/01251e1ff2d14426a125996ffbaa3af0.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 15,
+                  "name": "吴孟铨",
+                  "grade": "研二",
+                  "research_area": "自由基生成",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "气泡溃灭",
+                    "传质强化",
+                    "分子动力学"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T16:19:53.460633+00:00",
+                  "bio": "研究溃灭诱导自由基生成与传质强化的关键影响因素",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/5e1bb10e04104e3ebd2e53c9649f38f8.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 3,
+                  "name": "杜同贺",
+                  "grade": "研一",
+                  "research_area": "污染控制与水质提升",
+                  "email": "320324492@qq.com",
+                  "role": "admin",
+                  "skills": [
+                    "微纳米气泡",
+                    "水质提升",
+                    "数据分析"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T12:37:04.135328+00:00",
+                  "bio": "围绕污染控制与水质提升，开展微纳米气泡强化工艺研究与数据分析",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/avatars/ce71e922b5b4491da9221df678a39acf.jpeg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 20,
+                  "name": "张宏魁",
+                  "grade": "研三",
+                  "research_area": "设施农业",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "设施农业",
+                    "盐碱土修复",
+                    "农业应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-30T08:57:09.536812+00:00",
+                  "bio": "探索微纳米气泡在设施农业与盐碱土修复场景中的增效机制",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/c3fcb5b2f69647cb9971b6d49e2b25da.jpg",
+                  "rich_block_type": "member"
+                }
+              ]
+            }
+          },
+          {
+            "name": "search_knowledge",
+            "result": {
+              "status": "success",
+              "count": 5,
+              "results": [
+                {
+                  "id": 14,
+                  "title": "δ-MnO2活化PMS强化NaClO预氧化对有机微污染原水中锰污染控制研究",
+                  "content": "[PAGE:1] \n \n \nδ-MnO2 活化PMS 强化NaClO 预氧化对有机\n微污染原水中锰污染控制研究 \n \n \n \n \n \n \n重庆大学硕士学位论文 \n（学术学位） \n \n \n[PAGE:2] \n \n \nResearch on the Control of Manganese \nPollution in Organically Micro-polluted Raw \nWater Using δ-MnO2-Activated PMS to \nEnhance NaClO Preoxidation \n \n \n \n \nA thesis submitted to Chongqing University \nin partial fulfillment of the requirement \nfor the degree of Master of Science in \nEnvironmental Science and Engineering \n \n \n[PAGE:3]重庆大学硕士学位论文 \n摘  要 \nI \n \n摘  要 \n有机微污染地表原水中锰(Mn)污染问题近年来日益突出。溶解性",
+                  "category": "饮用水深度处理与锰污染控制",
+                  "tags": [
+                    "δ-MnO₂",
+                    "PMS活化",
+                    "NaClO预氧化",
+                    "有机络合锰",
+                    "非自由基路径",
+                    "固定化滤料",
+                    "饮用水处理"
+                  ],
+                  "source": null,
+                  "score": 127.0101,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 1.0,
+                  "rerank_score": 127.0101
+                },
+                {
+                  "id": 40,
+                  "title": "[拓展-S25] 微纳米气泡的国家自然科学基金立项方向有哪些？",
+                  "content": "## 问题\n微纳米气泡的国家自然科学基金立项方向有哪些？\n\n## 回答\n王老师，您好！关于微纳米气泡在国家自然科学基金中的立项方向，我为您整理了以下分析：\n\n---\n\n## 微纳米气泡相关的国家自然科学基金立项方向\n\n国家自然科学基金目前**没有专门针对\"微纳米气泡\"设立独立的项目指南**，但微纳米气泡作为交叉学科技术，可以纳入多个学部的资助范围。以下是主要的申报方向：\n\n### 一、工程与材料科学部（E部）\n\n| 代码 | 方向 | 与微纳米气泡的关联 |\n|------|------|---------------------|\n| **E09** | 环境工程 | 水处理、污染物去除、高级氧化技术 |\n| **E0903** | 水污染控制与治理 | 臭氧微纳米气泡协同消毒、难降解有机物处理 |\n| **E0904** | 大气污染控制 | 气液传质、气体溶解与释放机制 |\n| **E02** | 化工过程与原理 | 气泡生成、传质强化、多相流 |\n\n### 二、化学科学部（B部）\n\n| 代码 | 方向 | 与微纳米气泡的关联 |\n|------|------|---------",
+                  "category": "FAQ",
+                  "tags": [
+                    "国家自然科学基金",
+                    "立项方向",
+                    "学科交叉",
+                    "环境治理",
+                    "气泡动力学",
+                    "界面传质",
+                    "申报策略"
+                  ],
+                  "source": null,
+                  "score": 24.5891,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.1922,
+                  "rerank_score": 24.5891
+                },
+                {
+                  "id": 126,
+                  "title": "[拓展-S11] 国际期刊：微纳米气泡相关的高影响力期刊有哪些？",
+                  "content": "## 问题\r\n国际期刊：微纳米气泡相关的高影响力期刊有哪些？\r\n\r\n## 回答\r\n王老师，您好！微纳米气泡是一个跨学科的研究领域，涉及环境工程、化学工程、材料科学、流体力学等多个方向。根据我的了解和搜索结果，为您整理了微纳米气泡相关研究可以投稿的高影响力国际期刊：\r\n\r\n---\r\n\r\n## 一、环境与水处理领域（核心方向）\r\n\r\n| 期刊名称 | 影响因子（近似值） | 说明 |\r\n|---------|------------------|------|\r\n| **Water Research** | ~12.8 | 环境领域顶刊，水处理方向首选，微纳米气泡水处理研究的标杆期刊 |\r\n| **Journal of Hazardous Materials** | ~13.6 | 危险物质处理，适合臭氧微纳米气泡降解污染物的研究 |\r\n| **Chemical Engineering Journal** | ~15.1 | 化工顶刊，适合气泡传质、反应器设计等工程化研究 |\r\n| **Science of the Total Environment (STOTEN)** | ~9.8 |",
+                  "category": "笔记",
+                  "tags": [
+                    "微纳米气泡",
+                    "国际期刊",
+                    "影响因子",
+                    "环境工程",
+                    "水处理",
+                    "投稿指南",
+                    "研究方向"
+                  ],
+                  "source": null,
+                  "score": 19.5852,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.1528,
+                  "rerank_score": 19.5852
+                },
+                {
+                  "id": 77,
+                  "title": "[拓展-S11] 国际期刊：微纳米气泡相关的高影响力期刊有哪些？",
+                  "content": "## 问题\r\n国际期刊：微纳米气泡相关的高影响力期刊有哪些？\r\n\r\n## 回答\r\n王老师，您好！微纳米气泡是一个跨学科的研究领域，涉及环境工程、化学工程、材料科学、流体力学等多个方向。根据我的了解和搜索结果，为您整理了微纳米气泡相关研究可以投稿的高影响力国际期刊：\r\n\r\n---\r\n\r\n## 一、环境与水处理领域（核心方向）\r\n\r\n| 期刊名称 | 影响因子（近似值） | 说明 |\r\n|---------|------------------|------|\r\n| **Water Research** | ~12.8 | 环境领域顶刊，水处理方向首选，微纳米气泡水处理研究的标杆期刊 |\r\n| **Journal of Hazardous Materials** | ~13.6 | 危险物质处理，适合臭氧微纳米气泡降解污染物的研究 |\r\n| **Chemical Engineering Journal** | ~15.1 | 化工顶刊，适合气泡传质、反应器设计等工程化研究 |\r\n| **Science of the Total Environment (STOTEN)** | ~9.8 |",
+                  "category": "FAQ",
+                  "tags": [
+                    "微纳米气泡",
+                    "国际期刊",
+                    "投稿指南",
+                    "环境工程",
+                    "影响因子",
+                    "水处理",
+                    "纳米材料"
+                  ],
+                  "source": null,
+                  "score": 19.5852,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.1528,
+                  "rerank_score": 19.5852
+                },
+                {
+                  "id": 253,
+                  "title": "实验相关工作安排 (2026-06-18 组会)",
+                  "content": "# 实验相关工作安排 (2026-06-18 组会)\n\n## 会议基本信息\n\n- 时长：2 小时 54 分钟\n- 参会：王天志、杜同贺、贾琦、张宏魁、宋洋\n- 转录：3357 段，识别 4 位发言人\n- 会议类型：例行组会\n\n---\n\n## 一、核心议题\n\n1. 臭氧微纳米气泡实验系统搭建（加压螺管输送）\n2. 臭氧/紫外协同降解碘海醇（机理与效能）\n3. 高密度循环水养殖系统设计（贾琦汇报）\n4. 论文写作经验反思（同济大学快速发表案例）\n5. 暑假组会节奏调整（每两周一次）\n6. 实验室纪律与团队建设\n\n---\n\n## 二、会议决议\n\n### 2.1 实验设备与人员安排\n\n1. **【王天志决定】** 为宋洋配置两方加 50 克水冷臭氧发生器 + 散装组件（替代六方机），目标 200 升水达到臭氧爆表浓度\n2. **【王天志决定】** 张宏魁每天去实验现场参与工作，确保设备熟悉度\n3. **【全组决定】** 暑假组会改为每两周一次，适应新成员（吴怡霏、刘莫菲等）加入和实验密集期\n\n### 2.2 实验方案与技术路线\n\n4. **【全组共识】** 继续推进水力相似性模型验证，重点是几",
+                  "category": "笔记",
+                  "tags": [
+                    "臭氧微纳米气泡",
+                    "碘海醇降解",
+                    "循环水养殖",
+                    "高密度养殖",
+                    "水处理",
+                    "实验方案",
+                    "论文写作"
+                  ],
+                  "source": "meeting",
+                  "score": 0.3866,
+                  "retrieval_method": "vector",
+                  "retrieval_methods": [
+                    "vector",
+                    "bm25"
+                  ],
+                  "normalized_score": 0.0013,
+                  "rerank_score": 0.3866
+                }
+              ],
+              "rich_block_type": "knowledge_ref"
+            }
+          }
+        ],
+        "content": "",
+        "grounded_names": [
+          "余歆睿",
+          "关小未",
+          "刘子毅",
+          "刘子煜",
+          "刘莫菲",
+          "吴孟铨",
+          "吴怡霏",
+          "周之超",
+          "孟祥琪",
+          "宋洋",
+          "张宏魁",
+          "张懿",
+          "李胜景",
+          "李锐远",
+          "杜同贺",
+          "杨慈",
+          "王书馨",
+          "王天志",
+          "耿嘉栋",
+          "胡小琪",
+          "董昊宇",
+          "蒋芦笛",
+          "贾琦",
+          "赵航佳",
+          "邓国祥",
+          "陈天祥",
+          "陈金薪",
+          "韩重阳"
+        ],
+        "critique_score": null,
+        "duration_ms": 7734
+      },
+      "issues": [
+        {
+          "type": "stream_no_done",
+          "severity": "fail",
+          "expected": "done event",
+          "actual": "no done event in stream",
+          "context": "共 20 个事件，最后一个事件类型: error"
+        },
+        {
+          "type": "stream_error_event",
+          "severity": "fail",
+          "expected": "no error event",
+          "actual": "error: cannot access local variable 'final_text' where it is not associated with a value",
+          "context": "SSE 流中出现 error 事件（应用错误传播到客户端）"
+        }
+      ],
+      "has_critical_issue": true,
+      "verdict": "FAIL",
+      "seven_dim": {
+        "dim_scores": {
+          "intent": 1.0,
+          "tool": 1.0,
+          "content": 0.39999999999999997,
+          "rich": 1.0,
+          "defense": 0.4,
+          "perf": 1.0,
+          "consistency": 1.0
+        },
+        "total_score": 39.0,
+        "grade": "F",
+        "veto": true
+      }
+    },
+    {
+      "id": "A-L1-0002",
+      "category": "A",
+      "question": "杜同贺是学生吗？他的研究方向是什么？",
+      "expect": {
+        "intent": "search_info",
+        "tools_any": [
+          "query_members"
+        ],
+        "tools_must_all": [],
+        "must_contain_any": [
+          [
+            "杜同贺"
+          ],
+          [
+            "博士"
+          ],
+          [
+            "水处理"
+          ]
+        ],
+        "forbidden_names": [
+          "王天志",
+          "杜同贺",
+          "赵航佳",
+          "杨慈",
+          "宋洋",
+          "贾琦",
+          "李胜景",
+          "李松泽",
+          "周之超",
+          "苏杭",
+          "王田志",
+          "邹雨",
+          "梁博",
+          "雒培媛",
+          "李胜奕",
+          "吴梦全",
+          "吴孟全",
+          "吴孟拴",
+          "赵航家",
+          "王天之",
+          "洪辉",
+          "李子涵",
+          "张红",
+          "刘红",
+          "韩梅",
+          "陈伟",
+          "测试",
+          "test_json",
+          "test_user"
+        ],
+        "must_contain_keywords": [],
+        "min_length": 20,
+        "max_length": 300,
+        "rich_block_required": false,
+        "domain_check": null
+      },
+      "actual": {
+        "intent": "search_info",
+        "tools_called": [
+          "get_member_profile"
+        ],
+        "tool_inputs": [
+          {
+            "name": "get_member_profile",
+            "input": {
+              "member_name": "杜同贺"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "get_member_profile",
+            "result": {
+              "status": "success",
+              "id": 3,
+              "name": "杜同贺",
+              "grade": "研一",
+              "research_area": "污染控制与水质提升",
+              "email": "320324492@qq.com",
+              "phone": "18031816670",
+              "role": "admin",
+              "skills": [
+                "微纳米气泡",
+                "水质提升",
+                "数据分析"
+              ],
+              "bio": "围绕污染控制与水质提升，开展微纳米气泡强化工艺研究与数据分析",
+              "custom_instructions": null,
+              "voice_enrolled": true,
+              "voice_enrolled_at": "2026-06-28T12:37:04.135328+00:00",
+              "voice_sample_count": 4,
+              "projects": [
+                {
+                  "id": 2,
+                  "name": "饮用水水质提升与安全保障",
+                  "status": "active"
+                }
+              ],
+              "tasks": []
+            }
+          }
+        ],
+        "content": "",
+        "grounded_names": [
+          "杜同贺"
+        ],
+        "critique_score": null,
+        "duration_ms": 10890
+      },
+      "issues": [
+        {
+          "type": "stream_no_done",
+          "severity": "fail",
+          "expected": "done event",
+          "actual": "no done event in stream",
+          "context": "共 7 个事件，最后一个事件类型: error"
+        },
+        {
+          "type": "stream_error_event",
+          "severity": "fail",
+          "expected": "no error event",
+          "actual": "error: cannot access local variable 'final_text' where it is not associated with a value",
+          "context": "SSE 流中出现 error 事件（应用错误传播到客户端）"
+        },
+        {
+          "type": "missing_tools",
+          "missing": [
+            "query_members"
+          ],
+          "note": "tools_any — 任一即可"
+        }
+      ],
+      "has_critical_issue": true,
+      "verdict": "FAIL",
+      "seven_dim": {
+        "dim_scores": {
+          "intent": 1.0,
+          "tool": 0.0,
+          "content": 0.39999999999999997,
+          "rich": 1.0,
+          "defense": 0.4,
+          "perf": 1.0,
+          "consistency": 1.0
+        },
+        "total_score": 39.0,
+        "grade": "F",
+        "veto": true
+      }
+    },
+    {
+      "id": "A-L2-0003",
+      "category": "A",
+      "question": "我们课题组成员里谁在做臭氧氧化相关研究？",
+      "expect": {
+        "intent": "search_info",
+        "tools_any": [
+          "query_members"
+        ],
+        "tools_must_all": [],
+        "must_contain_any": [
+          [
+            "臭氧"
+          ],
+          [
+            "氧化"
+          ]
+        ],
+        "forbidden_names": [
+          "王天志",
+          "杜同贺",
+          "赵航佳",
+          "杨慈",
+          "宋洋",
+          "贾琦",
+          "李胜景",
+          "李松泽",
+          "周之超",
+          "苏杭",
+          "王田志",
+          "邹雨",
+          "梁博",
+          "雒培媛",
+          "李胜奕",
+          "吴梦全",
+          "吴孟全",
+          "吴孟拴",
+          "赵航家",
+          "王天之",
+          "洪辉",
+          "李子涵",
+          "张红",
+          "刘红",
+          "韩梅",
+          "陈伟",
+          "测试",
+          "test_json",
+          "test_user"
+        ],
+        "must_contain_keywords": [
+          "臭氧"
+        ],
+        "min_length": 30,
+        "max_length": 300,
+        "rich_block_required": false,
+        "domain_check": null
+      },
+      "actual": {
+        "intent": "search_info",
+        "tools_called": [
+          "query_members",
+          "search_knowledge",
+          "query_members"
+        ],
+        "tool_inputs": [
+          {
+            "name": "query_members",
+            "input": {}
+          },
+          {
+            "name": "search_knowledge",
+            "input": {
+              "query": "课题组成员"
+            }
+          },
+          {
+            "name": "query_members",
+            "input": {
+              "research_area": "臭氧"
+            }
+          }
+        ],
+        "tool_results": [
+          {
+            "name": "query_members",
+            "result": {
+              "status": "success",
+              "count": 28,
+              "members": [
+                {
+                  "id": 22,
+                  "name": "周之超",
+                  "grade": "大三",
+                  "research_area": "表面污染去除",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "表面去除",
+                    "文献调研",
+                    "实验辅助"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T08:22:36.702062+00:00",
+                  "bio": "参与表面污染去除实验与数据整理，支持文献调研与材料准备",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/b01932141f184cfba641549deb812752.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 9,
+                  "name": "关小未",
+                  "grade": "研二",
+                  "research_area": "盐碱土改良",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "盐碱土修复",
+                    "种养系统",
+                    "农业应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "关注盐碱土改良与高效种养场景中的微纳米气泡应用路径",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/d62b2cf6363d4e6989b0ca6462fc8759.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 13,
+                  "name": "宋洋",
+                  "grade": "研二",
+                  "research_area": "饮用水处理",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "生物稳定性",
+                    "管网生物膜",
+                    "膜耦合"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-26T03:58:30.043697+00:00",
+                  "bio": "微纳米气泡饮用水处理组，研究气泡与膜的耦合应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/bfa35e46d45f4138b843a9a86c6e3b46.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 6,
+                  "name": "耿嘉栋",
+                  "grade": "研一",
+                  "research_area": "装备开发",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "装备开发",
+                    "系统集成",
+                    "发生器优化"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "面向工程化落地，参与发生器结构优化与系统集成验证",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/2fd38934a1fe438eb0c629495f404154.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 8,
+                  "name": "董昊宇",
+                  "grade": "研二",
+                  "research_area": "农业应用",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "农业应用",
+                    "水-土环境",
+                    "增效应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "探索微纳米气泡在农业水-土环境中的增效应用与评价方法",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/8f73fda0ff5641be9075e1f3f4fb26b2.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 25,
+                  "name": "孟祥琪",
+                  "grade": "大三",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 26,
+                  "name": "吴怡霏",
+                  "grade": "研一",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 27,
+                  "name": "蒋芦笛",
+                  "grade": "研二",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 17,
+                  "name": "李锐远",
+                  "grade": "研三",
+                  "research_area": "管网水质",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "生物膜控制",
+                    "管网系统",
+                    "水质稳定"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "研究微纳米气泡在管网生物膜控制与水质稳定性提升中的作用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/b15758696a0c484a8cce247d5f0e0f5d.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 28,
+                  "name": "刘莫菲",
+                  "grade": "研一",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/avatars/390779688fdc4663bdcb281f1323b82b.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 12,
+                  "name": "刘子毅",
+                  "grade": "研二",
+                  "research_area": "水质评价",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "过程评价",
+                    "数据分析",
+                    "水质提升"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "构建水质提升工艺的评价体系与实验数据处理流程",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/0f53a747c9784ecd85be9d9681e21725.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 4,
+                  "name": "陈天祥",
+                  "grade": "研一",
+                  "research_area": "表面清洗技术",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "清洗工艺",
+                    "去除工艺",
+                    "表面清洗"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "构建微纳米气泡清洗/去除工艺并评估关键去污指标",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/de3a120c4ac744a98af2f83ea55a4555.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 23,
+                  "name": "邓国祥",
+                  "grade": "大三",
+                  "research_area": "自由基研究",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "实验辅助",
+                    "数据分析",
+                    "自由基"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "参与溃灭与自由基相关实验辅助与基础数据分析",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/18524abc3e22409a8ce880bfc72764ce.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 18,
+                  "name": "杨慈",
+                  "grade": "研三",
+                  "research_area": "饮用水安全",
+                  "email": "yc3259672120@163.com",
+                  "role": "member",
+                  "skills": [
+                    "饮用水安全",
+                    "蜡样芽孢杆菌",
+                    "微生物消杀"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T18:05:34.671596+00:00",
+                  "bio": "探索微纳米气泡在饮用水安全保障领域的应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/4465d00074114a738a68cfd66675c9b1.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 10,
+                  "name": "胡小琪",
+                  "grade": "研二",
+                  "research_area": "黑臭水体",
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": "臭氧微纳米气泡对黑臭水体泥/水界面微生境修复机理研究",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/3f2df0f2eeb24fa99f8b0a964fad8fbe.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 21,
+                  "name": "贾琦",
+                  "grade": "大四",
+                  "research_area": "表面清洗",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "实验辅助",
+                    "数据整理",
+                    "表面清洗"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T08:22:36.714907+00:00",
+                  "bio": "参与表面清洗去除实验与指标测定，协助数据整理与记录",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/9b857218ea02421e9ab2a43d5d8193bd.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 58,
+                  "name": "刘子煜",
+                  "grade": "研一",
+                  "research_area": null,
+                  "email": null,
+                  "role": "member",
+                  "skills": [],
+                  "custom_instructions": null,
+                  "voice_enrolled": false,
+                  "voice_enrolled_at": null,
+                  "bio": null,
+                  "avatar": null,
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 19,
+                  "name": "余歆睿",
+                  "grade": "研三",
+                  "research_area": "藻华控制",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "藻华控制",
+                    "水质净化",
+                    "小球藻抑制"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-26T12:51:22.740694+00:00",
+                  "bio": "探索微纳米气泡技术在藻华控制与水质净化领域的应用",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/74b2f106d8db4f808a0211ad0d1c3f5a.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 11,
+                  "name": "李胜景",
+                  "grade": "研二",
+                  "research_area": "水产养殖",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "高密度养殖",
+                    "无抗鱼养殖",
+                    "水产应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.887268+00:00",
+                  "bio": "微纳米气泡应用于高密度无抗鱼养殖",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/5b53c176e76341b68448ab1fe3088b19.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 2,
+                  "name": "赵航佳",
+                  "grade": "博一",
+                  "research_area": "黑臭水体治理",
+                  "email": "zhaohangjia@tju.edu.cn",
+                  "role": "admin",
+                  "skills": [
+                    "臭氧微纳米气泡",
+                    "底泥-水界面",
+                    "污染物去除"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.864159+00:00",
+                  "bio": "围绕微纳米气泡在黑臭水体治理中的应用开展研究，重点关注微纳米气泡与底泥-水界面污染物之间的相互作用机制",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/c68e8860d14e45a694d38f4676c3975c.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 14,
+                  "name": "王书馨",
+                  "grade": "研二",
+                  "research_area": "农业灌溉",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "农业应用",
+                    "土壤修复",
+                    "工程化应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.876069+00:00",
+                  "bio": "探索微纳米气泡在农业灌溉与土壤修复中的工程化应用方法",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/d30728cdcb184f88a899dc14870b75dc.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 5,
+                  "name": "张懿",
+                  "grade": "研一",
+                  "research_area": "智能化运行",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "发生器优化",
+                    "在线监测",
+                    "过程控制"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.889449+00:00",
+                  "bio": "面向智能化运行，探索发生器参数优化与在线监测/控制思路",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/48d05f9d7b564663840f77e5c008d0ef.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 16,
+                  "name": "韩重阳",
+                  "grade": "研三",
+                  "research_area": "设备开发",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "装备研发",
+                    "工程验证",
+                    "发生器优化"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T09:55:11.881851+00:00",
+                  "bio": "面向设备开发，推进发生器与供气/供水单元的工程优化与验证",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/9889a513e6164985becddaf1bcf50e8c.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 7,
+                  "name": "陈金薪",
+                  "grade": "研二",
+                  "research_area": "气泡成核过程调控",
+                  "email": null,
+                  "role": "leader",
+                  "skills": [
+                    "自由基",
+                    "界面反应",
+                    "气泡溃灭"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-29T07:00:08.060169+00:00",
+                  "bio": "解析气泡溃灭过程的界面活化特征与·OH生成动力学",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/1c10b451e7ee4ba69a24b3314fb8f416.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 1,
+                  "name": "王天志",
+                  "grade": "副教授",
+                  "research_area": "微纳米气泡技术与应用",
+                  "email": null,
+                  "role": "admin",
+                  "skills": [
+                    "项目管理",
+                    "气泡生成",
+                    "水处理",
+                    "技术产业化"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T10:10:11.738703+00:00",
+                  "bio": "副教授，课题组负责人，长期从事微纳米气泡技术研究与应用开发",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/01251e1ff2d14426a125996ffbaa3af0.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 15,
+                  "name": "吴孟铨",
+                  "grade": "研二",
+                  "research_area": "自由基生成",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "气泡溃灭",
+                    "传质强化",
+                    "分子动力学"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-27T16:19:53.460633+00:00",
+                  "bio": "研究溃灭诱导自由基生成与传质强化的关键影响因素",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/5e1bb10e04104e3ebd2e53c9649f38f8.jpg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 3,
+                  "name": "杜同贺",
+                  "grade": "研一",
+                  "research_area": "污染控制与水质提升",
+                  "email": "320324492@qq.com",
+                  "role": "admin",
+                  "skills": [
+                    "微纳米气泡",
+                    "水质提升",
+                    "数据分析"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-28T12:37:04.135328+00:00",
+                  "bio": "围绕污染控制与水质提升，开展微纳米气泡强化工艺研究与数据分析",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/avatars/ce71e922b5b4491da9221df678a39acf.jpeg",
+                  "rich_block_type": "member"
+                },
+                {
+                  "id": 20,
+                  "name": "张宏魁",
+                  "grade": "研三",
+                  "research_area": "设施农业",
+                  "email": null,
+                  "role": "member",
+                  "skills": [
+                    "设施农业",
+                    "盐碱土修复",
+                    "农业应用"
+                  ],
+                  "custom_instructions": null,
+                  "voice_enrolled": true,
+                  "voice_enrolled_at": "2026-06-30T08:57:09.536812+00:00",
+                  "bio": "探索微纳米气泡在设施农业与盐碱土修复场景中的增效机制",
+                  "avatar": "https://agent.mnb-lab.cn/minio/microbubble/uploads/c3fcb5b2f69647cb9971b6d49e2b25da.jpg",
+                  "rich_block_type": "member"
+                }
+              ]
+            }
+          },
+          {
+            "name": "search_knowledge",
+            "result": {
+              "status": "success",
+              "count": 5,
+              "results": [
+                {
+                  "id": 20,
+                  "title": "声纹识别系统的录入操作指南与问题排查",
+                  "content": "1. 实验方法/操作步骤：\n   - 录制语音：\n     - 内容：说“我是[姓名]”或类似包含姓名的语句。\n     - 时长：10秒以上（建议15-20秒）。\n     - 质量要求：环境安静（避免背景噪音）、声音清晰（靠近麦克风）、语速自然、重复2-3遍（增强特征提取）。\n   - 上传音频：\n     - 选项A：聊天界面直接上传（语音消息或MP3/WAV文件）。\n     - 选项B：后台管理上传（通过管理后台API）。\n     - 选项C：会议场景自动录入（下次语音会议时系统自动采集）。\n   - 上传后流程：系统自动提取声纹特征，与成员ID关联，完成录入。\n\n2. 技术方案/专业概念解释：\n   - 声纹录入功能价值：\n     - 会议自动识别：在组会、讨论中自动标注发言人。\n     - 语音指令绑定：通过声音确认身份，执行专属命令。\n     - 协作优化：生成带发言人标签的会议记录。\n\n3. 经验总结/问题排查：\n   - 如果上传失败：检查文件格式和大小。\n   - 如果识别不到：确保语音清晰、背景安静。\n   - 成员未找到时：可能是姓名口误或新成员未添加",
+                  "category": "方法",
+                  "tags": [
+                    "声纹识别",
+                    "语音录入",
+                    "会议记录",
+                    "特征提取",
+                    "身份认证",
+                    "微纳米气泡课题组",
+                    "操作指南"
+                  ],
+                  "source": "对话记录#wechat_wwd6f28c99f88b9349",
+                  "score": 20.6179,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 1.0,
+                  "rerank_score": 20.6179
+                },
+                {
+                  "id": 197,
+                  "title": "[拓展-AA04] 微纳米气泡 + 大模型",
+                  "content": "## 问题\r\n微纳米气泡 + 大模型\r\n\r\n## 回答\r\n王老师，您提的这个方向非常前沿！**“微纳米气泡 + 大模型”** 正是当前 **AI for Science（人工智能驱动的科学研究）** 范式在具体工程领域的绝佳切入点。结合我们课题组的研究基础，我认为可以从以下几个层面进行深度融合：\r\n\r\n---\r\n\r\n### 一、大模型作为“智能科研助手”，赋能现有研究流程\r\n\r\n这是最直接、最快能落地的应用方向。\r\n\r\n1.  **文献挖掘与知识图谱构建**：\r\n    *   **应用**：利用大模型（如GPT-4、Claude等）的超长上下文理解能力，快速阅读、总结和对比海量微纳米气泡领域的文献（中英文），自动提取关键信息（如：特定生成方法下的气泡尺寸分布、Zeta电位影响因素、不同应用场景下的最佳参数等）。\r\n    *   **价值**：构建一个动态更新的 **“微纳米气泡知识大脑”**，帮助课题组成员快速把握领域前沿，避免重复研究，并为实验设计提供数据支持。\r\n\r\n2.  **实验方案设计与优化**：\r\n    *   **应用**：将课题组已有的实验数据（如不同压力、流量、",
+                  "category": "笔记",
+                  "tags": [
+                    "大模型",
+                    "AI for Science",
+                    "微纳米气泡",
+                    "知识图谱",
+                    "实验设计",
+                    "智能控制",
+                    "智慧农业",
+                    "水处理"
+                  ],
+                  "source": null,
+                  "score": 11.5153,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.5521,
+                  "rerank_score": 11.5153
+                },
+                {
+                  "id": 206,
+                  "title": "[拓展-AA06] 微纳米气泡 + 量子计算",
+                  "content": "## 问题\r\n微纳米气泡 + 量子计算\r\n\r\n## 回答\r\n这是一个非常前沿且有趣的交叉领域！我来为你梳理一下“微纳米气泡”与“量子计算”之间可能的关联和研究方向。\r\n\r\n## 核心关联点\r\n\r\n这两个领域的交叉主要体现在以下几个层面：\r\n\r\n### 1. **量子计算模拟微纳米气泡的复杂行为**\r\n微纳米气泡的生成、稳定、相互作用和崩溃过程涉及复杂的物理化学机制，例如：\r\n- **气泡表面的分子排列与电荷分布**：这本质上是量子化学问题。\r\n- **气泡崩溃时的自由基生成**：涉及高能态下的电子跃迁和化学反应动力学。\r\n- **气泡在液体中的集体行为**：可能形成复杂的非线性系统。\r\n\r\n**量子计算的潜力**：传统计算机模拟这些量子尺度的过程非常耗时且精度有限。量子计算机理论上可以更高效、更精确地模拟这些微观过程，从而：\r\n- **优化气泡生成参数**：预测不同条件下（压力、温度、气体类型）的气泡尺寸分布和稳定性。\r\n- **设计新型表面活性剂**：通过量子化学计算筛选能更有效稳定气泡的分子。\r\n- **理解气泡-固体界面**：模拟气泡在催化剂、膜材料或生物组织表面的行为。\r\n\r\n",
+                  "category": "综述",
+                  "tags": [
+                    "量子计算",
+                    "微纳米气泡",
+                    "量子模拟",
+                    "气泡动力学",
+                    "量子传感",
+                    "表面活性剂",
+                    "交叉学科"
+                  ],
+                  "source": null,
+                  "score": 7.874,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.3729,
+                  "rerank_score": 7.874
+                },
+                {
+                  "id": 175,
+                  "title": "[拓展-S74] 微纳米气泡 + 臭氧 + UV 三联用技术",
+                  "content": "## 问题\r\n微纳米气泡 + 臭氧 + UV 三联用技术\r\n\r\n## 回答\r\n王老师，您好！关于**微纳米气泡 + 臭氧 + UV 三联用技术**，这是一个非常前沿的高级氧化技术组合。让我为您详细解析：\r\n\r\n---\r\n\r\n## 🔬 技术原理\r\n\r\n### 1. 微纳米气泡的作用\r\n- **高比表面积**：气泡尺寸在1-100μm（微米级）或<1μm（纳米级），传质效率极高\r\n- **长停留时间**：纳米气泡可在水中稳定存在数小时甚至数天\r\n- **崩溃产生自由基**：气泡崩溃时产生·OH等活性氧自由基\r\n- **增溶作用**：提高臭氧等气体在水中的溶解度和传质效率\r\n\r\n### 2. 臭氧（O₃）的作用\r\n- **强氧化性**：氧化电位2.07V，仅次于氟\r\n- **广谱杀菌**：对细菌、病毒、原生动物等均有灭活效果\r\n- **分解有机物**：可氧化降解难降解有机污染物\r\n\r\n### 3. UV（紫外线）的作用\r\n- **直接光解**：UV-C（254nm）可直接破坏微生物DNA\r\n- **光催化臭氧分解**：UV照射促进O₃分解产生·OH自由基\r\n- **协同增效**：O₃/UV联",
+                  "category": "综述",
+                  "tags": [
+                    "微纳米气泡",
+                    "臭氧氧化",
+                    "紫外线消毒",
+                    "羟基自由基",
+                    "高级氧化技术",
+                    "水处理",
+                    "协同效应",
+                    "传质效率"
+                  ],
+                  "source": null,
+                  "score": 6.4645,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.3035,
+                  "rerank_score": 6.4645
+                },
+                {
+                  "id": 251,
+                  "title": "[拓展-AA27] 微纳米气泡 + ESG",
+                  "content": "## 问题\r\n微纳米气泡 + ESG\r\n\r\n## 回答\r\n# 微纳米气泡 + ESG：技术赋能可持续发展的新路径\r\n\r\n\"微纳米气泡 + ESG\"是一个非常前沿且有潜力的交叉领域。ESG（Environmental, Social, and Governance）是衡量企业可持续发展能力的核心框架，而微纳米气泡技术恰好能在多个维度为ESG目标提供技术支撑。\r\n\r\n---\r\n\r\n## 一、E（环境）维度：核心赋能领域\r\n\r\n### 1. **水处理与污染治理**\r\n- **饮用水净化**：微纳米气泡强化臭氧氧化，高效降解有机污染物、灭活病原微生物，减少化学药剂使用\r\n- **工业废水处理**：气泡崩溃产生的羟基自由基（·OH）可难降解有机物，降低处理成本和二次污染\r\n- **黑臭水体修复**：原位增氧，快速提升水体溶解氧，恢复水生态\r\n\r\n### 2. **农业可持续发展**\r\n- **节水灌溉**：微纳米气泡水提高水分利用效率，减少农业用水量\r\n- **减少化肥农药**：增强根系吸收能力，促进作物生长，降低化学投入品依赖\r\n- **土壤修复**：改善土壤通气性和微生物活性\r\n\r\n###",
+                  "category": "综述",
+                  "tags": [
+                    "微纳米气泡",
+                    "ESG",
+                    "水处理",
+                    "臭氧氧化",
+                    "碳减排",
+                    "绿色农业",
+                    "环境绩效"
+                  ],
+                  "source": null,
+                  "score": 6.3704,
+                  "retrieval_method": "bm25",
+                  "retrieval_methods": [
+                    "bm25"
+                  ],
+                  "normalized_score": 0.2989,
+                  "rerank_score": 6.3704
+                }
+              ],
+              "rich_block_type": "knowledge_ref"
+            }
+          },
+          {
+            "name": "query_members",
+            "result": {
+              "status": "success",
+              "count": 0,
+              "members": []
+            }
+          }
+        ],
+        "content": "<tool_call>\n<function=query_members>\n<parameter=research_area>氧化</parameter>\n</function>\n</tool_call>",
+        "grounded_names": [
+          "余歆睿",
+          "关小未",
+          "刘子毅",
+          "刘子煜",
+          "刘莫菲",
+          "吴孟铨",
+          "吴怡霏",
+          "周之超",
+          "孟祥琪",
+          "宋洋",
+          "张宏魁",
+          "张懿",
+          "李胜景",
+          "李锐远",
+          "杜同贺",
+          "杨慈",
+          "王书馨",
+          "王天志",
+          "耿嘉栋",
+          "胡小琪",
+          "董昊宇",
+          "蒋芦笛",
+          "贾琦",
+          "赵航佳",
+          "邓国祥",
+          "陈天祥",
+          "陈金薪",
+          "韩重阳"
+        ],
+        "critique_score": 0,
+        "duration_ms": 24441
+      },
+      "issues": [
+        {
+          "type": "fake_xml_leaked",
+          "patterns": [
+            "<function\\s*=[^>]+>"
+          ]
+        }
+      ],
+      "has_critical_issue": true,
+      "verdict": "FAIL",
+      "seven_dim": {
+        "dim_scores": {
+          "intent": 1.0,
+          "tool": 1.0,
+          "content": 0.7,
+          "rich": 1.0,
+          "defense": 0.7,
+          "perf": 1.0,
+          "consistency": 1.0
+        },
+        "total_score": 39.0,
+        "grade": "F",
+        "veto": true
+      }
+    }
+  ]
+}

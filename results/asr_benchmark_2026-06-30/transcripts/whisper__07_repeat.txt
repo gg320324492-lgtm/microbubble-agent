@@ -1,0 +1,9 @@
+=== whisper | 07_repeat.wav ===
+Raw text (length=16):
+啊对对对对对, 我同意这个方案。
+
+Clean text (length=16):
+啊对对对对对, 我同意这个方案。
+
+=== Ground truth ===
+啊对对对对对，我同意这个方案。
