@@ -138,6 +138,9 @@
       :default-folder-id="selectedFolderId"
       @uploaded="onFilesUploaded"
     />
+
+    <!-- PR4.6 FilePreviewDialog (图片/视频/音频/PDF 4 种) -->
+    <FilePreviewDialog v-model="showPreviewDialog" :file="previewFile" />
   </div>
 </template>
 
@@ -151,6 +154,7 @@ import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
 import DriveUploadDialog from '@/components/drive/DriveUploadDialog.vue'
+import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
@@ -275,9 +279,13 @@ function handleFileClick(file) {
 }
 
 function handleFilePreview(file) {
-  // PR3.4-3.7 接入 FilePreviewDialog
-  ElMessage.info(`预览功能待 PR3.4 接入: ${file.file_name || file.title}`)
+  // PR4.6: 接入 FilePreviewDialog
+  previewFile.value = file
+  showPreviewDialog.value = true
 }
+
+const showPreviewDialog = ref(false)
+const previewFile = ref(null)
 
 function handleFileRename(file) {
   renameTarget.value = file

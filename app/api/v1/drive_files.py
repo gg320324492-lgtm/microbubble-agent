@@ -392,7 +392,16 @@ async def download_drive_file(
         raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
 
     # 文件元信息
-    content_type = f.file_type or "application/octet-stream"
+    # PR4.6 修复: f.file_type 是 ".txt" 字面量 (DB 存的是扩展名), 直接返会触发 nosniff 阻断
+    # 用 mimetypes 模块从扩展名推断真实 MIME (image/jpeg, video/mp4, application/pdf 等)
+    import mimetypes
+    if f.file_type and f.file_type.startswith("."):
+        # f.file_type 是 ".ext" 形式 (我们 KB 上传时存的就是这个)
+        guessed, _ = mimetypes.guess_type(f"a{f.file_type}")
+        content_type = guessed or "application/octet-stream"
+    else:
+        content_type = f.file_type or "application/octet-stream"
+
     if content_type and not content_type.startswith("video/") and not content_type.startswith("image/") and disposition == "inline":
         # text 类保持原 mime, 其他 inline 也按 octet-stream
         pass

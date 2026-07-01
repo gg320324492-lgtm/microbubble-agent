@@ -232,6 +232,9 @@
       @action="onPickExtractVisibility"
     />
 
+    <!-- PR4.6: 文件预览 (图片/视频/音频/PDF 4 种, 其他提示下载) -->
+    <FilePreviewDialog v-model="showPreviewDialog" :file="previewFile" />
+
     <input
       ref="uploadInputRef"
       type="file"
@@ -287,6 +290,7 @@ import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileFileList from './MobileFileList.vue'  // PR4.2 课题组网盘移动端
+import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6 预览
 
 const router = useRouter()
 const activeTab = ref('knowledge')
@@ -526,8 +530,12 @@ function viewFormula(item) {
 
 async function onMobileFilePreview(file) {
   // PR4.6: 接入 FilePreviewDialog
-  ElMessage.info(`预览功能待 PR4.6 接入: ${file.title || file.file_name}`)
+  previewFile.value = file
+  showPreviewDialog.value = true
 }
+
+const showPreviewDialog = ref(false)
+const previewFile = ref(null)
 
 async function onMobileFileDownload(file) {
   // PR4.4: 用 FileCard 同款 downloadFile 模式
