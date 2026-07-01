@@ -28,16 +28,12 @@
 """
 import argparse
 import asyncio
-import os
 import sys
-
-# 添加项目根目录到路径 (与 init_db.py 同模式, 让脚本独立运行)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.config import settings
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.member import Member
 from app.services.member_service import MemberService
