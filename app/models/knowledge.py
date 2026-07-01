@@ -64,6 +64,11 @@ class Knowledge(Base, TimestampMixin):
     share_expires_at = Column(DateTime, nullable=True)                       # 到期时间
     # ==================== /PR2.7 ====================
 
+    # ==================== v2 PR1 分享链接提取码 2026-07-01 ====================
+    # SHA256 hex hash (64 chars). NULL = 无提取码（公开分享），非 NULL = 必填密码访问。
+    share_password = Column(String(64), nullable=True)
+    # ==================== /v2 PR1 ====================
+
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 

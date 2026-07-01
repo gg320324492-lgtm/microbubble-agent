@@ -141,6 +141,37 @@
 
     <!-- PR4.6 FilePreviewDialog (图片/视频/音频/PDF 4 种) -->
     <FilePreviewDialog v-model="showPreviewDialog" :file="previewFile" />
+
+    <!-- v2 PR1 ShareDialog -->
+    <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
+
+    <!-- v2 PR1 Extract Dialog (visibility 选择) -->
+    <el-dialog
+      v-model="showExtractDialog"
+      title="📚 加入公共知识库"
+      width="420px"
+      top="20vh"
+      :close-on-press-escape="true"
+    >
+      <p class="extract-intro">
+        把文件 "{{ extractDialogFile?.file_name }}" 的内容升级为知识库条目, 团队其他成员的
+        AI 助手可检索使用. 升级后原 drive 文件保留, 但不推荐再编辑.
+      </p>
+      <div class="extract-field">
+        <label class="extract-field-label">目标可见性</label>
+        <el-radio-group v-model="extractTargetVisibility">
+          <el-radio value="team">team - 全组可见</el-radio>
+          <el-radio value="public">public - 任何人可见</el-radio>
+        </el-radio-group>
+        <p class="extract-hint">private 文件不能升级为 private (必须升可见性)</p>
+      </div>
+      <template #footer>
+        <el-button @click="showExtractDialog = false">取消</el-button>
+        <el-button type="primary" @click="doConfirmExtract">
+          升级到知识库
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -155,6 +186,7 @@ import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
 import DriveUploadDialog from '@/components/drive/DriveUploadDialog.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6
+import ShareDialog from '@/components/drive/ShareDialog.vue'  // v2 PR1
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
@@ -172,7 +204,7 @@ const {
   renameFolder: doRenameFolder
 } = useFolderTree()
 
-// === 文件列表 (PR3.3 接入) ===
+// === 文件列表 (PR3.3 接入 + v2 PR1) ===
 const {
   driveFiles,
   total,
@@ -185,6 +217,10 @@ const {
   deleteFile,
   renameFile,
   moveFile,
+  updateVisibility: doUpdateVisibility,
+  extractToKb: doExtractToKb,
+  createShareLink,
+  revokeShareLink,
   toggleSelect: toggleFileSelect,
   clearSelection
 } = useDriveFiles()
@@ -218,6 +254,13 @@ const renameTarget = ref(null)
 const renameTargetType = ref('file')  // file | folder
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
+
+// === v2 PR1 dialog 状态 ===
+const showShareDialog = ref(false)
+const shareDialogFile = ref(null)
+const showExtractDialog = ref(false)
+const extractDialogFile = ref(null)
+const extractTargetVisibility = ref('team')
 
 // === PR3.6 上传 dialog 状态 ===
 const showUploadDialog = ref(false)
@@ -323,16 +366,57 @@ async function onMoveFile(payload) {
   }
 }
 
-function handleFileUpdateVisibility(file) {
-  ElMessage.info(`改可见性功能待 PR3.4 接入: ${file.file_name}`)
+// === v2 PR1 替换 3 个 stub handlers ===
+
+async function handleFileUpdateVisibility(file) {
+  // v2 PR1 实现: 弹出 ElMessageBox.prompt 选 visibility
+  try {
+    const { value } = await ElMessageBox.prompt(
+      `为文件 "${file.file_name}" 设置可见性 (private 仅自己 / team 全组 / public 任何人):`,
+      '修改可见性',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputPattern: /^(private|team|public)$/,
+        inputErrorMessage: '必须是 private/team/public 之一',
+        inputValue: file.visibility || 'team'
+      }
+    )
+    await doUpdateVisibility(file.id, value)
+    ElMessage.success(`已修改为 ${value}`)
+  } catch (e) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error(e.message || '修改失败')
+    }
+  }
 }
 
 function handleFileExtractToKb(file) {
-  ElMessage.info(`加入公共知识库功能待 PR3.4 接入: ${file.file_name}`)
+  // v2 PR1 实现: 弹 ExtractDialog 选 target visibility
+  extractDialogFile.value = file
+  extractTargetVisibility.value = 'team'
+  showExtractDialog.value = true
+}
+
+async function doConfirmExtract() {
+  if (!extractDialogFile.value) return
+  const file = extractDialogFile.value
+  try {
+    await doExtractToKb(file.id, extractTargetVisibility.value)
+    ElMessage.success(`已加入公共知识库 (visibility=${extractTargetVisibility.value})`)
+    showExtractDialog.value = false
+    extractDialogFile.value = null
+    // 刷新列表 (文件已转到 kb 不应在 drive 列表)
+    await fetchDriveFiles({ folder_id: selectedFolderId.value })
+  } catch (e) {
+    ElMessage.error(e.message || '升级失败')
+  }
 }
 
 function handleFileShareLink(file) {
-  ElMessage.info(`分享链接功能待 PR3.4 接入: ${file.file_name}`)
+  // v2 PR1 实现: 打开 ShareDialog
+  shareDialogFile.value = file
+  showShareDialog.value = true
 }
 
 async function handleFileDelete(file) {
@@ -528,6 +612,42 @@ const currentPathDisplay = computed(() => {
   align-items: center;
   font-size: 12px;
   color: var(--color-text-secondary, #606266);
+}
+
+/* v2 PR1: extract-to-kb dialog styles */
+.extract-intro {
+  font-size: 13px;
+  color: var(--color-text-secondary, #606266);
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.extract-field {
+  margin-top: 12px;
+}
+
+.extract-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #303133);
+  margin-bottom: 8px;
+}
+
+.extract-field :deep(.el-radio) {
+  display: flex;
+  margin-right: 0;
+  margin-bottom: 8px;
+}
+
+.extract-field :deep(.el-radio + .el-radio) {
+  margin-left: 0;
+}
+
+.extract-hint {
+  font-size: 11px;
+  color: var(--color-text-placeholder, #909399);
+  margin: 4px 0 0;
 }
 </style>
 

@@ -92,11 +92,51 @@ export function useDriveFiles() {
 
   const updateVisibility = async (id, visibility) => {
     try {
-      await axios.put(`/api/v1/drive/files/${id}`, { visibility })
+      // v2 PR1: 改用专用 PUT /visibility 端点 (带 folder 上限校验)
+      const resp = await axios.put(`/api/v1/drive/files/${id}/visibility`, { visibility })
       const target = driveFiles.value.find(f => f.id === id)
-      if (target) target.visibility = visibility
+      if (target) target.visibility = resp.data.visibility
     } catch (e) {
       throw new Error(e.response?.data?.error?.message || '修改可见性失败')
+    }
+  }
+
+  const extractToKb = async (id, targetVisibility = 'team') => {
+    try {
+      await axios.post(`/api/v1/drive/files/${id}/extract-to-kb`, { target_visibility: targetVisibility })
+      const target = driveFiles.value.find(f => f.id === id)
+      if (target) {
+        target.storage_mode = 'kb'
+        target.visibility = targetVisibility
+      }
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || '加入公共知识库失败')
+    }
+  }
+
+  const createShareLink = async (id, { expiresHours = 168, password = null } = {}) => {
+    try {
+      const payload = { expires_hours: expiresHours }
+      if (password) payload.password = String(password)
+      const resp = await axios.post(`/api/v1/drive/files/${id}/share-link`, payload)
+      return {
+        token: resp.data.token,
+        shareUrl: resp.data.share_url,
+        expiresAt: resp.data.expires_at,
+        passwordRequired: resp.data.password_required
+      }
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || '生成分享链接失败')
+    }
+  }
+
+  const revokeShareLink = async (id) => {
+    try {
+      await axios.delete(`/api/v1/drive/files/${id}/share-link`)
+      // 局部更新: 清空目标文件 share 状态 (但列表不直接显示 share_token, 这里仅刷新)
+      await fetchFiles()
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || '撤销分享链接失败')
     }
   }
 
@@ -135,6 +175,9 @@ export function useDriveFiles() {
     renameFile,
     moveFile,
     updateVisibility,
+    extractToKb,
+    createShareLink,
+    revokeShareLink,
     toggleSelect,
     clearSelection,
     selectAll

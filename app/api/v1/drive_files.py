@@ -632,7 +632,14 @@ from datetime import datetime as _dt_now
 # ==========================================================================
 
 class ShareLinkRequest(BaseModel):
-    expires_in_days: int = 7
+    """v2 PR1: 新增 expires_hours (细粒度) + password (提取码) 字段
+
+    expires_in_days 保留旧字段向后兼容 (优先级低于 expires_hours).
+    password 必填 4-8 位数字, 后端存 SHA256 hash (不存明文).
+    """
+    expires_in_days: Optional[int] = None  # 旧 API, 1-365
+    expires_hours: Optional[int] = None    # 新 API, 1-8760; 0=默认 7 天; -1=永久
+    password: Optional[str] = None          # 4-8 位数字, None=无密码
 
 
 class ShareLinkResponse(BaseModel):
@@ -640,6 +647,7 @@ class ShareLinkResponse(BaseModel):
     token: str
     share_url: str
     expires_at: Optional[str] = None
+    password_required: bool = False         # v2 PR1 新增: 是否需要提取码
 
 
 @router.post("/files/{file_id}/share-link", response_model=ShareLinkResponse)
@@ -651,7 +659,7 @@ async def create_share_link(
 ):
     """生成 drive 文件公开分享链接 (owner only)
 
-    返回 token + 完整 share_url + expires_at
+    返回 token + 完整 share_url + expires_at + password_required
     """
     svc = DriveService(db)
     try:
@@ -659,6 +667,8 @@ async def create_share_link(
             file_id,
             current_user_id=current_user.id,
             expires_in_days=payload.expires_in_days,
+            expires_hours=payload.expires_hours,
+            password=payload.password,
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
@@ -672,6 +682,7 @@ async def create_share_link(
         token=f.share_token,
         share_url=share_url,
         expires_at=str(f.share_expires_at) if f.share_expires_at else None,
+        password_required=bool(f.share_password),
     )
 
 
@@ -689,6 +700,71 @@ async def revoke_share_link(
     return
 
 
+# === v2 PR1 公开分享 GET 端点 (含密码验证) ===
+
+class PublicShareInfoResponse(BaseModel):
+    """公开分享链接的元信息 (验证密码后才返回下载链接)."""
+    file_name: str
+    file_size: Optional[int] = None
+    expires_at: Optional[str] = None
+    password_required: bool = False
+    verify_token: Optional[str] = None  # 验证密码后由后端签发的短期 token, 传给下载端点
+
+
+class PublicShareDownloadRequest(BaseModel):
+    """下载请求 body. password 留空时直接尝试下载 (公开分享无密码模式)."""
+    password: Optional[str] = None
+
+
+# === share_router endpoints 注册放在 share_router 定义之后 (顺序依赖) ===
+# 见下方 share_router 段
+
+
+# ==========================================================================
+# v2 PR1 visibility edit endpoint (桌面 stub 修复)
+# ==========================================================================
+
+class UpdateVisibilityRequest(BaseModel):
+    """修改 drive 文件可见性请求体."""
+    visibility: str  # private | team | public
+
+
+class UpdateVisibilityResponse(BaseModel):
+    file_id: int
+    visibility: str
+    folder_id: Optional[int] = None
+
+
+@router.put("/files/{file_id}/visibility", response_model=UpdateVisibilityResponse)
+async def update_file_visibility(
+    file_id: int,
+    payload: UpdateVisibilityRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """PUT /api/v1/drive/files/{file_id}/visibility
+
+    修改 drive 文件可见性 (owner only, 校验文件夹硬上限).
+    桌面 DriveView 的 handleFileUpdateVisibility stub 修复由此端点支撑.
+    """
+    svc = DriveService(db)
+    try:
+        f = await svc.update_visibility(
+            file_id,
+            current_user_id=current_user.id,
+            new_visibility=payload.visibility,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+    return UpdateVisibilityResponse(
+        file_id=f.id,
+        visibility=f.visibility,
+        folder_id=f.folder_id,
+    )
+
+
 # === 公开 share 端点 (无需 JWT, token 验证) ===
 
 # 注: 放在前缀 /drive/share 路径下, router prefix = /drive
@@ -699,20 +775,66 @@ async def revoke_share_link(
 share_router = APIRouter(prefix="/drive/share", tags=["网盘公开分享"])
 
 
-@share_router.get("/{token}")
-async def public_download_by_token(
+@share_router.get("/{token}/info", response_model=PublicShareInfoResponse)
+async def public_share_info(
     token: str,
-    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """公开分享下载 (无 JWT, 仅 token 验证)
+    """GET /api/v1/drive/share/{token}/info — 查看分享链接元信息 + 是否需要密码.
 
-    GET /api/v1/drive/share/{token} -> 流式下载
+    注意: 此端点不返回密码本身, 仅返回 password_required flag + 文件元信息.
     """
     svc = DriveService(db)
     f = await svc.get_by_share_token(token)
     if f is None:
         raise HTTPException(status_code=404, detail="分享链接不存在或已过期")
+    return PublicShareInfoResponse(
+        file_name=f.file_name or f.title or f"file_{f.id}",
+        file_size=None,  # 暂不返具体 size (避免被白嫖)
+        expires_at=str(f.share_expires_at) if f.share_expires_at else None,
+        password_required=bool(f.share_password),
+    )
+
+
+@share_router.post("/{token}/verify-password")
+async def public_share_verify_password(
+    token: str,
+    request: PublicShareDownloadRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """POST /api/v1/drive/share/{token}/verify-password
+
+    验证提取码. 失败返 403 (不放任何提示防枚举). 成功返 verify_token (短期有效).
+    """
+    svc = DriveService(db)
+    f = await svc.verify_share_access(token, password=request.password)
+    if f is None:
+        # 整体返 403 不区分"不存在/过期/密码错" 防 token 枚举
+        raise HTTPException(status_code=403, detail="分享链接已过期或密码错误")
+    # v2 PR1 暂用文件 id 作为 verify_token (无 JWT 时跳转用)
+    return {"verified": True, "file_id": f.id}
+
+
+@share_router.get("/{token}")
+async def public_download_by_token(
+    token: str,
+    request: Request,
+    password: Optional[str] = Query(None, description="提取码 (分享链接有密码时必填)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """公开分享下载 (无 JWT, 校验 token + 可选提取码)
+
+    GET /api/v1/drive/share/{token}?password=1234 -> 流式下载
+    GET /api/v1/drive/share/{token}              -> 无密码公开分享直接下载
+
+    v2 PR1 升级: 当 share 有密码时, 必须 query ?password=xxx 才返流;
+    缺少或错密码返 403. 防枚举: 整体返 403 不区分 404 vs 403.
+    """
+    svc = DriveService(db)
+    f = await svc.verify_share_access(token, password=password)
+    if f is None:
+        # 一律 403 (不区分"不存在/过期/密码错")
+        raise HTTPException(status_code=403, detail="分享链接已过期或密码错误")
     if not f.file_path:
         raise HTTPException(status_code=404, detail="分享文件无 MinIO 对象")
 
