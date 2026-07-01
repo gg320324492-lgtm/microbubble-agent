@@ -75,13 +75,28 @@
 
         <div class="drive-file-area">
           <!-- PR3.3: FileGrid 组件 -->
-          <div class="drive-file-area-placeholder">
-            <el-icon class="placeholder-icon"><Folder /></el-icon>
-            <p class="placeholder-text">文件列表 (PR3.3 接入)</p>
-            <p class="placeholder-hint">
-              骨架完成, 待 PR3.2 FolderTree + PR3.3 FileGrid 接入后真实展示
-            </p>
-          </div>
+          <FileGrid
+            :files="driveFiles"
+            :total="total"
+            :current-page="currentPage"
+            :page-size="pageSize"
+            :selected-file-ids="selectedFileIds"
+            :loading="filesLoading"
+            :load-error="filesLoadError"
+            :view-mode="viewMode"
+            :is-top-level="selectedFolderId === null"
+            @retry="fetchDriveFiles"
+            @file-click="handleFileClick"
+            @file-preview="handleFilePreview"
+            @file-rename="handleFileRename"
+            @file-move="handleFileMove"
+            @file-update-visibility="handleFileUpdateVisibility"
+            @file-extract-to-kb="handleFileExtractToKb"
+            @file-share-link="handleFileShareLink"
+            @file-delete="handleFileDelete"
+            @toggle-select="toggleFileSelect"
+            @page-change="onPageChange"
+          />
         </div>
       </main>
     </div>
@@ -95,10 +110,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Search, UploadFilled, Folder, Plus, Grid, List, Files } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
+import FileGrid from '@/components/drive/FileGrid.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
+import { useDriveFiles } from '@/composables/useDriveFiles'
 
 // === 文件夹树 (PR3.2 接入) ===
 const {
@@ -110,15 +128,92 @@ const {
   toggleExpanded: toggleExpandedFolder
 } = useFolderTree()
 
-// === 状态 (PR3.1 骨架: 仅声明, 不调 API) ===
+// === 文件列表 (PR3.3 接入) ===
+const {
+  driveFiles,
+  total,
+  currentPage,
+  pageSize,
+  loading: filesLoading,
+  loadError: filesLoadError,
+  selectedFileIds,
+  fetchFiles: fetchDriveFiles,
+  deleteFile,
+  toggleSelect: toggleFileSelect,
+  clearSelection
+} = useDriveFiles()
+
+// === 状态 ===
 const selectedFolderId = ref(null)
 const viewMode = ref('grid')  // grid | list
 const searchQuery = ref('')
 
+// === 监听 selectedFolderId 变化 → 重新拉文件列表 ===
+watch(selectedFolderId, (newId, oldId) => {
+  if (newId !== oldId) {
+    currentPage.value = 1
+    fetchDriveFiles({ folder_id: newId })
+  }
+})
+
 // === 生命周期 ===
 onMounted(() => {
   fetchFolderTree()
+  fetchDriveFiles({ folder_id: null })  // 顶级目录
 })
+
+// === 文件操作 handlers (PR3.3 接入, 部分留给 PR3.4-3.7 完善 dialog) ===
+function onPageChange(page) {
+  currentPage.value = page
+  fetchDriveFiles({ folder_id: selectedFolderId.value })
+}
+
+function handleFileClick(file) {
+  // 默认行为: 单击 = 选中 (多选模式). 双击待 PR3.4 接入预览
+  toggleFileSelect(file.id)
+}
+
+function handleFilePreview(file) {
+  // PR3.4-3.7 接入 FilePreviewDialog
+  ElMessage.info(`预览功能待 PR3.4 接入: ${file.file_name || file.title}`)
+}
+
+async function handleFileRename(file) {
+  // PR3.4 接入 rename dialog
+  ElMessage.info(`重命名功能待 PR3.4 接入: ${file.file_name}`)
+}
+
+function handleFileMove(file) {
+  ElMessage.info(`移动功能待 PR3.4 接入: ${file.file_name}`)
+}
+
+function handleFileUpdateVisibility(file) {
+  ElMessage.info(`改可见性功能待 PR3.4 接入: ${file.file_name}`)
+}
+
+function handleFileExtractToKb(file) {
+  ElMessage.info(`加入公共知识库功能待 PR3.4 接入: ${file.file_name}`)
+}
+
+function handleFileShareLink(file) {
+  ElMessage.info(`分享链接功能待 PR3.4 接入: ${file.file_name}`)
+}
+
+async function handleFileDelete(file) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除文件 "${file.title || file.file_name}" 吗？此操作可在 3 天内从回收站恢复。`,
+      '删除确认',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await deleteFile(file.id)
+    ElMessage.success('已删除')
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
+  }
+}
 
 // === 计算属性 ===
 const currentPathDisplay = computed(() => {
