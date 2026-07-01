@@ -6,7 +6,6 @@
 ## 当前状态（2026-07-01 早班收官）
 
 **已交付（2026-07-01 早班新增）**：
-- 🆕 **声纹 CAM++ 选型实验 + 完整回滚（commits `835ac1ff` + `b7c1bed5`）** — 升级 ERes2Net → CAM++ (iic/speech_campplus_sv_zh-cn_16k-common, 维度 192 drop-in) → 中文 EER 3.5% → ~2.3% (理论 -34%) → **但实测锚定测试失败**（CAM++ vs anchor ERes2Net cosine 1.045 接近正交 + intra-class 0.63-0.77 远低于 ERes2Net 0.99）→ **完整回滚到 ERes2Net baseline**。保留资产：`docs/voiceprint-alternatives.md` (579 行 C2 候选完整评测) + `app/services/voiceprint_recovery.py` (104 行反推公式工具)。未来升级路径：30+ sample_count 成员完整 anchor → ≥5min 完整会议 intra-class 测试 → 用户手动确认新 anchor 后再上线
 - 🆕 **post_meeting_tasks 简化（commit `4b215220`）** — 124 行 → 26 行 (-98, -79%)，移除下划线前缀临时变量 (`_n_expected`/`_labels`/`_optimal_k`) → 直接命名 + 同步重命名 `cluster_centers`/`cluster_representatives` + 修复 UnboundLocalError 闭包 lazy 求值隐患
 - 🆕 **v78 tabs 集成 spec + 临时启用 desktop-chrome（commit `6b6a91f4`）** — `web/tests/visual/desktop/templates-tab-integration-2026-06-30.spec.mjs` (116 行) 端到端验证 `/meetings` 2 tabs 集成（会议列表 / 模板管理）+ 批量操作 toolbar + 编辑按钮真实打开 MeetingTemplateDialog；`web/playwright.config.js` 临时启用 desktop-chrome project
 - 🆕 **`scripts/generate_token_plan_doc.py` 项目状况报告 Word 生成（commit `763244ae`）** — 1195 行一次性脚本（不入 CI），依赖 python-docx，产物 `docs/MicroBubble_Agent_开发状况报告_2026-06-30.docx` (71KB)

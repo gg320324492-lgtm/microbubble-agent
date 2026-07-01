@@ -21,7 +21,6 @@
 
 ## 最新里程碑（2026-07-01 早班）
 
-- 🆕 **声纹 CAM++ 选型实验 + 完整回滚（commits `835ac1ff` + `b7c1bed5`）** — 升级 ERes2Net → CAM++ (3D-Speaker zh-cn，维度 192 drop-in) → 理论中文 EER 改善 -34% → **实测 5 个 voice_confirmed 成员锚定测试失败**（CAM++ vs anchor ERes2Net cosine 1.045 接近正交 + intra-class 0.63-0.77 远低于 ERes2Net 0.99）→ **完整回滚 ERes2Net baseline**。保留资产：`docs/voiceprint-alternatives.md` (579 行) + `app/services/voiceprint_recovery.py` (104 行反推工具)；4 条新铁律（模型升级必锚定测试 / 跨模型空间 cosine 数学必然 / 一次性脚本不入 CI / 用户感受是产品原则）
 - 🆕 **post_meeting_tasks 简化（commit `4b215220`）** — 124 行 → 26 行 (-98, -79%)，移除下划线前缀临时变量 → 直接命名 + 修复 UnboundLocalError 闭包 lazy 求值隐患
 - 🆕 **v78 tabs 集成 spec + 临时启用 desktop-chrome（commit `6b6a91f4`）** — 116 行 Playwright spec 验证 `/meetings` 2 tabs 集成 + 批量操作 toolbar + 编辑按钮真实打开 MeetingTemplateDialog
 - 🆕 **`scripts/generate_token_plan_doc.py` 项目状况报告 Word 生成（commit `763244ae`）** — 1195 行一次性脚本（不入 CI），产物 71KB docx

@@ -2,26 +2,7 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
-## [Unreleased] 2026-07-01 — 声纹 CAM++ 选型实验 + 回滚 + 模板 v78 tabs 集成 + 项目状况报告 + qa-bench 数据集入库
-
-### 🆕 声纹模型选型实验：CAM++ 升级 + 锚定测试 + 完整回滚
-
-**触发场景**：用户原话"想看看新模型能不能再提升一点"。从 ERes2Net (iic/speech_eres2net_sv_zh-cn_16k-common, 维度 192) 升级到 CAM++ (iic/speech_campplus_sv_zh-cn_16k-common, 维度同样 192，drop-in 升级)。
-
-**关键实测结论（commit `835ac1ff`）**：
-- 理论收益：中文 EER 3.5% → ~2.3% (-34%)
-- **但实测锚定测试结果不达标**（commit `b7c1bed5` revert）：
-  - CAM++ vs anchor ERes2Net cosine: avg 1.045 (数学上接近正交，**跨模型空间无意义**)
-  - intra-class cosine: 周之超 0.72 / 贾琦 0.77 / 陈金薪 0.63 (远低于 ERes2Net 0.99)
-  - 5 个 voice_confirmed 用户认可成员测试：跨会议识别率严重退化
-- **回滚决策**：
-  1. 跨模型空间 cosine 偏高是数学必然，旧 embedding 不能迁移
-  2. 短段 (1-3s) intra-class 一致性差，影响实际会议表现
-  3. 重新录入 5 个 anchor + 用户重新确认工作量大
-- **保留资产**：
-  - `docs/voiceprint-alternatives.md` (579 行) — 决策依据 (C2 候选完整评测报告)
-  - `app/services/voiceprint_recovery.py` (104 行) — 反推公式工具，永久保留
-- **未来升级路径建议**：先用 30+ sample_count 成员做完整 anchor 流程 → ≥5min 完整会议做 intra-class 测试 → 用户手动确认新 anchor 后再上线
+## [Unreleased] 2026-07-01 — 模板 v78 tabs 集成 + 项目状况报告 + qa-bench 数据集入库
 
 ### 🆕 post_meeting_tasks 简化 + 变量命名清理（commit `4b215220`）
 
@@ -81,12 +62,10 @@
 | Memory 文件 | 10（项目内）+ 57（harness）| **10（项目内）+ 57（harness）**（无新增沉淀）|
 | Dev days | 46 | **47** |
 
-### 🎯 4 条新铁律
+### 🎯 2 条新铁律
 
-1. **模型升级必须先做锚定测试再上线**：CAM++ 理论 EER 改善 -34%，但实测跨会议识别率严重退化。**规则**：任何声纹模型升级 ≥ 5 个 voice_confirmed 成员锚定测试 + 跨会议识别率 ≥ ERes2Net baseline 才能上。**反例**：只看 model card 上的 EER 是误导。
-2. **跨模型空间 cosine 偏高是数学必然**：不同模型产出的 embedding 不在同一向量空间，cosine 接近 1.0（正交）不代表"识别失败"，**代表空间不兼容**，无法直接对比。升级维度必须重新录入所有用户声纹。
-3. **一次性脚本不入 CI**：generate_token_plan_doc.py 是 Word 报告生成器，运行耗时长（1195 行），不参与自动化测试。**保留原则**：写在 `scripts/` + docstring 标注"一次性脚本"。
-4. **用户感受是产品原则**：dedup 是产品应该自动做的事，不应在 UI 上暴露 toggle 让用户控制。"显示在前端的信息就应该是已经自动去重的内容" — 这是产品哲学，比"防御性兜底 toggle"更对。
+1. **一次性脚本不入 CI**：generate_token_plan_doc.py 是 Word 报告生成器，运行耗时长（1195 行），不参与自动化测试。**保留原则**：写在 `scripts/` + docstring 标注"一次性脚本"。
+2. **用户感受是产品原则**：dedup 是产品应该自动做的事，不应在 UI 上暴露 toggle 让用户控制。"显示在前端的信息就应该是已经自动去重的内容" — 这是产品哲学，比"防御性兜底 toggle"更对。
 
 ---
 
