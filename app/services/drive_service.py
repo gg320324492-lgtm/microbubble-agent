@@ -255,6 +255,7 @@ class DriveService:
         current_user_id: int,
         *,
         title: Optional[str] = None,
+        file_name: Optional[str] = None,  # PR4.4: 重命名 (修复 PR2.5 漏的字段)
         visibility: Optional[str] = None,
         folder_id: Optional[int] = None,
     ) -> Optional[Knowledge]:
@@ -287,6 +288,9 @@ class DriveService:
 
         if title is not None:
             file.title = title
+
+        if file_name is not None:  # PR4.4: 重命名 (修复 PR2.5 漏的字段)
+            file.file_name = file_name
 
         if folder_id is not None and folder_id != file.folder_id:
             # 校验目标文件夹存在 + ownership

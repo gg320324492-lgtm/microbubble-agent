@@ -97,6 +97,7 @@
       <!-- Tab: 文件 (PR4.2 课题组网盘) -->
       <div v-else-if="activeTab === 'files'">
         <MobileFileList
+          ref="mobileFileListRef"
           @file-preview="onMobileFilePreview"
           @file-download="onMobileFileDownload"
           @file-rename="onMobileFileRename"
@@ -213,6 +214,14 @@
       submit-text="开始研究"
       :submitting="researchRunning"
       @submit="onResearchSubmit"
+    />
+
+    <!-- PR4.4: 改可见性 Sheet (用 MobileActionSheet 替代 prompt) -->
+    <MobileActionSheet
+      v-model:show="showVisibilitySheet"
+      :title="visibilityTarget ? `改可见性: ${visibilityTarget.file_name || visibilityTarget.title}` : '改可见性'"
+      :actions="visibilityActions"
+      @action="onPickVisibility"
     />
 
     <input
@@ -530,7 +539,7 @@ async function onMobileFileDownload(file) {
 }
 
 async function onMobileFileRename(file) {
-  // PR4.4: 弹输入框
+  // PR4.4: 弹输入框 + 改后 refresh
   try {
     const { value: newName } = await ElMessageBox.prompt('新文件名', '重命名', {
       inputValue: file.file_name || file.title || '',
@@ -540,7 +549,7 @@ async function onMobileFileRename(file) {
     if (newName && newName !== file.file_name) {
       await axios.put(`/api/v1/drive/files/${file.id}`, { file_name: newName })
       ElMessage.success('已重命名')
-      // 通知 MobileFileList 刷新 (PR4.4 改 emit refresh)
+      mobileFileListRef.value?.refresh?.()  // PR4.4: refresh 列表
     }
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '重命名失败')
@@ -548,26 +557,33 @@ async function onMobileFileRename(file) {
 }
 
 async function onMobileFileUpdateVisibility(file) {
-  // PR4.4: 弹 visibility 单选
-  const visibilities = [
-    { value: 'private', label: '🔒 私有' },
-    { value: 'team', label: '👥 团队' },
-    { value: 'public', label: '🌐 公开' },
-  ]
+  // PR4.4: 用 MobileActionSheet 替代 prompt (移动端原生 UX)
+  showVisibilitySheet.value = true
+  visibilityTarget.value = file
+}
+
+const showVisibilitySheet = ref(false)
+const visibilityTarget = ref(null)
+const visibilityActions = [
+  { name: 'private', label: '🔒 私有', subtitle: '仅自己可见' },
+  { name: 'team', label: '👥 团队', subtitle: '课题组全员可见 (推荐)' },
+  { name: 'public', label: '🌐 公开', subtitle: '所有人可见' },
+]
+
+async function onPickVisibility(action) {
+  showVisibilitySheet.value = false
+  if (!visibilityTarget.value || !action?.name) return
+  const file = visibilityTarget.value
+  if (action.name === file.visibility) {
+    ElMessage.info('可见性未变')
+    return
+  }
   try {
-    const { value } = await ElMessageBox({
-      title: '改可见性',
-      message: '选择新的可见性',
-      showCancelButton: true,
-    })
-    // 简化: 直接用 prompt
-    const newVis = prompt('可见性: private / team / public', file.visibility || 'team')
-    if (newVis && ['private', 'team', 'public'].includes(newVis)) {
-      await axios.put(`/api/v1/drive/files/${file.id}`, { visibility: newVis })
-      ElMessage.success('已更新')
-    }
+    await axios.put(`/api/v1/drive/files/${file.id}`, { visibility: action.name })
+    ElMessage.success('已更新')
+    mobileFileListRef.value?.refresh?.()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '更新失败')
+    ElMessage.error(e.message || '更新失败')
   }
 }
 
@@ -585,6 +601,7 @@ async function onMobileFileDelete(file) {
     )
     await axios.delete(`/api/v1/drive/files/${file.id}`)
     ElMessage.success('已删除')
+    mobileFileListRef.value?.refresh?.()  // PR4.4: refresh 列表
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
   }
@@ -674,6 +691,7 @@ async function onManualSubmit() {
 const uploadInputRef = ref(null)
 const driveUploadInputRef = ref(null)  // PR4.3: 网盘模式上传
 const cameraInputRef = ref(null)  // PR4.7: 拍照上传
+const mobileFileListRef = ref(null)  // PR4.4: 文件列表 ref (供 rename/delete 后 refresh)
 
 // PR4.3: 网盘模式上传 handler (走 drive API, storage_mode=drive, visibility=team)
 async function onDriveUploadFile(e) {

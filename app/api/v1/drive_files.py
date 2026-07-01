@@ -78,6 +78,7 @@ class DriveFileListResponse(BaseModel):
 
 class DriveFileUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=500)
+    file_name: Optional[str] = Field(None, max_length=500)  # PR4.4: 修复 PR2.5 漏的 file_name 字段
     visibility: Optional[str] = None  # private | team | public
     folder_id: Optional[int] = None  # 0 = move to root
 
@@ -278,6 +279,7 @@ async def update_drive_file(
             file_id,
             current_user_id=current_user.id,
             title=payload.title,
+            file_name=payload.file_name,  # PR4.4: 透传 file_name
             visibility=payload.visibility,
             folder_id=payload.folder_id,
         )
