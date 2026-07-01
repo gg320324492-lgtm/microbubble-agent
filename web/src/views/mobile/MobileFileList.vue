@@ -294,6 +294,11 @@ function onFileAction(action) {
       emit('file-delete', file); break
   }
 }
+
+// === PR4.4: 暴露 refresh 给父组件, 让 rename/delete 后无需切 tab 就能刷新 ===
+defineExpose({
+  refresh
+})
 </script>
 
 <style scoped>
