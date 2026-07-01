@@ -81,30 +81,14 @@ const routes = [
         meta: { title: '会议详情' }
       },
       {
-        path: 'projects',
-        name: 'Projects',
-        component: resolveMobileComponent('ProjectView', 'MobileProjectView'),
-        meta: { title: '项目管理', icon: 'Folder' }
-      },
-      {
-        // 移动端项目详情（桌面 ProjectView 的 dialog 内容镜像成全屏页）
-        path: 'projects/:id',
-        name: 'ProjectDetail',
-        component: resolveMobileComponent('ProjectView', 'mobile/MobileProjectDetailView'),
-        meta: { title: '项目详情' }
-      },
-      {
-        path: 'members',
-        name: 'Members',
-        component: resolveMobileComponent('MemberView', 'MobileMemberView'),
-        meta: { title: '成员管理', icon: 'User' }
-      },
-      {
-        // 移动端成员详情（从 MobileMemberView 卡片点击进入）
-        path: 'members/:id',
-        name: 'MemberDetail',
-        component: resolveMobileComponent('MemberView', 'mobile/MobileMemberDetailView'),
-        meta: { title: '成员详情' }
+        // v78: 合并原 /projects + /members + /voiceprint 3 个独立路由为 1 个 /workspace
+        // 顶部 3 tab (项目/成员/声纹), 详情走 dialog 弹层 (与桌面 ProjectView.showDetailDialog 一致)
+        // 移动端走 MobileWorkspaceView (顶栏 + 横向 tab + sheet 弹层)
+        // 路由 menuRoutes 自动按 meta.icon 过滤显示, sidebar + 移动 drawer 自动出现
+        path: 'workspace',
+        name: 'Workspace',
+        component: resolveMobileComponent('WorkspaceView', 'mobile/MobileWorkspaceView'),
+        meta: { title: '团队协作', icon: 'Files' }
       },
       {
         path: 'knowledge',
@@ -123,18 +107,12 @@ const routes = [
         redirect: '/knowledge?tab=memory'
       },
       {
-        path: 'voiceprint',
-        name: 'Voiceprint',
-        component: resolveMobileComponent('VoiceprintView', 'MobileVoiceprintView'),
-        meta: { title: '声纹库中心', icon: 'mic' }
-      },
-      {
         // PR3.1: 课题组网盘 (Lab Group Drive) - 桌面端主视图, 移动端 PR4 复用 KB 第 6 tab
         path: 'drive',
         name: 'Drive',
         // 桌面 DesktopDriveView (本 PR3 创建), 移动端 MobileDriveView (PR4)
         component: resolveMobileComponent('DesktopDriveView', 'mobile/MobileDriveView'),
-        meta: { title: '课题组网盘', icon: 'Files' }
+        meta: { title: '课题组网盘', icon: 'Folder' }
       },
       {
         // v2 PR2: 回收站 (顶级路由, 不嵌套在 /drive 下避免与 FileGrid 冲突)

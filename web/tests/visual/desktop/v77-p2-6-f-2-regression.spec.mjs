@@ -156,7 +156,8 @@ test.describe('Round 8: 14 项浏览器手测清单', () => {
   })
 
   test('A-02 9 路由全部能进, 无白屏', async ({ page }) => {
-    const routes = ['/dashboard', '/chat', '/tasks', '/projects', '/members', '/settings', '/knowledge', '/meetings', '/meetings/room']
+    // v78: /projects /members 合并到 /workspace, 仍 9 路由总数不变
+    const routes = ['/dashboard', '/chat', '/tasks', '/workspace?tab=projects', '/workspace?tab=members', '/settings', '/knowledge', '/meetings', '/meetings/room']
     for (const route of routes) {
       await page.goto(`${BASE_URL}${route}`, { waitUntil: 'networkidle' })
       await waitForLoaded(page)

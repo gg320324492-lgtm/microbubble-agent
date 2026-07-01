@@ -1,9 +1,9 @@
 <template>
-  <div class="voiceprint-view">
-    <h2>课题组声纹中心</h2>
+  <div class="voiceprints-panel">
+    <h2 class="panel-title">课题组声纹中心</h2>
     <div v-if="loading" v-loading="true" class="loading">加载中...</div>
     <div v-else-if="members.length === 0" class="empty">
-      暂无录入声纹的成员。请前往"成员管理"录入。
+      暂无录入声纹的成员。请前往"成员"tab 录入。
     </div>
     <div v-else class="cards-grid">
       <VoiceprintCard
@@ -30,6 +30,14 @@
 </template>
 
 <script setup>
+/**
+ * VoiceprintsPanel.vue — v78 "团队协作" 声纹 tab 子组件
+ *
+ * 从原 web/src/views/VoiceprintView.vue 拆出 (2026-07-02):
+ * - 保留: 声纹卡片网格 + el-drawer 详情 + ConfidenceChart + SpeakerSearch
+ * - 移除: 无独立路由逻辑, 全部内嵌于 WorkspaceView 容器
+ */
+
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import VoiceprintCard from '@/components/voiceprint/VoiceprintCard.vue'
@@ -87,12 +95,35 @@ function onJump(meetingId) {
 </script>
 
 <style scoped>
-.voiceprint-view { padding: 24px; }
+.voiceprints-panel {
+  padding: 16px 0;
+}
+
+.panel-title {
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-4);
+}
+
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
   margin-top: 16px;
 }
-.loading, .empty { padding: 40px; text-align: center; color: var(--color-text-secondary); }
+
+.loading, .empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+</style>
+
+<!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
+<style>
+[data-theme="dark"] .voiceprints-panel {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .panel-title {
+  color: var(--color-text-primary);
+}
 </style>
