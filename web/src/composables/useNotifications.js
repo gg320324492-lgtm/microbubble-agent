@@ -156,6 +156,38 @@ export const useNotificationsStore = defineStore('notifications', () => {
     }
   }
 
+  /**
+   * v2 PR6-P5: 回复评论 (threading)
+   * @param fileId - 文件 id
+   * @param parentCommentId - 父评论 id
+   * @param content - 回复内容
+   * 422 错误 (parent 不存在 / 跨文件 / 深度超限) 抛 error 让 caller 处理
+   */
+  async function postReply(fileId, parentCommentId, content) {
+    try {
+      const resp = await axios.post(
+        `${API_BASE}/drive/files/${fileId}/comments`,
+        { content, parent_comment_id: parentCommentId },
+        { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+      )
+      const existing = commentsByFileId.value[fileId] || []
+      const updated = existing.map((c) => {
+        if (c.id === parentCommentId) {
+          return { ...c, reply_count: (c.reply_count || 0) + 1 }
+        }
+        return c
+      })
+      commentsByFileId.value = {
+        ...commentsByFileId.value,
+        [fileId]: [resp.data.comment, ...updated],
+      }
+      return resp.data
+    } catch (e) {
+      console.error('[Notify] postReply failed:', e)
+      throw e
+    }
+  }
+
   async function deleteComment(fileId, commentId) {
     try {
       await axios.delete(`${API_BASE}/drive/files/${fileId}/comments/${commentId}`, {
@@ -241,6 +273,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     fetchActivities,
     fetchComments,
     postComment,
+    postReply,
     deleteComment,
     startWs,
     stopWs,

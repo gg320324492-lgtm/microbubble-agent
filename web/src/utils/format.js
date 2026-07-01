@@ -33,6 +33,19 @@ export function formatRelativeTime(date) {
   return d.format('YYYY-MM-DD')
 }
 
+// 文件大小格式化 (B/KB/MB/GB) — MobileVoiceprintsPanel 依赖
+export function formatSize(bytes) {
+  if (!bytes || bytes <= 0) return '—'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let v = bytes
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i += 1
+  }
+  return `${v.toFixed(1)} ${units[i]}`
+}
+
 // 紧凑日期格式（用于 Dashboard 等空间有限的场景）
 export function formatCompactDate(date, emptyText = '无截止日期') {
   if (!date) return emptyText

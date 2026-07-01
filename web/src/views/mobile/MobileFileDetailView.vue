@@ -210,7 +210,7 @@ import axios from 'axios'
 import MobileCommentThread from '@/views/mobile/MobileCommentThread.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'
-import { useUserStore } from '@/stores/useUserStore'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()

@@ -88,6 +88,9 @@ class CommentItem(BaseModel):
     user_name: Optional[str] = None
     content: str
     mentions: Optional[List[int]] = None
+    parent_comment_id: Optional[int] = None  # v2 PR6-P5 threading
+    thread_depth: int = 0                   # v2 PR6-P5: 0/1/2
+    reply_count: int = 0                    # v2 PR6-P5: 冗余子评论数
     created_at: Optional[str] = None
 
 
@@ -98,6 +101,9 @@ class CommentListResponse(BaseModel):
 
 class CommentCreateRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=2000)
+    parent_comment_id: Optional[int] = Field(
+        None, description="v2 PR6-P5: 父评论 id, None=顶层评论"
+    )
 
 
 class CommentCreateResponse(BaseModel):
@@ -275,6 +281,9 @@ async def list_file_comments(
             user_name=user_name,
             content=c.content,
             mentions=c.mentions,
+            parent_comment_id=c.parent_comment_id,  # v2 PR6-P5
+            thread_depth=c.thread_depth,             # v2 PR6-P5
+            reply_count=c.reply_count,               # v2 PR6-P5
             created_at=str(c.created_at) if c.created_at else None,
         )
         for c, user_name in rows
@@ -289,18 +298,29 @@ async def create_file_comment(
     db: AsyncSession = Depends(get_db),
     user: Member = Depends(get_current_user),
 ):
-    """写评论 + 自动解析 @username → 创建 mention"""
+    """写评论 + 自动解析 @username → 创建 mention (+ v2 PR6-P5 reply)
+
+    v2 PR6-P5: payload.parent_comment_id 可选
+      - None: 顶层评论 (默认, 向后兼容 PR6 所有老数据)
+      - int: 该评论的回复, 自动算 thread_depth, MAX_DEPTH=2 截断
+    """
     from app.services.drive_service import DriveService
     svc = DriveService(db)
     f = await svc.get_file(file_id, current_user_id=user.id)
     if f is None:
         raise HTTPException(status_code=404, detail="文件不存在或无权访问")
 
-    comment, mentioned_user_ids = await comment_service.create_comment(
-        db, file_id=file_id, user_id=user.id, content=payload.content,
-    )
+    try:
+        comment, mentioned_user_ids = await comment_service.create_comment(
+            db,
+            file_id=file_id,
+            user_id=user.id,
+            content=payload.content,
+            parent_comment_id=payload.parent_comment_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
-    # 查 user_name (评论者)
     user_names = await _batch_user_names(db, [user.id])
 
     return CommentCreateResponse(
@@ -311,6 +331,9 @@ async def create_file_comment(
             user_name=user_names.get(user.id),
             content=comment.content,
             mentions=comment.mentions,
+            parent_comment_id=comment.parent_comment_id,
+            thread_depth=comment.thread_depth,
+            reply_count=comment.reply_count,
             created_at=str(comment.created_at) if comment.created_at else None,
         ),
         mentioned_user_ids=mentioned_user_ids,

@@ -144,7 +144,7 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import CommentThread from '@/components/drive/CommentThread.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'
-import { useUserStore } from '@/stores/useUserStore'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
@@ -414,5 +414,3 @@ watch(fileId, () => {
   background: var(--color-bg-page, #2a2d35);
 }
 </style>
-</content>
-</invoke>
