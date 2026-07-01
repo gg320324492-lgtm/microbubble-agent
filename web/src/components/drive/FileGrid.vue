@@ -47,6 +47,7 @@
         :view-mode="'grid'"
         @click="(f) => $emit('file-click', f)"
         @toggle-select="(id) => $emit('toggle-select', id)"
+        @toggle-star="(f) => $emit('file-toggle-star', f)"
         @preview="(f) => $emit('file-preview', f)"
         @rename="(f) => $emit('file-rename', f)"
         @move="(f) => $emit('file-move', f)"
@@ -68,6 +69,7 @@
         :view-mode="'list'"
         @click="(f) => $emit('file-click', f)"
         @toggle-select="(id) => $emit('toggle-select', id)"
+        @toggle-star="(f) => $emit('file-toggle-star', f)"
         @preview="(f) => $emit('file-preview', f)"
         @rename="(f) => $emit('file-rename', f)"
         @move="(f) => $emit('file-move', f)"
@@ -108,7 +110,7 @@ const props = defineProps({
   isTopLevel: { type: Boolean, default: true }  // 是否顶级目录 (空态文案区分)
 })
 
-defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-share-link', 'file-delete', 'toggle-select', 'page-change'])
+defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-share-link', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change'])
 
 // === 空态文案 ===
 const emptyTitle = computed(() => {

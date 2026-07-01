@@ -1,10 +1,11 @@
 <!--
-  FolderTree.vue — 课题组网盘 PR3.2 文件夹树组件
-  2026-07-01
+  FolderTree.vue — 课题组网盘 PR3.2 + v2 PR2 文件夹树组件
+  2026-07-01 (v2 PR2: 加 3 个特殊固定项)
 
   结构:
   - 顶级固定节点 "📁 我的网盘" (selectedFolderId=null)
-  - "🗑️ 回收站" 节点 (PR3.7 接入, PR3.2 占位)
+  - "⭐ 我的收藏" (specialView='starred', emit 'update:specialView')
+  - "🗑️ 回收站" (specialView='trash')
   - 递归渲染文件夹树 (el-tree 自定义节点)
   - hover 节点显示快捷操作 (新建子文件夹 / 删除)
 
@@ -12,17 +13,28 @@
   - props.folderTree: 从 useFolderTree composable
   - props.selectedFolderId / emits.update:selectedFolderId
   - props.expandedFolderIds / emits.update:expandedFolderIds
+  - props.specialView: 'starred' | 'trash' | null
 -->
 <template>
   <div class="folder-tree">
     <!-- 顶级固定节点 -->
     <div
       class="folder-tree-root-item"
-      :class="{ active: selectedFolderId === null }"
-      @click="$emit('update:selectedFolderId', null)"
+      :class="{ active: selectedFolderId === null && specialView === null }"
+      @click="handleRootClick"
     >
-      <el-icon><FolderOpened v-if="selectedFolderId === null" /><Folder v-else /></el-icon>
+      <el-icon><FolderOpened v-if="selectedFolderId === null && specialView === null" /><Folder v-else /></el-icon>
       <span class="folder-tree-root-label">📁 我的网盘</span>
+    </div>
+
+    <!-- 收藏 (PR2 新增) -->
+    <div
+      class="folder-tree-special-item"
+      :class="{ active: specialView === 'starred' }"
+      @click="$emit('update:specialView', 'starred')"
+    >
+      <el-icon><Star v-if="specialView === 'starred'" /><StarFilled v-else /></el-icon>
+      <span>⭐ 我的收藏</span>
     </div>
 
     <!-- 三态: loading / error / empty / data -->
@@ -46,33 +58,56 @@
         :folder="folder"
         :selected-folder-id="selectedFolderId"
         :expanded-folder-ids="expandedFolderIds"
-        @select="$emit('update:selectedFolderId', $event)"
+        @select="handleFolderSelect"
         @toggle="$emit('toggle-expanded', $event)"
       />
     </template>
 
-    <!-- 回收站占位 (PR3.7 接入真实数据) -->
     <div class="folder-tree-divider" />
-    <div class="folder-tree-trash-item" disabled>
+    <!-- 回收站 (PR2 真实接入) -->
+    <div
+      class="folder-tree-special-item folder-tree-trash"
+      :class="{ active: specialView === 'trash' }"
+      @click="$emit('update:specialView', 'trash')"
+    >
       <el-icon><Delete /></el-icon>
-      <span>🗑️ 回收站 (PR3.7)</span>
+      <span>🗑️ 回收站</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { Folder, FolderOpened, Delete, Loading, Warning } from '@element-plus/icons-vue'
+import { Folder, FolderOpened, Delete, Loading, Warning, Star, StarFilled } from '@element-plus/icons-vue'
 import FolderTreeNode from './FolderTreeNode.vue'
 
-defineProps({
+const props = defineProps({
   folderTree: { type: Array, default: () => [] },
   selectedFolderId: { type: [Number, null], default: null },
   expandedFolderIds: { type: Set, default: () => new Set() },
   loading: { type: Boolean, default: false },
-  loadError: { type: [String, null], default: null }
+  loadError: { type: [String, null], default: null },
+  specialView: { type: [String, null], default: null }  // v2 PR2: 'starred' | 'trash' | null
 })
 
-defineEmits(['update:selectedFolderId', 'toggle-expanded', 'retry'])
+const emit = defineEmits([
+  'update:selectedFolderId',
+  'update:specialView',  // v2 PR2
+  'toggle-expanded',
+  'retry',
+  'navigate-trash'  // 跳路由到 /drive/trash
+])
+
+function handleRootClick() {
+  // 切回 "我的网盘" 时清掉 specialView
+  emit('update:selectedFolderId', null)
+  emit('update:specialView', null)
+}
+
+function handleFolderSelect(folderId) {
+  // 选中普通 folder 时也清掉 specialView
+  emit('update:selectedFolderId', folderId)
+  emit('update:specialView', null)
+}
 </script>
 
 <style scoped>
@@ -86,7 +121,7 @@ defineEmits(['update:selectedFolderId', 'toggle-expanded', 'retry'])
 }
 
 .folder-tree-root-item,
-.folder-tree-trash-item {
+.folder-tree-special-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -96,23 +131,20 @@ defineEmits(['update:selectedFolderId', 'toggle-expanded', 'retry'])
 }
 
 .folder-tree-root-item:hover,
-.folder-tree-trash-item:hover:not([disabled]) {
+.folder-tree-special-item:hover {
   background: var(--color-bg-hover, #f5f7fa);
 }
 
-.folder-tree-root-item.active {
+.folder-tree-root-item.active,
+.folder-tree-special-item.active {
   background: var(--color-primary-light-9, #ecf5ff);
-  color: var(--color-primary, #409eff);
+  color: var(--color-primary, #ff7a5c);
   font-weight: 500;
 }
 
-.folder-tree-root-item.active :deep(.el-icon) {
-  color: var(--color-primary, #409eff);
-}
-
-.folder-tree-trash-item {
-  cursor: not-allowed;
-  color: var(--color-text-placeholder, #909399);
+.folder-tree-root-item.active :deep(.el-icon),
+.folder-tree-special-item.active :deep(.el-icon) {
+  color: var(--color-primary, #ff7a5c);
 }
 
 .folder-tree-loading,

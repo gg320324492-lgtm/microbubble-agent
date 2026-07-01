@@ -137,6 +137,13 @@ const routes = [
         meta: { title: '课题组网盘', icon: 'Files' }
       },
       {
+        // v2 PR2: 回收站 (顶级路由, 不嵌套在 /drive 下避免与 FileGrid 冲突)
+        path: 'drive/trash',
+        name: 'DriveTrash',
+        component: resolveMobileComponent('desktop/DriveTrashView', 'mobile/MobileDriveTrashView'),
+        meta: { title: '回收站', icon: 'Delete' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: resolveMobileComponent('SettingsView', 'MobileSettingsView'),

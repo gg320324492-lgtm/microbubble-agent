@@ -439,3 +439,38 @@ class FolderService:
         await self.db.refresh(folder)
         logger.info(f"[FolderService.restore_folder] id={folder.id}")
         return folder
+
+    # ============================================================
+    # v2 PR2 回收站列表 (与文件回收站对称)
+    # ============================================================
+
+    async def list_trash_folders(
+        self,
+        *,
+        current_user_id: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> Tuple[List[Folder], int]:
+        """v2 PR2: 列回收站中的 folder (deleted_at IS NOT NULL, 仅 owner).
+
+        复用 list_folders + include_deleted=True + owner_id filter, 排序用 deleted_at desc
+        (最近删除在前, 与文件回收站一致).
+        """
+        stmt = select(Folder)
+        count_stmt = select(func.count(Folder.id))
+        filters = [
+            Folder.deleted_at.isnot(None),
+            Folder.owner_id == current_user_id,
+        ]
+        stmt = stmt.where(and_(*filters)).order_by(Folder.deleted_at.desc())
+        count_stmt = count_stmt.where(and_(*filters))
+        offset = (page - 1) * page_size
+        stmt = stmt.offset(offset).limit(page_size)
+        items_result = await self.db.execute(stmt)
+        count_result = await self.db.execute(count_stmt)
+        items = list(items_result.scalars().all())
+        total = count_result.scalar() or 0
+        logger.info(
+            f"[FolderService.list_trash_folders] user={current_user_id} total={total}"
+        )
+        return items, total
