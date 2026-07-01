@@ -143,6 +143,7 @@
  * - 不需要 separate 调用 /api/v1/knowledge
  */
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Document, Picture, Headset, VideoCamera, Tickets, DataAnalysis, Folder } from '@element-plus/icons-vue'
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
@@ -150,6 +151,8 @@ import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 
 const emit = defineEmits(['file-preview', 'file-download', 'file-rename', 'file-update-visibility', 'file-extract-to-kb', 'file-delete'])
+
+const router = useRouter()
 
 // === 文件夹树 (PR3.2 复用) ===
 const {
@@ -266,8 +269,10 @@ function onPageChange(page) {
 }
 
 function onFileClick(file) {
-  // 单击 = 预览 (与桌面 FileCard 一致)
-  emit('file-preview', file)
+  // v2 PR6-P3: 单击 = 跳详情页 (与桌面端 FileCard UX 一致)
+  // 长按 600ms 仍由 LongPressWrapper 触发 -> 弹出 ActionSheet 完整操作
+  // 主流移动端 UX: 单击=打开详情, 长按=操作菜单
+  router.push(`/drive/file/${file.id}`)
 }
 
 function onLongPressFile(file) {
