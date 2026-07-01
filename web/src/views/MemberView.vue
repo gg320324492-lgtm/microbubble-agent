@@ -73,7 +73,7 @@
 
         <div class="member-info">
           <h3 class="member-name">{{ member.name }}</h3>
-          <el-tag size="small">{{ member.grade }}</el-tag>
+          <el-tag size="small" class="grade-tag">{{ member.grade }}</el-tag>
           <div class="member-role">
             <el-tag :type="getRoleType(member.role)" size="small">
               {{ getRoleLabel(member.role) }}

@@ -32,7 +32,7 @@
           <h2 class="hero-name">{{ member.name }}</h2>
           <div class="hero-tags">
             <el-tag size="small" :type="getRoleType(member.role)">{{ getRoleLabel(member.role) }}</el-tag>
-            <el-tag v-if="member.grade" size="small" type="info">{{ member.grade }}</el-tag>
+            <el-tag v-if="member.grade" size="small" type="info" class="grade-tag">{{ member.grade }}</el-tag>
             <el-tag
               v-if="member.voice_enrolled_at"
               size="small"
