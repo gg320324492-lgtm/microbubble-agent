@@ -179,6 +179,47 @@ class FileService:
             return result
         return await asyncio.to_thread(_list)
 
+    async def copy_object_async(self, src_object_name: str, dst_object_name: str) -> int:
+        """MinIO 服务端 copy_object (0 客户端带宽秒传核心)
+
+        PR4 用法: instant-upload 命中同 hash 文件时, 只在 MinIO 服务端做对象复制,
+        不经过本机网络, 5GB 文件秒级完成。
+
+        重要: 必须 asyncio.to_thread 包装, 否则同步阻塞 FastAPI event loop,
+        4 并发秒传后所有 API 路由延迟 10-30s (CLAUDE.md 历史教训)。
+
+        Args:
+            src_object_name: 源对象路径
+            dst_object_name: 目标对象路径 (新路径, 可带版本前缀)
+
+        Returns:
+            目标对象字节大小 (从 stat 读取, 用于校验 copy 成功)
+        """
+        def _sync_copy():
+            from minio.commonconfig import CopySource
+            # 桶内 copy: CopySource(bucket, src_object_name)
+            # 不需要 metadata directive (默认 COPY), 也不需要 conditions
+            self.client.copy_object(
+                self.bucket,
+                dst_object_name,
+                CopySource(self.bucket, src_object_name),
+            )
+            # stat_object 校验 copy 成功 + 拿大小
+            stat = self.client.stat_object(self.bucket, dst_object_name)
+            return stat.size
+
+        return await asyncio.to_thread(_sync_copy)
+
+    async def object_exists(self, object_name: str) -> bool:
+        """检查对象是否存在"""
+        def _check():
+            try:
+                self.client.stat_object(self.bucket, object_name)
+                return True
+            except Exception:
+                return False
+        return await asyncio.to_thread(_check)
+
 
 # 全局实例
 file_service = FileService()

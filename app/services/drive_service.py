@@ -25,7 +25,7 @@ from sqlalchemy import and_, or_, select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.folder import Folder, VISIBILITY_ORDER
-from app.models.knowledge import Knowledge
+from app.models.knowledge import Knowledge, KnowledgeVersion  # PR4: 版本历史
 from app.services.file_service import file_service
 
 logger = logging.getLogger("microbubble.drive")
@@ -92,6 +92,7 @@ class DriveServiceError(Exception):
     """业务级错误，调用方映射成 HTTP 4xx"""
     def __init__(self, message: str, status_code: int = 400):
         super().__init__(message)
+        self.message = message  # 暴露属性, 否则 e.message 报 AttributeError
         self.status_code = status_code
 
 
@@ -159,6 +160,7 @@ class DriveService:
         created_by: Optional[int] = None,
         source_type: Optional[str] = None,
         content: Optional[str] = None,
+        file_hash: Optional[str] = None,  # PR4: 秒传 hash
     ) -> Knowledge:
         """创建 drive 文件元数据 (multipart complete 后调用, 或从前端直接表单上传)
 
@@ -175,6 +177,7 @@ class DriveService:
             created_by: 创建人 (默认 = owner_id)
             source_type: auto_research 等上游标识, 默认 None
             content: 提取摘要 (默认 None)
+            file_hash: 文件 MD5/SHA256 hex hash (PR4 秒传字段, 可选)
         """
         if storage_mode == "drive":
             assert visibility in ("private", "team", "public"), f"invalid visibility: {visibility}"
@@ -202,6 +205,10 @@ class DriveService:
             file_path=file_path,
             file_name=file_name,
             file_type=file_type,
+            file_size=file_size,           # PR4: 真值 (PR2.7 之前 0)
+            file_hash=file_hash,            # PR4: 秒传 hash (可空)
+            is_latest=True,                 # PR4: 新文件默认最新
+            version_number=1,               # PR4: 默认 v1
             source_type=source_type or "drive",
             created_by=created_by or owner_id,
             storage_mode=storage_mode,
@@ -213,7 +220,8 @@ class DriveService:
         await self.db.refresh(knowledge)
         logger.info(
             f"[DriveService.create_file] id={knowledge.id} file_name={file_name} "
-            f"visibility={visibility} folder_id={folder_id}"
+            f"visibility={visibility} folder_id={folder_id} "
+            f"file_size={file_size} file_hash={'<set>' if file_hash else None}"
         )
         return knowledge
 
@@ -1203,3 +1211,370 @@ class DriveService:
             f"deleted={deleted} skipped={len(skipped)}"
         )
         return deleted, skipped
+
+    # ============================================================
+    # v2 PR4: 文件秒传 (hash) + 版本历史
+    # ============================================================
+
+    async def hash_lookup(
+        self,
+        *,
+        file_hash: str,
+        current_user_id: int,
+    ) -> Optional[Knowledge]:
+        """按 hash 查同 owner 的活跃 drive 文件 (秒查 dedup)
+
+        匹配规则:
+        - file_hash 严格相等
+        - storage_mode='drive' (KB 不参与秒传)
+        - deleted_at IS NULL (软删不算)
+        - is_latest=True (历史版本不参与秒查, 避免误命中)
+
+        Returns:
+            命中的 Knowledge 行, 没命中返 None
+        """
+        stmt = (
+            select(Knowledge)
+            .where(
+                Knowledge.file_hash == file_hash,
+                Knowledge.storage_mode == "drive",
+                Knowledge.deleted_at.is_(None),
+                Knowledge.is_latest.is_(True),
+            )
+            .order_by(Knowledge.created_at.desc())
+            .limit(1)
+        )
+        res = await self.db.execute(stmt)
+        row = res.scalar_one_or_none()
+        if row and self._can_see_file(row, current_user_id):
+            return row
+        return None
+
+    async def create_instant_upload(
+        self,
+        *,
+        file_hash: str,
+        file_name: str,
+        file_size: int,
+        owner_id: int,
+        folder_id: Optional[int] = None,
+        visibility: str = "team",
+        created_by: Optional[int] = None,
+    ) -> Tuple[Optional[Knowledge], int]:
+        """秒传 dedup: hash 命中 → MinIO copy_object 零带宽秒传
+
+        PR4 设计:
+        1. hash_lookup 查同 hash 文件 (用户可见)
+        2. 命中 → file_service.copy_object_async 在 MinIO 内复制, 不经过本机
+        3. 新 Knowledge 行 file_path 是新路径, 但 file_hash/file_size 一致
+        4. dedup_saved_bytes = 复制的字节数 (告诉前端"省了 X MB")
+
+        Returns:
+            (knowledge_or_none, dedup_saved_bytes)
+            - 命中: (Knowledge行, 复制字节数)
+            - 未命中: (None, 0) → 前端走 multipart 上传
+        """
+        existing = await self.hash_lookup(
+            file_hash=file_hash, current_user_id=owner_id,
+        )
+        if existing is None:
+            return None, 0
+
+        # MinIO 服务端 copy_object 零带宽秒传
+        ext = ""
+        if "." in file_name:
+            ext = "." + file_name.rsplit(".", 1)[-1].lower()
+        new_object = (
+            f"uploads/drive/{owner_id}/"
+            f"{secrets.token_hex(8)}_{file_hash[:12]}_{int(datetime.now(timezone.utc).timestamp())}"
+            f"{ext}"
+        )
+        copied_size = await file_service.copy_object_async(
+            existing.file_path, new_object,
+        )
+
+        # 文件夹校验 (复用 create_file 的逻辑)
+        if folder_id is not None:
+            folder = await self.get_folder(folder_id)
+            if folder is None:
+                raise DriveServiceError(
+                    f"文件夹 id={folder_id} 不存在", status_code=400,
+                )
+            if folder.owner_id != owner_id:
+                raise DriveServiceError(
+                    f"无权在该文件夹中创建文件", status_code=403,
+                )
+            self._validate_visibility_inherits(visibility, folder.visibility)
+
+        # 新行 + 复用同 hash
+        new_k = Knowledge(
+            title=file_name,
+            content=f"[drive instant-upload] {file_name}",
+            file_path=new_object,
+            file_name=file_name,
+            file_type=ext.lstrip(".") if ext else existing.file_type,
+            file_size=copied_size,
+            file_hash=file_hash,
+            is_latest=True,
+            version_number=1,            # 秒传是新文件, 不是新版本
+            parent_version_id=None,
+            source_type="drive",
+            created_by=created_by or owner_id,  # Knowledge 模型无 owner_id, 用 created_by
+            storage_mode="drive",
+            visibility=visibility,
+            folder_id=folder_id,
+        )
+        self.db.add(new_k)
+        await self.db.commit()
+        await self.db.refresh(new_k)
+        logger.info(
+            f"[DriveService.create_instant_upload] HIT hash={file_hash[:12]}... "
+            f"src_id={existing.id} dst_id={new_k.id} "
+            f"src_path={existing.file_path} dst_path={new_object} "
+            f"dedup_saved_bytes={copied_size}"
+        )
+        return new_k, copied_size
+
+    async def create_version(
+        self,
+        *,
+        file_id: int,
+        new_hash: str,
+        new_size: int,
+        new_object_name: str,
+        new_filename: str,
+        change_note: Optional[str],
+        uploader_id: int,
+    ) -> Knowledge:
+        """创建新版本: 旧 is_latest=False, 新行 version_number+=1, parent_version_id=旧.id
+
+        调用方 (前端 multipart upload 走完后) 负责:
+        - 把新文件 bytes 通过 file_service.upload_to_path 写到 new_object_name
+        - 然后调本方法写 metadata
+
+        Returns:
+            新 Knowledge 行 (is_latest=True)
+        """
+        cur = await self.db.get(Knowledge, file_id)
+        if cur is None:
+            raise DriveServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        if cur.is_latest is False:
+            raise DriveServiceError(
+                f"文件 id={file_id} 已是历史版本, 无法再创建新版本", status_code=400,
+            )
+
+        # 旧行翻 is_latest=False (保留作为历史链)
+        cur.is_latest = False
+        cur.parent_version_id = cur.parent_version_id  # 不动, 保持原链
+
+        # 新行
+        new_version_number = (cur.version_number or 1) + 1
+        new_k = Knowledge(
+            title=cur.title,
+            content=cur.content,
+            file_path=new_object_name,
+            file_name=new_filename,
+            file_type=cur.file_type,
+            file_size=new_size,
+            file_hash=new_hash,
+            is_latest=True,
+            version_number=new_version_number,
+            parent_version_id=cur.id,
+            source_type=cur.source_type,
+            created_by=uploader_id,
+            storage_mode="drive",
+            visibility=cur.visibility,
+            folder_id=cur.folder_id,
+            owner_id=cur.owner_id,
+        )
+        self.db.add(new_k)
+        await self.db.flush()  # 拿 new_k.id
+
+        # 写知识版明细 (一行 = 一次版本)
+        kv = KnowledgeVersion(
+            file_id=new_k.id,
+            version_number=new_version_number,
+            file_hash=new_hash,
+            file_size=new_size,
+            uploaded_by=uploader_id,
+            change_note=change_note,
+        )
+        self.db.add(kv)
+        await self.db.commit()
+        await self.db.refresh(new_k)
+        logger.info(
+            f"[DriveService.create_version] file_id={file_id} → v{new_version_number} "
+            f"new_id={new_k.id} hash={new_hash[:12]}... "
+            f"change_note={change_note!r}"
+        )
+        return new_k
+
+    async def list_versions(
+        self,
+        *,
+        file_id: int,
+        current_user_id: int,
+    ) -> List[dict]:
+        """列文件版本历史 (含每版 hash + 上传者 + 时间)
+
+        返回字段:
+        - id: knowledge_versions.id (版本明细行 id)
+        - file_id: knowledge.id (新版时 = 新行 id, 旧版时 = 老行 id)
+        - version_number
+        - file_hash
+        - file_size
+        - uploaded_by + uploaded_by_name (LEFT JOIN members)
+        - change_note
+        - created_at (ISO format)
+        - is_current: 是否当前最新版本
+        """
+        cur = await self.db.get(Knowledge, file_id)
+        if cur is None:
+            raise DriveServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        if not self._can_see_file(cur, current_user_id):
+            raise DriveServiceError(
+                f"无权查看文件 id={file_id} 的版本", status_code=403,
+            )
+
+        # 联合查询: knowledge_versions JOIN members + 当前 knowledge 行作为"current"
+        # 简化: 单独查两张表
+        from app.models.member import Member
+
+        stmt = (
+            select(KnowledgeVersion, Member.name)
+            .outerjoin(Member, KnowledgeVersion.uploaded_by == Member.id)
+            .where(KnowledgeVersion.file_id == file_id)
+            .order_by(KnowledgeVersion.version_number.desc())
+        )
+        res = await self.db.execute(stmt)
+        rows = res.all()
+
+        result = []
+        for kv, member_name in rows:
+            result.append({
+                "id": kv.id,
+                "file_id": kv.file_id,
+                "version_number": kv.version_number,
+                "file_hash": kv.file_hash,
+                "file_size": kv.file_size,
+                "uploaded_by": kv.uploaded_by,
+                "uploaded_by_name": member_name,
+                "change_note": kv.change_note,
+                "created_at": kv.created_at.isoformat() if kv.created_at else None,
+                "is_current": (kv.file_id == file_id and (cur.is_latest and kv.version_number == cur.version_number)),
+            })
+        return result
+
+    async def restore_version(
+        self,
+        *,
+        file_id: int,
+        version_id: int,
+        uploader_id: int,
+        change_note: Optional[str] = None,
+    ) -> Knowledge:
+        """恢复历史版本: 从旧 object_name copy_object 到新路径, 创建新行 v{cur.version+1}
+
+        流程 (与 create_version 类似, 只是数据源是历史版本的 object_name):
+        1. 拿 version 明细 → 拿到历史 file_hash + file_size
+        2. cur.is_latest=False
+        3. 新行: file_path = 新 object_name (从历史 object copy_object 过来)
+        4. 写知识版明细
+
+        Returns:
+            新 Knowledge 行 (is_latest=True, 与被恢复的 v1 内容字节级一致)
+        """
+        cur = await self.db.get(Knowledge, file_id)
+        if cur is None:
+            raise DriveServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        if cur.is_latest is False:
+            raise DriveServiceError(
+                f"文件 id={file_id} 已是历史版本, 无法再恢复", status_code=400,
+            )
+
+        kv = await self.db.get(KnowledgeVersion, version_id)
+        if kv is None:
+            raise DriveServiceError(
+                f"版本 id={version_id} 不存在", status_code=404,
+            )
+        if kv.file_id != file_id:
+            raise DriveServiceError(
+                f"版本 id={version_id} 不属于文件 id={file_id}", status_code=400,
+            )
+
+        # 拿历史行的 file_path (knowledge 行 file_path 即 MinIO object_name)
+        old_k = await self.db.get(Knowledge, kv.file_id)
+        old_object = old_k.file_path if old_k else None
+        if not old_object:
+            raise DriveServiceError(
+                f"历史版本 id={kv.file_id} 缺 MinIO object 引用", status_code=500,
+            )
+
+        # 校验源 object 还在 (防止被误删)
+        exists = await file_service.object_exists(old_object)
+        if not exists:
+            raise DriveServiceError(
+                f"历史版本 MinIO object 不存在: {old_object}", status_code=410,
+            )
+
+        # copy_object 反向
+        new_version_number = (cur.version_number or 1) + 1
+        ext = ""
+        if old_k.file_name and "." in old_k.file_name:
+            ext = "." + old_k.file_name.rsplit(".", 1)[-1].lower()
+        new_object = (
+            f"uploads/drive/{cur.owner_id}/"
+            f"v{new_version_number}_{kv.file_hash[:12]}_{int(datetime.now(timezone.utc).timestamp())}"
+            f"{ext}"
+        )
+        copied_size = await file_service.copy_object_async(old_object, new_object)
+
+        # 旧行翻 is_latest=False
+        cur.is_latest = False
+
+        # 新行
+        new_k = Knowledge(
+            title=cur.title,
+            content=cur.content,
+            file_path=new_object,
+            file_name=old_k.file_name,
+            file_type=old_k.file_type,
+            file_size=copied_size,
+            file_hash=kv.file_hash,        # 与历史版字节级一致
+            is_latest=True,
+            version_number=new_version_number,
+            parent_version_id=cur.id,
+            source_type=cur.source_type,
+            created_by=uploader_id,
+            storage_mode="drive",
+            visibility=cur.visibility,
+            folder_id=cur.folder_id,
+            owner_id=cur.owner_id,
+        )
+        self.db.add(new_k)
+        await self.db.flush()
+
+        # 写知识版明细 (恢复也算一个版本)
+        kv_new = KnowledgeVersion(
+            file_id=new_k.id,
+            version_number=new_version_number,
+            file_hash=kv.file_hash,
+            file_size=copied_size,
+            uploaded_by=uploader_id,
+            change_note=change_note or f"restored from v{kv.version_number}",
+        )
+        self.db.add(kv_new)
+        await self.db.commit()
+        await self.db.refresh(new_k)
+        logger.info(
+            f"[DriveService.restore_version] file_id={file_id} "
+            f"restored_from_v{kv.version_number} → new_v{new_version_number} "
+            f"new_id={new_k.id} copy_bytes={copied_size}"
+        )
+        return new_k

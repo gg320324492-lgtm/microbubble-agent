@@ -67,6 +67,10 @@ class DriveFileItem(BaseModel):
     # v2 PR2: 收藏字段
     is_starred: bool = False
     starred_at: Optional[str] = None
+    # v2 PR4: 秒传 + 版本历史
+    file_hash: Optional[str] = None
+    is_latest: bool = True
+    version_number: int = 1
 
     class Config:
         from_attributes = True
@@ -103,7 +107,7 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         file_path=k.file_path or "",
         file_name=k.file_name or "",
         file_type=k.file_type or "",
-        file_size=0,  # PR2 暂未在 Knowledge 模型加 file_size 列
+        file_size=k.file_size or 0,  # PR4: 真值 (PR2 之前 0)
         storage_mode=k.storage_mode,
         visibility=k.visibility,
         folder_id=k.folder_id,
@@ -117,6 +121,9 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         share_expires_at=str(k.share_expires_at) if k.share_expires_at else None,
         is_starred=bool(k.is_starred),
         starred_at=str(k.starred_at) if k.starred_at else None,
+        file_hash=k.file_hash,        # PR4
+        is_latest=bool(k.is_latest),  # PR4
+        version_number=k.version_number or 1,  # PR4
     )
 
 
@@ -1148,3 +1155,136 @@ async def public_download_by_token(
         media_type=content_type,
         headers=headers,
     )
+
+
+# ============================================================
+# v2 PR4: 文件秒传 (hash) + 版本历史
+# ============================================================
+
+
+class InstantUploadRequest(BaseModel):
+    """秒传查询请求 — 前端算完 hash 后 POST"""
+    file_hash: str = Field(..., min_length=32, max_length=64, description="MD5/SHA256 hex (32/64 chars)")
+    file_name: str = Field(..., min_length=1, max_length=200)
+    file_size: int = Field(..., ge=1, le=MAX_DRIVE_FILE_SIZE_BYTES)
+    folder_id: Optional[int] = None
+    visibility: str = Field("team", pattern="^(private|team|public)$")
+
+
+class InstantUploadResponse(BaseModel):
+    """秒传响应
+    - instant=true  命中: 新 file_id 已创建, 不用再上传字节
+    - instant=false 未命中: 前端走老 multipart 上传路径
+    """
+    instant: bool
+    file_id: Optional[int] = None
+    file_name: Optional[str] = None
+    dedup_saved_bytes: int = 0
+    file_size: Optional[int] = None
+    file_hash: Optional[str] = None
+    # miss 时返前端走老路径的提示
+    upload_url: Optional[str] = None
+
+
+class VersionItem(BaseModel):
+    """版本历史明细 (一行 = 一次版本)"""
+    id: int
+    file_id: int
+    version_number: int
+    file_hash: str
+    file_size: int
+    uploaded_by: int
+    uploaded_by_name: Optional[str] = None
+    change_note: Optional[str] = None
+    created_at: str
+    is_current: bool = False
+
+
+class RestoreVersionRequest(BaseModel):
+    """恢复版本请求 — 可选 change_note"""
+    change_note: Optional[str] = Field(None, max_length=500)
+
+
+@router.post("/files/instant-upload", response_model=InstantUploadResponse)
+async def instant_upload(
+    body: InstantUploadRequest,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """秒传 dedup 查询 + 创建 (命中时)
+
+    命中: hash_lookup 找到同 owner 同 hash 文件 → MinIO copy_object 零带宽 → 新 Knowledge 行
+    未命中: 返 instant=false, 前端走老 multipart 上传
+    """
+    svc = DriveService(db)
+    try:
+        k, saved = await svc.create_instant_upload(
+            file_hash=body.file_hash,
+            file_name=body.file_name,
+            file_size=body.file_size,
+            owner_id=user.id,
+            folder_id=body.folder_id,
+            visibility=body.visibility,
+            created_by=user.id,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+    if k:
+        return InstantUploadResponse(
+            instant=True,
+            file_id=k.id,
+            file_name=k.file_name,
+            dedup_saved_bytes=saved,
+            file_size=k.file_size,
+            file_hash=k.file_hash,
+        )
+    return InstantUploadResponse(
+        instant=False,
+        upload_url="/api/v1/drive/files/upload",
+    )
+
+
+@router.get("/files/{file_id}/versions", response_model=List[VersionItem])
+async def list_file_versions(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """列文件版本历史 (按 version_number desc)
+
+    权限: 走 _can_see_file, private 文件仅 owner 可看
+    """
+    svc = DriveService(db)
+    try:
+        items = await svc.list_versions(file_id=file_id, current_user_id=user.id)
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    return [VersionItem(**item) for item in items]
+
+
+@router.post("/files/{file_id}/versions/{version_id}/restore", response_model=DriveFileItem)
+async def restore_file_version(
+    file_id: int,
+    version_id: int,
+    body: RestoreVersionRequest = RestoreVersionRequest(),
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """恢复历史版本
+
+    创建新行 v{cur.version+1}, file_hash 与历史版一致 (字节级还原)
+    旧版本链保留 (cur.is_latest=False), 新行 is_latest=True
+    """
+    svc = DriveService(db)
+    try:
+        new_k = await svc.restore_version(
+            file_id=file_id,
+            version_id=version_id,
+            uploader_id=user.id,
+            change_note=body.change_note,
+        )
+    except DriveServiceError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    await db.refresh(new_k)
+    return _to_item(new_k, viewer_id=user.id)
