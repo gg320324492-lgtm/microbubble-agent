@@ -224,6 +224,14 @@
       @action="onPickVisibility"
     />
 
+    <!-- PR4.5: 加入公共知识库 Sheet (team / public 二选一) -->
+    <MobileActionSheet
+      v-model:show="showExtractSheet"
+      :title="extractTarget ? `加入公共知识库: ${extractTarget.file_name || extractTarget.title}` : '加入公共知识库'"
+      :actions="extractActions"
+      @action="onPickExtractVisibility"
+    />
+
     <input
       ref="uploadInputRef"
       type="file"
@@ -588,8 +596,36 @@ async function onPickVisibility(action) {
 }
 
 async function onMobileFileExtractToKb(file) {
-  // PR4.5: 接入 MobileExtractToKBSheet
-  ElMessage.info(`加入公共知识库功能待 PR4.5 接入: ${file.file_name}`)
+  // PR4.5: 弹 extract-to-kb ActionSheet (team / public 二选一, 不允许 private)
+  // 后端: POST /api/v1/drive/files/{id}/extract-to-kb body={target_visibility: "team"|"public"}
+  showExtractSheet.value = true
+  extractTarget.value = file
+}
+
+const showExtractSheet = ref(false)
+const extractTarget = ref(null)
+const extractActions = computed(() => {
+  if (!extractTarget.value) return []
+  return [
+    { name: 'team', label: '👥 团队', subtitle: '课题组全员可检索' },
+    { name: 'public', label: '🌐 公开', subtitle: '所有人可检索' },
+  ]
+})
+
+async function onPickExtractVisibility(action) {
+  showExtractSheet.value = false
+  if (!extractTarget.value || !action?.name) return
+  const file = extractTarget.value
+  try {
+    await axios.post(`/api/v1/drive/files/${file.id}/extract-to-kb`, {
+      target_visibility: action.name
+    })
+    ElMessage.success(`已加入公共知识库 (${action.name === 'team' ? '团队' : '公开'})`)
+    // 刷新文件列表 (status 改 kb, 长按菜单不再显示 "加入公共知识库" 选项)
+    mobileFileListRef.value?.refresh?.()
+  } catch (e) {
+    ElMessage.error(e.message || '加入失败')
+  }
 }
 
 async function onMobileFileDelete(file) {
