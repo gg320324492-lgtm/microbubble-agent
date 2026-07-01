@@ -346,3 +346,262 @@ async def get_storage_stats(
     svc = DriveService(db)
     stats = await svc.storage_stats(current_user_id=current_user.id)
     return StorageStatsResponse(**stats)
+
+
+# ==========================================================================
+# 下载 (PR2.6)
+# ==========================================================================
+import zipfile
+import re
+from urllib.parse import quote
+
+from fastapi.responses import StreamingResponse
+from starlette.requests import Request
+
+
+def _check_download_visibility(file_knowledge, current_user_id: int) -> None:
+    """下载/预览前校验: private 必须是 owner"""
+    if file_knowledge.visibility == "private" and file_knowledge.created_by != current_user_id:
+        raise HTTPException(status_code=403, detail="无权限下载该私有文件")
+
+
+@router.get("/files/{file_id}/download")
+async def download_drive_file(
+    file_id: int,
+    request: Request,
+    disposition: str = Query("attachment", pattern="^(attachment|inline)$"),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """单文件下载 (支持 Range 断点续传 + 中文文件名 URL 编码)"""
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    _check_download_visibility(f, current_user.id)
+
+    if not f.file_path:
+        raise HTTPException(status_code=404, detail="file 无 MinIO 对象")
+
+    # 文件元信息
+    content_type = f.file_type or "application/octet-stream"
+    if content_type and not content_type.startswith("video/") and not content_type.startswith("image/") and disposition == "inline":
+        # text 类保持原 mime, 其他 inline 也按 octet-stream
+        pass
+    filename = f.file_name or f.title or f"file_{f.id}"
+
+    # Range 头解析
+    range_header = request.headers.get("Range")
+    if range_header:
+        m = re.match(r"bytes=(\d+)-(\d*)", range_header)
+        if m:
+            start = int(m.group(1))
+            end_str = m.group(2)
+            # 读 total size
+            file_size = await _get_object_size(f.file_path)
+            if file_size is None:
+                # 没拿到 size, 走完整下载
+                start = None
+            else:
+                if end_str:
+                    end = min(int(end_str), file_size - 1)
+                else:
+                    end = file_size - 1
+                length = end - start + 1
+
+                async def _range_stream():
+                    chunk = await _download_range(f.file_path, start, length)
+                    yield chunk
+
+                encoded = quote(filename)
+                headers = {
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(length),
+                    "Content-Disposition": f"{disposition}; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+                }
+                return StreamingResponse(
+                    _range_stream(),
+                    status_code=206,
+                    media_type=content_type,
+                    headers=headers,
+                )
+
+    # 完整下载
+    file_size = await _get_object_size(f.file_path)
+    encoded = quote(filename)
+    headers = {
+        "Content-Disposition": f"{disposition}; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+    }
+    if file_size is not None:
+        headers["Content-Length"] = str(file_size)
+    headers["Accept-Ranges"] = "bytes"
+
+    async def _full_stream():
+        data = await file_service.download_file(f.file_path)
+        yield data
+
+    return StreamingResponse(
+        _full_stream(),
+        media_type=content_type,
+        headers=headers,
+    )
+
+
+async def _get_object_size(object_name: str) -> Optional[int]:
+    """读 MinIO 对象 size (用 stat_object 同步)"""
+    import asyncio
+    try:
+        def _sync_stat():
+            return file_service.client.stat_object(file_service.bucket, object_name)
+        obj = await asyncio.to_thread(_sync_stat)
+        return obj.size
+    except Exception:
+        return None
+
+
+async def _download_range(object_name: str, start: int, length: int) -> bytes:
+    """下载 MinIO 对象指定字节范围 (minio get_object 支持 offset+length)"""
+    import asyncio
+    def _sync_range():
+        response = file_service.client.get_object(
+            file_service.bucket, object_name, offset=start, length=length,
+        )
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+    return await asyncio.to_thread(_sync_range)
+
+
+# === 批量 ZIP 下载 ===
+
+class BatchDownloadRequest(BaseModel):
+    ids: Optional[List[int]] = Field(None, description="文件 id 列表")
+    folder_id: Optional[int] = Field(None, description="递归下载整个 folder")
+
+
+@router.post("/files/batch-download")
+async def batch_download_drive_files(
+    payload: BatchDownloadRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """批量 ZIP 下载 (流式生成, 不落盘)
+
+    body: {"ids": [1,2,3]} OR {"folder_id": 4}
+    无权限文件跳过, ZIP 根目录生成 _skipped.txt
+    """
+    if not payload.ids and not payload.folder_id:
+        raise HTTPException(status_code=400, detail="ids 或 folder_id 必填其一")
+
+    svc = DriveService(db)
+
+    # 1) 收集 file 列表
+    file_records = []
+    skipped = []
+    if payload.ids:
+        for fid in payload.ids:
+            f = await svc.get_file(fid, current_user_id=current_user.id)
+            if f is None:
+                skipped.append(f"id={fid} 无权访问")
+                continue
+            _check_download_visibility(f, current_user.id)
+            if not f.file_path:
+                skipped.append(f"id={fid} 无 MinIO 对象")
+                continue
+            file_records.append(f)
+    elif payload.folder_id:
+        # 递归收集 folder 下的所有文件 (含子 folder)
+        file_records, skipped = await _collect_folder_files(
+            db, svc, payload.folder_id, current_user.id, skipped
+        )
+
+    if not file_records and not skipped:
+        raise HTTPException(status_code=404, detail="无可下载文件")
+
+    # 2) 流式生成 ZIP
+    timestamp = _dt_now.now().strftime("%Y%m%d_%H%M%S")
+    zip_filename = f"drive_{current_user.username}_{timestamp}.zip"
+
+    async def _zip_stream():
+        # BytesIO 缓冲区 zip stream
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in file_records:
+                try:
+                    data = await file_service.download_file(f.file_path)
+                    # ZIP 内路径: file_name (避免重复)
+                    arcname = f.file_name or f"file_{f.id}"
+                    # 防路径冲突 (同名)
+                    existing = [n for n in zf.namelist() if n == arcname]
+                    if existing:
+                        arcname = f"{f.id}_{arcname}"
+                    zf.writestr(arcname, data)
+                except Exception as e:
+                    logger.warning(f"批量下载跳过 file_id={f.id}: {e}")
+                    continue
+            # skipped list 写 _skipped.txt
+            if skipped:
+                skipped_content = "\n".join(skipped)
+                zf.writestr("_skipped.txt", skipped_content)
+        # yield 一次完整 buffer (PR3 优化: chunked write)
+        buffer.seek(0)
+        yield buffer.read()
+
+    encoded = quote(zip_filename)
+    return StreamingResponse(
+        _zip_stream(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{zip_filename}\"; filename*=UTF-8''{encoded}",
+        },
+    )
+
+
+async def _collect_folder_files(
+    db: AsyncSession,
+    drive_svc: DriveService,
+    folder_id: int,
+    current_user_id: int,
+    skipped: list,
+) -> tuple:
+    """递归收集 folder 下所有 file + 跨子 folder, 越权文件入 skipped"""
+    from app.services.folder_service import FolderService
+    folder_svc = FolderService(db)
+
+    # 1) 校验 folder 越权
+    folder = await folder_svc.get_folder(folder_id)
+    if folder is None:
+        return [], skipped + [f"folder_id={folder_id} 不存在"]
+    if folder.visibility == "private" and folder.owner_id != current_user_id:
+        return [], skipped + [f"folder_id={folder_id} 无权访问"]
+
+    # 2) 列当前 folder 的文件
+    files, _ = await drive_svc.list_files(
+        current_user_id=current_user_id,
+        folder_id=folder_id,
+        storage_mode="drive",
+        page=1,
+        page_size=1000,  # 单 folder 上限 1000 个文件
+    )
+    # 过滤已软删 + 真实可见
+    file_records = [f for f in files if f.deleted_at is None and f.file_path]
+
+    # 3) 递归子 folder
+    children = await folder_svc.list_children(folder_id=folder_id, include_deleted=False)
+    for child in children:
+        if child.visibility == "private" and child.owner_id != current_user_id:
+            skipped.append(f"folder_id={child.id} 跳过 (无权限)")
+            continue
+        sub_files, skipped = await _collect_folder_files(
+            db, drive_svc, child.id, current_user_id, skipped,
+        )
+        file_records.extend(sub_files)
+
+    return file_records, skipped
+
+
+# === Stats 补 time import ===
+from datetime import datetime as _dt_now
