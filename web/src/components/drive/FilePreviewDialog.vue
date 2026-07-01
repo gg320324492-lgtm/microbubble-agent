@@ -77,6 +77,9 @@
     </div>
 
     <template #footer>
+      <el-button :icon="ChatDotRound" @click="onGoDetail">
+        查看详情/评论
+      </el-button>
       <el-button @click="visible = false">关闭</el-button>
       <el-button type="primary" :icon="Download" @click="downloadFile">
         下载
@@ -98,7 +101,8 @@
  * 4. 关闭 dialog 时 revokeObjectURL 防内存泄漏
  */
 import { ref, computed, watch, onUnmounted } from 'vue'
-import { Loading, Download } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Loading, Download, ChatDotRound } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
@@ -108,6 +112,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const router = useRouter()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -188,6 +193,13 @@ function cleanup() {
 
 function onClose() {
   cleanup()
+}
+
+function onGoDetail() {
+  if (!props.file?.id) return
+  visible.value = false  // 关闭预览
+  cleanup()              // 释放 blob URL
+  router.push(`/drive/file/${props.file.id}`)
 }
 
 async function downloadFile() {

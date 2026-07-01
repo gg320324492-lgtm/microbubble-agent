@@ -151,6 +151,15 @@ const routes = [
         meta: { title: '活动动态', icon: 'Bell' }
       },
       {
+        // v2 PR6-P2: 文件详情页 (桌面端 PR6-P2 新增, 移动端暂用 DriveList 占位)
+        // 集成文件信息 + CommentThread (评论 @ 自动 mention)
+        path: 'drive/file/:id',
+        name: 'DriveFileDetail',
+        component: resolveMobileComponent('desktop/FileDetailView', 'mobile/MobileDriveView'),
+        meta: { title: '文件详情' },
+        props: true,
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: resolveMobileComponent('SettingsView', 'MobileSettingsView'),
