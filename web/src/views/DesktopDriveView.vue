@@ -50,11 +50,17 @@
     <div class="drive-main">
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
-        <!-- PR3.2: FolderTree 组件 -->
-        <div class="drive-sidebar-placeholder">
-          <el-icon class="placeholder-icon"><Files /></el-icon>
-          <p class="placeholder-text">文件夹树 (PR3.2 接入)</p>
-        </div>
+        <!-- PR3.2: FolderTree 组件 (含 FolderTreeNode 递归) -->
+        <FolderTree
+          :folder-tree="folderTree"
+          :selected-folder-id="selectedFolderId"
+          :expanded-folder-ids="expandedFolderIds"
+          :loading="treeLoading"
+          :load-error="treeLoadError"
+          @update:selected-folder-id="selectedFolderId = $event"
+          @toggle-expanded="toggleExpandedFolder"
+          @retry="fetchFolderTree"
+        />
       </aside>
 
       <main class="drive-content">
@@ -89,13 +95,30 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Search, UploadFilled, Folder, Plus, Grid, List, Files } from '@element-plus/icons-vue'
+import FolderTree from '@/components/drive/FolderTree.vue'
+import { useFolderTree } from '@/composables/useFolderTree'
+
+// === 文件夹树 (PR3.2 接入) ===
+const {
+  folderTree,
+  expandedFolderIds,
+  loading: treeLoading,
+  loadError: treeLoadError,
+  fetchTree: fetchFolderTree,
+  toggleExpanded: toggleExpandedFolder
+} = useFolderTree()
 
 // === 状态 (PR3.1 骨架: 仅声明, 不调 API) ===
 const selectedFolderId = ref(null)
 const viewMode = ref('grid')  // grid | list
 const searchQuery = ref('')
+
+// === 生命周期 ===
+onMounted(() => {
+  fetchFolderTree()
+})
 
 // === 计算属性 ===
 const currentPathDisplay = computed(() => {
