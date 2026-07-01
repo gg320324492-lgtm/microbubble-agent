@@ -1,4 +1,4 @@
-"""Drive 文件服务 (PR2.1)
+"""Drive 文件服务 (PR2.1 + v2 升级)
 
 负责 drive_storage_mode='drive' 文件元数据的 CRUD 操作。
 
@@ -15,6 +15,7 @@
   2. drive 文件不入 Agent search_knowledge 检索 (隐私边界)
   3. listing 时 SQL hard-filter private → created_by=current_user_id
 """
+import hashlib
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -33,6 +34,49 @@ logger = logging.getLogger("microbubble.drive")
 # 默认配额
 MAX_DRIVE_FILE_SIZE_MB = 2048  # MinIO multipart 安全上限
 MAX_DRIVE_FILE_SIZE_BYTES = MAX_DRIVE_FILE_SIZE_MB * 1024 * 1024
+
+
+# ===== 分享链接默认值 (v2 PR1) =====
+DEFAULT_SHARE_EXPIRES_HOURS = 168   # 7 天 (百度网盘默认 7 天, 我们保持一致)
+MAX_SHARE_EXPIRES_HOURS = 8760     # 365 天
+MIN_SHARE_PASSWORD_LENGTH = 4
+MAX_SHARE_PASSWORD_LENGTH = 8
+
+
+def _hash_share_password(password: str) -> str:
+    """提取码 SHA256 hex 哈希 (64 字符).
+
+    计划文档原话: "提取码 SHA256 哈希存", 所以即使明文是 4 位数字也存 hash.
+    """
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _validate_share_password(password: Optional[str]) -> None:
+    """校验提取码长度 (4-8 位数字). 抛出 DriveServiceError(400) 给上层 API.
+    """
+    if password is None:
+        return  # 公开分享, 无密码
+    if not isinstance(password, str) or len(password) < MIN_SHARE_PASSWORD_LENGTH or len(password) > MAX_SHARE_PASSWORD_LENGTH:
+        raise DriveServiceError(
+            f"提取码长度需在 {MIN_SHARE_PASSWORD_LENGTH}-{MAX_SHARE_PASSWORD_LENGTH} 位之间",
+            status_code=400,
+        )
+    if not password.isdigit():
+        raise DriveServiceError("提取码必须为纯数字", status_code=400)
+
+
+def _validate_share_expires_hours(expires_hours: Optional[int]) -> None:
+    """校验分享链接过期时间 (1h - 365d). 0/None = 7 天默认. 负数 = 永久 (-1).
+    """
+    if expires_hours is None or expires_hours == 0:
+        return
+    if expires_hours == -1:
+        return  # -1 = 永久
+    if expires_hours < 1 or expires_hours > MAX_SHARE_EXPIRES_HOURS:
+        raise DriveServiceError(
+            f"过期时长超出范围 (1 - {MAX_SHARE_EXPIRES_HOURS} 小时), 0 = 默认 7 天, -1 = 永久",
+            status_code=400,
+        )
 
 
 def _to_naive_dt(dt: Optional[datetime]) -> Optional[datetime]:
@@ -488,19 +532,56 @@ class DriveService:
         file_id: int,
         current_user_id: int,
         *,
-        expires_in_days: int = 7,
+        expires_in_days: Optional[int] = None,
+        expires_hours: Optional[int] = None,
+        password: Optional[str] = None,
     ) -> Optional[Knowledge]:
         """生成公开分享 token (owner only)
 
-        - token: 32 字符 secrets.token_urlsafe
-        - expires: now + expires_in_days
-        - owner only (private 仍能生成, 因为是"主动决定暴露")
+        v2 PR1 升级:
+        - expires_hours 新参数 (细粒度, 1-8760)
+        - password 新参数 (4-8 位数字, 存 SHA256 hash)
+        - 保留 expires_in_days 向后兼容 (None 时优先级低于 expires_hours)
+
+        Args:
+            file_id: drive 文件 id
+            current_user_id: 当前用户 (必须 = file.created_by)
+            expires_in_days: 保留旧 API, 1-365 (向后兼容)
+            expires_hours: 新 API, 1-8760; 0=None=默认 7 天; -1=永久
+            password: 4-8 位数字, None = 公开分享
         """
-        if expires_in_days < 1 or expires_in_days > 365:
-            raise DriveServiceError(
-                f"expires_in_days {expires_in_days} 超出范围 [1, 365]",
-                status_code=400,
+        # 优先 expires_hours (新 API), 退到 expires_in_days (旧 API)
+        if expires_hours is not None:
+            _validate_share_expires_hours(expires_hours)
+            if expires_hours == -1:
+                expires_at = None  # 永久
+            elif expires_hours == 0:
+                expires_at = _to_naive_dt(
+                    datetime.now(timezone.utc) + timedelta(hours=DEFAULT_SHARE_EXPIRES_HOURS)
+                )
+            else:
+                expires_at = _to_naive_dt(
+                    datetime.now(timezone.utc) + timedelta(hours=expires_hours)
+                )
+        elif expires_in_days is not None:
+            if expires_in_days < 1 or expires_in_days > 365:
+                raise DriveServiceError(
+                    f"expires_in_days {expires_in_days} 超出范围 [1, 365]",
+                    status_code=400,
+                )
+            expires_at = _to_naive_dt(
+                datetime.now(timezone.utc) + timedelta(days=expires_in_days)
             )
+        else:
+            # 默认 7 天
+            expires_at = _to_naive_dt(
+                datetime.now(timezone.utc) + timedelta(hours=DEFAULT_SHARE_EXPIRES_HOURS)
+            )
+
+        # 提取码校验
+        _validate_share_password(password)
+        password_hash = _hash_share_password(password) if password else None
+
         f = await self.db.execute(
             select(Knowledge).where(
                 Knowledge.id == file_id,
@@ -515,14 +596,13 @@ class DriveService:
         # 32 字符 token (44 字符 url-safe base64)
         token = secrets.token_urlsafe(24)[:32]
         f.share_token = token
-        f.share_expires_at = _to_naive_dt(
-            datetime.now(timezone.utc) + timedelta(days=expires_in_days)
-        )
+        f.share_expires_at = expires_at
+        f.share_password = password_hash
         await self.db.commit()
         await self.db.refresh(f)
         logger.info(
             f"[DriveService.create_share_link] id={f.id} token={token[:8]}... "
-            f"expires={f.share_expires_at}"
+            f"expires={f.share_expires_at} password={'yes' if password_hash else 'no'}"
         )
         return f
 
@@ -531,7 +611,7 @@ class DriveService:
         file_id: int,
         current_user_id: int,
     ) -> bool:
-        """撤销分享链接 (清 token + expires)"""
+        """撤销分享链接 (清 token + expires + password)"""
         f = await self.db.execute(
             select(Knowledge).where(
                 Knowledge.id == file_id,
@@ -544,11 +624,16 @@ class DriveService:
             return False
         f.share_token = None
         f.share_expires_at = None
+        f.share_password = None
         await self.db.commit()
         return True
 
     async def get_by_share_token(self, token: str) -> Optional[Knowledge]:
-        """通过 token 公开访问 (无 JWT, 用于 /drive/share/{token} 端点)"""
+        """通过 token 公开访问 (无 JWT, 用于 /drive/share/{token} 端点)
+
+        注意: 不校验密码 (留给 verify_share_access 调用方), 密码验证必须先 get_by_share_token
+        后由调用方主动传 password 走 verify_share_access(token, password).
+        """
         if not token:
             return None
         f = await self.db.execute(
@@ -568,4 +653,91 @@ class DriveService:
             if expires_naive < now_naive:
                 logger.info(f"[DriveService.get_by_share_token] token={token[:8]}... 已过期")
                 return None
+        return f
+
+    async def verify_share_access(
+        self,
+        token: str,
+        password: Optional[str] = None,
+    ) -> Optional[Knowledge]:
+        """验证分享链接访问权限 (含密码校验).
+
+        Returns:
+            - None: token 不存在 / 已过期 / 密码错误
+            - Knowledge: 通过验证的文件对象
+
+        行为:
+        1. 调 get_by_share_token 校验 token 存在 + 未过期
+        2. share_password is NULL (公开分享) → 直接返回 file
+        3. share_password 非 NULL → 必须 password 正确 (SHA256 hash 一致) 才能返回
+        """
+        f = await self.get_by_share_token(token)
+        if f is None:
+            return None
+        # 公开分享 / password_hash 未设 → 直接通过
+        if not f.share_password:
+            return f
+        # 有密码: 必须提供且 hash 一致
+        if password is None:
+            return None
+        password_hash = _hash_share_password(password)
+        if password_hash != f.share_password:
+            logger.info(f"[DriveService.verify_share_access] token={token[:8]}... 密码错误")
+            return None
+        return f
+
+    # ==========================================================================
+    # v2 PR1 visibility edit (桌面 stub 修复)
+    # ==========================================================================
+
+    async def update_visibility(
+        self,
+        file_id: int,
+        current_user_id: int,
+        new_visibility: str,
+    ) -> Optional[Knowledge]:
+        """修改 drive 文件可见性 (owner only).
+
+        校验:
+        1. visibility 必须在 {private, team, public} 三选一
+        2. 必须 <= 所在文件夹 visibility (硬上限, plan 决策)
+        3. 文件已 owner 才能改
+
+        Returns: 更新后的 Knowledge 或 None (越权/不存在).
+        """
+        if new_visibility not in ("private", "team", "public"):
+            raise DriveServiceError(
+                f"非法 visibility '{new_visibility}', 必须是 private/team/public",
+                status_code=400,
+            )
+
+        f = await self.db.execute(
+            select(Knowledge).where(
+                Knowledge.id == file_id,
+                Knowledge.deleted_at.is_(None),
+                Knowledge.storage_mode == "drive",
+            )
+        )
+        f = f.scalar_one_or_none()
+        if f is None or f.created_by != current_user_id:
+            return None
+
+        # visibility 上限 (private 不能往公开升级除非 folder 允许)
+        if f.folder_id is not None:
+            folder = await self.get_folder(f.folder_id)
+            if folder is not None:
+                self._validate_visibility_inherits(new_visibility, folder.visibility)
+
+        before = f.visibility
+        f.visibility = new_visibility
+
+        # 注意: 文件夹 owner 改 visibility 后, share_token 可不撤销 (原 token 仅受 expires 控制)
+        # owner 主动 revoke 才清 token. 维持现行策略.
+
+        await self.db.commit()
+        await self.db.refresh(f)
+        logger.info(
+            f"[DriveService.update_visibility] id={f.id} {before}→{new_visibility} "
+            f"folder={f.folder_id}"
+        )
         return f
