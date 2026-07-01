@@ -144,6 +144,13 @@ const routes = [
         meta: { title: '回收站', icon: 'Delete' }
       },
       {
+        // v2 PR6: 活动动态流
+        path: 'drive/activity',
+        name: 'DriveActivity',
+        component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView'),  // 移动端暂用 trash 占位, PR8 独立 mobile 版
+        meta: { title: '活动动态', icon: 'Bell' }
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: resolveMobileComponent('SettingsView', 'MobileSettingsView'),

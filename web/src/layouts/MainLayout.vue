@@ -115,6 +115,9 @@
             </div>
           </el-popover>
 
+          <!-- v2 PR6: 网盘协作通知铃铛 (@ 提醒 + 评论) -->
+          <NotificationBell />
+
           <!-- v68 (2026-06-26): 主题切换按钮（铃铛之后、用户 dropdown 之前） -->
           <ThemeToggleButton />
 
@@ -180,6 +183,8 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import MobileTabBar from '@/components/mobile/TabBar.vue'
 // v68 (2026-06-26): 桌面端顶栏主题切换按钮（与移动端 MobileHeader 风格一致）
 import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
+// v2 PR6: 网盘协作通知 (@ 提醒 + 评论) + WS 推送
+import NotificationBell from '@/components/common/NotificationBell.vue'
 import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射

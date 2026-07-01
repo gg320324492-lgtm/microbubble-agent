@@ -3,7 +3,7 @@ from app.models.task import Task, TaskDependency
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.project import Project, Milestone
 from app.models.folder import Folder  # 2026-07-01 课题组网盘
-from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession  # PR4: 秒传+版本; PR5: 断点续传
+from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession, FileMention, ActivityEvent, FileComment  # PR4: 秒传+版本; PR5: 断点续传; PR6: 通知+活动+评论
 from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
 from app.models.knowledge_hypothesis import KnowledgeHypothesis
 from app.models.knowledge_formula import KnowledgeFormula
@@ -33,6 +33,9 @@ __all__ = [
     "Knowledge",
     "KnowledgeVersion",  # PR4: 秒传 + 版本历史
     "ChunkedUploadSession",  # PR5: 分片断点续传 session
+    "FileMention",           # PR6: @ 提醒
+    "ActivityEvent",         # PR6: 活动动态流
+    "FileComment",           # PR6: 文件评论
     "Reminder",
     "Memory",
     "Feedback",

@@ -207,3 +207,86 @@ class ChunkedUploadSession(Base):
 
     def __repr__(self):
         return f"<ChunkedUploadSession(id='{self.id[:8]}...', user_id={self.user_id}, status='{self.status}', chunks={len(self.uploaded_chunks or [])}/{self.total_chunks})>"
+
+
+class FileMention(Base):
+    """v2 PR6: @ 提醒 (mention notifications)
+
+    - mentioned_user_id: 被 @ 的人 (受提醒者)
+    - mentioned_by: 触发提醒的人 (NULL = 系统, 例如定时清理通知)
+    - context: 触发场景 ('comment' | 'share' | 'mention' | 'version_restore')
+    - is_read: 未读/已读 (前端 NotificationBell 红点)
+    - read_at: 已读时间
+
+    生命周期:
+    - 写: drive_service 在评论/分享/上传时同步插入
+    - 读: GET /notifications?unread_only=true
+    - 删除: 已读后保留 30 天, Celery beat 清理
+    """
+    __tablename__ = "file_mentions"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False)
+    mentioned_user_id = Column(Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False)
+    mentioned_by = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True)
+    context = Column(String(500), nullable=True)
+    is_read = Column(Boolean, nullable=False, server_default="false")
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default="now()")
+
+    def __repr__(self):
+        return f"<FileMention(id={self.id}, file_id={self.file_id}, mentioned_user_id={self.mentioned_user_id}, is_read={self.is_read})>"
+
+
+class ActivityEvent(Base):
+    """v2 PR6: 活动动态流 (audit trail for drive changes)
+
+    - actor_id: 触发动作的人 (NULL = 系统清理)
+    - action: upload | rename | move | delete | restore | share | version_restore | comment | mention | star
+    - target_type: file | folder | comment
+    - target_id: 对应目标 id
+    - target_name: 冗余存名字 (目标删除后仍能展示)
+    - metadata: JSONB, action 特定的额外信息 (例如 mention 列表 / old_value / new_value)
+
+    用途:
+    - /drive/activity 时间线 (按 created_at desc)
+    - /admin/audit 安全审计
+    - 个人主页 '最近活动'
+    """
+    __tablename__ = "activity_events"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    actor_id = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True)
+    action = Column(String(50), nullable=False)
+    target_type = Column(String(20), nullable=False)
+    target_id = Column(Integer, nullable=True)
+    target_name = Column(String(500), nullable=True)
+    meta_data = Column("metadata", JSONB, nullable=True)  # 'metadata' PG 列名, Python attr 改名避开 SQLAlchemy reserved
+    created_at = Column(DateTime, nullable=False, server_default="now()")
+
+    def __repr__(self):
+        return f"<ActivityEvent(id={self.id}, actor_id={self.actor_id}, action='{self.action}', target_type='{self.target_type}', target_id={self.target_id})>"
+
+
+class FileComment(Base):
+    """v2 PR6: 文件评论 (collaboration comments on drive files)
+
+    - user_id: 评论者
+    - content: 评论内容 (纯文本,前端 Markdown 渲染)
+    - mentions: ARRAY 冗余存 user_id 列表 (前端 O(1) 显示 '王天志 提到 你')
+
+    关联:
+    - file_id → knowledge.id (CASCADE)
+    - user_id → members.id (SET NULL = 用户注销保留评论)
+    """
+    __tablename__ = "file_comments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_id = Column(Integer, ForeignKey("knowledge.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True)
+    content = Column(Text, nullable=False)
+    mentions = Column(ARRAY(Integer), nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default="now()")
+
+    def __repr__(self):
+        return f"<FileComment(id={self.id}, file_id={self.file_id}, user_id={self.user_id})>"
