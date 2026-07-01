@@ -18,11 +18,14 @@ from app.api.v1 import drive_files  # PR2.5 课题组网盘 file CRUD + multipar
 from app.api.v1 import upload_multipart  # PR2.8 通用分片上传 3 端点
 from app.api.v1 import ws_notifications  # PR6: WebSocket 通知推送
 from app.api.v1 import notifications  # PR6: 通知 + 活动 + 评论 8 REST API
+from app.api.v1 import file_requests  # PR7: 文件请求 (Dropbox 招牌)
+from app.api.v1 import admin_audit  # PR7: 审计日志查询 (admin)
 from app.api.v1.dashboard import mobile_router as mobile_aliases  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 from app.core.database import engine, Base
 from app.core.redis import close_redis
 from app.core.exceptions import AppException, app_exception_handler, generic_exception_handler
 from app.core.rate_limit import rate_limit_middleware
+# RequestLoggingMiddleware 不再独立注册 — 已集成到 rate_limit_middleware 末尾
 
 
 @asynccontextmanager
@@ -125,6 +128,9 @@ app.add_exception_handler(Exception, generic_exception_handler)
 # 全站限流中间件
 app.middleware("http")(rate_limit_middleware)
 
+# PR7: 自动审计 (集成在 rate_limit_middleware 内部末尾 — BaseHTTPMiddleware 单独 add_middleware 范式不 fire)
+# 见 app/core/rate_limit.py 末尾的 audit 集成代码
+
 # 安全响应头中间件
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
@@ -166,6 +172,8 @@ app.include_router(drive_files.share_router, prefix="/api/v1", tags=["网盘公�
 app.include_router(upload_multipart.router, prefix="/api/v1", tags=["分片上传"])  # PR2.8
 app.include_router(ws_notifications.router, prefix="/api/v1")  # PR6: WebSocket /api/v1/ws/notifications
 app.include_router(notifications.router)  # PR6: 通知 + 活动 + 评论 (router 自带 /api/v1 prefix)  # noqa
+app.include_router(file_requests.router, prefix="/api/v1")  # PR7: 文件请求 (router 自带 /file-requests prefix)
+app.include_router(admin_audit.router, prefix="/api/v1")  # PR7: 审计 admin 端点 (router 自带 /admin/audit prefix)
 
 
 @app.get("/")

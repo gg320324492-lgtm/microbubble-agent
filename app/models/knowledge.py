@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime
+from sqlalchemy import Column, Integer, BigInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -290,3 +290,88 @@ class FileComment(Base):
 
     def __repr__(self):
         return f"<FileComment(id={self.id}, file_id={self.file_id}, user_id={self.user_id})>"
+
+
+class FileRequest(Base):
+    """v2 PR7: 文件请求 (Dropbox 招牌 '文件请求' 收作业场景)
+
+    - token: 32 字符随机公开 token (URL 不暴露内部 id, 防枚举)
+    - target_folder_id: 提交文件落到哪个文件夹 (NULL = 创建者根目录)
+    - allowed_extensions ARRAY: 限制文件类型 ('pdf','docx',...), NULL = 不限
+    - require_uploader_name: true=必填姓名 / false=可选 (匿名提交)
+    - max_file_size_mb: 单文件大小上限 (NULL = 不限)
+    - submission_count: 已成功提交数 (每次 submit +1)
+    - is_active: false=手动关闭 / expires_at 过期后失效
+
+    公开访问流程 (无 JWT):
+      POST /api/v1/file-requests/{token}/submit  (multipart + uploader_name)
+
+    关联:
+      - created_by → members.id (RESTRICT, 不能删创建者后丢文件请求)
+      - target_folder_id → folders.id (SET NULL, 文件夹删了文件请求保留)
+    """
+    __tablename__ = "file_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(32), nullable=False, unique=True, index=True)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    target_folder_id = Column(Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True)
+    created_by = Column(Integer, ForeignKey("members.id", ondelete="RESTRICT"), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=True)
+    allowed_extensions = Column(ARRAY(String), nullable=True)
+    require_uploader_name = Column(Boolean, nullable=False, server_default="true")
+    max_file_size_mb = Column(Integer, nullable=True)
+    submission_count = Column(Integer, nullable=False, server_default="0")
+    is_active = Column(Boolean, nullable=False, server_default="true")
+    created_at = Column(DateTime, nullable=False, server_default="now()")
+    updated_at = Column(DateTime, nullable=False, server_default="now()")
+
+    def __repr__(self):
+        return f"<FileRequest(id={self.id}, title='{self.title[:30]}', submissions={self.submission_count}, active={self.is_active})>"
+
+
+class AuditLog(Base):
+    """v2 PR7: 完整安全审计 (谁在什么时候做了什么)
+
+    数据来源:
+      - RequestLoggingMiddleware: 自动记录所有 /api/v1/* 调用
+      - 服务层显式 log: 高敏感操作 (share-link 创建, visibility 改, 文件请求创建/submit)
+
+    字段:
+      - user_id: 登录用户 (NULL = 匿名, 如 /r/:token 公开提交)
+      - ip_address: 客户端 IP (via X-Forwarded-For 或 request.client.host)
+      - user_agent: 浏览器 UA (string, 用于审计浏览器版本)
+      - method+path: HTTP 方法 + 路径 (token 查询参数已脱敏)
+      - action: 标准化动作 ('read'| 'write'| 'delete'| 'login'| 'share'| ...)
+      - resource_type+id: 受影响资源 ('file:42' | 'folder:7' | 'comment:99' | NULL)
+      - status_code+duration_ms: HTTP 响应状态 + 耗时 (运维质量)
+      - metadata JSONB: 动作特定扩展数据 (重命名 old/new name, 删除前 file 名, ...)
+
+    生命周期:
+      - 写: 同步写 (audit 必须可靠, 不能丢)
+      - 读: GET /api/v1/admin/audit (admin only) + 30 天保留 (Celery beat)
+    """
+    __tablename__ = "audit_log"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True, index=True)
+    ip_address = Column(String(45), nullable=True, index=True)  # IPv6 max 45
+    user_agent = Column(Text, nullable=True)
+    method = Column(String(10), nullable=False, index=True)
+    path = Column(String(500), nullable=False, index=True)
+    action = Column(String(50), nullable=False, index=True)
+    resource_type = Column(String(20), nullable=True)
+    resource_id = Column(String(50), nullable=True)
+    status_code = Column(Integer, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+    meta_data = Column(JSONB, nullable=True)  # alembic 048 列名 = meta_data (与 ORM attr 统一, 不要 metadata 重名)
+    created_at = Column(DateTime, nullable=False, server_default="now()", index=True)
+
+    __table_args__ = (
+        Index("ix_audit_log_user_action_time", "user_id", "action", "created_at"),
+        Index("ix_audit_log_action_time", "action", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<AuditLog(id={self.id}, action='{self.action}', user_id={self.user_id}, status={self.status_code})>"
