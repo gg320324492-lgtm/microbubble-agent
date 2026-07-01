@@ -23,7 +23,7 @@
   <div
     class="file-card"
     :class="['file-card--' + viewMode, { 'is-selected': selected, 'is-private': file.visibility === 'private' }]"
-    @click="$emit('click', file)"
+    @click="$emit('click', file, $event)"
     @contextmenu.prevent="$emit('contextmenu', file, $event)"
   >
     <!-- 多选 checkbox -->

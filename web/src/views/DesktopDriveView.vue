@@ -535,9 +535,14 @@ function onPageChange(page) {
   fetchDriveFiles({ folder_id: selectedFolderId.value })
 }
 
-function handleFileClick(file) {
-  // 默认行为: 单击 = 选中 (多选模式). 双击待 PR3.4 接入预览
-  toggleFileSelect(file.id)
+function handleFileClick(file, event) {
+  // v2 PR6-P2: 默认单击跳详情页 (符合主流网盘 UX, 用户找详情/评论)
+  // 按住 Ctrl/Cmd 多选 (保持多选能力)
+  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+    toggleFileSelect(file.id)
+  } else {
+    router.push(`/drive/file/${file.id}`)
+  }
 }
 
 function handleFilePreview(file) {
