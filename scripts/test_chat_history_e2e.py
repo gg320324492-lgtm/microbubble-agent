@@ -1,6 +1,21 @@
-import requests, json, time
+import os
+import sys
+import time
+
+import requests
+
+# 测试账号 (从 conftest 常量导, 避免与生产 admin wangtianzhi 物理隔离被破坏)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tests.conftest import TEST_BOT_USERNAME, TEST_BOT_PASSWORD  # noqa: E402
+
 BASE = "http://localhost:8000/api/v1"
-TOKEN = requests.post(f"{BASE}/auth/login", json={"username":"wangtianzhi","password":"admin123"}).json()["access_token"]
+E2E_USERNAME = os.environ.get("E2E_USERNAME", TEST_BOT_USERNAME)
+E2E_PASSWORD = os.environ.get("E2E_PASSWORD", TEST_BOT_PASSWORD)
+TOKEN = requests.post(
+    f"{BASE}/auth/login",
+    json={"username": E2E_USERNAME, "password": E2E_PASSWORD},
+    timeout=10,
+).json()["access_token"]
 H = {"Authorization": f"Bearer {TOKEN}"}
 TS = int(time.time())  # 每次跑用唯一时间戳避免 test pollution
 SID_BASE = f"test_e2e_{TS}"
@@ -51,7 +66,7 @@ print("\n=== 5. 越权防护 (无 token) ===")
 test("GET /chat/sessions (no auth, 401)", lambda: requests.get(f"{BASE}/chat/sessions"))
 test("POST /chat/sessions (no auth, 401)", lambda: requests.post(f"{BASE}/chat/sessions", json={"title":"x"}))
 
-print("\n=== 6. 跨用户越权 (用 wangtianzhi token 访问自己 session OK) ===")
+print(f"\n=== 6. 跨用户越权 (用 {E2E_USERNAME} token 访问自己 session OK) ===")
 test("GET 自己的 session", lambda: requests.get(f"{BASE}/chat/sessions/{SID_BASE}", headers=H))
 
 print("\n=== 全部结果 ===")
