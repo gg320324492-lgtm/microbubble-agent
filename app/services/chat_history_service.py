@@ -824,11 +824,34 @@ async def ensure_session_for_stream(
     2. 流式完全成功 → user + assistant 各一条消息
 
     越权防护：如果 session 存在但 user_id 不匹配，抛 NotFoundException
+
+    2026-07-01 修复 bug 1d: 检测跨用户 session_id 污染
+    根因: 客户端 logout 时 localStorage 残留旧 user 的 sessionId, 新 user 登录
+    后 store 没清空 → 新 user 发送请求携带旧 sessionId → 后端 get_session 找不到
+    (id, new_user) 匹配 → 旧实现静默创建新行 (标题 "新对话")。
+    修复: 检测到 (id) 存在但 (user_id) 不匹配时记录 WARN 日志,方便监控发现异常
+    行为(创建新行)不变以保持向后兼容,仅监控层面给出信号。
     """
+    from sqlalchemy import select as _select
     # 已存在（按 (id, user_id) 查找）
     existing = await get_session(db, user_id, session_id, include_deleted=True)
     if existing is not None:
         return existing
+
+    # ★ 2026-07-01 修复 bug 1d: 检测跨用户 session_id 污染
+    # session_id 不属于当前 user 但属于其他 user → 客户端可能在用旧 user 的残留 sessionId
+    # 不阻断(保持向后兼容,旧实现就是静默创建),只发 WARN 方便监控
+    cross_user = await db.execute(
+        _select(ChatSession.user_id).where(ChatSession.id == session_id).limit(1)
+    )
+    cross_user_row = cross_user.first()
+    if cross_user_row is not None and cross_user_row[0] != user_id:
+        logger.warning(
+            f"[chat_stream] CROSS-USER session_id detected: "
+            f"session={session_id} belongs to user_id={cross_user_row[0]} "
+            f"but request user_id={user_id}. Frontend should drop the "
+            f"stale local session id on login (see chatSessions.ts pickInitialSessionId)."
+        )
 
     # 不存在 → 创建（标题 = 首条消息前 30 字符）
     title = "新对话"

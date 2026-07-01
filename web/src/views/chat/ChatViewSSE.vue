@@ -185,6 +185,10 @@ const jumpToBottom = () => {
 // ============================================================================
 // 2026-06-14 方案 C 增强：之前只在 sendMessage 前后滚，流式生成中不滚，
 // 用户必须手动滚轮才能看新内容。改为 watch messages 实时滚。
+//
+// ★ 2026-07-01 修复 bug 2.2: sessionId watcher 改 rAF,避免与 messages watcher
+// 同一 tick 竞争 → 同一 .messages 容器连续两次 scrollTop 赋值 → 引起
+// 父级 flex 容器 (含侧边栏) 短暂 reflow → 侧边栏 scroll 跳变。
 watch(
   () => messages.value,
   () => {
@@ -197,7 +201,11 @@ watch(
 // 新 session 切换时也滚到底
 watch(
   () => sessionId.value,
-  () => scrollToBottom(true),
+  (newId, oldId) => {
+    if (newId === oldId) return
+    // rAF 推迟一帧,避免与 messages watcher 同步触发造成的 layout thrash
+    requestAnimationFrame(() => scrollToBottom(true))
+  },
 )
 
 // ============================================================================

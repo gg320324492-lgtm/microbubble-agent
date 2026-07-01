@@ -7,8 +7,13 @@
  * - overlap bug 修复：title-row 改 .session-content 用 flex + min-width: 0，actions 永远不绝对定位
  * - sortedSessions 已自动置顶冒泡（chatSessions.ts:v78）
  * - 4-attr a11y 全部 button 加齐
+ *
+ * 2026-07-01 修复侧边栏点击跳动（bug 2）:
+ * - 1) CSS: .session-list 加 overflow-anchor: none（关闭 Chrome scroll anchoring）
+ * - 2) CSS: .session-item 默认 border-left: 3px solid transparent（占位避免 active 切换 reflow）
+ * - 3) JS: onBeforeUpdate/onUpdated 保留 scrollTop（filterKw / v-for reorder 时位置不丢）
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onBeforeUpdate, onUpdated, nextTick } from 'vue'
 import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useChatHistoryStore } from '@/stores/chatHistory'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -143,6 +148,28 @@ const onTogglePinned = (session) => {
   closeContextMenu()
   store.setPinned(session.id, !session.is_pinned)
 }
+
+// ★ 2026-07-01 修复 bug 2.4: 侧边栏 scroll 位置保留
+// 切会话 / filterKw 变化 / v-for reorder 时,Vue 会 re-render .session-item 列表
+// Chrome 浏览器会尝试 scroll anchoring 自动调整 scrollTop → 用户感知为"跳动"
+// 解决: 渲染前快照 scrollTop, 渲染后 nextTick 恢复
+const sessionListRef = ref(null)
+let pendingScrollTop = null
+
+onBeforeUpdate(() => {
+  if (sessionListRef.value) {
+    pendingScrollTop = sessionListRef.value.scrollTop
+  }
+})
+onUpdated(() => {
+  if (pendingScrollTop != null && sessionListRef.value) {
+    const target = pendingScrollTop
+    pendingScrollTop = null
+    nextTick(() => {
+      if (sessionListRef.value) sessionListRef.value.scrollTop = target
+    })
+  }
+})
 </script>
 
 <template>
@@ -198,7 +225,7 @@ const onTogglePinned = (session) => {
       <span class="sync-icon">⚠</span>
       <span class="sync-text" :title="chatHistoryStore.syncError">同步失败</span>
     </div>
-    <div v-if="!collapsed" class="session-list">
+    <div v-if="!collapsed" class="session-list" ref="sessionListRef">
       <div
         v-for="s in filteredSessions"
         :key="s.id"
@@ -293,16 +320,20 @@ const onTogglePinned = (session) => {
 .new-btn { width: 100%; }
 .new-btn-text { margin-left: 4px; }
 .icon { font-size: 16px; margin-right: 4px; }
-.session-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+.session-list { flex: 1; overflow-y: auto; padding: 8px 0; overflow-anchor: none; }
 .session-item {
   padding: 10px 16px;
   margin: 2px 8px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
+  /* ★ 2026-07-01 修复 bug 2.3: 默认 border-left 透明占位 3px,active 切换只改色不改尺寸 */
+  border-left: 3px solid transparent;
+  /* ★ 2026-07-01 修复 bug 2.1: 关闭 Chrome scroll anchoring,避免 .active 切换触发 scroll 跳变 */
+  overflow-anchor: none;
 }
 .session-item:hover { background: var(--color-primary-bg); }
-.session-item.active { background: var(--color-primary-bg); border-left: 3px solid var(--color-primary); }
+.session-item.active { background: var(--color-primary-bg); border-left-color: var(--color-primary); }
 
 /* v78: session-content 用 flex + min-width: 0 让 title-text 自然收缩，actions 绝对定位重叠 bug 修复 */
 .session-content {
