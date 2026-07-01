@@ -90,6 +90,7 @@
 - ✅ **v70 P3 会议纪要视觉精简** — 顶部 TL;DR + 默认折叠发言人卡片 + Stylelint 字面色禁用（commit `bd41497e`）
 - ✅ **v70 P0~P2 字面色 → token** — ~340 处 hex 替换 CSS 变量 + dark mode 全面修复（`5ea74dd5` / `f6a2bc3d` / `e4b2eec3`）
 - ✅ **pre-commit hook auto-add web/dist/** — `scripts/check-dist-before-commit.sh` 自动检测 `web/src/` 改动 + 未 tracked dist 文件，避免 dist 漏 commit 导致服务器 404（commit `6565415a`，CLAUDE.md 教训第 4 次沉淀）
+- ✅ **pre-commit hook 阻止凭据入库 + setup-hooks.sh 一键安装** — `scripts/check-secrets-before-commit.sh` hard block admin JWT / refresh token 入库（commit `63d5675c` + `a242624c`，CLAUDE.md 2026-07-01 安全事件沉淀）
 - ✅ **v31.3.1 whisper 容器 bind mount** — Dockerfile 删 `COPY` + bind mount 源码（commit `3f9411cb`）
 - ✅ **v31.3 Whisper 常驻 GPU 8GB** — 端到端 ASR 1s（commit `93de5151`）
 - ✅ **v31.2.5 rate-limit Redis ZSET 持久化** — 抗 `docker compose restart` 清零（commit `0ea97c95`）
@@ -121,15 +122,25 @@
 # 1. 配置
 cp .env.example .env
 # 编辑 .env：CLAUDE_API_KEY、SECRET_KEY、数据库密码
+# ⚠️ SECRET_KEY 不能用默认占位符 `change-this-to-a-...`！必须生成强随机
+#    python -c "import secrets; print(secrets.token_urlsafe(64))"
 
-# 2. 启动
+# 2. 安装 git hooks (新成员必做, 防止 secrets 误入库 + dist 漏 commit)
+bash scripts/setup-hooks.sh
+
+# 3. 启动
 start.bat                       # Windows 一键启动所有服务
 # 或 docker compose up -d
 
-# 3. 访问
+# 4. 访问
 http://localhost:5173           # 前端（开发）
 http://localhost:8000           # API
 https://agent.mnb-lab.cn        # 生产
+```
+
+**Hook 检查**：
+```bash
+bash scripts/setup-hooks.sh --check   # 验证所有 hook 是否正确配置
 ```
 
 详细部署：[docs/deploy.md](docs/deploy.md)
