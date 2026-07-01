@@ -46,6 +46,8 @@ from app.agent.tool_registry import (
 )
 from app.config import settings
 from app.core.llm import LLMClient
+# 2026-07-02 Phase I.3 取证 hook
+from app.agent.llm_input_dumper import maybe_dump
 
 logger = logging.getLogger("microbubble.agent.agentic_loop")
 
@@ -869,11 +871,6 @@ class AgenticLoop:
         accumulated_text = ""
         rich_blocks: list[RichBlock] = []
         tool_calls: list[dict] = []
-
-        try:
-        accumulated_text = ""
-        rich_blocks: list[RichBlock] = []
-        tool_calls: list[dict] = []
         t0 = time.monotonic()
 
         try:
@@ -1023,6 +1020,17 @@ class AgenticLoop:
             # ===== Phase 1: 工具循环 =====
             for round_idx in range(max_rounds):
                 try:
+                    # 2026-07-02 Phase I.3 取证: dump LLM 真实输入 (DEBUG_DUMP_LLM_INPUT=1 启用)
+                    maybe_dump(
+                        messages=messages,
+                        system=system,
+                        tools=get_all_tool_schemas(),
+                        model=getattr(settings, "AGENT_SYNTHESIS_MODEL", None)
+                            or getattr(settings, "CLAUDE_MODEL", None)
+                            or "mimo-v2.5",
+                        phase_label=f"phase1-round{round_idx}",
+                        extra={"intent_category": str(intent.category) if intent else "unknown"},
+                    )
                     response = await llm.complete(
                         messages=messages,
                         system=system,
@@ -1375,6 +1383,15 @@ class AgenticLoop:
             )
 
         try:
+            # 2026-07-02 Phase I.3 取证: dump LLM 真实输入 (synthesis 阶段)
+            maybe_dump(
+                messages=messages,
+                system=kwargs.get("system", ""),
+                tools=None,  # Phase 2 没有 tools
+                model=chosen_model or "unknown",
+                phase_label="phase2-synth",
+                extra={"round_idx": round_idx if "round_idx" in dir() else -1},
+            )
             # llm.stream() 是 AsyncIterator（不是 async context manager），
             # 正确用法：async for 拿 stream 后再 async with
             # 2026-06-14 Stage 5 收尾：mimo 等思考型模型显式禁用 thinking（避免只返 thinking）
