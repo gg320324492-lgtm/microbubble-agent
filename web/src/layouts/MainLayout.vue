@@ -180,13 +180,13 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import MobileTabBar from '@/components/mobile/TabBar.vue'
 // v68 (2026-06-26): 桌面端顶栏主题切换按钮（与移动端 MobileHeader 风格一致）
 import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
-import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Microphone, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
 const iconMap = {
   Odometer, ChatDotRound, List, VideoCamera, Folder,
-  User, Document, Memo, Setting,
+  User, Document, Memo, Setting, Files,
   mic: Microphone,  // 声纹库图标
 }
 
