@@ -29,15 +29,6 @@ if not SKIP_DB_SETUP:
     from app.main import app  # noqa: E402
     from app.models.member import Member  # noqa: E402
 
-# ── 测试账号常量 (v0.1.0, 2026-07-01) ──────────────────────────
-# 测试账号与生产 admin (wangtianzhi) 物理隔离, 避免 e2e reset 密码影响真实使用.
-# 配套脚本: scripts/ensure_test_user.py (一次性创建) + E2E_USERNAME/E2E_PASSWORD env 覆盖.
-# 放在 if not SKIP_DB_SETUP 分支外, 让脚本 `from tests.conftest import TEST_BOT_USERNAME` 在 SKIP 模式也能工作.
-TEST_BOT_USERNAME = "xiaoqi_testbot"
-TEST_BOT_PASSWORD = "testbot_pass_2026"
-TEST_BOT_NAME = "测试小助手"
-TEST_BOT_ROLE = "admin"
-
     TEST_DB_URL = os.getenv(
         "TEST_DATABASE_URL",
         "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test",
@@ -56,6 +47,16 @@ else:
     create_access_token = None
     AsyncClient = None
     ASGITransport = None
+
+# ── 测试账号常量 (v0.1.0, 2026-07-01) ──────────────────────────
+# 测试账号与生产 admin (wangtianzhi) 物理隔离, 避免 e2e reset 密码影响真实使用.
+# 配套脚本: scripts/ensure_test_user.py (一次性创建) + E2E_USERNAME/E2E_PASSWORD env 覆盖.
+# 放在 if/else 块外 (module 顶层), 让脚本 `from tests.conftest import TEST_BOT_USERNAME`
+# 在 SKIP_DB_SETUP=1 模式也能工作 (不触发重型 import).
+TEST_BOT_USERNAME = "xiaoqi_testbot"
+TEST_BOT_PASSWORD = "testbot_pass_2026"
+TEST_BOT_NAME = "测试小助手"
+TEST_BOT_ROLE = "admin"
 
 
 if SKIP_DB_SETUP:
