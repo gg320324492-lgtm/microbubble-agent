@@ -64,6 +64,25 @@
     </template>
 
     <div class="folder-tree-divider" />
+
+    <!-- v2 PR7: 团队共享盘 + 文件请求 -->
+    <div
+      class="folder-tree-special-item folder-tree-team"
+      :class="{ active: specialView === 'team' }"
+      @click="$emit('update:specialView', 'team')"
+    >
+      <el-icon><Share /></el-icon>
+      <span>🌐 团队共享盘</span>
+    </div>
+    <div
+      class="folder-tree-special-item folder-tree-requests"
+      :class="{ active: $route.path === '/drive/requests' }"
+      @click="$router.push('/drive/requests')"
+    >
+      <el-icon><Promotion /></el-icon>
+      <span>📢 文件请求</span>
+    </div>
+
     <!-- 回收站 (PR2 真实接入) -->
     <div
       class="folder-tree-special-item folder-tree-trash"
@@ -77,7 +96,7 @@
 </template>
 
 <script setup>
-import { Folder, FolderOpened, Delete, Loading, Warning, Star, StarFilled } from '@element-plus/icons-vue'
+import { Folder, FolderOpened, Delete, Loading, Warning, Star, StarFilled, Share, Promotion } from '@element-plus/icons-vue'
 import FolderTreeNode from './FolderTreeNode.vue'
 
 const props = defineProps({

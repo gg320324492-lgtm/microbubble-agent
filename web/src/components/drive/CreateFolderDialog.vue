@@ -56,6 +56,12 @@
           ⚠️ 已是 5 层, 此文件夹内不能再新建子文件夹
         </span>
       </el-form-item>
+
+      <!-- v2 PR7: 团队共享盘标识 (打勾后该文件夹进 team 团队共享盘列表) -->
+      <el-form-item label="团队空间" v-if="!parentFolder">
+        <el-switch v-model="form.is_team_default" />
+        <span class="team-hint">标记为团队空间后, 团队共享盘页面会自动列出此文件夹</span>
+      </el-form-item>
     </el-form>
 
     <template #footer>
@@ -85,7 +91,8 @@ const formRef = ref(null)
 const submitting = ref(false)
 const form = reactive({
   name: '',
-  visibility: 'team'
+  visibility: 'team',
+  is_team_default: false  // v2 PR7
 })
 
 const rules = {
@@ -101,6 +108,7 @@ const rules = {
 function resetForm() {
   form.name = ''
   form.visibility = 'team'
+  form.is_team_default = false
   formRef.value?.clearValidate()
 }
 
@@ -111,7 +119,8 @@ async function onSubmit() {
     emit('create', {
       name: form.name.trim(),
       parent_id: props.parentId,
-      visibility: form.visibility
+      visibility: form.visibility,
+      is_team_default: form.is_team_default  // v2 PR7: 团队空间
     })
     // 父组件成功后会关闭 dialog (visible=false)
   } catch (e) {
@@ -141,6 +150,12 @@ defineExpose({ resetForm })
   font-size: 12px;
   color: var(--color-warning, #e6a23c);
   margin-top: 4px;
+}
+
+.team-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+  margin-left: 8px;
 }
 </style>
 
