@@ -125,6 +125,8 @@ _rate_limiters = {
     "read": AsyncRedisRateLimiter(max_attempts=200, window_seconds=60),     # 读操作：200次/分钟
     "upload": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),    # 上传：10次/分钟
     "sse": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),       # v31.2.3: SSE 长连接 10次/分钟
+    "drive_upload": AsyncRedisRateLimiter(max_attempts=50, window_seconds=60),  # PR2.10: drive 上传 50次/分 (批量友好)
+    "drive_list": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # PR2.10: drive 列表 300次/分 (高频浏览)
 }
 
 # /auth/ 下细分：只对真正敏感的认证动作保留 20/min 限流
@@ -194,6 +196,15 @@ def _get_rate_limit_type(request: Request) -> str:
     # 未来加其他 SSE 端点, 在 _SSE_PATH_RE 加 regex 即可
     if _SSE_PATH_RE.match(path):
         return "sse"
+
+    # PR2.10: 课题组网盘 drive 端点 tier 区分
+    # 路径匹配 /api/v1/drive/* 和 /api/v1/upload/multipart/*
+    # drive 上传 (POST/单端点流) 50次/分, drive 列表 (GET) 300次/分
+    # 端点: POST /drive/files/upload, POST /upload/multipart/complete, POST /upload/multipart/init, POST /drive/files/batch-download
+    if path.startswith("/api/v1/drive/") or path.startswith("/api/v1/upload/"):
+        if method in ("POST", "PUT", "PATCH", "DELETE"):
+            return "drive_upload"
+        return "drive_list"
 
     # v31.2: 检索质量埋点端点 - POST/PATCH 完全豁免（前端每次搜索 2 次埋点, 不该限流）,
     # GET stats/logs 走 read tier (200/min) 防滥用.

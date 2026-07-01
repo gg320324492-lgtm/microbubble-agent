@@ -796,12 +796,15 @@ class KnowledgeService:
 
             # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
             # drive 模式不入 embedding 索引, 软删除条目不可检索
+            # PR2.10 课题组网盘: 加 visibility IN ('team','public') 过滤
+            # private 文件即使 owner 也不通过 search_knowledge 看到 (走 search_my_files 工具)
             stmt = select(
                 Knowledge,
                 Knowledge.embedding.cosine_distance(query_embedding).label("distance")
             ).where(
                 Knowledge.deleted_at.is_(None),
                 Knowledge.storage_mode == "kb",
+                Knowledge.visibility.in_(["team", "public"]),
             )
 
             if category:
@@ -832,9 +835,11 @@ class KnowledgeService:
     async def _search_keyword_fallback(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
         """关键词搜索回退"""
         # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
+        # PR2.10: 加 visibility IN ('team','public') 过滤 (硬边界)
         stmt = select(Knowledge).where(
             Knowledge.deleted_at.is_(None),
             Knowledge.storage_mode == "kb",
+            Knowledge.visibility.in_(["team", "public"]),
             or_(
                 Knowledge.title.ilike(f"%{query}%"),
                 Knowledge.content.ilike(f"%{query}%")

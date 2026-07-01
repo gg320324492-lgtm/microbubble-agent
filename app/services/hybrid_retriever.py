@@ -144,9 +144,11 @@ class HybridRetriever:
 
         # 2026-07-01 课题组网盘 PR1: 加 deleted_at IS NULL + storage_mode='kb' 过滤
         # drive 模式原始文件不入 BM25 索引, 软删除条目不索引
+        # PR2.10 课题组网盘: 加 visibility IN ('team','public') 过滤 (硬边界, 防止 private 漏出)
         stmt = select(Knowledge).where(
             Knowledge.deleted_at.is_(None),
             Knowledge.storage_mode == "kb",
+            Knowledge.visibility.in_(["team", "public"]),
         )
         if category:
             stmt = stmt.where(Knowledge.category == category)
