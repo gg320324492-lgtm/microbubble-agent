@@ -120,7 +120,7 @@ class TestChatEngine:
     def test_engine_has_methods(self):
         engine = ChatEngine()
         # 2026-06-14 方案 C Stage 2：ChatEngine 重写为单阶段流式
-        # 2026-06-29 收官：_legacy_chat_stream kill switch 已删除（30 天回滚承诺提前收官）
+        # 2026-06-29 收官：_legacy_chat_stream kill switch 已删除（30 天回滚承诺提前收官, commit 817f1ffa）
         assert hasattr(engine, "chat_with_brief_and_detail"), "薄壳保留（旧 API 兼容）"
         assert hasattr(engine, "chat_stream"), "薄壳保留（旧 API 兼容）"
         assert hasattr(engine, "synthesize_stream"), "新主入口（方案 C 核心）"
@@ -216,7 +216,7 @@ class TestBackwardCompat:
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from app.agent.core import agent  # noqa: F401
 
-    # 2026-06-29 已删除（chat_engine_legacy.py 30 天回滚承诺提前收官）:
+    # 2026-06-29 已删除（chat_engine_legacy.py 30 天回滚承诺提前收官, commit 817f1ffa）:
     # - test_legacy_chat_engine_file_still_exists: 断言 chat_engine_legacy.py 存在 (现文件已删除)
 
     def test_dispatch_legacy_removed(self):

@@ -47,7 +47,7 @@ class TestChatEngineNewArchitecture:
         content = engine_path.read_text(encoding="utf-8")
         assert "_append_detail_background" not in content, "detail 后台任务应已删除！"
 
-    # 2026-06-29 已删除（chat_engine_legacy.py + 3 flag 30 天承诺提前收官）:
+    # 2026-06-29 已删除（chat_engine_legacy.py + 3 flag 30 天承诺提前收官, commit 817f1ffa）:
     # - test_engine_has_kill_switch_fallback (断言 hasattr _legacy_chat_stream)
     # - test_legacy_chat_engine_file_exists (断言 chat_engine_legacy.py 存在)
     # - test_kill_switch_respects_settings (断言 settings.AGENT_NEW_ARCHITECTURE_ENABLED is True)

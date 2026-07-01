@@ -1,6 +1,6 @@
 """2026-06-14 方案 C Stage 3：方案 C 新架构的性能基线测试
 
-2026-06-29 收官：chat_engine_legacy.py 已删除，新代码仅跑 synthesize_stream
+2026-06-29 收官：chat_engine_legacy.py 已删除（commit 817f1ffa），新代码仅跑 synthesize_stream
 单阶段流式综合流程。本测试覆盖 P95 / first-byte / 各阶段延迟。
 
 跑法：
