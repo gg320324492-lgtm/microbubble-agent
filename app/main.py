@@ -14,6 +14,7 @@ from app.config import settings
 import app.agent.tools  # noqa: F401  ← 关键！触发 tools/__init__.py 链式 import
 from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording, dashboard, admin, analytics, chat_history
 from app.api.v1 import drive_folders  # PR2.4 课题组网盘 folder CRUD
+from app.api.v1 import drive_files  # PR2.5 课题组网盘 file CRUD + multipart upload
 from app.api.v1.dashboard import mobile_router as mobile_aliases  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 from app.core.database import engine, Base
 from app.core.redis import close_redis
@@ -157,6 +158,7 @@ app.include_router(analytics.router, prefix="/api/v1", tags=["检索质量"])  #
 app.include_router(chat_history.router, prefix="/api/v1", tags=["聊天历史"])  # #043 账号持久化
 app.include_router(admin.router, prefix="/api/v1", tags=["管理"])
 app.include_router(drive_folders.router, prefix="/api/v1", tags=["网盘文件夹"])  # PR2.4
+app.include_router(drive_files.router, prefix="/api/v1", tags=["网盘文件"])  # PR2.5
 
 
 @app.get("/")
