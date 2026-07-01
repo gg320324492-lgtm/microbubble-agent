@@ -224,6 +224,27 @@
       title="选择知识文件"
       @change="onUploadFile"
     />
+    <!-- PR4.3: 网盘模式上传 input (任何文件类型, 不入库只归档) -->
+    <input
+      ref="driveUploadInputRef"
+      type="file"
+      multiple
+      hidden
+      aria-label="选择网盘文件"
+      title="选择网盘文件"
+      @change="onDriveUploadFile"
+    />
+    <!-- PR4.7: 拍照上传 input (capture=environment 调起后置摄像头) -->
+    <input
+      ref="cameraInputRef"
+      type="file"
+      accept="image/*"
+      capture="environment"
+      hidden
+      aria-label="拍照上传"
+      title="拍照上传"
+      @change="onCameraCapture"
+    />
   </div>
 </template>
 
@@ -378,9 +399,11 @@ const formulaFieldConfig = computed(() => ({
 }))
 
 const createActions = [
+  // PR4.3: 1 个新增 ("📁 入网盘") + 现有 3 个保留 (向后兼容)
   { name: '手动添加', icon: '✏️', color: 'var(--color-primary)' },
-  { name: '上传文件', icon: '📁', color: '#67C23A' },
+  { name: '上传文件', icon: '📚', color: '#67C23A', subtitle: '入知识库 + 自动解析' },  // PR4.3 标注语义
   { name: 'AI 自动研究', icon: '🤖', color: '#E6A23C' },
+  { name: '入网盘', icon: '📁', color: '#409EFF', subtitle: '原始文件归档' },  // PR4.3 新增
 ]
 
 function getCategoryLabel(c) {
@@ -589,9 +612,16 @@ function onCreateAction(action) {
   if (action.name === '手动添加') {
     showManualSheet.value = true
   } else if (action.name === '上传文件') {
+    // PR4.3: 上传文件 = 入知识库 (自动解析 + embedding)
     uploadInputRef.value?.click()
   } else if (action.name === 'AI 自动研究') {
     showResearchSheet.value = true
+  } else if (action.name === '入网盘') {
+    // PR4.3: 走 drive 模式 (PR2.5/2.6 后端, 仅归档不入库)
+    driveUploadInputRef.value?.click()
+  } else if (action.name === '拍照上传') {
+    // PR4.7: capture API 调起后置摄像头
+    cameraInputRef.value?.click()
   }
 }
 
@@ -642,6 +672,43 @@ async function onManualSubmit() {
 
 // === 上传文件 ===
 const uploadInputRef = ref(null)
+const driveUploadInputRef = ref(null)  // PR4.3: 网盘模式上传
+const cameraInputRef = ref(null)  // PR4.7: 拍照上传
+
+// PR4.3: 网盘模式上传 handler (走 drive API, storage_mode=drive, visibility=team)
+async function onDriveUploadFile(e) {
+  const files = Array.from(e.target.files || [])
+  if (files.length === 0) return
+  let success = 0
+  for (const file of files) {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('storage_mode', 'drive')
+      formData.append('visibility', 'team')
+      await axios.post('/api/v1/drive/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      success++
+    } catch (err) {
+      console.error('Drive upload failed:', err)
+    }
+  }
+  ElMessage.success(success > 0 ? `已上传 ${success}/${files.length} 个文件到网盘` : '上传失败')
+  e.target.value = ''
+}
+
+// PR4.7: 拍照上传 handler (图片直接入网盘, visibility=team)
+async function onCameraCapture(e) {
+  // 复用 drive upload 但强制 image MIME
+  await onDriveUploadFile(e)
+  // 拍照后给提示, 让用户知道可以去 /knowledge 文件 tab 看
+  setTimeout(() => {
+    if (e.target.files?.length > 0) {
+      ElMessage.info('照片已归档到网盘，可在"📁 文件"tab 查看')
+    }
+  }, 1500)
+}
 async function onUploadFile(e) {
   const file = e.target.files?.[0]
   if (!file) return
