@@ -64,3 +64,20 @@ class Folder(Base, TimestampMixin):
         Index("ix_folders_parent_active", "parent_id", "deleted_at"),
         Index("ix_folders_owner_active", "owner_id", "deleted_at"),
     )
+
+
+# PR2.1 引入：visibility 排序常量，供 drive_service / folder_service 共享
+# 排序: private(0) < team(1) < public(2)
+# 规则: 文件 visibility 必须 ≤ 所在文件夹 visibility (防止越权暴露,
+#   即在 private 文件夹里放 team 文件 = 让其他人能看到 = 越权)
+VISIBILITY_ORDER: dict = {
+    "private": 0,
+    "team": 1,
+    "public": 2,
+}
+
+# 合法 visibility 枚举
+VALID_VISIBILITIES: tuple = ("private", "team", "public")
+
+# 文件夹嵌套深度上限 (PR1 用户决策: 5 层)
+MAX_FOLDER_DEPTH: int = 5
