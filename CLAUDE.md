@@ -1,6 +1,22 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 当前任务链**：🆕 **v78 "团队协作" 导航合并收官**（8 新文件 + 13 改/删 + +1995/-575 行）= **项目/成员/声纹 3 个独立路由合并为 1 个 `/workspace` el-tabs 路由**（仿 v77 P2.6-G.2 MeetingView + TemplatesPanel 范例）。
+> **2026-07-02 当前任务链**：🆕 **v2 PR6-P6 comment edit 收官**（7 文件 + 1 E2E + +988 行）= **评论 5 分钟内 owner 可编辑**，复用 PR6-P4 三路 mention 解析，结构不动。
+> **核心改动**:
+> ① **`app/services/comment_service.py` update_comment()** — owner 校验 + 5 分钟窗口 (`COMMENT_EDIT_WINDOW_SECONDS=300`) + 重解析 @ mentions (PR6-P4 3 路匹配) + 不动 thread_depth/parent_comment_id/reply_count + activity log `action='edit_comment'`
+> ② **`app/api/v1/notifications.py` PATCH `/drive/files/{file_id}/comments/{comment_id}`** — `CommentUpdateRequest/Response` schema + try/except ValueError → 422 (与 create 镜像)
+> ③ **`web/src/composables/useNotifications.js` store.updateComment()** — PATCH 调用 + 本地 comment content/mentions 同步
+> ④ **`web/src/components/drive/CommentItem.vue` 编辑按钮 + inline edit form** — canEdit 守卫 (owner + 5 分钟) + own useMentionAutocomplete (与 reply 隔离) + '已编辑' tag (`comment._edited=true`) + dark mode 非 scoped 块
+> ⑤ **8 pytest + 11 vitest + 3 E2E 场景全 PASS** — 错误码覆盖 4 类 (不存在/无权/窗口过/内容空超长)
+> **5 新铁律 (永久沉淀)**:
+> ① 5 分钟编辑窗口是行业标准 (GitHub/Slack/Notion), 过长导致历史污染
+> ② 重解析 mentions 必须用 PR6-P4 三路匹配 (wechat_id + username + name, case-insensitive)
+> ③ edit 不改结构: thread_depth/parent_comment_id/reply_count 全部保留
+> ④ owner-only + 5 分钟窗口: 前端 canEdit() UX 守卫 + 后端 service 校验双重 (前端可绕过)
+> ⑤ edited 标记靠 mentions 差异推断 (`comment._edited` 由后端维护) — v2 不加 edited_at 列, 避免 alembic migration 成本
+> **端到端验证清单 (P0-12)**:
+> 桌面 `/drive/file/16` (xiaoqi_testbot 自己的评论) → 5 分钟内看到"编辑"按钮 → 点编辑 → textarea 弹出 (own autocomplete) → 改内容 + @ → 保存 → content 更新 + mentions 重新解析 + 5 分钟外按钮消失 / 422 "编辑窗口已过" / 422 "无权编辑" (看别人评论) / 422 "内容不能为空" / 422 "超长" / pytest 18/18 + vitest 546/546 + E2E 3/3 + dark mode 切换 + build 0 警告 + stylelint 0 errors。
+> ---
+> **2026-07-02 早班 历史任务链**：🆕 **v78 "团队协作" 导航合并收官**（8 新文件 + 13 改/删 + +1995/-575 行）= **项目/成员/声纹 3 个独立路由合并为 1 个 `/workspace` el-tabs 路由**（仿 v77 P2.6-G.2 MeetingView + TemplatesPanel 范例）。
 > **用户决策 (AskUserQuestion 4 项)**:
 > ① 命名 `团队协作`（中性，覆盖 3 域）/ ② 项目动态硬编码入口不动 / ③ 旧路由 `/projects` `/members` `/voiceprint` 完全删除（含详情子路由）/ ④ 移动 TabBar 5 项保持不变，workspace 入口走 MainLayout 抽屉 menuRoutes
 > **核心改动**:
