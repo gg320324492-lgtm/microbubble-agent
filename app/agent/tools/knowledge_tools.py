@@ -29,6 +29,31 @@ class SearchKnowledgeOutput(BaseModel):
     rich_block_type: str = "knowledge_ref"
 
 
+# 2026-07-02 Round 5b: 内部字段不应透传给 LLM
+# 根因: rerank_score 字段（4 位小数精度）让 LLM 把 tool_result 误认为训练数据里
+# tool_use 协议的输出格式 → 模仿写出 <function=get_member_profile> 假 XML
+# 修复: 在工具出口过滤内部字段，只留 LLM 友好的展示字段
+INTERNAL_RESULT_FIELDS = frozenset({
+    "score",                # 原始 retrieval score (向量/BM25/图谱)
+    "normalized_score",     # hybrid_retriever 归一化分数
+    "rerank_score",         # BGE m3 cross-encoder 分数
+    "retrieval_method",     # 单来源标记
+    "retrieval_methods",    # 多来源列表
+})
+
+
+def _filter_result_for_llm(doc: dict) -> dict:
+    """过滤内部字段，仅保留 LLM 友好的展示字段
+
+    2026-07-02 Round 5b: BGE m3 rerank_score 4 位小数让 LLM 误以为是 model 评分，
+    模仿训练数据 tool_use 协议输出 fake XML <function=...>。剥除内部字段后 LLM 看到
+    干净的 id+title+content，不会触发 fake tool_call 模式。
+
+    其他工具 (list_formulas / list_hypotheses / query_members) 不受影响。
+    """
+    return {k: v for k, v in doc.items() if k not in INTERNAL_RESULT_FIELDS}
+
+
 @tool(
     name="search_knowledge",
     description="搜索知识库。当用户询问专业问题、查找文献、查询实验方法等时使用。返回 0 结果时会附 hint 提示是否需要 web_search 补充。",
@@ -48,10 +73,12 @@ async def search_knowledge(input: SearchKnowledgeInput, ctx: ToolContext) -> dic
         enable_graph=True,
         enable_rerank=True,
     )
+    # 2026-07-02 Round 5b: 过滤内部字段，避免 LLM 模仿 tool_use 协议输出 fake XML
+    filtered = [_filter_result_for_llm(r) for r in results]
     result = {
         "status": "success",
-        "count": len(results),
-        "results": results,
+        "count": len(filtered),
+        "results": filtered,
         "rich_block_type": "knowledge_ref",
     }
     # 2026-06-14 收官：本地知识库返回 0 结果时，hint 调 web_search 补充

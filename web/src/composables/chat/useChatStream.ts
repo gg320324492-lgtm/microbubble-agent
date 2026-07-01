@@ -18,6 +18,28 @@
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+
+// 2026-07-02 Round 5c: 前端兜底剥除 fake XML
+// 镜像 Python app/agent/agentic_loop.py:_strip_fake_tool_calls (line 394-419)
+// 5 种格式: <function=>  / <function_calls>  / <tool_call>{  / ```json{name,...}  / <tool_call><function=
+// 触发场景: 后端 done event 在 stream 中断路径下被 Round 5a try/finally 兜底 yield,
+// text_without_json=None, 前端 useChatStream:638 替换逻辑跳过, raw text_delta 含 fake XML 泄露
+const FAKE_XML_PATTERNS = [
+  /<function\s*=[^>]+>/gi,
+  /<function_calls?\s*>/gi,
+  /</tool_call>\s*\{/gi,
+  /```json\s*\{[^{}]*"(?:name|function|tool)"/gi,
+  /<tool_call>\s*<function=/gi,
+]
+
+function stripFakeXml(text: string): string {
+  if (!text) return text
+  let result = text
+  for (const pattern of FAKE_XML_PATTERNS) {
+    result = result.replace(pattern, '')
+  }
+  return result
+}
 import { ElMessage } from 'element-plus'
 import { sseFetch } from '@/api/agent/sse'
 import { useChatSessionsStore } from '@/stores/chatSessions'
@@ -435,7 +457,9 @@ export function useChatStream() {
               )
             }
           }
-          currentAssistant.content = (currentAssistant.content || '') + (evt.delta || '')
+          // 2026-07-02 Round 5c: 前端兜底剥除 fake XML (兜底防 Round 5a/5b 都没完全解决的情况)
+          const cleanedDelta = stripFakeXml(evt.delta || '')
+          currentAssistant.content = (currentAssistant.content || '') + cleanedDelta
           break
         case 'brief':
           // [snapshot, deprecated] v1 客户端兼容，v2+ 忽略
