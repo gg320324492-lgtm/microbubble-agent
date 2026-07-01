@@ -7,9 +7,9 @@
 - 保留旧 API 签名（chat_stream / chat_with_brief_and_detail）以兼容 micro_bubble_agent
 
 历史（2026-06-29 已删除）：
-- chat_engine_legacy.py (30 天回滚资产，已在 2026-06-29 提前 15 天收官)
+- chat_engine_legacy.py (30 天回滚资产，已在 2026-06-29 提前 15 天收官, commit 817f1ffa)
 - AGENT_NEW_ARCHITECTURE_ENABLED 等 3 个 feature flag 已全部移除
-- 真回滚路径: git revert <删除 commit> + 重新部署
+- 真回滚路径: git revert 817f1ffa + 重新部署
 """
 
 import asyncio

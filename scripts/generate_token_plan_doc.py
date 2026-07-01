@@ -750,7 +750,7 @@ add_h3('3.14.2 2026-06-12 v4 收官（34 工具 @tool 装饰器 + 12 类 Rich Bl
 add_h3('3.14.3 2026-06-12 方案 C：Agent 单阶段流式渐进综合架构（6 stage 收官）')
 add_bullet('取消 brief/detail 双层 → 单阶段流式综合（intent → agentic_loop → critique → done）')
 
-add_h3('3.14.4 2026-06-12 chat_engine_legacy 30 天承诺提前 15 天收官（2026-06-29）')
+add_h3('3.14.4 2026-06-12 chat_engine_legacy 30 天承诺提前 15 天收官（2026-06-29, commit 817f1ffa）')
 
 add_h3('3.14.5 Phase 1-6 全部完成 + 160+ 测试全过')
 

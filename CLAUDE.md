@@ -474,7 +474,7 @@ async def complete(self, messages, *, model=None, system=None, ...):
 - `AGENT_REFLECTION_ENABLED: bool = True`
 - `AGENT_COMPRESSION_ENABLED: bool = True`
 - 关闭时由 `chat_engine.py` 内部调 `chat_engine_legacy.py`（保留作为 30 天回滚资产，**不是 in-file dead code**）
-- 30 天后（2026-07-14）单独 commit 删除 `chat_engine_legacy.py` → **已提前 15 天（2026-06-29）收官**
+- 30 天后（2026-07-14）单独 commit 删除 `chat_engine_legacy.py` → **已提前 15 天（2026-06-29）收官** (commit `817f1ffa`)
 
 ### 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官
 
@@ -522,7 +522,7 @@ docker compose restart app celery-worker
 - 流式 ChartBlock 渐进渲染（边输出文字边出图）
 - RAG 引用图谱可视化
 - ASR/TTS 真流式（边录音边出文字）
-- ~~30 天后删除 `chat_engine_legacy.py`（2026-07-14）~~ — **已于 2026-06-29 提前 15 天完成**（见上节"## 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官"）
+- ~~30 天后删除 `chat_engine_legacy.py`（2026-07-14）~~ — **已于 2026-06-29 提前 15 天完成** (commit `817f1ffa`)（见上节"## 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官"）
 
 ## 开发注意事项
 
