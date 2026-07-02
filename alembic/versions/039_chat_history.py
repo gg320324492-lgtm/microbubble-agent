@@ -32,7 +32,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision: str = "039_chat_history"
-down_revision: Union[str, None] = "038_tpl_cloned_from"
+down_revision: Union[str, None] = "037_knowledge_meta_jsonb"  # 2026-07-03 跳过 038_tpl_cloned_from (模板管理已删除)
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

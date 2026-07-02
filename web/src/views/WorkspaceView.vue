@@ -126,7 +126,7 @@
  * - 项目/成员详情用 el-dialog 弹层模式 (与原桌面 ProjectView.showDetailDialog 一致)
  * - 移动端通过 resolveMobileComponent 切换到 MobileWorkspaceView
  *
- * 复用 CLAUDE.md v77 P2.6-G.2 (L6661) 模式: MeetingView el-tabs 嵌入 TemplatesPanel
+ * 2026-07-03: 模板管理删除后, WorkspaceView 只剩项目 / 成员 / 声纹 3 个 tab
  */
 
 import { ref, watch, onMounted } from 'vue'

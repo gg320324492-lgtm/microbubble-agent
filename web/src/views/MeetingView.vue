@@ -174,42 +174,14 @@
     </el-card>
     </div>
 
-      <!-- Tab 2: 模板管理 (从 /admin/templates 移入) -->
-    <div v-show="activeTab === 'templates'" role="tabpanel"
-      :aria-labelledby="`tab-strip-templates`" class="tab-panel">
-      <TemplatesPanel
-        ref="templatesPanelRef"
-        @edit="onEditTemplate"
-        @delete="onDeleteTemplate"
-        @clone="onCloneTemplate"
-        @toggle-active="onToggleActive"
-        @batch-toggle-active="onBatchToggleActive"
-        @batch-delete="onBatchDeleteTemplates"
-      />
-    </div>
-
-    <!-- 创建会议对话框 -->
-    <!-- 创建/编辑会议对话框 -->
+      <!-- 创建会议对话框 -->
+    <!-- 创建/编辑会议对话框 (2026-07-03: 模板管理删除, 不再传 :templates) -->
     <MeetingCreateDialog
       v-model:visible="showCreateDialog"
       :is-mobile="isMobile"
       :editing-id="editingMeetingId"
       :editing-data="editingMeetingData"
-      :templates="templates"
       @success="onMeetingSaved"
-      @save-template="onSaveAsTemplate"
-      @delete-template="onDeleteTemplate"
-      @clone-template="onCloneTemplate"
-      @toggle-active="onToggleActive"
-    />
-
-    <!-- 2026-06-03 新增：模板编辑对话框 — v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件 -->
-    <MeetingTemplateDialog
-      v-model="showTemplateDialog"
-      :editing-template="editingTemplate"
-      :members="members"
-      :is-mobile="isMobile"
-      @saved="onTemplateSaved"
     />
 
     <!-- 实时转写对话框（已废弃，录音机模式无需实时转写） -->
@@ -256,8 +228,6 @@ import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import VoiceTestDialog from '@/components/VoiceTestDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import MeetingMinutesDialog from '@/components/meeting/MeetingMinutesDialog.vue'
-import MeetingTemplateDialog from '@/components/meeting/MeetingTemplateDialog.vue'
-import TemplatesPanel from '@/components/meeting/TemplatesPanel.vue'
 import { Delete, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 
@@ -265,9 +235,9 @@ const router = useRouter()
 const route = useRoute()
 const memberStore = useMemberStore()
 
-// v78 UI redesign: 2 tabs (会议列表 / 模板管理)
-// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['meetings', 'templates']
+// v78 UI redesign: 模板管理 tab 已删除 (2026-07-03 用户决策), 现在只剩 1 tab "会议列表"
+// 保留 VALID_TABS / tabItems / TabStrip 框架, 方便未来加新 tab
+const VALID_TABS = ['meetings']
 const activeTab = ref(
   route.query.tab && VALID_TABS.includes(String(route.query.tab))
     ? String(route.query.tab)
@@ -277,10 +247,7 @@ const activeTab = ref(
 // 铁律 30: EP 图标 named import + 通过 props 传入
 const tabItems = [
   { key: 'meetings',  label: '会议列表', icon: VideoCamera },
-  { key: 'templates', label: '模板管理', icon: Document },
 ]
-
-const templatesPanelRef = ref(null)
 
 // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
 watch(activeTab, (tab) => {
@@ -410,133 +377,16 @@ const resumeRecording = (meetingId) => {
 }
 
 const meetingForm = ref({
-  templateId: null,
+  templateId: null,  // 保留兼容旧数据, 不再写入 (2026-07-03 模板管理删除)
   title: '', start_time: '', location: '', participants: [], description: '',
   summary: '', key_points: [], decisions: [],
   agenda: [],  // Wave 3b: 会议议程
   remindBefore: true,
 })
 
-// === 2026-06-03 重构：会议模板内嵌到 MeetingView ===
-// v77 P2.6-F.2 Step 1: builtinTemplates/customTemplates/applyTemplate 已删（MeetingCreateDialog 有自己的副本）
-const templates = ref([])
-
-async function loadTemplates() {
-  try {
-    const resp = await axios.get('/api/v1/meeting-templates')
-    if (resp.status === 200) templates.value = resp.data
-  } catch (e) {
-    console.warn('加载会议模板失败', e)
-  }
-}
-
-// === 模板 CRUD（v77 P2.6-F.2: 抽到 MeetingTemplateDialog 子组件） ===
-// 父 MeetingView 只保留 dialog 开关 + 当前编辑模板引用，表单 + submit + reset 都搬到子组件
-const showTemplateDialog = ref(false)
-const editingTemplate = ref(null)
-
-// v77 P2.6-F.3: '存为新模板' 事件处理 (line 444 已重写为新版, 包含 templatesPanelRef 刷新)
-// MeetingCreateDialog 填好表单 → emit('save-template', templateData) →
-//   1. 关闭 MeetingCreateDialog
-//   2. 设置 editingTemplate = templateData (MeetingTemplateDialog 走编辑模式但视觉是"预填的新模板")
-//   3. 打开 MeetingTemplateDialog, 用户继续调整后提交 → customTemplates 新增 1 条
-const onSaveAsTemplate = (templateData) => {
-  showCreateDialog.value = false
-  editingTemplate.value = templateData
-  showTemplateDialog.value = true
-}
-
-// v77 P2.6-F.4: 删除 custom template (后端 DELETE 路由已存在 meeting_template.py:98-107)
-const onDeleteTemplate = async (templateId) => {
-  if (!templateId) return
-  try {
-    await axios.delete(`/api/v1/meeting-templates/${templateId}`)
-    ElMessage.success('模板已删除')
-    await loadTemplates()  // 刷新 templates ref → customTemplates 列表自动减 1
-  } catch (e) {
-    ElMessage.error(`删除失败：${e.response?.data?.detail || e.message}`)
-  }
-}
-
-// v77 P2.6-F.5: 一键复制 builtin 为 custom 副本 (后端 POST /meeting-templates/{id}/clone)
-const onCloneTemplate = async (templateId) => {
-  if (!templateId) return
-  try {
-    const resp = await axios.post(`/api/v1/meeting-templates/${templateId}/clone`)
-    ElMessage.success(`已复制: ${resp.data.name}`)
-    await loadTemplates()  // 刷新 templates ref → customTemplates 列表自动 +1
-  } catch (e) {
-    ElMessage.error(`复制失败: ${e.response?.data?.detail || e.message}`)
-  }
-}
-
-// v77 P2.6-F.5: 切换 builtin is_active (后端 PUT 端点已支持 is_active 字段)
-const onToggleActive = async ({ id, is_active }) => {
-  if (!id) return
-  try {
-    await axios.put(`/api/v1/meeting-templates/${id}`, { is_active })
-    ElMessage.success(is_active ? '已启用' : '已禁用')
-    await loadTemplates()  // 刷新 templates ref → builtin 卡片 disabled class 自动更新
-  } catch (e) {
-    ElMessage.error(`操作失败: ${e.response?.data?.detail || e.message}`)
-  }
-}
-
-// v78 UI redesign: TemplatesPanel emit 'edit' → 打开 MeetingTemplateDialog (不再是 toast)
-const onEditTemplate = (template) => {
-  editingTemplate.value = template
-  showTemplateDialog.value = true
-}
-
-// v78 UI redesign: 批量启用/禁用 (TemplatesPanel batch-toggle-active event)
-const onBatchToggleActive = async ({ ids, is_active }) => {
-  if (!ids || !ids.length) return
-  try {
-    const res = await axios.post('/api/v1/meeting-templates/batch-toggle-active', { ids, is_active })
-    ElMessage.success(`已批量${is_active ? '启用' : '禁用'} ${res.data.updated} 个模板`)
-    await loadTemplates()
-    templatesPanelRef.value?.fetchTemplates?.()
-  } catch (e) {
-    ElMessage.error(`批量操作失败: ${e.response?.data?.detail || e.message}`)
-  }
-}
-
-// v78 UI redesign: 批量删除 (TemplatesPanel batch-delete event, 二次确认后调 API)
-const onBatchDeleteTemplates = async (ids) => {
-  if (!ids || !ids.length) return
-  try {
-    await ElMessageBox.confirm(
-      `确定批量删除 ${ids.length} 个模板?此操作不可撤销,内置模板自动跳过。`,
-      '批量删除确认',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
-    )
-  } catch {
-    return // 用户取消
-  }
-  try {
-    const res = await axios.post('/api/v1/meeting-templates/batch-delete', { ids })
-    const skipMsg = res.data.skipped_builtin?.length
-      ? `, ${res.data.skipped_builtin.length} 个内置模板已跳过`
-      : ''
-    ElMessage.success(`已删除 ${res.data.deleted} 个模板${skipMsg}`)
-    await loadTemplates()
-    templatesPanelRef.value?.fetchTemplates?.()
-  } catch (e) {
-    ElMessage.error(`批量删除失败: ${e.response?.data?.detail || e.message}`)
-  }
-}
-
-// v78 UI redesign: '存为新模板' 事件后, 编辑模式存完刷新 TemplatesPanel
-const onTemplateSaved = async () => {
-  editingTemplate.value = null
-  await loadTemplates()
-  templatesPanelRef.value?.fetchTemplates?.()
-}
-
-// 关闭会议创建对话框时清理 templateId 高亮
+// 关闭会议创建对话框时清理编辑状态
 function onCreateDialogClose() {
   editingMeetingId.value = null
-  meetingForm.value.templateId = null
 }
 
 // 获取成员列表（使用 store）
@@ -558,7 +408,6 @@ const formatHour = (date) => dayjs(date).add(8, 'hour').format('HH:mm')
 onMounted(() => {
   fetchMeetings()
   fetchMembers()
-  loadTemplates()  // Wave 3b
 
   // 2026-07-03 修复: 删除 popover 外部点击关闭
   // el-popover trigger="manual" 不自动关闭, 需要手动监听 document click
@@ -584,15 +433,6 @@ onMounted(() => {
   if (resumeId) {
     resumeRecording(Number(resumeId))
     // resumeRecording 内部已 router.replace('/meetings/room')，不要在这里再 replace
-  }
-
-  // v77 P2.6-G.2: 移动端 TabBar 跳 /meetings?tab=templates → 自动打开快速模板区
-  // (桌面端独立 /admin/templates 走桌面 el-table 表格, 移动端走 MeetingCreateDialog 快速模板卡)
-  const tab = route.query.tab
-  if (tab === 'templates') {
-    showCreateDialog.value = true
-    // 清理 query 防止刷新重复触发
-    router.replace({ path: '/meetings' })
   }
 })
 </script>

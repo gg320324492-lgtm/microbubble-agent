@@ -194,11 +194,6 @@ function onItemClick(n) {
   router.push(`/drive/file/${n.file_id}`)
 }
 
-function onViewAll() {
-  popoverVisible.value = false
-  router.push('/drive/activity')
-}
-
 onMounted(async () => {
   store.startWs()
   store.startPolling(30000)

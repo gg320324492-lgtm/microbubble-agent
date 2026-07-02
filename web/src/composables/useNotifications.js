@@ -4,18 +4,18 @@
  * 提供:
  * - notifications[]: 当前用户 mentions (倒序)
  * - unreadCount: 未读数 (红点数字)
- * - activities[]: 活动动态流
  * - commentsByFileId: { file_id: [comments] }
  *
  * 操作:
  * - fetchNotifications / fetchUnreadCount / markRead / markAllRead
- * - fetchActivities
  * - fetchComments / postComment / deleteComment
  *
  * 自动:
  * - WS 收到 'mention' 事件 → 增量 prepend notifications + 重新拉 unreadCount
- * - WS 收到 'activity' 事件 → 增量 prepend activities
  * - 30s polling unreadCount (兜底, WS 断时仍能显示)
+ *
+ * 注: 2026-07-03 用户决策"活动动态彻底删除" — activities state + fetchActivities +
+ *     WS 'activity' handler 已删除. activity_service 后端仍保留 (驱动 audit log).
  */
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
@@ -31,10 +31,8 @@ function getAuthToken() {
 export const useNotificationsStore = defineStore('notifications', () => {
   const notifications = ref([])
   const unreadCount = ref(0)
-  const activities = ref([])
   const commentsByFileId = ref({})  // { file_id: [{ id, ... }] }
   const loadingNotifications = ref(false)
-  const loadingActivities = ref(false)
   const wsConnected = ref(false)
   let pollTimer = null
   let wsHandlersBound = false
@@ -103,23 +101,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
       return resp.data.marked_count
     } catch (e) {
       console.error('[Notify] markAllRead failed:', e)
-    }
-  }
-
-  async function fetchActivities(scope = 'team', beforeId = null, limit = 50) {
-    loadingActivities.value = true
-    try {
-      const resp = await axios.get(`${API_BASE}/activities`, {
-        params: { scope, before_id: beforeId, limit },
-        headers: { Authorization: `Bearer ${getAuthToken()}` },
-      })
-      activities.value = resp.data.items || []
-      return resp.data
-    } catch (e) {
-      console.error('[Notify] fetchActivities failed:', e)
-      throw e
-    } finally {
-      loadingActivities.value = false
     }
   }
 
@@ -304,9 +285,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
       ]
       unreadCount.value = unreadCount.value + 1
     })
-    ws.on('activity', (data) => {
-      activities.value = [data, ...activities.value].slice(0, 100)
-    })
     wsHandlersBound = true
   }
 
@@ -338,16 +316,13 @@ export const useNotificationsStore = defineStore('notifications', () => {
   return {
     notifications,
     unreadCount,
-    activities,
     commentsByFileId,
     loadingNotifications,
-    loadingActivities,
     wsConnected,
     fetchNotifications,
     fetchUnreadCount,
     markRead,
     markAllRead,
-    fetchActivities,
     fetchComments,
     postComment,
     postReply,

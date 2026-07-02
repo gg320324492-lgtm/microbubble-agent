@@ -15,7 +15,6 @@ from app.models.memory import Memory
 from app.models.feedback import Feedback
 from app.models.prompt_template import PromptTemplate
 from app.models.voiceprint_history import VoiceprintHistory
-from app.models.meeting_template import MeetingTemplate  # Wave 3b
 from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
 from app.models.search_log import SearchLog  # v31 检索质量埋点
 from app.models.chat_history import ChatSession, ChatMessage, ChatShare  # #043 账号持久化
@@ -26,7 +25,7 @@ __all__ = [
     "TaskDependency",
     "Meeting",
     "MeetingParticipant",
-    "MeetingTemplate",
+    # 2026-07-03 模板管理删除 — MeetingTemplate 已下架 (模型 + endpoint + service + alembic 016+038 全部清空)
     "Project",
     "Milestone",
     "Folder",  # 2026-07-01 课题组网盘

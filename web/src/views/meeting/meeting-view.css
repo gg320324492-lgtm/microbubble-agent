@@ -9,9 +9,11 @@
  *
  * 拆分注意事项:
  *   1. 原来 scoped 块里的 data-v-xxx 属性选择器已丢失 (因为是非 scoped css 文件)
- *   2. 类名 (.filter-card / .meeting-item / .action-btn / .template-card 等) 在项目中 unique
+ *   2. 类名 (.filter-card / .meeting-item / .action-btn 等) 在项目中 unique
  *   3. dark 块在 css 文件中仍按 v60-v67 教训非 scoped (全局规则)
- *   4. 子组件 MeetingMinutesDialog / MeetingTemplateDialog 的 scoped style block 独立, 不污染
+ *   4. 子组件 MeetingMinutesDialog 的 scoped style block 独立, 不污染
+ *
+ * 2026-07-03: 模板管理已删除 (.template-card / .template-card-* / .tpl-action 等全部移除)
  */
 
 /* ===== 原 MeetingView line 604-997 scoped style ===== */
@@ -225,119 +227,8 @@
 .item-add { width: 100%; justify-content: center; border-style: dashed; }
 .decision-add { color: var(--color-warning); border-color: var(--color-warning); }
 
-/* 2026-06-03 新增：模板卡片选择器样式（替代独立 MeetingTemplatesView） */
-.template-picker {
-  background: var(--color-bg-page, #fafafa);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 16px;
-}
-.template-picker-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.template-picker-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.template-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
-}
-.template-card {
-  border: 1px solid var(--color-border, #e4e7ed);
-  border-radius: 6px;
-  padding: 10px 12px;
-  background: var(--color-bg-card);
-  cursor: pointer;
-  transition: var(--transition-all-fast) ease;
-  position: relative;
-}
-.template-card:hover {
-  border-color: var(--color-primary, #FF7A5C);
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.12);
-  transform: translateY(-1px);
-}
-.template-card.active {
-  border-color: var(--color-primary, #FF7A5C);
-  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.04), rgba(var(--color-accent-rgb), 0.04));
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.18);
-}
-.template-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  justify-content: space-between;
-}
-.template-card-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.4;
-  margin-bottom: 6px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.template-card-meta {
-  display: flex;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--color-text-placeholder);
-}
-.template-card-meta span {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.template-card-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.template-card.custom:hover .template-card-actions { opacity: 1; }
-/* v77 P2.6-F.5: builtin 卡片 hover 也显示 actions (复制按钮) */
-.template-card.builtin:hover .template-card-actions { opacity: 1; }
-.tpl-action {
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
-  color: var(--color-text-secondary);
-}
-.tpl-action:hover { background: var(--color-bg-page, #fafafa); }
-.tpl-action.danger { color: var(--color-danger); }
+/* 2026-07-03: 模板管理已删除 — .template-picker / .template-card / .template-card-* / .tpl-action / .builtin-active-switch 全部删除 */
 
-/* v77 P2.6-F.5: builtin 卡片禁用态视觉 */
-.template-card.builtin.disabled { opacity: 0.5; cursor: not-allowed; }
-.template-card.builtin.disabled:hover { border-color: var(--color-border); }
-
-/* v77 P2.6-F.5: builtin 卡片右侧 el-switch 定位 */
-.template-card.builtin { position: relative; padding-right: 50px; }
-.builtin-active-switch {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  transform: scale(0.85);
-}
-.template-empty {
-  grid-column: 1 / -1;
-  text-align: center;
-  color: var(--color-text-placeholder);
-  font-size: 12px;
-  padding: 16px 0;
-}
 .form-hint {
   font-size: 11px;
   color: var(--color-text-placeholder);
@@ -498,26 +389,12 @@
   color: var(--el-color-white) !important;
   box-shadow: 0 2px 8px rgba(245, 108, 108, 0.4);
 }
-[data-theme="dark"] .template-picker {
-  background: var(--color-bg-page);
-}
-[data-theme="dark"] .template-card {
-  background: var(--color-bg-card);
-  border-color: var(--color-border);
-}
-[data-theme="dark"] .template-card.active {
-  background: linear-gradient(135deg, rgba(var(--color-primary-rgb), 0.08), rgba(var(--color-accent-rgb), 0.08));
-}
-[data-theme="dark"] .tpl-action:hover {
-  background: var(--color-bg-page);
-}
-/* v77 P2.6-F.5: builtin 卡片禁用态 dark 模式透明度调整 */
-[data-theme="dark"] .template-card.builtin.disabled { opacity: 0.4; }
+/* 2026-07-03: 模板管理删除 — .template-picker / .template-card / .tpl-action / .builtin-active-switch 的 dark 模式覆盖全部删除 */
 [data-theme="dark"] .meeting-info-bar {
   border-bottom-color: var(--color-border);
 }
 
-/* v77 P2.6-D: ocean / forest 主题 dialog header 装饰 + 模板卡选中态 */
+/* v77 P2.6-D: ocean / forest 主题 dialog header 装饰 */
 [data-accent="ocean"] .el-dialog__header,
 [data-accent="forest"] .el-dialog__header {
   background: var(--color-primary-bg);
@@ -529,21 +406,7 @@
 [data-theme="dark"][data-accent="forest"] .el-dialog__header {
   background: rgba(var(--color-primary-rgb), 0.10);
 }
-/* v77 P2.6-G.1: 移动端 long-press 视觉反馈 (LongPressWrapper 内部 + 卡片整体 hover 反馈) */
-.long-press-wrapper {
-  /* LongPressWrapper 内置 opacity: 0.7 is-pressing, 这里补 dark 模式 + 不影响卡片布局 */
-  display: contents;
-}
-[data-theme="dark"] .long-press-wrapper {
-  color: var(--color-text-regular);
-}
-
-/* v77 P2.6-G.1: 移动端模板卡片触摸反馈 (active 状态) */
-.template-card.builtin:active,
-.template-card.custom:active {
-  transform: scale(0.98);
-  transition: transform 0.1s ease-out;
-}
+/* 2026-07-03: long-press-wrapper dark 覆盖 + .template-card:active 触摸反馈删除 (模板管理删除后无引用) */
 
 /* 铁律 31: TabStrip 容器 + TabPanel 容器（替代原 .meeting-tabs el-tabs） */
 .tab-strip-wrapper {
