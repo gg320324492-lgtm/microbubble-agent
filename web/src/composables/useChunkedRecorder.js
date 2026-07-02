@@ -102,8 +102,20 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
           pendingCount.value = Math.max(0, pendingCount.value)
           return idbStore.markChunkUploaded(mid, index)
         }).catch((err) => {
-          // 上传失败：保留在 IDB pending 队列，等待 online 重传
-          console.warn(`[useChunkedRecorder] chunk ${index} 上传失败:`, err?.message || err)
+          // v2.1 修复: 4xx 业务错 (401/403/404) 不算"待重传"
+          // 401 = token 过期, 需要重新登录 (不是网络问题, 不该累积 pending)
+          // 403 = 无权, 重试无用
+          // 404 = 端点不存在, 重试无用
+          // 只 5xx + !status (网络错) 才累积到 pendingCount
+          const status = err?.response?.status
+          if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
+            console.warn(`[useChunkedRecorder] chunk ${index} 4xx 业务错 ${status}, 不累积 pending:`, err?.message || err)
+            // 4xx 不需要重传, 不动 pendingCount
+            // 同时不调用 markChunkUploaded (chunk 留在 IDB 但不算 pending)
+            return
+          }
+          // 5xx / 网络错: 保留在 IDB pending 队列, 等待 online 重传
+          console.warn(`[useChunkedRecorder] chunk ${index} 上传失败 (网络/5xx):`, err?.message || err)
           pendingCount.value++
         })
       })

@@ -26,7 +26,9 @@ import { ref, onMounted, onUnmounted } from 'vue'
 const PROBE_INTERVAL = 10_000
 const PROBE_TIMEOUT = 5_000
 const FAIL_THRESHOLD = 3
-const PROBE_ENDPOINTS = ['/api/v1/health', '/health', '/api/v1/auth/me']
+// v2.1 修复: /api/v1/health 返 404 (路径不存在), 改用 /health (200 真存在)
+// 注意顺序: 已知最快的端点放前面 (自学习会缓存, 优先用)
+const PROBE_ENDPOINTS = ['/health', '/api/v1/auth/me', '/api/v1/health']
 
 // ===== 模块级单例状态 =====
 const online = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
@@ -175,10 +177,18 @@ function markReachable() {
 }
 
 function markUnreachable() {
-  if (online.value || failStreak < FAIL_THRESHOLD) {
+  // v2.1 修复: 累积式翻红, 不是立即翻
+  // 5xx/网络错只 +1, 累积到 failStreak >= FAIL_THRESHOLD (3) 才翻红
+  // 之前设计: 1 次 markUnreachable 立即翻红 → 每次录音 chunk 5xx 翻红一次 → 视觉上持续红
+  // 实际: 5xx 持续 (cloud 8000 没人听) 应该累积到 3 次才翻红
+  // 单次 5xx (瞬时网络抖) 不该翻红 (probe 10s 内会拉回)
+  if (failStreak < FAIL_THRESHOLD) {
+    failStreak++
+  }
+  if (failStreak >= FAIL_THRESHOLD && online.value) {
     online.value = false
-    failStreak = FAIL_THRESHOLD
     recompute()
+    console.warn(`[useNetworkStatus] markUnreachable 触发 failStreak=${failStreak}, online=false`)
   }
 }
 
