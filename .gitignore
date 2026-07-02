@@ -102,3 +102,9 @@ scripts/probe_*.py
 # 论文原文 PDF（不入库，桌面备份用）
 *.pdf
 !nginx/**/*.pdf
+
+# 本地 LLM 实验残留（2026-07-01 vLLM/Ollama/sm_120 调试）
+# 含 GGUF 模型 (qwen3-14b-q4_K_M.gguf ~9GB) + cudart.zip (390MB) + Modelfile + 转换工具
+# 总计 3218 文件 / 552 MB, push 一次要几分钟，必须 ignore
+# 保留文件本地备用，但禁止入库（任何 Claude 窗口都需要）
+llama-cpp-tools/
