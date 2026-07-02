@@ -334,9 +334,12 @@ async function uploadOne(item) {
     })
   } else {
     // 大文件: multipart 3 阶段 (init + complete + abort on error)
+    // ⚠️ 后端 schema (MultipartInitRequest) 用 `filename` + `total_size`, 区别于
+    //    PR4 `/drive/files/instant-upload` 的 `file_name` + `file_size` 命名约定.
+    //    见 app/api/v1/upload_multipart.py:5 docstring 的 canonical wire format.
     const initResp = await axios.post('/api/v1/upload/multipart/init', {
-      file_name: item.file.name,
-      file_size: item.file.size,
+      filename: item.file.name,
+      total_size: item.file.size,
       content_type: item.file.type || 'application/octet-stream'
     })
     const uploadId = initResp.data.upload_id
