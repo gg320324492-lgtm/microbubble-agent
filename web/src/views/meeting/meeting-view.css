@@ -432,6 +432,21 @@
 [data-theme="dark"] .meeting-time-block {
   background: var(--color-bg-page);
 }
+
+/* ===== 2026-07-03 修复: 删除 popover 内容样式 ===== */
+.delete-popover-content {
+  padding: 4px 0;
+}
+.delete-popover-title {
+  font-size: 14px;
+  margin: 0 0 10px 0;
+  color: var(--color-text-primary);
+}
+.delete-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 [data-theme="dark"] .item-row {
   background: var(--color-bg-page);
 }
