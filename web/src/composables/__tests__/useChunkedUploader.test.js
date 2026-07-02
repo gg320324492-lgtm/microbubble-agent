@@ -9,7 +9,15 @@ vi.mock('axios', () => ({
   },
 }))
 
+// v2: Mock useNetworkStatus 模块, 让 markReachable/markUnreachable 成为 spy
+vi.mock('@/composables/useNetworkStatus', () => ({
+  markReachable: vi.fn(),
+  markUnreachable: vi.fn(),
+  getNetworkStatus: vi.fn(),
+}))
+
 import axios from 'axios'
+import { markReachable, markUnreachable } from '@/composables/useNetworkStatus'
 
 describe('useChunkedUploader', () => {
   beforeEach(async () => {
@@ -142,5 +150,49 @@ describe('useChunkedUploader', () => {
     expect(c).toHaveProperty('uploadAll')
     expect(c).toHaveProperty('enqueue')
     expect(typeof c.uploadOne).toBe('function')
+  })
+
+  // === v2: 联动 useNetworkStatus (修复网络误报) ===
+  it('v2.1 uploadOne 成功后调 markReachable', async () => {
+    axios.put.mockResolvedValue({ data: { ok: true } })
+    markReachable.mockClear()
+
+    const blob = new Blob(['x'])
+    await uploader.uploadOne(100, 0, blob)
+
+    expect(markReachable).toHaveBeenCalledTimes(1)
+  })
+
+  it('v2.2 uploadOne 5 次网络错误后调 markUnreachable', async () => {
+    // 所有 5 次都网络错误 (无 status 字段)
+    axios.put.mockRejectedValue({ code: 'ECONNABORTED' })
+    markUnreachable.mockClear()
+
+    const blob = new Blob(['x'])
+    await expect(uploader.uploadOne(100, 0, blob, { maxRetries: 5 })).rejects.toBeDefined()
+
+    expect(markUnreachable).toHaveBeenCalledTimes(1)
+  }, 40_000)  // 5 次重试 × 指数退避 (1+2+4+8+16=31s) 需要 >35s
+
+  it('v2.3 uploadOne 4xx 错误不调 markUnreachable (业务错不是网络错)', async () => {
+    axios.put.mockRejectedValue({ response: { status: 400 } })
+    markUnreachable.mockClear()
+
+    const blob = new Blob(['x'])
+    await expect(uploader.uploadOne(100, 0, blob)).rejects.toBeDefined()
+
+    expect(markUnreachable).not.toHaveBeenCalled()
+  })
+
+  it('v2.4 uploadOne 部分失败后重试成功仍调 markReachable', async () => {
+    axios.put
+      .mockRejectedValueOnce({ code: 'ECONNABORTED' })
+      .mockResolvedValueOnce({ data: { ok: true } })
+    markReachable.mockClear()
+
+    const blob = new Blob(['x'])
+    await uploader.uploadOne(100, 0, blob, { maxRetries: 5 })
+
+    expect(markReachable).toHaveBeenCalledTimes(1)
   })
 })

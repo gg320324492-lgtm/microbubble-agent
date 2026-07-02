@@ -159,7 +159,6 @@ import { useChatSessionsStore } from '@/stores/chatSessions'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useKeyboardInset } from '@/composables/chat/useKeyboardInset'
 import { useHaptic } from '@/composables/chat/useHaptic'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import MobileHeader from './MobileHeader.vue'
 import MobileSessionDrawer from './MobileSessionDrawer.vue'
 import MobileMessageList from './MobileMessageList.vue'
@@ -172,7 +171,6 @@ import TagsEditor from '@/components/chat/TagsEditor.vue'
 import { ElMessageBox } from 'element-plus'
 
 const theme = useThemeStore()
-const network = useNetworkStatus()
 const haptic = useHaptic()
 const sessionsStore = useChatSessionsStore()
 
