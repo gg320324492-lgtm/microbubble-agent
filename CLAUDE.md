@@ -1,22 +1,22 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 当前任务链**：🆕 **v2 PR6-P7 notification 5s dedup 收官**（7 文件 + 1 E2E + +371 行）= **同 (receiver, file, context) 5s 内多次通知合并为 1 条**，红点不增 + 弹 toast + 列表显示 xN 徽章。
+> **2026-07-02 当前任务链**：🆕 **v2 PR6-P8 notification rich title/body 收官**（7 文件 + 36 单测 + +683 行）= **推送服务 metadata 增强 + NotificationBell 卡片化重设计**（comment preview + file_type icon + 操作按钮）。
 > **核心改动**:
-> ① **`alembic/versions/051_drive_notification_dedup.py`** — `file_mentions` 加 `repeated_count` (Integer default 1) + `ix_file_mentions_receiver_file_recent` 索引 (mentioned_user_id + file_id + created_at DESC)
-> ② **`app/services/notification_service.py` create_mention** — 返回 `Tuple[FileMention, bool]` (merged flag), 5s 内同 key 命中 → `repeated_count+=1, created_at=now, mentioned_by=最新actor, commit`. WS push payload 加 `repeated_count` + `merged`
-> ③ **`app/services/notification_service.py` create_bulk_mentions** — 5s dedup 在 24h dedup 之前, 24h 作兜底
-> ④ **`app/api/v1/notifications.py` NotificationItem** — schema 加 `repeated_count: int = 1` 字段
-> ⑤ **`web/src/composables/useNotifications.js` WS handler** — `if (data.merged) { ... }` 分支: 找已有 row 替换 + 红点不增 + `ElMessage.info("已合并 N 条类似通知 (5 秒内)", {grouping: true, duration: 2500})`
-> ⑥ **`web/src/components/common/NotificationBell.vue`** — `<span class="notif-merge-badge">x{{ n.repeated_count }}</span>` (repeated_count > 1 才显示) + 圆角胶囊 primary 色 + dark mode 非 scoped 块
-> ⑦ **`scripts/test_pr6_p7_dedup.py`** — 4 场景 E2E (1/2/3 次合并 + 不同 context 独立)
+> ① **`alembic/versions/052_drive_notification_rich.py`** — `file_mentions` 加 3 列: `title` String(200) + `body` Text + `file_type` String(50) 缓存
+> ② **`app/services/notification_service.py` `_build_title_body()`** — 5 context 模板 (comment/reply:N/star/share/mention) + 实时拼 + 存 DB + WS payload 同步带 metadata + repeated_count > 1 时 title 加 `(xN)`
+> ③ **`app/services/notification_service.py` `_simplify_file_type(mime, file_name)`** — MIME/扩展名 → 9 分类 (pdf/doc/excel/ppt/image/audio/video/text/archive/other), 前端友好值
+> ④ **`app/services/notification_service.py` `_lookup_rich_metadata()`** — 拼 file_name + file_type + comment_preview (comment/reply:N 两种 query 模式 + cross-file 防御)
+> ⑤ **`app/api/v1/notifications.py` NotificationItem** — schema 加 `title`/`body`/`file_type` Optional 字段 + list endpoint 透传
+> ⑥ **`web/src/components/common/NotificationBell.vue` 卡片化重设计** — `<article class="notif-card">` (左 file_type icon + 中 title/body/meta + 右 ArrowRight) + hover translateX(2px) + 未读左色条 + 老数据 `buildFallbackTitle` 兜底 + dark mode 非 scoped 块 (v60-v67 教训)
+> ⑦ **`tests/test_notification_service_rich.py`** — 36/36 PASS (TestSimplifyFileType 14 + TestBuildTitleBody 12 + TestLookupActorName 4 + TestLookupRichMetadata 5 + TestConstants 1)
 > **5 新铁律 (永久沉淀)**:
-> ① dedup key 必须是 (receiver, file_id, context) 三元组 — 不同 user/file/context 永远不合并
-> ② WS payload 必带 `merged` flag — 前端无 SQL 能力, 必须靠后端告知
-> ③ dedup 命中只更新 3 字段: `repeated_count+1` + `created_at=now` + `mentioned_by=最新actor`, 不改 is_read/read_at/id/file_id/context/mentioned_user_id
-> ④ 5s 窗口用 `datetime.utcnow() - timedelta(seconds=5)`, ≥ 1min 用 SQL `INTERVAL 'N minutes'` 走索引
-> ⑤ 双重 UI 反馈: 持久视觉 (NotificationBell xN 徽章) + 瞬时视觉 (ElMessage toast grouping=true)
+> ① title/body 存 DB + 实时拼双轨 — 历史数据 NULL 走前端 `buildFallbackTitle` fallback, 推送服务持久 metadata, dedup 命中重拼 (preview 变了)
+> ② file_type 缓存 vs Knowledge join — 静态字段 (file_type/file_name) 写时存避免 N+1, 动态字段 (actor_name) 实时查
+> ③ 简化分类 vs 原始 MIME — 前端友好值 ≤10 枚举, 后端/推送用原始 MIME, `_simplify_file_type()` 边界函数改一处即可
+> ④ reply:N 安全防御 — N 必须是 int (try/except ValueError) + N 对应 comment.file_id 必须 == 当前 file_id (防跨文件 reply 泄漏内容)
+> ⑤ dedup 命中时 title 重拼 — preview 是动态的, dedup 命中必须重拼 title/body/file_type 反映最新 (id/file_id/context/mentioned_user_id 不变)
 > **端到端验证 (P0-5)**:
-> 同 receiver 5s 内连发 3 次 mention → DB 只 1 row (repeated_count=3) → 1 个 WS 推送 (merged=true) → 红点不增 + 弹 toast "已合并 3 条类似通知" + NotificationBell 显示 "x3" 徽章 / 不同 context (comment vs reply:N) 各自独立 / 5s 外重复 → 新 row (default 1) / 已读不参与合并 / 8 dedup 单测 + 1 E2E 全过 + vitest 546/546 + build 0 警告。
+> testbot @赵航佳 触发 mention → DB row title="xiaoqi_testbot 在 test.pdf 提到了你" body="@... PR6-P8 测试 · pdf" file_type="pdf" / alembic 052 跑成功 / 36 单测全过 / build 0 警告 / NotificationBell 卡片化上线 / 5s dedup (PR6-P7) + rich body (PR6-P8) 双轨并存 / 老数据 NULL 走前端 fallback / cross-file reply 安全拒绝。
 > ---
 > **2026-07-02 早班 历史任务链**：🆕 **v2 PR6-P6 comment edit 收官**（7 文件 + 1 E2E + +988 行）= **评论 5 分钟内 owner 可编辑**，复用 PR6-P4 三路 mention 解析，结构不动。
 > **核心改动**:
