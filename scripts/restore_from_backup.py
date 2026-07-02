@@ -3,11 +3,18 @@
 事故教训 (PR6-P9): 我误传 cleanup_old_mentions_task(retention_days=0) 删了 31 条生产
 file_mentions 数据. 通过 backup_before_delete helper 自动备份到 JSON, 本脚本可单条重 INSERT.
 
-**支持的表** (从 JSON payload.table_name 推断):
+**支持的表** (从 JSON payload.table_name 推断, 可被 --table 覆盖):
 - chat_sessions (CASCADE 自动清 messages + shares, restore 只恢复 session 行)
 - file_mentions (单条独立, 简单)
 - drive_files (Knowledge 表, 含 file_path / mime_type / owner_id 等字段)
 - folders (Folder 表)
+
+**2026-07-02 v2 PR6-P10 增量: --table 显式指定**
+- 用途: 跨表恢复 / JSON 内 table_name 字段错 / 未来表 rename 兼容
+- 行为: 覆盖 payload['table_name'], 走与 JSON 内字段不同的 ORM model + DB 表
+- 警告: 与 JSON 内 table_name 不一致时打印 ⚠️ 警告 (仍允许, 用户显式决策)
+- 验证: --table 必须在 BACKUP_TABLE_TO_ORM.keys() 里, 否则 fail fast 列出合法选项
+- 注意: items 字段必须与目标表 columns 兼容 (否则 INSERT 失败, 走 try/except skipped_count += 1)
 
 **模式**:
 - --scan: 读 JSON → 打印将恢复的 N 行 + 目标表 + 字段预览 (无副作用)
@@ -23,6 +30,8 @@ docker cp microbubble-agent-app-1:/tmp/celery_cleanup_file_mentions_20260702_123
 python scripts/restore_from_backup.py --scan ./backups/celery_cleanup_file_mentions_20260702_123456.json
 # 4. 真跑
 python scripts/restore_from_backup.py --apply --confirm ./backups/celery_cleanup_file_mentions_20260702_123456.json
+# 5. (可选) --table 覆盖: 未来表 rename / JSON 内字段错时用
+python scripts/restore_from_backup.py --scan --table=folders ./backups/celery_cleanup_legacy.json
 ```
 """
 import argparse
@@ -75,13 +84,27 @@ def load_backup(backup_path: str) -> dict:
     return payload
 
 
-def print_scan_summary(payload: dict, backup_path: str) -> None:
-    """打印 backup 摘要 (无副作用)"""
+def print_scan_summary(
+    payload: dict,
+    backup_path: str,
+    original_table_name: Optional[str] = None,
+) -> None:
+    """打印 backup 摘要 (无副作用)
+
+    Args:
+        payload: load_backup 返回的 dict
+        backup_path: 备份文件路径 (用于打印)
+        original_table_name: JSON 原始 table_name (与 payload['table_name'] 不同时打印 override 警告)
+    """
     table_name = payload["table_name"]
     orm_info = BACKUP_TABLE_TO_ORM.get(table_name)
     print(f"📦 [SCAN] 备份文件: {backup_path}")
     print(f"   备份时间: {payload['backup_at']}")
-    print(f"   逻辑表: {table_name} → ORM: {orm_info[0] if orm_info else '?'} / DB 表: {orm_info[1] if orm_info else '?'}")
+    if original_table_name and original_table_name != table_name:
+        # 2026-07-02 v2 PR6-P10 增量: --table 覆盖时显式标记 override, 防静默改目标表
+        print(f"   逻辑表: {table_name} → ORM: {orm_info[0] if orm_info else '?'} / DB 表: {orm_info[1] if orm_info else '?'}  ⚠️ 覆盖自 JSON 原始 table_name={original_table_name}")
+    else:
+        print(f"   逻辑表: {table_name} → ORM: {orm_info[0] if orm_info else '?'} / DB 表: {orm_info[1] if orm_info else '?'}")
     print(f"   行数: {payload['row_count']}")
     print(f"   清理策略: {payload.get('meta', {}).get('strategy', 'N/A')}")
     print(f"   cutoff: {payload.get('meta', {}).get('cutoff_date', 'N/A')}")
@@ -97,9 +120,16 @@ def print_scan_summary(payload: dict, backup_path: str) -> None:
     print(f"⚠️ [SCAN] 即将恢复 {payload['row_count']} 行到 {orm_info[1] if orm_info else '?'} 表 (INSERT, id 冲突时跳过)")
 
 
-async def restore_from_backup(backup_path: str) -> int:
-    """恢复备份到 DB (async), 返回实际 INSERT 行数"""
-    payload = load_backup(backup_path)
+async def restore_from_backup(backup_path: str, payload: Optional[dict] = None) -> int:
+    """恢复备份到 DB (async), 返回实际 INSERT 行数
+
+    Args:
+        backup_path: 备份 JSON 文件路径 (用于日志)
+        payload: 预加载的 backup dict (--table override 时传入, 避免重新 load 丢覆盖)
+                 None 时内部调 load_backup 读盘
+    """
+    if payload is None:
+        payload = load_backup(backup_path)
     table_name = payload["table_name"]
     items = payload["items"]
 
@@ -181,6 +211,16 @@ def main():
     g.add_argument("--scan", action="store_true", help="只读 + 打印摘要 (无副作用)")
     g.add_argument("--apply", action="store_true", help="实际写入 DB (需要 --confirm)")
     parser.add_argument("--confirm", action="store_true", help="二次确认门 (apply 必传)")
+    # 2026-07-02 v2 PR6-P10 增量: 显式指定目标表, 覆盖 JSON 内 table_name
+    # 用途: 跨表恢复 / JSON 内字段错 / 未来表 rename 兼容
+    parser.add_argument(
+        "--table",
+        help=(
+            f"显式指定目标表 (覆盖 JSON 内的 table_name). "
+            f"可选: {', '.join(BACKUP_TABLE_TO_ORM.keys())}. "
+            f"覆盖时与 JSON 字段不一致会打 ⚠️ 警告"
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -189,7 +229,30 @@ def main():
         print(f"❌ [ERROR] {e}")
         return 1
 
-    print_scan_summary(payload, args.backup_path)
+    # 2026-07-02 v2 PR6-P10 增量: --table override 逻辑
+    # 铁律: 1) 必须在 BACKUP_TABLE_TO_ORM 里 (fail fast)
+    #       2) 与 JSON 原始字段不一致时必打 ⚠️ 警告 (不静默)
+    #       3) 覆盖后 payload 仍能正确推断 ORM model + DB 表
+    original_table_name = payload.get("table_name")
+    if args.table:
+        if args.table not in BACKUP_TABLE_TO_ORM:
+            print(f"❌ [ERROR] --table 指定的表 '{args.table}' 不在支持列表")
+            print(f"   可选: {list(BACKUP_TABLE_TO_ORM.keys())}")
+            return 1
+        if args.table != original_table_name:
+            print(
+                f"⚠️ [WARN] --table={args.table} 与 JSON 内的 table_name={original_table_name} 不一致"
+            )
+            print(
+                f"   用 --table 指定值覆盖 JSON 字段 (items 字段必须与目标表 columns 兼容, 否则 INSERT 会失败)"
+            )
+        else:
+            # 相同, 显式传 --table 但没差异, 静默不警告 (用户显式表达一致意图)
+            pass
+        # 覆盖 payload 字段 (in-memory, 不改 JSON 文件)
+        payload["table_name"] = args.table
+
+    print_scan_summary(payload, args.backup_path, original_table_name=original_table_name)
 
     if args.scan:
         print("\n🟢 [SCAN] dry-run 完成 (无 DB 写入)")
@@ -199,7 +262,7 @@ def main():
         if not args.confirm:
             print("⚠️ [DRY RUN] --apply 但未传 --confirm, 跳过写入 (用户决策防误操作)")
             return 1
-        inserted = asyncio.run(restore_from_backup(args.backup_path))
+        inserted = asyncio.run(restore_from_backup(args.backup_path, payload=payload))
         print(f"\n💡 [HINT] 建议硬刷浏览器 (Ctrl+Shift+R) 验证 UI 显示恢复的数据")
         return 0 if inserted > 0 else 1
 
