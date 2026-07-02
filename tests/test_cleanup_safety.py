@@ -7,6 +7,12 @@
 4. delay_sec=0 → 跳过 sleep, 仍 warn + proceed
 5. confirm_retention_param_or_skip: 非默认时 return proceed=False
 6. 3 个 Celery task 集成测试: 传 retention=0 → 立即 return skipped, 0 DELETE
+7. **2026-07-02 PR6-P12+**: 交互式 prompt (stdin y/n 确认)
+   - _parse_yes_no: 9 case (y/yes/Y/YES/n/no/NO/无效/空白)
+   - _prompt_yes_no: 7 case (非 tty/禁用/y/n/timeout/EOF/select OSError)
+   - confirm_retention_param 接入 prompt: 6 case (禁用 fallback / 非 tty fallback / y 跳过 sleep / n 拒绝 / timeout fallback / None 不触发)
+   - settings 验证: 2 case (默认 False / timeout 30s)
+   - 3 Celery task 集成: 4 case (非 tty fallback / 禁用旧 sleep / y 跳过 / n 拒绝)
 """
 
 import logging
@@ -481,3 +487,393 @@ class TestSettingsCriticalGuardedTasks:
     def test_default_empty_string(self):
         """CLEANUP_CRITICAL_GUARDED_TASKS 默认空 = 全部 task 走 friendly"""
         assert settings.CLEANUP_CRITICAL_GUARDED_TASKS == ""
+
+
+# ============================================================
+# 2026-07-02 v2 PR6-P12+ 交互式 prompt (stdin y/n 确认)
+# ============================================================
+
+class TestParseYesNo:
+    """_parse_yes_no: 接受 y/yes/n/no (不区分大小写)"""
+
+    def test_y_lowercase(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("y") is True
+
+    def test_yes_full(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("yes") is True
+
+    def test_Y_uppercase(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("Y") is True
+
+    def test_YES_caps(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("YES") is True
+
+    def test_n_lowercase(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("n") is False
+
+    def test_no_full(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("no") is False
+
+    def test_NO_caps(self):
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("NO") is False
+
+    def test_invalid_input_returns_none(self):
+        """无效输入 (非 y/n) → None (caller 重新 prompt 或 fallback)"""
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("hello") is None
+        assert _parse_yes_no("") is None
+        assert _parse_yes_no("   ") is None
+        assert _parse_yes_no("y n") is None  # 多 token
+
+    def test_whitespace_stripped(self):
+        """前后空白自动 strip"""
+        from app.services.cleanup_safety import _parse_yes_no
+        assert _parse_yes_no("  y  \n") is True
+        assert _parse_yes_no("\tyes\t") is True
+
+
+class TestPromptYesNo:
+    """_prompt_yes_no: isatty 兜底 + settings 开关 + select timeout"""
+
+    def test_non_tty_stdin_returns_none(self):
+        """stdin 非 tty (容器后台跑 / Celery beat) → None, 不阻塞"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=False):
+            result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is None
+
+    def test_settings_disabled_returns_none(self):
+        """settings.GUARD_INTERACTIVE_PROMPT_ENABLED=False → None (即便 stdin 是 tty)"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", False):
+                result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is None
+
+    def test_user_yes_returns_true(self):
+        """user 输入 y → True, 立即放行 (不 sleep)"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety.select.select",
+                    return_value=([object()], [], []),
+                ):
+                    with patch(
+                        "app.services.cleanup_safety.sys.stdin.readline",
+                        return_value="y\n",
+                    ):
+                        result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is True
+
+    def test_user_no_returns_false(self):
+        """user 输入 n → False (拒绝)"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety.select.select",
+                    return_value=([object()], [], []),
+                ):
+                    with patch(
+                        "app.services.cleanup_safety.sys.stdin.readline",
+                        return_value="n\n",
+                    ):
+                        result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is False
+
+    def test_timeout_returns_none(self):
+        """select timeout (无输入) → None, fallback 到 time.sleep 路径"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety.select.select",
+                    return_value=([], [], []),  # ready=空 = timeout
+                ):
+                    result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is None
+
+    def test_eof_returns_none(self):
+        """stdin.readline() 返空串 (EOF) → None"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety.select.select",
+                    return_value=([object()], [], []),
+                ):
+                    with patch(
+                        "app.services.cleanup_safety.sys.stdin.readline",
+                        return_value="",  # EOF
+                    ):
+                        result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is None
+
+    def test_select_oserror_falls_back_to_input(self):
+        """select() 抛 OSError (Windows 不支持 stdin) → 走 blocking input() 兜底"""
+        from app.services.cleanup_safety import _prompt_yes_no
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety.select.select",
+                    side_effect=OSError("win32 不支持 select on stdin"),
+                ):
+                    with patch(
+                        "app.services.cleanup_safety.input",
+                        return_value="y",
+                    ):
+                        result = _prompt_yes_no("test?", default=False, timeout_sec=1.0)
+        assert result is True
+
+
+class TestConfirmRetentionParamPrompt:
+    """confirm_retention_param + 交互式 prompt 端到端 (友好版)"""
+
+    def test_prompt_disabled_falls_back_to_sleep(self):
+        """GUARD_INTERACTIVE_PROMPT_ENABLED=False (默认) → 走 time.sleep 旧路径 (PR6-P11 行为)"""
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", False):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    result = confirm_retention_param(
+                        retention_days=0,
+                        default=30,
+                        task_name="test_task",
+                    )
+        assert result["proceed"] is True
+        assert result["prompt_used"] is False
+        assert result["delay_applied"] == settings.RETENTION_OVERRIDE_CONFIRM_DELAY_SEC
+        m_sleep.assert_called_once()
+
+    def test_non_tty_falls_back_to_sleep(self):
+        """stdin 非 tty (容器后台) → 走 time.sleep 旧路径, prompt_used=False"""
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=False):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    result = confirm_retention_param(
+                        retention_days=0,
+                        default=30,
+                        task_name="test_task",
+                    )
+        assert result["proceed"] is True
+        assert result["prompt_used"] is False
+        m_sleep.assert_called_once()  # 走 sleep 兜底
+
+    def test_user_yes_skips_sleep_and_proceeds(self):
+        """prompt 启用 + stdin tty + user 输 y → 立即放行, 0 sleep"""
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    with patch.object(
+                        __import__("app.services.cleanup_safety", fromlist=["_prompt_yes_no"]),
+                        "_prompt_yes_no",
+                        return_value=True,
+                    ):
+                        result = confirm_retention_param(
+                            retention_days=0,
+                            default=30,
+                            task_name="test_task",
+                        )
+        assert result["proceed"] is True
+        assert result["prompt_used"] is True
+        assert result["delay_applied"] == 0.0
+        m_sleep.assert_not_called()  # 用户显式确认, 不再 sleep
+
+    def test_user_no_refuses_and_returns_skipped_reason(self):
+        """prompt 启用 + user 输 n → proceed=False, 拒绝"""
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    with patch.object(
+                        __import__("app.services.cleanup_safety", fromlist=["_prompt_yes_no"]),
+                        "_prompt_yes_no",
+                        return_value=False,
+                    ):
+                        result = confirm_retention_param(
+                            retention_days=0,
+                            default=30,
+                            task_name="test_task",
+                        )
+        assert result["proceed"] is False
+        assert result["prompt_used"] is True
+        assert result["reason"] is not None
+        assert "用户在交互式 prompt 中输入 n" in result["reason"]
+        assert "retention_days=0" in result["reason"]
+        m_sleep.assert_not_called()
+
+    def test_user_timeout_falls_back_to_sleep(self):
+        """prompt timeout/EOF (返 None) → fallback 到 time.sleep 旧路径 (防永久阻塞)"""
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    with patch.object(
+                        __import__("app.services.cleanup_safety", fromlist=["_prompt_yes_no"]),
+                        "_prompt_yes_no",
+                        return_value=None,  # timeout
+                    ):
+                        result = confirm_retention_param(
+                            retention_days=0,
+                            default=30,
+                            task_name="test_task",
+                        )
+        assert result["proceed"] is True
+        assert result["prompt_used"] is False  # fallback 走 sleep 路径
+        m_sleep.assert_called_once()
+
+    def test_default_or_none_does_not_trigger_prompt(self):
+        """retention=None 或 == default → 不触发任何守卫 (含 prompt)"""
+        # retention=None
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety._prompt_yes_no"
+                ) as m_prompt:
+                    result = confirm_retention_param(
+                        retention_days=None,
+                        default=30,
+                        task_name="test_task",
+                    )
+        assert result["proceed"] is True
+        assert result["prompt_used"] is False
+        m_prompt.assert_not_called()
+
+        # retention == default
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_safety._prompt_yes_no"
+                ) as m_prompt:
+                    result = confirm_retention_param(
+                        retention_days=30,
+                        default=30,
+                        task_name="test_task",
+                    )
+        assert result["proceed"] is True
+        assert result["prompt_used"] is False
+        m_prompt.assert_not_called()
+
+    def test_or_skip_strict_mode_unaffected_by_prompt(self):
+        """confirm_retention_param_or_skip (严格版) 不走 prompt, 仍直接 proceed=False"""
+        result = confirm_retention_param_or_skip(
+            retention_days=0,
+            default=30,
+            task_name="critical_task",
+        )
+        assert result["proceed"] is False
+        assert result["prompt_used"] is False  # 严格版无 prompt 概念
+        assert "refused" in result["reason"]
+
+
+class TestSettingsInteractivePrompt:
+    """新 settings 验证"""
+
+    def test_interactive_prompt_default_disabled(self):
+        """GUARD_INTERACTIVE_PROMPT_ENABLED 默认 False (向后兼容 PR6-P11 行为)"""
+        assert settings.GUARD_INTERACTIVE_PROMPT_ENABLED is False
+
+    def test_interactive_prompt_timeout_default(self):
+        """GUARD_INTERACTIVE_PROMPT_TIMEOUT_SEC 默认 30.0 秒"""
+        assert settings.GUARD_INTERACTIVE_PROMPT_TIMEOUT_SEC == 30.0
+
+
+class TestCeleryTaskPromptIntegration:
+    """3 个 Celery task 端到端: 启用 prompt 模式后, 行为正确切换
+
+    关键: 容器后台跑 (stdin 非 tty) 时, prompt 自动 fallback 到 time.sleep,
+    Celery beat .delay() 永远不会被 prompt 阻塞.
+    """
+
+    def test_file_mention_task_prompt_enabled_non_tty_falls_back_to_sleep(self):
+        """file_mention: prompt 启用 + stdin 非 tty → fallback sleep, 放行 cleanup (mock 返 0)"""
+        from app.services.file_mention_tasks import cleanup_old_mentions_task
+
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=False):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    async def mock_cleanup(db, cutoff):
+                        return 0
+                    with patch(
+                        "app.services.notification_service.cleanup_old_mentions",
+                        side_effect=mock_cleanup,
+                    ):
+                        result = cleanup_old_mentions_task(retention_days=0)
+        # fallback 走 sleep, 后续 cleanup 走 (mock 返 0)
+        m_sleep.assert_called_once()
+        assert result["status"] == "ok"
+        assert result["deleted_count"] == 0
+
+    def test_chat_history_task_prompt_disabled_uses_old_sleep_path(self):
+        """chat_history: prompt 禁用 (默认) → 走 PR6-P11 旧 sleep 路径, 放行 cleanup"""
+        from app.services.chat_history_tasks import cleanup_soft_deleted_sessions_task
+
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", False):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    async def mock_cleanup(db, cutoff):
+                        return 0
+                    with patch(
+                        "app.services.chat_history_service.cleanup_soft_deleted_sessions",
+                        side_effect=mock_cleanup,
+                    ):
+                        result = cleanup_soft_deleted_sessions_task(retention_days=0)
+        m_sleep.assert_called_once()
+        assert result["status"] == "ok"
+        assert result["deleted_count"] == 0
+
+    def test_drive_cleanup_task_prompt_user_yes_skips_sleep(self):
+        """drive_cleanup: prompt 启用 + tty + user y → 跳过 sleep, 立即放行"""
+        from app.services.drive_cleanup_tasks import cleanup_expired_drive_files_task
+
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                    with patch.object(
+                        __import__(
+                            "app.services.cleanup_safety",
+                            fromlist=["_prompt_yes_no"],
+                        ),
+                        "_prompt_yes_no",
+                        return_value=True,
+                    ):
+                        async def mock_backup(db, **kwargs):
+                            return (0, None)
+                        with patch(
+                            "app.services.cleanup_backup.backup_rows_to_json",
+                            side_effect=mock_backup,
+                        ):
+                            result = cleanup_expired_drive_files_task(retention_days=0)
+        # user y: 跳过 sleep, cleanup 走 (mock 返 0)
+        m_sleep.assert_not_called()
+        assert result["status"] == "ok"
+        assert result["deleted_files"] == 0
+
+    def test_drive_cleanup_task_prompt_user_no_returns_skipped(self):
+        """drive_cleanup: prompt 启用 + user n → skipped dict, backup service 不被调"""
+        from app.services.drive_cleanup_tasks import cleanup_expired_drive_files_task
+
+        with patch("app.services.cleanup_safety.sys.stdin.isatty", return_value=True):
+            with patch.object(settings, "GUARD_INTERACTIVE_PROMPT_ENABLED", True):
+                with patch(
+                    "app.services.cleanup_backup.backup_rows_to_json"
+                ) as m_backup:
+                    with patch.object(
+                        __import__(
+                            "app.services.cleanup_safety",
+                            fromlist=["_prompt_yes_no"],
+                        ),
+                        "_prompt_yes_no",
+                        return_value=False,  # user n
+                    ):
+                        result = cleanup_expired_drive_files_task(retention_days=0)
+        # user n: skipped, 0 删除, backup 永远不被调
+        m_backup.assert_not_called()
+        assert result["status"] == "skipped"
+        assert result["deleted_files"] == 0
+        assert "用户在交互式 prompt 中输入 n" in result["reason"]

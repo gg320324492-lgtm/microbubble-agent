@@ -166,6 +166,17 @@ class Settings(BaseSettings):
     # 事故教训 (PR6-P9): 关键任务应进 CRITICAL 名单, 即便 0.5s 延迟也避免不了 docker exec 后台跑完
     CLEANUP_CRITICAL_GUARDED_TASKS: str = ""
 
+    # 2026-07-02 v2 PR6-P12+: 守卫交互式 prompt (stdin y/n 确认)
+    # 默认 False: 保持 PR6-P11 友好版"延迟 + warn + 无条件放行"行为, 向后兼容
+    # 启用后: 友好版 (friendly) 在检测到非默认 retention 时, 不再 time.sleep, 而是向 stdin
+    # 输出 [y/N] prompt, 等用户输入 y/n. 收到 n / timeout / EOF → proceed=False (与 or_skip 等价)
+    # 收到 y → 立即放行 (跳过 0.5s 延迟, 用户已显式确认)
+    # **容器后台跑自动 fallback**: sys.stdin.isatty() == False → 走旧的 time.sleep 路径
+    # (e.g. Celery beat .delay() / docker exec -d 都不会卡 stdin 等待输入)
+    # 何时启用: 运维手动触发 (docker compose run celery-worker python -c "...") 时
+    GUARD_INTERACTIVE_PROMPT_ENABLED: bool = False
+    GUARD_INTERACTIVE_PROMPT_TIMEOUT_SEC: float = 30.0  # 30s 默认, 过期自动拒绝 (防无限阻塞)
+
     # CORS 允许的源（逗号分隔，空则使用默认值）
     CORS_ORIGINS: str = ""
 
