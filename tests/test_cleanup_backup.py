@@ -568,3 +568,222 @@ class TestRestoreFromBackupTableFlag:
         assert "payload" in sig.parameters
         # 默认值是 None (向后兼容, 内部 load)
         assert sig.parameters["payload"].default is None
+
+
+class TestRestorePartialColumns:
+    """scripts/restore_from_backup.py 的 --columns 部分字段模式 (PR6-P10+ 增量)"""
+
+    def test_columns_invalid_fails_fast(self, tmp_path):
+        """--columns 指定不存在的列 → 退出码 1 + 列出目标表合法列"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--columns=id,nonexistent_column,another_typo", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 1
+        out = result.stdout
+        # 必须列出无效列名 + 提示语
+        assert "nonexistent_column" in out
+        assert "another_typo" in out
+        assert "不在表" in out
+        # 必须列出 file_mentions 的合法列 (至少包含 id)
+        assert "id" in out
+        # 提示用户加 id (如果缺)
+        # (此处 id 在 --columns 里, 不应触发 pk 缺失警告)
+
+    def test_columns_missing_pk_fails_fast(self, tmp_path):
+        """--columns 不包含主键 id → 退出码 1 + 提示加 id"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--columns=file_id,context", str(backup)],  # 故意缺 id
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 1
+        out = result.stdout
+        # 主键列名提示
+        assert "主键列" in out
+        assert "id" in out
+        # 提示修复建议
+        assert "id,file_id,context" in out or "id," in out
+
+    def test_columns_valid_partial_scan_succeeds(self, tmp_path):
+        """--columns=id,file_id + --scan → 退出码 0 + scan summary 显示 partial 模式"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 2,
+            "items": [
+                {"id": 100, "file_id": 1, "context": "msg1", "extra_col": "ignored"},
+                {"id": 101, "file_id": 2, "context": "msg2", "extra_col": "ignored"},
+            ],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--columns=id,file_id", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # partial 模式标识
+        assert "partial" in out
+        # 列出指定列
+        assert "id" in out
+        assert "file_id" in out
+        # scan 模式无副作用
+        assert "dry-run 完成" in out
+        assert "✅ [RESTORE]" not in out
+
+    def test_columns_absent_uses_full_row_mode(self, tmp_path):
+        """不传 --columns → 全字段模式 (PR6-P10 默认行为, 向后兼容)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2, "context": "msg"}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # 全字段模式标识
+        assert "全部列" in out
+        # 不应出现 partial
+        assert "partial" not in out
+
+    def test_columns_dedup_duplicate_entries(self, tmp_path):
+        """--columns=id,id,file_id → 去重保留 id,file_id (不报错)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--columns=id,id,file_id", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        # 去重后不重复列 → 退出码 0
+        assert result.returncode == 0
+        out = result.stdout
+        # partial 模式标识
+        assert "partial" in out
+
+    def test_columns_whitespace_stripped(self, tmp_path):
+        """--columns='id, file_id , context' → 空白自动 strip, 跟 id,file_id,context 等价"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2, "context": "msg"}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--columns=id, file_id , context", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # 空白被 strip, partial 模式生效
+        assert "partial" in out
+        assert "id" in out and "file_id" in out and "context" in out
+
+    def test_columns_with_table_combined(self, tmp_path):
+        """--table + --columns 组合: 跨表 + 部分字段同时生效"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        # JSON 标 file_mentions, --table=folders 跨表, --columns=id,parent_id 走 folders 主键
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2, "context": "msg"}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--table=folders", "--columns=id,parent_id", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        # --table=folders 与 JSON=file_mentions 不一致 → 但 columns 必须按 folders 表验证
+        assert result.returncode == 0
+        out = result.stdout
+        # --table 警告
+        assert "[WARN] --table=folders" in out
+        # partial 模式标识
+        assert "partial" in out
+        # 列名按 folders 验证 (parent_id 是 folders 的列)
+        assert "id" in out and "parent_id" in out
+
+    def test_columns_partial_inspect_signature(self):
+        """restore_from_backup 接受 columns 参数 (--columns 透传)"""
+        from scripts.restore_from_backup import restore_from_backup
+        import inspect
+        sig = inspect.signature(restore_from_backup)
+        assert "columns" in sig.parameters
+        # 默认值是 None (向后兼容, 全字段模式)
+        assert sig.parameters["columns"].default is None
+
+    def test_columns_print_scan_summary_signature(self):
+        """print_scan_summary 接受 partial_columns 参数"""
+        from scripts.restore_from_backup import print_scan_summary
+        import inspect
+        sig = inspect.signature(print_scan_summary)
+        assert "partial_columns" in sig.parameters
+        # 默认值是 None (向后兼容)
+        assert sig.parameters["partial_columns"].default is None
+
+    def test_columns_get_table_columns_returns_list(self):
+        """get_table_columns 返回目标表所有 ORM 列名 (含 id)"""
+        from scripts.restore_from_backup import get_table_columns, BACKUP_TABLE_TO_ORM
+        for table_name in BACKUP_TABLE_TO_ORM.keys():
+            cols = get_table_columns(table_name)
+            assert isinstance(cols, list)
+            assert "id" in cols, f"{table_name} 必须含主键 id"
+            assert len(cols) > 1, f"{table_name} 应有 >1 列"
+
+    def test_columns_invalid_table_raises(self):
+        """get_table_columns 传不存在的 table_name → ValueError"""
+        from scripts.restore_from_backup import get_table_columns
+        with pytest.raises(ValueError) as exc_info:
+            get_table_columns("nonexistent_table")
+        assert "不支持的 table_name" in str(exc_info.value)
