@@ -23,6 +23,9 @@ class Member(Base, TimestampMixin):
     wechat_id = Column(String(100))  # 企业微信 userid
     wechat_nickname = Column(String(100))  # 企业微信昵称
     wechat_remark = Column(String(100))  # 企业微信备注名
+    # 2026-07-02 v2 PR6-P15: 大小写不敏感 UNIQUE INDEX (alembic 055_member_personal_wechat_id_ci_unique)
+    # app/wechat/identity.py:79 resolve_by_wechat_id() 当前精确匹配, 但为防未来 lower() 匹配出现撞车
+    # 与 PR6-P13/014 同模式, _IDENTIFIER_COLUMNS 白名单已加 personal_wechat_id
     personal_wechat_id = Column(String(100))  # 个人微信号
     wechat_mobile = Column(String(20))  # 绑定手机号
     external_userid = Column(String(100))  # 微信互通外部用户ID（普通微信用户，wm开头）
