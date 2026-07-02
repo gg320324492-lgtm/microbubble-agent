@@ -48,6 +48,7 @@ from app.models.chat_history import (
     VALID_ROLES, SHARE_PERMISSION_READ, VALID_SHARE_PERMISSIONS,
 )
 from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
+from app.services.cleanup_backup import execute_backup_then_delete
 
 logger = logging.getLogger("microbubble.service.chat_history")
 
@@ -788,17 +789,25 @@ async def cleanup_soft_deleted_sessions(db: AsyncSession, cutoff_date: datetime)
     用 datetime.now(timezone.utc)），但 chat_sessions.deleted_at 是 naive 列。
     asyncpg 报 "can't subtract offset-naive and offset-aware datetimes" 500。
     统一 _to_naive_datetime helper 处理（CLAUDE.md 2026-06-05 教训复用）。
+
+    **PR6-P10 备份**: 先 SELECT 全字段 → JSON 备份 → 再 DELETE (事故防复发, PR6-P9
+    误删 31 条 file_mentions 教训). 关闭 BACKUP_BEFORE_DELETE_ENABLED=False 可跳过.
     """
     cutoff_naive = _to_naive_datetime(cutoff_date)
-    stmt = delete(ChatSession).where(
-        and_(
+    deleted_count, _backup_path = await execute_backup_then_delete(
+        db,
+        model=ChatSession,
+        where_clause=and_(
             ChatSession.deleted_at.isnot(None),
             ChatSession.deleted_at < cutoff_naive,
-        )
+        ),
+        table_name="chat_sessions",
+        extra_metadata={
+            "cutoff_date": cutoff_naive.isoformat(),
+            "strategy": "deleted_at IS NOT NULL AND deleted_at < cutoff (CASCADE 清 messages+shares)",
+        },
     )
-    result = await db.execute(stmt)
-    await db.commit()
-    return result.rowcount or 0
+    return deleted_count
 
 
 # ============================================================================

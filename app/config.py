@@ -129,6 +129,14 @@ class Settings(BaseSettings):
     # 运维/测试时可临时缩短 (如 0 立即清空) — 与 TRASH_RETENTION_DAYS 范式一致
     MENTION_RETENTION_DAYS: int = 30
 
+    # 2026-07-02 v2 PR6-P10: Celery cleanup task 物理删除前是否自动 JSON 备份 (默认开启)
+    # 关闭后会跳过 SELECT + JSON 写盘, 直接 DELETE (节省 SELECT 成本, 但失去回滚能力)
+    # 事故教训 (PR6-P9 误删 31 条 file_mentions): 默认开避免人为 retention_days=0 误删时无回滚
+    BACKUP_BEFORE_DELETE_ENABLED: bool = True
+
+    # 2026-07-02 v2 PR6-P10: cleanup 备份文件名前缀 (与 /tmp 路径拼接)
+    CLEANUP_BACKUP_PREFIX: str = "celery_cleanup"
+
     # CORS 允许的源（逗号分隔，空则使用默认值）
     CORS_ORIGINS: str = ""
 
