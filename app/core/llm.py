@@ -235,7 +235,18 @@ class LLMClient:
         - model 显式指定时：只用该模型，失败不 fallback（调用方明确意图，不应擅自降级）
         - model 为 None 时：走 self.models[0] → fallback 链
         - 失败重试：同模型连续 3 次（实际为 for-loop 切模型，每模型一次）
+
+        2026-07-02 backend dispatch 收尾: 当 self.backend in ("openai_compat", "ollama")
+        自动转 anthropic_messages_to_openai + 调 openai_client.chat.completions.create,
+        包装 openai_response_to_anthropic_message 为 Anthropic Message 形状.
+        调用方 30+ caller 零感知 backend 差异.
         """
+        if self.backend in ("openai_compat", "ollama"):
+            return await self._complete_openai_compat(
+                messages, model=model, system=system, tools=tools,
+                max_tokens=max_tokens, temperature=temperature,
+            )
+        # 默认 anthropic 路径
         kwargs = {
             "messages": messages,
             "max_tokens": max_tokens,
@@ -289,6 +300,47 @@ class LLMClient:
         logger.error(f"所有 LLM 模型失败: {models_to_try}")
         raise last_exc  # type: ignore
 
+    async def _complete_openai_compat(
+        self,
+        messages: list[dict],
+        *,
+        model: Optional[str] = None,
+        system: Optional[str] = None,
+        tools: Optional[list[dict]] = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.3,
+    ) -> Any:
+        """OpenAI 兼容路径 (mimo /v1 / Ollama /v1 同样协议).
+
+        调用 tool_call_converter 做双向转换, 包装成 Anthropic Message 形状.
+        """
+        oai_messages = anthropic_messages_to_openai(messages, system)
+        oai_tools = anthropic_to_openai_tools(tools) if tools else None
+
+        params = {
+            "model": model or self.models[0],
+            "messages": oai_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if oai_tools:
+            params["tools"] = oai_tools
+
+        models_to_try = [model] if model else self.models
+        last_exc: Optional[Exception] = None
+        for m in models_to_try:
+            try:
+                params["model"] = m
+                resp = await self.openai_client.chat.completions.create(**params)
+                # 包装 OpenAI ChatCompletion 响应为 Anthropic Message 形状
+                return openai_response_to_anthropic_message(resp)
+            except Exception as e:
+                logger.warning(f"openai_compat 模型 {m} 失败: {type(e).__name__}: {e}")
+                last_exc = e
+                continue
+        logger.error(f"openai_compat 所有模型失败: {models_to_try}")
+        raise last_exc  # type: ignore
+
     async def stream(
         self,
         messages: list[dict],
@@ -313,7 +365,12 @@ class LLMClient:
                 async with stream as s:
                     async for event in s:
                         ...
+        2026-07-02 backend dispatch 收尾: openai_compat/ollama 流式留给后续 (用 complete() 走非流式)
         """
+        if self.backend in ("openai_compat", "ollama"):
+            raise NotImplementedError(
+                f"backend={self.backend} 流式暂未实现, 请用 complete() 替代"
+            )
         kwargs = {
             "messages": messages,
             "max_tokens": max_tokens,
@@ -349,7 +406,13 @@ class LLMClient:
         用法：
             async for chunk in client.stream_raw(messages=...):
                 chunk == {"type": "text_delta", "text": "..."}
+
+        2026-07-02 backend dispatch 收尾: openai_compat/ollama 流式留给后续
         """
+        if self.backend in ("openai_compat", "ollama"):
+            raise NotImplementedError(
+                f"backend={self.backend} 流式暂未实现, 请用 complete() 替代"
+            )
         kwargs = {
             "messages": messages,
             "max_tokens": max_tokens,
