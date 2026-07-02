@@ -83,35 +83,48 @@ const loginRules = {
 const handleLogin = async () => {
   if (!loginFormRef.value) return
 
-  await loginFormRef.value.validate(async (valid) => {
-    if (!valid) return
+  // v2.1 修复: 不再使用 validate(callback) + async callback
+  // element-plus validate callback 期望同步返 boolean, async callback 内部 await 永远不会被等
+  // → loading 永远 true → 按钮转圈
+  // 改用 validate() promise 模式 (element-plus 2.x 返 Promise<boolean>)
 
-    loading.value = true
-    try {
-      const res = await axios.post('/api/v1/auth/login', {
-        username: loginForm.username,
-        password: loginForm.password
-      })
+  let isValid = false
+  loading.value = true
+  try {
+    isValid = await loginFormRef.value.validate()
+  } catch {
+    isValid = false
+  }
 
-      const { access_token, refresh_token, user } = res.data
+  if (!isValid) {
+    loading.value = false
+    return
+  }
 
-      // 保存令牌和用户信息
-      localStorage.setItem('access_token', access_token)
-      localStorage.setItem('refresh_token', refresh_token)
-      localStorage.setItem('user_info', JSON.stringify(user))
+  try {
+    const res = await axios.post('/api/v1/auth/login', {
+      username: loginForm.username,
+      password: loginForm.password
+    })
 
-      // 设置axios默认header
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+    const { access_token, refresh_token, user } = res.data
 
-      ElMessage.success('登录成功')
-      router.push('/')
-    } catch (error) {
-      const message = error.response?.data?.detail || '登录失败，请重试'
-      ElMessage.error(message)
-    } finally {
-      loading.value = false
-    }
-  })
+    // 保存令牌和用户信息
+    localStorage.setItem('access_token', access_token)
+    localStorage.setItem('refresh_token', refresh_token)
+    localStorage.setItem('user_info', JSON.stringify(user))
+
+    // 设置axios默认header
+    axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+
+    ElMessage.success('登录成功')
+    router.push('/')
+  } catch (error) {
+    const message = error.response?.data?.detail || '登录失败，请重试'
+    ElMessage.error(message)
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
