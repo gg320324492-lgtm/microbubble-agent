@@ -507,16 +507,35 @@ async def run_single_question(
     payload = {"message": question, "session_id": session_id}
 
     t0 = time.monotonic()
-    try:
-        resp = await client.post(
-            f"{API_BASE}/api/v1/chat/stream",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json; charset=utf-8",
-            },
-            timeout=STREAM_TIMEOUT_S,
-        )
+    # 2026-07-02 Step 2 修复: mimo 限流 429 retry/backoff
+    # 实测: 跑 10 题 mimo 限流 7/10, 阻断完整 benchmark
+    # 重试策略: 3 次, 60s/120s/180s 退避
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = await client.post(
+                f"{API_BASE}/api/v1/chat/stream",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json; charset=utf-8",
+                },
+                timeout=STREAM_TIMEOUT_S,
+            )
+            if resp.status_code == 429 and attempt < max_retries - 1:
+                wait = 60 * (attempt + 1)
+                logger.warning(
+                    f"[{qid}] 429 rate limit, retry {attempt+1}/{max_retries} after {wait}s"
+                )
+                await asyncio.sleep(wait)
+                continue
+            break  # 非 429 或最后一次重试, 跳出
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"[{qid}] exception {type(e).__name__}, retry {attempt+1}")
+                await asyncio.sleep(30)
+                continue
+            raise
         elapsed = (time.monotonic() - t0) * 1000
         if resp.status_code != 200:
             return {
