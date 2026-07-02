@@ -19,6 +19,8 @@ minio==7.2.0
 
 # AI相关
 anthropic>=0.39.0
+# 2026-07-02 openai_compat backend (切 mimo /v1 抗 429 限流)
+openai>=1.0.0,<2.0.0
 mcp>=0.9.0
 
 # 语音识别
