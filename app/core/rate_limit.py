@@ -125,6 +125,7 @@ _rate_limiters = {
     "read": AsyncRedisRateLimiter(max_attempts=200, window_seconds=60),     # 读操作：200次/分钟
     "upload": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),    # 上传：10次/分钟
     "sse": AsyncRedisRateLimiter(max_attempts=10, window_seconds=60),       # v31.2.3: SSE 长连接 10次/分钟
+    "chunked_upload": AsyncRedisRateLimiter(max_attempts=60, window_seconds=60),  # 2026-07-02: 听会边录边传 60次/分钟 (1秒1片 = 60秒录音)
     "drive_upload": AsyncRedisRateLimiter(max_attempts=50, window_seconds=60),  # PR2.10: drive 上传 50次/分 (批量友好)
     "drive_list": AsyncRedisRateLimiter(max_attempts=300, window_seconds=60),  # PR2.10: drive 列表 300次/分 (高频浏览)
 }
@@ -169,6 +170,19 @@ _SSE_PATH_RE = re.compile(
     r"^/api/v1/chat/stream$"
 )
 
+# 2026-07-02: 听会边录边传 (chunked audio upload) 端点精确路径匹配
+# PUT /api/v1/meetings/{meeting_id}/audio-chunk?chunk_index=N
+# - MediaRecorder.start(1000) 每 1s 触发 ondataavailable → 1秒1片
+# - 走 write tier 30/min → 30秒录音就 429 触顶, 用户看到"网络断开"
+# - 必须独立 tier (60/min = 1分钟录音)
+# - 修复依据: CLAUDE.md v31.2.3 教训 2 "SSE/WS/chunked upload 等长连接必须有独立 tier"
+# 当前只 1 个端点: PUT /meetings/{meeting_id}/audio-chunk
+# 未来加其他 chunked upload 端点 (例如合并 /merge-chunks 不在这条路径里, 它是 POST 一次性),
+# 在 _CHUNKED_UPLOAD_PATH_RE 扩展 regex 即可
+_CHUNKED_UPLOAD_PATH_RE = re.compile(
+    r"^/api/v1/meetings/\d+/audio-chunk$"
+)
+
 # v31.2.3: /auth/ 路径前缀匹配 (取代 substring "/auth/" in path)
 # 之前 substring '"/auth/" in path' 会误匹配 /api/v1/authentication/...
 # (不带 / 后缀但含 "auth" 子串). prefix 匹配要求路径以 '/api/v1/auth/'
@@ -196,6 +210,13 @@ def _get_rate_limit_type(request: Request) -> str:
     # 未来加其他 SSE 端点, 在 _SSE_PATH_RE 加 regex 即可
     if _SSE_PATH_RE.match(path):
         return "sse"
+
+    # 2026-07-02: 听会边录边传 (chunked audio upload) 独立 tier
+    # 走 write tier 30/min → 30秒录音触顶 → 用户看到"网络断开"误以为是断网
+    # 实际是限流。chunked_upload tier 60/min = 1分钟录音足够 (单次听会很少超过 60 秒)
+    # 未来加其他 chunked upload 端点, 在 _CHUNKED_UPLOAD_PATH_RE 扩展 regex 即可
+    if method == "PUT" and _CHUNKED_UPLOAD_PATH_RE.match(path):
+        return "chunked_upload"
 
     # PR2.10: 课题组网盘 drive 端点 tier 区分
     # 路径匹配 /api/v1/drive/* 和 /api/v1/upload/multipart/*
