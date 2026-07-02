@@ -1,8 +1,13 @@
-name: QA Bench Smoke (200 questions, < 5 min)
+name: QA Bench Smoke (200 questions, < 5 min, test DB)
 
 # v3.0 计划 — 每次 PR 跑 200 题 smoke 子集
 # 700 题全量太慢（5+ 小时），所以跑 hot_path 标签的 200 题
 # 5 分钟内必须通过，否则 PR 红 ✗ 阻断 merge
+
+# 2026-07-02 修复 (qa-bench-smoke-test-db):
+# - 改用 test DB stack (microbubble_test + 8001 端口 app) 避免污染生产 DB
+# - 加 init_db + ensure_test_user 步骤 (test DB 完全冷启动)
+# - runner.py --api-base http://localhost:8001 指向 test app
 
 on:
   pull_request:
@@ -35,7 +40,7 @@ permissions:
 
 jobs:
   qa-bench-smoke:
-    name: QA Bench 200 题 Smoke
+    name: QA Bench 200 题 Smoke (test DB)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -54,47 +59,104 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 httpx
 
-      - name: Wait for backend health
+      # === 新增 test DB stack 启动 (替代生产 app/db) ===
+      - name: Start test DB stack (microbubble_test + app on 8001)
         run: |
-          # 启动后端（dev 模式）
-          docker compose up -d postgres redis app celery-worker
-          # 等后端 healthy（最长 60s）
+          # 起 test DB (独立容器, 端口 5433 避免与生产 db:5432 冲突)
+          docker run -d --name pg-test \
+            -e POSTGRES_DB=microbubble_test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=microbubble2026 \
+            -p 5433:5432 \
+            postgres:16-alpine
+          # 等 pg-test ready (最长 60s)
           for i in {1..30}; do
-            if curl -sf http://localhost:8000/api/v1/health > /dev/null 2>&1; then
-              echo "✓ Backend healthy"
+            if docker exec pg-test pg_isready -U postgres > /dev/null 2>&1; then
+              echo "✓ pg-test ready"
               break
             fi
             if [ "$i" -eq 30 ]; then
-              echo "✗ Backend startup timeout"
-              docker compose logs app | tail -50
+              echo "✗ pg-test startup timeout"
+              docker logs pg-test | tail -30
               exit 1
             fi
             sleep 2
           done
 
+          # 起 test app (8001 端口, 接 test DB)
+          docker run -d --name app-test \
+            -p 8001:8000 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            -e REDIS_URL="redis://localhost:6379/1" \
+            -e MINIO_ENDPOINT="localhost:9000" \
+            -e MINIO_BUCKET="microbubble-test" \
+            -e MINIO_PUBLIC_URL="http://localhost:9001" \
+            -e LLM_BACKEND=mock \
+            -e SKIP_DB_SETUP=1 \
+            -v $(pwd)/app:/app/app \
+            -v $(pwd)/alembic/versions:/app/alembic/versions \
+            $(docker build -q .) \
+            uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+
+          # 等 app-test healthy (最长 90s, 含 18s Whisper 模型加载 - 实际 mock LLM 不需要)
+          for i in {1..45}; do
+            if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
+              echo "✓ app-test healthy on 8001"
+              break
+            fi
+            if [ "$i" -eq 45 ]; then
+              echo "✗ app-test startup timeout"
+              docker logs app-test | tail -50
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Init test DB schema + seed data
+        run: |
+          # 用 Base.metadata.create_all 建表 + seed (init_db.py 同时插入 24 members 等)
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            app-test python scripts/init_db.py 2>&1 | tail -5
+
+          # alembic stamp head (init_db 用 create_all, 不走 alembic, 需要手动 stamp)
+          # 关键: alembic_version.version_num VARCHAR(32) 上限 (CLAUDE.md 2026-06-02 教训),
+          # 055 migration 已重命名为 055_personal_wechat_ci (22 字符) 适配
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            app-test alembic stamp head 2>&1 | tail -3
+
+      - name: Ensure test user (xiaoqi_testbot) exists
+        run: |
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            app-test python scripts/ensure_test_user.py 2>&1 | tail -3
+          # 期望: [OK] 或 [CREATED] 都行 (幂等)
+
       - name: Generate 700 题题库
         working-directory: tests/qa-bench
         run: |
           python gen780.py --output questions_780.jsonl --schema-only
-          # 验证题数
           wc -l questions_780.jsonl
 
-      - name: Run 200 题 smoke
+      # === 关键改动: --api-base http://localhost:8001 指向 test app ===
+      - name: Run 200 题 smoke (against test DB 8001)
         working-directory: tests/qa-bench
         env:
-          API_BASE: http://localhost:8000
+          API_BASE: http://localhost:8001     # ← 改 8001 (test app)
           QA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
           # 截取前 200 题（hot_path 优先）
           head -200 questions_780.jsonl > smoke_200.jsonl
           python runner.py \
             --token "${QA_TOKEN:-mock}" \
+            --api-base "http://localhost:8001" \
             --questions smoke_200.jsonl \
             --output results/smoke \
             --concurrency 4
           # 期望 5 分钟内完成
           if [ -f results/smoke/results.json ]; then
-            echo "✓ Smoke 200 题完成"
+            echo "✓ Smoke 200 题完成 (test DB, 无生产污染)"
             cat results/smoke/report.md | head -50
           else
             echo "✗ Smoke 失败"
@@ -114,24 +176,31 @@ jobs:
         working-directory: tests/qa-bench
         run: |
           if [ -f results/smoke/results.json ]; then
-            PASS_RATE=$(python -c "
-import json
-with open('results/smoke/results.json') as f:
-    d = json.load(f)
-total = d['summary']['total']
-pass_ = d['summary']['pass']
-print(round(pass_ / max(total, 1) * 100, 1))
-")
+            PASS_RATE=$(python3 << 'PYEOF'
+          import json
+          with open('results/smoke/results.json') as f:
+              d = json.load(f)
+          total = d['summary']['total']
+          pass_ = d['summary']['pass']
+          print(round(pass_ / max(total, 1) * 100, 1))
+          PYEOF
+          )
             echo "Smoke 通过率: ${PASS_RATE}%"
-            # 阈值 80% — 跌至 80% 以下 PR 红 ✗
-            python -c "
-import sys
-pass_rate = float('${PASS_RATE}')
-threshold = 80.0
-if pass_rate < threshold:
-    print(f'❌ 通过率 {pass_rate}% < 阈值 {threshold}%, PR 阻断')
-    sys.exit(1)
-else:
-    print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, PR 通过')
-"
+            python3 << 'PYEOF'
+          import sys
+          pass_rate = float('${PASS_RATE}')
+          threshold = 80.0
+          if pass_rate < threshold:
+              print(f'❌ 通过率 {pass_rate}% < 阈值 {threshold}%, PR 阻断')
+              sys.exit(1)
+          else:
+              print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, PR 通过')
+          PYEOF
           fi
+
+      # === 新增: 清理 test stack ===
+      - name: Teardown test stack
+        if: always()
+        run: |
+          docker rm -f app-test pg-test 2>/dev/null || true
+          echo "✓ test DB stack cleaned up"
