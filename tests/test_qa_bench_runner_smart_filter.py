@@ -60,6 +60,21 @@ def test_equivalent_query_tasks_to_query_member_tasks():
     print("  ✅ Case 2: query_tasks ≈ query_member_tasks 语义等价")
 
 
+# === Case 2b: Round 9 smoke 30 发现 query_all_member_tasks 也应语义等价 ===
+def test_equivalent_query_all_member_tasks_to_query_member_tasks():
+    """query_member_tasks 期望, 实际调 query_all_member_tasks (B 类任务), 不应 missing_tools"""
+    actual = {
+        "tools_called": ["query_all_member_tasks"],
+        "content": "课题组任务: ...",
+        "question": "课题组任务完成率是多少?",
+    }
+    expect = {"tools_any": ["query_member_tasks"]}
+    issues = evaluate_expectation(expect, actual)
+    missing = [i for i in issues if i["type"] == "missing_tools"]
+    assert len(missing) == 0, f"query_all_member_tasks ≈ query_member_tasks 应满足, 但被判 missing: {missing}"
+    print("  ✅ Case 2b: query_all_member_tasks ≈ query_member_tasks 语义等价 (B 类任务新发现)")
+
+
 # === Case 3: 工具语义等价 (search_knowledge ≈ web_search) ===
 def test_equivalent_search_knowledge_to_web_search():
     actual = {"tools_called": ["web_search"], "content": "...", "question": "..."}
@@ -256,6 +271,7 @@ def run_all():
     tests = [
         test_equivalent_get_member_profile_to_query_members,
         test_equivalent_query_tasks_to_query_member_tasks,
+        test_equivalent_query_all_member_tasks_to_query_member_tasks,
         test_equivalent_search_knowledge_to_web_search,
         test_equivalent_reverse_get_member_profile,
         test_forbidden_intersects_must_contain_data_bug,
