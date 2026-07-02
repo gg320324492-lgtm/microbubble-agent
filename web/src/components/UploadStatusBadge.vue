@@ -2,11 +2,11 @@
   <Transition name="badge-fade">
     <div v-if="visible" class="upload-status-badge" :class="badgeClass" role="status" aria-live="polite">
       <span class="badge-icon" :class="iconClass">
-        <span v-if="effectiveOnline" class="dot" />
+        <span v-if="effectiveOnline.value" class="dot" />
         <span v-else class="dot dot-offline" />
       </span>
       <span class="badge-text">{{ message }}</span>
-      <button v-if="!effectiveOnline && pendingCount > 0" class="badge-action" @click="onManualRetry">
+      <button v-if="!effectiveOnline && pendingCount > 0 && !allUploaded" class="badge-action" @click="onManualRetry">
         手动重试
       </button>
     </div>
@@ -26,7 +26,15 @@ const props = defineProps({
 
 const emit = defineEmits(['manual-retry'])
 
-const effectiveOnline = computed(() => props.online)
+// v2.2 修复 (2026-07-03): "全部 chunk 已上传" 是事实级信号，强于探测翻红
+// 录音停止后 30s 窗口内 probe 偶发 3 次失败 → online 短暂 false → 徽章误报离线
+// 但 uploadedCount === totalCount 已经在 IDB 标记 + 后端 200 → 实际数据已安全
+// 这种情况下徽章应走 complete 分支（"✓ 录音已安全保存"），不显示红色
+const allUploaded = computed(() =>
+  props.totalCount > 0 && props.uploadedCount === props.totalCount
+)
+
+const effectiveOnline = computed(() => props.online || allUploaded.value)
 
 const visible = computed(() => {
   // 录音中或刚停止的会议才显示
@@ -35,19 +43,24 @@ const visible = computed(() => {
 })
 
 const badgeClass = computed(() => ({
-  'is-offline': !props.effectiveOnline,
-  'is-uploading': props.effectiveOnline && props.pendingCount > 0,
-  'is-complete': props.effectiveOnline && props.pendingCount === 0 && props.totalCount > 0,
+  'is-offline': !effectiveOnline.value,
+  'is-uploading': effectiveOnline.value && props.pendingCount > 0,
+  'is-complete': effectiveOnline.value && props.pendingCount === 0 && props.totalCount > 0,
 }))
 
 const iconClass = computed(() => ({
-  'pulse-green': props.effectiveOnline && props.pendingCount === 0,
-  'pulse-orange': props.effectiveOnline && props.pendingCount > 0,
-  'pulse-red': !props.effectiveOnline,
+  'pulse-green': effectiveOnline.value && props.pendingCount === 0,
+  'pulse-orange': effectiveOnline.value && props.pendingCount > 0,
+  'pulse-red': !effectiveOnline.value,
 }))
 
 const message = computed(() => {
-  if (!props.effectiveOnline) {
+  // v2.2 防御: allUploaded 是事实级信号, 优先于 effectiveOnline
+  // (理论上 effectiveOnline 已包含 allUploaded, 这里再保险一次)
+  if (allUploaded.value) {
+    return '✓ 录音已安全保存'
+  }
+  if (!effectiveOnline.value) {
     // P0 修复 (2026-07-03): offline 分支文案区分 pendingCount vs uploadedCount vs totalCount
     // 之前用 totalCount 当作"待重传"数 → chunk 全成功时仍显示"5 片待重传"误报
     if (props.pendingCount > 0) {
