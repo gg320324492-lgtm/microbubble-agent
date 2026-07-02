@@ -77,9 +77,8 @@ web/test-results/
 playwright-report/
 web/playwright-report/
 
-# FRP
-frpc
-frpc.exe
+# FRP — 已彻底移除 (2026-07-02): 客户端/服务端二进制+配置+日志全部清理
+
 *.log
 
 # Claude Code
