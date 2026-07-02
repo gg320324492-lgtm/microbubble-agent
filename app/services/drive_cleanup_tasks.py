@@ -32,6 +32,7 @@ from app.core.celery import celery_app
 from app.config import settings
 from app.models.knowledge import Knowledge
 from app.models.folder import Folder
+from app.services.cleanup_backup import backup_rows_to_json
 
 logger = logging.getLogger("microbubble.drive_cleanup")
 
@@ -73,13 +74,23 @@ def cleanup_expired_drive_files_task(retention_days: Optional[int] = None):
                     # ========== 1. 软删除的 drive 文件 ==========
                     # 范围: storage_mode='drive' AND deleted_at < cutoff
                     # 注: drive_extracted 升级后的 kb 文件也清, 因为用户主动软删表示想撤销
-                    stmt_files = select(Knowledge).where(
-                        and_(
-                            Knowledge.storage_mode == "drive",
-                            Knowledge.deleted_at.isnot(None),
-                            Knowledge.deleted_at < cutoff,
-                        )
+                    drive_files_where = and_(
+                        Knowledge.storage_mode == "drive",
+                        Knowledge.deleted_at.isnot(None),
+                        Knowledge.deleted_at < cutoff,
                     )
+                    # PR6-P10: 先备份后 DELETE (事故防复发, PR6-P9 误删 31 条教训)
+                    file_count, _file_backup_path = await backup_rows_to_json(
+                        db,
+                        model=Knowledge,
+                        where_clause=drive_files_where,
+                        table_name="drive_files",
+                        extra_metadata={
+                            "cutoff_date": cutoff.isoformat(),
+                            "strategy": "storage_mode='drive' AND deleted_at IS NOT NULL AND deleted_at < cutoff",
+                        },
+                    )
+                    stmt_files = select(Knowledge).where(drive_files_where)
                     result_files = await db.execute(stmt_files)
                     expired_files = result_files.scalars().all()
 
@@ -116,12 +127,22 @@ def cleanup_expired_drive_files_task(retention_days: Optional[int] = None):
 
                     # ========== 2. 孤儿 Folder (无子文件 + 无子 folder) ==========
                     # 找出过期 folder
-                    stmt_folders = select(Folder).where(
-                        and_(
-                            Folder.deleted_at.isnot(None),
-                            Folder.deleted_at < cutoff,
-                        )
+                    folders_where = and_(
+                        Folder.deleted_at.isnot(None),
+                        Folder.deleted_at < cutoff,
                     )
+                    # PR6-P10: 先备份后 DELETE (事故防复发)
+                    _folder_count, _folder_backup_path = await backup_rows_to_json(
+                        db,
+                        model=Folder,
+                        where_clause=folders_where,
+                        table_name="folders",
+                        extra_metadata={
+                            "cutoff_date": cutoff.isoformat(),
+                            "strategy": "deleted_at IS NOT NULL AND deleted_at < cutoff (孤儿 folder, 无子文件/folder)",
+                        },
+                    )
+                    stmt_folders = select(Folder).where(folders_where)
                     result_folders = await db.execute(stmt_folders)
                     expired_folders = result_folders.scalars().all()
 

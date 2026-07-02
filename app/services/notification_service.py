@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import FileMention, ActivityEvent, Knowledge, FileComment
 from app.models.member import Member
+from app.services.cleanup_backup import execute_backup_then_delete
 
 logger = logging.getLogger(__name__)
 
@@ -616,6 +617,8 @@ async def cleanup_old_mentions(db: AsyncSession, cutoff_date: datetime) -> int:
       cutoff_date 可能是 tz-aware (Celery task 用 datetime.now(timezone.utc)),
       必须 _to_naive_datetime 转换 (CLAUDE.md 2026-06-05 tz-aware 教训复用)
     - CASCADE 自动清: 无外键引用 file_mentions, 安全删除
+    - **PR6-P10 备份**: 先 SELECT 全字段 → JSON 备份 → 再 DELETE (事故防复发)
+      关闭 BACKUP_BEFORE_DELETE_ENABLED=False 可跳过备份
     - deleted_count = 0 是健康状态, 不报错
 
     Returns:
@@ -625,7 +628,14 @@ async def cleanup_old_mentions(db: AsyncSession, cutoff_date: datetime) -> int:
         cutoff_naive = cutoff_date.replace(tzinfo=None)
     else:
         cutoff_naive = cutoff_date
-    stmt = delete(FileMention).where(FileMention.created_at < cutoff_naive)
-    result = await db.execute(stmt)
-    await db.commit()
-    return result.rowcount or 0
+    deleted_count, _backup_path = await execute_backup_then_delete(
+        db,
+        model=FileMention,
+        where_clause=FileMention.created_at < cutoff_naive,
+        table_name="file_mentions",
+        extra_metadata={
+            "cutoff_date": cutoff_naive.isoformat(),
+            "strategy": "created_at < cutoff (一刀切, 不分 is_read)",
+        },
+    )
+    return deleted_count
