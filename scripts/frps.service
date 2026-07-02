@@ -1,0 +1,39 @@
+[Unit]
+Description=FRP Server - Cloud side reverse tunnel listener for microbubble-agent backend
+Documentation=https://github.com/fatedier/frp
+After=network-online.target nss-lookup.target
+Wants=network-online.target
+ConditionFileNotEmpty=/etc/frp/frps.toml
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/frps -c /etc/frp/frps.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+# 6h 没响应 client 视为 daemon 死了 (Local frpc heartbeat 默认 30s,
+# 6h 没新连接说明 tunnel 完全失效, 重启比 silent fail 安全)
+# 注意: frps 自身的 log.to 仍写到 /var/log/frps.log, 这里只标 unit-level 上限
+
+# Logging: append 到 /var/log/frps.log (与 frps.toml 配置一致)
+StandardOutput=append:/var/log/frps.log
+StandardError=append:/var/log/frps.log
+
+# 允许 bind privileged ports (frps.toml bindPort=7000 通常不需要, 但
+# future-proof 兼容 ss -tnlp 显示 frps 派生的 listener 在 8000/2222/9000)
+AmbientCapabilities=
+CapabilityBoundingSet=
+
+# Hardening (不影响功能)
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
