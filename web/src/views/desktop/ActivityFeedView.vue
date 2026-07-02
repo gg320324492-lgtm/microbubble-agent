@@ -1,20 +1,23 @@
 <!--
-  ActivityFeedView.vue — v2 PR6/7 活动动态流视图
+  ActivityFeedView.vue — v2 PR6/PR7 活动动态流视图
 
-  路由: /drive/activity
+  路由: /activity (2026-07-02 升级为顶级, 不再在 /drive 下)
   功能:
   - 时间线 (今天 / 昨天 / 本周 / 更早)
   - scope 切换: team / me
   - load more (cursor 分页)
-  - v2 PR7 修复: 现在嵌套在 DriveLayout 下, 去掉 page-container 外壳 (padding 由 layout 提供)
+
+  后端: GET /api/v1/activities (app/api/v1/notifications.py:227) — 跨域全局活动流
+  当前实现 100% 覆盖网盘域 (11 种 action: upload/rename/move/delete/restore/share/version_restore/comment/mention/star/unstar)
+  future scope: 任务/会议/项目/知识库活动也会并入
 
   Dark mode: 非 scoped 块 (v60-v67 教训)
 -->
 <template>
-  <div class="activity-feed-view">
+  <div class="page-container activity-feed-view">
     <div class="page-header">
       <h2>活动动态</h2>
-      <p class="page-subtitle">查看团队成员最近的文件操作</p>
+      <p class="page-subtitle">团队协作全局活动流（任务 / 会议 / 项目 / 网盘 / 知识库）</p>
     </div>
 
     <div class="activity-toolbar">
@@ -173,8 +176,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* v2 PR7 修复: 去掉 .page-container 前缀, layout 提供 padding */
-.activity-feed-view {
+/* 2026-07-02: 恢复 page-container + .activity-feed-view (PR7 回滚后顶级 /activity 路由, 视口是顶级页) */
+.page-container.activity-feed-view {
   padding: 24px;
   max-width: 900px;
   margin: 0 auto;
