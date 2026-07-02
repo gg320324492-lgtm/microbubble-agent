@@ -3,7 +3,28 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-07-02 午班 — v2 网盘 PR6-P11 收官）
+## 当前状态（2026-07-02 晚班 — v2 网盘 PR6-P15 personal_wechat_id + 听会 v4 + LLM 3-Way 收官）
+
+**已交付（2026-07-02 晚班新增）**：
+
+- 🆕 **v2 网盘 PR6-P15 personal_wechat_id case-insensitive uniqueness（commit `5bab3f15`）** — 6 文件 / +546 行 = **alembic 055 `UNIQUE INDEX ON LOWER(personal_wechat_id)` 兜底 + service `_IDENTIFIER_COLUMNS` 白名单扩到 3 列 + `_COLUMN_LABELS` 中文 label map + API POST/PUT 双保险预检查 + 20/20 pytest PASS + 65 passed, 9 skipped, 0 fail 合跑无回归 (PR6-P13 17 + PR6-P14 20 + PR6-P15 20 + drive_notification 8)**. 触发场景：当前 35 行 members 全部 `personal_wechat_id` 为空字符串 (psql 验证), `app/wechat/identity.py:79` `resolve_by_wechat_id()` 当前精确匹配, 但**未来若改 `lower()` 对齐 PR6-P4 mention 3 路模式**, 同样会有 map 撞车风险. 提前兜底比事后清理成本低 10×. 附带修复 `.gitignore` 防 `.ollama/id_ed25519` SSH 私钥泄漏. **3 层防御**: ① alembic 055 函数索引兜底真唯一 ② service `_IDENTIFIER_COLUMNS` 白名单 + `_COLUMN_LABELS` dict 中文 label ③ API POST/PUT 双保险预检查.
+
+- 🆕 **听会 v4 三件套修复（commit `2cde346f`）** — 3 文件 / +36/-12 行 = **中文文件名下载 RFC 5987 + 文件夹拖拽层级 + 录音 chunked path meeting context**:
+  - **修复 1**: `app/api/v1/drive_files.py:build_content_disposition` 抽 helper, 仅输出 `filename*=UTF-8''<encoded>` (RFC 5987 标准化形式), 旧 `filename="中文.pptx"` 部分走 latin-1 codec 触发 `UnicodeEncodeError` 500 (用户实测触发: "组会ppt/冯懿鑫/2025.7.2 研一 冯懿鑫.pptx"), 4 处调用点统一
+  - **修复 2**: `web/src/composables/useFolderDropZone.js` 删错误赋值 `file.webkitRelativePath = relativePath` (native read-only getter 静默忽略, Firefox 拖拽场景 relativePath 全 undefined), 改用 entries 数组直接存 relativePath 字段
+  - **修复 3**: `web/src/views/MeetingRoomView.vue` AudioRecorder 显式 `:meeting-id="meetingId"` + `:meeting-title="pageTitle"` (lazy computed 不传 prop 读不到值, chunked upload 路径触发后丢失 meeting context)
+  - **配套 commit 链**: `38487056` (v2) → `6c297703` (v3) → `7d0daadf` (chunked rate-limit) → `2cde346f` (v4 收官)
+
+- 🆕 **LLM 3-Way Benchmark (mimo cloud vs qwen3:8b vs qwen3:14b) 收官** — **生产决策: 保持 `LLM_BACKEND=openai_compat` (mimo cloud), 8b 作 offline fallback**:
+  - 10 题 subset: mimo 50% (5/10) ≈ qwen3:8b 50% (5/10) **平局**, 加权综合分 mimo 0.937 > 8b 0.906
+  - 35 题完整: mimo 14.3% > 8b 11.4% (2.9% 差距)
+  - qwen3:14b (9.27GB Q4_K_M, 14.8B params): 单题 40-230s (8b 的 5-10×), 80% 题 duration_too_long, 通过率反低 30% — 不适合实时对话
+  - 5 文件: `docs/llm-benchmark-2026-07-02.md` (263 行) + 4 个 benchmark 报告目录 + reranker 跨模型评估 + `memory/llm-benchmark-2026-07-02.md` (7 铁律) + `tests/manual-test/playwright-e2e-recording.mjs`
+  - **7 新铁律**: ① clash 代理必需 ② docker run 路径必须 `MSYS_NO_PATHCONV=1` ③ Ollama `--network host` bind IPv6 only 必须 `-p 11434:11434` ④ `docker compose restart` 不重读 env_file ⑤ qwen3:8b 是 cloud 备选不是替代品 ⑥ qwen3:14b 慢 4× 且通过率反低 ⑦ mimo openai_compat 3 大待修 (fake_xml_leaked / duration_too_long / intent_mismatch)
+
+---
+
+## 历史状态（2026-07-02 午班 — v2 网盘 PR6-P11 收官）
 
 **已交付（2026-07-02 午班新增）**：
 

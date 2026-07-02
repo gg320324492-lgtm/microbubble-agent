@@ -2,6 +2,114 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
+## [Unreleased] 2026-07-02 — v2 网盘 PR6-P15 personal_wechat_id + 听会 v4 三件套 + LLM 3-Way Benchmark + frps systemd
+
+### 🆕 v2 PR6-P15 personal_wechat_id case-insensitive uniqueness 收官（commit `5bab3f15`）
+
+**触发场景** — PR6-P13 username + PR6-P14 wechat_id case-insensitive 唯一 (alembic 053/054) 后, 个人微信号 `personal_wechat_id` 仍未保护。当前 35 行 members 全部 `personal_wechat_id` 为空字符串 (psql 验证), `app/wechat/identity.py:79` `resolve_by_wechat_id()` 用精确匹配, 但**未来若改 `lower()` 对齐 PR6-P4 mention 3 路模式**, 同样会有 map 撞车风险。提前兜底。
+
+**3 层防御**（与 PR6-P13/14 镜像）：
+1. **alembic 055 `UNIQUE INDEX ix_members_personal_wechat_id_ci ON LOWER(personal_wechat_id)`** 兜底真唯一 (PG 函数索引, NULL 不参与 UNIQUE, 多空字符串安全)
+2. **service `_IDENTIFIER_COLUMNS` 白名单扩展** — `frozenset({"username", "wechat_id", "personal_wechat_id"})` + 新增 `_COLUMN_LABELS = {"username":"用户名","wechat_id":"企业微信号","personal_wechat_id":"个人微信号"}` 中文 label map (替代 if-else 硬编码, 未来加列 O(1))
+3. **API POST/PUT /members 双保险预检查** — `create_member` + `update_member` 都加 personal_wechat_id case-insensitive 检查 (排除自己 update)
+
+**5 文件改动**：
+- `alembic/versions/055_member_personal_wechat_id_ci_unique.py` (新, 50 行 `CREATE UNIQUE INDEX`)
+- `app/models/member.py` (改 1 行注释 PR6-P15)
+- `app/services/member_service.py` (`_IDENTIFIER_COLUMNS += "personal_wechat_id"` + `_COLUMN_LABELS` dict 4 行 + create/update 检查)
+- `app/api/v1/member.py` (POST/PUT 都加 personal_wechat_id 检查)
+- `tests/test_member_personal_wechat_id_ci_unique.py` (新 436 行, 20 单测)
+
+**端到端验证**：
+- 20/20 pytest PASS (7 generic helper + 3 create + 4 update + 1 backward compat + 3 alembic + 2 mention 回归)
+- 65 passed, 9 skipped, 0 fail 合跑无回归 (PR6-P13 17 + PR6-P14 20 + PR6-P15 20 + drive_notification 8 = 65)
+- 实际数据 0 冲突 (psql 验证 35 行 members 全部 personal_wechat_id 为空字符串, 迁移无需数据修复)
+
+**5 新铁律**：
+1. **`_IDENTIFIER_COLUMNS` 白名单是唯一扩展点** — 未来加 personal_email / phone 只改 `_IDENTIFIER_COLUMNS` + `_COLUMN_LABELS` 2 处, helper 0 改 (3 行 vs 5+ if-else 分支)
+2. **`_COLUMN_LABELS` dict 中文 label 替代 if-else** — 加列 O(1) vs O(N), 与 PR6-P13/14 通用化反射模式完全一致
+3. **未来 `lower()` 改写时撞 map 提前兜底** — `app/wechat/identity.py:79` 当前精确匹配, 但提前加 unique 索引比事后清理成本低 10× (vs 之前 PR6-P13 因 mention 解析撞 map 才发现问题)
+4. **PG 函数索引 NULL/空字符串不参与 UNIQUE** — 多空字符串安全, service 层空值跳过仅省 1 次 SQL, 不用额外 NULL 检查代码
+5. **白名单 + 反射双保险** — `_assert_identifier_unique` 仅接受白名单内列名, `getattr(Member, column_name)` 反射避免硬编码 if-else, 同时防 SQL 注入 + 防止 password_hash 等敏感列被误用
+
+**附带 .gitignore 修复**（永久教训沉淀）：
+- `.ollama/` 整个目录 (含 `id_ed25519` OpenSSH 私钥 387 字节) — 凭据泄漏风险
+- 兜底规则 `**/id_ed25519` / `id_rsa` / `id_dsa` / `id_ecdsa` / `**/*.pem` / `**/*.key` — 防任何 SSH 私钥 / TLS 私钥入库
+
+---
+
+### 🆕 听会 v4 三件套修复收官（commit `2cde346f`）
+
+**触发场景** — 听会录音链路 v1/v2/v3 修复累积后, 用户实测触发 3 个新 bug：(1) 下载中文文件名 PPTX 触发 UnicodeEncodeError 500; (2) Firefox 拖拽文件夹层级丢失; (3) chunked upload 路径录音 meeting context 丢失。
+
+**修复 1: `app/api/v1/drive_files.py:build_content_disposition` RFC 5987 标准化**
+- **历史 bug**: 旧实现 `filename="中文.pptx"; filename*=UTF-8''<encoded>` 双 attribute, `filename=` 部分走 latin-1 codec, Starlette 调 `latin-1 encode` → `UnicodeEncodeError` → 500 (用户实测触发: "组会ppt/冯懿鑫/2025.7.2 研一 冯懿鑫.pptx")
+- **修复**: 抽 `build_content_disposition(disposition, filename)` helper, 仅输出 `filename*=UTF-8''<encoded>` (RFC 5987 标准化形式), 现代浏览器 (Chrome/Firefox/Safari/Edge) 全部支持, 老 IE≤9 不支持但项目目标用户无 IE
+- **4 处调用点统一**: `download_drive_file` (range + 完整) / `batch_download_drive_files` (zip) / `public_download_by_token` (range + 完整)
+
+**修复 2: `web/src/composables/useFolderDropZone.js:webkitRelativePath native getter 修复**
+- **历史 bug**: 旧实现 `file.webkitRelativePath = relativePath` 错误赋值, `File.webkitRelativePath` 是 native read-only getter, 赋值浏览器静默忽略
+- **症状**: Firefox 拖拽场景 relativePath 全 undefined, 文件夹层级丢失
+- **修复**: 删错误赋值, 改用 entries 数组直接存 `relativePath` 字段 (与 `file` 对象分离)
+
+**修复 3: `web/src/views/MeetingRoomView.vue:AudioRecorder meeting-id 传递**
+- **历史 bug**: AudioRecorder 内部 `lazy meetingId` 是 computed, 不传 prop 时读不到值, chunked upload 路径触发后丢失 meeting context
+- **修复**: 显式 `:meeting-id="meetingId"` + `:meeting-title="pageTitle"`, chunked_filename 拼接正确
+- **配套 commit 链**: `38487056` (v2 听会修) → `6c297703` (MeetingRoomView v3 修) → `7d0daadf` (chunked_upload rate-limit) → 本次 `2cde346f` (v4 收官)
+
+---
+
+### 🆕 LLM 3-Way Benchmark (mimo cloud vs qwen3:8b vs qwen3:14b) 收官（commit pending, 全量产物已入库）
+
+**目的** — 决定生产 `LLM_BACKEND` 是保持 cloud `openai_compat` (mimo) 还是切换本地 Ollama qwen3 模型, 3 维评估: 速度 / 质量 / 成本。
+
+**方法** — 本地 ollama 部署 + qa-bench 35 题全跑 + 10 题 subset 3-way 公平对比。
+
+**结果 (10 题 subset)**：
+- **mimo-v2.5 (云 openai_compat)**: 50% (5/10), 1m 57s 耗时
+- **qwen3:8b (本地 ollama)**: 50% (5/10), 1m 53s 耗时 ≈ **平局**
+- **qwen3:14b (本地 ollama)**: 30% (3/10), 7m 16s 耗时 — thinking 太重, 80% 题 duration_too_long
+
+**35 题完整**: mimo 14.3% > 8b 11.4% (2.9% 差距), 加权综合分 mimo 0.937 > 8b 0.906
+
+**7 维评分对比 (10 题)**：
+| 维度 | qwen3:8b | mimo cloud | 谁胜 |
+|---|---|---|---|
+| intent | **0.70** | 0.50 | 8b +20% |
+| tool | 0.90 | **1.00** | mimo +10% |
+| content | 0.91 | **0.97** | mimo +6% |
+| defense | **1.00** | 1.00 | 平局 (8b 无 fake XML) |
+| rich | 1.00 | 1.00 | 平局 |
+| consistency | 1.00 | 1.00 | 平局 |
+| perf | 0.96 | **0.96** | 平局 |
+
+**mimo 35 题发现 3 大问题**：
+1. **fake_xml_leaked 3/35 (8.6%)** — `<function=...>` XML 模板泄露给用户
+2. **duration_too_long 2/35 (5.7%)** — thinking 超过 60s
+3. **intent_mismatch 27/35 (77%)** — prompts.py intent 分类对所有 LLM 都不友好
+
+**8b 优势**：① defense 1.00 (无 fake XML) ② 不依赖 mimo rate limit ③ 5.2GB VRAM 16GB 显卡可装
+
+**最终决策**：**生产保持 `LLM_BACKEND=openai_compat` (mimo cloud)**, 8b 作 offline fallback (待办: 实现 `LLM_BACKEND=ollama` 切换接口)。
+
+**7 新铁律**：
+1. **clash 代理必需** — `registry.ollama.ai` GFW 阻断 0KB/s, 加 `HTTP_PROXY` env 后 9MB/s
+2. **docker run 路径必须 `MSYS_NO_PATHCONV=1`** — Git Bash 翻译 `E:\` 为 `C:\Program Files\Git\`, bind mount 失败
+3. **Ollama `--network host` 在 Docker Desktop Windows bind IPv6 only**, 必须 `-p 11434:11434` IPv4 NAT 转发
+4. **`docker compose restart` 不重读 env_file**, 切 backend 必须 `stop && up -d`
+5. **qwen3:8b 是 cloud 备选不是替代品** — 速度 ≈ cloud, 通过率平局, 但 tool 维度弱
+6. **qwen3:14b 慢 4× 且通过率反低** — thinking 重, 实时不用, 离线 batch 推荐
+7. **mimo openai_compat 3 大待修** — `fake_xml_leaked` / `duration_too_long` / `intent_mismatch`, 后端加固 `_strip_fake_tool_calls` + synthesis max_tokens 限制 + prompts.py intent few-shot
+
+**5 文件**：
+- `docs/llm-benchmark-2026-07-02.md` (新, 263 行聚合报告)
+- `tests/qa-bench/results/{cloud-mimo-openai-compat,cloud-mimo-openai-compat-10q,local-ollama-qwen3-8b,local-ollama-qwen3-8b-10q}-2026-07-02/` (4 个 benchmark 报告)
+- `tests/qa-bench/results/reranker-benchmark/round9-smart-filter-reeval/` (reranker 跨模型评估)
+- `memory/llm-benchmark-2026-07-02.md` (新, 7 铁律)
+- `tests/manual-test/playwright-e2e-recording.mjs` (manual test 录音流程)
+
+---
+
 ## [Unreleased] 2026-07-02 — v2 网盘 PR6-P11 Celery retention 二次确认守卫
 
 ### 🆕 v2 PR6-P11 cleanup_safety 守卫（commit `pending` — work in progress）
