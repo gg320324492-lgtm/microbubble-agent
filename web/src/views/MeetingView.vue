@@ -1,9 +1,13 @@
 <template>
   <div class="meeting-view">
-    <!-- v78 UI redesign: 2 tabs (会议列表 / 模板管理) — 替代独立 /admin/templates 路由 -->
-    <el-tabs v-model="activeTab" class="meeting-tabs">
-      <!-- Tab 1: 会议列表 (原内容) -->
-      <el-tab-pane label="会议列表" name="meetings">
+    <!-- 铁律 31: tab 统一用 <TabStrip> -->
+    <div class="tab-strip-wrapper">
+      <TabStrip v-model="activeTab" :items="tabItems" aria-label="会议视图切换" />
+    </div>
+
+    <!-- Tab 1: 会议列表 (原内容) -->
+    <div v-show="activeTab === 'meetings'" role="tabpanel"
+      :aria-labelledby="`tab-strip-meetings`" class="tab-panel">
         <!-- 顶部操作栏 -->
         <el-card class="filter-card">
       <el-row :gutter="16" align="middle">
@@ -137,21 +141,21 @@
         />
       </div>
     </el-card>
-      </el-tab-pane>
+    </div>
 
       <!-- Tab 2: 模板管理 (从 /admin/templates 移入) -->
-      <el-tab-pane label="模板管理" name="templates">
-        <TemplatesPanel
-          ref="templatesPanelRef"
-          @edit="onEditTemplate"
-          @delete="onDeleteTemplate"
-          @clone="onCloneTemplate"
-          @toggle-active="onToggleActive"
-          @batch-toggle-active="onBatchToggleActive"
-          @batch-delete="onBatchDeleteTemplates"
-        />
-      </el-tab-pane>
-    </el-tabs>
+    <div v-show="activeTab === 'templates'" role="tabpanel"
+      :aria-labelledby="`tab-strip-templates`" class="tab-panel">
+      <TemplatesPanel
+        ref="templatesPanelRef"
+        @edit="onEditTemplate"
+        @delete="onDeleteTemplate"
+        @clone="onCloneTemplate"
+        @toggle-active="onToggleActive"
+        @batch-toggle-active="onBatchToggleActive"
+        @batch-delete="onBatchDeleteTemplates"
+      />
+    </div>
 
     <!-- 创建会议对话框 -->
     <!-- 创建/编辑会议对话框 -->
@@ -204,16 +208,17 @@
 <script setup>
 // v77 P2.6-F.2 Step 4: 485 行 CSS 拆到独立 meeting-view.css
 import './meeting/meeting-view.css'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { formatDateTime } from '@/utils/format'
+import { VideoCamera, Document } from '@element-plus/icons-vue'
 import { getStatusType, getStatusLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useMeeting } from '@/composables/useMeeting'
 import { useRecordingState } from '@/composables/useRecordingState'
+import TabStrip from '@/components/common/TabStrip.vue'
 import MeetingCreateDialog from './meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
@@ -222,7 +227,7 @@ import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
 import MeetingMinutesDialog from '@/components/meeting/MeetingMinutesDialog.vue'
 import MeetingTemplateDialog from '@/components/meeting/MeetingTemplateDialog.vue'
 import TemplatesPanel from '@/components/meeting/TemplatesPanel.vue'
-import { Delete, Document, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
+import { Delete, Plus, Microphone, Location, Search } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -230,8 +235,33 @@ const route = useRoute()
 const memberStore = useMemberStore()
 
 // v78 UI redesign: 2 tabs (会议列表 / 模板管理)
-const activeTab = ref('meetings')
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
+const VALID_TABS = ['meetings', 'templates']
+const activeTab = ref(
+  route.query.tab && VALID_TABS.includes(String(route.query.tab))
+    ? String(route.query.tab)
+    : 'meetings'
+)
+
+// 铁律 30: EP 图标 named import + 通过 props 传入
+const tabItems = [
+  { key: 'meetings',  label: '会议列表', icon: VideoCamera },
+  { key: 'templates', label: '模板管理', icon: Document },
+]
+
 const templatesPanelRef = ref(null)
+
+// 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（浏览器前进/后退）
+watch(() => route.query.tab, (t) => {
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
+  }
+})
 
 // 全局录音状态（v77 P2.6-F.2 Step 4: 听会流程改走 /meetings/room 全屏 MeetingRoomView，仅保留 startRecording/stopRecording 用于 onMounted 恢复检查）
 const { recordingMeetingId: globalRecordingId, startRecording, stopRecording } = useRecordingState()

@@ -85,10 +85,15 @@
     <div class="detail-body">
       <!-- 左侧 Tab 内容 -->
       <div class="detail-main">
-        <el-tabs v-model="activeTab" class="detail-tabs">
-          <!-- Tab 1: 会议纪要 -->
-          <el-tab-pane label="会议纪要" name="minutes" lazy>
-            <div class="tab-content">
+        <!-- 铁律 31: tab 统一用 <TabStrip> (lazy → v-show 保留内联模板编辑态) -->
+        <div class="tab-strip-wrapper">
+          <TabStrip v-model="activeTab" :items="tabItems" aria-label="会议详情视图切换" />
+        </div>
+
+        <!-- Tab 1: 会议纪要 -->
+        <div v-show="activeTab === 'minutes'" role="tabpanel"
+          :aria-labelledby="`tab-strip-minutes`" class="tab-content">
+          <div class="tab-content-inner">
               <!-- 编辑态 -->
               <template v-if="editingMinutes">
                 <div class="section">
@@ -254,11 +259,12 @@
                 />
               </template>
             </div>
-          </el-tab-pane>
+          </div>
 
           <!-- Tab 2: 转录记录 -->
-          <el-tab-pane label="转录记录" name="transcript" lazy>
-            <div class="tab-content">
+          <div v-show="activeTab === 'transcript'" role="tabpanel"
+            :aria-labelledby="`tab-strip-transcript`" class="tab-content">
+            <div class="tab-content-inner">
               <template v-if="transcriptEntries.length">
                 <div
                   v-for="(entry, i) in transcriptEntries"
@@ -323,15 +329,15 @@
               </template>
               <el-empty v-else description="暂无转录记录" />
             </div>
-          </el-tab-pane>
+          </div>
 
           <!-- Tab 3: 发言统计 -->
-          <el-tab-pane label="发言统计" name="stats" lazy>
-            <div class="tab-content">
+          <div v-show="activeTab === 'stats'" role="tabpanel"
+            :aria-labelledby="`tab-strip-stats`" class="tab-content">
+            <div class="tab-content-inner">
               <SpeakerStatsCard :stats="meeting.speaker_stats || []" />
             </div>
-          </el-tab-pane>
-        </el-tabs>
+          </div>
       </div>
 
       <!-- 右侧边栏 -->
@@ -380,13 +386,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ArrowDown, ArrowUp, StarFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, Edit, Delete, Document, Plus, Loading, Clock, Location, Microphone, ArrowDown, ArrowUp, StarFilled, ChatLineRound, PieChart } from '@element-plus/icons-vue'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import { useMemberStore } from '@/stores/member'
+import TabStrip from '@/components/common/TabStrip.vue'
 import MeetingRoom from '@/components/MeetingRoom.vue'
 import ProcessingDialog from '@/components/ProcessingDialog.vue'
 import ParticipantAvatars from '@/components/ParticipantAvatars.vue'
@@ -403,7 +410,32 @@ const editingMinutes = ref(false)
 const showCallRoom = ref(false)
 const saving = ref(false)
 const savingTranscriptSpeaker = ref(null)
-const activeTab = ref('minutes')
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
+const VALID_TABS = ['minutes', 'transcript', 'stats']
+const activeTab = ref(
+  route.query.tab && VALID_TABS.includes(String(route.query.tab))
+    ? String(route.query.tab)
+    : 'minutes'
+)
+
+// 铁律 30: EP 图标 named import + 通过 props 传入
+const tabItems = [
+  { key: 'minutes',    label: '会议纪要', icon: Document },
+  { key: 'transcript', label: '转录记录', icon: ChatLineRound },
+  { key: 'stats',      label: '发言统计', icon: PieChart },
+]
+
+// 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（浏览器前进/后退）
+watch(() => route.query.tab, (t) => {
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
+  }
+})
 
 const relatedMeetings = ref([])
 
@@ -953,21 +985,11 @@ onMounted(async () => {
   border: 1px solid var(--color-border, #ebeef5);
 }
 
-.detail-tabs {
-  height: 100%;
-}
-.detail-tabs :deep(.el-tabs__header) {
-  margin: 0;
-  padding: 0 20px;
-  background: var(--color-bg-page, #f5f7fa);
-  border-radius: var(--radius-lg, 12px) var(--radius-lg, 12px) 0 0;
-}
-.detail-tabs :deep(.el-tabs__content) {
-  height: calc(100% - 40px);
-  overflow-y: auto;
-}
-.detail-tabs :deep(.el-tab-pane) {
-  height: 100%;
+/* 铁律 31: 替代原 .detail-tabs el-tabs */
+.tab-strip-wrapper {
+  margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
 }
 
 .tab-content {
@@ -1369,9 +1391,6 @@ onMounted(async () => {
 [data-theme="dark"] .detail-main {
   background: var(--color-bg-card);
   border-color: var(--color-border);
-}
-[data-theme="dark"] .detail-tabs :deep(.el-tabs__header) {
-  background: var(--color-bg-page);
 }
 [data-theme="dark"] .call-placeholder {
   border-color: var(--color-border);

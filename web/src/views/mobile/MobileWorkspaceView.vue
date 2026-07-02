@@ -29,15 +29,15 @@
       </template>
     </PageHeader>
 
-    <div class="tab-strip">
-      <button
-        v-for="t in tabs"
-        :key="t.name"
-        type="button"
-        class="tab-strip-item"
-        :class="{ active: activeTab === t.name }"
-        @click="onTabClick(t.name)"
-      >{{ t.label }}</button>
+    <!-- 铁律 31: 全项目 tab 统一用 <TabStrip> -->
+    <div class="tab-strip-wrapper">
+      <TabStrip
+        v-model="activeTab"
+        :items="tabItems"
+        :scroll="true"
+        aria-label="团队协作视图切换"
+        @change="onTabChange"
+      />
     </div>
 
     <main
@@ -63,8 +63,10 @@
  * 复用 web-minimal / mobile 模式 (PageHeader + CardList + MobileFormSheet + VoiceprintEnrollFlow)
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Folder, User, Microphone } from '@element-plus/icons-vue'
+import TabStrip from '@/components/common/TabStrip.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileProjectsPanel from './mobile-workspace/MobileProjectsPanel.vue'
 import MobileMembersPanel from './mobile-workspace/MobileMembersPanel.vue'
@@ -73,13 +75,20 @@ import MobileVoiceprintsPanel from './mobile-workspace/MobileVoiceprintsPanel.vu
 const route = useRoute()
 const router = useRouter()
 
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
 const VALID_TABS = ['projects', 'members', 'voiceprint']
-const tabs = [
-  { name: 'projects', label: '项目' },
-  { name: 'members', label: '成员' },
-  { name: 'voiceprint', label: '声纹' },
+const activeTab = ref(
+  route.query.tab && VALID_TABS.includes(String(route.query.tab))
+    ? String(route.query.tab)
+    : 'projects'
+)
+
+// 铁律 30: EP 图标 named import + 通过 props 传入
+const tabItems = [
+  { key: 'projects',   label: '项目', icon: Folder },
+  { key: 'members',    label: '成员', icon: User },
+  { key: 'voiceprint', label: '声纹', icon: Microphone },
 ]
-const activeTab = ref(route.query.tab && VALID_TABS.includes(route.query.tab) ? route.query.tab : 'projects')
 
 const PANEL_MAP = {
   projects: MobileProjectsPanel,
@@ -88,10 +97,22 @@ const PANEL_MAP = {
 }
 const currentPanel = computed(() => PANEL_MAP[activeTab.value] || MobileProjectsPanel)
 
-function onTabClick(name) {
-  activeTab.value = name
-  router.replace({ path: '/workspace', query: { tab: name } })
+// TabStrip emit update:modelValue 已自动改 activeTab, 这里只同步 URL
+function onTabChange(name) {
+  router.replace({ path: '/workspace', query: { ...route.query, tab: name } })
 }
+
+// 铁律 29: tab → URL 同步（兜底, 防止 TabStrip emit 漏掉）
+watch(activeTab, (tab) => {
+  router.replace({ path: '/workspace', query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（浏览器前进/后退）
+watch(() => route.query.tab, (t) => {
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
+  }
+})
 
 // header right 按钮代理到对应 panel 的方法
 // 各 panel 暴露 :ref 拿不到, 改用全局事件总线模式 (简单 window event)
@@ -121,36 +142,11 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.tab-strip {
-  display: flex;
-  gap: 8px;
+/* TabStrip 容器（铁律 31: 替代原 .tab-strip 自定义） */
+.tab-strip-wrapper {
   padding: 12px 16px;
   background: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.tab-strip::-webkit-scrollbar { display: none; }
-
-.tab-strip-item {
-  flex-shrink: 0;
-  padding: 8px 16px;
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-full);
-  font-size: 14px;
-  color: var(--color-text-regular);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: all var(--transition-all-fast) var(--ease-out);
-}
-
-.tab-strip-item.active {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  border-color: var(--color-primary);
 }
 
 .workspace-main {
@@ -182,17 +178,10 @@ onMounted(() => {
 
 <!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
 <style>
-[data-theme="dark"] .tab-strip {
+/* 铁律 26: 旧 .tab-strip / .tab-strip-item 已迁移到 TabStrip, dark 由组件自身处理 */
+/* 仅保留 .tab-strip-wrapper 在 dark 下的背景 */
+[data-theme="dark"] .tab-strip-wrapper {
   background: var(--color-bg-card);
   border-bottom-color: var(--color-border);
-}
-[data-theme="dark"] .tab-strip-item {
-  background: transparent;
-  border-color: var(--color-border);
-  color: var(--color-text-regular);
-}
-[data-theme="dark"] .tab-strip-item.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
 }
 </style>

@@ -1,114 +1,123 @@
 <template>
   <div class="knowledge-view">
-    <el-tabs v-model="activeTab" type="border-card" class="knowledge-tabs">
-      <el-tab-pane label="知识库" name="knowledge" lazy>
-        <!-- 工具栏 -->
-        <KnowledgeToolbar
-          :categories="categories"
-          @search="handleSearch"
-          @create="showCreateDialog = true"
-          @upload="showUploadDialog = true"
-          @qa="openQADialog"
-          @entities="activeTab = 'entities'"
-          @filter="handleFilter"
-          @go-drive="$router.push('/drive')"
+    <!-- 铁律 31: 全项目 tab 必须用 <TabStrip> 替代 <el-tabs> -->
+    <div class="tab-strip-wrapper">
+      <TabStrip v-model="activeTab" :items="tabItems" aria-label="知识库视图切换" />
+    </div>
+
+    <!-- ===== 知识库 tab ===== -->
+    <div v-show="activeTab === 'knowledge'" role="tabpanel"
+      :aria-labelledby="`tab-strip-knowledge`" class="tab-panel">
+      <!-- 工具栏 -->
+      <KnowledgeToolbar
+        :categories="categories"
+        @search="handleSearch"
+        @create="showCreateDialog = true"
+        @upload="showUploadDialog = true"
+        @qa="openQADialog"
+        @entities="activeTab = 'entities'"
+        @filter="handleFilter"
+        @go-drive="$router.push('/drive')"
+      />
+
+      <!-- Dashboard -->
+      <KnowledgeDashboard
+        :categories="categories"
+        :recent-items="knowledgeList"
+        :active-category="filterCategory"
+        :active-source-type="filterSourceType"
+        :source-type-stats="statsData.source_types || {}"
+        :loading="loading"
+        :load-error="loadError"
+        @filter-category="handleCategoryFilter"
+        @filter-source-type="handleSourceTypeFilter"
+        @filter-time="handleTimeFilter"
+        @show-entities="activeTab = 'entities'"
+        @show-hypotheses="activeTab = 'hypotheses'"
+        @show-all-categories="showAllCategories = true"
+        @view-detail="handleViewDetail"
+        @edit="editKnowledge"
+        @delete="handleDeleteKnowledge"
+        @download="downloadFile"
+        @retry="fetchKnowledge"
+        @navigate="handleDashboardNavigate"
+      />
+
+      <!-- 健康度摘要 -->
+      <div class="health-summary" v-if="!loading">
+        <el-tag type="info" size="small" effect="plain">📚 知识 {{ total }}</el-tag>
+        <el-tag type="success" size="small" effect="plain">🔗 实体 {{ entityTotal }}</el-tag>
+        <el-tag type="warning" size="small" effect="plain">🧪 假设 {{ hypothesisTotal }}</el-tag>
+        <el-tag type="primary" size="small" effect="plain">📐 公式 {{ formulaTotal }}</el-tag>
+        <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
+        <!-- v2 PR3: 跳转 chip 到网盘 -->
+        <el-tag
+          class="health-summary-drive-chip"
+          type="danger"
+          size="small"
+          effect="plain"
+          @click="$router.push('/drive')"
+          style="cursor: pointer;"
+        >
+          📁 网盘 →
+        </el-tag>
+      </div>
+
+      <div v-if="total > pageSize" class="pagination">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="total"
+          layout="total, prev, pager, next"
+          @current-change="fetchKnowledge"
         />
+      </div>
+    </div>
 
-        <!-- Dashboard -->
-        <KnowledgeDashboard
-          :categories="categories"
-          :recent-items="knowledgeList"
-          :active-category="filterCategory"
-          :active-source-type="filterSourceType"
-          :source-type-stats="statsData.source_types || {}"
-          :loading="loading"
-          :load-error="loadError"
-          @filter-category="handleCategoryFilter"
-          @filter-source-type="handleSourceTypeFilter"
-          @filter-time="handleTimeFilter"
-          @show-entities="activeTab = 'entities'"
-          @show-hypotheses="activeTab = 'hypotheses'"
-          @show-all-categories="showAllCategories = true"
-          @view-detail="handleViewDetail"
-          @edit="editKnowledge"
-          @delete="handleDeleteKnowledge"
-          @download="downloadFile"
-          @retry="fetchKnowledge"
-          @navigate="handleDashboardNavigate"
-        />
+    <!-- ===== 实体图谱 Tab (v77 P2.6-E.3 拆分到 KnowledgeEntityTab.vue) ===== -->
+    <div v-show="activeTab === 'entities'" role="tabpanel"
+      :aria-labelledby="`tab-strip-entities`" class="tab-panel">
+      <KnowledgeEntityTab
+        ref="entityTabRef"
+        :entity-list="entityList"
+        :entity-total="entityTotal"
+        :entity-page="entityPage"
+        :entity-graph-data="entityGraphData"
+        @refresh="handleEntityRefresh"
+        @show-entity-detail="showEntityDetail"
+      />
+    </div>
 
-        <!-- 健康度摘要 -->
-        <div class="health-summary" v-if="!loading">
-          <el-tag type="info" size="small" effect="plain">📚 知识 {{ total }}</el-tag>
-          <el-tag type="success" size="small" effect="plain">🔗 实体 {{ entityTotal }}</el-tag>
-          <el-tag type="warning" size="small" effect="plain">🧪 假设 {{ hypothesisTotal }}</el-tag>
-          <el-tag type="primary" size="small" effect="plain">📐 公式 {{ formulaTotal }}</el-tag>
-          <el-tag type="info" size="small" effect="plain">📁 分类 {{ categories.length }}</el-tag>
-          <!-- v2 PR3: 跳转 chip 到网盘 -->
-          <el-tag
-            class="health-summary-drive-chip"
-            type="danger"
-            size="small"
-            effect="plain"
-            @click="$router.push('/drive')"
-            style="cursor: pointer;"
-          >
-            📁 网盘 →
-          </el-tag>
-        </div>
+    <!-- ===== 假设 Tab (v77 P2.6-E.3 拆分到 KnowledgeHypothesisTab.vue) ===== -->
+    <div v-show="activeTab === 'hypotheses'" role="tabpanel"
+      :aria-labelledby="`tab-strip-hypotheses`" class="tab-panel">
+      <KnowledgeHypothesisTab
+        ref="hypothesisTabRef"
+        :hypothesis-list="hypothesisList"
+        :hypothesis-total="hypothesisTotal"
+        :hypothesis-page="hypothesisPage"
+        @refresh="handleHypothesisRefresh"
+      />
+    </div>
 
-        <div v-if="total > pageSize" class="pagination">
-          <el-pagination
-            v-model:current-page="currentPage"
-            :page-size="pageSize"
-            :total="total"
-            layout="total, prev, pager, next"
-            @current-change="fetchKnowledge"
-          />
-        </div>
-      </el-tab-pane>
+    <!-- ===== 公式计算 Tab (v77 P2.6-E.3 拆分到 KnowledgeFormulaTab.vue) ===== -->
+    <div v-show="activeTab === 'formulas'" role="tabpanel"
+      :aria-labelledby="`tab-strip-formulas`" class="tab-panel">
+      <KnowledgeFormulaTab
+        ref="formulaTabRef"
+        :formula-list="formulaList"
+        :formula-total="formulaTotal"
+        :formula-page="formulaPage"
+        :formula-categories="formulaCategories"
+        @refresh="handleFormulaRefresh"
+      />
+    </div>
 
-      <!-- ===== 实体图谱 Tab (v77 P2.6-E.3 拆分到 KnowledgeEntityTab.vue) ===== -->
-      <el-tab-pane label="实体图谱" name="entities" lazy>
-        <KnowledgeEntityTab
-          ref="entityTabRef"
-          :entity-list="entityList"
-          :entity-total="entityTotal"
-          :entity-page="entityPage"
-          :entity-graph-data="entityGraphData"
-          @refresh="handleEntityRefresh"
-          @show-entity-detail="showEntityDetail"
-        />
-      </el-tab-pane>
-
-      <!-- ===== 假设 Tab (v77 P2.6-E.3 拆分到 KnowledgeHypothesisTab.vue) ===== -->
-      <el-tab-pane label="科研假设" name="hypotheses" lazy>
-        <KnowledgeHypothesisTab
-          ref="hypothesisTabRef"
-          :hypothesis-list="hypothesisList"
-          :hypothesis-total="hypothesisTotal"
-          :hypothesis-page="hypothesisPage"
-          @refresh="handleHypothesisRefresh"
-        />
-      </el-tab-pane>
-
-      <!-- ===== 公式计算 Tab (v77 P2.6-E.3 拆分到 KnowledgeFormulaTab.vue) ===== -->
-      <el-tab-pane label="公式计算" name="formulas" lazy>
-        <KnowledgeFormulaTab
-          ref="formulaTabRef"
-          :formula-list="formulaList"
-          :formula-total="formulaTotal"
-          :formula-page="formulaPage"
-          :formula-categories="formulaCategories"
-          @refresh="handleFormulaRefresh"
-        />
-      </el-tab-pane>
-
-      <!-- ===== 我的长期记忆 Tab (v77 P2.6-E.3 拆分到 KnowledgeMemoryTab.vue) ===== -->
-      <el-tab-pane label="我的长期记忆" name="memory" lazy>
-        <KnowledgeMemoryTab ref="memoryTabRef" />
-      </el-tab-pane>
-    </el-tabs>
+    <!-- ===== 我的长期记忆 Tab (v77 P2.6-E.3 拆分到 KnowledgeMemoryTab.vue) ===== -->
+    <div v-show="activeTab === 'memory'" role="tabpanel"
+      :aria-labelledby="`tab-strip-memory`" class="tab-panel">
+      <KnowledgeMemoryTab ref="memoryTabRef" />
+    </div>
 
     <!-- 添加/编辑知识对话框 (v77 P2.6-E.3 拆分到 KnowledgeCreateDialog.vue) -->
     <KnowledgeCreateDialog
@@ -175,8 +184,10 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+import { Document, Share, MagicStick, Histogram, Memo } from '@element-plus/icons-vue'
 import { useKnowledge } from '@/composables/useKnowledge'
 import { useSearchAnalyticsStore } from '@/stores/useSearchAnalytics'
+import TabStrip from '@/components/common/TabStrip.vue'
 import KnowledgeToolbar from '@/components/knowledge/KnowledgeToolbar.vue'
 import KnowledgeDashboard from '@/components/knowledge/KnowledgeDashboard.vue'
 import KnowledgeEntityTab from '@/components/knowledge/KnowledgeEntityTab.vue'
@@ -209,7 +220,21 @@ const showAllCategories = ref(false)
 const activeTab = ref('knowledge')
 const route = useRoute()
 const router = useRouter()
-if (route.query.tab === 'memory') activeTab.value = 'memory'
+
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
+const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas', 'memory']
+if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
+  activeTab.value = String(route.query.tab)
+}
+
+// TabStrip 配置（铁律 30: EP 图标 named import + 通过 props 传入）
+const tabItems = [
+  { key: 'knowledge',  label: '知识库',       icon: Document },
+  { key: 'entities',   label: '实体图谱',     icon: Share },
+  { key: 'hypotheses', label: '科研假设',     icon: MagicStick },
+  { key: 'formulas',   label: '公式计算',     icon: Histogram },
+  { key: 'memory',     label: '我的长期记忆', icon: Memo },
+]
 
 const searchAnalytics = useSearchAnalyticsStore()
 
@@ -394,6 +419,15 @@ watch(activeTab, (tab) => {
   if (tab === 'memory') {
     memoryTabRef.value?.fetchMemories()
   }
+  // 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
+  router.replace({ query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（浏览器前进/后退）
+watch(() => route.query.tab, (t) => {
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
+  }
 })
 
 const handleResize = () => {
@@ -436,36 +470,19 @@ onUnmounted(() => {
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
-.knowledge-tabs {
+/* TabStrip 容器（铁律 31: 替代 el-tabs border-card） */
+.tab-strip-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+/* TabPanel 容器（v-show 不重挂载子组件, 保留 ECharts/force-graph 状态） */
+.tab-panel {
+  background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-}
-
-.knowledge-tabs :deep(.el-tabs__header) {
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  margin: 0;
-}
-
-.knowledge-tabs :deep(.el-tabs__item) {
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-medium);
-  padding: 0 var(--space-5);
-  height: 48px;
-  line-height: 48px;
-}
-
-.knowledge-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.knowledge-tabs :deep(.el-tabs__active-bar) {
-  background: var(--color-primary);
-}
-
-.knowledge-tabs :deep(.el-tabs__content) {
   padding: var(--space-4);
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
 
 .health-summary {
@@ -540,7 +557,7 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .knowledge-tabs :deep(.el-tabs__content) {
+  .tab-panel {
     padding: var(--space-3);
   }
 }
@@ -548,7 +565,8 @@ onUnmounted(() => {
 
 <style>
 /* v69 P1b: dark mode 覆盖（v60-v67 教训：必须非 scoped） */
-[data-theme="dark"] .knowledge-tabs :deep(.el-tabs__header) {
+/* 铁律 26: dark mode 覆盖必须非 scoped, scoped 块 data-v-xxx 干扰后代选择器 */
+[data-theme="dark"] .tab-panel {
   background: var(--color-bg-card);
 }
 [data-theme="dark"] .health-summary {
