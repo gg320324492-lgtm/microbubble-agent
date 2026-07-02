@@ -48,8 +48,13 @@ const iconClass = computed(() => ({
 
 const message = computed(() => {
   if (!props.effectiveOnline) {
+    // P0 修复 (2026-07-03): offline 分支文案区分 pendingCount vs uploadedCount vs totalCount
+    // 之前用 totalCount 当作"待重传"数 → chunk 全成功时仍显示"5 片待重传"误报
+    if (props.pendingCount > 0) {
+      return `⚠ 网络已断开，${props.pendingCount} 片待联网重传`
+    }
     if (props.totalCount > 0) {
-      return `⚠ 网络已断开，录音已暂存本地（${props.totalCount} 片，待联网重传）`
+      return `⚠ 网络已断开，录音已暂存本地（已上传 ${props.uploadedCount} / ${props.totalCount} 片）`
     }
     return '⚠ 网络已断开，录音暂存于本地'
   }
