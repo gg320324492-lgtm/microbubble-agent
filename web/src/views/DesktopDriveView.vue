@@ -358,10 +358,9 @@ async function reloadCurrentView() {
   if (specialView.value === 'starred') {
     starredOnly.value = true
     await fetchStarred()
-  } else if (specialView.value === 'trash') {
-    // 2026-07-02: inline 渲染 (复用 DriveTrashPanel 的 fetchTrash)
-    await fetchTrash()
   } else {
+    // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
+    // starred 之外的视图 (含 null) 走默认 fetchDriveFiles
     starredOnly.value = false
     await fetchDriveFiles({ folder_id: selectedFolderId.value })
   }
@@ -522,12 +521,10 @@ watch(specialView, async (newView) => {
   if (newView === 'starred') {
     starredOnly.value = true
     await fetchStarred()
-  } else if (newView === 'trash') {
-    // 2026-07-02: inline 渲染
-    await fetchTrash()
   } else if (newView === 'requests') {
     // 2026-07-02: FileRequestListPanel onMounted 自动 fetchMy, 无需手动调
-  } else {
+  } else if (newView !== 'trash') {
+    // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
     starredOnly.value = false
     if (selectedFolderId.value !== null) {
       await fetchDriveFiles({ folder_id: selectedFolderId.value })
