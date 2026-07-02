@@ -85,6 +85,14 @@
               在
               <em>{{ n.file_name || `文件 #${n.file_id}` }}</em>
               @ 了你
+              <!-- v2 PR6-P7: dedup 合并计数徽章 (repeated_count > 1 才显示) -->
+              <span
+                v-if="n.repeated_count > 1"
+                class="notif-merge-badge"
+                :title="`5 秒内有 ${n.repeated_count} 条同类通知已合并`"
+              >
+                x{{ n.repeated_count }}
+              </span>
             </div>
             <div class="notif-time">{{ formatTime(n.created_at) }}</div>
           </div>
@@ -311,6 +319,23 @@ onBeforeUnmount(() => {
   height: 8px;
   border-radius: 50%;
   background: var(--color-primary, #FF7A5C);
+}
+
+/* v2 PR6-P7: 5s dedup 合并徽章 (x2, x3...) */
+.notif-merge-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  background: var(--color-primary, #FF7A5C);
+  color: var(--el-color-white, #FFFFFF);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  line-height: 16px;
+  vertical-align: 1px;
+}
+[data-theme="dark"] .notif-merge-badge {
+  background: rgba(255, 122, 92, 0.9);
 }
 
 .notification-bell-footer {

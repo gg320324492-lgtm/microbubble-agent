@@ -21,8 +21,8 @@
 """
 import logging
 import re
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
 
 from sqlalchemy import select, and_, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,9 @@ from app.models.knowledge import FileMention, ActivityEvent
 from app.models.member import Member
 
 logger = logging.getLogger(__name__)
+
+# v2 PR6-P7: 5s 通知去重窗口 (同 receiver + file + context)
+NOTIFICATION_DEDUP_WINDOW_SECONDS = 5
 
 # @ 提及正则: @张三 / @WangTianZhi / @nuyoah. (中文 2-4 字 + 英文 + 数字 + ._-)
 # v2 PR6-P4 修复: 原 regex @([一-龥A-Za-z0-9_]{1,32}) 不能匹配 wechat_id 含 '.'
@@ -50,24 +53,65 @@ class NotificationService:
         mentioned_user_id: int,
         mentioned_by: Optional[int] = None,
         context: Optional[str] = None,
-    ) -> FileMention:
+    ) -> Tuple[FileMention, bool]:
         """创建单条 mention (立即 commit)
 
-        返回 FileMention 实例 (含 id)
-        触发 WS push (best-effort, 失败不抛)
-        """
-        m = FileMention(
-            file_id=file_id,
-            mentioned_user_id=mentioned_user_id,
-            mentioned_by=mentioned_by,
-            context=context or "mention",
-            is_read=False,
-        )
-        db.add(m)
-        await db.commit()
-        await db.refresh(m)
+        v2 PR6-P7: 5s dedup (receiver, file_id, context) — 命中时合并到现有 mention,
+        repeated_count +1, 不创建新 row. 推 WS 时带 merged=True 让前端识别.
 
-        # 推送 WS (best-effort)
+        Returns:
+            (FileMention, merged: bool) — merged=True 表示是 dedup 命中
+        """
+        # PR6-P7 dedup: 检查 5s 内 (mentioned_user_id, file_id, context) 是否有 unread mention
+        merged = False
+        ctx = context or "mention"
+        threshold = datetime.utcnow() - timedelta(seconds=NOTIFICATION_DEDUP_WINDOW_SECONDS)
+        existing_recent = (await db.execute(
+            select(FileMention)
+            .where(
+                and_(
+                    FileMention.mentioned_user_id == mentioned_user_id,
+                    FileMention.file_id == file_id,
+                    FileMention.context == ctx,
+                    FileMention.is_read == False,  # noqa: E712
+                    FileMention.created_at >= threshold,
+                )
+            )
+            .order_by(FileMention.created_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+
+        if existing_recent is not None:
+            # dedup 命中: 合并到第一条, repeated_count +1, 刷新 created_at 让它"看起来新鲜"
+            existing_recent.repeated_count = (existing_recent.repeated_count or 1) + 1
+            existing_recent.created_at = datetime.utcnow()
+            existing_recent.mentioned_by = mentioned_by  # 最新触发人覆盖
+            await db.commit()
+            await db.refresh(existing_recent)
+            merged = True
+            logger.info(
+                f"[Notify] 5s dedup merge file_id={file_id} → user={mentioned_user_id} "
+                f"id={existing_recent.id} repeated_count={existing_recent.repeated_count} context={ctx}"
+            )
+            m = existing_recent
+        else:
+            m = FileMention(
+                file_id=file_id,
+                mentioned_user_id=mentioned_user_id,
+                mentioned_by=mentioned_by,
+                context=ctx,
+                is_read=False,
+                repeated_count=1,
+            )
+            db.add(m)
+            await db.commit()
+            await db.refresh(m)
+            logger.info(
+                f"[Notify] mention file_id={file_id} → user={mentioned_user_id} "
+                f"by={mentioned_by} context={ctx}"
+            )
+
+        # 推送 WS (best-effort), merged=True 时前端红点不增 + 弹 toast
         try:
             from app.api.v1.ws_notifications import notification_manager
             await notification_manager.push_to_user(mentioned_user_id, {
@@ -75,17 +119,27 @@ class NotificationService:
                 "id": m.id,
                 "file_id": file_id,
                 "mentioned_by": mentioned_by,
-                "context": context,
+                "context": ctx,
+                "repeated_count": m.repeated_count,
+                "merged": merged,
                 "created_at": m.created_at.isoformat() if m.created_at else None,
             })
         except Exception as e:
             logger.debug(f"[Notify] WS push 失败 (非阻塞): {e}")
 
-        logger.info(
-            f"[Notify] mention file_id={file_id} → user={mentioned_user_id} "
-            f"by={mentioned_by} context={context}"
-        )
-        return m
+        return m, merged
+
+    @staticmethod
+    async def get_recent_dedup_count(
+        db: AsyncSession,
+        *,
+        mention_id: int,
+    ) -> int:
+        """PR6-P7: 拉单条 mention 的 repeated_count (前端 toast 显示 '已合并 X 条')"""
+        m = (await db.execute(
+            select(FileMention.repeated_count).where(FileMention.id == mention_id)
+        )).scalar_one_or_none()
+        return m or 1
 
     @staticmethod
     async def create_bulk_mentions(
@@ -99,6 +153,9 @@ class NotificationService:
         """批量创建 mention (评论里 @ N 人)
 
         同一 (file_id, mentioned_user_id) 24h 内去重: 已存在未读/已读都跳过 (避免轰炸)
+
+        v2 PR6-P7: 在 24h dedup 之前加 5s dedup — 同一 receiver 5s 内已有 unread
+        mention (context 一致) → 合并到现有 row (repeated_count+1), 不创建新 row.
         """
         if not mentioned_user_ids:
             return []
@@ -106,54 +163,88 @@ class NotificationService:
         # 去重 (同一用户)
         unique_ids = list(set(mentioned_user_ids))
 
-        # 24h 内的已有 mention 检查 (避免重复推送)
-        from datetime import timedelta
-        threshold = datetime.utcnow() - timedelta(hours=24)
-        existing = (await db.execute(
+        # v2 PR6-P7: 5s dedup window — 命中则合并, 跳过 24h 检查
+        recent_threshold = datetime.utcnow() - timedelta(seconds=NOTIFICATION_DEDUP_WINDOW_SECONDS)
+        recent_existing = (await db.execute(
+            select(FileMention).where(
+                and_(
+                    FileMention.file_id == file_id,
+                    FileMention.mentioned_user_id.in_(unique_ids),
+                    FileMention.context == context,
+                    FileMention.is_read == False,  # noqa: E712
+                    FileMention.created_at >= recent_threshold,
+                )
+            )
+        )).scalars().all()
+        recent_set = {m.mentioned_user_id: m for m in recent_existing}
+
+        # v2 PR6-P7: 5s 命中的合并 (repeated_count +1)
+        for uid, m in recent_set.items():
+            m.repeated_count = (m.repeated_count or 1) + 1
+            m.created_at = datetime.utcnow()
+            m.mentioned_by = mentioned_by
+        if recent_set:
+            await db.commit()
+
+        merged_ids = set(recent_set.keys())
+        # v2 PR6-P7: 5s 没命中再走 24h dedup (避免轰炸, 与 PR6-P5 兼容)
+        long_threshold = datetime.utcnow() - timedelta(hours=24)
+        long_existing = (await db.execute(
             select(FileMention.mentioned_user_id).where(
                 and_(
                     FileMention.file_id == file_id,
                     FileMention.mentioned_user_id.in_(unique_ids),
-                    FileMention.created_at >= threshold,
+                    FileMention.created_at >= long_threshold,
                 )
             )
         )).scalars().all()
-        existing_set = set(existing)
-        new_ids = [uid for uid in unique_ids if uid not in existing_set]
+        long_set = set(long_existing)
+        # 排除 5s 已合并的
+        new_ids = [uid for uid in unique_ids if uid not in long_set and uid not in merged_ids]
 
-        if not new_ids:
-            logger.debug(f"[Notify] 24h 内已 @ 过 {list(existing_set)} 跳过")
+        mentions = list(recent_set.values())  # 5s 合并的也算"创建了" (返给 caller)
+
+        if not new_ids and not recent_set:
+            logger.debug(f"[Notify] 24h 内已 @ 过 {list(long_set)} 跳过")
             return []
 
-        mentions = [
-            FileMention(
-                file_id=file_id,
-                mentioned_user_id=uid,
-                mentioned_by=mentioned_by,
-                context=context,
-                is_read=False,
-            )
-            for uid in new_ids
-        ]
-        db.add_all(mentions)
-        await db.commit()
+        if new_ids:
+            new_mentions = [
+                FileMention(
+                    file_id=file_id,
+                    mentioned_user_id=uid,
+                    mentioned_by=mentioned_by,
+                    context=context,
+                    is_read=False,
+                    repeated_count=1,
+                )
+                for uid in new_ids
+            ]
+            db.add_all(new_mentions)
+            await db.commit()
+            for m in new_mentions:
+                await db.refresh(m)
+            mentions.extend(new_mentions)
 
         # 推送 WS (each)
         try:
             from app.api.v1.ws_notifications import notification_manager
             for m in mentions:
+                is_merged = m.mentioned_user_id in merged_ids
                 await notification_manager.push_to_user(m.mentioned_user_id, {
                     "type": "mention",
                     "id": m.id,
                     "file_id": file_id,
                     "mentioned_by": mentioned_by,
                     "context": context,
+                    "repeated_count": m.repeated_count,
+                    "merged": is_merged,
                     "created_at": m.created_at.isoformat() if m.created_at else None,
                 })
         except Exception as e:
             logger.debug(f"[Notify] WS push 失败 (非阻塞): {e}")
 
-        logger.info(f"[Notify] bulk mentions file_id={file_id} → {len(mentions)} users")
+        logger.info(f"[Notify] bulk mentions file_id={file_id} → {len(mentions)} users ({len(recent_set)} merged)")
         return mentions
 
     @staticmethod
