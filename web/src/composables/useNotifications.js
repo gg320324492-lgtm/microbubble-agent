@@ -255,7 +255,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     ws.on('mention', async (data) => {
       // v2 PR6-P7: merged=true 表示这是 5s dedup 命中, 重复已合并到现有 row
       if (data.merged) {
-        // 找到已存在的同 id row, 替换 updated (含新 repeated_count + 新 created_at)
+        // 找到已存在的同 id row, 替换 updated (含新 repeated_count + 新 created_at + 新 title/body)
         const existingIdx = notifications.value.findIndex((n) => n.id === data.id)
         if (existingIdx !== -1) {
           notifications.value = [
@@ -264,6 +264,11 @@ export const useNotificationsStore = defineStore('notifications', () => {
               repeated_count: data.repeated_count || 1,
               created_at: data.created_at || new Date().toISOString(),
               mentioned_by: data.mentioned_by,
+              // v2 PR6-P8: rich metadata 更新 (重复最新 preview/file_type)
+              title: data.title ?? notifications.value[existingIdx].title,
+              body: data.body ?? notifications.value[existingIdx].body,
+              file_name: data.file_name ?? notifications.value[existingIdx].file_name,
+              file_type: data.file_type ?? notifications.value[existingIdx].file_type,
             },
             ...notifications.value.slice(0, existingIdx),
             ...notifications.value.slice(existingIdx + 1),
@@ -285,11 +290,15 @@ export const useNotificationsStore = defineStore('notifications', () => {
         {
           id: data.id,
           file_id: data.file_id,
+          file_name: data.file_name,  // v2 PR6-P8: rich
+          file_type: data.file_type,  // v2 PR6-P8: rich
           mentioned_by: data.mentioned_by,
           context: data.context,
           is_read: false,
           repeated_count: data.repeated_count || 1,
           created_at: data.created_at || new Date().toISOString(),
+          title: data.title,  // v2 PR6-P8: rich
+          body: data.body,    // v2 PR6-P8: rich
         },
         ...notifications.value,
       ]

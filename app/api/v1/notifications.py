@@ -51,6 +51,13 @@ class NotificationItem(BaseModel):
     created_at: Optional[str] = None
     # v2 PR6-P7: 5s dedup 合并计数 (default 1, 命中 +1)
     repeated_count: int = 1
+    # v2 PR6-P8: rich title/body (推送服务 metadata 增强)
+    # NULL = 历史数据 (052 迁移前) 或 实时拼 fallback
+    title: Optional[str] = None
+    body: Optional[str] = None
+    # file_type 缓存 (避免前端再次查 Knowledge join)
+    # 简化分类: 'pdf' / 'doc' / 'excel' / 'ppt' / 'image' / 'audio' / 'video' / 'text' / 'archive' / 'other'
+    file_type: Optional[str] = None
 
 
 class NotificationListResponse(BaseModel):
@@ -176,6 +183,10 @@ async def list_notifications(
             read_at=str(m.read_at) if m.read_at else None,
             created_at=str(m.created_at) if m.created_at else None,
             repeated_count=m.repeated_count or 1,  # v2 PR6-P7: dedup 合并计数
+            # v2 PR6-P8: rich metadata (NULL = 历史数据, 客户端可 fallback)
+            title=m.title,
+            body=m.body,
+            file_type=m.file_type,
         )
         for m in mentions
     ]

@@ -235,9 +235,15 @@ class FileMention(Base):
     created_at = Column(DateTime, nullable=False, server_default="now()")
     # v2 PR6-P7: 5s dedup 合并计数 (default 1, dedup 命中 +1)
     repeated_count = Column(Integer, nullable=False, server_default="1")
+    # v2 PR6-P8: rich title/body (推送服务 metadata 增强)
+    # NULL = 历史数据, 走实时拼 fallback (notification_service._build_title_body_fallback)
+    title = Column(String(200), nullable=True)
+    body = Column(Text, nullable=True)
+    # file_type 缓存 (创建时从 Knowledge 取, 避免后续 list_notifications N+1)
+    file_type = Column(String(50), nullable=True)
 
     def __repr__(self):
-        return f"<FileMention(id={self.id}, file_id={self.file_id}, mentioned_user_id={self.mentioned_user_id}, is_read={self.is_read}, repeated_count={self.repeated_count})>"
+        return f"<FileMention(id={self.id}, file_id={self.file_id}, mentioned_user_id={self.mentioned_user_id}, is_read={self.is_read}, repeated_count={self.repeated_count}, title='{self.title}')>"
 
 
 class ActivityEvent(Base):
