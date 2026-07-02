@@ -26,9 +26,5 @@ localIP = "127.0.0.1"
 localPort = 9000
 remotePort = 9000
 
-[[proxies]]
-name = "ssh"
-type = "tcp"
-localIP = "127.0.0.1"
-localPort = 22
-remotePort = 2222
+# ssh 代理已删除 (2026-07-02) - 本机不开 SSH server 该代理永远连不上
+# 如未来需要从云服务器 SSH 进本地电脑，先在本机启用 sshd 服务并开放 22 端口，再恢复本块
