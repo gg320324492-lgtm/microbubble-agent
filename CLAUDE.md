@@ -1,6 +1,24 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 当前任务链**：🆕 **v2 PR6-P6 comment edit 收官**（7 文件 + 1 E2E + +988 行）= **评论 5 分钟内 owner 可编辑**，复用 PR6-P4 三路 mention 解析，结构不动。
+> **2026-07-02 当前任务链**：🆕 **v2 PR6-P7 notification 5s dedup 收官**（7 文件 + 1 E2E + +371 行）= **同 (receiver, file, context) 5s 内多次通知合并为 1 条**，红点不增 + 弹 toast + 列表显示 xN 徽章。
+> **核心改动**:
+> ① **`alembic/versions/051_drive_notification_dedup.py`** — `file_mentions` 加 `repeated_count` (Integer default 1) + `ix_file_mentions_receiver_file_recent` 索引 (mentioned_user_id + file_id + created_at DESC)
+> ② **`app/services/notification_service.py` create_mention** — 返回 `Tuple[FileMention, bool]` (merged flag), 5s 内同 key 命中 → `repeated_count+=1, created_at=now, mentioned_by=最新actor, commit`. WS push payload 加 `repeated_count` + `merged`
+> ③ **`app/services/notification_service.py` create_bulk_mentions** — 5s dedup 在 24h dedup 之前, 24h 作兜底
+> ④ **`app/api/v1/notifications.py` NotificationItem** — schema 加 `repeated_count: int = 1` 字段
+> ⑤ **`web/src/composables/useNotifications.js` WS handler** — `if (data.merged) { ... }` 分支: 找已有 row 替换 + 红点不增 + `ElMessage.info("已合并 N 条类似通知 (5 秒内)", {grouping: true, duration: 2500})`
+> ⑥ **`web/src/components/common/NotificationBell.vue`** — `<span class="notif-merge-badge">x{{ n.repeated_count }}</span>` (repeated_count > 1 才显示) + 圆角胶囊 primary 色 + dark mode 非 scoped 块
+> ⑦ **`scripts/test_pr6_p7_dedup.py`** — 4 场景 E2E (1/2/3 次合并 + 不同 context 独立)
+> **5 新铁律 (永久沉淀)**:
+> ① dedup key 必须是 (receiver, file_id, context) 三元组 — 不同 user/file/context 永远不合并
+> ② WS payload 必带 `merged` flag — 前端无 SQL 能力, 必须靠后端告知
+> ③ dedup 命中只更新 3 字段: `repeated_count+1` + `created_at=now` + `mentioned_by=最新actor`, 不改 is_read/read_at/id/file_id/context/mentioned_user_id
+> ④ 5s 窗口用 `datetime.utcnow() - timedelta(seconds=5)`, ≥ 1min 用 SQL `INTERVAL 'N minutes'` 走索引
+> ⑤ 双重 UI 反馈: 持久视觉 (NotificationBell xN 徽章) + 瞬时视觉 (ElMessage toast grouping=true)
+> **端到端验证 (P0-5)**:
+> 同 receiver 5s 内连发 3 次 mention → DB 只 1 row (repeated_count=3) → 1 个 WS 推送 (merged=true) → 红点不增 + 弹 toast "已合并 3 条类似通知" + NotificationBell 显示 "x3" 徽章 / 不同 context (comment vs reply:N) 各自独立 / 5s 外重复 → 新 row (default 1) / 已读不参与合并 / 8 dedup 单测 + 1 E2E 全过 + vitest 546/546 + build 0 警告。
+> ---
+> **2026-07-02 早班 历史任务链**：🆕 **v2 PR6-P6 comment edit 收官**（7 文件 + 1 E2E + +988 行）= **评论 5 分钟内 owner 可编辑**，复用 PR6-P4 三路 mention 解析，结构不动。
 > **核心改动**:
 > ① **`app/services/comment_service.py` update_comment()** — owner 校验 + 5 分钟窗口 (`COMMENT_EDIT_WINDOW_SECONDS=300`) + 重解析 @ mentions (PR6-P4 3 路匹配) + 不动 thread_depth/parent_comment_id/reply_count + activity log `action='edit_comment'`
 > ② **`app/api/v1/notifications.py` PATCH `/drive/files/{file_id}/comments/{comment_id}`** — `CommentUpdateRequest/Response` schema + try/except ValueError → 422 (与 create 镜像)
