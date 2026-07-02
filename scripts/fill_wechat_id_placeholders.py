@@ -253,9 +253,13 @@ async def validate_mapping(
             )
             existing_rows = result.all()
             for row in existing_rows:
+                # 2026-07-03 P0-4 fix: 不要引用外层 closure 的 mapping 变量
+                # (loop 结束时 mapping 是最后一条), 通过 row.wechat_id 反查
+                # new_wechat_ids_lower dict 找对应 CSV 行.
+                csv_mapping_id = new_wechat_ids_lower.get(row.wechat_id.lower(), "?")
                 errors.append(
-                    f"  id={mapping.id}: new wechat_id='{mapping.new_wechat_id}' LOWER 冲突 "
-                    f"(已存在 id={row.id}, username={row.username}, wechat_id={row.wechat_id})"
+                    f"  id={csv_mapping_id}: new_wechat_id LOWER({row.wechat_id.lower()}) "
+                    f"与 DB 已存在 id={row.id} 的 wechat_id='{row.wechat_id}' 冲突"
                 )
 
     return errors
