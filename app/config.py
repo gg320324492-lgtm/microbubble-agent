@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # ollama 本地 (deprecated, 留给未来 RTX 5090 sm_120 兼容)
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
     OLLAMA_MODEL: str = "qwen3-embedding-0.6b"
+    # 2026-07-03 P0-3: openai_compat (mimo) 429 fallback 用的 ollama 模型.
+    # 默认复用 OLLAMA_MODEL (qwen3:8b), 未来可改 qwen3:14b 等更稳 fallback.
+    OLLAMA_FALLBACK_MODEL: str = ""
 
     # Vision MCP 配置（DeepSeek 切换时使用）
     VISION_USE_MCP: bool = False
