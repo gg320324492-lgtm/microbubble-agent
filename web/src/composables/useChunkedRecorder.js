@@ -146,7 +146,16 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
             return
           }
           // 5xx / 网络错: 保留在 IDB pending 队列, 等待 online 重传
+          // v2.2 修复 (2026-07-03): 主动入队 uploadQueue, onOnline 事件能扫描到
+          // 之前: 只 pendingCount++ 标 UI, uploadQueue 不知道有这 chunk
+          //       → onOnline 触发时 drainQueue 不会扫它
+          //       → 必须刷新页面靠 resumePending 才能恢复
           console.warn(`[useChunkedRecorder] chunk ${index} 上传失败 (网络/5xx):`, err?.message || err)
+          try {
+            uploader.enqueue(mid, [{ chunk_index: index, blob }])
+          } catch (enqErr) {
+            console.warn(`[useChunkedRecorder] enqueue failed, 将由 IDB 兜底扫到:`, enqErr?.message || enqErr)
+          }
           pendingCount.value++
         })
       })

@@ -113,4 +113,49 @@ describe('idbStore', () => {
     const meta = await idbStore.getMeta(999)
     expect(meta).toBeNull()
   })
+
+  // v2.2 新增: getAllMeetingsWithPending 测试 (2026-07-03)
+  describe('getAllMeetingsWithPending', () => {
+    it('空 DB 返回空数组', async () => {
+      const result = await idbStore.getAllMeetingsWithPending()
+      expect(result).toEqual([])
+    })
+
+    it('只跳过已上传 chunk, 列出有 pending 的 meeting', async () => {
+      // meeting 100 有 2 片 pending
+      await idbStore.putChunk(100, 0, new Blob(['c0']))
+      await idbStore.putChunk(100, 1, new Blob(['c1']))
+      // meeting 200 有 1 片 pending
+      await idbStore.putChunk(200, 0, new Blob(['c2']))
+      // meeting 300 有 1 片但已上传 (应该不出现)
+      await idbStore.putChunk(300, 0, new Blob(['c3']), { uploaded: false })
+      await idbStore.markChunkUploaded(300, 0)
+
+      const result = await idbStore.getAllMeetingsWithPending()
+      const meetings = result.map(m => m.meeting_id).sort()
+      expect(meetings).toEqual([100, 200])
+    })
+
+    it('返回的 count 字段正确', async () => {
+      await idbStore.putChunk(100, 0, new Blob(['c0']))
+      await idbStore.putChunk(100, 1, new Blob(['c1']))
+      await idbStore.putChunk(100, 2, new Blob(['c2']))
+      await idbStore.markChunkUploaded(100, 1)  // 1 片已上传
+
+      const result = await idbStore.getAllMeetingsWithPending()
+      expect(result).toHaveLength(1)
+      expect(result[0]).toEqual({ meeting_id: 100, count: 2 })  // 3 - 1 = 2 pending
+    })
+
+    it('同一 meeting 多片时只返回 1 个 entry (去重)', async () => {
+      await idbStore.putChunk(100, 0, new Blob(['c0']))
+      await idbStore.putChunk(100, 1, new Blob(['c1']))
+      await idbStore.putChunk(100, 2, new Blob(['c2']))
+
+      const result = await idbStore.getAllMeetingsWithPending()
+      expect(result).toHaveLength(1)
+      expect(result[0].meeting_id).toBe(100)
+      expect(result[0].count).toBe(3)
+    })
+  })
 })
