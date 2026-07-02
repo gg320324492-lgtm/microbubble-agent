@@ -1,6 +1,8 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 当前任务链**：🆕 **v2 PR6-P8 notification rich title/body 收官**（7 文件 + 36 单测 + +683 行）= **推送服务 metadata 增强 + NotificationBell 卡片化重设计**（comment preview + file_type icon + 操作按钮）。
+> **2026-07-02 当前任务链**：🆕 **v2 PR6-P9 file_mention 30 天清理收官**（5 文件 + 9 单测 / +130 行）= **Celery beat 86400s 调 + NullPool 独立 engine 范式 + 一刀切 created_at 清理**。本人验证时**误传 retention_days=0 误删 31 条生产 file_mentions 数据**,用户决策"接受丢失"。**5 新铁律**:① DELETE 类必须 3 段式 (scan → 人审 → apply + --confirm) + JSON 备份 (本次违反,留 PR6-P10+ 改) ② Celery task retention ≤ 0 必须二次确认或禁用 ③ 容器内 destructive task 验证前必跑 SELECT count ④ 任何批量物理删除必须留 backup_before_delete 机制 (chat_history/drive_cleanup/file_mention 3 个 schedule 全要补) ⑤ Celery beat schedule 名称 + frequency + 备份 owner 必须文档化 (本次 3 schedule 全无备份⚠️)。**端到端验证**:pytest 9/9 PASS + 回归 chat_history 7/7 不破 + celery worker [tasks] 列表确认 `file_mention_tasks.cleanup_old_mentions_task` 加载 + 默认 retention=30 健康 0 删除 + 误传 retention=0 真删 31 条 → 用户接受丢失 → activity_events 表完整不受影响。
+> ---
+> **2026-07-02 早班 历史任务链**：🆕 **v2 PR6-P8 notification rich title/body 收官**（7 文件 + 36 单测 + +683 行）= **推送服务 metadata 增强 + NotificationBell 卡片化重设计**（comment preview + file_type icon + 操作按钮）。
 > **核心改动**:
 > ① **`alembic/versions/052_drive_notification_rich.py`** — `file_mentions` 加 3 列: `title` String(200) + `body` Text + `file_type` String(50) 缓存
 > ② **`app/services/notification_service.py` `_build_title_body()`** — 5 context 模板 (comment/reply:N/star/share/mention) + 实时拼 + 存 DB + WS payload 同步带 metadata + repeated_count > 1 时 title 加 `(xN)`
