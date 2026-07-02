@@ -19,8 +19,10 @@
  */
 
 import { ref, readonly, onUnmounted, watch, isRef, unref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useChunkedUploader } from '@/composables/useChunkedUploader'
+import { useRecordingState } from '@/composables/useRecordingState'
 import * as idbStore from '@/utils/idbStore'
 
 /**
@@ -45,6 +47,13 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
   const lastChunkIndex = ref(-1)
   const totalChunks = ref(0)
   const status = ref('idle')  // 镜像 useGlobalRecorder.state
+
+  // P1 修复 (2026-07-03): 守卫会议状态变化
+  // 真实场景：会议被 stop-recording 或后处理触发后 status→processing，
+  // 但浏览器录音器仍持续发送 chunk → 全部 400 业务错。
+  // 修复：catch 4xx + detail 含"录音状态"时立即 stop 录音器 + 提示用户。
+  // 一次录音会话只触发一次（flag 防止后续 chunk 重复 stop 噪声）。
+  let meetingClosedDetected = false
 
   let unsubscribe = null
   let writeQueue = Promise.resolve()  // 串行化 IDB 写入，避免并发
@@ -112,6 +121,28 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
             console.warn(`[useChunkedRecorder] chunk ${index} 4xx 业务错 ${status}, 不累积 pending:`, err?.message || err)
             // 4xx 不需要重传, 不动 pendingCount
             // 同时不调用 markChunkUploaded (chunk 留在 IDB 但不算 pending)
+            // P1: 400 "会议不在录音状态" = 后端会议已 stop/后处理触发, 立即停浏览器录音器
+            if (status === 400 && !meetingClosedDetected) {
+              const detail = err?.response?.data?.detail || ''
+              if (typeof detail === 'string' && (detail.includes('录音状态') || detail.includes('recording'))) {
+                meetingClosedDetected = true
+                console.warn('[useChunkedRecorder] 检测到会议已不在录音状态, 主动停止浏览器录音器')
+                ElMessage.warning('会议已结束，录音已自动停止')
+                // fire-and-forget: useGlobalRecorder.stop() 是 Promise 但当前不是 async 上下文
+                try {
+                  const { stop } = useGlobalRecorder()
+                  stop().catch(e => console.warn('[useChunkedRecorder] 停止录音器失败:', e))
+                } catch (e) {
+                  console.warn('[useChunkedRecorder] 调 useGlobalRecorder.stop() 失败:', e)
+                }
+                try {
+                  const { stopRecording } = useRecordingState()
+                  stopRecording()
+                } catch (e) {
+                  console.warn('[useChunkedRecorder] 清录音状态失败:', e)
+                }
+              }
+            }
             return
           }
           // 5xx / 网络错: 保留在 IDB pending 队列, 等待 online 重传
