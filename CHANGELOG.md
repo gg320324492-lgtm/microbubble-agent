@@ -2,7 +2,54 @@
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
 
-## [Unreleased] 2026-07-01 — 模板 v78 tabs 集成 + 项目状况报告 + qa-bench 数据集入库
+## [Unreleased] 2026-07-02 — v2 网盘 PR6-P11 Celery retention 二次确认守卫
+
+### 🆕 v2 PR6-P11 cleanup_safety 守卫（commit `pending` — work in progress）
+
+**触发场景** — 继 PR6-P9 误传 `retention_days=0` 删 31 条生产 file_mentions (用户接受丢失) + PR6-P10 backup_before_delete 兜底机制收官后的**第二道防线**。
+
+**核心改动 5 文件 / +213 行**：
+- **`app/services/cleanup_safety.py`** (新) — `confirm_retention_param()` 友好版（delay+warn+proceed）+ `confirm_retention_param_or_skip()` 严格版（非默认就拒绝）双重 API
+- **`app/config.py`** — 新增 `RETENTION_OVERRIDE_CONFIRM_DELAY_SEC: float = 0.5`（人手按 Ctrl+C 的窗口）
+- **`app/services/chat_history_tasks.py`** + **`drive_cleanup_tasks.py`** + **`file_mention_tasks.py`** — 3 个 Celery cleanup task 顶部统一调用 `confirm_retention_param()` 守卫
+- **`tests/test_cleanup_safety.py`** (新) — 8 unit + 3 or_skip + 1 settings + 4 integration = **14/14 PASS**
+
+**首次集成测试踩坑（教训永久沉淀）**：
+- `test_cleanup_soft_deleted_sessions_task_triggers_delay_on_retention_zero` 之前没真 mock service → 守卫 proceed=True 后 task 真跑 cleanup → **真 DELETE 了 4 条 chat_sessions**
+- 用 PR6-P10 `scripts/restore_from_backup.py --apply --confirm` 恢复（PR6-P11 + PR6-P10 集成救了一命）
+- 测试改用 `_make_async_return(0)` mock service 返 0 行 — 守"测试只验证守卫被触发, 不真删数据"
+
+**5 新铁律（永久沉淀）**：
+1. **Celery retention 类参数必须 `confirm_retention_param` 守卫**（3 task 顶部统一 import）+ 5 永久铁律
+   - 默认值 == settings 时不触发守卫（`task.delay()` 永远走 None 路径）
+   - 延迟秒数从 settings 读，紧急场景可设 0 跳过 sleep
+   - 测试时必须 mock service 函数返 0，不能让 task 真跑 destructive 路径
+   - 严格版 `confirm_retention_param_or_skip` 留给 critical 场景（Sentry 监控等严禁漂移），默认 3 task 用友好版
+   - logger.warning 必带 task 名 + retention 值 + 默认值（容器日志可 grep）
+
+**调用模式 3 task 统一**：
+```python
+guard = confirm_retention_param(
+    retention_days=retention_days,
+    default=settings.X_RETENTION_DAYS,
+    task_name="cleanup_x_task",
+)
+if not guard["proceed"]:
+    return {"status": "skipped", "reason": guard["reason"], ...}
+days = guard["effective_days"]
+```
+
+**端到端验证**：pytest 14/14 PASS + 3 task 集成测试模拟 retention=0 误传，守卫 delay + warn 触发成功，0 真 DELETE。
+
+**互补 PR6-P10**：
+- **PR6-P10** (backup_before_delete) — 即便 DELETE 真发生，先 JSON 备份 + restore CLI 可恢复
+- **PR6-P11** (cleanup_safety) — 守卫提前拦截，让 DELETE 不发生（延迟时人手可 Ctrl+C）
+
+详见 [memory/v2-drive-pr6-p11-cleanup-safety-guard-2026-07-02.md](memory/v2-drive-pr6-p11-cleanup-safety-guard-2026-07-02.md) 完整复盘。
+
+---
+
+## 2026-07-01 — 模板 v78 tabs 集成 + 项目状况报告 + qa-bench 数据集入库
 
 ### 🆕 post_meeting_tasks 简化 + 变量命名清理（commit `4b215220`）
 

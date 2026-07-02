@@ -24,6 +24,7 @@ from sqlalchemy.pool import NullPool
 from app.core.celery import celery_app
 from app.config import settings
 from app.services.chat_history_service import cleanup_soft_deleted_sessions
+from app.services.cleanup_safety import confirm_retention_param
 
 logger = logging.getLogger("microbubble.chat_history_cleanup")
 
@@ -47,6 +48,21 @@ def cleanup_soft_deleted_sessions_task(retention_days: Optional[int] = None):
     days = retention_days if retention_days is not None else getattr(
         settings, "CHAT_HISTORY_RETENTION_DAYS", 30
     )
+
+    # PR6-P11 二次确认守卫: retention_days != settings 默认值时延迟 + warn
+    # 事故防复发: PR6-P9 误传 retention_days=0 删 31 条 (chat_history 同模式风险)
+    guard = confirm_retention_param(
+        retention_days=retention_days,
+        default=getattr(settings, "CHAT_HISTORY_RETENTION_DAYS", 30),
+        task_name="cleanup_soft_deleted_sessions_task",
+    )
+    if not guard["proceed"]:
+        return {
+            "status": "skipped",
+            "reason": guard["reason"],
+            "retention_days": guard["effective_days"],
+            "deleted_count": 0,
+        }
     try:
         async def _run():
             engine = create_async_engine(

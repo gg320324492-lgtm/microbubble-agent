@@ -3,7 +3,47 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-07-01 早班收官）
+## 当前状态（2026-07-02 午班 — v2 网盘 PR6-P11 收官）
+
+**已交付（2026-07-02 午班新增）**：
+
+- 🆕 **v2 网盘 PR6-P11 Celery retention 二次确认守卫** — 5 文件 + 14 单测 / +213 行 = **3 个 Celery cleanup task 顶部统一守卫 + 新模块 `app/services/cleanup_safety.py` 双重 API**。继 PR6-P9 误传 `retention_days=0` 删 31 条 / PR6-P10 backup_before_delete + restore CLI 之后的**第二道防线**：retention ≠ settings 默认值时，延迟 `RETENTION_OVERRIDE_CONFIRM_DELAY_SEC=0.5s` + logger.warning 二段打印，让人手能在 0.5s 内 Ctrl+C 取消。双重 API：
+  - `confirm_retention_param` — 延迟 + warn + proceed=True（用户友好，3 task 默认走这个）
+  - `confirm_retention_param_or_skip` — 严格模式，非默认就拒绝（留给未来 critical 场景如 Sentry 监控）
+
+  **首次集成测试踩坑（永久教训）**：测试之前没真 mock service，守卫 proceed=True 后 task 真跑 cleanup → **真 DELETE 了 4 条 chat_sessions**。用 PR6-P10 `restore_from_backup.py --apply --confirm` 救回。测试改用 `_make_async_return(0)` mock service 返 0 行 — 守住"测试只验证守卫被触发，不真删数据"。
+
+  **5 新铁律（永久沉淀）**：
+  1. **Celery retention 类参数必须 `confirm_retention_param` 守卫**（3 task 顶部统一 import）
+  2. 默认值 == settings 默认时**不触发**守卫（`task.delay()` 永远走 None 路径不延迟）
+  3. 延迟秒数从 settings 读，紧急场景可设 0 关闭
+  4. 测试时必须 mock service 函数返 0，守卫 proceed=True 后面是真 destructive cleanup
+  5. 严格版 `confirm_retention_param_or_skip` 留给 critical 场景，默认 3 task 用友好版
+
+  **端到端验证**：pytest 14/14 PASS + 3 task 集成测试模拟 retention=0 误传，守卫 delay + warn 触发成功，0 真 DELETE。`settings.RETENTION_OVERRIDE_CONFIRM_DELAY_SEC` 可在 `.env` 调：0.5 默认 / 0 紧急关闭 / 2.0+ CI 审计。
+
+  **互补 PR6-P10**：
+  - **PR6-P10** (backup_before_delete) — 即便 DELETE 真发生，先 JSON 备份 + restore CLI 可恢复
+  - **PR6-P11** (cleanup_safety) — 守卫提前拦截，让 DELETE 不发生（延迟时人手可 Ctrl+C）
+
+  详见 [memory/v2-drive-pr6-p11-cleanup-safety-guard-2026-07-02.md](memory/v2-drive-pr6-p11-cleanup-safety-guard-2026-07-02.md) 完整复盘。
+
+**详细文件改动**：
+| 文件 | 操作 | 行数 |
+|------|------|------|
+| `app/services/cleanup_safety.py` | 新建 — `confirm_retention_param` + `confirm_retention_param_or_skip` 双重 API | +115 |
+| `tests/test_cleanup_safety.py` | 新建 — 14 单测（8 unit + 3 or_skip + 1 settings + 4 integration） | +155 |
+| `app/config.py` | 新增 `RETENTION_OVERRIDE_CONFIRM_DELAY_SEC: float = 0.5` | +7 |
+| `app/services/chat_history_tasks.py` | 顶部加守卫 + skippable return | +18 |
+| `app/services/drive_cleanup_tasks.py` | 同上 | +19 |
+| `app/services/file_mention_tasks.py` | 同上 | +18 |
+| **合计** | **5 文件 / +213 行** | |
+
+**统计（commit pending）**：参见 `app/stats.json` 自动重算（本次新增 4 文件 + 修改 4 文件）。
+
+---
+
+## 历史状态（2026-07-01 早班收官）
 
 **已交付（2026-07-01 早班新增）**：
 - 🆕 **post_meeting_tasks 简化（commit `4b215220`）** — 124 行 → 26 行 (-98, -79%)，移除下划线前缀临时变量 (`_n_expected`/`_labels`/`_optimal_k`) → 直接命名 + 同步重命名 `cluster_centers`/`cluster_representatives` + 修复 UnboundLocalError 闭包 lazy 求值隐患

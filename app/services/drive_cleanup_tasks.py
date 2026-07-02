@@ -33,6 +33,7 @@ from app.config import settings
 from app.models.knowledge import Knowledge
 from app.models.folder import Folder
 from app.services.cleanup_backup import backup_rows_to_json
+from app.services.cleanup_safety import confirm_retention_param
 
 logger = logging.getLogger("microbubble.drive_cleanup")
 
@@ -58,6 +59,22 @@ def cleanup_expired_drive_files_task(retention_days: Optional[int] = None):
     days = retention_days if retention_days is not None else getattr(
         settings, "DRIVE_RETENTION_DAYS", 3
     )
+
+    # PR6-P11 二次确认守卫: retention_days != settings 默认值时延迟 + warn
+    # 事故防复发: PR6-P9 误传 retention_days=0 删 31 条 (drive_cleanup 同模式风险)
+    guard = confirm_retention_param(
+        retention_days=retention_days,
+        default=getattr(settings, "DRIVE_RETENTION_DAYS", 3),
+        task_name="cleanup_expired_drive_files_task",
+    )
+    if not guard["proceed"]:
+        return {
+            "status": "skipped",
+            "reason": guard["reason"],
+            "retention_days": guard["effective_days"],
+            "deleted_files": 0,
+            "deleted_folders": 0,
+        }
     try:
         async def _run():
             engine = create_async_engine(
