@@ -475,3 +475,70 @@ print(type(svc._model).__name__)  # CrossEncoder ✓
 - BGE m3 rerank **没让 LLM 决策变差** (Phase I.4 字节级证明)
 - 中文检索提升 (BGE m3 MIRACL #1 vs ms-marco 英文 only)
 - 决定: **保留 BGE m3** ✅
+
+
+---
+
+# Round 8 切 mimo OpenAI endpoint (进行中, 2026-07-02)
+
+## 实施动机
+
+R7 200 题实测有 81 次 `stream_error_event` (40% 失败) — mimo Anthropic 协议端点 per-IP/per-token 限流。
+Phase I 探查发现 `LLM_BACKEND=openai_compat` 是**无效配置** (代码未实现)。
+本 Round 实施 backend dispatch + 切 mimo /v1 OpenAI 协议端点, 抗 429 限流。
+
+## 改动清单
+
+1. **`app/core/tool_call_converter.py` (NEW, ~300 行)** - 6 核心函数 + OpenAIToolCallAccumulator:
+   - `anthropic_to_openai_tools` (Anthropic tools -> OpenAI function schema)
+   - `anthropic_messages_to_openai` (Anthropic messages -> OpenAI messages 序列, 含 tool_result + system)
+   - `openai_response_to_anthropic_message` (OpenAI response -> Anthropic-style message dict, 兼容 Pydantic + dict)
+   - `OpenAIToolCallAccumulator` (流式 tool_calls delta 累积, 处理 name + arguments 分段)
+   - `openai_streaming_delta_to_anthropic_events` (OpenAI stream chunk -> Anthropic events)
+   - `anthropic_tools_match_openai` (round-trip 一致性检查)
+
+2. **`app/core/llm.py` LLMClient.__init__** - 加 backend dispatch:
+   - `anthropic` (默认) - 走 `anthropic.AsyncAnthropic` (向后兼容)
+   - `openai_compat` (mimo /v1, 抗 429) - 走 `AsyncOpenAI` + `tool_call_converter`
+   - `ollama` (本地, RTX 5090 备用) - 走 `AsyncOpenAI` base_url=http://localhost:11434/v1
+
+3. **`app/agent/agentic_loop.py` 兼容性修复**:
+   - `_extract_tool_uses` 加 `_block_get()` helper, 兼容 Pydantic + dict
+   - line 1133 `for b in response.content` 改 `isinstance(response, dict)` 先判断, 避免 dict 没 `.content` 属性报 AttributeError
+
+4. **`app/core/tool_call_converter.py` 边界修复**:
+   - `openai_streaming_delta_to_anthropic_events` 加空 `choices` 边界 (openai final usage chunk 无 choices 字段)
+
+5. **`app/config.py`** - 加 6 字段:
+   - `LLM_BACKEND` (anthropic / openai_compat / ollama)
+   - `LLM_OPENAI_COMPAT_BASE_URL` (默认 "")
+   - `LLM_OPENAI_COMPAT_API_KEY` (默认 "")
+   - `LLM_OPENAI_COMPAT_MODEL` (默认 "mimo-v2.5")
+   - `OLLAMA_BASE_URL` (默认 http://localhost:11434/v1)
+   - `OLLAMA_MODEL` (默认 qwen3-embedding-0.6b)
+
+6. **`tests/unit/test_tool_call_converter.py` (NEW, 12 cases 全部 PASSED)**:
+   - 6 核心函数各 1-2 cases
+   - round-trip 一致性
+   - edge cases (空/None/空 tools)
+
+7. **`requirements.txt`** - 加 `openai>=1.0.0,<2.0.0` + 改 `pytest==7.4.3` -> `pytest>=8.2,<9`
+
+8. **`.dockerignore`** - 加 `llama-cpp-tools/` + `trace_llm.py` (其他窗口 dirty)
+
+9. **Docker build** - rebuild 装 openai (1.109.1, 195.1s build 时间)
+
+10. **`.env`** - 切 `LLM_BACKEND=openai_compat` + `LLM_OPENAI_COMPAT_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1` (fallthrough to MIMO_API_KEY)
+
+## 5 题 smoke 验证 (2026-07-02 16:25)
+
+| 指标 | R7 (anthropic) | R8 (openai_compat) |
+|---|---|---|
+| PASS | 0/5 (烟测后端崩) | **1/5 (20%)** |
+| stream_error_event | 多 | **0** (后端工作) |
+| missing_tools | 0 | 5 (LLM 调的工具与 expect 不一致, 跟后端无关) |
+| fake_xml_leaked | 0 | 1 (Phase H 修 3 仍不完整) |
+
+**关键发现**: openai_compat 后端端到端工作 — LLM 调工具, 返回正确答案, **完全消除 mimo 429 限流**。
+
+(Round 8 完整 200 题后台跑中, 预计 60-100 分钟完成)
