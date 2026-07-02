@@ -76,8 +76,8 @@
     </div>
     <div
       class="folder-tree-special-item folder-tree-requests"
-      :class="{ active: $route.path === '/drive/requests' }"
-      @click="$router.push('/drive/requests')"
+      :class="{ active: specialView === 'requests' }"
+      @click="$emit('update:specialView', 'requests')"
     >
       <el-icon><Promotion /></el-icon>
       <span>📢 文件请求</span>
@@ -105,7 +105,7 @@ const props = defineProps({
   expandedFolderIds: { type: Set, default: () => new Set() },
   loading: { type: Boolean, default: false },
   loadError: { type: [String, null], default: null },
-  specialView: { type: [String, null], default: null }  // v2 PR2: 'starred' | 'trash' | null
+  specialView: { type: [String, null], default: null }  // 'starred' | 'trash' | 'requests' | null (team 未来扩展)
 })
 
 const emit = defineEmits([
