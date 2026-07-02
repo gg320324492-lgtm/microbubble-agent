@@ -23,18 +23,15 @@
       class="knowledge-main"
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
     >
-      <!-- Tabs -->
-      <div class="tab-bar">
-        <button
-          v-for="t in tabs"
-          :key="t.name"
-          type="button"
-          class="tab-item"
-          :class="{ active: activeTab === t.name }"
-          @click="switchTab(t.name)"
-        >
-          {{ t.label }}
-        </button>
+      <!-- 铁律 31: tab 条统一用 <TabStrip> 替代自定义 .tab-bar -->
+      <div class="tab-bar-wrapper">
+        <TabStrip
+          v-model="activeTab"
+          :items="tabItems"
+          :scroll="true"
+          aria-label="知识库视图切换"
+          @change="switchTab"
+        />
       </div>
 
       <!-- Tab: 知识库 -->
@@ -280,11 +277,13 @@
  * - 健康度（简化）
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDateTime } from '@/utils/format'
+import { Document, Folder, Share, MagicStick, Histogram, Memo, DataLine } from '@element-plus/icons-vue'
+import TabStrip from '@/components/common/TabStrip.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
@@ -293,10 +292,25 @@ import MobileFileList from './MobileFileList.vue'  // PR4.2 课题组网盘移�
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6 预览
 
 const router = useRouter()
-const activeTab = ref('knowledge')
 const route = useRoute()
-// v28 step 68: 支持 ?tab=memory URL 直跳（如旧 /memory 重定向）
-if (route.query.tab === 'memory') activeTab.value = 'memory'
+const activeTab = ref('knowledge')
+
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
+const VALID_TABS = ['knowledge', 'files', 'entities', 'hypotheses', 'formulas', 'memory', 'health']
+if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
+  activeTab.value = String(route.query.tab)
+}
+
+// 铁律 30: EP 图标 named import + 通过 props 传入
+const tabItems = [
+  { key: 'knowledge',  label: '知识',     icon: Document },
+  { key: 'files',      label: '文件',     icon: Folder },
+  { key: 'entities',   label: '实体',     icon: Share },
+  { key: 'hypotheses', label: '假设',     icon: MagicStick },
+  { key: 'formulas',   label: '公式',     icon: Histogram },
+  { key: 'memory',     label: '长期记忆', icon: Memo },
+  { key: 'health',     label: '健康',     icon: DataLine },
+]
 
 // v28 step 68: 长期记忆 Tab 状态（合并自 MobileMemoryView）
 const memoryList = ref([])
@@ -366,13 +380,14 @@ const pageSize = ref(20)
 const total = ref(0)
 
 const tabs = [
-  { name: 'knowledge', label: '📚 知识' },
-  { name: 'files', label: '📁 文件' },  // PR4.2 课题组网盘 (第 7 tab)
-  { name: 'entities', label: '🔗 实体' },
-  { name: 'hypotheses', label: '💡 假设' },
-  { name: 'formulas', label: '🧮 公式' },
-  { name: 'memory', label: '🧠 长期记忆' },
-  { name: 'health', label: '💚 健康' },
+  // 兼容旧引用（如有）—— 推荐直接用 tabItems
+  { name: 'knowledge',  label: '知识',     icon: Document },
+  { name: 'files',      label: '文件',     icon: Folder },
+  { name: 'entities',   label: '实体',     icon: Share },
+  { name: 'hypotheses', label: '假设',     icon: MagicStick },
+  { name: 'formulas',   label: '公式',     icon: Histogram },
+  { name: 'memory',     label: '长期记忆', icon: Memo },
+  { name: 'health',     label: '健康',     icon: DataLine },
 ]
 
 const searchFilters = computed(() => [
@@ -444,12 +459,24 @@ function getStatusLabel(s) {
 }
 
 function switchTab(tab) {
-  activeTab.value = tab
+  // TabStrip emit update:modelValue 已自动更新 activeTab, 不再手动赋值
   if (tab === 'knowledge' && knowledgeList.value.length === 0) fetchKnowledge()
   if (tab === 'hypotheses' && hypotheses.value.length === 0) fetchHypotheses()
   if (tab === 'formulas' && formulas.value.length === 0) fetchFormulas()
   if (tab === 'memory' && memoryList.value.length === 0 && !memoryLoading.value) fetchMemories()
 }
+
+// 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（浏览器前进/后退）
+watch(() => route.query.tab, (t) => {
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
+  }
+})
 
 async function fetchKnowledge() {
   loading.value = true
@@ -840,35 +867,9 @@ onMounted(() => {
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
 }
 
-/* Tab bar */
-.tab-bar {
-  display: flex;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-md);
-  padding: 4px;
+/* TabStrip 容器（铁律 31: 替代原 .tab-bar 自定义） */
+.tab-bar-wrapper {
   margin-bottom: 12px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.tab-bar::-webkit-scrollbar { display: none; }
-.tab-item {
-  flex-shrink: 0;
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--color-text-regular);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  white-space: nowrap;
-}
-.tab-item.active {
-  background: var(--color-primary);
-  /* stylelint-disable-next-line color-named */
-  color: white;
-  font-weight: var(--font-weight-medium, 500);
 }
 
 /* Header action */
@@ -1077,14 +1078,7 @@ onMounted(() => {
 <!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
 <style>
 /* 知识库 tab / 卡片 / 搜索 / 分页在 dark 模式适配 */
-[data-theme="dark"] .tab-bar {
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border-light);
-}
-[data-theme="dark"] .tab-item.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
+/* 铁律 26: 旧 .tab-bar / .tab-item 已迁移到 TabStrip, dark mode 由 TabStrip 组件自身处理 */
 [data-theme="dark"] .search-input {
   background: var(--color-bg-page);
   color: var(--color-text-primary);

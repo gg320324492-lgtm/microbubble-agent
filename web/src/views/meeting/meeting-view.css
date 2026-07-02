@@ -529,3 +529,13 @@
   transform: scale(0.98);
   transition: transform 0.1s ease-out;
 }
+
+/* 铁律 31: TabStrip 容器 + TabPanel 容器（替代原 .meeting-tabs el-tabs） */
+.tab-strip-wrapper {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+.tab-panel {
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+}

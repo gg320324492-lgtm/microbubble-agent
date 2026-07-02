@@ -1,16 +1,22 @@
 <template>
   <div class="workspace-view">
-    <el-tabs v-model="activeTab" class="workspace-tabs" @tab-change="onTabChange">
-      <el-tab-pane label="项目" name="projects">
-        <ProjectsPanel @open-detail="openProjectDetail" />
-      </el-tab-pane>
-      <el-tab-pane label="成员" name="members">
-        <MembersPanel @open-detail="openMemberDetail" />
-      </el-tab-pane>
-      <el-tab-pane label="声纹" name="voiceprint">
-        <VoiceprintsPanel />
-      </el-tab-pane>
-    </el-tabs>
+    <!-- 铁律 31: 全项目 tab 统一用 <TabStrip> -->
+    <div class="tab-strip-wrapper">
+      <TabStrip v-model="activeTab" :items="tabItems" aria-label="团队协作视图切换" />
+    </div>
+
+    <div v-show="activeTab === 'projects'" role="tabpanel"
+      :aria-labelledby="`tab-strip-projects`" class="tab-panel">
+      <ProjectsPanel @open-detail="openProjectDetail" />
+    </div>
+    <div v-show="activeTab === 'members'" role="tabpanel"
+      :aria-labelledby="`tab-strip-members`" class="tab-panel">
+      <MembersPanel @open-detail="openMemberDetail" />
+    </div>
+    <div v-show="activeTab === 'voiceprint'" role="tabpanel"
+      :aria-labelledby="`tab-strip-voiceprint`" class="tab-panel">
+      <VoiceprintsPanel />
+    </div>
 
     <!-- 项目详情 dialog (ProjectsPanel emit 'open-detail' 触发) -->
     <el-dialog
@@ -128,8 +134,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import dayjs from 'dayjs'
+import { Folder, User, Microphone } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
+import TabStrip from '@/components/common/TabStrip.vue'
 import ProjectsPanel from './workspace/ProjectsPanel.vue'
 import MembersPanel from './workspace/MembersPanel.vue'
 import VoiceprintsPanel from './workspace/VoiceprintsPanel.vue'
@@ -138,16 +146,30 @@ const route = useRoute()
 const router = useRouter()
 const memberStore = useMemberStore()
 
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
 const VALID_TABS = ['projects', 'members', 'voiceprint']
-const activeTab = ref(route.query.tab && VALID_TABS.includes(route.query.tab) ? route.query.tab : 'projects')
+const activeTab = ref(
+  route.query.tab && VALID_TABS.includes(String(route.query.tab))
+    ? String(route.query.tab)
+    : 'projects'
+)
 
-function onTabChange(name) {
-  router.replace({ path: '/workspace', query: { tab: name } })
-}
+// 铁律 30: EP 图标 named import + 通过 props 传入
+const tabItems = [
+  { key: 'projects',   label: '项目', icon: Folder },
+  { key: 'members',    label: '成员', icon: User },
+  { key: 'voiceprint', label: '声纹', icon: Microphone },
+]
 
+// 铁律 29: tab → URL 同步
+watch(activeTab, (tab) => {
+  router.replace({ path: '/workspace', query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（已有, 强化）
 watch(() => route.query.tab, (t) => {
-  if (t && VALID_TABS.includes(t) && t !== activeTab.value) {
-    activeTab.value = t
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
   }
 })
 
@@ -227,11 +249,16 @@ onMounted(async () => {
   animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
 }
 
-.workspace-tabs {
+/* TabStrip 容器 + TabPanel 容器（铁律 31: 替代 el-tabs border-card） */
+.tab-strip-wrapper {
+  margin-bottom: var(--space-4);
+}
+.tab-panel {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
-  padding: 0 16px;
+  padding: var(--space-4);
   box-shadow: var(--shadow-sm);
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
 
 .detail-section-title {
@@ -305,17 +332,10 @@ onMounted(async () => {
 
 <!-- v60-v67 教训: dark mode 跨组件覆盖必须非 scoped 块 -->
 <style>
-[data-theme="dark"] .workspace-tabs {
+/* 铁律 26: dark mode 覆盖必须非 scoped, scoped 块 data-v-xxx 干扰后代选择器 */
+/* TabStrip 自身的 dark 模式由组件处理, 此处只覆盖 panel 内容 */
+[data-theme="dark"] .tab-panel {
   background: var(--color-bg-card);
-}
-[data-theme="dark"] .workspace-tabs .el-tabs__item {
-  color: var(--color-text-regular);
-}
-[data-theme="dark"] .workspace-tabs .el-tabs__item.is-active {
-  color: var(--color-primary);
-}
-[data-theme="dark"] .workspace-tabs .el-tabs__active-bar {
-  background-color: var(--color-primary);
 }
 [data-theme="dark"] .detail-section-title {
   color: var(--color-text-primary);

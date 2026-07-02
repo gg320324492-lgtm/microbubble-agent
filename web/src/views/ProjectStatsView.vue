@@ -6,10 +6,14 @@
       <p class="page-subtitle">项目从建立至今的全历程开发信息</p>
     </div>
 
-    <!-- Tabs: 项目历程 + 检索质量监控 (v31) -->
-    <el-tabs v-model="activeTab" class="project-stats-tabs">
-      <!-- Tab 1: 项目历程 (原内容) -->
-      <el-tab-pane label="项目历程" name="overview">
+    <!-- 铁律 31: tab 统一用 <TabStrip> -->
+    <div class="tab-strip-wrapper">
+      <TabStrip v-model="activeTab" :items="tabItems" aria-label="项目动态视图切换" />
+    </div>
+
+    <!-- Tab 1: 项目历程 (原内容) -->
+    <div v-show="activeTab === 'overview'" role="tabpanel"
+      :aria-labelledby="`tab-strip-overview`" class="tab-panel">
         <!-- 项目体量 -->
         <el-card class="stats-card fade-slide-up stagger-1" shadow="hover">
       <template #header>
@@ -150,148 +154,185 @@
         </el-timeline-item>
       </el-timeline>
     </el-card>
-      </el-tab-pane>
+      </div>
 
-      <!-- Tab 2: 检索质量监控 (v31) — 嵌入 AnalyticsView 组件 -->
-      <el-tab-pane label="检索质量" name="analytics">
-        <AnalyticsView />
-      </el-tab-pane>
+    <!-- Tab 2: 检索质量监控 (v31) — 嵌入 AnalyticsView 组件 -->
+    <div v-show="activeTab === 'analytics'" role="tabpanel"
+      :aria-labelledby="`tab-strip-analytics`" class="tab-panel">
+      <AnalyticsView />
+    </div>
 
-      <!-- Tab 3: KB 入库监控 (W6 D5) — polling 5min 自动刷新 -->
-      <el-tab-pane label="KB 入库监控" name="kb_monitor">
-        <el-card class="stats-card fade-slide-up" shadow="hover">
-          <template #header>
-            <div class="card-header">
-              <span class="card-title">
-                <span class="card-icon">📚</span>
-                KB 自动入库实时监控
-                <el-tag v-if="kbLoading" type="info" size="small" effect="plain" style="margin-left: 8px">
-                  <el-icon class="is-loading"><Loading /></el-icon> 刷新中
-                </el-tag>
-              </span>
-              <div class="header-actions">
-                <el-button size="small" @click="refreshKb" :icon="Refresh">手动刷新</el-button>
-              </div>
+    <!-- Tab 3: KB 入库监控 (W6 D5) — polling 5min 自动刷新 -->
+    <div v-show="activeTab === 'kb_monitor'" role="tabpanel"
+      :aria-labelledby="`tab-strip-kb_monitor`" class="tab-panel">
+      <el-card class="stats-card fade-slide-up" shadow="hover">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title">
+              <span class="card-icon">📚</span>
+              KB 自动入库实时监控
+              <el-tag v-if="kbLoading" type="info" size="small" effect="plain" style="margin-left: 8px">
+                <el-icon class="is-loading"><Loading /></el-icon> 刷新中
+              </el-tag>
+            </span>
+            <div class="header-actions">
+              <el-button size="small" @click="refreshKb" :icon="Refresh">手动刷新</el-button>
             </div>
-          </template>
+          </div>
+        </template>
 
-          <!-- 错误提示 -->
-          <el-alert v-if="kbError" type="warning" :title="'加载失败: ' + kbError" :closable="false" show-icon />
+        <!-- 错误提示 -->
+        <el-alert v-if="kbError" type="warning" :title="'加载失败: ' + kbError" :closable="false" show-icon />
 
-          <!-- 4 张统计卡 + 1 张趋势图 -->
-          <el-row :gutter="20" v-if="summary">
-            <el-col :span="6">
-              <el-card class="metric-card" shadow="never">
-                <div class="metric-label">📊 今日入库</div>
-                <div class="metric-value">{{ summary.today_intake || 0 }} <span class="metric-unit">条</span></div>
-                <div class="metric-sub">总 {{ summary.total_in_db || 0 }} 条</div>
-              </el-card>
-            </el-col>
-            <el-col :span="6">
-              <el-card class="metric-card" shadow="never">
-                <div class="metric-label">📈 7日入库</div>
-                <div class="metric-value">{{ weeklyIntakeTotal }} <span class="metric-unit">条</span></div>
-                <div class="metric-sub">日均 {{ Math.round(weeklyIntakeTotal / 7 * 10) / 10 }} 条</div>
-              </el-card>
-            </el-col>
-            <el-col :span="6">
-              <el-card class="metric-card" shadow="never">
-                <div class="metric-label">🎯 KB 命中率</div>
-                <div class="metric-value">{{ hitRatePct }}<span class="metric-unit">%</span></div>
-                <div class="metric-sub">待 W6 反馈模块接入</div>
-              </el-card>
-            </el-col>
-            <el-col :span="6">
-              <el-card class="metric-card" shadow="never">
-                <div class="metric-label">⚠️ 负反馈率</div>
-                <div class="metric-value">{{ negFeedbackPct }}<span class="metric-unit">%</span></div>
-                <div class="metric-sub">健康 ({{ negFeedbackPct < 10 ? '✅' : '⚠️' }})</div>
-              </el-card>
-            </el-col>
-          </el-row>
+        <!-- 4 张统计卡 + 1 张趋势图 -->
+        <el-row :gutter="20" v-if="summary">
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="never">
+              <div class="metric-label">📊 今日入库</div>
+              <div class="metric-value">{{ summary.today_intake || 0 }} <span class="metric-unit">条</span></div>
+              <div class="metric-sub">总 {{ summary.total_in_db || 0 }} 条</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="never">
+              <div class="metric-label">📈 7日入库</div>
+              <div class="metric-value">{{ weeklyIntakeTotal }} <span class="metric-unit">条</span></div>
+              <div class="metric-sub">日均 {{ Math.round(weeklyIntakeTotal / 7 * 10) / 10 }} 条</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="never">
+              <div class="metric-label">🎯 KB 命中率</div>
+              <div class="metric-value">{{ hitRatePct }}<span class="metric-unit">%</span></div>
+              <div class="metric-sub">待 W6 反馈模块接入</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card class="metric-card" shadow="never">
+              <div class="metric-label">⚠️ 负反馈率</div>
+              <div class="metric-value">{{ negFeedbackPct }}<span class="metric-unit">%</span></div>
+              <div class="metric-sub">健康 ({{ negFeedbackPct < 10 ? '✅' : '⚠️' }})</div>
+            </el-card>
+          </el-col>
+        </el-row>
 
-          <!-- 7日趋势 + rollback 警告 + 灰度状态 -->
-          <el-row :gutter="20" v-if="summary" style="margin-top: 20px">
-            <el-col :span="14">
-              <el-card class="trend-card" shadow="never">
-                <template #header>
-                  <div class="trend-header">
-                    <span>📊 7日入库趋势 (近 7 天)</span>
-                    <span v-if="weeklyIntakeTotal === 0" class="trend-empty-hint">
-                      等待数据中...
-                    </span>
-                  </div>
-                </template>
-                <!-- W6 D5 改进: 全 0 时显示 empty placeholder, 避免 7 个 0px bar 视觉混乱 -->
-                <el-empty
-                  v-if="weeklyIntakeTotal === 0"
-                  description="近 7 天暂无 KB 入库记录"
-                  :image-size="80"
-                />
-                <div v-else class="trend-bars">
+        <!-- 7日趋势 + rollback 警告 + 灰度状态 -->
+        <el-row :gutter="20" v-if="summary" style="margin-top: 20px">
+          <el-col :span="14">
+            <el-card class="trend-card" shadow="never">
+              <template #header>
+                <div class="trend-header">
+                  <span>📊 7日入库趋势 (近 7 天)</span>
+                  <span v-if="weeklyIntakeTotal === 0" class="trend-empty-hint">
+                    等待数据中...
+                  </span>
+                </div>
+              </template>
+              <!-- W6 D5 改进: 全 0 时显示 empty placeholder, 避免 7 个 0px bar 视觉混乱 -->
+              <el-empty
+                v-if="weeklyIntakeTotal === 0"
+                description="近 7 天暂无 KB 入库记录"
+                :image-size="80"
+              />
+              <div v-else class="trend-bars">
+                <div
+                  v-for="(count, idx) in (summary.weekly_intake || [0,0,0,0,0,0,0])"
+                  :key="idx"
+                  class="trend-bar-wrapper"
+                >
+                  <div class="trend-bar-value">{{ count }}</div>
                   <div
-                    v-for="(count, idx) in (summary.weekly_intake || [0,0,0,0,0,0,0])"
-                    :key="idx"
-                    class="trend-bar-wrapper"
-                  >
-                    <div class="trend-bar-value">{{ count }}</div>
-                    <div
-                      class="trend-bar"
-                      :class="{ 'trend-bar-zero': count === 0 }"
-                      :style="{ height: Math.max(6, count / Math.max(...summary.weekly_intake) * 100) + 'px' }"
-                    ></div>
-                    <div
-                      class="trend-bar-day"
-                      :class="{ 'trend-bar-day-today': idx === 6 }"
-                    >{{ ['昨7','昨6','昨5','昨4','昨3','昨2','今日'][idx] }}</div>
-                  </div>
+                    class="trend-bar"
+                    :class="{ 'trend-bar-zero': count === 0 }"
+                    :style="{ height: Math.max(6, count / Math.max(...summary.weekly_intake) * 100) + 'px' }"
+                  ></div>
+                  <div
+                    class="trend-bar-day"
+                    :class="{ 'trend-bar-day-today': idx === 6 }"
+                  >{{ ['昨7','昨6','昨5','昨4','昨3','昨2','今日'][idx] }}</div>
                 </div>
-              </el-card>
-            </el-col>
-            <el-col :span="10">
-              <el-card class="status-card" shadow="never">
-                <template #header>
-                  <span>🔄 系统状态</span>
-                </template>
-                <div class="status-item">
-                  <span class="status-label">灰度开关:</span>
-                  <el-tag :type="summary.gray_scale_enabled === 0 ? 'info' : 'success'" size="default">
-                    {{ grayScaleLabel }}
-                  </el-tag>
-                </div>
-                <div class="status-item">
-                  <span class="status-label">7日 rollback:</span>
-                  <el-tag :type="(summary.rollback_count || 0) > 0 ? 'danger' : 'success'" size="default">
-                    {{ summary.rollback_count || 0 }} 条
-                  </el-tag>
-                </div>
-                <div class="status-item">
-                  <span class="status-label">刷新机制:</span>
-                  <el-tag type="info" size="default">polling 5min</el-tag>
-                </div>
-              </el-card>
-            </el-col>
-          </el-row>
+              </div>
+            </el-card>
+          </el-col>
+          <el-col :span="10">
+            <el-card class="status-card" shadow="never">
+              <template #header>
+                <span>🔄 系统状态</span>
+              </template>
+              <div class="status-item">
+                <span class="status-label">灰度开关:</span>
+                <el-tag :type="summary.gray_scale_enabled === 0 ? 'info' : 'success'" size="default">
+                  {{ grayScaleLabel }}
+                </el-tag>
+              </div>
+              <div class="status-item">
+                <span class="status-label">7日 rollback:</span>
+                <el-tag :type="(summary.rollback_count || 0) > 0 ? 'danger' : 'success'" size="default">
+                  {{ summary.rollback_count || 0 }} 条
+                </el-tag>
+              </div>
+              <div class="status-item">
+                <span class="status-label">刷新机制:</span>
+                <el-tag type="info" size="default">polling 5min</el-tag>
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
 
-          <!-- 空状态 -->
-          <el-empty v-if="!summary && !kbLoading" description="暂无数据" />
-        </el-card>
-      </el-tab-pane>
-    </el-tabs>
+        <!-- 空状态 -->
+        <el-empty v-if="!summary && !kbLoading" description="暂无数据" />
+      </el-card>
+    </div>
+
+    <!-- Tab 4: 审计日志 (admin only, v2 PR7) — v78 合并到项目动态, admin 守卫 -->
+    <div v-show="activeTab === 'audit' && isAdmin" role="tabpanel"
+      :aria-labelledby="`tab-strip-audit`" class="tab-panel">
+      <AuditLogView v-if="isAdmin" />
+      <el-empty v-else description="仅管理员可查看审计日志" />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { Loading, Refresh } from '@element-plus/icons-vue'
+import { Loading, Refresh, DataLine, Histogram, Folder, Document } from '@element-plus/icons-vue'
 import changelogData from '@/data/changelog.json'
 import AnalyticsView from '@/views/admin/AnalyticsView.vue'  // v31 检索质量监控
+import AuditLogView from '@/views/admin/AuditLogView.vue'  // v2 PR7 审计日志 (admin only)
 import { useKbMonitor } from '@/composables/useKbMonitor'  // W6 D5 KB 入库监控
+import { useUserStore } from '@/stores/user'  // v78 admin 守卫
+import TabStrip from '@/components/common/TabStrip.vue'
+
+const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.isAdmin)
+
+// 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
+const VALID_TABS = ['overview', 'analytics', 'kb_monitor', 'audit']
+const activeTab = ref(
+  route.query.tab && VALID_TABS.includes(String(route.query.tab))
+    ? String(route.query.tab)
+    : 'overview'
+)
+
+// 铁律 30: EP 图标 named import + 通过 props 传入
+// audit tab 仅 admin 可见, computed 过滤
+const tabItems = computed(() => {
+  const items = [
+    { key: 'overview',   label: '项目历程',     icon: DataLine },
+    { key: 'analytics',  label: '检索质量',     icon: Histogram },
+    { key: 'kb_monitor', label: 'KB 入库监控',  icon: Folder },
+  ]
+  if (isAdmin.value) items.push({ key: 'audit', label: '审计日志', icon: Document })
+  return items
+})
 
 // v31 tab 切换: 'overview' = 项目历程, 'analytics' = 检索质量
 // W6 D5: 'kb_monitor' = KB 入库监控 (polling 5min 自动刷新)
-const activeTab = ref('overview')
+// v78: 'audit' = 审计日志 (admin only)
 const { summary, lastUpdate, error: kbError, loading: kbLoading, refresh: refreshKb } = useKbMonitor()
 
 // KB 入库监控 - 计算属性
@@ -439,6 +480,18 @@ const getTimelineType = (tag) => {
   return types[tag] || 'primary'
 }
 
+// 铁律 29: tab → URL 同步（router.replace 不污染 history, 合并其他 query）
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } })
+})
+
+// 铁律 29: URL → tab 反向同步（浏览器前进/后退）
+watch(() => route.query.tab, (t) => {
+  if (t && VALID_TABS.includes(String(t)) && String(t) !== activeTab.value) {
+    activeTab.value = String(t)
+  }
+})
+
 onMounted(async () => {
   try {
     const res = await axios.get('/api/v1/dashboard/project-stats')
@@ -453,6 +506,16 @@ onMounted(async () => {
 .project-stats-view {
   max-width: 1200px;
   padding-bottom: 30px;
+}
+
+/* 铁律 31: tab-strip-wrapper + tab-panel 容器 */
+.tab-strip-wrapper {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+.tab-panel {
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
 }
 
 /* 页面标题 */
