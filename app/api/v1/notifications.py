@@ -49,6 +49,8 @@ class NotificationItem(BaseModel):
     is_read: bool
     read_at: Optional[str] = None
     created_at: Optional[str] = None
+    # v2 PR6-P7: 5s dedup 合并计数 (default 1, 命中 +1)
+    repeated_count: int = 1
 
 
 class NotificationListResponse(BaseModel):
@@ -173,6 +175,7 @@ async def list_notifications(
             is_read=m.is_read,
             read_at=str(m.read_at) if m.read_at else None,
             created_at=str(m.created_at) if m.created_at else None,
+            repeated_count=m.repeated_count or 1,  # v2 PR6-P7: dedup 合并计数
         )
         for m in mentions
     ]

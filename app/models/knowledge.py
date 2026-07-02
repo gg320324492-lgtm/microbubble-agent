@@ -233,9 +233,11 @@ class FileMention(Base):
     is_read = Column(Boolean, nullable=False, server_default="false")
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default="now()")
+    # v2 PR6-P7: 5s dedup 合并计数 (default 1, dedup 命中 +1)
+    repeated_count = Column(Integer, nullable=False, server_default="1")
 
     def __repr__(self):
-        return f"<FileMention(id={self.id}, file_id={self.file_id}, mentioned_user_id={self.mentioned_user_id}, is_read={self.is_read})>"
+        return f"<FileMention(id={self.id}, file_id={self.file_id}, mentioned_user_id={self.mentioned_user_id}, is_read={self.is_read}, repeated_count={self.repeated_count})>"
 
 
 class ActivityEvent(Base):

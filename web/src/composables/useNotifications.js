@@ -253,7 +253,34 @@ export const useNotificationsStore = defineStore('notifications', () => {
       wsConnected.value = false
     })
     ws.on('mention', async (data) => {
-      // 增量 prepend (避免重拉)
+      // v2 PR6-P7: merged=true 表示这是 5s dedup 命中, 重复已合并到现有 row
+      if (data.merged) {
+        // 找到已存在的同 id row, 替换 updated (含新 repeated_count + 新 created_at)
+        const existingIdx = notifications.value.findIndex((n) => n.id === data.id)
+        if (existingIdx !== -1) {
+          notifications.value = [
+            {
+              ...notifications.value[existingIdx],
+              repeated_count: data.repeated_count || 1,
+              created_at: data.created_at || new Date().toISOString(),
+              mentioned_by: data.mentioned_by,
+            },
+            ...notifications.value.slice(0, existingIdx),
+            ...notifications.value.slice(existingIdx + 1),
+          ]
+        }
+        // dedup 命中: 红点**不增** (代表同一逻辑通知), 弹 toast 提示
+        // ElMessage 是动态 import 避免 SSR 报错
+        import('element-plus').then(({ ElMessage }) => {
+          ElMessage.info({
+            message: `已合并 ${data.repeated_count} 条类似通知 (5 秒内)`,
+            duration: 2500,
+            grouping: true,
+          })
+        }).catch(() => {})
+        return
+      }
+      // 首次创建: 增量 prepend (避免重拉)
       notifications.value = [
         {
           id: data.id,
@@ -261,6 +288,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
           mentioned_by: data.mentioned_by,
           context: data.context,
           is_read: false,
+          repeated_count: data.repeated_count || 1,
           created_at: data.created_at || new Date().toISOString(),
         },
         ...notifications.value,
