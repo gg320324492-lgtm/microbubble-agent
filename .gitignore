@@ -108,3 +108,9 @@ scripts/probe_*.py
 # 总计 3218 文件 / 552 MB, push 一次要几分钟，必须 ignore
 # 保留文件本地备用，但禁止入库（任何 Claude 窗口都需要）
 llama-cpp-tools/
+
+# SSH tunnel watchdog 运行时 PID 文件（start-ssh-tunnel.ps1 写, 用于 dedup 重启）
+# 必须保留文件本地（watchdog 依赖），但禁止入库（每次启动都会重新生成）
+tunnel/*.pid
+tunnel/*.log
+tunnel/start-ssh-tunnel.vbs.tmp
