@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from typing import List, Optional
 
+from app.core.exceptions import ConflictException
 from app.models.member import Member
 
 
@@ -10,6 +11,40 @@ class MemberService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    async def _assert_username_unique(
+        db: AsyncSession,
+        username: str,
+        exclude_member_id: Optional[int] = None,
+    ) -> None:
+        """检查 username 是否被占用 (case-insensitive)
+
+        v2 PR6-P13: comment_service 用 username.lower() 匹配 mention, 必须 case-insensitive 唯一
+        - alembic 053 在 DB 层加 UNIQUE INDEX ON LOWER(username) 兜底
+        - 这里 service 层 pre-check 抛 ConflictException, 让 API 返回 409 而不是 500
+        - exclude_member_id: 更新自己时排除自己的 username
+
+        Raises:
+            ConflictException: username 已存在 (case-insensitive)
+        """
+        if not username:
+            # 空 username 跳过检查 (允许 NULL/empty, 与 DB 索引一致)
+            return
+
+        normalized = username.lower().strip()
+        if not normalized:
+            return
+
+        stmt = select(Member.id).where(func.lower(Member.username) == normalized)
+        if exclude_member_id is not None:
+            stmt = stmt.where(Member.id != exclude_member_id)
+        existing = (await db.execute(stmt)).scalar_one_or_none()
+        if existing is not None:
+            raise ConflictException(
+                f"用户名已存在 (大小写不敏感): {username} (existing_member_id={existing})",
+                resource=f"members.username={username}",
+            )
 
     async def get_member(self, member_id: int) -> Optional[Member]:
         """获取单个成员"""
@@ -84,7 +119,12 @@ class MemberService:
         phone: Optional[str] = None,
         role: str = "member"
     ) -> Member:
-        """创建成员"""
+        """创建成员
+
+        v2 PR6-P13: 创建前检查 username 是否被占用 (case-insensitive),
+        与 alembic 053 兜底配合 (DB UNIQUE INDEX ON LOWER(username))
+        """
+        await self._assert_username_unique(self.db, username or "")
         member = Member(
             name=name,
             username=username,
@@ -102,10 +142,18 @@ class MemberService:
         return member
 
     async def update_member(self, member_id: int, **kwargs) -> Optional[Member]:
-        """更新成员信息"""
+        """更新成员信息
+
+        v2 PR6-P13: 如果 kwargs 含 username, 先检查 case-insensitive 唯一 (排除自己)
+        """
         member = await self.get_member(member_id)
         if not member:
             return None
+
+        if "username" in kwargs and kwargs["username"] is not None:
+            await self._assert_username_unique(
+                self.db, kwargs["username"], exclude_member_id=member_id
+            )
 
         for key, value in kwargs.items():
             if hasattr(member, key) and value is not None:
