@@ -94,13 +94,7 @@
 
     <!-- 主体布局: 左侧 DriveSubSidebar + FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
     <div class="drive-main" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
-      <!-- v2 PR7: 网盘内部子侧边栏（我的文件/回收站/活动动态/文件请求），可折叠 -->
-      <DriveSubSidebar
-        :collapsed="subSidebarCollapsed"
-        active-key="files"
-        @toggle="toggleSubSidebar"
-      />
-
+      <!-- v2 PR7 修复: 子侧边栏已上移到 DriveLayout 容器, 此处不再重复 -->
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
         <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
@@ -252,7 +246,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
-import DriveSubSidebar from '@/components/drive/DriveSubSidebar.vue'  // v2 PR7
+// v2 PR7 修复: DriveSubSidebar 已上移到 DriveLayout 容器, 此处不再 import
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
@@ -265,19 +259,8 @@ import { useFolderDropZone } from '@/composables/useFolderDropZone'
 
 const router = useRouter()  // v2 PR2: 回收站路由跳转
 
-// v2 PR7: 子侧边栏折叠状态（localStorage 持久化，不走 Pinia 保持 useUiStore 干净）
-const SUB_SIDEBAR_STORAGE_KEY = 'mnb:ui:drive:subSidebarCollapsed'
-function readSubSidebarCollapsed() {
-  if (typeof localStorage === 'undefined') return false
-  try { return localStorage.getItem(SUB_SIDEBAR_STORAGE_KEY) === '1' } catch { return false }
-}
-const subSidebarCollapsed = ref(readSubSidebarCollapsed())
-watch(subSidebarCollapsed, (v) => {
-  try { localStorage.setItem(SUB_SIDEBAR_STORAGE_KEY, v ? '1' : '0') } catch { /* ignore */ }
-})
-function toggleSubSidebar() {
-  subSidebarCollapsed.value = !subSidebarCollapsed.value
-}
+// v2 PR7 修复: 子侧边栏折叠状态已上移到 useDriveSubSidebarCollapsed composable, 此处不再维护
+// (composable 由 DriveLayout 调用, 4 view 共享同一份 singleton ref)
 
 // === 文件夹树 (PR3.2 接入) ===
 const {

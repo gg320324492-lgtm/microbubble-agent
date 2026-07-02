@@ -1,16 +1,17 @@
 <!--
-  ActivityFeedView.vue — v2 PR6 活动动态流视图
+  ActivityFeedView.vue — v2 PR6/7 活动动态流视图
 
   路由: /drive/activity
   功能:
   - 时间线 (今天 / 昨天 / 本周 / 更早)
   - scope 切换: team / me
   - load more (cursor 分页)
+  - v2 PR7 修复: 现在嵌套在 DriveLayout 下, 去掉 page-container 外壳 (padding 由 layout 提供)
 
   Dark mode: 非 scoped 块 (v60-v67 教训)
 -->
 <template>
-  <div class="page-container activity-feed-view">
+  <div class="activity-feed-view">
     <div class="page-header">
       <h2>活动动态</h2>
       <p class="page-subtitle">查看团队成员最近的文件操作</p>
@@ -172,7 +173,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-container.activity-feed-view {
+/* v2 PR7 修复: 去掉 .page-container 前缀, layout 提供 padding */
+.activity-feed-view {
   padding: 24px;
   max-width: 900px;
   margin: 0 auto;
