@@ -22,8 +22,8 @@
 
     <div class="activity-toolbar">
       <el-radio-group v-model="scope" @change="onScopeChange">
-        <el-radio-button label="team">团队</el-radio-button>
-        <el-radio-button label="me">我的</el-radio-button>
+        <el-radio-button value="team">团队</el-radio-button>
+        <el-radio-button value="me">我的</el-radio-button>
       </el-radio-group>
       <el-button link @click="onRefresh">刷新</el-button>
     </div>

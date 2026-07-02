@@ -118,6 +118,7 @@
             <el-breadcrumb-item :to="{ path: '/drive' }">我的网盘</el-breadcrumb-item>
             <el-breadcrumb-item v-if="specialView === 'starred'">⭐ 我的收藏</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'requests'">📢 文件请求</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="selectedFolderId">
               文件夹 #{{ selectedFolderId }}
             </el-breadcrumb-item>
@@ -126,7 +127,7 @@
 
         <!-- v2 PR2: 多选批量 toolbar (sticky 在 grid 上方) -->
         <BatchActionToolbar
-          v-if="specialView !== 'trash'"
+          v-if="!['trash', 'requests'].includes(specialView)"
           :selected-count="selectedFileIds.length"
           :total-count="driveFiles.length"
           context="files"
@@ -141,8 +142,12 @@
         />
 
         <div class="drive-file-area">
-          <!-- PR3.3: FileGrid 组件 -->
+          <!-- 2026-07-02 inline 化: specialView inline 渲染 (保留 FolderTree 上下文, 不离开 /drive) -->
+          <FileRequestListPanel v-if="specialView === 'requests'" />
+          <DriveTrashPanel v-else-if="specialView === 'trash'" />
+          <!-- PR3.3: FileGrid 组件 (默认文件夹/收藏列表) -->
           <FileGrid
+            v-else
             :files="driveFiles"
             :total="total"
             :current-page="currentPage"
@@ -247,6 +252,9 @@ import FolderTree from '@/components/drive/FolderTree.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
 // 2026-07-02: DriveSubSidebar 已删除 (PR7 反转), 此处不再 import
+// 2026-07-02 inline 化: specialView 内嵌面板 (从 DesktopXxxView 抽取)
+import DriveTrashPanel from '@/components/drive/DriveTrashPanel.vue'
+import FileRequestListPanel from '@/components/drive/FileRequestListPanel.vue'
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
@@ -351,8 +359,8 @@ async function reloadCurrentView() {
     starredOnly.value = true
     await fetchStarred()
   } else if (specialView.value === 'trash') {
-    // 跳到独立路由 (PR2 设计)
-    router.push('/drive/trash')
+    // 2026-07-02: inline 渲染 (复用 DriveTrashPanel 的 fetchTrash)
+    await fetchTrash()
   } else {
     starredOnly.value = false
     await fetchDriveFiles({ folder_id: selectedFolderId.value })
@@ -515,8 +523,10 @@ watch(specialView, async (newView) => {
     starredOnly.value = true
     await fetchStarred()
   } else if (newView === 'trash') {
-    // 跳到独立路由
-    router.push('/drive/trash')
+    // 2026-07-02: inline 渲染
+    await fetchTrash()
+  } else if (newView === 'requests') {
+    // 2026-07-02: FileRequestListPanel onMounted 自动 fetchMy, 无需手动调
   } else {
     starredOnly.value = false
     if (selectedFolderId.value !== null) {
