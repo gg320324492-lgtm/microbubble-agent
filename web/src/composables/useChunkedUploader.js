@@ -15,6 +15,7 @@
 import { ref, readonly } from 'vue'
 import axios from 'axios'
 import * as idbStore from '@/utils/idbStore'
+import { markReachable, markUnreachable } from '@/composables/useNetworkStatus'  // v2: 网络状态联动
 
 // ===== 模块级状态（单例模式，多个组件共享） =====
 const isUploading = ref(false)
@@ -33,6 +34,7 @@ const onlineListenersAttached = new Set()
 export async function uploadOne(meetingId, index, blob, opts = {}) {
   const maxRetries = opts.maxRetries ?? 5
   let lastErr = null
+  let sawNetworkError = false  // v2: 追踪是否所有重试都是网络类错误
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -43,6 +45,7 @@ export async function uploadOne(meetingId, index, blob, opts = {}) {
         fd,
         { timeout: 30000 }
       )
+      markReachable()  // v2: 任何一片成功 → 立刻告诉网络层"通的"
       return  // 成功
     } catch (err) {
       lastErr = err
@@ -51,11 +54,16 @@ export async function uploadOne(meetingId, index, blob, opts = {}) {
       if (status && status >= 400 && status < 500 && status !== 408 && status !== 429) {
         throw err
       }
+      // 网络类错误（无 status 字段 = ECONNABORTED/ETIMEDOUT/ENETUNREACH 等）
+      if (!status) sawNetworkError = true
       // 指数退避：1s, 2s, 4s, 8s, 16s, max 30s
       const wait = Math.min(30000, 1000 * Math.pow(2, attempt))
       await sleep(wait)
     }
   }
+  // v2: 5 次重试耗尽且全是网络类错误 → 标记网络不可达
+  // 4xx 业务错走 throw err 早退不会到这里
+  if (sawNetworkError) markUnreachable()
   throw lastErr || new Error(`chunk ${index} 上传失败（重试 ${maxRetries} 次）`)
 }
 
