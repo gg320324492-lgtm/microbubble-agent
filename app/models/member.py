@@ -18,6 +18,8 @@ class Member(Base, TimestampMixin):
     grade = Column(String(20))  # 研一/研二/博一等
     research_area = Column(String(100))  # 研究方向
     skills = Column(ARRAY(String))  # 技能列表
+    # 2026-07-02 v2 PR6-P14: 大小写不敏感 UNIQUE INDEX (alembic 054_member_wechat_id_ci_unique)
+    # comment_service mention 解析用 wechat_id.lower() (3 路匹配优先) → 防 "WangTianZhi" vs "wangtianzhi" 歧义
     wechat_id = Column(String(100))  # 企业微信 userid
     wechat_nickname = Column(String(100))  # 企业微信昵称
     wechat_remark = Column(String(100))  # 企业微信备注名
