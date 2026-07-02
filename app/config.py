@@ -155,6 +155,17 @@ class Settings(BaseSettings):
     # 事故教训 (PR6-P9 误传 retention_days=0 删 31 条): 二级防线
     RETENTION_OVERRIDE_CONFIRM_DELAY_SEC: float = 0.5
 
+    # 2026-07-02 v2 PR6-P12: 守卫模式开关化 — CRITICAL 任务走严格版 (or_skip)
+    # 逗号分隔的 task 名单, 这些任务 retention_days != default 时**直接拒绝执行**
+    # (而非延迟 + warn), caller 收到 {status: skipped} 不继续 cleanup.
+    # 用法: CLEANUP_CRITICAL_GUARDED_TASKS="app.services.X.tasks.critical_task"
+    # 默认空 = 所有任务走 confirm_retention_param 友好版 (延迟 + warn + proceed)
+    # 何时把 task 加入: 严禁 retention 漂移 + 必须人审才放行的"破坏性极高"任务
+    # 例: 误删会触发 P0 事故的清理 / 跨表 CASCADE 删 / 涉及备份不可恢复的数据
+    # 加入流程: 先用 task_name 试跑一次 (走 or_skip 验证拒绝逻辑) → 改 commit 时同步 README
+    # 事故教训 (PR6-P9): 关键任务应进 CRITICAL 名单, 即便 0.5s 延迟也避免不了 docker exec 后台跑完
+    CLEANUP_CRITICAL_GUARDED_TASKS: str = ""
+
     # CORS 允许的源（逗号分隔，空则使用默认值）
     CORS_ORIGINS: str = ""
 

@@ -15,6 +15,8 @@ from unittest.mock import patch
 from app.services.cleanup_safety import (
     confirm_retention_param,
     confirm_retention_param_or_skip,
+    confirm_retention_param_auto,
+    _is_critical_task,
 )
 from app.config import settings
 
@@ -243,3 +245,239 @@ class TestCeleryTasksIntegration:
         assert result["status"] == "ok"
         assert result["deleted_files"] == 0
         assert result["deleted_folders"] == 0
+
+
+# ============================================================
+# PR6-P12 守卫模式开关化 — confirm_retention_param_auto 统一入口
+# ============================================================
+
+class TestIsCriticalTask:
+    """_is_critical_task: 解析 settings.CLEANUP_CRITICAL_GUARDED_TASKS 逗号分隔列表"""
+
+    def test_empty_setting_returns_false(self):
+        with patch.object(settings, "CLEANUP_CRITICAL_GUARDED_TASKS", ""):
+            assert _is_critical_task("any.task") is False
+
+    def test_single_task_in_list(self):
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.X.tasks.critical_task",
+        ):
+            assert _is_critical_task("app.services.X.tasks.critical_task") is True
+            assert _is_critical_task("app.services.Y.tasks.other_task") is False
+
+    def test_multiple_tasks_with_whitespace(self):
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            " task.a , task.b ,task.c  ",  # 故意加空白 + 不规范分隔
+        ):
+            assert _is_critical_task("task.a") is True
+            assert _is_critical_task("task.b") is True
+            assert _is_critical_task("task.c") is True
+            assert _is_critical_task("task.d") is False
+
+    def test_case_sensitive(self):
+        """大小写敏感 — task_name 注册名严格匹配"""
+        with patch.object(
+            settings, "CLEANUP_CRITICAL_GUARDED_TASKS", "Cleanup_Task"
+        ):
+            assert _is_critical_task("cleanup_task") is False  # 小写不匹配
+            assert _is_critical_task("Cleanup_Task") is True
+
+
+class TestConfirmRetentionParamAuto:
+    """confirm_retention_param_auto: 根据 settings 自动选 friendly/strict 模式"""
+
+    def test_default_mode_is_friendly(self):
+        """settings 空时所有 task 走 friendly (延迟 + warn)"""
+        with patch.object(settings, "CLEANUP_CRITICAL_GUARDED_TASKS", ""):
+            with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                result = confirm_retention_param_auto(
+                    retention_days=0, default=30, task_name="any.task"
+                )
+        assert result["proceed"] is True
+        assert result["mode"] == "friendly"
+        assert result["delay_applied"] == settings.RETENTION_OVERRIDE_CONFIRM_DELAY_SEC
+        m_sleep.assert_called_once()
+
+    def test_critical_mode_routes_to_strict(self):
+        """task_name 在 critical 名单时 → strict (or_skip) → proceed=False + 无 sleep"""
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.critical_task.run",
+        ):
+            with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                result = confirm_retention_param_auto(
+                    retention_days=0,
+                    default=30,
+                    task_name="app.services.critical_task.run",
+                )
+        assert result["proceed"] is False
+        assert result["mode"] == "strict"
+        assert result["delay_applied"] == 0.0
+        assert result["reason"] is not None
+        m_sleep.assert_not_called()  # strict 模式不 sleep
+
+    def test_non_critical_task_in_mixed_list_falls_through_to_friendly(self):
+        """critical 名单里有 A, 但传 B → B 走 friendly (只名单内 task 才 strict)"""
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.A.run",
+        ):
+            with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                result = confirm_retention_param_auto(
+                    retention_days=0,
+                    default=30,
+                    task_name="app.services.B.run",
+                )
+        assert result["proceed"] is True
+        assert result["mode"] == "friendly"
+        m_sleep.assert_called_once()
+
+    def test_default_value_skips_guard_regardless_of_mode(self):
+        """retention == default 时两种模式都放行 (无延迟无 sleep)"""
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "any.task",
+        ):
+            with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                result = confirm_retention_param_auto(
+                    retention_days=30, default=30, task_name="any.task"
+                )
+        assert result["proceed"] is True
+        assert result["effective_days"] == 30
+        assert result["delay_applied"] == 0.0
+        m_sleep.assert_not_called()
+
+    def test_none_value_skips_guard_regardless_of_mode(self):
+        """retention=None (用默认) 时两种模式都放行"""
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "any.task",
+        ):
+            with patch("app.services.cleanup_safety.time.sleep") as m_sleep:
+                result = confirm_retention_param_auto(
+                    retention_days=None, default=30, task_name="any.task"
+                )
+        assert result["proceed"] is True
+        assert result["effective_days"] == 30
+        assert result["delay_applied"] == 0.0
+        m_sleep.assert_not_called()
+
+    def test_critical_mode_log_emits_strict_marker(self, caplog):
+        """strict 模式 logger.warning 必带 🛑 标记 (审计追溯)"""
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "critical.task",
+        ):
+            with caplog.at_level(logging.WARNING):
+                confirm_retention_param_auto(
+                    retention_days=7, default=30, task_name="critical.task"
+                )
+        log_text = " ".join(r.message for r in caplog.records)
+        assert "🛑" in log_text  # strict marker
+        assert "拒绝执行" in log_text
+
+
+# ============================================================
+# PR6-P12 端到端: Celery task + critical 模式集成
+# ============================================================
+
+class TestCeleryTaskCriticalMode:
+    """3 个 Celery task + critical 模式: 验证 task 在白名单内时 strict 拒绝
+
+    关键陷阱: strict 模式 proceed=False, task 必须 return skipped dict,
+    不能继续跑 destructive cleanup. (与 friendly 模式不同!)
+    """
+
+    def test_file_mention_task_skips_when_critical_and_retention_zero(self):
+        """file_mention task: 加入 critical 名单 + retention=0 → skipped, 0 DELETE"""
+        from app.services.file_mention_tasks import cleanup_old_mentions_task
+
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.file_mention_tasks.cleanup_old_mentions_task",
+        ):
+            # service 应该**永远**不被调 (strict 模式早 return)
+            with patch("app.services.notification_service.cleanup_old_mentions") as m_cleanup:
+                result = cleanup_old_mentions_task(retention_days=0)
+        # strict 模式: 立即跳过, 不调 service
+        m_cleanup.assert_not_called()
+        assert result["status"] == "skipped"
+        assert result["deleted_count"] == 0
+        assert "refused" in result["reason"]
+        assert "retention_days=0" in result["reason"]
+
+    def test_chat_history_task_skips_when_critical_and_retention_zero(self):
+        """chat_history task: 加入 critical + retention=0 → skipped"""
+        from app.services.chat_history_tasks import cleanup_soft_deleted_sessions_task
+
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.chat_history_tasks.cleanup_soft_deleted_sessions_task",
+        ):
+            with patch(
+                "app.services.chat_history_service.cleanup_soft_deleted_sessions"
+            ) as m_cleanup:
+                result = cleanup_soft_deleted_sessions_task(retention_days=0)
+        m_cleanup.assert_not_called()
+        assert result["status"] == "skipped"
+        assert result["deleted_count"] == 0
+
+    def test_drive_cleanup_task_skips_when_critical_and_retention_zero(self):
+        """drive_cleanup task: 加入 critical + retention=0 → skipped"""
+        from app.services.drive_cleanup_tasks import cleanup_expired_drive_files_task
+
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.drive_cleanup_tasks.cleanup_expired_drive_files_task",
+        ):
+            with patch("app.services.cleanup_backup.backup_rows_to_json") as m_backup:
+                result = cleanup_expired_drive_files_task(retention_days=0)
+        # strict 模式: backup service 也不该被调
+        m_backup.assert_not_called()
+        assert result["status"] == "skipped"
+        assert result["deleted_files"] == 0
+        assert result["deleted_folders"] == 0
+
+    def test_critical_task_default_retention_passes_through(self):
+        """critical task + retention_days=None → 放行 (默认值场景不受 critical 影响)"""
+        from app.services.file_mention_tasks import cleanup_old_mentions_task
+
+        with patch.object(
+            settings,
+            "CLEANUP_CRITICAL_GUARDED_TASKS",
+            "app.services.file_mention_tasks.cleanup_old_mentions_task",
+        ):
+            async def mock_cleanup(db, cutoff):
+                return 0
+            with patch(
+                "app.services.notification_service.cleanup_old_mentions",
+                side_effect=mock_cleanup,
+            ):
+                result = cleanup_old_mentions_task(retention_days=None)
+        # 默认值场景: 走 friendly / strict 都直接放行, task 正常执行 (mock 返 0)
+        assert result["status"] == "ok"
+        assert result["deleted_count"] == 0
+
+
+# ============================================================
+# PR6-P12 Settings 验证
+# ============================================================
+
+class TestSettingsCriticalGuardedTasks:
+    """PR6-P12 新增 setting"""
+
+    def test_default_empty_string(self):
+        """CLEANUP_CRITICAL_GUARDED_TASKS 默认空 = 全部 task 走 friendly"""
+        assert settings.CLEANUP_CRITICAL_GUARDED_TASKS == ""
