@@ -9,7 +9,7 @@ import { ref, onBeforeUnmount } from 'vue'
  * 浏览器支持情况:
  * - Chrome / Edge / Safari 14+: dataTransfer.items + webkitGetAsEntry (支持文件夹)
  * - Firefox: dataTransfer.files 仅文件 (不支持 webkitdirectory 拖拽)
- * - 降级: Firefox 拖拽走 file.webkitRelativePath (webkitdirectory 选择时)
+ * - 降级: Firefox 拖拽走 f.name 作 relativePath (line 88)
  *
  * 数据流:
  * 1. onDrop 接收 DragEvent
@@ -136,8 +136,9 @@ export function useFolderDropZone(options = {}) {
 
       if (entry.isFile) {
         entry.file((file) => {
-          // 把 relativePath 临时挂到 file 对象 (无副作用, 仅本次使用)
-          file.webkitRelativePath = relativePath
+          // ⚠️ 不能给 native File 赋值 webkitRelativePath: 它是 read-only native getter
+          //   File 对象的 webkitRelativePath 仅由 `<input webkitdirectory>` 自动设置,
+          //   拖拽场景浏览器不会设置. 我们的相对路径直接走 entry.relativePath 字段.
           entries.push({ file, relativePath })
           resolve()
         }, () => resolve())  // 读文件失败

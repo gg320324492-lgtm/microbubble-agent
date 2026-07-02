@@ -25,6 +25,8 @@
     <main class="room-main">
       <AudioRecorder
         ref="recorderRef"
+        :meeting-id="meetingId"
+        :meeting-title="pageTitle"
         @recording-start="onRecordingStart"
         @recording-stop="onRecordingStop"
         @audio-ready="onAudioReady"

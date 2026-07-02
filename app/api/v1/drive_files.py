@@ -702,6 +702,31 @@ from fastapi.responses import StreamingResponse
 from starlette.requests import Request
 
 
+def build_content_disposition(disposition: str, filename: str) -> str:
+    """构建 Content-Disposition 头 (RFC 5987 + RFC 6266).
+
+    历史教训 (2026-07-02):
+      旧实现用 `filename="{filename}"; filename*=UTF-8''{encoded}`
+      双 attribute 看似稳妥, 实则 `filename=` 部分走 latin-1 codec,
+      一旦 filename 含中文 (如 "组会ppt/冯懿鑫/2025.7.2 研一 冯懿鑫.pptx"),
+      Starlette/FastAPI 调用 latin-1 encode → UnicodeEncodeError → 500.
+
+    修复: 仅输出 `filename*=UTF-8''<encoded>` (RFC 5987 标准化形式),
+    移除非 ASCII safe 的 `filename="..."` 旧 attribute.
+    现代浏览器 (Chrome / Firefox / Safari / Edge) 全部支持 filename*,
+    老 IE (≤ IE9) 不支持但本项目目标用户无 IE.
+
+    Args:
+        disposition: 'attachment' 或 'inline'
+        filename: 原始文件名 (可含中文)
+
+    Returns:
+        e.g. "inline; filename*=UTF-8''%E7%BB%84%E4%BC%9Appt.pptx"
+    """
+    encoded = quote(filename, safe='')
+    return f"{disposition}; filename*=UTF-8''{encoded}"
+
+
 def _check_download_visibility(file_knowledge, current_user_id: int) -> None:
     """下载/预览前校验: private 必须是 owner"""
     if file_knowledge.visibility == "private" and file_knowledge.created_by != current_user_id:
@@ -768,12 +793,11 @@ async def download_drive_file(
                     chunk = await _download_range(f.file_path, start, length)
                     yield chunk
 
-                encoded = quote(filename)
                 headers = {
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
                     "Accept-Ranges": "bytes",
                     "Content-Length": str(length),
-                    "Content-Disposition": f"{disposition}; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+                    "Content-Disposition": build_content_disposition(disposition, filename),
                 }
                 return StreamingResponse(
                     _range_stream(),
@@ -784,9 +808,8 @@ async def download_drive_file(
 
     # 完整下载
     file_size = await _get_object_size(f.file_path)
-    encoded = quote(filename)
     headers = {
-        "Content-Disposition": f"{disposition}; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+        "Content-Disposition": build_content_disposition(disposition, filename),
     }
     if file_size is not None:
         headers["Content-Length"] = str(file_size)
@@ -905,12 +928,11 @@ async def batch_download_drive_files(
         buffer.seek(0)
         yield buffer.read()
 
-    encoded = quote(zip_filename)
     return StreamingResponse(
         _zip_stream(),
         media_type="application/zip",
         headers={
-            "Content-Disposition": f"attachment; filename=\"{zip_filename}\"; filename*=UTF-8''{encoded}",
+            "Content-Disposition": build_content_disposition("attachment", zip_filename),
         },
     )
 
@@ -1179,7 +1201,6 @@ async def public_download_by_token(
 
     filename = f.file_name or f.title or f"file_{f.id}"
     content_type = f.file_type or "application/octet-stream"
-    encoded = quote(filename)
     file_size = await _get_object_size(f.file_path)
 
     # Range 支持 (与 /files/{id}/download 一致)
@@ -1205,13 +1226,13 @@ async def public_download_by_token(
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
                     "Accept-Ranges": "bytes",
                     "Content-Length": str(length),
-                    "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+                    "Content-Disposition": build_content_disposition("attachment", filename),
                 },
             )
 
     # 完整下载
     headers = {
-        "Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{encoded}",
+        "Content-Disposition": build_content_disposition("attachment", filename),
         "Accept-Ranges": "bytes",
     }
     if file_size is not None:
