@@ -21,7 +21,7 @@ async def create_member(
 ):
     """创建成员
 
-    v2 PR6-P13/P14: case-insensitive username + wechat_id uniqueness check (避免 mention 解析歧义)
+    v2 PR6-P13/P14/P15: case-insensitive username + wechat_id + personal_wechat_id uniqueness check
     """
     from app.services.member_service import MemberService
     svc = MemberService(db)
@@ -29,6 +29,8 @@ async def create_member(
     await svc._assert_identifier_unique(db, "username", member_data.username)
     # PR6-P14 wechat_id 唯一 (alembic 054 兜底)
     await svc._assert_identifier_unique(db, "wechat_id", member_data.wechat_id)
+    # PR6-P15 personal_wechat_id 唯一 (alembic 055 兜底)
+    await svc._assert_identifier_unique(db, "personal_wechat_id", member_data.personal_wechat_id)
 
     member = Member(
         name=member_data.name,
@@ -120,7 +122,8 @@ async def update_member(
 ):
     """更新成员
 
-    v2 PR6-P13/P14: 如果更新包含 username 或 wechat_id, 走 case-insensitive 唯一检查 (排除自己)
+    v2 PR6-P13/P14/P15: 如果更新包含 username / wechat_id / personal_wechat_id,
+    走 case-insensitive 唯一检查 (排除自己)
     """
     result = await db.execute(select(Member).where(Member.id == member_id))
     member = result.scalar_one_or_none()
@@ -130,7 +133,7 @@ async def update_member(
 
     update_data = member_data.model_dump(exclude_unset=True)
 
-    # PR6-P13/P14: 提前检查 username/wechat_id 唯一性, 失败时 ConflictException (409)
+    # PR6-P13/P14/P15: 提前检查 3 个 identifier 唯一性, 失败时 ConflictException (409)
     from app.services.member_service import MemberService
     if "username" in update_data and update_data["username"] is not None:
         await MemberService._assert_identifier_unique(
@@ -139,6 +142,11 @@ async def update_member(
     if "wechat_id" in update_data and update_data["wechat_id"] is not None:
         await MemberService._assert_identifier_unique(
             db, "wechat_id", update_data["wechat_id"], exclude_member_id=member_id
+        )
+    if "personal_wechat_id" in update_data and update_data["personal_wechat_id"] is not None:
+        await MemberService._assert_identifier_unique(
+            db, "personal_wechat_id", update_data["personal_wechat_id"],
+            exclude_member_id=member_id,
         )
 
     for field, value in update_data.items():
