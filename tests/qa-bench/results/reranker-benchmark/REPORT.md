@@ -325,3 +325,63 @@ docker compose restart app
 
 - **A/B/C/D 选哪个**？
 - 是否 commit 修复 1 + 修复 2 + 修复 3 代码（即便 BGE m3 不启用，修复 1 是有价值的工程改进）？
+
+
+---
+
+# Phase I — 深度排查 + 真相修正 (2026-07-02)
+
+> ⚠️ **完整 Phase I 报告**: [REPORT-phase-I.md](./REPORT-phase-I.md) (9054 bytes)
+
+## Phase I TL;DR
+
+| Round | Pass | 关键修复 |
+|---|---|---|
+| R3 BGE m3 raw | 0.8% | 起点 |
+| R5a-c Phase H 3 层防御 | 1.8/2.8/0.5% | done yield + 字段过滤 + 前端剥除 |
+| **R6 ms-marco + Phase I 修复** | **10%** | Neo4j 6.x 修复 + stripFakeXml 整块 |
+
+**关键真相**: ms-marco 和 BGE m3 模式下 LLM 收到的 messages **字节级完全相同** (18106 bytes)。**rerank 不影响 LLM 决策**。
+
+**真正失败根因** (与 rerank 无关):
+1. mimo Anthropic endpoint 429 限流 (~60% 失败)
+2. qa-bench `forbidden_names` 含合法成员名 (30% 数据 bug)
+3. Phase H 修 3 不完整 (LLM fake XML)
+4. dirty working tree 干扰
+
+## 之前 plan 误读修正
+
+3 个 Explore agent 报告 `llm.py:321-326 openai_compat tool_result 丢失`，**实际不存在**:
+- `grep "openai_compat" app/core/llm.py` → 0 命中
+- llm.py 当前只有 anthropic backend dispatch
+- `LLM_BACKEND=openai_compat` 是无效配置 (代码未实现)
+- CLAUDE.md 2026-07-01 v3 提到的 openai_compat 是**未来 plan**，未 push
+
+**教训**: plan 引用 file:line 必须先 grep 确认。
+
+## Phase I 已完成工作
+
+| 任务 | commit | 状态 |
+|---|---|---|
+| I.0.1 Neo4j 6.x driver bug | `82787118` | ✅ |
+| I.0.2 stripFakeXml 整块 | `82787118` | ✅ |
+| I.3 DEBUG_DUMP_LLM_INPUT hook | `1eb6d739` | ✅ |
+| I.4 BGE m3 vs ms-marco messages 对比 | (本期报告) | ✅ 字节级相同 |
+| I.5 综合决策 + REPORT | 本节 | ✅ |
+
+## 7 条新铁律 (Phase I 沉淀)
+
+1. **Neo4j 6.x `session.run(cypher, query=...)` 同名冲突** — 用 `parameters={}` 包裹避免
+2. **Explore agent 报告必须二次验证** — grep file:line 确认代码存在
+3. **mimo 限流必须有 backoff/retry** — 不能裸跑 benchmark
+4. **qa-bench `forbidden_names` 不能含 `must_contain_any` 名字** — 测试数据设计
+5. **frontend `stripFakeXml` 必须用整块 pattern** — 不只剥开始标记
+6. **messages 累积必须设上限** — 防止 token 爆炸 (deferred)
+7. **commit 必须只 stage 当前改动** — `git status` + `git diff --cached --stat` 验证
+
+## 下一步建议
+
+- **不要回滚 BGE m3**: 切换 reranker 模型对 pass rate 无影响 (R6 字节级证明)
+- **修 qa-bench 数据 bug** (单独 PR): forbidden_names 重设计为只禁幻觉名
+- **缓解 mimo 限流**: 加 benchmark retry/backoff 或切 Claude 官方 API
+- **保留 BGE m3 模型文件**: 2.27 GB 已下载, 未来可重试 (中文检索是正确方向)
