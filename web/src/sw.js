@@ -231,12 +231,14 @@
 // (4) 不加 Web Push / Periodic Background Sync：
 //     - Web Push：后端走企业微信（v2 11AM 单一窗口），Web 是辅助通道，投资回报低
 //     - Periodic Background Sync：浏览器支持窄（仅 Chrome + engagement 分数），场景不匹配
+// 2026-07-02 v77 BUMP (二次)：main.js 加 controllerchange 监听 + init waiting 检查，
+//   比 SW_UPDATED 早 100-300ms 触发 force reload，缩短旧 SW 缓存污染窗口期。
 // 2026-07-02 v77 BUMP：dist 404 修复后浏览器 PWA SW 仍缓存了 deploy 瞬态 5xx → 4xx
 //   永久污染 documents cache。activate 钩子的 caches.delete() 会清空所有 cache。
 //   客户端收到 SW_UPDATED postMessage 后自动 reload → 干净。
 // 2026-06-30 v77 BUMP：fix 5 个统计全 0 误报 + filter 残留; activate 钩子清空 api-cache
 //   让修复后的 URL 不命中旧 cache; 同步加 noEmptyItemsPlugin 拒绝空 items 永久缓存
-const SW_VERSION = 'v77-dist-deploy-fix-2026-07-02'
+const SW_VERSION = 'v77-sw-controllerchange-force-reload-2026-07-02'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

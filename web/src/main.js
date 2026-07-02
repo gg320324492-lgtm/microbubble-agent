@@ -180,6 +180,36 @@ useRegisterSW({
   },
 })
 
+// 2026-07-02 SW 升级强制刷新加固：
+// controllerchange 事件在新 SW 通过 clients.claim() 接管当前 client 时触发，
+// 比 SW_UPDATED postMessage 更早（早 ~100-300ms）也更可靠（标准浏览器 API，
+// 不依赖 SW 代码正确 postMessage）。
+// firstActivation flag 防止首次 SW 注册（从 null → SW）触发 reload（初次访问不刷新）。
+let swFirstActivation = true
+navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (swFirstActivation) {
+    swFirstActivation = false
+    console.log('[PWA] First SW activation, no reload')
+    return
+  }
+  console.log('[PWA] New SW controller, force reloading...')
+  // 延迟 500ms 让 console.log 显示出来再 reload（与 SW_UPDATED 处理对齐）
+  setTimeout(() => window.location.reload(), 500)
+})
+
+// 防御性：app 加载时如果已有 waiting SW（上次访问下载了新 SW 但未 activate），
+// 主动激活 + 走 controllerchange 路径强制 reload。
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if (reg?.waiting) {
+      console.log('[PWA] Waiting SW detected on init, force activating...')
+      reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+      // SW 的 self.skipWaiting() 已生效；SKIP_WAITING 是冗余但无害，
+      // controllerchange 会在 waiting → active 时触发
+    }
+  })
+}
+
 // v28 step 33: 页面加载后立即检查服务器 sw.js 内容是否在黑名单
 // 不依赖 SW 自身响应消息（坏 SW 不会响应），直接 fetch 服务器 sw.js 文本判断
 checkSwBlacklist().then((blacklisted) => {
