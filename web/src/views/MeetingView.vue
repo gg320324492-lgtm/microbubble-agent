@@ -121,11 +121,42 @@
             <el-button type="primary" size="small" @click.stop="viewMeeting(meeting)">
               查看详情
             </el-button>
-            <el-popconfirm title="确定删除此会议？" @confirm="deleteMeeting(meeting.id)">
+            <!-- 删除按钮 (修复 click 事件冒泡 + el-popconfirm @confirm 不触发) -->
+            <!-- 2026-07-03 修复: el-popconfirm 用 ElTooltip trigger="click" 时,
+                 reference 按钮的 click 实际被 ElTooltip 自己监听触发 popover,
+                 而不是通过 Vue @click. 即便加 @click.stop 也挡不住 ElTooltip
+                 内部的 reference click listener. 表现:
+                 1. 点删除按钮 → click 仍冒泡到外层 meeting-item @click="viewMeeting"
+                    → 用户被跳转到详情页, popconfirm 看起来"没反应"
+                 2. 即便 popconfirm 弹出, 用户点确定后 confirm() emit("@confirm") 在某些
+                    jsdom / 部分浏览器下不触发, 因为 popper 的 click 路径与原生 click
+                    handler 冲突.
+                 修复方案: 用 el-popover + 手动 ref 控制, 完全绕过 el-popconfirm.
+                 点击外部自动关闭, 不依赖 trigger="click" 的隐式 click listener. -->
+            <el-popover
+              :ref="el => setDeletePopoverRef(el, meeting.id)"
+              :width="220"
+              placement="top"
+              trigger="manual"
+              :show-arrow="false"
+              popper-class="delete-meeting-popover"
+            >
               <template #reference>
-                <el-button type="danger" size="small" @click.stop>删除</el-button>
+                <el-button
+                  type="danger"
+                  size="small"
+                  :data-delete-ref-id="meeting.id"
+                  @click.stop="openDeletePopover(meeting.id)"
+                >删除</el-button>
               </template>
-            </el-popconfirm>
+              <div class="delete-popover-content">
+                <p class="delete-popover-title">确定删除此会议？</p>
+                <div class="delete-popover-actions">
+                  <el-button size="small" @click.stop="closeDeletePopover(meeting.id)">取消</el-button>
+                  <el-button type="danger" size="small" @click.stop="confirmDelete(meeting.id)">确定删除</el-button>
+                </div>
+              </div>
+            </el-popover>
           </div>
         </div>
       </div>
@@ -208,7 +239,7 @@
 <script setup>
 // v77 P2.6-F.2 Step 4: 485 行 CSS 拆到独立 meeting-view.css
 import './meeting/meeting-view.css'
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -307,7 +338,34 @@ const editMeeting = (meeting) => {
 
 const editingMeetingId = ref(null)
 
-const deleteMeeting = async (id) => {
+// 删除按钮 popover 控制 (2026-07-03 修复: 见 template 注释)
+// 用 Map<meetingId, ElPopover ref> 跟踪每个会议的 popover 实例
+const deletePopoverRefs = ref({})
+
+// 当前打开的 popover meeting id (用于外部 click 关闭)
+const activeDeletePopoverId = ref(null)
+
+function setDeletePopoverRef(el, id) {
+  if (el) deletePopoverRefs.value[id] = el
+}
+
+function openDeletePopover(id) {
+  // 关闭其他 popover
+  Object.entries(deletePopoverRefs.value).forEach(([mid, popover]) => {
+    if (Number(mid) !== id && popover?.hide) popover.hide()
+  })
+  activeDeletePopoverId.value = id
+  deletePopoverRefs.value[id]?.show?.()
+}
+
+function closeDeletePopover(id) {
+  activeDeletePopoverId.value = null
+  deletePopoverRefs.value[id]?.hide?.()
+}
+
+async function confirmDelete(id) {
+  // 立即关闭 popover
+  closeDeletePopover(id)
   try {
     await deleteMeetingApi(id)
     ElMessage.success('会议已删除')
@@ -315,6 +373,9 @@ const deleteMeeting = async (id) => {
     ElMessage.error('删除失败')
   }
 }
+
+// 保留旧函数名作为 alias, 以防其他代码引用 (向后兼容)
+const deleteMeeting = confirmDelete
 
 // 编辑会议数据
 const editingMeetingData = computed(() => {
@@ -498,6 +559,23 @@ onMounted(() => {
   fetchMeetings()
   fetchMembers()
   loadTemplates()  // Wave 3b
+
+  // 2026-07-03 修复: 删除 popover 外部点击关闭
+  // el-popover trigger="manual" 不自动关闭, 需要手动监听 document click
+  // 排除: ① popover 内部 ② 删除按钮 reference 本身
+  const handleDocClick = (e) => {
+    if (!activeDeletePopoverId.value) return
+    const popoverEl = document.querySelector('.delete-meeting-popover')
+    const target = e.target
+    const inPopover = popoverEl?.contains(target)
+    // 检查是否点击当前 reference 按钮 (通过 data-meeting-id 标记)
+    const refBtn = target.closest?.(`[data-delete-ref-id="${activeDeletePopoverId.value}"]`)
+    if (!inPopover && !refBtn) {
+      closeDeletePopover(activeDeletePopoverId.value)
+    }
+  }
+  document.addEventListener('click', handleDocClick)
+  onUnmounted(() => document.removeEventListener('click', handleDocClick))
 
   // 支持从全局录音指示器跳转回来：2026-06-18 改为跳到 /meetings/room 全屏页
   // （与 MobileMeetingView:325-328 镜像），不要再"清理 query 后留 /meetings"
