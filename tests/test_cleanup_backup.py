@@ -787,3 +787,251 @@ class TestRestorePartialColumns:
         with pytest.raises(ValueError) as exc_info:
             get_table_columns("nonexistent_table")
         assert "不支持的 table_name" in str(exc_info.value)
+
+
+class TestRestoreUpsert:
+    """scripts/restore_from_backup.py 的 --upsert ON CONFLICT DO UPDATE 模式 (PR6-P11+ 增量)"""
+
+    def test_upsert_absent_uses_do_nothing_mode(self, tmp_path):
+        """不传 --upsert → DO NOTHING 模式 (PR6-P10+ 默认行为, 向后兼容)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # DO NOTHING 模式标识
+        assert "DO NOTHING" in out
+        # 不应出现 UPSERT 标识
+        assert "DO UPDATE" not in out
+        # 不应出现 --upsert 缺 --columns 警告
+        assert "建议配合 --columns" not in out
+
+    def test_upsert_flag_enables_do_update_mode(self, tmp_path):
+        """传 --upsert → DO UPDATE 模式标识 + ⚠️ 警告 (缺 --columns)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", "--upsert", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # UPSERT 模式标识
+        assert "UPSERT" in out
+        assert "DO UPDATE" in out
+        # ⚠️ 警告 (缺 --columns)
+        assert "建议配合 --columns" in out
+        # scan 模式无副作用
+        assert "dry-run 完成" in out
+
+    def test_upsert_with_columns_partial_silent(self, tmp_path):
+        """--upsert + --columns = 完美打补丁 (无覆盖全部列警告)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--upsert", "--columns=id,is_read,read_at", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # UPSERT 模式 + partial 列同时显示
+        assert "UPSERT" in out
+        assert "partial" in out
+        # 列出指定列 (Python list repr 格式)
+        assert "['id', 'is_read', 'read_at']" in out
+        # 无覆盖全部列警告 (因为有 --columns)
+        assert "建议配合 --columns" not in out
+
+    def test_upsert_with_table_combined(self, tmp_path):
+        """--upsert + --table=folders 跨表 + UPSERT"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",  # JSON 标 file_mentions
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--upsert", "--table=folders", "--columns=id,name", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # --table 警告 + UPSERT 标识 + partial 同时显示
+        assert "[WARN] --table=folders" in out
+        assert "UPSERT" in out
+        assert "partial" in out
+        # 目标表显示为 folders
+        assert "folders" in out
+
+    def test_upsert_scan_no_side_effects(self, tmp_path):
+        """--upsert + --scan 永远不写库 (与 PR6-P10+ 一致)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", "--upsert", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        assert "dry-run 完成" in result.stdout
+        # 不能出现 UPSERT 完成 (那是写库成功的标志)
+        assert "UPSERT 完成" not in result.stdout
+
+    def test_upsert_argparse_help_includes_flag(self):
+        """--help 应包含 --upsert flag"""
+        import subprocess
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--help"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        assert "--upsert" in result.stdout
+
+    def test_upsert_inspect_signature(self):
+        """restore_from_backup 接受 upsert 参数"""
+        from scripts.restore_from_backup import restore_from_backup
+        import inspect
+        sig = inspect.signature(restore_from_backup)
+        assert "upsert" in sig.parameters
+        # 默认值是 False (向后兼容, PR6-P10+ 行为)
+        assert sig.parameters["upsert"].default is False
+
+    def test_upsert_print_scan_summary_signature(self):
+        """print_scan_summary 接受 upsert_mode 参数"""
+        from scripts.restore_from_backup import print_scan_summary
+        import inspect
+        sig = inspect.signature(print_scan_summary)
+        assert "upsert_mode" in sig.parameters
+        # 默认值是 False (向后兼容)
+        assert sig.parameters["upsert_mode"].default is False
+
+    def test_upsert_with_missing_pk_columns_fails_fast(self, tmp_path):
+        """--upsert + --columns 缺主键 id → fail fast (与 PR6-P10+ 一致)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "file_id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--upsert", "--columns=file_id,context", str(backup)],  # 故意缺 id
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 1
+        out = result.stdout
+        # 主键列名提示
+        assert "主键列" in out
+        # 修复建议
+        assert "id,file_id,context" in out
+
+    def test_upsert_with_invalid_columns_fails_fast(self, tmp_path):
+        """--upsert + --columns 含无效列 → fail fast (与 PR6-P10+ 一致)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--upsert", "--columns=id,typo_col", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 1
+        out = result.stdout
+        assert "typo_col" in out
+        assert "不在表" in out
+
+    def test_upsert_final_summary_line(self, tmp_path):
+        """--upsert 时 scan summary 最终行应显示 '即将 UPSERT'"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", "--upsert", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # scan summary 最终行应区分 INSERT/UPSERT
+        assert "即将 UPSERT" in out
+        assert "即将恢复" not in out  # 默认模式才是 "即将恢复"
+
+    def test_upsert_default_mode_final_summary_line(self, tmp_path):
+        """默认模式 (无 --upsert) scan summary 最终行应显示 '即将恢复'"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # 默认模式最终行
+        assert "即将恢复" in out
+        assert "即将 UPSERT" not in out
