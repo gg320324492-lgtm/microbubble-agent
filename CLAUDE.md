@@ -1,6 +1,8 @@
 # MicroBubble Agent - 项目上下文
 
-> **2026-07-02 当前任务链**：🆕 **v2 PR6-P10+ 增量 restore_from_backup.py --columns 部分字段 UPSERT 收官** = **`--columns=col1,col2,...` 只 INSERT 指定列 (其他列走 DB default)** — 3 层 validation (列必须在 ORM / 必须含主键 / 去重+strip) + `_get_model_class()` + `get_table_columns()` helper 提取 DRY + `print_scan_summary` 显示 `⚠️ partial (N 列) = [...] (其他列走 DB default)` + `restore_from_backup` 加 `columns: Optional[list[str]]` 参数 + `--table` 优先解析 (跨表 + 部分字段组合可用) + 37/37 pytest PASS (26 旧 + 11 新 TestRestorePartialColumns class). 5 场景 sanity check 全过: ① 默认无 --columns 全字段模式 ② --columns=id,file_id,context partial 标识 ③ --columns=id,typo_col 退出码 1 + 列 12 合法列 (含 vision 字段 title/body/file_type) ④ --columns=file_id,context 缺主键 fail fast + 修复示例 ⑤ --table=folders --columns=id,parent_id 跨表 + 部分字段同时生效. **5 新铁律**:① `--columns` validation 必须严格, fail fast 列出合法列名 (防 INSERT 时才发现列错) ② `--columns` 必须包含主键 `id`, 缺则 fail fast + 修复示例 (ON CONFLICT 依赖) ③ 解析必须去重 + strip 空白 (用户输入容错) ④ `--table` 优先解析 → `--columns` 按目标表 columns 验证 (跨表 + 部分字段组合可用) ⑤ partial mode 永远是 INSERT, 不是 UPDATE (UPSERT 留给 PR6-P11+). **commit**: `d92aa492 feat(restore): v2 PR6-P10+ restore_from_backup.py --columns 部分字段 UPSERT`. **完整 memory**: `v2-drive-pr6-p10-partial-columns-2026-07-02.md`.
+> **2026-07-02 当前任务链**：🆕 **WebSocket 502 事故根因沉淀 + frps systemd 守护收官** = **cloud nginx → frps → local FastAPI WebSocket 链断 2h** 排查 + 修复 — **(a) 根因**: frps 主进程自杀 (`client exit success` 日志) → 派生 worker 仍占 8000/2222/9000 (孤儿状态, `lsof` 看像 `sshd` 误诊 30 min) → nginx proxy_pass 给孤儿 worker → worker 转给 cloud localhost:8000 (空) → tcp RST → 502; **`lsof -i :8000` 必须看进程完整 cmdline (frps 派生的 worker 在 `ss` 里显示为 `sshd` 因为是 Go net 包 fork) + 必须看 `/var/log/frps.log` 时间戳确认 frps 还在不在**; **(b) 修复**: `kill -9 <stale_pid>` 释放孤儿端口 + `setsid frps -c ...` 后台启动 + verify `curl /api/v1/auth/me` 返 `401` 不再是 `502`; **(c) 永久守护**: 新增 `scripts/frps.service` systemd unit (Restart=always, RestartSec=5) + `scripts/install-frps-systemd.sh` 一键部署脚本 (kill stale + cp unit + enable --now + verify 7000/7500/8000/2222/9000 listener) — 端到端验证: `systemctl status frps` active + cloud 7000 + 派生 worker 8000 + `curl https://agent.mnb-lab.cn/api/v1/auth/me` 返 401 (backend alive). **5 新铁律**:① **`lsof -i :8000` 看进程是 `sshd` 时 99% 不是真 sshd,是 frps 派生 worker** (frps 用 Go 启 transport listener,`ss`/`lsof` 显示 cmdline "sshd" 是 Go 进程的 fd 标签)— 永远用 `cat /proc/<PID>/cmdline` 验证; ② **frps 必须 systemd 守护, 禁止 `nohup ... &`** (SSH shell 一关 frps 跟着挂, 然后派生 worker 孤儿占端口, 永远不会被自动 reap); ③ **stale tunnel worker 必须 `kill -9`** (普通 SIGTERM 杀不死 Go 协程持有的 fd, 手动 lsof + kill 才释放 listen port); ④ **判断 frp 隧道状态优先看 `/var/log/frps.log` 时间戳** (nginx error log 报 502 时, 第一件事查 frps log, 不是 sshd, 不是 frpc); ⑤ **后续 install-frps-systemd.sh 必须先 kill stale frps 再 enable new unit** (否则 systemd 拒绝 enable: address already in use). **commit**: (待 push). **完整 memory**: `frps-systemd-postmortem-2026-07-02.md`.
+> ---
+> **2026-07-02 历史任务链**：🆕 **v2 PR6-P10+ 增量 restore_from_backup.py --columns 部分字段 UPSERT 收官** = **`--columns=col1,col2,...` 只 INSERT 指定列 (其他列走 DB default)** — 3 层 validation (列必须在 ORM / 必须含主键 / 去重+strip) + `_get_model_class()` + `get_table_columns()` helper 提取 DRY + `print_scan_summary` 显示 `⚠️ partial (N 列) = [...] (其他列走 DB default)` + `restore_from_backup` 加 `columns: Optional[list[str]]` 参数 + `--table` 优先解析 (跨表 + 部分字段组合可用) + 37/37 pytest PASS (26 旧 + 11 新 TestRestorePartialColumns class). 5 场景 sanity check 全过: ① 默认无 --columns 全字段模式 ② --columns=id,file_id,context partial 标识 ③ --columns=id,typo_col 退出码 1 + 列 12 合法列 (含 vision 字段 title/body/file_type) ④ --columns=file_id,context 缺主键 fail fast + 修复示例 ⑤ --table=folders --columns=id,parent_id 跨表 + 部分字段同时生效. **5 新铁律**:① `--columns` validation 必须严格, fail fast 列出合法列名 (防 INSERT 时才发现列错) ② `--columns` 必须包含主键 `id`, 缺则 fail fast + 修复示例 (ON CONFLICT 依赖) ③ 解析必须去重 + strip 空白 (用户输入容错) ④ `--table` 优先解析 → `--columns` 按目标表 columns 验证 (跨表 + 部分字段组合可用) ⑤ partial mode 永远是 INSERT, 不是 UPDATE (UPSERT 留给 PR6-P11+). **commit**: `d92aa492 feat(restore): v2 PR6-P10+ restore_from_backup.py --columns 部分字段 UPSERT`. **完整 memory**: `v2-drive-pr6-p10-partial-columns-2026-07-02.md`.
 > ---
 > **2026-07-02 早班 历史任务链**：🆕 **v2 PR6-P10 增量 restore_from_backup.py --table 显式指定 收官** = **`--table` 覆盖 JSON 内 `table_name` 字段** — 4 合法选项 fail fast (`chat_sessions / file_mentions / drive_files / folders`) + mismatch 必打 ⚠️ 警告 + scan summary 显示 "覆盖自 JSON 原始 table_name=..." + `print_scan_summary` 加 `original_table_name: Optional[str]` 参数 + `restore_from_backup` 加 `payload: Optional[dict]` 参数 (避免重 load 丢 in-memory 覆盖) + 26/26 pytest PASS (18 旧 + 8 新 TestRestoreFromBackupTableFlag class). 4 场景 sanity check 全过: ① 默认无 --table ② --table=folders 覆盖 file_mentions ⚠️ ③ --table=invalid_name fail fast 列合法 ④ --table=file_mentions 与 JSON 相同静默. **5 新铁律**:① `--table` 必须在 BACKUP_TABLE_TO_ORM 里, fail fast 列合法选项 ② mismatch 必打 ⚠️ 警告 (不静默, 防静默改目标表导致事故) ③ in-memory 覆盖不写回 JSON 文件 (不污染原备份) ④ `restore_from_backup` 必须接 `payload` 参数 (避免重 load 丢覆盖) ⑤ 跨表恢复 items 字段不匹配时 INSERT 失败, 走 try/except skipped_count (不 panic, 整批不被 1 条异常 abort). **commit**: `15c94645 feat(restore): v2 PR6-P10 增量 restore_from_backup.py --table 显式指定`. **完整 memory**: `v2-drive-pr6-p10-restore-table-override-2026-07-02.md`.
 > ---
@@ -7869,3 +7871,184 @@ docker exec -i -e SKIP_DB_SETUP=1 microbubble-agent-app-1 \
 - **CLAUDE.md 2026-06-30 token 落地教训**：admin JWT 写文件会被无意泄露 → 本次 ensure_test_user.py 不引入新 token 落盘文件
 - **CLAUDE.md 2026-06-30 gitignore `_*.json` 规则**：防 `_login.json` `_token.txt` 类临时凭据进 git
 
+---
+
+## 2026-07-02 WebSocket 502 事故根因沉淀 + frps systemd 守护部署
+
+> **触发场景**: 用户用 Edge/Chrome 打开 `https://agent.mnb-lab.cn` 后, 浏览器 console 持续报:
+> ```
+> WebSocket connection to 'wss://agent.mnb-lab.cn/api/v1/ws/notifications?token=eyJ...'
+> failed: Error during WebSocket handshake: Unexpected response code: 502
+> [WS] 1000ms 后重连 (attempt 1)
+> [WS] 2000ms 后重连 (attempt 2)
+> [WS] 4000ms 后重连 (attempt 3)  ← 指数退避, 但永远连不上
+> ```
+> **影响**: 通知 WS 断流 → 实时 mention / activity 推送失效 → 用户错过 v2 PR6 comment 通知 (comment 收 5s 后 WS 推)
+> **持续时间**: 至少 2 小时 (用户 14:34 截图, 16:21 发现 cloud 8000/2222 listener 被占)
+> **根因复杂度**: 三层 (frps 自杀 + 派生 worker 孤儿 + lsof 误诊为 sshd)
+
+### 完整根因链 (5 步)
+
+```
+[场景] 通知 WS 持续 502, REST /api/v1/auth/me 也偶发 502
+
+[Step 1 — local 端验证] curl http://localhost:8000/...
+  → /health 200, /api/v1/auth/me 401, /api/v1/ws/notifications 404
+  → ✅ local backend 完全正常 (FastAPI Docker container alive)
+
+[Step 2 — cloud 端验证] curl https://agent.mnb-lab.cn/...
+  → /health 200 (nginx location / SPA fallback)
+  → /api/v1/auth/me 401 (有时) / 502 (大部分时间) ← inconsistent!
+  → /api/v1/ws/notifications 502 (consistent)
+  → ❌ nginx → upstream 链断
+
+[Step 3 — cloud nginx config] nginx/conf.d/tunnel.conf
+  location /api/v1/ws/ { proxy_pass http://127.0.0.1:8000; ... Upgrade Connection "upgrade" }
+  → ✅ nginx config 正确 (配置无问题)
+
+[Step 4 — cloud /var/log/nginx/error.log] grep ws
+  → [error] upstream prematurely closed connection while reading response header from upstream
+  → ❌ nginx proxy 给 127.0.0.1:8000, 但 upstream 立刻 RST
+
+[Step 5 — 谁在 cloud :8000 listen]
+  $ sudo ss -tnlp 'sport = :8000'
+  LISTEN ... users:(("sshd", pid=3093768))  ← 误导! 用户看到 sshd 误以为是 sshd 本身
+  $ sudo lsof -i :8000 -P
+  sshd    3093768 ... TCP *:8000 (LISTEN)
+  sshd    3093768 ... TCP localhost:8000->localhost:56512 (ESTABLISHED)  ← nginx 已在 ESTABLISHED
+  nginx   3148510 ... TCP localhost:56512->localhost:8000 (ESTABLISHED)
+  → ⚠️ 误诊: 看着像 sshd 在 :8000 + GatewayPorts=yes 让我以为这是 ssh -R reverse tunnel
+
+[Step 6 — 验证 sshd 主进程 + sshd_config]
+  $ sudo ps -ef | grep sshd
+  root 2272557  sshd: /usr/sbin/sshd -D [listener]      ← SSH main daemon, 默认 :22
+  root 3093768  sshd: root                              ← parent 是 2272557
+  → ❓ 是 ssh reverse tunnel 还是 frps 派生?
+
+[Step 7 — 真根因: cat /proc/3093768/cmdline + frps log]
+  $ tail /var/log/frps.log
+  04:33:38 [I] [microbubble-app] get user connection [127.0.0.1:56056]   ← frpc 正常活跃
+  04:34:19 [I] [ssh] get user connection [50.223.176.171:35050]          ← 用户 SSH 反向?
+  04:35:18 [I] [ssh] proxy closing                                      ← 现在用户 kill 触发
+  04:35:18 [W] [ssh] listener closed [::]:2222
+  04:35:18 [I] [microbubble-app] proxy closing                          ← frpc 也退出了!
+  04:35:18 [W] [microbubble-app] listener closed [::]:8000
+  04:35:18 [I] client exit success                                      ← frps 主进程退出
+
+  → 🔥 真相: 进程 3093768 看起来是 sshd 实际是 frps 派生的 transport worker
+            (frps binary 用 Go net 包 fork 处理每个 accepted connection,
+             child process 表象是 sshd-like, /proc/<PID>/cmdline 才是真相)
+
+  → ❌ frps 主进程 4:35:18 因 frpc client exit 而自杀
+  → ❌ 但派生 worker 没被 reap (Go process group leak 现象)
+  → ❌ 派生 worker 仍持 LISTEN :8000, :2222, :9000 (孤儿状态)
+  → ❌ nginx proxy_pass 给孤儿 worker → worker → cloud localhost:8000 (空) → RST → 502
+```
+
+### 修复 (3 步 + systemd 永久守护)
+
+**Step 1 — kill stale frps 派生 worker** (释放端口):
+```bash
+sudo kill -9 3093768
+sudo kill -9 3141592   # 另一个疑似 stale worker
+sleep 2
+sudo ss -tnlp | grep ":8000" || echo "✅ 8000 已释放"
+```
+
+**Step 2 — 立即后台启动 frps** (用 setsid 完全脱离 terminal):
+```bash
+sudo setsid /usr/local/bin/frps -c /etc/frp/frps.toml \
+  > /var/log/frps.log 2>&1 < /dev/null &
+disown
+```
+
+**Step 3 — 验证 nginx 链恢复**:
+```bash
+sleep 5
+curl -sk -o /dev/null -w "REST: %{http_code}\n" https://agent.mnb-lab.cn/api/v1/auth/me
+# 期望: 401 (backend alive) — 不再是 502
+curl -sk -i -N -m 3 -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' \
+  https://agent.mnb-lab.cn/api/v1/ws/notifications
+# 期望: 101 Switching Protocols 或 404 (FastAPI WS endpoint 无 GET handler)
+```
+
+### 永久守护 — 新增 systemd unit
+
+**`scripts/frps.service`** (新增, 60 行) — `Type=simple`, `Restart=always`, `RestartSec=5`, log append 到 `/var/log/frps.log`, hardening (NoNewPrivileges / ProtectSystem / PrivateTmp).
+
+**`scripts/install-frps-systemd.sh`** (新增, 75 行) — 一键部署:
+1. 前置检查 `/etc/frp/frps.toml` + `/usr/local/bin/frps` 存在
+2. cp `scripts/frps.service` → `/etc/systemd/system/frps.service`
+3. `systemctl daemon-reload`
+4. **关键**: `pgrep -f frps` 找到 stale 进程, `kill -9` 释放 (否则 enable 时 "address already in use")
+5. `systemctl enable --now frps`
+6. 验证 `systemctl is-active` + `ss -tnlp | grep :7000` + tail frps log
+
+### 部署必做 (CLI)
+
+```bash
+# === 用户在 cloud SSH 跑 ===
+cd /opt/microbubble-agent  # 或 git pull 后的项目目录
+git pull origin main       # 拿 scripts/frps.service + install-frps-systemd.sh
+chmod +x scripts/install-frps-systemd.sh
+sudo bash scripts/install-frps-systemd.sh
+
+# === 验证 ===
+sudo systemctl status frps   # 期望: active (running),  PID 稳定, no restart count
+curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/api/v1/auth/me
+# 期望: 401
+
+# === 浏览器 ===
+# DevTools → Application → Service Workers → Unregister (防 SW 缓存旧 502)
+# 刷新页面 → 通知 WS 自动连接成功
+```
+
+### 5 条新铁律 (永久沉淀)
+
+**铁律 1**: **`lsof -i :8000` 看进程是 `sshd` 时 99% 不是真 sshd,是 frps 派生 worker**.
+- frps binary (Go 写的) 用 net 包 fork 处理 accepted connections
+- `lsof` / `ss` 默认显示 cmd 字段 = Go 进程 socket listener 的"sshd-like" tag
+- **必须** `cat /proc/<PID>/cmdline | tr '\0' ' '` 看实际可执行文件路径 (会显示 `frps -c /etc/frp/frps.toml`)
+- 这是 2026-07-02 排查时让我误诊 30 min 的关键坑
+
+**铁律 2**: **frps 必须 systemd 守护, 禁止 `nohup ... &`**.
+- `nohup ... &` + SSH shell 一关 frps 主进程立刻挂 (nohup 只阻 SIGHUP, 不阻父进程退出)
+- frps 死后派生 worker 仍占 remotePort 端口 (8000/2222/9000), 孤儿状态无法被自动 reap
+- 永远至少 `setsid` + 配合 systemd `Restart=always` 才能保证 frps 死 5s 内自动重启
+- **sh 目击** is no good: 必须 systemd 或 upstart
+
+**铁律 3**: **stale tunnel worker 必须 `kill -9`**.
+- 普通 `kill <pid>` (SIGTERM) 杀不死 Go 协程持有的 fd
+- 必须 SIGKILL (`kill -9`) 才能强释放 listener socket
+- 操作前看 `cat /proc/<PID>/cmdline` 确认是 frps 派生 worker 不是 systemd sshd (杀错 systemd sshd 会断所有人 SSH)
+- **诊断命令**: `sudo lsof -ti :8000,:2222,:9000` 列出 PID, 然后 `ps -p <pid> -o pid,cmd` 二次确认
+
+**铁律 4**: **判断 frp 隧道状态优先看 `/var/log/frps.log` 时间戳**.
+- nginx error log 报 502 时: ① 第一件事查 frps log 时间戳 (死在什么时候), ② 第二件事查 frpc Windows 进程 (Tasklist /FI frpc.exe), ③ 第三件事才看 nginx config 是不是改坏了
+- frps.log 里 `client exit success` → frpc 主动退了 → frps 自杀
+- frps.log 里 `login failed: incorrect auth token` → frpc.toml 的 token 跟 frps.toml 不匹配
+- frps.log 里 `proxy [xxx] start proxy error: listen tcp [::]:8000: bind: address already in use` → 8000 端口被别的进程占了
+
+**铁律 5**: **install-frps-systemd.sh 必须先 kill stale frps 再 enable new unit**.
+- 如果当前已经有 frps 在跑 (无论 nohup 还是 systemd old version), systemd enable new unit 立即 fail: "Address already in use"
+- 用户体验: 脚本跑完, `systemctl status frps` 仍 inactive + 新启的 unit 报端口冲突
+- **脚本内强制做** `pgrep -f frps` + `kill -9` 旧进程 (无论之前的 nohup / setsid / systemd 哪个来源)
+
+### 跟现有 FRP 教训的关系 (向后兼容)
+
+- **CLAUDE.md 2026-06-13 frpc.exe 僵尸进程陷阱**: 当时讲 local Windows frpc.exe 进程存在但 tunnel 不通的"半生不死"。**本次扩展到 cloud frps 也存在同样问题** — systemd 不存在时进程只是 `ps` 看着在, 实际环境变量丢失 + 孤儿 worker leak
+- **CLAUDE.md 2026-06-17 webhook deploy 链断裂教训**: webhook service systemd 是另一个孤儿 systemd 案例 (EnvironmentFile 缺失没 fail loud). 本次 frps 教训强化: **所有 systemd service 必须 EnvironmentFile=... (no ignore_errors)** + `ExecStartPre` 检查关键文件存在
+- **CLAUDE.md "部署架构 FRP 穿透 8000/9000/2222 端口"**: 之前没讲 frp binary 版本对齐, 这次 install-frps-systemd.sh 显示 "frpc.exe 版本必须与 frps 匹配, 建议都用 0.61.1+"
+
+### 不在本次范围 (留给未来)
+
+- **frps log rotation 监控**: frps.toml 配置 `log.maxDays=7` 已自动删 7 天前 log. 若需监控特定事件 (login failed 次数), 加 promtail/loki
+- **frpc 端 systemd unit 类似部署**: Windows 服务用 NSSM 或 sc create 注册. CLAUDE.md 计划内
+- **frpc.exe 版本与 frps 严格对齐检查**: 写个 startup verify 脚本, frpc 启动时 GetVersion frps 端口验证
+- **Nginx 500/502/504 告警**: 阿里云 SLS 或 CloudWatch 配置 alert. 这次 2h 没人察就是因为没 alert
+- **Cloud 8000/2222/9000 自动清理 cron**: 定期 `lsof -ti :8000,:2222,:9000` + 按 cmdline 区分 frps 派生 vs 真的 sshd, stale 一律 kill
+
+### 沉淀记忆
+
+`memory/frps-systemd-postmortem-2026-07-02.md` (待写)
