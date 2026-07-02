@@ -69,17 +69,24 @@ class RerankerService:
             return
         try:
             from sentence_transformers import CrossEncoder
+            # 2026-07-02 Phase I 修复: 强制 local_files_only 避免在容器内访问 hf-mirror.com
+            # 之前 HF_HUB_OFFLINE=1 没生效, sentence-transformers 默认还尝试网络
+            # 加 local_files_only=True 强制从本地 cache 加载
+            cache_folder = "/root/.cache/huggingface/hub"
 
             self._device = self._detect_device()
             self._model_name = RERANKER_MODEL
             logger.info(
                 f"加载 Cross-encoder 模型: {self._model_name} on {self._device} "
-                f"(max_length={RERANKER_MAX_LENGTH}, batch_size={RERANKER_BATCH_SIZE})"
+                f"(max_length={RERANKER_MAX_LENGTH}, batch_size={RERANKER_BATCH_SIZE}, "
+                f"cache_folder={cache_folder})"
             )
             self._model = CrossEncoder(
                 self._model_name,
                 max_length=RERANKER_MAX_LENGTH,
                 device=self._device,
+                cache_folder=cache_folder,
+                local_files_only=True,  # 强制本地加载, 不走网络
             )
             logger.info(
                 f"Cross-encoder 模型加载完成 ({self._model_name} on {self._device})"
