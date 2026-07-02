@@ -140,15 +140,29 @@ function ensureOnlineListener() {
 
   const onOnline = async () => {
     console.log('[uploader] 检测到 online 事件，扫描所有待传 chunks')
-    // 扫描所有 IDB 中的 pending chunks
-    // 注意：这里只能扫描当前 meeting 的；其他会议的由各 useChunkedRecorder 实例的
-    // online 监听器负责
-    for (const [meetingId] of uploadQueue) {
+    // v2.2 修复 (2026-07-03): 双层扫描
+    //   1. 优先 uploadQueue Map (in-memory, 快) — catch 主动 enqueue 的 chunk 在这里
+    //   2. 兜底 IDB 全表扫 — 录音失败但 enqueue 漏了 / 刷新打断 / 新代码路径绕过
+    // 合并去重 meetings → 各自 drainQueue
+    const meetings = new Set()
+    for (const [meetingId] of uploadQueue) meetings.add(meetingId)
+    try {
+      const idbMeetings = await idbStore.getAllMeetingsWithPending()
+      for (const m of idbMeetings) meetings.add(m.meeting_id)
+    } catch (err) {
+      console.warn('[uploader] 扫 IDB pending meetings 失败, 继续内存队列:', err)
+    }
+    for (const meetingId of meetings) {
       try {
         const pending = await idbStore.getPendingChunks(meetingId)
         if (pending.length > 0) {
           console.log(`[uploader] 会议 ${meetingId} 有 ${pending.length} 片待传`)
-          await drainQueue(meetingId)
+          // 把 IDB 找到但 uploadQueue 没的 chunk 入队, 让 drainQueue 处理
+          if (!uploadQueue.has(meetingId) || uploadQueue.get(meetingId).length === 0) {
+            uploader.enqueue(meetingId, pending)
+          } else {
+            await drainQueue(meetingId)
+          }
         }
       } catch (err) {
         console.warn(`[uploader] 会议 ${meetingId} 恢复失败:`, err)

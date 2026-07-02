@@ -155,6 +155,30 @@ export async function getPendingChunks(meetingId) {
 }
 
 /**
+ * 列出有未上传 chunk 的所有 meeting_id（去重 + 含每个 meeting 的 pending count）
+ * 用于 online 重传 / 启动恢复时不依赖 uploadQueue 全局 Map,
+ * 也能从 IDB 找到所有"孤儿" pending chunk（录音中失败的 chunk 只在 IDB 标 uploaded=false）。
+ *
+ * 实现: 全表扫 chunks, 过滤 uploaded=false, 按 meeting_id 聚合 → 去重 Map。
+ * 性能: O(N) 单次 ≤ 10ms (单会议 720 chunks/h, 数小时录音仍 < 5000 条)。
+ *       如未来 N 巨大 (单浏览器万级), 再加 [meeting_id, uploaded] 复合索引 (需 DB_VERSION 升级)。
+ * @returns {Promise<Array<{meeting_id: number, count: number}>>}
+ */
+export async function getAllMeetingsWithPending() {
+  const db = await openDB()
+  const tx = db.transaction(STORE_CHUNKS, 'readonly')
+  const store = tx.objectStore(STORE_CHUNKS)
+  const all = await reqToPromise(store.getAll())
+  await txDone(tx)
+  const map = new Map()
+  for (const r of all) {
+    if (r.uploaded) continue
+    map.set(r.meeting_id, (map.get(r.meeting_id) || 0) + 1)
+  }
+  return Array.from(map, ([meeting_id, count]) => ({ meeting_id, count }))
+}
+
+/**
  * 获取已上传的 chunk 数
  */
 export async function countUploaded(meetingId) {
