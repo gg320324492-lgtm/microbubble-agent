@@ -1,0 +1,178 @@
+{
+  "old_verdicts": {
+    "A-L1-0001": "FAIL",
+    "A-L1-0002": "WARN",
+    "A-L2-0003": "PASS",
+    "A-L2-0004": "WARN",
+    "A-L2-0005": "PASS",
+    "A-L2-0006": "WARN",
+    "A-L2-0008": "WARN",
+    "A-L2-0009": "PASS",
+    "A-L2-0011": "FAIL",
+    "A-L2-0012": "FAIL",
+    "A-L2-0016": null,
+    "A-L2-0017": "FAIL",
+    "A-L2-0019": "WARN",
+    "A-L3-0007": "WARN",
+    "A-L3-0010": "WARN",
+    "A-L3-0013": "FAIL",
+    "A-L3-0014": "WARN",
+    "A-L3-0015": "WARN",
+    "A-L3-0018": "WARN",
+    "B-L1-0081": "WARN",
+    "B-L2-0082": "WARN",
+    "B-L2-0083": "FAIL",
+    "B-L2-0084": "WARN",
+    "B-L2-0085": "FAIL",
+    "B-L2-0086": "FAIL",
+    "B-L2-0087": "FAIL",
+    "B-L2-0096": "FAIL",
+    "B-L3-0088": "FAIL",
+    "B-L3-0089": "FAIL",
+    "B-L3-0090": "FAIL"
+  },
+  "new_verdicts": {
+    "A-L1-0001": "PASS",
+    "A-L1-0002": "WARN",
+    "A-L2-0003": "PASS",
+    "A-L2-0004": "WARN",
+    "A-L2-0005": "PASS",
+    "A-L2-0006": "WARN",
+    "A-L2-0008": "WARN",
+    "A-L2-0009": "PASS",
+    "A-L2-0011": "FAIL",
+    "A-L2-0012": "FAIL",
+    "A-L2-0016": "ERROR",
+    "A-L2-0017": "FAIL",
+    "A-L2-0019": "WARN",
+    "A-L3-0007": "WARN",
+    "A-L3-0010": "WARN",
+    "A-L3-0013": "FAIL",
+    "A-L3-0014": "PASS",
+    "A-L3-0015": "WARN",
+    "A-L3-0018": "WARN",
+    "B-L1-0081": "WARN",
+    "B-L2-0082": "WARN",
+    "B-L2-0083": "FAIL",
+    "B-L2-0084": "WARN",
+    "B-L2-0085": "FAIL",
+    "B-L2-0086": "FAIL",
+    "B-L2-0087": "FAIL",
+    "B-L2-0096": "WARN",
+    "B-L3-0088": "WARN",
+    "B-L3-0089": "WARN",
+    "B-L3-0090": "FAIL"
+  },
+  "new_issues_summary": {
+    "A-L1-0001": [],
+    "A-L1-0002": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L2-0003": [],
+    "A-L2-0004": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L2-0005": [],
+    "A-L2-0006": [
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L2-0008": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L2-0009": [],
+    "A-L2-0011": [
+      "missing_tools",
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L2-0012": [
+      "missing_tools",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L2-0016": [],
+    "A-L2-0017": [
+      "missing_tools"
+    ],
+    "A-L2-0019": [
+      "forbidden_names_listing_question"
+    ],
+    "A-L3-0007": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L3-0010": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L3-0013": [
+      "missing_tools",
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L3-0014": [],
+    "A-L3-0015": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "A-L3-0018": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "B-L1-0081": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "B-L2-0082": [
+      "intent_mismatch",
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "B-L2-0083": [
+      "missing_tools",
+      "forbidden_names_appeared"
+    ],
+    "B-L2-0084": [
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "B-L2-0085": [
+      "missing_tools",
+      "forbidden_names_data_bug",
+      "forbidden_names_query_mentioned"
+    ],
+    "B-L2-0086": [
+      "forbidden_names_appeared"
+    ],
+    "B-L2-0087": [
+      "missing_tools",
+      "forbidden_names_listing_question"
+    ],
+    "B-L2-0096": [
+      "forbidden_names_listing_question"
+    ],
+    "B-L3-0088": [
+      "forbidden_names_listing_question"
+    ],
+    "B-L3-0089": [
+      "forbidden_names_listing_question"
+    ],
+    "B-L3-0090": [
+      "missing_tools"
+    ]
+  },
+  "old_counts": {
+    "FAIL": 13,
+    "WARN": 13,
+    "PASS": 3,
+    "null": 1
+  },
+  "new_counts": {
+    "PASS": 5,
+    "WARN": 15,
+    "FAIL": 9,
+    "ERROR": 1
+  }
+}

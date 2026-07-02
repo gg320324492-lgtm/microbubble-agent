@@ -144,11 +144,15 @@ def detect_filler_phrases(content: str) -> int:
 # 背景: LLM 调 get_member_profile (单成员查) 与 query_members (列表查) 是语义等价
 # 同样 query_tasks 与 query_member_tasks 也是. expect.tools_any 经常
 # 期望 query_members 但 LLM 选更精准的 get_member_profile → missing_tools 误判
+# Round 9 smoke 30 验证: 4 题 LLM 调 query_all_member_tasks (新工具, B 类任务专属)
+# 视为 query_member_tasks / query_tasks 的等价 (都是查任务列表)
 TOOL_SEMANTIC_EQUIVALENTS: Dict[str, frozenset] = {
     "query_members": frozenset({"get_member_profile"}),
     "get_member_profile": frozenset({"query_members"}),
-    "query_tasks": frozenset({"query_member_tasks"}),
-    "query_member_tasks": frozenset({"query_tasks"}),
+    "query_tasks": frozenset({"query_member_tasks", "query_all_member_tasks"}),
+    "query_member_tasks": frozenset({"query_tasks", "query_all_member_tasks"}),
+    "query_all_member_tasks": frozenset({"query_tasks", "query_member_tasks"}),
+    "query_my_tasks": frozenset({"query_member_tasks"}),
     "search_knowledge": frozenset({"web_search"}),
     "web_search": frozenset({"search_knowledge"}),
 }
@@ -786,13 +790,19 @@ async def run_single_question(
 
 
 async def main():
+    global API_BASE
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", required=True)
     parser.add_argument("--questions", default="tests/qa-bench/questions.jsonl")
     parser.add_argument("--output", default="results/run")
     parser.add_argument("--limit", type=int, default=0, help="limit N questions (0=all)")
     parser.add_argument("--concurrency", type=int, default=6, help="并发数")
+    parser.add_argument("--api-base", default=API_BASE, help="API base URL (default: localhost)")
     args = parser.parse_args()
+
+    # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
+    API_BASE = args.api_base
+    logger.info(f"API_BASE = {API_BASE}")
 
     questions_path = Path(args.questions)
     output_dir = Path(args.output)
