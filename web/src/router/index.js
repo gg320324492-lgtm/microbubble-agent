@@ -129,16 +129,6 @@ const routes = [
         meta: { title: '文件请求', icon: 'Promotion' }
       },
       {
-        // 2026-07-02: 活动动态全局化 (从 /drive/activity 挪到顶级 /activity)
-        // 用户反馈: 活动动态不是网盘的功能, 应该是跨域的活动流
-        // 后端 endpoint 是全局 GET /api/v1/activities (已在 app/api/v1/notifications.py:227)
-        // 顶级路由 + meta.icon='Bell' 让 menuRoutes 自动出现「活动动态」入口
-        path: 'activity',
-        name: 'ActivityFeed',
-        component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView'),  // 移动端暂用 trash 占位
-        meta: { title: '活动动态', icon: 'Bell' }
-      },
-      {
         // v2 PR6-P2 + PR6-P3: 文件详情页
         // 桌面端: FileDetailView (左右 2 栏)
         // 移动端: MobileFileDetailView (单列 + sticky 顶部 + bottom action sheet)

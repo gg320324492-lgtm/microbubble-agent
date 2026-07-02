@@ -56,8 +56,7 @@ const staticActions = [
   { id: 'a2', icon: '📤', title: '上传文件', subtitle: '从相册/相机选择', kind: '动作', action: () => router.push('/drive?action=upload') },
   { id: 'a3', icon: '🗑', title: '回收站', subtitle: '查看已删除文件', kind: '导航', action: () => router.push('/drive/trash') },
   { id: 'a4', icon: '📢', title: '文件请求', subtitle: '查看收作业链接', kind: '导航', action: () => router.push('/drive/requests') },
-  { id: 'a5', icon: '🔔', title: '活动动态', subtitle: '团队最近动态', kind: '导航', action: () => router.push('/drive/activity') },
-  { id: 'a6', icon: '⭐', title: '我的收藏', subtitle: '查看收藏文件', kind: '导航', action: () => router.push('/drive?tab=starred') },
+  { id: 'a5', icon: '⭐', title: '我的收藏', subtitle: '查看收藏文件', kind: '导航', action: () => router.push('/drive?tab=starred') },
 ]
 
 const fileResults = computed(() => {

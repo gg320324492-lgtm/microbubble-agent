@@ -7,140 +7,6 @@
     @close="onClose"
   >
     <el-form :model="form" label-width="80px">
-      <!-- 模板选择（仅创建模式） -->
-      <div v-if="!editingId" class="template-picker">
-        <div class="template-picker-header">
-          <span class="template-picker-title">
-            <el-icon><Document /></el-icon> 快速模板
-          </span>
-        </div>
-        <div class="template-cards">
-          <div
-            v-for="tpl in builtinTemplates"
-            :key="tpl.id"
-          >
-            <!-- v77 P2.6-G.1: 移动端 LongPressWrapper 包裹整张卡片 (600ms 触发 + 短震) -->
-            <LongPressWrapper
-              v-if="isMobile"
-              @longpress="openMobileActions(tpl)"
-            >
-              <div
-                class="template-card builtin"
-                :class="{ active: form.templateId === tpl.id, disabled: !tpl.is_active }"
-                @click="tpl.is_active && applyTemplate(tpl)"
-              >
-                <div class="template-card-name">{{ tpl.name }}<el-tag size="small" type="info" effect="plain">内置</el-tag></div>
-                <div class="template-card-desc">{{ tpl.description || '—' }}</div>
-                <div class="template-card-meta">
-                  <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
-                  <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
-                </div>
-              </div>
-            </LongPressWrapper>
-            <!-- 桌面端: 卡片直接渲染 + F.5 hover 复制按钮 + el-switch -->
-            <div
-              v-else
-              class="template-card builtin"
-              :class="{ active: form.templateId === tpl.id, disabled: !tpl.is_active }"
-              @click="tpl.is_active && applyTemplate(tpl)"
-            >
-              <div class="template-card-actions">
-                <el-icon
-                  class="tpl-action"
-                  title="复制为自定义模板"
-                  aria-label="复制为自定义模板"
-                  @click.stop="$emit('clone-template', tpl.id)"
-                >
-                  <DocumentCopy />
-                </el-icon>
-              </div>
-              <div class="template-card-name">{{ tpl.name }}<el-tag size="small" type="info" effect="plain">内置</el-tag></div>
-              <div class="template-card-desc">{{ tpl.description || '—' }}</div>
-              <div class="template-card-meta">
-                <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
-                <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
-              </div>
-              <el-switch
-                :model-value="tpl.is_active"
-                class="builtin-active-switch"
-                inline-prompt
-                active-text="启用"
-                inactive-text="禁用"
-                @click.stop
-                @update:model-value="(val) => $emit('toggle-active', { id: tpl.id, is_active: val })"
-              />
-            </div>
-          </div>
-          <div
-            v-for="tpl in customTemplates"
-            :key="tpl.id"
-          >
-            <!-- v77 P2.6-G.1: 移动端 LongPressWrapper 包裹整张卡片 -->
-            <LongPressWrapper
-              v-if="isMobile"
-              @longpress="openMobileActions(tpl)"
-            >
-              <div
-                class="template-card custom"
-                :class="{ active: form.templateId === tpl.id }"
-                @click="applyTemplate(tpl)"
-              >
-                <div class="template-card-name">{{ tpl.name }}</div>
-                <div class="template-card-desc">{{ tpl.description || '（无说明）' }}</div>
-                <div class="template-card-meta">
-                  <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
-                  <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
-                </div>
-              </div>
-            </LongPressWrapper>
-            <!-- 桌面端: 卡片直接渲染 + F.4 hover 编辑/删除按钮 -->
-            <div
-              v-else
-              class="template-card custom"
-              :class="{ active: form.templateId === tpl.id }"
-              @click="applyTemplate(tpl)"
-            >
-              <div class="template-card-actions">
-                <el-icon
-                  class="tpl-action"
-                  title="编辑模板"
-                  aria-label="编辑模板"
-                  @click.stop="onEditTpl(tpl)"
-                >
-                  <Edit />
-                </el-icon>
-                <el-popconfirm
-                  title="确定删除此模板？此操作不可撤销。"
-                  confirm-button-text="删除"
-                  cancel-button-text="取消"
-                  @confirm="$emit('delete-template', tpl.id)"
-                >
-                  <template #reference>
-                    <el-icon
-                      class="tpl-action danger"
-                      title="删除模板"
-                      aria-label="删除模板"
-                      @click.stop
-                    >
-                      <Delete />
-                    </el-icon>
-                  </template>
-                </el-popconfirm>
-              </div>
-              <div class="template-card-name">{{ tpl.name }}</div>
-              <div class="template-card-desc">{{ tpl.description || '（无说明）' }}</div>
-              <div class="template-card-meta">
-                <span><el-icon><Clock /></el-icon> {{ tpl.default_duration_minutes || 60 }} 分钟</span>
-                <span v-if="tpl.agenda?.length"><el-icon><List /></el-icon> {{ tpl.agenda.length }} 议题</span>
-              </div>
-            </div>
-          </div>
-          <div v-if="customTemplates.length === 0" class="template-empty">
-            暂无自定义模板
-          </div>
-        </div>
-      </div>
-
       <!-- 基本信息 -->
       <el-form-item label="会议主题" required>
         <el-input v-model="form.title" placeholder="请输入会议主题" />
@@ -222,59 +88,40 @@
     </el-form>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <!-- v77 P2.6-F.3: '存为新模板' 按钮 - 仅在新建模式显示 -->
-      <el-button
-        v-if="!editingId"
-        type="warning"
-        plain
-        @click="onSaveAsTemplate"
-        title="将当前表单保存为模板, 下次可快速套用"
-      >
-        <el-icon><Document /></el-icon>
-        存为新模板
-      </el-button>
       <el-button type="primary" @click="onSubmit">{{ editingId ? '保存' : '创建' }}</el-button>
     </template>
   </el-dialog>
-
-  <!-- v77 P2.6-G.1: 移动端 long-press 操作 ActionSheet (桌面端永远不显示) -->
-  <MobileActionSheet
-    v-if="isMobile"
-    v-model="showMobileActionSheet"
-    title="模板操作"
-    :actions="mobileActions"
-  />
 </template>
 
 <script setup>
+/**
+ * MeetingCreateDialog.vue — 创建/编辑会议对话框
+ *
+ * 2026-07-03: 模板管理 (template-picker / save-template / clone-template / delete-template /
+ *            toggle-active / builtin + custom 模板卡 / LongPress / MobileActionSheet) 已彻底删除.
+ *            用户决策"模板管理没用" - 前后端 + UI 全部清空, 只剩创建/编辑会议核心表单.
+ */
 import { ref, computed, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Document, Clock, List, Plus, Delete, Edit, DocumentCopy } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Document, Plus, Delete } from '@element-plus/icons-vue'
 import { useMeeting } from '@/composables/useMeeting'
 import { useMemberStore } from '@/stores/member'
-import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
-import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
-import dayjs from 'dayjs'
 
 const props = defineProps({
   isMobile: { type: Boolean, default: false },
   editingId: { type: Number, default: null },
   editingData: { type: Object, default: null },
-  templates: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['success', 'save-template', 'delete-template', 'clone-template', 'toggle-active'])
+const emit = defineEmits(['success'])
 
 const visible = defineModel('visible', { default: false })
 const { createMeeting, updateMeeting } = useMeeting()
 const memberStore = useMemberStore()
 const members = computed(() => memberStore.members)
 
-const builtinTemplates = computed(() => props.templates.filter(t => t.is_builtin))
-const customTemplates = computed(() => props.templates.filter(t => !t.is_builtin))
-
 const defaultForm = {
-  templateId: null,
+  templateId: null,  // 兼容旧数据保留, 不再写入
   title: '',
   start_time: '',
   location: '',
@@ -287,71 +134,9 @@ const defaultForm = {
   remindBefore: true
 }
 
-// v77 P2.6-G.1: 移动端 long-press ActionSheet 状态
-const activeMobileTpl = ref(null)
-const showMobileActionSheet = ref(false)
-
-// v77 P2.6-G.1: 移动端 long-press 触发 ActionSheet
-const openMobileActions = (tpl) => {
-  if (!tpl) return
-  activeMobileTpl.value = tpl
-  showMobileActionSheet.value = true
-}
-
-// v77 P2.6-G.1: MobileActionSheet actions 列表 (按 builtin/custom 分支)
-const mobileActions = computed(() => {
-  const tpl = activeMobileTpl.value
-  if (!tpl) return []
-  if (tpl.is_builtin) {
-    // builtin 卡片: 复制 + 启用/禁用
-    return [
-      {
-        name: '复制为自定义模板',
-        icon: '📋',
-        callback: () => emit('clone-template', tpl.id),
-      },
-      {
-        name: tpl.is_active ? '禁用模板' : '启用模板',
-        icon: tpl.is_active ? '🚫' : '✅',
-        callback: () => emit('toggle-active', { id: tpl.id, is_active: !tpl.is_active }),
-      },
-    ]
-  }
-  // custom 卡片: 编辑 + 复制 + 删除 (删除二次确认用 ElMessageBox)
-  return [
-    {
-      name: '编辑模板',
-      icon: '📝',
-      callback: () => onEditTpl(tpl),
-    },
-    {
-      name: '复制为新模板',
-      icon: '📋',
-      callback: () => emit('clone-template', tpl.id),
-    },
-    {
-      name: '删除模板',
-      icon: '🗑️',
-      danger: true,
-      callback: async () => {
-        try {
-          await ElMessageBox.confirm(
-            '确定删除此模板?此操作不可撤销。',
-            '删除确认',
-            { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' },
-          )
-          emit('delete-template', tpl.id)
-        } catch {
-          // 用户点取消, 啥也不做
-        }
-      },
-    },
-  ]
-})
-
-const form = ref({ ...defaultForm })
-
+// 2026-07-03 修复 TDZ: form 必须在 watch 之前声明 (immediate: true 同步触发 callback)
 // 编辑模式：填充数据
+const form = ref({ ...defaultForm })
 watch(() => props.editingData, (data) => {
   if (data) {
     form.value = {
@@ -369,29 +154,6 @@ watch(() => props.editingData, (data) => {
     }
   }
 }, { immediate: true })
-
-const applyTemplate = (tpl) => {
-  if (!tpl) return
-  form.value.templateId = tpl.id
-  if (tpl.title_template && !form.value.title) {
-    form.value.title = tpl.title_template
-      .replace('{date}', dayjs().format('YYYY-MM-DD'))
-      .replace('{project_name}', '新项目')
-  }
-  if (tpl.description && !form.value.description) {
-    form.value.description = tpl.description
-  }
-  if (tpl.agenda && tpl.agenda.length && (!form.value.agenda || form.value.agenda.length === 0)) {
-    form.value.agenda = [...tpl.agenda]
-  }
-  if (tpl.default_participant_ids && tpl.default_participant_ids.length && (!form.value.participants || form.value.participants.length === 0)) {
-    form.value.participants = [...tpl.default_participant_ids]
-  }
-  if (tpl.default_location && !form.value.location) {
-    form.value.location = tpl.default_location
-  }
-  ElMessage.success(`已应用模板：${tpl.name}`)
-}
 
 const onSubmit = async () => {
   if (!form.value.title || !form.value.start_time) {
@@ -413,116 +175,12 @@ const onSubmit = async () => {
   }
 }
 
-// v77 P2.6-F.3: '存为新模板' 按钮处理
-// 将当前 form 数据转换为 MeetingTemplateDialog editingTemplate 格式, emit 'save-template'
-// 父 MeetingView 接收后打开 MeetingTemplateDialog (editingTemplate = templateData, 走编辑模式)
-const onSaveAsTemplate = () => {
-  // 双重防御: v-if !editingId 在 UI 层隐藏按钮, 函数层再检查一次
-  // 防止程序化调用 (如 console / 测试 / 快捷键) 在编辑模式下意外触发
-  if (props.editingId) {
-    ElMessage.warning('编辑模式下不能保存为模板')
-    return
-  }
-  if (!form.value.title?.trim()) {
-    ElMessage.warning('请先填写会议主题, 再保存为模板')
-    return
-  }
-  const templateData = {
-    name: form.value.title,           // 用会议主题做模板名
-    title_template: form.value.title,  // 标题模板 (简单复用)
-    description: form.value.description || '',
-    default_duration_minutes: 60,     // 默认 60 分钟 (MeetingCreateDialog 无此字段)
-    default_location: form.value.location || '',
-    default_participant_ids: form.value.participants || [],
-    agenda: (form.value.agenda || []).filter(a => a?.trim()),
-  }
-  emit('save-template', templateData)
-  // 不关闭 dialog — 让用户在 MeetingTemplateDialog 中继续编辑/提交
-  // 父组件接 event 后会:
-  //   1. 关闭 MeetingCreateDialog (showCreateDialog = false)
-  //   2. 打开 MeetingTemplateDialog (showTemplateDialog = true, editingTemplate = templateData)
-}
-
-// v77 P2.6-F.4: 编辑已有的 custom template
-// 复用 P2.6-F.3 的 save-template emit — id 字段让 MeetingTemplateDialog 走 PUT 而非 POST (line 156)
-const onEditTpl = (tpl) => {
-  if (!tpl) return
-  emit('save-template', {
-    id: tpl.id,                                              // 关键: 走 PUT path
-    name: tpl.name,
-    title_template: tpl.title_template,
-    description: tpl.description,
-    default_duration_minutes: tpl.default_duration_minutes,
-    default_location: tpl.default_location,
-    default_participant_ids: tpl.default_participant_ids ? [...tpl.default_participant_ids] : [],
-    agenda: tpl.agenda ? [...tpl.agenda] : [],
-  })
-}
-
 const onClose = () => {
   form.value = { ...defaultForm }
 }
 </script>
 
 <style scoped>
-.template-picker {
-  margin-bottom: 16px;
-}
-.template-picker-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.template-picker-title {
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.template-cards {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.template-card {
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: var(--transition-all-normal);
-  min-width: 120px;
-}
-.template-card:hover {
-  border-color: var(--color-primary);
-}
-.template-card.active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-}
-.template-card-name {
-  font-weight: 600;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.template-card-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin: 4px 0;
-}
-.template-card-meta {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  display: flex;
-  gap: 8px;
-}
-.template-empty {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  padding: 8px;
-}
 .item-list {
   display: flex;
   flex-direction: column;

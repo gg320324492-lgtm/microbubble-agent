@@ -1,4 +1,4 @@
-"""notifications + activity + comments REST API (PR6)
+"""notifications + comments REST API (PR6)
 
 端点:
 - GET    /api/v1/notifications              列我的 mentions (含 unread_count)
@@ -6,7 +6,8 @@
 - POST   /api/v1/notifications/{id}/read    标记单条已读
 - POST   /api/v1/notifications/read-all     标记全部已读
 
-- GET    /api/v1/activities                活动动态流 (cursor 分页)
+注: /api/v1/activities 已于 2026-07-03 删除 (用户决策"活动动态彻底删除")
+     activity_service.py + activity_events 表保留 (驱动 drive/comment/file_request 11 处 audit log)
 
 - GET    /api/v1/drive/files/{file_id}/comments      列评论
 - POST   /api/v1/drive/files/{file_id}/comments      写评论 (自动解析 @)
@@ -273,6 +274,13 @@ async def list_activities(
     ]
     has_more = len(items) == limit
     return ActivityFeedResponse(items=items, has_more=has_more)
+
+
+# ============================================================
+# Activity endpoints (已删除 — 2026-07-03 用户决策"活动动态彻底删除"
+# 前端 ActivityFeedView + /activity 路由 + NotificationBell 跳转都删了
+# 保留 activity_service + activity_events 表 + 11 处 drive/comment/file_request audit log 调用)
+# ============================================================
 
 
 # ============================================================

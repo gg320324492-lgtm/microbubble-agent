@@ -12,7 +12,7 @@ from app.config import settings
 # 避免 chat 第一次请求时 TOOL_REGISTRY 还是空的（导致模型在 content 里 fake tool_call，
 # fake parser 解析后 dispatch_tool 又报 TOOL_NOT_FOUND）
 import app.agent.tools  # noqa: F401  ← 关键！触发 tools/__init__.py 链式 import
-from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_template, meeting_recording, dashboard, admin, analytics, chat_history
+from app.api.v1 import auth, chat, task, meeting, member, project, knowledge, voice, wechat, upload, tencent_meeting, memory, voiceprint, meeting_progress, meeting_recording, dashboard, admin, analytics, chat_history  # 2026-07-03 模板管理删除 — meeting_template 已下架
 from app.api.v1 import drive_folders  # PR2.4 课题组网盘 folder CRUD
 from app.api.v1 import drive_files  # PR2.5 课题组网盘 file CRUD + multipart upload
 from app.api.v1 import upload_multipart  # PR2.8 通用分片上传 3 端点
@@ -161,7 +161,7 @@ app.include_router(tencent_meeting.router, prefix="/api/v1", tags=["腾讯会议
 app.include_router(memory.router, prefix="/api/v1", tags=["长期记忆"])
 app.include_router(voiceprint.router, prefix="/api/v1", tags=["声纹识别"])
 app.include_router(meeting_progress.router, prefix="/api/v1", tags=["会议进度"])
-app.include_router(meeting_template.router, prefix="/api/v1", tags=["会议模板"])
+# 2026-07-03 模板管理删除 — meeting_template.router 已下架
 app.include_router(dashboard.router, prefix="/api/v1", tags=["项目动态"])
 app.include_router(analytics.router, prefix="/api/v1", tags=["检索质量"])  # v31 检索质量监控埋点
 app.include_router(chat_history.router, prefix="/api/v1", tags=["聊天历史"])  # #043 账号持久化

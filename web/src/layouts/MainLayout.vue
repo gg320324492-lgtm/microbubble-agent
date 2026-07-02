@@ -234,7 +234,6 @@ const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
   // 2026-07-02: PR7 反转后, drive/trash / drive/requests 在 FolderTree 内访问 (主侧边栏不再单独显示)
-  // 活动动态已升级为顶级 /activity (meta.icon='Bell') 自动出现
   const HIDDEN_PATHS = new Set(['drive/trash', 'drive/requests'])
   return (mainRoute?.children || []).filter(r => r.meta?.icon && !HIDDEN_PATHS.has(r.path))
 })
