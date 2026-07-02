@@ -246,30 +246,41 @@ def _expand_concept_to_four_domain(planned: list[str]) -> list[str]:
 
 
 def _extract_tool_uses(response) -> list[dict]:
-    """从 Anthropic Message 响应中提取 tool_use 列表
+    """从 LLM 响应中提取 tool_use 列表
 
-    2026-06-14 收官：双路径解析
-    - 路径 A：原生 tool_use blocks（代理正确转发 tools 参数时）
-    - 路径 B：模型在 content 里 fake 输出 XML 格式（代理吞掉 tools 参数时）—
-      解析 <function_calls>/<tool_call> 等多种格式，转成 tool_use 走后续流程
+    2026-06-14 收官: 双路径解析
+    - 路径 A: 原生 tool_use blocks (代理正确转发 tools 参数时)
+    - 路径 B: 模型在 content 里 fake 输出 XML 格式 (代理吞掉 tools 参数时) —
+      解析 <function_calls>/<tool_call> 等多种格式, 转成 tool_use 走后续流程
+
+    2026-07-02 Phase I.0 backend dispatch 修复: 兼容 Pydantic model (anthropic)
+    + dict (openai_compat via openai_response_to_anthropic_message) 两种返回类型
     """
     tool_uses = []
-    # 路径 A：原生 tool_use blocks
-    for block in response.content:
-        if hasattr(block, "type") and block.type == "tool_use":
+    # 兼容 Pydantic model + dict 两种返回
+    def _block_get(block, key, default=None):
+        if isinstance(block, dict):
+            return block.get(key, default)
+        return getattr(block, key, default)
+
+    content = _block_get(response, "content", []) or []
+    # 路径 A: 原生 tool_use blocks
+    for block in content:
+        if _block_get(block, "type") == "tool_use":
             tool_uses.append({
-                "id": block.id,
-                "name": block.name,
-                "input": block.input,
+                "id": _block_get(block, "id", ""),
+                "name": _block_get(block, "name", ""),
+                "input": _block_get(block, "input", {}) or {},
             })
     if tool_uses:
         return tool_uses
 
-    # 路径 B：从 text block 里解析 fake tool_call XML
+    # 路径 B: 从 text block 里解析 fake tool_call XML
     text_parts = []
-    for block in response.content:
-        if hasattr(block, "text") and block.text:
-            text_parts.append(block.text)
+    for block in content:
+        block_text = _block_get(block, "text", "")
+        if block_text:
+            text_parts.append(block_text)
     if not text_parts:
         return tool_uses
     full_text = "\n".join(text_parts)
@@ -1116,10 +1127,17 @@ class AgenticLoop:
                     })
 
                 # 把本轮 tool_use + tool_result 灌回 messages
-                # 2026-06-14 收官：strip 掉 response content 里的 fake tool_call XML，
-                # 否则 Phase 2 synthesis 看到这种 pattern 会复制到最终输出（fake_xml_leaked）
+                # 2026-06-14 收官: strip 掉 response content 里的 fake tool_call XML,
+                # 否则 Phase 2 synthesis 看到这种 pattern 会复制到最终输出 (fake_xml_leaked)
+                # 2026-07-02 Phase I.0 修复: 兼容 Pydantic + dict 两种返回
+                if isinstance(response, dict):
+                    _resp_content = response.get("content", []) or []
+                else:
+                    _resp_content = getattr(response, "content", []) or []
+                if not isinstance(_resp_content, list):
+                    _resp_content = []
                 cleaned_content = []
-                for b in response.content:
+                for b in _resp_content:
                     dumped = _block_dump(b)
                     if isinstance(dumped, dict) and dumped.get("type") == "text":
                         dumped["text"] = _strip_fake_tool_calls(dumped.get("text", ""))

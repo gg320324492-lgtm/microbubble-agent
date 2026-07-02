@@ -23,3 +23,7 @@ __pycache__/
 nginx/ssl/
 .env.webhook
 .env.example
+
+# 2026-07-02 P0 切 openai_compat: 排除其他窗口未跟踪的实验目录
+llama-cpp-tools/
+trace_llm.py
