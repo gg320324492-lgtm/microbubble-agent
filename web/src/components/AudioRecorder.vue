@@ -79,13 +79,19 @@ const {
 const { stopRecording: clearRecordingIndicator } = useRecordingState()
 const network = useNetworkStatus()
 
-// 边录边传 chunked recorder（仅在 meetingId 存在时启用）
-const chunkedRecorder = props.meetingId
-  ? useChunkedRecorder(props.meetingId, { title: props.meetingTitle })
-  : null
-const uploadedCount = computed(() => chunkedRecorder?.uploadedCount.value ?? 0)
-const pendingCount = computed(() => chunkedRecorder?.pendingCount.value ?? 0)
-const totalChunks = computed(() => chunkedRecorder?.totalChunks.value ?? 0)
+// 边录边传 chunked recorder（v2: lazy meetingId, meetingId 迟到不丢 chunks）
+// 修复 (2026-07-02): 之前 props.meetingId 在 setup() 时可能为 null,
+// 1s 内 ondataavailable 触发 chunks 全部丢失 (永远不调用 useChunkedRecorder).
+// 改成传 ref, useChunkedRecorder 内部 watch meetingId 变化时 flush 缓存.
+const meetingIdRef = ref(props.meetingId)
+watch(() => props.meetingId, (mid) => {
+  meetingIdRef.value = mid
+}, { immediate: true })
+
+const chunkedRecorder = useChunkedRecorder(meetingIdRef, { title: props.meetingTitle })
+const uploadedCount = computed(() => chunkedRecorder.uploadedCount.value)
+const pendingCount = computed(() => chunkedRecorder.pendingCount.value)
+const totalChunks = computed(() => chunkedRecorder.totalChunks.value)
 
 // 回放状态（组件局部）
 const isPlaying = ref(false)
