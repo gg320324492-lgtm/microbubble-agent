@@ -405,3 +405,166 @@ class TestRestoreFromBackupCLI:
         )
         assert result.returncode == 0
         assert "dry-run 完成" in result.stdout
+
+
+# ============================================================
+# 2026-07-02 v2 PR6-P10 增量: --table 显式指定目标表
+# ============================================================
+
+class TestRestoreFromBackupTableFlag:
+    """scripts/restore_from_backup.py 的 --table 覆盖逻辑 (PR6-P10 增量)"""
+
+    def test_table_invalid_fails_fast(self, tmp_path):
+        """--table 指定不存在的表 → 退出码 1 + 列出合法选项"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--table=invalid_table_name", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 1
+        out = result.stdout
+        assert "不在支持列表" in out
+        # 必须列出全部合法选项
+        for valid in ["chat_sessions", "file_mentions", "drive_files", "folders"]:
+            assert valid in out, f"合法选项 {valid} 应在错误信息中"
+
+    def test_table_same_as_json_no_warn(self, tmp_path):
+        """--table 与 JSON 原始 table_name 一致 → 无 ⚠️ 警告"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1, "title": "test"}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--table=file_mentions", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # 显式 --table=file_mentions + JSON 原始=file_mentions → 一致, 无覆盖警告
+        assert "覆盖自 JSON 原始" not in out
+        assert "[WARN] --table=" not in out
+
+    def test_table_diff_from_json_warns_and_overrides(self, tmp_path):
+        """--table 与 JSON 原始不一致 → ⚠️ 警告 + 覆盖生效"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        # JSON 标 file_mentions, --table 强制 folders
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 2,
+            "items": [{"id": 1}, {"id": 2}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--table=folders", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # 警告: 覆盖
+        assert "[WARN] --table=folders" in out
+        assert "table_name=file_mentions" in out
+        # scan summary 显示覆盖标记
+        assert "覆盖自 JSON 原始 table_name=file_mentions" in out
+        # 目标表显示为 folders (不是 file_mentions)
+        assert "folders" in out
+
+    def test_table_scan_no_side_effects(self, tmp_path):
+        """--table + --scan 完全无 DB 副作用 (--apply 必传 --confirm, scan 一定不写)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan",
+             "--table=folders", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        # scan 模式永远退出码 0
+        assert result.returncode == 0
+        # 必须有 "dry-run 完成" 字样
+        assert "dry-run 完成" in result.stdout
+        # 不能出现 "✅ [RESTORE]"  (那是写库成功的标志)
+        assert "✅ [RESTORE]" not in result.stdout
+
+    def test_table_absent_uses_json_default(self, tmp_path):
+        """不传 --table → 走 JSON 原始 table_name (向后兼容)"""
+        import subprocess
+        backup = tmp_path / "backup.json"
+        backup.write_text(json.dumps({
+            "backup_at": "2026-07-02T12:00:00",
+            "table_name": "file_mentions",
+            "row_count": 1,
+            "items": [{"id": 1}],
+        }), encoding="utf-8")
+
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--scan", str(backup)],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # 不传 --table → 无 [WARN] 警告
+        assert "[WARN]" not in out
+        # scan summary 也不显示 "覆盖自"
+        assert "覆盖自" not in out
+
+    def test_table_argparse_help_includes_choices(self):
+        """--table --help 应包含 BACKUP_TABLE_TO_ORM 全部可选值, 帮用户记忆"""
+        import subprocess
+        result = subprocess.run(
+            ["python", "scripts/restore_from_backup.py", "--help"],
+            capture_output=True, text=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert result.returncode == 0
+        out = result.stdout
+        # help 文本里必须列出 4 个合法选项
+        for valid in ["chat_sessions", "file_mentions", "drive_files", "folders"]:
+            assert valid in out, f"--help 应包含 {valid}"
+
+    def test_table_payload_override_unit(self):
+        """load_backup 不会动 JSON, 覆盖必须在 main() 层做 (in-memory)"""
+        # 验证 print_scan_summary 接受 original_table_name 参数
+        from scripts.restore_from_backup import print_scan_summary, load_backup
+        import inspect
+        sig = inspect.signature(print_scan_summary)
+        assert "original_table_name" in sig.parameters
+        # 默认值是 None (向后兼容)
+        assert sig.parameters["original_table_name"].default is None
+
+    def test_table_payload_passthrough_to_restore(self):
+        """restore_from_backup 接受 payload 参数 (--table override 时传入, 避免重新 load 丢覆盖)"""
+        from scripts.restore_from_backup import restore_from_backup
+        import inspect
+        sig = inspect.signature(restore_from_backup)
+        assert "payload" in sig.parameters
+        # 默认值是 None (向后兼容, 内部 load)
+        assert sig.parameters["payload"].default is None
