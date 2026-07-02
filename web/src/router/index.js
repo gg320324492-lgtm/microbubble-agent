@@ -160,8 +160,9 @@ const routes = [
         path: 'project-stats',
         name: 'ProjectStats',
         component: resolveMobileComponent('ProjectStatsView', 'MobileProjectStatsView'),
-        // v78 合并审计日志到项目动态: 加 icon 让 menuRoutes 自动显示（取代原 .sidebar-bottom 硬编码入口）
-        meta: { title: '项目动态', icon: 'DataBoard' }
+        // v78 决策"项目动态硬编码入口不动": 不加 icon, 让 menuRoutes filter r.meta?.icon 自动排除
+        // 入口走 MainLayout L60-69 .sidebar-bottom 硬编码 (含 DataBoard icon)
+        meta: { title: '项目动态' }
       },
       {
         path: 'admin/agent-traces',
