@@ -154,26 +154,34 @@ def anthropic_messages_to_openai(
 # ============================================================================
 
 def openai_response_to_anthropic_message(
-    openai_response: Dict[str, Any],
+    openai_response: Any,
 ) -> Dict[str, Any]:
-    """OpenAI ChatCompletion response -> Anthropic-style message dict
+    """OpenAI ChatCompletion response -> Anthropic-style message dict.
 
-    兼容 LLMClient 调用方代码 (使用 .content / .stop_reason / .usage.input_tokens 等)
+    兼容 Pydantic model (ChatCompletion) 和 dict 两种输入.
+    LLMClient 调用方代码使用 .content / .stop_reason / .usage.input_tokens 属性访问.
 
     OpenAI response:
-      {
-        "id": "chatcmpl-xxx",
-        "choices": [{"message": {"role": "assistant", "content": "...", "tool_calls": [...]}, "finish_reason": "stop"}],
-        "usage": {"prompt_tokens": N, "completion_tokens": N, "total_tokens": N}
-      }
+      ChatCompletion(
+        id="chatcmpl-xxx",
+        choices=[Choice(message=ChoiceMessage(content="...", tool_calls=[...]), finish_reason="stop")],
+        usage=Usage(prompt_tokens=N, completion_tokens=N, total_tokens=N)
+      )
     """
-    choice = openai_response.get("choices", [{}])[0]
-    msg = choice.get("message", {})
-    usage = openai_response.get("usage", {})
+    # 兼容 Pydantic model + dict 两种输入 (2026-07-02 backend dispatch 修复)
+    def _get(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    choice = _get(openai_response, "choices", [{}])[0]
+    msg = _get(choice, "message", {}) or {}
+    raw_msg = msg if isinstance(msg, dict) else (vars(msg) if not isinstance(msg, dict) else msg)
+    usage = _get(openai_response, "usage", {}) or {}
 
     # 拼装 Anthropic-style content blocks
     content_blocks = []
-    text_content = msg.get("content") or ""
+    text_content = raw_msg.get("content") if isinstance(raw_msg, dict) else getattr(raw_msg, "content", "") or ""
     if text_content:
         content_blocks.append({
             "type": "text",
@@ -181,20 +189,31 @@ def openai_response_to_anthropic_message(
         })
 
     # OpenAI tool_calls -> Anthropic tool_use blocks
-    for tc in msg.get("tool_calls", []) or []:
-        func = tc.get("function", {})
+    tool_calls_obj = raw_msg.get("tool_calls") if isinstance(raw_msg, dict) else getattr(raw_msg, "tool_calls", None)
+    tool_calls = tool_calls_obj or []
+    for tc in tool_calls:
+        if isinstance(tc, dict):
+            func = tc.get("function", {})
+            tc_id = tc.get("id", "")
+            func_name = func.get("name", "")
+            args_str = func.get("arguments", "{}")
+        else:
+            func = getattr(tc, "function", None)
+            tc_id = getattr(tc, "id", "")
+            func_name = getattr(func, "name", "") if func else ""
+            args_str = getattr(func, "arguments", "{}") if func else "{}"
         try:
-            inp = json.loads(func.get("arguments", "{}"))
+            inp = json.loads(args_str)
         except (json.JSONDecodeError, TypeError):
             inp = {}
         content_blocks.append({
             "type": "tool_use",
-            "id": tc.get("id", ""),
-            "name": func.get("name", ""),
+            "id": tc_id,
+            "name": func_name,
             "input": inp,
         })
 
-    finish_reason = choice.get("finish_reason", "stop")
+    finish_reason = _get(choice, "finish_reason", "stop")
     stop_reason_map = {
         "stop": "end_turn",
         "length": "max_tokens",
@@ -204,16 +223,16 @@ def openai_response_to_anthropic_message(
     stop_reason = stop_reason_map.get(finish_reason, "end_turn")
 
     return {
-        "id": openai_response.get("id", ""),
+        "id": _get(openai_response, "id", ""),
         "type": "message",
         "role": "assistant",
         "content": content_blocks,
         "stop_reason": stop_reason,
         "stop_sequence": None,
-        "model": openai_response.get("model", ""),
+        "model": _get(openai_response, "model", ""),
         "usage": {
-            "input_tokens": usage.get("prompt_tokens", 0),
-            "output_tokens": usage.get("completion_tokens", 0),
+            "input_tokens": _get(usage, "prompt_tokens", 0),
+            "output_tokens": _get(usage, "completion_tokens", 0),
             "cache_creation_input_tokens": 0,
             "cache_read_input_tokens": 0,
         },
