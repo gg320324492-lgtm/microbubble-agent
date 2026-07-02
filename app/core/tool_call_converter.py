@@ -321,7 +321,12 @@ def openai_streaming_delta_to_anthropic_events(
     - {"type": "message_stop"}
     """
     events = []
-    choice = openai_chunk.get("choices", [{}])[0]
+    # 2026-07-02 Phase I.0 修复: openai_chunk 可能是 final usage chunk (无 choices)
+    # 或 chunk["choices"] 空 list, 跳过这种 chunk
+    choices = openai_chunk.get("choices")
+    if not choices:
+        return events
+    choice = choices[0]
     delta = choice.get("delta", {})
 
     # 文本增量
@@ -335,6 +340,19 @@ def openai_streaming_delta_to_anthropic_events(
                 "text": delta["content"],
             },
         })
+
+    # 2026-07-02 Ollama /v1 qwen3 thinking 兼容: reasoning 字段是 OpenAI 协议的
+    # Ollama 扩展（不在标准 OpenAI spec 里）。thinking 模型 (qwen3:8b 默认) 把
+    # 思考过程放在 delta.reasoning, 把最终回答放在 delta.content.
+    #
+    # 策略: 不向 caller 暴露 reasoning (避免用户看到"我需要..."独白),
+    # 但聚合 reasoning 块数供上层 debug 用 (例如 token 计数 / 延迟分析).
+    # thinking_content 块通过非 yield 方式累积到 tool_acc.reasoning_chars.
+    if delta.get("reasoning") and not delta.get("content"):
+        # 仅当 reasoning-only chunk 才累积 (避免与 content 重复)
+        tool_acc.reasoning_chars = getattr(tool_acc, "reasoning_chars", 0) + len(
+            delta["reasoning"]
+        )
 
     # tool_calls 增量
     finalized = tool_acc.add_delta({
@@ -373,7 +391,7 @@ def openai_streaming_delta_to_anthropic_events(
             "tool_calls": "tool_use",
             "content_filter": "stop_sequence",
         }
-        usage = openai_chunk.get("usage", {})
+        usage = openai_chunk.get("usage") or {}  # Ollama 某些 chunk usage=None
         events.append({
             "type": "message_delta",
             "delta": {"stop_reason": stop_reason_map.get(finish_reason, "end_turn")},

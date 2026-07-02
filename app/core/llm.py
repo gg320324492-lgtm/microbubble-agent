@@ -43,6 +43,112 @@ from app.core.tool_call_converter import (
 
 
 # ============================================================================
+# 流式 shim — 把 OpenAI 异步流包装成 Anthropic MessageStream 接口
+# ============================================================================
+
+class _OAIEventShim:
+    """把 dict (tool_call_converter 返回的 Anthropic event 形状) 转成对象属性访问.
+
+    agentic_loop 调用方式: event.type / event.delta.type / event.delta.text /
+    event.content_block.type / event.content_block.id / event.content_block.name
+    """
+
+    def __init__(self, d: dict):
+        # 嵌套 dict / list 递归转换
+        for k, v in d.items():
+            if isinstance(v, dict):
+                setattr(self, k, _OAIEventShim(v))
+            elif isinstance(v, list):
+                setattr(self, k, [
+                    _OAIEventShim(x) if isinstance(x, dict) else x
+                    for x in v
+                ])
+            else:
+                setattr(self, k, v)
+
+
+class _OAIStreamShim:
+    """Anthropic MessageStream 接口 shim — 用于 openai_compat / ollama.
+
+    用法:
+        async for stream in llm.stream(...):
+            async with stream as s:
+                async for event in s:
+                    if event.type == "content_block_delta" ...
+
+    内部: 调用 openai_client.chat.completions.create(stream=True),
+    每个 chunk 转成 1+ 个 Anthropic-style event (经 openai_streaming_delta_to_anthropic_events),
+    按顺序 yield 出去.
+
+    边界处理:
+    - 多个 events 来自同一 chunk: 首个 event 立即 yield, 其余 buffer 下次 __anext__ 返回
+    - 空 chunk (没产生 event): 最多跳过 1000 个连续空 chunk 后退出
+      (qwen3 thinking 模型 reasoning 阶段可能持续 200+ chunks 不出 content, 10 不够)
+    - Pydantic v2 ChatCompletionChunk: 自动 .model_dump() 转 dict
+    - reasoning chars 累积到 tool_acc.reasoning_chars 供 caller debug
+    """
+
+    def __init__(self, oai_stream_coro, tool_acc):
+        self._oai_coro = oai_stream_coro
+        self._tool_acc = tool_acc
+        self._oai_iter = None
+        self._buffered = []
+        self._entered = False
+
+    async def __aenter__(self):
+        self._entered = True
+        # 触发 openai stream 创建 (返回 AsyncStream[ChatCompletionChunk])
+        self._oai_iter = await self._oai_coro
+        return self
+
+    async def __aexit__(self, *args):
+        # openai AsyncStream 不需要显式 close, async for 结束自动清理
+        return None
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if not self._entered:
+            raise RuntimeError("必须 'async with stream as s:' 后再迭代")
+        # 优先返回 buffer 里的 events
+        if self._buffered:
+            return _OAIEventShim(self._buffered.pop(0))
+        # 拉下一个非空 chunk
+        # qwen3 thinking 阶段可能持续 200+ chunks 不出 content, 1000 足够
+        for _ in range(1000):
+            try:
+                chunk = await self._oai_iter.__anext__()
+            except StopAsyncIteration:
+                raise StopAsyncIteration
+            chunk_dict = self._chunk_to_dict(chunk)
+            events = openai_streaming_delta_to_anthropic_events(
+                chunk_dict, "", self._tool_acc
+            )
+            if events:
+                # 第一个 event 立即返, 后续 buffer 下次返
+                self._buffered = events[1:]
+                return _OAIEventShim(events[0])
+        # 1000 个连续空 chunk — 异常但不该发生, 优雅退出
+        # 真发生说明模型永久卡在 thinking 不出 content (可能 max_tokens 触顶)
+        logger.warning(
+            f"OAI stream: 1000 个连续空 chunk, 强制退出 "
+            f"(reasoning_chars={getattr(self._tool_acc, 'reasoning_chars', 0)})"
+        )
+        raise StopAsyncIteration
+
+    @staticmethod
+    def _chunk_to_dict(chunk) -> dict:
+        if isinstance(chunk, dict):
+            return chunk
+        # Pydantic v2 model (openai SDK 默认返回)
+        if hasattr(chunk, "model_dump"):
+            return chunk.model_dump()
+        # 兜底
+        return dict(chunk)
+
+
+# ============================================================================
 # 旧 API（保留）
 # ============================================================================
 
@@ -365,12 +471,33 @@ class LLMClient:
                 async with stream as s:
                     async for event in s:
                         ...
-        2026-07-02 backend dispatch 收尾: openai_compat/ollama 流式留给后续 (用 complete() 走非流式)
+
+        2026-07-02 backend dispatch 收尾 (openai_compat / ollama):
+        用 _OAIStreamShim 包装 openai_client.stream 调 Anthropic MessageStream 接口,
+        caller (agentic_loop) 零感知 backend 差异.
         """
         if self.backend in ("openai_compat", "ollama"):
-            raise NotImplementedError(
-                f"backend={self.backend} 流式暂未实现, 请用 complete() 替代"
-            )
+            oai_messages = anthropic_messages_to_openai(messages, system)
+            oai_tools = anthropic_to_openai_tools(tools) if tools else None
+            chosen = model or self.models[0]
+
+            async def _oai_call():
+                params = {
+                    "model": chosen,
+                    "messages": oai_messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "stream": True,
+                }
+                if oai_tools:
+                    params["tools"] = oai_tools
+                return await self.openai_client.chat.completions.create(**params)
+
+            tool_acc = OpenAIToolCallAccumulator()
+            yield _OAIStreamShim(_oai_call(), tool_acc)
+            return
+
+        # 默认 anthropic 路径
         kwargs = {
             "messages": messages,
             "max_tokens": max_tokens,
@@ -383,7 +510,6 @@ class LLMClient:
         if thinking is not None:
             kwargs["thinking"] = thinking
 
-        # 流式不做缓存，不做 fallback 链（流式 fallback 体验差）
         chosen = model or self.models[0]
         async with self.client.messages.stream(model=chosen, **kwargs) as stream:
             yield stream
@@ -407,12 +533,52 @@ class LLMClient:
             async for chunk in client.stream_raw(messages=...):
                 chunk == {"type": "text_delta", "text": "..."}
 
-        2026-07-02 backend dispatch 收尾: openai_compat/ollama 流式留给后续
+        2026-07-02 backend dispatch 收尾 (openai_compat / ollama):
+        复用 openai_streaming_delta_to_anthropic_events, 转回 stream_raw 的 dict chunk 格式.
         """
         if self.backend in ("openai_compat", "ollama"):
-            raise NotImplementedError(
-                f"backend={self.backend} 流式暂未实现, 请用 complete() 替代"
-            )
+            oai_messages = anthropic_messages_to_openai(messages, system)
+            oai_tools = anthropic_to_openai_tools(tools) if tools else None
+            chosen = model or self.models[0]
+            params = {
+                "model": chosen,
+                "messages": oai_messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "stream": True,
+            }
+            if oai_tools:
+                params["tools"] = oai_tools
+            stream = await self.openai_client.chat.completions.create(**params)
+            tool_acc = OpenAIToolCallAccumulator()
+            async for chunk in stream:
+                # Pydantic v2 ChatCompletionChunk -> dict
+                chunk_dict = (
+                    chunk.model_dump() if hasattr(chunk, "model_dump") else dict(chunk)
+                )
+                for event in openai_streaming_delta_to_anthropic_events(
+                    chunk_dict, "", tool_acc
+                ):
+                    if event["type"] == "content_block_start":
+                        if event["content_block"]["type"] == "tool_use":
+                            yield {
+                                "type": "tool_use_start",
+                                "id": event["content_block"]["id"],
+                                "name": event["content_block"]["name"],
+                            }
+                    elif event["type"] == "content_block_delta":
+                        if event["delta"]["type"] == "text_delta":
+                            yield {
+                                "type": "text_delta",
+                                "text": event["delta"]["text"],
+                            }
+                        elif event["delta"]["type"] == "input_json_delta":
+                            yield {
+                                "type": "tool_input_delta",
+                                "partial_json": event["delta"]["partial_json"],
+                            }
+            return
+
         kwargs = {
             "messages": messages,
             "max_tokens": max_tokens,
