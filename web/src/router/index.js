@@ -107,34 +107,38 @@ const routes = [
         redirect: '/knowledge?tab=memory'
       },
       {
-        // PR3.1: 课题组网盘 (Lab Group Drive) - 桌面端主视图, 移动端 PR4 复用 KB 第 6 tab
+        // v2 PR7 修复: nested children 改造, 子侧边栏在 4 view 切换时持续渲染
+        // 桌面端: DriveLayout 容器 (左侧 DriveSubSidebar + 右侧 4 children 之一)
+        //   解决"点击回收站/活动/请求后子侧边栏消失, 体验像弹到别的界面"
+        // 移动端: MobileDriveView (单一页面, 无 children, 保持原状)
         path: 'drive',
-        name: 'Drive',
-        // 桌面 DesktopDriveView (本 PR3 创建), 移动端 MobileDriveView (PR4)
-        component: resolveMobileComponent('DesktopDriveView', 'mobile/MobileDriveView'),
-        meta: { title: '课题组网盘', icon: 'Folder' }
-      },
-      {
-        // v2 PR2: 回收站 (顶级路由, 不嵌套在 /drive 下避免与 FileGrid 冲突)
-        path: 'drive/trash',
-        name: 'DriveTrash',
-        component: resolveMobileComponent('desktop/DriveTrashView', 'mobile/MobileDriveTrashView'),
-        meta: { title: '回收站', icon: 'Delete' }
-      },
-      {
-        // v2 PR6: 活动动态流
-        path: 'drive/activity',
-        name: 'DriveActivity',
-        component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView'),  // 移动端暂用 trash 占位, PR8 独立 mobile 版
-        meta: { title: '活动动态', icon: 'Bell' }
-      },
-      {
-        // v2 PR7: 文件请求管理 (Dropbox 招牌 "收作业" 创建/关闭页)
-        // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
-        path: 'drive/requests',
-        name: 'DriveFileRequests',
-        component: resolveMobileComponent('desktop/FileRequestListView', 'mobile/MobileDriveTrashView'),
-        meta: { title: '文件请求', icon: 'Promotion' }
+        component: resolveMobileComponent('desktop/DriveLayout', 'mobile/MobileDriveView'),
+        meta: { title: '课题组网盘', icon: 'Folder' },
+        children: [
+          {
+            path: '',
+            name: 'Drive',
+            component: () => import('@/views/DesktopDriveView.vue')
+          },
+          {
+            // v2 PR2: 回收站
+            path: 'trash',
+            name: 'DriveTrash',
+            component: resolveMobileComponent('desktop/DriveTrashView', 'mobile/MobileDriveTrashView')
+          },
+          {
+            // v2 PR6: 活动动态流
+            path: 'activity',
+            name: 'DriveActivity',
+            component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView')  // 移动端暂用 trash 占位
+          },
+          {
+            // v2 PR7: 文件请求管理 (Dropbox 招牌"收作业"创建/关闭页)
+            path: 'requests',
+            name: 'DriveFileRequests',
+            component: resolveMobileComponent('desktop/FileRequestListView', 'mobile/MobileDriveTrashView')
+          }
+        ]
       },
       {
         // v2 PR6-P2 + PR6-P3: 文件详情页
@@ -156,7 +160,8 @@ const routes = [
         path: 'project-stats',
         name: 'ProjectStats',
         component: resolveMobileComponent('ProjectStatsView', 'MobileProjectStatsView'),
-        meta: { title: '项目动态' }
+        // v78 合并审计日志到项目动态: 加 icon 让 menuRoutes 自动显示（取代原 .sidebar-bottom 硬编码入口）
+        meta: { title: '项目动态', icon: 'DataBoard' }
       },
       {
         path: 'admin/agent-traces',
@@ -164,16 +169,10 @@ const routes = [
         component: resolveMobileComponent('admin/AgentTracesView', 'admin/MobileAgentTracesView'),
         meta: { title: 'Agent Trace 监控' }
       },
-      {
-        // v2 PR7: 审计日志 (admin only, 后端 Depends(get_current_admin) 兜底)
-        path: 'admin/audit',
-        name: 'AdminAudit',
-        component: () => import('@/views/admin/AuditLogView.vue'),
-        meta: { title: '审计日志', icon: 'Lock' }
-      },
-      // v78 UI redesign: 模板管理已合并到 /meetings 第二个 tab (TemplatesPanel), 此路由删除
+      // v78 合并审计日志到项目动态: admin/audit 路由删除, 改用 /project-stats?tab=audit 访问
       // 旧路由保留作 fallback 兼容老链接 (去掉 meta.icon 自动从 sidebar 隐藏)
-      // 2026-06-30 由 v77 P2.6-G.2 的 /admin/templates 移入会议管理 tab
+      // v2 PR7 审计日志视图 (admin only, 后端 Depends(get_current_admin) 兜底) 改嵌在 ProjectStatsView 第 2 个 tab
+      // v78 UI redesign: 模板管理已合并到 /meetings 第二个 tab (TemplatesPanel), 此路由删除
     ]
   },
   {

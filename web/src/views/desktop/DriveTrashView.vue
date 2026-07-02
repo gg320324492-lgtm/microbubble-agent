@@ -11,10 +11,10 @@
   Props: 无 (顶层路由 /drive/trash)
 -->
 <template>
-  <div class="page-container drive-trash-view">
+  <!-- v2 PR7 修复: 去掉 page-container 外壳 (padding 由 DriveLayout 提供) + 去掉"返回网盘"按钮 (子侧边栏就是返回入口) -->
+  <div class="drive-trash-view">
     <div class="page-header">
       <div class="page-header-left">
-        <el-button :icon="ArrowLeft" text @click="goBack">返回网盘</el-button>
         <h2 class="page-title">🗑️ 回收站</h2>
         <el-tag size="small" type="info">3 天后自动清除</el-tag>
       </div>
@@ -57,15 +57,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+// v2 PR7 修复: useRouter/ArrowLeft/goBack 全删 (子侧边栏就是返回入口, 不再硬编码 router.push('/drive'))
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
 
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
-
-const router = useRouter()
 
 // 复用 PR3.3 composable, 但覆盖 fetch 用 fetchTrash
 const {
@@ -147,17 +144,14 @@ function handleFilePreview(file) {
   handleFileClick(file)
 }
 
-function goBack() {
-  router.push('/drive')
-}
-
 onMounted(() => {
   reload()
 })
 </script>
 
 <style scoped>
-.page-container {
+/* v2 PR7 修复: page-container 已上移到 DriveLayout, 此处只定义子 view 自己的样式 */
+.drive-trash-view {
   padding: 16px 24px;
   max-width: 1400px;
   margin: 0 auto;
