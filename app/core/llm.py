@@ -20,10 +20,26 @@ from threading import Lock
 from typing import Any, AsyncIterator, Optional
 
 import anthropic
-
-from app.config import settings
+import logging
 
 logger = logging.getLogger("microbubble.llm")
+
+# 2026-07-02 openai_compat backend dispatch
+try:
+    from openai import AsyncOpenAI
+    HAS_OPENAI = True
+except ImportError:
+    HAS_OPENAI = False
+    logger.warning("openai 包未安装, openai_compat backend 不可用")
+
+from app.config import settings
+from app.core.tool_call_converter import (
+    anthropic_to_openai_tools,
+    anthropic_messages_to_openai,
+    openai_response_to_anthropic_message,
+    OpenAIToolCallAccumulator,
+    openai_streaming_delta_to_anthropic_events,
+)
 
 
 # ============================================================================
@@ -149,21 +165,49 @@ class LLMClient:
     def __init__(self):
         if self._initialized:
             return
-        self.client = anthropic.AsyncAnthropic(
-            api_key=settings.CLAUDE_API_KEY,
-            base_url=settings.CLAUDE_BASE_URL or None,
-        )
-        # 模型 fallback 链：主模型 -> 备用模型
-        self.models: list[str] = []
-        primary = settings.CLAUDE_MODEL or "mimo-v2.5"
-        self.models.append(primary)
+        # 2026-07-02 openai_compat backend dispatch
+        # LLM_BACKEND: "anthropic" (默认) / "openai_compat" (mimo /v1, 抗 429) / "ollama" (本地)
+        self.backend: str = getattr(settings, "LLM_BACKEND", "anthropic")
+        if self.backend == "openai_compat":
+            if not HAS_OPENAI:
+                raise ImportError("LLM_BACKEND=openai_compat 但 openai 包未装. requirements.txt 加 openai>=1.0.0,<2.0.0")
+            base_url = (
+                getattr(settings, "LLM_OPENAI_COMPAT_BASE_URL", "")
+                or settings.MIMO_BASE_URL
+            )
+            api_key = (
+                getattr(settings, "LLM_OPENAI_COMPAT_API_KEY", "")
+                or settings.MIMO_API_KEY
+            )
+            self.openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            self.client = None  # anthropic client 不创建
+            primary = getattr(settings, "LLM_OPENAI_COMPAT_MODEL", "") or "mimo-v2.5"
+        elif self.backend == "ollama":
+            if not HAS_OPENAI:
+                raise ImportError("LLM_BACKEND=ollama 但 openai 包未装")
+            base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            self.openai_client = AsyncOpenAI(api_key="ollama", base_url=base_url)
+            self.client = None
+            primary = getattr(settings, "OLLAMA_MODEL", "") or "qwen3-embedding-0.6b"
+        else:  # "anthropic" 默认
+            self.client = anthropic.AsyncAnthropic(
+                api_key=settings.CLAUDE_API_KEY,
+                base_url=settings.CLAUDE_BASE_URL or None,
+            )
+            self.openai_client = None
+            primary = settings.CLAUDE_MODEL or "mimo-v2.5"
+        # 模型 fallback 链
+        self.models: list[str] = [primary]
         fallback = getattr(settings, "CLAUDE_FALLBACK_MODEL", "")
         if fallback and fallback != primary:
             self.models.append(fallback)
         # 简单 LRU 缓存
         self.cache = LRUResponseCache(max_size=256, ttl_seconds=3600)
         self._initialized = True
-        logger.info(f"LLMClient 初始化完成: models={self.models}")
+        logger.info(
+            f"LLMClient 初始化完成: backend={self.backend}, models={self.models}, "
+            f"openai_client={'set' if self.openai_client else 'None'}"
+        )
 
     async def complete(
         self,
