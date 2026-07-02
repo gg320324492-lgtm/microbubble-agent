@@ -385,3 +385,53 @@ docker compose restart app
 - **修 qa-bench 数据 bug** (单独 PR): forbidden_names 重设计为只禁幻觉名
 - **缓解 mimo 限流**: 加 benchmark retry/backoff 或切 Claude 官方 API
 - **保留 BGE m3 模型文件**: 2.27 GB 已下载, 未来可重试 (中文检索是正确方向)
+
+
+---
+
+# Step 1-3 收官 (2026-07-02, Round 7 跑完后数据待填)
+
+## 修复进度
+
+| Step | 改动 | commit |
+|---|---|---|
+| Step 0 | 验证 BGE m3 已启用 + DEBUG hook 启用 + app healthy | (无代码改动) |
+| **Step 1** | 修 qa-bench 数据 bug: `forbidden_names_data_bug` smart filter (排除与 must_contain_any 冲突的名字) | `853cd2f2` |
+| **Step 2** | 加 mimo 限流 429 retry/backoff (3 次, 60s/120s/180s) + `logger` import 修复 | `882158fd` + `e8b2ccd1` |
+| **Step 3** | BGE m3 强制 `local_files_only=True` + `cache_folder` 显式指定 (避免 hf-mirror.com 网络访问) | (本节) |
+| **Step 4** | 三轮对比脚本 `scripts/compare_reranker_rounds_v2.py` | `2abd8bd8` |
+
+## BGE m3 模型加载修复
+
+**根因**: BGE m3 模型文件已在 `/root/.cache/huggingface/hub/models--BAAI--bge-reranker-v2-m3/snapshots/` (2.27 GB safetensors), 
+但 sentence-transformers 默认尝试 `https://hf-mirror.com` 远程检查, 容器内无法访问, 报 "couldn't find them in the cached files"。
+
+**修复** (`app/services/reranker_service.py:75-89`):
+```python
+self._model = CrossEncoder(
+    self._model_name,
+    max_length=RERANKER_MAX_LENGTH,
+    device=self._device,
+    cache_folder="/root/.cache/huggingface/hub",  # 显式指定
+    local_files_only=True,  # 强制本地加载, 不走网络
+)
+```
+
+**验证**:
+```bash
+# docker 内直接 import
+from app.services.reranker_service import get_reranker_service
+svc = get_reranker_service()
+svc._load_model()
+print(svc.is_loaded)  # True ✓
+print(type(svc._model).__name__)  # CrossEncoder ✓
+```
+
+## Round 7 跑进度 (后台跑)
+
+- PID: 1097672
+- 输出: `tests/qa-bench/results/reranker-benchmark/round7-bge-m3-clean/`
+- 预计 50-60 分钟 (含 mimo 限流 retry 退避)
+- 包含 Step 1 + Step 2 + Step 3 全部修复 (BGE m3 + 数据 bug + retry)
+
+(Round 7 完成后用 `python scripts/compare_reranker_rounds_v2.py` 看三轮对比)
