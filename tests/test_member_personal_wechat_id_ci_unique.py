@@ -373,7 +373,9 @@ class TestAlembicMigration055Existence:
         spec = importlib.util.spec_from_file_location("migration_055", migration_path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        assert mod.revision == "055_member_personal_wechat_id_ci_unique"
+        # revision ID 必须 ≤32 字符 (alembic_version.version_num VARCHAR(32))
+        assert len(mod.revision) <= 32, f"revision ID 太长 ({len(mod.revision)} chars): {mod.revision}"
+        assert mod.revision == "055_personal_wechat_ci"
         assert mod.down_revision == "054_member_wechat_id_ci_unique"
 
     def test_migration_055_chain_continues_from_054(self):

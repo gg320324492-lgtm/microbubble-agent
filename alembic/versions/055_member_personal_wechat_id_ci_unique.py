@@ -21,7 +21,7 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "055_member_personal_wechat_id_ci_unique"
+revision: str = "055_personal_wechat_ci"
 # 接 054 链 (PR6-P14 wechat_id case-insensitive uniqueness)
 down_revision: Union[str, None] = "054_member_wechat_id_ci_unique"
 branch_labels: Union[str, Sequence[str], None] = None
