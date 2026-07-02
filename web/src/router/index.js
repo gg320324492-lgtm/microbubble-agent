@@ -107,38 +107,36 @@ const routes = [
         redirect: '/knowledge?tab=memory'
       },
       {
-        // v2 PR7 修复: nested children 改造, 子侧边栏在 4 view 切换时持续渲染
-        // 桌面端: DriveLayout 容器 (左侧 DriveSubSidebar + 右侧 4 children 之一)
-        //   解决"点击回收站/活动/请求后子侧边栏消失, 体验像弹到别的界面"
-        // 移动端: MobileDriveView (单一页面, 无 children, 保持原状)
+        // PR3.1: 课题组网盘 (Lab Group Drive) - 桌面端主视图, 移动端 PR4 复用 KB 第 6 tab
         path: 'drive',
-        component: resolveMobileComponent('desktop/DriveLayout', 'mobile/MobileDriveView'),
-        meta: { title: '课题组网盘', icon: 'Folder' },
-        children: [
-          {
-            path: '',
-            name: 'Drive',
-            component: () => import('@/views/DesktopDriveView.vue')
-          },
-          {
-            // v2 PR2: 回收站
-            path: 'trash',
-            name: 'DriveTrash',
-            component: resolveMobileComponent('desktop/DriveTrashView', 'mobile/MobileDriveTrashView')
-          },
-          {
-            // v2 PR6: 活动动态流
-            path: 'activity',
-            name: 'DriveActivity',
-            component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView')  // 移动端暂用 trash 占位
-          },
-          {
-            // v2 PR7: 文件请求管理 (Dropbox 招牌"收作业"创建/关闭页)
-            path: 'requests',
-            name: 'DriveFileRequests',
-            component: resolveMobileComponent('desktop/FileRequestListView', 'mobile/MobileDriveTrashView')
-          }
-        ]
+        name: 'Drive',
+        component: resolveMobileComponent('DesktopDriveView', 'mobile/MobileDriveView'),
+        meta: { title: '课题组网盘', icon: 'Folder' }
+      },
+      {
+        // v2 PR2: 回收站 (顶级路由, 不嵌套在 /drive 下避免与 FileGrid 冲突)
+        path: 'drive/trash',
+        name: 'DriveTrash',
+        component: resolveMobileComponent('desktop/DriveTrashView', 'mobile/MobileDriveTrashView'),
+        meta: { title: '回收站', icon: 'Delete' }
+      },
+      {
+        // v2 PR7: 文件请求管理 (Dropbox 招牌"收作业"创建/关闭页)
+        // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
+        path: 'drive/requests',
+        name: 'DriveFileRequests',
+        component: resolveMobileComponent('desktop/FileRequestListView', 'mobile/MobileDriveTrashView'),
+        meta: { title: '文件请求', icon: 'Promotion' }
+      },
+      {
+        // 2026-07-02: 活动动态全局化 (从 /drive/activity 挪到顶级 /activity)
+        // 用户反馈: 活动动态不是网盘的功能, 应该是跨域的活动流
+        // 后端 endpoint 是全局 GET /api/v1/activities (已在 app/api/v1/notifications.py:227)
+        // 顶级路由 + meta.icon='Bell' 让 menuRoutes 自动出现「活动动态」入口
+        path: 'activity',
+        name: 'ActivityFeed',
+        component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView'),  // 移动端暂用 trash 占位
+        meta: { title: '活动动态', icon: 'Bell' }
       },
       {
         // v2 PR6-P2 + PR6-P3: 文件详情页

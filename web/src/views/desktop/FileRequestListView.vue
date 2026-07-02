@@ -7,12 +7,13 @@
   - 创建文件请求 dialog (title / description / expires / 扩展名限制 / 必填姓名 / 大小上限)
   - 关闭文件请求 (owner only)
   - 复制公开 URL 到剪贴板
-  - v2 PR7 修复: 现在嵌套在 DriveLayout 下, 去掉 page-container 外壳 (padding 由 layout 提供)
+
+  2026-07-02: 恢复 page-container (PR7 nested route 回滚后顶级 sibling 模式)
 
   Dark mode: 非 scoped 块 (v60-v67 教训)
 -->
 <template>
-  <div class="file-request-list-view">
+  <div class="page-container file-request-list-view">
     <div class="page-header">
       <h2>📢 文件请求</h2>
       <p class="page-subtitle">创建公开链接，让团队成员或外部人员提交文件到指定文件夹</p>
@@ -245,8 +246,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* v2 PR7 修复: 去掉 .page-container 前缀, layout 提供 padding */
-.file-request-list-view {
+/* 2026-07-02: 恢复 page-container (PR7 回滚后顶级 sibling 模式) */
+.page-container.file-request-list-view {
   padding: 24px;
   max-width: 1200px;
   margin: 0 auto;

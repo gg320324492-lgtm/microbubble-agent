@@ -92,9 +92,9 @@
       </div>
     </div>
 
-    <!-- 主体布局: 左侧 DriveSubSidebar + FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
+    <!-- 主体布局: 左侧 FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
+    <!-- 2026-07-02: DriveSubSidebar 已删除 (与 FolderTree 重复), 不再嵌入子侧边栏 -->
     <div class="drive-main" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
-      <!-- v2 PR7 修复: 子侧边栏已上移到 DriveLayout 容器, 此处不再重复 -->
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
         <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
@@ -246,7 +246,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
 import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v2 PR2
-// v2 PR7 修复: DriveSubSidebar 已上移到 DriveLayout 容器, 此处不再 import
+// 2026-07-02: DriveSubSidebar 已删除 (PR7 反转), 此处不再 import
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'
@@ -259,8 +259,7 @@ import { useFolderDropZone } from '@/composables/useFolderDropZone'
 
 const router = useRouter()  // v2 PR2: 回收站路由跳转
 
-// v2 PR7 修复: 子侧边栏折叠状态已上移到 useDriveSubSidebarCollapsed composable, 此处不再维护
-// (composable 由 DriveLayout 调用, 4 view 共享同一份 singleton ref)
+// 2026-07-02: DriveSubSidebar 删除后, 此处不再嵌入子侧边栏, 不需折叠状态管理
 
 // === 文件夹树 (PR3.2 接入) ===
 const {
