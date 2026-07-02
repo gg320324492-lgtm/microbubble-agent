@@ -233,9 +233,9 @@ const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
-  // v2 PR7: drive/trash 和 drive/activity 已迁移到 DriveSubSidebar（网盘页面内子侧边栏），
-  // 主侧边栏不再单独显示这 2 项
-  const HIDDEN_PATHS = new Set(['drive/trash', 'drive/activity'])
+  // v2 PR7: drive/trash / drive/activity / drive/requests 已迁移到 DriveSubSidebar（网盘页面内子侧边栏），
+  // 主侧边栏不再单独显示这 3 项
+  const HIDDEN_PATHS = new Set(['drive/trash', 'drive/activity', 'drive/requests'])
   return (mainRoute?.children || []).filter(r => r.meta?.icon && !HIDDEN_PATHS.has(r.path))
 })
 
