@@ -26,10 +26,13 @@ logger = logging.getLogger("microbubble.llm")
 
 # 2026-07-02 openai_compat backend dispatch
 try:
-    from openai import AsyncOpenAI
+    from openai import AsyncOpenAI, RateLimitError
     HAS_OPENAI = True
+    HAS_OPENAI_RATE_LIMIT = True
 except ImportError:
     HAS_OPENAI = False
+    HAS_OPENAI_RATE_LIMIT = False
+    RateLimitError = None  # type: ignore  # 仅 fallback 用, HAS_OPENAI=False 时不 import
     logger.warning("openai 包未安装, openai_compat backend 不可用")
 
 from app.config import settings
@@ -419,6 +422,13 @@ class LLMClient:
         """OpenAI 兼容路径 (mimo /v1 / Ollama /v1 同样协议).
 
         调用 tool_call_converter 做双向转换, 包装成 Anthropic Message 形状.
+
+        2026-07-03 P0-3: mimo 429 fallback 到 ollama.
+        - 当 self.backend == "openai_compat" (mimo /v1) 遇到 RateLimitError (429),
+          临时切到 OLLAMA_BASE_URL + OLLAMA_FALLBACK_MODEL 调一次.
+        - ollama 成功 → 返回结果 (仍走 Anthropic Message 形状, caller 零感知).
+        - ollama 也失败 → 抛原 429, 让上层处理 (走 rate_limit middleware 5s dedup / 用户重试).
+        - 不修改 self.backend (避免长时占用 ollama, 下次 mimo 仍先尝试).
         """
         oai_messages = anthropic_messages_to_openai(messages, system)
         oai_tools = anthropic_to_openai_tools(tools) if tools else None
@@ -441,11 +451,59 @@ class LLMClient:
                 # 包装 OpenAI ChatCompletion 响应为 Anthropic Message 形状
                 return openai_response_to_anthropic_message(resp)
             except Exception as e:
+                # 2026-07-03 P0-3: mimo 429 fallback to ollama (一次性, 不修改 self.backend)
+                if HAS_OPENAI_RATE_LIMIT and isinstance(e, RateLimitError):
+                    if self.backend == "openai_compat":
+                        try:
+                            logger.warning(
+                                f"openai_compat (mimo) 限流 429 (model={m}), "
+                                f"fallback 到 ollama {settings.OLLAMA_FALLBACK_MODEL}"
+                            )
+                            return await self._try_ollama_fallback(
+                                oai_messages, oai_tools, params
+                            )
+                        except Exception as e2:
+                            logger.warning(f"ollama fallback 也失败: {e2}")
+                            last_exc = e2
+                            continue
+                    else:
+                        # backend == "ollama" 但还是 429 → ollama 自己限流, raise
+                        logger.warning(f"ollama 限流 429 (model={m}): {e}")
+                        last_exc = e
+                        continue
                 logger.warning(f"openai_compat 模型 {m} 失败: {type(e).__name__}: {e}")
                 last_exc = e
                 continue
         logger.error(f"openai_compat 所有模型失败: {models_to_try}")
         raise last_exc  # type: ignore
+
+    async def _try_ollama_fallback(
+        self,
+        oai_messages: list[dict],
+        oai_tools: Optional[list[dict]],
+        params: dict,
+    ) -> Any:
+        """P0-3 2026-07-03: mimo 429 fallback 到本地 ollama (一次性调用).
+
+        临时创建 AsyncOpenAI client 指向 OLLAMA_BASE_URL + 用 OLLAMA_FALLBACK_MODEL
+        调一次 chat.completions.create, 包装成 Anthropic Message 形状返回.
+        caller (agentic_loop 等 30+) 零感知 backend 切换.
+
+        失败抛 openai 错误让上层处理 (rate_limit middleware 5s dedup / 用户重试).
+        """
+        ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://host.docker.internal:11434/v1")
+        ollama_model = getattr(settings, "OLLAMA_FALLBACK_MODEL", "") or getattr(
+            settings, "OLLAMA_MODEL", "qwen3:8b"
+        )
+        # 临时 client, 不污染 self.openai_client (避免长时占用 ollama)
+        fallback_client = AsyncOpenAI(api_key="ollama", base_url=ollama_url)
+        fallback_params = dict(params)
+        fallback_params["model"] = ollama_model
+        if oai_tools and "tools" not in fallback_params:
+            fallback_params["tools"] = oai_tools
+        logger.info(f"ollama fallback → {ollama_url} model={ollama_model}")
+        resp = await fallback_client.chat.completions.create(**fallback_params)
+        return openai_response_to_anthropic_message(resp)
 
     async def stream(
         self,
@@ -491,7 +549,35 @@ class LLMClient:
                 }
                 if oai_tools:
                     params["tools"] = oai_tools
-                return await self.openai_client.chat.completions.create(**params)
+                try:
+                    return await self.openai_client.chat.completions.create(**params)
+                except Exception as e:
+                    # P0-3 2026-07-03: mimo 429 fallback 到 ollama (流式)
+                    if (
+                        HAS_OPENAI_RATE_LIMIT
+                        and isinstance(e, RateLimitError)
+                        and self.backend == "openai_compat"
+                    ):
+                        logger.warning(
+                            f"openai_compat (mimo) 流式限流 429, "
+                            f"fallback 到 ollama {settings.OLLAMA_FALLBACK_MODEL}"
+                        )
+                        ollama_url = getattr(
+                            settings, "OLLAMA_BASE_URL",
+                            "http://host.docker.internal:11434/v1",
+                        )
+                        ollama_model = getattr(
+                            settings, "OLLAMA_FALLBACK_MODEL", ""
+                        ) or getattr(settings, "OLLAMA_MODEL", "qwen3:8b")
+                        fallback_client = AsyncOpenAI(
+                            api_key="ollama", base_url=ollama_url
+                        )
+                        fallback_params = dict(params)
+                        fallback_params["model"] = ollama_model
+                        return await fallback_client.chat.completions.create(
+                            **fallback_params
+                        )
+                    raise
 
             tool_acc = OpenAIToolCallAccumulator()
             yield _OAIStreamShim(_oai_call(), tool_acc)
@@ -549,7 +635,36 @@ class LLMClient:
             }
             if oai_tools:
                 params["tools"] = oai_tools
-            stream = await self.openai_client.chat.completions.create(**params)
+            try:
+                stream = await self.openai_client.chat.completions.create(**params)
+            except Exception as e:
+                # P0-3 2026-07-03: mimo 429 fallback 到 ollama (stream_raw)
+                if (
+                    HAS_OPENAI_RATE_LIMIT
+                    and isinstance(e, RateLimitError)
+                    and self.backend == "openai_compat"
+                ):
+                    logger.warning(
+                        f"openai_compat (mimo) stream_raw 限流 429, "
+                        f"fallback 到 ollama {settings.OLLAMA_FALLBACK_MODEL}"
+                    )
+                    ollama_url = getattr(
+                        settings, "OLLAMA_BASE_URL",
+                        "http://host.docker.internal:11434/v1",
+                    )
+                    ollama_model = getattr(
+                        settings, "OLLAMA_FALLBACK_MODEL", ""
+                    ) or getattr(settings, "OLLAMA_MODEL", "qwen3:8b")
+                    fallback_client = AsyncOpenAI(
+                        api_key="ollama", base_url=ollama_url
+                    )
+                    fallback_params = dict(params)
+                    fallback_params["model"] = ollama_model
+                    stream = await fallback_client.chat.completions.create(
+                        **fallback_params
+                    )
+                else:
+                    raise
             tool_acc = OpenAIToolCallAccumulator()
             async for chunk in stream:
                 # Pydantic v2 ChatCompletionChunk -> dict
