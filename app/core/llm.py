@@ -608,5 +608,10 @@ class LLMClient:
                         }
 
 
-# 全局单例
-llm_client = LLMClient()
+# 全局单例已删除 (P0-1 2026-07-03 修复):
+# 原 llm_client = LLMClient() 是 import-time 副作用, celery worker 镜像 (2026-06-17 创建)
+# 缺 openai 包时, import app.core.llm 立即抛 ImportError → worker 启动崩溃死循环重启.
+# 所有调用方都直接 LLMClient() 实例化 (见 agentic_loop/critic/intent_classifier/
+# result_compressor 的 `ctx.llm or LLMClient()` 模式), 没有引用全局变量, 删了零影响.
+# 新铁律: 模块级禁止副作用 (构造客户端/加载模型/连接 DB) — 全部走 lazy 函数.
+# 如需 LLMClient 单例, 调用方自行实现 lazy 缓存 (本项目目前无此需求).
