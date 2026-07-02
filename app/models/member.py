@@ -10,7 +10,9 @@ class Member(Base, TimestampMixin):
     __tablename__ = "members"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, index=True)  # 登录用户名
+    # 2026-07-02 v2 PR6-P13: 大小写不敏感 UNIQUE INDEX (alembic 053_member_username_ci_unique)
+    # comment_service 解析 @ 时用 username.lower() → 防 "Alice" vs "alice" 歧义
+    username = Column(String(50), index=False)  # 登录用户名
     password_hash = Column(String(200))  # 密码哈希
     name = Column(String(50), nullable=False)
     grade = Column(String(20))  # 研一/研二/博一等

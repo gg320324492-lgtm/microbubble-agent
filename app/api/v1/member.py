@@ -5,7 +5,7 @@ from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import get_password_hash, get_current_user, get_current_admin_user
-from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
+from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException, ConflictException
 from app.models.member import Member
 from app.schemas.member import MemberCreate, MemberUpdate, MemberResponse, MemberList
 from app.api.v1.auth import _resolve_avatar_url
@@ -19,10 +19,13 @@ async def create_member(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """创建成员"""
-    existing = await db.execute(select(Member).where(Member.username == member_data.username))
-    if existing.scalar_one_or_none():
-        raise ValidationException("用户名已存在")
+    """创建成员
+
+    v2 PR6-P13: case-insensitive username uniqueness check (避免 mention 解析歧义)
+    """
+    from app.services.member_service import MemberService
+    svc = MemberService(db)
+    await svc._assert_username_unique(db, member_data.username or "")
 
     member = Member(
         name=member_data.name,
@@ -112,7 +115,10 @@ async def update_member(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """更新成员"""
+    """更新成员
+
+    v2 PR6-P13: 如果更新包含 username, 走 case-insensitive 唯一检查 (排除自己)
+    """
     result = await db.execute(select(Member).where(Member.id == member_id))
     member = result.scalar_one_or_none()
 
@@ -120,6 +126,14 @@ async def update_member(
         raise NotFoundException("成员")
 
     update_data = member_data.model_dump(exclude_unset=True)
+
+    # PR6-P13: 提前检查 username 唯一性, 失败时 ConflictException (409) 而非 IntegrityError (500)
+    if "username" in update_data and update_data["username"] is not None:
+        from app.services.member_service import MemberService
+        await MemberService._assert_username_unique(
+            db, update_data["username"], exclude_member_id=member_id
+        )
+
     for field, value in update_data.items():
         setattr(member, field, value)
 
