@@ -310,6 +310,25 @@ class DriveService:
         except Exception as e:
             logger.debug(f"[DriveService.create_file] activity log 失败 (非阻塞): {e}")
 
+        # v2 网盘 PR6-P12+ 增量: upload owner notification (folder owner != uploader 时通知 owner)
+        # 设计: 自通知 skip (owner_id == current_user_id 时不触发, 避免噪音)
+        # 未来扩展: "upload to other user's folder" 时自动通知 folder owner
+        # best-effort 不阻塞, 失败只 logger.debug
+        try:
+            owner_id_for_notify = owner_id
+            uploader_id = created_by or owner_id
+            if owner_id_for_notify != uploader_id:
+                # 跨用户上传场景: 通知 file owner (e.g. folder owner != uploader)
+                await notification_service.create_mention(
+                    self.db,
+                    file_id=knowledge.id,
+                    mentioned_user_id=owner_id_for_notify,
+                    mentioned_by=uploader_id,
+                    context="upload",
+                )
+        except Exception as e:
+            logger.debug(f"[DriveService.create_file] notification trigger 失败 (非阻塞): {e}")
+
         return knowledge
 
     async def list_files(
@@ -868,6 +887,22 @@ class DriveService:
             await self.db.commit()
         except Exception as e:
             logger.debug(f"[DriveService.create_share_link] activity log 失败: {e}")
+
+        # v2 网盘 PR6-P12+ 增量: share 触发 notification (context='share')
+        # 设计: create_share_link 仅 owner 可调 (line 859 已校验), 所以 share 通知发给 owner 自己
+        # 未来 PR3 "team 成员触发分享" 时, 这里会跳过自通知
+        try:
+            if f.created_by != current_user_id:
+                await notification_service.create_mention(
+                    self.db,
+                    file_id=f.id,
+                    mentioned_user_id=f.created_by,
+                    mentioned_by=current_user_id,
+                    context="share",
+                )
+        except Exception as e:
+            logger.debug(f"[DriveService.create_share_link] notification trigger 失败 (非阻塞): {e}")
+
         return f
 
     async def revoke_share_link(
@@ -1014,6 +1049,9 @@ class DriveService:
         """切换文件收藏状态 (owner only, 360° 翻转 is_starred).
 
         Returns: 更新后的 Knowledge, None = 文件不存在或非 owner.
+
+        v2 网盘 PR6-P12+ 增量: star 触发 notification_service (create_mention context='star'),
+        通知 file owner (跳过自通知, 防止噪音).
         """
         f = await self.db.execute(
             select(Knowledge).where(
@@ -1035,6 +1073,23 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(f)
         logger.info(f"[DriveService.toggle_star_file] id={f.id} {action}")
+
+        # v2 网盘 PR6-P12+ 增量: star 通知 file owner (只有 star 时通知, unstar 不通知)
+        # 设计: star 总是 owner 操作 (toggle_star_file 已校验 f.created_by == current_user_id),
+        # 未来 PR3 "team member star others' files" 时, 这里会跳过自通知
+        if action == "star":
+            try:
+                if f.created_by != current_user_id:
+                    await notification_service.create_mention(
+                        self.db,
+                        file_id=f.id,
+                        mentioned_user_id=f.created_by,
+                        mentioned_by=current_user_id,
+                        context="star",
+                    )
+            except Exception as e:
+                logger.debug(f"[DriveService.toggle_star_file] notification trigger 失败 (非阻塞): {e}")
+
         return f
 
     async def list_trash(
