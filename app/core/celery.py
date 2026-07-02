@@ -71,6 +71,12 @@ celery_app.conf.update(
             "task": "app.services.drive_cleanup_tasks.cleanup_expired_drive_files_task",
             "schedule": 3600.0,  # 每 1 小时扫描（retention=3 天时误差 < 1.4%）
         },
+        # 2026-07-02 v2 PR6-P9: file_mentions 通知 30 天物理清除
+        # 一刀切 (is_read 不分), 24h 调度对齐 task 垃圾桶节奏 (CLAUDE.md 2026-06-03 教训)
+        "file-mention-cleanup-old": {
+            "task": "app.services.file_mention_tasks.cleanup_old_mentions_task",
+            "schedule": 86400.0,  # 每 24 小时扫描 (retention=30 天时误差 < 1.4%)
+        },
     },
 )
 
@@ -94,6 +100,7 @@ celery_app.conf.imports = [
     "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
     "app.services.thumbnail_tasks",  # 2026-07-01 课题组网盘 PR5 缩略图生成
     "app.services.storage_tasks",  # 2026-07-01 课题组网盘 PR5 配额重算 + 分片 session 清理
+    "app.services.file_mention_tasks",  # 2026-07-02 v2 PR6-P9 通知 30 天清理
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）

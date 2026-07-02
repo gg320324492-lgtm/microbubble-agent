@@ -25,7 +25,7 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-from sqlalchemy import select, and_, func, update
+from sqlalchemy import select, and_, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import FileMention, ActivityEvent, Knowledge, FileComment
@@ -600,3 +600,32 @@ class NotificationService:
 
 # 全局单例 (与 PR5 service 范式一致)
 notification_service = NotificationService()
+
+
+# ============================================================================
+# 2026-07-02 v2 PR6-P9: Celery 物理清理 30 天前 file_mentions
+# ============================================================================
+
+async def cleanup_old_mentions(db: AsyncSession, cutoff_date: datetime) -> int:
+    """物理清除 `cutoff_date` 之前的 file_mentions 行 (一刀切, 不分已读未读)
+
+    设计要点:
+    - 一刀切: is_read=true/false 都删 (与表 docstring "已读后保留 30 天" 对齐,
+      但本实现统一按 created_at 而非 read_at, 简化逻辑 + 防止未读通知无限堆积)
+    - file_mentions.created_at 是 naive 列 (TIMESTAMP WITHOUT TIME ZONE),
+      cutoff_date 可能是 tz-aware (Celery task 用 datetime.now(timezone.utc)),
+      必须 _to_naive_datetime 转换 (CLAUDE.md 2026-06-05 tz-aware 教训复用)
+    - CASCADE 自动清: 无外键引用 file_mentions, 安全删除
+    - deleted_count = 0 是健康状态, 不报错
+
+    Returns:
+        int: 删除行数 (0 = 无过期, N = 实际清理 N 行)
+    """
+    if cutoff_date.tzinfo is not None:
+        cutoff_naive = cutoff_date.replace(tzinfo=None)
+    else:
+        cutoff_naive = cutoff_date
+    stmt = delete(FileMention).where(FileMention.created_at < cutoff_naive)
+    result = await db.execute(stmt)
+    await db.commit()
+    return result.rowcount or 0

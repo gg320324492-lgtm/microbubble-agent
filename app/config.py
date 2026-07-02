@@ -124,6 +124,11 @@ class Settings(BaseSettings):
     # 2026-07-01 课题组网盘: drive 文件 + 孤儿 folder 软删除保留天数 (与 task/chat 清理模式对齐)
     DRIVE_RETENTION_DAYS: int = 3
 
+    # 2026-07-02 v2 PR6 通知清理: file_mentions 保留天数 (与 chat_history 30 天对齐)
+    # 已读/未读通知保留 N 天后 Celery beat 物理删除 file_mentions (一刀切)
+    # 运维/测试时可临时缩短 (如 0 立即清空) — 与 TRASH_RETENTION_DAYS 范式一致
+    MENTION_RETENTION_DAYS: int = 30
+
     # CORS 允许的源（逗号分隔，空则使用默认值）
     CORS_ORIGINS: str = ""
 
