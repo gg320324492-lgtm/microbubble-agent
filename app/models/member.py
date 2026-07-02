@@ -20,7 +20,9 @@ class Member(Base, TimestampMixin):
     skills = Column(ARRAY(String))  # 技能列表
     # 2026-07-02 v2 PR6-P14: 大小写不敏感 UNIQUE INDEX (alembic 054_member_wechat_id_ci_unique)
     # comment_service mention 解析用 wechat_id.lower() (3 路匹配优先) → 防 "WangTianZhi" vs "wangtianzhi" 歧义
-    wechat_id = Column(String(100))  # 企业微信 userid
+    # 2026-07-03 v2 PR6-P17: nullable=False (alembic 057_wechat_id_not_null 防 NULL 渗透)
+    # 14/35 行原 NULL 已 backfill 为 '__NULL_BACKFILL_<id>__' 占位, 留给后续真实值填充
+    wechat_id = Column(String(100), nullable=False)  # 企业微信 userid (NOT NULL)
     wechat_nickname = Column(String(100))  # 企业微信昵称
     wechat_remark = Column(String(100))  # 企业微信备注名
     # 2026-07-02 v2 PR6-P15: 大小写不敏感 UNIQUE INDEX (alembic 055_member_personal_wechat_id_ci_unique)
