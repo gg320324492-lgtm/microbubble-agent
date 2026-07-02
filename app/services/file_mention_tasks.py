@@ -22,6 +22,7 @@ from sqlalchemy.pool import NullPool
 from app.core.celery import celery_app
 from app.config import settings
 from app.services.notification_service import cleanup_old_mentions
+from app.services.cleanup_safety import confirm_retention_param
 
 logger = logging.getLogger("microbubble.file_mention_cleanup")
 
@@ -47,6 +48,21 @@ def cleanup_old_mentions_task(retention_days: Optional[int] = None):
     days = retention_days if retention_days is not None else getattr(
         settings, "MENTION_RETENTION_DAYS", 30
     )
+
+    # PR6-P11 二次确认守卫: retention_days != settings 默认值时延迟 + warn
+    # 事故防复发: PR6-P9 误传 retention_days=0 删 31 条 production file_mentions
+    guard = confirm_retention_param(
+        retention_days=retention_days,
+        default=getattr(settings, "MENTION_RETENTION_DAYS", 30),
+        task_name="cleanup_old_mentions_task",
+    )
+    if not guard["proceed"]:
+        return {
+            "status": "skipped",
+            "reason": guard["reason"],
+            "retention_days": guard["effective_days"],
+            "deleted_count": 0,
+        }
     try:
         async def _run():
             engine = create_async_engine(

@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     MIMO_BASE_URL: str = "https://api.xiaomimimo.com/v1"
     MIMO_MODEL: str = "mimo-v2.5"
 
+    # 2026-07-02 openai_compat backend dispatch
+    # LLM_BACKEND: "anthropic" (默认) / "openai_compat" (mimo /v1, 抗 429) / "ollama" (本地)
+    LLM_BACKEND: str = "anthropic"
+    # openai_compat 端点 (mimo /v1, 抗 anthropic 协议 429 限流)
+    LLM_OPENAI_COMPAT_BASE_URL: str = ""
+    LLM_OPENAI_COMPAT_API_KEY: str = ""
+    LLM_OPENAI_COMPAT_MODEL: str = "mimo-v2.5"
+    # ollama 本地 (deprecated, 留给未来 RTX 5090 sm_120 兼容)
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
+    OLLAMA_MODEL: str = "qwen3-embedding-0.6b"
+
     # Vision MCP 配置（DeepSeek 切换时使用）
     VISION_USE_MCP: bool = False
     VISION_MCP_TRANSPORT: str = "stdio"  # stdio 或 http
@@ -136,6 +147,13 @@ class Settings(BaseSettings):
 
     # 2026-07-02 v2 PR6-P10: cleanup 备份文件名前缀 (与 /tmp 路径拼接)
     CLEANUP_BACKUP_PREFIX: str = "celery_cleanup"
+
+    # 2026-07-02 v2 PR6-P11: Celery task retention 二次确认延迟秒数
+    # 任务参数 retention_days != settings 默认值时, 守卫 sleep N 秒后继续执行
+    # 0.5s 给人手按 Ctrl+C 的窗口 (Celery 启动是 subprocess, 杀 task 可能来不及)
+    # 0 = 关闭延迟 (紧急场景: 真要快速跑非默认值), 默认 0.5s
+    # 事故教训 (PR6-P9 误传 retention_days=0 删 31 条): 二级防线
+    RETENTION_OVERRIDE_CONFIRM_DELAY_SEC: float = 0.5
 
     # CORS 允许的源（逗号分隔，空则使用默认值）
     CORS_ORIGINS: str = ""
