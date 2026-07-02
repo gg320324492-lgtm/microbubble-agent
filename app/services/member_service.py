@@ -13,16 +13,19 @@ class MemberService:
         self.db = db
 
     # ============================================================
-    # v2 PR6-P13/P14/P15: case-insensitive uniqueness helpers
+    # v2 PR6-P13/P14/P15/P16: case-insensitive uniqueness helpers
     # ============================================================
-    # 通用 helper: 同时支持 username / wechat_id / personal_wechat_id
+    # 通用 helper: 同时支持 4 个 identifier 列
     # 反射 Member.__table__.columns 取列引用, 避免硬编码
-    _IDENTIFIER_COLUMNS = frozenset({"username", "wechat_id", "personal_wechat_id"})
+    _IDENTIFIER_COLUMNS = frozenset({
+        "username", "wechat_id", "personal_wechat_id", "external_userid",
+    })
     # 列名 → 中文 label (用于 ConflictException 错误信息, 用户友好)
     _COLUMN_LABELS = {
         "username": "用户名",
         "wechat_id": "企业微信号",
         "personal_wechat_id": "个人微信号",
+        "external_userid": "微信外部ID",
     }
 
     @staticmethod
@@ -32,9 +35,9 @@ class MemberService:
         value: Optional[str],
         exclude_member_id: Optional[int] = None,
     ) -> None:
-        """case-insensitive 唯一检查 (PR6-P13 username + PR6-P14 wechat_id + PR6-P15 personal_wechat_id 通用)
+        """case-insensitive 唯一检查 (PR6-P13/14/15/16 通用)
 
-        反射 Member 表的列名, 支持 username / wechat_id / personal_wechat_id.
+        反射 Member 表的列名, 支持 4 个 identifier 列.
         空值/None 跳过检查 (与 PG UNIQUE 索引 NULL 不参与行为一致).
 
         Args:
@@ -54,14 +57,14 @@ class MemberService:
             )
 
         if not value:
-            # 空 / None 跳过检查 (与 alembic 053/054/055 函数索引 NULL 不参与行为一致)
+            # 空 / None 跳过检查 (与 alembic 053/054/055/056 函数索引 NULL 不参与行为一致)
             return
 
         normalized = value.lower().strip()
         if not normalized:
             return
 
-        # 反射获取列对象 (避免硬编码 Member.username / Member.wechat_id / Member.personal_wechat_id)
+        # 反射获取列对象 (避免硬编码 Member.username / Member.wechat_id 等)
         column = getattr(Member, column_name)
 
         stmt = select(Member.id).where(func.lower(column) == normalized)
@@ -159,6 +162,7 @@ class MemberService:
         password_hash: Optional[str] = None,
         wechat_id: Optional[str] = None,
         personal_wechat_id: Optional[str] = None,
+        external_userid: Optional[str] = None,
         grade: Optional[str] = None,
         research_area: Optional[str] = None,
         email: Optional[str] = None,
@@ -167,8 +171,8 @@ class MemberService:
     ) -> Member:
         """创建成员
 
-        v2 PR6-P13/P14/P15: 创建前检查 username + wechat_id + personal_wechat_id
-        是否被占用 (case-insensitive), 与 alembic 053/054/055 兜底配合.
+        v2 PR6-P13/P14/P15/P16: 创建前检查 4 个 identifier 是否被占用 (case-insensitive),
+        与 alembic 053/054/055/056 兜底配合.
         """
         # PR6-P13 username 唯一检查
         await self._assert_identifier_unique(self.db, "username", username)
@@ -176,12 +180,15 @@ class MemberService:
         await self._assert_identifier_unique(self.db, "wechat_id", wechat_id)
         # PR6-P15 personal_wechat_id 唯一检查 (wechat/identity.resolve_by_wechat_id)
         await self._assert_identifier_unique(self.db, "personal_wechat_id", personal_wechat_id)
+        # PR6-P16 external_userid 唯一检查 (wechat/identity.resolve_by_external_userid)
+        await self._assert_identifier_unique(self.db, "external_userid", external_userid)
         member = Member(
             name=name,
             username=username,
             password_hash=password_hash,
             wechat_id=wechat_id,
             personal_wechat_id=personal_wechat_id,
+            external_userid=external_userid,
             grade=grade,
             research_area=research_area,
             email=email,
@@ -197,7 +204,7 @@ class MemberService:
     async def update_member(self, member_id: int, **kwargs) -> Optional[Member]:
         """更新成员信息
 
-        v2 PR6-P13/P14/P15: 如果 kwargs 含 username / wechat_id / personal_wechat_id,
+        v2 PR6-P13/P14/P15/P16: 如果 kwargs 含 4 个 identifier,
         走 case-insensitive 唯一检查 (排除自己)
         """
         member = await self.get_member(member_id)
@@ -218,6 +225,12 @@ class MemberService:
         if "personal_wechat_id" in kwargs and kwargs["personal_wechat_id"] is not None:
             await self._assert_identifier_unique(
                 self.db, "personal_wechat_id", kwargs["personal_wechat_id"],
+                exclude_member_id=member_id,
+            )
+        # PR6-P16 external_userid
+        if "external_userid" in kwargs and kwargs["external_userid"] is not None:
+            await self._assert_identifier_unique(
+                self.db, "external_userid", kwargs["external_userid"],
                 exclude_member_id=member_id,
             )
 

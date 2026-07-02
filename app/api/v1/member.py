@@ -21,7 +21,7 @@ async def create_member(
 ):
     """创建成员
 
-    v2 PR6-P13/P14/P15: case-insensitive username + wechat_id + personal_wechat_id uniqueness check
+    v2 PR6-P13/P14/P15/P16: case-insensitive username + wechat_id + personal_wechat_id + external_userid uniqueness check
     """
     from app.services.member_service import MemberService
     svc = MemberService(db)
@@ -31,6 +31,8 @@ async def create_member(
     await svc._assert_identifier_unique(db, "wechat_id", member_data.wechat_id)
     # PR6-P15 personal_wechat_id 唯一 (alembic 055 兜底)
     await svc._assert_identifier_unique(db, "personal_wechat_id", member_data.personal_wechat_id)
+    # PR6-P16 external_userid 唯一 (alembic 056 兜底)
+    await svc._assert_identifier_unique(db, "external_userid", member_data.external_userid)
 
     member = Member(
         name=member_data.name,
@@ -122,7 +124,7 @@ async def update_member(
 ):
     """更新成员
 
-    v2 PR6-P13/P14/P15: 如果更新包含 username / wechat_id / personal_wechat_id,
+    v2 PR6-P13/P14/P15/P16: 如果更新包含 4 个 identifier 字段,
     走 case-insensitive 唯一检查 (排除自己)
     """
     result = await db.execute(select(Member).where(Member.id == member_id))
@@ -133,7 +135,7 @@ async def update_member(
 
     update_data = member_data.model_dump(exclude_unset=True)
 
-    # PR6-P13/P14/P15: 提前检查 3 个 identifier 唯一性, 失败时 ConflictException (409)
+    # PR6-P13/P14/P15/P16: 提前检查 4 个 identifier 唯一性, 失败时 ConflictException (409)
     from app.services.member_service import MemberService
     if "username" in update_data and update_data["username"] is not None:
         await MemberService._assert_identifier_unique(
@@ -146,6 +148,11 @@ async def update_member(
     if "personal_wechat_id" in update_data and update_data["personal_wechat_id"] is not None:
         await MemberService._assert_identifier_unique(
             db, "personal_wechat_id", update_data["personal_wechat_id"],
+            exclude_member_id=member_id,
+        )
+    if "external_userid" in update_data and update_data["external_userid"] is not None:
+        await MemberService._assert_identifier_unique(
+            db, "external_userid", update_data["external_userid"],
             exclude_member_id=member_id,
         )
 

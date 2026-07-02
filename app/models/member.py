@@ -28,6 +28,9 @@ class Member(Base, TimestampMixin):
     # 与 PR6-P13/014 同模式, _IDENTIFIER_COLUMNS 白名单已加 personal_wechat_id
     personal_wechat_id = Column(String(100))  # 个人微信号
     wechat_mobile = Column(String(20))  # 绑定手机号
+    # 2026-07-03 v2 PR6-P16: 大小写不敏感 UNIQUE INDEX (alembic 056_external_userid_ci)
+    # app/wechat/identity.py:41 resolve_by_external_userid() 当前精确匹配, 但为防未来 lower() 匹配出现撞车
+    # 与 PR6-P13/014/015 同模式, _IDENTIFIER_COLUMNS 白名单已加 external_userid (wm 开头通常大写)
     external_userid = Column(String(100))  # 微信互通外部用户ID（普通微信用户，wm开头）
     email = Column(String(100))
     phone = Column(String(20))
