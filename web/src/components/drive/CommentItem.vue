@@ -572,8 +572,11 @@ function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
 .mention-tag {
   font-size: 11px;
   padding: 2px 6px;
-  background: var(--color-primary-bg, rgba(255, 122, 92, 0.12));
-  color: var(--color-primary, #FF7A5C);
+  /* P2-6 fix (2026-07-08): 改用 var(--color-primary-rgb) 透明度可调, */
+  /* 之前 fallback rgba(255,122,92,0.12) / #FF7A5C 硬编码 light 暖橙, */
+  /* dark + ocean/forest 主题不切换. 6 主题全部自动跟随. */
+  background: rgba(var(--color-primary-rgb), 0.12);
+  color: var(--color-primary);
   border-radius: 10px;
 }
 
