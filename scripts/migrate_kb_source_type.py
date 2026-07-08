@@ -1,14 +1,14 @@
 """一次性 KB 迁移脚本（2026-06-30 续集 4）
 
 目标:
-  把 knowledge 表中所有 title 以 '[拓展' 开头的卡片（180 张，2026-06-30 摸底确认）
+  把 knowledge 表中所有 title 以 '[拓展' 开头的卡片（179 张，dedup_titles 删 1 行后）
   的 source_type 字段从 NULL → 'auto_expansion'。
 
 背景:
-  - 这 180 张卡片是 LLM / 上游脚本自动入库的，title 前缀是课题内部科学索引编码
+  - 这 179 张卡片是 LLM / 上游脚本自动入库的，title 前缀是课题内部科学索引编码
     ('拓展-{V/U/AA/S/Z}{数字}' 格式, 自动打标)
   - 但入库时未写 source_type='auto_expansion', 前端"✨ 自动拓展" chip (走
-    source_type 过滤) 看不到这 180 张 → 用户视觉上"自动拓展是空白的"
+    source_type 过滤) 看不到这 179 张 → 用户视觉上"自动拓展是空白的"
   - 实际数据完整, 只是没被正确归类
 
 与 migrate_kb_tags.py 关系:
