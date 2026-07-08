@@ -80,10 +80,14 @@ if [ -d "web/dist/assets" ]; then
             *) continue ;;
         esac
         # 跳过 HEAD 已有的
+        # P3-1 fix (2026-07-08): 原 case "$head_dist" in *"$rel"* 用 unquoted word glob,
+        # 只能匹配第一个 word (head_dist 第一行). HEAD 含多行 dist 文件时,
+        # 从第二个开始永远不匹配 → 重复 add. 改用 echo | grep -qFx (精确行匹配)
+        # 跨 sh 兼容 (dash/bash/zsh) 且无 case glob 限制.
         rel="web/dist/assets/$bn"
-        case "$head_dist" in
-            *"$rel"*) continue ;;
-        esac
+        if echo "$head_dist" | grep -qFx "$rel"; then
+            continue
+        fi
         local_new_dist="$local_new_dist $f"
     done
 fi
