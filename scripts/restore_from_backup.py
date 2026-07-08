@@ -301,37 +301,62 @@ async def restore_from_backup(
                 placeholders = ", ".join(f":{c}" for c in cols)
                 pk = TABLE_TO_PRIMARY_KEY.get(table_name, "id")
                 if upsert:
-                    # 2026-07-02 v2 PR6-P11+ 增量: DO UPDATE SET 全列 (partial mode 时只 UPDATE partial 列)
-                    # PK 列不 SET (会被 PG 自动跳过), 所以可以安全 SET 所有 cols
-                    update_set = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c != pk)
-                    stmt = text(
-                        f"INSERT INTO {db_table_name} ({col_names}) VALUES ({placeholders}) "
-                        f"ON CONFLICT ({pk}) DO UPDATE SET {update_set}"
-                    )
+                    # P2-12 fix (2026-07-08): 两步法 (SELECT 优先 + 显式 INSERT/UPDATE)
+                    # 之前尝试 RETURNING (xmax = 0) 失败: PG 14+ UPSERT 内部走
+                    # "tuple move" (DELETE + INSERT), xmin 变 + xmax 仍 0 → 无法区分.
+                    # 旧 rowcount == 2 判定在 PG 17 也失败 (DO UPDATE 改回 rowcount=1).
+                    # 两步法: 先 SELECT 现有行, 再 INSERT (无) 或 UPDATE (有).
+                    # 跨 PG 版本 (14/15/16/17) 行为一致.
+                    pk = TABLE_TO_PRIMARY_KEY.get(table_name, "id")
+                    if cols and cols != [pk]:
+                        # 正常情况: 包含 PK 列
+                        pk_value = clean_item[pk]
+                    else:
+                        # --columns 没指定 PK (admin 误用) — 跳过
+                        log.warning(f"  [SKIP] UPSERT 但 cols 不含 PK ({cols}), 跳过")
+                        skipped_count += 1
+                        continue
+                    existing_row = (await db.execute(
+                        text(f"SELECT 1 FROM {db_table_name} WHERE {pk} = :pk"),
+                        {"pk": pk_value},
+                    )).first()
+                    if existing_row is None:
+                        # 不存在 → INSERT
+                        stmt = text(
+                            f"INSERT INTO {db_table_name} ({col_names}) VALUES ({placeholders})"
+                        )
+                        await db.execute(stmt, clean_item)
+                        await db.commit()  # 关键: async session __aexit__ 默认 rollback, 必须显式 commit
+                        inserted_count += 1
+                    else:
+                        # 已存在 → UPDATE
+                        update_set = ", ".join(f"{c} = :{c}" for c in cols if c != pk)
+                        update_params = {c: clean_item[c] for c in cols if c != pk}
+                        update_params["pk"] = pk_value
+                        stmt = text(
+                            f"UPDATE {db_table_name} SET {update_set} WHERE {pk} = :pk"
+                        )
+                        result = await db.execute(stmt, update_params)
+                        await db.commit()  # 关键
+                        if result.rowcount > 0:
+                            updated_count += 1
+                        else:
+                            skipped_count += 1
                 else:
                     stmt = text(
                         f"INSERT INTO {db_table_name} ({col_names}) VALUES ({placeholders}) "
                         f"ON CONFLICT ({pk}) DO NOTHING"
                     )
                 try:
-                    result = await db.execute(stmt, clean_item)
-                    # PR6-P11+ 增量: 区分 INSERT/UPDATE/SKIP
-                    # rowcount 在 DO NOTHING 模式下: 1=实际 INSERT, 0=conflict 跳过
-                    # rowcount 在 DO UPDATE 模式下: 2=UPDATE (1 INSERT row + 1 UPDATE row), 1=INSERT
-                    # (PG 行为: DO UPDATE 时 rowcount=2, 因为更新一行算 2 个 affected row)
-                    # DO NOTHING 时 rowcount=0
                     if upsert:
-                        if result.rowcount == 2:
-                            updated_count += 1  # 行已存在, 走 DO UPDATE
-                        elif result.rowcount == 1:
-                            inserted_count += 1  # 新行, INSERT 成功
-                        else:
-                            skipped_count += 1  # 不期望情况
+                        # 已在上面分支处理 (两步法)
+                        continue
+                    result = await db.execute(stmt, clean_item)
+                    # DO NOTHING 模式: rowcount 1=INSERT, 0=冲突跳过
+                    if result.rowcount > 0:
+                        inserted_count += 1
                     else:
-                        if result.rowcount > 0:
-                            inserted_count += 1
-                        else:
-                            skipped_count += 1
+                        skipped_count += 1
                 except Exception as e:
                     print(f"⚠️ INSERT/UPDATE 失败 (id={clean_item.get('id')}): {e}")
                     skipped_count += 1
