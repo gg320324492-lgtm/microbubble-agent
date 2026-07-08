@@ -106,6 +106,16 @@ export function useMentionAutocomplete({
   /**
    * 根据 query 过滤成员 (本地, 避免每键 fetch)
    * 匹配优先级: exact (wechat_id) > prefix (wechat_id) > prefix (username) > prefix (name)
+   *
+   * 2026-07-08 P1-8 修: name 字段也要 toLowerCase 与 wechat/username 保持一致.
+   * 之前 `name === q` 用原始 q (未 lowercase), 当 name 字段是英文大小写敏感
+   * (如 "WangTianZhi") 用户输入小写 ("wangtianzhi") 或全大写 ("WANGTIANZHI")
+   * 时会失配 — wechat/username 都已 lowercase, 只有 name 例外.
+   *
+   * 注意: 纯中文输入场景 "张三".toLowerCase() === "张三" 不变, 修复前后行为
+   * 相同. 主要修英文 name + 大小写不一致的 query 场景.
+   * (Pinyin 输入 "zhang" → 中文 name "张三" 的场景需要 pinyin 映射表, 不在
+   * 本次修复范围).
    */
   function filterMembers(list, q) {
     if (!q) return list.slice(0, maxCandidates)
@@ -114,10 +124,10 @@ export function useMentionAutocomplete({
     for (const m of list) {
       const wechat = (m.wechat_id || '').toLowerCase()
       const username = (m.username || '').toLowerCase()
-      const name = m.name || ''
-      if (wechat === ql || username === ql || name === q) {
+      const name = (m.name || '').toLowerCase()
+      if (wechat === ql || username === ql || name === ql) {
         matched.push({ member: m, score: 100, isExact: true })
-      } else if (wechat.startsWith(ql) || username.startsWith(ql) || name.startsWith(q)) {
+      } else if (wechat.startsWith(ql) || username.startsWith(ql) || name.startsWith(ql)) {
         matched.push({ member: m, score: 50, isExact: false })
       }
     }

@@ -50,6 +50,71 @@ describe('useMentionAutocomplete - filterMembers behavior', () => {
     expect(ids).toContain(1)
   })
 
+  it('English name exact match (mixed case query) - P1-8 fix', async () => {
+    // 2026-07-08 P1-8: name 字段 lowercase 后, 用户输入 "wangtianzhi" (全小写)
+    // 应该精确匹配 name="王天志"? 不行, 名字是中文. 测英文 name 场景:
+    // MOCK_MEMBERS 不含英文 name, 这里 inline 模拟.
+    const MIXED_MEMBERS = [
+      { id: 100, username: 'wangtianzhi_en', wechat_id: '', name: 'WangTianZhi', role: 'member' },
+      { id: 101, username: 'alice', wechat_id: '', name: 'Alice Chen', role: 'member' },
+    ]
+    const ac = useMentionAutocomplete({ members: MIXED_MEMBERS })
+
+    // case 1: 小写 query "wangtianzhi" 匹配 name "WangTianZhi" (修复前 false, 修复后 true)
+    ac.query.value = 'wangtianzhi'
+    ac.refresh()
+    await wait()
+    let ids = ac.rawCandidates.value.map((c) => c.id)
+    expect(ids).toContain(100) // lowercase query should match mixed-case name
+
+    // case 2: 全大写 query "ALICE" 匹配 name "Alice Chen"
+    ac.query.value = 'ALICE'
+    ac.refresh()
+    await wait()
+    ids = ac.rawCandidates.value.map((c) => c.id)
+    expect(ids).toContain(101) // uppercase query should match capitalized name
+
+    // case 3: 混合大小写 query "Alice CHEN" 匹配 name "Alice Chen" (exact match)
+    ac.query.value = 'Alice Chen'
+    ac.refresh()
+    await wait()
+    ids = ac.rawCandidates.value.map((c) => c.id)
+    expect(ids).toContain(101)
+  })
+
+  it('Chinese name exact match (修复前后行为一致, 防御性回归)', async () => {
+    // 中文 lowercase 不变, 修复前后都应该命中. 防未来回归.
+    const ac = useMentionAutocomplete({ members: MOCK_MEMBERS })
+    ac.query.value = '王天志'  // 全中文 query
+    ac.refresh()
+    await wait()
+    const ids = ac.rawCandidates.value.map((c) => c.id)
+    expect(ids).toContain(1)
+  })
+
+  it('English name prefix match (mixed case) - P1-8 fix', async () => {
+    const MIXED_MEMBERS = [
+      { id: 200, username: 'bob_smith', wechat_id: '', name: 'Bob Smith', role: 'member' },
+      { id: 201, username: 'bobby_lee', wechat_id: '', name: 'Bobby Lee', role: 'member' },
+    ]
+    const ac = useMentionAutocomplete({ members: MIXED_MEMBERS })
+
+    // 全大写前缀 "BO" 应匹配 "Bob Smith" + "Bobby Lee"
+    ac.query.value = 'BO'
+    ac.refresh()
+    await wait()
+    const ids = ac.rawCandidates.value.map((c) => c.id)
+    expect(ids).toContain(200)
+    expect(ids).toContain(201)
+
+    // 小写前缀 "bobby" 应匹配 "Bobby Lee" (prefix)
+    ac.query.value = 'bobby'
+    ac.refresh()
+    await wait()
+    const ids2 = ac.rawCandidates.value.map((c) => c.id)
+    expect(ids2).toContain(201)
+  })
+
   it('no match returns empty + dropdown closed', async () => {
     const ac = useMentionAutocomplete({ members: MOCK_MEMBERS })
     ac.query.value = 'zzzz_nomatch'
