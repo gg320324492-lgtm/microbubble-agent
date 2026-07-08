@@ -88,7 +88,15 @@ fi
 log "   ✅ frps active (PID $(pgrep -f 'frps -c /etc/frp/frps.toml' | head -1))"
 
 log "--- frps listen ---"
-sudo ss -tnlp | grep -E ":7000|:7500|:8000|:2222|:9000" || true
+# P3-6 fix (2026-07-08): ss 命令 fallback 到 netstat (Alpine 极简镜像 / 微容器
+# 可能没装 iproute2 ss 命令). command -v 探测 + fallback.
+if command -v ss &> /dev/null; then
+    sudo ss -tnlp 2>/dev/null | grep -E ":7000|:7500|:8000|:2222|:9000" || true
+elif command -v netstat &> /dev/null; then
+    sudo netstat -tnlp 2>/dev/null | grep -E ":7000|:7500|:8000|:2222|:9000" || true
+else
+    warn "ss 和 netstat 都不可用, 跳过端口检查 (安装 iproute2 或 net-tools)"
+fi
 
 log "--- 最后 10 行 frps log ---"
 sudo tail -10 /var/log/frps.log 2>&1 | head -10 || true
