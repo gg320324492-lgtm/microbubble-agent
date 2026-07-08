@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # MicroBubble Agent - 本地电脑部署脚本
-# 部署全部服务（Docker + FRP 客户端）
+# 部署全部服务 (Docker)
+# SSH tunnel 启动另见 tunnel/README.md (Windows 用 start-ssh-tunnel.ps1 + Task Scheduler)
 # 用法: bash scripts/deploy-local.sh
 
 set -e
@@ -59,71 +60,7 @@ if [ ! -f .env ]; then
 fi
 
 # ============================================
-# 3. 安装 FRP 客户端
-# ============================================
-install_frp() {
-    if [ -f "$PROJECT_DIR/frp/frpc.exe" ] || command -v frpc &> /dev/null; then
-        info "FRP 客户端已安装"
-        return
-    fi
-
-    info "下载 FRP 客户端..."
-    FRP_VERSION="0.61.1"
-
-    cd "$PROJECT_DIR/frp"
-
-    if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "win32"* ]]; then
-        # Windows
-        FRP_FILE="frp_${FRP_VERSION}_windows_amd64.zip"
-        wget -q "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${FRP_FILE}" -O frp.zip 2>/dev/null || \
-        curl -sL "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${FRP_FILE}" -o frp.zip
-
-        if command -v unzip &> /dev/null; then
-            unzip -o frp.zip
-        else
-            echo "请手动解压 frp.zip 到 frp/ 目录"
-        fi
-        cp "frp_${FRP_VERSION}_windows_amd64/frpc.exe" . 2>/dev/null || true
-        rm -f frp.zip
-        rm -rf "frp_${FRP_VERSION}_windows_amd64"
-        info "FRP 客户端下载完成: $PROJECT_DIR/frp/frpc.exe"
-    else
-        # Linux/Mac
-        FRP_FILE="frp_${FRP_VERSION}_linux_amd64.tar.gz"
-        wget -q "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/${FRP_FILE}" -O frp.tar.gz
-        tar xzf frp.tar.gz
-        cp "frp_${FRP_VERSION}_linux_amd64/frpc" .
-        rm -f frp.tar.gz
-        rm -rf "frp_${FRP_VERSION}_linux_amd64"
-        info "FRP 客户端下载完成"
-    fi
-}
-
-# ============================================
-# 4. 启动 FRP 客户端
-# ============================================
-start_frp() {
-    info "启动 FRP 客户端..."
-
-    cd "$PROJECT_DIR/frp"
-
-    if [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "win32"* ]]; then
-        # Windows - 后台启动
-        if [ -f frpc.exe ]; then
-            start //B frpc.exe -c frpc.toml
-            info "FRP 客户端已启动（后台）"
-        else
-            warn "frpc.exe 未找到，请手动启动: frp/frpc.exe -c frp/frpc.toml"
-        fi
-    else
-        # Linux/Mac - 后台启动
-        nohup ./frpc -c frpc.toml > frpc.log 2>&1 &
-        info "FRP 客户端已启动（PID: $!）"
-    fi
-}
-
-# ============================================
-# 5. 构建前端
+# 3. 构建前端
 # ============================================
 build_frontend() {
     cd "$PROJECT_DIR/web"
@@ -188,27 +125,31 @@ EOF
 # 主流程
 # ============================================
 echo ""
-info "步骤 1/5: 检查环境"
+info "步骤 1/4: 检查环境"
 echo ""
 
-info "步骤 2/5: 安装 FRP 客户端"
-install_frp
-
-echo ""
-info "步骤 3/5: 配置环境变量"
+info "步骤 2/4: 配置环境变量"
 if [ ! -f .env ]; then
     warn "请先编辑 .env 文件，然后重新运行此脚本"
     exit 1
 fi
 
 echo ""
-info "步骤 4/5: 启动 FRP 客户端"
-start_frp
-
-echo ""
-info "步骤 5/5: 启动 Docker 服务"
+info "步骤 3/4: 构建前端 + 启动 Docker 服务"
 build_frontend
 start_services
+
+echo ""
+echo "=================================="
+echo "本地 Docker 部署完成！"
+echo "=================================="
+echo ""
+echo "下一步: 启用 SSH tunnel 让云端能访问本地服务"
+echo "  Windows:  powershell tunnel/start-ssh-tunnel.ps1"
+echo "  详细文档: tunnel/README.md"
+echo ""
+echo "访问地址: https://$DOMAIN"
+echo ""
 
 echo ""
 echo "=================================="
