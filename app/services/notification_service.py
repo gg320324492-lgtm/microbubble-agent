@@ -280,10 +280,16 @@ class NotificationService:
         Returns:
             (FileMention, merged: bool) — merged=True 表示是 dedup 命中
         """
-        # PR6-P7 dedup: 检查 5s 内 (mentioned_user_id, file_id, context) 是否有 unread mention
+        # PR6-P7 dedup: 检查 5s 内 (mentioned_user_id, file_id, context) 是否有 mention
         merged = False
         ctx = context or "mention"
         threshold = datetime.utcnow() - timedelta(seconds=NOTIFICATION_DEDUP_WINDOW_SECONDS)
+        # P1-9 fix (2026-07-08): 去掉 is_read=False 过滤.
+        # 之前 bug: 过滤 is_read=False 导致 markAllRead 后的 row 不参与 dedup,
+        # 每次 mention 都新建 row, 不合并, 用户视觉上 unreadCount 一直涨但
+        # merged=true 设计完全失效. 正确语义: 5s 内 (file_id, user_id, context)
+        # 合并, 不论 is_read 状态 (用户已 markRead 后, 新 mention 仍合并到同一 row
+        # + 重置 is_read=False 让用户重新看到合并通知).
         existing_recent = (await db.execute(
             select(FileMention)
             .where(
@@ -291,7 +297,6 @@ class NotificationService:
                     FileMention.mentioned_user_id == mentioned_user_id,
                     FileMention.file_id == file_id,
                     FileMention.context == ctx,
-                    FileMention.is_read == False,  # noqa: E712
                     FileMention.created_at >= threshold,
                 )
             )
@@ -310,6 +315,13 @@ class NotificationService:
             existing_recent.repeated_count = (existing_recent.repeated_count or 1) + 1
             existing_recent.created_at = datetime.utcnow()
             existing_recent.mentioned_by = mentioned_by  # 最新触发人覆盖
+            # P1-9 fix (2026-07-08): dedup 命中时重置 is_read=False + read_at=None.
+            # 之前 bug: 用户 markAllRead 后, dedup 命中不重置 is_read → 红点不再更新
+            # (count_unread WHERE is_read=False 仍 = 0), 用户漏看后续 mention 合并.
+            # 设计意图: 5s 内合并显示 1 条 (repeated_count=N), 用户标已读后,
+            # 第 N+1 次 mention 应该让用户重新看到 → is_read=False.
+            existing_recent.is_read = False
+            existing_recent.read_at = None
             # v2 PR6-P8: title/body 重拼 (preview/file_type 已变, 重复最新)
             new_title, new_body = NotificationService._build_title_body(
                 actor_name=actor_name, meta=meta, context=ctx,
