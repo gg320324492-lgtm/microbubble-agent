@@ -1,5 +1,7 @@
 # 历史任务链 / lessons learned 见 [docs/CLAUDE-history.md](./docs/CLAUDE-history.md) (拆分于 2026-07-08 P3-15)
 
+> **2026-07-08 本会话新增**: 30 个 commit 修复 25+ bug, 详见顶层 [CLAUDE.md](../CLAUDE.md) + [CHANGELOG.md](../CHANGELOG.md) 顶部 [Unreleased] 段 + 总览 [memory/2026-07-08-25-bug-fix-batch.md](../memory/2026-07-08-25-bug-fix-batch.md). 13 条新铁律沉淀 (模块级禁止副作用 / async session 必须显式 commit / backend-level fallback 用临时 client / 内层循环不引用外层 closure / filter 字段统一 lowercase / dedup 查询不按 is_read / dedup 区分静态/动态 / tree 必须 cycle 检测 / PG UPSERT 两步法 / sh 脚本 grep 替代 case glob / SW 排除流式 / HTTP path urlsplit / CLAUDE.md < 150KB). 本节按时间倒序归档历史任务链.
+
 ## 开发注意事项
 
 ### 2026-06-14 webhint Edge DevTools `/chat` 页 6 警告 5 误报 + favicon.ico 真修复（commit `30fa545`）
