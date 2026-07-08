@@ -22,7 +22,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from sqlalchemy import select, and_, delete, update
+from sqlalchemy import select, and_, delete, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.knowledge import FileComment, Knowledge
@@ -381,6 +381,24 @@ class CommentService:
         if parent_comment_id is None:
             child_stmt = select(FileComment.id).where(FileComment.parent_comment_id == comment_id)
             child_count = len((await db.execute(child_stmt)).all())
+
+        # P2-1 fix (2026-07-08): 删 file_mentions 关联的 reply mention
+        # (避免孤儿 file_mentions 行)
+        # FileMention 模型没 file_comment_id FK, 用 context 字段模糊匹配:
+        # - context="reply:<comment_id>" (PR6-P5 reply notification) → 可精准删
+        # - context="comment" (顶层 comment mention) → 多 comment 共用, 不删 (避免误删)
+        # - context="share" 等其他 → 不动
+        reply_mention_ctx = f"reply:{comment_id}"
+        reply_mention_delete = await db.execute(
+            text("DELETE FROM file_mentions WHERE context = :ctx"),
+            {"ctx": reply_mention_ctx},
+        )
+        deleted_mentions = reply_mention_delete.rowcount
+        if deleted_mentions > 0:
+            logger.info(
+                f"[Comment] delete_comment {comment_id} 同时删 {deleted_mentions} 条 reply mention "
+                f"(context={reply_mention_ctx})"
+            )
 
         await db.execute(delete(FileComment).where(FileComment.id == comment_id))
         # cascade 自动删 children, reply_count 需手动维护
