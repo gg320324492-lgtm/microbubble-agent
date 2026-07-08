@@ -267,7 +267,7 @@
             <div class="tab-content-inner">
               <template v-if="transcriptEntries.length">
                 <div
-                  v-for="(entry, i) in transcriptEntries"
+                  v-for="(entry, i) in displayedTranscriptEntries"
                   :key="i"
                   class="transcript-entry"
                   :class="{ 'entry-removed': entry.removed }"
@@ -325,6 +325,12 @@
                       <span v-if="entry.reason" class="remove-reason">({{ entry.reason }})</span>
                     </div>
                   </div>
+                </div>
+                <!-- 2026-07-08 修复: 分页按钮（避免 3331 段一次性渲染） -->
+                <div v-if="hasMoreTranscript" class="transcript-load-more">
+                  <el-button @click="loadMoreTranscript" type="primary" plain>
+                    加载更多 ({{ displayedTranscriptEntries.length }} / {{ transcriptEntries.length }})
+                  </el-button>
                 </div>
               </template>
               <el-empty v-else description="暂无转录记录" />
@@ -417,6 +423,11 @@ const activeTab = ref(
     ? String(route.query.tab)
     : 'minutes'
 )
+// 2026-07-08 修复: 大会议 (3331+ 段) v-for 渲染 ~30k Element Plus 组件
+// 触发 "Maximum call stack size exceeded"。transcript 改分页渲染，每页 50 段，
+// "加载更多" 按钮手动追加。避免一次 render 30k EP 组件实例。
+const TRANSCRIPT_PAGE_SIZE = 50
+const transcriptPageCount = ref(1)
 
 // 铁律 30: EP 图标 named import + 通过 props 传入
 const tabItems = [
@@ -531,6 +542,20 @@ const transcriptEntries = computed(() => {
 //  并发 3 × 83 段 = ~83 POST, 30/min 限流后段全部 429, console 30+ 个重复错误像 Vue loop)
 const polishedTexts = ref({})
 
+// 2026-07-08 修复: 分页渲染 transcript (避免 3331 段触发 Element Plus 栈溢出)
+// 每次只渲染前 pageCount * 50 段，"加载更多"按钮递增 pageCount
+const displayedTranscriptEntries = computed(() => {
+  const all = transcriptEntries.value || []
+  const end = Math.min(all.length, transcriptPageCount.value * TRANSCRIPT_PAGE_SIZE)
+  return all.slice(0, end)
+})
+const hasMoreTranscript = computed(
+  () => (transcriptEntries.value?.length || 0) > displayedTranscriptEntries.value.length
+)
+function loadMoreTranscript() {
+  transcriptPageCount.value++
+}
+
 async function autoPolishIfNeeded() {
   if (!meeting.value) return
   const entries = transcriptEntries.value
@@ -552,6 +577,15 @@ async function autoPolishIfNeeded() {
   }
   if (!pending.length) return
 
+  // 2026-07-08 修复: 大会议 (>= 500 段) 跳过自动润色
+  // 根因: Promise.all 并发 17 个 polish-text-batch 请求 → 每请求 60s LLM 调用 +
+  // 持 DB session → 后端连接池 30 个全占满 → 所有 API 500/504
+  // 长会议用户已能接受原始 ASR 文本 (会议纪要 + 关键要点已由 LLM 生成)
+  if (pending.length >= 500) {
+    console.warn(`[MeetingDetailView] ${pending.length} 段待润色 > 500，跳过自动润色（防 DB 连接池耗尽）`)
+    return
+  }
+
   // 按 200 条分块（后端 polish-text-batch 端点硬上限 200 条/批，防 LLM token 超限）
   // 长会议 #120 (3357 段) / #95 (333 段) / #151 (426 段) 不分块会触发 400
   const BATCH_SIZE = 200
@@ -560,33 +594,39 @@ async function autoPolishIfNeeded() {
     chunks.push(pending.slice(i, i + BATCH_SIZE))
   }
 
-  // 并发请求所有 chunk（每块 1 次 HTTP，仍比 83 个并发单文本 POST 少 99% 请求数）
-  try {
-    const responses = await Promise.all(
-      chunks.map(chunk =>
-        axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text-batch`, {
-          texts: chunk.map(p => p.text),
-        }).catch(() => null)  // 单 chunk 失败不影响其他 chunk
-      )
-    )
-    let pendingIdx = 0
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const res = responses[ci]
-      const chunk = chunks[ci]
-      const polishedArr = res?.data?.polished
-      if (!polishedArr) {
-        pendingIdx += chunk.length
-        continue
-      }
-      for (let k = 0; k < chunk.length && k < polishedArr.length; k++) {
-        const polished = polishedArr[k]
-        if (polished && polished !== pending[pendingIdx].text) {
-          polishedTexts.value[pending[pendingIdx].i] = polished
-        }
-        pendingIdx++
-      }
+  // 2026-07-08 修复: 并发限流 (max 3 chunk 同时) 防连接池耗尽
+  // 原版 Promise.all 会把所有 chunk 同时发, 17 个 LLM 请求持 17 个 DB session
+  const MAX_CONCURRENT_CHUNKS = 3
+  const responses = new Array(chunks.length).fill(null)
+
+  for (let i = 0; i < chunks.length; i += MAX_CONCURRENT_CHUNKS) {
+    const batch = chunks.slice(i, i + MAX_CONCURRENT_CHUNKS).map((chunk, idx) => ({
+      chunk, idx: i + idx,
+      promise: axios.post(`/api/v1/meetings/${meeting.value.id}/polish-text-batch`, {
+        texts: chunk.map(p => p.text),
+      }).catch(() => null)  // 单 chunk 失败不影响其他 chunk
+    }))
+    const settled = await Promise.all(batch.map(b => b.promise))
+    settled.forEach((res, k) => { responses[batch[k].idx] = res })
+  }
+
+  let pendingIdx = 0
+  for (let ci = 0; ci < chunks.length; ci++) {
+    const res = responses[ci]
+    const chunk = chunks[ci]
+    const polishedArr = res?.data?.polished
+    if (!polishedArr) {
+      pendingIdx += chunk.length
+      continue
     }
-  } catch { /* 静默失败 - 后端 Redis 命中率高, 单次失败不阻塞阅读 */ }
+    for (let k = 0; k < chunk.length && k < polishedArr.length; k++) {
+      const polished = polishedArr[k]
+      if (polished && polished !== pending[pendingIdx].text) {
+        polishedTexts.value[pending[pendingIdx].i] = polished
+      }
+      pendingIdx++
+    }
+  }
 }
 
 function getPolishedText(entry, index) {
@@ -1245,6 +1285,16 @@ onMounted(async () => {
 }
 .transcript-entry:last-child .transcript-line {
   display: none;
+}
+/* 2026-07-08 修复: transcript 分页按钮 (避免 3331 段一次性渲染触发 Element Plus 栈溢出) */
+.transcript-load-more {
+  text-align: center;
+  padding: 24px 0 12px;
+  border-top: 1px dashed var(--color-border, #e0e0e0);
+  margin-top: 8px;
+}
+.transcript-load-more .el-button {
+  min-width: 240px;
 }
 .transcript-body {
   flex: 1;
