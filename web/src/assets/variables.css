@@ -43,6 +43,18 @@
   --color-bg-page: #F5F7FA;
   --color-bg-card: #FFFFFF;
   --color-bg-card-rgb: 255, 255, 255; /* v77 P2: glass.css 玻璃态工具 6 主题自适应 */
+
+  /* P3-11: file type icon 颜色 (NotificationBell 等用, 6 主题自动跟随) */
+  --color-file-pdf: #DC3545;     /* 红 — 文档/PDF */
+  --color-file-pdf-rgb: 220, 53, 69;
+  --color-file-doc: #0D6EFD;     /* 蓝 — Word/文档 */
+  --color-file-doc-rgb: 13, 110, 253;
+  --color-file-excel: #198754;   /* 绿 — Excel/表格 */
+  --color-file-excel-rgb: 25, 135, 84;
+  --color-file-image: #9C27B0;   /* 紫 — 图片 */
+  --color-file-image-rgb: 156, 39, 176;
+  --color-file-default: #909399; /* 默认 (其他类型) */
+  --color-file-default-rgb: 144, 147, 153;
   --color-bg-warm: #FFF8F5;
 
   /* ===== 侧边栏玻璃拟态 ===== */
@@ -656,6 +668,13 @@ body {
   --color-bg-card: #2a2d35;
   --color-bg-card-rgb: 42, 45, 53; /* v77 P2: dark 模式玻璃态背景 */
   --color-bg-warm: #2a2d35; /* v69: 新增 — 任务配对卡 / task-row hover 暖色背景 */
+
+  /* P3-11: dark 模式 file type icon 颜色 (与 light 模式同色, Material Design 标准) */
+  --color-file-pdf: #DC3545;
+  --color-file-doc: #0D6EFD;
+  --color-file-excel: #198754;
+  --color-file-image: #9C27B0;
+  --color-file-default: #909399;
   --color-bg-hover: #3a3d45;
   --color-border: #3a3d45; /* v69: 新增 — 与 --color-border-base 同步 (light 是 #EBEEF5) */
   --color-border-base: #3a3d45;

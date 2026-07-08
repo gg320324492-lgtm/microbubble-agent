@@ -333,15 +333,18 @@ onBeforeUnmount(() => {
   color: var(--color-primary, #FF7A5C);
   font-size: 18px;
 }
-.notif-icon.is-type-pdf     { background: rgba(220, 53, 69, 0.12);  color: #DC3545; }
-.notif-icon.is-type-doc     { background: rgba(13, 110, 253, 0.12); color: #0D6EFD; }
-.notif-icon.is-type-excel   { background: rgba(25, 135, 84, 0.12);  color: #198754; }
-.notif-icon.is-type-ppt     { background: rgba(255, 87, 34, 0.12);  color: #FF5722; }
-.notif-icon.is-type-image   { background: rgba(156, 39, 176, 0.12); color: #9C27B0; }
-.notif-icon.is-type-audio   { background: rgba(0, 188, 212, 0.12);  color: #00BCD4; }
-.notif-icon.is-type-video   { background: rgba(233, 30, 99, 0.12);  color: #E91E63; }
-.notif-icon.is-type-text    { background: rgba(96, 125, 139, 0.12); color: #607D8B; }
-.notif-icon.is-type-archive { background: rgba(121, 85, 72, 0.12);  color: #795548; }
+/* P3-11 (2026-07-08): 改用 var(--color-file-*) token 6 主题自动跟随.
+   之前 hardcoded rgba(#XXX, 0.12) 在 dark 主题下颜色不切换. 5 个未建 token 的
+   file type (ppt/audio/video/text/archive) fallback 到 --color-file-default. */
+.notif-icon.is-type-pdf     { background: rgba(var(--color-file-pdf-rgb), 0.12);     color: var(--color-file-pdf); }
+.notif-icon.is-type-doc     { background: rgba(var(--color-file-doc-rgb), 0.12);     color: var(--color-file-doc); }
+.notif-icon.is-type-excel   { background: rgba(var(--color-file-excel-rgb), 0.12);   color: var(--color-file-excel); }
+.notif-icon.is-type-ppt     { background: rgba(var(--color-file-pdf-rgb), 0.12);     color: var(--color-file-default); }
+.notif-icon.is-type-image   { background: rgba(var(--color-file-image-rgb), 0.12); color: var(--color-file-image); }
+.notif-icon.is-type-audio   { background: rgba(var(--color-file-default-rgb), 0.12); color: var(--color-file-default); }
+.notif-icon.is-type-video   { background: rgba(var(--color-file-default-rgb), 0.12); color: var(--color-file-default); }
+.notif-icon.is-type-text    { background: rgba(var(--color-file-default-rgb), 0.12); color: var(--color-file-default); }
+.notif-icon.is-type-archive { background: rgba(var(--color-file-default-rgb), 0.12); color: var(--color-file-default); }
 
 /* 中间内容区 */
 .notif-body {
