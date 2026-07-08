@@ -20,12 +20,77 @@ import pytest
 from app.agent.agentic_loop import (
     AgenticLoop,
     _block_dump,
+    _expand_concept_to_four_domain,
     _last_user_text,
     _sanitize_pending_tool_uses,
+    CONCEPT_DOMAIN_TOOLS,
 )
 from app.agent.intent_classifier import IntentCategory, IntentResult
 from app.agent.protocol import StreamEvent, StreamEventType
 from app.agent.tool_registry import ToolContext
+
+
+class TestExpandConceptToFourDomain:
+    """P2-3 fix (2026-07-08): 4 域 fan-out 截断时优先保留 4 域工具.
+
+    bug: 之前实现 simple slice [:MAX], 当 LLM planned 6 个工具时按原顺序
+    砍第 6 个, 可能砍掉 query_members (4 域) 而保留 LLM 最后选的 get_meeting_transcript.
+    fix: 4 域工具移到前部, LLM planned 的非 4 域保留尾部, 截断时优先砍非 4 域.
+    """
+
+    def test_single_4domain_tool_appended_to_length_4(self):
+        """planned=['search_knowledge'] → 补齐 4 域 = 4 个."""
+        result = _expand_concept_to_four_domain(['search_knowledge'])
+        assert len(result) == 4
+        # 4 域 tool 全在结果里
+        for tool in CONCEPT_DOMAIN_TOOLS:
+            assert tool in result
+        assert 'search_knowledge' in result
+
+    def test_4domain_first_others_last_for_truncation(self):
+        """planned 含 4 域 + 非 4 域 → 4 域在前, 非 4 域在后 (截断安全)."""
+        result = _expand_concept_to_four_domain(
+            ['search_knowledge', 'get_meeting_transcript']
+        )
+        # 4 域 tool 应在结果前半部
+        four_domain_indices = [i for i, t in enumerate(result) if t in CONCEPT_DOMAIN_TOOLS]
+        other_indices = [i for i, t in enumerate(result) if t not in CONCEPT_DOMAIN_TOOLS]
+        # 所有 4 域 index < 所有非 4 域 index (4 域在前)
+        assert max(four_domain_indices) < min(other_indices), \
+            f"4 域必须在前部 (用于截断时优先保留), 实际 indices: {[(i, t) for i, t in enumerate(result)]}"
+        # 4 域全保
+        for tool in CONCEPT_DOMAIN_TOOLS:
+            assert tool in result
+
+    def test_six_non_4domain_truncated_keeps_all_4domain(self):
+        """P2-3 核心 bug 场景: planned 6 个非 4 域 → MAX=5 → 4 域全保 + 1 个非 4 域.
+
+        修复前: 简单 slice [:5] 砍掉第 6 个, 但 4 域补全后追加在末尾,
+                砍掉的是 query_members 等 4 域工具.
+        修复后: 4 域移到前部, 砍掉的是 LLM planned 的非 4 域尾部.
+        """
+        planned = ['a', 'b', 'c', 'd', 'e', 'f']  # 6 个非 4 域
+        result = _expand_concept_to_four_domain(planned)
+        # MAX=5 (默认 settings.AGENT_PLAN_STEP_MAX), 所以结果长度 = 5
+        assert len(result) == 5
+        # 4 域工具**全部**保留 (不被砍)
+        for tool in CONCEPT_DOMAIN_TOOLS:
+            assert tool in result, f"4 域 tool {tool} 应被保留"
+        # 非 4 域只有 1 个 (砍掉 5 个), 必须是 'a' (LLM 原顺序第一个)
+        others = [t for t in result if t not in CONCEPT_DOMAIN_TOOLS]
+        assert others == ['a']
+
+    def test_four_domain_dedup_when_llm_planned_partial(self):
+        """LLM 已 planned 部分 4 域 → 只补缺失的."""
+        result = _expand_concept_to_four_domain(
+            ['search_knowledge', 'list_formulas', 'query_members']
+        )
+        # 4 域中 list_hypotheses 缺失 → 自动补
+        assert 'list_hypotheses' in result
+        # 没有重复 (4 域去重)
+        assert len(result) == len(set(result))
+        # search_knowledge 仍在结果 (LLM 原 planned)
+        assert 'search_knowledge' in result
 
 
 class TestSanitizePendingToolUses:
