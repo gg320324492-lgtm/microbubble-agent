@@ -218,6 +218,85 @@ class TestDBIntegration:
         count = await notification_service.mark_all_read(db, user_id=test_user)
         assert count >= 3
 
+    async def test_p19_dedup_resets_is_read(self, db):
+        """P1-9 fix (2026-07-08): dedup 命中时重置 is_read=False + read_at=None.
+
+        场景: 用户 markAllRead 后, 5s 内又有 dedup 命中.
+        修复前: is_read 保持 True → 用户漏看 (count_unread 仍 = 0, 红点不更新).
+        修复后: dedup 命中重置 is_read=False + read_at=None → 用户重新看到合并通知.
+        """
+        from app.models.knowledge import FileMention as FM
+        from sqlalchemy import delete, select
+        test_user = 998  # 独立 test_user 避免和其他 test 干扰
+        await db.execute(delete(FM).where(FM.mentioned_user_id == test_user))
+        await db.commit()
+
+        # 1. 第 1 次 mention → 创建 row (is_read=False, repeated_count=1)
+        m1, merged1 = await notification_service.create_mention(
+            db, file_id=540, mentioned_user_id=test_user, mentioned_by=59,
+        )
+        assert merged1 is False
+        assert m1.is_read is False
+        assert m1.read_at is None
+        assert m1.repeated_count == 1
+
+        # 2. 用户 markAllRead → row.is_read = True
+        await notification_service.mark_all_read(db, user_id=test_user)
+        await db.refresh(m1)
+        assert m1.is_read is True
+        assert m1.read_at is not None
+
+        # 3. 第 2 次 mention (5s 内, dedup 命中) → 关键!
+        m2, merged2 = await notification_service.create_mention(
+            db, file_id=540, mentioned_user_id=test_user, mentioned_by=59,
+        )
+        # dedup 命中: 返回的应该是同一 row (m2.id == m1.id)
+        assert merged2 is True, "dedup 应命中"
+        assert m2.id == m1.id, "dedup 命中应是同一 row"
+        # P1-9 fix 关键断言: dedup 命中重置 is_read + read_at
+        assert m2.is_read is False, (
+            "dedup 命中后 is_read 应重置 False (P1-9 fix), "
+            f"实际仍 = {m2.is_read} → 用户漏看 bug"
+        )
+        assert m2.read_at is None, (
+            "dedup 命中后 read_at 应清空 (P1-9 fix)"
+        )
+        # repeated_count 应该 +1
+        assert m2.repeated_count == 2
+
+        # 4. count_unread 应 = 1 (dedup 命中重置 is_read → 用户重新看到)
+        unread = await notification_service.count_unread(db, user_id=test_user)
+        assert unread == 1, (
+            "dedup 命中重置 is_read 后 count_unread 应 = 1, "
+            f"实际 = {unread} → 红点仍 = 0 用户漏看"
+        )
+
+    async def test_p19_dedup_resets_is_read_on_first_create_too(self, db):
+        """P1-9 fix: dedup 命中**始终**重置 is_read, 不只 markRead 后.
+
+        防御性测试: 即使 dedup 命中时 row 本来就是 is_read=False,
+        也应该一致重置 (no-op 但代码路径一致).
+        """
+        from app.models.knowledge import FileMention as FM
+        from sqlalchemy import delete
+        test_user = 997
+        await db.execute(delete(FM).where(FM.mentioned_user_id == test_user))
+        await db.commit()
+
+        # 1. 第 1 次 mention → is_read=False
+        m1, _ = await notification_service.create_mention(
+            db, file_id=540, mentioned_user_id=test_user, mentioned_by=59,
+        )
+        assert m1.is_read is False
+
+        # 2. 第 2 次 mention (dedup 命中) → is_read 应仍 False (no-op 但一致)
+        m2, merged = await notification_service.create_mention(
+            db, file_id=540, mentioned_user_id=test_user, mentioned_by=59,
+        )
+        assert merged is True
+        assert m2.is_read is False
+        assert m2.read_at is None
+
     async def test_cleanup_old_mentions(self, db):
         """cleanup_old_mentions 只删已读超过 N 天的"""
         from app.models.knowledge import FileMention as FM
