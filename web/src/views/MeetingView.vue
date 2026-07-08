@@ -132,14 +132,21 @@
                     jsdom / 部分浏览器下不触发, 因为 popper 的 click 路径与原生 click
                     handler 冲突.
                  修复方案: 用 el-popover + 手动 ref 控制, 完全绕过 el-popconfirm.
-                 点击外部自动关闭, 不依赖 trigger="click" 的隐式 click listener. -->
+                 点击外部自动关闭, 不依赖 trigger="click" 的隐式 click listener.
+                 2026-07-08 二次修复: 原方案用 ref + popover.show() 控制弹框, 但
+                 Element Plus 2.4.4 的 el-popover __expose 只暴露 popperRef + hide,
+                 不暴露 show(). 调 popoverRef?.show?.() 返回 undefined, "确定删除"
+                 弹框永远不弹, 用户看到"点了删除按钮没反应". 改用 :visible + @update:visible
+                 受控 prop 范式:visible 在 el-popover props/emits 都有定义, 转发到
+                 内层 ElTooltip 走 useTooltipModelToggle 受控路径, 不依赖 ref 暴露. -->
             <el-popover
-              :ref="el => setDeletePopoverRef(el, meeting.id)"
               :width="220"
               placement="top"
               trigger="manual"
               :show-arrow="false"
               popper-class="delete-meeting-popover"
+              :visible="!!deletePopoverVisible[meeting.id]"
+              @update:visible="(v) => onDeletePopoverVisibleChange(meeting.id, v)"
             >
               <template #reference>
                 <el-button
@@ -211,7 +218,7 @@
 <script setup>
 // v77 P2.6-F.2 Step 4: 485 行 CSS 拆到独立 meeting-view.css
 import './meeting/meeting-view.css'
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -305,29 +312,33 @@ const editMeeting = (meeting) => {
 
 const editingMeetingId = ref(null)
 
-// 删除按钮 popover 控制 (2026-07-03 修复: 见 template 注释)
-// 用 Map<meetingId, ElPopover ref> 跟踪每个会议的 popover 实例
-const deletePopoverRefs = ref({})
+// 删除按钮 popover 控制 (2026-07-08 修复: 见 template 注释)
+// 改用 :visible 受控 prop 范式, 不用 ref.show() (EP 2.4.4 el-popover __expose 不暴露 show)
+const deletePopoverVisible = reactive({})
 
-// 当前打开的 popover meeting id (用于外部 click 关闭)
+// 当前打开的 popover meeting id (用于外部 click 关闭 + 互斥单开)
 const activeDeletePopoverId = ref(null)
 
-function setDeletePopoverRef(el, id) {
-  if (el) deletePopoverRefs.value[id] = el
+function onDeletePopoverVisibleChange(id, v) {
+  deletePopoverVisible[id] = v
+  // 弹框被关闭 (包括点外部/ESC/取消) 时清空 active 标记
+  if (!v && activeDeletePopoverId.value === id) {
+    activeDeletePopoverId.value = null
+  }
 }
 
 function openDeletePopover(id) {
   // 关闭其他 popover
-  Object.entries(deletePopoverRefs.value).forEach(([mid, popover]) => {
-    if (Number(mid) !== id && popover?.hide) popover.hide()
+  Object.keys(deletePopoverVisible).forEach((mid) => {
+    if (Number(mid) !== id) deletePopoverVisible[mid] = false
   })
   activeDeletePopoverId.value = id
-  deletePopoverRefs.value[id]?.show?.()
+  deletePopoverVisible[id] = true
 }
 
 function closeDeletePopover(id) {
   activeDeletePopoverId.value = null
-  deletePopoverRefs.value[id]?.hide?.()
+  deletePopoverVisible[id] = false
 }
 
 async function confirmDelete(id) {
