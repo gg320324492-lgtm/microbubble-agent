@@ -447,7 +447,10 @@ onBeforeUnmount(() => {
   color: var(--color-text-secondary);
 }
 [data-theme="dark"] .notif-card {
-  background: var(--color-bg-card-dark, rgba(255, 255, 255, 0.04));
+  /* P2-5 fix (2026-07-08): 去掉不存在的 --color-bg-card-dark token, */
+  /* 改用 --color-bg-card (dark 模式变量已定义为 #2a2d35). 之前 fallback */
+  /* rgba(255,255,255,0.04) 与 border 同色系 → 边框几乎不可见. */
+  background: var(--color-bg-card);
   border-color: rgba(255, 255, 255, 0.08);
 }
 [data-theme="dark"] .notif-card:hover {
