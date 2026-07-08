@@ -443,25 +443,37 @@ const writeSyncPlugin = new BackgroundSyncPlugin('mnb-api-writes', {
     }
   },
 })
+// P3-2 fix (2026-07-08): 排除 SSE 流式端点. 之前 4 个 registerRoute
+// (POST/PUT/PATCH/DELETE) 全部匹配 /api/v1/*, 包括 /api/v1/chat/stream
+// (PR6-P2 SSE POST 长连接). Background Sync 排队重试会:
+// - 第一次: 正常返回 (但流式响应未消费完)
+// - 网络恢复后重试: 同一请求再次发到服务器 (创建重复流式 session, 浪费资源)
+// - 用户体验: 收到不完整响应
+// 修复: match function 加 SSE 端点排除
+const isSSEEndpoint = (url) =>
+  url.pathname.includes('/chat/stream') ||
+  url.pathname.includes('/meeting/live') ||
+  url.pathname.includes('/ws/')
+
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  ({ url }) => url.pathname.startsWith('/api/v1/') && !isSSEEndpoint(url),
   new NetworkOnly({  // 不缓存写请求（Background Sync 自带 IndexedDB 队列）
     plugins: [writeSyncPlugin],
   }),
   'POST'
 )
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  ({ url }) => url.pathname.startsWith('/api/v1/') && !isSSEEndpoint(url),
   new NetworkOnly({ plugins: [writeSyncPlugin] }),
   'PUT'
 )
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  ({ url }) => url.pathname.startsWith('/api/v1/') && !isSSEEndpoint(url),
   new NetworkOnly({ plugins: [writeSyncPlugin] }),
   'PATCH'
 )
 registerRoute(
-  ({ url }) => url.pathname.startsWith('/api/v1/'),
+  ({ url }) => url.pathname.startsWith('/api/v1/') && !isSSEEndpoint(url),
   new NetworkOnly({ plugins: [writeSyncPlugin] }),
   'DELETE'
 )
