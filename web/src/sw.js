@@ -437,8 +437,12 @@ const writeSyncPlugin = new BackgroundSyncPlugin('mnb-api-writes', {
           silent: false,
         })
       } catch (e) {
-        // 用户未授权 Notification 权限 — 静默忽略（不影响功能）
-        console.log('[SW] Notification skipped (permission denied or unsupported):', e.message)
+        // P3-3 fix (2026-07-08): 静默 catch 改 console.warn. 之前 console.log
+        // 静默吞错, DevTools 默认 info 级不显示, 用户不知道为什么没弹通知.
+        // 改 warn 让 DevTools / 调试工具能发现. 实际修复路径 (未来):
+        // 调用 self.registration.pushManager 主动检查 permissionState,
+        // 'denied' 时跳过调用 (不报错) + 引导用户到 settings 开启.
+        console.warn('[SW] Notification skipped (permission denied or unsupported):', e.message)
       }
     }
   },
