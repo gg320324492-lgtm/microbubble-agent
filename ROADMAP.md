@@ -3,6 +3,81 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
+## 当前状态（2026-07-08 — 25+ bug 修复收官 + CLAUDE.md 拆分）
+
+**已交付（2026-07-08 本会话新增 — 30 个 commit 全部 push origin/main）**：
+
+详细 commit 列表见 [CHANGELOG.md](CHANGELOG.md) 顶部 [Unreleased] 段, 总览见 `memory/2026-07-08-25-bug-fix-batch.md`.
+
+- 🆕 **P0 必修 4 个** — 修生产事故 + 数据丢失:
+  - `51d7e90f` celery worker 启动 ImportError 死循环 (17 天 backend 任务全死)
+  - `badc9701` + `cb847755` Windows Task Scheduler 备份 (修 18 天无备份)
+  - `68171064` mimo 429 fallback to ollama (修用户 5xx)
+  - `043db721` fill_wechat_id_placeholders closure bug (修 admin 误传)
+
+- 🆕 **P1 必修 5 个** — 修用户日常痛点 + 数据完整性:
+  - `89487992` `_assert_identifier_unique` 跳过 placeholder 字符串
+  - `9c905f6f` AudioRecorder meetingTitle reactive (修死路径)
+  - `5e5289e5` useMentionAutocomplete name 字段统一 lowercase (修中文 mention)
+  - `a3a3c43e` 5s dedup + markAllRead 语义冲突 (修用户漏看)
+  - `74c206f4` SSH tunnel onboarding (替代 frp 死代码 + onboarding 文档)
+
+- 🆕 **P2 必修 9 个** — 设计瑕疵 / 防御性:
+  - `2e96d738` comment_service 同步删 file_mentions reply mention
+  - `f104b9c6` dedup 保留首次 mention preview (不覆盖)
+  - `ab734026` `_expand_concept_to_four_domain` 4 域前移 (修概念问答案质量)
+  - `aa1486d3` NotificationBell `var(--color-bg-card-dark)` → `var(--color-bg-card)` (dark 模式)
+  - `cfbe4754` mention-tag 改用 `var(--color-primary-rgb)` 透明度可调
+  - `e17da752` useCommentTree cycle 检测防栈溢出
+  - `53275f20` KnowledgeView filter 切换重置 currentPage 回归测试
+  - `d50a0f64` migrate_kb_source_type docstring 180→179 同步
+  - `d27d2263` migrate_kb_tags.py 加 SCOPE_ALL 选项
+  - `3db3f6b4` pgvector embedding round-trip 端到端测试 (1024 维验证)
+  - `f454b69c` restore_from_backup --upsert 改两步法 (PG 17 兼容)
+
+- 🆕 **P3 修复 5 个** — 防御性 / 跨平台:
+  - `4e0349fe` pre-commit hook head_dist case glob 改 `grep -qFx` (POSIX sh 严格兼容)
+  - `09755234` SW Background Sync 排除 SSE 端点 (防重试让用户收不完整流)
+  - `f8c33ecc` SW Notification 错误 `console.log` → `console.warn` (DevTools 可见)
+  - `15aecfa4` webhook.py path 提取 query string 后再匹配
+  - `bb949281` lint-css.yml 加 webhint CSS a11y 步骤
+  - `c09bd10c` NotificationBell file type 颜色 token 化 (variables.css 加 4+4 token)
+  - `5777b10b` CommentItem `data-depth="3"` selector 预留
+  - `4f0e1e2c` install-frps-systemd.sh ss 命令 fallback netstat
+  - `44569e17` **CLAUDE.md 拆分** (新会话启动 -81% read 量)
+
+- 🆕 **非 bug 跳过 (6 个)** — 验证后无需修:
+  - P3-4 memory_service 顶层 import (P0-1 已修)
+  - P3-5 celery-beat alembic volume (beat 不跑 alembic)
+  - P3-8-补丁 docker-compose.override.yml version (文件被 .gitignore)
+  - P3-10 .env APP_ENV=production (文件被 .gitignore)
+  - P3-13 _complete_openai_compat 日志 (P0-3 已有 5+ logger)
+  - P3-14 frpc wrapper 清理 (P1-10 替代为 SSH tunnel, README 已写)
+
+**新铁律 (本会话沉淀 13 条)**：
+
+1. 模块级禁止副作用 (构造客户端/加载模型/连接 DB) — 全部走 lazy 函数
+2. async session 必须显式 `await db.commit()` (with 退出默认 rollback)
+3. backend-level fallback 必须用临时 client, 不修改 `self.backend`
+4. 内层循环不要引用外层 closure 变量 — 用反查 dict 或 enumerate(zip(...))
+5. filter 字段必须全部走统一的大小写处理 (lowercase + compare with ql)
+6. dedup 查询条件按 (receiver, file, context, time window) 过滤, 不要按 is_read
+7. dedup 命中区分 '静态内容' (title/body) vs '动态元数据' (mentioned_by/count/timestamp)
+8. tree/recurse 构建前必须做 cycle 检测 + 防御性 maxDepth
+9. PG UPSERT 行计数不可靠 (跨版本 + tuple move), 优先用两步法
+10. sh 脚本里 list 字符串匹配优先用 grep/awk, 不要依赖 case glob 跨多行
+11. Background Sync 路由 match function 一定要排除所有流式端点 (SSE/WS)
+12. HTTP path 匹配必须用 `urlsplit(path).path` 提取 pathname 部分
+13. CLAUDE.md 应该 < 150KB (< 1000 行), 历史任务链拆到 docs/CLAUDE-history.md
+
+**端到端验证方法 (每项必跑)**：
+
+- **后端 (P0/P1/P2)**: `SKIP_DB_SETUP=1 docker exec -w /app microbubble-agent-app-1 python -c "<mock script>"` 容器内跑真实 DB
+- **后端 (alembic)**: `docker exec microbubble-agent-db-1 psql -U postgres -d microbubble -c "<SQL>"`
+- **前端 (P2)**: `cd web && npx vitest run <test-file>` 跑单测
+- **前端 (P3)**: `cd web && npm run build` + `grep` 静态检查
+- **运维 (P3)**: `bash -n script.sh` syntax + `MSYS_NO_PATHCONV=1 docker exec ... python <test>`
+
 ## 当前状态（2026-07-02 晚班 — v2 网盘 PR6-P15 personal_wechat_id + 听会 v4 + LLM 3-Way 收官）
 
 **已交付（2026-07-02 晚班新增）**：

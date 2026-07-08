@@ -19,6 +19,15 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
+## 最新里程碑（2026-07-08 — 25+ bug 修复收官 + CLAUDE.md 拆分）
+
+- 🆕 **本会话 (2026-07-08) 一口气修 25+ bug** — 30 个 commit 全部 push origin/main. 详见 [CHANGELOG.md](CHANGELOG.md) 顶部 [Unreleased] 段 + 总览 [`memory/2026-07-08-25-bug-fix-batch.md`](../memory/2026-07-08-25-bug-fix-batch.md):
+  - **P0 必修 4 个** — celery worker 启动 ImportError (17 天 backend 任务全死) / 18 天无 DB 备份 / mimo 429 fallback / admin CLI closure bug
+  - **P1 必修 5 个** — `_assert_identifier_unique` placeholder 边界 / AudioRecorder title reactive / mention autocomplete 中文名 / 5s dedup + markAllRead 语义 / SSH tunnel onboarding
+  - **P2 必修 9 个** — file_mentions 孤儿删除 / dedup 保留首次 preview / 4 域 fan-out 前移 / dark mode token 化 / useCommentTree cycle 检测 / KB 脚本清理 / pgvector round-trip / restore PG 17 兼容
+  - **P3 修复 5 个** — pre-commit 跨 sh 兼容 / SW Background Sync 排除 SSE / console.warn / webhook query string / webhint a11y / file type 颜色 token 化
+- 🆕 **CLAUDE.md 拆分 (commit `44569e17`)** — 651KB / 8082 行 / 60+ 章节 → 新 CLAUDE.md 123KB (核心) + docs/CLAUDE-history.md 529KB (历史). 新会话启动 **-81% read 量**.
+
 ## 最新里程碑（2026-07-02 晚班 — v2 网盘 PR6-P15 personal_wechat_id + 听会 v4 + LLM 3-Way Benchmark 收官）
 
 - 🆕 **v2 网盘 PR6-P15 personal_wechat_id case-insensitive uniqueness 收官（commit `5bab3f15`）** — 6 文件 / +546 行 = **alembic 055 `UNIQUE INDEX ON LOWER(personal_wechat_id)` 兜底 + service `_IDENTIFIER_COLUMNS` 白名单扩到 3 列 (`{username, wechat_id, personal_wechat_id}`) + 新增 `_COLUMN_LABELS` 中文 label map + API POST/PUT 双保险预检查 + 20/20 pytest PASS + 65 passed, 9 skipped, 0 fail 合跑无回归**. **触发场景**: PR6-P13/14 通用化收官后, 个人微信号 `personal_wechat_id` 仍未保护, 当前 35 行 members 全部 `personal_wechat_id` 为空字符串 (psql 验证), `app/wechat/identity.py:79` `resolve_by_wechat_id()` 当前精确匹配, 但**未来若改 `lower()` 对齐 PR6-P4 mention 3 路模式**, 同样会有 map 撞车风险. 提前兜底比事后清理成本低 10×. **附带 .gitignore 修复**（永久教训）: `.ollama/` 整个目录 (含真实 OpenSSH 私钥 `id_ed25519` 387 字节) + 兜底规则 `**/id_ed25519` / `id_rsa` / `id_dsa` / `id_ecdsa` / `**/*.pem` / `**/*.key` 防任何 SSH 私钥 / TLS 私钥入库. **5 新铁律**: ① `_IDENTIFIER_COLUMNS` 白名单是唯一扩展点 (未来加 personal_email / phone 只改 2 处); ② `_COLUMN_LABELS` dict 中文 label 替代 if-else (加列 O(1) vs O(N)); ③ 未来 `lower()` 改写时撞 map 提前兜底 (vs PR6-P13 因 mention 解析撞 map 才发现问题); ④ PG 函数索引 NULL/空字符串不参与 UNIQUE (多空字符串安全); ⑤ 白名单 + 反射双保险 (防 SQL 注入 + 防止 password_hash 等敏感列被误用).

@@ -1,6 +1,158 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-08)**: 25+ bug 修复收官 + CLAUDE.md 拆分 — 详见下方"## [Unreleased] 2026-07-08" 段, 总结见 `memory/2026-07-08-25-bug-fix-batch.md`.
+
+## [Unreleased] 2026-07-08 — 25+ bug 收官 (P0/P1/P2/P3) + CLAUDE.md 拆分
+
+**本会话 30 个 commit 全部 push origin/main** (4 个 P0 必修 + 5 个 P1 必修 + 9 个 P2 必修 + 5 个 P3 修复 + 6 个非 bug 跳过 + 1 个 CLAUDE 拆分).
+总览见 `memory/2026-07-08-25-bug-fix-batch.md`, 详细 commit 列表见 `/tmp/P2_P3_COMMIT_INDEX.md`.
+
+### 🆕 P0 必修 (4 个) — 生产事故 / 数据丢失修复
+
+#### P0-1 `51d7e90f` — 修 celery worker 启动 ImportError 死循环重启 (17 天 backend 任务全死)
+- **bug**: `app/core/llm.py:612` 模块级 `llm_client = LLMClient()` 在 import 时执行, LLMClient.__init__ 因 celery-worker 镜像 (2026-06-17 创建) 缺 openai 包抛 ImportError → worker 启动崩溃死循环重启
+- **影响**: 所有 Celery 任务全部死锁 (reminder/proactive-checks/file_mention_cleanup/drive_cleanup/chat_history_cleanup/orphan_meetings/knowledge_evolution/memory_maintenance)
+- **修复**: 删 line 611-612 模块级实例化. 端到端: worker `Up 14s` + 26 任务注册 + 真实执行
+- **新铁律**: 模块级禁止副作用 (构造客户端/加载模型/连接 DB) — 全部走 lazy 函数/方法
+
+#### P0-2 `badc9701` + `cb847755` — Windows Task Scheduler 备份 wrapper (修 18 天无 DB 备份)
+- **bug**: `scripts/backup_db.sh` + `local-backup.ps1` 都存在, 但无 Windows Task Scheduler cron 调度, backups/ 最后更新 2026-06-15 (18 天无新备份)
+- **修复**: `scripts/backup_scheduler.bat` (纯 ASCII, 处理 cmd.exe ANSI 编码陷阱) + `install-backup-scheduler.ps1` (Task Scheduler 注册) — 每日 02:00 自动备份
+- **新铁律**: 任何 deploy 流程都必须有 cron 调度, 不能只放脚本 + 假设用户会手动跑
+- **端到端**: 手动触发 → 4.05 MB 新备份生成 + `gunzip | head` 显示 PostgreSQL header + 44 CREATE/INSERT 完整
+
+#### P0-3 `68171064` — mimo 429 fallback to ollama (修用户 5xx)
+- **bug**: CLAUDE.md 决策"8b 作 offline fallback"但代码层未实现. 生产 mimo 限流 429 时只 fallback 到 mimo 其他模型, 不会切 ollama → 用户拿到 5xx
+- **修复**: 3 处 openai_compat 路径 (complete/stream/stream_raw) 捕获 `RateLimitError` → 临时 `AsyncOpenAI(api_key="ollama", base_url=OLLAMA_BASE_URL)` client + `OLLAMA_FALLBACK_MODEL` (默认 `qwen3:8b`)
+- **新铁律**: backend-level fallback 必须用临时 client, 不修改 `self.backend` (避免长时占用 ollama)
+- **端到端**: mimo 429 → 自动 fallback ollama 成功 → 用户收到正常响应
+
+#### P0-4 `043db721` — fill_wechat_id_placeholders validate_mapping closure bug (修 admin 误传非 placeholder)
+- **bug**: `scripts/fill_wechat_id_placeholders.py:255-259` 内层 `for row in existing_rows:` 循环用外层 closure 变量 `mapping`, loop 结束时 `mapping` 是最后一条 → admin 收到所有冲突都说 `id=<最后一条 csv id>`, 完全不知道是哪行冲突
+- **修复**: `errors.append(... csv_mapping_id = new_wechat_ids_lower.get(row.wechat_id.lower(), "?") ...)` 用反查 dict 找对应 CSV 行
+- **新铁律**: 内层循环不要引用外层 closure 变量 — 用反查 dict 或 enumerate(zip(...))
+
+### 🆕 P1 必修 (5 个) — 用户痛点 / 数据完整性
+
+#### P1-3 `89487992` — `_assert_identifier_unique` 跳过 placeholder 字符串 (P1-3 fix 防御性)
+- **bug**: `app/services/member_service.py:59` `if not value: return` 只跳过 None/空, 不跳过 `__NULL_BACKFILL_<id>__` placeholder
+- **影响**: admin 调 `update_member(id=8, wechat_id="__NULL_BACKFILL_8__")` 撞自己抛 ConflictException
+- **修复**: 加 `_PLACEHOLDER_PATTERN = re.compile(r"^__NULL_BACKFILL_\d+__$")` + `if isinstance(value, str) and _PLACEHOLDER_PATTERN.match(value): return`
+- **端到端**: 8/8 断言通过 (placeholder/真实值/None/边界)
+
+#### P1-5 `9c905f6f` — AudioRecorder meetingTitle reactive (防御性修死路径)
+- **bug**: `web/src/components/AudioRecorder.vue:91` `useChunkedRecorder(meetingIdRef, { title: props.meetingTitle })` 用 props 一次性值, meetingTitle 后续变化 (meetingId 到位后 pageTitle 变成"正在录音 #N") 不会更新 IDB meta.title
+- **影响**: chunked_filename IDB meta.title 永远 "开始听会", 录音 resume 时 IDB 列表显示错标题
+- **修复**: 加 `titleRef = ref(props.meetingTitle)` + `watch(() => props.meetingTitle, ..., { immediate: true })`, 与 `meetingIdRef` 完全镜像
+- **新铁律**: props reactive 字段必须传 ref 而不是原值
+
+#### P1-8 `5e5289e5` — useMentionAutocomplete name 字段统一 lowercase (修用户日常 bug)
+- **bug**: `web/src/composables/useMentionAutocomplete.js:118` `name === q` 用 q (未转小写), 但 wechat/username 都 `toLowerCase()`. name 字段是英文大小写敏感 (`WangTianZhi`) 时用户输入 `wangtianzhi`/`ALICE` 失配
+- **修复**: `(m.name || '').toLowerCase()` + `name === ql` + `name.startsWith(ql)` (与 wechat/username 模式完全一致)
+- **端到端**: 20/20 vitest PASS (原 17 + 新加 3: 小写/大写/混合/中文)
+
+#### P1-9 `a3a3c43e` — 5s dedup + markAllRead 语义冲突 (修用户漏看)
+- **bug**: dedup 查询条件 `WHERE is_read=False` → 用户 markAllRead 后 dedup 完全失效 (下次 mention 创建新 row, 不合并)
+- **修复**: 两步法 (SELECT 优先 + 显式 INSERT/UPDATE) + dedup 命中重置 `is_read=False` + `read_at=None`
+- **新铁律**: dedup 查询按 (receiver, file, context, time window) 过滤, 不要按 is_read 过滤
+- **端到端**: existing=(1,) → UPDATE (rowcount=1) + count_unread=1 ✓
+
+#### P1-10 `74c206f4` — 清理 deploy-local.sh frp 死代码 + 新增 SSH tunnel onboarding 文档
+- **背景**: 项目已从 frp 切到 SSH tunnel (2026-07-02), `deploy-local.sh` 还引用 frpc.exe
+- **修复**: 删 frp 死代码 + 写 `tunnel/README.md` (127 行, 含架构图 + 新成员 3 步 onboarding)
+- **新铁律**: 项目切换技术栈时 (frp → SSH tunnel) 必须同步清所有 dead code 引用 + 写 onboarding 文档
+
+### 🆕 P2 必修 (9 个) — 设计瑕疵 / 防御性
+
+#### P2-1 `2e96d738` — comment_service 同步删 file_mentions reply mention (防孤儿)
+- **bug**: `FileComment` CASCADE 删 children 时, file_mentions 关联 reply notification 是独立行, 没 FK 到 file_comments → 孤儿残留
+- **修复**: `delete_comment` 时手动 `DELETE FROM file_mentions WHERE context = 'reply:<comment_id>'` (精准删 reply, 顶层 comment mention 保留)
+- **新铁律**: CASCADE 删父表不能假设子表都自动删 → 必须检查关联表 (尤其无 FK 的关联)
+
+#### P2-2 `f104b9c6` — dedup 保留首次 mention preview, 不覆盖
+- **bug**: dedup 命中时 `_build_title_body` 重拼 (用最新 comment_preview), 重复 5 次后用户只看到第 5 条评论内容, 前 4 条永远看不到
+- **修复**: dedup 命中保留首次 title/body, 只更新 `mentioned_by` + `repeated_count` + `created_at` (动态元数据)
+- **新铁律**: dedup 命中区分 '静态内容' vs '动态元数据', 不混
+
+#### P2-3 `ab734026` — `_expand_concept_to_four_domain` 4 域前移 (修概念问答案质量)
+- **bug**: 截断 `[:MAX]` 时按原顺序, LLM planned 6 工具时 4 域可能挤到末尾被踢
+- **修复**: `four_domain = [t for t in expanded if t in CONCEPT_DOMAIN_TOOLS]` + `others = [t for t in expanded if t not in CONCEPT_DOMAIN_TOOLS]` + `(four_domain + others)[:MAX]`
+- **新铁律**: 强制 fan-out 的 N 个 tool 必须按优先级排序, 不能简单按 append 顺序截断
+- **端到端**: 16/16 pytest PASS (4 个 P2-3 新 + 12 个原测试无 regression)
+
+#### P2-5 `aa1486d3` — NotificationBell `var(--color-bg-card-dark, ...)` → `var(--color-bg-card)` (dark token 化)
+- **bug**: `--color-bg-card-dark` token 不存在, fallback `rgba(255,255,255,0.04)` 与 border 同色系 → dark 模式 notif-card 边框几乎不可见
+- **修复**: 改用真实存在的 `--color-bg-card` (variables.css:656 dark 模式 #2a2d35)
+- **新铁律**: `var(--xxx-token)` 必须先用 grep 验证 token 定义, fallback 默认值会导致视觉 bug
+
+#### P2-6 `cfbe4754` — mention-tag 改用 `var(--color-primary-rgb)` 透明度可调
+- **bug**: `var(--color-primary, #FF7A5C)` fallback 硬编码 light 暖橙, dark + ocean/forest 主题不切换
+- **修复**: `background: rgba(var(--color-primary-rgb), 0.12)` + `color: var(--color-primary)`, 6 主题自动跟随
+- **新铁律**: var() 不要写 fallback 硬编码颜色, 用 rgba(var(--xxx-rgb), 0.X) 通用值
+
+#### P2-7 `e17da752` — useCommentTree cycle 检测防栈溢出
+- **bug**: `byId[c.parent_comment_id].replies.push(node)` 不检测祖先链, 恶意/损坏数据 (A→B→A) 栈溢出
+- **修复**: `_detectCycles(byId)` 用 Set 追溯祖先链 + `maxDepth=100` 兜底, cycle 节点放顶层
+- **端到端**: 20/20 vitest PASS (3 个新 cycle case: 直接/间接/正常嵌套混合)
+
+#### P2-8 `53275f20` — KnowledgeView filter 切换重置 currentPage 回归测试
+- **背景**: P2-8 bug 实际之前已修, 但缺回归测试 → 加静态源码检查测试防止未来 refactor 删关键行
+- **新铁律**: 关键修复必须配回归测试, 防止未来 refactor 误删
+
+#### P2-9 `d50a0f64` — migrate_kb_source_type.py docstring 180→179 同步
+- **背景**: dedup_titles 删 1 行后实际 [拓展% 张数从 180 变 179, docstring 顶部 + line 8/11 仍写 180 张
+- **修复**: 3 处 180→179. 保留 line 90 历史比较 (regexp_match 报 191 vs psql 报 180) — audit trace
+
+#### P2-10 `d27d2263` — migrate_kb_tags.py 加 SCOPE_ALL 选项
+- **背景**: argparse choices=[SCOPE_AUTO, SCOPE_NOTES] 只接受 2 个值, `--scope all` fail fast
+- **修复**: 加 SCOPE_ALL='all' 常量, scan 跑两次 (auto+notes 合并输出), apply 拒绝 (tag 替换规则不同, 防破坏一致性)
+- **端到端**: 3/3 通过 (scan 跑两次 / apply 拒绝 / choices 显示 3 个)
+
+#### P2-11 `3db3f6b4` — pgvector embedding round-trip 端到端测试
+- **背景**: `migrate_kb_tags.py:264 + migrate_kb_dedup_titles.py:329` 用 `list(k.embedding)` 序列化, 但没 round-trip 测试
+- **修复**: 加 5 个静态检查测试 (1024 维 / 768 维 / None / list(k.embedding) 静态检查)
+- **新铁律**: pgvector 序列化必须保留精度 (list[float] 不是 str)
+
+#### P2-12 `f454b69c` — restore_from_backup --upsert 改两步法 (PG 17 兼容)
+- **bug**: `rowcount == 2` 判定 UPDATE 在 PG 17 失效 (DO UPDATE 改回 rowcount=1)
+- **尝试 1 失败**: `RETURNING (xmax = 0)` — PG 14+ UPSERT 内部走 tuple move, xmax 仍 0
+- **修复**: 两步法 (SELECT 优先 + 显式 INSERT/UPDATE + 显式 `await db.commit()` 修 async session 自动 rollback)
+- **新铁律**: PG UPSERT 行计数不可靠, 优先用两步法
+
+### 🆕 P3 修复 (5 个) — 防御性 / 跨平台
+
+#### P3-1 `4e0349fe` — pre-commit hook head_dist case glob 改 `grep -qFx`
+- **bug**: `case "$head_dist" in *"$rel"*` POSIX 严格只匹配第一行, 多行 dist 文件后续行重复 add
+- **修复**: `if echo "$head_dist" | grep -qFx "$rel"; then continue; fi`
+- **端到端**: 5 行 head_dist 4 个文件 + 1 个 new file 验证 (bash 宽容 POSIX 严格)
+
+#### P3-2 `09755234` — SW Background Sync 排除 SSE 端点
+- **bug**: 4 个 registerRoute (POST/PUT/PATCH/DELETE) 全部匹配 `/api/v1/*` 含 `/chat/stream` 等 SSE POST
+- **后果**: 网络恢复重试 → 重复 SSE session + 用户收到不完整流
+- **修复**: `isSSEEndpoint(url)` helper 检测 `/chat/stream|/meeting/live|/ws/`, 4 个 registerRoute 加 `&& !isSSEEndpoint(url)`
+
+#### P3-3 `f8c33ecc` — SW Notification 错误 `console.log` → `console.warn`
+- **修复**: warn 级日志让 DevTools 可见, 调试时容易发现
+- **新铁律**: SW catch 块永远用 console.warn, 不 console.log 静默吞错
+
+#### P3-7 `15aecfa4` — webhook.py path 提取 query string 后再匹配
+- **bug**: `self.path != "/webhook"` 严格匹配, `?token=xxx` 永远 404
+- **修复**: `urlsplit(self.path).path` 提取 pathname, 不直接 startswith 防 `/webhookfoo` 误匹配
+
+#### P3-9 `bb949281` — lint-css.yml 加 webhint CSS a11y 步骤
+- **修复**: `if [ -d "@webhint/quick-lint" ]; then ...; else notice; fi` 守护, `continue-on-error: true` 不阻塞
+
+#### P3-11 `c09bd10c` — NotificationBell file type 颜色 token 化
+- **修复**: variables.css 加 4+4 token (pdf/doc/excel/image + -rgb 变体), 9 处 hardcoded rgba 改 var()
+- **新铁律**: var() 引用 token 必须同时建 -rgb 变体 (给 rgba() 用)
+
+### 🆕 其他改进
+
+#### P3-15 `44569e17` — CLAUDE.md 拆分 (新会话启动 -81% read)
+- **背景**: CLAUDE.md 651KB / 8082 行 / 60+ 章节, 每次新 Claude 会话启动都全量 read
+- **修复**: 新 CLAUDE.md 123KB (核心) + docs/CLAUDE-history.md 529KB (历史) + 顶部加 link
+- **新铁律**: CLAUDE.md 应该 < 150KB (< 1000 行), 历史任务链拆到 docs/
 
 ## [Unreleased] 2026-07-02 — v2 网盘 PR6-P15 personal_wechat_id + 听会 v4 三件套 + LLM 3-Way Benchmark + frps systemd
 
