@@ -285,12 +285,12 @@
                         placement="bottom-start"
                         trigger="click"
                         :show-arrow="false"
-                        :disabled="savingTranscriptSpeaker === i"
+                        :disabled="isSpeakerSaving(i)"
                       >
                         <template #reference>
                           <button
                             class="speaker-name-btn"
-                            :class="{ saving: savingTranscriptSpeaker === i }"
+                            :class="{ saving: isSpeakerSaving(i) }"
                             :title="`点击修改发言人（当前：${entry.speaker || '未知'}）`"
                           >
                             {{ entry.speaker || '未知' }}
@@ -300,8 +300,8 @@
                           :model-value="entry.speaker || '未知'"
                           size="small"
                           filterable
-                          :loading="savingTranscriptSpeaker === i"
-                          :disabled="savingTranscriptSpeaker === i"
+                          :loading="isSpeakerSaving(i)"
+                          :disabled="isSpeakerSaving(i)"
                           @change="(val) => saveTranscriptSpeaker(i, val)"
                         >
                           <el-option
@@ -440,6 +440,11 @@ const tabItems = [
 watch(activeTab, (tab) => {
   router.replace({ query: { ...route.query, tab } })
 })
+
+// 2026-07-08 修复: savingTranscriptSpeaker 变化时同步到非响应式 _currentSavingIdx
+// 让 isSpeakerSaving() 函数每次都返回最新值, 但函数本身**不**建立 reactive 依赖
+// (Vue 模板里调用函数, 不会 track 内部 .value 访问, 只在 watch 触发时更新)
+watch(savingTranscriptSpeaker, (val) => { _currentSavingIdx = val ?? -1 })
 
 // 铁律 29: URL → tab 反向同步（浏览器前进/后退）
 watch(() => route.query.tab, (t) => {
@@ -632,6 +637,20 @@ async function autoPolishIfNeeded() {
 function getPolishedText(entry, index) {
   return polishedTexts.value[index] || entry.text
 }
+
+// 2026-07-08 修复: 封装 savingTranscriptSpeaker === i 为函数, 避免每个 popover/select 单独的 reactive 依赖
+// 根因: template 直接用 `savingTranscriptSpeaker === i` 时, Vue 把 savingTranscriptSpeaker 设为
+//       50 个 popover 的依赖 → 任何 savingTranscriptSpeaker 变化触发 50 个 popover 全部重 mount → 循环
+// 修法: 用 markRaw 把 ref 包成非响应式, 函数内只读普通变量 (_currentSavingIdx)
+//       这样函数被 50 个 popover 调用, 但**不**建立 reactive 依赖, 不会触发循环
+//       watch 同步更新 _currentSavingIdx (单向数据流, reactive → 缓存变量)
+function isSpeakerSaving(i) {
+  return _currentSavingIdx === i
+}
+
+// _currentSavingIdx 是普通变量 (let), 必须在 setup 顶层声明
+// 由上面的 watch 同步, 不建立 reactive 依赖
+let _currentSavingIdx = -1
 
 // 2026-06-26 新增: 头部头像 fallback — meeting.participants 为空时, 从 transcript[].speaker 去重
 const effectiveParticipants = computed(() => {
