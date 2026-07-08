@@ -44,7 +44,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         # 设 15s timeout > GitHub 默认 10s 客户端超时，留 5s 余量给 service 读完 body
         self.connection.settimeout(15)
 
-        if self.path != "/webhook":
+        # P3-7 fix (2026-07-08): 处理 query string. self.path 含 query
+        # (如 /webhook?token=xxx), 严格 != 匹配会误判 404. 提取 pathname 部分.
+        # 用 startswith 风险太大 (/webhookfoo 也匹配), 用 split 取首个 segment.
+        from urllib.parse import urlsplit
+        path_only = urlsplit(self.path).path
+        if path_only != "/webhook":
             self.send_response(404)
             self.end_headers()
             return
