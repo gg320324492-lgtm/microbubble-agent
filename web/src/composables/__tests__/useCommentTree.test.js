@@ -89,6 +89,53 @@ describe('useCommentTree', () => {
       expect(JSON.stringify(comments)).toBe(originalStr)
       expect(comments[0].replies).toBeUndefined()
     })
+
+    it('P2-7 修复: 直接循环 (A→B→A) 不会栈溢出, 2 节点都放顶层', () => {
+      // 恶意/损坏数据: A.parent=B, B.parent=A
+      const comments = [
+        { id: 1, content: 'A', parent_comment_id: 2, thread_depth: 0 },
+        { id: 2, content: 'B', parent_comment_id: 1, thread_depth: 1 },
+      ]
+      const { top, byId } = buildCommentTree(comments)
+      // 关键: 不应栈溢出 (修复前会无限递归)
+      expect(top).toHaveLength(2)
+      // 2 节点都放顶层
+      expect(byId[1].replies).toEqual([])
+      expect(byId[2].replies).toEqual([])
+    })
+
+    it('P2-7 修复: 间接循环 (A→B→C→A) → 3 节点都放顶层', () => {
+      const comments = [
+        { id: 1, content: 'A', parent_comment_id: 3, thread_depth: 0 },
+        { id: 2, content: 'B', parent_comment_id: 1, thread_depth: 0 },
+        { id: 3, content: 'C', parent_comment_id: 2, thread_depth: 0 },
+      ]
+      const { top, byId } = buildCommentTree(comments)
+      // 3 节点都在顶层
+      expect(top).toHaveLength(3)
+      expect(byId[1].replies).toEqual([])
+      expect(byId[2].replies).toEqual([])
+      expect(byId[3].replies).toEqual([])
+    })
+
+    it('P2-7 修复: 正常嵌套 + cycle 节点混合 → 正常节点保留嵌套, cycle 节点放顶层', () => {
+      // 场景: 1 个正常嵌套 + 1 个 cycle 独立
+      const comments = [
+        { id: 1, content: '正常父', parent_comment_id: null, thread_depth: 0 },
+        { id: 2, content: '正常子', parent_comment_id: 1, thread_depth: 1 },
+        // cycle 独立
+        { id: 3, content: 'cycle A', parent_comment_id: 4, thread_depth: 0 },
+        { id: 4, content: 'cycle B', parent_comment_id: 3, thread_depth: 0 },
+      ]
+      const { top, byId } = buildCommentTree(comments)
+      // 正常嵌套: id 1 在顶层, id 2 在 id 1.replies
+      expect(top).toHaveLength(3)  // id 1, 3, 4 都在顶层 (cycle 节点)
+      expect(byId[1].replies).toHaveLength(1)
+      expect(byId[1].replies[0].id).toBe(2)
+      // cycle 节点不放进 parent
+      expect(byId[3].replies).toEqual([])
+      expect(byId[4].replies).toEqual([])
+    })
   })
 
   describe('canReply', () => {
