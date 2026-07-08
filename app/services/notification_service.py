@@ -322,14 +322,17 @@ class NotificationService:
             # 第 N+1 次 mention 应该让用户重新看到 → is_read=False.
             existing_recent.is_read = False
             existing_recent.read_at = None
-            # v2 PR6-P8: title/body 重拼 (preview/file_type 已变, 重复最新)
-            new_title, new_body = NotificationService._build_title_body(
-                actor_name=actor_name, meta=meta, context=ctx,
-                repeated_count=existing_recent.repeated_count,
-            )
-            existing_recent.title = new_title
-            existing_recent.body = new_body
-            existing_recent.file_type = meta.get("file_type")
+            # P2-2 fix (2026-07-08): dedup 命中时**保留首次 mention 的 title/body**,
+            # 不重拼 preview. 之前重拼总是用最新 mention 的 comment_preview,
+            # 重复 5 次后用户只看到第 5 条评论内容, 前 4 条永远看不到.
+            # 修复: 首次 mention 的 title/body 已包含原始评论内容 (PR6-P8),
+            # dedup 后续只更新 mentioned_by (最后一次是谁发的) + repeated_count + created_at.
+            # 前端显示 "A 在 实验.xlsx 提到了你" (首次) + "(共 N 次)" 提示合并数.
+            existing_recent.mentioned_by = mentioned_by
+            existing_recent.repeated_count = (existing_recent.repeated_count or 1) + 1
+            existing_recent.created_at = datetime.utcnow()
+            # title/body 保持原值 (首次 mention 内容, 含原始 preview)
+            # 只在 title 末尾加重复数提示 (PR6-P7 已有 line 247-251 处理 repeated_count > 1)
             await db.commit()
             await db.refresh(existing_recent)
             merged = True
