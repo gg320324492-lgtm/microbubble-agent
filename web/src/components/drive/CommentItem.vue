@@ -509,6 +509,12 @@ function onEditMentionItemClick(index) { editMention.selectCandidate(index) }
 .comment-item-wrapper[data-depth="2"] {
   margin-left: 48px;
 }
+/* P3-12 (2026-07-08): 预留 depth=3 缩进 (未来 MAX_COMMENT_DEPTH=3 时自动生效).
+   防御性 + 不破坏现有 depth=0/1/2. 后端 MAX_COMMENT_DEPTH 仍 = 2 (composable/useCommentTree.js),
+   这个 selector 当前不会命中, 但未来改 MAX_COMMENT_DEPTH=3 时不用再改 CSS. */
+.comment-item-wrapper[data-depth="3"] {
+  margin-left: 72px;
+}
 
 .comment-item {
   display: flex;
