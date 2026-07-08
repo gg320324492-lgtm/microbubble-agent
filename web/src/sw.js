@@ -238,7 +238,7 @@
 //   客户端收到 SW_UPDATED postMessage 后自动 reload → 干净。
 // 2026-06-30 v77 BUMP：fix 5 个统计全 0 误报 + filter 残留; activate 钩子清空 api-cache
 //   让修复后的 URL 不命中旧 cache; 同步加 noEmptyItemsPlugin 拒绝空 items 永久缓存
-const SW_VERSION = 'v78-meeting-delete-popover-visible-fix-2026-07-08'
+const SW_VERSION = 'v79-sw-cache-poisoning-purge-2026-07-08'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
