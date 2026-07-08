@@ -66,6 +66,17 @@ jobs:
         # v74: 移除 continue-on-error (白名单已覆盖 --i 等设计意图, 真 orphan 必须 fail)
         # v76.5: 加 --ci-mode 输出 ::error file=...,line=... annotation, PR 视图显示错误位置
 
+      # P3-9: webhint 静态 CSS a11y 兜底 (stylelint 漏掉的 a11y/CSS 最佳实践)
+      # 用 @webhint/quick-lint 仅做 CSS 静态分析 (无需 dev server)
+      - name: webhint CSS a11y 提示 (非阻塞, 仅 PR 警告)
+        continue-on-error: true
+        run: |
+          if [ -d "web/node_modules/@webhint/quick-lint" ]; then
+            npx hint --config web/.hintrc web/dist/index.html 2>&1 | head -50 || true
+          else
+            echo "::notice::@webhint/quick-lint 未安装, 跳过 webhint 步骤 (npm i -D @webhint/quick-lint 可启用)"
+          fi
+
       # 同时跑 vitest 兜底（stylelint 漏掉的逻辑错误）
       - name: Run unit tests (smoke)
         working-directory: web
