@@ -88,7 +88,16 @@ watch(() => props.meetingId, (mid) => {
   meetingIdRef.value = mid
 }, { immediate: true })
 
-const chunkedRecorder = useChunkedRecorder(meetingIdRef, { title: props.meetingTitle })
+// P1-5 fix (2026-07-08): meetingTitle 也走 ref 模式, 否则 useChunkedRecorder
+// setup() 时只能读到 props.meetingTitle 初始值 ("开始听会" / ""), 后续父组件
+// pageTitle 变化 (meetingId 到位后变成 "正在录音 #N") 不会更新 IDB meta.title.
+// 改成传 titleRef, useChunkedRecorder 内部 watch 变化时实时 patch meta.title.
+const titleRef = ref(props.meetingTitle)
+watch(() => props.meetingTitle, (t) => {
+  titleRef.value = t
+}, { immediate: true })
+
+const chunkedRecorder = useChunkedRecorder(meetingIdRef, { titleRef })
 const uploadedCount = computed(() => chunkedRecorder.uploadedCount.value)
 const pendingCount = computed(() => chunkedRecorder.pendingCount.value)
 const totalChunks = computed(() => chunkedRecorder.totalChunks.value)

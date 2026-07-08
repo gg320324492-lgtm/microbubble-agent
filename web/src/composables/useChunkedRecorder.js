@@ -28,7 +28,9 @@ import * as idbStore from '@/utils/idbStore'
 /**
  * @param {number|import('vue').Ref<number|null>} meetingIdRef  当前录音关联的会议 ID（可传 ref，初始为 null 时 buffer）
  * @param {object} [opts]
- * @param {string} [opts.title]  会议标题（写入 IDB meta）
+ * @param {string} [opts.title]  会议标题（写入 IDB meta, 仅 setup 时一次, 兼容旧调用）
+ * @param {import('vue').Ref<string>} [opts.titleRef]  会议标题 ref (P1-5 fix 2026-07-08),
+ *   内部 watch 变化时实时更新 IDB meta.title (不影响 started_at). 优先于 title.
  * @returns {{
  *   uploadedCount: import('vue').Ref<number>,
  *   pendingCount: import('vue').Ref<number>,
@@ -198,10 +200,30 @@ export function useChunkedRecorder(meetingIdRef, opts = {}) {
   unsubscribe = onChunk(handleChunk)
 
   // 写入元数据（仅在 meetingId 就绪时）
+  // P1-5 fix (2026-07-08): 优先用 titleRef.value (reactive), fallback opts.title (旧调用兼容)
   const initialMid = getMid()
-  if (initialMid && opts.title) {
-    idbStore.putMeta(initialMid, { title: opts.title, started_at: Date.now() })
+  const initialTitle = isRef(opts.titleRef)
+    ? opts.titleRef.value
+    : opts.title
+  // 缓存 started_at 给后续 watch 复用 (避免每次 title 变化都 Date.now() 重置)
+  const initialStartedAt = Date.now()
+  if (initialMid && initialTitle) {
+    idbStore.putMeta(initialMid, { title: initialTitle, started_at: initialStartedAt })
       .catch(err => console.warn('[useChunkedRecorder] 写 meta 失败:', err))
+  }
+
+  // P1-5 fix: watch titleRef 变化, 实时更新 IDB meta.title (不影响 started_at)
+  // 避免父组件 pageTitle 从 "开始听会" → "正在录音 #N" 后 IDB meta.title 仍是旧值.
+  if (isRef(opts.titleRef) && initialMid) {
+    const fixedMid = initialMid  // closure 锁定 meetingId (recording 期间不变)
+    const fixedStartedAt = initialStartedAt  // closure 锁定 started_at
+    watch(opts.titleRef, (newTitle) => {
+      if (!newTitle) return
+      // upsert: title 变化时只更新 title 字段, 保留首次写入的 started_at
+      // 用 closure 锁定的 started_at, 不读 getMeta (避免 IDB 读延迟 + race)
+      idbStore.putMeta(fixedMid, { title: newTitle, started_at: fixedStartedAt })
+        .catch(err => console.warn('[useChunkedRecorder] 更新 meta.title 失败:', err))
+    })
   }
 
   // 启动时尝试恢复 (meetingId 就绪时才恢复)
