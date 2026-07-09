@@ -77,14 +77,39 @@
       <iframe :src="blobUrl" class="preview-pdf" frameborder="0" />
     </div>
 
-    <!-- v2.7 新增: Office 365 在线预览 (iframe 嵌入 view.officeapps.live.com) -->
-    <div v-else-if="previewType === 'office'" class="preview-office-wrapper">
+    <!-- v2.7.1 (2026-07-10) Office 365 iframe 加 sandbox + referrerpolicy + 错误降级:
+         - sandbox: 限制 iframe 能力 (allow-popups 给 OAuth 用, allow-popups-to-escape-sandbox 给 OAuth 重定向)
+         - referrerpolicy="no-referrer": 不让 view.officeapps.live.com 看到我们的文件路径
+         - @error: 网络错误 (iframe src 加载失败) → 自动降级 thumbnail
+         - 微软内部 JS 错误 (ViewPreview is not defined 等) 不会被 @error 捕获, 这是预期 (沙箱生效)
+    -->
+    <div v-else-if="previewType === 'office' && !officeFallbackToThumbnail" class="preview-office-wrapper">
       <iframe
         :src="officeViewerUrl"
         class="preview-office-iframe"
         frameborder="0"
         allowfullscreen
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+        referrerpolicy="no-referrer"
+        @error="onOfficeViewerError"
       />
+    </div>
+    <!-- v2.7.1: Office viewer 加载失败时降级显示 thumbnail (沿用 unsupported 模式) -->
+    <div v-else-if="previewType === 'office' && officeFallbackToThumbnail" class="preview-office-wrapper">
+      <img
+        v-if="thumbnailUrl"
+        :src="thumbnailUrl"
+        :alt="file?.file_name"
+        class="preview-image"
+      />
+      <el-icon v-else :size="64" class="preview-unsupported-icon"><Document /></el-icon>
+      <p class="preview-unsupported-title">Office 在线预览加载失败</p>
+      <p class="preview-unsupported-hint">
+        {{ file?.file_name }} (网络问题或 CDN 不可达)
+      </p>
+      <el-button class="drive-upload-btn" :icon="Download" @click="downloadFile">
+        下载文件
+      </el-button>
     </div>
 
     <!-- v2.7 新增: 文本预览 (15 类 txt/md/json/csv/xml/yaml/sh 等) -->
@@ -183,6 +208,7 @@ const error = ref(null)
 const textContent = ref('')
 const textTruncated = ref(false)
 const officeViewerUrl = ref('')
+const officeFallbackToThumbnail = ref(false)   // v2.7.1: Office viewer 网络错误时降级 thumbnail
 const pendingLargeFileConfirm = ref(false)
 
 const textMaxBytes = 500 * 1024
@@ -350,6 +376,7 @@ function cleanup() {
   textContent.value = ''
   textTruncated.value = false
   officeViewerUrl.value = ''
+  officeFallbackToThumbnail.value = false   // v2.7.1
   thumbnailUrl.value = null
   error.value = null
 }
@@ -357,6 +384,14 @@ function cleanup() {
 function onClose() {
   cleanup()
   pendingLargeFileConfirm.value = false
+}
+
+// v2.7.1: Office viewer 网络错误降级
+// @error 捕获 iframe src 加载失败 (e.g. network/CDN 不可达),
+// 不捕获微软内部 JS 错误 (那些在 iframe 隔离 console 内)
+function onOfficeViewerError(e) {
+  console.warn('[FilePreviewDialog] Office viewer iframe src failed to load, fallback to thumbnail:', e?.message || e)
+  officeFallbackToThumbnail.value = true
 }
 
 function onGoDetail() {
@@ -382,6 +417,14 @@ async function downloadFile() {
     ElMessage.error('下载失败')
   }
 }
+
+// v2.7.1 (2026-07-10): 暴露内部方法给父级 + 让 vitest wrapper.vm 能调用
+defineExpose({
+  previewType,        // 让父级也能读 previewType
+  officeFallbackToThumbnail,
+  onOfficeViewerError, // 让 vitest 测试 @error handler
+  cleanup,            // 让父级可手动清除 (e.g. 路由切换时清理)
+})
 </script>
 
 
