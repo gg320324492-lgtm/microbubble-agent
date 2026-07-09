@@ -16,28 +16,50 @@
 -->
 <template>
   <div class="file-grid-wrapper">
-    <!-- loading -->
-    <div v-if="loading" class="file-grid-loading">
-      <el-icon class="is-loading"><Loading /></el-icon>
-      <span>加载文件列表...</span>
+    <!-- v2.0 (2026-07-09) Drive 美化: 三态全部走 drive-view.css skeleton + 渐变 hero -->
+    <!-- loading: 7 个 skeleton card 占位 (与 grid 列数对齐) -->
+    <div v-if="loading" class="drive-grid-loading">
+      <div v-for="n in 7" :key="n" class="drive-grid-loading-skeleton">
+        <div class="skeleton skeleton-circle drive-grid-loading-skeleton-circle"></div>
+        <div class="skeleton skeleton-text drive-grid-loading-skeleton-bar" style="width: 85%"></div>
+        <div class="skeleton skeleton-text drive-grid-loading-skeleton-bar" style="width: 55%"></div>
+        <div class="skeleton skeleton-button" style="width: 60px; margin-top: 8px;"></div>
+      </div>
     </div>
 
-    <!-- error -->
-    <div v-else-if="loadError" class="file-grid-error">
-      <el-icon><Warning /></el-icon>
-      <span>{{ loadError }}</span>
-      <el-button size="small" @click="$emit('retry')">重试</el-button>
+    <!-- error: 红橙渐变 hero -->
+    <div v-else-if="loadError" class="drive-grid-error">
+      <el-icon class="drive-grid-error-icon"><WarningFilled /></el-icon>
+      <p class="drive-grid-error-title">{{ loadErrorTitle }}</p>
+      <p class="drive-grid-error-hint">请检查网络连接后重试</p>
+      <el-button class="drive-upload-btn drive-grid-error-retry" @click="$emit('retry')">重试</el-button>
     </div>
 
-    <!-- empty -->
-    <div v-else-if="files.length === 0" class="file-grid-empty">
-      <el-icon :size="64"><Folder /></el-icon>
-      <p class="file-grid-empty-title">{{ emptyTitle }}</p>
-      <p class="file-grid-empty-hint">{{ emptyHint }}</p>
+    <!-- empty: 渐变 hero + 主色 CTA (顶级) / 子文件夹差异文案 / 搜索无结果差异 -->
+    <div
+      v-else-if="files.length === 0"
+      class="drive-grid-empty"
+      :data-state="emptyState"
+    >
+      <div class="drive-grid-empty-hero">
+        <el-icon :size="48">
+          <component :is="emptyIconComponent" />
+        </el-icon>
+      </div>
+      <p class="drive-grid-empty-title">{{ emptyTitle }}</p>
+      <p class="drive-grid-empty-hint">{{ emptyHint }}</p>
+      <el-button
+        v-if="emptyState === 'top-level' && !isSearch"
+        class="drive-upload-btn drive-grid-empty-cta"
+        :icon="UploadFilled"
+        @click="$emit('empty-cta-click')"
+      >
+        上传文件
+      </el-button>
     </div>
 
     <!-- data: grid 模式 -->
-    <div v-else-if="viewMode === 'grid'" class="file-grid-grid">
+    <div v-else-if="viewMode === 'grid'" class="drive-file-grid">
       <FileCard
         v-for="file in files"
         :key="file.id"
@@ -59,7 +81,7 @@
     </div>
 
     <!-- data: list 模式 -->
-    <div v-else class="file-grid-list">
+    <div v-else class="drive-grid-list drive-file-grid-list">
       <FileCard
         v-for="file in files"
         :key="file.id"
@@ -80,22 +102,29 @@
       />
     </div>
 
-    <!-- 分页 -->
+    <!-- v2.0: 分页走 .drive-grid-pagination + 加 sizes 选择器 -->
     <el-pagination
       v-if="!loading && !loadError && total > pageSize"
       :current-page="currentPage"
       :page-size="pageSize"
       :total="total"
-      layout="total, prev, pager, next"
-      class="file-grid-pagination"
+      :page-sizes="[20, 50, 100]"
+      layout="total, sizes, prev, pager, next, jumper"
+      class="drive-grid-pagination"
       @current-change="$emit('page-change', $event)"
+      @size-change="$emit('size-change', $event)"
     />
   </div>
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 三态走 drive-view.css + 加 isSearch 区分搜索空态
+// 引入 drive-view.css 让 .drive-grid-loading/-empty/-error / .drive-file-grid 生效
+import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
-import { Loading, Warning, Folder } from '@element-plus/icons-vue'
+import {
+  WarningFilled, Folder, Search as SearchIcon, UploadFilled, FolderAdd
+} from '@element-plus/icons-vue'
 import FileCard from './FileCard.vue'
 
 const props = defineProps({
@@ -107,80 +136,54 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   loadError: { type: [String, null], default: null },
   viewMode: { type: String, default: 'grid' },  // grid | list
-  isTopLevel: { type: Boolean, default: true }  // 是否顶级目录 (空态文案区分)
+  isTopLevel: { type: Boolean, default: true },  // 是否顶级目录 (空态文案区分)
+  isSearch: { type: Boolean, default: false },   // v2.0: 是否搜索无结果态
+  searchKeyword: { type: String, default: '' }   // v2.0: 用于 "未找到与 X 相关" 文案
 })
 
-defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-share-link', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change'])
+defineEmits(['retry', 'file-click', 'file-preview', 'file-rename', 'file-move', 'file-update-visibility', 'file-extract-to-kb', 'file-share-link', 'file-delete', 'toggle-select', 'file-toggle-star', 'page-change', 'size-change', 'empty-cta-click'])
 
-// === 空态文案 ===
+// === v2.0: 空态多态 (top-level / folder / search) ===
+const emptyState = computed(() => {
+  if (props.isSearch) return 'search'
+  return props.isTopLevel ? 'top-level' : 'folder'
+})
+
 const emptyTitle = computed(() => {
+  if (props.isSearch) return '未找到相关文件'
   if (props.isTopLevel) return '网盘中暂无文件'
   return '此文件夹为空'
 })
 
 const emptyHint = computed(() => {
-  if (props.isTopLevel) return '点击上方"上传文件"按钮，或直接将文件拖入网盘'
-  return '将文件拖入此文件夹，或上传到此处'
+  if (props.isSearch) {
+    return props.searchKeyword
+      ? `没有找到与 "${props.searchKeyword}" 相关的文件,试试更短的关键词?`
+      : '没有找到相关文件,试试调整搜索关键词?'
+  }
+  if (props.isTopLevel) return '点击下方"上传文件"按钮,或直接将文件拖入网盘'
+  return '将文件拖入此文件夹,或上传到此处'
+})
+
+const emptyIconComponent = computed(() => {
+  if (props.isSearch) return SearchIcon
+  return props.isTopLevel ? FolderAdd : Folder
+})
+
+const loadErrorTitle = computed(() => {
+  return '加载失败'
 })
 </script>
 
 <style scoped>
+/*
+ * v2.0 (2026-07-09) Drive 美化: 三态 styles 已迁移到 drive-view.css .drive-grid-loading/-empty/-error
+ * 本块仅保留 layout 容器 (file-grid-wrapper flex column + min-height)
+ */
 .file-grid-wrapper {
   display: flex;
   flex-direction: column;
-  min-height: 300px;
-}
-
-.file-grid-loading,
-.file-grid-error,
-.file-grid-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: var(--color-text-secondary, #606266);
-  gap: 12px;
-}
-
-.file-grid-error {
-  color: var(--color-danger, #f56c6c);
-}
-
-.file-grid-empty {
-  color: var(--color-text-placeholder, #909399);
-}
-
-.file-grid-empty-title {
-  font-size: 16px;
-  font-weight: 500;
-  margin: 0;
-  color: var(--color-text-secondary, #606266);
-}
-
-.file-grid-empty-hint {
-  font-size: 13px;
-  margin: 0;
-  color: var(--color-text-placeholder, #909399);
-}
-
-.file-grid-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.file-grid-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.file-grid-pagination {
-  margin-top: 24px;
-  display: flex;
-  justify-content: center;
+  min-height: 320px;
 }
 </style>
 
