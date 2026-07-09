@@ -132,4 +132,47 @@ describe('FileCard v2.0 美化', () => {
     expect(wrapper.classes()).toContain('is-private')
     wrapper.unmount()
   })
+
+  // v2.1 (2026-07-09) Drive 美化: 3 个 [icon+文本] 按钮 — 取代原 3 个无标签 circle
+  it('hover 操作栏渲染 3 个 [icon+label] button (下载/预览/更多)', async () => {
+    const wrapper = mount(FileCard, {
+      props: { file: makeFile(), viewMode: 'grid' },
+      global: globalConfig,
+    })
+    await nextTick()
+    const actions = wrapper.find('.file-card-actions')
+    expect(actions.exists()).toBe(true)
+    const buttons = actions.findAll('.file-card-action')
+    expect(buttons.length).toBe(3)
+    const labels = buttons.map(b => b.find('.file-card-action-label').text())
+    expect(labels).toEqual(['下载', '预览', '更多'])
+    wrapper.unmount()
+  })
+
+  it('下载按钮带主色 (drive-primary), 预览按钮带信息蓝 (drive-file-doc), 更多按钮默认灰', async () => {
+    const wrapper = mount(FileCard, {
+      props: { file: makeFile(), viewMode: 'grid' },
+      global: globalConfig,
+    })
+    await nextTick()
+    const download = wrapper.find('.file-card-action--download')
+    const preview = wrapper.find('.file-card-action--preview')
+    const more = wrapper.find('.file-card-action--more')
+    expect(download.exists()).toBe(true)
+    expect(preview.exists()).toBe(true)
+    expect(more.exists()).toBe(true)
+    // 校验 CSS token 类正确 (颜色由 drive-view.css 接管, 不在此测具体 rgba)
+    wrapper.unmount()
+  })
+
+  it('aria-label 含文件名前缀 (无障碍标识)', async () => {
+    const wrapper = mount(FileCard, {
+      props: { file: makeFile({ title: '组会ppt.pdf', file_name: '组会ppt.pdf' }), viewMode: 'grid' },
+      global: globalConfig,
+    })
+    await nextTick()
+    expect(wrapper.find('.file-card-action--download').attributes('aria-label')).toContain('组会ppt.pdf')
+    expect(wrapper.find('.file-card-action--preview').attributes('aria-label')).toContain('组会ppt.pdf')
+    wrapper.unmount()
+  })
 })

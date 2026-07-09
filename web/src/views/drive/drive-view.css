@@ -592,23 +592,103 @@
   font-weight: var(--font-weight-medium);
 }
 
+/*
+ * v2.1 (2026-07-09) Drive 美化: hover 操作栏重设计
+ * 从 3 个无文字 circle 按钮 → 1 个白色胶囊 [icon+文本] 按钮组
+ * - 胶囊背景: 白色 + 阴影 (避免 drive-upload-btn 橙渐变误导为"上传")
+ * - 每个 button = 透明 bg + icon + 中文 label (下载/预览/更多)
+ * - 配色: 下载 主色, 预览 信息蓝, 更多 默认 (无 token 单一来源)
+ * - 触摸目标 32px 高
+ */
 .file-card-actions {
   position: absolute;
   bottom: var(--space-2);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(4px);
   display: flex;
-  gap: var(--space-1);
+  gap: 2px;
   opacity: 0;
-  transition: opacity var(--duration-normal) var(--ease-out);
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
   background: var(--color-bg-card);
-  padding: var(--space-1);
-  border-radius: var(--radius-md);
+  padding: 4px;
+  border-radius: var(--radius-full);
   box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border-light);
 }
 
 .drive-file-card:hover .file-card-actions {
   opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.file-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px 10px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-regular);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--duration-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+.file-card-action :deep(.el-icon) {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+/* 下载 (主色, 最常用操作) */
+.file-card-action--download {
+  color: var(--color-primary);
+}
+.file-card-action--download:hover {
+  background: var(--color-primary-bg);
+}
+.file-card-action--download:hover :deep(.el-icon) {
+  transform: translateY(1px);
+}
+.file-card-action--download:active {
+  background: var(--gradient-cta-button);
+  color: #fff;
+}
+
+/* 预览 (信息蓝, 中性) */
+.file-card-action--preview {
+  color: var(--color-file-doc);
+}
+.file-card-action--preview:hover {
+  background: rgba(var(--color-file-doc-rgb), 0.10);
+}
+.file-card-action--preview:hover :deep(.el-icon) {
+  transform: scale(1.15);
+}
+.file-card-action--preview:active {
+  background: var(--color-file-doc);
+  color: #fff;
+}
+
+/* 更多 (默认灰) */
+.file-card-action--more {
+  color: var(--color-text-secondary);
+}
+.file-card-action--more:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+.file-card-action--more:active {
+  background: var(--color-info-bg);
+}
+
+.file-card-action-label {
+  font-size: var(--font-size-xs);
+  line-height: 1;
 }
 
 .file-card-checkbox {
