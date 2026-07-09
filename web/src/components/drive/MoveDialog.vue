@@ -15,6 +15,7 @@
 <template>
   <el-dialog
     v-model="visible"
+    class="drive-dialog"
     title="移动到"
     width="480px"
     :close-on-click-modal="false"
@@ -66,6 +67,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
+import '@/views/drive/drive-view.css'
 import { ref, computed, watch } from 'vue'
 import { Folder } from '@element-plus/icons-vue'
 import FolderTree from './FolderTree.vue'

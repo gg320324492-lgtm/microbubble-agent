@@ -220,9 +220,10 @@
     <!-- v2 PR1 ShareDialog -->
     <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
 
-    <!-- v2 PR1 Extract Dialog (visibility 选择) -->
+    <!-- v2.0 (2026-07-09) Drive 美化: 加 class="drive-dialog" 让 Extract dialog 玻璃态生效 -->
     <el-dialog
       v-model="showExtractDialog"
+      class="drive-dialog"
       title="📚 加入公共知识库"
       width="420px"
       top="20vh"

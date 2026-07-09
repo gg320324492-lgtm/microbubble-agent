@@ -12,7 +12,11 @@
   Dark mode: 用 var(--color-*) token 跟随 6 主题
 -->
 <template>
-  <div>
+  <!-- v2.0 (2026-07-09) Drive 美化: 玻璃态 panel + 红橙 hero header -->
+  <div class="drive-panel">
+    <div class="drive-panel-header is-danger">
+      <h3 class="drive-panel-title">🗑️ 回收站 — 已删除文件 30 天后自动清除</h3>
+    </div>
     <BatchActionToolbar
       :selected-count="selectedFileIds.length"
       :total-count="driveFiles.length"
@@ -46,6 +50,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-panel 玻璃态生效
+import '@/views/drive/drive-view.css'
 import { ref, onMounted } from 'vue'
 // 不需要 useRouter (没有 goBack; DesktopDriveView breadcrumb 是返回入口)
 // 不需要 ArrowLeft icon

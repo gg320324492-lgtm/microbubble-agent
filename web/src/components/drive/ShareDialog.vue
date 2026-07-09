@@ -19,6 +19,7 @@
   <el-dialog
     :model-value="modelValue"
     @update:model-value="$emit('update:modelValue', $event)"
+    class="drive-dialog"
     title="🔗 生成分享链接"
     width="500px"
     top="15vh"
@@ -133,6 +134,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
+import '@/views/drive/drive-view.css'
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DocumentCopy, Refresh } from '@element-plus/icons-vue'
