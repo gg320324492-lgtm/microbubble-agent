@@ -247,9 +247,22 @@ async function onSubContext(cmd, folder) {
       )
       try {
         await deleteFolder(folder.id)
-        ElMessage.success('文件夹已移入回收站')
+        ElMessage.success(`文件夹 "${folder.name}" 已移入回收站`)
+        await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
       } catch (e) {
-        ElMessage.error('删除失败: ' + (e.message || '未知错误'))
+        // v2.9 增强: 404 友好提示 (避免静默 'Not Found' 让用户困惑)
+        const status = e.response?.status
+        const msg = e.response?.data?.detail || e.message
+        if (status === 404) {
+          ElMessage.error(`文件夹不存在或您不是 owner (可能已被删除),请刷新页面`)
+        } else if (status === 400) {
+          // FolderService.soft_delete_folder 返 400 (有未删子 folder/file)
+          ElMessage.error('删除失败: ' + msg)
+        } else if (status === 401) {
+          ElMessage.error('未登录, 请重新登录')
+        } else {
+          ElMessage.error('删除失败: ' + (msg || '未知错误'))
+        }
       }
     } catch (e) { /* user cancel */ }
   }
