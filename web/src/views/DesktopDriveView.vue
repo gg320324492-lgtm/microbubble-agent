@@ -152,7 +152,7 @@
           <!-- 2026-07-02 inline 化: specialView inline 渲染 (保留 FolderTree 上下文, 不离开 /drive) -->
           <FileRequestListPanel v-if="specialView === 'requests'" />
           <DriveTrashPanel v-else-if="specialView === 'trash'" />
-          <!-- PR3.3: FileGrid 组件 (默认文件夹/收藏列表) -->
+          <!-- v2.0 (2026-07-09) Drive 美化: 加 is-search / search-keyword 让 FileGrid 区分空态 -->
           <FileGrid
             v-else
             :files="driveFiles"
@@ -164,7 +164,10 @@
             :load-error="filesLoadError"
             :view-mode="viewMode"
             :is-top-level="selectedFolderId === null && specialView === null"
-            @retry="fetchDriveFiles"
+            :is-search="!!searchQuery.trim()"
+            :search-keyword="searchQuery.trim()"
+            @retry="fetchDriveFiles({ folder_id: selectedFolderId })"
+            @empty-cta-click="showUploadDialog = true"
             @file-click="handleFileClick"
             @file-preview="handleFilePreview"
             @file-rename="handleFileRename"
@@ -176,6 +179,7 @@
             @toggle-select="toggleFileSelect"
             @file-toggle-star="handleFileToggleStar"
             @page-change="onPageChange"
+            @size-change="onPageSizeChange"
           />
         </div>
       </main>
@@ -552,6 +556,13 @@ onMounted(() => {
 // === 文件操作 handlers (PR3.3 接入, 部分留给 PR3.4-3.7 完善 dialog) ===
 function onPageChange(page) {
   currentPage.value = page
+  fetchDriveFiles({ folder_id: selectedFolderId.value })
+}
+
+// v2.0 (2026-07-09): 分页 size 切换 — pageSize 直接更新触发 refetch
+function onPageSizeChange(size) {
+  pageSize.value = size
+  currentPage.value = 1
   fetchDriveFiles({ folder_id: selectedFolderId.value })
 }
 

@@ -21,8 +21,13 @@
 -->
 <template>
   <div
-    class="file-card"
-    :class="['file-card--' + viewMode, { 'is-selected': selected, 'is-private': file.visibility === 'private' }]"
+    class="file-card drive-file-card"
+    :class="[
+      'file-card--' + viewMode,
+      'drive-file-card-' + viewMode,
+      { 'is-selected': selected, 'is-private': file.visibility === 'private' }
+    ]"
+    :data-type="fileTypeKey"
     @click="$emit('click', file, $event)"
     @contextmenu.prevent="$emit('contextmenu', file, $event)"
   >
@@ -147,17 +152,34 @@ const props = defineProps({
 
 defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'version-history', 'delete', 'toggle-star'])
 
+// === v2.0 (2026-07-09) Drive 美化: 按 file_type 提取 type key 用于 data-type ===
+// 与 drive-view.css 中的 .drive-file-card[data-type="pdf|doc|ppt|excel|image|video|audio|text"] 配套
+const EXTENSION_TYPE_MAP = {
+  '.pdf': 'pdf',
+  '.doc': 'doc', '.docx': 'doc',
+  '.ppt': 'ppt', '.pptx': 'ppt',
+  '.xls': 'excel', '.xlsx': 'excel',
+  '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image',
+  '.bmp': 'image', '.webp': 'image', '.svg': 'image',
+  '.mp4': 'video', '.mov': 'video', '.avi': 'video', '.mkv': 'video', '.webm': 'video',
+  '.mp3': 'audio', '.wav': 'audio', '.ogg': 'audio', '.flac': 'audio', '.m4a': 'audio',
+  '.txt': 'text', '.md': 'text'
+}
+
+const fileTypeKey = computed(() => {
+  const ext = (props.file.file_type || '').toLowerCase()
+  return EXTENSION_TYPE_MAP[ext] || 'text'
+})
+
 // === 图标按 file_type 分类 ===
 const iconComponent = computed(() => {
-  const ext = (props.file.file_type || '').toLowerCase()
-  if (['.pdf'].includes(ext)) return Document
-  if (['.doc', '.docx'].includes(ext)) return Document
-  if (['.ppt', '.pptx'].includes(ext)) return Tickets
-  if (['.xls', '.xlsx'].includes(ext)) return DataAnalysis
-  if (['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'].includes(ext)) return Picture
-  if (['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(ext)) return VideoCamera
-  if (['.mp3', '.wav', '.ogg', '.flac', '.m4a'].includes(ext)) return Headset
-  if (['.txt', '.md'].includes(ext)) return Document
+  const type = fileTypeKey.value
+  if (type === 'pdf' || type === 'doc' || type === 'text') return Document
+  if (type === 'ppt') return Tickets
+  if (type === 'excel') return DataAnalysis
+  if (type === 'image') return Picture
+  if (type === 'video') return VideoCamera
+  if (type === 'audio') return Headset
   return Document
 })
 
@@ -224,41 +246,26 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/*
+ * v2.0 (2026-07-09) Drive 美化: 大部分视觉样式已迁移到 drive-view.css (.drive-file-card 等)
+ * 本 scoped 块只保留 layout-flex 细节 (列表视图对齐 / 操作栏位置等)
+ *
+ * v2.0 已 token 化, 移除硬编码 EP 默认蓝色与色值 fallback
+ */
+
 .file-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 16px 12px;
-  border: 1px solid var(--color-border-light, #ebeef5);
-  border-radius: 8px;
-  background: var(--color-bg-card, #fff);
-  cursor: pointer;
-  transition: all 0.2s;
-  min-height: 160px;
+  /* 颜色 / 边框 / 阴影 / hover lift 全部走 .drive-file-card (共享 CSS) */
+  /* 本块只留 layout-flex 细节 */
+  font-family: inherit;
 }
 
-.file-card:hover {
-  border-color: var(--color-primary, #409eff);
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.15);
-  transform: translateY(-2px);
-}
-
-.file-card.is-selected {
-  border-color: var(--color-primary, #409eff);
-  background: var(--color-primary-light-9, #ecf5ff);
-}
-
-.file-card.is-private {
-  border-left: 3px solid var(--color-danger, #f56c6c);
-}
-
-/* 列表视图 */
+/* 列表视图 layout (drive-file-card-list 在共享 CSS 内已有, 此处补充细节对齐) */
 .file-card--list {
   flex-direction: row;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: auto;
-  padding: 10px 12px;
+  padding: var(--space-3);
+  align-items: center;
 }
 
 .file-card--list .file-card-icon {
@@ -270,113 +277,21 @@ onMounted(() => {
   text-align: left;
 }
 
-/* checkbox */
-.file-card-checkbox {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 1;
-}
-
-/* v2 PR2: 收藏按钮 (右上角镜像 checkbox) */
-.file-card-star {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 4px;
-  transition: background 0.15s;
-}
-.file-card-star:hover {
-  background: var(--color-bg-hover, #f5f7fa);
-}
-.file-card-star .el-icon {
-  color: var(--color-text-placeholder, #909399);
-  transition: color 0.15s;
-}
-.file-card-star .el-icon.is-starred {
-  color: var(--color-warning, #e6a23c);  /* 收藏后金色 */
-}
-
-/* icon */
-.file-card-icon {
-  color: var(--color-primary, #409eff);
-  margin-bottom: 8px;
+/* 列表视图右侧操作按钮组 */
+.file-card-list-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* v2 PR5: 缩略图 (替代 type icon) */
-.file-card-thumb {
-  max-width: 80px;
-  max-height: 80px;
-  object-fit: contain;
-  border-radius: 4px;
-  background: var(--color-bg-light, #fafbfc);
-}
-
-.file-card.is-private .file-card-icon {
-  color: var(--color-danger, #f56c6c);
-}
-
-/* name */
-.file-card-name {
-  width: 100%;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text-primary, #303133);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 8px;
-}
-
-/* meta */
-.file-card-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--color-text-secondary, #606266);
-}
-
-.file-card-size {
-  font-weight: 500;
-}
-
-.file-card-visibility {
-  margin-top: 2px;
-}
-
-/* actions (hover 显示) */
-.file-card-actions {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  background: var(--color-bg-card, #fff);
-  padding: 4px;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.file-card:hover .file-card-actions {
+  gap: var(--space-1);
+  flex-shrink: 0;
   opacity: 1;
 }
 
-.file-card-list-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
+/* 操作按钮 hover 显示在 grid 视图 — 列表视图常驻可见 (保留原 UX) */
+.file-card--list .file-card-actions {
+  position: static;
+  transform: none;
+  opacity: 1;
+  box-shadow: none;
+  background: transparent;
 }
 </style>
 
