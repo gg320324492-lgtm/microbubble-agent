@@ -1,7 +1,29 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-09)**: 待做清单核对沉淀 — 5 项未完成 + admin 决策 1 项 (voiceprint_relaxed*.py). 详见下方"## [Unreleased] 2026-07-09" 段, 总结见 `memory/2026-07-09-pending-items-audit.md`.
 > **本会话 (2026-07-08)**: 25+ bug 修复收官 + CLAUDE.md 拆分 — 详见下方"## [Unreleased] 2026-07-08" 段, 总结见 `memory/2026-07-08-25-bug-fix-batch.md`.
+
+## [Unreleased] 2026-07-09 — 待做清单核对沉淀 + Drive 美化收官文档同步
+
+### 🆕 待做清单核对 (本会话)
+- **触发**: 用户决策"看一下上面这些待做哪些事已经完成的" → 我对 Drive 美化收官前列出的 5 项待做逐项核对.
+- **结果**: **5 项全部未完成**, 但分布合理. 详见 `memory/2026-07-09-pending-items-audit.md`.
+- **未完成清单**:
+  1. PR6-P18 admin 填 14 行 `__NULL_BACKFILL_*` placeholder — DB 验证仍 14 行, 工具链就绪但 `--apply --confirm` 未跑
+  2. #009 Self-RAG 30 天承诺收尾 — `AGENT_SELF_RAG_ENABLED` 仍在 config.py:233, 2026-07-30 截止 (还有 21 天)
+  3. `scripts/voiceprint_relaxed*.py` 2 个未追踪文件 — 声纹临时实验脚本, 需要 admin 决策 (commit 还是删除)
+  4. PR6-P17 留尾 — `app/schemas/member.py:21` `MemberCreate.wechat_id` 仍 `Optional[str] = None`
+  5. Phase 8 异地容灾 — 本地备份已就绪 (Task Scheduler + `backup_scheduler.bat` 2026-07-08 P0-2), 但 cloud S3/OSS 镜像未做
+- **文档同步**: CHANGELOG.md / README.md / ROADMAP.md / memory/MEMORY.md 顶部任务链同步本会话状态
+- **3 铁律**: ① 待做清单必须定期核对 ② DB 验证 > 文档声明 ③ 临时实验脚本必须决策归宿 (留 7 天无 commit = 该删)
+
+### 📌 Drive 美化收官文档同步 (前一会话完成, 本次文档补齐)
+- **背景**: 2026-07-09 Drive 全家桶全面美化收官 (5 commit 链 + 1 测试 commit 全部 push origin/main), 但本会话开始时 CHANGELOG/README/ROADMAP 顶部未补 2026-07-09 段.
+- **修复**: CHANGELOG.md / README.md / ROADMAP.md 顶部加 2026-07-09 段落 (本次 commit 一并同步)
+- **关键 commit 链**: `295848df` (CSS+View) → `782c92b` (FileCard+Grid) → `0788f8bd` (FolderTree+Toolbar+chip) → `196cd9e` (10 dialog 玻璃态) → `7d5bfb0` (mobile 镜像) → `04c7fd2` (15 vitest PASS)
+- **memory 已存在**: `memory/drive-view-beaute-2026-07-09.md` (前一会话沉淀), CLAUDE.md 顶部任务链也已有 2026-07-09 段
+- **新铁律 (来自 Drive 美化)**: drive-view.css vs scoped 边界 / file_type data-type attr selector / aria-pressed chip / glass dialog 共享 backdrop / mobile 仅镜像不重构 / skeleton 数量列对齐 / 8 类 file-type color / `.drive-page` 容器 fade-slide-up / 单 import 共享样式表 / dark mode 自动跟随 token
 
 ## [Unreleased] 2026-07-08 — 25+ bug 收官 (P0/P1/P2/P3) + CLAUDE.md 拆分
 

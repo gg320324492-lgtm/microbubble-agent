@@ -19,6 +19,18 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
+## 最新里程碑（2026-07-09 — Drive 全家桶全面美化收官 + 待做清单核对沉淀）
+
+- 🆕 **Drive 全家桶全面美化收官 (5 commit 链 + 1 测试 commit, 全部 push origin/main)** — `drive-view.css` 共享样式 (1089 行 / 27 .drive-* class) + 5 子组件改写 + 10 dialog 玻璃态 + MobileDriveView 镜像 + chip 化过滤条 + 8 类文件染色 + 3 态升级 + 15 vitest PASS (FileCard 7 + FileGrid 8). 详见 [`memory/drive-view-beaute-2026-07-09.md`](./memory/drive-view-beaute-2026-07-09.md). 10 新铁律沉淀.
+- 🆕 **待做清单核对沉淀** — 用户决策"看一下上面这些待做哪些事已经完成的" → 对前一会话列出的 5 项待做逐项核对. **结果: 5 项全部未完成**, 但分布合理. 详见 [`memory/2026-07-09-pending-items-audit.md`](./memory/2026-07-09-pending-items-audit.md):
+  1. ❌ PR6-P18 admin 填 14 行 placeholder (DB 验证仍 14 行, 工具链就绪未跑)
+  2. ❌ #009 Self-RAG 30 天承诺收尾 (2026-07-30 截止, 还有 21 天)
+  3. ⚠️ `scripts/voiceprint_relaxed*.py` 2 个未追踪文件 (admin 决策: commit 还是删除)
+  4. ❌ PR6-P17 留尾 — `MemberCreate.wechat_id` 仍 Optional
+  5. ❌ Phase 8 异地容灾 (本地备份已就绪, cloud 镜像未做)
+- 🆕 **文档同步 (本会话)** — CHANGELOG.md / README.md / ROADMAP.md 顶部加 2026-07-09 段落, 之前 Drive 美化收官时漏补文档 (memory + CLAUDE.md 已更新, 但 3 大文档未同步)
+- 🆕 **3 新铁律**: ① 待做清单必须定期核对 (不能让 TODO 列表无限累积) ② DB 验证 > 文档声明 (PR6-P18 工具链 "已就绪" 不等于 "已跑") ③ 临时实验脚本必须决策归宿 (留 7 天无 commit = 该删)
+
 ## 最新里程碑（2026-07-08 — 25+ bug 修复收官 + CLAUDE.md 拆分）
 
 - 🆕 **本会话 (2026-07-08) 一口气修 25+ bug** — 30 个 commit 全部 push origin/main. 详见 [CHANGELOG.md](CHANGELOG.md) 顶部 [Unreleased] 段 + 总览 [`memory/2026-07-08-25-bug-fix-batch.md`](../memory/2026-07-08-25-bug-fix-batch.md):
