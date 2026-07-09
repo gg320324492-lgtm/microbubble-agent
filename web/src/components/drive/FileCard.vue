@@ -31,8 +31,8 @@
     @click="$emit('click', file, $event)"
     @contextmenu.prevent="$emit('contextmenu', file, $event)"
   >
-    <!-- 多选 checkbox -->
-    <div v-if="selectable" class="file-card-checkbox" @click.stop="$emit('toggle-select', file.id)">
+    <!-- 多选 checkbox (修复: 仅 el-checkbox @change 触发, 外层只 .stop 防止冒泡到 card 导航) -->
+    <div v-if="selectable" class="file-card-checkbox" @click.stop>
       <el-checkbox :model-value="selected" @change="$emit('toggle-select', file.id)" />
     </div>
 
