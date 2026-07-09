@@ -11,43 +11,46 @@
 -->
 <template>
   <!-- v2.0 (2026-07-09) Drive 美化: .drive-folder-tree-node 走共享 CSS + hover lift + 缩进指示线 -->
+  <!-- v2.8 (2026-07-10) 右键菜单: 用 FolderContextMenu 包裹 row 节点, 右键弹菜单 -->
   <div class="folder-tree-node drive-folder-tree-node">
-    <div
-      class="folder-tree-node-row drive-folder-tree-node-row"
-      :class="{ 'is-active': isSelected }"
-      :style="{ paddingLeft: `${indentPx}px` }"
-      @click="$emit('select', folder.id)"
-    >
-      <!-- 展开/收起箭头 -->
-      <span
-        v-if="hasChildren"
-        class="folder-tree-node-toggle drive-folder-tree-node-toggle"
-        :class="{ 'is-expanded': isExpanded }"
-        @click.stop="$emit('toggle', folder.id)"
+    <FolderContextMenu :items="folderMenuItems" placement="right-start" @command="onContextCommand">
+      <div
+        class="folder-tree-node-row drive-folder-tree-node-row"
+        :class="{ 'is-active': isSelected }"
+        :style="{ paddingLeft: `${indentPx}px` }"
+        @click="$emit('select', folder.id)"
       >
-        <el-icon>
-          <CaretBottom v-if="isExpanded" />
-          <CaretRight v-else />
+        <!-- 展开/收起箭头 -->
+        <span
+          v-if="hasChildren"
+          class="folder-tree-node-toggle drive-folder-tree-node-toggle"
+          :class="{ 'is-expanded': isExpanded }"
+          @click.stop="$emit('toggle', folder.id)"
+        >
+          <el-icon>
+            <CaretBottom v-if="isExpanded" />
+            <CaretRight v-else />
+          </el-icon>
+        </span>
+        <span v-else class="folder-tree-node-toggle-spacer drive-folder-tree-node-toggle-spacer" />
+
+        <!-- 文件夹图标 -->
+        <el-icon :class="['folder-tree-node-icon drive-folder-tree-node-icon', isSelected ? 'active' : '']">
+          <FolderOpened v-if="isSelected" />
+          <Folder v-else />
         </el-icon>
-      </span>
-      <span v-else class="folder-tree-node-toggle-spacer drive-folder-tree-node-toggle-spacer" />
 
-      <!-- 文件夹图标 -->
-      <el-icon :class="['folder-tree-node-icon drive-folder-tree-node-icon', isSelected ? 'active' : '']">
-        <FolderOpened v-if="isSelected" />
-        <Folder v-else />
-      </el-icon>
+        <!-- 文件夹名称 -->
+        <span class="folder-tree-node-name" :title="folder.name">
+          {{ folder.name }}
+        </span>
 
-      <!-- 文件夹名称 -->
-      <span class="folder-tree-node-name" :title="folder.name">
-        {{ folder.name }}
-      </span>
-
-      <!-- 子项计数徽章 (v2.0: 圆形 pill + 主色实底, 仿 .category-badge 风格) -->
-      <span v-if="folder.children?.length" class="folder-tree-node-count">
-        {{ folder.children.length }}
-      </span>
-    </div>
+        <!-- 子项计数徽章 (v2.0: 圆形 pill + 主色实底, 仿 .category-badge 风格) -->
+        <span v-if="folder.children?.length" class="folder-tree-node-count">
+          {{ folder.children.length }}
+        </span>
+      </div>
+    </FolderContextMenu>
 
     <!-- v2.0: 缩进指示线 (深度 ≥ 1 时左侧 1px 主色 bg 30% 透明线, 增强树结构感) -->
     <template v-if="isExpanded && folder.children?.length">
@@ -67,9 +70,11 @@
 
 <script setup>
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-folder-tree-node-* 生效
+// v2.8 (2026-07-10) 右键菜单支持 (FolderContextMenu 包裹)
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import { Folder, FolderOpened, CaretBottom, CaretRight } from '@element-plus/icons-vue'
+import FolderContextMenu from './FolderContextMenu.vue'
 
 const props = defineProps({
   folder: { type: Object, required: true },
@@ -78,7 +83,20 @@ const props = defineProps({
   expandedFolderIds: { type: Set, default: () => new Set() }
 })
 
-defineEmits(['select', 'toggle'])
+const emit = defineEmits(['select', 'toggle', 'context-command'])
+
+// v2.8: 子文件夹右键菜单项 (5 项)
+const folderMenuItems = [
+  { label: '📂 打开',         command: 'open' },
+  { label: '➕ 新建子文件夹',   command: 'create-sub' },
+  { label: '✏ 重命名',         command: 'rename' },
+  { label: '🔗 复制 Folder ID', command: 'copy-id' },
+  { label: '🗑 删除',          command: 'delete', divided: true },
+]
+
+function onContextCommand(cmd) {
+  emit('context-command', cmd, props.folder)
+}
 
 const hasChildren = computed(() => props.folder.children?.length > 0)
 const isExpanded = computed(() => props.expandedFolderIds.has(props.folder.id))
