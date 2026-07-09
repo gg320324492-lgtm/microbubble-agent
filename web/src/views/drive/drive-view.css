@@ -1,0 +1,1089 @@
+/*
+ * drive-view.css — Drive 全家桶全面美化 v2.0 (2026-07-09)
+ *
+ * 从 5 个 .vue 文件 (DesktopDriveView / FileCard / FileGrid / FolderTree /
+ * BatchActionToolbar) + 10 个 dialog (CreateFolder / Rename / Move / Upload /
+ * Preview / Share / Version + Trash panel + Requests panel + Extract dialog)
+ * 抽取共享样式。所有视觉 token 走 var(), 不写 hardcoded 颜色。
+ *
+ * 设计原则:
+ * 1. 全部颜色 / 阴影 / 渐变 / 圆角 / 动画 走 token (--color-*, --shadow-*,
+ *    --gradient-*, --radius-*, --space-*, --duration-*, --ease-*)
+ * 2. rgba() 写法一律走 var(--color-*-rgb) 三元组
+ *    (orange/ocean/forest 3 主题切换时自动跟随)
+ * 3. 6 主题 (light/dark × orange/ocean/forest) 通过 variables.css [data-theme] +
+ *    [data-accent] block 自动覆盖, 本文件不写 dark 块
+ * 4. 复用 .fade-slide-up / .stagger-1..6 / .glass / .skeleton / .card-file-hero--*
+ *    现成 utility, 不重复定义
+ * 5. 类名 .drive-* 前缀 namespace, 与其它全局类不冲突
+ *
+ * 与 MeetingView/meeting-view.css 范式一致:
+ *   - 全局 (非 scoped) css 文件
+ *   - 由 DesktopDriveView.vue 第一行 `import './drive-view.css'` 引入
+ *   - 子组件用法: `<div class="drive-card">` 配合现有 scoped 块使用
+ *   - dark / accent 覆盖全部依赖 variables.css token 翻转
+ */
+
+/* ===== 1. 页面容器 ===== */
+.drive-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg-page);
+  animation: fadeSlideUp var(--duration-slower) var(--ease-out) both;
+}
+
+/* ===== 2. 顶部工具栏 (Toolbar) ===== */
+.drive-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xs);
+  gap: var(--space-4);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.drive-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  flex-shrink: 0;
+}
+
+.drive-title-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--gradient-cta-button);
+  color: #fff;
+  font-size: var(--icon-size-lg);
+  box-shadow: var(--shadow-primary);
+}
+
+.drive-search-input {
+  width: 280px;
+  --el-input-border-radius: var(--radius-full);
+}
+
+/* ===== 3. 上传按钮 (CTA 渐变 + 发光) ===== */
+.drive-upload-btn {
+  background: var(--gradient-cta-button) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-primary) !important;
+  transition: all var(--duration-normal) var(--ease-out) !important;
+}
+
+.drive-upload-btn:hover {
+  background: var(--gradient-cta-button) !important;
+  filter: brightness(1.05);
+  box-shadow: var(--shadow-glow) !important;
+  transform: translateY(-1px);
+}
+
+.drive-upload-btn:active {
+  transform: translateY(0);
+}
+
+.drive-upload-btn-glow {
+  position: relative;
+}
+
+.drive-upload-btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: var(--gradient-cta-button);
+  opacity: 0.5;
+  filter: blur(8px);
+  z-index: -1;
+  animation: btn-glow 2s var(--ease-in-out) infinite;
+}
+
+/* ===== 4. 过滤条 (chip 化) ===== */
+.drive-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-6);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-card);
+}
+
+.drive-filter-bar-left {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.drive-filter-bar-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin-right: var(--space-2);
+}
+
+.drive-filter-bar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.drive-filter-stat {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.drive-filter-stat-num {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ===== 5. Chip 基础样式 (替换 el-dropdown) ===== */
+.drive-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-regular);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  user-select: none;
+}
+
+.drive-chip:hover {
+  border-color: var(--color-primary-border);
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.drive-chip:active {
+  transform: scale(0.96);
+}
+
+.drive-chip[aria-pressed="true"],
+.drive-chip.is-active {
+  background: var(--gradient-cta-button);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: var(--shadow-primary);
+}
+
+/* 各 chip type 染色变体 (用于 file_type chip 激活态左侧色点) */
+.drive-chip[data-type="pdf"]::before,
+.drive-chip[data-type="image"]::before,
+.drive-chip[data-type="video"]::before,
+.drive-chip[data-type="audio"]::before,
+.drive-chip[data-type="office"]::before,
+.drive-chip[data-type="text"]::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.drive-chip[data-type="pdf"]::before  { background: var(--color-file-pdf); }
+.drive-chip[data-type="image"]::before { background: var(--color-file-image); }
+.drive-chip[data-type="video"]::before { background: var(--color-file-pdf); }
+.drive-chip[data-type="audio"]::before { background: var(--color-warning); }
+.drive-chip[data-type="office"]::before { background: var(--color-file-excel); }
+.drive-chip[data-type="text"]::before  { background: var(--color-file-default); }
+
+/* ===== 6. 主体布局 (主区域 + 左侧栏) ===== */
+.drive-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  background: var(--color-bg-page);
+}
+
+/* ===== 7. 左侧文件树 (玻璃态侧栏) ===== */
+.drive-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-sidebar);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  border-right: 1px solid var(--color-sidebar-border);
+  box-shadow: var(--shadow-sidebar);
+  overflow: hidden;
+}
+
+.drive-sidebar-header {
+  padding: var(--space-4);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--gradient-paper-warm);
+  letter-spacing: 0.5px;
+}
+
+/* ===== 8. 文件夹树节点 ===== */
+.drive-folder-tree {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) 0;
+  font-size: var(--font-size-base);
+  color: var(--color-text-primary);
+  user-select: none;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Root 主节点: 我的网盘 */
+.drive-folder-tree-root-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  margin: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  position: relative;
+  font-weight: var(--font-weight-medium);
+}
+
+.drive-folder-tree-root-item:hover {
+  background: var(--color-primary-bg);
+  transform: translateX(2px);
+}
+
+.drive-folder-tree-root-item.is-active {
+  background: var(--gradient-cta-button);
+  color: #fff;
+  box-shadow: var(--shadow-primary);
+}
+
+.drive-folder-tree-root-item.is-active :deep(.el-icon) {
+  color: #fff;
+}
+
+/* Special nodes (starred / team / requests / trash) */
+.drive-folder-tree-special-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px var(--space-4);
+  margin: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  position: relative;
+}
+
+.drive-folder-tree-special-item:hover {
+  background: var(--color-primary-bg);
+  transform: translateX(2px);
+}
+
+.drive-folder-tree-special-item.is-active {
+  background: var(--gradient-paper-warm);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.drive-folder-tree-special-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--gradient-cta-button);
+  border-radius: 0 2px 2px 0;
+}
+
+/* 各 special item 色彩区分 */
+.drive-folder-tree-special-item.is-team.is-active {
+  background: var(--gradient-paper-success);
+  color: var(--color-success);
+}
+
+.drive-folder-tree-special-item.is-team.is-active::before {
+  background: linear-gradient(135deg, var(--color-success), var(--color-file-excel));
+}
+
+.drive-folder-tree-special-item.is-requests.is-active {
+  background: var(--gradient-paper-warm);
+  color: var(--color-primary);
+}
+
+.drive-folder-tree-special-item.is-trash.is-active {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.drive-folder-tree-special-item.is-trash.is-active::before {
+  background: var(--color-danger);
+}
+
+.drive-folder-tree-divider {
+  height: 1px;
+  background: var(--color-border-lighter);
+  margin: var(--space-2) var(--space-3);
+}
+
+/* 普通树节点 (FolderTreeNode) */
+.drive-folder-tree-node {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 8px var(--space-4);
+  margin: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  position: relative;
+}
+
+.drive-folder-tree-node:hover {
+  background: var(--color-primary-bg);
+}
+
+.drive-folder-tree-node.is-active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.drive-folder-tree-node.is-active :deep(.el-icon) {
+  color: var(--color-primary);
+}
+
+.drive-folder-tree-node-toggle {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-secondary);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.drive-folder-tree-node-toggle.is-expanded {
+  transform: rotate(90deg);
+}
+
+/* ===== 9. 主内容区 (面包屑 + grid) ===== */
+.drive-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.drive-breadcrumb {
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-lighter);
+}
+
+.drive-breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.drive-file-area {
+  flex: 1;
+  padding: var(--space-5) var(--space-6);
+  overflow: auto;
+}
+
+/* ===== 10. FileCard 网格 (按 file_type 染色 + 多档 hover) ===== */
+.drive-file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-4);
+}
+
+.drive-file-grid-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.drive-file-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  min-height: 180px;
+  overflow: hidden;
+}
+
+.drive-file-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--color-file-default);
+  transition: height var(--duration-normal) var(--ease-out);
+}
+
+.drive-file-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-primary);
+  border-color: var(--color-primary-border);
+}
+
+.drive-file-card:hover::before {
+  height: 6px;
+}
+
+/* 各 file_type 顶部彩条 */
+.drive-file-card[data-type="pdf"]::before    { background: var(--color-file-pdf); }
+.drive-file-card[data-type="doc"]::before    { background: var(--color-file-doc); }
+.drive-file-card[data-type="ppt"]::before    { background: var(--color-accent); }
+.drive-file-card[data-type="excel"]::before  { background: var(--color-file-excel); }
+.drive-file-card[data-type="image"]::before  { background: var(--color-file-image); }
+.drive-file-card[data-type="video"]::before  { background: var(--color-file-pdf); }
+.drive-file-card[data-type="audio"]::before  { background: var(--color-warning); }
+.drive-file-card[data-type="text"]::before   { background: var(--color-file-default); }
+
+.drive-file-card[data-type="pdf"] .file-card-icon,
+.drive-file-card[data-type="doc"] .file-card-icon,
+.drive-file-card[data-type="excel"] .file-card-icon,
+.drive-file-card[data-type="image"] .file-card-icon,
+.drive-file-card[data-type="ppt"] .file-card-icon,
+.drive-file-card[data-type="video"] .file-card-icon,
+.drive-file-card[data-type="audio"] .file-card-icon,
+.drive-file-card[data-type="text"] .file-card-icon {
+  color: var(--color-file-default);
+}
+
+.drive-file-card[data-type="pdf"] .file-card-icon    { color: var(--color-file-pdf); }
+.drive-file-card[data-type="doc"] .file-card-icon    { color: var(--color-file-doc); }
+.drive-file-card[data-type="excel"] .file-card-icon  { color: var(--color-file-excel); }
+.drive-file-card[data-type="image"] .file-card-icon  { color: var(--color-file-image); }
+.drive-file-card[data-type="ppt"] .file-card-icon    { color: var(--color-accent); }
+.drive-file-card[data-type="video"] .file-card-icon  { color: var(--color-file-pdf); }
+.drive-file-card[data-type="audio"] .file-card-icon  { color: var(--color-warning); }
+
+.drive-file-card.is-selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
+  box-shadow: var(--shadow-primary);
+}
+
+.drive-file-card.is-selected::before {
+  background: var(--gradient-cta-button);
+}
+
+.drive-file-card.is-private::before {
+  background: var(--color-danger);
+}
+
+.drive-file-card.is-private {
+  border-left: 4px solid var(--color-danger);
+}
+
+/* 缩略图占位 */
+.drive-file-card-thumb {
+  max-width: 80px;
+  max-height: 80px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--gradient-thumbnail-empty);
+  padding: var(--space-1);
+}
+
+/* 列表视图变体 */
+.drive-file-card-list {
+  flex-direction: row;
+  gap: var(--space-3);
+  min-height: auto;
+  padding: var(--space-3);
+  align-items: center;
+}
+
+.drive-file-card-list::before {
+  width: 4px;
+  height: auto;
+  inset: 0 auto 0 0;
+}
+
+.drive-file-card-list .drive-file-card-name {
+  flex: 1;
+  text-align: left;
+}
+
+/* Stagger 入场 (前 14 个卡片依次出现, 适配默认 7 列 × 2 行) */
+.drive-file-grid .drive-file-card:nth-child(1) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 0ms both; }
+.drive-file-grid .drive-file-card:nth-child(2) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 40ms both; }
+.drive-file-grid .drive-file-card:nth-child(3) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 80ms both; }
+.drive-file-grid .drive-file-card:nth-child(4) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 120ms both; }
+.drive-file-grid .drive-file-card:nth-child(5) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 160ms both; }
+.drive-file-grid .drive-file-card:nth-child(6) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 200ms both; }
+.drive-file-grid .drive-file-card:nth-child(7) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 240ms both; }
+.drive-file-grid .drive-file-card:nth-child(n+8) { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 280ms both; }
+
+.file-card-name {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: var(--space-2) 0;
+}
+
+.file-card-icon {
+  color: var(--color-file-default);
+  margin-bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.file-card-size {
+  font-weight: var(--font-weight-medium);
+}
+
+.file-card-actions {
+  position: absolute;
+  bottom: var(--space-2);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+  background: var(--color-bg-card);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.drive-file-card:hover .file-card-actions {
+  opacity: 1;
+}
+
+.file-card-checkbox {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1;
+}
+
+.file-card-star {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.file-card-star:hover {
+  background: var(--color-bg-hover);
+}
+
+.file-card-star :deep(.el-icon) {
+  color: var(--color-text-placeholder);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.file-card-star :deep(.el-icon.is-starred) {
+  color: var(--color-warning);
+}
+
+/* 可见性 tag (替换 el-tag 默认) */
+.file-card-visibility {
+  margin-top: 2px;
+  border-radius: var(--radius-full) !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  font-weight: var(--font-weight-medium) !important;
+}
+
+/* ===== 11. 三态 (Loading / Error / Empty) ===== */
+.drive-grid-loading,
+.drive-grid-error,
+.drive-grid-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-5);
+  min-height: 320px;
+  gap: var(--space-3);
+}
+
+/* Loading: 7 个 skeleton card 模拟 grid */
+.drive-grid-loading {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.drive-grid-loading-skeleton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  min-height: 180px;
+}
+
+.drive-grid-loading-skeleton-circle {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+}
+
+.drive-grid-loading-skeleton-bar {
+  height: 14px;
+  width: 75%;
+}
+
+/* Error: 红橙渐变 hero */
+.drive-grid-error {
+  background: var(--gradient-group-header);
+  border-radius: var(--radius-lg);
+  color: var(--color-danger);
+  text-align: center;
+}
+
+.drive-grid-error-icon {
+  font-size: 56px;
+  color: var(--color-danger);
+}
+
+.drive-grid-error-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-danger);
+  margin: 0;
+}
+
+.drive-grid-error-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  max-width: 360px;
+}
+
+.drive-grid-error-retry {
+  margin-top: var(--space-3);
+}
+
+/* Empty: 渐变 hero + 主色 CTA */
+.drive-grid-empty {
+  background: var(--gradient-paper-warm);
+  border-radius: var(--radius-xl);
+  color: var(--color-text-secondary);
+  text-align: center;
+  padding: var(--space-12) var(--space-5);
+}
+
+.drive-grid-empty-hero {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-cta-button);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+  margin-bottom: var(--space-4);
+}
+
+.drive-grid-empty-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.drive-grid-empty-hint {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  margin: var(--space-2) 0 var(--space-4);
+  max-width: 400px;
+}
+
+.drive-grid-empty-cta {
+  margin-top: var(--space-3);
+}
+
+.drive-grid-empty[data-state="search"] .drive-grid-empty-hero {
+  background: var(--gradient-paper-qa-a);
+  color: var(--color-file-doc);
+}
+
+.drive-grid-empty[data-state="search"] .drive-grid-empty-title {
+  color: var(--color-text-primary);
+}
+
+.drive-grid-empty[data-state="search"] .drive-grid-empty-cta {
+  display: none;
+}
+
+/* ===== 12. 分页 ===== */
+.drive-grid-pagination {
+  margin-top: var(--space-5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-3) 0;
+}
+
+.drive-grid-pagination :deep(.el-pagination) {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-color: var(--color-text-regular);
+  --el-pagination-hover-color: var(--color-primary);
+}
+
+.drive-grid-pagination :deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: var(--gradient-cta-button) !important;
+  color: #fff !important;
+}
+
+/* ===== 13. 批量操作 toolbar ===== */
+.drive-batch-toolbar {
+  position: sticky;
+  top: 64px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--gradient-cta-button);
+  color: #fff;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-primary);
+  animation: slideDownFade var(--duration-slower) var(--ease-out) both;
+}
+
+.drive-batch-toolbar-left,
+.drive-batch-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.drive-batch-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+.drive-batch-toolbar-btn {
+  background: rgba(255, 255, 255, 0.18) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  transition: all var(--duration-fast) var(--ease-out) !important;
+}
+
+.drive-batch-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-1px);
+}
+
+.drive-batch-toolbar-btn-danger {
+  background: rgba(245, 108, 108, 0.85) !important;
+}
+
+.drive-batch-toolbar-btn-danger:hover {
+  background: var(--color-danger) !important;
+}
+
+/* ===== 14. 状态栏 (底部路径 + 容量) ===== */
+.drive-statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-2) var(--space-6);
+  background: var(--color-bg-sidebar);
+  border-top: 1px solid var(--color-border-light);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  backdrop-filter: blur(var(--glass-blur-sm));
+  -webkit-backdrop-filter: blur(var(--glass-blur-sm));
+}
+
+.drive-statusbar-path {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-medium);
+}
+
+/* ===== 15. Dialog 玻璃态 ===== */
+.drive-dialog :deep(.el-dialog) {
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden;
+  background: var(--color-bg-card) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-lg) !important;
+  backdrop-filter: blur(var(--glass-blur-md)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur-md)) !important;
+}
+
+.drive-dialog :deep(.el-dialog__header) {
+  padding: var(--space-4) var(--space-5) !important;
+  background: var(--gradient-welcome-hero) !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--color-border-light) !important;
+}
+
+.drive-dialog :deep(.el-dialog__title) {
+  color: #fff !important;
+  font-weight: var(--font-weight-semibold) !important;
+  font-size: var(--font-size-md) !important;
+  letter-spacing: 0.3px;
+}
+
+.drive-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: #fff !important;
+}
+
+.drive-dialog :deep(.el-dialog__body) {
+  padding: var(--space-5) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.drive-dialog :deep(.el-dialog__footer) {
+  padding: var(--space-3) var(--space-5) var(--space-5) !important;
+  border-top: 1px solid var(--color-border-lighter) !important;
+}
+
+/* Inline panel (Trash / Requests), 不是 dialog */
+.drive-panel {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  animation: fadeSlideUp var(--duration-slow) var(--ease-out) both;
+}
+
+.drive-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--gradient-paper-warm);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-primary);
+}
+
+.drive-panel-header.is-danger {
+  background: var(--color-danger-bg);
+  border-left-color: var(--color-danger);
+}
+
+.drive-panel-header.is-success {
+  background: var(--color-success-bg);
+  border-left-color: var(--color-success);
+}
+
+.drive-panel-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/* ===== 16. 拖拽激活态 ===== */
+.drive-dropzone-active {
+  position: relative;
+}
+
+.drive-dropzone-active::before {
+  content: '';
+  position: absolute;
+  inset: var(--space-3);
+  border: 3px dashed var(--color-primary);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-bg);
+  z-index: 100;
+  pointer-events: none;
+  animation: pulse 1.5s var(--ease-in-out) infinite;
+}
+
+.drive-dropzone-active::after {
+  content: '📂 松开上传文件';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: var(--space-3) var(--space-5);
+  background: var(--gradient-cta-button);
+  color: #fff;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  z-index: 101;
+  pointer-events: none;
+  box-shadow: var(--shadow-glow);
+}
+
+/* ===== 17. 视图切换按钮组 (grid / list) ===== */
+.drive-view-toggle {
+  display: inline-flex;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+}
+
+.drive-view-toggle :deep(.el-button) {
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.drive-view-toggle :deep(.el-button.is-active),
+.drive-view-toggle :deep(.el-button--primary) {
+  background: var(--gradient-cta-button) !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-primary);
+}
+
+/* ===== 18. 滚动条美化 (Webkit) ===== */
+.drive-file-area::-webkit-scrollbar,
+.drive-grid-list::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.drive-file-area::-webkit-scrollbar-thumb,
+.drive-grid-list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.drive-file-area::-webkit-scrollbar-thumb:hover,
+.drive-grid-list::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary-border);
+}
+
+.drive-file-area::-webkit-scrollbar-track,
+.drive-grid-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===== 19. 移动端响应式 (max-width: 1024px) ===== */
+@media (max-width: 1024px) {
+  .drive-toolbar {
+    padding: var(--space-3) var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .drive-search-input {
+    width: 200px;
+  }
+
+  .drive-sidebar {
+    width: 64px;
+  }
+
+  .drive-sidebar-header,
+  .drive-folder-tree-special-item span,
+  .drive-folder-tree-root-item span,
+  .drive-folder-tree-node span {
+    display: none;
+  }
+
+  .drive-file-area {
+    padding: var(--space-3);
+  }
+}
+
+@media (max-width: 768px) {
+  .drive-toolbar-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .drive-search-input {
+    width: 100%;
+  }
+
+  .drive-view-toggle {
+    align-self: flex-end;
+  }
+
+  .drive-batch-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+}
