@@ -135,6 +135,85 @@ describe('FilePreviewDialog v2.7 previewType 分类', () => {
     expect(wrapper.vm.officeViewerUrl).toContain(encodeURIComponent('drive/2026/07/test.pptx'))
     wrapper.unmount()
   })
+
+  // v2.7.1 (2026-07-10) Office iframe 安全配置 + 错误降级
+  it('office iframe 含 sandbox + referrerpolicy 安全属性', async () => {
+    mockAxiosGet.mockReset()
+    mockAxiosGet.mockResolvedValueOnce({ data: { thumbnail_url: null } })
+    const wrapper = mount(FilePreviewDialog, {
+      props: {
+        modelValue: true,
+        file: makeFile({ file_type: '.pptx', file_path: 'drive/test.pptx' }),
+      },
+      global: {
+        stubs: {
+          'el-dialog': {
+            template: '<div><slot /></div>',
+          },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-button': {
+            template: '<button @click="$emit(\'click\')"><slot /></button>',
+          },
+          // 让 iframe 真的渲染到 DOM (v-if=true)
+          'iframe': {
+            template: '<iframe v-bind="$attrs" v-on="$listeners" />',
+            inheritAttrs: true,
+          },
+        },
+      },
+    })
+    for (let i = 0; i < 4; i++) await flushPromises()
+    const html = wrapper.html()
+    // 验证 iframe 元素真的有 sandbox + referrerpolicy 属性
+    expect(html).toMatch(/sandbox=/)
+    expect(html).toMatch(/referrerpolicy="no-referrer"/i)
+    expect(html).toMatch(/allowfullscreen/i)
+    // 验证 officeViewerUrl 含 Office 域名
+    expect(wrapper.vm.officeViewerUrl).toContain('view.officeapps.live.com')
+    wrapper.unmount()
+  })
+
+  it('Office viewer @error 降级到 thumbnail: officeFallbackToThumbnail=true', async () => {
+    mockAxiosGet.mockResolvedValueOnce({ data: { thumbnail_url: null } })
+    const wrapper = mount(FilePreviewDialog, {
+      props: {
+        modelValue: true,
+        file: makeFile({ file_type: '.pptx', file_path: 'drive/test.pptx' }),
+      },
+      global: globalStubs,
+    })
+    for (let i = 0; i < 4; i++) await flushPromises()
+    expect(wrapper.vm.previewType).toBe('office')
+    expect(wrapper.vm.officeFallbackToThumbnail).toBe(false)  // 初始 false
+    // 模拟 @error 触发
+    wrapper.vm.onOfficeViewerError(new Error('iframe load fail'))
+    await flushPromises()
+    expect(wrapper.vm.officeFallbackToThumbnail).toBe(true)   // 降级触发
+    wrapper.unmount()
+  })
+
+  it('cleanup 资源不泄漏: visibility false 触发后无内存泄漏 (blob URL revoke 调用)', async () => {
+    mockAxiosGet.mockReset()
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    mockAxiosGet.mockResolvedValueOnce({ data: new Blob(['x'], { type: 'image/jpeg' }) })
+
+    const wrapper = mount(FilePreviewDialog, {
+      props: { modelValue: true, file: makeFile({ file_type: '.jpg' }) },
+      global: globalStubs,
+    })
+    for (let i = 0; i < 4; i++) await flushPromises()
+    expect(wrapper.vm.blobUrl).toBeTruthy()
+    expect(revokeSpy).not.toHaveBeenCalled()  // 未关闭前不应 revoke
+
+    // 模拟关闭 — 触发 watch → cleanup → revokeObjectURL
+    await wrapper.setProps({ modelValue: false })
+    for (let i = 0; i < 4; i++) await flushPromises()
+
+    expect(revokeSpy).toHaveBeenCalled()  // cleanup 路径会 revoke
+    expect(wrapper.vm.blobUrl).toBe(null)  // blob URL 已清空
+    revokeSpy.mockRestore()
+    wrapper.unmount()
+  })
 })
 
 describe('FilePreviewDialog v2.7 text preview 行为', () => {
