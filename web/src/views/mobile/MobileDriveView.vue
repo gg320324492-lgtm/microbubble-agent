@@ -5,7 +5,8 @@
   4 tab (文件/收藏/最近/团队) + 文件夹 chip + 长按 + MobileActionSheet
 -->
 <template>
-  <div class="mobile-drive-view">
+  <!-- v2.0 (2026-07-09) Drive 美化: 加 .drive-page 让 fade-slide-up + --color-bg-page 继承 -->
+  <div class="mobile-drive-view drive-page">
     <PageHeader title="网盘" :show-back="false">
       <template #actions>
         <button type="button" class="header-btn" aria-label="搜索" @click="showSearch = true">🔍</button>
@@ -45,7 +46,8 @@
 
     <div v-else class="drive-grid">
       <LongPressWrapper v-for="file in driveFiles" :key="file.id" :duration="600" @long-press="onLongPressFile(file)">
-        <article class="drive-file-card" :class="{ 'is-private': file.visibility === 'private', 'is-starred': file.is_starred }"
+        <article class="drive-file-card" :data-type="getFileTypeKey(file)"
+          :class="{ 'is-private': file.visibility === 'private', 'is-starred': file.is_starred }"
           @click="onFileClick(file)">
           <div class="drive-file-icon">
             <el-icon :size="32"><component :is="getFileIcon(file)" /></el-icon>
@@ -77,6 +79,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-page fade-slide-up + 文件类型色共享样式生效
+import '@/views/drive/drive-view.css'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
@@ -251,6 +255,33 @@ function getFileIcon(file) {
   if (/\.(xlsx?|csv)$/.test(name)) return 'Grid'
   if (/\.(pptx?|key)$/.test(name)) return 'Present'
   return 'Folder'
+}
+
+// v2.0 (2026-07-09) Drive 美化: 文件类型分类 key (与 drive-view.css .drive-file-card[data-type=...] 配套)
+const MOBILE_FILE_TYPE_KEYS = {
+  'image/': 'image', 'video/': 'video', 'audio/': 'audio',
+  'application/pdf': 'pdf',
+  '.pdf': 'pdf', '.doc': 'doc', '.docx': 'doc', '.rtf': 'doc',
+  '.xls': 'excel', '.xlsx': 'excel', '.csv': 'text',
+  '.ppt': 'ppt', '.pptx': 'ppt', '.key': 'ppt',
+  '.txt': 'text', '.md': 'text',
+  '.jpg': 'image', '.jpeg': 'image', '.png': 'image', '.gif': 'image',
+  '.webp': 'image', '.svg': 'image',
+  '.mp4': 'video', '.mov': 'video', '.avi': 'video', '.webm': 'video',
+  '.mp3': 'audio', '.wav': 'audio', '.ogg': 'audio', '.m4a': 'audio',
+}
+function getFileTypeKey(file) {
+  const name = (file.file_name || file.title || '').toLowerCase()
+  const t = file.file_type || ''
+  // 先比 MIME 前缀
+  for (const [prefix, key] of Object.entries(MOBILE_FILE_TYPE_KEYS)) {
+    if (prefix.endsWith('/') && t.startsWith(prefix)) return key
+  }
+  // 再比扩展名
+  for (const ext of Object.keys(MOBILE_FILE_TYPE_KEYS)) {
+    if (ext.startsWith('.') && name.endsWith(ext)) return MOBILE_FILE_TYPE_KEYS[ext]
+  }
+  return 'text'
 }
 
 onMounted(() => { fetchTree(); applyTabQuery() })
