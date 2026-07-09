@@ -21,62 +21,63 @@
   - @batch-permanent-delete (trash only)
 -->
 <template>
-  <transition name="batch-toolbar-fade">
-    <div v-if="selectedCount > 0" class="batch-toolbar">
-      <div class="batch-toolbar-inner">
-        <div class="batch-toolbar-left">
-          <el-checkbox
-            :model-value="allSelected"
-            :indeterminate="indeterminate"
-            @change="$emit('select-all')"
-          >
-            <span class="batch-toolbar-count">已选 {{ selectedCount }} 项</span>
-          </el-checkbox>
-          <el-button text size="small" @click="$emit('clear')">取消选择</el-button>
-        </div>
+  <!-- v2.0 (2026-07-09) Drive 美化: .drive-batch-toolbar 走共享 CSS (橙渐变 + 数字徽章 + 按钮玻璃) -->
+  <transition name="drive-batch-toolbar-fade">
+    <div v-if="selectedCount > 0" class="drive-batch-toolbar">
+      <div class="drive-batch-toolbar-left">
+        <el-checkbox
+          :model-value="allSelected"
+          :indeterminate="indeterminate"
+          @change="$emit('select-all')"
+        >
+          <span class="batch-toolbar-label">已选 <span class="drive-batch-count">{{ selectedCount }}</span> 项</span>
+        </el-checkbox>
+        <el-button class="drive-batch-toolbar-btn" size="small" @click="$emit('clear')">取消选择</el-button>
+      </div>
 
-        <div class="batch-toolbar-right">
-          <template v-if="context === 'trash'">
-            <el-button type="success" :icon="RefreshLeft" @click="$emit('batch-restore')">
-              批量恢复
+      <div class="drive-batch-toolbar-right">
+        <template v-if="context === 'trash'">
+          <el-button class="drive-batch-toolbar-btn" :icon="RefreshLeft" @click="$emit('batch-restore')">
+            批量恢复
+          </el-button>
+          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-permanent-delete')">
+            彻底删除
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">
+            移动
+          </el-button>
+          <el-dropdown @command="handleVisibilityCmd" trigger="click">
+            <el-button class="drive-batch-toolbar-btn" :icon="View">
+              可见性
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
-            <el-button type="danger" :icon="Delete" @click="$emit('batch-permanent-delete')">
-              彻底删除
-            </el-button>
-          </template>
-          <template v-else>
-            <el-button :icon="Folder" @click="$emit('batch-move')">
-              移动
-            </el-button>
-            <el-dropdown @command="handleVisibilityCmd">
-              <el-button :icon="View">
-                可见性
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="private">🔒 仅自己</el-dropdown-item>
-                  <el-dropdown-item command="team">👥 团队成员</el-dropdown-item>
-                  <el-dropdown-item command="public">🌐 公开</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button :icon="Star" @click="$emit('batch-toggle-star')">
-              收藏
-            </el-button>
-            <el-button :icon="Share" @click="$emit('batch-share')">分享</el-button>
-            <el-button :icon="Download" @click="$emit('batch-download')">下载</el-button>
-            <el-button type="danger" :icon="Delete" @click="$emit('batch-delete')">
-              删除
-            </el-button>
-          </template>
-        </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="private">🔒 仅自己</el-dropdown-item>
+                <el-dropdown-item command="team">👥 团队成员</el-dropdown-item>
+                <el-dropdown-item command="public">🌐 公开</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <el-button class="drive-batch-toolbar-btn" :icon="Star" @click="$emit('batch-toggle-star')">
+            收藏
+          </el-button>
+          <el-button class="drive-batch-toolbar-btn" :icon="Share" @click="$emit('batch-share')">分享</el-button>
+          <el-button class="drive-batch-toolbar-btn" :icon="Download" @click="$emit('batch-download')">下载</el-button>
+          <el-button class="drive-batch-toolbar-btn drive-batch-toolbar-btn-danger" :icon="Delete" @click="$emit('batch-delete')">
+            删除
+          </el-button>
+        </template>
       </div>
     </div>
   </transition>
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-batch-toolbar 共享样式生效
+import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import {
   Delete, Download, Folder, Share, Star, View, ArrowDown, RefreshLeft
@@ -108,53 +109,26 @@ function handleVisibilityCmd(cmd) {
 </script>
 
 <style scoped>
-.batch-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--color-bg-card, #ffffff);
-  border: 1px solid var(--color-primary-light-7, #fde2dc);
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+/*
+ * v2.0 (2026-07-09) Drive 美化: 全部视觉走 drive-view.css .drive-batch-toolbar
+ * 本 scoped 块保留 transition name & label flex 细节
+ */
+.batch-toolbar-label {
+  color: #fff;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin-left: var(--space-2);
 }
 
-.batch-toolbar-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+.drive-batch-toolbar-fade-enter-active,
+.drive-batch-toolbar-fade-leave-active {
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
 }
-
-.batch-toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.batch-toolbar-count {
-  font-weight: 600;
-  color: var(--color-primary, #ff7a5c);
-  margin-left: 8px;
-}
-
-.batch-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.batch-toolbar-fade-enter-active,
-.batch-toolbar-fade-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.batch-toolbar-fade-enter-from,
-.batch-toolbar-fade-leave-to {
+.drive-batch-toolbar-fade-enter-from,
+.drive-batch-toolbar-fade-leave-to {
   opacity: 0;
-  transform: translateY(-4px);
+  transform: translateY(-8px);
 }
 </style>
 

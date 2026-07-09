@@ -58,44 +58,40 @@
       </div>
     </div>
 
-    <!-- v2 PR2: 排序 + 类型过滤 chip 行 -->
+    <!-- v2.0 (2026-07-09) Drive 美化: 排序 + 类型过滤 chip 行 (替换 2 个 el-dropdown) -->
+    <!-- 6 个排序 chip + 6 个类型 chip, 走 .drive-chip class + aria-pressed 语义 -->
     <div class="drive-filter-bar">
       <div class="drive-filter-bar-left">
-        <el-dropdown trigger="click" @command="handleSortChange">
-          <el-button :icon="Sort">
-            排序: {{ sortLabel }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="created_at:desc">最新上传 ⬇️</el-dropdown-item>
-              <el-dropdown-item command="created_at:asc">最新上传 ⬆️</el-dropdown-item>
-              <el-dropdown-item command="updated_at:desc">最近修改 ⬇️</el-dropdown-item>
-              <el-dropdown-item command="file_name:asc">文件名 A-Z</el-dropdown-item>
-              <el-dropdown-item command="file_name:desc">文件名 Z-A</el-dropdown-item>
-              <el-dropdown-item command="starred_at:desc">收藏时间 ⬇️</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-dropdown trigger="click" @command="handleFileTypeChange">
-          <el-button :icon="Filter">
-            类型: {{ fileTypeLabel }}
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item :command="null">全部类型</el-dropdown-item>
-              <el-dropdown-item command="pdf">📄 PDF</el-dropdown-item>
-              <el-dropdown-item command="image">🖼️ 图片</el-dropdown-item>
-              <el-dropdown-item command="video">🎬 视频</el-dropdown-item>
-              <el-dropdown-item command="office">📊 Office</el-dropdown-item>
-              <el-dropdown-item command="text">📝 文本</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <span class="drive-filter-bar-label">排序</span>
+        <button
+          v-for="opt in SORT_OPTIONS"
+          :key="opt.value"
+          type="button"
+          class="drive-chip"
+          :aria-pressed="sortKey === opt.value"
+          :class="{ 'is-active': sortKey === opt.value }"
+          @click="handleSortChange(opt.value)"
+        >
+          {{ opt.label }}
+        </button>
+        <span class="drive-filter-bar-label" style="margin-left: var(--space-3);">类型</span>
+        <button
+          v-for="opt in FILE_TYPE_OPTIONS"
+          :key="opt.value || 'all'"
+          type="button"
+          class="drive-chip"
+          :data-type="opt.type || null"
+          :aria-pressed="fileType === opt.value || (!fileType && opt.value === null)"
+          :class="{ 'is-active': fileType === opt.value || (!fileType && opt.value === null) }"
+          @click="handleFileTypeChange(opt.value)"
+        >
+          {{ opt.label }}
+        </button>
       </div>
       <div class="drive-filter-bar-right">
-        <span class="filter-stat">共 {{ total }} 项</span>
+        <span class="drive-filter-stat">
+          共 <span class="drive-filter-stat-num">{{ total }}</span> 项
+        </span>
       </div>
     </div>
 
@@ -331,38 +327,40 @@ const searchQuery = ref('')
 // v2 PR2: 特殊视图 (null | 'starred' | 'trash')
 const specialView = ref(null)
 
-// v2 PR2: sort/filter 标签 (computed)
-const SORT_LABELS = {
-  'created_at:desc': '最新上传 ⬇️',
-  'created_at:asc': '最新上传 ⬆️',
-  'updated_at:desc': '最近修改 ⬇️',
-  'file_name:asc': '文件名 A-Z',
-  'file_name:desc': '文件名 Z-A',
-  'starred_at:desc': '收藏时间 ⬇️',
-}
-const FILE_TYPE_LABELS = {
-  pdf: '📄 PDF', image: '🖼️ 图片', video: '🎬 视频',
-  office: '📊 Office', text: '📝 文本'
-}
-const sortLabel = computed(() => {
-  const key = `${sortBy.value}:${sortOrder.value}`
-  return SORT_LABELS[key] || SORT_LABELS['created_at:desc']
-})
-const fileTypeLabel = computed(() =>
-  fileType.value ? FILE_TYPE_LABELS[fileType.value] || fileType.value : '全部类型'
-)
+// v2.0 (2026-07-09) Drive 美化: chip 化的 sort/type 选项数组 (替代 SORT_LABELS dropdown)
+// 与 drive-view.css .drive-chip 配合, aria-pressed=true 时 is-active class
+const SORT_OPTIONS = [
+  { value: 'created_at:desc', label: '最新上传 ⬇️' },
+  { value: 'created_at:asc',  label: '最新上传 ⬆️' },
+  { value: 'updated_at:desc', label: '最近修改 ⬇️' },
+  { value: 'file_name:asc',   label: '文件名 A-Z' },
+  { value: 'file_name:desc',  label: '文件名 Z-A' },
+  { value: 'starred_at:desc', label: '收藏时间 ⬇️' },
+]
 
-// v2 PR2: handlers
-function handleSortChange(cmd) {
-  const [sb, so] = cmd.split(':')
+const FILE_TYPE_OPTIONS = [
+  { value: null,    type: null,    label: '全部类型' },
+  { value: 'pdf',   type: 'pdf',   label: '📄 PDF' },
+  { value: 'image', type: 'image', label: '🖼️ 图片' },
+  { value: 'video', type: 'video', label: '🎬 视频' },
+  { value: 'office',type: 'office',label: '📊 Office' },
+  { value: 'audio', type: 'audio', label: '🎵 音频' },
+  { value: 'text',  type: 'text',  label: '📝 文本' },
+]
+
+const sortKey = computed(() => `${sortBy.value}:${sortOrder.value}`)
+
+// v2.0: handlers 直接收 chip value
+function handleSortChange(value) {
+  const [sb, so] = value.split(':')
   sortBy.value = sb
   sortOrder.value = so
   currentPage.value = 1
   reloadCurrentView()
 }
 
-function handleFileTypeChange(cmd) {
-  fileType.value = cmd
+function handleFileTypeChange(value) {
+  fileType.value = value
   currentPage.value = 1
   reloadCurrentView()
 }
