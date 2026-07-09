@@ -3,7 +3,15 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
-## 当前状态（2026-07-08 — 25+ bug 修复收官 + CLAUDE.md 拆分）
+## 当前状态（2026-07-09 — Drive 全家桶全面美化收官 + 待做清单核对沉淀）
+
+**已交付（2026-07-09 本会话新增 — 文档同步 commit + 待做清单核对沉淀）**：
+
+- 🆕 **Drive 全家桶全面美化收官 (5 commit 链 + 1 测试 commit, 全部 push origin/main)** — 详见 `memory/drive-view-beaute-2026-07-09.md`. 19 文件改动 (1 css + 1 mobile view + 1 desktop view + 13 子组件 + 2 test + 1 __init__ dir), 15 vitest PASS. 关键 commit 链: `295848df` (CSS+View) → `782c92b` (FileCard+Grid) → `0788f8bd` (FolderTree+Toolbar+chip) → `196cd9e` (10 dialog 玻璃态) → `7d5bfb0` (mobile 镜像) → `04c7fd2` (15 vitest PASS).
+
+- 🆕 **待做清单核对沉淀** — 详见 `memory/2026-07-09-pending-items-audit.md`. 5 项未完成: PR6-P18 admin 填值 / Self-RAG 收尾 / voiceprint_relaxed 追踪 / MemberCreate schema / Phase 8 异地容灾.
+
+- 🆕 **文档同步 (本会话 commit)** — CHANGELOG.md / README.md / ROADMAP.md 顶部加 2026-07-09 段落 (Drive 美化收官时漏补文档, 本次补齐).
 
 **已交付（2026-07-08 本会话新增 — 30 个 commit 全部 push origin/main）**：
 
