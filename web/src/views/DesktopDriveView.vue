@@ -14,12 +14,19 @@
 
   数据流:
   - PR3.1 仅骨架, 不调 API, 子组件待 PR3.2/3.3 接入
+
+  2026-07-09: Drive 美化 v2.0 — 引入 drive-view.css 共享样式 (.drive-page / .drive-toolbar /
+  .drive-title / .drive-search-input / .drive-upload-btn / .drive-filter-bar / .drive-chip 等)
+  详见 web/src/views/drive/drive-view.css + C:\Users\pc\.claude\plans\ui-shiny-hearth.md
 -->
 <template>
-  <div class="desktop-drive-view">
+  <div class="desktop-drive-view drive-page">
     <!-- 工具栏 (PR3.4 接入: 启用按钮 + 接入 dialog) -->
     <div class="drive-toolbar">
-      <h2 class="drive-title">📁 课题组网盘</h2>
+      <h2 class="drive-title">
+        <span class="drive-title-icon">📁</span>
+        课题组网盘
+      </h2>
       <div class="drive-toolbar-actions">
         <el-input
           v-model="searchQuery"
@@ -30,7 +37,7 @@
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
         <el-button-group>
-          <el-button :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
+          <el-button class="drive-upload-btn" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
           <el-button :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
           <el-button :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
         </el-button-group>
@@ -244,6 +251,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化 — 引入 drive-view.css 共享样式 (见下方 import 与 .drive-* class)
+import '@/views/drive/drive-view.css'
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, UploadFilled, Folder, Plus, Grid, List, Files, Sort, Filter, ArrowDown } from '@element-plus/icons-vue'
