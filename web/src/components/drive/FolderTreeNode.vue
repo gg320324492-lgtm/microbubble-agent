@@ -10,17 +10,19 @@
   - hover 显示快捷操作 (PR3.4 接入新建/删除/重命名)
 -->
 <template>
-  <div class="folder-tree-node">
+  <!-- v2.0 (2026-07-09) Drive 美化: .drive-folder-tree-node 走共享 CSS + hover lift + 缩进指示线 -->
+  <div class="folder-tree-node drive-folder-tree-node">
     <div
-      class="folder-tree-node-row"
-      :class="{ active: isSelected }"
+      class="folder-tree-node-row drive-folder-tree-node-row"
+      :class="{ 'is-active': isSelected }"
       :style="{ paddingLeft: `${indentPx}px` }"
       @click="$emit('select', folder.id)"
     >
       <!-- 展开/收起箭头 -->
       <span
         v-if="hasChildren"
-        class="folder-tree-node-toggle"
+        class="folder-tree-node-toggle drive-folder-tree-node-toggle"
+        :class="{ 'is-expanded': isExpanded }"
         @click.stop="$emit('toggle', folder.id)"
       >
         <el-icon>
@@ -28,10 +30,10 @@
           <CaretRight v-else />
         </el-icon>
       </span>
-      <span v-else class="folder-tree-node-toggle-spacer" />
+      <span v-else class="folder-tree-node-toggle-spacer drive-folder-tree-node-toggle-spacer" />
 
       <!-- 文件夹图标 -->
-      <el-icon :class="['folder-tree-node-icon', isSelected ? 'active' : '']">
+      <el-icon :class="['folder-tree-node-icon drive-folder-tree-node-icon', isSelected ? 'active' : '']">
         <FolderOpened v-if="isSelected" />
         <Folder v-else />
       </el-icon>
@@ -41,13 +43,13 @@
         {{ folder.name }}
       </span>
 
-      <!-- 子项计数徽章 -->
+      <!-- 子项计数徽章 (v2.0: 圆形 pill + 主色实底, 仿 .category-badge 风格) -->
       <span v-if="folder.children?.length" class="folder-tree-node-count">
         {{ folder.children.length }}
       </span>
     </div>
 
-    <!-- 递归子节点 (展开时才渲染) -->
+    <!-- v2.0: 缩进指示线 (深度 ≥ 1 时左侧 1px 主色 bg 30% 透明线, 增强树结构感) -->
     <template v-if="isExpanded && folder.children?.length">
       <FolderTreeNode
         v-for="child in folder.children"
@@ -64,6 +66,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-folder-tree-node-* 生效
+import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import { Folder, FolderOpened, CaretBottom, CaretRight } from '@element-plus/icons-vue'
 
@@ -83,29 +87,44 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
 </script>
 
 <style scoped>
+/*
+ * v2.0 (2026-07-09) Drive 美化: 视觉样式已迁移 drive-view.css .drive-folder-tree-node-*
+ * 本 scoped 块保留 layout-flex 细节 + 计数徽章 token 化
+ */
 .folder-tree-node {
-  font-size: 14px;
+  font-size: var(--font-size-base);
   user-select: none;
 }
 
 .folder-tree-node-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px 6px 0;
+  gap: var(--space-2);
+  padding: 6px var(--space-3) 6px 0;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all var(--duration-fast) var(--ease-out);
   min-height: 32px;
+  position: relative;
 }
 
-.folder-tree-node-row:hover {
-  background: var(--color-bg-hover, #f5f7fa);
+/* v2.0: 子节点左侧缩进指示线 */
+.folder-tree-node-row[style*="paddingLeft: 28"],
+.folder-tree-node-row[style*="paddingLeft: 44"],
+.folder-tree-node-row[style*="paddingLeft: 60"] {
+  position: relative;
 }
 
-.folder-tree-node-row.active {
-  background: var(--color-primary-light-9, #ecf5ff);
-  color: var(--color-primary, #409eff);
-  font-weight: 500;
+.folder-tree-node-row[style*="paddingLeft: 28"]::before,
+.folder-tree-node-row[style*="paddingLeft: 44"]::before,
+.folder-tree-node-row[style*="paddingLeft: 60"]::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(var(--color-primary-rgb), 0.18);
+  pointer-events: none;
 }
 
 .folder-tree-node-toggle,
@@ -117,11 +136,12 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
   height: 16px;
   flex-shrink: 0;
   cursor: pointer;
-  color: var(--color-text-secondary, #606266);
+  color: var(--color-text-secondary);
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
 .folder-tree-node-toggle:hover {
-  color: var(--color-primary, #409eff);
+  color: var(--color-primary);
 }
 
 .folder-tree-node-toggle-spacer {
@@ -130,11 +150,11 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
 
 .folder-tree-node-icon {
   flex-shrink: 0;
-  color: var(--color-text-secondary, #909399);
+  color: var(--color-text-secondary);
 }
 
 .folder-tree-node-icon.active {
-  color: var(--color-primary, #409eff);
+  color: var(--color-primary);
 }
 
 .folder-tree-node-name {
@@ -144,19 +164,24 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
   text-overflow: ellipsis;
 }
 
+/* v2.0: 计数徽章改 pill + 主色实底 */
 .folder-tree-node-count {
   flex-shrink: 0;
+  min-width: 20px;
   padding: 0 6px;
-  border-radius: 8px;
-  background: var(--color-bg-tag, #f0f0f0);
-  color: var(--color-text-secondary, #606266);
-  font-size: 11px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tag, var(--color-info-bg));
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
   line-height: 16px;
+  text-align: center;
+  font-weight: var(--font-weight-semibold);
+  transition: all var(--duration-fast) var(--ease-out);
 }
 
-.folder-tree-node-row.active .folder-tree-node-count {
-  background: var(--color-primary, #409eff);
-  color: var(--el-color-white, #ffffff);
+.folder-tree-node-row.is-active .folder-tree-node-count {
+  background: var(--gradient-cta-button);
+  color: #fff;
 }
 </style>
 

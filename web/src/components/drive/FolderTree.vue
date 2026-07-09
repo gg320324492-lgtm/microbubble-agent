@@ -16,11 +16,12 @@
   - props.specialView: 'starred' | 'trash' | null
 -->
 <template>
-  <div class="folder-tree">
-    <!-- 顶级固定节点 -->
+  <!-- v2.0 (2026-07-09) Drive 美化: .drive-folder-tree 走共享 CSS (玻璃态侧栏 + 多色 special) -->
+  <div class="folder-tree drive-folder-tree">
+    <!-- 顶级固定节点: 我的网盘 (渐变激活) -->
     <div
-      class="folder-tree-root-item"
-      :class="{ active: selectedFolderId === null && specialView === null }"
+      class="folder-tree-root-item drive-folder-tree-root-item"
+      :class="{ 'is-active': selectedFolderId === null && specialView === null }"
       @click="handleRootClick"
     >
       <el-icon><FolderOpened v-if="selectedFolderId === null && specialView === null" /><Folder v-else /></el-icon>
@@ -29,8 +30,8 @@
 
     <!-- 收藏 (PR2 新增) -->
     <div
-      class="folder-tree-special-item"
-      :class="{ active: specialView === 'starred' }"
+      class="folder-tree-special-item drive-folder-tree-special-item"
+      :class="{ 'is-active': specialView === 'starred' }"
       @click="$emit('update:specialView', 'starred')"
     >
       <el-icon><Star v-if="specialView === 'starred'" /><StarFilled v-else /></el-icon>
@@ -38,16 +39,16 @@
     </div>
 
     <!-- 三态: loading / error / empty / data -->
-    <div v-if="loading" class="folder-tree-loading">
+    <div v-if="loading" class="folder-tree-loading drive-folder-tree-loading">
       <el-icon class="is-loading"><Loading /></el-icon>
       <span>加载中...</span>
     </div>
-    <div v-else-if="loadError" class="folder-tree-error">
+    <div v-else-if="loadError" class="folder-tree-error drive-folder-tree-error">
       <el-icon><Warning /></el-icon>
       <span>{{ loadError }}</span>
       <el-button size="small" text @click="$emit('retry')">重试</el-button>
     </div>
-    <div v-else-if="folderTree.length === 0" class="folder-tree-empty">
+    <div v-else-if="folderTree.length === 0" class="folder-tree-empty drive-folder-tree-empty">
       <el-icon><Folder /></el-icon>
       <span>暂无文件夹</span>
     </div>
@@ -63,30 +64,30 @@
       />
     </template>
 
-    <div class="folder-tree-divider" />
+    <div class="folder-tree-divider drive-folder-tree-divider" />
 
-    <!-- v2 PR7: 团队共享盘 + 文件请求 -->
+    <!-- v2 PR7: 团队共享盘 (绿) + 文件请求 (橙) -->
     <div
-      class="folder-tree-special-item folder-tree-team"
-      :class="{ active: specialView === 'team' }"
+      class="folder-tree-special-item drive-folder-tree-special-item is-team"
+      :class="{ 'is-active': specialView === 'team' }"
       @click="$emit('update:specialView', 'team')"
     >
       <el-icon><Share /></el-icon>
       <span>🌐 团队共享盘</span>
     </div>
     <div
-      class="folder-tree-special-item folder-tree-requests"
-      :class="{ active: specialView === 'requests' }"
+      class="folder-tree-special-item drive-folder-tree-special-item is-requests"
+      :class="{ 'is-active': specialView === 'requests' }"
       @click="$emit('update:specialView', 'requests')"
     >
       <el-icon><Promotion /></el-icon>
       <span>📢 文件请求</span>
     </div>
 
-    <!-- 回收站 (PR2 真实接入) -->
+    <!-- 回收站 (PR2 真实接入) (红) -->
     <div
-      class="folder-tree-special-item folder-tree-trash"
-      :class="{ active: specialView === 'trash' }"
+      class="folder-tree-special-item drive-folder-tree-special-item is-trash"
+      :class="{ 'is-active': specialView === 'trash' }"
       @click="$emit('update:specialView', 'trash')"
     >
       <el-icon><Delete /></el-icon>
@@ -96,6 +97,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让玻璃态侧栏 + 多色 special 生效
+import '@/views/drive/drive-view.css'
 import { Folder, FolderOpened, Delete, Loading, Warning, Star, StarFilled, Share, Promotion } from '@element-plus/icons-vue'
 import FolderTreeNode from './FolderTreeNode.vue'
 
@@ -130,66 +133,10 @@ function handleFolderSelect(folderId) {
 </script>
 
 <style scoped>
-.folder-tree {
-  display: flex;
-  flex-direction: column;
-  padding: 8px 0;
-  font-size: 14px;
-  color: var(--color-text-primary, #303133);
-  user-select: none;
-}
-
-.folder-tree-root-item,
-.folder-tree-special-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.folder-tree-root-item:hover,
-.folder-tree-special-item:hover {
-  background: var(--color-bg-hover, #f5f7fa);
-}
-
-.folder-tree-root-item.active,
-.folder-tree-special-item.active {
-  background: var(--color-primary-light-9, #ecf5ff);
-  color: var(--color-primary, #ff7a5c);
-  font-weight: 500;
-}
-
-.folder-tree-root-item.active :deep(.el-icon),
-.folder-tree-special-item.active :deep(.el-icon) {
-  color: var(--color-primary, #ff7a5c);
-}
-
-.folder-tree-loading,
-.folder-tree-error,
-.folder-tree-empty {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  font-size: 12px;
-  color: var(--color-text-secondary, #606266);
-}
-
-.folder-tree-error {
-  color: var(--color-danger, #f56c6c);
-}
-
-.folder-tree-divider {
-  height: 1px;
-  background: var(--color-border-lighter, #f0f0f0);
-  margin: 8px 12px;
-}
-
-.folder-tree-root-label {
-  flex: 1;
-}
+/*
+ * v2.0 (2026-07-09) Drive 美化: 全部视觉样式已迁 drive-view.css (.drive-folder-tree-* + .drive-sidebar)
+ * 本 scoped 块只保留 forward-compat placeholder (后续如需 layout-flex 细节再加)
+ */
 </style>
 
 <!--
