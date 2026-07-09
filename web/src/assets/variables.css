@@ -30,6 +30,7 @@
   --color-warning-bg: #FDF6EC;
   --color-danger: #F56C6C;
   --color-danger-bg: #FEF0F0;
+  --color-danger-rgb: 245, 108, 108;  /* v77.2 (2026-07-09) Drive 美化: rgba 用 RGB 三元组, dark mode 翻转 */
   --color-info: #909399;
   --color-info-bg: #F4F4F5;
 
@@ -695,6 +696,7 @@ body {
   --color-warning-bg: rgba(230, 162, 60, 0.15);
   --color-danger-bg: rgba(245, 108, 108, 0.15);
   --color-info-bg: rgba(144, 147, 153, 0.15);
+  --color-danger-rgb: 247, 137, 137;  /* v77.2 (2026-07-09) dark mode: --color-danger = #f78989 */
 
   /* v69: 阴影系统在 dark 上反色（用更深的 rgba(0,0,0,.3-.6) 模拟"亮起"） */
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
