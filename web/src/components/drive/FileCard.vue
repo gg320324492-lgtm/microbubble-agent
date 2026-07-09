@@ -78,52 +78,65 @@
       </el-tag>
     </div>
 
-    <!-- hover 操作栏 (仅网格视图) -->
+    <!--
+      v2.1 (2026-07-09) Drive 美化: hover 操作栏 — 从 3 个无标签 circle 按钮
+      改为 [icon+文本] 水平胶囊. 每个按钮直接显示文字 (下载/预览/更多),
+      无需依赖 tooltip 才能辨识, 触摸用户也能看懂. 胶囊背景走白色 + 阴影,
+      避免主色橙 (drive-upload-btn) 误读为"上传"CTA. 配色:
+      下载 = 主色调 (最常用操作), 预览 = 信息蓝 (中性), 更多 = 默认灰.
+    -->
     <div v-if="viewMode === 'grid'" class="file-card-actions">
-      <el-tooltip content="下载" placement="top">
-        <el-button
-          size="small"
-          :icon="Download"
-          circle
-          @click.stop="handleDownload"
-        />
-      </el-tooltip>
-      <el-tooltip content="预览" placement="top">
-        <el-button
-          size="small"
-          :icon="View"
-          circle
-          @click.stop="$emit('preview', file)"
-        />
-      </el-tooltip>
-      <el-tooltip content="更多" placement="top">
-        <el-dropdown trigger="click" @command="(cmd) => $emit(cmd, file)">
-          <el-button size="small" :icon="MoreFilled" circle @click.stop />
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="toggle-star">
-                {{ file.is_starred ? '⭐ 取消收藏' : '⭐ 加入收藏' }}
-              </el-dropdown-item>
-              <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
-              <el-dropdown-item command="move">移动</el-dropdown-item>
-              <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
-              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
-                📚 加入公共知识库
-              </el-dropdown-item>
-              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
-                🔗 生成分享链接
-              </el-dropdown-item>
-              <!-- v2 PR4: 版本历史 (仅 drive 文件, 当前版本始终 ≥1) -->
-              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="version-history">
-                🕘 版本历史
-              </el-dropdown-item>
-              <el-dropdown-item divided command="delete">
-                <span style="color: var(--color-danger);">删除</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </el-tooltip>
+      <button
+        type="button"
+        class="file-card-action file-card-action--download"
+        :aria-label="`下载 ${file.title || file.file_name}`"
+        @click.stop="handleDownload"
+      >
+        <el-icon :size="14"><Download /></el-icon>
+        <span class="file-card-action-label">下载</span>
+      </button>
+      <button
+        type="button"
+        class="file-card-action file-card-action--preview"
+        :aria-label="`预览 ${file.title || file.file_name}`"
+        @click.stop="$emit('preview', file)"
+      >
+        <el-icon :size="14"><View /></el-icon>
+        <span class="file-card-action-label">预览</span>
+      </button>
+      <el-dropdown trigger="click" @command="(cmd) => $emit(cmd, file)">
+        <button
+          type="button"
+          class="file-card-action file-card-action--more"
+          aria-label="更多操作"
+          @click.stop
+        >
+          <el-icon :size="14"><MoreFilled /></el-icon>
+          <span class="file-card-action-label">更多</span>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="toggle-star">
+              {{ file.is_starred ? '⭐ 取消收藏' : '⭐ 加入收藏' }}
+            </el-dropdown-item>
+            <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
+            <el-dropdown-item command="move">移动</el-dropdown-item>
+            <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
+            <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
+              📚 加入公共知识库
+            </el-dropdown-item>
+            <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
+              🔗 生成分享链接
+            </el-dropdown-item>
+            <el-dropdown-item v-if="file.storage_mode === 'drive'" command="version-history">
+              🕘 版本历史
+            </el-dropdown-item>
+            <el-dropdown-item divided command="delete">
+              <span style="color: var(--color-danger);">删除</span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
 
     <!-- 列表视图: 右侧操作栏 -->
