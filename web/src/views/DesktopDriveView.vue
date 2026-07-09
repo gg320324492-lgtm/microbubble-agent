@@ -331,12 +331,14 @@ const specialView = ref(null)
 // v2.0 (2026-07-09) Drive 美化: chip 化的 sort/type 选项数组 (替代 SORT_LABELS dropdown)
 // 与 drive-view.css .drive-chip 配合, aria-pressed=true 时 is-active class
 const SORT_OPTIONS = [
-  { value: 'created_at:desc', label: '最新上传 ⬇️' },
-  { value: 'created_at:asc',  label: '最新上传 ⬆️' },
-  { value: 'updated_at:desc', label: '最近修改 ⬇️' },
-  { value: 'file_name:asc',   label: '文件名 A-Z' },
-  { value: 'file_name:desc',  label: '文件名 Z-A' },
-  { value: 'starred_at:desc', label: '收藏时间 ⬇️' },
+  // v2.5 (2026-07-10): 修复两 chip 视觉重复 — 「最新上传 ⬇/⬆」文字完全相同只差箭头方向,
+  //   改为「最新上传 ⬇」+「最早上传 ⬆」让用户一眼区分 (latest vs earliest).
+  { value: 'created_at:desc', label: '最新上传 ⬇' },
+  { value: 'created_at:asc',  label: '最早上传 ⬆' },
+  { value: 'updated_at:desc', label: '最近修改 ⬇' },
+  { value: 'starred_at:desc', label: '收藏时间 ⬇' },
+  { value: 'file_name:asc',   label: '名称 A-Z' },
+  { value: 'file_name:desc',  label: '名称 Z-A' },
 ]
 
 const FILE_TYPE_OPTIONS = [
