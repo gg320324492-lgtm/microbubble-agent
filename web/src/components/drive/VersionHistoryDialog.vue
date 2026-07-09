@@ -11,6 +11,7 @@
 <template>
   <el-dialog
     :model-value="visible"
+    class="drive-dialog"
     title="🕘 版本历史"
     width="780px"
     top="8vh"
@@ -104,6 +105,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
+import '@/views/drive/drive-view.css'
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'

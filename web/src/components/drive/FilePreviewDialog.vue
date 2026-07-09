@@ -26,6 +26,7 @@
 <template>
   <el-dialog
     v-model="visible"
+    class="drive-dialog"
     :title="title"
     width="80%"
     top="5vh"
@@ -89,6 +90,9 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
+import '@/views/drive/drive-view.css'
+
 /**
  * FilePreviewDialog.vue — 通用文件预览
  *

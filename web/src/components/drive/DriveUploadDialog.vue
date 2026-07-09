@@ -23,6 +23,7 @@
 <template>
   <el-dialog
     v-model="visible"
+    class="drive-dialog"
     title="上传到网盘"
     width="640px"
     :close-on-click-modal="false"
@@ -119,6 +120,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
+import '@/views/drive/drive-view.css'
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled, Document } from '@element-plus/icons-vue'

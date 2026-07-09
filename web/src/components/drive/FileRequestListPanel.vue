@@ -61,7 +61,7 @@
     </ul>
 
     <!-- Create Dialog (与列表同上下文, 不能拆出) -->
-    <el-dialog v-model="showCreate" title="新建文件请求" width="540px" :close-on-click-modal="false">
+    <el-dialog v-model="showCreate" class="drive-dialog" title="新建文件请求" width="540px" :close-on-click-modal="false">
       <el-form :model="createForm" label-width="100px" ref="formRef">
         <el-form-item label="标题" required>
           <el-input v-model="createForm.title" placeholder="如: 2026 秋季作业" maxlength="200" show-word-limit />
@@ -95,7 +95,7 @@
     </el-dialog>
 
     <!-- Preview Dialog -->
-    <el-dialog v-model="showPreview" title="公开链接" width="560px">
+    <el-dialog v-model="showPreview" class="drive-dialog" title="公开链接" width="560px">
       <p>用户打开此链接即可匿名提交文件：</p>
       <el-input v-model="previewUrl" readonly>
         <template #append>
@@ -108,6 +108,8 @@
 </template>
 
 <script setup>
+// v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-dialog 玻璃态生效
+import '@/views/drive/drive-view.css'
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
