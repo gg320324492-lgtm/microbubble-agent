@@ -34,47 +34,88 @@
 }
 
 /* ===== 2. 顶部工具栏 (Toolbar) ===== */
+/*
+ * v2.4 (2026-07-09) Drive 美化: 顶部 toolbar 紧凑现代重设计
+ *
+ * 用户反馈原 toolbar 浪费垂直空间:
+ * - 标题图标 36px + 主色实底 + box-shadow (视觉抢占)
+ * - 标题字号 22px (偏大)
+ * - padding 16px × 24px (上下空白过多)
+ * - 整体高度 74px (滚动时仍占满视觉空间)
+ *
+ * 改造:
+ * - 标题图标 36px → 28px (线性图标 in primary 圆角方块, 不抢眼)
+ * - 标题字号 22px → 17px (与第二级别一致)
+ * - padding 16×24 → 10×24 (高度 -22px)
+ * - 搜索框 280px → 320px (用户能输入更长关键词)
+ * - 按钮 :deep-style 仅必要 hover/active 反馈
+ * - 标题区可收缩: vw<900 时标题消失 (响应式后续)
+ */
 .drive-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-2) var(--space-6);
   background: var(--color-bg-card);
   border-bottom: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-xs);
-  gap: var(--space-4);
+  gap: var(--space-3);
   position: sticky;
   top: 0;
   z-index: 10;
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
 }
 
 .drive-title {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin: 0;
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-md);  /* 15px */
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   flex-shrink: 0;
+  letter-spacing: 0.3px;
 }
 
 .drive-title-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  background: var(--gradient-cta-button);
-  color: #fff;
-  font-size: var(--icon-size-lg);
-  box-shadow: var(--shadow-primary);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-bg);  /* 浅橙底, 不抢眼 */
+  color: var(--color-primary);
+  font-size: 16px;
+  /* 移除 shadow-primary — 原占用视觉空间 */
 }
 
 .drive-search-input {
-  width: 280px;
+  width: 320px;
+  flex-shrink: 0;
   --el-input-border-radius: var(--radius-full);
+  --el-input-height: 32px;
+}
+
+.drive-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/*
+ * 视图切换按钮组合 (grid/list 切换器) — 紧凑一体化
+ * 用 :deep 套 EP 自定义样式, 避免被 EP 默认 button-style 覆盖
+ */
+.drive-view-toggle :deep(.el-button) {
+  height: 32px;
+  width: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
 }
 
 /* ===== 3. 上传按钮 (CTA 渐变 + 发光) ===== */
