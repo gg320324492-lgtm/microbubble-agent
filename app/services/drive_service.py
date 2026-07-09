@@ -477,11 +477,17 @@ class DriveService:
         """v2 PR2: 把文件类型枚举映射到 file_name 后缀 LIKE 条件.
 
         返回 SQLAlchemy 列表达式 (用于 .where()), 无效类型返 None (不过滤).
+
+        v2.7.1 (2026-07-10) bugfix: 加 'audio' 映射 (前缺导致前端 chip 选了 audio
+        返回的是全部文件 — 看上去 '所有 PPT 也是音频' 的错误). 覆盖常见音频:
+        .mp3 / .wav / .flac / .aac / .ogg / .m4a / .wma / .opus. 任何未匹配
+        的 type 返 None → 不过滤 (前端拿到全部,需前端 chip 自身友好 fallback).
         """
         type_to_ext = {
             "pdf":   [".pdf"],
             "image": [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"],
             "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv"],
+            "audio": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma", ".opus"],
             "office": [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"],
             "text":  [".txt", ".md", ".log", ".csv"],
         }

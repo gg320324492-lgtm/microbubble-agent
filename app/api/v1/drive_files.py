@@ -317,7 +317,7 @@ async def list_drive_files(
     starred_only: bool = Query(False, description="仅显示收藏"),
     file_type: Optional[str] = Query(
         None,
-        description="类型过滤: pdf | image | video | office | text",
+        description="类型过滤: pdf | image | video | audio | office | text (无值=全部)",
     ),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
