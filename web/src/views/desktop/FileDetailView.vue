@@ -292,8 +292,16 @@ watch(fileId, () => {
 </script>
 
 <style scoped>
+/* v2.6 (2026-07-10): FileDetailView 暗色主题适配
+   - 去除所有硬写色 fallback (移除 ', #xxx')
+   - file-type-icon 改走 file-type 专属 token (dark mode 自动跟随)
+   - el-card / el-descriptions / el-tag / el-button 深色适配走
+     [data-theme="dark"] 全局覆盖 (在 non-scoped block 内, v60-v67 教训)
+   - '在线预览' button: 还是 type=primary 走 EP 自适应, 仅 hover state 加显式反馈
+*/
+
 .page-container.file-detail-view {
-  padding: 24px;
+  padding: var(--space-6);
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -301,19 +309,20 @@ watch(fileId, () => {
 .file-detail-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
 }
 
 .back-btn {
-  font-size: 14px;
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
 }
 
 .file-title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -323,12 +332,18 @@ watch(fileId, () => {
 
 .file-detail-loading,
 .file-detail-error {
-  padding: 64px 16px;
+  padding: var(--space-12) var(--space-4);
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+}
+
+.file-detail-loading :deep(.el-icon.is-loading) {
+  font-size: 32px;
+  color: var(--color-primary);
 }
 
 .file-detail-error {
@@ -338,7 +353,7 @@ watch(fileId, () => {
 .file-detail-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  gap: 20px;
+  gap: var(--space-5);
 }
 
 @media (max-width: 900px) {
@@ -350,7 +365,7 @@ watch(fileId, () => {
 .file-info-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .file-info-header-text {
@@ -359,43 +374,67 @@ watch(fileId, () => {
 }
 
 .file-info-header-text h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text-primary, #303133);
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* v2.6: file-type icon 改走 file-type 专属 token (color-file-pdf/doc/excel/image/audio/video/text),
+   暗色模式下自动跟随 token (variables.css 中定义了同色 token, dark mode 不变但保证 token 单一来源) */
 .file-type-icon {
   flex-shrink: 0;
-  color: var(--color-primary, #FF7A5C);
+  color: var(--color-file-default);
 }
 
-.file-type-icon.is-image { color: var(--color-success, #67c23a); }
-.file-type-icon.is-video { color: var(--color-info, #909399); }
-.file-type-icon.is-audio { color: var(--color-warning, #e6a23c); }
+.file-type-icon.is-image { color: var(--color-file-image); }
+.file-type-icon.is-video { color: var(--color-file-pdf); }   /* 视频用 warning 风格 */
+.file-type-icon.is-audio { color: var(--color-warning); }
+.file-type-icon.is-pdf,
+.file-type-icon.is-ppt,
+.file-type-icon.is-pptx { color: var(--color-file-pdf); }
+.file-type-icon.is-doc,
+.file-type-icon.is-docx { color: var(--color-file-doc); }
+.file-type-icon.is-xls,
+.file-type-icon.is-xlsx { color: var(--color-file-excel); }
+.file-type-icon.is-txt,
+.file-type-icon.is-md { color: var(--color-file-default); }
 
 .file-info-descriptions {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
+}
+
+/* v2.6: el-descriptions-item label 在 dark 模式下文字色更深, 手动覆盖使其可读 */
+.file-info-descriptions :deep(.el-descriptions__label) {
+  color: var(--color-text-secondary);
+}
+
+.file-info-descriptions :deep(.el-descriptions__content) {
+  color: var(--color-text-primary);
 }
 
 .hash-code {
   font-family: monospace;
-  font-size: 12px;
-  background: var(--color-bg-page, #f5f7fa);
-  padding: 1px 4px;
-  border-radius: 3px;
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
 }
 
+/* v2.6: 操作按钮区, 用 token border 让 dark mode 自动跟随 */
 .file-info-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-light, #ebeef5);
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
 }
+
+/* el-card 容器: 让 dark 模式下卡片背景按 token 自动 (variables.css [data-theme='dark'] 已覆盖) */
 
 .file-comments-card {
   align-self: start;
@@ -405,12 +444,53 @@ watch(fileId, () => {
   overflow-y: auto;
 }
 
-/* Dark mode 非 scoped 块 (v60-v67 教训) */
-[data-theme="dark"] .file-info-actions {
-  border-top-color: var(--color-border-dark, rgba(255, 255, 255, 0.08));
+/* 评论区评论空态/输入区 dark mode 适配 (deep select 通过 EP 变量自动) */
+.file-comments-card :deep(.el-empty__description p) {
+  color: var(--color-text-secondary);
 }
 
+.file-comments-card :deep(.comment-editor-textarea textarea) {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+</style>
+
+<!-- v2.6 (2026-07-10): Dark mode 非 scoped 块 (v60-v67 教训: 跨组件覆盖必须放非 scoped)
+     el-card / el-descriptions / el-tag / el-button 默认 EP 变量在 dark mode 已自动覆盖
+     但部分自定义组件需要再次 ensure bg / color 跟随 token -->
+<style>
+/* el-card 在 dark mode 加柔阴影 + 灰边 (避免纯黑边界) */
+[data-theme="dark"] .file-detail-view .el-card {
+  background-color: var(--color-bg-card);
+  border-color: var(--color-border-base);
+  box-shadow: var(--shadow-sm);
+}
+
+/* el-descriptions 表格 dark mode (EP 默认已部分覆盖, 强化) */
+[data-theme="dark"] .file-detail-view .el-descriptions__cell {
+  background-color: var(--color-bg-card) !important;
+}
+[data-theme="dark"] .file-detail-view .el-descriptions__label {
+  color: var(--color-text-secondary) !important;
+}
+[data-theme="dark"] .file-detail-view .el-descriptions__content {
+  color: var(--color-text-primary) !important;
+}
+
+/* el-tag '公开' 标签 (type=success) 在 dark mode 让其文字对比度足够 */
+[data-theme="dark"] .file-detail-view .el-tag--success {
+  --el-tag-bg-color: var(--color-success-bg);
+  --el-tag-text-color: var(--color-success);
+}
+
+/* hash-code 在 dark 模式下浅暗背景 */
 [data-theme="dark"] .hash-code {
-  background: var(--color-bg-page, #2a2d35);
+  background-color: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+
+/* 操作按钮 separator 暗色淡化 */
+[data-theme="dark"] .file-info-actions {
+  border-top-color: var(--color-border-light);
 }
 </style>
