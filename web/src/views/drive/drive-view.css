@@ -851,7 +851,7 @@
 }
 
 .drive-batch-toolbar-btn-danger {
-  background: rgba(245, 108, 108, 0.85) !important;
+  background: rgba(var(--color-danger-rgb), 0.85) !important;
 }
 
 .drive-batch-toolbar-btn-danger:hover {
