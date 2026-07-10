@@ -1972,12 +1972,8 @@ class DriveService:
             )).scalar_one_or_none()
             if not folder:
                 raise DriveServiceError(f"Folder {folder_id} 不存在", status_code=404)
-            # visibility 继承校验
-            if not _validate_visibility_inherits(visibility, folder.visibility):
-                raise DriveServiceError(
-                    f"visibility='{visibility}' 超过父文件夹 '{folder.visibility}'",
-                    status_code=400,
-                )
+            # visibility 继承校验 (函数内 raise, 不需要 if not)
+            self._validate_visibility_inherits(visibility, folder.visibility)
 
         session_id = secrets.token_hex(16)  # 32 chars
         session = ChunkedUploadSession(
