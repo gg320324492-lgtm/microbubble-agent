@@ -229,6 +229,8 @@ class DriveService:
         source_type: Optional[str] = None,
         content: Optional[str] = None,
         file_hash: Optional[str] = None,  # PR4: 秒传 hash
+        # v2 PR6-P19: 团队共享盘标识 (前端在 team 视图上传 = true)
+        is_team_shared: bool = False,
     ) -> Knowledge:
         """创建 drive 文件元数据 (multipart complete 后调用, 或从前端直接表单上传)
 
@@ -246,6 +248,7 @@ class DriveService:
             source_type: auto_research 等上游标识, 默认 None
             content: 提取摘要 (默认 None)
             file_hash: 文件 MD5/SHA256 hex hash (PR4 秒传字段, 可选)
+            is_team_shared: v2 PR6-P19, True=团队共享盘上传, 不在个人网盘显示
         """
         if storage_mode == "drive":
             assert visibility in ("private", "team", "public"), f"invalid visibility: {visibility}"
@@ -282,6 +285,7 @@ class DriveService:
             storage_mode=storage_mode,
             visibility=visibility,
             folder_id=folder_id,
+            is_team_shared=is_team_shared,  # v2 PR6-P19
         )
         self.db.add(knowledge)
         await self.db.commit()
@@ -346,6 +350,8 @@ class DriveService:
         sort_order: str = "desc",
         starred_only: bool = False,
         file_type: Optional[str] = None,
+        # v2 PR6-P19: 团队共享盘隔离 (None=不过滤)
+        is_team_shared: Optional[bool] = None,
     ) -> Tuple[List[Knowledge], int]:
         """列 drive 文件 (含列表 SQL 越权防御)
 
@@ -360,6 +366,7 @@ class DriveService:
             sort_order: asc / desc
             starred_only: 仅 is_starred=true
             file_type: pdf/image/video/office/text
+            is_team_shared: v2 PR6-P19, None=不过滤/True=仅 team/False=仅 personal
 
         Returns:
             (items, total)
@@ -376,6 +383,7 @@ class DriveService:
             sort_order=sort_order,
             starred_only=starred_only,
             file_type=file_type,
+            is_team_shared_filter=is_team_shared,
         )
 
     async def _list_files_impl(
@@ -393,11 +401,13 @@ class DriveService:
         starred_only: bool,
         file_type: Optional[str],    # pdf | image | video | office | text | (None=全部)
         deleted_only: bool = False,  # v2 PR2: trash 模式 exclusive filter
+        is_team_shared_filter: Optional[bool] = None,  # v2 PR6-P19: None=both, True=仅 team, False=仅 personal
     ) -> Tuple[List[Knowledge], int]:
         """v2 PR2: 拆出 list_files 内部实现, 支持 sort_by / sort_order / starred_only / file_type.
 
         对外保持向后兼容 (list_files 默认 sort=created_at desc).
         v2 PR2: deleted_only=True 时仅返 deleted_at IS NOT NULL (回收站专用).
+        v2 PR6-P19: is_team_shared_filter 隔离个人/团队共享盘 (True/False/None).
         """
         stmt = select(Knowledge)
         count_stmt = select(func.count(Knowledge.id))
@@ -426,6 +436,9 @@ class DriveService:
             ext_predicate = self._build_file_type_predicate(file_type)
             if ext_predicate is not None:
                 filters.append(ext_predicate)
+        # v2 PR6-P19: 团队共享盘隔离 (None=不过滤, True=仅 is_team_shared=true, False=仅 false)
+        if is_team_shared_filter is not None:
+            filters.append(Knowledge.is_team_shared == is_team_shared_filter)
 
         # 核心隐私边界: private 文件仅 owner 可见
         visibility_see_cond = or_(
@@ -1489,6 +1502,8 @@ class DriveService:
         folder_id: Optional[int] = None,
         visibility: str = "team",
         created_by: Optional[int] = None,
+        # v2 PR6-P19: 团队共享盘标识 (前端在 team 视图上传 = true)
+        is_team_shared: bool = False,
     ) -> Tuple[Optional[Knowledge], int]:
         """秒传 dedup: hash 命中 → MinIO copy_object 零带宽秒传
 
@@ -1497,6 +1512,8 @@ class DriveService:
         2. 命中 → file_service.copy_object_async 在 MinIO 内复制, 不经过本机
         3. 新 Knowledge 行 file_path 是新路径, 但 file_hash/file_size 一致
         4. dedup_saved_bytes = 复制的字节数 (告诉前端"省了 X MB")
+
+        v2 PR6-P19: is_team_shared 标记上传来源视图, 决定 list_drive_files 过滤.
 
         Returns:
             (knowledge_or_none, dedup_saved_bytes)
@@ -1552,6 +1569,7 @@ class DriveService:
             storage_mode="drive",
             visibility=visibility,
             folder_id=folder_id,
+            is_team_shared=is_team_shared,  # v2 PR6-P19
         )
         self.db.add(new_k)
         await self.db.commit()
@@ -1927,6 +1945,10 @@ class DriveService:
         配额检查: 配额不足时抛 DriveServiceError 413
         24h TTL: expires_at = now + 24h
         status='active': 等 chunks 写入
+
+        v2 PR6-P19: is_team_shared 不在这里传 — 移到 complete 阶段 (前端可在 complete 时
+        决定 final 视图归属, init 阶段用户可能还没决定). service 层 complete_chunked_upload
+        接 is_team_shared 参数 (Optional, None=默认 personal/false).
         """
         # 配额检查
         allowed, _, quota = await self.check_quota(user_id, file_size)
@@ -2052,6 +2074,8 @@ class DriveService:
         session_id: str,
         user_id: int,
         change_note: Optional[str] = None,
+        # v2 PR6-P19: 团队共享盘标识 (前端 complete 时传, 决定 Knowledge.is_team_shared)
+        is_team_shared: Optional[bool] = None,
     ) -> Knowledge:
         """完成分片上传 (POST /files/upload/{id}/complete)
 
@@ -2100,6 +2124,9 @@ class DriveService:
             dst_object=final_object,
         )
 
+        # v2 PR6-P19: is_team_shared 默认 False (个人), API 显式传 True (团队) 才覆盖
+        is_team_shared_resolved = bool(is_team_shared) if is_team_shared is not None else False
+
         # 创建 Knowledge 行 (复用 create_file 走 drive 路径)
         new_file = await self.create_file(
             title=session.file_name,
@@ -2113,6 +2140,7 @@ class DriveService:
             folder_id=session.folder_id,
             visibility=session.visibility,
             storage_mode="drive",
+            is_team_shared=is_team_shared_resolved,
         )
 
         # 标 session 完成

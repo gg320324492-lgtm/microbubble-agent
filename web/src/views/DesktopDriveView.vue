@@ -135,6 +135,7 @@
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/drive' }">我的网盘</el-breadcrumb-item>
             <el-breadcrumb-item v-if="specialView === 'starred'">⭐ 我的收藏</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'team'">🌐 团队共享盘</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'requests'">📢 文件请求</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="selectedFolderId">
@@ -226,6 +227,7 @@
     <DriveUploadDialog
       v-model="showUploadDialog"
       :default-folder-id="selectedFolderId"
+      :is-team-shared="specialView === 'team'"
       @uploaded="onFilesUploaded"
     />
 
@@ -387,9 +389,16 @@ async function reloadCurrentView() {
   if (specialView.value === 'starred') {
     starredOnly.value = true
     await fetchStarred()
+  } else if (specialView.value === 'team') {
+    // v2 PR6-P19: 团队共享盘视图 — 后端 view='team' 过滤 is_team_shared=true 文件
+    starredOnly.value = false
+    await fetchDriveFiles({
+      folder_id: selectedFolderId.value,
+      view: 'team',
+    })
   } else {
     // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
-    // starred 之外的视图 (含 null) 走默认 fetchDriveFiles
+    // starred + team 之外的视图 (含 null) 走默认 view=personal (useDriveFiles 内置)
     starredOnly.value = false
     await fetchDriveFiles({ folder_id: selectedFolderId.value })
   }
@@ -545,15 +554,23 @@ watch(selectedFolderId, (newId, oldId) => {
   }
 })
 
-// v2 PR2: 监听 specialView (starred | trash | null)
+// v2 PR2 + v2 PR6-P19: 监听 specialView (starred | team | trash | null)
 watch(specialView, async (newView) => {
   if (newView === 'starred') {
     starredOnly.value = true
     await fetchStarred()
+  } else if (newView === 'team') {
+    // v2 PR6-P19: 团队共享盘视图 — 后端 view='team' 过滤 is_team_shared=true
+    starredOnly.value = false
+    await fetchDriveFiles({
+      folder_id: selectedFolderId.value,
+      view: 'team',
+    })
   } else if (newView === 'requests') {
     // 2026-07-02: FileRequestListPanel onMounted 自动 fetchMy, 无需手动调
   } else if (newView !== 'trash') {
     // trash 子组件 <DriveTrashPanel> 自管 onMounted → reload() → fetchTrash()
+    // 默认走 view=personal (useDriveFiles 内置 default)
     starredOnly.value = false
     if (selectedFolderId.value !== null) {
       await fetchDriveFiles({ folder_id: selectedFolderId.value })

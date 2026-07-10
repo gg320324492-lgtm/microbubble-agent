@@ -77,6 +77,15 @@ class Knowledge(Base, TimestampMixin):
     starred_at = Column(DateTime, nullable=True)
     # ==================== /v2 PR2 ====================
 
+    # ==================== v2 PR6-P19 团队共享盘隔离 2026-07-11 ====================
+    # is_team_shared: 用户上传时所在的视图 (specialView='team' = True, 'personal' = False)
+    #   - True: 上传到「团队共享盘」, 不显示在「个人网盘」root view
+    #   - False: 上传到「个人网盘」, 不显示在「团队共享盘」team view
+    # 索引: ix_knowledge_team_shared (partial WHERE deleted_at IS NULL AND is_team_shared = true, alembic 058)
+    # 历史兼容: 默认 false, 已存在的文件全部归类为「个人网盘」(用户可手动迁移留 v2.20 admin CLI)
+    is_team_shared = Column(Boolean, nullable=False, server_default="false")
+    # ==================== /v2 PR6-P19 ====================
+
     # ==================== v2 PR4 秒传 + 版本历史 2026-07-01 ====================
     # file_size: 文件字节大小（之前硬编码 0, 044 后真值; dedup_saved_bytes 计算 + UI 显示用）
     # file_hash: MD5/SHA256 hex hash (64 chars); 部分索引 WHERE deleted_at IS NULL AND storage_mode='drive'

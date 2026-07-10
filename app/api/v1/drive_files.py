@@ -74,6 +74,9 @@ class DriveFileItem(BaseModel):
     # v2 PR5: 缩略图字段
     thumbnail_path: Optional[str] = None
     thumbnail_status: str = "pending"  # pending | ready | failed
+    # v2 PR6-P19: 团队共享盘隔离 (uploaded from specialView='team' = True)
+    # 决定 list_drive_files view=personal|team 过滤
+    is_team_shared: bool = False
 
     class Config:
         from_attributes = True
@@ -124,6 +127,7 @@ class ChunkedUploadInitRequest(BaseModel):
     file_hash: Optional[str] = Field(None, max_length=64)
     folder_id: Optional[int] = None
     visibility: str = "team"
+    # v2 PR6-P19: is_team_shared 在 complete 阶段才传, 这里不接 (前端可在最后决定)
 
 
 class ChunkedUploadInitResponse(BaseModel):
@@ -150,6 +154,10 @@ class ChunkedUploadStatusResponse(BaseModel):
 class ChunkedUploadCompleteRequest(BaseModel):
     """POST /api/v1/drive/files/upload/{id}/complete 请求"""
     change_note: Optional[str] = Field(None, max_length=500)
+    # v2 PR6-P19: 团队共享盘标识 (init 时已传过, complete 时可再传覆盖)
+    is_team_shared: Optional[bool] = Field(
+        None, description="v2 PR6-P19: 覆盖 init 时的设置 (None=沿用)"
+    )
 
 
 class ThumbnailResponse(BaseModel):
@@ -160,7 +168,20 @@ class ThumbnailResponse(BaseModel):
     thumbnail_url: Optional[str] = None  # MinIO 公开读 URL 或 None
 
 
-def _to_item(k: Knowledge) -> DriveFileItem:
+def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem:
+    """Build DriveFileItem.
+
+    v2.16 (2026-07-11): 可选 owner_lookup 传 {member_id: Member} 字典,
+    一次 JOIN 查所有 owner 后批量 attach (避免 N+1 query).
+    老 callsite 不传 owner_lookup 时, owner_name/owner_username 字段为 None,
+    前端 fallback 到 "#<created_by>" 显示 (CLAUDE.md 兼容原则).
+    """
+    owner_name = None
+    owner_username = None
+    if owner_lookup and k.created_by in owner_lookup:
+        m = owner_lookup[k.created_by]
+        owner_name = m.name if m.name else None
+        owner_username = m.username if m.username else None
     return DriveFileItem(
         id=k.id,
         title=k.title,
@@ -172,6 +193,8 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         visibility=k.visibility,
         folder_id=k.folder_id,
         created_by=k.created_by,
+        owner_name=owner_name,
+        owner_username=owner_username,
         source_type=k.source_type,
         created_at=str(k.created_at) if k.created_at else None,
         updated_at=str(k.updated_at) if k.updated_at else None,
@@ -186,6 +209,7 @@ def _to_item(k: Knowledge) -> DriveFileItem:
         version_number=k.version_number or 1,  # PR4
         thumbnail_path=k.thumbnail_path,  # PR5
         thumbnail_status=k.thumbnail_status or "pending",  # PR5
+        is_team_shared=bool(k.is_team_shared),  # v2 PR6-P19
     )
 
 
@@ -198,6 +222,8 @@ async def upload_drive_file(
     content_type: Optional[str] = Form(None, description="MIME (默认 file.content_type)"),
     folder_id: Optional[int] = Form(None, description="目标 folder id (None=顶级)"),
     visibility: str = Form("team", description="private|team|public"),
+    # v2 PR6-P19: 用户上传时所在的视图 (specialView='team' = True)
+    is_team_shared: bool = Form(False, description="v2 PR6-P19: True=团队共享盘上传, 不在个人网盘显示"),
     title: Optional[str] = Form(None, description="文件标题 (默认 = filename)"),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
@@ -205,6 +231,9 @@ async def upload_drive_file(
     """单端点 drive 文件上传 (FastAPI 接收 multipart, minio 自管分片)
 
     不超过 2GB (MAX_DRIVE_FILE_SIZE_BYTES); 走 init/complete pattern 简化为单端点.
+
+    v2 PR6-P19: is_team_shared 标记上传来源, 前端在团队共享盘视图上传时 = true,
+    个人视图上传 = false. 后端 list_drive_files 走 view=personal|team 隔离过滤.
     """
     real_filename = filename or file.filename or "unnamed"
     real_ct = content_type or file.content_type or "application/octet-stream"
@@ -279,6 +308,7 @@ async def upload_drive_file(
             folder_id=folder_id,
             created_by=current_user.id,
             source_type="drive",
+            is_team_shared=is_team_shared,  # v2 PR6-P19
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
@@ -319,14 +349,34 @@ async def list_drive_files(
         None,
         description="类型过滤: pdf | image | video | audio | office | text (无值=全部)",
     ),
+    # v2 PR6-P19: 视图隔离 (personal=个人网盘默认, team=团队共享盘, all=全显)
+    view: Optional[str] = Query(
+        "personal",
+        description="视图隔离: personal (默认, 不含 is_team_shared=true) | team (仅 is_team_shared=true) | all (不过滤)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
     """列 drive 文件 (含越权过滤: private 仅 owner 可见)
 
     v2 PR2: 支持 sort_by/sort_order/starred_only/file_type.
+    v2 PR6-P19: view 参数隔离个人/团队共享盘.
     - sort_by 默认 None = 维持原 created_at desc 行为 (向后兼容)
+    - view 默认 personal = 不显示 is_team_shared=true (老调用方升级即隔离)
     """
+    # v2 PR6-P19: view → is_team_shared 映射
+    if view == "personal":
+        is_team_shared_filter = False
+    elif view == "team":
+        is_team_shared_filter = True
+    elif view == "all":
+        is_team_shared_filter = None
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"无效 view 参数: '{view}', 必须是 personal|team|all",
+        )
+
     svc = DriveService(db)
     try:
         items, total = await svc.list_files(
@@ -341,6 +391,7 @@ async def list_drive_files(
             sort_order=sort_order or "desc",
             starred_only=starred_only,
             file_type=file_type,
+            is_team_shared=is_team_shared_filter,
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))
@@ -1261,6 +1312,8 @@ class InstantUploadRequest(BaseModel):
     file_size: int = Field(..., ge=1, le=MAX_DRIVE_FILE_SIZE_BYTES)
     folder_id: Optional[int] = None
     visibility: str = Field("team", pattern="^(private|team|public)$")
+    # v2 PR6-P19: 团队共享盘标识 (前端在 specialView='team' 视图上传 = true)
+    is_team_shared: bool = Field(False, description="True=团队共享盘上传, 不在个人网盘显示")
 
 
 class InstantUploadResponse(BaseModel):
@@ -1318,6 +1371,7 @@ async def instant_upload(
             folder_id=body.folder_id,
             visibility=body.visibility,
             created_by=user.id,
+            is_team_shared=body.is_team_shared,  # v2 PR6-P19
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
@@ -1525,6 +1579,7 @@ async def complete_chunked_upload(
             session_id=upload_id,
             user_id=user.id,
             change_note=body.change_note,
+            is_team_shared=body.is_team_shared,  # v2 PR6-P19
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=e.message)
