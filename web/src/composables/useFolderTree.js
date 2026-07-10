@@ -105,6 +105,24 @@ export function useFolderTree() {
     }
   }
 
+  /**
+   * v2.14 (2026-07-10): 查 folder 下未删子 folder + 文件数 (前置 confirm 弹窗用)
+   * Returns: { folder_id, folder_count, file_count }
+   * 错误 fallback: 返 { folder_count: 0, file_count: 0 } 让 confirm 走默认文案
+   *   (用户体验: 用户点删除时网络失败不影响弹窗, 422 错误 fallback 处理)
+   */
+  const getChildrenStats = async (id) => {
+    try {
+      const resp = await axios.get(`/api/v1/folders/${id}/children-stats`)
+      return resp.data  // {folder_id, folder_count, file_count}
+    } catch (e) {
+      // 兜底: 查询失败 (401/403/404/500) → 返零计数让 confirm 走默认文案
+      // 422/400 如果 folder 真不存在 → 上面列表查不到
+      // 不抛错 — 前端在 delete 时还会再校验, 这里只是 UX 提示
+      return { folder_id: id, folder_count: 0, file_count: 0 }
+    }
+  }
+
   const restoreFolder = async (id) => {
     try {
       await axios.post(`/api/v1/folders/${id}/restore`)
@@ -175,6 +193,7 @@ export function useFolderTree() {
     restoreFolder,
     renameFolder,
     updateVisibility,
+    getChildrenStats,
     selectFolder,
     toggleExpanded
   }

@@ -235,6 +235,35 @@ class FolderService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_folder_children_stats(
+        self,
+        folder_id: int,
+    ) -> dict:
+        """返 folder 下未删子 folder + 文件数
+
+        v2.14 (2026-07-10): smart confirm 前置, 避免用户撞 422 后才知道有子。
+        Returns: {"folder_count": int, "file_count": int}
+        """
+        from app.models.knowledge import Knowledge
+
+        # 子 folder 数 (排除已软删)
+        stmt_folder = select(func.count(Folder.id)).where(
+            Folder.parent_id == folder_id,
+            Folder.deleted_at.is_(None),
+        )
+        folder_count = (await self.db.execute(stmt_folder)).scalar() or 0
+
+        # 网盘文件数 (storage_mode='drive', 排除已软删)
+        # 注: 知识库条目 (storage_mode='kb') 不算"folder 下文件", 跳过
+        stmt_file = select(func.count(Knowledge.id)).where(
+            Knowledge.folder_id == folder_id,
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "drive",
+        )
+        file_count = (await self.db.execute(stmt_file)).scalar() or 0
+
+        return {"folder_count": folder_count, "file_count": file_count}
+
     async def update_folder(
         self,
         folder_id: int,

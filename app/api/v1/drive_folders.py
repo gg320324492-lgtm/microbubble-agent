@@ -1,13 +1,14 @@
 """Folder REST API (PR2.4)
 
 端点:
-  POST   /api/v1/folders              → 创建
-  GET    /api/v1/folders              → 列 (含分页 + visibility 过滤)
-  GET    /api/v1/folders/tree         → 树形结构 (按 owner 分组, 顶级优先)
-  GET    /api/v1/folders/{id}         → 详情
-  PUT    /api/v1/folders/{id}         → 改名/移动/改 visibility
-  DELETE /api/v1/folders/{id}         → 软删
-  POST   /api/v1/folders/{id}/restore → 恢复 (3 天保留期内)
+  POST   /api/v1/folders                       → 创建
+  GET    /api/v1/folders                       → 列 (含分页 + visibility 过滤)
+  GET    /api/v1/folders/tree                  → 树形结构 (按 owner 分组, 顶级优先)
+  GET    /api/v1/folders/{id}/children-stats   → 子 folder + 文件计数 (v2.14 smart confirm)
+  GET    /api/v1/folders/{id}                  → 详情
+  PUT    /api/v1/folders/{id}                  → 改名/移动/改 visibility
+  DELETE /api/v1/folders/{id}                  → 软删
+  POST   /api/v1/folders/{id}/restore          → 恢复 (3 天保留期内)
 """
 from typing import List, Optional
 
@@ -190,6 +191,34 @@ async def get_folder_tree(
 
     tree = await _build_tree(root_id, 1 if root_id else 0)
     return {"tree": tree, "max_depth": max_depth}
+
+
+@router.get("/{folder_id}/children-stats")
+async def get_folder_children_stats(
+    folder_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """返 folder 下未删子 folder + 文件数 (v2.14 smart confirm 前置)
+
+    v2.14 (2026-07-10): 加这个 endpoint 让前端 delete confirm 弹窗可以预查,
+    避免用户撞 422 「folder 下还有 N 个未删的子 folder」后才反应过来要先去清子。
+
+    越权: private 非 owner 返 403 (与 GET /folders/{id} 越权规则一致)。
+    不存在: 返 404 (与 GET /folders/{id} 一致)。
+    """
+    svc = FolderService(db)
+    f = await svc.get_folder(folder_id)
+    if f is None:
+        raise NotFoundException(resource="Folder", resource_id=folder_id)
+    if f.visibility == "private" and f.owner_id != current_user.id:
+        raise ForbiddenException(message="无权访问此 folder")
+    stats = await svc.get_folder_children_stats(folder_id)
+    return {
+        "folder_id": folder_id,
+        "folder_count": stats["folder_count"],
+        "file_count": stats["file_count"],
+    }
 
 
 @router.get("/{folder_id}", response_model=FolderItem)
