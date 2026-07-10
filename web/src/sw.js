@@ -238,7 +238,21 @@
 //   客户端收到 SW_UPDATED postMessage 后自动 reload → 干净。
 // 2026-06-30 v77 BUMP：fix 5 个统计全 0 误报 + filter 残留; activate 钩子清空 api-cache
 //   让修复后的 URL 不命中旧 cache; 同步加 noEmptyItemsPlugin 拒绝空 items 永久缓存
-const SW_VERSION = 'v79-sw-cache-poisoning-purge-2026-07-08'
+// v80 (2026-07-10): fix PWA SW install 410 事故根因。
+//   症状：浏览器控制台报 `bad-precaching-response :: [{"url":".../manifest.webmanifest","status":410}]`
+//   → SW install 阶段失败 → activate 钩子不跑 → cache 永远清不掉 → 用户浏览器永久污染。
+//   根因：vite-plugin-pwa 自动把 manifest.webmanifest 加进 precache 列表（globIgnores 对它无效），
+//   web/scripts/postbuild-fix-manifest.js 跑完后 sw.js 应含 hashed manifest URL，
+//   但用户最新部署的 dist/sw.js 仍含 unhashed "manifest.webmanifest"（postbuild 的 regex 偶尔不匹配
+//   时静默失败，加上 vite.config.js 的 manifestHashPlugin 用 setImmediate 竞态），导致 SW install
+//   拉旧 URL → 服务器 c855f0e commit 的 410 Gone → bad-precaching-response。
+//   修复：
+//     1. 删 vite.config.js 的 manifestHashPlugin（setImmediate 竞态根因，统一由 postbuild 处理）
+//     2. 加固 postbuild-fix-manifest.js：try/catch + process.exit(1) + 健全性自检（grep sw.js 含 unhashed URL 即失败）
+//     3. scripts/deploy-auto.sh 加 sw.js precache 健全性检查（防 build 退出码 0 但产物坏的 commit 进 git）
+//     4. BUMP SW_VERSION v79 → v80：触发浏览器字节比较检测到新 SW → skipWaiting → activate 钩子
+//        清空所有 cache（包括 v79 install 失败时留下的坏 precache 引用）
+const SW_VERSION = 'v80-pwa-manifest-410-fix-2026-07-10'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
