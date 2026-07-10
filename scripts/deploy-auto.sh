@@ -131,6 +131,26 @@ if [ -n "$INDEX_HASH" ] && [ ! -f "$PROJECT_DIR/web/dist/$INDEX_HASH" ]; then
 fi
 log "dist 健全性检查通过（$DIST_JS_COUNT 个 index-*.js，index.html 引用 $INDEX_HASH 存在）"
 
+# PWA SW 健全性检查：dist/sw.js 不能引用 unhashed manifest.webmanifest
+# 背景：vite-plugin-pwa 自动把 manifest.webmanifest 加进 precache 列表（globIgnores 对它无效），
+# 必须由 web/scripts/postbuild-fix-manifest.js 改写 sw.js 把 URL 替换成 manifest.{hash}.webmanifest。
+# 漏改会导致 SW install 阶段 precache 拉旧 URL → 服务器 c855f0e commit 设的 410 Gone
+# → bad-precaching-response → SW install 失败 → 用户浏览器永久污染 cache（新 SW 永远激活不了）。
+# 这个检查会拦住未来类似的"build 链路瞬态失败但 npm run build 退出码 0"的 commit。
+if [ -f "$PROJECT_DIR/web/dist/sw.js" ]; then
+    SW_MANIFEST_OLD_URL=$(grep -oE '"url":"manifest\.webmanifest"' "$PROJECT_DIR/web/dist/sw.js" 2>/dev/null | head -1)
+    if [ -n "$SW_MANIFEST_OLD_URL" ]; then
+        log "ERROR: dist/sw.js 仍引用 unhashed $SW_MANIFEST_OLD_URL"
+        log "服务器 c855f0e commit 把 /manifest.webmanifest 设为 410 Gone"
+        log "→ SW install 阶段 precache 失败 → 用户浏览器永久污染"
+        log "修复方法：cd web && npm run build（必须走 && node scripts/postbuild-fix-manifest.js）"
+        log "如果 npm run build 仍失败，看 postbuild-fix-manifest.js 第 4 步健全性自检的报错"
+        log "========== 部署中止 =========="
+        exit 1
+    fi
+    log "PWA SW precache 检查通过（sw.js 不含 unhashed manifest 引用）"
+fi
+
 # 同步 Nginx 配置（tunnel.conf → /etc/nginx/conf.d/default.conf）
 # 注意：此步骤在 git pull 之后执行，配置变更下次部署生效
 if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then

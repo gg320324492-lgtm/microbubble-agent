@@ -1,8 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
-import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs'
-import crypto from 'crypto'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
@@ -10,100 +8,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
 // 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
-// closeBundle 钩子里把文件重命名为 manifest.{sha256_8}.webmanifest，并同步改
-// index.html / offline.html 的 link 引用 + sw.js 里 __WB_MANIFEST 的引用。
-// 8 字符 hex 满足 webhint 默认 [0-9a-f]+ 正则。
-//
-// 2026-06-13 事故修复：之前只改 HTML，没改 sw.js 的 __WB_MANIFEST，
-// vite-plugin-pwa 在 generateBundle 阶段就把 manifest.webmanifest 加进了
-// precache 列表（字符串嵌入 sw.js），closeBundle 重命名 dist 文件后 sw.js
-// 里的路径还是旧名字 → SW install 阶段 precache 拉旧 URL → 服务器 410 Gone
-// （commit c855f0e 加的 location = /manifest.webmanifest { return 410 }）
-// → bad-precaching-response → SW install 失败 → 新 SW 永远激活不了。
-// 修复：rename 之后同步替换 sw.js 里所有 '"/manifest.webmanifest"' 字符串。
-function manifestHashPlugin() {
-  return {
-    name: 'manifest-hash-plugin',
-    // v28 step 109.8: 用 writeBundle + enforce: 'post' 替代 closeBundle
-    //   之前 closeBundle 跟 vite-plugin-pwa 并行，setImmediate 重试 20 次仍被覆写
-    //   writeBundle 在所有 bundle 写盘后才触发，且 enforce: 'post' 保证在 PWA 之后跑
-    enforce: 'post',
-    writeBundle() {
-      const distDir = resolve(__dirname, 'dist')
-      const manifestPath = resolve(distDir, 'manifest.webmanifest')
-      let content
-      try {
-        content = readFileSync(manifestPath)
-      } catch {
-        return // dev 模式或 manifest 未生成时静默跳过
-      }
-      const hash = crypto.createHash('sha256').update(content).digest('hex').slice(0, 8)
-      const newName = `manifest.${hash}.webmanifest`
-      renameSync(manifestPath, resolve(distDir, newName))
-      // 同步改 HTML 引用（index.html + offline.html 兜底页都要改）
-      for (const file of ['index.html', 'offline.html']) {
-        const p = resolve(distDir, file)
-        try {
-          let html = readFileSync(p, 'utf-8')
-          if (html.includes('/manifest.webmanifest')) {
-            html = html.replace('/manifest.webmanifest', `/${newName}`)
-            writeFileSync(p, html)
-          }
-        } catch { /* offline.html 不存在时跳过 */ }
-      }
-      // 同步改 sw.js 里的 __WB_MANIFEST
-      // 2026-06-13 时序问题：vite-plugin-pwa 用自己的内部 rollup build 异步生成 sw.js，
-      // 在主 build 的 closeBundle 之后才写 dist/sw.js。这里用 setImmediate 让出主线程，
-      // 等 vite-plugin-pwa 完成后再修改 sw.js，最多重试 20 次（每次 +100ms）。
-      // 注意：__WB_MANIFEST 里的 url 没有前导斜杠（"manifest.webmanifest"），与 HTML 不同。
-      // 2026-06-13 教训：之前只改 HTML 没改 sw.js，导致 SW install 阶段 precache 拉
-      // 旧 manifest URL → 服务器 410 Gone（commit c855f0e 加的 location return 410）
-      // → bad-precaching-response → SW install 失败 → 新 SW 永远激活不了。
-      const swPath = resolve(distDir, 'sw.js')
-      let attempts = 0
-      const MAX_ATTEMPTS = 20
-      const tryUpdateSw = () => {
-        try {
-          attempts++
-          if (attempts > MAX_ATTEMPTS) {
-            console.warn('[manifest-hash-plugin] sw.js update failed after', MAX_ATTEMPTS, 'attempts')
-            return
-          }
-          if (!existsSync(swPath)) {
-            setTimeout(tryUpdateSw, 100)
-            return
-          }
-          let sw = readFileSync(swPath, 'utf-8')
-          // v28 step 94 修复：vite-plugin-pwa 实际输出 "manifest.webmanifest"}]) 格式
-          //   （precache 数组末尾 entry，无前导冒号或字符串边界）。之前的 PATTERNS 数组
-          //   用了精确字符串匹配（"manifest.webmanifest" / :"manifest.webmanifest" 等）
-          //   但实际 sw.js 输出包含裸字符串，前后不是引号或冒号，导致替换失败。
-          //   → SW install 仍 precache 旧 URL → 服务器 410 → bad-precaching-response
-          //   修复：用 catch-all 正则 /\bmanifest\.webmanifest\b/g 一次性替换所有出现位置
-          let matched = false
-          if (/\bmanifest\.webmanifest\b/.test(sw)) {
-            sw = sw.replace(/\bmanifest\.webmanifest\b/g, newName)
-            matched = true
-            console.log(`[manifest-hash-plugin] catch-all regex matched → ${newName}`)
-          }
-          if (matched) {
-            writeFileSync(swPath, sw)
-            console.log(`[manifest-hash-plugin] sw.js __WB_MANIFEST updated → ${newName} (attempt ${attempts})`)
-          } else if (sw.includes(`"${newName}"`)) {
-            // 已经更新过了（可能 setImmediate 多次回调或重 build）
-            return
-          } else {
-            console.warn(`[manifest-hash-plugin] sw.js pattern not found (attempt ${attempts})`)
-          }
-        } catch (e) {
-          // 任何错误都不能影响 build 流程（closeBundle 抛错会让 build 失败）
-          console.warn(`[manifest-hash-plugin] sw.js update error (attempt ${attempts}):`, e.message)
-        }
-      }
-      setImmediate(tryUpdateSw)
-    },
-  }
-}
+// 修复路径：**完全在 postbuild Node 脚本里处理** (`scripts/postbuild-fix-manifest.js`)。
+// Vite plugin (`manifestHashPlugin`) 2026-07-10 已删除，原因：
+//   1. setImmediate + 100ms×20 重试是脆弱时序竞态 — vite-plugin-pwa 内部用
+//      workbox-build 异步生成 sw.js，写盘时机跟 Vite plugin 钩子不同步，
+//      极个别 build 会出现 sw.js 已被 patch 但又被覆写回旧 URL 的情况。
+//   2. `npm run build` 末尾的 && 链 `vite build && node scripts/postbuild-fix-manifest.js`
+//      postbuild 跑在 vite 进程退出**之后**，是独立 Node 进程，对 sw.js 的改写
+//      不可能被 Vite plugin 钩子再覆写，更可靠。
+// 任何走 `vite build`（绕开 postbuild）的 build 都会被 `scripts/deploy-auto.sh`
+// 的健全性检查拦下，提示重跑 `npm run build`。
 
 // Vue 3.5 'bum' null 解构 bug patch（已确认 3.5.34 / 3.5.38 都没修）
 // renderer.ts unmountComponent 函数签名：
@@ -348,7 +262,8 @@ export default defineConfig({
     }),
 
     // webhint cache-busting 修复：manifest.webmanifest → manifest.{hash}.webmanifest
-    manifestHashPlugin(),
+    // 2026-07-10: 删 manifestHashPlugin，统一在 scripts/postbuild-fix-manifest.js 处理。
+    // 见上方 import 块的注释（setImmediate 竞态根因 + postbuild 更可靠）
 
     // Vue 3.5 'bum' null 解构 bug patch — 见上面 vueBumNullPatchPlugin 注释
     vueBumNullPatchPlugin(),
