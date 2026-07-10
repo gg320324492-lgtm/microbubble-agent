@@ -1,7 +1,7 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
-> **本会话 (2026-07-10)**: dist deploy fix + folder 越权 403 修复 — 详见下方"## [Unreleased] 2026-07-10" 段.
+> **本会话 (2026-07-11)**: 桌面 275 PPT 上传到团队共享网盘 (含 2 backend bug 修) — 详见下方"## [Unreleased] 2026-07-11"段.
 > **本会话 (2026-07-09)**: 待做清单核对沉淀 — 5 项未完成 + admin 决策 1 项 (voiceprint_relaxed*.py). 详见下方"## [Unreleased] 2026-07-09" 段, 总结见 `memory/2026-07-09-pending-items-audit.md`.
 > **本会话 (2026-07-08)**: 25+ bug 修复收官 + CLAUDE.md 拆分 — 详见下方"## [Unreleased] 2026-07-08" 段, 总结见 `memory/2026-07-08-25-bug-fix-batch.md`.
 
