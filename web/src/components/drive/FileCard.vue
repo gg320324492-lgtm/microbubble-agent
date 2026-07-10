@@ -144,6 +144,89 @@
       <el-button size="small" :icon="Download" circle @click.stop="handleDownload" />
       <el-button size="small" :icon="View" circle @click.stop="$emit('preview', file)" />
     </div>
+
+    <!--
+      v2.16 (2026-07-11) Drive 横向详情行 (类似 macOS Finder 列表视图)
+      用户决策: 默认模式改为 detail, 取代 grid — 一行 56px 紧凑, 信息密度高
+      169 文件全部可见不用翻页卡, 完整文件名 (单行省略), 大小/日期/owner/可见性/操作
+      columns: 32px (checkbox) + 32px (star) + 32px (icon) + flex (name) + 80px (size) + 110px (date) + 80px (owner) + 100px (visibility) + 120px (actions)
+    -->
+    <template v-if="viewMode === 'detail'">
+      <!-- 大小 -->
+      <div class="file-row-col file-row-size" :title="formatSize(file.file_size)">
+        {{ formatSize(file.file_size) }}
+      </div>
+      <!-- 上传日期 -->
+      <div class="file-row-col file-row-date" :title="formatDate(file.created_at)">
+        {{ formatDate(file.created_at) }}
+      </div>
+      <!-- 拥有者 -->
+      <div class="file-row-col file-row-owner" :title="ownerName">
+        {{ ownerName }}
+      </div>
+      <!-- 可见性 tag -->
+      <div class="file-row-col file-row-visibility">
+        <el-tag
+          :type="visibilityTagType(file.visibility)"
+          size="small"
+          effect="plain"
+          class="file-row-vis-tag"
+        >
+          {{ visibilityLabel(file.visibility) }}
+        </el-tag>
+      </div>
+      <!-- 操作 -->
+      <div class="file-row-col file-row-actions">
+        <button
+          type="button"
+          class="file-row-action-btn"
+          :aria-label="`预览 ${file.title || file.file_name}`"
+          @click.stop="$emit('preview', file)"
+        >
+          <el-icon :size="16"><View /></el-icon>
+        </button>
+        <button
+          type="button"
+          class="file-row-action-btn"
+          :aria-label="`下载 ${file.title || file.file_name}`"
+          @click.stop="handleDownload"
+        >
+          <el-icon :size="16"><Download /></el-icon>
+        </button>
+        <el-dropdown trigger="click" @command="(cmd) => $emit(cmd, file)">
+          <button
+            type="button"
+            class="file-row-action-btn"
+            aria-label="更多操作"
+            @click.stop
+          >
+            <el-icon :size="16"><MoreFilled /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="toggle-star">
+                {{ file.is_starred ? '⭐ 取消收藏' : '⭐ 加入收藏' }}
+              </el-dropdown-item>
+              <el-dropdown-item divided command="rename">重命名</el-dropdown-item>
+              <el-dropdown-item command="move">移动</el-dropdown-item>
+              <el-dropdown-item command="update-visibility">修改可见性</el-dropdown-item>
+              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="extract-to-kb">
+                📚 加入公共知识库
+              </el-dropdown-item>
+              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="share-link">
+                🔗 生成分享链接
+              </el-dropdown-item>
+              <el-dropdown-item v-if="file.storage_mode === 'drive'" command="version-history">
+                🕘 版本历史
+              </el-dropdown-item>
+              <el-dropdown-item divided command="delete">
+                <span style="color: var(--color-danger);">删除</span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -160,7 +243,7 @@ const props = defineProps({
   file: { type: Object, required: true },
   selected: { type: Boolean, default: false },
   selectable: { type: Boolean, default: false },
-  viewMode: { type: String, default: 'grid' }  // grid | list
+  viewMode: { type: String, default: 'detail' }  // detail | grid | list (v2.16 detail 默认)
 })
 
 defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'version-history', 'delete', 'toggle-star'])
@@ -204,6 +287,33 @@ function formatSize(bytes) {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
+
+/**
+ * 格式化上传日期 (v2.16 detail 模式)
+ * 格式: YYYY-MM-DD HH:MM
+ * 例: 2026-07-09 14:23
+ */
+function formatDate(iso) {
+  if (!iso) return '-'
+  // 兼容 ISO 字符串 / Date 对象 / postgres timestamp-without-tz
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (isNaN(d.getTime())) return '-'
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/**
+ * detail 模式 owner 列显示
+ * v2.16: 后端 list_drive_files 已 join member, 返 owner_name / owner_username
+ * 兼容: 老 API 只给 created_by id 时显示 id 而非 name
+ */
+const ownerName = computed(() => {
+  return (
+    props.file.owner_name ||
+    props.file.owner_username ||
+    (props.file.created_by ? `#${props.file.created_by}` : '-')
+  )
+})
 
 function visibilityTagType(v) {
   if (v === 'private') return 'danger'
@@ -305,6 +415,132 @@ onMounted(() => {
   opacity: 1;
   box-shadow: none;
   background: transparent;
+}
+
+/*
+ * v2.16 (2026-07-11) detail 模式 (横向表格行)
+ * 单行布局: checkbox | star | icon | name | size | date | owner | visibility | actions
+ * 默认模式, 取代 grid — 信息密度高, 169 文件全部可见
+ *
+ * 与 .drive-file-card-detail 共享样式 (drive-view.css) 提供完整列定义
+ * 此处保留 grid 内部 alignment 细节
+ */
+.file-card--detail {
+  display: grid;
+  /* 列: checkbox(32) + star(32) + icon(36) + name(flex) + size(80) + date(110) + owner(80) + visibility(100) + actions(120) */
+  grid-template-columns: 32px 32px 36px minmax(0, 1fr) 80px 110px 80px 100px 120px;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 52px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.file-card--detail::before {
+  /* 左侧 4px 染色条 (与 grid 同) */
+  width: 4px;
+  height: auto;
+  inset: 0 auto 0 0;
+}
+
+.file-card--detail .file-card-icon {
+  margin-bottom: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.file-card--detail .file-card-name {
+  text-align: left;
+  width: auto;
+  margin: 0;
+}
+
+.file-card--detail .file-card-checkbox,
+.file-card--detail .file-card-star {
+  /* 隐藏原本卡片的绝对定位 - detail 模式下用网格列定位 */
+  position: static;
+  top: auto;
+  left: auto;
+}
+
+.file-row-col {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-row-size {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-row-date {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.file-row-visibility {
+  display: flex;
+  align-items: center;
+}
+
+.file-row-vis-tag {
+  font-size: var(--font-size-xs);
+}
+
+.file-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.file-card--detail:hover .file-row-actions,
+.file-card--detail.is-selected .file-row-actions {
+  opacity: 1;
+}
+
+.file-row-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.file-row-action-btn:hover {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.file-row-action-btn:active {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  transform: scale(0.92);
+}
+
+/* detail 模式下 checkbox + star 显示在 row 内 */
+.file-card--detail .file-card-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-card--detail .file-card-star {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>
 

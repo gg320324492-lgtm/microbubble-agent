@@ -45,6 +45,7 @@ const globalConfig = {
     'el-icon': { template: '<i><slot /></i>' },
     'el-tooltip': { template: '<div><slot /></div>' },
     'el-button': { template: '<button @click="$emit(\'click\', $event)"><slot /></button>' },
+    'el-tag': { template: '<span class="el-tag-stub"><slot /></span>' },
     'el-dropdown': { template: '<div><slot /></div>' },
     'el-dropdown-menu': { template: '<div><slot /></div>' },
     'el-dropdown-item': { template: '<div @click="$emit(\'command\', $attrs.command)"><slot /></div>' },
@@ -108,6 +109,75 @@ describe('FileCard v2.0 美化', () => {
     await nextTick()
     expect(wrapper.classes()).toContain('drive-file-card')
     expect(wrapper.classes()).toContain('drive-file-card-list')
+    wrapper.unmount()
+  })
+
+  // === v2.16 (2026-07-11) detail 视图测试 ===
+  it('detail view 加 drive-file-card-detail class, 渲染 7 列横向 row', async () => {
+    const wrapper = mount(FileCard, {
+      props: {
+        file: makeFile({
+          created_at: '2026-07-09T14:23:00Z',
+          owner_name: '余歆睿',
+          owner_username: 'yuxinrui',
+          file_size: 1024 * 1024 * 3.6,
+        }),
+        viewMode: 'detail',
+      },
+      global: globalConfig,
+    })
+    await nextTick()
+    expect(wrapper.classes()).toContain('drive-file-card')
+    expect(wrapper.classes()).toContain('drive-file-card-detail')
+
+    // 列渲染: size / date / owner / visibility / actions
+    expect(wrapper.find('.file-row-size').exists()).toBe(true)
+    expect(wrapper.find('.file-row-date').exists()).toBe(true)
+    expect(wrapper.find('.file-row-owner').exists()).toBe(true)
+    expect(wrapper.find('.file-row-visibility').exists()).toBe(true)
+    expect(wrapper.find('.file-row-actions').exists()).toBe(true)
+
+    // 内容正确
+    expect(wrapper.find('.file-row-size').text()).toMatch(/MB/)
+    expect(wrapper.find('.file-row-date').text()).toContain('2026-07-09')
+    expect(wrapper.find('.file-row-owner').text()).toContain('余歆睿')
+    expect(wrapper.find('.file-row-visibility').text()).toContain('团队')
+
+    wrapper.unmount()
+  })
+
+  it('detail view: owner 回退到 created_by id (无 owner_name / owner_username)', async () => {
+    const wrapper = mount(FileCard, {
+      props: {
+        file: makeFile({ created_by: 59 }),
+        viewMode: 'detail',
+      },
+      global: globalConfig,
+    })
+    await nextTick()
+    expect(wrapper.find('.file-row-owner').text()).toBe('#59')
+    wrapper.unmount()
+  })
+
+  it('detail view: 点击行 emit click (整个 FileCard clickable)', async () => {
+    const wrapper = mount(FileCard, {
+      props: { file: makeFile(), viewMode: 'detail' },
+      global: globalConfig,
+    })
+    await nextTick()
+    await wrapper.trigger('click')
+    expect(wrapper.emitted('click')).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('detail view 默认选中状态 class 不变 (v2.15 验证)', async () => {
+    // selected=true 时, .is-selected class 应渲染 (与 grid/list 共享 class)
+    const wrapper = mount(FileCard, {
+      props: { file: makeFile(), viewMode: 'detail', selected: true },
+      global: globalConfig,
+    })
+    await nextTick()
+    expect(wrapper.classes()).toContain('is-selected')
     wrapper.unmount()
   })
 
