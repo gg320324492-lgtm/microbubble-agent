@@ -38,6 +38,9 @@ export function useDriveFiles() {
   const sortOrder = ref('desc')         // asc | desc
   const starredOnly = ref(false)        // 仅收藏
   const fileType = ref(null)            // pdf | image | video | office | text | null
+  // v2 PR6-P19: 视图隔离 (personal | team | all) - personal 不显示 is_team_shared=true 文件
+  // DesktopDriveView 切到 team 视图时调 setViewMode('team') 改这里
+  const viewMode = ref('personal')       // v2 PR6-P19: personal (默认) | team | all
 
   // === 计算属性 ===
   const isEmpty = computed(() =>
@@ -56,6 +59,9 @@ export function useDriveFiles() {
         sort_by: sortBy.value,
         sort_order: sortOrder.value,
         starred_only: starredOnly.value ? 'true' : 'false',
+        // v2 PR6-P19: 默认 view=personal (个人网盘, 不显示 is_team_shared=true)
+        // DesktopDriveView team 分支调 fetchFiles 时传 view='team' 覆盖
+        view: viewMode.value,
         ...(fileType.value ? { file_type: fileType.value } : {}),
         ...params
       }
@@ -330,13 +336,14 @@ export function useDriveFiles() {
    * 秒传查询 — POST /files/instant-upload
    * @returns {Promise<{instant: boolean, file_id?: number, dedup_saved_bytes?: number, upload_url?: string}>}
    */
-  async function instantUpload({ fileHash, fileName, fileSize, folderId = null, visibility = 'team' }) {
+  async function instantUpload({ fileHash, fileName, fileSize, folderId = null, visibility = 'team', isTeamShared = false }) {
     const resp = await axios.post('/api/v1/drive/files/instant-upload', {
       file_hash: fileHash,
       file_name: fileName,
       file_size: fileSize,
       folder_id: folderId,
       visibility,
+      is_team_shared: isTeamShared,  // v2 PR6-P19
     })
     return resp.data
   }
@@ -381,6 +388,8 @@ export function useDriveFiles() {
     sortOrder,
     starredOnly,
     fileType,
+    // v2 PR6-P19: 视图隔离
+    viewMode,
     // 计算
     isEmpty,
     hasSelection,

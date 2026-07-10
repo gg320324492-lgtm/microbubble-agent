@@ -24,12 +24,20 @@
   <el-dialog
     v-model="visible"
     class="drive-dialog"
-    title="上传到网盘"
+    :title="props.isTeamShared ? '上传到团队共享盘' : '上传到网盘'"
     width="640px"
     :close-on-click-modal="false"
     :close-on-press-escape="!uploading"
     @closed="resetForm"
   >
+    <!-- v2 PR6-P19: 团队共享盘上传横幅 -->
+    <div
+      v-if="props.isTeamShared"
+      class="drive-upload-team-banner"
+    >
+      <el-icon><Share /></el-icon>
+      <span>此文件将上传到「团队共享盘」, <strong>不会显示在您的个人网盘</strong>。如需个人可见, 请先切换回「我的网盘」再上传。</span>
+    </div>
     <!-- 文件接收区 -->
     <div
       class="drive-upload-drop-zone"
@@ -124,7 +132,7 @@
 import '@/views/drive/drive-view.css'
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { UploadFilled, Document } from '@element-plus/icons-vue'
+import { UploadFilled, Document, Share } from '@element-plus/icons-vue'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useFileHash } from '@/composables/useFileHash'   // PR4
@@ -132,7 +140,9 @@ import { useDriveFiles } from '@/composables/useDriveFiles' // PR4
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  defaultFolderId: { type: [Number, null], default: null }
+  defaultFolderId: { type: [Number, null], default: null },
+  // v2 PR6-P19: 团队共享盘标识 (DesktopDriveView 切到 team 视图时上传传 true)
+  isTeamShared: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue', 'uploaded'])
@@ -299,6 +309,7 @@ async function uploadOne(item) {
         fileSize: item.file.size,
         folderId: form.folderId || null,
         visibility: form.visibility,
+        isTeamShared: !!props.isTeamShared,  // v2 PR6-P19
       })
 
       if (instant.instant) {
@@ -482,6 +493,32 @@ export default { name: 'DriveUploadDialog' }
 
 .drive-upload-form {
   margin-top: 20px;
+}
+
+/* v2 PR6-P19: 团队共享盘上传横幅 (橙黄高亮) */
+.drive-upload-team-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: linear-gradient(135deg, rgba(255, 179, 71, 0.12), rgba(255, 122, 92, 0.08));
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.drive-upload-team-banner :deep(.el-icon) {
+  color: var(--color-accent);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.drive-upload-team-banner strong {
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold, 600);
 }
 </style>
 
