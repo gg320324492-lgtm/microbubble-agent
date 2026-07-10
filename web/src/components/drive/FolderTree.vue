@@ -139,7 +139,7 @@ const emit = defineEmits([
   'delete-folder',      // (folder)   → parent 调 useFolderTree.deleteFolder
 ])
 
-const { fetchTree, deleteFolder } = useFolderTree()
+const { fetchTree, deleteFolder, getChildrenStats } = useFolderTree()
 
 function handleRootClick() {
   emit('update:selectedFolderId', null)
@@ -240,13 +240,42 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
       ElMessage.info(`Folder ID: ${folder.id}`)
     }
   } else if (cmd === 'delete') {
-    // v2.13: admin 越权删除时弹红字警告 (否则普通 owner 删除用标准警告)
-    const confirmMsg = isAdminOverride
-      ? `⚠️ 管理员越权删除: 文件夹 "${folder.name}" (owner=其他成员) 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.`
-      : `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复.`
-    const confirmTitle = isAdminOverride ? '⚠️ 管理员越权操作' : '删除文件夹'
-    const confirmType = isAdminOverride ? 'error' : 'warning'
-    const confirmBtnText = isAdminOverride ? '我已确认, 越权删除' : '删除'
+    // v2.14 (2026-07-10): 预查子 folder/file 数量, 智能 confirm 文案
+    //   - 有子 → 「⚠️ 文件夹下还有 N 个子 folder / M 个文件, 请先清理」type=warning
+    //   - 没子 → 删进入回收站, 30 天可恢复
+    //   - admin 越权 → 加红字警告
+    //   - 三种情况合并 (优先级: admin 越权 > 有子 > 普通)
+    const stats = await getChildrenStats(folder.id)
+    const folderCount = stats?.folder_count ?? 0
+    const fileCount = stats?.file_count ?? 0
+    const hasChildren = folderCount > 0 || fileCount > 0
+
+    let confirmMsg, confirmTitle, confirmType, confirmBtnText
+    if (isAdminOverride) {
+      // v2.13 + v2.14: admin 越权 (优先级最高)
+      const childWarn = hasChildren
+        ? `\n\n⚠️ 该 folder 下还有 ${folderCount} 个未删子 folder, ${fileCount} 个未删文件.\n删除 folder 不会自动级联删这些, 你需要单独先清理, 否则它们会变成孤儿 (parent_id 仍指向被删 folder).`
+        : ''
+      confirmMsg = `⚠️ 管理员越权删除: 文件夹 "${folder.name}" (owner=其他成员) 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.${childWarn}`
+      confirmTitle = '⚠️ 管理员越权操作'
+      confirmType = 'error'
+      confirmBtnText = '我已确认, 越权删除'
+    } else if (hasChildren) {
+      // v2.14: 有子 folder / 文件
+      const parts = []
+      if (folderCount > 0) parts.push(`${folderCount} 个子 folder`)
+      if (fileCount > 0) parts.push(`${fileCount} 个文件`)
+      confirmMsg = `⚠️ 文件夹 "${folder.name}" 下还有 ${parts.join(' + ')}, 请先清理它们再删除这个 folder.\n\n如何继续:\n 1) 先展开 folder 处理子 folder / 文件\n 2) 全部移到回收站后回来再次右键删除这个 folder`
+      confirmTitle = `⚠️ folder 下还有未删内容`
+      confirmType = 'warning'
+      confirmBtnText = '我知道了, 去清理子项'
+    } else {
+      // v2.8: 普通删除
+      confirmMsg = `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复.`
+      confirmTitle = '删除文件夹'
+      confirmType = 'warning'
+      confirmBtnText = '删除'
+    }
     try {
       await ElMessageBox.confirm(
         confirmMsg,

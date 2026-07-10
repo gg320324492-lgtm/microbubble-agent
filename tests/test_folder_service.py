@@ -469,6 +469,89 @@ async def test_soft_delete_returns_false_when_not_exist(alice_bob):
 
 
 @pytest.mark.asyncio
+async def test_get_folder_children_stats(alice_bob):
+    """v2.14 智能 confirm 前置: 返 {folder_count, file_count}
+
+    准备: parent folder + 1 子 folder + 1 drive 文件 + 1 个已软删的 folder
+    期望: folder_count=1 (排除软删), file_count=1
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        parent = await svc.create_folder(
+            name=f"alice_parent_stats_{u}", owner_id=alice.id, visibility="team",
+        )
+        child = await svc.create_folder(
+            name=f"alice_child_stats_{u}", owner_id=alice.id,
+            parent_id=parent.id, visibility="team",
+        )
+        # 1 个 drive 文件 (storage_mode='drive')
+        kb_drive = Knowledge(
+            title=f"file_drive_{u}",
+            content="x",
+            folder_id=parent.id,
+            storage_mode="drive",
+        )
+        # 1 个 KB 知识卡片 (storage_mode='kb', 不算 file_count)
+        kb_kb = Knowledge(
+            title=f"file_kb_{u}",
+            content="y",
+            folder_id=parent.id,
+            storage_mode="kb",
+        )
+        session.add_all([kb_drive, kb_kb])
+        await session.commit()
+        # 额外: 1 个子 folder 加 deleted_at (软删, 不应被统计)
+        deleted_child = await svc.create_folder(
+            name=f"alice_delchild_{u}", owner_id=alice.id,
+            parent_id=parent.id, visibility="team",
+        )
+        deleted_child_id = deleted_child.id
+        await session.commit()
+    pid = parent.id
+
+    # 软删那个 child
+    async with factory() as session:
+        svc = FolderService(session)
+        folder = await svc.get_folder(deleted_child_id)
+        folder.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await session.commit()
+
+    # stats 应: folder_count=1 (child alive, 不含 deleted_child), file_count=1 (kb_drive, 不含 kb_kb)
+    async with factory() as session:
+        svc = FolderService(session)
+        stats = await svc.get_folder_children_stats(pid)
+        assert stats == {"folder_count": 1, "file_count": 1}, (
+            f"期望 {{folder_count: 1, file_count: 1}}, 实际 {stats}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_folder_children_stats_empty(alice_bob):
+    """空 folder (无子 folder/file) → folder_count=0, file_count=0
+
+    v2.14 confirm 弹窗: 这个结果走「普通删除」分支
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.create_folder(
+            name=f"alice_empty_stats_{u}", owner_id=alice.id, visibility="team",
+        )
+        await session.commit()
+        fid = f.id
+
+    async with factory() as session:
+        svc = FolderService(session)
+        stats = await svc.get_folder_children_stats(fid)
+        assert stats == {"folder_count": 0, "file_count": 0}
+
+
+@pytest.mark.asyncio
 async def test_soft_delete_and_restore(alice_bob):
     """无子 folder 时可软删, 3 天保留期内可恢复"""
     factory = alice_bob["factory"]

@@ -5,7 +5,38 @@
 > **本会话 (2026-07-09)**: 待做清单核对沉淀 — 5 项未完成 + admin 决策 1 项 (voiceprint_relaxed*.py). 详见下方"## [Unreleased] 2026-07-09" 段, 总结见 `memory/2026-07-09-pending-items-audit.md`.
 > **本会话 (2026-07-08)**: 25+ bug 修复收官 + CLAUDE.md 拆分 — 详见下方"## [Unreleased] 2026-07-08" 段, 总结见 `memory/2026-07-08-25-bug-fix-batch.md`.
 
-## [Unreleased] 2026-07-10 — dist deploy 链断裂修复 + folder 越权 403 区分 + admin 越权
+## [Unreleased] 2026-07-10 — dist deploy 链断裂修复 + folder 越权 403 区分 + admin 越权 + smart confirm
+
+### 🆕 folder delete smart confirm (`feat(drive) v2.14` 4 file + 2 tests)
+
+**触发**: 用户截图 `[FolderContextMenu] delete folder 158 failed: 422 folder 下还有 1 个未删的子 folder` — 用户其实没看到 158 下面有子 folder (UI 默认不展开), 撞 422 后才知道要先清理.
+
+**修复** (`feat(drive): v2.14 folder smart confirm pre-check`):
+- **`app/services/folder_service.py:239-273`** 新增 `get_folder_children_stats(folder_id)`:
+  - folder_count: 未软删的子 folder 数
+  - file_count: 未软删的 `storage_mode='drive'` 文件数 (排除 KB 知识卡片)
+- **`app/api/v1/drive_folders.py`**: 新增 `GET /folders/{id}/children-stats` (越权规则与 GET /{id} 一致: private 非 owner 403, 不存在 404)
+- **`web/src/composables/useFolderTree.js:108-119`**: `getChildrenStats(id)` wrapper, 错误兜底返 `{folder_count:0, file_count:0}` 让 confirm 走默认文案
+- **`web/src/components/drive/FolderTree.vue:242-276`**: confirm 分流 3 路:
+  - **admin 越权 (优先级最高)**: `type='error'` 红字 + 「⚠️ 该 folder 下还有 N 个未删子 folder, M 个未删文件. 删除 folder 不会自动级联删这些, 你需要单独先清理, 否则它们会变成孤儿」
+  - **有子 (folder_count + file_count > 0)**: `type='warning'` 黄字 + 「⚠️ 文件夹下还有 N 个子 folder + M 个文件, 请先清理它们再删除」
+  - **普通删除**: 原标准文案
+
+**测试**: **18 passed** (新增 `test_get_folder_children_stats` + `test_get_folder_children_stats_empty` — 测 multi-scenario: alive/deleted/KB/drive 各类文件正确归类).
+
+**Live e2e**:
+- 准备 `158 + 159` (parent + 1 child alive, 1 deleted_child)
+- `GET /api/v1/folders/158/children-stats` → `{folder_count:1, file_count:0}` ✅ (deleted_child 不计)
+- `GET /api/v1/folders/160/children-stats` (空) → `{folder_count:0, file_count:0}` ✅
+- `GET /api/v1/folders/999999999/children-stats` → 404 ✅
+- `GET /api/v1/folders/{soft_deleted_id}/children-stats` → 404 (与 GET /{id} 一致) ✅
+
+**3 新铁律**:
+1. **后端先放宽前确认 (pre-check 优于后报错)** — UX 友好 422 升级: 用 confirm dialog 预查替代撞错后才知道
+2. **统计 endpoint 必须排除软删** — 默认 `deleted_at IS NULL` 不污染计数, 区分"看到的"vs"全部"
+3. **storage_mode='drive' 与 'kb' 区分** — 文件计数 ≠ 知识卡片, 智能 confirm 只算"实文件"
+
+### 🆕 folder admin 越权删除 (`feat(drive) v2.13` 5 file + 1 test)
 
 ### 🆕 folder admin 越权删除 (`feat(drive) v2.13` 5 file + 1 test)
 
