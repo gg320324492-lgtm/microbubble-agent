@@ -1,10 +1,12 @@
 <!--
   FileGrid.vue — 课题组网盘 PR3.3 文件网格
   2026-07-01
+  2026-07-11 v2.16: 加 detail 视图 (默认), 用户决策「横向长条展示更多信息」
 
   布局:
-  - 网格视图 (viewMode='grid'): CSS grid 自适应列数 (auto-fill, minmax 180px)
-  - 列表视图 (viewMode='list'): 单列紧凑布局
+  - detail 视图 (viewMode='detail', v2.16 默认): 单行表格, columns = checkbox + star + icon + name + size + date + owner + visibility + actions, 56px 行高, 169 文件信息密度高
+  - 网格视图 (viewMode='grid'): CSS grid 自适应列数 (auto-fill, minmax 180px) — 缩略图场景
+  - 列表视图 (viewMode='list'): 单列紧凑布局 — 仅保留兼容
 
   三态:
   - loading: Loading 占位
@@ -56,6 +58,28 @@
       >
         上传文件
       </el-button>
+    </div>
+
+    <!-- data: detail 模式 (v2.16 默认, 像 macOS Finder 列表) -->
+    <div v-else-if="viewMode === 'detail'" class="drive-file-detail">
+      <FileCard
+        v-for="file in files"
+        :key="file.id"
+        :file="file"
+        :selected="selectedFileIds.includes(file.id)"
+        :selectable="true"
+        :view-mode="'detail'"
+        @click="(f, e) => $emit('file-click', f, e)"
+        @toggle-select="(id) => $emit('toggle-select', id)"
+        @toggle-star="(f) => $emit('file-toggle-star', f)"
+        @preview="(f) => $emit('file-preview', f)"
+        @rename="(f) => $emit('file-rename', f)"
+        @move="(f) => $emit('file-move', f)"
+        @update-visibility="(f) => $emit('file-update-visibility', f)"
+        @extract-to-kb="(f) => $emit('file-extract-to-kb', f)"
+        @share-link="(f) => $emit('file-share-link', f)"
+        @delete="(f) => $emit('file-delete', f)"
+      />
     </div>
 
     <!-- data: grid 模式 -->
@@ -135,7 +159,7 @@ const props = defineProps({
   selectedFileIds: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   loadError: { type: [String, null], default: null },
-  viewMode: { type: String, default: 'grid' },  // grid | list
+  viewMode: { type: String, default: 'detail' },  // v2.16: detail 默认 (替代 grid) | grid | list
   isTopLevel: { type: Boolean, default: true },  // 是否顶级目录 (空态文案区分)
   isSearch: { type: Boolean, default: false },   // v2.0: 是否搜索无结果态
   searchKeyword: { type: String, default: '' }   // v2.0: 用于 "未找到与 X 相关" 文案

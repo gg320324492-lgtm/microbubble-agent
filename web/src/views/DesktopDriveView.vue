@@ -41,15 +41,30 @@
           <el-button :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
           <el-button :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
         </el-button-group>
+        <!--
+          v2.16 (2026-07-11) 三种视图切换:
+          - detail (默认): 横向 long bar (macOS Finder 列表), 信息密度高, 适合大量文件
+          - grid: 卡片网格, 适合缩略图场景
+          - list: 单列紧凑 (保留兼容, 老用户习惯)
+        -->
         <el-button-group class="drive-view-toggle">
           <el-button
+            :type="viewMode === 'detail' ? 'primary' : 'default'"
+            :title="'详情列表视图'"
+            @click="viewMode = 'detail'"
+          >
+            <el-icon><Tickets /></el-icon>
+          </el-button>
+          <el-button
             :type="viewMode === 'grid' ? 'primary' : 'default'"
+            :title="'网格视图'"
             @click="viewMode = 'grid'"
           >
             <el-icon><Grid /></el-icon>
           </el-button>
           <el-button
             :type="viewMode === 'list' ? 'primary' : 'default'"
+            :title="'紧凑列表视图'"
             @click="viewMode = 'list'"
           >
             <el-icon><List /></el-icon>
@@ -256,7 +271,7 @@
 import '@/views/drive/drive-view.css'
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, UploadFilled, Folder, Plus, Grid, List, Files, Sort, Filter, ArrowDown } from '@element-plus/icons-vue'
+import { Search, UploadFilled, Folder, Plus, Grid, List, Files, Sort, Filter, ArrowDown, Tickets } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTree from '@/components/drive/FolderTree.vue'
 import FileGrid from '@/components/drive/FileGrid.vue'
@@ -323,7 +338,7 @@ const {
 
 // === 状态 ===
 const selectedFolderId = ref(null)
-const viewMode = ref('grid')  // grid | list
+const viewMode = ref('detail')  // v2.16 默认 detail (横向 long bar) | grid | list
 const searchQuery = ref('')
 // v2 PR2: 特殊视图 (null | 'starred' | 'trash')
 const specialView = ref(null)

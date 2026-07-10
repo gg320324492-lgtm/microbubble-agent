@@ -477,6 +477,126 @@
   border: 1px solid var(--color-border);
 }
 
+/*
+ * v2.16 (2026-07-11) Drive 详情表格视图 (macOS Finder 列表风格)
+ * 默认 mode, 取代 grid — 信息密度高, 169 文件全部可见, 长文件名不截
+ * 结构: 容器 (.drive-file-detail, 表格感) + 行 (.drive-file-row, 56-72px 高)
+ *       + 列头 (.drive-file-row-header, 顶部 sticky 灰底)
+ *       + 数据行 (.drive-file-row-item, hover 高亮 + selected 主色)
+ */
+.drive-file-detail {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  overflow: hidden;  /* 截断行内 hover 阴影 */
+}
+
+.drive-file-row-header {
+  display: grid;
+  /* 列: name(1fr, 占 checkbox+star+icon+name) | size(80) | date(110) | owner(80) | visibility(100) | actions(120) */
+  grid-template-columns: 32px 32px 36px minmax(0, 1fr) 80px 110px 80px 100px 120px;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-elevated, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.drive-file-row-header > span {
+  /* 跳过 checkbox + star + icon 这 3 列 (无内容), 文字列从第 4 (name) 起 */
+}
+.drive-file-row-header > span.file-row-header-name { padding-left: 0; }
+.drive-file-row-header > span.file-row-header-size { text-align: right; }
+.drive-file-row-header > span.file-row-header-actions { text-align: center; opacity: 0; }
+
+/* 行 hover 联动 */
+.drive-file-row-item {
+  display: grid;
+  grid-template-columns: 32px 32px 36px minmax(0, 1fr) 80px 110px 80px 100px 120px;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 56px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-lighter);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.drive-file-row-item:last-child {
+  border-bottom: none;
+}
+
+.drive-file-row-item:hover {
+  background: var(--color-bg-elevated, rgba(255, 255, 255, 0.03));
+}
+
+.drive-file-row-item.is-selected {
+  background: var(--color-primary-bg);
+}
+
+/* 左侧 3px 染色条 (按 file_type) */
+.drive-file-row-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--color-file-default);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.drive-file-row-item:hover::before,
+.drive-file-row-item.is-selected::before {
+  opacity: 1;
+}
+
+.drive-file-row-item[data-type="pdf"]::before  { background: var(--color-file-pdf); }
+.drive-file-row-item[data-type="doc"]::before  { background: var(--color-file-doc); }
+.drive-file-row-item[data-type="ppt"]::before  { background: var(--color-accent); }
+.drive-file-row-item[data-type="excel"]::before { background: var(--color-file-excel); }
+.drive-file-row-item[data-type="image"]::before { background: var(--color-file-image); }
+.drive-file-row-item[data-type="video"]::before { background: var(--color-file-pdf); }
+.drive-file-row-item[data-type="audio"]::before { background: var(--color-warning); }
+.drive-file-row-item[data-type="text"]::before { background: var(--color-file-default); }
+
+/* Stagger animation (复用 fadeSlideUp) */
+.drive-file-row-item { animation: fadeSlideUp var(--duration-slow) var(--ease-out) 0ms both; }
+.drive-file-row-item:nth-child(2) { animation-delay: 30ms; }
+.drive-file-row-item:nth-child(3) { animation-delay: 60ms; }
+.drive-file-row-item:nth-child(4) { animation-delay: 90ms; }
+.drive-file-row-item:nth-child(5) { animation-delay: 120ms; }
+.drive-file-row-item:nth-child(6) { animation-delay: 150ms; }
+.drive-file-row-item:nth-child(7) { animation-delay: 180ms; }
+.drive-file-row-item:nth-child(8) { animation-delay: 210ms; }
+.drive-file-row-item:nth-child(n+9) { animation-delay: 240ms; }
+
+/* dark mode (v60-v67 教训: 跨组件覆盖必须放非 scoped 块) */
+[data-theme="dark"] .drive-file-row-header {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .drive-file-row-item {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .drive-file-row-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .drive-file-row-item.is-selected {
+  background: rgba(255, 122, 92, 0.16);  /* primary-bg 暗色变体 */
+}
+
 .drive-file-card {
   position: relative;
   display: flex;
