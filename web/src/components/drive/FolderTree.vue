@@ -250,9 +250,12 @@ async function onSubContext(cmd, folder) {
         ElMessage.success(`文件夹 "${folder.name}" 已移入回收站`)
         await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
       } catch (e) {
-        // v2.9 增强: 404 友好提示 (避免静默 'Not Found' 让用户困惑)
+        // v2.9 + v2.11 增强: 404 友好提示 + console.error 同步 dev tools
+        //   - 之前用户只看 console 原始 404 (axios 错误) 没看到 friendly msg
+        //   - 加 console.error 让 DevTools Console 也能看到我们的提示
         const status = e.response?.status
         const msg = e.response?.data?.detail || e.message
+        console.error(`[FolderContextMenu] delete folder ${folder.id} failed:`, status, msg)
         if (status === 404) {
           ElMessage.error(`文件夹不存在或您不是 owner (可能已被删除),请刷新页面`)
         } else if (status === 400) {
