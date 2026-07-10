@@ -11,17 +11,34 @@
 """
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.exceptions import ForbiddenException, NotFoundException, ValidationException
 from app.core.security import get_current_user
 from app.models.folder import Folder
 from app.models.member import Member
 from app.services.folder_service import FolderService, FolderServiceError
 
 router = APIRouter(prefix="/folders", tags=["网盘文件夹"])
+
+
+def _reraise_folder_service_error(e: FolderServiceError) -> None:
+    """把 FolderServiceError 映射到 AppException 子类, 走统一响应格式 {"error": {"code", "message", "details"}}
+
+    2026-07-10 修复：之前 `raise HTTPException(status_code=e.status_code, detail=str(e))` 走 FastAPI
+    默认格式 `{"detail": "..."}` → 前端 useFolderTree.js 找 `e.response.data.error.message` 失败
+    → 落兜底字符串 "删除文件夹失败"（user 截图 "[FolderContextMenu] delete folder 28 failed: undefined 删除文件夹失败"）。
+    """
+    msg = str(e)
+    if e.status_code == 404:
+        raise NotFoundException(resource="Folder") from e
+    if e.status_code == 403:
+        raise ForbiddenException(message=msg) from e
+    # 400 / 422 / 其他：ValidationException（不走 HTTPException 走 AppException 统一格式）
+    raise ValidationException(message=msg) from e
 
 
 # === Pydantic schemas ===
@@ -98,7 +115,7 @@ async def create_folder(
             visibility=payload.visibility,
         )
     except FolderServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e))
+        _reraise_folder_service_error(e)
     return _to_item(f)
 
 
@@ -186,10 +203,10 @@ async def get_folder(
     svc = FolderService(db)
     f = await svc.get_folder(folder_id, include_deleted=include_deleted)
     if f is None:
-        raise HTTPException(status_code=404, detail=f"folder {folder_id} 不存在")
+        raise NotFoundException(resource="Folder", resource_id=folder_id)
     # 越权检查: private 非 owner 不可见
     if f.visibility == "private" and f.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="无权访问此 folder")
+        raise ForbiddenException(message="无权访问此 folder")
     return _to_item(f)
 
 
@@ -214,9 +231,9 @@ async def update_folder(
             parent_id=payload.parent_id,
         )
     except FolderServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e))
+        _reraise_folder_service_error(e)
     if f is None:
-        raise HTTPException(status_code=404, detail="folder 不存在或非 owner")
+        raise NotFoundException(resource="Folder", resource_id=folder_id)
     return _to_item(f)
 
 
@@ -231,9 +248,9 @@ async def delete_folder(
     try:
         ok = await svc.soft_delete_folder(folder_id, current_user_id=current_user.id)
     except FolderServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e))
+        _reraise_folder_service_error(e)
     if not ok:
-        raise HTTPException(status_code=404, detail="folder 不存在或非 owner")
+        raise NotFoundException(resource="Folder", resource_id=folder_id)
     return
 
 
@@ -247,7 +264,7 @@ async def restore_folder(
     svc = FolderService(db)
     f = await svc.restore_folder(folder_id, current_user_id=current_user.id)
     if f is None:
-        raise HTTPException(status_code=404, detail="folder 不存在或非 owner")
+        raise NotFoundException(resource="Folder", resource_id=folder_id)
     return _to_item(f)
 
 
