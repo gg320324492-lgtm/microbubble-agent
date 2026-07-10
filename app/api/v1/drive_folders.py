@@ -243,10 +243,19 @@ async def delete_folder(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """软删 folder (有未删子 folder/file 时 400)"""
+    """软删 folder (有未删子 folder/file 时 400)
+
+    v2.13 (2026-07-10): admin 越权支持 — 任务权限模型已有 (CLAUDE.md),
+    folder 这里也加。owner 可删自己的 folder; admin 可删任何 folder;
+    普通用户跨 owner 删除返 403。
+    """
     svc = FolderService(db)
     try:
-        ok = await svc.soft_delete_folder(folder_id, current_user_id=current_user.id)
+        ok = await svc.soft_delete_folder(
+            folder_id,
+            current_user_id=current_user.id,
+            is_admin=(current_user.role == "admin"),
+        )
     except FolderServiceError as e:
         _reraise_folder_service_error(e)
     if not ok:
@@ -260,9 +269,16 @@ async def restore_folder(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """恢复软删 folder (3 天保留期内, owner only)"""
+    """恢复软删 folder (3 天保留期内, owner 或 admin)
+
+    v2.13 (2026-07-10): admin 越权支持 (与 soft_delete_folder 对齐)
+    """
     svc = FolderService(db)
-    f = await svc.restore_folder(folder_id, current_user_id=current_user.id)
+    f = await svc.restore_folder(
+        folder_id,
+        current_user_id=current_user.id,
+        is_admin=(current_user.role == "admin"),
+    )
     if f is None:
         raise NotFoundException(resource="Folder", resource_id=folder_id)
     return _to_item(f)

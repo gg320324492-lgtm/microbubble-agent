@@ -71,10 +71,13 @@
 <script setup>
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-folder-tree-node-* 生效
 // v2.8 (2026-07-10) 右键菜单支持 (FolderContextMenu 包裹)
+// v2.12 (2026-07-10) owner-only 守卫: 非 owner 「删除」菜单项不渲染 (避免误删 + 后端 403 误导)
+// v2.13 (2026-07-10) admin 越权: role==='admin' 可删除任何 folder (对齐 CLAUDE.md 任务权限模型)
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
 import { Folder, FolderOpened, CaretBottom, CaretRight } from '@element-plus/icons-vue'
 import FolderContextMenu from './FolderContextMenu.vue'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
   folder: { type: Object, required: true },
@@ -85,17 +88,46 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'toggle', 'context-command'])
 
-// v2.8: 子文件夹右键菜单项 (5 项)
-const folderMenuItems = [
-  { label: '📂 打开',         command: 'open' },
-  { label: '➕ 新建子文件夹',   command: 'create-sub' },
-  { label: '✏ 重命名',         command: 'rename' },
-  { label: '🔗 复制 Folder ID', command: 'copy-id' },
-  { label: '🗑 删除',          command: 'delete', divided: true },
-]
+const userStore = useUserStore()
+const currentUserId = computed(() => userStore.userInfo?.id)
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+
+// v2.12 + v2.13: owner 可删自己的 folder, admin 可越权删任何 folder
+// 防御性兜底: 后端 folder_service.soft_delete_folder 也会按同样规则校验
+const canDelete = computed(() => {
+  const cid = currentUserId.value
+  const oid = props.folder?.owner_id
+  if (cid == null || oid == null) return false
+  if (isAdmin.value) return true                                  // v2.13: admin 越权
+  return Number(cid) === Number(oid)                              // owner-only
+})
+
+// v2.8 + v2.12 + v2.13: 菜单项 + 是否 admin 越权 (后者决定 UI 提示)
+//   isAdminOverride 是 admin 操作**非自己**folder 时为 true, 用来 confirm 弹窗加红字警告
+const isAdminOverride = computed(() => {
+  if (!isAdmin.value) return false
+  const cid = currentUserId.value
+  const oid = props.folder?.owner_id
+  return cid != null && oid != null && Number(cid) !== Number(oid)
+})
+
+// v2.8 + v2.12 + v2.13: 子文件夹右键菜单项 (5 项, 「删除」owner 或 admin 可见)
+const folderMenuItems = computed(() => {
+  const items = [
+    { label: '📂 打开',         command: 'open' },
+    { label: '➕ 新建子文件夹',   command: 'create-sub' },
+    { label: '✏ 重命名',         command: 'rename' },
+    { label: '🔗 复制 Folder ID', command: 'copy-id' },
+  ]
+  if (canDelete.value) {
+    items.push({ label: '🗑 删除', command: 'delete', divided: true })
+  }
+  return items
+})
 
 function onContextCommand(cmd) {
-  emit('context-command', cmd, props.folder)
+  // v2.13: 多传一个 isAdminOverride, 让 FolderTree.vue 在弹 confirm 时显示红字警告
+  emit('context-command', cmd, props.folder, isAdminOverride.value)
 }
 
 const hasChildren = computed(() => props.folder.children?.length > 0)

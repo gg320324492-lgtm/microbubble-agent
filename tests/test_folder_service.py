@@ -48,10 +48,13 @@ async def alice_bob(db_session):
     alice = Member(
         username=u_alice, name="Alice Folder Test",
         password_hash="hash", role="member", grade="测试", is_active=True,
+        # 2026-07-10 PR6-P17: wechat_id NOT NULL, 测试 fixture 用 `__TEST_BACKFILL_<u>__` 占位
+        wechat_id=f"__TEST_BACKFILL_{u}_alice__",
     )
     bob = Member(
         username=u_bob, name="Bob Folder Test",
         password_hash="hash", role="member", grade="测试", is_active=True,
+        wechat_id=f"__TEST_BACKFILL_{u}_bob__",
     )
     session.add_all([alice, bob])
     await session.commit()
@@ -370,6 +373,99 @@ async def test_soft_delete_blocks_when_has_children(alice_bob):
             await svc.soft_delete_folder(pid, current_user_id=alice.id)
         assert exc_info.value.status_code == 400
         assert "子 folder" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_blocks_when_not_owner(alice_bob):
+    """非 owner 调 soft_delete → 应 raise FolderServiceError(403)
+
+    v2.12 (2026-07-10) 修复: 旧行为非 owner 返回 False (→ endpoint 转 404),
+    误导用户「Folder不存在」(实际 folder 存在但越权)。
+    新行为: 显式 raise 403 让前端能区分「不存在」vs「无权限」。
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    bob = alice_bob["bob"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.create_folder(
+            name=f"alice_owned_by_bob_to_delete_{u}",
+            owner_id=alice.id,
+            visibility="team",  # team visibility 让 bob 也能看到, 但不能删
+        )
+        fid = f.id
+        await session.commit()
+
+    async with factory() as session:
+        svc = FolderService(session)
+        with pytest.raises(FolderServiceError) as exc_info:
+            await svc.soft_delete_folder(fid, current_user_id=bob.id)
+        assert exc_info.value.status_code == 403, (
+            f"应返 403 (越权), 实际 {exc_info.value.status_code}: {exc_info.value}"
+        )
+        assert "无法删除非自己拥有" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_admin_can_bypass_owner(alice_bob):
+    """admin 越权 → 应允许删除 (与 CLAUDE.md 任务权限模型对齐)
+
+    v2.13 (2026-07-10): 加 is_admin 越权支持。admin 调 soft_delete_folder(others_folder)
+    应返 True (成功软删), 无 FolderServiceError。
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    bob = alice_bob["bob"]  # 普通用户 (非 admin)
+    u = alice_bob["u"]
+    # 准备 alice 的 folder (bob 不是 owner)
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.create_folder(
+            name=f"alice_target_for_admin_{u}",
+            owner_id=alice.id,
+            visibility="team",
+        )
+        fid = f.id
+        await session.commit()
+
+    # bob (非 admin) 调 → 应 403
+    async with factory() as session:
+        svc = FolderService(session)
+        with pytest.raises(FolderServiceError) as exc_info:
+            await svc.soft_delete_folder(fid, current_user_id=bob.id)
+        assert exc_info.value.status_code == 403
+
+    # bob (is_admin=True) 调 → 应成功 (bypass owner 检查)
+    async with factory() as session:
+        svc = FolderService(session)
+        ok = await svc.soft_delete_folder(
+            fid, current_user_id=bob.id, is_admin=True,  # admin bypass
+        )
+        assert ok is True
+        await session.commit()
+
+    # 验证软删成功
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.get_folder(fid, include_deleted=True)
+        assert f is not None
+        assert f.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_returns_false_when_not_exist(alice_bob):
+    """folder 不存在 → 返 False (→ endpoint 转 404 NotFoundException)
+
+    v2.12 区分: 不存在 (False) vs 非 owner (raise 403) 是两条独立路径,
+    endpoint 见 False raise NotFoundException, 见 FolderServiceError _reraise 透传。
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    async with factory() as session:
+        svc = FolderService(session)
+        ok = await svc.soft_delete_folder(999_999_999, current_user_id=alice.id)
+        assert ok is False  # → endpoint raise NotFoundException(404)
 
 
 @pytest.mark.asyncio

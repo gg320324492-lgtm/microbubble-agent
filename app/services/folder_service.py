@@ -385,15 +385,31 @@ class FolderService:
         self,
         folder_id: int,
         current_user_id: int,
+        is_admin: bool = False,
     ) -> bool:
-        """软删除 folder (owner only)
+        """软删除 folder (owner only, admin 可越权)
 
         设 deleted_at=NOW(), 3 天后 Celery beat 物理清除
-        Returns: True = 成功, False = folder 不存在或非 owner
+        Returns: True = 成功
+        Raises:
+            FolderServiceError(404): folder 真不存在
+            FolderServiceError(403): folder 存在但非 owner 且非 admin (越权)
+            FolderServiceError(400): folder 下还有未删子 folder/file
+
+        2026-07-10 v2.13: 加 is_admin 越权支持 (对齐 CLAUDE.md 任务权限模型
+        "任务: 创建人/负责人/管理员可删除" 的 admin 跨越规则)
         """
         folder = await self.get_folder(folder_id)
-        if folder is None or folder.owner_id != current_user_id:
+        if folder is None:
+            # 2026-07-10 修复: 与非 owner 区分 — 前端能看到 team folder 但不能删，
+            # 旧行为 return False → 404 「Folder不存在」误导用户，实际是 403 越权
             return False
+        # v2.13: admin 可越权删除 (前端 canDelete 守卫同步放宽)
+        if folder.owner_id != current_user_id and not is_admin:
+            raise FolderServiceError(
+                f"无法删除非自己拥有的 folder (folder_id={folder_id}, owner_id={folder.owner_id} != current_user_id={current_user_id}, is_admin={is_admin})",
+                status_code=403,
+            )
 
         # 检查是否有未软删的子 folder / 文件 (PR1 铁律: skip 非空 folder)
         stmt = select(func.count(Folder.id)).where(
@@ -428,11 +444,18 @@ class FolderService:
         self,
         folder_id: int,
         current_user_id: int,
+        is_admin: bool = False,
     ) -> Optional[Folder]:
-        """恢复被软删的 folder (owner only, 3 天保留期内有效)"""
+        """恢复被软删的 folder (owner or admin, 3 天保留期内有效)
+
+        v2.13 (2026-07-10): 加 admin 越权支持 (与 soft_delete_folder 对齐)
+        """
         stmt = select(Folder).where(Folder.id == folder_id)
         folder = (await self.db.execute(stmt)).scalar_one_or_none()
-        if folder is None or folder.owner_id != current_user_id:
+        if folder is None:
+            return None
+        # v2.13: admin 可越权恢复 (与 soft_delete_folder 对齐)
+        if folder.owner_id != current_user_id and not is_admin:
             return None
         folder.deleted_at = None
         await self.db.commit()

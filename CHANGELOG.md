@@ -1,8 +1,75 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-10)**: dist deploy fix + folder 越权 403 修复 — 详见下方"## [Unreleased] 2026-07-10" 段.
 > **本会话 (2026-07-09)**: 待做清单核对沉淀 — 5 项未完成 + admin 决策 1 项 (voiceprint_relaxed*.py). 详见下方"## [Unreleased] 2026-07-09" 段, 总结见 `memory/2026-07-09-pending-items-audit.md`.
 > **本会话 (2026-07-08)**: 25+ bug 修复收官 + CLAUDE.md 拆分 — 详见下方"## [Unreleased] 2026-07-08" 段, 总结见 `memory/2026-07-08-25-bug-fix-batch.md`.
+
+## [Unreleased] 2026-07-10 — dist deploy 链断裂修复 + folder 越权 403 区分 + admin 越权
+
+### 🆕 folder admin 越权删除 (`feat(drive) v2.13` 5 file + 1 test)
+
+**触发**: 用户测试「我现在 admin 为啥不能删别人的 folder?」 → 发现 v2.12 改 owner-only 后 admin 也被拒, 不符合任务权限模型 (CLAUDE.md "任务: 创建人/负责人/**管理员**可删除").
+
+**修复** (`feat(drive): v2.13 folder admin 越权`):
+- **`app/services/folder_service.py:384-413`**:
+  - `soft_delete_folder(folder_id, current_user_id, is_admin=False)` 加 admin bypass: `if folder.owner_id != current_user_id and not is_admin: raise 403`
+  - `restore_folder` 镜像同步加 `is_admin` 参数 (恢复也允许越权)
+- **`app/api/v1/drive_folders.py:240-263`**: DELETE endpoint 传 `is_admin=(current_user.role == 'admin')`, 同 /restore endpoint
+- **`web/src/components/drive/FolderTreeNode.vue`**: `canDelete` 加 `if (isAdmin.value) return true` 守卫, `isAdminOverride` 计算传给 emit
+- **`web/src/components/drive/FolderTree.vue`**: confirm dialog 加分流 — admin 越权 (`isAdminOverride=true`) 时弹 `type='error'` 红字警告, 普通删除照旧 `type='warning'`
+- **`tests/test_folder_service.py`**: `test_soft_delete_admin_can_bypass_owner` — bob (member) 删 alice 返 403, bob (is_admin=True) 删 alice 返 True 真软删
+
+**测试结果**: **16 passed** (folder_service 16, 含新增 1 测试). 零回归.
+
+**Live e2e**:
+- `xiaoqi_testbot` (admin) → `DELETE /api/v1/folders/28` (alice's) → **HTTP 204** ✅
+- `xiaoqi_testbot` (admin) → `POST /api/v1/folders/28/restore` → **HTTP 200** + DB 删除字段清空 ✅
+- 任何非 admin 跨 owner 仍 403 (已有 `test_soft_delete_blocks_when_not_owner` 覆盖)
+
+**3 新铁律** (永久沉淀):
+1. **admin 越权必走 user.role 而非 user.id** — 权限模型与 CLAUDE.md 「任务/成员/声纹」一致, 单一 admin 角色跨业务复用
+2. **越权操作必须有 UI 红字警告** — `type='error'` + `confirmButtonText='我已确认, 越权删除'`, 普通删除照 `type='warning'` 区分. 防 admin 误删
+3. **is_admin 参数默认 False** — API 显式 None/False 触发严格检查, True 才 bypass. 防止 service 被新调用方漏参数
+
+### 🆕 dist 部署链断裂 (`fix(deploy)` 一条 commit)
+
+**触发**: 用户浏览器报 `GET /assets/index-fea4093d.js 404`. 本地 dist 有此文件 (107KB), 服务器没此文件, 服务器 `index.html` 又在引用这个 hash.
+
+**根因** (3 层):
+1. `b205c4fe` 系列 commit `git add` 了 `web/dist/index.html` (引用新 hash) 但漏了对应的 94 个 chunks (`index-fea4093d.js` 等)
+2. `.gitignore` 第 72 行 `web/dist/` 排除, 必须 `git add -f` 才能强制 add
+3. 服务器 `git reset --hard origin/main` 后 sanity-check (deploy-auto.sh:152) 应该 exit 1, 但 git reset 已先行把新 index.html 落地
+
+**修复** (`fix(deploy): 补全 web/dist/ 缺失 94 个 build chunks`):
+- `git add -f web/dist/` → 强制 add 全部缺失 chunks → commit 8ade7b24 (HEAD)
+- 服务器 webhook → `git pull` → 95 → 189 完整 dist → sanity-check 通过 → SPA 恢复
+
+**4 新铁律** (永久沉淀):
+1. **`web/dist/` 必须 `git add -f`** (`.gitignore` ignore, 不 `-f` 永远不入 git)
+2. **`--no-verify` 在本仓库 = 漏 dist** (pre-commit hook 唯一自动补, 跳过即手动漏)
+3. **dist 健全性检查应 hard block** (deploy-auto.sh:152 当前是 soft log + exit 1, 加 fail-loud `exit 99 + 服务方报警` 减少多角度排障)
+4. **dist cache-bust 时间窗 (P1)** — 加 `?ts=<git_sha1>` 到 `dist` URL 兜底
+
+### 🆕 folder delete 越权: 404 → 403 区分 (`fix(drive) v2.12` 4 file + 2 tests)
+
+**触发**: 用户截图 `DELETE /api/v1/folders/28 404 + Folder不存在`. folder 28 (`alice_team_folder`) 真存在, owner=116 (Alice), 不是当前用户 (`xiaoqi_testbot`, id=59). 旧实现 `soft_delete_folder` 把 owner-mismatch 一律返 `False` → endpoint 转 404 NotFoundException. 「Folder不存在」**完全误导**, 实际是「无权限」.
+
+**修复** (`fix(drive): v2.12 folder 越权 403 vs 真不存在 404`):
+- **`app/services/folder_service.py:384-414`**: `soft_delete_folder` 拆 3 路
+  - `None` (folder 不存在) → return `False` → endpoint 转 404
+  - `owner_id != current_user_id` → raise `FolderServiceError(403)` → `_reraise_folder_service_error` 转 `ForbiddenException` (统一 `{"error":{"code":"FORBIDDEN",...}}` 格式)
+  - 子 folder/file 未删 → 保留 400
+- **`web/src/components/drive/FolderTreeNode.vue`**: `folderMenuItems` 改 computed, 仅 owner 才推入「删除」菜单项
+- **`web/src/components/drive/FolderTree.vue:259-262`**: error handler 加 `if (status === 403)` 清晰分支
+- **`tests/test_folder_service.py`**: fixture 加 `wechat_id=...` (PR6-P17 NOT NULL 之前漏的字段), 新增 2 测试
+
+**测试结果**: **39 passed, 3 skipped** (test_folder_service 15 + test_drive_notification_trigger 8 + test_member_wechat_id_not_null 16). 零回归.
+
+**3 新铁律** (永久沉淀):
+1. **404 vs 403 必须区分** — folder 可见但 owner 不匹配时返 403 (越权), 只有 folder 完全不存在时返 404
+2. **前端 owner 守卫优先于后端 status code** — computed `canDelete` 不渲染「删除」菜单项, 用户根本看不到选项
+3. **错误 status 真实显示** — 前端错误处理必须 4 路分支 (403/404/400/401), 接续 CLAUDE.md 2026-07-10 commit `b205c4fe` `wrapApiError` 透传 `e.response.status`
 
 ## [Unreleased] 2026-07-09 — 待做清单核对沉淀 + Drive 美化收官文档同步
 

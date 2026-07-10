@@ -223,7 +223,8 @@ async function onTrashContext(cmd) {
 }
 
 // === v2.8: sub folder 右键菜单 handler (来自 FolderTreeNode emit) ===
-async function onSubContext(cmd, folder) {
+// v2.13: 加第 3 个参数 isAdminOverride (admin 越权删除别人 folder 时弹红字警告)
+async function onSubContext(cmd, folder, isAdminOverride = false) {
   if (cmd === 'open') {
     handleFolderSelect(folder.id)
   } else if (cmd === 'create-sub') {
@@ -239,25 +240,46 @@ async function onSubContext(cmd, folder) {
       ElMessage.info(`Folder ID: ${folder.id}`)
     }
   } else if (cmd === 'delete') {
+    // v2.13: admin 越权删除时弹红字警告 (否则普通 owner 删除用标准警告)
+    const confirmMsg = isAdminOverride
+      ? `⚠️ 管理员越权删除: 文件夹 "${folder.name}" (owner=其他成员) 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.`
+      : `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复.`
+    const confirmTitle = isAdminOverride ? '⚠️ 管理员越权操作' : '删除文件夹'
+    const confirmType = isAdminOverride ? 'error' : 'warning'
+    const confirmBtnText = isAdminOverride ? '我已确认, 越权删除' : '删除'
     try {
       await ElMessageBox.confirm(
-        `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复.`,
-        '删除文件夹',
-        { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+        confirmMsg,
+        confirmTitle,
+        {
+          type: confirmType,
+          confirmButtonText: confirmBtnText,
+          cancelButtonText: '取消',
+          dangerouslyUseHTMLString: false,
+        }
       )
       try {
         await deleteFolder(folder.id)
-        ElMessage.success(`文件夹 "${folder.name}" 已移入回收站`)
+        const successMsg = isAdminOverride
+          ? `[admin 越权] 文件夹 "${folder.name}" 已移入回收站`
+          : `文件夹 "${folder.name}" 已移入回收站`
+        ElMessage.success(successMsg)
         await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
       } catch (e) {
         // v2.9 + v2.11 增强: 404 友好提示 + console.error 同步 dev tools
         //   - 之前用户只看 console 原始 404 (axios 错误) 没看到 friendly msg
         //   - 加 console.error 让 DevTools Console 也能看到我们的提示
+        // v2.12 增强: 403 vs 404 区分 (folder 存在但非 owner 返 403 越权)
+        // v2.13: admin 已经能越权, 403 仍可能 = 普通用户跨 owner (正常拒绝)
         const status = e.response?.status
         const msg = e.response?.data?.detail || e.message
         console.error(`[FolderContextMenu] delete folder ${folder.id} failed:`, status, msg)
-        if (status === 404) {
-          ElMessage.error(`文件夹不存在或您不是 owner (可能已被删除),请刷新页面`)
+        if (status === 403) {
+          // v2.12 新增: 后端 soft_delete_folder 区分了 owner-mismatch (403) vs 不存在 (404)
+          // 旧实现把两者都吞成 404, 误导用户「Folder不存在」, 实际是越权
+          ElMessage.error('删除失败: 该文件夹不属于您 (仅 owner 或 admin 可删除)')
+        } else if (status === 404) {
+          ElMessage.error(`文件夹不存在 (可能已被删除), 请刷新页面`)
         } else if (status === 400) {
           // FolderService.soft_delete_folder 返 400 (有未删子 folder/file)
           ElMessage.error('删除失败: ' + msg)
