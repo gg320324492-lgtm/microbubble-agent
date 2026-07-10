@@ -93,6 +93,33 @@ if [ $PULL_OK -eq 0 ]; then
     fi
 fi
 
+# 2026-07-10 P0 修复：检测 .py 文件变更 → 提醒手动重启 Docker app container
+# 根因：服务器后端架构 = nginx(云) → frps(云) → frpc(本地 PC) → Docker app (本地 PC)
+#       云端 git pull 后只是云端磁盘新文件，**Python 进程没自动 reload**
+#       → 任何 .py / alembic 改动必须手动在本地 PC `docker restart microbubble-agent-app-1 microbubble-agent-celery-worker-1`
+# 修复前症状: 用户 push 修复 → 服务器 curl 仍是旧响应（如 folder delete 404 返 FastAPI 默认 {detail}）
+# 修复: deploy-auto.sh 自动检测 .py/alembic 改动 → log 醒目的提醒 + 列出受影响的本地 PC 重启命令
+# 注意: 这是**临时**缓解方案。彻底解决需要 frps 在 git pull 后自动触发本地 PC 重启
+#       (未来可加 scripts/local-auto-restart.sh: 本地 PC daemon 监听云端 signal 或 git pull 通知)
+PY_CHANGED=$(git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -E '^(app/|alembic/)' | wc -l)
+if [ "$PY_CHANGED" -gt 0 ]; then
+    log "================================================================"
+    log "⚠️  Python 代码有 ${PY_CHANGED} 个文件变更 — 必须手动重启本地 PC Docker！"
+    log "================================================================"
+    log "受影响的文件 (前 10 个):"
+    git diff --name-only HEAD@{1} HEAD 2>/dev/null | grep -E '^(app/|alembic/)' | head -10 | while read f; do
+        log "    - $f"
+    done
+    log ""
+    log "本地 PC 必须执行（让新代码生效）:"
+    log "    ssh user@local-pc 'docker restart microbubble-agent-app-1 microbubble-agent-celery-worker-1'"
+    log "    或 Windows 本地:"
+    log "    docker restart microbubble-agent-app-1 microbubble-agent-celery-worker-1"
+    log ""
+    log "注意: 不重启的话 curl 服务器 200 但 Python 进程仍在跑旧代码！"
+    log "================================================================"
+fi
+
 # 检查可用磁盘空间（至少 500MB）
 AVAILABLE_MB=$(df -m /opt | tail -1 | awk '{print $4}')
 if [ "$AVAILABLE_MB" -lt 500 ]; then
