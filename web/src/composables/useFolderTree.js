@@ -5,6 +5,21 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 
 /**
+ * 提取后端错误消息，支持两种响应格式：
+ *   - AppException 统一格式: {error: {code, message, details}} (项目标准)
+ *   - FastAPI 默认格式: {detail: "..."} (兜底, 用于未迁移的旧 endpoint)
+ *
+ * 2026-07-10 加固: 之前只找 .error.message, FastAPI 默认 {detail: "folder 28 不存在"}
+ * 找不到 → 落兜底字符串 "删除文件夹失败" → 用户截图 [FolderContextMenu] delete folder
+ * 28 failed: undefined 删除文件夹失败。后端已统一改用 NotFoundException /
+ * ForbiddenException / ValidationException (AppException 子类), 前端兜底也兼容旧格式。
+ */
+function extractErrorMessage(e, fallback) {
+  const data = e.response?.data
+  return data?.error?.message || data?.detail || e.message || fallback
+}
+
+/**
  * 文件夹树状态管理
  *
  * 数据流:
@@ -44,7 +59,7 @@ export function useFolderTree() {
       const resp = await axios.get('/api/v1/folders/tree')
       folderTree.value = resp.data.tree || []
     } catch (e) {
-      loadError.value = e.response?.data?.error?.message || e.message || '文件夹树加载失败'
+      loadError.value = extractErrorMessage(e, '文件夹树加载失败')
       folderTree.value = []
     } finally {
       loading.value = false
@@ -61,7 +76,7 @@ export function useFolderTree() {
       await fetchTree()  // 重建树
       return resp.data
     } catch (e) {
-      throw new Error(e.response?.data?.error?.message || '创建文件夹失败')
+      throw new Error(extractErrorMessage(e, '创建文件夹失败'))
     }
   }
 
@@ -71,7 +86,12 @@ export function useFolderTree() {
       await fetchTree()  // 重建树
       if (selectedFolderId.value === id) selectedFolderId.value = null
     } catch (e) {
-      throw new Error(e.response?.data?.error?.message || '删除文件夹失败')
+      // 2026-07-10 加固: 支持两种响应格式
+      //   - AppException 统一格式: {error: {code, message, details}} (项目标准)
+      //   - FastAPI 默认格式: {detail: "..."} (兜底, 用于未迁移的旧 endpoint)
+      const data = e.response?.data
+      const msg = data?.error?.message || data?.detail || e.message || '删除文件夹失败'
+      throw new Error(msg)
     }
   }
 
@@ -80,7 +100,7 @@ export function useFolderTree() {
       await axios.post(`/api/v1/folders/${id}/restore`)
       await fetchTree()
     } catch (e) {
-      throw new Error(e.response?.data?.error?.message || '恢复文件夹失败')
+      throw new Error(extractErrorMessage(e, '恢复文件夹失败'))
     }
   }
 
@@ -89,7 +109,7 @@ export function useFolderTree() {
       await axios.put(`/api/v1/folders/${id}`, { name: newName })
       await fetchTree()
     } catch (e) {
-      throw new Error(e.response?.data?.error?.message || '重命名失败')
+      throw new Error(extractErrorMessage(e, '重命名失败'))
     }
   }
 
@@ -98,7 +118,7 @@ export function useFolderTree() {
       await axios.put(`/api/v1/folders/${id}`, { visibility })
       await fetchTree()
     } catch (e) {
-      throw new Error(e.response?.data?.error?.message || '修改可见性失败')
+      throw new Error(extractErrorMessage(e, '修改可见性失败'))
     }
   }
 
