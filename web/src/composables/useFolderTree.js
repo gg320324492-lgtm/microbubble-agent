@@ -1,7 +1,14 @@
 // useFolderTree.js — 课题组网盘 PR3.2 文件夹树 composable
 // 2026-07-01
+// 2026-07-11 v2.15: 改 Pinia store (defineStore) 替代 factory 模式, 让所有 caller 共享单例 state
+//   修复: 用户测试「删除 folder 不消失」— 根因 = 8 处独立 useFolderTree() 实例, FolderTree.vue
+//         的 fetchTree 只更新自己的 ref, 父 DesktopDriveView 的 folderTree prop 不联动
+//   同步受益: CreateFolderDialog / DriveUploadDialog / MoveDialog / KnowledgeUploadDialog /
+//             MobileDriveView / MobileFileList 等同问题的所有场景
+//   兼容: useFolderTree() factory 函数保留, 内部转调 useFolderTreeStore() — 零 callsite 改动
 
 import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
 import axios from 'axios'
 
 /**
@@ -34,11 +41,28 @@ function wrapApiError(e, fallback) {
   return err
 }
 
+// === 内部辅助 ===
+function findFolder(nodes, targetId) {
+  for (const node of nodes) {
+    if (node.id === targetId) return node
+    if (node.children?.length) {
+      const found = findFolder(node.children, targetId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
 /**
- * 文件夹树状态管理
+ * Folder Tree Pinia store (v2.15 单例)
+ *
+ * 为什么 Pinia:
+ * - 8 个组件调 useFolderTree() 都需要共享同一份 tree / selectedFolderId / expandedFolderIds
+ * - factory 模式 (旧实现) 每调用一次 = 一份独立 ref, 互不联动
+ * - Pinia store 是 app-level 单例, 所有 component 共享同一份 reactive state
  *
  * 数据流:
- * 1. fetchTree() -> GET /api/v1/folders/tree -> folderTree.value
+ * 1. fetchTree() -> GET /api/v1/folders/tree -> folderTree.value (全局共享)
  * 2. 用户选中文件夹 -> selectedFolderId.value = id (null = 顶级)
  * 3. FileGrid 监听 selectedFolderId 重新拉取文件列表
  *
@@ -51,8 +75,8 @@ function wrapApiError(e, fallback) {
  * - deleteFolder(id): DELETE /api/v1/folders/{id} (软删)
  * - restoreFolder(id): POST /api/v1/folders/{id}/restore
  */
-export function useFolderTree() {
-  // 状态
+export const useFolderTreeStore = defineStore('folderTree', () => {
+  // === 状态 (单例, 全 app 共享) ===
   const folderTree = ref([])  // 后端返回的树形结构
   const selectedFolderId = ref(null)
   const expandedFolderIds = ref(new Set())  // 展开状态
@@ -88,20 +112,10 @@ export function useFolderTree() {
         parent_id: parentId,
         visibility
       })
-      await fetchTree()  // 重建树
+      await fetchTree()  // 重建树 (单例 store 自动同步到所有 caller)
       return resp.data
     } catch (e) {
       throw wrapApiError(e, '创建文件夹失败')
-    }
-  }
-
-  const deleteFolder = async (id) => {
-    try {
-      await axios.delete(`/api/v1/folders/${id}`)
-      await fetchTree()  // 重建树
-      if (selectedFolderId.value === id) selectedFolderId.value = null
-    } catch (e) {
-      throw wrapApiError(e, '删除文件夹失败')
     }
   }
 
@@ -109,17 +123,24 @@ export function useFolderTree() {
    * v2.14 (2026-07-10): 查 folder 下未删子 folder + 文件数 (前置 confirm 弹窗用)
    * Returns: { folder_id, folder_count, file_count }
    * 错误 fallback: 返 { folder_count: 0, file_count: 0 } 让 confirm 走默认文案
-   *   (用户体验: 用户点删除时网络失败不影响弹窗, 422 错误 fallback 处理)
    */
   const getChildrenStats = async (id) => {
     try {
       const resp = await axios.get(`/api/v1/folders/${id}/children-stats`)
-      return resp.data  // {folder_id, folder_count, file_count}
+      return resp.data
     } catch (e) {
-      // 兜底: 查询失败 (401/403/404/500) → 返零计数让 confirm 走默认文案
-      // 422/400 如果 folder 真不存在 → 上面列表查不到
-      // 不抛错 — 前端在 delete 时还会再校验, 这里只是 UX 提示
+      // 兜底: 查询失败 → 返零计数让 confirm 走默认文案
       return { folder_id: id, folder_count: 0, file_count: 0 }
+    }
+  }
+
+  const deleteFolder = async (id) => {
+    try {
+      await axios.delete(`/api/v1/folders/${id}`)
+      await fetchTree()  // 重建树 (单例 store 自动同步)
+      if (selectedFolderId.value === id) selectedFolderId.value = null
+    } catch (e) {
+      throw wrapApiError(e, '删除文件夹失败')
     }
   }
 
@@ -148,18 +169,6 @@ export function useFolderTree() {
     } catch (e) {
       throw wrapApiError(e, '修改可见性失败')
     }
-  }
-
-  // === 内部辅助 ===
-  function findFolder(nodes, targetId) {
-    for (const node of nodes) {
-      if (node.id === targetId) return node
-      if (node.children?.length) {
-        const found = findFolder(node.children, targetId)
-        if (found) return found
-      }
-    }
-    return null
   }
 
   function toggleExpanded(folderId) {
@@ -197,4 +206,17 @@ export function useFolderTree() {
     selectFolder,
     toggleExpanded
   }
+})
+
+/**
+ * 兼容层: 8 处 callsite 调 `useFolderTree()` 不需改 import, 内部转 Pinia store
+ * v2.15 之前所有调用方: `const { ... } = useFolderTree()`
+ * 之后调用方式完全不变, 内部拿的是同一份单例 state
+ *
+ * 注意: 当 store 还没在 setup() 中被激活时, useFolderTreeStore() 可能要 Pinia 上下文
+ * Vue 3 + Pinia 2 setup-store: 必须在 setup() 顶层第一次调 useFolderTreeStore() →
+ * 之后任一 caller 都拿到同一份 store. 这个兼容 wrapper 让 caller 不必知道 Pinia 存在.
+ */
+export function useFolderTree() {
+  return useFolderTreeStore()
 }

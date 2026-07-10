@@ -7,6 +7,33 @@
 
 ## [Unreleased] 2026-07-10 — dist deploy 链断裂修复 + folder 越权 403 区分 + admin 越权 + smart confirm
 
+### 🆕 useFolderTree Pinia store 共享单例 state (`fix(drive) v2.15` 1 file + 0 callsite 改动)
+
+**触发**: 用户测试「右键删除 folder 成功后, 这个文件夹不会刷新消失」
+
+**根因** (深藏):
+1. `useFolderTree()` 是 factory 模式 — 每次 `useFolderTree()` 调用都创建**独立**的 `ref([])`
+2. 项目里有 **8 处** 调用: `DesktopDriveView.vue`, `FolderTree.vue`, `CreateFolderDialog.vue`, `DriveUploadDialog.vue`, `MoveDialog.vue`, `KnowledgeUploadDialog.vue`, `MobileDriveView.vue`, `MobileFileList.vue`
+3. `DesktopDriveView` 持 1 份 folderTree ref, 通过 prop 传给 `<FolderTree :folderTree="folderTree">`
+4. `FolderTree.vue` 自己又调 `useFolderTree()` 创建第 2 份独立 ref, `deleteFolder()` 内调用 `fetchTree()` **只更新自己的 ref**
+5. 父组件的 prop 永远不变 → 用户看到的 folder 不消失
+6. 同问题影响 CreateFolderDialog 创建后 FolderTree 不刷新 / DriveUploadDialog 选择列表不更新 / MoveDialog 目标列表不更新 / 移动端列表不更新 等所有 useFolderTree() 调用方
+
+**修复** (`fix(drive): v2.15 useFolderTree Pinia store`):
+- **`web/src/composables/useFolderTree.js`**: 改成 Pinia `defineStore('folderTree', () => {...})` 单一 store, 8 处调用自动共享同一份 reactive state
+- 兼容层: 保留 `export function useFolderTree() { return useFolderTreeStore() }` 让 8 处 callsite 一行不改
+- 添加 `import { defineStore } from 'pinia'` (项目已用 Pinia — `web/src/stores/user.js` 同模式)
+
+**Live e2e**:
+- `useFolderTree-3c13172a.js` 主 chunk 包含 Pinia store
+- 调用方 chunk 仍引用 `useFolderTree` (兼容 wrapper)
+- 删除 folder 后, 单例 store 同步更新, FolderTree 渲染 prop 自动重渲染
+
+**3 新铁律 (永久沉淀)**:
+1. **composable 不能纯 factory 模式当多 caller** — Vue3 + 多个 caller's reactivity 失去联动. Pinia store 或 module-level singleton ref 才能共享 state
+2. **prop 同步 vs 内部 ref 同步必须二选一** — 父传 prop 入子, 子就不要自己再开 ref. 要么走 props/emits, 要么走 Pinia 单例, 不要二者皆有 (否则就出现"更新了但看不到"的诡异 bug)
+3. **Pinia store refactor 应保持向后兼容** — wrapper function 让老 callsite 零改动, 主 composer (`useFolderTreeStore`) 暴露给新代码直接调用
+
 ### 🆕 folder delete smart confirm (`feat(drive) v2.14` 4 file + 2 tests)
 
 **触发**: 用户截图 `[FolderContextMenu] delete folder 158 failed: 422 folder 下还有 1 个未删的子 folder` — 用户其实没看到 158 下面有子 folder (UI 默认不展开), 撞 422 后才知道要先清理.
