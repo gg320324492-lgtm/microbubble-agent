@@ -481,8 +481,18 @@
   margin: var(--space-2) var(--space-3);
 }
 
-/* 普通树节点 (FolderTreeNode) */
+/* 普通树节点 (FolderTreeNode) — 容器
+   v2.26 (2026-07-12) BUG C 修复: display: flex 让 row + 递归 children 横向排列,
+   23 个成员 sub-folder 被推到 sidebar 外 (left > 2000px).
+   修法: 容器 display: block (默认), 子 .drive-folder-tree-node-row 是真正的 flex 横向布局
+*/
 .drive-folder-tree-node {
+  display: block;
+  position: relative;
+}
+
+/* row (icon + name + count badge) 才是横向 flex */
+.drive-folder-tree-node-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
