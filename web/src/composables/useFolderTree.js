@@ -91,11 +91,15 @@ export const useFolderTreeStore = defineStore('folderTree', () => {
   })
 
   // === API 调用 ===
-  const fetchTree = async () => {
+  // v2.25 (2026-07-11) 加 scope 参数: personal (默认) / team / all
+  // personal: 排除 is_team_default=true folder (个人网盘视图)
+  // team:     仅 is_team_default=true folder (团队共享盘视图)
+  // all:      不过滤 (兼容老调用 + 调试)
+  const fetchTree = async (scope = 'personal') => {
     loading.value = true
     loadError.value = null
     try {
-      const resp = await axios.get('/api/v1/folders/tree')
+      const resp = await axios.get('/api/v1/folders/tree', { params: { scope } })
       folderTree.value = resp.data.tree || []
     } catch (e) {
       loadError.value = extractErrorMessage(e, '文件夹树加载失败')

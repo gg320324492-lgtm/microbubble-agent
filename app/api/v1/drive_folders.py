@@ -155,6 +155,14 @@ async def list_folders(
 async def get_folder_tree(
     root_id: Optional[int] = Query(None, description="根 folder id (None=顶级全部)"),
     max_depth: int = Query(5, ge=1, le=5),
+    scope: str = Query(
+        "personal",
+        description=(
+            "视图范围: 'personal' (默认, 个人网盘, 排除 is_team_default=true folder) | "
+            "'team' (团队共享盘, 仅返回 is_team_default=true folder + 子层级) | "
+            "'all' (不过滤, 包含 personal + team, 兼容老调用)"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
@@ -162,11 +170,24 @@ async def get_folder_tree(
 
     用于 DesktopDriveView 左侧 FolderTree 组件
     返回: [{id, name, depth, children: [...]}]
+
+    v2.25 (2026-07-11) 加 scope 参数:
+    - personal (默认): 排除 is_team_default=true folder, 个人网盘视图
+    - team:           仅 is_team_default=true folder (含子层级), 团队共享盘视图
+    - all:            不过滤, 兼容老调用 + 调试用
     """
+    if scope not in ("personal", "team", "all"):
+        raise ValidationException(message=f"scope 必须是 personal/team/all 之一, 当前={scope!r}")
+
     svc = FolderService(db)
 
     # BFS 收集
-    async def _build_tree(parent_id: Optional[int], current_depth: int) -> list:
+    # v2.25.1 (2026-07-11) 修 bug: scope 过滤只在顶层 (parent_id == root_id) 生效,
+    #   进入子层级不再过滤 is_team_default (子 folder 不需要是 team_default, 它们
+    #   跟着 team_default 父 folder 一起显示)
+    #   原实现递归过滤 → team scope 下 组会PPT (id 336, is_team_default=true) 的
+    #   子 folder (id 337-359, is_team_default=false) 全部被过滤掉 → children_count=0
+    async def _build_tree(parent_id: Optional[int], current_depth: int, is_top_level: bool = True) -> list:
         if current_depth > max_depth:
             return []
         children = await svc.list_children(folder_id=parent_id, include_deleted=False)
@@ -175,6 +196,12 @@ async def get_folder_tree(
             c for c in children
             if c.visibility != "private" or c.owner_id == current_user.id
         ]
+        # v2.25 scope 过滤: 只在顶层生效 (进入子层级全部保留)
+        if is_top_level:
+            if scope == "personal":
+                visible = [c for c in visible if not c.is_team_default]
+            elif scope == "team":
+                visible = [c for c in visible if c.is_team_default]
         result = []
         for c in visible:
             result.append({
@@ -183,14 +210,15 @@ async def get_folder_tree(
                 "parent_id": c.parent_id,
                 "owner_id": c.owner_id,
                 "visibility": c.visibility,
+                "is_team_default": c.is_team_default,
                 "depth": c.depth,
                 "path": c.path,
-                "children": await _build_tree(c.id, current_depth + 1),
+                "children": await _build_tree(c.id, current_depth + 1, is_top_level=False),
             })
         return result
 
     tree = await _build_tree(root_id, 1 if root_id else 0)
-    return {"tree": tree, "max_depth": max_depth}
+    return {"tree": tree, "max_depth": max_depth, "scope": scope}
 
 
 @router.get("/{folder_id}/children-stats")

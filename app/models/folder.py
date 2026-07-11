@@ -12,7 +12,7 @@
 - owner_id FK members (ondelete='RESTRICT'), 不能 cascade (删成员不删文件夹)
 - 软删除 deleted_at (Celery beat 定期物理清除, 与 Knowledge 同步)
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Index, Boolean
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -52,6 +52,12 @@ class Folder(Base, TimestampMixin):
     depth = Column(Integer, nullable=False, server_default="0")
 
     deleted_at = Column(DateTime, nullable=True, index=True)
+
+    # v2.25 (2026-07-11) 修复 model 漂移:
+    #   alembic 048_drive_requests_audit.py 早已加 is_team_default 列 (DB schema 有)
+    #   但 Folder 模型一直没声明, ORM 读不到 → AttributeError
+    #   scope=team 过滤 + 团队共享盘视图依赖此字段
+    is_team_default = Column(Boolean, nullable=False, server_default="false", index=True)
 
     # 关系 (backref 让 Knowledge 反查 folder)
     parent = relationship("Folder", remote_side=[id], backref="children")
