@@ -139,19 +139,19 @@ def update_member_avatar(session: requests.Session, token: str,
 
 
 def backup_source() -> Path:
-    """备份源证件照到 E 盘 backups/avatars-source/<date>/ (防 D 盘 wipe)"""
-    today = datetime.now().strftime("%Y-%m-%d")
-    backup_dir = BACKUP_ROOT / today
-    if not backup_dir.exists():
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(SOURCE_DIR, backup_dir / SOURCE_DIR.name)
-        # 直接复制所有 jpg/png
-        for f in SOURCE_DIR.iterdir():
-            if f.is_file():
-                shutil.copy2(f, backup_dir / f.name)
-        log(f"  ✅ 源文件已备份到: {backup_dir} ({len(list(backup_dir.iterdir()))} 个)")
-    else:
-        log(f"  ℹ️  备份已存在: {backup_dir}")
+    """备份源证件照到 E 盘 backups/avatars-source/current/
+
+    v2.3 (2026-07-11): 改为固定目录 (非日期子目录), 保持最新版本, 占用固定 ~37 MB
+    """
+    backup_dir = BACKUP_ROOT / "current"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    # 直接复制所有 jpg/png 到 current/ (覆盖更新)
+    count = 0
+    for f in SOURCE_DIR.iterdir():
+        if f.is_file() and f.suffix.lower() in IMG_EXTS:
+            shutil.copy2(f, backup_dir / f.name)
+            count += 1
+    log(f"  ✅ 源文件已备份到: {backup_dir} ({count} 个)")
     return backup_dir
 
 
