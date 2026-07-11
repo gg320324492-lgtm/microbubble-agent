@@ -43,19 +43,34 @@
       </div>
     </FolderContextMenu>
 
-    <!-- 三态: loading / error / empty / data -->
+    <!-- v2.28 (2026-07-12) 三态玻璃态: 复用 .drive-grid-* 设计语言 (hero 渐变 + glass CTA)
+         sidebar 紧凑 adapter (48px mini hero + 二级 helper + 紧凑圆形 CTA)
+         loading 旋转 + 进度文案, error 红字 + 重试, empty 大号 icon + 二级文案 + 快捷按钮 -->
     <div v-if="loading" class="folder-tree-loading drive-folder-tree-loading">
-      <el-icon class="is-loading"><Loading /></el-icon>
-      <span>加载中...</span>
+      <el-icon><Loading /></el-icon>
+      <span class="drive-folder-tree-loading-text">正在加载文件夹…</span>
     </div>
     <div v-else-if="loadError" class="folder-tree-error drive-folder-tree-error">
       <el-icon><Warning /></el-icon>
-      <span>{{ loadError }}</span>
-      <el-button size="small" text @click="$emit('retry')">重试</el-button>
+      <p class="drive-folder-tree-error-text">{{ loadError }}</p>
+      <el-button size="small" @click="$emit('retry')">重试</el-button>
     </div>
     <div v-else-if="folderTree.length === 0" class="folder-tree-empty drive-folder-tree-empty">
-      <el-icon><Folder /></el-icon>
-      <span>暂无文件夹</span>
+      <div class="drive-folder-tree-empty-hero">
+        <el-icon><FolderAdd /></el-icon>
+      </div>
+      <p class="drive-folder-tree-empty-title">还没有文件夹</p>
+      <p class="drive-folder-tree-empty-hint">
+        右键点击空白处新建 ·<br>或将文件拖拽到此处
+      </p>
+      <el-button
+        size="small"
+        class="drive-folder-tree-empty-cta"
+        @click="$emit('request-new-folder')"
+      >
+        <el-icon style="margin-right: 4px"><Plus /></el-icon>
+        新建文件夹
+      </el-button>
     </div>
     <template v-else>
       <FolderTreeNode
@@ -132,7 +147,7 @@
 // v2.8 (2026-07-10) 右键菜单支持 (5 根项 + sub 节点共用 FolderContextMenu)
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
-import { Folder, FolderOpened, Delete, Loading, Warning, Star, StarFilled, Share, Promotion } from '@element-plus/icons-vue'
+import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTreeNode from './FolderTreeNode.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
@@ -166,6 +181,8 @@ const emit = defineEmits([
   'create-sub-folder',  // (parentId) → parent 弹 CreateFolderDialog
   'rename-folder',      // (folder)   → parent 弹 RenameDialog
   'delete-folder',      // (folder)   → parent 调 useFolderTree.deleteFolder
+  // v2.28 (2026-07-12): 空态 CTA "新建文件夹" — 无 parent_id 顶层创建
+  'request-new-folder', // () → parent 弹 CreateFolderDialog
 ])
 
 const { fetchTree, deleteFolder, getChildrenStats } = useFolderTree()

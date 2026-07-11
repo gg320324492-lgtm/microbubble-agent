@@ -1103,6 +1103,153 @@
   display: none;
 }
 
+/* ===== 11.5 Sidebar 三态 (FolderTree loading / error / empty) =====
+ *
+ * v2.28 (2026-07-12) Drive 补漏: 主区 .drive-grid-* 三态齐全, sidebar 的 FolderTree 三态
+ * 之前完全裸奔 (走 EP 默认 <el-icon>+<span> 行内渲染). 现复用 .drive-grid-* 设计语言
+ * (hero 渐变 + glass CTA + skeleton 等), 做 sidebar 紧凑布局的 adapter (48px mini hero
+ * + 二级 helper + 紧凑圆形 CTA), 自动跟随 dark/6 主题 (全走 var() token).
+ *
+ * 三态镜像 .drive-grid-* 但有 3 个 sidebar 专属差异:
+ * 1. mini hero (48px vs 主区 96px) — sidebar 230px 宽装不下 96px
+ * 2. 边距小 — sidebar 紧凑
+ * 3. CTA 紧凑 24px 高 — 主区 CTA 走 32-40px 大按钮
+ *
+ * 与 .drive-grid-(loading|error|empty) 同段位设计, 用户跨区切换不会跳脱.
+ */
+.drive-folder-tree-loading,
+.drive-folder-tree-error,
+.drive-folder-tree-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: var(--space-3);
+  padding: var(--space-5) var(--space-3);
+  border-radius: var(--radius-md);
+  text-align: center;
+  gap: var(--space-2);
+  animation: fadeSlideUp var(--duration-normal) var(--ease-out) both;
+}
+
+/* Loading: 旋转图标 + 进度文案 (主色驱动感) */
+.drive-folder-tree-loading {
+  background: var(--color-primary-bg);
+  color: var(--color-text-secondary);
+}
+.drive-folder-tree-loading .el-icon {
+  font-size: 28px;
+  color: var(--color-primary);
+  animation: spin 1.4s linear infinite;
+}
+.drive-folder-tree-loading-text {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+
+/* Error: 红色 hero 警告 + 重试按钮 (走 --color-danger-bg + .el-button 红色 primary) */
+.drive-folder-tree-error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.drive-folder-tree-error .el-icon {
+  font-size: 28px;
+  color: var(--color-danger);
+}
+.drive-folder-tree-error-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  margin: 0;
+  word-break: break-word;
+  max-width: 100%;
+  line-height: 1.4;
+}
+.drive-folder-tree-error .el-button {
+  margin-top: var(--space-1);
+  font-size: 11px;
+  height: 24px;
+  padding: 0 var(--space-3);
+  background: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+  color: #fff !important;
+  border-radius: var(--radius-full) !important;
+}
+.drive-folder-tree-error .el-button:hover {
+  opacity: 0.85;
+}
+
+/* Empty: 渐变 hero + 二级文案 + CTA (主色渐变 + glass 卡片) */
+.drive-folder-tree-empty {
+  background: var(--gradient-paper-warm);
+  color: var(--color-text-secondary);
+}
+.drive-folder-tree-empty-hero {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-cta-button);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-glow);
+  margin-bottom: var(--space-2);
+}
+.drive-folder-tree-empty-hero .el-icon {
+  font-size: 24px;
+  color: #fff;
+}
+.drive-folder-tree-empty-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+.drive-folder-tree-empty-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  word-break: break-word;
+  opacity: 0.85;
+}
+.drive-folder-tree-empty-cta {
+  margin-top: var(--space-3);
+  font-size: 11px;
+  height: 26px;
+  padding: 0 var(--space-3);
+  background: var(--gradient-cta-button) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  border-radius: var(--radius-full) !important;
+  box-shadow: var(--shadow-primary) !important;
+  transition: transform var(--duration-fast) var(--ease-out) !important;
+}
+.drive-folder-tree-empty-cta:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+.drive-folder-tree-empty-cta:active {
+  transform: translateY(0);
+}
+
+/* Sidebar 三态在响应式 (<1024px) 下隐藏: 窄到 64px 时 sidebar 不再有富余空间 */
+@media (max-width: 1024px) {
+  .drive-folder-tree-loading,
+  .drive-folder-tree-error,
+  .drive-folder-tree-empty {
+    /* 64px 宽 sidebar 不显示大字图标, 只保留 chip 化的 root/special 就够 */
+    display: none;
+  }
+}
+
+/* 旋转动画 (全局 .is-loading EP 自带, 这里单独定义避免被覆盖) */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ===== 12. 分页 ===== */
 .drive-grid-pagination {
   margin-top: var(--space-5);
