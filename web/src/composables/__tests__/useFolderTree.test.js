@@ -108,8 +108,8 @@ describe('useFolderTreeStore (v2.15 Pinia singleton)', () => {
       expect(desktop_caller.folderTree.map(f => f.id)).toEqual([2])
       expect(folderTree_caller.folderTree.map(f => f.id)).toEqual([2])
 
-      // 5. 验证 axios DELETE 真调过
-      expect(mockAxiosDelete).toHaveBeenCalledWith('/api/v1/folders/1')
+      // 5. 验证 axios DELETE 真调过 (v2.16: axios.delete 一律传 config, 即使空也至少 {} 保证 signature 一致)
+      expect(mockAxiosDelete).toHaveBeenCalledWith('/api/v1/folders/1', {})
     })
 
     it('deleteFolder 失败时 throw + state 不变 (其他 caller 不受影响)', async () => {
@@ -262,5 +262,120 @@ describe('getChildrenStats (v2.14 smart confirm helper)', () => {
 
     const stats = await getChildrenStats(999)
     expect(stats).toEqual({ folder_id: 999, folder_count: 0, file_count: 0 })
+  })
+})
+
+
+describe('deleteFolder v2.16 (recursive cascade soft-delete)', () => {
+  /**
+   * 用户决策"有子文件夹的话也可以直接删除" → 前端 smart confirm
+   *   检测到 children 时 2 按钮: 取消 / 全部移入回收站 (recursive=true)
+   *
+   * 实现: useFolderTree.deleteFolder(id, { recursive: true }) →
+   *   axios.delete('/api/v1/folders/<id>', { params: { recursive: true } })
+   *
+   * 关键不变量:
+   * - 默认 (无 options 或 recursive=undefined) → 不传 params (与 v2.15 旧行为一致, 服务器走 422 路径)
+   * - recursive: true → 传 params={ recursive: true } (后端走级联软删)
+   * - recursive: false → 不传 params (与默认一致)
+   * - 删除成功后 fetchTree 必触发 + selectedFolderId 在被删的就是选中时清空
+   * - 错误透传 wrapApiError 结构不变 (e.response / e.status / e.code 仍在)
+   */
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    mockAxiosGet.mockResolvedValue({ data: { tree: [], max_depth: 5 } })
+    mockAxiosDelete.mockResolvedValue({ data: null })
+  })
+
+  it('默认调用 (无 options) → 不传 params, 与 v2.15 完全向后兼容', async () => {
+    const { useFolderTree } = await import('@/composables/useFolderTree')
+    const { deleteFolder } = useFolderTree()
+
+    await deleteFolder(28)
+
+    expect(mockAxiosDelete).toHaveBeenCalledWith(
+      '/api/v1/folders/28',
+      {},  // 不传 params (保持旧 API 兼容)
+    )
+    expect(mockAxiosDelete.mock.calls[0][1]).not.toHaveProperty('params')
+  })
+
+  it('options.recursive=true → axios DELETE 传 params={recursive: true}', async () => {
+    const { useFolderTree } = await import('@/composables/useFolderTree')
+    const { deleteFolder } = useFolderTree()
+
+    await deleteFolder(158, { recursive: true })
+
+    expect(mockAxiosDelete).toHaveBeenCalledWith(
+      '/api/v1/folders/158',
+      { params: { recursive: true } },
+    )
+  })
+
+  it('options.recursive=false → 显式 false 与默认一致, 不传 params', async () => {
+    const { useFolderTree } = await import('@/composables/useFolderTree')
+    const { deleteFolder } = useFolderTree()
+
+    await deleteFolder(28, { recursive: false })
+
+    expect(mockAxiosDelete).toHaveBeenCalledWith('/api/v1/folders/28', {})
+    expect(mockAxiosDelete.mock.calls[0][1]).not.toHaveProperty('params')
+  })
+
+  it('recursive=true 成功后 selectedFolderId 自动清空 (与旧行为一致)', async () => {
+    const { useFolderTree } = await import('@/composables/useFolderTree')
+    const store = useFolderTree()
+
+    await store.fetchTree()
+    store.selectFolder(158)
+    expect(store.selectedFolderId).toBe(158)
+
+    await store.deleteFolder(158, { recursive: true })
+
+    expect(store.selectedFolderId).toBe(null)
+  })
+
+  it('recursive 失败时 throw wrapApiError (保留 status / code / response)', async () => {
+    const { useFolderTree } = await import('@/composables/useFolderTree')
+    const { deleteFolder } = useFolderTree()
+
+    mockAxiosDelete.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          error: {
+            code: 'VALIDATION_ERROR',
+            message: 'folder 下还有 1 个未删的子 folder, 请先清理',
+            details: {},
+          },
+        },
+      },
+    })
+
+    await expect(deleteFolder(158, { recursive: true })).rejects.toMatchObject({
+      status: 422,
+      code: 'VALIDATION_ERROR',
+      message: expect.stringContaining('folder 下还有'),
+      response: expect.objectContaining({ status: 422 }),
+    })
+  })
+
+  it('recursive=true + 0 子项 → 也允许 (后端兜底无级联)', async () => {
+    // 用户可能从回收站还原后立即删除, 不一定有 children
+    // 后端不报错, 前端也不应限制 options 传值
+    const { useFolderTree } = await import('@/composables/useFolderTree')
+    const { deleteFolder } = useFolderTree()
+
+    // mock 返 dict (recursive 后端返 200 + dict 而非 204)
+    mockAxiosDelete.mockResolvedValueOnce({
+      data: { deleted_folders: 1, deleted_files: 0, deleted_folder_ids: [158] },
+    })
+
+    await expect(deleteFolder(158, { recursive: true })).resolves.toBeUndefined()
+    expect(mockAxiosDelete).toHaveBeenCalledWith(
+      '/api/v1/folders/158',
+      { params: { recursive: true } },
+    )
   })
 })

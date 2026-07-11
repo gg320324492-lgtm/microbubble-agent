@@ -134,9 +134,28 @@ export const useFolderTreeStore = defineStore('folderTree', () => {
     }
   }
 
-  const deleteFolder = async (id) => {
+  /**
+   * v2.16 (2026-07-11): 支持 options.recursive → query param ?recursive=true
+   *
+   * 用户决策"有子文件夹的话也可以直接删除" → 级联软删整棵子树 + 子文件
+   * 后端 PR6-P12+ 同步: FolderService.soft_delete_folder(..., recursive=True)
+   *
+   * 用法:
+   *   await deleteFolder(158)                              // 旧行为 (有子 folder/file → 422)
+   *   await deleteFolder(158, { recursive: true })         // 级联删, 全进回收站 (30 天可恢复)
+   *   await deleteFolder(158, { recursive: false })        // 显式 false (与默认一致)
+   *
+   * 错误处理: 与旧版完全一致 — throw wrapApiError 含 status / code / details / response.
+   * 成功: fetchTree() 重建 + selectedFolderId 自动清空 (若被删的就是当前选中).
+   */
+  const deleteFolder = async (id, options = {}) => {
+    const { recursive = false } = options
     try {
-      await axios.delete(`/api/v1/folders/${id}`)
+      const config = {}
+      if (recursive) {
+        config.params = { recursive: true }
+      }
+      await axios.delete(`/api/v1/folders/${id}`, config)
       await fetchTree()  // 重建树 (单例 store 自动同步)
       if (selectedFolderId.value === id) selectedFolderId.value = null
     } catch (e) {

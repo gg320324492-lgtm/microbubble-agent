@@ -15,7 +15,7 @@ import uuid as _uuid_lib
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from app.config import settings
 from app.models.member import Member
@@ -625,3 +625,264 @@ async def test_list_children_for_tree_walk(alice_bob):
         kids_ids = {k.id for k in kids}
         assert c1.id in kids_ids
         assert c2.id in kids_ids
+
+
+# =============================================================================
+# v2.16 (2026-07-11) — recursive=True 级联软删除
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_recursive_cascades_subtree_folders(alice_bob):
+    """recursive=True → 级联软删整棵子树 folders (self + 所有子 folder + 后代 folder)
+
+    树结构:
+      root (id=A)
+      ├── child1 (id=B)
+      │   └── grandchild (id=C)
+      └── child2 (id=D)
+
+    预期: 删 root 时 recursive=True → A, B, C, D 4 个 folder 全部软删
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        root = await svc.create_folder(
+            name=f"alice_root_rec_{u}", owner_id=alice.id, visibility="team",
+        )
+        child1 = await svc.create_folder(
+            name=f"alice_c1_rec_{u}", owner_id=alice.id,
+            parent_id=root.id, visibility="team",
+        )
+        grandchild = await svc.create_folder(
+            name=f"alice_gc_rec_{u}", owner_id=alice.id,
+            parent_id=child1.id, visibility="team",
+        )
+        child2 = await svc.create_folder(
+            name=f"alice_c2_rec_{u}", owner_id=alice.id,
+            parent_id=root.id, visibility="team",
+        )
+        await session.commit()
+        ids = {"root": root.id, "child1": child1.id, "grandchild": grandchild.id, "child2": child2.id}
+
+    # recursive=True → 返 dict 含计数 + ids
+    async with factory() as session:
+        svc = FolderService(session)
+        result = await svc.soft_delete_folder(
+            ids["root"], current_user_id=alice.id, recursive=True,
+        )
+        await session.commit()
+
+    assert isinstance(result, dict), f"recursive=True 必须返 dict, 实际 {type(result)}"
+    assert result["deleted_folders"] == 4, f"应删 4 个 folder, 实际 {result['deleted_folders']}"
+    assert set(result["deleted_folder_ids"]) == set(ids.values()), (
+        f"应包含全部 subtree ids, 实际 {result['deleted_folder_ids']}"
+    )
+
+    # 验证: 全部 4 个 folder 都软删 (deleted_at is not None)
+    async with factory() as session:
+        for fid in ids.values():
+            stmt = select(Folder).where(Folder.id == fid)
+            f = (await session.execute(stmt)).scalar_one_or_none()
+            assert f is not None, f"folder id={fid} 应仍存在 (软删不物理清)"
+            assert f.deleted_at is not None, f"folder id={fid} 应被软删"
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_recursive_cascades_drive_files(alice_bob):
+    """recursive=True → 级联软删子树所有 drive files (Knowledge storage_mode='drive')
+
+    树结构:
+      root
+      ├── child1
+      │   ├── file_in_child1 (drive)
+      │   └── file_in_child1_2 (drive)
+      └── child2
+          └── file_in_child2 (drive)
+      + 文件 directly in root (drive)
+      + 文件 in root 但 storage_mode='kb' (KB 不动!)
+
+    预期: recursive=True 删 root → 4 个 drive 文件全软删, 1 个 KB 文件不动
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        root = await svc.create_folder(
+            name=f"alice_root_with_files_{u}", owner_id=alice.id, visibility="team",
+        )
+        child1 = await svc.create_folder(
+            name=f"alice_c1_files_{u}", owner_id=alice.id,
+            parent_id=root.id, visibility="team",
+        )
+        child2 = await svc.create_folder(
+            name=f"alice_c2_files_{u}", owner_id=alice.id,
+            parent_id=root.id, visibility="team",
+        )
+        await session.commit()
+
+        # 5 drive files + 1 kb file (subtree 内)
+        files_drive = []
+        for i, (fname, parent) in enumerate([
+            (f"alice_file_root_{u}", root.id),
+            (f"alice_file_c1a_{u}", child1.id),
+            (f"alice_file_c1b_{u}", child1.id),
+            (f"alice_file_c2_{u}", child2.id),
+        ]):
+            kf = Knowledge(
+                title=fname, content="test content", storage_mode="drive",
+                folder_id=parent, created_by=alice.id, visibility="team",
+            )
+            session.add(kf)
+            files_drive.append(kf)
+
+        # KB 文件不应被级联 (storage_mode='kb')
+        kb_file = Knowledge(
+            title=f"alice_kb_in_c1_{u}", content="kb content",
+            storage_mode="kb", folder_id=child1.id,
+            created_by=alice.id, visibility="team",
+        )
+        session.add(kb_file)
+        await session.commit()
+        await session.refresh(kb_file)
+        for f in files_drive:
+            await session.refresh(f)
+
+        file_ids = {f.id for f in files_drive}
+        kb_file_id = kb_file.id
+
+    # 删 root (recursive=True)
+    async with factory() as session:
+        svc = FolderService(session)
+        result = await svc.soft_delete_folder(
+            root.id, current_user_id=alice.id, recursive=True,
+        )
+        await session.commit()
+
+    assert result["deleted_folders"] == 3  # root + child1 + child2
+    assert result["deleted_files"] == 4, f"应级联软删 4 个 drive 文件, 实际 {result['deleted_files']}"
+
+    # 验证: drive 全软删
+    async with factory() as session:
+        for fid in file_ids:
+            stmt = select(Knowledge).where(Knowledge.id == fid)
+            f = (await session.execute(stmt)).scalar_one_or_none()
+            assert f is not None
+            assert f.deleted_at is not None, f"drive file id={fid} 应被软删"
+
+    # 验证: KB 文件不被软删 (Knowledge Q 边界 storage_mode 不动)
+    async with factory() as session:
+        stmt = select(Knowledge).where(Knowledge.id == kb_file_id)
+        kf = (await session.execute(stmt)).scalar_one_or_none()
+        assert kf is not None
+        assert kf.deleted_at is None, f"KB file id={kb_file_id} 不应被级联软删 (storage_mode='kb')"
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_recursive_owner_check_still_enforced(alice_bob):
+    """recursive=True 但非 owner (且非 admin) → 仍应 raise 403 (不能因级联而绕过权限)"""
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    bob = alice_bob["bob"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.create_folder(
+            name=f"alice_target_rec_{u}", owner_id=alice.id, visibility="team",
+        )
+        await svc.create_folder(
+            name=f"alice_sub_rec_{u}", owner_id=alice.id,
+            parent_id=f.id, visibility="team",
+        )
+        await session.commit()
+        fid = f.id
+
+    # bob (非 admin) 用 recursive=True → 应 403 (不能跳过 owner 检查)
+    async with factory() as session:
+        svc = FolderService(session)
+        with pytest.raises(FolderServiceError) as exc_info:
+            await svc.soft_delete_folder(
+                fid, current_user_id=bob.id, recursive=True,
+            )
+        assert exc_info.value.status_code == 403, (
+            f"应 403 越权, 实际 {exc_info.value.status_code}"
+        )
+
+    # 验证: 越权失败不应留下任何半删痕迹
+    async with factory() as session:
+        items, _ = await svc.list_folders(current_user_id=alice.id)
+        assert fid in {x.id for x in items}, "被越权目标的 folder 应仍保留"
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_recursive_skips_already_deleted(alice_bob):
+    """recursive=True + 子 folder 已被软删 → 只软删未删部分 (idempotent 友好)"""
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        root = await svc.create_folder(
+            name=f"alice_root_idem_{u}", owner_id=alice.id, visibility="team",
+        )
+        child = await svc.create_folder(
+            name=f"alice_child_idem_{u}", owner_id=alice.id,
+            parent_id=root.id, visibility="team",
+        )
+        await session.commit()
+        cid = child.id
+
+    # 先把 child 单独软删
+    async with factory() as session:
+        svc = FolderService(session)
+        ok = await svc.soft_delete_folder(cid, current_user_id=alice.id)
+        assert ok is True
+        await session.commit()
+
+    # 现在 root 仍含 1 个 "未删" 子? 不, child 软删后不该被 children-stats 算上
+    # 所以 root 走 recursive=False 也可以 (因为只剩 root 自己)
+    async with factory() as session:
+        svc = FolderService(session)
+        result_root_only = await svc.soft_delete_folder(
+            root.id, current_user_id=alice.id, recursive=True,
+        )
+        await session.commit()
+
+    assert result_root_only["deleted_folders"] == 1, (
+        f"应只软删 root 自己 (1 个), child 已软删不计. "
+        f"实际 {result_root_only['deleted_folders']}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_recursive_default_false_backward_compat(alice_bob):
+    """recursive 默认 False (向后兼容 v2.13/v2.14 行为) → 有子 folder 应 422
+
+    不变: v2.14 用户用旧前端 / 第三方调用, recursive=False 仍走硬性拒绝路径.
+    """
+    factory = alice_bob["factory"]
+    alice = alice_bob["alice"]
+    u = alice_bob["u"]
+    async with factory() as session:
+        svc = FolderService(session)
+        f = await svc.create_folder(
+            name=f"alice_v214_compat_{u}", owner_id=alice.id, visibility="team",
+        )
+        await svc.create_folder(
+            name=f"alice_v214_compat_child_{u}", owner_id=alice.id,
+            parent_id=f.id, visibility="team",
+        )
+        await session.commit()
+        fid = f.id
+
+    # 不传 recursive (默认 False) → 应 raise 400 (硬性拒绝)
+    async with factory() as session:
+        svc = FolderService(session)
+        with pytest.raises(FolderServiceError) as exc_info:
+            await svc.soft_delete_folder(fid, current_user_id=alice.id)
+        assert exc_info.value.status_code == 400, (
+            f"默认 False 应保留旧 400 行为, 实际 {exc_info.value.status_code}"
+        )

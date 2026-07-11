@@ -241,36 +241,42 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
     }
   } else if (cmd === 'delete') {
     // v2.14 (2026-07-10): 预查子 folder/file 数量, 智能 confirm 文案
-    //   - 有子 → 「⚠️ 文件夹下还有 N 个子 folder / M 个文件, 请先清理」type=warning
-    //   - 没子 → 删进入回收站, 30 天可恢复
-    //   - admin 越权 → 加红字警告
-    //   - 三种情况合并 (优先级: admin 越权 > 有子 > 普通)
+    // v2.16 (2026-07-11): 含子项时改 2 按钮 confirm — "全部移入回收站" 即 cascade
+    //   - 用户决策"有子文件夹也可以直接删除" → 后端 recursive=true
+    //   - 删除行为: 自身 + 子 folder + 子文件 全部进回收站, 30 天保留期可整体 restore
+    //   - 三种情况合并 (优先级: admin 越权 > 有子 (级联) > 普通)
     const stats = await getChildrenStats(folder.id)
     const folderCount = stats?.folder_count ?? 0
     const fileCount = stats?.file_count ?? 0
     const hasChildren = folderCount > 0 || fileCount > 0
 
-    let confirmMsg, confirmTitle, confirmType, confirmBtnText
+    let confirmMsg, confirmTitle, confirmType, confirmBtnText, doRecursive = false
     if (isAdminOverride) {
       // v2.13 + v2.14: admin 越权 (优先级最高)
+      // v2.16: admin 越权 + 有子 → 默认走 cascade (避免 admin 越权删 folder
+      //   后留下别人 owner 的子 folder 孤儿, 体验差)
       const childWarn = hasChildren
-        ? `\n\n⚠️ 该 folder 下还有 ${folderCount} 个未删子 folder, ${fileCount} 个未删文件.\n删除 folder 不会自动级联删这些, 你需要单独先清理, 否则它们会变成孤儿 (parent_id 仍指向被删 folder).`
+        ? `\n\n⚠️ 该 folder 下还有 ${folderCount} 个未删子 folder, ${fileCount} 个未删文件.\n确认后将连同子项一起移入回收站 (级联软删), 30 天内可整体恢复.`
         : ''
       confirmMsg = `⚠️ 管理员越权删除: 文件夹 "${folder.name}" (owner=其他成员) 将进入回收站, 30 天内可恢复.\n建议先与 owner 沟通, 确认后再删除.${childWarn}`
       confirmTitle = '⚠️ 管理员越权操作'
       confirmType = 'error'
-      confirmBtnText = '我已确认, 越权删除'
+      confirmBtnText = hasChildren ? '我已确认, 全部移入回收站' : '我已确认, 越权删除'
+      doRecursive = hasChildren
     } else if (hasChildren) {
-      // v2.14: 有子 folder / 文件
+      // v2.16: 有子 folder / 文件 → 2 按钮 confirm 走 cascade
+      //   - 旧 v2.14 文案"请先清理它们再删除这个 folder" 走死胡同, 用户体验差
+      //   - 新文案明确告知级联删除 + 子项计数, 用户一眼看懂"全部一起进回收站"
       const parts = []
       if (folderCount > 0) parts.push(`${folderCount} 个子 folder`)
       if (fileCount > 0) parts.push(`${fileCount} 个文件`)
-      confirmMsg = `⚠️ 文件夹 "${folder.name}" 下还有 ${parts.join(' + ')}, 请先清理它们再删除这个 folder.\n\n如何继续:\n 1) 先展开 folder 处理子 folder / 文件\n 2) 全部移到回收站后回来再次右键删除这个 folder`
-      confirmTitle = `⚠️ folder 下还有未删内容`
+      confirmMsg = `⚠️ 文件夹 "${folder.name}" 下还有 ${parts.join(' + ')}, 点击确定后将连同子项一起移入回收站, 30 天内可整体恢复.`
+      confirmTitle = `删除文件夹 + 子项 (级联)`
       confirmType = 'warning'
-      confirmBtnText = '我知道了, 去清理子项'
+      confirmBtnText = `全部移入回收站`
+      doRecursive = true
     } else {
-      // v2.8: 普通删除
+      // v2.8: 普通删除 (无子项)
       confirmMsg = `删除文件夹 "${folder.name}"? 文件夹进入回收站, 30 天内可恢复.`
       confirmTitle = '删除文件夹'
       confirmType = 'warning'
@@ -288,11 +294,21 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
         }
       )
       try {
-        await deleteFolder(folder.id)
-        const successMsg = isAdminOverride
-          ? `[admin 越权] 文件夹 "${folder.name}" 已移入回收站`
-          : `文件夹 "${folder.name}" 已移入回收站`
-        ElMessage.success(successMsg)
+        await deleteFolder(folder.id, { recursive: doRecursive })
+        // v2.16: 区分级联 vs 普通 success 文案 (用户更清楚刚才发生了什么)
+        if (doRecursive) {
+          const sub = []
+          if (folderCount > 0) sub.push(`${folderCount} 个子 folder`)
+          if (fileCount > 0) sub.push(`${fileCount} 个文件`)
+          ElMessage.success(
+            `文件夹 "${folder.name}" + ${sub.join(' + ')} 已全部移入回收站`
+          )
+        } else {
+          const successMsg = isAdminOverride
+            ? `[admin 越权] 文件夹 "${folder.name}" 已移入回收站`
+            : `文件夹 "${folder.name}" 已移入回收站`
+          ElMessage.success(successMsg)
+        }
         await fetchTree()  // 显式重建树 (useFolderTree.deleteFolder 内部已调, 双保险)
       } catch (e) {
         // v2.9 + v2.11 增强: 404 友好提示 + console.error 同步 dev tools
@@ -302,7 +318,7 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
         // v2.13: admin 已经能越权, 403 仍可能 = 普通用户跨 owner (正常拒绝)
         const status = e.response?.status
         const msg = e.response?.data?.detail || e.message
-        console.error(`[FolderContextMenu] delete folder ${folder.id} failed:`, status, msg)
+        console.error(`[FolderContextMenu] delete folder ${folder.id} (recursive=${doRecursive}) failed:`, status, msg)
         if (status === 403) {
           // v2.12 新增: 后端 soft_delete_folder 区分了 owner-mismatch (403) vs 不存在 (404)
           // 旧实现把两者都吞成 404, 误导用户「Folder不存在」, 实际是越权
@@ -310,7 +326,7 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
         } else if (status === 404) {
           ElMessage.error(`文件夹不存在 (可能已被删除), 请刷新页面`)
         } else if (status === 400) {
-          // FolderService.soft_delete_folder 返 400 (有未删子 folder/file)
+          // FolderService.soft_delete_folder 返 400 (有未删子 folder/file, 默认 recursive=False)
           ElMessage.error('删除失败: ' + msg)
         } else if (status === 401) {
           ElMessage.error('未登录, 请重新登录')
