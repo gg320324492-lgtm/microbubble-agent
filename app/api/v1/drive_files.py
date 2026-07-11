@@ -354,6 +354,13 @@ async def list_drive_files(
         "personal",
         description="视图隔离: personal (默认, 不含 is_team_shared=true) | team (仅 is_team_shared=true) | all (不过滤)",
     ),
+    # v2.21 (2026-07-11): 团队共享盘顶级列出整个团队空间 (root + sub folder)
+    # 默认 False 保持 v2 PR3 行为 (folder_id=None → folder_id IS NULL)
+    # 个人顶级 view=personal 不该传 True (会 leak team view 行为)
+    include_subfolders: bool = Query(
+        False,
+        description="v2.21: folder_id=None 时是否包含 sub folder PPT (🌐 团队共享盘顶级 view 用)",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
@@ -361,6 +368,8 @@ async def list_drive_files(
 
     v2 PR2: 支持 sort_by/sort_order/starred_only/file_type.
     v2 PR6-P19: view 参数隔离个人/团队共享盘.
+    v2.21: include_subfolders=True 让 🌐 团队共享盘顶级 view 列出整个团队空间
+      (root + 23 sub folder), 而不是只看 root folder 的 2 个 PPT.
     - sort_by 默认 None = 维持原 created_at desc 行为 (向后兼容)
     - view 默认 personal = 不显示 is_team_shared=true (老调用方升级即隔离)
     """
@@ -377,6 +386,13 @@ async def list_drive_files(
             detail=f"无效 view 参数: '{view}', 必须是 personal|team|all",
         )
 
+    # v2.21: include_subfolders 仅对 team/all 顶级 view 有意义
+    # personal 顶级 view 维持 v2 PR3 行为 (folder_id IS NULL = 个人根目录)
+    if include_subfolders and view == "personal":
+        # 防御性: personal view 不应该跨 folder 显示, 即便前端传了也忽略
+        # 防止泄露其他 folder 的 PPT
+        include_subfolders = False
+
     svc = DriveService(db)
     try:
         items, total = await svc.list_files(
@@ -392,6 +408,7 @@ async def list_drive_files(
             starred_only=starred_only,
             file_type=file_type,
             is_team_shared=is_team_shared_filter,
+            include_subfolders=include_subfolders,
         )
     except DriveServiceError as e:
         raise HTTPException(status_code=e.status_code, detail=str(e))

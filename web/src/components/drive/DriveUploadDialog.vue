@@ -169,7 +169,12 @@ const form = reactive({
 })
 
 // === 文件夹列表 (供 TreeSelect) ===
-const { folderTree, fetchTree } = useFolderTree()
+// v2.15 Pinia 改造后修复 (2026-07-11): state 用 storeToRefs 解构保持响应性
+// 否则 dialog 内 el-select 只显示顶级目录 (1 个 option)
+import { storeToRefs } from 'pinia'
+const folderTreeStore = useFolderTree()
+const { folderTree } = storeToRefs(folderTreeStore)
+const { fetchTree } = folderTreeStore
 const flatFolderOptions = computed(() => {
   const opts = []
   function walk(nodes, depth = 0) {
@@ -337,6 +342,9 @@ async function uploadOne(item) {
     formData.append('folder_id', form.folderId || '')
     formData.append('visibility', form.visibility)
     formData.append('storage_mode', 'drive')
+    // v2 PR6-P19 修复: 小文件路径之前漏传 is_team_shared, 导致走"团队共享盘"
+    // 视图上传的小文件仍写入 is_team_shared=false → 显示在个人网盘
+    formData.append('is_team_shared', props.isTeamShared ? 'true' : 'false')
 
     await axios.post('/api/v1/drive/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -364,6 +372,8 @@ async function uploadOne(item) {
       completeForm.append('folder_id', form.folderId || '')
       completeForm.append('visibility', form.visibility)
       completeForm.append('storage_mode', 'drive')
+      // v2 PR6-P19 修复: 大文件 complete 路径之前漏传 is_team_shared
+      completeForm.append('is_team_shared', props.isTeamShared ? 'true' : 'false')
       completeForm.append('data', item.file)
 
       await axios.post('/api/v1/upload/multipart/complete', completeForm, {

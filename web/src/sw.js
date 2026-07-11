@@ -252,7 +252,7 @@
 //     3. scripts/deploy-auto.sh 加 sw.js precache 健全性检查（防 build 退出码 0 但产物坏的 commit 进 git）
 //     4. BUMP SW_VERSION v79 → v80：触发浏览器字节比较检测到新 SW → skipWaiting → activate 钩子
 //        清空所有 cache（包括 v79 install 失败时留下的坏 precache 引用）
-const SW_VERSION = 'v80-pwa-manifest-410-fix-2026-07-10'
+const SW_VERSION = 'v81-drive-include-subfolders-fix-2026-07-11'
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 

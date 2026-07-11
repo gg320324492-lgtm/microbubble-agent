@@ -352,6 +352,10 @@ class DriveService:
         file_type: Optional[str] = None,
         # v2 PR6-P19: 团队共享盘隔离 (None=不过滤)
         is_team_shared: Optional[bool] = None,
+        # v2.21 (2026-07-11): folder_id=None + include_subfolders=True 时
+        # 跳过 folder_id IS NULL filter (用于 🌐 团队共享盘顶级 view, 列出
+        # 所有 team PPT, 不论 folder_id 是否 NULL). personal view 维持 v2 PR3 行为.
+        include_subfolders: bool = False,
     ) -> Tuple[List[Knowledge], int]:
         """列 drive 文件 (含列表 SQL 越权防御)
 
@@ -367,6 +371,7 @@ class DriveService:
             starred_only: 仅 is_starred=true
             file_type: pdf/image/video/office/text
             is_team_shared: v2 PR6-P19, None=不过滤/True=仅 team/False=仅 personal
+            include_subfolders: v2.21, True 时跳过 folder_id IS NULL filter (🌐 team view 顶级用)
 
         Returns:
             (items, total)
@@ -384,6 +389,7 @@ class DriveService:
             starred_only=starred_only,
             file_type=file_type,
             is_team_shared_filter=is_team_shared,
+            include_subfolders=include_subfolders,
         )
 
     async def _list_files_impl(
@@ -402,12 +408,16 @@ class DriveService:
         file_type: Optional[str],    # pdf | image | video | office | text | (None=全部)
         deleted_only: bool = False,  # v2 PR2: trash 模式 exclusive filter
         is_team_shared_filter: Optional[bool] = None,  # v2 PR6-P19: None=both, True=仅 team, False=仅 personal
+        include_subfolders: bool = False,  # v2.21 (2026-07-11): 见 list_files docstring
     ) -> Tuple[List[Knowledge], int]:
         """v2 PR2: 拆出 list_files 内部实现, 支持 sort_by / sort_order / starred_only / file_type.
 
         对外保持向后兼容 (list_files 默认 sort=created_at desc).
         v2 PR2: deleted_only=True 时仅返 deleted_at IS NOT NULL (回收站专用).
         v2 PR6-P19: is_team_shared_filter 隔离个人/团队共享盘 (True/False/None).
+        v2.21 (2026-07-11): include_subfolders=True 时跳过 folder_id IS NULL filter
+          (团队共享盘顶级 view 列出整个团队空间的 PPT, 含 root + 所有 sub folder).
+          personal view 维持 v2 PR3 行为 (folder_id=None → folder_id IS NULL).
         """
         stmt = select(Knowledge)
         count_stmt = select(func.count(Knowledge.id))
@@ -421,11 +431,12 @@ class DriveService:
         if folder_id is not None:
             # v2 PR3 修复: folder_id 显式时只返该 folder 的文件
             filters.append(Knowledge.folder_id == folder_id)
-        elif folder_id is None:
+        elif folder_id is None and not include_subfolders:
             # v2 PR3 修复: 默认 (folder_id=None) 是"顶级根目录", 仅 folder_id IS NULL
             # 之前不过滤会把子目录里的文件也带回来, 与 DesktopDriveView UI 不一致
             # (DesktopDriveView 'selectedFolderId.value = null' = 顶级, 用户期望"只看根")
             # 行为兼容: 不动 service 调用方, 默认语义升级
+            # v2.21 例外: include_subfolders=True (团队共享盘顶级) 跳过此 filter
             filters.append(Knowledge.folder_id.is_(None))
         if visibility_filter:
             filters.append(Knowledge.visibility == visibility_filter)

@@ -301,19 +301,29 @@ const router = useRouter()  // v2 PR2: 回收站路由跳转
 // 2026-07-02: DriveSubSidebar 删除后, 此处不再嵌入子侧边栏, 不需折叠状态管理
 
 // === 文件夹树 (PR3.2 接入) ===
+// v2.15 Pinia 改造后修复 (2026-07-11): 必须用 storeToRefs 解构 state, 否则丢响应性
+// 症状: store.folderTree 有 4 个 root, 但 FolderTree 收到 folderTree.length=0 → DOM 0 node
+// 根因: ES6 解构 store 实例时执行 getter, 拿到的是初始 .value 快照, 不再跟随 .value 更新
+// 修法: state 用 storeToRefs(store) 保持 ref 引用, actions 直接解构不丢响应
+import { storeToRefs } from 'pinia'
+const folderTreeStore = useFolderTree()
 const {
   folderTree,
   expandedFolderIds,
   loading: treeLoading,
-  loadError: treeLoadError,
+  loadError: treeLoadError
+} = storeToRefs(folderTreeStore)
+const {
   fetchTree: fetchFolderTree,
   toggleExpanded: toggleExpandedFolder,
   selectedFolder,
   createFolder: doCreateFolder,
   renameFolder: doRenameFolder
-} = useFolderTree()
+} = folderTreeStore
 
 // === 文件列表 (PR3.3 接入 + v2 PR1 + v2 PR2 sort/filter/star/batch) ===
+// v2.15 Pinia 改造后修复 (2026-07-11): state 用 storeToRefs 解构保持响应性 (同 folderTree 修复)
+const driveFilesStore = useDriveFiles()
 const {
   driveFiles,
   total,
@@ -322,6 +332,10 @@ const {
   loading: filesLoading,
   loadError: filesLoadError,
   selectedFileIds,
+  // v2 PR2: sort/filter state (双向绑定, 切文件夹/特殊视图保留)
+  sortBy, sortOrder, starredOnly, fileType
+} = storeToRefs(driveFilesStore)
+const {
   fetchFiles: fetchDriveFiles,
   fetchStarred,
   deleteFile,
@@ -337,10 +351,8 @@ const {
   batchUpdateVisibility: doBatchUpdateVisibility,
   toggleSelect: toggleFileSelect,
   clearSelection,
-  selectAll,
-  // v2 PR2: sort/filter state (双向绑定, 切文件夹/特殊视图保留)
-  sortBy, sortOrder, starredOnly, fileType
-} = useDriveFiles()
+  selectAll
+} = driveFilesStore
 
 // === 状态 ===
 const selectedFolderId = ref(null)
