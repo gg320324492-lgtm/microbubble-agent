@@ -363,6 +363,8 @@ const specialView = ref(null)
 
 // v2.0 (2026-07-09) Drive 美化: chip 化的 sort/type 选项数组 (替代 SORT_LABELS dropdown)
 // 与 drive-view.css .drive-chip 配合, aria-pressed=true 时 is-active class
+// v2.23 (2026-07-11) 删 名称 A-Z / 名称 Z-A chip (用户决策 "重命名场景极少, 4 个时间排序够用")
+// 后端 file_name 排序仍支持 (e.g. URL 直调 file_name:asc), 仅前端 chip 不暴露
 const SORT_OPTIONS = [
   // v2.5 (2026-07-10): 修复两 chip 视觉重复 — 「最新上传 ⬇/⬆」文字完全相同只差箭头方向,
   //   改为「最新上传 ⬇」+「最早上传 ⬆」让用户一眼区分 (latest vs earliest).
@@ -370,21 +372,27 @@ const SORT_OPTIONS = [
   { value: 'created_at:asc',  label: '最早上传 ⬆' },
   { value: 'updated_at:desc', label: '最近修改 ⬇' },
   { value: 'starred_at:desc', label: '收藏时间 ⬇' },
-  { value: 'file_name:asc',   label: '名称 A-Z' },
-  { value: 'file_name:desc',  label: '名称 Z-A' },
 ]
 
 // v2.22 (2026-07-11) 拆分 office → word/ppt/excel (用户决策 "Office 分类太粗")
 // 后端 drive_service._build_file_type_predicate 同步加 word/ppt/excel 映射, office 留为 alias
+//
+// v2.23 (2026-07-11) 重排: PDF 移到 Word/PPT/Excel 旁边 (Office 文档族聚类, 用户决策)
+// 文档族: PDF + Word + PPT + Excel (连排)
+// 媒体族: 图片 + 视频 + 音频 (连排)
+// 其他:   文本 (兜底)
 const FILE_TYPE_OPTIONS = [
   { value: null,    type: null,    label: '全部类型' },
+  // 文档族 (Office docs 聚类)
   { value: 'pdf',   type: 'pdf',   label: '📄 PDF' },
-  { value: 'image', type: 'image', label: '🖼️ 图片' },
-  { value: 'video', type: 'video', label: '🎬 视频' },
   { value: 'word',  type: 'word',  label: '📝 Word' },
   { value: 'ppt',   type: 'ppt',   label: '📊 PPT' },
   { value: 'excel', type: 'excel', label: '📈 Excel' },
+  // 媒体族
+  { value: 'image', type: 'image', label: '🖼️ 图片' },
+  { value: 'video', type: 'video', label: '🎬 视频' },
   { value: 'audio', type: 'audio', label: '🎵 音频' },
+  // 其他
   { value: 'text',  type: 'text',  label: '📝 文本' },
 ]
 
