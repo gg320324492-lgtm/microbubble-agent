@@ -266,30 +266,52 @@ async def update_folder(
     return _to_item(f)
 
 
-@router.delete("/{folder_id}", status_code=204)
+@router.delete("/{folder_id}")
 async def delete_folder(
     folder_id: int,
+    recursive: bool = Query(False, description="True=级联软删除整棵子树 (folder + 子 folder + 子文件)"),
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """软删 folder (有未删子 folder/file 时 400)
+    """软删 folder
+
+    Args:
+        recursive: False (默认) = 旧行为 — 有未删子 folder/file 时 400
+                   True = 级联删整棵子树 + 子文件, 全部进回收站 (30 天保留期可恢复)
+    Returns:
+        recursive=False: 204 No Content (旧行为, 向后兼容 v2.13)
+        recursive=True: 200 + {deleted_folders, deleted_files, deleted_folder_ids}
 
     v2.13 (2026-07-10): admin 越权支持 — 任务权限模型已有 (CLAUDE.md),
     folder 这里也加。owner 可删自己的 folder; admin 可删任何 folder;
     普通用户跨 owner 删除返 403。
+
+    v2.16 (2026-07-11): 加 recursive 级联软删除 — 用户决策"有子文件夹也可以直接删除"。
+    前端 FolderTree.vue smart confirm 检测到 children 时弹 2 按钮 confirm:
+    - "仅删除本 folder (硬性 422)" (默认单按钮)
+    - "连同子项一起移入回收站" (recursive=true)
     """
+    from fastapi import Response
+
     svc = FolderService(db)
     try:
-        ok = await svc.soft_delete_folder(
+        result = await svc.soft_delete_folder(
             folder_id,
             current_user_id=current_user.id,
             is_admin=(current_user.role == "admin"),
+            recursive=recursive,
         )
     except FolderServiceError as e:
         _reraise_folder_service_error(e)
-    if not ok:
+    if recursive:
+        # 200 + 计数 (caller 想看到删了几个 folder/file)
+        if result is None:
+            raise NotFoundException(resource="Folder", resource_id=folder_id)
+        return result
+    # 旧路径: result=True 成功 / False=folder 不存在
+    if not result:
         raise NotFoundException(resource="Folder", resource_id=folder_id)
-    return
+    return Response(status_code=204)
 
 
 @router.post("/{folder_id}/restore", response_model=FolderItem)

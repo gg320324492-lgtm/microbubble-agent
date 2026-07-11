@@ -415,18 +415,40 @@ class FolderService:
         folder_id: int,
         current_user_id: int,
         is_admin: bool = False,
-    ) -> bool:
+        recursive: bool = False,
+    ) -> dict | bool:
         """软删除 folder (owner only, admin 可越权)
 
         设 deleted_at=NOW(), 3 天后 Celery beat 物理清除
-        Returns: True = 成功
+
+        Args:
+            folder_id: 目标 folder
+            current_user_id: 当前用户
+            is_admin: admin 越权标识
+            recursive: True = 级联删整棵子树 (folder + 全部子 folder + 全部子文件
+                       一起进回收站, 30 天保留期可整体 restore).
+                       False = 硬性 422 (旧行为, 留给"误删防护"场景).
+
+        Returns:
+            bool: 仅当 recursive=False 且成功 (向后兼容 v2.13/v2.14)
+            dict: recursive=True 时返 {"deleted_folders": int, "deleted_files": int,
+                                       "deleted_folder_ids": list[int]}
+
         Raises:
             FolderServiceError(404): folder 真不存在
             FolderServiceError(403): folder 存在但非 owner 且非 admin (越权)
-            FolderServiceError(400): folder 下还有未删子 folder/file
+            FolderServiceError(400, recursive=False): folder 下还有未删子 folder/file
 
         2026-07-10 v2.13: 加 is_admin 越权支持 (对齐 CLAUDE.md 任务权限模型
         "任务: 创建人/负责人/管理员可删除" 的 admin 跨越规则)
+
+        2026-07-11 v2.16: 加 recursive=True 级联软删除 — 用户决策"有子文件夹
+        也可以直接删除" (前端 smart confirm 2 按钮分流)。设计:
+        - 用 Folder.path 物化路径 '/1/4/7/' → UPDATE ... WHERE path LIKE ?
+          一次抓 subtree 所有 folder id (避免 N+1 递归)
+        - Knowledge 同步 UPDATE (storage_mode='drive' 才级联, KB 不动)
+        - 单事务: 失败整体 rollback (防半删)
+        - deleted_folder_ids 给前端 import 用 restore all
         """
         folder = await self.get_folder(folder_id)
         if folder is None:
@@ -440,34 +462,89 @@ class FolderService:
                 status_code=403,
             )
 
-        # 检查是否有未软删的子 folder / 文件 (PR1 铁律: skip 非空 folder)
-        stmt = select(func.count(Folder.id)).where(
-            Folder.parent_id == folder_id,
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        if not recursive:
+            # === 旧行为 (PR1 铁律: skip 非空 folder) ===
+            stmt = select(func.count(Folder.id)).where(
+                Folder.parent_id == folder_id,
+                Folder.deleted_at.is_(None),
+            )
+            child_folder_count = (await self.db.execute(stmt)).scalar() or 0
+            if child_folder_count > 0:
+                raise FolderServiceError(
+                    f"folder 下还有 {child_folder_count} 个未删的子 folder, 请先清理",
+                    status_code=400,
+                )
+
+            from app.models.knowledge import Knowledge
+            stmt_kb = select(func.count(Knowledge.id)).where(
+                Knowledge.folder_id == folder_id,
+                Knowledge.deleted_at.is_(None),
+            )
+            kb_count = (await self.db.execute(stmt_kb)).scalar() or 0
+            if kb_count > 0:
+                raise FolderServiceError(
+                    f"folder 下还有 {kb_count} 个未删的文件, 请先清理",
+                    status_code=400,
+                )
+
+            folder.deleted_at = now_naive
+            await self.db.commit()
+            logger.info(f"[FolderService.soft_delete_folder] id={folder.id}")
+            return True
+
+        # === v2.16 级联软删除 (recursive=True) ===
+        # 1. 收集子树 folder ids (含自己) — 用物化 path LIKE 一把抓
+        # path 形如 '/1/4/7/' → 找所有 path 以 '/1/4/7/' 开头的 (自身 + 后代)
+        # 已软删的不算, 避免 restore 后 parent 软删导致二次"激活"
+        subtree_stmt = select(Folder.id).where(
+            Folder.path.like(f"{folder.path}%"),
             Folder.deleted_at.is_(None),
         )
-        child_folder_count = (await self.db.execute(stmt)).scalar() or 0
-        if child_folder_count > 0:
-            raise FolderServiceError(
-                f"folder 下还有 {child_folder_count} 个未删的子 folder, 请先清理",
-                status_code=400,
-            )
+        subtree_ids = [row[0] for row in (await self.db.execute(subtree_stmt)).all()]
 
-        from app.models.knowledge import Knowledge
-        stmt_kb = select(func.count(Knowledge.id)).where(
-            Knowledge.folder_id == folder_id,
-            Knowledge.deleted_at.is_(None),
+        if not subtree_ids:
+            # 边界: self 已被删 (软删但 fetchTree 可能仍能拿到 if include_deleted=False 时不会)
+            # 安全起见, 单独软删 self
+            subtree_ids = [folder.id]
+
+        # 2. 原子软删所有 subtree folders (一次 UPDATE)
+        stmt_upd_folder = update(Folder).where(
+            Folder.id.in_(subtree_ids),
+        ).values(
+            deleted_at=now_naive,
+            updated_at=now_naive,
         )
-        kb_count = (await self.db.execute(stmt_kb)).scalar() or 0
-        if kb_count > 0:
-            raise FolderServiceError(
-                f"folder 下还有 {kb_count} 个未删的文件, 请先清理",
-                status_code=400,
-            )
+        folder_result = await self.db.execute(stmt_upd_folder)
 
-        folder.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        # 3. 级联软删所有 subtree knowledge (drive 文件)
+        #   - storage_mode='drive' 才动, 'kb' 是知识库条目 (KB 不归文件夹管理)
+        #   - deleted_at=now 而非 None, restore 时可恢复整棵子树
+        from app.models.knowledge import Knowledge
+        stmt_upd_kb = update(Knowledge).where(
+            Knowledge.folder_id.in_(subtree_ids),
+            Knowledge.deleted_at.is_(None),
+            Knowledge.storage_mode == "drive",
+        ).values(
+            deleted_at=now_naive,
+        )
+        file_result = await self.db.execute(stmt_upd_kb)
+
         await self.db.commit()
-        logger.info(f"[FolderService.soft_delete_folder] id={folder.id}")
-        return True
+
+        deleted_folders = folder_result.rowcount or 0
+        deleted_files = file_result.rowcount or 0
+        logger.info(
+            f"[FolderService.soft_delete_folder] CASCADE id={folder.id} path='{folder.path}' "
+            f"deleted_folders={deleted_folders} deleted_files={deleted_files} "
+            f"subtree_ids={subtree_ids[:10]}{'...' if len(subtree_ids) > 10 else ''}"
+        )
+        return {
+            "deleted_folders": deleted_folders,
+            "deleted_files": deleted_files,
+            "deleted_folder_ids": subtree_ids,
+        }
 
     async def restore_folder(
         self,
