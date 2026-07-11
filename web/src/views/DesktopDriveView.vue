@@ -131,6 +131,7 @@
           @update:special-view="specialView = $event"
           @toggle-expanded="toggleExpandedFolder"
           @retry="fetchFolderTree"
+          @request-new-folder="showCreateFolderDialog = true"
         />
       </aside>
 
