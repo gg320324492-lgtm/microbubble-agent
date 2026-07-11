@@ -390,28 +390,34 @@ export default { name: 'DriveUploadDialog' }
 
 <style scoped>
 .drive-upload-drop-zone {
-  border: 2px dashed var(--color-border-light, #dcdfe6);
+  /*
+   * v2.17 (2026-07-11) 暗色主题适配:
+   * - 旧 var(--color-bg-light, #fafbfc) 该 token 在 variables.css 不存在, fallback 浅色
+   *   → dark 模式永远白底, 与 dialog body (#2a2d35) 形成"白纸"突兀视觉
+   * - 改用真实存在的 token, 让 var() 自动跟随 dark/accent 翻转
+   */
+  border: 2px dashed var(--color-border);
   border-radius: 8px;
   padding: 32px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
-  background: var(--color-bg-light, #fafbfc);
+  background: var(--color-bg-page);
 }
 
 .drive-upload-drop-zone:hover {
-  border-color: var(--color-primary, #409eff);
-  background: var(--color-primary-light-9, #ecf5ff);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 
 .drive-upload-drop-zone.is-drag-over {
-  border-color: var(--color-primary, #409eff);
-  background: var(--color-primary-light-9, #ecf5ff);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
   border-style: solid;
 }
 
 .drive-upload-drop-icon {
-  color: var(--color-primary, #409eff);
+  color: var(--color-primary);
   margin-bottom: 8px;
 }
 
@@ -419,22 +425,23 @@ export default { name: 'DriveUploadDialog' }
   font-size: 16px;
   font-weight: 500;
   margin: 0 0 4px 0;
-  color: var(--color-text-primary, #303133);
+  color: var(--color-text-primary);
 }
 
 .drive-upload-drop-hint {
   font-size: 12px;
   margin: 0;
-  color: var(--color-text-placeholder, #909399);
+  color: var(--color-text-secondary);
 }
 
 .drive-upload-file-list {
   margin-top: 16px;
-  border: 1px solid var(--color-border-lighter, #f0f0f0);
+  border: 1px solid var(--color-border-light);
   border-radius: 4px;
   padding: 12px;
   max-height: 240px;
   overflow-y: auto;
+  background: var(--color-bg-page);
 }
 
 .drive-upload-file-list-header {
@@ -444,7 +451,7 @@ export default { name: 'DriveUploadDialog' }
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-primary, #303133);
+  color: var(--color-text-primary);
 }
 
 .drive-upload-file-item {
@@ -452,7 +459,7 @@ export default { name: 'DriveUploadDialog' }
   align-items: center;
   gap: 8px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--color-border-lighter, #f5f7fa);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .drive-upload-file-item:last-child {
@@ -460,7 +467,7 @@ export default { name: 'DriveUploadDialog' }
 }
 
 .drive-upload-file-icon {
-  color: var(--color-primary, #409eff);
+  color: var(--color-primary);
   flex-shrink: 0;
 }
 
@@ -471,7 +478,7 @@ export default { name: 'DriveUploadDialog' }
 
 .drive-upload-file-name {
   font-size: 13px;
-  color: var(--color-text-primary, #303133);
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -479,7 +486,7 @@ export default { name: 'DriveUploadDialog' }
 
 .drive-upload-file-meta {
   font-size: 11px;
-  color: var(--color-text-secondary, #909399);
+  color: var(--color-text-secondary);
   margin-top: 2px;
   display: flex;
   align-items: center;

@@ -123,8 +123,12 @@
  *
  * 上传文件夹 / 新建文件夹 是 default 类型 el-button, dark mode 下 EP 默认白底,
  * 与暗色 page 背景反差过大 (像贴了 2 块白纸)。修复: 走 var() token, 自适应双主题。
+ *
+ * v2.17 (2026-07-11) 加固: 同时写 --el-button-* CSS vars + 直接 background/border/color
+ *   双保险, 防 EP button CSS 用 background-color: white 直接覆盖 CSS var override。
  */
 .drive-toolbar-btn {
+  /* CSS 变量层 (EP 内部消费) */
   --el-button-bg-color: var(--color-bg-card) !important;
   --el-button-border-color: var(--color-border) !important;
   --el-button-text-color: var(--color-text-regular) !important;
@@ -134,7 +138,8 @@
   --el-button-active-bg-color: var(--color-primary-bg) !important;
   --el-button-active-border-color: var(--color-primary) !important;
   --el-button-active-text-color: var(--color-primary) !important;
-  background: var(--color-bg-card) !important;
+  /* 直接属性层 (兜底, 防 EP background-color 直接覆盖) */
+  background-color: var(--color-bg-card) !important;
   border-color: var(--color-border) !important;
   color: var(--color-text-regular) !important;
   transition: all var(--duration-fast) var(--ease-out) !important;
@@ -429,7 +434,7 @@
 
 .drive-folder-tree-divider {
   height: 1px;
-  background: var(--color-border-lighter);
+  background: var(--color-border-light);
   margin: var(--space-2) var(--space-3);
 }
 
@@ -486,7 +491,7 @@
 .drive-breadcrumb {
   padding: var(--space-3) var(--space-6);
   background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border-lighter);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .drive-breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
@@ -564,7 +569,7 @@
   align-items: center;
   min-height: 56px;
   padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--color-border-lighter);
+  border-bottom: 1px solid var(--color-border-light);
   cursor: pointer;
   transition: background var(--duration-fast) var(--ease-out);
 }
@@ -820,7 +825,7 @@
   padding: 3px;
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-sm);
-  border: 1px solid var(--color-border-lighter);
+  border: 1px solid var(--color-border-light);
   pointer-events: none;
 }
 
@@ -1180,7 +1185,7 @@
 
 .drive-dialog :deep(.el-dialog__footer) {
   padding: var(--space-3) var(--space-5) var(--space-5) !important;
-  border-top: 1px solid var(--color-border-lighter) !important;
+  border-top: 1px solid var(--color-border-light) !important;
 }
 
 /*

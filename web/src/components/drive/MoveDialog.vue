@@ -171,7 +171,7 @@ function onSubmit() {
 .move-dialog-tree-wrapper {
   max-height: 360px;
   overflow-y: auto;
-  border: 1px solid var(--color-border-lighter, #f0f0f0);
+  border: 1px solid var(--color-border-light);
   border-radius: 4px;
   padding: 8px 0;
 }
@@ -199,7 +199,7 @@ function onSubmit() {
 .move-dialog-target-info {
   margin-top: 12px;
   padding: 8px 12px;
-  background: var(--color-bg-light, #f5f7fa);
+  background: var(--color-bg-page);
   border-radius: 4px;
   font-size: 13px;
   display: flex;
