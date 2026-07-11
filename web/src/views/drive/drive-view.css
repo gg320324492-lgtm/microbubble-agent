@@ -118,6 +118,39 @@
   border-radius: var(--radius-sm);
 }
 
+/*
+ * v2.16.1 (2026-07-11) Toolbar 次级按钮暗色主题适配
+ *
+ * 上传文件夹 / 新建文件夹 是 default 类型 el-button, dark mode 下 EP 默认白底,
+ * 与暗色 page 背景反差过大 (像贴了 2 块白纸)。修复: 走 var() token, 自适应双主题。
+ */
+.drive-toolbar-btn {
+  --el-button-bg-color: var(--color-bg-card) !important;
+  --el-button-border-color: var(--color-border) !important;
+  --el-button-text-color: var(--color-text-regular) !important;
+  --el-button-hover-bg-color: var(--color-primary-bg) !important;
+  --el-button-hover-border-color: var(--color-primary-border) !important;
+  --el-button-hover-text-color: var(--color-primary) !important;
+  --el-button-active-bg-color: var(--color-primary-bg) !important;
+  --el-button-active-border-color: var(--color-primary) !important;
+  --el-button-active-text-color: var(--color-primary) !important;
+  background: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-regular) !important;
+  transition: all var(--duration-fast) var(--ease-out) !important;
+}
+
+.drive-toolbar-btn:hover {
+  background: var(--color-primary-bg) !important;
+  border-color: var(--color-primary-border) !important;
+  color: var(--color-primary) !important;
+  transform: translateY(-1px);
+}
+
+.drive-toolbar-btn:active {
+  transform: translateY(0);
+}
+
 /* ===== 3. 上传按钮 (CTA 渐变 + 发光) ===== */
 .drive-upload-btn {
   background: var(--gradient-cta-button) !important;
@@ -204,7 +237,13 @@
   gap: var(--space-1);
   padding: 6px 14px;
   border-radius: var(--radius-full);
-  background: transparent;
+  /*
+   * v2.16.1 (2026-07-11) 暗色主题加固:
+   * !important 防浏览器 / EP 默认 <button> 样式覆盖白底。
+   * chip 走 raw <button> 而非 <el-button>, 默认 user-agent sheet 在 dark mode 也可能冒出。
+   */
+  background: transparent !important;
+  background-color: transparent !important;
   border: 1px solid var(--color-border);
   color: var(--color-text-regular);
   font-size: var(--font-size-sm);
@@ -217,7 +256,8 @@
 .drive-chip:hover {
   border-color: var(--color-primary-border);
   color: var(--color-primary);
-  background: var(--color-primary-bg);
+  background: var(--color-primary-bg) !important;
+  background-color: var(--color-primary-bg) !important;
 }
 
 .drive-chip:active {
@@ -1330,6 +1370,18 @@
   background: transparent !important;
   color: var(--color-text-secondary) !important;
   transition: all var(--duration-fast) var(--ease-out);
+}
+
+/*
+ * v2.16.1 (2026-07-11) 视图切换暗色主题加固:
+ * 用 EP 内部 var() 双重保险, 防 :deep 选择器被 EP 默认 .el-button--default 覆盖白底
+ */
+.drive-view-toggle :deep(.el-button:not(.is-active):not(.el-button--primary)) {
+  --el-button-bg-color: transparent !important;
+  --el-button-border-color: transparent !important;
+  --el-button-text-color: var(--color-text-secondary) !important;
+  --el-button-hover-bg-color: var(--color-primary-bg) !important;
+  --el-button-hover-text-color: var(--color-primary) !important;
 }
 
 .drive-view-toggle :deep(.el-button.is-active),
