@@ -49,6 +49,10 @@ export function useDriveFiles() {
   const hasSelection = computed(() => selectedFileIds.value.length > 0)
 
   // === API 调用 ===
+  // v2.26 (2026-07-12) BUG E 修复: 改用 fetch + URLSearchParams, 绕开 axios 1.16.1 + vite production
+  //   build 丢 `{ params }` 的 bug. 之前 queryParams 含 view/sort_by/file_type 等关键 filter,
+  //   但 axios 发出的 URL 全部丢失 query string → 后端永远用 default (view=personal 等)
+  //   → 团队共享盘 sub-folder 显示 0 个文件 (Bug D) 实际上是 Bug E 的连锁反应
   const fetchFiles = async (params = {}) => {
     loading.value = true
     loadError.value = null
@@ -81,9 +85,14 @@ export function useDriveFiles() {
           delete queryParams[k]
         }
       })
-      const resp = await axios.get('/api/v1/drive/files', { params: queryParams })
-      driveFiles.value = resp.data.items || []
-      total.value = resp.data.total || 0
+      const qs = new URLSearchParams(queryParams)
+      const resp = await fetch(`/api/v1/drive/files?${qs}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}` },
+      })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data = await resp.json()
+      driveFiles.value = data.items || []
+      total.value = data.total || 0
       // 切换 folder 时清掉多选状态
       selectedFileIds.value = []
     } catch (e) {
