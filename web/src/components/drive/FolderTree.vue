@@ -59,7 +59,7 @@
     </div>
     <template v-else>
       <FolderTreeNode
-        v-for="folder in folderTree"
+        v-for="folder in regularFolders"
         :key="folder.id"
         :folder="folder"
         :selected-folder-id="selectedFolderId"
@@ -83,6 +83,25 @@
         <span>🌐 团队共享盘</span>
       </div>
     </FolderContextMenu>
+
+    <!-- v2.27 (2026-07-12) BUG G 修复: team root folder (is_team_default=true)
+         嵌套显示在 团队共享盘 special node 下面 (不是顶级节点)
+         之前组会PPT 显示在 personal 区域 "我的收藏" 下面, 用户期望它在团队共享盘里面
+         视觉层级: 🌐 团队共享盘 → 📂 组会PPT → 23 个成员 sub-folder
+         depth=1 缩进, 让 CSS 渲染出 "嵌套在团队共享盘下面" 的视觉效果
+    -->
+    <FolderTreeNode
+      v-for="folder in teamRootFolders"
+      :key="folder.id"
+      :folder="folder"
+      :depth="1"
+      :selected-folder-id="selectedFolderId"
+      :expanded-folder-ids="expandedFolderIds"
+      @select="handleFolderSelect"
+      @toggle="$emit('toggle-expanded', $event)"
+      @context-command="onSubContext"
+    />
+
     <FolderContextMenu :items="requestsMenuItems" placement="right-start" @command="(cmd) => onRequestsContext(cmd)">
       <div
         class="folder-tree-special-item drive-folder-tree-special-item is-requests"
@@ -112,6 +131,7 @@
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让玻璃态侧栏 + 多色 special 生效
 // v2.8 (2026-07-10) 右键菜单支持 (5 根项 + sub 节点共用 FolderContextMenu)
 import '@/views/drive/drive-view.css'
+import { computed } from 'vue'
 import { Folder, FolderOpened, Delete, Loading, Warning, Star, StarFilled, Share, Promotion } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTreeNode from './FolderTreeNode.vue'
@@ -126,6 +146,15 @@ const props = defineProps({
   loadError: { type: [String, null], default: null },
   specialView: { type: [String, null], default: null }  // 'starred' | 'trash' | 'requests' | null
 })
+
+// v2.27 (2026-07-12) BUG G 修复: 把 is_team_default=true 的 folder 从 folderTree 中分离
+//   顶层 folder 区域只显示 regular folder, team root folder 单独渲染到 团队共享盘 节点下
+const regularFolders = computed(() =>
+  (props.folderTree || []).filter(f => !f.is_team_default)
+)
+const teamRootFolders = computed(() =>
+  (props.folderTree || []).filter(f => f.is_team_default)
+)
 
 const emit = defineEmits([
   'update:selectedFolderId',
