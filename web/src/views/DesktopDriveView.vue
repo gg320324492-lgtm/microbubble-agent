@@ -586,6 +586,16 @@ watch(selectedFolderId, (newId, oldId) => {
 
 // v2 PR2 + v2 PR6-P19: 监听 specialView (starred | team | trash | null)
 watch(specialView, async (newView) => {
+  // v2.25 (2026-07-11): 切 specialView 时重拉 tree (scope 跟随新视图)
+  //   personal 默认 → fetchTree('personal') 排除 is_team_default=true
+  //   team          → fetchTree('team') 仅 is_team_default=true folder
+  //   其它 (starred/trash/requests) → 不重拉, tree 不变
+  if (newView === 'team') {
+    await fetchFolderTree('team')
+  } else if (newView === null) {
+    await fetchFolderTree('personal')
+  }
+  // === 旧分支: 切视图时同步文件列表 ===
   if (newView === 'starred') {
     starredOnly.value = true
     await fetchStarred()
