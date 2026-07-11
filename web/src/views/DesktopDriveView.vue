@@ -38,8 +38,12 @@
         </el-input>
         <el-button-group>
           <el-button class="drive-upload-btn" :icon="UploadFilled" @click="showUploadDialog = true">上传文件</el-button>
-          <el-button :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
-          <el-button :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
+          <!--
+            v2.16.1 (2026-07-11) 暗色主题适配: 上传文件夹 / 新建文件夹 加 .drive-toolbar-btn
+            走 var() token 双主题自适应 (light=白底深字, dark=深底浅字 + 主色 hover)
+          -->
+          <el-button class="drive-toolbar-btn" :icon="Folder" @click="triggerFolderUpload">上传文件夹</el-button>
+          <el-button class="drive-toolbar-btn" :icon="Plus" @click="showCreateFolderDialog = true">新建文件夹</el-button>
         </el-button-group>
         <!--
           v2.16 (2026-07-11) 三种视图切换:
