@@ -577,10 +577,15 @@ onBeforeUnmount(() => {
 })
 
 // === 监听 selectedFolderId 变化 → 重新拉文件列表 ===
+// v2.26 (2026-07-12) BUG D 修复: watch(selectedFolderId) 必须传 view 跟随 specialView
+//   修复前: fetchDriveFiles({ folder_id: newId }) 没传 view → useDriveFiles 默认 view=personal
+//           → 过滤掉 is_team_shared=true → 用户在团队共享盘 sub-folder 看 0 文件
+//   修复后: 跟随 specialView.value (team → view='team', 其他 → view='personal')
 watch(selectedFolderId, (newId, oldId) => {
   if (newId !== oldId) {
     currentPage.value = 1
-    fetchDriveFiles({ folder_id: newId })
+    const view = specialView.value === 'team' ? 'team' : 'personal'
+    fetchDriveFiles({ folder_id: newId, view })
   }
 })
 
