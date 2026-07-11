@@ -271,12 +271,48 @@
   transform: scale(0.96);
 }
 
+/*
+ * v2.18 (2026-07-11) 修复顶部 chip 光晕泄漏 + 选中态渐变 bg 不渲染:
+ *
+ * 用户截图报"顶部 UI 出问题了": 排序/类型 filter bar 整片橙色光晕, "排序" / "类型"
+ * 文字标签也被光晕包围, 看起来像多个 chip 同时 active (实际只有 1 个).
+ *
+ * 端到端 Playwright 排查发现 2 个 bug:
+ *
+ * (A) 20px 大光晕泄漏:
+ *   --shadow-primary = `0 4px 20px rgba(255,122,92,0.30)` 的 20px blur 半径过大,
+ *   在 32px 高的小 chip 上产生 ~20px 半径的橙色光晕, 溢出 chip 边界向四周扩散,
+ *   视觉上覆盖相邻 chip + 文字标签, 制造"光晕泄漏"错觉.
+ *
+ * (B) active 态渐变 bg 实际从未渲染 (pre-existing, 由 v2.16.1 暗色防御副作用):
+ *   base `.drive-chip` 有 `background: transparent !important;` (防 user-agent <button>
+ *   默认白底, dark mode 防御), 但 active 态的 `background: var(--gradient-cta-button)`
+ *   没加 !important → base 的 !important 永远 win → 渐变 bg 实际不渲染. 用户截图里
+ *   看到的"橙色光晕"其实是 20px box-shadow 在充当"选中态"视觉信号, 一旦 box-shadow
+ *   修了就完全没有"选中"视觉 = 看上去更"破".
+ *
+ * 修法:
+ * - 移除大范围 box-shadow, 改用 1-3px 极浅内阴影感 (修 A)
+ * - active 态的 background / border-color / color 加 !important, 显式 win over base
+ *   的 !important, 让渐变 bg 真正渲染 (修 B)
+ * - 渐变 bg + 白字 + 字重 + 极小 box-shadow = 干净清晰的"选中态"视觉, 无光晕污染
+ * - 用 rgba(var(--color-primary-rgb), 0.25) 走 token 翻转, 自动跟随 6 主题
+ * - 新增 :focus-visible outline 做无障碍键盘焦点环 (与 active 视觉区分)
+ *
+ * (--shadow-primary 全局变量不动, 仍适合 .drive-upload-btn / .drive-folder-tree-root-item
+ *  等大型 CTA 元素. 仅 chip 这种小元素需要降级.)
+ */
 .drive-chip[aria-pressed="true"],
 .drive-chip.is-active {
-  background: var(--gradient-cta-button);
-  border-color: transparent;
-  color: #fff;
-  box-shadow: var(--shadow-primary);
+  background: var(--gradient-cta-button) !important;
+  border-color: transparent !important;
+  color: #fff !important;
+  box-shadow: 0 1px 3px rgba(var(--color-primary-rgb), 0.25);
+}
+
+.drive-chip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* 各 chip type 染色变体 (用于 file_type chip 激活态左侧色点) */
