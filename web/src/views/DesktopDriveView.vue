@@ -844,7 +844,7 @@ const currentPathDisplay = computed(() => {
   font-size: 14px;
   font-weight: 600;
   color: var(--color-text-secondary, #606266);
-  border-bottom: 1px solid var(--color-border-lighter, #f0f0f0);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .drive-sidebar-placeholder,
@@ -885,7 +885,7 @@ const currentPathDisplay = computed(() => {
 
 .drive-breadcrumb {
   padding: 12px 24px;
-  border-bottom: 1px solid var(--color-border-lighter, #f0f0f0);
+  border-bottom: 1px solid var(--color-border-light);
   background: var(--color-bg-card, #fff);
 }
 
@@ -897,7 +897,7 @@ const currentPathDisplay = computed(() => {
 
 .drive-statusbar {
   padding: 8px 24px;
-  border-top: 1px solid var(--color-border-lighter, #f0f0f0);
+  border-top: 1px solid var(--color-border-light);
   background: var(--color-bg-card, #fff);
   display: flex;
   justify-content: space-between;

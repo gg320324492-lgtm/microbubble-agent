@@ -88,8 +88,8 @@ function formatBytes(bytes) {
   align-items: center;
   padding: 6px 12px;
   border-radius: 16px;
-  background: var(--color-bg-light, #f5f7fa);
-  border: 1px solid var(--color-border-light, #ebeef5);
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border-light);
   transition: all 0.2s;
   cursor: pointer;
   user-select: none;
