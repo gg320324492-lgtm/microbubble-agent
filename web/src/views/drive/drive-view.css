@@ -320,7 +320,9 @@
 .drive-chip[data-type="image"]::before,
 .drive-chip[data-type="video"]::before,
 .drive-chip[data-type="audio"]::before,
-.drive-chip[data-type="office"]::before,
+.drive-chip[data-type="word"]::before,
+.drive-chip[data-type="ppt"]::before,
+.drive-chip[data-type="excel"]::before,
 .drive-chip[data-type="text"]::before {
   content: '';
   width: 8px;
@@ -333,7 +335,10 @@
 .drive-chip[data-type="image"]::before { background: var(--color-file-image); }
 .drive-chip[data-type="video"]::before { background: var(--color-file-pdf); }
 .drive-chip[data-type="audio"]::before { background: var(--color-warning); }
-.drive-chip[data-type="office"]::before { background: var(--color-file-excel); }
+/* v2.22 (2026-07-11) 拆分 office → word(蓝) + ppt(橙) + excel(绿), 沿用现有 token */
+.drive-chip[data-type="word"]::before  { background: var(--color-file-doc); }
+.drive-chip[data-type="ppt"]::before   { background: var(--color-accent); }
+.drive-chip[data-type="excel"]::before { background: var(--color-file-excel); }
 .drive-chip[data-type="text"]::before  { background: var(--color-file-default); }
 
 /* ===== 6. 主体布局 (主区域 + 左侧栏) ===== */

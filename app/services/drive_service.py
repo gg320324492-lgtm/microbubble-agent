@@ -506,12 +506,20 @@ class DriveService:
         返回的是全部文件 — 看上去 '所有 PPT 也是音频' 的错误). 覆盖常见音频:
         .mp3 / .wav / .flac / .aac / .ogg / .m4a / .wma / .opus. 任何未匹配
         的 type 返 None → 不过滤 (前端拿到全部,需前端 chip 自身友好 fallback).
+
+        v2.22 (2026-07-11): 拆分 office → word/ppt/excel (用户决策"Office 分类太粗")
+        前端 chip 选项 DesktopDriveView.FILE_TYPE_OPTIONS 同步更新.
+        office 留为 alias (含全部 6 扩展名) 用于向后兼容 (老请求 / 第三方脚本).
         """
         type_to_ext = {
             "pdf":   [".pdf"],
             "image": [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"],
             "video": [".mp4", ".mov", ".avi", ".mkv", ".webm", ".flv"],
             "audio": [".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a", ".wma", ".opus"],
+            "word":  [".doc", ".docx"],
+            "ppt":   [".ppt", ".pptx"],
+            "excel": [".xls", ".xlsx"],
+            # office 留作 alias, 覆盖全部 Office 扩展名, 老请求 / 旧 chip fallback
             "office": [".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"],
             "text":  [".txt", ".md", ".log", ".csv"],
         }
