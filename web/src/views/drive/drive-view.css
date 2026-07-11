@@ -48,7 +48,7 @@
  * - 标题字号 22px → 17px (与第二级别一致)
  * - padding 16×24 → 10×24 (高度 -22px)
  * - 搜索框 280px → 320px (用户能输入更长关键词)
- * - 按钮 :deep-style 仅必要 hover/active 反馈
+ * - 按钮 .drive-toolbar-btn / .drive-upload-btn 走 var() token, 无 :deep (全局 CSS)
  * - 标题区可收缩: vw<900 时标题消失 (响应式后续)
  */
 .drive-toolbar {
@@ -109,9 +109,11 @@
 
 /*
  * 视图切换按钮组合 (grid/list 切换器) — 紧凑一体化
- * 用 :deep 套 EP 自定义样式, 避免被 EP 默认 button-style 覆盖
+ * v2.17 (2026-07-11) 移除 :deep():
+ *   drive-view.css 是 import 全局 CSS, 非 <style scoped>, vite-plugin-vue 不会处理
+ *   `:deep()`, 浏览器当无效 CSS 静默忽略. 后代选择器直接写即可 (EP .el-button/.el-icon 是全局 class)
  */
-.drive-view-toggle :deep(.el-button) {
+.drive-view-toggle .el-button {
   height: 32px;
   width: 32px;
   padding: 0;
@@ -368,7 +370,7 @@
   box-shadow: var(--shadow-primary);
 }
 
-.drive-folder-tree-root-item.is-active :deep(.el-icon) {
+.drive-folder-tree-root-item.is-active .el-icon {
   color: #fff;
 }
 
@@ -461,7 +463,7 @@
   font-weight: var(--font-weight-medium);
 }
 
-.drive-folder-tree-node.is-active :deep(.el-icon) {
+.drive-folder-tree-node.is-active .el-icon {
   color: var(--color-primary);
 }
 
@@ -494,7 +496,7 @@
   border-bottom: 1px solid var(--color-border-light);
 }
 
-.drive-breadcrumb :deep(.el-breadcrumb__item:last-child .el-breadcrumb__inner) {
+.drive-breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner {
   color: var(--color-primary);
   font-weight: var(--font-weight-semibold);
 }
@@ -857,7 +859,7 @@
   transition: color var(--duration-fast) var(--ease-out);
 }
 
-.file-card-action :deep(.el-icon) {
+.file-card-action .el-icon {
   font-size: 13px;
   color: var(--color-text-secondary);
   transition: color var(--duration-fast) var(--ease-out);
@@ -865,12 +867,12 @@
 
 /* 全部 3 个按钮: hover 时文字 + icon 同步变主色, 无 bg fill (消除误读 selected) */
 .file-card-action:hover,
-.file-card-action:hover :deep(.el-icon) {
+.file-card-action:hover .el-icon {
   color: var(--color-primary);
 }
 
 .file-card-action:active,
-.file-card-action:active :deep(.el-icon) {
+.file-card-action:active .el-icon {
   background: var(--gradient-cta-button);
   color: #fff;
 }
@@ -903,12 +905,12 @@
   background: var(--color-bg-hover);
 }
 
-.file-card-star :deep(.el-icon) {
+.file-card-star .el-icon {
   color: var(--color-text-placeholder);
   transition: color var(--duration-fast) var(--ease-out);
 }
 
-.file-card-star :deep(.el-icon.is-starred) {
+.file-card-star .el-icon.is-starred {
   color: var(--color-warning);
 }
 
@@ -1059,13 +1061,13 @@
   padding: var(--space-3) 0;
 }
 
-.drive-grid-pagination :deep(.el-pagination) {
+.drive-grid-pagination .el-pagination {
   --el-pagination-bg-color: transparent;
   --el-pagination-button-color: var(--color-text-regular);
   --el-pagination-hover-color: var(--color-primary);
 }
 
-.drive-grid-pagination :deep(.el-pagination.is-background .el-pager li.is-active) {
+.drive-grid-pagination .el-pagination.is-background .el-pager li.is-active {
   background: var(--gradient-cta-button) !important;
   color: #fff !important;
 }
@@ -1150,7 +1152,7 @@
 }
 
 /* ===== 15. Dialog 玻璃态 ===== */
-.drive-dialog :deep(.el-dialog) {
+.drive-dialog .el-dialog {
   border-radius: var(--radius-lg) !important;
   overflow: hidden;
   background: var(--color-bg-card) !important;
@@ -1160,30 +1162,30 @@
   -webkit-backdrop-filter: blur(var(--glass-blur-md)) !important;
 }
 
-.drive-dialog :deep(.el-dialog__header) {
+.drive-dialog .el-dialog__header {
   padding: var(--space-4) var(--space-5) !important;
   background: var(--gradient-welcome-hero) !important;
   margin: 0 !important;
   border-bottom: 1px solid var(--color-border-light) !important;
 }
 
-.drive-dialog :deep(.el-dialog__title) {
+.drive-dialog .el-dialog__title {
   color: #fff !important;
   font-weight: var(--font-weight-semibold) !important;
   font-size: var(--font-size-md) !important;
   letter-spacing: 0.3px;
 }
 
-.drive-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+.drive-dialog .el-dialog__headerbtn .el-dialog__close {
   color: #fff !important;
 }
 
-.drive-dialog :deep(.el-dialog__body) {
+.drive-dialog .el-dialog__body {
   padding: var(--space-5) !important;
   color: var(--color-text-primary) !important;
 }
 
-.drive-dialog :deep(.el-dialog__footer) {
+.drive-dialog .el-dialog__footer {
   padding: var(--space-3) var(--space-5) var(--space-5) !important;
   border-top: 1px solid var(--color-border-light) !important;
 }
@@ -1368,7 +1370,7 @@
   background: var(--color-bg-card);
 }
 
-.drive-view-toggle :deep(.el-button) {
+.drive-view-toggle .el-button {
   border: none !important;
   border-radius: 0 !important;
   margin: 0 !important;
@@ -1379,9 +1381,11 @@
 
 /*
  * v2.16.1 (2026-07-11) 视图切换暗色主题加固:
- * 用 EP 内部 var() 双重保险, 防 :deep 选择器被 EP 默认 .el-button--default 覆盖白底
+ * 用 EP 内部 var() 双重保险, 防 .el-button--default 覆盖白底
+ *
+ * v2.17 (2026-07-11) 移除 :deep(): 全局 CSS 不需要, 直接后代选择器即可
  */
-.drive-view-toggle :deep(.el-button:not(.is-active):not(.el-button--primary)) {
+.drive-view-toggle .el-button:not(.is-active):not(.el-button--primary) {
   --el-button-bg-color: transparent !important;
   --el-button-border-color: transparent !important;
   --el-button-text-color: var(--color-text-secondary) !important;
@@ -1389,8 +1393,8 @@
   --el-button-hover-text-color: var(--color-primary) !important;
 }
 
-.drive-view-toggle :deep(.el-button.is-active),
-.drive-view-toggle :deep(.el-button--primary) {
+.drive-view-toggle .el-button.is-active,
+.drive-view-toggle .el-button--primary {
   background: var(--gradient-cta-button) !important;
   color: #fff !important;
   box-shadow: var(--shadow-primary);
