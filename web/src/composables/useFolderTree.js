@@ -95,12 +95,28 @@ export const useFolderTreeStore = defineStore('folderTree', () => {
   // personal: 排除 is_team_default=true folder (个人网盘视图)
   // team:     仅 is_team_default=true folder (团队共享盘视图)
   // all:      不过滤 (兼容老调用 + 调试)
+  //
+  // v2.26 (2026-07-12) BUG A 修复: axios.get(url, { params }) 在 production build 下丢失 params
+  //   根因: 生产环境 axios 1.16.1 (vite bundle) 对 `{ params: { scope } }` 不附加 query string 到 URL
+  //   症状: fetchTree('team') / fetchTree('all') / fetchTree('personal') 三个不同 scope 都发出
+  //         `/folders/tree` (无 query) → 后端默认 scope=personal → 永远返 personal tree
+  //         → 用户点击 🌐 团队共享盘后 Pinia store.folderTree 不更新 → FolderTree 不渲染 组会PPT
+  //   修法: 改用 fetch + URLSearchParams 显式构造 URL (与 axios interceptor 401/refresh 链解耦)
   const fetchTree = async (scope = 'personal') => {
     loading.value = true
     loadError.value = null
     try {
-      const resp = await axios.get('/api/v1/folders/tree', { params: { scope } })
-      folderTree.value = resp.data.tree || []
+      const qs = new URLSearchParams({ scope })
+      const resp = await fetch(`/api/v1/folders/tree?${qs}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token') || ''}`,
+        },
+      })
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}: ${await resp.text()}`)
+      }
+      const data = await resp.json()
+      folderTree.value = data.tree || []
     } catch (e) {
       loadError.value = extractErrorMessage(e, '文件夹树加载失败')
       folderTree.value = []
