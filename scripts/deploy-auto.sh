@@ -178,6 +178,28 @@ if [ -f "$PROJECT_DIR/web/dist/sw.js" ]; then
     log "PWA SW precache 检查通过（sw.js 不含 unhashed manifest 引用）"
 fi
 
+# PWA SW 健全性检查 (staged diff)：防 commit 59187ce8 回归再次发生
+# 背景：上面 line 167-178 检查磁盘上的 web/dist/sw.js，但 commit 59187ce8 cascade folder delete
+# 是开发者本地 `vite build` 直跑 (绕开 `npm run build` 末尾的 postbuild-fix-manifest.js) → 磁盘上
+# 的 sw.js 含 unhashed manifest.webmanifest → 上面检查能拦。但**如果开发者重跑 npm run build 后
+# 手动 force-add 了老的 unhashed dist 文件** (例如 cache 里残留 + git add -f web/dist/) → 磁盘 sw.js
+# 是干净的 (postbuild 已修) → 上面检查过 → 但 git diff --cached 可能仍含 unhashed 引用 →
+# commit push 后 webhook 部署会用 git HEAD 的旧 sw.js 替换磁盘的干净 sw.js → 回归。
+# 修法：在 git commit 之前 grep staged diff，命中即 abort。
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    STAGED_MANIFEST_OLD=$(git diff --cached -- web/dist/ 2>/dev/null | grep -E '"url":\s*"manifest\.webmanifest"' | head -3)
+    if [ -n "$STAGED_MANIFEST_OLD" ]; then
+        log "ERROR: git diff --cached 含 unhashed manifest.webmanifest 引用 (commit 59187ce8 回归点)"
+        log "staged diff 含以下 unhashed 引用:"
+        echo "$STAGED_MANIFEST_OLD" | while IFS= read -r line; do log "  $line"; done
+        log "修复方法：cd web && npm run build (重跑 postbuild-fix-manifest.js 自动 hash 化)"
+        log "        然后 git reset HEAD web/dist/ 再 git add -f web/dist/ 重新 stage"
+        log "========== 部署中止 =========="
+        exit 1
+    fi
+    log "PWA staged diff 检查通过 (git diff --cached 不含 unhashed manifest 引用)"
+fi
+
 # 同步 Nginx 配置（tunnel.conf → /etc/nginx/conf.d/default.conf）
 # 注意：此步骤在 git pull 之后执行，配置变更下次部署生效
 if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
