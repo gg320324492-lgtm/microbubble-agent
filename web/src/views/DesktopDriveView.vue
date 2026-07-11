@@ -365,13 +365,15 @@ const specialView = ref(null)
 // 与 drive-view.css .drive-chip 配合, aria-pressed=true 时 is-active class
 // v2.23 (2026-07-11) 删 名称 A-Z / 名称 Z-A chip (用户决策 "重命名场景极少, 4 个时间排序够用")
 // 后端 file_name 排序仍支持 (e.g. URL 直调 file_name:asc), 仅前端 chip 不暴露
+// v2.24 (2026-07-11) 删 收藏时间 chip (用户决策 "收藏有专门视图, 不用混在排序里")
+// 后端 starred_at 排序仍支持 (e.g. fetch_starred() 默认 sort=starred_at desc),
+// 仅前端 chip 不暴露. "我的收藏" 视图 (specialView=starred) 内部仍按 starred_at desc
 const SORT_OPTIONS = [
   // v2.5 (2026-07-10): 修复两 chip 视觉重复 — 「最新上传 ⬇/⬆」文字完全相同只差箭头方向,
   //   改为「最新上传 ⬇」+「最早上传 ⬆」让用户一眼区分 (latest vs earliest).
   { value: 'created_at:desc', label: '最新上传 ⬇' },
   { value: 'created_at:asc',  label: '最早上传 ⬆' },
   { value: 'updated_at:desc', label: '最近修改 ⬇' },
-  { value: 'starred_at:desc', label: '收藏时间 ⬇' },
 ]
 
 // v2.22 (2026-07-11) 拆分 office → word/ppt/excel (用户决策 "Office 分类太粗")
