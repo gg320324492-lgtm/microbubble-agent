@@ -347,7 +347,7 @@ async def list_drive_files(
     starred_only: bool = Query(False, description="仅显示收藏"),
     file_type: Optional[str] = Query(
         None,
-        description="类型过滤: pdf | image | video | audio | office | text (无值=全部)",
+        description="类型过滤: pdf | image | video | audio | word | ppt | excel | text (无值=全部, office 仍兼容)",
     ),
     # v2 PR6-P19: 视图隔离 (personal=个人网盘默认, team=团队共享盘, all=全显)
     view: Optional[str] = Query(

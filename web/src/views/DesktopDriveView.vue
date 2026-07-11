@@ -374,12 +374,16 @@ const SORT_OPTIONS = [
   { value: 'file_name:desc',  label: '名称 Z-A' },
 ]
 
+// v2.22 (2026-07-11) 拆分 office → word/ppt/excel (用户决策 "Office 分类太粗")
+// 后端 drive_service._build_file_type_predicate 同步加 word/ppt/excel 映射, office 留为 alias
 const FILE_TYPE_OPTIONS = [
   { value: null,    type: null,    label: '全部类型' },
   { value: 'pdf',   type: 'pdf',   label: '📄 PDF' },
   { value: 'image', type: 'image', label: '🖼️ 图片' },
   { value: 'video', type: 'video', label: '🎬 视频' },
-  { value: 'office',type: 'office',label: '📊 Office' },
+  { value: 'word',  type: 'word',  label: '📝 Word' },
+  { value: 'ppt',   type: 'ppt',   label: '📊 PPT' },
+  { value: 'excel', type: 'excel', label: '📈 Excel' },
   { value: 'audio', type: 'audio', label: '🎵 音频' },
   { value: 'text',  type: 'text',  label: '📝 文本' },
 ]
