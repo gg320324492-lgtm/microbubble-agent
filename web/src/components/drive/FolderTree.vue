@@ -146,9 +146,15 @@ function handleRootClick() {
   emit('update:specialView', null)
 }
 
+// v2.26 (2026-07-12) BUG F 修复: handleFolderSelect 不再 emit specialView=null
+//   修复前: 任何 sub-folder click 都会重置 specialView → 团队共享盘 view 切回 personal view
+//           → fetchDriveFiles 走 view=personal → 过滤掉 is_team_shared=true 文件
+//           → 用户在团队共享盘 sub-folder 看 0 个文件 (Bug D 表面现象, 真因在 FolderTree)
+//   修复后: 只更新 selectedFolderId, specialView 保持 (用户主动选的特殊视图不应被 folder click 覆盖)
+//           watch(selectedFolderId) 内部已经跟随 specialView 传 view 参数 (Bug D 修复)
 function handleFolderSelect(folderId) {
   emit('update:selectedFolderId', folderId)
-  emit('update:specialView', null)
+  // 不重置 specialView — 允许在团队共享盘 / 收藏等特殊视图下钻取 sub-folder
 }
 
 // === v2.8: 5 根项 + 1 sub 右键菜单项配置 ===
