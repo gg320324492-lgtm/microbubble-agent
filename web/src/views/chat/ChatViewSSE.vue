@@ -732,16 +732,15 @@ onUnmounted(() => {
   transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 
-/* P0-#2 (2026-07-12): "跳到最早"按钮 — 镜像 jump-to-bottom 但 top 对齐 */
+/* P0-#2 v2 (2026-07-12 14:30): "跳到最早"按钮 — 用 position: sticky 而非 absolute
+   关键修复: `position: absolute; top: 24px` 在 scrollTop>0 时按钮被卷出可见区域
+   (scrollHeight=3223, scrollTop=2836 时 rect.top=-2670). sticky 始终在可见区域顶部. */
 .jump-to-top {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
+  position: sticky;
+  top: 16px;
+  z-index: 10;
+  display: block;
+  margin: 0 auto 0 auto;
   background: var(--color-bg-card);
   border: 1px solid var(--color-primary, #FF7A5C);
   border-radius: 20px;
@@ -750,8 +749,14 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   box-shadow: var(--shadow-md);
-  z-index: 10;
+  padding: 8px 16px;
   transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.jump-to-top:hover {
+  background: var(--color-primary, #FF7A5C);
+  color: white;
+  transform: translateY(2px);
 }
 
 .jump-to-top:hover {
