@@ -269,6 +269,15 @@ export function useChatStream() {
 
   // --------------------------------------------------------------------------
   // 会话加载（修复 4：loadedSessions 防重复覆盖后台 SSE 增量）
+  // P0-#1.6 (2026-07-12): localStorage miss → server fetch fallback (绕过 #043 设计漏洞)
+  //
+  // 背景: 旧实现只从 localStorage 读,server-side create 的 session (curl 测试 / 跨设备 /
+  // PR6 持久化等) localStorage 永远没缓存 → 点开空白. 现加 server fetch 兜底:
+  // - localStorage hit: 直接用 (常见,本设备历史)
+  // - localStorage miss: 设空数组占位 + kick 后台 chatHistoryStore.fetchMessages(id)
+  //   - server 返消息 → 用 serverToClient map + 写回 localStorage (下次启动命中)
+  //   - server 返空 → 保留空数组 (genuine empty)
+  //   - fetch 失败 → 保留空数组 (用户手刷新重试)
   // --------------------------------------------------------------------------
   function ensureSessionLoaded(id: string) {
     if (loadedSessions.has(id)) return
@@ -277,11 +286,47 @@ export function useChatStream() {
     if (saved) {
       try {
         messagesBySession.value[id] = JSON.parse(saved)
+        return  // 本地缓存命中 → 直接返回
       } catch {
-        messagesBySession.value[id] = []
+        // 解析失败 → 走 server fetch 兜底
       }
-    } else {
-      messagesBySession.value[id] = []
+    }
+    // localStorage miss 或 parse fail → 占位 + 后台 server fetch
+    messagesBySession.value[id] = []
+    void fetchSessionFromServer(id)
+  }
+
+  /**
+   * 从 server 拉取完整历史消息 (P0-#1.6 2026-07-12)
+   * - 调用 chatHistoryStore.fetchMessages(id) (已有 API)
+   * - 成功后 map serverToClient + 写回 messagesBySession + 写回 localStorage
+   * - 失败 best-effort: console.warn 不阻塞 UI (用户重试或换设备登录)
+   */
+  async function fetchSessionFromServer(id: string) {
+    try {
+      const data = await chatHistoryStore.fetchMessages(id, { pageSize: 200 })
+      const items = data?.items || []
+      // 并发安全: 用户可能中途切到其他 session, 此时不应覆盖另一 session 的 messages
+      // 单 session 内的 messages 是 in-place 替换, 用户自己看到的是 messages 渲染的当前 session
+      // 不需要 session id 比对 (这里只动 messagesBySession[id])
+      if (items.length === 0) {
+        // server 真实 0 条消息 → 保留空数组 (用户可看到欢迎 hero)
+        return
+      }
+      messagesBySession.value[id] = items.map(serverToClient)
+      // 写回 localStorage: 下次启动直接 cache hit,不用再 server fetch
+      try {
+        localStorage.setItem(
+          `${MESSAGES_KEY_PREFIX}${id}`,
+          JSON.stringify(messagesBySession.value[id]),
+        )
+      } catch (e) {
+        // localStorage quota 超限等: console.warn 不阻塞
+        console.warn(`[fetchSessionFromServer] localStorage 写回失败: sid=${id}`, e)
+      }
+    } catch (e: any) {
+      // server fetch 失败 → 保留空数组, console.warn 不阻塞 (用户可手动刷新)
+      console.warn(`[fetchSessionFromServer] 失败: sid=${id}`, e?.response?.data?.detail || e?.message)
     }
   }
 
