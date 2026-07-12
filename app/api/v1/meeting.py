@@ -588,47 +588,9 @@ async def end_meeting_call(
     }
 
 
-@router.delete("/meetings/{meeting_id}/audio", status_code=200)
-async def delete_meeting_audio(
-    meeting_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: Member = Depends(get_current_user),
-):
-    """
-    管理员删除会议录音（保留纪要）。
-    软删除：清空 audio_archive_url，保留 audio_archived_at 等字段供审计。
-    """
-    import logging
-    from app.services.file_service import file_service
-
-    logger = logging.getLogger(__name__)
-
-    # 权限校验：仅管理员
-    if current_user.role != "admin":
-        raise ForbiddenException("需要管理员权限")
-
-    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
-    meeting = result.scalar_one_or_none()
-    if not meeting:
-        raise NotFoundException("会议")
-
-    if not meeting.audio_archived:
-        raise ValidationException("没有可删除的录音")
-
-    # 删除 MinIO 文件
-    object_name = f"meetings/{meeting_id}/audio.opus"
-    try:
-        await file_service.delete_file(object_name)
-    except Exception as e:
-        logger.warning(f"MinIO 删除失败: {e}")
-
-    # 软删除（清空 url，保留其他字段）
-    meeting.audio_archived = False
-    meeting.audio_archive_url = None
-    # audio_archived_at / duration / size 保留
-    await db.commit()
-
-    return {"status": "deleted", "meeting_id": meeting_id}
+# 2026-07-12 死代码清理: 删除 DELETE /meetings/{id}/audio handler
+# 原因: audio_archive_service.py 已删 (孤儿), model 列已 drop (alembic 059)
+# handler 唯一作用 = 软删除 audio_archive_url, 列已不存在, handler 必 500
 
 
 @router.get("/meetings/{meeting_id}/related")

@@ -54,12 +54,8 @@ class Meeting(Base, TimestampMixin):
     recording_started_at = Column(DateTime, nullable=True)    # 开始听会时间
     recording_ended_at = Column(DateTime, nullable=True)      # 结束听会时间
 
-    # Wave 2b: 音频存档
-    audio_archive_url = Column(String(500), nullable=True)
-    audio_duration_seconds = Column(Float, nullable=True)
-    audio_size_bytes = Column(BigInteger, nullable=True)
-    audio_archived_at = Column(DateTime(timezone=True), nullable=True)
-    audio_archived = Column(Boolean, default=False)
+    # 2026-07-12 死代码清理: 删 5 个 audio_archive_* 列 (audio_archive_service.py 孤儿, 列 write-only)
+    # alembic 059_drop_audio_archive_columns.py DROP COLUMN IF EXISTS
 
     # Wave 3a: 跨会议关联
     agenda = Column(JSON, nullable=True)
