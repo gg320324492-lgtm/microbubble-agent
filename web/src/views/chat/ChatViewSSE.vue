@@ -20,7 +20,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ChatDotRound, ArrowDown, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny } from '@element-plus/icons-vue'
+import { ChatDotRound, ArrowDown, ArrowUp, Search, Fold, Expand, Plus, Picture, Paperclip, Microphone, Promotion, VideoPause, MagicStick, Cpu, Moon, Sunny } from '@element-plus/icons-vue'
 import RichContent from '@/components/chat/RichContent.vue'
 import SessionSidebar from '@/components/chat/SessionSidebar.vue'
 import VoiceRecorder from '@/components/VoiceRecorder.vue'
@@ -142,8 +142,10 @@ useGlobalShortcuts({
 const messagesRef = ref<HTMLElement | null>(null)
 const autoStick = ref(true)  // 是否自动贴底
 const showJumpToBottom = ref(false)  // 是否显示"跳到最新"按钮
+const showJumpToTop = ref(false)  // P0-#2 (2026-07-12): 是否显示"跳到最早"按钮
 const STICK_THRESHOLD_PX = 80  // 距底 < 80px 算"贴底"
 const USER_SCROLL_UP_THRESHOLD = 120  // 距底 > 120px 视为"用户主动上滚"
+const TOP_THRESHOLD_PX = 100  // P0-#2: 距顶 < 100px 算"贴顶"
 
 const scrollToBottom = async (force = false) => {
   await nextTick()
@@ -152,23 +154,43 @@ const scrollToBottom = async (force = false) => {
       messagesRef.value.scrollTop = messagesRef.value.scrollHeight
       autoStick.value = true
       showJumpToBottom.value = false
+      // P0-#2: 滚到底后, 离顶部远 → 显示"跳到最早"按钮
+      showJumpToTop.value = true
     }
   }
 }
 
-// 监听用户手动滚动：用户往上滚 → 取消 autoStick
+// P0-#2 新增: 滚到顶部 (用于"跳到最早"按钮)
+const scrollToTop = async () => {
+  await nextTick()
+  if (messagesRef.value) {
+    messagesRef.value.scrollTop = 0
+  }
+}
+
+// 监听用户手动滚动:用户往上滚 → 取消 autoStick
 const onMessagesScroll = () => {
   if (!messagesRef.value) return
   const { scrollTop, scrollHeight, clientHeight } = messagesRef.value
   const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+  const distanceFromTop = scrollTop
+
   if (distanceFromBottom < STICK_THRESHOLD_PX) {
     // 接近底部 → 重新启用 autoStick
     autoStick.value = true
     showJumpToBottom.value = false
-  } else {
-    // 离开底部（用户上滚）→ 停止自动滚，显示跳到最新按钮
+    // P0-#2: 离顶部 > 100px 时仍显示"跳到最早"按钮
+    showJumpToTop.value = distanceFromTop > TOP_THRESHOLD_PX
+  } else if (distanceFromTop < TOP_THRESHOLD_PX) {
+    // P0-#2: 接近顶部 → 关闭"跳到最早"按钮 (已在顶部无需按钮)
     autoStick.value = false
     showJumpToBottom.value = true
+    showJumpToTop.value = false
+  } else {
+    // P0-#2: 中间区域 → 两个按钮都显示 (用户可自由跳到任一端)
+    autoStick.value = false
+    showJumpToBottom.value = true
+    showJumpToTop.value = true
   }
 }
 
@@ -178,6 +200,16 @@ const jumpToBottom = () => {
   }
   autoStick.value = true
   showJumpToBottom.value = false
+  showJumpToTop.value = true  // P0-#2: 跳到底后离顶部远 → 显示"跳到最早"
+}
+
+// P0-#2 新增: 跳到最早 (历史起点)
+const jumpToTop = () => {
+  if (messagesRef.value) {
+    messagesRef.value.scrollTop = 0
+  }
+  showJumpToBottom.value = true  // 离底部远 → 显示"跳到最新"按钮
+  showJumpToTop.value = false
 }
 
 // ============================================================================
@@ -411,6 +443,20 @@ onUnmounted(() => {
       >
         <el-icon><ArrowDown /></el-icon>
         <span>跳到最新</span>
+      </button>
+      <!-- P0-#2 (2026-07-12): 加"跳到最早"按钮 - 用户报"41条仍然看不全"实际原因
+           autoStick 滚到底无顶部按钮,用户被卡在底部看不到前 35 条历史. 修复: -->
+      <button
+        v-if="showJumpToTop"
+        id="chat-jump-to-top"
+        class="jump-to-top"
+        type="button"
+        aria-label="跳到最早消息"
+        title="跳到最早消息 (历史起点)"
+        @click="jumpToTop"
+      >
+        <el-icon><ArrowUp /></el-icon>
+        <span>跳到最早</span>
       </button>
       <!-- 录音面板 -->
       <VoiceRecorder
@@ -684,6 +730,44 @@ onUnmounted(() => {
   box-shadow: var(--shadow-md);
   z-index: 10;
   transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+/* P0-#2 (2026-07-12): "跳到最早"按钮 — 镜像 jump-to-bottom 但 top 对齐 */
+.jump-to-top {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-primary, #FF7A5C);
+  border-radius: 20px;
+  color: var(--color-primary, #FF7A5C);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.jump-to-top:hover {
+  background: var(--color-primary, #FF7A5C);
+  color: white;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+[data-theme="dark"] .jump-to-top {
+  background: var(--color-bg-card, #2a2a2a);
+  color: var(--color-primary, #FF7A5C);
+}
+
+[data-theme="dark"] .jump-to-top:hover {
+  background: var(--color-primary, #FF7A5C);
+  color: white;
 }
 
 .jump-to-bottom:hover {
