@@ -1,5 +1,11 @@
 # MicroBubble Agent - 项目上下文
 
+> ⚠️ **DEPRECATED 2026-07-12**: 本文件已被 [CLAUDE.md](./CLAUDE.md) 替代。
+> 保留本文件仅为兼容 `.agents/skills/*.md` 中提到的 "AGENTS.md 约定名" (未来可统一改名为 CLAUDE.md 再删除)。
+> **新会话启动请读 CLAUDE.md**, 本文件不再更新, 内容已严重过时 (停留在 2026-06-24)。
+
+---
+
 ## 项目简介
 
 "小气" - 微纳米气泡课题组智能Agent系统，约20人研究实验室的AI助手。
