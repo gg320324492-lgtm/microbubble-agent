@@ -332,6 +332,7 @@ def scan_paper_layout_task(self, knowledge_id: int):
     """Celery async scan single paper layout."""
     import asyncio
     from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
     from app.config import settings
     from app.models.knowledge import Knowledge
     from app.services.file_service import file_service

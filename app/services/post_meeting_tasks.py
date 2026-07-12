@@ -19,6 +19,9 @@ import wave
 
 import numpy as np
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.services.progress_service import ProgressStage, update_progress
@@ -82,7 +85,6 @@ def post_meeting_process(self, meeting_id: int):
 
         async with session_factory() as db:
             from app.models.meeting import Meeting
-            from sqlalchemy import select
             result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
             meeting = result.scalar_one_or_none()
             if not meeting:

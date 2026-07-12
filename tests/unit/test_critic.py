@@ -13,12 +13,12 @@ import pytest
 
 from app.agent.critic import (
     CritiqueResult,
-    _parse_json_response,
     critique_response,
     critique_to_sse_event,
     inject_suggestion_to_system,
     should_retry,
 )
+from app.core.llm import parse_llm_json  # 2026-07-12 提取到 app.core.llm.parse_llm_json
 from app.agent.intent_classifier import IntentCategory, IntentResult
 from app.agent.protocol import RichBlock
 from app.config import settings

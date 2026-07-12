@@ -16,6 +16,7 @@ import logging
 from datetime import datetime, timezone
 from celery import shared_task
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any, Optional
 
 from app.models.base import utcnow, BEIJING_TZ

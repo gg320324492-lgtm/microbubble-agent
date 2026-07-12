@@ -18,6 +18,7 @@ from app.models.base import utcnow, BEIJING_TZ
 from app.core.celery_db import create_celery_engine_and_session
 from celery import shared_task
 from sqlalchemy import select, and_
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("microbubble.wechat.scheduler")
 

@@ -35,6 +35,7 @@ from app.core.celery import celery_app
 from app.config import settings
 from app.services.cleanup_safety import confirm_retention_param_auto
 from app.services.drive_cleanup_service import clean_old_drive_files
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("microbubble.drive_cleanup")
 
@@ -84,7 +85,7 @@ def cleanup_expired_drive_files_task(retention_days: Optional[int] = None):
         }
     try:
         async def _run():
-            session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            engine, session_factory = create_celery_engine_and_session()
             try:
                 # 计算 cutoff: UTC-aware → service 内部 _to_naive_datetime 统一
                 cutoff_aware = datetime.now(timezone.utc) - timedelta(days=days)

@@ -21,6 +21,7 @@ from app.core.celery import celery_app
 from app.config import settings
 from app.services.notification_service import cleanup_old_mentions
 from app.services.cleanup_safety import confirm_retention_param_auto
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("microbubble.file_mention_cleanup")
 
@@ -65,7 +66,7 @@ def cleanup_old_mentions_task(retention_days: Optional[int] = None):
         }
     try:
         async def _run():
-            session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            engine, session_factory = create_celery_engine_and_session()
             try:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=days)
                 # cleanup_old_mentions 内部会 commit

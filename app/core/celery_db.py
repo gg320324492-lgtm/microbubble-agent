@@ -35,8 +35,7 @@ memory_service / paper_layout_service / tracing.py / wechat/scheduler 等).
 """
 from typing import Tuple
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.engine import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
