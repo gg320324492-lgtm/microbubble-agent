@@ -1,10 +1,10 @@
 """Embedding service - 向量嵌入生成
 
 Phase 2 重构 (2026-06-24 sentence-transformers 5.6.0 升级)：
-- 删除 Qwen3 wrapper 双分支（qwen_embedder_legacy.py 保留作 graceful degradation）
 - 统一用 sentence-transformers SentenceTransformer 加载所有 embedding 模型
 - ST 5.6.0 的 Pooling 支持 include_prompt 参数 + Qwen3 native 加载
 - 单 ST 路径 = 单代码路径 = 少 bug 表面
+- 2026-07-12 死代码清理: 删除孤儿 qwen_embedder_legacy.py (无任何调用方)
 
 设备自动检测：EMBEDDING_DEVICE=auto 时按 torch.cuda.is_available() 选择。
 可选模型通过 EMBEDDING_MODEL_NAME 环境变量切换：

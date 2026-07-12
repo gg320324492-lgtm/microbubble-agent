@@ -23,11 +23,6 @@
           @download="downloadFile"
         />
 
-        <!-- 阅读器工具栏（v28 step 15: 仅保留字号/行距/回顶） -->
-        <ReadingToolbar
-          :paper="paper"
-        />
-
         <!-- 摘要卡片 -->
         <AbstractCard v-if="paper.abstract" :paper="paper" />
 
@@ -205,7 +200,7 @@ import ExtractionPanel from '@/components/paper/ExtractionPanel.vue'
 import RelatedKnowledgeList from '@/components/paper/RelatedKnowledgeList.vue'
 import RightAnchorNav from '@/components/paper/RightAnchorNav.vue'
 // v28 step 10: 移除 RightImageRail（正文已自动内嵌图片，右侧重复展示已无用）
-import ReadingToolbar from '@/components/paper/ReadingToolbar.vue'
+// 2026-07-12: 移除 ReadingToolbar import (孤儿组件, v28 step 20 已 deliberate no-op)
 
 import {
   normalizePaperData,

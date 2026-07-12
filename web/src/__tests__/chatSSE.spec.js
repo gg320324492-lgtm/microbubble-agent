@@ -95,33 +95,7 @@ describe('sseFetch', () => {
 })
 
 
-// ============================================================
-// 2. toolLabels 测试
-// ============================================================
-
-describe('TOOL_LABELS', () => {
-  it('所有关键工具都有中文标签', async () => {
-    const { TOOL_LABELS, toolLabel } = await import('@/api/agent/toolLabels')
-    for (const name of [
-      'query_meetings', 'get_meeting_detail', 'get_meeting_transcript',
-      'get_recent_meeting_conclusions', 'query_tasks', 'search_knowledge',
-      'web_search', 'list_formulas', 'list_hypotheses'
-    ]) {
-      expect(TOOL_LABELS[name]).toBeTruthy()
-      expect(TOOL_LABELS[name]).not.toBe(name)  // 不应是英文
-    }
-  })
-
-  it('未知工具 fallback 到原名', async () => {
-    const { toolLabel } = await import('@/api/agent/toolLabels')
-    expect(toolLabel('some_unknown_tool_xyz')).toBe('some_unknown_tool_xyz')
-  })
-
-  it('undefined 输入返回空串', async () => {
-    const { toolLabel } = await import('@/api/agent/toolLabels')
-    expect(toolLabel(undefined)).toBe('')
-  })
-})
+// 2026-07-12: TOOL_LABELS describe 块已删除 (对应 @/api/agent/toolLabels.ts 已清理, 孤儿 API)
 
 
 // ============================================================

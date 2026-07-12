@@ -103,41 +103,8 @@ def test_qwen3_native_loads_and_encodes():
     assert 0.99 < norm < 1.01, f"Expected normalized embedding, got norm={norm}"
 
 
-def test_qwen3_native_vs_wrapper_output_match():
-    """验证 ST 原生 Qwen3 与 wrapper 输出实质相同 (cos > 0.999)
-
-    这是 Phase 2 删 wrapper 的关键前置测试。
-    """
-    import numpy as np
-    from sentence_transformers import SentenceTransformer
-    from app.services.qwen_embedder_legacy import Qwen3Embedder
-    import torch
-
-    text = "微纳米气泡的zeta电位"
-    expected_dim = 1024
-
-    # ST 原生
-    st_model = SentenceTransformer(
-        "Qwen/Qwen3-Embedding-0.6B",
-        device="cuda",
-        trust_remote_code=True,
-    )
-    st_emb = st_model.encode([text], normalize_embeddings=True)[0]
-    del st_model
-    torch.cuda.empty_cache()
-
-    # Legacy wrapper (保留作对比)
-    wrapper = Qwen3Embedder("Qwen/Qwen3-Embedding-0.6B", device="cuda")
-    wrapper_emb = wrapper.encode([text], for_query=False)[0]
-    del wrapper
-    torch.cuda.empty_cache()
-
-    # 比较
-    assert st_emb.shape == (expected_dim,)
-    assert wrapper_emb.shape == (expected_dim,)
-
-    cos = float(np.dot(st_emb, wrapper_emb) / (np.linalg.norm(st_emb) * np.linalg.norm(wrapper_emb)))
-    assert cos > 0.999, f"Expected cos > 0.999, got cos={cos}"
+# 2026-07-12: test_qwen3_native_vs_wrapper_output_match 已删除 — wrapper (qwen_embedder_legacy.py) 已清理
+# 删后只剩 ST 原生路径, 无对比对象
 
 
 def test_embedding_service_qwen3_dim():
@@ -193,10 +160,4 @@ def test_embedding_service_for_query_param():
     assert v_query is not None and len(v_query) == 1024
 
 
-def test_legacy_wrapper_still_importable():
-    """Phase 2: qwen_embedder_legacy.py 保留作 graceful degradation"""
-    from app.services.qwen_embedder_legacy import Qwen3Embedder
-    assert Qwen3Embedder is not None
-    # 文件名应该是 legacy
-    import app.services.qwen_embedder_legacy as legacy
-    assert "DEPRECATED" in (legacy.__doc__ or ""), "qwen_embedder_legacy.py should have DEPRECATED warning in docstring"
+# 2026-07-12: test_legacy_wrapper_still_importable 已删除 — qwen_embedder_legacy.py 已清理
