@@ -18,6 +18,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 
 logger = logging.getLogger("microbubble.orphan_cleanup")
@@ -42,19 +43,12 @@ def cleanup_orphan_meetings():
 async def _scan_and_cleanup() -> dict:
     """异步执行清理逻辑"""
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import NullPool
     from app.config import settings
     from app.models.meeting import Meeting
     from app.services.chunked_upload_service import chunked_upload_service
     from app.services.progress_service import update_progress, ProgressStage
     import redis.asyncio as aioredis
-
-    engine = create_async_engine(
-        settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-        poolclass=NullPool,
-    )
-    session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    engine, session_factory = create_celery_engine_and_session()
     redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
     threshold = datetime.utcnow() - timedelta(hours=1)

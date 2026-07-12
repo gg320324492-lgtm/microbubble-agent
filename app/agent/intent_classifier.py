@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 from app.agent.protocol import StreamEvent
 from app.agent.tool_registry import ToolContext
 from app.config import settings
-from app.core.llm import LLMClient
+from app.core.llm import LLMClient, parse_llm_json
 
 logger = logging.getLogger("microbubble.agent.intent")
 
@@ -172,7 +172,7 @@ async def classify_intent(question: str, ctx: ToolContext) -> IntentResult:
             raise ValueError("LLM 返回空文本")
 
         # 解析 JSON
-        result_dict = _parse_json_response(text)
+        result_dict = parse_llm_json(text)
         result = IntentResult(
             category=IntentCategory(_map_category(result_dict.get("category", "找资料"))),
             confidence=float(result_dict.get("confidence", 0.5)),
@@ -219,17 +219,7 @@ def intent_to_sse_event(result: IntentResult) -> StreamEvent:
 # ============================================================================
 
 
-def _parse_json_response(text: str) -> dict[str, Any]:
-    """解析 LLM 返回的 JSON 文本，自动处理 markdown 包裹"""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        if lines and lines[-1].strip() == "```":
-            text = "\n".join(lines[1:-1])
-        else:
-            text = "\n".join(lines[1:])
-        text = text.strip()
-    return json.loads(text)
+# 2026-07-12 死代码清理: 删本地 _parse_json_response, 复用 app.core.llm.parse_llm_json
 
 
 _CATEGORY_MAP = {
@@ -243,9 +233,6 @@ _CATEGORY_MAP = {
 
 
 def _map_category(zh_or_en: str) -> str:
-    """LLM 返回的中文类别 → enum 值"""
-    if zh_or_en in _CATEGORY_MAP.values():
-        return zh_or_en
     return _CATEGORY_MAP.get(zh_or_en, "search_info")
 
 

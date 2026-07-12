@@ -22,7 +22,7 @@ from app.agent.intent_classifier import IntentResult
 from app.agent.protocol import StreamEvent
 from app.agent.tool_registry import ToolContext
 from app.config import settings
-from app.core.llm import LLMClient
+from app.core.llm import LLMClient, parse_llm_json
 
 logger = logging.getLogger("microbubble.agent.compressor")
 
@@ -166,7 +166,7 @@ async def compress_tool_result(
         if not text:
             raise ValueError("LLM returned empty text")
 
-        result_dict = _parse_json_response(text)
+        result_dict = parse_llm_json(text)
         result = CompressionResult(
             selected=result_dict.get("selected", []),
             reasoning=result_dict.get("reasoning", ""),
@@ -255,14 +255,3 @@ def _extract_items(raw_result: dict) -> tuple[list, str]:
     return [], "items"
 
 
-def _parse_json_response(text: str) -> dict[str, Any]:
-    """解析 LLM 返回的 JSON 文本，自动处理 markdown 包裹"""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        if lines and lines[-1].strip() == "```":
-            text = "\n".join(lines[1:-1])
-        else:
-            text = "\n".join(lines[1:])
-        text = text.strip()
-    return json.loads(text)

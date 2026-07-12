@@ -19,6 +19,7 @@ import wave
 
 import numpy as np
 
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.services.progress_service import ProgressStage, update_progress
 
@@ -75,16 +76,9 @@ def post_meeting_process(self, meeting_id: int):
 
     async def _run():
         import redis.asyncio as aioredis
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-        from sqlalchemy.pool import NullPool
         from app.config import settings
-
-        engine = create_async_engine(
-            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-            poolclass=NullPool,
-        )
         redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-        session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        engine, session_factory = create_celery_engine_and_session()
 
         async with session_factory() as db:
             from app.models.meeting import Meeting

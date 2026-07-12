@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
 
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.config import settings
 from app.models.base import utcnow
@@ -268,18 +268,11 @@ def auto_purge_trash_task(retention_days: Optional[int] = None):
     """
     import asyncio
     import logging
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import NullPool
-
     logger = logging.getLogger("microbubble.trash")
     days = retention_days if retention_days is not None else settings.TRASH_RETENTION_DAYS
     try:
         async def _run():
-            engine = create_async_engine(
-                settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-                poolclass=NullPool,
-            )
-            session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            engine, session_factory = create_celery_engine_and_session()
             try:
                 async with session_factory() as db:
                     result = await TaskService.auto_purge_trash(db, retention_days=days)

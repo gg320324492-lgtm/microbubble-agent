@@ -323,6 +323,7 @@ class PaperLayoutService:
 paper_layout_service = PaperLayoutService()
 
 
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 
 
@@ -330,8 +331,6 @@ from app.core.celery import celery_app
 def scan_paper_layout_task(self, knowledge_id: int):
     """Celery async scan single paper layout."""
     import asyncio
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import NullPool
     from sqlalchemy import select
     from app.config import settings
     from app.models.knowledge import Knowledge
@@ -339,10 +338,6 @@ def scan_paper_layout_task(self, knowledge_id: int):
     from app.models.knowledge_layout import KnowledgeLayout
 
     async def _run():
-        engine = create_async_engine(
-            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-            poolclass=NullPool,
-        )
         local_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         try:
             async with local_session_factory() as db:

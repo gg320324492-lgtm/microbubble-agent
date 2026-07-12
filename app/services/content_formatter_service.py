@@ -4,6 +4,7 @@ import logging
 import re
 
 from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 
 logger = logging.getLogger("microbubble.content_formatter")
@@ -127,8 +128,6 @@ def reformat_knowledge_task(self, knowledge_id: int):
     - 失败自动重试 2 次（countdown=60s）
     """
     import asyncio
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import NullPool
     from app.config import settings
     from app.models.knowledge import Knowledge
     from sqlalchemy import select
@@ -137,10 +136,6 @@ def reformat_knowledge_task(self, knowledge_id: int):
         # v28 step 18: Celery worker 是新 event loop，不能复用 FastAPI app 的全局 async_session
         #   跨 event loop 复用连接池会报 "Future attached to a different loop"
         #   参考 reminder_service.py 模式：创建独立 NullPool 引擎 + 任务结束 dispose
-        engine = create_async_engine(
-            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-            poolclass=NullPool,
-        )
         local_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         try:
             async with local_session_factory() as db:

@@ -15,8 +15,8 @@
 import logging
 from datetime import timedelta, timezone
 from app.models.base import utcnow, BEIJING_TZ
+from app.core.celery_db import create_celery_engine_and_session
 from celery import shared_task
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 
 logger = logging.getLogger("microbubble.wechat.scheduler")
@@ -230,18 +230,12 @@ def run_proactive_checks():
     """Celery task: 执行主动提醒检查"""
     import asyncio
     import redis.asyncio as aioredis
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-    from sqlalchemy.pool import NullPool
     from app.config import settings
 
     async def _run():
-        engine = create_async_engine(
-            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-            poolclass=NullPool,
-        )
         redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
         try:
-            async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            engine, async_session_factory = create_celery_engine_and_session()
             async with async_session_factory() as db:
                 result = await scheduler.run_all_checks(db, redis_client=redis_client)
                 logger.info(f"主动提醒完成: {result}")

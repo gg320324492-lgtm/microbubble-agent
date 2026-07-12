@@ -12,7 +12,7 @@
 - 早返回兼容: 0 行时仍 commit (避免 nullify error)
 
 铁律:
-1. cutoff_date 接受 tz-aware / naive (内部统一 _to_naive_datetime)
+1. cutoff_date 接受 tz-aware / naive (内部统一 to_naive_datetime)
 2. MinIO 删除失败 → logger.warning + minio_cleanup_failures += 1, 但 DB 行仍硬删
 3. backup_before_delete 失败抛异常 → caller 决定是否中止清理
 4. return dict 字段命名与 chat_history_service.cleanup_soft_deleted_sessions 一致 (deleted_count 等)
@@ -34,26 +34,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge
 from app.services.cleanup_backup import backup_rows_to_json
+from app.utils.datetime_utils import to_naive_datetime
 
 logger = logging.getLogger("microbubble.drive_cleanup_service")
 
 
-def _to_naive_datetime(dt: Optional[datetime]) -> Optional[datetime]:
-    """tz-aware datetime 转 naive (PG TIMESTAMP WITHOUT TIME ZONE 列要求)
-
-    - None → None
-    - naive → naive (透传)
-    - aware (UTC) → 转 naive (strip tzinfo, PG 列存 UTC 时刻值)
-
-    复用 chat_history_service._to_naive_datetime 范式 (CLAUDE.md 2026-06-05 tz-aware 教训),
-    本地 inline 简化 (drive_cleanup 独立 module, 不引入跨文件 helper 依赖).
-    """
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt
-    # aware → 转 naive (strip tzinfo, 保留 UTC 时刻值)
-    return dt.replace(tzinfo=None)
+# 2026-07-12 死代码清理: 复用 app.utils.datetime_utils.to_naive_datetime
+# (原本独立 inline, 现统一到 chat_history_service 同样的严格 astimezone(UTC) 版本)
 
 
 async def clean_old_drive_files(db: AsyncSession, cutoff_date: datetime) -> dict:
@@ -83,7 +70,7 @@ async def clean_old_drive_files(db: AsyncSession, cutoff_date: datetime) -> dict
     - task 调 service + 持有 NullPool engine + logger.warning 输出 + 二次确认守卫
     - service 只关心 DB + MinIO 物理删除 + 计数, 不关心 Celery / asyncio.run / 守卫
     """
-    cutoff_naive = _to_naive_datetime(cutoff_date)
+    cutoff_naive = to_naive_datetime(cutoff_date)
     if cutoff_naive is None:
         raise ValueError("cutoff_date 不能为 None (caller 应传 datetime.now(timezone.utc) - timedelta)")
 

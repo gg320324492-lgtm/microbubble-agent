@@ -285,14 +285,11 @@ class TraceCollector:
         - 创建独立 NullPool 引擎 + 独立 session（参照 reminder_service 模式）
         """
         from app.config import settings
+        from app.core.celery_db import create_celery_engine_and_session
         from app.core.database import Base  # noqa: F401
-        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-        from sqlalchemy.pool import NullPool
 
-        url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, poolclass=NullPool)
+        engine, Session = create_celery_engine_and_session()
         try:
-            Session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             async with Session() as db:
                 # 直接 insert，不走 ORM 避免 migration race
                 from app.models.agent_trace import AgentTrace

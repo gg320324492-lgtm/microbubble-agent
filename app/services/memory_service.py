@@ -2,11 +2,11 @@
 
 import logging
 from app.models.base import utcnow
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 from typing import List, Optional, Dict
 
 from sqlalchemy import select, and_, text, func, desc
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory import Memory
 
@@ -405,18 +405,12 @@ try:
     def maintenance_task():
         """每小时执行：衰减重要性，停用低重要性记忆"""
         import asyncio
-        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-        from sqlalchemy.pool import NullPool
         from sqlalchemy import update
         from app.config import settings
 
         async def _run():
-            engine = create_async_engine(
-                settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-                poolclass=NullPool,
-            )
             try:
-                async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+                engine, async_session_factory = create_celery_engine_and_session()
                 async with async_session_factory() as db:
                     await db.execute(
                         update(Memory)
