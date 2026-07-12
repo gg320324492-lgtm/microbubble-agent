@@ -132,11 +132,11 @@ test.describe('TaskView 操作按钮美化回归', () => {
       console.log(`[${t.name}] default edit:`, defaultEdit)
       console.log(`[${t.name}] default delete:`, defaultDelete)
 
-      // 默认态 bg = transparent (rgba(0, 0, 0, 0))
-      expect(defaultEdit['background-color'], `${t.name} edit 默认 bg 透明`)
-        .toMatch(/rgba\(0,\s*0,\s*0,\s*0\)|transparent/)
-      expect(defaultDelete['background-color'], `${t.name} delete 默认 bg 透明`)
-        .toMatch(/rgba\(0,\s*0,\s*0,\s*0\)|transparent/)
+      // 默认态 bg = 极淡 neutral tint (rgba(text-secondary-rgb, 0.04))
+      expect(defaultEdit['background-color'], `${t.name} edit 默认 bg 极淡 neutral`)
+        .toMatch(/rgba\(144,\s*147,\s*153[,\s]+0\.04\)/)
+      expect(defaultDelete['background-color'], `${t.name} delete 默认 bg 极淡 neutral`)
+        .toMatch(/rgba\(144,\s*147,\s*153[,\s]+0\.04\)/)
 
       // ===== P0-2/P0-3: hover 触发 primary / danger =====
       await hoverElement(page, '.task-action-btn--edit')
@@ -148,8 +148,8 @@ test.describe('TaskView 操作按钮美化回归', () => {
       // edit hover border 应包含 primary 色 rgb (基于当前主题的 primaryRgb)
       expect(hoverEdit['border-color'], `${t.name} edit hover border = primary`)
         .toContain(t.primaryRgb)
-      // edit hover bg 应是 rgba(primaryRgb, alpha) — alpha = 0.1 light / 0.12 dark
-      const editAlpha = t.theme === 'dark' ? '0.12' : '0.1'
+      // edit hover bg 应是 rgba(primaryRgb, alpha) — alpha = 0.15 light / 0.18 dark
+      const editAlpha = t.theme === 'dark' ? '0.18' : '0.15'
       const editRgbEscaped = t.primaryRgb.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       expect(hoverEdit['background-color'], `${t.name} edit hover bg = rgba(primary ${editAlpha})`)
         .toMatch(new RegExp(`${editRgbEscaped}[,\\s]+${editAlpha.replace('.', '\\.')}`))
@@ -166,7 +166,7 @@ test.describe('TaskView 操作按钮美化回归', () => {
       // delete hover border 应是 danger (主题相关 RGB triplet)
       expect(hoverDelete['border-color'], `${t.name} delete hover border = danger`)
         .toContain(t.dangerRgb)
-      const deleteAlpha = t.theme === 'dark' ? '0.12' : '0.1'
+      const deleteAlpha = t.theme === 'dark' ? '0.18' : '0.15'
       const deleteRgbEscaped = t.dangerRgb.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       expect(hoverDelete['background-color'], `${t.name} delete hover bg = rgba(danger ${deleteAlpha})`)
         .toMatch(new RegExp(`${deleteRgbEscaped}[,\\s]+${deleteAlpha.replace('.', '\\.')}`))

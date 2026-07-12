@@ -117,11 +117,11 @@
                   </div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                      <el-button circle size="small" class="task-action-btn task-action-btn--edit" aria-label="编辑" @click="editTask(task)">
-                        <el-icon size="16"><Edit /></el-icon>
+                      <el-button circle size="default" class="task-action-btn task-action-btn--edit" aria-label="编辑" @click="editTask(task)">
+                        <el-icon size="18"><Edit /></el-icon>
                       </el-button>
-                      <el-button circle size="small" class="task-action-btn task-action-btn--delete" aria-label="删除" @click="deleteTask(task)">
-                        <el-icon size="16"><Delete /></el-icon>
+                      <el-button circle size="default" class="task-action-btn task-action-btn--delete" aria-label="删除" @click="deleteTask(task)">
+                        <el-icon size="18"><Delete /></el-icon>
                       </el-button>
                     </template>
                   </div>
@@ -150,8 +150,8 @@
                   <div class="task-due">-</div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                      <el-button circle size="small" class="task-action-btn task-action-btn--delete" aria-label="删除" @click="deleteTask(task)">
-                        <el-icon size="16"><Delete /></el-icon>
+                      <el-button circle size="default" class="task-action-btn task-action-btn--delete" aria-label="删除" @click="deleteTask(task)">
+                        <el-icon size="18"><Delete /></el-icon>
                       </el-button>
                     </template>
                   </div>
@@ -783,21 +783,21 @@ onMounted(() => {
 /* ===== 操作按钮（编辑/删除）===== */
 .task-action-btn {
   flex-shrink: 0;
-  border: 1.5px solid var(--color-border);
-  background: transparent;
+  border: 2px solid var(--color-border);
+  background: rgba(var(--color-text-secondary-rgb, 144, 147, 153), 0.04);
   color: var(--color-text-secondary);
   transition: all var(--duration-fast, 150ms) ease;
 }
 
 .task-action-btn--edit:hover {
   border-color: var(--color-primary);
-  background: rgba(var(--color-primary-rgb), 0.1);
+  background: rgba(var(--color-primary-rgb), 0.15);
   color: var(--color-primary);
 }
 
 .task-action-btn--delete:hover {
   border-color: var(--color-danger);
-  background: rgba(var(--color-danger-rgb), 0.1);
+  background: rgba(var(--color-danger-rgb), 0.15);
   color: var(--color-danger);
 }
 
@@ -908,10 +908,10 @@ onMounted(() => {
   color: var(--color-text-secondary);
 }
 [data-theme="dark"] .task-action-btn--edit:hover {
-  background: rgba(var(--color-primary-rgb), 0.12);
+  background: rgba(var(--color-primary-rgb), 0.18);
 }
 [data-theme="dark"] .task-action-btn--delete:hover {
-  background: rgba(var(--color-danger-rgb), 0.12);
+  background: rgba(var(--color-danger-rgb), 0.18);
 }
 [data-theme="dark"] .trash-tab-label:hover {
   background: rgba(144, 147, 153, 0.14);
