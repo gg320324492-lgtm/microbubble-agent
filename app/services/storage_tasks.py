@@ -14,9 +14,7 @@ import logging
 from datetime import datetime, timedelta
 
 from sqlalchemy import select, update, func, delete, and_
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.config import settings
 from app.models.knowledge import Knowledge, ChunkedUploadSession
@@ -27,10 +25,6 @@ logger = logging.getLogger(__name__)
 
 def _create_session_factory():
     """独立引擎 + NullPool (Celery 跨事件循环范式)"""
-    engine = create_async_engine(
-        settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-        poolclass=NullPool,
-    )
     return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

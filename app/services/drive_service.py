@@ -26,6 +26,8 @@ from typing import List, Optional, Tuple
 from sqlalchemy import and_, or_, select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.datetime_utils import to_naive_datetime
+
 from app.models.folder import Folder, VISIBILITY_ORDER
 from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession  # PR5: 断点续传
 from app.models.member import Member
@@ -85,13 +87,7 @@ def _validate_share_expires_hours(expires_hours: Optional[int]) -> None:
         )
 
 
-def _to_naive_dt(dt: Optional[datetime]) -> Optional[datetime]:
-    """TZ-aware datetime → naive (CLAUDE.md 2026-06-05 asyncpg 坑复用)"""
-    if dt is None:
-        return None
-    if dt.tzinfo is not None:
-        return dt.replace(tzinfo=None)
-    return dt
+# 2026-07-12 死代码清理: _to_naive_dt helper 提取到 app.utils.datetime_utils.to_naive_datetime
 
 
 class DriveServiceError(Exception):
@@ -652,7 +648,7 @@ class DriveService:
         if file is None or file.created_by != current_user_id:
             return False
 
-        file.deleted_at = _to_naive_dt(datetime.now(timezone.utc))
+        file.deleted_at = to_naive_datetime(datetime.now(timezone.utc))
         await self.db.commit()
         logger.info(f"[DriveService.soft_delete_file] id={file.id}")
         # PR6: 活动动态流
@@ -860,11 +856,11 @@ class DriveService:
             if expires_hours == -1:
                 expires_at = None  # 永久
             elif expires_hours == 0:
-                expires_at = _to_naive_dt(
+                expires_at = to_naive_datetime(
                     datetime.now(timezone.utc) + timedelta(hours=DEFAULT_SHARE_EXPIRES_HOURS)
                 )
             else:
-                expires_at = _to_naive_dt(
+                expires_at = to_naive_datetime(
                     datetime.now(timezone.utc) + timedelta(hours=expires_hours)
                 )
         elif expires_in_days is not None:
@@ -873,12 +869,12 @@ class DriveService:
                     f"expires_in_days {expires_in_days} 超出范围 [1, 365]",
                     status_code=400,
                 )
-            expires_at = _to_naive_dt(
+            expires_at = to_naive_datetime(
                 datetime.now(timezone.utc) + timedelta(days=expires_in_days)
             )
         else:
             # 默认 7 天
-            expires_at = _to_naive_dt(
+            expires_at = to_naive_datetime(
                 datetime.now(timezone.utc) + timedelta(hours=DEFAULT_SHARE_EXPIRES_HOURS)
             )
 
@@ -985,7 +981,7 @@ class DriveService:
             return None
         # 校验 expires
         if f.share_expires_at is not None:
-            expires_naive = _to_naive_dt(f.share_expires_at)
+            expires_naive = to_naive_datetime(f.share_expires_at)
             now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
             if expires_naive < now_naive:
                 logger.info(f"[DriveService.get_by_share_token] token={token[:8]}... 已过期")
@@ -1106,7 +1102,7 @@ class DriveService:
             action = "unstar"
         else:
             f.is_starred = True
-            f.starred_at = _to_naive_dt(datetime.now(timezone.utc))
+            f.starred_at = to_naive_datetime(datetime.now(timezone.utc))
             action = "star"
         await self.db.commit()
         await self.db.refresh(f)
@@ -1209,7 +1205,7 @@ class DriveService:
             )
         )
         files = list(result.scalars().all())
-        now = _to_naive_dt(datetime.now(timezone.utc))
+        now = to_naive_datetime(datetime.now(timezone.utc))
         skipped = []
         deleted = 0
         for f in files:

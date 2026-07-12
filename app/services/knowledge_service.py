@@ -1,9 +1,9 @@
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, text
 from typing import List, Optional
 import logging
 import re
 
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.models.knowledge import Knowledge
 from app.services.name_aliases import clean_text as clean_person_names
@@ -334,21 +334,10 @@ def analyze_knowledge_task(self, knowledge_id: int, title: str, content: str):
     - 抗 FastAPI/celery-worker 进程重启
     """
     import asyncio
-    from sqlalchemy.ext.asyncio import (
-        create_async_engine, AsyncSession, async_sessionmaker,
-    )
-    from sqlalchemy.pool import NullPool
     from app.config import settings
 
     async def _run():
-        engine = create_async_engine(
-            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-            poolclass=NullPool,
-        )
         try:
-            session_factory = async_sessionmaker(
-                engine, class_=AsyncSession, expire_on_commit=False,
-            )
             try:
                 await _run_analyze_and_embed(knowledge_id, title, content, session_factory)
             except Exception as e:

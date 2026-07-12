@@ -13,6 +13,8 @@
 - 操作 ChatSession.message_count 时必须 +1（避免 COUNT(*) 全表扫描）
 - 操作 last_message_at 必须刷新（侧栏排序字段）
 - deleted_at 设值时同步 is_archived=False（软删除隐含从主列表移除）
+
+2026-07-12 死代码清理: tz-aware → naive helper 已提取到 app.utils.datetime_utils.to_naive_datetime
 """
 
 import logging
@@ -20,24 +22,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any, Tuple
 
-
-# 2026-06-29 fix: Pydantic 从浏览器 ISO 字符串解析为 tz-aware datetime
-# (如 '2026-06-29T18:02:38Z'), 但 PostgreSQL chat_sessions/messages 是
-# TIMESTAMP WITHOUT TIME ZONE 列, asyncpg 抛 "can't subtract offset-naive
-# and offset-aware datetimes" 500 错误 (CLAUDE.md 2026-06-05 教训复用).
-# 统一 helper: 任何 datetime 写入 DB 前都做 tz-aware → naive 转换
-def _to_naive_datetime(dt: Optional[datetime]) -> Optional[datetime]:
-    """tz-aware datetime 转 naive (PG TIMESTAMP WITHOUT TIME ZONE 列)
-
-    None → None (fallback 给 datetime.utcnow())
-    naive → naive (透传)
-    aware → 转 UTC 再 strip tzinfo
-    """
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+from app.utils.datetime_utils import to_naive_datetime
 
 from sqlalchemy import select, delete, and_, or_, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -611,8 +596,8 @@ async def sync_from_local(
             # 新建
             now = datetime.utcnow()
             # 2026-06-29: 客户端 datetime tz-aware → naive 转换 (PG TIMESTAMP WITHOUT TIME ZONE)
-            client_created_at = _to_naive_datetime(local.get("created_at")) or now
-            client_updated_at = _to_naive_datetime(local.get("updated_at")) or now
+            client_created_at = to_naive_datetime(local.get("created_at")) or now
+            client_updated_at = to_naive_datetime(local.get("updated_at")) or now
             session = ChatSession(
                 id=sid,
                 user_id=user_id,
@@ -676,7 +661,7 @@ async def sync_from_local(
                 tool_trace=local_msg.get("tool_trace", {}),
                 message_metadata=local_msg.get("message_metadata") or local_msg.get("metadata", {}),
                 client_msg_id=client_msg_id,
-                created_at=_to_naive_datetime(local_msg.get("created_at")) or datetime.utcnow(),
+                created_at=to_naive_datetime(local_msg.get("created_at")) or datetime.utcnow(),
             )
             db.add(msg)
             migrated += 1
@@ -793,7 +778,7 @@ async def cleanup_soft_deleted_sessions(db: AsyncSession, cutoff_date: datetime)
     **PR6-P10 备份**: 先 SELECT 全字段 → JSON 备份 → 再 DELETE (事故防复发, PR6-P9
     误删 31 条 file_mentions 教训). 关闭 BACKUP_BEFORE_DELETE_ENABLED=False 可跳过.
     """
-    cutoff_naive = _to_naive_datetime(cutoff_date)
+    cutoff_naive = to_naive_datetime(cutoff_date)
     deleted_count, _backup_path = await execute_backup_then_delete(
         db,
         model=ChatSession,

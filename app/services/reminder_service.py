@@ -15,11 +15,11 @@
 import logging
 from datetime import datetime, timezone
 from celery import shared_task
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Dict, Any, Optional
 
 from app.models.base import utcnow, BEIJING_TZ
+from app.core.celery_db import create_celery_engine_and_session
 from app.models.task import Task
 from app.models.member import Member
 from app.models.reminder import Reminder
@@ -550,20 +550,10 @@ def process_reminders_task():
     """Celery task: 处理所有待发送提醒（v2 入口）"""
     import asyncio
     import redis.asyncio as aioredis
-    from sqlalchemy.ext.asyncio import (
-        create_async_engine,
-        AsyncSession,
-        async_sessionmaker,
-    )
-    from sqlalchemy.pool import NullPool
     from app.config import settings
 
     async def _run():
         # 创建独立的引擎和 Redis 连接，避免跨事件循环的连接池冲突
-        engine = create_async_engine(
-            settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-            poolclass=NullPool,
-        )
         redis_client = aioredis.from_url(
             settings.REDIS_URL, decode_responses=True
         )

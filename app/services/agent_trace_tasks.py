@@ -26,8 +26,7 @@ logger = logging.getLogger("microbubble.agent_trace")
 def persist_trace_task(self, trace_dict: dict):
     """Celery 任务：把 trace dict 写入 agent_traces 表"""
     import asyncio
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-    from sqlalchemy.pool import NullPool
+    from app.core.celery_db import create_celery_engine_and_session
     from app.models.agent_trace import AgentTrace
 
     # 2026-06-14 Stage 5 收尾：防御性检查（之前收到 None 报 'NoneType' has no attribute 'get'）
@@ -43,9 +42,7 @@ def persist_trace_task(self, trace_dict: dict):
         return None
 
     async def _write():
-        db_url = settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-        engine = create_async_engine(db_url, poolclass=NullPool)
-        Session = async_sessionmaker(engine, expire_on_commit=False)
+        engine, Session = create_celery_engine_and_session()
         try:
             async with Session() as db:
                 _u = trace_dict.get("usage") or {}  # 2026-06-14 修复：usage 可能为 None

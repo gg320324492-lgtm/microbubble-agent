@@ -16,9 +16,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool
-
+from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.config import settings
 from app.services.notification_service import cleanup_old_mentions
@@ -67,10 +65,6 @@ def cleanup_old_mentions_task(retention_days: Optional[int] = None):
         }
     try:
         async def _run():
-            engine = create_async_engine(
-                settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-                poolclass=NullPool,
-            )
             session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             try:
                 cutoff = datetime.now(timezone.utc) - timedelta(days=days)
