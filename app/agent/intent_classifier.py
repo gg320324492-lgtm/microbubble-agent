@@ -141,18 +141,33 @@ async def classify_intent(question: str, ctx: ToolContext) -> IntentResult:
             messages=[{"role": "user", "content": prompt}],
             model=settings.AGENT_INTENT_MODEL,
             system="你是意图分类器。直接输出纯 JSON。",
-            max_tokens=300,
+            # P0-#1.5 (2026-07-12): max_tokens 从 300 → 2048
+            # mimo-v2.5 thinking 模型在 300 tokens 会被 reasoning_content 占满,
+            # finish_reason="length" 时 content="" → 之前 wrapper 不处理 reasoning_content
+            # → text 为空 → "LLM 返回空文本" fallback. 提到 2048 给足空间让 mimo 输出 JSON.
+            max_tokens=2048,
             temperature=0.0,
             # 2026-06-14 Stage 5 收尾：mimo 等思考型模型必须显式禁用 thinking
             # 否则只返 thinking block 不返 text，JSON 解析失败
+            # P0-#1.5 备注: openai_compat 路径下 thinking 参数被 _complete_openai_compat 丢,
+            # mimo 实际行为受 OpenAI 协议 reasoning 控制 (此处只 Anthropic backend 生效).
             thinking={"type": "disabled"},
         )
         # 只读 text block（不要 fallback 到 thinking，避免解析 thinking 内容当 JSON 失败）
+        # P0-#1.5 (2026-07-12): 即使 max_tokens 够, mimo 仍可能输出 reasoning_content 而非 content,
+        # wrapper 加 thinking block (兼容 Anthropic SDK 标准), 这里 fallback 到 thinking 提取
         text = ""
         for block in resp.content:
             if hasattr(block, "text") and block.text:
                 text = block.text.strip()
                 break
+        if not text:
+            # fallback: mimo 等 thinking-only 响应, 从 thinking block 提 (parse JSON 也行)
+            for block in resp.content:
+                if hasattr(block, "thinking") and block.thinking:
+                    text = block.thinking.strip()
+                    logger.debug("intent_classifier 命中 thinking block fallback (mimo reasoning_content)")
+                    break
         if not text:
             raise ValueError("LLM 返回空文本")
 
