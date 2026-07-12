@@ -212,5 +212,62 @@ describe('useChatStream', () => {
       )
       warnSpy.mockRestore()
     })
+
+    // P0-#1.6 v2 (2026-07-12): 用户报"41条仍然看不全" 真根因
+    // - 修复前 localStorage 把空 session 缓存成 '[]' 字符串
+    // - 修复后 ensureSessionLoaded 看 localStorage 存在 → cache hit → 不 fetch → 永远空
+    // - 修法: 加 serverFetchedSessions Set, 看 parsed 内容是否真有数据 (>0 条) 才视为 cache hit
+    it('P0-#1.6 v2 回归: localStorage 缓存空数组时仍要 server fetch 兜底', async () => {
+      // 模拟修复前缓存的 orphan 空数组
+      global.localStorage.getItem = vi.fn((key) => {
+        if (key === 'chat_current_session_v3') return 'orphan-session'
+        if (key === 'chat_msgs_orphan-session') return JSON.stringify([])  // ← 关键
+        return null
+      })
+
+      const serverMsgs = [
+        { id: 9001, session_id: 'orphan-session', role: 'user', content: 'fix me', rich_blocks: [], tool_trace: [], metadata: {}, is_partial: false, created_at: '2026-07-12T10:00:00Z' },
+      ]
+      mockFetchMessages.mockResolvedValueOnce({ items: serverMsgs, has_more: false })
+
+      const stream = useChatStream()
+      stream.ensureSessionLoaded('orphan-session')
+      await new Promise(r => setTimeout(r, 30))
+
+      // ★ 修复: 即使 localStorage 有内容 (但空数组), 仍必须 server fetch
+      expect(mockFetchMessages).toHaveBeenCalledWith('orphan-session', { pageSize: 200 })
+      expect(stream.messages.value.length).toBe(1)
+      expect(stream.messages.value[0].content).toBe('fix me')
+    })
+
+    it('P0-#1.6 v2: ensureSessionLoaded 二次调用不重复 fetch (serverFetchedSessions 防御)', async () => {
+      mockFetchMessages.mockResolvedValueOnce({ items: [], has_more: false })
+      const stream = useChatStream()
+      stream.ensureSessionLoaded('once-session')
+      await new Promise(r => setTimeout(r, 30))
+      expect(mockFetchMessages).toHaveBeenCalledTimes(1)
+      // 二次调用 (re-render, sidebar click 等场景) → 不重复 fetch
+      stream.ensureSessionLoaded('once-session')
+      await new Promise(r => setTimeout(r, 10))
+      expect(mockFetchMessages).toHaveBeenCalledTimes(1)  // 仍 1 次
+    })
+
+    it('P0-#1.6 v2: localStorage 有真实内容时跳过 fetch (常见 path 不退化)', async () => {
+      const realCache = [
+        { id: 'local_real_1', role: 'user', content: 'cached local', richBlocks: [], timestamp: '2026-07-12T10:00:00Z' },
+      ]
+      global.localStorage.getItem = vi.fn((key) => {
+        if (key === 'chat_current_session_v3') return 'real-cached'
+        if (key === 'chat_msgs_real-cached') return JSON.stringify(realCache)
+        return null
+      })
+      // fetch 应不调
+      const stream = useChatStream()
+      stream.ensureSessionLoaded('real-cached')
+      await new Promise(r => setTimeout(r, 30))
+      expect(mockFetchMessages).not.toHaveBeenCalled()
+      expect(stream.messages.value.length).toBe(1)
+      expect(stream.messages.value[0].content).toBe('cached local')
+    })
   })
 })
