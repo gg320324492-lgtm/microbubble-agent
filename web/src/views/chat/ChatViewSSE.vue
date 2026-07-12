@@ -732,11 +732,13 @@ onUnmounted(() => {
   transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 
-/* P0-#2 v3 (2026-07-12 14:40): 修按钮"来回跳动"反馈
-   用户报: 点击 ↑ 时按钮视觉上跳动. 排查后真因是 :hover { transform: translateY(2px) }
-   + 移动端/触屏 :active 也有 transform 反馈, 鼠标按下瞬间按钮会动 2px.
-   修: 移除所有 transform 反馈 (包括 hover), 只保留 background 颜色变化 (anti-CLS).
-   Playwright 验证: buttons before/after click rect 完全不变. */
+/* P0-#2 v4 (2026-07-12 14:50): transform: none !important 防御 EP active 样式
+   Playwright 实测 click 期间: transform=matrix(1, 0, 0, 1, -49.5, -2)
+   - 来源: Element Plus 全局 button:active 默认样式 (translate center alignment)
+   - 影响: 按钮按下瞬间视觉上向左下移动 49.5px / 2px, 用户称之"跳动"
+   - 修法: 强制 transform: none !important 覆盖 EP 全局样式
+     + transform 不在 transition 中 (v3 已修)
+     + width: fit-content + 自动 (无 transform-based centering) */
 .jump-to-top {
   position: sticky;
   top: 16px;
@@ -753,20 +755,36 @@ onUnmounted(() => {
   cursor: pointer;
   box-shadow: var(--shadow-md);
   padding: 8px 16px;
-  transition: background 0.2s, color 0.2s;  /* 不含 transform */
-  user-select: none;  /* 防止双击文本选中触发视觉抖动 */
+  transition: background 0.2s, color 0.2s;
+  user-select: none;
+  /* 防止任何 inherited / EP 全局 transform 干扰 */
+  transform: none !important;
 }
 
 .jump-to-top:hover {
   background: var(--color-primary, #FF7A5C);
   color: white;
-  /* 故意不写 transform: translateY(2px) — 避免鼠标按下瞬间按钮视觉上"跳动" */
+  transform: none !important;
 }
 
 .jump-to-top:active {
-  /* 触屏/键盘点击反馈: 改 outline 而非 transform */
+  background: var(--color-primary, #FF7A5C);
+  color: white;
   outline: 2px solid var(--color-primary, #FF7A5C);
   outline-offset: 2px;
+  transform: none !important;
+}
+
+.jump-to-top:focus {
+  outline: 2px solid var(--color-primary, #FF7A5C);
+  outline-offset: 2px;
+  transform: none !important;
+}
+
+.jump-to-top:focus-visible {
+  outline: 2px solid var(--color-primary, #FF7A5C);
+  outline-offset: 2px;
+  transform: none !important;
 }
 
 .jump-to-top:hover {
