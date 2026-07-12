@@ -260,29 +260,9 @@ else
     log "WARN: $MIGRATION_SQL 不存在（首次部署？git pull 可能漏了）"
 fi
 
-# ============================================================================
-# 2026-06-15 提醒 v2 迁移：reminders 表加 6 列 (ack/snooze/11AM 批次)
-# 触发场景: 提醒策略 v2 改动 (commit 223ea74 + ba75e32) 加了 6 个新列
-# 但 DB 没同步 ALTER TABLE → /api/v1/reminders 报 500 错误
-# 幂等（ADD COLUMN IF NOT EXISTS），重复跑安全
-# ============================================================================
-MIGRATION_SQL="$PROJECT_DIR/scripts/alter_reminders_v2.sql"
-if [ -f "$MIGRATION_SQL" ]; then
-    PG_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E 'postgres|db' | head -1)
-    if [ -n "$PG_CONTAINER" ]; then
-        log "运行 reminders v2 schema 迁移（6 列）..."
-        if docker exec -i "$PG_CONTAINER" psql -U postgres -d microbubble < "$MIGRATION_SQL" >> "$LOG_FILE" 2>&1; then
-            log "reminders v2 迁移成功（幂等）"
-        else
-            log "WARN: reminders v2 迁移失败，请手动跑："
-            log "  docker exec $PG_CONTAINER psql -U postgres -d microbubble -f scripts/alter_reminders_v2.sql"
-        fi
-    else
-        log "WARN: 未找到 postgres 容器，跳过 reminders v2 迁移"
-    fi
-else
-    log "WARN: $MIGRATION_SQL 不存在（首次部署？）"
-fi
+# 2026-07-12 死代码清理: 移除 reminders v2 迁移块
+# 原因: alter_reminders_v2.sql 已被 alembic 019_reminder_ack_snooze_v2.py 完全替代 (含 FK + 索引)
+# 未来服务器部署走 alembic upgrade head 即可, 不再需要这条 deploy-time SQL
 
 # 测试 + 重载 Nginx（失败只 warn 不退出）
 if nginx -t >> "$LOG_FILE" 2>&1; then

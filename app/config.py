@@ -192,14 +192,10 @@ class Settings(BaseSettings):
     POLISH_CACHE_TTL_SECONDS: int = 86400  # 24h
     POLISH_LOCK_TTL_SECONDS: int = 120  # 2min
 
-    # 2026-06-02 三级润色流水线（实时 / 聚批 / 全文）
+    # 2026-06-02 三级润色流水线（实时 / 聚批）— L3 全文润色 2026-07-12 删除（孤儿 service）
     POLISH_BATCH_INTERVAL_SECONDS: int = 30  # L2 攒批触发间隔
     POLISH_BATCH_MAX_SEGMENTS: int = 5  # L2 攒批最大段数
     POLISH_BATCH_MIN_CHARS: int = 30  # L2 攒批最少字符数（避免空批）
-    ENABLE_FULL_POLISH_ON_HANGUP: bool = True  # L3 全文润色开关
-    FULL_POLISH_MODEL: str = ""  # L3 用高质量模型，空则用默认模型
-    FULL_POLISH_MAX_TOKENS: int = 8192
-    FULL_POLISH_CHUNK_CHARS: int = 4000  # L3 分块大小（避免超 max_tokens）
     TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 1000  # 原 200 → 1000（覆盖长会议）
 
     # ========================================================================

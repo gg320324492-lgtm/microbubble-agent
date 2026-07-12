@@ -6,8 +6,8 @@ v2 PR6 端到端测试脚本 (通知 + @ 提醒 + 活动动态流 + 文件评论
 2. mention idempotency: 24h 内同 (file_id, user) 重复 @ 跳过 (dedup)
 3. mark-read / mark-all-read: 标已读后 unread_count=0
 4. cross-user isolation: testbot2 看不到 testbot1 的 mentions
-5. activity log: drive upload + rename + delete 自动写 activity_events
-6. activity feed: cursor 分页 + scope=team / scope=me
+# 2026-07-12: Group 5 activity log + Group 6 activity feed 已删除 (UI 已下线)
+# (后续行号保留为 7/8/9, 注释标明删除原因)
 7. comment + auto-mention: 评论含 @xiaoqi_testbot_2 → 自动创建 mention
 8. comment delete: owner of comment OR owner of file 才能删
 9. PR1-5 regression: drive upload + share + star + version + thumbnail
@@ -199,71 +199,9 @@ async def test_group_4_cross_user_isolation(client, headers):
         return None
 
 
-# ============== Group 5: activity log auto-write ==============
-async def test_group_5_activity_log(client, headers):
-    """5. drive upload + delete 自动写 activity_events"""
-    print("\n=== Test Group 5: activity log ===")
-    # 上传
-    files = {"file": (f"pr6_act_{int(time.time())}.txt", b"act", "text/plain")}
-    data = {"visibility": "team", "storage_mode": "drive"}
-    resp = await client.post("/drive/files/upload", headers=headers, files=files, data=data)
-    assert_eq("upload 201", resp.status_code, 201)
-    file_id = resp.json()["id"]
-
-    # 拉活动
-    resp = await client.get("/activities?scope=me&limit=10", headers=headers)
-    assert_eq("activities 200", resp.status_code, 200)
-    items = resp.json().get("items", [])
-    assert_true(f"activities 含 upload ({file_id})",
-                any(i.get("action") == "upload" and i.get("target_id") == file_id for i in items))
-
-    # rename
-    resp = await client.put(
-        f"/drive/files/{file_id}", headers=headers,
-        json={"file_name": f"pr6_renamed_{int(time.time())}.txt"},
-    )
-    assert_eq("rename 200", resp.status_code, 200)
-
-    # 软删
-    resp = await client.post(
-        "/drive/files/batch-soft-delete", headers=headers,
-        json={"file_ids": [file_id]},
-    )
-    assert_eq("soft-delete 200", resp.status_code, 200)
-
-    # 再拉活动 (应有 rename + delete)
-    resp = await client.get("/activities?scope=me&limit=10", headers=headers)
-    items = resp.json().get("items", [])
-    actions_for_file = [i.get("action") for i in items if i.get("target_id") == file_id]
-    assert_true(f"含 upload", "upload" in actions_for_file)
-    assert_true(f"含 rename 或 move", "rename" in actions_for_file or "move" in actions_for_file)
-    assert_true(f"含 delete", "delete" in actions_for_file)
-
-    # restore + 清理
-    resp = await client.post(f"/drive/files/{file_id}/restore", headers=headers)
-    assert_eq("restore 200", resp.status_code, 200)
-
-
-# ============== Group 6: activity feed cursor ==============
-async def test_group_6_activity_feed(client, headers):
-    """6. activity feed cursor 分页 + scope=team / me"""
-    print("\n=== Test Group 6: activity feed ===")
-    # scope=me
-    resp = await client.get("/activities?scope=me&limit=20", headers=headers)
-    assert_eq("scope=me 200", resp.status_code, 200)
-    items = resp.json().get("items", [])
-    assert_true(f"me scope 返回数组", isinstance(items, list))
-    assert_true(f"has_more 是 bool", isinstance(resp.json().get("has_more"), bool))
-
-    # scope=team (默认)
-    resp = await client.get("/activities?scope=team&limit=20", headers=headers)
-    assert_eq("scope=team 200", resp.status_code, 200)
-
-    # before_id cursor (取最末 id)
-    if len(items) >= 20:
-        last_id = items[-1]["id"]
-        resp = await client.get(f"/activities?scope=me&before_id={last_id}", headers=headers)
-        assert_eq("cursor 200", resp.status_code, 200)
+# 2026-07-12: Group 5 (activity log) + Group 6 (activity feed) 已删除
+# 原因: /api/v1/activities endpoint 已随"活动动态"UI 一起彻底删除 (commit f66a2120, 2026-07-03 用户决策)
+# 仅 audit log (activity_events 表) 保留供 drive/comment/file_request 审计用, 但前端 UI 无 consumer
 
 
 # ============== Group 7: comment + auto-mention ==============
@@ -398,7 +336,6 @@ async def main():
     setup_cleanup_sql = """
         DELETE FROM file_comments WHERE user_id IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2'));
         DELETE FROM file_mentions WHERE mentioned_user_id IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2'));
-        DELETE FROM activity_events WHERE actor_id IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2'));
         UPDATE knowledge SET deleted_at = NOW() WHERE created_by IN (SELECT id FROM members WHERE username IN ('xiaoqi_testbot','xiaoqi_testbot_2')) AND deleted_at IS NULL;
     """
     print(f"  [setup] running cleanup SQL...")
@@ -423,8 +360,6 @@ async def main():
         await test_group_2_mention_idempotency(client, headers)
         await test_group_3_mark_read(client, headers)
         await test_group_4_cross_user_isolation(client, headers)
-        await test_group_5_activity_log(client, headers)
-        await test_group_6_activity_feed(client, headers)
         # Group 7 在 Group 8 内部调用 (comment_id 复用)
         await test_group_8_comment_delete(client, headers)
         reg_fid = await test_group_9_pr1_5_regression(client, headers)
