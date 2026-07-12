@@ -270,28 +270,41 @@ export function useChatStream() {
   // --------------------------------------------------------------------------
   // 会话加载（修复 4：loadedSessions 防重复覆盖后台 SSE 增量）
   // P0-#1.6 (2026-07-12): localStorage miss → server fetch fallback (绕过 #043 设计漏洞)
+  // P0-#1.6 v2 (2026-07-12 13:30): 加 serverFetchedSessions 独立 Set, 解决 user 报告
+  //   "41条仍然看不全": 修复前 localStorage 把空 session 缓存成 '[]' 字符串,
+  //   修复后 loadedSessions 仅看 localStorage 是否存在 (不区分内容), 被误导 cache hit.
+  //   修法: serverFetchedSessions 仅在真正 fetch 后才 add, 触发 fetch 不依赖 localStorage 内容.
   //
-  // 背景: 旧实现只从 localStorage 读,server-side create 的 session (curl 测试 / 跨设备 /
-  // PR6 持久化等) localStorage 永远没缓存 → 点开空白. 现加 server fetch 兜底:
-  // - localStorage hit: 直接用 (常见,本设备历史)
-  // - localStorage miss: 设空数组占位 + kick 后台 chatHistoryStore.fetchMessages(id)
-  //   - server 返消息 → 用 serverToClient map + 写回 localStorage (下次启动命中)
-  //   - server 返空 → 保留空数组 (genuine empty)
-  //   - fetch 失败 → 保留空数组 (用户手刷新重试)
+  // 行为分层:
+  // - localStorage 有内容 (非空数组) → 常见 path, 直接用
+  // - localStorage 命中但空数组 '[]' (修复前缓存的 orphan) → 仍 server fetch 兜底
+  // - localStorage miss (跨设备 / PR6 持久化 / curl 残留) → server fetch
+  // - serverFetchedSessions 命中 → 跳过 (防止重复 fetch)
+  //
+  // 缓存策略: cache hit 仍走 localStorage (避免 N+1 fetch),但 refresh 兜底由 serverFetchedSessions 强制
   // --------------------------------------------------------------------------
+  const serverFetchedSessions = new Set<string>()
+
   function ensureSessionLoaded(id: string) {
-    if (loadedSessions.has(id)) return
-    loadedSessions.add(id)
+    if (serverFetchedSessions.has(id)) return  // 已 server fetch 过 → 跳过
+    serverFetchedSessions.add(id)
+    loadedSessions.add(id)  // 兼容原防 SSE 增量覆盖
     const saved = localStorage.getItem(`${MESSAGES_KEY_PREFIX}${id}`)
     if (saved) {
       try {
-        messagesBySession.value[id] = JSON.parse(saved)
-        return  // 本地缓存命中 → 直接返回
+        const parsed = JSON.parse(saved)
+        messagesBySession.value[id] = parsed
+        // 如果 localStorage 已有真实内容 (非空数组), 视为 cache hit 不再 fetch
+        // 反例: 修复前把空 session 缓存成 '[]' → 还必须 fetch 兜底
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return
+        }
+        // 空数组 → 走 server fetch 兜底 (P0-#1.6 v2 修复主路径)
       } catch {
         // 解析失败 → 走 server fetch 兜底
       }
     }
-    // localStorage miss 或 parse fail → 占位 + 后台 server fetch
+    // localStorage miss / 空数组 / parse fail → 占位 + 后台 server fetch
     messagesBySession.value[id] = []
     void fetchSessionFromServer(id)
   }
