@@ -12,6 +12,7 @@
 import logging
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
 from app.config import settings

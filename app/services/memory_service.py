@@ -7,6 +7,7 @@ from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json
 from typing import List, Optional, Dict
 
 from sqlalchemy import select, and_, text, func, desc
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.memory import Memory
 

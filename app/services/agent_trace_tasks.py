@@ -13,6 +13,7 @@ from typing import Any
 
 from app.config import settings
 from app.core.celery import celery_app
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("microbubble.agent_trace")
 
