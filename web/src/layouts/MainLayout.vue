@@ -86,36 +86,11 @@
         </div>
 
         <div class="header-right">
-          <el-popover placement="bottom-end" :width="320" trigger="click" v-model:visible="popoverVisible" @show="handlePopoverShow">
-            <template #reference>
-              <el-badge :value="notificationCount" :max="99" :hidden="notificationCount === 0">
-                <el-icon :size="isMobile ? 36 : 32" class="bell-icon"><Bell /></el-icon>
-              </el-badge>
-            </template>
-            <div v-if="popoverVisible" class="notification-panel">
-              <div class="notification-panel-title">提醒通知</div>
-              <div class="notification-panel-body">
-                <template v-if="notifications.length > 0">
-                  <div
-                    v-for="item in notifications"
-                    :key="item.id"
-                    class="notification-item"
-                    @click="goToTask(item.task_id)"
-                  >
-                    <div class="notification-item-title">{{ item.task_title }}</div>
-                    <div class="notification-item-time">{{ formatTime(item.remind_at) }}</div>
-                  </div>
-                  <el-button type="primary" size="small" class="mark-read-btn" @click="handleMarkAllRead">全部标为已读</el-button>
-                </template>
-                <p v-else style="color:var(--color-info);text-align:center;padding:20px 0">暂无新提醒</p>
-              </div>
-              <div class="notification-panel-footer">
-                <el-button text size="small" @click="router.push({ path: '/tasks', query: { assignee_id: userStore.userInfo?.id } })">查看我的任务</el-button>
-              </div>
-            </div>
-          </el-popover>
-
-          <!-- v2 PR6: 网盘协作通知铃铛 (@ 提醒 + 评论) -->
+          <!-- v2 PR6: 网盘协作通知铃铛 (@ 提醒 + 评论) + WS 推送
+               2026-07-12: 删除并存旧版"任务到期提醒" el-popover。
+               任务到期提醒主路径走 Celery beat → WeChat 11AM digest window
+               (app/services/reminder_policy.py)，用户可在 /tasks 页面查看。
+               NotificationBell 仅承担 v2 网盘协作通知语义，单一入口避免视觉重复。 -->
           <NotificationBell />
 
           <!-- v68 (2026-06-26): 主题切换按钮（铃铛之后、用户 dropdown 之前） -->
@@ -174,7 +149,6 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
-import dayjs from 'dayjs'
 import { useUserStore } from '@/stores/user'
 import { useMemberStore } from '@/stores/member'
 import { useRecordingState } from '@/composables/useRecordingState'
@@ -185,7 +159,8 @@ import MobileTabBar from '@/components/mobile/TabBar.vue'
 import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 // v2 PR6: 网盘协作通知 (@ 提醒 + 评论) + WS 推送
 import NotificationBell from '@/components/common/NotificationBell.vue'
-import { ArrowRight, DataBoard, Aim, Bell, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
+// 2026-07-12: 删除 Bell icon import (旧任务到期提醒铃铛已删除，统一走 NotificationBell)
+import { ArrowRight, DataBoard, Aim, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
@@ -213,7 +188,6 @@ const goToRecording = () => {
 const isMobile = useIsMobile().isMobile
 const isCollapse = ref(false)
 const showMobileMenu = ref(false)
-const popoverVisible = ref(false)
 
 // /chat 路由不显示 TabBar（标准 mobile UX：聊天专注模式 + 避免覆盖 MobileInputBar）
 const isChatRoute = computed(() => route.path.startsWith('/chat'))
@@ -227,8 +201,6 @@ const currentRoute = computed(() => route.path)
 const currentTitle = computed(() => route.meta?.title || '首页')
 const username = computed(() => userStore.username)
 const userRole = computed(() => userStore.userRole)
-const notificationCount = computed(() => userStore.notificationCount)
-const notifications = computed(() => userStore.notifications)
 const userAvatar = computed(() => userStore.userInfo?.avatar || '')
 
 const menuRoutes = computed(() => {
@@ -269,8 +241,6 @@ onMounted(async () => {
   const token = localStorage.getItem('access_token')
   if (!token) return
 
-  userStore.fetchNotificationCount()
-  userStore.fetchNotifications()
   memberStore.fetchMembers()
   checkActiveRecording()
 
@@ -291,31 +261,6 @@ const handleLogout = () => {
   userStore.logout()
   ElMessage.success('已退出登录')
   router.push('/login')
-}
-
-const handleMarkAllRead = async () => {
-  if (notificationCount.value === 0) return
-  try {
-    await axios.post('/api/v1/reminders/mark-read')
-    userStore.notificationCount = 0
-    userStore.notifications = []
-    ElMessage.success('已全部标为已读')
-  } catch {
-    ElMessage.error('操作失败')
-  }
-}
-
-const handlePopoverShow = () => {
-  userStore.fetchNotifications()
-}
-
-const goToTask = (taskId) => {
-  router.push('/tasks')
-}
-
-const formatTime = (t) => {
-  if (!t) return ''
-  return dayjs(t).add(8, 'hour').format('MM-DD HH:mm')
 }
 </script>
 
@@ -522,24 +467,6 @@ const formatTime = (t) => {
 
 .badge {
   cursor: pointer;
-}
-
-.bell-icon {
-  cursor: pointer;
-  transition: all var(--transition-all-normal) var(--ease-out);
-  color: var(--color-text-regular, #606266);
-  padding: 10px;
-  border-radius: 50%;
-  background: rgba(144, 147, 153, 0.1);
-  border: 1px solid rgba(144, 147, 153, 0.15);
-}
-
-.bell-icon:hover {
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
-  border-color: var(--color-primary-light, #FF9D85);
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(var(--color-primary-rgb), 0.2);
 }
 
 .user-info {
@@ -755,77 +682,6 @@ const formatTime = (t) => {
   transform: rotate(90deg) scale(0.6);
 }
 
-/* ===== 通知面板 ===== */
-.notification-panel {
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.notification-panel-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  padding-bottom: 12px;
-  border-bottom: 1px solid #EBEEF5;
-  margin-bottom: 12px;
-}
-
-.notification-panel-body {
-  padding: 4px 0;
-}
-
-.notification-panel-body p {
-  margin: 0 0 12px;
-  font-size: 14px;
-  color: var(--color-text-regular);
-}
-
-.notification-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  margin: 0 -12px;
-  border-bottom: 1px solid #F2F3F5;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.notification-item:last-of-type {
-  border-bottom: none;
-}
-
-.notification-item:hover {
-  background: rgba(var(--color-primary-rgb), 0.06);
-}
-
-.notification-item-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.notification-item-time {
-  font-size: 12px;
-  color: var(--color-info);
-}
-
-.mark-read-btn {
-  margin-top: 8px;
-  width: 100%;
-}
-
-.notification-panel-footer {
-  padding-top: 12px;
-  border-top: 1px solid #EBEEF5;
-  margin-top: 8px;
-}
-
 /* ===== 全局浮动录音指示器 ===== */
 .recording-indicator {
   position: fixed;
@@ -937,16 +793,6 @@ const formatTime = (t) => {
     gap: 8px;
   }
 
-  .bell-icon {
-    padding: 10px;
-    border-radius: var(--radius-lg);
-    min-width: var(--touch-target-min, 44px);
-    min-height: var(--touch-target-min, 44px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
   .user-info {
     padding: 4px 8px;
   }
@@ -1001,12 +847,11 @@ const formatTime = (t) => {
     background: var(--color-bg-card);
     border-bottom: 1px solid var(--color-border-light);
   }
-  [data-theme="dark"] .bell-icon,
+  /* 2026-07-12: 删除 .bell-icon 选择器（旧任务提醒铃铛已废弃，统一走 NotificationBell 组件） */
   [data-theme="dark"] .collapse-btn,
   [data-theme="dark"] .breadcrumb-text {
     color: var(--color-text-regular);
   }
-  [data-theme="dark"] .bell-icon:hover,
   [data-theme="dark"] .collapse-btn:hover,
   [data-theme="dark"] .breadcrumb-text:hover {
     background: var(--color-bg-hover);
@@ -1015,23 +860,6 @@ const formatTime = (t) => {
   [data-theme="dark"] .user-info:hover { background: var(--color-bg-warm); }
   [data-theme="dark"] .user-name { color: var(--color-text-primary); }
   [data-theme="dark"] .user-role { color: var(--color-text-secondary); }
-
-  /* === 通知面板（之前是硬编码 light 孤岛） === */
-  [data-theme="dark"] .notification-panel {
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border-base);
-    box-shadow: var(--shadow-md);
-  }
-  [data-theme="dark"] .notification-header {
-    border-bottom: 1px solid var(--color-border-light);
-    color: var(--color-text-primary);
-  }
-  [data-theme="dark"] .notification-item {
-    border-bottom: 1px solid var(--color-border-light);
-  }
-  [data-theme="dark"] .notification-item:hover { background: var(--color-bg-hover); }
-  [data-theme="dark"] .notification-item .notification-title { color: var(--color-text-primary); }
-  [data-theme="dark"] .notification-item .notification-time { color: var(--color-text-secondary); }
 
   /* === 录音 banner + 浮动胶囊 === */
   [data-theme="dark"] .recording-banner,
