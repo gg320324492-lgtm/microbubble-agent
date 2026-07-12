@@ -77,6 +77,11 @@ web/test-results/
 playwright-report/
 web/playwright-report/
 
+# Playwright 验证截图 (临时输出, spec page.screenshot 每次跑重新生成, 无 audit 价值)
+# 包含 web/tests/visual/desktop/screenshots/ 和 mobile/screenshots/ (若存在)
+# 教训: 2026-07-12 工作树清理 — 54 个 PNG 共 6.1MB, 分布在 7 个历史 commit, 全删
+web/tests/visual/**/screenshots/
+
 # FRP — 已彻底移除 (2026-07-02): 客户端/服务端二进制+配置+日志全部清理
 
 *.log
