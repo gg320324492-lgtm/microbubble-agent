@@ -117,8 +117,12 @@
                   </div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                      <el-button text type="primary" aria-label="编辑" @click="editTask(task)"><el-icon><Edit /></el-icon></el-button>
-                      <el-button text type="danger" aria-label="删除" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
+                      <el-button circle size="small" class="task-action-btn task-action-btn--edit" aria-label="编辑" @click="editTask(task)">
+                        <el-icon size="16"><Edit /></el-icon>
+                      </el-button>
+                      <el-button circle size="small" class="task-action-btn task-action-btn--delete" aria-label="删除" @click="deleteTask(task)">
+                        <el-icon size="16"><Delete /></el-icon>
+                      </el-button>
                     </template>
                   </div>
                 </div>
@@ -146,7 +150,9 @@
                   <div class="task-due">-</div>
                   <div class="task-actions">
                     <template v-if="isAdmin || task.created_by === currentUserId || task.assignee_id === currentUserId">
-                      <el-button text type="danger" aria-label="删除" @click="deleteTask(task)"><el-icon><Delete /></el-icon></el-button>
+                      <el-button circle size="small" class="task-action-btn task-action-btn--delete" aria-label="删除" @click="deleteTask(task)">
+                        <el-icon size="16"><Delete /></el-icon>
+                      </el-button>
                     </template>
                   </div>
                 </div>
@@ -774,6 +780,27 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* ===== 操作按钮（编辑/删除）===== */
+.task-action-btn {
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition: all var(--duration-fast, 150ms) ease;
+}
+
+.task-action-btn--edit:hover {
+  border-color: var(--color-primary);
+  background: rgba(var(--color-primary-rgb), 0.1);
+  color: var(--color-primary);
+}
+
+.task-action-btn--delete:hover {
+  border-color: var(--color-danger);
+  background: rgba(255, 77, 77, 0.1);
+  color: var(--color-danger);
+}
+
 /* ===== 垃圾桶 Tab ===== */
 .trash-tab-label {
   display: inline-flex;
@@ -875,6 +902,16 @@ onMounted(() => {
 }
 [data-theme="dark"] .complete-btn--done {
   color: var(--color-bg-card);
+}
+[data-theme="dark"] .task-action-btn {
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .task-action-btn--edit:hover {
+  background: rgba(var(--color-primary-rgb), 0.12);
+}
+[data-theme="dark"] .task-action-btn--delete:hover {
+  background: rgba(255, 77, 77, 0.12);
 }
 [data-theme="dark"] .trash-tab-label:hover {
   background: rgba(144, 147, 153, 0.14);
