@@ -732,14 +732,17 @@ onUnmounted(() => {
   transition: background 0.2s, color 0.2s, transform 0.2s;
 }
 
-/* P0-#2 v2 (2026-07-12 14:30): "跳到最早"按钮 — 用 position: sticky 而非 absolute
-   关键修复: `position: absolute; top: 24px` 在 scrollTop>0 时按钮被卷出可见区域
-   (scrollHeight=3223, scrollTop=2836 时 rect.top=-2670). sticky 始终在可见区域顶部. */
+/* P0-#2 v3 (2026-07-12 14:40): 修按钮"来回跳动"反馈
+   用户报: 点击 ↑ 时按钮视觉上跳动. 排查后真因是 :hover { transform: translateY(2px) }
+   + 移动端/触屏 :active 也有 transform 反馈, 鼠标按下瞬间按钮会动 2px.
+   修: 移除所有 transform 反馈 (包括 hover), 只保留 background 颜色变化 (anti-CLS).
+   Playwright 验证: buttons before/after click rect 完全不变. */
 .jump-to-top {
   position: sticky;
   top: 16px;
   z-index: 10;
   display: block;
+  width: fit-content;
   margin: 0 auto 0 auto;
   background: var(--color-bg-card);
   border: 1px solid var(--color-primary, #FF7A5C);
@@ -750,13 +753,20 @@ onUnmounted(() => {
   cursor: pointer;
   box-shadow: var(--shadow-md);
   padding: 8px 16px;
-  transition: background 0.2s, color 0.2s, transform 0.2s;
+  transition: background 0.2s, color 0.2s;  /* 不含 transform */
+  user-select: none;  /* 防止双击文本选中触发视觉抖动 */
 }
 
 .jump-to-top:hover {
   background: var(--color-primary, #FF7A5C);
   color: white;
-  transform: translateY(2px);
+  /* 故意不写 transform: translateY(2px) — 避免鼠标按下瞬间按钮视觉上"跳动" */
+}
+
+.jump-to-top:active {
+  /* 触屏/键盘点击反馈: 改 outline 而非 transform */
+  outline: 2px solid var(--color-primary, #FF7A5C);
+  outline-offset: 2px;
 }
 
 .jump-to-top:hover {
