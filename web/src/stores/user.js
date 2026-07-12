@@ -4,8 +4,6 @@ import axios from 'axios'
 
 export const useUserStore = defineStore('user', () => {
   const userInfo = ref(null)
-  const notificationCount = ref(0)
-  const notifications = ref([])
 
   const username = computed(() => userInfo.value?.name || '用户')
   const userRole = computed(() => {
@@ -17,24 +15,6 @@ export const useUserStore = defineStore('user', () => {
     const info = localStorage.getItem('user_info')
     if (info) {
       userInfo.value = JSON.parse(info)
-    }
-  }
-
-  async function fetchNotificationCount() {
-    try {
-      const res = await axios.get('/api/v1/reminders/pending-count')
-      notificationCount.value = res.data.count || 0
-    } catch {
-      notificationCount.value = 0
-    }
-  }
-
-  async function fetchNotifications() {
-    try {
-      const res = await axios.get('/api/v1/reminders')
-      notifications.value = res.data.reminders || []
-    } catch {
-      notifications.value = []
     }
   }
 
@@ -85,5 +65,5 @@ export const useUserStore = defineStore('user', () => {
     })
   }
 
-  return { userInfo, notificationCount, notifications, username, userRole, loadFromStorage, fetchNotificationCount, fetchNotifications, logout }
+  return { userInfo, username, userRole, loadFromStorage, logout }
 })
