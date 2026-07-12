@@ -797,7 +797,7 @@ onMounted(() => {
 
 .task-action-btn--delete:hover {
   border-color: var(--color-danger);
-  background: rgba(255, 77, 77, 0.1);
+  background: rgba(var(--color-danger-rgb), 0.1);
   color: var(--color-danger);
 }
 
@@ -911,7 +911,7 @@ onMounted(() => {
   background: rgba(var(--color-primary-rgb), 0.12);
 }
 [data-theme="dark"] .task-action-btn--delete:hover {
-  background: rgba(255, 77, 77, 0.12);
+  background: rgba(var(--color-danger-rgb), 0.12);
 }
 [data-theme="dark"] .trash-tab-label:hover {
   background: rgba(144, 147, 153, 0.14);
