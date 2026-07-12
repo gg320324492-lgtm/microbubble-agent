@@ -291,6 +291,178 @@ def test_edge_cases():
 
 
 # ============================================================================
+# Case 13 (P0-#1.5 2026-07-12): wrapper 返回值支持 attr + dict 双访问
+# ============================================================================
+def test_response_attr_and_dict_access():
+    """P0-#1.5: openai_response_to_anthropic_message 返回值必须是 _AnthropicMsgDict (dict 子类),
+    让 caller 既能用 resp.content (Anthropic SDK 风格) 又能用 resp["content"] (dict 风格) 访问.
+
+    Background:
+    - 之前返 plain dict, 12 个 caller (intent_classifier.py:152 / critic.py:133 / 等) 都用
+      `for block in resp.content` + `block.text` 属性访问 → AttributeError 'dict' object has no attribute 'content'
+    - 修法: wrapper 改成返 _AnthropicMsgDict (dict 子类 + __getattr__), 后向兼容现有 dict 风格测试.
+    """
+    from app.core.tool_call_converter import _AnthropicMsgDict, _wrap_as_anthropic
+
+    # 1. 顶层 attribute + dict 双访问
+    ant_msg = openai_response_to_anthropic_message({
+        "id": "chatcmpl-attr-test",
+        "model": "mimo-v2.5",
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": "hello", "tool_calls": []},
+            "finish_reason": "stop",
+        }],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    })
+    # type check
+    assert isinstance(ant_msg, _AnthropicMsgDict), (
+        f"P0-#1.5 regression: 必须是 _AnthropicMsgDict, got {type(ant_msg).__name__}"
+    )
+    # attr access (Anthropic SDK 风格)
+    assert ant_msg.role == "assistant"
+    assert ant_msg.stop_reason == "end_turn"
+    assert ant_msg.usage.input_tokens == 10  # 嵌套 attr
+    assert ant_msg.content[0].text == "hello"  # block 也要 attr
+    # dict access (向后兼容, P0 之前已有测试用)
+    assert ant_msg["role"] == "assistant"
+    assert ant_msg["content"][0]["text"] == "hello"
+    # 不存在 key/attr
+    try:
+        _ = ant_msg.nonexistent_key
+        assert False, "should raise AttributeError"
+    except AttributeError:
+        pass
+
+    # 2. _wrap_as_anthropic 递归处理 (嵌套 dict / list)
+    nested = _wrap_as_anthropic({
+        "a": {"b": {"c": [1, 2, {"d": "deep"}]}},
+        "list_field": [{"x": 1}, {"x": 2}],
+    })
+    assert isinstance(nested, _AnthropicMsgDict)
+    assert nested.a.b.c[2].d == "deep"  # 深嵌套 attr
+    assert nested["a"]["b"]["c"][2]["d"] == "deep"  # 深嵌套 dict
+    assert nested.list_field[0].x == 1
+    assert nested.list_field[1]["x"] == 2
+
+    # 3. tool_use block 也要 attr (这是 intent_classifier / critic 等 caller 的核心场景)
+    ant_msg_tools = openai_response_to_anthropic_message({
+        "id": "chatcmpl-tools",
+        "model": "mimo-v2.5",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "id": "call_001",
+                    "type": "function",
+                    "function": {
+                        "name": "search_knowledge",
+                        "arguments": json.dumps({"q": "微纳米气泡"}, ensure_ascii=False),
+                    },
+                }],
+            },
+            "finish_reason": "tool_calls",
+        }],
+        "usage": {"prompt_tokens": 100, "completion_tokens": 30},
+    })
+    tool_block = ant_msg_tools.content[0]
+    assert tool_block.type == "tool_use"
+    assert tool_block.name == "search_knowledge"
+    assert tool_block.input.q == "微纳米气泡"
+    # dict access
+    assert tool_block["type"] == "tool_use"
+    assert tool_block["input"]["q"] == "微纳米气泡"
+
+    print("✅ Case 13: wrapper 返回值支持 attr + dict 双访问 (P0-#1.5 修复)")
+
+
+# ============================================================================
+# Case 14 (P0-#1.5 2026-07-12): wrapper 处理 mimo reasoning_content → thinking block
+# ============================================================================
+def test_response_reasoning_content_to_thinking_block():
+    """P0-#1.5: mimo-v2.5 OpenAI 协议把思考过程放 reasoning_content 而非 content,
+    wrapper 必须把 reasoning_content 转为 Anthropic-style thinking block,
+    这样 caller (intent_classifier 等) 用 `block.thinking` 也能拿到 thinking-only 响应.
+
+    Background:
+    - 用户实测 mimo 返回 `{"finish_reason":"length", "content":"", "reasoning_content":"思考过程..."}`
+    - 旧 wrapper 只看 content (空), 不添加 thinking block
+    - intent_classifier 走 `for block in resp.content: if hasattr(block, "text")` 永远是空 → fallback
+    - 修法: wrapper 检测 reasoning_content, 加 thinking block (Anthropic SDK 标准)
+    """
+    # 1. 只有 reasoning_content 没 content → 应该有 1 个 thinking block
+    ant_msg = openai_response_to_anthropic_message({
+        "id": "chatcmpl-thinking",
+        "model": "mimo-v2.5",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "",
+                "reasoning_content": "First, the user said X. I need to...",
+            },
+            "finish_reason": "stop",
+        }],
+        "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+    })
+    assert len(ant_msg.content) == 1
+    assert ant_msg.content[0].type == "thinking"
+    assert "First, the user said" in ant_msg.content[0].thinking
+    # attr + dict 双访问
+    assert "First, the user said" in ant_msg.content[0]["thinking"]
+
+    # 2. content 和 reasoning_content 都有 → 应该有 2 个 block (text + thinking)
+    ant_msg_both = openai_response_to_anthropic_message({
+        "id": "chatcmpl-both",
+        "model": "mimo-v2.5",
+        "choices": [{
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": '{"category":"找资料","confidence":0.9}',
+                "reasoning_content": "思考了用户的问题...",
+            },
+            "finish_reason": "stop",
+        }],
+        "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+    })
+    assert len(ant_msg_both.content) == 2
+    text_block = next(b for b in ant_msg_both.content if b.type == "text")
+    thinking_block = next(b for b in ant_msg_both.content if b.type == "thinking")
+    assert text_block.text == '{"category":"找资料","confidence":0.9}'
+    assert "思考了用户" in thinking_block.thinking
+
+    # 3. Pydantic 模型输入 (production 实际是 openai ChatCompletion Pydantic model)
+    # 模拟 openai.types.chat.ChatCompletionMessage: 用 SimpleNamespace 模拟 attribute access
+    from types import SimpleNamespace
+    oai_pydantic_like = SimpleNamespace(
+        id="chatcmpl-pytest",
+        model="mimo-v2.5",
+        choices=[
+            SimpleNamespace(
+                index=0,
+                message=SimpleNamespace(
+                    role="assistant",
+                    content="",
+                    reasoning_content="Reasoning via Pydantic-like",
+                    tool_calls=None,
+                ),
+                finish_reason="stop",
+            )
+        ],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15),
+    )
+    ant_msg_py = openai_response_to_anthropic_message(oai_pydantic_like)
+    assert len(ant_msg_py.content) == 1
+    assert ant_msg_py.content[0].type == "thinking"
+    assert "Reasoning via Pydantic-like" in ant_msg_py.content[0].thinking
+
+    print("✅ Case 14: wrapper reasoning_content → thinking block (P0-#1.5 修复)")
+
+
+# ============================================================================
 # Run all
 # ============================================================================
 if __name__ == "__main__":
@@ -306,7 +478,9 @@ if __name__ == "__main__":
     test_tool_call_id_preservation()
     test_openai_tool_message_content_is_str()
     test_edge_cases()
+    test_response_attr_and_dict_access()
+    test_response_reasoning_content_to_thinking_block()
     print()
     print("=" * 50)
-    print("All 12 cases PASSED ✅")
+    print("All 14 cases PASSED ✅")
     print("=" * 50)

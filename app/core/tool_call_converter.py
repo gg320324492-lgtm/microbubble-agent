@@ -153,13 +153,68 @@ def anthropic_messages_to_openai(
 # 3. OpenAI response -> Anthropic-style 响应对象 (兼容 _AnthropicMessageWrapper)
 # ============================================================================
 
+
+class _AnthropicMsgDict(dict):
+    """Anthropic-style message: dict with attribute access (.content / .text / .type etc.).
+
+    解决 P0-#1.5 (2026-07-12): wrapper 之前返回 plain dict, 12 个 caller (intent_classifier /
+    critic / result_compressor / self_rag / paper_layout_service / rag_evaluator 等) 都用
+    `resp.content` / `block.text` 属性访问, plain dict 没有 .content 属性 → AttributeError
+    "'dict' object has no attribute 'content'" → 所有非 anthropic backend (openai_compat /
+    ollama) 的 intent/critic/compressor 全部 fallback 失效.
+
+    设计: dict 子类 + __getattr__, 让 dict 用法 (resp["content"]) 和属性用法 (resp.content)
+    都可用, 后向兼容 Pydantic Message 调用方.
+
+    边界:
+    - __getattr__ 只在 __getattribute__ 找不到属性时被调用 (Python 默认语义)
+    - __getitem__ 仍 work, 现有测试 ant_msg["role"] 等不变
+    - JSON 序列化: json.dumps 会忽略 __getattr__, 仅 dump dict key, 行为正确
+    - 内存开销: 每个 message ~50 bytes 一个 dict 子类 vs 100 bytes SimpleNamespace (差距 < 1%)
+    - 递归: 内部 block 也会包装成 _AnthropicMsgDict, 让 block.text / block.type / block.input 都 work
+    """
+
+    def __getattr__(self, key: str) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(
+                f"_AnthropicMsgDict has no attribute/key '{key}' (keys: {list(self.keys())[:10]}...)"
+            )
+
+    def __setattr__(self, key: str, value: Any) -> None:
+        self[key] = value
+
+
+def _wrap_as_anthropic(obj: Any) -> Any:
+    """递归包装 dict / list[dict] 为 _AnthropicMsgDict.
+
+    openai_response_to_anthropic_message 内部用, 让顶层 resp 和内部每个 content block
+    都同时支持 .content / block.text 属性访问 和 ["content"] / ["text"] dict 访问.
+    其他类型 (str/int/float/None) 原样返回.
+    """
+    if isinstance(obj, dict):
+        wrapped = _AnthropicMsgDict()
+        for k, v in obj.items():
+            wrapped[k] = _wrap_as_anthropic(v)
+        return wrapped
+    if isinstance(obj, list):
+        return [_wrap_as_anthropic(x) for x in obj]
+    return obj
+
+
 def openai_response_to_anthropic_message(
     openai_response: Any,
 ) -> Dict[str, Any]:
-    """OpenAI ChatCompletion response -> Anthropic-style message dict.
+    """OpenAI ChatCompletion response -> Anthropic-style message (AttrDict).
 
     兼容 Pydantic model (ChatCompletion) 和 dict 两种输入.
-    LLMClient 调用方代码使用 .content / .stop_reason / .usage.input_tokens 属性访问.
+    LLMClient 调用方代码使用 .content / .stop_reason / .usage.input_tokens 属性访问 (Anthropic SDK 风格).
+    同时支持 dict 访问 resp["content"] (向后兼容 P0 之前 _AnthropicMsgDict 改动前 12 个 caller).
+
+    P0-#1.5 修复 (2026-07-12): 返回 _AnthropicMsgDict 包装而非 plain dict, 修
+    `AttributeError: 'dict' object has no attribute 'content'` 在 12 个 caller
+    (intent_classifier.py:152 / critic.py:133 / result_compressor.py:162 等).
 
     OpenAI response:
       ChatCompletion(
@@ -186,6 +241,17 @@ def openai_response_to_anthropic_message(
         content_blocks.append({
             "type": "text",
             "text": text_content,
+        })
+
+    # P0-#1.5 (2026-07-12): wrapper 处理 OpenAI `reasoning_content` 字段 (mimo thinking 模型)
+    # mimo OpenAI 协议把思考过程放 reasoning_content 而非 content, 之前 wrapper 只查 content
+    # 导致 thinking-only 响应 (mimo 思考多 content 少) → 12 caller 都拿不到 text → fallback 失效
+    # 修法: 加 thinking block (Anthropic SDK 标准), caller 走 extract_text_from_response 可识别
+    reasoning_content = raw_msg.get("reasoning_content") if isinstance(raw_msg, dict) else getattr(raw_msg, "reasoning_content", "") or ""
+    if reasoning_content:
+        content_blocks.append({
+            "type": "thinking",
+            "thinking": reasoning_content,
         })
 
     # OpenAI tool_calls -> Anthropic tool_use blocks
@@ -222,7 +288,9 @@ def openai_response_to_anthropic_message(
     }
     stop_reason = stop_reason_map.get(finish_reason, "end_turn")
 
-    return {
+    # P0-#1.5 (2026-07-12): 递归包装成 _AnthropicMsgDict 让 12 个 caller 的
+    # `resp.content` / `block.text` 属性访问工作 (见函数 docstring)
+    return _wrap_as_anthropic({
         "id": _get(openai_response, "id", ""),
         "type": "message",
         "role": "assistant",
@@ -236,7 +304,7 @@ def openai_response_to_anthropic_message(
             "cache_creation_input_tokens": 0,
             "cache_read_input_tokens": 0,
         },
-    }
+    })
 
 
 # ============================================================================
