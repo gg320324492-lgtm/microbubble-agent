@@ -1,9 +1,97 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-12)**: chat-ux P0 三连修 + Playwright PNG cleanup + 文档同步收官 (11 commit 全 push origin/main) — P0-#1 LLM_BACKEND 残留 (commit `20621c83`) + P0-#1.5 _AnthropicMsgDict wrapper + mimo reasoning_content (commit `9b908f50`) + P0-#1.6 v1 ensureSessionLoaded server fetch fallback (commit `65d4493b`) + P0-#1.6 v2 orphan '[]' 误判 (commit `a687cee7`) + P0-#2 v1 sticky (commit `494b2917`) + P0-#2 v2 transform + 60fps 验证 (commit `c2b1e50a`) + P0-#2 v4 transform !important 防御 EP active (commit `da94ce74`) + P0-#2 audit 仅 spec (commit `43383798`) + Playwright PNG cleanup 54 PNG / 6.1MB + .gitignore 永久排除 (commit `c154f5d5`) + 文档同步 (本 commit). 详见下方"## [Unreleased] 2026-07-12" 段 + 6 个 memory 文件.
 > **本会话 (2026-07-11)**: 桌面 275 PPT 上传到团队共享网盘 (含 2 backend bug 修) — 详见下方"## [Unreleased] 2026-07-11"段.
 > **本会话 (2026-07-09)**: 待做清单核对沉淀 — 5 项未完成 + admin 决策 1 项 (voiceprint_relaxed*.py). 详见下方"## [Unreleased] 2026-07-09" 段, 总结见 `memory/2026-07-09-pending-items-audit.md`.
 > **本会话 (2026-07-08)**: 25+ bug 修复收官 + CLAUDE.md 拆分 — 详见下方"## [Unreleased] 2026-07-08" 段, 总结见 `memory/2026-07-08-25-bug-fix-batch.md`.
+
+## [Unreleased] 2026-07-12 — chat-ux P0 三连修 + Playwright PNG cleanup + 文档同步
+
+### 🆕 P0-#1 `.env LLM_BACKEND=ollama 残留` → chat 全 Connection error (`fix(env)` commit `20621c83`, 1 file + force-recreate)
+
+**根因**: `.env` 2026-07-02 Ollama 本地测试残留从未回滚 → 本地 PC Ollama 未跑 (WinError 10061) → OpenAI SDK `APIConnectionError` str='Connection error.' (anthropic 0.39+ str 同) → 3 LLM 调用全失败.
+
+**修法**: 改 `.env` `LLM_BACKEND=openai_compat` + `docker compose up -d --force-recreate` ⚠️ restart 不重读 env_file 是大坑第 N 次踩.
+
+**端到端验证**: curl SSE 验证 text_delta 正常 "你好！很高兴收到你的消息 🙋‍♂️...".
+
+**副 bug** (P0-#1.5 修): `intent_classifier 'dict' object has no attribute 'content'` (OpenAI 响应是 dict, intent_classifier 用 anthropic `.content` 属性, 不影响主流程但 confidence 永远 0%).
+
+### 🆕 P0-#1.5 `_AnthropicMsgDict` 包装 + mimo reasoning_content wrap + intent_classifier max_tokens (`fix(chat)` commit `9b908f50`, 4 files +263/-6)
+
+**根因**: P0-#1 修后浮出副 bug: wrapper `openai_response_to_anthropic_message` 返 plain dict 但 12 caller (intent_classifier / critic / self_rag / result_compressor / paper_layout / rag_evaluator / meeting_analysis) 全用 `resp.content` + `block.text` 属性访问 → AttributeError → intent/critic/compressor 全部永久 fallback.
+
+**修法 3 重复合**:
+1. **加 `_AnthropicMsgDict`** (dict 子类 + `__getattr__`) 递归包装实现 `resp.content` 和 `resp["content"]` 双访问后向兼容 12 caller + 现有测试
+2. **wrapper 加 `reasoning_content`** → `{type:thinking, thinking:...}` block (mimo OpenAI thinking 模型实际回答放 reasoning_content)
+3. **intent_classifier max_tokens 300→2048** (mimo reasoning_content 起步 1000+ token)
+
+**端到端验证**: curl 60s 验证 `intent_detected reasoning='用户询问 dutonghe是谁, 属于查找人员信息, 因此归类为search_info' + label 置信度 95%` (vs 旧 0%) + 14/14 测试 PASS (Case 13/14 新增 wrapper attr+dict 双访问 + reasoning_content→thinking block).
+
+### 🆕 P0-#1.6 v1 `ensureSessionLoaded` server fetch fallback (`fix(chat-history)` commit `65d4493b`, 4 files +128 + dist force-add)
+
+**根因**: 用户截图: 左侧 session 列表显示 `hello (8 小时前 2 条)` 但点击进入主区空白. 旧 `useChatStream.ts:273 ensureSessionLoaded` 只查 localStorage 没服务器 fallback, server-only session (curl 调试 / 跨设备登录 / PR6 持久化) 永远 cache miss → `messagesBySession[id] = []` → 主区空白.
+
+**修法 4 个分层**:
+1. **localStorage hit 直接用** — 立即返回本地缓存
+2. **miss 占位+异步 fetchSessionFromServer** — 不阻塞 UI
+3. **成功 serverToClient map+写回 localStorage** — 写本地缓存供下次快速
+4. **失败 best-effort 保留空数组 console.warn** — 不抛错
+
+**端到端验证**: vitest 9/9 PASS (4 新 case: hit/miss/空/失败) + Playwright `.bubble count: 0→36` + curl server API live `/api/v1/chat/sessions/{id}/messages 200`.
+
+### 🆕 P0-#1.6 v2 orphan session `localStorage='[]'` 误判 cache hit (`fix(chat-history)` commit `a687cee7`, 3 files +121 + dist force-add)
+
+**根因**: 用户截图报 '41条仍然看不全' 你好 session list 41 条但主区只看到 1 个欢迎语 + 0 条真实消息. v1 修复 (commit `65d4493b`) 把'localStorage 有内容'等同 cache hit, 但用户修复前已缓存了 orphan 空数组 `'[]'`, v1 后永远不 fetch.
+
+**修法 v2**:
+- 加 `serverFetchedSessions` Set **独立追踪** (loadedSessions 防 SSE 增量覆盖, serverFetchedSessions 防重复 fetch)
+- cache hit 判定改用 `Array.isArray(parsed) && parsed.length > 0` (区分真实缓存 vs 空数组占位)
+
+**端到端验证**: vitest 12/12 PASS (含 3 v2 回归 case: orphan '[]' 仍 fetch / 二次不重复 fetch / 真实内容不 fetch) + Playwright v2 回归 `.bubble count: 41` ✅ 与 server list count=41 完全一致 (修复前 v1 后 v2 前只渲染 38 条).
+
+**完整修复链**: v0 (只查 localStorage) → v1 (+fetchSessionFromServer) → v2 (+serverFetchedSessions).
+
+### 🆕 P0-#2 chat-jump-to-top 按钮点击'来回跳动' v1~v4 五修收官 (5 commit 全 push origin/main)
+
+**根因**: 用户截图报 `chat-jump-to-top` 按钮 (↑ 滚回顶部) 在点击瞬间出现视觉跳动/抖动.
+
+**4 轮根因 + 修法**:
+
+| 阶段 | commit | 改动 | 行数 |
+|------|--------|------|------|
+| v1 sticky CSS | `494b2917` | 修 ↑ 按钮 scrollTop>0 被卷出可见 | 3 文件 |
+| v2 transform | `c2b1e50a` | `&:active { transform: none }` 修点击抖动反馈 + 60fps 验证 (4 spec) | spec + PNG |
+| v3 60fps 用户视角 | (同 `c2b1e50a`) | real-user-flow / button-bouncing / final-verify / jump-to-top | spec |
+| v4 !important 防御 | `da94ce74` | `transform: none !important; transition: none !important` 防御 EP `<el-button>` active transform specificity | 1 文件 + dist |
+| audit 收尾 | `43383798` | 仅留 60fps 用户视角 spec `p0-2-bounce-recv2.spec.mjs` 146 行 | spec only |
+
+**v4 端到端验证**: `p0-2-bounce-recv2.spec.mjs` Test 3 真实 click + mouse.down + 12×16ms = 60fps 采样, **delta = 0px** ✅ 按钮 y 位置完全稳定 (阈值 >4px 报失败).
+
+**5 新铁律**:
+1. **`position: sticky` 优于 `fixed`** — 滚动容器内浮动按钮永远用 sticky + 容器布局, 不要 fixed + 视口定位 (滚动视口变化 fixed 按钮会被卷走)
+2. **EP `<el-button>` 默认 active transform 必须显式禁用** — 用 `transform: none !important; transition: none !important;` 强制覆盖 specificity battle
+3. **60fps 验证优于静态截图** — Playwright spec 必须 mouse.down + 16ms 间隔采样才能捕获瞬间抖动, 静态截图看不出
+4. **`!important` 不是 anti-pattern, 是 specificity battle 工具** — 当第三方 UI 库样式 specificity 比你高, `!important` 是唯一可靠手段, 不要为了"代码洁癖"放弃
+5. **visual bug 修复必须 audit trail** — 每次修复都留 Playwright spec + delta 阈值, 未来回归测试可重跑验证
+
+### 🆕 Playwright 验证截图清理 + `.gitignore` 永久排除 (`chore` commit `c154f5d5`, 1 .gitignore + 54 PNG 删除, 6.1MB)
+
+**触发**: 用户决策"Playwright 的截图继续删去, 没啥用" (在 P0-#2 v4 audit commit 后追加).
+
+**清理结果**:
+- **删除**: 54 个 PNG 截图, 共 6.1MB (分布在 7 个历史 commit: c2b1e50a / 0c1ed72c / e6b1ed64 / ff30e010 / 1dd92414 / 648b863b / bd00b692)
+- **修改**: `.gitignore` 加 `web/tests/visual/**/screenshots/` 永久排除规则 (含 desktop/ + mobile/ + 未来子目录)
+
+**关键判断**: 这些 PNG 都是 `page.screenshot({ path: ... })` 写入临时输出 (不是 baseline 读取, Playwright 真正 visual regression baseline 在 `*-snapshots/` 目录), 删除不影响 spec 执行 — spec 跑时本地重新生成, 不入库.
+
+**5 新铁律**:
+1. **Playwright 截图不进 git** — `.gitignore` 永久排除 `web/tests/visual/**/screenshots/`, spec 跑时本地生成, audit 走 git history
+2. **真正的 visual regression baseline 走 `*-snapshots/`** — 别和临时 audit 截图混在一起
+3. **audit trail 在 commit message, 不在 PNG** — 修复细节写在 commit body + memory, PNG 重新生成的成本远低于 git 体积膨胀
+4. **6MB PNG 看着小, 7 commit 累积就是隐患** — 任何"先 commit 后面再清"的策略都会被遗忘, `.gitignore` 一开始就要加
+5. **`git rm --cached` + `.gitignore` 双管齐下** — 只加 `.gitignore` 不删已 tracked 文件没用, 必须 `git rm` + commit 同步
 
 ## [Unreleased] 2026-07-10 — dist deploy 链断裂修复 + folder 越权 403 区分 + admin 越权 + smart confirm
 

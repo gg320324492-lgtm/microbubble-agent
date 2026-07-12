@@ -3,6 +3,36 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
 
+## 当前状态（2026-07-12 — chat-ux P0 三连修收官 + 工作树整理清零）
+
+**已交付（2026-07-12 本会话新增 — P0-#1+#1.5+#1.6 + P0-#2 + Playwright PNG cleanup + 文档同步）**：
+
+- 🆕 **chat-ux P0 三连修 + 工作树整理清零（11 commit 全 push origin/main）** — 详见 `memory/p0-2-chat-jump-to-top-bouncing-2026-07-12.md` + `memory/playwright-screenshot-cleanup-2026-07-12.md` + `memory/llm-backend-ollama-residual-connection-error-2026-07-12.md` + `memory/anthropic-msg-dict-wrapper-mimo-reasoning-content-2026-07-12.md` + `memory/session-load-server-fetch-fallback-2026-07-12.md` + `memory/ensure-session-loaded-cache-hit-orphan-2026-07-12.md`. 关键 commit 链:
+  - **P0-#1 `.env LLM_BACKEND=ollama 残留`**: `20621c83` 仅 `.env` + force-recreate (`docker compose restart` 不重读 env_file 是大坑第 N 次踩)
+  - **P0-#1.5 `_AnthropicMsgDict` wrapper**: `9b908f50` 4 文件 +263/-6 (dict 子类 `__getattr__` 递归包装实现 `resp.content` + `resp["content"]` 双访问后向兼容 12 caller, mimo reasoning_content wrap 成 `{type:thinking, thinking:...}` block, intent_classifier max_tokens 300→2048)
+  - **P0-#1.6 v1 `ensureSessionLoaded` server fetch fallback**: `65d4493b` 4 文件 +128 (修左侧 session 列表 `hello (8 小时前 2 条)` 但点击进入主区空白)
+  - **P0-#1.6 v2 orphan session `localStorage='[]'` 误判**: `a687cee7` 3 文件 +121 (加 `serverFetchedSessions` Set 独立追踪 + `parsed.length > 0` 才视为 cache hit)
+  - **P0-#2 v1 `position: sticky`**: `494b2917` 3 文件 (修 ↑ 按钮 scrollTop>0 被卷出可见)
+  - **P0-#2 v2 `&:active { transform: none }`**: `c2b1e50a` + 60fps 验证 (4 Playwright spec 修点击抖动反馈)
+  - **P0-#2 v3 60fps 用户视角验证**: 同 commit `c2b1e50a` (real-user-flow / button-bouncing / final-verify / jump-to-top)
+  - **P0-#2 v4 `transform: none !important` 防御 EP active transform**: `da94ce74` 1 文件 + dist
+  - **P0-#2 audit 收尾**: `43383798` 仅留 60fps 用户视角 spec `p0-2-bounce-recv2.spec.mjs` 146 行
+  - **Playwright PNG cleanup**: `c154f5d5` 1 .gitignore + 54 PNG 删除 (6.1MB, 7 历史 commit 来源: c2b1e50a / 0c1ed72c / e6b1ed64 / ff30e010 / 1dd92414 / 648b863b / bd00b692) + `.gitignore` 加 `web/tests/visual/**/screenshots/` glob 永久排除
+  - **文档同步**: 本 commit (CLAUDE.md / README.md / ROADMAP.md / CHANGELOG.md / memory/MEMORY.md 全部更新)
+
+- 🆕 **核心铁律沉淀 (12 条, 跨 3 个任务)** —
+  - **P0-#1+#1.5**: `.env` 改动必须 force-recreate / wrapper shape 与 caller 期望必须对齐 / OpenAI thinking 模型 reasoning_content 必须 wrap / mimo-v2.5 max_tokens 至少 2048 / `for block in resp.content` 是 anthropic backend 假设
+  - **P0-#1.6**: localStorage 不能唯一数据源 / server fetch 失败 best-effort / cache hit 必须看内容 `parsed.length > 0` / cache hit + server fetch 是不同维度必须独立 Set 追踪 / Playwright 验证 cloud dist 必看 served index hash
+  - **P0-#2**: `position: sticky` 优于 `fixed` / EP active transform 必须显式禁用 / 60fps 验证优于静态截图 / `!important` 不是 anti-pattern 是 specificity battle 工具 / visual bug 修复必须 audit trail
+  - **PNG cleanup**: Playwright 截图不进 git / 真正的 visual regression baseline 走 `*-snapshots/` / audit trail 在 commit message 不在 PNG / 6MB PNG 7 commit 累积就是隐患 / `git rm --cached` + `.gitignore` 双管齐下
+
+- 🆕 **端到端验证清单** —
+  - [x] P0-#1: curl SSE 验证 text_delta 正常 "你好！很高兴收到你的消息 🙋‍♂️..."
+  - [x] P0-#1.5: curl 60s 验证 `intent_detected reasoning='用户询问 dutonghe是谁, 属于查找人员信息, 因此归类为search_info' + label 置信度 95%` (vs 旧 0%)
+  - [x] P0-#1.6 v2: Playwright v2 回归 `.bubble count: 41` ✅ 与 server list count=41 完全一致 (修复前 v1 后 v2 前只渲染 38 条)
+  - [x] P0-#2 v4: 60fps 采样 `delta = 0px` ✅ 按钮 y 位置完全稳定 (阈值 >4px 报失败)
+  - [x] PNG cleanup: `git rm` 54 个 PNG, working tree clean, commit `c154f5d5` push 到 origin/main
+
 ## 当前状态（2026-07-09 — Drive 全家桶全面美化收官 + 待做清单核对沉淀）
 
 **已交付（2026-07-09 本会话新增 — 文档同步 commit + 待做清单核对沉淀）**：
