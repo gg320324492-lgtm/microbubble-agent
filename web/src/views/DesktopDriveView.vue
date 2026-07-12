@@ -120,6 +120,7 @@
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
         <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
+        <!-- v2.29 (2026-07-12) 接通 create-sub-folder emit (右键菜单"新建子文件夹"触发) -->
         <FolderTree
           :folder-tree="folderTree"
           :selected-folder-id="selectedFolderId"
@@ -131,7 +132,8 @@
           @update:special-view="specialView = $event"
           @toggle-expanded="toggleExpandedFolder"
           @retry="fetchFolderTree"
-          @request-new-folder="showCreateFolderDialog = true"
+          @request-new-folder="onCreateSubFolder(null)"
+          @create-sub-folder="onCreateSubFolder"
         />
       </aside>
 
@@ -209,10 +211,18 @@
     </div>
 
     <!-- PR3.4 dialogs -->
+    <!--
+      v2.29 (2026-07-12) parent-id 数据流改造:
+      旧实现 hardcode :parent-id="selectedFolderId", 工具栏"新建文件夹"按钮 OK,
+      但右键 FolderTree emit('create-sub-folder', folderId) parent_id 是 folderId,
+      跟 selectedFolderId 不同 (用户可能在 A 文件夹下, 右键 B 创建 B 的子文件夹).
+      新增 createSubFolderParentId ref 暂存右键触发的 parent_id,
+      currentCreateFolderParentId computed 取右键值优先, 否则 fallback selectedFolderId.
+    -->
     <CreateFolderDialog
       v-model="showCreateFolderDialog"
-      :parent-id="selectedFolderId"
-      :parent-folder="selectedFolder"
+      :parent-id="currentCreateFolderParentId"
+      :parent-folder="currentCreateFolderParentFolder"
       @create="onCreateFolder"
     />
     <RenameDialog
@@ -319,7 +329,8 @@ const {
   toggleExpanded: toggleExpandedFolder,
   selectedFolder,
   createFolder: doCreateFolder,
-  renameFolder: doRenameFolder
+  renameFolder: doRenameFolder,
+  findFolderById
 } = folderTreeStore
 
 // === 文件列表 (PR3.3 接入 + v2 PR1 + v2 PR2 sort/filter/star/batch) ===
@@ -535,6 +546,28 @@ const renameTarget = ref(null)
 const renameTargetType = ref('file')  // file | folder
 const showMoveDialog = ref(false)
 const moveTargetFileId = ref(null)
+
+// v2.29 (2026-07-12) 右键 FolderTree 菜单"新建子文件夹" 触发的临时 parent_id
+//   null = 走默认 selectedFolderId (工具栏按钮 / 空态 CTA 路径)
+//   非 null = 右键触发的目标 folder id (覆盖 selectedFolderId)
+const createSubFolderParentId = ref(null)
+
+// 右键触发时优先用 target folder id, 默认走 selectedFolderId
+const currentCreateFolderParentId = computed(() =>
+  createSubFolderParentId.value !== null
+    ? createSubFolderParentId.value
+    : selectedFolderId.value
+)
+
+// 右键触发时找该 folder 的 object 给 CreateFolderDialog 显示父文件夹 path
+// 默认走 store.selectedFolder computed (按 selectedFolderId)
+const currentCreateFolderParentFolder = computed(() => {
+  const id = createSubFolderParentId.value
+  if (id !== null) {
+    return findFolderById(id)
+  }
+  return selectedFolder.value
+})
 
 // === v2 PR1 dialog 状态 ===
 const showShareDialog = ref(false)
@@ -778,11 +811,23 @@ async function onCreateFolder(payload) {
       visibility: payload.visibility
     })
     showCreateFolderDialog.value = false
+    // v2.29: reset 创建后 cleanup 临时 parent_id 暂存,
+    // 下次打开 dialog (工具栏 / 空态 CTA) 默认走 selectedFolderId
+    createSubFolderParentId.value = null
     ElMessage.success(`文件夹已创建: ${result.name}`)
     // useFolderTree.createFolder 内部已 fetchTree, 不用再手动刷新
   } catch (e) {
+    // v2.29: 失败不 reset, dialog 保持打开, 用户修复后 retry 仍用同一 parent_id
     ElMessage.error(e.message || '创建文件夹失败')
   }
+}
+
+// v2.29 (2026-07-12) 右键 FolderTree 触发的"新建子文件夹" handler
+//   folderId 可能 null (根项右键) 或 子 folder id
+//   暂存到 createSubFolderParentId 覆盖 selectedFolderId, dialog 据此决定 parent_id
+function onCreateSubFolder(folderId) {
+  createSubFolderParentId.value = folderId  // null = 顶级
+  showCreateFolderDialog.value = true
 }
 
 // === 计算属性 ===

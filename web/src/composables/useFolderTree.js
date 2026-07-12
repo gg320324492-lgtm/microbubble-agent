@@ -224,6 +224,15 @@ export const useFolderTreeStore = defineStore('folderTree', () => {
     selectedFolderId.value = id
   }
 
+  // v2.29 (2026-07-12) 暴露 findFolder (包装 store 内部 helper, 让外部 caller 复用)
+  //   用途: 右键 FolderTree sub folder 的 "新建子文件夹" 触发时, 需要按 folderId
+  //         在 tree 里找 folder object 给 CreateFolderDialog 的 :parent-folder prop
+  //   selectedFolder computed 只按 selectedFolderId 找, 不够灵活 (右键触发不等于选中)
+  //   暴露内部 helper 让 caller 主动按 folderId 找
+  function findFolderById(targetId) {
+    return findFolder(folderTree.value, targetId)
+  }
+
   return {
     // 状态
     folderTree,
@@ -243,7 +252,8 @@ export const useFolderTreeStore = defineStore('folderTree', () => {
     updateVisibility,
     getChildrenStats,
     selectFolder,
-    toggleExpanded
+    toggleExpanded,
+    findFolderById
   }
 })
 
