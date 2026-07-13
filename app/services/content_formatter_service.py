@@ -131,7 +131,7 @@ def reformat_knowledge_task(self, knowledge_id: int):
     from app.config import settings
     from app.models.knowledge import Knowledge
     from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     async def _run():
         # v28 step 18: Celery worker 是新 event loop，不能复用 FastAPI app 的全局 async_session

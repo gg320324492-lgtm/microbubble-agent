@@ -115,12 +115,20 @@ class MemberService:
 
         2026-06-14 收官：is_active=None 时不过滤（兼容历史成员/alumni 查找）。
         显式传 True/False 则按值过滤。
+
+        2026-07-13 修复：DB 有重名成员（实测 `测试小助手` × 3 个 active），
+        原 `scalar_one_or_none()` 抛 MultipleResultsFound → 上游 create_task tool
+        崩 → chat_stream 500 整个对话挂掉。改用 `scalars().first()`:
+        - 无匹配 → None
+        - 1 个 → 返它
+        - 多个 → 返 id 最小的（创建最早，最具代表性）
         """
         query = select(Member).where(Member.name == name)
         if is_active is not None:
             query = query.where(Member.is_active == is_active)
+        query = query.order_by(Member.id)
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_members(
         self,
