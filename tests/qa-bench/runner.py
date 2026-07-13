@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os  # 2026-07-13 #P1: 读 THINKING_MODE env 注入 payload
 import re
 import sys
 import time
@@ -628,6 +629,14 @@ async def run_single_question(
     session_id = f"qa-bench-{qid}-{int(time.time())}"
 
     payload = {"message": question, "session_id": session_id}
+    # 2026-07-13 #P1: 三档 mode 透传 (qa-bench benchmark 用 THINKING_MODE env 或 question.thinking_mode 字段)
+    # 优先级: question_data 显式字段 > THINKING_MODE env > 跳过(走后端 settings 默认)
+    thinking_mode = (
+        question_data.get("thinking_mode")
+        or os.environ.get("THINKING_MODE")
+    )
+    if thinking_mode:
+        payload["thinking_mode"] = thinking_mode
 
     t0 = time.monotonic()
     # 2026-07-02 Step 2 修复: mimo 限流 429 retry/backoff

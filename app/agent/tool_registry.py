@@ -58,6 +58,10 @@ class ToolContext:
         # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle 优先于 settings 全局开关）
         self_rag_enabled: Optional[bool] = None,  # True=跑 Phase 0.5 gate, False=跳过, None=用 settings.AGENT_SELF_RAG_ENABLED
         synthesis_model_override: Optional[str] = None,  # 覆盖 settings.AGENT_SYNTHESIS_MODEL 的 synthesis 模型
+        # 2026-07-13 #P1 三态推理模式 (fast/balanced/deep): 整包配置注入, agentic_loop 5 处真分支读此字段
+        # None 时回落 settings 默认 (即旧 behavior), 兼容旧调用点
+        thinking_config=None,  # ThinkingConfig | None (循环 import 防护: 不引入类型注解)
+        mode_label: str = "balanced",  # UI 展示名, 流式 done 事件回填
     ):
         self.db = db
         self.user_id = user_id
@@ -69,6 +73,8 @@ class ToolContext:
         self.loop_id = loop_id
         self.self_rag_enabled = self_rag_enabled
         self.synthesis_model_override = synthesis_model_override
+        self.thinking_config = thinking_config  # None 时 agentic_loop 走 settings fallback 路径
+        self.mode_label = mode_label
         # 2026-06-14 收官：grounding 守卫用 — 工具返回里出现过的成员 ID + 姓名
         # agentic_loop._extract_rich_block_json 解析 LLM 输出的 rich_block.data 时
         # 校验 name 是否在这个集合里，否则丢弃（防 LLM 凭空捏造成员名）

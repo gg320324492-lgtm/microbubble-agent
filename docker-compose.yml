@@ -170,6 +170,40 @@ services:
   #   mem_limit: 4g
   #   restart: unless-stopped
 
+  # 2026-07-13 #P1: Ollama 服务 (本地 LLM, fast/balanced/deep 三档模式都用)
+  # - fast/balanced: qwen3:8b (默认)
+  # - deep: deepseek-r1-distill-qwen:7b (原生 reasoning_content 通道)
+  # - volume ./data/ollama 持久化模型 (首次 pull ~4GB)
+  # - GPU: deploy.resources.reservations.devices 走 NVIDIA driver (与 app 共享同一 GPU)
+  # - OLLAMA_KEEP_ALIVE=10m: 模型空闲 10 分钟后自动 unload 释放显存
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"     # host 仅本地访问 (避免暴露公网)
+    volumes:
+      - ./data/ollama:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=10m
+      - OLLAMA_HOST=0.0.0.0:11434
+    extra_hosts:
+      # Docker Desktop Windows 默认只 bind IPv6, 加 host-gateway 强制 IPv4 NAT
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      # ollama 官方镜像无 curl/wget, 用 ollama ps 代替 (列已 load 模型, server 启动后永真)
+      test: ["CMD-SHELL", "ollama ps > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
   # 2026-06-30 ASR 迁移: SenseVoice 服务 (唯一 ASR 后端, 单模型策略)
   # 内存占用 ~1 GB (vs Whisper 8 GB), RTF 0.001 (1000× real-time)
   # 长音频自动 chunked (60s × N, cache={}) 避免 OOM

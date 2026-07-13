@@ -90,30 +90,42 @@
           <span class="item-arrow">›</span>
         </button>
 
-        <!-- 2026-06-30 #009 Self-RAG 深度思考 toggle -->
-        <button
-          type="button"
-          class="settings-item"
-          @click="toggleDeepThinking"
-          aria-label="切换回答深度"
-        >
-          <div class="item-icon" style="background: var(--color-primary-bg)">
-            {{ useDeepThinking ? '🧠' : '⚡' }}
-          </div>
-          <div class="item-info">
-            <div class="item-title">回答深度</div>
-            <div class="item-desc">
-              当前：{{ useDeepThinking ? '深度思考（带 Self-RAG 重检索）' : '快速回答（跳过 judge 评估）' }}
-            </div>
-          </div>
-          <el-switch
-            :model-value="useDeepThinking"
-            inline-prompt
-            active-text="深度"
-            inactive-text="快速"
-            @update:model-value="toggleDeepThinking"
-          />
-        </button>
+        <!-- 2026-07-13 #P1 三档推理模式 (fast/balanced/deep) -->
+        <section class="settings-section">
+          <h3 class="section-title">思考模式</h3>
+          <van-radio-group
+            :model-value="uiStore.thinkingMode"
+            @update:model-value="onModeChange"
+            direction="horizontal"
+          >
+            <van-cell-group inset>
+              <van-cell clickable @click="onModeChange('fast')">
+                <template #title>
+                  <van-icon name="flash-o" /> 快速 (Qwen3-8B · 跳过深度推理)
+                </template>
+                <template #right-icon>
+                  <van-radio name="fast" />
+                </template>
+              </van-cell>
+              <van-cell clickable @click="onModeChange('balanced')">
+                <template #title>
+                  <van-icon name="cpu" /> 平衡 (Qwen3-8B · 默认 Self-RAG)
+                </template>
+                <template #right-icon>
+                  <van-radio name="balanced" />
+                </template>
+              </van-cell>
+              <van-cell clickable @click="onModeChange('deep')">
+                <template #title>
+                  <van-icon name="magic-stick-o" /> 深度 (DeepSeek-R1 + thinking + 重检索)
+                </template>
+                <template #right-icon>
+                  <van-radio name="deep" />
+                </template>
+              </van-cell>
+            </van-cell-group>
+          </van-radio-group>
+        </section>
       </section>
 
       <!-- 只读信息 -->
@@ -224,8 +236,12 @@ const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
 const uiStore = useUiStore()  // 2026-06-30 #009 Self-RAG
+// 2026-07-13 #P1: 三档模式 (fast/balanced/deep) 兼容老 boolean API
 const useDeepThinking = computed(() => uiStore.useDeepThinking)
 const toggleDeepThinking = () => uiStore.toggleDeepThinking()
+const onModeChange = (v) => {
+  if (v) uiStore.setThinkingMode(v)
+}
 
 const userInfo = computed(() => userStore.userInfo)
 

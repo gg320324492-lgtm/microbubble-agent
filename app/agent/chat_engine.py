@@ -65,6 +65,8 @@ class ChatEngine:
         # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle 优先于 settings 全局开关）
         self_rag_enabled: Optional[bool] = None,
         synthesis_model_override: Optional[str] = None,
+        # 2026-07-13 #P1 三态推理模式 (fast/balanced/deep): 'fast' | 'balanced' | 'deep' | None (= settings 默认)
+        thinking_mode: Optional[str] = None,
     ) -> AsyncIterator[StreamEvent]:
         """方案 C 单阶段流式综合主入口
 
@@ -85,11 +87,19 @@ class ChatEngine:
         - text_delta [increment] (retry 流式)
         - done [snapshot] | error [snapshot]
         """
+        # 2026-07-13 #P1: 提前 resolve_thinking_config, 让 intent gates + ToolContext 都能读
+        from app.agent.thinking_config import resolve_thinking_config
+
+        thinking_config = resolve_thinking_config(thinking_mode)
+
         # 1. 意图分类
         ctx = ToolContext(
             db=db,
             user_id=user_id,
             channel_user_id=channel_user_id,
+            # 2026-07-13 #P1: 注入 thinking_config 给 intent_classifier 等后续步骤
+            thinking_config=thinking_config,
+            mode_label=thinking_config.label,
         )
         intent: Optional[IntentResult] = None
         try:
@@ -108,7 +118,8 @@ class ChatEngine:
         # - DATA_QUERY/EXECUTE_ACTION → 直接展示工具结果，不展开
         # - SEARCH_INFO/EXPLAIN_CONCEPT/RECOMMEND_PERSON → ≥300 字 + 三段式 + 引用
         # feature flag AGENT_INTENT_AWARE_PROMPTS 控制开关，便于紧急回滚
-        if settings.AGENT_INTENT_AWARE_PROMPTS:
+        # 2026-07-13 #P1: 优先读 thinking_config.intent_aware_prompts (mode-aware), 否则读 settings 默认
+        if thinking_config.intent_aware_prompts and settings.AGENT_INTENT_AWARE_PROMPTS:
             from app.agent.prompts import get_intent_aware_guidelines
             intent_category = intent.category.value if intent else None
             intent_section = get_intent_aware_guidelines(intent_category)
@@ -116,7 +127,7 @@ class ChatEngine:
                 system = system + "\n" + intent_section
                 logger.debug(
                     f"intent-aware gate applied: intent={intent_category}, "
-                    f"added {len(intent_section)} chars"
+                    f"added {len(intent_section)} chars, mode={thinking_config.mode}"
                 )
 
         # 1c. Primitive Recognition Gate (#083 - 2026-06-28 chat agent 质量优化)
@@ -125,7 +136,7 @@ class ChatEngine:
         # 中的哪一种，再决定调什么工具、如何回复。
         # 闲聊/数据场景不挂这个 section（避免干扰快速回答）。
         # feature flag AGENT_PRIMITIVE_RECOGNITION 控制开关，便于紧急回滚
-        if settings.AGENT_PRIMITIVE_RECOGNITION and intent_category in {
+        if thinking_config.primitive_recognition and settings.AGENT_PRIMITIVE_RECOGNITION and intent_category in {
             "search_info", "explain_concept", "recommend_person"
         }:
             from app.agent.prompts import get_primitive_recognition_section
@@ -134,7 +145,7 @@ class ChatEngine:
                 system = system + "\n" + primitive_section
                 logger.debug(
                     f"primitive-recognition gate applied: intent={intent_category}, "
-                    f"added {len(primitive_section)} chars"
+                    f"added {len(primitive_section)} chars, mode={thinking_config.mode}"
                 )
 
         # 1d. Cross-Domain Synthesis Gate (#086 - 2026-06-28 chat agent 质量优化)
@@ -143,14 +154,14 @@ class ChatEngine:
         # (原理+公式+我们的研究+我们的假设+我们的研究人员)
         # 不挂 search_info (找具体论文/资料) 和 recommend_person (找人) 场景
         # feature flag AGENT_CROSS_DOMAIN_SYNTHESIS 控制开关
-        if settings.AGENT_CROSS_DOMAIN_SYNTHESIS and intent_category == "explain_concept":
+        if thinking_config.cross_domain_synthesis and settings.AGENT_CROSS_DOMAIN_SYNTHESIS and intent_category == "explain_concept":
             from app.agent.prompts import get_cross_domain_synthesis_section
             cross_domain_section = get_cross_domain_synthesis_section()
             if cross_domain_section:
                 system = system + "\n" + cross_domain_section
                 logger.debug(
                     f"cross-domain-synthesis gate applied: intent={intent_category}, "
-                    f"added {len(cross_domain_section)} chars"
+                    f"added {len(cross_domain_section)} chars, mode={thinking_config.mode}"
                 )
 
         # 2. Agentic Loop + Trace 持久化（async with 异常安全）
@@ -173,6 +184,9 @@ class ChatEngine:
             # 2026-06-30 #009: 透传 per-request override
             self_rag_enabled=self_rag_enabled,
             synthesis_model_override=synthesis_model_override,
+            # 2026-07-13 #P1: 注入 thinking_config 给 agentic_loop 5 处真分支
+            thinking_config=thinking_config,
+            mode_label=thinking_config.label,
         )
 
         loop = AgenticLoop()
@@ -227,6 +241,8 @@ class ChatEngine:
         *,
         self_rag_enabled: Optional[bool] = None,
         synthesis_model_override: Optional[str] = None,
+        # 2026-07-13 #P1 三档推理模式透传
+        thinking_mode: Optional[str] = None,
     ) -> AsyncIterator[StreamEvent]:
         """流式接口 — 内部转给 synthesize_stream
 
@@ -242,6 +258,8 @@ class ChatEngine:
             # 2026-06-30 #009 透传 per-request override
             self_rag_enabled=self_rag_enabled,
             synthesis_model_override=synthesis_model_override,
+            # 2026-07-13 #P1 透传
+            thinking_mode=thinking_mode,
         ):
             yield evt
 
@@ -263,6 +281,8 @@ class ChatEngine:
         *,
         self_rag_enabled: Optional[bool] = None,
         synthesis_model_override: Optional[str] = None,
+        # 2026-07-13 #P1 三档推理模式透传
+        thinking_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """非流式接口 — 消费 synthesize_stream 收集为 dict
 
@@ -302,6 +322,8 @@ class ChatEngine:
             # 2026-06-30 #009 透传 per-request override
             self_rag_enabled=self_rag_enabled,
             synthesis_model_override=synthesis_model_override,
+            # 2026-07-13 #P1 透传
+            thinking_mode=thinking_mode,
         ):
             if evt.type == "text_delta":
                 content += evt.delta or ""

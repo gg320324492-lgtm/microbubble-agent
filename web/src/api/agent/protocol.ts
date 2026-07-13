@@ -152,4 +152,13 @@ export interface StreamEvent {
   sync_reason?: 'aborted' | 'error'                     // 中断原因
   // ===== #009 新增字段（retrieval_assessment / reretrieval 事件） =====
   retrieval?: RetrievalInfo
+  // ===== 2026-07-13 #P1 三档推理模式反馈字段 (done 事件携带) =====
+  // mode: 实际跑的 mode (fast / balanced / deep)
+  mode?: 'fast' | 'balanced' | 'deep'
+  // model: 实际跑的 model name (Ollama tag 或 Anthropic model id)
+  model?: string
+  // thinking_tokens_used: Anthropic SDK 返回的 thinking tokens (Ollama deepseek-r1 当前返 0)
+  thinking_tokens_used?: number
+  // self_rag_reretrieve_count: 本轮 Self-RAG judge 触发的重检索次数 (deep=2, balanced=1, fast=0)
+  self_rag_reretrieve_count?: number
 }

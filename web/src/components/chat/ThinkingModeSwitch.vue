@@ -1,23 +1,30 @@
 <script setup>
 /**
- * ThinkingModeSwitch.vue — v78 UI-redesign 思考模式分段控件
+ * ThinkingModeSwitch.vue — v78 + 2026-07-13 #P1 三档推理模式 segmented control
  *
  * 替代 顶栏 2 个 🧠/⚡ toggle button（视觉冲突）
- * 设计: 2 选 1 segmented control，input bar 上方
- * - 快速回答: 跳过 Self-RAG Phase 0.5 gate（useDeepThinking=false）
- * - 深度思考: 走 Self-RAG judge + 潜在重检索（useDeepThinking=true）
+ * 设计: 3 选 1 segmented control，input bar 上方
+ * - ⚡快速 (fast):     本地 Qwen3-8B + 关 Self-RAG + 小 budget
+ * - 🖥平衡 (balanced): 本地 Qwen3-8B + 默认 Self-RAG judge (默认)
+ * - ✨深度 (deep):     DeepSeek-R1-Distill-Qwen-7B + thinking + 重检索 2 次
  *
  * a11y 4-attr 全部就绪
  * dark mode 走非 scoped 块（v60-v67 教训）
  */
-import { Lightning, Cpu } from '@element-plus/icons-vue'
+import { Lightning, Cpu, MagicStick } from '@element-plus/icons-vue'
 import { useUiStore } from '@/stores/useUiStore'
 
 const uiStore = useUiStore()
 
-const onChange = (val) => {
-  if (val !== uiStore.useDeepThinking) {
-    uiStore.setUseDeepThinking(val)
+const MODES = [
+  { value: 'fast', icon: Lightning, label: '快速', title: '快速回答 (Qwen3-8B · 跳过深度推理)' },
+  { value: 'balanced', icon: Cpu, label: '平衡', title: '平衡模式 (Qwen3-8B · 默认 Self-RAG)' },
+  { value: 'deep', icon: MagicStick, label: '深度', title: '深度模式 (DeepSeek-R1 + thinking + 重检索)' },
+]
+
+function onChange(value) {
+  if (value !== uiStore.thinkingMode) {
+    uiStore.setThinkingMode(value)
   }
 }
 </script>
@@ -31,34 +38,24 @@ const onChange = (val) => {
     name="thinking-mode-switch"
   >
     <button
-      id="thinking-mode-quick"
-      name="thinking-mode-quick"
+      v-for="m in MODES"
+      :key="m.value"
+      :id="`thinking-mode-${m.value}`"
+      :name="`thinking-mode-${m.value}`"
       type="button"
       role="radio"
-      :aria-checked="!uiStore.useDeepThinking"
-      :aria-label="'快速回答'"
-      :title="'快速回答（跳过 judge 评估）'"
+      :aria-checked="uiStore.thinkingMode === m.value"
+      :aria-label="m.label"
+      :title="m.title"
       class="mode-option"
-      :class="{ active: !uiStore.useDeepThinking }"
-      @click="onChange(false)"
+      :class="[
+        { active: uiStore.thinkingMode === m.value },
+        `mode-${m.value}`,
+      ]"
+      @click="onChange(m.value)"
     >
-      <el-icon :size="14"><Lightning /></el-icon>
-      <span>快速</span>
-    </button>
-    <button
-      id="thinking-mode-deep"
-      name="thinking-mode-deep"
-      type="button"
-      role="radio"
-      :aria-checked="uiStore.useDeepThinking"
-      :aria-label="'深度思考'"
-      :title="'深度思考（带 Self-RAG 重检索 + judge）'"
-      class="mode-option"
-      :class="{ active: uiStore.useDeepThinking }"
-      @click="onChange(true)"
-    >
-      <el-icon :size="14"><Cpu /></el-icon>
-      <span>深度</span>
+      <el-icon :size="14"><component :is="m.icon" /></el-icon>
+      <span>{{ m.label }}</span>
     </button>
   </div>
 </template>
@@ -97,6 +94,12 @@ const onChange = (val) => {
   background: var(--color-bg-card);
   color: var(--color-primary);
   box-shadow: var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.06));
+}
+
+/* 2026-07-13 #P1: 深度模式专属紫色调 (明显区别于快速/平衡) */
+.mode-option.active.mode-deep {
+  background: linear-gradient(135deg, var(--color-primary-700, #5b21b6), var(--color-primary, #FF7A5C));
+  color: #fff;
 }
 </style>
 

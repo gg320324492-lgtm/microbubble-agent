@@ -151,6 +151,15 @@ class StreamEvent(BaseModel):
                                                 #   "refined_query": str,
                                                 #   "latency_ms": int,
                                                 # }
+    # ===== 2026-07-13 #P1 三档推理模式反馈字段 (done 事件携带, 前端 mode badge 显示) =====
+    # mode: 实际跑的 mode (fast/balanced/deep)
+    mode: Optional[Literal["fast", "balanced", "deep"]] = None
+    # model: 实际跑的 model (Ollama tag 或 Anthropic model id)
+    model: Optional[str] = None
+    # thinking_tokens_used: Anthropic SDK 返回的 thinking tokens (Ollama deepseek-r1 当前返 0, 走 reasoning_content 通道)
+    thinking_tokens_used: Optional[int] = None
+    # self_rag_reretrieve_count: 本轮 Self-RAG judge 触发的重检索次数 (deep=2, balanced=1, fast=0)
+    self_rag_reretrieve_count: Optional[int] = None
 
     def to_sse(self) -> str:
         """序列化为 SSE data 帧"""

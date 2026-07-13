@@ -234,6 +234,26 @@ class Settings(BaseSettings):
     AGENT_SELF_RAG_MODEL: str = ""                    # judge 模型, 空=AGENT_REFLECTION_MODEL (生产建议改 claude-haiku-4-5-20251001)
     AGENT_SELF_RAG_JUDGE_TIMEOUT_MS: int = 3000       # judge 超时, 触发 default-on-fail
 
+    # ========================================================================
+    # 2026-07-13 #P1: 三态推理模式 (fast / balanced / deep)
+    # - fast: 本地 Qwen3-8B + 关 Self-RAG + 小 budget (闲聊 / 简单查找)
+    # - balanced: 本地 Qwen3-8B + 默认 Self-RAG judge + 默认 budget (沿用 AGENT_SELF_RAG_* 当前默认)
+    # - deep: DeepSeek-R1-Distill-Qwen-7B + Self-RAG 重检索 2 次 + 大 budget + reasoning_content
+    # - 用户切换通过前端 useUiStore.thinkingMode (localStorage 'mnb:ui:thinkingMode') → SSE body thinking_mode
+    # - balanced = 当前默认行为逐字段对齐, 零行为差异作为迁移期兜底
+    # ========================================================================
+    AGENT_THINKING_MODE_DEFAULT: str = "balanced"  # 'fast' | 'balanced' | 'deep', 全局默认
+    AGENT_THINKING_MODE_FAST_MODEL: str = "qwen3:8b"  # fast 模式 Ollama model tag
+    AGENT_THINKING_MODE_FAST_MAX_TOKENS: int = 3000  # fast synthesis max_tokens
+    AGENT_THINKING_MODE_FAST_MAX_TOOL_TOKENS: int = 500  # fast Phase 1 tool loop max_tokens
+    AGENT_THINKING_MODE_BALANCED_MODEL: str = "qwen3:8b"  # balanced 模式 Ollama model tag (与 fast 同模型, 不同 config)
+    AGENT_THINKING_MODE_BALANCED_MAX_TOKENS: int = 6000  # balanced synthesis max_tokens (与 AGENT_MAX_SYNTHESIS_TOKENS=4000 略大)
+    AGENT_THINKING_MODE_DEEP_MODEL: str = "deepseek-r1:7b"  # deep 模式 Ollama model tag (原生 reasoning_content) — 2026-07-13 实际 pull 后修正
+    AGENT_THINKING_MODE_DEEP_MAX_TOKENS: int = 12000  # deep synthesis max_tokens (留足 DeepSeek-R1 完整 reasoning + 长答案)
+    AGENT_THINKING_MODE_DEEP_MAX_TOOL_TOKENS: int = 1500  # deep Phase 1 tool loop max_tokens (允许更复杂工具调用)
+    AGENT_THINKING_MODE_DEEP_MAX_RERETRIEVE: int = 2  # deep 模式 Self-RAG 最多重检索次数 (默认 1 → deep 2)
+    AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR: int = 30  # deep 模式单用户每小时限次 (防 DeepSeek 7B 满载)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
