@@ -43,7 +43,6 @@ def cleanup_orphan_meetings():
 async def _scan_and_cleanup() -> dict:
     """异步执行清理逻辑"""
     from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
     from app.config import settings
     from app.models.meeting import Meeting
     from app.services.chunked_upload_service import chunked_upload_service
