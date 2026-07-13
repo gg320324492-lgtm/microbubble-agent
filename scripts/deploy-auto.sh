@@ -52,8 +52,10 @@ fi
 # 2026-06-13 加固：丢弃所有本地修改 + untracked 文件，确保干净工作区
 # （之前 git checkout + git clean 分两步有时不彻底，残留 untracked 文件阻塞 git pull fast-forward）
 # 2026-06-17 v2 加：-e .env.webhook 排除该文件（虽然它在 .gitignore 内但 git clean -fdx 仍会删）
+# 2026-07-14 v3 加：-e web/dist 排除整个 web/dist 目录（gitignore 排除, 不在 git 里, 但 nginx 静态服务必需,
+#   删了 nginx try_files 找不到 index.html → 死循环 → 500; 本地 PC 手动 scp 同步后, deploy 不能删）
 git checkout -- . >> "$LOG_FILE" 2>&1 || true
-git clean -fdx -e .env.webhook >> "$LOG_FILE" 2>&1 || true  # -x 也清 .gitignore 内的文件，但 -e 排除指定
+git clean -fdx -e .env.webhook -e web/dist >> "$LOG_FILE" 2>&1 || true  # -x 也清 .gitignore 内的文件，但 -e 排除指定
 
 # 拉取最新代码（重试 5 次 + 指数退避，2026-06-02 加固）
 # 背景：阿里云服务器偶发无法连接 GitHub（TLS/GnuTLS 错误或超时），
