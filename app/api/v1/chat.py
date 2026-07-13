@@ -17,7 +17,7 @@
 
 import json
 import logging
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Literal, Optional
 
 from fastapi import (
     APIRouter,
@@ -57,6 +57,8 @@ class ChatRequest(BaseModel):
     # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle）
     model: Optional[str] = None  # 覆盖 settings.AGENT_SYNTHESIS_MODEL
     use_self_rag: Optional[bool] = None  # 覆盖 settings.AGENT_SELF_RAG_ENABLED
+    # 2026-07-13 #P1 三档推理模式 (fast / balanced / deep), 前端 useChatStream 透传
+    thinking_mode: Optional[Literal["fast", "balanced", "deep"]] = None  # None 走 settings.AGENT_THINKING_MODE_DEFAULT
 
 
 class ChatResponse(BaseModel):
@@ -106,6 +108,8 @@ async def chat(
         # 2026-06-30 #009 Self-RAG: per-request override
         model=request.model,
         use_self_rag=request.use_self_rag,
+        # 2026-07-13 #P1 三档推理模式透传
+        thinking_mode=request.thinking_mode,
     )
     return ChatResponse(
         content=result["content"],
@@ -127,6 +131,8 @@ async def chat_with_image(
     image: UploadFile = File(...),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    # 2026-07-13 #P1 三档推理模式 (fast/balanced/deep)
+    thinking_mode: Optional[str] = Form(None),
 ):
     """图片对话接口"""
     image_data = await image.read()
@@ -146,6 +152,7 @@ async def chat_with_image(
         image_data=image_data,
         image_media_type=media_type,
         user_id=current_user.id,
+        thinking_mode=thinking_mode,  # 2026-07-13 #P1 透传
     )
     return ChatResponse(
         content=result["content"],
@@ -163,6 +170,8 @@ async def chat_with_file(
     file: UploadFile = File(...),
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    # 2026-07-13 #P1 三档推理模式
+    thinking_mode: Optional[str] = Form(None),
 ):
     """文件对话接口（图片/PDF/Word/Excel/TXT）"""
     file_data = await file.read()
@@ -178,6 +187,7 @@ async def chat_with_file(
             image_data=file_data,
             image_media_type=media_type,
             user_id=current_user.id,
+            thinking_mode=thinking_mode,  # 2026-07-13 #P1 透传
         )
         return ChatResponse(
             content=result["content"], session_id=session_id,
@@ -222,6 +232,7 @@ async def chat_with_file(
     result = await v2_agent.chat(
         message=full_message, session_id=session_id, db=db,
         user_id=current_user.id,
+        thinking_mode=thinking_mode,  # 2026-07-13 #P1 透传
     )
     return ChatResponse(
         content=result["content"],
@@ -288,6 +299,8 @@ async def chat_stream_route(
                 # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
                 model=request.model,
                 use_self_rag=request.use_self_rag,
+                # 2026-07-13 #P1 三档推理模式透传
+                thinking_mode=request.thinking_mode,
             ):
                 yield event.to_sse()
         except Exception as e:

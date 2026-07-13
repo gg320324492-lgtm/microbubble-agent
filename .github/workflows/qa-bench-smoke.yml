@@ -198,7 +198,32 @@ jobs:
           PYEOF
           fi
 
-      # === 新增: 清理 test stack ===
+      # === 2026-07-13 #P1: 三档推理模式 benchmark (30 题 × 3 mode = 90 次, 验证 fast/balanced/deep 真区分) ===
+      - name: Run fast vs balanced vs deep benchmark (30 题 × 3 mode)
+        working-directory: tests/qa-bench
+        env:
+          API_BASE: http://localhost:8001
+          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          python scripts/benchmark_fast_vs_deep.py \
+            --questions tests/qa-bench/questions_fast_vs_deep.jsonl \
+            --api-base-fast http://localhost:8001 \
+            --api-base-balanced http://localhost:8001 \
+            --api-base-deep http://localhost:8001 \
+            --token "${QA_TOKEN:-mock}" \
+            --concurrency 2 \
+            --output docs/benchmarks/fast-vs-deep-${GITHUB_SHA::8}.md
+          # 注: 单 docker 配置下 3 mode 走同一后端, 实际三档区分由 THINKING_MODE env + 后端 thinking_config 调度
+          # 验证: deep 模式应该 thinking_tokens_used > 0, fast 模式延迟 < balanced < deep
+
+      - name: Upload thinking mode benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fast-vs-deep-benchmark
+          path: docs/benchmarks/fast-vs-deep-*.md
+
+# === 新增: 清理 test stack ===
       - name: Teardown test stack
         if: always()
         run: |

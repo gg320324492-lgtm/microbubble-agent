@@ -583,6 +583,21 @@ onUnmounted(() => {
           @keydown="handleKeydown"
           @input="autoResize"
         />
+        <!-- 2026-07-13 #P1: mode badge — 实时显示上一次响应的 mode/model/duration/thinkingTokens -->
+        <span
+          v-if="uiStore.lastModeInfo.mode"
+          id="chat-mode-badge"
+          class="mode-badge"
+          :class="`mode-${uiStore.lastModeInfo.mode}`"
+          :title="`mode=${uiStore.lastModeInfo.mode}, model=${uiStore.lastModeInfo.model}, ${uiStore.lastModeInfo.durationMs}ms`"
+        >
+          <span class="mode-badge-label">{{ uiStore.lastModeInfo.mode }}</span>
+          <span v-if="uiStore.lastModeInfo.model" class="mode-badge-model">{{ uiStore.lastModeInfo.model }}</span>
+          <span class="mode-badge-duration">{{ uiStore.lastModeInfo.durationMs }}ms</span>
+          <span v-if="uiStore.lastModeInfo.thinkingTokens > 0" class="mode-badge-thinking">
+            思考 {{ uiStore.lastModeInfo.thinkingTokens }}tok
+          </span>
+        </span>
         <el-button
           v-if="!isCurrentSessionSending"
           id="chat-send-btn"
@@ -869,6 +884,35 @@ onUnmounted(() => {
 .input-core { display: flex; align-items: center; gap: 8px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 20px; padding: 4px 8px; }
 .input-actions-left { display: flex; gap: 4px; }
 .input-textarea { flex: 1; border: none; outline: none; resize: none; font: inherit; padding: 8px; max-height: 120px; background: transparent; }
+
+/* 2026-07-13 #P1: mode badge — send 按钮左边的实时 mode/model/duration 状态 */
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--color-bg-warm, #f5f7fa);
+  border: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.mode-badge.mode-fast { border-color: var(--color-success, #67c23a); color: var(--color-success, #67c23a); }
+.mode-badge.mode-balanced { border-color: var(--color-primary, #FF7A5C); color: var(--color-primary, #FF7A5C); }
+.mode-badge.mode-deep {
+  border-color: var(--color-primary-700, #5b21b6);
+  color: var(--color-primary-700, #5b21b6);
+  font-weight: 600;
+}
+.mode-badge-label { font-weight: 700; }
+.mode-badge-model { opacity: 0.8; }
+.mode-badge-duration { opacity: 0.7; }
+.mode-badge-thinking { opacity: 0.85; font-style: italic; }
+[data-theme="dark"] .mode-badge { background: var(--color-bg-warm, #2a2d35); }
+
 .send-btn {
   width: 34px;
   height: 34px;

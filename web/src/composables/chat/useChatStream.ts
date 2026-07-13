@@ -501,14 +501,17 @@ export function useChatStream() {
     // v31 埋点: Agent 调用 search_knowledge 时暂存 query, tool_result 时连同 top_ids 一起 POST
     let pendingAgentSearchQuery: string | null = null
     // targetSessionId 是 sendMessage 启动时捕获的闭包变量
-    // 2026-06-30 #009: 读 useUiStore.useDeepThinking + useThemeStore.accent 塞 fetch body
-    const useDeepThinking = ui.useDeepThinking
+    // 2026-07-13 #P1: 读三档 thinkingMode (fast/balanced/deep) 塞 fetch body
+    const thinkingMode = ui.thinkingMode
+    // use_self_rag 派生: fast 关, 其他开 (保持向后兼容, 老后端读 use_self_rag 仍 work)
+    const useSelfRag = thinkingMode !== 'fast'
     for await (const evt of sseFetch(
       '/api/v1/chat/stream',
       {
         message: content,
         session_id: targetSessionId,
-        use_self_rag: useDeepThinking,  // null = 不传（后端用 settings 全局）
+        use_self_rag: useSelfRag,
+        thinking_mode: thinkingMode,  // 2026-07-13 #P1 三档模式 (fast/balanced/deep)
         // model: '', // 留空走 settings.AGENT_SYNTHESIS_MODEL（生产可让深度模式 = Sonnet）
       },
       { signal }
@@ -735,6 +738,15 @@ export function useChatStream() {
           // [snapshot] 流结束
           currentAssistant.usage = evt.usage
           currentAssistant.durationMs = evt.duration_ms
+          // 2026-07-13 #P1: 三档 mode 反馈 — 写入 lastModeInfo, ChatInputBar badge 渲染
+          if (evt.mode || evt.model) {
+            ui.setLastModeInfo({
+              mode: evt.mode,
+              model: evt.model,
+              thinkingTokens: evt.thinking_tokens_used || 0,
+              durationMs: evt.duration_ms || 0,
+            })
+          }
           // 2026-06-15 修复元话语/thinking 文本泄露：done 时用后端剥除过的干净文本替换 content
           // 流式过程 text_delta 累加的 content 包含 LLM 写的"我需要..."等元话语
           // 后端 text_without_json 已剥除（JSON 段 + fake tool_call + 元话语）
@@ -836,23 +848,28 @@ export function useChatStream() {
     assistantMsg: ChatMessage,
     targetSessionId: string
   ) {
+    // 2026-07-13 #P1: 三档 mode 透传到所有 3 个非流式路径 (修复图片/文件漏传)
+    const thinkingMode = ui.thinkingMode
     let res
     if (file) {
       const fd = new FormData()
       fd.append('message', text || '')
       fd.append('session_id', targetSessionId)
       fd.append('file', file)
+      fd.append('thinking_mode', thinkingMode)
       res = await axios.post('/api/v1/chat/file', fd)
     } else if (img) {
       const fd = new FormData()
       fd.append('message', text || '请描述这张图片')
       fd.append('session_id', targetSessionId)
       fd.append('image', img)
+      fd.append('thinking_mode', thinkingMode)
       res = await axios.post('/api/v1/chat/image', fd)
     } else {
       res = await axios.post('/api/v1/chat', {
         message: text,
         session_id: targetSessionId,
+        thinking_mode: thinkingMode,  // 2026-07-13 #P1 文本非流式也补上
       })
     }
     const targetAssistant = activeAssistantMap.value[targetSessionId] || assistantMsg

@@ -1,0 +1,32 @@
+{"id": "fd-001", "category": "fast_casual", "question": "你好", "expect": {"intent": "casual_chat", "expect_features": ["≤80字", "友好", "不调工具"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-002", "category": "fast_casual", "question": "你能做什么?", "expect": {"intent": "casual_chat", "expect_features": ["≤150字", "列举能力"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-003", "category": "fast_casual", "question": "谢谢", "expect": {"intent": "casual_chat", "expect_features": ["≤30字", "礼貌回应"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-004", "category": "fast_casual", "question": "再见", "expect": {"intent": "casual_chat", "expect_features": ["≤30字"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-005", "category": "fast_casual", "question": "早上好", "expect": {"intent": "casual_chat", "expect_features": ["≤50字"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-006", "category": "fast_casual", "question": "今天心情不错", "expect": {"intent": "casual_chat", "expect_features": ["≤80字", "友好"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-007", "category": "fast_casual", "question": "嗯嗯", "expect": {"intent": "casual_chat", "expect_features": ["≤30字"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-008", "category": "fast_casual", "question": "你会说英文吗?", "expect": {"intent": "casual_chat", "expect_features": ["≤100字", "回答能力"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-009", "category": "fast_casual", "question": "你是AI吗?", "expect": {"intent": "casual_chat", "expect_features": ["≤80字"]}, "modes": ["fast", "balanced", "deep"]}
+{"id": "fd-010", "category": "fast_casual", "question": "哈哈", "expect": {"intent": "casual_chat", "expect_features": ["≤30字", "理解情绪"]}, "modes": ["fast", "balanced", "deep"]}
+
+{"id": "fd-011", "category": "data_query", "question": "今天的待办", "expect": {"intent": "data_query", "expect_features": ["≥1任务"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-012", "category": "data_query", "question": "最近在研的项目", "expect": {"intent": "data_query", "expect_features": ["≥1项目"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-013", "category": "data_query", "question": "上周的会议", "expect": {"intent": "data_query", "expect_features": ["调用meeting工具", "≥1会议"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-014", "category": "data_query", "question": "课题组的博士都有谁", "expect": {"intent": "data_query", "expect_features": ["真实姓名"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-015", "category": "data_query", "question": "我的未完成任务", "expect": {"intent": "data_query", "expect_features": ["≥1任务"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-016", "category": "data_query", "question": "杜同贺最近在做什么", "expect": {"intent": "recommend_person", "expect_features": ["真实信息"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-017", "category": "data_query", "question": "列出所有进行中的项目", "expect": {"intent": "data_query", "expect_features": ["≥3项目"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-018", "category": "data_query", "question": "本周的会议纪要", "expect": {"intent": "data_query", "expect_features": ["≥1会议"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-019", "category": "data_query", "question": "实验室有哪些做气泡研究的成员", "expect": {"intent": "recommend_person", "expect_features": ["≥3人", "研究方向匹配"]}, "modes": ["balanced", "deep"]}
+{"id": "fd-020", "category": "data_query", "question": "知识库里有什么微纳米气泡的资料", "expect": {"intent": "data_query", "expect_features": ["调用knowledge工具", "≥1结果"]}, "modes": ["balanced", "deep"]}
+
+{"id": "fd-021", "category": "deep_concept", "question": "什么是微纳米气泡?", "expect": {"intent": "explain_concept", "expect_features": ["≥300字", "三段式", "提到公式"]}, "modes": ["deep"]}
+{"id": "fd-022", "category": "deep_concept", "question": "对比一下微气泡和超声空化的区别", "expect": {"intent": "explain_concept", "expect_features": ["两列对比", "≥500字"]}, "modes": ["deep"]}
+{"id": "fd-023", "category": "deep_concept", "question": "声致发光原理", "expect": {"intent": "explain_concept", "expect_features": ["提到公式", "≥300字"]}, "modes": ["deep"]}
+{"id": "fd-024", "category": "deep_concept", "question": "zeta电位在水处理中的作用", "expect": {"intent": "explain_concept", "expect_features": ["≥300字", "机制解释"]}, "modes": ["deep"]}
+{"id": "fd-025", "category": "deep_concept", "question": "微纳米气泡在水处理中的应用原理", "expect": {"intent": "explain_concept", "expect_features": ["≥500字", "原理+案例"]}, "modes": ["deep"]}
+{"id": "fd-026", "category": "deep_concept", "question": "羟基自由基怎么生成", "expect": {"intent": "explain_concept", "expect_features": ["化学方程式", "≥300字"]}, "modes": ["deep"]}
+{"id": "fd-027", "category": "deep_concept", "question": "气泡稳定性的影响因素", "expect": {"intent": "explain_concept", "expect_features": ["≥400字", "列举≥3因素"]}, "modes": ["deep"]}
+{"id": "fd-028", "category": "deep_concept", "question": "什么是Langmuir吸附等温线", "expect": {"intent": "explain_concept", "expect_features": ["公式", "≥300字"]}, "modes": ["deep"]}
+{"id": "fd-029", "category": "deep_concept", "question": "气泡在液体中的运动规律", "expect": {"intent": "explain_concept", "expect_features": ["≥300字"]}, "modes": ["deep"]}
+{"id": "fd-030", "category": "deep_concept", "question": "臭氧氧化技术在微气泡中的应用", "expect": {"intent": "explain_concept", "expect_features": ["≥400字", "机制+案例"]}, "modes": ["deep"]}

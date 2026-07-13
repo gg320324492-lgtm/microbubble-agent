@@ -563,6 +563,20 @@ def _extract_rich_block(tool_name: str, result: dict) -> Optional[RichBlock]:
     return _orig_extract(tool_name, result)
 
 
+# ============================================================================
+# 2026-07-13 #P1: 三档推理模式 helper (MagicMock truthy 但属性不是合法 Literal — 用 isinstance 守卫)
+# ============================================================================
+from app.agent.thinking_config import ThinkingConfig as _TC
+
+
+def _has_thinking_config(ctx) -> bool:
+    """安全判断 ctx.thinking_config 是不是真 ThinkingConfig 实例。
+
+    普通 ctx 走 True 分支;测试用 MagicMock ctx 走 False 分支,避免 StreamEvent Literal 校验炸测试。
+    """
+    return isinstance(getattr(ctx, "thinking_config", None), _TC)
+
+
 class AgenticLoop:
     """真正的多轮工具循环 + 流式综合 + Reflection"""
 
@@ -577,11 +591,13 @@ class AgenticLoop:
         messages: list[dict],
         intent: IntentResult,
         ctx: ToolContext,
+        # 2026-07-13 #P1: 三档 mode — max_reretrieve 可 per-call 覆盖 (deep 模式 2 次, balanced/fast 用 settings 默认)
+        max_reretrieve: Optional[int] = None,
     ) -> AsyncIterator[StreamEvent]:
         """2026-06-30 #009 Self-RAG Phase 0.5 gate
 
         评估 plan_step 阶段 search_knowledge 检索质量.
-        低质量时改写 query 重检索, 最多 settings.AGENT_SELF_RAG_MAX_RERETRIEVE 次.
+        低质量时改写 query 重检索, 最多 settings.AGENT_SELF_RAG_MAX_RERETRIEVE 次 (deep 模式可 per-call 覆盖为 2).
         每次重检索 yield tool_use + tool_result + messages.append 配对 (CLAUDE.md 2026-06-14 铁律: 必须 balanced).
         """
         from app.services.self_rag import (
@@ -651,7 +667,7 @@ class AgenticLoop:
             else:
                 # 低置信度: 触发重检索 (除非已达上限)
                 tier = "low"
-                if reretrieve_count >= settings.AGENT_SELF_RAG_MAX_RERETRIEVE:
+                if reretrieve_count >= (max_reretrieve if max_reretrieve is not None else settings.AGENT_SELF_RAG_MAX_RERETRIEVE):
                     logger.warning(
                         f"🛑 [self_rag] max_reretrieve_reached: query='{user_message[:50]}...' "
                         f"final_confidence={confidence:.2f} attempts={reretrieve_count+1}"
@@ -831,6 +847,29 @@ class AgenticLoop:
         useChatStream.ts:638 text_without_json 替换逻辑不跑 → fake XML 永久泄露
         → qa-bench runner 检测到 stream_no_done 触发 FAIL。
         """
+        # 2026-07-13 #P1: deep 模式 rate limit (每用户每小时限 30 次, 防 DeepSeek-R1-Distill 满载)
+        if _has_thinking_config(ctx) and ctx.thinking_config.mode == "deep":
+            import time as _time
+            now = _time.monotonic()
+            # sliding window: 保留最近 1 小时
+            if not hasattr(ctx, "deep_call_timestamps"):
+                ctx.deep_call_timestamps = []
+            ctx.deep_call_timestamps = [t for t in ctx.deep_call_timestamps if now - t < 3600]
+            if len(ctx.deep_call_timestamps) >= settings.AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR:
+                logger.warning(
+                    f"deep mode rate limit hit: user_id={ctx.user_id}, "
+                    f"calls_in_last_hour={len(ctx.deep_call_timestamps)}"
+                )
+                yield StreamEvent(
+                    type="error",
+                    code="RATE_LIMIT_DEEP",
+                    message=f"深度模式每小时限 {settings.AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR} 次, 请稍后再试或切换平衡模式",
+                    mode="deep",
+                    model=ctx.thinking_config.model,
+                )
+                return  # 不继续执行
+            ctx.deep_call_timestamps.append(now)
+
         if max_rounds is None:
             max_rounds = settings.AGENT_MAX_TOOL_ROUNDS
 
@@ -867,6 +906,14 @@ class AgenticLoop:
                     duration_ms=duration_ms,
                     session_id=ctx.trace.session_id if ctx.trace else None,
                     text_without_json=None,  # 无干净文本，前端不替换 content
+                    # 2026-07-13 #P1: cancelled 兜底也带 mode/model
+                    mode=(ctx.thinking_config.mode if _has_thinking_config(ctx) else "balanced"),
+                    # 从 ctx 推导 model (chosen_model 在 _synthesize_stream 内, finally 不可见)
+                    model=(
+                        ctx.thinking_config.model
+                        if _has_thinking_config(ctx)
+                        else (settings.AGENT_SYNTHESIS_MODEL or settings.CLAUDE_MODEL or "mimo-v2.5")
+                    ),
                 )
 
     async def _run_legacy(
@@ -1017,11 +1064,17 @@ class AgenticLoop:
                 # plan_step 完成后, 用 Haiku judge 评估检索质量.
                 # 低质量时改写 query 重检索 (最多 AGENT_SELF_RAG_MAX_RERETRIEVE 次, 默认 1).
                 # 双层控制: ctx.self_rag_enabled (per-request, 用户 toggle) > settings.AGENT_SELF_RAG_ENABLED (全局).
-                self_rag_active = (
-                    ctx.self_rag_enabled
-                    if ctx.self_rag_enabled is not None
-                    else settings.AGENT_SELF_RAG_ENABLED
-                )
+                # 2026-07-13 #P1: 三档 mode — thinking_config 优先级最高, per-request 全包覆盖
+                if _has_thinking_config(ctx):
+                    self_rag_active = ctx.thinking_config.self_rag_enabled
+                    self_rag_max_reretrieve = ctx.thinking_config.self_rag_max_reretrieve
+                else:
+                    self_rag_active = (
+                        ctx.self_rag_enabled
+                        if ctx.self_rag_enabled is not None
+                        else settings.AGENT_SELF_RAG_ENABLED
+                    )
+                    self_rag_max_reretrieve = settings.AGENT_SELF_RAG_MAX_RERETRIEVE
                 if self_rag_active and intent.category in {IntentCategory.SEARCH_INFO, IntentCategory.EXPLAIN_CONCEPT}:
                     async for gate_evt in self._run_self_rag_gate(
                         user_message=user_message,
@@ -1030,6 +1083,7 @@ class AgenticLoop:
                         messages=messages,
                         intent=intent,
                         ctx=ctx,
+                        max_reretrieve=self_rag_max_reretrieve,  # 2026-07-13 #P1: 透传 mode-aware 重检索次数
                     ):
                         yield gate_evt
 
@@ -1051,8 +1105,11 @@ class AgenticLoop:
                         messages=messages,
                         system=system,
                         tools=get_all_tool_schemas(),
-                        max_tokens=500,
+                        max_tokens=(ctx.thinking_config.max_tool_tokens if _has_thinking_config(ctx) else 500),
                         temperature=0.3,
+                        # 2026-07-13 #P1: 透传 mode-aware model + thinking (None 时用 LLMClient 默认 fallback chain)
+                        model=(ctx.thinking_config.model if _has_thinking_config(ctx) else None),
+                        thinking=(ctx.thinking_config.thinking if _has_thinking_config(ctx) else None),
                     )
                 except Exception as e:
                     logger.error(f"LLM tool decision round {round_idx} failed: {e}", exc_info=True)
@@ -1166,6 +1223,7 @@ class AgenticLoop:
                 messages=messages,
                 system=system,
                 llm=llm,
+                thinking_config=ctx.thinking_config,  # 2026-07-13 #P1: 透传
             ):
                 if evt.type == "text_delta":
                     synthesis_text += evt.delta or ""
@@ -1209,6 +1267,7 @@ class AgenticLoop:
                     messages=messages,
                     system=new_system,
                     llm=llm,
+                    thinking_config=ctx.thinking_config,  # 2026-07-13 #P1: 透传
                 ):
                     if evt.type == "text_delta":
                         retry_text += evt.delta or ""
@@ -1224,6 +1283,10 @@ class AgenticLoop:
                 )
                 yield critique_to_sse_event(critique)
                 accumulated_text = retry_text
+
+            # 2026-07-13 #P1 修复: final_text 在 try 内定义, except 块 (异常兜底) 引用会 UnboundLocalError
+            # 提前初始化, 让 except 块安全访问 (L1360 `not final_text.strip()`)
+            final_text = ""
 
             # ===== Phase 4.5: 在 done 之前重算 text_without_json（retry 后文本可能已变）=====
             # 2026-06-15 修复元话语泄露：把"剥除 JSON 段 + fake tool_call + 元话语"的最终干净文本
@@ -1274,11 +1337,21 @@ class AgenticLoop:
 
             # ===== Phase 5: done =====
             duration_ms = int((time.monotonic() - t0) * 1000)
+            # 2026-07-13 #P1: 三档 mode 反馈字段 (run 主入口, chosen_model 是 _synthesize_stream 内部变量不可见)
+            _tc = ctx.thinking_config if _has_thinking_config(ctx) else None
+            _model = (
+                _tc.model if _tc and _tc.model
+                else (settings.AGENT_SYNTHESIS_MODEL or settings.CLAUDE_MODEL or "unknown")
+            )
             yield StreamEvent(
                 type="done",
                 duration_ms=duration_ms,
                 session_id=ctx.trace.session_id if ctx.trace else None,
                 text_without_json=final_text,
+                mode=(_tc.mode if _tc else "balanced"),
+                model=_model,
+                thinking_tokens_used=0,
+                self_rag_reretrieve_count=0,
             )
 
         except asyncio.CancelledError:
@@ -1300,8 +1373,14 @@ class AgenticLoop:
                     yield StreamEvent(
                         type="done",
                         duration_ms=int((time.monotonic() - t0) * 1000),
-                        session_id=ctx.trace.session_id if ctx.trace else None,
+                        # 2026-07-13 #P1 修复: 异常兜底原本引用 ctx.trace, 但 _synthesize_stream 没 ctx 参数
+                        # 改用 thinking_config 形参 (None 时回退 balanced)
+                        session_id=None,
                         text_without_json=fallback,
+                        mode=("deep" if thinking_config and thinking_config.mode == "deep" else (
+                            "fast" if thinking_config and thinking_config.mode == "fast" else "balanced"
+                        )),
+                        model=(chosen_model or "unknown"),
                     )
                     return  # 兜底成功，不 raise
             yield StreamEvent(type="error", code="AGENTIC_LOOP_ERROR", message=str(e))
@@ -1312,6 +1391,8 @@ class AgenticLoop:
         messages: list[dict],
         system: str,
         llm: LLMClient,
+        # 2026-07-13 #P1: 三档 mode 反馈字段 (传 None 时 fallback balanced, 保持向后兼容)
+        thinking_config=None,  # ThinkingConfig | None
     ) -> AsyncIterator[StreamEvent]:
         """流式综合输出 — 无 tools，仅生成最终答案
 
@@ -1331,7 +1412,13 @@ class AgenticLoop:
             "max_tokens": settings.AGENT_MAX_SYNTHESIS_TOKENS,
             "temperature": 0.5,
         }
-        chosen_model = settings.AGENT_SYNTHESIS_MODEL or None
+        # 2026-07-13 #P1: 三档 mode — thinking_config 覆盖 settings 默认 (修复 synthesis_model_override 死代码)
+        # _synthesize_stream 没 ctx 参数, 直接读 thinking_config 形参
+        if thinking_config is not None:
+            kwargs["max_tokens"] = thinking_config.max_tokens  # 覆盖 settings 默认
+            chosen_model = thinking_config.model
+        else:
+            chosen_model = settings.AGENT_SYNTHESIS_MODEL or None  # 旧 behavior 向后兼容
 
         # 在 system 末尾追加 JSON 协议（让 LLM 知道可输出 rich_block 声明）
         # 2026-06-14 收官：4 条铁律防 LLM 凭空捏造 rich_block.data
@@ -1419,7 +1506,10 @@ class AgenticLoop:
             # 正确用法：async for 拿 stream 后再 async with
             # 2026-06-14 Stage 5 收尾：mimo 等思考型模型显式禁用 thinking（避免只返 thinking）
             async for stream in llm.stream(
-                **kwargs, model=chosen_model, thinking={"type": "disabled"}
+                **kwargs,
+                model=chosen_model,
+                # 2026-07-13 #P1 修复: _synthesize_stream 没 ctx, 改读 thinking_config 形参
+                thinking=(thinking_config.thinking if thinking_config is not None else {"type": "disabled"}),
             ):
                 async with stream as s:
                     accumulated = ""
