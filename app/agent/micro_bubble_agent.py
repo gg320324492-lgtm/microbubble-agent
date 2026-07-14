@@ -23,6 +23,8 @@ import time
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from sqlalchemy import select
+
 from app.agent.chat_engine import ChatEngine
 from app.agent.prompts import (
     _is_meeting_transcript_query,
@@ -36,6 +38,155 @@ from app.config import settings
 from app.models.base import BEIJING_TZ
 
 logger = logging.getLogger("microbubble.agent")
+
+
+# ============================================================================
+# 2026-07-15 #P2: 课题组概览上下文注入 (Redis 1h 缓存)
+# ============================================================================
+# 背景: 之前 system prompt 不注入课题组成员/项目, "详细介绍本课题组" 类查询
+#       只能拿到 KB 通用条目 (#12 标题党) → 返回通用 web-search 模板
+# 修法: _build_team_overview_text() 拼成员花名册 + 项目列表, Redis 缓存 1h
+#       _build_system_prompt() 每条 query 都注入 (~2-3k token)
+# 缓存失效: 管理员成员/项目变动后 redis-cli DEL team_overview:v1 即可
+# ============================================================================
+
+_TEAM_OVERVIEW_CACHE_KEY = "team_overview:v1"
+_TEAM_OVERVIEW_CACHE_TTL_SEC = 3600  # 1h
+
+
+async def _build_team_overview_text(db, max_members: int = 30, max_projects: int = 10) -> str:
+    """构造【课题组概览】上下文文本, 注入 system prompt
+
+    返回文本格式 (~2-3k token):
+    ```
+    ## 【课题组概览】（由 system 注入，每小时刷新）
+
+    课题组当前 N 位成员，主要研究方向：xxx、yyy
+
+    ### 成员列表（按角色 + 年级排序）
+    - **王天志**（副教授/组长）：微纳米气泡技术与应用
+    - **赵航佳**（博一）：黑臭水体治理, 臭氧微纳米气泡
+    - ...
+
+    ### 活跃项目
+    - **微纳米气泡水处理**（水处理方向，3 人）
+    - ...
+    ```
+
+    Args:
+        db: AsyncSession (异步 SQLAlchemy session)
+        max_members: 最多列多少成员 (默认 30)
+        max_projects: 最多列多少活跃项目 (默认 10)
+
+    Returns:
+        str: 注入文本；db=None 或异常时返回空字符串 (best-effort)
+    """
+    if db is None:
+        return ""
+
+    # 1. Redis 缓存查
+    try:
+        from app.core.redis import get_redis
+        r = await get_redis()
+        cached = await r.get(_TEAM_OVERVIEW_CACHE_KEY)
+        if cached:
+            logger.debug("team_overview cache hit")
+            return cached
+    except Exception as e:
+        logger.warning(f"team_overview redis read failed (proceed to DB): {e}")
+
+    # 2. 查 DB
+    try:
+        from app.models.member import Member
+        from app.models.project import Project
+
+        # 成员: 排除 is_active=False，按 role 优先级 + name 排序
+        # role 顺序: admin > leader > member (admin/leader 放前面)
+        members_rows = await db.execute(
+            select(Member)
+            .where(Member.is_active == True)  # noqa: E712
+            .order_by(Member.role.desc(), Member.name.asc())
+            .limit(max_members)
+        )
+        members = members_rows.scalars().all()
+
+        # 活跃项目
+        projects_rows = await db.execute(
+            select(Project)
+            .where(Project.status == "active")
+            .order_by(Project.name.asc())
+            .limit(max_projects)
+        )
+        projects = projects_rows.scalars().all()
+    except Exception as e:
+        logger.warning(f"team_overview DB query failed: {e}", exc_info=True)
+        return ""
+
+    if not members and not projects:
+        return ""
+
+    # 3. 拼文本
+    lines = ["## 【课题组概览】（由 system 自动注入，每小时刷新一次）", ""]
+
+    # 成员分布 + 主要研究方向
+    if members:
+        role_count = {"admin": 0, "leader": 0, "member": 0}
+        for m in members:
+            role = m.role or "member"
+            role_count[role] = role_count.get(role, 0) + 1
+        all_research_areas = [m.research_area for m in members if m.research_area]
+        unique_areas = list(dict.fromkeys(all_research_areas))[:8]  # 去重保序取前 8
+        lines.append(
+            f"课题组当前 **{len(members)} 位活跃成员**"
+            f"（管理员 {role_count.get('admin', 0)} / "
+            f"组长 {role_count.get('leader', 0)} / "
+            f"普通成员 {role_count.get('member', 0)}）。"
+        )
+        if unique_areas:
+            lines.append(f"**主要研究方向**：{'、'.join(unique_areas)}。")
+        lines.append("")
+
+    # 成员列表
+    if members:
+        lines.append("### 成员列表（按角色 + 姓名排序）")
+        lines.append("")
+        for m in members:
+            role_label = {"admin": "[管理员]", "leader": "[组长]", "member": ""}.get(m.role, "")
+            grade = m.grade or ""
+            grade_str = f"（{grade}）" if grade else ""
+            ra = m.research_area or "未明确研究方向"
+            # bio 不注入（太长），只留姓名 + 年级 + 研究方向
+            lines.append(f"- {role_label}**{m.name}**{grade_str}：{ra}".replace("****", "**").replace("****", "**"))
+        lines.append("")
+
+    # 项目列表
+    if projects:
+        lines.append(f"### 活跃项目（共 {len(projects)} 个）")
+        lines.append("")
+        for p in projects:
+            member_count = len(p.members or [])
+            ra = p.research_area or "未明确方向"
+            member_str = f"，{member_count} 人参与" if member_count else ""
+            lines.append(f"- **{p.name}**（{ra}{member_str}）")
+        lines.append("")
+
+    lines.append(
+        "**纪律**：以上成员姓名 / 研究方向 / 项目名都是**真实数据库内容**，"
+        "回答任何「本课题组/我们组/组里」类问题时必须基于这些字段，**严禁**凭训练知识编造成员或项目。"
+    )
+
+    text = "\n".join(lines)
+
+    # 4. 写 Redis 缓存 (best-effort, 失败不阻塞)
+    try:
+        from app.core.redis import get_redis
+        r = await get_redis()
+        await r.set(_TEAM_OVERVIEW_CACHE_KEY, text, ex=_TEAM_OVERVIEW_CACHE_TTL_SEC)
+        logger.debug(f"team_overview cached ({len(text)} chars, ttl={_TEAM_OVERVIEW_CACHE_TTL_SEC}s)")
+    except Exception as e:
+        logger.warning(f"team_overview redis write failed: {e}")
+
+    return text
 
 
 class MicroBubbleAgent:
@@ -500,6 +651,12 @@ class MicroBubbleAgent:
                     parts.append(f"\n用户自定义指令:\n{member.custom_instructions}")
         except Exception as e:
             logger.warning(f"注入用户身份失败: {e}")
+
+        # 2.5 课题组概览（2026-07-15 #P2 修复"回答不个性化"）
+        # Redis 1h 缓存: 命中 <10ms 直接返, 未命中查 Member + Project 表拼 ~2-3k token
+        team_overview = await _build_team_overview_text(db)
+        if team_overview:
+            parts.append(team_overview)
 
         # 3. 长期记忆
         try:

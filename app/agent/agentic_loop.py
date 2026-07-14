@@ -949,13 +949,18 @@ class AgenticLoop:
         try:
             # ===== Phase 0: 强制 plan_step (#041 - 2026-06-28 chat agent 架构级集成) =====
             # Haiku 输出的 suggested_tools → agentic_loop 主动 dispatch (代码层强制, 不靠 LLM)
-            # 仅 search_info + explain_concept 两个 deep intent 走 Phase 0
+            # 仅 deep intent 走 Phase 0: search_info / explain_concept / team_overview
             # (data_query / execute_action / recommend_person / casual_chat 跳过, 避免误调)
             # feature flag AGENT_PLAN_STEP_ENABLED 控制总开关
             # 2026-07-15 #P2: fast mode (thinking_config.skip_plan_step=True) 跳过, 节省 0.5-7.5s
+            # 2026-07-15 #P2: 新增 team_overview → 强制 query_members + list_projects + search_knowledge 三件套
             if (not (_has_thinking_config(ctx) and ctx.thinking_config.skip_plan_step)
                 and settings.AGENT_PLAN_STEP_ENABLED
-                and intent.category in {IntentCategory.SEARCH_INFO, IntentCategory.EXPLAIN_CONCEPT}
+                and intent.category in {
+                    IntentCategory.SEARCH_INFO,
+                    IntentCategory.EXPLAIN_CONCEPT,
+                    IntentCategory.TEAM_OVERVIEW,  # 2026-07-15 #P2 新增
+                }
                 and intent.suggested_tools
                 and intent.confidence >= settings.AGENT_PLAN_STEP_MIN_CONFIDENCE):
                 # dedup (保留首次出现顺序) + 截断到 AGENT_PLAN_STEP_MAX
