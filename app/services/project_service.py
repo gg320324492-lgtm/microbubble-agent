@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from app.models.project import Project, Milestone
+from app.utils.text_sanitize import sanitize_project_description
 
 
 class ProjectService:
@@ -41,10 +42,12 @@ class ProjectService:
         member_ids: Optional[List[int]] = None,
         created_by: Optional[int] = None
     ) -> Project:
-        """创建项目"""
+        """创建项目 (description 入库前 sanitize, 防 LLM 整段计划塞 description)"""
+        # 2026-07-15: 防 generate_project_plan 工具把整段 LLM markdown 计划塞 description
+        clean_desc = sanitize_project_description(description) if description else None
         project = Project(
             name=name,
-            description=description,
+            description=clean_desc,
             research_area=research_area,
             start_date=start_date,
             end_date=end_date,
@@ -58,13 +61,16 @@ class ProjectService:
         return project
 
     async def update_project(self, project_id: int, **kwargs) -> Optional[Project]:
-        """更新项目"""
+        """更新项目 (description update 前 sanitize)"""
         project = await self.get_project(project_id)
         if not project:
             return None
 
         for key, value in kwargs.items():
             if hasattr(project, key) and value is not None:
+                # 2026-07-15: description 同样走 sanitize 防脏数据二次污染
+                if key == "description":
+                    value = sanitize_project_description(value)
                 setattr(project, key, value)
 
         await self.db.commit()
