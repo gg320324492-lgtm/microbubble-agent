@@ -38,6 +38,11 @@ class ThinkingConfig:
       在 deep 模式实际走 reasoning_content 通道，此字段仅作类型合规占位
     - max_tokens: synthesis 阶段 LLMClient.stream 的 max_tokens
     - max_tool_tokens: Phase 1 tool loop 的 max_tokens
+    - max_tool_rounds: Phase 1 agentic_loop 最大轮数（覆盖 settings.AGENT_MAX_TOOL_ROUNDS）；
+      fast 模式设为 0 直接跳过 tool loop，节省 1-7.5s
+    - skip_plan_step: 是否跳过 Phase 0 强制 plan_step (Haiku suggested_tools → agentic_loop
+      主动 dispatch); fast=True 跳过让用户感知"快速"语义
+    - skip_critique: 是否跳过 Phase 3 critique + Phase 4 retry; fast=True 跳过节省 0.5-3s
     - self_rag_enabled: 是否跑 Phase 0.5 Self-RAG judge
     - self_rag_max_reretrieve: Self-RAG judge parse-fail 时最多重检索次数 (0/1/2)
     - intent_aware_prompts: 是否按 intent 分类追加「闲聊/数据/深度」prompt section
@@ -53,6 +58,9 @@ class ThinkingConfig:
     thinking: dict
     max_tokens: int
     max_tool_tokens: int
+    max_tool_rounds: int
+    skip_plan_step: bool
+    skip_critique: bool
     self_rag_enabled: bool
     self_rag_max_reretrieve: int
     intent_aware_prompts: bool
@@ -89,6 +97,12 @@ def resolve_thinking_config(mode: Optional[str]) -> ThinkingConfig:
             thinking={"type": "disabled"},
             max_tokens=settings.AGENT_THINKING_MODE_FAST_MAX_TOKENS,
             max_tool_tokens=settings.AGENT_THINKING_MODE_FAST_MAX_TOOL_TOKENS,
+            # 2026-07-15 #P2: fast mode 真·快速——跳过 plan_step / critique / Phase 1 tool loop
+            # 用户选 fast = 明确要速度不要 quality control
+            # max_tool_rounds=0 直接进 synthesis, 跳过整段 agentic_loop
+            max_tool_rounds=0,
+            skip_plan_step=True,
+            skip_critique=True,
             self_rag_enabled=False,
             self_rag_max_reretrieve=0,
             intent_aware_prompts=False,
@@ -106,6 +120,10 @@ def resolve_thinking_config(mode: Optional[str]) -> ThinkingConfig:
             thinking={"type": "enabled", "budget_tokens": 8000},
             max_tokens=settings.AGENT_THINKING_MODE_DEEP_MAX_TOKENS,
             max_tool_tokens=settings.AGENT_THINKING_MODE_DEEP_MAX_TOOL_TOKENS,
+            # 2026-07-15 #P2: deep 模式跑完整 plan_step + critique + 完整 tool rounds
+            max_tool_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
+            skip_plan_step=False,
+            skip_critique=False,
             self_rag_enabled=True,
             self_rag_max_reretrieve=settings.AGENT_THINKING_MODE_DEEP_MAX_RERETRIEVE,
             intent_aware_prompts=True,
@@ -123,6 +141,10 @@ def resolve_thinking_config(mode: Optional[str]) -> ThinkingConfig:
         thinking={"type": "disabled"},
         max_tokens=settings.AGENT_THINKING_MODE_BALANCED_MAX_TOKENS,
         max_tool_tokens=500,  # 与 agentic_loop 现有硬编码 500 一致
+        # 2026-07-15 #P2: balanced 默认全跑, max_tool_rounds 走 settings (5)
+        max_tool_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
+        skip_plan_step=False,
+        skip_critique=False,
         self_rag_enabled=settings.AGENT_SELF_RAG_ENABLED,
         self_rag_max_reretrieve=settings.AGENT_SELF_RAG_MAX_RERETRIEVE,
         intent_aware_prompts=settings.AGENT_INTENT_AWARE_PROMPTS,
