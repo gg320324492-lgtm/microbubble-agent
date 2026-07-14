@@ -210,7 +210,10 @@ async def get_project_summary(input: GetProjectSummaryInput, ctx: ToolContext) -
 
     return {
         "status": "success",
-        "id": p.id, "name": p.name, "description": p.description,
+        "id": p.id, "name": p.name,
+        # 2026-07-15 #P2 fix: 补 c9ff0a59 sanitize 修复留下的 get_project_summary 盲点
+        # 历史脏数据可能仍含 LLM 计划原始 markdown, 在工具出口 sanitize 防 LLM 误抄
+        "description": _safe_sanitize_description(p.description),
         "status_field": p.status, "research_area": p.research_area,
         "start_date": str(p.start_date) if p.start_date else None,
         "end_date": str(p.end_date) if p.end_date else None,
@@ -221,6 +224,25 @@ async def get_project_summary(input: GetProjectSummaryInput, ctx: ToolContext) -
         "recent_tasks": recent_tasks,
         "rich_block_type": "project",
     }
+
+
+def _safe_sanitize_description(raw: str | None) -> str | None:
+    """sanitize_project_description 包装, 失败时降级返 None (绝不抛错打断工具链)
+
+    2026-07-15 #P2: get_project_summary 出口 sanitize, 防止 LLM 看到脏数据后抄写
+    入库前 project_service 已 sanitize (c9ff0a59), 此处是历史脏数据的兜底防御
+    """
+    if not raw:
+        return None
+    try:
+        from app.utils.text_sanitize import sanitize_project_description
+        sanitized = sanitize_project_description(raw)
+        # sanitize 可能返空串 (整段都是 LLM 元信息无法救) → 降级返 None 不显示
+        return sanitized if sanitized else None
+    except Exception as e:
+        # sanitize 失败不阻塞工具链, 仅 log 警告
+        logger.warning(f"sanitize_project_description failed in get_project_summary: {e}")
+        return raw  # 失败返原文 (比 None 信息多)
 
 
 # ============================================================================
