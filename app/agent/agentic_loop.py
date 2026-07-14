@@ -873,6 +873,16 @@ class AgenticLoop:
         if max_rounds is None:
             max_rounds = settings.AGENT_MAX_TOOL_ROUNDS
 
+        # 2026-07-15 #P2: thinking_config.max_tool_rounds 覆盖 (fast 模式 = 0 直接跳过 tool loop)
+        if _has_thinking_config(ctx):
+            max_rounds = min(max_rounds, ctx.thinking_config.max_tool_rounds)
+            logger.debug(
+                f"[thinking_config] max_rounds clamped: "
+                f"settings.AGENT_MAX_TOOL_ROUNDS={settings.AGENT_MAX_TOOL_ROUNDS} "
+                f"thinking_config.max_tool_rounds={ctx.thinking_config.max_tool_rounds} "
+                f"effective={max_rounds} mode={ctx.thinking_config.mode}"
+            )
+
         llm = ctx.llm or LLMClient()
         accumulated_text = ""
         rich_blocks: list[RichBlock] = []
@@ -942,7 +952,9 @@ class AgenticLoop:
             # 仅 search_info + explain_concept 两个 deep intent 走 Phase 0
             # (data_query / execute_action / recommend_person / casual_chat 跳过, 避免误调)
             # feature flag AGENT_PLAN_STEP_ENABLED 控制总开关
-            if (settings.AGENT_PLAN_STEP_ENABLED
+            # 2026-07-15 #P2: fast mode (thinking_config.skip_plan_step=True) 跳过, 节省 0.5-7.5s
+            if (not (_has_thinking_config(ctx) and ctx.thinking_config.skip_plan_step)
+                and settings.AGENT_PLAN_STEP_ENABLED
                 and intent.category in {IntentCategory.SEARCH_INFO, IntentCategory.EXPLAIN_CONCEPT}
                 and intent.suggested_tools
                 and intent.confidence >= settings.AGENT_PLAN_STEP_MIN_CONFIDENCE):
@@ -1235,21 +1247,27 @@ class AgenticLoop:
             accumulated_text = synthesis_text
 
             # ===== Phase 3: Critique =====
-            critique: CritiqueResult = await critique_response(
-                user_question=_last_user_text(messages),
-                intent=intent,
-                response_text=accumulated_text,
-                rich_blocks=rich_blocks,
-                tool_calls=tool_calls,
-                ctx=ctx,
-            )
-            # [snapshot] critique
-            yield critique_to_sse_event(critique)
+            # 2026-07-15 #P2: fast mode (thinking_config.skip_critique=True) 跳过 critique + retry, 节省 0.5-3s
+            critique_skipped = _has_thinking_config(ctx) and ctx.thinking_config.skip_critique
+            if not critique_skipped:
+                critique: CritiqueResult = await critique_response(
+                    user_question=_last_user_text(messages),
+                    intent=intent,
+                    response_text=accumulated_text,
+                    rich_blocks=rich_blocks,
+                    tool_calls=tool_calls,
+                    ctx=ctx,
+                )
+                # [snapshot] critique
+                yield critique_to_sse_event(critique)
+            else:
+                logger.debug("[thinking_config] skip_critique=True, skipping Phase 3 critique")
 
             # ===== Phase 4: Retry（如需） =====
             retry_count = 0
             while (
-                should_retry(critique)
+                not critique_skipped
+                and should_retry(critique)
                 and retry_count < settings.AGENT_MAX_REFLECTION_RETRIES
             ):
                 retry_count += 1
