@@ -36,7 +36,7 @@
           <el-descriptions-item label="研究方向">{{ detailProject.research_area || '-' }}</el-descriptions-item>
           <el-descriptions-item label="开始日期">{{ formatDate(detailProject.start_date) }}</el-descriptions-item>
           <el-descriptions-item label="结束日期">{{ formatDate(detailProject.end_date) }}</el-descriptions-item>
-          <el-descriptions-item label="项目描述" :span="2">{{ detailProject.description || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="项目描述" :span="2">{{ cleanDescriptionForDisplay(detailProject.description) || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <h4 class="detail-section-title">项目成员</h4>
@@ -137,6 +137,7 @@ import dayjs from 'dayjs'
 import { Folder, User, Microphone } from '@element-plus/icons-vue'
 import { formatDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
+import { cleanDescriptionForDisplay } from '@/utils/textSanitize'
 import TabStrip from '@/components/common/TabStrip.vue'
 import ProjectsPanel from './workspace/ProjectsPanel.vue'
 import MembersPanel from './workspace/MembersPanel.vue'

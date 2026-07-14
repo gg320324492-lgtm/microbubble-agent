@@ -46,7 +46,10 @@
         </div>
 
         <h3 class="project-name">{{ project.name }}</h3>
-        <p class="project-desc">{{ project.description || '暂无描述' }}</p>
+        <p
+          class="project-desc"
+          :title="(project.description || '').length > 80 ? project.description : ''"
+        >{{ showDescription(project.description) }}</p>
 
         <div class="project-meta">
           <div class="meta-item">
@@ -207,6 +210,10 @@
  * - 保留: 项目卡片列表 + 创建/编辑 dialog + filters 状态
  * - 移除: 项目详情 dialog (由父 WorkspaceView 接管, 通过 emit 'open-detail' 触发)
  * - 详情走 WorkspaceView 顶层 el-dialog (统一位置 + 跨 tab 共享)
+ *
+ * 2026-07-15 修正:
+ * - 加 cleanDescriptionForDisplay() 兜底防脏 description 显示
+ *   (详见后端 sanitize_project_description 等价 JS 实现)
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
@@ -214,6 +221,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
 import { useMemberStore } from '@/stores/member'
+import { cleanDescriptionForDisplay, displayDescription } from '@/utils/textSanitize'
 
 defineEmits(['open-detail'])
 
@@ -281,13 +289,14 @@ const handleCommand = async (cmd, project) => {
     case 'edit':
       editingProjectId.value = project.id
       // 把项目数据回填到 projectForm（共享 create 表单）
+      // 2026-07-15: 编辑打开时把脏 description 预先清洗 (前端兜底)
       projectForm.value = {
         name: project.name || '',
         research_area: project.research_area || '',
         startDate: project.start_date || '',
         endDate: project.end_date || '',
         members: Array.isArray(project.members) ? [...project.members] : [],
-        description: project.description || '',
+        description: cleanDescriptionForDisplay(project.description) || '',
       }
       showEditDialog.value = true
       break
@@ -362,6 +371,10 @@ const getStatusLabel = (status) => {
   const map = { active: '进行中', paused: '已暂停', completed: '已完成', archived: '已归档' }
   return map[status] || status
 }
+
+// 兜底显示清洗 (后端入库清洗是预防, 前端显示清洗是最后一道防线)
+// 2026-07-15: 防 LLM 整段计划 description 渲染时显示 #/** 等字符
+const showDescription = (raw) => displayDescription(raw)
 
 watch(filters, () => fetchProjects(), { deep: true })
 
