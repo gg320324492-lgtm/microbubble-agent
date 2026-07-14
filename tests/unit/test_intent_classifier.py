@@ -22,17 +22,19 @@ from app.agent.intent_classifier import (
 
 
 class TestIntentCategory:
-    """6 种闭集分类"""
+    """7 种闭集分类（2026-07-15 #P2: 新增 team_overview）"""
 
-    def test_six_categories_defined(self):
+    def test_seven_categories_defined(self):
         cats = list(IntentCategory)
-        assert len(cats) == 6
+        # 2026-07-15 #P2: 6 类 → 7 类（新增 TEAM_OVERVIEW 课题组概览）
+        assert len(cats) == 7
         assert IntentCategory.RECOMMEND_PERSON in cats
         assert IntentCategory.SEARCH_INFO in cats
         assert IntentCategory.EXPLAIN_CONCEPT in cats
         assert IntentCategory.EXECUTE_ACTION in cats
         assert IntentCategory.DATA_QUERY in cats
         assert IntentCategory.CASUAL_CHAT in cats
+        assert IntentCategory.TEAM_OVERVIEW in cats  # 2026-07-15 #P2 新增
 
 
 class TestMapCategory:
@@ -45,6 +47,8 @@ class TestMapCategory:
         assert _map_category("执行操作") == "execute_action"
         assert _map_category("数据查询") == "data_query"
         assert _map_category("闲聊") == "casual_chat"
+        # 2026-07-15 #P2: 团队概览
+        assert _map_category("团队概览") == "team_overview"
 
     def test_english_passthrough(self):
         assert _map_category("recommend_person") == "recommend_person"

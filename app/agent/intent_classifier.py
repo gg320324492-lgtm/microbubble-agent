@@ -31,13 +31,14 @@ logger = logging.getLogger("microbubble.agent.intent")
 
 
 class IntentCategory(str, Enum):
-    """6 种闭集意图"""
+    """7 种闭集意图"""
     RECOMMEND_PERSON = "recommend_person"   # 找人/请教谁/谁能帮忙
     SEARCH_INFO = "search_info"             # 找资料/文献/方法
     EXPLAIN_CONCEPT = "explain_concept"     # 解释概念/原理/是什么
     EXECUTE_ACTION = "execute_action"       # 创建/修改/删除 任务/会议/项目
     DATA_QUERY = "data_query"               # 查询 任务列表/会议列表/统计
     CASUAL_CHAT = "casual_chat"             # 闲聊/问候/不确定
+    TEAM_OVERVIEW = "team_overview"         # 2026-07-15 #P2: 课题组/团队介绍 (强制 query_members+list_projects+search_knowledge 三件套)
 
 
 class IntentResult(BaseModel):
@@ -49,8 +50,8 @@ class IntentResult(BaseModel):
     reasoning: str = ""
 
 
-# Prompt 模板（精简：闭集 6 选 1，不需要长 prompt）
-_INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之一：
+# Prompt 模板（精简：闭集 7 选 1，不需要长 prompt）
+_INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 7 类之一：
 
 - recommend_person: 用户想找人/请教谁/谁能帮忙（如「请教谁」「谁能指导」）
 - search_info: 用户想找资料/文献/方法/知识（如「怎么检测」「有什么方案」）
@@ -62,6 +63,7 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之
   - 提醒/通知（如「提醒我」）
 - data_query: 用户想查询数据（任务列表/会议列表/统计「多少」「几个」）
 - casual_chat: 闲聊/问候/无法分类（如「你好」「谢谢」「天气」）
+- team_overview: 用户想了解课题组/团队本身（成员构成、研究方向、项目）。如「详细介绍本课题组」「我们组研究什么」「组里有哪些人」「我们实验室做什么方向」「组里的研究方向」「我们组的项目」「课题组介绍」。**核心特征**：query 明确以"组/团队/课题组/实验室"为主语，而不是具体成员/项目/概念
 
 关键区分点（容易混淆）：
 - 「记住 X」/「忘掉 X」/「以后 X」→ execute_action（不是 casual_chat）
@@ -72,13 +74,16 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之
 - 「X 的任务」/「X 的工作清单」/「X 在做什么（任务）」→ data_query（显式问任务）
 - 「什么是 X」/「X 的原理」→ explain_concept
 - 「所有成员任务」/「团队任务」/「大家都在做什么任务」→ data_query（query_all_member_tasks）
+- **「本课题组/我们组/组里/实验室」开头 → team_overview**（2026-07-15 #P2 新增）
+  - 与 search_info 区分：search_info 问的是"找资料/文献/方法"，主语是外部知识；team_overview 问的是"我们自己组怎么样"，主语是本课题组
+  - 与 recommend_person 区分：recommend_person 找具体一个人（如"谁做 XX 方向"）；team_overview 看整体
 
 输出严格 JSON（无其他文字）：
 {{
-  "category": "推荐人|找资料|解释概念|执行操作|数据查询|闲聊",
+  "category": "推荐人|找资料|解释概念|执行操作|数据查询|闲聊|团队概览",
   "confidence": 0.0-1.0,
   "keywords": ["关键词1", "关键词2"],
-  "suggested_tools": ["query_members", "search_knowledge"],
+  "suggested_tools": ["query_members", "list_projects", "search_knowledge"],
   "reasoning": "一句话分类理由"
 }}
 
@@ -93,6 +98,7 @@ _INTENT_PROMPT = """你是意图分类器。把用户问题分成以下 6 类之
   项目类: list_projects / get_project_summary
 - search_info → 必填 ["search_knowledge"] 或 ["web_search"]
 - explain_concept → 必填 ["search_knowledge", "list_formulas"] 或 ["search_knowledge", "get_hypothesis"]
+- **team_overview → 必填 ["query_members", "list_projects", "search_knowledge"]**（2026-07-15 #P2: 三件套, 必须并行 dispatch）
 - casual_chat → 必填 []（**严禁**填工具）
 - 任何场景 confidence < 0.5 时 → suggested_tools 设为 []（避免 hallucinated tools）
 
@@ -229,6 +235,8 @@ _CATEGORY_MAP = {
     "执行操作": "execute_action",
     "数据查询": "data_query",
     "闲聊": "casual_chat",
+    # 2026-07-15 #P2: 团队概览 (team_overview) 7 类
+    "团队概览": "team_overview",
 }
 
 
@@ -245,4 +253,6 @@ def _category_zh(cat: IntentCategory) -> str:
         IntentCategory.EXECUTE_ACTION: "执行操作",
         IntentCategory.DATA_QUERY: "数据查询",
         IntentCategory.CASUAL_CHAT: "闲聊",
+        # 2026-07-15 #P2: 团队概览
+        IntentCategory.TEAM_OVERVIEW: "团队概览",
     }.get(cat, "未知")
