@@ -106,6 +106,18 @@ def parse_args() -> argparse.Namespace:
         default=90,
         help="单题超时秒 (默认: 90)",
     )
+    parser.add_argument(
+        "--thinking-mode",
+        default=None,
+        choices=["fast", "balanced", "deep"],
+        help="三档推理模式 (2026-07-13 #P1 three-mode 透传 ChatRequest.thinking_mode)",
+    )
+    parser.add_argument(
+        "--use-self-rag",
+        dest="use_self_rag",
+        default=None,
+        help="Self-RAG 开关覆盖 (true/false/None=用 settings.AGENT_SELF_RAG_ENABLED)",
+    )
     return parser.parse_args()
 
 
@@ -142,6 +154,8 @@ async def run_one(
     backend_base: str,
     token: str,
     timeout: int,
+    thinking_mode: str | None = None,
+    use_self_rag: str | None = None,
 ) -> dict:
     """跑单题: POST /chat/stream + 解析 SSE events."""
     qid = q["id"]
@@ -150,12 +164,23 @@ async def run_one(
     session_id = f"qa-{qid}-{int(time.time() * 1000)}"
     r = None
 
+    # 构造请求 body, per-request flags
+    body = {"message": question, "session_id": session_id}
+    if thinking_mode is not None:
+        body["thinking_mode"] = thinking_mode
+    if use_self_rag is not None:
+        # 把 "true"/"false"/None 转成 bool
+        if use_self_rag.lower() in ("true", "1", "yes"):
+            body["use_self_rag"] = True
+        elif use_self_rag.lower() in ("false", "0", "no"):
+            body["use_self_rag"] = False
+
     for attempt in range(2):
         try:
             t0 = time.monotonic()
             resp = await client.post(
                 f"{backend_base}/chat/stream",
-                json={"message": question, "session_id": session_id},
+                json=body,
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json; charset=utf-8",
@@ -171,6 +196,10 @@ async def run_one(
                     "error": f"HTTP {resp.status_code}",
                     "duration_s": round(elapsed, 1),
                 }
+                # 2026-07-14: 429 rate limit 退避 30s (SSE tier 10/min 默认, benchmark 临时高并发需更长退避)
+                if resp.status_code == 429 and attempt == 0:
+                    await asyncio.sleep(30)
+                    continue
                 if attempt == 0:
                     await asyncio.sleep(3)
                     continue
@@ -282,15 +311,19 @@ async def main():
     async with httpx.AsyncClient() as client:
         async def sem_run(q):
             async with sem:
-                return await run_one(client, q, backend_base, token, args.timeout)
+                return await run_one(
+                    client, q, backend_base, token, args.timeout,
+                    thinking_mode=args.thinking_mode,
+                    use_self_rag=args.use_self_rag,
+                )
 
         start = time.monotonic()
         tasks = [sem_run(q) for q in questions]
         for i, fut in enumerate(asyncio.as_completed(tasks), 1):
             r = await fut
             results.append(r)
-            # 每 10 题立即写盘 (防中断丢失)
-            if i % 10 == 0 or i == 1:
+            # 每 10 题立即写盘 (防中断丢失) + 最后一题也写 (修 < 10 题数据丢失 bug)
+            if i % 10 == 0 or i == 1 or i == len(questions):
                 ok = sum(1 for x in results if x and "content" in x)
                 err = sum(1 for x in results if x and "content" not in x)
                 elapsed_total = time.monotonic() - start
