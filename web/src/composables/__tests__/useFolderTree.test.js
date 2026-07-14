@@ -15,6 +15,22 @@ const mockAxiosGet = vi.fn()
 const mockAxiosPost = vi.fn()
 const mockAxiosPut = vi.fn()
 const mockAxiosDelete = vi.fn()
+const mockFetch = vi.fn()
+
+function treeResponse(tree) {
+  return {
+    ok: true,
+    json: async () => ({ tree, max_depth: 5 }),
+  }
+}
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', mockFetch)
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 vi.mock('axios', () => ({
   default: {
@@ -29,16 +45,11 @@ describe('useFolderTreeStore (v2.15 Pinia singleton)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    // Default mock: tree returns 2 folders
-    mockAxiosGet.mockResolvedValue({
-      data: {
-        tree: [
-          { id: 1, name: 'folder_a', children: [] },
-          { id: 2, name: 'folder_b', children: [] },
-        ],
-        max_depth: 5,
-      },
-    })
+    // Default mock: tree returns 2 folders through fetchTree's production fetch path
+    mockFetch.mockResolvedValue(treeResponse([
+      { id: 1, name: 'folder_a', children: [] },
+      { id: 2, name: 'folder_b', children: [] },
+    ]))
   })
 
   afterEach(() => {
@@ -94,12 +105,9 @@ describe('useFolderTreeStore (v2.15 Pinia singleton)', () => {
 
       // 2. mock DELETE 成功 + 后续 fetchTree 返回 [folder id=2]
       mockAxiosDelete.mockResolvedValue({ data: null })
-      mockAxiosGet.mockResolvedValueOnce({
-        data: {
-          tree: [{ id: 2, name: 'folder_b', children: [] }],
-          max_depth: 5,
-        },
-      })
+      mockFetch.mockResolvedValueOnce(treeResponse([
+        { id: 2, name: 'folder_b', children: [] },
+      ]))
 
       // 3. FolderTree 调用 deleteFolder (它自己的 wrapper, 但底层共享)
       await folderTree_caller.deleteFolder(1)
@@ -144,9 +152,9 @@ describe('useFolderTreeStore (v2.15 Pinia singleton)', () => {
       expect(caller.selectedFolderId).toBe(1)
 
       mockAxiosDelete.mockResolvedValue({ data: null })
-      mockAxiosGet.mockResolvedValueOnce({
-        data: { tree: [{ id: 2, name: 'folder_b', children: [] }], max_depth: 5 },
-      })
+      mockFetch.mockResolvedValueOnce(treeResponse([
+        { id: 2, name: 'folder_b', children: [] },
+      ]))
 
       await caller.deleteFolder(1)
       expect(caller.selectedFolderId).toBe(null)
@@ -184,16 +192,11 @@ describe('useFolderTreeStore (v2.15 Pinia singleton)', () => {
       mockAxiosPost.mockResolvedValueOnce({
         data: { id: 99, name: 'new_folder', parent_id: null },
       })
-      mockAxiosGet.mockResolvedValueOnce({
-        data: {
-          tree: [
-            { id: 99, name: 'new_folder', children: [] },
-            { id: 1, name: 'folder_a', children: [] },
-            { id: 2, name: 'folder_b', children: [] },
-          ],
-          max_depth: 5,
-        },
-      })
+      mockFetch.mockResolvedValueOnce(treeResponse([
+        { id: 99, name: 'new_folder', children: [] },
+        { id: 1, name: 'folder_a', children: [] },
+        { id: 2, name: 'folder_b', children: [] },
+      ]))
 
       await dialog.createFolder({ name: 'new_folder', parentId: null })
 
@@ -284,7 +287,7 @@ describe('deleteFolder v2.16 (recursive cascade soft-delete)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    mockAxiosGet.mockResolvedValue({ data: { tree: [], max_depth: 5 } })
+    mockFetch.mockResolvedValue(treeResponse([]))
     mockAxiosDelete.mockResolvedValue({ data: null })
   })
 

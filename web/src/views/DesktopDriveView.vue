@@ -313,13 +313,15 @@ const router = useRouter()  // v2 PR2: 回收站路由跳转
 
 // === 文件夹树 (PR3.2 接入) ===
 // v2.15 Pinia 改造后修复 (2026-07-11): 必须用 storeToRefs 解构 state, 否则丢响应性
-// 症状: store.folderTree 有 4 个 root, 但 FolderTree 收到 folderTree.length=0 → DOM 0 node
-// 根因: ES6 解构 store 实例时执行 getter, 拿到的是初始 .value 快照, 不再跟随 .value 更新
-// 修法: state 用 storeToRefs(store) 保持 ref 引用, actions 直接解构不丢响应
+// 2026-07-14: selectedFolderId / selectedFolder 同样属于 store state；禁止从 store action 区解构。
+// Pinia setup-store proxy 会自动 unwrap ref，直接解构初始 selectedFolder=null 后再读 .value 会崩溃。
+// 修法: 全部 state/computed 用 storeToRefs(store)，actions 才直接解构。
 import { storeToRefs } from 'pinia'
 const folderTreeStore = useFolderTree()
 const {
   folderTree,
+  selectedFolderId,
+  selectedFolder,
   expandedFolderIds,
   loading: treeLoading,
   loadError: treeLoadError
@@ -327,7 +329,6 @@ const {
 const {
   fetchTree: fetchFolderTree,
   toggleExpanded: toggleExpandedFolder,
-  selectedFolder,
   createFolder: doCreateFolder,
   renameFolder: doRenameFolder,
   findFolderById
@@ -367,7 +368,6 @@ const {
 } = driveFilesStore
 
 // === 状态 ===
-const selectedFolderId = ref(null)
 const viewMode = ref('detail')  // v2.16 默认 detail (横向 long bar) | grid | list
 const searchQuery = ref('')
 // v2 PR2: 特殊视图 (null | 'starred' | 'trash')
