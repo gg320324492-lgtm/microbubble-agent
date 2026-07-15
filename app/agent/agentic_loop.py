@@ -586,6 +586,121 @@ def _strip_qwen3_section_markers(text: str) -> str:
     return result
 
 
+# 2026-07-15 #P2 续: LLM synthesis 阶段偶尔会"幻觉"工具返回值格式, 直接把
+# {"status":"success","content":"..."} 写进 content 字段 (用户截图实测:
+# "{"status":"success","content":"组里最年轻和最年长的成员分别是？\n\n## 最年轻的成员..."}).
+# 这个格式**不是** ```json``` fence (rich block 声明), **不是** fake XML tool_call,
+# **不是** qwen3 section marker, **不是** meta-thinking 前缀. 4 个 sanitizer 全漏掉.
+#
+# 修复: 加 _strip_json_envelope 检测 leading raw JSON envelope, 抽取里面的 content/markdown
+# 等可读字段, 剥除外层工具返回值结构. 仅处理**文本开头**的 JSON (前 4 KB), 避免误剥
+# 正文里嵌入的 JSON 示例.
+def _strip_json_envelope(text: str) -> str:
+    """2026-07-15 #P2 续: 剥除 LLM 幻觉写出的 raw tool_result JSON envelope.
+
+    触发场景：synthesis 阶段 LLM 把上轮 query 包成 tool_result 格式直接吐到 content 里,
+    e.g. {"status":"success","content":"<原 query>\\n\\n## ...正文..."}.
+    之前的 4 个 sanitizer (_extract_rich_block_json / _strip_fake_tool_calls /
+    _strip_qwen3_section_markers / _strip_meta_thinking) 全部漏掉这种格式.
+
+    剥除策略:
+    1. 只看文本前 4 KB (避免误剥正文里嵌入的 JSON 示例代码)
+    2. 检测以 `{"` 开头的 raw JSON, 尝试 json.loads
+    3. 必须是 dict 且含 status="success" 或 "error" 字段 (tool_result 协议)
+    4. 抽取 content / markdown / message 字段拼接为可读文本
+    5. 拼接剥除 JSON envelope 后的剩余尾部文本
+    6. 剥除后 < 5 字符 → 保留原文 (防误杀)
+
+    边界:
+    - 不是所有 leading JSON 都是 envelope: 必须有 status 字段且 status ∈ {"success","error"}
+    - 抽出后拼接剩余文本 (envelope 后可能还有 LLM 写的正文尾巴)
+    """
+    import json as _json
+    import re
+
+    if not text or len(text) < 20:
+        return text
+
+    # 1. 只扫前 4 KB
+    head = text[:4096]
+    rest = text[4096:]
+
+    # 2. 必须以 `{` 开头 (允许前导空白)
+    stripped_head = head.lstrip()
+    if not stripped_head.startswith("{"):
+        return text
+
+    # 3. 用栈平衡找匹配的 `}` (避免 regex 在嵌套 JSON 上贪婪失败)
+    #    简单平衡计数: 遇到 `{` +1, `}` -1, 引号内忽略
+    depth = 0
+    in_string = False
+    escape = False
+    end_idx = -1
+    for i, ch in enumerate(stripped_head):
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                end_idx = i + 1
+                break
+    if end_idx <= 0:
+        return text  # 没有完整 JSON envelope → 不动
+
+    json_str = stripped_head[:end_idx]
+    # 4. 尝试解析
+    try:
+        parsed = _json.loads(json_str)
+    except _json.JSONDecodeError:
+        return text
+
+    if not isinstance(parsed, dict):
+        return text
+
+    # 5. 必须是 tool_result 协议: 有 status 字段 ∈ {"success","error"}
+    status = parsed.get("status")
+    if status not in ("success", "error"):
+        return text
+
+    # 6. 抽取可读字段
+    extractable_fields = ("content", "markdown", "message", "text", "summary")
+    extracted_parts = []
+    for field in extractable_fields:
+        val = parsed.get(field)
+        if isinstance(val, str) and val.strip():
+            extracted_parts.append(val.strip())
+
+    # 7. 拼接 envelope 后剩余文本 (可能 LLM 在 JSON 后还写了正文尾巴)
+    #    注意: stripped_head 是 lstrip 后的, head 可能有前导空白, 要保留
+    leading_ws = head[: len(head) - len(stripped_head)]
+    after_envelope = stripped_head[end_idx:].lstrip("\n").lstrip()
+    tail = after_envelope + rest  # 后续正文 + 4 KB 外的尾巴
+
+    # 8. 拼接: 抽出的字段 + 尾部
+    new_text = "\n\n".join(extracted_parts + ([tail] if tail.strip() else []))
+
+    # 9. 兜底: 剥除后 < 5 字符 → 保留原文 (防误杀, 真正短文不应剥)
+    if len(new_text.strip()) < 5:
+        return text
+
+    logger.info(
+        f"_strip_json_envelope: 剥除 {end_idx} 字符 JSON envelope "
+        f"(status={status}, fields={list(parsed.keys())[:5]})"
+    )
+    return leading_ws + new_text
+
+
 def _parse_xml_params(xml_str: str) -> dict:
     """从 <parameter=k>v</parameter> 风格 XML 串提取参数 dict"""
     import re
@@ -1370,6 +1485,10 @@ class AgenticLoop:
             final_text = _strip_fake_tool_calls(final_text)
             # 2026-07-15 #P2: 剥 qwen3:8b 内部 section marker (| tool___start | 等)
             final_text = _strip_qwen3_section_markers(final_text)
+            # 2026-07-15 #P2 续: 剥 LLM 幻觉写出的 raw tool_result JSON envelope
+            # (e.g. {"status":"success","content":"<原 query>\n\n## ..正文..."})
+            # 必须放在 meta_thinking 之前 — envelope 内的 content 字段可能含元话语, 先剥 envelope 再剥 meta
+            final_text = _strip_json_envelope(final_text)
             pre_strip_len = len(final_text)
             final_text = _strip_meta_thinking(final_text)
             meta_was_stripped = len(final_text) < pre_strip_len  # 元话语被剥掉了
@@ -1605,6 +1724,10 @@ class AgenticLoop:
             text_without_json = _strip_fake_tool_calls(text_without_json)
             # 2026-07-15 #P2: 剥 qwen3:8b 内部 section marker (| tool___start | 等)
             text_without_json = _strip_qwen3_section_markers(text_without_json)
+            # 2026-07-15 #P2 续: 剥 LLM 幻觉写出的 raw tool_result JSON envelope
+            # (e.g. {"status":"success","content":"<原 query>\n\n## ..正文..."})
+            # 必须放在 meta_thinking 之前 — envelope 内的 content 字段可能含元话语, 先剥 envelope 再剥 meta
+            text_without_json = _strip_json_envelope(text_without_json)
             # 2026-06-15 修复：剥除 LLM 写在正文开头的元话语/thinking 文本
             # 即使 prompts.py 加了硬规则，LLM 偶尔仍会输出"我需要..."、"用户问的是..."、
             # "开始回答吧"等内部独白。后端兜底剥除，避免泄露到用户视野

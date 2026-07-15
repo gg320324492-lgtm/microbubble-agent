@@ -286,6 +286,9 @@ export function useChatStream() {
   const serverFetchedSessions = new Set<string>()
 
   function ensureSessionLoaded(id: string) {
+    // ★ 2026-07-15 #P2 修复: 空 sid 早返 (避免 /chat/sessions//messages 双斜杠 404)
+    // 触发场景: 首次冷启动 / fresh user / 切到空 store / onMounted resolveInitialSessionId 返 ''
+    if (!id) return  // 空字符串 / undefined → 不查 server, UI 显示空状态
     if (serverFetchedSessions.has(id)) return  // 已 server fetch 过 → 跳过
     serverFetchedSessions.add(id)
     loadedSessions.add(id)  // 兼容原防 SSE 增量覆盖
@@ -316,6 +319,8 @@ export function useChatStream() {
    * - 失败 best-effort: console.warn 不阻塞 UI (用户重试或换设备登录)
    */
   async function fetchSessionFromServer(id: string) {
+    // ★ 2026-07-15 #P2 修复: 空 sid 早返 (兜底 — ensureSessionLoaded 已守卫, 这里再保一道)
+    if (!id) return
     try {
       const data = await chatHistoryStore.fetchMessages(id, { pageSize: 200 })
       const items = data?.items || []
