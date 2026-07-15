@@ -77,17 +77,12 @@
       <iframe :src="blobUrl" class="preview-pdf" frameborder="0" />
     </div>
 
-    <!-- v2.7.1 (2026-07-10) Office 365 iframe 加 sandbox + referrerpolicy + 错误降级
-         v2.10 (2026-07-10) 移除 allow-same-origin 修 Chrome CSP 警告:
-         - "An iframe which has both allow-scripts and allow-same-origin for its sandbox
-            attribute can escape its sandboxing" (Chrome 警告)
-         - Office viewer 是跨域 (view.officeapps.live.com != agent.mnb-lab.cn),
-           本来就不需要 same-origin. 移除后 iframe 被当 unique-origin,
-           Microsoft 内部 JS 错误更隔离, 同时满足 Chrome CSP 安全建议.
-         - sandbox 保留: allow-scripts (运行) + allow-popups (OAuth) +
-           allow-popups-to-escape-sandbox (OAuth redirect) + allow-forms (表单)
-         - referrerpolicy="no-referrer": 不让 MS 看到我们文件路径
-         - @error: 网络错误 → 降级 thumbnail
+    <!-- Office 365 预览器是完整的跨域 Web 应用，会继续嵌套 PowerPoint/Word/Excel frame，
+         并依赖自身 origin、cookie/storage、内部 CORS 与 OAuth。不要添加 sandbox：
+         即使放开 allow-same-origin，继承到嵌套 frame 的其余 sandbox 限制仍会破坏启动链。
+         officeapps.live.com 与本站跨域，浏览器同源策略已阻止它访问父页面 DOM。
+         referrerpolicy="no-referrer" 避免向 Office 泄露父页面 URL。
+         @error 只捕获 iframe 导航失败；微软页面内部 JS 错误无法从父页面捕获。
     -->
     <div v-else-if="previewType === 'office' && !officeFallbackToThumbnail" class="preview-office-wrapper">
       <iframe
@@ -95,7 +90,6 @@
         class="preview-office-iframe"
         frameborder="0"
         allowfullscreen
-        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
         referrerpolicy="no-referrer"
         @error="onOfficeViewerError"
       />
