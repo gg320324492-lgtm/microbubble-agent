@@ -82,6 +82,7 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
         str: 注入文本；db=None 或异常时返回空字符串 (best-effort)
     """
     if db is None:
+        logger.warning("_build_team_overview_text called with db=None, returning empty (no injection)")
         return ""
 
     # 1. Redis 缓存查
@@ -90,8 +91,9 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
         r = await get_redis()
         cached = await r.get(_TEAM_OVERVIEW_CACHE_KEY)
         if cached:
-            logger.debug("team_overview cache hit")
+            logger.debug(f"team_overview cache hit ({len(cached)} chars)")
             return cached
+        logger.debug("team_overview cache miss, querying DB")
     except Exception as e:
         logger.warning(f"team_overview redis read failed (proceed to DB): {e}")
 
@@ -170,9 +172,23 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
             lines.append(f"- **{p.name}**（{ra}{member_str}）")
         lines.append("")
 
+    # 2026-07-15 #P2 反幻觉: GROUND TRUTH 名单（强制 LLM 不准编造）
+    # 把所有真实姓名 / 项目名 / 方向打包成显式白名单, LLM 看到后必须严格遵守
+    lines.append("### ⚠️ GROUND TRUTH 白名单（严禁出现以下名单之外的成员 / 项目）")
+    lines.append("")
+    if members:
+        member_names = "、".join(m.name for m in members)
+        lines.append(f"**真实成员姓名（共 {len(members)} 人）**：{member_names}")
+    if projects:
+        project_names = "、".join(p.name for p in projects)
+        lines.append(f"**真实活跃项目名（共 {len(projects)} 个）**：{project_names}")
+    lines.append("")
     lines.append(
-        "**纪律**：以上成员姓名 / 研究方向 / 项目名都是**真实数据库内容**，"
-        "回答任何「本课题组/我们组/组里」类问题时必须基于这些字段，**严禁**凭训练知识编造成员或项目。"
+        "**反幻觉纪律**：回答「本课题组/我们组/组里/实验室」类问题时, "
+        "出现的**每一个成员姓名 / 项目名 / 会议主题 / 任务标题**都必须在以上白名单或工具返回中真实存在. "
+        "**严禁**编造任何不在白名单内的姓名 (如李晓辉、张伟杰等常见名), "
+        "**严禁**为凑完整性而虚构成员/项目数量. "
+        "如概览块为空或工具返回空, **必须直接说**'暂时无法获取课题组信息', 禁止凭训练知识瞎写."
     )
 
     text = "\n".join(lines)
@@ -182,7 +198,10 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
         from app.core.redis import get_redis
         r = await get_redis()
         await r.set(_TEAM_OVERVIEW_CACHE_KEY, text, ex=_TEAM_OVERVIEW_CACHE_TTL_SEC)
-        logger.debug(f"team_overview cached ({len(text)} chars, ttl={_TEAM_OVERVIEW_CACHE_TTL_SEC}s)")
+        logger.info(
+            f"team_overview cached: {len(members)} members + {len(projects)} projects, "
+            f"{len(text)} chars, ttl={_TEAM_OVERVIEW_CACHE_TTL_SEC}s"
+        )
     except Exception as e:
         logger.warning(f"team_overview redis write failed: {e}")
 
@@ -654,9 +673,19 @@ class MicroBubbleAgent:
 
         # 2.5 课题组概览（2026-07-15 #P2 修复"回答不个性化"）
         # Redis 1h 缓存: 命中 <10ms 直接返, 未命中查 Member + Project 表拼 ~2-3k token
-        team_overview = await _build_team_overview_text(db)
-        if team_overview:
-            parts.append(team_overview)
+        try:
+            team_overview = await _build_team_overview_text(db)
+            if team_overview:
+                parts.append(team_overview)
+                logger.debug(f"_build_system_prompt: team_overview injected ({len(team_overview)} chars)")
+            else:
+                # 2026-07-15 #P2: 异常情况诊断——如果 db 非 None 但返空字符串, 必有 bug
+                logger.warning(
+                    f"_build_system_prompt: team_overview EMPTY (db={db is not None}), "
+                    f"agent 回答可能编造成员姓名!"
+                )
+        except Exception as e:
+            logger.error(f"_build_system_prompt: team_overview injection failed: {e}", exc_info=True)
 
         # 3. 长期记忆
         try:
