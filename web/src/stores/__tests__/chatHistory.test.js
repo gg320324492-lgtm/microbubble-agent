@@ -90,6 +90,75 @@ describe('useChatHistoryStore', () => {
 
       expect(result).toBeNull()
     })
+
+    // 2026-07-15 P2-#chatHistory-appendMessage-404 修复回归保护
+    it('404 时自动 createServerSession + 重试一次 (本地新 session race 兜底)', async () => {
+      const err404 = Object.assign(new Error('Request failed with status code 404'), {
+        response: { status: 404, data: { detail: '会话不存在或已删除' } },
+      })
+      // 第一次 appendMessage → 404
+      // 第二次 appendMessage (重试) → 成功
+      mockChatHistoryApi.appendMessage
+        .mockRejectedValueOnce(err404)
+        .mockResolvedValueOnce({ id: 99, content: 'recovered' })
+      mockChatHistoryApi.createSession.mockResolvedValue({ id: 'user_1782916607641_ddzr', user_id: 1 })
+
+      const { useChatHistoryStore } = await import('../chatHistory')
+      const store = useChatHistoryStore()
+      const result = await store.appendMessageAsync('user_1782916607641_ddzr', {
+        role: 'user',
+        content: 'first user msg',
+      })
+
+      // 验证: 第一次 404 → 自动 createServerSession 用 clientSessionId 复用 → 第二次重试成功
+      expect(mockChatHistoryApi.createSession).toHaveBeenCalledWith({
+        client_session_id: 'user_1782916607641_ddzr',
+        first_message: 'first user msg',
+      })
+      expect(mockChatHistoryApi.appendMessage).toHaveBeenCalledTimes(2)
+      expect(result).toEqual({ id: 99, content: 'recovered' })
+    })
+
+    it('404 + createSession 也失败 → 返回 null 不死循环', async () => {
+      const err404 = Object.assign(new Error('404'), { response: { status: 404 } })
+      mockChatHistoryApi.appendMessage.mockRejectedValue(err404)  // 永远 404
+      mockChatHistoryApi.createSession.mockRejectedValue(new Error('session create failed'))
+
+      const { useChatHistoryStore } = await import('../chatHistory')
+      const store = useChatHistoryStore()
+      const result = await store.appendMessageAsync('sid_x', { role: 'user', content: 'x' })
+
+      // createSession 失败 → 不再 appendMessage 重试 (避免死循环) → 返回 null
+      expect(mockChatHistoryApi.appendMessage).toHaveBeenCalledTimes(1)
+      expect(result).toBeNull()
+    })
+
+    it('timeout (无 response.status) 不触发 404 重试 (避免不确定状态重复写)', async () => {
+      // axios timeout 错误: e.response === undefined
+      const errTimeout = new Error('timeout of 10000ms exceeded')
+      mockChatHistoryApi.appendMessage.mockRejectedValue(errTimeout)
+
+      const { useChatHistoryStore } = await import('../chatHistory')
+      const store = useChatHistoryStore()
+      const result = await store.appendMessageAsync('sid_timeout', { role: 'user', content: 'x' })
+
+      // timeout 不是 404, 不重试, 直接返回 null (best-effort)
+      expect(mockChatHistoryApi.createSession).not.toHaveBeenCalled()
+      expect(mockChatHistoryApi.appendMessage).toHaveBeenCalledTimes(1)
+      expect(result).toBeNull()
+    })
+
+    it('500 server error 不触发 404 重试', async () => {
+      const err500 = Object.assign(new Error('500'), { response: { status: 500 } })
+      mockChatHistoryApi.appendMessage.mockRejectedValue(err500)
+
+      const { useChatHistoryStore } = await import('../chatHistory')
+      const store = useChatHistoryStore()
+      const result = await store.appendMessageAsync('sid_500', { role: 'user', content: 'x' })
+
+      expect(mockChatHistoryApi.createSession).not.toHaveBeenCalled()
+      expect(result).toBeNull()
+    })
   })
 
   describe('createShareLink', () => {

@@ -96,13 +96,35 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
 
   /**
    * 异步追加消息到 server（fire-and-forget，不阻塞流式）
+   *
+   * ★ 2026-07-15 P2-#chatHistory-appendMessage-404 修复:
+   *   防御性兜底: 404 → 自动 createServerSession(clientSessionId) → 重试一次
+   *   触发场景: useChatStream.stopGeneration race (createServerSession 还在 flight 时
+   *   stopGeneration 先到,本地 session 在 server 还不存在 → 404)
+   *   注意: 仅 404 重试 (明确拒绝,安全); timeout/network 5xx 不重试 (不确定, 防重复)
+   *   server-side client_msg_id 唯一约束保证即使重试也不重复写
+   *
    * @returns {Promise<ServerChatMessage|null>} 成功返回 message，失败返回 null
    */
   async function appendMessageAsync(sid: string, msg: any) {
     try {
-      const result = await chatHistoryApi.appendMessage(sid, msg)
-      return result
+      return await chatHistoryApi.appendMessage(sid, msg)
     } catch (e: any) {
+      const status = e?.response?.status
+      // 仅 404 重试: 服务端明确拒绝 (session 不存在), 安全可重试
+      if (status === 404) {
+        try {
+          const created = await createServerSession({
+            clientSessionId: sid,
+            firstMessage: msg?.content,
+          })
+          if (created) {
+            return await chatHistoryApi.appendMessage(sid, msg)
+          }
+        } catch {
+          // createServerSession 自身失败 → 走原错误路径
+        }
+      }
       // best-effort: 失败不阻塞流式，仅 console 记录
       // CLAUDE.md 2026-06-12 "持久化失败必须 best-effort" 铁律
       console.error(`[chatHistory] appendMessage 失败: sid=${sid}`, e?.response?.data?.detail || e?.message)
