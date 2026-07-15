@@ -144,6 +144,12 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
    * @returns {Promise<{items: ServerChatMessage[], has_more: boolean}>}
    */
   async function fetchMessages(sid: string, opts: { afterId?: number; pageSize?: number } = {}) {
+    // ★ 2026-07-15 #P2 修复: 空 sid 早返 (避免 /chat/sessions//messages 双斜杠 404)
+    // 触发场景: useChatStream.ensureSessionLoaded('') 走 onMounted 冷启动路径
+    if (!sid) {
+      console.warn('[chatHistory] fetchMessages skipped: empty sid')
+      return { items: [], has_more: false }
+    }
     try {
       return await chatHistoryApi.listMessages(sid, {
         afterId: opts.afterId ?? 0,
@@ -160,6 +166,11 @@ export const useChatHistoryStore = defineStore('chatHistory', () => {
    * @returns {Promise<ServerChatMessage[]|null>}
    */
   async function refreshSession(sid: string) {
+    // ★ 2026-07-15 #P2 修复: 空 sid 早返 (与 fetchMessages 镜像, 防止 sync_required reload 误调)
+    if (!sid) {
+      console.warn('[chatHistory] refreshSession skipped: empty sid')
+      return null
+    }
     try {
       const data = await chatHistoryApi.listMessages(sid, { pageSize: 200 })
       return data.items || []
