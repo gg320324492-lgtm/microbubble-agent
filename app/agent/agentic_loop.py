@@ -20,6 +20,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from typing import Any, AsyncIterator, Optional
 
@@ -532,6 +533,55 @@ def _strip_meta_thinking(text: str) -> str:
         if len(meaningful) < 2:
             # 全是元话语，不要兜底回原文
             return ""
+
+    return result
+
+
+# 2026-07-15 #P2: qwen3:8b 走 ollama OpenAI-compat 时, 会把内部 section marker
+# (| tool___start | | topic overview | | problem statement | | relevance analysis |
+#  | thinking detail |) 写进 content 字段, 直接泄露给用户.
+# 修复: 加 _strip_qwen3_section_markers 在 synthesis 文本流式输出前过滤.
+_QWEN3_SECTION_MARKER_PATTERNS = [
+    # 单独的 `| xxx |` 行（可能是 marker 也可能是 markdown 表格，限定在已知 marker）
+    re.compile(r"^\s*\|\s*tool[_ ]?(?:___)?(?:start|context|input|output)\s*\|\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^\s*\|\s*tool[_ ]?context\s*\|\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^\s*\|\s*toolcontext\s*\|\s*$", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^\s*\|\s*(?:topic\s+overview|problem\s+statement|relevance\s+analysis|thinking\s+detail|thinking\s+process|thinking\s+summary)\s*\|\s*$", re.IGNORECASE | re.MULTILINE),
+    # `< / | toolcontext | >` 注释格式 (截图实测)
+    re.compile(r"^\s*<\s*/?\s*\|\s*[a-z_]+\s*\|\s*/?\s*>\s*$", re.IGNORECASE | re.MULTILINE),
+    # `//| xxx |` 注释形式
+    re.compile(r"^\s*//\s*\|\s*[a-z_]+\s*\|\s*$", re.IGNORECASE | re.MULTILINE),
+]
+
+
+def _strip_qwen3_section_markers(text: str) -> str:
+    """2026-07-15 #P2: 剥除 qwen3:8b 内部 section marker（不让泄露给用户）
+
+    触发场景：qwen3:8b 走 ollama OpenAI-compat 时会把内部 prompt 结构
+    (| tool___start | | topic overview | 等) 写进 content 字段, 用户直接看到
+    内部格式而不是自然语言回答. 这个函数只剥除**整行都是 marker** 的情况
+    (保留正常 markdown 表格和带文本的行), 不影响正文内容.
+
+    边界:
+    - 只剥除整行 marker, 不影响 `| xxx |` 在句子中间的使用
+    - 剥除后剩余 < 10 字符 → 保留原文（防误杀, 兜底）
+    - 文本本身 < 30 字符 → 不剥除（短文本不会有 marker）
+    """
+    import re
+    if not text or len(text) < 30:
+        return text
+
+    result = text
+    for pat in _QWEN3_SECTION_MARKER_PATTERNS:
+        result = pat.sub("", result)
+
+    # 清理连续空行（marker 剥除后可能留 3+ 空行）
+    result = re.sub(r"\n{3,}", "\n\n", result)
+
+    # 兜底: 剥除后剩余 < 10 字符 → 保留原文（防误杀, 真正短内容不应剥）
+    meaningful = result.strip().rstrip("。，、；！？ \n\t")
+    if len(meaningful) < 10:
+        return text
 
     return result
 
@@ -1318,6 +1368,8 @@ class AgenticLoop:
             # 与 _synthesize_stream 内部后处理**完全镜像**——必须保持一致
             final_text, _ = _extract_rich_block_json(accumulated_text)
             final_text = _strip_fake_tool_calls(final_text)
+            # 2026-07-15 #P2: 剥 qwen3:8b 内部 section marker (| tool___start | 等)
+            final_text = _strip_qwen3_section_markers(final_text)
             pre_strip_len = len(final_text)
             final_text = _strip_meta_thinking(final_text)
             meta_was_stripped = len(final_text) < pre_strip_len  # 元话语被剥掉了
@@ -1551,6 +1603,8 @@ class AgenticLoop:
             # Phase 1 已经被 _parse_fake_tool_calls 解析并 dispatch，但模型在 synthesis 阶段
             # 可能再次写出 fake tool_call（从训练里学来的输出格式），必须清掉
             text_without_json = _strip_fake_tool_calls(text_without_json)
+            # 2026-07-15 #P2: 剥 qwen3:8b 内部 section marker (| tool___start | 等)
+            text_without_json = _strip_qwen3_section_markers(text_without_json)
             # 2026-06-15 修复：剥除 LLM 写在正文开头的元话语/thinking 文本
             # 即使 prompts.py 加了硬规则，LLM 偶尔仍会输出"我需要..."、"用户问的是..."、
             # "开始回答吧"等内部独白。后端兜底剥除，避免泄露到用户视野
