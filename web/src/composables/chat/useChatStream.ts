@@ -401,6 +401,14 @@ export function useChatStream() {
 
     // ★ 2026-07-01 修复 bug 1a: 无 session 时(用户首次发消息) → 创建一个
     // 这是用户主动发消息的入口,符合"除非用户自己创建,不然不创建"的产品决策
+    //
+    // ★ 2026-07-15 P2-#chatHistory-appendMessage-404 修复: 本地新建 session 必须
+    //   同步到 server,否则后续 appendMessage 必触发 404/timeout (本次 chatHistory
+    //   appendMessage 失败真根因: sid=user_<ts>_<rand> 是 chatSessions.createSession
+    //   生成的纯本地 ID, 后端 chat_history_service.append_message 找不到 session 返 404)
+    //   修法: 标记 justCreatedLocalSession, 在 user message push 后串行
+    //         createServerSession → appendMessage,避免 race
+    let justCreatedLocalSession = false
     if (!sessionId.value) {
       sessionsStore.createSession()
       const newId = sessionsStore.currentId
@@ -408,6 +416,7 @@ export function useChatStream() {
       sessionId.value = newId
       messagesBySession.value[newId] = []
       loadedSessions.add(newId)
+      justCreatedLocalSession = true
     }
 
     // ★ 关键：捕获目标 sessionId 到闭包（防止 SSE yield 时用户已切走）
@@ -431,16 +440,38 @@ export function useChatStream() {
 
     // #043: user 消息 fire-and-forget 持久化到 server
     // CLAUDE.md 2026-06-12 "持久化失败必须 best-effort" 铁律 — appendMessageAsync 内部已 try/except
-    chatHistoryStore.appendMessageAsync(targetSessionId, {
-      role: 'user',
-      content,
-      rich_blocks: [],
-      tool_trace: {},
-      message_metadata: { source: 'chat_stream_user' },
-      client_msg_id: userMsg.client_msg_id,
-    }).then((persisted) => {
-      if (persisted?.id) userMsg.server_id = persisted.id
-    })
+    if (justCreatedLocalSession) {
+      // ★ 2026-07-15 修复: 新建 session 必须先注册 server 再 appendMessage
+      // 用 clientSessionId 让后端 create_session 复用本地 ID (chat_history_service.py:140-149)
+      // 不 await 顶层: 不阻塞流式 chat, 本地消息已立即可见
+      // 串行 IIFE: 避免 appendMessage 抢跑触发 404/timeout
+      void (async () => {
+        await chatHistoryStore.createServerSession({
+          clientSessionId: targetSessionId,
+          firstMessage: content,
+        })
+        const persisted = await chatHistoryStore.appendMessageAsync(targetSessionId, {
+          role: 'user',
+          content,
+          rich_blocks: [],
+          tool_trace: {},
+          message_metadata: { source: 'chat_stream_user_first' },
+          client_msg_id: userMsg.client_msg_id,
+        })
+        if (persisted?.id) userMsg.server_id = persisted.id
+      })()
+    } else {
+      chatHistoryStore.appendMessageAsync(targetSessionId, {
+        role: 'user',
+        content,
+        rich_blocks: [],
+        tool_trace: {},
+        message_metadata: { source: 'chat_stream_user' },
+        client_msg_id: userMsg.client_msg_id,
+      }).then((persisted) => {
+        if (persisted?.id) userMsg.server_id = persisted.id
+      })
+    }
 
     // Assistant 占位
     const assistantMsg: ChatMessage = {
