@@ -1,6 +1,7 @@
 from sqlalchemy import select, and_, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+import hashlib
 import logging
 import re
 
@@ -491,7 +492,14 @@ class KnowledgeService:
         """#043 自动拓展：从 qa-bench 高分问答创建知识卡片 (source_type='auto_expansion')
 
         设计要点:
-          1. 幂等: 通过 (source='qa-bench:qa_id' AND source_type='auto_expansion') 查重
+          1. 幂等: 双重查重
+             a) 主: (source='qa-bench:qa_id' AND source_type='auto_expansion') — qa_id 唯一时
+             b) 兜底: (source_type='auto_expansion' AND meta->>'content_hash'=X)
+                — qa_id 重复/为空/历史脏数据时仍能阻止重复入库
+             ★ 2026-07-15 修复: 3 条记录 source 全 NULL 但 title 完全一致 (id=38/86/135),
+               旧逻辑依赖 source 列查重失效,导致同一题目被入库 3 次。前端 RichContent 引用
+               渲染 3 张一模一样的卡。修法: 用 sha256(question + content[:500]) 写 meta.content_hash,
+                查重时也按 content_hash 兜底。
           2. 绕过 LLM 重分析 (qa-bench 已评估) → analysis_status='done'
           3. created_by=None 表示系统自动创建 (与 auto_research 一致)
           4. quality_score = score/5.0; knowledge_type = scope (用于过滤)
@@ -499,7 +507,7 @@ class KnowledgeService:
 
         Returns: 已存在时返回旧行 (调用方跳过计数), 新建时返回新行
         """
-        # 1. 幂等查重
+        # 1a. 主查重: 按 source='qa-bench:qa_id'
         source_tag = f"qa-bench:{qa_id}"
         result = await self.db.execute(
             select(Knowledge).where(
@@ -513,6 +521,24 @@ class KnowledgeService:
                 f"[#043] 自动拓展已存在 (qa_id={qa_id}, knowledge_id={existing.id}), 跳过"
             )
             return existing
+
+        # 1b. 兜底查重: 按 content_hash (qa_id 重复/为空/source 脏时仍能防重复入库)
+        content_hash = hashlib.sha256(
+            f"{(question or '').strip()}|{(content or '')[:500]}".encode("utf-8")
+        ).hexdigest()[:32]
+        result_hash = await self.db.execute(
+            select(Knowledge).where(
+                (Knowledge.source_type == "auto_expansion")
+                & text("meta->>'content_hash' = :content_hash")
+            ).params(content_hash=content_hash)
+        )
+        existing_hash = result_hash.scalar_one_or_none()
+        if existing_hash:
+            logger.info(
+                f"[#043] 自动拓展 content_hash 兜底命中 (qa_id={qa_id}, "
+                f"knowledge_id={existing_hash.id}), 跳过"
+            )
+            return existing_hash
 
         # 2. 构造标题与内容
         title = f"[自动拓展-{qa_id}] {question[:60]}"
@@ -529,6 +555,8 @@ class KnowledgeService:
         )
 
         # 3. 构造 meta (RichBlock 数据 + qa-bench 元信息)
+        # ★ 2026-07-15: 加 content_hash 兜底 (sha256(question|content[:500])[:32])
+        #   供入库查重 + 历史重复合并 admin CLI 使用
         meta = {
             "qa_id": qa_id,
             "intent": intent,
@@ -536,6 +564,7 @@ class KnowledgeService:
             "score": score,
             "tool_calls": tool_calls or [],
             "rich_blocks": rich_blocks or [],
+            "content_hash": content_hash,
         }
 
         # 4. 入库
@@ -806,7 +835,7 @@ class KnowledgeService:
             result = await self.db.execute(stmt)
             rows = result.all()
 
-            return [
+            raw_results = [
                 {
                     "id": row.Knowledge.id,
                     "title": row.Knowledge.title,
@@ -818,6 +847,8 @@ class KnowledgeService:
                 }
                 for row in rows
             ]
+            # ★ 2026-07-15 修复: 防御性按 title 去重 (历史重复入库导致 3+ 条同 title)
+            return self._dedup_search_results_by_title(raw_results)
         except Exception:
             # pgvector 不可用，回退到关键词搜索
             return await self._search_keyword_fallback(query, top_k, category)
@@ -840,7 +871,7 @@ class KnowledgeService:
         stmt = stmt.limit(top_k)
         result = await self.db.execute(stmt)
         rows = result.scalars().all()
-        return [
+        raw_results = [
             {
                 "id": r.id,
                 "title": r.title,
@@ -852,6 +883,57 @@ class KnowledgeService:
             }
             for r in rows
         ]
+        # ★ 2026-07-15 修复: 防御性按 title 去重
+        return self._dedup_search_results_by_title(raw_results)
+
+    @staticmethod
+    def _dedup_search_results_by_title(results: List[dict]) -> List[dict]:
+        """搜索结果按 title 去重, 保留 score 最高的条目
+
+        ★ 2026-07-15 修复: 防御性兜底, 防止历史脏数据 (DB 中多条同 title 重复入库)
+        导致前端 RichContent 引用渲染多张一模一样卡片。
+        设计:
+          - 同 title → 只保留 score 最高 (语义搜索 score 越接近 1 越相关)
+          - 平局 → 保留 id 最大 (新数据优先, 假设是后期 re-analysis 后的版本)
+          - 保持原始顺序 (按 score 降序, 入参已排序)
+          - 空 title 直接跳过 (不入 dedup map, 也不入输出)
+        """
+        if not results:
+            return results
+        # 1. 每个 title 的最佳 id
+        best_id_by_title: dict[str, int] = {}
+        for r in results:
+            title = (r.get("title") or "").strip()
+            if not title:
+                continue
+            rid = r["id"]
+            rscore = r.get("score", 0.0)
+            if title not in best_id_by_title:
+                best_id_by_title[title] = rid
+                continue
+            # 在 results 中找 prev
+            prev_id = best_id_by_title[title]
+            prev = next((x for x in results if x["id"] == prev_id), None)
+            if prev is None:
+                best_id_by_title[title] = rid
+                continue
+            if rscore > prev.get("score", 0.0) or (
+                rscore == prev.get("score", 0.0) and rid > prev_id
+            ):
+                best_id_by_title[title] = rid
+        # 2. 按原始顺序输出, 每 title 只输出 1 次 (the best)
+        # 找到 title 第一次出现且是 best 的位置
+        seen: set = set()
+        output: list[dict] = []
+        for r in results:
+            title = (r.get("title") or "").strip()
+            if not title or title in seen:
+                continue
+            # 第一次出现的 title: 仅当它是 best 时 append
+            if best_id_by_title.get(title) == r["id"]:
+                seen.add(title)
+                output.append(r)
+        return output
 
     async def reanalyze(self, knowledge_id: int):
         """重新分析指定知识条目（嵌入 + LLM 分析 + 关联）"""
