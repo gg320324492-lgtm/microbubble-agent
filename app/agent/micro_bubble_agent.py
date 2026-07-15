@@ -108,9 +108,29 @@ async def _build_team_overview_text(db, max_members: int = 30, max_projects: int
             select(Member)
             .where(Member.is_active == True)  # noqa: E712
             .order_by(Member.role.desc(), Member.name.asc())
-            .limit(max_members)
+            .limit(max_members + 10)  # 多取 10 个, 过滤测试账号后再限 max_members
         )
-        members = members_rows.scalars().all()
+        all_members = members_rows.scalars().all()
+
+        # 2026-07-15 #P2 反幻觉修复: 过滤测试账号 (drive_test, 测试小助手)
+        # 避免 Alice/Bob/Charlie/测试小助手 出现在 team_overview 顶部误导用户
+        # 识别规则: username 含 "test" 或 name 含 "Test" / "测试"
+        def is_test_account(m) -> bool:
+            username = (m.username or "").lower()
+            name = m.name or ""
+            if "test" in username or "test" in name.lower():
+                return True
+            if name in ("测试小助手", "xiaoqi_testbot", "xiaoqi_testbot_2"):
+                return True
+            if username in ("xiaoqi_testbot", "xiaoqi_testbot_2"):
+                return True
+            return False
+
+        members = [m for m in all_members if not is_test_account(m)][:max_members]
+        logger.debug(
+            f"team_overview filtered: {len(all_members)} total -> {len(members)} real "
+            f"({len(all_members) - len(members)} test accounts removed)"
+        )
 
         # 活跃项目
         projects_rows = await db.execute(
