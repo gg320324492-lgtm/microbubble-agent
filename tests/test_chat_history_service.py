@@ -65,6 +65,46 @@ class TestChatSessionCRUD:
             )
         assert "404" in str(exc_info.value) or "NotFound" in str(exc_info.value)
 
+    # 2026-07-15 P2-#chatHistory-appendMessage-404 修复回归
+    @pytest.mark.asyncio
+    async def test_create_session_跨用户_client_session_id_撞车_改用后端生成(self, db, test_member, admin_member):
+        """用户 A 已占用 client_session_id "user_1782916607641_ddzr" → 用户 B 复用同 ID 不应 404
+        应改用后端生成的 user_<ts>_<8hex> 格式 ID,返回新行而非冲突
+        修复前: create_session 走 get_session 调 _ensure_owned 抛 NotFoundException → 404
+        修复后: 跳过 _ensure_owned,发现是别人的 ID 直接改用后端生成 → 201
+        """
+        # 用户 A 占 ID
+        await create_session(
+            db, user_id=admin_member.id, client_session_id="collide_id_001",
+        )
+        # 用户 B 尝试复用同 ID
+        b_session = await create_session(
+            db, user_id=test_member.id, client_session_id="collide_id_001",
+            first_message="B 的消息",
+        )
+        # 验证: 返回的不是 client_session_id,而是后端生成的新 ID
+        assert b_session.id != "collide_id_001"
+        assert b_session.id.startswith("user_")
+        # B 的会话属于 B 自己
+        assert b_session.user_id == test_member.id
+        # A 的原始会话未受影响
+        a_session = await get_session(
+            db, user_id=admin_member.id, session_id="collide_id_001", include_deleted=True,
+        )
+        assert a_session.id == "collide_id_001"
+        assert a_session.user_id == admin_member.id
+
+    @pytest.mark.asyncio
+    async def test_create_session_自己复用_client_session_id_幂等(self, db, test_member):
+        """同一 user 重复 create_session 同 client_session_id → 返回同一行 (幂等)"""
+        s1 = await create_session(
+            db, user_id=test_member.id, client_session_id="idempotent_001",
+        )
+        s2 = await create_session(
+            db, user_id=test_member.id, client_session_id="idempotent_001",
+        )
+        assert s1.id == s2.id == "idempotent_001"
+
     @pytest.mark.asyncio
     async def test_list_sessions_分页(self, db, test_member):
         """创建 N 个会话 + 分页查询"""

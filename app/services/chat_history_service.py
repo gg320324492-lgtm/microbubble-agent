@@ -139,13 +139,27 @@ async def create_session(
     first_message: Optional[str] = None,
     client_session_id: Optional[str] = None,
 ) -> ChatSession:
-    """创建会话（可选同时创建首条 user 消息）"""
+    """创建会话（可选同时创建首条 user 消息）
+
+    ★ 2026-07-15 P2-#chatHistory-appendMessage-404 修复:
+      client_session_id 与其他用户撞车时不再 404,
+      而是改用后端生成新 ID 并返回 (前端拿 server-returned id 用)
+      原 bug: get_session(...) 走 _ensure_owned, 别人 ID 必 raise NotFoundException
+    """
     # session_id：优先用 client_session_id（localStorage 兼容），否则后端生成
     if client_session_id:
-        # 检查是否已存在（幂等）
-        existing = await get_session(db, user_id, client_session_id, include_deleted=True)
+        # 检查是否已存在（仅查存在性,不鉴权,避免与其他用户撞车时报 NotFoundException）
+        stmt_check = select(ChatSession).where(ChatSession.id == client_session_id).limit(1)
+        existing = (await db.execute(stmt_check)).scalar_one_or_none()
         if existing:
-            return existing
+            if existing.user_id == user_id:
+                # ★ 当前用户已用此 ID,幂等复用 (Phase 5 旧数据迁移必备)
+                return existing
+            # 别人的 ID → 不能复用,改用后端生成 (避免 PK 冲突)
+            client_session_id = None
+
+    if client_session_id:
+        # 不存在 + 我的 → 用本地 ID
         session_id = client_session_id
     else:
         # 生成 "user_<ts>_<8hex>" 格式
