@@ -134,3 +134,10 @@ tunnel/start-ssh-tunnel.vbs.tmp
 **/id_ed25519.pub.bak
 **/*.pem
 **/*.key
+
+# Windows 绝对路径误识别兜底 (Git Bash 把 `C:\Users\...` 当成相对路径)
+# 触发场景: ~/.claude/projects/.../MEMORY.md 等 user 项目 memory 路径
+#           每次 git status 都会显示为 untracked, 实际文件在 repo 外
+# 修法: 忽略任何以 [A-Z]: 开头的"路径" (Windows drive letter)
+#       git 会跳过这些误识别, git status 输出真正 clean
+/[A-Za-z]:*
