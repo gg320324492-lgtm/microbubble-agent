@@ -6,7 +6,7 @@ POST /merge-chunks, GET /upload-status。
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, UploadFile, File, Query, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Query, HTTPException, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -23,10 +23,17 @@ router = APIRouter()
 
 @router.post("/meetings/start-recording")
 async def start_recording(
+    request: Request,
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """创建录音会议（零配置，自动生成标题）"""
+    """创建录音会议（零配置，自动生成标题）
+
+    2026-07-16 +060: 加 Request 参数接收 User-Agent header 落库, 便于事后排查
+       兼容性失败是哪类设备 (HarmonyOS ArkWeb / iOS Safari / 企业微信 X5 等)。
+    """
+    # 2026-07-16 +060: 截断 UA 防爆, VARCHAR(500) 上限
+    user_agent = (request.headers.get('User-Agent') or '')[:500]
     now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
     meeting = Meeting(
         title="正在听会",  # 占位，commit 拿到 id 后补全为 "正在听会（ID {id}）"
@@ -36,6 +43,7 @@ async def start_recording(
         upload_status="pending",
         last_chunk_index=-1,  # 显式置 -1 便于孤儿扫描判断
         created_by=current_user.id,
+        user_agent=user_agent,  # 2026-07-16 +060
     )
     db.add(meeting)
     await db.commit()
@@ -112,6 +120,9 @@ async def upload_audio_chunk(
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
+    # 2026-07-16 修复 (安全加固): 越权守卫 — 任意登录用户可上传分片, 加 created_by 校验
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可上传分片")
     if meeting.status not in ("recording",):
         raise HTTPException(status_code=400, detail=f"会议不在录音状态 (status={meeting.status})")
 
@@ -153,6 +164,9 @@ async def merge_chunks_endpoint(
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
+    # 2026-07-16 修复 (安全加固): 越权守卫
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可合并分片")
 
     if (meeting.last_chunk_index is None) or (meeting.last_chunk_index < 0):
         raise HTTPException(
@@ -226,11 +240,16 @@ async def stop_recording(
     - 必须 last_chunk_index >= 0（至少收到一个 chunk）
     - 必须 audio_url 非空（旧版一次性上传）或 upload_status='completed'（新版 chunked）
     - 否则返回 400，会议保持 'recording' 状态（不触发 Celery）
+
+    2026-07-16 安全加固: 加 created_by 越权守卫, 防止其他用户停止他人会议。
     """
     result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one_or_none()
     if not meeting:
         raise HTTPException(status_code=404, detail="会议不存在")
+    # 2026-07-16 修复 (安全加固): 越权守卫
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可停止录音")
     if meeting.status != "recording":
         raise HTTPException(status_code=400, detail="会议不在录音状态")
 
@@ -304,6 +323,41 @@ async def get_audio_url(
     # 生成 presigned URL（1 小时有效）
     url = file_service.get_url(meeting.audio_url, expires=3600)
     return {"audio_url": url, "duration": meeting.audio_duration}
+
+
+@router.post("/meetings/{meeting_id}/cancel-recording", status_code=200)
+async def cancel_recording(
+    meeting_id: int,
+    current_user: Member = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """录音启动失败时 rollback 会议 (status=recording → status=error)
+
+    2026-07-16 新增 (#207 完整修复链): 前端 AudioRecorder.handleStart catch 块
+      在录音启动失败 (getUserMedia timeout / MediaRecorder 不支持 / 权限拒绝)
+      时调用此端点, 把已创建的会议从 recording 切到 error, 不留孤儿会议等
+      Celery 60min 后自动清理。
+    守卫: 仅 created_by=current_user 的 meeting 可取消。
+    幂等: 非 recording 状态直接返 cancelled=False (不抛错)。
+    """
+    import logging
+    log = logging.getLogger("microbubble.meeting_recording")
+
+    result = await db.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting = result.scalar_one_or_none()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="会议不存在")
+    if meeting.created_by != current_user.id:
+        raise HTTPException(status_code=403, detail="仅创建者可取消录音")
+    if meeting.status != "recording":
+        # 幂等: 已 stop / error / processing 不再处理
+        return {"id": meeting.id, "status": meeting.status, "cancelled": False}
+    meeting.status = "error"
+    meeting.error_reason = "录音启动失败已取消 (前端 catch 块调用 cancel-recording)"
+    await db.commit()
+    await db.refresh(meeting)
+    log.info(f"Meeting {meeting_id} 取消录音: status recording → error")
+    return {"id": meeting.id, "status": meeting.status, "cancelled": True}
 
 
 import logging

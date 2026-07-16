@@ -116,6 +116,10 @@ class Settings(BaseSettings):
     # 运维/测试时可临时缩短（如 0 立即清空）— 与 TRASH_RETENTION_DAYS 范式一致
     CHAT_HISTORY_RETENTION_DAYS: int = 30
 
+    # 2026-07-16 +060: 孤儿会议清理阈值 (默认 30 分钟, 旧版硬编码 60min 太长)
+    # 录音超过此分钟数仍未 stop 的会议, Celery beat 自动标 error。
+    ORPHAN_MEETING_TIMEOUT_MINUTES: int = 30
+
     # 2026-06-19：开始听会 → 不再自动从会议决策/action items 创建任务
     # 关闭后 _auto_create_task_from_meeting 不再被调用，user 需手动建任务
     # 设 True 可恢复旧行为（不推荐，决策不一定都该是任务）
