@@ -4,6 +4,26 @@ import { createPinia, setActivePinia } from 'pinia'
 // fake-indexeddb: jsdom 默认不提供 IndexedDB, 引入 fake-indexeddb 启用持久化测试
 import 'fake-indexeddb/auto'
 
+// 2026-07-16 (#207): jsdom 缺 MediaRecorder / MediaStream / AudioContext, 注入 polyfill
+import { FakeMediaRecorder, FakeMediaStream, FakeAudioContext } from './setup-media-recorder.js'
+
+if (typeof globalThis.MediaRecorder === 'undefined') {
+  globalThis.MediaRecorder = FakeMediaRecorder
+}
+if (typeof globalThis.MediaStream === 'undefined') {
+  globalThis.MediaStream = FakeMediaStream
+}
+if (typeof globalThis.AudioContext === 'undefined') {
+  globalThis.AudioContext = FakeAudioContext
+}
+if (typeof globalThis.navigator !== 'undefined' && !globalThis.navigator.mediaDevices) {
+  Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+    value: { getUserMedia: () => Promise.resolve(new FakeMediaStream()) },
+    writable: true,
+    configurable: true,
+  })
+}
+
 // 每个测试前重置 Pinia
 beforeEach(() => {
   setActivePinia(createPinia())
