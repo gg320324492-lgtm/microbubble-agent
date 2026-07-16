@@ -57,6 +57,9 @@ class Meeting(Base, TimestampMixin):
     # 2026-07-12 死代码清理: 删 5 个 audio_archive_* 列 (audio_archive_service.py 孤儿, 列 write-only)
     # alembic 059_drop_audio_archive_columns.py DROP COLUMN IF EXISTS
 
+    # 2026-07-16 +060: 落库 User-Agent, 便于事后排查兼容性失败 (HarmonyOS ArkWeb / iOS Safari / 企业微信 X5)
+    user_agent = Column(String(500), nullable=True)
+
     # Wave 3a: 跨会议关联
     agenda = Column(JSON, nullable=True)
     # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
