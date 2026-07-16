@@ -57,7 +57,8 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import axios from 'axios'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useGlobalRecorder } from '@/composables/useGlobalRecorder'
 import { useRecordingState } from '@/composables/useRecordingState'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -137,8 +138,42 @@ async function handleStart() {
     await start()
     emit('recording-start')
   } catch (err) {
-    console.error('录音启动失败:', err)
-    alert('无法访问麦克风，请检查浏览器权限')
+    // 2026-07-16 修复 (#207 完整流程): 精细化错误处理 + catch 块完整 rollback
+    //   1. 按 DOMException error name 分类给用户精确引导
+    //   2. 已创建的会议: 调 cancel-recording 把 status=recording → error
+    //   3. 已设置的 meetingIdRef: 清空 (防 store 残留导致 ghost 录音)
+    //   4. 已开启的录音状态指示器: 清空
+    console.error('[AudioRecorder] 录音启动失败:', err)
+    const errorName = err?.name || ''
+    let userHint = ''
+    if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
+      userHint = '麦克风权限被拒绝, 请在浏览器设置中允许麦克风访问。'
+    } else if (errorName === 'NotFoundError') {
+      userHint = '未检测到麦克风设备, 请检查硬件连接。'
+    } else if (errorName === 'NotReadableError') {
+      userHint = '麦克风被其他程序占用, 请关闭后重试。'
+    } else if (errorName === 'NotSupportedError' || errorName === 'TypeError') {
+      userHint = '当前浏览器不支持录音, 请使用 Chrome / Edge / Safari 14+ 浏览器。'
+    } else if (errorName === 'SecurityError') {
+      userHint = '当前页面不安全, 请使用 HTTPS 或 localhost 访问。'
+    } else if (errorName === 'AbortError') {
+      userHint = '录音启动被中断, 请重试。'
+    } else {
+      // getUserMedia timeout / 其他自定义错误
+      userHint = (err?.message || err) || '未知错误'
+    }
+
+    if (meetingIdRef.value) {
+      try {
+        await axios.post(`/api/v1/meetings/${meetingIdRef.value}/cancel-recording`)
+        console.warn('[AudioRecorder] 已 cancel meeting', meetingIdRef.value)
+      } catch (cancelErr) {
+        console.error('[AudioRecorder] cancel-recording 失败:', cancelErr)
+      }
+      meetingIdRef.value = null
+    }
+    clearRecordingIndicator()
+    ElMessage.error('录音启动失败: ' + userHint)
   }
 }
 

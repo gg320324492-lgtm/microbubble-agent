@@ -6,6 +6,58 @@
 
 import { ref, readonly } from 'vue'
 
+// ===== 模块级工具函数 =====
+
+/**
+ * getUserMedia 调用加 Promise.race timeout 兜底 (#207 直接根因)
+ * 2026-07-16 修复: HarmonyOS 6.x ArkWeb 6.0 内核 + 企业微信 X5 老内核 +
+ *   部分内嵌 WebView 调 getUserMedia 既不 resolve 也不 reject, UI 永久卡死。
+ *   修复: 5s 内未拿到 stream 主动 reject, 让 handleStart catch 块能感知失败并 rollback 会议。
+ * @param {number} timeoutMs
+ * @returns {Promise<MediaStream>}
+ */
+function getUserMediaWithTimeout(timeoutMs) {
+  const getUserMediaPromise = navigator.mediaDevices.getUserMedia({ audio: true })
+  const timeoutPromise = new Promise((_, __reject) =>
+    setTimeout(() => __reject(new Error(
+      `getUserMedia ${timeoutMs}ms timeout (浏览器可能不支持, 如 HarmonyOS ArkWeb / 企业微信 X5)`
+    )), timeoutMs)
+  )
+  return Promise.race([getUserMediaPromise, timeoutPromise])
+}
+
+/**
+ * 探测浏览器支持的 MediaRecorder MIME 类型。
+ * 2026-07-16 修复 (#207): 主录音路径原本硬编码 'audio/webm;codecs=opus',
+ *   iOS Safari / HarmonyOS ArkWeb / 企业微信 X5 / 老 WebView 不支持即抛
+ *   NotSupportedError, 导致录音链路直接中断。
+ * 修复: 探测链 webm;opus → webm → ogg;opus → mp4, 任一支持即用。
+ *   (其他 7 个录音组件 VoiceRecorder/VoiceTestDialog/VoiceprintEnrollDialog
+ *    /mobile/VoiceprintEnrollFlow/mobile/VoiceTestFlow/MobileChatView
+ *    已有类似探测, 此处统一抽到 useGlobalRecorder)
+ * @returns {string} 支持的 MIME 类型, 空字符串表示走浏览器默认
+ */
+function getSupportedMimeType() {
+  if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
+    return ''  // 浏览器不支持 MediaRecorder (e.g. 企业微信 X5 老内核)
+  }
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',  // iOS Safari 必须
+  ]
+  for (const m of candidates) {
+    try {
+      if (MediaRecorder.isTypeSupported(m)) return m
+    } catch {
+      // 单个候选探测抛错不影响整体
+      continue
+    }
+  }
+  return ''  // 都不支持, 走浏览器默认
+}
+
 // ===== 模块级状态（跨组件持久） =====
 let mediaRecorder = null
 let mediaStream = null
@@ -39,7 +91,7 @@ async function start() {
   if (!recorderStartEpoch) recorderStartEpoch = Date.now()
   // chunkIndex 不重置 — 留给 setChunkStartIndex() 控制（刷新后从 last_chunk_index+1 续传）
 
-  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+  mediaStream = await getUserMediaWithTimeout(5000)
 
   // 音频分析
   audioContext = new AudioContext()
@@ -50,7 +102,11 @@ async function start() {
   dataArray = new Uint8Array(analyser.frequencyBinCount)
 
   // MediaRecorder
-  mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' })
+  // 2026-07-16 修复 (#207): 不再硬编码 webm/opus, 用探测链兜底 iOS Safari / HarmonyOS / 老 WebView
+  const supportedMime = getSupportedMimeType()
+  mediaRecorder = supportedMime
+    ? new MediaRecorder(mediaStream, { mimeType: supportedMime })
+    : new MediaRecorder(mediaStream)
   audioChunks = []
 
   mediaRecorder.ondataavailable = (e) => {
