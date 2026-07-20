@@ -41,6 +41,12 @@ if not SKIP_DB_SETUP:
     from app.main import app  # noqa: E402
     from app.models.member import Member  # noqa: E402
 
+    # W8 (主指挥亲自修): conftest 条件 import 之前 force import app.models.
+    # 旧只 import Member → Base.metadata.tables 只有 Member (1 张)
+    # → E2E 报 "knowledge_extractions table does not exist"
+    # 修复: 触发 app.models.__init__ 全部 import, Base 注册 39 张表
+    import app.models  # noqa: E402,F401
+
     TEST_DB_URL = os.getenv(
         "TEST_DATABASE_URL",
         "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test",
@@ -82,23 +88,31 @@ if not SKIP_DB_SETUP:
         return _engine
 
     def _get_test_session_maker():
-        """懒 async_sessionmaker (与 _get_conftest_engine 同 loop 缓存)."""
-        global _test_session_maker, _test_session_maker_loop
-        try:
-            current_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            try:
-                current_loop = asyncio.get_event_loop()
-            except RuntimeError:
-                current_loop = None
-        if _test_session_maker is None or _test_session_maker_loop is not current_loop:
-            _test_session_maker = async_sessionmaker(
-                _get_conftest_engine(),
-                class_=AsyncSession,
-                expire_on_commit=False,
-            )
-            _test_session_maker_loop = current_loop
-        return _test_session_maker
+        """W8.1 (主指挥亲自修): 每次 new sessionmaker, 不 cache.
+
+        原 cache 模式 (_test_session_maker + _test_session_maker_loop) 跟 _engine
+        同步失效 — setup_db teardown dispose engine 后, 下次 _get_conftest_engine
+        重建新 engine (loop 变化触发), 但 _test_session_maker cache 没失效
+        (loop 检查只看是否一致, 不检查底层 engine 是否被 dispose).
+
+        最稳的修法: sessionmaker 每次 new, 走 _get_conftest_engine() 拿当前 loop 的
+        engine. 性能 trade-off 极小 (async_sessionmaker 创建 O(微秒)).
+        """
+        return async_sessionmaker(
+            _get_conftest_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+
+
+    def _reset_conftest_engine_cache():
+        """W8.1 (主指挥亲自修): 保留供未来 cache 模式需要时复用.
+
+        当前 _get_test_session_maker 不再 cache, _reset_conftest_engine_cache
+        主要影响 _engine 重建 (下次 _get_conftest_engine 检测 _engine is None).
+        """
+        global _engine
+        _engine = None
 
     # 向后兼容: 老 `from tests.conftest import engine, TestSession` 路径仍可用
     # 但强烈建议新代码用 _get_conftest_engine() / _get_test_session_maker()
@@ -134,9 +148,18 @@ if SKIP_DB_SETUP:
         """SKIP_DB_SETUP=1 时使用同步 fixture，避免 async teardown 绑定已关闭事件循环。"""
         yield
 else:
-    @pytest_asyncio.fixture(scope="session", autouse=True)
+    @pytest_asyncio.fixture(scope="function", autouse=True)
     async def setup_db():
-        """创建测试表 (W1 T1: 用 _get_conftest_engine() 走 lazy path)."""
+        """创建测试表 (W1 T1: 用 _get_conftest_engine() 走 lazy path).
+
+        scope='function' 而不是 'session' (W6 修复):
+        - pytest_asyncio 自动 inject function-scope event_loop fixture
+        - session-scope setup_db + function-scope event_loop 触发 ScopeMismatch
+          ("function scoped fixture event_loop with a session scoped request object")
+        - 改 function-scope 后, 每个 test 触发 setup_db (drop_all → create_all)
+        - 性能 trade-off: 跨 test 重复建/删表, 但本项目 test suite 量级 OK
+        - 跨 loop lazy 仍正确: _get_conftest_engine() 按 loop 重建 engine
+        """
         conftest_engine = _get_conftest_engine()
         async with conftest_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -144,6 +167,7 @@ else:
         async with conftest_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
         await conftest_engine.dispose()
+        _reset_conftest_engine_cache()  # W8.1: dispose 后必须重置, 否则 db fixture 拿到 stale sessionmaker
 
 
 @pytest_asyncio.fixture
