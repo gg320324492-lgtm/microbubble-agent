@@ -103,7 +103,10 @@ class TestNewStreamEvents:
 
 
 class TestStreamEventTypeContainsAllNew:
-    """StreamEventType Literal 必须包含 6 个新类型 + 原 9 类（共 15）"""
+    """StreamEventType Literal 必须包含 (>=15) 个类型 (历史 + 方案 C + #043 + 留未来扩展)
+
+    W1 (2026-07-21) T1 other fix: 数字断言改 >= (兼容 #043 加的 message_persisted + sync_required)
+    """
 
     def test_all_event_types_present(self):
         from typing import get_args
@@ -113,14 +116,20 @@ class TestStreamEventTypeContainsAllNew:
             "text_delta", "tool_use", "tool_result", "rich_block",
             "thinking", "brief", "detail", "error", "done",
         }
-        # 新 6 种
+        # 方案 C 6 种 (2026-06-14)
         expected_new = {
             "intent_detected", "plan_step", "tool_compressed",
             "synthesis_start", "critique", "retry",
         }
+        # #043 2 种 (2026-06-29) 账号持久化聊天历史
+        expected_043 = {
+            "message_persisted", "sync_required",
+        }
         assert expected_old.issubset(all_types)
         assert expected_new.issubset(all_types)
-        assert len(all_types) == 15
+        assert expected_043.issubset(all_types)
+        # 数字断言改 >= 17 (兼容未来扩展, 防止 stale 数字锁死)
+        assert len(all_types) >= 17
 
 
 class TestRichBlockNewFields:

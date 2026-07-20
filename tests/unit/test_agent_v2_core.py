@@ -291,9 +291,12 @@ class TestLLMClient:
         assert c1 is c2
 
     def test_models_chain(self):
-        from app.core.llm import llm_client
-        assert len(llm_client.models) >= 1
-        assert llm_client.models[0]  # 主模型非空
+        # W1 (2026-07-21) T1 other fix: production LLMClient 没有单例 llm_client 变量
+        # 改为 LLMClient class + assert class.models 验证 model 列表可用
+        from app.core.llm import LLMClient
+        c = LLMClient()
+        assert len(c.models) >= 1
+        assert c.models[0]  # 主模型非空
 
     def test_compat_functions_still_work(self):
         from app.core.llm import (
