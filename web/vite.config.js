@@ -6,6 +6,17 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import NutUIResolver from '@nutui/nutui/dist/resolver'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// 2026-07-20 cache-bust 时间窗: 全局 __BUILD_TIMESTAMP__ 常量
+// 注入时机: build 启动时 (process.hrtime / Date.now), 在 main.js 入口 console.log 出来
+// 浏览器看到的时间戳可帮运维快速判断:
+//   1. 部署是否真的生效 (用户报 cache miss → 对比 dist hash + 时间戳)
+//   2. CDN/边缘节点是否回源 (同 URL 不同时间戳 = 边缘 cache)
+//   3. 用户是否拿到旧 build (DevTools 顶部 console + 时间戳 + 版本号)
+// 设计: 用 ISO 字符串 (人可读) 而非 epoch ms, 同时附 build_id (随机 6 字符, 多容器并行 build 区分)
+// ⚠️ 与 main.js 的 console.log 必须同步, 否则用户看不到时间戳 = 功能无效
+const BUILD_TIMESTAMP = new Date().toISOString()
+const BUILD_ID = Math.random().toString(36).slice(2, 8)
+
 // webhint cache-busting 修复：vite-plugin-pwa 输出的 manifest.webmanifest
 // 不参与 Vite rollup hash 流程，文件名固定 → webhint cache-busting 永远报警告。
 // 修复路径：**完全在 postbuild Node 脚本里处理** (`scripts/postbuild-fix-manifest.js`)。
@@ -289,6 +300,13 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src')
     }
+  },
+  // 2026-07-20 cache-bust: 全局常量注入 (与 main.js console.log 同步)
+  // 浏览器 DevTools 顶部 console 看 [build] 行 → 知道是哪个 build
+  // 运维诊断: 用户报"页面没更新" → 让他截图 console 第一行, 对比服务器部署时间
+  define: {
+    __BUILD_TIMESTAMP__: JSON.stringify(BUILD_TIMESTAMP),
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
   server: {
     port: 3000,

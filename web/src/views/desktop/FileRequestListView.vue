@@ -103,7 +103,10 @@
           <el-button @click="onCopyPreview">复制</el-button>
         </template>
       </el-input>
-      <p class="preview-hint">也可以让用户扫描下方二维码（TODO）</p>
+      <div v-if="previewUrl" class="preview-qr">
+        <p class="preview-hint">也可以让用户扫描下方二维码：</p>
+        <QrCode :value="previewUrl" :size="180" />
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -113,6 +116,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { useFileRequests } from '@/composables/useFileRequests'
+import QrCode from '@/components/common/QrCode.vue'
 
 const {
   requests,
@@ -334,6 +338,19 @@ onMounted(() => {
   font-size: 12px;
   color: var(--color-text-secondary);
   margin-top: 12px;
+}
+.preview-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+}
+.preview-qr .preview-hint {
+  margin-top: 0;
 }
 </style>
 
