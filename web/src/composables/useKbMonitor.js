@@ -21,6 +21,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000  // 5 分钟
+const POLL_TIMEOUT_MS = 30 * 1000       // 30 秒 (W2 T4 P2-C 2026-07-20: 后端慢响应防御)
 
 export function useKbMonitor() {
   const summary = ref(null)
@@ -33,13 +34,16 @@ export function useKbMonitor() {
   async function fetchSummary() {
     loading.value = true
     try {
-      const res = await axios.get('/api/v1/knowledge/auto-intake-summary')
+      // W2 T4 P2-C: axios timeout 30s 防御后端 hang, 超时 axios 会 reject with code='ECONNABORTED'
+      // message='timeout of 30000ms exceeded' → 进 catch → 跳过本轮, 下个 5min tick 自然重试
+      const res = await axios.get('/api/v1/knowledge/auto-intake-summary', { timeout: POLL_TIMEOUT_MS })
       summary.value = res.data
       lastUpdate.value = new Date()
       error.value = null
     } catch (e) {
+      // 超时 / 网络错 / 5xx 统一进 catch, 保留上次 data (W5 T5.4 教训)
+      // 不 console.error 噪音 (polling 30s timeout 在网络抖动时是正常路径)
       error.value = e.message || 'Failed to fetch KB summary'
-      // W5 T5.4: 保留上次数据, 不清空 (避免 UI 闪烁)
     } finally {
       loading.value = false
     }

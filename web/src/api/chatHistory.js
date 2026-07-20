@@ -123,9 +123,12 @@ export async function deleteSession(sid, { hard = false } = {}) {
  */
 export async function listMessages(sid, opts = {}) {
   const { page = 1, pageSize = 100, afterId = 0 } = opts
+  // W2 T4 P2-C (2026-07-20): 加 timeout 30s 防御后端慢响应 hang
+  // 跟同文件 syncFromLocal({ timeout: 30000 }) 一致 (那条已落地)
+  // 上游 fetchSessionFromServer / ensureSessionLoaded (P0-#1.6) catch 已有 console.warn 降级
   const { data } = await axios.get(
     `${BASE}/chat/sessions/${encodeURIComponent(sid)}/messages`,
-    { params: { page, page_size: pageSize, after_id: afterId } },
+    { params: { page, page_size: pageSize, after_id: afterId }, timeout: 30000 },
   )
   return data
 }
