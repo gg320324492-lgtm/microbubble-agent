@@ -239,6 +239,43 @@ if ! grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
     fi
 fi
 
+# 2026-07-20 webhint http-compression 补全：确保 6 类 PWA/静态资源 MIME 存在于 mime.types
+# 背景：webhint http-compression 规则要求这些资源带正确 Content-Type（配合 nginx gzip_types
+#   压缩），否则报 "resource should be served compressed / with correct type"。
+# ⚠️ 幂等：每类 content-type 先 grep 再注入（避免重复）。font/woff2 与 application/manifest+json
+#   上方已有专用块处理，此处兜底 idempotent（已存在 → grep 命中 → 跳过）。
+# ⚠️ 同扩展名冲突：image/x-icon 与 image/vnd.microsoft.icon 都映射 .ico，nginx 不允许同扩展名
+#   出现两次（duplicate extension 报错）。故两者共用一个 grep pattern —— 命中任一即跳过，
+#   保证 .ico 只被映射一次。font/woff 同理兼容 nginx 默认的 application/font-woff / font/woff。
+# ⚠️ 位置纪律：只改 http 块 include 的 mime.types（合并语义 additive），绝不在 server context 用
+#   types { } block（server context 完全覆盖，会让 .html/.css/.js 全变 octet-stream，白屏事故 0a29290）。
+ensure_mime() {
+    # $1 = content-type, $2 = 扩展名, $3 = 幂等 grep pattern（可选, ERE）
+    # 无 $3 → 用 grep -F 定值匹配 content-type（application/manifest+json 含 '+' 会破坏 ERE,
+    #        必须定值匹配）; 有 $3 → 用 grep -E 匹配（.ico / woff 共扩展名去重）。
+    ctype="$1"; ext="$2"; pat="$3"
+    if [ -n "$pat" ]; then
+        grep -qE "$pat" /etc/nginx/mime.types 2>/dev/null && return 0
+    else
+        grep -qF "$ctype" /etc/nginx/mime.types 2>/dev/null && return 0
+    fi
+    # 锚点用 types { 块开头（永远存在, 与缩进无关）—— 比 application/json 行锚点更稳
+    # （标准 nginx mime.types 条目有 4 空格缩进, ^application/json 会匹配失败）。
+    # 追加到块首作为第一条 entry, nginx 合法。GNU sed a\ 单行追加。
+    sed -i "/types[[:space:]]*{/a\\    ${ctype}    ${ext};" /etc/nginx/mime.types
+    if grep -qF "$ctype" /etc/nginx/mime.types 2>/dev/null; then
+        log "MIME added to mime.types: ${ctype} -> .${ext}"
+    else
+        log "ERROR: MIME sed injection failed for ${ctype}"
+    fi
+}
+ensure_mime 'font/woff2'                'woff2'
+ensure_mime 'application/wasm'          'wasm'
+ensure_mime 'application/manifest+json' 'webmanifest'
+ensure_mime 'image/x-icon'              'ico'  'image/(x-icon|vnd\.microsoft\.icon)'
+ensure_mime 'image/vnd.microsoft.icon'  'ico'  'image/(x-icon|vnd\.microsoft\.icon)'
+ensure_mime 'font/woff'                 'woff' '(font/woff[^2]|application/font-woff)'
+
 # ============================================================================
 # 2026-06-14 方案 C Stage 5 收尾：agent_traces 表迁移
 # 自动跑 alter_agent_traces_stage3.sql（加 7 列：intent/critique/status 等）
