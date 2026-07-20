@@ -18,6 +18,8 @@ import os
 from sentence_transformers import SentenceTransformer
 from typing import List, Optional
 
+from app.services.embedding_prompts import build_embedding_prompt
+
 logger = logging.getLogger("microbubble.embedding")
 
 # 从环境变量读取模型名，默认 Qwen3
@@ -103,21 +105,28 @@ def _get_model() -> Optional[SentenceTransformer]:
     return _model
 
 
-def generate_embedding_sync(text: str, for_query: bool = False) -> Optional[List[float]]:
+def generate_embedding_sync(
+    text: str,
+    for_query: bool = False,
+    has_query_prompt: bool = False,
+) -> Optional[List[float]]:
     """同步生成单条文本的 embedding，失败返回 None
 
     Args:
         text: 输入文本
         for_query: 是否为 query（True 时用 ST prompt 机制加指令前缀；False=document）
                   注意：当前项目所有调用都用 False (document 模式)，RAG 检索也是 document 模式
+        has_query_prompt: 模型是否支持 query prefix（Qwen3-Embedding/BGE-m3 等 instruction-tuned = True）
     """
     try:
         model = _get_model()
         if model is None:
             return None
         # Phase 2: 统一 ST 路径
-        # for_query=True 时用 ST 的 prompt 系统加前缀；document 不加前缀
-        prompt = None  # TODO: if for_query and has_query_prompt: prompt = ...
+        # for_query=True + has_query_prompt=True 时加 query 指令前缀（Qwen3/BGE 风格）；
+        # document 不加前缀（避免污染入库向量）
+        # 2026-07-20: prompt helper 抽到 embedding_prompts 避免测试时加载重型 ST 依赖
+        prompt = build_embedding_prompt(for_query, has_query_prompt)
         # ST 5.6.0 支持 prompt= 参数（pass 中文 prefix to match old wrapper behavior）
         arr = model.encode(
             [text],
@@ -150,12 +159,17 @@ async def generate_embedding(text: str, for_query: bool = False) -> Optional[Lis
         return None
 
 
-async def generate_embeddings(texts: List[str], for_query: bool = False) -> Optional[List[List[float]]]:
+async def generate_embeddings(
+    texts: List[str],
+    for_query: bool = False,
+    has_query_prompt: bool = False,
+) -> Optional[List[List[float]]]:
     """异步批量生成 embedding，失败返回 None
 
     Args:
         texts: 文本列表
         for_query: 保留兼容（当前所有调用都用 False）
+        has_query_prompt: 模型是否支持 query prefix（同 generate_embedding_sync）
     """
     model = _get_model()
     if model is None:
@@ -163,7 +177,7 @@ async def generate_embeddings(texts: List[str], for_query: bool = False) -> Opti
 
     def _encode():
         try:
-            prompt = None  # TODO: if for_query and has_query_prompt: prompt = ...
+            prompt = build_embedding_prompt(for_query, has_query_prompt)
             return model.encode(
                 texts,
                 prompt=prompt,
