@@ -1,6 +1,66 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-20)**: Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 + 17 commit 收官. **5 协调铁律** + **6 技术铁律** 沉淀. **9 批 multi-agent 任务全部上线 (W1-W10 + W1 重启 + W2 重启 + 5 worker P2 子任务)**. 详见下方"## [Unreleased] 2026-07-20" 段 + 8 个 memory 文件 (multi-agent-task-orchestration-baseline + orchestrator-mode-coordination-2026-07-20 + config-value-contract-regression-2026-07-20 + chat-share-celery-cleanup-2026-07-20 + kb-and-chat-timeout-2026-07-20 + localstorage-chat-session-ttl-2026-07-20 + session-polling-audit-2026-07-20).
+
+## [Unreleased] 2026-07-20
+
+### Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 (17 commit + 8 memory 沉淀)
+
+**P0 上线 (#009 Self-RAG 删除 + 录音全链路)**:
+- `7046fbbf` feat(cleanup): #009 Self-RAG 删除 (7/14 R5/R6 deep mode 6 轮 benchmark 证伪) — 139 文件 +4209/-12093
+- `9301b0de` merge: fix/office-preview-sandbox → main (#009 + 录音全链路 + Drive 美化 + TODO 实装)
+- `6d8d6145` test(recording): 补 4 录音后端单测覆盖 7/16 fix 链路 (35 PASS / 0.98s)
+
+**P1 收尾 (W1-W3)**:
+- `2775f1ff` feat(config): MEETING_USER_AGENT_MAX_LEN settings 字段 + 死代码测试清理 (39 PASS)
+- `9c88ba31` test(useDriveFiles): 修 5 fetchFiles 测试改 fetch mock (7 PASS)
+
+**P2/P3 清理 (W4-W8)**:
+- `c3004906` test(vitest): 修 3 个 useNetworkStatus + 1 个 recorder unhandled rejection (670 PASS)
+- `081c55e8` fix(redis): meeting_transcript_buffer LTRIM 200 契约回归 (TRANSCRIPT_BUFFER_MAX_ENTRIES 1000→200)
+- `f9130c34` test(isolation): 修 orphan_meeting_cleanup monkeypatch 跨文件泄露
+- `641e402f` fix(pytest): asyncio loop_scope function 修录音测试合跑冲突
+- `9ca41623` feat(kb): KB dedup admin CLI (3 段式 scan/validate/apply) + E2E 覆盖
+
+**P2 候选清单收尾 (W2 T3 审计报告 `8c401031` 推动)**:
+- `a37ef09b` feat(chat-share): Celery beat 主动清理过期 share (P2-A)
+- `f3e637cf` feat(config): KB polling + chat fetch 30s timeout 防御 (P2-C)
+- `1a0ecbed` feat(chat): localStorage chat session 90 天 TTL 防御 (P2-B)
+
+**W5+1 follow-up 4 层全闭环 + W2 留尾闭环**:
+- `ca0fb0a3` fix(redis): pool lazy init + loop-aware 修 transcript_buffer 单例 loop bug
+- `1a3b491a` test(useDriveFiles): 真实集成测试覆盖 5 场景 (12 case PASS)
+- `eafb2f47` fix(useDriveFiles): batchDownload 加 try/catch 兜底 (W2 留尾 round 2)
+
+**Memory 沉淀 (8 文件)**:
+- `multi-agent-task-orchestration-baseline.md` — 项目级协调范式锚点
+- `orchestrator-mode-coordination-2026-07-20.md` — 4 步议程 + 5 协调铁律
+- `config-value-contract-regression-2026-07-20.md` — 8 技术铁律
+- `chat-share-celery-cleanup-2026-07-20.md` — P2-A
+- `kb-and-chat-timeout-2026-07-20.md` — P2-C
+- `localstorage-chat-session-ttl-2026-07-20.md` — P2-B
+- `session-polling-audit-2026-07-20.md` — W2 T3 审计 + P2 候选
+- (docker-desktop-api-500-2026-07-20.md 已在前会话沉淀)
+
+**5 协调铁律**:
+1. 总指挥 ≠ 总执行
+2. 多 worker stash 隔离
+3. 严禁 main commit
+4. 边界立即拍板
+5. 6 点 curl 硬指标
+
+**6 技术铁律**:
+1. 默认值改动 4 重证据
+2. 测试契约漂移优先改测试
+3. rejection matcher 提前注册
+4. 配置改动 commit cite 证据
+5. 测试 fix ≠ 改生产代码
+6. pre-existing fail 优先改测试
+
+**主指挥模式**: 用户开 4 窗口 → 主指挥出指令 → 用户转发 → worker 完工 → 主指挥审核 + commit + push. 详见 `memory/multi-agent-task-orchestration-baseline.md`.
+
+## [Unreleased] 2026-07-12
 > **本会话 (2026-07-12)**: chat-ux P0 三连修 + Playwright PNG cleanup + 文档同步收官 (11 commit 全 push origin/main) — P0-#1 LLM_BACKEND 残留 (commit `20621c83`) + P0-#1.5 _AnthropicMsgDict wrapper + mimo reasoning_content (commit `9b908f50`) + P0-#1.6 v1 ensureSessionLoaded server fetch fallback (commit `65d4493b`) + P0-#1.6 v2 orphan '[]' 误判 (commit `a687cee7`) + P0-#2 v1 sticky (commit `494b2917`) + P0-#2 v2 transform + 60fps 验证 (commit `c2b1e50a`) + P0-#2 v4 transform !important 防御 EP active (commit `da94ce74`) + P0-#2 audit 仅 spec (commit `43383798`) + Playwright PNG cleanup 54 PNG / 6.1MB + .gitignore 永久排除 (commit `c154f5d5`) + 文档同步 (本 commit). 详见下方"## [Unreleased] 2026-07-12" 段 + 6 个 memory 文件.
 > **本会话 (2026-07-11)**: 桌面 275 PPT 上传到团队共享网盘 (含 2 backend bug 修) — 详见下方"## [Unreleased] 2026-07-11"段.
 > **本会话 (2026-07-09)**: 待做清单核对沉淀 — 5 项未完成 + admin 决策 1 项 (voiceprint_relaxed*.py). 详见下方"## [Unreleased] 2026-07-09" 段, 总结见 `memory/2026-07-09-pending-items-audit.md`.

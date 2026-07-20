@@ -1,7 +1,26 @@
 # MicroBubble Agent - 路线图
 
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
-> 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELOG.md)。
+> 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
+
+## 当前状态（2026-07-20 — Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成）
+
+**已交付（2026-07-20 本会话新增 — 9 批 multi-agent 任务 + 17 commit + 8 memory 沉淀）**：
+
+- 🆕 **Multi-agent 协调范式锚点 memory** — 4 阶段流程 (出指令 / 监控 / 审核+合并 / 上线+沉淀) + 5 协调铁律 (总指挥 ≠ 总执行 / 多 worker stash 隔离 / 严禁 main commit / 边界立即拍板 / 6 点 curl 硬指标) + 6 技术铁律 (默认值改动 4 重证据 / 测试契约漂移优先改测试 / rejection matcher 提前注册 / 配置改动 commit cite 证据 / 测试 fix ≠ 改生产代码 / pre-existing fail 优先改测试). 详见 `memory/multi-agent-task-orchestration-baseline.md`.
+- 🆕 **W2 T3 审计 + P2 候选 3/3 全部完成** — 锚点 memory 提到 `sessionPollingInterval` 字面量在代码库 0 匹配, 回归到真实代码语义, 5 项审计 + 3 P2 候选全部当日完成:
+  - **P2-A 过期 chat_share Celery 清理** (commit `a37ef09b`) — 复用 PR6-P10 backup_before_delete 范式, 8/8 pytest
+  - **P2-C KB polling + chat fetch 30s timeout** (commit `f3e637cf`) — axios timeout 30s, 43 vitest PASS
+  - **P2-B localStorage chat session 90 天 TTL** (commit `1a0ecbed`) — lazy migration + 过期清 3 key, 20/20 vitest
+- 🆕 **W5+1 follow-up 4 层全闭环** — Redis LTRIM 200 契约回归 + monkeypatch sys.modules 污染 + pytest.ini loop_scope=function + app/core/redis.py lazy init. 4 commit 链: `081c55e8` → `f9130c34` → `641e402f` → `ca0fb0a3`.
+- 🆕 **W2 留尾闭环** — useDriveFiles batchDownload 无 try/catch 修复 (commit `eafb2f47` round 2). **新铁律**: composable 方法风格必须统一 / 错误 fallback 文案兼容多 envelope / 测试断言反映真实契约.
+- 🆕 **P0 上线 (#009 Self-RAG 删除)** — `7046fbbf` + `9301b0de` merge fix/office-preview-sandbox → main. 7/14 R5/R6 deep mode 6 轮 benchmark 证伪 7/13 commit `c2648120` "Self-RAG 防 deep 幻觉" 假设, 30 天承诺提前 30 天收官. 13+ 文件 (139 +4209/-12093).
+- 🆕 **录音全链路 10 commit 上线** — MIME 探测 + getUserMedia 5s timeout + cancel endpoint + UA 落库 (alembic 060) + orphan cleanup + post_meeting NameError 修复. 详见 `memory/recording-comprehensive-fix-2026-07-16.md`.
+
+**未来待做 (P3 收尾)**：
+- 5 个 active fix/feature 分支清理 (等下次会话 24h 缓冲期)
+- 僵尸 worktree 目录清理 (`.git/worktrees/agent-ac0b4b1084844e58b` 空目录)
+- pytest-asyncio pre-existing fail 修复 (test_maxlen_200 单文件 fail, 根因 redis pool 单例绑首次 loop, W1 已修)
 
 ## 当前状态（2026-07-12 — chat-ux P0 三连修收官 + 工作树整理清零）
 
