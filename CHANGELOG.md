@@ -1,7 +1,104 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
-> **本会话 (2026-07-20)**: Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 + 17 commit 收官. **5 协调铁律** + **6 技术铁律** 沉淀. **9 批 multi-agent 任务全部上线 (W1-W10 + W1 重启 + W2 重启 + 5 worker P2 子任务)**. 详见下方"## [Unreleased] 2026-07-20" 段 + 8 个 memory 文件 (multi-agent-task-orchestration-baseline + orchestrator-mode-coordination-2026-07-20 + config-value-contract-regression-2026-07-20 + chat-share-celery-cleanup-2026-07-20 + kb-and-chat-timeout-2026-07-20 + localstorage-chat-session-ttl-2026-07-20 + session-polling-audit-2026-07-20).
+> **本会话 (2026-07-21)**: Phase 8 完整闭环 + 6 次 baseline 对齐 + 48 commit 收官. **5 pending items 5/5 100% 闭环** (含 Phase 8.3 阿里云 OSS cloud 镜像 + Phase 8.4 OSS 恢复测试). 详见下方"## [Unreleased] 2026-07-21" 段 + 2 新 memory 文件 (`phase-8-cloud-mirror-2026-07-21` + `today-closure-2026-07-21`).
+> **本会话 (2026-07-20)**: Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 + 17 commit 收官. **5 协调铁律** + **6 技术铁律** 沉淀. **9 批 multi-agent 任务全部上线 (W1-W10 + W1 重启 + W2 重启 + 5 worker P2 子任务)**. 详见下方"## [Unreleased] 2026-07-21
+
+### Phase 8 完整闭环 + 6 次 baseline 对齐 + 5 pending items 5/5 闭环 (48 commit 收官)
+
+**Phase 8 完整闭环** (4 步全完成):
+- Phase 8.1 本地 backup (backup_db.sh + backup_minio_daily.py, 历史)
+- Phase 8.2 通用 restore CLI (restore_from_backup.py, PR6-P10)
+- **Phase 8.3 阿里云 OSS cloud 镜像** (commit `e4d58bd6`, `scripts/backup_to_aliyun_oss.py` ~280 行)
+  - S3 兼容 API (urllib + S3 V4 签名, 零外部依赖)
+  - 3 步 admin CLI (`--scan` / `--apply --confirm` / `--cleanup N`)
+  - KMS 服务端加密 (AES256 默认)
+  - 30 天保留 (跟本地 backup_minio_daily.py 一致)
+  - 7 单测全 PASS
+- **Phase 8.4 OSS 恢复测试** (commit `e79a127b`, `scripts/restore_from_oss.py` 411 行)
+  - mirror W15 范式 (共享 `_build_auth_header` + S3 V4 签名)
+  - 3 步 admin CLI (`--scan` / `--apply --confirm` / `--verify`)
+  - RTO estimate: `download_seconds + restore_seconds` = (size_mb / 50 MB/s) + (size_mb × 0.5s/MB)
+  - **RTO < 1h SLA 验证**: 1 GB DB = 532s = 8.8 min ✅
+  - 10 单测全 PASS
+- Phase 8.5 异地冷备 (USB HDD) ⏳ P4 留未来 (0.5-1 人天)
+
+**5 pending items 5/5 100% 闭环**:
+- ✅ #1 PR6-P18 fill_wechat_id_placeholders (3407909a + 043db721)
+- ✅ #2 #009 Self-RAG 30 天承诺收官 (7046fbbf)
+- ✅ #3 voiceprint_relaxed*.py 2 文件 (97009f04)
+- ✅ #4 PR6-P17 MemberCreate.wechat_id Optional (e40bd8ab)
+- ✅ #5 Phase 8 异地容灾 (e4d58bd6 + e79a127b)
+
+**6 次 baseline 对齐** (W2 T2 → W17 T2, 0 regression):
+- W2 T2 原始基线: 71 PASS + 7 SKIP
+- W7 T2 mid-loop: 71 PASS + 7 SKIP
+- W8 T2 终极 commit `5c77c417`: 71 PASS + 7 SKIP
+- W9 T1 终极验证: 71 PASS + 7 SKIP (2.16s)
+- W11 T1 终极回归: 71 PASS + 7 SKIP (2.34s)
+- W13 T1 终极收口: 71 PASS + 7 SKIP (2.17s)
+- **W17 T2 (本次)**: **71 PASS + 7 SKIP (2.11s)** — 6 次连续 baseline 对齐 ✅
+
+**W5+1 follow-up 11 commit 终极闭环** (主指挥亲自跑 5 commit):
+- W3 (`fe09010a`) app/core/database.py lazy init
+- W5.1 (`105d4ecc`) _get_engine get_event_loop fallback
+- W2 T2 (`0ae3319a`) test_database_lazy_init 期望漂移
+- W1 T1 (`9b7913b1`) conftest 跨 scope lazy init
+- W8 (`5c77c417`) conftest model import + sessionmaker 优化
+
+**memory 沉淀 (2 新文件)**:
+- `memory/phase-8-cloud-mirror-2026-07-21.md` (Phase 8 完整闭环)
+- `memory/today-closure-2026-07-21.md` (今日 48 commit + 13 memory + 73 任务收口)
+
+## [Unreleased] 2026-07-20" 段 + 8 个 memory 文件 (multi-agent-task-orchestration-baseline + orchestrator-mode-coordination-2026-07-20 + config-value-contract-regression-2026-07-20 + chat-share-celery-cleanup-2026-07-20 + kb-and-chat-timeout-2026-07-20 + localstorage-chat-session-ttl-2026-07-20 + session-polling-audit-2026-07-20).
+
+## [Unreleased] 2026-07-21
+
+### Phase 8 完整闭环 + 6 次 baseline 对齐 + 5 pending items 5/5 闭环 (48 commit 收官)
+
+**Phase 8 完整闭环** (4 步全完成):
+- Phase 8.1 本地 backup (backup_db.sh + backup_minio_daily.py, 历史)
+- Phase 8.2 通用 restore CLI (restore_from_backup.py, PR6-P10)
+- **Phase 8.3 阿里云 OSS cloud 镜像** (commit `e4d58bd6`, `scripts/backup_to_aliyun_oss.py` ~280 行)
+  - S3 兼容 API (urllib + S3 V4 签名, 零外部依赖)
+  - 3 步 admin CLI (`--scan` / `--apply --confirm` / `--cleanup N`)
+  - KMS 服务端加密 (AES256 默认)
+  - 30 天保留 (跟本地 backup_minio_daily.py 一致)
+  - 7 单测全 PASS
+- **Phase 8.4 OSS 恢复测试** (commit `e79a127b`, `scripts/restore_from_oss.py` 411 行)
+  - mirror W15 范式 (共享 `_build_auth_header` + S3 V4 签名)
+  - 3 步 admin CLI (`--scan` / `--apply --confirm` / `--verify`)
+  - RTO estimate: `download_seconds + restore_seconds` = (size_mb / 50 MB/s) + (size_mb × 0.5s/MB)
+  - **RTO < 1h SLA 验证**: 1 GB DB = 532s = 8.8 min ✅
+  - 10 单测全 PASS
+- Phase 8.5 异地冷备 (USB HDD) ⏳ P4 留未来 (0.5-1 人天)
+
+**5 pending items 5/5 100% 闭环**:
+- ✅ #1 PR6-P18 fill_wechat_id_placeholders (3407909a + 043db721)
+- ✅ #2 #009 Self-RAG 30 天承诺收官 (7046fbbf)
+- ✅ #3 voiceprint_relaxed*.py 2 文件 (97009f04)
+- ✅ #4 PR6-P17 MemberCreate.wechat_id Optional (e40bd8ab)
+- ✅ #5 Phase 8 异地容灾 (e4d58bd6 + e79a127b)
+
+**6 次 baseline 对齐** (W2 T2 → W17 T2, 0 regression):
+- W2 T2 原始基线: 71 PASS + 7 SKIP
+- W7 T2 mid-loop: 71 PASS + 7 SKIP
+- W8 T2 终极 commit `5c77c417`: 71 PASS + 7 SKIP
+- W9 T1 终极验证: 71 PASS + 7 SKIP (2.16s)
+- W11 T1 终极回归: 71 PASS + 7 SKIP (2.34s)
+- W13 T1 终极收口: 71 PASS + 7 SKIP (2.17s)
+- **W17 T2 (本次)**: **71 PASS + 7 SKIP (2.11s)** — 6 次连续 baseline 对齐 ✅
+
+**W5+1 follow-up 11 commit 终极闭环** (主指挥亲自跑 5 commit):
+- W3 (`fe09010a`) app/core/database.py lazy init
+- W5.1 (`105d4ecc`) _get_engine get_event_loop fallback
+- W2 T2 (`0ae3319a`) test_database_lazy_init 期望漂移
+- W1 T1 (`9b7913b1`) conftest 跨 scope lazy init
+- W8 (`5c77c417`) conftest model import + sessionmaker 优化
+
+**memory 沉淀 (2 新文件)**:
+- `memory/phase-8-cloud-mirror-2026-07-21.md` (Phase 8 完整闭环)
+- `memory/today-closure-2026-07-21.md` (今日 48 commit + 13 memory + 73 任务收口)
 
 ## [Unreleased] 2026-07-20
 

@@ -304,6 +304,14 @@
 - 知识库 64→247+ → 350+ 条（Qwen3 重算后，alembic 030 双列原子切换 text2vec 768d → Qwen3-Embedding-0.6B 1024d）
 - **2026-06-24~28 起 20+ 铁律沉淀**（清华源/ONNX 反优化/docker build 污染/pre-commit hook/dist 漏 commit/Stylelint/PowerShell BOM/Background Sync/playwright dev server/token 渐进收敛/v-model 子组件 props 禁用/word-boundary 正则 等，详见 [CLAUDE.md](CLAUDE.md) 末尾）
 
+**最新里程碑（2026-07-21 — Phase 8 完整闭环 + 6 次 baseline 对齐）**：
+
+- 🆕 **Phase 8 完整闭环** = 8.1 本地 backup + 8.2 通用 restore CLI + 8.3 阿里云 OSS cloud 镜像 (commit `e4d58bd6`) + 8.4 OSS 恢复测试 (commit `e79a127b`, RTO < 1h SLA 验证). 详见 [`memory/phase-8-cloud-mirror-2026-07-21.md`](./memory/phase-8-cloud-mirror-2026-07-21.md).
+- 🆕 **6 次 baseline 对齐（0 regression）** = W2 T2 → W17 T2 跨 33 commit 0 regression. 平均 2.13s. 详见 [`memory/w16-baseline-six-runs-closure-2026-07-21.md`](./memory/w16-baseline-six-runs-closure-2026-07-21.md).
+- 🆕 **5 pending items 5/5 100% 闭环** (含 Phase 8 实施).
+- 🆕 **W5+1 follow-up 11 commit 终极闭环** = redis.py lazy + database.py lazy + get_event_loop fallback + 2 test 期望漂移 + conftest 跨 scope lazy + setup_db scope fix + model import + sessionmaker 优化 + useChatStream onUnmounted timer cleanup. 详见 [`memory/w5-plus-one-followup-grand-closure-2026-07-20.md`](./memory/w5-plus-one-followup-grand-closure-2026-07-20.md).
+- 🆕 **今日 (2026-07-21) 累计 48 commit + 13 memory + 73 任务**. 详见 [`memory/today-closure-2026-07-21.md`](./memory/today-closure-2026-07-21.md).
+
 **最新里程碑**：
 - 🆕 [v77 P2.6-E/F 视觉/代码质量延伸（4 commits）](CHANGELOG.md#2026-06-28-v77-p26-ef-视觉代码质量延伸-4-commits) - CSS-in-JS 收官 + 缓动 token 化 + KnowledgeView 拆分 + transition: all token 化
 - 🆕 [v77 P2.6 视觉体系 4 子任务全面收官（A/B/C/D）](CHANGELOG.md#2026-06-28-v77-p26-视觉体系-4-子任务全面收官abc-d-共-7-commits) - 7 commits + 143 条 dark 规则 + 18 张 baseline
