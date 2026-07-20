@@ -5,8 +5,20 @@
 
 注意：当 SKIP_DB_SETUP=1 时，db / client / test_member / admin_member / auth_headers / admin_headers
 这些 fixture 不可用，调用它们的测试会被跳过。
+
+## W1 T1 (2026-07-20) conftest 跨 scope 真闭环
+
+L36-37 旧实现 module-level `engine = create_async_engine(...)` 单例绑首次访问 loop,
+setup_db (session-scope) + db (function-scope) 跨 loop 用同一 engine → "Event loop is closed".
+W5 (commit fe09010a) + W5.1 (commit 105d4ecc) 修 app/core/database.py,但 conftest 自己的
+engine 是独立的测试客户端,不走 production lazy init 路径 → 7 skipped E2E 在非 SKIP 模式
+仍 fail.
+
+修复: conftest.py 同样 lazy pattern + get_event_loop() fallback (与 W5.1 app/core/database.py 一致),
+setup_db 用 _get_conftest_engine() 按当前 loop 创建真 engine,db fixture 用 _get_test_session_maker().
 """
 
+import asyncio
 import os
 
 import pytest
@@ -33,8 +45,65 @@ if not SKIP_DB_SETUP:
         "TEST_DATABASE_URL",
         "postgresql+asyncpg://postgres:password@localhost:5432/microbubble_test",
     )
-    engine = create_async_engine(TEST_DB_URL, echo=False)
-    TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    # === W1 T1 conftest 跨 scope 真闭环 (2026-07-20) ===
+    # 旧: module-level `engine = create_async_engine(...)` 单例 → cross-loop bind 首次 loop.
+    # 新: lazy init + get_event_loop() fallback (与 app/core/database.py W5.1 一致).
+    _engine = None
+    _engine_loop = None
+    _test_session_maker = None
+    _test_session_maker_loop = None
+    _engine_lock = None  # 懒 asyncio.Lock (loop 内才能创建)
+
+    def _get_conftest_engine():
+        """按当前 event loop 创建或重建 conftest engine (loop 不匹配时重建).
+
+        跨 loop 路径 (pytest-asyncio loop_scope=function):
+        - setup_db session-scope: 创建 engine → 绑 loop_setup
+        - db function-scope (在另一个 test): 旧 engine 绑 loop_setup 已死
+        - 这时必须**重建** engine 绑当前 loop → fixture 不挂
+
+        sync context fallback (W5.1 教训):
+        - asyncio.get_running_loop() 在 sync context 抛 RuntimeError
+        - fallback 到 asyncio.get_event_loop() (≥3.10 deprecated 但仍能用)
+        - 再 fallback 到 None
+        """
+        global _engine, _engine_loop, _engine_lock
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                current_loop = asyncio.get_event_loop()
+            except RuntimeError:
+                current_loop = None
+        if _engine is None or _engine_loop is not current_loop:
+            _engine = create_async_engine(TEST_DB_URL, echo=False)
+            _engine_loop = current_loop
+        return _engine
+
+    def _get_test_session_maker():
+        """懒 async_sessionmaker (与 _get_conftest_engine 同 loop 缓存)."""
+        global _test_session_maker, _test_session_maker_loop
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            try:
+                current_loop = asyncio.get_event_loop()
+            except RuntimeError:
+                current_loop = None
+        if _test_session_maker is None or _test_session_maker_loop is not current_loop:
+            _test_session_maker = async_sessionmaker(
+                _get_conftest_engine(),
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+            _test_session_maker_loop = current_loop
+        return _test_session_maker
+
+    # 向后兼容: 老 `from tests.conftest import engine, TestSession` 路径仍可用
+    # 但强烈建议新代码用 _get_conftest_engine() / _get_test_session_maker()
+    engine = None  # 老路径返回 None (调用方必须改用 lazy helper); 显式 None 比 stale engine 安全
+    TestSession = None
 else:
     # SKIP 模式：占位 stub，让 fixture 报"不可用"错误而非 import 失败
     engine = None
@@ -67,21 +136,23 @@ if SKIP_DB_SETUP:
 else:
     @pytest_asyncio.fixture(scope="session", autouse=True)
     async def setup_db():
-        """创建测试表。"""
-        async with engine.begin() as conn:
+        """创建测试表 (W1 T1: 用 _get_conftest_engine() 走 lazy path)."""
+        conftest_engine = _get_conftest_engine()
+        async with conftest_engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         yield
-        async with engine.begin() as conn:
+        async with conftest_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
-        await engine.dispose()
+        await conftest_engine.dispose()
 
 
 @pytest_asyncio.fixture
 async def db():
-    """每个测试独立的数据库会话（需 DB）"""
+    """每个测试独立的数据库会话（需 DB, W1 T1: lazy sessionmaker 跨 loop 安全）"""
     if SKIP_DB_SETUP:
         pytest.skip("SKIP_DB_SETUP=1：db fixture 不可用")
-    async with TestSession() as session:
+    SessionMaker = _get_test_session_maker()
+    async with SessionMaker() as session:
         yield session
         await session.rollback()
 
