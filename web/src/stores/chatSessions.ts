@@ -68,6 +68,18 @@ function loadFromStorage() {
     const raw = localStorage.getItem(newKey) || localStorage.getItem(STORAGE_KEY_BASE)
     if (!raw) return { sessions: [], currentId: null }
     const parsed = JSON.parse(raw)
+    // === W2 T3 P2-B (2026-07-20): localStorage chat session 90 天 TTL ===
+    // legacy 数据无 expiresAt 字段 → 视为过期 (强制从 server 重新拉)
+    // 避免旧用户累积 (90 天前的 session 永不清理, list 性能退化)
+    if (!parsed.expiresAt || parsed.expiresAt < Date.now()) {
+      // 清理过期 key (无论 legacy 还是 new)
+      try {
+        localStorage.removeItem(newKey)
+        localStorage.removeItem(STORAGE_KEY_BASE)
+        localStorage.removeItem(userKey(CURRENT_KEY_BASE, userId))
+      } catch { /* ignore */ }
+      return { sessions: [], currentId: null }
+    }
     const sessions = Array.isArray(parsed.sessions)
       ? parsed.sessions.map((s: any) => deserializeSession(s))
       : []
@@ -82,7 +94,15 @@ function saveToStorage(sessions: ChatSession[], currentId: string | null) {
     const userId = readUserId()
     const newKey = userKey(STORAGE_KEY_BASE, userId)
     const clean = sessions.map(serializeSession)
-    localStorage.setItem(newKey, JSON.stringify({ sessions: clean, currentId }))
+    // === W2 T3 P2-B (2026-07-20): 写时加 90 天 expiresAt ===
+    localStorage.setItem(
+      newKey,
+      JSON.stringify({
+        sessions: clean,
+        currentId,
+        expiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000,  // 90 天后过期
+      }),
+    )
     if (currentId) localStorage.setItem(userKey(CURRENT_KEY_BASE, userId), currentId)
     // 清理老非 namespace key（一次）
     localStorage.removeItem(STORAGE_KEY_BASE)
