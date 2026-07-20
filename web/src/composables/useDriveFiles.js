@@ -393,6 +393,40 @@ export function useDriveFiles() {
     return `/api/v1/drive/files/${file.id}/download`
   }
 
+  /**
+   * 批量下载 (v77 留尾清理 2026-07-20)
+   * 复用后端 POST /api/v1/drive/files/batch-download (drive_files.py:931, 已实装)
+   * 后端流式生成 ZIP, 无权限文件跳过并写入 _skipped.txt
+   *
+   * @param {number[]} ids - 选中文件 id 列表 (空数组直接 return, 上层已 disable)
+   * @returns {Promise<boolean>} 是否触发了下载
+   */
+  async function batchDownload(ids) {
+    if (!ids || !ids.length) return false
+    const resp = await axios.post(
+      '/api/v1/drive/files/batch-download',
+      { ids },
+      { responseType: 'blob' },
+    )
+    // 从 Content-Disposition 解析文件名 (后端给 drive_<user>_<ts>.zip)
+    let filename = 'drive_download.zip'
+    const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
+    if (disposition) {
+      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
+      if (m && m[1]) filename = decodeURIComponent(m[1])
+    }
+    const blob = new Blob([resp.data], { type: 'application/zip' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    return true
+  }
+
   return {
     // 状态
     driveFiles,
@@ -435,6 +469,7 @@ export function useDriveFiles() {
     listVersions,
     restoreVersion,
     downloadFileUrl,
+    batchDownload,
     // 内部
     toggleSelect,
     clearSelection,

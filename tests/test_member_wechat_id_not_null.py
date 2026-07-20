@@ -187,22 +187,46 @@ class TestBackwardCompat:
 
 
 # ============================================================================
-# TestMemberCreateWechatIdOptional — API schema 当前仍 Optional (PR6-P17 范围外)
+# TestMemberCreateWechatIdRequired — PR6-P17 留尾: schema 与 DB NOT NULL 同步 (2026-07-20)
 # ============================================================================
 
-class TestMemberCreateWechatIdOptional:
-    """MemberCreate.wechat_id 当前仍 Optional[str] (PR6-P17 只加 DB 约束, 不动 API schema)"""
+class TestMemberCreateWechatIdRequired:
+    """MemberCreate.wechat_id 改为 required[str] (PR6-P17 留尾, 与 DB NOT NULL 对齐)"""
 
-    def test_member_create_wechat_id_still_optional(self):
-        """PR6-P17 范围: 只加 DB NOT NULL 约束, API schema 仍 Optional (留给业务决定)"""
+    def test_member_create_wechat_id_now_required(self):
+        """PR6-P17 留尾: MemberCreate.wechat_id 必传, 缺传 → Pydantic 422 fail loud"""
         from app.schemas.member import MemberCreate
-        # 通过 pydantic 字段检查
         fields = MemberCreate.model_fields
-        assert fields["wechat_id"].default is None
-        assert fields["wechat_id"].annotation == Optional[str]
+        # required 字段: default is PydanticUndefined (sentinel), 不是 None
+        from pydantic_core import PydanticUndefined
+        assert fields["wechat_id"].default is PydanticUndefined, \
+            "MemberCreate.wechat_id 必须 required (无 default)"
+        # annotation 是 str (无 Optional 包裹)
+        assert fields["wechat_id"].annotation == str
+
+    def test_member_create_raises_422_without_wechat_id(self):
+        """缺 wechat_id 创建 → Pydantic ValidationError (FastAPI 422)"""
+        from app.schemas.member import MemberCreate
+        from pydantic import ValidationError
+        import pytest
+        with pytest.raises(ValidationError) as exc_info:
+            MemberCreate(name="测试", username="test_required_422")
+        # 错误路径必须包含 wechat_id
+        errors = exc_info.value.errors()
+        assert any("wechat_id" in str(e.get("loc", [])) for e in errors), \
+            f"ValidationError 必须提到 wechat_id 字段, 实测: {errors}"
+
+    def test_member_create_accepts_explicit_wechat_id(self):
+        """传 wechat_id 创建成功"""
+        from app.schemas.member import MemberCreate
+        m = MemberCreate(
+            name="测试", username="test_explicit_wechat",
+            wechat_id="explicit_wechat_123",
+        )
+        assert m.wechat_id == "explicit_wechat_123"
 
     def test_member_update_wechat_id_still_optional(self):
-        """MemberUpdate.wechat_id 仍 Optional"""
+        """MemberUpdate.wechat_id 仍 Optional (部分更新语义, 不动)"""
         from app.schemas.member import MemberUpdate
         fields = MemberUpdate.model_fields
         assert fields["wechat_id"].default is None

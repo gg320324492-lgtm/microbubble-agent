@@ -136,8 +136,8 @@ describe('FilePreviewDialog v2.7 previewType 分类', () => {
     wrapper.unmount()
   })
 
-  // v2.7.1 (2026-07-10) Office iframe 安全配置 + 错误降级
-  it('office iframe 含 sandbox + referrerpolicy 安全属性', async () => {
+  // Office iframe 能力配置 + 错误降级
+  it('office iframe 不含 sandbox 且保留 referrerpolicy', async () => {
     mockAxiosGet.mockReset()
     mockAxiosGet.mockResolvedValueOnce({ data: { thumbnail_url: null } })
     const wrapper = mount(FilePreviewDialog, {
@@ -164,8 +164,11 @@ describe('FilePreviewDialog v2.7 previewType 分类', () => {
     })
     for (let i = 0; i < 4; i++) await flushPromises()
     const html = wrapper.html()
-    // 验证 iframe 元素真的有 sandbox + referrerpolicy 属性
-    expect(html).toMatch(/sandbox=/)
+    const iframe = wrapper.find('iframe')
+    // Office 365 是完整的跨域 Web 应用；sandbox 会把它或其嵌套 frame
+    // 降级为 origin=null，并阻断 cookie/storage/CORS 启动链。
+    expect(iframe.exists()).toBe(true)
+    expect(iframe.attributes('sandbox')).toBeUndefined()
     expect(html).toMatch(/referrerpolicy="no-referrer"/i)
     expect(html).toMatch(/allowfullscreen/i)
     // 验证 officeViewerUrl 含 Office 域名

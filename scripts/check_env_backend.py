@@ -105,8 +105,6 @@ MODEL_SETTINGS = [
     ("OLLAMA_FALLBACK_MODEL", "Ollama fallback model", "fallback"),
     ("MIMO_MODEL", "mimo model (其他 backend 用)", "fallback"),
     ("LLM_OPENAI_COMPAT_MODEL", "openai_compat 模式 model (其他 backend 用)", "fallback"),
-    # === 废弃/待删 ===
-    ("AGENT_SELF_RAG_MODEL", "Self-RAG judge (待删除)", "fallback"),
 ]
 
 

@@ -28,7 +28,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestFastMode:
-    """fast 模式: 关 Self-RAG + 小 budget + 关 prompt gates。"""
+    """fast 模式: 小 budget + 关 prompt gates。"""
 
     @pytest.mark.asyncio
     async def test_fast_mode_resolves_to_correct_config(self):
@@ -37,7 +37,6 @@ class TestFastMode:
         tc = resolve_thinking_config("fast")
         assert tc.mode == "fast"
         assert tc.model == "qwen3:8b"
-        assert tc.self_rag_enabled is False
         assert tc.intent_aware_prompts is False
 
     @pytest.mark.asyncio
@@ -50,18 +49,6 @@ class TestFastMode:
         assert "thinking_mode" in sig.parameters
         param = sig.parameters["thinking_mode"]
         assert param.default is None  # 默认 None = 走 settings 默认
-
-    @pytest.mark.asyncio
-    async def test_fast_mode_no_self_rag_event_yielded(self):
-        """fast 模式 (self_rag_enabled=False) 不 yield retrieval_assessment/reretrieval 事件。
-        (集成测试: 通过 mock LLMClient + check StreamEvent sequence 不含 self_rag 事件)
-        """
-        # 注: 这里不实际跑 synthesize_stream (mock LLM 流式 mock 复杂), 仅验证 config 正确
-        # 实际端到端验证见 qa-bench benchmark_fast_vs_deep.py
-        from app.agent.thinking_config import resolve_thinking_config
-        tc = resolve_thinking_config("fast")
-        assert tc.self_rag_enabled is False
-        assert tc.self_rag_max_reretrieve == 0
 
 
 # ============================================================================
@@ -80,7 +67,6 @@ class TestBalancedMode:
 
         tc = resolve_thinking_config("balanced")
         assert tc.mode == "balanced"
-        assert tc.self_rag_enabled == settings.AGENT_SELF_RAG_ENABLED
         assert tc.intent_aware_prompts == settings.AGENT_INTENT_AWARE_PROMPTS
         assert tc.primitive_recognition == settings.AGENT_PRIMITIVE_RECOGNITION
         assert tc.cross_domain_synthesis == settings.AGENT_CROSS_DOMAIN_SYNTHESIS
@@ -102,7 +88,7 @@ class TestBalancedMode:
 
 
 class TestDeepMode:
-    """deep 模式: DeepSeek-R1-Distill + thinking enabled + 重检索 2 次。"""
+    """deep 模式: DeepSeek-R1-Distill + thinking enabled + 完整质量控制。"""
 
     @pytest.mark.asyncio
     async def test_deep_mode_uses_deepseek_r1(self):
@@ -111,7 +97,6 @@ class TestDeepMode:
         tc = resolve_thinking_config("deep")
         assert tc.model == "deepseek-r1-distill-qwen:7b"
         assert tc.thinking == {"type": "enabled", "budget_tokens": 8000}
-        assert tc.self_rag_max_reretrieve == 2
 
     @pytest.mark.asyncio
     async def test_deep_mode_rate_limit_setting_exists(self):
@@ -139,18 +124,6 @@ class TestDeepMode:
         # sliding window: 1 小时内的都保留
         filtered = [t for t in ctx.deep_call_timestamps if now - t < 3600]
         assert len(filtered) == 5
-
-    @pytest.mark.asyncio
-    async def test_deep_mode_yields_retrieval_assessment_when_enabled(self):
-        """deep 模式 (self_rag_enabled=True + intent=SEARCH_INFO) 会 yield retrieval_assessment 事件。
-
-        (集成测试: 需 mock llm + search_knowledge 完整链路, 见 qa-bench benchmark)
-        这里仅验证 config 正确
-        """
-        from app.agent.thinking_config import resolve_thinking_config
-        tc = resolve_thinking_config("deep")
-        assert tc.self_rag_enabled is True
-        assert tc.self_rag_max_reretrieve == 2
 
 
 # ============================================================================
@@ -197,14 +170,13 @@ class TestFormDataPaths:
             ChatRequest(message="test", thinking_mode="ultra_fast_xxx")
 
     def test_stream_event_has_mode_model_fields(self):
-        """StreamEvent Pydantic 模型新增 mode/model/thinking_tokens_used/self_rag_reretrieve_count 字段。"""
+        """StreamEvent Pydantic 模型新增 mode/model/thinking_tokens_used 字段。"""
         from app.agent.protocol import StreamEvent
         # 验证字段定义存在 (Pydantic v2)
         fields = StreamEvent.model_fields
         assert "mode" in fields
         assert "model" in fields
         assert "thinking_tokens_used" in fields
-        assert "self_rag_reretrieve_count" in fields
 
     def test_stream_event_mode_field_accepts_three_values(self):
         """StreamEvent.mode 字段类型 Literal['fast','balanced','deep'], 接受 None (done event 之外不填)."""
@@ -224,9 +196,7 @@ class TestFormDataPaths:
             mode="deep",
             model="deepseek-r1-distill-qwen:7b",
             thinking_tokens_used=1500,
-            self_rag_reretrieve_count=2,
         )
         assert evt.mode == "deep"
         assert evt.model == "deepseek-r1-distill-qwen:7b"
         assert evt.thinking_tokens_used == 1500
-        assert evt.self_rag_reretrieve_count == 2

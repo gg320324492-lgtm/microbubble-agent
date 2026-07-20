@@ -249,10 +249,8 @@ class MicroBubbleAgent:
         image_media_type: str = "image/png",
         user_id: Optional[int] = None,
         channel_user_id: Optional[str] = None,
-        # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
         *,
         model: Optional[str] = None,
-        use_self_rag: Optional[bool] = None,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -292,8 +290,6 @@ class MicroBubbleAgent:
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
-            # 2026-06-30 #009 透传 per-request override
-            self_rag_enabled=use_self_rag,
             synthesis_model_override=model,
             # 2026-07-13 #P1 透传
             thinking_mode=thinking_mode,
@@ -323,10 +319,8 @@ class MicroBubbleAgent:
         image_media_type: str = "image/png",
         user_id: Optional[int] = None,
         channel_user_id: Optional[str] = None,
-        # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
         *,
         model: Optional[str] = None,
-        use_self_rag: Optional[bool] = None,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode: Optional[str] = None,
     ) -> AsyncIterator[StreamEvent]:
@@ -429,8 +423,6 @@ class MicroBubbleAgent:
             db=db,
             channel_user_id=channel_user_id,
             session_id=session_id,
-            # 2026-06-30 #009 透传 per-request override
-            self_rag_enabled=use_self_rag,
             synthesis_model_override=model,
             # 2026-07-13 #P1 透传
             thinking_mode=thinking_mode,

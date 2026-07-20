@@ -2,7 +2,7 @@
 qa-bench/gen780.py — 780 题测评题库生成器（v3.0 扩展版）
 
 继承 gen_base.py 的 9 大类模板，扩展到 14 大类（+ 高级 P + 横切 D）。
-新增 6 大高级能力专项（Self-RAG / fan-out / plan_step / 持久化 / abort / grounding）。
+新增 6 大高级能力专项（检索质量 / fan-out / plan_step / 持久化 / abort / grounding）。
 新增 4 大横切防御性题（抗幻觉 / 抗 fake XML / 性能 / dark mode / mobile）。
 
 题库结构（780 题 = 业务 500 + 高级 100 + 横切 100 + 极端 80）：
@@ -56,7 +56,7 @@ CATEGORY_COUNTS = {
     "X": 20,   # 跨域
     "Z": 10,   # 极端
     # 高级 + 横切（200）— 2026-06 新增
-    "P": 100,  # 高级 (Self-RAG/fan-out/plan_step/持久化/abort/grounding)
+    "P": 100,  # 高级 (检索质量/fan-out/plan_step/持久化/abort/grounding)
     "K": 100,  # 横切 (抗幻觉/抗 fake XML/性能/dark/mobile) - 用 K 避免与 D 项目域冲突
 }
 
@@ -70,7 +70,7 @@ DIFFICULTY_DIST = {
 
 # 高级能力 6 大子类别 (P 类)
 P_SUBCATEGORIES = {
-    "P1": ("Self-RAG 重检索", 20),    # gate 决策 + 阈值边界
+    "P1": ("检索质量与防幻觉", 20),    # 检索不足时的引用与拒答边界
     "P2": ("fan-out 跨域并行", 20),   # 4 域综合 (#042)
     "P3": ("plan_step 工具推荐", 15),  # Haiku suggested_tools (#041)
     "P4": ("持久化聊天历史", 15),     # 跨 session (#043)
@@ -192,7 +192,7 @@ def build_question(
 
 # === 高级能力 P 类题目模板（专家题 100 题）===
 
-P1_SELF_RAG_TEMPLATES = [
+P1_RETRIEVAL_QUALITY_TEMPLATES = [
     "什么是 {concept}？",
     "{concept} 的最新研究进展？",
     "{concept} 实验方法？",
@@ -226,11 +226,11 @@ def gen_p_questions() -> List[Dict[str, Any]]:
     questions = []
     seq = 0
 
-    # P1 Self-RAG (20 题)
+    # P1 检索质量与防幻觉 (20 题)
     for i in range(20):
         seq += 1
-        idx = i % len(P1_SELF_RAG_TEMPLATES)
-        template = P1_SELF_RAG_TEMPLATES[idx]
+        idx = i % len(P1_RETRIEVAL_QUALITY_TEMPLATES)
+        template = P1_RETRIEVAL_QUALITY_TEMPLATES[idx]
         concept = P1_CONCEPTS[i % len(P1_CONCEPTS)]
         other_concept = P1_OTHER_CONCEPTS[i % len(P1_OTHER_CONCEPTS)]
         scenario = P1_SCENARIOS[i % len(P1_SCENARIOS)]
@@ -256,7 +256,7 @@ def gen_p_questions() -> List[Dict[str, Any]]:
             expect=expect,
             source="template",
             author="gen780.py@2026-06-30",
-            tags=["self_rag", "reretrieve", "hot_path"],
+            tags=["retrieval_quality", "grounding", "hot_path"],
             detector=["duration", "grounding_violation", "first_token_latency"],
         )
         questions.append(q)
