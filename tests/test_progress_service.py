@@ -16,23 +16,29 @@ from tests._fake_redis import FakeRedis
 
 
 def test_progress_stage_enum_values():
-    assert ProgressStage.EXTRACTING_TRANSCRIPT.value == "extracting_transcript"
+    # W2 T2 (2026-07-21) 修类 3 orm_edge — production enum 在 2026-06-04 重构 (commit 9e16cf9e),
+    # DOWNLOADING_AUDIO + TRANSCRIBING + IDENTIFYING_SPEAKERS 替代旧 EXTRACTING_TRANSCRIPT
+    # GENERATING_ANALYSIS + STORING_RESULTS 替代旧 GENERATING_MINUTES + LINKING_HISTORY
+    assert ProgressStage.DOWNLOADING_AUDIO.value == "downloading_audio"
+    assert ProgressStage.TRANSCRIBING.value == "transcribing"
     assert ProgressStage.IDENTIFYING_SPEAKERS.value == "identifying_speakers"
     assert ProgressStage.GENERATING_TITLE.value == "generating_title"
-    assert ProgressStage.GENERATING_MINUTES.value == "generating_minutes"
+    assert ProgressStage.GENERATING_ANALYSIS.value == "generating_analysis"
     assert ProgressStage.CREATING_TASKS.value == "creating_tasks"
-    assert ProgressStage.LINKING_HISTORY.value == "linking_history"
+    assert ProgressStage.STORING_RESULTS.value == "storing_results"
     assert ProgressStage.DONE.value == "done"
 
 
 def test_stage_order():
+    # W2 T2: 跟 production STAGE_ORDER 一致 (2026-06-04 重构后)
     assert STAGE_ORDER == [
-        "extracting_transcript",
+        "downloading_audio",
+        "transcribing",
         "identifying_speakers",
         "generating_title",
-        "generating_minutes",
+        "generating_analysis",
         "creating_tasks",
-        "linking_history",
+        "storing_results",
         "done",
     ]
 
@@ -57,7 +63,8 @@ async def test_progress_lifecycle(fake_redis):
     try:
         snapshot = await get_progress(meeting_id)
         assert snapshot is not None
-        assert snapshot["stage"] == "extracting_transcript"
+        # W2 T2: 2026-06-04 重构后初始 stage 是 downloading_audio (下载+转码+VAD)
+        assert snapshot["stage"] == "downloading_audio"
         assert snapshot["status"] == "running"
 
         await update_progress(
@@ -68,9 +75,9 @@ async def test_progress_lifecycle(fake_redis):
         snapshot = await get_progress(meeting_id)
         assert snapshot["stage"] == "generating_title"
         assert snapshot["detail"] == "AI 正在生成标题"
-        # 阶段 2/6 ≈ 33.3%
-        assert 30.0 <= snapshot["percent"] <= 35.0, (
-            f"percent={snapshot['percent']} 期望 30~35 之间"
+        # W2 T2: stage 3/8 ≈ 37.5% (新 8 阶段: 0-7, stage 3 = 3/8 = 37.5%)
+        assert 35.0 <= snapshot["percent"] <= 40.0, (
+            f"percent={snapshot['percent']} 期望 35~40 之间 (stage 3/8)"
         )
 
         await update_progress(meeting_id, ProgressStage.DONE)

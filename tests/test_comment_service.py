@@ -32,6 +32,46 @@ async def db():
         yield session
 
 
+# W1 (2026-07-21) T1 endpoint_404 fix: hardcoded file_id=540 需要对应 Knowledge 行 (FK 约束)
+# 加 module-scope autouse fixture 在每个 test 前 ensure file_id=540 + user_id=59 存在
+@pytest_asyncio.fixture(autouse=True)
+async def _ensure_test_knowledge(db):
+    """保证 file_id=540 + user_id=59 存在 (comment 测试硬编码)"""
+    from app.core.database import async_session as _session_factory
+    from app.models.knowledge import Knowledge
+    from app.models.member import Member
+
+    async with _session_factory() as session:
+        # 确保 user 59 (xiaoqi_testbot) 存在
+        result = await session.execute(
+            select(Member).where(Member.id == 59)
+        )
+        if not result.scalar_one_or_none():
+            user = Member(
+                id=59,
+                username="xiaoqi_testbot",
+                name="测试小助手",
+                wechat_id="__NULL_BACKFILL_59__",  # 满足 PR6-P17 NOT NULL
+                is_active=True,
+                role="admin",
+            )
+            session.add(user)
+        # 确保 file_id=540 (drive 文件行) 存在
+        result = await session.execute(
+            select(Knowledge).where(Knowledge.id == 540)
+        )
+        if not result.scalar_one_or_none():
+            file_kb = Knowledge(
+                id=540,
+                title="comment test file",
+                content="test content",
+                storage_mode="kb",
+                created_by=59,
+            )
+            session.add(file_kb)
+        await session.commit()
+
+
 # ────────────────────────────────────────────────────────
 # 1. create_comment 集成测试 (4 case)
 # ────────────────────────────────────────────────────────
