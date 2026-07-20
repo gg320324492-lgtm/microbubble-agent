@@ -79,5 +79,21 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       testMatch: /desktop\/.*\.spec\.mjs/,
     },
+    // 2026-07-16 +060 (#207 完整流程修复): HarmonyOS ArkWeb 6.0 UA project
+    //   用于 recording-mime-fallback.spec.mjs + recording-harmonyos-ua.spec.mjs
+    //   模拟真实 HarmonyOS 6.1 + ArkWeb 6.0 浏览器场景
+    {
+      name: 'harmonyos-arkweb',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 720, height: 1280 },
+        deviceScaleFactor: 2.625,
+        isMobile: true,
+        hasTouch: true,
+        userAgent:
+          'Mozilla/5.0 (Phone; OpenHarmony 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36 ArkWeb/6.0.0.46SP3 Mobile',
+      },
+      testMatch: /desktop\/recording-.*\.spec\.mjs/,
+    },
   ],
 })

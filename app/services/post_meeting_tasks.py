@@ -20,7 +20,8 @@ import wave
 import numpy as np
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
@@ -476,7 +477,8 @@ def post_meeting_process(self, meeting_id: int):
                 # 2026-06-26 优化: 用新 vote_with_quality_gates 替代 finalize_cluster_speakers
                 # 加载 enrolled 4-tuple (含 sample_count)
                 from app.models.member import Member
-                from sqlalchemy import select
+                # 注: select 已在模块顶部 (line 22) 导入, 这里**不要**重复 from sqlalchemy import select
+                # 否则 Python 把 select 当函数局部变量, line 89 select(Meeting) 会报 UnboundLocalError
                 enrolled_result = await db.execute(
                     select(Member).where(Member.voice_embedding.isnot(None))
                 )

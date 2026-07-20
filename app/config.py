@@ -116,6 +116,10 @@ class Settings(BaseSettings):
     # 运维/测试时可临时缩短（如 0 立即清空）— 与 TRASH_RETENTION_DAYS 范式一致
     CHAT_HISTORY_RETENTION_DAYS: int = 30
 
+    # 2026-07-16 +060: 孤儿会议清理阈值 (默认 30 分钟, 旧版硬编码 60min 太长)
+    # 录音超过此分钟数仍未 stop 的会议, Celery beat 自动标 error。
+    ORPHAN_MEETING_TIMEOUT_MINUTES: int = 30
+
     # 2026-06-19：开始听会 → 不再自动从会议决策/action items 创建任务
     # 关闭后 _auto_create_task_from_meeting 不再被调用，user 需手动建任务
     # 设 True 可恢复旧行为（不推荐，决策不一定都该是任务）
@@ -223,22 +227,11 @@ class Settings(BaseSettings):
     AGENT_PLAN_STEP_MIN_CONFIDENCE: float = 0.5    # #041: intent confidence < 此值不挂计划 (避免 hallucinated tools)
     AGENT_CROSS_DOMAIN_FANOUT_ENABLED: bool = True  # #042: explain_concept 时代码层强制补齐 4 域工具 (不依赖 LLM 自觉, 与 #086 prompt 软规则协同)
 
-    # 2026-06-30 #009: Self-RAG retrieval gate (Phase 0.5)
-    # - judge 模型默认 Haiku 4.5 (走 Anthropic 协议, 跟 compressor/intent 同模型, 延迟 ~300ms)
-    # - 30 天回滚承诺（2026-07-30 截止）：AGENT_SELF_RAG_ENABLED=false 关闭，无需代码回滚
-    AGENT_SELF_RAG_ENABLED: bool = True               # Phase 0.5 总开关 (用户 toggle + settings 双层)
-    AGENT_SELF_RAG_THRESHOLD: float = 0.6             # confidence >= 此值 → 不重检索
-    AGENT_SELF_RAG_RELAXED_THRESHOLD: float = 0.4     # can_answer=true 且 confidence >= 此值 → 不重检索（有答案优于无）
-    AGENT_SELF_RAG_MAX_RERETRIEVE: int = 1            # 最多重检索次数 (硬上限 2 防爆炸)
-    AGENT_SELF_RAG_MAX_CONTEXT_DOCS: int = 8          # 合并后上下文最大文档数
-    AGENT_SELF_RAG_MODEL: str = ""                    # judge 模型, 空=AGENT_REFLECTION_MODEL (生产建议改 claude-haiku-4-5-20251001)
-    AGENT_SELF_RAG_JUDGE_TIMEOUT_MS: int = 3000       # judge 超时, 触发 default-on-fail
-
     # ========================================================================
     # 2026-07-13 #P1: 三态推理模式 (fast / balanced / deep)
-    # - fast: 本地 Qwen3-8B + 关 Self-RAG + 小 budget (闲聊 / 简单查找)
-    # - balanced: 本地 Qwen3-8B + 默认 Self-RAG judge + 默认 budget (沿用 AGENT_SELF_RAG_* 当前默认)
-    # - deep: DeepSeek-R1-Distill-Qwen-7B + Self-RAG 重检索 2 次 + 大 budget + reasoning_content
+    # - fast: 本地 Qwen3-8B + 小 budget + 跳过完整 agent 流程 (闲聊 / 简单查找)
+    # - balanced: 本地 Qwen3-8B + 默认 budget + 完整 agent 流程
+    # - deep: DeepSeek-R1-Distill-Qwen-7B + 大 budget + reasoning_content
     # - 用户切换通过前端 useUiStore.thinkingMode (localStorage 'mnb:ui:thinkingMode') → SSE body thinking_mode
     # - balanced = 当前默认行为逐字段对齐, 零行为差异作为迁移期兜底
     # ========================================================================
@@ -251,7 +244,6 @@ class Settings(BaseSettings):
     AGENT_THINKING_MODE_DEEP_MODEL: str = "deepseek-r1:7b"  # deep 模式 Ollama model tag (原生 reasoning_content) — 2026-07-13 实际 pull 后修正
     AGENT_THINKING_MODE_DEEP_MAX_TOKENS: int = 12000  # deep synthesis max_tokens (留足 DeepSeek-R1 完整 reasoning + 长答案)
     AGENT_THINKING_MODE_DEEP_MAX_TOOL_TOKENS: int = 1500  # deep Phase 1 tool loop max_tokens (允许更复杂工具调用)
-    AGENT_THINKING_MODE_DEEP_MAX_RERETRIEVE: int = 2  # deep 模式 Self-RAG 最多重检索次数 (默认 1 → deep 2)
     AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR: int = 30  # deep 模式单用户每小时限次 (防 DeepSeek 7B 满载)
 
     class Config:

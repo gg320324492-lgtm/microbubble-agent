@@ -1,17 +1,23 @@
-"""孤儿会议清理任务（2026-06-12 防御机制）
+"""孤儿会议清理任务（2026-06-12 防御机制, 2026-07-16 扩展 #207 完整修复）
 
 解决问题：会议状态卡在 recording，但音频数据已物理丢失（前端刷新/断网），
 且用户不再回来点 stop-recording。会议永久占着 ID，Celery 也不会触发后处理。
 
 触发条件（每 10 分钟一次）：
 - status = 'recording'
-- recording_started_at < NOW() - 1h（启动超过 1h）
-- last_chunk_index IS NULL OR last_chunk_index < 0（未收到任何 chunk）
+- recording_started_at < NOW() - ORPHAN_MEETING_TIMEOUT_MINUTES 分钟（默认 30, 原 60 改 30）
 
 动作：
-- 标 status='error', error_reason='录音超时未收到任何音频'
+- 标 status='error', error_reason 含 user_agent + last_chunk_index + total_chunks
 - 推 WS 进度通知（让前端能显示）
 - 删 MinIO 上的相关 chunk 文件（如果有）
+
+2026-07-16 改动:
+  1. 删除 (last_chunk_index IS NULL OR last_chunk_index < 0) 条件, 扩展覆盖
+     "录了 30 分钟突然刷新离开" 的孤儿 (last_chunk_index >= 0 但用户从不 stop)。
+     原条件漏了这部分, 会议永远卡 recording 永不清理。
+  2. error_reason 拼 user_agent 片段, 便于事后排查兼容性问题 (HarmonyOS ArkWeb 等)。
+  3. 阈值改 60min → 30min (settings.ORPHAN_MEETING_TIMEOUT_MINUTES 可配置)。
 """
 
 import asyncio
@@ -51,29 +57,31 @@ async def _scan_and_cleanup() -> dict:
     engine, session_factory = create_celery_engine_and_session()
     redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
-    threshold = datetime.utcnow() - timedelta(hours=1)
+    # 2026-07-16: 阈值改 60min → 30min, 由 settings.ORPHAN_MEETING_TIMEOUT_MINUTES 控制
+    threshold = datetime.utcnow() - timedelta(minutes=settings.ORPHAN_MEETING_TIMEOUT_MINUTES)
     cleaned = []
     errors = []
 
     try:
         async with session_factory() as db:
-            # 找孤儿会议
+            # 2026-07-16 扩展: 删除 last_chunk_index 条件, 覆盖 "录了 N 分钟突然刷新离开" 的孤儿
             r = await db.execute(
                 select(Meeting).where(
                     Meeting.status == "recording",
-                    Meeting.recording_started_at < threshold,
-                    (Meeting.last_chunk_index.is_(None)) | (Meeting.last_chunk_index < 0)
+                    Meeting.recording_started_at < threshold
                 )
             )
             orphans = r.scalars().all()
 
             for m in orphans:
                 try:
-                    # 标 error
+                    # 标 error (2026-07-16: error_reason 拼 user_agent 片段)
                     m.status = "error"
+                    ua_short = (m.user_agent or 'unknown')[:80]
                     m.error_reason = (
-                        f"录音超过 1h 未收到任何音频 chunk（last_chunk_index={m.last_chunk_index}），"
-                        f"已自动清理"
+                        f"录音超过 {settings.ORPHAN_MEETING_TIMEOUT_MINUTES}min 未 stop "
+                        f"(last_chunk_index={m.last_chunk_index}, total_chunks={m.total_chunks}), "
+                        f"已自动清理 [UA: {ua_short}]"
                     )
                     # 顺手清 MinIO（防孤儿文件）
                     try:

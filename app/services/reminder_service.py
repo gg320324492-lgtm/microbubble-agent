@@ -550,19 +550,18 @@ class ReminderService:
 def process_reminders_task():
     """Celery task: 处理所有待发送提醒（v2 入口）"""
     import asyncio
+    from sqlalchemy.ext.asyncio import async_sessionmaker
     import redis.asyncio as aioredis
     from app.config import settings
 
     async def _run():
         # 创建独立的引擎和 Redis 连接，避免跨事件循环的连接池冲突
+        engine, session_factory = create_celery_engine_and_session()
         redis_client = aioredis.from_url(
             settings.REDIS_URL, decode_responses=True
         )
         try:
-            async_session_factory = async_sessionmaker(
-                engine, class_=AsyncSession, expire_on_commit=False
-            )
-            async with async_session_factory() as db:
+            async with session_factory() as db:
                 service = ReminderService(db)
                 result = await service.process_reminders(redis_override=redis_client)
                 print(f"提醒处理完成: {result}")
