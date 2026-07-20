@@ -362,6 +362,7 @@ const {
   batchSoftDelete,
   batchMove: doBatchMove,
   batchUpdateVisibility: doBatchUpdateVisibility,
+  batchDownload: doBatchDownload,
   toggleSelect: toggleFileSelect,
   clearSelection,
   selectAll
@@ -472,11 +473,60 @@ async function handleBatchMove() {
 }
 
 async function handleBatchShare() {
-  ElMessage.info('批量分享: 暂未实现, 请逐个使用分享按钮')
+  // v77 留尾清理 (2026-07-20): 逐个复用 createShareLink (share_link API 已实装),
+  // 汇总所有分享 URL 后复制到剪贴板 (批量分享 = 生成 N 条链接)
+  if (!selectedFileIds.value.length) return
+  const ids = [...selectedFileIds.value]
+  const lines = []
+  let fail = 0
+  for (const id of ids) {
+    try {
+      const target = driveFiles.value.find(f => f.id === id)
+      const result = await createShareLink(id)
+      const fullUrl = `${window.location.origin}${result.shareUrl}`
+      lines.push(`${target?.file_name || `文件${id}`}: ${fullUrl}`)
+    } catch (e) {
+      fail++
+    }
+  }
+  if (!lines.length) {
+    ElMessage.error('批量分享失败, 请逐个使用分享按钮')
+    return
+  }
+  const text = lines.join('\n')
+  let copied = false
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      copied = true
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      try { copied = document.execCommand('copy') } catch (_) { /* noop */ }
+      document.body.removeChild(ta)
+    }
+  } catch (_) { /* noop */ }
+  const suffix = fail ? `, ${fail} 个失败` : ''
+  if (copied) {
+    ElMessage.success(`已生成 ${lines.length} 条分享链接并复制到剪贴板${suffix}`)
+  } else {
+    ElMessage.success(`已生成 ${lines.length} 条分享链接 (复制失败, 请手动分享)${suffix}`)
+  }
 }
 
 async function handleBatchDownload() {
-  ElMessage.info('批量下载: 暂未实现, 请逐个下载')
+  // v77 留尾清理 (2026-07-20): 复用后端 batch-download ZIP 流式端点 (drive_files.py:931)
+  if (!selectedFileIds.value.length) return
+  try {
+    await doBatchDownload([...selectedFileIds.value])
+    ElMessage.success(`已开始下载 ${selectedFileIds.value.length} 个文件的 ZIP 打包`)
+  } catch (e) {
+    ElMessage.error(e.response?.data?.error?.message || e.message || '批量下载失败')
+  }
 }
 
 async function handleBatchUpdateVisibility(visibility) {
