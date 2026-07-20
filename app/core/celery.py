@@ -77,6 +77,12 @@ celery_app.conf.update(
             "task": "app.services.file_mention_tasks.cleanup_old_mentions_task",
             "schedule": 86400.0,  # 每 24 小时扫描 (retention=30 天时误差 < 1.4%)
         },
+        # 2026-07-20 W2 T3 P2-A: chat_share 过期主动清理 (24h Redis TTL 失效 PG 行兜底)
+        # 对齐 file_mention 24h 调度频率 (chat_share 本身 24h 过期, 主动清理立即生效)
+        "chat-share-cleanup-expired": {
+            "task": "app.services.chat_share_tasks.cleanup_expired_chat_shares_task",
+            "schedule": 86400.0,  # 每 24 小时扫描 (chat_share 24h 过期语义对齐)
+        },
     },
 )
 
@@ -101,6 +107,7 @@ celery_app.conf.imports = [
     "app.services.thumbnail_tasks",  # 2026-07-01 课题组网盘 PR5 缩略图生成
     "app.services.storage_tasks",  # 2026-07-01 课题组网盘 PR5 配额重算 + 分片 session 清理
     "app.services.file_mention_tasks",  # 2026-07-02 v2 PR6-P9 通知 30 天清理
+    "app.services.chat_share_tasks",  # 2026-07-20 W2 T3 P2-A 过期 share 清理
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
