@@ -54,9 +54,7 @@ class ChatRequest(BaseModel):
     """对话请求"""
     message: str
     session_id: str = "default"
-    # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle）
     model: Optional[str] = None  # 覆盖 settings.AGENT_SYNTHESIS_MODEL
-    use_self_rag: Optional[bool] = None  # 覆盖 settings.AGENT_SELF_RAG_ENABLED
     # 2026-07-13 #P1 三档推理模式 (fast / balanced / deep), 前端 useChatStream 透传
     thinking_mode: Optional[Literal["fast", "balanced", "deep"]] = None  # None 走 settings.AGENT_THINKING_MODE_DEFAULT
 
@@ -105,9 +103,7 @@ async def chat(
         session_id=request.session_id,
         db=db,
         user_id=current_user.id,
-        # 2026-06-30 #009 Self-RAG: per-request override
         model=request.model,
-        use_self_rag=request.use_self_rag,
         # 2026-07-13 #P1 三档推理模式透传
         thinking_mode=request.thinking_mode,
     )
@@ -296,9 +292,7 @@ async def chat_stream_route(
                 session_id=request.session_id,
                 db=db,
                 user_id=current_user.id,
-                # 2026-06-30 #009 Self-RAG: per-request override（用户 toggle）
                 model=request.model,
-                use_self_rag=request.use_self_rag,
                 # 2026-07-13 #P1 三档推理模式透传
                 thinking_mode=request.thinking_mode,
             ):

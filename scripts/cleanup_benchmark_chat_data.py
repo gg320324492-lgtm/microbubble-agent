@@ -1,4 +1,4 @@
-"""Self-RAG benchmark 测试数据清理 (2026-07-14 一次性)
+"""Benchmark 测试数据清理 (2026-07-14 一次性)
 
 清理范围 (最小化, 不误伤历史数据):
   1. chat_sessions + chat_messages (CASCADE) where user_id=59 (xiaoqi_testbot) AND created_at >= benchmark 启动时间

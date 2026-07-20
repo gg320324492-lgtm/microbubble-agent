@@ -20,7 +20,6 @@
 - 各 mode 的 avg_latency_ms / avg_input_tokens / avg_output_tokens
 - 7 维分 (intent / tool / content / rich / defense / perf / consistency)
 - thinking_tokens_used (deep 模式预期 > 0)
-- self_rag_reretrieve_count (deep 模式预期 ≥ 1)
 - cost_estimate_usd (粗估)
 """
 
@@ -105,7 +104,6 @@ def compute_stats(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     input_toks = []
     output_toks = []
     thinking_toks = []
-    reretrieve_counts = []
     scores = []
 
     for r in results:
@@ -116,8 +114,6 @@ def compute_stats(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             output_toks.append(usage["output_tokens"])
         if "thinking_tokens" in usage:
             thinking_toks.append(usage["thinking_tokens"])
-        if r.get("self_rag_reretrieve_count") is not None:
-            reretrieve_counts.append(r["self_rag_reretrieve_count"])
         if "score" in r and isinstance(r["score"], dict):
             # 7 维分取 mean
             s = r["score"]
@@ -144,7 +140,6 @@ def compute_stats(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "input_tokens": _stats(input_toks),
         "output_tokens": _stats(output_toks),
         "thinking_tokens": _stats(thinking_toks),
-        "reretrieve_count": _stats(reretrieve_counts),
         "seven_dim_avg": _stats(scores),
     }
 
@@ -170,15 +165,14 @@ def render_markdown(mode_stats: Dict[str, Dict[str, Any]], questions: List[Dict]
 
     lines.append("## Token 使用")
     lines.append("")
-    lines.append("| Mode | input_tokens avg | output_tokens avg | thinking_tokens avg | reretrieve avg |")
-    lines.append("|------|------------------|-------------------|----------------------|-----------------|")
+    lines.append("| Mode | input_tokens avg | output_tokens avg | thinking_tokens avg |")
+    lines.append("|------|------------------|-------------------|----------------------|")
     for mode, stats in mode_stats.items():
         i = stats["input_tokens"]
         o = stats["output_tokens"]
         t = stats["thinking_tokens"]
-        r = stats["reretrieve_count"]
         lines.append(
-            f"| {mode} | {i['avg']} (n={i['count']}) | {o['avg']} (n={o['count']}) | {t['avg']} (n={t['count']}) | {r['avg']} (n={r['count']}) |"
+            f"| {mode} | {i['avg']} (n={i['count']}) | {o['avg']} (n={o['count']}) | {t['avg']} (n={t['count']}) |"
         )
     lines.append("")
 
@@ -205,7 +199,7 @@ def render_markdown(mode_stats: Dict[str, Dict[str, Any]], questions: List[Dict]
     lines.append("")
     lines.append("## 结论 (自动生成)")
     lines.append("")
-    lines.append("- deep 模式应该 thinking_tokens_used > 0 且 reretrieve_count ≥ 1")
+    lines.append("- deep 模式应该 thinking_tokens_used > 0")
     lines.append("- deep 模式应该 7 维分在 deep_concept 类题 ≥ fast 5%")
     lines.append("- fast 模式应该延迟 < balanced < deep")
     return "\n".join(lines)

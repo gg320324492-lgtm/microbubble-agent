@@ -18,7 +18,7 @@ def main():
     report = ["# 小气助手能力测评 - 高级能力报告 (W4 T4.7)\n"]
     report.append(f"**生成时间**: 2026-06-30")
     report.append(f"**P 高级题**: {len(p_qs)} 题 (W1 gen780.py 模板生成)")
-    report.append(f"**场景**: Self-RAG / fan-out / plan_step / 持久化 / abort / grounding\n")
+    report.append(f"**场景**: 检索质量 / fan-out / plan_step / 持久化 / abort / grounding\n")
 
     # 1. 子题分布
     report.append("## 1. P 高级 6 子类分布\n")
@@ -58,8 +58,8 @@ def main():
         report.append("| " + " | ".join(row) + " |")
     report.append("")
 
-    # 4. W4 T3.4 Self-RAG 3-tier 改进
-    report.append("## 4. W4 T3.4 Self-RAG 3-tier 分级改进\n")
+    # 4. W4 T3.4 检索质量 3-tier 改进
+    report.append("## 4. W4 T3.4 检索质量 3-tier 分级改进\n")
     report.append("### 4.1 改进前 (W1 阶段)")
     report.append("- 单阈值 0.6: confidence >= 0.6 不重检索, 否则触发")
     report.append("- 缺点: 模糊查询 (e.g. 0.55) 立即重检索, 增加 latency 30%+")
@@ -79,7 +79,7 @@ def main():
 
     # 5. W4 T3.5 性能优化 (deferred)
     report.append("## 5. W4 T3.5 性能优化 (deferred)\n")
-    report.append("**目标**: Phase 0.5 (Self-RAG) 与 Phase 1 首轮检索并行")
+    report.append("**目标**: Phase 0.5 (检索质量) 与 Phase 1 首轮检索并行")
     report.append("")
     report.append("**为什么 defer**:")
     report.append("- 主循环重构风险高 (动 Phase 0.5 / 1 的串联逻辑)")
@@ -96,7 +96,7 @@ def main():
     report.append("## 6. 5 弱项改进计划回顾 (来自 plan 5.1)\n")
     improvements = [
         ("A. 跨域 4 域综合", "W3 T3.3 4-段 checklist + 5-段 LLM 自检", "✅ 实施", "prompts.py"),
-        ("B. Self-RAG 阈值优化", "W4 T3.4 3-tier 分级 (0.8/0.6/0.4)", "✅ 实施", "agentic_loop.py"),
+        ("B. 检索质量阈值优化", "W4 T3.4 3-tier 分级 (0.8/0.6/0.4)", "✅ 实施", "agentic_loop.py"),
         ("C. 持久化聊天", "W1 #043 8 phase 收官 (跨 session 摘要)", "✅ 收官", "app/services/chat_history*"),
         ("D. 任务创建参数解析", "W2 验收 — 测试集覆盖 B3 5 题", "✅ 完成", "manual_234.jsonl"),
         ("E. 性能优化", "W4 T3.5 deferred (需主循环重构)", "⏸ W5/W6", "agentic_loop.py"),

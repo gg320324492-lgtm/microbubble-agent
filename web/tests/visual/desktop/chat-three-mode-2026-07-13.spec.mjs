@@ -52,7 +52,7 @@ async function captureChatStream(page, message, thinkingMode) {
       const reader = r.body.getReader()
       const decoder = new TextDecoder()
       let buf = ''
-      const events = { text: '', done: null, retrievalCount: 0 }
+      const events = { text: '', done: null }
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
@@ -65,8 +65,6 @@ async function captureChatStream(page, message, thinkingMode) {
             const evt = JSON.parse(line)
             if (evt.type === 'text_delta') {
               events.text += evt.delta || ''
-            } else if (evt.type === 'retrieval_assessment' || evt.type === 'reretrieval') {
-              events.retrievalCount++
             } else if (evt.type === 'done') {
               events.done = evt
             }
