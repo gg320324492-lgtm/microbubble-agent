@@ -24,7 +24,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 
 const STORAGE_KEY = 'mnb:ui:showThinking'
-const LEGACY_DEPTH_KEY = 'mnb:ui:useDeepThinking'  // 2026-06-30 #009 Self-RAG (boolean)
+const LEGACY_DEPTH_KEY = 'mnb:ui:useDeepThinking'  // 旧版 boolean 深度思考开关
 const MODE_STORAGE_KEY = 'mnb:ui:thinkingMode'  // 2026-07-13 #P1 三档 (string)
 
 const VALID_MODES = ['fast', 'balanced', 'deep']

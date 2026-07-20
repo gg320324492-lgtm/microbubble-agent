@@ -2,13 +2,13 @@
 
 设计目标：
 - 把 toggle 行为从「半成品 UI 包装」升级为「真区分」
-- 每档 mode 在 4 个维度同时变化：model / thinking / max_tokens / Self-RAG
+- 每档 mode 在 3 个维度同时变化：model / thinking / max_tokens
 - balanced = 当前默认行为逐字段对齐，作为迁移期兜底
 - fast / deep 是「真不同」，qa-bench 100 题可量化区分
 
 调用方：
 - chat_engine.synthesize_stream 入口根据 thinking_mode 参数 → resolve_thinking_config() → 注入 ToolContext
-- agentic_loop 5 处真分支 (L1019 self_rag gate / L1050 Phase 1 tool loop / L1334 synthesis model / L1422 synthesis stream / done event) 读 ctx.thinking_config
+- agentic_loop 的 tool loop / synthesis model / synthesis stream / done event 读 ctx.thinking_config
 - intent_aware_prompts / primitive_recognition / cross_domain_synthesis 三段 prompt gate 从 settings 切换到 ctx.thinking_config
 
 复用：
@@ -43,8 +43,6 @@ class ThinkingConfig:
     - skip_plan_step: 是否跳过 Phase 0 强制 plan_step (Haiku suggested_tools → agentic_loop
       主动 dispatch); fast=True 跳过让用户感知"快速"语义
     - skip_critique: 是否跳过 Phase 3 critique + Phase 4 retry; fast=True 跳过节省 0.5-3s
-    - self_rag_enabled: 是否跑 Phase 0.5 Self-RAG judge
-    - self_rag_max_reretrieve: Self-RAG judge parse-fail 时最多重检索次数 (0/1/2)
     - intent_aware_prompts: 是否按 intent 分类追加「闲聊/数据/深度」prompt section
     - primitive_recognition: 是否在深度场景追加 5 大原意识别 section
     - cross_domain_synthesis: 是否在 explain_concept 场景追加跨域综合规则
@@ -61,8 +59,6 @@ class ThinkingConfig:
     max_tool_rounds: int
     skip_plan_step: bool
     skip_critique: bool
-    self_rag_enabled: bool
-    self_rag_max_reretrieve: int
     intent_aware_prompts: bool
     primitive_recognition: bool
     cross_domain_synthesis: bool
@@ -103,8 +99,6 @@ def resolve_thinking_config(mode: Optional[str]) -> ThinkingConfig:
             max_tool_rounds=0,
             skip_plan_step=True,
             skip_critique=True,
-            self_rag_enabled=False,
-            self_rag_max_reretrieve=0,
             intent_aware_prompts=False,
             primitive_recognition=False,
             cross_domain_synthesis=False,
@@ -124,8 +118,6 @@ def resolve_thinking_config(mode: Optional[str]) -> ThinkingConfig:
             max_tool_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
             skip_plan_step=False,
             skip_critique=False,
-            self_rag_enabled=True,
-            self_rag_max_reretrieve=settings.AGENT_THINKING_MODE_DEEP_MAX_RERETRIEVE,
             intent_aware_prompts=True,
             primitive_recognition=True,
             cross_domain_synthesis=True,
@@ -145,8 +137,6 @@ def resolve_thinking_config(mode: Optional[str]) -> ThinkingConfig:
         max_tool_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
         skip_plan_step=False,
         skip_critique=False,
-        self_rag_enabled=settings.AGENT_SELF_RAG_ENABLED,
-        self_rag_max_reretrieve=settings.AGENT_SELF_RAG_MAX_RERETRIEVE,
         intent_aware_prompts=settings.AGENT_INTENT_AWARE_PROMPTS,
         primitive_recognition=settings.AGENT_PRIMITIVE_RECOGNITION,
         cross_domain_synthesis=settings.AGENT_CROSS_DOMAIN_SYNTHESIS,

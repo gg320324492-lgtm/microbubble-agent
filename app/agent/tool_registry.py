@@ -55,10 +55,8 @@ class ToolContext:
         redis=None,  # aioredis.Redis | None；intent_classifier / result_compressor 用
         llm=None,    # LLMClient | None；agentic_loop / critic 用，None 时调用方临时创建
         loop_id: str = "",  # debugging：记录当前 event loop 标识，便于排查跨 loop 问题
-        # 2026-06-30 #009 Self-RAG: per-request 覆盖（用户 toggle 优先于 settings 全局开关）
-        self_rag_enabled: Optional[bool] = None,  # True=跑 Phase 0.5 gate, False=跳过, None=用 settings.AGENT_SELF_RAG_ENABLED
         synthesis_model_override: Optional[str] = None,  # 覆盖 settings.AGENT_SYNTHESIS_MODEL 的 synthesis 模型
-        # 2026-07-13 #P1 三态推理模式 (fast/balanced/deep): 整包配置注入, agentic_loop 5 处真分支读此字段
+        # 2026-07-13 #P1 三态推理模式 (fast/balanced/deep): 整包配置注入
         # None 时回落 settings 默认 (即旧 behavior), 兼容旧调用点
         thinking_config=None,  # ThinkingConfig | None (循环 import 防护: 不引入类型注解)
         mode_label: str = "balanced",  # UI 展示名, 流式 done 事件回填
@@ -71,7 +69,6 @@ class ToolContext:
         self.redis = redis
         self.llm = llm
         self.loop_id = loop_id
-        self.self_rag_enabled = self_rag_enabled
         self.synthesis_model_override = synthesis_model_override
         self.thinking_config = thinking_config  # None 时 agentic_loop 走 settings fallback 路径
         self.mode_label = mode_label

@@ -4,9 +4,9 @@
  *
  * 替代 顶栏 2 个 🧠/⚡ toggle button（视觉冲突）
  * 设计: 3 选 1 segmented control，input bar 上方
- * - ⚡快速 (fast):     本地 Qwen3-8B + 关 Self-RAG + 小 budget
- * - 🖥平衡 (balanced): 本地 Qwen3-8B + 默认 Self-RAG judge (默认)
- * - ✨深度 (deep):     DeepSeek-R1-Distill-Qwen-7B + thinking + 重检索 2 次
+ * - ⚡快速 (fast):     本地 Qwen3-8B + 小 budget + 跳过完整 agent 流程
+ * - 🖥平衡 (balanced): 本地 Qwen3-8B + 默认 budget + 完整 agent 流程
+ * - ✨深度 (deep):     DeepSeek-R1-Distill-Qwen-7B + thinking + 完整质量控制
  *
  * a11y 4-attr 全部就绪
  * dark mode 走非 scoped 块（v60-v67 教训）
@@ -18,8 +18,8 @@ const uiStore = useUiStore()
 
 const MODES = [
   { value: 'fast', icon: Lightning, label: '快速', title: '快速回答 (Qwen3-8B · 跳过深度推理)' },
-  { value: 'balanced', icon: Cpu, label: '平衡', title: '平衡模式 (Qwen3-8B · 默认 Self-RAG)' },
-  { value: 'deep', icon: MagicStick, label: '深度', title: '深度模式 (DeepSeek-R1 + thinking + 重检索)' },
+  { value: 'balanced', icon: Cpu, label: '平衡', title: '平衡模式 (Qwen3-8B · 完整 Agent 流程)' },
+  { value: 'deep', icon: MagicStick, label: '深度', title: '深度模式 (DeepSeek-R1 + thinking + 完整质量控制)' },
 ]
 
 function onChange(value) {

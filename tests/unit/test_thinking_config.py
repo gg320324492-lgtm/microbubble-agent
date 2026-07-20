@@ -54,12 +54,6 @@ class TestDeepModeUnchanged:
         assert cfg.skip_plan_step is False
         assert cfg.skip_critique is False
 
-    def test_deep_self_rag_enabled(self):
-        """deep 模式保留 Self-RAG 重检索 2 次"""
-        cfg = resolve_thinking_config("deep")
-        assert cfg.self_rag_enabled is True
-        assert cfg.self_rag_max_reretrieve == 2
-
 
 class TestUnknownFallback:
     """Unknown mode / None fallback 到 balanced（不抛错, 避免前端脏数据炸后端）"""
@@ -105,8 +99,6 @@ class TestBackwardCompatibility:
             assert isinstance(cfg.max_tool_rounds, int) and cfg.max_tool_rounds >= 0
             assert isinstance(cfg.skip_plan_step, bool)
             assert isinstance(cfg.skip_critique, bool)
-            assert isinstance(cfg.self_rag_enabled, bool)
-            assert isinstance(cfg.self_rag_max_reretrieve, int)
             assert isinstance(cfg.intent_aware_prompts, bool)
             assert isinstance(cfg.primitive_recognition, bool)
             assert isinstance(cfg.cross_domain_synthesis, bool)

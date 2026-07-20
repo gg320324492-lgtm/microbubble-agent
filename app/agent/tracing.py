@@ -106,9 +106,9 @@ class TraceCollector:
         self.compression_applied_count: int = 0
         self.critique_score: Optional[int] = None
         self.retry_count: int = 0
-        # 2026-06-30 #009 Self-RAG: judge 评估结果 mirror 到 agent_traces
+        # 通用检索监控字段（保留 set 接口以便未来 RAG 改进或 offline reranker 接入）
         self.retrieval_quality_score: Optional[float] = None
-        self.retrieval_attempts: Optional[int] = None
+        self.retrieval_attempts: Optional[int] = 0
 
     # ---- 记录方法 ----
 
@@ -167,7 +167,7 @@ class TraceCollector:
         self.retry_count = retry_count
 
     def set_retrieval_quality(self, score: float, attempts: int = 0):
-        """2026-06-30 #009: 记录 Self-RAG judge 最终评估（便于 agent_traces 表聚合分析）"""
+        """记录检索质量评分（通用接口，未来 RAG 改进或 offline reranker 接入可继续使用）"""
         self.retrieval_quality_score = score
         self.retrieval_attempts = attempts
 
@@ -324,7 +324,6 @@ class TraceCollector:
                     trace_row.critique_score = payload.get("critique_score")
                 if hasattr(trace_row, "retry_count"):
                     trace_row.retry_count = payload.get("retry_count", 0)
-                # 2026-06-30 #009 Self-RAG
                 if hasattr(trace_row, "retrieval_quality_score"):
                     trace_row.retrieval_quality_score = payload.get("retrieval_quality_score")
                 if hasattr(trace_row, "retrieval_attempts"):
@@ -402,7 +401,5 @@ class TraceCollector:
             "compression_applied_count": self.compression_applied_count,
             "critique_score": self.critique_score,
             "retry_count": self.retry_count,
-            # 2026-06-30 #009 Self-RAG
-            "retrieval_quality_score": self.retrieval_quality_score,
             "retrieval_attempts": self.retrieval_attempts,
         }
