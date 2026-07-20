@@ -48,7 +48,11 @@ def test_upload_to_path_signature():
 
 @pytest.mark.asyncio
 async def test_upload_to_path_basic():
-    """upload_to_path 上传 bytes 到指定 object_name（mock MinIO put_object）"""
+    """upload_to_path 上传 bytes 到指定 object_name (mock MinIO put_object 用位置参数 API)
+
+    W1 (2026-07-21) T1 endpoint_404 fix: 测试从 s3 kwargs API 改成 minio-py 位置参数 API
+    (生产 file_service.py 用 minio-py: client.put_object(bucket, object_name, data, length, content_type))
+    """
     test_bytes = b"fake audio content for testing"
     object_name = "test_uploads/audio_test.opus"
 
@@ -61,10 +65,12 @@ async def test_upload_to_path_basic():
         assert result["object_name"] == object_name
         assert result["size"] == len(test_bytes)
         assert result["content_type"] == "audio/ogg"
-        # 验证 put_object 被以正确参数调用
+        # 验证 put_object 被以正确位置参数调用 (minio-py 风格)
         file_service.client.put_object.assert_called_once()
+        call_args = file_service.client.put_object.call_args.args
         call_kwargs = file_service.client.put_object.call_args.kwargs
-        assert call_kwargs["Bucket"] == file_service.bucket
-        assert call_kwargs["Key"] == object_name
-        assert call_kwargs["Length"] == len(test_bytes)
-        assert call_kwargs["ContentType"] == "audio/ogg"
+        # minio-py 位置参数: (bucket_name, object_name, data, length, content_type)
+        assert call_args[0] == file_service.bucket  # bucket_name
+        assert call_args[1] == object_name  # object_name
+        assert call_kwargs.get("length") == len(test_bytes)
+        assert call_kwargs.get("content_type") == "audio/ogg"

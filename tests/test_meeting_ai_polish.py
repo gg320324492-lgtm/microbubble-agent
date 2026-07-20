@@ -26,12 +26,15 @@ async def test_polish_segments_basic():
         "summary": "讨论方案并决定下周开始"
     }"""
 
-    with patch("app.services.meeting_ai_polish.get_anthropic_client") as mock_client_factory:
-        mock_client = AsyncMock()
+    # W2 T2 (2026-07-21) 修类 3 orm_edge — production polish dispatch 已从
+    # `get_anthropic_client` 迁到 `_get_llm()` (LLMClient singleton, commit 2aeae1ed).
+    # 测试 mock 改 patch `_get_llm()` 并返回 Mock LLMClient, message 结构走 .complete() 返回 .content[0].text
+    with patch("app.services.meeting_ai_polish._get_llm") as mock_llm_factory:
+        mock_llm = MagicMock()
         mock_message = MagicMock()
         mock_message.content = [MagicMock(text=mock_response_text)]
-        mock_client.messages.create = AsyncMock(return_value=mock_message)
-        mock_client_factory.return_value = mock_client
+        mock_llm.complete = AsyncMock(return_value=mock_message)
+        mock_llm_factory.return_value = mock_llm
 
         result = await polish_segments(segments, context)
 
@@ -99,7 +102,7 @@ async def test_polish_segments_cache_hit():
     await fake.set(cache_key, json.dumps(cached), ex=60)
 
     with patch("app.services.meeting_ai_polish.get_redis", AsyncMock(return_value=fake)), \
-         patch("app.services.meeting_ai_polish.get_anthropic_client") as mock_factory:
+         patch("app.services.meeting_ai_polish._get_llm") as mock_factory:
         result = await polish_segments_with_cache(1, segments, context)
 
     assert result["polished"][0]["text"] == "缓存版"
