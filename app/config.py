@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     # 运维/测试时可临时缩短（如 0 立即清空）— 与 TRASH_RETENTION_DAYS 范式一致
     CHAT_HISTORY_RETENTION_DAYS: int = 30
 
+    # 2026-07-16 +060: 录音 User-Agent 截断长度 (默认 500 字符)
+    # 超过此长度的 UA 在 start-recording 时截断后再落库, 防止恶意/异常长 UA
+    # 把 meetings.user_agent VARCHAR(500) 列撑爆或拖慢 index 查询。
+    # 配套: alembic 060_meeting_user_agent.py + app/api/v1/meeting_recording.py:36
+    MEETING_USER_AGENT_MAX_LEN: int = 500
+
     # 2026-07-16 +060: 孤儿会议清理阈值 (默认 30 分钟, 旧版硬编码 60min 太长)
     # 录音超过此分钟数仍未 stop 的会议, Celery beat 自动标 error。
     ORPHAN_MEETING_TIMEOUT_MINUTES: int = 30

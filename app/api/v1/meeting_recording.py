@@ -33,7 +33,7 @@ async def start_recording(
        兼容性失败是哪类设备 (HarmonyOS ArkWeb / iOS Safari / 企业微信 X5 等)。
     """
     # 2026-07-16 +060: 截断 UA 防爆, VARCHAR(500) 上限
-    user_agent = (request.headers.get('User-Agent') or '')[:500]
+    user_agent = (request.headers.get('User-Agent') or '')[:settings.MEETING_USER_AGENT_MAX_LEN]
     now = datetime.now(timezone.utc).replace(tzinfo=None)  # 转为 naive datetime 适配 TIMESTAMP WITHOUT TIME ZONE
     meeting = Meeting(
         title="正在听会",  # 占位，commit 拿到 id 后补全为 "正在听会（ID {id}）"
