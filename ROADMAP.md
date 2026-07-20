@@ -3,12 +3,12 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-21 W6 终极收口 — 66 commit + 22 memory + 89 任务）
+## 当前状态（2026-07-21 W7 终极收口 — 67 commit + 23 memory + 89 任务）
 
-**已交付（2026-07-21 W5+W6 终极 — 跨 21 批 multi-agent 任务 + 11 次 baseline 对齐 + 锚点 memory 实战验证 + 4 类 84 fail/error 闭环）**：
+**已交付（2026-07-21 W5+W6+W7 终极 — 跨 21 批 multi-agent 任务 + 12 次 baseline 对齐 + 锚点 memory 实战验证 + 4 类 84 fail/error 闭环）**：
 
-- 🆕 **11 次 baseline 100% 对齐** (W2 T2 → W2 T2 10 baseline, 跨 24h 60+ commit): 9 文件合跑 SKIP 模式全部 **71 PASS + 7 SKIP** 一致, 0 regression, 0 flaky test, 平均耗时 ~2.16s
-- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 66 commit / 89 任务 / 21 worker 实战中 0 偏离, 132 技术/方法论铁律沉淀
+- 🆕 **12 次 baseline 100% 对齐** (W2 T2 → W7 12 baseline, 跨 24h 67+ commit): 9 文件合跑 SKIP 模式全部 **71 PASS + 7 SKIP** 一致, 0 regression, 0 flaky test, 平均耗时 ~2.16s
+- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 67 commit / 89 任务 / 22 worker 实战中 0 偏离, 136 技术/方法论铁律沉淀
 - 🆕 **4 类 84 fail/error 闭环 53/84 (63%)** — 类 1 migration_stale 12 err (`0112d668`) + 类 2 endpoint_404 40 fail (`fb921992`+`9c475740`) + 类 3 orm_edge 9 fail (`4606e677`+`9c475740`) + 类 4 other 4 fail (`db7e6e58`)
 - 🆕 **W19 选项 A 4 留未来 PR 拍板 + 2026-2027 季度排期** — Phase 8.5 (P4) / P3 dedup / P3 跨 tab / 7 E2E 全部留未来, 触发即排 (勒索软件 / 合规 / 用户反馈 / 主指挥决策)
 - 🆕 **5 pending items 5/5 100% 闭环** — PR6-P18 / Self-RAG / voiceprint_relaxed / PR6-P17 / Phase 8.1-8.4
