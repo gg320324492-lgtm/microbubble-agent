@@ -23,6 +23,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Reques
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.v1._drive_error_helper import (
+    ERR_BATCH_PARAM_MISSING,
+    ERR_FILE_FORBIDDEN,
+    ERR_FILE_NOT_FOUND,
+    ERR_SHARE_LINK_NOT_FOUND,
+    raise_app_error,
+)
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.knowledge import Knowledge
@@ -457,9 +464,10 @@ async def update_drive_file(
             folder_id=payload.folder_id,
         )
     except DriveServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e))
+        # W1 T1 migration: DriveServiceError → AppException envelope (helper)
+        raise_app_error(e.status_code, ERR_FILE_FORBIDDEN, str(e), file_id=file_id)
     if f is None:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise_app_error(404, ERR_FILE_NOT_FOUND, "file 不存在或非 owner", file_id=file_id)
     return _to_item(f)
 
 
@@ -715,7 +723,8 @@ async def batch_move_files(
             current_user_id=current_user.id,
         )
     except DriveServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e))
+        # W1 T1 migration: DriveServiceError → AppException envelope
+        raise_app_error(e.status_code, ERR_FILE_FORBIDDEN, str(e))
     return BatchOperationResponse(
         succeeded_count=moved,
         skipped_ids=skipped,
@@ -940,7 +949,8 @@ async def batch_download_drive_files(
     无权限文件跳过, ZIP 根目录生成 _skipped.txt
     """
     if not payload.ids and not payload.folder_id:
-        raise HTTPException(status_code=400, detail="ids 或 folder_id 必填其一")
+        # W1 T1 migration: 400 → AppException envelope (BATCH_PARAM_MISSING)
+        raise_app_error(400, ERR_BATCH_PARAM_MISSING, "ids 或 folder_id 必填其一")
 
     svc = DriveService(db)
 
@@ -965,7 +975,8 @@ async def batch_download_drive_files(
         )
 
     if not file_records and not skipped:
-        raise HTTPException(status_code=404, detail="无可下载文件")
+        # W1 T1 migration: 404 → AppException envelope
+        raise_app_error(404, ERR_FILE_NOT_FOUND, "无可下载文件")
 
     # 2) 流式生成 ZIP
     timestamp = _dt_now.now().strftime("%Y%m%d_%H%M%S")
@@ -1096,9 +1107,10 @@ async def create_share_link(
             password=payload.password,
         )
     except DriveServiceError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e))
+        # W1 T1 migration: DriveServiceError → AppException envelope
+        raise_app_error(e.status_code, ERR_FILE_FORBIDDEN, str(e), file_id=file_id)
     if f is None:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise_app_error(404, ERR_SHARE_LINK_NOT_FOUND, "file 不存在或非 owner", file_id=file_id)
 
     # share_url 用 settings.PUBLIC_BASE_URL (前端拼) - 这里用相对路径
     share_url = f"/drive/share/{f.share_token}"
@@ -1121,7 +1133,7 @@ async def revoke_share_link(
     svc = DriveService(db)
     ok = await svc.revoke_share_link(file_id, current_user_id=current_user.id)
     if not ok:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise_app_error(404, ERR_SHARE_LINK_NOT_FOUND, "file 不存在或非 owner", file_id=file_id)
     return
 
 
