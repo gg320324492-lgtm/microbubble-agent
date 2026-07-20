@@ -206,7 +206,7 @@ class Settings(BaseSettings):
     POLISH_BATCH_INTERVAL_SECONDS: int = 30  # L2 攒批触发间隔
     POLISH_BATCH_MAX_SEGMENTS: int = 5  # L2 攒批最大段数
     POLISH_BATCH_MIN_CHARS: int = 30  # L2 攒批最少字符数（避免空批）
-    TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 1000  # 原 200 → 1000（覆盖长会议）
+    TRANSCRIPT_BUFFER_MAX_ENTRIES: int = 200  # Redis LIST 限长（test_maxlen_200 契约）
 
     # ========================================================================
     # 2026-06-14 方案 C：Agent 单阶段流式渐进综合架构（plan: eager-juggling-dewdrop.md）
