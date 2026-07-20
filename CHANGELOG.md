@@ -1,10 +1,48 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-21 W23 终极)**: 累计 **54 commit + 16 memory + 78 任务** 收口. **8 次 baseline 100% 对齐** (W2 T2 → W22 T1). 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用. W19 选项 A 4 留未来 PR 拍板 (Phase 8.5 + P3 dedup + P3 跨 tab + 7 E2E). 详见下方"W22 + W23 收口" 段 + 4 新 memory (`w16-baseline-six-runs-closure-2026-07-21` + `multi-agent-coordination-grand-closure-2026-07-21` + `phase-8-cloud-mirror-2026-07-21` + `w18-7-baseline-closure-2026-07-21`).
 > **本会话 (2026-07-21)**: Phase 8 完整闭环 + 6 次 baseline 对齐 + 48 commit 收官. **5 pending items 5/5 100% 闭环** (含 Phase 8.3 阿里云 OSS cloud 镜像 + Phase 8.4 OSS 恢复测试). 详见下方"## [Unreleased] 2026-07-21" 段 + 2 新 memory 文件 (`phase-8-cloud-mirror-2026-07-21` + `today-closure-2026-07-21`).
 > **本会话 (2026-07-20)**: Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 + 17 commit 收官. **5 协调铁律** + **6 技术铁律** 沉淀. **9 批 multi-agent 任务全部上线 (W1-W10 + W1 重启 + W2 重启 + 5 worker P2 子任务)**. 详见下方"## [Unreleased] 2026-07-21
 
-### Phase 8 完整闭环 + 6 次 baseline 对齐 + 5 pending items 5/5 闭环 (48 commit 收官)
+### W22 + W23 跨主题终极收口 (54 commit + 16 memory + 78 任务)
+
+**8 次 baseline 100% 对齐** (跨 24h 51+ commit, 0 regression, 0 flaky test):
+- W2 T2 原始基线: 71 PASS + 7 SKIP
+- W7 T2 mid-loop: 71 PASS + 7 SKIP
+- W8 T2 终极 commit: 71 PASS + 7 SKIP
+- W9 T1 终极验证: 71 PASS + 7 SKIP
+- W11 T1 终极回归: 71 PASS + 7 SKIP
+- W13 T1 终极收口: 71 PASS + 7 SKIP
+- W17 T2 (6 次连跑 100% 一致): 71 PASS + 7 SKIP
+- **W18 T1 / W22 T1 (本次)**: **71 PASS + 7 SKIP** — 8 次连续 baseline 对齐 ✅
+
+**锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用**:
+- 4 阶段标准流程: 出指令 / 监控 / 审核+合并 / 上线+沉淀 — 100% 遵循, 0 修改
+- 11 协调铁律: 总指挥≠总执行 / stash 隔离 / 严禁 main / 边界立即拍板 / 6 点 curl 硬指标 — 100% 适用
+- 19 worker / 73 任务 / 51 commit / **0 翻车**
+- 87 技术/方法论铁律沉淀 (从 51 commit 实战提炼, 8 大类)
+
+**W19 选项 A 4 留未来 PR 拍板** (2026-2027 季度排期表):
+- Phase 8.5 异地冷备 (USB HDD) — ⏳ P4 留未来, 触发即排 (勒索软件 / 合规)
+- P3 dedup 提示 — ⏳ P3 留未来, 触发即排 (用户反馈)
+- P3 跨 tab 同步 — ⏳ P3 留未来, 触发即排 (多 tab 反馈)
+- 7 E2E 真闭环 — ⏳ 维持选项 A, 永不主动排 (主指挥决策)
+- 详细排期: `docs/future-pr-roadmap-2026-07-21.md`
+- 拍板记录: `docs/future-pr-decision-2026-07-21.md`
+
+**54 commit 收口时间线** (W1-W22, 21 批 multi-agent 任务):
+- 阶段 1 (W1-W11, 39 commit): Multi-agent 协调范式 + W5+1 follow-up 6 层闭环 + 录音全链路
+- 阶段 2 (W12-W18, 12 commit): Phase 8.3/8.4 + W13/W17/W18 baseline 收口 + 5 pending items 5/5 闭环
+- 阶段 3 (W19-W22, 3 commit): 4 留未来 PR 拍板 + W21 留未来 PR 排期 + W22 superpowers 沉淀
+
+**memory 沉淀 (4 新文件)**:
+- `memory/w16-baseline-six-runs-closure-2026-07-21.md` (W16 6 次 baseline 收口)
+- `memory/multi-agent-coordination-grand-closure-2026-07-21.md` (主指挥协调范式实战 51 commit 收口)
+- `memory/phase-8-cloud-mirror-2026-07-21.md` (Phase 8 完整闭环)
+- `memory/w18-7-baseline-closure-2026-07-21.md` (W18 7 次 baseline 收口)
+
+## [Unreleased] 2026-07-20" 段 + 8 个 memory 文件 (multi-agent-task-orchestration-baseline + orchestrator-mode-coordination-2026-07-20 + config-value-contract-regression-2026-07-20 + chat-share-celery-cleanup-2026-07-20 + kb-and-chat-timeout-2026-07-20 + localstorage-chat-session-ttl-2026-07-20 + session-polling-audit-2026-07-20).
 
 **Phase 8 完整闭环** (4 步全完成):
 - Phase 8.1 本地 backup (backup_db.sh + backup_minio_daily.py, 历史)

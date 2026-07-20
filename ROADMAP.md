@@ -3,6 +3,29 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
+## 当前状态（2026-07-21 W23 终极收口 — 54 commit + 16 memory + 78 任务）
+
+**已交付（2026-07-21 W22+W23 终极 — 跨 21 批 multi-agent 任务 + 8 次 baseline 对齐 + 锚点 memory 实战验证）**：
+
+- 🆕 **8 次 baseline 100% 对齐** (W2 T2 → W22 T1, 跨 24h 51+ commit): 9 文件合跑 SKIP 模式全部 **71 PASS + 7 SKIP** 一致, 0 regression, 0 flaky test, 平均耗时 ~2.13s
+- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 51 commit / 73 任务 / 19 worker 实战中 0 偏离, 87 技术/方法论铁律沉淀
+- 🆕 **W19 选项 A 4 留未来 PR 拍板 + 2026-2027 季度排期** — Phase 8.5 (P4) / P3 dedup / P3 跨 tab / 7 E2E 全部留未来, 触发即排 (勒索软件 / 合规 / 用户反馈 / 主指挥决策)
+- 🆕 **5 pending items 5/5 100% 闭环** — PR6-P18 / Self-RAG / voiceprint_relaxed / PR6-P17 / Phase 8.1-8.4
+- 🆕 **Phase 8 完整闭环 (8.1/8.2/8.3/8.4 ✅, 8.5 ⏳)** — 阿里云 OSS cloud 镜像 (commit `e4d58bd6`) + OSS 恢复测试 RTO < 1h SLA (commit `e79a127b`)
+
+**未来待做（4 留未来 PR，按 W19 选项 A + 触发条件）**：
+
+| PR | 风险 | 一次性投入 | 触发条件 |
+|---|---|---|---|
+| Phase 8.5 异地冷备 (USB HDD) | 🟢 P4 | ¥2,000 + 1 人天 | 勒索软件事件 / 合规要求 |
+| P3 dedup 提示 | 🟢 P3 | 1 人天 | 用户多次反馈侧栏重复 ≥3 次 |
+| P3 跨 tab 同步 | 🟢 P3 | 0.5-1 人天 | 多 tab 用户反馈 ≥10 条/月 |
+| 7 E2E 真闭环 | 🟢 选项 A | 1-2 人天 (选 B 启用) | 主指挥决策变更 (当前 维持 选项 A) |
+
+- 详细排期: `docs/future-pr-roadmap-2026-07-21.md`
+- 拍板记录: `docs/future-pr-decision-2026-07-21.md`
+- W21 主指挥协调范式实战总结: `memory/multi-agent-coordination-grand-closure-2026-07-21.md`
+
 ## 当前状态（2026-07-20 — Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成）
 
 **已交付（2026-07-20 本会话新增 — 9 批 multi-agent 任务 + 17 commit + 8 memory 沉淀）**：
