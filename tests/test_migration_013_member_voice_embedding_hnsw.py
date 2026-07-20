@@ -21,6 +21,14 @@ import time
 import psycopg2
 import pytest
 
+# SKIP_DB_SETUP=1 整文件 skip (跟 conftest db fixture 跳过逻辑一致)
+# W1 (2026-07-21) class 1 migration_stale 修复: convert ERROR → graceful SKIP
+SKIP_DB_SETUP = bool(os.getenv("SKIP_DB_SETUP"))
+pytestmark = pytest.mark.skipif(
+    SKIP_DB_SETUP,
+    reason="SKIP_DB_SETUP=1：psycopg2 同步连 TEST_DATABASE_URL 需要真 DB, SKIP 模式 skip",
+)
+
 
 def _get_test_db_conn():
     """获取同步 psycopg2 连接，TEST_DATABASE_URL 形如 postgresql+asyncpg://...@host:port/db"""
