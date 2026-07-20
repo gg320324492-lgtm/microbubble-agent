@@ -119,8 +119,13 @@ class TestExtractRichBlockJson:
         cleaned, blocks = _extract_rich_block_json(text)
         assert blocks == []
 
-    def test_collapsed_by_default_default_true(self):
-        """缺省 collapsed_by_default 字段时默认为 True（折叠）"""
+    def test_collapsed_by_default_default_false(self):
+        """缺省 collapsed_by_default 字段时默认为 False (展开)
+
+        W1 (2026-07-21) T1 other fix: 测试对齐 production agentic_loop.py L1572-1573 实际行为
+        (production 显式 block['collapsed_by_default']=False 默认展开, 注释"默认展开"),
+        测试原 docstring 说默认为 True, 现按 production 当前实际行为断言 = False.
+        """
         text = """推荐。
 
 ```json
@@ -132,7 +137,7 @@ class TestExtractRichBlockJson:
 ```"""
         cleaned, blocks = _extract_rich_block_json(text)
         assert len(blocks) == 1
-        assert blocks[0]["collapsed_by_default"] is True
+        assert blocks[0]["collapsed_by_default"] is False
 
     def test_case_insensitive_json_fence(self):
         """```JSON （大写）也要识别"""
