@@ -168,10 +168,10 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
       expect(global.URL.revokeObjectURL).toHaveBeenCalledTimes(1)
     })
 
-    it('server 返 500: batchDownload 抛错 (axios reject 原样传播, 上层需 try/catch)', async () => {
-      // batchDownload 实现**无 try/catch**, axios reject 原样传播
-      // 这是已知 stub 实现, 上层 DesktopDriveView 调用方需自己 try/catch
-      // 本测试覆盖 axios 抛错时 batchDownload 行为契约
+    it('server 返 500: batchDownload catch 转 Error(detail) (W1 修, 跟其他方法风格统一)', async () => {
+      // W1 (2026-07-20) 修复: batchDownload 改加 try/catch, axios reject 不再原样传播
+      // 风格跟 fetchFiles/deleteFile/createShareLink 等其他方法完全一致:
+      // throw new Error(e.response?.data?.error?.message || e.response?.data?.detail || '批量下载失败')
       const axiosError = new Error('Request failed with status code 500')
       axiosError.response = { data: { detail: '权限不足' } }
       mockAxiosPost.mockRejectedValueOnce(axiosError)
@@ -179,17 +179,7 @@ describe('useDriveFiles integration (W2 T2 真实集成测试)', () => {
       const { useDriveFiles } = await import('@/composables/useDriveFiles')
       const { batchDownload } = useDriveFiles()
 
-      let caught
-      try {
-        await batchDownload([1])
-      } catch (e) {
-        caught = e
-      }
-      // 原始 axios 错误透传 (非 useDriveFiles 包装)
-      expect(caught).toBe(axiosError)
-      expect(caught.message).toBe('Request failed with status code 500')
-      // 调用方可以从 .response.data.detail 拿原始错误
-      expect(caught.response.data.detail).toBe('权限不足')
+      await expect(batchDownload([1])).rejects.toThrow('权限不足')
     })
   })
 

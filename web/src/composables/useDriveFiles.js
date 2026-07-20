@@ -403,28 +403,32 @@ export function useDriveFiles() {
    */
   async function batchDownload(ids) {
     if (!ids || !ids.length) return false
-    const resp = await axios.post(
-      '/api/v1/drive/files/batch-download',
-      { ids },
-      { responseType: 'blob' },
-    )
-    // 从 Content-Disposition 解析文件名 (后端给 drive_<user>_<ts>.zip)
-    let filename = 'drive_download.zip'
-    const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
-    if (disposition) {
-      const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
-      if (m && m[1]) filename = decodeURIComponent(m[1])
+    try {
+      const resp = await axios.post(
+        '/api/v1/drive/files/batch-download',
+        { ids },
+        { responseType: 'blob' },
+      )
+      // 从 Content-Disposition 解析文件名 (后端给 drive_<user>_<ts>.zip)
+      let filename = 'drive_download.zip'
+      const disposition = resp.headers?.['content-disposition'] || resp.headers?.['Content-Disposition']
+      if (disposition) {
+        const m = /filename\*?=(?:UTF-8'')?["']?([^"';]+)/i.exec(disposition)
+        if (m && m[1]) filename = decodeURIComponent(m[1])
+      }
+      const blob = new Blob([resp.data], { type: 'application/zip' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      return true
+    } catch (e) {
+      throw new Error(e.response?.data?.error?.message || e.response?.data?.detail || '批量下载失败')
     }
-    const blob = new Blob([resp.data], { type: 'application/zip' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    return true
   }
 
   return {

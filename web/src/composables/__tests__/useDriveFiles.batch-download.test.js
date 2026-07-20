@@ -4,6 +4,7 @@
  * 1. 单选 (1 id) → POST batch-download {ids:[1]} + 触发浏览器下载
  * 2. 多选 (多 id) → POST batch-download {ids:[1,2,3]}
  * 3. 空选择 → 直接 return false, 不发请求 (上层 toolbar 已 disable)
+ * 4. axios reject → catch 转 Error('批量下载失败') 或 detail 文案 (跟 fetchFiles/deleteFile 风格统一)
  *
  * 复用后端 POST /api/v1/drive/files/batch-download (drive_files.py:931 已实装)
  */
@@ -82,6 +83,33 @@ describe('useDriveFiles batchDownload (v77 留尾清理)', () => {
     expect(retEmpty).toBe(false)
     expect(retNull).toBe(false)
     expect(mockAxiosPost).not.toHaveBeenCalled()
+    expect(clickSpy).not.toHaveBeenCalled()
+  })
+
+  it('W1 修复: axios reject → throw Error(后端 detail 或 "批量下载失败") 兜底', async () => {
+    // Case A: 后端返回带 detail 的 4xx/5xx (与 batchSoftDelete 等其他方法风格一致)
+    mockAxiosPost.mockRejectedValueOnce({
+      response: { data: { detail: '权限不足,无法下载该文件' } }
+    })
+    const { useDriveFiles: a } = await import('@/composables/useDriveFiles')
+    const { batchDownload: dl1 } = a()
+    await expect(dl1([1])).rejects.toThrow('权限不足,无法下载该文件')
+
+    // Case B: 后端返回带 error.message 的 envelope (与 deleteFile/renameFile 风格一致)
+    mockAxiosPost.mockRejectedValueOnce({
+      response: { data: { error: { message: '文件不存在或已删除' } } }
+    })
+    const { useDriveFiles: b } = await import('@/composables/useDriveFiles')
+    const { batchDownload: dl2 } = b()
+    await expect(dl2([1])).rejects.toThrow('文件不存在或已删除')
+
+    // Case C: 网络断开/无 response (axios fail raw) → fallback "批量下载失败"
+    mockAxiosPost.mockRejectedValueOnce(new Error('Network Error'))
+    const { useDriveFiles: c } = await import('@/composables/useDriveFiles')
+    const { batchDownload: dl3 } = c()
+    await expect(dl3([1])).rejects.toThrow('批量下载失败')
+
+    // 关键断言: 失败时绝对不能触发浏览器下载 (anchor click 没被调)
     expect(clickSpy).not.toHaveBeenCalled()
   })
 })
