@@ -236,7 +236,8 @@ import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import {
   Document, Picture, VideoCamera, Headset, Download, View, MoreFilled,
-  Tickets, DataAnalysis, Star, StarFilled  // v2 PR2
+  Tickets, DataAnalysis, Star, StarFilled,  // v2 PR2
+  Files  // v77 P2.6-G.3: 未知类型 generic fallback 图标
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -267,15 +268,25 @@ const fileTypeKey = computed(() => {
   return EXTENSION_TYPE_MAP[ext] || 'text'
 })
 
+// v77 P2.6-G.3 缩略图常规化: 真文本 (.txt/.md) 用 Document, 其余未知扩展 (无扩展/.zip/.csv 等)
+// 走 generic Files 图标, 避免未知类型伪装成文本文档. data-type 仍归 'text' 复用 file-default 色 token.
+const KNOWN_TEXT_EXT = new Set(['.txt', '.md'])
+const isGenericFile = computed(() => {
+  const ext = (props.file.file_type || '').toLowerCase()
+  return fileTypeKey.value === 'text' && !KNOWN_TEXT_EXT.has(ext)
+})
+
 // === 图标按 file_type 分类 ===
 const iconComponent = computed(() => {
   const type = fileTypeKey.value
-  if (type === 'pdf' || type === 'doc' || type === 'text') return Document
+  if (type === 'pdf' || type === 'doc') return Document
   if (type === 'ppt') return Tickets
   if (type === 'excel') return DataAnalysis
   if (type === 'image') return Picture
   if (type === 'video') return VideoCamera
   if (type === 'audio') return Headset
+  // text 组: 真文本 → Document; 未知扩展/无扩展 → generic Files (缩略图 fallback 常规化)
+  if (isGenericFile.value) return Files
   return Document
 })
 
