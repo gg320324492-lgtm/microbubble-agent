@@ -178,6 +178,9 @@ export function useChatStream() {
 
   /** debounce 持久化 timer（per-session 100ms） */
   const persistTimers: Record<string, ReturnType<typeof setTimeout>> = {}
+  // W11 (2026-07-20) T1 收尾: #043 Phase 5 旧数据迁移 setTimeout 句柄 (1 秒延迟),
+  // 必须存句柄才能在 onUnmounted clearTimeout 防止 timer 泄漏 + 切路由时仍跑迁移.
+  let migrationTimer: ReturnType<typeof setTimeout> | null = null
 
   // --------------------------------------------------------------------------
   // UI 状态
@@ -1000,7 +1003,12 @@ export function useChatStream() {
 
     // #043: Phase 5 旧数据自动迁移（登录后 1 秒异步跑）
     if (hasToken) {
-      setTimeout(async () => {
+      // W11 (2026-07-20) T1 收尾: 用 migrationTimer 存句柄, onUnmounted 可 clearTimeout
+      // (旧实现 setTimeout(...) 不拿返回值, 切路由后仍跑 1 秒后迁移, 用户报 "迁移完才能访问"
+      // 影响体验)
+      migrationTimer = setTimeout(async () => {
+        // 迁移开始后清空句柄, 避免后续清理误取消正在跑的迁移
+        migrationTimer = null
         try {
           const { useChatMigration } = await import('@/composables/chat/useChatMigration')
           const result = await useChatMigration().migrateLocalToServer()
@@ -1020,6 +1028,20 @@ export function useChatStream() {
       try {
         ctrl.abort()
       } catch { /* ignore */ }
+    }
+    // W11 (2026-07-20) T1 收尾: 清理 persistTimers dict 防止 timer 泄漏
+    // (SSE 流式 yield 时调 persistSessionDebounced → setTimeout 累积, 切路由不清
+    // 旧 timer 仍跑 → 内存泄漏 + 重复写 localStorage)
+    for (const id of Object.keys(persistTimers)) {
+      if (persistTimers[id]) {
+        clearTimeout(persistTimers[id])
+        delete persistTimers[id]
+      }
+    }
+    // W11 (2026-07-20) T1 收尾: 清理 migrationTimer 防止切路由后仍跑迁移
+    if (migrationTimer) {
+      clearTimeout(migrationTimer)
+      migrationTimer = null
     }
     // 持久化所有 session（含后台流式生成的内容）
     // 2026-07-01:关闭页面不更新活动(避免所有 session updatedAt 重置为"刚刚"→ 顺序丢失)
