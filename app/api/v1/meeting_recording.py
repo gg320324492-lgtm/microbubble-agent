@@ -339,6 +339,12 @@ async def cancel_recording(
       Celery 60min 后自动清理。
     守卫: 仅 created_by=current_user 的 meeting 可取消。
     幂等: 非 recording 状态直接返 cancelled=False (不抛错)。
+
+    2026-07-20 增 (P0): 同时清空 audio_url / last_chunk_index / total_chunks 字段
+      防止"会议 status=error 但 DB 还有 audio_url 指向不存在的 MinIO 文件"导致
+      MeetingDetailView AudioPlayer 永远 404。修法: 即使 start-recording 时 audio_url
+      还没设置(只在首个 chunk 200 OK 后才写), 也防御性清空, 让前端不再有"audio_url
+      字段存在但 MinIO 404"的孤儿状态。
     """
     import logging
     log = logging.getLogger("microbubble.meeting_recording")
@@ -354,10 +360,23 @@ async def cancel_recording(
         return {"id": meeting.id, "status": meeting.status, "cancelled": False}
     meeting.status = "error"
     meeting.error_reason = "录音启动失败已取消 (前端 catch 块调用 cancel-recording)"
+    # 2026-07-20 P0: 防御性清空音频字段, 防 7/11 MinIO wipe 类孤儿
+    meeting.audio_url = None
+    meeting.last_chunk_index = -1
+    meeting.total_chunks = None
+    meeting.upload_status = "cancelled"
     await db.commit()
     await db.refresh(meeting)
-    log.info(f"Meeting {meeting_id} 取消录音: status recording → error")
-    return {"id": meeting.id, "status": meeting.status, "cancelled": True}
+    log.info(
+        f"Meeting {meeting_id} 取消录音: status recording → error, "
+        f"audio_url/last_chunk_index/total_chunks 已清空"
+    )
+    return {
+        "id": meeting.id,
+        "status": meeting.status,
+        "cancelled": True,
+        "audio_url_cleared": True,
+    }
 
 
 import logging

@@ -10,15 +10,27 @@ import re
 
 from app.config import settings
 from app.core.llm import (
+    LLMClient,
     extract_text_from_response,
-    get_anthropic_client,
-    get_default_model,
     parse_llm_json,
 )
 from app.core.redis import get_redis
 from app.services.prompts.meeting_polish import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 
 logger = logging.getLogger("microbubble.meeting_polish")
+
+# 2026-07-20 polish dispatch 修 (P0): get_anthropic_client() 写死只走 anthropic,
+# LLM_BACKEND=openai_compat/ollama 时仍会拿 CLAUDE_API_KEY 打 mimo anthropic endpoint,
+# 401 invalid_key. 改用 LLMClient().complete() 自动 dispatch 任意 backend.
+_LLM_SINGLETON: LLMClient | None = None
+
+
+def _get_llm() -> LLMClient:
+    """模块级 LLMClient 单例（polish batch 200 条避免 200 次 init）"""
+    global _LLM_SINGLETON
+    if _LLM_SINGLETON is None:
+        _LLM_SINGLETON = LLMClient()
+    return _LLM_SINGLETON
 
 
 _PUNCTUATION_RE = re.compile(r"[\s,，.。!！?？;；:：、\"'“”‘’（）()【】\[\]《》<>-]+")
@@ -51,14 +63,17 @@ async def polish_segments(
         segments_json=json.dumps(segments, ensure_ascii=False),
     )
 
-    client = get_anthropic_client()
-    model = get_default_model()
-    response = await client.messages.create(
-        model=model,
+    # 2026-07-20 P0 fix: 走 LLMClient dispatch (anthropic/openai_compat/ollama 自动切换)
+    # - thinking={"type": "disabled"} 强制纯文本输出（qwen3:8b / mimo-v2.5 thinking block
+    #   会污染 JSON parse，extract_text_from_response 只取 .text 不取 .thinking）
+    # - max_tokens=8192 与旧实现一致（polish 输出 ~80 segments JSON 需 ~6K tokens）
+    llm = _get_llm()
+    response = await llm.complete(
+        messages=[{"role": "user", "content": user_prompt}],
+        system=SYSTEM_PROMPT,
         max_tokens=8192,
         temperature=0.3,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_prompt}],
+        thinking={"type": "disabled"},
     )
     # 使用项目统一 helper：处理 ThinkingBlock（mimo-v2.5/claude-sonnet-4 扩展思维）+ ```json``` 包裹
     raw_text = extract_text_from_response(response)
