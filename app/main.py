@@ -20,6 +20,7 @@ from app.api.v1 import ws_notifications  # PR6: WebSocket 通知推送
 from app.api.v1 import notifications  # PR6: 通知 + 活动 + 评论 8 REST API
 from app.api.v1 import file_requests  # PR7: 文件请求 (Dropbox 招牌)
 from app.api.v1 import admin_audit  # PR7: 审计日志查询 (admin)
+from app.api.v1 import translation  # 2026-07-20 论文段落/全文翻译 (LLMClient + Redis cache)
 from app.api.v1.dashboard import mobile_router as mobile_aliases  # 2026-06-17 加：/formula /hypothesis /memory /summary 简化路径
 from app.core.database import engine, Base
 from app.core.redis import close_redis
@@ -174,6 +175,7 @@ app.include_router(ws_notifications.router, prefix="/api/v1")  # PR6: WebSocket 
 app.include_router(notifications.router)  # PR6: 通知 + 活动 + 评论 (router 自带 /api/v1 prefix)  # noqa
 app.include_router(file_requests.router, prefix="/api/v1")  # PR7: 文件请求 (router 自带 /file-requests prefix)
 app.include_router(admin_audit.router, prefix="/api/v1")  # PR7: 审计 admin 端点 (router 自带 /admin/audit prefix)
+app.include_router(translation.router)  # 2026-07-20 论文翻译 (router 自带 /api/v1/translation prefix)
 
 
 @app.get("/")
