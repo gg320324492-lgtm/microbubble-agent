@@ -69,6 +69,9 @@ async def alice_bob_folders(db_session):
         role="member",
         grade="测试",
         is_active=True,
+        # 2026-07-21 W2 P0 修类 2: PR6-P17 wechat_id NOT NULL schema drift
+        # 跟 test_folder_service.py 一致, 用 __TEST_BACKFILL_<u>_<user>__ 占位
+        wechat_id=f"__TEST_BACKFILL_{u}_alice__",
     )
     bob = Member(
         username=u_bob,
@@ -77,6 +80,7 @@ async def alice_bob_folders(db_session):
         role="member",
         grade="测试",
         is_active=True,
+        wechat_id=f"__TEST_BACKFILL_{u}_bob__",
     )
     charlie = Member(
         username=u_charlie,
@@ -85,6 +89,7 @@ async def alice_bob_folders(db_session):
         role="member",
         grade="测试",
         is_active=True,
+        wechat_id=f"__TEST_BACKFILL_{u}_charlie__",
     )
     session.add_all([alice, bob, charlie])
     await session.commit()
