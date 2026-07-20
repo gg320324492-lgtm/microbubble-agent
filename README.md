@@ -19,6 +19,13 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
+## 最新里程碑（2026-07-21 — Phase 8 完整闭环 + 6 次 baseline 对齐 + 48 commit 收口）
+
+- 🆕 **Phase 8 完整闭环（4 步全完成）** = Phase 8.1 本地 backup + Phase 8.2 通用 restore CLI + Phase 8.3 阿里云 OSS cloud 镜像 (commit `e4d58bd6`) + Phase 8.4 OSS 恢复测试 (commit `e79a127b`, RTO < 1h SLA 验证, 1 GB DB = 8.8 min). **5 pending items 5/5 100% 闭环** (含 Phase 8 实施). **4 新铁律**: OSS 镜像 + 恢复必须 pair 设计 / RTO estimate 必须在脚本里 / DRY RUN 默认 + `--confirm` 二次确认门 / 错误走 stderr 正常走 stdout. 详见 [`memory/phase-8-cloud-mirror-2026-07-21.md`](./memory/phase-8-cloud-mirror-2026-07-21.md).
+- 🆕 **6 次 baseline 对齐（0 regression）** = W2 T2 → W7 T2 → W8 T2 → W9 T1 (2.16s) → W11 T1 (2.34s) → W13 T1 (2.17s) → W17 T2 (2.11s). 平均 2.13s, 标准差 < 0.05s, **0 flaky test** ✅. 详见 [`memory/w16-baseline-six-runs-closure-2026-07-21.md`](./memory/w16-baseline-six-runs-closure-2026-07-21.md).
+- 🆕 **W5+1 follow-up 11 commit 终极闭环** = redis.py lazy + database.py lazy + get_event_loop fallback + 2 test 期望漂移 + conftest 跨 scope lazy + setup_db scope fix + model import + sessionmaker 优化 + useChatStream onUnmounted timer cleanup. 详见 [`memory/w5-plus-one-followup-grand-closure-2026-07-20.md`](./memory/w5-plus-one-followup-grand-closure-2026-07-20.md).
+- 🆕 **今日 (2026-07-21) 累计 48 commit + 13 memory + 73 任务** = 跨 21 批 multi-agent 任务 + 6 次 baseline 对齐 + 5 pending items 5/5 闭环 + 11 协调+技术铁律实战验证. 详见 [`memory/today-closure-2026-07-21.md`](./memory/today-closure-2026-07-21.md).
+
 ## 最新里程碑（2026-07-20 — Multi-agent 协调范式收官 + P2 候选 3/3 全部完成）
 
 - 🆕 **Multi-agent 协调范式锚点 memory + 5/11 铁律沉淀** — 2026-07-20 当日 9 批 multi-agent 任务全部上线 (W1-W10), 17 commit push origin/main, 跨 worker 协调范式完整闭环. **主指挥模式**: 用户开 4 窗口 → 主指挥出指令 → 用户转发 → worker 完工 → 主指挥审核 + push. **5 协调铁律**: 总指挥 ≠ 总执行 / 多 worker stash 隔离 / 严禁 main commit / 边界立即拍板 / 6 点 curl 硬指标. **6 技术铁律**: 默认值改动 4 重证据 / 测试契约漂移优先改测试 / rejection matcher 提前注册 / 配置改动 commit cite 证据 / 测试 fix ≠ 改生产代码 / pre-existing fail 优先改测试. 详见 [`memory/multi-agent-task-orchestration-baseline.md`](./memory/multi-agent-task-orchestration-baseline.md).
