@@ -54,11 +54,24 @@ class TestProxyBehavior:
     """代理对象转发 attribute / call 到真实 engine / sessionmaker"""
 
     def test_engine_proxy_repr_no_real_engine(self):
-        """repr 不创建真 engine, 显示 loop=None"""
-        assert repr(engine_proxy) == "<_EngineProxy loop=None>"
+        """repr 不创建真 engine, 显示当前 _engine_loop 状态
+
+        W5.1 (commit 105d4ecc) 后 _engine_loop 在 sync context 走 get_event_loop() fallback,
+        不再永远是 None。repr 必须如实反映当前状态 (None 或真 EventLoop), 但**绝不创建真 engine**。
+        用 regex 匹配两种合法形态: 既兼容 W5.1 fallback 语义, 又验证 repr 格式稳定。
+        """
+        import re
+        repr_str = repr(engine_proxy)
+        # 关键断言: repr 不抛错, 格式符合 _EngineProxy 协议
+        assert re.match(r"^<_EngineProxy loop=(None|<.+>)$", repr_str), \
+            f"repr 格式不符 (W5.1 后 _engine_loop 可能是 None 或真 EventLoop): {repr_str!r}"
 
     def test_async_session_proxy_repr_no_real_factory(self):
-        assert repr(async_session_proxy) == "<_SessionFactoryProxy loop=None>"
+        """跟 test_engine_proxy_repr_no_real_engine 镜像, 验证 _SessionFactoryProxy repr"""
+        import re
+        repr_str = repr(async_session_proxy)
+        assert re.match(r"^<_SessionFactoryProxy loop=(None|<.+>)$", repr_str), \
+            f"repr 格式不符 (W5.1 后 _session_factory_loop 可能是 None 或真 EventLoop): {repr_str!r}"
 
     def test_engine_proxy_getattr_forwards_to_get_engine(self, monkeypatch):
         """__getattr__ 转发到当前 loop 的 _get_engine() (mock 避免真 create)"""
