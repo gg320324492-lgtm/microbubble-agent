@@ -117,6 +117,16 @@
     <!-- 主体布局: 左侧 FolderTree + 右侧 FileGrid (PR3.5 接入拖拽) -->
     <!-- 2026-07-02: DriveSubSidebar 已删除 (与 FolderTree 重复), 不再嵌入子侧边栏 -->
     <div class="drive-main" ref="driveMainRef" :class="{ 'is-drag-over': isDragging }">
+      <!-- v77 P2.6-G.3 空态/拖拽 hero: 拖拽文件到主区时显示大 hero (替代旧 PR3.6 占位文案) -->
+      <transition name="drive-drop-hero-fade">
+        <div v-if="isDragging" class="drive-drop-hero">
+          <div class="drive-drop-hero-icon">
+            <el-icon :size="48"><UploadFilled /></el-icon>
+          </div>
+          <p class="drive-drop-hero-title">拖拽文件到此处</p>
+          <p class="drive-drop-hero-hint">松开鼠标即可上传到当前网盘</p>
+        </div>
+      </transition>
       <aside class="drive-sidebar">
         <div class="drive-sidebar-header">我的网盘</div>
         <!-- PR3.2 + v2 PR2: FolderTree 加 specialView 双向绑定 -->
@@ -942,29 +952,70 @@ const currentPathDisplay = computed(() => {
   content: '';
   position: absolute;
   inset: 0;
-  border: 3px dashed var(--color-primary, #409eff);
-  background: var(--color-primary-light-9, #ecf5ff);
-  opacity: 0.3;
+  border: 3px dashed var(--color-primary);
+  background: var(--color-primary-bg);
+  opacity: 0.35;
   pointer-events: none;
   z-index: 10;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 
-.drive-main.is-drag-over::after {
-  content: '松开上传文件 (PR3.6 接入上传逻辑)';
+/*
+ * v77 P2.6-G.3 拖拽 hero — 替代旧 ::after 占位文案 "松开上传文件 (PR3.6 接入上传逻辑)".
+ * 走 drive 美化 token (珊瑚橙 primary), 不再硬编码 EP 默认蓝 #409eff.
+ */
+.drive-drop-hero {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  padding: 12px 24px;
-  background: var(--color-primary, #409eff);
-  color: var(--el-color-white, #fff);
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-8);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-primary);
   z-index: 11;
   pointer-events: none;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  text-align: center;
+}
+
+.drive-drop-hero-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--gradient-cta-button);
+  color: #fff;
+  box-shadow: var(--shadow-glow);
+}
+
+.drive-drop-hero-title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.drive-drop-hero-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.drive-drop-hero-fade-enter-active,
+.drive-drop-hero-fade-leave-active {
+  transition: opacity var(--duration-normal) var(--ease-out),
+              transform var(--duration-normal) var(--ease-out);
+}
+.drive-drop-hero-fade-enter-from,
+.drive-drop-hero-fade-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -46%) scale(0.96);
 }
 
 .drive-sidebar {
