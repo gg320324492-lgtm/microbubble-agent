@@ -15,10 +15,18 @@ class MemberBase(BaseModel):
 
 
 class MemberCreate(MemberBase):
-    """创建成员"""
+    """创建成员
+
+    PR6-P17 留尾: wechat_id 改为 required, 与 DB NOT NULL 约束同步 (2026-07-20)
+    - DB `members.wechat_id` alembic 057 已 NOT NULL
+    - 模型 `Member.wechat_id` 已 nullable=False
+    - MemberCreate 仍 Optional → 缺传 silently 写入 '' 触发 UNIQUE 冲突
+    - 改为 required: 缺传 → Pydantic 422 fail loud
+    - 个人/admin 后台必须传 wechat_id (PR6-P18 fill_wechat_id_placeholders.py 已就绪)
+    """
     username: str
     password: Optional[str] = None
-    wechat_id: Optional[str] = None
+    wechat_id: str
     wechat_nickname: Optional[str] = None
     wechat_remark: Optional[str] = None
     personal_wechat_id: Optional[str] = None
