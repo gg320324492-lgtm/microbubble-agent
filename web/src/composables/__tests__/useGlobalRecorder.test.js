@@ -71,9 +71,10 @@ describe('useGlobalRecorder getUserMedia 5s timeout (Step 2, #207 根因修复)'
       .mockImplementation(() => new Promise(() => {}))  // 永不 resolve
     vi.useFakeTimers()
     const startPromise = useGlobalRecorder().start()
-    // 推进时间到 5s 后
+    const rejection = expect(startPromise).rejects.toThrow(/5000ms timeout/)
+    // 先注册 rejection handler，再推进计时器，避免 Node 将预期拒绝短暂判为 unhandled
     await vi.advanceTimersByTimeAsync(5000)
-    await expect(startPromise).rejects.toThrow(/5000ms timeout/)
+    await rejection
   })
 
   it('getUserMedia 正常 resolve 不受 timeout 影响', async () => {

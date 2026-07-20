@@ -60,7 +60,7 @@ describe('useNetworkStatus v2 — 心跳探测 (修复网络误报)', () => {
   it('1. navigator.onLine=false 时初值为 offline', () => {
     setNavigatorOnline(false)
     _resetForTesting()
-    const { online, status } = useNetworkStatus()
+    const { online, status } = getNetworkStatus()
     expect(online.value).toBe(false)
     expect(status.value).toBe('offline')
   })
@@ -68,7 +68,7 @@ describe('useNetworkStatus v2 — 心跳探测 (修复网络误报)', () => {
   it('1b. navigator.onLine=true 时初值为 online', () => {
     setNavigatorOnline(true)
     _resetForTesting()
-    const { online, status } = useNetworkStatus()
+    const { online, status } = getNetworkStatus()
     expect(online.value).toBe(true)
     expect(status.value).toBe('online')
   })
@@ -126,11 +126,10 @@ describe('useNetworkStatus v2 — 心跳探测 (修复网络误报)', () => {
   it('4. 探测成功立即恢复 online=true', async () => {
     fetchSpy.mockResolvedValue({ status: 200 })
 
-    const wrapper = mount(makeStub())
-    await nextTick()
-
     const { online } = getNetworkStatus()
-    // 强制置为 offline
+    // 连续 3 次失败才置为 offline，避免单次网络抖动误报
+    markUnreachable()
+    markUnreachable()
     markUnreachable()
     expect(online.value).toBe(false)
     expect(_test_getFailStreak()).toBe(3)
@@ -139,17 +138,14 @@ describe('useNetworkStatus v2 — 心跳探测 (修复网络误报)', () => {
     await _test_probe()
     expect(online.value).toBe(true)
     expect(_test_getFailStreak()).toBe(0)
-
-    wrapper.unmount()
   })
 
   // === Case 5: markReachable 立即恢复 (不需要等探测) ===
-  it('5. markReachable 立即恢复 online, 不等探测', async () => {
-    const wrapper = mount(makeStub())
-    await nextTick()
-
+  it('5. markReachable 立即恢复 online, 不等探测', () => {
     const { online } = getNetworkStatus()
 
+    markUnreachable()
+    markUnreachable()
     markUnreachable()
     expect(online.value).toBe(false)
     expect(_test_getFailStreak()).toBe(3)
@@ -158,8 +154,6 @@ describe('useNetworkStatus v2 — 心跳探测 (修复网络误报)', () => {
     markReachable()
     expect(online.value).toBe(true)
     expect(_test_getFailStreak()).toBe(0)
-
-    wrapper.unmount()
   })
 
   // === Case 6: 探测并发去重 ===
@@ -215,29 +209,23 @@ describe('useNetworkStatus v2 — 心跳探测 (修复网络误报)', () => {
   })
 
   // === Case 9: 多端点 fallback ===
-  it('9. 第一个端点失败时 fallback 到 /health', async () => {
-    // /api/v1/health 失败, /health 成功
+  it('9. /health 失败时 fallback 到鉴权端点', async () => {
     fetchSpy.mockImplementation((url) => {
-      if (url === '/api/v1/health') return Promise.reject(new TypeError('404'))
-      if (url === '/health') return Promise.resolve({ status: 200 })
+      if (url === '/health') return Promise.reject(new TypeError('NetworkError'))
+      if (url === '/api/v1/auth/me') return Promise.resolve({ status: 401 })
       return Promise.reject(new TypeError('unknown'))
     })
 
-    const wrapper = mount(makeStub())
-    await nextTick()
-
-    // 清空自学习缓存, 强制走完整 fallback 链
+    // 清空自学习缓存, 验证默认 fallback 顺序
     _test_setWorkingEndpoint(null)
     _test_setFailStreak(0)
     await _test_probe()
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/health', expect.objectContaining({ method: 'GET' }))
-    expect(fetchSpy).toHaveBeenCalledWith('/health', expect.objectContaining({ method: 'GET' }))
+    expect(fetchSpy).toHaveBeenNthCalledWith(1, '/health', expect.objectContaining({ method: 'GET' }))
+    expect(fetchSpy).toHaveBeenNthCalledWith(2, '/api/v1/auth/me', expect.objectContaining({ method: 'GET' }))
 
     const { online } = getNetworkStatus()
-    expect(online.value).toBe(true)  // /health 探测成功
-
-    wrapper.unmount()
+    expect(online.value).toBe(true)
   })
 
   // === Case 10: alive 判定宽松 (401/5xx 都算后端在响应) ===
