@@ -9,11 +9,19 @@
 - 半成品 (last_chunk_index >= 0 但用户从未 stop) → 清理
 - 24h 窗口外 → 不清理
 
-策略: 提前在 sys.modules 里 stub 掉函数内 from-import 的 chunked_upload_service /
-progress_service / redis.asyncio. Meeting 用真的 ORM (SKIP 模式下也能 import, 让
-select(Meeting) 能正常构造 SQL). create_celery_engine_and_session 通过 patch 注入.
+策略: chunked_upload_service / progress_service 用 MagicMock 注入到 sys.modules,
+redis.asyncio 用 autouse function-scope fixture 隔离 + 测试结束 restore —
+避免污染其它测试文件 (e.g. test_meeting_transcript_buffer 用真 redis.asyncio).
+Meeting 用真的 ORM (SKIP 模式下也能 import, 让 select(Meeting) 能正常构造 SQL).
+create_celery_engine_and_session 通过 patch 注入.
 
 铁律: SKIP_DB_SETUP=1 mock, 不依赖数据库, 5s 内跑完
+
+⚠️ 2026-07-20 修复 (W8 pre-existing bug): 模块顶层用 sys.modules.setdefault 注入
+redis.asyncio stub 会永久污染 sys.modules — 反序跑 (orphan 在前) 时, 后跑测试
+(如 test_meeting_transcript_buffer) `import redis.asyncio` 拿到 MagicMock, 报
+`TypeError: object MagicMock can't be used in 'await' expression`.
+修法: 用 function-scope autouse fixture + 显式 save/restore sys.modules.
 """
 import os
 os.environ.setdefault("SKIP_DB_SETUP", "1")
@@ -29,24 +37,45 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
 # ============================================================================
-# 提前 stub 函数内 from-import 的模块 + 对象
-# (注: app.models.meeting.Meeting 必须用真 ORM, 否则 select(Meeting) 构造 SQL 时报 ArgumentError)
+# Module-level stubs: chunked_upload_service + progress_service
+# (这些 mock 只挂属性, 不替换整个 sys.modules entry, 不污染其它测试)
 # ============================================================================
 _chunked_stub = MagicMock()
 _chunked_stub.delete_chunks = AsyncMock(return_value=0)
-sys.modules.setdefault("app.services.chunked_upload_service", MagicMock())
-sys.modules["app.services.chunked_upload_service"].chunked_upload_service = _chunked_stub
+_chunked_stub_module = MagicMock()
+_chunked_stub_module.chunked_upload_service = _chunked_stub
 
 _update_progress_stub = AsyncMock(return_value=None)
-sys.modules.setdefault("app.services.progress_service", MagicMock())
-sys.modules["app.services.progress_service"].update_progress = _update_progress_stub
-sys.modules["app.services.progress_service"].ProgressStage = MagicMock()
+_progress_stub_module = MagicMock()
+_progress_stub_module.update_progress = _update_progress_stub
+_progress_stub_module.ProgressStage = MagicMock()
 
-_redis_client = MagicMock()
-_redis_client.aclose = AsyncMock(return_value=None)
-_redis_stub = MagicMock()
-_redis_stub.from_url = MagicMock(return_value=_redis_client)
-sys.modules.setdefault("redis.asyncio", _redis_stub)
+
+@pytest.fixture(autouse=True)
+def _stub_function_level_imports(monkeypatch):
+    """function-scope autouse: 隔离 redis.asyncio stub + 注入其它 module-level mocks.
+
+    orphan_meeting_cleanup.py 在 _scan_and_cleanup() 函数内
+    `import redis.asyncio as aioredis`, 所以必须让 sys.modules["redis.asyncio"]
+    在测试期间指向 MagicMock. 但模块顶层不能 setdefault (会污染其它测试文件).
+
+    修法: 用 monkeypatch.setitem 在 fixture 生命周期内替换, fixture exit 自动恢复.
+    """
+    # chunked_upload_service + progress_service: 注入到 sys.modules
+    # (生产代码函数内 from-import 会拿到这些 stub)
+    monkeypatch.setitem(sys.modules, "app.services.chunked_upload_service", _chunked_stub_module)
+    monkeypatch.setitem(sys.modules, "app.services.progress_service", _progress_stub_module)
+
+    # redis.asyncio: 整个模块替换为 MagicMock, 让 aioredis.from_url(...) 返可控对象
+    _redis_client_stub = MagicMock()
+    _redis_client_stub.aclose = AsyncMock(return_value=None)
+    _redis_asyncio_stub = MagicMock()
+    _redis_asyncio_stub.from_url = MagicMock(return_value=_redis_client_stub)
+    monkeypatch.setitem(sys.modules, "redis.asyncio", _redis_asyncio_stub)
+
+    yield
+
+    # monkeypatch 自动在 function 结束时 setitem 回去, 无需手动 restore
 
 
 def _make_orphan_meeting(
