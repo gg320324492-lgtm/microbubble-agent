@@ -15,6 +15,15 @@
   }
 })()
 
+// 2026-07-20 cache-bust 诊断: build 时间戳 (由 vite.config.js define 注入)
+// 浏览器 DevTools 顶部 console 第一行即可看到 build 时间, 运维判断"页面没更新"时
+// 让用户截图这行 → 对比服务器部署时间 → 知道是 CDN 没回源 / 用户没刷新 / 部署没生效
+// 注意: 必须在 createApp 之前 console.log, 否则 build 标识信息被业务日志覆盖
+console.info(
+  `%c[build] ${__BUILD_TIMESTAMP__} (id=${__BUILD_ID__})`,
+  'color:#FF7A5C;font-weight:600;'
+)
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 // 全局样式加载顺序：
