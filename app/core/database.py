@@ -80,12 +80,17 @@ def _get_engine() -> AsyncEngine:
 
     pytest-asyncio loop_scope=function 每个 test 一个新 loop,
     engine 必须重新创建才能绑到新 loop 的 event source 上。
+
+    关键: 同步函数内 get_running_loop() 抛 RuntimeError, 必须用 get_event_loop() fallback。
     """
     global _engine, _engine_loop
     try:
         current_loop = asyncio.get_running_loop()
     except RuntimeError:
-        current_loop = None
+        try:
+            current_loop = asyncio.get_event_loop()  # fallback for sync context
+        except RuntimeError:
+            current_loop = None
 
     if _engine is None or _engine_loop is not current_loop:
         _engine = _build_engine()
@@ -99,7 +104,10 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     try:
         current_loop = asyncio.get_running_loop()
     except RuntimeError:
-        current_loop = None
+        try:
+            current_loop = asyncio.get_event_loop()
+        except RuntimeError:
+            current_loop = None
 
     if _session_factory is None or _session_factory_loop is not current_loop:
         _session_factory = _build_session_factory(_get_engine())
