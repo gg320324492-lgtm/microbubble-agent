@@ -75,9 +75,10 @@ async def test_progress_lifecycle(fake_redis):
         snapshot = await get_progress(meeting_id)
         assert snapshot["stage"] == "generating_title"
         assert snapshot["detail"] == "AI 正在生成标题"
-        # W2 T2: stage 3/8 ≈ 37.5% (新 8 阶段: 0-7, stage 3 = 3/8 = 37.5%)
-        assert 35.0 <= snapshot["percent"] <= 40.0, (
-            f"percent={snapshot['percent']} 期望 35~40 之间 (stage 3/8)"
+        # W2 T2: stage 3/6 = 50% (production TOTAL_STAGES=6, 老 enum stage_index 算法没改,
+        # 新 7 stage 索引到 stage 3 (generating_title) 还是 3/6 = 50%)
+        assert 48.0 <= snapshot["percent"] <= 52.0, (
+            f"percent={snapshot['percent']} 期望 48~52 之间 (stage 3/6)"
         )
 
         await update_progress(meeting_id, ProgressStage.DONE)
