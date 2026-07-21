@@ -1,5 +1,9 @@
-# 历史任务链 / lessons learned 见 [docs/CLAUDE-history.md](./docs/CLAUDE-history.md) (拆分于 2026-07-08 P3-15)
-
+> **2026-07-22 W54 跨主题收口段 (13 commit + 16 baseline 守恒)**:
+>
+> W54 主指挥亲自完成 13 个 doc/memory-only commit，继承 W53 “15 baseline 71+7 不变”证据，经实际验证登记 16 baseline（71 PASS + 7 SKIP）。累计 27 commit、90+ 任务、33 memory、38 docs、165 实战验证铁律；0 production code / test / config 改动。W52/W53/W54 紧凑节奏使锚点范式 13 → 14 → 15 → 16 单调上升。4 future PR 4/4 不触发，W19 选项 A 维持。4 memory 与 4 docs 草稿目录见 `memory/w14-16-baseline-closure-2026-07-22.md` 等文件。
+>
+> **W54 5 文档同步清单**: CLAUDE.md 顶部 / ROADMAP.md L6 / CHANGELOG.md L4 / MEMORY.md 双端 / 本文件。W54 沿用 0 production code 改动铁律，不新增铁律。
+>
 > **2026-07-22 本会话新增 (W52 跨主题收口段 — 76 commit + 25 memory + 90 任务 + 13 baseline + 4 类 64/84 + 165 实战验证铁律)**:
 >
 > W51 启动段 (8 commit 主指挥亲自) + W52 沿用 W10 范式 5 文档同步 + W53 future PR 季度排期表更新. 跨 13 次 baseline 71+7 不变, 锚点范式单调上升 W13 5 → W52 13, 0 production code 改动铁律沿用. 详细 commit 流水账见 git history (W51-5 `6b1bc600` + W51-6 `de7c67df` + W51-7 `55dc08a6` + W51-8 `0bf563c2`).
