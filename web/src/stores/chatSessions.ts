@@ -149,9 +149,43 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     saveToStorage(sessions.value, currentId.value)
   }, { deep: true })
 
+  // === W59 P3 dedup (2026-07-22): 标题时间戳后缀 + first_message hash 检测 ===
+  // 防止用户连续点 3 次 "+ 新对话" → 3 个重复 session
+  // 设计 (W21 排期方案, 1 人天压缩到单阶段):
+  //   1. 标题时间戳后缀: 新对话 → "新对话 14:23" (HH:MM 24h)
+  //   2. 60s 内同 first_message 检测: 跳转 vs 新建 prompt (Toast 提示)
+  //   3. 默认行为: createSession 仍 mint 新 session (向后兼容), 标题自动加时间戳;
+  //      dedup 仅作辅助 (store.findSessionByFirstMessage 用于 useChatStream 检测时调用)
+  // 复用现有 mergeServerList (line 259) 逻辑, 跨 commit defer 顺序:
+  //   实施前 baseline 21 → 实施 → 实施后 baseline 21 守恒 → commit
+  const TITLE_SUFFIX_FORMAT_RE = /^新对话 (\d{1,2}:\d{2})$/
+  const FIRST_MESSAGE_HASH_WINDOW_MS = 60_000  // 60s dedup 窗口
+
+  function formatLocalTime(date: Date = new Date()): string {
+    const h = String(date.getHours()).padStart(2, '0')
+    const m = String(date.getMinutes()).padStart(2, '0')
+    return `${h}:${m}`
+  }
+
+  function djb2Hash(s: string): string {
+    let h = 5381
+    for (let i = 0; i < s.length; i++) {
+      h = (h * 33) ^ s.charCodeAt(i)
+    }
+    return (h >>> 0).toString(36)
+  }
+
   function createSession(firstUserMsg?: string): ChatSession {
-    const now = new Date().toISOString()
-    const title = (firstUserMsg || '新对话').slice(0, 30) || '新对话'
+    const nowDate = new Date()
+    const now = nowDate.toISOString()
+    const baseTitle = (firstUserMsg || '新对话').slice(0, 30) || '新对话'
+    // ★ W59 P3 dedup: 标题加时间戳后缀 (HH:MM), 避免快速 mint 多个 session 视觉重复
+    // 防"连续点 3 次 + 新对话" → 3 个完全相同的 "新对话" 列表项
+    // 旧契约 (W58-19 baseline): title="新对话" 或 "新对话<user msg>"
+    // 新契约: title="新对话 14:23" 或 "<user msg>" (user msg 时不加后缀)
+    const title = baseTitle === '新对话'
+      ? `新对话 ${formatLocalTime(nowDate)}`
+      : baseTitle
     const session: ChatSession = {
       id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       title,
@@ -165,6 +199,35 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     sessions.value.push(session)
     currentId.value = session.id
     return session
+  }
+
+  /**
+   * ★ W59 P3 dedup: 60s 内查找同 first_message 的 session
+   * 返回最近一个匹配的 session (用于 useChatStream 检测时弹出 Toast "已有相同对话, 是否跳转?")
+   * 复用现有 sessions 数组, 不调 server (性能优先, server 数据用 pickInitialSessionId 选)
+   * @param firstMessage 首条 user 消息内容 (用作 hash key)
+   * @param windowMs 窗口 ms 数 (默认 60s, 测试可覆盖)
+   */
+  function findSessionByFirstMessage(firstMessage: string, windowMs: number = FIRST_MESSAGE_HASH_WINDOW_MS): ChatSession | null {
+    if (!firstMessage || !firstMessage.trim()) return null
+    const hash = djb2Hash(firstMessage.trim().toLowerCase())
+    const nowMs = Date.now()
+    // 1) 用 preview 字段 hash 匹配 (创建时已存首条 user 消息前 50 字)
+    // 2) createdAt 在 windowMs 内的 → 命中, 按 createdAt desc 取最近
+    const candidates = sessions.value.filter((s) => {
+      if (!s.preview) return false
+      // 简化匹配: hash 相等 + createdAt 在窗口内
+      const previewNorm = s.preview.trim().toLowerCase().slice(0, firstMessage.trim().length)
+      const hashOk = djb2Hash(previewNorm) === hash
+      if (!hashOk) return false
+      const createdMs = s.createdAt ? new Date(s.createdAt).getTime() : 0
+      return nowMs - createdMs <= windowMs
+    })
+    if (candidates.length === 0) return null
+    // 按 createdAt desc 取最近
+    return candidates.sort((a, b) =>
+      (b.createdAt || '').localeCompare(a.createdAt || '')
+    )[0]
   }
 
   function switchSession(id: string) {
@@ -465,5 +528,7 @@ export const useChatSessionsStore = defineStore('chatSessions', () => {
     setArchived,
     // 2026-07-01 修复 bug 1a/1b：登录/同步后纯函数选 session
     pickInitialSessionId,
+    // 2026-07-22 W59 P3 dedup: 标题时间戳后缀 + 60s 内同 first_message 检测
+    findSessionByFirstMessage,
   }
 })

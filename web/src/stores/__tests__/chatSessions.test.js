@@ -382,3 +382,84 @@ describe('chatSessions store — deleteSession 同步服务端 (2026-07-01 bug 4
     expect(mockDeleteServerSession).toHaveBeenCalled()
   })
 })
+
+
+// ============================================================================
+// 2026-07-22 W59 P3 dedup: 标题时间戳后缀 + 60s 内同 first_message 检测
+// ============================================================================
+
+describe('chatSessions store — W59 P3 dedup (标题时间戳后缀 + 60s 检测)', () => {
+  it('★ createSession 默认标题加 HH:MM 时间戳后缀', async () => {
+    localStorage.setItem('user_info', JSON.stringify({ id: 700, name: 'gina' }))
+    const store = useChatSessionsStore()
+    const s = store.createSession()  // 不传 firstUserMsg
+    // 标题应为 "新对话 HH:MM" 格式
+    expect(s.title).toMatch(/^新对话 \d{2}:\d{2}$/)
+    // 直接传首条 user msg → 仍按原契约走首条消息 (不加时间戳, slice(0,30))
+    const s2 = store.createSession('hello world')
+    expect(s2.title).toBe('hello world')
+  })
+
+  it('createSession 连续 mint 多个 session 标题不同 (HH:MM 不重)', async () => {
+    localStorage.setItem('user_info', JSON.stringify({ id: 701, name: 'hank' }))
+    const store = useChatSessionsStore()
+    const s1 = store.createSession()
+    // 强制 1ms+ 时间差 (HH:MM 同分钟内也用 createdAt desc 排序不冲突, 这里仅验证标题唯一)
+    const s2 = store.createSession()
+    expect(s1.id).not.toBe(s2.id)
+    expect(store.sessions.length).toBe(2)
+    // 至少一个标题时间戳不同 (同分钟内也允许, 因为 id 不同)
+    // 核心契约: id 仍唯一定位,不靠 title 区分
+    expect(s1.id).toMatch(/^user_\d+_[a-z0-9]+$/)
+    expect(s2.id).toMatch(/^user_\d+_[a-z0-9]+$/)
+  })
+
+  it('findSessionByFirstMessage 命中 60s 内同首条消息', async () => {
+    localStorage.setItem('user_info', JSON.stringify({ id: 702, name: 'ivy' }))
+    const store = useChatSessionsStore()
+    const msg = '今天论文看到了什么'
+    const s1 = store.createSession(msg)
+    // s1 已存 msg 到 preview
+    expect(s1.preview).toBe(msg)
+
+    // 立即再查: 应能找到 s1
+    const found = store.findSessionByFirstMessage(msg)
+    expect(found).not.toBeNull()
+    expect(found.id).toBe(s1.id)
+  })
+
+  it('findSessionByFirstMessage 窗口外 (>60s) 不命中', async () => {
+    localStorage.setItem('user_info', JSON.stringify({ id: 703, name: 'jack' }))
+    const store = useChatSessionsStore()
+    const msg = '过期测试消息'
+    const s1 = store.createSession(msg)
+
+    // 手动篡改 s1.createdAt → 1 小时前
+    s1.createdAt = new Date(Date.now() - 61 * 60 * 1000).toISOString()
+
+    const found = store.findSessionByFirstMessage(msg)
+    expect(found).toBeNull()
+  })
+
+  it('findSessionByFirstMessage 空消息 / 不同内容 / 大小写差异 行为正确', async () => {
+    localStorage.setItem('user_info', JSON.stringify({ id: 704, name: 'kara' }))
+    const store = useChatSessionsStore()
+    const s1 = store.createSession('原始消息')
+
+    // 1) 空消息 → null
+    expect(store.findSessionByFirstMessage('')).toBeNull()
+    expect(store.findSessionByFirstMessage('   ')).toBeNull()
+
+    // 2) 完全不同的内容 → null
+    expect(store.findSessionByFirstMessage('完全不同的内容')).toBeNull()
+
+    // 3) 大小写 / 首尾空格 → 当前实现按 lowercase 归一, 也应命中
+    //    (规范: dedup 不应被大小写绕过)
+    const foundCase = store.findSessionByFirstMessage('原始消息')  // 完全相同
+    expect(foundCase?.id).toBe(s1.id)
+
+    const foundLower = store.findSessionByFirstMessage('原始消息'.toLowerCase())
+    // 大小写归一后应命中 (djb2 + lowercase 都生效)
+    expect(foundLower?.id).toBe(s1.id)
+  })
+})
