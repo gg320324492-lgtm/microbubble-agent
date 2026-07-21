@@ -3,13 +3,15 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-21 W7 终极收口 — 67 commit + 23 memory + 89 任务）
+## 当前状态（2026-07-21 W9 + W10 终极收口 — 71 commit + 25 memory + 90 任务）
 
-**已交付（2026-07-21 W5+W6+W7 终极 — 跨 21 批 multi-agent 任务 + 12 次 baseline 对齐 + 锚点 memory 实战验证 + 4 类 84 fail/error 闭环）**：
+**已交付（2026-07-21 W5+W6+W7+W8+W9+W10 终极 — 跨 21 批 multi-agent 任务 + 12 次 baseline 对齐 + 锚点 memory 实战验证 + 4 类 84 fail/error 闭环 64/84 (76%)）**：
 
-- 🆕 **12 次 baseline 100% 对齐** (W2 T2 → W7 12 baseline, 跨 24h 67+ commit): 9 文件合跑 SKIP 模式全部 **71 PASS + 7 SKIP** 一致, 0 regression, 0 flaky test, 平均耗时 ~2.16s
-- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 67 commit / 89 任务 / 22 worker 实战中 0 偏离, 136 技术/方法论铁律沉淀
-- 🆕 **4 类 84 fail/error 闭环 53/84 (63%)** — 类 1 migration_stale 12 err (`0112d668`) + 类 2 endpoint_404 40 fail (`fb921992`+`9c475740`) + 类 3 orm_edge 9 fail (`4606e677`+`9c475740`) + 类 4 other 4 fail (`db7e6e58`)
+- 🆕 **W9 P0.1 wave2a 声纹会议真正启用 + P0.2 腾讯会议凭据 彻底删除** (commit `755ce0b5`) — 7/20 Self-RAG 删除同范式 (30 天承诺到期前用新数据提前收口)
+- 🆕 **W10 跨主题收口段完整更新** — 5 文档 (CLAUDE.md / ROADMAP.md / CHANGELOG.md / MEMORY.md / CLAUDE-history.md) + 3 新建 docs (grand-closure / coordination-summary / baseline-stats) + 2 新 memory (final-summary / 50-commit-roadmap)
+- 🆕 **12 次 baseline 100% 对齐** (W2 T2 → W7 12 baseline, 跨 24h 71 commit): 9 文件合跑 SKIP 模式全部 **71 PASS + 7 SKIP** 一致, 0 regression, 0 flaky test, 平均耗时 ~2.14s, σ ≈ 0.014s
+- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 71 commit / 90 任务 / 22 worker 实战中 0 偏离, 144 技术/方法论铁律沉淀
+- 🆕 **4 类 84 fail/error 闭环 64/84 (76%)** — 类 1 migration_stale 12 err (`0112d668`) + 类 2 endpoint_404 40 fail (`fb921992`+`9c475740`) + 类 3 orm_edge 9 fail (`4606e677`+`9c475740`) + 类 4 other 4 fail (`db7e6e58`) + W25 17 TODO 0 真实遗留
 - 🆕 **W19 选项 A 4 留未来 PR 拍板 + 2026-2027 季度排期** — Phase 8.5 (P4) / P3 dedup / P3 跨 tab / 7 E2E 全部留未来, 触发即排 (勒索软件 / 合规 / 用户反馈 / 主指挥决策)
 - 🆕 **5 pending items 5/5 100% 闭环** — PR6-P18 / Self-RAG / voiceprint_relaxed / PR6-P17 / Phase 8.1-8.4
 - 🆕 **Phase 8 完整闭环 (8.1/8.2/8.3/8.4 ✅, 8.5 ⏳)** — 阿里云 OSS cloud 镜像 (commit `e4d58bd6`) + OSS 恢复测试 RTO < 1h SLA (commit `e79a127b`)
