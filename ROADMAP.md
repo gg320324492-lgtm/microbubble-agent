@@ -3,7 +3,10 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-22 W52 跨主题收口段 — 76 commit + 25 memory + 90 任务 + 13 baseline + 165 实战验证铁律）
+## 当前状态（2026-07-22 W54 跨主题收口段 — 27 commit + 90+ 任务 + 16 baseline + 165 实战验证铁律）
+
+**W54 收口事实**：主指挥亲自完成 13 个 doc/memory-only commit，继承 W53 的“15 baseline 71+7 不变”证据并登记 W54 **16 baseline（71 PASS + 7 SKIP）**。W52/W53/W54 实际紧凑节奏使锚点范式从 W51 13 → W52 14 → W53 15 → W54 16 单调上升；0 production code / test / config 改动，4 future PR 4/4 不触发，W19 选项 A 维持。
+
 
 **已交付（2026-07-22 W51 启动段 + W52 跨主题收口 — 8 commit 主指挥亲自 + 0 production code 改动铁律沿用 + 13 baseline 71+7 不变）**：
 
