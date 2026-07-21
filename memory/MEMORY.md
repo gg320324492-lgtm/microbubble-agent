@@ -1,0 +1,5 @@
+- [2026-07-22 W51-1 W11 13 baseline 守恒 (锚点范式 W7 12 → W11 13 单调上升)](w11-13-baseline-closure-2026-07-22.md) — 9 文件合跑 SKIP_DB_SETUP=1 模式 5 run 全部 71 PASS + 7 SKIP 100% 对齐, σ ≈ 0.015s 历史最优持平. 跨 18 commit 0 regression.
+- [2026-07-22 W51-2 锚点范式 21 天实战验证 (4 阶段 100% 适用 0 偏离)](anchor-paradigm-21-day-validation-2026-07-22.md) — 跨 71+ commit / 22+ worker / 13+ baseline / 4+ 主指挥亲自修 / 165 铁律. 锚点范式金标准.
+- [2026-07-22 W51-3 W51-W100 50 commit 跨主题时间线预排](2026-07-22-50-commit-w51-w100-roadmap.md) — 5 大阶段 × 10 子阶段 × 5 commit = 250 commit 预排. 新规则 W1/W2 命名 + 最多 2 agent 沿用.
+- [2026-07-22 W51-4 4 留未来 PR 触发评估 (W51 检查 4/4 全不触发)](future-pr-trigger-evaluation-2026-07-22.md) — future PR 触发评估是 W51 必做项. 防止 future PR 列表无限累积铁律.
+- [2026-07-22 W52 5 文档同步 (CLAUDE.md / ROADMAP.md / CHANGELOG.md / MEMORY.md / CLAUDE-history.md)](docs/2026-07-22-grand-closure.md) — W51-1~W51-8 8 commit 主指挥亲自 + 0 production code 改动铁律沿用 + 13 baseline 71+7 不变守恒 (W52 跨主题收口段).
