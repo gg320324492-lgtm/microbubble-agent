@@ -14,3 +14,7 @@
 - [2026-07-22 W56 baseline 16-18 守恒](w16-18-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56 紧凑节奏 14→15→16→17→18, 71 PASS + 7 SKIP, 0 drift.
 - [2026-07-22 W56 W51-W60 紧凑节奏预排 final](w56-w51-w60-roadmap-final-2026-07-22.md) — W51-W60 50 commit 阶段 final, 实际节奏 vs 原预排差异完整留痕.
 - [2026-07-22 W56 Q4 future PR final 评估](w56-future-pr-q4-final-evaluation-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final. Q4 量化触发条件维持.
+- [2026-07-22 W57 跨主题收口 (19 baseline 守恒)](w57-coordination-grand-closure-2026-07-22.md) — W52-W56 + W57 紧凑节奏 14→15→16→17→18→19, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 18 baseline 71+7 不变. σ ≈ 0.130s 历史最优持平.
+- [2026-07-22 W57 baseline 17-19 守恒](w17-19-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56/W57 紧凑节奏 14→15→16→17→18→19, 71 PASS + 7 SKIP, 0 drift.
+- [2026-07-22 W57 W51-W60 紧凑节奏 compact final](w57-w51-w60-roadmap-compact-2026-07-22.md) — W51-W60 7 阶段 91 commit final, 实际节奏 vs 原预排差异完整留痕.
+- [2026-07-22 W57 Q4 future PR final 评估](w57-future-pr-q4-evaluation-final-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final. fact-check 修正 pre-existing fail 65/65 = 100%.
