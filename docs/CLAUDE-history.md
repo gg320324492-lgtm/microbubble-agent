@@ -7537,3 +7537,69 @@ W51-W60 原定为 **50 commit 阶段**。Pre-W60 的 W51-W59 实际累计 **75 c
 - **pre-existing fail 闭环最终口径：65/65 = 100%**。
 - 旧口径 `64/84 (76%)` 属于早期阶段快照，不再作为 W60 final 的累计闭环数字。
 - W60 数字统一采用主指挥拍板：**88 commit / 53 memory / 58 docs / 22 baseline / 165 铁律 / 3 future PR 留未来**。
+
+---
+
+## W61 2026-07-22 502 Bad Gateway 真根因 3 层修复 (1 commit + 23 baseline + 167 铁律)
+
+### 摘要
+
+W61 启动段首次发现 `/minio/avatars/*.jpg` 持续返回 502 Bad Gateway。原始 memory `nginx-ssl-cert-path-mismatch-502-2026-07-22.md` 仅诊断第 1 层（SSL 路径错），实际穿透排查发现 **3 层链路都需修复**。
+
+### 3 层根因链
+
+1. **第 1 层（外）**：docker nginx-1 容器 SSL 路径错
+   - `tunnel.conf` 写 `/etc/letsencrypt/live/...` 但 docker-compose 挂载 `/etc/nginx/ssl`
+   - 容器 `[emerg]` 失败 → restart loop（8s 间隔）
+   - 修复：`/etc/letsencrypt/live/...` → `/etc/nginx/ssl/...` + 从云服务器拉证书
+
+2. **第 2 层（中，真根因）**：SSH reverse tunnel 孤儿 listener
+   - 云服务器 `ss -tlnp` 显示 PID 1544507 sshd session 占 8000/9000/2222
+   - 该 session 7/20 启动，SSH tunnel 已死但 listener 孤儿化
+   - 云 nginx `proxy_pass http://127.0.0.1:9000` 接到孤儿 → RST → 502
+   - 修复：`kill -9 1544507` + 重连 SSH tunnel（用 PowerShell 数组形式 + 双引号转义）
+
+3. **第 3 层（内）**：docker minio-1 端口响应 0
+   - 端口 LISTENING（IPv4+IPv6）但 `curl 127.0.0.1:9000/minio/health/live` 返回 000
+   - 容器内 curl 200 OK（`docker exec microbubble-agent-minio-1 curl localhost:9000`）
+   - 修复：`docker restart microbubble-agent-minio-1`
+
+### 修复动作（commit `2d73c9f8`）
+
+1. `nginx/conf.d/tunnel.conf` 4 行 SSL 路径修改
+2. 从云服务器拉 `fullchain.pem` / `privkey.pem` 到 `nginx/ssl/{agent,mnb}-lab.cn/`
+3. `docker compose restart nginx`（容器 healthy）
+4. `ssh root@agent.mnb-lab.cn "kill -9 1544507"`（kill 孤儿 sshd session）
+5. PowerShell `Start-Process -ArgumentList @(...)` 启动新 SSH reverse tunnel（3 forwards: 8000/9000/2222）
+6. `docker restart microbubble-agent-minio-1`（修复 minio 端口响应）
+
+### 6 点 curl 验证（全过）
+
+```
+/minio/avatars/32593ab1...jpg → 200 (23685 bytes) ✅
+/index.html                   → 200 text/html ✅
+/sw.js                        → 200 application/javascript ✅
+/api/v1/auth/me               → 401 application/json ✅
+/dashboard                    → 200 text/html (SPA fallback) ✅
+/manifest.webmanifest         → 410 (防护保留) ✅
+```
+
+### Baseline 守恒
+
+9 文件合跑：`71 PASS + 7 SKIP`（W60 22 → **W61 23**，0 regression 跨 1 commit）
+
+### 2 新铁律
+
+1. **502 排查必须穿透 3 层链路**——云 nginx error log → SSH tunnel listener 状态 → 目标服务响应（W61 启动段错就错在只看云 nginx log）
+2. **PowerShell `Start-Process -ArgumentList @(...)` 数组形式 + 双引号转义**——防 bash 替换 `$env:USERPROFILE` 为空字符串导致 SSH key 找不到
+
+### 累计数据
+
+- **commit**: W60 88 → **W61 89**（+1）
+- **memory**: W60 53 → **W61 54**（+1，覆盖修正原始错误 memory）
+- **baseline**: W60 22 → **W61 23**（+1）
+- **铁律**: W60 165 → **W61 167**（+2）
+
+### 0 production code 改动铁律
+
+W61 改的是 `tunnel.conf`（nginx 配置）+ 部署脚本启动方式 + docker minio restart（运维操作），**不属于 production code 改动**。锚点范式全程沿用。
