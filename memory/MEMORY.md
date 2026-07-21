@@ -22,3 +22,7 @@
 - [2026-07-22 W57 baseline 17-19 守恒](w17-19-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56/W57 紧凑节奏 14→15→16→17→18→19, 71 PASS + 7 SKIP, 0 drift.
 - [2026-07-22 W57 W51-W60 紧凑节奏 compact final](w57-w51-w60-roadmap-compact-2026-07-22.md) — W51-W60 7 阶段 91 commit final, 实际节奏 vs 原预排差异完整留痕.
 - [2026-07-22 W57 Q4 future PR final 评估](w57-future-pr-q4-evaluation-final-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final. fact-check 修正 pre-existing fail 65/65 = 100%.
+- [2026-07-22 W60 跨主题收口 final (22 baseline 守恒)](w60-coordination-grand-closure-2026-07-22.md) — Pre-W60 W51-W59 累计 75 commit + W60 13 commit = Post-W60 88 commit；累计 53 memory + 58 docs + 165 铁律。W59 P3 dedup 实施后继承 21 baseline 71+7 不变，W60 第 22 次仍为 71 PASS + 7 SKIP，0 drift。
+- [2026-07-22 W19-W22 baseline closure 累计数据](w19-22-baseline-closure-2026-07-22.md) — W18/W19/W20/W21/W22 baseline 连续守恒，锚点范式 W7 12 → W60 22 单调上升，σ ≈ 0.130s。
+- [2026-07-22 W51-W60 50 commit 阶段收官 final](w60-w51-w60-stage-closure-final.md) — 实际完成 88 commit，较 50 commit 阶段目标形成 1.76x 紧凑节奏；全阶段数据与时间线最终留痕。
+- [2026-07-22 W59 P3 dedup 实质开发首次启动](w60-future-pr-evaluation-post-dedup.md) — future PR 从 W19 选项 A 切换为选项 B 并完成 `chatSessions.ts` 标题时间戳 + 60s 首条消息检测；其余 3 future PR 继续留未来。
