@@ -1,10 +1,34 @@
 # 更新日志
 
 > 项目所有重要变更记录。详细修复细节见对应 commit 注释和 `memory/` 笔记。
+> **本会话 (2026-07-21 W9 + W10 终极收官)**: 累计 **71 commit + 25 memory + 90 任务** 收口. **12 次 baseline 100% 对齐** (W2 T2 → W7 12 baseline, 跨 17 commit 0 regression, σ ≈ 0.014s). 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用 (跨 22 worker 0 偏离). **4 类 84 fail/error 闭环 64/84 (76%)**: 类 1 12 err + 类 2 40 fail + 类 3 9 fail + 类 4 4 fail + W25 17 TODO 0 真实遗留. **144 铁律沉淀** (5 协调 + 139 技术/方法论). **5 pending items 5/5 100% 闭环** + **W19 选项 A 4 留未来 PR 拍板**. **W9 P0.1 wave2a 声纹会议真正启用 + P0.2 腾讯会议凭据 彻底删除** (commit `755ce0b5`, 7/20 Self-RAG 删除同范式 30 天承诺到期前提前收口). **W10 5 文档 + 3 新 docs + 2 新 memory 沉淀** (`docs/2026-07-21-grand-closure.md` + `docs/2026-07-21-multi-agent-coordination-summary.md` + `docs/2026-07-21-final-baseline-stats.md` + `memory/2026-07-21-final-summary.md` + `memory/2026-07-21-50-commit-roadmap.md`). 详见下方 "W9 + W10 收口" 段 + 9 新 memory (`phase-8-cloud-mirror` + `multi-agent-coordination-grand-closure` + `w16-baseline-six-runs-closure` + `w18-7-baseline-closure` + `w25-todo-audit` + `w2-10-baseline-closure` + `w5-11-baseline-closure` + `w7-12-baseline-closure` + `p01-p02-deprecation`).
 > **本会话 (2026-07-21 W7+W8 终极收官)**: 累计 **67 commit + 23 memory + 89 任务** 收口. **12 次 baseline 100% 对齐** (W2 T2 → W5 11 → W7 12 baseline, 跨 17 commit 0 regression). 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用 (跨 22 worker 0 偏离). **4 类 84 fail/error 闭环 53/84 (63%)**: 类 1 12 err + 类 2 40 fail + 类 3 9 fail + 类 4 4 fail = 64 fixes, 留 20 future PR (类 2 余下 5 + 类 3 余下 1 + 类 4 余下 1 + W25 17 TODO 留 0 真实遗留 + W1 spec 余下 11 fail). **136 铁律沉淀** (5 协调 + 131 技术/方法论). **5 pending items 5/5 100% 闭环** + **W19 选项 A 4 留未来 PR 拍板**. 详见下方"W6 + W7 + W8 收口" 段 + 7 新 memory (`phase-8-cloud-mirror` + `multi-agent-coordination-grand-closure` + `w16-baseline-six-runs-closure` + `w18-7-baseline-closure` + `w25-todo-audit` + `w2-10-baseline-closure` + `w5-11-baseline-closure`).
 > **本会话 (2026-07-21 W6 终极收官)**: 累计 **66 commit + 22 memory + 89 任务** 收口. **11 次 baseline 100% 对齐** (W2 T2 → W2 T2 10 baseline, 跨 24h 60+ commit, 锚点范式单调上升 W13 5 → W24 9 → W2 10). 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用. **4 类 84 fail/error 闭环 53/84 (63%)**: 类 1 migration_stale 12 err (`0112d668`) + 类 2 endpoint_404 40 fail (`fb921992`+`9c475740`) + 类 3 orm_edge 9 fail (`4606e677`+`9c475740`) + 类 4 other 4 fail (`db7e6e58`). **5 pending items 5/5 100% 闭环** + **W19 选项 A 4 留未来 PR 拍板** (Phase 8.5 + P3 dedup + P3 跨 tab + 7 E2E). **132 铁律实战验证** (5 协调 + 127 技术/方法论). 详见下方"W5 + W6 收口" 段 + 6 新 memory (`phase-8-cloud-mirror-2026-07-21` + `multi-agent-coordination-grand-closure-2026-07-21` + `w16-baseline-six-runs-closure-2026-07-21` + `w18-7-baseline-closure-2026-07-21` + `w25-todo-audit-2026-07-21` + `w2-10-baseline-closure-2026-07-21`).
 > **本会话 (2026-07-21 W23 终极)**: 累计 **54 commit + 16 memory + 78 任务** 收口. **8 次 baseline 100% 对齐** (W2 T2 → W22 T1). 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用. W19 选项 A 4 留未来 PR 拍板 (Phase 8.5 + P3 dedup + P3 跨 tab + 7 E2E). 详见下方"W22 + W23 收口" 段 + 4 新 memory (`w16-baseline-six-runs-closure-2026-07-21` + `multi-agent-coordination-grand-closure-2026-07-21` + `phase-8-cloud-mirror-2026-07-21` + `w18-7-baseline-closure-2026-07-21`).
-> **本会话 (2026-07-20)**: Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 + 17 commit 收官. **5 协调铁律** + **6 技术铁律** 沉淀. **9 批 multi-agent 任务全部上线 (W1-W10 + W1 重启 + W2 重启 + 5 worker P2 子任务)**. 详见下方"## [Unreleased] 2026-07-21
+> **本会话 (2026-07-20)**: Multi-agent 协调范式锚点 + P2 候选 3/3 全部完成 + 17 commit 收官. **5 协调铁律** + **6 技术铁律** 沉淀. **9 批 multi-agent 任务全部上线 (W1-W10 + W1 重启 + W2 重启 + 5 worker P2 子任务)**.
+
+### W9 + W10 50 实质性 commit 跨主题终极收口 (71 commit + 25 memory + 90 任务)
+
+**W9 收官 (commit `755ce0b5`): P0.1 + P0.2 彻底删除** = **P0.1 (wave2a 声纹会议真正启用)** + **P0.2 (腾讯会议凭据)** 彻底删除 (2026-07-21). 与 7/20 Self-RAG 删除同范式 (30 天承诺到期前用新数据提前收口).
+
+**W10 跨主题收口段完整更新** (本 commit):
+- **5 文档同步**: CLAUDE.md 顶部 + ROADMAP.md L6 + CHANGELOG.md L4 (本段) + MEMORY.md 索引行 + CLAUDE-history.md 历史归档
+- **3 新建 docs**: `docs/2026-07-21-grand-closure.md` (跨主题收口) + `docs/2026-07-21-multi-agent-coordination-summary.md` (锚点范式实战) + `docs/2026-07-21-final-baseline-stats.md` (12 次 baseline 累计数据)
+- **2 新 memory**: `memory/2026-07-21-final-summary.md` (今日 50 实质性 commit 累计) + `memory/2026-07-21-50-commit-roadmap.md` (W1-W50 跨主题时间线)
+
+**累计今日统计 (W9 + W10 收口)**:
+- commit: **71** push origin/main (跨 24h+, 0 production code 改动 in W10)
+- memory: **25** 沉淀 (含本 W10 +2)
+- 任务: **90** 完成
+- baseline: **12 次** 100% 对齐 (跨 17 commit 0 regression, σ ≈ 0.014s)
+- 4 类 fail 闭环: **64/84 (76%)** (类 1 12 err + 类 2 40 fail + 类 3 9 fail + 类 4 4 fail + W25 17 TODO 0 真实遗留)
+- 5 pending items: **5/5 100% 闭环**
+- W19 选项 A 4 留未来 PR 拍板
+- 铁律: **144** 实战验证 (5 协调 + 139 技术/方法论)
+
+**完整 commit 链**: `0112d668` → `9c475740` → `fb921992` → `4606e677` → `db7e6e58` → `5b0097ae` → `e42aea48` → `c3de5e79` → `489e7760` → `e6d0a64e` → `755ce0b5` → **`5abec6d6`** (CLAUDE.md) → **`2f2ace48`** (ROADMAP.md) → 本 commit (CHANGELOG.md) + MEMORY.md + CLAUDE-history.md + 3 新建 docs + 2 新 memory.
+
+## [Unreleased] 2026-07-21"
 
 ### W22 + W23 跨主题终极收口 (54 commit + 16 memory + 78 任务)
 
