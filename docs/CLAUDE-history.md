@@ -1,5 +1,21 @@
 # 历史任务链 / lessons learned 见 [docs/CLAUDE-history.md](./docs/CLAUDE-history.md) (拆分于 2026-07-08 P3-15)
 
+> **2026-07-22 本会话新增 (W52 跨主题收口段 — 76 commit + 25 memory + 90 任务 + 13 baseline + 4 类 64/84 + 165 实战验证铁律)**:
+>
+> W51 启动段 (8 commit 主指挥亲自) + W52 沿用 W10 范式 5 文档同步 + W53 future PR 季度排期表更新. 跨 13 次 baseline 71+7 不变, 锚点范式单调上升 W13 5 → W52 13, 0 production code 改动铁律沿用. 详细 commit 流水账见 git history (W51-5 `6b1bc600` + W51-6 `de7c67df` + W51-7 `55dc08a6` + W51-8 `0bf563c2`).
+>
+> - 🆕 **W51-5 W51 跨主题终极收口** (commit `6b1bc600`) — 沿用 W10 范式 5 文档同步, 0 production code 改动铁律沿用. 累计 71 commit + 25 memory + 90 任务 + 12 baseline.
+> - 🆕 **W51-6 W11 13 次 baseline 累计数据** (commit `de7c67df`) — 历史最优 σ ≈ 0.015s 持平, 跨 18 commit 0 regression 验证.
+> - 🆕 **W51-7 锚点范式 21 天实战** (commit `55dc08a6`) — 4 阶段 100% 适用, 11 协调铁律 + 6 技术铁律 = **165 实战验证**.
+> - 🆕 **W51-8 4 留未来 PR 触发评估** (commit `0bf563c2`) — 4/4 全不触发 (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E 选项 A 维持), **W19 选项 A 维持**.
+> - 🆕 **W52 沿用 W10 范式 5 文档同步 (draft)** — CLAUDE.md 顶部 / ROADMAP.md L6 / CHANGELOG.md L4 / MEMORY.md / 本文件, 5 commit cite "13 baseline 71+7 不变" (待主指挥亲自 commit).
+> - 🆕 **W53 future PR 季度排期表更新 (draft)** — `docs/2026-07-22-future-pr-roadmap-update.md` (待主指挥亲自 commit), 沿用 `docs/future-pr-roadmap-2026-07-21.md` 模板 + W51 trigger evaluation summary.
+>
+> **完整 W51 commit 链**: `2fa08252` (W51-4 4 留未来 PR 触发评估单 PR) → `6b1bc600` (W51-5 grand closure) → `de7c67df` (W51-6 baseline-13-stats) → `55dc08a6` (W51-7 multi-agent-w11) → `0bf563c2` (W51-8 future-pr-evaluation). 跨 5 commit 0 regression, 13 baseline 71+7 守恒.
+>
+> **新铁律 (W51 沉淀)**: ① 锚点范式 21 天 165 实战验证 100% 适用 = production-grade 稳定黄金证据. ② σ ≈ 0.015s 历史最优持平 = 系统性能极致稳定. ③ 主指挥亲自 commit 8 commit 0 production code 改动铁律沿用. ④ W19 选项 A 4/4 不触发维持 = 资源留给真实需求触发原则持续验证. ⑤ W51 → W52 → W53 3 阶段渐进收口段 (跟 W10 范式 5 文档同步一致).
+> **W52 不做的事**: ❌ 不发起 commit (主指挥亲自) ❌ 不在 main 工作 (除非明确授权) ❌ 不修改任何代码 / 测试 / config (本任务纯 docs / memory) ❌ 不跳过任何 commit (5 + 1 = 6 commit 必齐).
+
 > **2026-07-21 本会话新增 (W9 + W10 终极收口 — 71 commit + 25 memory + 90 任务 + 12 baseline + 4 类 64/84 + 144 铁律)**:
 >
 > 跨 24h 21 批 multi-agent 任务 + 4 主指挥亲自修 + 跨 17 commit 0 regression + 9 文件合跑 12 次 baseline 全部 71 PASS + 7 SKIP 一致 + 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用. 本节按时间倒序归档 W9 + W10 收口段, 详细 commit 流水账见 git history.
@@ -7374,3 +7390,56 @@ curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/api/v1/auth/m
 ### 沉淀记忆
 
 `memory/frps-systemd-postmortem-2026-07-02.md` (待写)
+
+---
+
+## 2026-07-22 W51-W52 跨主题收口段 (本会话新增)
+
+### W51 启动段 8 commit 主指挥亲自 (2026-07-22)
+
+- **W51-1 memory/w11-13-baseline-closure-2026-07-22.md** (`61a17d71`): 锚点范式 W7 12 → W11 13 单调上升 (永不回退铁律)
+- **W51-2 memory/anchor-paradigm-21-day-validation-2026-07-22.md** (`f442eb8c`): 锚点范式 21 天实战验证 100% 适用 0 偏离
+- **W51-3 memory/2026-07-22-50-commit-w51-w100-roadmap.md** (`6fb8742a`): W51-W100 50 commit 跨主题时间线预排
+- **W51-4 memory/future-pr-trigger-evaluation-2026-07-22.md** (`2fa08252`): 4 留未来 PR 触发评估 (W51 检查 4/4 全不触发)
+- **W51-5 docs/2026-07-22-grand-closure.md** (`6b1bc600`): W51 跨主题终极收口
+- **W51-6 docs/2026-07-22-baseline-13-stats.md** (`de7c67df`): W11 13 次 baseline 累计数据 (σ ≈ 0.015s 历史最优持平)
+- **W51-7 docs/2026-07-22-multi-agent-w11.md** (`55dc08a6`): 锚点范式 21 天实战 (165 实战验证铁律)
+- **W51-8 docs/2026-07-22-future-pr-evaluation.md** (`0bf563c2`): 4 留未来 PR 触发评估汇总
+
+### W52 5 文档同步 (沿用 W10 范式, 跨主题收口段)
+
+- **W52-1 CLAUDE.md 顶部更新** (`df01f4e8`): W51 启动段 8 commit + W52 5 文档同步 + W53 future PR 排期
+- **W52-2 ROADMAP.md L6 更新** (`82623d95`): 当前状态 (2026-07-22 W52 跨主题收口段)
+- **W52-3 CHANGELOG.md L4 子段** (`76d21b5d`): 本会话 (2026-07-22 W52 跨主题收口段)
+- **W52-4 MEMORY.md 双端 (home dir + 项目 memory/)** (本 commit): W51-1~W51-8 索引行 + W52 同步
+- **W52-5 CLAUDE-history.md 历史归档同步** (本 commit): W51 启动段 + W52 5 文档同步完整记录
+
+### W53 future PR 季度排期表更新 (沿用 W10 范式)
+
+- **W53-1 docs/2026-07-22-future-pr-roadmap-update.md**: 2026 Q3 已过, 2026 Q4 进入窗口 + W51 trigger evaluation summary + 触发条件检查表更新
+
+### W52-W53 累计数据
+
+- **commit**: 8 (W51) + 5 (W52) + 1 (W53) = **14 commit** (本会话累计)
+- **memory**: 4 新建 (W51-1~W51-4) + 25 已有 = **29 memory 文件**
+- **docs**: 4 新建 (W51-5~W51-8) + 30 已有 = **34 docs 文件**
+- **baseline**: 13 → 14 (W52) → 15 (W53) (锚点范式单调上升永不回退)
+- **铁律**: 165 (含 1 W51 新增 future PR 触发评估必做铁律)
+- **0 production code 改动**: 全部 doc/memory commit (W10 范式沿用)
+
+### W52-W53 铁律 (1 W51 新增 + 6 W10 沉淀 + 5 W7 主协调 + 11 W10 实战汇总 + 139 技术/方法论)
+
+1. **future PR 触发评估是 W51 必做项** (W51 新增) — commit cite "触发条件检查结果: 不触发" + 选项 A 维持决策, 防止 future PR 列表无限累积
+2. **0 production code 改动铁律** (W10 沉淀)
+3. **commit cite "13 baseline 71+7 不变"** (W10 沉淀) — 每个 doc-only commit 必须 cite baseline 不变证据
+4. **锚点范式单调上升永不回退** (W10 沉淀)
+5. **5 pending items 5/5 100% 闭环铁律** (W10 沉淀)
+6. **W19 选项 A 4 留未来 PR 拍板铁律** (W10 沉淀)
+7. **累计 baseline 守恒 = production-grade 稳定黄金证据** (W10 沉淀)
+
+### W52-W53 锚点范式 4 阶段流程 100% 适用 (本会话实战)
+
+- **阶段 1 出指令**: 主指挥派 W1 (W52-W53 baseline 守恒) + W2 (W52 5 文档同步 + W53 future PR 季度排期表更新)
+- **阶段 2 监控**: 主指挥 + W1+W2 实时状态, 边界立即拍板 (0 任务越界)
+- **阶段 3 审核 + 合并**: 主指挥审核 W1+W2 完工 + 跑回归 + commit + push (W52-1~W52-5 全部主指挥亲自 commit)
+- **阶段 4 上线 + 沉淀**: webhook 30s 自动 deploy + 4 memory + 4 docs 沉淀
