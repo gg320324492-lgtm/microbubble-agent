@@ -1,3 +1,7 @@
+- [2026-07-22 W58 跨主题收口 (20 baseline 守恒)](w58-coordination-grand-closure-2026-07-22.md) — W52-W57 + W58 紧凑节奏 14→15→16→17→18→19→20, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 19 baseline 71+7 不变. σ ≈ 0.130s 历史最优持平.
+- [2026-07-22 W58 baseline 18-20 守恒](w18-20-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56/W57/W58 紧凑节奏 14→15→16→17→18→19→20, 71 PASS + 7 SKIP, 0 drift.
+- [2026-07-22 W58 W51-W60 紧凑节奏 quarterly final2](w58-w51-w60-roadmap-quarterly-2026-07-22.md) — W51-W60 8 阶段 104 commit final2, 实际节奏 vs 原预排差异完整留痕.
+- [2026-07-22 W58 Q4 future PR final2 评估](w58-future-pr-q4-evaluation-final2-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final2. fact-check 修正 pre-existing fail 65/65 = 100%.
 - [2026-07-22 W54 跨主题收口 (16 baseline 守恒)](w54-coordination-grand-closure-2026-07-22.md) — 13 doc/memory-only commit + 4 memory + 4 docs，继承 15 baseline 71+7 不变，实际累计 16 baseline；27 commit + 90+ 任务 + 165 铁律。
 - [2026-07-22 W54 baseline 14-16 守恒](w14-16-baseline-closure-2026-07-22.md) — W52/W53/W54 紧凑节奏 14 → 15 → 16，71 PASS + 7 SKIP，0 drift。
 - [2026-07-22 W54 W51-W60 预排](w54-w51-w60-roadmap-2026-07-22.md) — 50 commit 阶段计划与实际紧凑 baseline 节奏差异留痕。
