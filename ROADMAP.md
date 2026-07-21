@@ -3,9 +3,11 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-22 W58 跨主题收口段 — 74 commit + 90+ 任务 + 20 baseline + 165 实战验证铁律）
+## 当前状态（2026-07-22 W60 跨主题收口段 — pre-W60 75 commit (W51-W59 累计) + W60 13 commit = post-W60 88 commit + 50 memory + 58 docs + 22 baseline + 165 实战验证铁律）
 
-**W56+W57+W58 三个 doc/memory-only 阶段（每阶段 13 commit）累计 39 commit，主指挥亲自**：继承 W55 17 baseline，经 W56/W57/W58 三次验证登记 20 baseline（71 PASS + 7 SKIP）。W55 → W56 → W57 → W58 实际紧凑节奏使锚点范式从 W55 17 → W58 20 单调上升；0 production code / test / config 改动，4 future PR 4/4 不触发，W19 选项 A 维持。**fact-check 修正**：pre-existing fail 闭环 = 65/65 = 100% 真 fail (修正 W2 旧 64/84 = 76% 误读)。
+**W51-W60 50 commit 阶段收官 final**：W58 20 baseline → W59 P3 dedup 实质开发模式首次启动 (`8f187cda`) → 21 baseline → W60 阶段收口 13 commit → **22 baseline**. W51 8 + W52 5 + W53 1 + W54 13 + W55 13 + W56 8 + W57 13 + W58 13 + W59 1 + W60 13 = 88 commit post-W60, 紧凑节奏 1.76x vs 原预排 50 commit. **锚点范式单调上升**: W2 10 → W5 11 → W7 12 → W52 13 → W54 16 → W55 17 → W56 18 → W57 19 → W58 20 → W59 21 → **W60 22** (production-grade 稳定黄金证据, 0 regression 跨 W60 13 commit). **0 production code / test / config 改动铁律沿用** (W60 不新增铁律, 165 实战验证铁律沿用). **4 future PR 4/4 不触发**: P3 dedup 已 W59 实质开发完成 (`8f187cda`), Phase 8.5 / P3 跨 tab / 7 E2E (选项 A) 仍留未来, 2026 Q4 主动排期 0. **5 pending items 5/5 100% 闭环** (沿用 W21 锚点范式). **fact-check 修正**: pre-existing fail 闭环 = 65/65 = 100% 真 fail (修正 W2 旧 64/84 = 76% 误读).
+
+**W59 实质开发模式首次启动**: W19 选项 A → 选项 B 切换触发 (P3 dedup 用户多次反馈侧栏重复 ≥3 次), commit `8f187cda feat(chat): P3 dedup 标题时间戳 + 60s 首条消息检测` 实施. 改动 chatSessions.ts 标题时间戳后缀 + 60s 首条消息检测, vitest 25/25 PASS + web/ 699/699 PASS. W59 + W60 共同构成"W60 阶段收口 final"的两阶段闭环. 详见 `memory/p01-p02-deprecation-2026-07-21.md` + `memory/2026-07-22-final-summary-2026-07-22.md` (待主指挥拍板后 commit).
 
 
 **已交付（2026-07-22 W51 启动段 + W52 跨主题收口 — 8 commit 主指挥亲自 + 0 production code 改动铁律沿用 + 13 baseline 71+7 不变）**：
