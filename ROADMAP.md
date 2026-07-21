@@ -3,20 +3,17 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-21 W9 + W10 终极收口 — 71 commit + 25 memory + 90 任务）
+## 当前状态（2026-07-22 W52 跨主题收口段 — 76 commit + 25 memory + 90 任务 + 13 baseline + 165 实战验证铁律）
 
-**已交付（2026-07-21 W5+W6+W7+W8+W9+W10 终极 — 跨 21 批 multi-agent 任务 + 12 次 baseline 对齐 + 锚点 memory 实战验证 + 4 类 84 fail/error 闭环 64/84 (76%)）**：
+**已交付（2026-07-22 W51 启动段 + W52 跨主题收口 — 8 commit 主指挥亲自 + 0 production code 改动铁律沿用 + 13 baseline 71+7 不变）**：
 
-- 🆕 **W9 P0.1 wave2a 声纹会议真正启用 + P0.2 腾讯会议凭据 彻底删除** (commit `755ce0b5`) — 7/20 Self-RAG 删除同范式 (30 天承诺到期前用新数据提前收口)
-- 🆕 **W10 跨主题收口段完整更新** — 5 文档 (CLAUDE.md / ROADMAP.md / CHANGELOG.md / MEMORY.md / CLAUDE-history.md) + 3 新建 docs (grand-closure / coordination-summary / baseline-stats) + 2 新 memory (final-summary / 50-commit-roadmap)
-- 🆕 **12 次 baseline 100% 对齐** (W2 T2 → W7 12 baseline, 跨 24h 71 commit): 9 文件合跑 SKIP 模式全部 **71 PASS + 7 SKIP** 一致, 0 regression, 0 flaky test, 平均耗时 ~2.14s, σ ≈ 0.014s
-- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 71 commit / 90 任务 / 22 worker 实战中 0 偏离, 144 技术/方法论铁律沉淀
-- 🆕 **4 类 84 fail/error 闭环 64/84 (76%)** — 类 1 migration_stale 12 err (`0112d668`) + 类 2 endpoint_404 40 fail (`fb921992`+`9c475740`) + 类 3 orm_edge 9 fail (`4606e677`+`9c475740`) + 类 4 other 4 fail (`db7e6e58`) + W25 17 TODO 0 真实遗留
-- 🆕 **W19 选项 A 4 留未来 PR 拍板 + 2026-2027 季度排期** — Phase 8.5 (P4) / P3 dedup / P3 跨 tab / 7 E2E 全部留未来, 触发即排 (勒索软件 / 合规 / 用户反馈 / 主指挥决策)
-- 🆕 **5 pending items 5/5 100% 闭环** — PR6-P18 / Self-RAG / voiceprint_relaxed / PR6-P17 / Phase 8.1-8.4
-- 🆕 **Phase 8 完整闭环 (8.1/8.2/8.3/8.4 ✅, 8.5 ⏳)** — 阿里云 OSS cloud 镜像 (commit `e4d58bd6`) + OSS 恢复测试 RTO < 1h SLA (commit `e79a127b`)
+- 🆕 **W51 启动段 8 commit (主指挥亲自)** — 沿用 W10 范式 5 文档同步: ① W51-1 superpowers 新增 `(grand-closure)` ② W51-2 superpowers 新增 `(baseline-13-stats)` ③ W51-3 superpowers 新增 `(multi-agent-w11)` 锚点范式 21 天实战 ④ W51-4 4 留未来 PR 触发评估单 PR (`2fa08252`) ⑤ W51-5 W51 跨主题终极收口 (`6b1bc600`) ⑥ W51-6 W11 13 次 baseline 累计数据 (`de7c67df`, σ ≈ 0.015s 历史最优持平) ⑦ W51-7 锚点范式 21 天实战 (`55dc08a6`, 165 实战验证铁律) ⑧ W51-8 4 留未来 PR 触发评估 (`0bf563c2`, 4/4 全不触发 + 选项 A 维持)
+- 🆕 **W52 沿用 W10 范式 5 文档同步** — CLAUDE.md 顶部 / ROADMAP.md L6 / CHANGELOG.md L4 / MEMORY.md (双端 home dir + 项目 memory/) / CLAUDE-history.md, 5 commit cite "13 baseline 71+7 不变" (跨 18 commit 0 regression)
+- 🆕 **W53 future PR 季度排期表更新** — 沿用 `docs/future-pr-roadmap-2026-07-21.md` 模板, 加 W51 trigger evaluation summary (Phase 8.5 不触发 / P3 dedup 不触发 / P3 跨 tab 不触发 / 7 E2E 选项 A 维持)
+- 🆕 **跨 13 次 baseline 对齐** = W13 5 → W24 9 → W2 10 → W5 11 → W7 12 → **W52 13**, 0 regression 跨 18 commit (锚点范式单调上升)
+- 🆕 **锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用** — 4 阶段标准流程 + 11 协调铁律在 76 commit / 90 任务 / 22 worker 实战中 0 偏离, 165 实战验证铁律
 
-**未来待做（4 留未来 PR，按 W19 选项 A + 触发条件）**：
+**未来待做（4 留未来 PR，W51 触发评估 4/4 全不触发 + W19 选项 A 维持）**：
 
 | PR | 风险 | 一次性投入 | 触发条件 |
 |---|---|---|---|
