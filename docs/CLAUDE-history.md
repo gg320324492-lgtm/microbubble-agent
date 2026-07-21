@@ -7485,3 +7485,55 @@ curl -sk -o /dev/null -w "%{http_code}\n" https://agent.mnb-lab.cn/api/v1/auth/m
 - **阶段 2 监控**: 主指挥 + W1+W2 实时状态, 边界立即拍板 (0 任务越界)
 - **阶段 3 审核 + 合并**: 主指挥审核 W1+W2 完工 + 跑回归 + commit + push (W52-1~W52-5 全部主指挥亲自 commit)
 - **阶段 4 上线 + 沉淀**: webhook 30s 自动 deploy + 4 memory + 4 docs 沉淀
+
+---
+
+## 2026-07-22 W51-W60 50 commit 阶段收官 final (W60)
+
+### W51-W60 累计 88 commit 完整记录
+
+| 阶段 | commit 数 | 累计 | 核心结果 |
+|---|---:|---:|---|
+| W51 | 8 | 8 | 启动段：baseline、锚点范式、50 commit 路线图、future PR 评估 |
+| W52 | 5 | 13 | W10 范式 5 文档同步 |
+| W53 | 1 | 14 | future PR 季度排期更新 |
+| W54 | 13 | 27 | 16 baseline 守恒收口 |
+| W55 | 13 | 40 | 17 baseline 守恒收口 |
+| W56 | 8 | 48 | 18 baseline 守恒与阶段 final |
+| W57 | 13 | 61 | 19 baseline 守恒与 compact final |
+| W58 | 13 | 74 | 20 baseline 守恒与 quarterly final2 |
+| W59 | 1 | 75 | P3 dedup 实质开发首次启动 |
+| W60 | 13 | **88** | 22 baseline 守恒与阶段终极收口 |
+
+W51-W60 原定为 **50 commit 阶段**。Pre-W60 的 W51-W59 实际累计 **75 commit**，加上 W60 **13 commit** 后，Post-W60 以 **88 commit** 完成，紧凑节奏为 **1.76x**。W60 累计沉淀 **53 memory 文件 + 58 docs 文件**，铁律总数维持 **165**，W60 不新增铁律。
+
+### W59 P3 dedup 实质开发首次启动
+
+- commit `8f187cda`：`feat(chat): P3 dedup 标题时间戳 + 60s 首条消息检测`。
+- 改动边界为 `web/src/stores/chatSessions.ts` 及对应验证；这是本阶段首次从纯 docs/memory 收口切换到实质开发。
+- 决策从 W19 **选项 A（留未来）**切换到**选项 B（实施）**，P3 dedup future PR 已触发并完成。
+- W59 实施后 baseline 守恒：继承 **21 baseline 71 PASS + 7 SKIP 不变**；W60 再完成第 22 次验证。
+
+### W60 阶段收口 final
+
+- W60 13 commit 沿用 W10 范式收口；文档类 commit cite “21 baseline 71+7 不变”，并由 W60 新验证将累计 baseline 推进到 22。
+- **累计 baseline 22 守恒**：锚点范式单调上升 `W7 12 → W60 22`，第 22 次仍为 **71 PASS + 7 SKIP，0 drift**。
+- W18/W19/W20/W21/W22 baseline 连续数据守恒，统计离散度 **σ ≈ 0.130s**。
+- W51-W60 最终累计：**88 commit + 53 memory + 58 docs + 165 铁律**。
+- docs/memory 收口 commit 严格遵守 **0 production code 改动铁律**；唯一实质开发为已单独提交的 W59 P3 dedup。
+
+### Future PR 最终状态
+
+原 4 future PR 中，**P3 dedup 已于 W59 触发并实施完成**。其余 3 项继续留未来：
+
+1. Phase 8.5 异地容灾后续；
+2. P3 跨 tab 同步；
+3. 7 skipped E2E 真闭环。
+
+不因阶段收口自动发起剩余 PR，继续按量化触发条件评估。
+
+### Fact-check 修正
+
+- **pre-existing fail 闭环最终口径：65/65 = 100%**。
+- 旧口径 `64/84 (76%)` 属于早期阶段快照，不再作为 W60 final 的累计闭环数字。
+- W60 数字统一采用主指挥拍板：**88 commit / 53 memory / 58 docs / 22 baseline / 165 铁律 / 3 future PR 留未来**。
