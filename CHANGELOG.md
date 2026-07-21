@@ -35,6 +35,34 @@
 
 **完整 commit 链**: `0112d668` → `9c475740` → `fb921992` → `4606e677` → `db7e6e58` → `5b0097ae` → `e42aea48` → `c3de5e79` → `489e7760` → `e6d0a64e` → `755ce0b5` → **`5abec6d6`** (CLAUDE.md) → **`2f2ace48`** (ROADMAP.md) → 本 commit (CHANGELOG.md) + MEMORY.md + CLAUDE-history.md + 3 新建 docs + 2 新 memory.
 
+## [Unreleased] 2026-07-22 W61 跨主题收口段
+
+### W61 502 Bad Gateway 真根因 3 层修复 (1 commit + 23 baseline 守恒 + 167 铁律)
+
+**W61 启动段修复穿透 3 层链路**（覆盖修正原始错误的 `nginx-ssl-cert-path-mismatch-502-2026-07-22.md` memory）：
+
+- **第 1 层（最外）**：tunnel.conf `ssl_certificate` 路径 `/etc/letsencrypt/live/...` → `/etc/nginx/ssl/...` + 从云服务器拉 fullchain.pem/privkey.pem 到本地 `nginx/ssl/{agent,mnb}-lab.cn/` + `docker compose restart nginx`（修复 docker nginx-1 restart loop）
+- **第 2 层（中间，真根因之一）**：SSH reverse tunnel 死掉的孤儿 listener（sshd PID 1544507 session 7/20 启动 36h 占云 8000/9000/2222）→ `kill -9 1544507` + 重连 SSH tunnel 用 PowerShell `Start-Process -ArgumentList @(...)` 数组形式 + 双引号转义（之前 `$env:USERPROFILE` 被 bash 替换为空导致 key 找不到）
+- **第 3 层（最里）**：`docker restart microbubble-agent-minio-1`（端口 LISTENING 但 curl 127.0.0.1:9000 返回 000，minio 容器内 200 OK，docker-proxy 链断）
+
+**6 点 curl 验证全过**：
+- `https://agent.mnb-lab.cn/minio/microbubble/avatars/32593ab1...jpg` → 200 (23685 bytes) ✅
+- `/index.html` → 200 text/html ✅
+- `/sw.js` → 200 application/javascript ✅
+- `/api/v1/auth/me` → 401 application/json ✅
+- `/dashboard` → 200 text/html (SPA fallback) ✅
+- `/manifest.webmanifest` → 410 (防护保留) ✅
+
+**9 文件 baseline 守恒**：71 PASS + 7 SKIP（W60 22 → W61 23，0 regression 跨 1 commit）
+
+**2 新铁律**（累计 167）：
+1. **502 排查必须穿透 3 层链路**（云 nginx error log → SSH tunnel listener 状态 → 目标服务响应），不能只看云 nginx `upstream prematurely closed` 就下结论（W61 启动段原始 memory 只诊断第 1 层就 commit 错了）
+2. **PowerShell `Start-Process -ArgumentList @(...)` 数组形式 + 双引号转义环境变量**，防 bash 替换空字符串（W61 `start-ssh-tunnel.ps1` 因 bash 转义导致 `$env:USERPROFILE` 替换空 → SSH key 找不到 → 反复 code:255 失败 → 孤儿 listener）
+
+**commit**：`2d73c9f8 fix(infra): W61 502 Bad Gateway 真根因 3 层修复 (tunnel.conf SSL + SSH 孤儿 + minio restart, 23 baseline 71+7 守恒)`
+
+**累计 89 commit**（W60 88 + W61 1），**0 production code 改动**（改的是 tunnel.conf + 部署脚本，不属 production code）
+
 ## [Unreleased] 2026-07-21"
 
 ### W22 + W23 跨主题终极收口 (54 commit + 16 memory + 78 任务)
