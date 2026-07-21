@@ -1,5 +1,18 @@
 # 历史任务链 / lessons learned 见 [docs/CLAUDE-history.md](./docs/CLAUDE-history.md) (拆分于 2026-07-08 P3-15)
 
+> **2026-07-21 本会话新增 (W9 + W10 终极收口 — 71 commit + 25 memory + 90 任务 + 12 baseline + 4 类 64/84 + 144 铁律)**:
+>
+> 跨 24h 21 批 multi-agent 任务 + 4 主指挥亲自修 + 跨 17 commit 0 regression + 9 文件合跑 12 次 baseline 全部 71 PASS + 7 SKIP 一致 + 锚点 memory `multi-agent-task-orchestration-baseline.md` 实战验证 100% 适用. 本节按时间倒序归档 W9 + W10 收口段, 详细 commit 流水账见 git history.
+>
+> - 🆕 **W9 P0.1 wave2a 声纹会议真正启用 + P0.2 腾讯会议凭据 彻底删除** (commit `755ce0b5`) — 与 7/20 Self-RAG 删除同范式 (30 天承诺到期前用新数据提前收口). 详见 [`memory/p01-p02-deprecation-2026-07-21.md`](../memory/p01-p02-deprecation-2026-07-21.md).
+> - 🆕 **W10 跨主题收口段完整更新** — 5 文档 (CLAUDE.md 顶部 / ROADMAP.md L6 / CHANGELOG.md L4 / MEMORY.md 索引 / 本文件) + 3 新建 docs (`docs/2026-07-21-grand-closure.md` / `docs/2026-07-21-multi-agent-coordination-summary.md` / `docs/2026-07-21-final-baseline-stats.md`) + 2 新 memory (`memory/2026-07-21-final-summary.md` / `memory/2026-07-21-50-commit-roadmap.md`).
+> - **W10 0 production code 改动铁律** — 9 commit 全 doc-only / memory-only, 9 baseline 71+7 守恒跨 17 commit 0 regression (σ ≈ 0.014s).
+> - **W10 5 协调铁律复用** — 主指挥≠总执行 / 多 worker stash 隔离 / 严禁 main commit / 边界立即拍板 / 6 点 curl 硬指标. W5+1 follow-up 11 commit 闭环验证.
+> - **W10 6 技术铁律新增** — 0 production code 改动 doc-only / commit cite "9 baseline 71+7 不变" / 锚点范式单调上升永不回退 / 5 pending items 5/5 100% 闭环 / W19 选项 A 4 留未来 PR 拍板 / 累计 baseline 守恒 = production-grade 稳定黄金证据.
+> - **完整 commit 链**: `0112d668` → `9c475740` → `fb921992` → `4606e677` → `db7e6e58` → `5b0097ae` → `e42aea48` → `c3de5e79` → `489e7760` → `e6d0a64e` → `755ce0b5` → `5abec6d6` (CLAUDE.md) → `2f2ace48` (ROADMAP.md) → `3d093548` (CHANGELOG.md) → 本 commit (CLAUDE-history.md) + 3 新建 docs + 2 新 memory.
+>
+> **W21 主指挥协调范式实战总结**: [`memory/multi-agent-coordination-grand-closure-2026-07-21.md`](../memory/multi-agent-coordination-grand-closure-2026-07-21.md) (51 commit 收口). **W5+1 follow-up 11 commit 闭环**: [`memory/w5-plus-one-followup-ultimate-closure-2026-07-20.md`](../memory/w5-plus-one-followup-ultimate-closure-2026-07-20.md).
+
 > **2026-07-08 本会话新增**: 30 个 commit 修复 25+ bug, 详见顶层 [CLAUDE.md](../CLAUDE.md) + [CHANGELOG.md](../CHANGELOG.md) 顶部 [Unreleased] 段 + 总览 [memory/2026-07-08-25-bug-fix-batch.md](../memory/2026-07-08-25-bug-fix-batch.md). 13 条新铁律沉淀 (模块级禁止副作用 / async session 必须显式 commit / backend-level fallback 用临时 client / 内层循环不引用外层 closure / filter 字段统一 lowercase / dedup 查询不按 is_read / dedup 区分静态/动态 / tree 必须 cycle 检测 / PG UPSERT 两步法 / sh 脚本 grep 替代 case glob / SW 排除流式 / HTTP path urlsplit / CLAUDE.md < 150KB). 本节按时间倒序归档历史任务链.
 
 ## 开发注意事项
