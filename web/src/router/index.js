@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { defineAsyncComponent } from 'vue'
-import { resolveMobileComponent } from '@/utils/resolveMobile'
+import { resolveMobileComponent, resolveMobileOnly } from '@/utils/resolveMobile'
 
 /**
  * 路由表（PR #2 改造：所有 14 条路由包 resolveMobileComponent 路由级动态加载）
@@ -55,7 +54,7 @@ const routes = [
         // 移动端任务回收站（桌面嵌入 TaskView，移动端独立路由）
         path: 'tasks/trash',
         name: 'MobileTaskTrash',
-        component: () => import('@/views/mobile/MobileTaskTrash.vue'),
+        component: resolveMobileOnly('MobileTaskTrash'),
         meta: { title: '任务回收站' }
       },
       {
@@ -88,7 +87,7 @@ const routes = [
         // 路由 menuRoutes 自动按 meta.icon 过滤显示, sidebar + 移动 drawer 自动出现
         path: 'workspace',
         name: 'Workspace',
-        component: resolveMobileComponent('WorkspaceView', 'mobile/MobileWorkspaceView'),
+        component: resolveMobileComponent('WorkspaceView', 'MobileWorkspaceView'),
         meta: { title: '团队协作', icon: 'Files' }
       },
       {
@@ -111,14 +110,14 @@ const routes = [
         // PR3.1: 课题组网盘 (Lab Group Drive) - 桌面端主视图, 移动端 PR4 复用 KB 第 6 tab
         path: 'drive',
         name: 'Drive',
-        component: resolveMobileComponent('DesktopDriveView', 'mobile/MobileDriveView'),
+        component: resolveMobileComponent('DesktopDriveView', 'MobileDriveView'),
         meta: { title: '课题组网盘', icon: 'Folder' }
       },
       {
         // v2 PR2: 回收站 (顶级路由, 不嵌套在 /drive 下避免与 FileGrid 冲突)
         path: 'drive/trash',
         name: 'DriveTrash',
-        component: resolveMobileComponent('desktop/DriveTrashView', 'mobile/MobileDriveTrashView'),
+        component: resolveMobileComponent('desktop/DriveTrashView', 'MobileDriveTrashView'),
         meta: { title: '回收站', icon: 'Delete' }
       },
       {
@@ -126,7 +125,7 @@ const routes = [
         // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
         path: 'drive/requests',
         name: 'DriveFileRequests',
-        component: resolveMobileComponent('desktop/FileRequestListView', 'mobile/MobileDriveTrashView'),
+        component: resolveMobileComponent('desktop/FileRequestListView', 'MobileDriveTrashView'),
         meta: { title: '文件请求', icon: 'Promotion' }
       },
       {
@@ -135,7 +134,7 @@ const routes = [
         // 移动端: MobileFileDetailView (单列 + sticky 顶部 + bottom action sheet)
         path: 'drive/file/:id',
         name: 'DriveFileDetail',
-        component: resolveMobileComponent('desktop/FileDetailView', 'mobile/MobileFileDetailView'),
+        component: resolveMobileComponent('desktop/FileDetailView', 'MobileFileDetailView'),
         meta: { title: '文件详情' },
         props: true,
       },
@@ -147,7 +146,7 @@ const routes = [
         path: 'drive/preview/:id',
         name: 'DriveFilePreviewSwipe',
         // mobile-only: 桌面端走 DesktopDriveView 文件 grid 直接预览 (FilePreviewDialog)
-        component: defineAsyncComponent(() => import('@/views/mobile/MobileFilePreviewSwipe.vue')),
+        component: resolveMobileOnly('MobileFilePreviewSwipe'),
         meta: { title: '文件预览', mobileOnly: true },
         props: true,
       },
