@@ -139,19 +139,19 @@ jobs:
           python gen780.py --output questions_780.jsonl --schema-only
           wc -l questions_780.jsonl
 
-      # === 关键改动: --api-base http://localhost:8001 指向 test app ===
+      # === 关键改动: --api-base http://localhost:8001 指向 test app + --smoke 简写 (v3.1 D6) ===
       - name: Run 200 题 smoke (against test DB 8001)
         working-directory: tests/qa-bench
         env:
           API_BASE: http://localhost:8001     # ← 改 8001 (test app)
           QA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          # 截取前 200 题（hot_path 优先）
-          head -200 questions_780.jsonl > smoke_200.jsonl
+          # v3.1 D6: --smoke 等价于 --limit 200 + 优先 questions_780.jsonl
+          # 取代旧的 `head -200 questions_780.jsonl > smoke_200.jsonl` + `--questions smoke_200.jsonl` 两步
           python runner.py \
             --token "${QA_TOKEN:-mock}" \
             --api-base "http://localhost:8001" \
-            --questions smoke_200.jsonl \
+            --smoke \
             --output results/smoke \
             --concurrency 4
           # 期望 5 分钟内完成
