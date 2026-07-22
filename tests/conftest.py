@@ -304,3 +304,50 @@ def mock_embedding():
     """固定 192 维向量（不需 DB）"""
     import numpy as np
     return np.random.randn(192).astype(np.float32).tolist()
+
+
+# === W62 T1 (2026-07-22) baseline 9 files 锚点 ===
+# 与 docs/2026-07-22-baseline-13-stats.md 表格同步.
+# 9 文件合跑 SKIP_DB_SETUP=1 模式产出 71 PASS + 7 SKIP (W62 第 24 次守恒).
+# Agent 3 audit (commit pending) 验证全部存在 + pytest --collect-only = 78.
+#
+# 用法 (main repo audit 时):
+#   SKIP_DB_SETUP=1 pytest $(printf ' %s' "${BASELINE_9_FILES[@]}") -v
+#   # 等价: SKIP_DB_SETUP=1 pytest tests/test_meeting_transcript_buffer.py \
+#   #       tests/test_orphan_meeting_cleanup_audio_chunks.py ... (9 个)
+#
+# 不要修改本列表除非同步更新 docs/2026-07-22-baseline-13-stats.md 表格.
+# 已删文件 (Self-RAG / 5th-wave / 4th-wave / Phase 1 / 活动动态+模板) 不应在
+# 本列表, 详见 tests/test_baseline_audit.py STALE_BASELINE_PATTERNS.
+BASELINE_9_FILES = [
+    "tests/test_meeting_transcript_buffer.py",                # 2 cases
+    "tests/test_orphan_meeting_cleanup_audio_chunks.py",      # 9 cases
+    "tests/test_meeting_recording_user_agent.py",             # 10 cases
+    "tests/test_meeting_recording_audio_chunk_auth.py",       # 8 cases
+    "tests/test_meeting_recording_cancel.py",                 # 8 cases
+    "tests/test_chat_history_tasks.py",                       # 7 cases
+    "tests/test_chat_share_cleanup.py",                       # 8 cases
+    "tests/test_kb_dedup_admin_cli.py",                       # 19 cases
+    "tests/scripts/test_kb_dedup_admin_cli_e2e.py",           # 7 cases (7 SKIP)
+]
+
+
+def get_baseline_9_files():
+    """返回 9 baseline 文件的 pytest 命令行参数 (含 tests/scripts/ 子目录).
+
+    用途: 给 audit / verify / CI 脚本动态生成 pytest 命令.
+    Returns:
+        list[str]: 9 文件绝对路径或相对路径 (相对于 conftest.py 父目录)
+    """
+    return list(BASELINE_9_FILES)
+
+
+@pytest.fixture
+def baseline_9_files():
+    """pytest fixture: 提供 9 baseline 文件列表给测试使用.
+
+    测试用法:
+        def test_x(baseline_9_files):
+            assert len(baseline_9_files) == 9
+    """
+    return list(BASELINE_9_FILES)
