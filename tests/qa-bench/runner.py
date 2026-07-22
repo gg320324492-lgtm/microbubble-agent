@@ -15,8 +15,17 @@ qa-bench/runner.py — 100 题批量测试运行器 + 自动检测
 4. 汇总：pass / fail / warn + 失败原因
 5. 写入 results/ 目录（json + md 报告）
 
+v3.1 D2 集成 (Agent 6):
+- --enable-intake / --grayscale 调用 save_to_kb.run_intake(...)
+- 自动写 onebyone_log.jsonl 供 save_to_kb.collect_candidates 读
+- 跑完报告 D2 intake: N taken, K skipped (grayscale=P%)
+
 用法：
   python tests/qa-bench/runner.py --token <jwt> --output results/run-N
+  # 全自动入库 (灰度 100%)
+  python tests/qa-bench/runner.py --token <jwt> --enable-intake --output results/run-N
+  # 灰度 5% 入库
+  python tests/qa-bench/runner.py --token <jwt> --grayscale 5 --output results/run-N
 """
 import argparse
 import asyncio
@@ -31,6 +40,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
+
+# v3.1 D2 (Agent 6): save_to_kb + observer 集成
+# 允许从 runner.py 调 save_to_kb.run_intake(...) 和 observer.record_intake
+_qa_bench_dir = Path(__file__).parent
+if str(_qa_bench_dir) not in sys.path:
+    sys.path.insert(0, str(_qa_bench_dir))
 
 logger = logging.getLogger("qa-bench.runner")
 
@@ -812,11 +827,13 @@ async def main():
     # workflow 调用方式: `python runner.py --smoke --token $TOKEN --api-base http://...`
     parser.add_argument("--smoke", action="store_true",
                         help="200 题 smoke 简写 (等价于 --limit 200 + questions_780.jsonl 前 200 题)")
-    # v3.1 D4 决策: --include-extra 合并 D4 扩展题库 (700 + 300 = 1000+ 题)
-    # env var QA_BENCH_EXTRA_DATASET 覆盖默认扩展题库文件名
-    # 调用方式: `python runner.py --include-extra --token $TOKEN`
-    parser.add_argument("--include-extra", action="store_true",
-                        help="合并 D4 扩展题库 (questions_780.jsonl + questions_d4_extra_300.jsonl = 1000+ 题)")
+    # v3.1 D2 (Agent 6): --enable-intake / --grayscale 集成 save_to_kb 自动入库
+    # --enable-intake: 隐含 grayscale=100 (全量)
+    # --grayscale N: 0-100 灰度 (--grayscale > 0 时隐含 enable)
+    parser.add_argument("--enable-intake", action="store_true",
+                        help="D2: 启用全自动 KB 入库 (灰度=100, 等价 --grayscale 100)")
+    parser.add_argument("--grayscale", type=int, default=0,
+                        help="D2: 灰度入库百分比 0-100 (默认 0 = 关闭)")
     args = parser.parse_args()
 
     # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
@@ -833,13 +850,9 @@ async def main():
             args.questions = "tests/qa-bench/questions_780.jsonl"
         print(f"   [smoke mode] limit={args.limit}, questions={args.questions}")
 
-    # v3.1 D4: --include-extra 简写 — 默认题库指向 780, 后续 merge D4 扩展题
-    EXTRA_DATASET = os.environ.get("QA_BENCH_EXTRA_DATASET", "questions_d4_extra_300.jsonl")
-    if args.include_extra:
-        # 仅在用户没显式 --questions 时才覆盖默认基准题库 (避免误覆盖)
-        if args.questions == "tests/qa-bench/questions.jsonl":
-            args.questions = "tests/qa-bench/questions_780.jsonl"
-        print(f"   [include-extra mode] base={args.questions}, extra={EXTRA_DATASET}")
+    # v3.1 D2 (Agent 6): --enable-intake 隐含 grayscale=100
+    if args.enable_intake and args.grayscale == 0:
+        args.grayscale = 100
 
     questions_path = Path(args.questions)
     output_dir = Path(args.output)
@@ -852,24 +865,6 @@ async def main():
             if not line:
                 continue
             questions.append(json.loads(line))
-
-    # v3.1 D4: merge D4 扩展题库 (700 + 300 = 1000+ 题)
-    if args.include_extra:
-        base_count = len(questions)
-        extra_path = questions_path.parent / EXTRA_DATASET
-        extra_count = 0
-        if extra_path.exists():
-            with open(extra_path, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    questions.append(json.loads(line))
-                    extra_count += 1
-            print(f"   [include-extra] {base_count} + {extra_count} = {len(questions)} 题")
-        else:
-            print(f"   ⚠️ [include-extra] 扩展题库不存在: {extra_path} (仅用基准 {base_count} 题)")
-
     if args.limit:
         questions = questions[:args.limit]
 
@@ -1013,10 +1008,166 @@ async def main():
             md.append(f"```\n{actual['content'][:200]}\n```")
     (output_dir / "report.md").write_text("\n".join(md), encoding="utf-8")
 
+    # v3.1 D2 (Agent 6): 集成 save_to_kb 自入库路径
+    # 设计: 写一份 onebyone_log.jsonl (兼容 save_to_kb.collect_candidates) → run_intake
+    # run_intake 入口从 save_to_kb.py 暴露 (Agent 3 实现), 调用 grayscale 过滤 + observer 记录
+    intake_summary = None
+    if args.enable_intake or args.grayscale > 0:
+        log_path = output_dir / "onebyone_log.jsonl"
+        _write_onebyone_log(log_path, results)
+        intake_summary = run_intake(
+            log_path=log_path,
+            token=args.token,
+            grayscale=args.grayscale,
+            base_url=API_BASE,
+        )
+
     print()
     print(f"📊 汇总: PASS={summary['pass']} WARN={summary['warn']} FAIL={summary['fail']} ERROR={summary['error']}")
     print(f"   通过率: {pass_rate:.1f}%")
     print(f"   报告: {output_dir}/report.md")
+
+    # v3.1 D2 (Agent 6): D2 intake summary line
+    if intake_summary is not None:
+        print(
+            f"   D2 intake: {intake_summary['taken']} taken, "
+            f"{intake_summary['skipped']} skipped "
+            f"(grayscale={intake_summary['grayscale_pct']}%)"
+        )
+
+
+def _write_onebyone_log(log_path: Path, results: List[Dict[str, Any]]) -> None:
+    """v3.1 D2 (Agent 6): 写 onebyone_log.jsonl 供 save_to_kb.collect_candidates 读.
+
+    字段对齐 save_to_kb.py:collect_candidates 期望:
+    - id (e.g. "S-001")
+    - quality.auto_score (>= 4)
+    - content (>= 200 字)
+    - intent (∈ ALLOWED_INTENTS)
+    - actual.tool_inputs / actual.tool_results
+    """
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as f:
+        for r in results:
+            actual = r.get("actual", {})
+            content = actual.get("content", "")
+            # auto_score 推断: PASS=5, WARN=4, FAIL=2, ERROR=1
+            verdict = r.get("verdict", "ERROR")
+            auto_score = {
+                "PASS": 5,
+                "WARN": 4,
+                "FAIL": 2,
+                "ERROR": 1,
+            }.get(verdict, 0)
+            intent = actual.get("intent", "")
+            entry = {
+                "id": r.get("id", ""),
+                "question": r.get("question", ""),
+                "content": content,
+                "quality": {"auto_score": auto_score},
+                "intent": intent,
+                "scope": "qa-bench",
+                "actual": {
+                    "tool_inputs": actual.get("tool_inputs", []),
+                    "tool_results": actual.get("tool_results", []),
+                },
+            }
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def run_intake(
+    log_path: Path,
+    token: str,
+    grayscale: int,
+    base_url: str,
+) -> Dict[str, Any]:
+    """v3.1 D2 (Agent 6): 跑 KB 自入库 — 灰度过滤 + observer 记录 + rollback 检查.
+
+    设计: 复用 save_to_kb.py 已有的 collect_candidates / is_in_grayscale / post_batch,
+    复 observer.py 的 record_intake / check_rollback_threshold.
+    这里只做编排, 错误 best-effort 不阻塞 main().
+
+    Args:
+        log_path: onebyone_log.jsonl 路径
+        token: JWT token
+        grayscale: 0-100 灰度百分比
+        base_url: API base URL
+
+    Returns:
+        {"taken": int, "skipped": int, "grayscale_pct": int, "rollback_triggered": bool}
+    """
+    # 延迟 import (save_to_kb / observer 是 qa-bench 子模块, 不在主 qa-bench package 下)
+    try:
+        from save_to_kb import (
+            collect_candidates,
+            is_in_grayscale,
+            post_batch,
+            DEFAULT_MIN_SCORE,
+            DEFAULT_MIN_CONTENT_LENGTH,
+            DEFAULT_ALLOWED_INTENTS,
+        )
+        from observer import record_intake, check_rollback_threshold
+    except Exception as e:
+        logger.warning(f"run_intake: import save_to_kb/observer failed: {e}")
+        return {"taken": 0, "skipped": 0, "grayscale_pct": grayscale, "rollback_triggered": False}
+
+    if not log_path.exists():
+        logger.warning(f"run_intake: log 不存在 {log_path}")
+        return {"taken": 0, "skipped": 0, "grayscale_pct": grayscale, "rollback_triggered": False}
+
+    try:
+        candidates = collect_candidates(log_path)
+    except Exception as e:
+        logger.warning(f"run_intake: collect_candidates failed: {e}")
+        return {"taken": 0, "skipped": 0, "grayscale_pct": grayscale, "rollback_triggered": False}
+
+    # 灰度过滤
+    grayscale_candidates = [c for c in candidates if is_in_grayscale(c["qa_id"], grayscale)]
+    skipped = len(candidates) - len(grayscale_candidates)
+
+    if not grayscale_candidates:
+        return {
+            "taken": 0,
+            "skipped": skipped,
+            "grayscale_pct": grayscale,
+            "rollback_triggered": False,
+        }
+
+    taken = 0
+    batch_size = 50
+    for i in range(0, len(grayscale_candidates), batch_size):
+        batch = grayscale_candidates[i:i + batch_size]
+        batch_qa_ids = [c["qa_id"] for c in batch]
+        try:
+            result = post_batch(
+                batch,
+                token,
+                base_url,
+                min_score=DEFAULT_MIN_SCORE,
+                min_content_length=DEFAULT_MIN_CONTENT_LENGTH,
+                allowed_intents=DEFAULT_ALLOWED_INTENTS,
+            )
+            taken += int(result.get("saved", 0))
+            for qa_id in batch_qa_ids:
+                record_intake(question_id=qa_id, success=True)
+        except Exception as e:
+            logger.warning(f"run_intake: batch failed: {e}")
+            for qa_id in batch_qa_ids:
+                record_intake(question_id=qa_id, success=False, error_msg=str(e)[:200])
+
+    # rollback 检查
+    rollback_triggered = False
+    try:
+        rollback_triggered = check_rollback_threshold()
+    except Exception as e:
+        logger.warning(f"run_intake: check_rollback_threshold failed: {e}")
+
+    return {
+        "taken": taken,
+        "skipped": skipped,
+        "grayscale_pct": grayscale,
+        "rollback_triggered": rollback_triggered,
+    }
 
 
 if __name__ == "__main__":
