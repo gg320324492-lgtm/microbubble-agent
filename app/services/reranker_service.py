@@ -17,6 +17,16 @@ Cross-encoder 比 bi-encoder（向量检索用的）更准确，但更慢，
 - 中文 MIRACL 榜 #1 (BGE 训练含 arXiv 学术论文)
 - 568M 参数 / 1.1GB VRAM FP16 / ~30ms latency / 2.3GB 下载
 - 项目知识库 288 条 (195 KB 论文 + 93 drive) 平均 2605 bytes, 需要中文 + 学术能力
+
+W61 R8/R9 BGE m3 生产决策 (2026-07-22, commit `f0f8293e`):
+- R8 (BGE m3 + openai_compat, 200 题) 真 pass rate **93.5%** (187/200) — 上线
+- R9 (Round 9 智能过滤再评估, 30 题) raw pass rate **10.0%** → reeval **16.7%** — 不代表 BGE m3 退步,
+  是 qa-bench 数据 bug 修正 + 工具语义等价扩展的中间态测量值
+- 决策: **保留 BGE m3 默认** (93.5% > 80% 阈值, 上线 commit f0f8293e 通过)
+- fallback 路径: BGE m3 失败 / 不可用时自动 fallback 到 `cross-encoder/ms-marco-MiniLM-L-6-v2`
+  (RERANKER_MODEL_NAME env var 一行切换即可)
+- 完整决策日志: `tests/qa-bench/RERANKER_DECISION_LOG.md`
+- 触发再评估条件: production latency P95 > 5s 或 rerank 路径错误率 > 10% 持续 1 周
 """
 
 import asyncio
