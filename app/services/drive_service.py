@@ -87,6 +87,165 @@ def _validate_share_expires_hours(expires_hours: Optional[int]) -> None:
         )
 
 
+# =====================================================================
+# v2 代码清理收尾 (2026-07-23): retry 装饰器 + folder filter + query builder
+# =====================================================================
+# 之前 _stream_concat_chunks + chunked_upload 路径直接裸调 MinIO/DB, 出错时
+# 网络瞬断 (RST/timeout/5xx) 不会自动重试, 用户看到 "上传失败" 但其实 0.5s 后
+# 重试就能成功. 第三/四/五波多版本迭代后, retry 模式逐渐分散, 这里抽成一个
+# 装饰器 + helper, 未来加 retry 只需 `@drive_retry(max_attempts=3)` 一行.
+
+import functools
+
+
+# 默认重试参数 (针对 MinIO/PG 瞬断场景: 200ms → 400ms → 800ms, 上限 1.6s)
+DRIVE_RETRY_DEFAULT_MAX_ATTEMPTS = 3
+DRIVE_RETRY_DEFAULT_BACKOFF_BASE = 0.2  # seconds
+DRIVE_RETRY_DEFAULT_BACKOFF_MAX = 1.6   # seconds
+
+# DriveServiceError 不重试 (业务级错误, 重试也 4xx)
+# OperationalError / IOError / OSError / asyncio.TimeoutError 走重试
+import sqlalchemy.exc as _sa_exc
+
+
+def drive_retry(
+    max_attempts: int = DRIVE_RETRY_DEFAULT_MAX_ATTEMPTS,
+    backoff_base: float = DRIVE_RETRY_DEFAULT_BACKOFF_BASE,
+    backoff_max: float = DRIVE_RETRY_DEFAULT_BACKOFF_MAX,
+    retry_on: tuple = (_sa_exc.OperationalError, OSError, IOError, asyncio.TimeoutError),
+):
+    """Drive 服务共享 retry 装饰器 (替代分散的 try/except 重试模式)
+
+    设计要点:
+    - 仅重试 transient 错误 (OperationalError / OSError / IOError / asyncio.TimeoutError)
+    - 业务错误 (DriveServiceError, ValueError) 不重试 — 重试也是 4xx
+    - 指数退避 + jitter: sleep = min(base * 2^(attempt-1), max) + random(0, 0.05)
+    - 最后一次失败抛原异常 (不包 DriveServiceError, 让上游 try/except 正常处理)
+    - async 函数专用 (装饰器内部 await sleep)
+
+    使用范式:
+        @drive_retry(max_attempts=3)
+        async def upload_chunk(...):
+            ...
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            import random
+            last_exc = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except retry_on as exc:
+                    last_exc = exc
+                    if attempt >= max_attempts:
+                        # 最后一次失败: 抛原异常, 让上游处理
+                        logger.warning(
+                            f"[drive_retry] {func.__name__} attempt {attempt}/{max_attempts} "
+                            f"failed (final): {type(exc).__name__}: {exc}"
+                        )
+                        raise
+                    # 退避: base * 2^(attempt-1), capped at max
+                    sleep_sec = min(backoff_base * (2 ** (attempt - 1)), backoff_max)
+                    sleep_sec += random.uniform(0, 0.05)  # jitter 防 thundering herd
+                    logger.debug(
+                        f"[drive_retry] {func.__name__} attempt {attempt}/{max_attempts} "
+                        f"failed ({type(exc).__name__}), retry in {sleep_sec:.2f}s"
+                    )
+                    await asyncio.sleep(sleep_sec)
+            # 理论不会到这里, 但保险
+            raise last_exc
+        return wrapper
+    return decorator
+
+
+def _build_folder_filter_clause(
+    folder_id: Optional[int],
+    include_subfolders: bool = False,
+):
+    """v2.21 (2026-07-11) + v2.22 (2026-07-11) 共享 folder filter 逻辑.
+
+    三种场景:
+    1. folder_id 显式 (e.g. 5) → `Knowledge.folder_id == 5` (只看该 folder)
+    2. folder_id=None + include_subfolders=False → `Knowledge.folder_id.is_(None)` (顶级, 个人 view)
+    3. folder_id=None + include_subfolders=True → 跳过 filter (团队共享盘顶级, 含 root + 所有 sub)
+
+    Returns:
+        SQLAlchemy 谓词 (用于 filters.append), 或 None 表示"不过滤".
+
+    v2.22 重构说明:
+    之前 3 种场景分散在 _list_files_impl 的 if/elif 分支里 (line 427-436), 混在
+    6 种其他 filter 中 (deleted, visibility, starred, file_type, is_team_shared, see_cond).
+    抽成 helper 后: 单测可独立覆盖 + 新增场景 (e.g. include_subfolders=True + folder_id=5
+    的混合) 只改 1 处.
+    """
+    if folder_id is not None:
+        # 显式 folder → 只看该 folder (不论 include_subfolders, 子文件夹遍历留给调用方)
+        return Knowledge.folder_id == folder_id
+    if include_subfolders:
+        # 团队共享盘顶级 view → 不过滤 (root + 所有 sub folder 都要)
+        return None
+    # 个人 view 顶级 → 只看 folder_id IS NULL (即"根目录", 不含子文件夹)
+    return Knowledge.folder_id.is_(None)
+
+
+def _build_list_files_query(
+    *,
+    storage_mode: str,
+    folder_id: Optional[int],
+    include_subfolders: bool,
+    visibility_filter: Optional[str],
+    starred_only: bool,
+    file_type: Optional[str],
+    is_team_shared_filter: Optional[bool],
+    deleted_only: bool,
+    include_deleted: bool,
+    current_user_id: int,
+):
+    """v2.22 (2026-07-11): 抽 list_files filter builder 到独立 helper.
+
+    把 _list_files_impl 中"组装 filters list + visibility_see_cond + and_(...)"
+    的 35 行 (line 418-458) 压缩成单一调用. caller 拿到 (filters, has_folder_filter)
+    后只需负责 ORDER BY + LIMIT/OFFSET.
+
+    Returns:
+        filters: list[ColumnElement] — 必传 WHERE 子句列表 (不含 ORDER/LIMIT)
+
+    Note:
+        include_deleted + deleted_only 互斥 (caller 必须二选一, 这里仅按 caller 传的参数加 filter)
+    """
+    filters = [Knowledge.storage_mode == storage_mode]
+    if deleted_only:
+        filters.append(Knowledge.deleted_at.isnot(None))
+    elif not include_deleted:
+        filters.append(Knowledge.deleted_at.is_(None))
+
+    # folder filter (v2.21 + v2.22 共享逻辑)
+    folder_clause = _build_folder_filter_clause(folder_id, include_subfolders)
+    if folder_clause is not None:
+        filters.append(folder_clause)
+
+    if visibility_filter:
+        filters.append(Knowledge.visibility == visibility_filter)
+    if starred_only:
+        filters.append(Knowledge.is_starred.is_(True))
+    if file_type:
+        ext_predicate = DriveService._build_file_type_predicate(file_type)
+        if ext_predicate is not None:
+            filters.append(ext_predicate)
+    if is_team_shared_filter is not None:
+        filters.append(Knowledge.is_team_shared == is_team_shared_filter)
+
+    # 核心隐私边界: private 文件仅 owner 可见
+    visibility_see_cond = or_(
+        Knowledge.created_by == current_user_id,
+        Knowledge.visibility != "private",
+    )
+    filters.append(visibility_see_cond)
+
+    return filters
+
+
 # 2026-07-12 死代码清理: _to_naive_dt helper 提取到 app.utils.datetime_utils.to_naive_datetime
 
 
@@ -418,41 +577,21 @@ class DriveService:
         stmt = select(Knowledge)
         count_stmt = select(func.count(Knowledge.id))
 
-        filters = [Knowledge.storage_mode == storage_mode]
-        if deleted_only:
-            # 回收站模式: 只看 deleted_at IS NOT NULL (排除正常的活跃文件)
-            filters.append(Knowledge.deleted_at.isnot(None))
-        elif not include_deleted:
-            filters.append(Knowledge.deleted_at.is_(None))
-        if folder_id is not None:
-            # v2 PR3 修复: folder_id 显式时只返该 folder 的文件
-            filters.append(Knowledge.folder_id == folder_id)
-        elif folder_id is None and not include_subfolders:
-            # v2 PR3 修复: 默认 (folder_id=None) 是"顶级根目录", 仅 folder_id IS NULL
-            # 之前不过滤会把子目录里的文件也带回来, 与 DesktopDriveView UI 不一致
-            # (DesktopDriveView 'selectedFolderId.value = null' = 顶级, 用户期望"只看根")
-            # 行为兼容: 不动 service 调用方, 默认语义升级
-            # v2.21 例外: include_subfolders=True (团队共享盘顶级) 跳过此 filter
-            filters.append(Knowledge.folder_id.is_(None))
-        if visibility_filter:
-            filters.append(Knowledge.visibility == visibility_filter)
-        if starred_only:
-            filters.append(Knowledge.is_starred.is_(True))
-        if file_type:
-            # file_type 是扩展名大写组: pdf / image / video / office / text
-            ext_predicate = self._build_file_type_predicate(file_type)
-            if ext_predicate is not None:
-                filters.append(ext_predicate)
-        # v2 PR6-P19: 团队共享盘隔离 (None=不过滤, True=仅 is_team_shared=true, False=仅 false)
-        if is_team_shared_filter is not None:
-            filters.append(Knowledge.is_team_shared == is_team_shared_filter)
-
-        # 核心隐私边界: private 文件仅 owner 可见
-        visibility_see_cond = or_(
-            Knowledge.created_by == current_user_id,
-            Knowledge.visibility != "private",
+        # v2.22 (2026-07-11): 抽 list_files filter builder 到独立 helper
+        # 之前 35 行 if/elif + and_(...) 压缩成单一调用, _build_folder_filter_clause
+        # 单独覆盖 v2.21 (include_subfolders) + v2.22 (file_type chip 拆分) 共享逻辑
+        filters = _build_list_files_query(
+            storage_mode=storage_mode,
+            folder_id=folder_id,
+            include_subfolders=include_subfolders,
+            visibility_filter=visibility_filter,
+            starred_only=starred_only,
+            file_type=file_type,
+            is_team_shared_filter=is_team_shared_filter,
+            deleted_only=deleted_only,
+            include_deleted=include_deleted,
+            current_user_id=current_user_id,
         )
-        filters.append(visibility_see_cond)
 
         stmt = stmt.where(and_(*filters))
         count_stmt = count_stmt.where(and_(*filters))
