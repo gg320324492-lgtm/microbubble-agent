@@ -126,12 +126,17 @@
 - ✅ Phase 8.3 commit `e4d58bd6` (阿里云 OSS)
 - ✅ Phase 8.4 commit `e79a127b` (W16 OSS 恢复 + RTO < 1h SLA 验证)
 
-### Drive v2 PR6 ActivityFeedView + PR8 移动端 (W62 第二波闭环, 已移出 future PR)
+### Drive v2 PR6 ActivityFeedView + PR8 移动端 (W62 第二波闭环 + W62 第三波闭环删除)
 
-- ✅ PR6 ActivityFeedView commit `a132c003` (desktop 活动动态 Panel, 复用 audit log; partial → ✅)
+- ❌ **PR6 ActivityFeedView 已闭环删除** (W62 第三波, 2026-07-22 主指挥决策"已交付也删除")
+  - 实施 commit `a132c003` (desktop 活动动态 Panel, 复用 audit log; partial → ✅)
+  - 删除 commit `d7d2e083 chore(drive): 删除 ActivityFeedView 全部代码 (桌面 + 移动 + 文档)` — 124 文件 -1039/+18
+  - SW 修复 commit `fa559a5d fix(sw): 修复 PWA SW 404 bug (ActivityFeedView 删除后 sw.js stale)`
+  - 详见 `docs/2026-07-22-activity-feed-deletion.md` (W62 第三波 closure doc)
 - ✅ PR8a MobileKnowledgeView 移除 files tab commit `0e445005`
 - ✅ PR8b MobileFilePreviewSwipe commit `022225d0` (swipe 文件预览; partial → ✅)
-- 详见 `docs/2026-07-22-drive-v2-pr6-pr8-closure.md` — 网盘 PR6/PR8 不再是 future PR, 仅保留 Phase 8.5 / P3 跨 tab / 7 E2E 三项
+- 网盘 PR6/PR8 不再是 future PR, 仅保留 Phase 8.5 / P3 跨 tab / 7 E2E 三项
+- 详见 `docs/2026-07-22-drive-v2-pr6-pr8-closure.md` (PR6 + PR8 完整收口段)
 
 ---
 
