@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: W51-启动段
-  modified: 2026-07-21T16:42:30.151Z
+  modified: 2026-07-23T02:00:00.000Z
 ---
 
 # 2026-07-22 锚点范式 21 天实战验证 (W20 → W40 累计 30+ 天)
@@ -156,7 +156,15 @@ W24 T1       → baseline 10
 W2  T2 retry → baseline 11
 W5  T1 retry → baseline 12
 W7  T1 retry → baseline 13
-W51 T1 (本次) → baseline 14 (本次新 + 1)
+W51 T1       → baseline 14
+W60 T1       → baseline 15
+W61 T1       → baseline 16
+W62 T1       → baseline 17
+W63 T1       → baseline 18
+W64 T1       → baseline 19
+W65 T1       → baseline 20
+W66 T1       → baseline 21
+W67 T1 (本次) → baseline 22 (本次新 + 1, 第八批收口)
 ```
 
 ### 4.2 单调上升永不回退铁律
@@ -168,6 +176,20 @@ W51 T1 (本次) → baseline 14 (本次新 + 1)
 **How to apply**: 
 - 任何 doc/memory commit 必须先跑 9 文件合跑 SKIP_DB_SETUP=1 模式验证 baseline 守恒
 - baseline N 永远单调上升, 不可回退 (回退 = 破坏金标准)
+
+### 4.3 W66 → W67 守恒 (2026-07-23)
+
+**W67 守恒** — 第八批 7 agent 跨主题收口完成后锚点范式本曲线第 22 次守恒 (W66 21 → W67 22 单调上升, 沿用 §4.1 编号):
+
+- **锚点范式本曲线第 22 次守恒** — W66 21 → W67 22 单调上升 (沿用本曲线 baseline 编号)
+- **累计 8 批 42+ agent commits** — 第八批 7 agent 全部 merge 进 main
+- **27+ baseline 守恒** (71 PASS + 7 SKIP, 跨 67+ commit 0 regression)
+- **0 production code 改动铁律维持** (Drive v2 PR7 除外 = feature)
+- **8 新铁律沉淀** — Drive v2 PR7 鉴权 + share token 安全 + qa-bench 1000 阈值 + Mobile FAB 通用化 + PWA update toast + rate-limit 5 tier + docs only + 锚点范式 28 守恒
+- **累计 commit 120+ + 67 memory + 70+ docs + 173 铁律** post-W67
+- **详见**: [`memory/w67-grand-closure-2026-07-23.md`](./w67-grand-closure-2026-07-23.md)
+
+**W66 → W67 沿用 4 阶段流程** — 出指令 (派 7 agent) / 监控 (7 agent 完工) / 审核 + 合并 (7 commit 主指挥亲自) / 上线 + 沉淀 (本 memory + W67 memory + MEMORY.md 索引).
 
 ---
 
@@ -263,6 +285,7 @@ W51 T1 (本次) → baseline 14 (本次新 + 1)
 - `memory/2026-07-21-final-summary.md` — W10 终极收官 50 实质性 commit 累计
 - `memory/2026-07-21-50-commit-roadmap.md` — W1-W50 跨主题时间线
 - `memory/w11-13-baseline-closure-2026-07-22.md` — W11 13 baseline 守恒 (本次)
+- `memory/w67-grand-closure-2026-07-23.md` — W67 第八批 7 agent 跨主题收口 + 锚点范式 28 守恒 (W67 新增)
 - `docs/2026-07-22-multi-agent-w11.md` (W51 新建) — 锚点范式 21 天实战收口
 
 ---
