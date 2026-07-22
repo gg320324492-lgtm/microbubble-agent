@@ -676,3 +676,7 @@
 - 📝 [**CHANGELOG.md**](CHANGELOG.md) — 权威更新日志（按日期组织，简洁）
 - 🛡️ [**CLAUDE.md**](CLAUDE.md) — 项目开发铁律沉淀
 - 🐛 [**memory/**](memory/) — 事件复盘 + 教训笔记
+
+## 项目动态更新 (W66 plans status 100% 状态化 截至 2026-07-23)
+
+**W66 → W67 锚点范式第 28 次守恒** — 67 plans 全项目调研 100% 状态化: **47 completed + 16 agent-stub + 2 deleted** (`claude-pet` + `self-rag`) **+ 1 partial** (`15-17-18-cozy-bengio` Part 2 低占比发言人过滤 1.5s/3s/5% 在 commit `4b215220` refactor 中意外删除, 已由后续 memory 记录) **+ 1 not_started** (`2026-06-05-19-10-melodic-donut`)。锚点范式单调上升 W7 12 → W62 24 → W65 26 → **W66 27 → W67 28**，26+ baseline 守恒 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression)。累计 5 批 35+ agent commits + 1 cleanup commit (main HEAD `34a3ce6a6` chore(cleanup): W66 stale worktree 清理 + memory anchor LF 标准化, 上一 commit `5ee6fccab`)。全程沿用 **0 production code 改动铁律** + W19 选项 A 维持 (4 留未来 PR 不发起新排期)。详见 `memory/plans-status-67-closure-w66-2026-07-23.md`。
