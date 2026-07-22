@@ -91,19 +91,6 @@
         />
       </div>
 
-      <!-- Tab: 文件 (PR4.2 课题组网盘) -->
-      <div v-else-if="activeTab === 'files'">
-        <MobileFileList
-          ref="mobileFileListRef"
-          @file-preview="onMobileFilePreview"
-          @file-download="onMobileFileDownload"
-          @file-rename="onMobileFileRename"
-          @file-update-visibility="onMobileFileUpdateVisibility"
-          @file-extract-to-kb="onMobileFileExtractToKb"
-          @file-delete="onMobileFileDelete"
-        />
-      </div>
-
       <!-- Tab: 健康度 -->
       <div v-else-if="activeTab === 'health'">
         <div class="info-pane">
@@ -296,7 +283,7 @@ const route = useRoute()
 const activeTab = ref('knowledge')
 
 // 铁律 29: URL ?tab= 同步双向（VALID_TABS 白名单 + watch + replace）
-const VALID_TABS = ['knowledge', 'files', 'entities', 'hypotheses', 'formulas', 'memory', 'health']
+const VALID_TABS = ['knowledge', 'entities', 'hypotheses', 'formulas', 'memory', 'health']  // PR8: drive tab moved to /m-drive
 if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
   activeTab.value = String(route.query.tab)
 }
@@ -304,7 +291,6 @@ if (route.query.tab && VALID_TABS.includes(String(route.query.tab))) {
 // 铁律 30: EP 图标 named import + 通过 props 传入
 const tabItems = [
   { key: 'knowledge',  label: '知识',     icon: Document },
-  { key: 'files',      label: '文件',     icon: Folder },
   { key: 'entities',   label: '实体',     icon: Share },
   { key: 'hypotheses', label: '假设',     icon: MagicStick },
   { key: 'formulas',   label: '公式',     icon: Histogram },
@@ -379,10 +365,9 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 
+// PR8: 旧 tabs 数组同步移除 files, 兼容旧引用（如有）—— 推荐直接用 tabItems
 const tabs = [
-  // 兼容旧引用（如有）—— 推荐直接用 tabItems
   { name: 'knowledge',  label: '知识',     icon: Document },
-  { name: 'files',      label: '文件',     icon: Folder },
   { name: 'entities',   label: '实体',     icon: Share },
   { name: 'hypotheses', label: '假设',     icon: MagicStick },
   { name: 'formulas',   label: '公式',     icon: Histogram },
