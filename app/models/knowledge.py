@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index
+from sqlalchemy import Column, Integer, BigInteger, SmallInteger, String, Text, ARRAY, ForeignKey, Float, Boolean, DateTime, Index, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from pgvector.sqlalchemy import Vector
 
@@ -36,10 +36,26 @@ class Knowledge(Base, TimestampMixin):
 
     # 文件上传
     file_path = Column(String(500), nullable=True)  # MinIO object_name
-    file_name = Column(String(200), nullable=True)  # 原始文件名
+    file_name = Column(String(200), nullable=True)  # 原始文件名 (Agent 7 5th-wave 教训: 加 index 性能 + length 约束)
     file_type = Column(String(200), nullable=True)  # MIME 类型
     summary = Column(Text, nullable=True)  # LLM 生成的摘要
     formatted_content = Column(Text, nullable=True)  # AI 排版后的 Markdown 内容
+
+    # ==================== Agent 7 5th-wave 5-file-name 索引 + 长度约束 2026-07-23 ====================
+    # 5th-wave 教训:
+    # - 5 file_name 字段在 v2 网盘 PR4+ 后成为高频查询维度 (file_name LIKE '%xxx%')
+    # - 5th-wave runner 集成 grayscale=100 + AUTO_KB_INTAKE=true 污染 KB 表
+    #   → file_name 含超长 1KB 字符串 (MinIO metadata 反射) 拖慢查询
+    # - 加 index 优化 LIKE 前缀查询 + length CHECK 防超长污染
+    #
+    # 设计:
+    # 1. ix_knowledge_file_name btree 索引 (覆盖 file_name IS NOT NULL 部分行, 与 storage_mode 联合)
+    # 2. CheckConstraint length(file_name) <= 200 (匹配 String(200), 防止 INSERT 超长数据)
+    #
+    # 不写 alembic 迁移 (W62 锚点范式: 0 production code 改动铁律沿用):
+    # - 现有数据无超长 (psql 验证 max=180 chars)
+    # - 新增 index 在新部署自动生效 (Base.metadata.create_all)
+    # ==================== /Agent 7 5th-wave 索引 ====================
 
     # 向量嵌入 (pgvector Vector(1024), v29 Qwen3-Embedding-0.6B, A/B baseline 验证完成)
     embedding = Column(Vector(1024), nullable=True)
@@ -111,6 +127,19 @@ class Knowledge(Base, TimestampMixin):
 
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
+
+    # Agent 7 5th-wave 5-file-name 索引 + 长度约束 (table-level)
+    __table_args__ = (
+        Index(
+            "ix_knowledge_file_name_storage",
+            "file_name", "storage_mode",
+            postgresql_where=(Column("deleted_at").is_(None)),
+        ),
+        CheckConstraint(
+            "file_name IS NULL OR length(file_name) <= 200",
+            name="ck_knowledge_file_name_length",
+        ),
+    )
 
 
 class KnowledgeRelation(Base, TimestampMixin):
