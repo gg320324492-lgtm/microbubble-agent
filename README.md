@@ -269,3 +269,10 @@ microbubble-agent/
 - **7th-wave 7 agent**: PWA SW e2e + Nginx HSTS/TLS 1.3 + baseline stale fix + PWA InstallPrompt + Drive folder nesting e2e + rate limit 8 场景 + 6 批 v2.21 范式总结
 - **W19 选项 A 维持**: 4 留未来 PR 不发起新排期
 - **0 production code 改动铁律**: 全程沿用 (除主指挥亲自 commit 的清理类)
+
+### W66 plans status 100% 状态化 (2026-07-23)
+
+- **67 plans 全项目调研 100% 状态化**: 47 completed + 16 agent-stub + 2 deleted (`claude-pet` + `self-rag`) + 1 partial (`15-17-18-cozy-bengio` Part 2 低占比发言人过滤 1.5s/3s/5% 在 commit `4b215220` refactor 中意外删除) + 1 not_started (`2026-06-05-19-10-melodic-donut`)
+- **W66 → W67 锚点范式第 28 次守恒**: W7 12 → W62 24 → W65 26 → W66 27 → W67 28 单调上升, 26+ baseline 守恒 (71 PASS + 7 SKIP)
+- **main HEAD** `34a3ce6a6` (chore(cleanup): W66 stale worktree 清理 + memory anchor LF 标准化), 累计 5 批 35+ agent commits + 1 cleanup commit
+- 详见 `memory/plans-status-67-closure-w66-2026-07-23.md`
