@@ -23,7 +23,7 @@
               <span v-if="action.icon" class="action-icon" :style="iconStyle(action)">
                 {{ action.icon }}
               </span>
-              <span class="action-label">{{ action.name }}</span>
+              <span class="action-label">{{ action.label || action.name }}</span>
               <span v-if="action.description" class="action-desc">
                 {{ action.description }}
               </span>

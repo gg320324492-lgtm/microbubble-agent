@@ -72,6 +72,7 @@ function handleAction(action) {
   z-index: -1;
   pointer-events: auto;
 }
+  .mobile-fab-actions {
   position: absolute;
   right: 0;
   bottom: 66px;
