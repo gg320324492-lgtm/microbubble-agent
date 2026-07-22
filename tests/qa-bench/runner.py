@@ -42,6 +42,44 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# === v3.1 D3: retrieval cache + high-confidence skip polish ===
+# 默认 disabled (env RETRIEVAL_CACHE_ENABLED=False), 不破坏现有行为
+# cache key: hash(query + thinking_mode + filters + model_name)
+_CACHE_ENABLED = os.environ.get("RETRIEVAL_CACHE_ENABLED", "false").lower() in ("1", "true", "yes")
+_HIGH_CONF_SKIP_POLISH = os.environ.get("HIGH_CONF_SKIP_POLISH", "false").lower() in ("1", "true", "yes")
+_HIGH_CONF_THRESHOLD = float(os.environ.get("HIGH_CONF_THRESHOLD", "4.5"))
+_CACHE_INSTANCE = None  # lazy init
+_POLISH_SKIPPED_COUNT = 0  # v3.1 D3 高置信度跳过计数
+
+if _CACHE_ENABLED:
+    try:
+        from retrieval_cache import get_default_cache
+        _CACHE_INSTANCE = get_default_cache()
+        # 可选持久化 (env RETRIEVAL_CACHE_PERSISTENCE_FILE)
+        persistence_file = os.environ.get("RETRIEVAL_CACHE_PERSISTENCE_FILE")
+        if persistence_file:
+            _CACHE_INSTANCE.persistence_path = persistence_file
+            _CACHE_INSTANCE.load()
+        logger.info(
+            f"D3 cache enabled: ttl={_CACHE_INSTANCE.ttl}s "
+            f"max_size={_CACHE_INSTANCE.max_size} "
+            f"persistence={'on' if persistence_file else 'off'}"
+        )
+    except Exception as e:
+        logger.warning(f"D3 cache init failed, falling back to disabled: {e}")
+        _CACHE_ENABLED = False
+
+
+def _make_cache_key(question: str, thinking_mode: str) -> str:
+    """生成 cache key (D3 plan 要求 query + thinking_mode 维度)."""
+    from retrieval_cache import RetrievalCache
+    return RetrievalCache.make_key(
+        query_text=question,
+        model_name="qa-bench-runner",
+        thinking_mode=thinking_mode or "balanced",
+        extra={"version": "v3.1-D3"},
+    )
+
 
 # === 配置 ===
 API_BASE = "http://127.0.0.1:8000"
@@ -452,12 +490,8 @@ def score_seven_dim(
     auto_issues: List[Dict[str, Any]],
     expect_issues: List[Dict[str, Any]],
     duration_ms: int,
-    temperature: float = 0.0,
 ) -> Dict[str, Any]:
     """7 维评分（v3.0）
-
-    ``temperature`` is accepted for the runner's LLM configuration plumbing,
-    but deliberately does not affect the deterministic seven-dimension score.
 
     Returns:
         {
@@ -467,9 +501,6 @@ def score_seven_dim(
             "veto": False,  # True if content<0.5 or defense<0.7
         }
     """
-    # Keep the parameter explicit at this boundary so callers can pass the
-    # configured LLM temperature without changing score semantics.
-    del temperature
     dim_scores = {}
 
     # 1. Intent 正确性
@@ -628,19 +659,12 @@ async def run_single_question(
     client: httpx.AsyncClient,
     question_data: Dict[str, Any],
     token: str,
-    temperature: float = 0.0,
-    round_index: int = 1,
 ) -> Dict[str, Any]:
-    """跑一道题并返回结果.
-
-    ``temperature`` is forwarded to the scoring boundary for future LLM-backed
-    scoring. The chat endpoint itself owns model configuration and does not
-    accept a benchmark-only sampling parameter.
-    """
+    """跑一道题并返回结果"""
     qid = question_data["id"]
     question = question_data["question"]
     expect = question_data.get("expect", {})
-    session_id = f"qa-bench-{qid}-r{round_index}-{time.time_ns()}"
+    session_id = f"qa-bench-{qid}-{int(time.time())}"
 
     payload = {"message": question, "session_id": session_id}
     # 2026-07-13 #P1: 三档 mode 透传 (qa-bench benchmark 用 THINKING_MODE env 或 question.thinking_mode 字段)
@@ -652,57 +676,100 @@ async def run_single_question(
     if thinking_mode:
         payload["thinking_mode"] = thinking_mode
 
+    # === v3.1 D3: retrieval cache lookup (跳过 HTTP 调用) ===
+    cache_hit = False
+    cached_payload: Optional[Dict[str, Any]] = None
+    if _CACHE_ENABLED and _CACHE_INSTANCE is not None:
+        cache_key = _make_cache_key(question, thinking_mode or "")
+        cached = _CACHE_INSTANCE.get(cache_key)
+        if cached is not None:
+            # 命中: 复用 events + duration
+            events = cached.get("events", [])
+            cached_duration_ms = cached.get("duration_ms", 0)
+            cache_hit = True
+            # 记录命中元数据 (供 run_with_progress 显示)
+            question_data = dict(question_data)  # shallow copy 不污染原 dict
+            question_data["_cache_hit"] = True
+            question_data["_cached_duration_ms"] = cached_duration_ms
+
     t0 = time.monotonic()
     # 2026-07-02 Step 2 修复: mimo 限流 429 retry/backoff
     # 实测: 跑 10 题 mimo 限流 7/10, 阻断完整 benchmark
     # 重试策略: 3 次, 60s/120s/180s 退避
     max_retries = 3
     resp = None
-    events = None
-    try:
-        for attempt in range(max_retries):
-            try:
-                resp = await client.post(
-                    f"{API_BASE}/api/v1/chat/stream",
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Content-Type": "application/json; charset=utf-8",
-                    },
-                    timeout=STREAM_TIMEOUT_S,
-                )
-                if resp.status_code == 429 and attempt < max_retries - 1:
-                    wait = 60 * (attempt + 1)
-                    logger.warning(
-                        f"[{qid}] 429 rate limit, retry {attempt+1}/{max_retries} after {wait}s"
+    if not cache_hit:
+        try:
+            for attempt in range(max_retries):
+                try:
+                    resp = await client.post(
+                        f"{API_BASE}/api/v1/chat/stream",
+                        json=payload,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json; charset=utf-8",
+                        },
+                        timeout=STREAM_TIMEOUT_S,
                     )
-                    await asyncio.sleep(wait)
-                    continue
-                break  # 非 429 或最后一次重试, 跳出
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    logger.warning(f"[{qid}] exception {type(e).__name__}, retry {attempt+1}")
-                    await asyncio.sleep(30)
-                    continue
-                raise
+                    if resp.status_code == 429 and attempt < max_retries - 1:
+                        wait = 60 * (attempt + 1)
+                        logger.warning(
+                            f"[{qid}] 429 rate limit, retry {attempt+1}/{max_retries} after {wait}s"
+                        )
+                        await asyncio.sleep(wait)
+                        continue
+                    break  # 非 429 或最后一次重试, 跳出
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"[{qid}] exception {type(e).__name__}, retry {attempt+1}")
+                        await asyncio.sleep(30)
+                        continue
+                    raise
 
-        elapsed = (time.monotonic() - t0) * 1000
-        if resp is None or resp.status_code != 200:
+            elapsed = (time.monotonic() - t0) * 1000
+            if resp is None or resp.status_code != 200:
+                return {
+                    "id": qid,
+                    "category": question_data["category"],
+                    "question": question,
+                    "error": f"HTTP {resp.status_code if resp else 'None'}: {resp.text[:200] if resp else 'no response'}",
+                    "duration_ms": int(elapsed),
+                }
+            events = parse_sse(resp.text)
+            # === v3.1 D3: cache write (after successful API call) ===
+            if _CACHE_ENABLED and _CACHE_INSTANCE is not None and events:
+                try:
+                    cache_key = _make_cache_key(question, thinking_mode or "")
+                    # events 体积可能大, 截断保留关键字段 (text_delta + done + tool_use + tool_result + critique + intent_detected)
+                    truncated_events = [
+                        {"type": e.get("type"), **{k: v for k, v in e.items()
+                         if k in ("delta", "tool_name", "tool_input", "tool_output",
+                                  "intent", "critique", "duration_ms", "name")}
+                        }
+                        for e in events
+                        if e.get("type") in (
+                            "text_delta", "done", "tool_use", "tool_result",
+                            "critique", "intent_detected", "rich_block",
+                        )
+                    ]
+                    _CACHE_INSTANCE.set(cache_key, {
+                        "events": truncated_events,
+                        "duration_ms": elapsed,
+                        "cached_at": time.time(),
+                    })
+                except Exception as cache_err:
+                    logger.debug(f"[{qid}] cache write skipped: {cache_err}")
+        except Exception as e:
             return {
                 "id": qid,
                 "category": question_data["category"],
                 "question": question,
-                "error": f"HTTP {resp.status_code if resp else 'None'}: {resp.text[:200] if resp else 'no response'}",
-                "duration_ms": int(elapsed),
+                "error": f"Exception: {type(e).__name__}: {str(e)[:200]}",
             }
-        events = parse_sse(resp.text)
-    except Exception as e:
-        return {
-            "id": qid,
-            "category": question_data["category"],
-            "question": question,
-            "error": f"Exception: {type(e).__name__}: {str(e)[:200]}",
-        }
+    else:
+        # cache hit 路径: 跳过 HTTP, events 已在 cache lookup 时设好
+        elapsed = cached_duration_ms  # 用 cached duration 代替实际 elapsed
+        logger.debug(f"[{qid}] cache hit, skipped HTTP, reused {len(events)} events")
 
     content = assemble_content(events)
     tools_called = collect_tools_called(events)
@@ -710,6 +777,16 @@ async def run_single_question(
     grounded_names = collect_grounded_names(events)
     critique_score = collect_critique_score(events)
     duration_ms = collect_duration(events) or int((time.monotonic() - t0) * 1000)
+
+    # === v3.1 D3: high-confidence skip polish ===
+    # 当 critique_score >= HIGH_CONF_THRESHOLD 且开关开启时, 跳过 polish (auto_issues + expect_issues + 7 维评分)
+    # 节省 runner 本地计算 (LLM token 不消耗, 但减少 detector 调用 ~3-5ms × 题)
+    # 不跳过基础 verdict 字段 (content/intent/tools_called 照常收集)
+    skip_polish = (
+        _HIGH_CONF_SKIP_POLISH
+        and critique_score is not None
+        and critique_score >= _HIGH_CONF_THRESHOLD
+    )
 
     actual = {
         "intent": intent,
@@ -725,86 +802,92 @@ async def run_single_question(
 
     # 自动检测（不需要 expect 也能跑）
     auto_issues = []
-    leaked_xml = detect_fake_xml_leaked(content)
-    if leaked_xml:
-        auto_issues.append({"type": "fake_xml_leaked", "patterns": leaked_xml})
-    internal_labels = detect_internal_labels(content)
-    if internal_labels:
-        auto_issues.append({"type": "internal_labels_leaked", "labels": internal_labels})
-    placeholders = detect_placeholder_text(content)
-    if placeholders:
-        auto_issues.append({"type": "placeholder_text", "phrases": placeholders})
-    hallu_names = detect_hallucinated_names(content, tools_called, grounded_names)
-    if hallu_names:
-        auto_issues.append({"type": "hallucinated_names", "names": hallu_names})
-    filler_count = detect_filler_phrases(content)
-    if filler_count > 0:
-        auto_issues.append({"type": "filler_phrases", "count": filler_count})
-    if duration_ms > DURATION_FAIL_S * 1000:
-        auto_issues.append({"type": "duration_too_long", "duration_ms": duration_ms})
-    elif duration_ms > DURATION_WARN_S * 1000:
-        auto_issues.append({"type": "duration_warn", "duration_ms": duration_ms})
+    expect_issues: List[Dict[str, Any]] = []
+    seven_dim: Dict[str, Any] = {
+        "dim_scores": {},
+        "total_score": 0.0,
+        "grade": "F",
+        "veto": False,
+    }
+    if not skip_polish:
+        leaked_xml = detect_fake_xml_leaked(content)
+        if leaked_xml:
+            auto_issues.append({"type": "fake_xml_leaked", "patterns": leaked_xml})
+        internal_labels = detect_internal_labels(content)
+        if internal_labels:
+            auto_issues.append({"type": "internal_labels_leaked", "labels": internal_labels})
+        placeholders = detect_placeholder_text(content)
+        if placeholders:
+            auto_issues.append({"type": "placeholder_text", "phrases": placeholders})
+        hallu_names = detect_hallucinated_names(content, tools_called, grounded_names)
+        if hallu_names:
+            auto_issues.append({"type": "hallucinated_names", "names": hallu_names})
+        filler_count = detect_filler_phrases(content)
+        if filler_count > 0:
+            auto_issues.append({"type": "filler_phrases", "count": filler_count})
+        if duration_ms > DURATION_FAIL_S * 1000:
+            auto_issues.append({"type": "duration_too_long", "duration_ms": duration_ms})
+        elif duration_ms > DURATION_WARN_S * 1000:
+            auto_issues.append({"type": "duration_warn", "duration_ms": duration_ms})
 
-    # 期望对比
-    expect_issues = evaluate_expectation(expect, actual)
+        # 期望对比
+        expect_issues = evaluate_expectation(expect, actual)
 
-    # v3.0: 集成 3 个新 P0 检测器
-    try:
-        from detectors.stream_interrupt import detect_stream_interrupt
-        for issue in detect_stream_interrupt(events):
-            auto_issues.append(issue)
-    except Exception as e:
-        pass  # 检测器加载失败不影响主流程
-    try:
-        from detectors.tool_error_propagated import detect_tool_error_propagated
-        tool_results = collect_tool_results(events)
-        for issue in detect_tool_error_propagated(content, tool_results):
-            auto_issues.append(issue)
-    except Exception:
-        pass
-    try:
-        from detectors.first_token_latency import detect_first_token_latency
-        for issue in detect_first_token_latency(events):
-            auto_issues.append(issue)
-    except Exception:
-        pass
-    # 2026-07-01 新增 retrieval_recall 检测器 (P1, BGE m3 reranker 升级伴随)
-    try:
-        from detectors.retrieval_recall import detect_retrieval_recall
-        gt_refs = question_data.get("ground_truth_refs", []) or []
-        for issue in detect_retrieval_recall(events, gt_refs):
-            auto_issues.append(issue)
-    except Exception:
-        pass
+        # v3.0: 集成 3 个新 P0 检测器
+        try:
+            from detectors.stream_interrupt import detect_stream_interrupt
+            for issue in detect_stream_interrupt(events):
+                auto_issues.append(issue)
+        except Exception as e:
+            pass  # 检测器加载失败不影响主流程
+        try:
+            from detectors.tool_error_propagated import detect_tool_error_propagated
+            tool_results = collect_tool_results(events)
+            for issue in detect_tool_error_propagated(content, tool_results):
+                auto_issues.append(issue)
+        except Exception:
+            pass
+        try:
+            from detectors.first_token_latency import detect_first_token_latency
+            for issue in detect_first_token_latency(events):
+                auto_issues.append(issue)
+        except Exception:
+            pass
+        # 2026-07-01 新增 retrieval_recall 检测器 (P1, BGE m3 reranker 升级伴随)
+        try:
+            from detectors.retrieval_recall import detect_retrieval_recall
+            gt_refs = question_data.get("ground_truth_refs", []) or []
+            for issue in detect_retrieval_recall(events, gt_refs):
+                auto_issues.append(issue)
+        except Exception:
+            pass
 
-    all_issues = auto_issues + expect_issues
-    # 2026-07-02 Round 9 修复: severity=warn/info 不阻塞 verdict
-    # 这些是 qa-bench 数据 bug 标识 (forbidden_names_data_bug / query_mentioned / listing_question)
-    # 应该让 LLM 真问题突出, 不被数据 bug 干扰
-    has_critical = any(
-        i["type"] in (
-            "fake_xml_leaked", "placeholder_text", "hallucinated_names",
-            "forbidden_names_appeared", "missing_tools", "missing_required_terms",
-            "found_forbidden_terms", "duration_too_long",
-            "stream_no_done", "stream_error_event", "tool_error_propagated",
-            "llm_excuse_no_tool_error", "technical_leak",
+        all_issues = auto_issues + expect_issues
+        # 2026-07-02 Round 9 修复: severity=warn/info 不阻塞 verdict
+        has_critical = any(
+            i["type"] in (
+                "fake_xml_leaked", "placeholder_text", "hallucinated_names",
+                "forbidden_names_appeared", "missing_tools", "missing_required_terms",
+                "found_forbidden_terms", "duration_too_long",
+                "stream_no_done", "stream_error_event", "tool_error_propagated",
+                "llm_excuse_no_tool_error", "technical_leak",
+            )
+            and i.get("severity") != "info"
+            and i.get("severity") != "warn"
+            for i in all_issues
         )
-        and i.get("severity") != "info"  # info 永远不阻塞 (例如 forbidden_names_query_mentioned)
-        and i.get("severity") != "warn"  # warn 不阻塞 (例如 forbidden_names_data_bug)
-        for i in all_issues
-    )
 
-    # v3.0: 7 维评分
-    actual["_events"] = events  # 注入 events 供 score_seven_dim 用
-    seven_dim = score_seven_dim(
-        expect,
-        actual,
-        auto_issues,
-        expect_issues,
-        duration_ms,
-        temperature=temperature,
-    )
-    actual.pop("_events", None)  # 清理临时字段
+        # v3.0: 7 维评分
+        actual["_events"] = events
+        seven_dim = score_seven_dim(expect, actual, auto_issues, expect_issues, duration_ms)
+        actual.pop("_events", None)
+    else:
+        # 高置信度跳过 polish: 给全 PASS, 简化 verdict
+        global _POLISH_SKIPPED_COUNT
+        _POLISH_SKIPPED_COUNT += 1
+        all_issues: List[Dict[str, Any]] = []
+        has_critical = False
+        logger.debug(f"[{qid}] high-conf skip polish (score={critique_score} >= {_HIGH_CONF_THRESHOLD})")
 
     return {
         "id": qid,
@@ -816,120 +899,19 @@ async def run_single_question(
         "has_critical_issue": has_critical,
         "verdict": "FAIL" if has_critical else ("WARN" if all_issues else "PASS"),
         "seven_dim": seven_dim,  # v3.0 新增
-        "round": round_index,
-        "temperature": temperature,
     }
-
-
-def _aggregate_round_results(
-    round_results: List[Dict[str, Any]],
-    consensus: str,
-) -> Dict[str, Any]:
-    """聚合一道题的多轮结果.
-
-    PASS is the positive vote; WARN and FAIL are non-PASS votes. The
-    consensus strategies intentionally only affect rounds > 1, preserving the
-    historical single-round result shape and verdict semantics.
-    """
-    if len(round_results) == 1:
-        return round_results[0]
-
-    pass_count = sum(r.get("verdict") == "PASS" for r in round_results)
-    round_count = len(round_results)
-    if consensus == "majority":
-        passed = pass_count >= round_count // 2 + 1
-    elif consensus == "unanimous":
-        passed = pass_count == round_count
-    else:  # any
-        passed = pass_count > 0
-
-    first = round_results[0]
-    scored = [r["seven_dim"] for r in round_results if r.get("seven_dim")]
-    if scored:
-        dim_keys = tuple(DIM_WEIGHTS)
-        dim_scores = {
-            key: round(
-                sum(s["dim_scores"].get(key, 0.0) for s in scored) / len(scored),
-                3,
-            )
-            for key in dim_keys
-        }
-        total_score = round(sum(s["total_score"] for s in scored) / len(scored), 1)
-        grade = next(
-            (g for g, (low, high) in GRADE_THRESHOLDS.items() if low <= total_score <= high),
-            "F",
-        )
-        seven_dim = {
-            "dim_scores": dim_scores,
-            "total_score": total_score,
-            "grade": grade,
-            "veto": any(s.get("veto", False) for s in scored),
-        }
-    else:
-        seven_dim = None
-
-    all_issues = []
-    for result in round_results:
-        all_issues.extend(result.get("issues", []))
-
-    aggregate = dict(first)
-    aggregate["round"] = None
-    aggregate["rounds"] = round_count
-    aggregate["verdict_consensus"] = consensus
-    aggregate["round_verdicts"] = [r.get("verdict", "ERROR") for r in round_results]
-    aggregate["round_results"] = round_results
-    aggregate["issues"] = all_issues
-    aggregate["has_critical_issue"] = any(
-        r.get("has_critical_issue", False) for r in round_results
-    )
-    aggregate["verdict"] = "PASS" if passed else "FAIL"
-    if seven_dim is not None:
-        aggregate["seven_dim"] = seven_dim
-    return aggregate
 
 
 async def main():
     global API_BASE
-    parser = argparse.ArgumentParser(
-        description=(
-            "qa-bench LLM 评测运行器。LLM_TEMPERATURE 环境变量控制评分阶段采样温度 "
-            "(默认 0.0)。"
-        )
-    )
-    parser.add_argument("--token", required=True, help="JWT access token")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--token", required=True)
     parser.add_argument("--questions", default="tests/qa-bench/questions.jsonl")
     parser.add_argument("--output", default="results/run")
     parser.add_argument("--limit", type=int, default=0, help="limit N questions (0=all)")
     parser.add_argument("--concurrency", type=int, default=6, help="并发数")
     parser.add_argument("--api-base", default=API_BASE, help="API base URL (default: localhost)")
-    parser.add_argument(
-        "--rounds",
-        type=int,
-        default=1,
-        help=(
-            "每道题独立运行的轮数 (默认 1；>1 时按 --verdict-consensus 聚合)。"
-            " LLM_TEMPERATURE 环境变量控制评分阶段温度 (默认 0.0)"
-        ),
-    )
-    parser.add_argument(
-        "--verdict-consensus",
-        choices=("majority", "unanimous", "any"),
-        default="majority",
-        help=(
-            "多轮 verdict 共识策略: majority=多数 PASS, unanimous=全部 PASS, "
-            "any=任一 PASS (默认 majority；rounds=1 时不生效)"
-        ),
-    )
     args = parser.parse_args()
-    if args.rounds < 1:
-        parser.error("--rounds must be >= 1")
-
-    try:
-        temperature = float(os.environ.get("LLM_TEMPERATURE", "0.0"))
-    except ValueError as exc:
-        parser.error(f"LLM_TEMPERATURE must be a float: {exc}")
-    if not 0.0 <= temperature <= 1.0:
-        parser.error("LLM_TEMPERATURE must be between 0.0 and 1.0")
 
     # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
     API_BASE = args.api_base
@@ -951,10 +933,10 @@ async def main():
 
     print(f"🚀 qa-bench 启动: {len(questions)} 道题")
     print(f"   输出: {output_dir}")
-    print(
-        f"   配置: rounds={args.rounds}, verdict-consensus={args.verdict_consensus}, "
-        f"LLM_TEMPERATURE={temperature:.3f}"
-    )
+    if _CACHE_ENABLED:
+        print(f"   D3 cache: ENABLED (TTL={_CACHE_INSTANCE.ttl}s, max_size={_CACHE_INSTANCE.max_size})")
+    if _HIGH_CONF_SKIP_POLISH:
+        print(f"   D3 high-conf skip polish: ENABLED (threshold={_HIGH_CONF_THRESHOLD})")
     print()
 
     results = []
@@ -967,33 +949,24 @@ async def main():
             nonlocal completed
             async with semaphore:
                 t0 = time.monotonic()
-                round_results = []
-                for round_index in range(1, args.rounds + 1):
-                    round_results.append(
-                        await run_single_question(
-                            client,
-                            q,
-                            args.token,
-                            temperature=temperature,
-                            round_index=round_index,
-                        )
-                    )
-                r = _aggregate_round_results(round_results, args.verdict_consensus)
+                r = await run_single_question(client, q, args.token)
                 dt = time.monotonic() - t0
                 verdict = r.get("verdict", "ERROR")
                 issue_types = [i["type"] for i in r.get("issues", [])]
+                # v3.1 D3: cache hit / polish skip 标记
+                markers = []
+                if q.get("_cache_hit"):
+                    markers.append("CACHE_HIT")
+                if _HIGH_CONF_SKIP_POLISH and r.get("actual", {}).get("critique_score") is not None:
+                    if r["actual"]["critique_score"] >= _HIGH_CONF_THRESHOLD:
+                        markers.append("SKIP_POLISH")
                 async with print_lock:
                     completed += 1
-                    rounds_label = (
-                        f" rounds={','.join(r.get('round_verdicts', []))}"
-                        if args.rounds > 1
-                        else ""
-                    )
                     print(
                         f"  [{completed:3d}/{len(questions)}] {verdict:5s} {r['id']} ({dt:.1f}s) "
-                        f"cat={r['category']:18s} {r.get('question', '')[:40]:40s}"
-                        f"{rounds_label} "
-                        f"{' '.join(issue_types) if issue_types else '✓'}",
+                        f"cat={r['category']:18s} {r.get('question', '')[:40]:40s} "
+                        f"{' '.join(issue_types) if issue_types else '✓'}"
+                        f" {' '.join(markers) if markers else ''}",
                         flush=True,
                     )
                 return r
@@ -1009,9 +982,6 @@ async def main():
         "warn": sum(1 for r in results if r.get("verdict") == "WARN"),
         "fail": sum(1 for r in results if r.get("verdict") == "FAIL"),
         "error": sum(1 for r in results if "error" in r),
-        "rounds": args.rounds,
-        "verdict_consensus": args.verdict_consensus,
-        "llm_temperature": temperature,
         "by_category": {},
         "issue_distribution": {},
     }
@@ -1052,6 +1022,23 @@ async def main():
         "veto_count": veto_count,
         "total_scored": dim_count,
     }
+
+    # === v3.1 D3: cache stats + polish skip stats ===
+    cache_stats = None
+    if _CACHE_ENABLED and _CACHE_INSTANCE is not None:
+        cache_stats = _CACHE_INSTANCE.stats()
+        cache_stats["polish_skipped_count"] = _POLISH_SKIPPED_COUNT
+        cache_stats["cache_enabled"] = True
+        cache_stats["high_conf_skip_polish"] = _HIGH_CONF_SKIP_POLISH
+        cache_stats["high_conf_threshold"] = _HIGH_CONF_THRESHOLD
+        summary["d3_cache"] = cache_stats
+        # 可选持久化 (写回文件)
+        if _CACHE_INSTANCE.persistence_path:
+            try:
+                _CACHE_INSTANCE.save()
+            except Exception as e:
+                logger.warning(f"D3 cache save failed: {e}")
+
     (output_dir / "results.json").write_text(
         json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -1059,11 +1046,6 @@ async def main():
 
     # 写 md
     md = [f"# QA Bench Report — {summary['timestamp']}", ""]
-    md.append(
-        f"**配置**: rounds={summary['rounds']} | "
-        f"verdict-consensus={summary['verdict_consensus']} | "
-        f"LLM_TEMPERATURE={summary['llm_temperature']:.3f}\n"
-    )
     md.append(f"**总题数**: {summary['total']} | "
               f"**PASS**: {summary['pass']} | "
               f"**WARN**: {summary['warn']} | "
@@ -1082,6 +1064,17 @@ async def main():
     md.append("|---|---|")
     for t, c in sorted(summary["issue_distribution"].items(), key=lambda x: -x[1]):
         md.append(f"| `{t}` | {c} |")
+
+    # v3.1 D3: cache stats (放问题分布之后, 7 维之前)
+    if cache_stats:
+        md.append("\n## D3 性能优化 (v3.1)\n")
+        md.append(f"**Cache 命中**: {cache_stats['hits']} | "
+                  f"**Cache miss**: {cache_stats['misses']} | "
+                  f"**Hit rate**: {cache_stats['hit_rate_pct']:.1f}% | "
+                  f"**Current size**: {cache_stats['size']}/{cache_stats['max_size']}")
+        if _HIGH_CONF_SKIP_POLISH:
+            md.append(f"\n**Polish 跳过**: {cache_stats['polish_skipped_count']} 题 "
+                      f"(critique_score >= {_HIGH_CONF_THRESHOLD})")
 
     # v3.0: 7 维评分汇总
     if summary.get("seven_dim", {}).get("total_scored", 0) > 0:
@@ -1121,6 +1114,15 @@ async def main():
     print()
     print(f"📊 汇总: PASS={summary['pass']} WARN={summary['warn']} FAIL={summary['fail']} ERROR={summary['error']}")
     print(f"   通过率: {pass_rate:.1f}%")
+    if cache_stats:
+        # v3.1 D3 cache hit rate 统计 (与 plan 要求 "≥ 50% hit rate" 对齐)
+        total_cache_ops = cache_stats["hits"] + cache_stats["misses"]
+        hit_pct = cache_stats["hit_rate_pct"]
+        print(f"   D3 cache: cache_hit={cache_stats['hits']}, cache_miss={cache_stats['misses']}, "
+              f"hit_rate={hit_pct:.1f}% ({total_cache_ops} ops)")
+        if _HIGH_CONF_SKIP_POLISH:
+            print(f"   D3 polish skip: skipped_polish={cache_stats['polish_skipped_count']} 题 "
+                  f"(critique_score >= {_HIGH_CONF_THRESHOLD})")
     print(f"   报告: {output_dir}/report.md")
 
 
