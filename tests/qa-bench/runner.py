@@ -812,6 +812,11 @@ async def main():
     # workflow 调用方式: `python runner.py --smoke --token $TOKEN --api-base http://...`
     parser.add_argument("--smoke", action="store_true",
                         help="200 题 smoke 简写 (等价于 --limit 200 + questions_780.jsonl 前 200 题)")
+    # v3.1 D4 决策: --include-extra 合并 D4 扩展题库 (700 + 300 = 1000+ 题)
+    # env var QA_BENCH_EXTRA_DATASET 覆盖默认扩展题库文件名
+    # 调用方式: `python runner.py --include-extra --token $TOKEN`
+    parser.add_argument("--include-extra", action="store_true",
+                        help="合并 D4 扩展题库 (questions_780.jsonl + questions_d4_extra_300.jsonl = 1000+ 题)")
     args = parser.parse_args()
 
     # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
@@ -828,6 +833,14 @@ async def main():
             args.questions = "tests/qa-bench/questions_780.jsonl"
         print(f"   [smoke mode] limit={args.limit}, questions={args.questions}")
 
+    # v3.1 D4: --include-extra 简写 — 默认题库指向 780, 后续 merge D4 扩展题
+    EXTRA_DATASET = os.environ.get("QA_BENCH_EXTRA_DATASET", "questions_d4_extra_300.jsonl")
+    if args.include_extra:
+        # 仅在用户没显式 --questions 时才覆盖默认基准题库 (避免误覆盖)
+        if args.questions == "tests/qa-bench/questions.jsonl":
+            args.questions = "tests/qa-bench/questions_780.jsonl"
+        print(f"   [include-extra mode] base={args.questions}, extra={EXTRA_DATASET}")
+
     questions_path = Path(args.questions)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -839,6 +852,24 @@ async def main():
             if not line:
                 continue
             questions.append(json.loads(line))
+
+    # v3.1 D4: merge D4 扩展题库 (700 + 300 = 1000+ 题)
+    if args.include_extra:
+        base_count = len(questions)
+        extra_path = questions_path.parent / EXTRA_DATASET
+        extra_count = 0
+        if extra_path.exists():
+            with open(extra_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    questions.append(json.loads(line))
+                    extra_count += 1
+            print(f"   [include-extra] {base_count} + {extra_count} = {len(questions)} 题")
+        else:
+            print(f"   ⚠️ [include-extra] 扩展题库不存在: {extra_path} (仅用基准 {base_count} 题)")
+
     if args.limit:
         questions = questions[:args.limit]
 

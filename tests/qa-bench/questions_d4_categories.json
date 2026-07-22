@@ -1,0 +1,169 @@
+{
+  "name": "questions_d4_extra_300",
+  "version": "v3.1-D4",
+  "description": "D4 题库 1000+ 扩展批次 (+300 题, 14 类别分布), schema 与 questions_780.jsonl 完全兼容",
+  "author": "gen_d4.py@2026-07-22",
+  "created_at": "2026-07-22",
+  "total": 300,
+  "combined_with_780": 1000,
+  "difficulty_distribution": {
+    "L1": 70,
+    "L2": 122,
+    "L3": 85,
+    "L4": 23
+  },
+  "difficulty_pct": {
+    "L1": 23.3,
+    "L2": 40.7,
+    "L3": 28.3,
+    "L4": 7.7
+  },
+  "categories": {
+    "A": {
+      "count": 32,
+      "dimension": "member",
+      "pct": 10.7,
+      "subcategories": {
+        "A1": 16,
+        "A2": 8,
+        "A3": 8
+      }
+    },
+    "B": {
+      "count": 32,
+      "dimension": "task",
+      "pct": 10.7,
+      "subcategories": {
+        "B1": 8,
+        "B2": 16,
+        "B3": 8
+      }
+    },
+    "C": {
+      "count": 32,
+      "dimension": "meeting",
+      "pct": 10.7,
+      "subcategories": {
+        "C1": 8,
+        "C2": 16,
+        "C3": 8
+      }
+    },
+    "D": {
+      "count": 18,
+      "dimension": "project",
+      "pct": 6.0,
+      "subcategories": {
+        "D1": 12,
+        "D2": 6
+      }
+    },
+    "E": {
+      "count": 19,
+      "dimension": "knowledge",
+      "pct": 6.3,
+      "subcategories": {
+        "E1": 7,
+        "E2": 12
+      }
+    },
+    "F": {
+      "count": 13,
+      "dimension": "formula",
+      "pct": 4.3,
+      "subcategories": {
+        "F1": 9,
+        "F2": 4
+      }
+    },
+    "G": {
+      "count": 13,
+      "dimension": "hypothesis",
+      "pct": 4.3,
+      "subcategories": {
+        "G1": 5,
+        "G2": 4,
+        "G3": 4
+      }
+    },
+    "H": {
+      "count": 19,
+      "dimension": "memory",
+      "pct": 6.3,
+      "subcategories": {
+        "H1": 13,
+        "H2": 6
+      }
+    },
+    "K": {
+      "count": 19,
+      "dimension": "cross_cutting",
+      "pct": 6.3,
+      "subcategories": {
+        "K1": 13,
+        "K2": 6
+      }
+    },
+    "M": {
+      "count": 19,
+      "dimension": "multi_turn",
+      "pct": 6.3,
+      "subcategories": {
+        "M1": 13,
+        "M2": 6
+      }
+    },
+    "P": {
+      "count": 38,
+      "dimension": "advanced",
+      "pct": 12.7,
+      "subcategories": {
+        "P1": 7,
+        "P2": 7,
+        "P3": 6,
+        "P4": 6,
+        "P5": 6,
+        "P6": 6
+      }
+    },
+    "U": {
+      "count": 10,
+      "dimension": "casual",
+      "pct": 3.3,
+      "subcategories": {
+        "U1": 10
+      }
+    },
+    "X": {
+      "count": 10,
+      "dimension": "cross_domain",
+      "pct": 3.3,
+      "subcategories": {
+        "X1": 10
+      }
+    },
+    "Z": {
+      "count": 26,
+      "dimension": "extreme",
+      "pct": 8.7,
+      "subcategories": {
+        "Z1": 7,
+        "Z2": 7,
+        "Z3": 6,
+        "Z4": 6
+      }
+    }
+  },
+  "difficulty_matrix": {
+    "L1_analytical": 19,
+    "L1_factual": 51,
+    "L2_analytical": 26,
+    "L2_factual": 96,
+    "L3_analytical": 19,
+    "L3_factual": 66,
+    "L4_analytical": 4,
+    "L4_factual": 19
+  },
+  "schema_ref": "questions_780.jsonl",
+  "notes": "14 类别按 questions_780.jsonl 业务比例扩展; Z 类含 Z1/Z2/Z3/Z4 子类 (空题/超长/注入/无意义); P 类含 P1-P6 高级子类. 难度 L1 20% / L2 40% / L3 30% / L4 10% 目标."
+}
