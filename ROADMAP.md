@@ -668,6 +668,10 @@
 
 ## 详细文档
 
+## 项目动态更新 (W62-W65 截至 2026-07-23)
+
+7 批 35+ agent commits 全部 merge 进 main. 5th-wave 主决策"测试内容以及其他的测试内容删去" (commit a70a1b07). 6th-wave 集成 5th-wave lessons (SafeIntakeContext + cache_drive_list + knowledge field constraints 7 铁律). 7th-wave 7 agent (PWA SW e2e + Nginx HSTS/TLS 1.3 + baseline stale fix + PWA InstallPrompt + Drive folder nesting e2e + rate limit 8 场景 + 6 批 v2.21 范式总结). 锚点范式 W7 12 -> W62 24 -> W65 26 单调上升, 26+ baseline 守恒 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression). W19 选项 A 维持 (4 留未来 PR 不发起新排期). 全程沿用 0 production code 改动铁律 (除主指挥亲自 commit 的清理类).
+
 - 📜 [**HISTORY.md**](HISTORY.md) — 完整开发历史（按时间倒序 commit 流水账，已存档 5730 行）
 - 📝 [**CHANGELOG.md**](CHANGELOG.md) — 权威更新日志（按日期组织，简洁）
 - 🛡️ [**CLAUDE.md**](CLAUDE.md) — 项目开发铁律沉淀

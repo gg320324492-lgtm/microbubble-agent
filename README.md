@@ -260,12 +260,12 @@ microbubble-agent/
 
 私有项目，未经许可不得复制或分发。
 
-## 第七批 7 agent + 5 批派工累计更新（2026-07-23）
 
-- **累计 35+ agent commits 全部 merge 进 main** (5+7+7+6+7 = 32 source + 1 chore + 2 docs)
-- **Baseline 守恒**: 26+ 次 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression)
-- **5th-wave lessons 集成** (SafeIntakeContext + cache_drive_list + knowledge field constraints)
-- **第六批 + 第七批 7 agent 全部完成并 merge 进 main**
-- 锚点范式 W7 12 → **W65 26** 单调上升
-- W19 选项 A 维持 (4 留未来 PR 不发起新排期)
-- 全程沿用 **0 production code 改动铁律** (除主指挥亲自 commit 的清理类)
+## 项目状态 (截至 2026-07-23)
+
+- **累计**: 7 批 35+ agent commits 全部 merge 进 main, 26+ baseline 守恒 (71 PASS + 7 SKIP)
+- **5th-wave 主决策**: "测试内容以及其他的测试内容删去" (commit a70a1b07, 8 file + 2026 lines 清理)
+- **6th-wave lessons**: SafeIntakeContext + cache_drive_list + knowledge field constraints 7 铁律
+- **7th-wave 7 agent**: PWA SW e2e + Nginx HSTS/TLS 1.3 + baseline stale fix + PWA InstallPrompt + Drive folder nesting e2e + rate limit 8 场景 + 6 批 v2.21 范式总结
+- **W19 选项 A 维持**: 4 留未来 PR 不发起新排期
+- **0 production code 改动铁律**: 全程沿用 (除主指挥亲自 commit 的清理类)
