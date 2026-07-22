@@ -116,6 +116,9 @@ class Settings(BaseSettings):
     # 运维/测试时可临时缩短（如 0 立即清空）— 与 TRASH_RETENTION_DAYS 范式一致
     CHAT_HISTORY_RETENTION_DAYS: int = 30
 
+    # 2026-07-23: pending knowledge 后台处理轮询间隔（Celery beat，可由 env 覆盖）
+    KB_POLLING_INTERVAL_SEC: int = 300
+
     # 2026-07-16 +060: 录音 User-Agent 截断长度 (默认 500 字符)
     # 超过此长度的 UA 在 start-recording 时截断后再落库, 防止恶意/异常长 UA
     # 把 meetings.user_agent VARCHAR(500) 列撑爆或拖慢 index 查询。
