@@ -7,13 +7,15 @@
 
 **W62 跨主题收口段**：按主指挥拍板，本会话累计 **104 commit + 24 baseline 守恒 + 165 实战验证铁律**；W62 baseline 由 W1 验证为 **71 PASS + 7 SKIP**（trimmed σ = **0.0058s**，与既有稳定水平持平）。锚点范式继续单调上升：W2 10 → W7 12 → W52 13 → W60 22 → W61 23 → **W62 24**，第 24 次一致结果继续构成 production-grade 稳定黄金证据。W61 历史由 `2d73c9f8 fix(infra)` 完成 nginx 502 三层根因修复：SSL 证书路径不匹配、SSH reverse tunnel 孤儿 listener、MinIO 端口链异常后 restart；`edb06315 docs(5-sync)` 随后完成 5 文档跨主题同步。**W61-W70 50 commit 阶段预排**继续：W61-W62 已完成 15 commit，剩余 35 commit 留 W63-W70；W62-W70 延续 W51-W61 的实际紧凑节奏。W62 5 文档同步 commit cite 按拍板继承 **“23 baseline 71+7 不变”**，并登记 W61 第 23 次、W62 第 24 次守恒。P3 dedup 已于 W59 实施完成并移出 future PR，仅保留 Phase 8.5 / P3 跨 tab / 7 E2E 三项。**fact-check 修正**：pre-existing fail 闭环按 W10 权威档案沿用 **64/84（76%）**；84 项由 65 个真 fail 与 19 个 phantom/edge case 构成，W19 选项 A 拍板不强求表面 100%。本阶段保持 0 production code / test / config 改动。
 
-**已交付（2026-07-22 W62 第二波 — Drive v2 PR6 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
+**已交付（2026-07-22 W62 第二波 + 第三波 — Drive v2 PR6 闭环删除 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
 
-- 🆕 **Drive v2 PR6 ActivityFeedView ✅ 已交付**（commit `a132c003`）— desktop 端 `web/src/views/desktop/ActivityFeedView.vue` 活动动态 Panel，复用 backend `/api/v1/activities` 端点（audit log 完整保留，drive/comment/file_request 11 处 audit log 不动）。11 种 action icon + 中文 label + 颜色映射 + cursor 分页（30/页）+ 团队/我的 scope 切换 + 相对时间格式化。`/drive/activity` 顶级路由（`meta.icon='Bell'`）+ FolderTree 新增 '📰 活动动态' 节点 click emit `update:specialView='activity'`（**不 router.push**，沿用 W60 FolderTree 节点范式）+ DesktopDriveView inline 渲染。9 vitest case PASS。**PR6 partial → ✅**。
+- ❌ **Drive v2 PR6 ActivityFeedView 已闭环删除（commit `d7d2e083`）** — 第三波主指挥拍板"功能没必要保留，已交付的也删除"，前端 `web/src/views/desktop/ActivityFeedView.vue` (450 行) + 测试 `ActivityFeedView.test.js` (218 行) + FolderTree 26 行引用全删；后端 `/api/v1/activities` endpoint 已删除（活动动态表 activity_events + audit log 完整保留复用）。**PR6 状态: ✅ 已交付 → ❌ 已闭环删除**（W62 第三波 2026-07-22 主指挥决策）。
 - 🆕 **Drive v2 PR8a MobileKnowledgeView 移除 files tab ✅ 已交付**（commit `0e445005`）— `web/src/views/mobile/MobileKnowledgeView.vue` 移除冗余 files tab（网盘已独立 MobileDriveView），81 行新增测试覆盖。**PR8 partial → ✅**。
 - 🆕 **Drive v2 PR8b MobileFilePreviewSwipe ✅ 已交付**（commit `022225d0`）— `web/src/views/mobile/MobileFilePreviewSwipe.vue`（518 行）+ `useSwipeGesture.js`（139 行）swipe 文件预览，178 行测试。`/mobile/drive/preview` 路由 + MobileDriveView 联动。**PR8 partial → ✅**。
-- 🆕 **Drive v2 状态收官** — PR1-5 / PR6 / PR7 / PR8 全部 **✅**（PR6/PR8 由 partial → ✅ 收官）。
+- 🆕 **Drive v2 状态收官** — PR1-5 / PR6（已闭环删除）/ PR7 / PR8 全部收官（PR8 partial → ✅，PR6 已闭环删除）。
 - 🆕 **qa-bench v3.1 D1/D3/D6/D7/D8**（commits `e53b2f79` D1 LLM config / `dd0fdc92` D3 retrieval cache / `cfdc4451` D6 CI 80% / `034d5f32` D7+D8 docs）+ final dist rebuild（`79371f98`）。
+
+**W62 第三波（2026-07-22 晚）PR6 闭环删除段**：主指挥拍板"功能没必要保留，已交付的也删除" → 4 commit 链收口（`a132c003` 实施 → `69f5a60a` 第二波 merge → `d7d2e083` 删除 → `fa559a5d` SW 404 修复）。详见 `docs/2026-07-22-activity-feed-deletion.md` (W62 第三波 closure doc) + 5 新铁律沉淀。
 
 ## 当前状态（2026-07-22 W61 跨主题收口段 — pre-W61 88 commit (W51-W60 累计) + W61 1 commit = post-W61 89 commit + 53 memory + 58 docs + 23 baseline + 167 实战验证铁律）
 

@@ -36,6 +36,36 @@
 
 **完整 commit 链**: `0112d668` → `9c475740` → `fb921992` → `4606e677` → `db7e6e58` → `5b0097ae` → `e42aea48` → `c3de5e79` → `489e7760` → `e6d0a64e` → `755ce0b5` → **`5abec6d6`** (CLAUDE.md) → **`2f2ace48`** (ROADMAP.md) → 本 commit (CHANGELOG.md) + MEMORY.md + CLAUDE-history.md + 3 新建 docs + 2 新 memory.
 
+## [Unreleased] 2026-07-22 W62 第三波 — Drive v2 PR6 ActivityFeedView 闭环删除
+
+### Drive v2 PR6 ActivityFeedView 闭环删除 (4 commit 链, 主指挥决策"已交付也删除")
+
+**主指挥 2026-07-22 晚拍板**：活动动态功能没必要保留，已交付的也删除 → 4 commit 链收口：
+
+- **commit `a132c003` — Drive v2 PR6 ActivityFeedView 实施**：W62 第二波 Agent 1 实施，desktop 端 `ActivityFeedView.vue` (450 行) 活动动态 Panel。
+- **commit `69f5a60a` — PR6 第二波 merge** + 临时 dist rebuild。
+- **commit `d7d2e083 chore(drive): 删除 ActivityFeedView 全部代码 (桌面 + 移动 + 文档)**：W62 第三波前端 + dist 全删，124 文件 -1039/+18：
+  - `web/src/views/desktop/ActivityFeedView.vue` (450 行) 全删
+  - `web/src/views/__tests__/ActivityFeedView.test.js` (218 行) 全删
+  - `web/src/components/drive/FolderTree.vue` 26 行引用清理
+  - `web/src/views/DesktopDriveView.vue` 7 行 specialView='activity' inline 渲染删除
+  - 99 个 `web/dist/assets/*.{js,css}` 文件全删（vite manifest 增量 hash 全部失效）
+  - 后端 `/api/v1/activities` endpoint 保留复用（`activity_service.py` + `activity_events` 表 + 11 处 drive/comment/file_request audit log 不动，与 2026-07-03 早期决策一致）
+- **commit `fa559a5d fix(sw): 修复 PWA SW 404 bug (ActivityFeedView 删除后 sw.js stale)**：dist 删除后 SW 仍引用 `ActivityFeedView-*.{js,css}` → 浏览器报 404 → 修 sw.js SW_VERSION BUMP 强制 activate + 清 cache。
+
+**Drive v2 状态**：PR1-5 / PR6（已闭环删除）/ PR7 / PR8 全部收官（PR8 partial → ✅，PR6 ✅ → ❌ 已闭环删除）。
+
+**9 文件 baseline 守恒**：71 PASS + 7 SKIP（W62 第 24 次 baseline 守恒，纯前端 + docs 不影响后端）。
+
+**5 新铁律**：
+1. **后端复用审计 log 不删** — 删除 UI 不动 activity_service + activity_events 表 + 11 处 audit 调用（与 2026-07-03 活动动态首次删除范式一致）
+2. **前端视图可独立闭环** — UI 删除可独立于后端 endpoint 存在，audit log 是审计资产不是 UI 资产
+3. **用户决策"已有代码也删除" 必删** — 主指挥拍板"功能没必要保留，已交付的也删除"是合法且优先的触发条件，PR6 → ❌ 不算回归
+4. **删后跑 npm run build 重新 hash** — `npm run build` (而非 `vite build` 直跑) 是唯一合法 build 命令，保证新 dist manifest hash 全部刷新
+5. **git add -f dist 必备** — `web/dist/` 在 .gitignore，新增/删除的 hashed assets 文件必须 `git add -f` 显式追踪（CLAUDE.md 2026-07-11 pwa-manifest-410-regression 教训复用）
+
+**详见** `docs/2026-07-22-activity-feed-deletion.md` (W62 第三波 closure doc)。
+
 ## [Unreleased] 2026-07-22 W62 第二波 — Drive v2 PR6 + PR8 收官 + qa-bench v3.1
 
 ### Drive v2 PR6 ActivityFeedView + PR8 移动端文件预览收官 (8 commit + 5 agent 并行)
@@ -51,11 +81,11 @@
 - **Agent 7 — qa-bench v3.1 D7+D8 docs**（commit `034d5f32`）：用户指南 + 报告模板 + 里程碑。
 - **final dist rebuild**（commit `79371f98`）：涵盖 7 agent source 改动。
 
-**Drive v2 状态**：PR1-5 / PR6 / PR7 / PR8 全部 **✅**（PR6/PR8 由 partial → ✅ 收官）。
+**Drive v2 状态**：PR1-5 / PR6（已闭环删除见 W62 第三波）/ PR7 / PR8 全部收官（PR8 partial → ✅，PR6 ✅ → ❌ 已闭环删除）。
 
 **9 文件 baseline 守恒**：71 PASS + 7 SKIP（W62 第 24 次 baseline 守恒，纯前端 + docs 不影响后端）。
 
-**详见** `docs/2026-07-22-drive-v2-pr6-pr8-closure.md`（PR6 + PR8 完整收口 + 5 新铁律）。
+**详见** `docs/2026-07-22-drive-v2-pr6-pr8-closure.md`（PR6 + PR8 完整收口 + 5 新铁律）+ `docs/2026-07-22-activity-feed-deletion.md`（PR6 闭环删除 closure doc）。
 
 ## [Unreleased] 2026-07-22 W61 跨主题收口段
 
