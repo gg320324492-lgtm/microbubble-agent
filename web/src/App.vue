@@ -29,6 +29,9 @@
         >重试</button>
       </div>
     </Transition>
+
+    <!-- PWA 安装提示（beforeinstallprompt 事件触发） -->
+    <InstallPrompt :deferred-prompt="deferredInstallPrompt" />
   </el-config-provider>
 </template>
 
@@ -50,6 +53,7 @@ import { useRoute } from 'vue-router'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { useAdaptiveRoute } from '@/composables/useAdaptiveRoute'
 import RouterFallbackSkeleton from '@/components/common/RouterFallbackSkeleton.vue'
+import InstallPrompt from '@/components/InstallPrompt.vue'
 
 const route = useRoute()
 
@@ -60,6 +64,10 @@ useAdaptiveRoute()
 function isSseRoute(r) {
   return r?.name === 'Chat'
 }
+
+// PR #10：PWA beforeinstallprompt 事件捕获（传给 InstallPrompt 组件）
+const deferredInstallPrompt = ref(null)
+let beforeInstallHandler = null
 
 // PR #9：离线检测
 const showOfflineBanner = ref(false)
@@ -91,12 +99,21 @@ onMounted(() => {
     window.addEventListener('offline', offlineHandler)
     if (!navigator.onLine) setOffline()
   }
+
+  // PR #10：捕获 beforeinstallprompt，阻止浏览器默认 mini-infobar
+  // App.vue 顶层捕获后注入 InstallPrompt 组件，让用户在我们自定义 UI 中决定
+  beforeInstallHandler = (e) => {
+    e.preventDefault()
+    deferredInstallPrompt.value = e
+  }
+  window.addEventListener('beforeinstallprompt', beforeInstallHandler)
 })
 
 onUnmounted(() => {
   if (typeof window !== 'undefined') {
     if (onlineHandler) window.removeEventListener('online', onlineHandler)
     if (offlineHandler) window.removeEventListener('offline', offlineHandler)
+    if (beforeInstallHandler) window.removeEventListener('beforeinstallprompt', beforeInstallHandler)
   }
 })
 </script>
