@@ -452,8 +452,12 @@ def score_seven_dim(
     auto_issues: List[Dict[str, Any]],
     expect_issues: List[Dict[str, Any]],
     duration_ms: int,
+    temperature: float = 0.0,
 ) -> Dict[str, Any]:
     """7 维评分（v3.0）
+
+    ``temperature`` is accepted for the runner's LLM configuration plumbing,
+    but deliberately does not affect the deterministic seven-dimension score.
 
     Returns:
         {
@@ -463,6 +467,9 @@ def score_seven_dim(
             "veto": False,  # True if content<0.5 or defense<0.7
         }
     """
+    # Keep the parameter explicit at this boundary so callers can pass the
+    # configured LLM temperature without changing score semantics.
+    del temperature
     dim_scores = {}
 
     # 1. Intent 正确性
@@ -621,12 +628,19 @@ async def run_single_question(
     client: httpx.AsyncClient,
     question_data: Dict[str, Any],
     token: str,
+    temperature: float = 0.0,
+    round_index: int = 1,
 ) -> Dict[str, Any]:
-    """跑一道题并返回结果"""
+    """跑一道题并返回结果.
+
+    ``temperature`` is forwarded to the scoring boundary for future LLM-backed
+    scoring. The chat endpoint itself owns model configuration and does not
+    accept a benchmark-only sampling parameter.
+    """
     qid = question_data["id"]
     question = question_data["question"]
     expect = question_data.get("expect", {})
-    session_id = f"qa-bench-{qid}-{int(time.time())}"
+    session_id = f"qa-bench-{qid}-r{round_index}-{time.time_ns()}"
 
     payload = {"message": question, "session_id": session_id}
     # 2026-07-13 #P1: 三档 mode 透传 (qa-bench benchmark 用 THINKING_MODE env 或 question.thinking_mode 字段)
@@ -782,7 +796,14 @@ async def run_single_question(
 
     # v3.0: 7 维评分
     actual["_events"] = events  # 注入 events 供 score_seven_dim 用
-    seven_dim = score_seven_dim(expect, actual, auto_issues, expect_issues, duration_ms)
+    seven_dim = score_seven_dim(
+        expect,
+        actual,
+        auto_issues,
+        expect_issues,
+        duration_ms,
+        temperature=temperature,
+    )
     actual.pop("_events", None)  # 清理临时字段
 
     return {
@@ -795,19 +816,120 @@ async def run_single_question(
         "has_critical_issue": has_critical,
         "verdict": "FAIL" if has_critical else ("WARN" if all_issues else "PASS"),
         "seven_dim": seven_dim,  # v3.0 新增
+        "round": round_index,
+        "temperature": temperature,
     }
+
+
+def _aggregate_round_results(
+    round_results: List[Dict[str, Any]],
+    consensus: str,
+) -> Dict[str, Any]:
+    """聚合一道题的多轮结果.
+
+    PASS is the positive vote; WARN and FAIL are non-PASS votes. The
+    consensus strategies intentionally only affect rounds > 1, preserving the
+    historical single-round result shape and verdict semantics.
+    """
+    if len(round_results) == 1:
+        return round_results[0]
+
+    pass_count = sum(r.get("verdict") == "PASS" for r in round_results)
+    round_count = len(round_results)
+    if consensus == "majority":
+        passed = pass_count >= round_count // 2 + 1
+    elif consensus == "unanimous":
+        passed = pass_count == round_count
+    else:  # any
+        passed = pass_count > 0
+
+    first = round_results[0]
+    scored = [r["seven_dim"] for r in round_results if r.get("seven_dim")]
+    if scored:
+        dim_keys = tuple(DIM_WEIGHTS)
+        dim_scores = {
+            key: round(
+                sum(s["dim_scores"].get(key, 0.0) for s in scored) / len(scored),
+                3,
+            )
+            for key in dim_keys
+        }
+        total_score = round(sum(s["total_score"] for s in scored) / len(scored), 1)
+        grade = next(
+            (g for g, (low, high) in GRADE_THRESHOLDS.items() if low <= total_score <= high),
+            "F",
+        )
+        seven_dim = {
+            "dim_scores": dim_scores,
+            "total_score": total_score,
+            "grade": grade,
+            "veto": any(s.get("veto", False) for s in scored),
+        }
+    else:
+        seven_dim = None
+
+    all_issues = []
+    for result in round_results:
+        all_issues.extend(result.get("issues", []))
+
+    aggregate = dict(first)
+    aggregate["round"] = None
+    aggregate["rounds"] = round_count
+    aggregate["verdict_consensus"] = consensus
+    aggregate["round_verdicts"] = [r.get("verdict", "ERROR") for r in round_results]
+    aggregate["round_results"] = round_results
+    aggregate["issues"] = all_issues
+    aggregate["has_critical_issue"] = any(
+        r.get("has_critical_issue", False) for r in round_results
+    )
+    aggregate["verdict"] = "PASS" if passed else "FAIL"
+    if seven_dim is not None:
+        aggregate["seven_dim"] = seven_dim
+    return aggregate
 
 
 async def main():
     global API_BASE
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--token", required=True)
+    parser = argparse.ArgumentParser(
+        description=(
+            "qa-bench LLM 评测运行器。LLM_TEMPERATURE 环境变量控制评分阶段采样温度 "
+            "(默认 0.0)。"
+        )
+    )
+    parser.add_argument("--token", required=True, help="JWT access token")
     parser.add_argument("--questions", default="tests/qa-bench/questions.jsonl")
     parser.add_argument("--output", default="results/run")
     parser.add_argument("--limit", type=int, default=0, help="limit N questions (0=all)")
     parser.add_argument("--concurrency", type=int, default=6, help="并发数")
     parser.add_argument("--api-base", default=API_BASE, help="API base URL (default: localhost)")
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=1,
+        help=(
+            "每道题独立运行的轮数 (默认 1；>1 时按 --verdict-consensus 聚合)。"
+            " LLM_TEMPERATURE 环境变量控制评分阶段温度 (默认 0.0)"
+        ),
+    )
+    parser.add_argument(
+        "--verdict-consensus",
+        choices=("majority", "unanimous", "any"),
+        default="majority",
+        help=(
+            "多轮 verdict 共识策略: majority=多数 PASS, unanimous=全部 PASS, "
+            "any=任一 PASS (默认 majority；rounds=1 时不生效)"
+        ),
+    )
     args = parser.parse_args()
+    if args.rounds < 1:
+        parser.error("--rounds must be >= 1")
+
+    try:
+        temperature = float(os.environ.get("LLM_TEMPERATURE", "0.0"))
+    except ValueError as exc:
+        parser.error(f"LLM_TEMPERATURE must be a float: {exc}")
+    if not 0.0 <= temperature <= 1.0:
+        parser.error("LLM_TEMPERATURE must be between 0.0 and 1.0")
 
     # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
     API_BASE = args.api_base
@@ -829,6 +951,10 @@ async def main():
 
     print(f"🚀 qa-bench 启动: {len(questions)} 道题")
     print(f"   输出: {output_dir}")
+    print(
+        f"   配置: rounds={args.rounds}, verdict-consensus={args.verdict_consensus}, "
+        f"LLM_TEMPERATURE={temperature:.3f}"
+    )
     print()
 
     results = []
@@ -841,15 +967,32 @@ async def main():
             nonlocal completed
             async with semaphore:
                 t0 = time.monotonic()
-                r = await run_single_question(client, q, args.token)
+                round_results = []
+                for round_index in range(1, args.rounds + 1):
+                    round_results.append(
+                        await run_single_question(
+                            client,
+                            q,
+                            args.token,
+                            temperature=temperature,
+                            round_index=round_index,
+                        )
+                    )
+                r = _aggregate_round_results(round_results, args.verdict_consensus)
                 dt = time.monotonic() - t0
                 verdict = r.get("verdict", "ERROR")
                 issue_types = [i["type"] for i in r.get("issues", [])]
                 async with print_lock:
                     completed += 1
+                    rounds_label = (
+                        f" rounds={','.join(r.get('round_verdicts', []))}"
+                        if args.rounds > 1
+                        else ""
+                    )
                     print(
                         f"  [{completed:3d}/{len(questions)}] {verdict:5s} {r['id']} ({dt:.1f}s) "
-                        f"cat={r['category']:18s} {r.get('question', '')[:40]:40s} "
+                        f"cat={r['category']:18s} {r.get('question', '')[:40]:40s}"
+                        f"{rounds_label} "
                         f"{' '.join(issue_types) if issue_types else '✓'}",
                         flush=True,
                     )
@@ -866,6 +1009,9 @@ async def main():
         "warn": sum(1 for r in results if r.get("verdict") == "WARN"),
         "fail": sum(1 for r in results if r.get("verdict") == "FAIL"),
         "error": sum(1 for r in results if "error" in r),
+        "rounds": args.rounds,
+        "verdict_consensus": args.verdict_consensus,
+        "llm_temperature": temperature,
         "by_category": {},
         "issue_distribution": {},
     }
@@ -913,6 +1059,11 @@ async def main():
 
     # 写 md
     md = [f"# QA Bench Report — {summary['timestamp']}", ""]
+    md.append(
+        f"**配置**: rounds={summary['rounds']} | "
+        f"verdict-consensus={summary['verdict_consensus']} | "
+        f"LLM_TEMPERATURE={summary['llm_temperature']:.3f}\n"
+    )
     md.append(f"**总题数**: {summary['total']} | "
               f"**PASS**: {summary['pass']} | "
               f"**WARN**: {summary['warn']} | "
