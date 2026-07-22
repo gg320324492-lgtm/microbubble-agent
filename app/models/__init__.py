@@ -18,6 +18,7 @@ from app.models.voiceprint_history import VoiceprintHistory
 from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
 from app.models.search_log import SearchLog  # v31 检索质量埋点
 from app.models.chat_history import ChatSession, ChatMessage, ChatShare  # #043 账号持久化
+from app.models.drive_share import DriveFolderShare, DriveFolderMember  # v2 PR7 文件夹分享/成员
 
 __all__ = [
     "Member",
@@ -48,4 +49,6 @@ __all__ = [
     "ChatSession",           # #043 账号持久化
     "ChatMessage",           # #043 账号持久化
     "ChatShare",             # #043 账号持久化
+    "DriveFolderShare",      # v2 PR7 文件夹公开分享
+    "DriveFolderMember",     # v2 PR7 文件夹邀请成员
 ]
