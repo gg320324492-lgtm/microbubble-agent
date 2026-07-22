@@ -9,7 +9,14 @@
   PUT    /api/v1/folders/{id}                  → 改名/移动/改 visibility
   DELETE /api/v1/folders/{id}                  → 软删
   POST   /api/v1/folders/{id}/restore          → 恢复 (3 天保留期内)
+
+v2 PR7 (2026-07-23) — 文件夹分享 + 邀请成员:
+  POST   /api/v1/folders/{id}/share                  → 创建公开分享链接 (owner/admin)
+  GET    /api/v1/folders/share/{token}               → 通过 token 公开访问 (无登录)
+  POST   /api/v1/folders/{id}/members                → 邀请成员 (owner/admin)
+  DELETE /api/v1/folders/{id}/members/{member_id}    → 移除成员 (owner/admin)
 """
+import os
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -21,6 +28,17 @@ from app.core.exceptions import ForbiddenException, NotFoundException, Validatio
 from app.core.security import get_current_user
 from app.models.folder import Folder
 from app.models.member import Member
+from app.schemas.drive_share import (
+    FolderMemberAdd,
+    FolderShareCreate,
+    FolderShareResponse,
+    FolderShareTokenAccess,
+)
+from app.services.drive_share_service import (
+    DEFAULT_SHARE_EXPIRES_DAYS,
+    DriveShareService,
+    DriveShareServiceError,
+)
 from app.services.folder_service import FolderService, FolderServiceError
 
 router = APIRouter(prefix="/folders", tags=["网盘文件夹"])
@@ -40,6 +58,209 @@ def _reraise_folder_service_error(e: FolderServiceError) -> None:
         raise ForbiddenException(message=msg) from e
     # 400 / 422 / 其他：ValidationException（不走 HTTPException 走 AppException 统一格式）
     raise ValidationException(message=msg) from e
+
+
+def _reraise_drive_share_service_error(e: DriveShareServiceError) -> None:
+    """v2 PR7: 把 DriveShareServiceError 映射到 AppException 子类, 与 _reraise_folder_service_error 对齐
+
+    Note: 404 不区分 FolderShare vs FolderMember (语义都是资源不存在),
+    统一用 NotFoundException(resource='Folder') 兜底; 详细信息通过 message 透传
+    """
+    msg = str(e)
+    if e.status_code == 404:
+        raise NotFoundException(resource="Folder") from e
+    if e.status_code == 403:
+        raise ForbiddenException(message=msg) from e
+    raise ValidationException(message=msg) from e
+
+
+# ============================================================
+# v2 PR7: 文件夹分享 + 邀请成员 (2026-07-23)
+# ============================================================
+
+
+def _build_share_url(token: str) -> str:
+    """构造公开分享链接 URL
+
+    优先从环境变量 SHARE_BASE_URL 读, 否则用 API_BASE_URL 兜底,
+    最后 fallback http://localhost:8000 (本地开发)
+    """
+    base = os.environ.get("SHARE_BASE_URL") or os.environ.get("API_BASE_URL") or "http://localhost:8000"
+    return f"{base.rstrip('/')}/api/v1/folders/share/{token}"
+
+
+@router.post(
+    "/{folder_id}/share",
+    response_model=FolderShareResponse,
+    status_code=201,
+)
+async def create_folder_share(
+    folder_id: int,
+    payload: FolderShareCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v2 PR7: 创建 folder 公开分享链接 (folder owner / admin member only)
+
+    Body:
+      permission: read | write | admin (默认 read)
+      expires_days: 1-365 (默认 7)
+
+    Returns:
+      201 + FolderShareResponse (含 share_token + share_url + expires_at)
+    """
+    svc = DriveShareService(db)
+    try:
+        share = await svc.create_folder_share(
+            folder_id=folder_id,
+            user_id=current_user.id,
+            permission=payload.permission,
+            expires_days=payload.expires_days or DEFAULT_SHARE_EXPIRES_DAYS,
+        )
+    except DriveShareServiceError as e:
+        _reraise_drive_share_service_error(e)
+
+    return FolderShareResponse(
+        id=share.id,
+        folder_id=share.folder_id,
+        permission=share.permission,
+        expires_at=share.expires_at,
+        created_by=share.created_by,
+        created_at=share.created_at,
+        share_token=share.share_token,
+        share_url=_build_share_url(share.share_token),
+    )
+
+
+@router.get(
+    "/share/{token}",
+    response_model=FolderShareTokenAccess,
+)
+async def access_folder_by_share_token(
+    token: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """v2 PR7: 通过 token 公开访问 folder (无 JWT 鉴权)
+
+    校验:
+    - token 存在
+    - 未撤销 (revoked_at IS NULL)
+    - 未过期 (expires_at > now)
+
+    Returns:
+      200 + FolderShareTokenAccess (folder 概要 + 文件 + 子 folder)
+      404 if token 不存在/已撤销/已过期
+    """
+    svc = DriveShareService(db)
+    result = await svc.get_folder_by_share_token(token)
+    if result is None:
+        # token 不存在 / 已撤销 / 已过期 统一返 404
+        # NotFoundException 默认消息太短, 用 AppException 自定义 message
+        from app.core.exceptions import AppException
+        raise AppException(
+            code="FOLDER_SHARE_NOT_FOUND",
+            message="分享链接不存在、已撤销或已过期",
+            status_code=404,
+            details={"reason": "token 不存在 / 已撤销 / 已过期"},
+        )
+    folder, share, files, subfolders = result
+    return FolderShareTokenAccess(
+        folder_id=folder.id,
+        folder_name=folder.name,
+        owner_id=folder.owner_id,
+        visibility=folder.visibility,
+        permission=share.permission,
+        expires_at=share.expires_at,
+        created_by=share.created_by,
+        files=files,
+        subfolders=subfolders,
+    )
+
+
+@router.post(
+    "/{folder_id}/members",
+    response_model=FolderShareResponse,
+    status_code=201,
+)
+async def add_folder_member(
+    folder_id: int,
+    payload: FolderMemberAdd,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v2 PR7: 邀请成员到 folder (owner / admin member only)
+
+    Body:
+      member_id: 被邀请成员 ID (>0)
+      permission: read | write | admin (默认 read)
+
+    幂等: 重复邀请同 member → 更新 permission, 不报错
+    错误:
+      - 400: 不能邀请自己 / 不能邀请 folder owner / 非法 permission
+      - 403: 当前用户不是 owner / admin
+      - 404: folder 或 member 不存在
+    """
+    svc = DriveShareService(db)
+    try:
+        member_row = await svc.add_folder_member(
+            folder_id=folder_id,
+            inviter_id=current_user.id,
+            member_id=payload.member_id,
+            permission=payload.permission,
+        )
+    except DriveShareServiceError as e:
+        _reraise_drive_share_service_error(e)
+
+    return FolderShareResponse(
+        id=member_row.id,
+        folder_id=member_row.folder_id,
+        permission=member_row.permission,
+        expires_at=None,
+        created_by=member_row.invited_by,
+        created_at=member_row.created_at,
+        member_id=member_row.member_id,
+    )
+
+
+@router.delete(
+    "/{folder_id}/members/{member_id}",
+    status_code=204,
+)
+async def remove_folder_member(
+    folder_id: int,
+    member_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v2 PR7: 移除 folder 成员 (owner / admin only)
+
+    错误:
+      - 400: 不能移除自己 / 不能移除 folder owner
+      - 403: 当前用户不是 owner / admin
+      - 404: folder 不存在
+      - 204: 成功
+    """
+    from fastapi import Response
+
+    svc = DriveShareService(db)
+    try:
+        removed = await svc.remove_folder_member(
+            folder_id=folder_id,
+            remover_id=current_user.id,
+            member_id=member_id,
+        )
+    except DriveShareServiceError as e:
+        _reraise_drive_share_service_error(e)
+
+    if not removed:
+        from app.core.exceptions import AppException
+        raise AppException(
+            code="FOLDER_MEMBER_NOT_FOUND",
+            message=f"folder member (folder_id={folder_id}, member_id={member_id}) 不存在",
+            status_code=404,
+            details={"folder_id": folder_id, "member_id": member_id},
+        )
+    return Response(status_code=204)
 
 
 # === Pydantic schemas ===
