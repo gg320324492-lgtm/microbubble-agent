@@ -102,6 +102,8 @@
       </div>
     </main>
 
+    <MobileFab :actions="fabActions" />
+
     <!-- 操作菜单（替代桌面 4 个按钮） -->
     <Teleport to="body">
       <Transition name="action-sheet">
@@ -228,6 +230,7 @@ import MeetingCreateDialog from '@/views/meeting/MeetingCreateDialog.vue'
 import PasteAnalyzeDialog from '@/components/PasteAnalyzeDialog.vue'
 import VoiceTestFlow from '@/components/mobile/VoiceTestFlow.vue'
 import VoiceprintEnrollFlow from '@/components/mobile/VoiceprintEnrollFlow.vue'
+import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -301,6 +304,13 @@ function formatHour(t) {
 function getStatusLabel(s) {
   return { scheduled: '已预约', recording: '录制中', processing: '处理中', completed: '已完成', cancelled: '已取消', error: '处理失败' }[s] || s
 }
+
+const fabActions = [
+  { name: 'create', label: 'Create meeting', icon: '＋', handler: handleCreateMeeting },
+  { name: 'paste', label: 'Analyze transcript', icon: '📋', handler: handlePasteAnalyze },
+  { name: 'live', label: 'Start recording', icon: '🎤', handler: handleStartLive },
+  { name: 'voice', label: 'Voiceprint test', icon: '🎙', handler: handleVoiceTest },
+]
 
 // 操作菜单处理
 function handleCreateMeeting() {
