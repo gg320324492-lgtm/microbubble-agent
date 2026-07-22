@@ -154,7 +154,7 @@ function formatBytes(bytes) {
 .storage-quota-badge.is-over .quota-icon,
 .storage-quota-badge.is-over .quota-percent,
 .storage-quota-badge.is-over .quota-detail {
-  color: white;
+  color: var(--el-color-white);
 }
 </style>
 

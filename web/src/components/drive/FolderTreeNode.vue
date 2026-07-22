@@ -231,7 +231,7 @@ const indentPx = computed(() => 12 + props.depth * 16)  // 缩进: 顶级 12px, 
 
 .folder-tree-node-row.is-active .folder-tree-node-count {
   background: var(--gradient-cta-button);
-  color: #fff;
+  color: var(--el-color-white);
 }
 </style>
 

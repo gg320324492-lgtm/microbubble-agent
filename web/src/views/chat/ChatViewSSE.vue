@@ -778,13 +778,13 @@ onUnmounted(() => {
 
 .jump-to-top:hover {
   background: var(--color-primary, #FF7A5C);
-  color: white;
+  color: var(--el-color-white);
   transform: none !important;
 }
 
 .jump-to-top:active {
   background: var(--color-primary, #FF7A5C);
-  color: white;
+  color: var(--el-color-white);
   outline: 2px solid var(--color-primary, #FF7A5C);
   outline-offset: 2px;
   transform: none !important;
@@ -804,7 +804,7 @@ onUnmounted(() => {
 
 .jump-to-top:hover {
   background: var(--color-primary, #FF7A5C);
-  color: white;
+  color: var(--el-color-white);
   transform: translateX(-50%) translateY(-2px);
 }
 
@@ -815,13 +815,13 @@ onUnmounted(() => {
 
 [data-theme="dark"] .jump-to-top:hover {
   background: var(--color-primary, #FF7A5C);
-  color: white;
+  color: var(--el-color-white);
 }
 
 .jump-to-bottom:hover {
   background: var(--color-primary, #FF7A5C);
   /* stylelint-disable-next-line color-named */
-  color: white;
+  color: var(--el-color-white);
   transform: translateX(-50%) translateY(-2px);
 }
 .time-divider { text-align: center; font-size: 12px; color: var(--color-text-secondary); margin: 16px 0; }
@@ -834,7 +834,7 @@ onUnmounted(() => {
 .user-bubble {
   background: var(--gradient-welcome-hero);
   /* stylelint-disable-next-line color-named */
-  color: white;
+  color: var(--el-color-white);
   border-bottom-right-radius: 6px;
 }
 .bot-bubble { background: var(--color-bg-card); box-shadow: var(--shadow-sm); border-bottom-left-radius: 6px; }
@@ -921,7 +921,7 @@ onUnmounted(() => {
   background: var(--gradient-welcome-hero);
   border: none;
   /* stylelint-disable-next-line color-named */
-  color: white;
+  color: var(--el-color-white);
   font-size: 18px;
 }
 

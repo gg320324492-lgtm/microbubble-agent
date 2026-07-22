@@ -114,7 +114,7 @@ function handleVisibilityCmd(cmd) {
  * 本 scoped 块保留 transition name & label flex 细节
  */
 .batch-toolbar-label {
-  color: #fff;
+  color: var(--el-color-white);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   margin-left: var(--space-2);

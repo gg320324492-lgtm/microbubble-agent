@@ -184,7 +184,7 @@ defineExpose({ visible, version, dismissed, showUpdate })
   outline-offset: 2px;
 }
 .pwa-update-toast__button:active { transform: scale(0.97); }
-.pwa-update-toast__button--refresh { color: #fff; background: var(--color-primary-dark, #e85a3a); }
+.pwa-update-toast__button--refresh { color: var(--el-color-white); background: var(--color-primary-dark, #e85a3a); }
 .pwa-update-toast__button--refresh:hover { background: var(--color-primary, #ff7a5c); }
 .pwa-update-toast__button--dismiss { color: var(--color-text-secondary, #606266); background: transparent; }
 .pwa-update-toast__button--dismiss:hover { background: var(--color-primary-bg, #fff0ed); }
