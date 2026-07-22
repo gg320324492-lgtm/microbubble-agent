@@ -80,6 +80,7 @@
 
 <script setup>
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-page fade-slide-up + 文件类型色共享样式生效
+// v2.1 (2026-07-22) PR8: onMounted 预拉 /api/v1/mobile/dashboard 一次聚合 (5 sections 1 请求) 替换 N 次独立请求
 import '@/views/drive/drive-view.css'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -110,6 +111,23 @@ const showSearch = ref(false)
 const showUploadMenu = ref(false)
 const showActionSheet = ref(false)
 const selectedFile = ref(null)
+
+// v2 PR8: 移动端首页聚合 (5 sections 1 请求)
+const dashboardData = ref(null)
+const dashboardLoading = ref(false)
+
+async function loadDashboard() {
+  // 失败隔离: dashboard 失败不阻塞主列表 (主列表用 useDriveFiles 独立拉)
+  dashboardLoading.value = true
+  try {
+    const resp = await axios.get('/api/v1/mobile/dashboard')
+    dashboardData.value = resp.data
+  } catch (e) {
+    console.warn('[MobileDriveView] dashboard 预拉失败 (主流程仍可用):', e?.message)
+  } finally {
+    dashboardLoading.value = false
+  }
+}
 
 const { folderTree, fetchTree } = useFolderTree()
 const folderChips = computed(() => {
@@ -284,7 +302,7 @@ function getFileTypeKey(file) {
   return 'text'
 }
 
-onMounted(() => { fetchTree(); applyTabQuery() })
+onMounted(() => { fetchTree(); applyTabQuery(); loadDashboard() })
 watch(() => route.query.tab, (newTab) => {
   if (newTab && tabs.some(t => t.name === newTab)) switchTab(newTab)
 })
