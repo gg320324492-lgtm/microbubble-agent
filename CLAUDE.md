@@ -8,6 +8,10 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-07-23 W66 plans status 100% 状态化收口)
+
+**W66 → W67 锚点范式第 28 次守恒** — 67 plans 100% 状态化: **47 completed + 16 agent-stub + 2 deleted** (`claude-pet` + `self-rag`) **+ 1 partial** (`15-17-18-cozy-bengio` Part 2 低占比发言人过滤 1.5s/3s/5% 在 commit `4b215220` refactor 中意外删除) **+ 1 not_started** (`2026-06-05-19-10-melodic-donut`)。锚点范式单调上升 W7 12 → W62 24 → W65 26 → **W66 27 → W67 28**，26+ baseline 守恒 (71 PASS + 7 SKIP，跨 60+ commit 0 regression)。累计 5 批 35+ agent commits + 1 cleanup commit (main HEAD `34a3ce6a6`)。全程 **0 production code 改动铁律** + W19 选项 A 维持 (4 留未来 PR 不发起新排期)。详见 `memory/plans-status-67-closure-w66-2026-07-23.md`。
+
 ## 当前开发阶段
 
 **Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官 + 移动端 10 个 PR 全栈定制收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**移动端**采用 NutUI 4 + Element Plus **路由级双栈**架构（`useIsMobile.js` 判定 + `resolveMobile.js` 路由适配），**18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略**全部交付，**iOS Safari + Android Chrome 全兼容**。**当前状态（2026-06-13 收官后，commit `9026c07`）**：
