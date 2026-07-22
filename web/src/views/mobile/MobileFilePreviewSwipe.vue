@@ -343,7 +343,7 @@ onMounted(() => {
   padding: 10px 24px;
   border: 1px solid var(--color-primary, #FF7A5C);
   background: var(--color-primary, #FF7A5C);
-  color: #fff;
+  color: var(--el-color-white);
   border-radius: 8px;
   font-size: 14px;
   cursor: pointer;

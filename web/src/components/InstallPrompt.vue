@@ -299,7 +299,7 @@ defineExpose({ recordDriveVisit })
 
 .install-prompt__btn--primary {
   background: var(--color-primary, #FF7A5C);
-  color: white;
+  color: var(--el-color-white);
 }
 
 .install-prompt__btn--primary:hover {

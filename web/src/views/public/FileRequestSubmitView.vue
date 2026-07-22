@@ -207,7 +207,7 @@ onMounted(async () => {
 }
 
 .submit-card {
-  background: #fff;
+  background: var(--el-color-white);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   padding: 40px;
@@ -219,27 +219,27 @@ onMounted(async () => {
   font-size: 24px;
   font-weight: 600;
   margin: 0 0 24px 0;
-  color: #1a1a1a;
+  color: var(--color-text-primary);
 }
 
 .submit-state {
   text-align: center;
   padding: 40px 20px;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 .submit-state.error h2 {
-  color: #d9534f;
+  color: var(--color-danger);
   font-size: 18px;
   margin-bottom: 8px;
 }
 
 .submit-desc {
-  background: #f5f7fa;
+  background: var(--color-bg-page);
   border-radius: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
   font-size: 14px;
-  color: #333;
+  color: var(--color-text-primary);
   line-height: 1.5;
 }
 
@@ -248,7 +248,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   gap: 8px;
   font-size: 12px;
-  color: #888;
+  color: var(--color-text-placeholder);
   margin-bottom: 20px;
 }
 
@@ -259,11 +259,11 @@ onMounted(async () => {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: var(--color-text-primary);
   margin-bottom: 6px;
 }
 .required {
-  color: #d9534f;
+  color: var(--color-danger);
 }
 .form-row input[type="text"] {
   width: 100%;
@@ -286,15 +286,15 @@ onMounted(async () => {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: #888;
+  color: var(--color-text-placeholder);
 }
 
 .submit-btn {
   display: block;
   width: 100%;
   padding: 12px;
-  background: #FF7A5C;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--el-color-white);
   border: none;
   border-radius: 8px;
   font-size: 15px;
@@ -304,20 +304,20 @@ onMounted(async () => {
   font-family: inherit;
 }
 .submit-btn:hover:not(:disabled) {
-  background: #ff5e3a;
+  background: var(--color-primary-dark);
 }
 .submit-btn:disabled {
-  background: #ccc;
+  background: var(--color-border);
   cursor: not-allowed;
 }
 
 .submit-error {
   margin-top: 12px;
   padding: 10px 14px;
-  background: #fef0ef;
+  background: var(--color-danger-bg);
   border: 1px solid #fbc7c4;
   border-radius: 6px;
-  color: #d9534f;
+  color: var(--color-danger);
   font-size: 13px;
 }
 
@@ -326,12 +326,12 @@ onMounted(async () => {
   padding: 20px;
 }
 .submit-success h2 {
-  color: #5cb85c;
+  color: var(--color-success);
   font-size: 22px;
   margin-bottom: 12px;
 }
 .submit-success p {
-  color: #333;
+  color: var(--color-text-primary);
   font-size: 14px;
   margin-bottom: 24px;
 }
