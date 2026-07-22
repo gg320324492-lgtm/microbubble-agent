@@ -40,6 +40,8 @@
       />
     </div>
 
+    <MobileFab v-if="activeTab === 'members'" :actions="fabActions" />
+
     <main
       class="workspace-main"
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
@@ -71,6 +73,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileProjectsPanel from './mobile-workspace/MobileProjectsPanel.vue'
 import MobileMembersPanel from './mobile-workspace/MobileMembersPanel.vue'
 import MobileVoiceprintsPanel from './mobile-workspace/MobileVoiceprintsPanel.vue'
+import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -95,6 +98,13 @@ const PANEL_MAP = {
   members: MobileMembersPanel,
   voiceprint: MobileVoiceprintsPanel,
 }
+const fabActions = [
+  { name: 'create', label: 'Add member', icon: '＋', handler: onCreateMember },
+  { name: 'search', label: 'Search members', icon: '🔍', handler: onSearchMember },
+  { name: 'voice', label: 'Voiceprints', icon: '🎙', handler: () => router.replace({ path: '/workspace', query: { tab: 'voiceprint' } }) },
+  { name: 'projects', label: 'View projects', icon: '📁', handler: () => router.replace({ path: '/workspace', query: { tab: 'projects' } }) },
+]
+
 const currentPanel = computed(() => PANEL_MAP[activeTab.value] || MobileProjectsPanel)
 
 // TabStrip emit update:modelValue 已自动改 activeTab, 这里只同步 URL

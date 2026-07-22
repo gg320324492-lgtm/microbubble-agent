@@ -67,7 +67,7 @@
       </LongPressWrapper>
     </div>
 
-    <button type="button" class="drive-fab" aria-label="上传文件" @click="onUploadClick">+</button>
+    <MobileFab :actions="fabActions" />
 
     <MobileActionSheet v-model="showActionSheet"
       :title="selectedFile ? (selectedFile.title || selectedFile.file_name) : ''"
@@ -97,6 +97,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileCommandPalette from '@/views/mobile/MobileCommandPalette.vue'
+import MobileFab from '@/components/mobile/MobileFab.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { formatSize } from '@/utils/format'
@@ -295,6 +296,13 @@ const uploadActions = [
   { name: 'drive', label: '📁 入网盘', subtitle: '原始文件归档' },
   { name: 'photo', label: '📷 拍照上传', subtitle: '调用摄像头' },
 ]
+const fabActions = [
+  { name: 'upload', label: 'Upload file', icon: '📁', handler: onUploadClick },
+  { name: 'folder', label: 'New folder', icon: '📂', handler: () => ElMessage.info('Use desktop to create folders') },
+  { name: 'share', label: 'Share drive', icon: '🔗', handler: () => ElMessage.info('Select a file to share') },
+  { name: 'search', label: 'Search files', icon: '🔍', handler: () => { showSearch.value = true } },
+]
+
 function onUploadClick() { showUploadMenu.value = true }
 function onUploadAction(action) {
   ElMessage.info(`"${action.label}" 即将上线, 临时跳 KB`)
@@ -369,8 +377,6 @@ watch(() => route.query.tab, (newTab) => {
 .drive-error, .drive-empty, .drive-loading { text-align: center; padding: 60px 20px; color: var(--color-text-secondary); }
 .empty-icon { font-size: 48px; margin-bottom: 12px; }
 .empty-text { font-size: 15px; margin-bottom: 4px; color: var(--color-text-primary); }
-.drive-fab { position: fixed; right: 20px; bottom: 80px; width: 56px; height: 56px; border-radius: 50%; background: var(--color-primary); color: var(--el-color-white); font-size: 28px; border: none; box-shadow: var(--shadow-lg); cursor: pointer; z-index: 200; }
-.drive-fab:active { transform: scale(0.95); }
 .header-btn { width: 36px; height: 36px; background: transparent; border: none; font-size: 18px; color: var(--color-text-regular); cursor: pointer; border-radius: 6px; }
 .notification-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--color-warning); color: var(--el-color-white); border-radius: 12px; font-size: 11px; font-weight: 600; }
 .notification-badge-count { font-variant-numeric: tabular-nums; }

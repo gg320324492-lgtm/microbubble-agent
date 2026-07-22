@@ -158,6 +158,8 @@
       </div>
     </main>
 
+    <MobileFab :actions="fabActions" />
+
     <!-- 搜索 Sheet -->
     <MobileSearchSheet
       v-model="showSearch"
@@ -256,6 +258,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
+import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -397,6 +400,13 @@ const formulaFieldConfig = computed(() => ({
   subtitle: (f) => `${f.domain || '通用'} · ${f.variables?.length || 0} 个变量`,
   badge: (f) => ({ label: f.category || '公式', type: 'info' }),
 }))
+
+const fabActions = [
+  { name: 'manual', label: 'Add knowledge', icon: '✏️', handler: () => { showManualSheet.value = true } },
+  { name: 'upload', label: 'Upload file', icon: '📚', handler: () => uploadInputRef.value?.click() },
+  { name: 'research', label: 'AI research', icon: '🤖', handler: () => { showResearchSheet.value = true } },
+  { name: 'drive', label: 'Archive to drive', icon: '📁', handler: () => driveUploadInputRef.value?.click() },
+]
 
 const createActions = [
   // PR4.3: 1 个新增 ("📁 入网盘") + 现有 3 个保留 (向后兼容)
