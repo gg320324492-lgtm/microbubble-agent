@@ -99,7 +99,7 @@ function onChange(value) {
 /* 2026-07-13 #P1: 深度模式专属紫色调 (明显区别于快速/平衡) */
 .mode-option.active.mode-deep {
   background: linear-gradient(135deg, var(--color-primary-700, #5b21b6), var(--color-primary, #FF7A5C));
-  color: #fff;
+  color: var(--el-color-white);
 }
 </style>
 

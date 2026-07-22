@@ -395,7 +395,7 @@ onBeforeUnmount(() => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* v2 PR6-P8: 元数据条 (时间 + 类型 + 未读点) */

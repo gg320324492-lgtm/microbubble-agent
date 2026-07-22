@@ -107,12 +107,6 @@
   justify-content: flex-end;
 }
 
-/*
- * 视图切换按钮组合 (grid/list 切换器) — 紧凑一体化
- * v2.17 (2026-07-11) 移除 :deep():
- *   drive-view.css 是 import 全局 CSS, 非 <style scoped>, vite-plugin-vue 不会处理
- *   `:deep()`, 浏览器当无效 CSS 静默忽略. 后代选择器直接写即可 (EP .el-button/.el-icon 是全局 class)
- */
 .drive-view-toggle .el-button {
   height: 32px;
   width: 32px;
@@ -162,7 +156,7 @@
 .drive-upload-btn {
   background: var(--gradient-cta-button) !important;
   border-color: transparent !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   box-shadow: var(--shadow-primary) !important;
   transition: all var(--duration-normal) var(--ease-out) !important;
 }
@@ -306,7 +300,7 @@
 .drive-chip.is-active {
   background: var(--gradient-cta-button) !important;
   border-color: transparent !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   box-shadow: 0 1px 3px rgba(var(--color-primary-rgb), 0.25);
 }
 
@@ -407,12 +401,12 @@
 
 .drive-folder-tree-root-item.is-active {
   background: var(--gradient-cta-button);
-  color: #fff;
+  color: var(--el-color-white);
   box-shadow: var(--shadow-primary);
 }
 
 .drive-folder-tree-root-item.is-active .el-icon {
-  color: #fff;
+  color: var(--el-color-white);
 }
 
 /* Special nodes (starred / team / requests / trash) */
@@ -925,7 +919,7 @@
 .file-card-action:active,
 .file-card-action:active .el-icon {
   background: var(--gradient-cta-button);
-  color: #fff;
+  color: var(--el-color-white);
 }
 
 /* focus-visible 无障碍键盘 focus (主色 outline, 不加 bg) */
@@ -1067,7 +1061,7 @@
   align-items: center;
   justify-content: center;
   font-size: 48px;
-  color: #fff;
+  color: var(--el-color-white);
   box-shadow: var(--shadow-glow);
   margin-bottom: var(--space-4);
 }
@@ -1163,7 +1157,7 @@
   font-size: var(--font-size-xs);
   color: var(--color-danger);
   margin: 0;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   max-width: 100%;
   line-height: 1.4;
 }
@@ -1174,7 +1168,7 @@
   padding: 0 var(--space-3);
   background: var(--color-danger) !important;
   border-color: var(--color-danger) !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   border-radius: var(--radius-full) !important;
 }
 .drive-folder-tree-error .el-button:hover {
@@ -1199,7 +1193,7 @@
 }
 .drive-folder-tree-empty-hero .el-icon {
   font-size: 24px;
-  color: #fff;
+  color: var(--el-color-white);
 }
 .drive-folder-tree-empty-title {
   font-size: var(--font-size-sm);
@@ -1212,7 +1206,7 @@
   color: var(--color-text-secondary);
   margin: 0;
   line-height: 1.5;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   opacity: 0.85;
 }
 .drive-folder-tree-empty-cta {
@@ -1222,7 +1216,7 @@
   padding: 0 var(--space-3);
   background: var(--gradient-cta-button) !important;
   border-color: transparent !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   border-radius: var(--radius-full) !important;
   box-shadow: var(--shadow-primary) !important;
   transition: transform var(--duration-fast) var(--ease-out) !important;
@@ -1267,7 +1261,7 @@
 
 .drive-grid-pagination .el-pagination.is-background .el-pager li.is-active {
   background: var(--gradient-cta-button) !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
 }
 
 /* ===== 13. 批量操作 toolbar ===== */
@@ -1281,7 +1275,7 @@
   padding: var(--space-3) var(--space-4);
   margin-bottom: var(--space-3);
   background: var(--gradient-cta-button);
-  color: #fff;
+  color: var(--el-color-white);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-primary);
   animation: slideDownFade var(--duration-slower) var(--ease-out) both;
@@ -1303,7 +1297,7 @@
   padding: 0 var(--space-2);
   border-radius: var(--radius-full);
   background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  color: var(--el-color-white);
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-sm);
 }
@@ -1311,7 +1305,7 @@
 .drive-batch-toolbar-btn {
   background: rgba(255, 255, 255, 0.18) !important;
   border-color: transparent !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   transition: all var(--duration-fast) var(--ease-out) !important;
 }
 
@@ -1368,14 +1362,14 @@
 }
 
 .drive-dialog .el-dialog__title {
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   font-weight: var(--font-weight-semibold) !important;
   font-size: var(--font-size-md) !important;
   letter-spacing: 0.3px;
 }
 
 .drive-dialog .el-dialog__headerbtn .el-dialog__close {
-  color: #fff !important;
+  color: var(--el-color-white) !important;
 }
 
 .drive-dialog .el-dialog__body {
@@ -1414,7 +1408,7 @@
   font-size: var(--font-size-sm);
   line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   margin: 0;
 }
 
@@ -1550,7 +1544,7 @@
   transform: translate(-50%, -50%);
   padding: var(--space-3) var(--space-5);
   background: var(--gradient-cta-button);
-  color: #fff;
+  color: var(--el-color-white);
   border-radius: var(--radius-md);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
@@ -1594,7 +1588,7 @@
 .drive-view-toggle .el-button.is-active,
 .drive-view-toggle .el-button--primary {
   background: var(--gradient-cta-button) !important;
-  color: #fff !important;
+  color: var(--el-color-white) !important;
   box-shadow: var(--shadow-primary);
 }
 

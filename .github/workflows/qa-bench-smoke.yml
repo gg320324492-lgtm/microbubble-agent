@@ -60,14 +60,19 @@ jobs:
           pip install --prefer-binary --retries 10 --timeout 60 httpx
 
       # === 新增 test DB stack 启动 (替代生产 app/db) ===
+      # v2026-07-23 修复: 改用 Docker network 让 app-test 通过服务名 `pg-test` 直连,
+      #   解决 Linux runner 上 `host.docker.internal` 不解析的连接问题.
       - name: Start test DB stack (microbubble_test + app on 8001)
         run: |
+          # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
+          docker network create qa-bench-net
+
           # 起 test DB (独立容器, 端口 5433 避免与生产 db:5432 冲突)
           docker run -d --name pg-test \
+            --network qa-bench-net \
             -e POSTGRES_DB=microbubble_test \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=microbubble2026 \
-            -p 5433:5432 \
             postgres:16-alpine
           # 等 pg-test ready (最长 60s)
           for i in {1..30}; do
@@ -83,10 +88,11 @@ jobs:
             sleep 2
           done
 
-          # 起 test app (8001 端口, 接 test DB)
+          # 起 test app (8001 端口, 接 test DB 通过同网络服务名 pg-test)
           docker run -d --name app-test \
+            --network qa-bench-net \
             -p 8001:8000 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             -e REDIS_URL="redis://localhost:6379/1" \
             -e MINIO_ENDPOINT="localhost:9000" \
             -e MINIO_BUCKET="microbubble-test" \
@@ -116,20 +122,20 @@ jobs:
         run: |
           # 用 Base.metadata.create_all 建表 + seed (init_db.py 同时插入 24 members 等)
           docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             app-test python scripts/init_db.py 2>&1 | tail -5
 
           # alembic stamp head (init_db 用 create_all, 不走 alembic, 需要手动 stamp)
           # 关键: alembic_version.version_num VARCHAR(32) 上限 (CLAUDE.md 2026-06-02 教训),
           # 055 migration 已重命名为 055_personal_wechat_ci (22 字符) 适配
           docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             app-test alembic stamp head 2>&1 | tail -3
 
       - name: Ensure test user (xiaoqi_testbot) exists
         run: |
           docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@host.docker.internal:5433/microbubble_test" \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
             app-test python scripts/ensure_test_user.py 2>&1 | tail -3
           # 期望: [OK] 或 [CREATED] 都行 (幂等)
 
@@ -228,4 +234,5 @@ jobs:
         if: always()
         run: |
           docker rm -f app-test pg-test 2>/dev/null || true
+          docker network rm qa-bench-net 2>/dev/null || true
           echo "✓ test DB stack cleaned up"
