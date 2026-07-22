@@ -467,8 +467,12 @@ def score_seven_dim(
     auto_issues: List[Dict[str, Any]],
     expect_issues: List[Dict[str, Any]],
     duration_ms: int,
+    temperature: float = 0.0,
 ) -> Dict[str, Any]:
     """7 维评分（v3.0）
+
+    ``temperature`` is retained as explicit configuration plumbing; the
+    deterministic local scoring rules do not use it.
 
     Returns:
         {
@@ -636,6 +640,8 @@ async def run_single_question(
     client: httpx.AsyncClient,
     question_data: Dict[str, Any],
     token: str,
+    temperature: float = 0.0,
+    round_index: int = 1,
 ) -> Dict[str, Any]:
     """跑一道题并返回结果"""
     qid = question_data["id"]
@@ -797,7 +803,10 @@ async def run_single_question(
 
     # v3.0: 7 维评分
     actual["_events"] = events  # 注入 events 供 score_seven_dim 用
-    seven_dim = score_seven_dim(expect, actual, auto_issues, expect_issues, duration_ms)
+    seven_dim = score_seven_dim(
+        expect, actual, auto_issues, expect_issues, duration_ms,
+        temperature=temperature,
+    )
     actual.pop("_events", None)  # 清理临时字段
 
     return {
@@ -810,7 +819,50 @@ async def run_single_question(
         "has_critical_issue": has_critical,
         "verdict": "FAIL" if has_critical else ("WARN" if all_issues else "PASS"),
         "seven_dim": seven_dim,  # v3.0 新增
+        "round": round_index,
+        "temperature": temperature,
     }
+
+
+def _aggregate_round_results(
+    round_results: List[Dict[str, Any]], consensus: str,
+) -> Dict[str, Any]:
+    """Aggregate per-question rounds using the configured PASS consensus."""
+    if len(round_results) == 1:
+        return round_results[0]
+    pass_count = sum(r.get("verdict") == "PASS" for r in round_results)
+    n_rounds = len(round_results)
+    if consensus == "majority":
+        passed = pass_count >= n_rounds // 2 + 1
+    elif consensus == "unanimous":
+        passed = pass_count == n_rounds
+    else:
+        passed = pass_count > 0
+    scored = [r["seven_dim"] for r in round_results if r.get("seven_dim")]
+    seven_dim = None
+    if scored:
+        dim_scores = {
+            key: round(sum(s["dim_scores"].get(key, 0.0) for s in scored) / len(scored), 3)
+            for key in DIM_WEIGHTS
+        }
+        total_score = round(sum(s["total_score"] for s in scored) / len(scored), 1)
+        grade = next((g for g, (low, high) in GRADE_THRESHOLDS.items() if low <= total_score <= high), "F")
+        seven_dim = {"dim_scores": dim_scores, "total_score": total_score,
+                     "grade": grade, "veto": any(s.get("veto", False) for s in scored)}
+    aggregate = dict(round_results[0])
+    aggregate.update({
+        "round": None,
+        "rounds": n_rounds,
+        "verdict_consensus": consensus,
+        "round_verdicts": [r.get("verdict", "ERROR") for r in round_results],
+        "round_results": round_results,
+        "issues": [i for r in round_results for i in r.get("issues", [])],
+        "has_critical_issue": any(r.get("has_critical_issue", False) for r in round_results),
+        "verdict": "PASS" if passed else "FAIL",
+    })
+    if seven_dim is not None:
+        aggregate["seven_dim"] = seven_dim
+    return aggregate
 
 
 async def main():
@@ -822,7 +874,16 @@ async def main():
     parser.add_argument("--limit", type=int, default=0, help="limit N questions (0=all)")
     parser.add_argument("--concurrency", type=int, default=6, help="并发数")
     parser.add_argument("--api-base", default=API_BASE, help="API base URL (default: localhost)")
-    # v3.1 D6 决策: --smoke 是 --limit 200 的简写 (CI 默认 200 题子集)
+    parser.add_argument(
+        "--rounds", type=int, default=1,
+        help="每道题独立运行轮数 (默认 1；>1 时按 --verdict-consensus 聚合)",
+    )
+    parser.add_argument("--verdict-consensus", choices=("majority", "unanimous", "any"),
+                        default="majority",
+                        help="多轮 verdict 共识策略 (默认 majority)")
+    # v3.1 D4 决策: --include-extra 合并 D4 扩展题库 (700 + 300 = 1000+ 题)
+    parser.add_argument("--include-extra", action="store_true",
+                        help="合并 questions_780.jsonl 与 D4 额外 300 题")
     # 取代 workflow 里 `head -200 questions_780.jsonl > smoke_200.jsonl` + `--questions smoke_200.jsonl` 两步
     # workflow 调用方式: `python runner.py --smoke --token $TOKEN --api-base http://...`
     parser.add_argument("--smoke", action="store_true",
@@ -835,6 +896,15 @@ async def main():
     parser.add_argument("--grayscale", type=int, default=0,
                         help="D2: 灰度入库百分比 0-100 (默认 0 = 关闭)")
     args = parser.parse_args()
+    if args.rounds < 1:
+        parser.error("--rounds must be >= 1")
+
+    try:
+        temperature = float(os.environ.get("LLM_TEMPERATURE", "0.0"))
+    except ValueError as exc:
+        parser.error(f"LLM_TEMPERATURE must be a float: {exc}")
+    if not 0.0 <= temperature <= 1.0:
+        parser.error("LLM_TEMPERATURE must be between 0.0 and 1.0")
 
     # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
     API_BASE = args.api_base
@@ -854,6 +924,11 @@ async def main():
     if args.enable_intake and args.grayscale == 0:
         args.grayscale = 100
 
+    # v3.1 D4: include-extra 合并题库
+    extra_dataset = os.environ.get("QA_BENCH_EXTRA_DATASET", "questions_d4_extra_300.jsonl")
+    if args.include_extra and args.questions == "tests/qa-bench/questions.jsonl":
+        args.questions = "tests/qa-bench/questions_780.jsonl"
+
     questions_path = Path(args.questions)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -865,11 +940,25 @@ async def main():
             if not line:
                 continue
             questions.append(json.loads(line))
+    # v3.1 D4: merge extra questions after loading the base dataset
+    if args.include_extra:
+        extra_path = questions_path.parent / extra_dataset
+        if extra_path.exists():
+            with extra_path.open(encoding="utf-8") as f:
+                questions.extend(json.loads(line) for line in f if line.strip())
+            print(f"   [include-extra] base + {extra_path.name} = {len(questions)} 题")
+        else:
+            print(f"   [include-extra] 扩展题库不存在: {extra_path}")
+
     if args.limit:
         questions = questions[:args.limit]
 
     print(f"🚀 qa-bench 启动: {len(questions)} 道题")
     print(f"   输出: {output_dir}")
+    print(
+        f"   配置: rounds={args.rounds}, verdict-consensus={args.verdict_consensus}, "
+        f"LLM_TEMPERATURE={temperature:.3f}"
+    )
     print()
 
     results = []
@@ -882,7 +971,16 @@ async def main():
             nonlocal completed
             async with semaphore:
                 t0 = time.monotonic()
-                r = await run_single_question(client, q, args.token)
+                round_results = []
+                for round_index in range(1, args.rounds + 1):
+                    round_results.append(
+                        await run_single_question(
+                            client, q, args.token,
+                            temperature=temperature,
+                            round_index=round_index,
+                        )
+                    )
+                r = _aggregate_round_results(round_results, args.verdict_consensus)
                 dt = time.monotonic() - t0
                 verdict = r.get("verdict", "ERROR")
                 issue_types = [i["type"] for i in r.get("issues", [])]
@@ -890,7 +988,8 @@ async def main():
                     completed += 1
                     print(
                         f"  [{completed:3d}/{len(questions)}] {verdict:5s} {r['id']} ({dt:.1f}s) "
-                        f"cat={r['category']:18s} {r.get('question', '')[:40]:40s} "
+                        f"cat={r['category']:18s} {r.get('question', '')[:40]:40s}"
+                        f"{' rounds=' + ','.join(r.get('round_verdicts', [])) if args.rounds > 1 else ''} "
                         f"{' '.join(issue_types) if issue_types else '✓'}",
                         flush=True,
                     )
@@ -907,6 +1006,9 @@ async def main():
         "warn": sum(1 for r in results if r.get("verdict") == "WARN"),
         "fail": sum(1 for r in results if r.get("verdict") == "FAIL"),
         "error": sum(1 for r in results if "error" in r),
+        "rounds": args.rounds,
+        "verdict_consensus": args.verdict_consensus,
+        "llm_temperature": temperature,
         "by_category": {},
         "issue_distribution": {},
     }
@@ -954,6 +1056,11 @@ async def main():
 
     # 写 md
     md = [f"# QA Bench Report — {summary['timestamp']}", ""]
+    md.append(
+        f"**配置**: rounds={summary['rounds']} | "
+        f"verdict-consensus={summary['verdict_consensus']} | "
+        f"LLM_TEMPERATURE={summary['llm_temperature']:.3f}\n"
+    )
     md.append(f"**总题数**: {summary['total']} | "
               f"**PASS**: {summary['pass']} | "
               f"**WARN**: {summary['warn']} | "
