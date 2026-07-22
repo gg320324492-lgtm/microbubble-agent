@@ -30,3 +30,4 @@
 - [2026-07-22 W19-W22 baseline closure 累计数据](w19-22-baseline-closure-2026-07-22.md) — W18/W19/W20/W21/W22 baseline 连续守恒，锚点范式 W7 12 → W60 22 单调上升，σ ≈ 0.130s。
 - [2026-07-22 W51-W60 50 commit 阶段收官 final](w60-w51-w60-stage-closure-final.md) — 实际完成 88 commit，较 50 commit 阶段目标形成 1.76x 紧凑节奏；全阶段数据与时间线最终留痕。
 - [2026-07-22 W59 P3 dedup 实质开发首次启动](w60-future-pr-evaluation-post-dedup.md) — future PR 从 W19 选项 A 切换为选项 B 并完成 `chatSessions.ts` 标题时间戳 + 60s 首条消息检测；其余 3 future PR 继续留未来。
+- [2026-07-23 W67 第八批 7 agent 跨主题收口](w67-grand-closure-2026-07-23.md) — 8 批 42+ agent commits, 锚点范式 W66 27 → W67 28 单调上升, 8 新铁律沉淀 (Drive v2 PR7 鉴权 + share token 安全 + qa-bench 1000 阈值 + Mobile FAB 通用化 + PWA update toast + rate-limit 5 tier + docs only + 锚点范式 28 守恒).
