@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { defineAsyncComponent } from 'vue'
 import { resolveMobileComponent } from '@/utils/resolveMobile'
 
 /**
@@ -121,15 +122,6 @@ const routes = [
         meta: { title: '回收站', icon: 'Delete' }
       },
       {
-        // v2 PR6 (2026-07-22 Agent1 重写): 活动动态 — audit log 复用 (后端 /api/v1/activities 端点已存在)
-        // 顶级路由 (与 /drive/trash, /drive/requests 同一模式), URL 直跳兼容
-        // DesktopDriveView specialView === 'activity' 时 inline 渲染同一组件
-        path: 'drive/activity',
-        name: 'DriveActivity',
-        component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView'),
-        meta: { title: '活动动态', icon: 'Bell' }
-      },
-      {
         // v2 PR7: 文件请求管理 (Dropbox 招牌"收作业"创建/关闭页)
         // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
         path: 'drive/requests',
@@ -145,6 +137,18 @@ const routes = [
         name: 'DriveFileDetail',
         component: resolveMobileComponent('desktop/FileDetailView', 'mobile/MobileFileDetailView'),
         meta: { title: '文件详情' },
+        props: true,
+      },
+      {
+        // PR8: 移动端文件 swipe 预览 (mobile-only)
+        // 桌面端访问走 FileDetailView 详情页
+        // 单文件模式: /drive/preview/:id
+        // 多文件模式: /drive/preview/:id?list=id1,id2,id3&idx=0
+        path: 'drive/preview/:id',
+        name: 'DriveFilePreviewSwipe',
+        // mobile-only: 桌面端走 DesktopDriveView 文件 grid 直接预览 (FilePreviewDialog)
+        component: defineAsyncComponent(() => import('@/views/mobile/MobileFilePreviewSwipe.vue')),
+        meta: { title: '文件预览', mobileOnly: true },
         props: true,
       },
       {
@@ -194,6 +198,12 @@ router.beforeEach((to, from, next) => {
   // v2 PR7: 公开路由 (e.g. /r/:token 文件请求提交) 跳过 auth 检查
   if (to.meta?.noAuth) {
     return next()
+  }
+
+  // PR8: mobile-only 路由在桌面端重定向到文件详情页
+  if (to.meta?.mobileOnly && typeof window !== 'undefined' && window.innerWidth >= 768) {
+    const fileId = to.params.id
+    return next(`/drive/file/${fileId}`)
   }
 
   const token = localStorage.getItem('access_token')

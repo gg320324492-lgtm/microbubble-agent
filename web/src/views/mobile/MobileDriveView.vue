@@ -165,7 +165,7 @@ const emptyState = computed(() => {
   }
 })
 
-function onFileClick(file) { router.push(`/drive/file/${file.id}`) }
+function onFileClick(file) { router.push(`/drive/preview/${file.id}`) }
 function onLongPressFile(file) { selectedFile.value = file; showActionSheet.value = true }
 
 const fileActions = computed(() => {
@@ -187,7 +187,7 @@ async function onFileAction(action) {
   const file = selectedFile.value
   try {
     switch (action.name) {
-      case 'preview': router.push(`/drive/file/${file.id}`); break
+      case 'preview': router.push(`/drive/preview/${file.id}`); break
       case 'download': {
         const resp = await axios.get(`/api/v1/drive/files/${file.id}/download`, { responseType: 'blob' })
         const url = window.URL.createObjectURL(new Blob([resp.data]))
