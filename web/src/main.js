@@ -175,25 +175,22 @@ useRegisterSW({
   immediate: true,
   onRegisteredSW(swUrl) {
     console.log('[PWA] SW registered:', swUrl)
-    // 监听 SW 消息：SW 升级时它会 postMessage({type: 'SW_UPDATED'})
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (event.data?.type === 'SW_UPDATED') {
-        console.log('[PWA] SW updated, reloading...', event.data.version)
-        // 延迟 500ms 让 console.log 显示出来再 reload
-        setTimeout(() => window.location.reload(), 500)
-      }
-    })
   },
   onRegisterError(err) {
     console.warn('[PWA] SW registration failed:', err)
   },
 })
 
-// 2026-07-02 SW 升级强制刷新加固：
-// controllerchange 事件在新 SW 通过 clients.claim() 接管当前 client 时触发，
-// 比 SW_UPDATED postMessage 更早（早 ~100-300ms）也更可靠（标准浏览器 API，
-// 不依赖 SW 代码正确 postMessage）。
-// firstActivation flag 防止首次 SW 注册（从 null → SW）触发 reload（初次访问不刷新）。
+// SW 更新由顶层 PwaUpdateToast 呈现；广播自定义事件也让组件在 SW
+// 注册回调早于 Vue mount 时不丢失消息。
+navigator.serviceWorker.addEventListener('message', (event) => {
+  if (event.data?.type === 'SW_UPDATED') {
+    window.dispatchEvent(new CustomEvent('pwa-update-available', { detail: event.data }))
+  }
+})
+
+// 2026-07-02 SW 升级加固：controllerchange 仅记录状态，不再强制 reload。
+// 用户可能正在编辑内容，刷新由 PwaUpdateToast 的明确按钮触发。
 let swFirstActivation = true
 navigator.serviceWorker.addEventListener('controllerchange', () => {
   if (swFirstActivation) {
@@ -201,9 +198,7 @@ navigator.serviceWorker.addEventListener('controllerchange', () => {
     console.log('[PWA] First SW activation, no reload')
     return
   }
-  console.log('[PWA] New SW controller, force reloading...')
-  // 延迟 500ms 让 console.log 显示出来再 reload（与 SW_UPDATED 处理对齐）
-  setTimeout(() => window.location.reload(), 500)
+  console.log('[PWA] New SW controller; waiting for user refresh')
 })
 
 // 防御性：app 加载时如果已有 waiting SW（上次访问下载了新 SW 但未 activate），
