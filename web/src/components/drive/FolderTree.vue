@@ -128,6 +128,20 @@
       </div>
     </FolderContextMenu>
 
+    <!-- v2 PR6 (2026-07-22 Agent1 重做): 活动动态 (复用 audit log, 不 router.push)
+         与 trash / requests / team / starred 同一 inline 模式 — click 只 emit 不切路由
+         这样保留 FolderTree 上下文 (面包屑 + 工具栏 + 状态) 不破坏 -->
+    <FolderContextMenu :items="activityMenuItems" placement="right-start" @command="(cmd) => onActivityContext(cmd)">
+      <div
+        class="folder-tree-special-item drive-folder-tree-special-item is-activity"
+        :class="{ 'is-active': specialView === 'activity' }"
+        @click="$emit('update:specialView', 'activity')"
+      >
+        <el-icon><Bell /></el-icon>
+        <span>📰 活动动态</span>
+      </div>
+    </FolderContextMenu>
+
     <!-- 回收站 (PR2 真实接入) (红) -->
     <FolderContextMenu :items="trashMenuItems" placement="right-start" @command="(cmd) => onTrashContext(cmd)">
       <div
@@ -147,7 +161,7 @@
 // v2.8 (2026-07-10) 右键菜单支持 (5 根项 + sub 节点共用 FolderContextMenu)
 import '@/views/drive/drive-view.css'
 import { computed } from 'vue'
-import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus } from '@element-plus/icons-vue'
+import { Folder, FolderOpened, FolderAdd, Delete, Loading, Warning, Star, StarFilled, Share, Promotion, Plus, Bell } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import FolderTreeNode from './FolderTreeNode.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
@@ -219,6 +233,10 @@ const requestsMenuItems = [
   { label: '🔄 刷新',          command: 'refresh' },
   { label: '➕ 新建子文件夹',   command: 'create-sub' },
 ]
+// v2 PR6 (2026-07-22 Agent1): 活动动态 — 右键菜单仅刷新 (不像 requests/trash 有 create 子项)
+const activityMenuItems = [
+  { label: '🔄 刷新',          command: 'refresh' },
+]
 const trashMenuItems = [
   { label: '🔄 刷新',          command: 'refresh' },
   { label: '♻️ 恢复全部',       command: 'restore-all', divided: true },
@@ -246,6 +264,14 @@ async function onTeamContext(cmd) {
 async function onRequestsContext(cmd) {
   if (cmd === 'refresh') await fetchTree()
   else if (cmd === 'create-sub') emit('create-sub-folder', null)
+}
+
+// v2 PR6 (2026-07-22 Agent1): 活动动态右键菜单 handler
+async function onActivityContext(cmd) {
+  if (cmd === 'refresh') {
+    // 活动动态是后端 audit log, 刷新 tree 不影响, 这里仅做 UX 反馈
+    ElMessage.info('活动动态: 点击下方"刷新"按钮即可重新拉取')
+  }
 }
 
 async function onTrashContext(cmd) {
