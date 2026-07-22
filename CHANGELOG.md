@@ -36,6 +36,27 @@
 
 **完整 commit 链**: `0112d668` → `9c475740` → `fb921992` → `4606e677` → `db7e6e58` → `5b0097ae` → `e42aea48` → `c3de5e79` → `489e7760` → `e6d0a64e` → `755ce0b5` → **`5abec6d6`** (CLAUDE.md) → **`2f2ace48`** (ROADMAP.md) → 本 commit (CHANGELOG.md) + MEMORY.md + CLAUDE-history.md + 3 新建 docs + 2 新 memory.
 
+## [Unreleased] 2026-07-22 W62 第二波 — Drive v2 PR6 + PR8 收官 + qa-bench v3.1
+
+### Drive v2 PR6 ActivityFeedView + PR8 移动端文件预览收官 (8 commit + 5 agent 并行)
+
+**第二波 8 commit（Agent 1/2/3 Drive + Agent 4/5/6/7 qa-bench + final dist）**：
+
+- **Agent 1 — Drive v2 PR6 ActivityFeedView**（commit `a132c003`）：desktop 端 `ActivityFeedView.vue` 活动动态 Panel，复用 backend `/api/v1/activities`（audit log 完整保留）。11 种 action icon + 中文 label + cursor 分页（30/页）+ 团队/我的 scope 切换 + 相对时间格式化。`/drive/activity` 顶级路由（`meta.icon='Bell'`）+ FolderTree '📰 活动动态' 节点 click emit `update:specialView='activity'`（**不 router.push**）+ DesktopDriveView inline 渲染。9 vitest case PASS，708/708 无 regression。**PR6 partial → ✅**。
+- **Agent 2 — MobileKnowledgeView 移除 files tab**（commit `0e445005`）：`MobileKnowledgeView.vue` 移除冗余 files tab（网盘已独立 MobileDriveView），81 行测试覆盖。**PR8a**。
+- **Agent 3 — MobileFilePreviewSwipe**（commit `022225d0`）：`MobileFilePreviewSwipe.vue`（518 行）+ `useSwipeGesture.js`（139 行）swipe 文件预览，178 行测试 + `/mobile/drive/preview` 路由。**PR8b**。
+- **Agent 4 — qa-bench v3.1 D1 LLM config**（commit `e53b2f79`）：TEMPERATURE / rounds / verdict-consensus。
+- **Agent 5 — qa-bench v3.1 D3 retrieval cache**（commit `dd0fdc92`）：retrieval cache + high-confidence skip polish。
+- **Agent 6 — qa-bench v3.1 D6 CI 80%**（commit `cfdc4451`）：`--smoke` 简写 + 收敛 CI 路径。
+- **Agent 7 — qa-bench v3.1 D7+D8 docs**（commit `034d5f32`）：用户指南 + 报告模板 + 里程碑。
+- **final dist rebuild**（commit `79371f98`）：涵盖 7 agent source 改动。
+
+**Drive v2 状态**：PR1-5 / PR6 / PR7 / PR8 全部 **✅**（PR6/PR8 由 partial → ✅ 收官）。
+
+**9 文件 baseline 守恒**：71 PASS + 7 SKIP（W62 第 24 次 baseline 守恒，纯前端 + docs 不影响后端）。
+
+**详见** `docs/2026-07-22-drive-v2-pr6-pr8-closure.md`（PR6 + PR8 完整收口 + 5 新铁律）。
+
 ## [Unreleased] 2026-07-22 W61 跨主题收口段
 
 ### W61 502 Bad Gateway 真根因 3 层修复 (1 commit + 23 baseline 守恒 + 167 铁律)
