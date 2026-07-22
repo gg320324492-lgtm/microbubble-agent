@@ -200,25 +200,6 @@
       @submit="onResearchSubmit"
     />
 
-    <!-- PR4.4: 改可见性 Sheet (用 MobileActionSheet 替代 prompt) -->
-    <MobileActionSheet
-      v-model:show="showVisibilitySheet"
-      :title="visibilityTarget ? `改可见性: ${visibilityTarget.file_name || visibilityTarget.title}` : '改可见性'"
-      :actions="visibilityActions"
-      @action="onPickVisibility"
-    />
-
-    <!-- PR4.5: 加入公共知识库 Sheet (team / public 二选一) -->
-    <MobileActionSheet
-      v-model:show="showExtractSheet"
-      :title="extractTarget ? `加入公共知识库: ${extractTarget.file_name || extractTarget.title}` : '加入公共知识库'"
-      :actions="extractActions"
-      @action="onPickExtractVisibility"
-    />
-
-    <!-- PR4.6: 文件预览 (图片/视频/音频/PDF 4 种, 其他提示下载) -->
-    <FilePreviewDialog v-model="showPreviewDialog" :file="previewFile" />
-
     <input
       ref="uploadInputRef"
       type="file"
@@ -269,14 +250,12 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDateTime } from '@/utils/format'
-import { Document, Folder, Share, MagicStick, Histogram, Memo, DataLine } from '@element-plus/icons-vue'
+import { Document, Share, MagicStick, Histogram, Memo, DataLine } from '@element-plus/icons-vue'
 import TabStrip from '@/components/common/TabStrip.vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
-import MobileFileList from './MobileFileList.vue'  // PR4.2 课题组网盘移动端
-import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6 预览
 
 const router = useRouter()
 const route = useRoute()
@@ -535,135 +514,6 @@ function viewFormula(item) {
   router.push({ path: '/knowledge', query: { tab: 'formulas', id: item.id } })
 }
 
-// === PR4.2 移动端文件操作 handlers ===
-// 6 个事件从 MobileFileList emit 出来:
-//   file-preview / file-download / file-rename / file-update-visibility / file-extract-to-kb / file-delete
-// PR4.4 完善真功能 (现在用占位让 PR4.2 编译通过 + 跑得通)
-// ElMessage/ElMessageBox 已在文件顶部 import
-
-async function onMobileFilePreview(file) {
-  // PR4.6: 接入 FilePreviewDialog
-  previewFile.value = file
-  showPreviewDialog.value = true
-}
-
-const showPreviewDialog = ref(false)
-const previewFile = ref(null)
-
-async function onMobileFileDownload(file) {
-  // PR4.4: 用 FileCard 同款 downloadFile 模式
-  try {
-    const response = await axios.get(`/api/v1/drive/files/${file.id}/download`, { responseType: 'blob' })
-    const url = window.URL.createObjectURL(new Blob([response.data]))
-    const link = document.createElement('a')
-    link.href = url
-    link.setAttribute('download', file.file_name || file.title || 'download')
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.URL.revokeObjectURL(url)
-  } catch (e) {
-    ElMessage.error('下载失败')
-  }
-}
-
-async function onMobileFileRename(file) {
-  // PR4.4: 弹输入框 + 改后 refresh
-  try {
-    const { value: newName } = await ElMessageBox.prompt('新文件名', '重命名', {
-      inputValue: file.file_name || file.title || '',
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-    })
-    if (newName && newName !== file.file_name) {
-      await axios.put(`/api/v1/drive/files/${file.id}`, { file_name: newName })
-      ElMessage.success('已重命名')
-      mobileFileListRef.value?.refresh?.()  // PR4.4: refresh 列表
-    }
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '重命名失败')
-  }
-}
-
-async function onMobileFileUpdateVisibility(file) {
-  // PR4.4: 用 MobileActionSheet 替代 prompt (移动端原生 UX)
-  showVisibilitySheet.value = true
-  visibilityTarget.value = file
-}
-
-const showVisibilitySheet = ref(false)
-const visibilityTarget = ref(null)
-const visibilityActions = [
-  { name: 'private', label: '🔒 私有', subtitle: '仅自己可见' },
-  { name: 'team', label: '👥 团队', subtitle: '课题组全员可见 (推荐)' },
-  { name: 'public', label: '🌐 公开', subtitle: '所有人可见' },
-]
-
-async function onPickVisibility(action) {
-  showVisibilitySheet.value = false
-  if (!visibilityTarget.value || !action?.name) return
-  const file = visibilityTarget.value
-  if (action.name === file.visibility) {
-    ElMessage.info('可见性未变')
-    return
-  }
-  try {
-    await axios.put(`/api/v1/drive/files/${file.id}`, { visibility: action.name })
-    ElMessage.success('已更新')
-    mobileFileListRef.value?.refresh?.()
-  } catch (e) {
-    ElMessage.error(e.message || '更新失败')
-  }
-}
-
-async function onMobileFileExtractToKb(file) {
-  // PR4.5: 弹 extract-to-kb ActionSheet (team / public 二选一, 不允许 private)
-  // 后端: POST /api/v1/drive/files/{id}/extract-to-kb body={target_visibility: "team"|"public"}
-  showExtractSheet.value = true
-  extractTarget.value = file
-}
-
-const showExtractSheet = ref(false)
-const extractTarget = ref(null)
-const extractActions = computed(() => {
-  if (!extractTarget.value) return []
-  return [
-    { name: 'team', label: '👥 团队', subtitle: '课题组全员可检索' },
-    { name: 'public', label: '🌐 公开', subtitle: '所有人可检索' },
-  ]
-})
-
-async function onPickExtractVisibility(action) {
-  showExtractSheet.value = false
-  if (!extractTarget.value || !action?.name) return
-  const file = extractTarget.value
-  try {
-    await axios.post(`/api/v1/drive/files/${file.id}/extract-to-kb`, {
-      target_visibility: action.name
-    })
-    ElMessage.success(`已加入公共知识库 (${action.name === 'team' ? '团队' : '公开'})`)
-    // 刷新文件列表 (status 改 kb, 长按菜单不再显示 "加入公共知识库" 选项)
-    mobileFileListRef.value?.refresh?.()
-  } catch (e) {
-    ElMessage.error(e.message || '加入失败')
-  }
-}
-
-async function onMobileFileDelete(file) {
-  try {
-    await ElMessageBox.confirm(
-      `确定删除文件 "${file.title || file.file_name}" 吗？此操作可在 3 天内从回收站恢复。`,
-      '删除确认',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
-    )
-    await axios.delete(`/api/v1/drive/files/${file.id}`)
-    ElMessage.success('已删除')
-    mobileFileListRef.value?.refresh?.()  // PR4.4: refresh 列表
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
-  }
-}
-
 function editKnowledge(item) {
   // 知识编辑：跳到桌面详情页（KnowledgeDetailView 内嵌编辑表单）
   router.push(`/knowledge/${item.id}?edit=true`)
@@ -748,7 +598,6 @@ async function onManualSubmit() {
 const uploadInputRef = ref(null)
 const driveUploadInputRef = ref(null)  // PR4.3: 网盘模式上传
 const cameraInputRef = ref(null)  // PR4.7: 拍照上传
-const mobileFileListRef = ref(null)  // PR4.4: 文件列表 ref (供 rename/delete 后 refresh)
 
 // PR4.3: 网盘模式上传 handler (走 drive API, storage_mode=drive, visibility=team)
 async function onDriveUploadFile(e) {
@@ -777,10 +626,10 @@ async function onDriveUploadFile(e) {
 async function onCameraCapture(e) {
   // 复用 drive upload 但强制 image MIME
   await onDriveUploadFile(e)
-  // 拍照后给提示, 让用户知道可以去 /knowledge 文件 tab 看
+  // 拍照后给提示, 让用户知道可以去网盘页 (/m-drive) 查看
   setTimeout(() => {
     if (e.target.files?.length > 0) {
-      ElMessage.info('照片已归档到网盘，可在"📁 文件"tab 查看')
+      ElMessage.info('照片已归档到网盘，可在"网盘"页查看')
     }
   }, 1500)
 }
