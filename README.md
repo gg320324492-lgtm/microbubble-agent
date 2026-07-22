@@ -259,3 +259,13 @@ microbubble-agent/
 ## 许可证
 
 私有项目，未经许可不得复制或分发。
+
+## 第七批 7 agent + 5 批派工累计更新（2026-07-23）
+
+- **累计 35+ agent commits 全部 merge 进 main** (5+7+7+6+7 = 32 source + 1 chore + 2 docs)
+- **Baseline 守恒**: 26+ 次 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression)
+- **5th-wave lessons 集成** (SafeIntakeContext + cache_drive_list + knowledge field constraints)
+- **第六批 + 第七批 7 agent 全部完成并 merge 进 main**
+- 锚点范式 W7 12 → **W65 26** 单调上升
+- W19 选项 A 维持 (4 留未来 PR 不发起新排期)
+- 全程沿用 **0 production code 改动铁律** (除主指挥亲自 commit 的清理类)
