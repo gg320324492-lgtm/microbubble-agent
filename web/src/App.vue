@@ -32,6 +32,9 @@
 
     <!-- PWA 安装提示（beforeinstallprompt 事件触发） -->
     <InstallPrompt :deferred-prompt="deferredInstallPrompt" />
+
+    <!-- PWA 更新提示（SW_UPDATED 事件，全局挂载不受路由切换影响） -->
+    <PwaUpdateToast />
   </el-config-provider>
 </template>
 
@@ -54,6 +57,7 @@ import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
 import { useAdaptiveRoute } from '@/composables/useAdaptiveRoute'
 import RouterFallbackSkeleton from '@/components/common/RouterFallbackSkeleton.vue'
 import InstallPrompt from '@/components/InstallPrompt.vue'
+import PwaUpdateToast from '@/components/PwaUpdateToast.vue'
 
 const route = useRoute()
 
