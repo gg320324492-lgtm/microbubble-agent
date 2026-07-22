@@ -209,36 +209,6 @@ if [ -f "$PROJECT_DIR/nginx/conf.d/tunnel.conf" ]; then
     log "nginx config synced"
 fi
 
-# 补充/修正 woff2 MIME 类型（Nginx 默认 mime.types 可能不含 woff2，或旧值不正确）
-if ! grep -q 'font/woff2' /etc/nginx/mime.types 2>/dev/null; then
-    # 删除旧的错误条目（application/font-woff2）
-    grep -v 'application/font-woff2' /etc/nginx/mime.types > /tmp/mime.types.new
-    # 在 woff 行后插入正确的 woff2
-    awk '/application\/font-woff.*woff;/{print;print "    font/woff2                           woff2;";next}1' /tmp/mime.types.new > /etc/nginx/mime.types
-    rm -f /tmp/mime.types.new
-    log "woff2 MIME type fixed in mime.types"
-fi
-
-# 2026-06-13 webhint 修复：注入 webmanifest MIME 类型到 mime.types
-# 背景：Nginx 1.27 之前默认 mime.types 不含 .webmanifest → application/octet-stream
-# → 浏览器拒绝解析 PWA manifest。
-#
-# ⚠️ 关键纪律：必须在 http 块的 mime.types 里加，**不要**在 server context 用
-# types { } block —— types 指令在 server context **完全覆盖**默认 mime.types，
-# 会让 .html/.css/.js 全变 octet-stream（白屏事故 2026-06-13 commit 0a29290）。
-# http context 的 mime.types 是合并语义（additive），不会丢失默认 MIME。
-if ! grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
-    # 用 sed 在 application/json 行后追加 webmanifest（更可靠，awk 在某些 Nginx 默认
-    # mime.types 行尾含 \r 时会失效）。
-    # 匹配 "application/json" 整行（含可能尾随空格/CR），在新行后插入 webmanifest。
-    sed -i '/^application\/json[[:space:]]/a\    application/manifest+json           webmanifest;' /etc/nginx/mime.types
-    if grep -q 'application/manifest+json' /etc/nginx/mime.types 2>/dev/null; then
-        log "webmanifest MIME type added to mime.types"
-    else
-        log "ERROR: webmanifest MIME sed injection failed"
-    fi
-fi
-
 # 2026-07-20 webhint http-compression 补全：确保 6 类 PWA/静态资源 MIME 存在于 mime.types
 # 背景：webhint http-compression 规则要求这些资源带正确 Content-Type（配合 nginx gzip_types
 #   压缩），否则报 "resource should be served compressed / with correct type"。

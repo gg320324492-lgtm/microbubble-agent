@@ -184,9 +184,6 @@ import {
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
-// v2.0 (2026-07-09) Drive 美化 + v2.7 (2026-07-10) preview 增强
-import '@/views/drive/drive-view.css'
-
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   file: { type: Object, default: null }
