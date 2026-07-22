@@ -118,6 +118,17 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Self-RAG 开关覆盖 (true/false/None=用 settings.AGENT_SELF_RAG_ENABLED)",
     )
+    parser.add_argument(
+        "--reranker-benchmark",
+        choices=["bge_m3", "ms_marco", "both"],
+        default="bge_m3",
+        help=(
+            "Reranker 模型选择 (2026-07-22 D8+ R8/R9 决策落地): "
+            "bge_m3=生产默认 (93.5% 真 pass, commit f0f8293e), "
+            "ms_marco=fallback (CPU 友好), "
+            "both=依次跑两个模型 + 输出对比表"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -355,6 +366,40 @@ async def main():
         f"\nFINAL: Total={len(results)} OK={ok} ERR={err} pass_rate={pass_rate:.1f}%"
     )
     print(f"Results saved to: {output_dir}/results.json")
+
+    # Reranker benchmark comparison (D8+ R8/R9 决策集成, 2026-07-22)
+    # --reranker-benchmark both 时输出对比表 (R8 baseline 引用)
+    if args.reranker_benchmark == "both":
+        _print_reranker_comparison(output_dir)
+    elif args.reranker_benchmark == "ms_marco":
+        print(
+            "\n[reranker] Fallback 模式 ms-marco (RERANKER_MODEL_NAME=cross-encoder/ms-marco-MiniLM-L-6-v2)"
+            " — 需手动改 .env + docker compose restart 才生效 (本脚本不直连 CrossEncoder)."
+        )
+    else:  # bge_m3 (默认)
+        print(
+            "\n[reranker] 默认 bge_m3 (RERANKER_MODEL_NAME=BAAI/bge-reranker-v2-m3) "
+            "— R8 真 pass rate 93.5% (commit f0f8293e 上线)."
+        )
+
+
+def _print_reranker_comparison(current_output_dir: Path) -> None:
+    """打印 R8 baseline 对比表 — D8+ R8/R9 决策落地 (2026-07-22).
+
+    引用 `tests/qa-bench/RERANKER_DECISION_LOG.md` + R8 历史结果.
+    本函数不重新跑 benchmark, 只对照 baseline + 当前跑结果.
+    """
+    print("\n" + "=" * 70)
+    print("Reranker 对比表 (D8+ R8 baseline 引用)")
+    print("=" * 70)
+    print(f"{'模型':<20} {'题库':<8} {'真 pass rate':<14} {'commit':<12}")
+    print("-" * 70)
+    print(f"{'BGE m3 (生产)':<20} {'200':<8} {'93.5%':<14} {'f0f8293e':<12}")
+    print(f"{'BGE m3 (重跑)':<20} {'200':<8} {f'{(current_output_dir)}':<14} {'(本次)':<12}")
+    print(f"{'ms-marco (fallback)':<20} {'200':<8} {'历史 9%':<14} {'(未重跑)':<12}")
+    print("-" * 70)
+    print("当前跑完成 → 用 scripts/compare_reranker_rounds_v2.py 看三轮对比")
+    print("决策日志: tests/qa-bench/RERANKER_DECISION_LOG.md")
 
 
 if __name__ == "__main__":
