@@ -66,11 +66,11 @@
 
     <button type="button" class="drive-fab" aria-label="上传文件" @click="onUploadClick">+</button>
 
-    <MobileActionSheet v-model:show="showActionSheet"
+    <MobileActionSheet v-model="showActionSheet"
       :title="selectedFile ? (selectedFile.title || selectedFile.file_name) : ''"
-      :actions="fileActions" @action="onFileAction" />
+      :actions="fileActions" @select="onFileAction" />
 
-    <MobileActionSheet v-model:show="showUploadMenu" title="上传文件" :actions="uploadActions" @action="onUploadAction" />
+    <MobileActionSheet v-model="showUploadMenu" title="上传文件" :actions="uploadActions" @select="onUploadAction" />
 
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
