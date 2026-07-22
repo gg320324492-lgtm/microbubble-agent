@@ -126,6 +126,13 @@
 - ✅ Phase 8.3 commit `e4d58bd6` (阿里云 OSS)
 - ✅ Phase 8.4 commit `e79a127b` (W16 OSS 恢复 + RTO < 1h SLA 验证)
 
+### Drive v2 PR6 ActivityFeedView + PR8 移动端 (W62 第二波闭环, 已移出 future PR)
+
+- ✅ PR6 ActivityFeedView commit `a132c003` (desktop 活动动态 Panel, 复用 audit log; partial → ✅)
+- ✅ PR8a MobileKnowledgeView 移除 files tab commit `0e445005`
+- ✅ PR8b MobileFilePreviewSwipe commit `022225d0` (swipe 文件预览; partial → ✅)
+- 详见 `docs/2026-07-22-drive-v2-pr6-pr8-closure.md` — 网盘 PR6/PR8 不再是 future PR, 仅保留 Phase 8.5 / P3 跨 tab / 7 E2E 三项
+
 ---
 
 ## 💡 拍板决策方法论沉淀 (4 新铁律)
