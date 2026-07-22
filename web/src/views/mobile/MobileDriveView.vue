@@ -8,7 +8,10 @@
   <!-- v2.0 (2026-07-09) Drive 美化: 加 .drive-page 让 fade-slide-up + --color-bg-page 继承 -->
   <div class="mobile-drive-view drive-page">
     <PageHeader title="网盘" :show-back="false">
-      <template #actions>
+      <template #right>
+        <span v-if="notificationUnreadCount > 0" class="notification-badge" :aria-label="`${notificationUnreadCount} 条未读通知`">
+          🔔 <span class="notification-badge-count">{{ notificationUnreadCount > 99 ? '99+' : notificationUnreadCount }}</span>
+        </span>
         <button type="button" class="header-btn" aria-label="搜索" @click="showSearch = true">🔍</button>
         <button type="button" class="header-btn" aria-label="命令面板 (Ctrl+K)" @click="showCommandPalette = true">⌘</button>
       </template>
@@ -66,11 +69,11 @@
 
     <button type="button" class="drive-fab" aria-label="上传文件" @click="onUploadClick">+</button>
 
-    <MobileActionSheet v-model="showActionSheet"
+    <MobileActionSheet v-model:show="showActionSheet"
       :title="selectedFile ? (selectedFile.title || selectedFile.file_name) : ''"
-      :actions="fileActions" @select="onFileAction" />
+      :actions="fileActions" @action="onFileAction" />
 
-    <MobileActionSheet v-model="showUploadMenu" title="上传文件" :actions="uploadActions" @select="onUploadAction" />
+    <MobileActionSheet v-model:show="showUploadMenu" title="上传文件" :actions="uploadActions" @action="onUploadAction" />
 
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
@@ -81,6 +84,10 @@
 <script setup>
 // v2.0 (2026-07-09) Drive 美化: 引入 drive-view.css 让 .drive-page fade-slide-up + 文件类型色共享样式生效
 // v2.1 (2026-07-22) PR8: onMounted 预拉 /api/v1/mobile/dashboard 一次聚合 (5 sections 1 请求) 替换 N 次独立请求
+// v2.2 (2026-07-22) Agent 2: 把 dashboard 5 sections 实际灌进 4 tab, 顶栏显示 notification_unread_count
+//                       - dashboard 命中时 tab 切换直接消费预拉数据, 不再 fetchFiles()
+//                       - dashboard 失败 (try/catch) 时回退 fetchFiles() (4 独立请求)
+//                       - 减少 N 次请求 → 1 次, mobile 网络慢场景首屏体验提升
 import '@/views/drive/drive-view.css'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -113,8 +120,11 @@ const showActionSheet = ref(false)
 const selectedFile = ref(null)
 
 // v2 PR8: 移动端首页聚合 (5 sections 1 请求)
+// dashboardData.value === null 表示预拉失败/未完成, dashboard 失败不阻塞主列表
+// 主列表仍走 fetchFiles() 兜底
 const dashboardData = ref(null)
 const dashboardLoading = ref(false)
+const notificationUnreadCount = computed(() => dashboardData.value?.notification_unread_count ?? 0)
 
 async function loadDashboard() {
   // 失败隔离: dashboard 失败不阻塞主列表 (主列表用 useDriveFiles 独立拉)
@@ -124,6 +134,7 @@ async function loadDashboard() {
     dashboardData.value = resp.data
   } catch (e) {
     console.warn('[MobileDriveView] dashboard 预拉失败 (主流程仍可用):', e?.message)
+    dashboardData.value = null
   } finally {
     dashboardLoading.value = false
   }
@@ -145,6 +156,22 @@ const folderChips = computed(() => {
 
 const { driveFiles, total, currentPage, pageSize, loading, loadError, isEmpty, fetchFiles } = useDriveFiles()
 
+// v2 PR8 Agent 2: dashboard 5 sections 灌进 4 tab 的核心映射
+// - starred_files → ⭐ 收藏 tab (覆盖 fetchFiles starred_only=true)
+// - team_root_files → 🌐 团队 tab (覆盖 fetchFiles visibility=team)
+// - my_uploads → 🕐 最近 tab (覆盖 fetchFiles sort_by=updated_at desc, 我自己的最近上传)
+// - recent_activities → 暂不直接灌 tab (UI 当前只显示 drive files; 后续 PR9+ 可做活动流 tab)
+// - files tab: 仍走 fetchFiles(folder_id) (需要 folder_id 参数化, dashboard 不带)
+// 返回 Array<{id, title, file_name, file_type, ...}> 或 null
+function dashboardSectionForTab(tabName) {
+  const d = dashboardData.value
+  if (!d) return null
+  if (tabName === 'starred') return d.starred_files || []
+  if (tabName === 'team') return d.team_root_files || []
+  if (tabName === 'recent') return d.my_uploads || []
+  return null  // files tab 不走 dashboard
+}
+
 function switchTab(name) {
   if (activeTab.value === name) return
   activeTab.value = name
@@ -158,6 +185,18 @@ function selectFolder(folderId) {
 }
 
 function applyTabQuery() {
+  // v2 PR8 Agent 2: 优先用 dashboard 数据 (1 次聚合替代 4 次独立请求)
+  // dashboard 未就绪 (null) 或当前 tab 没对应 section 时回退 fetchFiles
+  const sectionData = dashboardSectionForTab(activeTab.value)
+  if (sectionData !== null) {
+    // 灌进 driveFiles (复用现有渲染逻辑), 不走 fetchFiles
+    driveFiles.value = sectionData
+    total.value = sectionData.length
+    loadError.value = null
+    return
+  }
+
+  // 兜底: files tab 或 dashboard 失败时走原 fetchFiles 路径
   const params = {}
   if (activeTab.value === 'files' && currentFolderId.value !== null) {
     params.folder_id = currentFolderId.value
@@ -333,6 +372,8 @@ watch(() => route.query.tab, (newTab) => {
 .drive-fab { position: fixed; right: 20px; bottom: 80px; width: 56px; height: 56px; border-radius: 50%; background: var(--color-primary); color: var(--el-color-white); font-size: 28px; border: none; box-shadow: var(--shadow-lg); cursor: pointer; z-index: 200; }
 .drive-fab:active { transform: scale(0.95); }
 .header-btn { width: 36px; height: 36px; background: transparent; border: none; font-size: 18px; color: var(--color-text-regular); cursor: pointer; border-radius: 6px; }
+.notification-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--color-warning); color: var(--el-color-white); border-radius: 12px; font-size: 11px; font-weight: 600; }
+.notification-badge-count { font-variant-numeric: tabular-nums; }
 </style>
 
 <!-- v77 P2.6-B dark 覆盖 (v60-v67 教训: 非 scoped) -->
