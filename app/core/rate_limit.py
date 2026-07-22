@@ -1,4 +1,60 @@
-"""全站 API 限流器 — 按类型分级"""
+"""全站 API 限流器 — 按类型分级
+
+5 tier 全站限流，通过 ``rate_limit_middleware`` 统一应用 (v31.2.6)。
+
+完整文档：[`docs/rate-limit.md`](../docs/rate-limit.md)（含响应头/Redis 存储/FAQ）。
+完整 endpoint × tier 矩阵：[`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md)。
+
+5 tier 默认配置（生产）：
+
+    +-----------------+----------+---------+----------------------------------------------+
+    | Tier            | 限制      | 窗口(秒) | 应用场景                                       |
+    +-----------------+----------+---------+----------------------------------------------+
+    | auth            | 20/min   | 60      | /auth/login, /auth/refresh, /auth/change-pwd |
+    | write           | 30/min   | 60      | POST/PUT/PATCH/DELETE 默认                    |
+    | read            | 200/min  | 60      | GET 默认                                       |
+    | upload          | 10/min   | 60      | 单文件上传（/upload）                          |
+    | sse             | 10/min   | 60      | SSE 长连接（/chat/stream）                     |
+    +-----------------+----------+---------+----------------------------------------------+
+
+扩展 tier（PR2.10 / 2026-07-02）：
+
+    +-------------------+----------+---------------------------------------+
+    | Tier              | 限制      | 应用                                    |
+    +-------------------+----------+---------------------------------------+
+    | chunked_upload    | 60/min   | PUT /meetings/{id}/audio-chunk        |
+    | drive_upload      | 50/min   | /api/v1/drive/* + /upload/* 写操作      |
+    | drive_list        | 300/min  | /api/v1/drive/* + /upload/* GET       |
+    +-------------------+----------+---------------------------------------+
+
+存储后端（v31.2.5）：Redis ZSET 滑动窗口（``AsyncRedisRateLimiter``）。
+持久化抗 docker compose restart，Redis 故障时 ``check/record`` 内部 try/except
+静默降级，不阻断业务请求。响应头：``X-RateLimit-{Limit,Remaining,Reset,Policy}``。
+超限响应：HTTP 429 + ``Retry-After`` 头 + JSON envelope
+``{"error": {"code": "RATE_LIMIT_EXCEEDED", "message": "..."}}``。
+
+判定优先级 (``_get_rate_limit_type``)：
+    1. _AUTH_UNLIMITED_PATHS (e.g. /auth/me) → unlimited
+    2. _SSE_PATH_RE (e.g. /chat/stream) → sse
+    3. _CHUNKED_UPLOAD_PATH_RE + PUT → chunked_upload
+    4. /api/v1/drive/* + /api/v1/upload/* → drive_upload / drive_list
+    5. _ANALYTICS_PATH_RE → unlimited (写) / read (读)
+    6. /api/v1/auth/* 白名单 → auth, 其他 /auth/* 写 → write, 读 → read
+    7. 含 /upload → upload
+    8. POST/PUT/PATCH/DELETE → write
+    9. GET → read
+
+历史：
+    - v31.2.0  初版 in-memory 5 tier
+    - v31.2.1  X-Forwarded-For 空 IP 兜底 "unknown"
+    - v31.2.2  Bearer token 轻量级解析 (用户维度) + analytics regex 替代 substring
+    - v31.2.3  /auth prefix 替代 substring + /auth/me unlimited + SSE tier + X-RateLimit-Policy
+    - v31.2.4  AsyncRedisRateLimiter 类实现（未接入）
+    - v31.2.5  切到 AsyncRedisRateLimiter + middleware await 化
+    - v31.2.6  Retry-After 头 + login_limiter Redis ZSET 化
+
+参考：[memory/rate-limit-redis-2026-06-26.md](../memory/rate-limit-redis-2026-06-26.md)
+"""
 
 import re
 import time
@@ -194,7 +250,11 @@ def _is_under_auth(path: str) -> bool:
 def _get_rate_limit_type(request: Request) -> str:
     """根据请求路径和方法判断限流类型
 
-    返回 "unlimited" 表示跳过限流（/auth/me 等安全只读端点）
+    返回 "unlimited" 表示跳过限流（/auth/me 等安全只读端点）。
+
+    完整 5 tier 判定规则 + endpoint 矩阵见：
+      - [`docs/rate-limit.md`](../docs/rate-limit.md) — 5 tier 配置/响应头/FAQ
+      - [`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md) — 31+ endpoint × tier 完整映射
     """
     path = request.url.path
     method = request.method
@@ -315,10 +375,19 @@ def _try_attach_user_id(request: Request) -> None:
 async def rate_limit_middleware(request: Request, call_next):
     """全站限流中间件
 
-    v31.2.5: 切到 AsyncRedisRateLimiter (Redis ZSET 持久化)
-    - 抗 docker compose restart (Redis 默认 RDB 每分钟 snapshot)
+    v31.2.6: 当前生产配置（5 tier + 3 扩展 tier）
+
+    - 抗 docker compose restart (Redis 默认 RDB 每分钟 snapshot, AsyncRedisRateLimiter)
     - 跨实例共享 (未来多 worker / 多 pod)
     - Redis 故障时静默降级 (limiter.check/record 内部 try/except)
+    - 响应头：X-RateLimit-{Limit,Remaining,Reset,Policy} 让前端做 tier-aware UX
+    - 超限响应：HTTP 429 + Retry-After 头 + JSON envelope ``{error: {code, message}}``
+    - 客户端维度：登录用户 ``{ip}:user:{uid}``, 未登录 ``{ip}:anon`` (v31.2.2 Bearer token 解析)
+    - PR7 集成：响应后调用 ``app.core.audit_middleware._audit_request`` 写 audit_log
+
+    完整文档：
+      - [`docs/rate-limit.md`](../docs/rate-limit.md) — 5 tier 配置 / 响应头 / Redis / FAQ
+      - [`docs/rate-limit-endpoint-matrix.md`](../docs/rate-limit-endpoint-matrix.md) — 31+ endpoint × tier 映射
     """
     from starlette.responses import JSONResponse
 
