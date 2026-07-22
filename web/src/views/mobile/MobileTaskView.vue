@@ -121,6 +121,8 @@
       </div>
     </main>
 
+    <MobileFab :actions="fabActions" />
+
     <!-- 筛选 Sheet -->
     <MobileSearchSheet
       v-model="showFilter"
@@ -165,6 +167,7 @@ import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileTaskCreateForm from '@/components/mobile/MobileTaskCreateForm.vue'
 import MemberAvatar from '@/components/mobile/MemberAvatar.vue'  // 2026-06-26: 按负责人分组的组头头像
 import { groupTasksByAssignee } from '@/utils/taskGroup'  // 2026-06-26: 从 TaskView 抽出共用
+import MobileFab from '@/components/mobile/MobileFab.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -213,6 +216,13 @@ const searchFilters = computed(() => [
     ],
   },
 ])
+
+const fabActions = [
+  { name: 'create', label: 'New task', icon: '＋', handler: () => { editingTask.value = null; showCreate.value = true } },
+  { name: 'search', label: 'Filter tasks', icon: '🔍', handler: () => { showFilter.value = true } },
+  { name: 'trash', label: 'Task trash', icon: '🗑', handler: () => router.push('/tasks/trash') },
+  { name: 'refresh', label: 'Refresh list', icon: '↻', handler: () => fetchTasks() },
+]
 
 // 过滤后的任务
 const filteredTasks = computed(() => {
