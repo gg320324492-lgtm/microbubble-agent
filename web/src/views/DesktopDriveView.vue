@@ -155,6 +155,7 @@
             <el-breadcrumb-item v-else-if="specialView === 'team'">🌐 团队共享盘</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'trash'">🗑️ 回收站</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="specialView === 'requests'">📢 文件请求</el-breadcrumb-item>
+            <el-breadcrumb-item v-else-if="specialView === 'activity'">📰 活动动态</el-breadcrumb-item>
             <el-breadcrumb-item v-else-if="selectedFolderId">
               文件夹 #{{ selectedFolderId }}
             </el-breadcrumb-item>
@@ -163,7 +164,7 @@
 
         <!-- v2 PR2: 多选批量 toolbar (sticky 在 grid 上方) -->
         <BatchActionToolbar
-          v-if="!['trash', 'requests'].includes(specialView)"
+          v-if="!['trash', 'requests', 'activity'].includes(specialView)"
           :selected-count="selectedFileIds.length"
           :total-count="driveFiles.length"
           context="files"
@@ -181,6 +182,8 @@
           <!-- 2026-07-02 inline 化: specialView inline 渲染 (保留 FolderTree 上下文, 不离开 /drive) -->
           <FileRequestListPanel v-if="specialView === 'requests'" />
           <DriveTrashPanel v-else-if="specialView === 'trash'" />
+          <!-- v2 PR6 (2026-07-22 Agent1): 活动动态 inline — 复用 audit log, 不 router.push -->
+          <ActivityFeedView v-else-if="specialView === 'activity'" />
           <!-- v2.0 (2026-07-09) Drive 美化: 加 is-search / search-keyword 让 FileGrid 区分空态 -->
           <FileGrid
             v-else
@@ -307,6 +310,8 @@ import BatchActionToolbar from '@/components/drive/BatchActionToolbar.vue'  // v
 // 2026-07-02 inline 化: specialView 内嵌面板 (从 DesktopXxxView 抽取)
 import DriveTrashPanel from '@/components/drive/DriveTrashPanel.vue'
 import FileRequestListPanel from '@/components/drive/FileRequestListPanel.vue'
+// v2 PR6 (2026-07-22 Agent1 重写): 活动动态 inline Panel — 复用 audit log 后端
+import ActivityFeedView from '@/views/desktop/ActivityFeedView.vue'
 import CreateFolderDialog from '@/components/drive/CreateFolderDialog.vue'
 import RenameDialog from '@/components/drive/RenameDialog.vue'
 import MoveDialog from '@/components/drive/MoveDialog.vue'

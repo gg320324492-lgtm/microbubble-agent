@@ -121,6 +121,15 @@ const routes = [
         meta: { title: '回收站', icon: 'Delete' }
       },
       {
+        // v2 PR6 (2026-07-22 Agent1 重写): 活动动态 — audit log 复用 (后端 /api/v1/activities 端点已存在)
+        // 顶级路由 (与 /drive/trash, /drive/requests 同一模式), URL 直跳兼容
+        // DesktopDriveView specialView === 'activity' 时 inline 渲染同一组件
+        path: 'drive/activity',
+        name: 'DriveActivity',
+        component: resolveMobileComponent('desktop/ActivityFeedView', 'mobile/MobileDriveTrashView'),
+        meta: { title: '活动动态', icon: 'Bell' }
+      },
+      {
         // v2 PR7: 文件请求管理 (Dropbox 招牌"收作业"创建/关闭页)
         // 移动端暂用 trash 占位 (PR8 独立 mobile 版)
         path: 'drive/requests',
