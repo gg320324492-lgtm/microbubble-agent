@@ -990,7 +990,7 @@ const currentPathDisplay = computed(() => {
   height: 72px;
   border-radius: 50%;
   background: var(--gradient-cta-button);
-  color: #fff;
+  color: var(--el-color-white);
   box-shadow: var(--shadow-glow);
 }
 

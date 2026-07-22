@@ -1,0 +1,13 @@
+# qa-bench benchmark dependencies (GitHub Actions: qa-bench-ci.yml + qa-bench-smoke.yml)
+# v3.0 (2026-07-23): runner.py + 10 sibling scripts use these. Keep minimal.
+# Production / agent deps come from repo-root requirements.txt (not this file).
+
+# HTTP client (runner.py 主调用: POST /api/v1/chat/stream, /health, /token 等)
+httpx>=0.27.0
+
+# PostgreSQL adapter (gen500.py / gen_base.py 题库生成脚本, 本地跑题库时需要)
+# 注: CI 主链路 (runner.py + gen780.py) 不直连 DB, 但保留以确保本地题库脚本可用.
+psycopg2-binary>=2.9.9
+
+# JSON / YAML / 工具
+pyyaml>=6.0
