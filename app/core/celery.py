@@ -38,6 +38,10 @@ celery_app.conf.update(
             "task": "app.services.knowledge_evolution_tasks.process_pending_gaps",
             "schedule": 6 * 3600.0,  # 每6小时处理待填补空白
         },
+        "process-pending-knowledge": {
+            "task": "app.services.knowledge_polling_service.process_pending_knowledge_task",
+            "schedule": float(settings.KB_POLLING_INTERVAL_SEC),  # 默认每 5 分钟，可由 env 覆盖
+        },
         "knowledge-health-check": {
             "task": "app.services.knowledge_evolution_tasks.health_check_knowledge_base",
             "schedule": 12 * 3600.0,  # 每12小时
@@ -102,6 +106,7 @@ celery_app.conf.imports = [
     "app.services.paper_layout_service",  # v28 step 105 vision 看整篇论文
     "app.services.embedding_recalc",  # v29 Qwen3-Embedding 全量重算
     "app.services.knowledge_service",  # 2026-06-29 修复 #257 异步分析
+    "app.services.knowledge_polling_service",  # pending knowledge 每 5 分钟后台处理
     "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
     "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
     "app.services.thumbnail_tasks",  # 2026-07-01 课题组网盘 PR5 缩略图生成
@@ -123,6 +128,7 @@ celery_app.autodiscover_tasks(
         "app.services.content_formatter_service",  # 2026-06-20 v28 step 18
         "app.services.paper_layout_service",  # v28 step 105
         "app.services.knowledge_service",  # 2026-06-29 修复 #257
+        "app.services.knowledge_polling_service",  # pending knowledge 后台处理
         "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
         "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
         "app.wechat.scheduler",
