@@ -184,6 +184,22 @@ qa-bench v3.0 起采用 **7 维加权**评分制（取代 v2.x 的二元 PASS/FA
 | L3 | 多步 + 跨工具 | 30% |
 | L4 | 极端 / 反向 / 边界 | 10% |
 
+## D5 1000 题 baseline (待跑)
+
+D5 在 D4 题库基础上增加 300 道题，目标规模为 1000 题。由于当前执行环境没有 API 凭据，真实跑题由主指挥在 main 分支手动完成；占位指标见 [baselines/baseline_d5_1000_summary.md](./baselines/baseline_d5_1000_summary.md)。
+
+## 3-tier 阈值复核
+
+| tier | score range | 处理 |
+|------|-------------|------|
+| high | > 0.8 | 通过 |
+| medium | 0.5-0.8 | 警告, 人工 review |
+| low | < 0.5 | 失败, 重试 |
+
+## CI 门禁
+
+D5 CI 要求 pass rate ≥ 80%。`runner.py --ci-gate` 在低于门禁时以非零状态退出，阻断 push 或 pull request。
+
 ## 7. CI 集成
 
 ### 7.1 GitHub Actions

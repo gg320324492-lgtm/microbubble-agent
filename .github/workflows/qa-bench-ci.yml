@@ -1,0 +1,35 @@
+name: qa-bench D5 gate (1000 题 baseline)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  qa-bench-d5:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd tests/qa-bench
+          pip install -r requirements.txt
+
+      - name: Run qa-bench D5 (1000 题 baseline)
+        env:
+          # ANTHROPIC_API_KEY 必须由 GitHub Secrets 提供
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd tests/qa-bench
+          python runner.py --rounds=3 --verdict-consensus=2 --include-extra             --full-1000 --ci-gate --output=baseline_d5_1000.json
+
+      # CI 门禁: pass rate < 80% → exit 1
+      # runner.py 内部检查 --ci-gate 标志时, 低于门禁则非零退出
