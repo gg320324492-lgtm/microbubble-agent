@@ -119,7 +119,8 @@ jobs:
 
           # 等 app-test healthy (最长 1800s = 30min)
           # W67 第 39 步: 实测 1510s, 1500s 还差 10 秒. 提到 1800s 留缓冲 (最后 1 次).
-          # 拆 build 修复 (W67 第 33 步) + 真 GHA cache (W67 第 36 步) 后实际启动 25+ min
+          # W67 第 41 步 (Agent 21): SKIP_DB_SETUP 短路 lifespan 内 create_all + seed + reminder sync.
+          #   实际启动 < 10 分钟 (含 30+ 模块 import ~3.75s). 保留 1800s 缓冲防回归.
           for i in {1..900}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "✓ app-test healthy on 8001"
@@ -133,23 +134,15 @@ jobs:
             sleep 2
           done
 
-      - name: Init test DB schema + seed data
+      - name: Init test DB schema + seed + test user (W67 第 41 步 合并脚本)
         run: |
+          # W67 第 41 步 (Agent 21): 合并 init_db + ensure_test_user 到 1 个 Python 进程,
+          # 节省 2× import overhead (~7-8s). alembic stamp head 跳过 (test DB 走 init_db.create_all,
+          # 不需要 alembic 版本跟踪 — 生产 DB 走 alembic upgrade head 是另一回事).
           docker exec -e SKIP_DB_SETUP=1 \
             -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
-            app-test python scripts/init_db.py 2>&1 | tail -5
-
-          # alembic stamp head (init_db 用 create_all, 不走 alembic, 需要手动 stamp)
-          docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
-            app-test alembic stamp head 2>&1 | tail -3
-
-      - name: Ensure test user (xiaoqi_testbot) exists
-        run: |
-          docker exec -e SKIP_DB_SETUP=1 \
-            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
-            app-test python scripts/ensure_test_user.py 2>&1 | tail -3
-          # 期望: [OK] 或 [CREATED] 都行 (幂等)
+            app-test python scripts/init_test_db_all.py 2>&1 | tail -20
+          # 期望输出: init_db "数据库初始化完成" + ensure_test_user "[OK] 测试账号已存在" 或 "[CREATED]"
 
       - name: Generate 1000 题题库 (D4 base 700 + D5 extra 300)
         working-directory: tests/qa-bench
