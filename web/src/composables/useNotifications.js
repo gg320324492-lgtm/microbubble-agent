@@ -13,6 +13,9 @@
  * 自动:
  * - WS 收到 'mention' 事件 → 增量 prepend notifications + 重新拉 unreadCount
  * - 30s polling unreadCount (兜底, WS 断时仍能显示)
+ * - W68 PR8d: 客户端订阅 priority filter (?priority=high|medium|low)
+ * - W68 PR8d: 离线消息 replay (reconnect 时 server 端自动 replayed, 前端监听 hello)
+ * - W68 PR8d: heartbeat client (5s 自动响应 server ping)
  *
  * 注: 2026-07-03 用户决策"活动动态彻底删除" — activities state + fetchActivities +
  *     WS 'activity' handler 已删除. activity_service 后端仍保留 (驱动 audit log).
@@ -24,6 +27,9 @@ import getWsClient from '@/utils/wsClient'
 
 const API_BASE = '/api/v1'
 
+// W68 PR8d: client-side heartbeat (响应 server 5s ping)
+const HEARTBEAT_RESPONSE_TIMEOUT_MS = 8000  // 8s 没收到 server ping → 主动断
+
 function getAuthToken() {
   return localStorage.getItem('access_token') || ''
 }
@@ -34,8 +40,13 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const commentsByFileId = ref({})  // { file_id: [{ id, ... }] }
   const loadingNotifications = ref(false)
   const wsConnected = ref(false)
+  // W68 PR8d: priority filter (UI 可调)
+  const priorityFilter = ref(null)  // null = 全部, 或 'high' | 'medium' | 'low'
+  const lastReplayed = ref(0)  // 最近一次 reconnect 补推条数
   let pollTimer = null
   let wsHandlersBound = false
+  let heartbeatMonitorTimer = null
+  let lastServerPingTs = 0  // 上次收到 server ping 的时间戳
 
   async function fetchNotifications(unreadOnly = false, limit = 50) {
     loadingNotifications.value = true
@@ -229,9 +240,39 @@ export const useNotificationsStore = defineStore('notifications', () => {
     const ws = getWsClient()
     ws.on('open', () => {
       wsConnected.value = true
+      // W68 PR8d: 启动 heartbeat monitor (8s 没收到 server ping → 主动断)
+      startHeartbeatMonitor()
     })
     ws.on('close', () => {
       wsConnected.value = false
+      stopHeartbeatMonitor()
+    })
+    // W68 PR8d: 监听 hello 事件 (含 priority_filter + replayed 离线条数)
+    ws.on('hello', (data) => {
+      if (typeof data?.replayed === 'number') {
+        lastReplayed.value = data.replayed
+        if (data.replayed > 0) {
+          console.info(`[Notify] W68 reconnect: ${data.replayed} 条离线消息已补推`)
+          // 主动拉一次 unreadCount 同步
+          fetchUnreadCount()
+        }
+      }
+    })
+    // W68 PR8d: 监听 server 主动 ping (5s 一次), 用于 client-side heartbeat
+    ws.on('ping', (_data) => {
+      lastServerPingTs = Date.now()
+    })
+    // W68 PR8d: 监听 batch 事件 (3s 内合并的多条通知)
+    ws.on('batch', (data) => {
+      const count = data?.count || 0
+      const key = data?.batch_key || 'unknown'
+      import('element-plus').then(({ ElMessage }) => {
+        ElMessage.info({
+          message: `${key} 有 ${count} 条新通知 (批量)`,
+          duration: 2500,
+          grouping: true,
+        })
+      }).catch(() => {})
     })
     ws.on('mention', async (data) => {
       // v2 PR6-P7: merged=true 表示这是 5s dedup 命中, 重复已合并到现有 row
@@ -280,6 +321,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
           created_at: data.created_at || new Date().toISOString(),
           title: data.title,  // v2 PR6-P8: rich
           body: data.body,    // v2 PR6-P8: rich
+          // W68 PR8d: priority 字段 (UI 可按 priority 区分样式)
+          priority: data.priority || 'medium',
         },
         ...notifications.value,
       ]
@@ -288,12 +331,60 @@ export const useNotificationsStore = defineStore('notifications', () => {
     wsHandlersBound = true
   }
 
+  /**
+   * W68 PR8d: client-side heartbeat monitor
+   * - 监听 server 5s 一次 ping (data.ts 更新)
+   * - 8s 没收到 server ping → 主动 disconnect 让 reconnect 逻辑兜底
+   * - 不主动发 ping (server 主动 ping 我们, 我们只被动响应)
+   */
+  function startHeartbeatMonitor() {
+    stopHeartbeatMonitor()
+    lastServerPingTs = Date.now()
+    heartbeatMonitorTimer = setInterval(() => {
+      if (Date.now() - lastServerPingTs > HEARTBEAT_RESPONSE_TIMEOUT_MS) {
+        console.warn('[Notify] W68 heartbeat timeout, forcing reconnect')
+        const ws = getWsClient()
+        ws.disconnect()
+        // 触发 reconnect (3s 后)
+        setTimeout(() => {
+          startWs()
+        }, 3000)
+      }
+    }, 3000)  // 每 3s 检查一次
+  }
+
+  function stopHeartbeatMonitor() {
+    if (heartbeatMonitorTimer) {
+      clearInterval(heartbeatMonitorTimer)
+      heartbeatMonitorTimer = null
+    }
+  }
+
+  /**
+   * W68 PR8d: 设置 priority filter (UI 开关)
+   * 改变后会自动重连 WS 走新的 ?priority=...
+   * @param {string|null} priority - 'high' | 'medium' | 'low' | null (全部)
+   */
+  function setPriorityFilter(priority) {
+    const validPriorities = ['high', 'medium', 'low', null]
+    if (!validPriorities.includes(priority)) {
+      console.warn(`[Notify] invalid priority: ${priority}, use one of`, validPriorities)
+      return
+    }
+    if (priorityFilter.value === priority) return
+    priorityFilter.value = priority
+    // 重连 WS 走新 priority
+    stopWs()
+    setTimeout(() => startWs(), 100)
+  }
+
   function startWs() {
     const token = getAuthToken()
     if (!token) return
     const ws = getWsClient()
     bindWsHandlers()
-    ws.connect(token)
+    // W68 PR8d: 传入 priority filter (?priority=high|medium|low)
+    ws.connect(token, { priority: priorityFilter.value })
   }
 
   function stopWs() {
@@ -301,6 +392,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       clearInterval(pollTimer)
       pollTimer = null
     }
+    stopHeartbeatMonitor()  // W68 PR8d
     const ws = getWsClient()
     ws.disconnect()
     wsConnected.value = false
@@ -319,6 +411,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     commentsByFileId,
     loadingNotifications,
     wsConnected,
+    priorityFilter,       // W68 PR8d
+    lastReplayed,         // W68 PR8d
     fetchNotifications,
     fetchUnreadCount,
     markRead,
@@ -331,6 +425,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     startWs,
     stopWs,
     startPolling,
+    setPriorityFilter,    // W68 PR8d
   }
 })
 

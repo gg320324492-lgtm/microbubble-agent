@@ -25,7 +25,7 @@ class WsClient {
     this.lastPongAt = 0
   }
 
-  connect(token) {
+  connect(token, options = {}) {
     if (!token) {
       console.warn('[WS] connect() 无 token, 跳过')
       return
@@ -34,7 +34,11 @@ class WsClient {
       return
     }
     this.shouldReconnect = true
-    const wsUrl = `${this.url}?token=${encodeURIComponent(token)}`
+    // W68 PR8d: 支持 priority filter (?priority=high|medium|low)
+    let wsUrl = `${this.url}?token=${encodeURIComponent(token)}`
+    if (options.priority) {
+      wsUrl += `&priority=${encodeURIComponent(options.priority)}`
+    }
     try {
       this.ws = new WebSocket(wsUrl)
     } catch (e) {
@@ -109,7 +113,15 @@ class WsClient {
       this.reconnectTimer = null
       const token = localStorage.getItem('access_token')
       if (token) {
-        this.connect(token)
+        // W68 PR8d: 重连时保留 priority filter (从当前 ws URL 提取, fallback 无)
+        let priority = null
+        if (this.ws && this.ws.url) {
+          try {
+            const u = new URL(this.ws.url)
+            priority = u.searchParams.get('priority')
+          } catch (e) {}
+        }
+        this.connect(token, { priority })
       }
     }, delay)
   }
