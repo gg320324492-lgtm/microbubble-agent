@@ -11,23 +11,44 @@ from app.config import settings
 
 
 class FileService:
-    """MinIO 文件存储服务"""
+    """MinIO 文件存储服务
+
+    2026-07-23 W67 真治本 (lazy init):
+    __init__ 不再做任何 MinIO 网络调用。原实现在模块 import 阶段 (line 244 的
+    `file_service = FileService()`) 就调 `_ensure_bucket()` + `_set_public_read_policy()`,
+    这两个是**同步阻塞网络请求**。本地 MinIO 立即拒签 (<1s), 但 CI/启动早期 MinIO 未就绪时
+    minio-py 会带 backoff 反复重试, 导致 `import app.main` 卡 25+ 分钟 → uvicorn 迟迟不 ready
+    → qa-bench D5 gate 1800s health budget 耗尽。
+    改法: client 与 bucket 初始化全部延迟到首次真正用 MinIO 时 (`self.client` property),
+    import 阶段 0 网络调用。功能不变 (bucket ensure + public-read policy 仍会在首用时跑一次)。
+    """
 
     def __init__(self):
-        self.client = Minio(
-            settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ACCESS_KEY,
-            secret_key=settings.MINIO_SECRET_KEY,
-            secure=settings.MINIO_SECURE
-        )
+        # 惰性初始化: 不在 import/构造阶段碰网络
+        self._client = None
         self.bucket = settings.MINIO_BUCKET
-        self._ensure_bucket()
-        self._set_public_read_policy()
+        self._bucket_ready = False
+
+    @property
+    def client(self) -> Minio:
+        """惰性构造 MinIO client + 首用时确保 bucket/policy (仅一次)。"""
+        if self._client is None:
+            self._client = Minio(
+                settings.MINIO_ENDPOINT,
+                access_key=settings.MINIO_ACCESS_KEY,
+                secret_key=settings.MINIO_SECRET_KEY,
+                secure=settings.MINIO_SECURE
+            )
+        if not self._bucket_ready:
+            self._bucket_ready = True  # 先置位, 避免失败时每次重试拖慢每个请求
+            self._ensure_bucket()
+            self._set_public_read_policy()
+        return self._client
 
     def _ensure_bucket(self):
         """确保 bucket 存在"""
-        if not self.client.bucket_exists(self.bucket):
-            self.client.make_bucket(self.bucket)
+        if not self._client.bucket_exists(self.bucket):
+            self._client.make_bucket(self.bucket)
 
     def _set_public_read_policy(self):
         """设置 bucket 公开读权限（头像等通过 Nginx 代理直接访问）"""
@@ -44,12 +65,12 @@ class FileService:
         }
         # 尝试获取当前 policy，避免重复设置
         try:
-            existing = self.client.get_bucket_policy(self.bucket)
+            existing = self._client.get_bucket_policy(self.bucket)
             if json.loads(existing) == policy:
                 return
         except Exception:
             pass
-        self.client.set_bucket_policy(self.bucket, json.dumps(policy))
+        self._client.set_bucket_policy(self.bucket, json.dumps(policy))
 
     async def upload_file(
         self,
