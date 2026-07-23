@@ -19,6 +19,7 @@ from app.models.agent_trace import AgentTrace  # 2026-06-12 可观测性
 from app.models.search_log import SearchLog  # v31 检索质量埋点
 from app.models.chat_history import ChatSession, ChatMessage, ChatShare  # #043 账号持久化
 from app.models.drive_share import DriveFolderShare, DriveFolderMember  # v2 PR7 文件夹分享/成员
+from app.models.drive_file_version import DriveFileVersion  # v2 PR9 文件版本历史
 
 __all__ = [
     "Member",
@@ -51,4 +52,5 @@ __all__ = [
     "ChatShare",             # #043 账号持久化
     "DriveFolderShare",      # v2 PR7 文件夹公开分享
     "DriveFolderMember",     # v2 PR7 文件夹邀请成员
+    "DriveFileVersion",      # v2 PR9 文件版本历史
 ]
