@@ -35,15 +35,16 @@ jobs:
           cache: "pip"
           cache-dependency-path: tests/qa-bench/requirements.txt
 
-      - name: Cache pip + Docker layers
+      - name: Cache pip + Docker layers + apt
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/pip
             /tmp/.buildx-cache
-          key: ${{ runner.os }}-pip-docker-${{ hashFiles('requirements.txt', 'Dockerfile', 'web/package.json', 'web/package-lock.json') }}
+            /var/cache/apt/archives
+          key: ${{ runner.os }}-multi-${{ hashFiles('requirements.txt', 'Dockerfile', 'app/requirements.txt') }}
           restore-keys: |
-            ${{ runner.os }}-pip-docker-
+            ${{ runner.os }}-multi-
 
       - name: Install Python dependencies
         working-directory: tests/qa-bench
@@ -62,7 +63,7 @@ jobs:
       # W67 第 37 步: 必须显式 context = 仓库根 (前 step Install Python dependencies
       #   设了 working-directory: tests/qa-bench, docker/build-push-action@v5 默认
       #   context = 当前 step working-directory, 不显式就找不到仓库根 Dockerfile)
-      - name: Build app-test image (W67 step 36 真 cache, 利用 GHA cache-from)
+      - name: Build app-test image (deeper cache via docker/build-push-action)
         uses: docker/build-push-action@v5
         with:
           context: ${{ github.workspace }}
@@ -70,20 +71,28 @@ jobs:
           push: false
           load: true
           tags: app-test:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=gha,scope=app-test
+          cache-to: |
+            type=gha,mode=max,scope=app-test
+          # 多层 cache (base + 中间层 + 当前层)
+          provenance: false
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
       - name: Start test DB stack (W67 step 33 用 image, 不再 build)
         run: |
           # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
           docker network create qa-bench-net
 
-          # 起 test DB
+          # 起 test DB：复用官方 image，并通过 init script 创建测试所需扩展
           docker run -d --name pg-test \
             --network qa-bench-net \
             -e POSTGRES_DB=microbubble_test \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=microbubble2026 \
+            -v ${{ github.workspace }}/scripts/init_pg_test.sql:/docker-entrypoint-initdb.d/init.sql:ro \
             postgres:16-alpine
           # 等 pg-test ready (最长 60s)
           for i in {1..30}; do
