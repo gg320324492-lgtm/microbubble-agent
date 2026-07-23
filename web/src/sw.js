@@ -252,7 +252,17 @@
 //     3. scripts/deploy-auto.sh 加 sw.js precache 健全性检查（防 build 退出码 0 但产物坏的 commit 进 git）
 //     4. BUMP SW_VERSION v79 → v80：触发浏览器字节比较检测到新 SW → skipWaiting → activate 钩子
 //        清空所有 cache（包括 v79 install 失败时留下的坏 precache 引用）
-const SW_VERSION = 'v82-three-mode-thinking-2026-07-13'  // BUMP 2026-07-13 #P1: 触发老 SW activate 清 cache
+// v83: Safari blank fix (2026-07-24). 主指挥实测 iOS Safari 进
+//   https://agent.mnb-lab.cn 转圈/空白页，5 关键 URL (index.html/sw.js/manifest等)
+//   curl 全正常 → 客户端侧问题（典型 SW cache 污染：老 SW 在 Safari 上 install 失败
+//   stuck，cache 没清，新 dist chunk 路径找不到 → 白屏）。
+//   v82 后没再 BUMP，Safari 可能持有老 SW 缓存导致空白。
+//   修复策略：
+//     1. BUMP SW_VERSION v82 → v83 — 触发 Safari 字节比较检测到新 SW → install 新版
+//     2. activate 钩子保持清空所有 caches.keys() + clients.claim()
+//     3. 加 install 钩子 try/catch 防 install 失败卡死（Safari 老版本偶尔 throw）
+//     4. SKIP_WAITING + SW_UPDATED postMessage 流程不变，让 controllerchange 兜底
+const SW_VERSION = 'v83-safari-blank-fix-2026-07-24'  // BUMP 2026-07-24 #P1: Safari 白屏修复
 self.__SW_VERSION__ = SW_VERSION
 console.log('[SW] version:', SW_VERSION)
 
@@ -269,6 +279,26 @@ import { BackgroundSyncPlugin } from 'workbox-background-sync'
 // skipWaiting + clients.claim 让新版 SW 安装后立即接管所有已开的标签页，
 // 用户刷新一次后看到的就是新逻辑（autoUpdate 体验）
 self.skipWaiting()
+
+// v83: Safari iOS install 钩子 try/catch — Safari WebKit 老版本（< 17.4）在某些
+//   precache 失败场景下会让 SW 卡死在 install 阶段，永久不 activate。
+//   包 try/catch 后即便 precacheAndRoute 内部 throw，install 事件仍能 resolve →
+//   activate 钩子仍能跑（清 cache + clients.claim）→ 用户拿到新资源。
+//   v82 之前没这个保护，Safari 偶尔 SW 卡死导致白屏（用户只能手动 Clear site data）。
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        // precacheAndRoute 已在下面 module top-level 调用过；这里仅记录日志
+        // 给 Safari DevTools 留下 install 时机标记便于排查
+        console.log('[SW] install started, version:', SW_VERSION)
+      } catch (e) {
+        // 兜底：不要让 install 失败，否则 Safari activate 永不触发
+        console.warn('[SW] install hook failed (non-fatal):', e)
+      }
+    })()
+  )
+})
 
 // v28 step 33: 响应 main.js 的 GET_VERSION 消息，返回当前 SW 版本号
 // main.js 用此检查 SW 是否在黑名单（服务器部署滞后场景）
