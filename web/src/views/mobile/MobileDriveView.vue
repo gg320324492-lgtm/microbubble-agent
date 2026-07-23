@@ -366,10 +366,11 @@ function onLongPressFile(file) {
 const fileActions = computed(() => {
   if (!selectedFile.value) return []
   const f = selectedFile.value
-  // v3.0 (W68 Agent 4) PR8 R4: 长按菜单精简到 4 个核心动作 (preview/download/share/delete)
-  // 重命名 / 可见性切换 / 收藏 / 提取到知识库 → 留给 detail 页操作 (移动端长按入口追求速度)
+  // W68 路线 F-3: 加 "查看评论" 入口, 长按菜单升级到 5 个核心动作
+  // 顺序: 预览 / 评论 / 下载 / 分享 / 删除 (评论提至第 2 位突出协作价值)
   return [
     { name: 'preview',  label: '👁 预览' },
+    { name: 'comments', label: '💬 查看评论' },
     { name: 'download', label: '⬇ 下载' },
     { name: 'share',    label: '🔗 分享' },
     { name: 'delete',   label: '🗑 删除', danger: true },
@@ -382,6 +383,8 @@ async function onFileAction(action) {
   try {
     switch (action.name) {
       case 'preview': router.push(`/drive/preview/${file.id}`); break
+      // W68 路线 F-3: "查看评论" → 跳独立评论页
+      case 'comments': router.push(`/drive/file/${file.id}/comments`); break
       case 'download': {
         const resp = await axios.get(`/api/v1/drive/files/${file.id}/download`, { responseType: 'blob' })
         const url = window.URL.createObjectURL(new Blob([resp.data]))
