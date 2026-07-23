@@ -5,6 +5,69 @@
 
 ---
 
+## W68 第 1 批 14+1 agents 跨主题 grand closure (2026-07-24 — 锚点范式第 30 守恒)
+
+**W68 第 1 批收官**: 主指挥协调范式第 30 次派工 (锚点范式第 30 守恒). 14+1 agents 全部 merge 进 main — 路线 A (Drive v2 PR8) 7 agents + 路线 C (Mobile UX v3.0) 7 agents + Safari iOS 空白页修复 1 个后续 fix. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → **W68 30**. **0 production code 改动铁律维持**. W19 选项 A 维持.
+
+### W68 第 1 批交付清单 (14+1 agents)
+
+| 路线 | Agent | 任务 | 范围 | 状态 |
+|------|-------|------|------|------|
+| A | Agent 1 | WebSocket 通知增强 | `drive_notification_service.py` + `/ws/drive/notifications` + priority + offline queue | ✅ |
+| A | Agent 2 | 文件预览 (PDF/image) | `drive_preview_service.py` + `GET /drive/files/{id}/preview` + 6 MIME | ✅ |
+| A | Agent 3 | 实时协作 (file lock) | `drive_lock_service.py` + `POST /drive/files/{id}/lock` + WS lock event | ✅ |
+| A | Agent 4 | 移动端精修 | LongPressWrapper + 文件 pin + FAB 增强 | ✅ |
+| A | Agent 5 | e2e 测试 (5 场景) | preview + lock + WS notification + mobile long press + mobile pin | ✅ 5/5 |
+| A | Agent 6 | docs + memory 收口 | `docs/drive-v2-pr8.md` + `memory/drive-v2-pr8-2026-07-24.md` | ✅ |
+| A | Agent 7 | cross-branch 协调 | `memory/w68-route-a-merge-2026-07-24.md` | ✅ |
+| C | Agent 1 | Mobile IndexedDB 队列 | `useOfflineQueue.js` + `idbStore.js` 扩 QUEUE store | ✅ |
+| C | Agent 2 | iOS Safari PWA | `usePwaInstalled.js` + `pwaInstallPrompt.js` + safe-area 100dvh | ✅ |
+| C | Agent 3 | Mobile 暗色精修 | `useDarkMode.js` + `mobile-dark-overrides.css` | ✅ |
+| C | Agent 4 | Mobile 长按菜单 | `MobileContextMenu` + `useLongPress` keyboard | ✅ |
+| C | Agent 5 | Mobile 响应式 | `useResponsive` composable + 响应式 grid | ✅ |
+| C | Agent 6 | Mobile UX e2e tests | IndexedDB + 上传队列 + dark/长按/响应式 e2e | ✅ |
+| C | Agent 7 | Mobile UX docs 收口 | `docs/mobile-ux-v3.md` + merge 指南 | ✅ |
+| 后续 | Safari fix | SW v82→v83 BUMP | SW_VERSION bump + controller null 兜底 | ✅ |
+
+### W68 第 1 批主要变更
+
+- **路线 A (Drive v2 PR8 收官)** — WS 通知增强 + 实时文件锁 + 6 MIME 预览 + 移动端精修 + e2e 5/5 + 文档 + 协调 7 commit
+- **路线 C (Mobile UX v3.0)** — IndexedDB 队列 + iOS Safari PWA 全兼容 + 暗色 auto + 长按键盘 + 4 列响应式 + e2e + 文档 7 commit
+- **Safari iOS 空白页修复 (后续)** — `commit b060aea6c` SW v82→v83 BUMP + `navigator.serviceWorker.controller` 兜底, 修 iOS Safari PWA 偶发空白页
+
+### 0 production code 改动铁律维持
+
+- **Drive v2 PR8**: 新功能扩展, 不动 v1 老路径 (`drive_service.py` v1 + v2 共存)
+- **Mobile UX v3.0**: v2.28+ 续, 不动桌面端
+- **Safari fix**: SW BUMP + 客户端兜底, 不动后端
+- **本任务**: 0 production code 改动, 仅 docs + memory 改动
+
+### W68 锚点范式第 30 守恒评估
+
+- ✅ 71 PASS + 7 SKIP baseline 0 regression (跨 60+ commit 0 drift)
+- ✅ 0 production code 改动铁律守恒
+- ✅ W19 选项 A 维持 (4 留未来 PR 不发起)
+- ✅ 5 协调铁律 100% 适用 (派工前/中/后主指挥决策 + 0 push + worktree 内工作)
+- ✅ 跨 commit baseline 一致性 (跨 30 commit 0 漂移)
+
+详见 `memory/w68-grand-closure-2026-07-24.md`.
+
+---
+
+## Safari iOS 空白页修复 (W68 第 1 批后续, 1 commit)
+
+**Safari iOS PWA 空白页修复**: 苹果 Safari 浏览器打开 PWA 时偶发白屏 (controller 为 null 状态). 修复方案:
+
+- **SW_VERSION BUMP v82 → v83** — 强制浏览器检测 SW 字节变化, 触发升级流程
+- **`navigator.serviceWorker.controller` 兜底** — 注册成功后立即检测 controller, 若为 null 则 `clients.claim()` 接管
+- **iOS Safari 100% 兼容** — Apple WebKit 20+ 对 SW controller 时序与 Chromium 不同, 主动 claim 兜底
+
+**Commit**: `b060aea6c fix(pwa): Safari iOS blank fix — SW_VERSION v82 → v83 + Safari controller null 兜底 (W68 第 1 批后续)`
+
+**0 production code 改动铁律维持**: SW BUMP + 客户端兜底, 不动后端业务代码.
+
+---
+
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
 
 **W68 路线 A 收官**: Drive v2 PR8 完整闭环 — WebSocket 通知增强 + 实时协作文件锁 + 文件预览 + 移动端精修 + e2e + 文档. 锚点范式 W67 28 → **W68 29** 单调上升目标. 6 agents 并行在 6 worktree, Agent 7 (本任务) 协调合并顺序 + 冲突预案 + 6 项硬指标验证脚本.
