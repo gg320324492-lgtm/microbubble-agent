@@ -54,19 +54,31 @@ jobs:
           cache: "pip"
           cache-dependency-path: requirements.txt
 
+      - name: Cache pip + Docker layers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            /tmp/.buildx-cache
+          key: ${{ runner.os }}-pip-docker-${{ hashFiles('requirements.txt', 'Dockerfile', 'web/package.json', 'web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-docker-
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 httpx
 
-      # === W67 第 33 步: 拆 build + run (修复 6-10 min 重 build 问题) ===
-      # 之前: `docker build -q .` 内嵌在 `docker run`, 每次都重 build 完整 image 没 cache
-      # 现在: 先 build 一次 (GHA cache 复用 layer), 再 run 起来
-      - name: Build app-test image (W67 step 33 拆 build, 利用 GHA cache)
-        run: |
-          # 关键: `docker build -t app-test:ci .` 单独 step, 失败时 stop, 不污染后续
-          docker build -t app-test:ci . 2>&1 | tail -30
-          echo "✓ app-test:ci image built"
+      # === W67 第 36 步: Buildx + GHA 跨 run layer cache ===
+      - name: Build app-test image (W67 step 36 真 cache, 利用 GHA cache-from)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: app-test:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       # === 新增 test DB stack 启动 (替代生产 app/db) ===
       # v2026-07-23 修复: 改用 Docker network 让 app-test 通过服务名 `pg-test` 直连,

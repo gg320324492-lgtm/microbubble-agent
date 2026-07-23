@@ -33,22 +33,32 @@ jobs:
           cache: "pip"
           cache-dependency-path: tests/qa-bench/requirements.txt
 
+      - name: Cache pip + Docker layers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            /tmp/.buildx-cache
+          key: ${{ runner.os }}-pip-docker-${{ hashFiles('requirements.txt', 'Dockerfile', 'web/package.json', 'web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-docker-
+
       - name: Install Python dependencies
         working-directory: tests/qa-bench
         run: |
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 -r requirements.txt
 
-      # === W67 第 33 步: 拆 build + run (修复 6-10 min 重 build 问题) ===
-      # 之前: `docker build -q .` 内嵌在 `docker run`, 每次都重 build 完整 image 没 cache
-      # 现在: 5a build 一次 (GitHub Actions cache 跨 run 复用 layer), 5b run 多次
-      - name: Build app-test image (W67 step 33 拆 build, 利用 GHA cache)
-        run: |
-          # 关键: `docker build -t app-test:ci .` 单独 step, 失败时 stop, 不污染后续
-          # 利用 GHA 内置 cache: 同一 runner 的 image layer cache 跨 step 复用
-          # requirements.txt / Dockerfile 变更 → 重新 build, 更快 (只 rebuild 变更层)
-          docker build -t app-test:ci . 2>&1 | tail -30
-          echo "✓ app-test:ci image built"
+      # === W67 第 36 步: Buildx + GHA 跨 run layer cache ===
+      - name: Build app-test image (W67 step 36 真 cache, 利用 GHA cache-from)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: app-test:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Start test DB stack (W67 step 33 用 image, 不再 build)
         run: |
