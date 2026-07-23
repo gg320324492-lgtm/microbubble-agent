@@ -49,6 +49,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 -r requirements.txt
 
+      # === W67 第 38 步: 必须 setup buildx, 否则 cache-from: type=gha 不工作 ===
+      # docker/build-push-action@v5 默认用 docker driver, 不支持 cache-from: type=gha (这是 buildx-only 功能).
+      # 必须先 setup-buildx-action@v3 配 buildx. 0 config 即用 (默认 builder), 不需要 driver-opts.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        # W67 第 38 步: 必须 setup buildx, 否则 cache-from: type=gha 不工作 (默认 docker driver 不支持)
+
       # === W67 第 36 步: Buildx + GHA 跨 run layer cache ===
       # W67 第 37 步: 必须显式 context = 仓库根 (前 step Install Python dependencies
       #   设了 working-directory: tests/qa-bench, docker/build-push-action@v5 默认
