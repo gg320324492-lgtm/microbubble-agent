@@ -2,6 +2,11 @@
   MobileDriveView.vue — v2 PR8 M4 移动端独立网盘视图
   2026-07-02
 
+  v3.0 (2026-07-24 W68 Agent 4) PR8 R4 移动端精修:
+    - 长按文件 → 直接显示操作菜单 (preview/download/share/delete) 而非进 detail
+      (保留进 detail 的入口: 文件名右上角溢出菜单, 见 drive-file-menu 按钮)
+    - 双指捏合 → grid 列数 2/3/4 (捏合=缩小列数, 张开=放大列数, 持久到 localStorage)
+    - 顶部搜索栏 sticky (始终可见, 不随滚动消失, 命中后过滤当前 tab)
   4 tab (文件/收藏/最近/团队) + 文件夹 chip + 长按 + MobileActionSheet
 -->
 <template>
@@ -16,6 +21,33 @@
         <button type="button" class="header-btn" aria-label="命令面板 (Ctrl+K)" @click="showCommandPalette = true">⌘</button>
       </template>
     </PageHeader>
+
+    <!-- v3.0 (W68 Agent 4) PR8 R4: 顶部搜索栏 sticky, 始终可见, 命中后过滤当前 tab -->
+    <div class="drive-sticky-search">
+      <div class="drive-sticky-search-input-wrap">
+        <span class="drive-sticky-search-icon">🔍</span>
+        <input
+          v-model="quickSearch"
+          type="search"
+          class="drive-sticky-search-input"
+          placeholder="快速过滤当前列表..."
+          aria-label="快速过滤当前列表"
+        />
+        <button
+          v-if="quickSearch"
+          type="button"
+          class="drive-sticky-search-clear"
+          aria-label="清空搜索"
+          @click="quickSearch = ''"
+        >✕</button>
+        <button
+          type="button"
+          class="drive-sticky-search-grid"
+          :aria-label="`当前 ${gridColumns} 列, 点切下一档`"
+          @click="cycleGridColumns"
+        >▦ {{ gridColumns }}</button>
+      </div>
+    </div>
 
     <nav class="drive-tabs" role="tablist">
       <button v-for="t in tabs" :key="t.name" type="button" role="tab"
@@ -47,11 +79,22 @@
 
     <div v-else-if="loading && driveFiles.length === 0" class="drive-loading"><p>加载中...</p></div>
 
-    <div v-else class="drive-grid">
-      <LongPressWrapper v-for="file in driveFiles" :key="file.id" :duration="600" @long-press="onLongPressFile(file)">
+    <div v-else-if="filteredFiles.length === 0" class="drive-empty">
+      <p class="empty-icon">🔍</p>
+      <p class="empty-text">没有匹配 "{{ quickSearch }}" 的文件</p>
+      <p class="empty-hint">试试清除关键词或切换 tab</p>
+    </div>
+
+    <div v-else class="drive-grid" :style="{ gridTemplateColumns: `repeat(${gridColumns}, 1fr)` }"
+      @touchstart.passive="onTouchStart"
+      @touchmove.passive="onTouchMove"
+      @touchend.passive="onTouchEnd">
+      <LongPressWrapper v-for="file in filteredFiles" :key="file.id" :duration="600" @long-press="onLongPressFile(file)">
         <article class="drive-file-card" :data-type="getFileTypeKey(file)"
           :class="{ 'is-private': file.visibility === 'private', 'is-starred': file.is_starred }"
           @click="onFileClick(file)">
+          <button type="button" class="drive-file-menu" aria-label="更多操作"
+            @click.stop="onLongPressFile(file)">⋯</button>
           <div class="drive-file-icon">
             <el-icon :size="32"><component :is="getFileIcon(file)" /></el-icon>
           </div>
@@ -67,7 +110,14 @@
       </LongPressWrapper>
     </div>
 
-    <MobileFab :actions="fabActions" />
+    <!-- v3.0 (W68 Agent 4) PR8 R4: Drive 专属 FAB (最近上传照片 + 长按 QR 扫描) -->
+    <MobileDriveFAB
+      ref="driveFabRef"
+      :actions="fabActions"
+      :latest-backup="latestBackup"
+      @recent-click="onRecentBackupClick"
+      @qr-scan-result="onQrScanResult"
+    />
 
     <MobileActionSheet v-model="showActionSheet"
       :title="selectedFile ? (selectedFile.title || selectedFile.file_name) : ''"
@@ -88,6 +138,7 @@
 //                       - dashboard 命中时 tab 切换直接消费预拉数据, 不再 fetchFiles()
 //                       - dashboard 失败 (try/catch) 时回退 fetchFiles() (4 独立请求)
 //                       - 减少 N 次请求 → 1 次, mobile 网络慢场景首屏体验提升
+// v3.0 (2026-07-24 W68 Agent 4) PR8 R4 移动端精修: 长按精简 4 动作菜单 + 双指捏合切换 grid 列数 + sticky 搜索过滤
 import '@/views/drive/drive-view.css'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -97,7 +148,8 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileCommandPalette from '@/views/mobile/MobileCommandPalette.vue'
-import MobileFab from '@/components/mobile/MobileFab.vue'
+// v3.0 (W68 Agent 4) PR8 R4: 用 MobileDriveFAB 替换通用 MobileFab, 加最近上传照片 + QR 扫描入口
+import MobileDriveFAB from '@/components/mobile/MobileDriveFAB.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { formatSize } from '@/utils/format'
@@ -173,6 +225,85 @@ function dashboardSectionForTab(tabName) {
   return null  // files tab 不走 dashboard
 }
 
+// v3.0 (W68 Agent 4) PR8 R4: 顶部 sticky 搜索关键词
+const quickSearch = ref('')
+const filteredFiles = computed(() => {
+  const kw = quickSearch.value.trim().toLowerCase()
+  if (!kw) return driveFiles.value
+  return driveFiles.value.filter((f) => {
+    const name = (f.title || f.file_name || '').toLowerCase()
+    return name.includes(kw)
+  })
+})
+
+// v3.0 (W68 Agent 4) PR8 R4: grid 列数 2/3/4, 双指捏合缩, 张开放
+// 持久到 localStorage (key: mobile-drive-grid-columns)
+const GRID_COLS_OPTIONS = [2, 3, 4]
+const GRID_COLS_STORAGE_KEY = 'mobile-drive-grid-columns'
+function loadGridColumns() {
+  try {
+    const v = parseInt(localStorage.getItem(GRID_COLS_STORAGE_KEY) || '2', 10)
+    return GRID_COLS_OPTIONS.includes(v) ? v : 2
+  } catch { return 2 }
+}
+const gridColumns = ref(loadGridColumns())
+function saveGridColumns(v) {
+  try { localStorage.setItem(GRID_COLS_STORAGE_KEY, String(v)) } catch {}
+}
+function cycleGridColumns() {
+  const idx = GRID_COLS_OPTIONS.indexOf(gridColumns.value)
+  const next = GRID_COLS_OPTIONS[(idx + 1) % GRID_COLS_OPTIONS.length]
+  gridColumns.value = next
+  saveGridColumns(next)
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10)
+}
+
+// v3.0 (W68 Agent 4) PR8 R4: 双指捏合手势检测 (基于 touchstart/touchmove 两指距离变化)
+// 阈值: 距离变化 > 40% 触发一次 (避免频繁切换), 单次操作内只切 1 档
+let pinchInitialDistance = 0
+let pinchLastDistance = 0
+let pinchSwappedThisGesture = false
+function getTouchDistance(t1, t2) {
+  const dx = t1.clientX - t2.clientX
+  const dy = t1.clientY - t2.clientY
+  return Math.hypot(dx, dy)
+}
+function onTouchStart(e) {
+  if (e.touches.length !== 2) return
+  pinchInitialDistance = getTouchDistance(e.touches[0], e.touches[1])
+  pinchLastDistance = pinchInitialDistance
+  pinchSwappedThisGesture = false
+}
+function onTouchMove(e) {
+  if (e.touches.length !== 2 || pinchInitialDistance === 0) return
+  const d = getTouchDistance(e.touches[0], e.touches[1])
+  pinchLastDistance = d
+}
+function onTouchEnd() {
+  if (pinchInitialDistance === 0 || pinchSwappedThisGesture) {
+    pinchInitialDistance = 0
+    return
+  }
+  const delta = pinchLastDistance - pinchInitialDistance
+  const ratio = delta / pinchInitialDistance
+  // 张开 (ratio > 0.4) → 列数 +1 (更多细节); 捏合 (ratio < -0.4) → 列数 -1 (更少卡片)
+  const idx = GRID_COLS_OPTIONS.indexOf(gridColumns.value)
+  let nextIdx = idx
+  if (ratio > 0.4 && idx < GRID_COLS_OPTIONS.length - 1) {
+    nextIdx = idx + 1
+  } else if (ratio < -0.4 && idx > 0) {
+    nextIdx = idx - 1
+  }
+  if (nextIdx !== idx) {
+    gridColumns.value = GRID_COLS_OPTIONS[nextIdx]
+    saveGridColumns(GRID_COLS_OPTIONS[nextIdx])
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10)
+    pinchSwappedThisGesture = true
+  }
+  pinchInitialDistance = 0
+  pinchLastDistance = 0
+}
+
 function switchTab(name) {
   if (activeTab.value === name) return
   activeTab.value = name
@@ -224,18 +355,23 @@ const emptyState = computed(() => {
 })
 
 function onFileClick(file) { router.push(`/drive/preview/${file.id}`) }
-function onLongPressFile(file) { selectedFile.value = file; showActionSheet.value = true }
+function onLongPressFile(file) {
+  // v3.0 (W68 Agent 4) PR8 R4: 长按文件直接显示操作菜单 (preview/download/share/delete)
+  // 触觉反馈 (CLAUDE.md 2026-06-27 教训)
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10)
+  selectedFile.value = file
+  showActionSheet.value = true
+}
 
 const fileActions = computed(() => {
   if (!selectedFile.value) return []
   const f = selectedFile.value
+  // v3.0 (W68 Agent 4) PR8 R4: 长按菜单精简到 4 个核心动作 (preview/download/share/delete)
+  // 重命名 / 可见性切换 / 收藏 / 提取到知识库 → 留给 detail 页操作 (移动端长按入口追求速度)
   return [
     { name: 'preview',  label: '👁 预览' },
     { name: 'download', label: '⬇ 下载' },
-    { name: 'rename',   label: '✏ 重命名' },
-    { name: 'visibility', label: f.visibility === 'private' ? '🔓 改团队可见' : '🔒 改私有' },
-    { name: 'star',     label: f.is_starred ? '☆ 取消收藏' : '⭐ 收藏' },
-    { name: 'extract',  label: '📚 提取到知识库' },
+    { name: 'share',    label: '🔗 分享' },
     { name: 'delete',   label: '🗑 删除', danger: true },
   ]
 })
@@ -254,28 +390,23 @@ async function onFileAction(action) {
         ElMessage.success('下载已开始')
         break
       }
-      case 'rename': {
-        const { value: newName } = await ElMessageBox.prompt('新文件名', '重命名', {
-          inputValue: file.file_name || file.title, confirmButtonText: '保存', cancelButtonText: '取消',
-        })
-        if (newName?.trim()) {
-          await axios.put(`/api/v1/drive/files/${file.id}`, { file_name: newName.trim() })
-          ElMessage.success('已重命名'); refresh()
+      // v3.0 (W68 Agent 4) PR8 R4: 分享 → 复制链接到剪贴板 (移动端 web Share API 不可用兜底)
+      case 'share': {
+        const shareUrl = `${window.location.origin}/drive/preview/${file.id}`
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: file.title || file.file_name, url: shareUrl })
+            break
+          }
+          await navigator.clipboard.writeText(shareUrl)
+          ElMessage.success('链接已复制')
+        } catch (e) {
+          if (e?.name === 'AbortError') return
+          await navigator.clipboard.writeText(shareUrl).catch(() => {})
+          ElMessage.success('链接已复制')
         }
         break
       }
-      case 'visibility':
-        await axios.put(`/api/v1/drive/files/${file.id}`, { visibility: file.visibility === 'private' ? 'team' : 'private' })
-        ElMessage.success('可见性已更新'); refresh()
-        break
-      case 'star':
-        await axios.post(`/api/v1/drive/files/${file.id}/toggle-star`)
-        ElMessage.success(file.is_starred ? '已取消收藏' : '已收藏'); refresh()
-        break
-      case 'extract':
-        await axios.post(`/api/v1/drive/files/${file.id}/extract-to-kb`, { target_visibility: 'team' })
-        ElMessage.success('已提取到知识库'); refresh()
-        break
       case 'delete': {
         await ElMessageBox.confirm(`确定删除 "${file.title || file.file_name}"?`, '删除', {
           confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning',
@@ -307,6 +438,25 @@ function onUploadClick() { showUploadMenu.value = true }
 function onUploadAction(action) {
   ElMessage.info(`"${action.label}" 即将上线, 临时跳 KB`)
   router.push('/knowledge?action=upload&mode=' + action.name)
+}
+
+// v3.0 (W68 Agent 4) PR8 R4: 最近上传照片 (来自 album-auto-backup, 缺省 null 不显示)
+// 数据源: /api/v1/drive/files?sort_by=updated_at&sort_order=desc&file_type=image/*
+// 父组件从 useDriveFiles 或独立 fetch 注入, 此处给兜底空值
+const latestBackup = ref(null)
+const driveFabRef = ref(null)
+function onRecentBackupClick(file) {
+  // 点击最近上传照片 → 直接预览
+  if (file?.id) router.push(`/drive/preview/${file.id}`)
+}
+function onQrScanResult(text) {
+  // QR 扫描结果: 如果是 /drive/preview/<id> 链接, 直接跳转
+  if (!text) return
+  const m = text.match(/\/drive\/preview\/(\d+)/)
+  if (m) {
+    router.push(`/drive/preview/${m[1]}`)
+    driveFabRef.value?.closeQrScan?.()
+  }
 }
 
 function getFileIcon(file) {
@@ -365,11 +515,28 @@ watch(() => route.query.tab, (newTab) => {
 .folder-chip-row { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border-light); -webkit-overflow-scrolling: touch; }
 .folder-chip { flex-shrink: 0; padding: 6px 12px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; color: var(--color-text-regular); cursor: pointer; white-space: nowrap; }
 .folder-chip.active { background: var(--color-primary); color: var(--el-color-white); border-color: var(--color-primary); }
-.drive-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; }
-.drive-file-card { display: flex; flex-direction: column; align-items: center; padding: 16px 8px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 8px; cursor: pointer; transition: transform 0.2s ease; }
+.drive-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; touch-action: pan-y; }
+.drive-file-card { position: relative; display: flex; flex-direction: column; align-items: center; padding: 16px 8px; background: var(--color-bg-card); border: 1px solid var(--color-border-light); border-radius: 8px; cursor: pointer; transition: transform 0.2s ease; }
 .drive-file-card:active { transform: scale(0.97); }
 .drive-file-card.is-starred { border-color: var(--color-warning); }
 .drive-file-card.is-private { opacity: 0.75; }
+.drive-file-menu {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.drive-file-menu:active { background: var(--color-bg-hover); }
 .drive-file-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--color-primary); margin-bottom: 8px; }
 .drive-file-info { width: 100%; text-align: center; }
 .drive-file-name { font-size: 13px; color: var(--color-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -380,6 +547,62 @@ watch(() => route.query.tab, (newTab) => {
 .header-btn { width: 36px; height: 36px; background: transparent; border: none; font-size: 18px; color: var(--color-text-regular); cursor: pointer; border-radius: 6px; }
 .notification-badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--color-warning); color: var(--el-color-white); border-radius: 12px; font-size: 11px; font-weight: 600; }
 .notification-badge-count { font-variant-numeric: tabular-nums; }
+
+/* v3.0 (W68 Agent 4) PR8 R4: sticky 搜索栏 (始终可见, 不随滚动消失) */
+.drive-sticky-search {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  padding: 8px 12px;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border-light);
+}
+.drive-sticky-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-page);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 10px;
+}
+.drive-sticky-search-icon { font-size: 14px; color: var(--color-text-secondary); }
+.drive-sticky-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text-primary);
+  outline: none;
+  font-family: inherit;
+  min-width: 0;
+}
+.drive-sticky-search-input::placeholder { color: var(--color-text-placeholder); }
+.drive-sticky-search-clear {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-border);
+  border: none;
+  font-size: 11px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.drive-sticky-search-grid {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 12px;
+  color: var(--color-text-regular);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.drive-sticky-search-grid:active { background: var(--color-bg-hover); }
 </style>
 
 <!-- v77 P2.6-B dark 覆盖 (v60-v67 教训: 非 scoped) -->
@@ -387,4 +610,8 @@ watch(() => route.query.tab, (newTab) => {
 [data-theme="dark"] .drive-file-card { background: var(--color-bg-card); border-color: var(--color-border); }
 [data-theme="dark"] .folder-chip { background: var(--color-bg-page); color: var(--color-text-regular); }
 [data-theme="dark"] .folder-chip.active { background: var(--color-primary); color: var(--el-color-white); }
+[data-theme="dark"] .drive-sticky-search { background: var(--color-bg-card); border-color: var(--color-border); }
+[data-theme="dark"] .drive-sticky-search-input-wrap { background: var(--color-bg-page); }
+[data-theme="dark"] .drive-sticky-search-grid { background: var(--color-bg-card); border-color: var(--color-border); color: var(--color-text-regular); }
+[data-theme="dark"] .drive-file-menu { color: var(--color-text-secondary); }
 </style>
