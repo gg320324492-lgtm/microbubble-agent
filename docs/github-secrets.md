@@ -129,6 +129,7 @@ W67 起 D5 gate 完整 CI 流程:
 | W66 之前 | 90s (45 × 2s) | 假设 mimo SDK init < 18s |
 | W67 第 32 步 | 240s (120 × 2s) | mimo SDK + 全套 import 慢 |
 | W67 第 33 步 | 600s (300 × 2s) | 拆 build + run 后, 实际启动 6-10 min |
+| W67 第 34 步 | 900s (450 × 2s) | 提 900s 留缓冲, uvicorn 启动 10+ min |
 
 **关键修复 (W67 第 33 步)**: `docker build -q .` 在 `docker run` 同一行导致每次重 build. 拆成:
 
@@ -137,7 +138,7 @@ W67 起 D5 gate 完整 CI 流程:
 
 未来: 改用 `docker/build-push-action@v5` + `cache-from type=gha` 自动 GHA cache (Phase 2).
 
-如果你的环境 (Anthropic 直连 / 本地 ollama / mock) 启动快, 可以调回 240s. 但默认 600s 兼容 mimo cloud 套件 + 冷启动.
+如果你的环境 (Anthropic 直连 / 本地 ollama / mock) 启动快, 可以调回 240s. 但默认 900s 兼容 mimo cloud 套件 + 冷启动 (实测 610s, 留 290s 缓冲).
 
 ## 故障排除
 
