@@ -137,9 +137,21 @@ W67 起 D5 gate 完整 CI 流程:
 1. **Step 5a** `docker build -t app-test:ci .` (Build, 缓存 Docker layer)
 2. **Step 5b** `docker run app-test:ci` (Run, 用已 build image, 启动 30-60s)
 
-未来: 改用 `docker/build-push-action@v5` + `cache-from type=gha` 自动 GHA cache (Phase 2).
+W67 第 36 步已改用 `docker/build-push-action@v5` + `cache-from: type=gha`，通过 GitHub Actions cache 跨 run 复用 Docker layers。详见下节。
 
 如果你的环境 (Anthropic 直连 / 本地 ollama / mock) 启动快, 可以调回 240s. 但默认 900s 兼容 mimo cloud 套件 + 冷启动 (实测 610s, 留 290s 缓冲).
+
+## 真 GHA cache (W67 第 36 步)
+
+| 时间 | 方案 | 实测 build 时间 |
+|------|------|------------------|
+| W66 | `docker build -q .` (no cache) | 6-10 min |
+| W67 第 33 步 | 拆 build + run (单 step build) | 6-10 min (首次) |
+| W67 第 36 步 | `docker/build-push-action@v5` + `cache-from: type=gha` | 1-2 min (warm cache) / 6-10 min (cold) |
+
+**机制**: 跨 run 复用 Docker layer cache. requirements.txt / Dockerfile 不变 → 命中 cache → 跳过 pip install + base image pull.
+
+**setup-buildx-action 依赖**: `docker/build-push-action@v5` 自动 setup buildx. 不需要额外 step.
 
 ## 故障排除
 
