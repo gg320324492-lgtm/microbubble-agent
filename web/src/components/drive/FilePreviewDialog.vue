@@ -45,6 +45,18 @@
       </div>
     </div>
 
+    <!-- v2.8 (PR8.6): 文件锁提示 banner — 其他人正在编辑时显示 -->
+    <div v-else-if="isLockedByOthers" class="preview-lock-banner">
+      <el-icon :size="18"><Lock /></el-icon>
+      <span>
+        <strong>{{ lockHolderName }}</strong> 正在编辑此文件
+        <span v-if="lockHolder?.ttl_remaining > 0" class="lock-ttl">
+          (锁剩余 {{ Math.ceil(lockHolder.ttl_remaining / 60) }} 分钟)
+        </span>
+      </span>
+      <el-button size="small" text @click="refreshLock">刷新状态</el-button>
+    </div>
+
     <!-- 加载态 -->
     <div v-else-if="loading" class="preview-loading">
       <el-icon class="is-loading"><Loading /></el-icon>
@@ -176,10 +188,10 @@ import '@/views/drive/drive-view.css'
  * 4. thumbnail URL: public HTTPS 不需 JWT, 给 Office Viewer src
  * 5. revokeObjectURL 防内存泄漏
  */
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Loading, Download, ChatDotRound, Document, WarningFilled
+  Loading, Download, ChatDotRound, Document, WarningFilled, Lock
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -207,6 +219,25 @@ const textTruncated = ref(false)
 const officeViewerUrl = ref('')
 const officeFallbackToThumbnail = ref(false)   // v2.7.1: Office viewer 网络错误时降级 thumbnail
 const pendingLargeFileConfirm = ref(false)
+
+// === v2.8 文件级软锁 (PR8.6) ===
+const lockHolder = ref(null)  // {user_id, username, name, acquired_at, ttl_remaining}
+const lockHolderName = computed(() => {
+  if (!lockHolder.value) return ''
+  return lockHolder.value.name || lockHolder.value.username || `用户${lockHolder.value.user_id}`
+})
+const isLockedByOthers = computed(() => {
+  // 仅在已知当前用户时才能判定, 否则保守提示有锁
+  if (!lockHolder.value) return false
+  // 通过 authStore.userId 区分自己 vs 他人 (authStore 单例)
+  try {
+    const auth = JSON.parse(localStorage.getItem('microbubble_auth') || '{}')
+    const me = auth?.userInfo?.id || auth?.user?.id
+    return lockHolder.value.user_id && lockHolder.value.user_id !== me
+  } catch {
+    return true
+  }
+})
 
 const textMaxBytes = 500 * 1024
 
@@ -291,18 +322,73 @@ watch(visible, async (newVal) => {
     } else {
       await loadPreview()
     }
+    // v2.8: 进入预览时拉锁状态 + 启动心跳续期
+    await refreshLock()
   } else {
     cleanup()
     pendingLargeFileConfirm.value = false
+    // v2.8: 关闭时释放锁 (仅当前用户持有的情况)
+    await releaseLockIfMine()
   }
 }, { immediate: true })  // v2.7: 加 immediate, 初次 visible=true 也触发 (fix vitest mount 时 watch 不触发)
 
 async function confirmLoadLargeFile() {
   pendingLargeFileConfirm.value = false
   await loadPreview()
+  await refreshLock()
 }
 
-onUnmounted(() => { cleanup() })
+onMounted(() => {
+  // v2.8: 启动锁心跳 (60s 一次, TTL 5 分钟)
+  lockHeartbeatTimer.value = setInterval(refreshLock, 60_000)
+})
+
+onUnmounted(() => {
+  cleanup()
+  if (lockHeartbeatTimer.value) {
+    clearInterval(lockHeartbeatTimer.value)
+    lockHeartbeatTimer.value = null
+  }
+  releaseLockIfMine()
+})
+
+// === v2.8 文件锁实现 ===
+const lockHeartbeatTimer = ref(null)
+
+async function refreshLock() {
+  if (!props.file?.id) return
+  try {
+    const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/lock`)
+    lockHolder.value = resp.data?.locked ? resp.data : null
+    // 锁空 + 自己刚才释放 → 心跳主动获取 (heartbeat 模式)
+    if (!resp.data?.locked) {
+      try {
+        const acquire = await axios.post(`/api/v1/drive/files/${props.file.id}/lock`)
+        if (acquire.data?.locked) lockHolder.value = acquire.data
+      } catch (e) {
+        // 409 等情况忽略 — 仅展示当前 holder
+        if (e?.response?.data?.locked) {
+          lockHolder.value = e.response.data
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[FilePreviewDialog] lock refresh failed:', e?.message || e)
+  }
+}
+
+async function releaseLockIfMine() {
+  if (!props.file?.id) return
+  if (!lockHolder.value) return
+  if (isLockedByOthers.value) return  // 别人的锁不释放
+  try {
+    await axios.delete(`/api/v1/drive/files/${props.file.id}/lock`)
+    lockHolder.value = null
+  } catch (e) {
+    // 静默吞 — 释放失败无副作用 (TTL 5 分钟自然过期)
+    console.warn('[FilePreviewDialog] lock release failed:', e?.message || e)
+  }
+}
 
 // === v2.7 loadPreview 重写 ===
 async function loadPreview() {
@@ -421,6 +507,12 @@ defineExpose({
   officeFallbackToThumbnail,
   onOfficeViewerError, // 让 vitest 测试 @error handler
   cleanup,            // 让父级可手动清除 (e.g. 路由切换时清理)
+  // v2.8 (PR8.6): 暴露锁状态供测试
+  lockHolder,
+  isLockedByOthers,
+  lockHolderName,
+  refreshLock,
+  releaseLockIfMine,
 })
 </script>
 
@@ -436,6 +528,36 @@ defineExpose({
   padding: 60px 20px;
   text-align: center;
   min-height: 200px;
+}
+
+/* v2.8 (PR8.6): 文件锁 banner — 暖琥珀色提示他人正在编辑 */
+.preview-lock-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: 10px 16px;
+  margin-bottom: var(--space-3, 12px);
+  border-radius: var(--radius-md, 8px);
+  background: rgba(255, 179, 71, 0.12);  /* accent amber */
+  border: 1px solid rgba(255, 179, 71, 0.4);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 13px);
+}
+.preview-lock-banner .lock-ttl {
+  color: var(--color-text-secondary);
+  margin-left: var(--space-1, 4px);
+  font-size: var(--font-size-xs, 12px);
+}
+.preview-lock-banner .el-icon {
+  color: var(--color-accent, #FFB347);
+  flex-shrink: 0;
+}
+.preview-lock-banner strong {
+  color: var(--color-accent, #FFB347);
+  font-weight: var(--font-weight-semibold, 600);
+}
+.preview-lock-banner .el-button {
+  margin-left: auto;
 }
 
 .preview-loading p,
