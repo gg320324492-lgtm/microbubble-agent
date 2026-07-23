@@ -79,26 +79,19 @@
       >
         <el-icon :size="20"><Promotion /></el-icon>
       </button>
-      <button
+      <MobileVoiceInputButton
         v-else
-        id="mobile-input-voice"
-        name="mobile-input-voice"
-        type="button"
-        class="voice-btn"
-        aria-label="按住说话"
-        title="按住说话"
-        @touchstart.prevent="onVoiceStart"
-        @touchend="onVoiceEnd"
-        @touchcancel="onVoiceEnd"
-        @mousedown.prevent="onVoiceStart"
-        @mouseup="onVoiceEnd"
-        @mouseleave="onVoiceEnd"
-      >
-        <el-icon :size="20"><Microphone /></el-icon>
-      </button>
+        :text="modelValue"
+        :disabled="isSending"
+        :auto-send="false"
+        @update:text="$emit('update:modelValue', $event)"
+        @transcribed="onTranscribed"
+        @recording="onVoiceRecordingState"
+        @send="onVoiceAutoSend"
+      />
     </div>
 
-    <!-- 录音提示 -->
+    <!-- 录音提示 (W68 路线 G-1: 现在由 MobileVoiceInputButton 浮层显示, 此处保留 fallback) -->
     <div v-if="voiceRecording" class="voice-tip">
       <span class="rec-dot" />
       正在录音... 松开发送
@@ -119,7 +112,8 @@
  */
 
 import { ref, watch } from 'vue'
-import { Picture, Paperclip, Promotion, VideoPause, Microphone } from '@element-plus/icons-vue'
+import { Picture, Paperclip, Promotion, VideoPause } from '@element-plus/icons-vue'
+import MobileVoiceInputButton from '@/components/mobile/MobileVoiceInputButton.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -137,8 +131,12 @@ const emit = defineEmits([
   'stop',  // 2026-06-14 方案 C Stage 5 收尾
   'image',
   'file',
+  // 2026-07-24 W68 路线 G-1: 语音输入迁移到 MobileVoiceInputButton, 仍保留事件向上抛
   'voice-start',
   'voice-end',
+  'voice-transcribed',  // (text: string) ASR 完成后
+  'voice-auto-send',   // (text: string) autoSend=true 时
+  'voice-state',       // ('start' | 'cancel' | 'error')
   'focus',
   'clear-image',
   'clear-file',
@@ -170,12 +168,27 @@ function autoResize() {
 function onVoiceStart(e) {
   voiceRecording.value = true
   emit('voice-start', e)
+  // 2026-07-24 W68 G-1: 新路径通过 MobileVoiceInputButton 内部 start(), 这里只保留老路径兼容
+  emit('voice-state', 'start')
 }
 function onVoiceEnd(e) {
   if (voiceRecording.value) {
     voiceRecording.value = false
     emit('voice-end', e)
   }
+}
+
+function onTranscribed(text) {
+  // ASR 完成后透传 (父组件已通过 v-model:text 收到 update:text, 这里只用于钩子)
+  emit('voice-transcribed', text)
+}
+
+function onVoiceAutoSend(text) {
+  emit('voice-auto-send', text)
+}
+
+function onVoiceRecordingState(state) {
+  emit('voice-state', state)
 }
 
 function clearImage() {
