@@ -1,41 +1,206 @@
 name: qa-bench D5 gate (1000 题 baseline)
 
+# W67 第 30 步 (2026-07-23): 让 D5 gate 真实跑题
+# - 复制 qa-bench-smoke.yml 的 test DB stack 启动逻辑 (pg-test + app-test on 8001)
+# - 切 mimo cloud (而非 mock) 通过 MIMO_API_KEY
+# - --include-extra 合并 700+300 = 1000 题, --rounds 3 majority consensus
+# - 默认 timeout 90 分钟 (1000 题比 200 题慢)
+# - 真实门禁: pass_rate < 80% → exit 1
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   qa-bench-d5:
+    name: qa-bench D5 1000 题 baseline (test DB)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: tests/qa-bench/requirements.txt
 
-      - name: Install dependencies
+      - name: Install Python dependencies
+        working-directory: tests/qa-bench
         run: |
-          cd tests/qa-bench
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install --prefer-binary --retries 10 --timeout 60 -r requirements.txt
 
-      - name: Run qa-bench D5 (1000 题 baseline)
+      # === W67 第 30 步: 启动 test DB stack (复制自 qa-bench-smoke.yml) ===
+      # 改 LLM_BACKEND=openai_compat 走 mimo cloud (而非 mock)
+      - name: Start test DB stack (microbubble_test + app on 8001)
+        run: |
+          # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
+          docker network create qa-bench-net
+
+          # 起 test DB
+          docker run -d --name pg-test \
+            --network qa-bench-net \
+            -e POSTGRES_DB=microbubble_test \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=microbubble2026 \
+            postgres:16-alpine
+          # 等 pg-test ready (最长 60s)
+          for i in {1..30}; do
+            if docker exec pg-test pg_isready -U postgres > /dev/null 2>&1; then
+              echo "✓ pg-test ready"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "✗ pg-test startup timeout"
+              docker logs pg-test | tail -30
+              exit 1
+            fi
+            sleep 2
+          done
+
+          # 起 test app (8001 端口), 切 mimo cloud
+          docker run -d --name app-test \
+            --network qa-bench-net \
+            -p 8001:8000 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            -e REDIS_URL="redis://localhost:6379/1" \
+            -e MINIO_ENDPOINT="localhost:9000" \
+            -e MINIO_BUCKET="microbubble-test" \
+            -e MINIO_PUBLIC_URL="http://localhost:9001" \
+            -e LLM_BACKEND=openai_compat \
+            -e LLM_OPENAI_COMPAT_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1 \
+            -e LLM_OPENAI_COMPAT_MODEL=mimo-v2.5 \
+            -e SKIP_DB_SETUP=1 \
+            -v $(pwd)/app:/app/app \
+            -v $(pwd)/alembic/versions:/app/alembic/versions \
+            $(docker build -q .) \
+            uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
+
+          # 等 app-test healthy (最长 90s)
+          for i in {1..45}; do
+            if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
+              echo "✓ app-test healthy on 8001"
+              break
+            fi
+            if [ "$i" -eq 45 ]; then
+              echo "✗ app-test startup timeout"
+              docker logs app-test | tail -50
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - name: Init test DB schema + seed data
+        run: |
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            app-test python scripts/init_db.py 2>&1 | tail -5
+
+          # alembic stamp head (init_db 用 create_all, 不走 alembic, 需要手动 stamp)
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            app-test alembic stamp head 2>&1 | tail -3
+
+      - name: Ensure test user (xiaoqi_testbot) exists
+        run: |
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            app-test python scripts/ensure_test_user.py 2>&1 | tail -3
+          # 期望: [OK] 或 [CREATED] 都行 (幂等)
+
+      - name: Generate 1000 题题库 (D4 base 700 + D5 extra 300)
+        working-directory: tests/qa-bench
+        run: |
+          # 生成 base 700 题 (含 schema)
+          python gen780.py --output questions_780.jsonl --schema-only
+          wc -l questions_780.jsonl
+          # D4 extra 300 题已在 questions_d4_extra_300.jsonl (Agent 2 已合并, 不需要再生成)
+          if [ ! -f questions_d4_extra_300.jsonl ]; then
+            echo "✗ questions_d4_extra_300.jsonl 不存在, D5 无法跑"
+            exit 1
+          fi
+          wc -l questions_d4_extra_300.jsonl
+
+      # === 关键改动: --api-base http://localhost:8001 指向 test app + --include-extra 合并 1000 题 ===
+      - name: Run qa-bench D5 (1000 题 baseline, against test DB 8001)
+        working-directory: tests/qa-bench
         env:
-          # W67 (2026-07-23): 本地 LLM 切 mimo cloud (OpenAI 兼容协议), CI 必须用 MIMO_API_KEY
-          # GitHub Secrets 配置: Settings → Secrets and variables → Actions → New repository secret
-          #   Name: MIMO_API_KEY
-          #   Value: 主指挥从 https://token-plan-cn.xiaomimimo.com 拿的 mimo API key
+          # W67 第 29 步: 切 mimo cloud
           MIMO_API_KEY: ${{ secrets.MIMO_API_KEY }}
-          LLM_BACKEND: openai_compat  # W67 切到 OpenAI 兼容 (而非本地 ollama)
+          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+          LLM_BACKEND: openai_compat
           LLM_OPENAI_COMPAT_BASE_URL: https://token-plan-cn.xiaomimimo.com/v1
           LLM_OPENAI_COMPAT_MODEL: mimo-v2.5
         run: |
-          cd tests/qa-bench
-          python runner.py --rounds=3 --verdict-consensus=2 --include-extra --full-1000 --ci-gate --output=baseline_d5_1000.json
+          # --include-extra: 合并 700 base + 300 extra = 1000 题
+          # --rounds 3 + --verdict-consensus majority: 三轮多数决, 减少单轮随机噪声
+          # --concurrency 3: mimo tier 限流保护 (1000 题 30-60 min)
+          python runner.py \
+            --token "${QA_TOKEN:-mock}" \
+            --api-base "http://localhost:8001" \
+            --include-extra \
+            --rounds 3 \
+            --verdict-consensus majority \
+            --output results/baseline_d5_1000 \
+            --concurrency 3
+          # 期望 ~60 分钟跑完 (1000 题 × 3 rounds × 1 majority consensus, mimo tier)
+          if [ -f results/baseline_d5_1000/results.json ]; then
+            echo "✓ D5 1000 题完成 (test DB, 无生产污染)"
+            cat results/baseline_d5_1000/report.md | head -50
+          else
+            echo "✗ D5 失败"
+            exit 1
+          fi
 
-      # CI 门禁: pass rate < 80% → exit 1
-      # runner.py 内部检查 --ci-gate 标志时, 低于门禁则非零退出
+      - name: Upload D5 baseline report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-bench-d5-baseline
+          path: tests/qa-bench/results/baseline_d5_1000/
+          retention-days: 30
+
+      # === 硬门禁: pass_rate < 80% → exit 1 (即使 runner.py 跑了也得验证) ===
+      - name: Fail if pass_rate < 80%
+        if: always()
+        working-directory: tests/qa-bench
+        run: |
+          if [ -f results/baseline_d5_1000/results.json ]; then
+            PASS_RATE=$(python3 << 'PYEOF'
+          import json
+          with open('results/baseline_d5_1000/results.json') as f:
+              d = json.load(f)
+          total = d['summary']['total']
+          pass_ = d['summary']['pass']
+          print(round(pass_ / max(total, 1) * 100, 1))
+          PYEOF
+          )
+            echo "D5 通过率: ${PASS_RATE}%"
+            python3 << 'PYEOF'
+          import sys
+          pass_rate = float('${PASS_RATE}')
+          threshold = 80.0
+          if pass_rate < threshold:
+              print(f'❌ 通过率 {pass_rate}% < 阈值 {threshold}%, D5 gate 阻断 merge')
+              sys.exit(1)
+          else:
+              print(f'✓ 通过率 {pass_rate}% >= 阈值 {threshold}%, D5 gate 通过')
+          PYEOF
+          fi
+
+      # === Teardown: 清 test stack ===
+      - name: Teardown test stack
+        if: always()
+        run: |
+          docker rm -f app-test pg-test 2>/dev/null || true
+          docker network rm qa-bench-net 2>/dev/null || true
+          echo "✓ test DB stack cleaned up"
