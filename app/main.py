@@ -8,6 +8,11 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 
 from app.config import settings
+import os
+# W67 第 41 步 (Agent 21): SKIP_DB_SETUP 短路 lifespan 内全部 DB 启动操作
+# CI 测试场景 (e.g. qa-bench-ci.yml test DB): scripts/init_db.py 由单独的 docker exec 步执行,
+# 避免 lifespan 阻塞 /health 端点超时. 默认 False (生产/本地开发仍是幂等 create_all).
+SKIP_DB_SETUP = os.environ.get("SKIP_DB_SETUP", "").lower() in ("1", "true", "yes")
 # 2026-06-14 收官：提前 import 触发所有 @tool 装饰器执行，
 # 避免 chat 第一次请求时 TOOL_REGISTRY 还是空的（导致模型在 content 里 fake tool_call，
 # fake parser 解析后 dispatch_tool 又报 TOOL_NOT_FOUND）
@@ -45,47 +50,53 @@ async def lifespan(app: FastAPI):
             warnings.warn("SECRET_KEY 使用了不安全的默认值，生产环境请务必修改")
 
     # 启动时执行
-    # 先尝试安装 pgvector 扩展（单独事务，失败不影响后续操作）
-    try:
+    # W67 第 41 步 (Agent 21): SKIP_DB_SETUP=1 时全量跳过 lifespan 内 DB 启动操作.
+    # CI test app (qa-bench-ci.yml) 由 scripts/init_db.py 单独 docker exec 跑 create_all + seed,
+    # lifespan 此处只阻塞 /health 端点 ~30s+ 没有任何收益. 见文档 memory/w67-...-init-db-fast-2026-07-23.md
+    if SKIP_DB_SETUP:
+        print("[SKIP_DB_SETUP] 跳过 lifespan 内 DB 启动操作 (create_all / seed_formula_library / reminder sync)")
+    else:
+        # 先尝试安装 pgvector 扩展（单独事务，失败不影响后续操作）
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            print("pgvector 扩展已安装")
+        except Exception as e:
+            print(f"pgvector 扩展安装失败（可忽略，语义搜索将不可用）: {e}")
+
+        # 创建数据库表
         async with engine.begin() as conn:
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        print("pgvector 扩展已安装")
-    except Exception as e:
-        print(f"pgvector 扩展安装失败（可忽略，语义搜索将不可用）: {e}")
+            await conn.run_sync(Base.metadata.create_all)
+        print("数据库表创建完成")
 
-    # 创建数据库表
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    print("数据库表创建完成")
+        # 初始化内置公式库（幂等）
+        try:
+            from app.core.database import async_session
+            from app.seed.seeder import seed_formula_library
+            async with async_session() as db:
+                await seed_formula_library(db)
+        except Exception as e:
+            print(f"内置公式库初始化失败（可忽略）: {e}")
 
-    # 初始化内置公式库（幂等）
-    try:
-        from app.core.database import async_session
-        from app.seed.seeder import seed_formula_library
-        async with async_session() as db:
-            await seed_formula_library(db)
-    except Exception as e:
-        print(f"内置公式库初始化失败（可忽略）: {e}")
-
-    # 启动时同步待发送提醒到 Redis（实现秒级精确提醒）
-    try:
-        from app.core.database import async_session
-        from app.models.reminder import Reminder
-        from app.services.reminder_scheduler import reminder_scheduler
-        from sqlalchemy import select
-        async with async_session() as db:
-            result = await db.execute(
-                select(Reminder).where(Reminder.status == "pending")
-            )
-            pending = result.scalars().all()
-            if pending:
-                await reminder_scheduler.sync_from_db([
-                    {"id": r.id, "remind_at_ts": r.remind_at.timestamp()}
-                    for r in pending
-                ])
-                print(f"已同步 {len(pending)} 条待发送提醒到 Redis")
-    except Exception as e:
-        print(f"提醒同步到 Redis 失败（可忽略）: {e}")
+        # 启动时同步待发送提醒到 Redis（实现秒级精确提醒）
+        try:
+            from app.core.database import async_session
+            from app.models.reminder import Reminder
+            from app.services.reminder_scheduler import reminder_scheduler
+            from sqlalchemy import select
+            async with async_session() as db:
+                result = await db.execute(
+                    select(Reminder).where(Reminder.status == "pending")
+                )
+                pending = result.scalars().all()
+                if pending:
+                    await reminder_scheduler.sync_from_db([
+                        {"id": r.id, "remind_at_ts": r.remind_at.timestamp()}
+                        for r in pending
+                    ])
+                    print(f"已同步 {len(pending)} 条待发送提醒到 Redis")
+        except Exception as e:
+            print(f"提醒同步到 Redis 失败（可忽略）: {e}")
 
     yield
     # 关闭时执行
