@@ -50,6 +50,23 @@
 
     <!-- 预览主体 -->
     <div v-else-if="file" class="mfps-body">
+      <!-- v2 PR8e (2026-07-24): 预览元信息条 (60s Redis 缓存) -->
+      <div v-if="previewMeta" class="mfps-meta-bar">
+        <span v-if="previewMeta.preview_type === 'image' && previewMeta.width && previewMeta.height" class="mfps-meta-pill">
+          🖼 {{ previewMeta.width }} × {{ previewMeta.height }} px
+        </span>
+        <span v-else-if="previewMeta.preview_type === 'pdf' && previewMeta.page_count" class="mfps-meta-pill">
+          📄 {{ previewMeta.page_count }} 页
+        </span>
+        <span v-else-if="previewMeta.preview_type === 'text'" class="mfps-meta-pill">
+          📝 文本预览
+        </span>
+        <span v-else class="mfps-meta-pill">
+          📦 {{ formatSize(file.file_size) }}
+        </span>
+        <span v-if="previewMeta.cached" class="mfps-meta-cached" title="60s Redis 缓存">⚡ 缓存</span>
+      </div>
+
       <!-- 图片预览 -->
       <div v-if="previewType === 'image'" class="mfps-image-wrapper">
         <img :src="blobUrl" :alt="file.file_name" class="mfps-image" />
@@ -136,6 +153,8 @@ const file = ref(null)
 const blobUrl = ref('')
 const loading = ref(false)
 const loadError = ref('')
+// v2 PR8e (2026-07-24): preview meta 状态 (60s Redis 缓存)
+const previewMeta = ref(null)
 
 const fileIdList = computed(() => {
   const raw = route.query.list
@@ -210,6 +229,7 @@ async function loadFile() {
   loading.value = true
   loadError.value = ''
   file.value = null
+  previewMeta.value = null  // v2 PR8e
   // 清理旧 blob URL 防止内存泄漏
   if (blobUrl.value) {
     URL.revokeObjectURL(blobUrl.value)
@@ -220,6 +240,14 @@ async function loadFile() {
     // 1. 元信息
     const metaResp = await axios.get(`/api/v1/drive/files/${id}`)
     file.value = metaResp.data
+
+    // v2 PR8e (2026-07-24): 拉预览 meta (60s Redis 缓存, 失败不阻塞主流程)
+    try {
+      const previewResp = await axios.get(`/api/v1/drive/files/${id}/preview`)
+      previewMeta.value = previewResp.data
+    } catch (previewErr) {
+      console.warn('[MobileFilePreviewSwipe] preview meta 拉取失败, 降级显示:', previewErr)
+    }
 
     // 2. blob (仅当预览类型支持时拉取)
     if (previewType.value !== 'unsupported') {
@@ -352,10 +380,42 @@ onMounted(() => {
 .mfps-body {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 16px;
   overflow: auto;
+}
+
+/* v2 PR8e (2026-07-24): 预览元信息条 (image 尺寸 / PDF 页数 / text 标志 / 缓存命中) */
+.mfps-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--color-bg-card, #fff);
+  border: 1px solid var(--color-border-light, rgba(0, 0, 0, 0.08));
+  border-radius: var(--radius-md, 8px);
+  font-size: 13px;
+  color: var(--color-text-secondary, #666);
+  align-self: stretch;
+  justify-content: flex-start;
+}
+
+.mfps-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  font-weight: var(--font-weight-medium, 500);
+}
+
+.mfps-meta-cached {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-success, #67c23a);
+  background: rgba(103, 194, 58, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
 .mfps-image-wrapper,
@@ -514,5 +574,11 @@ onMounted(() => {
 [data-theme='dark'] .mfps-nav-btn {
   border-color: var(--color-border);
   color: var(--color-text-primary);
+}
+/* v2 PR8e (2026-07-24): 预览 meta bar dark mode 覆盖 (v60-v67 教训第 5 次强化) */
+[data-theme='dark'] .mfps-meta-bar {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
 }
 </style>

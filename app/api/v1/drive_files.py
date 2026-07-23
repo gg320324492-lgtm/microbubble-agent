@@ -9,6 +9,8 @@
   POST   /api/v1/drive/files/{id}/restore → 恢复 (3 天保留期内)
   POST   /api/v1/drive/files/{id}/extract-to-kb → 升级到公共知识库
   GET    /api/v1/drive/storage-stats  → 容量统计 (per member)
+  GET    /api/v1/drive/files/{id}/preview → 预览元信息 (image/pdf/text, 60s Redis 缓存) [v2 PR8e]
+  GET    /api/v1/drive/files/{id}/thumbnail → 缩略图 URL
 
 Multipart 简化 (PR2.3): 单端点流式接收 + minio 自管分片
   POST   /api/v1/drive/files/upload   → multipart 接收 (单端点, content-type: multipart/form-data)
@@ -173,6 +175,36 @@ class ThumbnailResponse(BaseModel):
     thumbnail_path: Optional[str] = None
     thumbnail_status: str  # pending | ready | failed
     thumbnail_url: Optional[str] = None  # MinIO 公开读 URL 或 None
+
+
+class PreviewResponse(BaseModel):
+    """v2 PR8e: GET /api/v1/drive/files/{id}/preview 响应 (轻量元信息, 60s Redis 缓存)
+
+    用途: 前端 grid/list 卡片快速拿到预览类型 + 缩略图 URL + 文字预览头部 + PDF 页数,
+    避免每次点开都拉整文件 + 让 file-detail 页能秒开"封面信息"块.
+
+    字段:
+    - file_id / file_name / file_type / file_size: 复用 DriveFileItem 核心字段
+    - preview_type: image | pdf | text | other (前端按此选择渲染策略)
+    - cached: True=从 Redis 缓存返, False=实时解析
+    - width / height: 仅 image 类型, 用 Pillow 取真实像素
+    - page_count: 仅 pdf 类型, 用 PyMuPDF 取
+    - thumbnail_url: 复用 thumbnail_path 的 MinIO 公开 URL (无 JWT, 浏览器直拉)
+    - text_preview: 仅 text 类型, 前 1KB UTF-8 字符串 (空字符串表示 binary)
+    - first_page_url: 仅 pdf 类型, 公开读 URL (无 ?disposition=inline, 让浏览器用 PDF viewer 渲染)
+    """
+    file_id: int
+    file_name: str
+    file_type: str
+    file_size: int
+    preview_type: str  # image | pdf | text | other
+    cached: bool = False
+    width: Optional[int] = None
+    height: Optional[int] = None
+    page_count: Optional[int] = None
+    thumbnail_url: Optional[str] = None
+    text_preview: Optional[str] = None  # 最多 1KB, text-only
+    first_page_url: Optional[str] = None  # pdf 公开读 (CDN/预签名)
 
 
 def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem:
@@ -1832,6 +1864,242 @@ async def get_thumbnail(
         thumbnail_status=k.thumbnail_status or "pending",
         thumbnail_url=thumb_url,
     )
+
+
+# ============================================================
+# v2 PR8e: 预览元信息端点 (60s Redis 缓存) — 2026-07-24
+# ============================================================
+#
+# 设计: 与 thumbnail 端点互补
+# - thumbnail: 返 200x200 缩略图 (适合 list 卡片, PR5 已有)
+# - preview: 返 轻量元信息 (适合 detail 页"封面"块 + 文件选择器)
+#   - image: width/height + thumbnail_url
+#   - pdf: page_count + first_page_url
+#   - text: 前 1KB 文本
+#   - other: 仅 file_type/file_size (前端 fallback)
+#
+# 60s 缓存理由: 预览元信息稳定 (文件不变元信息不变), 但又不能 cache 太久
+# (用户上传新版本要能秒看到新页数), 60s 是 mobile feed 类短轮询的甜点
+#
+# 复用 thumbnail (200x200) 而非新生成 1024px 大图: PR8e 范围严格 1-2 文件,
+# 大图渲染留给未来 PR. thumbnail_status=failed 时仍能根据 file_type 给个
+# type-icon URL (thumbnail_url=None, 前端用 type icon fallback)
+
+
+PREVIEW_CACHE_TTL = 60  # Redis TTL (秒)
+PREVIEW_TEXT_MAX_BYTES = 1024  # text preview 截断阈值
+PREVIEW_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".svg"}
+PREVIEW_PDF_EXT = {".pdf"}
+PREVIEW_TEXT_EXT = {
+    ".txt", ".md", ".json", ".csv", ".tsv", ".xml", ".log",
+    ".yaml", ".yml", ".ini", ".conf", ".sh", ".bat",
+    ".sql", ".env", ".properties", ".html", ".htm",
+}
+
+
+def _classify_preview_type(file_name: str, file_type: str) -> str:
+    """返回 preview_type: image | pdf | text | other
+
+    优先按扩展名判断 (更准), fallback 用 file_type (MIME 字符串).
+    """
+    import os as _os
+    ext = ""
+    if file_name:
+        ext = _os.path.splitext(file_name)[1].lower()
+    if not ext and file_type:
+        # file_type 可能是 ".pdf" 或 "application/pdf", 兼容两种
+        ft = file_type.lower().strip()
+        if ft.startswith("."):
+            ext = ft
+        elif "/" in ft:
+            # 简化映射
+            if ft.startswith("image/"):
+                return "image"
+            if ft == "application/pdf":
+                return "pdf"
+            if ft.startswith("text/"):
+                return "text"
+    if ext in PREVIEW_IMAGE_EXT:
+        return "image"
+    if ext in PREVIEW_PDF_EXT:
+        return "pdf"
+    if ext in PREVIEW_TEXT_EXT:
+        return "text"
+    return "other"
+
+
+async def _read_minio_bytes(object_name: str, max_bytes: int = 5 * 1024 * 1024) -> Optional[bytes]:
+    """从 MinIO 读文件字节 (封顶 max_bytes, 5MB 默认, 防止大文件 OOM)
+
+    失败 (文件不存在 / 超限) 返回 None.
+    """
+    import asyncio as _asyncio
+    try:
+        def _sync_read() -> bytes:
+            response = file_service.client.get_object(
+                file_service.bucket, object_name,
+            )
+            try:
+                data = response.read(max_bytes + 1)  # 多读 1 字节判断是否超限
+                return data
+            finally:
+                response.close()
+                response.release_conn()
+        return await _asyncio.to_thread(_sync_read)
+    except Exception as e:
+        logger.warning(f"[preview] 读 MinIO 失败 {object_name}: {e}")
+        return None
+
+
+def _probe_image(data: bytes) -> tuple:
+    """Pillow 取 image 宽高, 失败返 (None, None).
+
+    性能: 200x200 jpg ~10ms, 5MB png ~50ms (I/O 主导).
+    """
+    try:
+        from PIL import Image
+        import io as _io
+        img = Image.open(_io.BytesIO(data))
+        w, h = img.size
+        img.close()
+        return w, h
+    except Exception:
+        return None, None
+
+
+def _probe_pdf(data: bytes) -> Optional[int]:
+    """PyMuPDF 取 pdf 页数, 失败返 None.
+
+    注意: doc.close() 必须 finally, 避免文件句柄泄漏.
+    """
+    try:
+        import fitz  # PyMuPDF
+        import io as _io
+        doc = fitz.open(stream=data, filetype="pdf")
+        try:
+            return len(doc)
+        finally:
+            doc.close()
+    except Exception:
+        return None
+
+
+def _read_text_preview(data: bytes) -> str:
+    """读前 1KB 文本 (binary 时返空字符串)
+
+    binary 检测: 前 512 字节含 NUL byte 即判 binary.
+    UTF-8 容错解码 (fatal=False), 截断时不抛.
+    """
+    if not data:
+        return ""
+    # binary 检测
+    sample = data[:512]
+    for byte in sample:
+        if byte == 0:
+            return ""
+    # UTF-8 解码 + 截断
+    preview = data[:PREVIEW_TEXT_MAX_BYTES]
+    text = preview.decode("utf-8", errors="replace")
+    return text
+
+
+@router.get("/files/{file_id}/preview", response_model=PreviewResponse)
+async def get_file_preview(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: Member = Depends(get_current_user),
+):
+    """v2 PR8e: 获取文件预览元信息 (60s Redis 缓存)
+
+    - image → width/height + thumbnail_url
+    - pdf → page_count + first_page_url
+    - text → text_preview (前 1KB)
+    - other → 仅 file_type/file_size
+
+    越权: 必须能 get_file 才返 (复用 drive_service.get_file)
+    失败: MinIO 读失败/Pillow/PyMuPDF 失败 → 字段 None, 不抛 5xx
+    """
+    import json as _json
+    import asyncio as _asyncio
+    from app.core.redis import get_redis
+
+    # 1) 越权 + 元信息
+    svc = DriveService(db)
+    k = await svc.get_file(file_id, user.id)
+    if not k:
+        raise HTTPException(status_code=404, detail="文件不存在或无权访问")
+
+    # 2) Redis 缓存查询 (per file_id, 含 user_id 防越权穿透)
+    cache_key = f"drive:preview:v1:{user.id}:{file_id}"
+    redis_client = await get_redis()
+    try:
+        cached_str = await redis_client.get(cache_key)
+        if cached_str:
+            cached = _json.loads(cached_str)
+            cached["cached"] = True
+            return PreviewResponse(**cached)
+    except Exception as e:
+        # Redis 不可用不阻塞主流程 (降级实时解析)
+        logger.warning(f"[preview] Redis get 失败, 降级实时解析: {e}")
+
+    # 3) 实时解析
+    file_name = k.file_name or k.title or f"file_{k.id}"
+    file_type = k.file_type or ""
+    preview_type = _classify_preview_type(file_name, file_type)
+
+    # thumbnail_url 复用 thumbnail_path (MinIO 公开读 URL)
+    thumbnail_url = None
+    if k.thumbnail_status == "ready" and k.thumbnail_path:
+        thumbnail_url = file_service.get_url(k.thumbnail_path, expires=3600)
+
+    width = height = None
+    page_count = None
+    text_preview = None
+    first_page_url = None
+
+    # 仅在有 MinIO 对象时尝试解析元信息
+    if k.file_path and preview_type in ("image", "pdf", "text"):
+        # 异步读 (限 5MB, 避免大文件 OOM)
+        data = await _read_minio_bytes(k.file_path, max_bytes=5 * 1024 * 1024)
+        if data is not None:
+            if preview_type == "image":
+                width, height = await _asyncio.to_thread(_probe_image, data)
+            elif preview_type == "pdf":
+                page_count = await _asyncio.to_thread(_probe_pdf, data)
+                # first page URL 复用 thumbnail_url 模式 (MinIO 公开读)
+                # 注意: 这是整个 PDF 的公开读 URL, 浏览器 PDF viewer 默认显示第一页
+                if thumbnail_url:
+                    first_page_url = thumbnail_url  # 走 thumbnail URL 模式
+            elif preview_type == "text":
+                text_preview = await _asyncio.to_thread(_read_text_preview, data)
+
+    # 4) 构造响应
+    response = PreviewResponse(
+        file_id=k.id,
+        file_name=file_name,
+        file_type=file_type,
+        file_size=k.file_size or 0,
+        preview_type=preview_type,
+        cached=False,
+        width=width,
+        height=height,
+        page_count=page_count,
+        thumbnail_url=thumbnail_url,
+        text_preview=text_preview,
+        first_page_url=first_page_url,
+    )
+
+    # 5) 写 Redis 缓存 (best-effort, 失败不阻塞)
+    try:
+        await redis_client.setex(
+            cache_key,
+            PREVIEW_CACHE_TTL,
+            response.model_dump_json(),
+        )
+    except Exception as e:
+        logger.warning(f"[preview] Redis setex 失败 (非阻塞): {e}")
+
+    return response
 
 
 # ============================================================
