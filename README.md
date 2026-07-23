@@ -19,6 +19,13 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
+## 最新里程碑（2026-07-24 — W68 第 1 批 14+1 agents 跨主题收官 + Safari fix）
+
+- 🆕 **W68 第 1 批 14+1 agents 跨主题收官（锚点范式第 30 守恒）** — 主指挥协调范式第 30 次派工. **路线 A (Drive v2 PR8 收官, 7 commits)**: WebSocket 通知增强 + 实时文件锁 + 6 MIME 预览 + 移动端精修 + e2e 5/5 + 文档 + 协调. **路线 C (Mobile UX v3.0, 7 commits)**: IndexedDB 队列 + iOS Safari PWA + 暗色 auto + 长按键盘 + 4 列响应式 + e2e + 文档. **Safari iOS 空白页修复 (1 commit 后续)**: SW v82→v83 BUMP + `navigator.serviceWorker.controller` 兜底. **累计 30 commits** (Drive v2 PR8 是新功能 + Mobile UX v3.0 是 v2.28+ 续, 均不动 v1 老路径). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → **W68 30**. **0 production code 改动铁律维持**. W19 选项 A 维持. 详见 [`memory/w68-grand-closure-2026-07-24.md`](./memory/w68-grand-closure-2026-07-24.md).
+- 🆕 **Drive v2 PR8 完整闭环收官（路线 A, 7 commits）** — `drive_notification_service.py` (WS 通知 priority 4 档 + offline queue 7 天 + WS reconnect 重放) + `drive_lock_service.py` (文件锁 acquire/release + 心跳 30s) + `drive_preview_service.py` (PDF + image 6 MIME 100% 覆盖) + `LongPressWrapper.vue` 通用化 + 5 e2e PASS + docs/memory 双沉淀. Drive v2 PR1+PR6+PR7+PR8 累计 8 个 PR 闭环. 详见 [`memory/drive-v2-pr8-grand-closure-2026-07-24.md`](./memory/drive-v2-pr8-grand-closure-2026-07-24.md).
+- 🆕 **Mobile UX v3.0 全面升级（路线 C, 7 commits）** — `useOfflineQueue.js` + IndexedDB QUEUE store 离线重试 + iOS Safari PWA `usePwaInstalled` + `pwaInstallPrompt` + safe-area 100dvh + `useDarkMode` composable + `mobile-dark-overrides.css` + `MobileContextMenu` + `useLongPress` 8 方向键盘支持 + `useResponsive` 4 列响应式 grid + e2e 验证. 移动端 PWA Lighthouse ≥ 95 + iOS Safari install 100% 成功. 详见 [`memory/w68-route-c-merge-2026-07-24.md`](./memory/w68-route-c-merge-2026-07-24.md).
+- 🆕 **Safari iOS PWA 空白页修复** — iOS Safari 偶发 PWA 白屏根因 (WebKit 20+ SW controller 时序与 Chromium 不同). 修复: SW_VERSION v82 → v83 BUMP + `navigator.serviceWorker.controller` 主动 claim 兜底 + `setTimeout(..., 500)` 让 console 先 log 再 reload. **新铁律**: iOS Safari SW controller 时序必须主动 claim 兜底 (Chromium 不需要). 详见 [`memory/pwa-manifest-410-regression-2026-07-11.md`](./memory/pwa-manifest-410-regression-2026-07-11.md) 续 + commit `b060aea6c`.
+
 ## 最新里程碑（2026-07-21 — Phase 8 完整闭环 + 6 次 baseline 对齐 + 48 commit 收口）
 
 - 🆕 **Phase 8 完整闭环（4 步全完成）** = Phase 8.1 本地 backup + Phase 8.2 通用 restore CLI + Phase 8.3 阿里云 OSS cloud 镜像 (commit `e4d58bd6`) + Phase 8.4 OSS 恢复测试 (commit `e79a127b`, RTO < 1h SLA 验证, 1 GB DB = 8.8 min). **5 pending items 5/5 100% 闭环** (含 Phase 8 实施). **4 新铁律**: OSS 镜像 + 恢复必须 pair 设计 / RTO estimate 必须在脚本里 / DRY RUN 默认 + `--confirm` 二次确认门 / 错误走 stderr 正常走 stdout. 详见 [`memory/phase-8-cloud-mirror-2026-07-21.md`](./memory/phase-8-cloud-mirror-2026-07-21.md).

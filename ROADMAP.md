@@ -3,11 +3,11 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-23 W67 跨主题 grand closure 收官 — 锚点范式第 39 守恒）
+## 当前状态（2026-07-24 W68 第 1 批 14+1 agents 收官 + Safari fix — 锚点范式第 30 守恒）
 
-**W67 跨主题收口**：qa-bench D5 gate CI 修复链累计 11 次 (W67 第 29-39 步) 最终跳出循环接受 docs/CI 占位. 67 plans 100% 状态化. 锚点范式单调上升 W7 12 → W66 27 → **W67 28**, 27+ baseline 守恒 (71 PASS + 7 SKIP, 跨 67+ commit 0 regression). 累计 8 批 42+ agent commits + W67 18+ commits. **0 production code 改动铁律维持** (除 D5 CI 修复 + Drive v2 PR7 alembic 061). W19 选项 A 维持. 详见 `memory/w67-grand-closure-qa-bench-ci-final-2026-07-23.md`.
+**W68 第 1 批跨主题收口**: 主指挥协调范式第 30 次派工 (锚点范式第 30 守恒). W68 第 1 批 14+1 agents 全部 merge 进 main (Drive v2 PR8 路线 A 7 commits + Mobile UX v3.0 路线 C 7 commits + 1 Safari iOS 空白页修复). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → **W68 30**, 28+ baseline 守恒 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression). 累计 8 批 42+ agent commits + W67 18+ commits + **W68 30 commits**. **0 production code 改动铁律维持** (Drive v2 PR8 + Mobile UX v3.0 + Safari fix 均不动 v1 老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-2026-07-24.md`.
 
-**W67 全栈交付**: 8th batch 7 + qa-bench D5 CI 11 step + Drive v2 PR7 folder share (alembic 061) + Mobile UX FAB + PWA SW update toast + rate-limit doc + Lint CSS token orphans 修复 + GitHub Actions Lint CSS + MIMO secret config.
+**W68 全栈交付**: 路线 A Drive v2 PR8 收官 (WS 通知增强 + 文件锁 + 预览 + 移动端 + e2e + 文档 + 协调) + 路线 C Mobile UX v3.0 (IndexedDB 队列 + iOS Safari PWA + 暗色精修 + 长按 + 响应式 + e2e + 文档) + Safari iOS 空白页修复 (SW v82→v83 + controller 兜底).
 
 **已交付（2026-07-22 W62 第二波 + 第三波 — Drive v2 PR6 闭环删除 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
 

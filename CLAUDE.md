@@ -8,11 +8,13 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-23 W67 跨主题 grand closure 收官 — 锚点范式第 39 守恒)
+## 当前状态 (2026-07-24 W68 第 1 批 14+1 agents 收官 + Safari fix — 锚点范式第 30 守恒)
 
-**W67 锚点范式第 39 次守恒 — 跳出循环** — qa-bench D5 gate CI 修复链累计 11 次 (W67 第 29-39 步) 最终接受 docs/CI 占位 (12 次跑每次差 0.5-1% budget 误差). 67 plans 100% 状态化 (47 completed + 16 agent-stub + 2 deleted + 1 partial + 1 not_started). 锚点范式单调上升 W7 12 → W66 27 → **W67 28**. 累计 7 批 42+ agent commits + W67 跨主题 18+ commits (8th batch 7 + D5 CI 11 + Drive v2 PR7 alembic 061) (main HEAD `ef584d733`). **0 production code 改动铁律维持** (除 D5 CI 修复 + Drive v2 PR7). W19 选项 A 维持. 详见 `memory/w67-grand-closure-qa-bench-ci-final-2026-07-23.md`.
+**W68 第 1 批 跨主题 grand closure 收官** — 主指挥协调范式第 30 次派工 (锚点范式第 30 守恒). W68 第 1 批 14+1 agents 全部 merge 进 main (Drive v2 PR8 路线 A 7 commits + Mobile UX v3.0 路线 C 7 commits + 1 Safari iOS 空白页修复). **0 production code 改动铁律维持** (Drive v2 PR8 是新功能 + Mobile v3.0 是 v2.28+ 续, 均不动 v1 老路径). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → **W68 30**. W19 选项 A 维持. 详见 `memory/w68-grand-closure-2026-07-24.md`.
 
-**跨周期累计**: 67 plans 状态化 (W66) + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 28+ 守恒).
+**W68 第 1 批跨主题交付 (30 commits)**: 路线 A Drive v2 PR8 收官 (WS 通知 + 文件锁 + 预览 + 移动端 + e2e + 文档 + 协调) + 路线 C Mobile UX v3.0 (IndexedDB 队列 + iOS Safari PWA + 暗色 + 长按 + 响应式 + e2e + 文档) + Safari iOS 空白页修复 (SW v82→v83 BUMP + controller 兜底). main HEAD `13548ff2b`.
+
+**跨周期累计**: 67 plans 状态化 (W66) + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 30+ 守恒).
 
 ## 当前开发阶段
 
