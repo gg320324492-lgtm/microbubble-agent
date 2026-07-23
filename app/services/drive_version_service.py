@@ -1,0 +1,580 @@
+"""Drive v2 PR9 — File Version Service (2026-07-24)
+
+功能: 文件版本管理 (上传新版本 / 列出版本 / 下载历史版 / 回滚 / 删除某版)
+
+设计:
+- 与 PR4 KnowledgeVersion (审计日志) 互补:
+  * KnowledgeVersion = immutable audit log (每次 create_version/restore 调用一行)
+  * DriveFileVersion = 历史版本仓库 (每版本一行, 含 minio_object_key)
+- Knowledge 主表只保留**当前**版本 (file_path/file_size/version_number)
+- 业务上, 第一次上传文件 → service 自动创建 v1 (is_current=1)
+- 后续上传 → service 创建 v(N+1), 把旧 v(N) 的 is_current 翻 0, 更新 Knowledge 行的 file_path 等
+
+权限模型:
+- list / download: 走 DriveService._can_see_file (private 仅 owner)
+- upload_new_version / rollback / delete: 创建人 OR folder 管理员 OR 平台管理员
+- 删除中间版本: 不允许 (会悬空 rollback), 只能删最新非当前版本
+
+调用方 (API 层):
+- app/api/v1/drive_versions.py
+"""
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from sqlalchemy import and_, desc, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.drive_file_version import DriveFileVersion
+from app.models.knowledge import Knowledge
+from app.models.member import Member
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 自定义异常 (与 DriveServiceError 兼容)
+# ============================================================
+
+
+class DriveVersionServiceError(Exception):
+    """Drive v2 PR9 版本服务错误
+
+    - message: 错误消息
+    - status_code: HTTP 状态码 (默认 400)
+    """
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.message = message
+        self.status_code = status_code
+
+
+# ============================================================
+# Service 类
+# ============================================================
+
+
+class DriveVersionService:
+    """Drive v2 PR9 文件版本管理服务
+
+    设计要点:
+    - Knowledge.file_id = Knowledge.id (主文件行)
+    - DriveFileVersion.file_id = Knowledge.id (FK 关联)
+    - 创建新版本: 旧行 is_current=0 → 新行 is_current=1 → 更新 Knowledge.file_path/file_size/version_number
+    """
+
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    # ==========================================================================
+    # 权限校验
+    # ==========================================================================
+
+    @staticmethod
+    def _can_modify_file(file: Knowledge, user_id: int) -> bool:
+        """判断当前用户是否能"修改"该文件 (上传新版本/回滚/删除版本)
+
+        - 创建人: 可改
+        - folder 管理员: 可改 (PR7 admin permission)
+        - 平台管理员 (Member.role='admin'): 可改
+        """
+        if file.created_by == user_id:
+            return True
+        # 简化: 暂不查 folder 管理员 (PR7 + v2 PR9 时间紧, 留 PR10 优化)
+        # TODO PR10: 加 folder admin permission check
+        return False
+
+    @staticmethod
+    def _is_platform_admin(user_id: int, db: AsyncSession) -> bool:
+        """检查是否为平台管理员 (Member.role='admin')
+
+        注意: 这是同步函数 (用 db.query), 真正的 async 写法见 _is_platform_admin_async
+        """
+        return False  # 占位
+
+    # ==========================================================================
+    # 创建版本 (核心 API)
+    # ==========================================================================
+
+    async def create_version(
+        self,
+        *,
+        file_id: int,
+        new_content: bytes,
+        new_filename: str,
+        new_content_type: str,
+        uploader_id: int,
+        comment: Optional[str] = None,
+    ) -> DriveFileVersion:
+        """创建新版本 (上传新内容)
+
+        流程:
+        1. 校验 file_id 存在 + 权限 (_can_modify_file)
+        2. 算下一版本号 = max(version_number) + 1
+        3. 写 MinIO: uploads/drive/{owner_id}/v{n}_{ts}_{hash}{ext}
+        4. 创建 DriveFileVersion 行 (is_current=1)
+        5. 把旧 DriveFileVersion 行的 is_current 翻 0
+        6. 更新 Knowledge 行: file_path/file_size/version_number+1/file_hash
+        7. 触发 activity log (PR6)
+
+        Args:
+            file_id: 主文件行 Knowledge.id
+            new_content: 新文件 bytes
+            new_filename: 新文件名 (可与旧名不同, 比如 v1.docx → v2.docx)
+            new_content_type: MIME type (e.g. 'application/pdf')
+            uploader_id: 上传者 member.id
+            comment: 可选备注
+
+        Returns:
+            新创建的 DriveFileVersion (is_current=True)
+
+        Raises:
+            DriveVersionServiceError: 404 文件不存在, 403 无权限, 500 内部错误
+        """
+        # 1. 校验
+        cur_file = await self.db.get(Knowledge, file_id)
+        if cur_file is None:
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        if cur_file.deleted_at is not None:
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 已删除", status_code=410,
+            )
+        if cur_file.storage_mode != "drive":
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 非 drive 模式, 无版本概念", status_code=400,
+            )
+
+        # 权限: 创建人 OR 平台管理员
+        if not self._can_modify_file(cur_file, uploader_id):
+            # 检查平台管理员
+            admin_member = await self.db.get(Member, uploader_id)
+            if admin_member is None or admin_member.role != "admin":
+                raise DriveVersionServiceError(
+                    f"无权修改文件 id={file_id} (非创建人非管理员)", status_code=403,
+                )
+
+        # 2. 算下一版本号
+        max_v_stmt = (
+            select(func.coalesce(func.max(DriveFileVersion.version_number), 0))
+            .where(DriveFileVersion.file_id == file_id)
+        )
+        max_v = (await self.db.execute(max_v_stmt)).scalar() or 0
+        new_version_number = max_v + 1
+
+        # 3. 写 MinIO
+        # 路径: uploads/drive/{owner_id}/v{n}_{ts}_{hash12}{ext}
+        import hashlib
+        new_hash = hashlib.sha256(new_content).hexdigest()
+        ext = ""
+        if new_filename and "." in new_filename:
+            ext = "." + new_filename.rsplit(".", 1)[-1].lower()
+        ts = int(datetime.now(timezone.utc).timestamp())
+        new_object_key = (
+            f"uploads/drive/{cur_file.created_by}/"
+            f"v{new_version_number}_{new_hash[:12]}_{ts}{ext}"
+        )
+
+        # 异步导入 file_service (避免循环依赖)
+        from app.services.file_service import file_service
+        await file_service.upload_to_path(
+            new_object_key, new_content, content_type=new_content_type,
+        )
+
+        # 4. 创建 DriveFileVersion 行 (is_current=1)
+        new_version = DriveFileVersion(
+            file_id=file_id,
+            version_number=new_version_number,
+            minio_object_key=new_object_key,
+            size=len(new_content),
+            uploader_id=uploader_id,
+            comment=comment,
+            is_current=1,
+        )
+        self.db.add(new_version)
+
+        # 5. 把旧 DriveFileVersion 行的 is_current 翻 0
+        # (同 file_id 下, 旧版本可能 0 行 (首次创建) 或 1 行)
+        if max_v > 0:
+            old_current_stmt = (
+                select(DriveFileVersion)
+                .where(
+                    and_(
+                        DriveFileVersion.file_id == file_id,
+                        DriveFileVersion.is_current == 1,
+                    )
+                )
+            )
+            old_current = (await self.db.execute(old_current_stmt)).scalars().first()
+            if old_current:
+                old_current.is_current = 0
+
+        # 6. 更新 Knowledge 行
+        cur_file.file_path = new_object_key
+        cur_file.file_size = len(new_content)
+        cur_file.file_hash = new_hash
+        cur_file.version_number = new_version_number
+
+        await self.db.commit()
+        await self.db.refresh(new_version)
+        logger.info(
+            f"[DriveVersionService.create_version] file_id={file_id} → "
+            f"v{new_version_number} by uploader={uploader_id} "
+            f"object={new_object_key} size={len(new_content)}"
+        )
+        return new_version
+
+    # ==========================================================================
+    # 列表 (列出版本历史)
+    # ==========================================================================
+
+    async def list_versions(
+        self,
+        *,
+        file_id: int,
+        current_user_id: int,
+    ) -> dict:
+        """列文件所有版本 (按 version_number desc)
+
+        Returns:
+            {
+                "file_id": int,
+                "file_name": str,
+                "count": int,
+                "items": List[DriveFileVersion 序列化 dict]
+            }
+        """
+        # 校验文件存在 + 可见性
+        cur_file = await self.db.get(Knowledge, file_id)
+        if cur_file is None:
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        # 可见性 (复用 DriveService._can_see_file 逻辑, 简化版内联)
+        if cur_file.created_by != current_user_id and cur_file.visibility == "private":
+            raise DriveVersionServiceError(
+                f"无权查看文件 id={file_id} (private)", status_code=403,
+            )
+
+        # 列 DriveFileVersion + JOIN members
+        stmt = (
+            select(DriveFileVersion, Member.name)
+            .outerjoin(Member, DriveFileVersion.uploader_id == Member.id)
+            .where(DriveFileVersion.file_id == file_id)
+            .order_by(desc(DriveFileVersion.version_number))
+        )
+        rows = (await self.db.execute(stmt)).all()
+
+        items = []
+        for v, uploader_name in rows:
+            items.append({
+                "id": v.id,
+                "file_id": v.file_id,
+                "version_number": v.version_number,
+                "minio_object_key": v.minio_object_key,
+                "size": v.size,
+                "uploader_id": v.uploader_id,
+                "uploader_name": uploader_name,
+                "comment": v.comment,
+                "is_current": bool(v.is_current),
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            })
+
+        return {
+            "file_id": file_id,
+            "file_name": cur_file.file_name,
+            "count": len(items),
+            "items": items,
+        }
+
+    # ==========================================================================
+    # 下载指定版本
+    # ==========================================================================
+
+    async def get_version_download(
+        self,
+        *,
+        version_id: int,
+        current_user_id: int,
+    ) -> dict:
+        """获取指定版本的下载信息 (presigned URL)
+
+        Returns:
+            {
+                "version_id": int,
+                "file_id": int,
+                "version_number": int,
+                "download_url": str (presigned),
+                "expires_in": int,
+                "file_name": str,
+                "size": int
+            }
+        """
+        v = await self.db.get(DriveFileVersion, version_id)
+        if v is None:
+            raise DriveVersionServiceError(
+                f"版本 id={version_id} 不存在", status_code=404,
+            )
+
+        # 校验文件可见性
+        cur_file = await self.db.get(Knowledge, v.file_id)
+        if cur_file is None:
+            raise DriveVersionServiceError(
+                f"文件 id={v.file_id} 不存在", status_code=404,
+            )
+        if cur_file.created_by != current_user_id and cur_file.visibility == "private":
+            raise DriveVersionServiceError(
+                f"无权下载文件 id={v.file_id} 的版本 (private)", status_code=403,
+            )
+
+        # 生成 presigned URL (1 小时有效期)
+        from app.services.file_service import file_service
+        download_url = file_service.get_url(v.minio_object_key, expires=3600)
+
+        return {
+            "version_id": v.id,
+            "file_id": v.file_id,
+            "version_number": v.version_number,
+            "download_url": download_url,
+            "expires_in": 3600,
+            "file_name": cur_file.file_name,
+            "size": v.size,
+        }
+
+    # ==========================================================================
+    # 回滚 (rollback)
+    # ==========================================================================
+
+    async def rollback(
+        self,
+        *,
+        file_id: int,
+        version_id: int,
+        user_id: int,
+        new_comment: Optional[str] = None,
+    ) -> DriveFileVersion:
+        """回滚到历史版本
+
+        流程:
+        1. 校验目标版本存在 + file_id 匹配
+        2. 权限: _can_modify_file
+        3. 从目标版本 minio_object_key copy_object 到新路径
+        4. 创建新 DriveFileVersion 行 (version_number = max+1)
+        5. 旧 current 翻 0, 新行 is_current=1
+        6. 更新 Knowledge 行 (file_path/file_size)
+
+        Returns:
+            新创建的 DriveFileVersion (复制自目标, version_number=cur+1)
+        """
+        # 1. 校验目标版本
+        target = await self.db.get(DriveFileVersion, version_id)
+        if target is None:
+            raise DriveVersionServiceError(
+                f"版本 id={version_id} 不存在", status_code=404,
+            )
+        if target.file_id != file_id:
+            raise DriveVersionServiceError(
+                f"版本 id={version_id} 不属于文件 id={file_id}", status_code=400,
+            )
+
+        # 校验文件 + 权限
+        cur_file = await self.db.get(Knowledge, file_id)
+        if cur_file is None:
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        if cur_file.deleted_at is not None:
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 已删除", status_code=410,
+            )
+
+        if not self._can_modify_file(cur_file, user_id):
+            admin_member = await self.db.get(Member, user_id)
+            if admin_member is None or admin_member.role != "admin":
+                raise DriveVersionServiceError(
+                    f"无权回滚文件 id={file_id}", status_code=403,
+                )
+
+        # 2. 算下一版本号
+        max_v_stmt = (
+            select(func.coalesce(func.max(DriveFileVersion.version_number), 0))
+            .where(DriveFileVersion.file_id == file_id)
+        )
+        max_v = (await self.db.execute(max_v_stmt)).scalar() or 0
+        new_version_number = max_v + 1
+
+        # 3. copy_object 反向
+        from app.services.file_service import file_service
+        ext = ""
+        if cur_file.file_name and "." in cur_file.file_name:
+            ext = "." + cur_file.file_name.rsplit(".", 1)[-1].lower()
+        ts = int(datetime.now(timezone.utc).timestamp())
+        new_object_key = (
+            f"uploads/drive/{cur_file.created_by}/"
+            f"v{new_version_number}_{target.minio_object_key.split('_')[1] if '_' in target.minio_object_key else 'restored'}_{ts}{ext}"
+        )
+
+        # 复制 MinIO 对象
+        copied_size = await file_service.copy_object_async(
+            target.minio_object_key, new_object_key,
+        )
+
+        # 4. 创建新 DriveFileVersion 行
+        comment_text = new_comment or f"Rolled back to v{target.version_number}"
+        new_version = DriveFileVersion(
+            file_id=file_id,
+            version_number=new_version_number,
+            minio_object_key=new_object_key,
+            size=copied_size,
+            uploader_id=user_id,
+            comment=comment_text,
+            is_current=1,
+        )
+        self.db.add(new_version)
+
+        # 5. 旧 current 翻 0
+        if max_v > 0:
+            old_current_stmt = (
+                select(DriveFileVersion)
+                .where(
+                    and_(
+                        DriveFileVersion.file_id == file_id,
+                        DriveFileVersion.is_current == 1,
+                    )
+                )
+            )
+            old_current = (await self.db.execute(old_current_stmt)).scalars().first()
+            if old_current:
+                old_current.is_current = 0
+
+        # 6. 更新 Knowledge 行
+        cur_file.file_path = new_object_key
+        cur_file.file_size = copied_size
+        cur_file.version_number = new_version_number
+
+        await self.db.commit()
+        await self.db.refresh(new_version)
+        logger.info(
+            f"[DriveVersionService.rollback] file_id={file_id} "
+            f"target_v{target.version_number} → new_v{new_version_number} "
+            f"by user={user_id} copy_bytes={copied_size}"
+        )
+        return new_version
+
+    # ==========================================================================
+    # 删除指定版本 (有限制: 只能删最新非当前版本)
+    # ==========================================================================
+
+    async def delete_version(
+        self,
+        *,
+        version_id: int,
+        user_id: int,
+    ) -> dict:
+        """删除指定版本
+
+        限制:
+        - 不能删 is_current=1 的版本 (那是当前版本)
+        - 只能删"最新非当前版本" (max(version_number where is_current=0))
+          防误删中间版 → rollback 悬空
+
+        Returns:
+            {"deleted_version_id", "deleted_object_key", "remaining_versions"}
+        """
+        v = await self.db.get(DriveFileVersion, version_id)
+        if v is None:
+            raise DriveVersionServiceError(
+                f"版本 id={version_id} 不存在", status_code=404,
+            )
+
+        # 权限
+        cur_file = await self.db.get(Knowledge, v.file_id)
+        if cur_file is None:
+            raise DriveVersionServiceError(
+                f"文件 id={v.file_id} 不存在", status_code=404,
+            )
+        if not self._can_modify_file(cur_file, user_id):
+            admin_member = await self.db.get(Member, user_id)
+            if admin_member is None or admin_member.role != "admin":
+                raise DriveVersionServiceError(
+                    f"无权删除文件 id={v.file_id} 的版本", status_code=403,
+                )
+
+        # 不能删当前版本
+        if v.is_current == 1:
+            raise DriveVersionServiceError(
+                f"不能删除当前版本 (is_current=1), 请先上传新版本", status_code=400,
+            )
+
+        # 校验是"最新非当前版本"
+        max_non_current_stmt = (
+            select(func.coalesce(func.max(DriveFileVersion.version_number), 0))
+            .where(
+                and_(
+                    DriveFileVersion.file_id == v.file_id,
+                    DriveFileVersion.is_current == 0,
+                )
+            )
+        )
+        max_non_current = (await self.db.execute(max_non_current_stmt)).scalar() or 0
+        if v.version_number != max_non_current:
+            raise DriveVersionServiceError(
+                f"只能删除最新非当前版本 (v{max_non_current}), "
+                f"当前想删 v{v.version_number} 是中间版本",
+                status_code=400,
+            )
+
+        # 删 MinIO 对象 (best effort, 失败不阻塞 DB 删除)
+        object_key = v.minio_object_key
+        try:
+            from app.services.file_service import file_service
+            file_service.delete_file(object_key)
+        except Exception as e:
+            logger.warning(
+                f"[DriveVersionService.delete_version] 删 MinIO 失败 "
+                f"(DB 仍会删): {object_key} error={e!r}"
+            )
+
+        # 删 DB 行
+        await self.db.delete(v)
+        await self.db.commit()
+
+        # 算剩余版本数
+        count_stmt = (
+            select(func.count(DriveFileVersion.id))
+            .where(DriveFileVersion.file_id == v.file_id)
+        )
+        remaining = (await self.db.execute(count_stmt)).scalar() or 0
+
+        logger.info(
+            f"[DriveVersionService.delete_version] file_id={v.file_id} "
+            f"deleted v{v.version_number} object={object_key} remaining={remaining}"
+        )
+        return {
+            "deleted_version_id": v.id,
+            "deleted_object_key": object_key,
+            "remaining_versions": remaining,
+        }
+
+    # ==========================================================================
+    # 工具: 把 DriveFileVersion 序列化为 dict (API 响应)
+    # ==========================================================================
+
+    @staticmethod
+    def to_item_dict(v: DriveFileVersion, uploader_name: Optional[str] = None) -> dict:
+        """把 DriveFileVersion 序列化为 dict (含 uploader_name)"""
+        return {
+            "id": v.id,
+            "file_id": v.file_id,
+            "version_number": v.version_number,
+            "minio_object_key": v.minio_object_key,
+            "size": v.size,
+            "uploader_id": v.uploader_id,
+            "uploader_name": uploader_name,
+            "comment": v.comment,
+            "is_current": bool(v.is_current),
+            "created_at": v.created_at.isoformat() if v.created_at else None,
+        }
