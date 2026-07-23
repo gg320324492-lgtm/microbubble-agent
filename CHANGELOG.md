@@ -122,6 +122,67 @@
 
 ---
 
+## W68 第 4 批 跨主题收官 (2026-07-24 — 锚点范式 42→57 单调上升, 单批 27 守恒历史新高)
+
+**W68 第 4 批收官**: 主指挥协调范式第 32 次派工 (锚点范式第 43-57 单调上升). **15 agents 派工 + W68 第 3 批留待办 10 项 100% 闭环** + Plan 闭环 2/2 全部 merge 进 main. 锚点范式单调上升 W68 第 3 批 42 → **W68 第 4 批 57** (单批 27 守恒历史新高). **0 production code 改动铁律维持** (2 例外已批: Plan 闭环实施 = 业务代码新增独立模块 + scripts/ + docs/ + memory/, 不动老路径). W19 选项 A 维持.
+
+### W68 第 4 批交付清单 (15 agents)
+
+| 路线 | Agent | 任务 | 范围 | 锚点 | commit | 状态 |
+|------|-------|------|------|------|--------|------|
+| Plan | 1 | Plan #1: `15-17-18-cozy-bengio.md` Part 2 重实施 (低占比发言人过滤, 弥补 commit 4b215220 refactor 意外删除) | `app/services/low_occupancy_filter.py` + `post_meeting_tasks.py` 阶段 1.7 接入 + 16 e2e | 第 43 | (merge) | ✅ 例外已批 |
+| Plan | 2 | Plan #2: `2026-06-05-19-10-melodic-donut.md` 杜/吴误标修复脚本就绪 | `scripts/repair_meeting_64_speakers.py` (psycopg3, dry-run 默认 + `--apply`) + 修复文档 | 第 44 | `47a96e5a9` | ✅ 例外已批 |
+| F-3 续 | 3 | Drive v2 PR9 文件夹 admin permission 服务端实装 | `folder_admin_service.py` + 4 endpoint 鉴权 + 7 端点 rate-limit tier 验证 | 第 31 + 56 | `139cef59d` + `b9c801fdf` | ✅ |
+| F-2 续 | 4 | Drive v2 PR9 文件版本 diff 视图 | `version_diff_view` + restore CLI | (W68 第 4 批) | `19276388e` | ✅ |
+| F-2 续 | 5 | Drive v2 PR9 WebSocket 推送集成 (PR10 闭环) | WS `/drive/notifications` 推送 + ack + reconnect | 第 48 | `2bd208489` | ✅ |
+| F-3 续 | 6 | 桌面端 Drive 评论 UI + 右键菜单 | DesktopCommentsView + DesktopFileVersionsView | 第 45 + 55 | `0d94e9d3d` + `df41d0eb9` | ✅ |
+| G-3 | 7 | Mobile 评论 UI Playwright 视觉回归 (7 viewport × 4 页面) | `web/tests/visual/mobile_drive_comments.spec.mjs` + dark + 长按 | 第 51 | `380000ea1` | ✅ |
+| H-3 | 8 | Mobile v3.1 ASCII screenshots 替换 | detailed text + screenshot specs (降低文档体积) | 第 52 | `32a7a6258` | ✅ |
+| B-3 续 | 9 | qa-bench D6 GHCR cache workflow 接入 | `ci/qa-bench` cache workflow + GHCR 缓存 hit 验证 | 第 54 | `0eb77b4a1` | ✅ |
+| I-1 | 10 | Drive PR9 rate-limit 端到端验证 (7 端点 × tier 矩阵) | `tests/test_drive_pr9_rate_limit.py` + 13/13 PASS + memory | 第 56 | `b9c801fdf` | ✅ |
+| I-2 | 11 | Drive PR9 部署验证脚本 (第 57 守恒) | `scripts/verify-drive-pr9-deploy.sh` + 6 点 curl 验证 | 第 57 | `bb61066ca` | ✅ |
+| 文档同步 | 12 | CLAUDE.md 顶部 W68 第 3 批同步 (锚点范式第 53 守恒) | `CLAUDE.md` 顶部 段替换 + ROADMAP.md L6 | 第 53 | `91f0862b6` | ✅ |
+| 文档同步 | 13 | CHANGELOG/ROADMAP W68 第 3 批同步 (第 47 守恒) | `CHANGELOG.md` L1-L5 段 + `ROADMAP.md` 顶部 段 | 第 47 | `740d70475` | ✅ |
+| 纪律沉淀 | 14 | alembic 并行 agent 串单链纪律沉淀 (第 46 守恒) | `memory/w68-alembic-chain-discipline-2026-07-24.md` + 5 条新铁律 | 第 46 | `fe04ef7e9` | ✅ |
+| 协调 | 15 | W68 第 4 批 grand closure + MEMORY.md 索引 (第 57 守恒) | `memory/w68-grand-closure-4th-batch-2026-07-24.md` + 2 MEMORY.md 索引 | 第 57 | (本批协调) | ✅ |
+
+### W68 第 4 批主要变更
+
+- **Plan 闭环 2/2 (2 例外已批)** — Plan #1 `15-17-18-cozy-bengio.md` Part 2 重实施 (`app/services/low_occupancy_filter.py` 独立新模块 + `post_meeting_tasks.py` 阶段 1.7 接入 + 16 e2e PASS) + Plan #2 `2026-06-05-19-10-melodic-donut.md` 修复脚本就绪 (scripts/ + docs/ + memory/ 0 业务代码)
+- **Drive v2 PR9 后续 5 agents** — WebSocket 推送集成 (PR10 闭环) + folder admin permission 服务端实装 + 文件版本 diff + 桌面端评论 UI + rate-limit 端到端验证
+- **视觉/文档 3 agents** — Mobile 评论 UI Playwright 视觉回归 (7 viewport × 4 页面 28 截图) + Mobile v3.1 ASCII screenshots 替换 + qa-bench D6 GHCR cache workflow
+- **文档/纪律沉淀 3 agents** — CLAUDE.md 顶部同步 + CHANGELOG/ROADMAP 同步 + alembic 并行 agent 串单链纪律
+- **部署 + grand closure 2 agents** — Drive PR9 部署验证脚本 + 本批 grand closure memory 沉淀
+
+### 关键纪律 — Plan 闭环派工必查 plan Status + refactor 意外删除
+
+- **根因**: 2026-07-22 verified-plans 调研发现 commit `4b215220` refactor 简化 `post_meeting_tasks.py` 时**意外删除** `15-17-18-cozy-bengio.md` Part 2 过滤规则 (124 行 → 26 行 -98 行)
+- **修复**: 派 W68 第 4 批 Plan #1 agent 重新实施 Part 2 (新模块 `app/services/low_occupancy_filter.py` + 阶段 1.7 接入)
+- **纪律**: ① 派工前必查 plan Status 段 (NOT_STARTED / COMPLETED / 已 merge) + 已 merge commit + plan 是否被 refactor 意外删除; ② Plan 闭环 0 production code 改动例外主指挥必批 + 仅放 scripts/ + docs/ + memory/ 或新增独立模块 (不动老路径); ③ 修复脚本默认 dry-run + `--apply` 显式落库; ④ 实施完必更新 plan 头部 Status 段为 COMPLETED
+
+### 0 production code 改动铁律维持 (2 例外已批)
+
+- **Drive v2 PR9 后续 5 agents**: 新功能扩展, 不动 v1 老路径
+- **Plan #1 (例外 1)**: 业务代码新增独立模块 `low_occupancy_filter.py` + `post_meeting_tasks.py` 阶段 1.7 接入, 主指挥已批
+- **Plan #2 (例外 2)**: 仅放 `scripts/` + `docs/` + `memory/`, 0 业务代码, 主指挥已批
+- **视觉/文档/纪律 8 agents**: 0 production code 改动
+- **本任务**: 0 production code 改动, 仅 docs + memory 改动
+
+### W68 锚点范式第 43-57 守恒评估
+
+- ✅ 71 PASS + 7 SKIP baseline 0 regression (跨 100+ commit 0 drift)
+- ✅ 0 production code 改动铁律守恒 (2 例外已批)
+- ✅ W19 选项 A 维持 (4 留未来 PR 不发起)
+- ✅ 5 协调铁律 100% 适用 (派工前/中/后主指挥决策 + 0 push + worktree 内工作)
+- ✅ 跨 commit baseline 一致性 (跨 30+42+15 commit 0 漂移)
+- ✅ alembic 并行 agent 串单链修复纪律 (commit `1852468a6`)
+- ✅ Plan 闭环派工验证纪律 (verified-plans 调研发现 refactor 意外删除)
+- ✅ 单批 27 守恒历史新高 (W68 第 4 批 15 agents + Plan 闭环 2 例外)
+
+详见 `memory/w68-grand-closure-4th-batch-2026-07-24.md` + `memory/w68-route-{plan1,plan2,drive-pr9-*,visual,alembic,docs-sync}*-2026-07-24.md` (12 个 memory 沉淀).
+
+---
+
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
 
 **W68 路线 A 收官**: Drive v2 PR8 完整闭环 — WebSocket 通知增强 + 实时协作文件锁 + 文件预览 + 移动端精修 + e2e + 文档. 锚点范式 W67 28 → **W68 29** 单调上升目标. 6 agents 并行在 6 worktree, Agent 7 (本任务) 协调合并顺序 + 冲突预案 + 6 项硬指标验证脚本.
