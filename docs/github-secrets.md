@@ -130,7 +130,10 @@ W67 起 D5 gate 完整 CI 流程:
 | W67 第 32 步 | 240s (120 × 2s) | mimo SDK + 全套 import 慢 |
 | W67 第 33 步 | 600s (300 × 2s) | 拆 build + run 后, 实际启动 6-10 min |
 | W67 第 34 步 | 900s (450 × 2s) | 实测 909s, 差 9 秒 |
-| W67 第 35 步 | 1500s (750 × 2s) | 提 1500s 留充分缓冲, uvicorn + mimo SDK 15+ min |
+| W67 第 35 步 | 1500s (750 × 2s) | 实测 1510s, 差 10 秒 |
+| W67 第 39 步 (最后) | 1800s (900 × 2s) | 实测 1510s 仍 fail 风险, 提 1800s |
+
+**W67 跨主题收官 (W67 第 29-39 步)**: qa-bench D5 gate CI 修复链累计 11 次尝试 (timeout 90s → 240s → 600s → 900s → 1500s → 1800s + test DB stack + mimo secret + build 拆分 + setup-buildx + 真 GHA cache), 最终 1800s budget 含 setup-buildx + cache-from 期望 PASS. 如仍 fail 接受 docs/CI 占位, 留给未来 PR.
 
 **关键修复 (W67 第 33 步)**: `docker build -q .` 在 `docker run` 同一行导致每次重 build. 拆成:
 
