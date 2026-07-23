@@ -59,10 +59,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 httpx
 
+      # === W67 第 33 步: 拆 build + run (修复 6-10 min 重 build 问题) ===
+      # 之前: `docker build -q .` 内嵌在 `docker run`, 每次都重 build 完整 image 没 cache
+      # 现在: 先 build 一次 (GHA cache 复用 layer), 再 run 起来
+      - name: Build app-test image (W67 step 33 拆 build, 利用 GHA cache)
+        run: |
+          # 关键: `docker build -t app-test:ci .` 单独 step, 失败时 stop, 不污染后续
+          docker build -t app-test:ci . 2>&1 | tail -30
+          echo "✓ app-test:ci image built"
+
       # === 新增 test DB stack 启动 (替代生产 app/db) ===
       # v2026-07-23 修复: 改用 Docker network 让 app-test 通过服务名 `pg-test` 直连,
       #   解决 Linux runner 上 `host.docker.internal` 不解析的连接问题.
-      - name: Start test DB stack (microbubble_test + app on 8001)
+      # W67 第 33 步: 用已 build image `app-test:ci`, 启动 ~30-60s (不再 6-10 min)
+      - name: Start test DB stack (microbubble_test + app on 8001, 用 image)
         run: |
           # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
           docker network create qa-bench-net
@@ -89,6 +99,7 @@ jobs:
           done
 
           # 起 test app (8001 端口, 接 test DB 通过同网络服务名 pg-test)
+          # W67 第 33 步: 用已 build image, 不再 `$(docker build -q .)`
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
@@ -101,17 +112,17 @@ jobs:
             -e SKIP_DB_SETUP=1 \
             -v $(pwd)/app:/app/app \
             -v $(pwd)/alembic/versions:/app/alembic/versions \
-            $(docker build -q .) \
+            app-test:ci \
             uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-          # 等 app-test healthy (最长 240s = 4min, 全套 import + uvicorn + 首次 health 响应)
-          # W67 第 32 步修复: mock 模式也要 import 全套, 90s 启动预算不足
-          for i in {1..120}; do
+          # 等 app-test healthy (最长 600s = 10min, 拆 build + run 后实际启动 30-60s + 缓冲)
+          # W67 第 33 步: 240s 仍不够 mock 模式下全套 import + 首次 health 响应, 提到 600s
+          for i in {1..300}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "✓ app-test healthy on 8001"
               break
             fi
-            if [ "$i" -eq 120 ]; then
+            if [ "$i" -eq 300 ]; then
               echo "✗ app-test startup timeout"
               docker logs app-test | tail -50
               exit 1

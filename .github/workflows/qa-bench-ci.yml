@@ -39,9 +39,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 -r requirements.txt
 
-      # === W67 第 30 步: 启动 test DB stack (复制自 qa-bench-smoke.yml) ===
-      # 改 LLM_BACKEND=openai_compat 走 mimo cloud (而非 mock)
-      - name: Start test DB stack (microbubble_test + app on 8001)
+      # === W67 第 33 步: 拆 build + run (修复 6-10 min 重 build 问题) ===
+      # 之前: `docker build -q .` 内嵌在 `docker run`, 每次都重 build 完整 image 没 cache
+      # 现在: 5a build 一次 (GitHub Actions cache 跨 run 复用 layer), 5b run 多次
+      - name: Build app-test image (W67 step 33 拆 build, 利用 GHA cache)
+        run: |
+          # 关键: `docker build -t app-test:ci .` 单独 step, 失败时 stop, 不污染后续
+          # 利用 GHA 内置 cache: 同一 runner 的 image layer cache 跨 step 复用
+          # requirements.txt / Dockerfile 变更 → 重新 build, 更快 (只 rebuild 变更层)
+          docker build -t app-test:ci . 2>&1 | tail -30
+          echo "✓ app-test:ci image built"
+
+      - name: Start test DB stack (W67 step 33 用 image, 不再 build)
         run: |
           # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
           docker network create qa-bench-net
@@ -68,6 +77,7 @@ jobs:
           done
 
           # 起 test app (8001 端口), 切 mimo cloud
+          # W67 第 33 步: 用已 build image `app-test:ci`, 启动 ~30-60s (不再 6-10 min)
           docker run -d --name app-test \
             --network qa-bench-net \
             -p 8001:8000 \
@@ -83,17 +93,17 @@ jobs:
             -e SKIP_DB_SETUP=1 \
             -v $(pwd)/app:/app/app \
             -v $(pwd)/alembic/versions:/app/alembic/versions \
-            $(docker build -q .) \
+            app-test:ci \
             uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-          # 等 app-test healthy (最长 240s = 4min, mimo SDK init + 18s whisper + uvicorn + 首次 health 响应)
-          # W67 第 32 步修复: 90s 不够 mimo cloud SDK 初始化时间, 实测 build 完 + 启动要 6-7 min
-          for i in {1..120}; do
+          # 等 app-test healthy (最长 600s = 10min, 拆 build + run 后实际启动 30-60s + 缓冲)
+          # W67 第 33 步: 240s 仍不够启动 + 首次 health 响应 (agent 部分 ASR/TTS 加载慢), 提到 600s
+          for i in {1..300}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "✓ app-test healthy on 8001"
               break
             fi
-            if [ "$i" -eq 120 ]; then
+            if [ "$i" -eq 300 ]; then
               echo "✗ app-test startup timeout"
               docker logs app-test | tail -50
               exit 1
