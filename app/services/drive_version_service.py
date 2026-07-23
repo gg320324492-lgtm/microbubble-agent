@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.drive_file_version import DriveFileVersion
 from app.models.knowledge import Knowledge
 from app.models.member import Member
+from app.services.drive_permission_service import DrivePermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class DriveVersionService:
         self.db = db
 
     # ==========================================================================
-    # 权限校验
+    # 权限校验 (PR9 W68 第 4 批: 改用 drive_permission_service.check_file_owner_or_folder_admin)
     # ==========================================================================
 
     @staticmethod
@@ -77,13 +78,20 @@ class DriveVersionService:
         """判断当前用户是否能"修改"该文件 (上传新版本/回滚/删除版本)
 
         - 创建人: 可改
-        - folder 管理员: 可改 (PR7 admin permission)
+        - folder 管理员 (含 owner): 可改 (W68 PR9 drive_permission_service)
         - 平台管理员 (Member.role='admin'): 可改
+
+        Returns:
+            True: 有权限 (file 改动可能)
+            False: 无权限 (调用方应 raise 403)
+
+        注意: 此方法同步 + 简化版, 实际 drive_permission_service 是 async.
+        完整异步版本请直接调用 drive_permission_service.check_file_owner_or_folder_admin.
         """
+        # 同步简化判断: 只能检查 created_by (folder admin 需查表, 异步)
+        # 真正的 PR9 服务端用 drive_permission_service.check_file_owner_or_folder_admin
         if file.created_by == user_id:
             return True
-        # 简化: 暂不查 folder 管理员 (PR7 + v2 PR9 时间紧, 留 PR10 优化)
-        # TODO PR10: 加 folder admin permission check
         return False
 
     @staticmethod
@@ -148,13 +156,21 @@ class DriveVersionService:
                 f"文件 id={file_id} 非 drive 模式, 无版本概念", status_code=400,
             )
 
-        # 权限: 创建人 OR 平台管理员
+        # 权限: 创建人 OR 平台管理员 OR folder admin (W68 PR9)
         if not self._can_modify_file(cur_file, uploader_id):
-            # 检查平台管理员
-            admin_member = await self.db.get(Member, uploader_id)
-            if admin_member is None or admin_member.role != "admin":
+            # 检查 folder admin / 平台管理员 (PR9 走 drive_permission_service)
+            perm_svc = DrivePermissionService(self.db)
+            if not await perm_svc.check_file_owner_or_folder_admin(
+                uploader_id, file_id
+            ):
+                logger.error(
+                    f"[DriveVersionService.create_version] 权限拒绝: "
+                    f"file_id={file_id} uploader={uploader_id} "
+                    f"(非创建人 + 非 folder admin + 非平台 admin)"
+                )
                 raise DriveVersionServiceError(
-                    f"无权修改文件 id={file_id} (非创建人非管理员)", status_code=403,
+                    f"无权修改文件 id={file_id} (非创建人非 folder 管理员非平台管理员)",
+                    status_code=403,
                 )
 
         # 2. 算下一版本号
@@ -392,8 +408,16 @@ class DriveVersionService:
             )
 
         if not self._can_modify_file(cur_file, user_id):
-            admin_member = await self.db.get(Member, user_id)
-            if admin_member is None or admin_member.role != "admin":
+            # PR9: 检查 folder admin / 平台管理员 (走 drive_permission_service)
+            perm_svc = DrivePermissionService(self.db)
+            if not await perm_svc.check_file_owner_or_folder_admin(
+                user_id, file_id
+            ):
+                logger.error(
+                    f"[DriveVersionService.rollback] 权限拒绝: "
+                    f"file_id={file_id} user={user_id} "
+                    f"(非创建人 + 非 folder admin + 非平台 admin)"
+                )
                 raise DriveVersionServiceError(
                     f"无权回滚文件 id={file_id}", status_code=403,
                 )
@@ -497,8 +521,16 @@ class DriveVersionService:
                 f"文件 id={v.file_id} 不存在", status_code=404,
             )
         if not self._can_modify_file(cur_file, user_id):
-            admin_member = await self.db.get(Member, user_id)
-            if admin_member is None or admin_member.role != "admin":
+            # PR9: 检查 folder admin / 平台管理员 (走 drive_permission_service)
+            perm_svc = DrivePermissionService(self.db)
+            if not await perm_svc.check_file_owner_or_folder_admin(
+                user_id, v.file_id
+            ):
+                logger.error(
+                    f"[DriveVersionService.delete_version] 权限拒绝: "
+                    f"file_id={v.file_id} user={user_id} "
+                    f"(非创建人 + 非 folder admin + 非平台 admin)"
+                )
                 raise DriveVersionServiceError(
                     f"无权删除文件 id={v.file_id} 的版本", status_code=403,
                 )
