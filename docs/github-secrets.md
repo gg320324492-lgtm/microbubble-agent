@@ -120,16 +120,24 @@ W67 起 D5 gate 完整 CI 流程:
 | `LLM_OPENAI_COMPAT_MODEL` | `mimo-v2.5` | mimo 模型 |
 | `QA_TOKEN` | test DB JWT (mock 兜底) | GitHub Secret 或 fallback `mock` |
 
-## app-test 健康检查 timeout 调整 (W67 第 32 步)
+## app-test 健康检查 timeout 调整 (W67 第 32-33 步)
 
 `Start test DB stack` 步骤里 `curl -sf http://localhost:8001/health` 等待循环:
 
 | 时间 | Budget | 原因 |
 |------|--------|------|
 | W66 之前 | 90s (45 × 2s) | 假设 mimo SDK init < 18s |
-| W67 第 32 步 | 240s (120 × 2s) | 实测 build 完 + 启动 = 6-7 min, mimo SDK + 全套 import 慢 |
+| W67 第 32 步 | 240s (120 × 2s) | mimo SDK + 全套 import 慢 |
+| W67 第 33 步 | 600s (300 × 2s) | 拆 build + run 后, 实际启动 6-10 min |
 
-如果你的环境 (Anthropic 直连 / 本地 ollama / mock) 启动快, 可以调回 90s. 但默认 240s 兼容所有后端.
+**关键修复 (W67 第 33 步)**: `docker build -q .` 在 `docker run` 同一行导致每次重 build. 拆成:
+
+1. **Step 5a** `docker build -t app-test:ci .` (Build, 缓存 Docker layer)
+2. **Step 5b** `docker run app-test:ci` (Run, 用已 build image, 启动 30-60s)
+
+未来: 改用 `docker/build-push-action@v5` + `cache-from type=gha` 自动 GHA cache (Phase 2).
+
+如果你的环境 (Anthropic 直连 / 本地 ollama / mock) 启动快, 可以调回 240s. 但默认 600s 兼容 mimo cloud 套件 + 冷启动.
 
 ## 故障排除
 
