@@ -49,6 +49,8 @@
       @file="triggerFile"
       @voice-start="onVoiceStart"
       @voice-end="onVoiceEnd"
+      @voice-transcribed="onVoiceTranscribed"
+      @voice-state="onVoiceState"
       @focus="onInputFocus"
       @clear-image="clearImage"
       @clear-file="clearFile"
@@ -408,6 +410,23 @@ async function onVoiceStart() {
 function onVoiceEnd() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.stop()
+  }
+}
+
+// 2026-07-24 W68 路线 G-1: 新路径 (MobileVoiceInputButton) 回调
+// - transcribed: 文本已通过 v-model:text 写入 inputText, 这里仅做滚动 + 触觉反馈
+// - state: 录音生命周期 (start/cancel/error) 供父组件锁定键盘
+function onVoiceTranscribed(text) {
+  haptic.tap()
+  // 滚到底让用户看到识别结果在输入框
+  nextTick(() => messageListRef.value?.scrollToBottom(true))
+}
+
+function onVoiceState(state) {
+  if (state === 'error') {
+    // 已经 ElMessage 提示过, 这里仅记录
+    // eslint-disable-next-line no-console
+    console.warn('[MobileChatView] voice input error')
   }
 }
 
