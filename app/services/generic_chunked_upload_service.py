@@ -76,8 +76,13 @@ class GenericChunkedUploadService:
     """通用 drive 文件上传服务 (单端点流式)"""
 
     def __init__(self):
-        self._client = file_service.client
+        # 2026-07-23 W67 真治本: 不在构造/import 阶段碰 file_service.client
+        # (那是惰性 property, 首访问会做 MinIO 网络调用)。延迟到首次真正上传时。
         self._bucket = file_service.bucket
+
+    @property
+    def _client(self):
+        return file_service.client
 
     # ==========================================================================
     # 公共方法
