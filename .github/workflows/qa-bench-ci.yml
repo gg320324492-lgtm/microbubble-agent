@@ -96,14 +96,15 @@ jobs:
             app-test:ci \
             uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-          # 等 app-test healthy (最长 600s = 10min, 拆 build + run 后实际启动 30-60s + 缓冲)
-          # W67 第 33 步: 240s 仍不够启动 + 首次 health 响应 (agent 部分 ASR/TTS 加载慢), 提到 600s
-          for i in {1..300}; do
+          # 等 app-test healthy (最长 900s = 15min)
+          # W67 第 34 步: 实测 610s, 600s 还差 10s. 提到 900s 留缓冲.
+          # 拆 build 修复 (W67 第 33 步) 后实际启动 ~10 min (mimo SDK + Whisper 18s + 全套 import)
+          for i in {1..450}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "✓ app-test healthy on 8001"
               break
             fi
-            if [ "$i" -eq 300 ]; then
+            if [ "$i" -eq 450 ]; then
               echo "✗ app-test startup timeout"
               docker logs app-test | tail -50
               exit 1
