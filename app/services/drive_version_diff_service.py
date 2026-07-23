@@ -229,7 +229,7 @@ class DriveVersionDiffService:
             to_lines,
             fromfile=from_label,
             tofile=to_label,
-            lineterm="",
+            lineterm="\n",
             n=3,  # context lines
         ))
         unified = "".join(diff_lines)
