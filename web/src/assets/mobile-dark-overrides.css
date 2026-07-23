@@ -1,0 +1,237 @@
+/* ============================================
+   mobile-dark-overrides.css — 移动端暗色模式精修（W68 路线 C）
+   ============================================
+   目标：在 variables.css 的 [data-theme="dark"] token 体系之上，
+   针对移动端各页面/组件补齐暗色细节（背景 / 边框 / active / placeholder）。
+
+   设计原则：
+   1. 全部包裹在 [data-theme="dark"] 下，light 模式零影响。
+   2. 移动端专用（<= 1023px），桌面端零影响（避免污染 el-* 桌面栈）。
+   3. 优先复用 variables.css token；仅在需要更深/更细腻的移动端灰阶时用字面色。
+   4. 非 scoped（跨组件生效）——遵循 CLAUDE.md v60-v67 "dark mode 跨组件必须非 scoped" 铁律。
+
+   移动端暗色灰阶规范（比桌面 #1a1d23/#2a2d35 更贴近 OLED 纯黑，省电 + 对比）：
+     - 页面/网格底：  #1a1a1a
+     - 卡片/浮层底：  #222222
+     - 卡片边框：     #2a2a2a
+     - active 高亮：  #3a3a3a
+     - 主文字：       #e0e0e0
+     - 次文字：       #a0a0a0
+     - placeholder：  #888888
+   ============================================ */
+
+@media (max-width: 1023px) {
+  /* ---------- 全局页面容器 ---------- */
+  [data-theme="dark"] .mobile-drive-view,
+  [data-theme="dark"] .mobile-knowledge-view,
+  [data-theme="dark"] .mobile-task-view,
+  [data-theme="dark"] .mobile-workspace-view,
+  [data-theme="dark"] .mobile-settings-view,
+  [data-theme="dark"] .mobile-meeting-view,
+  [data-theme="dark"] .drive-page {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+  }
+
+  /* ========================================
+     Drive 网格 + 文件卡（任务点名要求）
+     ======================================== */
+  [data-theme="dark"] .drive-grid {
+    background-color: #1a1a1a;
+  }
+  [data-theme="dark"] .drive-file-card {
+    background-color: #222222;
+    border: 1px solid #2a2a2a;
+    color: #e0e0e0;
+  }
+  /* active / 长按选中态 */
+  [data-theme="dark"] .drive-file-card:active,
+  [data-theme="dark"] .drive-file-card.is-selected,
+  [data-theme="dark"] .drive-file-card.is-active {
+    background-color: #3a3a3a;
+    border-color: #4a4a4a;
+  }
+  [data-theme="dark"] .drive-file-name {
+    color: #e0e0e0;
+  }
+  [data-theme="dark"] .drive-file-meta,
+  [data-theme="dark"] .drive-file-info {
+    color: #a0a0a0;
+  }
+  [data-theme="dark"] .drive-file-icon {
+    opacity: 0.92;
+  }
+
+  /* Drive tabs 切换栏 */
+  [data-theme="dark"] .drive-tabs {
+    background-color: #222222;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  [data-theme="dark"] .drive-tab-btn {
+    color: #a0a0a0;
+  }
+  [data-theme="dark"] .drive-tab-btn.is-active {
+    color: var(--color-primary);
+    background-color: #3a3a3a;
+  }
+
+  /* Drive 空态 / 错误态 / 加载态 */
+  [data-theme="dark"] .drive-empty,
+  [data-theme="dark"] .drive-error,
+  [data-theme="dark"] .drive-loading {
+    color: #888888;
+    background-color: #1a1a1a;
+  }
+
+  /* ========================================
+     通用移动端卡片（mobile-card / *-card）
+     ======================================== */
+  [data-theme="dark"] .mobile-card,
+  [data-theme="dark"] .meeting-card,
+  [data-theme="dark"] .avatar-card,
+  [data-theme="dark"] .skeleton-card {
+    background-color: #222222;
+    border: 1px solid #2a2a2a;
+    color: #e0e0e0;
+  }
+  [data-theme="dark"] .mobile-card:active,
+  [data-theme="dark"] .meeting-card:active {
+    background-color: #3a3a3a;
+  }
+
+  /* 卡片内的次级文字 / 时间戳 / 分组头 */
+  [data-theme="dark"] .mobile-time,
+  [data-theme="dark"] .mobile-type,
+  [data-theme="dark"] .mobile-key,
+  [data-theme="dark"] .group-header {
+    color: #a0a0a0;
+  }
+  [data-theme="dark"] .mobile-imp,
+  [data-theme="dark"] .mobile-content {
+    color: #e0e0e0;
+  }
+
+  /* ========================================
+     移动端 header / toolbar / footer
+     ======================================== */
+  [data-theme="dark"] .mobile-header,
+  [data-theme="dark"] .mobile-toolbar,
+  [data-theme="dark"] .mobile-footer {
+    background-color: #222222;
+    border-color: #2a2a2a;
+    color: #e0e0e0;
+  }
+
+  /* ========================================
+     输入框 / 搜索框 / 下拉（placeholder 精修）
+     ======================================== */
+  [data-theme="dark"] .mobile-search,
+  [data-theme="dark"] .search-input,
+  [data-theme="dark"] .mobile-select,
+  [data-theme="dark"] .mobile-input {
+    background-color: #2a2a2a;
+    border: 1px solid #3a3a3a;
+    color: #e0e0e0;
+  }
+  [data-theme="dark"] .mobile-search input,
+  [data-theme="dark"] .search-input input,
+  [data-theme="dark"] .mobile-input input,
+  [data-theme="dark"] .mobile-input textarea {
+    background-color: transparent;
+    color: #e0e0e0;
+  }
+  /* placeholder 统一 #888（点名要求） */
+  [data-theme="dark"] .mobile-search input::placeholder,
+  [data-theme="dark"] .search-input input::placeholder,
+  [data-theme="dark"] .mobile-input input::placeholder,
+  [data-theme="dark"] .mobile-input textarea::placeholder,
+  [data-theme="dark"] .mobile-view input::placeholder,
+  [data-theme="dark"] .mobile-view textarea::placeholder {
+    color: #888888;
+    opacity: 1; /* Firefox 默认降透明度，强制拉满保证可读 */
+  }
+  /* NutUI 输入组件 placeholder 兜底 */
+  [data-theme="dark"] .nut-input__input::placeholder,
+  [data-theme="dark"] .nut-textarea__textarea::placeholder,
+  [data-theme="dark"] .nut-searchbar input::placeholder {
+    color: #888888;
+    opacity: 1;
+  }
+
+  /* ========================================
+     列表 / 设置项 / cell
+     ======================================== */
+  [data-theme="dark"] .mobile-list,
+  [data-theme="dark"] .settings-item,
+  [data-theme="dark"] .readonly-item,
+  [data-theme="dark"] .tab-item {
+    background-color: #222222;
+    border-color: #2a2a2a;
+    color: #e0e0e0;
+  }
+  [data-theme="dark"] .settings-item:active,
+  [data-theme="dark"] .readonly-item:active,
+  [data-theme="dark"] .tab-item:active,
+  [data-theme="dark"] .tab-item.is-active {
+    background-color: #3a3a3a;
+  }
+
+  /* ========================================
+     浮动操作按钮 FAB（MobileFab）
+     ======================================== */
+  [data-theme="dark"] .mobile-fab-actions {
+    background-color: #222222;
+    border: 1px solid #2a2a2a;
+  }
+  [data-theme="dark"] .mobile-fab-action {
+    color: #e0e0e0;
+  }
+  [data-theme="dark"] .mobile-fab-action:active {
+    background-color: #3a3a3a;
+  }
+  [data-theme="dark"] .mobile-fab-action-label {
+    color: #a0a0a0;
+  }
+  [data-theme="dark"] .mobile-fab-dismiss {
+    background-color: rgba(0, 0, 0, 0.5);
+  }
+
+  /* ========================================
+     Sheet / 弹层 / ActionSheet 通用
+     ======================================== */
+  [data-theme="dark"] .mobile-sheet,
+  [data-theme="dark"] .mobile-action-sheet,
+  [data-theme="dark"] .mobile-search-sheet,
+  [data-theme="dark"] .nut-popup,
+  [data-theme="dark"] .nut-dialog {
+    background-color: #222222;
+    color: #e0e0e0;
+  }
+  [data-theme="dark"] .mobile-sheet .sheet-handle {
+    background-color: #4a4a4a;
+  }
+
+  /* ========================================
+     骨架屏（暗色下用深灰 shimmer，避免亮块刺眼）
+     ======================================== */
+  [data-theme="dark"] .skeleton {
+    background-color: #2a2a2a;
+  }
+  [data-theme="dark"] .skeleton::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      transparent 100%
+    );
+  }
+
+  /* ========================================
+     分割线 / 边框统一
+     ======================================== */
+  [data-theme="dark"] .mobile-divider,
+  [data-theme="dark"] .mobile-view hr {
+    border-color: #2a2a2a;
+    background-color: #2a2a2a;
+  }
+}
