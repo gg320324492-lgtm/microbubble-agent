@@ -37,6 +37,7 @@ def _import_application_routers():
         dashboard,
         drive_files,
         drive_folders,
+        drive_comments,  # v2 PR9 评论 thread
         file_requests,
         knowledge,
         meeting,
@@ -84,6 +85,7 @@ def _import_application_routers():
         (drive_folders.router, {"prefix": "/api/v1", "tags": ["网盘文件夹"]}),
         (drive_files.router, {"prefix": "/api/v1", "tags": ["网盘文件"]}),
         (drive_files.share_router, {"prefix": "/api/v1", "tags": ["网盘公开分享"]}),
+        (drive_comments.router, {"prefix": "/api/v1", "tags": ["网盘评论 thread"]}),  # v2 PR9
         (upload_multipart.router, {"prefix": "/api/v1", "tags": ["分片上传"]}),
         (ws_notifications.router, {"prefix": "/api/v1"}),
         (notifications.router, {}),
