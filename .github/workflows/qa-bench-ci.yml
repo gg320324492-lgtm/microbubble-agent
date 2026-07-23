@@ -50,10 +50,14 @@ jobs:
           pip install --prefer-binary --retries 10 --timeout 60 -r requirements.txt
 
       # === W67 第 36 步: Buildx + GHA 跨 run layer cache ===
+      # W67 第 37 步: 必须显式 context = 仓库根 (前 step Install Python dependencies
+      #   设了 working-directory: tests/qa-bench, docker/build-push-action@v5 默认
+      #   context = 当前 step working-directory, 不显式就找不到仓库根 Dockerfile)
       - name: Build app-test image (W67 step 36 真 cache, 利用 GHA cache-from)
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ github.workspace }}
+          file: ${{ github.workspace }}/Dockerfile
           push: false
           load: true
           tags: app-test:ci
