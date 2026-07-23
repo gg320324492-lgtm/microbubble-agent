@@ -21,8 +21,8 @@ jobs:
   qa-bench-d5:
     name: qa-bench D5 1000 题 baseline (test DB)
     runs-on: ubuntu-latest
-    # W67 第 46 步 (Agent 26): 90 → 120 min. Step 8 wait 30s 单次可能 600-900s
-    #   (30s wait + 后续 1000 题 runner ~60 min), 留 30 min 缓冲防 budget-edge 失败.
+    # W67 第 47 步 (Agent 27): 120 min 保留. Step 8 /health 后固定等 60s
+    #   给 router 注册完成, 后续 1000 题 runner ~60 min, 留足缓冲防 budget-edge 失败.
     timeout-minutes: 120
     steps:
       - name: Checkout
@@ -130,10 +130,9 @@ jobs:
           # W67 第 45 步 (Agent 25): 双探针过早接受 ready 反而添乱 — /health 200 后必须等
           #   5s 让 router 真注册完成, 再 probe /auth/login. 避免在 lifespan yield 和
           #   router 注册完成之间的窗口期误判 ready (返 404 → 后续 init step 一切失败).
-          # W67 第 46 步 (Agent 26): 双探针 wait 从 5s 提到 30s.
-          # Agent 25 实测 5s wait 不够 — uvicorn 启动 8s 后 /health OK 立即, 但 /auth/login
-          #   router 注册**真慢** (实测 16+ 分钟没 ready, 单次 budget 1500s 内 27.7 min 仍 fail).
-          # 失败时打印 HTTP code 看路由状态 + dump 容器 logs (即使 lifecycle 没 fail 也行).
+          # W67 第 47 步 (Agent 27): Agent 26 的 30s 仍不够, 固定等 60s.
+          # /health OK 只代表 lifespan 已 yield; 24 个 v1 router 的同步注册可能仍在继续.
+          # 失败后循环会再次等待 60s 并探测, 直到 login 返回 401/422 或总超时.
           for i in {1..450}; do
             if ! curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               if [ "$i" -eq 450 ]; then
@@ -145,9 +144,9 @@ jobs:
               sleep 2
               continue
             fi
-            # /health OK → wait 30s 让 router 真注册完成 (lifespan yield 早于 router 注册, 5s 不够)
-            echo "  [probe $i/450] /health OK, 等 30s 给 router 真注册..."
-            sleep 30
+            # /health OK → wait 60s 让 router 真注册完成 (lifespan yield 早于 router 注册, 30s 不够)
+            echo "  [probe $i/450] /health OK, 等 60s 给 router 真注册..."
+            sleep 60
             # 探针 2: /auth/login 必须 401/422 (路由注册完成, 区别 404 endpoint-missing)
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
               http://localhost:8001/api/v1/auth/login \
