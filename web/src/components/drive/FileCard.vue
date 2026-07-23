@@ -131,6 +131,14 @@
             <el-dropdown-item v-if="file.storage_mode === 'drive'" command="version-history">
               🕘 版本历史
             </el-dropdown-item>
+            <!--
+              W68 F-4: 桌面端 "查看评论" 入口.
+              与 mobile 文件级长按菜单 "查看评论" 对等 (W68 F-3 移动端).
+              点击跳到 /drive/file/{id}/comments 独立评论路由页.
+            -->
+            <el-dropdown-item command="view-comments" divided>
+              💬 查看评论
+            </el-dropdown-item>
             <el-dropdown-item divided command="delete">
               <span style="color: var(--color-danger);">删除</span>
             </el-dropdown-item>
@@ -219,6 +227,13 @@
               <el-dropdown-item v-if="file.storage_mode === 'drive'" command="version-history">
                 🕘 版本历史
               </el-dropdown-item>
+              <!--
+                W68 F-4: 桌面端 detail 视图 (默认) "查看评论" 入口.
+                跟 grid 视图对等, 路由跳转 /drive/file/{id}/comments.
+              -->
+              <el-dropdown-item command="view-comments" divided>
+                💬 查看评论
+              </el-dropdown-item>
               <el-dropdown-item divided command="delete">
                 <span style="color: var(--color-danger);">删除</span>
               </el-dropdown-item>
@@ -247,7 +262,7 @@ const props = defineProps({
   viewMode: { type: String, default: 'detail' }  // detail | grid | list (v2.16 detail 默认)
 })
 
-defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'version-history', 'delete', 'toggle-star'])
+defineEmits(['click', 'contextmenu', 'toggle-select', 'preview', 'rename', 'move', 'update-visibility', 'extract-to-kb', 'share-link', 'version-history', 'view-comments', 'delete', 'toggle-star'])
 
 // === v2.0 (2026-07-09) Drive 美化: 按 file_type 提取 type key 用于 data-type ===
 // 与 drive-view.css 中的 .drive-file-card[data-type="pdf|doc|ppt|excel|image|video|audio|text"] 配套
