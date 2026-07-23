@@ -39,6 +39,15 @@
         </h2>
       </div>
       <div class="drive-toolbar-actions">
+        <el-button
+          v-if="versions.length >= 2"
+          class="drive-compare-btn"
+          :icon="DocumentCopy"
+          data-testid="open-version-diff"
+          @click="diffDialogVisible = true"
+        >
+          版本对比
+        </el-button>
         <!-- 上传新版本按钮 (走 el-upload 隐式触发) -->
         <el-upload
           v-if="fileInfo"
@@ -146,6 +155,13 @@
         </div>
       </div>
     </div>
+
+    <DesktopVersionDiffDialog
+      v-model="diffDialogVisible"
+      :file-id="fileId"
+      :file-name="fileInfo?.file_name || ''"
+      :versions="versions"
+    />
   </div>
 </template>
 
@@ -154,9 +170,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
-  ArrowLeft, UploadFilled, WarningFilled, Download, Refresh
+  ArrowLeft, UploadFilled, WarningFilled, Download, Refresh, DocumentCopy
 } from '@element-plus/icons-vue'
 import { useDriveFiles } from '@/composables/useDriveFiles'
+import DesktopVersionDiffDialog from '@/components/desktop/DesktopVersionDiffDialog.vue'
 import { formatDateTime } from '@/utils/format'
 
 // 引入 drive-view.css 共享样式 (跟 FileGrid/DriveTrashView 一致)
@@ -175,6 +192,7 @@ const fileInfo = ref(null)  // { file_name, version_number, file_hash }
 const loading = ref(false)
 const loadError = ref(null)
 const uploading = ref(false)
+const diffDialogVisible = ref(false)
 
 async function fetchVersions() {
   loading.value = true
@@ -306,6 +324,18 @@ onMounted(() => {
   gap: 12px;
 }
 
+.drive-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drive-compare-btn {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-bg);
+}
+
 /* 文件摘要卡 */
 .version-file-summary-card {
   display: flex;
@@ -383,7 +413,7 @@ onMounted(() => {
 }
 .version-timeline-item.is-current .version-timeline-card {
   background: var(--color-success-light-9, rgba(133, 206, 97, 0.08));
-  border-color: var(--color-success-light-7, rgba(133, 206, 97, 0.3));
+  border-color: rgba(133, 206, 97, 0.3);
 }
 .version-timeline-marker {
   display: flex;
@@ -454,7 +484,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 .version-size {
-  background: var(--color-info-light-9, rgba(64, 158, 255, 0.08));
+  background: var(--color-info-bg);
   padding: 2px 8px;
   border-radius: var(--radius-sm, 4px);
   font-weight: var(--font-weight-medium, 500);
