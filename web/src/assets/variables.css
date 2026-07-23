@@ -1674,4 +1674,76 @@ body, .aside, .header, .card, .el-card, .el-button, .btn, .el-menu,
   transition: var(--theme-transition);
 }
 
+/* ============================================
+   W67 v2 (2026-07-23) Define 15 orphan tokens (修 Lint CSS Step 6 token-orphans 失败)
+   修前 15 个唯一 orphan:
+     --el-color-white (EP 全局, 4 处)
+     --color-bg-elevated / --color-bg-light / --color-bg-tag (背景色)
+     --color-border-dark (深边框)
+     --color-primary-700 / --color-primary-light-9 (主色深浅)
+     --color-success-light-9 / --color-warning-border / --color-warning-light-5 /
+       --color-warning-light-9 (warning 语义 4 token)
+     --color-danger-border / --color-danger-light-5 / --color-danger-light-9 (danger 语义 3 token)
+     --weight-semibold (字体粗细别名)
+   设计原则:
+     - EP 全局 token 别名 --el-color-white = #FFFFFF, 让 check-token-orphans.sh 认到
+     - light-5/light-9 派生现有 --color-primary/success/warning/danger 主色
+     - --weight-semibold 别名 = 600 (与现有 --font-weight-semibold 对齐)
+     - dark mode 遵循现有 [data-theme="dark"] 翻转模式
+   ============================================ */
+:root {
+  /* Element Plus 全局 token (4 个使用: PwaUpdateToast.vue:187, NotificationBell.vue:381, ShareDialog.vue:390, MobileFab.vue:123) */
+  --el-color-white: #FFFFFF;
+
+  /* 项目自有背景色扩展 */
+  --color-bg-elevated: #FFFFFF;       /* 略亮的卡片背景 (VersionHistoryDialog.vue 等) */
+  --color-bg-light: #FAFAFA;          /* 极浅灰背景 (DriveUploadDialog.vue) */
+  --color-bg-tag: #F0F2F5;            /* 标签背景 (FolderTreeNode.vue) */
+
+  /* 边框颜色扩展 */
+  --color-border-dark: #D6D9DE;       /* 深边框 (CommentItem + CommentThread) */
+
+  /* 主题色扩展 (主色 light-3/9 = EP 体系, 700 = 更深一档) */
+  --color-primary-light-3: #FF9D85;   /* EP 体系 light-3 (MobileCommentThread.vue:473) */
+  --color-primary-700: #C44A30;       /* 主色深 700 (ThinkingModeSwitch.vue) */
+  --color-primary-light-9: #FFF8F5;   /* 主色最浅 9 (MoveDialog.vue) */
+
+  /* 语义色 light-5/light-9 + border (派生 success/warning/danger 主色) */
+  --color-success-light-9: #F0F9EB;   /* 与 --color-success-bg 一致 */
+  --color-warning-border: #F5DAB1;    /* warning 浅边框 (ShareDialog.vue) */
+  --color-warning-light-5: #FCE9D2;   /* warning 浅 5 */
+  --color-warning-light-9: #FDF6EC;   /* 与 --color-warning-bg 一致 */
+  --color-danger-border: #FBC4C4;     /* danger 浅边框 (KnowledgeDashboard.vue) */
+  --color-danger-light-5: #FCD3D3;    /* danger 浅 5 */
+  --color-danger-light-9: #FEF0F0;    /* 与 --color-danger-bg 一致 */
+
+  /* 字体粗细别名 (DriveUploadDialog.vue 等 font-weight: var(--weight-semibold)) */
+  --weight-semibold: 600;
+
+  /* 文本禁用色 (DesktopDriveView.vue:1052) */
+  --color-text-disabled: #C0C4CC;
+
+  /* 文本副色 RGB (TaskView.vue:787 rgba 三元组用) — 派生 --color-text-secondary #909399 = 144,147,153 */
+  --color-text-secondary-rgb: 144, 147, 153;
+}
+
+/* dark mode 适配 (8 派生色翻转, light-9 / bg 系列遵循 dark bg card/page 反色) */
+[data-theme="dark"] {
+  --color-bg-elevated: #2A2A2A;
+  --color-bg-light: #1F1F1F;
+  --color-bg-tag: #2E2E2E;
+  --color-border-dark: #4A4A4A;
+  --color-primary-700: #E85A3A;
+  --color-primary-light-9: #3D2A26;
+  --color-primary-light-3: #FF7A5C;     /* dark orange primary-light */
+  --color-success-light-9: rgba(103, 194, 58, 0.15);
+  --color-warning-border: rgba(230, 162, 60, 0.4);
+  --color-warning-light-5: rgba(230, 162, 60, 0.18);
+  --color-warning-light-9: rgba(230, 162, 60, 0.15);
+  --color-danger-border: rgba(245, 108, 108, 0.4);
+  --color-danger-light-5: rgba(245, 108, 108, 0.18);
+  --color-danger-light-9: rgba(245, 108, 108, 0.15);
+  --color-text-secondary-rgb: 168, 170, 176;  /* dark --color-text-secondary: #a8aab0 = 168,170,176 */
+}
+
 
