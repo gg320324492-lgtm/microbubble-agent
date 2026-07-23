@@ -95,5 +95,24 @@ export default defineConfig({
       },
       testMatch: /desktop\/recording-.*\.spec\.mjs/,
     },
+    // W68 第 4 批 (2026-07-24): 移动端评论 UI 视觉回归
+    //   mobile_drive_comments.spec.mjs — 7 viewport × 4 页面 = 28 截图
+    //   复用 v77 P2.6-C 视觉回归模式 (visual-regression.spec.mjs 双注入登录态)
+    //   阈值 0.2% 像素差 (跟 v76.2g 视觉基线一致)
+    //   锚点范式第 51 守恒
+    {
+      name: 'mobile-comments',
+      // 测试文件自己设置 viewport (7 viewport 矩阵), 不强制
+      use: {
+        ...devices['Desktop Chrome'], // 只借用默认 chromium engine (本地没装 webkit)
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+        userAgent:
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+      },
+      testMatch: /mobile\/mobile_drive_comments\.spec\.mjs$/,
+    },
   ],
 })
