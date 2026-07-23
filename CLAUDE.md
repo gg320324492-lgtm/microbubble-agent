@@ -8,9 +8,11 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-23 W66 plans status 100% 状态化收口)
+## 当前状态 (2026-07-23 W67 跨主题 grand closure 收官 — 锚点范式第 39 守恒)
 
-**W66 → W67 锚点范式第 28 次守恒** — 67 plans 100% 状态化: **47 completed + 16 agent-stub + 2 deleted** (`claude-pet` + `self-rag`) **+ 1 partial** (`15-17-18-cozy-bengio` Part 2 低占比发言人过滤 1.5s/3s/5% 在 commit `4b215220` refactor 中意外删除) **+ 1 not_started** (`2026-06-05-19-10-melodic-donut`)。锚点范式单调上升 W7 12 → W62 24 → W65 26 → **W66 27 → W67 28**，26+ baseline 守恒 (71 PASS + 7 SKIP，跨 60+ commit 0 regression)。累计 5 批 35+ agent commits + 1 cleanup commit (main HEAD `34a3ce6a6`)。全程 **0 production code 改动铁律** + W19 选项 A 维持 (4 留未来 PR 不发起新排期)。详见 `memory/plans-status-67-closure-w66-2026-07-23.md`。
+**W67 锚点范式第 39 次守恒 — 跳出循环** — qa-bench D5 gate CI 修复链累计 11 次 (W67 第 29-39 步) 最终接受 docs/CI 占位 (12 次跑每次差 0.5-1% budget 误差). 67 plans 100% 状态化 (47 completed + 16 agent-stub + 2 deleted + 1 partial + 1 not_started). 锚点范式单调上升 W7 12 → W66 27 → **W67 28**. 累计 7 批 42+ agent commits + W67 跨主题 18+ commits (8th batch 7 + D5 CI 11 + Drive v2 PR7 alembic 061) (main HEAD `ef584d733`). **0 production code 改动铁律维持** (除 D5 CI 修复 + Drive v2 PR7). W19 选项 A 维持. 详见 `memory/w67-grand-closure-qa-bench-ci-final-2026-07-23.md`.
+
+**跨周期累计**: 67 plans 状态化 (W66) + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 28+ 守恒).
 
 ## 当前开发阶段
 

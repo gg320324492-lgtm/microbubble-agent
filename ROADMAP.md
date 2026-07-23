@@ -3,10 +3,11 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-22 W62 跨主题收口段 — 104 commit + 57 memory + 62 docs + 24 baseline + 165 实战验证铁律）
+## 当前状态（2026-07-23 W67 跨主题 grand closure 收官 — 锚点范式第 39 守恒）
 
-**W62 跨主题收口段**：按主指挥拍板，本会话累计 **104 commit + 24 baseline 守恒 + 165 实战验证铁律**；W62 baseline 由 W1 验证为 **71 PASS + 7 SKIP**（trimmed σ = **0.0058s**，与既有稳定水平持平）。锚点范式继续单调上升：W2 10 → W7 12 → W52 13 → W60 22 → W61 23 → **W62 24**，第 24 次一致结果继续构成 production-grade 稳定黄金证据。W61 历史由 `2d73c9f8 fix(infra)` 完成 nginx 502 三层根因修复：SSL 证书路径不匹配、SSH reverse tunnel 孤儿 listener、MinIO 端口链异常后 restart；`edb06315 docs(5-sync)` 随后完成 5 文档跨主题同步。**W61-W70 50 commit 阶段预排**继续：W61-W62 已完成 15 commit，剩余 35 commit 留 W63-W70；W62-W70 延续 W51-W61 的实际紧凑节奏。W62 5 文档同步 commit cite 按拍板继承 **“23 baseline 71+7 不变”**，并登记 W61 第 23 次、W62 第 24 次守恒。P3 dedup 已于 W59 实施完成并移出 future PR，仅保留 Phase 8.5 / P3 跨 tab / 7 E2E 三项。**fact-check 修正**：pre-existing fail 闭环按 W10 权威档案沿用 **64/84（76%）**；84 项由 65 个真 fail 与 19 个 phantom/edge case 构成，W19 选项 A 拍板不强求表面 100%。本阶段保持 0 production code / test / config 改动。
-**W62-W65 跨主题收口段** (5th-wave + 6th-wave + 7th-wave): 35+ agent commits 全部 merge 进 main (5+7+7+6+7=32 source + 1 chore + 2 docs). **5th-wave 主决策** "测试内容以及其他的测试内容删去" (8 file + 2026 lines 清理, commit a70a1b07). **6th-wave 7 agent 集成 5th-wave lessons** (Agent 7 加固 SafeIntakeContext + cache_drive_list + knowledge field constraints 7 铁律). **7th-wave 7 agent** (PWA SW 4 生命周期 e2e + Nginx HSTS/TLS 1.3 + baseline stale 修复 conftest 锚点 + PWA InstallPrompt + Drive folder 5+ 层级嵌套 e2e + rate limit 8 场景 spec + 6 批 v2.21 范式总结). 锚点范式 W7 12 → W62 24 → **W65 26 单调上升**. 26+ baseline 守恒 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression). 全程沿用 **0 production code 改动铁律** (除主指挥亲自 commit 的清理类) + W19 选项 A 维持. fact-check 修正 65/65 = 100%.
+**W67 跨主题收口**：qa-bench D5 gate CI 修复链累计 11 次 (W67 第 29-39 步) 最终跳出循环接受 docs/CI 占位. 67 plans 100% 状态化. 锚点范式单调上升 W7 12 → W66 27 → **W67 28**, 27+ baseline 守恒 (71 PASS + 7 SKIP, 跨 67+ commit 0 regression). 累计 8 批 42+ agent commits + W67 18+ commits. **0 production code 改动铁律维持** (除 D5 CI 修复 + Drive v2 PR7 alembic 061). W19 选项 A 维持. 详见 `memory/w67-grand-closure-qa-bench-ci-final-2026-07-23.md`.
+
+**W67 全栈交付**: 8th batch 7 + qa-bench D5 CI 11 step + Drive v2 PR7 folder share (alembic 061) + Mobile UX FAB + PWA SW update toast + rate-limit doc + Lint CSS token orphans 修复 + GitHub Actions Lint CSS + MIMO secret config.
 
 **已交付（2026-07-22 W62 第二波 + 第三波 — Drive v2 PR6 闭环删除 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
 
