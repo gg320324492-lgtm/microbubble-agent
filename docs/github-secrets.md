@@ -129,7 +129,8 @@ W67 起 D5 gate 完整 CI 流程:
 | W66 之前 | 90s (45 × 2s) | 假设 mimo SDK init < 18s |
 | W67 第 32 步 | 240s (120 × 2s) | mimo SDK + 全套 import 慢 |
 | W67 第 33 步 | 600s (300 × 2s) | 拆 build + run 后, 实际启动 6-10 min |
-| W67 第 34 步 | 900s (450 × 2s) | 提 900s 留缓冲, uvicorn 启动 10+ min |
+| W67 第 34 步 | 900s (450 × 2s) | 实测 909s, 差 9 秒 |
+| W67 第 35 步 | 1500s (750 × 2s) | 提 1500s 留充分缓冲, uvicorn + mimo SDK 15+ min |
 
 **关键修复 (W67 第 33 步)**: `docker build -q .` 在 `docker run` 同一行导致每次重 build. 拆成:
 
