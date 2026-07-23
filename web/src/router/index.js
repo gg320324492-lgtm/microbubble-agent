@@ -149,6 +149,16 @@ const routes = [
         props: true,
       },
       {
+        // W68 第 4 批: 文件版本历史桌面端独立路由 (desktop-only)
+        // 桌面端: DesktopFileVersionsView 全屏时间线 (本批新建)
+        // 移动端: 暂不暴露, 用户走 VersionHistoryDialog (PR4 既有)
+        path: 'drive/file/:id/versions',
+        name: 'DriveFileVersions',
+        component: () => import('@/views/desktop/DesktopFileVersionsView.vue'),
+        meta: { title: '文件版本历史', desktopOnly: true },
+        props: true,
+      },
+      {
         // PR8: 移动端文件 swipe 预览 (mobile-only)
         // 桌面端访问走 FileDetailView 详情页
         // 单文件模式: /drive/preview/:id
