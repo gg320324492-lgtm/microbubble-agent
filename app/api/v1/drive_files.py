@@ -525,6 +525,179 @@ async def extract_to_kb(
 
 
 # ==========================================================
+# v2 PR8.6: 文件级软锁 (防冲突协作)
+# Redis TTL 5 分钟自动过期, 释放/重新获取强制覆盖
+# ==========================================================
+
+import time as _time
+
+DRIVE_FILE_LOCK_TTL_SECONDS = 300  # 5 分钟
+_DRIVE_LOCK_KEY_PREFIX = "drive:file_lock:"
+
+
+async def _get_redis_client():
+    """延迟创建 Redis 客户端 (CLAUDE.md 752 行铁律: 不在模块顶部创建)"""
+    import redis.asyncio as aioredis
+    from app.config import settings
+    return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+async def _drive_lock_get_holder(file_id: int) -> Optional[dict]:
+    """读 Redis 锁 holder, 无锁返 None"""
+    client = await _get_redis_client()
+    try:
+        raw = await client.get(f"{_DRIVE_LOCK_KEY_PREFIX}{file_id}")
+        if not raw:
+            return None
+        import json
+        try:
+            data = json.loads(raw)
+            # 校验 TTL 实际剩余 (Redis 5 分钟已重新校准)
+            ttl = await client.ttl(f"{_DRIVE_LOCK_KEY_PREFIX}{file_id}")
+            data["ttl_remaining"] = ttl if ttl > 0 else 0
+            return data
+        except Exception:
+            return None
+    finally:
+        await client.aclose()
+
+
+class FileLockResponse(BaseModel):
+    """v2 PR8.6: 锁状态响应"""
+    file_id: int
+    locked: bool
+    holder_user_id: Optional[int] = None
+    holder_username: Optional[str] = None
+    holder_name: Optional[str] = None
+    acquired_at: Optional[str] = None
+    ttl_remaining: int = 0  # 秒
+
+
+@router.post("/files/{file_id}/lock", response_model=FileLockResponse)
+async def acquire_file_lock(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v2 PR8.6: 软锁 drive 文件 (5 分钟 Redis TTL)
+
+    - 同用户重复 acquire: 续期 TTL (返回新 acquired_at)
+    - 异用户 acquire: 返 409 + 当前 holder 信息
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+
+    client = await _get_redis_client()
+    try:
+        key = f"{_DRIVE_LOCK_KEY_PREFIX}{file_id}"
+        import json
+        now_iso = _time.strftime("%Y-%m-%dT%H:%M:%SZ", _time.gmtime())
+        payload = json.dumps({
+            "user_id": current_user.id,
+            "username": getattr(current_user, "username", None) or "",
+            "name": getattr(current_user, "name", "") or "",
+            "acquired_at": now_iso,
+        })
+        existing_raw = await client.get(key)
+        if existing_raw:
+            try:
+                existing = json.loads(existing_raw)
+                if int(existing.get("user_id", 0)) != current_user.id:
+                    return FileLockResponse(
+                        file_id=file_id,
+                        locked=True,
+                        holder_user_id=int(existing.get("user_id", 0)) or None,
+                        holder_username=existing.get("username"),
+                        holder_name=existing.get("name"),
+                        acquired_at=existing.get("acquired_at"),
+                        ttl_remaining=max(await client.ttl(key), 0),
+                    )
+            except Exception:
+                # 损坏的 JSON 直接覆盖
+                pass
+        # 同用户续期 / 异用户第一次拿到 → 写入
+        await client.set(key, payload, ex=DRIVE_FILE_LOCK_TTL_SECONDS)
+        return FileLockResponse(
+            file_id=file_id,
+            locked=True,
+            holder_user_id=current_user.id,
+            holder_username=getattr(current_user, "username", None) or "",
+            holder_name=getattr(current_user, "name", "") or "",
+            acquired_at=now_iso,
+            ttl_remaining=DRIVE_FILE_LOCK_TTL_SECONDS,
+        )
+    finally:
+        await client.aclose()
+
+
+@router.delete("/files/{file_id}/lock", response_model=FileLockResponse)
+async def release_file_lock(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v2 PR8.6: 释放 drive 文件锁
+
+    - 仅 holder 可释放, 异用户返 403
+    - 锁不存在返 200 + locked=False (幂等)
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+
+    client = await _get_redis_client()
+    try:
+        key = f"{_DRIVE_LOCK_KEY_PREFIX}{file_id}"
+        raw = await client.get(key)
+        if not raw:
+            return FileLockResponse(file_id=file_id, locked=False)
+        import json
+        try:
+            existing = json.loads(raw)
+            if int(existing.get("user_id", 0)) != current_user.id:
+                raise HTTPException(status_code=403, detail="非锁持有者, 无法释放")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+        await client.delete(key)
+        return FileLockResponse(file_id=file_id, locked=False)
+    finally:
+        await client.aclose()
+
+
+@router.get("/files/{file_id}/lock", response_model=FileLockResponse)
+async def get_file_lock(
+    file_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),
+):
+    """v2 PR8.6: 查 drive 文件当前锁状态
+
+    任何可见该文件的人都能查 (含 public/team), 无锁时 locked=False
+    """
+    svc = DriveService(db)
+    f = await svc.get_file(file_id, current_user_id=current_user.id)
+    if f is None:
+        raise HTTPException(status_code=404, detail="file 不存在或无权访问")
+    holder = await _drive_lock_get_holder(file_id)
+    if not holder:
+        return FileLockResponse(file_id=file_id, locked=False)
+    return FileLockResponse(
+        file_id=file_id,
+        locked=True,
+        holder_user_id=int(holder.get("user_id", 0)) or None,
+        holder_username=holder.get("username"),
+        holder_name=holder.get("name"),
+        acquired_at=holder.get("acquired_at"),
+        ttl_remaining=int(holder.get("ttl_remaining", 0)),
+    )
+
+
+# ==========================================================
 # v2 PR2: 回收站 + 收藏 + 批量操作
 # ==========================================================
 
