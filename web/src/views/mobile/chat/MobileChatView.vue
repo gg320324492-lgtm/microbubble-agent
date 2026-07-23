@@ -1,4 +1,12 @@
 <template>
+  <!-- W68 G-2 (2026-07-24): MobileSwipeNavigation 包装, 左右滑切换上一个/下一个会话 -->
+  <MobileSwipeNavigation
+    ref="swipeNavRef"
+    :left-action="swipeToNextSession"
+    :right-action="swipeToPrevSession"
+    :threshold="50"
+    aria-label="会话左右滑切换"
+  >
   <div class="mobile-chat-root">
     <MobileHeader
       :title="currentTitle"
@@ -133,6 +141,7 @@
       :session="dialogSession"
     />
   </div>
+  </MobileSwipeNavigation>
 </template>
 
 <script setup>
@@ -163,6 +172,8 @@ import MobileHeader from './MobileHeader.vue'
 import MobileSessionDrawer from './MobileSessionDrawer.vue'
 import MobileMessageList from './MobileMessageList.vue'
 import MobileInputBar from './MobileInputBar.vue'
+// W68 G-2 (2026-07-24): 左右滑切换会话包装
+import MobileSwipeNavigation from '@/components/mobile/MobileSwipeNavigation.vue'
 // #043 Phase 6
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import ShareDialog from '@/components/chat/ShareDialog.vue'
@@ -266,6 +277,8 @@ const imageInputRef = ref(null)
 const fileInputRef = ref(null)
 const messageListRef = ref(null)
 const showDrawer = ref(false)
+// W68 G-2 (2026-07-24): swipe 包装 ref (调试/测试)
+const swipeNavRef = ref(null)
 
 // 会话列表（供 MobileSessionDrawer）
 const sessionsList = computed(() => sessionsStore.sortedSessions)
@@ -493,6 +506,22 @@ function handleSwitchSession(id) {
   streamOnSwitchSession(id)
   showDrawer.value = false
   nextTick(() => messageListRef.value?.scrollToBottom(true))
+}
+
+// W68 G-2 (2026-07-24): 左右滑切换会话
+// 向左滑 = 下一个会话, 向右滑 = 上一个会话
+// 跳过空 list / 单会话场景 (无可切换目标)
+function swipeToNextSession() {
+  if (!sessionsList.value || sessionsList.value.length < 2) return
+  const idx = sessionsList.value.findIndex((s) => s.id === sessionId.value)
+  const nextIdx = idx < sessionsList.value.length - 1 ? idx + 1 : 0
+  handleSwitchSession(sessionsList.value[nextIdx].id)
+}
+function swipeToPrevSession() {
+  if (!sessionsList.value || sessionsList.value.length < 2) return
+  const idx = sessionsList.value.findIndex((s) => s.id === sessionId.value)
+  const prevIdx = idx > 0 ? idx - 1 : sessionsList.value.length - 1
+  handleSwitchSession(sessionsList.value[prevIdx].id)
 }
 
 // ============================================================================
