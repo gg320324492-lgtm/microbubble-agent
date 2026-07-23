@@ -21,7 +21,9 @@ jobs:
   qa-bench-d5:
     name: qa-bench D5 1000 题 baseline (test DB)
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # W67 第 46 步 (Agent 26): 90 → 120 min. Step 8 wait 30s 单次可能 600-900s
+    #   (30s wait + 后续 1000 题 runner ~60 min), 留 30 min 缓冲防 budget-edge 失败.
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -128,11 +130,14 @@ jobs:
           # W67 第 45 步 (Agent 25): 双探针过早接受 ready 反而添乱 — /health 200 后必须等
           #   5s 让 router 真注册完成, 再 probe /auth/login. 避免在 lifespan yield 和
           #   router 注册完成之间的窗口期误判 ready (返 404 → 后续 init step 一切失败).
-          for i in {1..900}; do
-            # 探针 1: /health 必须 200
+          # W67 第 46 步 (Agent 26): 双探针 wait 从 5s 提到 30s.
+          # Agent 25 实测 5s wait 不够 — uvicorn 启动 8s 后 /health OK 立即, 但 /auth/login
+          #   router 注册**真慢** (实测 16+ 分钟没 ready, 单次 budget 1500s 内 27.7 min 仍 fail).
+          # 失败时打印 HTTP code 看路由状态 + dump 容器 logs (即使 lifecycle 没 fail 也行).
+          for i in {1..450}; do
             if ! curl -sf http://localhost:8001/health > /dev/null 2>&1; then
-              if [ "$i" -eq 900 ]; then
-                echo "✗ app-test /health never returned 200 (final attempt $i/900)"
+              if [ "$i" -eq 450 ]; then
+                echo "✗ app-test /health never returned 200 (final attempt $i/450)"
                 docker logs app-test | tail -80
                 docker logs pg-test | tail -30
                 exit 1
@@ -140,20 +145,20 @@ jobs:
               sleep 2
               continue
             fi
-            # /health OK → 等 5s 给 router 真注册完成 (lifespan yield 早于 router 注册)
-            echo "  [probe $i/900] /health OK, 等 5s 给 router 真注册..."
-            sleep 5
+            # /health OK → wait 30s 让 router 真注册完成 (lifespan yield 早于 router 注册, 5s 不够)
+            echo "  [probe $i/450] /health OK, 等 30s 给 router 真注册..."
+            sleep 30
             # 探针 2: /auth/login 必须 401/422 (路由注册完成, 区别 404 endpoint-missing)
             HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
               http://localhost:8001/api/v1/auth/login \
               -H "Content-Type: application/json" \
               -d '{"username":"xiaoqi_testbot","password":"INVALID_PROBE_ROUTER_READY"}' 2>/dev/null || echo "000")
             if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "422" ]; then
-              echo "✓ app-test 全 router ready (health=200 + login=$HTTP_CODE, attempt $i/900)"
+              echo "✓ app-test 全 router ready (health=200 + login=$HTTP_CODE, attempt $i/450)"
               break
             fi
-            echo "  [probe $i/900] /health=200 但 login=$HTTP_CODE (非 401/422 = router 还未注册完成), 继续等..."
-            if [ "$i" -eq 900 ]; then
+            echo "  [probe $i/450] /health=200 但 login=$HTTP_CODE (非 401/422 = router 还未注册完成), 继续等..."
+            if [ "$i" -eq 450 ]; then
               echo "✗ app-test router startup timeout (final /health=200 但 login=$HTTP_CODE)"
               docker logs app-test | tail -80
               docker logs pg-test | tail -30
