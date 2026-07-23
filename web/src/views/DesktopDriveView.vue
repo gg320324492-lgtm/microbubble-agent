@@ -204,6 +204,7 @@
             @file-update-visibility="handleFileUpdateVisibility"
             @file-extract-to-kb="handleFileExtractToKb"
             @file-share-link="handleFileShareLink"
+            @file-view-comments="handleFileViewComments"
             @file-delete="handleFileDelete"
             @toggle-select="toggleFileSelect"
             @file-toggle-star="handleFileToggleStar"
@@ -844,6 +845,14 @@ function handleFileShareLink(file) {
   // v2 PR1 实现: 打开 ShareDialog
   shareDialogFile.value = file
   showShareDialog.value = true
+}
+
+// W68 路线 F-4: 桌面端 "查看评论" 入口 (FileCard 右键菜单 → 💬 查看评论)
+//   跳到独立评论路由页 DesktopFileCommentsView (mobile 走 MobileFileCommentsView)
+//   桌面端访问 /drive/file/:id/comments 可看完整评论列表 + 输入栏
+//   与移动端 F-3 long-press 菜单 "查看评论" 入口对等
+function handleFileViewComments(file) {
+  router.push(`/drive/file/${file.id}/comments`)
 }
 
 async function handleFileDelete(file) {
