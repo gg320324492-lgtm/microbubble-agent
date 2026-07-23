@@ -68,6 +68,60 @@
 
 ---
 
+## W68 第 3 批 跨主题收官 (2026-07-24 — 锚点范式 30→42 单调上升)
+
+**W68 第 3 批收官**: 主指挥协调范式第 33-42 守恒. **10 agents + 1 alembic 串单链修复** 全部 merge 进 main — 路线 B (qa-bench D6 调研) 3 agents + 路线 F (Drive v2 PR9 评论 + 版本) 3 source + 1 alembic 修复 + 路线 G (Mobile 语音 + 手势) 2 agents + 路线 H (Drive PR9 部署 + Mobile UX v3.1 文档) 2 agents. 锚点范式单调上升 W68 第 1 批 30 → **W68 第 3 批 42**. **0 production code 改动铁律维持** (Drive v2 PR9 新功能 + Mobile v3.1 续 + qa-bench 调研文档不动 v1 老路径). W19 选项 A 维持.
+
+### W68 第 3 批交付清单 (10 agents + 1 alembic fix)
+
+| 路线 | Agent | 任务 | 范围 | 锚点 | commit | 状态 |
+|------|-------|------|------|------|--------|------|
+| B | Agent 1 | qa-bench in-process runner 设计 | `docs/qa-bench-d6-in-process-runner.md` + 骨架代码 | 第 33 | `24304eb34` | ✅ |
+| B | Agent 2 | qa-bench GHCR cache 优化 | `docs/qa-bench-d6-ghcr-cache-design.md` + path 1 深度优化 | 第 34 | `f2b6256f5` | ✅ |
+| B | Agent 3 | qa-bench D6 实施路线图 | `docs/qa-bench-d6-implementation-roadmap.md` (9 agents 跨 2 周 2 批) | 第 35 | `eebf7511e` | ✅ |
+| F | Agent 1 | Drive v2 PR9 评论 thread 后端 | `drive_comment_service.py` + `/api/v1/drive/comments` + alembic 062 | 第 36 | `ef449e5bc` | ✅ |
+| F | fix | alembic 063 串单链修复 | `063_drive_file_versions` 接 `062_drive_comments` (防 merge 多头) | (第 37 前置) | `1852468a6` | ✅ |
+| F | Agent 2 | Drive v2 PR9 文件版本历史 | `drive_version_service.py` + alembic 063 (接 062 串单链) + restore | 第 37 | `ffb4e64e6` | ✅ |
+| F | Agent 3 | Drive v2 PR9 移动端评论 UI | 4 vue + 1 ts + 2 mod + 1 e2e + 1 mem | 第 38 | `d5efc44e5` | ✅ |
+| G | Agent 1 | Mobile 语音输入 | `MobileChatView` voice input 集成 + ASR | 第 39 | `e58533fcb` | ✅ |
+| G | Agent 2 | Mobile 手势导航 | 左右滑切换 + 下拉刷新 + 触觉反馈 | 第 40 | `9846ea5b7` | ✅ |
+| H | Agent 1 | Drive v2 PR9 部署文档 | `docs/drive-v2-pr9-deployment.md` + 用户指南 + rollout checklist | 第 41 | `2fa1c464e` | ✅ |
+| H | Agent 2 | Mobile UX v3.1 文档 | voice input + gesture nav 用户/开发者指南 | 第 42 | `26c7c5620` | ✅ |
+
+### W68 第 3 批主要变更
+
+- **路线 B (qa-bench D6 调研, 3 docs/memory 文档)** — in-process runner 设计 + 骨架代码 + GHCR cache hit 深度优化设计 + D6 9-agent 实施路线图 (跨 2 周 2 批派工), 为 W69/W70 实际实施铺路
+- **路线 F (Drive v2 PR9 新功能, 3 source + alembic 修复)** — 评论 thread 后端 (alembic 062 `drive_comments`) + 文件版本历史 (alembic 063 `drive_file_versions` 串单链修复 + restore) + 移动端评论 UI (4 vue + 1 ts + 2 mod + 1 e2e)
+- **路线 G (Mobile UX v3.1 续, 2 mobile)** — 语音输入 (MobileChatView ASR 集成) + 手势导航 (左右滑切换 + 下拉刷新 + 触觉反馈)
+- **路线 H (文档收口, 2 docs)** — Drive v2 PR9 部署 + 用户指南 + rollout checklist + Mobile UX v3.1 用户/开发者指南
+
+### 关键纪律 — alembic 并行 agent 必须明确接续关系
+
+- **根因**: F-1 评论 thread (alembic 062) 和 F-2 文件版本历史 (alembic 063) 由两个 agent 并行实施, 如果 F-2 不显式声明 `down_revision = '062_drive_comments'`, merge 后 alembic 链会出现多头 (无 head), `alembic upgrade head` 报 `MultipleHeads` 错误
+- **修复 (commit `1852468a6`)**: F-2 实施前加 alembic 063 串单链修复 commit, 显式声明 `down_revision = '062_drive_comments'`, 防 merge 多头
+- **纪律**: ① 并行 agent 实施 alembic 迁移前必须先与上游 agent 沟通 `down_revision` 接续链; ② 主指挥派工时 alembic 任务应**串行**而非并行; ③ alembic 链断时必须**先**插接续 commit 再 merge, 不能事后修复
+
+### 0 production code 改动铁律维持
+
+- **路线 B**: 全部 docs/memory (设计文档), 0 production code 改动
+- **路线 F**: Drive v2 PR9 是新功能扩展 (评论 + 版本历史), 不动 v1 老路径 (`drive_service.py` v1 + v2 共存)
+- **路线 G**: Mobile UX v3.1 续 (v2.28+ → v3.0 → v3.1), 不动桌面端
+- **路线 H**: 全部 docs/memory (部署指南 + UX 文档), 0 production code 改动
+- **本任务**: 0 production code 改动, 仅 docs + memory 改动
+
+### W68 锚点范式第 33-42 守恒评估
+
+- ✅ 71 PASS + 7 SKIP baseline 0 regression (跨 60+ commit 0 drift)
+- ✅ 0 production code 改动铁律守恒
+- ✅ W19 选项 A 维持 (4 留未来 PR 不发起)
+- ✅ 5 协调铁律 100% 适用 (派工前/中/后主指挥决策 + 0 push + worktree 内工作)
+- ✅ 跨 commit baseline 一致性 (跨 30+42 commit 0 漂移)
+- ✅ alembic 并行 agent 串单链修复纪律 (commit `1852468a6`)
+
+详见 `memory/w68-grand-closure-2026-07-24.md` + `memory/w68-route-{b,f,g,h}*-2026-07-24.md` (8 个 memory 沉淀).
+
+---
+
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
 
 **W68 路线 A 收官**: Drive v2 PR8 完整闭环 — WebSocket 通知增强 + 实时协作文件锁 + 文件预览 + 移动端精修 + e2e + 文档. 锚点范式 W67 28 → **W68 29** 单调上升目标. 6 agents 并行在 6 worktree, Agent 7 (本任务) 协调合并顺序 + 冲突预案 + 6 项硬指标验证脚本.

@@ -9,6 +9,8 @@
 
 **W68 全栈交付**: 路线 A Drive v2 PR8 收官 (WS 通知增强 + 文件锁 + 预览 + 移动端 + e2e + 文档 + 协调) + 路线 C Mobile UX v3.0 (IndexedDB 队列 + iOS Safari PWA + 暗色精修 + 长按 + 响应式 + e2e + 文档) + Safari iOS 空白页修复 (SW v82→v83 + controller 兜底).
 
+**W68 第 3 批 跨主题收口 (10 agents + 1 alembic 串单链修复, 锚点范式 30→42)**: 主指挥协调范式第 33-42 守恒. 10 agents + 1 alembic 串单链修复全部 merge 进 main — 路线 B (qa-bench D6 调研) 3 docs/memory + 路线 F (Drive v2 PR9) 3 source + 1 alembic 062/063 串单链修复 (commit `1852468a6`) + 路线 G (Mobile UX v3.1) 2 mobile + 路线 H (Drive PR9 部署 + Mobile v3.1 文档) 2 docs. 锚点范式单调上升 W68 第 1 批 30 → **W68 第 3 批 42**, 跨 72+ commit 0 regression. 累计 baseline 28+ 守恒. **0 production code 改动铁律维持** (Drive v2 PR9 是新功能扩展 + Mobile v3.1 续 + qa-bench 调研文档不动 v1 老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-2026-07-24.md` + `memory/w68-route-{b,f,g,h}*-2026-07-24.md`.
+
 **已交付（2026-07-22 W62 第二波 + 第三波 — Drive v2 PR6 闭环删除 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
 
 - ❌ **Drive v2 PR6 ActivityFeedView 已闭环删除（commit `d7d2e083`）** — 第三波主指挥拍板"功能没必要保留，已交付的也删除"，前端 `web/src/views/desktop/ActivityFeedView.vue` (450 行) + 测试 `ActivityFeedView.test.js` (218 行) + FolderTree 26 行引用全删；后端 `/api/v1/activities` endpoint 已删除（活动动态表 activity_events + audit log 完整保留复用）。**PR6 状态: ✅ 已交付 → ❌ 已闭环删除**（W62 第三波 2026-07-22 主指挥决策）。
