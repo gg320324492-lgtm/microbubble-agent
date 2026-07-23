@@ -1,0 +1,54 @@
+name: "Build app-test image (W67 step 48 路线 2: pre-built)"
+
+# W67 第 48 步 (2026-07-23): GHCR pre-built image 跳过 CI build
+# - 每次 push to main (或 Dockerfile 改) 自动 build image 推到 ghcr.io
+# - qa-bench-ci.yml 用 `docker pull` 直接拉 pre-built image (1-2 min 跨 run cache hit)
+# - 替代每 CI run 重 build app-test image (6-12 分钟 cold cache)
+#
+# Image 名称约定: ghcr.io/<OWNER>/microbubble-agent:app-test-latest
+# qa-bench-ci.yml Step 6 用 `docker pull` + `docker tag ... app-test:ci` 复用现有 step 7 启动逻辑.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "scripts/init_test_db_all.py"
+      - "alembic/**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - ".github/workflows/build-image.yml"
+  # 允许手动 trigger (调试 cache miss / 强制重建)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build & push app-test image to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -51,29 +51,31 @@ jobs:
           python -m pip install --upgrade pip
           pip install --prefer-binary --retries 10 --timeout 60 -r requirements.txt
 
-      # === W67 第 38 步: 必须 setup buildx, 否则 cache-from: type=gha 不工作 ===
-      # docker/build-push-action@v5 默认用 docker driver, 不支持 cache-from: type=gha (这是 buildx-only 功能).
-      # 必须先 setup-buildx-action@v3 配 buildx. 0 config 即用 (默认 builder), 不需要 driver-opts.
-      - name: Set up Docker Buildx
+      # === W67 第 48 步 路线 2 改造: 已删除 setup-buildx + build step ===
+      # 原 W67 第 38 步 setup-buildx 仅服务于 W67 第 36 步 buildx + cache-from: type=gha.
+      #   pre-built image 不需要 build, 整个 buildx step 删除.
+      # 原 W67 第 36-38 步 build step 替换为上方 `Pull pre-built app-test image`.
+      # 上下 steps (Cache pip / Install Python deps / Start test DB / etc.) 全部保留.
+      # 回退到 buildx 模式: 取消 setup-buildx step 注释 + 改回 Pull step 为 Build step.
+      - name: "Set up Docker Buildx (W67 step 38, 路线 2 已禁用, 保留注释回退)"
+        if: false
         uses: docker/setup-buildx-action@v3
         # W67 第 38 步: 必须 setup buildx, 否则 cache-from: type=gha 不工作 (默认 docker driver 不支持)
 
-      # === W67 第 36 步: Buildx + GHA 跨 run layer cache ===
-      # W67 第 37 步: 必须显式 context = 仓库根 (前 step Install Python dependencies
-      #   设了 working-directory: tests/qa-bench, docker/build-push-action@v5 默认
-      #   context = 当前 step working-directory, 不显式就找不到仓库根 Dockerfile)
-      - name: Build app-test image (W67 step 36 真 cache, 利用 GHA cache-from)
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ github.workspace }}
-          file: ${{ github.workspace }}/Dockerfile
-          push: false
-          load: true
-          tags: app-test:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # === W67 第 48 步 路线 2 (2026-07-23): GHCR pre-built image ===
+      # 替代 W67 第 36-38 步 buildx + GHA cache-from, 进一步把 build 从 CI 移除.
+      # 触发链: push to main → build-image.yml 自动 build & push 到
+      #   ghcr.io/<OWNER>/microbubble-agent:app-test-latest
+      # CI 这边: docker pull (1-2 min, 跨 run cache hit) → docker tag → 复用现成 step 7 启动逻辑.
+      # 与 Agent 48a (lazy router) + Agent 48c (deeper cache) 并行, 任一成功 = D5 gate 真治本.
+      # 回退路径: revert 本步 → step 6 回到原 buildx 模式 (cache-from: type=gha).
+      - name: "Pull pre-built app-test image (W67 step 48 路线 2, GHCR pre-built)"
+        run: |
+          docker pull ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest
+          docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
+          docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
 
-      - name: Start test DB stack (W67 step 33 用 image, 不再 build)
+      - name: "Start test DB stack (W67 step 33 用 image, 路线 2: pre-built + cached)"
         run: |
           # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
           docker network create qa-bench-net
