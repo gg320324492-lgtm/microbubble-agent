@@ -9,6 +9,8 @@
 
 **W68 全栈交付**: 路线 A Drive v2 PR8 收官 (WS 通知增强 + 文件锁 + 预览 + 移动端 + e2e + 文档 + 协调) + 路线 C Mobile UX v3.0 (IndexedDB 队列 + iOS Safari PWA + 暗色精修 + 长按 + 响应式 + e2e + 文档) + Safari iOS 空白页修复 (SW v82→v83 + controller 兜底).
 
+**W68 第 4 批纪律沉淀 — alembic 并行 agent 串单链** (commit `1852468a6` 修复): F-1 (062) + F-2 (063) 并行派工都接 061 → merge 后 Multiple head revisions → 主指挥改 063 接 062 串单链. **5 条新铁律**已沉淀到 CLAUDE.md「2026-07-24 alembic 并行 agent 串单链纪律」节 (派工明确接续 / merge 按链序 / merge 后 verify 单 head / 部署文档第 0 节含 chain 风险 / cp + clear `__pycache__`). 锚点范式第 46 守恒, 详见 `memory/w68-alembic-chain-discipline-2026-07-24.md`.
+
 **已交付（2026-07-22 W62 第二波 + 第三波 — Drive v2 PR6 闭环删除 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
 
 - ❌ **Drive v2 PR6 ActivityFeedView 已闭环删除（commit `d7d2e083`）** — 第三波主指挥拍板"功能没必要保留，已交付的也删除"，前端 `web/src/views/desktop/ActivityFeedView.vue` (450 行) + 测试 `ActivityFeedView.test.js` (218 行) + FolderTree 26 行引用全删；后端 `/api/v1/activities` endpoint 已删除（活动动态表 activity_events + audit log 完整保留复用）。**PR6 状态: ✅ 已交付 → ❌ 已闭环删除**（W62 第三波 2026-07-22 主指挥决策）。
