@@ -590,6 +590,24 @@ def post_meeting_process(self, meeting_id: int):
 
                 logger.info(f"声纹识别完成: {len(set(seg.get('speaker','') for seg in transcript_segments))} 位发言人")
 
+                # ===== 阶段 1.7: 低占比发言人过滤（2026-06-30 铁律: 王天志只言片语误识） =====
+                # 触发条件（任一）:
+                #   - 单段最大时长 < 1.5s
+                #   - 总发言时长  < 3.0s
+                #   - 总时长占比  < 5%
+                # 同步回写 transcript_segments[].speaker = "发言人?"，删 speaker_mapping 中被过滤 cluster.
+                # 早于 AI polish / MeetingParticipant 自增 / transcript 落盘 (plan: 15-17-18-cozy-bengio.md Part 2).
+                # 见 app/services/low_occupancy_filter.py + plan: 15-17-18-cozy-bengio.md
+                from app.services.low_occupancy_filter import apply_low_occupancy_filter
+                _filtered_cids = apply_low_occupancy_filter(
+                    transcript_segments, speaker_mapping, meeting_id=meeting_id
+                )
+                if _filtered_cids:
+                    logger.info(
+                        f"低占比发言人过滤命中: {sorted(_filtered_cids)}, "
+                        f"speaker_mapping 现有 {len(speaker_mapping)} 人"
+                    )
+
                 # ===== 阶段 1.8: 规则标点补充（兜底 AI 润色失败的情况） =====
                 def _add_punctuation(text: str) -> str:
                     """给中文文本添加基本标点符号"""
