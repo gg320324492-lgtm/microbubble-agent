@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Mapping, Sequence
+from typing import Any, AsyncIterator, Callable, Mapping, Sequence
 
 
 @dataclass(slots=True)
@@ -78,7 +78,11 @@ async def _collect_stream(stream: AsyncIterator[Any] | Any) -> str:
     return "".join(chunks)
 
 
-async def run_inprocess(questions: Sequence[Any], db_url: str) -> list[VerdictResult]:
+async def run_inprocess(
+    questions: Sequence[Any],
+    db_url: str,
+    engine_factory: Callable[[], Any] | None = None,
+) -> list[VerdictResult]:
     """Run benchmark questions through ChatEngine directly.
 
     The eventual implementation must create one test-scoped async session,
@@ -87,19 +91,36 @@ async def run_inprocess(questions: Sequence[Any], db_url: str) -> list[VerdictRe
     No TestClient request or uvicorn process belongs in this function.
     ``db_url`` is deliberately explicit so CI can point at its disposable
     PostgreSQL service and never accidentally use a developer database.
+
+    ``engine_factory`` is an optional seam for unit tests that want to inject
+    a stub ``ChatEngine`` without touching the production ``app.agent.chat_engine``
+    import path.  When omitted (the production-style call), the real
+    ``ChatEngine(llm=None)`` is constructed lazily on this event loop.
     """
+
     if not db_url:
         raise ValueError("db_url is required for the in-process benchmark")
 
-    # Imports stay inside the coroutine.  This follows the cross-event-loop
-    # rule: clients, pools, and sessions must be constructed on this loop.
-    try:
-        from app.agent.chat_engine import ChatEngine  # noqa: WPS433 (deferred import on purpose)
-    except ImportError as exc:  # pragma: no cover - helpful skeleton failure
-        raise RuntimeError("qa-bench requires the application dependencies") from exc
-
-    engine = ChatEngine(llm=None)
     results: list[VerdictResult] = []
+
+    # Short-circuit when there is nothing to run.  The empty branch must
+    # avoid constructing ``ChatEngine`` (which lazily imports the full app
+    # stack and would defeat the smoke-test for the "no engine instantiated"
+    # contract).
+    if not questions:
+        return results
+
+    if engine_factory is None:
+        # Imports stay inside the coroutine.  This follows the cross-event-loop
+        # rule: clients, pools, and sessions must be constructed on this loop.
+        try:
+            from app.agent.chat_engine import ChatEngine  # noqa: WPS433 (deferred import on purpose)
+        except ImportError as exc:  # pragma: no cover - helpful skeleton failure
+            raise RuntimeError("qa-bench requires the application dependencies") from exc
+
+        engine_factory = lambda: ChatEngine(llm=None)  # noqa: E731
+
+    engine = engine_factory()
 
     # Serial execution is the safe default while DB-session and Redis sharing
     # semantics are measured.  A later batch may add bounded concurrency with
