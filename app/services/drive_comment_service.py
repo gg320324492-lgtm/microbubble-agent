@@ -90,8 +90,8 @@ async def _check_file_comment_authority(
             status_code=400,
         )
 
-    # file owner 默认可访问
-    if file_row.uploader_id == user_id:
+    # file owner 默认可访问 (Knowledge ORM 字段: created_by, 不是 uploader_id)
+    if file_row.created_by == user_id:
         return file_row
 
     # 校验 folder 访问权限 (read 足够)
@@ -164,7 +164,7 @@ async def _check_resolve_authority(
 
     规则 (或关系) — W68 PR9 改走 drive_permission_service.check_comment_resolver:
     - author 本人 (comment.author_id == user_id)
-    - file owner (comment.file_id → file.uploader_id == user_id)
+    - file owner (comment.file_id → file.created_by == user_id)
     - folder owner (comment.folder_id → folder.owner_id == user_id)
     - folder admin member (DriveFolderMember permission='admin')
     - 平台管理员 (Member.role='admin')

@@ -74,7 +74,7 @@ async def publish_comment_created(
         actor_id: 操作者 (默认 comment.author_id)
 
     收件人:
-    - file_id 不为空 → Knowledge.uploader_id (file owner)
+    - file_id 不为空 → Knowledge.created_by (file owner)
     - folder_id 不为空 → Folder.owner_id (folder owner)
     - 注意: mentions 由 PR6 notification_service.create_bulk_mentions 单独推,
       本推送是补的"协作事件"通知 (priority=MEDIUM)
