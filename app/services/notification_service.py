@@ -15,19 +15,24 @@
 - is_read 字段: False=未读, True=已读
 - read_at: 已读时间戳 (前端 NotificationBell 时间显示)
 - v2 PR6-P8: title/body 实时拼 + 存 DB 双轨 (推送服务的 metadata 增强)
+- W68 PR8d: 通知优先级 (HIGH/MEDIUM/LOW) + 离线消息队列 (Redis list) +
+  批量通知合并 (combine 多个小事件为 batch event)
 
 不与现有 Notification 系统冲突:
 - 现有 app/api/v1/notification.py (chat reminder 类) 用的是 Notification 模型 + reminder_service
 - 本服务**只**管 file_mentions (drive 网盘协作提醒),不混合
 """
+import json
 import logging
 import re
 from datetime import datetime, timedelta
+from enum import Enum
 from typing import List, Optional, Tuple
 
 from sqlalchemy import select, and_, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import get_redis
 from app.models.knowledge import FileMention, ActivityEvent, Knowledge, FileComment
 from app.models.member import Member
 from app.services.cleanup_backup import execute_backup_then_delete
@@ -36,6 +41,26 @@ logger = logging.getLogger(__name__)
 
 # v2 PR6-P7: 5s 通知去重窗口 (同 receiver + file + context)
 NOTIFICATION_DEDUP_WINDOW_SECONDS = 5
+
+# W68 PR8d: 通知优先级
+class NotificationPriority(str, Enum):
+    """v2 PR8d 通知优先级 3 档
+    - HIGH: 立即推送 (mention / @ 提醒) — 不允许合并
+    - MEDIUM: 普通活动 (文件上传 / 评论) — 可批量合并
+    - LOW: 系统提示 (清理 / 巡检) — 仅离线队列
+    """
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+# W68 PR8d: 离线队列配置
+OFFLINE_QUEUE_KEY = "ws_notify:offline_queue"  # Redis list per user: {user_id}:{priority}
+OFFLINE_QUEUE_MAX_SIZE = 100  # 每用户每档最多 100 条 (FIFO trim)
+OFFLINE_QUEUE_TTL_SECONDS = 7 * 24 * 3600  # 7 天自动过期
+
+# W68 PR8d: 批量通知配置
+BATCH_MERGE_WINDOW_SECONDS = 3  # 3s 内的 MEDIUM 通知合并为 batch event
+BATCH_MERGE_MAX_ITEMS = 10  # 单 batch 最多 10 条, 超过即 flush
 
 # v2 PR6-P8: rich body 长度限制 (前端卡片 2 行省略号 ≈ 60 中文字)
 BODY_PREVIEW_MAX_CHARS = 60
@@ -616,6 +641,249 @@ class NotificationService:
 
 # 全局单例 (与 PR5 service 范式一致)
 notification_service = NotificationService()
+
+
+# ============================================================================
+# W68 PR8d: 通知优先级 + 离线消息队列 + 批量通知
+# ============================================================================
+
+# mention context → priority 映射 (集中管理, 避免散落各分支)
+_CONTEXT_PRIORITY_MAP = {
+    "comment": NotificationPriority.HIGH,    # @ 提醒必须立刻看到
+    "reply": NotificationPriority.HIGH,      # 回复评论同 mention
+    "mention": NotificationPriority.HIGH,    # 显式 @ 提及
+    "share": NotificationPriority.MEDIUM,    # 分享可稍后看
+    "star": NotificationPriority.LOW,        # 收藏低优先级
+    "upload": NotificationPriority.MEDIUM,   # 上传通知
+    "system": NotificationPriority.LOW,      # 系统级巡检
+}
+
+
+def infer_priority(context: Optional[str]) -> NotificationPriority:
+    """W68 PR8d: 根据 context 推断优先级
+
+    Args:
+        context: notification context 字符串 (comment/reply/mention/share/star/...)
+
+    Returns:
+        NotificationPriority (HIGH/MEDIUM/LOW), 未知 context 默认 MEDIUM
+    """
+    if not context:
+        return NotificationPriority.MEDIUM
+    # 'reply:N' 走 prefix 匹配
+    key = context.split(":", 1)[0] if ":" in context else context
+    return _CONTEXT_PRIORITY_MAP.get(key, NotificationPriority.MEDIUM)
+
+
+def _offline_queue_key(user_id: int, priority: NotificationPriority) -> str:
+    """W68 PR8d: Redis offline queue key"""
+    return f"{OFFLINE_QUEUE_KEY}:{user_id}:{priority.value}"
+
+
+async def enqueue_offline(user_id: int, payload: dict) -> int:
+    """W68 PR8d: 离线消息入队 (Redis list, FIFO, 上限 OFFLINE_QUEUE_MAX_SIZE)
+
+    用户离线 (WS 未连接) 时调用, 客户端 reconnect 时 drain。
+    payload 会带 priority 字段 (HIGH/MEDIUM/LOW), 用户 reconnect 时按
+    priority 拉对应队列。
+
+    Args:
+        user_id: 目标 user
+        payload: 通知 payload (必须含 'priority' 字段)
+
+    Returns:
+        当前队列长度 (>= 0)
+    """
+    try:
+        priority = NotificationPriority(payload.get("priority", "medium"))
+    except ValueError:
+        priority = NotificationPriority.MEDIUM
+
+    r = await get_redis()
+    key = _offline_queue_key(user_id, priority)
+    payload_json = json.dumps(payload, ensure_ascii=False, default=str)
+    pipe = r.pipeline()
+    pipe.rpush(key, payload_json)
+    pipe.ltrim(key, -OFFLINE_QUEUE_MAX_SIZE, -1)  # 只保留最近 N 条
+    pipe.expire(key, OFFLINE_QUEUE_TTL_SECONDS)
+    results = await pipe.execute()
+    queue_len = results[0] if results else 0
+    logger.debug(f"[Notify] offline enqueue user_id={user_id} prio={priority.value} len={queue_len}")
+    return queue_len
+
+
+async def drain_offline_queue(
+    user_id: int,
+    priority_filter: Optional[str] = None,
+    max_items: int = 50,
+) -> List[dict]:
+    """W68 PR8d: 客户端 reconnect 时拉离线消息, 拉完即清
+
+    Args:
+        user_id: 目标 user
+        priority_filter: 'high' | 'medium' | 'low' | None (None=全部 3 档)
+        max_items: 单次最多返回条数 (防 client 重连后一次拉太多)
+
+    Returns:
+        通知 payload list (按时间倒序, latest first)
+    """
+    r = await get_redis()
+    keys = []
+    if priority_filter:
+        try:
+            p = NotificationPriority(priority_filter)
+            keys = [_offline_queue_key(user_id, p)]
+        except ValueError:
+            keys = [_offline_queue_key(user_id, p) for p in NotificationPriority]
+    else:
+        keys = [_offline_queue_key(user_id, p) for p in NotificationPriority]
+
+    # 按 HIGH → MEDIUM → LOW 顺序拉
+    out: List[dict] = []
+    for k in keys:
+        if len(out) >= max_items:
+            break
+        remaining = max_items - len(out)
+        items = await r.lrange(k, -remaining, -1)
+        for raw in items:
+            try:
+                out.append(json.loads(raw))
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f"[Notify] offline queue corrupt item in {k}, skip")
+        if items:
+            await r.ltrim(k, 0, -len(items) - 1)  # 清掉已拉走的 (FIFO)
+    return out
+
+
+async def push_with_priority(
+    user_id: int,
+    payload: dict,
+    *,
+    priority: Optional[NotificationPriority] = None,
+) -> int:
+    """W68 PR8d: 推送通知 (在线走 WS, 离线走队列)
+
+    增强 push_to_user:
+    - HIGH: 立即尝试 WS 推送, 失败入 offline HIGH 队列
+    - MEDIUM: 尝试 WS 推送, 失败入 offline MEDIUM 队列
+    - LOW: 不主动 WS 推送, 直接入 offline LOW 队列 (用户 reconnect 才看)
+
+    Args:
+        user_id: 目标 user
+        payload: 推送内容
+        priority: None=从 payload 读 / 从 context 推断
+
+    Returns:
+        1 = WS 推送成功, 0 = 离线入队
+    """
+    if priority is None:
+        priority_str = payload.get("priority")
+        if priority_str:
+            try:
+                priority = NotificationPriority(priority_str)
+            except ValueError:
+                priority = None
+        if priority is None:
+            priority = infer_priority(payload.get("context"))
+    payload["priority"] = priority.value
+
+    # LOW 不主动推, 只入队
+    if priority == NotificationPriority.LOW:
+        await enqueue_offline(user_id, payload)
+        return 0
+
+    # HIGH/MEDIUM 尝试 WS 推送
+    try:
+        from app.api.v1.ws_notifications import notification_manager
+        delivered = await notification_manager.push_to_user(user_id, payload)
+    except Exception as e:
+        logger.debug(f"[Notify] push WS 失败, 入离线队列: {e}")
+        delivered = 0
+
+    # 在线但 WS 暂时不通 (可能 client 断网) 也入队
+    if delivered == 0:
+        await enqueue_offline(user_id, payload)
+    return delivered
+
+
+# W68 PR8d: 批量通知合并 (per-user in-memory pending batches)
+_batch_pending: dict = {}  # {(user_id, batch_key): (first_ts, items[])}
+_batch_lock = None  # asyncio.Lock lazy init on first use
+
+
+async def push_batch(
+    user_id: int,
+    payload: dict,
+    *,
+    batch_key: str,
+    window_seconds: int = BATCH_MERGE_WINDOW_SECONDS,
+) -> int:
+    """W68 PR8d: 批量通知合并 — window_seconds 内的相同 batch_key 合并为单条
+
+    用法示例: 多个文件同时上传 → 合并为 '3 个新文件上传' batch event
+
+    Args:
+        user_id: 目标 user
+        payload: 单条通知 payload
+        batch_key: 合并分组 key (如 'file_upload' / 'comment_added')
+        window_seconds: 合并窗口 (秒), 默认 3s
+
+    Returns:
+        1 = 立即推送 (首批), 0 = 已合并入 pending
+    """
+    global _batch_lock
+    if _batch_lock is None:
+        _batch_lock = __import__("asyncio").Lock()
+    async with _batch_lock:
+        key = (user_id, batch_key)
+        now_ts = __import__("asyncio").get_event_loop().time()
+        entry = _batch_pending.get(key)
+        if entry is None or (now_ts - entry[0]) > window_seconds:
+            # 窗口过期或首批, 启动新 batch
+            _batch_pending[key] = (now_ts, [payload])
+            # 启动延迟 flush 协程
+            __import__("asyncio").create_task(
+                _flush_batch(user_id, batch_key, window_seconds)
+            )
+            # 首批立即推
+            return await push_with_priority(user_id, payload)
+        # 窗口内: 合并
+        items = entry[1]
+        items.append(payload)
+        if len(items) >= BATCH_MERGE_MAX_ITEMS:
+            await _flush_batch_now(user_id, batch_key)
+        return 0
+
+
+async def _flush_batch(user_id: int, batch_key: str, window_seconds: int) -> None:
+    """W68 PR8d: 等待 window 后 flush batch (单次)"""
+    await __import__("asyncio").sleep(window_seconds)
+    await _flush_batch_now(user_id, batch_key)
+
+
+async def _flush_batch_now(user_id: int, batch_key: str) -> None:
+    """W68 PR8d: 立即 flush pending batch (合并 N 条为 batch event)"""
+    global _batch_lock
+    if _batch_lock is None:
+        _batch_lock = __import__("asyncio").Lock()
+    async with _batch_lock:
+        key = (user_id, batch_key)
+        entry = _batch_pending.pop(key, None)
+    if not entry:
+        return
+    items = entry[1]
+    if not items:
+        return
+    # 合并为 batch event
+    batched = {
+        "type": "batch",
+        "batch_key": batch_key,
+        "count": len(items),
+        "items": items,
+        "ts": datetime.utcnow().isoformat(),
+    }
+    await push_with_priority(user_id, batched)
+    logger.debug(f"[Notify] batch flush user_id={user_id} key={batch_key} n={len(items)}")
 
 
 # ============================================================================
