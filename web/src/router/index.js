@@ -139,12 +139,13 @@ const routes = [
         props: true,
       },
       {
-        // W68 路线 F-3: 文件评论独立路由页 (mobile-only)
-        // 桌面端访问走 FileDetailView 详情页 (评论嵌内)
+        // W68 路线 F-3 + F-4: 文件评论独立路由页
+        // 移动端: MobileFileCommentsView (长按 + 触觉反馈)
+        // 桌面端: DesktopFileCommentsView (el-popover hover + inline edit)
         path: 'drive/file/:id/comments',
         name: 'DriveFileComments',
-        component: resolveMobileOnly('MobileFileCommentsView'),
-        meta: { title: '文件评论', mobileOnly: true },
+        component: resolveMobileComponent('desktop/DesktopFileCommentsView', 'MobileFileCommentsView'),
+        meta: { title: '文件评论' },
         props: true,
       },
       {
