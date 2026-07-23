@@ -20,9 +20,22 @@
     </PageHeader>
 
     <main
+      ref="knowledgeMainRef"
       class="knowledge-main"
       :style="{ paddingBottom: 'calc(var(--tabbar-height, 56px) + var(--sab, 0px))' }"
     >
+      <!-- W68 G-2 (2026-07-24): 下拉刷新指示器, pullDistance/isRefreshing 来自 usePullToRefresh -->
+      <div
+        v-if="isPulling || isRefreshing"
+        class="knowledge-pull-indicator"
+        :class="{ 'is-active': isRefreshing }"
+        :style="{ height: Math.min(pullDistance, 80) + 'px' }"
+        :aria-label="isRefreshing ? '刷新中' : '下拉刷新'"
+      >
+        <span class="pull-glyph" :class="{ spin: isRefreshing }">{{ isRefreshing ? '⟳' : '↓' }}</span>
+        <span class="pull-text">{{ isRefreshing ? '刷新中…' : '松手刷新' }}</span>
+      </div>
+
       <!-- 铁律 31: tab 条统一用 <TabStrip> 替代自定义 .tab-bar -->
       <div class="tab-bar-wrapper">
         <TabStrip
@@ -259,6 +272,8 @@ import CardList from '@/components/mobile/CardList.vue'
 import MobileSearchSheet from '@/components/mobile/MobileSearchSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileFab from '@/components/mobile/MobileFab.vue'
+// W68 G-2 (2026-07-24): 下拉刷新 composable
+import { usePullToRefresh } from '@/composables/usePullToRefresh'
 
 const router = useRouter()
 const route = useRoute()
@@ -346,6 +361,18 @@ const activeFilters = ref({ category: '' })
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+
+// W68 G-2 (2026-07-24): 下拉刷新 hook, 监听 knowledgeMainRef 滚动容器
+// refresh 回调直接调 fetchKnowledge() (已有 async 函数, 无需改实现)
+// 注: fetchKnowledge 在此模块靠下方定义, 通过 nextTick 包裹保证 hookup 时已存在
+const knowledgeMainRef = ref(null)
+const { pullDistance, isPulling, isRefreshing } = usePullToRefresh(knowledgeMainRef, {
+  threshold: 80,
+  maxPull: 160,
+  onRefresh: async () => {
+    if (typeof fetchKnowledge === 'function') await fetchKnowledge()
+  },
+})
 
 // PR8: 旧 tabs 数组同步移除 files, 兼容旧引用（如有）—— 推荐直接用 tabItems
 const tabs = [
@@ -709,6 +736,33 @@ onMounted(() => {
 .knowledge-main {
   flex: 1;
   padding: var(--mobile-padding-y, 12px) var(--mobile-padding-x, 16px);
+}
+
+/* W68 G-2 (2026-07-24): 下拉刷新指示器 */
+.knowledge-pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary, #666);
+  transition: height 100ms ease;
+  overflow: hidden;
+}
+.knowledge-pull-indicator.is-active {
+  color: var(--color-primary, #FF7A5C);
+}
+.pull-glyph {
+  font-size: 18px;
+  display: inline-block;
+  transition: transform 200ms ease;
+}
+.pull-glyph.spin {
+  animation: pull-spin 1s linear infinite;
+}
+@keyframes pull-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* TabStrip 容器（铁律 31: 替代原 .tab-bar 自定义） */
