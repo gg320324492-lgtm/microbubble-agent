@@ -81,14 +81,14 @@ jobs:
           # 创建独立网络, 让容器间通过服务名直连 (Linux runner 无 host.docker.internal)
           docker network create qa-bench-net
 
-          # 起 test DB：复用官方 image，并通过 init script 创建测试所需扩展
+          # 起 test DB: 用 pgvector 官方 image (含 vector + uuid-ossp 扩展)
+          # 替代 postgres:16-alpine + init_pg_test.sql 手动建扩展
           docker run -d --name pg-test \
             --network qa-bench-net \
             -e POSTGRES_DB=microbubble_test \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=microbubble2026 \
-            -v ${{ github.workspace }}/scripts/init_pg_test.sql:/docker-entrypoint-initdb.d/init.sql:ro \
-            postgres:16-alpine
+            pgvector/pgvector:pg16
           # 等 pg-test ready (最长 60s)
           for i in {1..30}; do
             if docker exec pg-test pg_isready -U postgres > /dev/null 2>&1; then
