@@ -5,6 +5,8 @@
 
 ## 当前状态（2026-07-24 W68 第 3 批 grand closure — 锚点范式第 42 守恒）
 
+**任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md`.
+
 **W68 第 3 批跨主题收口**: 主指挥协调范式第 42 次派工 (锚点范式第 42 守恒). W68 第 3 批 11 agents + 1 主指挥 alembic 串单链修复 (11 commits) 全部 merge 进 main: **Drive v2 PR9** (F-1 评论 thread 后端 + F-2 文件版本历史 + F-3 移动端评论 UI) + **qa-bench D6 调研** (B-1 in-process runner + B-2 GHCR cache + B-3 实施路线图) + **Mobile UX v3.1** (G-1 语音输入 + G-2 手势导航) + **文档部署收口** (H-1 PR9 部署文档 + H-2 v3.1 文档). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → **W68 第 3 批 42**, 30+ baseline 守恒 (71 PASS + 7 SKIP, 跨 100+ commit 0 regression). 累计 8 批 50+ agent commits + **W68 跨主题 50+ commits** (第 1 批 30 + 第 2 批 8 + 第 3 批 12+). **0 production code 改动铁律维持** (Drive v2 PR9 + qa-bench D6 调研 + Mobile UX v3.1 范畴内, 不动 v1 老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-2026-07-24.md`.
 
 **W68 第 1+2 批回顾**: 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari fix 1 commit + 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证). main HEAD `26c7c5620`.
