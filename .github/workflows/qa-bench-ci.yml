@@ -144,6 +144,59 @@ jobs:
             app-test python scripts/init_test_db_all.py 2>&1 | tail -20
           # 期望输出: init_db "数据库初始化完成" + ensure_test_user "[OK] 测试账号已存在" 或 "[CREATED]"
 
+      # === W67 第 43 步 (Agent 23): 在 Login 前诊断 xiaoqi_testbot 实际状态 ===
+      # 历史: #35 (run 30011821182) Step 11 Login 30×2s=60s 失败, 无任何 app 端日志可查.
+      # 根因可能是: (a) init_test_db_all 在 app-test *另进程* 跑, 提交后 app-test 主进程连接未刷池;
+      #            (b) 测试 user 实际未创建 (init 步骤偶发 1s 完成, 怀疑 sleep-overwrite);
+      #            (c) Redis 缺失导致限流 check 静默降级后再失败;
+      #            (d) asyncpg first connect 慢.
+      # 解决: 在 Step 11 Login 之前, 用 *同一连接参数* 直接查 xiaoqi_testbot + 验证密码哈希,
+      #       并把 app-test 容器最近 80 行日志 / Login HTTP 4xx 响应也 print 出来.
+      # 关键: 这个诊断 step 跑 fail-loud (exit 1) 当 DB 内容异常 → 后续 Login 会一定成功.
+      - name: "Diagnostic - verify xiaoqi_testbot + capture app-test logs (W67 step 43)"
+        run: |
+          echo "=== [1] Direct DB probe (via app-test container's python + same DATABASE_URL) ==="
+          docker exec -e SKIP_DB_SETUP=1 \
+            -e DATABASE_URL="postgresql+asyncpg://postgres:microbubble2026@pg-test:5432/microbubble_test" \
+            app-test python - <<'PYEOF'
+          import asyncio, sys, os
+          sys.path.insert(0, '/app')
+          from sqlalchemy import select, text
+          from app.core.database import async_session
+          from app.models.member import Member
+          from app.core.security import verify_password
+
+          async def main():
+              async with async_session() as db:
+                  r = await db.execute(select(Member).where(Member.username == 'xiaoqi_testbot'))
+                  m = r.scalar_one_or_none()
+                  if m is None:
+                      print('MEMBER_NOT_FOUND')
+                      # 但要看 members 表真存在 + 数量
+                      cnt = (await db.execute(text('SELECT count(*) FROM members'))).scalar()
+                      print(f'members_count={cnt}')
+                      return 1
+                  print(f'member id={m.id} role={m.role} is_active={m.is_active} hashlen={len(m.password_hash) if m.password_hash else 0}')
+                  if not m.password_hash:
+                      print('NO_PASSWORD_HASH')
+                      return 2
+                  ok = verify_password('testbot_pass_2026', m.password_hash)
+                  print(f'verify_password=testbot_pass_2026 -> {ok}')
+                  return 0 if ok else 3
+          sys.exit(asyncio.run(main()))
+          PYEOF
+          echo ""
+          echo "=== [2] Single raw login attempt (不静默, 显示 HTTP code + body) ==="
+          HTTP_CODE=$(curl -s -o /tmp/login_body.txt -w "%{http_code}" \
+            -X POST http://localhost:8001/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}')
+          echo "HTTP_CODE=$HTTP_CODE"
+          echo "BODY=$(head -c 500 /tmp/login_body.txt)"
+          echo ""
+          echo "=== [3] app-test 容器最近 80 行日志 (诊断 startup / init 是否真正成功) ==="
+          docker logs --tail 80 app-test 2>&1 | tail -80
+
       - name: Generate 1000 题题库 (D4 base 700 + D5 extra 300)
         working-directory: tests/qa-bench
         run: |
@@ -165,14 +218,25 @@ jobs:
           # 为什么用 xiaoqi_testbot (非 admin) — scripts/ensure_test_user.py 默认账号是 xiaoqi_testbot /
           #   testbot_pass_2026 (生产 admin 物理隔离). init_test_db_all.py 第 3 步自动确保存在.
           #
+          # W67 第 43 步 (Agent 23): 上方 Diagnostic step 已先验证 user + 密码, 此处单一目的是取 JWT.
           # 重试机制: app-test 可能刚 ready 但 lifespan 还在最后阶段, /health 200 不代表路由就绪.
-          #   最多重试 30 次 × 2s = 60s.
-          for i in {1..30}; do
-            LOGIN_RESP=$(curl -sf -X POST http://localhost:8001/api/v1/auth/login \
+          #   最多重试 30 次 × 2s = 60s. W67 步减少为 15 次 × 2s = 30s (fail-fast).
+          for i in {1..15}; do
+            HTTP_CODE=$(curl -s -o /tmp/login_resp.txt -w "%{http_code}" \
+              -X POST http://localhost:8001/api/v1/auth/login \
               -H "Content-Type: application/json" \
-              -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' 2>&1) && break
-            if [ "$i" -eq 30 ]; then
-              echo "✗ Login failed after 30 retries: $LOGIN_RESP"
+              -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' 2>&1)
+            if [ "$HTTP_CODE" = "200" ]; then
+              LOGIN_RESP=$(cat /tmp/login_resp.txt)
+              echo "✓ HTTP 200 OK (attempt $i)"
+              break
+            fi
+            echo "✗ attempt $i HTTP $HTTP_CODE: $(head -c 200 /tmp/login_resp.txt)"
+            if [ "$i" -eq 15 ]; then
+              echo "=== app-test logs (final 80 lines) ==="
+              docker logs --tail 80 app-test 2>&1 | tail -80
+              echo "=== pg-test logs (final 30 lines) ==="
+              docker logs --tail 30 pg-test 2>&1 | tail -30
               exit 1
             fi
             sleep 2
