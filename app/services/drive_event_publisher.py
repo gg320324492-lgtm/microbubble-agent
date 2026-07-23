@@ -18,11 +18,15 @@ WS payload, 走 push_with_priority 推送.
 - 失败 best-effort: try/except + logger.error(exc_info=True), 不抛出 (caller 不感知)
 - 复用 caller 的 db session (不再开新 session — DRY 原则, 与 a-1 一致)
 - 收件人解析 = 同步 DB lookup (走 caller 的 db session, 单 SQL, 性能可忽略)
-- mention 提醒单独走 notification_service.create_bulk_mentions (PR6 已建, 本模块不重做)
+- mention 提醒独立路径 (W68 PR10):
+  parse_mentions() (app.services.mention_parser) → mentioned_user_ids list
+  → publish_comment_mention(db, comment, mentioned_user_id, actor_id, snippet)
+  走 HIGH priority (与 W68 PR8d 通知优先级一致 — 立即送达)
 - delete 场景特殊处理: comment ORM 已被删, 仅传 ID 即可
 
 调用方 (service 层集成):
 - drive_comment_service.create_comment() → publish_comment_created(db, comment)
+                                          + 多条 publish_comment_mention(db, comment, uid, ...)
 - drive_comment_service.update_comment() → publish_comment_updated(db, comment, actor_id)
 - drive_comment_service.delete_comment() → publish_comment_deleted(db, comment_id, file_id, folder_id, author_id, actor_id)
 - drive_comment_service.resolve_comment() → publish_comment_resolved(db, comment_id, file_id, folder_id, resolved_by)
@@ -132,6 +136,50 @@ async def publish_comment_deleted(
         "ts": _now_iso(),
     }
     return await _safe_push(target_user_id, payload, priority=NotificationPriority.LOW)
+
+
+async def publish_comment_mention(
+    db: AsyncSession,
+    comment: DriveComment,
+    *,
+    actor_id: int,
+    mentioned_user_id: int,
+    snippet: Optional[str] = None,
+) -> int:
+    """评论 @ 提醒推送 — 通知被 @ 的 user (1 条 mention = 1 条推送)
+
+    W68 第 5 批 PR10 (锚点范式第 63 守恒):
+    - 与 publish_comment_created 不同: 不通知 file/folder owner, 而是通知 mentions 列表里的人
+    - 1 次 @ 1 条推送 (不批量合并 — 用户立即看到"@了你"是基础体验)
+    - priority=HIGH (mention 是直接指向, 与 W68 PR8d H 档定义一致)
+    - payload 含 `mentioned_user_id` + `mentioned_by` + `snippet` (内容摘要)
+
+    Args:
+        db: caller 的 AsyncSession
+        comment: DriveComment ORM (含 author_id, mentions, file_id/folder_id)
+        actor_id: @ 的发起者 (一般等于 comment.author_id)
+        mentioned_user_id: 被 @ 的 user (1 条推送)
+        snippet: comment content 摘要 (前 80 char, 折行符折叠)
+
+    priority=HIGH (mention 是直接指向, 必须立即送达)
+    """
+    # 跳过自推 (作者 @ 自己)
+    if mentioned_user_id == actor_id:
+        return 0
+    payload = {
+        "type": "comment_mention",
+        "comment_id": comment.id,
+        "file_id": comment.file_id,
+        "folder_id": comment.folder_id,
+        "parent_id": comment.parent_id,
+        "author_id": comment.author_id,
+        "actor_id": actor_id,
+        "mentioned_by": actor_id,
+        "mentioned_user_id": mentioned_user_id,
+        "snippet": snippet or "",
+        "ts": _now_iso(),
+    }
+    return await _safe_push(mentioned_user_id, payload, priority=NotificationPriority.HIGH)
 
 
 async def publish_comment_resolved(
@@ -354,6 +402,7 @@ def _now_iso() -> str:
 
 __all__ = [
     "publish_comment_created",
+    "publish_comment_mention",
     "publish_comment_updated",
     "publish_comment_deleted",
     "publish_comment_resolved",
