@@ -162,53 +162,24 @@ async def _check_resolve_authority(
 ) -> bool:
     """校验 user 是否有 resolve 权限
 
-    规则 (或关系):
+    规则 (或关系) — W68 PR9 改走 drive_permission_service.check_comment_resolver:
     - author 本人 (comment.author_id == user_id)
     - file owner (comment.file_id → file.uploader_id == user_id)
     - folder owner (comment.folder_id → folder.owner_id == user_id)
     - folder admin member (DriveFolderMember permission='admin')
+    - 平台管理员 (Member.role='admin')
 
     Returns:
         True: 有权限
+
+    Notes:
+        - W68 PR9 前: 内联实现 (走 DriveShareService + DriveFolderMember 直查)
+        - W68 PR9 后: 委托 drive_permission_service.check_comment_resolver
+                       (统一入口, 未来 PR 复用, 减少重复逻辑)
     """
-    if comment.author_id == user_id:
-        return True
-
-    if comment.file_id is not None:
-        file_row = (await db.execute(
-            select(Knowledge).where(Knowledge.id == comment.file_id)
-        )).scalar_one_or_none()
-        if file_row is not None and file_row.uploader_id == user_id:
-            return True
-        # 文件 owner 通常有 folder 权限, 走 folder owner/admin 检查即可
-        if file_row is not None and file_row.folder_id is not None:
-            share_svc = DriveShareService(db)
-            perm = await share_svc.get_user_folder_permission(
-                file_row.folder_id, user_id
-            )
-            if perm == "admin":  # owner 隐含 admin
-                return True
-
-    if comment.folder_id is not None:
-        folder = (await db.execute(
-            select(Folder).where(Folder.id == comment.folder_id)
-        )).scalar_one_or_none()
-        if folder is not None:
-            if folder.owner_id == user_id:
-                return True
-            # 检查 DriveFolderMember (admin permission)
-            from app.models.drive_share import DriveFolderMember
-            member_row = (await db.execute(
-                select(DriveFolderMember).where(
-                    DriveFolderMember.folder_id == comment.folder_id,
-                    DriveFolderMember.member_id == user_id,
-                    DriveFolderMember.permission == "admin",
-                )
-            )).scalar_one_or_none()
-            if member_row is not None:
-                return True
-
-    return False
+    from app.services.drive_permission_service import DrivePermissionService
+    perm_svc = DrivePermissionService(db)
+    return await perm_svc.check_comment_resolver(user_id, comment)
 
 
 # ==========================================================================
