@@ -139,6 +139,15 @@ const routes = [
         props: true,
       },
       {
+        // W68 路线 F-3: 文件评论独立路由页 (mobile-only)
+        // 桌面端访问走 FileDetailView 详情页 (评论嵌内)
+        path: 'drive/file/:id/comments',
+        name: 'DriveFileComments',
+        component: resolveMobileOnly('MobileFileCommentsView'),
+        meta: { title: '文件评论', mobileOnly: true },
+        props: true,
+      },
+      {
         // PR8: 移动端文件 swipe 预览 (mobile-only)
         // 桌面端访问走 FileDetailView 详情页
         // 单文件模式: /drive/preview/:id
