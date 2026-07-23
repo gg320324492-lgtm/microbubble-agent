@@ -177,7 +177,7 @@
           @batch-toggle-star="handleBatchToggleStar"
         />
 
-        <div class="drive-file-area">
+        <div class="drive-file-area" @contextmenu.prevent="onDriveFileAreaContextMenu">
           <!-- 2026-07-02 inline 化: specialView inline 渲染 (保留 FolderTree 上下文, 不离开 /drive) -->
           <FileRequestListPanel v-if="specialView === 'requests'" />
           <DriveTrashPanel v-else-if="specialView === 'trash'" />
@@ -209,6 +209,21 @@
             @file-toggle-star="handleFileToggleStar"
             @page-change="onPageChange"
             @size-change="onPageSizeChange"
+          />
+
+          <!--
+            W68 第 4 批: 文件右键菜单 (查看评论 + 文件版本历史)
+            - 走 FolderContextMenu (复用 v2.9 既有固定定位菜单, 鼠标位置弹出)
+            - 文件检测: 走 DOM 走查找到 .file-card 祖先 → 同 parent 子节点 index → driveFiles[index]
+            - 不动 FileGrid 保持 mobile/desktop 解耦, 桌面端独占此菜单
+          -->
+          <FolderContextMenu
+            v-if="contextMenuItems.length > 0"
+            ref="contextMenuRef"
+            :items="contextMenuItems"
+            :placement="'auto'"
+            @command="onContextMenuCommand"
+            @close="onContextMenuClose"
           />
         </div>
       </main>
@@ -313,6 +328,8 @@ import MoveDialog from '@/components/drive/MoveDialog.vue'
 import DriveUploadDialog from '@/components/drive/DriveUploadDialog.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6
 import ShareDialog from '@/components/drive/ShareDialog.vue'  // v2 PR1
+// W68 第 4 批: 右键菜单复用 v2.9 FolderContextMenu (固定定位 + 边界检测)
+import FolderContextMenu from '@/components/drive/FolderContextMenu.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { useFolderDropZone } from '@/composables/useFolderDropZone'
@@ -896,6 +913,61 @@ const currentPathDisplay = computed(() => {
     ? `我的网盘 / 文件夹 #${selectedFolderId.value}`
     : '我的网盘 / 顶级目录'
 })
+
+// === W68 第 4 批: 文件右键菜单 (查看评论 + 文件版本历史) ===
+// FolderContextMenu 自身已 bind @contextmenu.prevent, 这里只需通过 contextMenuRef.open(event) 触发
+const contextMenuRef = ref(null)
+const contextMenuFile = ref(null)
+
+// 菜单项动态生成 (跟当前右击文件挂钩)
+const contextMenuItems = computed(() => {
+  if (!contextMenuFile.value) return []
+  return [
+    { command: 'view-comments',  label: '💬 查看评论' },
+    { command: 'view-versions',  label: '🕘 文件版本历史', divided: true },
+  ]
+})
+
+/**
+ * 桌面端 drive-file-area 右键捕获.
+ *
+ * 文件识别策略:
+ * - 不动 FileGrid (保持 mobile/desktop 解耦, 不污染其他用 FileGrid 的页面)
+ * - DOM 走查: 从 event.target 向上找 .file-card 祖先 (FileCard.vue 顶层 class)
+ * - 拿该 card 在 parent (FileCard 列表容器) 的 index → driveFiles[index] 即为目标文件
+ * - 防御: 走查失败 / 索引越界 → 静默忽略 (右键空白区域不应该弹菜单)
+ */
+function onDriveFileAreaContextMenu(event) {
+  const cardEl = event.target?.closest?.('.file-card')
+  if (!cardEl) return  // 右键空白区域, 不弹菜单 (跟主流网盘 UX 一致)
+  // 拿 card 在父容器中的索引
+  const siblings = Array.from(cardEl.parentElement?.children || [])
+  const idx = siblings.indexOf(cardEl)
+  if (idx < 0 || idx >= driveFiles.value.length) return
+  const file = driveFiles.value[idx]
+  contextMenuFile.value = file
+  // 触发 FolderContextMenu.open (通过 nextTick 等 DOM 更新完菜单项)
+  nextTick(() => {
+    contextMenuRef.value?.open?.(event)
+  })
+}
+
+function onContextMenuCommand(cmd) {
+  const file = contextMenuFile.value
+  if (!file) return
+  if (cmd === 'view-comments') {
+    // 桌面端独立评论页未建 (本批第 3 agent 仍在建), fallback 走 FileDetailView 详情页 (评论嵌内)
+    // W68 第 4 批纪律: 不碰评论 UI agent 的文件, 故评论功能暂跳详情页
+    router.push(`/drive/file/${file.id}`)
+    ElMessage.info('桌面端独立评论页待评论 agent 收官后切换, 当前跳详情页')
+  } else if (cmd === 'view-versions') {
+    router.push(`/drive/file/${file.id}/versions`)
+  }
+}
+
+function onContextMenuClose() {
+  contextMenuFile.value = null
+}
 </script>
 
 <style scoped>
