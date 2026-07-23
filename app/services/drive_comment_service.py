@@ -338,6 +338,14 @@ class DriveCommentService:
             f"file_id={file_id} folder_id={folder_id} author={author_id} "
             f"parent_id={parent_id} mentions={mentions}"
         )
+
+        # W68 PR9 WS 推送: 通知 file/folder owner (best-effort, 不阻塞主流程)
+        try:
+            from app.services.drive_event_publisher import publish_comment_created
+            await publish_comment_created(self.db, comment, actor_id=author_id)
+        except Exception as e:
+            logger.debug(f"[DriveCommentService] publish_comment_created 失败 (非阻塞): {e!r}")
+
         return comment
 
     # ==========================================================================
@@ -484,6 +492,14 @@ class DriveCommentService:
         logger.info(
             f"[DriveCommentService.update_comment] id={comment_id} by user={user_id}"
         )
+
+        # W68 PR9 WS 推送: 通知 file/folder owner (best-effort, 不阻塞)
+        try:
+            from app.services.drive_event_publisher import publish_comment_updated
+            await publish_comment_updated(self.db, comment, actor_id=user_id)
+        except Exception as e:
+            logger.debug(f"[DriveCommentService] publish_comment_updated 失败 (非阻塞): {e!r}")
+
         return comment
 
     # ==========================================================================
@@ -511,6 +527,11 @@ class DriveCommentService:
                 "仅 author 本人可删除评论", status_code=403
             )
 
+        # W68 PR9 WS 推送: 在 hard delete 前快照 ID 字段 (删除后 ORM 不可访问)
+        snapshot_file_id = comment.file_id
+        snapshot_folder_id = comment.folder_id
+        snapshot_author_id = comment.author_id
+
         await self.db.delete(comment)
         await self.db.commit()
 
@@ -518,6 +539,21 @@ class DriveCommentService:
             f"[DriveCommentService.delete_comment] id={comment_id} by user={user_id} "
             f"(子回复 CASCADE 已自动删)"
         )
+
+        # W68 PR9 WS 推送: 通知 file/folder owner (best-effort)
+        try:
+            from app.services.drive_event_publisher import publish_comment_deleted
+            await publish_comment_deleted(
+                self.db,
+                comment_id=comment_id,
+                file_id=snapshot_file_id,
+                folder_id=snapshot_folder_id,
+                author_id=snapshot_author_id,
+                actor_id=user_id,
+            )
+        except Exception as e:
+            logger.debug(f"[DriveCommentService] publish_comment_deleted 失败 (非阻塞): {e!r}")
+
         return True
 
     # ==========================================================================
@@ -557,6 +593,20 @@ class DriveCommentService:
             logger.info(
                 f"[DriveCommentService.resolve_comment] id={comment_id} by user={user_id}"
             )
+
+            # W68 PR9 WS 推送: 通知 comment.author (best-effort)
+            try:
+                from app.services.drive_event_publisher import publish_comment_resolved
+                await publish_comment_resolved(
+                    self.db,
+                    comment_id=comment_id,
+                    file_id=comment.file_id,
+                    folder_id=comment.folder_id,
+                    resolved_by=user_id,
+                    author_id=comment.author_id,
+                )
+            except Exception as e:
+                logger.debug(f"[DriveCommentService] publish_comment_resolved 失败 (非阻塞): {e!r}")
         return comment
 
     async def unresolve_comment(self, comment_id: int, user_id: int) -> DriveComment:
