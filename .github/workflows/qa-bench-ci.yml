@@ -86,13 +86,14 @@ jobs:
             $(docker build -q .) \
             uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-          # 等 app-test healthy (最长 90s)
-          for i in {1..45}; do
+          # 等 app-test healthy (最长 240s = 4min, mimo SDK init + 18s whisper + uvicorn + 首次 health 响应)
+          # W67 第 32 步修复: 90s 不够 mimo cloud SDK 初始化时间, 实测 build 完 + 启动要 6-7 min
+          for i in {1..120}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "✓ app-test healthy on 8001"
               break
             fi
-            if [ "$i" -eq 45 ]; then
+            if [ "$i" -eq 120 ]; then
               echo "✗ app-test startup timeout"
               docker logs app-test | tail -50
               exit 1

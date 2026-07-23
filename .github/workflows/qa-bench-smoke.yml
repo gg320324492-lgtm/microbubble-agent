@@ -104,13 +104,14 @@ jobs:
             $(docker build -q .) \
             uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log
 
-          # 等 app-test healthy (最长 90s, 含 18s Whisper 模型加载 - 实际 mock LLM 不需要)
-          for i in {1..45}; do
+          # 等 app-test healthy (最长 240s = 4min, 全套 import + uvicorn + 首次 health 响应)
+          # W67 第 32 步修复: mock 模式也要 import 全套, 90s 启动预算不足
+          for i in {1..120}; do
             if curl -sf http://localhost:8001/health > /dev/null 2>&1; then
               echo "✓ app-test healthy on 8001"
               break
             fi
-            if [ "$i" -eq 45 ]; then
+            if [ "$i" -eq 120 ]; then
               echo "✗ app-test startup timeout"
               docker logs app-test | tail -50
               exit 1

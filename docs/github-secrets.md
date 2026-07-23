@@ -120,6 +120,17 @@ W67 起 D5 gate 完整 CI 流程:
 | `LLM_OPENAI_COMPAT_MODEL` | `mimo-v2.5` | mimo 模型 |
 | `QA_TOKEN` | test DB JWT (mock 兜底) | GitHub Secret 或 fallback `mock` |
 
+## app-test 健康检查 timeout 调整 (W67 第 32 步)
+
+`Start test DB stack` 步骤里 `curl -sf http://localhost:8001/health` 等待循环:
+
+| 时间 | Budget | 原因 |
+|------|--------|------|
+| W66 之前 | 90s (45 × 2s) | 假设 mimo SDK init < 18s |
+| W67 第 32 步 | 240s (120 × 2s) | 实测 build 完 + 启动 = 6-7 min, mimo SDK + 全套 import 慢 |
+
+如果你的环境 (Anthropic 直连 / 本地 ollama / mock) 启动快, 可以调回 90s. 但默认 240s 兼容所有后端.
+
 ## 故障排除
 
 - **CI 仍报 `ANTHROPIC_API_KEY missing`**: 你 push 的 commit **没**包含这次 workflow 改动。检查 `.github/workflows/qa-bench-ci.yml` 第 29 行用的是 `secrets.MIMO_API_KEY` 还是 `secrets.ANTHROPIC_API_KEY`。
