@@ -11,7 +11,15 @@
 -->
 <template>
   <!-- v2.0 (2026-07-09) Drive 美化: 加 .drive-page 让 fade-slide-up + --color-bg-page 继承 -->
-  <div class="mobile-drive-view drive-page">
+  <!-- W68 G-2 (2026-07-24): wrap in MobileSwipeNavigation, 左右滑切换 4 个 tab (files/starred/recent/team) -->
+  <MobileSwipeNavigation
+    ref="swipeNavRef"
+    :left-action="swipeToNextTab"
+    :right-action="swipeToPrevTab"
+    :threshold="50"
+    aria-label="网盘左右滑切换 tab"
+  >
+    <div ref="driveRootRef" class="mobile-drive-view drive-page">
     <PageHeader title="网盘" :show-back="false">
       <template #right>
         <span v-if="notificationUnreadCount > 0" class="notification-badge" :aria-label="`${notificationUnreadCount} 条未读通知`">
@@ -128,7 +136,8 @@
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
     </Teleport>
-  </div>
+    </div>
+  </MobileSwipeNavigation>
 </template>
 
 <script setup>
@@ -150,12 +159,18 @@ import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileCommandPalette from '@/views/mobile/MobileCommandPalette.vue'
 // v3.0 (W68 Agent 4) PR8 R4: 用 MobileDriveFAB 替换通用 MobileFab, 加最近上传照片 + QR 扫描入口
 import MobileDriveFAB from '@/components/mobile/MobileDriveFAB.vue'
+// W68 G-2 (2026-07-24): 左右滑切换 tab wrapper
+import MobileSwipeNavigation from '@/components/mobile/MobileSwipeNavigation.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
 import { formatSize } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
+
+// W68 G-2 (2026-07-24): wrapper ref (用于调试/暴露给测试)
+const swipeNavRef = ref(null)
+const driveRootRef = ref(null)
 
 const tabs = [
   { name: 'files', icon: '📁', label: '文件' },
@@ -309,6 +324,18 @@ function switchTab(name) {
   activeTab.value = name
   currentFolderId.value = null
   applyTabQuery()
+}
+
+// W68 G-2 (2026-07-24): 左右滑切换 tab (向左 = 下一个, 向右 = 上一个)
+function swipeToNextTab() {
+  const idx = tabs.findIndex((t) => t.name === activeTab.value)
+  const nextIdx = idx < tabs.length - 1 ? idx + 1 : 0  // 循环到第一个
+  switchTab(tabs[nextIdx].name)
+}
+function swipeToPrevTab() {
+  const idx = tabs.findIndex((t) => t.name === activeTab.value)
+  const prevIdx = idx > 0 ? idx - 1 : tabs.length - 1  // 循环到最后一个
+  switchTab(tabs[prevIdx].name)
 }
 
 function selectFolder(folderId) {
