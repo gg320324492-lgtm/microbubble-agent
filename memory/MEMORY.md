@@ -1,3 +1,4 @@
+- [2026-07-24 W68 第 4 批 Drive v2 PR9 评论 rate-limit tier 验证](w68-route-drive-pr9-rate-limit-2026-07-24.md) — 锚点范式第 56 守恒. 7 端点 × tier 矩阵 13/13 PASS (5 写端点 drive_upload 50/min + 2 读端点 drive_list 300/min), 0 production code 改动铁律维持, 5 新铁律 (端到端测试 > 读配置 / ZSET mock 必 +1ms / drive_upload+drive_list 独立 / 验证 Policy header / 写端点共享配额).
 - [2026-07-24 W68 第 1 批 14+1 agents 跨主题收官](w68-grand-closure-2026-07-24.md) — Drive v2 PR8 路线 A 7 + Mobile UX v3.0 路线 C 7 + Safari iOS 空白页修复 1. 锚点范式 W67 28 → W68 30 单调上升, 30 commits 全部 merge, 0 production code 改动铁律维持.
 - [2026-07-22 W58 跨主题收口 (20 baseline 守恒)](archived/w58-coordination-grand-closure-2026-07-22.md) — W52-W57 + W58 紧凑节奏 14→15→16→17→18→19→20, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 19 baseline 71+7 不变. σ ≈ 0.130s 历史最优持平.
 - [2026-07-22 W58 baseline 18-20 守恒](w18-20-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56/W57/W58 紧凑节奏 14→15→16→17→18→19→20, 71 PASS + 7 SKIP, 0 drift.
