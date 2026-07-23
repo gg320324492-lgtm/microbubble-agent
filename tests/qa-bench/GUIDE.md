@@ -1,7 +1,7 @@
 # qa-bench 用户指南
 
-> **版本**: v3.1 (D7 文档交付)
-> **生效**: 2026-07-22
+> **版本**: v3.2 (W67 增补 mimo secret 段)
+> **生效**: 2026-07-23
 > **目标读者**: 课题组成员、新人、运维
 > **配套文档**: [REPORT_TEMPLATE.md](./results/REPORT_TEMPLATE.md) + [MILESTONES.md](./MILESTONES.md)
 
@@ -183,6 +183,14 @@ qa-bench v3.0 起采用 **7 维加权**评分制（取代 v2.x 的二元 PASS/FA
 | L2 | 2 步推理 | 40% |
 | L3 | 多步 + 跨工具 | 30% |
 | L4 | 极端 / 反向 / 边界 | 10% |
+
+## CI 配置 (mimo secret) — W67
+
+D5 CI (`qa-bench-ci.yml`) 在 main push / PR 自动跑 1000 题, 走 **mimo cloud** (OpenAI 兼容协议), 主指挥需配置 `MIMO_API_KEY` GitHub Secret:
+
+- **CI workflow**: `.github/workflows/qa-bench-ci.yml` 第 28-37 行 env block, 已配齐 `LLM_BACKEND=openai_compat` + `LLM_OPENAI_COMPAT_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1` + `MODEL=mimo-v2.5`
+- **GitHub Secret**: `MIMO_API_KEY` 来源于 https://token-plan-cn.xiaomimimo.com (格式 `tp-...`), 详见 [docs/github-secrets.md](../../docs/github-secrets.md)
+- **本地手动跑题**: `export MIMO_API_KEY=...` + `python runner.py --rounds=3 ...` (自动检测 `LLM_BACKEND=openai_compat` 走 mimo)
 
 ## D5 1000 题 baseline (待跑)
 

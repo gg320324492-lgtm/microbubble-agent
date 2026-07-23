@@ -25,11 +25,17 @@ jobs:
 
       - name: Run qa-bench D5 (1000 题 baseline)
         env:
-          # ANTHROPIC_API_KEY 必须由 GitHub Secrets 提供
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # W67 (2026-07-23): 本地 LLM 切 mimo cloud (OpenAI 兼容协议), CI 必须用 MIMO_API_KEY
+          # GitHub Secrets 配置: Settings → Secrets and variables → Actions → New repository secret
+          #   Name: MIMO_API_KEY
+          #   Value: 主指挥从 https://token-plan-cn.xiaomimimo.com 拿的 mimo API key
+          MIMO_API_KEY: ${{ secrets.MIMO_API_KEY }}
+          LLM_BACKEND: openai_compat  # W67 切到 OpenAI 兼容 (而非本地 ollama)
+          LLM_OPENAI_COMPAT_BASE_URL: https://token-plan-cn.xiaomimimo.com/v1
+          LLM_OPENAI_COMPAT_MODEL: mimo-v2.5
         run: |
           cd tests/qa-bench
-          python runner.py --rounds=3 --verdict-consensus=2 --include-extra             --full-1000 --ci-gate --output=baseline_d5_1000.json
+          python runner.py --rounds=3 --verdict-consensus=2 --include-extra --full-1000 --ci-gate --output=baseline_d5_1000.json
 
       # CI 门禁: pass rate < 80% → exit 1
       # runner.py 内部检查 --ci-gate 标志时, 低于门禁则非零退出
