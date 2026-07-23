@@ -96,6 +96,30 @@ python tests/qa-bench/runner.py --rounds=3 --verdict-consensus=2 --include-extra
 
 > **并发建议**: `--concurrency 3` 是经验值(mimo tier 限流保护), 30-60 min 跑完。报 429 时降到 1。
 
+## qa-bench D5 gate CI 触发流程 (W67 第 30 步)
+
+W67 起 D5 gate 完整 CI 流程:
+
+1. **Setup Python + Install deps** — pip install requirements.txt (httpx + pyyaml + psygopg2 等)
+2. **Start test DB stack** — Docker 起 pg-test (postgres:16) + app-test (uvicorn 8001), 复用 qa-bench-smoke 模板, 切 `LLM_BACKEND=openai_compat` 走 mimo cloud
+3. **Init test DB** — init_db.py (create_all + seed 24 members) + alembic stamp head
+4. **Ensure test user** — ensure_test_user.py (xiaoqi_testbot)
+5. **Generate 1000 题题库** — gen780.py schema-only 生成 base 700 题 + 检查 questions_d4_extra_300.jsonl (300 题已存在)
+6. **Run 1000 题 baseline** — runner.py --include-extra --rounds 3 --verdict-consensus majority (约 60 分钟)
+7. **Upload baseline report** — artifacts (results/baseline_d5_1000/, 保留 30 天)
+8. **Fail if pass_rate < 80%** — 硬门禁, 低于即 exit 1
+9. **Teardown** — docker stop + rm + network rm
+
+### 关键环境变量 (Step 6)
+
+| 变量 | 值 | 来源 |
+|------|-----|------|
+| `MIMO_API_KEY` | `tp-...` | GitHub Secret (`secrets.MIMO_API_KEY`) |
+| `LLM_BACKEND` | `openai_compat` | 切 mimo cloud (非本地 ollama) |
+| `LLM_OPENAI_COMPAT_BASE_URL` | `https://token-plan-cn.xiaomimimo.com/v1` | mimo 端点 |
+| `LLM_OPENAI_COMPAT_MODEL` | `mimo-v2.5` | mimo 模型 |
+| `QA_TOKEN` | test DB JWT (mock 兜底) | GitHub Secret 或 fallback `mock` |
+
 ## 故障排除
 
 - **CI 仍报 `ANTHROPIC_API_KEY missing`**: 你 push 的 commit **没**包含这次 workflow 改动。检查 `.github/workflows/qa-bench-ci.yml` 第 29 行用的是 `secrets.MIMO_API_KEY` 还是 `secrets.ANTHROPIC_API_KEY`。
