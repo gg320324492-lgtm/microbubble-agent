@@ -241,6 +241,19 @@ class DriveVersionService:
             f"v{new_version_number} by uploader={uploader_id} "
             f"object={new_object_key} size={len(new_content)}"
         )
+
+        # W68 PR9 WS 推送: 通知 file owner (best-effort)
+        try:
+            from app.services.drive_event_publisher import publish_version_uploaded
+            await publish_version_uploaded(
+                self.db,
+                new_version,
+                file_name=cur_file.file_name,
+                actor_id=uploader_id,
+            )
+        except Exception as e:
+            logger.debug(f"[DriveVersionService] publish_version_uploaded 失败 (非阻塞): {e!r}")
+
         return new_version
 
     # ==========================================================================
@@ -486,6 +499,20 @@ class DriveVersionService:
             f"target_v{target.version_number} → new_v{new_version_number} "
             f"by user={user_id} copy_bytes={copied_size}"
         )
+
+        # W68 PR9 WS 推送: 通知 file owner (best-effort)
+        try:
+            from app.services.drive_event_publisher import publish_version_rollback
+            await publish_version_rollback(
+                self.db,
+                new_version,
+                file_name=cur_file.file_name,
+                target_version_number=target.version_number,
+                actor_id=user_id,
+            )
+        except Exception as e:
+            logger.debug(f"[DriveVersionService] publish_version_rollback 失败 (非阻塞): {e!r}")
+
         return new_version
 
     # ==========================================================================
