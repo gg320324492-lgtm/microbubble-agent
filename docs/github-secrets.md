@@ -1,0 +1,127 @@
+# GitHub Secrets 配置 (W67 必读)
+
+> **版本**: W67 (2026-07-23)
+> **生效**: qa-bench D5 gate 切 mimo cloud 后
+> **目标读者**: 主指挥、运维、新人
+> **配套文档**: [tests/qa-bench/GUIDE.md](../tests/qa-bench/GUIDE.md) + [deploy.md](./deploy.md)
+
+## TL;DR
+
+本项目 GitHub Actions 需要以下 5 个 Secret。缺失会导致对应 workflow 失败。
+
+| Secret 名 | 来源 | 用途 |
+|-----------|------|------|
+| `MIMO_API_KEY` | https://token-plan-cn.xiaomimimo.com | qa-bench D5 gate 真实跑题 |
+| `QA_TOKEN` | 后端 `/api/v1/auth/login` 拿的 JWT | qa-bench smoke (200 题 test DB) |
+| `WEBHOOK_SECRET` | 主指挥本地生成 | push 触发 webhook 部署 |
+| `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` | hub.docker.com | 镜像 push (如有) |
+
+> **W67 关键改动**: qa-bench D5 gate 从 `ANTHROPIC_API_KEY` 切到 `MIMO_API_KEY`(本地 LLM 也已切 mimo cloud, OpenAI 兼容协议)。
+
+## 必填 Secret (按 workflow 分组)
+
+### 1. `MIMO_API_KEY` — qa-bench D5 gate 1000 题真实跑
+
+| 字段 | 值 |
+|------|-----|
+| Name | `MIMO_API_KEY` |
+| 来源 | https://token-plan-cn.xiaomimimo.com 控制台 |
+| 格式 | `tp-...` (主指挥本地 `.env` 已有) |
+| 用在哪 | `.github/workflows/qa-bench-ci.yml` 第 28-37 行 env block |
+
+### 2. `QA_TOKEN` — qa-bench smoke 200 题 (test DB)
+
+| 字段 | 值 |
+|------|-----|
+| Name | `QA_TOKEN` |
+| 来源 | test DB 启动后 `POST /api/v1/auth/login` 返回的 JWT |
+| 用在哪 | `.github/workflows/qa-bench-smoke.yml` `Run 200 题 smoke` 步骤 |
+
+### 3. `WEBHOOK_SECRET` — push 触发 webhook 部署
+
+| 字段 | 值 |
+|------|-----|
+| Name | `WEBHOOK_SECRET` |
+| 来源 | 主指挥本地 `openssl rand -hex 32` 生成 (32 字符) |
+| 用在哪 | webhook 接收脚本 (部署侧), 验证 header `X-Hub-Signature-256` |
+
+### 4. (按需) `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN`
+
+仅当 PR 需要 build & push Docker 镜像时才用。一般不会走 GitHub Actions push 镜像(本地 build 推到阿里云个人 registry), 留空即可。
+
+## 详细步骤: 添加 MIMO_API_KEY
+
+1. 浏览器登录 GitHub: <https://github.com/gg320324492-lgtm/microbubble-agent/settings/secrets/actions>
+2. 点击 **"New repository secret"**
+3. Name: `MIMO_API_KEY`
+4. Secret: 从 <https://token-plan-cn.xiaomimimo.com> 控制台复制 API key(格式 `tp-...`)
+5. 点击 **"Add secret"**
+
+> **注意**: GitHub Secret 一旦保存就**不可见**(只显示 `***`)。改值只能删了重建, 不能编辑。误填的话只能 Delete + Add new。
+
+## 验证
+
+加完后, 触发任意 workflow(push 一个 commit 或 `workflow_dispatch`), 在 Actions log 里搜 `MIMO_API_KEY` 应该看到:
+
+- **日志里**显示 `MIMO_API_KEY=***`(GitHub 自动隐式 sensitive env)
+- 紧接着 `python runner.py --rounds=3 ...` 真实跑题(无 `RuntimeError: MIMO_API_KEY not set`)
+
+如果想本地验证 (不 push), 可手动 `workflow_dispatch` 触发 + 看 runner logs 的第一步。
+
+## runner.py 自动检测 mimo backend
+
+`tests/qa-bench/runner.py` 在以下条件时自动走 mimo cloud(无需改代码):
+
+- `LLM_BACKEND=openai_compat` (env)
+- `LLM_OPENAI_COMPAT_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1`
+- `LLM_OPENAI_COMPAT_MODEL=mimo-v2.5`
+- `MIMO_API_KEY` env 或 `LLM_OPENAI_COMPAT_API_KEY` env 已设置
+
+CI workflow 已配齐以上 4 个 env, runner 走 `/api/v1/chat/stream` 调用 mimo cloud 而不是本机 ollama(本地 qa-bench 跑也走 mimo, 见 `app/core/llm.py:LLM_BACKEND` 分支)。
+
+## 主指挥本地手动跑题
+
+```bash
+# 1. 加载 .env (含 MIMO_API_KEY + LLM_OPENAI_COMPAT_*)
+cd E:/microbubble-agent
+set -a; source .env; set +a
+
+# 2. 跑 smoke
+python tests/qa-bench/runner.py --token "$JWT_TOKEN" --limit 200 --concurrency 3
+
+# 3. 跑 D5 全量
+python tests/qa-bench/runner.py --rounds=3 --verdict-consensus=2 --include-extra \
+  --full-1000 --ci-gate --output=baseline_d5_1000.json
+```
+
+> **并发建议**: `--concurrency 3` 是经验值(mimo tier 限流保护), 30-60 min 跑完。报 429 时降到 1。
+
+## 故障排除
+
+- **CI 仍报 `ANTHROPIC_API_KEY missing`**: 你 push 的 commit **没**包含这次 workflow 改动。检查 `.github/workflows/qa-bench-ci.yml` 第 29 行用的是 `secrets.MIMO_API_KEY` 还是 `secrets.ANTHROPIC_API_KEY`。
+- **runner.py 报 401 Unauthorized**: `MIMO_API_KEY` 填错了。重新从 mimo 控制台复制(格式 `tp-...` 前缀)。GitHub Secrets 不让看原值, 只能 Delete + Add new。
+- **mimo cloud 超时**: 1000 题预计 30-60 分钟, `timeout-minutes: 60` 可能不够。在 `.github/workflows/qa-bench-ci.yml` 第 12 行改 `timeout-minutes: 90`(CI 最大 360 分钟)。
+- **mimo 返回 429 Too Many Requests**: 跑题并发太高, mimo tier 限流。本地复跑时降低 `--concurrency` 或等待 1-2 分钟后重试。
+- **本地跑题不知道走哪个 backend**: 看 `app/core/llm.py:LLM_BACKEND` 决定走 Anthropic / openai_compat / ollama。设 `LLM_BACKEND=openai_compat` 走 mimo cloud, 设 `LLM_BACKEND=ollama` 走本地 qwen3:8b(若有 GPU)。
+
+## 历史 (W67 之前)
+
+| 时间 | 改动 | 原因 |
+|------|------|------|
+| 2026-07-08 | `ANTHROPIC_API_KEY` 首次引入 | 早期 Anthropic 直连 |
+| 2026-07-12 | 切 ollama (本地 qwen3:8b) | 离线跑题(本地 GPU) |
+| 2026-07-23 | 本地切 mimo cloud (OpenAI 兼容) | 云端 GPU 不够, 走 mimo 远程 |
+| 2026-07-23 | CI workflow 同步切 `MIMO_API_KEY` (本次提交) | 配套本地切换, 删 `ANTHROPIC_API_KEY` 引用 |
+
+## 链接
+
+- [tests/qa-bench/GUIDE.md](../tests/qa-bench/GUIDE.md) — qa-bench 用户指南
+- [docs/deploy.md](./deploy.md) — 部署指南 (含云服务器 / Docker / FRP)
+- [docs/rate-limit.md](./rate-limit.md) — 限流配置参考
+- memory [2026-07-02-tool-call-converter-2026-07-01.md](../memory/tool-call-converter-2026-07-01.md) — mimo tool_call converter 收官
+
+---
+
+**变更记录**:
+
+- v1.0 / W67 (2026-07-23): 初版，与 mimo cloud 切换同步
