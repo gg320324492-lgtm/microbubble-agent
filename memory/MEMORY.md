@@ -32,3 +32,5 @@
 - [2026-07-22 W51-W60 50 commit 阶段收官 final](archived/w60-w51-w60-stage-closure-final.md) — 实际完成 88 commit，较 50 commit 阶段目标形成 1.76x 紧凑节奏；全阶段数据与时间线最终留痕。
 - [2026-07-22 W59 P3 dedup 实质开发首次启动](archived/w60-future-pr-evaluation-post-dedup.md) — future PR 从 W19 选项 A 切换为选项 B 并完成 `chatSessions.ts` 标题时间戳 + 60s 首条消息检测；其余 3 future PR 继续留未来。
 - [2026-07-23 W67 第八批 7 agent 跨主题收口](w67-grand-closure-2026-07-23.md) — 8 批 42+ agent commits, 锚点范式 W66 27 → W67 28 单调上升, 8 新铁律沉淀 (Drive v2 PR7 鉴权 + share token 安全 + qa-bench 1000 阈值 + Mobile FAB 通用化 + PWA update toast + rate-limit 5 tier + docs only + 锚点范式 28 守恒).
+- [2026-07-24 W68 路线 B qa-bench D6 未来根因 5 路径调研](w68-route-b-qa-bench-d6-future-roots-2026-07-24.md) — 锚点范式第 30 守恒. 推荐路径 3 (in-process runner) + 路径 1 (cache 深度优化) 组合, 5 路径全部 0 production code 改动.
+- [2026-07-24 W68 路线 B-3 qa-bench D6 实施路线图 (本文)](w68-route-b3-d6-roadmap-2026-07-24.md) — 锚点范式第 35 守恒. 9 agents 跨 2 周 2 批派工 (Phase 1 W68 第 4 批 5 agents + Phase 2 W69 第 1 批 4 agents), CI 25+ min → 5-8 min, 0 production code 改动铁律完全守恒. 路线图核心: `docs/qa-bench-d6-implementation-roadmap.md`.
