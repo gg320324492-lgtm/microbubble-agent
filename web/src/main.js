@@ -204,6 +204,10 @@ navigator.serviceWorker.addEventListener('controllerchange', () => {
 
 // 防御性：app 加载时如果已有 waiting SW（上次访问下载了新 SW 但未 activate），
 // 主动激活 + 走 controllerchange 路径强制 reload。
+// v83: iOS Safari 特定加固 — Safari 在用户首次访问或 PWA standalone 启动时，
+//   navigator.serviceWorker.controller 可能为 null（首次 SW 注册尚未生效），
+//   这种情况下我们额外加一个 3s 后 controller 仍 null 则主动 reload 的兜底，
+//   防止 Safari 上 SW 注册流程卡住导致页面空白。
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistration().then(reg => {
     if (reg?.waiting) {
@@ -213,6 +217,14 @@ if ('serviceWorker' in navigator) {
       // controllerchange 会在 waiting → active 时触发
     }
   })
+
+  // v83 Safari 兜底：3s 后若 controller 仍 null，主动 reload 一次（首次访问 SW 注册慢）
+  setTimeout(() => {
+    if (!navigator.serviceWorker.controller) {
+      console.warn('[PWA] No SW controller after 3s (Safari slow register?), reloading once')
+      window.location.reload()
+    }
+  }, 3000)
 }
 
 // v28 step 33: 页面加载后立即检查服务器 sw.js 内容是否在黑名单
