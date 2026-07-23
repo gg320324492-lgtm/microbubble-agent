@@ -11,6 +11,8 @@
 
 **W68 第 4 批纪律沉淀 — alembic 并行 agent 串单链** (commit `1852468a6` 修复): F-1 (062) + F-2 (063) 并行派工都接 061 → merge 后 Multiple head revisions → 主指挥改 063 接 062 串单链. **5 条新铁律**已沉淀到 CLAUDE.md「2026-07-24 alembic 并行 agent 串单链纪律」节 (派工明确接续 / merge 按链序 / merge 后 verify 单 head / 部署文档第 0 节含 chain 风险 / cp + clear `__pycache__`). 锚点范式第 46 守恒, 详见 `memory/w68-alembic-chain-discipline-2026-07-24.md`.
 
+**W68 第 3 批 跨主题收口 (10 agents + 1 alembic 串单链修复, 锚点范式 30→42)**: 主指挥协调范式第 33-42 守恒. 10 agents + 1 alembic 串单链修复全部 merge 进 main — 路线 B (qa-bench D6 调研) 3 docs/memory + 路线 F (Drive v2 PR9) 3 source + 1 alembic 062/063 串单链修复 (commit `1852468a6`) + 路线 G (Mobile UX v3.1) 2 mobile + 路线 H (Drive PR9 部署 + Mobile v3.1 文档) 2 docs. 锚点范式单调上升 W68 第 1 批 30 → **W68 第 3 批 42**, 跨 72+ commit 0 regression. 累计 baseline 28+ 守恒. **0 production code 改动铁律维持** (Drive v2 PR9 是新功能扩展 + Mobile v3.1 续 + qa-bench 调研文档不动 v1 老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-2026-07-24.md` + `memory/w68-route-{b,f,g,h}*-2026-07-24.md`.
+
 **已交付（2026-07-22 W62 第二波 + 第三波 — Drive v2 PR6 闭环删除 + PR8 收官 + qa-bench v3.1 D1/D3/D6/D7/D8）**：
 
 - ❌ **Drive v2 PR6 ActivityFeedView 已闭环删除（commit `d7d2e083`）** — 第三波主指挥拍板"功能没必要保留，已交付的也删除"，前端 `web/src/views/desktop/ActivityFeedView.vue` (450 行) + 测试 `ActivityFeedView.test.js` (218 行) + FolderTree 26 行引用全删；后端 `/api/v1/activities` endpoint 已删除（活动动态表 activity_events + audit log 完整保留复用）。**PR6 状态: ✅ 已交付 → ❌ 已闭环删除**（W62 第三波 2026-07-22 主指挥决策）。
