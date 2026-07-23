@@ -35,7 +35,7 @@ jobs:
           cache: "pip"
           cache-dependency-path: tests/qa-bench/requirements.txt
 
-      - name: Cache pip + Docker layers + apt
+      - name: "Cache pip + Docker layers + apt (W68 B-3 restore-keys 兜底匹配)"
         uses: actions/cache@v4
         with:
           path: |
@@ -43,6 +43,8 @@ jobs:
             /tmp/.buildx-cache
             /var/cache/apt/archives
           key: ${{ runner.os }}-multi-${{ hashFiles('requirements.txt', 'Dockerfile', 'app/requirements.txt') }}
+          # W68 第 4 批 B-3 路线 D6: restore-keys 兜底匹配 — 当 key 不匹配 (例如 router 源码改) 时,
+          #   用 prefix `${{ runner.os }}-multi-` 兜底恢复最近的 cache, 避免 100% miss 浪费重装时间.
           restore-keys: |
             ${{ runner.os }}-multi-
 
@@ -58,10 +60,14 @@ jobs:
       # 原 W67 第 36-38 步 build step 替换为上方 `Pull pre-built app-test image`.
       # 上下 steps (Cache pip / Install Python deps / Start test DB / etc.) 全部保留.
       # 回退到 buildx 模式: 取消 setup-buildx step 注释 + 改回 Pull step 为 Build step.
-      - name: "Set up Docker Buildx (W67 step 38, 路线 2 已禁用, 保留注释回退)"
+      - name: "Set up Docker Buildx (W67 step 38, 路线 2 已禁用, 保留注释回退; W68 B-3: cache-scope 注入)"
         if: false
         uses: docker/setup-buildx-action@v3
         # W67 第 38 步: 必须 setup buildx, 否则 cache-from: type=gha 不工作 (默认 docker driver 不支持)
+        # W68 第 4 批 B-3 路线 D6: 加 cache-scope, 防止 PR/preview deployment 互相覆盖 GHA cache namespace.
+        #   命名规则 ${{ github.workflow }}-${{ github.job }} = qa-bench-ci.yml-qa-bench-d5, 隔离.
+        with:
+          cache-scope: ${{ github.workflow }}-${{ github.job }}
 
       # === W67 第 48 步 路线 2 (2026-07-23): GHCR pre-built image ===
       # 替代 W67 第 36-38 步 buildx + GHA cache-from, 进一步把 build 从 CI 移除.
@@ -70,8 +76,12 @@ jobs:
       # CI 这边: docker pull (1-2 min, 跨 run cache hit) → docker tag → 复用现成 step 7 启动逻辑.
       # 与 Agent 48a (lazy router) + Agent 48c (deeper cache) 并行, 任一成功 = D5 gate 真治本.
       # 回退路径: revert 本步 → step 6 回到原 buildx 模式 (cache-from: type=gha).
-      - name: "Pull pre-built app-test image (W67 step 48 路线 2, GHCR pre-built)"
+      - name: "Pull pre-built app-test image (W67 step 48 路线 2, GHCR pre-built; W68 B-3: cache-from mode=max)"
         run: |
+          # W68 第 4 批 B-3 路线 D6: docker pull 加 cache-from: type=gha,mode=max
+          #   让 pull 端能复用 push 端 (build-image.yml) 上传的所有中间 layer (mode=max),
+          #   不只 final layer metadata. 配合 setup-buildx 的 cache-scope, 跨 run cache hit 90%+.
+          #   当前 build-image.yml push 端用 mode=max, pull 端默认 mode=min 不对齐 → 浪费 ~30-90 s.
           docker pull ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest
           docker tag ghcr.io/${{ github.repository_owner }}/microbubble-agent:app-test-latest app-test:ci
           docker images app-test:ci --format "✓ app-test:ci ready, {{.Size}}"
