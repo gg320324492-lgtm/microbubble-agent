@@ -50,14 +50,17 @@ from pathlib import Path
 from typing import Any, Iterable, Sequence
 
 _QA_BENCH_DIR = Path(__file__).resolve().parent
-if str(_QA_BENCH_DIR) not in sys.path:
-    sys.path.insert(0, str(_QA_BENCH_DIR))
+_SCORING_DIR = _QA_BENCH_DIR / "scoring"
+for _p in (str(_QA_BENCH_DIR), str(_SCORING_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 REPO_ROOT = _QA_BENCH_DIR.parent.parent
 QUESTIONS_SEED = _QA_BENCH_DIR / "questions_780.jsonl"
 QUESTIONS_D4_EXTRA = _QA_BENCH_DIR / "questions_d4_extra_300.jsonl"
 DEFAULT_CONCURRENCY = 5
 DEFAULT_GATE_THRESHOLD = 90
+DEFAULT_SCORING = "none"  # "none" | "7d"
 PHASE2_INTENT_BUCKETS: tuple[str, ...] = (
     "knowledge",
     "task",
@@ -338,6 +341,89 @@ def _dry_placeholder_results(questions: Sequence[dict[str, Any]]) -> list[dict[s
     ]
 
 
+def _phase2_results_to_records(
+    aggregated: Sequence[dict[str, Any]],
+    *,
+    rounds: int,
+) -> list[Any]:
+    """Flatten phase2 aggregated results into ``VerdictRecord`` objects.
+
+    Each phase2 row contains ``round_verdicts`` (one verdict per round) and
+    ``round_durations_s`` (one wall-clock per round).  The seven-dim
+    scorer expects round-level records, so we emit ``rounds`` records
+    per question — one per executed round.
+    """
+
+    from seven_d_scoring import VerdictRecord  # noqa: WPS433 -- sibling-module import
+
+    records: list[VerdictRecord] = []
+    for row in aggregated:
+        verdicts = list(row.get("round_verdicts", []))
+        durations = list(row.get("round_durations_s", []))
+        # Pad / truncate to the canonical ``rounds`` count so the scorer
+        # sees the same cardinality as the runner was configured for.
+        if len(verdicts) < rounds:
+            verdicts = verdicts + ["unknown"] * (rounds - len(verdicts))
+            durations = durations + [0.0] * (rounds - len(durations))
+        elif len(verdicts) > rounds:
+            verdicts = verdicts[:rounds]
+            durations = durations[:rounds]
+        # Use question-id-keyed records so accuracy / recall per
+        # question can be aggregated.  ``ground_truth_positive`` is
+        # True by default because qa-bench questions are curated to
+        # have an expected answer.
+        for verdict, duration in zip(verdicts, durations):
+            records.append(
+                VerdictRecord(
+                    question_id=str(row.get("id") or "unknown"),
+                    verdict=verdict,
+                    ground_truth_positive=True,
+                    latency_ms=float(duration or 0.0) * 1000.0,
+                    intent=str(row.get("intent") or "other"),
+                    error=row.get("last_error"),
+                    metadata={"raw_intent": row.get("raw_intent", "")},
+                )
+            )
+    return records
+
+
+def _run_seven_d_scoring(
+    aggregated: Sequence[dict[str, Any]],
+    *,
+    rounds: int,
+    output_path: Path | None,
+) -> dict[str, Any] | None:
+    """Score ``aggregated`` with the 7-dimension scorer.
+
+    Returns the JSON payload as a dict, or ``None`` if scoring could not
+    run (import failure or no records).
+    """
+
+    if not aggregated:
+        return None
+    try:
+        from seven_d_scoring import score_records  # noqa: WPS433
+    except ImportError:  # pragma: no cover - sibling-module not on path
+        print(
+            "[phase2-runner] --scoring 7d requested but seven_d_scoring "
+            "could not be imported",
+            file=sys.stderr,
+        )
+        return None
+
+    records = _phase2_results_to_records(aggregated, rounds=rounds)
+    seven = score_records(records)
+    payload = seven.as_dict()
+    if output_path is not None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        print(f"[phase2-runner] 7d score written to {output_path}")
+    return payload
+
+
 async def _run(args: argparse.Namespace) -> dict[str, Any]:
     """Top-level orchestrator.  Returns a structured payload for tests."""
 
@@ -360,6 +446,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         f"Concurrency: {args.concurrency} workers (Phase 1 was 3, Phase 2 elevates to 5)",
         f"Gate threshold: {args.gate_threshold}% (Phase 2 baseline 80%, target 90%)",
     ]
+    aggregated: list[dict[str, Any]] = []
     if not can_run_live:
         if not api_key:
             extra_notes.append("MIMO_API_KEY not present -> skipped live run")
@@ -400,6 +487,36 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         out_path.write_text(report, encoding="utf-8")
         print(f"[phase2-runner] report written to {out_path}")
 
+    # --- Optional 7-dimension scoring overlay --------------------------
+    seven_d_payload: dict[str, Any] | None = None
+    seven_d_path: Path | None = None
+    if getattr(args, "scoring", DEFAULT_SCORING) == "7d":
+        seven_d_path = Path(
+            getattr(args, "seven_d_out", "")
+            or str(_QA_BENCH_DIR / "phase2_7d_score.json")
+        )
+        # In dry-fallback mode, ``aggregated`` is empty and the
+        # summary's question rows live elsewhere (the placeholder
+        # path).  Synthesise a flat list of placeholder rows so the
+        # 7-dim scorer still runs end-to-end.
+        scoring_input = aggregated
+        if not scoring_input:
+            scoring_input = _dry_placeholder_results(questions)
+        seven_d_payload = _run_seven_d_scoring(
+            scoring_input,
+            rounds=args.rounds,
+            output_path=seven_d_path,
+        )
+        if seven_d_payload is not None:
+            extra_notes.append(
+                "7-dim scoring enabled: "
+                f"accuracy={seven_d_payload.get('accuracy', 0):.4f} "
+                f"recall={seven_d_payload.get('recall', 0):.4f} "
+                f"f1={seven_d_payload.get('f1', 0):.4f} "
+                f"consistency={seven_d_payload.get('consistency', 0):.4f} "
+                f"entropy={seven_d_payload.get('entropy', 0):.4f}"
+            )
+
     pass_rate_pct = summary["pass_rate"] * 100
     return {
         "summary": summary,
@@ -411,6 +528,8 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         "started_at": started_at,
         "finished_at": finished_at,
         "total_questions": len(questions),
+        "seven_d": seven_d_payload,
+        "seven_d_path": str(seven_d_path) if seven_d_path else None,
     }
 
 
@@ -449,10 +568,35 @@ def main() -> int:
         default=str(_QA_BENCH_DIR / f"phase2_dry_report_{datetime.now().strftime('%Y-%m-%d')}.md"),
         help="Path to write the auto-generated Markdown report",
     )
+    parser.add_argument(
+        "--scoring",
+        choices=("none", "7d"),
+        default=DEFAULT_SCORING,
+        help=(
+            "Scoring overlay. 'none' = existing summary only; "
+            "'7d' = compute 7-dimension score (accuracy/recall/precision/"
+            "F1/consistency/entropy/latency) over the round-level verdicts "
+            "and emit phase2_7d_score.json next to the Markdown report."
+        ),
+    )
+    parser.add_argument(
+        "--seven-d-out",
+        default="",
+        help=(
+            "Optional output path for the 7-dim score JSON. "
+            "Defaults to tests/qa-bench/phase2_7d_score.json when --scoring 7d."
+        ),
+    )
     args = parser.parse_args()
 
     payload = asyncio.run(_run(args))
     print(payload["report"])
+    if payload.get("seven_d"):
+        print(
+            f"[phase2-runner] 7d score -> {payload['seven_d_path']} "
+            f"(accuracy={payload['seven_d'].get('accuracy', 0):.4f}, "
+            f"f1={payload['seven_d'].get('f1', 0):.4f})"
+        )
     return 0 if payload["gate_verdict"] == "PASS" else 1
 
 
