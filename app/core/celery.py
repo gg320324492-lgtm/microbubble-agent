@@ -87,6 +87,16 @@ celery_app.conf.update(
             "task": "app.services.chat_share_tasks.cleanup_expired_chat_shares_task",
             "schedule": 86400.0,  # 每 24 小时扫描 (chat_share 24h 过期语义对齐)
         },
+        # 2026-07-24 W68 第 7 批 B-1: Drive v2 PR10 协同编辑 Y.Doc snapshot 周期刷盘
+        "drive-collab-flush-ydoc": {
+            "task": "app.services.drive_collab_tasks.flush_ydoc_state_task",
+            "schedule": 30.0,  # 每 30s 把活跃文档 Y.Doc snapshot 刷盘 (设计 doc §4.2)
+        },
+        # 2026-07-24 W68 第 7 批 B-1: Drive v2 PR10 op log 7 天压缩 (审计窗口外删除)
+        "drive-collab-compress-op-logs": {
+            "task": "app.services.drive_collab_tasks.compress_op_logs_task",
+            "schedule": 24 * 3600.0,  # 每天一次 (设计 doc §4.2: 凌晨 03:00 语义, beat 用间隔近似)
+        },
     },
 )
 
@@ -113,6 +123,7 @@ celery_app.conf.imports = [
     "app.services.storage_tasks",  # 2026-07-01 课题组网盘 PR5 配额重算 + 分片 session 清理
     "app.services.file_mention_tasks",  # 2026-07-02 v2 PR6-P9 通知 30 天清理
     "app.services.chat_share_tasks",  # 2026-07-20 W2 T3 P2-A 过期 share 清理
+    "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -131,6 +142,7 @@ celery_app.autodiscover_tasks(
         "app.services.knowledge_polling_service",  # pending knowledge 后台处理
         "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
         "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
+        "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘
         "app.wechat.scheduler",
     ],
     related_name=None,
