@@ -1,0 +1,84 @@
+{
+  "_comment_purpose": "Claude Code global voice-alert hooks TEMPLATE — wires 6 trigger events to PowerShell wrappers. Source-of-truth at scripts/notify-templates/settings.json.template. Setup.sh --apply merges this into user-level C:/Users/pc/.claude/settings.json hooks block (preserve user-defined env / model / permissions). DO NOT edit installed settings.json directly — re-edit this template and re-run setup.sh.",
+  "_comment_w68": "W68 第 13 批 B-1 (2026-07-24): repo-level template derived from W68 第 12 批 B-4 user-level implementation (commit f0c37366)",
+  "_comment_6_triggers": [
+    "Stop: claude finishes a turn — 'task done'",
+    "UserPromptSubmit: user submits prompt — 'received, processing'",
+    "Notification: background event — 'notification arrived'",
+    "PermissionRequest: blocks agent — 'permission required NOW'",
+    "SessionStart: session begins/resumes — 'session ready'",
+    "PreToolUse (matcher=Bash): bash about to run — 'running bash command'"
+  ],
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:/Users/pc/bin/claude-voice-alert-stop.ps1\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:/Users/pc/bin/claude-voice-alert-prompt.ps1\""
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:/Users/pc/bin/claude-voice-alert-notify.ps1\""
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:/Users/pc/bin/claude-voice-alert-perm.ps1\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:/Users/pc/bin/claude-voice-alert-session.ps1\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File \"C:/Users/pc/bin/claude-voice-alert-tool.ps1\""
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "_comment_env": "Project dir hint lets wrappers find the project voice-alert script for high-quality XiaoxiaoNeural playback (SAPI fallback when missing). Adjust path per user / machine.",
+    "MNB_VOICE_ALERT_PROJECT_DIR": "e:\\microbubble-agent"
+  }
+}
