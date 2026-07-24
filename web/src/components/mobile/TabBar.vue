@@ -28,9 +28,8 @@
 /**
  * TabBar.vue — 移动端底部导航（基于 NutUI nut-tabbar）
  *
- * PR #2: 5 项底部导航（首页 / 智能对话 / 任务 / 知识 / 我的）
- * 2026-06-25 调整: 5 项保持，"对话"放正中间（第 3 位），
- *                删去"知识"，换成"听会"（/meetings）。
+ * PR #2: 底部主导航（首页 / 网盘 / 听会 / 对话 / 任务 / 我的）
+ * 2026-07-24 W68 第 11 批 B-2: 新增网盘入口，保持 6 项紧凑响应式布局。
  * 物理隔离：仅 isMobile 时渲染（MainLayout.vue 控制）
  *
  * 注意：使用 Element Plus 图标（项目已统一），通过 v-for 动态渲染
@@ -44,10 +43,11 @@ import { useRoute, useRouter } from 'vue-router'
 const route = useRoute()
 const router = useRouter()
 
-// 5 项导航（2026-06-25 调整：对话居中，知识 → 听会）
-// 顺序：首页 / 听会 / 对话(中间) / 任务 / 我的
+// 6 项导航（W68 第 11 批 B-2：网盘置于首页后，保持高频入口前置）
+// 顺序：首页 / 网盘 / 听会 / 对话 / 任务 / 我的
 const items = [
   { name: 'dashboard', path: '/dashboard', title: '首页', icon: 'home' },
+  { name: 'drive',     path: '/m-drive',   title: '网盘', icon: 'folder' },
   { name: 'meetings',  path: '/meetings',  title: '听会', icon: 'microphone' },
   { name: 'chat',      path: '/chat',      title: '对话', icon: 'chat' },
   { name: 'tasks',     path: '/tasks',     title: '任务', icon: 'list' },
@@ -55,6 +55,9 @@ const items = [
 ]
 
 const activeRoute = computed(() => {
+  // /m-drive 的路由名是 MobileDrive，显式归一化为 TabBar item name。
+  if (route.path === '/m-drive') return 'drive'
+
   // 2026-06-25: 转小写匹配 item.name
   // router.name 是 'Dashboard' 大写，item.name 是 'dashboard' 小写
   // NutUI 4 strict equality 'Dashboard' === 'dashboard' → false
@@ -87,6 +90,7 @@ function handleSwitch(name) {
 }
 :deep(.nut-tabbar-item) {
   color: var(--color-text-secondary);
+  min-width: 0;
   min-height: var(--touch-target-min, 44px);
   transition: background 0.25s ease, transform 0.25s ease;
 }
@@ -145,9 +149,12 @@ function handleSwitch(name) {
 }
 
 .tabbar-label {
+  display: block;
+  min-width: 0;
   font-size: 11px;
   line-height: 1.2;
   margin-top: 2px;
+  white-space: nowrap;
 }
 
 /* NutUI icon 占位（emoji fallback） */
