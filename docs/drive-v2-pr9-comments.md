@@ -1,5 +1,7 @@
 # Drive v2 PR9 — 文件/文件夹 评论 Thread (2026-07-24)
 
+> alembic 066 down_revision 修: 064_drive_documents → 065_push_subscriptions (W68 第 9 批 hot-fix, 串单链 065→066→067)
+
 > **背景**: Drive v2 PR6 已有 `FileComment` (file_comments 表, 仅绑 file_id, 2 层嵌套 + 无 resolved).  
 > 课题组场景需要**文件夹级别讨论** + **多层嵌套回复** + **已解决标记** (GitHub PR review comments 风格).  
 > 本 PR 引入新表 `drive_comments` + 5 个 REST 端点 (含 resolve/unresolve), 与 PR6 FileComment 共存.
@@ -375,6 +377,163 @@ docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble \
 ## 7. 后续 PR 计划
 
 - **PR10**: WS notification 推送 (new_comment / new_reply / resolved 事件)
-- **PR11**: 大量嵌套回复性能优化 (path 物化 + 复合索引)
+- **PR11**: 大量嵌套回复性能优化 (path 物化 + 复合索引) — **W68 第 8 批收官 (本节)**
 - **PR12**: 邮件/企微通知 (mentions 真正发送)
 - **PR13**: 评论搜索 (按 content / author / mentions 全文搜索)
+
+---
+
+## 11. PR11 — 嵌套路径物化 + GIN 索引 (2026-07-24, W68 第 8 批)
+
+> **背景**: W68 第 3 批 F-1 (drive_comments) 留 TODO: 大量嵌套回复 (100+) 时 `list_comments` N+1 拉 replies 慢. 设计文档提到 "PR11 path 物化". 本节落地.
+>
+> **核心思想**: 在 drive_comments 表加 `path VARCHAR(500)` 物化嵌套路径, 加 GIN trigram 索引加速 path LIKE 查询, 一次 query 拿祖先链 (breadcrumb).
+
+### 11.1 Schema 增量
+
+```sql
+-- 066_drive_comments_path.py
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+ALTER TABLE drive_comments ADD COLUMN path VARCHAR(500) DEFAULT '/';
+
+-- WITH RECURSIVE 重算现有数据
+WITH RECURSIVE comment_path_calc AS (
+    SELECT id, parent_id, '/'::text AS path
+    FROM drive_comments
+    WHERE parent_id IS NULL
+    UNION ALL
+    SELECT c.id, c.parent_id, (cp.path || cp.id::text || '/')::text AS path
+    FROM drive_comments c
+    INNER JOIN comment_path_calc cp ON c.parent_id = cp.id
+)
+UPDATE drive_comments dc SET path = cpc.path
+FROM comment_path_calc cpc WHERE dc.id = cpc.id;
+
+CREATE INDEX ix_drive_comments_path_gin
+    ON drive_comments USING GIN (path gin_trgm_ops);
+CREATE INDEX ix_drive_comments_file_path
+    ON drive_comments (file_id, path);
+```
+
+### 11.2 path 语义
+
+| 场景 | path |
+|------|------|
+| 顶层 (parent_id IS NULL) | `/` |
+| 顶层 id=5 的子评论 | `/5/` |
+| 顶层 id=5 → 子 id=12 → 子 id=30 | `/5/12/30/` |
+| 嵌套深度 N | segments 数 = N |
+
+### 11.3 新增 API
+
+#### 11.3.1 按 path prefix 过滤列评论
+
+```http
+GET /api/v1/drive/comments/by-path?file_id=42&path_prefix=/5/
+Authorization: Bearer <token>
+```
+
+**Response 200**:
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "file_id": 42,
+      "author_id": 5,
+      "parent_id": 5,
+      "content": "...",
+      "path": "/5/12/",
+      "depth": 2,
+      ...
+    }
+  ],
+  "total": 2,
+  "matched_path_prefix": "/5/"
+}
+```
+
+#### 11.3.2 祖先链 (breadcrumb)
+
+```http
+GET /api/v1/drive/comments/{id}/breadcrumb
+Authorization: Bearer <token>
+```
+
+**Response 200**:
+```json
+{
+  "ancestors": [
+    {"id": 5, "path": "/", "depth": 0, "content_preview": "...", "author_name": "..."},
+    {"id": 12, "path": "/5/", "depth": 1, "content_preview": "...", "author_name": "..."}
+  ],
+  "current": {"id": 30, "path": "/5/12/30/", "depth": 3, "content_preview": "...", "author_name": "..."},
+  "total": 3
+}
+```
+
+### 11.4 新增 service 方法
+
+- `DriveCommentService.list_by_path_prefix(*, file_id?, folder_id?, path_prefix='/', limit, offset)` — 走 GIN 索引, 1 query
+- `DriveCommentService.rebuild_paths(*, file_id?, folder_id?)` — 数据修复用, WITH RECURSIVE 重算
+- `DriveCommentService.get_breadcrumb(comment_id)` — 1 query 走 path LIKE 拿祖先链
+
+### 11.5 部署
+
+```bash
+# 1. 跑迁移
+docker cp alembic/versions/066_drive_comments_path.py microbubble-agent-app-1:/app/alembic/versions/
+docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__
+docker exec microbubble-agent-app-1 alembic upgrade head
+
+# 2. 重启
+docker compose restart app celery-worker
+
+# 3. 验证 (GIN 索引 + path 列)
+docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble \
+  -c "\d drive_comments" | grep -E "path|gin"
+
+# 期望看到:
+#   path                          | character varying(500)
+#   ix_drive_comments_path_gin    | index
+#   ix_drive_comments_file_path   | index
+```
+
+### 11.6 alembic 链风险
+
+**down_revision 接 064_drive_documents** (064 是当前 head, 065 留待后续 PR 派工). W68 第 4 批 串单链纪律: 不破坏 alembic 链 (1 head only).
+
+merge 后必须 verify:
+```bash
+python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; \
+  c=Config(); c.set_main_option('script_location','alembic'); \
+  s=ScriptDirectory.from_config(c); print(s.get_heads())"
+```
+期望只 1 个 head: `['066_drive_comments_path']`
+
+### 11.7 性能预期
+
+| 场景 | PR9 (无 path) | PR11 (有 path) |
+|------|---------------|----------------|
+| 列 100 嵌套评论 | 101 query (N+1) | 2 query (顶层 + 子) |
+| 面包屑导航 (深度 10) | 10 query (递归) | 1 query (path LIKE) |
+| 按 path prefix 过滤 | 不支持 | 1 query (走 GIN) |
+| 嵌套深度计算 | N/A | ORM property (`DriveComment.depth`) |
+
+### 11.8 测试
+
+7 场景 e2e 测试在 `tests/test_drive_v2_pr11_path_materialized.py`:
+1. 创建根评论 → path='/'
+2. 创建子评论 → path 自动计算
+3. 嵌套 5 层 path 正确性
+4. list by path_prefix 过滤
+5. breadcrumb 祖先链
+6. rebuild_paths 数据修复
+7. GIN 索引存在 + EXPLAIN 验证
+
+### 11.9 后续 PR (W69+)
+
+- **PR12**: 大文件评论 thread 虚拟滚动 (前端按需渲染)
+- **PR13**: 评论搜索 (按 content / author / mentions 全文搜索 + GIN trigram 复用)
+- **PR14**: 评论订阅 (新回复邮件/企微通知)
