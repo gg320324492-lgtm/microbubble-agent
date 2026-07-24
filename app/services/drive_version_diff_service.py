@@ -26,7 +26,7 @@ import logging
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.drive_file_version import DriveFileVersion
@@ -229,7 +229,7 @@ class DriveVersionDiffService:
             to_lines,
             fromfile=from_label,
             tofile=to_label,
-            lineterm="",
+            lineterm="\n",
             n=3,  # context lines
         ))
         unified = "".join(diff_lines)
