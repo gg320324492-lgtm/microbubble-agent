@@ -40,8 +40,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "070_drive_comments_soft_delete"
-down_revision: Union[str, None] = "069_drive_comments_recursive_func"
+revision: str = "074_drive_comments_soft_delete"
+down_revision: Union[str, None] = "073_kb_links_placeholder"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
