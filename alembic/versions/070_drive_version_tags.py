@@ -41,8 +41,8 @@ import sqlalchemy as sa
 from alembic import op
 
 
-revision: str = "070_drive_version_tags"
-down_revision: Union[str, None] = "069_drive_comments_recursive_func"
+revision: str = "075_drive_version_tags"
+down_revision: Union[str, None] = "074_drive_comments_soft_delete"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 

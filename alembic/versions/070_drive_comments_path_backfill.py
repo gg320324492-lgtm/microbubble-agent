@@ -44,8 +44,8 @@ from typing import Union
 from alembic import op
 
 
-revision: str = "070_drive_comments_path_backfill"
-down_revision: Union[str, None] = "069_drive_comments_recursive_func"
+revision: str = "076_drive_comments_path_backfill"
+down_revision: Union[str, None] = "075_drive_version_tags"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
