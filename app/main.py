@@ -30,6 +30,7 @@ def _import_application_routers():
     from app.api.v1 import (
         admin,
         admin_audit,
+        admin_kb_monitor,  # qa-bench v3.1 D5: KB 自动入库监控
         analytics,
         auth,
         chat,
@@ -84,6 +85,7 @@ def _import_application_routers():
         (analytics.router, {"prefix": "/api/v1", "tags": ["检索质量"]}),
         (chat_history.router, {"prefix": "/api/v1", "tags": ["聊天历史"]}),
         (admin.router, {"prefix": "/api/v1", "tags": ["管理"]}),
+        (admin_kb_monitor.router, {"prefix": "/api/v1", "tags": ["KB 监控"]}),  # qa-bench v3.1 D5
         (drive_folders.router, {"prefix": "/api/v1", "tags": ["网盘文件夹"]}),
         (drive_files.router, {"prefix": "/api/v1", "tags": ["网盘文件"]}),
         (drive_files.share_router, {"prefix": "/api/v1", "tags": ["网盘公开分享"]}),
