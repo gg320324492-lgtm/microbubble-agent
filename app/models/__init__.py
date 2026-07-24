@@ -23,6 +23,7 @@ from app.models.drive_comment import DriveComment  # v2 PR9 评论 thread
 from app.models.drive_file_version import DriveFileVersion  # v2 PR9 文件版本历史
 from app.models.drive_version_tag import DriveVersionTag  # v2 PR15 文件版本标签 (W68 第 12 批 B-2)
 from app.models.push_subscription import PushSubscription, PushTopic, PushTopicSubscription  # v3.2 PWA Push
+from app.models.team_folder import TeamFolder, TeamFolderAuditLog  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
 
 __all__ = [
     "Member",
@@ -61,4 +62,6 @@ __all__ = [
     "PushSubscription",      # v3.2 PWA 推送订阅
     "PushTopic",             # v3.2 PWA 推送主题
     "PushTopicSubscription", # v3.2 PWA 推送主题订阅
-]
+    "TeamFolder",            # v2 PR18 团队共享盘 (W68 第 14 批 B-2)
+    "TeamFolderAuditLog",    # v2 PR18 4 维审计日志 (W68 第 14 批 B-2)
+]   # noqa
