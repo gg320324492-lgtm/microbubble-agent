@@ -1,4 +1,4 @@
-"""Drive v2 PR9 — 事件 Publisher (WS 推送桥接层)
+"""Drive v2 PR9 + PR12 — 事件 Publisher (WS 推送桥接层)
 
 W68 第 1 批 a-1 (commit f5a4b2586) 已建 notification_service 基础设施:
 - NotificationPriority (HIGH/MEDIUM/LOW)
@@ -12,8 +12,11 @@ W68 第 3 批 F-1/F-2 (commits 0bfe36751 + 04e06f6fd) 已建 DriveComment + Driv
 本模块承担 PR10 角色: 把 DriveComment + DriveFileVersion 6 个写操作的"事件"包装为
 WS payload, 走 push_with_priority 推送.
 
+W68 第 8 批 B-2 (PR12): 新增 publish_reaction_added — Drive v2 PR12 表情反应
+WS 推送, polymorphic target (comment/file/note) → file/folder owner 通知.
+
 设计要点:
-- 6 个 publish_* 函数, 每个对应 service 层一个写操作, payload schema 固定
+- 7 个 publish_* 函数, 每个对应 service 层一个写操作, payload schema 固定
 - 全部走 push_with_priority (在线 WS push, 离线入 Redis queue, reconnect drain)
 - 失败 best-effort: try/except + logger.error(exc_info=True), 不抛出 (caller 不感知)
 - 复用 caller 的 db session (不再开新 session — DRY 原则, 与 a-1 一致)
@@ -22,6 +25,9 @@ WS payload, 走 push_with_priority 推送.
   parse_mentions() (app.services.mention_parser) → mentioned_user_ids list
   → publish_comment_mention(db, comment, mentioned_user_id, actor_id, snippet)
   走 HIGH priority (与 W68 PR8d 通知优先级一致 — 立即送达)
+- reaction 推送 (W68 PR12):
+  publish_reaction_added(db, reaction_id, target_type, target_id, actor_id, emoji)
+  走 HIGH priority (reaction 是协作信号, 与 mention 同档)
 - delete 场景特殊处理: comment ORM 已被删, 仅传 ID 即可
 
 调用方 (service 层集成):
@@ -32,6 +38,7 @@ WS payload, 走 push_with_priority 推送.
 - drive_comment_service.resolve_comment() → publish_comment_resolved(db, comment_id, file_id, folder_id, resolved_by)
 - drive_version_service.create_version() → publish_version_uploaded(db, version, file_name)
 - drive_version_service.rollback() → publish_version_rollback(db, version, file_name, target_v)
+- drive_reaction_service.add_reaction() → publish_reaction_added(db, reaction_id, target_type, target_id, actor_id, emoji)
 
 约束:
 - 不阻塞 service 主流程: publish_* 内部 try/except 包住 push_with_priority
@@ -49,6 +56,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.drive_comment import DriveComment
 from app.models.drive_file_version import DriveFileVersion
+from app.models.drive_reaction import DriveReaction
 from app.models.folder import Folder
 from app.models.knowledge import Knowledge
 from app.services.notification_service import (
@@ -215,6 +223,53 @@ async def publish_comment_resolved(
 
 
 # ==========================================================================
+# Reaction events (W68 第 8 批 B-2, Drive v2 PR12)
+# ==========================================================================
+
+
+async def publish_reaction_added(
+    db: AsyncSession,
+    *,
+    reaction_id: int,
+    target_type: str,
+    target_id: int,
+    actor_id: int,
+    emoji: str,
+) -> int:
+    """表情反应新增推送 — 通知 file/folder owner (PR12)
+
+    Args:
+        db: caller 的 AsyncSession
+        reaction_id: DriveReaction.id (新创建的行)
+        target_type: 'comment' / 'file' / 'note' (polymorphic)
+        target_id: polymorphic target ID
+        actor_id: 操作者 (一般等于 reaction.member_id)
+        emoji: emoji 字面值
+
+    收件人解析:
+    - target_type='comment': 拿 comment.file_id / folder_id → file/folder owner
+    - target_type='file':    Knowledge.created_by (file owner)
+    - target_type='note':    暂无 (未来 PR 引入)
+
+    priority=HIGH (PR12 设计: 反应是协作信号, 与 mention 同档)
+    """
+    target_user_id = await _resolve_reaction_target_owner(db, target_type, target_id)
+    if target_user_id is None or target_user_id == actor_id:
+        # target 不存在 / 自推 → 跳过
+        return 0
+    payload = {
+        "type": "reaction_added",
+        "reaction_id": reaction_id,
+        "target_type": target_type,
+        "target_id": target_id,
+        "actor_id": actor_id,
+        "emoji": emoji,
+        "ts": _now_iso(),
+    }
+    return await _safe_push(target_user_id, payload, priority=NotificationPriority.HIGH)
+
+
+# ==========================================================================
 # Version events (2 个)
 # ==========================================================================
 
@@ -352,6 +407,40 @@ async def _resolve_comment_author(
         return None
 
 
+async def _resolve_reaction_target_owner(
+    db: AsyncSession, target_type: str, target_id: int
+) -> Optional[int]:
+    """polymorphic reaction target → owner user_id (W68 PR12)
+
+    target_type='comment': comment → file/folder owner
+    target_type='file':    Knowledge.created_by
+    target_type='note':    None (未来 PR 引入 drive_notes 后实现)
+
+    失败 best-effort: try/except + logger.warning, 返 None
+    """
+    try:
+        if target_type == "comment":
+            stmt = select(DriveComment.file_id, DriveComment.folder_id).where(
+                DriveComment.id == target_id
+            )
+            row = (await db.execute(stmt)).first()
+            if row is None:
+                return None
+            file_id, folder_id = row[0], row[1]
+            return await _resolve_target_owner(
+                db, file_id=file_id, folder_id=folder_id
+            )
+        if target_type == "file":
+            return await _resolve_file_owner(db, target_id)
+        # 'note' 暂无, 返 None
+        return None
+    except Exception as e:
+        logger.warning(
+            f"[DriveEventPublisher] _resolve_reaction_target_owner({target_type}:{target_id}) 失败: {e!r}"
+        )
+        return None
+
+
 def _build_comment_payload(
     event_type: str, comment: DriveComment, *, actor_id: int
 ) -> dict:
@@ -406,6 +495,7 @@ __all__ = [
     "publish_comment_updated",
     "publish_comment_deleted",
     "publish_comment_resolved",
+    "publish_reaction_added",  # W68 PR12
     "publish_version_uploaded",
     "publish_version_rollback",
 ]
