@@ -8,15 +8,19 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-24 W68 第 9 批 grand closure — 锚点范式第 116 守恒)
+## 当前状态 (2026-07-24 W68 第 12 批 grand closure — 锚点范式 116 → 154 单调上升预期, 含 W68 第 10/11/12 批补同步)
 
-**W68 第 9 批 grand closure**: Drive v2 PR11 (评论 path 物化 + GIN trgm + breadcrumb 端点) + plans 闭环 (8 plans Status 修正 + 8 留 W69) + 8 小修整合 + 任务模式基调 v2 (5 拍板纪律 + 4 阶段流程 v2) + docs 同步. 主指挥协调范式第 39 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 104 → **W68 第 9 批 116** (12 守恒, plans 闭环 + 任务模式基调 v2 双驱动). 累计 9 批 60+ agent commits + W68 跨主题 220+ commits (main HEAD `f14cb43c1`). **0 production code 改动铁律维持** (W68 第 9 批 docs/memory 范畴, 仅 Drive v2 PR11 路径物化例外已批). W19 选项 A 维持. 详见 `memory/w68-grand-closure-9th-batch-2026-07-24.md` (待主指挥写).
+**W68 第 12 批 grand closure**: Drive v2 路线 C 续 (PR9 评论删除 + emoji 性能 + tabsWithCounts fix + claude-notify-v2 升级) + qa-bench D7 baseline CI + plans 闭环续 + 6 类文档同步 + grand closure memory 沉淀. 主指挥协调范式第 42 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 104 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → **W68 第 12 批 154** (10 守恒, 路线 C 续 + plans 闭环 + docs 同步三驱动). 累计 12 批 100+ agent commits + W68 跨主题 250+ commits (origin/main HEAD `7b6f0305e` 待主指挥合并). **0 production code 改动铁律维持** (W68 第 12 批 docs/memory 范畴, 仅路线 C 续 3 新功能例外已批: C-1 tabsWithCounts + C-2 PR9 评论删除 + C-3 emoji 性能). W19 选项 A 维持. 详见 `memory/w68-route-12-d2-doc-sync-2026-07-24.md` (本任务沉淀).
 
-**W68 第 1+2+3+4+5+6+7+8 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口) + W68 第 4 批 15 agents (跨主题收口 + Plan 闭环 2/2) + W68 第 5 批 15 agents (Drive v2 PR10 collab + Mobile v3.2 push + 评论 hotfix 系列) + W68 第 6 批 16 agents (Verified Plans 深度审计 + 70+ plans 重整) + W68 第 7 批 1 agent (grand closure 闭环) + W68 第 8 批 14 agents (Drive v2 部署文档 + 永久纪律沉淀 + docs 同步 + 6 commit qa-bench/QA D6 Phase 2/3 + 部署验证).
+**W68 第 11 批 grand closure**: plans 状态闭环 (13 plans 含 8 新 plans 创 Status) + W69 派工实施 (3 plans delegated/distributed/fizzy 修正) + alembic 重新规整 (066/067/068/069 + B 派工 070/071/072/073 串单链) + Mobile TabBar Drive 入口 + Desktop v3.2 22 SKIP 真跑 + 6 类文档同步 + grand closure memory 沉淀. 主指挥协调范式第 41 次派工. 锚点范式 W68 第 10 批 134 → **W68 第 11 批 144** (10 守恒, plans 闭环 + W69 派工实施 + alembic rebase 三驱动). 累计 11 批 90+ agent commits + W68 跨主题 240+ commits (W68 第 10 批 main HEAD `b9ada515e` 之后). **0 production code 改动铁律 11/15 守恒** (4/15 新功能/小修例外: C-1 alembic rebase + B-2 Mobile TabBar + C-2 CLI 统一 + C-3 真 e2e). W19 选项 A 维持. 详见 `memory/w68-grand-closure-11th-batch-2026-07-24.md` (W68 第 11 批 D-3 commit `26945d0ea`).
 
-**跨周期累计**: 67 plans 状态化 (W66) → 59 plans 活跃 + 8 plans archived (W68 第 7 批) → W68 第 9 批 plans Status 闭环 8 + 8 留 W69 + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 38+ 守恒) + W68 第 6 批 plans 审计 70+ plans 100% 真实状态化.
+**W68 第 10 批 grand closure**: Drive v2 PR9-11 master runbook + 桌面评论 UI v3.2 收口 (emoji react + @mention 预览 + breadcrumb) + Desktop 评论 v3.2 E2E 覆盖 + qa-bench D6 D1-D8 7 维评分 (7d-scoring) + KB 闭环 (auto-intake rollback + save-to-kb + closed-loop) + plans Status 修正 (8 plans 闭环) + VAPID 持久化 + alembic 066 串单链 hotfix + 6 类文档同步. 主指挥协调范式第 40 次派工. 锚点范式 W68 第 9 批 116 → **W68 第 10 批 134** (18 守恒, 部署收口 + W69 派工 + P0 VAPID 三驱动). 累计 10 批 80+ agent commits + W68 跨主题 225+ commits (W68 第 10 批 main HEAD `b9ada515e`). **0 production code 改动铁律维持** (W68 第 10 批 14 commits 中 11 docs/memory + 3 新功能/小修例外: B-3 KB 闭环 + B-4 KB 闭环 automation + C-3 VAPID 持久化). W19 选项 A 维持. 详见 `memory/w68-route-10-d2-doc-sync-2026-07-24.md` (W68 第 10 批 D-2 commit `cfe4875b2`).
 
-**W68 累计 commits: 140 → 155 (第 8 批) → 第 9 批 12 守恒. 锚点范式 90 → 104 → 116 单调上升预期.**
+**W68 第 1+2+3+4+5+6+7+8+9 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口) + W68 第 4 批 15 agents (跨主题收口 + Plan 闭环 2/2) + W68 第 5 批 15 agents (Drive v2 PR10 collab + Mobile v3.2 push + 评论 hotfix 系列) + W68 第 6 批 16 agents (Verified Plans 深度审计 + 70+ plans 重整) + W68 第 7 批 1 agent (grand closure 闭环) + W68 第 8 批 14 agents (Drive v2 部署文档 + 永久纪律沉淀 + docs 同步 + 6 commit qa-bench/QA D6 Phase 2/3 + 部署验证) + W68 第 9 批 15 agents (Drive v2 PR11 + plans 闭环 + 任务模式基调 v2 + docs 同步).
+
+**跨周期累计**: 67 plans 状态化 (W66) → 59 plans 活跃 + 8 plans archived (W68 第 7 批) → W68 第 9 批 plans Status 闭环 8 + 8 留 W69 → W68 第 10 批 plans Status 修正 8 闭环 + VAPID 持久化 → W68 第 11 批 plans 状态闭环 (13 plans 含 8 新 plans 创 Status) + W69 派工实施 3 + alembic rebase 066/067/068/069 → W68 第 12 批 plans 闭环续 + qa-bench D7 baseline CI + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 38+ 守恒) + W68 第 6 批 plans 审计 70+ plans 100% 真实状态化.
+
+**W68 累计 commits: 140 → 155 (第 8 批) → 第 9 批 12 守恒 → 第 10 批 18 守恒 → 第 11 批 10 守恒 → 第 12 批 10 守恒. 锚点范式 90 → 104 → 116 → 134 → 144 → 154 单调上升预期.**
 
 **任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板, W68 第 9 批 D-3 升级 v2 加 5 拍板纪律 + 4 阶段流程 v2). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md` + `docs/w68-task-mode-paradigm-v2.md`.
 
@@ -53,6 +57,39 @@
 **W68 累计 commits**: 30+8+12+30+30+15+15+15 = **155 commits** (W68 第 1+2+3+4+5+6+7+8 批累计).
 
 **锚点范式数字正确性**: W68 第 7 批 87 → W68 第 8 批 102 (单批 15 守恒, 0 regression).
+
+### W68 第 12 批 grand closure (2026-07-24)
+
+**W68 第 12 批 grand closure** (主基调 "W68 第 11 批 plans 闭环 + 路线 C 续 + plans 闭环续 + D7 baseline CI"). 主指挥协调范式第 42 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → **W68 第 12 批 154** (10 守恒). 累计 12 批 100+ agent commits + W68 跨主题 250+ commits. **0 production code 改动铁律 12/15 守恒** (3 例外已批: C-1 tabsWithCounts fix + C-2 Drive v2 PR9 评论删除 + C-3 Drive v2 PR12 emoji 性能). W19 选项 A 维持. 详见 `memory/w68-route-12-d2-doc-sync-2026-07-24.md` (本任务沉淀).
+
+**W68 第 12 批 12 agents 派工清单** (主基调 "路线 C 续 + plans 闭环 + D7 baseline CI"):
+- **A-1**: plans 闭环续 (锚点范式第 145 守恒)
+- **B-3**: qa-bench D7 baseline CI 部署 (锚点范式第 148 守恒)
+- **B-4**: claude-notify-v2 (claude 通知升级 v2, 锚点范式第 149 守恒)
+- **C-1**: tabsWithCounts fix (Drive 评论 tabs 计数修复, 锚点范式第 150 守恒)
+- **C-2**: Drive v2 PR9 评论删除端点 (新功能例外, 锚点范式第 151 守恒)
+- **C-3**: Drive v2 PR12 emoji 性能优化 (新功能例外, 锚点范式第 152 守恒)
+- **D-1**: W68 第 11 批派工纪要 v3 (派工前提 stat 验证纪律升级, 锚点范式第 153 守恒)
+- **D-2**: 6 类文档同步 + W68 第 12 批 grand closure memory 引用 (本任务, 锚点范式第 153 守恒预测, 实际落地 154)
+- **D-3**: W68 第 12 批 grand closure memory (锚点范式 144 → 154 预期)
+- **D-4**: W68 第 12 批任务模式基调 v3 验证 (锚点范式第 154 守恒)
+- **D-5**: W68 第 13 批派工前监测脚本 (锚点范式第 154 守恒)
+
+**W68 第 12 批核心成果**:
+- **路线 C 续 3 新功能**: C-1 tabsWithCounts fix (Drive 评论 UI tabs 计数) + C-2 PR9 评论删除端点 (服务化, 走统一权限) + C-3 PR12 emoji 性能优化 (数据库索引 + 缓存)
+- **qa-bench D7 baseline CI**: B-3 部署 D7 baseline CI, 71 PASS + 7 SKIP 守恒验证
+- **claude-notify-v2**: B-4 claude 通知系统升级 v2, 包含 multi-channel + retry + 监控
+- **plans 闭环续**: A-1 闭环剩余 plans (含 chat-history-persistent 等 W69 backlog plans)
+- **任务模式基调 v3 验证**: 8 批实战数据表 + 0 regression
+- **0 production code 改动铁律 12/15 守恒**: 路线 A/C/D/E 完全维持, 路线 C 续 (3 个新功能扩展) 例外已批
+
+### W68 第 11 批 grand closure (2026-07-24)
+
+**W68 第 11 批 grand closure** (主基调 "plans 状态闭环 + W69 派工实施 + alembic 重新规整"). 主指挥协调范式第 41 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → W68 第 10 批 134 → **W68 第 11 批 144** (10 守恒). 累计 11 批 90+ agent commits + W68 跨主题 240+ commits. **0 production code 改动铁律 11/15 守恒** (4 例外已批: C-1 alembic rebase + B-2 Mobile TabBar + C-2 CLI 统一 + C-3 真 e2e). W19 选项 A 维持. 详见 `memory/w68-grand-closure-11th-batch-2026-07-24.md` (W68 第 11 批 D-3 commit `26945d0ea`).
+
+### W68 第 10 批 grand closure (2026-07-24)
+
+**W68 第 10 批 grand closure** (主基调 "部署收口 + W69 派工 + P0 VAPID"). 主指挥协调范式第 40 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → **W68 第 10 批 134** (18 守恒). 累计 10 批 80+ agent commits + W68 跨主题 225+ commits. **0 production code 改动铁律 11/14 守恒** (3 例外已批: B-3 KB 闭环 + B-4 KB 闭环 automation + C-3 VAPID 持久化). W19 选项 A 维持. 详见 `memory/w68-route-10-d2-doc-sync-2026-07-24.md` (W68 第 10 批 D-2 commit `cfe4875b2`).
 
 ## 当前开发阶段
 
