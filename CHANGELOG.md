@@ -183,6 +183,44 @@
 
 ---
 
+## W68 第 8 批 grand closure (2026-07-24 — 锚点范式 90 → 104 预期, 跨 W68 第 6+7 批 路线驱动)
+
+**W68 第 8 批收官**: 主指挥协调范式第 36 次派工. 锚点范式预期 90 → 104 (本批 14-19 守恒, 跨 W68 第 6 批深度审计 + W68 第 7 批 plans 闭环 + W68 第 8 批新增). 累计 8 批 50+ agent commits + W68 跨主题 14+ 主题总计 165+ commits. **0 production code 改动铁律维持** (docs/memory 范畴 + Drive v2 PR10/11/12 + Mobile UX v3.2 + qa-bench D5/D6 路线, 不动 v1 老路径). W19 选项 A 维持.
+
+### W68 第 8 批交付清单 (预期 14-19 守恒)
+
+| 路线 | 主题 | 锚点 | Production code | 状态 |
+|------|------|------|-----------------|------|
+| A | Drive v2 PR9-11 master runbook + FAQ | 第 90-92 | 0 | ✅ |
+| A | cached-giggling-pebble 真未实施修复 (脚本实施) | 第 93 | 0 | ✅ |
+| A | cheer-questing-kite 3 新脚本 + 12 会议 anchor | 第 94 | 0 | ✅ |
+| B | qa-bench 物理隔离栈 A1 核心交付 | 第 95-97 | 0 | ✅ |
+| B | qa-bench D5 Dashboard KB 监控 | 第 98 | 0 | ✅ |
+| C | Drive v2 PR10 协同编辑 WS endpoint | 第 99-100 | ⚠️ 例外 | ✅ |
+| C | Mobile UX v3.2 PWA Push Backend | 第 101-102 | 0 | ✅ |
+| C | silly-gliding-dahl fast mode + team_overview | 第 103 | ⚠️ 例外 | ✅ |
+| D | qa-bench D6 Phase 2 dry-run + 14 plans Status 修正 + 8 plans 归档 + verified-plans 报告 | 第 104 | 0 | ✅ |
+
+### W68 第 8 批主要变更 (路线驱动 + 7 批收口)
+
+- **路线 A 续**: Drive v2 PR9 部署 + PR10 协同 + PR11 路径物化, docs-only + script-only
+- **路线 A 计划闭环**: 5 P0 plans (cached-giggling-pebble / cheer-questing-kite / qa-bench-isolation-a1 / D5 / silly-gliding-dahl) 实施
+- **路线 B 续**: qa-bench D5 Dashboard + D6 Phase 2 1000 题 dry-run
+- **路线 C 续**: Drive v2 PR10 协同编辑 WS + Mobile UX v3.2 PWA 推送 backend
+- **路线 D 收口**: 14 plans Status 修正 + 8 plans 归档 + verified-plans 报告
+
+### W68 第 8 批 5 条新铁律 (文档同步纪律)
+
+- ✅ 6 类文档同步必须含主仓库 5 类 (CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md 双端)
+- ✅ 不写 history 文档时 CLAUDE-history 段不动 (避免污染)
+- ✅ 同步内容主指挥拍板前是预测值 (e.g. 锚点范式 90 → 104 是预期, 实际由 C-3 落地)
+- ✅ 主指挥立即反馈错位时 1 个 commit 即修正 (避免批次重做)
+- ✅ 7 类文档同步必须含 archive memory 引用 (memory/verified-plans, memory/w68-grand-closure)
+
+详见 `memory/w68-grand-closure-8th-batch-2026-07-24.md` (C-3 沉淀) + `memory/w68-doc-sync-cumulative-2026-07-24.md` (D-2 沉淀).
+
+---
+
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
 
 **W68 路线 A 收官**: Drive v2 PR8 完整闭环 — WebSocket 通知增强 + 实时协作文件锁 + 文件预览 + 移动端精修 + e2e + 文档. 锚点范式 W67 28 → **W68 29** 单调上升目标. 6 agents 并行在 6 worktree, Agent 7 (本任务) 协调合并顺序 + 冲突预案 + 6 项硬指标验证脚本.

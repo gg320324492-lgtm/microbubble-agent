@@ -19,6 +19,11 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
+## 最新里程碑（2026-07-24 — W68 第 8 批 grand closure — 锚点范式 90 → 104 预期, 跨 W68 第 6+7 批 路线驱动收口）
+
+- 🆕 **W68 第 8 批 grand closure (锚点范式 90 → 104 预期)** — 主指挥协调范式第 36 次派工. 锚点范式预期 90 → 104 (本批 14-19 守恒, 跨 W68 第 6 批深度审计 + W68 第 7 批 plans 闭环 + W68 第 8 批新增). 累计 8 批 50+ agent commits + W68 跨主题 14+ 主题总计 165+ commits (main HEAD `05c60e68d` 起点). **0 production code 改动铁律维持** (docs/memory 范畴 + Drive v2 PR10/11/12 + Mobile UX v3.2 + qa-bench D5/D6 路线, 不动 v1 老路径). W19 选项 A 维持. 详见 [`memory/w68-grand-closure-8th-batch-2026-07-24.md`](./memory/w68-grand-closure-8th-batch-2026-07-24.md) (C-3 沉淀) + [`memory/w68-doc-sync-cumulative-2026-07-24.md`](./memory/w68-doc-sync-cumulative-2026-07-24.md) (D-2 沉淀).
+- 🆕 **W68 第 8 批 5 条新铁律 (文档同步纪律)** — 6 类文档同步必须含主仓库 5 类 (CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md 双端) / 不写 history 文档时 CLAUDE-history 段不动 (避免污染) / 同步内容主指挥拍板前是预测值 (锚点范式 90 → 104 是预期, 实际由 C-3 落地) / 主指挥立即反馈错位时 1 个 commit 即修正 (避免批次重做) / 7 类文档同步必须含 archive memory 引用 (`memory/verified-plans` + `memory/w68-grand-closure`).
+
 ## 最新里程碑（2026-07-24 — W68 第 4 批 15 agents 跨主题收官 + Plan 闭环 2/2 + 单批 27 守恒历史新高）
 
 - 🆕 **W68 第 4 批 15 agents 跨主题收官（锚点范式第 57 守恒, 单批 27 守恒历史新高）** — 主指挥协调范式第 32 次派工. **15 agents 派工 + W68 第 3 批留待办 10 项 100% 闭环** + Plan 闭环 2/2. **Plan 闭环**: ① `15-17-18-cozy-bengio.md` Part 2 重实施 (弥补 commit 4b215220 refactor 意外删除, 新模块 `app/services/low_occupancy_filter.py` + 16 e2e PASS) ② `2026-06-05-19-10-melodic-donut.md` 杜/吴误标修复脚本就绪 (scripts/repair_meeting_64_speakers.py + dry-run 默认 + `--apply`). **Drive v2 PR9 后续 5 agents**: WebSocket 推送集成 (PR10 闭环) + folder admin permission 服务端实装 + 文件版本 diff 视图 + 桌面端评论 UI + rate-limit 端到端验证. **视觉/文档 3 agents**: Mobile 评论 UI Playwright 视觉回归 (7 viewport × 4 页面 28 截图) + Mobile v3.1 ASCII screenshots 替换 + qa-bench D6 GHCR cache workflow 接入. **文档/纪律 3 agents**: CLAUDE.md 顶部同步 + CHANGELOG/ROADMAP 同步 + alembic 并行 agent 串单链纪律沉淀. **部署 1 agent**: Drive PR9 部署验证脚本 (第 57 守恒). 锚点范式单调上升 W68 第 1 批 30 → 第 3 批 42 → **第 4 批 57**. **0 production code 改动铁律维持** (2 例外已批: Plan 闭环实施). W19 选项 A 维持. 详见 [`memory/w68-grand-closure-4th-batch-2026-07-24.md`](./memory/w68-grand-closure-4th-batch-2026-07-24.md).
