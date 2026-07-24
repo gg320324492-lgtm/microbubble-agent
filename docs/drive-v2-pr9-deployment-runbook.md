@@ -1,5 +1,7 @@
 # Drive v2 PR9 SSH 部署 Runbook (2026-07-24)
 
+> **W68 第 5 批 H-1 runbook 已合并到 master runbook (见 [docs/drive-v2-pr9-11-deployment-master-runbook.md](drive-v2-pr9-11-deployment-master-runbook.md)), 本文件保留作为 PR9 单 PR 参考** — master runbook 整合 PR9 + PR10 + PR11 (18 步 SSH + alembic 链 + 验证脚本 + FAQ), 主指挥部署前先查 master runbook。
+
 > **范围**: 主指挥本地 PC (Docker 8 services 宿主机) 部署 Drive v2 PR9 (评论 thread + 文件版本历史 + 移动端评论 UI) 的**流程化 12 步操作手册**。
 >
 > **配套文档**:
