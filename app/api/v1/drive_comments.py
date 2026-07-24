@@ -1,15 +1,20 @@
-"""Drive v2 PR9 — 评论 thread REST API (2026-07-24)
+"""Drive v2 PR9 — 评论 thread REST API (2026-07-24, W68 第 8 批 PR11 path 物化)
 
 端点:
   POST   /api/v1/drive/comments                  → 创建顶层/嵌套回复
   GET    /api/v1/drive/comments                  → 列表 (按 file_id/folder_id/author/is_resolved 过滤)
+  GET    /api/v1/drive/comments?path_prefix=/    → 列表 (path prefix 过滤, PR11 新增)
   GET    /api/v1/drive/comments/{id}             → 详情 (含子回复树)
   PATCH  /api/v1/drive/comments/{id}             → 编辑内容 (仅 author)
   DELETE /api/v1/drive/comments/{id}             → 删除 (仅 author, CASCADE 子回复)
   POST   /api/v1/drive/comments/{id}/resolve     → 标记已解决 (幂等)
   POST   /api/v1/drive/comments/{id}/unresolve   → 取消已解决 (幂等)
+  GET    /api/v1/drive/comments/{id}/breadcrumb  → 祖先链 (PR11 新增, 1 query)
 
-限流: 自动走 drive_upload tier (50/min, 在 app/core/rate_limit.py:285 路径匹配)
+限流:
+- POST/PATCH/DELETE  → drive_upload (50/min)
+- GET                 → drive_list (300/min, 自动按 path 匹配)
+- /breadcrumb        → drive_list (300/min)
 """
 from typing import Optional
 
@@ -20,11 +25,18 @@ from app.core.database import get_db
 from app.core.exceptions import AppException
 from app.core.security import get_current_user
 from app.models.member import Member
+from app.models.drive_comment import DriveComment
 from app.schemas.drive_comment import (
     CommentCreate,
     CommentListResponse,
     CommentRead,
     CommentUpdate,
+)
+from app.schemas.drive_comment_path import (
+    CommentBreadcrumbItem,
+    CommentBreadcrumbResponse,
+    CommentPathListResponse,
+    CommentPathRead,
 )
 from app.services.drive_comment_service import (
     DriveCommentService,
@@ -191,6 +203,122 @@ async def list_comments(
         ))
 
     return CommentListResponse(items=read_items, total=total)
+
+
+@router.get("/by-path", response_model=CommentPathListResponse)
+async def list_comments_by_path(
+    file_id: Optional[int] = Query(None, gt=0, description="按 file 过滤 (与 folder_id 二选一)"),
+    folder_id: Optional[int] = Query(None, gt=0, description="按 folder 过滤 (与 file_id 二选一)"),
+    path_prefix: str = Query(
+        "/",
+        description="path 前缀 (例 '/1/2/' = file_id=1 + 2 层嵌套, '/' = 全部)",
+        max_length=500,
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),  # noqa: ARG001
+):
+    """v2 PR11: 按 path prefix 过滤列评论 (走 GIN trigram 索引)
+
+    性能: 走 GIN 索引加速 path LIKE '%/xxx/%', 替代 PR9 的 N+1 递归
+    必须指定 file_id 或 folder_id 之一 (无全表 path LIKE 防爆)
+    """
+    if (file_id is None) == (folder_id is None):
+        raise AppException(
+            code="VALIDATION_ERROR",
+            message="file_id / folder_id 必须二选一",
+            status_code=400,
+        )
+
+    svc = DriveCommentService(db)
+    try:
+        items, total = await svc.list_by_path_prefix(
+            file_id=file_id,
+            folder_id=folder_id,
+            path_prefix=path_prefix,
+            limit=page_size,
+            offset=(page - 1) * page_size,
+        )
+    except DriveCommentServiceError as e:
+        _reraise_comment_service_error(e)
+
+    # 规范化 path_prefix 用于响应
+    norm_prefix = path_prefix
+    if not norm_prefix.startswith("/"):
+        norm_prefix = "/" + norm_prefix
+    if not norm_prefix.endswith("/"):
+        norm_prefix = norm_prefix + "/"
+
+    read_items: list = []
+    for c in items:
+        read_items.append(CommentPathRead(
+            id=c.id,
+            file_id=c.file_id,
+            folder_id=c.folder_id,
+            author_id=c.author_id,
+            parent_id=c.parent_id,
+            content=c.content,
+            mentions=c.mentions,
+            is_top_level=c.is_top_level,
+            is_resolved=c.is_resolved,
+            resolved_at=c.resolved_at,
+            resolved_by=c.resolved_by,
+            path=c.path or "/",
+            depth=c.depth,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+        ))
+
+    return CommentPathListResponse(
+        items=read_items,
+        total=total,
+        matched_path_prefix=norm_prefix,
+    )
+
+
+@router.get("/{comment_id}/breadcrumb", response_model=CommentBreadcrumbResponse)
+async def get_comment_breadcrumb(
+    comment_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Member = Depends(get_current_user),  # noqa: ARG001
+):
+    """v2 PR11: 拿祖先链 (1 query 走 path LIKE)
+
+    返回 ancestors + current (depth 升序, 顶层在前)
+    """
+    svc = DriveCommentService(db)
+    try:
+        rows = await svc.get_breadcrumb(comment_id)
+    except DriveCommentServiceError as e:
+        _reraise_comment_service_error(e)
+
+    if not rows:
+        raise AppException(
+            code="RESOURCE_NOT_FOUND",
+            message=f"Comment id={comment_id} 不存在",
+            status_code=404,
+        )
+
+    current = rows[-1]
+    ancestors = rows[:-1]
+
+    def _to_breadcrumb_item(c: DriveComment) -> CommentBreadcrumbItem:
+        return CommentBreadcrumbItem(
+            id=c.id,
+            parent_id=c.parent_id,
+            content_preview=c.content[:100] if c.content else "",
+            author_name=c.author.name if c.author else "[已注销用户]",
+            path=c.path or "/",
+            depth=c.depth,
+            created_at=c.created_at,
+        )
+
+    return CommentBreadcrumbResponse(
+        ancestors=[_to_breadcrumb_item(c) for c in ancestors],
+        current=_to_breadcrumb_item(current),
+        total=len(rows),
+    )
 
 
 @router.get("/{comment_id}", response_model=CommentRead)
