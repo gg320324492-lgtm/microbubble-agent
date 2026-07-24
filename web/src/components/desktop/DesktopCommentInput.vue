@@ -77,6 +77,15 @@
           <span v-else>发送</span>
         </button>
       </div>
+      <!-- 已 mention 用户预览 — B-3 v3.2 -->
+      <div v-if="mentionedPreview.length > 0" class="dci-mentioned-preview" aria-label="将提醒的用户">
+        <span class="dci-mentioned-label">将提醒:</span>
+        <span
+          v-for="m in mentionedPreview"
+          :key="m.id"
+          class="dci-mentioned-chip"
+        >@{{ m.name || m.username }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -105,6 +114,31 @@ const effectivePlaceholder = computed(() => props.placeholder || '写评论... @
 const canSend = computed(() => {
   const trimmed = text.value.trim()
   return trimmed.length > 0 && trimmed.length <= 1000 && !props.busy
+})
+
+// 已 mention 用户预览 — B-3 v3.2
+// 扫描文本中所有 @handle, 匹配 membersList (wechat_id / username / name), 去重
+const mentionedPreview = computed(() => {
+  const val = text.value || ''
+  const handles = new Set()
+  const re = /@([一-龥A-Za-z0-9_.\-]{1,32})/g
+  let m
+  while ((m = re.exec(val)) !== null) {
+    handles.add(m[1].toLowerCase())
+  }
+  if (handles.size === 0) return []
+  const seen = new Set()
+  const result = []
+  for (const member of props.membersList) {
+    const keys = [member.wechat_id, member.username, member.name]
+      .filter(Boolean)
+      .map((k) => String(k).toLowerCase())
+    if (keys.some((k) => handles.has(k)) && !seen.has(member.id)) {
+      seen.add(member.id)
+      result.push(member)
+    }
+  }
+  return result
 })
 
 const mention = useMentionAutocomplete({
@@ -315,6 +349,29 @@ onMounted(() => {
   font-size: 14px;
 }
 
+/* 已 mention 用户预览 — B-3 v3.2 */
+.dci-mentioned-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.dci-mentioned-label {
+  font-size: 11px;
+  color: var(--color-text-placeholder, #c0c4cc);
+}
+
+.dci-mentioned-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  color: var(--color-primary, #ff7a5c);
+  border-radius: 10px;
+  font-weight: 500;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -333,5 +390,9 @@ onMounted(() => {
 
 [data-theme="dark"] .dci-send-btn:disabled {
   background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .dci-mentioned-chip {
+  background: rgba(255, 122, 92, 0.16);
 }
 </style>
