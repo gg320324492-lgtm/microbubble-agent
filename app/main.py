@@ -44,6 +44,7 @@ def _import_application_routers():
         drive_collab,  # v2 PR10 协同编辑 WS + REST
         drive_reactions,  # v2 PR12 表情反应 (W68 第 8 批 B-2)
         drive_version_tags,  # v2 PR15 文件版本标签 (W68 第 12 批 B-2)
+        team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         file_requests,
         knowledge,
         meeting,
@@ -99,6 +100,7 @@ def _import_application_routers():
         (drive_collab.router, {"prefix": "/api/v1", "tags": ["网盘协同编辑"]}),  # v2 PR10
         (drive_reactions.router, {"prefix": "/api/v1", "tags": ["网盘表情反应"]}),  # v2 PR12 (W68 第 8 批 B-2)
         (drive_version_tags.router, {"prefix": "/api/v1", "tags": ["网盘文件版本标签"]}),  # v2 PR15 (W68 第 12 批 B-2)
+        (team_folders.router, {"prefix": "/api/v1", "tags": ["团队共享盘 + 4 维审计"]}),  # v2 PR18 (W68 第 14 批 B-2)
         (push_notifications.router, {"prefix": "/api/v1", "tags": ["PWA 浏览器推送"]}),  # v3.2
         (upload_multipart.router, {"prefix": "/api/v1", "tags": ["分片上传"]}),
         (ws_notifications.router, {"prefix": "/api/v1"}),
