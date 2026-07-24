@@ -42,3 +42,5 @@
 - [2026-07-24 W68 路线 B qa-bench D6 未来根因 5 路径调研](w68-route-b-qa-bench-d6-future-roots-2026-07-24.md) — 锚点范式第 30 守恒. 推荐路径 3 (in-process runner) + 路径 1 (cache 深度优化) 组合, 5 路径全部 0 production code 改动.
 - [2026-07-24 W68 路线 B-3 qa-bench D6 实施路线图 (本文)](w68-route-b3-d6-roadmap-2026-07-24.md) — 锚点范式第 35 守恒. 9 agents 跨 2 周 2 批派工 (Phase 1 W68 第 4 批 5 agents + Phase 2 W69 第 1 批 4 agents), CI 25+ min → 5-8 min, 0 production code 改动铁律完全守恒. 路线图核心: `docs/qa-bench-d6-implementation-roadmap.md`.
 - [2026-07-24 W68 任务模式基调 (plans 优先 + 小修搭配)](w68-task-mode-paradigm-plans-first-2026-07-24.md) — 主指挥 W68 第 4 批拍板永久任务模式: plans 优先 + 小修搭配 + 路线 fallback. 新 4 阶段选题流程 + 新 3 铁律. 第 4 批 (2 plan 闭环 + 13 小修) 与第 5 批 (全小修+fallback) 双实战验证, 0 regression.
+- [2026-07-24 W68 第 8 批 B-4 qa-bench D6 Phase 3 matrix 4 runner 并行](w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24.md) — 锚点范式第 96 守恒. 路径 4 落地: 1000 题 / 4 shard (250×4) asyncio.Semaphore 并发, matrix gate 严格 (ALL workers ≥ 90% 才 PASS), 复用 phase2_dry_runner verdict logic (5 函数 + 2 常量). 5 新铁律沉淀 (matrix 拆分 deterministic / 双层 Semaphore / verdict 复用 / matrix gate 严格 / dry-fallback SSH 标注). Wall clock 30-60 min → 5-15 min (50-75% 节省). 0 production code 改动.
+
