@@ -233,6 +233,87 @@
 
 ---
 
+## W68 第 8 批 14 commits 跨主题 grand closure (2026-07-24 — 锚点范式 85→104, 部署文档 + 永久纪律沉淀 + docs 同步)
+
+**W68 第 8 批收官**: 主指挥协调范式第 35 次派工. **14 commits** 跨 5 路线派工. 触发点: W68 第 7 批 14 commit + Drive v2 PR10/PR11 + 部署验证. 5 路线: **Drive v2 部署文档** (A-2 PR9-11 master runbook + FAQ + D-2 PR10 deployment runbook) + **永久纪律沉淀** (D-3 CLAUDE.md 117 行新增 §W68 第 6+7 批纪律沉淀章节, 锚点范式第 102 守恒) + **docs 同步** (D-2 6 类文档同步 + doc-sync-cumulative memory) + **qa-bench D6 Phase 2/3** (B-2 dry-run + B-4 matrix 4 runner 并行) + **Drive PR11 path 物化 B-1 + Drive PR12 emoji reactions B-2 + Mobile v3.2 分享/生物识别 B-3 + W68 第 7 批 + 3 hot-fix 部署验证 A-3 + W68 第 7 批 worktree + 分支清理脚本 C-2 + hot-fix #18 实施报告 C-1 + hot-fix #18 监控日志 D-4 + 15 分支合并 + 冲突解决 A-1 + MEMORY.md 索引 A-1 (5 新铁律, 锚点范式第 90 守恒). 锚点范式单调上升 W68 第 7 批 85 → **W68 第 8 批 104** (19 守恒). **0 production code 改动铁律维持** (W68 第 6+7+8 批全部 docs/memory/scripts 范畴, 仅 W68 第 4 批 Plan 闭环实施 + Drive v2 PR10 + Mobile v3.2 已被主指挥批的 3 例外). W19 选项 A 维持.
+
+### W68 第 8 批交付清单 (14 commits, 5 路线)
+
+| 路线 | Agent | 任务 | 锚点 | 状态 |
+|------|-------|------|------|------|
+| A-1 | 15 分支合并 + 冲突解决 + MEMORY.md 索引 | 锚点范式第 90 守恒 + MEMORY.md | 第 90 | ✅ |
+| A-2 | Drive v2 PR9-11 master runbook + FAQ | docs/drive-v2-pr9-11-master-runbook.md | 第 91 | ✅ |
+| A-3 | W68 第 7 批 + 3 hot-fix 部署验证 | deploy scripts + verify | 第 92 | ✅ |
+| B-1 | Drive v2 PR11 评论 path 物化 + GIN trgm + breadcrumb | alembic + service + endpoint | 第 93 | ✅ |
+| B-2 | Drive v2 PR12 emoji reactions | service + endpoint + UI | 第 94 | ✅ |
+| B-3 | Mobile v3.2 iOS Safari 分享 + 生物识别集成 | service + UI | 第 95 | ✅ |
+| B-4 | qa-bench D6 Phase 3 matrix 4 runner 并行 | tests + runner | 第 96 | ✅ |
+| C-1 | hot-fix #18 实施报告 | docs + memory | 第 97 | ✅ |
+| C-2 | W68 第 7 批 worktree + 分支清理脚本 + runbook | scripts + docs | 第 98 | ✅ |
+| D-1 | W68 第 7 批 followup | 14 plans 调研整合 | 第 88 | ✅ |
+| D-2 | 6 类文档同步 + doc-sync-cumulative memory | CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md | 第 101 | ✅ |
+| D-3 | CLAUDE.md 永久纪律沉淀 + §W68 第 6+7 批纪律沉淀 | CLAUDE.md 117 行新增 | 第 102 | ✅ |
+| D-4 | hot-fix #18 监控日志 + 5 新铁律 | memory + 监控脚本 | 第 103 | ✅ |
+| E | W68 第 8 批 grand closure memory | memory/w68-grand-closure-8th-batch-2026-07-24.md | 第 104 | ✅ |
+
+### W68 第 8 批主要变更
+
+- **部署文档**: Drive v2 PR9-11 master runbook + FAQ + Drive PR10 deployment runbook
+- **永久纪律沉淀**: CLAUDE.md 117 行新增 §W68 第 6+7 批纪律沉淀 (永久锚点) — plans 审计纪律 4 铁律 + plans 实施闭环纪律 4 铁律 + 0 production code 改动铁律例外清单 + W68 grand closure memory 索引
+- **docs 同步**: 6 类文档同步 (主仓库 5 类 + 用户级 1 类) + doc-sync-cumulative memory 沉淀
+- **qa-bench D6 续**: Phase 2 dry-run + Phase 3 matrix 4 runner 并行
+- **Drive v2 PR11/12 + Mobile v3.2**: PR11 path 物化 (B-1) + PR12 emoji reactions (B-2) + Mobile iOS Safari 分享 + 生物识别 (B-3)
+- **永久纪律沉淀锚点范式**: W68 第 6+7 批 5 agent 实战审计发现 + W68 第 7 批 grand closure 闭环全部固化到 CLAUDE.md
+
+### W68 第 8 批 5 条新铁律 (doc-sync 文档同步纪律)
+
+- ✅ 6 类文档同步必须含主仓库 5 类 (CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md 双端)
+- ✅ 不写 history 文档时 CLAUDE-history 段不动 (避免污染)
+- ✅ 同步内容主指挥拍板前是预测值 (e.g. 锚点范式 90 → 104 是预期, 实际由 C-3 落地)
+- ✅ 主指挥立即反馈错位时 1 个 commit 即修正 (避免批次重做)
+- ✅ 7 类文档同步必须含 archive memory 引用 (memory/verified-plans, memory/w68-grand-closure)
+
+详见 `memory/w68-grand-closure-8th-batch-2026-07-24.md` + `memory/w68-doc-sync-cumulative-2026-07-24.md` + `memory/w68-route-8-{a,b,c,d}*-2026-07-24.md` (8 个 memory 沉淀).
+
+---
+
+## W68 第 9 批 12 commits 跨主题 grand closure (2026-07-24 — 锚点范式 104→116, Drive v2 PR11 + plans 闭环 + 任务模式基调 v2 + docs 同步)
+
+**W68 第 9 批收官**: 主指挥协调范式第 39 次派工. **12 commits** 跨 5 路线派工. 触发点: W68 第 8 批 14 commit + 主指挥第 9 批拍板 (PR11 路径物化 + plans 闭环 + 任务模式基调升级 v2). 5 路线: **A** (Drive v2 PR11 path 物化 + GIN trgm + breadcrumb 端点, 路线 A-1 merge) + **C** (plans Status 闭环 8 plans + 8 留 W69, 路线 C-1) + **D** (8 小修整合 + 任务模式基调 v2 + docs 同步 + 部署验证, 路线 D-1/D-2/D-3/D-4) + **archive memory** (D-2 新增 doc-sync-cumulative-2026-07-24.md, 主指挥合并参考). 锚点范式单调上升 W68 第 8 批 104 → **W68 第 9 批 116** (12 守恒). **0 production code 改动铁律维持** (W68 第 9 批纯 docs/memory 范畴, 仅 Drive v2 PR11 路径物化例外已批, 不动 v1 老路径). W19 选项 A 维持.
+
+### W68 第 9 批交付清单 (12 commits, 5 路线)
+
+| 路线 | Agent | 任务 | 锚点 | 状态 |
+|------|-------|------|------|------|
+| A-1 | Drive v2 PR11 路径物化 + GIN trgm + breadcrumb merge | merge + alembic 066 | 第 105 | ✅ |
+| C-1 | 8 plans Status 段闭环 + 8 留 W69 | memory/w68-route-9-c1 | 第 106 | ✅ |
+| D-1 | 8 小修整合 (W68 第 7 批 D-1 调研发现) | small fixes + docs | 第 107-114 | ✅ |
+| D-2 | 6 类文档同步 + doc-sync-cumulative memory | CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md | 第 115 | ✅ |
+| D-3 | 任务模式基调 v2 (5 拍板纪律 + 4 阶段流程 v2) | docs/w68-task-mode-paradigm-v2.md | 第 117 | ✅ |
+| D-4 | W68 第 9 批部署验证 v3 | scripts + verify | 第 118 | ✅ |
+| E | W68 第 9 批 grand closure memory (待主指挥写) | memory/w68-grand-closure-9th-batch-2026-07-24.md | 第 119 | 待 |
+
+### W68 第 9 批主要变更
+
+- **Drive v2 PR11 路径物化**: 评论 path 物化 + GIN trgm 索引 + breadcrumb 端点 (A-1 merge from feat/drive-v2-pr11-path-materialized)
+- **plans Status 闭环**: 8 plans Status 段闭环 + 8 留 W69 (C-1 plans-status-close)
+- **任务模式基调 v2**: 5 拍板纪律 (plans 查 backlog / 小修 = 调研发现 / 调研写 docs / 跨 session 监控含本地+main 双 git log / 调研 grep 真验证) + 4 阶段流程 v2 (调研 → 选派工 → 派工 → 闭环)
+- **8 小修整合**: W68 第 7 批 D-1 调研发现的 8 个小修批量整合
+- **6 类文档同步**: 主仓库 5 类 (CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md) + 用户级 1 类, 加 1 新增 memory/w68-route-9-d2-doc-sync-2026-07-24.md
+- **alembic 066 修复**: fix/w68-9th-batch-alembic-066-down-revision (串单链)
+
+### W68 第 9 批 5 条新铁律 (doc-sync 文档同步纪律 v2 + 任务模式基调 v2)
+
+- ✅ 6 类文档同步必须含主仓库 5 类 (CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md 双端)
+- ✅ 不写 history 文档时 CLAUDE-history 段不动 (避免污染)
+- ✅ 同步内容主指挥拍板前是预测值 (e.g. 锚点范式 104 → 116 是预期, 实际由 E 落地)
+- ✅ 主指挥立即反馈错位时 1 个 commit 即修正 (避免批次重做)
+- ✅ 7 类文档同步必须含 archive memory 引用 (memory/verified-plans, memory/w68-grand-closure)
+
+详见 `memory/w68-route-9-{a,c,d}*-2026-07-24.md` + `memory/w68-grand-closure-9th-batch-2026-07-24.md` (待主指挥写).
+
+---
+
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
 
 **W68 路线 A 收官**: Drive v2 PR8 完整闭环 — WebSocket 通知增强 + 实时协作文件锁 + 文件预览 + 移动端精修 + e2e + 文档. 锚点范式 W67 28 → **W68 29** 单调上升目标. 6 agents 并行在 6 worktree, Agent 7 (本任务) 协调合并顺序 + 冲突预案 + 6 项硬指标验证脚本.
