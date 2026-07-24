@@ -349,17 +349,14 @@ class DriveCommentService:
         # best-effort: 任何 1 条推送失败不影响其他 + 不阻塞 caller
         if resolved_mentions:
             try:
-                from app.services.drive_event_publisher import publish_comment_mention
+                from app.services.drive_event_publisher import publish_combined_notification
                 from app.services.mention_parser import extract_snippet
                 snippet = extract_snippet(content, max_chars=80)
                 for uid in resolved_mentions:
                     try:
-                        await publish_comment_mention(
-                            self.db,
-                            comment,
-                            actor_id=author_id,
-                            mentioned_user_id=uid,
-                            snippet=snippet,
+                        await publish_combined_notification(
+                            self.db, target_user_id=uid, combined_actions=["@mentioned"],
+                            source_comment_id=comment.id, actor_id=author_id, snippet=snippet,
                         )
                     except Exception as e:
                         logger.warning(

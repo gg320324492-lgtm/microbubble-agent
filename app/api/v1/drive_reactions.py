@@ -154,6 +154,16 @@ async def add_reaction(
             )
         reaction = existing
 
+    if payload.target_type == "comment":
+        try:
+            from app.services.drive_event_publisher import publish_combined_notification
+            from app.services.drive_event_publisher import _resolve_reaction_target_owner
+            target_user = await _resolve_reaction_target_owner(db, "comment", payload.target_id)
+            if target_user is not None:
+                await publish_combined_notification(db, target_user_id=target_user, combined_actions=[f"reacted_{payload.emoji}"], source_comment_id=payload.target_id, actor_id=current_user.id)
+        except Exception:
+            pass
+
     return ReactionRead(
         id=reaction.id,
         target_type=reaction.target_type,
