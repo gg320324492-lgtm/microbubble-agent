@@ -7,7 +7,9 @@
 - 编辑评论: 仅 author 本人 (不开放给 admin, 保证作者主权)
 - 删除评论: 仅 author 本人 (CASCADE 自动删子回复, 软删改 hard delete)
 - resolve: author / file owner / folder owner / folder admin member 可操作
-- mention 提醒: 留给 PR10 集成 WS notification, 本 PR 仅写 mentions 字段
+- mention 提醒: W68 PR10 已集成 WS notification (publish_comment_mention)
+  — mentions ARRAY 字段自动从 content 解析 @username 填充
+  — 每个 mentioned user 触发 1 条 HIGH priority push
 
 权限模型 (与 PR6 FileComment 一致 + 新增 folder 级):
 - file_id 写评论: 校验 `get_user_folder_permission(file.folder_id, user_id)` 不为 None
@@ -250,13 +252,18 @@ class DriveCommentService:
             file_id / folder_id: 二选一 (Pydantic 已校验, service 二次校验)
             parent_id: 嵌套回复父评论 (None=顶层)
             content: 评论内容 (Pydantic 已校验 1-10000)
-            mentions: @ 提醒 user_id 列表
+            mentions: @ 提醒 user_id 列表 (caller 显式传的优先, 否则从 content 自动解析)
 
         Returns:
             DriveComment (含 author / replies)
 
         Raises:
             DriveCommentServiceError on validation / not-found / forbidden
+
+        W68 PR10 (锚点范式第 63 守恒):
+        - mentions 为 None → 自动从 content 解析 @username
+        - 每个 mentioned_user_id 触发 1 条 HIGH priority WS push (独立 publish_comment_mention)
+        - 解析 / 推送失败 best-effort (try/except + logger.warning/error)
         """
         if (file_id is None) == (folder_id is None):
             raise DriveCommentServiceError(
@@ -291,13 +298,33 @@ class DriveCommentService:
                     status_code=400,
                 )
 
+        # W68 PR10: mentions 兜底 — caller 没传或传空 → 从 content 自动解析
+        resolved_mentions: Optional[List[int]] = mentions
+        if not resolved_mentions:
+            try:
+                from app.services.mention_parser import parse_mentions
+                parsed = await parse_mentions(
+                    self.db, content, exclude_user_id=author_id,
+                )
+                if parsed:
+                    resolved_mentions = parsed
+                    logger.info(
+                        f"[DriveCommentService.create_comment] 自动解析 mentions: "
+                        f"parsed={parsed} from content (length={len(content)})"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"[DriveCommentService.create_comment] mentions 解析失败 (非阻塞): {e!r}",
+                    exc_info=True,
+                )
+
         comment = DriveComment(
             file_id=file_id,
             folder_id=folder_id,
             author_id=author_id,
             parent_id=parent_id,
             content=content,
-            mentions=mentions,
+            mentions=resolved_mentions,
         )
         self.db.add(comment)
         await self.db.commit()
@@ -307,7 +334,7 @@ class DriveCommentService:
         logger.info(
             f"[DriveCommentService.create_comment] id={comment.id} "
             f"file_id={file_id} folder_id={folder_id} author={author_id} "
-            f"parent_id={parent_id} mentions={mentions}"
+            f"parent_id={parent_id} mentions={resolved_mentions}"
         )
 
         # W68 PR9 WS 推送: 通知 file/folder owner (best-effort, 不阻塞主流程)
@@ -316,6 +343,34 @@ class DriveCommentService:
             await publish_comment_created(self.db, comment, actor_id=author_id)
         except Exception as e:
             logger.debug(f"[DriveCommentService] publish_comment_created 失败 (非阻塞): {e!r}")
+
+        # W68 PR10 WS 推送: 通知每个 mentioned user (HIGH priority, 独立推送)
+        # 每个 mention 1 条 publish (不批量合并 — 立即送达是基础体验)
+        # best-effort: 任何 1 条推送失败不影响其他 + 不阻塞 caller
+        if resolved_mentions:
+            try:
+                from app.services.drive_event_publisher import publish_comment_mention
+                from app.services.mention_parser import extract_snippet
+                snippet = extract_snippet(content, max_chars=80)
+                for uid in resolved_mentions:
+                    try:
+                        await publish_comment_mention(
+                            self.db,
+                            comment,
+                            actor_id=author_id,
+                            mentioned_user_id=uid,
+                            snippet=snippet,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"[DriveCommentService.create_comment] mention 推送失败 "
+                            f"uid={uid} (非阻塞): {e!r}"
+                        )
+            except Exception as e:
+                logger.warning(
+                    f"[DriveCommentService.create_comment] mention 推送整体失败 (非阻塞): {e!r}",
+                    exc_info=True,
+                )
 
         return comment
 
