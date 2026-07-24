@@ -1,4 +1,4 @@
-"""Drive v2 PR9 — 评论 thread Service (2026-07-24)
+"""Drive v2 PR9 — 评论 thread Service (2026-07-24, W68 第 8 批 PR11 path 物化)
 
 负责 drive_comments 表的 CRUD + 嵌套回复树构建 + resolved 状态管理。
 
@@ -16,10 +16,20 @@
   (file 的 folder 是 visibility=public 时 read 即可, 否则需要 folder 访问权限)
 - folder_id 写评论: 校验 `get_user_folder_permission(folder_id, user_id)` >= 'read'
 
+W68 第 8 批 PR11 增量 (path 物化):
+- create_comment 自动根据 parent.path 计算 path (parent.path + str(parent.id) + '/')
+- list_comments 支持 path_prefix 过滤 (走 GIN trigram 索引, 1 query)
+- 新增 list_by_path_prefix (path prefix LIKE 查询, 替代 N+1 递归)
+- 新增 rebuild_paths (数据修复 CLI 用, WITH RECURSIVE 重算全部 path)
+- 新增 get_breadcrumb (1 query 走 path LIKE 拿祖先链)
+
 调用方 (API 层):
 - create_comment(db, payload, author_id) → DriveComment
 - list_comments(db, file_id?, folder_id?, author_id?, is_resolved?, limit, offset)
   → {top_level_comments_with_replies, total}
+- list_by_path_prefix(db, file_id?, path_prefix='/') → 1 query 走 GIN
+- rebuild_paths(db, file_id/folder_id) → 修复用
+- get_breadcrumb(db, comment_id) → ancestor chain (1 query)
 - get_comment(db, comment_id) → DriveComment
 - update_comment(db, comment_id, user_id, content) → DriveComment
 - delete_comment(db, comment_id, user_id) → bool (CASCADE 删子回复)
@@ -318,6 +328,17 @@ class DriveCommentService:
                     exc_info=True,
                 )
 
+        # W68 PR11: 计算 path
+        # - 顶层 (parent_id IS NULL): path = '/'
+        # - 子评论: path = parent.path + str(parent.id) + '/'
+        # 例: parent.id=5, parent.path='/1/2/' → child.path='/1/2/5/'
+        if parent_id is not None and parent is not None:
+            # parent 已在前面 query 出来, 复用
+            parent_path = parent.path if parent.path else "/"
+            new_path = f"{parent_path}{parent.id}/"
+        else:
+            new_path = "/"
+
         comment = DriveComment(
             file_id=file_id,
             folder_id=folder_id,
@@ -325,6 +346,7 @@ class DriveCommentService:
             parent_id=parent_id,
             content=content,
             mentions=resolved_mentions,
+            path=new_path,
         )
         self.db.add(comment)
         await self.db.commit()
@@ -334,7 +356,7 @@ class DriveCommentService:
         logger.info(
             f"[DriveCommentService.create_comment] id={comment.id} "
             f"file_id={file_id} folder_id={folder_id} author={author_id} "
-            f"parent_id={parent_id} mentions={resolved_mentions}"
+            f"parent_id={parent_id} path='{new_path}' mentions={resolved_mentions}"
         )
 
         # W68 PR9 WS 推送: 通知 file/folder owner (best-effort, 不阻塞主流程)
@@ -452,6 +474,242 @@ class DriveCommentService:
                 c.replies = replies_by_parent.get(c.id, [])
 
         return list(items), total
+
+    # ==========================================================================
+    # W68 PR11: path 物化查询 (高性能)
+    # ==========================================================================
+
+    async def list_by_path_prefix(
+        self,
+        *,
+        file_id: Optional[int] = None,
+        folder_id: Optional[int] = None,
+        path_prefix: str = "/",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[List[DriveComment], int]:
+        """按 path prefix 过滤列评论 (W68 PR11, 替代 N+1 递归)
+
+        利用 GIN trigram 索引 (migration 066 加) 加速 path LIKE 查询.
+        走 file_id + path 复合索引 (PR11 加).
+
+        Args:
+            file_id / folder_id: 二选一 (Pydantic 校验)
+            path_prefix: 必须以 '/' 开头和结尾, 例 '/1/2/'
+                          规范化: 补尾 '/' 但不去头 '/'
+            limit / offset: 分页
+
+        Returns:
+            (items, total)
+
+        Notes:
+            - path_prefix '/' 查所有顶层 + 所有嵌套 (全部命中)
+            - path_prefix '/1/2/' 查 file_id=1 的所有直接子评论 (深度 2)
+            - path_prefix '/1/2/3/' 查 file_id=1+2 的所有子评论 (深度 3)
+              (例: path='/1/2/3/4/' 包含 '/1/2/3/' 因为 LIKE '%/1/2/3/%' 匹配)
+            - 必须接 file_id 或 folder_id 之一 (无全表 path LIKE)
+        """
+        # 规范化 path_prefix: 补尾 '/', 不强制补头 '/'
+        if not path_prefix.startswith("/"):
+            path_prefix = "/" + path_prefix
+        if not path_prefix.endswith("/"):
+            path_prefix = path_prefix + "/"
+
+        conditions = []
+        if file_id is not None:
+            conditions.append(DriveComment.file_id == file_id)
+        if folder_id is not None:
+            conditions.append(DriveComment.folder_id == folder_id)
+        if (file_id is None) and (folder_id is None):
+            raise DriveCommentServiceError(
+                "list_by_path_prefix 必须指定 file_id 或 folder_id 之一 (无全表 path LIKE)",
+                status_code=400,
+            )
+        # LIKE 过滤: path 包含 prefix (走 GIN trigram 索引加速)
+        conditions.append(DriveComment.path.like(f"%{path_prefix}%"))
+
+        where_clause = and_(*conditions)
+
+        # total
+        total_stmt = select(func.count()).select_from(DriveComment).where(where_clause)
+        total = (await self.db.execute(total_stmt)).scalar_one()
+
+        # items
+        items_stmt = (
+            select(DriveComment)
+            .where(where_clause)
+            .options(selectinload(DriveComment.author))
+            .order_by(DriveComment.path.asc(), DriveComment.created_at.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        items = (await self.db.execute(items_stmt)).scalars().all()
+
+        return list(items), total
+
+    async def rebuild_paths(
+        self,
+        *,
+        file_id: Optional[int] = None,
+        folder_id: Optional[int] = None,
+    ) -> int:
+        """重算指定 file/folder 下所有评论的 path (W68 PR11 数据修复 CLI)
+
+        用法:
+        - 数据迁移后 path 缺失/错误时跑
+        - migration 066 已自动 UPDATE 现有数据, 此函数是手动修复入口
+        - CLI: `python -m app.scripts.rebuild_drive_comment_paths --file-id 42`
+
+        Args:
+            file_id / folder_id: 二选一 (无 = 不允许全表 UPDATE, 防止误操作)
+
+        Returns:
+            更新的 comment 数
+
+        Notes:
+            - 走 PostgreSQL WITH RECURSIVE (同 migration 066 逻辑)
+            - 1 次 query 完成, 不用 ORM 对象级 UPDATE
+            - 走 file_id 索引限定范围, 防全表扫
+        """
+        if (file_id is None) and (folder_id is None):
+            raise DriveCommentServiceError(
+                "rebuild_paths 必须指定 file_id 或 folder_id 之一",
+                status_code=400,
+            )
+        if (file_id is not None) and (folder_id is not None):
+            raise DriveCommentServiceError(
+                "rebuild_paths 不能同时指定 file_id 和 folder_id",
+                status_code=400,
+            )
+
+        target_col = "file_id" if file_id is not None else "folder_id"
+        target_val = file_id if file_id is not None else folder_id
+
+        # 走 raw SQL 走 WITH RECURSIVE
+        # 注意: 用 SQLAlchemy text + execute
+        from sqlalchemy import text
+
+        sql = text(
+            f"""
+            WITH RECURSIVE comment_path_calc AS (
+                SELECT
+                    id,
+                    parent_id,
+                    '/'::text AS path
+                FROM drive_comments
+                WHERE parent_id IS NULL
+                  AND {target_col} = :target_val
+
+                UNION ALL
+
+                SELECT
+                    c.id,
+                    c.parent_id,
+                    (cp.path || cp.id::text || '/')::text AS path
+                FROM drive_comments c
+                INNER JOIN comment_path_calc cp ON c.parent_id = cp.id
+                WHERE c.{target_col} = :target_val
+            )
+            UPDATE drive_comments dc
+            SET path = cpc.path
+            FROM comment_path_calc cpc
+            WHERE dc.id = cpc.id
+              AND dc.{target_col} = :target_val
+            """
+        )
+        result = await self.db.execute(sql, {"target_val": target_val})
+        await self.db.commit()
+        updated_count = result.rowcount or 0
+
+        logger.info(
+            f"[DriveCommentService.rebuild_paths] {target_col}={target_val} "
+            f"updated {updated_count} comments"
+        )
+        return updated_count
+
+    async def get_breadcrumb(
+        self, comment_id: int
+    ) -> List[DriveComment]:
+        """拿祖先链 (W68 PR11, 1 query 走 path LIKE)
+
+        Args:
+            comment_id: 目标评论 id
+
+        Returns:
+            ancestors + current (depth 升序, 顶层在前)
+
+        Raises:
+            DriveCommentServiceError(404) 评论不存在
+
+        Notes:
+            - 走 path LIKE '%/X/%' (用 GIN trigram 索引)
+            - 1 query 拿祖先链, 不用 ORM 自连接递归
+        """
+        # 先拿目标评论 (必须存在)
+        current = (await self.db.execute(
+            select(DriveComment)
+            .where(DriveComment.id == comment_id)
+            .options(selectinload(DriveComment.author))
+        )).scalar_one_or_none()
+        if current is None:
+            raise DriveCommentServiceError(
+                f"Comment id={comment_id} 不存在", status_code=404
+            )
+
+        # 走 path LIKE 拿祖先链
+        # 例: current.path='/1/2/3/42/' → path LIKE '%/1/%' (depth 1)
+        #                                   OR '%/1/2/%' (depth 2)
+        #                                   OR '%/1/2/3/%' (depth 3)
+        # 简化: 全部 path segments 都包含就算祖先
+        # 例: current.path='/1/2/3/42/' → split → ['1','2','3','42']
+        # 父评论 path 必然包含 '/1/', '/1/2/', '/1/2/3/' 中至少一个
+
+        # 取 ancestors: file_id 或 folder_id 必须与 current 一致
+        if current.file_id is not None:
+            target_cond = DriveComment.file_id == current.file_id
+        else:
+            target_cond = DriveComment.folder_id == current.folder_id
+
+        # 解析 current.path 拿祖先 ID 集合
+        # path='/1/2/3/42/' → segments=['1','2','3','42'] → ancestor_ids=[1,2,3]
+        ancestor_ids: list = []
+        if current.path and current.path != "/":
+            segments = [s for s in current.path.split("/") if s]
+            ancestor_ids = [int(s) for s in segments[:-1]]  # 去掉最后一个 (是 current 自己)
+
+        if not ancestor_ids:
+            # 顶层评论, 无祖先
+            return [current]
+
+        # 1 query: 拿祖先 + current 一起
+        stmt = (
+            select(DriveComment)
+            .where(
+                DriveComment.id.in_(ancestor_ids + [current.id]),
+                target_cond,
+            )
+            .options(selectinload(DriveComment.author))
+            .order_by(DriveComment.path.asc(), DriveComment.created_at.asc())
+        )
+        all_rows = (await self.db.execute(stmt)).scalars().all()
+
+        # 按 path 升序排 (顶层 '/...') 已经在前
+        # 防御: 如果 GIN trigram 索引让某些祖先未命中, 这里补查
+        found_ids = {r.id for r in all_rows}
+        missing = [aid for aid in ancestor_ids if aid not in found_ids]
+        if missing:
+            missing_stmt = (
+                select(DriveComment)
+                .where(DriveComment.id.in_(missing))
+                .options(selectinload(DriveComment.author))
+            )
+            missing_rows = (await self.db.execute(missing_stmt)).scalars().all()
+            all_rows = list(all_rows) + list(missing_rows)
+
+        # 按 depth 排序 (path 越短 = depth 越小)
+        all_rows.sort(key=lambda c: (len(c.path or "/"), c.id))
+
+        return all_rows
 
     # ==========================================================================
     # 详情
