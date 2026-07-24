@@ -255,6 +255,15 @@ class Settings(BaseSettings):
     AGENT_THINKING_MODE_DEEP_MAX_TOOL_TOKENS: int = 1500  # deep Phase 1 tool loop max_tokens (允许更复杂工具调用)
     AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR: int = 30  # deep 模式单用户每小时限次 (防 DeepSeek 7B 满载)
 
+    # ========================================================================
+    # 2026-07-24 W68 第 10 批 C-3: PWA 浏览器推送 VAPID 密钥持久化目录
+    # - 部署必做: docker-compose.yml app service 加 volume mount /data/push:/data/push:rw
+    # - 跑 scripts/setup_vapid_persistence.sh 一次创建密钥
+    # - 重启 app 后密钥保持不变 (旧订阅者无需重新订阅)
+    # - 默认 /data/push (Linux 云 server + docker 容器内), 本地可改 .env
+    # ========================================================================
+    PUSH_VAPID_DIR: str = "/data/push"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

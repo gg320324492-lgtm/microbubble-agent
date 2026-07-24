@@ -1,4 +1,4 @@
-"""push_service — v3.2 PWA 浏览器推送服务 (2026-07-24, W68 第 7 批 B-3)
+"""push_service — v3.2 PWA 浏览器推送服务 (2026-07-24, W68 第 7 批 B-3 + W68 第 10 批 C-3)
 
 核心职责:
 1. generate_vapid_keys(): 启动时生成 + 持久化到 in-memory cache (VAPID 密钥)
@@ -23,10 +23,18 @@
 - notification_service.push_with_priority 同时调 WS + push_service (跨端推送)
 
 注意:
-- VAPID 密钥启动时生成, 重启会生成新 key (老 subscription 失效)
-  实际生产用文件持久化 (deployment 必做), 文档记录
+- VAPID 密钥启动时生成, **必须**持久化到 settings.PUSH_VAPID_DIR
+  (默认 /data/push/), 配 docker volume mount, 否则每次重启生成新 key
+  → 所有用户 subscription 失效 → 用户需手动重新订阅
+  部署必做见 docs/push-vapid-persistence-deploy.md
 - payload 加密依赖 cryptography (python-jose 已带), **不需要** pywebpush
 - HTTP POST 必须 User-Agent + TTL header (RFC 8030)
+
+W68 第 10 批 C-3 增强 (2026-07-24):
+- VAPID 路径改走 settings.PUSH_VAPID_DIR (默认 /data/push, 可环境变量覆盖)
+- atomic write 强化: dir 先 mkdir -p + 写 .tmp + os.replace (rename) 原子替换
+  (原实现已有, 现在加目录权限校验 + 失败原因 log)
+- 文件加载失败/不存在 fallback 到内存生成 (容器只读 fs 场景)
 """
 import asyncio
 import base64
@@ -48,6 +56,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.redis import get_redis
 from app.models.base import utcnow
 from app.models.push_subscription import (
@@ -59,17 +68,30 @@ from app.models.push_subscription import (
 logger = logging.getLogger(__name__)
 
 # ==========================================================================
-# 配置 (环境变量覆盖, 缺失走默认)
+# 配置 (W68 第 10 批 C-3: 走 settings, 不再硬编码 os.environ.get)
 # ==========================================================================
 
-# VAPID private key 文件路径 (deployment 必做: 持久化到固定路径,
-# 重启加载避免用户全部重新订阅)
-VAPID_KEY_FILE = os.environ.get(
-    "PUSH_VAPID_KEY_FILE", "/data/push/vapid_private.pem",
+# VAPID 持久化目录 (deployment 必做: 挂 docker volume, 重启加载避免用户全部重新订阅)
+# 默认 /data/push, 可通过 PUSH_VAPID_DIR 环境变量覆盖 (settings.py)
+_VAPID_DIR_DEFAULT = "/data/push"
+
+# 兼容老路径: 优先从 settings 读, 缺失回退默认
+VAPID_DIR = getattr(settings, "PUSH_VAPID_DIR", None) or os.environ.get(
+    "PUSH_VAPID_DIR", _VAPID_DIR_DEFAULT,
 )
-VAPID_PUBLIC_KEY_FILE = os.environ.get(
-    "PUSH_VAPID_PUBLIC_KEY_FILE", "/data/push/vapid_public.pem",
-)
+
+# 私钥/公钥 文件路径 (VAPID_DIR 下, 不单独 override)
+VAPID_KEY_FILE = os.path.join(VAPID_DIR, "vapid_private.pem")
+VAPID_PUBLIC_KEY_FILE = os.path.join(VAPID_DIR, "vapid_public.pem")
+
+# 兼容老环境变量覆盖 (PUSH_VAPID_KEY_FILE / _PUBLIC_KEY_FILE 优先)
+_OVERRIDE_PRIV = os.environ.get("PUSH_VAPID_KEY_FILE")
+_OVERRIDE_PUB = os.environ.get("PUSH_VAPID_PUBLIC_KEY_FILE")
+if _OVERRIDE_PRIV:
+    VAPID_KEY_FILE = _OVERRIDE_PRIV
+if _OVERRIDE_PUB:
+    VAPID_PUBLIC_KEY_FILE = _OVERRIDE_PUB
+
 VAPID_SUBJECT = os.environ.get(
     "PUSH_VAPID_SUBJECT", "mailto:admin@mnb-lab.cn",
 )
@@ -107,12 +129,18 @@ class VAPIDKeys:
     - 服务端用 ES256 (P-256 ECDSA) 签名 JWT
     - 浏览器验证服务端身份, 防止任意服务推送到 endpoint
     - public key 客户端用, private key 服务端用
+
+    W68 第 10 批 C-3: 增强持久化
+    - 目录优先 mkdir (PermissionError 走内存 fallback)
+    - 写 tmp → os.replace 原子替换 (防半写状态)
+    - 加载/生成失败均 log 详细原因, 便于排查
     """
 
     def __init__(self) -> None:
         self.private_key: Optional[ec.EllipticCurvePrivateKey] = None
         self.public_key: Optional[ec.EllipticCurvePublicKey] = None
         self.public_key_b64url: str = ""  # base64url (无 padding) → 客户端用
+        self.source: str = "unknown"  # 'file' / 'memory' (诊断用)
 
     def load_or_generate(self) -> None:
         """启动时调用: 文件存在则加载, 不存在则生成+保存
@@ -122,24 +150,40 @@ class VAPIDKeys:
         if os.path.exists(VAPID_KEY_FILE) and os.path.exists(VAPID_PUBLIC_KEY_FILE):
             try:
                 self._load_from_files()
-                logger.info("[PUSH] VAPID 密钥从文件加载: %s", VAPID_KEY_FILE)
+                self.source = "file"
+                logger.info(
+                    "[PUSH] VAPID 密钥从文件加载: %s (持久化生效, 旧订阅者保留)",
+                    VAPID_KEY_FILE,
+                )
+                self.public_key_b64url = self._encode_public_key()
                 return
             except Exception as e:
-                logger.warning("[PUSH] 文件加载失败, 重新生成: %s", e)
+                logger.warning(
+                    "[PUSH] 文件加载失败, 重新生成: %s (file=%s)",
+                    e, VAPID_KEY_FILE,
+                )
 
         # 生成新密钥 + 持久化
         try:
             self._generate_and_save()
-            logger.info("[PUSH] VAPID 密钥已生成 + 持久化: %s", VAPID_KEY_FILE)
+            self.source = "file"
+            logger.info(
+                "[PUSH] VAPID 密钥已生成 + 持久化: %s (注意: 旧订阅者需重新订阅)",
+                VAPID_KEY_FILE,
+            )
         except Exception as e:
             # 持久化失败 (容器 / 只读 fs) 不阻塞, 用内存密钥
-            logger.warning("[PUSH] VAPID 持久化失败, 用内存密钥: %s", e)
+            logger.warning(
+                "[PUSH] VAPID 持久化失败, 用内存密钥 (重启会丢): %s",
+                e,
+            )
             self._generate_in_memory()
+            self.source = "memory"
 
         self.public_key_b64url = self._encode_public_key()
 
     def _load_from_files(self) -> None:
-        with open(VAPID_PRIVATE_KEY_FILE, "rb") as f:
+        with open(VAPID_KEY_FILE, "rb") as f:
             self.private_key = serialization.load_pem_private_key(
                 f.read(), password=None,
             )
@@ -147,7 +191,17 @@ class VAPIDKeys:
             self.public_key = serialization.load_pem_public_key(f.read())
 
     def _generate_and_save(self) -> None:
-        os.makedirs(os.path.dirname(VAPID_KEY_FILE), exist_ok=True)
+        # W68 第 10 批 C-3: 强化目录创建 + 权限校验
+        target_dir = os.path.dirname(VAPID_KEY_FILE)
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except PermissionError as e:
+            logger.error(
+                "[PUSH] 无法创建 VAPID 目录 %s (权限不足): %s",
+                target_dir, e,
+            )
+            raise
+
         self.private_key = ec.generate_private_key(ec.SECP256R1())
         self.public_key = self.private_key.public_key()
 
@@ -160,15 +214,30 @@ class VAPIDKeys:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
-        # 原子写 (tmp → rename)
+        # 原子写 (tmp → rename), 防半写状态被读到
         priv_tmp = VAPID_KEY_FILE + ".tmp"
         pub_tmp = VAPID_PUBLIC_KEY_FILE + ".tmp"
-        with open(priv_tmp, "wb") as f:
-            f.write(priv_pem)
-        with open(pub_tmp, "wb") as f:
-            f.write(pub_pem)
-        os.replace(priv_tmp, VAPID_KEY_FILE)
-        os.replace(pub_tmp, VAPID_PUBLIC_KEY_FILE)
+        try:
+            with open(priv_tmp, "wb") as f:
+                f.write(priv_pem)
+            with open(pub_tmp, "wb") as f:
+                f.write(pub_pem)
+            # os.replace 是原子操作 (Linux rename / Windows MoveFileEx)
+            os.replace(priv_tmp, VAPID_KEY_FILE)
+            os.replace(pub_tmp, VAPID_PUBLIC_KEY_FILE)
+        except Exception as e:
+            # 清理 tmp 残留 (避免下次启动误用半写文件)
+            for tmp in (priv_tmp, pub_tmp):
+                try:
+                    if os.path.exists(tmp):
+                        os.remove(tmp)
+                except OSError:
+                    pass
+            logger.error(
+                "[PUSH] VAPID 原子写失败: %s (tmp 已清理, 重试会重新生成)",
+                e,
+            )
+            raise
 
     def _generate_in_memory(self) -> None:
         self.private_key = ec.generate_private_key(ec.SECP256R1())
