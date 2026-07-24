@@ -64,3 +64,14 @@ DesktopFileCommentsView (onMounted)
 
 - e2e: `web/tests/e2e/desktop_comment_v32.spec.js` (5 场景: emoji 上传 / mention 预览 / breadcrumb 渲染 / reaction 聚合 / 5 层深链)。
 - 回归: `desktop_drive_comments.spec.js` + `desktop_drive_mention.spec.js` (17 test) 全过。
+
+## §5 TabBar Drive 入口 (W68 第 11 批 B-2)
+
+移动端底部 `TabBar` 从 5 项扩展为 6 项，顺序固定为：**首页 / 网盘 / 听会 / 对话 / 任务 / 我的**。网盘是高频入口，必须放在首页之后、听会之前，不得沉到末尾。
+
+- 配置项：`{ name: 'drive', path: '/m-drive', title: '网盘', icon: 'folder' }`。
+- 路由：`/m-drive` 复用 `MobileDriveView.vue`，不复制网盘业务组件。
+- active 规则：`/m-drive` 必须映射到 `drive`，不能直接依赖路由名 `MobileDrive` 的小写结果。
+- 响应式：6 项平均分配可用宽度，item 允许收缩且 label 禁止换行；375px 移动端 viewport 不出现横向滚动。
+- Dashboard：快捷入口同步为 6 项并采用 3 列网格，网盘入口同样指向 `/m-drive`。
+- e2e：`web/tests/e2e/mobile_tabbar_drive.spec.js` 覆盖 6 项显示、点击跳转和 375px viewport 三个场景。

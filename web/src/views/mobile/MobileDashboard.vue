@@ -117,7 +117,7 @@
  *
  * PR #8a: 简化版（不用桌面兔子/云朵装饰）
  * - 欢迎卡片 + 问候语
- * - 5 个快捷入口（聊/任务/会议/知识/我的）
+ * - 6 个快捷入口（聊/网盘/任务/会议/知识/我的）
  * - 3 个数据统计卡片
  * - 最近 5 条待办任务
  */
@@ -156,6 +156,7 @@ const currentDate = computed(() => {
 // v77 P2.6-E.1: bg → colorClass（_runtime-style-tokens.scss .quick-icon--*）
 const quickActions = [
   { icon: '💬', label: '智能对话', path: '/chat', colorClass: 'quick-icon--chat' },
+  { icon: '📁', label: '课题组网盘', path: '/m-drive', colorClass: 'quick-icon--drive' },
   { icon: '✅', label: '我的任务', path: '/tasks', colorClass: 'quick-icon--task' },
   { icon: '🎤', label: '会议', path: '/meetings', colorClass: 'quick-icon--meeting' },
   { icon: '📚', label: '知识库', path: '/knowledge', colorClass: 'quick-icon--knowledge' },
@@ -249,7 +250,7 @@ onMounted(() => {
 /* 快捷入口 */
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 16px;
   padding: 12px;

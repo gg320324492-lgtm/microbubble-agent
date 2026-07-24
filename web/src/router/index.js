@@ -114,6 +114,13 @@ const routes = [
         meta: { title: '课题组网盘', icon: 'Folder' }
       },
       {
+        // W68 第 11 批 B-2: Mobile TabBar 独立网盘入口，复用 MobileDriveView
+        path: '/m-drive',
+        name: 'MobileDrive',
+        component: resolveMobileOnly('MobileDriveView'),
+        meta: { title: '课题组网盘', icon: 'Folder', mobileOnly: true }
+      },
+      {
         // v2 PR2: 回收站 (顶级路由, 不嵌套在 /drive 下避免与 FileGrid 冲突)
         path: 'drive/trash',
         name: 'DriveTrash',
