@@ -43,6 +43,7 @@ def _import_application_routers():
         drive_version_diff,  # v2 PR9 文件版本对比
         drive_collab,  # v2 PR10 协同编辑 WS + REST
         drive_reactions,  # v2 PR12 表情反应 (W68 第 8 批 B-2)
+        drive_admin,  # v2 PR16 workspace 回收站 admin (W68 第 13 批 C-3)
         file_requests,
         knowledge,
         meeting,
@@ -97,6 +98,7 @@ def _import_application_routers():
         (drive_version_diff.router, {"prefix": "/api/v1", "tags": ["网盘文件版本对比"]}),  # v2 PR9
         (drive_collab.router, {"prefix": "/api/v1", "tags": ["网盘协同编辑"]}),  # v2 PR10
         (drive_reactions.router, {"prefix": "/api/v1", "tags": ["网盘表情反应"]}),  # v2 PR12 (W68 第 8 批 B-2)
+        (drive_admin.router, {"prefix": "/api/v1", "tags": ["Drive 回收站管理 (admin)"]}),  # v2 PR16 (W68 第 13 批 C-3)
         (push_notifications.router, {"prefix": "/api/v1", "tags": ["PWA 浏览器推送"]}),  # v3.2
         (upload_multipart.router, {"prefix": "/api/v1", "tags": ["分片上传"]}),
         (ws_notifications.router, {"prefix": "/api/v1"}),

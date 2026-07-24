@@ -112,9 +112,30 @@ class DriveFileVersion(Base, TimestampMixin):
         comment="是否当前版本 (1=是, 0=否, 同一 file_id 只有 1 行 =1)",
     )
 
+    # 2026-07-24 W68 第 13 批 C-3: Drive v2 PR16 workspace 回收站保留期
+    # - purged_at: NULL = 活跃版本, 非 NULL = 已软删 (Celery 30 天保留后物理删)
+    # - purged_by: 触发者 member.id (Celery auto-purge = 系统用户, admin manual = 真实用户)
+    # - 软删语义: workspace admin 删 file → Knowledge.deleted_at = now()
+    #   → Celery 每日 04:00 跑: JOIN Knowledge WHERE deleted_at < (now - 30d)
+    #   → set v.purged_at = now (软删), v.purged_by = 系统用户
+    # - 物理删语义: Celery 二次跑 (再 30 天后): WHERE v.purged_at < (now - 30d)
+    #   → hard DELETE (MinIO 对象 + DB 行)
+    purged_at = Column(
+        DateTime,
+        nullable=True,
+        comment="软删时间 (NULL=活跃, 非 NULL=Celery 已标记待清理)",
+    )
+    purged_by = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="RESTRICT"),
+        nullable=True,
+        comment="触发软删的 member.id (Celery auto / admin manual)",
+    )
+
     # 关系
     file = relationship("Knowledge", foreign_keys=[file_id])
     uploader = relationship("Member", foreign_keys=[uploader_id])
+    purger = relationship("Member", foreign_keys=[purged_by])
 
     # 索引: (file_id, version_number) 复合 — list_versions 高频
     __table_args__ = (
@@ -129,10 +150,23 @@ class DriveFileVersion(Base, TimestampMixin):
             "file_id", "is_current",
             unique=False,
         ),
+        # 2026-07-24 W68 第 13 批 C-3 (PR16): purged_at 高频过滤
+        Index(
+            "ix_drive_file_versions_purged_at",
+            "purged_at",
+            unique=False,
+        ),
+        # 复合 (purged_at, file_id): 物理删 step 2 + admin stats GROUP BY
+        Index(
+            "ix_drive_file_versions_purged_at_file_id",
+            "purged_at", "file_id",
+            unique=False,
+        ),
     )
 
     def __repr__(self):
         return (
             f"<DriveFileVersion(id={self.id}, file_id={self.file_id}, "
-            f"v{self.version_number}, size={self.size}, current={bool(self.is_current)})>"
+            f"v{self.version_number}, size={self.size}, current={bool(self.is_current)}, "
+            f"purged_at={self.purged_at})>"
         )
