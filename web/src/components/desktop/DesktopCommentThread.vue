@@ -37,6 +37,23 @@
     :data-depth="depth"
     :aria-label="`${comment.user_name || '用户'} 的评论`"
   >
+    <!-- 嵌套评论 breadcrumb (ancestor chain) — B-3 v3.2 -->
+    <nav
+      v-if="depth > 0 && breadcrumb.length > 0"
+      class="dci-breadcrumb"
+      aria-label="评论上下文"
+    >
+      <span
+        v-for="(node, i) in breadcrumb"
+        :key="node.id"
+        class="dci-crumb"
+      >
+        <span class="dci-crumb-user">@{{ node.username }}</span>
+        <span class="dci-crumb-snippet">{{ node.snippet }}</span>
+        <span v-if="i < breadcrumb.length - 1" class="dci-crumb-sep" aria-hidden="true">›</span>
+      </span>
+    </nav>
+
     <div class="dci-row">
       <div class="dci-avatar" :style="avatarStyle" aria-hidden="true">
         {{ avatarInitial }}
@@ -81,8 +98,53 @@
           </div>
         </template>
 
+        <!-- 反应汇总 bar (每 emoji count + 自己是否 react) — B-3 v3.2 -->
+        <div v-if="!isEditing && myReactions.length > 0" class="dci-reactions-bar">
+          <button
+            v-for="r in myReactions"
+            :key="r.emoji"
+            type="button"
+            class="dci-reaction-pill"
+            :class="{ mine: r.reacted_by_me }"
+            :aria-label="`${r.emoji} ${r.count} 人${r.reacted_by_me ? ' (含你)' : ''}`"
+            :aria-pressed="r.reacted_by_me"
+            @click="onToggleReaction(r.emoji)"
+          >
+            <span class="dci-reaction-emoji">{{ r.emoji }}</span>
+            <span class="dci-reaction-count">{{ r.count }}</span>
+          </button>
+        </div>
+
         <!-- 操作行 -->
         <div v-if="!isEditing" class="dci-actions">
+          <!-- emoji react 按钮 + hover popover — B-3 v3.2 -->
+          <div class="dci-react-wrap" @mouseenter="showEmojiPicker = true" @mouseleave="showEmojiPicker = false">
+            <button
+              type="button"
+              class="dci-action-btn dci-react-trigger"
+              aria-label="添加表情反应"
+              aria-haspopup="true"
+              :aria-expanded="showEmojiPicker"
+              @click="showEmojiPicker = !showEmojiPicker"
+            >
+              <span aria-hidden="true">😊</span>
+              <span>表情</span>
+            </button>
+            <div v-if="showEmojiPicker" class="dci-emoji-popover" role="menu">
+              <button
+                v-for="emoji in emojiWhitelist"
+                :key="emoji"
+                type="button"
+                class="dci-emoji-option"
+                :class="{ active: isReactedByMe(emoji) }"
+                role="menuitem"
+                :aria-label="`用 ${emoji} 反应`"
+                @click="onPickEmoji(emoji)"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+          </div>
           <button
             v-if="canReply"
             type="button"
@@ -148,12 +210,16 @@
           :username-map="usernameMap"
           :editing-comment-id="editingCommentId"
           :edit-draft="editDraft"
+          :reactions-map="reactionsMap"
+          :breadcrumb-map="breadcrumbMap"
+          :emoji-whitelist="emojiWhitelist"
           @reply="$emit('reply', $event)"
           @edit="$emit('edit', $event)"
           @toggle-resolved="$emit('toggle-resolved', $event)"
           @delete="$emit('delete', $event)"
           @save-edit="(id, content) => $emit('save-edit', id, content)"
           @cancel-edit="$emit('cancel-edit')"
+          @toggle-reaction="(id, emoji) => $emit('toggle-reaction', id, emoji)"
         />
       </li>
     </ul>
@@ -174,13 +240,43 @@ const props = defineProps({
   usernameMap: { type: Object, default: () => ({}) },
   editingCommentId: { type: [Number, String], default: null },
   editDraft: { type: String, default: '' },
+  // B-3 v3.2: emoji 反应 + breadcrumb (map 形式, 递归透传, 每节点按 comment.id 取)
+  reactionsMap: { type: Object, default: () => ({}) },  // { [commentId]: [{ emoji, count, reacted_by_me }] }
+  breadcrumbMap: { type: Object, default: () => ({}) }, // { [commentId]: [{ id, user_id, username, snippet }] }
+  emojiWhitelist: { type: Array, default: () => [] },   // 12 emoji 白名单
 })
 
 const emit = defineEmits([
   'reply', 'edit', 'toggle-resolved', 'delete', 'save-edit', 'cancel-edit',
+  'toggle-reaction',
 ])
 
 const collapsed = ref(false)
+const showEmojiPicker = ref(false)
+
+// === emoji 反应 ===
+// 只展示 count > 0 的 emoji, 保序 (map 内顺序)
+const myReactions = computed(() => {
+  const list = props.reactionsMap[props.comment.id] || []
+  return list.filter((r) => r && r.count > 0)
+})
+
+// 本节点 breadcrumb (从 map 按 comment.id 取)
+const breadcrumb = computed(() => props.breadcrumbMap[props.comment.id] || [])
+
+function isReactedByMe(emoji) {
+  const r = myReactions.value.find((x) => x.emoji === emoji)
+  return !!(r && r.reacted_by_me)
+}
+
+function onPickEmoji(emoji) {
+  showEmojiPicker.value = false
+  emit('toggle-reaction', props.comment.id, emoji)
+}
+
+function onToggleReaction(emoji) {
+  emit('toggle-reaction', props.comment.id, emoji)
+}
 
 // === 计算属性 ===
 const isOwner = computed(() => {
@@ -484,6 +580,135 @@ function onCancelEdit() {
 .dci-reply-item {
   list-style: none;
 }
+
+/* === B-3 v3.2: breadcrumb === */
+.dci-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 4px 8px;
+  background: var(--color-bg-page, #f5f7fa);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
+}
+
+.dci-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.dci-crumb-user {
+  color: var(--color-primary, #ff7a5c);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.dci-crumb-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.dci-crumb-sep {
+  color: var(--color-text-placeholder, #c0c4cc);
+  margin: 0 2px;
+}
+
+/* === B-3 v3.2: 反应汇总 bar === */
+.dci-reactions-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.dci-reaction-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--color-bg-page, #f5f7fa);
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dci-reaction-pill:hover {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.08));
+}
+
+.dci-reaction-pill.mine {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.12));
+  border-color: var(--color-primary, #ff7a5c);
+}
+
+.dci-reaction-emoji {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.dci-reaction-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #606266);
+}
+
+.dci-reaction-pill.mine .dci-reaction-count {
+  color: var(--color-primary, #ff7a5c);
+}
+
+/* === B-3 v3.2: emoji react 按钮 + popover === */
+.dci-react-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.dci-emoji-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding: 6px;
+  background: var(--color-bg-card, #fff);
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+}
+
+.dci-emoji-option {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 17px;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.1s;
+}
+
+.dci-emoji-option:hover {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  transform: scale(1.15);
+}
+
+.dci-emoji-option.active {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.16));
+}
 </style>
 
 <!-- v60-v67 教训: dark mode 跨组件覆盖必须放非 scoped <style> 块 -->
@@ -501,5 +726,20 @@ function onCancelEdit() {
 [data-theme="dark"] .dci-content :deep(.mention),
 [data-theme="dark"] .dci-mention-tag {
   background: rgba(255, 122, 92, 0.16);
+}
+
+[data-theme="dark"] .dci-breadcrumb,
+[data-theme="dark"] .dci-reaction-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-light, #3a3d45);
+}
+
+[data-theme="dark"] .dci-reaction-pill.mine {
+  background: rgba(255, 122, 92, 0.16);
+}
+
+[data-theme="dark"] .dci-emoji-popover {
+  background: var(--color-bg-card, #2a2d35);
+  border-color: var(--color-border-light, #3a3d45);
 }
 </style>
