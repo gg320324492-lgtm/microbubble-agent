@@ -311,10 +311,104 @@ docker compose restart app celery-worker
 
 ---
 
+## 8bis. W68 第 7 批 B-1 实施段 (2026-07-24, 真实实施收官)
+
+> **状态更新**: W68 第 5 批仅调研 + 骨架。**W68 第 7 批 B-1 完成 service 真实实施 + WS/REST endpoint + Celery task + e2e**。本段记录实际交付 (与上文 §2-§7 的"未来契约"对照)。
+
+### 8bis.1 交付清单 (6 文件)
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `app/services/drive_collab_service.py` | 改 (305 stub → 630+ 实施) | 9 方法真实实现 (含 pub/sub + 崩溃恢复) |
+| `app/api/v1/drive_collab.py` | 新建 (~330 行) | WS + 2 REST endpoint + 注册 main.py |
+| `app/services/drive_collab_tasks.py` | 新建 (~170 行) | flush (30s) + compress (7 天) Celery task |
+| `app/models/drive_document.py` | 改 (relationship 修正) | op_logs/document 显式 primaryjoin + viewonly |
+| `tests/test_drive_v2_pr10_collab_e2e.py` | 新建 (~290 行) | 6 场景 e2e (sqlite + fakeredis + 真 pycrdt) |
+| `docs/drive-v2-pr10-collab-editing.md` | 改 (本段) | §8bis 实施记录 |
+
+### 8bis.2 实际 endpoint (与 §2.1 契约的差异)
+
+**契约 §2.1 用 `/api/v1/drive/collab/{file_id}`, 实施改为 `/api/v1/drive/files/{file_id}/collab`** — 与 PR9 `/drive/files/{file_id}/versions` REST 命名风格对齐 (file 子资源统一 `/drive/files/{id}/*`)。
+
+| 端点 | 方法 | 鉴权 | 说明 |
+|------|------|------|------|
+| `/api/v1/drive/files/{file_id}/collab?token=<jwt>` | WS | JWT query + `check_file_owner_or_folder_admin` | Yjs 同步: init → op 双向 → Redis 广播 |
+| `/api/v1/drive/files/{file_id}/snapshot?meta=0\|1` | GET | `get_current_user` + 权限 | meta=0 二进制 octet-stream / meta=1 JSON 元信息 |
+| `/api/v1/drive/files/{file_id}/op` | POST | `get_current_user` + 权限 | 提交单条 op base64 (无 WS 场景) |
+
+**WS 协议 (JSON, op 走 base64)**:
+- client → server: `{"type":"op","payload":"<b64>","client_id":<uint>}` / `{"type":"ping"}`
+- server → client: `{"type":"init","state":"<b64>","version":0}` / `{"type":"op","payload":"<b64>","origin":<cid>}` / `{"type":"pong"}` / `{"type":"error","code":"...","message":"..."}`
+- WS close code: 4401 (鉴权失败) / 4403 (无权限) / 1011 (init 失败)
+
+### 8bis.3 snapshot 存储关键决策
+
+**drive_documents.ydoc_state 存全量 `Doc.get_update()` 字节, 不是 `get_state()` state vector**。原因: state vector 只是"我知道哪些 update"的摘要, 无法重建内容; 客户端 init 需全量 update 才能 apply 重建。
+
+### 8bis.4 Celery task (与 §4.2 契约对照)
+
+| 任务 | beat schedule | 实施 |
+|------|--------------|------|
+| `flush_ydoc_state_task(file_id=None)` | 30s | file_id=None 刷近 120s 有新 op 的活跃文档; state=None 从 op log 重放 |
+| `compress_op_logs_task()` | 24h | 删 7 天前 op log (删前 `recover_from_crash` 幂等重建确保内容已在 snapshot) |
+| ~~`cleanup_orphan_rooms_task`~~ | — | 留 W70 (collab-gateway 内存房间引入后才有意义) |
+
+`app/core/celery.py` 已注册 2 个 beat + `conf.imports` + `autodiscover` 双注册 (与 chat_share_tasks 模式一致)。
+
+### 8bis.5 pycrdt 真跑命令 (本机实测通过)
+
+```bash
+# e2e (本地, 不需 docker — sqlite + fakeredis + 真 pycrdt)
+cd <worktree> && SKIP_DB_SETUP=1 python -m pytest tests/test_drive_v2_pr10_collab_e2e.py -v
+# → 7 passed (get_or_create / apply_op / get_snapshot / subscribe_room / room_channel / flush / crash_recovery)
+
+# smoke (W68 第 5 批留, 仍通过)
+SKIP_DB_SETUP=1 python -m pytest tests/test_drive_v2_pr10_collab_smoke.py -q   # 6 passed
+
+# typing imports CI (方案 C 铁律 2)
+bash scripts/check_typing_imports.sh   # 156 文件 0 错误
+
+# pycrdt 双向 merge 验证
+python -c "import pycrdt; d1=pycrdt.Doc(); t1=d1.get('content',type=pycrdt.Text); t1+='hello '; d2=pycrdt.Doc(); t2=d2.get('content',type=pycrdt.Text); t2+='world'; d1.apply_update(d2.get_update()); d2.apply_update(d1.get_update()); print(str(t1)==str(t2), str(t1))"
+```
+
+### 8bis.6 部署必做 (W68 第 7 批 B-1 merge 后)
+
+```bash
+# 1. 跑 alembic 064 (W68 第 5 批已建, 若未部署)
+docker cp alembic/versions/064_drive_documents.py microbubble-agent-app-1:/app/alembic/versions/
+docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__
+docker exec microbubble-agent-app-1 alembic upgrade head
+
+# 2. requirements 加 pycrdt (若未加)
+echo "pycrdt==0.14.1" >> requirements.txt
+docker compose build app celery-worker
+
+# 3. 重启 app + celery (CLAUDE.md 752 行铁律 — Python 进程改动必重启)
+docker compose up -d app
+docker compose restart celery-worker   # 让新 flush/compress beat 生效
+
+# 4. 验证 Celery beat 有 2 个 collab task
+docker exec microbubble-agent-celery-worker-1 python -c \
+  "from app.core.celery import celery_app; print([k for k in celery_app.conf.beat_schedule if 'collab' in k])"
+```
+
+---
+
+## 9. 已知限制 (补充 W68 第 7 批 B-1)
+
+除上表外, 本次实施的 MVP 边界:
+- **无 in-memory collab-gateway**: 每次 op 即时从 DB snapshot 重建 doc → apply → 落库。高频输入 (>10 op/s) 场景性能待 W70 内存缓存优化。
+- **权限 MVP 统一门槛**: WS 连入 + snapshot + op 都用 `check_file_owner_or_folder_admin` (编辑权限隐含读)。W71 细分 read-only 观察者 (visibility=public 只读接入)。
+- **awareness (协作者光标) 未实现**: 契约 §2.1 的 `awareness` 事件留 W71 前端集成。
+
+---
+
 ## 10. 引用
 
 - 设计 doc: [drive-v2-pr10-collab-editing-design.md](./drive-v2-pr10-collab-editing-design.md)
 - memory: [memory/w68-route-5-drive-pr10-collab-2026-07-24.md](../memory/w68-route-5-drive-pr10-collab-2026-07-24.md)
+- memory (W68 第 7 批 B-1 实施): [memory/w68-route-7-b1-drive-pr10-collab-ws-2026-07-24.md](../memory/w68-route-7-b1-drive-pr10-collab-ws-2026-07-24.md)
 - 串单链铁律: CLAUDE.md §2026-07-24
 - pycrdt 0.14.1: https://pypi.org/project/pycrdt/
 - Yjs 13.6.x: https://github.com/yjs/yjs
