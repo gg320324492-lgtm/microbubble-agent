@@ -254,7 +254,18 @@
           />
         </el-form-item>
         <el-form-item label="任务描述">
-          <el-input v-model="newTask.description" name="newTask-description" type="textarea" :rows="3" placeholder="请输入任务描述" />
+          <el-input
+            ref="quickCommentInput"
+            v-model="newTask.description"
+            name="newTask-description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入任务描述 (支持 @ 提及成员, 例 @张三)"
+            class="dci-mention-input"
+            data-mention-input="desktop-dashboard-task"
+            @input="onQuickCommentInput"
+            @keydown="onQuickCommentKeydown"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -322,6 +333,7 @@ import { formatCompactDate } from '@/utils/format'
 import { getPriorityType, getPriorityLabel } from '@/utils/task'
 import { useMemberStore } from '@/stores/member'
 import { useUserStore } from '@/stores/user'
+import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
 import DashboardPet from '@/components/DashboardPet.vue'
 
 const memberStore = useMemberStore()
@@ -373,6 +385,23 @@ const updateTime = () => {
 onUnmounted(() => { window.removeEventListener('resize', handleResize) })
 
 const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' })
+
+// W68 第 13 批 C-2: 任务描述 quick input 复用 useMentionAutocomplete
+// selector 与 DesktopCommentInput 区分 (不同 view 不同隔离)
+const quickCommentInput = ref(null)
+const quickMention = useMentionAutocomplete({
+  textareaRef: quickCommentInput,
+  members: members,
+  name: 'desktop-dashboard-task',
+  selector: '[data-mention-input="desktop-dashboard-task"]',
+  keyboardSupport: true,
+  onSelect: (member) => {
+    // 任务描述里 @用户名 → 提示后端在描述里保留 @username (后端 mention parser 已支持)
+    ElMessage.info(`已添加 @${member.wechat_id || member.username} — 任务创建后会自动通知`)
+  },
+})
+function onQuickCommentInput() { quickMention.refresh() }
+function onQuickCommentKeydown(ev) { quickMention.handleKeydown(ev) }
 
 // 编辑相关
 const editingTask = ref(null)

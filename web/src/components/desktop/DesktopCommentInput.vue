@@ -34,7 +34,8 @@
         :maxlength="1000"
         show-word-limit
         resize="none"
-        class="dci-textarea"
+        class="dci-textarea dci-mention-input"
+        data-mention-input="desktop-comment-input"
         @input="onInput"
         @keydown="onKeydown"
         @focus="onFocus"
@@ -144,6 +145,9 @@ const mentionedPreview = computed(() => {
 const mention = useMentionAutocomplete({
   textareaRef: inputRef,
   members: props.membersList,
+  name: 'desktop-comment-input',
+  selector: '.dci-mention-input',
+  keyboardSupport: true,
   onSelect: (member, ctx) => {
     if (!ctx || ctx.triggerPos < 0) return
     const before = text.value.substring(0, ctx.triggerPos)
