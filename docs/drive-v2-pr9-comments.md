@@ -128,15 +128,36 @@ Content-Type: application/json
 
 **错误**: `403 FORBIDDEN` — 非 author.
 
-### 1.5 删除
+### 1.5 删除 (W68 第 12 批 C-2: 改软删 + 3 角色权限)
 
 ```http
 DELETE /api/v1/drive/comments/{comment_id}
 ```
 
-**权限**: 仅 author 本人. CASCADE 自动删所有子回复 (无残留).
+**权限** (满足任一):
+- author 本人 (`comment.author_id == user_id`)
+- file owner (`file.created_by == user_id`) — 仅当 `comment.file_id` 非 NULL
+- 平台 admin (`Member.role == 'admin'`)
 
-**错误**: `403 FORBIDDEN` — 非 author. `404 RESOURCE_NOT_FOUND` — 不存在.
+**行为 (W68 第 12 批 C-2 改造)**:
+- **软删**: 设 `deleted_at` + `deleted_by` 字段, 不 DELETE FROM
+- **保留 audit_log**: API 层同步写 AuditLog (action='delete', resource_type='comment')
+- **子回复保留**: 软删不 CASCADE, 父子关系保留供追溯
+- **幂等**: 已软删评论再次删 → 404 (视为不存在)
+
+**错误**:
+- `403 FORBIDDEN` — 非 author / 非 file owner / 非 admin
+- `404 RESOURCE_NOT_FOUND` — 评论不存在 OR 已软删 (幂等)
+
+**Schema 增量** (alembic 070_drive_comments_soft_delete):
+- `deleted_at TIMESTAMPTZ NULL` — 软删时间戳
+- `deleted_by INT NULL FK members(id) ON DELETE SET NULL` — 删除人
+- `ix_drive_comments_deleted_at` 索引
+
+**前端行为变化**:
+- 普通列表 API (`GET /comments` / `GET /comments?path_prefix=...`) 默认过滤 `deleted_at IS NULL`
+- 软删评论不在前端展示 (类似已删除邮件不进收件箱)
+- 历史评论数据保留在 DB, 供审计/追溯
 
 ### 1.6 标记已解决 (幂等)
 
