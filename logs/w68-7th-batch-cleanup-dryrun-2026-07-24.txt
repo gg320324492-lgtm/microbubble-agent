@@ -1,0 +1,34 @@
+================================================================
+[DRY-RUN] W68 第 7 批 worktree + 分支清理预览 (默认模式)
+================================================================
+
+执行 w68_7th_cleanup.sh --apply 才会真删 (主指挥拍板)
+
+[1/4] 待清理 worktree + 分支清单 (15 项):
+
+  [ 1] agent-a00103ef46303806c          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 2] agent-a83d1f096269a7455          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 3] agent-a785756f198d623ee          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 4] agent-a862622ec21e4f37b          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 5] agent-a15b80d0cf50a32ec          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 6] agent-a68b44365140e9956          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 7] agent-a9ab41846632dd8cc          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 8] agent-a8e0f5a43fed97bbe          | WT:NO  | branch-local:YES | branch-remote:YES
+  [ 9] agent-a2fa62d9143ea67e4          | WT:NO  | branch-local:YES | branch-remote:YES
+  [10] agent-af1bda3114821c1f7          | WT:NO  | branch-local:YES | branch-remote:YES
+  [11] agent-a4ef176d4f5c8a3c0          | WT:NO  | branch-local:YES | branch-remote:YES
+  [12] agent-a5b02d4327953632f          | WT:NO  | branch-local:YES | branch-remote:YES
+  [13] agent-ab788b1ac3a6db3da          | WT:NO  | branch-local:YES | branch-remote:YES
+  [14] agent-af25e11b3f78258cc          | WT:NO  | branch-local:YES | branch-remote:YES
+  [15] agent-ac0caaff1a01d57bb          | WT:NO  | branch-local:YES | branch-remote:YES
+
+统计: 总计 15 项 | 存在 worktree 0 | 缺失 15
+      存在 local branch 15
+
+[2/4] 保护清单 (不动):
+  - worktree: priceless-grothendieck-6a2998 (DO NOT TOUCH)
+  - branch:   claude/priceless-grothendieck-6a2998 (主指挥本地 hot-fix #18 仍跑)
+
+================================================================
+[DRY-RUN COMPLETE] 不真删. 主指挥拍板后跑: w68_7th_cleanup.sh --apply
+================================================================
