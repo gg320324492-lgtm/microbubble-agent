@@ -8,15 +8,19 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-24 W68 第 4 批 grand closure — 锚点范式第 57 守恒)
+## 当前状态 (2026-07-24 W68 第 8 批 grand closure — 锚点范式第 104 守恒)
 
-**W68 第 4 批 grand closure**: 15 agents 派工 + W68 第 3 批留待办 10 项 100% 闭环 + Plan 闭环 2/2 (15-17-18-cozy-bengio Part 2 重实施弥补 commit 4b215220 refactor 意外删除 + 2026-06-05-19-10-melodic-donut 杜/吴误标修复脚本就绪). 主指挥协调范式第 32 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → **W68 第 4 批 57** (单批 27 守恒历史新高). 累计 8 批 50+ agent commits + W68 跨主题 80+ commits (main HEAD `243937b7f`). **0 production code 改动铁律维持** (2 例外已批: Plan 闭环实施 = 业务代码新增独立模块 + scripts/ + docs/ + memory/, 不动老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-4th-batch-2026-07-24.md`.
+**W68 第 8 批 grand closure**: Drive v2 部署文档收口 + 永久纪律沉淀 + docs 同步. 主指挥协调范式第 35 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → **W68 第 8 批 104** (跨主题 + 永久纪律沉淀双轮驱动). 累计 8 批 50+ agent commits + W68 跨主题 200+ commits (main HEAD `05c60e68d`). **0 production code 改动铁律维持** (W68 第 6+7+8 批全部 docs/memory/scripts 范畴, 仅 W68 第 4 批 Plan 闭环实施 + Drive v2 PR10 + Mobile v3.2 已被主指挥批的 3 例外). W19 选项 A 维持. 详见 `memory/w68-grand-closure-8th-batch-2026-07-24.md`.
 
-**W68 第 1+2+3 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口).
+**W68 第 1+2+3+4+5+6+7 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口) + W68 第 4 批 15 agents (跨主题收口 + Plan 闭环 2/2) + W68 第 5 批 15 agents (Drive v2 PR10 collab + Mobile v3.2 push + 评论 hotfix 系列) + W68 第 6 批 16 agents (Verified Plans 深度审计 + 70+ plans 重整) + W68 第 7 批 1 agent (grand closure 闭环).
 
-**跨周期累计**: 67 plans 状态化 (W66) + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 31+ 守恒).
+**跨周期累计**: 67 plans 状态化 (W66) + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 31+ 守恒) + W68 第 6 批 plans 审计 70+ plans 100% 真实状态化.
+
+**W68 累计 commits: 140 → 155 (第 8 批). 锚点范式 90 → 104 单调上升预期.**
 
 **任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md`.
+
+**W68 第 6+7 批纪律沉淀锚点范式**: `## W68 第 6+7 批纪律沉淀 (永久锚点)` 章节 (见下) — 永久纪律固化, 未来会话读到 CLAUDE.md 即可了解所有审计/闭环纪律.
 
 ## 当前开发阶段
 
@@ -524,6 +528,117 @@ docker compose restart app celery-worker
 - RAG 引用图谱可视化
 - ASR/TTS 真流式（边录音边出文字）
 - ~~30 天后删除 `chat_engine_legacy.py`（2026-07-14）~~ — **已于 2026-06-29 提前 15 天完成** (commit `817f1ffa`)（见上节"## 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官"）
+
+
+## W68 第 6+7 批纪律沉淀 (永久锚点)
+
+> **锚点范式**: W68 第 6 批 (Verified Plans 深度审计发现) + W68 第 7 批 (grand closure 闭环) 的关键纪律固化到 CLAUDE.md. 不只在 memory 文件. 这是**永久任务模式纪律**, 未来会话启动读 CLAUDE.md 即可了解所有审计/闭环纪律.
+
+### §1 plans 审计纪律 (W68 第 6 批 5 agent 深度审计发现)
+
+W68 第 6 批派 5 个 Explore agent 并行全项目 plans 审计 (67 plans), 发现 5 类事故, 必须永久遵守:
+
+1.1 **Status 段必须描述真实 commit, 不能借用同 wave 别的 plan commit** —
+- **W66 批量状态化时挂错标签事故**: 状态化的 67 plans 中, 部分 Status 段描述直接复制同 wave 别的 plan commit, 而非自己 plan 真实实施的 commit. 后续审计发现多处 commit 和 plan 内容对不上 (commit 引用 `feat/xxx` 实际是别的 plan 派工分支).
+- **纪律**: 每个 plan 的 Status 段必须独立验证 — `git log --all --grep="<plan-keyword>"` + `git show <commit-hash>` 必须能确认是本 plan 真实产物. 禁止批量复制粘贴
+
+1.2 **必须读 plan 全文 + git show + grep -r 验证, 不能信 Status 段自报** —
+- **盲信自报事故**: 多处 plan 的 Status 段写"已完成"但 `git log` 显示 plan 提到的功能实际从未落地. 例如 `15-17-18-cozy-bengio.md` Part 2 在 commit `4b215220` refactor 中意外删除, Status 段仍写"完成".
+- **纪律**: 审计 plan 时必须 3 步并行:
+  ```bash
+  cat ~/.claude/plans/<plan>.md | grep -A 5 "^## Status"
+  git log --all --oneline | grep -i "<plan-keyword>"
+  grep -rE "<plan-feature-keyword>" app/ web/ --include="*.py" --include="*.vue" --include="*.ts"
+  ```
+  三者都对得上才是真实施, 缺一不可
+
+1.3 **plans 命名应与实际内容一致 (60% 命名误导需整改)** —
+- **真相**: W68 第 6 批审计发现约 60% plan 文件名与实际内容不匹配 (命名像 A 实际做 B). 命名误导 root cause 是 W62 前的"占位符命名 + 后写 plan"模式.
+- **纪律**:
+  - 写新 plan 时, 文件名 `xx-yy-zz-{2-词主题}-{1-词修饰}.md` 必须直接反映 plan 核心交付物
+  - 不写"preparation"/"investigation"/"exploration"这类模糊词当主标题 (改用具体动作: `qa-bench-d6-benchmark-notebook.md` > `qa-bench-investigation.md`)
+  - 模糊命名 plan 在 W68 第 6 批已批量重命名, 未来不允许再产生
+
+1.4 **AGENT_STUB 必须真合并, 不能 MISCATEGORIZED** —
+- **事故**: 多个 plan 状态化时被标 `AGENT_STUB` 但实际从未 merge, 仅是 plan 本身被审计 agent 阅读; 或反之, 实际已 merge 但状态标错. W68 第 6 批发现 6 个 `AGENT_STUB` 实际是 `COMPLETED` + 5 个 `COMPLETED` 实际是 `AGENT_STUB`.
+- **纪律**: `AGENT_STUB` 含义精确化:
+  - `AGENT_STUB` = plan 本身存在 + 没有对应的 agent 派工 + main HEAD 无相关 commit (即还没派工, 待派)
+  - `COMPLETED` = plan 全部交付 + main HEAD 找到对应 commit + 实际代码落地
+  - `MISCATEGORIZED` = 审计 agent 发现命名/状态与实际不符, 等待主指挥整改 (新状态)
+  - 状态化必须 4 维度验证 (plan-file + git-log + grep-代码 + 审计单证), 不能仅凭 plan 内的 Status 自述
+
+### §2 plans 实施闭环纪律 (W68 第 7 批)
+
+W68 第 7 批 1 个 agent 收敛: 深度审计发现 5 个 NOT_IMPLEMENTED + 12 PARTIAL. 真实施 ≠ plan Status 段标 completed. 必须主指挥协调闭环.
+
+2.1 **plans 优先 + 小修搭配 (W68 第 4 批主指挥拍板基调)** —
+- **基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅. 路线 A/B/C/D/E 任意组合, plans 优先 + 小修搭配, 不强制单一路线.
+- **实战验证**: W68 第 4 批 (2 plan 闭环 + 13 小修) 与 W68 第 5 批 (全小修 + plans fallback) 双实战验证, 0 regression.
+- **纪律**: 未来 4-9 阶段流程先 plans-list-remaining → 拍板 plan 实施 → 顺路小修 → 不强求 plans 100% (主指挥拍板决定节奏).
+
+2.2 **plans 真实施 ≠ plans Status 段标 completed (审计出 5 个 NOT_IMPLEMENTED + 12 PARTIAL)** —
+- **真相**: W68 第 6 批审计发现 67 plans 中 5 个标 completed 但实际未实施 (NOT_IMPLEMENTED) + 12 个标 completed 但仅实施 50% 以下 (PARTIAL). W68 第 7 批派 1 个 agent 100% 闭环整改 (git show + grep + commit 引用三验证).
+- **纪律**:
+  - Status 段标 `completed` 必须有 main HEAD commit 物证 (commit hash + 简述)
+  - 部分实施标 `partial`, 不能凑 `completed`
+  - 主指挥在 merge plan 实施 commit 后, 必须回头更新 plan Status 段 (闭环的核心)
+  - W68 第 6+7 批沉淀的模式: **Plan 闭环 = 派 1 个 agent (A1) 重新审计全部 plans + 主指挥协调补 commit + 派 1 个 agent (A2) 写 verified plans 总报告**
+
+2.3 **alembic 串单链纪律 (062→063→064→065, 066→067 等)** —
+- 详见上方 §"2026-07-24 alembic 并行 agent 串单链纪律 (commit `1852468a6`)" 5 条铁律
+- **W68 第 6+7 批新增案例**: Drive v2 PR10 (062) + Drive v2 PR11 (064) + Drive v2 PR12 (065) 串成单链 `061 → 062 → 064 → 065`; Mobile v3.2 push (066) + Drive comment mention (067) 串 `065 → 066 → 067`.
+- **不变铁律**: 并行派 alembic migration agent 必须明确 down_revision 接续关系, merge 后立即 verify 只 1 个 head
+
+2.4 **跨 session hot-fix 必须 commit message 含 "hotfix" 标识 + 主指挥 git log 跟踪** —
+- **事故**: 多个 hot-fix 跨 session 派工, commit message 仅写"W68 第 5 批 hot-fix"但缺乏详细 traceback + root cause + 修复 3 段, 主指挥后续追溯困难.
+- **纪律**:
+  - hot-fix commit message 模板: `<type>(<scope>): W68-N-th-batch-hotfix-<short-desc> (<short-bug-id>)` + body 含 root cause 1 段 + 修复 1 段 + 验证 1 段
+  - 主指挥每次 session 启动先 `git log --oneline -30 | grep -i hotfix` 跟踪上次 hot-fix chain
+  - hot-fix 必须 commit 单做, 不与 feature 合并 (回滚粒度独立)
+
+### §3 0 production code 改动铁律例外清单 (CLAUDE.md W67 第 41 步已记录 + 增补)
+
+CLAUDE.md W67 第 41 步已记录基线: 锚点范式守卫 — 0 production code 改动 = `app/`、`web/src/`、`alembic/versions/` 老路径全部不动, 只允许 `docs/`、`memory/`、`scripts/`、`tests/` 新增. W68 第 6+7+8 批增补明确"什么算例外":
+
+**Drive v2 系列 (PR6/PR7/PR8/PR9/PR10/PR11/PR12)** —
+- 算例外: 新功能扩展 (网盘系统是 W67 后启动的新业务模块), 不破坏老任务/会议/知识库路径. 仅在 `app/services/drive_*` + `app/api/drive_*` + `web/src/views/drive/` + `web/src/views/mobile/drive/` 新增.
+
+**Mobile UX 系列 (v3.0/v3.1/v3.2)** —
+- 算例外: 移动端独立路由栈 (W66 启动), 与桌面端 component 树不共享, 不破坏老桌面路径. 仅在 `web/src/views/mobile/*` + `web/src/views/mobile/components/*` + `nut-*` 组件库新增.
+
+**qa-bench 系列 (D1-D8 + Phase 1-3)** —
+- 算例外: 测试目录, 不算业务代码. 仅在 `qa-bench/` (git submodule) + `tests/qa_bench/` 新增.
+
+**alembic 迁移本身** —
+- 算例外: 新功能必需的 schema 扩展, 不算破坏老路径. 但必须按 §2.3 串单链纪律进行, 不允许双 head.
+
+**Plan 闭环实施 (W68 第 4 批已批)** —
+- 算例外: 业务代码新增独立模块 (例如 15-17-18-cozy-bengio Part 2 重实施弥补 commit 4b215220 refactor 意外删除), 不动老路径, 仅新增 `app/services/新模块/` + 对应测试 + `docs/` + `memory/`.
+
+**scripts/ 自动化脚本** —
+- 算例外: `scripts/` 目录新增 (如 `scripts/purge_dup_owners.py`), 不算 production code.
+
+**什么不算例外 (违规) — 明确禁止**:
+- ❌ 修改 `app/services/task_service.py`/`meeting_service.py`/`knowledge_service.py` 等老模块的核心函数
+- ❌ 修改 `web/src/views/Desktop*/index.vue` 老桌面页面组件
+- ❌ 修改 `alembic/versions/0XX_老.py` 老迁移的 down_revision/up_revision
+- ❌ 修改 `app/core/security.py`/`app/core/rate_limit.py` 老安全/限流基础设施
+- ❌ 修改 `app/agent/chat_engine.py` 方案 C 6 条铁律相关文件
+
+### §4 W68 grand closure memory 索引 (永久)
+
+未来会话读 CLAUDE.md 即可访问所有 W68 batch grand closure 沉淀文件:
+
+- W68 第 1 批 grand closure: `memory/w68-grand-closure-2026-07-24.md` (跨主题收口, 14 agents + Safari iOS 修复)
+- W68 第 2 批 grand closure: `memory/w68-grand-closure-2026-07-24.md` (整合在第 1 批文件, 3 agents 调研/文档/baseline)
+- W68 第 3 批 grand closure: `memory/w68-grand-closure-2026-07-24.md` (整合在第 1 批文件, 11 agents Drive v2 PR9 + Mobile v3.1 + qa-bench D6)
+- W68 第 4 批 grand closure: `memory/w68-grand-closure-4th-batch-2026-07-24.md` (15 agents 跨主题 + Plan 闭环 2/2)
+- W68 第 5 批 grand closure: `memory/w68-grand-closure-5th-batch-2026-07-24.md` (15 agents Drive v2 PR10 + Mobile v3.2 + 评论 hotfix 系列)
+- W68 第 6 批 verified plans: `memory/verified-plans-w68-2026-07-24.md` (5 Explore agent 深度审计发现)
+- W68 第 7 批 grand closure: `memory/w68-grand-closure-7th-batch-2026-07-24.md` (1 agent 闭环 5 NOT_IMPLEMENTED + 12 PARTIAL)
+- W68 第 8 批 grand closure: `memory/w68-grand-closure-8th-batch-2026-07-24.md` (永久纪律沉淀 + 文档收口)
+- 任务模式基调: `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md` (plans 优先 + 小修搭配)
+- alembic 串单链: `memory/w68-alembic-chain-discipline-2026-07-24.md` (锚点范式第 46 守恒 + commit 链)
 
 
 ## 完整历史任务链
