@@ -1,4 +1,4 @@
-"""Drive v2 PR9 — 文件/文件夹 评论 Thread 模型 (2026-07-24)
+"""Drive v2 PR9 — 文件/文件夹 评论 Thread 模型 (2026-07-24, W68 第 8 批 PR11 path 物化)
 
 设计背景:
 - Drive v2 PR6 已有 `FileComment` (file_comments 表, 仅绑 file_id, 单层评论 + 回复),
@@ -7,6 +7,14 @@
   / 嵌套回复 (GitHub PR review comments 风格) / 已解决标记 (issue close).
 - 本 PR 引入 1 张新表:
   * drive_comments: file/folder 评论 thread + 嵌套回复 + resolved 状态
+
+W68 第 8 批 PR11 增量:
+- 加 path VARCHAR(500) 列, 物化嵌套路径
+  * 顶层 (parent_id IS NULL): path = '/'
+  * 子评论: path = parent.path + str(parent.id) + '/'
+  * 例: comment id=42 在嵌套祖先 /1/2/3/ 下 → path='/1/2/3/42/'
+- GIN 索引 + file_id+path 复合索引 (migration 066 中加)
+- 用途: path LIKE prefix 查询 + breadcrumb 一次 query 拿祖先链
 
 表设计 vs FileComment (PR6) 区别:
 - FileComment 仅绑 file_id; DriveComment 同时绑 file_id/folder_id (二者互斥)
@@ -30,6 +38,7 @@
 - DELETE /api/v1/drive/comments/{id}                → 删除 (仅 author, 级联子回复)
 - POST   /api/v1/drive/comments/{id}/resolve        → 标记 resolved (author / 文件 owner / folder admin)
 - POST   /api/v1/drive/comments/{id}/unresolve      → 取消 resolved (同权限)
+- GET    /api/v1/drive/comments/{id}/breadcrumb     → 祖先链 (PR11 新增)
 
 注意:
 - file_id/folder_id 二选一 (CHECK 约束在 migration 加, ORM 层用 validators 校验)
@@ -37,6 +46,7 @@
 - content TEXT, 不限长度 (前端建议 1-10000 字符, 由 schema 校验)
 - mentions ARRAY(Integer) 冗余存 user_id 列表 (前端 O(1) 高亮 '提到你', 与 PR6 FileComment 一致)
 - resolved_at NULL=未解决, NOT NULL=已解决 (含 resolved_by 必填)
+- path 默认 '/', 由 service.create_comment 自动根据 parent.path 计算
 """
 from sqlalchemy import (
     CheckConstraint,
@@ -63,6 +73,9 @@ class DriveComment(Base, TimestampMixin):
     - parent_id 嵌套不限深度 (FileComment 仅 2 层)
     - resolved_at / resolved_by 状态管理 (FileComment 无)
     - author_id NOT NULL CASCADE (FileComment SET NULL 保留)
+
+    W68 第 8 批 PR11 增量:
+    - path VARCHAR(500) 物化嵌套路径 (例: '/1/2/3/42/')
     """
     __tablename__ = "drive_comments"
 
@@ -113,6 +126,18 @@ class DriveComment(Base, TimestampMixin):
         nullable=True,
     )
 
+    # === 嵌套路径物化 (W68 第 8 批 PR11 增量) ===
+    # 顶层 (parent_id IS NULL): path = '/'
+    # 子评论: path = parent.path + str(parent.id) + '/'
+    # 例: comment id=42 在嵌套祖先 /1/2/3/ 下 → path='/1/2/3/42/'
+    # 用途: path LIKE prefix 查询 (GIN trigram 索引) + breadcrumb 一次 query 拿祖先链
+    path = Column(
+        String(500),
+        nullable=True,
+        default="/",
+        server_default="/",
+    )
+
     # === 关系 ===
     author = relationship("Member", foreign_keys=[author_id])
     resolver = relationship("Member", foreign_keys=[resolved_by])
@@ -134,6 +159,8 @@ class DriveComment(Base, TimestampMixin):
         Index("ix_drive_comments_folder_resolved", "folder_id", "resolved_at"),
         # 常用查询: parent_id (拉子回复)
         Index("ix_drive_comments_parent", "parent_id"),
+        # W68 PR11: file_id + path 复合索引 (按 file 过滤 + path prefix 常用)
+        Index("ix_drive_comments_file_path", "file_id", "path"),
     )
 
     def __repr__(self):
@@ -141,6 +168,7 @@ class DriveComment(Base, TimestampMixin):
         return (
             f"<DriveComment(id={self.id}, {target}, "
             f"author_id={self.author_id}, parent_id={self.parent_id}, "
+            f"path='{self.path}', "
             f"resolved={'yes' if self.resolved_at else 'no'})>"
         )
 
@@ -153,3 +181,21 @@ class DriveComment(Base, TimestampMixin):
     def is_top_level(self) -> bool:
         """是否顶层评论 (parent_id NULL)"""
         return self.parent_id is None
+
+    @property
+    def depth(self) -> int:
+        """嵌套深度 (顶层=0, 子=parent.depth+1)
+
+        从 path 推导:
+        - '/' → 顶层 (depth=0)
+        - '/5/' → id=5 的子评论 (depth=1)
+        - '/5/12/' → depth=2
+        - '/5/12/30/' → depth=3
+        公式: depth = max(0, len(path.split('/') 非空 segments))
+        """
+        if not self.path or self.path == "/":
+            return 0
+        # path 形式: '/5/12/30/' → split('/') → ['', '5', '12', '30', '']
+        # 非空 segments: ['5', '12', '30'] → length = depth
+        segments = [s for s in self.path.split("/") if s]
+        return len(segments)
