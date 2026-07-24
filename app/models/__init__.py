@@ -21,6 +21,7 @@ from app.models.chat_history import ChatSession, ChatMessage, ChatShare  # #043 
 from app.models.drive_share import DriveFolderShare, DriveFolderMember  # v2 PR7 文件夹分享/成员
 from app.models.drive_comment import DriveComment  # v2 PR9 评论 thread
 from app.models.drive_file_version import DriveFileVersion  # v2 PR9 文件版本历史
+from app.models.push_subscription import PushSubscription, PushTopic, PushTopicSubscription  # v3.2 PWA Push
 
 __all__ = [
     "Member",
@@ -55,4 +56,7 @@ __all__ = [
     "DriveFolderMember",     # v2 PR7 文件夹邀请成员
     "DriveComment",          # v2 PR9 评论 thread
     "DriveFileVersion",      # v2 PR9 文件版本历史
+    "PushSubscription",      # v3.2 PWA 推送订阅
+    "PushTopic",             # v3.2 PWA 推送主题
+    "PushTopicSubscription", # v3.2 PWA 推送主题订阅
 ]
