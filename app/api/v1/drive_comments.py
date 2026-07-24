@@ -1,16 +1,22 @@
-"""Drive v2 PR9 — 评论 thread REST API (2026-07-24, W68 第 9 批 B-2 PR11 fallback)
+"""Drive v2 PR9 — 评论 thread REST API (2026-07-24, W68 第 12 批 C-2 PR9 续 软删)
 
 端点:
   POST   /api/v1/drive/comments                  → 创建顶层/嵌套回复
-  GET    /api/v1/drive/comments                  → 列表 (按 file_id/folder_id/author/is_resolved 过滤)
-  GET    /api/v1/drive/comments?path_prefix=/    → 列表 (path prefix 过滤, PR11 新增)
+  GET    /api/v1/drive/comments                  → 列表 (按 file_id/folder_id/author/is_resolved 过滤, 默认过滤软删)
+  GET    /api/v1/drive/comments?path_prefix=/    → 列表 (path prefix 过滤, PR11 新增, 默认过滤软删)
   GET    /api/v1/drive/comments/{id}             → 详情 (含子回复树)
   GET    /api/v1/drive/comments/{id}/breadcrumb  → 祖先链 (PR11 + PR11 fallback B-2 新增)
   GET    /api/v1/drive/comments/{id}/descendants → 子树 (PR11 fallback B-2 新增)
   PATCH  /api/v1/drive/comments/{id}             → 编辑内容 (仅 author)
-  DELETE /api/v1/drive/comments/{id}             → 删除 (仅 author, CASCADE 子回复)
+  DELETE /api/v1/drive/comments/{id}             → 软删 (author / file owner / 平台 admin, 同步写 audit_log)
   POST   /api/v1/drive/comments/{id}/resolve     → 标记已解决 (幂等)
   POST   /api/v1/drive/comments/{id}/unresolve   → 取消已解决 (幂等)
+
+W68 第 12 批 C-2 改造 (PR9 续):
+- DELETE 端点改软删 (PR9 老 hard delete 已移除)
+- 权限放宽: author / file owner / 平台 admin (3 角色满足任一)
+- 同步写 audit_log (action='delete', resource_type='comment')
+- list 默认过滤 deleted_at IS NULL (软删评论不在普通 API 暴露)
 
 X-Fallback header:
 - GET /breadcrumb + GET /descendants 响应含 X-Fallback: gin|recursive 标识
@@ -22,6 +28,7 @@ X-Fallback header:
 - /breadcrumb        → drive_list (300/min)
 - /descendants       → drive_list (300/min)
 """
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -57,6 +64,8 @@ from app.services.drive_comment_service import (
 )
 
 router = APIRouter(prefix="/drive/comments", tags=["网盘评论 thread"])
+
+logger = logging.getLogger("microbubble.drive_comment_api")
 
 
 def _reraise_comment_service_error(e: DriveCommentServiceError) -> None:
@@ -503,8 +512,31 @@ async def delete_comment(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """v2 PR9: 删除评论 (仅 author, CASCADE 子回复)"""
+    """v2 PR9 续 (W68 第 12 批 C-2): 软删评论 (author / file owner / 平台 admin)
+
+    权限 (满足任一):
+    - author 本人 (comment.author_id == user_id)
+    - file owner (file.created_by == user_id) — 仅当 comment.file_id 非 NULL
+    - 平台 admin (Member.role == 'admin')
+
+    行为:
+    - 软删: set deleted_at + deleted_by (不 DELETE FROM)
+    - 子回复保留 (软删不 CASCADE)
+    - audit_log 同步写 (action='delete', resource_type='comment', resource_id=comment_id)
+
+    错误:
+    - 403 FORBIDDEN — 无权限 (非 author / 非 file owner / 非 admin)
+    - 404 RESOURCE_NOT_FOUND — 评论不存在 OR 已软删 (幂等)
+    """
     svc = DriveCommentService(db)
+
+    # 先查 comment 用于 audit_log (file/folder/author 快照)
+    from app.models.drive_comment import DriveComment as DriveCommentModel
+    from sqlalchemy import select as sa_select
+    snapshot = (await db.execute(
+        sa_select(DriveCommentModel).where(DriveCommentModel.id == comment_id)
+    )).scalar_one_or_none()
+
     try:
         ok = await svc.delete_comment(
             comment_id=comment_id,
@@ -514,11 +546,52 @@ async def delete_comment(
         _reraise_comment_service_error(e)
 
     if not ok:
+        # 评论不存在 OR 已软删 → 404 (幂等)
         raise AppException(
             code="RESOURCE_NOT_FOUND",
-            message=f"Comment id={comment_id} 不存在",
+            message=f"Comment id={comment_id} 不存在或已删除",
             status_code=404,
         )
+
+    # W68 第 12 批 C-2: 同步写 audit_log (PR9 老逻辑没有这一步)
+    # 注: audit_log 写失败不阻塞 204 返回 (best-effort, 防止审计失败阻塞主流程)
+    if snapshot is not None:
+        try:
+            from app.models.knowledge import AuditLog
+            audit = AuditLog(
+                user_id=current_user.id,
+                method="DELETE",
+                path=f"/api/v1/drive/comments/{comment_id}",
+                action="delete",
+                resource_type="comment",
+                resource_id=str(comment_id),
+                status_code=204,
+                meta_data={
+                    "soft_delete": True,
+                    "comment_author_id": snapshot.author_id,
+                    "comment_file_id": snapshot.file_id,
+                    "comment_folder_id": snapshot.folder_id,
+                    "actor_role": getattr(current_user, "role", "member"),
+                },
+            )
+            db.add(audit)
+            await db.commit()
+            logger.info(
+                f"[DriveComment API] audit_log 已写: "
+                f"comment_id={comment_id} actor_id={current_user.id} action=delete"
+            )
+        except Exception as e:
+            # 审计失败不回滚软删 (软删本身已 commit), 仅记日志
+            logger.warning(
+                f"[DriveComment API] audit_log 写入失败 (软删已生效, 不阻塞): {e!r}",
+                exc_info=True,
+            )
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    # 204 响应, 不要任何 body
     return Response(status_code=204)
 
 
