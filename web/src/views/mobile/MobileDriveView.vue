@@ -635,7 +635,7 @@ watch(() => route.query.tab, (newTab) => {
 .drive-sticky-search-grid:active { background: var(--color-bg-hover); }
 </style>
 
-<!-- v77 P2.6-B dark 覆盖 (v60-v67 教训: 非 scoped) -->
+<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一 (v60-v67 教训: 非 scoped) -->
 <style>
 [data-theme="dark"] .drive-file-card { background: var(--color-bg-card); border-color: var(--color-border); }
 [data-theme="dark"] .folder-chip { background: var(--color-bg-page); color: var(--color-text-regular); }
@@ -644,4 +644,36 @@ watch(() => route.query.tab, (newTab) => {
 [data-theme="dark"] .drive-sticky-search-input-wrap { background: var(--color-bg-page); }
 [data-theme="dark"] .drive-sticky-search-grid { background: var(--color-bg-card); border-color: var(--color-border); color: var(--color-text-regular); }
 [data-theme="dark"] .drive-file-menu { color: var(--color-text-secondary); }
+/* W68 第 14 批 C-2: 列表 / 网格视图 / 空态 / 文件名 / 文件类型色在 dark 适配 */
+[data-theme="dark"] .drive-file-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .drive-file-meta,
+[data-theme="dark"] .drive-file-info {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .drive-empty,
+[data-theme="dark"] .drive-error,
+[data-theme="dark"] .drive-loading {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .drive-tabs {
+  background: var(--color-bg-card);
+  border-bottom-color: var(--color-border);
+}
+[data-theme="dark"] .drive-tab-btn {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .drive-tab-btn.is-active {
+  color: var(--color-primary);
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .drive-file-card:active,
+[data-theme="dark"] .drive-file-card.is-selected {
+  background: var(--color-bg-hover);
+  border-color: var(--color-primary);
+}
+[data-theme="dark"] .drive-grid {
+  background: var(--color-bg-page);
+}
 </style>

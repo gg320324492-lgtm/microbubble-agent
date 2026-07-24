@@ -458,8 +458,9 @@ onMounted(() => {
 .skeleton-line.w-90 { width: 90%; }
 </style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped） -->
 <style>
+/* welcome-card / skeleton / 统计 / 待办任务 / quick action / 标题 在 dark 适配 */
 [data-theme="dark"] .welcome-card {
   /* welcome-card 用主题色渐变背景，dark 模式压暗一档避免过曝 */
   filter: brightness(0.9) saturate(0.95);
@@ -470,5 +471,57 @@ onMounted(() => {
 }
 [data-theme="dark"] .skeleton-line::after {
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+/* W68 第 14 批 C-2: 统计 / 待办任务卡 / quick action / 标题在 dark 适配 */
+[data-theme="dark"] .stat-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .stat-num {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .stat-label {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .stat-warning .stat-num { color: var(--color-primary); }
+[data-theme="dark"] .stat-success .stat-num { color: var(--color-success); }
+[data-theme="dark"] .stat-danger .stat-num { color: var(--color-danger); }
+[data-theme="dark"] .section-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .task-item {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .task-item:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .task-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .task-meta {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .task-priority.priority-high { background: var(--color-danger); }
+[data-theme="dark"] .task-priority.priority-medium { background: var(--color-warning); }
+[data-theme="dark"] .task-priority.priority-low { background: var(--color-success); }
+[data-theme="dark"] .quick-action {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .quick-action:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .quick-action .action-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .empty-state,
+[data-theme="dark"] .loading-state {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .empty-title {
+  color: var(--color-text-primary);
 }
 </style>

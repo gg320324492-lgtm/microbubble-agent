@@ -642,3 +642,32 @@ onMounted(() => {
   transform: translateY(100%);
 }
 </style>
+
+<!-- W68 第 14 批 C-2: Mobile UX v3.3 dark mode 跨组件统一 (v60-v67 教训: 非 scoped) -->
+<style>
+/* MobileChatView action sheet / 输入栏 / 消息列表 / 加载态 在 dark 适配 */
+[data-theme="dark"] .mobile-chat-root {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .action-sheet-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+[data-theme="dark"] .action-sheet-panel {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .action-item {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .action-item:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .action-item.danger {
+  color: var(--color-danger);
+}
+[data-theme="dark"] .action-item.cancel {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+</style>
