@@ -437,11 +437,12 @@ const fabActions = [
 
 const createActions = [
   // PR4.3: 1 个新增 ("📁 入网盘") + 现有 3 个保留 (向后兼容)
+  // W68 第 14 批 C-2: 用 CSS 变量替代硬编码色值, dark mode 自动跟随
   { name: '手动添加', icon: '✏️', color: 'var(--color-primary)' },
-  { name: '上传文件', icon: '📚', color: '#67C23A', subtitle: '入知识库 + 自动解析' },  // PR4.3 标注语义
-  { name: '拍照上传', icon: '📷', color: '#909399', subtitle: '摄像头拍照入网盘' },  // PR4.7 capture API
-  { name: 'AI 自动研究', icon: '🤖', color: '#E6A23C' },
-  { name: '入网盘', icon: '📁', color: '#409EFF', subtitle: '原始文件归档' },  // PR4.3 新增
+  { name: '上传文件', icon: '📚', color: 'var(--color-success)', subtitle: '入知识库 + 自动解析' },  // PR4.3 标注语义
+  { name: '拍照上传', icon: '📷', color: 'var(--color-info)', subtitle: '摄像头拍照入网盘' },  // PR4.7 capture API
+  { name: 'AI 自动研究', icon: '🤖', color: 'var(--color-warning)' },
+  { name: '入网盘', icon: '📁', color: 'var(--color-primary-light)', subtitle: '原始文件归档' },  // PR4.3 新增
 ]
 
 function getCategoryLabel(c) {
@@ -973,14 +974,18 @@ onMounted(() => {
 .page-info { font-size: 13px; color: var(--color-text-secondary); }
 </style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped） -->
 <style>
-/* 知识库 tab / 卡片 / 搜索 / 分页在 dark 模式适配 */
+/* 知识库 tab / 卡片 / 搜索 / 分页 / 上传 dialog / action item / 空态在 dark 模式适配 */
 /* 铁律 26: 旧 .tab-bar / .tab-item 已迁移到 TabStrip, dark mode 由 TabStrip 组件自身处理 */
 [data-theme="dark"] .search-input {
   background: var(--color-bg-page);
   color: var(--color-text-primary);
   border-color: var(--color-border-light);
+}
+[data-theme="dark"] .knowledge-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
 }
 [data-theme="dark"] .knowledge-card:active {
   background: var(--color-bg-hover);
@@ -994,6 +999,10 @@ onMounted(() => {
 [data-theme="dark"] .knowledge-card .card-meta {
   color: var(--color-text-placeholder);
 }
+[data-theme="dark"] .knowledge-card .tag {
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+}
 [data-theme="dark"] .page-btn {
   background: var(--color-bg-card);
   color: var(--color-text-primary);
@@ -1002,5 +1011,52 @@ onMounted(() => {
 [data-theme="dark"] .page-btn:not(:disabled):active {
   background: var(--color-primary-bg);
   color: var(--color-primary);
+}
+[data-theme="dark"] .page-info {
+  color: var(--color-text-secondary);
+}
+/* W68 第 14 批 C-2: 上传 dialog / action sheet / 加载态 / 空态 在 dark 适配 */
+[data-theme="dark"] .upload-overlay,
+[data-theme="dark"] .dialog-overlay {
+  background: rgba(0, 0, 0, 0.5);
+}
+[data-theme="dark"] .upload-panel,
+[data-theme="dark"] .dialog-panel {
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .upload-panel h3,
+[data-theme="dark"] .dialog-panel h3 {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .upload-action {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .upload-action:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .upload-action .action-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .upload-action .action-subtitle {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .upload-cancel,
+[data-theme="dark"] .dialog-cancel {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .empty-state,
+[data-theme="dark"] .loading-state,
+[data-theme="dark"] .error-state {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .empty-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .knowledge-card .card-title-text {
+  color: var(--color-text-primary);
 }
 </style>
