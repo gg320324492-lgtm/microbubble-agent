@@ -913,6 +913,106 @@ python tests/qa-bench/phase2_dry_runner.py \
 
 ---
 
+## 10️⃣ Phase 3 实施段 (W68 第 8 批 B-4 — 路径 4 matrix 4 runner 并行)
+
+> **作者**: Claude Fable 5 (W68 Route-8-B-4 Agent)
+> **日期**: 2026-07-24
+> **基线 HEAD**: `05c60e68d` (W68 第 5 批 hot-fix)
+> **新增交付**:
+> - `tests/qa-bench/phase3_matrix_runner.py` (~430 行 CLI)
+> - `tests/qa-bench/phase3_matrix_report_2026-07-24.md` (~150 行报告)
+> **关联 memory**: `memory/w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24.md` (锚点范式第 96 守恒)
+
+### 10.1 触发与决策
+
+W68 第 5 批 B-3 调研锁定 5 路径, **主指挥拍板"路径 4 (matrix 拆分 4 runner 并行) + 路径 1 (cache 优化) 组合"** 作为 Phase 2 / 3 实施方向. Phase 2 已由 W68 第 7 批 B-2 实施 (`phase2_dry_runner.py` 单 runner 骨架, 360 行, 并发 5, 3 rounds majority). Phase 3 实施目标: **路径 4 落工具** — 在 Phase 2 基础上加 **跨 worker 并发调度** + **多 worker 汇总聚合** + **严格 matrix gate**.
+
+### 10.2 实施内容
+
+**核心改动 (4 项)**:
+
+1. **新建** `tests/qa-bench/phase3_matrix_runner.py` (~430 行)
+   - `--workers 4` (默认) 切分 1000 题 → 4 shard (250 / 250 / 250 / 250)
+   - `--matrix 4` (默认) 跨 worker asyncio.Semaphore 并发 (同跑)
+   - 复用 `phase2_dry_runner._round_with_concurrency` (verdict consensus majority)
+   - `_aggregate_matrix` 汇总 4 worker → combined counts + per-intent pass rate + matrix gate
+   - `_render_phase3_report` 写 Markdown 报告 (与 Phase 2 同结构)
+
+2. **复用** `phase2_dry_runner.py` (从 `e6220d016` commit 拷贝, 因 Phase 2 还未 merge 到 main)
+   - 5 函数复用: `_load_full_corpus` / `_bucket_intent` / `_majority_verdict` / `_verdict_from_answer` / `_round_with_concurrency`
+   - 2 常量: `PHASE2_INTENT_BUCKETS` + `PHASE2_CHAT_INTENT_BUCKETS`
+
+3. **新建** `tests/qa-bench/phase3_matrix_report_2026-07-24.md` (~150 行, 同 Phase 2 报告结构)
+   - 摘要 / 工具设计 / Dry-run 验证 / 真实 1000 题 dry-run (主指挥 SSH 跑后填表) / Risk / 验收 / 沉淀位置
+
+4. **import 路径**: `phase3_matrix_runner` 从 `phase2_dry_runner` import 5 函数 + 2 常量 (避免逻辑双胞胎)
+
+### 10.3 严格 matrix gate 设计
+
+**Phase 2 gate**: 单 runner 整体 pass rate ≥ 90% → PASS
+
+**Phase 3 matrix gate**: 严格模式 — **ALL 4 workers ≥ 90% 才 PASS**
+
+```python
+matrix_gate = PASS if all(
+    worker["pass_rate"] * 100 >= gate_threshold
+    for worker in worker_summaries
+)
+```
+
+**理由**: 1 个 worker pass rate 显著低于其他 3 个 (例如 80% vs 95%) 时, 主指挥需要立即知道具体哪个 shard 出问题, 而非 "整体 92.5% pass" 一句带过. 严格 gate 强制报告按 worker 细分失败原因.
+
+### 10.4 实施验收 (本地 PC)
+
+- **Dry-run 验证**: `python phase3_matrix_runner.py --dry-run` 成功
+- **Sharding 准确**: 1000 题 / 4 shard = 250/250/250/250 (round-robin `index % workers`)
+- **Per-intent 校验**: action=136 + casual=118 + data=316 + deep=129 + explain_concept=161 + none=15 + search_info=125 = **1000** ✓
+- **Phase 2 复用**: 0 双胞胎逻辑, 5 函数 + 2 常量 import 复用
+- **Matrix gate 严格**: FAIL when 0% pass rate (expected in dry-fallback)
+
+### 10.5 下一步主指挥 SSH 跑
+
+```bash
+ssh microbubble-agent-runner
+cd tests/qa-bench
+MIMO_API_KEY=$MIMO_CLOUD_KEY \
+DATABASE_URL=postgresql+asyncpg://test:test@localhost:5432/qa_test \
+  python phase3_matrix_runner.py --report-out phase3_real_run_$(date +%Y%m%d_%H%M).md
+```
+
+**期望**: wall clock 5-15 min (vs 单 runner 30-60 min), 50-75% wall clock 节省.
+
+### 10.6 锚点范式 W68 第 8 批 95 → **96** 守恒
+
+| 维度 | 数值 |
+|------|------|
+| Phase 3 工具 (matrix runner) | 1 (~430 行) |
+| Phase 3 报告 | 1 (~150 行, dry-fallback 占位) |
+| Phase 3 roadmap 改动 | +~50 行 (本文 §10) |
+| Phase 3 memory 沉淀 | 1 (~150 行) |
+| **总新增文件** | **3** (matrix runner + 报告 + memory) |
+| **总改动文件** | **1** (roadmap, +~50 行) |
+| **production code 改动** | **0** (仅 tests/qa-bench/ + docs/ + memory/) |
+| **锚点范式** | W68 第 8 批 95 → **96** 单调上升 |
+
+### 10.7 Phase 3 失败回滚路径
+
+```bash
+git revert <phase3-commit-hash> --no-edit
+git push origin main
+# webhook 30s 后, 回到 Phase 2 single runner
+```
+
+**回滚后接受**: Phase 2 single runner (8-12 min wall clock) + docs/CI 占位 (W67 baseline 维持).
+
+---
+
+**Anchor**: 锚点范式 W68 第 8 批 95 → **96** 单调上升, W68 第 8 批 B-4 Phase 3 实施 0 production code 改动铁律完全守恒. 4 文件交付 (1 工具 + 1 报告 + 1 改 roadmap + 1 memory), 工具 dry-fallback 验证逻辑正确, 待主指挥 SSH 跑真实 1000 题 (本地 PC 无 MIMO_API_KEY + test DB).
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+
+---
+
 **Anchor**: 锚点范式 W68 30 → **35** 单调上升, W68 第 4 批路线 B-3 实施路线图 0 production code 改动铁律完全守恒. 9 agents 跨 2 周 2 批派工决策已锁定, Phase 1 主指挥 W68 第 4 批派工依据本文 §3, Phase 2 主指挥 W69 第 1 批派工依据本文 §4.
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
