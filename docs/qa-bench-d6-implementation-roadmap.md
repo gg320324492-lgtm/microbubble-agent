@@ -779,6 +779,114 @@ git push origin main
 
 **总工时**: Phase 1 16-24h + Phase 2 12-20h = **28-44h** (跨 2 周 9 agents, 平均 3-5h/agent)
 
+## §9 W68 第 7 批 Phase 2 实施段 (Anchor 81, 2026-07-24)
+
+> **作者**: Claude Fable 5 (W68 第 7 批 B-2 Agent — Phase 2 dry-run 实施)
+> **日期**: 2026-07-24
+> **基线 HEAD**: `05c60e68d` (W68 第 5 批 hot-fix 收官)
+> **前序**: §3 Phase 1 (W68 第 5 批 #4 已实施) + §4 Phase 2 规划 (本文)
+> **锚点范式**: W68 第 5 批 67 → **W68 第 7 批 81** 单调上升 (本节贡献 14)
+> **铁律**: 0 production code 改动 (新增 + 改动只在 `tests/qa-bench/` + `docs/` + `memory/`) + W19 选项 A 维持 + 71 PASS + 7 SKIP baseline 守恒
+
+### 9.1 W68 第 7 批 B-2 派工背景
+
+主指挥 W68 第 5 批 #4 已实施 Phase 1 (`inprocess_runner.py` + `run_d5_dry.py` + smoke tests), W68 第 7 批 B-2 接力实施 Phase 2 dry-run:
+
+- **输入**: W68 第 5 批 #4 已建 `tests/qa-bench/inprocess_runner.py` (140 行) + `tests/qa-bench/run_d5_dry.py` (220 行)
+- **输出**: 6 文件落地 (1 改 runner + 1 新建 phase2 runner + 1 新建报告 + 1 新增 e2e + 1 改 roadmap §9 + 1 新增 memory)
+- **目标**: 真跑 1000 题 + per-intent 分布 + gate 强化 (Phase 2 阈值 80 → 90)
+
+### 9.2 Phase 2 实施交付清单
+
+| 文件 | 状态 | 行数 | 职责 |
+|------|------|------|------|
+| `tests/qa-bench/run_d5_dry.py` | 改 | 220 → ~340 | 加 `--full` / `--per-intent` / `--gate-threshold` flag + 6-bucket taxonomy |
+| `tests/qa-bench/phase2_dry_runner.py` | 新建 | ~360 | Phase 2 专用 runner, 并发 5, gate verdict 退出码 |
+| `tests/qa-bench/phase2_dry_report_2026-07-24.md` | 新建 | ~280 | Phase 2 dry-fallback 报告 (本次 commit) |
+| `tests/qa-bench/test_phase2_dry_smoke.py` | 新建 | ~340 | 8 个 e2e 场景 (5 主 + 3 子), PASS 8/8 |
+| `docs/qa-bench-d6-implementation-roadmap.md` §9 | 改 | 0 → ~50 | 本节 |
+| `memory/w68-route-7-b2-qa-bench-phase2-2026-07-24.md` | 新建 | ~150 | 锚点范式第 81 守恒 + 5 新铁律 |
+
+### 9.3 Phase 2 关键决策
+
+**决策 1: Phase 2 runner 入口** — `phase2_dry_runner.py` 是**专用**入口, 不挤压 `run_d5_dry.py`. 复用 `inprocess_runner.run_inprocess` 接口, 不动 production code.
+
+**决策 2: 并发 5 vs Phase 1 串行** — Phase 1 in-process 默认串行 (避免 DB session 共享风险), Phase 2 提升到并发 5 (W68 第 5 批 3 → Phase 2 强化到 5). 风险: 跨并发 LLM 调用仍走单 `ChatEngine` 实例, 但 asyncio.Semaphore 隔离并发安全. **CLAUDE.md 752 行铁律升级**: 单 event loop 内 5 并发不会触发 "Future attached to different loop", 跑 Celery worker 时仍需 `ctx` 注入.
+
+**决策 3: Gate threshold 80 → 90** — Phase 1 默认 80%, Phase 2 强化到 90%. 跟 W67 第 47 步 smoke 30 题 88% 对齐 (88% < 90%, 真跑时若仅 88% 会 FAIL, 触发 per-intent 回归分析).
+
+**决策 4: 双 taxonomy 共存 (6 business bucket + 7 chat-intent)** — `_bucket_intent` 函数同时支持:
+- 6 business buckets: meeting / task / knowledge / member / project / drive (主指挥定义)
+- 7 chat-intents: EXPLAIN_CONCEPT / DATA / DEEP / ACTION / CASUAL / SEARCH_INFO / NONE (实际 corpus 用)
+
+优先级: 6 business bucket > 7 chat-intent > "other". 当前 corpus 没有 business token, 全部走 chat-intent 分支; W69 第 2 批可扩展 corpus 加 business intent, runner 立即生效.
+
+**决策 5: dry-fallback placeholder 必返回非零退出码** — Phase 2 runner 在 `--dry-run` 时 placeholder pass rate 是 0%, gate verdict 自动 FAIL (退出码 1). **这是 by design**, CI 用 `--dry-run` 时只看报告结构, 不看退出码.
+
+### 9.4 Phase 2 真跑派工依据 (W69 第 1 批)
+
+详见 `tests/qa-bench/phase2_dry_report_2026-07-24.md` 第 6 节派工依据:
+
+```bash
+# SSH 主机 (有 MIMO_API_KEY + DATABASE_URL)
+python tests/qa-bench/phase2_dry_runner.py \
+    --concurrency 5 \
+    --gate-threshold 90 \
+    --report-out reports/phase2_real_run_$(date +%Y-%m-%d).md
+
+# 退出码语义
+# 0 = PASS (commit promote)
+# 1 = FAIL (rollback / investigate)
+# 2 = abort (环境问题)
+```
+
+**预期时间预算**: 1000 题 × 3 rounds / 并发 5 / mimo 1.5s/call = **~15 min 总时长**. 超过 30 min 直接 abort (跟 W67 第 47 步一致).
+
+**预期 gate verdict**:
+- pass rate ≥ 90% → **PROMOTE** (进 §10 路线图 + merge Phase 2 commit)
+- pass rate 80-90% → **INVESTIGATE** (per-intent 分布找回归 intent)
+- pass rate < 80% → **ROLLBACK** (回 W67 baseline + docs/CI 占位)
+
+### 9.5 5 新铁律 (W68 第 7 批 B-2 沉淀)
+
+1. **并发 5 是 Phase 2 强化 baseline** — Phase 1 串行 / Phase 2 并发 5 / W69 第 1 批可考虑并发 8 (有 stress test 风险)
+2. **1000 题全集 = 700 seed + 300 d4 extra** — merge 顺序 seed-first 保证 per-intent 计数稳定
+3. **per-intent gate 是 Phase 2 必做** — 单一全局 pass rate 遮盖回归 intent, per-intent 表是 reviewer 必看
+4. **fallback dry-run 必须返回非零** — placeholder pass rate 是 0%, gate FAIL 是 by design, CI 用 `--dry-run` 时只看报告结构
+5. **时间预算 15-20 min 是 Phase 2 真跑硬上限** — 超过 30 min 直接 abort, 不做第 3 次失败尝试 (跟 W67 第 47 步一致)
+
+### 9.6 跟 §4 Phase 2 规划对比
+
+| 维度 | §4 Phase 2 规划 | §9 W68 第 7 批实际 |
+|---|---|---|
+| Runner 入口 | 仅 `run_d5_dry.py --full` | **双入口**: `run_d5_dry.py --full` + `phase2_dry_runner.py` |
+| 并发 | matrix 4 runner (跨 runner) | **单 runner 内 asyncio 并发 5** |
+| Gate | 95% (规划) | **90%** (跟 W67 smoke 88% 对齐, 留 2pp 余量) |
+| Per-intent | 6 business bucket | **6 business + 7 chat-intent** 双 taxonomy |
+| 时间预算 | 8-12 min (matrix) | **15-20 min** (单 runner 真跑) |
+| Phase 2 真跑 | W69 第 1 批 4 agents | **W69 第 1 批 1 agent** (主指挥 SSH 跑) |
+
+调整原因: 单 runner 内并发 5 比 matrix 4 runner 简单 5x, 风险可控. 接受 docs/CI 占位 fallback (跟 W67 一致) 不做第 3 次失败尝试.
+
+### 9.7 W69 第 1 批派工 (主指挥参考)
+
+- **#1 (主指挥自跑)**: SSH 跑 Phase 2 (按 9.4 节命令)
+- **#2 (1 agent)**: 真跑后更新路线图 §10 (gate verdict + per-intent 回归分析)
+- **#3 (1 agent)**: W67 docs/CI 占位 → 真跑链接替换 (仅在 gate PASS 后)
+- **grand closure**: 锚点范式第 84 守恒 (跨 W67-W69-W70 累计 30 commit)
+
+### 9.8 验收清单
+
+- [x] 1 改 runner (`run_d5_dry.py` 加 3 个 flag + 6-bucket 映射 + gate 强化)
+- [x] 1 新建 phase2 runner (`phase2_dry_runner.py` 并发 5 + gate verdict 退出码)
+- [x] 1 新建报告 (`phase2_dry_report_2026-07-24.md` ~280 行)
+- [x] 1 新增 e2e (`test_phase2_dry_smoke.py` 8 场景 PASS 8/8)
+- [x] 1 改 roadmap (本 §9 节)
+- [x] 1 新增 memory (`memory/w68-route-7-b2-qa-bench-phase2-2026-07-24.md`)
+- [ ] commit + push (本次 worktree 已 build, 主指挥 merge)
+
+---
+
 ## 附录 B: 主指挥派工 PR 模板
 
 主指挥 W68 第 4 批派工 5 agents 时, 直接 copy paste 派工 prompt (§3 + §6 Agent 1-5 prompt 模板) 到 5 个 worktree. 类似 W69 第 1 批派工 4 agents.

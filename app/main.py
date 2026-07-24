@@ -30,6 +30,7 @@ def _import_application_routers():
     from app.api.v1 import (
         admin,
         admin_audit,
+        admin_kb_monitor,  # qa-bench v3.1 D5: KB 自动入库监控
         analytics,
         auth,
         chat,
@@ -40,6 +41,7 @@ def _import_application_routers():
         drive_comments,  # v2 PR9 评论 thread
         drive_versions,  # v2 PR9 文件版本历史
         drive_version_diff,  # v2 PR9 文件版本对比
+        drive_collab,  # v2 PR10 协同编辑 WS + REST
         file_requests,
         knowledge,
         meeting,
@@ -49,6 +51,7 @@ def _import_application_routers():
         memory,
         notifications,
         project,
+        push_notifications,  # v3.2 PWA 浏览器推送
         task,
         tencent_meeting,
         translation,
@@ -84,12 +87,15 @@ def _import_application_routers():
         (analytics.router, {"prefix": "/api/v1", "tags": ["检索质量"]}),
         (chat_history.router, {"prefix": "/api/v1", "tags": ["聊天历史"]}),
         (admin.router, {"prefix": "/api/v1", "tags": ["管理"]}),
+        (admin_kb_monitor.router, {"prefix": "/api/v1", "tags": ["KB 监控"]}),  # qa-bench v3.1 D5
         (drive_folders.router, {"prefix": "/api/v1", "tags": ["网盘文件夹"]}),
         (drive_files.router, {"prefix": "/api/v1", "tags": ["网盘文件"]}),
         (drive_files.share_router, {"prefix": "/api/v1", "tags": ["网盘公开分享"]}),
         (drive_comments.router, {"prefix": "/api/v1", "tags": ["网盘评论 thread"]}),  # v2 PR9
         (drive_versions.router, {"prefix": "/api/v1", "tags": ["网盘文件版本"]}),  # v2 PR9
         (drive_version_diff.router, {"prefix": "/api/v1", "tags": ["网盘文件版本对比"]}),  # v2 PR9
+        (drive_collab.router, {"prefix": "/api/v1", "tags": ["网盘协同编辑"]}),  # v2 PR10
+        (push_notifications.router, {"prefix": "/api/v1", "tags": ["PWA 浏览器推送"]}),  # v3.2
         (upload_multipart.router, {"prefix": "/api/v1", "tags": ["分片上传"]}),
         (ws_notifications.router, {"prefix": "/api/v1"}),
         (notifications.router, {}),
@@ -199,6 +205,17 @@ async def lifespan(app: FastAPI):
                     print(f"已同步 {len(pending)} 条待发送提醒到 Redis")
         except Exception as e:
             print(f"提醒同步到 Redis 失败（可忽略）: {e}")
+
+    # W68 第 7 批 B-3: 启动时初始化 VAPID 密钥 (浏览器推送认证)
+    # - 文件存在 (持久化): 加载
+    # - 文件不存在 (新部署): 生成 + 持久化到 /data/push/vapid_*.pem
+    # - 持久化失败 (容器只读 fs): 内存密钥 (重启后用户需重新订阅)
+    try:
+        from app.services.push_service import init_vapid_keys
+        init_vapid_keys()
+        print("[PUSH] VAPID 密钥初始化完成")
+    except Exception as e:
+        print(f"[PUSH] VAPID 初始化失败 (push 不可用, 其他模块不受影响): {e}")
 
     # 不能把加载逻辑直接写在 yield 后：asynccontextmanager 的 yield 后半段只在 shutdown 执行。
     # 后台 task 让 ASGI startup 立即完成；重型同步 import 在线程中执行，不占用事件循环，
