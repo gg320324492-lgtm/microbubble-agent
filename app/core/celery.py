@@ -97,6 +97,12 @@ celery_app.conf.update(
             "task": "app.services.drive_collab_tasks.compress_op_logs_task",
             "schedule": 24 * 3600.0,  # 每天一次 (设计 doc §4.2: 凌晨 03:00 语义, beat 用间隔近似)
         },
+        # 2026-07-24 W68 第 10 批 B-3: KB 自动入库失败 daily health check + 告警
+        # 每日 03:00 跑 (凌晨低峰, 与 drive-collab-compress-op-logs 同节奏不冲突)
+        "kb-intake-health-check-daily": {
+            "task": "app.services.auto_intake_rollback_tasks.daily_kb_intake_health_check_task",
+            "schedule": 24 * 3600.0,  # 每 24 小时 (凌晨 03:00 语义)
+        },
     },
 )
 
@@ -124,6 +130,7 @@ celery_app.conf.imports = [
     "app.services.file_mention_tasks",  # 2026-07-02 v2 PR6-P9 通知 30 天清理
     "app.services.chat_share_tasks",  # 2026-07-20 W2 T3 P2-A 过期 share 清理
     "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘
+    "app.services.auto_intake_rollback_tasks",  # 2026-07-24 W68 第 10 批 B-3 KB 入库失败重试/告警
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -143,6 +150,7 @@ celery_app.autodiscover_tasks(
         "app.services.chat_history_tasks",  # 2026-06-30 #043 Phase 7 软删除 30 天清理
         "app.services.drive_cleanup_tasks",  # 2026-07-01 课题组网盘 PR1 软删除 3 天清理
         "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘
+        "app.services.auto_intake_rollback_tasks",  # 2026-07-24 W68 第 10 批 B-3 KB 入库失败重试/告警
         "app.wechat.scheduler",
     ],
     related_name=None,
