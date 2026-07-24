@@ -1,0 +1,132 @@
+# docker-compose.test.yml — qa-bench 物理隔离测试栈 (plan: qa-bench-isolation-a1.md)
+#
+# W68 第 7 批 A-3 (2026-07-24): 补齐 plan 核心交付物 (PARTIAL_REGRESSION 修复).
+#
+# 目的: qa-bench 跑测彻底物理隔离, 生产 DB / Redis / MinIO 永远不被写入.
+#   - 独立 postgres (5433) + redis (6380) + minio (9001/9002) + app (8001)
+#   - 独立数据卷 (test_pg_data / test_redis_data / test_minio_data)
+#   - 独立网络 (mb-test-net) 与生产 default 网络隔离
+#   - 销毁: docker compose -f docker-compose.test.yml down -v (-v 清数据卷, 0 残留)
+#
+# 端口错开生产 (5432/6379/9000/9001/8000) 避免冲突.
+# JWT_SECRET / MinIO 凭据与生产不同, 防测试栈 token 误用于生产.
+#
+# ⚠️ 主指挥 SSH 部署必做见 docs/qa-bench-isolation-stack.md 第 4 节.
+#
+# 用法:
+#   docker compose -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.test.yml down -v
+
+services:
+  # PostgreSQL 16 + pgvector (复用生产 Dockerfile.db, 端口错开)
+  pg-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.db
+    environment:
+      POSTGRES_DB: microbubble_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${TEST_POSTGRES_PASSWORD:-test_password}
+    ports:
+      - "5433:5432"   # 错开生产 5432
+    volumes:
+      - test_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d microbubble_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mb-test-net
+    mem_limit: 512m
+
+  # Redis 7 (端口错开)
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"   # 错开生产 6379
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mb-test-net
+    mem_limit: 256m
+
+  # MinIO (端口错开, 独立凭据 + bucket microbubble-test)
+  minio-test:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${TEST_MINIO_ACCESS_KEY:-test_minio}
+      MINIO_ROOT_PASSWORD: ${TEST_MINIO_SECRET_KEY:-test_minio_password}
+    ports:
+      - "9001:9000"   # API  (错开生产 9000)
+      - "9002:9001"   # Console (错开生产 9001)
+    volumes:
+      - test_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mb-test-net
+    mem_limit: 256m
+
+  # 主应用 (复用生产 Dockerfile, 独立 env, 端口错开)
+  app-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8001:8000"   # 错开生产 8000, 仅本地访问
+    volumes:
+      - ./app:/app/app
+      - ./alembic/versions:/app/alembic/versions
+      - ./models/hf_cache:/root/.cache/huggingface
+    environment:
+      # 指向测试栈内部服务 (docker network 内 hostname)
+      DATABASE_URL: postgresql+asyncpg://postgres:${TEST_POSTGRES_PASSWORD:-test_password}@pg-test:5432/microbubble_test
+      REDIS_URL: redis://redis-test:6379/0
+      MINIO_ENDPOINT: minio-test:9000
+      MINIO_ACCESS_KEY: ${TEST_MINIO_ACCESS_KEY:-test_minio}
+      MINIO_SECRET_KEY: ${TEST_MINIO_SECRET_KEY:-test_minio_password}
+      MINIO_BUCKET: microbubble-test
+      # JWT secret 与生产不同 → 测试栈 token 无法用于生产
+      SECRET_KEY: ${TEST_SECRET_KEY:-test_jwt_secret_different_from_prod}
+      # 复用生产 LLM endpoint (qa-bench 需真 LLM 调用)
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
+      CLAUDE_BASE_URL: ${CLAUDE_BASE_URL:-}
+      EMBEDDING_MODEL_NAME: ${EMBEDDING_MODEL_NAME:-shibing624/text2vec-base-chinese}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cpu}
+    depends_on:
+      pg-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      minio-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    networks:
+      - mb-test-net
+    mem_limit: 4g
+
+# 独立数据卷 (down -v 时一起销毁, 0 残留)
+volumes:
+  test_pg_data:
+  test_redis_data:
+  test_minio_data:
+
+# 独立网络 (与生产 default 网络隔离)
+networks:
+  mb-test-net:
+    driver: bridge
