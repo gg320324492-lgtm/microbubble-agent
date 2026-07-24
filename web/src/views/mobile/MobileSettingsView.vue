@@ -97,6 +97,40 @@
           <span class="item-arrow">›</span>
         </button>
 
+        <!-- W68 第 8 批 B-3: 分享 App 设置项 -->
+        <button
+          type="button"
+          class="settings-item"
+          data-testid="share-app-item"
+          @click="showShareApp = true"
+        >
+          <div class="item-icon" style="background: var(--color-primary-bg, #fff1ed)">📤</div>
+          <div class="item-info">
+            <div class="item-title">分享 App</div>
+            <div class="item-desc">推荐小气助手给课题组同事</div>
+          </div>
+          <span class="item-arrow">›</span>
+        </button>
+
+        <!-- W68 第 8 批 B-3: 生物识别登录开关 -->
+        <button
+          type="button"
+          class="settings-item"
+          data-testid="biometric-auth-item"
+          @click="showBioAuth = true"
+        >
+          <div class="item-icon" style="background: var(--color-success-bg, #e1f3d8)">🔐</div>
+          <div class="item-info">
+            <div class="item-title">生物识别登录</div>
+            <div class="item-desc">
+              <span v-if="bioEnabled" class="bio-status-on">已启用</span>
+              <span v-else-if="bioSupportAvailable" class="bio-status-supported">{{ bioLabel }} 可用, 未启用</span>
+              <span v-else class="bio-status-off">设备不支持</span>
+            </div>
+          </div>
+          <span class="item-arrow">›</span>
+        </button>
+
         <button
           type="button"
           class="settings-item"
@@ -234,6 +268,26 @@
       title="选择头像"
       @change="handleAvatarChange"
     />
+
+    <!-- W68 第 8 批 B-3: 分享 App 弹窗 (Web Share API + 自定义 sheet fallback) -->
+    <MobileShareSheet
+      v-model:show="showShareApp"
+      title="分享小气助手"
+      description="推荐给课题组同事, 一起用 AI 助手"
+      :url="shareAppUrl"
+      :text="shareAppText"
+      :show-native-share="true"
+      @share="onShareAppItem"
+    />
+
+    <!-- W68 第 8 批 B-3: 生物识别登录弹窗 -->
+    <MobileBiometricAuth
+      v-model:show="showBioAuth"
+      title="生物识别登录"
+      hint="使用 Face ID / 指纹 / PIN 码 一键登录"
+      @success="onBioSuccess"
+      @cancel="onBioCancel"
+    />
   </div>
 </template>
 
@@ -257,11 +311,15 @@ import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'  // 2026-06-30 #009 Self-RAG 深度思考 toggle
 import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
 import { useMobilePushNotification } from '@/composables/useMobilePushNotification'
+import { useMobileShare } from '@/composables/useMobileShare'  // W68 第 8 批 B-3
+import { useMobileBiometric } from '@/composables/useMobileBiometric'  // W68 第 8 批 B-3
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MemberAvatar from '@/components/mobile/MemberAvatar.vue'
 import MobilePushPermissionDialog from '@/components/mobile/MobilePushPermissionDialog.vue'
+import MobileShareSheet from '@/components/mobile/MobileShareSheet.vue'  // W68 第 8 批 B-3
+import MobileBiometricAuth from '@/components/mobile/MobileBiometricAuth.vue'  // W68 第 8 批 B-3
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -305,6 +363,53 @@ const pushStatusMeta = computed(() => {
   if (push.isDismissed.value) return '· 7 天内不再询问'
   return '· 点击开启'
 })
+
+// W68 第 8 批 B-3: 分享 App + 生物识别登录
+const showShareApp = ref(false)
+const showBioAuth = ref(false)
+const share = useMobileShare()
+const biometric = useMobileBiometric()
+const shareAppUrl = computed(() =>
+  typeof window !== 'undefined' ? `${window.location.origin}/?utm=share` : 'https://microbubble.lab.cn'
+)
+const shareAppText = '小气助手 — 微纳米气泡课题组智能 Agent, 一站式任务/会议/知识管理, 你也来试试?'
+const bioSupportAvailable = computed(() => biometric.support.value?.available ?? false)
+const bioEnabled = computed(() => biometric.isBiometricEnabled())
+const bioLabel = computed(() => biometric.support.value?.displayName || '生物识别')
+
+// onMounted: 预探测生物识别能力 (不阻塞 UI)
+onMounted(() => {
+  biometric.detectSupport().catch(() => {})
+})
+
+async function onShareAppItem(payload) {
+  // payload: { key: 'wechat'|'qq'|'weibo'|'copy'|'save'|'native', url, text, ... }
+  const { key, url, text } = payload
+  if (key === 'native' && share.canNativeShare) {
+    await share.shareLink({ url, title: '小气助手', text })
+    return
+  }
+  if (key === 'copy') {
+    await share.copyLink(url)
+    return
+  }
+  // wechat/qq/weibo 在国内社交平台 scheme 未深度集成, 降级为复制链接 + 提示
+  if (key === 'wechat' || key === 'qq' || key === 'weibo') {
+    await share.copyLink(url)
+    const label = key === 'wechat' ? '微信' : key === 'qq' ? 'QQ' : '微博'
+    ElMessage.info?.(`已复制链接, 请粘贴到${label}分享`)
+  }
+}
+
+function onBioSuccess(result) {
+  // result: { method: 'webauthn' | 'pin' }
+  biometric.setBiometricEnabled(true)
+  ElMessage.success?.(`${bioLabel.value} 已启用`)
+}
+
+function onBioCancel() {
+  // 用户主动关闭, 不弹错误
+}
 
 function onTogglePushClick() {
   // 已开启 → 直接取消订阅 (无需弹窗)
