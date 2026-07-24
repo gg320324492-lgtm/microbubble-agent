@@ -433,6 +433,13 @@ class DriveCommentService:
 
         where_clause = and_(*conditions) if conditions else None
 
+        # W68 第 12 批 C-2: 默认过滤软删评论 (deleted_at IS NULL)
+        # 注: 这是 list API 默认行为; 内部 service (breadcrumb 等) 仍能看到软删评论
+        if where_clause is not None:
+            where_clause = and_(where_clause, DriveComment.deleted_at.is_(None))
+        else:
+            where_clause = DriveComment.deleted_at.is_(None)
+
         # total
         total_stmt = select(func.count()).select_from(DriveComment)
         if where_clause is not None:
@@ -526,6 +533,9 @@ class DriveCommentService:
         conditions.append(DriveComment.path.like(f"%{path_prefix}%"))
 
         where_clause = and_(*conditions)
+
+        # W68 第 12 批 C-2: 默认过滤软删评论
+        where_clause = and_(where_clause, DriveComment.deleted_at.is_(None))
 
         # total
         total_stmt = select(func.count()).select_from(DriveComment).where(where_clause)
@@ -784,52 +794,98 @@ class DriveCommentService:
         return comment
 
     # ==========================================================================
-    # 删除
+    # 删除 (W68 第 12 批 C-2: 改软删 + 3 角色权限)
     # ==========================================================================
 
     async def delete_comment(self, comment_id: int, user_id: int) -> bool:
-        """删除评论 (仅 author, CASCADE 子回复)
+        """软删评论 (author / file owner / 平台 admin)
+
+        W68 第 12 批 C-2 改造 (W68 第 8 批 PR9 老 hard delete + 仅 author):
+        - 软删: set deleted_at + deleted_by (不 DELETE FROM, 不 CASCADE 子回复)
+        - 3 角色权限 (满足任一可删):
+          * author 本人 (comment.author_id == user_id)
+          * file owner (file.created_by == user_id) — 仅当 comment.file_id 非 NULL
+          * 平台 admin (Member.role == 'admin')
+        - 保留 audit_log (调用方写, service 层不写避免破坏幂等性)
+        - 子回复不自动删除 (PR9 老 CASCADE 移除, 软删保留父子关系供追溯)
+
+        Args:
+            comment_id: 目标评论 id
+            user_id: 操作人
 
         Returns:
-            True: 成功删除
+            True: 成功软删
             False: 评论不存在
 
         Raises:
-            DriveCommentServiceError(403) 非 author
+            DriveCommentServiceError(403) 无权限 (非 author / 非 file owner / 非 admin)
+            DriveCommentServiceError(404) 评论不存在
+
+        Notes:
+            - 已软删 (deleted_at IS NOT NULL) 再次删 → 返回 False (幂等性保持)
+              不抛 404, 不抛 403 — 调用方视为幂等成功
+            - 软删后 list_comments 默认过滤 deleted_at IS NULL (历史数据保留在 DB)
+            - audit_log 写入由 API 层做 (DELETE /api/v1/drive/comments/{id})
         """
         comment = (await self.db.execute(
             select(DriveComment).where(DriveComment.id == comment_id)
         )).scalar_one_or_none()
         if comment is None:
-            return False
-
-        if comment.author_id != user_id:
             raise DriveCommentServiceError(
-                "仅 author 本人可删除评论", status_code=403
+                f"Comment id={comment_id} 不存在", status_code=404
             )
 
-        # W68 PR9 WS 推送: 在 hard delete 前快照 ID 字段 (删除后 ORM 不可访问)
-        snapshot_file_id = comment.file_id
-        snapshot_folder_id = comment.folder_id
-        snapshot_author_id = comment.author_id
+        # 幂等: 已软删 → 直接返回 False (让 API 层返 404)
+        if comment.deleted_at is not None:
+            return False
 
-        await self.db.delete(comment)
+        # 权限校验: author / file owner / 平台 admin
+        is_author = comment.author_id == user_id
+        is_admin = False
+        is_file_owner = False
+
+        # 查 actor 的 role (平台 admin 判断)
+        actor = (await self.db.execute(
+            select(Member).where(Member.id == user_id)
+        )).scalar_one_or_none()
+        if actor is not None and getattr(actor, "role", None) == "admin":
+            is_admin = True
+
+        # file owner 判断 (仅 file_id 非 NULL)
+        if comment.file_id is not None:
+            file_row = (await self.db.execute(
+                select(Knowledge).where(Knowledge.id == comment.file_id)
+            )).scalar_one_or_none()
+            if file_row is not None and file_row.created_by == user_id:
+                is_file_owner = True
+
+        if not (is_author or is_file_owner or is_admin):
+            raise DriveCommentServiceError(
+                "无权限删除该评论 (需要 author / file owner / 平台 admin)",
+                status_code=403,
+            )
+
+        # 软删: set deleted_at + deleted_by
+        comment.deleted_at = to_naive_datetime(datetime.now(timezone.utc))
+        comment.deleted_by = user_id
         await self.db.commit()
+        await self.db.refresh(comment, attribute_names=["author"])
 
         logger.info(
             f"[DriveCommentService.delete_comment] id={comment_id} by user={user_id} "
-            f"(子回复 CASCADE 已自动删)"
+            f"(author={is_author} file_owner={is_file_owner} admin={is_admin})"
         )
 
-        # W68 PR9 WS 推送: 通知 file/folder owner (best-effort)
+        # W68 PR9 WS 推送: 通知 file/folder owner (best-effort, 不阻塞)
+        # 注: 软删而非 hard delete, 子回复保留, 推送语义不变
         try:
             from app.services.drive_event_publisher import publish_comment_deleted
             await publish_comment_deleted(
                 self.db,
                 comment_id=comment_id,
-                file_id=snapshot_file_id,
-                folder_id=snapshot_folder_id,
-                author_id=snapshot_author_id,
+                file_id=comment.file_id,
+                folder_id=comment.folder_id,
+                author_id=comment.author_id,
                 actor_id=user_id,
             )
         except Exception as e:

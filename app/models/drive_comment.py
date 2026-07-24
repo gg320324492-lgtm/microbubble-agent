@@ -138,6 +138,24 @@ class DriveComment(Base, TimestampMixin):
         server_default="/",
     )
 
+    # === 软删 (W68 第 12 批 C-2 增量) ===
+    # PR9 老 delete 是 hard delete (CASCADE 子回复)
+    # C-2 改软删: deleted_at + deleted_by 标记, 不物理删除
+    # 用途:
+    # - 保留 audit_log 链路 (谁在什么时候删的, 即使删人账号注销仍可追溯)
+    # - 子回复保留 (parent 不被 CASCADE 连带)
+    # - deleted_by SET NULL 而非 CASCADE (删人时不连带删评论, 与 resolved_by 一致)
+    deleted_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    deleted_by = Column(
+        Integer,
+        ForeignKey("members.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # === 关系 ===
     author = relationship("Member", foreign_keys=[author_id])
     resolver = relationship("Member", foreign_keys=[resolved_by])
@@ -176,6 +194,11 @@ class DriveComment(Base, TimestampMixin):
     def is_resolved(self) -> bool:
         """是否已解决 (resolved_at NOT NULL)"""
         return self.resolved_at is not None
+
+    @property
+    def is_deleted(self) -> bool:
+        """是否软删 (deleted_at NOT NULL) — W68 第 12 批 C-2"""
+        return self.deleted_at is not None
 
     @property
     def is_top_level(self) -> bool:
