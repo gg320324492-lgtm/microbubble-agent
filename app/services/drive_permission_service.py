@@ -18,7 +18,7 @@ PR9 服务端先打 logger.debug 占位):
 1. check_folder_admin(user_id, folder_id) -> bool
    - 文件操作 (上传/回滚/删除版本) 权限: owner / admin / platform admin
 2. check_file_owner_or_folder_admin(user_id, file_id) -> bool
-   - 复合权限: file.uploader_id == user_id OR folder admin/owner OR platform admin
+   - 复合权限: file.created_by == user_id OR folder admin/owner OR platform admin
 3. check_comment_resolver(user_id, comment) -> bool
    - 评论 resolve 权限: author / file owner / folder owner / folder admin member
 
@@ -226,7 +226,7 @@ class DrivePermissionService:
 
         规则 (或关系, 与 drive_comment_service._check_resolve_authority 一致):
         - comment.author_id == user_id (作者本人)
-        - comment.file_id 存在 + file.uploader_id == user_id (file owner)
+        - comment.file_id 存在 + file.created_by == user_id (file owner)
         - comment.file_id 存在 + file.folder_id 存在 + user 是 folder admin
         - comment.folder_id 存在 + folder.owner_id == user_id (folder owner)
         - comment.folder_id 存在 + user 是 folder admin member
@@ -250,7 +250,7 @@ class DrivePermissionService:
                 file_row = await self.db.get(Knowledge, comment.file_id)
                 if file_row is not None:
                     # 2a. file owner (uploader)
-                    if file_row.uploader_id == user_id:
+                    if file_row.created_by == user_id:
                         return True
                     # 2b. file.folder admin
                     if file_row.folder_id is not None:
