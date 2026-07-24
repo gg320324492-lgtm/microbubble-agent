@@ -48,6 +48,34 @@
       <span class="dfcv-subtitle">{{ headerSubtitle }}</span>
     </div>
 
+    <!-- 文件级 emoji react 工具栏 + 反应汇总 — B-3 v3.2 -->
+    <div class="dfcv-file-reactions">
+      <div class="dfcv-react-toolbar" role="toolbar" aria-label="文件表情反应">
+        <button
+          v-for="emoji in emojiWhitelist"
+          :key="emoji"
+          type="button"
+          class="dfcv-react-emoji"
+          :class="{ active: fileReactedByMe(emoji) }"
+          :aria-label="`用 ${emoji} 反应文件`"
+          :aria-pressed="fileReactedByMe(emoji)"
+          @click="onToggleFileReaction(emoji)"
+        >
+          {{ emoji }}
+        </button>
+      </div>
+      <div v-if="fileReactionSummary.length > 0" class="dfcv-react-summary">
+        <span
+          v-for="r in fileReactionSummary"
+          :key="r.emoji"
+          class="dfcv-react-pill"
+          :class="{ mine: r.reacted_by_me }"
+        >
+          {{ r.emoji }} {{ r.count }}
+        </span>
+      </div>
+    </div>
+
     <!-- tab 切换 -->
     <nav class="dfcv-tabs" role="tablist">
       <button
@@ -91,12 +119,16 @@
             :username-map="usernameMap"
             :editing-comment-id="editingCommentId"
             :edit-draft="editDraft"
+            :reactions-map="reactionsByComment"
+            :breadcrumb-map="chainByComment"
+            :emoji-whitelist="emojiWhitelist"
             @reply="onReply"
             @edit="startEditComment"
             @toggle-resolved="onToggleResolved"
             @delete="onDeleteCommentWithConfirm"
             @save-edit="onSaveEdit"
             @cancel-edit="cancelEditComment"
+            @toggle-reaction="onToggleCommentReaction"
           />
         </li>
       </ul>
@@ -125,6 +157,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, ChatDotRound, Loading } from '@element-plus/icons-vue'
 import { useCommentTree } from '@/composables/useCommentTree'
 import { useFileCommentsDesktop } from '@/composables/useFileCommentsDesktop'
+import { useCommentReactions, EMOJI_WHITELIST } from '@/composables/useCommentReactions'
+import { useCommentBreadcrumb } from '@/composables/useCommentBreadcrumb'
 import DesktopCommentThread from '@/components/desktop/DesktopCommentThread.vue'
 import DesktopCommentInput from '@/components/desktop/DesktopCommentInput.vue'
 
@@ -134,6 +168,23 @@ const props = defineProps({
 
 const router = useRouter()
 const { buildCommentTree } = useCommentTree()
+
+// B-3 v3.2: emoji 反应 + 面包屑 composables
+const {
+  reactionsByComment,
+  fetchReactions,
+  toggleReaction,
+  reactionsFor,
+} = useCommentReactions()
+const {
+  chainByComment,
+  fetchBreadcrumb,
+  clear: clearBreadcrumb,
+} = useCommentBreadcrumb()
+
+const emojiWhitelist = EMOJI_WHITELIST
+// 文件级 emoji 反应用虚拟 commentId (file:<id>) 存本地, 与评论反应隔离
+const fileReactionKey = computed(() => `file:${props.fileId}`)
 
 const {
   // state
@@ -233,6 +284,49 @@ async function fetchAll() {
     listComments(),
     batchResolveMembers(),
   ])
+  // 评论加载后: 批量拉反应 + 嵌套评论面包屑 (B-3 v3.2)
+  await loadReactionsAndBreadcrumbs()
+}
+
+// B-3 v3.2: 批量拉当前评论反应 + 嵌套评论祖先链
+async function loadReactionsAndBreadcrumbs() {
+  const all = comments.value || []
+  if (all.length === 0) return
+  const commentIds = all.map((c) => c.id).filter((x) => x != null)
+  // 文件级反应也一并拉 (虚拟 key)
+  try {
+    await fetchReactions([...commentIds, fileReactionKey.value])
+  } catch { /* 静默降级 */ }
+  // 嵌套评论 (thread_depth > 0) 才需要面包屑, 深链性能: 只拉有父级的
+  const nested = all.filter((c) => (c.thread_depth || 0) > 0 || c.parent_comment_id != null)
+  await Promise.all(
+    nested.map((c) => fetchBreadcrumb(c.id).catch(() => [])),
+  )
+}
+
+// B-3 v3.2: 单条评论 emoji 反应切换
+async function onToggleCommentReaction(commentId, emoji) {
+  try {
+    await toggleReaction(commentId, emoji)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.message || '表情操作失败')
+  }
+}
+
+// B-3 v3.2: 文件级 emoji 反应
+const fileReactionSummary = computed(() => reactionsFor(fileReactionKey.value).filter((r) => r.count > 0))
+
+function fileReactedByMe(emoji) {
+  const r = fileReactionSummary.value.find((x) => x.emoji === emoji)
+  return !!(r && r.reacted_by_me)
+}
+
+async function onToggleFileReaction(emoji) {
+  try {
+    await toggleReaction(fileReactionKey.value, emoji)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.message || '表情操作失败')
+  }
 }
 
 async function onPost(content) {
@@ -307,6 +401,7 @@ onMounted(() => {
 
 watch(() => props.fileId, (newId, oldId) => {
   if (newId && newId !== oldId) {
+    clearBreadcrumb()  // B-3 v3.2: 防跨文件串链
     fetchAll()
   }
 })
@@ -372,6 +467,70 @@ watch(() => props.fileId, (newId, oldId) => {
   padding: 8px 24px;
   background: var(--color-bg-card, #fff);
   border-bottom: 1px solid var(--color-border-light, #ebeef5);
+}
+
+/* === B-3 v3.2: 文件级 emoji react 工具栏 === */
+.dfcv-file-reactions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 24px;
+  background: var(--color-bg-card, #fff);
+  border-bottom: 1px solid var(--color-border-light, #ebeef5);
+  flex-wrap: wrap;
+}
+
+.dfcv-react-toolbar {
+  display: flex;
+  gap: 2px;
+}
+
+.dfcv-react-emoji {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.1s;
+}
+
+.dfcv-react-emoji:hover {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  transform: scale(1.15);
+}
+
+.dfcv-react-emoji.active {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.16));
+}
+
+.dfcv-react-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dfcv-react-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  background: var(--color-bg-page, #f5f7fa);
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #606266);
+}
+
+.dfcv-react-pill.mine {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.12));
+  border-color: var(--color-primary, #ff7a5c);
+  color: var(--color-primary, #ff7a5c);
 }
 
 .dfcv-tab-btn {
@@ -489,8 +648,18 @@ watch(() => props.fileId, (newId, oldId) => {
 
 [data-theme="dark"] .dfcv-header,
 [data-theme="dark"] .dfcv-tabs,
+[data-theme="dark"] .dfcv-file-reactions,
 [data-theme="dark"] .dfcv-compose {
   background: var(--color-bg-card, #2a2d35);
   border-color: var(--color-border-light, #3a3d45);
+}
+
+[data-theme="dark"] .dfcv-react-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--color-border-light, #3a3d45);
+}
+
+[data-theme="dark"] .dfcv-react-pill.mine {
+  background: rgba(255, 122, 92, 0.16);
 }
 </style>
