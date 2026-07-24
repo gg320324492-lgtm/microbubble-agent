@@ -33,6 +33,7 @@ import json
 import logging
 import os  # 2026-07-13 #P1: 读 THINKING_MODE env 注入 payload
 import re
+import subprocess  # W68 A-3: --use-test-stack 起/销毁 docker-compose.test.yml
 import sys
 import time
 from datetime import datetime
@@ -865,6 +866,63 @@ def _aggregate_round_results(
     return aggregate
 
 
+# === W68 A-3: 隔离测试栈生命周期 (plan qa-bench-isolation-a1.md) ===
+TEST_COMPOSE_FILE = "docker-compose.test.yml"
+TEST_STACK_BASE_URL = "http://127.0.0.1:8001"
+TEST_STACK_DB_PORT = 5433
+
+
+def _run_cmd(cmd: List[str], check: bool = True) -> subprocess.CompletedProcess:
+    """薄封装 subprocess.run, 打印命令供审计."""
+    print(f"    $ {' '.join(cmd)}", flush=True)
+    return subprocess.run(cmd, check=check)
+
+
+async def _wait_for_test_stack(base_url: str, timeout_s: int = 120) -> bool:
+    """轮询 test-app /health 直到 healthy 或超时."""
+    deadline = time.monotonic() + timeout_s
+    async with httpx.AsyncClient() as client:
+        while time.monotonic() < deadline:
+            try:
+                r = await client.get(f"{base_url}/health", timeout=5)
+                if r.status_code == 200:
+                    return True
+            except Exception:
+                pass
+            await asyncio.sleep(3)
+    return False
+
+
+def test_stack_up(compose_file: str = TEST_COMPOSE_FILE) -> None:
+    """启动隔离测试栈 (docker compose up -d)."""
+    print("[STACK] 启动 qa-bench 隔离测试栈...")
+    _run_cmd(["docker", "compose", "-f", compose_file, "up", "-d"])
+
+
+def test_stack_down(compose_file: str = TEST_COMPOSE_FILE) -> None:
+    """销毁隔离测试栈 + 数据卷 (docker compose down -v, 0 残留)."""
+    print("[STACK] 销毁测试栈 (down -v, 清数据卷)...")
+    _run_cmd(["docker", "compose", "-f", compose_file, "down", "-v"], check=False)
+
+
+def load_fixture_into_test_stack(fixture_sql: str, db_port: int = TEST_STACK_DB_PORT) -> None:
+    """把脱敏后的 fixture 灌入测试栈 DB (psql host:db_port)."""
+    fixture_path = Path(fixture_sql)
+    if not fixture_path.exists():
+        raise FileNotFoundError(f"fixture 不存在: {fixture_path}")
+    if fixture_path.suffix == ".sql" and ".sanitized" not in fixture_path.name:
+        print(
+            f"    ⚠️  {fixture_path.name} 未含 .sanitized — 疑似未脱敏, "
+            "先跑 scripts/sanitize_fixture.py --apply",
+            flush=True,
+        )
+    pw = os.environ.get("TEST_POSTGRES_PASSWORD", "test_password")
+    db_url = f"postgresql://postgres:{pw}@localhost:{db_port}/microbubble_test"
+    print(f"[FIXTURE] 灌入 {fixture_path.name} → test DB (port {db_port})...")
+    with fixture_path.open("rb") as f:
+        subprocess.run(["psql", db_url], stdin=f, check=True)
+
+
 async def main():
     global API_BASE
     parser = argparse.ArgumentParser()
@@ -895,6 +953,13 @@ async def main():
                         help="D2: 启用全自动 KB 入库 (灰度=100, 等价 --grayscale 100)")
     parser.add_argument("--grayscale", type=int, default=0,
                         help="D2: 灰度入库百分比 0-100 (默认 0 = 关闭)")
+    # W68 A-3: 隔离测试栈 (plan qa-bench-isolation-a1.md)
+    parser.add_argument("--use-test-stack", action="store_true",
+                        help="A1: 用 docker-compose.test.yml 隔离栈跑测 (自动 up→灌 fixture→run→down)")
+    parser.add_argument("--fixture-sql", default="",
+                        help="A1: 脱敏后 fixture SQL 路径 (配合 --use-test-stack, 空则跳过灌入)")
+    parser.add_argument("--skip-down", action="store_true",
+                        help="A1: 跑测后不自动销毁测试栈 (调试用)")
     args = parser.parse_args()
     if args.rounds < 1:
         parser.error("--rounds must be >= 1")
@@ -909,6 +974,23 @@ async def main():
     # 2026-07-02 Round 9 修复: 支持 --api-base 参数 (跑 cloud / 本地 backend)
     API_BASE = args.api_base
     logger.info(f"API_BASE = {API_BASE}")
+
+    # W68 A-3: 隔离测试栈生命周期 (plan qa-bench-isolation-a1.md)
+    # 流程: up → 等 healthy → 灌 fixture → 覆盖 API_BASE 到 :8001 → (finally) down -v
+    _test_stack_active = False
+    if args.use_test_stack:
+        test_stack_up()
+        _test_stack_active = True
+        print("[STACK] 等待 test-app healthy (最多 120s)...")
+        healthy = await _wait_for_test_stack(TEST_STACK_BASE_URL)
+        if not healthy:
+            if not args.skip_down:
+                test_stack_down()
+            parser.error("测试栈 test-app 未在 120s 内 healthy, 中止")
+        if args.fixture_sql:
+            load_fixture_into_test_stack(args.fixture_sql)
+        API_BASE = TEST_STACK_BASE_URL
+        print(f"[STACK] 就绪, API_BASE 覆盖为 {API_BASE}")
 
     # v3.1 D6: --smoke 简写展开 (CI 路径收敛为单一 flag)
     SMOKE_LIMIT = 200
@@ -1141,6 +1223,12 @@ async def main():
             f"{intake_summary['skipped']} skipped "
             f"(grayscale={intake_summary['grayscale_pct']}%)"
         )
+
+    # W68 A-3: 销毁隔离测试栈 (除非 --skip-down)
+    if _test_stack_active and not args.skip_down:
+        test_stack_down()
+    elif _test_stack_active:
+        print(f"[STACK] --skip-down 已设, 测试栈保留 (手动 docker compose -f {TEST_COMPOSE_FILE} down -v)")
 
 
 def _write_onebyone_log(log_path: Path, results: List[Dict[str, Any]]) -> None:
