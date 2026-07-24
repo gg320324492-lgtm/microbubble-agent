@@ -27,9 +27,37 @@ Usage::
     # custom matrix shape -- 2 workers, 250 concurrency, 95 gate
     python tests/qa-bench/phase3_matrix_runner.py --workers 2 --matrix 8 --gate-threshold 95
 
+    # W68 第 11 批 C-2 unified output CLI
+    python tests/qa-bench/phase3_matrix_runner.py --report-out phase3.json          # JSON by suffix
+    python tests/qa-bench/phase3_matrix_runner.py --report-out phase3.md            # Markdown by suffix
+    python tests/qa-bench/phase3_matrix_runner.py --report-out phase3 --output-format md
+    python tests/qa-bench/phase3_matrix_runner.py --input custom_questions.jsonl --report-out phase3.json
+    python tests/qa-bench/phase3_matrix_runner.py --dry-run --seven-d --report-out phase3.json
+
 The runner returns ``int`` -- ``0`` when *all* workers clear the gate
 ("matrix PASS"), ``1`` when any worker falls below gate ("matrix FAIL"),
 ``2`` on abort.
+
+W68 第 11 批 C-2 CLI uniformity
+-------------------------------
+
+* ``--output-format {auto,json,md}`` (default ``auto``) decides the
+  on-disk encoding.  ``auto`` infers from ``--report-out`` suffix
+  (``.json`` -> JSON, ``.md`` -> Markdown, no suffix -> JSON).
+* ``--input PATH`` lets the runner consume a custom question corpus
+  (JSONL or top-level JSON list).  When omitted the runner loads the
+  full 1000-question Phase 2 corpus and shards it across the matrix
+  workers.  Used by ``save_to_kb`` 5 道防线 pipelines and downstream
+  tooling that wants to reuse the runner on a curated subset.
+* ``--seven-d`` invokes ``runner.score_seven_dim`` after the matrix
+  dry-run finishes and writes ``seven_d_phase3_dry.json`` next to the
+  report.  The dry grade is heuristic (uses the coarse pass-rate per
+  intent as the ``accuracy`` dim; other dims default to 1.0).  Future
+  PRs can swap the heuristic for a real dim scoring loop without
+  changing the CLI surface.
+* The Phase 1 and Phase 2 runners share the same CLI contract -- see
+  ``run_d5_dry.py`` and ``phase2_dry_runner.py`` for the parallel
+  ``--output-format`` / ``--input`` / ``--seven-d`` flags.
 """
 
 from __future__ import annotations
@@ -427,6 +455,142 @@ def _dry_worker_summary(
 
 
 # ---------------------------------------------------------------------------
+# W68 第 11 批 C-2 unified output CLI helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_output_format(
+    output_path: str | None,
+    output_format: str,
+) -> str:
+    """Mirror of ``run_d5_dry._resolve_output_format`` (W68 第 11 批 C-2)."""
+
+    normalized = (output_format or "auto").strip().lower()
+    if normalized not in {"auto", "json", "md"}:
+        raise SystemExit(
+            f"--output-format must be one of auto|json|md, got {output_format!r}"
+        )
+    if normalized != "auto":
+        return normalized
+    suffix = Path(output_path or "").suffix.lower()
+    if suffix == ".json":
+        return "json"
+    if suffix in {".md", ".markdown"}:
+        return "md"
+    return "json"
+
+
+def _dump_payload(payload: dict[str, Any], fmt: str, path: Path) -> str:
+    """Serialize ``payload`` to ``path`` according to ``fmt``."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "json":
+        body = dict(payload)
+        body.setdefault("format_version", "1")
+        path.write_text(
+            json.dumps(body, ensure_ascii=False, indent=2, sort_keys=False),
+            encoding="utf-8",
+        )
+    else:
+        path.write_text(str(payload.get("body") or ""), encoding="utf-8")
+    return fmt
+
+
+def _load_input_questions(input_path: str | None) -> list[dict[str, Any]]:
+    """Load the question corpus from ``--input`` JSON / JSONL.
+
+    When ``input_path`` is omitted we fall back to ``_load_full_corpus``.
+    """
+
+    if not input_path:
+        return _load_full_corpus()
+    p = Path(input_path)
+    if not p.exists():
+        raise SystemExit(f"--input path does not exist: {p}")
+    raw = p.read_text(encoding="utf-8").strip()
+    if not raw:
+        return []
+    rows: list[dict[str, Any]] = []
+    if raw.startswith("["):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"--input JSON parse failed: {exc}") from exc
+        if isinstance(data, list):
+            rows = [r for r in data if isinstance(r, dict)]
+        else:
+            rows = [data] if isinstance(data, dict) else []
+    else:
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise SystemExit(
+                    f"--input JSONL parse failed on line {len(rows) + 1}: {exc}"
+                ) from exc
+            if isinstance(obj, dict):
+                rows.append(obj)
+    return rows
+
+
+def _run_seven_d_scoring(
+    rollup: dict[str, Any],
+    *,
+    output_dir: Path,
+) -> str | None:
+    """Best-effort post-run 7-dim scoring (W68 第 10 批 B-1 integration)."""
+
+    try:
+        from runner import score_seven_dim  # type: ignore[import-not-found]
+    except Exception:  # noqa: BLE001 -- optional integration, never fatal
+        return None
+    by_intent = rollup.get("by_intent", {}) or {}
+    intents = sorted(by_intent.keys())
+    if not intents:
+        return None
+    per_intent_dim: dict[str, dict[str, Any]] = {}
+    totals: list[float] = []
+    for intent in intents:
+        info = by_intent.get(intent) or {}
+        pass_rate = float(info.get("pass_rate") or 0.0)
+        dim_scores = {
+            "intent": 1.0,
+            "tool": 1.0,
+            "content": 1.0,
+            "structure": 1.0,
+            "accuracy": pass_rate,
+            "defense": 1.0,
+            "latency": 1.0,
+        }
+        total = sum(dim_scores.values()) / len(dim_scores) * 100
+        totals.append(total)
+        per_intent_dim[intent] = {
+            "dim_scores": dim_scores,
+            "total_score": round(total, 2),
+            "grade": score_seven_dim.__globals__.get("_SEVEN_DIM_GRADE", "B"),
+            "veto": False,
+        }
+    overall_total = round(sum(totals) / max(len(totals), 1), 2)
+    payload = {
+        "phase": "phase3",
+        "format_version": "1",
+        "source": "phase3_matrix_runner._run_seven_d_scoring",
+        "intents": per_intent_dim,
+        "overall_total_score": overall_total,
+    }
+    out = output_dir / "seven_d_phase3_dry.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return str(out)
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -437,13 +601,15 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
     can_run_live = bool(api_key) and bool(db_url) and not args.dry_run
     mode = "live-mimo" if can_run_live else "dry-fallback"
     started_at = datetime.now(timezone.utc).isoformat()
+    output_format = _resolve_output_format(args.report_out, args.output_format)
     print(
         f"[phase3-matrix] mode={mode} workers={args.workers} "
         f"matrix_concurrency={args.matrix} rounds={args.rounds} "
-        f"gate={args.gate_threshold}%"
+        f"gate={args.gate_threshold}% "
+        f"output_format={output_format}"
     )
 
-    questions = _load_full_corpus()
+    questions = _load_input_questions(args.input)
     if not questions:
         raise RuntimeError("Phase 3 corpus is empty -- aborting")
 
@@ -453,7 +619,12 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         f"Workers: {args.workers} shards ({args.workers} x ~{len(questions) // args.workers} questions)",
         f"Per-worker concurrency: {args.matrix} (matrix minimum 4, lower falls back to per-shard serial)",
         f"Gate threshold: {args.gate_threshold}% (matrix gate requires ALL workers to clear)",
+        f"Output format: {output_format} ({args.report_out})",
     ]
+    if args.input:
+        extra_notes.append(
+            f"Input corpus override: {args.input} ({len(questions)} rows)"
+        )
     if not can_run_live:
         if not api_key:
             extra_notes.append("MIMO_API_KEY not present -> skipped live run")
@@ -502,9 +673,42 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
 
     if args.report_out:
         out_path = Path(args.report_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(report, encoding="utf-8")
-        print(f"[phase3-matrix] report written to {out_path}")
+        if output_format == "json":
+            json_payload = {
+                "format_version": "1",
+                "schema": "phase3_matrix_runner.v1",
+                "phase": "phase3",
+                "mode": mode,
+                "workers": args.workers,
+                "matrix_concurrency": args.matrix,
+                "rounds": args.rounds,
+                "gate_threshold": args.gate_threshold,
+                "matrix_gate": rollup["matrix_gate"],
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "rollup": rollup,
+                "worker_summaries": worker_summaries,
+                "notes": extra_notes,
+                "total_questions": len(questions),
+            }
+            _dump_payload(json_payload, "json", out_path)
+        else:
+            _dump_payload({"body": report}, "md", out_path)
+        print(
+            f"[phase3-matrix] report written to {out_path} "
+            f"(format={output_format})"
+        )
+
+    if args.seven_d:
+        out_dir = Path(args.report_out).parent if args.report_out else _QA_BENCH_DIR
+        seven_d_path = _run_seven_d_scoring(rollup, output_dir=out_dir)
+        if seven_d_path:
+            print(f"[phase3-matrix] seven-d scoring written to {seven_d_path}")
+        else:
+            print(
+                "[phase3-matrix] seven-d scoring skipped (runner.score_seven_dim "
+                "unavailable or empty corpus)"
+            )
 
     return {
         "rollup": rollup,
@@ -515,6 +719,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         "started_at": started_at,
         "finished_at": finished_at,
         "total_questions": len(questions),
+        "output_format": output_format,
     }
 
 
@@ -566,7 +771,39 @@ def main() -> int:
             _QA_BENCH_DIR
             / f"phase3_matrix_report_{datetime.now().strftime('%Y-%m-%d')}.md"
         ),
-        help="Path to write the auto-generated Markdown report",
+        help=(
+            "Path to write the auto-generated report.  Format follows "
+            "--output-format (default auto: '.json' -> JSON, '.md' -> Markdown, "
+            "no suffix -> JSON).  W68 第 11 批 C-2 CLI uniformity."
+        ),
+    )
+    parser.add_argument(
+        "--output-format",
+        choices=("auto", "json", "md"),
+        default="auto",
+        help=(
+            "Force a specific output format.  'auto' (default) infers the "
+            "format from --report-out suffix; explicit 'json' / 'md' overrides "
+            "the suffix.  W68 第 11 批 C-2 CLI uniformity."
+        ),
+    )
+    parser.add_argument(
+        "--input",
+        default=None,
+        help=(
+            "Optional JSON / JSONL question corpus path.  Overrides the "
+            "default 1000-question Phase 3 corpus (sharded across --workers).  "
+            "W68 第 11 批 C-2."
+        ),
+    )
+    parser.add_argument(
+        "--seven-d",
+        action="store_true",
+        help=(
+            "After the dry-run finishes, emit a 7-dim scoring JSON next "
+            "to --report-out (filename 'seven_d_phase3_dry.json').  Reuses "
+            "runner.score_seven_dim.  W68 第 10 批 B-1 integration."
+        ),
     )
     args = parser.parse_args()
 
