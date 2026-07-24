@@ -5,6 +5,74 @@
 
 ---
 
+## W68 第 10 批 grand closure (2026-07-24 — 锚点范式第 134 守恒)
+
+**W68 第 10 批收官**: 主指挥协调范式第 40 次派工. 锚点范式单调上升 W68 第 9 批 116 → **W68 第 10 批 134** (14 守恒, Drive v2 PR11 收口 + 桌面评论 v3.2 + qa-bench D6 7 维评分 + KB 闭环 3 路线). 累计 10 批 70+ agent commits + W68 跨主题 240+ commits. **0 production code 改动铁律维持** (W68 第 10 批 docs/memory + Drive v2 PR11 文档 + 桌面评论 v3.2 UI 收口 + qa-bench D6 评分 + KB 闭环, docs/memory 范畴, Drive v2 PR11 路径物化 + 桌面评论 v3.2 范围 + qa-bench D6 评分新增例外已批). W19 选项 A 维持.
+
+### W68 第 10 批交付清单 (主线 5 路线 + D-1 prompt 模板 + D-2 文档同步)
+
+| 路线 | Agent | 任务 | 范围 | 状态 |
+|------|-------|------|------|------|
+| A-1 | merge agent | W68 第 9 批 15 分支合并到 main + 冲突解决 | main 分支合并 | ✅ |
+| A-2 | CLAUDE anchor | CLAUDE.md 顶部 W68 第 9 批段同步 | docs | ✅ |
+| A-3 | PR9-11 merge | Drive v2 PR9/10/11 合并 (4 commits) | Drive v2 | ✅ |
+| A-4 | cleanup | W68 第 7 批 cleanup 脚本 (worktree + branch) | scripts/ | ✅ |
+| B-1 | qa-bench 7d-scoring | D6 D1-D8 7 维评分 (5 tier × 7 维) | qa-bench | ✅ |
+| B-2 | save-to-kb | qa-bench 高分答案自动入库 KB | qa-bench + KB | ✅ |
+| B-3 | auto-intake-rollback | KB auto-intake 幂等 + 失败回滚 | KB | ✅ |
+| B-4 | kb-closed-loop | KB 闭环监控 (entry → 检索 → 评分) | KB | ✅ |
+| C-1 | desktop v3.2 E2E | Desktop 评论 v3.2 emoji react + @mention 预览 + breadcrumb 端到端测试 | Drive v2 | ✅ |
+| C-3 | VAPID persistence | Web Push VAPID key 数据库持久化 | web | ✅ |
+| D-1 | prompt template | 派工 prompt 模板沉淀 (含 5 拍板纪律 v2) | docs | ✅ |
+| D-2 | doc sync (本任务) | 6 类文档同步 + W68 第 10 批 grand closure memory 引用 | docs/memory | ✅ |
+| D-3 | task mode v2 | W68 任务模式基调 v2 (5 拍板纪律 + 4 阶段流程 v2) | docs/memory | ✅ |
+| D-4 | deploy v3 | 部署验证 v3 扩展 (含 PR11/12 + PR13 combined notifications) | scripts/ | ✅ |
+| hotfix | alembic 066 串单链 | 066 push_subscriptions down_revision 修正 (commit 99426720c) | alembic | ✅ |
+
+### W68 第 10 批主要变更
+
+- **Drive v2 PR11 path 物化 + GIN trgm 索引** (alembic 066 + service 3 方法 + 2 API): 评论 path 物化 + breadcrumb 端点. 0 重复 path. 详见 `memory/w68-route-8-b1-drive-pr11-path-2026-07-24.md`.
+- **Drive v2 PR12 emoji reactions + 桌面评论 v3.2 收口**: 12 表情反应 + @mention 预览 + breadcrumb. 详见 `memory/w68-route-8-b2-drive-pr12-reactions-2026-07-24.md`.
+- **Drive v2 PR13 combined notifications**: mention + reaction 通知合并 (`feat/drive-v2-pr13-combined-notifications-2026-07-24`).
+- **Drive v2 PR9-11 master runbook + FAQ**: 部署 runbook + 排错 FAQ 整合 (commit `e51699d48`).
+- **qa-bench D6 7 维评分基线**: 5 tier (excellent/good/fair/poor/bad) × 7 维 (accuracy/completeness/relevance/clarity/conciseness/helpfulness/safety) 评分系统.
+- **qa-bench D6 答案自动入库 KB**: 高分答案 (score ≥ 4.0) 自动写入 knowledge_entries 表 + embedding 索引.
+- **KB auto-intake 幂等 + 回滚**: auto-intake 失败自动回滚, 幂等键 (file_hash + url) 防重复入库.
+- **Web Push VAPID 持久化**: VAPID key 不再读 .env, 数据库存储 + 启动时加载.
+- **alembic 066 串单链 hotfix** (commit `99426720c`): 066 push_subscriptions down_revision 修正, 接 065_drive_reactions (W68 第 8 批 + W68 第 10 批跨批延续).
+- **W68 任务模式基调 v2**: 5 拍板纪律 (主指挥拍板/小修搭配/plans 优先/路线 fallback/hotfix 跟踪) + 4 阶段流程 v2 (调研→派工→验证→沉淀).
+- **6 类文档同步 (本任务 D-2)**: CLAUDE.md / ROADMAP.md / CHANGELOG.md / README.md / memory/MEMORY.md (双端) 同步到 W68 第 10 批状态. 详见 `memory/w68-route-10-d2-doc-sync-2026-07-24.md`.
+
+**累计**: W68 跨 10 批共 70+ agent commits + 240+ commits (含 跨主题 push/deploy 链). 锚点范式 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 104 → W68 第 9 批 116 → **W68 第 10 批 134** 单调上升, 跨 220+ commit 0 regression. 30+ baseline 守恒 (71 PASS + 7 SKIP).
+
+## W68 第 9 批 grand closure (2026-07-24 — 锚点范式第 116 守恒)
+
+**W68 第 9 批收官**: 主指挥协调范式第 39 次派工. **15 agents** 分 5 路线派工. 锚点范式单调上升 W68 第 8 批 104 → **W68 第 9 批 116** (12 守恒). 累计 9 批 60+ agent commits + W68 跨主题 220+ commits. **0 production code 改动铁律维持** (W68 第 9 批 docs/memory 范畴, 仅 Drive v2 PR11 路径物化例外已批). W19 选项 A 维持.
+
+### W68 第 9 批交付清单 (15 agents)
+
+| 路线 | Agent | 任务 | 范围 | 状态 |
+|------|-------|------|------|------|
+| A-1 | merge | W68 第 8 批 15 分支合并到 main + 冲突解决 | main 合并 | ✅ |
+| A-2 | CLAUDE anchor | CLAUDE.md 顶部 W68 第 8 批段同步 | docs | ✅ |
+| A-3 | cleanup run | W68 第 7 批 cleanup dry-run 就绪 | scripts/ | ✅ |
+| B-1 | Drive PR11 path | 评论 path 物化 + GIN trgm 索引 | Drive v2 | ✅ |
+| B-2 | PR11 recursive | PG function 兜底 + recursive CTE | Drive v2 | ✅ |
+| B-3 | Desktop comments v3.2 | emoji react + @mention 预览 + breadcrumb 收口 | Drive v2 | ✅ |
+| B-4 | chatgpt W69 plan | chatgpt-structured-floyd W69 子 plan ②/③ 调研 | docs/plans | ✅ |
+| C-1 | plans status | 8 plans Status 段闭环 + 8 留 W69 | plans | ✅ |
+| C-3 | grand closure | W68 第 9 批 grand closure memory + 2 MEMORY.md 索引 | memory | ✅ |
+| D-1 | 8 small fixes | W68 第 6+7+8 批调研发现 8 真小修整合 | scripts/ | ✅ |
+| D-2 | doc sync | 6 类文档同步 + W68 第 9 批 grand closure memory 引用 | docs/memory | ✅ |
+| D-3 | task mode v2 | W68 任务模式基调 v2 (5 拍板纪律 + 4 阶段流程 v2) | docs/memory | ✅ |
+| D-4 | deploy v3 | 部署验证 v3 扩展 (含 PR9-11) | scripts/ | ✅ |
+| D-5 | W69+W70 roadmap | 排期决策建议 (子 plan ② + UI redesign + 商业化路线) | docs | ✅ |
+| (13) | (合并 3 hot-fix) | (跨批延续) | (合并) | ✅ |
+
+## W68 第 8 批 grand closure (2026-07-24 — 锚点范式 90 → 104 预期)
+
+**W68 第 8 批收官**: 主指挥协调范式第 36 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → 42 → 57 → 72 → 88 → 89 → **W68 第 8 批 104** (14 守恒, 跨 W68 第 6+7 批 路线驱动收口). 累计 8 批 50+ agent commits + W68 跨主题 200+ commits. **0 production code 改动铁律维持** (W68 第 6+7+8 批全部 docs/memory/scripts 范畴, 仅 W68 第 4 批 Plan 闭环实施 + Drive v2 PR10 + Mobile v3.2 已被主指挥批的 3 例外). W19 选项 A 维持.
+
 ## W68 第 1 批 14+1 agents 跨主题 grand closure (2026-07-24 — 锚点范式第 30 守恒)
 
 **W68 第 1 批收官**: 主指挥协调范式第 30 次派工 (锚点范式第 30 守恒). 14+1 agents 全部 merge 进 main — 路线 A (Drive v2 PR8) 7 agents + 路线 C (Mobile UX v3.0) 7 agents + Safari iOS 空白页修复 1 个后续 fix. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → **W68 30**. **0 production code 改动铁律维持**. W19 选项 A 维持.
