@@ -1,6 +1,11 @@
 /**
  * useMentionAutocomplete.js — v2 PR6-P4 @username 自动补全 composable
  *
+ * W68 第 13 批 C-2 升级: 跨 DesktopMobile / DesktopFileCommentsView / DesktopDashboardView
+ * 三处统一. 新增 `name` 调用场景标识 + `selector` 参数 (默认 [data-mention-input],
+ * DesktopCommentInput/DesktopFileCommentsView 传 .dci-mention-input), 让多个 mention
+ * dropdown 共存时 selector 隔离, 避免跨视图串状态.
+ *
  * 触发机制:
  * - 监听 textarea/contenteditable 输入
  * - 提取光标前最近 @ 触发器 + query 字符串
@@ -8,9 +13,10 @@
  * - 支持上下键选择 + Enter/Tab 补全 + Esc 关闭 + 点外部关闭
  *
  * 关键设计:
- * - 复用 desktop + mobile CommentThread (一次实现两处用)
+ * - 复用 desktop + mobile CommentThread (一次实现多视图用)
  * - keyboard navigation 是 a11y 必备 (用户不能用鼠标也必须能补全)
  * - candidates 来自服务端 query (无本地过滤), 避免重复逻辑
+ * - keyboardSupport 默认 true (桌面/移动端都支持键盘)
  *
  * 状态机:
  *   idle (无 @) → active (检测到 @) → typing (用户在输入) → selected (高亮某项)
@@ -37,6 +43,9 @@ export function useMentionAutocomplete({
   textareaRef,           // ref to <textarea> or <el-input> wrapping it
   members,               // ref 或 array of {id, username, wechat_id, name, avatar, role}
   onSelect,              // (member) => void   选中后调用 (父组件负责替换文本)
+  name = 'mention',      // 调用场景标识 (debugging + 多视图隔离)
+  selector = '[data-mention-input]',  // CSS selector, 多视图共存时区分
+  keyboardSupport = true,  // 默认 true: Desktop 已有键盘, Mobile 也支持
   debounceMs = 150,
   maxCandidates = 8,
 } = {}) {
@@ -46,6 +55,11 @@ export function useMentionAutocomplete({
   const cursorPos = ref(-1)
   const selectedIndex = ref(0)
   const loading = ref(false)
+
+  // W68 第 13 批 C-2: 暴露 config 为 ref, 外部可通过 .value 读取 (符合 Vue ref 约定)
+  const nameRef = ref(name)
+  const selectorRef = ref(selector)
+  const keyboardSupportRef = ref(keyboardSupport)
 
   let membersCache = null     // 缓存 members list 避免重复 parse prop
   let debounceTimer = null
@@ -213,8 +227,10 @@ export function useMentionAutocomplete({
    * 键盘事件处理器: 给 textarea 绑 onKeydown
    * 命中: ↑↓ Enter Tab Esc → true (已处理)
    * 不命中: false (让 textarea 自己处理)
+   * 仅在 keyboardSupport=true 时启用 (默认 true)
    */
   function handleKeydown(event) {
+    if (!keyboardSupportRef.value) return false
     if (!isOpen.value) return false
     switch (event.key) {
       case 'ArrowDown':
@@ -252,6 +268,9 @@ export function useMentionAutocomplete({
     triggerPos,
     cursorPos,
     loading,
+    name: nameRef,               // 调用场景标识 (ref, 调试可读)
+    selector: selectorRef,       // CSS selector (ref, 多视图隔离)
+    keyboardSupport: keyboardSupportRef,    // 键盘支持开关 (ref)
     refresh,
     open,
     close,

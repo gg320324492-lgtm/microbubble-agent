@@ -143,6 +143,7 @@
         :placeholder="placeholder"
         :busy="posting"
         :auto-focus="false"
+        class="dci-mention-input"
         @post="onPost"
         @typing="onTyping"
       />
@@ -159,6 +160,7 @@ import { useCommentTree } from '@/composables/useCommentTree'
 import { useFileCommentsDesktop } from '@/composables/useFileCommentsDesktop'
 import { useCommentReactions, EMOJI_WHITELIST } from '@/composables/useCommentReactions'
 import { useCommentBreadcrumb } from '@/composables/useCommentBreadcrumb'
+import { useMentionAutocomplete } from '@/composables/useMentionAutocomplete'
 import DesktopCommentThread from '@/components/desktop/DesktopCommentThread.vue'
 import DesktopCommentInput from '@/components/desktop/DesktopCommentInput.vue'
 
@@ -218,6 +220,20 @@ const {
 } = useFileCommentsDesktop(props.fileId)
 
 const newContent = ref('')
+
+// W68 第 13 批 C-2: 跨视图一致性 — view 层也调用 useMentionAutocomplete
+// 复用 desktop comment input 的成员列表 + selector 隔离 .dci-mention-input
+// view 层持有本视图的 mention 状态 (跨 mention input 串 — 改 newContent 时不动)
+const viewMention = useMentionAutocomplete({
+  members: membersList,
+  name: 'desktop-file-comments-view',
+  selector: '.dci-mention-input',
+  keyboardSupport: false,  // input 内部已绑 keyboard, view 层不重复
+  onSelect: () => {
+    // view 层不直接替换文本 (DesktopCommentInput 内部 onSelect 负责)
+    // 仅持有 mention 状态用于 cross-view 统计 + debug
+  },
+})
 
 // === 计算属性 ===
 const treeTop = computed(() => buildCommentTree(filteredComments.value).top)
