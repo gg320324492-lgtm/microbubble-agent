@@ -114,5 +114,25 @@ export default defineConfig({
       },
       testMatch: /mobile\/mobile_drive_comments\.spec\.mjs$/,
     },
+    // W68 第 5 批 #1 (2026-07-24): 桌面端 Drive 评论 UI 视觉回归
+    //   desktop_drive_comments.spec.mjs — 5 viewport × 4 页面 = 20 截图
+    //   复用 v77 P2.6-C 双注入登录态 + 桌面端 chromium engine
+    //   阈值 0.2% 像素差 (跟 v76.2g + 移动端评论视觉基线一致)
+    //   baseline 目录: tests/visual/desktop/desktop_drive_comments.spec.mjs-snapshots/
+    //   锚点范式第 58 守恒
+    {
+      name: 'desktop-comments',
+      // 测试文件自己设置 viewport (5 viewport 矩阵), 不强制
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 1,
+        isMobile: false,
+        hasTouch: false,
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      testMatch: /desktop\/desktop_drive_comments\.spec\.mjs$/,
+    },
   ],
 })
