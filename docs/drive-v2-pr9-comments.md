@@ -1,5 +1,7 @@
 # Drive v2 PR9 — 文件/文件夹 评论 Thread (2026-07-24)
 
+> alembic 066 down_revision 修: 064_drive_documents → 065_push_subscriptions (W68 第 9 批 hot-fix, 串单链 065→066→067)
+
 > **背景**: Drive v2 PR6 已有 `FileComment` (file_comments 表, 仅绑 file_id, 2 层嵌套 + 无 resolved).  
 > 课题组场景需要**文件夹级别讨论** + **多层嵌套回复** + **已解决标记** (GitHub PR review comments 风格).  
 > 本 PR 引入新表 `drive_comments` + 5 个 REST 端点 (含 resolve/unresolve), 与 PR6 FileComment 共存.
