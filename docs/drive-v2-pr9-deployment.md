@@ -1,5 +1,7 @@
 # Drive v2 PR9 部署文档 (2026-07-24)
 
+> **Master runbook 见 [docs/drive-v2-pr9-11-deployment-master-runbook.md](drive-v2-pr9-11-deployment-master-runbook.md)** — 主指挥部署前先查 master runbook 总入口 (PR9 + PR10 + PR11 整合, 18 步 SSH + alembic 链 + 验证脚本 + FAQ)。
+
 > **部署 Runbook (流程化 12 步) 见 [docs/drive-v2-pr9-deployment-runbook.md](docs/drive-v2-pr9-deployment-runbook.md)** — 主指挥按 12 步主流程 + 6 点 curl 验证一键操作。本文档聚焦 alembic 链风险 + 回滚方案 + 端点速查, 与 runbook 互补不重复。
 
 > **范围**: Drive v2 PR9 三个特性分支的生产部署流程
