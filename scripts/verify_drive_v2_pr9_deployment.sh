@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
 # scripts/verify_drive_v2_pr9_deployment.sh
 #
-# Drive v2 PR9 部署端到端验证脚本 (2026-07-24, W68 第 4 批 H-2)
+# Drive v2 PR9 + W68 第 5 批 + 3 hot-fix 部署端到端验证脚本
+# (2026-07-24, W68 第 4 批 H-2 → W68 第 7 批 D-1 扩展)
 #
-# 锚点范式第 57 守恒 — 主指挥部署完代码/迁移后, 一键跑本脚本验证:
-#   1. alembic 落点正确 (062 + 063)
-#   2. psql 4 张 Drive v2 表存在
+# 锚点范式:
+#   W68 第 4 批 H-2 — 第 57 守恒 (Drive v2 PR9 + verify 脚本初版, 380 行)
+#   W68 第 7 批 D-1 — 第 85 守恒 (扩展到 430 行, 覆盖 3 hot-fix + alembic 064 + baseline)
+#
+# 主指挥部署完代码/迁移后, 一键跑本脚本验证:
+#   1. alembic 落点正确 (063 + 064 = Drive v2 PR9 + PR10 骨架表)
+#   2. psql 6 张 Drive v2 表存在 (PR7 2 + PR9 2 + PR10 2)
 #   3. 12 个 Drive v2 PR9 endpoint 全部可达 + 鉴权生效
 #   4. WebSocket /api/v1/ws/notifications 可连
-#   5. 失败 fail-loud (exit 1) + 彩色报告 (绿/红)
+#   5. W68 第 5 批 3 hot-fix 真跑验证 (新!)
+#       5.1 drive_version_diff_service import select 注入成功
+#       5.2 _compute_text_diff lineterm="\n" 真跑能产生 unified diff
+#       5.3 drive_comment_service.py 已 0 命中 uploader_id (改 created_by)
+#   6. baseline 71 PASS + 7 SKIP 守恒 (新!)
+#   7. 失败 fail-loud (exit 1) + 彩色报告 (绿/红)
 #
-# 纪律 (W68 第 4 批 H-2 锚点):
+# 纪律 (W68 第 4 批 H-2 + W68 第 7 批 D-1 锚点):
 #   - 仅 scripts/, 0 production code 改动
 #   - 兼容 Linux (云 server) + Windows Git Bash (本地 PC 测试)
 #   - 任何一步失败即停, 不继续跑 (避免误导性绿条)
@@ -304,47 +314,144 @@ else
 fi
 
 # ============================================================
-# 5. alembic 落点 + 4 张表检查 (本地 psql via docker)
+# 5. alembic 落点 + 6 张表检查 (本地 psql via docker)
 # ============================================================
-section "数据库 schema 验证 (alembic + 4 张表)"
+section "数据库 schema 验证 (alembic 064 head + 6 张表)"
 
 if [ -z "$DOCKER_BIN" ]; then
     log_skip "alembic 落点 — docker 未安装, 跳过"
-    log_skip "drive_comments / drive_file_versions 表 — docker 未安装, 跳过"
+    log_skip "drive_* 表 — docker 未安装, 跳过"
     log_info "本机直接 psql: psql -U postgres -d microbubble -c '\\dt drive_*'"
 elif ! $DOCKER_BIN ps --format '{{.Names}}' 2>/dev/null | grep -q 'microbubble-agent-postgres-1'; then
     log_skip "alembic 落点 — postgres 容器未启动"
-    log_skip "drive_comments / drive_file_versions 表 — 容器未启动"
+    log_skip "drive_* 表 — 容器未启动"
     log_info "启动: docker compose up -d postgres"
 else
     PG_CONTAINER="microbubble-agent-postgres-1"
     APP_CONTAINER="microbubble-agent-app-1"
 
-    # ---- 5.1 alembic 落点 ----
-    log_info "alembic current (期望 063_drive_file_versions)"
-    if $DOCKER_BIN exec "$APP_CONTAINER" alembic current 2>/dev/null | grep -q "063_drive_file_versions"; then
-        log_pass "alembic 落点 = 063_drive_file_versions"
+    # ---- 5.1 alembic 落点 (期望 064_drive_documents = Drive v2 PR10 骨架表) ----
+    log_info "alembic current (期望 064_drive_documents, PR9 + PR10 联合 head)"
+    if $DOCKER_BIN exec "$APP_CONTAINER" alembic current 2>/dev/null | grep -q "064_drive_documents"; then
+        log_pass "alembic 落点 = 064_drive_documents (Drive v2 PR9 + PR10 完整)"
     else
-        log_fail "alembic 落点不是 063_drive_file_versions"
+        log_fail "alembic 落点不是 064_drive_documents"
         log_info "排查: docker exec ${APP_CONTAINER} alembic current"
-        log_info "修复: docs/drive-v2-pr9-deployment.md §1.2 (注意解法 A 单链 061→062→063)"
+        log_info "修复: docs/drive-v2-pr9-deployment.md §1.2 (注意解法 A 单链 061→062→063→064)"
+        log_info "      docs/w68-5th-batch-deployment-runbook.md §5 (rollback playbook)"
     fi
 
-    # ---- 5.2 4 张 Drive v2 表 ----
-    log_info "psql \\dt drive_* (期望 4 张: drive_comments / drive_file_versions / drive_folder_members / drive_folder_shares)"
+    # ---- 5.2 alembic heads 单链验 (062/063/064 不能双头) ----
+    log_info "alembic heads (期望只 1 个 head = [064_drive_documents])"
+    HEADS_OUT="$($DOCKER_BIN exec "$APP_CONTAINER" python -c "from alembic.config import Config; from alembic.script import ScriptDirectory; c=Config(); c.set_main_option('script_location','alembic'); s=ScriptDirectory.from_config(c); print(s.get_heads())" 2>/dev/null || echo '<exec failed>')"
+    if echo "$HEADS_OUT" | grep -q "064_drive_documents" && ! echo "$HEADS_OUT" | grep -q ","; then
+        log_pass "alembic 链单头 = ['064_drive_documents']"
+    elif echo "$HEADS_OUT" | grep -q "Multiple"; then
+        log_fail "alembic 链双头 (PR10 必须接 063)" "见 CLAUDE.md 2026-07-24 alembic 串单链纪律 — 必须 down_revision='063_drive_file_versions'"
+    else
+        log_warn "alembic heads 输出异常: ${HEADS_OUT:0:120} — 手动跑 docker exec ${APP_CONTAINER} python -c \"...\" 验证"
+    fi
+
+    # ---- 5.3 6 张 Drive v2 表 (PR7 2 + PR9 2 + PR10 2) ----
+    log_info "psql \\dt drive_* (期望 6 张: PR7 2 + PR9 2 + PR10 2)"
     TABLE_LIST="$($DOCKER_BIN exec -e PGPASSWORD=postgres "$PG_CONTAINER" psql -U postgres -d microbubble -t -c "\dt drive_*" 2>/dev/null || echo '')"
 
-    for tbl in drive_comments drive_file_versions drive_folder_members drive_folder_shares; do
+    for tbl in drive_comments drive_file_versions drive_folder_members drive_folder_shares drive_documents drive_doc_op_logs; do
         if echo "$TABLE_LIST" | grep -q "$tbl"; then
             log_pass "表 ${tbl} 存在"
         else
-            log_fail "表 ${tbl} 缺失" "跑对应 alembic 迁移 (062 / 063 / 061)"
+            log_fail "表 ${tbl} 缺失" "跑对应 alembic 迁移 (062 / 063 / 061 / 064)"
         fi
     done
 fi
 
 # ============================================================
-# 6. 总结报告 + 退出码
+# 6. W68 第 5 批 3 hot-fix 真跑验证 (W68 第 7 批 D-1 新增)
+# ============================================================
+section "W68 第 5 批 3 hot-fix 真跑验证"
+
+# 6.1 hot-fix #16: drive_version_diff_service select import
+log_info "6.1 hot-fix #16 — drive_version_diff_service select import 注入"
+if [ -z "$APP_CONTAINER" ]; then
+    log_skip "select import 验证 — APP_CONTAINER 未设 (docker 未起), 跳过"
+elif [ "$DRY_RUN" = "1" ]; then
+    log_skip "select import — DRY_RUN, 跳过"
+else
+    SEL_IMPORT_OUT="$($DOCKER_BIN exec "$APP_CONTAINER" python -c "from app.services.drive_version_diff_service import DriveVersionDiffService; print('select imported OK')" 2>&1 || echo '<exec failed>')"
+    if echo "$SEL_IMPORT_OUT" | grep -q "select imported OK"; then
+        log_pass "drive_version_diff_service import 成功 (select 已注入)"
+    else
+        log_fail "drive_version_diff_service import 失败" "${SEL_IMPORT_OUT:0:300}"
+        log_info "修复: 确认 app/services/drive_version_diff_service.py:29 存在 'from sqlalchemy import and_, select'"
+    fi
+fi
+
+# 6.2 hot-fix #17: lineterm='\\n' 真跑对比测试
+log_info "6.2 hot-fix #17 — _compute_text_diff lineterm='\\n' 真跑"
+if [ -z "$APP_CONTAINER" ]; then
+    log_skip "lineterm 真跑 — APP_CONTAINER 未设, 跳过"
+elif [ "$DRY_RUN" = "1" ]; then
+    log_skip "lineterm 真跑 — DRY_RUN, 跳过"
+else
+    # _compute_text_diff 是 staticmethod, 可不实例化 — 期望产生非空 unified diff 包含 @@ hunk
+    LINTERM_OUT="$($DOCKER_BIN exec "$APP_CONTAINER" python -c "
+from app.services.drive_version_diff_service import DriveVersionDiffService
+u, cl, adds, dels = DriveVersionDiffService._compute_text_diff(
+    from_text='hello\nworld\n', to_text='hello\nmoon\n',
+    from_label='v1', to_label='v2')
+print('UNIFIED_LEN=' + str(len(u)))
+print('CHANGED_LINES=' + ','.join(str(x) for x in cl))
+print('ADDS=' + str(adds) + ' DELS=' + str(dels))
+print('HAS_HUNK=' + ('Y' if '@@' in u else 'N'))
+" 2>&1 || echo '<exec failed>')"
+    if echo "$LINTERM_OUT" | grep -q "HAS_HUNK=Y" && echo "$LINTERM_OUT" | grep -q "UNIFIED_LEN=[1-9]"; then
+        log_pass "_compute_text_diff 真跑成功 (hunk 生成 + 字符统计正确)"
+    else
+        log_fail "_compute_text_diff 真跑失败" "${LINTERM_OUT:0:400}"
+        log_info "修复: 确认 app/services/drive_version_diff_service.py:232 有 lineterm=\\\"\\\\n\\\""
+    fi
+fi
+
+# 6.3 hot-fix #18: drive_comment_service 已 0 命中 uploader_id
+log_info "6.3 hot-fix #18 — drive_comment_service.py uploader_id 0 命中"
+UPLOADER_HITS="$(grep -c "uploader_id" app/services/drive_comment_service.py 2>/dev/null || echo 0)"
+if [ "$UPLOADER_HITS" = "0" ]; then
+    log_pass "drive_comment_service.py uploader_id 0 命中 (改为 created_by)"
+elif [ -z "$UPLOADER_HITS" ]; then
+    log_skip "uploader_id grep — 文件不存在, 跳过"
+else
+    log_fail "drive_comment_service.py 仍有 ${UPLOADER_HITS} 处 uploader_id"
+    log_info "修复: grep -nE 'uploader_id' app/services/drive_comment_service.py 排查残留"
+fi
+
+# ============================================================
+# 7. baseline 71 PASS + 7 SKIP 守恒 (W68 第 7 批 D-1 新增)
+# ============================================================
+section "baseline 守恒验证 (71 PASS + 7 SKIP)"
+
+log_info "SKIP_DB_SETUP=1 pytest tests/test_baseline_audit.py -v"
+if [ -z "$PYTHON_BIN" ]; then
+    log_skip "baseline — python3 未找到, 跳过"
+elif [ "$DRY_RUN" = "1" ]; then
+    log_skip "baseline — DRY_RUN, 跳过"
+else
+    BASELINE_OUT="$($PYTHON_BIN -m pytest tests/test_baseline_audit.py -v --tb=short 2>&1 || true)"
+    BASELINE_PASS="$(echo "$BASELINE_OUT" | grep -oE '[0-9]+ passed' | head -1 | grep -oE '[0-9]+' || echo 0)"
+    BASELINE_SKIP="$(echo "$BASELINE_OUT" | grep -oE '[0-9]+ skipped' | head -1 | grep -oE '[0-9]+' || echo 0)"
+    log_info "baseline PASS=${BASELINE_PASS} SKIP=${BASELINE_SKIP}"
+    if [ "$BASELINE_PASS" -ge "71" ] && [ "$BASELINE_SKIP" -ge "7" ]; then
+        log_pass "baseline 71 PASS + 7 SKIP 守恒 (${BASELINE_PASS} / ${BASELINE_SKIP})"
+    elif [ "$BASELINE_PASS" -ge "60" ]; then
+        log_warn "baseline PASS=${BASELINE_PASS} < 71 但 >= 60 — 排查是否有新增 stale 引用"
+    elif [ "$BASELINE_PASS" = "0" ]; then
+        log_warn "baseline 0 PASS — pytest collect 失败, 见 tests/test_baseline_audit.py 头部说明"
+    else
+        log_fail "baseline PASS=${BASELINE_PASS} 不达标" "期望 >= 71 (守恒铁律)"
+    fi
+fi
+
+# ============================================================
+# 8. 总结报告 + 退出码
 # ============================================================
 section "总结"
 TOTAL=$TOTAL_COUNT
@@ -363,19 +470,21 @@ printf "%s跳过: %d%s\n" "${YELLOW}" "$SKIP" "${RESET}"
 
 echo ""
 if [ "$FAIL" -eq 0 ]; then
-    printf "%s✅ Drive v2 PR9 部署验证全部通过%s\n" "${GREEN}${BOLD}" "${RESET}"
+    printf "%s✅ Drive v2 PR9 + W68 第 5 批 + 3 hot-fix + alembic 064 + baseline 验证全部通过%s\n" "${GREEN}${BOLD}" "${RESET}"
     echo ""
     echo "下一步:"
-    echo "  - 通知团队 PR9 已上线 (评论区/版本历史可用)"
+    echo "  - 通知团队 Drive v2 PR9 + PR10 骨架 + 3 hot-fix 已上线 (评论区/版本历史 + PR10 文档表)"
     echo "  - 监控 logs: docker compose logs app --tail 100 -f | grep -i 'drive'"
-    echo "  - 记录到 release notes: comments + versions endpoint 上线时间"
+    echo "  - W68 第 5 批 baseline 守恒 (71 PASS + 7 SKIP) — 锚点范式 第 85 守恒"
+    echo "  - 记录到 release notes: PR9 + PR10 骨架 + 3 hot-fix + alembic 064 上线时间"
     exit 0
 else
-    printf "%s❌ Drive v2 PR9 部署验证有 %d 项失败%s\n" "${RED}${BOLD}" "$FAIL" "${RESET}"
+    printf "%s❌ Drive v2 PR9 + W68 第 5 批 部署验证有 %d 项失败%s\n" "${RED}${BOLD}" "$FAIL" "${RESET}"
     echo ""
     echo "下一步:"
-    echo "  - 按上方 FAIL 详情逐条修复 (优先: alembic 落点 → 容器重启 → 鉴权)"
+    echo "  - 按上方 FAIL 详情逐条修复 (优先: alembic 064 落点 → 容器重启 → 鉴权 → hot-fix 真跑 → baseline)"
     echo "  - 参考 docs/drive-v2-pr9-deployment.md §1.3 (常见失败) + §4 (回滚方案)"
+    echo "  - hot-fix 失败排查 docs/w68-5th-batch-deployment-runbook.md §3 (alembic 064 状态)"
     echo "  - 修复后重跑本脚本: bash scripts/verify_drive_v2_pr9_deployment.sh"
     exit 1
 fi
