@@ -117,6 +117,23 @@
       @context-command="onSubContext"
     />
 
+    <!-- v2 PR18 (2026-07-24, W68 第 14 批 B-2) 团队共享盘 Team Folder
+         区别于上面 PR7 的 is_team_default=true 普通 Folder:
+         - PR7 = is_team_default=True 普通 Folder 子树 (组会PPT 文件夹级别共享)
+         - PR18 = TeamFolder 表 (成员列表显式存为 ARRAY + 4 维审计)
+         同一个 "🌐 团队共享盘" 节点下同时挂载 PR7 + PR18 节点 — 用户视觉统一 -->
+    <FolderTreeNode
+      v-for="team in teamFolders"
+      :key="`team-pr18-${team.id}`"
+      :folder="teamFolderToTreeNode(team)"
+      :depth="1"
+      :selected-folder-id="selectedTeamFolderId === team.id ? -team.id : selectedFolderId"
+      :expanded-folder-ids="expandedFolderIds"
+      @select="(id) => onSelectTeamFolder(team, id)"
+      @toggle="$emit('toggle-expanded', $event)"
+      @context-command="onSubContext"
+    />
+
     <FolderContextMenu :items="requestsMenuItems" placement="right-start" @command="(cmd) => onRequestsContext(cmd)">
       <div
         class="folder-tree-special-item drive-folder-tree-special-item is-requests"
@@ -159,7 +176,10 @@ const props = defineProps({
   expandedFolderIds: { type: Set, default: () => new Set() },
   loading: { type: Boolean, default: false },
   loadError: { type: [String, null], default: null },
-  specialView: { type: [String, null], default: null }  // 'starred' | 'trash' | 'requests' | null
+  specialView: { type: [String, null], default: null },  // 'starred' | 'trash' | 'requests' | null
+  // v2 PR18 (W68 第 14 批 B-2): Team Folder 列表 (GET /api/v1/team-folders 返回)
+  teamFolders: { type: Array, default: () => [] },
+  selectedTeamFolderId: { type: [Number, null], default: null },
 })
 
 // v2.27 (2026-07-12) BUG G 修复: 把 is_team_default=true 的 folder 从 folderTree 中分离
@@ -388,6 +408,26 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
       }
     } catch (e) { /* user cancel */ }
   }
+}
+
+// === v2 PR18 (W68 第 14 批 B-2) Team Folder 适配 ===
+// TeamFolder 是独立表 (app/models/team_folder.py), 区别于 Folder
+// FolderTreeNode 期望 props.folder 含 {id, name, ...}, 这里做轻量适配
+function teamFolderToTreeNode(team) {
+  return {
+    id: -team.id,         // 用负数 id 与普通 Folder 隔离 (避免 key 冲突)
+    name: `👥 ${team.name}`,
+    owner_id: team.owner_id,
+    is_team_folder: true,
+    member_count: (team.member_ids || []).length,
+  }
+}
+
+function onSelectTeamFolder(team, _id) {
+  // v2 PR18 team folder click 行为: 弹 audit 列表 (后续 PR 接入 team folder detail view)
+  ElMessage.info(
+    `Team Folder "${team.name}" — 成员 ${(team.member_ids || []).length} 人, 请到审计面板查看活动`
+  )
 }
 </script>
 
