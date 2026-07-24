@@ -287,6 +287,12 @@ def _get_rate_limit_type(request: Request) -> str:
             return "drive_upload"
         return "drive_list"
 
+    # qa-bench v3.1 D5 (2026-07-24): KB 自动入库监控端点 → write tier (30/min)
+    # 全部 GET, 但派工要求 write tier 30/min (admin dashboard 轮询, 30/min 足够;
+    # 已由 get_current_admin 鉴权兜底, write tier 只作二次限流防滥用).
+    if path.startswith("/api/v1/admin/kb-monitor"):
+        return "write"
+
     # v31.2: 检索质量埋点端点 - POST/PATCH 完全豁免（前端每次搜索 2 次埋点, 不该限流）,
     # GET stats/logs 走 read tier (200/min) 防滥用.
     # v31.2.1 防御: substring "/analytics" + startswith("/api/v1/auth/") 守卫

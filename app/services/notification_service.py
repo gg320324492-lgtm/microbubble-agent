@@ -760,6 +760,7 @@ async def push_with_priority(
     payload: dict,
     *,
     priority: Optional[NotificationPriority] = None,
+    db: Optional[object] = None,  # AsyncSession 类型提示省略避免循环 import
 ) -> int:
     """W68 PR8d: 推送通知 (在线走 WS, 离线走队列)
 
@@ -768,10 +769,17 @@ async def push_with_priority(
     - MEDIUM: 尝试 WS 推送, 失败入 offline MEDIUM 队列
     - LOW: 不主动 WS 推送, 直接入 offline LOW 队列 (用户 reconnect 才看)
 
+    W68 第 7 批 B-3 扩展: 跨端推送 (WS + 浏览器原生 push)
+    - HIGH/MEDIUM: 同时调 push_service.push_to_user (best-effort, 不阻塞 WS 路径)
+    - LOW: 只入 offline queue, 不推浏览器 (用户 reconnect 才看)
+    - 浏览器推送是**异步** (create_task), 不阻塞 WS 推 + 离线入队的 fast path
+    - push 失败静默吞 (不影响用户能看到 WS 实时通知)
+
     Args:
         user_id: 目标 user
         payload: 推送内容
         priority: None=从 payload 读 / 从 context 推断
+        db: AsyncSession (可选, 浏览器推送需要 DB 查 subscription)
 
     Returns:
         1 = WS 推送成功, 0 = 离线入队
@@ -803,7 +811,53 @@ async def push_with_priority(
     # 在线但 WS 暂时不通 (可能 client 断网) 也入队
     if delivered == 0:
         await enqueue_offline(user_id, payload)
+
+    # W68 第 7 批 B-3: 跨端推送 — 浏览器原生 push (用户关网页也能收)
+    # 必须 best-effort: 失败 / 无 db 都不阻塞 WS fast path
+    if db is not None:
+        try:
+            import asyncio
+            asyncio.create_task(_push_to_browser(user_id, payload, db))
+        except Exception as e:
+            logger.debug(f"[Notify] push_to_browser create_task 失败: {e}")
+
     return delivered
+
+
+async def _push_to_browser(user_id: int, payload: dict, db: object) -> None:
+    """W68 第 7 批 B-3: 浏览器原生 push (后台异步)
+
+    从 payload 抽 title / body / data 调 push_service.push_to_user.
+    失败静默吞 (用户至少能收到 WS / 离线队列通知).
+    """
+    try:
+        from app.services.push_service import push_to_user
+        title = payload.get("title") or _infer_title_from_payload(payload)
+        body = payload.get("body") or _infer_body_from_payload(payload)
+        data = {k: v for k, v in payload.items() if k not in ("title", "body", "priority")}
+        await push_to_user(
+            db,
+            user_id=user_id,
+            title=title,
+            body=body,
+            data=data,
+        )
+    except Exception as e:
+        logger.debug(f"[Notify] push_to_browser 失败 (非阻塞): {e}")
+
+
+def _infer_title_from_payload(payload: dict) -> str:
+    """W68 第 7 批 B-3: payload 无 title 时回退推断"""
+    ctx = payload.get("context") or payload.get("type") or "通知"
+    return f"小气助手 · {ctx}"
+
+
+def _infer_body_from_payload(payload: dict) -> str:
+    """W68 第 7 批 B-3: payload 无 body 时回退推断"""
+    text = payload.get("content") or payload.get("message") or ""
+    if isinstance(text, str):
+        return text[:200]
+    return "您有一条新通知"
 
 
 # W68 PR8d: 批量通知合并 (per-user in-memory pending batches)

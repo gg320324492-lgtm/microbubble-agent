@@ -67,6 +67,12 @@ web/**/_token.json
 .env.backup-*
 .env.*.bak
 
+# qa-bench 隔离测试栈 fixtures (W68 A-3, plan qa-bench-isolation-a1.md)
+# 原始 pg_dump 含 PII (email/phone/wechat_id) — 严禁进 git.
+# 脱敏后的 *.sanitized.sql 也默认排除 (含真实业务内容, 仅本地灌入测试栈用).
+fixtures/*.sql
+fixtures/prod_dump_*.sql
+
 # 前端
 node_modules/
 web/dist/

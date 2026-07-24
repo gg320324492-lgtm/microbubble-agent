@@ -3,15 +3,20 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
-## 当前状态（2026-07-24 W68 第 4 批 grand closure — 锚点范式第 57 守恒）
+## 当前状态（2026-07-24 W68 第 7 批 grand closure — 锚点范式第 85 守恒）
 
 **任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md`.
 
+**W68 第 7 批跨主题收官 (plans 闭环 + Status 修正)**: 主指挥协调范式第 35 次派工. **15 agents** 分 4 路线派工. 触发点: W68 第 6 批 5 agent **实战** git log + git show + grep -r 核对 67 plans, 发现真完成率仅 **53% ACTUAL_COMPLETED** (vs W66 `plans-status-67-closure` 仅信 Status 段自报的 70%) + 5 个真未实施 (P0: exe-logical-pie / claude-code-bubbly-parnas / silly-gliding-dahl / qa-bench-isolation-a1 / qa-bench-v3.1-decisions D5) + 12 个 PARTIAL_REGRESSION + 14 个 Status 段系统化错位 + 2 个 MISCATEGORIZED. 4 路线: **C** (plans 审计收口 3: Status 修正 + P0 评估 + verified-plans 报告) + **D** (plans 闭环实施 3: bubbly-parnas hook wire + silly-gliding-dahl team_overview + D5 Dashboard KB 监控) + **A/B** (Drive v2 PR10 协同编辑/版本对比 + qa-bench D6 Phase 1 续 4) + **E** (Mobile UX v3.2 性能 + baseline 守恒 + grand closure 3). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → 42 → 57 → 72 → **W68 第 7 批 85** (13 守恒). **0 production code 改动铁律维持** (路线 C/E 纯 docs+memory 完全维持, 路线 D plans 闭环 + 路线 A/B 新功能扩展 例外已批, 不动 v1 老路径). W19 选项 A 维持 (4 留未来 PR + 2 新增 P0). 详见 `memory/verified-plans-w68-2026-07-24.md` + `memory/w68-grand-closure-7th-batch-2026-07-24.md`.
+
 **W68 第 3 批跨主题收口**: 主指挥协调范式第 42 次派工 (锚点范式第 42 守恒). W68 第 3 批 11 agents + 1 主指挥 alembic 串单链修复 (11 commits) 全部 merge 进 main: **Drive v2 PR9** (F-1 评论 thread 后端 + F-2 文件版本历史 + F-3 移动端评论 UI) + **qa-bench D6 调研** (B-1 in-process runner + B-2 GHCR cache + B-3 实施路线图) + **Mobile UX v3.1** (G-1 语音输入 + G-2 手势导航) + **文档部署收口** (H-1 PR9 部署文档 + H-2 v3.1 文档). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → **W68 第 3 批 42**, 30+ baseline 守恒 (71 PASS + 7 SKIP, 跨 100+ commit 0 regression). 累计 8 批 50+ agent commits + **W68 跨主题 50+ commits** (第 1 批 30 + 第 2 批 8 + 第 3 批 12+). **0 production code 改动铁律维持** (Drive v2 PR9 + qa-bench D6 调研 + Mobile UX v3.1 范畴内, 不动 v1 老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-2026-07-24.md`.
 
-**W68 第 4 批跨主题收官**: 主指挥协调范式第 32 次派工. **15 agents 派工 + W68 第 3 批留待办 10 项 100% 闭环** + Plan 闭环 2/2 (15-17-18-cozy-bengio Part 2 重实施, 弥补 commit 4b215220 refactor 意外删除 + 2026-06-05-19-10-melodic-donut 杜/吴误标修复脚本就绪). 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → **W68 第 4 批 57** (单批 27 守恒历史新高), 31+ baseline 守恒 (71 PASS + 7 SKIP, 跨 100+ commit 0 regression). 累计 8 批 50+ agent commits + **W68 跨主题 80+ commits** (第 1 批 30 + 第 2 批 8 + 第 3 批 12 + 第 4 批 30+). **0 production code 改动铁律维持** (2 例外已批: Plan 闭环实施 = 业务代码新增独立模块 + scripts/ + docs/ + memory/, 不动老路径). W19 选项 A 维持. 详见 `memory/w68-grand-closure-4th-batch-2026-07-24.md`.
+**W68 第 6 批 plans 审计 (主指挥)**: 67 plans 审计发现 5 SUPERSEDED/MISCATEGORIZED + 1 DELETED + 3 plan-body/Status 段错配 + 2 MISCATEGORIZED 错归类.
 
-**W68 第 1+2+3 批回顾**: 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari fix 1 commit + 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + 第 3 批 11 agents (Drive v2 PR9 评论/版本 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口). main HEAD `243937b7f`.
+**W68 第 7 批 plans 整理 (本任务)**:
+- 8 plans 已归档 (4 SUPERSEDED + 2 MISCATEGORIZED + 1 自标废弃 + 1 DELETED 真删), 真实 67 plans 调整为 **59 plans 活跃 + 8 plans archived**.
+- 新建 `C:/Users/pc/.claude/plans/archived/` 目录, 统一管理 SUPERSEDED / MISCATEGORIZED / DELETED 类 plan 文档.
+- 锚点范式第 84 守恒. 详见 `memory/w68-route-7-c2-plans-archive-2026-07-24.md`.
 
 **W68 第 4 批纪律沉淀 — alembic 并行 agent 串单链** (commit `1852468a6` 修复): F-1 (062) + F-2 (063) 并行派工都接 061 → merge 后 Multiple head revisions → 主指挥改 063 接 062 串单链. **5 条新铁律**已沉淀到 CLAUDE.md「2026-07-24 alembic 并行 agent 串单链纪律」节 (派工明确接续 / merge 按链序 / merge 后 verify 单 head / 部署文档第 0 节含 chain 风险 / cp + clear `__pycache__`). 锚点范式第 46 守恒, 详见 `memory/w68-alembic-chain-discipline-2026-07-24.md`.
 

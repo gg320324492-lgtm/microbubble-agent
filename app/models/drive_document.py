@@ -108,11 +108,14 @@ class DriveDocument(Base, TimestampMixin):
     # 关系
     file = relationship("Knowledge", foreign_keys=[file_id])
     last_editor = relationship("Member", foreign_keys=[last_edited_by])
+    # op_logs: DriveDocument.file_id == DriveDocOpLog.file_id (两表 file_id 均 FK 到 knowledge,
+    # 不互相 FK) → 必须显式 primaryjoin + foreign() 标注. viewonly (DB 级 CASCADE 走
+    # knowledge FK, ORM 不承担删除传播, 避免 delete-orphan 对非 FK 关系报错).
     op_logs = relationship(
         "DriveDocOpLog",
         back_populates="document",
-        cascade="all, delete-orphan",
-        foreign_keys="DriveDocOpLog.file_id",
+        primaryjoin="DriveDocument.file_id == foreign(DriveDocOpLog.file_id)",
+        viewonly=True,
     )
 
     def __repr__(self):
@@ -174,7 +177,14 @@ class DriveDocOpLog(Base):
     )
 
     # 关系
-    document = relationship("DriveDocument", back_populates="op_logs", foreign_keys=[file_id])
+    # document 反向: DriveDocOpLog.file_id == DriveDocument.file_id (显式 primaryjoin,
+    # foreign() 标注在 op log 侧 file_id). viewonly (仅导航, 不承担持久化).
+    document = relationship(
+        "DriveDocument",
+        back_populates="op_logs",
+        primaryjoin="foreign(DriveDocOpLog.file_id) == DriveDocument.file_id",
+        viewonly=True,
+    )
     user = relationship("Member", foreign_keys=[user_id])
 
     __table_args__ = (

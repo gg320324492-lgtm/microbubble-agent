@@ -8,19 +8,19 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-24 W68 第 8 批 grand closure — 锚点范式第 104 守恒)
+## 当前状态 (2026-07-24 W68 第 9 批 grand closure — 锚点范式第 116 守恒)
 
-**W68 第 8 批 grand closure**: Drive v2 部署文档收口 + 永久纪律沉淀 + docs 同步. 主指挥协调范式第 35 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → **W68 第 8 批 104** (跨主题 + 永久纪律沉淀双轮驱动). 累计 8 批 50+ agent commits + W68 跨主题 200+ commits (main HEAD `05c60e68d`). **0 production code 改动铁律维持** (W68 第 6+7+8 批全部 docs/memory/scripts 范畴, 仅 W68 第 4 批 Plan 闭环实施 + Drive v2 PR10 + Mobile v3.2 已被主指挥批的 3 例外). W19 选项 A 维持. 详见 `memory/w68-grand-closure-8th-batch-2026-07-24.md`.
+**W68 第 9 批 grand closure**: Drive v2 PR11 (评论 path 物化 + GIN trgm + breadcrumb 端点) + plans 闭环 (8 plans Status 修正 + 8 留 W69) + 8 小修整合 + 任务模式基调 v2 (5 拍板纪律 + 4 阶段流程 v2) + docs 同步. 主指挥协调范式第 39 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 104 → **W68 第 9 批 116** (12 守恒, plans 闭环 + 任务模式基调 v2 双驱动). 累计 9 批 60+ agent commits + W68 跨主题 220+ commits (main HEAD `f14cb43c1`). **0 production code 改动铁律维持** (W68 第 9 批 docs/memory 范畴, 仅 Drive v2 PR11 路径物化例外已批). W19 选项 A 维持. 详见 `memory/w68-grand-closure-9th-batch-2026-07-24.md` (待主指挥写).
 
-**W68 第 1+2+3+4+5+6+7 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口) + W68 第 4 批 15 agents (跨主题收口 + Plan 闭环 2/2) + W68 第 5 批 15 agents (Drive v2 PR10 collab + Mobile v3.2 push + 评论 hotfix 系列) + W68 第 6 批 16 agents (Verified Plans 深度审计 + 70+ plans 重整) + W68 第 7 批 1 agent (grand closure 闭环).
+**W68 第 1+2+3+4+5+6+7+8 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口) + W68 第 4 批 15 agents (跨主题收口 + Plan 闭环 2/2) + W68 第 5 批 15 agents (Drive v2 PR10 collab + Mobile v3.2 push + 评论 hotfix 系列) + W68 第 6 批 16 agents (Verified Plans 深度审计 + 70+ plans 重整) + W68 第 7 批 1 agent (grand closure 闭环) + W68 第 8 批 14 agents (Drive v2 部署文档 + 永久纪律沉淀 + docs 同步 + 6 commit qa-bench/QA D6 Phase 2/3 + 部署验证).
 
-**跨周期累计**: 67 plans 状态化 (W66) + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 31+ 守恒) + W68 第 6 批 plans 审计 70+ plans 100% 真实状态化.
+**跨周期累计**: 67 plans 状态化 (W66) → 59 plans 活跃 + 8 plans archived (W68 第 7 批) → W68 第 9 批 plans Status 闭环 8 + 8 留 W69 + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 38+ 守恒) + W68 第 6 批 plans 审计 70+ plans 100% 真实状态化.
 
-**W68 累计 commits: 140 → 155 (第 8 批). 锚点范式 90 → 104 单调上升预期.**
+**W68 累计 commits: 140 → 155 (第 8 批) → 第 9 批 12 守恒. 锚点范式 90 → 104 → 116 单调上升预期.**
 
-**任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md`.
+**任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板, W68 第 9 批 D-3 升级 v2 加 5 拍板纪律 + 4 阶段流程 v2). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md` + `docs/w68-task-mode-paradigm-v2.md`.
 
-**W68 第 6+7 批纪律沉淀锚点范式**: `## W68 第 6+7 批纪律沉淀 (永久锚点)` 章节 (见下) — 永久纪律固化, 未来会话读到 CLAUDE.md 即可了解所有审计/闭环纪律.
+**W68 第 6+7+8+9 批纪律沉淀锚点范式**: `## W68 第 6+7+8 批纪律沉淀 (永久锚点)` 章节 (见下) — 永久纪律固化, 未来会话读到 CLAUDE.md 即可了解所有审计/闭环纪律.
 
 ## 当前开发阶段
 

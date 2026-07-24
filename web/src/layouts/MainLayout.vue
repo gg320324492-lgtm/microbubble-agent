@@ -66,6 +66,17 @@
           <el-icon><DataBoard /></el-icon>
           <span v-show="!isCollapse">项目动态</span>
         </div>
+        <!-- qa-bench v3.1 D5: KB 自动入库监控 (admin/leader only; 后端 get_current_admin 兜底,
+             普通用户点进去 403 → 提示) -->
+        <div
+          v-if="isAdmin"
+          class="sidebar-bottom-item"
+          :class="{ active: currentRoute === '/admin/kb-monitor' }"
+          @click="router.push('/admin/kb-monitor')"
+        >
+          <el-icon><Odometer /></el-icon>
+          <span v-show="!isCollapse">KB 监控</span>
+        </div>
       </div>
     </el-aside>
 
@@ -202,6 +213,8 @@ const currentTitle = computed(() => route.meta?.title || '首页')
 const username = computed(() => userStore.username)
 const userRole = computed(() => userStore.userRole)
 const userAvatar = computed(() => userStore.userInfo?.avatar || '')
+// qa-bench v3.1 D5: KB 监控入口仅 admin/leader 可见 (raw role, 非展示名)
+const isAdmin = computed(() => ['admin', 'leader'].includes(userStore.userInfo?.role))
 
 const menuRoutes = computed(() => {
   const mainRoute = router.options.routes.find(r => r.path === '/')
