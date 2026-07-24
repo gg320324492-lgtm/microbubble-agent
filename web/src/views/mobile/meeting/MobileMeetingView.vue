@@ -810,3 +810,100 @@ onMounted(() => {
   transform: translateY(100%);
 }
 </style>
+
+<!-- W68 第 14 批 C-2: Mobile UX v3.3 dark mode 跨组件统一 (v60-v67 教训: 非 scoped) -->
+<style>
+/* meeting card / 时间块 / 状态徽章 / 状态点 / 参与人 / 摘要 / 空态 在 dark 适配 */
+[data-theme="dark"] .meeting-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .card-time-block {
+  background: var(--color-bg-page);
+  border: 1px solid var(--color-border);
+}
+[data-theme="dark"] .time-month,
+[data-theme="dark"] .time-day,
+[data-theme="dark"] .time-weekday {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .card-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .card-meta {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .meta-location { color: var(--color-text-secondary); }
+[data-theme="dark"] .meta-audio { color: var(--color-primary); }
+[data-theme="dark"] .card-summary {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .tag-scheduled { background: var(--color-info-bg); color: var(--color-info); }
+[data-theme="dark"] .tag-recording,
+[data-theme="dark"] .tag-processing { background: var(--color-warning-bg); color: var(--color-warning); }
+[data-theme="dark"] .tag-completed { background: var(--color-success-bg); color: var(--color-success); }
+[data-theme="dark"] .tag-cancelled { background: var(--color-bg-page); color: var(--color-text-secondary); }
+[data-theme="dark"] .tag-error { background: var(--color-danger-bg); color: var(--color-danger); }
+[data-theme="dark"] .status-tag {
+  background: var(--color-bg-page);
+}
+[data-theme="dark"] .mini-avatar {
+  border-color: var(--color-bg-card);
+}
+[data-theme="dark"] .mini-avatar.more {
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .empty-state,
+[data-theme="dark"] .loading-state {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .empty-title {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .skeleton-card {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .skeleton-line {
+  background: var(--color-border-light);
+}
+[data-theme="dark"] .skeleton-line::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+}
+[data-theme="dark"] .search-input {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .btn-secondary {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .btn-primary {
+  background: var(--color-primary);
+  color: var(--color-bg-card);
+}
+[data-theme="dark"] .search-header button {
+  color: var(--color-text-regular);
+}
+[data-theme="dark"] .filter-chip {
+  background: var(--color-bg-card);
+  color: var(--color-text-regular);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .filter-chip.active {
+  background: var(--color-primary);
+  color: var(--color-bg-card);
+  border-color: var(--color-primary);
+}
+[data-theme="dark"] .action-item {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .action-item:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .action-item.cancel {
+  background: var(--color-bg-card);
+}
+</style>

@@ -572,9 +572,9 @@ onMounted(() => {
 }
 </style>
 
-<!-- v77 P2.6-B: dark mode 适配（v60-v67 教训：必须非 scoped） -->
+<!-- v77 P2.6-B + W68 第 14 批 C-2: dark mode 跨组件统一（v60-v67 教训：必须非 scoped） -->
 <style>
-/* filter sheet / 状态徽章 / 任务卡在 dark 模式适配 */
+/* filter sheet / 状态徽章 / 任务卡 / 任务组 / 行动按钮 在 dark 模式适配 */
 [data-theme="dark"] .header-action.primary {
   background: var(--color-primary);
   color: var(--color-bg-card);
@@ -582,6 +582,9 @@ onMounted(() => {
 [data-theme="dark"] .header-action.primary:active {
   background: var(--color-primary);
   opacity: 0.85;
+}
+[data-theme="dark"] .header-action {
+  color: var(--color-text-primary);
 }
 [data-theme="dark"] .status-badge.status-todo,
 [data-theme="dark"] .status-badge.status-in_progress {
@@ -606,5 +609,52 @@ onMounted(() => {
 }
 [data-theme="dark"] .task-card:active {
   background: var(--color-bg-hover);
+}
+/* W68 第 14 批 C-2: 任务组 / 完成按钮 / 完成态按钮 / 折叠态在 dark 适配 */
+[data-theme="dark"] .task-group {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .task-group-header {
+  background: var(--color-bg-card);
+}
+[data-theme="dark"] .task-group-header:active {
+  background: var(--color-bg-hover);
+}
+[data-theme="dark"] .group-name {
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .group-count {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+[data-theme="dark"] .task-group-list :deep(.list-item) {
+  background: var(--color-bg-page);
+  border-color: var(--color-border);
+}
+[data-theme="dark"] .action-btn {
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
+}
+[data-theme="dark"] .action-btn.primary {
+  background: var(--color-primary);
+  color: var(--color-bg-card);
+  border-color: var(--color-primary);
+}
+[data-theme="dark"] .action-btn.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+[data-theme="dark"] .action-btn.success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border-color: var(--color-success);
+}
+[data-theme="dark"] .empty-state,
+[data-theme="dark"] .loading-state {
+  color: var(--color-text-secondary);
+}
+[data-theme="dark"] .empty-state .empty-title {
+  color: var(--color-text-primary);
 }
 </style>
