@@ -66,10 +66,32 @@
           <span>{{ loading ? '登录中...' : '登 录' }}</span>
         </button>
 
+        <!-- W68 第 8 批 B-3: Face ID / 指纹 一键登录 (设备支持时显示) -->
+        <button
+          v-if="bioAvailable"
+          type="button"
+          class="biometric-login-btn"
+          :disabled="loading"
+          :aria-label="`${bioLabel} 一键登录`"
+          @click="onBiometricLogin"
+        >
+          <span class="biometric-login-icon">{{ bioIcon }}</span>
+          <span>{{ bioLabel }} 一键登录</span>
+        </button>
+
         <div class="login-hint">
           <p>请联系管理员获取账号密码</p>
         </div>
       </form>
+
+      <!-- W68 第 8 批 B-3: 生物识别登录弹窗 (复用 MobileBiometricAuth) -->
+      <MobileBiometricAuth
+        v-model:show="showBioLogin"
+        title="生物识别登录"
+        hint="使用已注册的生物特征或 PIN 码一键登录"
+        @success="onBioLoginSuccess"
+        @cancel="onBioLoginCancel"
+      />
     </main>
   </div>
 </template>
@@ -88,12 +110,61 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
+import { useMobileBiometric } from '@/composables/useMobileBiometric'  // W68 第 8 批 B-3
+import MobileBiometricAuth from '@/components/mobile/MobileBiometricAuth.vue'  // W68 第 8 批 B-3
 
 const router = useRouter()
 const usernameInputRef = ref(null)
 const loading = ref(false)
 const showPassword = ref(false)
 const errorMessage = ref('')
+
+// W68 第 8 批 B-3: 生物识别登录状态
+const biometric = useMobileBiometric()
+const showBioLogin = ref(false)
+const bioAvailable = ref(false)
+const bioLabel = ref('生物识别')
+const bioIcon = ref('🔐')
+
+async function refreshBioSupport() {
+  const support = await biometric.detectSupport()
+  bioAvailable.value = support.available || biometric.hasPIN()
+  if (support.authenticatorType === 'face') {
+    bioIcon.value = '😊'
+    bioLabel.value = 'Face ID'
+  } else if (support.authenticatorType === 'touch') {
+    bioIcon.value = '👆'
+    bioLabel.value = 'Touch ID'
+  } else if (support.authenticatorType === 'fingerprint') {
+    bioIcon.value = '☝️'
+    bioLabel.value = '指纹'
+  } else {
+    bioIcon.value = '🔐'
+    bioLabel.value = 'PIN 码'
+  }
+}
+
+function onBiometricLogin() {
+  if (loading.value) return
+  showBioLogin.value = true
+}
+
+function onBioLoginSuccess(result) {
+  // result: { method: 'webauthn' | 'pin' }
+  // 关键: 这只是本机解锁凭证, 后端仍需要有效 JWT session 才能拿到用户身份
+  // 因此未存 token 时仍需走用户名/密码登录; 这里给用户一个清晰提示
+  const msg = result?.method === 'webauthn'
+    ? `${bioLabel.value} 验证成功, 请用用户名密码完成登录`
+    : 'PIN 验证成功, 请用用户名密码完成登录'
+  errorMessage.value = msg
+  showBioLogin.value = false
+  // 聚焦到用户名输入框, 让用户继续
+  nextTick(() => usernameInputRef.value?.focus())
+}
+
+function onBioLoginCancel() {
+  // 用户主动取消, 无操作
+}
 
 const loginForm = reactive({
   username: '',
@@ -141,8 +212,14 @@ async function handleLogin() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   nextTick(() => usernameInputRef.value?.focus())
+  // W68 第 8 批 B-3: 探测生物识别能力
+  try {
+    await refreshBioSupport()
+  } catch {
+    // 探测失败不影响登录
+  }
 })
 </script>
 
@@ -331,6 +408,40 @@ onMounted(() => {
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+/* W68 第 8 批 B-3: 生物识别登录按钮 (Face ID / Touch ID / 指纹) */
+.biometric-login-btn {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.6);
+  border-radius: var(--radius-md, 8px);
+  background: rgba(255, 255, 255, 0.15);
+  /* stylelint-disable-next-line color-named */
+  color: white;
+  font-size: 15px;
+  font-weight: var(--font-weight-medium, 500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  backdrop-filter: blur(4px);
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.biometric-login-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.biometric-login-btn:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(0.98);
+}
+.biometric-login-icon {
+  font-size: 18px;
 }
 .login-hint {
   text-align: center;

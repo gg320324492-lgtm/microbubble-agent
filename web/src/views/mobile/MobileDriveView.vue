@@ -133,6 +133,19 @@
 
     <MobileActionSheet v-model="showUploadMenu" title="上传文件" :actions="uploadActions" @select="onUploadAction" />
 
+    <!-- W68 第 8 批 B-3: 自定义分享 panel (Web Share API fallback) -->
+    <MobileShareSheet
+      v-model:show="showShareSheet"
+      title="分享文件"
+      :description="shareSheetDescription"
+      :url="shareSheetUrl"
+      :text="shareSheetText"
+      :file="shareSheetFile"
+      :filename="shareSheetFilename"
+      :show-native-share="true"
+      @share="onShareSheetSelect"
+    />
+
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
     </Teleport>
@@ -163,6 +176,8 @@ import MobileDriveFAB from '@/components/mobile/MobileDriveFAB.vue'
 import MobileSwipeNavigation from '@/components/mobile/MobileSwipeNavigation.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useDriveFiles } from '@/composables/useDriveFiles'
+import { useMobileShare } from '@/composables/useMobileShare'  // W68 第 8 批 B-3
+import MobileShareSheet from '@/components/mobile/MobileShareSheet.vue'  // W68 第 8 批 B-3
 import { formatSize } from '@/utils/format'
 
 const route = useRoute()
@@ -185,6 +200,15 @@ const showCommandPalette = ref(false)
 const showSearch = ref(false)
 const showUploadMenu = ref(false)
 const showActionSheet = ref(false)
+
+// W68 第 8 批 B-3: 分享 sheet 状态
+const showShareSheet = ref(false)
+const share = useMobileShare()
+const shareSheetFile = ref(null)
+const shareSheetFilename = ref('')
+const shareSheetUrl = ref('')
+const shareSheetText = ref('')
+const shareSheetDescription = ref('')
 const selectedFile = ref(null)
 
 // v2 PR8: 移动端首页聚合 (5 sections 1 请求)
@@ -420,21 +444,36 @@ async function onFileAction(action) {
         ElMessage.success('下载已开始')
         break
       }
-      // v3.0 (W68 Agent 4) PR8 R4: 分享 → 复制链接到剪贴板 (移动端 web Share API 不可用兜底)
+      // v3.0 (W68 Agent 4) PR8 R4: 分享 → 优先原生 navigator.share, 否则打开自定义分享 sheet
+      // W68 第 8 批 B-3 升级: 先尝试拉文件 blob + 触发 share file (图片/PDF 自动以文件形态分享)
       case 'share': {
         const shareUrl = `${window.location.origin}/drive/preview/${file.id}`
-        try {
-          if (navigator.share) {
-            await navigator.share({ title: file.title || file.file_name, url: shareUrl })
-            break
-          }
-          await navigator.clipboard.writeText(shareUrl)
-          ElMessage.success('链接已复制')
-        } catch (e) {
-          if (e?.name === 'AbortError') return
-          await navigator.clipboard.writeText(shareUrl).catch(() => {})
-          ElMessage.success('链接已复制')
+        const fileName = file.title || file.file_name || `file_${file.id}`
+        const fileMime = file.mime_type || 'application/octet-stream'
+        // 1. 优先 native share (含 URL)
+        if (share.canNativeShare) {
+          const r = await share.shareLink({ url: shareUrl, title: fileName, text: '来自小气助手的文件分享' })
+          if (r.status === 'shared') return
+          // dismissed / failed → fallback 到 sheet
         }
+        // 2. 文件类型支持 (image/pdf/video/<2MB) → 先下载, 然后打开分享 sheet with file
+        const canShareFile = fileMime.startsWith('image/') || fileMime === 'application/pdf' || fileMime.startsWith('video/')
+        let blob = null
+        if (canShareFile) {
+          try {
+            const resp = await axios.get(`/api/v1/drive/files/${file.id}/download`, { responseType: 'blob', timeout: 30000 })
+            blob = resp.data
+          } catch (e) {
+            // 下载失败, 降级到 link only
+            console.warn('[MobileDriveView] file download failed, fallback to link:', e)
+          }
+        }
+        shareSheetUrl.value = shareUrl
+        shareSheetText.value = '来自小气助手的文件分享'
+        shareSheetFilename.value = fileName
+        shareSheetFile.value = blob
+        shareSheetDescription.value = fileName
+        showShareSheet.value = true
         break
       }
       case 'delete': {
@@ -463,6 +502,38 @@ const fabActions = [
   { name: 'share', label: 'Share drive', icon: '🔗', handler: () => ElMessage.info('Select a file to share') },
   { name: 'search', label: 'Search files', icon: '🔍', handler: () => { showSearch.value = true } },
 ]
+
+async function onShareSheetSelect(payload) {
+  // payload: { key, url, text, file, filename }
+  const { key, url, text, file, filename } = payload
+  if (key === 'native') {
+    if (file) {
+      const result = await share.shareFile({ file, filename, title: filename, text })
+      if (result.status === 'shared') return
+    } else {
+      const result = await share.shareLink({ url, title: filename || '分享文件', text })
+      if (result.status === 'shared') return
+    }
+    ElMessage.warning?.('系统分享不可用, 已复制链接')
+    await share.copyLink(url)
+    return
+  }
+  if (key === 'copy') {
+    await share.copyLink(url)
+    return
+  }
+  if (key === 'save' && file) {
+    const ok = share.downloadFile(file, filename || 'share.bin')
+    if (ok) ElMessage.success?.('已下载')
+    return
+  }
+  // wechat / qq / weibo: 暂未深度集成, 降级为复制链接
+  if (key === 'wechat' || key === 'qq' || key === 'weibo') {
+    await share.copyLink(url)
+    const label = key === 'wechat' ? '微信' : key === 'qq' ? 'QQ' : '微博'
+    ElMessage.info?.(`已复制链接, 请粘贴到${label}分享`)
+  }
+}
 
 function onUploadClick() { showUploadMenu.value = true }
 function onUploadAction(action) {
