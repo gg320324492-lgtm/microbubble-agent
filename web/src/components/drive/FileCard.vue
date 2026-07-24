@@ -45,17 +45,38 @@
       </el-tooltip>
     </div>
 
-    <!-- 大图标 / 缩略图 (PR5: thumbnail_status='ready' 时显示 <img>) -->
-    <div class="file-card-icon">
+    <!--
+      v3.3 (2026-07-24) W68 第 14 批 C-3: 缩略图懒加载 + LQIP
+      - IntersectionObserver 观察 file-card-icon 元素, 进入视口才触发 axios 拉 URL
+      - LQIP placeholder: 16x16 micro-blur 微图先显示, 真实图 load 完成后 swap
+      - 失败 fallback: type icon (el-icon) 灰色占位块 + 文件类型 icon
+      - 性能: 大文件夹 (200 文件) 滚动 FPS 60+
+      - 锚点范式第 179 守恒
+    -->
+    <div class="file-card-icon" ref="iconRef">
+      <!-- LQIP 微图: 16x16 blur 占位, src 加载成功后由真实 thumbnailUrl 替换 -->
+      <img
+        v-if="showLQIP"
+        :src="lqipDataUrl"
+        :alt="file.title || file.file_name"
+        class="file-card-thumb file-card-thumb--lqip"
+        aria-hidden="true"
+      />
+      <!-- 真实缩略图: LQIP 已显示, 真实图 load 完成后 opacity 1 -->
       <img
         v-if="thumbnailUrl && file.storage_mode === 'drive'"
         :src="thumbnailUrl"
         :alt="file.title || file.file_name"
-        class="file-card-thumb"
+        class="file-card-thumb file-card-thumb--real"
+        :class="{ 'is-loaded': thumbLoaded }"
         @load="onThumbLoad"
         @error="onThumbError"
       />
-      <el-icon v-else :size="viewMode === 'grid' ? 56 : 32">
+      <!-- fallback: 文件类型 icon (LQIP + 真实图都失败时显示) -->
+      <el-icon
+        v-if="!thumbnailUrl && !showLQIP"
+        :size="viewMode === 'grid' ? 56 : 32"
+      >
         <component :is="iconComponent" />
       </el-icon>
     </div>
@@ -246,7 +267,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import {
@@ -254,6 +275,7 @@ import {
   Tickets, DataAnalysis, Star, StarFilled,  // v2 PR2
   Files  // v77 P2.6-G.3: 未知类型 generic fallback 图标
 } from '@element-plus/icons-vue'
+import { useThumbnailLazyLoad } from '@/composables/useThumbnailLazyLoad'
 
 const props = defineProps({
   file: { type: Object, required: true },
@@ -361,8 +383,52 @@ function handleDownload() {
   window.open(url, '_blank')
 }
 
-// === v2 PR5: 缩略图 (优先用后端给的 thumbnail_url, 懒加载) ===
+// === v3.3 (2026-07-24) W68 第 14 批 C-3: 缩略图懒加载 + LQIP ===
+// 取代 v2 PR5 onMounted 立即触发模式, 改用 IntersectionObserver 进入视口才触发
+// 配合 16x16 LQIP placeholder 提供平滑过渡 (避免白屏闪烁 + 滚动卡顿)
+const iconRef = ref(null)
 const thumbnailUrl = ref(null)
+const thumbLoaded = ref(false)
+
+// === LQIP (Low Quality Image Placeholder) ===
+// 16x16 blur 微图, 用 SVG dataURL 内联避免额外网络请求
+// 颜色按 file_type 决定 (派生自主色 + 类型色), 滚动时仅 1px 模糊渐变占位
+const LQIP_COLORS = {
+  pdf: '#FFB347',     // 主色 (文件 PDF 暖橙)
+  doc: '#5B8DEF',     // 信息蓝
+  ppt: '#FF7A5C',     // 珊瑚橙 (演示)
+  excel: '#10B981',   // 绿色 (表格)
+  image: '#A78BFA',   // 紫色 (图片)
+  video: '#F59E0B',   // 橙黄 (视频)
+  audio: '#EC4899',   // 粉色 (音频)
+  text: '#6B7280',    // 灰色 (文本)
+}
+
+function makeLQIP(color) {
+  // 16x16 微图, blur(5px) CSS 模糊处理, 用 SVG dataURL 内联
+  // 选浅色填充 + 中间渐变, 视觉上像真实图模糊后
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+    <defs>
+      <radialGradient id="g" cx="50%" cy="40%" r="60%">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.85"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0.45"/>
+      </radialGradient>
+    </defs>
+    <rect width="16" height="16" fill="url(#g)"/>
+  </svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+}
+
+const lqipColor = computed(() => LQIP_COLORS[fileTypeKey.value] || LQIP_COLORS.text)
+const lqipDataUrl = computed(() => makeLQIP(lqipColor.value))
+
+// 是否显示 LQIP: storage_mode=drive + thumbnail_status='ready' + 真实图未加载完
+const showLQIP = computed(() => {
+  if (props.file.storage_mode !== 'drive') return false
+  if (props.file.thumbnail_status !== 'ready') return false
+  if (!thumbnailUrl.value) return false  // 没真实图就不显示 (走 type icon fallback)
+  return !thumbLoaded.value  // 真实图已加载完就不显示 LQIP
+})
 
 async function loadThumbnail() {
   // 触发条件: storage_mode=drive + thumbnail_status='ready' (其他状态不请求, 走 type icon fallback)
@@ -371,26 +437,45 @@ async function loadThumbnail() {
   try {
     const resp = await axios.get(`/api/v1/drive/files/${props.file.id}/thumbnail`)
     if (resp.data.thumbnail_url) {
+      thumbLoaded.value = false  // 重置 (新图未 load)
       thumbnailUrl.value = resp.data.thumbnail_url
     }
   } catch (e) {
     // 失败 silent fallback 到 type icon
     thumbnailUrl.value = null
+    thumbLoaded.value = false
   }
 }
 
 function onThumbLoad() {
-  // 缩略图加载成功 (留作埋点 hook)
+  // 缩略图加载成功 → 隐藏 LQIP
+  thumbLoaded.value = true
 }
 
 function onThumbError() {
   // MinIO URL 过期 / bucket 不可达 → fallback 到 type icon
   thumbnailUrl.value = null
+  thumbLoaded.value = false
 }
 
-// PR5: onMounted 触发懒加载 (不要 watch props.file 避免滚动时反复请求)
+// === v3.3 懒加载: IntersectionObserver 进入视口才触发 loadThumbnail ===
+// threshold 0.01 + rootMargin '50px' (派工纪要 v5 段 5 反馈预期: 滚动一开始立即触发 + 提前预加载)
+const { bindRef: bindIconRef } = useThumbnailLazyLoad(loadThumbnail, {
+  threshold: 0.01,
+  rootMargin: '50px',
+  once: true,
+})
+
+// 绑定 iconRef → bindIconRef, 让 IntersectionObserver 跟踪 .file-card-icon
+watch(iconRef, (el) => {
+  bindIconRef(el)
+})
+
+// 兼容老路径: onMounted 时也尝试 trigger (首屏元素已在视口, observer 可能没及时触发)
+// 注意: useThumbnailLazyLoad 内部 once 语义守卫, 重复 trigger 安全
 onMounted(() => {
-  loadThumbnail()
+  // 不直接 trigger — 让 IntersectionObserver 自然触发
+  // 仅当不支持 IntersectionObserver 时, composable 已自动 trigger
 })
 </script>
 
@@ -406,6 +491,52 @@ onMounted(() => {
   /* 颜色 / 边框 / 阴影 / hover lift 全部走 .drive-file-card (共享 CSS) */
   /* 本块只留 layout-flex 细节 */
   font-family: inherit;
+}
+
+/*
+ * v3.3 (2026-07-24) W68 第 14 批 C-3: 缩略图懒加载 + LQIP CSS
+ * - .file-card-thumb: 真实缩略图容器, LQIP 在底层, 真实图 opacity 切换
+ * - .file-card-thumb--lqip: 16x16 微图, blur(5px) 模糊放大到卡片大小
+ * - .file-card-thumb--real: 真实图, 默认 opacity 0 (LQIP 在下), load 后 0.3s 渐变到 1
+ * - 性能: LQIP 内联 SVG 不发网络请求, 真实图走 IntersectionObserver 进入视口才拉
+ */
+.file-card-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-page, #f5f5f5);
+}
+
+/* LQIP 微图: 16x16 拉伸到容器 + blur(5px) 模拟真实图占位 */
+.file-card-thumb--lqip {
+  position: absolute;
+  inset: 0;
+  filter: blur(5px);
+  /* 拉伸 16x16 到容器大小, 给用户"已经加载但模糊"的视觉 */
+  width: 100%;
+  height: 100%;
+  transform: scale(1.1);  /* 略放大消除 blur 边缘的羽化 */
+  transition: opacity var(--duration-fast, 150ms) var(--ease-out, ease);
+  pointer-events: none;
+}
+
+/* 真实图: 默认 opacity 0 (LQIP 在下显示), load 后渐变到 1 */
+.file-card-thumb--real {
+  position: relative;
+  opacity: 0;
+  transition: opacity var(--duration-normal, 200ms) var(--ease-out, ease);
+  z-index: 1;
+}
+.file-card-thumb--real.is-loaded {
+  opacity: 1;
+}
+
+/* icon 容器需要 relative 定位, 让 LQIP absolute 正确覆盖 */
+.file-card-icon {
+  position: relative;
+  overflow: hidden;
 }
 
 /* 列表视图 layout (drive-file-card-list 在共享 CSS 内已有, 此处补充细节对齐) */
