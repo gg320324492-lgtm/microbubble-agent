@@ -190,6 +190,14 @@ const routes = [
         component: resolveMobileComponent('admin/AgentTracesView', 'admin/MobileAgentTracesView'),
         meta: { title: 'Agent Trace 监控' }
       },
+      {
+        // qa-bench v3.1 D5: KB 自动入库监控 (admin/leader only, 后端 get_current_admin 兜底)
+        // 桌面 dashboard, 无移动端变体 → 直接 import (移动端访问同一组件, ECharts 响应式收窄)
+        path: 'admin/kb-monitor',
+        name: 'KbMonitor',
+        component: () => import('@/views/admin/KbMonitorView.vue'),
+        meta: { title: 'KB 入库监控' }
+      },
       // v78 合并审计日志到项目动态: admin/audit 路由删除, 改用 /project-stats?tab=audit 访问
       // 旧路由保留作 fallback 兼容老链接 (去掉 meta.icon 自动从 sidebar 隐藏)
       // v2 PR7 审计日志视图 (admin only, 后端 Depends(get_current_admin) 兜底) 改嵌在 ProjectStatsView 第 2 个 tab
