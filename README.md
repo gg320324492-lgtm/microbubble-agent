@@ -19,7 +19,19 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
-## 最新里程碑（2026-07-24 — W68 第 7 批 15 agents plans 闭环 + Status 修正 + 实战审计真完成率 53%）
+## 最新里程碑（2026-07-24 — W68 第 10 批 grand closure + 14 守恒 + Drive v2 PR11 收口 + 桌面评论 v3.2 + qa-bench D6 7 维评分 + KB 闭环）
+
+- 🆕 **W68 第 10 批 grand closure（锚点范式第 134 守恒, 14 守恒）** — 主指挥协调范式第 40 次派工. 锚点范式单调上升 W68 第 9 批 116 → **第 10 批 134**（14 守恒, Drive v2 PR11 收口 + 桌面评论 v3.2 + qa-bench D6 7 维评分 + KB 闭环 3 路线）. **5 路线 + 3 D 子任务**: **A** (1 merge + 2 CLAUDE 锚点 + 1 cleanup, 4 agents) + **B** (qa-bench 7d-scoring + save-to-kb + auto-intake-rollback + kb-closed-loop, 4 agents) + **C** (Desktop v3.2 E2E + VAPID persistence, 2 agents) + **D** (prompt template + doc sync [本任务] + task mode v2 + deploy v3, 4 agents) + **hotfix** (alembic 066 串单链, commit `99426720c`). 累计 10 批 70+ agent commits + W68 跨主题 240+ commits. **0 production code 改动铁律维持** (W68 第 10 批 docs/memory + Drive v2 PR11 文档 + 桌面评论 v3.2 UI 收口 + qa-bench D6 评分 + KB 闭环, docs/memory 范畴, Drive v2 PR11 路径物化 + 桌面评论 v3.2 范围 + qa-bench D6 评分新增例外已批). W19 选项 A 维持. 详见 [`memory/w68-grand-closure-10th-batch-2026-07-24.md`](./memory/w68-grand-closure-10th-batch-2026-07-24.md)（待主指挥写）+ [`memory/w68-route-10-d2-doc-sync-2026-07-24.md`](./memory/w68-route-10-d2-doc-sync-2026-07-24.md)（本任务 D-2 沉淀）.
+- 🆕 **Drive v2 PR9-11 master runbook + FAQ** — 部署 runbook + 排错 FAQ 整合 (commit `e51699d48`). 涵盖 PR8/9/10/11/12 全链路, 含 alembic 链风险 + WebSocket 推送 + 评论 path 物化 + 表情反应 + 通知合并.
+- 🆕 **桌面评论 UI v3.2 收口** — emoji react (12 表情) + @mention 预览 + breadcrumb (`memory/w68-route-8-b2-drive-pr12-reactions-2026-07-24.md` + Desktop v3.2 E2E 覆盖).
+- 🆕 **qa-bench D6 7 维评分 (7d-scoring)** — 5 tier (excellent/good/fair/poor/bad) × 7 维 (accuracy/completeness/relevance/clarity/conciseness/helpfulness/safety) 评分系统. D1-D8 7 维度全部覆盖, 自动入库 KB (score ≥ 4.0).
+- 🆕 **KB 闭环 3 路线** — **B-2** 高分答案自动入库 KB (save-to-kb) + **B-3** auto-intake 幂等 + 失败回滚 (rollback) + **B-4** 闭环监控 (entry → 检索 → 评分 → 反馈). 知识库升级为**自主进化的课题组知识大脑 v2.0**.
+- 🆕 **Web Push VAPID 持久化** — VAPID key 不再读 .env, 数据库存储 + 启动时加载. 修复 .env 残留导致 PWA 推送失效事故.
+- 🆕 **alembic 066 串单链 hotfix** (commit `99426720c`) — 066 push_subscriptions down_revision 修正, 接 065_drive_reactions. 跨 W68 第 8+10 批延续, 详见 `memory/w68-alembic-chain-discipline-2026-07-24.md`.
+- 🆕 **W68 任务模式基调 v2** — 5 拍板纪律 (主指挥拍板/小修搭配/plans 优先/路线 fallback/hotfix 跟踪) + 4 阶段流程 v2 (调研→派工→验证→沉淀). 详见 `docs/w68-task-mode-paradigm-v2.md`.
+- 🆕 **6 类文档同步 (本任务 D-2)** — CLAUDE.md / ROADMAP.md / CHANGELOG.md / README.md / memory/MEMORY.md (双端) 同步到 W68 第 10 批状态. 3 新铁律: 6 类文档主仓库优先 / 不写 history 文档不动 / 同步预测值明示. 详见 `memory/w68-route-10-d2-doc-sync-2026-07-24.md`.
+
+## 最新里程碑（2026-07-24 — W68 第 9 批 grand closure + 12 守恒 + plans 闭环 8/8 + 任务模式基调 v2）
 
 - 🆕 **W68 第 7 批 15 agents 跨主题收官（锚点范式第 85 守恒, plans 闭环 + Status 修正）** — 主指挥协调范式第 35 次派工. 触发点: W68 第 6 批 5 agent **实战** git log + git show + grep -r 核对 67 plans, 发现真完成率仅 **53% ACTUAL_COMPLETED**（vs W66 `plans-status-67-closure` 仅信 Status 段自报的 70%）+ **5 个真未实施 (P0)**（exe-logical-pie / claude-code-bubbly-parnas / silly-gliding-dahl / qa-bench-isolation-a1 / qa-bench-v3.1-decisions D5）+ 12 个 PARTIAL_REGRESSION + 14 个 Status 段系统化错位 + 2 个 MISCATEGORIZED. 4 路线: **C**（plans 审计收口 3: Status 修正 + P0 评估 + verified-plans 报告）+ **D**（plans 闭环实施 3: bubbly-parnas hook wire + silly-gliding-dahl team_overview + D5 Dashboard KB 监控）+ **A/B**（Drive v2 PR10 协同编辑/版本对比 + qa-bench D6 Phase 1 续 4）+ **E**（Mobile UX v3.2 性能 + baseline 守恒 + grand closure 3）. 锚点范式单调上升 W68 第 5 批 72 → **第 7 批 85**（13 守恒）. **0 production code 改动铁律维持**（路线 C/E 完全维持, 路线 D/A/B 例外已批, 不动 v1 老路径）. W19 选项 A 维持. **5 条新铁律**: plans Status 段必须描述真实实施 commit / 三步实战核对 (读 plan + git show + grep -r) / plans 命名与内容一致 / AGENT_STUB 必须真合并 / plan body SUPERSEDED 必须同步 Status. 详见 [`memory/verified-plans-w68-2026-07-24.md`](./memory/verified-plans-w68-2026-07-24.md) + [`memory/w68-grand-closure-7th-batch-2026-07-24.md`](./memory/w68-grand-closure-7th-batch-2026-07-24.md).
 
