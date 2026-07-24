@@ -353,6 +353,48 @@ async def publish_version_rollback(
 
 
 # ==========================================================================
+# Version Tag events (W68 第 12 批 B-2, Drive v2 PR15)
+# ==========================================================================
+
+
+async def publish_version_tag_added(
+    db: AsyncSession,
+    *,
+    tag_id: int,
+    version_id: int,
+    file_id: int,
+    tag_name: str,
+    actor_id: int,
+) -> int:
+    """文件版本标签新增推送 — 通知 file owner (PR15)
+
+    Args:
+        db: caller 的 AsyncSession
+        tag_id: DriveVersionTag.id (新创建的标签)
+        version_id: DriveFileVersion.id (标签关联的版本)
+        file_id: Knowledge.id (主文件行)
+        tag_name: 标签名称 (12 个内置白名单之一)
+        actor_id: 操作者 (一般等于 tag.created_by)
+
+    priority=MEDIUM (PR15 设计: 标签是版本元数据, 重要性低于评论反应)
+    """
+    target_user_id = await _resolve_file_owner(db, file_id)
+    if target_user_id is None or target_user_id == actor_id:
+        # file 不存在 / 自推 → 跳过
+        return 0
+    payload = {
+        "type": "version_tag_added",
+        "tag_id": tag_id,
+        "version_id": version_id,
+        "file_id": file_id,
+        "tag_name": tag_name,
+        "actor_id": actor_id,
+        "ts": _now_iso(),
+    }
+    return await _safe_push(target_user_id, payload, priority=NotificationPriority.MEDIUM)
+
+
+# ==========================================================================
 # Internal helpers (复用 caller db session)
 # ==========================================================================
 
@@ -513,4 +555,5 @@ __all__ = [
     "publish_reaction_added",  # W68 PR12
     "publish_version_uploaded",
     "publish_version_rollback",
+    "publish_version_tag_added",  # W68 PR15 (第 12 批 B-2)
 ]
