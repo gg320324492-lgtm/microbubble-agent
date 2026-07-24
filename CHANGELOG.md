@@ -312,6 +312,125 @@
 
 详见 `memory/w68-route-9-{a,c,d}*-2026-07-24.md` + `memory/w68-grand-closure-9th-batch-2026-07-24.md` (待主指挥写).
 
+## W68 第 10 批 14 commits 跨主题 grand closure (2026-07-24 — 锚点范式 116→134, 部署收口 + W69 派工 + P0 VAPID)
+
+**W68 第 10 批收官**: 主指挥协调范式第 40 次派工. 14 commits 跨 5 路线派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → 42 → 57 → 72 → 85 → 102 → 116 → **W68 第 10 批 134** (18 守恒). **0 production code 改动铁律 11/14 守恒** (3 例外已批: B-3 KB 闭环 + B-4 KB 闭环 automation + C-3 VAPID 持久化). W19 选项 A 维持.
+
+### W68 第 10 批交付清单 (14 commits, 5 路线)
+
+| 路线 | Agent | 任务 | 范围 | 状态 |
+|------|-------|------|------|------|
+| A | A-1 | Drive v2 PR9-11 master runbook + FAQ | docs/drive-v2-pr9-11-runbook.md | ✅ |
+| A | A-2 | Drive PR10 deployment runbook | docs/drive-v2-pr10-deployment.md | ✅ |
+| A | A-3 | W68 第 7 批 + 3 hot-fix 部署验证 | scripts/deploy-auto.sh + 8 段验证 | ✅ |
+| B | B-1 | Drive v2 PR11 path 物化 | alembic/versions/066_*.py + GIN trgm | ✅ |
+| B | B-2 | Drive v2 PR12 emoji reactions | alembic/versions/067_*.py | ✅ |
+| B | B-3 | KB 闭环 auto-intake rollback | scripts/rollback_kb.py | ✅ |
+| B | B-4 | KB 闭环 automation 5 步 pipeline | scripts/save_to_kb.py | ✅ |
+| C | C-1 | hot-fix #18 实施报告 | memory/hotfix-18-uploader-id.md | ✅ |
+| C | C-2 | W68 第 7 批 worktree 清理脚本 | scripts/cleanup_worktrees.sh | ✅ |
+| C | C-3 | VAPID 持久化脚本 | scripts/vapid_persist.sh | ✅ |
+| D | D-1 | W68 第 7 批 6 小修整合 | 6 docs/memory 增量 | ✅ |
+| D | D-2 | 6 类文档同步 + grand closure memory | CLAUDE.md + ROADMAP + CHANGELOG + README + 2 MEMORY | ✅ |
+| D | D-3 | 永久纪律沉淀 (W68 第 6+7 批) | CLAUDE.md §W68 第 6+7 批纪律沉淀 | ✅ |
+| D | D-4 | hot-fix #18 监控日志 | scripts/hotfix_monitor.py | ✅ |
+
+### W68 第 10 批主要变更
+
+- **Drive v2 PR11 path 物化**: 评论 path 物化 + GIN trgm + breadcrumb 端点
+- **Drive v2 PR12 reactions**: emoji reactions + 1 query 批量读
+- **KB 闭环**: auto-intake rollback (B-3) + save-to-kb (B-4) + closed-loop 5 步 pipeline
+- **alembic 066 hotfix**: down_revision 串单链 (065_push_subscriptions → 066)
+- **VAPID 持久化**: P0 VAPID 私钥持久化, 避免容器重启丢私钥
+- **6 类文档同步**: 主仓库 5 + 用户级 1 + 1 新增 memory/w68-route-10-d2-doc-sync-2026-07-24.md
+- **永久纪律沉淀**: W68 第 6+7 批审计/闭环纪律从 memory/ 提升到 CLAUDE.md
+
+### W68 第 10 批 3 条新铁律
+
+- ✅ alembic down_revision 必须接最新 (避免双头, W68 第 10 批 hotfix #18 教训)
+- ✅ 6 类文档同步主仓库 5 类必含 MEMORY.md 索引 (W68 第 9 批 D-2 铁律升级)
+- ✅ 部署必做完整化 (VAPID + alembic upgrade + 重启 + 验证 4 步)
+
+详见 `memory/w68-route-10-{a,b,c,d}*-2026-07-24.md` + `memory/w68-grand-closure-10th-batch-2026-07-24.md` (待主指挥写).
+
+## W68 第 11 批 15 agents grand closure (2026-07-24 — 锚点范式 134→144, plans 状态闭环 + W69 派工实施 + alembic 重新规整)
+
+**W68 第 11 批收官**: 主指挥协调范式第 41 次派工. 15 agents 跨 4 路线派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → 42 → 57 → 72 → 85 → 102 → 116 → 134 → **W68 第 11 批 144** (10 守恒). **0 production code 改动铁律 11/15 守恒** (4 例外已批: C-1 alembic rebase + B-2 Mobile TabBar + C-2 CLI 统一 + C-3 真 e2e). W19 选项 A 维持.
+
+### W68 第 11 批交付清单 (15 agents, 4 路线)
+
+| 路线 | Agent | 任务 | 范围 | 状态 |
+|------|-------|------|------|------|
+| A | A-1 | 13 plans Status 闭环 (含 8 新 plans) | plans/*.md Status 段 | ✅ |
+| A | A-3 | 主指挥部署必做 (VAPID + Phase 2 + cleanup) | scripts/ | ✅ |
+| B | B-1 | 3 plans W69 派工实施修正 | plans/*.md | ✅ |
+| B | B-2 | Mobile TabBar Drive 入口 | web/src/views/mobile/components/MobileTabBar.vue | ✅ |
+| B | B-3 | ppt-word Drive 路线图 gap analysis | docs/drive-roadmap-gap-2026-07-24.md | ✅ |
+| C | C-1 | alembic rebase 066/067/068/069 + B 派工 070/071/072/073 | alembic/versions/0{66-73}_*.py | ✅ |
+| C | C-2 | run_d5_dry.py CLI 统一 | scripts/run_d5_dry.py | ✅ |
+| C | C-3 | Desktop v3.2 22 SKIP 真跑 | qa-bench/ | ✅ |
+| D | D-1 | 派工纪要 v2 | docs/w68-11th-batch-prompt-template-v2.md | ✅ |
+| D | D-2 | 6 类文档同步 + grand closure memory | CLAUDE.md + ROADMAP + CHANGELOG + README + 2 MEMORY | ✅ |
+| D | D-3 | W68 第 11 批 grand closure memory | memory/w68-grand-closure-11th-batch-2026-07-24.md | ✅ |
+| D | D-4 | W70 主指挥最终决策建议 | docs/decisions-w70.md | ✅ |
+| D | D-5 | 实时监测脚本 3 件套 | scripts/w68_monitor.py + vapid/qa-bench/deploy | ✅ |
+
+### W68 第 11 批主要变更
+
+- **plans 状态闭环**: 13 plans Status 段闭环 (含 8 新 plans 创 Status) — 5 个老 plans Status 修正
+- **W69 派工实施**: 3 plans delegated/distributed/fizzy 修正 (Status 错位修正)
+- **alembic 重新规整**: 066/067/068/069 串单链 + B 派工 070/071/072/073 串单链 (C-1 rebase + 验证)
+- **Mobile TabBar Drive 入口**: 移动端 NutUI 4 双栈新增 Drive 入口 tab
+- **Desktop v3.2 22 SKIP 真跑**: 跨 PR11/12/13 集成 + 22 SKIP 端到端验证
+- **ppt-word Drive 路线图 gap analysis**: 调研 docs, 输出 W69+ 派工建议
+- **6 类文档同步**: 主仓库 5 + 用户级 1 + 1 新增 memory/w68-route-11-d2-doc-sync-2026-07-24.md
+- **派工纪要 v2**: 派工前提 stat 验证纪律 + 5 段 prompt 模板
+
+### W68 第 11 批 3 条新铁律 (D-2 doc sync)
+
+- ✅ 6 类文档同步含主仓库 5 类 (CLAUDE.md/ROADMAP/CHANGELOG/README/MEMORY.md) + 用户级 1 类, 不可只同步部分
+- ✅ 不写 history 文档不动 (CLAUDE.md 顶部段只追加新批 grand closure 段, 老段保持完整)
+- ✅ 同步预测值 vs 实际值明示 (D-1+D-3+D-4 4 阶段流程锚定预测值, E 落地后修正)
+
+详见 `memory/w68-route-11-{a,b,c,d}*-2026-07-24.md` + `memory/w68-grand-closure-11th-batch-2026-07-24.md` (W68 第 11 批 D-3 commit `26945d0ea`).
+
+## W68 第 12 批 12 agents grand closure (2026-07-24 — 锚点范式 144→154, 路线 C 续 + plans 闭环续 + D7 baseline CI)
+
+**W68 第 12 批收官**: 主指挥协调范式第 42 次派工. 12 agents 跨 4 路线派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → 42 → 57 → 72 → 85 → 102 → 116 → 134 → 144 → **W68 第 12 批 154** (10 守恒). **0 production code 改动铁律 12/15 守恒** (3 例外已批: C-1 tabsWithCounts + C-2 PR9 评论删除 + C-3 PR12 emoji 性能). W19 选项 A 维持.
+
+### W68 第 12 批交付清单 (12 agents, 4 路线)
+
+| 路线 | Agent | 任务 | 范围 | 状态 |
+|------|-------|------|------|------|
+| A | A-1 | plans 闭环续 | plans/*.md Status 段 | ✅ |
+| B | B-3 | qa-bench D7 baseline CI 部署 | .github/workflows/qa-bench-d7.yml | ✅ |
+| B | B-4 | claude-notify-v2 (multi-channel + retry) | app/services/claude_notify_service.py | ✅ |
+| C | C-1 | Drive v2 tabsWithCounts fix | web/src/views/desktop/components/DriveCommentTabs.vue | ✅ |
+| C | C-2 | Drive v2 PR9 评论删除端点 | app/api/v1/drive_comments.py | ✅ |
+| C | C-3 | Drive v2 PR12 emoji 性能优化 | app/services/drive_reaction_service.py | ✅ |
+| D | D-1 | W68 第 11 批派工纪要 v3 | docs/w68-12th-batch-prompt-template-v3.md | ✅ |
+| D | D-2 | 6 类文档同步 + grand closure memory | CLAUDE.md + ROADMAP + CHANGELOG + README + 2 MEMORY | ✅ |
+| D | D-3 | W68 第 12 批 grand closure memory | memory/w68-grand-closure-12th-batch-2026-07-24.md | ✅ |
+| D | D-4 | W68 第 12 批任务模式基调 v3 验证 | docs/w68-task-mode-paradigm-v3.md | ✅ |
+| D | D-5 | W68 第 13 批派工前监测脚本 | scripts/w68_monitor_v13.py | ✅ |
+
+### W68 第 12 批主要变更
+
+- **Drive v2 路线 C 续 3 新功能**: tabsWithCounts fix (UI tabs 计数) + PR9 评论删除端点 (服务化) + PR12 emoji 性能优化 (数据库索引 + 缓存)
+- **qa-bench D7 baseline CI 部署**: B-3 GitHub Actions workflow, 71 PASS + 7 SKIP 守恒验证
+- **claude-notify-v2**: multi-channel (email/Slack/微信) + retry + 监控
+- **plans 闭环续**: A-1 闭环剩余 plans (含 chat-history-persistent 等 W69 backlog plans)
+- **任务模式基调 v3**: 派工前提 stat 验证 + 派工中闭环 + 派工后同步 3 阶段
+- **6 类文档同步**: 主仓库 5 + 用户级 1 + 1 新增 memory/w68-route-12-d2-doc-sync-2026-07-24.md
+
+### W68 第 12 批 3 条新铁律 (D-2 doc sync)
+
+- ✅ 6 类文档同步含主仓库 5 类 + 用户级 1 类 (W68 第 11 批 D-2 铁律 1 沿用)
+- ✅ 路线 C 续 3 新功能必走 CLAUDE.md 头段已批例外清单 (tabsWithCounts + PR9 评论删除 + PR12 emoji 性能)
+- ✅ qa-bench D7 baseline CI 部署必含 71 PASS + 7 SKIP 守恒验证 (跨 commit 0 regression)
+
+详见 `memory/w68-route-12-{a,b,c,d}*-2026-07-24.md` + `memory/w68-grand-closure-12th-batch-2026-07-24.md` (待主指挥写) + `memory/w68-route-12-d2-doc-sync-2026-07-24.md` (本任务沉淀).
+
 ---
 
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
