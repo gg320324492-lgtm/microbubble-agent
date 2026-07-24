@@ -337,6 +337,16 @@ jobs:
           path: tests/qa-bench/results/baseline_d5_1000/
           retention-days: 30
 
+      # === W68 第 12 批 B-3: D7 baseline audit 与 80% gate 同步执行 ===
+      # 直接在已安装完整依赖的 app-test 容器内运行，避免宿主 runner 缺少
+      # production imports；SKIP_DB_SETUP=1 保持 baseline 不触碰测试数据库。
+      - name: Run D7 baseline audit (71 PASS + 7 SKIP)
+        if: always()
+        run: |
+          docker exec -e SKIP_DB_SETUP=1 app-test bash -lc \
+            "cd /app && python tests/test_baseline_audit.py && \
+             python -m pytest tests/test_baseline_audit.py -q --disable-warnings"
+
       # === 硬门禁: pass_rate < 80% → exit 1 (即使 runner.py 跑了也得验证) ===
       - name: Fail if pass_rate < 80%
         if: always()
