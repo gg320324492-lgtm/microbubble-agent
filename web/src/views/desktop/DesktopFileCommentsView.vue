@@ -48,11 +48,16 @@
       <span class="dfcv-subtitle">{{ headerSubtitle }}</span>
     </div>
 
-    <!-- 文件级 emoji react 工具栏 + 反应汇总 — B-3 v3.2 -->
+    <!-- 文件级 emoji react 工具栏 + 反应汇总 — W68 第 12 批 C-3 虚拟滚动 (默认 8 + 折叠后 4) -->
     <div class="dfcv-file-reactions">
-      <div class="dfcv-react-toolbar" role="toolbar" aria-label="文件表情反应">
+      <div
+        class="dfcv-react-toolbar"
+        role="toolbar"
+        aria-label="文件表情反应"
+        :class="{ 'emoji-toolbar-collapsed': fileEmojiIsCollapsed }"
+      >
         <button
-          v-for="emoji in emojiWhitelist"
+          v-for="emoji in fileEmojiVisibleEmojis"
           :key="emoji"
           type="button"
           class="dfcv-react-emoji"
@@ -62,6 +67,27 @@
           @click="onToggleFileReaction(emoji)"
         >
           {{ emoji }}
+        </button>
+        <button
+          v-if="fileEmojiIsCollapsed && fileEmojiRemainingCount > 0"
+          type="button"
+          class="dfcv-react-more"
+          :aria-label="`展开剩余 ${fileEmojiRemainingCount} 个表情`"
+          @click="fileEmojiLoader.expand()"
+        >
+          <span aria-hidden="true">更多</span>
+          <span aria-hidden="true" class="dfcv-react-more-arrow">▼</span>
+          <span class="dfcv-react-more-count">{{ fileEmojiRemainingCount }}</span>
+        </button>
+        <button
+          v-else-if="!fileEmojiIsCollapsed"
+          type="button"
+          class="dfcv-react-more dfcv-react-more--collapse"
+          aria-label="折叠表情"
+          @click="fileEmojiLoader.collapse()"
+        >
+          <span aria-hidden="true">收起</span>
+          <span aria-hidden="true" class="dfcv-react-more-arrow">▲</span>
         </button>
       </div>
       <div v-if="fileReactionSummary.length > 0" class="dfcv-react-summary">
@@ -159,6 +185,8 @@ import { useCommentTree } from '@/composables/useCommentTree'
 import { useFileCommentsDesktop } from '@/composables/useFileCommentsDesktop'
 import { useCommentReactions, EMOJI_WHITELIST } from '@/composables/useCommentReactions'
 import { useCommentBreadcrumb } from '@/composables/useCommentBreadcrumb'
+// W68 第 12 批 C-3: emoji react 虚拟滚动 (默认 8 + 折叠后 4)
+import { useEmojiLazyLoad } from '@/composables/useEmojiLazyLoad'
 import DesktopCommentThread from '@/components/desktop/DesktopCommentThread.vue'
 import DesktopCommentInput from '@/components/desktop/DesktopCommentInput.vue'
 
@@ -183,6 +211,15 @@ const {
 } = useCommentBreadcrumb()
 
 const emojiWhitelist = EMOJI_WHITELIST
+// W68 第 12 批 C-3: 文件级 emoji 虚拟滚动 (默认 8 + 折叠后 4)
+const fileEmojiLoader = useEmojiLazyLoad({
+  initialVisibleCount: 8,
+  fullList: emojiWhitelist,
+})
+// 暴露 composable 计算属性到模板 (避免 .value 显式书写)
+const fileEmojiVisibleEmojis = fileEmojiLoader.visibleEmojis
+const fileEmojiIsCollapsed = fileEmojiLoader.isCollapsed
+const fileEmojiRemainingCount = fileEmojiLoader.remainingCount
 // 文件级 emoji 反应用虚拟 commentId (file:<id>) 存本地, 与评论反应隔离
 const fileReactionKey = computed(() => `file:${props.fileId}`)
 
@@ -506,6 +543,54 @@ watch(() => props.fileId, (newId, oldId) => {
 
 .dfcv-react-emoji.active {
   background: var(--color-primary-bg, rgba(255, 122, 92, 0.16));
+}
+
+/* === W68 第 12 批 C-3: 文件级 emoji 虚拟滚动 (默认 8 + 折叠后 4) === */
+.dfcv-react-toolbar.emoji-toolbar-collapsed .dfcv-react-emoji {
+  /* 折叠态: 8 + 1 "更多" = 9 项, 不换行, 紧凑布局 */
+}
+
+.dfcv-react-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--color-bg-page, #f5f7fa);
+  border: 1px dashed var(--color-border-light, #ebeef5);
+  border-radius: 6px;
+  font-size: 10px;
+  color: var(--color-text-secondary, #606266);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  padding: 2px;
+  gap: 1px;
+}
+
+.dfcv-react-more:hover {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  border-color: var(--color-primary, #ff7a5c);
+  color: var(--color-primary, #ff7a5c);
+}
+
+.dfcv-react-more-arrow {
+  font-size: 8px;
+  line-height: 1;
+}
+
+.dfcv-react-more-count {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.dfcv-react-more--collapse {
+  flex-direction: row;
+  width: auto;
+  padding: 4px 10px;
+  gap: 4px;
+  font-size: 11px;
 }
 
 .dfcv-react-summary {

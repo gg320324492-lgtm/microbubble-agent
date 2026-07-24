@@ -130,20 +130,49 @@
               <span aria-hidden="true">😊</span>
               <span>表情</span>
             </button>
-            <div v-if="showEmojiPicker" class="dci-emoji-popover" role="menu">
-              <button
-                v-for="emoji in emojiWhitelist"
-                :key="emoji"
-                type="button"
-                class="dci-emoji-option"
-                :class="{ active: isReactedByMe(emoji) }"
-                role="menuitem"
-                :aria-label="`用 ${emoji} 反应`"
-                @click="onPickEmoji(emoji)"
-              >
-                {{ emoji }}
-              </button>
-            </div>
+            <!-- W68 第 12 批 C-3: emoji react 虚拟滚动 (默认 8 + 折叠后 4) -->
+          <div
+            v-if="showEmojiPicker"
+            class="dci-emoji-popover"
+            role="menu"
+            :class="{ 'emoji-toolbar-collapsed': emojiIsCollapsed }"
+          >
+            <button
+              v-for="emoji in emojiVisibleEmojis"
+              :key="emoji"
+              type="button"
+              class="dci-emoji-option"
+              :class="{ active: isReactedByMe(emoji) }"
+              role="menuitem"
+              :aria-label="`用 ${emoji} 反应`"
+              @click="onPickEmoji(emoji)"
+            >
+              {{ emoji }}
+            </button>
+            <button
+              v-if="emojiIsCollapsed && emojiRemainingCount > 0"
+              type="button"
+              class="dci-emoji-more"
+              role="menuitem"
+              :aria-label="`展开剩余 ${emojiRemainingCount} 个表情`"
+              @click="emojiLoader.expand()"
+            >
+              <span aria-hidden="true">更多</span>
+              <span aria-hidden="true" class="dci-emoji-more-arrow">▼</span>
+              <span class="dci-emoji-more-count">{{ emojiRemainingCount }}</span>
+            </button>
+            <button
+              v-else-if="!emojiIsCollapsed"
+              type="button"
+              class="dci-emoji-more dci-emoji-more--collapse"
+              role="menuitem"
+              aria-label="折叠表情"
+              @click="emojiLoader.collapse()"
+            >
+              <span aria-hidden="true">收起</span>
+              <span aria-hidden="true" class="dci-emoji-more-arrow">▲</span>
+            </button>
+          </div>
           </div>
           <button
             v-if="canReply"
@@ -231,6 +260,8 @@ import { ref, computed, watch } from 'vue'
 import {
   ChatDotRound, Edit, Delete, RefreshLeft, Select, ArrowDown, ArrowUp,
 } from '@element-plus/icons-vue'
+// W68 第 12 批 C-3: emoji react 虚拟滚动 (默认 8 + 折叠后 4)
+import { useEmojiLazyLoad } from '@/composables/useEmojiLazyLoad'
 
 const props = defineProps({
   comment: { type: Object, required: true },
@@ -253,6 +284,21 @@ const emit = defineEmits([
 
 const collapsed = ref(false)
 const showEmojiPicker = ref(false)
+
+// W68 第 12 批 C-3: emoji 虚拟滚动 (默认 8 + 折叠后 4)
+const emojiLoader = useEmojiLazyLoad({
+  initialVisibleCount: 8,
+  fullList: props.emojiWhitelist.length > 0 ? props.emojiWhitelist : undefined,
+})
+// 暴露 composable 计算属性到模板 (避免 .value 显式书写)
+const emojiVisibleEmojis = emojiLoader.visibleEmojis
+const emojiIsCollapsed = emojiLoader.isCollapsed
+const emojiRemainingCount = emojiLoader.remainingCount
+
+// 关闭 picker 时自动折叠 (避免下次打开残留展开态)
+watch(showEmojiPicker, (val) => {
+  if (!val) emojiLoader.collapse()
+})
 
 // === emoji 反应 ===
 // 只展示 count > 0 的 emoji, 保序 (map 内顺序)
@@ -708,6 +754,52 @@ function onCancelEdit() {
 
 .dci-emoji-option.active {
   background: var(--color-primary-bg, rgba(255, 122, 92, 0.16));
+}
+
+/* === W68 第 12 批 C-3: emoji 虚拟滚动 (默认 8 + 折叠后 4) === */
+.dci-emoji-popover.emoji-toolbar-collapsed {
+  /* 折叠态: 8 emoji + 1 "更多" 按钮 = 9 节点, 网格 6 列自动换行 */
+  grid-template-columns: repeat(9, minmax(30px, 1fr));
+}
+
+.dci-emoji-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-page, #f5f7fa);
+  border: 1px dashed var(--color-border-light, #ebeef5);
+  border-radius: 6px;
+  font-size: 10px;
+  color: var(--color-text-secondary, #606266);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  padding: 2px;
+  gap: 1px;
+}
+
+.dci-emoji-more:hover {
+  background: var(--color-primary-bg, rgba(255, 122, 92, 0.1));
+  border-color: var(--color-primary, #ff7a5c);
+  color: var(--color-primary, #ff7a5c);
+}
+
+.dci-emoji-more-arrow {
+  font-size: 8px;
+  line-height: 1;
+}
+
+.dci-emoji-more-count {
+  font-size: 9px;
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.dci-emoji-more--collapse {
+  grid-column: span 3;
+  flex-direction: row;
+  gap: 4px;
+  padding: 4px 8px;
 }
 </style>
 

@@ -179,12 +179,19 @@ describe('desktop_comment_v32 (W68 第 9 批 B-3)', () => {
     vi.clearAllMocks()
   })
 
-  it('场景 1: emoji react 上传 — 文件工具栏 12 emoji + summary bar 聚合', async () => {
+  it('场景 1: emoji react 上传 — 文件工具栏 12 emoji (展开后) + summary bar 聚合', async () => {
     const wrapper = makeViewWrapper()
     await flushPromises()
     await flushPromises()
 
-    // 文件级 emoji 工具栏应有 12 个 emoji
+    // W68 第 12 批 C-3: 默认折叠态 8 emoji, 需先点"更多"展开 12 个
+    const moreBtn = wrapper.find('.dfcv-react-more')
+    if (moreBtn.exists()) {
+      await moreBtn.trigger('click')
+      await flushPromises()
+    }
+
+    // 文件级 emoji 工具栏应有 12 个 emoji (展开后)
     const emojiBtns = wrapper.findAll('.dfcv-react-emoji')
     expect(emojiBtns.length).toBe(EMOJI_WHITELIST.length)
     expect(EMOJI_WHITELIST.length).toBe(12)
