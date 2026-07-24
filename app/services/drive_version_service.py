@@ -619,6 +619,136 @@ class DriveVersionService:
         }
 
     # ==========================================================================
+    # W68 第 12 批 B-2 (Drive v2 PR15): 按 tag 查询版本 (复用 drive_version_tag_service)
+    # ==========================================================================
+
+    async def get_version_by_tag(
+        self,
+        *,
+        file_id: int,
+        tag_name: str,
+        current_user_id: int,
+    ) -> Optional[dict]:
+        """按 (file_id, tag_name) 拿首个匹配版本 (复用 PR15 service)
+
+        Args:
+            file_id: 文件 ID (Knowledge.id)
+            tag_name: 标签名称 (12 个内置白名单之一)
+            current_user_id: 当前用户 (权限校验)
+
+        Returns:
+            Dict: {version_id, version_number, is_current, tag_id, tag_name, color, ...} or None
+
+        Raises:
+            DriveVersionServiceError(403): 无 read 权限
+        """
+        from app.services.drive_version_tag_service import DriveVersionTagService
+
+        tag_svc = DriveVersionTagService(self.db)
+        try:
+            return await tag_svc.get_file_by_tag(
+                file_id=file_id,
+                tag_name=tag_name,
+                current_user_id=current_user_id,
+            )
+        except DriveVersionTagServiceError as e:
+            # 统一异常类型, 方便调用方 (API 层) 捕获
+            raise DriveVersionServiceError(
+                str(e), status_code=e.status_code,
+            )
+
+    async def list_versions_with_tags(
+        self,
+        *,
+        file_id: int,
+        current_user_id: int,
+    ) -> dict:
+        """列文件所有版本 (含 tags, PR15 增强)
+
+        与 list_versions 区别: 返回的 items 额外含 tags 字段
+        (调用方无需 2 次 query: 先 list_versions 再 list_tags_by_file)
+
+        Returns:
+            {
+                "file_id": int,
+                "file_name": str,
+                "count": int,
+                "items": [
+                    {
+                        "id": int, "version_number": int, "uploader_id": int, ...,
+                        "tags": [{tag_name, color, description, ...}, ...]
+                    }
+                ]
+            }
+
+        性能:
+        - 1 次 query 拿 version + tags (LEFT OUTER JOIN)
+        - 比 list_versions + list_tags_by_file 节省 50% query 数
+        """
+        # 校验文件存在 + 可见性 (复用 list_versions 逻辑)
+        cur_file = await self.db.get(Knowledge, file_id)
+        if cur_file is None:
+            raise DriveVersionServiceError(
+                f"文件 id={file_id} 不存在", status_code=404,
+            )
+        if cur_file.created_by != current_user_id and cur_file.visibility == "private":
+            raise DriveVersionServiceError(
+                f"无权查看文件 id={file_id} (private)", status_code=403,
+            )
+
+        # LEFT OUTER JOIN: version + tags (无 tag 的版本 tags=[])
+        from app.models.drive_version_tag import DEFAULT_TAG_COLOR, DriveVersionTag
+
+        stmt = (
+            select(DriveFileVersion, Member.name, DriveVersionTag)
+            .outerjoin(Member, DriveFileVersion.uploader_id == Member.id)
+            .outerjoin(
+                DriveVersionTag,
+                DriveVersionTag.version_id == DriveFileVersion.id,
+            )
+            .where(DriveFileVersion.file_id == file_id)
+            .order_by(
+                desc(DriveFileVersion.version_number),
+                DriveVersionTag.created_at.asc(),
+            )
+        )
+        rows = (await self.db.execute(stmt)).all()
+
+        # 聚合: version_id → {info + tags}
+        version_map: dict = {}
+        for v, uploader_name, tag in rows:
+            entry = version_map.setdefault(v.id, {
+                "id": v.id,
+                "file_id": v.file_id,
+                "version_number": v.version_number,
+                "minio_object_key": v.minio_object_key,
+                "size": v.size,
+                "uploader_id": v.uploader_id,
+                "uploader_name": uploader_name,
+                "comment": v.comment,
+                "is_current": bool(v.is_current),
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+                "tags": [],
+            })
+            if tag is not None:
+                entry["tags"].append({
+                    "id": tag.id,
+                    "tag_name": tag.tag_name,
+                    "tag_description": tag.tag_description,
+                    "color": tag.color if tag.color else DEFAULT_TAG_COLOR,
+                    "created_by": tag.created_by,
+                    "created_at": tag.created_at.isoformat() if tag.created_at else None,
+                })
+
+        items = list(version_map.values())
+        return {
+            "file_id": file_id,
+            "file_name": cur_file.file_name,
+            "count": len(items),
+            "items": items,
+        }
+
+    # ==========================================================================
     # 工具: 把 DriveFileVersion 序列化为 dict (API 响应)
     # ==========================================================================
 
