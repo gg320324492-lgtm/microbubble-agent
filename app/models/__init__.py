@@ -22,6 +22,8 @@ from app.models.drive_share import DriveFolderShare, DriveFolderMember  # v2 PR7
 from app.models.drive_comment import DriveComment  # v2 PR9 评论 thread
 from app.models.drive_file_version import DriveFileVersion  # v2 PR9 文件版本历史
 from app.models.push_subscription import PushSubscription, PushTopic, PushTopicSubscription  # v3.2 PWA Push
+from app.models.kb_closed_loop_log import KbClosedLoopLog  # W68 第 10 批 B-4 KB 闭环 audit log
+from app.models.kb_link import KbLink  # W68 第 10 批 B-4 KB 之间相似度关联
 
 __all__ = [
     "Member",
@@ -59,4 +61,6 @@ __all__ = [
     "PushSubscription",      # v3.2 PWA 推送订阅
     "PushTopic",             # v3.2 PWA 推送主题
     "PushTopicSubscription", # v3.2 PWA 推送主题订阅
+    "KbClosedLoopLog",       # W68 第 10 批 B-4 KB 闭环 audit log
+    "KbLink",                # W68 第 10 批 B-4 KB 之间相似度关联
 ]
