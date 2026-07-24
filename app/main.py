@@ -41,6 +41,7 @@ def _import_application_routers():
         drive_comments,  # v2 PR9 评论 thread
         drive_versions,  # v2 PR9 文件版本历史
         drive_version_diff,  # v2 PR9 文件版本对比
+        drive_collab,  # v2 PR10 协同编辑 WS + REST
         file_requests,
         knowledge,
         meeting,
@@ -92,6 +93,7 @@ def _import_application_routers():
         (drive_comments.router, {"prefix": "/api/v1", "tags": ["网盘评论 thread"]}),  # v2 PR9
         (drive_versions.router, {"prefix": "/api/v1", "tags": ["网盘文件版本"]}),  # v2 PR9
         (drive_version_diff.router, {"prefix": "/api/v1", "tags": ["网盘文件版本对比"]}),  # v2 PR9
+        (drive_collab.router, {"prefix": "/api/v1", "tags": ["网盘协同编辑"]}),  # v2 PR10
         (upload_multipart.router, {"prefix": "/api/v1", "tags": ["分片上传"]}),
         (ws_notifications.router, {"prefix": "/api/v1"}),
         (notifications.router, {}),
