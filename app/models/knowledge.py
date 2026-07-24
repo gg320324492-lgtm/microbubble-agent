@@ -125,6 +125,15 @@ class Knowledge(Base, TimestampMixin):
     thumbnail_generated_at = Column(DateTime, nullable=True)
     # ==================== /v2 PR5 ====================
 
+    # ==================== v2 PR17 文件秒传审计 2026-07-24 (W68 第 14 批 B-1) ====================
+    # 秒传本身走 file_hash (已有列 + ix_knowledge_file_hash 部分索引). 这 2 列纯审计:
+    # drive_dedupe_count: 该 file 被秒传命中的累计次数 (每次命中 mark_dedupe_hit +1)
+    # drive_dedupe_first_hit_at: 首次被秒传命中的时间戳 (分析热点文件)
+    # alembic 078_drive_dedupe_audit (down=076_drive_comments_path_backfill)
+    drive_dedupe_count = Column(Integer, nullable=False, server_default="0")
+    drive_dedupe_first_hit_at = Column(DateTime, nullable=True)
+    # ==================== /v2 PR17 ====================
+
     def __repr__(self):
         return f"<Knowledge(id={self.id}, title='{self.title}', storage_mode='{self.storage_mode}')>"
 
