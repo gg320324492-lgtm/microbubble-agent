@@ -55,8 +55,10 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "079_team_folders"
-# 接 B-1 (PR17 哈希去重), B-1 合并后主指挥会按 alembic 链顺序合并, 串单链 076 → 078 → 079
-down_revision: Union[str, None] = "078_drive_dedupe_audit"
+# 主指挥 W68 第 14 批合并收口修订 (2026-07-24): B-1 (alembic 078) stopped agent 未完工
+# → 改接 076_drive_comments_path_backfill (W68 第 13 批 alembic renumber 终点).
+# 串单链 076 → 079, 1 个 head 0 双头, 符合派工纪要 v4 铁律 1 + W68 第 13 批 C-1 实战教训.
+down_revision: Union[str, None] = "076_drive_comments_path_backfill"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
