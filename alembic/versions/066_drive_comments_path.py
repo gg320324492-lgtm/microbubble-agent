@@ -43,7 +43,7 @@ from alembic import op
 
 
 revision: str = "066_drive_comments_path"
-down_revision: Union[str, None] = "064_drive_documents"
+down_revision: Union[str, None] = "065_push_subscriptions"
 branch_labels: Union[str, None] = None
 depends_on: Union[str, None] = None
 
