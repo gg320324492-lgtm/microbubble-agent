@@ -183,6 +183,56 @@
 
 ---
 
+## W68 第 7 批 15 agents 跨主题收官 (2026-07-24 — 锚点范式 72→85, plans 闭环 + Status 修正)
+
+**W68 第 7 批收官**: 主指挥协调范式第 35 次派工. **15 agents** 分 4 路线派工. 触发点: W68 第 6 批 5 agent **实战** git log + git show + grep -r 核对 67 plans, 发现真完成率仅 **53% ACTUAL_COMPLETED** (vs W66 `plans-status-67-closure` 仅信 Status 段自报的 70%). 锚点范式单调上升 W68 第 5 批 72 → **W68 第 7 批 85** (13 守恒). **0 production code 改动铁律维持** (路线 C/E 纯 docs+memory 完全维持, 路线 D plans 闭环 + 路线 A/B 新功能扩展 例外已批). W19 选项 A 维持.
+
+### W68 第 6 批实战审计核心发现 (5 agent)
+
+- **真完成率 53% ACTUAL_COMPLETED** (vs W66 自报 70%, 差 -17 个百分点)
+- **5 个真未实施 (P0)**: exe-logical-pie (商业化打包 0%) + claude-code-bubbly-parnas (voice-alert hook 未 wire) + silly-gliding-dahl (fast mode + team_overview 0%) + qa-bench-isolation-a1 (物理隔离栈 0%) + qa-bench-v3.1-decisions D5 (Dashboard KB 监控 0%)
+- **12 个 PARTIAL_REGRESSION**: cached-giggling-pebble (P0 删除 polish 被反向重写) + chatgpt-structured-floyd (3 子 plan 仅 1 完成) + v2-drive-pr6 (4 表合并 1, frontend 全删) + memoized-pondering-marble (TabBar Drive 入口未做) + plan-playwright-greedy-flurry (sentence-transformers 未升级) + ppt-word-replicated-swing (Drive 路线图 30-40%) + delightful-leaping-pretzel (Ollama scripts + benchmark 缺) + delegated-orbiting-curry / fizzy-cooking-puzzle (Status commit 不匹配) + distributed-coalescing-stallman (CSS 改动未明) + qa-bench-isolation-a1 + D5 (交叉计入 P0)
+- **14 个 Status 段系统化错位**: W66 批量状态化"挂错标签"事故, W68 第 7 批 C-1 已批量修正
+- **2 个 MISCATEGORIZED**: ppt-word-replicated-swing (实为 Drive 路线图) + memoized-pondering-marble (实为 TabBar Drive 入口)
+
+### W68 第 7 批交付清单 (15 agents, 4 路线)
+
+| 路线 | Agent | 任务 | 锚点 | 状态 |
+|------|-------|------|------|------|
+| C | C-1 | 14 个 Status 段错位批量修正 | 第 73 | ✅ |
+| C | C-2 | 5 个 P0 未实施 plan 闭环可行性评估 | 第 74 | ✅ |
+| C | C-3 | verified-plans-w68 报告 + 6 类文档同步 + grand closure memory | 第 75 | ✅ |
+| D | D-1 | claude-code-bubbly-parnas hook wire (小修) | 第 76 | ✅ |
+| D | D-2 | silly-gliding-dahl team_overview 工具实施 | 第 77 | ✅ |
+| D | D-3 | qa-bench-v3.1-decisions D5 Dashboard KB 监控面板 | 第 78 | ✅ |
+| A | A-1 | Drive v2 PR10 协同编辑 CRDT 调研 | 第 79 | ✅ |
+| A | A-2 | Drive v2 PR10 文件版本对比视图 | 第 80 | ✅ |
+| B | B-1 | qa-bench D6 Phase 1 实施 | 第 81 | ✅ |
+| B | B-2 | qa-bench-isolation-a1 与 D6 合并规划 | 第 82 | ✅ |
+| E | E-1 | Mobile UX v3.2 性能优化 | 第 83 | ✅ |
+| E | E-2 | baseline 守恒验证 (71 PASS + 7 SKIP) | 第 84 | ✅ |
+| E | E-3 | W68 第 7 批 grand closure memory | 第 85 | ✅ |
+
+### W68 第 7 批主要变更
+
+- **审计**: W68 第 6 批 5 agent 实战核对 67 plans → 真完成率 53% (覆盖修正 W66 仅信 Status 段的 70%)
+- **Status 修正**: 14 个错位 plan Status 段批量修正为真实实施 commit
+- **plans 闭环**: 现实 P0 (bubbly-parnas hook wire + silly-gliding-dahl team_overview + D5 Dashboard) 实施
+- **新功能续**: Drive v2 PR10 协同编辑/版本对比 + qa-bench D6 Phase 1
+- **文档同步**: CLAUDE.md / ROADMAP.md / CHANGELOG.md / README.md / 2 MEMORY.md 同步 W68 第 7 批
+
+### W68 第 7 批 5 条新铁律 (plans 审计)
+
+- ✅ plans Status 段必须描述真实实施 commit (无 commit 不能标 COMPLETED)
+- ✅ 核对完成度必须三步实战 (读 plan 全文 + git show + grep -r)
+- ✅ plans 命名应与实际内容一致 (随机 codename 必须 Body 首行写明主题)
+- ✅ AGENT_STUB 必须真合并 (merge 后重新核对升级, 不能长期掩盖)
+- ✅ plan body 自标 SUPERSEDED 的, Status 段必须同步更新
+
+详见 `memory/verified-plans-w68-2026-07-24.md` + `memory/w68-grand-closure-7th-batch-2026-07-24.md`.
+
+---
+
 ## Drive v2 PR8 收官 (W68 第 1 批 路线 A, 6 commits + 1 协调)
 
 **W68 路线 A 收官**: Drive v2 PR8 完整闭环 — WebSocket 通知增强 + 实时协作文件锁 + 文件预览 + 移动端精修 + e2e + 文档. 锚点范式 W67 28 → **W68 29** 单调上升目标. 6 agents 并行在 6 worktree, Agent 7 (本任务) 协调合并顺序 + 冲突预案 + 6 项硬指标验证脚本.
