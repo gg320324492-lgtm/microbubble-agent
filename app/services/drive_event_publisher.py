@@ -49,7 +49,7 @@ WS 推送, polymorphic target (comment/file/note) → file/folder owner 通知.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -267,6 +267,21 @@ async def publish_reaction_added(
         "ts": _now_iso(),
     }
     return await _safe_push(target_user_id, payload, priority=NotificationPriority.HIGH)
+
+
+async def publish_combined_notification(db: AsyncSession, *, target_user_id: int, combined_actions: List[str], source_comment_id: int, actor_id: int, snippet: str = "") -> int:
+    """Send one HIGH notification for all actions on a comment."""
+    from app.services.drive_notification_dedup_service import actions_hash, should_send, record_sent
+    digest = actions_hash(combined_actions)
+    try:
+        if not await should_send(db, target_user_id, source_comment_id, digest): return 0
+        payload = {"type": "comment_combined", "comment_id": source_comment_id, "target_user_id": target_user_id, "actions": sorted(set(combined_actions)), "actor_id": actor_id, "snippet": snippet, "ts": _now_iso()}
+        result = await _safe_push(target_user_id, payload, priority=NotificationPriority.HIGH)
+        await record_sent(db, target_user_id, source_comment_id, digest)
+        return result
+    except Exception as e:
+        logger.error("combined notification failed: %r", e, exc_info=True)
+        return -1
 
 
 # ==========================================================================
