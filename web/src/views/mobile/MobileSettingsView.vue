@@ -77,6 +77,26 @@
           <span class="item-arrow">›</span>
         </button>
 
+        <!-- W68 路线 5 第 3 批: Mobile UX v3.2 PWA 推送开关 -->
+        <button
+          type="button"
+          class="settings-item"
+          data-testid="push-toggle-item"
+          @click="onTogglePushClick"
+        >
+          <div class="item-icon" style="background: var(--color-warning-bg, #fdf6ec)">📲</div>
+          <div class="item-info">
+            <div class="item-title">推送通知</div>
+            <div class="item-desc">
+              <span v-if="pushEnabled" class="push-status-on">已开启</span>
+              <span v-else-if="pushDenied" class="push-status-denied">已拒绝</span>
+              <span v-else class="push-status-off">未开启</span>
+              <span class="push-status-meta">{{ pushStatusMeta }}</span>
+            </div>
+          </div>
+          <span class="item-arrow">›</span>
+        </button>
+
         <button
           type="button"
           class="settings-item"
@@ -196,6 +216,15 @@
       @submit="onSaveNotif"
     />
 
+    <!-- W68 路线 5 第 3 批: 推送权限申请弹窗 -->
+    <MobilePushPermissionDialog
+      v-model="showPushDialog"
+      :digest-time="notifPrefs?.digest_time || '11:00'"
+      @allow="onPushAllow"
+      @dismiss="onPushDismiss"
+      @error="onPushError"
+    />
+
     <input
       ref="avatarInputRef"
       type="file"
@@ -227,10 +256,12 @@ import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/useThemeStore'
 import { useUiStore } from '@/stores/useUiStore'  // 2026-06-30 #009 Self-RAG 深度思考 toggle
 import { useNotificationPrefs } from '@/composables/useNotificationPrefs'
+import { useMobilePushNotification } from '@/composables/useMobilePushNotification'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import MobileFormSheet from '@/components/mobile/MobileFormSheet.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MemberAvatar from '@/components/mobile/MemberAvatar.vue'
+import MobilePushPermissionDialog from '@/components/mobile/MobilePushPermissionDialog.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -257,6 +288,47 @@ const savingPassword = ref(false)
 // 通知偏好（v2 11AM 单一窗口）
 const { prefs: notifPrefs, loading: notifLoading, fetchPrefs: fetchNotifPrefs, savePrefs: saveNotifPrefs } = useNotificationPrefs()
 const notifSaving = ref(false)
+
+// W68 路线 5 第 3 批: PWA 推送 (复用 useMobilePushNotification composable)
+const push = useMobilePushNotification()
+const showPushDialog = ref(false)
+const pushEnabled = computed(() => push.isSubscribed.value && push.permission.value === 'granted')
+const pushDenied = computed(() => push.permission.value === 'denied')
+const pushStatusMeta = computed(() => {
+  if (!push.canPush.value) {
+    return push.isIOS.value
+      ? '· iOS Safari 需添加到主屏'
+      : '· 当前浏览器不支持'
+  }
+  if (pushEnabled.value) return '· 实时推送'
+  if (pushDenied.value) return '· 已拒绝 (可在浏览器设置开启)'
+  if (push.isDismissed.value) return '· 7 天内不再询问'
+  return '· 点击开启'
+})
+
+function onTogglePushClick() {
+  // 已开启 → 直接取消订阅 (无需弹窗)
+  if (pushEnabled.value) {
+    push.unsubscribe()
+    ElMessage.success('推送已关闭')
+    return
+  }
+  // 其它状态 (default / denied / dismissed) → 弹窗申请
+  showPushDialog.value = true
+}
+
+function onPushAllow() {
+  ElMessage.success('推送通知已开启')
+}
+
+function onPushDismiss() {
+  // 用户主动关闭 / 拒绝 — 7 天冷却由 composable 内部维护
+  // 不弹 ElMessage (避免骚扰)
+}
+
+function onPushError(e) {
+  ElMessage.error(`推送申请失败: ${e?.message || '未知错误'}`)
+}
 const notifForm = reactive({
   enabled: true,
   digest_time: '11:00',
@@ -634,6 +706,34 @@ onMounted(async () => {
   color: var(--color-warning, #E6A23C);
   border-radius: 8px;
   font-size: 10px;
+}
+
+/* W68 路线 5 第 3 批: 推送状态徽标 (与 snoozed-badge 同款) */
+.push-status-on,
+.push-status-off,
+.push-status-denied {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: var(--font-weight-medium, 500);
+}
+.push-status-on {
+  background: var(--color-success-bg, #f0f9eb);
+  color: var(--color-success, #67C23A);
+}
+.push-status-off {
+  background: var(--color-info-bg, #ecf5ff);
+  color: var(--color-info, #909399);
+}
+.push-status-denied {
+  background: var(--color-danger-bg, #fef0f0);
+  color: var(--color-danger, #F56C6C);
+}
+.push-status-meta {
+  font-size: 11px;
+  color: var(--color-text-secondary, #909399);
 }
 </style>
 
