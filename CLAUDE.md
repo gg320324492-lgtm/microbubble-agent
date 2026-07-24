@@ -27,6 +27,38 @@
 
 **W68 第 7 批 15 agents (plans 闭环 + Status 修正) 派工完成**: 触发点 W68 第 6 批 5 agent **实战**审计 67 plans 发现真完成率仅 **53% ACTUAL_COMPLETED** (vs W66 自报 70%) + 5 个真未实施 (P0) + 14 个 Status 段系统化错位. 4 路线: C (plans 审计收口 3) + D (plans 闭环实施 3) + A/B (Drive PR10 + qa-bench D6 续 4) + E (文档/memory/baseline 3). 锚点范式第 73-85 守恒 (W68 第 5 批 72 → 第 7 批 85). 0 production code 改动铁律维持 (路线 C/E 完全, 路线 D/A/B 例外已批). 详见 `memory/verified-plans-w68-2026-07-24.md` + `memory/w68-grand-closure-7th-batch-2026-07-24.md`.
 
+### W68 第 8 批 grand closure (2026-07-24)
+
+**W68 第 8 批 grand closure** (主基调 "W68 第 7 批合并 + 路线驱动 + hot-fix #18 跟踪"). 主指挥协调范式第 36 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → **W68 第 8 批 102** (单批 15 守恒). 累计 8 批 50+ agent commits + W68 跨主题 200+ commits (main HEAD `05c60e68d`). **0 production code 改动铁律 12/15 守恒** (3 例外已批: B-1 Drive v2 PR11 + B-2 Drive v2 PR12 + B-3 Mobile v3.2 iOS 分享 + 生物识别). W19 选项 A 维持 (4 留未来 PR). 详见 `memory/w68-grand-closure-8th-batch-2026-07-24.md` + `memory/w68-route-9-a2-claudmd-anchor-2026-07-24.md`.
+
+**W68 第 8 批 15 agents 派工清单** (主基调 "W68 第 7 批合并 + 路线驱动 + hot-fix #18 跟踪"):
+- **A-1**: W68 第 7 批 15 分支合并到 main + 5 新铁律 (锚点范式第 90 守恒, commit `62d4a59f7`)
+- **A-2**: Drive v2 PR9-11 master runbook + FAQ (commit `e51699d48`)
+- **A-3**: W68 第 7 批 + 3 hot-fix 部署验证 8 段 (锚点范式第 92 守恒, commit `c6399df32`)
+- **B-1**: Drive v2 PR11 评论 path 物化 + GIN trgm 索引 + breadcrumb 端点 (commit `a2a00ad73`)
+- **B-2**: Drive v2 PR12 emoji reactions (锚点范式第 94 守恒, commit `21a1906a8`)
+- **B-3**: Mobile v3.2 iOS Safari 分享 + 生物识别集成 (commit `faffaf8ff`)
+- **B-4**: qa-bench D6 Phase 3 matrix 4 runner 并行 (commit `c496862b7`)
+- **C-1**: hot-fix #18 (Knowledge.uploader_id → created_by) 实施报告 (锚点范式第 97 守恒, commit `5c28059d5`)
+- **C-2**: W68 第 7 批 worktree + 分支清理脚本 + runbook (锚点范式第 98 守恒, commit `cf03425a0`)
+- **C-3**: W68 第 8 批 grand closure memory (锚点范式 90 → 104 预期, commit `79b44d171`)
+- **D-1**: W68 第 7 批 15 agents 调研发现 6 小修整合 (锚点范式第 88 守恒, commit `353ba295a`)
+- **D-2**: 6 类文档同步 + W68 第 8 批 grand closure memory 引用 (锚点范式 90 → 104 预期, commit `014585813`)
+- **D-3**: W68 第 6+7 批纪律沉淀到 CLAUDE.md (锚点范式第 102 守恒, commit `6f78e4cec`)
+- **D-4**: hot-fix #18 监控日志 + 5 新铁律 (锚点范式第 103 守恒, commit `1ce813e38`)
+- **D-5**: W68 任务模式基调最终验证 (锚点范式第 104 守恒)
+
+**W68 第 8 批核心成果**:
+- **alembic 单链纪律强化**: 062 (PR9 评论) → 063 (PR9 版本) → 064 (PR10 协同) → 065 (PWA push) → 066 (PR11 path) → 067 (PR12 reactions) — 6 串单链迁移 0 双头
+- **永久纪律固化**: W68 第 6+7 批审计/闭环纪律从 memory/ 提升到 CLAUDE.md `## W68 第 6+7 批纪律沉淀 (永久锚点)` 节 (D-3), 未来会话读到 CLAUDE.md 即可了解所有审计/闭环/守恒纪律
+- **任务模式基调实战彻底验证**: plans 优先 + 小修搭配 经 W68 第 4+5+6+7+8 批 5 批实战 (累计 60+ agents 派工) 彻底验证, 0 regression
+- **0 production code 改动铁律 12/15 守恒**: 路线 A/C/D/E 完全维持 (纯 docs/memory/scripts/ 范畴), 路线 B (3 个新功能扩展) 例外已批: B-1 PR11 评论 path 物化 + B-2 PR12 reactions + B-3 Mobile v3.2 iOS 分享 + 生物识别
+- **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 跨 tab / 7 E2E / pending-future-3). 量化触发条件维持.
+
+**W68 累计 commits**: 30+8+12+30+30+15+15+15 = **155 commits** (W68 第 1+2+3+4+5+6+7+8 批累计).
+
+**锚点范式数字正确性**: W68 第 7 批 87 → W68 第 8 批 102 (单批 15 守恒, 0 regression).
+
 ## 当前开发阶段
 
 **Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官 + 移动端 10 个 PR 全栈定制收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**移动端**采用 NutUI 4 + Element Plus **路由级双栈**架构（`useIsMobile.js` 判定 + `resolveMobile.js` 路由适配），**18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略**全部交付，**iOS Safari + Android Chrome 全兼容**。**当前状态（2026-06-13 收官后，commit `9026c07`）**：
