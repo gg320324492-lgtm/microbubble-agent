@@ -222,8 +222,6 @@ const tabBadgeCounts = computed(() => ({
   all: totalCount.value,
   resolved: resolvedCount.value,
 }))
-const tabsWithCounts = computed(() => tabs.map((t) => ({ ...t, count: tabBadgeCounts.value[t.name] || 0 })))
-
 const tabsWithCounts = computed(() =>
   tabs.map((t) => ({ ...t, count: tabBadgeCounts.value[t.name] || 0 })),
 )
