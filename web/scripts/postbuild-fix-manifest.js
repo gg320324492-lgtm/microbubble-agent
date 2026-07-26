@@ -34,11 +34,14 @@ const distDir = path.resolve(__dirname, '..', 'dist')
 
 try {
   // 0. sw.js 必须存在（vite-plugin-pwa 不生成 sw.js 时 build 已失败，此处再 guard 一次）
+  // W68 第 14 批 H-3: PWA 已被禁用 (vite.config.js VitePWA({ disable: true })),
+  // 跳过 sw.js / manifest 检查 — 它们不应该存在
   const swPath = path.join(distDir, 'sw.js')
   if (!fs.existsSync(swPath)) {
-    console.error('[postbuild] FATAL: dist/sw.js 不存在 — vite-plugin-pwa 是否正常生成？')
-    console.error('[postbuild] 检查 vite.config.js 的 VitePWA 配置和 injectManifest.globPatterns')
-    process.exit(1)
+    console.log('[postbuild] PWA 已禁用 (vite-plugin-pwa disable: true), sw.js 不存在 — 跳过所有 PWA 后处理')
+    console.log('[postbuild] H-3 修复: 强制注销浏览器老 SW + 清空 Cache Storage 已在 main.js 顶部实现')
+    console.log('[postbuild] 完成 ✓')
+    process.exit(0)
   }
 
   // 1. 找 manifest 文件（可能是 manifest.webmanifest 或 manifest.{hash}.webmanifest）

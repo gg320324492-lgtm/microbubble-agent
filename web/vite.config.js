@@ -238,6 +238,7 @@ export default defineConfig({
     //   useRegisterSW Vue composable 注册，避免 webhint 报 registerSW.js 缺 cache-busting
     // - manifest: 应用元信息（添加到桌面用），文件名带 hash 由上面 manifestHashPlugin 处理
     VitePWA({
+      disable: true,  // W68 第 14 批 H-3: 强制禁用 PWA (主指挥浏览器老 SW 仍 active 致持续刷新)
       registerType: 'autoUpdate',
       injectRegister: null,
       strategies: 'injectManifest',

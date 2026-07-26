@@ -1,3 +1,26 @@
+// W68 第 14 批 H-3: 强制注销浏览器老 SW (断电后 SW cache 污染致 dashboard 持续刷新)
+// 浏览器 Service Worker Registration Cache 保留老 sw.js 内容, 即使 nginx 现在 410 也仍 active
+// → 在每次加载页面顶部同步 unregister 所有老 SW, 一次清除后下次启动纯净
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => {
+      // unregister 后下次 fetch 走纯 nginx (no sw.js, 不再 404 老 chunk)
+      reg.unregister().catch(() => { /* ignore */ })
+    })
+  })
+  // 同时清所有 Cache Storage (老 precache)
+  if ('caches' in window) {
+    caches.keys().then((keys) => {
+      keys.forEach((k) => {
+        // 简单粗暴: 全部清, 我们已经禁 PWA 了
+        caches.delete(k).catch(() => {})
+      })
+    })
+  }
+}
+
+// 注: 上面代码必须在所有 import 之前, 确保最早执行
+
 // Passive event listener 补丁 — 消除 Chrome 滚轮事件性能警告
 // 2026-06-18 修复：只强制 wheel/mousewheel 为 passive（Chrome 滚轮性能警告根因）
 // touchstart/touchmove **不强制** — 移动端组件（语音按钮、longpress）需要 preventDefault 取消默认行为
