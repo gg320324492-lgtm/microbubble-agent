@@ -237,39 +237,14 @@ export default defineConfig({
     // - injectRegister: null → 不自动注入 /registerSW.js，改在 main.js 用
     //   useRegisterSW Vue composable 注册，避免 webhint 报 registerSW.js 缺 cache-busting
     // - manifest: 应用元信息（添加到桌面用），文件名带 hash 由上面 manifestHashPlugin 处理
+    // W68 第 14 批 H-2: PWA 临时禁用
+    // - 根因: 主指挥浏览器老 SW 缓存污染, 多次 rebuild 后浏览器仍 precache 老 chunk 列表
+    //   导致 GET /assets/index-{oldhash}.js ERR_ABORTED 404, 新 dist 加载不到
+    // - 修复: disable: true 让 vite-plugin-pwa 完全不生成 sw.js + manifest.* + inject 任何 SW 逻辑
+    //   浏览器再访问 /sw.js 会拿到 nginx 410, 卸载老 SW, 后续走纯 nginx 静态资源路径
+    // - 恢复: 主拍去掉 disable: true, 验证 npm run build 出 sw.js + manifest.{hash}.webmanifest
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: null,
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw.js',
-      manifest: {
-        name: '微纳米气泡课题组智能助手',
-        short_name: '小气助手',
-        description: '任务/会议/知识一体化智能 Agent',
-        theme_color: '#FF7A5C',
-        background_color: '#F5F7FA',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/pwa-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
-      injectManifest: {
-        // 预缓存：JS/CSS/SVG/PNG/字体 + offline.html（真离线兜底）
-        // 不预缓存 index.html：HTML 总走 NetworkFirst 拿最新
-        // v28 step 80: 不预缓存 .webmanifest（manifest 文件不需要离线缓存 + 服务器 410 拦截会触发 bad-precaching-response）
-        globPatterns: ['**/*.{js,css,svg,png,ico,woff,woff2}', 'offline.html'],
-        globIgnores: ['**/*.webmanifest'],
-      },
-      devOptions: {
-        // 开发模式禁用 service worker（避免缓存干扰调试）
-        enabled: false,
-      },
+      disable: true,  // W68 第 14 批 H-2: 临时禁用 PWA
     }),
 
     // webhint cache-busting 修复：manifest.webmanifest → manifest.{hash}.webmanifest
