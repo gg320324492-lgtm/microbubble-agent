@@ -78,6 +78,12 @@ axios.interceptors.response.use(
 
     // 如果是401错误且不是刷新令牌请求
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // 检查是不是公开端点 (e.g. /login, /auth/refresh), 不应该拦截
+      const url = originalRequest.url || ''
+      const isPublicEndpoint = url.includes('/auth/login') || url.includes('/auth/refresh')
+      if (isPublicEndpoint) {
+        return Promise.reject(error)
+      }
       originalRequest._retry = true
 
       const refreshToken = localStorage.getItem('refresh_token')
@@ -94,15 +100,13 @@ axios.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${access_token}`
           return axios(originalRequest)
         } catch (refreshError) {
-          // 刷新令牌也失败，跳转到登录页
-          localStorage.removeItem('access_token')
-          localStorage.removeItem('refresh_token')
-          localStorage.removeItem('user_info')
+          // 刷新令牌也失败，跳转到登录页 (W68 第 14 批修复: 不删 token, 让 dashboard 显示空数据而不是触发刷新循环)
+          console.warn('[Auth] refresh failed, redirecting to login', refreshError)
           router.push('/login')
           return Promise.reject(refreshError)
         }
       } else {
-        // 没有刷新令牌，跳转到登录页
+        // 没有刷新令牌，跳转到登录页 (W68 第 14 批修复: 不删 token)
         router.push('/login')
       }
     }
