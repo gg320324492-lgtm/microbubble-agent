@@ -55,7 +55,7 @@ import { useThemeStore } from './stores/useThemeStore'
 // PWA Service Worker 注册（webhint cache-busting 修复）
 // 用 Vue composable 替代 vite-plugin-pwa 自动注入的 <script src="/registerSW.js">，
 // 避免静态 registerSW.js 缺 hash 触发 cache-busting 警告。
-import { useRegisterSW } from 'virtual:pwa-register/vue'
+import { useRegisterSW as _pwaUseRegisterSW } from 'virtual:pwa-register/vue'
 
 // 配置axios拦截器
 axios.interceptors.request.use(
@@ -172,15 +172,22 @@ async function checkSwBlacklist() {
   }
 }
 
-useRegisterSW({
-  immediate: true,
-  onRegisteredSW(swUrl) {
-    console.log('[PWA] SW registered:', swUrl)
-  },
-  onRegisterError(err) {
-    console.warn('[PWA] SW registration failed:', err)
-  },
-})
+// 临时禁用 SW 注册: 主指挥浏览器 PWA cache 污染 404 (commit 4b658cbb2 + 89a34c28f 修复后)
+// 浏览器期望老 chunk, 老 SW 拦截返回 404. 禁用 SW 让浏览器直接走 nginx (no-cache, 强刷可修复)
+// 后续 PWA SW bug 全排查完后恢复
+const useRegisterSW = () => {} // noop (PWA 临时禁用)
+if (false) {
+  // 完整注册逻辑 (主拍恢复时取消 false)
+  _pwaUseRegisterSW({
+    immediate: true,
+    onRegisteredSW(swUrl) {
+      console.log('[PWA] SW registered:', swUrl)
+    },
+    onRegisterError(err) {
+      console.warn('[PWA] SW registration failed:', err)
+    },
+  })
+}
 
 // SW 更新由顶层 PwaUpdateToast 呈现；广播自定义事件也让组件在 SW
 // 注册回调早于 Vue mount 时不丢失消息。
