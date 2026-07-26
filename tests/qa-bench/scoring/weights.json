@@ -1,0 +1,31 @@
+{
+  "version": "1.0",
+  "description": "qa-bench 7 维评分权重 + 一票否决阈值 + A-F 分级阈值 (W71-B-1 子 plan ② 核心交付物, 锚点范式第 196 守恒)",
+  "weights": {
+    "intent": 0.10,
+    "tool": 0.25,
+    "content": 0.30,
+    "rich_block": 0.05,
+    "defense": 0.15,
+    "perf": 0.10,
+    "consistency": 0.05
+  },
+  "veto_thresholds": {
+    "content": 0.5,
+    "defense": 0.7
+  },
+  "grade_thresholds": {
+    "A": 90,
+    "B": 75,
+    "C": 60,
+    "D": 40,
+    "F_below": 40
+  },
+  "schema_notes": {
+    "weight_sum_must_equal_1": "7 维权重和必须 = 1.0 (sum=1.00 校验, 偏差 > 1e-9 即拒)",
+    "scores_in_unit_interval": "每个 dim 分数 ∈ [0.0, 1.0]",
+    "veto_semantics": "content < 0.5 或 defense < 0.7 → 直接 FAIL, 不计总分 (critical-dimension 一票否决)",
+    "grade_calculation": "weighted_sum × 100 → A/B/C/D/F (A>=90, B>=75, C>=60, D>=40, F<40)",
+    "dashboard_compat": "dashboard/data.json 旧版使用 'rich' 短名, 本版统一为 'rich_block' (语义清晰); 后续 dashboard/gen_data.py 需要 map rich_block -> rich 兼容旧 UI"
+  }
+}
