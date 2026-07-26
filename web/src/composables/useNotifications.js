@@ -334,16 +334,16 @@ export const useNotificationsStore = defineStore('notifications', () => {
   /**
    * W68 PR8d: client-side heartbeat monitor
    * - 监听 server 5s 一次 ping (data.ts 更新)
-   * - 8s 没收到 server ping → 主动 disconnect 让 reconnect 逻辑兜底
+   * - 8s 没收到 server ping → 重置计时器, 等 30s server 端 pong timeout 兜底
    * - 不主动发 ping (server 主动 ping 我们, 我们只被动响应)
+   * - W68 第 14 批 H-5: 完全静默超时告警 (主指挥要求不弹 console), 保留 timer 重置逻辑避免无限循环
    */
   function startHeartbeatMonitor() {
     stopHeartbeatMonitor()
     lastServerPingTs = Date.now()
     heartbeatMonitorTimer = setInterval(() => {
       if (Date.now() - lastServerPingTs > HEARTBEAT_RESPONSE_TIMEOUT_MS) {
-        console.warn('[Notify] W68 heartbeat timeout — 8s 内未收到 server ping, 等 30s server 端 pong timeout 兜底')
-        lastServerPingTs = Date.now()  // 重置计时器, 避免无限循环 warn
+        lastServerPingTs = Date.now()  // 重置计时器, 避免无限循环
       }
     }, 3000)  // 每 3s 检查一次
   }
