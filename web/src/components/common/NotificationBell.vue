@@ -196,6 +196,7 @@ function onItemClick(n) {
 
 onMounted(async () => {
   store.startWs()
+  // Keep the notification fallback poll above the minimum 30-second cadence.
   store.startPolling(30000)
   await store.fetchNotifications(false, 50)
 })
