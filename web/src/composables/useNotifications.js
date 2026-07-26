@@ -342,13 +342,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     lastServerPingTs = Date.now()
     heartbeatMonitorTimer = setInterval(() => {
       if (Date.now() - lastServerPingTs > HEARTBEAT_RESPONSE_TIMEOUT_MS) {
-        console.warn('[Notify] W68 heartbeat timeout, forcing reconnect')
-        const ws = getWsClient()
-        ws.disconnect()
-        // 触发 reconnect (3s 后)
-        setTimeout(() => {
-          startWs()
-        }, 3000)
+        console.warn('[Notify] W68 heartbeat timeout — 8s 内未收到 server ping, 等 30s server 端 pong timeout 兜底')
+        lastServerPingTs = Date.now()  // 重置计时器, 避免无限循环 warn
       }
     }, 3000)  // 每 3s 检查一次
   }
