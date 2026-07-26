@@ -370,7 +370,15 @@ const updateTime = () => {
   currentDate.value = now.format('YYYY年MM月DD日 dddd')
 }
 
-onUnmounted(() => { window.removeEventListener('resize', handleResize) })
+let clockTimer = null
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (clockTimer) {
+    clearInterval(clockTimer)
+    clockTimer = null
+  }
+})
 
 const newTask = ref({ title: '', assignee_id: null, priority: 'medium', due_date: null, description: '' })
 
@@ -497,7 +505,7 @@ const isOverdue = (date) => date && dayjs(date).isBefore(dayjs())
 
 onMounted(() => {
   updateTime()
-  setInterval(updateTime, 1000)
+  clockTimer = setInterval(updateTime, 1000)
   fetchDashboardStats()
   fetchInProgressTasks()
   memberStore.refreshMembers() // 强制刷新获取最新头像
