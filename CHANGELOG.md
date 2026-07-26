@@ -5,6 +5,24 @@
 
 ---
 
+## W71 batch partial mid-派工 D-2 文档同步 (2026-07-24 — 仅 1 commit 真合并至 origin/main + 2 commits 待合并, 锚点范式第 176 守恒预测, 派工纪要 v6 段 5 反馈 #2 实战)
+
+**W71 batch 实际真实施状态 (派工 v6 §1.2 真验证纪律)**:
+- **merged to origin/main**: 1 commit = W71-C-3 (claude-code notify v2 仓库模板回测 memory, commit `af4129925`, 锚点范式 175→176 守恒). 仅 memory 沉淀, 0 production code.
+- **branch-pushed 待合并**: 2 commits = W71-A-1 (部署收口 docs/w71-deployment-verification-2026-07-24.md, commit `0e46bb7b5`, 锚点范式第 192 守恒预测) + W71-A-4 (grand closure memo 预期版, commit `1b08d8501`, 锚点范式 W70 168 → W71 ~184 守恒预期版).
+- **未开工 (12/15 agents 仍 base HEAD)**: A-2 prompt v7 / A-3 plans verify / B-1 7 维评分 / B-2 5 道防线 / B-3 celery 回滚 / B-4 KB 闭环 / B-5 dashboard smoke / C-1 D8 调研 / C-2 subagent 编排 / D-1 prompt v8 / D-3 anchor 真收束 — 0 commit.
+
+**W71 D-2 文档同步纪律 (派工 v6 §1.2 真验证)**:
+- **不伪造未实施 work** — 不写 CHANGELOG L1-L5 Features / Tests 等大段声明子集未开工 B 路线 5 agents 工作.
+- **只聚合真落地 3 commits** — 已合并 1 + branch-pushed 2 commit 物证 + memory 沉淀 1.
+- **W71 grand closure ~184 锚点范式预测延后** — 12 agents 未开工状态下不能宣告守恒. 当前 D-2 锚点范式单 commit = 第 176 守恒预测.
+- **0 production code 改动铁律 N/15 守恒待定** — 未开工 agents 例外清单未拍板.
+- **W19 选项 A 维持** — 4 留未来 PR 不发起新排期.
+
+详见 `memory/w71-grand-closure-71st-batch-2026-07-24.md` (W71-A-4 预期版, 待主拍补实际值) + `memory/w71-route-71st-batch-d2-docs-sync-2026-07-24.md` (本任务沉淀).
+
+---
+
 ## W68 第 1 批 14+1 agents 跨主题 grand closure (2026-07-24 — 锚点范式第 30 守恒)
 
 **W68 第 1 批收官**: 主指挥协调范式第 30 次派工 (锚点范式第 30 守恒). 14+1 agents 全部 merge 进 main — 路线 A (Drive v2 PR8) 7 agents + 路线 C (Mobile UX v3.0) 7 agents + Safari iOS 空白页修复 1 个后续 fix. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → **W68 30**. **0 production code 改动铁律维持**. W19 选项 A 维持.
