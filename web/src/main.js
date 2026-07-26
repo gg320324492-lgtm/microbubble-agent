@@ -146,65 +146,65 @@ app.use(router)
 // 主题初始化（在 Pinia/router 注册后立即调用，避免刷新时 brief flash）
 useThemeStore()
 
-// PWA Service Worker 注册（webhint cache-busting 修复）
-// 监听 sw.js activate 钩子发的 SW_UPDATED 消息，触发自动 reload 让用户拿到新资源
-// （修复事故：之前 server 返回 octet-stream 时期 SW NetworkFirst 缓存了污染响应，
-// 现在 SW 升级会清空所有 cache + 通知客户端 reload）
-// v28 step 33: 服务器部署滞后时（如服务器 sw.js 仍是老版本），坏 SW 持续报
-// bad-precaching-response 错误且永远不更新。临时方案：直接 fetch 服务器 sw.js
-// 文本，检查是否包含黑名单字符串（精确匹配 SW 字面量，不匹配 index bundle 里的字符串）。
-// 命中 → 强制 unregister + 清 cache + reload。
-// v28 step 78: 之前误把 '"manifest.webmanifest"' 加进黑名单，导致新 index bundle 也命中
-//   → 无限循环 unregister + reload。改成只在 sw.js 上下文里匹配：
-//   'SW_VERSION' + 'manifest.webmanifest' + 老 SW 版本号同时存在时才算坏 SW。
-// v28 step 83: 扩到 v36 之前的所有版本（v2[0-5] → v2[0-5]|v3[0-5]）
-// v28 step 85: 扩到 v37 之前（v(?:2[0-9]|3[0-6])），加入 v36 字面量
-const SW_BLACKLIST_CONTENT_PATTERNS = [
-  // 老 sw.js 同时包含 SW_VERSION 字面量 + manifest.webmanifest 旧路径（说明是老 SW）
-  /SW_VERSION\s*=\s*["']v(?:2[0-9]|3[0-6])-/,
-  // 老 SW_VERSION 字面量（v28 step 33 之前的版本）
-  'v25-smart-reader-2026-06-19',
-  'v35-card-fallback-fetch-retry-2026-06-21',  // v28 step 79-82 的 SW，precache 列表有 404 文件
-  'v36-precache-purge-2026-06-21',  // v28 step 83-84 的 SW，浏览器可能仍加载旧 chunk
-]
-
-async function checkSwBlacklist() {
-  try {
-    const r = await fetch('/sw.js', { cache: 'no-store' })
-    const text = await r.text()
-    for (const pat of SW_BLACKLIST_CONTENT_PATTERNS) {
-      // v28 step 79: 同时支持字符串（includes）和正则（test）
-      const matched = pat instanceof RegExp ? pat.test(text) : text.includes(pat)
-      if (matched) {
-        console.warn('[PWA] SW content blacklisted (pattern: ' + pat + '), unregistering')
-        const regs = await navigator.serviceWorker.getRegistrations()
-        for (const reg of regs) {
-          await reg.unregister()
-          console.log('[PWA] Unregistered:', reg.scope)
-        }
-        if (window.caches) {
-          const keys = await caches.keys()
-          await Promise.all(keys.map(k => caches.delete(k)))
-          console.log('[PWA] Cleared caches:', keys.length)
-        }
-        // 阻止后续 SW 注册 + reload
-        return true
-      }
-    }
-    console.log('[PWA] SW content OK, no blacklist match')
-    return false
-  } catch (e) {
-    console.warn('[PWA] Failed to check SW blacklist:', e)
-    return false
-  }
-}
-
-// 临时禁用 SW 注册: 主指挥浏览器 PWA cache 污染 404 (commit 4b658cbb2 + 89a34c28f 修复后)
-// 浏览器期望老 chunk, 老 SW 拦截返回 404. 禁用 SW 让浏览器直接走 nginx (no-cache, 强刷可修复)
-// 后续 PWA SW bug 全排查完后恢复
-const useRegisterSW = () => {} // noop (PWA 临时禁用)
+// W68 第 14 批 H-4: PWA 已永久禁用, checkSwBlacklist 整段禁用 (永久 if (false) 包裹)
+// 根因: 每次页面 mount 都跑 fetch('/sw.js') + r.text() 读完整 HTML, 主指挥 console
+// 持续刷 `[PWA] SW content OK, no blacklist match` + Dashboard 频繁 mount 触发持续刷新
+// 修复: 整段 SW 检测代码 (含 SW_BLACKLIST_CONTENT_PATTERNS + checkSwBlacklist +
+// getRegistration().update() 主动 update + 3s controller null reload 兜底) 全部 if (false) 包裹
+// 保留: 顶部 line 1-20 同步 unregister 仍在 (H-3 修复, 一次性注销老 SW)
+// 保留: line 221-225 message listener (无害, 等老 SW 发消息不触发新注册)
+// 保留: line 230-237 controllerchange (无害, PWA 禁用后不会触发)
+// 恢复 PWA 时: 把所有 if (false) 改成 if (true) 即可
 if (false) {
-  // 完整注册逻辑 (主拍恢复时取消 false)
+  // v28 step 33: 服务器部署滞后时（如服务器 sw.js 仍是老版本），坏 SW 持续报
+  // bad-precaching-response 错误且永远不更新。临时方案：直接 fetch 服务器 sw.js
+  // 文本，检查是否包含黑名单字符串（精确匹配 SW 字面量，不匹配 index bundle 里的字符串）。
+  // 命中 → 强制 unregister + 清 cache + reload。
+  // v28 step 78: 之前误把 '"manifest.webmanifest"' 加进黑名单，导致新 index bundle 也命中
+  //   → 无限循环 unregister + reload。改成只在 sw.js 上下文里匹配：
+  //   'SW_VERSION' + 'manifest.webmanifest' + 老 SW 版本号同时存在时才算坏 SW。
+  // v28 step 83: 扩到 v36 之前的所有版本（v2[0-5] → v2[0-5]|v3[0-5]）
+  // v28 step 85: 扩到 v37 之前（v(?:2[0-9]|3[0-6])），加入 v36 字面量
+  const SW_BLACKLIST_CONTENT_PATTERNS = [
+    // 老 sw.js 同时包含 SW_VERSION 字面量 + manifest.webmanifest 旧路径（说明是老 SW）
+    /SW_VERSION\s*=\s*["']v(?:2[0-9]|3[0-6])-/,
+    // 老 SW_VERSION 字面量（v28 step 33 之前的版本）
+    'v25-smart-reader-2026-06-19',
+    'v35-card-fallback-fetch-retry-2026-06-21',  // v28 step 79-82 的 SW，precache 列表有 404 文件
+    'v36-precache-purge-2026-06-21',  // v28 step 83-84 的 SW，浏览器可能仍加载旧 chunk
+  ]
+
+  async function checkSwBlacklist() {
+    try {
+      const r = await fetch('/sw.js', { cache: 'no-store' })
+      const text = await r.text()
+      for (const pat of SW_BLACKLIST_CONTENT_PATTERNS) {
+        const matched = pat instanceof RegExp ? pat.test(text) : text.includes(pat)
+        if (matched) {
+          console.warn('[PWA] SW content blacklisted (pattern: ' + pat + '), unregistering')
+          const regs = await navigator.serviceWorker.getRegistrations()
+          for (const reg of regs) {
+            await reg.unregister()
+            console.log('[PWA] Unregistered:', reg.scope)
+          }
+          if (window.caches) {
+            const keys = await caches.keys()
+            await Promise.all(keys.map(k => caches.delete(k)))
+            console.log('[PWA] Cleared caches:', keys.length)
+          }
+          return true
+        }
+      }
+      console.log('[PWA] SW content OK, no blacklist match')
+      return false
+    } catch (e) {
+      console.warn('[PWA] Failed to check SW blacklist:', e)
+      return false
+    }
+  }
+
+  // 临时禁用 SW 注册: 主指挥浏览器 PWA cache 污染 404 (commit 4b658cbb2 + 89a34c28f 修复后)
+  const useRegisterSW = () => {} // noop (PWA 临时禁用)
   _pwaUseRegisterSW({
     immediate: true,
     onRegisteredSW(swUrl) {
@@ -214,62 +214,31 @@ if (false) {
       console.warn('[PWA] SW registration failed:', err)
     },
   })
-}
 
-// SW 更新由顶层 PwaUpdateToast 呈现；广播自定义事件也让组件在 SW
-// 注册回调早于 Vue mount 时不丢失消息。
-navigator.serviceWorker.addEventListener('message', (event) => {
-  if (event.data?.type === 'SW_UPDATED') {
-    window.dispatchEvent(new CustomEvent('pwa-update-available', { detail: event.data }))
+  // 防御性: app 加载时如果已有 waiting SW, 主动激活 + 走 controllerchange 路径强制 reload
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg?.waiting) {
+        console.log('[PWA] Waiting SW detected on init, force activating...')
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+      }
+    })
+    // v83 Safari 兜底: 3s 后若 controller 仍 null, 主动 reload 一次
+    setTimeout(() => {
+      if (!navigator.serviceWorker.controller) {
+        console.warn('[PWA] No SW controller after 3s (Safari slow register?), reloading once')
+        window.location.reload()
+      }
+    }, 3000)
   }
-})
 
-// 2026-07-02 SW 升级加固：controllerchange 仅记录状态，不再强制 reload。
-// 用户可能正在编辑内容，刷新由 PwaUpdateToast 的明确按钮触发。
-let swFirstActivation = true
-navigator.serviceWorker.addEventListener('controllerchange', () => {
-  if (swFirstActivation) {
-    swFirstActivation = false
-    console.log('[PWA] First SW activation, no reload')
-    return
-  }
-  console.log('[PWA] New SW controller; waiting for user refresh')
-})
-
-// 防御性：app 加载时如果已有 waiting SW（上次访问下载了新 SW 但未 activate），
-// 主动激活 + 走 controllerchange 路径强制 reload。
-// v83: iOS Safari 特定加固 — Safari 在用户首次访问或 PWA standalone 启动时，
-//   navigator.serviceWorker.controller 可能为 null（首次 SW 注册尚未生效），
-//   这种情况下我们额外加一个 3s 后 controller 仍 null 则主动 reload 的兜底，
-//   防止 Safari 上 SW 注册流程卡住导致页面空白。
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistration().then(reg => {
-    if (reg?.waiting) {
-      console.log('[PWA] Waiting SW detected on init, force activating...')
-      reg.waiting.postMessage({ type: 'SKIP_WAITING' })
-      // SW 的 self.skipWaiting() 已生效；SKIP_WAITING 是冗余但无害，
-      // controllerchange 会在 waiting → active 时触发
+  // v28 step 33: 页面加载后立即检查服务器 sw.js 内容是否在黑名单
+  checkSwBlacklist().then((blacklisted) => {
+    if (blacklisted) {
+      console.log('[PWA] Reloading in 2s to clear bad SW...')
+      setTimeout(() => window.location.reload(), 2000)
     }
   })
-
-  // v83 Safari 兜底：3s 后若 controller 仍 null，主动 reload 一次（首次访问 SW 注册慢）
-  setTimeout(() => {
-    if (!navigator.serviceWorker.controller) {
-      console.warn('[PWA] No SW controller after 3s (Safari slow register?), reloading once')
-      window.location.reload()
-    }
-  }, 3000)
 }
-
-// v28 step 33: 页面加载后立即检查服务器 sw.js 内容是否在黑名单
-// 不依赖 SW 自身响应消息（坏 SW 不会响应），直接 fetch 服务器 sw.js 文本判断
-checkSwBlacklist().then((blacklisted) => {
-  if (blacklisted) {
-    // 阻止 service worker 再次自动注册（通过临时删除 registerSW 标记）
-    // 实际实现：reload 即可让浏览器看到新 sw.js 前不复活
-    console.log('[PWA] Reloading in 2s to clear bad SW...')
-    setTimeout(() => window.location.reload(), 2000)
-  }
-})
 
 app.mount('#app')
