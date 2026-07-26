@@ -147,3 +147,4 @@ tunnel/start-ssh-tunnel.vbs.tmp
 # 修法: 忽略任何以 [A-Z]: 开头的"路径" (Windows drive letter)
 #       git 会跳过这些误识别, git status 输出真正 clean
 /[A-Za-z]:*
+.worktrees/
