@@ -165,20 +165,20 @@ describe('KbMonitorView — KB 自动入库监控 (qa-bench v3.1 D5)', () => {
     expect(html).toContain('滞留 pending 文档B.docx')
   })
 
-  it('场景2: 4 ECharts 子图渲染 — echarts.init 被调 4 次 + 4 个 canvas 容器', async () => {
+  it('场景2: ECharts 子图渲染 — 4 旧 + 5 新 = 9 子图 (W71 B-5 后)', async () => {
     const wrapper = mountView()
     await flushPromises()
     await new Promise((r) => setTimeout(r, 20))
     await flushPromises()
 
-    // 4 个 chart-canvas 容器 (入库趋势 / 失败率 / 重试 / 队列)
+    // W71 B-5: 4 旧 (入库趋势/失败率/重试/队列) + 5 新 (7天入库/7天回滚/5道防线/7维评分/抽检率) = 9 canvas
     const canvases = wrapper.findAll('.chart-canvas')
-    expect(canvases.length).toBe(4)
+    expect(canvases.length).toBe(9)
 
-    // echarts.init 被调 4 次 (每个子图一次)
-    expect(initCalls.length).toBe(4)
+    // echarts.init 被调 9 次 (每个子图一次)
+    expect(initCalls.length).toBe(9)
     // 每个子图都 setOption
-    expect(chartStub.setOption).toHaveBeenCalledTimes(4)
+    expect(chartStub.setOption).toHaveBeenCalledTimes(9)
   })
 
   it('场景3: dark mode 切换 — 组件不崩溃 + 样式全走 token (无硬编码颜色回归)', async () => {

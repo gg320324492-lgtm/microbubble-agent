@@ -930,6 +930,8 @@ async def main():
     parser.add_argument("--questions", default="tests/qa-bench/questions.jsonl")
     parser.add_argument("--output", default="results/run")
     parser.add_argument("--limit", type=int, default=0, help="limit N questions (0=all)")
+    # W71 B-5: --offset 跳过前 N 题 (配合 --limit 切主测/抽测两段, smoke 200 拆 2 step)
+    parser.add_argument("--offset", type=int, default=0, help="skip first N questions (W71 B-5 主测/抽测拆段)")
     parser.add_argument("--concurrency", type=int, default=6, help="并发数")
     parser.add_argument("--api-base", default=API_BASE, help="API base URL (default: localhost)")
     parser.add_argument(
@@ -1032,6 +1034,8 @@ async def main():
         else:
             print(f"   [include-extra] 扩展题库不存在: {extra_path}")
 
+    if args.offset:
+        questions = questions[args.offset:]
     if args.limit:
         questions = questions[:args.limit]
 
