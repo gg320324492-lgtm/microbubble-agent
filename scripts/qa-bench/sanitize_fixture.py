@@ -26,6 +26,11 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    from faker import Faker
+except ImportError:  # pragma: no cover - CI installs qa-bench requirements
+    Faker = None  # type: ignore[assignment]
+
 # 脱敏正则 (人名/邮箱/手机号/身份证/银行卡)
 SANITIZE_PATTERNS: dict[str, re.Pattern[str]] = {
     "email": re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"),
@@ -44,10 +49,38 @@ def _hash(value: str, salt: str) -> str:
     return "SAN_" + hashlib.sha256(f"{salt}:{value}".encode()).hexdigest()[:12]
 
 
+def _faker_token(kind: str, value: str, salt: str) -> str:
+    """Create a deterministic Faker surrogate before hashing it.
+
+    The final fixture still contains only the salted SHA token.  Faker is used
+    to keep the replacement source realistic while the hash prevents recovery
+    of the generated surrogate or original PII.
+    """
+    if Faker is None:
+        return value
+    fake = Faker("zh_CN")
+    seed = int(hashlib.sha256(f"{salt}:{kind}:{value}".encode()).hexdigest()[:16], 16)
+    fake.seed_instance(seed)
+    if kind == "email":
+        return fake.email()
+    if kind == "phone_cn":
+        return fake.phone_number()
+    if kind == "id_card_cn":
+        return fake.ssn()
+    if kind == "bank_card":
+        return fake.credit_card_number()
+    if kind == "wechat_id":
+        return f"wx_{fake.pystr(min_chars=8, max_chars=16)}"
+    return fake.pystr(min_chars=8, max_chars=16)
+
+
 def sanitize_text(text: str, salt: str) -> str:
     """对单段文本脱敏."""
     for kind, pattern in SANITIZE_PATTERNS.items():
-        text = pattern.sub(lambda m: _hash(f"{kind}:{m.group(0)}", salt), text)
+        text = pattern.sub(
+            lambda m: _hash(f"{kind}:{_faker_token(kind, m.group(0), salt)}", salt),
+            text,
+        )
     return text
 
 
