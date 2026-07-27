@@ -10,7 +10,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
+# W73 第 1 批 B-1 收口: 修正 W72 B-5 起步的 import 错误 (deps 不存在, get_db 在 app.core.database)
+from app.core.database import get_db
 from app.schemas.billing import (
     PlanOut, TenantCreate, TenantCreated, TenantOut,
     SubscriptionOut, InvoiceCreate, InvoiceOut, InvoicePayRequest,
