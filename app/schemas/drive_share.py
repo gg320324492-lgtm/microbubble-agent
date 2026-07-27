@@ -29,6 +29,10 @@ class FolderShareCreate(BaseModel):
 
     permission: read | write | admin
     expires_days: 默认 7, 上限 365 (不允许永久, 安全性)
+
+    W72 第 2 批 B-1 差量:
+    - password: 可选 4-8 位数字提取码 (None = 无密码, 与 PR7 兼容)
+    - max_downloads: 可选 下载次数上限 (None = 不限, 与 PR7 兼容)
     """
     permission: str = Field(
         default="read",
@@ -39,6 +43,18 @@ class FolderShareCreate(BaseModel):
         ge=1,
         le=365,
         description="链接有效期天数 (1-365, 默认 7)",
+    )
+    password: Optional[str] = Field(
+        default=None,
+        min_length=4,
+        max_length=8,
+        description="4-8 位数字提取码 (None = 无密码保护)",
+    )
+    max_downloads: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=10000,
+        description="下载次数上限 (None = 不限)",
     )
 
 
@@ -68,6 +84,10 @@ class FolderShareResponse(BaseModel):
     - GET  /share/{token} → folder 信息 + permission + expires_at
     - POST /members → member_id + permission + invited_by
     - DELETE /members/{member_id} → 确认消息
+
+    W72 第 2 批 B-1 差量字段 (has_password + max_downloads + download_count):
+    - has_password: bool (True 时访问需输密码, 不暴露 hash)
+    - max_downloads / download_count: 次数限制透明化
     """
     id: int
     folder_id: int
@@ -82,6 +102,11 @@ class FolderShareResponse(BaseModel):
 
     # 成员邀请特有字段 (share 链接时为 None)
     member_id: Optional[int] = None
+
+    # W72 第 2 批 B-1 差量: 分享链接增强字段 (不暴露 password_hash)
+    has_password: Optional[bool] = None
+    max_downloads: Optional[int] = None
+    download_count: Optional[int] = None
 
     class Config:
         from_attributes = True
