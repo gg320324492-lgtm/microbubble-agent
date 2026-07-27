@@ -41,6 +41,25 @@ import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { renderMarkdown } from '@/utils/markdown'
 
 // ============================================================================
+// W72 B-3: 顶栏 3-zone 类型 (派工 v6 段 5 反馈 #3 实战: SubAgent 编排 type hint 必含)
+// ============================================================================
+interface TopBarZone {
+  /** zone 名称 */
+  name: 'left' | 'center' | 'right'
+  /** grid template columns fr 单位 (桌面端) */
+  desktopFr: number
+  /** grid template columns fr 单位 (移动端 ≤768px) */
+  mobileFr: number
+  /** 渲染组件标识 (B-1 NavRail / B-2 ChatBreadcrumb / ThinkingModeSwitch / 原生 button) */
+  content: string
+}
+const TOPBAR_ZONES: readonly TopBarZone[] = [
+  { name: 'left',   desktopFr: 4, mobileFr: 1, content: 'hamburger+ChatBreadcrumb' },
+  { name: 'center', desktopFr: 4, mobileFr: 2, content: 'ChatBreadcrumb+ThinkingModeSwitch' },
+  { name: 'right',  desktopFr: 4, mobileFr: 1, content: 'new-session-button' },
+] as const
+
+// ============================================================================
 // SSE 核心（桌面/移动共用）
 // ============================================================================
 const {
@@ -396,8 +415,18 @@ onUnmounted(() => {
       />
 
       <div class="chat-main">
-        <!-- v78 UI-redesign 3-zone 顶栏 -->
-        <header class="chat-header glass glass-lg">
+        <!-- v78 UI-redesign 3-zone 顶栏 — W72 B-3 子 plan ③ 起步
+             (派工 v6 段 5 反馈 #3 实战: TopBarZone type hint 必含)
+             (派工 v6 段 5 反馈 #4 实战: 派生新任务必含真验证)
+             desktop: 4fr 4fr 4fr / mobile ≤768px: 1fr 2fr 1fr
+             B-1 NavRail 在 MainLayout 已挂载 (侧栏), 本顶栏内嵌 B-2 ChatBreadcrumb -->
+        <header
+          class="chat-header glass glass-lg"
+          :data-zone-left="TOPBAR_ZONES[0].name"
+          :data-zone-center="TOPBAR_ZONES[1].name"
+          :data-zone-right="TOPBAR_ZONES[2].name"
+          aria-label="Chat 顶栏 3-zone 容器"
+        >
           <div class="header-left">
             <el-button
               id="chat-header-sidebar-toggle"
@@ -699,12 +728,24 @@ onUnmounted(() => {
 .msg-enter-from { opacity: 0; transform: translateY(8px); }
 .chat-header {
   display: grid;
-  grid-template-columns: auto 1fr auto;  /* v78 3-zone: 左 / 中 / 右 */
+  /* W72 B-3: 3-zone grid — 派工 v6 段 5 反馈 #3 实战 (TopBarZone type hint 必含)
+     desktop: TOPBAR_ZONES[*].desktopFr = 4 4 4 → 4fr 4fr 4fr */
+  grid-template-columns: 4fr 4fr 4fr;  /* v78 3-zone: 左 / 中 / 右 */
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--color-border-light);
   min-height: 56px;
+}
+/* W72 B-3 移动端断点: TOPBAR_ZONES[*].mobileFr = 1 2 1 → 1fr 2fr 1fr
+   (派工 v6 段 5 反馈 #6 实战: W72 起步纪律 4 项必读) */
+@media (max-width: 768px) {
+  .chat-header {
+    grid-template-columns: 1fr 2fr 1fr;
+    padding: 6px 10px;
+    gap: 6px;
+    min-height: 48px;
+  }
 }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-center { display: flex; align-items: center; justify-content: center; min-width: 0; }
