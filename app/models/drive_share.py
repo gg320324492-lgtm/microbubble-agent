@@ -90,6 +90,15 @@ class DriveFolderShare(Base, TimestampMixin):
     )
     revoked_at = Column(DateTime, nullable=True)  # 主动撤销的时间 (软撤销)
 
+    # W72 第 2 批 B-1 差量 (派工 v10 段 7): 密码 + 次数限制
+    # bcrypt hash 60 字符, VARCHAR(128) 留 buffer
+    # NULL = 无密码 (与 PR7 兼容, 老 share 无密码)
+    password_hash = Column(String(128), nullable=True)
+    # NULL = 不限次数 (PR7 老 share 不限); >0 时 download_count >= max_downloads 自动失效
+    max_downloads = Column(Integer, nullable=True)
+    # NOT NULL DEFAULT 0, 原子自增 (PR2.7 Knowledge.download_count 模式复用)
+    download_count = Column(Integer, nullable=False, server_default="0")
+
     # 关系
     folder = relationship("Folder", foreign_keys=[folder_id])
 
@@ -106,7 +115,10 @@ class DriveFolderShare(Base, TimestampMixin):
 
     @property
     def is_active(self) -> bool:
-        """是否有效 (未撤销 + 未过期)"""
+        """是否有效 (未撤销 + 未过期 + 未超下载次数)
+
+        W72 第 2 批 B-1 差量: 增加 max_downloads 检查
+        """
         from datetime import datetime, timezone
         if self.revoked_at is not None:
             return False
@@ -117,7 +129,12 @@ class DriveFolderShare(Base, TimestampMixin):
         if expires_naive.tzinfo is not None:
             expires_naive = expires_naive.replace(tzinfo=None)
         now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
-        return expires_naive > now_naive
+        if expires_naive <= now_naive:
+            return False
+        # 次数限制: max_downloads 非空 + download_count >= max → 失效
+        if self.max_downloads is not None and self.download_count >= self.max_downloads:
+            return False
+        return True
 
 
 class DriveFolderMember(Base, TimestampMixin):
