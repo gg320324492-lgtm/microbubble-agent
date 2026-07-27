@@ -17,7 +17,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from app.models.base import Base
+# W73 第 1 批 B-1 收口: 修正 W72 B-5 起步的 import 错误 (Base 在 app.core.database, 不在 app.models.base)
+from app.core.database import Base
 
 
 class Plan(Base):

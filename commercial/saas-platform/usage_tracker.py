@@ -1,107 +1,122 @@
 """
-商业化 SaaS 平台 — usage tracker
+商业化 SaaS 平台 — usage tracker CLI (W73 第 1 批 B-1)
 
-W72 Phase 8 起步. 负责按 tenant 统计用量 (API 调用 / 存储 / 语音 / agent 轮次).
+W72 第 2 批 B-5 起步 (file-based tracker) + W73 第 1 批 B-1 收口 (DB-backed).
+
+Celery beat hourly 调度 + CLI 手动跑:
+    python -m commercial.saas-platform.usage_tracker --window 1h --output /tmp/usage.json
+    # Celery beat 调度 (在 celery_app.conf.beat_schedule 加 entry)
+    # 由 Celery beat 每小时调度 track_usage_window("1h")
+
+不破坏老路径: 仅在 commercial/saas-platform/usage_tracker.py 升级 CLI 入口,
+业务逻辑委托 app/services/usage_service.py (本文件 DB 接口).
 """
 from __future__ import annotations
 
+import argparse
+import asyncio
 import json
 import logging
-import os
-from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-from threading import Lock
-from typing import Optional
+from typing import Dict
 
-logger = logging.getLogger(__name__)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-USAGE_STORE_PATH = Path(os.getenv("MICROBUBBLE_USAGE_STORE", "/app/data/usage.json"))
+from sqlalchemy import select, func, and_  # noqa: E402
 
+from app.core.database import async_session  # noqa: E402
+from app.models.billing import CommercialTenant, Plan, UsageRecord  # noqa: E402
 
-@dataclass
-class UsageRecord:
-    tenant_id: str
-    metric: str  # api_calls / storage_mb / asr_seconds / agent_turns
-    value: float
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    metadata: dict = field(default_factory=dict)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("saas.usage_tracker")
 
-    def to_dict(self) -> dict:
-        return {
-            "tenant_id": self.tenant_id,
-            "metric": self.metric,
-            "value": self.value,
-            "timestamp": self.timestamp,
-            "metadata": self.metadata,
-        }
+SUPPORTED_WINDOWS = {"1h": timedelta(hours=1), "24h": timedelta(hours=24), "30d": timedelta(days=30)}
 
 
-class UsageTracker:
-    """线程安全的用量统计器."""
+async def track_usage_window(window: str = "1h") -> Dict:
+    """统计每个租户过去 window 时间的用量.
 
-    def __init__(self, store_path: Path = USAGE_STORE_PATH):
-        self.store_path = store_path
-        self._lock = Lock()
-        self._records: list[UsageRecord] = []
-        self._load()
+    Returns: dict {tenant_id: {totals: {...}, over_limit: [...], window, plan_code}, ...}
+    """
+    if window not in SUPPORTED_WINDOWS:
+        raise ValueError(f"unsupported window '{window}', supported: {list(SUPPORTED_WINDOWS)}")
 
-    def _load(self) -> None:
-        if not self.store_path.exists():
-            return
-        try:
-            with open(self.store_path) as f:
-                raw = json.load(f)
-            self._records = [UsageRecord(**r) for r in raw]
-        except Exception as e:
-            logger.warning(f"usage store load failed: {e}")
-            self._records = []
+    cutoff = datetime.utcnow() - SUPPORTED_WINDOWS[window]
+    out: Dict = {}
 
-    def _flush(self) -> None:
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.store_path, "w") as f:
-            json.dump([r.to_dict() for r in self._records], f, indent=2)
+    async with async_session() as db:
+        # 1. 列出所有 active 租户
+        tenants_q = select(CommercialTenant).where(CommercialTenant.status == "active")
+        tenants = (await db.execute(tenants_q)).scalars().all()
 
-    def record(self, tenant_id: str, metric: str, value: float, metadata: Optional[dict] = None) -> None:
-        """记录一次用量."""
-        with self._lock:
-            rec = UsageRecord(
-                tenant_id=tenant_id,
-                metric=metric,
-                value=value,
-                metadata=metadata or {},
+        for tenant in tenants:
+            # 2. 各 metric 聚合
+            q = (
+                select(UsageRecord.metric, func.sum(UsageRecord.value))
+                .where(and_(UsageRecord.tenant_id == tenant.tenant_id, UsageRecord.recorded_at >= cutoff))
+                .group_by(UsageRecord.metric)
             )
-            self._records.append(rec)
-            self._flush()
+            rows = (await db.execute(q)).all()
+            totals = {metric: float(total or 0) for metric, total in rows}
 
-    def get_tenant_summary(self, tenant_id: str, since: Optional[str] = None) -> dict[str, float]:
-        """按指标汇总某 tenant 的用量."""
-        with self._lock:
-            summary: dict[str, float] = defaultdict(float)
-            for r in self._records:
-                if r.tenant_id != tenant_id:
-                    continue
-                if since and r.timestamp < since:
-                    continue
-                summary[r.metric] += r.value
-            return dict(summary)
+            # 3. 校验 plan 限额
+            plan = await db.get(Plan, tenant.plan_code)
+            limits = (plan.limits if plan else {}) or {}
+            over_limit = []
+            for metric, value in totals.items():
+                limit_val = limits.get(metric)
+                if limit_val is not None and value > limit_val:
+                    over_limit.append({"metric": metric, "value": value, "limit": limit_val})
 
-    def get_all_tenants_summary(self) -> dict[str, dict[str, float]]:
-        """汇总所有 tenant 的用量."""
-        with self._lock:
-            result: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
-            for r in self._records:
-                result[r.tenant_id][r.metric] += r.value
-            return {t: dict(m) for t, m in result.items()}
+            out[tenant.tenant_id] = {
+                "tenant_name": tenant.name,
+                "plan_code": tenant.plan_code,
+                "totals": totals,
+                "over_limit": over_limit,
+                "window": window,
+            }
+            if over_limit:
+                logger.warning(
+                    "tenant %s (%s) over limit in window %s: %s",
+                    tenant.tenant_id, tenant.name, window, over_limit,
+                )
+
+    logger.info("usage tracked: window=%s tenants=%d", window, len(out))
+    return out
 
 
-_singleton: Optional[UsageTracker] = None
+async def record_usage(tenant_id: str, metric: str, value: float, metadata: Dict = None) -> None:
+    """写入单条用量记录 (供业务 endpoint 调用)."""
+    async with async_session() as db:
+        rec = UsageRecord(
+            tenant_id=tenant_id,
+            metric=metric,
+            value=value,
+            record_metadata=metadata or {},
+            recorded_at=datetime.utcnow(),
+        )
+        db.add(rec)
+        await db.commit()
+        logger.debug("usage recorded: tenant=%s metric=%s value=%.4f", tenant_id, metric, value)
 
 
-def get_tracker() -> UsageTracker:
-    """获取全局单例."""
-    global _singleton
-    if _singleton is None:
-        _singleton = UsageTracker()
-    return _singleton
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SaaS 用量统计 (W73 B-1 收口)")
+    parser.add_argument("--window", default="1h", choices=list(SUPPORTED_WINDOWS))
+    parser.add_argument("--output", default=None, help="写到 JSON 文件")
+    args = parser.parse_args()
+
+    result = asyncio.run(track_usage_window(args.window))
+    text = json.dumps(result, indent=2, ensure_ascii=False)
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+        logger.info("written to %s", args.output)
+    else:
+        print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
