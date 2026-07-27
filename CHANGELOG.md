@@ -5,6 +5,103 @@
 
 ---
 
+## W75 第 1 批 grand closure (2026-07-27 — 6/7 agents 完成 + 派工前提错配 5 实例沉淀 + 锚点范式 249 → 256 守恒 +7, 0 production code 5/7 守恒, 派工 v10 段 7 19 类 + 类 20 5 实例实战)
+
+**主基调**: 声纹 B+C 方案实施 + 跨租户 422 修复 + 4 类 hot-fix P2 webhook 修复 + 商业化真支付 SDK 接入 + Edge-TTS 移动端调研 + 9 表索引 PASS 验证 + 派工前提错配 5 实例沉淀.
+
+**W75 第 1 批 6 agents 真实施**:
+
+- **A-2 Edge-TTS 移动端调研** (commit `f538e3cf6`, 锚点范式 +3 守恒): 4 维度覆盖 16 case (iOS Safari autoplay 4 + Android Chrome 音频格式 4 + 后台切换 4 + 中断恢复 4). 调研 ≠ 生产. 5 关键风险 + W76/W77 派工建议. 0 production code 守恒.
+- **B-1 声纹 B+C 方案** (commit `449da75c2`, 锚点范式 +1 守恒): 拒绝方案 A 字面改 0.9 (派工 v6 段 5 反馈 #6 实战, 距离方向与 confidence 反向). 三层指标口径: 0.7 = cosine distance 上限 (MATCH_THRESHOLD 实战场, 不动) / 0.55 = 跨会议单段命中阈值 / 90% = 跨会议总体识别率 acceptance gate. B 方案确定性质量门: 4 子门禁 (单段距离 + top1-top2 margin + cluster votes + anchor 状态) + 跨会议 90% acceptance gate. C 方案文档口径修正: CLAUDE.md 永久锚点新增 "## 声纹 90% 硬门禁". 9 文件 +1095 行 + 13/13 e2e PASS (8 子门禁各 2 + 综合 2 + 跨会议 90% 2 + 6 件套 1). 0 production code 守恒 (不动 voiceprint_service.py 老 MATCH_THRESHOLD).
+- **B-2 跨租户 422 修复** (commit `6d9c9e446`, 锚点范式 +1 守恒, 0 production code 例外 1 已批): 1 行 production `app/services/tenant_data_isolation.py:31-37` `super().__init__` 补 `code=self.code, status_code=self.status_code`. 根因: `AppException.__init__(code, message, status_code, details)` `code` 是必填位置参数, `TenantIsolationViolation.__init__` 漏传 → TypeError → FastAPI 收 500 而非 422. 28/28 e2e PASS (W74 D-1 22 + W75 B-2 2 新增: `test_23_tenant_isolation_returns_422_not_500` + `test_05_4500_cross_access_returns_422_not_500` + 隔离 4). 6 件套监控凑齐. 4 新铁律.
+- **B-3 hot-fix P2 webhook 修复** (commit `a06fbe4df`, 锚点范式 +1 守恒): W74 E-1 P2 报告实战, 共用 webhook 库 `scripts/lib/webhook_payload.sh` (5 函数). 4 监控脚本 webhook payload 补全 (5 字段: severity/source/message/timestamp/details) + `|| true` 静默吞删除 + retry 策略 (3 次重试, 5s 间隔). 6/6 e2e PASS. 0 production code 守恒 (scripts/lib + tests 范畴).
+- **C-1 商业化真支付 SDK 接入** (commit `2487ce6658`, 锚点范式 +1 守恒, 0 production code 例外 1 已批): D-1 §3.2 Step 5 主拍单独拍板实战. Stripe SDK (PaymentIntent + construct_event + Refund + Customer, lazy import + mock 降级) + Alipay RSA2 (AlipayTradePagePay + RSA2 验签 + Refund + Query) + WeChat Pay V3 (jsapi + V3 签名 + Refund + Order.query) 真接入. webhook 签名验证 + 重放保护 (timestamp 5 分钟 TTL + nonce). 16/16 e2e PASS (3 支付 × 4 实战 + 重放保护 3 + summary, 小额 ¥0.01 沙箱测试). 5 新文件 + 1 编辑 (billing_gateway 工厂函数新增 3 真接入 provider). 3 新铁律.
+- **D-1 9 表索引 + 商业化 webhook + 跨租户 + hot-fix P2 webhook 4 项 PASS 验证** (commit `a5a095da2`, 验证型 0 增量): 严格不照抄派工书 PASS, 实测 9 PASS / 5 FAIL 据实 (派工 v4 铁律 3 + 类 20.9 实战). 14 case. 5 项派工前提校正实战. 7 件套监控凑齐. 0 production code 守恒 (scripts + tests 范畴).
+
+**W75 第 1 批 grand closure 收口**: `memory/w75-1st-grand-closure-2026-07-27.md` 193 行 + main commit `504c4c1b5`. 14 commits ahead of base `51d390b07` (W74 第 1 批 grand closure). alembic 1 head `['085_billing_payment_tables']` 守恒. W76/W77/W78 派工顺序表 (7+7+7 = 21 agents, 锚点 256→~277). 累计 17 批 290+ commits + 290+ 铁律. W19 选项 A 维持.
+
+**派工前提错配 5 实例沉淀 (类 20)**:
+1. **W72 B-4 错配** (file_request 已在 2026-07-02 完整实施, commit `a0e282db8` + `bb64d251b` + `f5715fd90`)
+2. **W73 D-1 brief 假设错误** (派工 brief "C-1 已实施 1 子批" 但 git log 真验证 0 commit)
+3. **W74 A-1 错判基线** (本地 main=45de56f3b 误判 vs 999276dda 实际 W73 closure base)
+4. **W74 B-1 派生 P1 缺陷** (084 migration 表名 meeting/member 写错 + JSON 不能直接 GIN)
+5. **W75 A-1 错派** (类 20.11: 6 收尾分支尚未 commit 派 A-1, 派工 v4 铁律 3 实战成功拦截)
+
+**派工前提铁律 12 条 + 类 20 新增 12 条 (类 20.1-20.12)**:
+1. 派生新任务必先 git log + grep 真验证当前 main HEAD
+2. 不重做已 plan 实施代码
+3. 调研"差距"必先辨明量纲 (cosine distance vs accuracy)
+4. 调研建议主拍必拍"破坏性 vs 渐进"修复路径
+5. 实施前必先 `information_schema` 实查表名 + 列类型
+6. alembic 链必 1 head
+7. 实施前置 7 项必含
+8. 商业化 B-2 主拍单独拍板
+9. 0 production code 例外必含派工批文
+10. commit message 必含锚点范式数字
+11. 部署前必跑 alembic chain verify
+12. 验证型 agent 必严格不照抄派工书 PASS, 必报实测不符
+
+## W74 第 1 批 grand closure (2026-07-27 — 6/7 agents 完成 + 4 项主拍决策全部实战 + 锚点范式 242 → 249 守恒 +7, alembic 1 head P1 修复实战)
+
+**主基调**: ppt-word 5 缺口真实施 + 商业化 Phase 8 起步 + 4 类 hot-fix 监控 + 7 维评分商业化改造 + qa-bench D9 W73 调研整合 + 声纹+ASR+TTS 调研 + 派工前提错误类 20 实战 4 实例.
+
+**W74 第 1 批 6 agents 真实施**:
+
+- **A-2 声纹 MATCH_THRESHOLD 0.7 vs 90% 门禁调研** (commit `306ac657e`, 锚点范式 +1): 0.7 = cosine distance 上限, 90% = strict merge 后跨会议总体识别率门禁, 60 点差距 = **量纲混淆**. 未发现 LLM 0.7→0.9 校正. 验证段命中 distance ≤ 0.55. W75 主拍建议: B+C 方案.
+- **B-1 9 表 2 索引修复** (commit `aef117b17`, 锚点范式 +1): 3 GIN 索引 + 1 联合部分索引 + alembic 084. 7/7 e2e PASS.
+- **B-2 计费真支付 mock** (commit `879723704`, 锚点范式 +5): 3 支付网关 (Stripe + Alipay + WeChat Pay) + 4 表 + alembic 085. 22/22 e2e PASS. **W74 B-2 替换 W73 B-1 Step 5** (主拍决策).
+- **C-1 240 题灰度 + 7 维商业化改造实施** (commit `8033618d`, 锚点范式 +1): 200→240 题 + 4 周 5/10/25/100% 灰度 + 实施前置 7 项 + Dashboard. 20/20 e2e PASS.
+- **D-1 多租户实战压测 + 数据隔离验证** (commit `8565ef21c`, 锚点范式 +1): 6 资源 600/600 拦截 + 6 表 P95 32-48ms + 10 租户 × 100 invoices × 100 并发 = 4500 跨访问 100% 拦截. 30/30 e2e PASS. **派工 v6 段 5 反馈 #7 实战**: `TenantIsolationViolation.__init__` 缺 `code` 形参 → FastAPI 500 而非 422 (W75 B-2 必修).
+- **E-1 守恒验证 5 件套** (commit `de85ba006`, 验证型 0 增量): 3 PASS / 2 FAIL 据实 (派工 v4 铁律 3 实战). 5 件套: alembic 1 head + 商业化 B-1 多租户隔离 (PENDING) + 9 表索引 FAIL (P1 缺陷) + 4 类 hot-fix 监控 PARTIAL (P2 webhook 畸形) + 调研 ≠ 生产.
+
+**W74 第 1 批 grand closure 收口**: `memory/w74-1st-grand-closure-2026-07-27.md` 198 行 + main commit `51d390b07`. 17 commits ahead of base `999276dda`. alembic 1 head `['085_billing_payment_tables']` 守恒 (084 P1 修复 + 085 串单链, 单链 076→078→080→081→082→083→084→085). 累计 16 批 280+ commits + 280+ 铁律.
+
+**4 项主拍决策全部实战**:
+1. **P0 修**: W73 7 分支立即合并入 main (commit `9ef05e5ae` 锚点 235→242 +7), 084 P1 修复实战.
+2. **084 走 B 路径**: 复数表名 (meetings/members) + `ALTER TABLE meetings ALTER COLUMN ... TYPE jsonb USING ::jsonb` (commit `8d0d12c2d`). GIN `jsonb_path_ops` on jsonb 列.
+3. **撤回 W74 B-2 重复派工**: 保留 W74 B-2 实战数据替换 W73 B-1 Step 5.
+4. **W73 7 分支立即合并**: W74 B-1/B-2 依赖 083 (W73 B-1 083), 不合并锚点基线永不可验 (派工前提铁律 实战).
+
+## W73 第 1 批 grand closure (2026-07-27 — 7/7 agents 完成 + alembic 080 接 078 链序调整 + 锚点范式 235 → 242 守恒 +7, 0 production code 6/7 守恒)
+
+**主基调**: 商业化 Phase 8 起步 + 4 类 hot-fix 监控 + 7 维评分商业化改造 + qa-bench D9 W73 调研整合 + 声纹+ASR+TTS 调研 + 派工 v10 段 7 19 类实战 + 派工前提铁律 12 条沉淀.
+
+**W73 第 1 批 7 agents 真实施**:
+
+- **A-1 部署收口**: 合并 6 分支 + alembic 080 接 078 链序调整 (跳过 079 历史独立分支) + grand closure commit `999276dda` + 14 commits. 单链 076→078→080→081→082→083, 1 head `['083_commercial_tenant_isolation']` 守恒.
+- **A-2 声纹+ASR+TTS 调研** (commit `a2243a650`): 5 项关键发现 (CAM++ 已 revert, SenseVoice 100% 灰度, Edge-TTS 单后端, 9 表 2 索引缺口).
+- **B-1 商业化 Phase 8 收口** (commit `a6835841`): 5 大件 (多租户隔离 + 计费接口预留 + License 校验 + SaaS 平台 + alembic 083).
+- **B-2 4 类 hot-fix 监控** (commit `68e024677`): 4 监控脚本 + hotfix commit message 模板 + 4 e2e.
+- **C-1 7 维评分商业化改造** (commit `6e65b32d5`): 12 子维度 + 6 检测器 + R10 weights_v4.json + 40 商业化题.
+- **D-1 qa-bench D9 W73 调研整合** (commit `ad2640891`): 5 子批 + 起步纪律 6 项 + 类 20 实战 2 实例.
+- **E-1 守恒验证 5 件套** (commit `6225c7c94`): 3 新增段 (商业化 B-1 多租户 + 声纹 ≠ 生产 + 4 类 hot-fix 监控).
+
+**W73 第 1 批 grand closure 收口**: `memory/w73-1st-grand-closure-2026-07-27.md` 148 行 + main commit `999276dda`. 累计 15 批 270+ commits + 270+ 铁律.
+
+## W72 第 2 批 grand closure (2026-07-27 — 15/15 agents 完成 + ppt-word 5 缺口真实施 + 锚点范式 220 → 235 守恒 +15, 0 production code 14/15 守恒)
+
+**主基调**: ppt-word 5 缺口真实施 + 商业化 Phase 8 起步 + 4 类 hot-fix 监控 + 7 维评分商业化改造 + 派工 v10 段 7 19 类实战.
+
+**W72 第 2 批 15 agents 真实施**:
+
+- **A-1 部署收口**: 合并 6 分支 + grand closure commit `45de56f3b` + 15 commits.
+- **A-2 派工纪要 v10**: 段 5 升级 12→18 项 + 段 6 升级 13→14 + 段 7 升级 16→19 类 + 段 8 升级 4→6 项 + 段 9 新增.
+- **A-3 plans 真验证**: 7 grep 真验证 + 派生新任务 6 项 + 派工前提错误 19 类.
+- **B-1 PR2 sharing 差量**: alembic 081 + 4 字段 + 桌面 ShareLinkDialog + 移动端入口 + 4 新铁律 (SHA256>bcrypt / VARCHAR(128) buffer / 审计 caller try/except / is_active 双维度).
+- **B-2 PR3 comment v2 验收**: 6 项差量验收 34/34 e2e PASS (验收不写 production).
+- **B-3 PR5 trash + alembic 080**: 4 项 trash 收口 + 8 项分片上传 + 3 项 UI 集成 (后续 W73 A-1 修复 alembic 080 接 078).
+- **B-4 PR7 file_request**: 派工前提错配实战 (file_request 已实施), 主拍方案 2 (15 case e2e + 1 行 audit 收口).
+- **B-5 商业化 Phase 8 起步**: 4 层架构 (Docker base + SaaS 平台 + 计费 + 前端) + 6 表 + 14/14 e2e.
+- **C-1 Drive v2 部署文档 v3**: 7 段覆盖 (alembic 链风险 + 部署必做 10 步 + 4 类 hot-fix 链预案).
+- **C-2 qa-bench D9 调研**: 6 大块 + W73 5 子批派工建议.
+- **C-3 Mobile v3.4 商业化暗色**: 4 块 + 119 e2e + 108 视觉快照.
+- **D-1 缺口 5 gap analysis 恢复**: 5 段 + 8 行状态表 + W74 派工顺序表.
+- **D-2 6 类文档同步**: mid-派工真实施聚合.
+- **D-3 锚点范式守恒**: 4 维度金标准 + 6 新铁律.
+- **E-1 守恒验证三件套**: alembic + baseline + PWA 410 + 0 production code 守恒.
+
+**W72 第 2 批 grand closure 收口**: `memory/w72-2nd-grand-closure-2026-07-27.md` 142 行 + main commit `45de56f3b`. 累计 14 批 250+ commits + 260+ 铁律.
+
 ## W72 第 2 批 partial mid-派工 D-2 文档同步 (2026-07-27 — 3 commits 真落地 + 12 agents worktree 未开工, 锚点范式 W72 第 1 批 220 → W72 第 2 批 ~234 守恒预测, 派工 v6 段 5 反馈 #2 实战 + 派工 v10 段 7 19 类实战)
 
 **W72 第 2 批实际真实施状态 (派工 v6 §1.2 真验证纪律 + 派工 v10 段 7 类 19 commit message 必含锚点范式数字)**:
