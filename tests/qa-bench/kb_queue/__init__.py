@@ -1,5 +1,16 @@
-"""KB queue entry point for the five-defense QA gate."""
+"""__init__.py — KB 闭环包 (W71 B-2 + B-4 合并)
 
+KB 闭环端到端串联 4 阶段: 评测 → 入库 → 抽检 → 回滚
+
+导出 (W71 B-2 + B-4 完整合并):
+- save_to_kb (5 道防线主入口, B-2 实施)
+- kb_loop_end_to_end (4 阶段串联主入口, B-4 实施)
+- KBLoopResult (dataclass, B-4 实施)
+- auto_intake_rollback_dry (B-4 接口契约)
+- ANCHOR_PARADIGM_ID (锚点范式标识)
+
+冲突解决: B-4 __init__.py add/add B-2 __init__.py, 必含两者的完整导出.
+"""
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
@@ -46,4 +57,20 @@ def save_to_kb(
     }
 
 
-__all__ = ["save_to_kb"]
+# B-4 4 阶段串联 (kb_loop_end_to_end 内部串联 B-1 评分 + B-2 五道防线 + B-3 Celery 回滚)
+from .end_to_end import (
+    KBLoopResult,
+    kb_loop_end_to_end,
+    auto_intake_rollback_dry,
+    ANCHOR_PARADIGM_ID,
+)
+
+
+__all__ = [
+    "save_to_kb",  # B-2 主入口
+    "apply_five_defenses",  # B-2 5 道防线函数
+    "KBLoopResult",  # B-4 dataclass
+    "kb_loop_end_to_end",  # B-4 主入口
+    "auto_intake_rollback_dry",  # B-4 接口契约
+    "ANCHOR_PARADIGM_ID",  # B-4 锚点范式标识
+]
