@@ -112,12 +112,14 @@ const isAdminOverride = computed(() => {
 })
 
 // v2.8 + v2.12 + v2.13: 子文件夹右键菜单项 (5 项, 「删除」owner 或 admin 可见)
+// W72 第 2 批 B-1 差量: 加第 6 项「🔗 分享」入口, 调 ShareLinkDialog
 const folderMenuItems = computed(() => {
   const items = [
     { label: '📂 打开',         command: 'open' },
     { label: '➕ 新建子文件夹',   command: 'create-sub' },
     { label: '✏ 重命名',         command: 'rename' },
     { label: '🔗 复制 Folder ID', command: 'copy-id' },
+    { label: '🔗 分享',         command: 'share', divided: true },  // W72-B-1
   ]
   if (canDelete.value) {
     items.push({ label: '🗑 删除', command: 'delete', divided: true })

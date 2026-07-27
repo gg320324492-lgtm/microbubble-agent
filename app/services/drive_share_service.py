@@ -144,6 +144,8 @@ class DriveShareService:
         *,
         permission: str = "read",
         expires_days: int = DEFAULT_SHARE_EXPIRES_DAYS,
+        password: Optional[str] = None,
+        max_downloads: Optional[int] = None,
     ) -> DriveFolderShare:
         """创建 folder 公开分享链接 (owner / admin member only)
 
@@ -152,15 +154,32 @@ class DriveShareService:
             user_id: 创建者 (folder owner 或 admin member)
             permission: read | write | admin (链接访问者权限)
             expires_days: 1-365
+            password: 4-8 位数字提取码 (W72-B-1 差量, None = 无密码)
+            max_downloads: 下载次数上限 (W72-B-1 差量, None = 不限)
 
         Returns:
-            DriveFolderShare (含 share_token, expires_at)
+            DriveFolderShare (含 share_token, expires_at, password_hash, max_downloads)
 
         Raises:
             DriveShareServiceError on validation / not-found / forbidden
         """
         _validate_permission(permission)
         _validate_expires_days(expires_days)
+
+        # W72 第 2 批 B-1 差量: password 格式校验 (4-8 位数字)
+        if password is not None:
+            if not password.isdigit() or not (4 <= len(password) <= 8):
+                raise DriveShareServiceError(
+                    "password 必须是 4-8 位数字 (None = 无密码保护)",
+                    status_code=400,
+                )
+
+        # W72 第 2 批 B-1 差量: max_downloads 范围校验 (1-10000)
+        if max_downloads is not None and not (1 <= max_downloads <= 10000):
+            raise DriveShareServiceError(
+                f"max_downloads {max_downloads} 超出范围 [1, 10000]",
+                status_code=400,
+            )
 
         folder, _ = await _check_folder_share_authority(
             self.db, folder_id, user_id, require_admin=True
@@ -174,31 +193,78 @@ class DriveShareService:
             now_utc + timedelta(days=expires_days)
         )
 
+        # W72 第 2 批 B-1 差量: password 哈希 (SHA256, 与 drive_service.py _hash_share_password 同模式)
+        # 走 SHA256 而非 bcrypt: 4-8 位数字密码太短, bcrypt 72-byte 上限 + 兼容性问题不必要
+        password_hash = None
+        if password is not None:
+            import hashlib
+            password_hash = hashlib.sha256(
+                f"drive_share_v1:{password}".encode("utf-8")
+            ).hexdigest()
+
         share = DriveFolderShare(
             folder_id=folder_id,
             share_token=token,
             permission=permission,
             expires_at=expires_at_naive,
             created_by=user_id,
+            password_hash=password_hash,        # W72-B-1 差量
+            max_downloads=max_downloads,         # W72-B-1 差量
+            download_count=0,                    # W72-B-1 差量 (server_default 兜底)
         )
         self.db.add(share)
         await self.db.commit()
         await self.db.refresh(share)
 
+        # W72 第 2 批 B-1 差量: 审计 (复用 audit_service, 不重复实现)
+        try:
+            from app.services.audit_service import audit_service
+            await audit_service.log(
+                self.db,
+                user_id=user_id,
+                ip_address="",
+                user_agent="",
+                method="CREATE",
+                path=f"/api/v1/drive/folders/{folder_id}/share",
+                action="share_created",
+                resource_type="folder_share",
+                resource_id=str(share.id),
+                status_code=200,
+                duration_ms=0,
+                metadata={
+                    "folder_id": folder_id,
+                    "permission": permission,
+                    "expires_days": expires_days,
+                    "has_password": password is not None,
+                    "max_downloads": max_downloads,
+                },
+            )
+        except Exception as e:
+            logger.warning(f"[DriveShareService.create_folder_share] 审计失败: {e}")
+
         logger.info(
             f"[DriveShareService.create_folder_share] folder_id={folder_id} "
             f"token={token[:8]}... permission={permission} "
-            f"expires={share.expires_at} created_by={user_id}"
+            f"expires={share.expires_at} created_by={user_id} "
+            f"has_password={password is not None} max_downloads={max_downloads}"
         )
         return share
 
     async def get_folder_by_share_token(
-        self, token: str
+        self, token: str, password: Optional[str] = None
     ) -> Optional[Tuple[Folder, DriveFolderShare, List[dict], List[dict]]]:
         """通过 token 公开访问 (无登录)
 
+        W72 第 2 批 B-1 差量:
+        - password 校验 (有 password_hash 必须传 password 验证, 否则 403)
+        - download_count < max_downloads 校验 (次数超限返 None)
+
+        Args:
+            token: 分享链接 token
+            password: 提取码 (仅当 link 有密码时需要, None = 不验证)
+
         Returns:
-            None: token 不存在 / 已撤销 / 已过期
+            None: token 不存在 / 已撤销 / 已过期 / 密码错 / 次数超限
             (folder, share, files, subfolders) tuple
 
         Raises:
@@ -236,6 +302,32 @@ class DriveShareService:
                 )
                 return None
 
+        # W72 第 2 批 B-1 差量: 密码校验 (SHA256 hash 比对, 与 drive_service.py 一致)
+        if share.password_hash is not None:
+            if password is None or password == "":
+                logger.info(
+                    f"[DriveShareService.get_folder_by_share_token] token={token[:8]}... "
+                    f"需要密码但未提供"
+                )
+                return None
+            import hashlib
+            expected = hashlib.sha256(
+                f"drive_share_v1:{password}".encode("utf-8")
+            ).hexdigest()
+            if expected != share.password_hash:
+                logger.info(
+                    f"[DriveShareService.get_folder_by_share_token] token={token[:8]}... 密码错误"
+                )
+                return None
+
+        # W72 第 2 批 B-1 差量: 次数校验 (超限即失效)
+        if share.max_downloads is not None and share.download_count >= share.max_downloads:
+            logger.info(
+                f"[DriveShareService.get_folder_by_share_token] token={token[:8]}... "
+                f"下载次数超限 ({share.download_count}/{share.max_downloads})"
+            )
+            return None
+
         folder = (await self.db.execute(
             select(Folder).where(
                 Folder.id == share.folder_id,
@@ -248,6 +340,29 @@ class DriveShareService:
                 f"folder_id={share.folder_id} 已不存在"
             )
             return None
+
+        # W72 第 2 批 B-1 差量: 审计 share_downloaded
+        try:
+            from app.services.audit_service import audit_service
+            await audit_service.log(
+                self.db,
+                user_id=None,  # 公开访问无 user
+                ip_address="",
+                user_agent="",
+                method="GET",
+                path=f"/api/v1/drive/folders/share/{token}",
+                action="share_downloaded",
+                resource_type="folder_share",
+                resource_id=str(share.id),
+                status_code=200,
+                duration_ms=0,
+                metadata={
+                    "folder_id": share.folder_id,
+                    "download_count": share.download_count + 1,  # 即将自增
+                },
+            )
+        except Exception as e:
+            logger.warning(f"[DriveShareService.get_folder_by_share_token] 审计失败: {e}")
 
         # 拉 folder 下文件 (drive 模式 + 未删)
         from app.models.knowledge import Knowledge  # 避免循环 import
@@ -288,6 +403,43 @@ class DriveShareService:
 
         return folder, share, files, subfolders
 
+    async def increment_download_count(
+        self, share_id: int
+    ) -> int:
+        """原子自增 download_count (W72-B-1 差量, 公开下载后调用)
+
+        Args:
+            share_id: DriveFolderShare.id
+
+        Returns:
+            自增后的 download_count
+
+        Notes:
+        - 走 SQL UPDATE ... SET download_count = download_count + 1 (原子)
+        - 超限返 -1 (不更新), 调用方应不再继续下载
+        """
+        # 先查当前 share
+        share = (await self.db.execute(
+            select(DriveFolderShare).where(DriveFolderShare.id == share_id)
+        )).scalar_one_or_none()
+        if share is None:
+            return -1
+        # 超限则不更新
+        if share.max_downloads is not None and share.download_count >= share.max_downloads:
+            return -1
+
+        # 原子自增 (PR2.7 Knowledge.download_count 同模式)
+        from sqlalchemy import update as sql_update
+        result = await self.db.execute(
+            sql_update(DriveFolderShare)
+            .where(DriveFolderShare.id == share_id)
+            .values(download_count=DriveFolderShare.download_count + 1)
+            .returning(DriveFolderShare.download_count)
+        )
+        new_count = result.scalar_one_or_none()
+        await self.db.commit()
+        return int(new_count) if new_count is not None else -1
+
     async def revoke_folder_share(
         self,
         share_id: int,
@@ -313,6 +465,30 @@ class DriveShareService:
         if share.revoked_at is None:
             share.revoked_at = to_naive_datetime(datetime.now(timezone.utc))
             await self.db.commit()
+
+            # W72 第 2 批 B-1 差量: 审计 share_revoked
+            try:
+                from app.services.audit_service import audit_service
+                await audit_service.log(
+                    self.db,
+                    user_id=user_id,
+                    ip_address="",
+                    user_agent="",
+                    method="DELETE",
+                    path=f"/api/v1/drive/folders/share/{share.id}",
+                    action="share_revoked",
+                    resource_type="folder_share",
+                    resource_id=str(share.id),
+                    status_code=200,
+                    duration_ms=0,
+                    metadata={
+                        "folder_id": share.folder_id,
+                        "revoked_at": share.revoked_at.isoformat(),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"[DriveShareService.revoke_folder_share] 审计失败: {e}")
+
             logger.info(
                 f"[DriveShareService.revoke_folder_share] share_id={share_id} "
                 f"by user_id={user_id}"

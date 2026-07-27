@@ -201,6 +201,8 @@ const emit = defineEmits([
   'create-sub-folder',  // (parentId) → parent 弹 CreateFolderDialog
   'rename-folder',      // (folder)   → parent 弹 RenameDialog
   'delete-folder',      // (folder)   → parent 调 useFolderTree.deleteFolder
+  // W72 第 2 批 B-1: folder share 入口 (转发 → parent 弹 ShareLinkDialog)
+  'share-folder',       // (folder)   → parent 弹 ShareLinkDialog
   // v2.28 (2026-07-12): 空态 CTA "新建文件夹" — 无 parent_id 顶层创建
   'request-new-folder', // () → parent 弹 CreateFolderDialog
 ])
@@ -303,6 +305,9 @@ async function onSubContext(cmd, folder, isAdminOverride = false) {
     emit('create-sub-folder', folder.id)
   } else if (cmd === 'rename') {
     emit('rename-folder', folder)
+  } else if (cmd === 'share') {
+    // W72 第 2 批 B-1 差量: folder share 入口, 上层 DesktopDriveView 接 ShareLinkDialog
+    emit('share-folder', folder)
   } else if (cmd === 'copy-id') {
     try {
       await navigator.clipboard.writeText(String(folder.id))
