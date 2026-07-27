@@ -140,6 +140,13 @@
 - **撤回决策依据**: 类比 W76 C-1 撤回实战, 不重派无意义脚本实战
 - **替代方案**: D-1 任务 (R10 weights_v4 灰度 + 实施前置 7 项 + 200→240 题实战) 推迟到 W78
 
+### 5.7 W78 D-1 重派实施配套（本次闭环）
+
+- **重派事实**: W78 第 1 批 D-1 按 W77 §5.6 替代方案重派，分支基于 `068626ecc`，先完成 W73/W74/W76 三段 commit + `git show --stat` 真验证。
+- **实施交付**: `tests/qa-bench/r10_gray_migration.py`（R10 dry-run、12 子维度 + 6 检测器、240 题 SHA lock、7 项前置、SenseVoice 三维度关联、4 周 5/10/25/100% 契约）+ `tests/test_w78_d1_r10_gray_e2e.py`（17 个 W76 D-1 case 复用 + 5 个 W78 新 case）。
+- **实测**: `SKIP_DB_SETUP=1 python -m pytest tests/test_w78_d1_r10_gray_e2e.py -q` = **22 passed**；SenseVoice 关联报告 12 桶、Wilson 95% CI、失败样本 27 个。
+- **边界**: W77 撤回不补造历史 commit；本次不改 `app/`、老 QA 链路、`alembic/versions/` 或生产 DB。R9 `weights.json` 保留 rollback，当前仅 dry-run/QA 配套，不宣称真实生产流量 promote。
+
 ## 6. W78/W79/W80 派工顺序 (D-1 + A-2 + E-1 综合 + W77 类 20.13 实战)
 
 ### W78 (W77 第 1 批 270 → ~277, +7 守恒, 单批 7 agents)
