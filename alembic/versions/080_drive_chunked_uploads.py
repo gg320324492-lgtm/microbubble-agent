@@ -17,7 +17,7 @@ from alembic import op
 
 
 revision: str = "080_drive_chunked_uploads"
-down_revision: Union[str, None] = "082_commercial_billing_tables"
+down_revision: Union[str, None] = "078_drive_dedupe_audit"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
