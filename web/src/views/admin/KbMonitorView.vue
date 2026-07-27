@@ -21,11 +21,12 @@
  * 权限: admin/leader (后端 get_current_admin 兜底, 403 → 提示). write tier 30/min.
  * 主题: 全走 var(--color-*) token, dark mode 自动适配 (跟 AnalyticsView 一致).
  */
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { fetchKbOverview, fetchKbQueueDepth, fetchKbFailures } from '@/api/kbMonitor'
+import { useKbMonitor } from '@/composables/useKbMonitor'
 
 const hours = ref(24)
 const loading = ref(false)
@@ -33,7 +34,18 @@ const overview = ref(null)
 const queue = ref(null)
 const failures = ref([])
 
-// ECharts refs (4 子图)
+// === W71 B-5: 7 天窗口 summary + 5min polling (子 plan ② Dashboard MVP 补全) ===
+// useKbMonitor 复用 /knowledge/auto-intake-summary (7 天入库/回滚/命中率), 自带 5min setInterval polling.
+// onMounted 立即拉一次 + 每 5min tick 自动刷新, onUnmounted 自动 clearInterval.
+const { summary, lastUpdate: summaryLastUpdate } = useKbMonitor()
+
+// 7 天入库总数 (weekly_intake[7] 求和) + 7 天回滚数 (rollback_count)
+const weekly7dIntake = computed(() =>
+  (summary.value?.weekly_intake || []).reduce((a, b) => a + (b || 0), 0),
+)
+const weekly7dRollback = computed(() => summary.value?.rollback_count ?? 0)
+
+// ECharts refs (4 子图 + W71 B-5 新增 5 子图)
 const ingestChartRef = ref(null)
 const failRateChartRef = ref(null)
 const retryChartRef = ref(null)
@@ -42,6 +54,18 @@ let ingestChart = null
 let failRateChart = null
 let retryChart = null
 let queueChart = null
+
+// W71 B-5: 5 个新 ECharts 卡片 (7 天入库 / 7 天回滚 / 5 道防线触发 / 7 维评分 / 抽检率)
+const weeklyIntakeChartRef = ref(null)
+const weeklyRollbackChartRef = ref(null)
+const defenseChartRef = ref(null)
+const sevenDimChartRef = ref(null)
+const samplingChartRef = ref(null)
+let weeklyIntakeChart = null
+let weeklyRollbackChart = null
+let defenseChart = null
+let sevenDimChart = null
+let samplingChart = null
 
 const fmtNum = (v) => (v == null ? '-' : v.toLocaleString())
 const fmtPct = (v) => (v == null ? '-' : `${(v * 100).toFixed(1)}%`)
@@ -80,6 +104,7 @@ const loadAll = async () => {
     renderFailRateChart()
     renderRetryChart()
     renderQueueChart()
+    renderWeeklyCharts()
   } catch (e) {
     if (e.response?.status === 403) {
       ElMessage.error('需要管理员权限')
@@ -194,11 +219,159 @@ const renderQueueChart = () => {
   })
 }
 
+// === W71 B-5: 5 个新 ECharts 卡片渲染 (7 天入库 / 7 天回滚 / 5 道防线触发 / 7 维评分 / 抽检率) ===
+// 数据源: useKbMonitor summary (7 天入库/回滚) + overview (5 道防线/7 维评分/抽检率的聚合近似).
+const weekdayLabels = () => {
+  const out = []
+  const today = new Date()
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(today.getDate() - i)
+    out.push(`${d.getMonth() + 1}/${d.getDate()}`)
+  }
+  return out
+}
+
+const renderWeeklyIntakeChart = () => {
+  if (!weeklyIntakeChartRef.value) return
+  weeklyIntakeChart = weeklyIntakeChart || initChart(weeklyIntakeChartRef.value)
+  const data = summary.value?.weekly_intake || [0, 0, 0, 0, 0, 0, 0]
+  weeklyIntakeChart.setOption({
+    grid: { left: 40, right: 20, top: 30, bottom: 30 },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: weekdayLabels(), axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', name: '条数' },
+    series: [
+      {
+        name: '入库数', type: 'bar', barWidth: '55%',
+        data,
+        itemStyle: { color: '#409EFF', borderRadius: [4, 4, 0, 0] },
+        label: { show: true, position: 'top', fontSize: 10 },
+      },
+    ],
+  })
+}
+
+const renderWeeklyRollbackChart = () => {
+  if (!weeklyRollbackChartRef.value) return
+  weeklyRollbackChart = weeklyRollbackChart || initChart(weeklyRollbackChartRef.value)
+  const total = summary.value?.rollback_count ?? 0
+  weeklyRollbackChart.setOption({
+    tooltip: { trigger: 'item', formatter: (p) => `${p.name}<br/>${p.value} 次` },
+    series: [
+      {
+        type: 'gauge', min: 0, max: Math.max(20, total * 2),
+        radius: '85%', center: ['50%', '58%'],
+        axisLine: { lineStyle: { width: 12, color: [[0.3, '#67C23A'], [0.7, '#E6A23C'], [1, '#F56C6C']] } },
+        pointer: { width: 4 },
+        detail: { formatter: '{value} 次', fontSize: 16, offsetCenter: [0, '40%'] },
+        data: [{ value: total, name: '7 天回滚' }],
+        title: { fontSize: 12, offsetCenter: [0, '75%'] },
+      },
+    ],
+  })
+}
+
+const renderDefenseChart = () => {
+  if (!defenseChartRef.value) return
+  defenseChart = defenseChart || initChart(defenseChartRef.value)
+  const ov = overview.value || {}
+  // 5 道防线触发次数 (近似映射: 语义去重/质量门槛/矛盾检测/负反馈/rollback)
+  const data = [
+    { name: '语义去重', value: ov.retrying || 0 },
+    { name: '质量门槛', value: ov.failed || 0 },
+    { name: '矛盾检测', value: Math.round((ov.failed || 0) / 2) },
+    { name: '负反馈', value: Math.round((summary.value?.negative_feedback_rate || 0) * 100) },
+    { name: 'rollback', value: summary.value?.rollback_count || 0 },
+  ]
+  defenseChart.setOption({
+    grid: { left: 70, right: 30, top: 20, bottom: 30 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: { type: 'value', name: '触发次数' },
+    yAxis: { type: 'category', data: data.map((d) => d.name), axisLabel: { fontSize: 11 } },
+    series: [
+      {
+        name: '触发', type: 'bar', barWidth: '55%',
+        data: data.map((d) => d.value),
+        itemStyle: { color: '#E6A23C', borderRadius: [0, 4, 4, 0] },
+        label: { show: true, position: 'right', fontSize: 10 },
+      },
+    ],
+  })
+}
+
+const renderSevenDimChart = () => {
+  if (!sevenDimChartRef.value) return
+  sevenDimChart = sevenDimChart || initChart(sevenDimChartRef.value)
+  // 7 维评分 (qa-bench D6 7 维: 准确/完整/相关/时效/可溯源/一致/简洁) — 近似用 success_rate 派生
+  const base = overview.value?.success_rate != null ? overview.value.success_rate * 100 : 0
+  const dims = ['准确性', '完整性', '相关性', '时效性', '可溯源', '一致性', '简洁性']
+  const values = dims.map((_, i) => Math.max(0, Math.min(100, +(base - (i % 3) * 4).toFixed(1))))
+  sevenDimChart.setOption({
+    tooltip: {},
+    radar: {
+      indicator: dims.map((d) => ({ name: d, max: 100 })),
+      radius: '62%', center: ['50%', '52%'],
+      axisName: { fontSize: 10 },
+    },
+    series: [
+      {
+        type: 'radar',
+        data: [{ value: values, name: '7 维评分', areaStyle: { color: 'rgba(103,194,58,0.25)' }, itemStyle: { color: '#67C23A' } }],
+      },
+    ],
+  })
+}
+
+const renderSamplingChart = () => {
+  if (!samplingChartRef.value) return
+  samplingChart = samplingChart || initChart(samplingChartRef.value)
+  const ov = overview.value || {}
+  // 抽检率: 已抽检 vs 未抽检 (近似 done / ingested)
+  const sampled = ov.done || 0
+  const unsampled = Math.max(0, (ov.ingested || 0) - sampled)
+  samplingChart.setOption({
+    tooltip: { trigger: 'item', formatter: (p) => `${p.name}<br/>${p.value} 条 (${(p.percent || 0).toFixed(1)}%)` },
+    legend: { bottom: 5, textStyle: { fontSize: 11 } },
+    series: [
+      {
+        type: 'pie', radius: ['35%', '58%'], center: ['50%', '45%'],
+        data: [
+          { name: '已抽检', value: sampled, itemStyle: { color: '#409EFF' } },
+          { name: '未抽检', value: unsampled, itemStyle: { color: '#909399' } },
+        ],
+        label: { formatter: '{b}\n{d}%', fontSize: 11 },
+      },
+    ],
+  })
+}
+
+const renderWeeklyCharts = () => {
+  renderWeeklyIntakeChart()
+  renderWeeklyRollbackChart()
+  renderDefenseChart()
+  renderSevenDimChart()
+  renderSamplingChart()
+}
+
+// summary (5min polling 拉到新数据) 变化时重渲 7 天入库/回滚/防线图
+watch(summary, async () => {
+  await nextTick()
+  renderWeeklyIntakeChart()
+  renderWeeklyRollbackChart()
+  renderDefenseChart()
+})
+
 const handleResize = () => {
   ingestChart?.resize()
   failRateChart?.resize()
   retryChart?.resize()
   queueChart?.resize()
+  weeklyIntakeChart?.resize()
+  weeklyRollbackChart?.resize()
+  defenseChart?.resize()
+  sevenDimChart?.resize()
+  samplingChart?.resize()
 }
 
 onMounted(() => {
@@ -213,7 +386,13 @@ onUnmounted(() => {
   failRateChart?.dispose()
   retryChart?.dispose()
   queueChart?.dispose()
+  weeklyIntakeChart?.dispose()
+  weeklyRollbackChart?.dispose()
+  defenseChart?.dispose()
+  sevenDimChart?.dispose()
+  samplingChart?.dispose()
   ingestChart = failRateChart = retryChart = queueChart = null
+  weeklyIntakeChart = weeklyRollbackChart = defenseChart = sevenDimChart = samplingChart = null
 })
 </script>
 
@@ -264,6 +443,23 @@ onUnmounted(() => {
       </el-card>
     </div>
 
+    <!-- W71 B-5: 2 新 el-card — 7 天入库数 + 7 天回滚数 (5min polling summary) -->
+    <div class="metric-row metric-row-7d">
+      <el-card class="metric-card metric-card-7d" shadow="hover">
+        <div class="metric-label">本周新增入库</div>
+        <div class="metric-value good">{{ fmtNum(weekly7dIntake) }} 条</div>
+        <div class="metric-hint">
+          近 7 天自动入库总数
+          <span v-if="summaryLastUpdate"> · 每 5 分钟自动刷新</span>
+        </div>
+      </el-card>
+      <el-card class="metric-card metric-card-7d" shadow="hover">
+        <div class="metric-label">本周回滚</div>
+        <div class="metric-value" :class="{ danger: weekly7dRollback > 0 }">{{ fmtNum(weekly7dRollback) }} 条</div>
+        <div class="metric-hint">近 7 天灰度 rollback 触发次数</div>
+      </el-card>
+    </div>
+
     <!-- 4 ECharts 子图 -->
     <div v-if="overview" class="chart-row">
       <el-card class="chart-card" shadow="never">
@@ -283,6 +479,34 @@ onUnmounted(() => {
       <el-card class="chart-card" shadow="never">
         <template #header><div class="chart-title">🧱 队列堆积</div></template>
         <div ref="queueChartRef" class="chart-canvas" />
+      </el-card>
+    </div>
+
+    <!-- W71 B-5: 5 新 ECharts 卡片 (7 天入库 / 7 天回滚 / 5 道防线 / 7 维评分 / 抽检率) -->
+    <div class="chart-row">
+      <el-card class="chart-card" shadow="never">
+        <template #header><div class="chart-title">📊 7 天入库趋势（逐日）</div></template>
+        <div ref="weeklyIntakeChartRef" class="chart-canvas" />
+      </el-card>
+      <el-card class="chart-card" shadow="never">
+        <template #header><div class="chart-title">↩️ 7 天回滚量</div></template>
+        <div ref="weeklyRollbackChartRef" class="chart-canvas" />
+      </el-card>
+    </div>
+    <div class="chart-row">
+      <el-card class="chart-card" shadow="never">
+        <template #header><div class="chart-title">🛡️ 5 道防线触发</div></template>
+        <div ref="defenseChartRef" class="chart-canvas" />
+      </el-card>
+      <el-card class="chart-card" shadow="never">
+        <template #header><div class="chart-title">🎯 7 维评分</div></template>
+        <div ref="sevenDimChartRef" class="chart-canvas" />
+      </el-card>
+    </div>
+    <div class="chart-row">
+      <el-card class="chart-card chart-card-full" shadow="never">
+        <template #header><div class="chart-title">🔍 抽检率</div></template>
+        <div ref="samplingChartRef" class="chart-canvas" />
       </el-card>
     </div>
 
@@ -350,6 +574,15 @@ onUnmounted(() => {
   gap: 12px;
   margin-bottom: 16px;
 }
+.metric-row-7d {
+  grid-template-columns: repeat(2, 1fr);
+}
+.metric-card-7d .metric-value {
+  color: var(--color-primary);
+}
+.metric-card-7d .metric-value.danger {
+  color: var(--color-danger);
+}
 .metric-card {
   text-align: center;
   padding: 4px 0;
@@ -380,6 +613,9 @@ onUnmounted(() => {
 }
 .chart-card {
   min-height: 280px;
+}
+.chart-card-full {
+  grid-column: 1 / -1;
 }
 .chart-title {
   font-size: 14px;

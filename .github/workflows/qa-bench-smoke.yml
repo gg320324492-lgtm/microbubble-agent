@@ -182,27 +182,47 @@ jobs:
           python gen780.py --output questions_780.jsonl --schema-only
           wc -l questions_780.jsonl
 
-      # === 关键改动: --api-base http://localhost:8001 指向 test app + --smoke 简写 (v3.1 D6) ===
-      - name: Run 200 题 smoke (against test DB 8001)
+      # === W71 B-5: smoke 200 题拆 2 step (主测 100 ≤ 2min + 抽测 100 ≤ 3min) 避免 5min timeout ===
+      # W69 plan 备注 LOW 缺口: 原单次 5min 跑全 200 题不现实. 拆分主测/抽测两段, 各自 offset 定位.
+      - name: Run 200 题 smoke — 主测 100 题 (against test DB 8001, ≤ 2min)
         working-directory: tests/qa-bench
         env:
-          API_BASE: http://localhost:8001     # ← 改 8001 (test app)
+          API_BASE: http://localhost:8001     # ← 8001 (test app)
           QA_TOKEN: ${{ secrets.QA_TOKEN }}
         run: |
-          # v3.1 D6: --smoke 等价于 --limit 200 + 优先 questions_780.jsonl
-          # 取代旧的 `head -200 questions_780.jsonl > smoke_200.jsonl` + `--questions smoke_200.jsonl` 两步
+          # W71 B-5: 主测子集 (前 100 题), --limit 100
           python runner.py \
             --token "${QA_TOKEN:-mock}" \
             --api-base "http://localhost:8001" \
-            --smoke \
+            --smoke --limit 100 \
+            --output results/smoke-main \
+            --concurrency 4
+          if [ -f results/smoke-main/results.json ]; then
+            echo "✓ Smoke 主测 100 题完成 (≤ 2min)"
+          else
+            echo "✗ Smoke 主测失败"
+            exit 1
+          fi
+
+      - name: Run 200 题 smoke — 抽测 100 题 (against test DB 8001, ≤ 3min)
+        working-directory: tests/qa-bench
+        env:
+          API_BASE: http://localhost:8001
+          QA_TOKEN: ${{ secrets.QA_TOKEN }}
+        run: |
+          # W71 B-5: 抽测子集 (后 100 题), --offset 100 --limit 100
+          python runner.py \
+            --token "${QA_TOKEN:-mock}" \
+            --api-base "http://localhost:8001" \
+            --smoke --offset 100 --limit 100 \
             --output results/smoke \
             --concurrency 4
-          # 期望 5 分钟内完成
+          # 期望 3 分钟内完成
           if [ -f results/smoke/results.json ]; then
-            echo "✓ Smoke 200 题完成 (test DB, 无生产污染)"
+            echo "✓ Smoke 抽测 100 题完成 (test DB, 无生产污染, 主测+抽测合计 200 题)"
             cat results/smoke/report.md | head -50
           else
-            echo "✗ Smoke 失败"
+            echo "✗ Smoke 抽测失败"
             exit 1
           fi
 
