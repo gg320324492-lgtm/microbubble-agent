@@ -311,13 +311,13 @@ onUpdated(() => {
   display: flex; flex-direction: column;
   width: 240px;
   background: var(--color-bg-warm);
-  border-right: 1px solid #e8eaed;
-  transition: width 0.2s ease;
+  border-right: 1px solid var(--color-border-light);
+  transition: width var(--duration-normal, 200ms) ease;
   flex-shrink: 0;
   position: relative;
 }
 .session-sidebar.collapsed { width: 0; overflow: hidden; border-right: none; }
-.sidebar-header { padding: 12px; border-bottom: 1px solid #f0f1f3; display: flex; flex-direction: column; gap: 8px; }
+.sidebar-header { padding: 12px; border-bottom: 1px solid var(--color-border-light); display: flex; flex-direction: column; gap: 8px; }
 .new-btn { width: 100%; }
 .new-btn-text { margin-left: 4px; }
 .icon { font-size: 16px; margin-right: 4px; }
@@ -458,41 +458,6 @@ onUpdated(() => {
 [data-theme="dark"] .ctx-sep { background: var(--color-border-light); }
 
 /* 同步状态 dark 模式 */
-[data-theme="dark"] .sync-badge.sync-loading {
-  background: rgba(64, 158, 255, 0.18);
-  color: var(--el-color-primary-light-3);
-}
-[data-theme="dark"] .sync-badge.sync-error {
-  background: rgba(245, 108, 108, 0.18);
-  color: var(--el-color-danger-light-3);
-}
-[data-theme="dark"] .local-only-tag {
-  background: var(--color-text-secondary, #909399);
-}
-</style>
-
-
-<!-- v69 P1b fix-2: SessionSidebar dark 覆盖（v60-v67 教训：必须非 scoped） -->
-<style>
-[data-theme="dark"] .session-sidebar {
-  background: var(--color-bg-card);
-  border-right-color: var(--color-border-base);
-}
-[data-theme="dark"] .sidebar-header {
-  border-bottom-color: var(--color-border-light);
-}
-[data-theme="dark"] .session-item:hover {
-  background: var(--color-primary-bg);
-}
-[data-theme="dark"] .session-item.active {
-  background: var(--color-primary-bg);
-}
-[data-theme="dark"] .session-title { color: var(--color-text-primary); }
-[data-theme="dark"] .session-meta { color: var(--color-text-secondary); }
-[data-theme="dark"] .session-preview { color: var(--color-text-secondary); }
-[data-theme="dark"] .empty { color: var(--color-text-secondary); }
-
-/* #043 dark 模式覆盖 */
 [data-theme="dark"] .sync-badge.sync-loading {
   background: rgba(64, 158, 255, 0.18);
   color: var(--el-color-primary-light-3);
