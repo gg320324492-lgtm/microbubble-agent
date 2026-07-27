@@ -1,15 +1,22 @@
 """
-计费网关抽象 (W73 第 1 批 B-1)
+计费网关抽象 (W73 第 1 批 B-1 + W74 第 1 批 B-2 真支付 mock 接入)
 
 W72 第 2 批 B-5 起步收口:
 - 接口预留: stripe / alipay / wechat_pay (3 实现切换, 仅 mock)
 - W73 仅预留接口, 不接真支付 (主指挥决策 W74 拍板)
-- 不破坏老路径: 仅在 app/services/billing_gateway.py 新增
+
+W74 第 1 批 B-2 真支付 mock 接入 (D-1 §3.2 W74 Step 5 P0 主拍单独拍板):
+- 3 实现全部 mock 化 (Stripe / Alipay / WeChatPay), 不接真支付
+- 真接入须主拍单独拍板 (派工 v6 段 5 反馈 #6 实战)
+- 3 实现切换逻辑由 get_billing_gateway(provider) 统一管理
+- 共享内存存储 (进程级), 仅测试用
+
+不破坏老路径: 仅在 app/services/billing_gateway.py 修改 + mock 实现.
 
 设计:
-- BillingGateway 抽象基类
-- MockBillingGateway (W73 默认, mock 实现)
-- StripeBillingGateway / AlipayBillingGateway / WeChatPayBillingGateway (接口骨架, 抛 NotImplementedError)
+- BillingGateway 抽象基类 (Strategy 模式)
+- MockBillingGateway (W73 默认, 进程级内存)
+- StripeBillingGateway / AlipayBillingGateway / WeChatPayBillingGateway (W74 B-2 全部 mock 化)
 - 工厂函数 get_billing_gateway(provider) 按 settings 切换
 """
 from __future__ import annotations
@@ -68,9 +75,14 @@ class BillingGateway(ABC):
         """退款."""
         ...
 
+    @abstractmethod
+    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
+        """验证 webhook 签名 (mock 默认 True)."""
+        ...
+
 
 class MockBillingGateway(BillingGateway):
-    """Mock 计费网关 (W73 默认)."""
+    """Mock 计费网关 (W73 默认, W74 B-2 扩展 3 provider 共用 mock 实现)."""
 
     provider_name = "mock"
 
@@ -79,18 +91,19 @@ class MockBillingGateway(BillingGateway):
         self._intents: dict = {}
 
     async def create_payment(self, invoice_id: str, amount_cents: int, currency: str = "CNY") -> PaymentIntent:
-        intent_id = "mock_pi_" + secrets.token_hex(12)
+        intent_id = f"{self.provider_name}_pi_" + secrets.token_hex(12)
         intent = PaymentIntent(
             intent_id=intent_id,
             invoice_id=invoice_id,
             amount_cents=amount_cents,
             currency=currency,
             provider=self.provider_name,
-            client_secret="mock_secret_" + secrets.token_hex(8),
-            redirect_url=f"https://mock.billing.local/confirm/{intent_id}",
+            client_secret=f"{self.provider_name}_secret_" + secrets.token_hex(8),
+            redirect_url=f"https://mock.billing.local/{self.provider_name}/confirm/{intent_id}",
         )
         self._intents[intent_id] = intent
-        logger.info("mock payment intent created: id=%s invoice=%s amount=%d", intent_id, invoice_id, amount_cents)
+        logger.info("[%s] mock payment intent created: id=%s invoice=%s amount=%d",
+                    self.provider_name, intent_id, invoice_id, amount_cents)
         return intent
 
     async def confirm_payment(self, intent_id: str, provider_ref: Optional[str] = None) -> PaymentResult:
@@ -100,12 +113,11 @@ class MockBillingGateway(BillingGateway):
                 intent_id=intent_id, status="failed", provider=self.provider_name,
                 error="intent not found",
             )
-        # mock 直接成功
         return PaymentResult(
             intent_id=intent_id,
             status="success",
             provider=self.provider_name,
-            provider_ref=provider_ref or ("mock_ref_" + secrets.token_hex(8)),
+            provider_ref=provider_ref or (f"{self.provider_name}_ref_" + secrets.token_hex(8)),
             completed_at=datetime.now(timezone.utc),
         )
 
@@ -120,57 +132,58 @@ class MockBillingGateway(BillingGateway):
             intent_id=intent_id,
             status="success",
             provider=self.provider_name,
-            provider_ref="mock_refund_" + secrets.token_hex(8),
+            provider_ref=f"{self.provider_name}_refund_" + secrets.token_hex(8),
             completed_at=datetime.now(timezone.utc),
         )
 
+    def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
+        """Mock 签名验证: 始终返回 True (W74 B-2, 真接入主拍拍板)."""
+        return True
 
-class StripeBillingGateway(BillingGateway):
-    """Stripe 网关骨架 (W76+ 实物接入).
 
-    W73 派工预设: 仅留接口, 不接真支付.
+class StripeBillingGateway(MockBillingGateway):
+    """Stripe 网关 mock (W74 第 1 批 B-2 真支付接入).
+
+    W73 派工预设: 仅留接口, 不接真支付 (W74 B-2 全部 mock 化, 真接入主拍拍板).
     """
 
     provider_name = "stripe"
 
-    async def create_payment(self, invoice_id: str, amount_cents: int, currency: str = "CNY") -> PaymentIntent:
-        raise NotImplementedError("Stripe gateway reserved for W76+ rollout")
-
-    async def confirm_payment(self, intent_id: str, provider_ref: Optional[str] = None) -> PaymentResult:
-        raise NotImplementedError("Stripe gateway reserved for W76+ rollout")
-
-    async def refund(self, intent_id: str, amount_cents: Optional[int] = None) -> PaymentResult:
-        raise NotImplementedError("Stripe gateway reserved for W76+ rollout")
+    def __init__(self):
+        super().__init__()
+        # Stripe 特定字段
+        self.publishable_key_prefix = "pk_test_"
+        self.webhook_secret_prefix = "whsec_"
 
 
-class AlipayBillingGateway(BillingGateway):
-    """支付宝网关骨架 (W76+ 实物接入)."""
+class AlipayBillingGateway(MockBillingGateway):
+    """支付宝网关 mock (W74 第 1 批 B-2 真支付接入).
+
+    W73 派工预设: 仅留接口, 不接真支付 (W74 B-2 全部 mock 化, 真接入主拍拍板).
+    """
 
     provider_name = "alipay"
 
-    async def create_payment(self, invoice_id: str, amount_cents: int, currency: str = "CNY") -> PaymentIntent:
-        raise NotImplementedError("Alipay gateway reserved for W76+ rollout")
-
-    async def confirm_payment(self, intent_id: str, provider_ref: Optional[str] = None) -> PaymentResult:
-        raise NotImplementedError("Alipay gateway reserved for W76+ rollout")
-
-    async def refund(self, intent_id: str, amount_cents: Optional[int] = None) -> PaymentResult:
-        raise NotImplementedError("Alipay gateway reserved for W76+ rollout")
+    def __init__(self):
+        super().__init__()
+        # 支付宝特定字段 (RSA2 签名占位)
+        self.app_id_prefix = "20210001"
+        self.sign_type = "RSA2"
 
 
-class WeChatPayBillingGateway(BillingGateway):
-    """微信支付网关骨架 (W76+ 实物接入)."""
+class WeChatPayBillingGateway(MockBillingGateway):
+    """微信支付网关 mock (W74 第 1 批 B-2 真支付接入).
+
+    W73 派工预设: 仅留接口, 不接真支付 (W74 B-2 全部 mock 化, 真接入主拍拍板).
+    """
 
     provider_name = "wechat_pay"
 
-    async def create_payment(self, invoice_id: str, amount_cents: int, currency: str = "CNY") -> PaymentIntent:
-        raise NotImplementedError("WeChat Pay gateway reserved for W76+ rollout")
-
-    async def confirm_payment(self, intent_id: str, provider_ref: Optional[str] = None) -> PaymentResult:
-        raise NotImplementedError("WeChat Pay gateway reserved for W76+ rollout")
-
-    async def refund(self, intent_id: str, amount_cents: Optional[int] = None) -> PaymentResult:
-        raise NotImplementedError("WeChat Pay gateway reserved for W76+ rollout")
+    def __init__(self):
+        super().__init__()
+        # 微信支付特定字段 (V3 API 签名占位)
+        self.mch_id_prefix = "190000"
+        self.api_v3_key_prefix = "mch_secret_"
 
 
 # ----- 工厂 -----
@@ -184,8 +197,17 @@ _GATEWAYS = {
 
 
 def get_billing_gateway(provider: str = "mock") -> BillingGateway:
-    """工厂函数: 按 provider 名获取网关实例."""
+    """工厂函数: 按 provider 名获取网关实例.
+
+    默认 'mock' (派工 v4 铁律 3 真验证 — settings 不覆盖则默认 mock).
+    真支付须主拍单独拍板.
+    """
     cls = _GATEWAYS.get(provider)
     if not cls:
         raise ValueError(f"unknown billing provider '{provider}', supported: {list(_GATEWAYS.keys())}")
     return cls()
+
+
+def list_supported_providers() -> list[str]:
+    """列出所有支持的支付 provider."""
+    return list(_GATEWAYS.keys())
