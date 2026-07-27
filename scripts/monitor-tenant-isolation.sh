@@ -3,9 +3,16 @@
 # W74 第 1 批 D-1: 多租户数据隔离监控 (与 W73 B-2 4 类 hot-fix 监控并列)
 # 依据: D-1 §5.2 多租户数据隔离风险 + W73 B-1 a6835841 多租户实施 + 派工 v6 §5 反馈 #7 实战
 #
+<<<<<<< HEAD
 # W75 第 1 批 B-2 升级: 新增 [4/5] 422 curl 实战验证
 # 派工 v6 段 5 反馈 #7 实战: TenantIsolationViolation 必返回 422 而非 500
 # (修复前: __init__ 缺 code 形参 → AppException 缺 code 抛 TypeError → FastAPI 收 500)
+=======
+# W75 第 1 批 B-3 P2 修复 (W74 E-1 报告):
+# - webhook payload 改用 scripts/lib/webhook_payload.sh 共用库 (含完整 5 字段)
+# - 删 || true 静默吞 → notify_alert 失败主动 exit 1
+# - retry 策略 (3 次, 间隔 5s)
+>>>>>>> chore/w75-1st-batch-b3-hotfix-p2-webhook-2026-07-27
 #
 # 用途: 每小时跑一次, 检测多租户数据隔离异常
 # 报警: 跨租户访问返回 200 (异常, 应 422) → 触发 webhook
@@ -26,22 +33,26 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/webhook_payload.sh"
+
 PROJECT_DIR="${PROJECT_DIR:-/opt/microbubble-agent}"
 APP_DIR="$PROJECT_DIR/app"
 SCRIPTS_DIR="$PROJECT_DIR/scripts"
 LOG_FILE="${LOG_FILE:-/var/log/microbubble-agent/tenant-isolation-monitor.log}"
 WEBHOOK_URL="${WEBHOOK_URL:-}"  # 主拍 webhook, 可选
+export WEBHOOK_URL
+ALERT_LOG_FILE="${ALERT_LOG_FILE:-/var/log/microbubble-agent/alert.log}"
+export ALERT_LOG_FILE
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
+# 兼容层: 老 fail_loud 调用 → notify_alert 共用库 (W75 B-3 P2 修复)
 fail_loud() {
     log "ERROR: $*"
-    if [ -n "$WEBHOOK_URL" ]; then
-        curl -sS -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\":\"[tenant-isolation-monitor] $*\"" "$WEBHOOK_URL" || true
-    fi
+    notify_alert "tenant-isolation-monitor" "critical" "$*" "{\"source_legacy\":\"fail_loud\"}" || return 0
 }
 
 if [ ! -d "$APP_DIR" ]; then
