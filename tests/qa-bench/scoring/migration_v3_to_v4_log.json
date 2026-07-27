@@ -1,0 +1,92 @@
+{
+  "timestamp": "2026-07-27T09:01:09.446944+00:00",
+  "applied": false,
+  "completeness_check": {
+    "v3_version": "1.0",
+    "v4_version": "4.0",
+    "v3_weight_sum": 1.0,
+    "v4_weight_sum": 1.0,
+    "mapping_complete": true
+  },
+  "rollout_plan": {
+    "gradual_rollout": [
+      {
+        "day": "D+0",
+        "traffic_pct": 10,
+        "sample_size": 20,
+        "gate_pass_rate": 70,
+        "gate_f_grade_max": 5
+      },
+      {
+        "day": "D+1",
+        "traffic_pct": 25,
+        "sample_size": 50,
+        "gate_pass_rate": 75,
+        "gate_f_grade_max": 5
+      },
+      {
+        "day": "D+2",
+        "traffic_pct": 50,
+        "sample_size": 100,
+        "gate_pass_rate": 78,
+        "gate_f_grade_max": 5
+      },
+      {
+        "day": "D+3",
+        "traffic_pct": 75,
+        "sample_size": 150,
+        "gate_pass_rate": 80,
+        "gate_f_grade_max": 5
+      },
+      {
+        "day": "D+4",
+        "traffic_pct": 100,
+        "sample_size": 200,
+        "gate_pass_rate": 80,
+        "gate_f_grade_max": 4
+      },
+      {
+        "day": "D+5",
+        "traffic_pct": 100,
+        "sample_size": 220,
+        "gate_pass_rate": 80,
+        "gate_f_grade_max": 4,
+        "note": "+20 商业化题"
+      },
+      {
+        "day": "D+6",
+        "traffic_pct": 100,
+        "sample_size": 240,
+        "gate_pass_rate": 80,
+        "gate_f_grade_max": 4,
+        "note": "+20 商业化题全量"
+      },
+      {
+        "day": "D+7",
+        "traffic_pct": 100,
+        "sample_size": 240,
+        "gate_pass_rate": 80,
+        "gate_f_grade_max": 4,
+        "note": "全量 rollout"
+      }
+    ],
+    "abort_conditions": [
+      "pass_rate 连续 2 天 < 70%",
+      "F 级 数量 连续 2 天 > 5",
+      "商业化 critical-dimension (defense_compliance < 0.7) 触发 > 3 次",
+      "v3 baseline 对照组差异 > 15% (权重迁移失真)"
+    ],
+    "rollback_strategy": {
+      "method": "feature flag 切换 + R9 v3.0 路径保留 30 天",
+      "command": "git revert <v4-commit-hash>",
+      "estimated_recovery_time": "< 5 分钟"
+    }
+  },
+  "operator": "W73-1st-batch-c1-migration-agent",
+  "notes": [
+    "v3 weights.json 保留 30 天观察期 (派工 v6 §3)",
+    "v4 weights_v4.json 不修改 v3 in-place (D9 调研 §7.3 纪律 3)",
+    "灰度 7 天 (D+0~D+7) → 全量 rollout (派工 v6 段 5 反馈 #5)",
+    "0 production code 改动 (qa-bench 范畴)"
+  ]
+}
