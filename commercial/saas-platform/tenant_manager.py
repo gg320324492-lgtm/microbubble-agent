@@ -1,157 +1,136 @@
 """
-商业化 SaaS 平台 — multi-tenant manager
+商业化 SaaS 平台 — multi-tenant manager CLI (W73 第 1 批 B-1)
 
-W72 Phase 8 起步. 负责多租户注册/隔离/路由 (单进程隔离, 后续 W75 升级到分库).
+W72 第 2 批 B-5 起步 (file-based store) + W73 第 1 批 B-1 收口 (DB-backed).
+
+用法:
+    python -m commercial.saas-platform.tenant_manager create --name acme --email ops@acme.com --plan pro
+    python -m commercial.saas-platform.tenant_manager list
+    python -m commercial.saas-platform.tenant_manager suspend --tenant-id ten_xxx --reason payment_overdue
+    python -m commercial.saas-platform.tenant_manager rotate-key --tenant-id ten_xxx
+    python -m commercial.saas-platform.tenant_manager delete --tenant-id ten_xxx [--hard]
+
+不破坏老路径: 仅在 commercial/saas-platform/tenant_manager.py 升级 CLI 入口,
+业务逻辑委托 app/services/tenant_service.py (新增).
 """
 from __future__ import annotations
 
-import hashlib
+import argparse
+import asyncio
+import json
 import logging
-import os
-import re
-import secrets
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
-from typing import Optional
 
-logger = logging.getLogger(__name__)
+# 路径 hack: 让脚本能 import app.*
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-TENANT_STORE_PATH = Path(os.getenv("MICROBUBBLE_TENANT_STORE", "/app/data/tenants.json"))
+# W73 第 1 批 B-1 收口: 修正 import (app.core.database 提供 async_session, 不叫 async_session_factory)
+from app.core.database import async_session  # noqa: E402
+from app.services import tenant_service  # noqa: E402
 
-
-# 租户 ID 规则: 8-32 位, 字母数字中划线下划线
-_TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{8,32}$")
-
-
-@dataclass
-class Tenant:
-    tenant_id: str
-    name: str
-    contact_email: str
-    plan: str = "free"  # free / pro / enterprise
-    status: str = "active"  # active / suspended / deleted
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    api_key_hash: str = ""
-    isolation_token: str = ""
-
-    def to_dict(self) -> dict:
-        return {
-            "tenant_id": self.tenant_id,
-            "name": self.name,
-            "contact_email": self.contact_email,
-            "plan": self.plan,
-            "status": self.status,
-            "created_at": self.created_at,
-            "api_key_hash": self.api_key_hash,
-            "isolation_token": self.isolation_token,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict) -> "Tenant":
-        return cls(**d)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("saas.tenant_manager")
 
 
-def _load_store() -> dict[str, dict]:
-    """加载本地租户存储."""
-    if not TENANT_STORE_PATH.exists():
-        return {}
-    try:
-        import json
-        with open(TENANT_STORE_PATH) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_store(tenants: dict[str, dict]) -> None:
-    """写入本地租户存储."""
-    import json
-    TENANT_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(TENANT_STORE_PATH, "w") as f:
-        json.dump(tenants, f, indent=2)
-
-
-def _hash_key(plain: str) -> str:
-    return hashlib.sha256(plain.encode()).hexdigest()
-
-
-def register_tenant(name: str, contact_email: str, plan: str = "free") -> Tenant:
-    """注册新租户, 返回 (Tenant, 一次性 API key 明文).
-
-    layer 1: tenant_id 校验
-    layer 2: api_key 一次性 (不持久化明文)
-    layer 3: isolation_token 强制每个 tenant 独立
-    """
-    if not name or not contact_email:
-        raise ValueError("name and contact_email required")
-
-    tenant_id = "tenant_" + secrets.token_hex(4)
-    api_key = "mbk_" + secrets.token_urlsafe(32)
-    isolation_token = secrets.token_urlsafe(16)
-
-    tenant = Tenant(
-        tenant_id=tenant_id,
-        name=name,
-        contact_email=contact_email,
-        plan=plan,
-        api_key_hash=_hash_key(api_key),
-        isolation_token=isolation_token,
-    )
-
-    store = _load_store()
-    if tenant_id in store:
-        raise RuntimeError(f"tenant_id {tenant_id} collision, retry")
-
-    store[tenant_id] = tenant.to_dict()
-    _save_store(store)
-
-    logger.info(f"registered tenant {tenant_id} ({plan})")
-    return tenant
-
-
-def verify_tenant(tenant_id: str, api_key: str) -> Optional[Tenant]:
-    """验证 tenant_id + api_key, 隔离检查."""
-    store = _load_store()
-    data = store.get(tenant_id)
-    if not data:
-        return None
-    if data.get("status") != "active":
-        return None
-    if data.get("api_key_hash") != _hash_key(api_key):
-        return None
-    return Tenant.from_dict(data)
-
-
-def get_tenant(tenant_id: str) -> Optional[Tenant]:
-    """按 tenant_id 查询 (管理用)."""
-    store = _load_store()
-    data = store.get(tenant_id)
-    return Tenant.from_dict(data) if data else None
-
-
-def suspend_tenant(tenant_id: str) -> bool:
-    """暂停租户."""
-    store = _load_store()
-    if tenant_id not in store:
-        return False
-    store[tenant_id]["status"] = "suspended"
-    _save_store(store)
-    return True
-
-
-def init_routes() -> None:
-    """SaaS 平台启动时初始化路由 (Phase 8 stub).
-
-    W75 升级到 alembic 081 多租户分库, Phase 2 SaaS 排期正式启用.
-    """
-    logger.info("[saas] tenant routes initialized (single-process isolation)")
-    # 兜底单租户模式: 若无 tenant 记录, 自动创建 default tenant
-    store = _load_store()
-    if not store:
-        default = register_tenant(
-            name="default",
-            contact_email="admin@microbubble.cloud",
-            plan="enterprise",
+async def cmd_create(args) -> None:
+    async with async_session() as db:
+        tenant = await tenant_service.create_tenant(
+            db, name=args.name, contact_email=args.email, plan_code=args.plan,
         )
-        logger.info(f"[saas] default tenant created: {default.tenant_id}")
+        await db.commit()
+        print(json.dumps({
+            "tenant_id": tenant.tenant_id,
+            "name": tenant.name,
+            "plan_code": tenant.plan_code,
+            "api_key": getattr(tenant, "_initial_api_key", ""),
+            "isolation_token": tenant.isolation_token,
+        }, indent=2, ensure_ascii=False))
+
+
+async def cmd_list(args) -> None:
+    async with async_session() as db:
+        tenants = await tenant_service.list_tenants(
+            db, status=args.status, plan_code=args.plan, limit=args.limit, offset=args.offset,
+        )
+        out = [
+            {
+                "tenant_id": t.tenant_id, "name": t.name, "plan_code": t.plan_code,
+                "status": t.status, "contact_email": t.contact_email,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+            }
+            for t in tenants
+        ]
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+
+
+async def cmd_suspend(args) -> None:
+    async with async_session() as db:
+        t = await tenant_service.suspend_tenant(db, args.tenant_id, reason=args.reason)
+        await db.commit()
+        print(json.dumps({"tenant_id": t.tenant_id, "status": t.status, "reason": args.reason}, indent=2))
+
+
+async def cmd_reactivate(args) -> None:
+    async with async_session() as db:
+        t = await tenant_service.reactivate_tenant(db, args.tenant_id)
+        await db.commit()
+        print(json.dumps({"tenant_id": t.tenant_id, "status": t.status}, indent=2))
+
+
+async def cmd_rotate(args) -> None:
+    async with async_session() as db:
+        new_key = await tenant_service.rotate_api_key(db, args.tenant_id)
+        await db.commit()
+        print(json.dumps({"tenant_id": args.tenant_id, "api_key": new_key}, indent=2))
+
+
+async def cmd_delete(args) -> None:
+    async with async_session() as db:
+        await tenant_service.delete_tenant(db, args.tenant_id, hard=args.hard)
+        await db.commit()
+        print(json.dumps({"tenant_id": args.tenant_id, "deleted": True, "hard": args.hard}, indent=2))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="SaaS 多租户 CLI (W73 B-1 收口)")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("create", help="创建租户")
+    p.add_argument("--name", required=True)
+    p.add_argument("--email", required=True)
+    p.add_argument("--plan", default="free", choices=["free", "pro", "enterprise"])
+    p.set_defaults(func=cmd_create)
+
+    p = sub.add_parser("list", help="列出租户")
+    p.add_argument("--status", default=None)
+    p.add_argument("--plan", default=None)
+    p.add_argument("--limit", type=int, default=50)
+    p.add_argument("--offset", type=int, default=0)
+    p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("suspend", help="暂停租户")
+    p.add_argument("--tenant-id", required=True)
+    p.add_argument("--reason", default="manual")
+    p.set_defaults(func=cmd_suspend)
+
+    p = sub.add_parser("reactivate", help="恢复租户")
+    p.add_argument("--tenant-id", required=True)
+    p.set_defaults(func=cmd_reactivate)
+
+    p = sub.add_parser("rotate-key", help="轮换 API key")
+    p.add_argument("--tenant-id", required=True)
+    p.set_defaults(func=cmd_rotate)
+
+    p = sub.add_parser("delete", help="删除租户")
+    p.add_argument("--tenant-id", required=True)
+    p.add_argument("--hard", action="store_true", help="物理删除 (默认软删)")
+    p.set_defaults(func=cmd_delete)
+
+    args = parser.parse_args()
+    asyncio.run(args.func(args))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
