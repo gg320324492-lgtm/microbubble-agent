@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.knowledge import FileRequest, Knowledge
 from app.models.member import Member
 from app.services.activity_service import activity_service
+from app.services.audit_service import audit_service
 from app.services.drive_service import DriveService
 
 logger = logging.getLogger(__name__)
@@ -391,6 +392,26 @@ class FileRequestService:
         req.is_active = False
         req.updated_at = datetime.utcnow()
         await db.commit()
+        # W72 第 2 批 B-4 (派工 v10 段 5 已批 1 例外): deactivate 审计收口
+        # audit_middleware 通用 'write' 分类, 不区分 file_request_deactivate
+        # service 层显式记一条专属 action, 方便 admin / 安全审计 grep
+        try:
+            await audit_service.log(
+                db,
+                user_id=user_id,
+                ip_address=None,
+                user_agent=None,
+                method="POST",
+                path=f"/api/v1/file-requests/{request_id}/deactivate",
+                action="file_request_deactivate",
+                resource_type="file_request",
+                resource_id=str(request_id),
+                status_code=204,
+                duration_ms=None,
+                metadata={"request_token_prefix": req.token[:8] + "***"},
+            )
+        except Exception as e:
+            logger.warning(f"[FileRequest] deactivate audit log 失败: {e}", exc_info=True)
         logger.info(f"[FileRequest] deactivated id={request_id} by user={user_id}")
         return True
 
