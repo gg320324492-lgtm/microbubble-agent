@@ -255,6 +255,27 @@ class Settings(BaseSettings):
     AGENT_THINKING_MODE_DEEP_MAX_TOOL_TOKENS: int = 1500  # deep Phase 1 tool loop max_tokens (允许更复杂工具调用)
     AGENT_THINKING_MODE_DEEP_RATE_LIMIT_PER_HOUR: int = 30  # deep 模式单用户每小时限次 (防 DeepSeek 7B 满载)
 
+    # ========================================================================
+    # 2026-07-28 W78 第 1 批 B-2: 商业化真支付生产 key 启用 (类 20.13 主拍决策落地)
+    # - BILLING_LIVE_ENABLED 默认 false, 必须主拍单独拍板才能设 true (派工 v6 段 5 反馈 #6)
+    # - 真生产 key 完整注入后才启用对应 *_real 网关; 缺失则优雅降级 mock
+    # - 模板见 .env.production.example (W77 B-3 创建 + W78 B-2 主拍决策落地)
+    # ========================================================================
+    BILLING_LIVE_ENABLED: bool = False  # 真生产支付总开关, 默认 false (主拍未启用)
+    # Stripe 真生产 (sk_live_ 前缀, 主拍决策后由 secrets manager 注入)
+    STRIPE_LIVE_SECRET_KEY: str = ""
+    STRIPE_LIVE_PUBLISHABLE_KEY: str = ""
+    # Alipay RSA2 真生产 (主拍决策后由 secrets manager 注入)
+    ALIPAY_LIVE_APP_ID: str = ""
+    ALIPAY_LIVE_PRIVATE_KEY: str = ""  # PEM 格式 RSA2 私钥
+    ALIPAY_LIVE_PUBLIC_KEY: str = ""   # 支付宝公钥 (回调验签用)
+    # WeChat Pay V3 真生产 (主拍决策后由 secrets manager 注入)
+    WECHAT_PAY_LIVE_APP_ID: str = ""
+    WECHAT_PAY_LIVE_MCH_ID: str = ""
+    WECHAT_PAY_LIVE_API_V3_KEY: str = ""
+    WECHAT_PAY_LIVE_PRIVATE_KEY: str = ""    # 商户 RSA 私钥 (V3 签名)
+    WECHAT_PAY_LIVE_PLATFORM_CERT: str = ""  # 微信支付平台证书 (V3 回调验签)
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
