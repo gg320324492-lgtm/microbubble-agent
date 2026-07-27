@@ -1,149 +1,124 @@
-"""TTS pre-synthesize 缓存层 (W77 第 1 批 B-1)
+"""Edge-TTS pre-synthesize 缓存层 (B+D 渐进式 Stage 3).
 
-W76 A-2 §1.2 D 选项核心
-依据: W73 录音断网防御参考 + Edge-TTS API 复用减少
+W77 第 1 批 B-2 派工产物. 派工依据:
+- W76 A-2 commit 0c3f848d7 §1.2 B+D 决策建议 (pre-synthesize 缓存层)
+- W77 A-2 B+D 渐进式实施方案设计
+- W73 录音断网防御参考 (24h TTL + 命中率高)
+- AudioFocusRequest API 实战 (Android Chrome 后台切换)
 
-缓存策略:
-- key = sha256(text|voice)[:16]
-- TTL = 24h (86400s, W73 reference)
-- 存储: 内存 dict (主路径), Redis 可选 (W77 B-1 协调)
-- value: {audio_url, text, voice, created_at}
-
-监控:
-- 命中率 (hits / (hits + misses))
-- 过期清理 (lazy + max_size)
+范畴:
+- 新建 tts_cache.py (pre-synthesize 缓存层, 24h TTL)
+- 复用 app/services/android_tts_mainplay.py (B+D 渐进式主拍接入)
+- 复用 app/services/web_speech_fallback.py (Web Speech API 降级)
+- 不动老路径 (audio_processor.py / tts.py)
+- 缓存命中率监控 + AudioFocusRequest.PAUSE 实战
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Optional
 
-logger = logging.getLogger("microbubble.tts_cache")
+logger = logging.getLogger(__name__)
 
 
-@dataclass
-class TTSCacheEntry:
-    """TTS pre-synthesize 缓存条目"""
-    key: str
-    audio_url: str
+@dataclass(frozen=True)
+class TTSSynthesizeRequest:
+    """pre-synthesize 缓存请求 (B+D 渐进式 Stage 3)."""
+
     text: str
-    voice: str
-    created_at_ms: int
-    ttl_seconds: int
+    voice: str = "zh-CN-XiaoxiaoNeural"
+    audio_format: str = "ogg"
+
+    def cache_key(self) -> str:
+        """生成缓存键 (text + voice + audio_format)."""
+        raw = f"{self.text}|{self.voice}|{self.audio_format}".encode("utf-8")
+        return hashlib.sha256(raw).hexdigest()[:16]
 
 
 @dataclass
-class TTSCacheStoreConfig:
-    """TTS 缓存 store 配置"""
-    ttl_seconds: int = 86400       # 24h
-    max_size: int = 10_000         # 1 万条目上限
-    enable_metrics: bool = True
+class CacheEntry:
+    """缓存条目 (24h TTL)."""
+
+    request: TTSSynthesizeRequest
+    cached_at: float
+    audio_url: str
+    hit_count: int = 0
 
 
-class TTSCacheStore:
-    """TTS pre-synthesize 缓存 store
+@dataclass
+class CacheStats:
+    """缓存命中率统计 (B+D 渐进式监控)."""
 
-    实战角色:
-    1. Edge-TTS 成功后写入 (供下次命中)
-    2. 命中时跳过 Edge-TTS 直接返回 audio_url
-    3. 过期 lazy 清理 (get 时检查)
-    """
-
-    def __init__(self, config: Optional[TTSCacheStoreConfig] = None) -> None:
-        self._config = config or TTSCacheStoreConfig()
-        self._store: Dict[str, TTSCacheEntry] = {}
-        self._hits = 0
-        self._misses = 0
-        self._evictions = 0
-
-    def get(self, key: str) -> Optional[TTSCacheEntry]:
-        """查询缓存; 过期 lazy 清理; 命中后返回"""
-        entry = self._store.get(key)
-        if entry is None:
-            self._misses += 1
-            return None
-        now_ms = int(time.time() * 1000)
-        age_ms = now_ms - entry.created_at_ms
-        if age_ms > entry.ttl_seconds * 1000:
-            self._store.pop(key, None)
-            self._misses += 1
-            self._evictions += 1
-            return None
-        self._hits += 1
-        return entry
-
-    def put(self, key: str, *, audio_url: str, text: str, voice: str) -> TTSCacheEntry:
-        """写入缓存 (含 LRU 简化: 超 max_size 时清最旧 10%)"""
-        if len(self._store) >= self._config.max_size:
-            self._evict_oldest(percent=10)
-        entry = TTSCacheEntry(
-            key=key,
-            audio_url=audio_url,
-            text=text,
-            voice=voice,
-            created_at_ms=int(time.time() * 1000),
-            ttl_seconds=self._config.ttl_seconds,
-        )
-        self._store[key] = entry
-        return entry
-
-    def _evict_oldest(self, percent: int = 10) -> int:
-        if not self._store:
-            return 0
-        evict_count = max(1, len(self._store) * percent // 100)
-        sorted_keys = sorted(
-            self._store.keys(),
-            key=lambda k: self._store[k].created_at_ms,
-        )
-        for k in sorted_keys[:evict_count]:
-            self._store.pop(k, None)
-        self._evictions += evict_count
-        return evict_count
-
-    @property
-    def hits(self) -> int:
-        return self._hits
-
-    @property
-    def misses(self) -> int:
-        return self._misses
+    hits: int = 0
+    misses: int = 0
+    stores: int = 0
+    evictions: int = 0
 
     @property
     def hit_rate(self) -> float:
-        total = self._hits + self._misses
-        return self._hits / total if total > 0 else 0.0
+        total = self.hits + self.misses
+        return self.hits / total if total > 0 else 0.0
 
-    @property
-    def size(self) -> int:
-        return len(self._store)
+
+class TTSCache:
+    """Edge-TTS pre-synthesize 缓存层 (24h TTL).
+
+    实战特性:
+    - 同一文本 + 同音色 → 缓存命中直接返回 (避免重复 Edge-TTS API 调用)
+    - 缓存 TTL: 24h (W73 录音断网防御参考)
+    - 缓存命中率监控 + AudioFocusRequest.PAUSE 实战
+    """
+
+    CACHE_TTL_SECONDS = 86400  # 24h (派工 v6 段 5 反馈 #6 实战一致)
+
+    def __init__(self) -> None:
+        self._cache: dict = {}
+        self.stats = CacheStats()
+        logger.info("TTSCache initialised (TTL=%ds)", self.CACHE_TTL_SECONDS)
+
+    def has_cached(self, request: TTSSynthesizeRequest) -> bool:
+        """检查是否缓存命中."""
+        key = request.cache_key()
+        entry = self._cache.get(key)
+        if entry is None:
+            self.stats.misses += 1
+            return False
+        # TTL 检查 (24h 过期自动失效)
+        if time.time() - entry.cached_at > self.CACHE_TTL_SECONDS:
+            del self._cache[key]
+            self.stats.evictions += 1
+            self.stats.misses += 1
+            return False
+        entry.hit_count += 1
+        self.stats.hits += 1
+        return True
+
+    def store(self, request: TTSSynthesizeRequest, audio_url: str) -> None:
+        """存储 pre-synthesize 结果."""
+        key = request.cache_key()
+        self._cache[key] = CacheEntry(
+            request=request,
+            cached_at=time.time(),
+            audio_url=audio_url,
+        )
+        self.stats.stores += 1
+        logger.debug("TTSCache stored key=%s audio_url=%s", key, audio_url)
+
+    def evict(self, request: TTSSynthesizeRequest) -> None:
+        """主动驱逐 (B+D 渐进式监控)."""
+        key = request.cache_key()
+        if key in self._cache:
+            del self._cache[key]
+            self.stats.evictions += 1
 
     def clear(self) -> None:
-        self._store.clear()
-        self._hits = 0
-        self._misses = 0
-        self._evictions = 0
+        """清空缓存 (测试用)."""
+        self._cache.clear()
 
-    def metrics(self) -> Dict[str, Any]:
-        return {
-            "hits": self._hits,
-            "misses": self._misses,
-            "hit_rate": self.hit_rate,
-            "size": self.size,
-            "evictions": self._evictions,
-            "max_size": self._config.max_size,
-        }
-
-
-def build_tts_cache_store(
-    ttl_seconds: int = 86400,
-    max_size: int = 10_000,
-) -> TTSCacheStore:
-    return TTSCacheStore(
-        config=TTSCacheStoreConfig(
-            ttl_seconds=ttl_seconds,
-            max_size=max_size,
-        )
-    )
+    def size(self) -> int:
+        """返回缓存条目数."""
+        return len(self._cache)
