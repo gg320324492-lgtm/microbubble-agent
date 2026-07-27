@@ -193,6 +193,12 @@ _GATEWAYS = {
     "stripe": StripeBillingGateway,
     "alipay": AlipayBillingGateway,
     "wechat_pay": WeChatPayBillingGateway,
+    # W75 第 1 批 C-1: 真 SDK 接入 (Stripe + Alipay + WeChat Pay V3)
+    # 派工 v6 段 5 反馈 #6 实战 + D-1 §5.4 真支付 SDK 接入决策
+    # 默认从 settings 读 API key (沙箱模式), 真生产 key 须主拍单独拍板启用
+    "stripe_real": None,         # lazy import 避免循环依赖, 在 get_billing_gateway() 中实例化
+    "alipay_real": None,
+    "wechat_pay_real": None,
 }
 
 
@@ -201,7 +207,25 @@ def get_billing_gateway(provider: str = "mock") -> BillingGateway:
 
     默认 'mock' (派工 v4 铁律 3 真验证 — settings 不覆盖则默认 mock).
     真支付须主拍单独拍板.
+
+    W75 第 1 批 C-1 新增 *_real provider:
+    - stripe_real → StripeSDKGateway (PaymentIntent + construct_event + Refund + Customer)
+    - alipay_real → AlipaySDKGateway (AlipayTradePagePay + RSA2 + Refund + Query)
+    - wechat_pay_real → WeChatPaySDKGateway (jsapi + V3 签名 + Refund + Order.query)
+    - API key 必读 settings.STRIPE_TEST_SECRET_KEY / ALIPAY_* / WECHAT_PAY_*
+    - SDK 不可用时优雅降级 mock (派工 v4 铁律)
     """
+    # 真 SDK lazy 实例化 (避免顶部 import 循环)
+    if provider == "stripe_real":
+        from app.services.billing.stripe_sdk import StripeSDKGateway
+        return StripeSDKGateway()
+    if provider == "alipay_real":
+        from app.services.billing.alipay_sdk import AlipaySDKGateway
+        return AlipaySDKGateway()
+    if provider == "wechat_pay_real":
+        from app.services.billing.wechat_pay_sdk import WeChatPaySDKGateway
+        return WeChatPaySDKGateway()
+
     cls = _GATEWAYS.get(provider)
     if not cls:
         raise ValueError(f"unknown billing provider '{provider}', supported: {list(_GATEWAYS.keys())}")
