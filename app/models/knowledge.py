@@ -72,6 +72,10 @@ class Knowledge(Base, TimestampMixin):
     folder_id = Column(Integer, ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True)
     visibility = Column(String(16), nullable=False, server_default="team", index=True)
     deleted_at = Column(DateTime, nullable=True, index=True)
+    # W72 B-3 trash 收口: 软删瞬间快照原目录。故意不设 FK，父目录被物理删除后
+    # 仍保留审计值；恢复时仅在目录仍存在且可用时放回，否则回退根目录。
+    original_parent_id = Column(Integer, nullable=True)
+    original_path = Column(String(1000), nullable=True)
     # ==================== /课题组网盘 ====================
 
     # ==================== PR2.7 分享链接 + 下载计数 2026-07-01 ====================
