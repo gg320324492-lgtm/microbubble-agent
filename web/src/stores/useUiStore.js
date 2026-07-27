@@ -26,6 +26,7 @@ import { ref, watch } from 'vue'
 const STORAGE_KEY = 'mnb:ui:showThinking'
 const LEGACY_DEPTH_KEY = 'mnb:ui:useDeepThinking'  // 旧版 boolean 深度思考开关
 const MODE_STORAGE_KEY = 'mnb:ui:thinkingMode'  // 2026-07-13 #P1 三档 (string)
+const NAV_RAIL_STORAGE_KEY = 'mnb:ui:navRailCollapsed'
 
 const VALID_MODES = ['fast', 'balanced', 'deep']
 const DEFAULT_MODE = 'balanced'
@@ -56,8 +57,18 @@ function readModeInitial() {
   }
 }
 
+function readNavRailInitial() {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    return localStorage.getItem(NAV_RAIL_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 export const useUiStore = defineStore('ui', () => {
   const showThinking = ref(readInitial())
+  const navRailCollapsed = ref(readNavRailInitial())
   // 2026-07-13 #P1: 旧 boolean useDeepThinking 替换为三档 string thinkingMode
   // 保留 useDeepThinking boolean getter/setter 兼容旧消费方 (建议新代码用 thinkingMode)
   const thinkingMode = ref(readModeInitial())
@@ -75,6 +86,12 @@ export const useUiStore = defineStore('ui', () => {
     } catch { /* ignore */ }
   })
 
+  watch(navRailCollapsed, (v) => {
+    try {
+      localStorage.setItem(NAV_RAIL_STORAGE_KEY, v ? '1' : '0')
+    } catch { /* ignore */ }
+  })
+
   watch(thinkingMode, (v) => {
     try {
       localStorage.setItem(MODE_STORAGE_KEY, v)
@@ -87,6 +104,14 @@ export const useUiStore = defineStore('ui', () => {
 
   function setShowThinking(v) {
     showThinking.value = !!v
+  }
+
+  function toggleNavRail() {
+    navRailCollapsed.value = !navRailCollapsed.value
+  }
+
+  function setNavRailCollapsed(v) {
+    navRailCollapsed.value = !!v
   }
 
   function setThinkingMode(v) {
@@ -114,10 +139,13 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     showThinking,
+    navRailCollapsed,      // W72 B-1: desktop rail 折叠偏好
     thinkingMode,        // 2026-07-13 #P1 新 API (推荐)
     lastModeInfo,        // 2026-07-13 #P1 SSE done 反馈
     toggleThinking,
     setShowThinking,
+    toggleNavRail,
+    setNavRailCollapsed,
     setThinkingMode,
     setLastModeInfo,
     // 兼容旧 API (boolean)
