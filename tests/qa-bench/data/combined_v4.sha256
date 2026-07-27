@@ -1,0 +1,7 @@
+# qa-bench combined_v4 SHA256 lock (W74 第 1 批 C-1 灰度题库版本锁定)
+# 240 题 = 200 (questions_smoke_200.jsonl) + 40 (data/commercial_v1.jsonl)
+# 锚点范式 W73 第 1 批 242 → W74 第 1 批 C-1 248 守恒 (+1)
+# 派工 v6 段 5 反馈 #5 实战 (7 天观察期)
+# 派工 v8 段 8 实施前置 1 (题库版本锁定)
+# 0 production code 改动铁律守恒 (qa-bench 范畴)
+016e2325840752fe953c2f56f0a40e77df855c19d41261b960d007d1db53785d  combined_v4.jsonl
