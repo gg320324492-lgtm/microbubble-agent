@@ -1,0 +1,59 @@
+{
+  "_comment": "B-4 KB 闭环 E2E 串联 输出 mock — 设计契约 (B-4 agent 实施时落地)",
+  "_interface": {
+    "_note": "B-4 端到端串联 B-1+B-2+B-3 输出, 此 mock 是设计契约, 实际代码待 B-4 agent 实施",
+    "return_type": "Dict[str, Any]",
+    "fields": {
+      "stage": "int (1=候选 / 2=评分 / 3=防线 / 4=入库审计 / 5=review)",
+      "score": "dict (B-1 输出快照: dim_scores, total_score, grade, veto)",
+      "defense": "dict (B-2 五道防线逐项状态)",
+      "review": "dict (24h/7d review 结果)",
+      "rollback_eligible": "bool (是否触发 rollback)"
+    }
+  },
+  "stage_2_score_passed": {
+    "stage": 2,
+    "score": {
+      "dim_scores": {"intent": 1.0, "tool": 1.0, "content": 0.95},
+      "total_score": 91,
+      "grade": "A",
+      "veto": false
+    },
+    "defense": {
+      "dedup": {"passed": true, "similarity": 0.42},
+      "length": {"passed": true, "length": 156},
+      "llm_refusal": {"passed": true, "refusal_score": 0.05},
+      "sensitive_word": {"passed": true, "matched": []},
+      "human_review": {"passed": true, "sampled": false}
+    },
+    "review": {},
+    "rollback_eligible": false
+  },
+  "stage_5_review_failed_rollback": {
+    "_note": "review 失败 → rollback_eligible=true → 触发 B-3 rollback",
+    "stage": 5,
+    "score": {"total_score": 84, "grade": "B", "veto": false},
+    "defense": {
+      "dedup": {"passed": true, "similarity": 0.38},
+      "length": {"passed": true, "length": 142},
+      "llm_refusal": {"passed": true, "refusal_score": 0.10},
+      "sensitive_word": {"passed": true, "matched": []},
+      "human_review": {"passed": true, "sampled": true, "verdict": "pass"}
+    },
+    "review": {
+      "24h_review": {"verdict": "pass", "reviewed_by": "admin"},
+      "7d_review": {"verdict": "fail", "reason": "content_quality_drop", "reviewed_by": "auto"}
+    },
+    "rollback_eligible": true
+  },
+  "five_stage_state_machine": {
+    "_note": "B-4 E2E 串联状态机定义",
+    "stages": [
+      {"id": 1, "name": "candidate", "input": "qa-bench onebyone_log.jsonl", "output": "list[candidate dict]", "next": "stage_2"},
+      {"id": 2, "name": "score", "input": "candidate dict", "output": "score_item dict", "next": "stage_3"},
+      {"id": 3, "name": "defense", "input": "score_item dict", "output": "defense result dict", "next": "stage_4"},
+      {"id": 4, "name": "intake_audit", "input": "defense result", "output": "knowledge.id + audit log", "next": "stage_5"},
+      {"id": 5, "name": "review", "input": "audit log + 24h/7d cron", "output": "review verdict", "next": "rollback OR stable"}
+    ]
+  }
+}

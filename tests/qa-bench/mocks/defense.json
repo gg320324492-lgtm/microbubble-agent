@@ -1,0 +1,60 @@
+{
+  "_comment": "B-2 collect_candidates 输出 mock — 对应 tests/qa-bench/save_to_kb.py:122",
+  "_interface": {
+    "function": "collect_candidates",
+    "return_type": "list[dict]",
+    "fields": {
+      "qa_id": "str (e.g. 'S-001')",
+      "question": "str",
+      "content": "str",
+      "scope": "str (e.g. 'qa-bench')",
+      "score": "int (= B-1 total_score)",
+      "intent": "str (must be in DEFAULT_ALLOWED_INTENTS)",
+      "tool_calls": "list",
+      "rich_blocks": "list"
+    },
+    "filter_conditions": [
+      "id startswith 'S'",
+      "auto_score >= DEFAULT_MIN_SCORE",
+      "content 长度 >= DEFAULT_MIN_CONTENT_LENGTH",
+      "intent in DEFAULT_ALLOWED_INTENTS",
+      "veto == False (B-1 输出 veto=True 必过滤)"
+    ]
+  },
+  "high_quality_in_grayscale": [
+    {
+      "qa_id": "S-001",
+      "question": "列出本周我负责的所有任务",
+      "content": "本周你负责 3 个任务: T-101 撰写文献综述 (周二前完成), T-102 实验数据整理 (周三), T-103 论文初稿 (周五)...",
+      "scope": "qa-bench",
+      "score": 91,
+      "intent": "query_task",
+      "tool_calls": [{"tool": "list_tasks", "input": {"assignee_id": "self"}}],
+      "rich_blocks": [{"type": "task_list", "tasks": ["T-101", "T-102", "T-103"]}]
+    },
+    {
+      "qa_id": "S-002",
+      "question": "上周五的会议讨论了什么",
+      "content": "上周五 (7月19日) 例会讨论了三项: 1) 微纳米气泡实验进展汇报, 由张三主讲, 2) 论文返修进度...",
+      "scope": "qa-bench",
+      "score": 84,
+      "intent": "query_meeting",
+      "tool_calls": [{"tool": "search_meetings", "input": {"date_range": "2026-07-13~2026-07-19"}}],
+      "rich_blocks": [{"type": "meeting", "id": 152, "title": "..."}]
+    }
+  ],
+  "low_quality_filtered_out": {
+    "_note": "score<DEFAULT_MIN_SCORE OR veto=True 必被过滤, 不出现在 list 中",
+    "qa_id": "S-099",
+    "question": "...",
+    "content": "...",
+    "score": 38,
+    "veto": true
+  },
+  "wrong_intent_filtered_out": {
+    "_note": "intent NOT IN DEFAULT_ALLOWED_INTENTS 必被过滤",
+    "qa_id": "S-088",
+    "intent": "chitchat",
+    "score": 91
+  }
+}
