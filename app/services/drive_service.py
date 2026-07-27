@@ -8,7 +8,7 @@
 - visibility='public': 含团队外部分享链接 (本服务暂不展开 share_token, 留 PR2.7)
 - 文件 visibility >= 所在文件夹 visibility (文件夹硬上限, plan 决策 2026-07-01)
 - drive 文件不入 embedding 索引 (search_semantic 硬过滤 storage_mode='kb', PR1.4 已实现)
-- 软删除: deleted_at 标记 → Celery beat 3 天后物理清除 (PR1.2)
+- 软删除: deleted_at 标记 → Celery beat 30 天后物理清除 (W72 B-3)
 
 业务规则优先级:
   1. visibility 继承上级文件夹（不可越权）, 见 _validate_visibility_inherits
@@ -774,7 +774,7 @@ class DriveService:
     ) -> bool:
         """软删除 drive 文件 (owner only)
 
-        设置 deleted_at = NOW(), 3 天后由 Celery beat 物理清除 (PR1.2)
+        设置 deleted_at = NOW(), 30 天后由 Celery beat 物理清除 (W72 B-3)
         Returns: True = 成功, False = 文件不存在或非 owner
         """
         file = await self.db.execute(
@@ -787,6 +787,14 @@ class DriveService:
         if file is None or file.created_by != current_user_id:
             return False
 
+        # 快照原目录与物化路径；软删本身仍保留 folder_id，快照用于父目录在
+        # 回收期间被移动/物理删除后的确定性恢复与 UI 审计。
+        file.original_parent_id = file.folder_id
+        if file.folder_id is not None:
+            original_folder = await self.get_folder(file.folder_id)
+            file.original_path = original_folder.path if original_folder is not None else None
+        else:
+            file.original_path = "/"
         file.deleted_at = to_naive_datetime(datetime.now(timezone.utc))
         await self.db.commit()
         logger.info(f"[DriveService.soft_delete_file] id={file.id}")
@@ -805,18 +813,55 @@ class DriveService:
             logger.debug(f"[DriveService.soft_delete_file] activity log 失败: {e}")
         return True
 
+    async def _restore_original_location(self, file: Knowledge) -> None:
+        """Restore a trashed file to its snapshotted folder, or safely fall back to root."""
+        target_parent_id = file.original_parent_id
+        if target_parent_id is not None:
+            target = (
+                await self.db.execute(
+                    select(Folder).where(
+                        Folder.id == target_parent_id,
+                        Folder.owner_id == file.created_by,
+                        Folder.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            file.folder_id = target.id if target is not None else None
+        elif file.original_path == "/":
+            file.folder_id = None
+        elif file.folder_id is not None:
+            # Backward compatibility for rows deleted before Alembic 080.
+            current_parent = (
+                await self.db.execute(
+                    select(Folder).where(
+                        Folder.id == file.folder_id,
+                        Folder.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if current_parent is None:
+                file.folder_id = None
+        file.original_parent_id = None
+        file.original_path = None
+
     async def restore_file(
         self,
         file_id: int,
         current_user_id: int,
+        is_admin: bool = False,
     ) -> Optional[Knowledge]:
-        """恢复被软删的 drive 文件 (owner only, 3 天保留期内有效)"""
+        """恢复被软删的 drive 文件 (owner/admin, 30 天保留期内有效)."""
         file = await self.db.execute(
-            select(Knowledge).where(Knowledge.id == file_id)
+            select(Knowledge).where(
+                Knowledge.id == file_id,
+                Knowledge.deleted_at.isnot(None),
+                Knowledge.storage_mode == "drive",
+            )
         )
         file = file.scalar_one_or_none()
-        if file is None or file.created_by != current_user_id:
+        if file is None or (file.created_by != current_user_id and not is_admin):
             return None
+        await self._restore_original_location(file)
         file.deleted_at = None
         await self.db.commit()
         await self.db.refresh(file)
@@ -1351,6 +1396,12 @@ class DriveService:
             if f.created_by != current_user_id:
                 skipped.append(f.id)
                 continue
+            f.original_parent_id = f.folder_id
+            if f.folder_id is None:
+                f.original_path = "/"
+            else:
+                original_folder = await self.get_folder(f.folder_id)
+                f.original_path = original_folder.path if original_folder is not None else None
             f.deleted_at = now
             deleted += 1
         # 不在 file_ids 里的也入 skipped (前端提示 "id=X 不存在")
@@ -1384,8 +1435,9 @@ class DriveService:
         self,
         file_ids: List[int],
         current_user_id: int,
+        is_admin: bool = False,
     ) -> Tuple[int, List[int]]:
-        """v2 PR2: 批量恢复 (从回收站清 deleted_at).
+        """v2 PR2/W72 B-3: 批量恢复到原路径 (owner/admin).
 
         - 仅 restore created_by == current_user_id 的
         - 不在 trash 的 (deleted_at IS NULL) 也入 skipped
@@ -1404,9 +1456,10 @@ class DriveService:
         skipped = []
         restored = 0
         for f in files:
-            if f.created_by != current_user_id:
+            if f.created_by != current_user_id and not is_admin:
                 skipped.append(f.id)
                 continue
+            await self._restore_original_location(f)
             f.deleted_at = None
             restored += 1
         existing_ids = {f.id for f in files}
@@ -1536,8 +1589,9 @@ class DriveService:
         self,
         file_id: int,
         current_user_id: int,
+        is_admin: bool = False,
     ) -> bool:
-        """v2 PR2: 物理删除 (从回收站彻底删除, owner only).
+        """v2 PR2/W72 B-3: 物理删除 (owner/admin only).
 
         Returns: True=成功, False=不存在或非 owner.
         """
@@ -1545,7 +1599,12 @@ class DriveService:
             select(Knowledge).where(Knowledge.id == file_id)
         )
         f = f.scalar_one_or_none()
-        if f is None or f.created_by != current_user_id:
+        if (
+            f is None
+            or f.deleted_at is None
+            or f.storage_mode != "drive"
+            or (f.created_by != current_user_id and not is_admin)
+        ):
             return False
         # 如果有 MinIO 对象, 删掉 (best-effort)
         if f.file_path:
@@ -1565,8 +1624,9 @@ class DriveService:
         self,
         file_ids: List[int],
         current_user_id: int,
+        is_admin: bool = False,
     ) -> Tuple[int, List[int]]:
-        """v2 PR2: 批量物理删除 (从回收站彻底删除一批).
+        """v2 PR2/W72 B-3: 批量永久删除 (owner/admin only).
 
         Returns: (deleted_count, skipped_ids)
         """
@@ -1583,7 +1643,7 @@ class DriveService:
         skipped = []
         deleted = 0
         for f in files:
-            if f.created_by != current_user_id:
+            if f.created_by != current_user_id and not is_admin:
                 skipped.append(f.id)
                 continue
             # best-effort 删 MinIO 对象

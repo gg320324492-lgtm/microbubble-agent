@@ -133,6 +133,44 @@
 
     <MobileActionSheet v-model="showUploadMenu" title="上传文件" :actions="uploadActions" @select="onUploadAction" />
 
+    <!-- W72 B-3: 移动端分片上传 dialog (camera capture / 文件 picker 共用) -->
+    <el-dialog
+      v-model="showChunkedDialog"
+      class="mobile-drive-chunked-dialog"
+      title="📤 分片上传 (断点续传)"
+      width="92%"
+      :close-on-click-modal="false"
+      @closed="onChunkedDialogClosed"
+    >
+      <div class="mobile-drive-chunked-info">
+        <p>选择大于 200MB 的文件可走分片上传，断网后自动续传 (24 小时有效)。</p>
+        <input
+          ref="mobileUploadInputRef"
+          type="file"
+          style="display: none;"
+          accept="*/*"
+          @change="onMobilePickFile"
+        />
+        <div class="mobile-drive-chunked-actions">
+          <el-button type="primary" :icon="UploadFilled" @click="triggerMobilePicker">
+            选择文件
+          </el-button>
+        </div>
+      </div>
+      <div v-if="chunkedFile" class="mobile-drive-chunked-active">
+        <DriveChunkedUploader
+          ref="mobileChunkedUploaderRef"
+          :file="chunkedFile"
+          :parent-id="currentFolderId"
+          visibility="team"
+          :is-team-shared="activeTab === 'team'"
+          :auto-start="true"
+          @done="onMobileChunkedDone"
+          @error="onMobileChunkedError"
+        />
+      </div>
+    </el-dialog>
+
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
     </Teleport>
@@ -153,12 +191,15 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import PageHeader from '@/components/mobile/PageHeader.vue'
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileCommandPalette from '@/views/mobile/MobileCommandPalette.vue'
 // v3.0 (W68 Agent 4) PR8 R4: 用 MobileDriveFAB 替换通用 MobileFab, 加最近上传照片 + QR 扫描入口
 import MobileDriveFAB from '@/components/mobile/MobileDriveFAB.vue'
+// W72 B-3: 移动端分片上传组件
+import DriveChunkedUploader from '@/components/drive/DriveChunkedUploader.vue'
 // W68 G-2 (2026-07-24): 左右滑切换 tab wrapper
 import MobileSwipeNavigation from '@/components/mobile/MobileSwipeNavigation.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
@@ -466,8 +507,52 @@ const fabActions = [
 
 function onUploadClick() { showUploadMenu.value = true }
 function onUploadAction(action) {
+  if (action.name === 'drive' || action.name === 'upload') {
+    showUploadMenu.value = false
+    showChunkedDialog.value = true
+    // 触觉反馈: 移动端 long-press 必带 vibrate(10) (CLAUDE.md 2026-06-27 铁律)
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(10)
+    }
+    return
+  }
   ElMessage.info(`"${action.label}" 即将上线, 临时跳 KB`)
   router.push('/knowledge?action=upload&mode=' + action.name)
+}
+
+// === W72 B-3: 移动端分片上传 state ===
+const showChunkedDialog = ref(false)
+const chunkedFile = ref(null)
+const mobileUploadInputRef = ref(null)
+const mobileChunkedUploaderRef = ref(null)
+function triggerMobilePicker() {
+  mobileUploadInputRef.value?.click()
+}
+function onMobilePickFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  if (file.size < 200 * 1024 * 1024) {
+    ElMessage.warning('分片上传仅对 200MB 以上文件生效, 小文件请走普通上传')
+    return
+  }
+  chunkedFile.value = file
+  event.target.value = ''
+}
+function onMobileChunkedDone() {
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(15)
+  }
+  ElMessage.success('分片上传完成')
+  refresh()
+}
+function onMobileChunkedError(message) {
+  ElMessage.error(message || '分片上传失败')
+}
+function onChunkedDialogClosed() {
+  if (mobileChunkedUploaderRef.value && typeof mobileChunkedUploaderRef.value.abort === 'function') {
+    mobileChunkedUploaderRef.value.abort().catch(() => {})
+  }
+  chunkedFile.value = null
 }
 
 // v3.0 (W68 Agent 4) PR8 R4: 最近上传照片 (来自 album-auto-backup, 缺省 null 不显示)

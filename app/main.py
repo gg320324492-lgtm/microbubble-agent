@@ -46,6 +46,7 @@ def _import_application_routers():
         drive_version_tags,  # v2 PR15 文件版本标签 (W68 第 12 批 B-2)
 team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         drive_dedupe,  # v2 PR17 文件秒传 (W68 第 14 批 B-1)
+        drive_chunked_uploads,  # W72 B-3 Drive PR5 分片上传 (alembic 080)
         file_requests,
         knowledge,
         meeting,
@@ -103,6 +104,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (drive_version_tags.router, {"prefix": "/api/v1", "tags": ["网盘文件版本标签"]}),  # v2 PR15 (W68 第 12 批 B-2)
 (team_folders.router, {"prefix": "/api/v1", "tags": ["团队共享盘 + 4 维审计"]}),  # v2 PR18 (W68 第 14 批 B-2)
         (drive_dedupe.router, {"prefix": "/api/v1", "tags": ["网盘文件秒传"]}),  # v2 PR17 (W68 第 14 批 B-1)
+        (drive_chunked_uploads.router, {"prefix": "/api/v1", "tags": ["网盘分片上传"]}),  # W72 B-3
         (push_notifications.router, {"prefix": "/api/v1", "tags": ["PWA 浏览器推送"]}),  # v3.2
         (upload_multipart.router, {"prefix": "/api/v1", "tags": ["分片上传"]}),
         (ws_notifications.router, {"prefix": "/api/v1"}),

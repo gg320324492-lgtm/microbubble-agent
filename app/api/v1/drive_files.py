@@ -19,6 +19,8 @@ Multipart 简化 (PR2.3): 单端点流式接收 + minio 自管分片
 """
 import io
 import logging
+import math
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -70,6 +72,10 @@ class DriveFileItem(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     deleted_at: Optional[str] = None
+    original_parent_id: Optional[int] = None
+    original_path: Optional[str] = None
+    remaining_days: Optional[int] = None
+    auto_delete_at: Optional[str] = None
     download_count: int = 0
     share_token: Optional[str] = None
     share_expires_at: Optional[str] = None
@@ -221,6 +227,18 @@ def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem
         m = owner_lookup[k.created_by]
         owner_name = m.name if m.name else None
         owner_username = m.username if m.username else None
+
+    remaining_days = None
+    auto_delete_at = None
+    if k.deleted_at:
+        from app.config import settings
+
+        retention_days = getattr(settings, "DRIVE_RETENTION_DAYS", 30)
+        expires_at = k.deleted_at + timedelta(days=retention_days)
+        seconds_left = (expires_at - datetime.utcnow()).total_seconds()
+        remaining_days = max(0, math.ceil(seconds_left / 86400))
+        auto_delete_at = expires_at.isoformat()
+
     return DriveFileItem(
         id=k.id,
         title=k.title,
@@ -238,6 +256,10 @@ def _to_item(k: Knowledge, owner_lookup: Optional[dict] = None) -> DriveFileItem
         created_at=str(k.created_at) if k.created_at else None,
         updated_at=str(k.updated_at) if k.updated_at else None,
         deleted_at=str(k.deleted_at) if k.deleted_at else None,
+        original_parent_id=k.original_parent_id,
+        original_path=k.original_path,
+        remaining_days=remaining_days,
+        auto_delete_at=auto_delete_at,
         download_count=k.download_count or 0,
         share_token=k.share_token,
         share_expires_at=str(k.share_expires_at) if k.share_expires_at else None,
@@ -523,11 +545,15 @@ async def restore_drive_file(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """恢复软删 drive 文件 (3 天保留期内, owner only)"""
+    """恢复软删 drive 文件 (30 天保留期内, owner/admin)."""
     svc = DriveService(db)
-    f = await svc.restore_file(file_id, current_user_id=current_user.id)
+    f = await svc.restore_file(
+        file_id,
+        current_user_id=current_user.id,
+        is_admin=current_user.role in ("admin", "leader"),
+    )
     if f is None:
-        raise HTTPException(status_code=404, detail="file 不存在或非 owner")
+        raise HTTPException(status_code=404, detail="file 不存在或无恢复权限")
     return _to_item(f)
 
 
@@ -863,10 +889,12 @@ async def permanent_delete_files(
     db: AsyncSession = Depends(get_db),
     current_user: Member = Depends(get_current_user),
 ):
-    """批量物理删除回收站中的文件 (owner only, 不可逆)."""
+    """批量物理删除回收站中的文件 (owner/admin only, 不可逆)."""
     svc = DriveService(db)
     deleted, skipped = await svc.permanent_delete_batch(
-        payload.file_ids, current_user_id=current_user.id,
+        payload.file_ids,
+        current_user_id=current_user.id,
+        is_admin=current_user.role in ("admin", "leader"),
     )
     return BatchOperationResponse(
         succeeded_count=deleted,
@@ -904,7 +932,9 @@ async def batch_restore_files(
     """批量从回收站恢复."""
     svc = DriveService(db)
     restored, skipped = await svc.batch_restore(
-        payload.file_ids, current_user_id=current_user.id,
+        payload.file_ids,
+        current_user_id=current_user.id,
+        is_admin=current_user.role in ("admin", "leader"),
     )
     return BatchOperationResponse(
         succeeded_count=restored,

@@ -45,7 +45,7 @@ def cleanup_expired_drive_files_task(retention_days: Optional[int] = None):
     """Celery beat 任务：物理清除 retention_days 天前软删除的 drive 文件 + 孤儿 folder。
 
     Args:
-        retention_days: 保留天数 (None 时使用 settings.DRIVE_RETENTION_DAYS, 默认 3)
+        retention_days: 保留天数 (None 时使用 settings.DRIVE_RETENTION_DAYS, 默认 30)
 
     Returns:
         dict: {"status": "ok"|"skipped"|"error", "deleted_files": int, "deleted_folders": int,
@@ -62,7 +62,7 @@ def cleanup_expired_drive_files_task(retention_days: Optional[int] = None):
        本 task 只做 Celery wrapper (NullPool + asyncio.run + logger)
     """
     days = retention_days if retention_days is not None else getattr(
-        settings, "DRIVE_RETENTION_DAYS", 3
+        settings, "DRIVE_RETENTION_DAYS", 30
     )
 
     # PR6-P11 + PR6-P12 二次确认守卫: retention_days != settings 默认值时延迟 + warn
