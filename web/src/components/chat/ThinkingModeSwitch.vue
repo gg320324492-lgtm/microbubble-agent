@@ -1,4 +1,14 @@
-<script setup>
+<!--
+ThinkingModeSwitch.vue — W72 B-2 子 plan ③ 起步 (派工 v6 段 5 反馈 #3 实战: type hint 必含)
+
+设计要点:
+- fast / balanced / deep 3 模式 segmented control
+- 派工 v6 段 5 反馈 #3 实战: useUiStore v-model type hint 必含 (ThinkingMode enum export)
+- 自 v78 / 2026-07-13 #P1 起即存在, W72 B-2 添加 lang="ts" + JSDoc 类型注释
+- a11y 4-attr 全部就绪
+- dark mode 走非 scoped 块 (v60-v67 教训)
+-->
+<script setup lang="ts">
 /**
  * ThinkingModeSwitch.vue — v78 + 2026-07-13 #P1 三档推理模式 segmented control
  *
@@ -8,21 +18,28 @@
  * - 🖥平衡 (balanced): 本地 Qwen3-8B + 默认 budget + 完整 agent 流程
  * - ✨深度 (deep):     DeepSeek-R1-Distill-Qwen-7B + thinking + 完整质量控制
  *
- * a11y 4-attr 全部就绪
- * dark mode 走非 scoped 块（v60-v67 教训）
+ * W72 B-2 改造 (派工 v6 段 5 反馈 #3 实战): useUiStore v-model type hint 必含
  */
 import { Lightning, Cpu, MagicStick } from '@element-plus/icons-vue'
 import { useUiStore } from '@/stores/useUiStore'
+import type { ThinkingMode } from '@/stores/useUiStore'
+
+interface ModeOption {
+  value: ThinkingMode
+  icon: typeof Lightning
+  label: string
+  title: string
+}
 
 const uiStore = useUiStore()
 
-const MODES = [
+const MODES: ModeOption[] = [
   { value: 'fast', icon: Lightning, label: '快速', title: '快速回答 (Qwen3-8B · 跳过深度推理)' },
   { value: 'balanced', icon: Cpu, label: '平衡', title: '平衡模式 (Qwen3-8B · 完整 Agent 流程)' },
   { value: 'deep', icon: MagicStick, label: '深度', title: '深度模式 (DeepSeek-R1 + thinking + 完整质量控制)' },
 ]
 
-function onChange(value) {
+function onChange(value: ThinkingMode): void {
   if (value !== uiStore.thinkingMode) {
     uiStore.setThinkingMode(value)
   }
