@@ -3,6 +3,12 @@ W74 第 1 批 D-1: 多租户数据隔离真实压测 e2e
 
 依据: D-1 §5.2 + W73 B-1 a6835841 多租户实施 + 派工 v6 §5 反馈 #7 实战
 
+W75 第 1 批 B-2 修复 (派工 v6 段 5 反馈 #7 实战):
+- 1 行 production 修复: TenantIsolationViolation.__init__ 补 code 形参
+- W75 B-2 新增 1 case: test_05_4500_cross_access_returns_422_not_500
+- 4500 跨访问 100% 必返回 TenantIsolationViolation (status_code=422)
+- 实战: W74 D-1 4500 跨访问 100% 拦截, 但 FastAPI 收 500 而非 422
+
 真实压测场景:
 - 10 租户
 - 每租户 100 用户
@@ -161,3 +167,60 @@ def test_04_all_10_tenants_isolated_from_each_other(hundred_invoices_per_tenant)
     # 10 租户两两 C(10,2) = 45 对, 每对 100 invoice = 4500 跨访问
     assert cross_pairs == 45 * 100, f"期望 4500 跨访问, 实得 {cross_pairs}"
     assert blocked == cross_pairs, f"必须 100% 拦截, 实得 {blocked}/{cross_pairs}"
+
+
+# ===== W75 第 1 批 B-2 跨租户 422 修复 1 case (派工 v6 段 5 反馈 #7 实战) =====
+
+
+def test_05_4500_cross_access_returns_422_not_500(hundred_invoices_per_tenant):
+    """W75 B-2: 4500 跨租户访问 100% 必返回 TenantIsolationViolation (status_code=422).
+
+    派工 v6 段 5 反馈 #7 实战 (W74 D-1 实战发现):
+        修复前: TypeError 抛出 → FastAPI 收 500 (Internal Server Error)
+        修复后: TenantIsolationViolation 抛出 → FastAPI 收 422 (Unprocessable Entity)
+
+    验证 3 维 (全 4500 跨访问):
+        1) 异常类型 = TenantIsolationViolation (not TypeError)
+        2) status_code = 422
+        3) code = "TENANT_ISOLATION_VIOLATION"
+    """
+    from app.services.tenant_data_isolation import (
+        TenantIsolationViolation,
+        assert_tenant_match,
+    )
+
+    tenants = list(hundred_invoices_per_tenant.keys())
+    cross_total = 0
+    type_errors = 0
+    isolation_violations = 0
+    leaked = 0
+
+    for i, t_a in enumerate(tenants):
+        for t_b in tenants[i + 1 :]:
+            for inv in hundred_invoices_per_tenant[t_b]:
+                cross_total += 1
+                try:
+                    assert_tenant_match(inv, t_a, resource="invoice")
+                    leaked += 1
+                except TenantIsolationViolation as e:
+                    # 关键修复: 必须是 TenantIsolationViolation (修复后) 而不是 TypeError (修复前)
+                    assert e.status_code == 422, (
+                        f"修复后 status_code 必须 = 422, 实得 {e.status_code}"
+                    )
+                    assert e.code == "TENANT_ISOLATION_VIOLATION", (
+                        f"修复后 code 必须 = TENANT_ISOLATION_VIOLATION, 实得 {e.code}"
+                    )
+                    isolation_violations += 1
+                except TypeError:
+                    # 修复前状态: TypeError 仍可能发生 (但必为 0 after fix)
+                    type_errors += 1
+
+    assert leaked == 0, f"漏拦截 {leaked} 次 (D-1 §5.2 IDOR 风险!)"
+    assert cross_total == 45 * 100, f"期望 4500 跨访问, 实得 {cross_total}"
+    assert type_errors == 0, (
+        f"修复后 TypeError 必为 0 (派工 v6 段 5 反馈 #7 实战), 实得 {type_errors} (缺 code 形参)"
+    )
+    assert isolation_violations == cross_total, (
+        f"4500 跨访问 100% 必抛 TenantIsolationViolation (status_code=422), "
+        f"实得 {isolation_violations}/{cross_total}"
+    )
