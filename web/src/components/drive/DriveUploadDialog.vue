@@ -94,6 +94,23 @@
       </div>
     </div>
 
+    <!-- W72 B-3: Drive 专用分片上传 (替换 multipart 简版, 支持断点续传 + SHA256) -->
+    <div v-if="chunkedItems.length > 0" class="drive-upload-chunked-list">
+      <DriveChunkedUploader
+        v-for="item in chunkedItems"
+        :key="item.uid"
+        :ref="(el) => registerChunkedUploader(item.uid, el)"
+        :file="item.file"
+        :parent-id="form.folderId"
+        :visibility="form.visibility"
+        :is-team-shared="props.isTeamShared"
+        :auto-start="true"
+        @done="(payload) => onChunkedDone(item, payload)"
+        @error="(msg) => onChunkedError(item, msg)"
+        @retry="() => retryChunked(item)"
+      />
+    </div>
+
     <!-- 配置区 -->
     <el-form :model="form" label-width="100px" :disabled="uploading" class="drive-upload-form">
       <el-form-item label="目标文件夹">
@@ -137,6 +154,7 @@ import { useFolderDropZone } from '@/composables/useFolderDropZone'
 import { useFolderTree } from '@/composables/useFolderTree'
 import { useFileHash } from '@/composables/useFileHash'   // PR4
 import { useDriveFiles } from '@/composables/useDriveFiles' // PR4
+import DriveChunkedUploader from '@/components/drive/DriveChunkedUploader.vue'  // W72 B-3
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -156,8 +174,12 @@ const visible = computed({
 const dropZoneRef = ref(null)
 const fileInputRef = ref(null)
 const fileItems = ref([])  // [{ file, relativePath, status, progress }]
+const chunkedItems = ref([])  // W72 B-3: 走 DriveChunkedUploader 的较大文件
+const chunkedRefs = ref(new Map())
 const uploading = ref(false)
 const uploadedCount = ref(0)
+const SMALL_FILE_THRESHOLD = 50 * 1024 * 1024  // 50MB
+const CHUNKED_THRESHOLD = 200 * 1024 * 1024   // 200MB 起走分片 (≥ 50MB 但小)
 
 // PR4: useFileHash (复用同一个 worker 实例避免重复创建) + useDriveFiles (instantUpload)
 const { calc: calcHash } = useFileHash()
@@ -231,14 +253,60 @@ function addFiles(entries) {
     file,
     relativePath,
     status: 'pending',
-    progress: 0
+    progress: 0,
   }))
   fileItems.value = [...fileItems.value, ...newItems]
+  const chunked = entries
+    .filter(({ file }) => file && file.size >= CHUNKED_THRESHOLD)
+    .map(({ file, relativePath }, index) => ({
+      uid: `chunked-${Date.now()}-${index}-${file.name}`,
+      file,
+      relativePath,
+    }))
+  if (chunked.length > 0) {
+    chunkedItems.value = [...chunkedItems.value, ...chunked]
+  }
   ElMessage.success(`已添加 ${newItems.length} 个文件`)
+}
+
+function registerChunkedUploader(uid, el) {
+  if (el) chunkedRefs.value.set(uid, el)
+  else chunkedRefs.value.delete(uid)
+}
+
+function onChunkedDone(item, payload) {
+  if (!payload) return
+  chunkedItems.value = chunkedItems.value.filter((entry) => entry.uid !== item.uid)
+  ElMessage.success(`分片上传完成: ${item.relativePath}`)
+  emit('uploaded', { count: 1, folderId: form.folderId })
+  maybeCloseDialog()
+}
+
+function onChunkedError(item, message) {
+  if (!item) return
+  ElMessage.error(message || '分片上传失败')
+}
+
+function retryChunked(item) {
+  const ref = chunkedRefs.value.get(item.uid)
+  if (ref && typeof ref.kickoff === 'function') {
+    ref.kickoff(item.file)
+  }
+}
+
+function maybeCloseDialog() {
+  const pendingSmall = fileItems.value.filter((i) => i.status !== 'done' && i.status !== 'error')
+  if (pendingSmall.length === 0 && chunkedItems.value.length === 0) {
+    setTimeout(() => {
+      visible.value = false
+    }, 800)
+  }
 }
 
 function clearFiles() {
   fileItems.value = []
+  chunkedItems.value = []
+  chunkedRefs.value.clear()
   uploadedCount.value = 0
 }
 
@@ -252,6 +320,8 @@ function formatSize(bytes) {
 
 function resetForm() {
   fileItems.value = []
+  chunkedItems.value = []
+  chunkedRefs.value.clear()
   uploadedCount.value = 0
   form.folderId = props.defaultFolderId
   form.visibility = 'team'

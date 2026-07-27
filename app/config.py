@@ -148,8 +148,8 @@ class Settings(BaseSettings):
     # 文件上传大小限制（MB）
     MAX_UPLOAD_SIZE_MB: int = 50
 
-    # 2026-07-01 课题组网盘: drive 文件 + 孤儿 folder 软删除保留天数 (与 task/chat 清理模式对齐)
-    DRIVE_RETENTION_DAYS: int = 3
+    # W72 B-3 trash 收口: 与聊天历史/通知一致统一 30 天保留，UI 展示剩余天数。
+    DRIVE_RETENTION_DAYS: int = 30
 
     # 2026-07-02 v2 PR6 通知清理: file_mentions 保留天数 (与 chat_history 30 天对齐)
     # 已读/未读通知保留 N 天后 Celery beat 物理删除 file_mentions (一刀切)
