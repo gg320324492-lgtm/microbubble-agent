@@ -44,7 +44,7 @@ revision: str = "081_drive_share_enhancements"
 # 当前 alembic head = 078_drive_dedupe_audit (W68-14-B-1 已合并, 079 preview 态未合并)
 # 081 必须接 078 (主指挥合并 079 后才会出现 081 → 079 顺序; 当前 B-1 agent 写 081 → 078
 # 是安全正确, 主指挥合并时按 078 → 079 → 081 串单链即可, 1 个 head 0 双头)
-down_revision: Union[str, None] = "078_drive_dedupe_audit"
+down_revision: Union[str, None] = "080_drive_chunked_uploads"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
