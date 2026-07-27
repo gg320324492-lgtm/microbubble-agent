@@ -23,7 +23,7 @@ import sqlalchemy as sa
 
 
 revision = "085_billing_payment_tables"
-down_revision = "083_commercial_tenant_isolation"
+down_revision = "084_meeting_cluster_jsonb_gin_index"
 branch_labels = None
 depends_on = None
 
