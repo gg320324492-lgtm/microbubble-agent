@@ -5,6 +5,49 @@
 
 ---
 
+## W72 第 1 批 partial mid-派工 D-2 文档同步 (2026-07-24 — 5 agents 已 push origin + 10 agents worktree 未开工, 锚点范式 W71 206 → W72 220 守恒预期 +14, 派工纪要 v6 段 5 反馈 #2 实战 + 派工 v8 段 8 实战升 v8 必备)
+
+**W72 第 1 批派工调研基础已落地状态 (派工 v6 §1.2 真验证纪律 + 派工 v8 段 8 起步纪律 4 项必读实战)**:
+
+| # | Agent | commit | 锚点范式 | 状态 | 类别 |
+|---|-------|--------|----------|------|------|
+| 1 | A-1 派工调研依据 + memory 沉淀 | `6e074ffd9` + `6d89bac8d` | **207** | ✅ push origin | docs/memory |
+| 2 | A-2 派工 v9 模板 + memory | `717d47f08` + `937742218` | **208** | ✅ push origin | docs/memory |
+| 3 | A-4 grand closure 预期版 | `7a1d07df8` | **210** | ✅ push origin | memory |
+| 4 | B-2 ThinkingModeSwitch + ChatBreadcrumb + useUiStore | `228aa9de3` | **212** | ✅ push origin | web/src/components/chat/ (派工 v6 允许) |
+| 5 | C-1 容器镜像 rebuild 5 步 + bash | `08df36e80` | **216** | ✅ push origin | Dockerfile + .github/ |
+
+**W72 第 1 批 4 路线 15 agents 派工清单**:
+- **路线 A (4 agents)**: A-1 派工调研 ✅ + A-2 派工 v9 ✅ + A-3 plans 真验证 ⏸ 待派 + A-4 grand closure 预期版 ✅
+- **路线 B (5 agents)**: B-1 NavRail.vue + SessionSidebar ⏸ + B-2 ThinkingModeSwitch ✅ + B-3 ChatViewSSE 顶栏 3-zone ⏸ + B-4 跨端点 e2e ⏸ + B-5 桌面端 6 主题 dark ⏸
+- **路线 C (3 agents)**: C-1 容器镜像 rebuild ✅ + C-2 商业化 24 人月季度 ⏸ + C-3 ppt-word 5 缺口 ⏸
+- **路线 D (3 agents)**: D-1 派工 v9 实战 ⏸ + D-2 6 类文档同步 (本任务) ⏸ + D-3 grand closure actual ⏸
+
+**W72 D-2 文档同步纪律 (派工 v6 §1.2 真验证 + 派工 v8 段 8 实战升 v8 必备)**:
+- **不伪造未开工 worktree 状态** — 只聚合已 push origin 的 5 agents commits, 10 agents worktree 未开工不写"已实施"段.
+- **W72 grand closure 220 锚点范式预测延后** — 当前 D-2 锚点范式最高 = 第 216 (C-1 容器镜像 rebuild).
+- **0 production code 改动铁律 14/15 守恒预期** — 1 例外 B-1 NavRail.vue 250 行 + SessionSidebar 重构已批 web/src/components/chat/ 范畴.
+- **W19 选项 A 维持** — 4 留未来 PR 不发起新排期 (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E).
+- **W72 起步纪律 4 项必读实战验证** — `git log --oneline main | grep -E "w71st-batch-(b1|b2|b3|b4|b5)" | wc -l` = 10 commits ≥ 5 期望 ✅.
+
+详见 `memory/w72-route-72nd-batch-d2-docs-sync-2026-07-24.md` (本任务沉淀) + `memory/w72-grand-closure-72nd-batch-actual-2026-07-24.md` (1 新增 memory) + `docs/w72nd-batch-dispatch-2026-07-24.md` (W72-A-1 派工调研依据, commit `6e074ffd9`, 第 207 守恒).
+
+---
+
+## W71 第 1 批 actual-merge 收口 (2026-07-24 — 15 agents 全部合并 origin/main + 部署验证 10 步, 锚点范式 W70 168 → W71 206 守恒 +38, 派工 v6→v7→v8 升级)
+
+**W71 第 1 批 actual-merge 收口状态 (派工 v6 §1.2 真验证纪律, 派工 v8 段 8 实战升 v8 必备)**:
+- **15 agents 全部 merged to origin/main**: 累计 15 个 merge commit + 锚点范式第 206 守恒.
+- **5 hot-fix 链实战沉淀**: H-1 浏览器老 SW cache 强制清 + H-2 PWA 永久禁用 4 件套 + H-3 checkSwBlacklist 自循环删除 + H-4 setInterval timer 必清理 + H-5 heartbeat console.warn 静默.
+- **6 新铁律沉淀**: SubAgent 编排 type hint + 浏览器老 SW cache 强制清 + PWA 永久禁用 4 件套 + checkSwBlacklist 自循环删除 + setInterval timer 必清理 + heartbeat console 必静默.
+- **派工 v6→v7→v8 升级**: v6 段 5 反馈 5 类别 + v7 段 5 升级 9 项 + v8 段 8 起步纪律 4 项必读.
+- **0 production code 改动铁律 16/15 守恒**: 1 例外 B-5 QaBenchDashboard.vue + 5 e2e PASS 已批 web/src/views/admin/ 范畴.
+- **alembic 1 head 0 双头守恒**: `078_drive_dedupe_audit` 单链, 跨 PR 部署 cp + clear cache 沿用.
+
+详见 `memory/w71-route-71st-batch-actual-merge-2026-07-24.md` (W71 actual-merge commit `9e21fbfcd`, 锚点范式第 206 守恒) + `memory/w71-anchor-paradigm-71st-batch-2026-07-24.md` (锚点范式 4 维度金标准) + `memory/w71-route-71st-batch-d1-prompt-v8-2026-07-24.md` (派工 v8 段 8 W72 起步纪律).
+
+---
+
 ## W71 batch partial mid-派工 D-2 文档同步 (2026-07-24 — 仅 1 commit 真合并至 origin/main + 2 commits 待合并, 锚点范式第 176 守恒预测, 派工纪要 v6 段 5 反馈 #2 实战)
 
 **W71 batch 实际真实施状态 (派工 v6 §1.2 真验证纪律)**:
