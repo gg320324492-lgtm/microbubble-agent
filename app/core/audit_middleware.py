@@ -56,10 +56,13 @@ def _classify_action(method: str, path: str) -> str:
       1. /auth/login → 'login'
       2. /file-requests/{token}/submit → 'file_request_submit'
       3. /share-link → 'share_token_create'
-      4. /comments (POST/DELETE) → 'comment_create' / 'comment_delete'
-      5. /ws/notifications → 'ws_connect' (实际写在 ws handler 里, 这里记录 GET probe)
-      6. GET → 'read'
-      7. 其他写 → 'write' (兜底)
+      4. /drive/folders/{id}/share (POST) → 'share_created'  (W72 第 2 批 B-1 差量)
+      5. /drive/folders/share/{token} (GET) → 'share_downloaded'  (W72 第 2 批 B-1 差量)
+      6. /drive/folders/share/{id} (DELETE) → 'share_revoked'  (W72 第 2 批 B-1 差量)
+      7. /comments (POST/DELETE) → 'comment_create' / 'comment_delete'
+      8. /ws/notifications → 'ws_connect' (实际写在 ws handler 里, 这里记录 GET probe)
+      9. GET → 'read'
+     10. 其他写 → 'write' (兜底)
     """
     method = method.upper()
     if path == "/api/v1/auth/login" and method == "POST":
@@ -69,9 +72,17 @@ def _classify_action(method: str, path: str) -> str:
     if re.match(r"^/api/v1/file-requests/[^/]+/submit$", path) and method == "POST":
         return "file_request_submit"
 
-    # share link create
+    # share link create (单文件)
     if re.match(r"^/api/v1/drive/files/\d+/share-link$", path) and method in ("POST",):
         return "share_token_create"
+
+    # W72 第 2 批 B-1 差量: folder share 创建 / 公开访问 / 撤销 3 个专属 action
+    if re.match(r"^/api/v1/drive/folders/\d+/share$", path) and method == "POST":
+        return "share_created"
+    if re.match(r"^/api/v1/drive/folders/share/[^/]+$", path) and method == "GET":
+        return "share_downloaded"
+    if re.match(r"^/api/v1/drive/folders/share/\d+$", path) and method == "DELETE":
+        return "share_revoked"
 
     # ws (只记录 GET/POST probe, 真实 connect 走 ws handler)
     if path.startswith("/api/v1/ws/"):

@@ -144,6 +144,7 @@
           @retry="fetchFolderTree"
           @request-new-folder="onCreateSubFolder(null)"
           @create-sub-folder="onCreateSubFolder"
+          @share-folder="onShareFolder"
         />
       </aside>
 
@@ -278,6 +279,9 @@
     <!-- v2 PR1 ShareDialog -->
     <ShareDialog v-model="showShareDialog" :file="shareDialogFile" />
 
+    <!-- W72 第 2 批 B-1: folder share link dialog (PR7 增强 + 密码 + 次数限制 + 审计) -->
+    <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
+
     <!-- v2.0 (2026-07-09) Drive 美化: 加 class="drive-dialog" 让 Extract dialog 玻璃态生效 -->
     <el-dialog
       v-model="showExtractDialog"
@@ -329,6 +333,7 @@ import MoveDialog from '@/components/drive/MoveDialog.vue'
 import DriveUploadDialog from '@/components/drive/DriveUploadDialog.vue'
 import FilePreviewDialog from '@/components/drive/FilePreviewDialog.vue'  // PR4.6
 import ShareDialog from '@/components/drive/ShareDialog.vue'  // v2 PR1
+import ShareLinkDialog from '@/components/drive/ShareLinkDialog.vue'  // W72-B-1 folder share link
 // W68 第 4 批: 右键菜单复用 v2.9 FolderContextMenu (固定定位 + 边界检测)
 import FolderContextMenu from '@/components/drive/FolderContextMenu.vue'
 import { useFolderTree } from '@/composables/useFolderTree'
@@ -652,6 +657,10 @@ const showShareDialog = ref(false)
 const shareDialogFile = ref(null)
 const showExtractDialog = ref(false)
 const extractDialogFile = ref(null)
+
+// === W72 第 2 批 B-1: folder share link dialog 状态 ===
+const showShareLinkDialog = ref(false)
+const shareLinkDialogFolder = ref(null)
 const extractTargetVisibility = ref('team')
 
 // === PR3.6 上传 dialog 状态 ===
@@ -862,6 +871,12 @@ function handleFileShareLink(file) {
   // v2 PR1 实现: 打开 ShareDialog
   shareDialogFile.value = file
   showShareDialog.value = true
+}
+
+// W72 第 2 批 B-1: Folder 右键菜单 "🔗 分享" → 弹 ShareLinkDialog
+function onShareFolder(folder) {
+  shareLinkDialogFolder.value = folder
+  showShareLinkDialog.value = true
 }
 
 // W68 路线 F-4: 桌面端 "查看评论" 入口 (FileCard 右键菜单 → 💬 查看评论)

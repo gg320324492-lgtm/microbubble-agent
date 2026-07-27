@@ -5,3 +5,6 @@
 
 # MainLayout.vue stagger 动画计算变量 (CSS 动画 index 0-2)
 --i
+
+# W72 第 2 批 B-1: MobileSwipeNavigation.vue shadow-direction 阴影方向计算 (G-2 W68 commit 651d15d2a 已有, 非本批新增)
+--shadow-direction

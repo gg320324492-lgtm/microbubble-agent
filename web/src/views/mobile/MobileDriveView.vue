@@ -133,6 +133,9 @@
 
     <MobileActionSheet v-model="showUploadMenu" title="上传文件" :actions="uploadActions" @select="onUploadAction" />
 
+    <!-- W72 第 2 批 B-1 差量: 移动端 folder share link dialog (复用桌面 ShareLinkDialog) -->
+    <ShareLinkDialog v-model="showShareLinkDialog" :folder="shareLinkDialogFolder" />
+
     <Teleport to="body">
       <MobileCommandPalette v-if="showCommandPalette" @close="showCommandPalette = false" />
     </Teleport>
@@ -157,6 +160,7 @@ import PageHeader from '@/components/mobile/PageHeader.vue'
 import LongPressWrapper from '@/components/mobile/LongPressWrapper.vue'
 import MobileActionSheet from '@/components/mobile/MobileActionSheet.vue'
 import MobileCommandPalette from '@/views/mobile/MobileCommandPalette.vue'
+import ShareLinkDialog from '@/components/drive/ShareLinkDialog.vue'  // W72-B-1 folder share link
 // v3.0 (W68 Agent 4) PR8 R4: 用 MobileDriveFAB 替换通用 MobileFab, 加最近上传照片 + QR 扫描入口
 import MobileDriveFAB from '@/components/mobile/MobileDriveFAB.vue'
 // W68 G-2 (2026-07-24): 左右滑切换 tab wrapper
@@ -185,6 +189,9 @@ const showCommandPalette = ref(false)
 const showSearch = ref(false)
 const showUploadMenu = ref(false)
 const showActionSheet = ref(false)
+// W72 第 2 批 B-1 差量: folder share link dialog 状态 (移动端复用桌面 ShareLinkDialog)
+const showShareLinkDialog = ref(false)
+const shareLinkDialogFolder = ref(null)
 const selectedFile = ref(null)
 
 // v2 PR8: 移动端首页聚合 (5 sections 1 请求)
@@ -394,14 +401,19 @@ const fileActions = computed(() => {
   if (!selectedFile.value) return []
   const f = selectedFile.value
   // W68 路线 F-3: 加 "查看评论" 入口, 长按菜单升级到 5 个核心动作
-  // 顺序: 预览 / 评论 / 下载 / 分享 / 删除 (评论提至第 2 位突出协作价值)
-  return [
+  // W72 第 2 批 B-1 差量: 当前 folder 非空时 +1 "分享 folder" 入口
+  //   - 顺序: 预览 / 评论 / 下载 / 分享 / 分享 folder / 删除
+  const actions = [
     { name: 'preview',  label: '👁 预览' },
     { name: 'comments', label: '💬 查看评论' },
     { name: 'download', label: '⬇ 下载' },
     { name: 'share',    label: '🔗 分享' },
-    { name: 'delete',   label: '🗑 删除', danger: true },
   ]
+  if (currentFolderId.value !== null) {
+    actions.push({ name: 'share-folder', label: '📂 分享当前 folder' })
+  }
+  actions.push({ name: 'delete', label: '🗑 删除', danger: true })
+  return actions
 })
 
 async function onFileAction(action) {
@@ -435,6 +447,17 @@ async function onFileAction(action) {
           await navigator.clipboard.writeText(shareUrl).catch(() => {})
           ElMessage.success('链接已复制')
         }
+        break
+      }
+      // W72 第 2 批 B-1 差量: 分享当前 folder → 调 ShareLinkDialog
+      //   触觉反馈 (CLAUDE.md 2026-06-27 教训)
+      case 'share-folder': {
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') navigator.vibrate(10)
+        // 当前 folder 简单展示; ShareLinkDialog 内有完整配置
+        const folderObj = { id: currentFolderId.value, name: `Folder #${currentFolderId.value}` }
+        shareLinkDialogFolder.value = folderObj
+        showShareLinkDialog.value = true
+        ElMessage.info('请在弹窗中配置过期时间/密码/次数限制')
         break
       }
       case 'delete': {
