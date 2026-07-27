@@ -1,0 +1,48 @@
+{
+  "_comment": "B-3 find_rollback_candidates 输出 mock — 对应 scripts/auto_intake_rollback.py:35",
+  "_interface": {
+    "function": "find_rollback_candidates",
+    "return_type": "list[dict]",
+    "query": "SELECT id, title, source_type, created_at FROM knowledge WHERE source_type='auto_expansion' AND created_at < NOW() - INTERVAL '7 days'",
+    "fields": {
+      "id": "int (knowledge.id)",
+      "title": "str",
+      "source_type": "str (always 'auto_expansion' for rollback)",
+      "created_at": "str (ISO 8601 datetime)"
+    },
+    "constants": {
+      "ROLLBACK_DAYS": 7
+    }
+  },
+  "rollback_candidates": [
+    {
+      "id": 42,
+      "title": "qa-bench: S-001 列出本周我负责的所有任务",
+      "source_type": "auto_expansion",
+      "created_at": "2026-07-15T03:30:00+08:00"
+    },
+    {
+      "id": 43,
+      "title": "qa-bench: S-002 上周五的会议讨论了什么",
+      "source_type": "auto_expansion",
+      "created_at": "2026-07-16T03:30:00+08:00"
+    },
+    {
+      "id": 44,
+      "title": "qa-bench: S-005 微纳米气泡 Zeta 电位测量",
+      "source_type": "auto_expansion",
+      "created_at": "2026-07-17T03:30:00+08:00"
+    }
+  ],
+  "no_candidates_today": {
+    "_note": "B-3 跑时若无 7 天前条目, 返回 []",
+    "rollback_candidates": []
+  },
+  "rollback_report_format": {
+    "_note": "scripts/auto_intake_rollback.py main() 输出格式",
+    "rolled_back_count": 3,
+    "rolled_back_ids": [42, 43, 44],
+    "backup_match_count": 2,
+    "timestamp": "2026-07-24T03:30:00+08:00"
+  }
+}

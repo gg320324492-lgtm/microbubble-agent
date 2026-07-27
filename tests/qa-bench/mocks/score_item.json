@@ -1,0 +1,56 @@
+{
+  "_comment": "B-1 score_seven_dim 输出 mock — 对应 tests/qa-bench/runner.py:465",
+  "_interface": {
+    "function": "score_seven_dim",
+    "return_type": "Dict[str, Any]",
+    "fields": {
+      "dim_scores": "Dict[str, float] (0-1, 7 维: intent/tool/content/rich/defense/perf/consistency)",
+      "total_score": "int (0-100)",
+      "grade": "str (A/B/C/D/F)",
+      "veto": "bool (True if content<0.5 or defense<0.7)"
+    }
+  },
+  "high_quality_pass": {
+    "dim_scores": {
+      "intent": 1.0,
+      "tool": 1.0,
+      "content": 0.95,
+      "rich": 0.85,
+      "defense": 0.92,
+      "perf": 0.88,
+      "consistency": 0.90
+    },
+    "total_score": 91,
+    "grade": "A",
+    "veto": false
+  },
+  "mid_quality_warn": {
+    "dim_scores": {
+      "intent": 1.0,
+      "tool": 0.5,
+      "content": 0.65,
+      "rich": 0.4,
+      "defense": 0.75,
+      "perf": 0.5,
+      "consistency": 0.6
+    },
+    "total_score": 62,
+    "grade": "C",
+    "veto": false
+  },
+  "veto_reject": {
+    "_note": "veto=True 必须被 B-2 collect_candidates 过滤 (score<DEFAULT_MIN_SCORE OR veto=True)",
+    "dim_scores": {
+      "intent": 1.0,
+      "tool": 0.0,
+      "content": 0.3,
+      "rich": 0.0,
+      "defense": 0.6,
+      "perf": 0.5,
+      "consistency": 0.4
+    },
+    "total_score": 38,
+    "grade": "F",
+    "veto": true
+  }
+}
