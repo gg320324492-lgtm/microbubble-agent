@@ -3,6 +3,12 @@
 # W73 第 1 批 B-2 hot-fix 监控 #1: alembic 双头检测
 # 依据: W72 第 2 批 E-1 commit c29ca1663 + CLAUDE.md §2.4 + W68 第 3 批事故 1852468a6
 #
+# W75 第 1 批 B-3 P2 修复 (W74 E-1 报告):
+# - webhook payload 改用 scripts/lib/webhook_payload.sh 共用库 (含完整 5 字段)
+# - 删 || true 静默吞 → notify_alert 失败主动 exit 1
+# - retry 策略 (3 次, 间隔 5s)
+# - payload 必含 severity=critical, source=alembic-monitor, heads 列表, head_count
+#
 # 用途: 每小时跑一次, 检测 alembic chain 是否多 head
 # 报警: ≥ 2 head 触发 webhook (主拍派 v6 段 5 反馈 #1 实战纪律)
 # 修复: 派工 v6 §6 段 6 串单链纪律 (down_revision 接 X + clear __pycache__)
@@ -15,25 +21,24 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/webhook_payload.sh"
+
 PROJECT_DIR="${PROJECT_DIR:-/opt/microbubble-agent}"
 ALEMBIC_DIR="$PROJECT_DIR/alembic"
 LOG_FILE="${LOG_FILE:-/var/log/microbubble-agent/alembic-monitor.log}"
 WEBHOOK_URL="${WEBHOOK_URL:-}"  # 主拍 webhook, 可选
+export WEBHOOK_URL
+ALERT_LOG_FILE="${ALERT_LOG_FILE:-/var/log/microbubble-agent/alert.log}"
+export ALERT_LOG_FILE
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
-fail_loud() {
-    log "ERROR: $*"
-    if [ -n "$WEBHOOK_URL" ]; then
-        curl -sS -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\":\"[alembic-monitor] $*\"" "$WEBHOOK_URL" || true
-    fi
-}
-
 if [ ! -d "$ALEMBIC_DIR" ]; then
-    fail_loud "alembic dir not found: $ALEMBIC_DIR"
+    notify_alert "alembic-monitor" "critical" "alembic dir not found" \
+        "{\"dir\":\"$ALEMBIC_DIR\",\"project_dir\":\"$PROJECT_DIR\"}" || exit 2
     exit 2
 fi
 
@@ -51,7 +56,8 @@ print(' '.join(heads))
 " 2>&1)
 
 if [ $? -ne 0 ]; then
-    fail_loud "alembic script load failed: $HEADS"
+    notify_alert "alembic-monitor" "critical" "alembic script load failed" \
+        "{\"error\":\"$HEADS\"}" || exit 2
     exit 2
 fi
 
@@ -60,7 +66,8 @@ HEAD_COUNT=$(echo "$HEADS" | wc -w | tr -d ' ')
 log "alembic heads: [$HEADS] (count: $HEAD_COUNT)"
 
 if [ "$HEAD_COUNT" -ge 2 ]; then
-    fail_loud "alembic 双头 detected! heads=[$HEADS]"
+    notify_alert "alembic-monitor" "critical" "alembic 双头 detected" \
+        "{\"heads\":\"$HEADS\",\"head_count\":$HEAD_COUNT,\"fix_ref\":\"W68 §2.3 commit 1852468a6\"}" || exit 1
     log "修复路径: W68 §2.3 (commit 1852468a6)"
     log "  1. 定位双头: alembic heads"
     log "  2. 改 down_revision: sed -i 's|down_revision.*<old>.*|down_revision.*<new>.*|' alembic/versions/0XX_*.py"
