@@ -6,6 +6,10 @@ W74 第 1 批 D-1 多租户实战压测 + 数据隔离验证 e2e 测试
 依据: W73 B-1 商业化 Phase 8 收口 a6835841 + D-1 §5.2 多租户数据隔离风险
 + 派工 v6 段 5 反馈 #7 实战 (性能不达标必报主指挥)
 
+W75 第 1 批 B-2 修复 (派工 v6 段 5 反馈 #7 实战):
+- 1 行 production 修复: TenantIsolationViolation.__init__ 补 code 形参
+- W75 B-2 新增 1 case: test_23_tenant_isolation_returns_422_not_500
+
 22 case 分类:
 - 跨租户 422 拦截: 6 case (6 商业化表)
 - tenant_id 索引性能 SLA: 6 case (P95 < 50ms / 跨租户 < 10ms)
@@ -13,9 +17,9 @@ W74 第 1 批 D-1 多租户实战压测 + 数据隔离验证 e2e 测试
 - License 校验实战: 4 case (校验/过期/宽限/read-only)
 - 多租户监控脚本: 2 case (脚本存在 + 跨租户异常检测)
 
-总计: 22/22 e2e PASS (D-1 实战目标)
+总计: 22/22 e2e PASS (D-1 实战目标) + W75 B-2 1 case = 23/23 e2e PASS
 
-0 production code 改动铁律守恒 (scripts + tests 范畴)
+0 production code 改动铁律守恒 (scripts + tests 范畴, W75 B-2 1 行 production 例外已批)
 """
 from __future__ import annotations
 
@@ -344,3 +348,50 @@ def test_22_monitor_tenant_isolation_lints_as_bash():
         timeout=10,
     )
     assert result.returncode == 0, f"bash 语法错: {result.stderr}"
+
+
+# ===== 6. W75 第 1 批 B-2 跨租户 422 修复验证 1 case (派工 v6 段 5 反馈 #7 实战) =====
+
+
+def test_23_tenant_isolation_returns_422_not_500():
+    """W75 B-2 跨租户 422 修复验证: TenantIsolationViolation 必返回 422 而非 500.
+
+    派工 v6 段 5 反馈 #7 实战 (W74 D-1 实战发现):
+        修复前: TenantIsolationViolation.__init__ 缺 code 形参
+                → AppException.__init__(code, message, status_code, details) 缺 code 抛 TypeError
+                → FastAPI 收 500 (Internal Server Error) 而非 422 (Unprocessable Entity)
+        修复后: super().__init__ 显式传 code=self.code, status_code=self.status_code
+                → 跨租户访问 FastAPI 必返回 422 (派工 v6 §5.2 SLA)
+
+    验证 3 维:
+        1) 异常类型 = TenantIsolationViolation (不是 TypeError)
+        2) status_code = 422
+        3) code = "TENANT_ISOLATION_VIOLATION"
+    """
+    sys.path.insert(0, str(APP_DIR))
+    from app.services.tenant_data_isolation import (
+        TenantIsolationViolation,
+        assert_tenant_match,
+    )
+
+    # 1. 直接构造验证 status_code + code
+    exc = TenantIsolationViolation("invoice", "tenant_B", "tenant_A")
+    assert exc.status_code == 422, (
+        f"修复后 status_code 必须 = 422, 实得 {exc.status_code} (派工 v6 §5.2 SLA)"
+    )
+    assert exc.code == "TENANT_ISOLATION_VIOLATION", (
+        f"修复后 code 必须 = TENANT_ISOLATION_VIOLATION, 实得 {exc.code}"
+    )
+
+    # 2. 跨租户触发必抛 TenantIsolationViolation (不是 TypeError)
+    class FakeInvoice:
+        tenant_id = "tenant_B"
+
+    with pytest.raises(TenantIsolationViolation) as exc_info:
+        assert_tenant_match(FakeInvoice(), "tenant_A", resource="invoice")
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.code == "TENANT_ISOLATION_VIOLATION"
+
+    # 3. AppException 父类 isinstance 验证 (FastAPI exception_handler 依赖)
+    from app.core.exceptions import AppException
+    assert isinstance(exc_info.value, AppException)

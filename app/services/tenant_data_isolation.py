@@ -6,6 +6,14 @@ W72 第 2 批 B-5 起步收口:
 - 共享资源白名单 (plans 表 / 公共 endpoint)
 - 隔离 token 校验 (防御 IDOR)
 
+W75 第 1 批 B-2 修复 (派工 v6 段 5 反馈 #7 实战):
+- TenantIsolationViolation 跨租户访问必返回 422 而非 500
+- AppException 必须传 code 形参 (派工 v6 段 5 反馈 #7 实战)
+- 根因: __init__ 之前漏传 code, 触发 TypeError → FastAPI 500
+- 修复: super().__init__ 显式传 code=self.code, status_code=self.status_code
+- 实战: W74 D-1 4500 跨访问压测 100% 拦截, 但 FastAPI 500 而非 422
+- 验证: tests/test_tenant_stress_e2e.py + tests/test_tenant_isolation_stress.py 各加 1 case
+
 不破坏老路径: 仅在 app/services/tenant_data_isolation.py 新增,
 与 billing_service.verify_tenant() 协同 (头部 X-Tenant-ID + X-API-Key).
 """
@@ -30,7 +38,9 @@ class TenantIsolationViolation(AppException):
 
     def __init__(self, resource: str, owner_tenant: str, requester_tenant: str):
         super().__init__(
+            code=self.code,
             message=f"resource '{resource}' owned by tenant '{owner_tenant}', requester='{requester_tenant}'",
+            status_code=self.status_code,
             details={"resource": resource, "owner_tenant": owner_tenant, "requester_tenant": requester_tenant},
         )
 
