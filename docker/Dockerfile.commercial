@@ -1,0 +1,91 @@
+# Docker base 商业化版 (W72 Phase 8 起步)
+#
+# 目标: 商业化交付的多阶段 Docker 镜像
+# - 多阶段构建 (builder + runtime)
+# - 商业化 watermark 配置
+# - License 服务端校验钩子
+# - 安全加固 (非 root 用户 + read-only fs + seccomp)
+# - 镜像大小 < 800MB
+#
+# 不替代 docker/Dockerfile, 是商业化专用, 由 commercial/saas-platform/deploy.sh 调用
+
+# ===== Stage 1: builder =====
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# 商业化 watermark
+ENV MICROBUBBLE_COMMERCIAL=1 \
+    MICROBUBBLE_BUILD_TYPE=commercial \
+    MICROBUBBLE_BUILD_DATE=2026-07-27 \
+    MICROBUBBLE_PHASE=8 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# builder 阶段装编译依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        gcc g++ libpq-dev libffi-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-commercial.txt ./
+RUN pip install --user -r requirements.txt && \
+    pip install --user -r requirements-commercial.txt
+
+# ===== Stage 2: runtime =====
+FROM python:3.11-slim AS runtime
+
+# 商业化 watermark (继承 builder)
+ENV MICROBUBBLE_COMMERCIAL=1 \
+    MICROBUBBLE_PHASE=8 \
+    # License 服务端校验 (离线 7 天宽限)
+    MICROBUBBLE_LICENSE_SERVER=https://license.microbubble.cloud/v1 \
+    MICROBUBBLE_LICENSE_GRACE_DAYS=7 \
+    # 安全加固
+    MICROBUBBLE_READONLY_FS=1 \
+    MICROBUBBLE_SECCOMP_PROFILE=commercial-strict
+
+# 非 root 用户
+RUN groupadd -r microbubble && useradd -r -g microbubble -u 10001 microbubble \
+    && mkdir -p /app /app/data /app/logs /app/commercial \
+    && chown -R microbubble:microbubble /app
+
+# 运行时只装必要依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq5 libffi8 libssl3 tini curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制 builder 阶段装好的 Python 包
+COPY --from=builder /root/.local /home/microbubble/.local
+ENV PATH=/home/microbubble/.local/bin:$PATH
+
+WORKDIR /app
+
+# 复制商业化代码 (限制范围)
+COPY --chown=microbubble:microbubble commercial/ /app/commercial/
+COPY --chown=microbubble:microbubble app/ /app/app/
+COPY --chown=microbubble:microbubble alembic/ /app/alembic/
+COPY --chown=microbubble:microbubble alembic.ini /app/alembic.ini
+COPY --chown=microbubble:microbubble docker/commercial/entrypoint.sh /app/entrypoint.sh
+COPY --chown=microbubble:microbubble docker/commercial/license-check.py /app/license-check.py
+
+USER microbubble
+
+# 时区
+ENV TZ=Asia/Shanghai
+
+# License 校验 + 入口
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://localhost:8000/healthz || exit 1
+
+EXPOSE 8000
+
+# Labels
+LABEL maintainer="MicroBubble Commercial <commercial@microbubble.cloud>" \
+      phase="8" \
+      watermark="microbubble-commercial-2026-07-27" \
+      license="commercial-tier" \
+      version="8.0.0-commercial"

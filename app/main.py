@@ -33,6 +33,7 @@ def _import_application_routers():
         admin_kb_monitor,  # qa-bench v3.1 D5: KB 自动入库监控
         analytics,
         auth,
+        billing,  # W72 第 2 批 B-5 商业化计费
         chat,
         chat_history,
         dashboard,
@@ -111,6 +112,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (admin_audit.router, {"prefix": "/api/v1"}),
         (translation.router, {}),
         (mobile_v1.router, {"prefix": "/api/v1", "tags": ["移动端聚合"]}),
+        (billing.router, {"prefix": "/api/v1", "tags": ["商业化计费"]}),  # W72 第 2 批 B-5 商业化 Phase 8 起步
     ]
 
 
