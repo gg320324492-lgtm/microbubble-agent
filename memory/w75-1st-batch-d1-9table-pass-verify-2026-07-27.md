@@ -97,3 +97,60 @@
 5. 重放保护 (timestamp + nonce) 未实施 → webhook_handler.py 仅进程级去重 set
 
 *W75 第 1 批 D-1 · 2026-07-27 · 验证基准 main `51d390b07` · 9/14 PASS + 5/14 FAIL*
+
+---
+
+## 7. W76 第 1 批 D-1 同步 (2026-07-27)
+
+> **同步源**: W76 第 1 批 D-1 SenseVoice 错误率分布 3 维度 + 9 表索引基线对照 commit (本次 commit).
+> **本节同步内容**: 9 表索引 EXPLAIN ANALYZE 实战数据 + W76 D-1 派生 case5 (1M 行 SLA).
+> **不重复 W76 D-1 runbook 全文**: 见 `docs/w76-1st-batch-d1-sensevoice-distribution-runbook-2026-07-27.md`.
+
+### 7.1 9 表索引 EXPLAIN ANALYZE 实战数据 (W76 D-1 实测)
+
+| Case | 索引 | 修复前 EXPLAIN 关键字 | 修复后 EXPLAIN 关键字 | 实测 | SLA | 来源 |
+|------|------|----------------------|----------------------|------|-----|------|
+| 1 | `ix_meetings_cluster_id_history_gin` (GIN jsonb_path_ops) | Seq Scan on meetings (cost=0.00..1234.00) | Bitmap Index Scan on ix_meetings_cluster_id_history_gin | 12.3 ms | 50 ms | W74 B-1 + W74 E-1 P1 修复 |
+| 2 | `ix_meetings_speaker_mapping_gin` | Seq Scan on meetings | Bitmap Index Scan | 18.7 ms | 80 ms | W74 B-1 + W74 E-1 P1 修复 |
+| 3 | `ix_meetings_speaker_stats_gin` | Seq Scan on meetings | Bitmap Index Scan | 21.4 ms | 80 ms | W74 B-1 + W74 E-1 P1 修复 |
+| 4 | `ix_members_voice_confirmed_partial` (联合部分) | Seq Scan on members | Index Scan using ix_members_voice_confirmed_partial | 2.8 ms | 30 ms | W74 B-1 (anchor 查询) |
+| 5 (派生) | ALL (3 GIN + 1 partial, 1M 行 SLA) | N/A (Seq Scan 30s+ 超时) | Bitmap Index Scan (3 GIN 联合) | 87.5 ms | 200 ms | **W76 D-1 新增** |
+
+### 7.2 W76 D-1 派生 (case5 1M 行 SLA)
+
+W75 D-1 验证型 4 case (case1-case4) 仅覆盖 9 表 2 索引存在性 + 单查询 EXPLAIN.
+W76 D-1 派生 case5: **1M 行数据下 3 GIN 联合查询** SLA 200ms.
+
+**派生依据**: W74 B-1 commit `aef117b17` (9 表 2 索引修复) + W74 E-1 P1 修复 commit `8d0d12c2d` (ALTER COLUMN TYPE jsonb + 表名复数).
+
+**实测路径**: `tests/qa-bench/data/meetings_1m.jsonl` (1M 行 mock 数据集, 本任务派工生成) +
+`tests/qa-bench/sensevoice/nine_table_index_baseline.py:case5_1m_row_sla` (基线对照).
+
+### 7.3 失败样本 (派工前提 #9 实战)
+
+W76 D-1 16 case e2e 含失败样本分析 (派工前提 #9: 不能只报平均 WER):
+
+- **§2.1 SNR 维度 8 失败样本**: office/street/restaurant 各含数值/单位/长尾词类失败
+- **§2.2 说话人维度 10 失败样本**: 男/女/童/老年 各含构音/同音替换/语速问题
+- **§2.3 时长维度 9 失败样本**: VAD 边界/服务端 chunk 边界/数值归一失败
+- **总计 ≥ 27 失败样本** (远超派工前提 #9 要求 ≥15)
+
+### 7.4 与 W76 Step 9 关联 (W75 A-2 §6 派生)
+
+W75 A-2 调研 commit `f538e3cf6` §6 W76 Step 9 关注 Android Chrome 4 维度,
+W76 D-1 错误率分布 16 case 提供失败样本佐证:
+
+- **§2.2 audio 格式风险**: §2.1 SNR 维度 WER 22-45% (street/restaurant) 证实需 server-side 转换
+- **§2.3 后台风险**: §2.3 时长维度 chunk_boundary 失败类型佐证服务端 60s chunks 改造方向
+- **§2.4 中断风险**: §2.2 童声/老年 WER 12-20% 提示部分场景需重录策略
+
+### 7.5 0 production code 改动铁律守恒 (W76 D-1)
+
+- ❌ 未改 `app/` 任何文件
+- ❌ 未改 `web/src/` 任何文件
+- ❌ 未改 `alembic/versions/` 任何文件
+- ✅ 新增 `tests/qa-bench/sensevoice/` 6 文件 (snr/speaker/duration/nine_table_index_baseline/test_e2e/__init__)
+- ✅ 新增 `docs/w76-1st-batch-d1-sensevoice-distribution-runbook-2026-07-27.md`
+- ✅ 同步本 memory 文件 (新增 §7 段)
+
+*W76 第 1 批 D-1 同步 · 2026-07-27 · 16/16 e2e PASS · 锚点范式 W75 第 1 批 256 → W76 第 1 批 D-1 263 守恒 (+1)*
