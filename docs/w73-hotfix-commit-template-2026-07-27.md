@@ -229,7 +229,47 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 ## 5. 关联文件
 
 - 4 监控脚本: `scripts/monitor-{alembic-heads,pwa-manifest,nginx-mime,sw-cache}.sh`
+- 共用 webhook 库: `scripts/lib/webhook_payload.sh` (W75 第 1 批 B-3 新建, 5 函数, 6 件套监控共用)
 - 4 测试: `tests/test_hotfix_monitor_e2e.py` (4 case 实战)
+- 4 测试 (W75 B-3 新增): `tests/test_hotfix_webhook_e2e.py` (4 payload 验证 + retry + || true 删除)
 - 4 类 hotfix 链预案: W72 第 2 批 E-1 commit `c29ca1663` (CLAUDE.md §2.4)
 - 派工纪要 v6/v7/v8/v9/v10: `docs/w68-*-prompt-template-*.md` 系列
 - 锚点范式: W72 第 2 批 235 → W73 第 1 批 B-2 240 守恒 (+1)
+- 锚点范式: W73 第 1 批 249 → W75 第 1 批 B-3 255 守恒 (+1, 4 类 hot-fix 监控 P2 webhook 修复)
+
+## 6. W75 B-3 webhook payload 格式升级 (W74 E-1 P2 实战)
+
+**P2 缺陷** (W74 第 1 批 E-1 报告): 4 监控脚本原 webhook payload 缺右花括号 `{"text":"..."` + `|| true` 静默吞报警。
+
+**修复纪律** (W75 第 1 批 B-3 实战, 派工 v6 段 5 反馈 #6):
+
+### 6.1 webhook payload 5 字段必含
+
+```json
+{
+  "severity": "critical|error|warn|info",
+  "source": "<monitor-name>",
+  "message": "<short summary>",
+  "timestamp": "2026-07-27T16:00:00Z",
+  "details": { ... 业务字段 ... }
+}
+```
+
+### 6.2 监控必含业务字段
+
+| 监控 | 必含业务字段 (details 内) |
+|------|------------------------|
+| monitor-alembic-heads | `heads`, `head_count`, `fix_ref` |
+| monitor-pwa-manifest | `hashed_manifest_status`, `unhashed_manifest_status`, `detection_method` |
+| monitor-nginx-mime | `endpoint`, `expected_content_type`, `actual_content_type`, `octet_stream_detected` |
+| monitor-sw-cache | `sw_version`, `cache_keys_count`, `cache_purge_status` |
+
+### 6.3 删 `|| true` 静默吞 + retry 策略
+
+- **删 `|| true`** — 失败时主动告警 `exit 1` (派工 v6 段 5 反馈 #6 实战)
+- **retry 策略** — 3 次重试, 间隔 5s (默认)
+- **共用 webhook 库** `scripts/lib/webhook_payload.sh` — 5 函数 `validate_payload_json` / `send_webhook_with_retry` / `format_alert_payload` / `log_alert` / `notify_alert`
+
+### 6.4 6 件套监控凑齐
+
+W73 B-2 4 类 hot-fix (alembic + PWA + nginx + SW) + W74 D-1 多租户隔离 + W75 B-3 webhook 修复 = **6 件套监控共用 webhook 库**
