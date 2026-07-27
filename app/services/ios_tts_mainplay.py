@@ -25,12 +25,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.services.web_speech_fallback import (
+# W78 B-1 类 20.12.1 修复: 原 import 指向 web_speech_fallback / tts_cache,
+# 但 W77 B-2 (Android) 同名模块在 main merge 时覆盖了 B-1 版本 →
+# ImportError: cannot import name 'WebSpeechFallbackHandler'.
+# 改指 iOS 专属模块 (ios_web_speech_fallback / ios_tts_cache), Android 侧不动.
+from app.services.ios_web_speech_fallback import (
     WebSpeechFallbackHandler,
     WebSpeechResult,
     build_web_speech_fallback_handler,
 )
-from app.services.tts_cache import (
+from app.services.ios_tts_cache import (
     TTSCacheEntry,
     TTSCacheStore,
     build_tts_cache_store,
