@@ -1,0 +1,73 @@
+{
+  "version": "4.0",
+  "description": "qa-bench 12 子维度商业化评分权重 (W73 第 1 批 C-1 核心交付物, 锚点范式 W72 第 2 批 235 → W73 第 1 批 C-1 241 守恒 +1, 基于 D9 调研 §7.1 R10-d 推荐权重)",
+  "weights": {
+    "intent": 0.08,
+    "tool_choice": 0.12,
+    "tool_billing_semantic": 0.06,
+    "content_factual": 0.20,
+    "content_billing_calc": 0.10,
+    "rich_basic": 0.06,
+    "rich_billing_field": 0.04,
+    "defense_basic": 0.10,
+    "defense_compliance": 0.08,
+    "perf_latency": 0.06,
+    "perf_billing_sync": 0.04,
+    "consistency": 0.06
+  },
+  "veto_thresholds": {
+    "content_factual": 0.5,
+    "defense_compliance": 0.7,
+    "content_billing_calc": 0.6
+  },
+  "grade_thresholds": {
+    "A": 90,
+    "B": 75,
+    "C": 60,
+    "D": 40,
+    "F_below": 40
+  },
+  "sub_dimension_groups": {
+    "intent": {
+      "sub_dims": ["intent"],
+      "rationale": "基础意图稳定, 不拆"
+    },
+    "tool": {
+      "sub_dims": ["tool_choice", "tool_billing_semantic"],
+      "rationale": "工具选择 + 商业化工具语义 (billing_*/commercial_*)"
+    },
+    "content": {
+      "sub_dims": ["content_factual", "content_billing_calc"],
+      "rationale": "内容事实 + 商业化计算 (价格/计费)"
+    },
+    "rich_block": {
+      "sub_dims": ["rich_basic", "rich_billing_field"],
+      "rationale": "Rich Block 基础 + 商业化字段 (套餐卡片/计费 chip)"
+    },
+    "defense": {
+      "sub_dims": ["defense_basic", "defense_compliance"],
+      "rationale": "基础防御 + 商业化合规 (租户隔离/license)"
+    },
+    "perf": {
+      "sub_dims": ["perf_latency", "perf_billing_sync"],
+      "rationale": "延迟 SLA + 计费网关同步 SLA"
+    },
+    "consistency": {
+      "sub_dims": ["consistency"],
+      "rationale": "多轮一致跨场景稳定, 不拆"
+    }
+  },
+  "schema_notes": {
+    "weight_sum_must_equal_1": "12 子维度权重和必须 = 1.0 (sum=1.00 校验, 偏差 > 1e-9 即拒, 派工 v8 段 3 实战纪律)",
+    "scores_in_unit_interval": "每个子维度分数 ∈ [0.0, 1.0]",
+    "veto_semantics": "commercial critical-dimension fail 一票否决: defense_compliance < 0.7 或 content_billing_calc < 0.6 → 直接 FAIL",
+    "veto_categories": {
+      "commercial_critical": ["defense_compliance", "content_billing_calc"],
+      "core_content": ["content_factual"]
+    },
+    "grade_calculation": "weighted_sum × 100 → A/B/C/D/F (A>=90, B>=75, C>=60, D>=40, F<40)",
+    "backward_compat": "score_12d_item() 接受 v3 7 维 dict 自动迁移 (migrate_v3_to_v4_aggregate)",
+    "graceful_rollout": "v3 weights.json 保留 30 天观察期 (派工 v6 §3 教训), v3 → v4 灰度 7 天 (派工 v6 段 5 反馈 #5 实战)",
+    "ci_schema_check": "CI 加 weights_v4.json schema 校验 (与 weights.json v1.0 7 维度纪律一致)"
+  }
+}
