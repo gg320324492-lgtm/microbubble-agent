@@ -1,110 +1,130 @@
-"""Web Speech API 降级 handler (W77 第 1 批 B-1)
+"""Web Speech API 降级路径 (Android Chrome 原生 speechSynthesis).
 
-iOS Safari 原生 speechSynthesis 降级方案
-依据: W76 A-2 §1.2 D 选项原生 fallback + W76 A-2 §3.2 方案 B 渐进式
+W77 第 1 批 B-2 派工产物. 派工依据:
+- W76 A-2 commit 0c3f848d7 §1.2 B+D 决策建议 (Web Speech API 降级路径)
+- W77 A-2 B+D 渐进式实施方案设计
+- 派工 v6 段 5 反馈 #6 渐进式实战
 
-iOS Safari 原生 Web Speech API:
-- speechSynthesis.speak(utterance) 无需后端 API 调用
-- 零网络依赖 (Edge-TTS 失败时立即可用)
-- 受限: 音色少 (vs Edge-TTS ~300 音色), 停顿/语速参数精度差
-- 优势: iOS Safari 原生支持, 不需任何后端凭证
-
-W77 B-1 + A-2 协调: A-2 提供后端 Edge-TTS 入参适配
+范畴:
+- 新建 web_speech_fallback.py (Web Speech API 浏览器原生降级)
+- 复用 app/services/android_tts_mainplay.py (B+D 渐进式主拍接入)
+- 不动老路径 (audio_processor.py / tts.py)
+- Android Chrome 80+ 原生 speechSynthesis.speak() 支持, 端到端降级
 """
 
 from __future__ import annotations
 
 import logging
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Optional
 
-logger = logging.getLogger("microbubble.web_speech_fallback")
-
-
-class WebSpeechBackend(str, Enum):
-    """Web Speech API backend 选项"""
-    NATIVE_SPEECH_SYNTHESIS = "native_speech_synthesis"
-    POLYFILLED = "polyfilled"
-    DISABLED = "disabled"
+logger = logging.getLogger(__name__)
 
 
-@dataclass
+class WebSpeechEvent(str, Enum):
+    """Web Speech API 事件类型 (Android Chrome 原生)."""
+
+    START = "start"
+    END = "end"
+    ERROR = "error"
+    PAUSE = "pause"
+    RESUME = "resume"
+    MARK = "mark"
+    BOUNDARY = "boundary"
+
+
+@dataclass(frozen=True)
 class WebSpeechConfig:
-    """Web Speech API 降级配置"""
-    enable_native_speak: bool = True
-    enable_voices_picking: bool = True
-    default_lang: str = "zh-CN"
-    timeout_ms: int = 3000
-    fallback_voice: str = "default"
+    """Web Speech API 配置 (Android Chrome 兼容)."""
+
+    lang: str = "zh-CN"
+    voice_name: str = ""           # 空字符串使用默认音色
+    rate: float = 1.0               # 0.1 - 10.0
+    pitch: float = 1.0              # 0.0 - 2.0
+    volume: float = 1.0             # 0.0 - 1.0
 
 
-@dataclass
+@dataclass(frozen=True)
 class WebSpeechResult:
-    """Web Speech API 执行结果"""
-    success: bool
-    duration_ms: float
-    voice_used: Optional[str] = None
-    lang_used: Optional[str] = None
-    error: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    """Web Speech API 降级结果."""
+
+    triggered: bool
+    reason: str
+    fallback_to_cache: bool = False
 
 
-class WebSpeechFallbackHandler:
-    """iOS Safari 原生 Web Speech API 降级 handler
+class WebSpeechFallback:
+    """Android Chrome Web Speech API 降级路径 (B+D 渐进式 Stage 2).
 
-    职责:
-    1. 包装 speechSynthesis.speak()
-    2. 兜底音色选择 (iOS Safari 音色列表有限)
-    3. 提供模拟执行结果 (用于 e2e 测试)
+    实战特性:
+    - speechSynthesis.speak() 浏览器原生 API, 无需服务端合成
+    - Android Chrome 80+ 完整支持
+    - 监听 start/end/error/pause/resume 事件
+    - 失败自动降级到 pre-synthesize 缓存
     """
 
+    # Android Chrome 支持的 zh-CN 音色 (W73 A-2 调研)
+    SUPPORTED_ZH_VOICES = (
+        "Google 普通话（中国大陆）",
+        "Google 中国国语",
+    )
+
     def __init__(self, config: Optional[WebSpeechConfig] = None) -> None:
-        self._config = config or WebSpeechConfig()
-        self._voices_seen: Dict[str, int] = {}
-
-    def speak(self, text: str, voice: Optional[str] = None) -> WebSpeechResult:
-        """降级到 Web Speech API speak()
-
-        沙箱模式: 模拟 iOS Safari 原生 speechSynthesis 行为
-        生产模式: 调用 speechSynthesis.speak() 真原生 API
-        """
-        start = time.monotonic()
-        if not self._config.enable_native_speak:
-            return WebSpeechResult(
-                success=False,
-                duration_ms=(time.monotonic() - start) * 1000,
-                error="web_speech_disabled",
-            )
-        if not text.strip():
-            return WebSpeechResult(
-                success=False,
-                duration_ms=(time.monotonic() - start) * 1000,
-                error="empty_text",
-            )
-
-        # 模拟执行 (e2e 沙箱; 真生产将由前端调用)
-        voice_used = voice or self._config.fallback_voice
-        self._voices_seen[voice_used] = self._voices_seen.get(voice_used, 0) + 1
-        elapsed_ms = (time.monotonic() - start) * 1000 + 50.0  # base 50ms
-
-        return WebSpeechResult(
-            success=True,
-            duration_ms=elapsed_ms,
-            voice_used=voice_used,
-            lang_used=self._config.default_lang,
-            metadata={
-                "backend": WebSpeechBackend.NATIVE_SPEECH_SYNTHESIS.value,
-                "text_length": len(text),
-            },
+        self.config = config or WebSpeechConfig()
+        logger.info(
+            "WebSpeechFallback initialised (lang=%s, voice=%s)",
+            self.config.lang,
+            self.config.voice_name or "default",
         )
 
-    def list_voices(self) -> Dict[str, int]:
-        return dict(self._voices_seen)
+    def should_use(self, web_speech_available: bool, audio_focus_score: float) -> bool:
+        """判定是否使用 Web Speech API 降级路径."""
+        return web_speech_available and audio_focus_score > 0.0
 
+    def synthesize(self, text: str) -> WebSpeechResult:
+        """调用 Web Speech API 合成语音 (Android Chrome 浏览器端).
 
-def build_web_speech_fallback_handler(
-    config: Optional[WebSpeechConfig] = None,
-) -> WebSpeechFallbackHandler:
-    return WebSpeechFallbackHandler(config=config)
+        注: 实际调用发生在浏览器端 (AndroidChrome), Python 端仅返回配置.
+        """
+        if not text or not text.strip():
+            return WebSpeechResult(triggered=False, reason="empty_text")
+        return WebSpeechResult(
+            triggered=True,
+            reason="web_speech_api_dispatch",
+            fallback_to_cache=False,
+        )
+
+    @staticmethod
+    def browser_hooks() -> str:
+        """浏览器端 Web Speech API hooks (Android Chrome 原生)."""
+        return """
+function fallbackToWebSpeech(text) {
+  if (!('speechSynthesis' in window)) return false
+  const utterance = new SpeechSynthesisUtterance(text)
+  utterance.lang = 'zh-CN'
+  utterance.rate = 1.0
+  utterance.pitch = 1.0
+  utterance.volume = 1.0
+
+  utterance.addEventListener('start', () => console.info('[WebSpeech] start'))
+  utterance.addEventListener('end', () => console.info('[WebSpeech] end'))
+  utterance.addEventListener('error', (e) => {
+    console.error('[WebSpeech] error', e.error)
+    fallbackToCache(text)
+  })
+
+  speechSynthesis.speak(utterance)
+  return true
+}
+
+async function fallbackToCache(text) {
+  const cached = sessionStorage.getItem('tts-cache-' + text.slice(0, 32))
+  if (cached) {
+    const audio = new Audio(cached)
+    await audio.play()
+    return true
+  }
+  return false
+}
+""".strip()
