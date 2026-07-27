@@ -61,6 +61,9 @@ const {
 // ============================================================================
 const themeStore = useThemeStore()
 const isDark = computed(() => themeStore.isDark)
+// W72 B-5: 6 主题 dark mode 完整版 - 暴露 accent + themeMode 给 template
+const accent = computed(() => themeStore.accent)
+const themeMode = computed(() => themeStore.mode)
 
 // v78 UI-redesign: 顶部 [+] FAB 用 store 直接创建会话
 const chatSessionsStore = useChatSessionsStore()
@@ -396,8 +399,17 @@ onUnmounted(() => {
       />
 
       <div class="chat-main">
-        <!-- v78 UI-redesign 3-zone 顶栏 -->
-        <header class="chat-header glass glass-lg">
+        <!-- v78 UI-redesign 3-zone 顶栏 — W72 B-5 桌面端 6 主题 dark mode 完整版
+             3-zone: 左 sidebar 触发 + 中 ChatBreadcrumb + 右 [+]
+             桌面端 >= 1024px: 3-6-3 grid; 平板 4-4-4; 移动 1-2-1
+             6 主题适配: theme-{accent}-{mode} (orange/ocean/forest × light/dark)
+             通过 useThemeStore.accent + mode 计算 -->
+        <header
+          class="chat-header glass glass-lg"
+          :class="[`theme-${accent}`, `theme-mode-${themeMode}`]"
+          :data-theme="themeMode"
+          :data-accent="accent"
+        >
           <div class="header-left">
             <el-button
               id="chat-header-sidebar-toggle"
@@ -697,15 +709,35 @@ onUnmounted(() => {
 }
 .msg-enter-active { transition: var(--transition-all-slow) ease; }
 .msg-enter-from { opacity: 0; transform: translateY(8px); }
+/* W72 B-5: 桌面端 ChatViewSSE 顶栏 6 主题 dark mode 完整版
+   3-zone grid 桌面端 >= 1024px: 3-6-3; 平板 4-4-4; 移动 1-2-1 */
 .chat-header {
   display: grid;
-  grid-template-columns: auto 1fr auto;  /* v78 3-zone: 左 / 中 / 右 */
+  grid-template-columns: 3fr 6fr 3fr;  /* 桌面端 3-6-3 */
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--color-border-light);
   min-height: 56px;
+  background: var(--color-bg-card);
+  transition: background 0.3s ease, color 0.3s ease;
 }
+/* 平板 768-1023px: 4-4-4 */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .chat-header { grid-template-columns: 4fr 4fr 4fr; }
+}
+/* 移动端 < 768px: 1-2-1 折叠 */
+@media (max-width: 767px) {
+  .chat-header { grid-template-columns: 1fr 2fr 1fr; padding: 6px 10px; }
+}
+/* 6 主题 light mode 背景微调 (orange/ocean/forest) */
+.chat-header.theme-orange { background: #fff5f0; }
+.chat-header.theme-ocean { background: #f0f7ff; }
+.chat-header.theme-forest { background: #f5faf5; }
+/* 6 主题 dark mode 完整版 */
+.chat-header.theme-mode-dark.theme-orange { background: #1a1a2e; color: #fff5f0; }
+.chat-header.theme-mode-dark.theme-ocean { background: #0f1924; color: #e6f3ff; }
+.chat-header.theme-mode-dark.theme-forest { background: #1a2e1f; color: #e8f5e8; }
 .header-left { display: flex; align-items: center; gap: 12px; }
 .header-center { display: flex; align-items: center; justify-content: center; min-width: 0; }
 .header-right { display: flex; align-items: center; gap: 4px; }
