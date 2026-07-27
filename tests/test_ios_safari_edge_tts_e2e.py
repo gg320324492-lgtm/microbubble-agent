@@ -355,7 +355,9 @@ class TestIOSSafariMainplayBD:
             MainplayState,
             build_ios_safari_mainplay_adapter,
         )
-        from app.services.tts_cache import build_tts_cache_store
+        # W78 B-1 类 20.12.1 修复: iOS 侧缓存模块已更名 ios_tts_cache
+        # (原 tts_cache.py 被 W77 B-2 Android 同名模块 merge 覆盖)
+        from app.services.ios_tts_cache import build_tts_cache_store
 
         # 预热缓存: 启用 production_key 模拟 Edge-TTS 成功写缓存
         cache_store = build_tts_cache_store(ttl_seconds=86400)
