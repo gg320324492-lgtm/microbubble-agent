@@ -10,6 +10,13 @@
 # - retry 策略 (3 次, 间隔 5s)
 # - payload 必含 hashed_manifest_status / unhashed_manifest_status / detection_method
 #
+# W80 第 1 批 A-2 修复 (W79 A-1 拦截 #10 副发现实战):
+# - 新增 PWA_DISABLED 检测: vite-plugin-pwa `disable: true` 时 hashed manifest 不存在 = by-design,
+#   不报警; 但 unhashed manifest 仍应 410 (防护保留)
+# - 新增 hashed manifest 200 regex 验证 (W80 A-2 §2.3 nginx `location ~ ^/manifest\.[a-f0-9]+\.webmanifest$`)
+# - 检测 PWA 是否意外重新启用 (web/dist 出现 sw.js 但 main.js SW 注册 noop = 不一致)
+# - 累计 6 case 验证
+#
 # 用途: 每 5 分钟跑一次, 验证 PWA manifest 是否正常被浏览器访问
 # 报警: hashed manifest 返回 410 (异常, 应 200) / unhashed manifest 返回 200 (异常, 应 410)
 # 修复: cd web && npm run build (严禁 vite build 直跑) + git add -f hashed manifest
@@ -27,6 +34,7 @@ source "$SCRIPT_DIR/lib/webhook_payload.sh"
 
 SITE_URL="${SITE_URL:-https://xiaoqi.studio}"
 WEB_DIST="${WEB_DIST:-/opt/microbubble-agent/web/dist}"
+WEB_SRC="${WEB_SRC:-/opt/microbubble-agent/web/src}"
 LOG_FILE="${LOG_FILE:-/var/log/microbubble-agent/pwa-manifest-monitor.log}"
 WEBHOOK_URL="${WEBHOOK_URL:-}"
 export WEBHOOK_URL
@@ -36,6 +44,11 @@ export ALERT_LOG_FILE
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
+
+# W80 A-2 §2.4 case 1: index.html 应 200 + text/html
+INDEX_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "$SITE_URL/" 2>&1)
+INDEX_CT=$(curl -sk -o /dev/null -w "%{content_type}" "$SITE_URL/" 2>&1)
+log "index.html: $INDEX_CODE / $INDEX_CT (期望 200 / text/html)"
 
 # 1. unhashed manifest 应返回 410 (CLAUDE.md 防护保留)
 UNHASHED_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "$SITE_URL/manifest.webmanifest" 2>&1)
@@ -49,7 +62,38 @@ if [ "$UNHASHED_CODE" != "410" ]; then
     exit 1
 fi
 
-# 2. 找到最新 hashed manifest
+# 2. sw.js 应返回 410 (CLAUDE.md 防护保留)
+SW_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "$SITE_URL/sw.js" 2>&1)
+log "sw.js: $SW_CODE (期望 410)"
+
+if [ "$SW_CODE" != "410" ]; then
+    notify_alert "pwa-manifest-monitor" "critical" "sw.js 应返 410 (防护保留)" \
+        "{\"sw_js_status\":$SW_CODE,\"expected\":410,\"detection_method\":\"http_probe\",\"fix_ref\":\"nginx location = /sw.js\"}" || exit 1
+    log "  修复: 检查 nginx 是否还含 'location = /sw.js { return 410; }'"
+    exit 1
+fi
+
+# 3. registerSW.js 应返回 410 (W68 第 14 批 H-2 防护)
+REG_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "$SITE_URL/registerSW.js" 2>&1)
+log "registerSW.js: $REG_CODE (期望 410)"
+
+if [ "$REG_CODE" != "410" ]; then
+    notify_alert "pwa-manifest-monitor" "critical" "registerSW.js 应返 410 (H-2 防护)" \
+        "{\"register_sw_status\":$REG_CODE,\"expected\":410,\"detection_method\":\"http_probe\",\"fix_ref\":\"nginx location = /registerSW.js\"}" || exit 1
+    log "  修复: 检查 nginx 是否还含 'location = /registerSW.js { return 410; }'"
+    exit 1
+fi
+
+# 4. 检测 PWA 是否 enabled (vite.config.js VitePWA disable: true = 禁用)
+PWA_DISABLED=false
+if [ -f "$WEB_SRC/../vite.config.js" ]; then
+    if grep -q "disable: true" "$WEB_SRC/../vite.config.js" 2>/dev/null; then
+        PWA_DISABLED=true
+    fi
+fi
+log "PWA disabled state: $PWA_DISABLED"
+
+# 5. 找到最新 hashed manifest
 if [ ! -d "$WEB_DIST" ]; then
     log "WARN: web dist dir not found: $WEB_DIST, 跳过 hashed manifest 验证"
     exit 0
@@ -57,6 +101,11 @@ fi
 
 HASHED_FILE=$(ls "$WEB_DIST"/manifest.*.webmanifest 2>/dev/null | head -1)
 if [ -z "$HASHED_FILE" ]; then
+    if [ "$PWA_DISABLED" = "true" ]; then
+        log "  hashed manifest 不存在 — PWA 已禁用 (W68 H-3 by-design), 跳过 200 验证"
+        log "  防护态 3/3 OK (unhashed manifest 410 + sw.js 410 + registerSW.js 410)"
+        exit 0
+    fi
     notify_alert "pwa-manifest-monitor" "critical" "hashed manifest not found" \
         "{\"web_dist\":\"$WEB_DIST\",\"detection_method\":\"fs_ls\",\"fix_ref\":\"cd web && npm run build\"}" || exit 1
     log "  修复: cd web && npm run build (严禁 vite build 直跑)"
@@ -77,7 +126,7 @@ if [ "$HASHED_CODE" != "200" ]; then
     exit 1
 fi
 
-# 3. 验证 Content-Type 是 application/manifest+json
+# 6. 验证 Content-Type 是 application/manifest+json
 HASHED_CT=$(curl -sk -o /dev/null -w "%{content_type}" "$SITE_URL/$HASHED_NAME" 2>&1)
 log "hashed manifest Content-Type: $HASHED_CT (期望 application/manifest+json)"
 
@@ -89,5 +138,5 @@ if ! echo "$HASHED_CT" | grep -q "application/manifest+json"; then
     exit 1
 fi
 
-log "PWA manifest monitor OK"
+log "PWA manifest monitor OK (防护态 + PWA disabled by-design 一致)"
 exit 0

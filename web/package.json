@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/postbuild-fix-manifest.js",
     "build:raw": "vite build",
     "build:pwa": "vite build && node scripts/postbuild-fix-manifest.js",
     "postbuild:fix-manifest": "node scripts/postbuild-fix-manifest.js",
