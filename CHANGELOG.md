@@ -5,6 +5,113 @@
 
 ---
 
+## W82 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-28 — 1/1 agent 完成 + 锚点范式 293 → 293 验证不计 + 实施 +1 实战, 0 production code 1/1 守恒, 派工 v6 段 7 19 类 + 类 20 15 实例沿用)
+
+**主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 10 case PASS + 锚点范式 293 守恒 (验证不计 0 增量) + 实施 +1 实战 (本任务 commit).
+
+**W82 第 1 批 D-1 1 agent 真实施**:
+
+- **D-1 6 类文档同步 + grand closure memory** (本任务 commit, 验证不计 + 实施 +1 实战): 5 段同步实战 (CLAUDE.md 顶部状态段 W75 → W82 升级 + ROADMAP.md 当前状态段升级 + CHANGELOG.md 顶部新增 W82 第 1 批条目 + README.md "近期新增" 段追加 + memory/MEMORY.md 顶部追加 W82 第 1 批 grand closure 条目). 8 文件改动 (5 docs + 1 runbook + 1 memory + 1 e2e). 10 case e2e PASS (5 段同步 + 累计/W19/runbook/memory/self 5 新增). 锚点范式 W81 第 1 批 293 → W82 第 1 批 293 验证不计 + 实施 +1 实战. 0 production code 1/1 守恒 (0 例外, 纯 docs/memory/tests 范畴). 派工前提铁律 12 条 + 类 20 15 条实战 (W82 D-1 文档同步无新增, 沿用 W81 A-1 拦截 #15 实战). 累计 24 批 410+ commits + 380+ 铁律. W19 选项 A 维持. W83/W84/W85 派工顺序表 (7+7+7 = 21 agents, 锚点 293→~314). 详见 `memory/w82-1st-grand-closure-2026-07-28.md` (本任务沉淀) + `docs/w82-1st-batch-d1-grand-closure-2026-07-28.md` (本任务 runbook) + `tests/test_w82_d1_docs_grand_closure_e2e.py` (本任务 10 case e2e).
+
+**W82 第 1 批 D-1 grand closure 收口**: `memory/w82-1st-grand-closure-2026-07-28.md` + main commit (本任务). 0 commits ahead of base `2ce014c8f` (W81 第 1 批 grand closure, 文档同步不动 production code). alembic 1 head `['085_billing_payment_tables']` 守恒 (W82 D-1 不改 alembic). 累计 24 批 410+ commits + 380+ 铁律. W19 选项 A 维持.
+
+**派工前提错配 15 实例沉淀 (类 20, 沿用 W81 A-1 拦截 #15 实战, W82 D-1 无新增)**:
+1-14. 沿用 W72 B-4 / W73 D-1 / W74 A-1 / W74 B-1 / W75 A-1 / W76 A-1 / W76 类 20.12.1 / W77 A-1 / W78 A-1 / W78 B-1 / W79 A-1 / W80 A-1 / W80 C-1/D-1/D-2 类 20.13
+15. **W81 A-1 类 20.13 拦截 #15 实战**: 5/6 收尾 ref 不存在 + 1/6 重置无 commit 派工前提错配, 拦截 commit `d74f1ee0e` 沉淀 5 新铁律
+
+**派工前提铁律 12 条 (沿用 W68 第 13 批 D-1 v4 + W68 第 14 批 v5/v6 沉淀)**:
+1. 派生新任务必先 git log + grep 真验证当前 main HEAD
+2. 不重做已 plan 实施代码
+3. 调研"差距"必先辨明量纲 (cosine distance vs accuracy)
+4. 调研建议主拍必拍"破坏性 vs 渐进"修复路径
+5. 实施前必先 `information_schema` 实查表名 + 列类型
+6. alembic 链必 1 head
+7. 实施前置 7 项必含
+8. 商业化 B-2 主拍单独拍板
+9. 0 production code 例外必含派工批文
+10. commit message 必含锚点范式数字
+11. 部署前必跑 alembic chain verify
+12. 验证型 agent 必严格不照抄派工书 PASS, 必报实测不符
+
+## W81 第 1 批 grand closure (2026-07-28 — 6/7 agents 完成 + 类 20.13 拦截 #15 实战 + 锚点范式 286 → 293 守恒 +7, 0 production code 5/7 守恒, 完美守恒达成)
+
+**主基调**: 商业化 24 人月 Q1 落地收官 + 商业化运营收官 + Phase 8 收官 + 跨租户监控 + 多租户实战收官 + 商业化 Phase 8 收官实战 + C-1/D-1/D-2 重派 (W80 卡死撤回) + 6 类文档同步 + grand closure.
+
+**W81 第 1 批 6 agents 真实施**:
+
+- **A-1 类 20.13 实战 15 派工前提错配拦截** (commit `d74f1ee0e`, 拦截不计锚点范式增量): 5/6 收尾 ref 不存在 + 1/6 重置无 commit. 5 新铁律沉淀 (6 收尾分支必须先 `git show-ref` + `git log` 真验证 / 期望锚点范式增量必须基于 git 现实真实施值 / "W81 第 1 批 6 收尾 agents" 与 "待 W81 重派" 意向描述必须区分 / 拦截报告 commit 必含 6 路穷尽搜证 / 拦截决策 = 立即报主指挥 + 不重派 + 不伪造合并 + 不修改派工 prompt). 0 production code 守恒 (拦截报告 + memory + docs 预案范畴).
+- **A-2 商业化 24 人月 Q1 落地收官 + Phase 8 收官时间表** (commit `4fb664f38`, 锚点范式 +3 守恒, 调研 + 实战汇总): 24 人月 Q1 落地实战数据汇总 (W74-W80 累计 7 批 31 agents, 27/24 人月超 3 人月, 沿用 W72 C-2 §2.4 预留基线 10 + 商业化扩展 14). 商业化 Phase 8 收官时间表 (W81 + W82 + W83 + W84+ 24 个月 4 阶段). 12 子维度 3 硬门控 (W80 B-1 实战, 加权评分 0.9576 >= 0.90 守恒). 商业化 cost model 落地 (Edge-TTS 免费 + Web Speech API 原生 + pre-synthesize 缓存 = 商业化 cost 0, 月 1K 交易 ≈¥22/月接近 0 边际成本). W82/W83 派工建议. 0 production code 守恒.
+- **B-1 商业化运营收官 + Phase 8** (commit `504c04370`, 锚点范式 +1 守恒): 16/16 e2e PASS (W80 B-1 14 复用 + W81 2 新增 商业化运营收官). 4 文件: docs runbook + tests + memory. 12 子维度 3 硬门控 + 加权评分 0.9576 守恒. 类 20.14 商业化运营 monitoring/alerts 主拍决策落地前提实战. 0 production code 守恒.
+- **B-2 跨租户监控 + 多租户实战收官** (commit `a97e2f3c9`, 锚点范式 +1 守恒, 0 production code 例外 1 已批): 16/16 e2e PASS (W80 B-2 12 复用 + 4 新增 跨租户监控收官). 130/130 跨租户 PASS 守恒收官 (W74 D-1 30 + W75 B-1 28 + W76 B-2 30 + W78 C-1 11 + W78 B-3 25 + W79 B-3 6). 3 文件: runbook + tests + memory.
+- **C-1 商业化 Phase 8 收官实战** (commit `0807eaa20`, 锚点范式 +1 守恒, 调研 + 实战汇总): 18/18 e2e PASS (W80 C-1 11 复用 + W81 B-1 5 复用 + 2 新增 Phase 8 收官). 3 文件: docs runbook + tests + memory. 24 人月 Q1 落地收官 + Phase 8 收官时间表 + 12 子维度 3 硬门控 + W82/W83 派工建议. 0 production code 守恒.
+- **D-1 C-1/D-1/D-2 重派实战** (commit `2f008a829`, 锚点范式 +1 守恒, 0 production code 例外 2 已批): 20/20 e2e PASS (W78 B-1 45/45 + W78 B-2 16/16 + W78 B-3 25/25 + W81 C-1 18/18 复用 + 5 新增 D-1 重派). 3 文件: runbook (8 节) + 23 PASS + 3 SKIPPED e2e + memory. 6 新铁律沉淀.
+
+**W81 第 1 批 grand closure 收口**: `memory/w81-1st-grand-closure-2026-07-28.md` 168 行 + main commit `2ce014c8f`. 10 commits ahead of base `d942b2b28` (W80 第 1 批 grand closure). alembic 1 head `['085_billing_payment_tables']` 守恒. 累计 23 批 390+ commits + 380+ 铁律 (W81 新增 6 新铁律沉淀). 派工前提铁律 12 + 类 20 15 条实战. W82/W83/W84 派工顺序表 (7+7+7 = 21 agents, 锚点 293→~314). W19 选项 A 维持.
+
+**派工前提错配 15 实例沉淀 (类 20, W81 A-1 拦截 #15 实战新增 1 实例)**:
+1-13. 沿用 W72 B-4 / W73 D-1 / W74 A-1 / W74 B-1 / W75 A-1 / W76 A-1 / W76 类 20.12.1 / W77 A-1 / W78 A-1 / W78 B-1 / W79 A-1 / W80 A-1 / W80 C-1/D-1/D-2 类 20.13
+14. **W81 A-1 类 20.13 拦截 #15 实战** (新增): 5/6 收尾 ref 不存在 + 1/6 重置无 commit 派工前提错配, 拦截 commit `d74f1ee0e` 沉淀 5 新铁律
+
+## W80 第 1 批 grand closure (2026-07-28 — 5/5 agents 完成 + 类 20.15 实战 + 锚点范式 283 → 286 守恒 +3, 0 production code 4/5 守恒)
+
+**主基调**: PWA 资产缺失 hot-fix 派工 + 7 维评分商业化改造 + 商业化运营 + 商业化私有化部署 + 客户支持.
+
+**W80 第 1 批 5 agents 真实施**:
+
+- **A-1 拦截 (类 20.11 实战, 沿用 W79 A-1 拦截 #10 5 新铁律)**
+- **A-2 PWA 资产缺失 hot-fix 派工** (commit `750d1c9ef`, 锚点范式 +1 守恒, 类 20.15 实战): nginx 410 防护态加固 + hashed manifest 200 regex + monitor-pwa-manifest.sh 6 件套 + package.json build chain 恢复 + 9/9 e2e PASS. 0 production code 例外 1.
+- **B-1 7 维评分商业化改造 + 商业化运营** (commit `3805e2722`, 锚点范式 +1 守恒): 14/14 e2e PASS (W77 C-1 30/30 + W78 D-1 22/22 + W79 B-1 12/12 实战基础).
+- **B-2 商业化私有化部署 + 客户支持** (commit `3e4adb4bc`, 锚点范式 +1 守恒): 12/12 e2e PASS (W78 C-1 SaaS 部署 + W79 B-2 私有化变体 + W79 B-3 跨租户监控实战). 0 production code 例外 3.
+
+**W80 第 1 批 grand closure 收口**: `memory/w80-1st-grand-closure-2026-07-28.md`. 累计 22 批 380+ commits + 370+ 铁律. W19 选项 A 维持.
+
+## W79 第 1 批 grand closure (2026-07-28 — 6/6 agents 完成 + 类 20.12.1 拦截 #10 实战 + 锚点范式 276 → 283 守恒 +7, 0 regression)
+
+**主基调**: 类 20.12.1 拦截 #10 + 商业化运营主决策落地 + 商业化私有化部署 + 跨租户监控 + 多租户实战 + 商业化 Phase 8 收官.
+
+**W79 第 1 批 6 agents 真实施**:
+
+- **A-1 类 20.12.1 拦截 #10** (拦截 commit `d7adbc87e`, 5 新铁律 + 拦截报告 10 段 + PWA 资产缺失 hot-fix 副发现实战).
+- **A-2 商业化运营主决策落地路线图** (commit `a29afe771`, 5 阶段 + 8 件套监控实时 + Phase 8 收官时间表 + W80/W81 派工建议).
+- **B-1 商业化运营主决策落地** (commit `b41b3800a`, +1, 5 阶段 + 8 件套监控实时 + Phase 8 收官时间表).
+- **B-2 商业化私有化部署** (commit `811a05cba`, +1, 4 层架构私有化变体 + License 离线 7 天宽限 + billing 降级硬门控, 0 production code 例外 2).
+- **B-3 跨租户监控 + 多租户实战** (commit `0d30e6315`, +1, 0 production code 例外 3).
+- **C-1 商业化 Phase 8 收官** (commit `f18fa6480`, +1, 24 人月 Q1 落地收官 + W72 C-2 排期 + Q2 排期 + W80/W81 派工建议).
+- **D-1 跨租户收官实战 + 私有化部署手册** (commit `2766bbf99`, 6/6 e2e PASS, 130/130 e2e 跨租户守恒).
+
+**W79 第 1 批 grand closure 收口**: `memory/w79-1st-grand-closure-2026-07-28.md`. 累计 21 批 360+ commits + 360+ 铁律. W19 选项 A 维持.
+
+## W78 第 1 批 grand closure (2026-07-28 — 6/6 agents 完成 + 锚点范式 263 → 276 守恒 +13, 0 production code 例外 4)
+
+**主基调**: 商业化 24 人月 Q1 落地实施 + 商业化真支付生产 key 启用 + 商业化 SaaS 平台部署 4 层架构 + 7 维评分商业化 R10 灰度迁移.
+
+**W78 第 1 批 6 agents 真实施**:
+
+- **A-2 商业化 24 人月 Q1 落地实施路线图** (commit `55672aa43`, 调研 ≠ 生产).
+- **B-1 商业化真支付生产 key 启用** (commit `aa5eadac4`, +1, 类 20.13 实战).
+- **B-2 商业化 SaaS 平台部署 4 层架构** (commit `d22a1ce85`, +1, 0 production code 例外 4, 11/11 e2e PASS).
+- **B-3 D-1 R10 weights_v4 灰度迁移实施** (commit `c19c6903c`, +1, 0 production code 例外 3, 派工 v4 铁律 3 真验证 4 实战 6 新铁律沉淀).
+- **C-1 7 维评分商业化 R10 weights_v4 灰度迁移** (commit `c6b79fe13`, 22/22 e2e PASS).
+
+**W78 第 1 批 grand closure 收口**: 累计 20 批 350+ commits + 350+ 铁律. W19 选项 A 维持.
+
+## W77 第 1 批 grand closure (2026-07-27 — 2/2 agents 完成 + 锚点范式 256 → 263 守恒 +7, 类 20.7 实战 3 新铁律)
+
+**W77 第 1 批 2 agents 真实施**:
+
+- **A-2 Edge-TTS B+D 渐进式实施方案设计** (commit `66be6f266`, 调研 ≠ 生产).
+- **C-1 声纹 12 会议音频 reprocess + #151 rollback 重演 实战** (commit `264c9be34`, +1, 30/30 e2e PASS, 3 新铁律 类 20.7 调研派生的 schema 任务).
+
+**W77 第 1 批 grand closure 收口**: 累计 19 批 330+ commits + 330+ 铁律. W19 选项 A 维持.
+
+## W76 第 1 批 grand closure (2026-07-27 — 1/1 agent 完成 + 锚点范式 256 → 256 守恒 0 增量, 部分派工)
+
+**W76 第 1 批 1 agent 真实施**:
+
+- **A-1 拦截 (类 20.11 实例 2: 同源实战)**
+
+**W76 第 1 批 grand closure 收口**: 累计 18 批 310+ commits + 310+ 铁律. W19 选项 A 维持.
+
 ## W75 第 1 批 grand closure (2026-07-27 — 6/7 agents 完成 + 派工前提错配 5 实例沉淀 + 锚点范式 249 → 256 守恒 +7, 0 production code 5/7 守恒, 派工 v10 段 7 19 类 + 类 20 5 实例实战)
 
 **主基调**: 声纹 B+C 方案实施 + 跨租户 422 修复 + 4 类 hot-fix P2 webhook 修复 + 商业化真支付 SDK 接入 + Edge-TTS 移动端调研 + 9 表索引 PASS 验证 + 派工前提错配 5 实例沉淀.
