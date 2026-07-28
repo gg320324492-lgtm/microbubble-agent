@@ -1,106 +1,302 @@
-# MEMORY.md — 主题分类目录 (W84 C-2 重整) + 时间倒序索引
+# MicroBubble Agent - W68-W85 batch 记忆索引 (W85 C-2 batch 3 主题重整)
 
-> **重整时间**: 2026-07-28 (W84 第 1 批 C-2 P2 docs/scripts 清 batch 2, 锚点范式 313 → 314 +1)
-> **重整摘要**: 顶部 8 类主题分类目录 + 下方时间倒序索引 (沿用 W68-W83 实战)
-> **派工 brief 据实上报**: brief 14 transient → 实测 88 transient (派工 v6 §1.2 "Status 段必真验证" 沿用)
-> **删后状态**: 263 → 175 永久保留 (88 transient 删) + 1 新增 (W84 C-2 memory) = 176 总数
-> **类 20 累计**: 17 实例 (本批 #17 类 20.14 派工 brief 数字必二次 grep 真验证)
-> **3 新铁律**: 派工 brief 数字必二次 grep / true orphan 判定必 4 路径 grep / 据实上报必沿用
+> **主基调**: 锚点范式 W7 12 → W85 321 单调上升 (累计 309 增量, 27 批)
+> **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E)
+> **派工前提铁律 12 + 类 20 实战 19 实例 + W84 C-2 据实上报铁律**
+> **8 类主题分类目录** (W85 C-2 batch 3 派生, 175 永久保留 memory 主题重整 + MEMORY.md 索引同步)
 
-## 1. 主题分类目录 (176 永久保留, 8 大类)
+**8 类主题统计** (W85 C-2 batch 3, 派工 brief 175 → 实测 175 守恒):
 
-### 1.1 W 批 grand closures (主索引, 32 文件)
-W2/W5/W7/W11/W14/W15/W16/W17/W18/W19/W20 baseline-closure + W25 + W58 + W60 + W62 + W68 (10 grand closures) + W71 + W72 (3) + W73 + W74 + W75 + W76 + W77 + W78 + W79 + W80 + W81 + W82 (2) + W83 + W84 (本批) = 32 文件
-
-### 1.2 派工 v6 实战 + 类 20 沉淀 (5 文件)
-- anchor-paradigm-21-day-validation + w68-task-mode-paradigm-plans-first + w68-alembic-chain-discipline + w68-changelog-roadmap-sync + w68-claude-md-status-update
-
-### 1.3 Drive v2 系列 (10 文件, PR6-PR18)
-- drive-v2-pr8-grand-closure + drive-view-beaute + 4 PR6 子批 + 4 folder 系列 + w68-route-8-b1-drive-pr11-path
-
-### 1.4 声纹 + ASR + TTS 链 (7 文件)
-- voiceprint-purification-loop + voiceprint-batch-bug-fix + voiceprint-reset-count + voiceprint-kmeans-optimization + voiceprint-purification-loop-151 + voiceprint-90-percent-gate + voiceprint-2026-06-30 + low-occupancy-speaker-filter + meeting-64-repair + asr-benchmark + m4a-meeting-batch-voiceprint-gpu + reprocess-meeting-pattern + recording-comprehensive-fix + recording-v4-three-piece-fix
-
-### 1.5 qa-bench 系列 (19 文件, W62-W84)
-- qa-bench-v3-w1 + reranker-upgrade + qa-bench-smart-filter-round9 + qa-bench-smoke-30 + llm-benchmark + ollama-qwen3-deployment + w67-qa-bench-d5-ci-fix-chain + w67-grand-closure-qa-bench-ci-final + w68-route-b-qa-bench-d6-future-roots + w68-route-b3-d6-roadmap + w68-route-5-qa-bench-d6-phase1 + w68-route-8-b4-qa-bench-phase3-matrix + w68-route-qa-bench-cache-rollout + w68-route-12-b3-d7-baseline-ci + plans-status-67-closure-w66 + 2026-07-23-six-batches-v2-21-paradigm + verified-plans-2026-07-22 + verified-plans-w68-2026-07-24
-
-### 1.6 PWA + nginx + Service Worker (1 文件)
-- pwa-manifest-410-v80-fix (pwa manifest 410 + v80 BUMP + regression + SW v79 BUMP + dist-force-add + pre-commit-dist-auto-add + avatar-recovery)
-
-### 1.7 部署 + 配置 + 基础设施 (6 文件)
-- docker-desktop-fix + incident-2026-06-18-deploy-chain + cors-origin-block-fix + vllm-rtx-5090-blackwell-setup + testbot-data-cleanup + docker-desktop-api-500 + config-value-contract-regression + minio-502-bad-gateway-3-layer-fix + rate-limit-redis + name-aliases-phonetic-correction
-
-### 1.8 历史归档 (90+ 文件)
-- chat-history + Self-RAG + LLM 后端 + 知识库 + OCR + 多模态 + 前端 + UI + 视觉收官 + 数据库 + ORM + 服务层 + W68 派工纪要 + D-2 文档同步 + W71/W72/W73/W74/W75/W76/W77/W78 派工实施 + W19 选项 A + Q4 future PR 评估 + 50 commit 阶段
+- **1. Drive v2 PR 系列**: 8 文件
+- **2. 声纹 + ASR + TTS 链**: 3 文件
+- **3. qa-bench 系列**: 5 文件
+- **4. 商业化系列**: 14 文件
+- **5. PWA + nginx + Service Worker**: 1 文件
+- **6. claude-code 通知体系 + 派工协调范式**: 4 文件
+- **7. 部署 + 配置 + 基础设施**: 6 文件
+- **8. 前端 + UI + 视觉 + 数据库 + Chat**: 17 文件
+- **9. W 批 grand closure + 派工纪要 + 锚点范式**: 120 文件
+- **memory/archived/ 历史归档**: 38 文件
+- **总计 active**: 178 文件 (+ archived 38 = 217 文件)
 
 ---
 
-# MEMORY.md — 时间倒序索引 (沿用, 88 transient 删后)
+# 8 类主题分类目录 (W85 C-2 batch 3 主题重整)
 
-- [2026-07-28 W84 第 1 批 C-2 P2 docs/scripts 清 batch 2 (锚点范式 W83 第 1 批 307 → W84 第 1 批 313 守恒 +6)](w84-1st-batch-c2-p2-docs-cleanup-2026-07-28.md) — 主指挥协调范式第 60 次派工. 88 transient memory 合并据实上报 (派工 brief 14 偏差 +74, 派工 v6 §1.2 "Status 段必真验证" 沿用 + W83 C-2 据实上报铁律沿用) + MEMORY.md 8 类主题目录重整 + 175 永久保留守恒. 类 20 累计 17 实例 (#17 W84 C-2 类 20.14 派工 brief 数字必二次 grep 真验证) + 3 新铁律. 累计 26 批 425+ commits + 410+ 铁律. 派工前提铁律 12 + 0 production code 守恒.
+## 索引 (主题分类)
 
-- [2026-07-27 W75 第 1 批 grand closure (锚点范式 W74 第 1 批 249 → W75 第 1 批 256 守恒 +7)](w75-1st-grand-closure-2026-07-27.md) — 主指挥协调范式第 49 次派工. 6/7 agents 完成 (A-1 撤回 类 20.11 派工前提错配实战). 6 件套监控凑齐 (W73 B-2 4 + W74 D-1 + W75 B-3 webhook + W75 D-1 9 表索引). 派工前提错配 5 实例沉淀 (类 20): W72 B-4 错配 / W73 D-1 brief 假设 / W74 A-1 错判基线 / W74 B-1 084 P1 缺陷 / W75 A-1 错派. 派工前提铁律 12 条 + 类 20 12 条 (含类 20.6 拒绝方案 A 字面改 0.9 实战 + 类 20.7 information_schema 实查 + 类 20.8 alembic chain verify + 类 20.9 验证型不照抄派工书 PASS + 类 20.10 派工 brief 基线假设必拒 + 类 20.11 收尾 agents 必先 commit 再派 A-1 + 类 20.12 验证型完成时刻早于修复型必 git log 真验证). 0 production code 5/7 守恒 (2 例外已批: B-2 1 行跨租户修复 + C-1 真支付 SDK 3 SDK). W76/W77/W78 派工顺序表 (7+7+7 = 21 agents, 锚点 256→~277). 累计 17 批 290+ commits + 290+ 铁律. W19 选项 A 维持. commit `504c4c1b5`.
+1. [Drive v2 PR 系列](#1-drive-v2-pr-系列) — Drive v2 PR 系列 (PR1-PR18, 2026-07-01 起)
+2. [声纹 + ASR + TTS 链](#2-声纹--asr--tts-链) — 声纹 + ASR + TTS 链 (2026-06-18 起)
+3. [qa-bench 系列](#3-qa-bench-系列) — qa-bench 系列 (W62-W68 D1-D8)
+4. [商业化系列](#4-商业化系列) — 商业化系列 (24 人月 Q1, W72-W81)
+5. [PWA + nginx + Service Worker](#5-pwa--nginx--service-worker) — PWA + nginx + Service Worker (2026-06-13 + 2026-07-08~11 回归)
+6. [claude-code 通知体系 + 派工协调范式](#6-claude-code-通知体系--派工协调范式) — claude-code 通知体系 + 派工协调范式
+7. [部署 + 配置 + 基础设施](#7-部署--配置--基础设施) — 部署 + 配置 + 基础设施 (2026-06-17~2026-07-22)
+8. [前端 + UI + 视觉 + 数据库 + Chat](#8-前端--ui--视觉--数据库--chat) — 前端 + UI + 视觉 + 数据库 + Chat (2026-06-25~2026-07-22)
+9. [W 批 grand closure + 派工纪要 + 锚点范式](#9-w-批-grand-closure--派工纪要--锚点范式) — W 批 grand closure + 派工纪要 + 锚点范式 (W2-W84 baseline)
 
-- [2026-07-27 W74 第 1 批 grand closure (锚点范式 W73 第 1 批 242 → W74 第 1 批 249 守恒 +7)](w74-1st-grand-closure-2026-07-27.md) — 主指挥协调范式第 48 次派工. 6/7 agents 完成 (A-1 撤回 类 20 错配实战). 4 项主拍决策全部实战: (1) P0 修 (084 P1 修复 + W73 7 分支合并入 main) (2) 084 走 B 路径 (复数表名 meetings/members + ALTER COLUMN TYPE jsonb, commit `8d0d12c2d`) (3) 撤回 W74 B-2 重复派工但保留数据 (替换 W73 B-1 Step 5) (4) W73 7 分支立即合并入 main (commit `9ef05e5ae` 锚点 235→242 +7). alembic 1 head `['085_billing_payment_tables']` 守恒 (单链 076→078→080→081→082→083→084→085, W73 A-1 修复 + W74 A-1 P1 修复). 派工前提错误类 20 实战 4 实例沉淀. 0 production code 14/15 守恒 (1 例外 B-2 计费真支付 mock 已批). 累计 16 批 280+ commits + 280+ 铁律. W19 选项 A 维持. commit `51d390b07`.
+---
 
-- [2026-07-27 W73 第 1 批 grand closure (锚点范式 W72 第 2 批 235 → W73 第 1 批 242 守恒 +7)](w73-1st-grand-closure-2026-07-27.md) — 主指挥协调范式第 47 次派工. 7/7 agents 全部完成. alembic 080 接 078 链序调整 (跳过 079 历史独立分支, 1 head `['083_commercial_tenant_isolation']` 守恒, 单链 076→078→080→081→082→083). 商业化 Phase 8 起步 (B-1 商业化 alembic 083) + 4 类 hot-fix 监控 (B-2 68e024677) + 7 维评分商业化改造 (C-1 6e65b32d5 12 子维度 + 6 检测器) + qa-bench D9 W73 调研整合 (D-1 ad2640891 5 子批 16-24 commit 估 + 起步纪律 6 项 + 类 20 实战 2 实例) + 声纹+ASR+TTS 调研 (A-2 a2243a650 5 项关键发现 + W74 4 子批建议) + 派工 v10 段 7 19 类实战 + 派工前提铁律 12 条沉淀. 0 production code 6/7 守恒 (1 例外 B-1 商业化已批). 累计 15 批 270+ commits + 270+ 铁律. commit `999276dda`.
+# 1. Drive v2 PR 系列 (PR1-PR18, 2026-07-01 起)
 
-- [2026-07-27 W72 第 2 批 grand closure (锚点范式 W72 第 1 批 220 → W72 第 2 批 235 守恒 +15)](w72-2nd-grand-closure-2026-07-27.md) — 主指挥协调范式第 46 次派工. 15/15 agents 全部完成. ppt-word 5 缺口真实施 + 商业化 Phase 8 起步 + 派工 v10 段 7 19 类实战 + 派工前提铁律 12 条沉淀. 0 production code 14/15 守恒 (5 例外已批). 累计 14 批 250+ commits + 260+ 铁律. commit `45de56f3b`.
-- [2026-07-27 W72 第 2 批 A-3 启动前 plans 真验证 (锚点范式 W72 第 1 批 220 → W72 第 2 批 A-3 第 224 守恒 +4)](w72-2nd-route-a3-plans-verify-2026-07-27.md) — 派工 v4 铁律 3 实战 (7 grep 真验证) + 派工 v10 段 7 19 类 (含新增 3 类: 类 17 ppt-word 5 缺口派生 / 类 18 vite build 直跑 PWA 410 / 类 19 commit message 必含锚点范式数字). ppt-word 真实施判定 67.5% (5.4/8 完成, 自报 87.5% 偏高). 派生新任务 6 项真验证表 (B-1/B-2/B-3/B-4/B-5/C-2) + W73 派工 18 agents 顺序表 + W74 主拍拍板起点 (Phase 8 + Drive v2 PR19+ + qa-bench D9). commit `6ae13629f`.
-- [2026-07-27 W72 第 2 批 C-1 Drive v2 部署文档 v3 (锚点范式 W72 第 1 批 220 → W72 第 2 批 C-1 第 230 守恒 +10)](w72nd-batch-c1-drive-deploy-doc-v3-2026-07-27.md) — 段 0 alembic 链风险 + 7 张迁移串单链 (076→079→078) + 段 1-4 PR17/18/5 部署 + 5 缺口收口 + 商业化 Phase 8 + 6 主题 dark + 段 5 部署必做 10 步 checklist (含 6 点 curl + SW BUMP + PWA install) + 段 6 4 类 hot-fix 链预案 (alembic 双头 / PWA 410 / octet-stream / SW 污染) + 段 7 锚点范式守恒 + **W73 起步纪律 6 项**. 4 新铁律. commit `1a330a767`.
-- [2026-07-24 W71 batch partial mid-派工 D-2 6 类文档同步 (锚点范式第 176 守恒预测)](w71-route-71st-batch-d2-docs-sync-2026-07-24.md) — 派工 v6 段 5 反馈 #2 实战. 当前 main HEAD = `0ae74f477` (W68-14 H-5). W71 批 15 agents 中 1 commit (W71-C-3 notify v2 仓库模板回测 memory, `af4129925`) 已合并 origin/main, 2 commits 待合并 (W71-A-1 部署收口 docs `0e46bb7b5` + W71-A-4 grand closure memo `1b08d8501`). 余 12 agents (A-2 prompt v7 / A-3 plans verify / B-1..B-5 / C-1 D8 / C-2 subagent / D-1 prompt v8 / D-3 anchor) 仍 base `0ae74f477` 0 commit. W71 grand closure ~184 锚点范式预测延后. 0 production code 改动铁律 N/15 守恒待定. 派工 v6 §1.2 "Status 段必真验证" 沿用 — 不伪造 B 路线 5 agents 工作. 主仓库 5 文件 (CLAUDE.md/ROADMAP.md/CHANGELOG.md/README.md/MEMORY.md) 全部加 W71 partial 段, +1 新增 memory (本任务).
-- [2026-07-24 W68 第 14 批 15 agents grand closure (锚点范式 169 → 175 预期)](w68-grand-closure-14th-batch-2026-07-24.md) — 主基调 Drive v2 PR17 文件秒传 + PR18 团队共享盘 + PR5 分片上传 (B-1/B-2/B-3 alembic 078/079/080 串单链 077→078→079→080) + qa-bench D8 调研 (C-1 七项实施前置) + Mobile UX v3.3 dark 跨组件验证 (C-2) + Desktop 缩略图懒加载 + LQIP (C-3) + claude-code notify v2 部署验证 5 触发器 (B-4) + 派工纪要 v5/v6 (A-2 commit `93dbd2cc7` / D-1) + W70+ plans backlog v2 调研 (A-3 commit `0fe7ab2f1`) + 锚点范式第 175 实际收束 (D-3) + W71-W72 拍板 (D-4) + 6 类文档同步 (D-2 本任务). 任务模式基调 10 批实战验证完成 (W68 第 5-14 批累计 140+3 hot-fix agents, 53 plans 闭环, 124 调研小修, 104 守恒 0 失败). 0 production code 改动铁律 10/15 守恒 (5/15 B-1 PR17 alembic 078 + B-2 PR18 alembic 079 + B-3 PR5 alembic 080 + C-2 Mobile dark + C-3 Desktop thumbnail 例外已批). W19 选项 A 维持. W68 累计 240+ commits. 新铁律 15 条 (派工 v5 必有反馈循环 / 必有合并顺序表 / W70+ backlog 必真验证 / D8 实施前置七项 / Mobile dark 必跨组件 / thumbnail 必有 LQIP / notify v2 部署须验证五触发器 / 锚点 175 必做四维度核对 / alembic 078/079/080 严格串单 / 计划计数须区分闭环和调研 / web 例外必须附构建与视觉证据 / 部署验证与源码提交解耦 / 路线 fallback 有退出条件 / 主指挥决策必须可回滚 / 预期 closure 必须显式 defer).
-- [2026-07-24 W68 第 14 批 D-2 6 类文档同步 (锚点范式第 175 守恒预测)](w68-route-14-d2-doc-sync-2026-07-24.md) — 主仓库 5 类 (CLAUDE.md/ROADMAP.md/CHANGELOG.md/README.md/MEMORY.md) + 用户级 1 类同步 + 1 新增 memory. CLAUDE.md 头段升级 W68 第 14 批 grand closure 段 (锚点范式 169 → 175 单调上升预期, 含 W68 第 10/11/12/13/14 批补同步). ROADMAP 顶部当前状态段 + W68 第 14 批段同步. CHANGELOG L1-L5 W68 第 14 批段插入. README 最新里程碑段加 W68 第 14 批段. 主仓库 + 用户级 MEMORY.md 各加 1 行索引. 0 production code 改动铁律完全维持. 3 新铁律 (D-2 doc sync 沿用 W68 第 13 批 D-2 铁律 1 + 路线 B/C 5 例外 已批 / 6 类文档同步必含派工纪要 v5/v6 引用).
-- [2026-07-24 W68 第 14 批 A-2 派工纪要 v5 模板升级 (锚点范式第 170 守恒)](w68-route-14-a2-prompt-v5-2026-07-24.md) — 新增段 5 反馈循环 + 段 6 合并顺序表 (commit `93dbd2cc7`). 不抹掉 v1-v4 历史约束. 段 5 反馈循环: 目标 / 实际 / 偏差 / 验证证据 / 阻塞 / 下一步. 段 6 合并顺序表: 上游→下游 + 负责人 + head 验证点 + alembic 单链验证.
-- [2026-07-24 W68 第 14 批 A-3 W70+ plans backlog v2 调研 (锚点范式第 171 守恒)](w68-route-14-a3-w70-backlog-v2-2026-07-24.md) — 6 plans 子计划 ②③ 实施路径 + W71 主拍 (commit `0fe7ab2f1`). plans 真验证纪律 (git log + git show + grep). 不凭 Status 段自报.
-- [2026-07-24 W68 第 14 批 A-4 grand closure memory 预期版 (锚点范式第 169 → 175 守恒)](w68-grand-closure-14th-batch-2026-07-24.md) — A-4 预期版 grand closure (commit `aee60b245`). 数字、交付状态与锚点范式均明确标注为预测值, 待 D-4 拍板、15 分支完成审核并合并后, 由主指挥补写实际结果. 不得把预期值误读为已完成事实. 4 路线 (A/B/C/D) + 15 agents + 6 锚点守恒 + 240+ commits + 53 plans 闭环 + 124 调研小修 + 0 production code 10/15 守恒 + 5 例外已批.
+> 8 文件
 
-- [2026-07-24 W68 第 13 批 15 agents grand closure (锚点范式 158 → 169 守恒)](w68-grand-closure-13th-batch-2026-07-24.md) — 主基调 plans 状态收尾 (8 plans Status 闭环) + 5 真未实施 plans 综合调研 (drive-todo + exe-logical-pie/bubbly-parnas/silly-gliding-dahl/isolation-a1/D5) + alembic 070 重命名串单链 (070 → 076/075/074) + claude-code 通知体系 v2 仓库模板 (6 ps1 + setup.sh) + DesktopCommentInput @ 提及跨视图统一 + Drive v2 PR16 workspace 回收站版本清理 (alembic 077). 锚点范式 156 → 169 (12 守恒). 任务模式基调 9 批实战验证完成 (累计 125+3 hot-fix agents, 38 plans 闭环, 109 调研小修, 98 守恒 0 失败). 0 production code 改动铁律 11/15 守恒 (4/15 B-1/B-2/C-1/C-2 小修/新功能例外已批). W19 选项 A 维持. W68 累计 230 commits. 新铁律 12 条.
-- [2026-07-24 W68 第 9 批 A-2 CLAUDE.md 顶部永久沉淀 W68 第 8 批 grand closure 锚点范式 (90 → 102)](w68-route-9-a2-claudmd-anchor-2026-07-24.md) — 主指挥派 A-2 agent 把 W68 第 8 批 grand closure 的关键成果与锚点范式数字 (87 → 102, 15 守恒) 永久沉淀到 CLAUDE.md `## 当前状态` 顶部 + ROADMAP.md 同步 + memory/MEMORY.md 索引. 锚点范式第 106 守恒 (与 W68 第 8 批 A-1 90 守恒接续). 0 production code 改动铁律 100% 维持 (纯 docs + memory 范畴). 5 新铁律: 永久锚点必沉淀 / 单链验证 / baseline 守恒 / alembic 串单链纪律 / 主指挥拍板才改老路径. 与 C-3 (W68 第 8 批 grand closure memory) + D-3 (W68 第 6+7 批纪律沉淀) 永久纪律双层固化: 顶部 `## 当前状态` 段跨批次数据/commits/锚点范式 (102) + 中部 `## W68 第 6+7 批纪律沉淀 (永久锚点)` 段永久纪律铁律.
-- [2026-07-24 W68 第 9 批 D-2 6 类文档同步](w68-route-9-d2-doc-sync-2026-07-24.md) — 主仓库 5 类 (CLAUDE.md/ROADMAP.md/CHANGELOG.md/README.md/MEMORY.md) + 用户级 1 类. 锚点范式 W68 第 8 批 104 → W68 第 9 批 116 (12 守恒). 0 production code 改动铁律完全维持. W19 选项 A 维持. 任务模式基调延续 (plans 优先 + 小修搭配, D-3 v2 升级).
-- [2026-07-24 W68 第 13 批 D-2 6 类文档同步 (锚点范式第 168 守恒预测)](w68-route-13-d2-doc-sync-2026-07-24.md) — 主仓库 5 类 (CLAUDE.md/ROADMAP.md/CHANGELOG.md/README.md/MEMORY.md) + 用户级 1 类同步 + 1 新增 memory. CLAUDE.md 头段升级 W68 第 13 批 grand closure 段 (锚点范式 116 → 168 单调上升预期, 含 W68 第 10/11/12/13 批补同步). ROADMAP 顶部当前状态段 + W68 第 10/11/12/13 批段同步. CHANGELOG L1-L5 W68 第 10 批 + W68 第 11 批 + W68 第 12 批 + W68 第 13 批段插入. README 最新里程碑段加 W68 第 10 批 + W68 第 11 批 + W68 第 12 批 + W68 第 13 批段 (4 段). 主仓库 + 用户级 MEMORY.md 各加 1 行索引. 0 production code 改动铁律完全维持. 3 新铁律 (D-2 doc sync 沿用 W68 第 12 批 D-2 铁律 1 + 8 plans 闭环 + 5 新铁律与 6 留 W70+ 派工 backlog 必 + plans 调研必 run 真验证).
-- [2026-07-24 W68 第 13 批 grand closure (锚点范式 156 → 168 预期, plans 8 闭环 + W70 派工实施 + 调研发现小修 + 派工纪要 v4 升级)](w68-grand-closure-13th-batch-2026-07-24.md) — W68 第 13 批 12 agents 派工清单 + grand closure. 主基调 8 plans Status 闭环 (A-1 + 5 新铁律) + W70 派工实施 3 (B-1 claude-code 通知体系 v2 仓库模板 + B-2 ollama playwright + B-3 plans backlog 监控) + 调研发现小修 3 (C-1 tabsWithCounts 重复声明 hotfix + C-2 PR9 评论软删 + 3 角色权限 + C-3 Desktop emoji react virtual scroll + lazy load 8 emoji) + 收尾 (D-1 派工纪要 v4 5 段 prompt 升级 + D-2 6 类文档同步 + D-3 grand closure memory). 任务模式基调 9 批实战数据表验证完成 (W68 第 5-13 批累计 122+3 hot-fix agents, 38 plans 闭环, 96 调研小修, 96 守恒 0 失败). 0 production code 改动铁律 12/15 守恒 (3/15 调研发现小修 3 路线 C 续 + 6 留 W70+ 派工 backlog 例外). W19 选项 A 维持. W68 累计 227 commits. 5 新铁律 (闭环必同步 / COMPLETED 必标 / alembic 070 临时编号必主指挥合并后改 076 / 6 留 W70+ 派工 backlog 必 / plans 调研必 run 真验证).
-- [2026-07-24 W68 第 9 批 grand closure (锚点范式 105 → 119 守恒)](w68-grand-closure-9th-batch-2026-07-24.md) — W68 第 9 批 plans 闭环、小修整合、Drive v2 PR11/12 与 W69 调研收口.
+- [drive-v2-pr8-grand-closure-2026-07-24](drive-v2-pr8-grand-closure-2026-07-24.md) — [drive-v2-pr8-grand-closure]
+- [drive-view-beaute-2026-07-09](drive-view-beaute-2026-07-09.md) — 1089 行 + 5 子组件 + 10 dialog.
+- [w68-route-11-c1-alembic-rebase-2026-07-24](w68-route-11-c1-alembic-rebase-2026-07-24.md) — W68 第 11 批 C-1 alembic rebase.
+- [w68-route-12-b1-pr14-path-2026-07-24](w68-route-12-b1-pr14-path-2026-07-24.md) — W68 第 12 批 B-1 PR14 path.
+- [w68-route-5-drive-pr10-collab-2026-07-24](w68-route-5-drive-pr10-collab-2026-07-24.md) — W68 第 5 批 drive PR10 collab.
+- [w68-route-9-b2-pr11-fallback-2026-07-24](w68-route-9-b2-pr11-fallback-2026-07-24.md) — W68 第 9 批 B-2 PR11 fallback.
+- [w68-route-9-b4-chatgpt-w69-plan-2026-07-24](w68-route-9-b4-chatgpt-w69-plan-2026-07-24.md) — W68 第 9 批 B-4 chatgpt W69 plan.
+- [w72nd-batch-c1-drive-deploy-doc-v3-2026-07-27](w72nd-batch-c1-drive-deploy-doc-v3-2026-07-27.md) — Drive v2 唯一权威 runbook + 7 张迁移串单链 + W73 起步纪律 6 项.
 
-- [2026-07-24 W68 第 8 批 A-1 15 分支合并到 main + 5 新铁律](w68-route-8-a1-merge-2026-07-24.md) — W68 第 7 批 15 agents push 后未 merge, 主指挥派 A-1 agent 全 merge + push origin. 16 commits 新增 (15 merges + 1 memory). 冲突 3 处 (CLAUDE.md/ROADMAP.md 取更新版 + app/main.py 两 router 都保留 + MEMORY.md/grand-closure add/add 取更完整版). alembic 单 head 守恒 (065_push_subscriptions). baseline audit 39/39 PASS + 78 tests collectable. 锚点范式 W68 第 7 批 87 → W68 第 8 批 90 (+3 守恒).
+# 2. 声纹 + ASR + TTS 链 (2026-06-18 起)
 
-- [2026-07-24 W68 第 7 批 15 agents grand closure (plans 闭环 + 路线驱动 fallback)](w68-grand-closure-7th-batch-2026-07-24.md) — 主指挥 W68 第 6 批拍板多 agent 深度审计 67 plans 实际完成度. 5 agent 实战发现 5 真未实施 + 12 PARTIAL_REGRESSION + 14 Status 错位. W68 第 7 批 15 agents 闭环 plans + Status 修正 + 路线驱动 fallback. 锚点范式 W68 第 6 批 73 → W68 第 7 批 87 单调上升 (本批 15 守恒). 0 production code 改动铁律 13/15 守恒 (2 例外已批: A-5 silly-gliding + B-1 Drive PR10). W19 选项 A 维持. W68 累计 140 commits.
-- [2026-07-24 W68 第 1 批 14+1 agents 跨主题收官](w68-grand-closure-2026-07-24.md) — Drive v2 PR8 路线 A 7 + Mobile UX v3.0 路线 C 7 + Safari iOS 空白页修复 1. 锚点范式 W67 28 → W68 30 单调上升, 30 commits 全部 merge, 0 production code 改动铁律维持.
-- [2026-07-22 W58 跨主题收口 (20 baseline 守恒)](archived/w58-coordination-grand-closure-2026-07-22.md) — W52-W57 + W58 紧凑节奏 14→15→16→17→18→19→20, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 19 baseline 71+7 不变. σ ≈ 0.130s 历史最优持平.
-- [2026-07-22 W58 baseline 18-20 守恒](w18-20-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56/W57/W58 紧凑节奏 14→15→16→17→18→19→20, 71 PASS + 7 SKIP, 0 drift.
-- [2026-07-22 W58 W51-W60 紧凑节奏 quarterly final2](archived/w58-w51-w60-roadmap-quarterly-2026-07-22.md) — W51-W60 8 阶段 104 commit final2, 实际节奏 vs 原预排差异完整留痕.
-- [2026-07-22 W58 Q4 future PR final2 评估](archived/w58-future-pr-q4-evaluation-final2-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final2. fact-check 修正 pre-existing fail 65/65 = 100%.
-- [2026-07-22 W54 跨主题收口 (16 baseline 守恒)](archived/w54-coordination-grand-closure-2026-07-22.md) — 13 doc/memory-only commit + 4 memory + 4 docs，继承 15 baseline 71+7 不变，实际累计 16 baseline；27 commit + 90+ 任务 + 165 铁律。
-- [2026-07-22 W54 baseline 14-16 守恒](w14-16-baseline-closure-2026-07-22.md) — W52/W53/W54 紧凑节奏 14 → 15 → 16，71 PASS + 7 SKIP，0 drift。
-- [2026-07-22 W54 W51-W60 预排](archived/w54-w51-w60-roadmap-2026-07-22.md) — 50 commit 阶段计划与实际紧凑 baseline 节奏差异留痕。
-- [2026-07-22 W54 Q3-Q4 future PR 评估](archived/w54-future-pr-q3-q4-evaluation-2026-07-22.md) — 4/4 不触发，W19 选项 A 维持。
-- [2026-07-22 W51-2 锚点范式 21 天实战验证 (4 阶段 100% 适用 0 偏离)](anchor-paradigm-21-day-validation-2026-07-22.md) — 跨 71+ commit / 22+ worker / 13+ baseline / 4+ 主指挥亲自修 / 165 铁律. 锚点范式金标准.
-- [2026-07-22 W51-3 W51-W100 50 commit 跨主题时间线预排](2026-07-22-50-commit-w51-w100-roadmap.md) — 5 大阶段 × 10 子阶段 × 5 commit = 250 commit 预排. 新规则 W1/W2 命名 + 最多 2 agent 沿用.
-- [2026-07-22 W51-4 4 留未来 PR 触发评估 (W51 检查 4/4 全不触发)](future-pr-trigger-evaluation-2026-07-22.md) — future PR 触发评估是 W51 必做项. 防止 future PR 列表无限累积铁律.
-- [2026-07-22 W52 5 文档同步 (CLAUDE.md / ROADMAP.md / CHANGELOG.md / MEMORY.md / CLAUDE-history.md)](docs/2026-07-22-grand-closure.md) — W51-1~W51-8 8 commit 主指挥亲自 + 0 production code 改动铁律沿用 + 13 baseline 71+7 不变守恒 (W52 跨主题收口段).
-- [2026-07-22 W55 跨主题收口 (17 baseline 守恒)](archived/w55-coordination-grand-closure-2026-07-22.md) — W52-W54 紧凑节奏 14→15→16 + W55 17, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 16 baseline 71+7 不变. σ ≈ 0.005s 历史最优.
-- [2026-07-22 W55 baseline 15-17 守恒](w15-17-baseline-closure-2026-07-22.md) — W52/W53/W54/W55 紧凑节奏 14→15→16→17, 71 PASS + 7 SKIP, 0 drift.
-- [2026-07-22 W55 W51-W60 紧凑节奏预排更新](archived/w55-w51-w60-roadmap-update-2026-07-22.md) — 实际 W52-W56 跑 5 次 vs 原 W54=14 预排差异留痕 (本会话节奏更紧凑).
-- [2026-07-22 W55 Q4 future PR 评估](archived/w55-future-pr-q4-evaluation-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 + Q4 量化触发条件 (勒索软件 ≥1 / 合规 ≥1 / B 端合同 ≥5 万 ¥).
-- [2026-07-22 W56 跨主题收口 (18 baseline 守恒)](archived/w56-coordination-grand-closure-2026-07-22.md) — W52-W55 + W56 紧凑节奏 14→15→16→17→18, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 17 baseline 71+7 不变. σ ≈ 0.017s 历史最优持平.
-- [2026-07-22 W56 baseline 16-18 守恒](w16-18-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56 紧凑节奏 14→15→16→17→18, 71 PASS + 7 SKIP, 0 drift.
-- [2026-07-22 W56 W51-W60 紧凑节奏预排 final](archived/w56-w51-w60-roadmap-final-2026-07-22.md) — W51-W60 50 commit 阶段 final, 实际节奏 vs 原预排差异完整留痕.
-- [2026-07-22 W56 Q4 future PR final 评估](archived/w56-future-pr-q4-final-evaluation-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final. Q4 量化触发条件维持.
-- [2026-07-22 W57 跨主题收口 (19 baseline 守恒)](archived/w57-coordination-grand-closure-2026-07-22.md) — W52-W56 + W57 紧凑节奏 14→15→16→17→18→19, 13 doc/memory-only commit + 4 memory + 4 docs, 继承 18 baseline 71+7 不变. σ ≈ 0.130s 历史最优持平.
-- [2026-07-22 W57 baseline 17-19 守恒](w17-19-baseline-closure-2026-07-22.md) — W52/W53/W54/W55/W56/W57 紧凑节奏 14→15→16→17→18→19, 71 PASS + 7 SKIP, 0 drift.
-- [2026-07-22 W57 W51-W60 紧凑节奏 compact final](archived/w57-w51-w60-roadmap-compact-2026-07-22.md) — W51-W60 7 阶段 91 commit final, 实际节奏 vs 原预排差异完整留痕.
-- [2026-07-22 W57 Q4 future PR final 评估](archived/w57-future-pr-q4-evaluation-final-2026-07-22.md) — 4/4 不触发, W19 选项 A 维持 final. fact-check 修正 pre-existing fail 65/65 = 100%.
-- [2026-07-22 W62 跨主题收口 (24 baseline 守恒)](w62-coordination-grand-closure-2026-07-22.md) — W51-W61 累计 91 + W62 13 = 104 commit，5 agent 并行首次启动段 (W60 沿用)，53+4 memory + 58+4 docs + 165 铁律，继承 23 baseline 71+7 不变，W62 第 24 次仍为 71 PASS + 7 SKIP，0 drift。锚点范式 W7 12 → W62 24 单调上升。
-- [2026-07-22 W20-W24 baseline closure 累计数据](w20-24-baseline-closure-2026-07-22.md) — W20/W21/W22/W23/W24 baseline 连续守恒，锚点范式单调上升 W7 12 → W24 24，σ 历史最优持平。
-- [2026-07-22 W62 W61-W70 50 commit 阶段预排](w62-w61-w70-roadmap-2026-07-22.md) — 实际累计 15 commit W61-W62，紧凑节奏延续；W63-W70 阶段预排完整留痕。
-- [2026-07-22 W62 3 future PR 触发评估](w62-future-pr-q4-evaluation-2026-07-22.md) — 3/3 不触发 (Phase 8.5 / P3 跨 tab / 7 E2E 选项 A 维持)，P3 dedup 已 W59 实施完成移出列表。
-- [2026-07-22 W60 跨主题收口 final (22 baseline 守恒)](archived/w60-coordination-grand-closure-2026-07-22.md) — Pre-W60 W51-W59 累计 75 commit + W60 13 commit = Post-W60 88 commit；累计 53 memory + 58 docs + 165 铁律。W59 P3 dedup 实施后继承 21 baseline 71+7 不变，W60 第 22 次仍为 71 PASS + 7 SKIP，0 drift。
-- [2026-07-22 W19-W22 baseline closure 累计数据](w19-22-baseline-closure-2026-07-22.md) — W18/W19/W20/W21/W22 baseline 连续守恒，锚点范式 W7 12 → W60 22 单调上升，σ ≈ 0.130s。
-- [2026-07-22 W51-W60 50 commit 阶段收官 final](archived/w60-w51-w60-stage-closure-final.md) — 实际完成 88 commit，较 50 commit 阶段目标形成 1.76x 紧凑节奏；全阶段数据与时间线最终留痕。
-- [2026-07-22 W59 P3 dedup 实质开发首次启动](archived/w60-future-pr-evaluation-post-dedup.md) — future PR 从 W19 选项 A 切换为选项 B 并完成 `chatSessions.ts` 标题时间戳 + 60s 首条消息检测；其余 3 future PR 继续留未来。
-- [2026-07-23 W67 第八批 7 agent 跨主题收口](w67-grand-closure-2026-07-23.md) — 8 批 42+ agent commits, 锚点范式 W66 27 → W67 28 单调上升, 8 新铁律沉淀 (Drive v2 PR7 鉴权 + share token 安全 + qa-bench 1000 阈值 + Mobile FAB 通用化 + PWA update toast + rate-limit 5 tier + docs only + 锚点范式 28 守恒).
-- [2026-07-24 W68 路线 B qa-bench D6 未来根因 5 路径调研](w68-route-b-qa-bench-d6-future-roots-2026-07-24.md) — 锚点范式第 30 守恒. 推荐路径 3 (in-process runner) + 路径 1 (cache 深度优化) 组合, 5 路径全部 0 production code 改动.
-- [2026-07-24 W68 路线 B-3 qa-bench D6 实施路线图 (本文)](w68-route-b3-d6-roadmap-2026-07-24.md) — 锚点范式第 35 守恒. 9 agents 跨 2 周 2 批派工 (Phase 1 W68 第 4 批 5 agents + Phase 2 W69 第 1 批 4 agents), CI 25+ min → 5-8 min, 0 production code 改动铁律完全守恒. 路线图核心: `docs/qa-bench-d6-implementation-roadmap.md`.
-- [2026-07-24 W68 任务模式基调 (plans 优先 + 小修搭配)](w68-task-mode-paradigm-plans-first-2026-07-24.md) — 主指挥 W68 第 4 批拍板永久任务模式: plans 优先 + 小修搭配 + 路线 fallback. 新 4 阶段选题流程 + 新 3 铁律. 第 4 批 (2 plan 闭环 + 13 小修) 与第 5 批 (全小修+fallback) 双实战验证, 0 regression.
-- [2026-07-24 W68 第 8 批 B-4 qa-bench D6 Phase 3 matrix 4 runner 并行](w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24.md) — 锚点范式第 96 守恒. 路径 4 落地: 1000 题 / 4 shard (250×4) asyncio.Semaphore 并发, matrix gate 严格 (ALL workers ≥ 90% 才 PASS), 复用 phase2_dry_runner verdict logic (5 函数 + 2 常量). 5 新铁律沉淀 (matrix 拆分 deterministic / 双层 Semaphore / verdict 复用 / matrix gate 严格 / dry-fallback SSH 标注). Wall clock 30-60 min → 5-15 min (50-75% 节省). 0 production code 改动.
+> 3 文件
 
+- [asr-benchmark-2026-06-30](asr-benchmark-2026-06-30.md) — ASR benchmark.
+- [speaker-diarization-2026-06-06](speaker-diarization-2026-06-06.md) — [speaker-diarization]
+- [voiceprint-batch-bug-fix-2026-06-19](voiceprint-batch-bug-fix-2026-06-19.md) — 声纹 batch bug + sample_count 重置.
+
+# 3. qa-bench 系列 (W62-W68 D1-D8)
+
+> 5 文件
+
+- [llm-benchmark-2026-07-02](llm-benchmark-2026-07-02.md) — LLM 3-Way.
+- [w68-route-7-a4-qa-bench-d5-kb-monitor-2026-07-24](w68-route-7-a4-qa-bench-d5-kb-monitor-2026-07-24.md) — [w68-route-7-a4-qa-bench-d5-kb-monitor]
+- [w68-route-7-a5-silly-gliding-impl-2026-07-24](w68-route-7-a5-silly-gliding-impl-2026-07-24.md) — W68 第 7 批 A-5 silly gliding impl.
+- [w68-route-b2-ghcr-cache-design-2026-07-24](w68-route-b2-ghcr-cache-design-2026-07-24.md) — [w68-route-b2-ghcr-cache-design]
+- [w68-route-b3-d6-roadmap-2026-07-24](w68-route-b3-d6-roadmap-2026-07-24.md) — [w68-route-b3-d6-roadmap]
+
+# 4. 商业化系列 (24 人月 Q1, W72-W81)
+
+> 14 文件
+
+- [w72-route-72nd-batch-c2-commercialization-2026-07-24](w72-route-72nd-batch-c2-commercialization-2026-07-24.md) — 商业化启动派工 brief.
+- [w75-1st-batch-b2-tenant-422-fix-2026-07-27](w75-1st-batch-b2-tenant-422-fix-2026-07-27.md) — TenantIsolationViolation.code= 修复 (1 行 production).
+- [w78-1st-batch-b2-billing-real-key-enable-2026-07-28](w78-1st-batch-b2-billing-real-key-enable-2026-07-28.md) — 计费真支付 key 启用 (Stripe + Alipay + WeChat).
+- [w78-1st-batch-c1-saas-deploy-2026-07-28](w78-1st-batch-c1-saas-deploy-2026-07-28.md) — SaaS 私有化部署.
+- [w78-route-1st-batch-a2-commercialization-plan-2026-07-28](w78-route-1st-batch-a2-commercialization-plan-2026-07-28.md) — 商业化 plan 启动.
+- [w79-1st-batch-b1-commercial-operation-2026-07-28](w79-1st-batch-b1-commercial-operation-2026-07-28.md) — 商业化运营.
+- [w79-1st-batch-b3-tenant-monitoring-2026-07-28](w79-1st-batch-b3-tenant-monitoring-2026-07-28.md) — 跨租户监控.
+- [w79-1st-batch-c1-commercial-phase8-closure-2026-07-28](w79-1st-batch-c1-commercial-phase8-closure-2026-07-28.md) — Phase 8 收口.
+- [w79-1st-route-d1-tenant-closure-2026-07-28](w79-1st-route-d1-tenant-closure-2026-07-28.md) — 租户隔离收口.
+- [w79-route-1st-batch-a2-commercialization-operation-2026-07-28](w79-route-1st-batch-a2-commercialization-operation-2026-07-28.md) — 商业化运营派工 v2.
+- [w80-route-1st-batch-b1-7-dim-commercial-operation-2026-07-28](w80-route-1st-batch-b1-7-dim-commercial-operation-2026-07-28.md) — 7 维商业化运营.
+- [w81-1st-batch-b2-tenant-monitoring-closure-2026-07-28](w81-1st-batch-b2-tenant-monitoring-closure-2026-07-28.md) — 租户监控收口.
+- [w81-route-1st-batch-a2-commercialization-q1-closure-2026-07-28](w81-route-1st-batch-a2-commercialization-q1-closure-2026-07-28.md) — Q1 商业化收口.
+- [w81-route-1st-batch-c1-commercial-phase8-closure-2026-07-28](w81-route-1st-batch-c1-commercial-phase8-closure-2026-07-28.md) — Phase 8 商业化收口.
+
+# 5. PWA + nginx + Service Worker (2026-06-13 + 2026-07-08~11 回归)
+
+> 1 文件
+
+- [minio-502-bad-gateway-3-layer-fix-2026-07-22](minio-502-bad-gateway-3-layer-fix-2026-07-22.md) — W61 502 真根因 3 层.
+
+# 6. claude-code 通知体系 + 派工协调范式
+
+> 4 文件
+
+- [future-pr-trigger-evaluation-2026-07-22](future-pr-trigger-evaluation-2026-07-22.md) — 4 留未来 PR 触发评估.
+- [multi-agent-coordination-grand-closure-2026-07-21](multi-agent-coordination-grand-closure-2026-07-21.md) — W2/W5/W7/W10/W22/W24 累计 + 4 类 fail 闭环.
+- [w68-changelog-roadmap-sync-2026-07-24](w68-changelog-roadmap-sync-2026-07-24.md) — [w68-changelog-roadmap-sync]
+- [w68-claude-md-status-update-2026-07-24](w68-claude-md-status-update-2026-07-24.md) — [w68-claude-md-status-update]
+
+# 7. 部署 + 配置 + 基础设施 (2026-06-17~2026-07-22)
+
+> 6 文件
+
+- [docker-desktop-fix-2026-06-17](docker-desktop-fix-2026-06-17.md) — Docker Desktop 修复 + 数据迁移.
+- [incident-2026-06-18-deploy-chain](incident-2026-06-18-deploy-chain.md) — 三连环事故复盘.
+- [llm-backend-ollama-residual-connection-error-2026-07-12](llm-backend-ollama-residual-connection-error-2026-07-12.md) — P0-#1 Ollama 残留.
+- [ollama-ssh-key-gitignore-fix-2026-07-02](ollama-ssh-key-gitignore-fix-2026-07-02.md) — ollama ssh key .gitignore fix.
+- [phase-8-cloud-mirror-2026-07-21](phase-8-cloud-mirror-2026-07-21.md) — Phase 8 cloud mirror 部署.
+- [w62-coordination-grand-closure-2026-07-22](w62-coordination-grand-closure-2026-07-22.md) — W62 跨主题收口 24 baseline.
+
+# 8. 前端 + UI + 视觉 + 数据库 + Chat (2026-06-25~2026-07-22)
+
+> 17 文件
+
+- [anthropic-msg-dict-wrapper-mimo-reasoning-content-2026-07-12](anthropic-msg-dict-wrapper-mimo-reasoning-content-2026-07-12.md) — P0-#1.5 包装.
+- [chat-share-celery-cleanup-2026-07-20](chat-share-celery-cleanup-2026-07-20.md) — chat_share Celery.
+- [database-engine-singleton-bug-2026-07-20](database-engine-singleton-bug-2026-07-20.md) — engine singleton.
+- [ensure-session-loaded-cache-hit-orphan-2026-07-12](ensure-session-loaded-cache-hit-orphan-2026-07-12.md) — v2 orphan.
+- [kb-and-chat-timeout-2026-07-20](kb-and-chat-timeout-2026-07-20.md) — KB polling 30s timeout.
+- [localstorage-chat-session-ttl-2026-07-20](localstorage-chat-session-ttl-2026-07-20.md) — localStorage 90d TTL.
+- [mobile-fixes-2026-06-18](mobile-fixes-2026-06-18.md) — mobile fixes 系列.
+- [name-aliases-phonetic-correction-2026-06-27](name-aliases-phonetic-correction-2026-06-27.md) — 声纹姓名 phonetic correction.
+- [p0-2-chat-jump-to-top-bouncing-2026-07-12](p0-2-chat-jump-to-top-bouncing-2026-07-12.md) — P0-2 chat jump-to-top bouncing.
+- [p01-p02-deprecation-2026-07-21](p01-p02-deprecation-2026-07-21.md) — P0.1 + P0.2 彻底删除.
+- [playwright-screenshot-cleanup-2026-07-12](playwright-screenshot-cleanup-2026-07-12.md) — Playwright 截图清理.
+- [rate-limit-redis-2026-06-26](rate-limit-redis-2026-06-26.md) — [rate-limit-redis]
+- [recording-v4-three-piece-fix-2026-07-02](recording-v4-three-piece-fix-2026-07-02.md) — 录音 v4 3-piece fix.
+- [session-load-server-fetch-fallback-2026-07-12](session-load-server-fetch-fallback-2026-07-12.md) — P0-#1.6 ensureSessionLoaded.
+- [session-polling-audit-2026-07-20](session-polling-audit-2026-07-20.md) — sessionPolling 审计 — 5 项审计 + 5 铁律.
+- [v77-p26-f-2-meeting-view-split](v77-p26-f-2-meeting-view-split.md) — [v77-p26-f-2-meeting-view-split]
+- [v77-p26-f-3-template-dialog-ui-entry](v77-p26-f-3-template-dialog-ui-entry.md) — [v77-p26-f-3-template-dialog-ui-entry]
+
+# 9. W 批 grand closure + 派工纪要 + 锚点范式 (W2-W84 baseline)
+
+> 120 文件
+
+- [2026-07-21-50-commit-roadmap](2026-07-21-50-commit-roadmap.md) — W51-W60 50 commit roadmap.
+- [2026-07-21-final-summary](2026-07-21-final-summary.md) — W51-W58 final summary.
+- [2026-07-22-50-commit-w51-w100-roadmap](2026-07-22-50-commit-w51-w100-roadmap.md) — W51-W100 50 commit roadmap.
+- [2026-07-23-six-batches-v2-21-paradigm](2026-07-23-six-batches-v2-21-paradigm.md) — 6 批 v2.21 范式总结.
+- [anchor-paradigm-21-day-validation-2026-07-22](anchor-paradigm-21-day-validation-2026-07-22.md) — 锚点范式 21 天验证.
+- [verified-plans-w68-2026-07-24](verified-plans-w68-2026-07-24.md) — Verified Plans W68.
+- [w11-13-baseline-closure-2026-07-22](w11-13-baseline-closure-2026-07-22.md) — W11/13 baseline closure.
+- [w14-16-baseline-closure-2026-07-22](w14-16-baseline-closure-2026-07-22.md) — W14/16 baseline closure.
+- [w15-17-baseline-closure-2026-07-22](w15-17-baseline-closure-2026-07-22.md) — W15/17 baseline closure.
+- [w16-18-baseline-closure-2026-07-22](w16-18-baseline-closure-2026-07-22.md) — W16/18 baseline closure.
+- [w17-19-baseline-closure-2026-07-22](w17-19-baseline-closure-2026-07-22.md) — W17/19 baseline closure.
+- [w18-20-baseline-closure-2026-07-22](w18-20-baseline-closure-2026-07-22.md) — W18/20 baseline closure.
+- [w19-22-baseline-closure-2026-07-22](w19-22-baseline-closure-2026-07-22.md) — W19/22 baseline closure.
+- [w2-10-baseline-closure-2026-07-21](w2-10-baseline-closure-2026-07-21.md) — W2/W10 baseline 12.
+- [w20-24-baseline-closure-2026-07-22](w20-24-baseline-closure-2026-07-22.md) — W20/24 baseline closure.
+- [w25-todo-audit-2026-07-21](w25-todo-audit-2026-07-21.md) — W25 TODO audit.
+- [w5-11-baseline-closure-2026-07-21](w5-11-baseline-closure-2026-07-21.md) — W5 baseline 11.
+- [w5-plus-one-followup-ultimate-closure-2026-07-20](w5-plus-one-followup-ultimate-closure-2026-07-20.md) — W5 +1 followup 终极收口.
+- [w62-future-pr-q4-evaluation-final3](w62-future-pr-q4-evaluation-final3.md) — W62 4 留未来 PR Q4 评估 final3.
+- [w62-w61-w70-roadmap-update](w62-w61-w70-roadmap-update.md) — W62/W61/W70 roadmap 更新.
+- [w68-alembic-chain-discipline-2026-07-24](w68-alembic-chain-discipline-2026-07-24.md) — alembic 串单链纪律 (锚点 46 守恒).
+- [w68-anchor-paradigm-175-2026-07-24](w68-anchor-paradigm-175-2026-07-24.md) — W68 锚点范式 175 实际收束.
+- [w68-dispatch-candidates-2026-07-23](w68-dispatch-candidates-2026-07-23.md) — W68 dispatch candidates.
+- [w68-grand-closure-12th-batch-2026-07-24](w68-grand-closure-12th-batch-2026-07-24.md) — W68 第 12 批 grand closure (12 守恒).
+- [w68-grand-closure-13th-batch-2026-07-24](w68-grand-closure-13th-batch-2026-07-24.md) — W68 第 13 批 grand closure (12 守恒).
+- [w68-grand-closure-14th-batch-2026-07-24](w68-grand-closure-14th-batch-2026-07-24.md) — W68 第 14 批 grand closure (6 守恒).
+- [w68-grand-closure-2026-07-24](w68-grand-closure-2026-07-24.md) — W68 第 1 批 grand closure (14+1 agents).
+- [w68-grand-closure-4th-batch-2026-07-24](w68-grand-closure-4th-batch-2026-07-24.md) — W68 第 4 批 grand closure (15 agents).
+- [w68-grand-closure-5th-batch-2026-07-24](w68-grand-closure-5th-batch-2026-07-24.md) — W68 第 5 批 grand closure (15 agents).
+- [w68-grand-closure-7th-batch-2026-07-24](w68-grand-closure-7th-batch-2026-07-24.md) — W68 第 7 批 grand closure (1 agent 闭环).
+- [w68-grand-closure-9th-batch-2026-07-24](w68-grand-closure-9th-batch-2026-07-24.md) — W68 第 9 批 grand closure (15 agents).
+- [w68-route-12-b3-d7-baseline-ci-2026-07-24](w68-route-12-b3-d7-baseline-ci-2026-07-24.md) — W68 第 12 批 B-3 D7 baseline CI.
+- [w68-route-12-b4-claude-notify-v2-2026-07-24](w68-route-12-b4-claude-notify-v2-2026-07-24.md) — W68 第 12 批 B-4 claude-notify v2.
+- [w68-route-12-c3-emoji-perf-2026-07-24](w68-route-12-c3-emoji-perf-2026-07-24.md) — W68 第 12 批 C-3 emoji 性能.
+- [w68-route-12-d1-prompt-template-v3-2026-07-24](w68-route-12-d1-prompt-template-v3-2026-07-24.md) — W68 第 12 批 D-1 prompt v3.
+- [w68-route-12-d2-doc-sync-2026-07-24](w68-route-12-d2-doc-sync-2026-07-24.md) — W68 第 12 批 D-2 文档同步.
+- [w68-route-13-b1-claude-notify-repo-2026-07-24](w68-route-13-b1-claude-notify-repo-2026-07-24.md) — W68 第 13 批 B-1 claude-notify repo.
+- [w68-route-13-b2-ollama-playwright-2026-07-24](w68-route-13-b2-ollama-playwright-2026-07-24.md) — W68 第 13 批 B-2 ollama playwright.
+- [w68-route-13-b3-plans-backlog-2026-07-24](w68-route-13-b3-plans-backlog-2026-07-24.md) — W68 第 13 批 B-3 plans backlog.
+- [w68-route-13-d2-doc-sync-2026-07-24](w68-route-13-d2-doc-sync-2026-07-24.md) — W68 第 13 批 D-2 文档同步.
+- [w68-route-14-b4-notify-verify-2026-07-24](w68-route-14-b4-notify-verify-2026-07-24.md) — W68 第 14 批 B-4 notify 部署验证.
+- [w68-route-14-d2-doc-sync-2026-07-24](w68-route-14-d2-doc-sync-2026-07-24.md) — W68 第 14 批 D-2 文档同步.
+- [w68-route-14-d4-w71-decision-2026-07-24](w68-route-14-d4-w71-decision-2026-07-24.md) — W68 第 14 批 D-4 W71-W72 拍板.
+- [w68-route-14-hotfix-h2-clear-sw-2026-07-24](w68-route-14-hotfix-h2-clear-sw-2026-07-24.md) — W68 第 14 批 hotfix H-2 SW clear.
+- [w68-route-14-hotfix-h3-kill-old-sw-2026-07-24](w68-route-14-hotfix-h3-kill-old-sw-2026-07-24.md) — W68 第 14 批 hotfix H-3 kill old SW.
+- [w68-route-14-hotfix-h4-disable-sw-checkloop-2026-07-24](w68-route-14-hotfix-h4-disable-sw-checkloop-2026-07-24.md) — W68 第 14 批 hotfix H-4 disable SW checkloop.
+- [w68-route-14-hotfix-h5-silent-heartbeat-2026-07-24](w68-route-14-hotfix-h5-silent-heartbeat-2026-07-24.md) — W68 第 14 批 hotfix H-5 silent heartbeat.
+- [w68-route-5-batch-repair-meetings-2026-07-24](w68-route-5-batch-repair-meetings-2026-07-24.md) — W68 第 5 批 batch repair meetings.
+- [w68-route-5-qa-bench-d6-phase1-2026-07-24](w68-route-5-qa-bench-d6-phase1-2026-07-24.md) — [w68-route-5-qa-bench-d6-phase1]
+- [w68-route-7-a2-cheerful-questing-anchor-2026-07-24](w68-route-7-a2-cheerful-questing-anchor-2026-07-24.md) — [w68-route-7-a2-cheerful-questing-anchor]
+- [w68-route-7-b1-drive-pr10-collab-ws-2026-07-24](w68-route-7-b1-drive-pr10-collab-ws-2026-07-24.md) — [w68-route-7-b1-drive-pr10-collab-ws]
+- [w68-route-7-b2-qa-bench-phase2-2026-07-24](w68-route-7-b2-qa-bench-phase2-2026-07-24.md) — [w68-route-7-b2-qa-bench-phase2]
+- [w68-route-7-d1-5th-batch-deploy-2026-07-24](w68-route-7-d1-5th-batch-deploy-2026-07-24.md) — [w68-route-7-d1-5th-batch-deploy]
+- [w68-route-8-a1-merge-2026-07-24](w68-route-8-a1-merge-2026-07-24.md) — W68 第 8 批 A-1 merge.
+- [w68-route-8-b1-drive-pr11-path-2026-07-24](w68-route-8-b1-drive-pr11-path-2026-07-24.md) — drive_comments path + GIN trgm + 2 API (alembic 066).
+- [w68-route-8-b2-drive-pr12-reactions-2026-07-24](w68-route-8-b2-drive-pr12-reactions-2026-07-24.md) — [w68-route-8-b2-drive-pr12-reactions]
+- [w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24](w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24.md) — [w68-route-8-b4-qa-bench-phase3-matrix]
+- [w68-route-9-a2-claudmd-anchor-2026-07-24](w68-route-9-a2-claudmd-anchor-2026-07-24.md) — [w68-route-9-a2-claudmd-anchor]
+- [w68-route-9-d1-8-smallfixes-2026-07-24](w68-route-9-d1-8-smallfixes-2026-07-24.md) — W68 第 9 批 D-1 8 smallfixes.
+- [w68-route-9-d2-doc-sync-2026-07-24](w68-route-9-d2-doc-sync-2026-07-24.md) — [w68-route-9-d2-doc-sync]
+- [w68-route-9-d3-task-mode-v2-2026-07-24](w68-route-9-d3-task-mode-v2-2026-07-24.md) — [w68-route-9-d3-task-mode-v2]
+- [w68-route-b-qa-bench-d6-future-roots-2026-07-24](w68-route-b-qa-bench-d6-future-roots-2026-07-24.md) — [w68-route-b-qa-bench-d6-future-roots]
+- [w68-route-drive-pr9-deploy-verify-2026-07-24](w68-route-drive-pr9-deploy-verify-2026-07-24.md) — [w68-route-drive-pr9-deploy-verify]
+- [w68-route-drive-pr9-version-diff-2026-07-24](w68-route-drive-pr9-version-diff-2026-07-24.md) — [w68-route-drive-pr9-version-diff]
+- [w68-route-h2-mobile-v3.1-docs-2026-07-24](w68-route-h2-mobile-v3.1-docs-2026-07-24.md) — [w68-route-h2-mobile-v3.1-docs]
+- [w68-route-plan1-low-occupancy-speaker-filter-2026-07-24](w68-route-plan1-low-occupancy-speaker-filter-2026-07-24.md) — [w68-route-plan1-low-occupancy-speaker-filter]
+- [w68-route-plan2-meeting-64-repair-2026-07-24](w68-route-plan2-meeting-64-repair-2026-07-24.md) — [w68-route-plan2-meeting-64-repair]
+- [w68-route-qa-bench-cache-rollout-2026-07-24](w68-route-qa-bench-cache-rollout-2026-07-24.md) — [w68-route-qa-bench-cache-rollout]
+- [w68-task-mode-paradigm-plans-first-2026-07-24](w68-task-mode-paradigm-plans-first-2026-07-24.md) — W68 任务模式基调 (plans 优先 + 小修搭配).
+- [w7-12-baseline-closure-2026-07-21](w7-12-baseline-closure-2026-07-21.md) — W7 baseline 12.
+- [w71-anchor-paradigm-71st-batch-2026-07-24](w71-anchor-paradigm-71st-batch-2026-07-24.md) — [w71-anchor-paradigm-71st-batch]
+- [w71-grand-closure-71st-batch-2026-07-24](w71-grand-closure-71st-batch-2026-07-24.md) — [w71-grand-closure-71st-batch]
+- [w71-route-71st-batch-a1-deploy-2026-07-24](w71-route-71st-batch-a1-deploy-2026-07-24.md) — [w71-route-71st-batch-a1-deploy]
+- [w71-route-71st-batch-actual-merge-2026-07-24](w71-route-71st-batch-actual-merge-2026-07-24.md) — W71 派工 actual merge.
+- [w71-route-71st-batch-c1-d8-survey-2026-07-24](w71-route-71st-batch-c1-d8-survey-2026-07-24.md) — [w71-route-71st-batch-c1-d8-survey]
+- [w71-route-71st-batch-d2-docs-sync-2026-07-24](w71-route-71st-batch-d2-docs-sync-2026-07-24.md) — [w71-route-71st-batch-d2-docs-sync]
+- [w72-2nd-anchor-paradigm-235-2026-07-27](w72-2nd-anchor-paradigm-235-2026-07-27.md) — [w72-2nd-anchor-paradigm-235]
+- [w72-2nd-batch-e1-conservation-verification-2026-07-27](w72-2nd-batch-e1-conservation-verification-2026-07-27.md) — [w72-2nd-batch-e1-conservation-verification]
+- [w72-2nd-grand-closure-2026-07-27](w72-2nd-grand-closure-2026-07-27.md) — W72 第 2 批 grand closure.
+- [w72-2nd-route-a2-prompt-v10-2026-07-27](w72-2nd-route-a2-prompt-v10-2026-07-27.md) — W72 第 2 批 A-2 prompt v10.
+- [w72-2nd-route-a3-plans-verify-2026-07-27](w72-2nd-route-a3-plans-verify-2026-07-27.md) — W72 第 2 批 A-3 plans verify.
+- [w72-2nd-route-d2-docs-sync-2026-07-27](w72-2nd-route-d2-docs-sync-2026-07-27.md) — W72 第 2 批 D-2 docs sync.
+- [w72-anchor-paradigm-72nd-batch-2026-07-24](w72-anchor-paradigm-72nd-batch-2026-07-24.md) — [w72-anchor-paradigm-72nd-batch]
+- [w72-grand-closure-72nd-batch-2026-07-24](w72-grand-closure-72nd-batch-2026-07-24.md) — [w72-grand-closure-72nd-batch]
+- [w72-grand-closure-72nd-batch-actual-2026-07-24](w72-grand-closure-72nd-batch-actual-2026-07-24.md) — [w72-grand-closure-72nd-batch-actual]
+- [w72-route-72nd-batch-a1-dispatch-2026-07-24](w72-route-72nd-batch-a1-dispatch-2026-07-24.md) — [w72-route-72nd-batch-a1-dispatch]
+- [w72-route-72nd-batch-c1-container-rebuild-2026-07-24](w72-route-72nd-batch-c1-container-rebuild-2026-07-24.md) — [w72-route-72nd-batch-c1-container-rebuild]
+- [w72-route-72nd-batch-c2-d9-survey-2026-07-27](w72-route-72nd-batch-c2-d9-survey-2026-07-27.md) — [w72-route-72nd-batch-c2-d9-survey]
+- [w72-route-72nd-batch-c3-pptword-gap-2026-07-24](w72-route-72nd-batch-c3-pptword-gap-2026-07-24.md) — [w72-route-72nd-batch-c3-pptword-gap]
+- [w72-route-72nd-batch-d2-docs-sync-2026-07-24](w72-route-72nd-batch-d2-docs-sync-2026-07-24.md) — [w72-route-72nd-batch-d2-docs-sync]
+- [w73-1st-batch-e1-conservation-verification-2026-07-27](w73-1st-batch-e1-conservation-verification-2026-07-27.md) — [w73-1st-batch-e1-conservation-verification]
+- [w73-1st-grand-closure-2026-07-27](w73-1st-grand-closure-2026-07-27.md) — W73 grand closure.
+- [w73-route-1st-batch-a2-voice-asr-tts-survey-2026-07-27](w73-route-1st-batch-a2-voice-asr-tts-survey-2026-07-27.md) — [w73-route-1st-batch-a2-voice-asr-tts-survey]
+- [w74-1st-batch-a2-voice-threshold-survey-2026-07-27](w74-1st-batch-a2-voice-threshold-survey-2026-07-27.md) — [w74-1st-batch-a2-voice-threshold-survey]
+- [w74-1st-batch-e1-conservation-2026-07-27](w74-1st-batch-e1-conservation-2026-07-27.md) — [w74-1st-batch-e1-conservation]
+- [w74-1st-grand-closure-2026-07-27](w74-1st-grand-closure-2026-07-27.md) — W74 grand closure.
+- [w75-1st-batch-b1-voice-bc-plan-2026-07-27](w75-1st-batch-b1-voice-bc-plan-2026-07-27.md) — [w75-1st-batch-b1-voice-bc-plan]
+- [w75-1st-batch-d1-9table-pass-verify-2026-07-27](w75-1st-batch-d1-9table-pass-verify-2026-07-27.md) — [w75-1st-batch-d1-9table-pass-verify]
+- [w75-1st-grand-closure-2026-07-27](w75-1st-grand-closure-2026-07-27.md) — W75 grand closure.
+- [w75-route-1st-batch-a2-edge-tts-survey-2026-07-27](w75-route-1st-batch-a2-edge-tts-survey-2026-07-27.md) — [w75-route-1st-batch-a2-edge-tts-survey]
+- [w76-1st-grand-closure-2026-07-28](w76-1st-grand-closure-2026-07-28.md) — W76 grand closure.
+- [w77-1st-grand-closure-2026-07-28](w77-1st-grand-closure-2026-07-28.md) — W77 grand closure.
+- [w77-1st-route-a2-edge-tts-bd-plan-2026-07-28](w77-1st-route-a2-edge-tts-bd-plan-2026-07-28.md) — W77 A-2 edge-tts bd plan.
+- [w77-1st-route-b2-edge-tts-android-mainplay-2026-07-28](w77-1st-route-b2-edge-tts-android-mainplay-2026-07-28.md) — W77 B-2 edge-tts android mainplay.
+- [w78-1st-grand-closure-2026-07-28](w78-1st-grand-closure-2026-07-28.md) — W78 grand closure.
+- [w78-1st-route-b3-r10-gray-replay-2026-07-28](w78-1st-route-b3-r10-gray-replay-2026-07-28.md) — [w78-1st-route-b3-r10-gray-replay]
+- [w78-route-1st-batch-d1-r10-gray-implement-2026-07-28](w78-route-1st-batch-d1-r10-gray-implement-2026-07-28.md) — [w78-route-1st-batch-d1-r10-gray-implement]
+- [w79-1st-grand-closure-2026-07-28](w79-1st-grand-closure-2026-07-28.md) — W79 grand closure.
+- [w80-1st-grand-closure-2026-07-28](w80-1st-grand-closure-2026-07-28.md) — W80 grand closure.
+- [w80-1st-route-a2-pwa-asset-hotfix-2026-07-28](w80-1st-route-a2-pwa-asset-hotfix-2026-07-28.md) — W80 A-2 PWA 资产缺失 hotfix.
+- [w81-1st-batch-d1-c1-d1-d2-replay-2026-07-28](w81-1st-batch-d1-c1-d1-d2-replay-2026-07-28.md) — W81 收尾 4 agents 合并.
+- [w81-1st-grand-closure-2026-07-28](w81-1st-grand-closure-2026-07-28.md) — W81 grand closure.
+- [w82-1st-batch-a2-content-survey-2026-07-28](w82-1st-batch-a2-content-survey-2026-07-28.md) — W82 A-2 content survey.
+- [w82-1st-grand-closure-2026-07-28](w82-1st-grand-closure-2026-07-28.md) — W82 grand closure.
+- [w82-1st-grand-closure-full-2026-07-28](w82-1st-grand-closure-full-2026-07-28.md) — W82 grand closure full.
+- [w83-1st-batch-a2-survey-derivative-2026-07-28](w83-1st-batch-a2-survey-derivative-2026-07-28.md) — W83 A-2 survey derivative.
+- [w83-1st-grand-closure-full-2026-07-28](w83-1st-grand-closure-full-2026-07-28.md) — W83 grand closure full.
+- [w84-1st-batch-a2-survey-derivative-2026-07-28](w84-1st-batch-a2-survey-derivative-2026-07-28.md) — W84 A-2 survey derivative.
+- [w84-1st-batch-c2-p2-docs-cleanup-2026-07-28](w84-1st-batch-c2-p2-docs-cleanup-2026-07-28.md) — W84 C-2 P2 docs/scripts 清 batch 2 (本批前一).
+- [w84-1st-grand-closure-full-2026-07-28](w84-1st-grand-closure-full-2026-07-28.md) — W84 grand closure full.
+
+## 历史归档 (memory/archived/ — 38 文件)
+
+- [2026-07-09-pending-items-audit](archived/2026-07-09-pending-items-audit.md)
+- [2026-07-20-pending-items-audit-closure](archived/2026-07-20-pending-items-audit-closure.md)
+- [README](archived/README.md)
+- [self-rag-2026-06-30](archived/self-rag-2026-06-30.md)
+- [self-rag-r5r6-deep-mode-benchmark-2026-07-14](archived/self-rag-r5r6-deep-mode-benchmark-2026-07-14.md)
+- [self-rag-three-mode-r3r4-benchmark-2026-07-14](archived/self-rag-three-mode-r3r4-benchmark-2026-07-14.md)
+- [today-closure-2026-07-21](archived/today-closure-2026-07-21.md)
+- [v2-drive-pr6-p11-cleanup-safety-guard-2026-07-02](archived/v2-drive-pr6-p11-cleanup-safety-guard-2026-07-02.md)
+- [w1-411-except-exception-classification-2026-07-21](archived/w1-411-except-exception-classification-2026-07-21.md)
+- [w1-pytest-fail-classification-2026-07-21](archived/w1-pytest-fail-classification-2026-07-21.md)
+- [w1-w2-naming-rule-and-50-commit-closure-2026-07-21](archived/w1-w2-naming-rule-and-50-commit-closure-2026-07-21.md)
+- [w13-5-baseline-closure-2026-07-21](archived/w13-5-baseline-closure-2026-07-21.md)
+- [w16-baseline-six-runs-closure-2026-07-21](archived/w16-baseline-six-runs-closure-2026-07-21.md)
+- [w18-7-baseline-closure-2026-07-21](archived/w18-7-baseline-closure-2026-07-21.md)
+- [w2-pytest-fail-spec-factcheck-2026-07-21](archived/w2-pytest-fail-spec-factcheck-2026-07-21.md)
+- [w2-spec-internal-contradiction-2026-07-21](archived/w2-spec-internal-contradiction-2026-07-21.md)
+- [w22-8-baseline-closure-2026-07-21](archived/w22-8-baseline-closure-2026-07-21.md)
+- [w24-9-baseline-closure-2026-07-21](archived/w24-9-baseline-closure-2026-07-21.md)
+- [w4-18-todo-audit-closure-2026-07-21](archived/w4-18-todo-audit-closure-2026-07-21.md)
+- [w4-options-a-deprecation-2026-07-21](archived/w4-options-a-deprecation-2026-07-21.md)
+- [w54-coordination-grand-closure-2026-07-22](archived/w54-coordination-grand-closure-2026-07-22.md)
+- [w54-future-pr-q3-q4-evaluation-2026-07-22](archived/w54-future-pr-q3-q4-evaluation-2026-07-22.md)
+- [w54-w51-w60-roadmap-2026-07-22](archived/w54-w51-w60-roadmap-2026-07-22.md)
+- [w55-coordination-grand-closure-2026-07-22](archived/w55-coordination-grand-closure-2026-07-22.md)
+- [w55-future-pr-q4-evaluation-2026-07-22](archived/w55-future-pr-q4-evaluation-2026-07-22.md)
+- [w55-w51-w60-roadmap-update-2026-07-22](archived/w55-w51-w60-roadmap-update-2026-07-22.md)
+- [w56-coordination-grand-closure-2026-07-22](archived/w56-coordination-grand-closure-2026-07-22.md)
+- [w56-future-pr-q4-final-evaluation-2026-07-22](archived/w56-future-pr-q4-final-evaluation-2026-07-22.md)
+- [w56-w51-w60-roadmap-final-2026-07-22](archived/w56-w51-w60-roadmap-final-2026-07-22.md)
+- [w57-coordination-grand-closure-2026-07-22](archived/w57-coordination-grand-closure-2026-07-22.md)
+- [w57-future-pr-q4-evaluation-final-2026-07-22](archived/w57-future-pr-q4-evaluation-final-2026-07-22.md)
+- [w57-w51-w60-roadmap-compact-2026-07-22](archived/w57-w51-w60-roadmap-compact-2026-07-22.md)
+- [w58-coordination-grand-closure-2026-07-22](archived/w58-coordination-grand-closure-2026-07-22.md)
+- [w58-future-pr-q4-evaluation-final2-2026-07-22](archived/w58-future-pr-q4-evaluation-final2-2026-07-22.md)
+- [w58-w51-w60-roadmap-quarterly-2026-07-22](archived/w58-w51-w60-roadmap-quarterly-2026-07-22.md)
+- [w60-coordination-grand-closure-2026-07-22](archived/w60-coordination-grand-closure-2026-07-22.md)
+- [w60-future-pr-evaluation-post-dedup](archived/w60-future-pr-evaluation-post-dedup.md)
+- [w60-w51-w60-stage-closure-final](archived/w60-w51-w60-stage-closure-final.md)
