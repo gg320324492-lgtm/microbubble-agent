@@ -1,24 +1,22 @@
 /**
- * useFileCommentsDesktop.ts — W68 路线 F-4 桌面端评论 composable
+ * useFileCommentsDesktop.ts — 桌面端评论 composable (W85 B-2 P1-1 Step 1 thin-shell 兼容层)
  *
- * 2026-07-24 主指挥协调范式第 45 守恒.
- *
- * 职责:
- * - 复用 useFileComments (W68 F-3) 的核心 API 调用
- * - 桌面端适配: RightClick 触发的 inline editor / resolved toggle / delete
- *   都通过 desktop-only adjust 包装 — 不污染 mobile store
- * - 文件元信息 fetch + members 批查 (用于 @mention autocomplete)
+ * 历史: W68 路线 F-4 桌面端评论 composable (2026-07-24 主指挥协调范式第 45 守恒).
+ * W85 第 1 批 B-2 P1 冗余重构 batch 3 (2026-07-29):
+ * - Step 1 (本批): 收敛为 thin-shell — 核心 CRUD 100% 委派 useFileComments (F-3),
+ *   UI 反馈适配 (ElMessage wrapper: onEditComment / onToggleResolved / onDeleteComment /
+ *   onReplyPrefix) 已提取到 view 层 `web/src/views/desktop/DesktopFileCommentsView.vue`.
+ *   本文件仅保留 desktop 数据层差异:
+ *   - fetchFileMeta (文件元信息 header + isFileOwner 判断)
+ *   - batchResolveMembers (@mention autocomplete + username 解析)
+ *   - inline edit 状态 (editingCommentId + editDraft) + activeTab 过滤
+ *   老 UI wrapper 以 @deprecated 兼容导出保留 (W82/W83/W84 B-2 拦截铁律: 分步走不删老).
+ * - Step 2 (W86 后续 batch): 删 @deprecated wrapper + 评估整文件收敛.
  *
  * 设计原则:
- * - 0 production code 改动铁律 — 复用 useFileComments + useNotifications store
- * - desktop-only adjust: 同 API 调用, 不同 UI binding (右键菜单触发)
- * - 不重新实现 API, 仅在 F-3 useFileComments 上加 desktop 适配
- *
- * 与 F-3 useFileComments 差异:
- * - F-3 是 mobile-only (long-press + 触觉反馈), 桌面走右键 + 无 vibrate
- * - F-4 加 fetchFileMeta + batchResolveMembers (desktop UI 完整化)
- * - F-4 加 onEditComment (5 分钟内 owner 可编辑, 桌面 inline edit)
- * - F-4 加 onMoveToTab (desktop 切换 resolved 过滤)
+ * - 0 production code 改动铁律例外已批 (W85 B-2 P1 重构 batch 3 派工批文)
+ * - 不重新实现 API, 核心 list / post / postReply / delete / update / toggleResolved
+ *   全部来自 useFileComments
  */
 
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
@@ -37,17 +35,17 @@ function authHeaders() {
 }
 
 /**
- * Desktop 文件评论 composable
+ * Desktop 文件评论 composable (thin-shell 委派 useFileComments 核心)
  * @param {string|number|Ref<number|string>} fileId
  */
 export function useFileCommentsDesktop(fileId) {
   // 内部 reactive fileId
   const _fileIdRef = typeof fileId === 'object' && 'value' in fileId ? fileId : ref(fileId)
 
-  // 复用 F-3 核心逻辑 (list / post / postReply / delete / update / toggleResolved)
+  // === 核心委派: F-3 useFileComments (list / post / postReply / delete / update / toggleResolved) ===
   const base = useFileComments(_fileIdRef)
 
-  // === Desktop-only state ===
+  // === Desktop-only 数据层 state ===
   const fileMeta = ref({ id: null, title: '', file_name: '', owner_id: null })
   const membersList = ref([])
   const usernameMap = ref({})
@@ -107,60 +105,6 @@ export function useFileCommentsDesktop(fileId) {
   }
 
   /**
-   * 桌面端编辑评论 — 复用 base.updateComment + 状态管理
-   * @param {number} commentId
-   * @param {string} newContent
-   */
-  async function onEditComment(commentId, newContent) {
-    try {
-      await base.updateComment(commentId, newContent)
-      ElMessage.success('评论已更新')
-      editingCommentId.value = null
-      editDraft.value = ''
-    } catch (e) {
-      ElMessage.error(e?.response?.data?.error?.message || e?.message || '编辑失败')
-    }
-  }
-
-  /**
-   * 右键菜单触发的 resolved toggle — 走 base.toggleResolved
-   * @param {object} comment - 评论对象
-   */
-  async function onToggleResolved(comment) {
-    if (!comment || !comment.id) return
-    try {
-      await base.toggleResolved(comment.id, !comment.resolved)
-      ElMessage.success(comment.resolved ? '已标记为未解决' : '已标记为已解决')
-    } catch (e) {
-      ElMessage.error('操作失败: ' + (e?.message || '未知错误'))
-    }
-  }
-
-  /**
-   * 右键菜单触发的删除评论 — 走 base.deleteComment
-   * @param {object} comment
-   */
-  async function onDeleteComment(comment) {
-    if (!comment || !comment.id) return
-    try {
-      await base.deleteComment(comment.id)
-      ElMessage.success('评论已删除')
-    } catch (e) {
-      ElMessage.error(e?.response?.data?.error?.message || e?.message || '删除失败')
-    }
-  }
-
-  /**
-   * 右键菜单触发的回复评论 (跳到输入栏 + @ 该用户)
-   * @param {object} comment
-   * @returns {string} mention prefix to prepend
-   */
-  function onReplyPrefix(comment) {
-    const userName = comment?.user_name || `用户 #${comment?.user_id}`
-    return `@${userName} `
-  }
-
-  /**
    * 触发编辑评论 — 设置 editingCommentId + editDraft
    * @param {object} comment
    */
@@ -182,7 +126,7 @@ export function useFileCommentsDesktop(fileId) {
     activeTab.value = name
   }
 
-  // 计算属性: 按 activeTab 过滤
+  // 计算属性: 按 activeTab 过滤 (委派 base.filterByTab)
   const filteredComments = computed(() => base.filterByTab(activeTab.value))
 
   // 计算属性: 当前文件 owner
@@ -199,6 +143,57 @@ export function useFileCommentsDesktop(fileId) {
     return fileMeta.value.owner_id === currentUserId.value
   })
 
+  // === W85 B-2 P1-1 Step 1: @deprecated UI wrapper 兼容层 ===
+  // UI 反馈 (ElMessage) 适配已提取到 DesktopFileCommentsView.vue view 层.
+  // 以下 wrapper 仅为老消费方兼容保留, W86 后续 batch Step 2 删除.
+
+  /**
+   * @deprecated W85 B-2 P1-1 — UI 适配已迁移到 view 层, 请在 view 内包装 base.updateComment
+   */
+  async function onEditComment(commentId, newContent) {
+    try {
+      await base.updateComment(commentId, newContent)
+      ElMessage.success('评论已更新')
+      cancelEditComment()
+    } catch (e) {
+      ElMessage.error(e?.response?.data?.error?.message || e?.message || '编辑失败')
+    }
+  }
+
+  /**
+   * @deprecated W85 B-2 P1-1 — UI 适配已迁移到 view 层, 请在 view 内包装 base.toggleResolved
+   */
+  async function onToggleResolved(comment) {
+    if (!comment || !comment.id) return
+    try {
+      await base.toggleResolved(comment.id, !comment.resolved)
+      ElMessage.success(comment.resolved ? '已标记为未解决' : '已标记为已解决')
+    } catch (e) {
+      ElMessage.error('操作失败: ' + (e?.message || '未知错误'))
+    }
+  }
+
+  /**
+   * @deprecated W85 B-2 P1-1 — UI 适配已迁移到 view 层, 请在 view 内包装 base.deleteComment
+   */
+  async function onDeleteComment(comment) {
+    if (!comment || !comment.id) return
+    try {
+      await base.deleteComment(comment.id)
+      ElMessage.success('评论已删除')
+    } catch (e) {
+      ElMessage.error(e?.response?.data?.error?.message || e?.message || '删除失败')
+    }
+  }
+
+  /**
+   * @deprecated W85 B-2 P1-1 — 纯 UI 逻辑已迁移到 view 层
+   */
+  function onReplyPrefix(comment) {
+    const userName = comment?.user_name || `用户 #${comment?.user_id}`
+    return `@${userName} `
+  }
+
   // === 监听 fileId 切换 → 自动 reset state ===
   watch(_fileIdRef, (newId, oldId) => {
     if (newId !== oldId) {
@@ -214,7 +209,7 @@ export function useFileCommentsDesktop(fileId) {
   })
 
   return {
-    // state
+    // desktop state
     fileMeta,
     membersList,
     usernameMap,
@@ -224,7 +219,7 @@ export function useFileCommentsDesktop(fileId) {
     loadingMeta,
     currentUserId,
     isFileOwner,
-    // base API
+    // base API (thin-shell 委派)
     comments: base.comments,
     loading: base.loading,
     posting: base.posting,
@@ -233,22 +228,24 @@ export function useFileCommentsDesktop(fileId) {
     openCount: base.openCount,
     resolvedCount: base.resolvedCount,
     filteredComments,
-    // actions
+    // desktop actions
     fetchFileMeta,
     batchResolveMembers,
+    startEditComment,
+    cancelEditComment,
+    switchTab,
+    // base actions (thin-shell 委派)
     listComments: base.listComments,
     postComment: base.postComment,
     postReply: base.postReply,
     updateComment: base.updateComment,
     deleteComment: base.deleteComment,
     toggleResolved: base.toggleResolved,
+    // @deprecated 兼容层 (W86 Step 2 删)
     onEditComment,
     onToggleResolved,
     onDeleteComment,
     onReplyPrefix,
-    startEditComment,
-    cancelEditComment,
-    switchTab,
   }
 }
 

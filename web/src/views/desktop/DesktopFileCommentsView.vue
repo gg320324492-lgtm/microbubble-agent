@@ -223,6 +223,10 @@ const fileEmojiRemainingCount = fileEmojiLoader.remainingCount
 // 文件级 emoji 反应用虚拟 commentId (file:<id>) 存本地, 与评论反应隔离
 const fileReactionKey = computed(() => `file:${props.fileId}`)
 
+// W85 B-2 P1-1 Step 1 (兼容层): UI 反馈 (ElMessage) 适配已提取到本 view 层.
+// 不再消费 composable 的 onEditComment/onToggleResolved/onDeleteComment/onReplyPrefix
+// UI wrapper — 改为直接消费 base 核心 action (updateComment/toggleResolved/deleteComment).
+// 老 wrapper 保留在 useFileCommentsDesktop.ts 作兼容层, W86 后续 batch Step 2 删.
 const {
   // state
   fileMeta,
@@ -240,15 +244,14 @@ const {
   activeTab,
   currentUserId,
   isFileOwner,
-  // actions
+  // actions (base 核心委派)
   fetchFileMeta,
   batchResolveMembers,
   listComments,
   postComment,
-  onEditComment,
-  onToggleResolved,
-  onDeleteComment,
-  onReplyPrefix,
+  updateComment,
+  toggleResolved,
+  deleteComment,
   startEditComment,
   cancelEditComment,
   switchTab,
@@ -364,6 +367,48 @@ async function onToggleFileReaction(emoji) {
   } catch (e) {
     ElMessage.error(e?.response?.data?.error?.message || e?.message || '表情操作失败')
   }
+}
+
+// === W85 B-2 P1-1: UI 适配层 (从 useFileCommentsDesktop 提取到 view 层) ===
+// 桌面端 ElMessage 反馈 + inline edit 状态清理, 核心 API 走 base composable.
+
+/** 桌面端编辑评论 — 核心走 updateComment, UI 反馈 + editing 状态清理在此 */
+async function onEditComment(commentId, newContentVal) {
+  try {
+    await updateComment(commentId, newContentVal)
+    ElMessage.success('评论已更新')
+    cancelEditComment()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.message || '编辑失败')
+  }
+}
+
+/** 右键菜单触发的 resolved toggle — 核心走 toggleResolved */
+async function onToggleResolved(comment) {
+  if (!comment || !comment.id) return
+  try {
+    await toggleResolved(comment.id, !comment.resolved)
+    ElMessage.success(comment.resolved ? '已标记为未解决' : '已标记为已解决')
+  } catch (e) {
+    ElMessage.error('操作失败: ' + (e?.message || '未知错误'))
+  }
+}
+
+/** 右键菜单触发的删除评论 — 核心走 deleteComment */
+async function onDeleteComment(comment) {
+  if (!comment || !comment.id) return
+  try {
+    await deleteComment(comment.id)
+    ElMessage.success('评论已删除')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.error?.message || e?.message || '删除失败')
+  }
+}
+
+/** 回复评论的 @mention 前缀 (纯 UI 逻辑) */
+function onReplyPrefix(comment) {
+  const userName = comment?.user_name || `用户 #${comment?.user_id}`
+  return `@${userName} `
 }
 
 async function onPost(content) {
