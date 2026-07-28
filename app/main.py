@@ -34,6 +34,7 @@ def _import_application_routers():
         analytics,
         auth,
         billing,  # W72 第 2 批 B-5 商业化计费
+        billing_webhooks,  # W82 B-1 P0: 商业化支付 webhook 路由
         tenants,  # W73 第 1 批 B-1 多租户管理
         chat,
         chat_history,
@@ -116,6 +117,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (translation.router, {}),
         (mobile_v1.router, {"prefix": "/api/v1", "tags": ["移动端聚合"]}),
         (billing.router, {"prefix": "/api/v1", "tags": ["商业化计费"]}),  # W72 第 2 批 B-5 商业化 Phase 8 起步
+        (billing_webhooks.router, {"prefix": "/api/v1", "tags": ["商业化支付 webhook"]}),  # W82 B-1 P0
         (tenants.router, {"prefix": "/api/v1", "tags": ["商业化多租户"]}),  # W73 第 1 批 B-1 多租户管理
     ]
 

@@ -16,6 +16,10 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_acks_late=True,
+    task_reject_on_worker_lost=True,  # worker OOM/重启时重新入队，避免任务静默丢失
+    task_time_limit=600,  # 单 task 最长 10 分钟，硬终止失控任务
+    task_soft_time_limit=540,  # 9 分钟软警告，给任务清理资源的机会
+    worker_max_tasks_per_child=1000,  # 定期回收 worker，防止长期内存泄漏
     worker_prefetch_multiplier=1,
     beat_schedule={
         "check-reminders": {
