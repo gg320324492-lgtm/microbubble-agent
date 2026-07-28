@@ -67,8 +67,8 @@ from app.services.android_tts_mainplay import (
     MainplayRoute as AndroidRoute,
 )
 
-# 跨平台统一缓存 store (W77 B-1 变体, 带 metrics + TTL + LRU)
-from app.services.ios_tts_cache import TTSCacheStore, build_tts_cache_store
+# 跨平台统一缓存 store (W77 B-1 + W78 B-1 合并, W83 B-2 P1-1 收敛)
+from app.services.tts_cache import TTSCacheStore, build_tts_cache_store
 
 logger = logging.getLogger("microbubble.tts_mainplay_pipeline")
 
