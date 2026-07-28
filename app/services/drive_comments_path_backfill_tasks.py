@@ -78,50 +78,20 @@ def backfill_paths_task(
                 async with session_factory() as db:
                     svc = DriveCommentsPathBackfillService(db)
 
-                    if file_id is not None:
-                        # 单文件模式
-                        updated = await svc.backfill_for_file(
-                            file_id,
-                            dry_run=dry_run,
-                            fix_orphans=fix_orphans,
-                        )
-                        return {
-                            "status": "ok",
-                            "target": target_label,
-                            "updated": updated,
-                            "orphans_fixed": 0,  # 单文件模式不单独计 orphan
-                            "total_examined": updated,
-                            "dry_run": dry_run,
-                        }
-                    elif folder_id is not None:
-                        # 单 folder 模式
-                        updated = await svc.backfill_for_folder(
-                            folder_id,
-                            dry_run=dry_run,
-                            fix_orphans=fix_orphans,
-                        )
-                        return {
-                            "status": "ok",
-                            "target": target_label,
-                            "updated": updated,
-                            "orphans_fixed": 0,
-                            "total_examined": updated,
-                            "dry_run": dry_run,
-                        }
-                    else:
-                        # 全部模式
-                        result = await svc.backfill_all_paths(
-                            dry_run=dry_run,
-                            fix_orphans=fix_orphans,
-                        )
-                        return {
-                            "status": "ok",
-                            "target": target_label,
-                            "updated": result.updated,
-                            "orphans_fixed": result.orphans_fixed,
-                            "total_examined": result.total_examined,
-                            "dry_run": result.dry_run,
-                        }
+                    result = await svc.backfill_comments_path(
+                        file_id=file_id,
+                        folder_id=folder_id,
+                        dry_run=dry_run,
+                        fix_orphans=fix_orphans,
+                    )
+                    return {
+                        "status": "ok",
+                        "target": target_label,
+                        "updated": result.updated,
+                        "orphans_fixed": result.orphans_fixed,
+                        "total_examined": result.total_examined,
+                        "dry_run": result.dry_run,
+                    }
             finally:
                 await engine.dispose()
 
