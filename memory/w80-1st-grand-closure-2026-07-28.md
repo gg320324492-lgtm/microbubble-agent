@@ -168,3 +168,14 @@
 **alembic 链实战**: 1 head `['085_billing_payment_tables']` 守恒达成 (W79 + W80 6 agents 不改 alembic, 单链 076→078→080→081→082→083→084→085)
 
 **push 实战**: `git push origin main` 已自动实战 (output `266ceb0fd..0a5b56878 main -> main` 确认推送成功, 沿用 W79 §8 push 实战)
+
+## 8. W81 第 1 批 B-1 商业化运营 + Phase 8 收官同步
+
+- **真验证基线**: W80 B-1 commit `3805e2722` 14/14 e2e，12 子维度、3 硬门控与加权评分 0.9576 >= 0.90 均有物证；W78 A-2 commit `35ac5ced5` 阶段 5 与 W72 C-2 commit `a78967661` 排期沿用。
+- **运营收官**: commercial_compliance、tenant_isolation 一票否决；billing_accuracy >= 0.99；8 件套监控能力链实时接入。
+- **Phase 8 收官**: W81 3 个月 + W82 3 个月 + W83 3 个月 + W84+ 15 个月 = 24 个月；连同前置 15 个月形成 39 个月路线周期。
+- **cost model**: Edge-TTS 7.2.8 免费 + Web Speech API 原生 + Redis pre-synthesize 缓存，语音链成本 0；真生产 key 后 Stripe 0.5% / Alipay 0.6% / WeChat Pay 0.6%，月 1K 交易约 ¥22。
+- **验证**: W80 14 case 复用 + W81 2 case 新增 = 16/16 e2e PASS。
+- **锚点范式**: W80 第 1 批 286 → W81 第 1 批 B-1 290 守恒 (+1)。
+- **边界**: 仅 docs + memory + tests，0 production code 改动、0 例外；类 20.14 monitoring/alerts 主拍决策沿用，不重新启用真生产 key。
+- **runbook**: `docs/w81-1st-batch-b1-commercial-operation-closure-2026-07-28.md`。
