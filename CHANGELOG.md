@@ -5,6 +5,25 @@
 
 ---
 
+## W85 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-29 — 1/1 agent 完成 + 锚点范式 314 → 320 守恒 +6 据实上报, 0 production code 5/7 守恒 例外 2 已批 W85 B-1 + C-1, 派工 v6 段 7 19 类 + 类 20 18 实例 + W84 据实上报 4 实例沉淀回写 + W85 B-2 useTask 0 hit 据实上报)
+
+**主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 5 case PASS + 锚点范式 314 → 320 +6 守恒 (验证不计 0 增量 + 实施 +1 实战, 本任务 commit).
+
+**W85 第 1 批 D-1 1 agent 真实施**:
+
+- **D-1 6 类文档同步 + grand closure memory** (本任务 commit, 锚点范式 314 → 320 验证不计 + 实施 +1 实战): 5 段同步实战 (CLAUDE.md 顶部状态段 W84 → W85 升级 + W85 第 1 批 grand closure 章节新增 + ROADMAP.md 当前状态段升级 + CHANGELOG.md 顶部新增 W85 第 1 批条目 + README.md "近期新增" 段追加 + memory/MEMORY.md 顶部追加 W85 第 1 批 grand closure 条目). 8 文件改动 (5 docs + 1 runbook + 1 memory + 1 e2e). 5 case e2e PASS (5 段同步). 锚点范式 W84 第 1 批 314 → W85 第 1 批 320 守恒 +6 验证不计 + 实施 +1 实战 (D-2 据实上报 +6, B-2 useTask 0 hit 不实施, 类 20.13 实战 19). 0 production code 改动铁律 5/7 守恒 (2 例外已批 W85: B-1 Phase 9 知识图谱 batch 1 + C-1 drive_upload 数据回填 alembic 086→085 单链主拍签字). 派工前提铁律 12 条 + 类 20 18 条实战 (W85 据实上报 2 实例沉淀: 类 20 实战 20 B-2 useTask 0 hit 跳过 + 类 20.13 实战 19 D-2 锚点 +6 不凑 +7). 累计 27 批 440+ commits + 440+ 铁律 (W85 第 1 批 +25+ 铁律: B-1 8 + B-2 5 + C-1 5 + C-2 5 + D-1/D-2 5). W86/W87/W88 派工顺序表 (7+7+7 = 21 agents, 锚点 320→~342). 详见 `memory/w85-1st-grand-closure-full-2026-07-29.md` (本任务沉淀) + `docs/w85-1st-batch-d1-grand-closure-2026-07-29.md` (本任务 runbook) + `tests/test_w85_d1_docs_grand_closure_e2e.py` (本任务 5 case e2e).
+
+**W85 第 1 批 D-1 grand closure 收口**: `memory/w85-1st-grand-closure-full-2026-07-29.md` + main commit (本任务). 0 commits ahead of base `7ca7846d1` (W84 第 1 批 D-2 锚点范式收口, 文档同步不动 production code). alembic 1 head `['085_billing_payment_tables']` 守恒 (W85 D-1 不改 alembic). 累计 27 批 440+ commits + 440+ 铁律 (W85 +25 + W84 +25 + W83 +25). W19 选项 A 维持.
+
+**派工前提错配 18 实例沉淀 (类 20, 沿用 W82 B-2 拦截 #16 + W84 据实上报 3 实例 + W85 据实上报 2 实例, W85 D-1 无新增)**:
+1-16. 沿用 W72-W84 类 20 累计 16 实例 (含 W84 据实上报 3 实例: A-2 派生新任务 + C-1 dead service + C-2 docs/scripts)
+17. **W85 类 20.13 实战 19 (D-2 据实上报锚点 +6)**: B-2 派工后 4/6 真实施稳定, B-2/D-1 未开工 0 commit, 真实累计 314 + 6 = 320 (非派工 brief 预填 +7). 铁律: 部分 agent 收齐时据实报真实增量, 不擅自凑派工 brief 预填增量, 各 commit 自报编号保留不改写
+18. **W85 类 20 实战 20 (B-2 useTask 据实上报 0 hit)**: grep 全仓 `useTaskDesktop` / `useTaskMobile` 0 hit, useTask.js 120 行已是单一核心, 桌面 + 移动 4 消费方 import 同一文件, 无冗余可重构. 铁律: 派工 brief 列举"冗余拆分"前必须先 grep 全仓验证目标文件/函数存在 + 实际冗余点, 不存在直接据实上报 0 hit 跳过
+
+**W85 第 1 批 6 类文档同步 + grand closure 收口累计**: 锚点范式 314 → 320 +6 守恒 (D-2 据实上报, B-2 useTask 0 hit 不实施), 0 production code 改动铁律 5/7 守恒 (2 例外已批: B-1 Phase 9 知识图谱 + C-1 drive_upload 数据回填). 累计 27 批 440+ commits + 440+ 铁律 (W85 第 1 批 +25+ 新铁律).
+
+---
+
 ## W84 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-28 — 1/1 agent 完成 + 锚点范式 307 → 314 守恒 +7, 0 production code 4/7 守恒 例外 3 已批 W84 B-1 + B-2 + C-1, 派工 v6 段 7 19 类 + 类 20 16 实例 + W83 据实上报 3 实例沉淀回写)
 
 **主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 5 case PASS + 锚点范式 307 → 314 +7 守恒 (验证不计 0 增量 + 实施 +1 实战, 本任务 commit).
