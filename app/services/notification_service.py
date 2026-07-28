@@ -409,7 +409,7 @@ class NotificationService:
                 "file_type": meta.get("file_type"),
             })
         except Exception as e:
-            logger.debug(f"[Notify] WS push 失败 (非阻塞): {e}")
+            logger.error("[Notify] WS push failed (non-blocking): %s", e, exc_info=True)
 
         return m, merged
 
@@ -545,7 +545,7 @@ class NotificationService:
                     "file_type": meta.get("file_type"),
                 })
         except Exception as e:
-            logger.debug(f"[Notify] WS push 失败 (非阻塞): {e}")
+            logger.error("[Notify] WS push failed (non-blocking): %s", e, exc_info=True)
 
         logger.info(f"[Notify] bulk mentions file_id={file_id} → {len(mentions)} users ({len(recent_set)} merged)")
         return mentions
@@ -819,7 +819,7 @@ async def push_with_priority(
             import asyncio
             asyncio.create_task(_push_to_browser(user_id, payload, db))
         except Exception as e:
-            logger.debug(f"[Notify] push_to_browser create_task 失败: {e}")
+            logger.error("[Notify] push_to_browser create_task failed: %s", e, exc_info=True)
 
     return delivered
 
@@ -843,7 +843,7 @@ async def _push_to_browser(user_id: int, payload: dict, db: object) -> None:
             data=data,
         )
     except Exception as e:
-        logger.debug(f"[Notify] push_to_browser 失败 (非阻塞): {e}")
+        logger.error("[Notify] push_to_browser failed (non-blocking): %s", e, exc_info=True)
 
 
 def _infer_title_from_payload(payload: dict) -> str:

@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query, Response
@@ -32,6 +33,8 @@ from app.services.drive_reaction_service import (
     DriveReactionService,
     DriveReactionServiceError,
 )
+
+logger = logging.getLogger("microbubble.drive_reactions")
 
 router = APIRouter(prefix="/drive/reactions", tags=["网盘表情反应"])
 
@@ -161,8 +164,12 @@ async def add_reaction(
             target_user = await _resolve_reaction_target_owner(db, "comment", payload.target_id)
             if target_user is not None:
                 await publish_combined_notification(db, target_user_id=target_user, combined_actions=[f"reacted_{payload.emoji}"], source_comment_id=payload.target_id, actor_id=current_user.id)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.error(
+                "reaction notification failed; reaction persisted without notification: %s",
+                exc,
+                exc_info=True,
+            )
 
     return ReactionRead(
         id=reaction.id,
