@@ -111,6 +111,10 @@ def _normalize_fake_tool_input(name: str, input_dict: dict) -> dict:
     - 输入 "query" → 找 schema 里第一个非 id 字段
     - 输入 "id" → 找 schema 里 ID 字段
     - 输入其他未声明字段 → 保留（让 Pydantic 报错暴露给模型看）
+
+    W83 B-1 P1-4: 不再静默吞错 (except 返回 input_dict 含 LLM 幻想字段).
+    TOOL_REGISTRY 找不到工具 → return 之前打 warning (让上层知道工具被调用但未注册).
+    其他异常 → return **带 known_fields 过滤的 safe_copy**, 避免 LLM 幻想字段污染 Pydantic.
     """
     if not input_dict:
         return input_dict
@@ -118,6 +122,14 @@ def _normalize_fake_tool_input(name: str, input_dict: dict) -> dict:
         from app.agent.tool_registry import TOOL_REGISTRY
         td = TOOL_REGISTRY.get(name)
         if not td or not td.input_model:
+            # W83 B-1 P1-4: 工具未注册, 不静默 — 打 warning 暴露给监控,
+            # 让上层知道"fake tool 被调用但 TOOL_REGISTRY 里没有它".
+            # 但仍 return 原 input_dict (Pydantic 会在 endpoint 入口报 unexpected field
+            # → 给模型显式错误信号, 比静默吞更有用).
+            logger.warning(
+                "_normalize_fake_tool_input: tool=%s not in TOOL_REGISTRY (fake call?), returning raw input_dict",
+                name,
+            )
             return input_dict
         # 拿到 Pydantic schema 字段列表
         schema_fields = td.input_model.model_fields
@@ -153,8 +165,26 @@ def _normalize_fake_tool_input(name: str, input_dict: dict) -> dict:
         result = {k: v for k, v in result.items() if k in known_fields}
         return result
     except Exception as e:
-        logger.warning(f"_normalize_fake_tool_input({name}) failed: {e}")
-        return input_dict
+        # W83 B-1 P1-4: 不再静默 return input_dict (含 LLM 幻想字段 → Pydantic 报
+        # unexpected field → 暴露给模型但污染本轮 messages).
+        # 改为: 打 error + 过滤掉所有非 known_fields (safe fallback),
+        # 让 LLM 看到"字段被剥离"的显式错误 (而不是 silent bypass).
+        logger.error(
+            "_normalize_fake_tool_input(%s) failed: %s, falling back to known_fields-only copy",
+            name, e, exc_info=True,
+        )
+        # fallback: 用最宽松 known_fields 过滤 (空 schema 时不过滤)
+        try:
+            from app.agent.tool_registry import TOOL_REGISTRY
+            td = TOOL_REGISTRY.get(name)
+            if td and td.input_model:
+                known_fields = set(td.input_model.model_fields.keys())
+                return {k: v for k, v in input_dict.items() if k in known_fields}
+        except Exception:
+            pass
+        # 真没救 (工具未注册 + alias 失败) → 返空 dict (Pydantic 必报"缺少必填字段",
+        # 暴露给模型它字段名错得离谱, 比静默 bypass 让它继续编造更好)
+        return {}
 
 
 def _build_plan_step_input(tool_name: str, intent, messages: list[dict]) -> dict:
@@ -1089,7 +1119,27 @@ class AgenticLoop:
                             ctx=ctx,
                         )
                     except Exception as e:
-                        logger.warning(f"compress_tool_result failed: {e}")
+                        # W83 B-1 P1-4: 不再静默吞错. 打 error 级别 (不是 warning,
+                        # 压缩失败会让 tool_result 全文塞回 messages → context 爆炸
+                        # → 用户看到无意义 token 消耗). 同时标记
+                        # ``compression_failed_for_tool`` 让上层/middleware 可观测.
+                        logger.error(
+                            "compress_tool_result failed (tool=%s, error=%s), fall through with raw result",
+                            tu["name"], e,
+                            exc_info=True,
+                        )
+                        # W83 B-1 P1-4 fallback: 把原始 result 标记 ``compression_failed``
+                        # 注入 round_results, 让 Phase 2 synthesis / debug endpoint
+                        # 能看到"压缩失败, 已 fallback"信号, 而不是无信息丢失.
+                        round_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tu["id"],
+                            "content": json.dumps(
+                                {"raw": result, "compression_failed": True, "compression_error": str(e)},
+                                ensure_ascii=False, default=str,
+                            ),
+                        })
+                        continue  # 跳过下方"未 fail 路径", 避免 round_results 重复 append
 
                     if compression:
                         # [snapshot] tool_compressed
@@ -1408,8 +1458,18 @@ class AgenticLoop:
                                     count = inner_data.get("count", 0)
                                     if count == 0 or inner_data.get("status") == "error":
                                         empty_tools.append(blk.get("tool_use_id", "?"))
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                # W83 B-1 P1-4: 不再静默吞错. json.loads 失败意味着
+                                # tool_result 格式异常 — 可能是 LLM 输出 garbage 或
+                                # 工具返回非 JSON. 打 warning 暴露给监控,
+                                # 但不阻断 (e.g. 单条 inner 不是 JSON 不影响整轮).
+                                # W83 B-1 P1-4 累积: empty_tools 解析失败的 tool 也算空,
+                                # 让模型看到"数据缺失"警告, 防止编造.
+                                logger.warning(
+                                    "tool_result inner parse failed (tool_use_id=%s, error=%s), treat as empty",
+                                    blk.get("tool_use_id", "?"), e,
+                                )
+                                empty_tools.append(blk.get("tool_use_id", "?"))
         if empty_tools:
             kwargs["system"] = kwargs["system"] + (
                 "\n\n## ⚠️ 数据缺失警告\n"
