@@ -11,3 +11,6 @@ psycopg2-binary>=2.9.9
 
 # JSON / YAML / 工具
 pyyaml>=6.0
+
+# Fixture 脱敏 (W78 D-1 R10 实施前置 2)
+Faker>=26.0
