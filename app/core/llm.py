@@ -260,7 +260,7 @@ class LLMClient:
         )
         # 流式
         async for chunk in client.stream(messages=..., system=...):
-            print(chunk)
+            logger.debug(chunk)
     """
 
     _instance: Optional["LLMClient"] = None
