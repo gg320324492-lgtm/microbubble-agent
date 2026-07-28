@@ -148,3 +148,16 @@ tunnel/start-ssh-tunnel.vbs.tmp
 #       git 会跳过这些误识别, git status 输出真正 clean
 /[A-Za-z]:*
 .worktrees/
+
+# W82 C-1 archive cleanup (Survey 5 §6) — 防再被 commit
+tests/_archive_*/
+scripts/_archive/
+scripts/_w3_verify.py
+tests/manual-test/
+scripts/playwright_drive_screenshots/
+tests/perf/test_brief_latency.py
+tests/perf/test_sse_first_byte.py
+# 注意: tests/qa-bench/results/ 整体 NOT ignored —
+# REPORT_TEMPLATE.md / round3 / round6-9 / smoke / stability_round1 等
+# 被 scripts/compare_reranker_rounds_v2.py + stability_check.py +
+# gen_*_report.py + GUIDE.md + W78 R10 runbook 实引用 (W82 C-1 真验证)
