@@ -280,8 +280,9 @@ async def publish_combined_notification(db: AsyncSession, *, target_user_id: int
         await record_sent(db, target_user_id, source_comment_id, digest)
         return result
     except Exception as e:
-        logger.error("combined notification failed: %r", e, exc_info=True)
-        return -1
+        logger.error("combined notification dedup failed; sending fallback: %r", e, exc_info=True)
+        payload = {"type": "comment_combined", "comment_id": source_comment_id, "target_user_id": target_user_id, "actions": sorted(set(combined_actions)), "actor_id": actor_id, "snippet": snippet, "ts": _now_iso(), "dedup_fallback": True}
+        return await _safe_push(target_user_id, payload, priority=NotificationPriority.HIGH)
 
 
 # ==========================================================================

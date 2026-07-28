@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.drive_notification_dedup import DriveNotificationDedup
 
+logger = logging.getLogger("microbubble.drive.notification_dedup")
+
 
 def actions_hash(actions: list[str]) -> str:
     canonical = "|".join(sorted(set(actions)))
@@ -18,12 +21,22 @@ def actions_hash(actions: list[str]) -> str:
 
 
 async def should_send(db: AsyncSession, user_id: int, comment_id: int, digest: str) -> bool:
-    row = (await db.execute(select(DriveNotificationDedup.id).where(
-        DriveNotificationDedup.user_id == user_id,
-        DriveNotificationDedup.comment_id == comment_id,
-        DriveNotificationDedup.actions_hash == digest,
-    ))).first()
-    return row is None
+    try:
+        row = (await db.execute(select(DriveNotificationDedup.id).where(
+            DriveNotificationDedup.user_id == user_id,
+            DriveNotificationDedup.comment_id == comment_id,
+            DriveNotificationDedup.actions_hash == digest,
+        ))).first()
+        return row is None
+    except Exception as exc:
+        logger.warning(
+            "notification dedup lookup failed; allowing fallback send user_id=%s comment_id=%s: %s",
+            user_id,
+            comment_id,
+            exc,
+            exc_info=True,
+        )
+        return True
 
 
 async def record_sent(db: AsyncSession, user_id: int, comment_id: int, digest: str) -> None:

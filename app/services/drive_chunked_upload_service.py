@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.drive_chunked_upload import DriveChunkedUpload
 from app.models.folder import Folder
+from app.services.drive_service import drive_retry
 from app.services.file_service import file_service
 
 logger = logging.getLogger("microbubble.drive_chunked_upload")
@@ -81,10 +82,33 @@ async def _delete_staging_objects(upload_id: str) -> int:
     return deleted_count
 
 
+async def _put_object_with_retry(
+    object_name: str,
+    data: bytes,
+    content_type: str,
+) -> None:
+    """Upload the merged object with transient-storage retry protection."""
+    @drive_retry()
+    async def _upload() -> None:
+        def _sync_upload() -> None:
+            from io import BytesIO
+            file_service.client.put_object(
+                file_service.bucket,
+                object_name,
+                BytesIO(data),
+                length=len(data),
+                content_type=content_type,
+            )
+
+        await asyncio.to_thread(_sync_upload)
+
+    await _upload()
+
+
 async def _merge_chunks(
     upload: DriveChunkedUpload,
     final_object_name: str,
-) -> tuple[int, str]:
+) -> tuple[int, str, bytes]:
     """Merge staging chunks through a bounded-memory temporary file.
 
     MinIO's Python client is synchronous, so downloads and final put run in a worker thread.
@@ -105,14 +129,9 @@ async def _merge_chunks(
                     hasher.update(data)
                     total_size += len(data)
             with open(temp_path, "rb") as source:
-                file_service.client.put_object(
-                    file_service.bucket,
-                    final_object_name,
-                    source,
-                    length=total_size,
-                    content_type=mimetypes.guess_type(upload.filename)[0] or "application/octet-stream",
-                )
-            return total_size, hasher.hexdigest()
+                # The actual upload is retried by the async wrapper below.
+                source_bytes = source.read()
+            return total_size, hasher.hexdigest(), source_bytes
         finally:
             try:
                 os.unlink(temp_path)
@@ -281,7 +300,12 @@ class DriveChunkedUploadService:
 
         requested_checksum = _validate_sha256(final_checksum, "final_checksum") or upload.checksum
         final_object_name = _final_object_name(upload)
-        total_size, actual_checksum = await _merge_chunks(upload, final_object_name)
+        total_size, actual_checksum, merged_data = await _merge_chunks(upload, final_object_name)
+        await _put_object_with_retry(
+            final_object_name,
+            merged_data,
+            mimetypes.guess_type(upload.filename)[0] or "application/octet-stream",
+        )
         if total_size != upload.file_size:
             await asyncio.to_thread(file_service.delete_file, final_object_name)
             raise DriveChunkedUploadError(

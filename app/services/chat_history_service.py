@@ -26,6 +26,7 @@ from app.utils.datetime_utils import to_naive_datetime
 
 from sqlalchemy import select, delete, and_, or_, func, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.chat_history import (
     ChatSession, ChatMessage, ChatShare,
@@ -904,6 +905,7 @@ async def mark_message_partial(
         # 越权防护
         await get_session(db, user_id, msg.session_id)
         msg.is_partial = True
+        flag_modified(msg, "is_partial")
         await db.commit()
         return msg
 
@@ -919,6 +921,7 @@ async def mark_message_partial(
             return None
         await get_session(db, user_id, session_id)  # 越权防护
         msg.is_partial = True
+        flag_modified(msg, "is_partial")
         await db.commit()
         return msg
 

@@ -2,6 +2,10 @@
 
 import io
 import wave
+import logging
+
+logger = logging.getLogger("microbubble.voice.recorder")
+
 from app.models.base import utcnow
 from typing import Optional, Callable
 from dataclasses import dataclass
@@ -52,7 +56,7 @@ class AudioRecorder:
 
         # 这里会启动实际的录音线程
         # 在Web环境中，录音由前端完成，这里只是管理状态
-        print("录音开始")
+        logger.info("录音开始")
 
     def stop(self) -> bytes:
         """
@@ -72,20 +76,20 @@ class AudioRecorder:
         # 转换为WAV格式
         wav_data = self._to_wav(audio_data)
 
-        print(f"录音结束，时长: {self.get_duration():.1f}秒")
+        logger.info("录音结束，时长: %.1f秒", self.get_duration())
         return wav_data
 
     def pause(self):
         """暂停录音"""
         if self.status == RecordingStatus.RECORDING:
             self.status = RecordingStatus.PAUSED
-            print("录音暂停")
+            logger.info("录音暂停")
 
     def resume(self):
         """恢复录音"""
         if self.status == RecordingStatus.PAUSED:
             self.status = RecordingStatus.RECORDING
-            print("录音恢复")
+            logger.info("录音恢复")
 
     def add_audio_data(self, data: bytes):
         """添加音频数据"""
@@ -147,7 +151,7 @@ class MeetingRecorder:
         """开始会议录制"""
         self.start_time = utcnow()
         self.recorder.start(on_data=self._on_audio_data)
-        print(f"会议 {self.meeting_id} 开始录制")
+        logger.info("会议 %s 开始录制", self.meeting_id)
 
     async def stop_recording(self) -> dict:
         """停止会议录制"""
