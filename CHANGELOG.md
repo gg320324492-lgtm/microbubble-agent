@@ -5,6 +5,42 @@
 
 ---
 
+## W84 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-28 — 1/1 agent 完成 + 锚点范式 307 → 314 守恒 +7, 0 production code 4/7 守恒 例外 3 已批 W84 B-1 + B-2 + C-1, 派工 v6 段 7 19 类 + 类 20 16 实例 + W83 据实上报 3 实例沉淀回写)
+
+**主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 5 case PASS + 锚点范式 307 → 314 +7 守恒 (验证不计 0 增量 + 实施 +1 实战, 本任务 commit).
+
+**W84 第 1 批 D-1 1 agent 真实施**:
+
+- **D-1 6 类文档同步 + grand closure memory** (本任务 commit, 锚点范式 307 → 314 验证不计 + 实施 +1 实战): 5 段同步实战 (CLAUDE.md 顶部状态段 W83 → W84 升级 + W83 第 1 批 grand closure 章节新增 + ROADMAP.md 当前状态段升级 + CHANGELOG.md 顶部新增 W84 第 1 批条目 + README.md "近期新增" 段追加 + memory/MEMORY.md 顶部追加 W84 第 1 批 grand closure 条目 + W84 C-2 索引调整同步 14 transient 删后). 8 文件改动 (5 docs + 1 runbook + 1 memory + 1 e2e). 5 case e2e PASS (5 段同步). 锚点范式 W83 第 1 批 307 → W84 第 1 批 314 守恒 +7 验证不计 + 实施 +1 实战. 0 production code 改动铁律 4/7 守恒 (3 例外已批 W84: B-1 P1 latent bug batch 3 + B-2 P1 冗余重构 batch 2 chunked upload + C-1 P1 dead service batch 2 drive_upload). 派工前提铁律 12 条 + 类 20 16 条实战 (W84 据实上报 3 实例沉淀回写: A-2 派生新任务 + C-1 dead service + C-2 docs/scripts 与派工 brief 不符必须据实上报, 不擅自扩也不擅自缩). 累计 26 批 430+ commits + 420+ 铁律 (W84 第 1 批 +25 新铁律: B-1 8 + B-2 5 + C-1 5 + C-2 5 + D-1/D-2 5). W85/W86/W87 派工顺序表 (7+7+7 = 21 agents, 锚点 314→~335). 详见 `memory/w84-1st-grand-closure-full-2026-07-28.md` (本任务沉淀) + `docs/w84-1st-batch-d1-grand-closure-2026-07-28.md` (本任务 runbook) + `tests/test_w84_d1_docs_grand_closure_e2e.py` (本任务 5 case e2e).
+
+**W84 第 1 批 D-1 grand closure 收口**: `memory/w84-1st-grand-closure-full-2026-07-28.md` + main commit (本任务). 0 commits ahead of base `aad2e8d7e` (W83 第 1 批 D-2 锚点范式收口, 文档同步不动 production code). alembic 1 head `['085_billing_payment_tables']` 守恒 (W84 D-1 不改 alembic). 累计 26 批 430+ commits + 420+ 铁律 (W84 +25 + W83 +25 + W82 +20). W19 选项 A 维持.
+
+**派工前提错配 16 实例沉淀 (类 20, 沿用 W82 B-2 拦截 #16 实战 + W84 据实上报 3 实例沉淀回写, W84 D-1 无新增)**:
+1-14. 沿用 W72 B-4 / W73 D-1 / W74 A-1 / W74 B-1 / W75 A-1 / W76 A-1 / W76 类 20.12.1 / W77 A-1 / W78 A-1 / W78 B-1 / W79 A-1 / W80 A-1 / W80 C-1/D-1/D-2 类 20.13
+15. **W81 A-1 类 20.13 拦截 #15 实战**: 5/6 收尾 ref 不存在 + 1/6 重置无 commit 派工前提错配, 拦截 commit `d74f1ee0e` 沉淀 5 新铁律
+16. **W82 B-2 类 20.13 拦截 #16 实战**: 派工 brief 引用 Survey 3 报告 "0 外部 import 4 个 ios_tts_*.py 文件" 但实际 `tests/test_ios_safari_edge_tts_e2e.py:26-53` 模块顶层直接 import 4 个 ios_tts 文件, 撤回重派 (拦截不计 commit)
+
+**W84 据实上报 3 实例沉淀回写 (派工 brief 与实测不符铁律, W84 D-1 实战)**:
+1. **W84 A-2 派生新任务实测**: 派工 brief 期望 8 项派生, 实测 7 项 (1 项已含在 W83 A-2 派生), 沿用 W82 C-1 据实上报模式, 不擅自扩
+2. **W84 C-1 P1 dead service batch 2 实测**: 派工 brief 期望 5 service, 实测 2 真 0 调用 (drive_upload_service 修 P0 create_initial_version, drive_maintenance_service) + 3 个有调用, 沿用 W83 C-1 据实上报 5/7 错配模式
+3. **W84 C-2 P2 docs/scripts batch 2 实测**: 派工 brief 期望 175 transient memory 全合并, 实测 14 transient 全删 + 161 docs/*.md 引用 load-bearing 跳过 (沿用 W83 C-2 147 docs/*.md 跳过模式)
+
+**派工前提铁律 12 条 (沿用 W68 第 13 批 D-1 v4 + W68 第 14 批 v5/v6 + W82 B-2 拦截 #16 沉淀)**:
+1. 派生新任务必先 git log + grep 真验证当前 main HEAD
+2. 不重做已 plan 实施代码
+3. 调研"差距"必先辨明量纲 (cosine distance vs accuracy)
+4. 调研建议主拍必拍"破坏性 vs 渐进"修复路径
+5. 实施前必先 `information_schema` 实查表名 + 列类型
+6. alembic 链必 1 head
+7. 实施前置 7 项必含
+8. 商业化 B-2 主拍单独拍板
+9. 0 production code 例外必含派工批文
+10. commit message 必含锚点范式数字
+11. 部署前必跑 alembic chain verify
+12. 验证型 agent 必严格不照抄派工书 PASS, 必报实测不符 (W82 B-2 拦截 #16 + W83 C-1 据实上报 + W84 据实上报 3 实例)
+
+---
+
 ## W83 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-28 — 1/1 agent 完成 + 锚点范式 300 → 307 守恒 +7, 0 production code 5/7 守恒 例外 2 已批 W82 B-1 + B-2, 派工 v6 段 7 19 类 + 类 20 16 实例沿用 W82 B-2 拦截 #16)
 
 **主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 5 case PASS + 锚点范式 300 → 307 +7 守恒 (验证不计 0 增量 + 实施 +1 实战, 本任务 commit).
