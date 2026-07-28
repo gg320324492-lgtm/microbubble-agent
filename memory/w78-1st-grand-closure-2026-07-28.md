@@ -244,3 +244,17 @@
 **alembic 链实战**: 1 head `['085_billing_payment_tables']` 守恒达成 (W77 5 agents 不改 alembic, W78 6 agents 不改 alembic, 单链 076→078→080→081→082→083→084→085)
 
 **push 实战**: `git push origin main` 在主指挥合并完成后 push (output 已确认推送成功, 沿用 W77 §8 push 实战)
+
+## 9. W79 第 1 批 B-3 跨租户监控 + 多租户实战落地（派生新任务，本节由 W79 B-3 agent 同步）
+
+依据 W78 grand closure §6 W79 B-3 + W78 C-1 SaaS 部署 4 层架构实战：
+
+- **B-3 跨租户监控 + 多租户实战** 落地（anchor 范式 +1，W78 第 1 批 276 → W79 第 1 批 B-3 282 守恒）
+- 6/6 e2e PASS（跨租户 422 拦截 + 6 商业化表 tenant_id 索引 + 10 租户 × 100 invoices × 100 并发 + 监控脚本 5 阶段 + License 校验 3 模式 + 私有化部署离线 7 天宽限）
+- 派工 v4 铁律 3 真验证 5 实战（4ce9dd5d3 + 8565ef21c + 6d9c9e446 + a06fbe4df + cb00397b7 已 git show 真验证）
+- 派工 v6 段 5 反馈 #7 实战（W74 D-1 实战发现 + W75 B-1 1 行 production 修 `TenantIsolationViolation.__init__` 补 `code=self.code`）
+- 0 production code 改动铁律例外 5（沿用 W78 已批 4 例外基础上新增 1 例外：跨租户监控新增）
+- runbook `docs/w79-1st-batch-b3-tenant-monitoring-runbook-2026-07-28.md` + memory `memory/w79-1st-batch-b3-tenant-monitoring-2026-07-28.md` 新增
+- 8 件套监控实时接入：W73 B-2 4 类 + W74 D-1 + W75 B-3 + W77 B-3 + W78 C-1 + W78 B-1 + W79 B-1 + W79 B-2 全部凑齐
+
+**累计**：W79 第 1 批 B-3 落地后，跨租户监控实战 + License 3 模式 + 私有化部署实战全部交付，QA + 商业化 + Drive v2 + Web Speech API + TTS 缓存命中率 + Edge-TTS 调用 + 真支付 key 健康 + 真支付调用 + webhook 回调 + 重放保护命中 + 商业化 SaaS 部署 + 跨租户 422 拦截 + 商业化运营主决策 + 私有化部署 + 离线 7 天宽限 — 8 件套监控实时接入，1 主拍决策（私 Lock 6 例外 5/15 守恒）。
