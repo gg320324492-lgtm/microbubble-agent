@@ -75,8 +75,8 @@ async def decode_audio_to_float32(
             if p and os.path.exists(p):
                 try:
                     os.unlink(p)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("清理临时音频文件失败 path=%s: %s", p, exc, exc_info=True)
 
 
 def _run_ffmpeg(input_path: str, output_path: str, timeout: float) -> None:
