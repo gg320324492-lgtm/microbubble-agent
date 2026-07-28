@@ -19,6 +19,17 @@
 - **🐰 宠物乐园** - 仪表盘两只 CSS 3D 兔子，60fps 自主走动 + XP 成长
 - **📱 移动端 PWA** - 路由级双栈（桌面 Element Plus / 移动 NutUI 4），18 个移动端页面 + iOS/Android 全兼容
 
+## 最新里程碑（2026-07-28 — W84 第 1 批 D-1 6 类文档同步收口 + 1/1 agent 完成 + 锚点范式 307 → 314 守恒 +7 + 0 production code 4/7 守恒 例外 3 已批 W84 B-1 + B-2 + C-1 + 25 新铁律）
+
+- 🆕 **W84 第 1 批 D-1 6 类文档同步 + grand closure** — 主指挥协调范式第 60 次派工. 触发点: W83 第 1 批 D-2 锚点范式收口 (commit `aad2e8d7e`, 锚点范式 307) + W84 起步. 1/1 agent 完成: **D-1 6 类文档同步** (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook (`docs/w84-1st-batch-d1-grand-closure-2026-07-28.md`) + memory (`memory/w84-1st-grand-closure-full-2026-07-28.md`) + e2e 5 case PASS. 5 段同步实战 (派工 v6 段 7 实战, 沿用 W83 D-1 commit `adea403a4` 模式). 锚点范式 W83 第 1 批 307 → W84 第 1 批 314 守恒 +7 验证不计 + 实施 +1 实战 (本任务 commit). **0 production code 改动铁律 4/7 守恒 (3 例外已批 W84: B-1 P1 latent bug batch 3 + B-2 P1 冗余重构 batch 2 chunked upload + C-1 P1 dead service batch 2 drive_upload)**. 派工前提铁律 12 + 类 20 16 条实战 (W84 据实上报 3 实例沉淀回写: A-2 + C-1 + C-2 派工 brief 与实测不符必须据实上报, 不擅自扩也不擅自缩). 累计 26 批 430+ commits + 420+ 铁律 (W84 第 1 批 +25 新铁律: B-1 8 + B-2 5 + C-1 5 + C-2 5 + D-1/D-2 5). W85/W86/W87 派工顺序表 (7+7+7 = 21 agents, 锚点 314→~335). W19 选项 A 维持. 详见 [`memory/w84-1st-grand-closure-full-2026-07-28.md`](./memory/w84-1st-grand-closure-full-2026-07-28.md) (本任务沉淀) + [`docs/w84-1st-batch-d1-grand-closure-2026-07-28.md`](./docs/w84-1st-batch-d1-grand-closure-2026-07-28.md) (本任务 runbook) + [`tests/test_w84_d1_docs_grand_closure_e2e.py`](./tests/test_w84_d1_docs_grand_closure_e2e.py) (本任务 5 case e2e).
+
+5 项交付物 (W84 第 1 批):
+1. **CLAUDE.md** 当前状态段插入 W84 章节 + W83 段升级 (锚点范式 307 → 314 +7 + 累计 25 批 → 26 批 + W83 第 1 批 grand closure 章节整合 A-1 + A-2 + B-1 + B-2 + C-1 + C-2 + D-1 + D-2 7 agents 全部完成)
+2. **ROADMAP.md** 当前状态段插入 W84 章节 + W83 段落升级
+3. **CHANGELOG.md** 顶部新增 W84 第 1 批条目 + 派工前提铁律 12 + 类 20 16 实例 + W84 据实上报 3 实例沉淀回写
+4. **README.md** 近期新增段追加 W84 第 1 批 5 项交付物
+5. **memory/MEMORY.md** 顶部追加 W84 第 1 批 grand closure 条目 (锚点范式 307 → 314 +7) + W84 C-2 索引调整同步 (14 transient 删后)
+
 ## 最新里程碑（2026-07-28 — W83 第 1 批 D-1 6 类文档同步收口 + 1/1 agent 完成 + 锚点范式 300 → 307 守恒 +7 + 0 production code 5/7 守恒 例外 2 已批 W82）
 
 - 🆕 **W83 第 1 批 D-1 6 类文档同步 + grand closure** — 主指挥协调范式第 58 次派工. 触发点: W82 第 1 批 grand closure 收口 (commit `b99eb52da`, 锚点范式 300) + W83 起步. 1/1 agent 完成: **D-1 6 类文档同步** (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook (`docs/w83-1st-batch-d1-grand-closure-2026-07-28.md`) + memory (`memory/w83-1st-grand-closure-full-2026-07-28.md`) + e2e 5 case PASS. 5 段同步实战 (派工 v6 段 7 实战, 沿用 W82 D-1 commit `b0cb5c4cb` 模式). 锚点范式 W82 第 1 批 300 → W83 第 1 批 307 守恒 +7 验证不计 + 实施 +1 实战 (本任务 commit). **0 production code 改动铁律 5/7 守恒 (2 例外已批 W82: B-1 P0 bug fix + B-2 P1 重构)**. 派工前提铁律 12 + 类 20 16 条实战 (W83 D-1 文档同步无新增, 沿用 W82 B-2 拦截 #16 实战). 累计 25 批 420+ commits + 410+ 铁律 (W83 第 1 批 +1 实战, 沿用 W82 +20 铁律). W84/W85/W86 派工顺序表 (7+7+7 = 21 agents, 锚点 307→~328). W19 选项 A 维持. 详见 [`memory/w83-1st-grand-closure-full-2026-07-28.md`](./memory/w83-1st-grand-closure-full-2026-07-28.md) (本任务沉淀) + [`docs/w83-1st-batch-d1-grand-closure-2026-07-28.md`](./docs/w83-1st-batch-d1-grand-closure-2026-07-28.md) (本任务 runbook) + [`tests/test_w83_d1_docs_grand_closure_e2e.py`](./tests/test_w83_d1_docs_grand_closure_e2e.py) (本任务 5 case e2e).
