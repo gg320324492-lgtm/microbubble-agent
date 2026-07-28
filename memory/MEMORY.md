@@ -1,3 +1,44 @@
+# MEMORY.md — 主题分类目录 (W84 C-2 重整) + 时间倒序索引
+
+> **重整时间**: 2026-07-28 (W84 第 1 批 C-2 P2 docs/scripts 清 batch 2, 锚点范式 313 → 314 +1)
+> **重整摘要**: 顶部 8 类主题分类目录 + 下方时间倒序索引 (沿用 W68-W83 实战)
+> **派工 brief 据实上报**: brief 14 transient → 实测 88 transient (派工 v6 §1.2 "Status 段必真验证" 沿用)
+> **删后状态**: 263 → 175 永久保留 (88 transient 删) + 1 新增 (W84 C-2 memory) = 176 总数
+> **类 20 累计**: 17 实例 (本批 #17 类 20.14 派工 brief 数字必二次 grep 真验证)
+> **3 新铁律**: 派工 brief 数字必二次 grep / true orphan 判定必 4 路径 grep / 据实上报必沿用
+
+## 1. 主题分类目录 (176 永久保留, 8 大类)
+
+### 1.1 W 批 grand closures (主索引, 32 文件)
+W2/W5/W7/W11/W14/W15/W16/W17/W18/W19/W20 baseline-closure + W25 + W58 + W60 + W62 + W68 (10 grand closures) + W71 + W72 (3) + W73 + W74 + W75 + W76 + W77 + W78 + W79 + W80 + W81 + W82 (2) + W83 + W84 (本批) = 32 文件
+
+### 1.2 派工 v6 实战 + 类 20 沉淀 (5 文件)
+- anchor-paradigm-21-day-validation + w68-task-mode-paradigm-plans-first + w68-alembic-chain-discipline + w68-changelog-roadmap-sync + w68-claude-md-status-update
+
+### 1.3 Drive v2 系列 (10 文件, PR6-PR18)
+- drive-v2-pr8-grand-closure + drive-view-beaute + 4 PR6 子批 + 4 folder 系列 + w68-route-8-b1-drive-pr11-path
+
+### 1.4 声纹 + ASR + TTS 链 (7 文件)
+- voiceprint-purification-loop + voiceprint-batch-bug-fix + voiceprint-reset-count + voiceprint-kmeans-optimization + voiceprint-purification-loop-151 + voiceprint-90-percent-gate + voiceprint-2026-06-30 + low-occupancy-speaker-filter + meeting-64-repair + asr-benchmark + m4a-meeting-batch-voiceprint-gpu + reprocess-meeting-pattern + recording-comprehensive-fix + recording-v4-three-piece-fix
+
+### 1.5 qa-bench 系列 (19 文件, W62-W84)
+- qa-bench-v3-w1 + reranker-upgrade + qa-bench-smart-filter-round9 + qa-bench-smoke-30 + llm-benchmark + ollama-qwen3-deployment + w67-qa-bench-d5-ci-fix-chain + w67-grand-closure-qa-bench-ci-final + w68-route-b-qa-bench-d6-future-roots + w68-route-b3-d6-roadmap + w68-route-5-qa-bench-d6-phase1 + w68-route-8-b4-qa-bench-phase3-matrix + w68-route-qa-bench-cache-rollout + w68-route-12-b3-d7-baseline-ci + plans-status-67-closure-w66 + 2026-07-23-six-batches-v2-21-paradigm + verified-plans-2026-07-22 + verified-plans-w68-2026-07-24
+
+### 1.6 PWA + nginx + Service Worker (1 文件)
+- pwa-manifest-410-v80-fix (pwa manifest 410 + v80 BUMP + regression + SW v79 BUMP + dist-force-add + pre-commit-dist-auto-add + avatar-recovery)
+
+### 1.7 部署 + 配置 + 基础设施 (6 文件)
+- docker-desktop-fix + incident-2026-06-18-deploy-chain + cors-origin-block-fix + vllm-rtx-5090-blackwell-setup + testbot-data-cleanup + docker-desktop-api-500 + config-value-contract-regression + minio-502-bad-gateway-3-layer-fix + rate-limit-redis + name-aliases-phonetic-correction
+
+### 1.8 历史归档 (90+ 文件)
+- chat-history + Self-RAG + LLM 后端 + 知识库 + OCR + 多模态 + 前端 + UI + 视觉收官 + 数据库 + ORM + 服务层 + W68 派工纪要 + D-2 文档同步 + W71/W72/W73/W74/W75/W76/W77/W78 派工实施 + W19 选项 A + Q4 future PR 评估 + 50 commit 阶段
+
+---
+
+# MEMORY.md — 时间倒序索引 (沿用, 88 transient 删后)
+
+- [2026-07-28 W84 第 1 批 C-2 P2 docs/scripts 清 batch 2 (锚点范式 W83 第 1 批 307 → W84 第 1 批 313 守恒 +6)](w84-1st-batch-c2-p2-docs-cleanup-2026-07-28.md) — 主指挥协调范式第 60 次派工. 88 transient memory 合并据实上报 (派工 brief 14 偏差 +74, 派工 v6 §1.2 "Status 段必真验证" 沿用 + W83 C-2 据实上报铁律沿用) + MEMORY.md 8 类主题目录重整 + 175 永久保留守恒. 类 20 累计 17 实例 (#17 W84 C-2 类 20.14 派工 brief 数字必二次 grep 真验证) + 3 新铁律. 累计 26 批 425+ commits + 410+ 铁律. 派工前提铁律 12 + 0 production code 守恒.
+
 - [2026-07-27 W75 第 1 批 grand closure (锚点范式 W74 第 1 批 249 → W75 第 1 批 256 守恒 +7)](w75-1st-grand-closure-2026-07-27.md) — 主指挥协调范式第 49 次派工. 6/7 agents 完成 (A-1 撤回 类 20.11 派工前提错配实战). 6 件套监控凑齐 (W73 B-2 4 + W74 D-1 + W75 B-3 webhook + W75 D-1 9 表索引). 派工前提错配 5 实例沉淀 (类 20): W72 B-4 错配 / W73 D-1 brief 假设 / W74 A-1 错判基线 / W74 B-1 084 P1 缺陷 / W75 A-1 错派. 派工前提铁律 12 条 + 类 20 12 条 (含类 20.6 拒绝方案 A 字面改 0.9 实战 + 类 20.7 information_schema 实查 + 类 20.8 alembic chain verify + 类 20.9 验证型不照抄派工书 PASS + 类 20.10 派工 brief 基线假设必拒 + 类 20.11 收尾 agents 必先 commit 再派 A-1 + 类 20.12 验证型完成时刻早于修复型必 git log 真验证). 0 production code 5/7 守恒 (2 例外已批: B-2 1 行跨租户修复 + C-1 真支付 SDK 3 SDK). W76/W77/W78 派工顺序表 (7+7+7 = 21 agents, 锚点 256→~277). 累计 17 批 290+ commits + 290+ 铁律. W19 选项 A 维持. commit `504c4c1b5`.
 
 - [2026-07-27 W74 第 1 批 grand closure (锚点范式 W73 第 1 批 242 → W74 第 1 批 249 守恒 +7)](w74-1st-grand-closure-2026-07-27.md) — 主指挥协调范式第 48 次派工. 6/7 agents 完成 (A-1 撤回 类 20 错配实战). 4 项主拍决策全部实战: (1) P0 修 (084 P1 修复 + W73 7 分支合并入 main) (2) 084 走 B 路径 (复数表名 meetings/members + ALTER COLUMN TYPE jsonb, commit `8d0d12c2d`) (3) 撤回 W74 B-2 重复派工但保留数据 (替换 W73 B-1 Step 5) (4) W73 7 分支立即合并入 main (commit `9ef05e5ae` 锚点 235→242 +7). alembic 1 head `['085_billing_payment_tables']` 守恒 (单链 076→078→080→081→082→083→084→085, W73 A-1 修复 + W74 A-1 P1 修复). 派工前提错误类 20 实战 4 实例沉淀. 0 production code 14/15 守恒 (1 例外 B-2 计费真支付 mock 已批). 累计 16 批 280+ commits + 280+ 铁律. W19 选项 A 维持. commit `51d390b07`.
