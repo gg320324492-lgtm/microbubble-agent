@@ -52,6 +52,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         drive_chunked_uploads,  # W72 B-3 Drive PR5 分片上传 (alembic 080)
         file_requests,
         knowledge,
+        knowledge_graph,  # W85 B-1 Phase 9 batch 1: 课题组知识图谱查询端点
         meeting,
         meeting_progress,
         meeting_recording,
@@ -83,6 +84,7 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (member.router, {"prefix": "/api/v1", "tags": ["成员"]}),
         (project.router, {"prefix": "/api/v1", "tags": ["项目"]}),
         (knowledge.router, {"prefix": "/api/v1", "tags": ["知识库"]}),
+        (knowledge_graph.router, {"prefix": "/api/v1", "tags": ["知识图谱"]}),  # W85 B-1 Phase 9 batch 1
         (mobile_aliases, {"prefix": "/api/v1", "tags": ["移动端别名"]}),
         (voice.router, {"prefix": "/api/v1", "tags": ["语音"]}),
         (wechat.router, {"prefix": "/api/v1", "tags": ["企业微信"]}),
