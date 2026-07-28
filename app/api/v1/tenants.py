@@ -15,6 +15,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import get_current_admin_user
 from app.services import tenant_service
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,11 @@ class TenantCreatedOut(TenantOut):
 
 
 @router.post("", response_model=TenantCreatedOut, status_code=status.HTTP_201_CREATED)
-async def create_tenant(payload: TenantCreateIn, db: AsyncSession = Depends(get_db)):
+async def create_tenant(
+    payload: TenantCreateIn,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """创建租户 + 颁发 API key."""
     tenant = await tenant_service.create_tenant(
         db, name=payload.name, contact_email=payload.contact_email, plan_code=payload.plan_code,
@@ -87,6 +92,7 @@ async def list_tenants(
     limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
 ):
     """列出租户 (支持 status / plan 过滤)."""
     tenants = await tenant_service.list_tenants(
@@ -96,14 +102,23 @@ async def list_tenants(
 
 
 @router.get("/{tenant_id}", response_model=TenantOut)
-async def get_tenant(tenant_id: str, db: AsyncSession = Depends(get_db)):
+async def get_tenant(
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """获取租户详情."""
     t = await tenant_service.get_tenant(db, tenant_id)
     return TenantOut.from_orm(t)
 
 
 @router.patch("/{tenant_id}", response_model=TenantOut)
-async def update_tenant(tenant_id: str, payload: TenantUpdateIn, db: AsyncSession = Depends(get_db)):
+async def update_tenant(
+    tenant_id: str,
+    payload: TenantUpdateIn,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """更新租户信息 (name / email / plan)."""
     t = await tenant_service.update_tenant(
         db, tenant_id, name=payload.name, contact_email=payload.contact_email, plan_code=payload.plan_code,
@@ -113,7 +128,11 @@ async def update_tenant(tenant_id: str, payload: TenantUpdateIn, db: AsyncSessio
 
 
 @router.post("/{tenant_id}/rotate-key", response_model=TenantCreatedOut)
-async def rotate_api_key(tenant_id: str, db: AsyncSession = Depends(get_db)):
+async def rotate_api_key(
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """轮换 API key (返回新 key, 仅此次可见)."""
     new_key = await tenant_service.rotate_api_key(db, tenant_id)
     await db.commit()
@@ -124,7 +143,12 @@ async def rotate_api_key(tenant_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{tenant_id}/suspend", response_model=TenantOut)
-async def suspend_tenant(tenant_id: str, reason: str = Query("manual"), db: AsyncSession = Depends(get_db)):
+async def suspend_tenant(
+    tenant_id: str,
+    reason: str = Query("manual"),
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """暂停租户."""
     t = await tenant_service.suspend_tenant(db, tenant_id, reason=reason)
     await db.commit()
@@ -132,7 +156,11 @@ async def suspend_tenant(tenant_id: str, reason: str = Query("manual"), db: Asyn
 
 
 @router.post("/{tenant_id}/reactivate", response_model=TenantOut)
-async def reactivate_tenant(tenant_id: str, db: AsyncSession = Depends(get_db)):
+async def reactivate_tenant(
+    tenant_id: str,
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """恢复被暂停的租户."""
     t = await tenant_service.reactivate_tenant(db, tenant_id)
     await db.commit()
@@ -140,7 +168,12 @@ async def reactivate_tenant(tenant_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.delete("/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_tenant(tenant_id: str, hard: bool = Query(False), db: AsyncSession = Depends(get_db)):
+async def delete_tenant(
+    tenant_id: str,
+    hard: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    _admin=Depends(get_current_admin_user),
+):
     """删除租户 (默认软删 status=deleted, hard=true 物理删除)."""
     await tenant_service.delete_tenant(db, tenant_id, hard=hard)
     await db.commit()
