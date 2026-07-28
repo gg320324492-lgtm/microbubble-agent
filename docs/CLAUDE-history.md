@@ -3220,7 +3220,7 @@ if "/analytics" in path and not path.startswith("/api/v1/auth/"):
 2. **扩展性最优**：未来加 `/api/v1/dashboard/analytics/...` 仍可走原 `/analytics` 分支（守卫是 `startswith("/api/v1/auth/")` 不是 `startswith("/api/v1/")`）
 3. **改动最小**：1 行 if 守卫 + 4 行注释，diff 干净
 
-**回归验证**（11 个 case 纯函数 mock 全 PASS，详见 [scripts/verify_v31_2_1_nested_path.py](scripts/verify_v31_2_1_nested_path.py)）：
+**回归验证**（11 个 case 纯函数 mock 全 PASS，详见 [scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_nested_path.py](scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_nested_path.py)）：
 - ✅ `POST /api/v1/analytics/search-event` → 守卫不命中 → unlimited（保留）
 - ✅ `PATCH /api/v1/analytics/search-event/{id}/click` → 守卫不命中 → unlimited（保留）
 - ✅ `GET /api/v1/analytics/stats` → 守卫不命中 → read（保留）
@@ -3241,8 +3241,8 @@ if "/analytics" in path and not path.startswith("/api/v1/auth/"):
 ### 端到端验证（脚本 + 实测）
 
 **新增 2 个 probe 脚本**：
-- [scripts/verify_v31_2_1_xff_empty.py](scripts/verify_v31_2_1_xff_empty.py) — 验证 Bug 1（XFF 空 IP 兜底）
-- [scripts/verify_v31_2_1_nested_path.py](scripts/verify_v31_2_1_nested_path.py) — 验证 Bug 2（嵌套路径判定顺序）
+- [scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_xff_empty.py](scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_xff_empty.py) — 验证 Bug 1（XFF 空 IP 兜底）
+- [scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_nested_path.py](scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_nested_path.py) — 验证 Bug 2（嵌套路径判定顺序）
 
 **已有 probe 脚本回归**：
 - [scripts/probe_analytics.mjs](scripts/probe_analytics.mjs) — 4 个 /analytics endpoint 端到端
@@ -3256,8 +3256,8 @@ docker compose restart app
 
 # 2. 跑回归 + 新增 probe
 python scripts/probe_boundary3_xff.py           # XFF 真实 IP 维度限流 (已有, 不能回归)
-python scripts/verify_v31_2_1_xff_empty.py     # XFF 空 IP 兜底 (新增)
-python scripts/verify_v31_2_1_nested_path.py  # 嵌套路径判定 (新增)
+python scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_xff_empty.py     # XFF 空 IP 兜底 (新增)
+python scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_nested_path.py  # 嵌套路径判定 (新增)
 
 # 3. 验证
 # probe_boundary4: XFF ", 1.2.3.4" / "   " / ",,,,," → 期望 "unknown" key 独立配额
@@ -3267,7 +3267,7 @@ python scripts/verify_v31_2_1_nested_path.py  # 嵌套路径判定 (新增)
 ### 沉淀
 
 - **修改文件 2 个**：`app/core/rate_limit.py`（+13 行：7 行 docstring + 6 行逻辑）+ `CLAUDE.md`（顶部 1 行快讯 + 底部 ~150 行章节）
-- **新增文件 3 个**：`scripts/verify_v31_2_1_xff_empty.py` + `scripts/verify_v31_2_1_nested_path.py` + `CHANGELOG.md` 顶部新 section
+- **新增文件 3 个**：`scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_xff_empty.py` + `scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_1_nested_path.py` + `CHANGELOG.md` 顶部新 section
 - **风险等级**：极低（无 alembic 迁移、无前端 rebuild、无 Docker 镜像变更，2 处都是加守卫/兜底，不是改语义）
 - **回滚成本**：`git revert` 30 秒完成
 
@@ -3390,13 +3390,13 @@ async def rate_limit_middleware(request, call_next):
 
 ```bash
 docker compose restart app  # CLAUDE.md 752 行铁律
-PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python scripts/verify_v31_2_2.py
+PYTHONIOENCODING=utf-8 PYTHONUTF8=1 python scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_2.py
 ```
 
 ### 沉淀
 
 - **修改文件 1 个**：`app/core/rate_limit.py`（+47 行：regex 12 行 + `_try_attach_user_id` 35 行）
-- **新增文件 1 个**：`scripts/verify_v31_2_3.py`（294 行纯函数 mock + 真实 HTTP 混合验证）
+- **新增文件 1 个**：`scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_3.py`（294 行纯函数 mock + 真实 HTTP 混合验证）
 
 ---
 
@@ -3520,7 +3520,7 @@ if _is_under_auth(path):  # 之前: if "/auth/" in path
 ### 沉淀
 
 - **修改文件 1 个**：`app/core/rate_limit.py`（+30 行：policy 头 5 行 + sse tier 15 行 + auth prefix 10 行）
-- **新增文件 1 个**：`scripts/verify_v31_2_3.py`（294 行）
+- **新增文件 1 个**：`scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_3.py`（294 行）
 
 ### 风险等级
 
@@ -3636,7 +3636,7 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 - record: ZADD 新 timestamp + EXPIRE 窗口+1s（Redis 自动清理）
 - middleware 全 await 化（每次 check/record 多 1 次 Redis round-trip ~1ms）
 
-**抗重启实测**（[scripts/verify_v31_2_5_restart.py](scripts/verify_v31_2_5_restart.py)）：
+**抗重启实测**（[scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_5_restart.py](scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_5_restart.py)）：
 | 阶段 | 期望 | 实测 | 解读 |
 |---|---|---|---|
 | 1. 灌 9 次 SSE | remaining 9→1 | ✅ 9→8→7→6→5→4→3→2→1 | ZSET 累加正确 |
@@ -3665,7 +3665,7 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 ### 沉淀
 
 - **修改文件 1 个**：`app/core/rate_limit.py`（+12 行 / -7 行 = 净 +5 行：5 个 tier 实例化 + 3 处 await + 1 处注释 + 1 处 docstring）
-- **新增文件 1 个**：`scripts/verify_v31_2_5_restart.py`（210 行，含 raw socket SSE 流式响应解析）
+- **新增文件 1 个**：`scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_5_restart.py`（210 行，含 raw socket SSE 流式响应解析）
 - **回归不破坏**：v31.2.1/2/3/4 全部 55 case 仍 PASS
 - **风险等级**：低（middleware 内部替换，无 API 行为变化；check + record 仍是分开调用；silent degradation 兜底 Redis 故障）
 
@@ -3705,7 +3705,7 @@ raw = ("\r\n".join(req_lines) + "\r\n\r\n").encode() + payload
 - login 函数 docstring 注明 v31.2.6 改动
 
 **文件 3**：[`scripts/verify_login_redis.py`](scripts/verify_login_redis.py) **（新增 180 行）**
-- 5 阶段端到端验证（模板：`scripts/verify_v31_2_5_restart.py`）：
+- 5 阶段端到端验证（模板：`scripts/_archive/2026-07-28-w83-p2-cleanup/verify_v31_2_5_restart.py`）：
   1. Pre-clean Redis ZSET `rl:login:{xff}`
   2. 5 次错误密码 → 全 401
   3. 第 6 次 → 429 + `Retry-After: 300`
