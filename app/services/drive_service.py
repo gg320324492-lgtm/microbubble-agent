@@ -35,6 +35,7 @@ from app.services.file_service import file_service
 # PR6: activity + notification 集成
 from app.services.activity_service import activity_service
 from app.services.notification_service import notification_service
+from app.services.drive_upload_service import create_initial_version
 
 logger = logging.getLogger("microbubble.drive")
 
@@ -488,6 +489,13 @@ class DriveService:
         except Exception as e:
             logger.debug(f"[DriveService.create_file] notification trigger 失败 (非阻塞): {e}")
 
+        await create_initial_version(
+            db=self.db,
+            file_id=knowledge.id,
+            minio_object_key=file_path,
+            size=file_size,
+            uploader_id=created_by or owner_id,
+        )
         return knowledge
 
     async def list_files(
@@ -1793,6 +1801,13 @@ class DriveService:
             f"src_id={existing.id} dst_id={new_k.id} "
             f"src_path={existing.file_path} dst_path={new_object} "
             f"dedup_saved_bytes={copied_size}"
+        )
+        await create_initial_version(
+            db=self.db,
+            file_id=new_k.id,
+            minio_object_key=new_object,
+            size=copied_size,
+            uploader_id=created_by or owner_id,
         )
         return new_k, copied_size
 

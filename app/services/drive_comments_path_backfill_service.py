@@ -135,7 +135,42 @@ class DriveCommentsPathBackfillService:
         )
         return result
 
-    async def backfill_for_file(
+    async def backfill_comments_path(
+        self,
+        *,
+        file_id: Optional[int] = None,
+        folder_id: Optional[int] = None,
+        dry_run: bool = True,
+        fix_orphans: bool = True,
+    ) -> BackfillResult:
+        """统一入口：按 file、folder 或全表重算评论路径。"""
+        if file_id is not None and folder_id is not None:
+            raise ValueError("file_id 与 folder_id 不能同时指定")
+        if file_id is None and folder_id is None:
+            return await self.backfill_all_paths(
+                dry_run=dry_run, fix_orphans=fix_orphans
+            )
+        target_col = "file_id" if file_id is not None else "folder_id"
+        target_val = file_id if file_id is not None else folder_id
+        target = f"file:{target_val}" if file_id is not None else f"folder:{target_val}"
+        result = BackfillResult(dry_run=dry_run, target=target)
+        result.total_examined = int((await self.db.execute(
+            text(f"SELECT COUNT(*) FROM drive_comments WHERE {target_col} = :target_val"),
+            {"target_val": target_val},
+        )).scalar_one())
+        if dry_run:
+            return result
+        if fix_orphans:
+            orphan_result = await self.db.execute(text(f"""
+                UPDATE drive_comments dc SET parent_id = NULL, path = '/', depth = 0
+                WHERE dc.{target_col} = :target_val AND dc.parent_id IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM drive_comments parent WHERE parent.id = dc.parent_id)
+            """), {"target_val": target_val})
+            result.orphans_fixed = orphan_result.rowcount or 0
+        result.updated = await self._backfill_dim(target_col=target_col, target_val=target_val)
+        await self.db.commit()
+        return result
+
         self,
         file_id: int,
         *,
