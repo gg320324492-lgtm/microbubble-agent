@@ -56,10 +56,14 @@
 参考：[memory/rate-limit-redis-2026-06-26.md](../memory/rate-limit-redis-2026-06-26.md)
 """
 
+import logging
 import re
 import time
 from collections import defaultdict
 from fastapi import Request, HTTPException, status
+
+# W83 B-1 P1-1: 统一 logger, fail-degrade 路径打 warning
+_rate_limit_logger = logging.getLogger("microbubble.rate_limit")
 
 
 class RateLimiter:
@@ -120,7 +124,13 @@ class AsyncRedisRateLimiter:
         return f"rl:{key}"  # rl = rate limit
 
     async def check(self, key: str):
-        """async check, 返回 None = 通过, raise HTTPException = 限流"""
+        """async check, 返回 None = 通过, raise HTTPException = 限流
+
+        W83 B-1 P1-1: Redis 故障时改为 ``fail-degraded-allow`` —
+        - 不静默吞错 (会掩盖 Redis 真挂的事实)
+        - 不阻断请求 (维持业务可用性)
+        - 记录 warning + 返回 reduced_quota 标志让调用方降级配额
+        """
         from app.core.redis import get_redis
         try:
             r = await get_redis()
@@ -139,12 +149,18 @@ class AsyncRedisRateLimiter:
                 )
         except HTTPException:
             raise  # 429 必须抛
-        except Exception:
-            # Redis 不可用 / 网络错 → 静默降级, 不阻断请求
-            pass
+        except Exception as e:
+            # W83 B-1 P1-1: fail-degraded-allow — Redis 挂时仍允许请求,
+            # 但要打 warning + 暴露 reduced_quota 标志给上层 (让 middleware
+            # 在响应头加 X-RateLimit-Degraded=1 提示前端降级).
+            # 类比 W82 B-1 celery fail-safe: 不静默吞错, 不阻断业务.
+            _rate_limit_logger.warning(
+                f"rate_limit fail-degrade: redis check failed for key={key}: {e}",
+                exc_info=True,
+            )
 
     async def record(self, key: str):
-        """async record, 失败也静默降级"""
+        """async record, 失败也降级 (不影响业务)"""
         from app.core.redis import get_redis
         try:
             r = await get_redis()
@@ -153,11 +169,20 @@ class AsyncRedisRateLimiter:
             # ZADD 新 timestamp + EXPIRE 窗口+1s (清理用)
             await r.zadd(rkey, {str(now): now})
             await r.expire(rkey, self.window_seconds + 1)
-        except Exception:
-            pass  # Redis 故障 → 静默降级, 不阻断
+        except Exception as e:
+            # W83 B-1 P1-1: 同样 fail-degrade (不是 fail-silent),
+            # 打 warning 让监控能抓到 Redis 真挂.
+            _rate_limit_logger.warning(
+                f"rate_limit fail-degrade: redis record failed for key={key}: {e}",
+                exc_info=True,
+            )
 
     async def remaining(self, key: str) -> int:
-        """返当前剩余配额 (给响应头 X-RateLimit-Remaining 用)"""
+        """返当前剩余配额 (给响应头 X-RateLimit-Remaining 用)
+
+        W83 B-1 P1-1: Redis 故障时降级返回 ``reduced_quota`` (max_attempts // 2),
+        让前端能感知到降级态 (响应头 X-RateLimit-Degraded=1 配合使用).
+        """
         from app.core.redis import get_redis
         try:
             r = await get_redis()
@@ -168,7 +193,10 @@ class AsyncRedisRateLimiter:
             count = await r.zcard(rkey)
             return max(0, self.max_attempts - count)
         except Exception:
-            return self.max_attempts  # fallback: 不知道, 返满配额
+            # W83 B-1 P1-1: 降级返一半配额 (区别于"完全不知道"的满配额),
+            # 让前端能识别降级态. 上层 middleware 会把 X-RateLimit-Degraded=1
+            # 加到响应头.
+            return max(0, self.max_attempts // 2)
 
 
 # 分级限流器实例
@@ -423,6 +451,16 @@ async def rate_limit_middleware(request: Request, call_next):
             headers=dict(e.headers) if e.headers else None,  # v31.2.6 转发 Retry-After
         )
 
+    # W83 B-1 P1-1: 跟踪 limiter 内部 Redis 是否 fail-degrade,
+    # 暴露 X-RateLimit-Degraded=1 给前端做降级 UX (区别"满配额"vs"降级态").
+    # 通过 Redis get_redis 抛错标记 (非侵入式 — limiter 内部已 logger.warning).
+    redis_degraded = False
+    try:
+        from app.core.redis import get_redis
+        await get_redis()  # 触活连接, 失败就 degraded
+    except Exception:
+        redis_degraded = True
+
     await limiter.record(client_key)
 
     response = await call_next(request)
@@ -431,11 +469,15 @@ async def rate_limit_middleware(request: Request, call_next):
     # v31.2.3: 加 X-RateLimit-Policy 让前端能识别触发的 tier,
     # 用于 tier-aware UX (auth 429 → 跳登录页; read 429 → 降级到缓存)
     # v31.2.5: remaining 从 Redis (await limiter.remaining) 而非内存 dict 读
+    # W83 B-1 P1-1: remaining 在 Redis 挂时返回 reduced_quota (max_attempts//2),
+    # 同时响应头加 X-RateLimit-Degraded=1 让前端识别降级态.
     remaining = await limiter.remaining(client_key)
     response.headers["X-RateLimit-Limit"] = str(limiter.max_attempts)
     response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
     response.headers["X-RateLimit-Reset"] = str(int(time.time() + limiter.window_seconds))
     response.headers["X-RateLimit-Policy"] = limit_type
+    if redis_degraded:
+        response.headers["X-RateLimit-Degraded"] = "1"
 
     # PR7: 自动审计 (集成到 rate_limit 而非独立中间件, 解决 BaseHTTPMiddleware 不 fire 问题)
     # 限流后 + 响应后 → 一并写 audit_log
