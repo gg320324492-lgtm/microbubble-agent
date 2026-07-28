@@ -103,6 +103,13 @@ const routes = [
         meta: { title: '知识详情' }
       },
       {
+        // W85 B-1 Phase 9 batch 1: 课题组知识图谱可视化主视图
+        path: 'knowledge/graph',
+        name: 'KnowledgeGraph',
+        component: () => import('@/views/knowledge/KnowledgeGraphView.vue'),
+        meta: { title: '知识图谱', icon: 'Share' }
+      },
+      {
         path: 'memory',
         redirect: '/knowledge?tab=memory'
       },
