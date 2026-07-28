@@ -139,65 +139,26 @@ class TestInvoiceServiceMock:
 # Test 3: PaymentService 4 case
 # ============================================================
 
-class TestPaymentServiceMock:
-    """测试 PaymentService mock (不依赖 DB, 用 mock session)."""
+class TestPaymentServiceRemoved:
+    """P1 dead service 清: payment_service / subscription_service 已删 (W83 C-1).
 
-    @pytest.fixture
-    def mock_db(self):
-        """Mock AsyncSession - 模拟 invoice."""
-        db = MagicMock()
-        db.flush = AsyncMock()
-        db.commit = AsyncMock()
+    真支付路径已走 billing_gateway.py + webhook_handler.py (W78 B-2 + W79 B-2 实战),
+    payment_service 仅是 W74 B-2 mock 残留, 无 production caller.
+    """
 
-        # Mock invoice
-        invoice = MagicMock()
-        invoice.invoice_id = "inv_test123"
-        invoice.tenant_id = "tenant_test"
-        invoice.amount_cents = 29900
-        invoice.currency = "CNY"
-        invoice.status = "pending"
-        db.get = AsyncMock(return_value=invoice)
+    def test_payment_service_removed(self):
+        """payment_service 模块已删除 (P1 dead)."""
+        import importlib
 
-        return db
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("app.services.billing.payment_service")
 
-    def test_payment_service_init_module(self):
-        """payment_service 模块能正确导入."""
-        from app.services.billing.payment_service import (
-            init_payment, confirm_payment, refund_payment,
-            get_payment, list_payments_for_invoice,
-        )
-        assert init_payment is not None
-        assert confirm_payment is not None
-        assert refund_payment is not None
-        assert get_payment is not None
-        assert list_payments_for_invoice is not None
+    def test_subscription_service_removed(self):
+        """subscription_service 模块已删除 (P1 dead)."""
+        import importlib
 
-    @pytest.mark.asyncio
-    async def test_init_payment_validation(self, mock_db):
-        """init_payment 参数校验 (不支持的 provider)."""
-        from app.core.exceptions import ValidationException
-        from app.services.billing.payment_service import init_payment
-
-        with pytest.raises(ValidationException):
-            await init_payment(mock_db, "inv_test123", "tenant_test", provider="invalid_provider")
-
-    @pytest.mark.asyncio
-    async def test_confirm_payment_not_found(self, mock_db):
-        """confirm_payment 不存在的 payment_id 抛 NotFoundException."""
-        from app.core.exceptions import NotFoundException
-        from app.services.billing.payment_service import confirm_payment
-
-        with pytest.raises(NotFoundException):
-            await confirm_payment(mock_db, "pay_nonexistent", "tenant_test")
-
-    @pytest.mark.asyncio
-    async def test_refund_payment_not_found(self, mock_db):
-        """refund_payment 不存在的 payment_id 抛 NotFoundException."""
-        from app.core.exceptions import NotFoundException
-        from app.services.billing.payment_service import refund_payment
-
-        with pytest.raises(NotFoundException):
-            await refund_payment(mock_db, "pay_nonexistent", "tenant_test")
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module("app.services.billing.subscription_service")
 
 
 # ============================================================
@@ -378,17 +339,13 @@ def test_module_imports():
         BillingGateway, MockBillingGateway, StripeBillingGateway,
         AlipayBillingGateway, WeChatPayBillingGateway, get_billing_gateway,
     )
-    from app.services.billing.payment_service import init_payment, confirm_payment
-    from app.services.billing.subscription_service import (
-        get_active_subscription, cancel_subscription,
-    )
+    # payment_service / subscription_service 已删 (W83 C-1 P1 dead 清)
     from app.services.billing.webhook_handler import handle_webhook_event
     from app.api.v1.billing_webhooks import router
 
     # 全部能导入
     assert BillingGateway is not None
     assert MockBillingGateway is not None
-    assert init_payment is not None
     assert handle_webhook_event is not None
     assert router is not None
 
