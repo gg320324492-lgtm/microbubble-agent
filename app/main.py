@@ -23,6 +23,11 @@ from app.core.redis import close_redis
 from app.core.exceptions import AppException, app_exception_handler, generic_exception_handler
 from app.core.rate_limit import rate_limit_middleware
 # RequestLoggingMiddleware 不再独立注册 — 已集成到 rate_limit_middleware 末尾
+from app.core.request_context import (
+    set_request_id,
+    reset_request_id,
+    get_request_id,
+)
 
 
 def _import_application_routers():
@@ -310,11 +315,31 @@ async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["X-Request-ID"] = str(uuid4())
+    # W87-H-1: 复用 request_context_middleware 设的 rid (派工 v6 §5 反馈类 20.28)
+    # 避免重复生成 uuid4() 覆盖
+    rid = get_request_id() or str(uuid4())
+    response.headers["X-Request-ID"] = rid
     # API 响应：max-age=0 满足 webhint 规则（只接受 max-age，不接受 no-store/must-revalidate）
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "max-age=0"
     return response
+
+
+# W87-H-1: request_id contextvars middleware (派工 v6 §5 反馈类 20.28)
+# 必须注册在 security_headers **之后** (更靠后 = Starlette LIFO 更外层 = 离客户端更近)
+# 这样 security_headers 在响应回写 X-Request-ID 时可读到我们设的 rid, 而不是新生成 UUID
+# 入口: 优先取 header X-Request-ID (客户端透传), 否则生成 UUID
+# 出口: 把 rid 回写到 response header (客户端可拉取, 调试更顺)
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    rid = request.headers.get("X-Request-ID") or str(uuid4())
+    rid_token = set_request_id(rid)
+    try:
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
+    finally:
+        reset_request_id(rid_token)
 
 
 @app.get("/")

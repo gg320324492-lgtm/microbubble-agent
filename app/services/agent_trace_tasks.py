@@ -5,6 +5,10 @@
 - Celery worker 独立 NullPool 引擎（不绑定主 app 事件循环）
 - 写入失败 max_retries=2 自动重试
 - 全部失败时降级到 logger（trace 数据不阻塞 chat）
+
+# W87-H-1 增量 (派工 v6 §5 反馈类 20.28):
+- task_id 由 Celery signal 自动设 (app/core/celery.py)
+- log.Filter 自动从 contextvars 取 task_id
 """
 
 import json
