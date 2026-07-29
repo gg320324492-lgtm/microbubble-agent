@@ -36,6 +36,7 @@ const {
   hasAllDimensions,
   recallGatePass,
   slowGatePass,
+  slowGateEvaluable,
   refresh,
   applyFilters,
   goToPage,
@@ -120,12 +121,18 @@ onMounted(refresh)
         </div>
         <div class="stat-value">{{ fmtPct(summary?.recall_rate) }}</div>
       </div>
-      <div class="stat-card" :class="slowGatePass ? 'gate-pass' : 'gate-fail'">
+      <div
+        class="stat-card"
+        :class="!slowGateEvaluable ? 'gate-unknown' : slowGatePass ? 'gate-pass' : 'gate-fail'"
+      >
         <div class="stat-label">
           慢查询占比
           <span class="stat-target">目标 ≤ {{ fmtPct(SLOW_QUERY_RATE_TARGET) }}</span>
         </div>
         <div class="stat-value">{{ fmtPct(summary?.slow_query_rate) }}</div>
+        <div v-if="!slowGateEvaluable" class="stat-note">
+          基于决策耗时代理值, 门禁不可判定 (真检索耗时留 PR7)
+        </div>
       </div>
       <div class="stat-card">
         <div class="stat-label">P95 决策耗时</div>
@@ -298,6 +305,17 @@ onMounted(refresh)
 
 .stat-card.gate-fail {
   border-color: var(--el-color-danger);
+}
+
+.stat-card.gate-unknown {
+  border-color: var(--el-color-warning);
+}
+
+.stat-note {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--el-color-warning);
 }
 
 .stat-label {
