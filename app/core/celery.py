@@ -1,6 +1,7 @@
-from celery import Celery
+from celery import Celery, signals
 
 from app.config import settings
+from app.core.request_context import set_task_id, reset_task_id
 
 celery_app = Celery(
     "microbubble",
@@ -182,3 +183,24 @@ celery_app.autodiscover_tasks(
     ],
     related_name=None,
 )
+
+
+# ── W87-H-1: Celery signal 接 contextvars ─────────────────────────
+# (派工 v6 §5 反馈类 20.28: task_id 必 request_id 解耦注入)
+# task_prerun: 入口设 task_id (worker 进程内单 task 生命周期)
+# task_postrun: 出口重置 (防御性, ContextVar 在 worker 进程 thread-local 自动失效)
+# 注意: Celery prefork worker 是多进程, 每 task 自带 ContextVar 上下文
+# 信号不会跨进程泄漏 — 但同一进程内串行 task 间需确保 reset, 防止上一 task 的 task_id 污染
+
+
+@signals.task_prerun.connect
+def _task_prerun_set_task_id(sender=None, task_id=None, **kwargs):
+    """Celery task 入口设 task_id contextvars."""
+    set_task_id(task_id or sender.request.id if hasattr(sender, "request") else None)
+
+
+@signals.task_postrun.connect
+def _task_postrun_clear_task_id(sender=None, task_id=None, **kwargs):
+    """Celery task 出口清 task_id (防御性, 防止 worker 进程内 task 间污染)."""
+    # 用 token reset 需要保留, 但 set(None) 更直接 (worker 进程即将执行下一 task)
+    set_task_id(None)

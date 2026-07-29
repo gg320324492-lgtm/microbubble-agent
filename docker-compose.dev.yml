@@ -88,3 +88,44 @@ services:
       - db
       - redis
     restart: unless-stopped
+
+  # 2026-07-29 W87-B-1: GlitchTip all-in-one; host port 8001 avoids production 8000.
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.2
+    container_name: microbubble-agent-glitchtip-dev-1
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/glitchtip"
+      VALKEY_URL: "redis://redis:6379/1"
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY:-dev-glitchtip-change-me}"
+      PORT: "8000"
+      GLITCHTIP_DOMAIN: "${GLITCHTIP_DOMAIN:-http://localhost:8001}"
+      EMAIL_ENABLED: "False"
+      SERVER_ROLE: "all_in_one"
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+    restart: unless-stopped
+
+  # 2026-07-29 W86-F-1: pg_exporter — PostgreSQL Prometheus 暴露
+  # image 钉死 tag v0.15.0 (latest 不跟, 避免主指挥据实上报不可控)
+  # DATA_SOURCE_NAME 走环境变量, 不在 compose 明文写密码
+  # 仅加 service 段, 其它 service 的 image / volume / port 不动
+  pg-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: microbubble-agent-pg-exporter-dev-1
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+    restart: unless-stopped
