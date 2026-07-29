@@ -184,6 +184,21 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
   overflow: hidden;
 }
 
+/* W86 mini-5 fix: 老代码 .entity-graph-panel 无 height/flex, 子组件
+   KnowledgeGraphExplorer 的 height:100% 没有可解析的父高度 → 图谱塌到
+   min-height 480px 且不随面板拉伸, 用户看到"小框显示不全".
+   面板改 flex column + 600px 下限, 图谱区 flex:1 吃掉 header 以外的剩余空间. */
+.entity-graph-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+}
+
+.entity-graph-panel :deep(.kg-explorer) {
+  flex: 1;
+  min-height: 0; /* flex 子项默认 min-height:auto 会撑破容器 */
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
