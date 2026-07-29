@@ -1,4 +1,5 @@
-FROM postgres:16-alpine
+# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+FROM postgres:16.14-alpine
 
 RUN apk add --no-cache \
     gcc \

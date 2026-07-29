@@ -1,0 +1,110 @@
+name: image-scan (trivy)
+
+# W86-C-1: Trivy 镜像漏洞扫描
+# - PR: 仅当 Dockerfile* / docker/** / docker-compose*.yml 变化时触发, advisory (不 block PR)
+# - schedule: 每周一 05:00 UTC 全量扫, HIGH/CRITICAL 命中即 fail
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile*'
+      - 'docker/**'
+      - 'docker-compose*.yml'
+      - 'web/Dockerfile'
+      - '.github/workflows/image-scan.yml'
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: trivy ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    # PR 上仅 advisory: 单个矩阵项失败不拖垮整个 workflow
+    continue-on-error: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            dockerfile: Dockerfile
+            context: .
+          - name: db
+            dockerfile: Dockerfile.db
+            context: .
+          - name: funasr
+            dockerfile: Dockerfile.funasr
+            context: .
+          - name: mcp
+            dockerfile: Dockerfile.mcp
+            context: .
+          - name: voice-pipeline
+            dockerfile: Dockerfile.voice-pipeline
+            context: .
+          - name: whisper
+            dockerfile: Dockerfile.whisper
+            context: .
+          - name: web
+            dockerfile: web/Dockerfile
+            context: web
+          - name: commercial
+            dockerfile: docker/Dockerfile.commercial
+            context: .
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 先做 config/IaC 扫描 (不需要 build, 永远能跑)
+      - name: Trivy config scan (${{ matrix.dockerfile }})
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: ${{ matrix.dockerfile }}
+          severity: 'CRITICAL,HIGH'
+          format: 'table'
+          exit-code: '0'
+
+      # 构建镜像 (失败不阻塞: 部分镜像需要 GPU base / 大依赖)
+      - name: Build image
+        id: build
+        continue-on-error: true
+        run: |
+          docker build -f "${{ matrix.dockerfile }}" \
+            -t "microbubble-scan-${{ matrix.name }}:ci" \
+            "${{ matrix.context }}"
+
+      # 镜像漏洞扫描 → sarif 上传
+      - name: Trivy image scan (sarif)
+        if: steps.build.outcome == 'success'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
+          severity: 'CRITICAL,HIGH'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.name }}.sarif'
+          exit-code: '0'
+
+      - name: Upload sarif to code scanning
+        if: steps.build.outcome == 'success'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.name }}.sarif'
+          category: 'trivy-${{ matrix.name }}'
+
+      # table 输出写到 actions log + 严重度门禁
+      # PR: exit-code 0 (advisory); schedule/manual: exit-code 1 (HIGH/CRITICAL 即 fail)
+      - name: Trivy image scan (table + gate)
+        if: steps.build.outcome == 'success'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'microbubble-scan-${{ matrix.name }}:ci'
+          severity: 'CRITICAL,HIGH'
+          format: 'table'
+          ignore-unfixed: true
+          exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}

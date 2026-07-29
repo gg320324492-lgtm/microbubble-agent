@@ -1,4 +1,5 @@
-FROM python:3.11-slim-bookworm
+# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+FROM python:3.11.15-slim-bookworm
 
 # 阿里云镜像源 (bookworm-security 路径已正确支持)
 # 2026-06-30 ASR 迁移: 与 Dockerfile.whisper 镜像源一致

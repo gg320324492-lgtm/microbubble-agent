@@ -1,5 +1,6 @@
 # 声纹流水线 GPU 服务（VAD + 3D-Speaker + Whisper）
-FROM nvidia/cuda:12.1-runtime-ubuntu22.04
+# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
 RUN apt-get update && apt-get install -y \
     python3.11 python3.11-dev python3-pip ffmpeg \
