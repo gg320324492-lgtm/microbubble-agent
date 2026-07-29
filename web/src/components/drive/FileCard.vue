@@ -125,7 +125,7 @@
         <el-icon :size="14"><View /></el-icon>
         <span class="file-card-action-label">预览</span>
       </button>
-      <el-dropdown trigger="click" @command="(cmd) => $emit(cmd, file)">
+      <el-dropdown aria-label="文件操作菜单" trigger="click" @command="(cmd) => $emit(cmd, file)">
         <button
           type="button"
           class="file-card-action file-card-action--more"
@@ -222,7 +222,7 @@
         >
           <el-icon :size="16"><Download /></el-icon>
         </button>
-        <el-dropdown trigger="click" @command="(cmd) => $emit(cmd, file)">
+        <el-dropdown aria-label="文件操作菜单" trigger="click" @command="(cmd) => $emit(cmd, file)">
           <button
             type="button"
             class="file-row-action-btn"
