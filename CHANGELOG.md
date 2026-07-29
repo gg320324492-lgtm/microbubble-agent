@@ -5,6 +5,12 @@
 
 ---
 
+## [2026-07-30] W88 PR1 嵌入一致化 + query prefix 生效
+
+- 新增统一 `MAX_EMBED_INPUT_CHARS=6000` 截断 policy，并让 embedding recalc 复用该 policy。
+- 修复 `has_query_prompt` 异步及批量透传，Knowledge/Memory 语义搜索显式启用 query prefix。
+- 新增 query caller 白名单与一致性检查；测试在无 `sentence_transformers` 环境下安全跳过重量级模型用例。
+
 ## [2026-07-30] RAG PR10 docs/deploy/eval 三件套沉淀 (W96 +0 → +10, C 清理 + D 收口混合, 0 production code)
 
 **10 PR 一行摘要** (RAG 工业级大改造系列, plan `rag-quirky-otter.md` v1.1, 详见 [docs/rag/CHANGELOG.md](docs/rag/CHANGELOG.md)):

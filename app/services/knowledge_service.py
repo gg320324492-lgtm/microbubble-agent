@@ -809,7 +809,7 @@ class KnowledgeService:
                 return await self._search_keyword_fallback(query, top_k, category)
 
             from app.services.embedding_service import generate_embedding
-            query_embedding = await generate_embedding(query)
+            query_embedding = await generate_embedding(query, for_query=True, has_query_prompt=True)
             if query_embedding is None:
                 return await self._search_keyword_fallback(query, top_k, category)
 

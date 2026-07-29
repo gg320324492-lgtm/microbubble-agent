@@ -19,6 +19,11 @@ from sentence_transformers import SentenceTransformer
 from typing import List, Optional
 
 from app.services.embedding_prompts import build_embedding_prompt
+from app.services.embedding_query_policy import should_use_query_prefix
+from app.services.embedding_truncation_policy import (
+    MODEL_HAS_QUERY_PROMPT,
+    truncate_for_embedding,
+)
 
 logger = logging.getLogger("microbubble.embedding")
 
@@ -109,6 +114,7 @@ def generate_embedding_sync(
     text: str,
     for_query: bool = False,
     has_query_prompt: bool = False,
+    caller_path: Optional[str] = None,
 ) -> Optional[List[float]]:
     """同步生成单条文本的 embedding，失败返回 None
 
@@ -122,10 +128,8 @@ def generate_embedding_sync(
         model = _get_model()
         if model is None:
             return None
-        # Phase 2: 统一 ST 路径
-        # for_query=True + has_query_prompt=True 时加 query 指令前缀（Qwen3/BGE 风格）；
-        # document 不加前缀（避免污染入库向量）
-        # 2026-07-20: prompt helper 抽到 embedding_prompts 避免测试时加载重型 ST 依赖
+        # Canonical preprocessing is shared with recalculation and chunking.
+        text = truncate_for_embedding(text)
         prompt = build_embedding_prompt(for_query, has_query_prompt)
         # ST 5.6.0 支持 prompt= 参数（pass 中文 prefix to match old wrapper behavior）
         arr = model.encode(
@@ -139,16 +143,29 @@ def generate_embedding_sync(
         return None
 
 
-async def generate_embedding(text: str, for_query: bool = False) -> Optional[List[float]]:
+async def generate_embedding(
+    text: str,
+    for_query: Optional[bool] = None,
+    has_query_prompt: bool = MODEL_HAS_QUERY_PROMPT,
+    caller_path: Optional[str] = None,
+) -> Optional[List[float]]:
     """异步生成单条文本的 embedding，超时或失败返回 None
 
     Args:
         text: 输入文本
         for_query: 保留兼容（当前所有调用都用 False）
     """
+    if for_query is None:
+        for_query = should_use_query_prefix(caller_path)
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(generate_embedding_sync, text, for_query),
+            asyncio.to_thread(
+                generate_embedding_sync,
+                text,
+                for_query,
+                has_query_prompt,
+                caller_path,
+            ),
             timeout=60.0
         )
     except asyncio.TimeoutError:
