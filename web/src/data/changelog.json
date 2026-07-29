@@ -224,6 +224,72 @@
   ],
   "changelog": [
     {
+      "date": "2026-07-29",
+      "tag": "优化",
+      "title": "W86 mini batch (Tab 1 项目历程滞后 + UX 优化) (5 commits + 11 builds)",
+      "pain_point": "d5c8534: chore(w85-a2): W84 据实上报 4 实例派生 W85 7 agents + Phase 9 详细化 + W86/W87/W88 排期 (锚点范式 314 → 317 +3, 0 production code)\n737c196: docs(w84-d2): 锚点范式 307 → 314 +7 守恒收口 + W85/W86/W87 派工顺序 + 类 20.13 拦截 #18 沉淀 (0 production code)\n81272f9: chore(w84-a2): W83 据实上报 3 实例派生 W84 7 agents 详细化 + W85/W86/W87 派工顺序 (锚点范式 307 → 310 +3, 0 production code)\n9d607a9: chore(w83-d2): 锚点范式 300 → 307 +7 守恒收口 + W84/W85/W86 派工顺序 (0 production code, 5 新铁律)\n37c9e2f: chore(w83-a2): W82 5 份 Survey 派生 W83 7 agents 详细化 + W84/W85/W86 派工顺序 (锚点范式 300 → 303 +3, 0 production code)"
+    },
+    {
+      "date": "2026-07-29",
+      "tag": "优化",
+      "title": "W85 第 1 批 grand closure (据实上报派工 + drive_upload 数据回填) (1 commits + 2 builds)",
+      "pain_point": "e5b2c0b: chore(w85-d1): 6 类文档同步 + W85 第 1 批 grand closure memory (锚点范式 314 → 320 +6 守恒, D-2 据实上报 +6, B-2 useTask 0 hit 不实施, 0 pro"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "优化",
+      "title": "W84 第 1 批 (P1 latent bug batch 3 + 冗余重构 batch 2 + dead service batch 2) (1 commits + 2 builds)",
+      "pain_point": "324a5bc: chore(w84-d1): 6 类文档同步 + W84 第 1 批 grand closure memory (锚点范式 307 → 314 验证不计 + 实施 +1 实战, 0 production code 4/7 守恒 例外 3 已"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "优化",
+      "title": "W83 第 1 批 (据实上报派工 + P1 latent bug + 冗余重构) (1 commits + 3 builds)",
+      "pain_point": "adea403: chore(w83-d1): 6 类文档同步 + W83 第 1 批 grand closure memory (锚点范式 300 → 307 验证不计 + 实施 +1 实战, 0 production code 5/7 守恒 例外 2 已"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "功能",
+      "title": "W82 第 1 批 (24人月Q1商业化 + 主拍决策 + Phase 8 收官) (2 commits + 2 builds)",
+      "pain_point": "b99eb52: memory(w82-grand-closure): W82 第 1 批 7 agents 全覆盖 grand closure (6 commit + 1 B-2 拦截, 锚点 293 → 300 +7 守恒, 0 production c\nb0cb5c4: chore(w82-d1): 6 类文档同步 + W82 第 1 批 grand closure memory (锚点范式 300 → 300 验证不计 + 实施 +1 实战, 0 production code)"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "功能",
+      "title": "W81 第 1 批 (商业化运营收官 + Phase 8 收官) (2 commits + 1 builds)",
+      "pain_point": "2ce014c: memory(w81-1st-grand-closure): W81 第 1 批 5 收尾 agents 合并 main 收口 + A-1 类 20.13 拦截 #15 实战 + C-1/D-1/D-2 重派收官 + 24 人月 Q1 落地\na29afe7: docs(w79-1st-batch-a2): 商业化运营主决策落地路线图 (5 阶段 + 8 件套监控实时 + Phase 8 收官时间表 + W80/W81 派工建议)"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "数据",
+      "title": "W80 第 1 批 (PWA 资产缺失 hot-fix + 锚点范式) (6 commits + 1 builds)",
+      "pain_point": "2f008a8: chore(w81-1st-batch-d1): C-1/D-1/D-2 类 20.13 实战 14 重派 (W80 C-1/D-1/D-2 卡死撤回重派, 20/20 e2e PASS)\n0807eaa: docs(w81-1st-batch-c1): 商业化 Phase 8 收官实战 (W78 A-2 §5.4 阶段 5 + W79 C-1 24 人月 Q1 落地 + W80 C-1 11/11 SaaS 部署 + W80 B-1 14/1\na97e2f3: chore(w81-1st-batch-b2): 跨租户监控 + 多租户实战收官 (W74 D-1 + W75 B-1 + W76 B-2 + W78 C-1 + W79 B-3 + W80 B-2 实战汇总, 16/16 e2e PASS\n4fb664f: docs(w81-1st-batch-a2): 商业化 24 人月 Q1 落地收官 + Phase 8 收官时间表 (W80 A-2 §5 阶段 5 实战, 31 agents 累计 27/24 人月)\nd942b2b: memory(w80-1st-grand-closure): W80 第 1 批 3 收尾 agents 合并 main 收口 + A-1 拦截 #10 + C-1/D-1/D-2 3 agents 卡死/异常终止撤回 (类 20.13 实\n... +1 more commits"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "优化",
+      "title": "W79 第 1 批 (商业化 Phase 8 商业化运营) (6 commits)",
+      "pain_point": "3e4adb4: chore(w80-1st-batch-b2): 商业化私有化部署 + 客户支持 (W78 C-1 SaaS 部署 + W79 B-2 私有化变体 + W79 B-3 跨租户监控实战, 12/12 e2e PASS)\n750d1c9: chore(w80-1st-batch-a2): PWA 资产缺失 hot-fix 派工 (W79 A-1 拦截 #10 副发现类 20.15 实战, 9/9 e2e PASS)\n3805e27: chore(w80-1st-batch-b1): 7 维评分商业化改造 + 商业化运营 (W77 C-1 30/30 + W78 D-1 22/22 + W79 B-1 12/12 实战基础, 14/14 e2e PASS)\n32b52b6: memory(w79-1st-grand-closure): W79 第 1 批 6 agents 合并 main 收口 + A-1 拦截 #10 + PWA 资产缺失 hot-fix 副发现 + 类 20.14 商业化运营 monitor\n2766bbf: docs(w79-1st-batch-d1): 跨租户收官实战 + 私有化部署手册 (W74 D-1 + W78 C-1 + W79 B-2 实战汇总)\n... +1 more commits"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "优化",
+      "title": "W78 第 1 批 (R10 灰度 + 商业化 Phase 8) (5 commits)",
+      "pain_point": "b41b380: chore(w79-1st-batch-b1): 商业化运营主决策落地 (W78 A-2 §5.4 阶段 5 实战, 5 阶段 + 8 件套监控 + Phase 8 收官)\n71420aa: docs(w79-1st-batch-c1): 商业化 Phase 8 收官 (W78 A-2 24 人月 Q1 落地收官 + W72 C-2 排期)\n849e490: memory(w78-1st-grand-closure): W78 第 1 批 6 agents 合并 main 收口 + A-1 拦截 #9 + 类 20.9 实战 + 类 20.13 真生产 key + W78 6 新铁律\n05c9dca: chore(w78-1st-batch-d1): 7 维评分商业化 R10 weights_v4 灰度迁移 (W78 B-3 D-1 R10 灰度步骤实施配套)\n44cf835: docs(w77-1st-batch-a2): Edge-TTS B+D 渐进式实施方案设计 (5 阶段 + 实施前置 5 项 + 沙箱配置 + W77/W78 派工建议)"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "优化",
+      "title": "W77 第 1 批 (Edge-TTS Android mainplay) (3 commits + 2 builds)",
+      "pain_point": "e022482: chore(w78-1st-batch-b3): D-1 R10 weights_v4 灰度迁移实施 (W77 D-1 撤回重派, 类比 W76 C-1 重派)\n41c8797: chore(w78-1st-batch-b2): 商业化真支付生产 key 启用 (B-3 W77 主拍决策落地, 类 20.13 实战)\n068626e: memory(w77-1st-grand-closure): W77 第 1 批 5 agents 合并 main 收口 + A-1/D-1 撤回 (类比 W76 C-1) + 类 20.12.1 修复 (2 分支重建) + 类 20.13"
+    },
+    {
+      "date": "2026-07-28",
+      "tag": "优化",
+      "title": "W76 第 1 批 grand closure (3 commits)",
+      "pain_point": "40008f9: chore(w77-1st-batch-c1): 声纹 12 会议音频 reprocess + #151 rollback 重演 实战 (W76 撤回 C-1 重派)\n61561c5: memory(w76-1st-grand-closure): W76 第 1 批 5 agents 合并 main 收口 + C-1 撤回实战 (类比 W74 B-2) + B-2 分支恢复 (类 20.12.1)\nf538e3c: docs(w75-1st-batch-a2): Edge-TTS 移动端兼容性调研 (W73 A-2 W76 Step 8 派生)"
+    },
+    {
       "date": "2026-06-28",
       "tag": "优化",
       "title": "v77 P2.6-F transition: all 0.Xs token 化 (27 处 → var(--transition-all-*))",
