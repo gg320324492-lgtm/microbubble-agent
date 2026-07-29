@@ -43,6 +43,11 @@ VALID_ACTIONS = frozenset({
     "upload", "download", "rename", "move",
     "share", "unshare", "star", "unstar",
     "share_token_create", "share_token_revoke",
+    # W72 第 2 批 B-1 差量: folder share 3 个专属 action (W86 mini-11 D fix P2)
+    # 老代码 audit_service VALID_ACTIONS 不含这 3 个 → fallback 'read' + warning → DB 0 行
+    "share_created", "share_downloaded", "share_revoked",
+    # 评论 (W68 PR9)
+    "comment_create", "comment_delete",
     # visibility / 权限
     "visibility_change", "permission_change",
     # 文件请求
@@ -53,6 +58,8 @@ VALID_ACTIONS = frozenset({
     # ws + 通知
     "ws_connect", "ws_disconnect",
     "notification_read",
+    # W86 mini-11 B: 监控 heartbeat action
+    "system_metrics",
 })
 
 # 不脱敏的元数据字段白名单 (即只允许这些字段存 metadata)

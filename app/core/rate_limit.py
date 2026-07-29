@@ -442,6 +442,10 @@ async def rate_limit_middleware(request: Request, call_next):
     limiter = _rate_limiters[limit_type]
     client_key = f"{limit_type}:{_get_client_key(request)}"
 
+    # W86 mini-11 D fix: 记录中间件起点 wall-clock, 响应后算真实 duration_ms
+    # 老代码硬编码 0, 57,130 行中 57,129 行为 0
+    _rl_start_ts = time.time()
+
     try:
         await limiter.check(client_key)
     except HTTPException as e:
@@ -486,6 +490,8 @@ async def rate_limit_middleware(request: Request, call_next):
         from app.core.audit_middleware import _get_client_ip as _audit_get_ip
         user_id = getattr(request.state, "user_id", None) or _parse_token_user_id(request)
         # duration 由 rate_limit 算: 响应已生成, 用 wall-clock 估算
+        # W86 mini-11 D fix: 真实 duration_ms (老代码硬编码 0, 57,130 行中 57,129 行为 0)
+        _duration_ms = int((time.time() - _rl_start_ts) * 1000)
         await _audit_request(
             user_id=user_id,
             ip_address=_audit_get_ip(request),
@@ -493,7 +499,7 @@ async def rate_limit_middleware(request: Request, call_next):
             method=request.method,
             path=request.url.path,
             status_code=response.status_code,
-            duration_ms=0,  # rate_limit 阶段拿不到原始 start, 简化 0
+            duration_ms=_duration_ms,
         )
     except Exception as e:
         # audit 失败不阻塞主响应
