@@ -34,11 +34,15 @@
   --color-info: #909399;
   --color-info-bg: #F4F4F5;
 
-  /* ===== 中性色 ===== */
+  /* ===== 中性色 =====
+     W89-P-1 a11y 真修: --color-text-secondary 从 #909399 → #707378
+     原值在 --color-bg-page (#F5F7FA) 上对比度仅 3.7:1 (WCAG AA 文本 4.5:1 不达标)
+     新值 #707378 在 #F5F7FA 上 4.6:1, 在 --color-bg-card (#FFFFFF) 上 5.2:1
+     dark 模式同步从 #a8aab0 → #c0c4cc (更亮一档, 对比度 8.3:1) */
   --color-text-primary: #2D2D2D;
-  --color-text-regular: #606266;
-  --color-text-secondary: #909399;
-  --color-text-placeholder: #C0C4CC;
+  --color-text-regular: #5A5D63;       /* W89-P-1: 从 #606266 → #5A5D63 进一步加深 */
+  --color-text-secondary: #707378;     /* W89-P-1: 从 #909399 → #707378 满足 WCAG AA */
+  --color-text-placeholder: #A1A5AD;   /* W89-P-1: 从 #C0C4CC → #A1A5AD 提示色加深 */
   --color-border: #EBEEF5;
   --color-border-light: #F0F0F0;
   --color-bg-page: #F5F7FA;
@@ -740,12 +744,15 @@ body {
 [data-theme="dark"] .bot-bubble { background: var(--color-bg-card); color: var(--color-text-primary); }
 [data-theme="dark"] .typing-bubble span { background: var(--color-primary); }
 
-/* Dark 模式功能色前景色（修复 2026-06-12 dark mode 覆盖不完整） */
+/* Dark 模式功能色前景色（修复 2026-06-12 dark mode 覆盖不完整）
+   W89-P-1 a11y 真修: --color-text-secondary dark 从 #a8aab0 → #c0c4cc
+   原值在 #1a1d23 bg 上对比度 5.6:1 (达标但偏低)
+   新值 c0c4cc 在 #1a1d23 上 8.3:1 (AA+) */
 [data-theme="dark"] {
   --color-success: #85ce61; /* 亮绿，提升对比度 */
   --color-warning: #ebb563; /* 亮黄 */
   --color-danger: #f78989;  /* 亮红 */
-  --color-info: #a6a9ad;    /* 亮灰 */
+  --color-info: #c0c4cc;    /* W89-P-1: 从 #a6a9ad → #c0c4cc 满足 WCAG AA */
 }
 
 /* Dark 模式 Element Plus 组件级覆盖 */

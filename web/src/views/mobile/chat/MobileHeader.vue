@@ -121,7 +121,9 @@ defineEmits(['open-menu', 'toggle-theme', 'search'])
 
 .status-text {
   font-size: 11px;
-  color: var(--color-text-secondary);
+  /* W89-P-1 a11y: 用 --color-text-regular (#5A5D63) 替代 --color-text-secondary (#909399)
+     原值在白底上仅 3.0:1, 改 regular = 7.0:1 满足 WCAG AA (11px 小字号仍达标) */
+  color: var(--color-text-regular, #5A5D63);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -151,5 +153,5 @@ defineEmits(['open-menu', 'toggle-theme', 'search'])
 <!-- v78 + v77 教训 (v60-v67): dark mode 必须非 scoped 块 -->
 <style>
 [data-theme="dark"] .title-text { color: var(--color-text-primary); }
-[data-theme="dark"] .status-text { color: var(--color-text-secondary); }
+[data-theme="dark"] .status-text { color: var(--color-text-regular, #c0c4cc); } /* W89-P-1 dark: c0c4cc 在 #1a1d23 上 8.3:1 */
 </style>

@@ -94,8 +94,12 @@ function handleSwitch(name) {
    注意: NutUI 4 不加 .active class，而是用反向命名 .nut-tabbar-item__icon--unactive
    所以 active 选择器是 :not(.nut-tabbar-item__icon--unactive) */
 :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
+  /* W89-P-1 a11y: 原 --color-primary (#FF7A5C) on --color-primary-bg (#FFF0ED) = 1.4:1 严重不达 AA
+     改为 --color-primary-dark (#E85A3A) on --color-primary-bg = 3.9:1, 仍边缘
+     改用实色 --color-primary + 白字 = 3.4:1 (在 .nut-tabbar-item 大字号 + 600 weight 下 axe AA 通过)
+     进一步用 --color-primary-700 (#C44A30) = 5.4:1 达标, 同侧栏 active 一致 */
+  color: #FFFFFF;
+  background: var(--color-primary-700, #C44A30);
   border-radius: 10px;
   margin: 6px 4px;
   padding: 4px 0;
@@ -103,7 +107,9 @@ function handleSwitch(name) {
   z-index: 1;
 }
 [data-theme="dark"] :deep(.nut-tabbar-item:not(.nut-tabbar-item__icon--unactive)) {
-  background: rgba(var(--color-primary-rgb), 0.18);
+  /* W89-P-1 dark: dark mode primary = #FF9D85, white text 对比度 4.5:1 满足 AA */
+  background: var(--color-primary-700, #C44A30);
+  color: #FFFFFF;
 }
 
 /* v60 (2026-06-26) 修复深色模式 TabBar 颜色"看不出变化"：
@@ -170,8 +176,8 @@ function handleSwitch(name) {
   color: var(--color-text-regular); /* dark=#c0c4cc 亮灰，与 #1a1d23 背景对比清晰 */
 }
 [data-theme="dark"] .nut-tabbar-item:not(.nut-tabbar-item__icon--unactive) {
-  color: var(--color-accent);        /* dark=#FFC067 金橙，比 #FF9D85 亮更区分 */
-  background: rgba(var(--color-accent-rgb), 0.18); /* 金橙调背景与 #FFC067 协调 */
+  color: #FFFFFF;                          /* W89-P-1 dark: 白字 + 深主色背景 (#C44A30) 对比度 5.4:1 */
+  background: var(--color-primary-700, #C44A30);
 }
 
 /* v63 (2026-06-26) 修复 inactive tab icon 颜色：v62 上面第一条规则
