@@ -3526,6 +3526,54 @@ function _normalizeExtractions(extractions) {
 }
 
 /**
+ * W86 mini-6 fix: 按 predicate / subject 关键词派生节点 category, 避免
+ *   `n.category || n.type || n.group || 'default'` 全部 fallback 到 'default'
+ *   导致 ECharts categories 只 1 项 → 所有节点同色 (全蓝)。
+ *
+ * 5 类 category (按 entity.subject 关键词匹配):
+ *   - equipment  : 设备 (反应器/泵/塔/仪/罐/池/管)
+ *   - method     : 方法 (法/反应/工艺/合成/处理/循环/沉积/降解/氧化/还原/吸附/分离/过滤)
+ *   - parameter  : 参数 (pH/温度/压力/浓度/强度/率/势/值/度)
+ *   - substance  : 物质 (溶液/气体/泡/粒子/膜/盐/酸/碱/试剂/水/氧/氢/臭氧/MNB)
+ *   - concept    : 概念 (兜底)
+ *
+ * 优先级顺序很重要 (派工 v6 §1.2 真验证):
+ *   equipment > method > parameter > substance > concept
+ *   "反应器" 同时含 "反应" (method) 和 "反应器" (equipment), 优先 equipment
+ *   "溶液pH" 同时含 "液" (substance) 和 "pH" (parameter), 优先 parameter
+ *   "臭氧氧化法" 含 "氧" (substance) 但优先 method
+ *   "微纳米气泡" 含 "泡" (substance) → substance
+ */
+const EQUIPMENT_RE  = /反应器|泵|塔|仪|罐|池|管|阀|炉|柱|reactor|pump|instrument|column|tank|valve|furnace|spectrometer|chromatograph|membrane\s*module/i
+const METHOD_RE     = /法|反应|工艺|合成|处理|循环|沉积|浸解|破碎|降解|氧化|还原|吸附|分离|过滤|coagulation|flocculation|degradation|oxidation|reduction|adsorption|filtration|reaction|synthesis|process|method|technique|recirculation/i
+const PARAMETER_RE  = /pH|ppm|浓度|强度|温度|压力|流速|流量|直径|粒径|电压|电流|效率|产率|回收率|数值|幅度|范围|potential|voltage|current|dosage|concentration|intensity|temperature|pressure|rate|velocity/i
+const SUBSTANCE_RE  = /液|气体|泡|粒子|膜|盐|酸|碱|试剂|水|氧|氢|臭氧|MNB|MNBs|微(?:纳)?气泡|nano|micro|bubble|particle|film|membrane|electrode|catalyst|salt|acid|base|reagent|water|oxygen|hydrogen|ozone/i
+
+function _getCategoryFromSubject(subject) {
+  const s = String(subject || '')
+  // 优先级: equipment > method > parameter > substance > concept
+  // 关键: equipment "反应器" 必须在 method "反应" 之前匹配 (具体优先于泛化)
+  if (EQUIPMENT_RE.test(s)) return 'equipment'
+  if (METHOD_RE.test(s)) return 'method'
+  if (PARAMETER_RE.test(s)) return 'parameter'
+  if (SUBSTANCE_RE.test(s)) return 'substance'
+  return 'concept'
+}
+
+/**
+ * 5 类 category 颜色映射 (ECharts 系列 palette).
+ * 顺序: substance (物质-红) / method (方法-青) / parameter (参数-黄)
+ *        equipment (设备-浅绿) / concept (概念-浅蓝)
+ */
+const CATEGORY_COLORS = {
+  substance:  '#FF6B6B',
+  method:     '#4ECDC4',
+  parameter:  '#FFE66D',
+  equipment:  '#95E1D3',
+  concept:    '#A8DADC',
+}
+
+/**
  * normalizeGraphData: 兼容后端多种图谱数据格式
  *
  * 兼容字段：
@@ -3540,7 +3588,10 @@ function _normalizeExtractions(extractions) {
  * 输出 ECharts 格式：
  *   { nodes: [{id, name, value, category, symbolSize}],
  *     links: [{source, target, value, label}],
- *     categories: [{name}] }
+ *     categories: [{name, itemStyle: {color}}] }
+ *
+ * W86 mini-6 fix: category 派生 (无 category 时按 subject 关键词分类) +
+ *                颜色 palette (5 类固定颜色, 避免全蓝)
  *
  * @param {Object} rawGraphData - 后端返回的图谱数据
  * @returns {Object} ECharts 兼容的图谱数据
@@ -3564,10 +3615,21 @@ export function normalizeGraphData(rawGraphData) {
   // 3. 限制最大节点数
   const MAX_NODES = 80
   const nodes = rawNodes.slice(0, MAX_NODES).map(n => {
-    const id = String(n.id || n.node_id || n.name || n.label || n.title || n.text || `node-${Math.random()}`)
-    const name = n.name || n.label || n.title || n.text || id
+    const id = String(n.id || n.node_id || n.name || n.label || n.title || n.text || n.subject || `node-${Math.random()}`)
+    // W86 mini-5 fix: entity 图谱节点 (entity_service._entity_to_dict) 只有
+    // subject / predicate / object 三元组字段, 没有 name / label / title / text,
+    // 老代码 fallback 到 id → 用户看到节点标数字 (entity_id 1-65) 而非主体名称.
+    // 通用展示字段优先 (兼容 paper / topic 图谱), 再落 entity 三元组, 最后才 id.
+    const name = n.name || n.label || n.title || n.text ||
+                 n.subject || n.object || n.predicate || id
     const value = Number(n.value ?? n.weight ?? n.score ?? n.count ?? 1)
-    const category = n.category || n.type || n.group || 'default'
+    // W86 mini-6 fix: 老代码 `n.category || n.type || n.group || 'default'` 全部
+    //   fallback 到 'default' (entity 三元组无 category 字段) → categories 只 1 项
+    //   → 全蓝. 现在按 subject 关键词派生 category, 并加 explicit 'default' 兜底.
+    const explicitCategory = n.category || n.type || n.group
+    const category = explicitCategory && explicitCategory !== 'default'
+      ? _getCategoryFromSubject(explicitCategory)  // 已分类的也走关键词校验
+      : _getCategoryFromSubject(name)
     return {
       id,
       name: String(name).slice(0, 60),
@@ -3587,9 +3649,11 @@ export function normalizeGraphData(rawGraphData) {
     return { source, target, value, label }
   }).filter(e => nodeIds.has(e.source) && nodeIds.has(e.target))
 
-  // 5. categories
-  const categorySet = new Set(nodes.map(n => n.category).filter(Boolean))
-  const categories = [...categorySet].map(name => ({ name }))
+  // 5. categories — W86 mini-6 fix: 含颜色 itemStyle, 仅输出实际用到的 5 类子集
+  const usedCategories = new Set(nodes.map(n => n.category).filter(Boolean))
+  const categories = Object.keys(CATEGORY_COLORS)
+    .filter(name => usedCategories.has(name))
+    .map(name => ({ name, itemStyle: { color: CATEGORY_COLORS[name] } }))
 
   return {
     nodes,

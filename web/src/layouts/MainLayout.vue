@@ -66,17 +66,8 @@
           <el-icon><DataBoard /></el-icon>
           <span v-show="!isCollapse">项目动态</span>
         </div>
-        <!-- qa-bench v3.1 D5: KB 自动入库监控 (admin/leader only; 后端 get_current_admin 兜底,
-             普通用户点进去 403 → 提示) -->
-        <div
-          v-if="isAdmin"
-          class="sidebar-bottom-item"
-          :class="{ active: currentRoute === '/admin/kb-monitor' }"
-          @click="router.push('/admin/kb-monitor')"
-        >
-          <el-icon><Odometer /></el-icon>
-          <span v-show="!isCollapse">KB 监控</span>
-        </div>
+        <!-- W86 mini batch 1: KB 监控入口从侧栏底部移除, 合入项目动态 TabStrip 第 3 个 tab (admin only).
+             路由 /admin/kb-monitor 保留作 fallback 兼容老链接 (见 router/index.js L201-207) -->
       </div>
     </el-aside>
 
@@ -171,13 +162,14 @@ import ThemeToggleButton from '@/components/ThemeToggleButton.vue'
 // v2 PR6: 网盘协作通知 (@ 提醒 + 评论) + WS 推送
 import NotificationBell from '@/components/common/NotificationBell.vue'
 // 2026-07-12: 删除 Bell icon import (旧任务到期提醒铃铛已删除，统一走 NotificationBell)
-import { ArrowRight, DataBoard, Aim, Odometer, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
+import { ArrowRight, DataBoard, Aim, ChatDotRound, List, VideoCamera, Folder, User, Document, Memo, Setting, Fold, Expand, Files } from '@element-plus/icons-vue'
 
 // 侧边栏/面包屑路由 meta.icon 字符串 → 图标组件映射
 // unplugin-vue-components 无法解析动态 <component :is="string">，必须显式 import
 // v78: 删除 mic 别名 (声纹已合并到 /workspace 走 Files 图标)
+// W86 mini batch 1: 删除 Odometer 别名 (KB 监控入口已合入项目动态 TabStrip, 不再走侧栏)
 const iconMap = {
-  Odometer, ChatDotRound, List, VideoCamera, Folder,
+  ChatDotRound, List, VideoCamera, Folder,
   User, Document, Memo, Setting, Files,
 }
 

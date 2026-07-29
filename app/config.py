@@ -123,6 +123,17 @@ class Settings(BaseSettings):
     # 2026-07-23: pending knowledge 后台处理轮询间隔（Celery beat，可由 env 覆盖）
     KB_POLLING_INTERVAL_SEC: int = 300
 
+    # 2026-07-30 W86 mini-13 C: KB 自动入库总开关 (env 覆盖, 默认关闭)
+    # 开启后 save_to_kb.py / auto_intake_celery_task 才会真正写入, 否则只跑 dry-run 收集统计。
+    # 灰度发布期间维持 false, 验证完成再切 true。
+    AUTO_KB_INTAKE_ENABLED: str = "false"
+
+    # 2026-07-30 W86 mini-13 C: KB 灰度百分比 (env 覆盖, 默认 100 全量)
+    # 写入 data/auto_intake_summary.json 的 gray_flag_enabled 字段, 同时回填
+    # /knowledge/auto-intake-summary 接口 gray_scale_enabled 字段。
+    # 可选值: 0 / 5 / 25 / 50 / 100
+    KB_GRAY_SCALE_PERCENT: int = 100
+
     # 2026-07-16 +060: 录音 User-Agent 截断长度 (默认 500 字符)
     # 超过此长度的 UA 在 start-recording 时截断后再落库, 防止恶意/异常长 UA
     # 把 meetings.user_agent VARCHAR(500) 列撑爆或拖慢 index 查询。

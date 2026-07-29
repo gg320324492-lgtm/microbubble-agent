@@ -105,6 +105,13 @@ const renderChart = async () => {
   chartInstance = echarts.init(chartRef.value)
   chartInstance.setOption(buildOption())
 
+  // W86 mini-5: chartRef 在 v-if/v-else (loading / empty / chart) 之间切换时是**新 DOM 元素**,
+  // onMounted 时 observe 的旧元素已卸载 → 必须重新绑定, 否则 ResizeObserver 形同失效.
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver.observe(chartRef.value)
+  }
+
   // 节点点击事件 → emit 上抛 (KnowledgeGraphView 监听)
   chartInstance.on('click', (params) => {
     if (params.dataType === 'node') {
@@ -117,6 +124,11 @@ const handleResize = () => {
   if (chartInstance) chartInstance.resize()
 }
 
+// W86 mini-5 fix: 父容器高度变化 (grid/flex 重排、tab 切换) 不触发 window resize,
+// ECharts canvas 会停留在初始化时的尺寸 → 图谱被裁成"小框显示不全".
+// ResizeObserver 直接盯 chartRef 尺寸变化, 补上 window resize 覆盖不到的场景.
+let resizeObserver = null
+
 // 监听 nodes/edges 变化 → 重渲染
 watch(() => [props.nodes, props.edges], () => {
   nextTick(() => renderChart())
@@ -125,10 +137,19 @@ watch(() => [props.nodes, props.edges], () => {
 onMounted(() => {
   renderChart()
   window.addEventListener('resize', handleResize)
+  // W86 mini-5: jsdom / 老浏览器无 ResizeObserver 时降级为仅 window resize
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(handleResize)
+    if (chartRef.value) resizeObserver.observe(chartRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null
@@ -147,6 +168,8 @@ onBeforeUnmount(() => {
 }
 .kg-chart {
   flex: 1;
+  width: 100%;
+  height: 100%;
   min-height: 480px;
 }
 .kg-loading,
