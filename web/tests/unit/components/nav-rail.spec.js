@@ -9,8 +9,9 @@ import NavRail from '@/components/chat/NavRail.vue'
 import { useUiStore } from '@/stores/useUiStore'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+// W89-P-10: 迁入 tests/unit/components/ (3 层深) 后 src 路径解析需 3 个 ../ (web/src/...)
 const NAV_RAIL_SOURCE = readFileSync(
-  resolve(__dirname, '../../src/components/chat/NavRail.vue'),
+  resolve(__dirname, '../../../src/components/chat/NavRail.vue'),
   'utf8',
 )
 
