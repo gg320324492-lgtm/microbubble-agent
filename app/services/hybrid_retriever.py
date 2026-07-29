@@ -9,7 +9,7 @@
 
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,20 +32,25 @@ class HybridRetriever:
         enable_graph: bool = True,
         enable_rerank: bool = True,
     ) -> List[dict]:
-        """混合检索
+        """混合检索 (W93 PR7 B-7: observability hook 包裹原逻辑, 原 10 def 签名不变)"""
+        # W93 PR7 B-7: observability hook — 仅添加包裹, 原 retrieve() body 字面照搬到 _retrieve_impl (不删不改)
+        from app.services.recall_observability import RecallObserver
+        observer = RecallObserver.get()
+        async with observer.observe(caller_path="hybrid_retriever", for_query=True, has_query_prompt=False, original_query=query) as obs_trace:
+            return await self._retrieve_impl(query=query, top_k=top_k, category=category, enable_vector=enable_vector, enable_bm25=enable_bm25, enable_graph=enable_graph, enable_rerank=enable_rerank, obs_trace=obs_trace)
 
-        Args:
-            query: 查询文本
-            top_k: 最终返回条数
-            category: 可选分类过滤
-            enable_vector: 是否启用向量检索
-            enable_bm25: 是否启用 BM25 检索
-            enable_graph: 是否启用图谱检索
-            enable_rerank: 是否启用重排序
-
-        Returns:
-            检索结果列表
-        """
+    async def _retrieve_impl(
+        self,
+        query: str,
+        top_k: int,
+        category: Optional[str],
+        enable_vector: bool,
+        enable_bm25: bool,
+        enable_graph: bool,
+        enable_rerank: bool,
+        obs_trace: Any = None,
+    ) -> List[dict]:
+        """原 retrieve() body — W93 PR7 B-7 拆分点, 不改任何逻辑/不动 4 路开关"""
         # 候选集数量（重排序前多取一些）
         # 2026-07-01 BGE m3: top_k * 5 → 25 candidates before rerank (从 15 扩到 25)
         # 理由: cross-encoder 对更大候选集更稳定, GPU 推理 30ms 可忽略

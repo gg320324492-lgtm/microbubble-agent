@@ -1,0 +1,2 @@
+-- 召回 CTR (grafana panel 4)
+SELECT ROUND(COUNT(clicked_id)::numeric / NULLIF(COUNT(*), 0), 4) AS ctr_24h, COUNT(*) AS total_searches_24h, COUNT(clicked_id) AS total_clicks_24h FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics';
