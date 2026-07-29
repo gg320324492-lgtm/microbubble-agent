@@ -1,5 +1,5 @@
 /**
- * tests/visual/a11y/axe-chats.spec.mjs — W87-G-1 axe WCAG 2.1 AA 扫描 (报告型)
+ * tests/visual/a11y/axe-chats.spec.mjs — W87-G-1 axe WCAG 2.1 AA 扫描 (报告型) + W89-P-2 限流修复
  *
  * 本 spec 只做"扫描 + 打印 violations", 不设硬断言:
  *   派工 brief 原写 expect(builder.analyze()).resolves.toHaveNoViolations(),
@@ -10,18 +10,37 @@
  *   baseline 比对, 本文件负责人读的清单.
  *
  * 用法: 见 playwright.a11y.config.mjs 顶部
+ *
+ * W89-P-2 限流修复:
+ *   5 case 各自调 login 触发 5 次/分/IP 限流 → 改 beforeAll 拿一次 token + beforeEach 注入.
+ *   派工 v6 §5 反馈 类 20.49 沉淀: 'Playwright 多 case 必 beforeAll 共享 token, 避免限流'
  */
 
 import { test, expect } from '@playwright/test'
-import { A11Y_PAGES, axeBuilder, injectAuth } from './axe-config.mjs'
+import { A11Y_PAGES, axeBuilder, injectAuth, getAuthToken } from './axe-config.mjs'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost'
+const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000'
 
-test.describe('axe WCAG 2.1 AA 扫描 (5 核心页面)', () => {
+test.describe('axe WCAG 2.1 AA 扫描 (5 核心页面) — shared token', () => {
+  // W89-P-2: beforeAll 拿一次 token, 避免 5 case 各自触发 5 次/分/IP 限流
+  let sharedAuth
+  test.beforeAll(async ({ request }) => {
+    sharedAuth = await getAuthToken(request, { baseUrl: API_BASE_URL })
+  })
+
+  test.beforeEach(async ({ page }) => {
+    // 注入 cookie + localStorage (沿用 injectAuth 形态, 仅 token 来源改为 sharedAuth)
+    await page.context().addCookies([
+      { name: 'access_token', value: sharedAuth.token, domain: new URL(BASE_URL).hostname, path: '/' },
+    ])
+    await page.addInitScript((tk) => {
+      localStorage.setItem('access_token', tk)
+    }, sharedAuth.token)
+  })
+
   for (const pageDef of A11Y_PAGES) {
     test(`${pageDef.name} axe 扫描`, async ({ page }) => {
-      const authed = await injectAuth(page, BASE_URL)
-
       await page.goto(`${BASE_URL}${pageDef.path}`, { waitUntil: 'domcontentloaded' })
       await page.waitForTimeout(1500) // SPA 首屏挂载
 
@@ -33,7 +52,7 @@ test.describe('axe WCAG 2.1 AA 扫描 (5 核心页面)', () => {
       // 打印给人看 (reporter=list 会带出来)
       console.log(
         `\n[a11y] ${pageDef.name} (${pageDef.path}) → ${pageDef.target}` +
-          `\n        TEST_TOKEN=${authed ? 'yes' : 'no'} url=${page.url()}` +
+          `\n        TEST_TOKEN=${sharedAuth ? 'yes' : 'no'} url=${page.url()}` +
           (landedOnLogin ? '\n        ⚠️  被 router 守卫重定向到 /login — 扫到的是登录页不是目标页' : '') +
           `\n        violations=${violations.length}` +
           violations
