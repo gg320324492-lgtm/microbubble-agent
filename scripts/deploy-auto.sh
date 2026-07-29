@@ -343,11 +343,118 @@ EOFOUTER
   log "  语言分布: Python=${PY_LINES} Vue=${VUE_LINES} JS=${JS_LINES} CSS=${CSS_LINES} MD=${MD_LINES} Shell=${SH_LINES} Config=${CONF_LINES} 其他=${OTHER_LINES}"
 ) || log "WARN: 项目统计失败（不影响部署）"
 
+# ============================================================================
+# 2026-07-30 W88-X-2: trivy 镜像扫描门禁
+# 背景：W86-C-1 已写 scripts/trivy/scan-images.sh 但 deploy-auto.sh 没接。
+# 部署时自动跑 trivy，HIGH > 5 警告 + CRITICAL > 0 阻断。
+# 前置：trivy 已安装（未安装则 SKIP exit 2，参考 scripts/install-trivy.md）。
+# ============================================================================
+log_step_trivy() { log "[trivy-gate] $1"; }
+log "--- trivy 镜像扫描门禁 (W88-X-2) ---"
+if [ -f "$PROJECT_DIR/scripts/trivy/scan-images.sh" ]; then
+    TRIVY_REPORT_DIR="$PROJECT_DIR/logs"
+    mkdir -p "$TRIVY_REPORT_DIR"
+    if bash "$PROJECT_DIR/scripts/trivy/scan-images.sh" >> "$LOG_FILE" 2>&1; then
+        log_step_trivy "scan-images.sh PASS (0 HIGH/CRITICAL)"
+    else
+        TRIVY_EXIT=$?
+        if [ "$TRIVY_EXIT" -eq 2 ]; then
+            log_step_trivy "trivy 未安装，跳过门禁（scripts/install-trivy.md 装机后启用）"
+        else
+            # 解析报告中的 HIGH/CRITICAL 计数
+            HIGH_COUNT=$(grep -cE "^HIGH:" "$TRIVY_REPORT_DIR/trivy-report.txt" 2>/dev/null || echo "0")
+            CRITICAL_COUNT=$(grep -cE "^CRITICAL:" "$TRIVY_REPORT_DIR/trivy-report.txt" 2>/dev/null || echo "0")
+            log_step_trivy "scan-images.sh FAIL HIGH=$HIGH_COUNT CRITICAL=$CRITICAL_COUNT"
+            if [ "${CRITICAL_COUNT:-0}" -gt 0 ]; then
+                log "ERROR: trivy 扫描发现 CRITICAL CVE，部署中止（参考 logs/trivy-report.txt）"
+                log "========== 部署中止 =========="
+                exit 1
+            fi
+            if [ "${HIGH_COUNT:-0}" -gt 5 ]; then
+                log "WARN: trivy 扫描发现 ${HIGH_COUNT} HIGH CVE > 5 阈值，主指挥拍板继续部署"
+            else
+                log "WARN: trivy 命中 HIGH=$HIGH_COUNT 但 ≤ 5 阈值，继续部署"
+            fi
+        fi
+    fi
+else
+    log_step_trivy "scripts/trivy/scan-images.sh 不存在，跳过（应跑 W86-C-1 装机）"
+fi
+
 # 自动生成 changelog.json (W86 mini-11 A fix: 替代手维护)
 log "自动生成 changelog.json..."
 (
   python3 "$PROJECT_DIR/scripts/generate-changelog.py" --limit 500 2>&1 || python "$PROJECT_DIR/scripts/generate-changelog.py" --limit 500 2>&1
 ) || log "WARN: changelog.json 生成失败（不影响部署，将使用现有文件）"
+
+# ============================================================================
+# 2026-07-30 W88-X-2: pg_exporter 健康检查
+# 背景：W86-F-1 已写 scripts/pg-exporter/health.sh 但 deploy-auto.sh 没接。
+# 部署完成后自动验证 pg_exporter /metrics 端点返回 200 + pg_up=1，
+# 失败仅 WARN（不阻断，pg-exporter 是可观测性组件非业务关键）。
+# ============================================================================
+log "--- pg_exporter 健康检查 (W88-X-2) ---"
+if [ -f "$PROJECT_DIR/scripts/pg-exporter/health.sh" ]; then
+    sleep 10  # 等 pg-exporter 容器起来（参考 health.sh 内部 sleep）
+    if PG_EXPORTER_ENDPOINT="${PG_EXPORTER_ENDPOINT:-http://localhost:9187/metrics}" \
+       bash "$PROJECT_DIR/scripts/pg-exporter/health.sh" >> "$LOG_FILE" 2>&1; then
+        log "[pg-exporter-gate] health.sh PASS (HTTP 200 + pg_up 1)"
+    else
+        PG_EXIT=$?
+        log "[pg-exporter-gate] health.sh FAIL exit=$PG_EXIT（pg-exporter 未起或 postgres 不通，WARN 不阻断）"
+        log "WARN: 检查 docker compose ps | grep pg-exporter + DATA_SOURCE_NAME 配置"
+    fi
+else
+    log "[pg-exporter-gate] scripts/pg-exporter/health.sh 不存在，跳过"
+fi
+
+# ============================================================================
+# 2026-07-30 W88-X-2: GlitchTip 部署（条件性）
+# 背景：W87-B-1 已加 docker-compose.yml glitchtip service，但 deploy-auto.sh 没接。
+# 仅当 GLITCHTIP_DATABASE_URL 环境变量已设置时才部署（生产环境必设），
+# 否则 WARN 跳过（避免默认部署失败）。
+# ============================================================================
+log "--- GlitchTip 部署 (W88-X-2) ---"
+if [ -n "${GLITCHTIP_DATABASE_URL:-}" ]; then
+    if command -v docker >/dev/null 2>&1; then
+        log "[glitchtip-deploy] 启动 glitchtip 容器..."
+        if docker compose up -d glitchtip >> "$LOG_FILE" 2>&1; then
+            sleep 30  # 等 glitchtip migrations + 端口监听
+            # GlitchTip 默认 8000 端口；用 127.0.0.2 避让 app 的 127.0.0.1:8000（参考 docker-compose.yml）
+            GLITCH_HEALTH=$(curl -sf -o /dev/null -w "%{http_code}" "http://127.0.0.2:8000/" 2>/dev/null || echo "000")
+            log "[glitchtip-deploy] HTTP $GLITCH_HEALTH (期望 200/302/401，跳过非 200)"
+            if [ "$GLITCH_HEALTH" = "000" ]; then
+                log "WARN: glitchtip 容器起但 127.0.0.2:8000 不可达（启动慢？检查 docker logs microbubble-agent-glitchtip-1）"
+            fi
+        else
+            log "[glitchtip-deploy] docker compose up -d glitchtip 失败（检查 GLITCHTIP_DATABASE_URL / SECRET_KEY）"
+        fi
+    else
+        log "[glitchtip-deploy] docker 未安装，跳过（非 Docker 部署环境）"
+    fi
+else
+    log "[glitchtip-deploy] GLITCHTIP_DATABASE_URL 未设置，跳过（生产部署必设，参考 docs/sentry-setup.md）"
+fi
+
+# ============================================================================
+# 2026-07-30 W88-X-2: Sentry DSN env 注入
+# 背景：W87-B-1 已加 app/main.py sentry init（默认 off，类 20.27 沉淀）。
+# 仅当 SENTRY_DSN 环境变量已设置时写入 .env.production（不进 git，gitignore 已拦），
+# 否则 INFO 跳过（默认 off 行为保持）。
+# ============================================================================
+log "--- Sentry DSN 注入 (W88-X-2) ---"
+if [ -n "${SENTRY_DSN:-}" ]; then
+    # .env.production 已被 .gitignore 排除；只在缺失时追加（幂等）
+    if [ -f "$PROJECT_DIR/.env.production" ] && grep -qF "SENTRY_DSN=" "$PROJECT_DIR/.env.production" 2>/dev/null; then
+        log "[sentry-dsn] .env.production 已有 SENTRY_DSN，跳过重复注入"
+    else
+        echo "SENTRY_DSN=$SENTRY_DSN" >> "$PROJECT_DIR/.env.production"
+        chmod 600 "$PROJECT_DIR/.env.production"
+        log "[sentry-dsn] SENTRY_DSN 已写入 .env.production（不进 git，gitignore 拦）"
+    fi
+else
+    log "[sentry-dsn] SENTRY_DSN 未设置，sentry 默认 off（类 20.27 沉淀）"
+fi
 
 log "========== 部署完成 =========="
 exit 0
