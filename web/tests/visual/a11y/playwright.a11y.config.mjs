@@ -41,7 +41,10 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: process.env.CI ? 'github' : 'list',
-  timeout: 60_000,
+  // W88-G-2: form login + 5 sequential tests 在 mobile-iphone14 UA 下慢,
+  // 60s 默认 timeout 5 跑必超时. 提到 120s 让真登录态 axe 扫描跑完.
+  // (token 模式仍 < 30s, 这次升级只放宽 form login 的瓶颈, 不影响 token 路径)
+  timeout: 120_000,
   expect: { timeout: 15_000 },
 
   use: {
