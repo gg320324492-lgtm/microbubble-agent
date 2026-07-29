@@ -2,7 +2,7 @@
 
 > "小气" - 约 20 人研究实验室的 AI 智能助手
 >
-> 📝 完整更新日志见 [CHANGELOG.md](CHANGELOG.md) · 项目铁律见 [CLAUDE.md](CLAUDE.md) · 历史与路线图见 [ROADMAP.md](ROADMAP.md)
+> 📝 完整更新日志见 [CHANGELOG.md](CHANGELOG.md) · 项目铁律见 [CLAUDE.md](CLAUDE.md) · 历史与路线图见 [ROADMAP.md](ROADMAP.md) · **RAG 工业级大改造（10 PR 系列, W88-W97）见 [docs/rag/README.md](docs/rag/README.md)**（[RUNBOOK](docs/rag/RUNBOOK.md) / [SCHEMAS](docs/rag/SCHEMAS.md) / [ROADMAP](docs/rag/ROADMAP.md) / [RISKS](docs/rag/RISKS.md) / [EVAL](docs/rag/EVAL.md) / [FAQ](docs/rag/FAQ.md)）
 
 ## 功能
 

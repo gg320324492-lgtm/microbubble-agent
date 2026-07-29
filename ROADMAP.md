@@ -373,6 +373,14 @@
 - 🆕 [v31.3 Whisper 常驻 + 推理加速](CHANGELOG.md#2026-06-26-v31-3-whisper-常驻--推理加速用户决策chat-asr-时效性优先) - 模型常驻 GPU 8GB
 - 🆕 [v31.2.5 rate-limit Redis ZSET 持久化](CHANGELOG.md#2026-06-26-v31-2-5-rate-limit-收官启用-redis-zset-持久化) - 抗 docker restart
 
+## 🆕 待做：RAG 工业级大改造（10 PR 串行, 2026-08 → 2027-05, 锚点范式 W88-W97）
+
+> **2026-07-30 PR10 W96 沉淀**: 完整方案见 plan `rag-quirky-otter.md` v1.1 + [docs/rag/README.md](docs/rag/README.md)（12 节总览）+ [docs/rag/ROADMAP.md](docs/rag/ROADMAP.md)（月度里程碑）。
+>
+> **9 大缺口驱动**: 嵌入不一致 / 无 chunking / BM25 N 次重建 / PG 全文缺失 / query prefix 失效 / RAGEvaluator 零调用 / SearchLog 前端未通 / 无独立 RAG 评测 / 无 observability。
+>
+> **时间线**: PR1 嵌入一致化 (2026-08) → PR2 knowledge_chunk 子表 (088) → PR3 BM25 增量 + pg_trgm + tsvector (089) → PR4 HybridRetriever 量化 → PR5 RAGEvaluator 激活 (090) → PR6 SearchLog 前端 → PR7 observability → PR8 知识图谱联动 (091) → PR9 auto-research 升级 → PR10 docs/deploy/eval 三件套收口 (2027-04, 本条沉淀)。alembic 单链 087→088→089→090→091, 禁止并行派工。评估 10 件套 + 风险 10 项 + 派工 v11 见 docs/rag/。
+
 ## 🆕 待做：产品扩展（商业化 + 多组织 + 桌面 + APP）
 
 > **2026-06-28 决策沉淀**：在 Phase 7~20 现有高优/中优/低优路线图基础上，新增产品级扩展方向。完整规划见 [docs/product-expansion-plan.md](docs/product-expansion-plan.md)（待补充）+ plan 文件 [C:\Users\pc\.claude\plans\exe-logical-pie.md](C:/Users/pc/.claude/plans/exe-logical-pie.md)。
