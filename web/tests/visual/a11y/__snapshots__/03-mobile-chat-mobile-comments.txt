@@ -1,0 +1,5 @@
+page: 03-mobile-chat  route: /chat
+target: MobileChatView.vue (mobile project 下解析)
+project: mobile-comments
+authed: no   redirected-to-login: yes
+violations: 0
