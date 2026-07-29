@@ -5,6 +5,38 @@
 
 ---
 
+## [2026-07-30] W87 第 1 批 4 路线 + X-3 hook 修复 + cherry-pick 模式完成 — a11y + k6 + GlitchTip/Sentry + contextvars + alembic hook (主指挥协调范式第 63+64+65 次派工, 锚点范式 325 → 332 +7 实际据实, 派工 v6 §5 反馈类 20.25-32 新增 8 实例, 0 production code 6/7 守恒)
+
+**主基调**: cherry-pick 而非 merge 模式实战 (主指挥拍板基于 3 件大事: 嵌套 worktree 分支名错位 + base 漂移 + 21 个 W86 mini-N commit 未拍板) + 4 路线 cherry-pick (H-1 / B-1 / E-1 / G-1) + X-1 alembic rebase 撤回干净 + X-3 alembic hook 假阳性修复 (4 e2e PASS) + D-2 6 类文档同步.
+
+**W87 第 1 批 6 agents (本任务 X-3 cherry-pick + 6 类文档同步)**:
+
+- **H-1 contextvars** (cherry-pick `78988bf01`, 锚点 +1): app/core/request_context.py (新, 85 行) + app/core/logging.py (RequestContextFilter 34 行) + app/core/celery.py (signal 24 行) + app/main.py (middleware 27 行) + 5 Celery task docstring (agent_trace / chat_history / chat_share / drive_cleanup / file_mention) + tests/request_context/ 4 文件 (157+95+130+70 行) + memory. 14 文件 804+/3-
+- **B-1 GlitchTip + Sentry main** (cherry-pick `e0275d643`, 锚点 +1): docker-compose.{yml,dev,test} 3 glitchtip service + app/main.py Sentry init (env guard `if settings.SENTRY_DSN`) + app/config.py SENTRY_DSN + web/src/main.js Sentry init (35 行) + web/src/sw.js install failure postMessage (11 行) + web/src/utils/sentry.js (14 行新) + requirements.txt sentry-sdk[fastapi] + 134 web/dist/ build 文件 (含 orphan entry chunk 缺陷, Sentry 在 index-d2ea53b1.js 但 index.html 引用 index-c70e8703.js) + scripts/.token-orphan-allowlist 5 行 + tests/sentry/ 3 文件 + docs/sentry-setup.md + memory. 150 文件 981+/1-
+- **B-1 lockfile** (cherry-pick `6c78d6880`, 锚点 +1): web/package-lock.json 99 行 (@sentry/browser + @sentry/vue 同步). 1 文件 99+
+- **E-1 k6 压测** (cherry-pick `4a5750343`, 锚点 +1): scripts/k6/{chat_stream, ws_notifications, drive_collab}.js 70+90+101 行 + scripts/k6/README.md + scripts/k6/baselines/README.md + scripts/install-k6.md + tests/k6/{__init__, test_scripts_exist}.py 1+154 行 + web/package.json 5 npm scripts (load:chat/ws/drive) + memory. 10 文件 746+/1-
+- **G-1 a11y** (cherry-pick `e52d003fd`, 锚点 +1): web/tests/visual/a11y/{playwright.a11y.config.mjs, axe-config.mjs, axe-chats.spec.mjs, a11y-baseline.spec.mjs} 82+78+49+43 行 + 25 snapshot 文件 (5 页面 × 5 viewport) + web/package.json + web/package-lock.json (axe-core/playwright) + memory. 32 文件 527+/1-
+- **W87-X-1 alembic rebase 撤回干净** (0 commit, 类 20.29 + 20.30 据实上报): 13 head 是 hook 假阳性 (冷缓存 `wc -w` 数错), 实测 1 head `087_add_knowledge_original_parent_id`. 留 W87-X-3 修 hook
+- **W87-X-3 alembic hook 假阳性修复** (commit `4c0458387`, 锚点 +1): scripts/alembic/check_single_head.sh 修法 (python sys.exit 直接 exit code + 分离 stdout/stderr + mktemp trap cleanup) + tests/alembic/test_pre_commit_hook_passes.py 4 test (冷缓存 exit 0 + 3 次连跑稳定 + 忽略 SyntaxWarning + 实际 1 head 基线) + tests/alembic/__init__.py. 3 文件 212+/20-
+- **W87-X-3 cherry-pick 模式实战** (派工 v6 §5 反馈类 20.31 + 20.32 沉淀): subagent EnterWorktree 阻断 → fallback `git worktree add` → 分支名 `worktree-agent-<id>` (G-1 a429a6749fe6f0075 + E-1 aeb766f2a0d4ade04), 主指挥合并必须用这个分支名 + 必须查实际 base (实测 4 agent 全基于 5c87904b7, 不是 1a3ebbea5). cherry-pick 而非 merge (避免带入 21 个 W86 mini-N 未拍板 commit). H-1 → B-1 main → B-1 lockfile → E-1 → G-1 顺序, 0 冲突
+- **D-2 6 类文档同步 + grand closure memory** (本任务 commit, 锚点 +1 实战): 6 文件 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + `memory/w87-1st-grand-closure-full-2026-07-29.md` 完整沉淀 (16 段: 派工清单 / cherry-pick 模式 / 集成 e2e / 边界复检 / W87+ 派工顺序表 / 真装机清单 / 待主指挥拍板 / 锚点守恒计算 / 关键 commit 链 / memory 索引更新 / 真实施 vs brief 偏差汇总 / 0 production code 守恒 / W19 选项 A 维持 / 累计 29 批 / 第一次报告暂停 → 主指挥拍板 → 第二次 cherry-pick / agent commits 真实施清单)
+
+**W87 第 1 批 X-3 收口**: 6 commits ahead of base `1a3ebbea5` (W86 D-2). alembic 1 head `['087_add_knowledge_original_parent_id']` 守恒 (W87-X-3 hook 修后冷缓存精确 returncode == 0). 累计 29 批 470+ commits + 490+ 铁律 (W87 +24 新铁律: G-1 5 + E-1 5 + B-1 5 + H-1 5 + X-3 4). W87+ 派工顺序表: W87 第 2 批 (G-2 a11y 真登录态 + H-2 老 logger 接 contextvars + A-1 npm audit + X-2 dist entry chunk orphan + X-3 trivy 6→7 计数) + W88 + W89. W19 选项 A 维持.
+
+**派工前提错配类 20 W87 新增 8 实例 (W87-X-3 沉淀)**:
+
+20.25-30 + 20.31-32 详见 `memory/w87-1st-grand-closure-full-2026-07-29.md` 第 1 段表格. 累计类 20.1-20.32 = 32 实例.
+
+**集成 e2e 验证 (派工 v6 §1.2 真验证)**:
+- W86 4 套件 (gitleaks + trivy + precommit + pg_exporter): 89 PASSED + 10 SKIPPED + 2 FAILED
+  - FAILED 1: `tests/precommit/test_hooks_executable.py::test_typing_imports_exit_zero` 60s timeout — W86 pre-existing flake (check_typing_imports.sh 实际 63s, 测试 timeout 紧贴)
+  - FAILED 2: `tests/trivy/test_dockerfile_pinning.py::test_refs_discovered` 期望 6 实际 7 — B-1 cherry-pick 加 glitchtip 触发, 1 行 e2e 修, 留 W87-X-3
+- W87 3 套件 (k6 + sentry + request_context): 62 PASSED + 0 FAILED
+- W87-X-3 alembic 1 套件: 4 PASSED (冷缓存精确 returncode == 0)
+- 主仓库 2620 collected: 1825 PASSED + 231 SKIPPED + 138+84 FAILED (全部 pre-existing 与 cherry-pick 无关: test_w79 syntax / test_w82 mount / test_folder_service / test_list_files_include_subfolders_v2_21 / test_perf / test_mobile_v34_commercial_e2e)
+
+---
+
 ## [2026-07-29] W86 第 1 批 P0/P1 4 路线完成 — gitleaks + Trivy + pre-commit + pg_exporter (X-2 e2e 修复 + D-2 6 类文档同步收口, 主指挥协调范式第 62 次派工, 锚点范式 320 → 324 +4 守恒 + D-2 实战 +1 = 325 据实, 0 production code 4/4 守恒, 派工 v6 §5 反馈类 20.24 沉淀)
 
 **主基调**: P0 安全/合规 4 路线并行启动 + X-2 e2e 修复 (W86-X-1 报告 2 FAIL 据实修) + D-2 6 类文档同步 + grand closure memory 沉淀. 1/1 agent 完成 X-2 + D-2 合并任务.

@@ -1,9 +1,9 @@
-# MicroBubble Agent - W68-W86 batch 记忆索引 (W86 第 1 批 X-2 + D-2 主题补完, 锚点 325, 28 批)
+# MicroBubble Agent - W68-W87 batch 记忆索引 (W87 X-3 主题压缩, 锚点 332, 29 批)
 
-> **主基调**: 锚点范式 W7 12 → W86 325 单调上升 (累计 313 增量, 28 批). **W86 +5 据实上报** (4 路线 merge +4 + D-2 文档同步 +1 实战, X-2 e2e 修复据实不算, 类 20 累计 21 实例 W86 新增 1).
+> **主基调**: 锚点范式 W7 12 → W87 332 单调上升 (累计 320 增量, 29 批). **W87 +7 实际据实** (4 路线 cherry-pick + 1 alembic hook 修复 + 1 docs sync, B-1 拆 2 commit 多 1 据实, X-1 撤回 0 增量).
 > **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E).
-> **派工前提铁律 12 + 类 20 实战 21 实例 + W86 X-2 类 20.24 并行 agent 隐藏假设**.
-> **8 类主题分类目录** (W85 C-2 batch 3 派生, 178 active memory 重整 + MEMORY.md 索引同步). 总计 active 183 + archived 38 = 221 文件 (W86 +5: 1 grand closure + 4 路线 memory).
+> **派工前提铁律 12 + 类 20 实战 32 实例** (W84 据实上报 3 + W85 据实上报 2 + W86 据实上报 1 + W87 据实上报 8 + 历史 18).
+> **8 类主题分类目录** (W85 C-2 batch 3 派生, 184 active memory 重整 + MEMORY.md 索引同步). 总计 active 190 + archived 38 = 228 文件 (W87 +7: 1 grand closure + 4 路线 memory + 2 W87-A PR + W86 mini-9 修正).
 
 **8 类主题统计** (W85 C-2 batch 3, 派工 brief 175 → 实测 175 守恒):
 
@@ -266,6 +266,12 @@
 - [w86-1st-batch-c1-trivy-2026-07-29](w86-1st-batch-c1-trivy-2026-07-29.md) — W86 C-1 Trivy 镜像扫描 (9 Dockerfile base image 钉死 + workflow + scan-images.sh + install-trivy.md + 47→48 e2e).
 - [w86-1st-batch-d1-pre-commit-2026-07-29](w86-1st-batch-d1-pre-commit-2026-07-29.md) — W86 D-1 pre-commit 框架接入 (5 hook 整合 CLAUDE.md 纪律 + 兼容 setup-hooks.sh + 14 e2e).
 - [w86-1st-batch-f1-pg-exporter-2026-07-29](w86-1st-batch-f1-pg-exporter-2026-07-29.md) — W86 F-1 pg_exporter 安装 (3 compose service + slow_query.sh + 23 e2e).
+- [w87-1st-batch-h1-contextvars-2026-07-29](w87-1st-batch-h1-contextvars-2026-07-29.md) — W87 H-1 contextvars 透传 request_id + task_id (app/core/request_context.py + logging Filter + celery signal + 5 task docstring + 23 e2e).
+- [w87-1st-batch-e1-k6-2026-07-29](w87-1st-batch-e1-k6-2026-07-29.md) — W87 E-1 k6 压测脚本接入 (chat_stream / ws_notifications / drive_collab + baselines/README + 17 e2e + npm 5 load: 脚本).
+- [w87-1st-batch-b1-glitch-tip-2026-07-29](w87-1st-batch-b1-glitch-tip-2026-07-29.md) — W87 B-1 GlitchTip + Sentry 接入 (3 compose service + app/main.py Sentry init env guard + web/src/{main,sw,utils/sentry}.js + requirements.txt + 134 web/dist build + 22 e2e).
+- [w87-1st-batch-g1-a11y-2026-07-29](w87-1st-batch-g1-a11y-2026-07-29.md) — W87 G-1 axe-core/playwright a11y 接入 (5 页面 × 5 viewport snapshot + axe-config + axe-chats.spec + a11y-baseline + 50 PASS, 类 20.25 全绿可疑信号).
+- [w87-a-pr-description-2026-07-29](w87-a-pr-description-2026-07-29.md) — W87-A PR 描述 (W87 第 1 批 PR 收口描述).
+- [w87-1st-grand-closure-full-2026-07-29](w87-1st-grand-closure-full-2026-07-29.md) — W87 grand closure full (锚点 325 → 332 +7 实际据实, 4 路线 cherry-pick + X-3 alembic hook 假阳性修复 + cherry-pick 而非 merge 模式实战, 派工 v6 §5 反馈类 20.25-32 新增 8 实例, 0 production code 6/7 守恒).
 
 ## 历史归档 (memory/archived/ — 38 文件)
 
