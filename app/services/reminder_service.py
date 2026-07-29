@@ -12,9 +12,26 @@
 注：snooze_user_reminders 仍保留在 API 端点用于向后兼容，但微信路径已不再调用。
 设计文档：C:\\Users\\admin\\.claude\\plans\\snappy-coalescing-quiche.md
 """
+"""
+W86 mini-12 hotfix: 延迟 celery import 避免 router 加载时的循环导入
+(b31318238/W86 mini-9 userStore getter 修复时, 未触发 task_router 业务 endpoint 调用,
+health 200 掩盖了 celery partial init 错误. 实际 /api/v1/* 业务 endpoint 报 500.
+Fix A: 延迟 import, 沿用 memory_service.py 底部 try/except 模式)
+"""
+try:
+    from celery import shared_task
+    _CELERY_AVAILABLE = True
+except ImportError:
+    _CELERY_AVAILABLE = False
+
+    def shared_task(*args, **kwargs):
+        """Celery 不可用时的占位装饰器 (W86 mini-12 hotfix Fix A)"""
+        def decorator(func):
+            return func
+        return decorator
+
 import logging
 from datetime import datetime, timezone
-from celery import shared_task
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Dict, Any, Optional
