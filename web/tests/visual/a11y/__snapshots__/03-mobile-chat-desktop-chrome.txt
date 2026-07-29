@@ -1,0 +1,6 @@
+page: 03-mobile-chat  route: /chat
+target: MobileChatView.vue (mobile project 下解析)
+project: desktop-chrome
+authed: no   redirected-to-login: yes
+violations: 1
+  color-contrast [serious] ×3

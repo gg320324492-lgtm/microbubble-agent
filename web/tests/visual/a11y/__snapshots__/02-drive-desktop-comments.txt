@@ -1,0 +1,6 @@
+page: 02-drive  route: /drive
+target: drive-view.css 引用页 (DesktopDriveView/MobileDriveView)
+project: desktop-comments
+authed: no   redirected-to-login: yes
+violations: 1
+  color-contrast [serious] ×3
