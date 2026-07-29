@@ -49,6 +49,7 @@ from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import get_redis
+from app.core.request_context import get_request_id, get_task_id
 from app.models.base import utcnow
 from app.models.push_subscription import (
     PushSubscription,
@@ -404,7 +405,7 @@ async def subscribe(
     await db.commit()
     await db.refresh(sub)
     logger.info(
-        f"[PUSH] subscribe user_id={user_id} endpoint={endpoint[:60]}... "
+        f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] subscribe user_id={user_id} endpoint={endpoint[:60]}... "
         f"topics={topics or []}"
     )
     return sub
@@ -431,7 +432,7 @@ async def unsubscribe(
     await db.commit()
     deleted = result.rowcount > 0
     if deleted:
-        logger.info(f"[PUSH] unsubscribe user_id={user_id} endpoint={endpoint[:60]}...")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] unsubscribe user_id={user_id} endpoint={endpoint[:60]}...")
     return deleted
 
 
@@ -618,7 +619,7 @@ async def _push_to_subscriptions(
 
     for sub, res in zip(subs, results):
         if isinstance(res, Exception):
-            logger.error(f"[PUSH] {context} endpoint={sub.endpoint[:60]}... 异常: {res}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] {context} endpoint={sub.endpoint[:60]}... 异常: {res}")
             failed += 1
             continue
         if res == "delivered":
@@ -636,9 +637,9 @@ async def _push_to_subscriptions(
                 delete(PushSubscription).where(PushSubscription.id.in_(bad_endpoints))
             )
             await db.commit()
-            logger.info(f"[PUSH] 清理失效订阅 {len(bad_endpoints)} 行")
+            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] 清理失效订阅 {len(bad_endpoints)} 行")
         except Exception as e:
-            logger.warning(f"[PUSH] 清理失效订阅失败: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] 清理失效订阅失败: {e}")
 
     # 入死信队列 (失败 > 0)
     if failed > 0:
@@ -650,7 +651,7 @@ async def _push_to_subscriptions(
         })
 
     logger.info(
-        f"[PUSH] {context} delivered={delivered} failed={failed} purged={purged}",
+        f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] {context} delivered={delivered} failed={failed} purged={purged}",
     )
     return {"delivered": delivered, "failed": failed, "purged": purged}
 
@@ -679,7 +680,7 @@ async def _send_to_endpoint_with_retry(
                 return "purged"
             wait = PUSH_RETRY_BACKOFF_BASE * (2 ** attempt)
             logger.warning(
-                f"[PUSH] {context} attempt={attempt+1} 失败, "
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] {context} attempt={attempt+1} 失败, "
                 f"{wait}s 后重试: {e}",
             )
             if attempt < PUSH_RETRY_MAX_ATTEMPTS - 1:
@@ -754,7 +755,7 @@ async def _send_to_endpoint(
     if response.status_code in (404, 410):
         # endpoint 失效 (用户取消 / 浏览器卸载)
         logger.info(
-            f"[PUSH] endpoint 失效 {response.status_code}: "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] endpoint 失效 {response.status_code}: "
             f"{sub.endpoint[:60]}...",
         )
         raise PushEndpointGone(f"HTTP {response.status_code}")
@@ -777,7 +778,7 @@ async def _enqueue_dead_letter(item: Dict[str, Any]) -> None:
         pipe.expire(DEAD_LETTER_KEY, DEAD_LETTER_TTL_SECONDS)
         await pipe.execute()
     except Exception as e:
-        logger.warning(f"[PUSH] dead letter enqueue 失败: {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] dead letter enqueue 失败: {e}")
 
 
 async def list_dead_letter(limit: int = 50) -> List[Dict[str, Any]]:
@@ -787,7 +788,7 @@ async def list_dead_letter(limit: int = 50) -> List[Dict[str, Any]]:
         items = await r.lrange(DEAD_LETTER_KEY, -limit, -1)
         return [json.loads(x) for x in items]
     except Exception as e:
-        logger.warning(f"[PUSH] dead letter list 失败: {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] dead letter list 失败: {e}")
         return []
 
 
@@ -812,5 +813,5 @@ async def purge_stale_subscriptions(db: AsyncSession, *, days: int = 90) -> int:
     await db.commit()
     deleted = result.rowcount or 0
     if deleted > 0:
-        logger.info(f"[PUSH] purged {deleted} stale subscriptions (> {days} days)")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [PUSH] purged {deleted} stale subscriptions (> {days} days)")
     return deleted

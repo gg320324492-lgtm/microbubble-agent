@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
+from app.core.request_context import get_request_id, get_task_id
 from app.models.knowledge import Knowledge, KnowledgeRelation
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 from app.services.search_service import search_service
@@ -91,7 +92,7 @@ class AutoResearchService:
         new_count = 0
 
         for query in queries:
-            logger.info(f"自主研究: {query}")
+            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 自主研究: {query}")
             search_result = await search_service.search(query, max_results=max_results_per_query)
             raw_results = search_result.get("results", [])
 
@@ -145,7 +146,7 @@ class AutoResearchService:
                     "knowledge_id": knowledge.id,
                 })
 
-            logger.info(f"查询 '{query}' 完成，新增 {new_count} 条知识")
+            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 查询 '{query}' 完成，新增 {new_count} 条知识")
 
         return {
             "query": queries[0] if queries else "",
@@ -178,7 +179,7 @@ class AutoResearchService:
                 result = await self.research_topic(queries=[query], max_results_per_query=2)
                 total_new += result["new_knowledge_count"]
             except Exception as e:
-                logger.warning(f"领域研究失败 ({query}): {e}")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 领域研究失败 ({query}): {e}")
 
         return {
             "weak_areas": weak_areas,
@@ -213,7 +214,7 @@ class AutoResearchService:
                     "target_title": b.title,
                     "relation_id": rel.id,
                 })
-                logger.warning(f"检测到可能矛盾: [{a.title}] ↔ [{b.title}]")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 检测到可能矛盾: [{a.title}] ↔ [{b.title}]")
 
                 # 持久化：写入 contradicts 关系（双向）
                 for s_id, t_id, reason in [
@@ -359,7 +360,7 @@ class AutoResearchService:
             result = parse_llm_json(text)
             return result
         except Exception as e:
-            logger.warning(f"知识提取失败 ({title}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 知识提取失败 ({title}): {e}")
             return {"relevant": False}
 
     async def _ingest_knowledge(
@@ -397,7 +398,7 @@ class AutoResearchService:
             graph_svc = KnowledgeGraphService(self.db)
             await graph_svc.build_relations_for(knowledge.id)
         except Exception as e:
-            logger.warning(f"自动研究条目关联失败(knowledge_id={knowledge.id}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 自动研究条目关联失败(knowledge_id={knowledge.id}): {e}")
 
         return knowledge
 
@@ -462,7 +463,7 @@ class AutoResearchService:
             text = extract_text_from_response(response)
             return parse_llm_json(text)
         except Exception as e:
-            logger.error(f"知识空白分析失败: {e}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 知识空白分析失败: {e}")
             return {"weak_areas": [], "strong_areas": [], "total_queries": []}
 
     async def _check_contradiction(self, title_a: str, content_a: str,

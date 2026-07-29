@@ -36,6 +36,7 @@ from app.services.file_service import file_service
 from app.services.activity_service import activity_service
 from app.services.notification_service import notification_service
 from app.services.drive_upload_service import create_initial_version
+from app.core.request_context import get_request_id, get_task_id
 
 logger = logging.getLogger("microbubble.drive")
 
@@ -142,7 +143,7 @@ def drive_retry(
                     if attempt >= max_attempts:
                         # 最后一次失败: 抛原异常, 让上游处理
                         logger.warning(
-                            f"[drive_retry] {func.__name__} attempt {attempt}/{max_attempts} "
+                            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [drive_retry] {func.__name__} attempt {attempt}/{max_attempts} "
                             f"failed (final): {type(exc).__name__}: {exc}"
                         )
                         raise
@@ -309,7 +310,7 @@ async def _stream_concat_chunks(
         )
 
         logger.info(
-            f"[_stream_concat_chunks] session={session_id} chunks={len(chunk_indices)} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [_stream_concat_chunks] session={session_id} chunks={len(chunk_indices)} "
             f"size={total_size} → {dst_object}"
         )
         return total_size
@@ -447,7 +448,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(knowledge)
         logger.info(
-            f"[DriveService.create_file] id={knowledge.id} file_name={file_name} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.create_file] id={knowledge.id} file_name={file_name} "
             f"visibility={visibility} folder_id={folder_id} "
             f"file_size={file_size} file_hash={'<set>' if file_hash else None}"
         )
@@ -747,7 +748,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(file)
         logger.info(
-            f"[DriveService.update_file] id={file.id} visibility={file.visibility} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.update_file] id={file.id} visibility={file.visibility} "
             f"folder_id={file.folder_id}"
         )
         # PR6: 活动动态流 — best-effort 不阻塞
@@ -805,7 +806,7 @@ class DriveService:
             file.original_path = "/"
         file.deleted_at = to_naive_datetime(datetime.now(timezone.utc))
         await self.db.commit()
-        logger.info(f"[DriveService.soft_delete_file] id={file.id}")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.soft_delete_file] id={file.id}")
         # PR6: 活动动态流
         try:
             await activity_service.log(
@@ -873,7 +874,7 @@ class DriveService:
         file.deleted_at = None
         await self.db.commit()
         await self.db.refresh(file)
-        logger.info(f"[DriveService.restore_file] id={file.id}")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.restore_file] id={file.id}")
         # PR6: 活动动态流
         try:
             await activity_service.log(
@@ -940,7 +941,7 @@ class DriveService:
         await self.db.refresh(file)
 
         logger.info(
-            f"[DriveService.extract_to_kb] id={file.id} storage: drive→kb "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.extract_to_kb] id={file.id} storage: drive→kb "
             f"visibility: {before}→{target_visibility}"
         )
         # 异步 LLM 提取留 PR3 再启 (本 PR 只切 storage_mode 让前端能立刻看到)
@@ -1093,7 +1094,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(f)
         logger.info(
-            f"[DriveService.create_share_link] id={f.id} token={token[:8]}... "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.create_share_link] id={f.id} token={token[:8]}... "
             f"expires={f.share_expires_at} password={'yes' if password_hash else 'no'}"
         )
         # PR6: 活动动态流 + 文件 owner 自提醒 (通知 owner 分享成功)
@@ -1176,7 +1177,7 @@ class DriveService:
             expires_naive = to_naive_datetime(f.share_expires_at)
             now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
             if expires_naive < now_naive:
-                logger.info(f"[DriveService.get_by_share_token] token={token[:8]}... 已过期")
+                logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.get_by_share_token] token={token[:8]}... 已过期")
                 return None
         return f
 
@@ -1207,7 +1208,7 @@ class DriveService:
             return None
         password_hash = _hash_share_password(password)
         if password_hash != f.share_password:
-            logger.info(f"[DriveService.verify_share_access] token={token[:8]}... 密码错误")
+            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.verify_share_access] token={token[:8]}... 密码错误")
             return None
         return f
 
@@ -1262,7 +1263,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(f)
         logger.info(
-            f"[DriveService.update_visibility] id={f.id} {before}→{new_visibility} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.update_visibility] id={f.id} {before}→{new_visibility} "
             f"folder={f.folder_id}"
         )
         return f
@@ -1298,7 +1299,7 @@ class DriveService:
             action = "star"
         await self.db.commit()
         await self.db.refresh(f)
-        logger.info(f"[DriveService.toggle_star_file] id={f.id} {action}")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.toggle_star_file] id={f.id} {action}")
 
         # v2 网盘 PR6-P12+ 增量: star 通知 file owner (只有 star 时通知, unstar 不通知)
         # 设计: star 总是 owner 操作 (toggle_star_file 已校验 f.created_by == current_user_id),
@@ -1434,7 +1435,7 @@ class DriveService:
         except Exception as e:
             logger.debug(f"[DriveService.batch_soft_delete] activity log 失败: {e}")
         logger.info(
-            f"[DriveService.batch_soft_delete] requested={len(file_ids)} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.batch_soft_delete] requested={len(file_ids)} "
             f"deleted={deleted} skipped={len(skipped)}"
         )
         return deleted, skipped
@@ -1476,7 +1477,7 @@ class DriveService:
                 skipped.append(fid)
         await self.db.commit()
         logger.info(
-            f"[DriveService.batch_restore] requested={len(file_ids)} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.batch_restore] requested={len(file_ids)} "
             f"restored={restored} skipped={len(skipped)}"
         )
         return restored, skipped
@@ -1534,7 +1535,7 @@ class DriveService:
                 skipped.append(fid)
         await self.db.commit()
         logger.info(
-            f"[DriveService.batch_move] requested={len(file_ids)} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.batch_move] requested={len(file_ids)} "
             f"moved={moved} skipped={len(skipped)} target={target_folder_id}"
         )
         return moved, skipped
@@ -1588,7 +1589,7 @@ class DriveService:
                 skipped.append(fid)
         await self.db.commit()
         logger.info(
-            f"[DriveService.batch_update_visibility] requested={len(file_ids)} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.batch_update_visibility] requested={len(file_ids)} "
             f"updated={updated} skipped={len(skipped)} vis={new_visibility}"
         )
         return updated, skipped
@@ -1620,12 +1621,12 @@ class DriveService:
                 file_service.delete_file(f.file_path)
             except Exception as e:
                 logger.warning(
-                    f"[DriveService.permanent_delete] minio delete failed "
+                    f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.permanent_delete] minio delete failed "
                     f"id={f.id} path={f.file_path}: {e}"
                 )
         await self.db.delete(f)
         await self.db.commit()
-        logger.info(f"[DriveService.permanent_delete] id={f.id}")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.permanent_delete] id={f.id}")
         return True
 
     async def permanent_delete_batch(
@@ -1660,7 +1661,7 @@ class DriveService:
                     file_service.delete_file(f.file_path)
                 except Exception as e:
                     logger.warning(
-                        f"[DriveService.permanent_delete_batch] minio delete failed "
+                        f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.permanent_delete_batch] minio delete failed "
                         f"id={f.id}: {e}"
                     )
             await self.db.delete(f)
@@ -1671,7 +1672,7 @@ class DriveService:
                 skipped.append(fid)
         await self.db.commit()
         logger.info(
-            f"[DriveService.permanent_delete_batch] requested={len(file_ids)} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.permanent_delete_batch] requested={len(file_ids)} "
             f"deleted={deleted} skipped={len(skipped)}"
         )
         return deleted, skipped
@@ -1797,7 +1798,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(new_k)
         logger.info(
-            f"[DriveService.create_instant_upload] HIT hash={file_hash[:12]}... "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.create_instant_upload] HIT hash={file_hash[:12]}... "
             f"src_id={existing.id} dst_id={new_k.id} "
             f"src_path={existing.file_path} dst_path={new_object} "
             f"dedup_saved_bytes={copied_size}"
@@ -1881,7 +1882,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(new_k)
         logger.info(
-            f"[DriveService.create_version] file_id={file_id} → v{new_version_number} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.create_version] file_id={file_id} → v{new_version_number} "
             f"new_id={new_k.id} hash={new_hash[:12]}... "
             f"change_note={change_note!r}"
         )
@@ -2049,7 +2050,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(new_k)
         logger.info(
-            f"[DriveService.restore_version] file_id={file_id} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.restore_version] file_id={file_id} "
             f"restored_from_v{kv.version_number} → new_v{new_version_number} "
             f"new_id={new_k.id} copy_bytes={copied_size}"
         )
@@ -2222,7 +2223,7 @@ class DriveService:
         await self.db.commit()
         await self.db.refresh(session)
         logger.info(
-            f"[DriveService.init_chunked_upload] session={session_id} "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.init_chunked_upload] session={session_id} "
             f"user={user_id} file={file_name} chunks={total_chunks}"
         )
         return session
@@ -2381,7 +2382,7 @@ class DriveService:
             recalc_user_storage_task.delay(user_id)
             generate_thumbnail_task.delay(new_file.id)
         except Exception as e:
-            logger.warning(f"[DriveService.complete_chunked_upload] fire Celery 失败: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.complete_chunked_upload] fire Celery 失败: {e}")
 
         # 清 MinIO staging (异步)
         try:
@@ -2390,11 +2391,9 @@ class DriveService:
             for obj in objects:
                 await asyncio.to_thread(file_service.delete_file, obj.object_name)
         except Exception as e:
-            logger.warning(f"[DriveService.complete_chunked_upload] staging 清理失败: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.complete_chunked_upload] staging 清理失败: {e}")
 
-        logger.info(
-            f"[DriveService.complete_chunked_upload] session={session_id} → file_id={new_file.id}"
-        )
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.complete_chunked_upload] session={session_id} → file_id={new_file.id}")
         return new_file
 
     async def abort_chunked_upload(self, session_id: str, user_id: int) -> bool:
@@ -2424,7 +2423,7 @@ class DriveService:
             for obj in objects:
                 await asyncio.to_thread(file_service.delete_file, obj.object_name)
         except Exception as e:
-            logger.warning(f"[DriveService.abort_chunked_upload] staging 清理失败: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.abort_chunked_upload] staging 清理失败: {e}")
 
-        logger.info(f"[DriveService.abort_chunked_upload] session={session_id} aborted")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [DriveService.abort_chunked_upload] session={session_id} aborted")
         return True

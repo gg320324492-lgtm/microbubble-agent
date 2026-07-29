@@ -4,6 +4,7 @@ import json
 import logging
 
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
+from app.core.request_context import get_request_id, get_task_id
 from app.services.name_aliases import clean_text as clean_person_names, get_member_names
 
 logger = logging.getLogger("microbubble.llm_analysis")
@@ -96,18 +97,18 @@ class LLMAnalysisService:
                     # v28 step 60: 兜底清洗
                     return _clean_result_person_names(result)
             except (json.JSONDecodeError, Exception) as e:
-                logger.warning(f"LLM JSON 解析失败: {type(e).__name__}: {str(e)[:120]}")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] LLM JSON 解析失败: {type(e).__name__}: {str(e)[:120]}")
                 # v28 step 34 fallback: 从 raw text 提取关键字段
                 result = _fallback_extract_fields(text)
                 if result.get('summary') or result.get('category'):
-                    logger.info(f"Fallback 提取成功: summary={len(result.get('summary', ''))} chars")
+                    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] Fallback 提取成功: summary={len(result.get('summary', ''))} chars")
                     return _clean_result_person_names(result)
             # 解析成功但 summary 仍空（LLM 没生成）
             if not result.get("summary"):
                 logger.warning("LLM 分析未返回 summary")
             return _clean_result_person_names(result)
         except Exception as e:
-            logger.error(f"LLM 内容分析失败: {e}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] LLM 内容分析失败: {e}")
             return {"summary": "", "category": "", "tags": [], "key_concepts": [], "related_topics": [], "knowledge_type": "文献阅读"}
 
 

@@ -16,6 +16,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.request_context import get_request_id, get_task_id
 from app.models.member import Member
 
 logger = logging.getLogger("microbubble.voiceprint")
@@ -49,7 +50,7 @@ class VoiceprintService:
             )
             logger.info("3D-Speaker 模型加载完成")
         except Exception as e:
-            logger.error(f"3D-Speaker 模型加载失败: {e}（声纹识别将不可用，所有发言人显示 unknown）")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 3D-Speaker 模型加载失败: {e}（声纹识别将不可用，所有发言人显示 unknown）")
             # 不抛异常，让 identify_speaker 返回 unknown 而不是崩溃 WS
             self._pipeline = None
 
@@ -124,12 +125,12 @@ class VoiceprintService:
                 model = model.cuda()
                 self._pipeline.model = model
                 device = next(model.parameters()).device
-                logger.info(f"3D-Speaker 模型已迁移到 {device}")
+                logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 3D-Speaker 模型已迁移到 {device}")
             except Exception as e:
-                logger.warning(f"模型迁移 GPU 失败: {e}，继续 CPU 推理")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 模型迁移 GPU 失败: {e}，继续 CPU 推理")
 
         logger.info(
-            f"声纹提取 (并行单条): {sum(1 for a in audio_segments if a is not None)} 段，"
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 声纹提取 (并行单条): {sum(1 for a in audio_segments if a is not None)} 段，"
             f"device={device}, N_WORKERS=8"
         )
 
@@ -155,7 +156,7 @@ class VoiceprintService:
                 with self._batch_extract_lock:
                     return self._extract_via_model(audio)
             except Exception as e:
-                logger.error(f"chunk 提取失败: {e}")
+                logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] chunk 提取失败: {e}")
                 return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
         with ThreadPoolExecutor(max_workers=8) as ex:
@@ -166,11 +167,11 @@ class VoiceprintService:
                 try:
                     results[valid_indices[i]] = fut.result()
                 except Exception as e:
-                    logger.error(f"chunk {valid_indices[i]} 失败: {e}")
+                    logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] chunk {valid_indices[i]} 失败: {e}")
                     results[valid_indices[i]] = np.zeros(EMBEDDING_DIM, dtype=np.float32)
                 done += 1
                 if done % 200 == 0:
-                    logger.info(f"  进度: {done}/{len(futures)}")
+                    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}]   进度: {done}/{len(futures)}")
 
         return results
 
@@ -259,7 +260,7 @@ class VoiceprintService:
         member.voice_enrolled_at = text("NOW()")
         await db.commit()
 
-        logger.info(f"成员 {member.name} (id={member_id}) 声纹已录入 (第{member.voice_sample_count}次)")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 成员 {member.name} (id={member_id}) 声纹已录入 (第{member.voice_sample_count}次)")
         return True
 
     async def identify_speaker(

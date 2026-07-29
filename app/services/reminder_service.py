@@ -38,6 +38,7 @@ from typing import List, Dict, Any, Optional
 
 from app.models.base import utcnow, BEIJING_TZ
 from app.core.celery_db import create_celery_engine_and_session
+from app.core.request_context import get_request_id, get_task_id
 from app.models.task import Task
 from app.models.member import Member
 from app.models.reminder import Reminder
@@ -77,9 +78,7 @@ class ReminderService:
         task = task_result.scalar_one_or_none()
 
         if not task or not task.assignee_id:
-            logger.warning(
-                f"提醒 {reminder.id} 无法发送: task不存在或无负责人"
-            )
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 提醒 {reminder.id} 无法发送: task不存在或无负责人")
             return False
 
         member_result = await self.db.execute(
@@ -88,15 +87,11 @@ class ReminderService:
         member = member_result.scalar_one_or_none()
 
         if not member:
-            logger.warning(
-                f"提醒 {reminder.id} 无法发送: 成员不存在 id={task.assignee_id}"
-            )
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 提醒 {reminder.id} 无法发送: 成员不存在 id={task.assignee_id}")
             return False
 
         if not member.wechat_id and not member.external_userid:
-            logger.warning(
-                f"提醒 {reminder.id} 无法发送: 成员 {member.name} 无微信标识"
-            )
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 提醒 {reminder.id} 无法发送: 成员 {member.name} 无微信标识")
             return False
 
         message = self._format_reminder_message(task, member)
@@ -107,14 +102,12 @@ class ReminderService:
                 result.get("errcode", -1) if isinstance(result, dict) else -1
             )
             if errcode != 0:
-                logger.warning(
-                    f"微信推送返回错误: {result}, member={member.name}"
-                )
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 微信推送返回错误: {result}, member={member.name}")
                 return False
-            logger.info(f"微信推送成功: member={member.name}")
+            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 微信推送成功: member={member.name}")
         except Exception as e:
             logger.error(
-                f"微信推送失败 reminder_id={reminder.id} member={member.name}: {e}",
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 微信推送失败 reminder_id={reminder.id} member={member.name}: {e}",
                 exc_info=True,
             )
             return False
@@ -128,14 +121,12 @@ class ReminderService:
 
         meeting_id = getattr(reminder, "meeting_id", None)
         if not meeting_id:
-            logger.warning(f"会议提醒 {reminder.id} 无 meeting_id，跳过")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 会议提醒 {reminder.id} 无 meeting_id，跳过")
             return False
 
         meeting = await self.db.get(Meeting, meeting_id)
         if not meeting:
-            logger.warning(
-                f"会议提醒 {reminder.id}: meeting {meeting_id} 不存在"
-            )
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 会议提醒 {reminder.id}: meeting {meeting_id} 不存在")
             return False
 
         try:
@@ -153,14 +144,12 @@ class ReminderService:
             participants = list(participants_result.scalars().all())
         except Exception as e:
             logger.error(
-                f"会议提醒 {reminder.id} 查询参会人失败: {e}", exc_info=True
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 会议提醒 {reminder.id} 查询参会人失败: {e}", exc_info=True
             )
             return False
 
         if not participants:
-            logger.warning(
-                f"会议 {meeting_id} 没有 active 参会人，跳过提醒"
-            )
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 会议 {meeting_id} 没有 active 参会人，跳过提醒")
             return False
 
         try:
@@ -196,7 +185,7 @@ class ReminderService:
                     push_ok = True
             except Exception as e:
                 logger.error(
-                    f"notify_meeting_reminder 失败: member={p.id} {e}",
+                    f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] notify_meeting_reminder 失败: member={p.id} {e}",
                     exc_info=True,
                 )
 
@@ -295,14 +284,12 @@ class ReminderService:
                 result.get("errcode", -1) if isinstance(result, dict) else -1
             )
             if errcode != 0:
-                logger.warning(
-                    f"digest send failed member_id={member.id} errcode={errcode}"
-                )
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] digest send failed member_id={member.id} errcode={errcode}")
                 return False
             return True
         except Exception as e:
             logger.error(
-                f"digest send exception member_id={member.id}: {e}",
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] digest send exception member_id={member.id}: {e}",
                 exc_info=True,
             )
             return False
@@ -372,9 +359,7 @@ class ReminderService:
                     continue
 
                 if not member.wechat_id and not member.external_userid:
-                    logger.warning(
-                        f"成员 {member.name} 无微信标识，跳过 {len(member_rems)} 条 reminder"
-                    )
+                    logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 成员 {member.name} 无微信标识，跳过 {len(member_rems)} 条 reminder")
                     for r in member_rems:
                         r.status = "sent"
                         r.sent_at = utcnow()
@@ -395,7 +380,7 @@ class ReminderService:
                     fail += len(member_rems)
             except Exception as e:
                 logger.error(
-                    f"send digest failed member_id={member_id}: {e}",
+                    f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] send digest failed member_id={member_id}: {e}",
                     exc_info=True,
                 )
                 for r in member_rems:
@@ -422,7 +407,7 @@ class ReminderService:
                 else:
                     await reminder_scheduler.remove_batch(sent_ids)
         except Exception as e:
-            logger.warning(f"清理 Redis ZSET 失败: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 清理 Redis ZSET 失败: {e}")
 
         return {
             "total": len(due),
@@ -496,7 +481,7 @@ class ReminderService:
             try:
                 await reminder_scheduler.remove_batch(ids)
             except Exception as e:
-                logger.warning(f"ack 后清理 Redis ZSET 失败: {e}")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] ack 后清理 Redis ZSET 失败: {e}")
 
         return len(all_rems)
 
@@ -556,7 +541,7 @@ class ReminderService:
                 await reminder_scheduler.add_reminder(r.id, until.timestamp())
             except Exception as e:
                 logger.warning(
-                    f"snooze 后更新 Redis ZSET 失败 reminder_id={r.id}: {e}",
+                    f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] snooze 后更新 Redis ZSET 失败 reminder_id={r.id}: {e}",
                     exc_info=True,
                 )
 
