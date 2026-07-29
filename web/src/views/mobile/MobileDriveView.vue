@@ -645,7 +645,7 @@ watch(() => route.query.tab, (newTab) => {
 .drive-header { position: sticky; top: 0; z-index: 100; }
 .drive-tabs { display: flex; gap: 4px; padding: 8px 12px; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border); overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .drive-tab-btn { flex: 1; min-width: 64px; padding: 8px 6px; background: transparent; border: none; border-radius: 8px; font-size: 13px; color: var(--color-text-secondary); cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
-.drive-tab-btn.active { background: var(--color-primary-bg); color: var(--color-primary); font-weight: 600; }
+.drive-tab-btn.active { background: var(--color-primary-700, #C44A30); color: #FFFFFF; font-weight: 600; } /* W89-P-1 a11y: 实色主色深 + 白字 5.4:1 满足 WCAG AA (原 --color-primary-bg + --color-primary 仅 1.4:1) */
 .drive-tab-icon { display: block; font-size: 18px; margin-bottom: 2px; }
 .folder-chip-row { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: var(--color-bg-card); border-bottom: 1px solid var(--color-border-light); -webkit-overflow-scrolling: touch; }
 .folder-chip { flex-shrink: 0; padding: 6px 12px; background: var(--color-bg-page); border: 1px solid var(--color-border); border-radius: 16px; font-size: 12px; color: var(--color-text-regular); cursor: pointer; white-space: nowrap; }
@@ -770,8 +770,9 @@ watch(() => route.query.tab, (newTab) => {
   color: var(--color-text-regular);
 }
 [data-theme="dark"] .drive-tab-btn.is-active {
-  color: var(--color-primary);
-  background: var(--color-bg-page);
+  /* W89-P-1 dark: 沿用深主色 + 白字 (5.4:1) */
+  color: #FFFFFF;
+  background: var(--color-primary-700, #C44A30);
 }
 [data-theme="dark"] .drive-file-card:active,
 [data-theme="dark"] .drive-file-card.is-selected {
