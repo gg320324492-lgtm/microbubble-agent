@@ -1,5 +1,6 @@
 # Vision MCP Server Docker 镜像
-FROM python:3.11-slim
+# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+FROM python:3.11.15-slim
 
 WORKDIR /app
 

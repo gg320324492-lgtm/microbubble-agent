@@ -1,7 +1,8 @@
 services:
   # Nginx 反向代理 + 前端静态文件
   nginx:
-    image: nginx:alpine
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: nginx:1.31.2-alpine
     ports:
       - "80:80"
       - "443:443"
@@ -88,7 +89,8 @@ services:
 
   # Redis缓存
   redis:
-    image: redis:7-alpine
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: redis:7.4.9-alpine
     volumes:
       - ./data/redis:/data
     healthcheck:
@@ -101,7 +103,8 @@ services:
 
   # Neo4j 图数据库（知识图谱）
   neo4j:
-    image: neo4j:5-community
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: neo4j:5.26.27-community
     ports:
       - "7474:7474"   # Web UI
       - "7687:7687"   # Bolt 协议
@@ -122,7 +125,8 @@ services:
 
   # MinIO对象存储
   minio:
-    image: minio/minio
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -177,7 +181,8 @@ services:
   # - GPU: deploy.resources.reservations.devices 走 NVIDIA driver (与 app 共享同一 GPU)
   # - OLLAMA_KEEP_ALIVE=10m: 模型空闲 10 分钟后自动 unload 释放显存
   ollama:
-    image: ollama/ollama:latest
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: ollama/ollama:0.31.1
     ports:
       - "127.0.0.1:11434:11434"     # host 仅本地访问 (避免暴露公网)
     volumes:
