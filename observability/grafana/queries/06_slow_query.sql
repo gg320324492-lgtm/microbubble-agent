@@ -1,0 +1,2 @@
+-- 慢查询分布 (grafana panel 6)
+SELECT date_trunc('minute', created_at) AS time, COUNT(*) FILTER (WHERE slow_query = 1) AS slow_count, COUNT(*) AS total_count, ROUND(COUNT(*) FILTER (WHERE slow_query = 1)::numeric / NULLIF(COUNT(*), 0), 4) AS slow_ratio FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1;
