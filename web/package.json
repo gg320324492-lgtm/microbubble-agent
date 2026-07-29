@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "npx vite --port 3000 --strictPort=false",
+    "prebuild": "echo 'Pre-build hook placeholder (W89-P-5 build:a11y 链入口)'",
     "build": "vite build && node scripts/postbuild-fix-manifest.js",
     "build:raw": "vite build",
     "build:pwa": "vite build && node scripts/postbuild-fix-manifest.js",
+    "build:a11y": "npm run build && npm run test:playwright:a11y -- --grep='health-check'",
     "postbuild:fix-manifest": "node scripts/postbuild-fix-manifest.js",
     "preview": "vite preview",
     "test:unit": "vitest run",
@@ -15,6 +17,7 @@
     "lint:css:fix": "stylelint --fix \"src/**/*.{vue,css,scss}\"",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
+    "test:playwright:a11y": "playwright test -c tests/visual/a11y/playwright.a11y.config.mjs",
     "load:chat": "k6 run --vus 10 --duration 30s ../scripts/k6/chat_stream.js",
     "load:ws": "k6 run --vus 10 --duration 30s ../scripts/k6/ws_notifications.js",
     "load:drive": "k6 run --vus 5 --duration 30s ../scripts/k6/drive_collab.js"
