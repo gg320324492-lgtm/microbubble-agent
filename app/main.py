@@ -9,7 +9,25 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+import sentry_sdk
+from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+
 from app.config import settings
+
+# W87-B-1 / 类 20.27: 默认 off；无 SENTRY_DSN 时不得初始化或静默上报。
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        integrations=[
+            FastApiIntegration(),
+            CeleryIntegration(),
+        ],
+        environment=settings.APP_ENV,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+        release=f"microbubble-agent@{settings.APP_VERSION}",
+    )
 # W67 第 41 步 (Agent 21): SKIP_DB_SETUP 短路 lifespan 内全部 DB 启动操作
 # CI 测试场景 (e.g. qa-bench-ci.yml test DB): scripts/init_db.py 由单独的 docker exec 步执行,
 # 避免 lifespan 阻塞 /health 端点超时. 默认 False (生产/本地开发仍是幂等 create_all).
