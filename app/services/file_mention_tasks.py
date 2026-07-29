@@ -7,6 +7,10 @@
 - engine.dispose() finally：清理连接
 - 始终 logger.warning / logger.info（即便删除 0 个）→ 健康监控可见
 
+# W87-H-1 增量 (派工 v6 §5 反馈类 20.28):
+- task_id 由 Celery signal 自动设 (app/core/celery.py)
+- log.Filter 自动从 contextvars 取 task_id, 不需本任务手动 set
+
 CASCADE 自动清除：无（file_mentions 无外键引用，物理删除安全）
 
 铁律沉淀：CLAUDE.md 2026-07-02 v2 PR6-P9 章节

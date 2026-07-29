@@ -1,5 +1,11 @@
-"""日志配置"""
+"""日志配置
 
+W87-H-1 增量 (派工 v6 §5 反馈类 20.28):
+- 新增 RequestContextFilter: 自动附加 request_id + task_id 到每条 log
+- JSONFormatter 增加 request_id + task_id 字段 (向后兼容, default '-')
+- 控制台 formatter 也接受 (request_id/task_id 默认值不被显示)
+- 不替换 stdlib logging, 仅追加 (派工 v6 §5 反馈类 20.28: logger 升级由后续任务推进)
+"""
 import json
 import logging
 import logging.handlers
@@ -8,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import settings
+from app.core.request_context import get_request_id, get_task_id
 
 
 class JSONFormatter(logging.Formatter):
@@ -19,10 +26,29 @@ class JSONFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            # W87-H-1: 透传 request_id + task_id (派工 v6 §5 反馈类 20.28)
+            "request_id": getattr(record, "request_id", "-"),
+            "task_id": getattr(record, "task_id", "-"),
         }
         if record.exc_info and record.exc_info[1]:
             log_entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(log_entry, ensure_ascii=False)
+
+
+class RequestContextFilter(logging.Filter):
+    """W87-H-1: 在每条 log 自动附加 request_id + task_id
+
+    从 contextvars 读取 (HTTP middleware / Celery signal 入口设).
+    默认 '-' (无 context 时), 让 console + JSON 输出都向后兼容.
+
+    Filter 在 Logger → Handler 之间触发 (与 handler 绑), 不修改 record 由
+    formatter 输出. 多个 handler 共享同一 filter 实例即可.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = get_request_id() or "-"
+        record.task_id = get_task_id() or "-"
+        return True
 
 
 def setup_logging():
@@ -54,6 +80,12 @@ def setup_logging():
         handlers=handlers,
         force=True
     )
+
+    # W87-H-1 增量: 把 RequestContextFilter 挂到所有 handler
+    # (派工 v6 §5 反馈类 20.28: 不替换 stdlib, 仅追加)
+    context_filter = RequestContextFilter()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(context_filter)
 
     # 降低第三方库日志级别
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
