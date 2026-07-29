@@ -10,7 +10,8 @@
 # 不替代 docker/Dockerfile, 是商业化专用, 由 commercial/saas-platform/deploy.sh 调用
 
 # ===== Stage 1: builder =====
-FROM python:3.11-slim AS builder
+# base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+FROM python:3.11.15-slim AS builder
 
 WORKDIR /build
 
@@ -32,7 +33,7 @@ RUN pip install --user -r requirements.txt && \
     pip install --user -r requirements-commercial.txt
 
 # ===== Stage 2: runtime =====
-FROM python:3.11-slim AS runtime
+FROM python:3.11.15-slim AS runtime
 
 # 商业化 watermark (继承 builder)
 ENV MICROBUBBLE_COMMERCIAL=1 \
