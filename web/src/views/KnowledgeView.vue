@@ -84,6 +84,7 @@
         :entity-page="entityPage"
         :entity-graph-data="entityGraphData"
         @refresh="handleEntityRefresh"
+        @page-change="handleEntityPageChange"
         @show-entity-detail="showEntityDetail"
       />
     </div>
@@ -363,6 +364,16 @@ const handleEntityRefresh = (payload) => {
   if (payload.graph !== undefined) {
     entityGraphData.value = payload.graph
   }
+}
+
+// W86 mini-8 fix (派工 v6 §1.2 真验证, 3 路搜证):
+// KnowledgeEntityTab 内的 el-pagination 切页时 @current-change → emit('page-change', page),
+// 但父组件之前没监听 → entityPage.value 不更新 + searchEntitiesLocal 不会重新触发.
+// 现在父组件统一接管 entityPage 状态, 然后调 entityTabRef.value.searchEntitiesLocal()
+// 让子组件复用 searchEntitiesLocal 直接发请求 (与 watch(activeTab) 同路径).
+const handleEntityPageChange = (page) => {
+  entityPage.value = page
+  entityTabRef.value?.searchEntitiesLocal()
 }
 
 const handleHypothesisRefresh = (payload) => {
