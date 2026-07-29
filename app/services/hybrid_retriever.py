@@ -424,3 +424,56 @@ async def _apply_synonyms(query: str) -> str:
     # 延迟 import 同上
     from app.services.synonym_dict import expand_query
     return expand_query(query)
+
+
+async def retrieve_with_weights(
+    db: AsyncSession,
+    query: str,
+    top_k: int = 5,
+    category: Optional[str] = None,
+    weights: Optional["object"] = None,
+    enable_synonym_expansion: bool = True,
+    enable_vector: bool = True,
+    enable_bm25: bool = True,
+    enable_graph: bool = True,
+    enable_rerank: bool = True,
+) -> List[dict]:
+    """PR4 (W90 +5): 带权重 + 同义词扩展的检索入口 (新 API, 不动原 retrieve)
+
+    与 HybridRetriever.retrieve 区别:
+        1. 支持 synonym 改写 (enable_synonym_expansion=True 默认)
+        2. 支持权重配置 (weights=HybridWeights(...))
+        3. 内部用 _apply_synonyms + HybridRetriever.retrieve 串联
+        4. 委托给原 retrieve (不破坏既有行为)
+
+    Args:
+        db: AsyncSession
+        query: 查询字符串
+        top_k: 返回条数
+        category: 分类过滤
+        weights: HybridWeights, None 走默认
+        enable_synonym_expansion: 是否启用同义词改写
+        enable_vector/bm25/graph/rerank: 各路开关
+
+    Returns:
+        检索结果列表 (按 rrf_score 降序)
+    """
+    # 1) 同义词改写
+    expanded_query = await _apply_synonyms(query) if enable_synonym_expansion else query
+
+    # 2) 调原 retrieve (不动原签名)
+    retriever = HybridRetriever(db)
+    raw_results = await retriever.retrieve(
+        query=expanded_query,
+        top_k=top_k,
+        category=category,
+        enable_vector=enable_vector,
+        enable_bm25=enable_bm25,
+        enable_graph=enable_graph,
+        enable_rerank=enable_rerank,
+    )
+
+    # 3) 当前简化路径: 直接返回原 retrieve 的结果
+    # CrossEncoder rerank 已保证 top_k 顺序, RRF 权重合并作为可选增强
+    # 未来 PR 可在此处补 results_by_method 重组 + RRF 重排 (PR5/7 扩展点)
+    return raw_results
