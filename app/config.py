@@ -119,6 +119,12 @@ class Settings(BaseSettings):
     # 2026-07-23: pending knowledge 后台处理轮询间隔（Celery beat，可由 env 覆盖）
     KB_POLLING_INTERVAL_SEC: int = 300
 
+    # 2026-07-29: W86 mini-11-c KB 自动入库灰度开关 (env 覆盖)
+    # 控制 KB 自动入库是否开启 (与知识图谱闭环 KB 入库相关)
+    AUTO_KB_INTAKE_ENABLED: str = "false"
+    # 灰度百分比 (0/5/25/100), 仅当 AUTO_KB_INTAKE_ENABLED=true 时生效
+    KB_GRAY_SCALE_PERCENT: int = 100
+
     # 2026-07-16 +060: 录音 User-Agent 截断长度 (默认 500 字符)
     # 超过此长度的 UA 在 start-recording 时截断后再落库, 防止恶意/异常长 UA
     # 把 meetings.user_agent VARCHAR(500) 列撑爆或拖慢 index 查询。

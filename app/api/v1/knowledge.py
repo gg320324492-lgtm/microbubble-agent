@@ -279,51 +279,63 @@ async def auto_intake_summary(
     current_user: Member = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """W5 T5.4 + W6 D5: KB 自动入库监控 summary
+    """W5 T5.4 + W6 D5 + W86 mini-11-c: KB 自动入库监控 summary
 
     给 ProjectStatsView 第 3 个 tab (KB 入库监控) 提供数据源.
     字段:
       - today_intake: 今日入库条数
       - weekly_intake: 7日入库趋势 (list of 7 ints)
-      - hit_rate: KB 命中率 (0-1)
-      - negative_feedback_rate: 负反馈率 (0-1)
+      - hit_rate: 反馈命中率 (rating>=4 比例, 近 7 天, 0-1)
+      - negative_feedback_rate: 负反馈率 (rating<=2 比例, 近 7 天, 0-1)
       - rollback_count: 7 天内 rollback 次数
-      - last_update: summary 文件最后更新 timestamp
-      - gray_scale_enabled: 灰度开关状态 (0/5/25/100)
+      - last_update: API 调用时间 ISO timestamp (修复: W86 mini-11-c, 之前是 null stub)
+      - gray_scale_enabled: 灰度开关状态 (0/5/25/100, env var AUTO_KB_INTAKE_ENABLED + KB_GRAY_SCALE_PERCENT)
 
     数据源:
-      - data/auto_intake_summary.json (save_to_kb.py 写入)
-      - DB 实时聚合: 今日 / 7 日 入库量
+      - DB 实时聚合: 今日 / 7 日 入库量 + 近 7 日 Feedback.rating
+      - env vars: AUTO_KB_INTAKE_ENABLED + KB_GRAY_SCALE_PERCENT (灰度开关)
       - data/auto_intake_rollback_*.json (rollback 任务写入)
+      - data/auto_intake_summary.json (save_to_kb.py 写入, 兼容)
+
+    W86 mini-11-c 修复:
+      1. hit_rate / negative_feedback_rate 不再是 0.0 stub, 改从 Feedback 表真实聚合 (近 7 天)
+      2. last_update 不再依赖 data/auto_intake_summary.json 文件存在, 改用 API 调用时间
+      3. gray_scale_enabled 不再依赖 summary 文件, 改从 env var 读取 (AUTO_KB_INTAKE_ENABLED + KB_GRAY_SCALE_PERCENT)
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from pathlib import Path
+    from app.models.feedback import Feedback
+
+    now_utc = datetime.now(timezone.utc)
+    now_naive = now_utc.replace(tzinfo=None)  # DB timestamps are naive UTC
+    week_ago = now_naive - timedelta(days=7)
 
     result = {
         "today_intake": 0,
         "weekly_intake": [0] * 7,
-        "hit_rate": 0.0,
-        "negative_feedback_rate": 0.0,
+        "hit_rate": None,  # 修复 W86 mini-11-c: None 当无反馈时 (不再是 0.0 stub)
+        "negative_feedback_rate": None,
         "rollback_count": 0,
-        "last_update": None,
-        "gray_scale_enabled": 0,
+        "last_update": now_utc.isoformat(),  # 修复 W86 mini-11-c: API 调用时间, 不依赖文件
+        "gray_scale_enabled": _check_gray_scale_enabled(),  # 修复 W86 mini-11-c: env var 真值
         "total_in_db": 0,
     }
 
-    # 1. 读 save_to_kb.py 输出的 summary 文件
+    # 1. (可选) 读 save_to_kb.py 输出的 summary 文件 — 兼容老脚本, 但不强制依赖
     summary_path = Path("data/auto_intake_summary.json")
     if summary_path.exists():
         try:
             import json
             summary_data = json.loads(summary_path.read_text(encoding="utf-8"))
-            result["last_update"] = summary_data.get("timestamp")
-            result["gray_scale_enabled"] = 100 if summary_data.get("gray_flag_enabled") else 0
+            # 仅当 summary 文件存在时, 用其 timestamp 覆盖 last_update (更精确)
+            if summary_data.get("timestamp"):
+                result["last_update"] = summary_data["timestamp"]
         except Exception:
-            pass
+            pass  # 失败不影响主流程
 
     # 2. DB 聚合: 今日 + 7 日入库量 (source_type='auto_expansion')
-    today = datetime.now().date()
-    week_ago = today - timedelta(days=6)
+    today = now_naive.date()
+    week_ago_date = today - timedelta(days=6)
 
     today_count_result = await db.execute(
         select(func.count(Knowledge.id))
@@ -355,16 +367,67 @@ async def auto_intake_summary(
     if rollback_dir.exists():
         for rb_path in sorted(rollback_dir.glob("auto_intake_rollback_*.json"), reverse=True):
             try:
+                import json
                 rb_data = json.loads(rb_path.read_text(encoding="utf-8"))
                 rb_ts = datetime.fromisoformat(rb_data.get("timestamp", "1970-01-01"))
-                if (datetime.now() - rb_ts).days <= 7:
+                # tz-naive comparison
+                if rb_ts.tzinfo is not None:
+                    rb_ts = rb_ts.replace(tzinfo=None)
+                if (now_naive - rb_ts).days <= 7:
                     result["rollback_count"] += rb_data.get("deleted_count", 0)
             except Exception:
                 pass
 
-    # 5. 命中率 / 负反馈率 (留 0 待 W6 T6.4 反馈模块接入)
-    # 暂用 stub 0.0, 后续 W6 T6.4 接入 feedback 表后填充
+    # 5. 命中率 / 负反馈率 (W86 mini-11-c 修复: 从 Feedback 表真实计算)
+    # hit_rate = rating >= 4 比例, negative_feedback_rate = rating <= 2 比例
+    total_feedback_q = await db.execute(
+        select(func.count(Feedback.id)).where(Feedback.created_at >= week_ago)
+    )
+    total_feedback = total_feedback_q.scalar() or 0
+
+    if total_feedback > 0:
+        hit_q = await db.execute(
+            select(func.count(Feedback.id)).where(
+                Feedback.created_at >= week_ago,
+                Feedback.rating >= 4,
+            )
+        )
+        hit_count = hit_q.scalar() or 0
+        neg_q = await db.execute(
+            select(func.count(Feedback.id)).where(
+                Feedback.created_at >= week_ago,
+                Feedback.rating <= 2,
+            )
+        )
+        neg_count = neg_q.scalar() or 0
+        result["hit_rate"] = round(hit_count / total_feedback, 4)
+        result["negative_feedback_rate"] = round(neg_count / total_feedback, 4)
+
     return result
+
+
+def _check_gray_scale_enabled() -> int:
+    """W86 mini-11-c: 灰度开关真值 (env var, runtime os.environ 直读)
+
+    Returns:
+      - 0 if AUTO_KB_INTAKE_ENABLED != 'true'
+      - else KB_GRAY_SCALE_PERCENT (default 100 if unset)
+
+    注意: 不用 settings.X (Pydantic BaseSettings 在模块加载时缓存, 无法反映 monkeypatch 测试场景)
+    直接读 os.environ 可在测试时 monkeypatch.setenv 即时生效, 也兼容生产 env 注入
+    """
+    import os
+    enabled_raw = os.environ.get("AUTO_KB_INTAKE_ENABLED", "false") or "false"
+    enabled = str(enabled_raw).lower().strip()
+    if enabled not in ("true", "1", "yes", "on"):
+        return 0
+    percent_raw = os.environ.get("KB_GRAY_SCALE_PERCENT")
+    if percent_raw is None or percent_raw == "":
+        return 100
+    try:
+        return int(percent_raw)
+    except (ValueError, TypeError):
+        return 100
 
 
 @router.get("/knowledge/categories", response_model=List[DynamicCategory])
