@@ -1,5 +1,5 @@
 /**
- * tests/visual/a11y/auth-shared-token.spec.mjs — W89-P-2 a11y 限流门禁 (shared token)
+ * tests/visual/a11y/auth-shared-token.spec.mjs — W89-P-2 a11y 限流门禁 (shared token) + W89-P-6 硬门禁
  *
  * W88-G-2 报告: mobile-comments 5 case 因 login API 429 限流失败.
  *   根因: 5 case 各自调 /api/v1/auth/login → 5 次/分/IP 限流 (app/api/v1/auth.py:77 + 91-92 record).
@@ -9,11 +9,11 @@
  *   beforeEach 注入 cookie + localStorage (沿用 injectAuth 形态)
  *   硬门禁: 必须通过限流 (token 注入后, 不被 router 守卫重定向到 /login)
  *
- * 注: 派工 brief 还要求 "critical/serious violations 必须为 []" — 实际 base 5ace8015e
- *   上 5 路由均存在真实 a11y violations (aria-command-name / color-contrast /
- *   nested-interactive), 这些是 W89-P-1 (parallel in flight) 的修复范围. 本 spec 不锁
- *   这些, 只验证 "限流修复成功 + 5 case 都能真正到达目标路由". W89-P-1 cherry-pick
- *   完后, 把 violations 报告 (console.log + __W89_P2_A11Y_REPORT__) 转硬断言即可.
+ * W89-P-6 升级 (P-1 cherry-pick + 重建 dist 后):
+ *   critical/serious violations 必须为 [] (硬断言)
+ *   派工 v6 §5 反馈 类 20.50 沉淀: 'a11y baseline 重 sync 必 cherry-pick 修复 commit +
+ *   --update-snapshots + 硬断言 = 0'
+ *   注: 仅锁 critical/serious, 留 minor 余地 (region / landmark 等 axe 误报常见)
  *
  * 派工 v6 §5 反馈 类 20.49 沉淀: 'Playwright 多 case 必 beforeAll 共享 token, 避免触发后端限流'
  *
@@ -23,8 +23,8 @@
  *     npx playwright test -c tests/visual/a11y/playwright.a11y.config.mjs \
  *     --project=mobile-comments tests/visual/a11y/auth-shared-token.spec.mjs
  *
- * 预期 (W89-P-2 范围): 5 case PASS (mobile-comments 项目下 5 路由 × shared token,
- *   全不被路由守卫打回 /login).
+ * 预期 (W89-P-6 范围): 5 case PASS (mobile-comments 项目下 5 路由 × shared token,
+ *   全不被路由守卫打回 /login + critical/serious violations = []).
  */
 
 import { test, expect } from '@playwright/test'
@@ -101,6 +101,12 @@ test.describe('mobile-comments a11y - shared token (W89-P-2 限流修复)', () =
       //   已经在 base 5ace8015e 上存在, 属 W89-P-1 mobile-comments a11y 修复范围 (派工依赖).
       //   本 spec 把 violations 写入 console 报告, 留给 W89-P-1 cherry-pick 后转硬断言.
       expect(landedOnLogin).toBe(false)
+
+      // W89-P-6 硬门禁: P-1 cherry-pick + 重建 dist 后, critical/serious violations 必须为 0.
+      //   派工 v6 §5 反馈 类 20.50 沉淀: 'a11y baseline 重 sync 必 cherry-pick 修复 commit +
+      //   --update-snapshots + 硬断言 = 0'. 注意: 不锁 total violations, 只锁 critical/serious,
+      //   避免 axe minor 误报 (e.g. region, landmark) 把 case 拖红.
+      expect(criticalOrSerious).toEqual([])
 
       // 报告型断言: 收集已知 violation 留给下游 (基线 + 修复对比)
       const reportRow = {
