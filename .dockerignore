@@ -27,3 +27,21 @@ nginx/ssl/
 # 2026-07-02 P0 切 openai_compat: 排除其他窗口未跟踪的实验目录
 llama-cpp-tools/
 trace_llm.py
+
+# 2026-07-30 DERIVE-14: 排除根目录残留 worktree 与本地缓存 (W89-P2 hotfix)
+# 根因: 每次 docker build ship ~1.4GB context (celery build > 20min)
+# 覆盖范围: W系所有 worktree + 其他意外创建目录
+agent-w*/
+agent-w*/*
+.worktrees/
+.ollama/
+.ollama/cache/
+backups/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+.wal/
