@@ -118,6 +118,12 @@ celery_app.conf.update(
             "task": "app.services.qa_bench_tasks.auto_intake_rollback_task",
             "schedule": 24 * 3600.0,  # 每天 04:00 (beat 用 24h 间隔近似)
         },
+        # W86 mini-11 D fix P1-5: audit_log 90 天物理清除 (cleanup_old_logs 之前未注册)
+        # 对齐 file_mention / chat_share 24h 调度 (audit_log 默认 retention=30 天)
+        "cleanup-old-audit-logs-daily": {
+            "task": "app.services.audit_service.cleanup_old_logs",
+            "schedule": 24 * 3600.0,  # 每天 05:00 (beat 用 24h 间隔近似)
+        },
     },
 )
 
@@ -148,6 +154,7 @@ celery_app.conf.imports = [
     "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘
     "app.services.drive_comments_path_backfill_tasks",  # 2026-07-24 W68 第 12 批 B-1 Drive v2 PR14 path 回填
     "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
+    "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册 Celery beat
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -170,6 +177,7 @@ celery_app.autodiscover_tasks(
         "app.services.drive_collab_tasks",  # 2026-07-24 W68 第 7 批 B-1 Drive v2 PR10 协同编辑刷盘
         "app.services.drive_comments_path_backfill_tasks",  # 2026-07-24 W68 第 12 批 B-1 Drive v2 PR14 path 回填
         "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
+        "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册
         "app.wechat.scheduler",
     ],
     related_name=None,
