@@ -5,6 +5,23 @@
 
 ---
 
+## [2026-07-30] RAG PR10 docs/deploy/eval 三件套沉淀 (W96 +0 → +10, C 清理 + D 收口混合, 0 production code)
+
+**10 PR 一行摘要** (RAG 工业级大改造系列, plan `rag-quirky-otter.md` v1.1, 详见 [docs/rag/CHANGELOG.md](docs/rag/CHANGELOG.md)):
+
+- **PR1** (W88 +0→+7): 嵌入一致化 + query prefix 生效 — 统一截断 6000 字符 + `has_query_prompt` 透传前置修复 + 路径白名单
+- **PR2** (W88 +8→+21): knowledge_chunk 子表 + parent-child 检索 (alembic 088)
+- **PR3** (W89 +0→+16): BM25 增量索引 + pg_trgm + tsvector 全文兜底 (alembic 089)
+- **PR4** (W90 +0→+14): HybridRetriever 四路权重可配 + synonym ≥ 200 + CrossEncoder rerank
+- **PR5** (W91 +0→+18): RAGEvaluator 真召回率激活 — ground-truth ≥ 100 + NDCG@10/MRR 夜间跑 (alembic 090)
+- **PR6** (W92 +0→+12): SearchLog 前端接通 — `/admin/search-logs` ≥ 7 维分析
+- **PR7** (W93 +0→+14): 全链路 observability — grafana ≥ 6 面板 + 按路耗时 100% 覆盖
+- **PR8** (W94 +0→+20): 知识图谱深度联动 — 实体链召回 hit ≥ 25% (alembic 091)
+- **PR9** (W95 +0→+16): auto-research 升级 — 自动入 KB ≥ 70% + 跨文档去重 ≥ 95%
+- **PR10** (W96 +0→+10, 本条): docs/rag/ 9 文件 (README 12 节 + RUNBOOK + SCHEMAS 7 件套 + ROADMAP + RISKS + EVAL + CHANGELOG + FAQ + CHECKLIST) + 派工 v11 模板落库 + `tests/rag/test_pr10_docs_e2e.py` + 5 件套守恒验证
+
+---
+
 ## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
 
 **主基调**: W87 第 1 批 11 收口 commits + W87-X-5 grand closure 完整收口. 类 20.31/32 双锚定 brief 模板 v3 沉淀 (`docs/dispatch-template-v3.md` 新建, W87-X-5 新增 docs/ 写入权). 派工协调范式第 66 次派工.
