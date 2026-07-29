@@ -1,8 +1,8 @@
-# MicroBubble Agent - W68-W87 batch 记忆索引 (W87 X-5 主题压缩, 锚点 336, 30 批)
+# MicroBubble Agent - W68-W87 batch 记忆索引 (W87 X-6 sync main 主题压缩, 锚点 337, 30 批)
 
-> **主基调**: 锚点范式 W7 12 → W87 336 单调上升 (累计 324 增量, 30 批). **W87 +11 实际据实** (4 cherry-pick + B-1 拆 2 commit + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure).
+> **主基调**: 锚点范式 W7 12 → W87 337 单调上升 (累计 325 增量, 30 批). **W87 +12 实际据实** (4 cherry-pick + B-1 拆 2 commit + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure + W87-X-6 sync main merge 跳过不计).
 > **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E).
-> **派工前提铁律 12 + 类 20 实战 36 实例** (W84 据实上报 3 + W85 据实上报 2 + W86 据实上报 1 + W87 据实上报 12 + 历史 18).
+> **派工前提铁律 12 + 类 20 实战 39 实例** (W84 据实上报 3 + W85 据实上报 2 + W86 据实上报 1 + W87 据实上报 15 + 历史 18).
 > **8 类主题分类目录** (W85 C-2 batch 3 派生, 190 active memory 重整 + MEMORY.md 索引同步). 总计 active 196 + archived 38 = 234 文件 (W87 +7 X-5 补强版: 1 grand closure + 5 收尾 memory + 1 补强版 grand closure).
 
 **8 类主题统计** (W85 C-2 batch 3, 派工 brief 175 → 实测 175 守恒):
@@ -277,6 +277,7 @@
 - [w87-x4b-trivy-count-2026-07-30](w87-x4b-trivy-count-2026-07-30.md) — W87-X-4b trivy Dockerfile pin 6 → 7 image 计数 (B-1 cherry-pick 加 glitchtip 触发, 并行 cherry-pick 引入新 image 测试计数必随之, 类 20.34).
 - [w87-x4c-npm-audit-2026-07-30](w87-x4c-npm-audit-2026-07-30.md) — W87-X-4c npm audit high+critical 24 vulns 修复 (moderate 75 留 W87 第 2 批调研, 类 20.35 + 5 铁律延伸).
 - [w87-1st-grand-closure-full-2026-07-30](w87-1st-grand-closure-full-2026-07-30.md) — **W87 grand closure full 补强版** (锚点 325 → 336 +11 实际据实, W87-X-5 补强, 11 收口 commits + W87-X-5 grand closure + 派工 brief v3 模板, 派工 v6 §5 反馈类 20 累计 36 实例 + 4 实例新增, 0 production code 10/11 守恒).
+- [w87-x6-sync-main-2026-07-30](w87-x6-sync-main-2026-07-30.md) — **W87-X-6 sync main 收口** (锚点 守恒 337, W86 mini-N 37 commits 大漂移, merge --no-ff 实战, dist/ 92 + 89 清理 0 FAILED, 派工 v6 §5 反馈类 20.37-39 新增 3 实例, 累计 39 实例, e2e 215 PASS + 10 SKIP + 0 FAIL).
 
 ## 历史归档 (memory/archived/ — 38 文件)
 
