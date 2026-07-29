@@ -62,6 +62,7 @@
   - A-1 真 binary 装机 (gitleaks / trivy / pre-commit / pg-exporter / k6 / GlitchTip 一次性)
   - npm audit moderate 75 调研 (类 20.35 续, 66 集中在 hint 链)
 - W88 第 1 批 (4 agents 候选, 留口):
+  - **D-1 文档脱节校核 (本任务)** — 类 20.46 实战, CLAUDE.md `tests/perf/` 6 → 2 修正, 当前 alembic head `['087_add_knowledge_original_parent_id']` 守恒标注 (历史 batch 快照保留)
   - 调研 npm audit hint 链豁免论证 (`--omit=dev`)
   - 真 binary 装机收口
   - 老 pytest 138+84 FAIL 修复调研
@@ -105,6 +106,8 @@ W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (�
 - 主仓库 2620 collected: 1825 PASSED + 231 SKIPPED + 138+84 FAILED (全部 pre-existing, 与 cherry-pick 无关)
 
 累计 29 批 470+ commits + 490+ 铁律 (W87 第 1 批 +24 新铁律: G-1 5 + E-1 5 + B-1 5 + H-1 5 + X-3 4). W87+ 派工顺序表: W87 第 2 批 / W88 / W89. W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-29.md` (本任务沉淀).
+
+**W88 第 1 批 D-1 文档脱节校核 (主指挥协调范式第 67 次派工, 类 20.46 实战)**: 锚点范式 W87 第 1 批 337 守恒 (D-1 0 production code 1/1 守恒, 验证不计 + 实施 +1 实战). 0 commits ahead of base `<pending>` (本任务结束时填). 1/1 agent 完成: 文档与实测对比清单 (`memory/w88-d1-doc-drift-2026-07-30.md`): **5 处不一致**, 2 处已修复 + 3 处留 W89+. (1) `tests/perf/` 6 测试 → 2 文件 7 test 函数 (W82 C-2 archive 后) — **CLAUDE.md line 303 已修**. (2) alembic head 085 → 当前 `['087_add_knowledge_original_parent_id']` (W85 C-1 加 086 + W85 hotfix 加 087 单链 `085 → 086 → 087`) — 历史 batch 快照保留为各 batch 当时状态, 当前 head 在 W88-D-1 memory 标注. (3) `app/services/` 表格 25 → 实测 127 — 留口 W89+. (4) `160+ 测试` 快照 (2026-06-13 收官) — 留口 W89+. (5) 商业化 billing/payment 表 — 留口 W89+. 派工前提铁律 12 + 类 20 累计 **37 实例** (W88 第 1 批 +1: 类 20.46 "文档校核 4 段: grep / 实际数字 / 不擅自扩 / 留口"). 累计 31 批 480+ commits + 500+ 铁律 (W88 第 1 批 +1 实战 D-1). W19 选项 A 维持. 详见 `memory/w88-d1-doc-drift-2026-07-30.md` (本任务沉淀).
 
 **W86 第 1 批 X-2 e2e 修复 + D-2 6 类文档同步 (主指挥协调范式第 62 次派工)**: 锚点范式 W85 第 1 批 320 → W86 第 1 批 324 守恒 (+4, 4 路线 merge +1 each: A-1 gitleaks + C-1 Trivy + D-1 pre-commit + F-1 pg_exporter, X-2 e2e 修复据实 2 行不算). 当前 main HEAD = `a4d773dfd` (W86-X-1 4 路线 merge 收口). 2 commits ahead of base `9564f2dc9` (W85 hotfix 320→321): commit 1 `129061ca2` test(w86) trivy 修 + commit 2 (本任务 commit) docs(w86) D-2 5 段同步 + grand closure memory. 1/1 agent 完成: X-2 e2e 修复 (tests/trivy/test_dockerfile_pinning.py 2 行: 5→6 + `^v?\d+`) + D-2 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + memory (`memory/w86-1st-grand-closure-full-2026-07-29.md`). 锚点范式 320 → 324 +4 验证不计 + X-2 e2e 修复据实 0 增量 + 实施 +1 实战 (D-2 文档同步沿用 W85 D-1 模式). alembic 13 head (D-1 hook 暴露, 留 W87-X-1 rebase). **0 production code 改动铁律 4/4 守恒** (4 路线全部装机 + 扫描脚本 + e2e, X-2 修测试也不算 production code). 派工前提铁律 12 条 + 类 20 累计 21 实例 (W86 据实上报 1 实例沉淀: 类 20.24 X-2 并行 agent 各自 PASS 但集成 e2e 红于隐藏假设). 累计 28 批 450+ commits + 450+ 铁律 (W86 第 1 批 +24+ 新铁律: A-1 8 + C-1 5 + D-1 5 + F-1 5 + X-2/D-2 1). W87/W88/W89 派工顺序表 (4+4+4 = 12 agents, 锚点 325→~348). W19 选项 A 维持. 详见 `memory/w86-1st-grand-closure-full-2026-07-29.md` (本任务沉淀).
 
@@ -300,7 +303,7 @@ W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (�
 - **agent_traces 可观测性闭环**（Celery 异步写表 + `/admin/agent-traces` 端点 + `AgentTracesView` 管理页）
 - **ASR 语音完整链路**（点 🎤 → 录音 → ASR 文字 → 自动发 + 🔊 TTS 播放）
 - **代码高亮**（highlight.js + 6 种语言：python / js / bash / json / sql / yaml）
-- **性能基线**（`tests/perf/` 6 测试：brief<3s / SSE<1s / tool<5ms）
+- **性能基线**（`tests/perf/` 2 文件 7 test 函数: `test_synthesis_latency.py` 4 test + `test_tool_round_trip.py` 3 test; W82 C-2 archive 清理已删 4 个老 perf 测试, 当前覆盖 first-byte<2.5s + brief deprecated marker + P95 + tool dispatch<100ms + schema export + registry size）
 - **质量评估体系**（LLM-as-judge + RAG 召回率 + 20 问标注 + 5 消融）
 - **`core.py` 清理**：1469 → 689 行（-53%，原 794 行 elif 链替换为 14 行薄壳调 `dispatch_tool`）
 
