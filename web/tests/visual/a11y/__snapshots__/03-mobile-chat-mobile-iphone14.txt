@@ -1,5 +1,5 @@
 page: 03-mobile-chat  route: /chat
 target: MobileChatView.vue (mobile project 下解析)
 project: mobile-iphone14
-authed: no   redirected-to-login: yes
+authed: no   redirected-to-login: no
 violations: 0

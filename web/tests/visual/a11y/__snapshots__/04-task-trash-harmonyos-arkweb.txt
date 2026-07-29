@@ -1,5 +1,5 @@
 page: 04-task-trash  route: /tasks/trash
 target: MobileTaskTrash.vue (8 裸 button)
 project: harmonyos-arkweb
-authed: no   redirected-to-login: yes
+authed: no   redirected-to-login: no
 violations: 0

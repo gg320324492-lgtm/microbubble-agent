@@ -1,5 +1,5 @@
 page: 05-file-comments  route: /drive/file/1/comments
 target: DesktopCommentThread.vue (22 aria 对照)
 project: mobile-comments
-authed: no   redirected-to-login: yes
+authed: no   redirected-to-login: no
 violations: 0
