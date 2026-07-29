@@ -200,6 +200,7 @@ const routes = [
       {
         // qa-bench v3.1 D5: KB 自动入库监控 (admin/leader only, 后端 get_current_admin 兜底)
         // 桌面 dashboard, 无移动端变体 → 直接 import (移动端访问同一组件, ECharts 响应式收窄)
+        // W86 mini batch 1: 侧栏入口已移除 (合入项目动态 TabStrip 第 3 个 tab), 此路由保留作 fallback 兼容老链接
         path: 'admin/kb-monitor',
         name: 'KbMonitor',
         component: () => import('@/views/admin/KbMonitorView.vue'),
