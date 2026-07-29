@@ -161,3 +161,11 @@ tests/perf/test_sse_first_byte.py
 # REPORT_TEMPLATE.md / round3 / round6-9 / smoke / stability_round1 等
 # 被 scripts/compare_reranker_rounds_v2.py + stability_check.py +
 # gen_*_report.py + GUIDE.md + W78 R10 runbook 实引用 (W82 C-1 真验证)
+
+# W86 第 1 批 A-1 (gitleaks 扫描产物)
+# - gitleaks-report.json / .sarif 是扫描产物 (含命中位置)
+# - 含历史凭据位置 (待 W86-X-1 主指挥 git filter-repo 清理) — 不入库
+# - 不入库原因: 1) 暴露历史泄漏点; 2) 触发新一轮 gitleaks 扫描误报
+# - 真凭据 location 仅在 memory/w86-1st-batch-a1-gitleaks-scan-2026-07-29.md 摘要
+logs/gitleaks-report.json
+logs/gitleaks-report.sarif
