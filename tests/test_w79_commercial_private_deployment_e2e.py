@@ -52,6 +52,7 @@ def test_01_four_layer_private_variants_complete():
 
     spec = importlib.util.spec_from_file_location("private_config", str(cfg))
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["private_config"] = mod  # 注册到 sys.modules (@dataclass 需要)
     spec.loader.exec_module(mod)
 
     layers = mod.layer_names()
@@ -127,9 +128,9 @@ def test_04_billing_degrade_exists_and_live_disabled():
     if config_py.exists():
         cfg_body = config_py.read_text(encoding="utf-8")
         assert "BILLING_LIVE_ENABLED" in cfg_body, "app/config.py missing BILLING_LIVE_ENABLED"
-        # 默认值必须是 False (大小写不敏感)
+        # 默认值必须是 False (大小写不敏感) — 锚定 = (赋值), 跳过 : 类型注解
         import re
-        m = re.search(r"BILLING_LIVE_ENABLED\s*[=:]\s*(\w+)", cfg_body)
+        m = re.search(r"BILLING_LIVE_ENABLED\s*:\s*[\w\[\], |]+\s*=\s*(\w+)", cfg_body)
         assert m is not None, "BILLING_LIVE_ENABLED default not found in app/config.py"
         assert m.group(1).lower() == "false", (
             f"BILLING_LIVE_ENABLED default must be False (类 20.13), got: {m.group(1)}"
@@ -146,6 +147,7 @@ def test_05_offline_grace_days_remaining_logic():
         "private_config_g", str(COMMERCIAL_PRIVATE / "private_config.py")
     )
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["private_config_g"] = mod  # 注册到 sys.modules (@dataclass 需要)
     spec.loader.exec_module(mod)
 
     assert mod.OFFLINE_GRACE_DAYS == 7, f"OFFLINE_GRACE_DAYS must be 7, got {mod.OFFLINE_GRACE_DAYS}"
@@ -170,6 +172,7 @@ def test_06_should_degrade_read_only_logic():
         "private_config_r", str(COMMERCIAL_PRIVATE / "private_config.py")
     )
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["private_config_r"] = mod  # 注册到 sys.modules (@dataclass 需要)
     spec.loader.exec_module(mod)
 
     # 触发降级的 mode
@@ -191,6 +194,7 @@ def test_07_billing_degrade_mock_fallback():
         "billing_degrade_t", str(COMMERCIAL_PRIVATE / "billing_degrade.py")
     )
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["billing_degrade_t"] = mod  # 注册到 sys.modules (@dataclass 需要)
     # 强制 BILLING_LIVE_ENABLED=false (默认值, 类 20.13)
     os.environ.pop("BILLING_LIVE_ENABLED", None)
     spec.loader.exec_module(mod)
@@ -233,6 +237,7 @@ def test_08_public_hidden_commercial_views_exist():
         "private_config_v", str(COMMERCIAL_PRIVATE / "private_config.py")
     )
     mod = importlib.util.module_from_spec(spec)
+    sys.modules["private_config_v"] = mod  # 注册到 sys.modules (@dataclass 需要)
     spec.loader.exec_module(mod)
     for v in mod.PRIVATE_PUBLIC_HIDDEN_VIEWS:
         assert v in required, f"{v} in PRIVATE_PUBLIC_HIDDEN_VIEWS but not in required list"
@@ -250,7 +255,7 @@ def test_09_private_deployment_monitor_sh():
     body = mon.read_text(encoding="utf-8")
     assert "set -e" in body, "monitor missing 'set -e'"
     # 4 case 标识
-    for case in ("[1/4]", "[2/4]", "[3/4]", "[4/4]"]:
+    for case in ("[1/4]", "[2/4]", "[3/4]", "[4/4]"):
         assert case in body, f"monitor missing {case}"
 
     # bash 语法检查
@@ -287,7 +292,11 @@ def test_10_offline_grace_days_three_sources_consistent():
     # 3. commercial/private-deployment/private_config.py
     pc = COMMERCIAL_PRIVATE / "private_config.py"
     pc_body = pc.read_text(encoding="utf-8")
-    m_pc = re.search(r"OFFLINE_GRACE_DAYS\s*=\s*(\d+)", pc_body)
+    # 兼容 int(os.getenv(..., "7")) 包装 (private_config.py 用 getenv 默认值)
+    m_pc = re.search(r"OFFLINE_GRACE_DAYS\s*=\s*int\(os\.getenv\([^,]+,\s*[\"'](\d+)[\"']", pc_body)
+    if m_pc is None:
+        # 回退: 直接 int 字面量或 =7 形式
+        m_pc = re.search(r"OFFLINE_GRACE_DAYS\s*=\s*(\d+)", pc_body)
     assert m_pc, "private_config.py missing OFFLINE_GRACE_DAYS constant"
     pc_val = int(m_pc.group(1))
 
