@@ -126,7 +126,14 @@ W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (�
 
 **累计**: W68-W87 共 30 批 480+ commits + 500+ 铁律 + 类 20 累计 36 实例.
 
-## 当前开发阶段
+## W88 PR1 RAG 嵌入一致化锚点
+
+- 统一 embedding 输入截断入口 `app/services/embedding_truncation_policy.py`，`MAX_EMBED_INPUT_CHARS=6000`；recalc 与后续 chunking 必须复用 `truncate_for_embedding`。
+- Query prefix 只允许 `kb_qa`、`hybrid_retriever`、`semantic_search` 白名单路径；模型是否支持 query prompt 由 Qwen/BGE 前缀推断。
+- `generate_embedding` 的 `has_query_prompt` 必须完整透传到同步和批量实现；仅改调用方 `for_query=True` 不足以生效。
+- 新 policy 保持标准库纯逻辑，避免测试环境导入 `sentence_transformers`；重量级模型测试用 `pytest.importorskip`。
+- W88 PR1 边界纪律：不动 `hybrid_retriever.py`、`models/knowledge.py`、087 migration；`knowledge_service.py` 仅允许 query 调用点与既有 snippet 注释。
+
 
 **Phase 1-6 全部完成 + v2/v3/v4 全栈架构重构收官 + 移动端 10 个 PR 全栈定制收官。** 知识库已升级为**自主进化的课题组知识大脑**。会议系统已重构为**录音机 + 离线后处理模式**。**小气助手后端 Agent 架构**：从 1 个 1469 行单文件（`app/agent/core.py`）拆为 7 个职责清晰模块 + 13 个按业务域拆分的 tools/ 文件，**34 个工具全部走 `@tool` 装饰器 + Pydantic 校验**。前端用 ChatViewSSE.vue 接入真实 SSE 流式 + 12 类 Rich Block 组件 + 多会话侧栏 + dark mode + ASR/TTS 完整语音链路 + 代码高亮。**移动端**采用 NutUI 4 + Element Plus **路由级双栈**架构（`useIsMobile.js` 判定 + `resolveMobile.js` 路由适配），**18 个移动端页面 + 12 个移动端组件 + 4 个 PWA 离线策略**全部交付，**iOS Safari + Android Chrome 全兼容**。**当前状态（2026-06-13 收官后，commit `9026c07`）**：
 - **43 commits 累计**（v1 修复 + v2 6 + v3 5 + v4 6 + 文档 2 + 深夜收尾 4 + 多会话并行 2 + 移动端 PR #1-10 共 10 + 文档/webhint 5 + 部署加固 1）
