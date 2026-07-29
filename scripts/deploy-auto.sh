@@ -343,5 +343,11 @@ EOFOUTER
   log "  语言分布: Python=${PY_LINES} Vue=${VUE_LINES} JS=${JS_LINES} CSS=${CSS_LINES} MD=${MD_LINES} Shell=${SH_LINES} Config=${CONF_LINES} 其他=${OTHER_LINES}"
 ) || log "WARN: 项目统计失败（不影响部署）"
 
+# 自动生成 changelog.json (W86 mini-11 A fix: 替代手维护)
+log "自动生成 changelog.json..."
+(
+  python3 "$PROJECT_DIR/scripts/generate-changelog.py" --limit 500 2>&1 || python "$PROJECT_DIR/scripts/generate-changelog.py" --limit 500 2>&1
+) || log "WARN: changelog.json 生成失败（不影响部署，将使用现有文件）"
+
 log "========== 部署完成 =========="
 exit 0
