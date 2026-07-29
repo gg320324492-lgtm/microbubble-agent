@@ -12,9 +12,10 @@ set -e
 echo "=== dispatch claim verify ==="
 
 # 件 5: 锚点范式
-EXPECTED_MIN=13
+# 期望 14 commits: +8, +9, +10..+12, +13, +14, +15, +16, +17, +17 fix, +18, +19, +20, +21, +21 fix
+EXPECTED_MIN=14
 ACTUAL=$(git log --grep "W88 +" | grep -c "^commit " || true)
-echo "anchor commits: $ACTUAL (expected >= $EXPECTED_MIN, +17 fix 合并到 +17 batch)"
+echo "anchor commits: $ACTUAL (expected >= $EXPECTED_MIN, +17/+21 fix commits 接受)"
 
 if [ "$ACTUAL" -lt "$EXPECTED_MIN" ]; then
     echo "FAIL: anchor commits < $EXPECTED_MIN"
