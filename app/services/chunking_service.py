@@ -1,4 +1,4 @@
-"""Chunking 策略实现 — PR2 (W88 +10..+12)
+"""Chunking 策略实现 — PR2 (W88 +10..+13)
 
 3 策略可选 (RAG v1.1 §11.2 chunking_service):
 - paragraph: 按 \\n\\n 切, 默认
@@ -17,10 +17,14 @@
 W88 +10: paragraph 策略
 W88 +11: window 策略
 W88 +12: heading 策略 + 路由入口
+W88 +13: write_chunks_for_knowledge — knowledge_service._run_analyze_and_embed 接入入口
 """
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+logger = logging.getLogger("microbubble.chunking")
 
 
 # PR1 MAX_EMBED_INPUT_CHARS = 6000 (复用 truncation policy, 见 PR1 §3.0/§11.2)
@@ -206,3 +210,74 @@ def _chunk_window(text: str, config: ChunkConfig) -> List[Chunk]:
         pos += step
 
     return chunks
+
+
+async def write_chunks_for_knowledge(
+    knowledge_id: int,
+    content: str,
+    session_factory,
+    config: Optional[ChunkConfig] = None,
+) -> int:
+    """W88 +13: knowledge_service 接入入口
+
+    Args:
+        knowledge_id: parent.id
+        content: parent.content (用于切 chunk + char 偏移)
+        session_factory: async_sessionmaker (Celery NullPool or FastAPI app loop)
+        config: chunking config (None = 默认 paragraph)
+
+    Returns:
+        inserted_count: 实际写入 knowledge_chunks 行数
+
+    Raises:
+        仅 DB 错误抛 (调用方 try/except 兜底, 防 #257 静默死亡)
+
+    Idempotent:
+        - 先 DELETE 该 knowledge_id 所有 chunk, 再 INSERT (重跑安全)
+        - alembic 088 ON DELETE CASCADE 已保证 parent 删除清子表
+    """
+    from sqlalchemy import delete
+
+    from app.models.knowledge_chunk import KnowledgeChunk
+
+    if not content:
+        return 0
+
+    chunks = chunk_text(content, config)
+    if not chunks:
+        return 0
+
+    inserted = 0
+    try:
+        async with session_factory() as db:
+            # 1. 清旧 chunk (重跑幂等, 防 stale drift)
+            await db.execute(
+                delete(KnowledgeChunk).where(KnowledgeChunk.knowledge_id == knowledge_id)
+            )
+
+            # 2. 批量 INSERT 新 chunk (不计算 embedding, 留给后续 PR4 召回侧量化)
+            for idx, c in enumerate(chunks):
+                row = KnowledgeChunk(
+                    knowledge_id=knowledge_id,
+                    chunk_index=idx,
+                    content=c.content,
+                    embedding=None,
+                    char_start=c.char_start,
+                    char_end=c.char_end,
+                    char_count=c.char_count,
+                    strategy=c.strategy,
+                    chunk_metadata=c.chunk_metadata,
+                )
+                db.add(row)
+                inserted += 1
+            await db.commit()
+        logger.info(
+            f"chunk 写入完成(knowledge_id={knowledge_id}): {inserted} rows"
+        )
+    except Exception as e:
+        logger.error(
+            f"chunk 写入失败(knowledge_id={knowledge_id}): {e}",
+            exc_info=True,
+        )
+        raise
+    return inserted
