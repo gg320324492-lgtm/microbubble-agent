@@ -1,4 +1,7 @@
-<!-- KnowledgeEntityTab.vue — v77 P2.6-E.3 拆分自 KnowledgeView.vue -->
+<!-- KnowledgeEntityTab.vue — v77 P2.6-E.3 拆分自 KnowledgeView.vue
+     W86 mini-4 fix: 复用 KnowledgeGraphExplorer.vue (Phase 9 W85 B-1), 现代化 ECharts 渲染
+     + loading state 骨架屏 + 保留搜索/过滤/侧栏实体详情
+-->
 <template>
   <div>
     <el-card class="filter-card">
@@ -27,10 +30,13 @@
           <h3 class="panel-title">🔗 关系网络</h3>
           <span class="panel-hint">点击节点查看详情</span>
         </div>
-        <div v-if="entityGraphData.nodes.length === 0" class="graph-empty">
-          <el-empty description="暂无图谱数据，点击「加载图谱」" :image-size="80" />
-        </div>
-        <div v-else ref="entityGraphRef" class="entity-graph-container"></div>
+        <!-- W86 mini-4 fix: 复用 Phase 9 KnowledgeGraphExplorer 现代化 ECharts -->
+        <KnowledgeGraphExplorer
+          :nodes="entityGraphData.nodes"
+          :edges="entityGraphData.edges"
+          :loading="entityGraphLoading"
+          @node-click="handleGraphNodeClick"
+        />
       </div>
 
       <div class="entity-list-panel">
@@ -81,17 +87,20 @@
 <script setup>
 /**
  * KnowledgeEntityTab.vue — 实体图谱 tab（v77 P2.6-E.3 从 KnowledgeView.vue 拆分）
+ * W86 mini-4 fix: 复用 KnowledgeGraphExplorer (Phase 9) 取代自维护 ECharts
  *
  * 父组件: KnowledgeView.vue (lazy-loaded tab-pane)
  * Props: entityList / entityTotal / entityPage / entityGraphData（来自 useKnowledge composable）
  *
  * 关键点:
- * - ECharts instance 在组件内部 lifecycle 管理 (onBeforeUnmount dispose)
+ * - ECharts instance 由 KnowledgeGraphExplorer 内部 lifecycle 管理
  * - 父组件不再持有 entityChartInstance 引用（v60-v67 教训：避免跨组件状态共享）
+ * - 父组件只管 search/filter/list, 图谱渲染委派给 Explorer
  */
-import { ref, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import KnowledgeGraphExplorer from './KnowledgeGraphExplorer.vue'
 
 const props = defineProps({
   entityList: { type: Array, required: true },
@@ -103,10 +112,8 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'show-entity-detail', 'page-change'])
 
 const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
-const entityGraphRef = ref(null)
-let entityChartInstance = null
-const entityGraphLoading = ref(false)
 const selectedEntityId = ref(null)
+const entityGraphLoading = ref(false)
 
 const searchEntitiesLocal = async () => {
   try {
@@ -127,80 +134,32 @@ const fetchEntityGraphLocal = async () => {
       params: { limit: 100 }
     })
     emit('refresh', { graph: res.data || { nodes: [], edges: [] } })
-    // 等待 DOM 更新 + Vue emit 完成
-    await new Promise(r => setTimeout(r, 100))
-    await renderEntityGraph()
-    entityGraphLoading.value = false
   } catch (e) {
     console.error('实体图谱加载失败:', e)
+    ElMessage.error('实体图谱加载失败')
+  } finally {
     entityGraphLoading.value = false
   }
 }
 
-const renderEntityGraph = async () => {
-  if (!entityGraphRef.value || props.entityGraphData.nodes.length === 0) return
-  const echarts = await import('echarts')
-  if (entityChartInstance) entityChartInstance.dispose()
-  entityChartInstance = echarts.init(entityGraphRef.value)
-  const cats = [...new Set(props.entityGraphData.nodes.map(n => n.predicate || '其他'))]
-  const colors = ['#FF7A5C', '#FFB347', '#5470c6', '#91cc75', '#ee6666', '#73c0de', '#fc8452']
-  const option = {
-    tooltip: { formatter: p => p.dataType === 'node' ? `${p.data.subject}<br/>${p.data.predicate} → ${p.data.object}` : `共现权重: ${p.data.weight || 1}` },
-    legend: { data: cats.slice(0, 7), bottom: 0 },
-    series: [{
-      type: 'graph', layout: 'force', roam: true, draggable: true,
-      force: { repulsion: 200, edgeLength: [100, 300] },
-      data: props.entityGraphData.nodes.map(n => ({
-        name: String(n.id), subject: n.subject, predicate: n.predicate, object: n.object, entityId: n.id,
-        symbolSize: Math.max(15, Math.min(40, (n.occurrence_count || 1) * 6)),
-        category: n.predicate || '其他', itemStyle: { color: colors[cats.indexOf(n.predicate || '其他') % colors.length] },
-      })),
-      categories: cats.slice(0, 7).map((c, i) => ({ name: c, itemStyle: { color: colors[i % colors.length] } })),
-      links: props.entityGraphData.edges.map(e => ({ source: String(e.source), target: String(e.target), weight: e.weight })),
-      lineStyle: { opacity: 0.4, curveness: 0.2 },
-      label: { show: true, formatter: p => p.data.subject.length > 8 ? p.data.subject.slice(0, 8) + '...' : p.data.subject, fontSize: 10 },
-      emphasis: {
-        focus: 'adjacency',
-        lineStyle: { width: 3 }
-      }
-    }],
-  }
-  entityChartInstance.setOption(option)
-
-  entityChartInstance.on('click', (params) => {
-    if (params.dataType === 'node' && params.data.entityId) {
-      selectedEntityId.value = params.data.entityId
-      const card = document.querySelector(`.entity-card-active`)
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      emit('show-entity-detail', params.data.entityId)
-    }
-  })
+const handleGraphNodeClick = (nodeData) => {
+  if (!nodeData) return
+  // nodeData.id 是 string (KnowledgeGraphExplorer 内部 normalize 后的 id)
+  // 找到原始 entity 并高亮 + emit
+  const entityId = Number(nodeData.id || nodeData.entityId)
+  if (!entityId) return
+  selectedEntityId.value = entityId
+  const card = document.querySelector(`.entity-card-active`)
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  emit('show-entity-detail', entityId)
 }
 
 const handleEntityClick = (entity) => {
   selectedEntityId.value = entity.id
-  if (entityChartInstance && props.entityGraphData.nodes.length > 0) {
-    const nodeIndex = props.entityGraphData.nodes.findIndex(n => n.id === entity.id)
-    if (nodeIndex >= 0) {
-      entityChartInstance.dispatchAction({
-        type: 'highlight',
-        seriesIndex: 0,
-        dataIndex: nodeIndex
-      })
-      entityGraphRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }
   emit('show-entity-detail', entity.id)
 }
 
-onBeforeUnmount(() => {
-  if (entityChartInstance) {
-    entityChartInstance.dispose()
-    entityChartInstance = null
-  }
-})
-
-defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal, renderEntityGraph })
+defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 </script>
 
 <style scoped>
