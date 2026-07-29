@@ -293,8 +293,17 @@ self.addEventListener('install', (event) => {
         // 给 Safari DevTools 留下 install 时机标记便于排查
         console.log('[SW] install started, version:', SW_VERSION)
       } catch (e) {
-        // 兜底：不要让 install 失败，否则 Safari activate 永不触发
+        // 兜底：不要让 install 失败，否则 Safari activate 永不触发。
+        // SW 不能直接 import Sentry；按永久 SW 模式 postMessage 给客户端上报。
         console.warn('[SW] install hook failed (non-fatal):', e)
+        const clients = await self.clients.matchAll({ type: 'window' })
+        clients.forEach((client) => {
+          client.postMessage({
+            type: 'SW_INSTALL_FAILED',
+            timestamp: Date.now(),
+            version: SW_VERSION,
+          })
+        })
       }
     })()
   )

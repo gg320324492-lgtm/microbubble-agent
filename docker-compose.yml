@@ -320,6 +320,32 @@ services:
     mem_limit: 512m
     restart: unless-stopped
 
+  # 2026-07-29 W87-B-1: GlitchTip all-in-one error tracking (default SDK reporting remains off)
+  # Docker Hub current stable semantic tag verified and pinned; never follow latest/major-only.
+  # The dedicated "glitchtip" database must exist before first start; see docs/sentry-setup.md.
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.2
+    container_name: microbubble-agent-glitchtip-1
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/glitchtip"
+      VALKEY_URL: "redis://redis:6379/1"
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY:-please-change-me-in-prod}"
+      PORT: "8000"
+      GLITCHTIP_DOMAIN: "${GLITCHTIP_DOMAIN:-https://glitchtip.example.com}"
+      EMAIL_ENABLED: "False"
+      SERVER_ROLE: "all_in_one"
+    ports:
+      # app 已占 127.0.0.1:8000；保持 GlitchTip host port 8000 但用独立 loopback IP。
+      - "127.0.0.2:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+    restart: unless-stopped
+
   # 2026-07-29 W86-F-1: pg_exporter — PostgreSQL Prometheus 暴露
   # 多租户慢查询监控入口 (pg_stat_database / pg_stat_user_tables / pg_stat_statements)
   # image 钉死 tag v0.15.0 (latest 不跟, 避免主指挥据实上报不可控)
