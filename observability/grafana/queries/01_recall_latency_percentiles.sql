@@ -1,0 +1,2 @@
+-- RAG 召回延迟 P50/P95/P99 (grafana panel 1)
+SELECT date_trunc('minute', created_at) AS time, percentile_cont(0.50) WITHIN GROUP (ORDER BY latency_ms) AS p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95, percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS p99, COUNT(*) AS sample_count FROM search_logs WHERE created_at >= NOW() - INTERVAL '1 hour' AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1;
