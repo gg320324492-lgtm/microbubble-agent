@@ -4,6 +4,7 @@ from app.models.meeting import Meeting, MeetingParticipant
 from app.models.project import Project, Milestone
 from app.models.folder import Folder  # 2026-07-01 课题组网盘
 from app.models.knowledge import Knowledge, KnowledgeVersion, ChunkedUploadSession, FileMention, ActivityEvent, FileComment  # PR4: 秒传+版本; PR5: 断点续传; PR6: 通知+活动+评论
+from app.models.knowledge_chunk import KnowledgeChunk  # PR2 (W88 +15): parent-child chunking 子表
 from app.models.knowledge_entity import KnowledgeEntity, EntityCoOccurrence
 from app.models.knowledge_hypothesis import KnowledgeHypothesis
 from app.models.knowledge_formula import KnowledgeFormula
@@ -66,4 +67,5 @@ __all__ = [
     "TeamFolder",            # v2 PR18 团队共享盘 (W68 第 14 批 B-2)
     "TeamFolderAuditLog",    # v2 PR18 4 维审计日志 (W68 第 14 批 B-2)
     "DriveChunkedUpload",    # W72 B-3 分片上传会话 (alembic 080)
+    "KnowledgeChunk",        # PR2 (W88 +15) knowledge 子表, FK CASCADE 100% 完整
 ]   # noqa

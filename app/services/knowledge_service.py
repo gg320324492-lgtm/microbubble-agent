@@ -107,6 +107,20 @@ async def _run_analyze_and_embed(
                     knowledge.embedding = embedding
                     await db.commit()
                     embedding_ok = True
+
+                    # PR2 (W88 +13): chunk 写入 (parent-child retrieval)
+                    # 仅 embedding 成功后写 chunk, 失败兜底 (防 #257 静默死亡)
+                    try:
+                        from app.services.chunking_service import write_chunks_for_knowledge
+                        await write_chunks_for_knowledge(
+                            knowledge_id=knowledge_id,
+                            content=content,
+                            session_factory=session_factory,
+                        )
+                    except Exception as chunk_err:
+                        logger.warning(
+                            f"chunk 写入失败(knowledge_id={knowledge_id}): {chunk_err}"
+                        )
     except Exception as e:
         logger.warning(f"Embedding 生成失败(knowledge_id={knowledge_id}): {e}")
 
