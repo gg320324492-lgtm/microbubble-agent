@@ -8,7 +8,68 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-30 W87 第 1 批 4 路线 + X-1 撤回 + X-3 hook 修复 + cherry-pick 模式 — 锚点范式 W86 第 1 批 325 → W87 第 1 批 332 守恒 +7 实际据实, 5 cherry-pick + 1 hook 修 + 1 docs sync, X-1 撤回 0 增量, 派工 v6 §5 反馈类 20.25-32 新增 8 实例 + 29 批累计)
+## 当前状态 (2026-07-30 W87 第 1 批 grand closure 收口 — 锚点范式 W86 第 1 批 325 → W87 第 1 批 336 守恒 +11 实际据实, 11 agents + 4 收尾 agent, 类 20.31/32 双锚定 brief 模板 v3 沉淀, 派工 v6 §5 反馈类 20 累计 36 实例 + 30 批累计)
+
+**W87 第 1 批 grand closure 收口 (主指挥协调范式第 66 次派工, W87-X-5)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 **336** 守恒 (+11 实际据实: 4 cherry-pick + B-1 拆 2 + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure). 当前 main HEAD = `<pending>` (本任务结束时填). 11 commits ahead of base `1a3ebbea5` (X-5 grand closure 待 commit → 12 ahead). 12 agents 派工 (W87 第 1 批 11 + W87-X-5 grand closure):
+- **W87-G-1** a11y (cherry-pick `e52d003fd`, 4 处 brief 错配 + 类 20.25 全绿可疑信号)
+- **W87-E-1** k6 (cherry-pick `4a5750343`, 3 脚本 + 17 e2e + 类 20.26 baseline 留口)
+- **W87-B-1** GlitchTip + Sentry (cherry-pick `e0275d643` + `6c78d6880`, 4 处 brief 错配 + 类 20.27 默认 off)
+- **W87-H-1** contextvars (cherry-pick `78988bf01`, 23 e2e + 类 20.28 双栈)
+- **W87-X-3** alembic hook 修复 (`4c0458387`, 类 20.30 4 铁律)
+- **W87-X-3** D-2 主协调 (`ca0b45365`)
+- **W87-X-4a** typing timeout (`946c6b598`, 类 20.33)
+- **W87-X-4b** trivy count (`faf393190`, 类 20.34)
+- **W87-X-2** dist rebuild (`223ae469b`, 类 20.36 + CLAUDE.md 永久纪律实战)
+- **W87-X-4c** npm audit (`8ba490cea`, 类 20.35 + 24 vulns 修复)
+- **W87-X-5** grand closure (本任务 + 类 20.31/32 双锚定 brief 模板 v3)
+- **W87-X-1** alembic rebase **撤回干净** (0 commit, 类 20.29)
+- **W87-A** PR 描述 (本地报告, gh CLI 未装)
+
+**0 production code 改动铁律 10/11 守恒** (1 例外: B-1 顺手补 `scripts/.token-orphan-allowlist` 5 行,设计意图第三选项已批)
+
+**派工前提铁律 12 + 类 20 累计 36 实例 (W87 第 1 批 + 12: 20.21-24 + 20.25-32 + 20.33-36)**:
+- 类 20.21 "hook 测 hook 不测合规" (W86 D-1)
+- 类 20.22 "不照抄建议版本" (W86 C-1)
+- 类 20.23 "e2e 必含负向对照" (W86 C-1)
+- 类 20.24 "并行 agent 各自 PASS 集成 e2e 红于隐藏假设" (W86 X-1/X-2)
+- 类 20.25 "a11y 测试必先 baseline, 全绿是可疑信号" (W87 G-1)
+- 类 20.26 "压测脚本必含阈值门禁 + baseline 留口" (W87 E-1)
+- 类 20.27 "Sentry 默认 off + env guard, 不可静默上报" (W87 B-1)
+- 类 20.28 "contextvars 必 request_id + task_id 双栈 + middleware LIFO 顺序" (W87 H-1)
+- 类 20.29 "alembic head 数必须 worktree 实测, 不可凭 hook 报告 + CLAUDE.md 历史" (W87 X-1)
+- 类 20.30 "alembic hook 必分离 stdout/stderr, e2e 必精确断言 returncode" (W87 X-3)
+- 类 20.31 "subagent EnterWorktree 阻断 → fallback git worktree add → 分支名 worktree-agent-<id>" (W87 X-3)
+- 类 20.32 "协调 base 必实测 ls-remote origin, 不可凭 CLAUDE.md 历史" (W87 X-3)
+- 类 20.33 "pytest timeout 必 ≥ 脚本实测时间 × 2" (W87 X-4a)
+- 类 20.34 "并行 cherry-pick 引入新 image, 测试计数必随之" (W87 X-4b)
+- 类 20.35 "npm audit 必须 high/critical 门禁, moderate 留 overrides" (W87 X-4c)
+- 类 20.36 "cherry-pick 改 deps 必重跑 npm run build" (W87 X-2)
+
+**派工 brief v3 模板 (W87-X-5 新增 docs/ 写入权, 类 20.31/32 双锚定)**:
+- 详见 `docs/dispatch-template-v3.md` (本任务新建)
+- 5 段新增: 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查
+- 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支
+
+**集成 e2e 验证 (W87-X-5 全跑, 派工 v6 §1.2 真验证)**:
+- W86 4 套件: 91 PASSED + 10 SKIPPED + 0 FAILED (96.29s)
+- W87 6 套件 (k6/sentry/request_context/dist_health/npm_audit/alembic): 74 PASSED + 0 FAILED (13.79s)
+- **总计**: **165 PASSED + 42 SKIPPED + 0 FAILED** ✅
+
+累计 30 批 480+ commits + 500+ 铁律 (W87 第 1 批 +36 新铁律 + 类 20 沉淀 4 实例). W87+ 派工顺序表:
+- W87 第 2 批 (主指挥待派):
+  - G-2 a11y 真登录态补刀 (类 20.25 续)
+  - H-2 老 logger 接 contextvars 全面化 (类 20.28 续)
+  - A-1 真 binary 装机 (gitleaks / trivy / pre-commit / pg-exporter / k6 / GlitchTip 一次性)
+  - npm audit moderate 75 调研 (类 20.35 续, 66 集中在 hint 链)
+- W88 第 1 批 (4 agents 候选, 留口):
+  - 调研 npm audit hint 链豁免论证 (`--omit=dev`)
+  - 真 binary 装机收口
+  - 老 pytest 138+84 FAIL 修复调研
+  - W86 mini-N 21 commits 合并决策
+
+W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (本任务沉淀, W87-X-5 补强版).
+
+---
 
 **W87 第 1 批 4 路线 + X-1 撤回 + X-3 hook 修复 (主指挥协调范式第 63+64+65 次派工)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 332 守恒 (+7 实际据实, 派工 brief 估 +6 因 B-1 拆 2 commit 多 1). 当前 main HEAD = `4c0458387` (本任务 W87-X-3 cherry-pick 收口, 5 cherry-pick + 1 hook 修复, docs sync commit pending). 6 agents 派工:
 - **W87-G-1** axe-core/playwright a11y (cherry-pick `e232fb2d9` → `e52d003fd`, 4 处 brief 错配据实上报 + 类 20.25 全绿是可疑信号 + 类 20.32 base 漂移 + 类 20.31 匿名分支)

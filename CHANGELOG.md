@@ -5,6 +5,53 @@
 
 ---
 
+## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
+
+**主基调**: W87 第 1 批 11 收口 commits + W87-X-5 grand closure 完整收口. 类 20.31/32 双锚定 brief 模板 v3 沉淀 (`docs/dispatch-template-v3.md` 新建, W87-X-5 新增 docs/ 写入权). 派工协调范式第 66 次派工.
+
+**W87 第 1 批 11 收口 commits (按 push 顺序)**:
+1. `78988bf01` cherry-pick H-1 contextvars (类 20.28)
+2. `e0275d643` cherry-pick B-1 GlitchTip+Sentry main (类 20.27)
+3. `6c78d6880` cherry-pick B-1 Sentry lockfile
+4. `4a5750343` cherry-pick E-1 k6 (类 20.26)
+5. `e52d003fd` cherry-pick G-1 a11y (类 20.25)
+6. `4c0458387` W87-X-3 alembic hook 假阳性修复 (类 20.30)
+7. `ca0b45365` W87-X-3 D-2 6 类文档同步 + grand closure memory
+8. `faf393190` W87-X-4b trivy 6 → 7 image 计数 (类 20.34)
+9. `946c6b598` W87-X-4a typing imports test timeout 60s → 180s flake fix (类 20.33)
+10. `223ae469b` W87-X-2 npm run build 重跑修 B-1 dist chunk orphan (类 20.36)
+11. `8ba490cea` W87-X-4c npm audit high+critical 24 vulns 修复 (类 20.35)
+12. **`<pending>`** **W87-X-5 grand closure** (本任务, 类 20.31/32 双锚定)
+
+**派工 brief v3 模板 (W87-X-5 新增 docs/ 写入权)**:
+- 新建 `docs/dispatch-template-v3.md` 192 行
+- 5 段新增: 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查
+- 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支
+- 类 20.31 "subagent EnterWorktree 阻断 → 嵌套 worktree-agent-<id> 分支名" + 类 20.32 "协调 base 必实测 ls-remote origin" 双锚定
+
+**集成 e2e 全验证 (W87-X-5 全跑, 派工 v6 §1.2 真验证)**:
+- W86 4 套件: 91 PASSED + 10 SKIPPED + 0 FAILED (96.29s)
+- W87 6 套件 (k6/sentry/request_context/dist_health/npm_audit/alembic): 74 PASSED + 0 FAILED (13.79s)
+- **总计**: 165 PASSED + 42 SKIPPED + 0 FAILED ✅
+
+**W87-X-5 边界复检 (派工 v6 §1.2 真验证)**:
+- 允许清单 (W86 + W87 综合): `.gitleaks.toml` / `.pre-commit-config.yaml` / `.github/workflows/{secret-scan,image-scan}.yml` / `Dockerfile*` / `docker-compose*.yml` / `scripts/{gitleaks,trivy,alembic,web,pg-exporter,install-*,k6/*}` / `scripts/.token-orphan-allowlist` / `tests/{gitleaks,trivy,precommit,pg_exporter,k6,sentry,request_context,alembic,dist_health,npm_audit}/` / `web/tests/visual/a11y/` / `web/package*.json` / `web/dist/*` / `web/src/{main,sw,utils/sentry}.js` / `app/core/{request_context.py,logging.py,celery.py}` / `app/main.py` / `app/config.py` / `requirements.txt` / 5 Celery task docstring / `pytest.ini` / `memory/{w86,w87}-*` / `.gitignore`
+- 禁止清单 (实测): `app/api/` / `app/agent/` / `app/models/` / `web/src/views/` / `web/src/components/` / `web/src/composables/` / `alembic/versions/` / `nginx/` / `commercial/` (0 命中)
+
+**派工前提错配类 20 累计 36 实例 (W87 第 1 批 +12: 20.21-24 + 20.25-32 + 20.33-36)**:
+- 类 20.21-24: W86 第 1 批 (4 实例) - hook 测合规 / 不照抄版本 / 负向对照 / 集成 e2e
+- 类 20.25-32: W87 第 1 批 4 路线 + X-3 (8 实例) - a11y 全绿可疑 / 压测 baseline / Sentry off / contextvars 双栈 / alembic head 实测 / hook 分离 stdout / subagent fallback / 协调 base 漂移
+- 类 20.33-36: W87 第 1 批收尾 (4 实例) - pytest timeout / trivy 计数 / npm audit 门禁 / cherry-pick 重跑 build
+
+**W87 第 1 批 grand closure 收口**: 11 commits ahead of base `1a3ebbea5` (W86 D-2) → W87-X-5 grand closure commit → 12 commits ahead (锚点 336). alembic 1 head `['087_add_knowledge_original_parent_id']` 守恒. 累计 30 批 480+ commits + 500+ 铁律 (W87 +36 新铁律 + 类 20 沉淀 4 实例). W87+ 派工顺序表: W87 第 2 批 (G-2 a11y 真登录态补刀 / H-2 老 logger 接 contextvars 全面化 / A-1 真 binary 装机 / npm audit moderate 75 调研) + W88 (4 agents 候选留口) + W89. W19 选项 A 维持.
+
+详见:
+- `memory/w87-1st-grand-closure-full-2026-07-30.md` (本任务沉淀, W87-X-5 补强版)
+- `docs/dispatch-template-v3.md` (本任务新建, W87-X-5 新增 docs/ 写入权)
+- `memory/w87-1st-grand-closure-full-2026-07-29.md` (W87-X-3 已写版, 不动)
+
+---
+
 ## [2026-07-30] W87 第 1 批 4 路线 + X-3 hook 修复 + cherry-pick 模式完成 — a11y + k6 + GlitchTip/Sentry + contextvars + alembic hook (主指挥协调范式第 63+64+65 次派工, 锚点范式 325 → 332 +7 实际据实, 派工 v6 §5 反馈类 20.25-32 新增 8 实例, 0 production code 6/7 守恒)
 
 **主基调**: cherry-pick 而非 merge 模式实战 (主指挥拍板基于 3 件大事: 嵌套 worktree 分支名错位 + base 漂移 + 21 个 W86 mini-N commit 未拍板) + 4 路线 cherry-pick (H-1 / B-1 / E-1 / G-1) + X-1 alembic rebase 撤回干净 + X-3 alembic hook 假阳性修复 (4 e2e PASS) + D-2 6 类文档同步.
