@@ -71,16 +71,21 @@ async function injectAuth(page) {
 /**
  * 等待评论 UI 完全渲染 (loading 消失 + 列表渲染)
  * 复用 F-3 组件约定: .mfcc-list / .mfcc-top / .mci-textarea 至少一个出现
+ *
+ * W89-P-7 / 类 20.67: 禁 waitForLoadState('networkidle')
+ *   移动端页面同样挂载 NotificationBell WS + 通知轮询, networkidle 永不达成.
+ *   改等确定 UI locator (.mobile-file-comments-container visible + .mfcc-loading hidden).
  */
 async function waitForCommentsUI(page) {
-  await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(800)
+  // 1. 评论 View 容器可见
+  await page.locator('.mobile-file-comments-container, .mfcc-list, .mfcc-empty').first()
+    .waitFor({ state: 'visible', timeout: 15000 })
+    .catch(() => null)
 
-  // 等待 mfcc-list 或 mfcc-empty 出现 (loading 已结束)
-  await page.waitForSelector(
-    '.mfcc-list, .mfcc-empty, .mfcc-loading',
-    { timeout: 5000 }
-  ).catch(() => null)
+  // 2. loading 状态消失
+  await page.locator('.mfcc-loading')
+    .waitFor({ state: 'hidden', timeout: 5000 })
+    .catch(() => null)
 
   // 给动画 500ms 完成
   await page.waitForTimeout(500)
