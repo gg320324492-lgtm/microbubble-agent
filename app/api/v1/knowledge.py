@@ -306,18 +306,35 @@ async def auto_intake_summary(
         "negative_feedback_rate": 0.0,
         "rollback_count": 0,
         "last_update": None,
-        "gray_scale_enabled": 0,
+        "gray_scale_enabled": settings.KB_GRAY_SCALE_PERCENT,
         "total_in_db": 0,
     }
 
     # 1. 读 save_to_kb.py 输出的 summary 文件
     summary_path = Path("data/auto_intake_summary.json")
+    summary_ts = None
     if summary_path.exists():
         try:
             import json
             summary_data = json.loads(summary_path.read_text(encoding="utf-8"))
-            result["last_update"] = summary_data.get("timestamp")
-            result["gray_scale_enabled"] = 100 if summary_data.get("gray_flag_enabled") else 0
+            summary_ts = summary_data.get("timestamp")
+            result["last_update"] = summary_ts
+            # 灰度开关读 env var (W86 mini-13), 保留 json 字段为 fallback
+            result["gray_scale_enabled"] = settings.KB_GRAY_SCALE_PERCENT
+        except Exception:
+            pass
+
+    # 1b. last_update 兜底: 没有任何 summary 文件时, 兜底用 knowledge 表最近更新时间
+    # (派工 v6 §1.2 真验证: data/auto_intake_summary.json 不存在场景, 锚点 332 之前一直 null)
+    if result["last_update"] is None:
+        try:
+            last_kb_result = await db.execute(
+                select(func.max(Knowledge.created_at))
+                .where(Knowledge.source_type == "auto_expansion")
+            )
+            last_kb = last_kb_result.scalar()
+            if last_kb is not None:
+                result["last_update"] = last_kb.isoformat()
         except Exception:
             pass
 
@@ -362,8 +379,33 @@ async def auto_intake_summary(
             except Exception:
                 pass
 
-    # 5. 命中率 / 负反馈率 (留 0 待 W6 T6.4 反馈模块接入)
-    # 暂用 stub 0.0, 后续 W6 T6.4 接入 feedback 表后填充
+    # 5. 命中率 / 负反馈率: 真实 feedback 表聚合 (W86 mini-13 沿用 W86 mini-11 C 实战)
+    # 命中率 = rating>=4 / 总数, 负反馈率 = rating<=2 / 总数, 近 7 天
+    from app.models.feedback import Feedback
+    from sqlalchemy import case
+    week_ago_dt = datetime.now() - timedelta(days=7)
+    try:
+        fb_total_result = await db.execute(
+            select(func.count(Feedback.id))
+            .where(Feedback.created_at >= week_ago_dt)
+        )
+        fb_total = fb_total_result.scalar() or 0
+        if fb_total > 0:
+            fb_hit_result = await db.execute(
+                select(func.count(Feedback.id))
+                .where(Feedback.created_at >= week_ago_dt)
+                .where(Feedback.rating >= 4)
+            )
+            fb_negative_result = await db.execute(
+                select(func.count(Feedback.id))
+                .where(Feedback.created_at >= week_ago_dt)
+                .where(Feedback.rating <= 2)
+            )
+            result["hit_rate"] = round((fb_hit_result.scalar() or 0) / fb_total, 4)
+            result["negative_feedback_rate"] = round((fb_negative_result.scalar() or 0) / fb_total, 4)
+    except Exception:
+        pass
+
     return result
 
 
