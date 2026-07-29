@@ -17,7 +17,9 @@ test('P0-#2 v3 实际用户视角: 精密集采按钮点击时的 rect 变化', 
     }
   })
   await page.reload()
-  await page.waitForLoadState('networkidle')
+  // 类 20.67: 禁 networkidle, 改等登录表单 input 可见
+  await page.locator('input[placeholder*="用户名"], input[name="username"]').first()
+    .waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
   // Login as dutonghe
   await page.fill('input[placeholder*="用户名"], input[name="username"]', 'dutonghe')
