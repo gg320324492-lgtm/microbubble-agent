@@ -448,11 +448,12 @@ onMounted(() => {
   fetchKnowledge()
   fetchStats()
   fetchCategories()
-  // 2026-06-30 修复 D: 健康度摘要的 entity/hyp/formula total 同步
-  // 旧版这三个 ref 永远停在 0 初值, 必须在 onMounted 主动 fetch (page_size=1 只拿 total)
+  // 2026-06-30 修复 D: 健康度摘要的 entity/hyp/formula total 同步。
+  // formulaList 同时驱动公式 tab，不能只取 page_size=1，否则直达 ?tab=formulas 时
+  // activeTab watcher 不会补跑，页面会把 API 的 36 条错误渲染成仅 1 条。
   searchEntities({ page: 1, page_size: 1 })
   fetchHypotheses({ page: 1, page_size: 1 })
-  fetchFormulas({ page: 1, page_size: 1 })
+  fetchFormulas({ page: 1, page_size: 20 })
 
   window.addEventListener('resize', handleResize)
 })
