@@ -7,20 +7,24 @@
  *   与 stores/useThemeStore.js:28 ACCENT_OPTIONS 证明). 本 spec 跑 3 accent 全集,
  *   不擅自扩到不存在的第 4 个 (扩了必假绿).
  *
- * 模式: 报告型 — 把 violations 数 + 命中数打到 console + 不设硬断言.
- *   真硬门禁在 a11y-baseline.spec.mjs (比对 baseline).
+ * 模式: 硬门禁 (W89-X-11 由 P-11 软断言转硬门禁) —
+ *   1. TEST_TOKEN 必注入 — process.env.TEST_TOKEN 缺失则 throw new Error 立即 fail,
+ *      不允许 "router 守卫重定向到 /login 后跳过" 的优雅降级 (那是软断言假绿).
+ *   2. authed 必须 true — auth 失败直接 fail (之前 authed=false 时仍走 axe 扫的是 /login,
+ *      数据不可信).
+ *   3. axe critical + serious violations 数仍报告到 console 但不作硬断言 —
+ *      历史 P-11 决策, 真硬门禁在 a11y-baseline.spec.mjs (比对 baseline).
+ *      本 spec 只报告, 让 W89+ 派工按 axe 报告数修复 (a11y-baseline drift 是真门禁).
  *
  * 用法:
  *   cd web
- *   BASE_URL=http://localhost npx playwright test \
+ *   TEST_TOKEN=<jwt> BASE_URL=http://localhost npx playwright test \
  *     -c tests/visual/a11y/playwright.a11y.config.mjs \
  *     tests/visual/a11y/dark-accent.spec.mjs --reporter=list
  *
- * 前提: TEST_TOKEN 已注入 (登录态), 否则 sidebar 没 el-menu 命中, 桌面端会被守卫打到 /login.
- *
- * 派工 v6 §5 反馈 类 20.59 沉淀:
- *   "dark 4 accent a11y 必含: data-accent 切换 + axe WCAG 2.1 AA + el-menu hover 单独扫描"
- *   (留口措辞 "4 accent" 沿用派工 brief, 实际实现是 3 accent)
+ * 派工 v6 §5 反馈 类 20.63 沉淀 (W89-X-11):
+ *   "Playwright 软断言改硬门禁必 TEST_TOKEN 真注入 + throw if missing"
+ *   (P-11 的 "authed=false → 优雅降级" 路径已废, 硬门禁必须有真 token)
  */
 
 import { test, expect } from '@playwright/test'
@@ -37,12 +41,35 @@ const PAGES = [
   { name: '03-tasks', path: '/tasks' },
 ]
 
+// W89-X-11 硬门禁: TEST_TOKEN 缺失直接 fail 整个 describe — 不允许软降级.
+// "TEST_TOKEN 缺失优雅降级" 是 P-11 软断言假绿根因, 删之.
+test.beforeAll(() => {
+  if (!process.env.TEST_TOKEN) {
+    throw new Error(
+      'TEST_TOKEN env not set — 硬门禁必须有真 token. ' +
+        '跑前先: TEST_TOKEN=$(curl -X POST http://localhost:8000/api/v1/auth/login ' +
+        "-H 'Content-Type: application/json' " +
+        "-d '{\"username\":\"xiaoqi_testbot\",\"password\":\"testbot_pass_2026\"}' " +
+        "| python -c \"import json,sys; print(json.load(sys.stdin).get('access_token',''))\")",
+    )
+  }
+})
+
 test.describe('dark mode × 3 accent a11y 扫描 (6 主题 × 3 页面 = 18 case)', () => {
   for (const mode of MODES) {
     for (const accent of ACCENTS) {
       for (const pageDef of PAGES) {
         test(`${mode}/${accent}/${pageDef.name}`, async ({ page }) => {
           const authed = await injectAuth(page, BASE_URL)
+
+          // W89-X-11 硬门禁: authed 必 true, 不允许 router 守卫重定向时还继续跑
+          // (之前是软断言继续扫 /login 页, 数据不可信).
+          if (!authed) {
+            throw new Error(
+              `injectAuth 失败 (TEST_TOKEN 缺失或无效) — 硬门禁必须有真 token, ` +
+                `请按 beforeAll 错误提示重新注入`,
+            )
+          }
 
           // 先到 /login 注入主题偏好, 然后再 goto 目标页 — 这样 useThemeStore.apply()
           // 会在 SPA 启动时读 localStorage 并立即 setAttribute. (axe-config.mjs 注释
@@ -94,14 +121,13 @@ test.describe('dark mode × 3 accent a11y 扫描 (6 主题 × 3 页面 = 18 case
           // 报告型断言 — 至少 axe 跑完了 (这是本 spec 的真门禁)
           expect(Array.isArray(violations)).toBe(true)
           expect(results.testEngine?.name).toBe('axe-core')
-          // 主题真切验证 — 当 TEST_TOKEN 缺失导致 router 守卫重定向或阻止 SPA 挂载时,
-          // 应用主题可能为 null. 这时 axe 扫的可能是 /login 页 (变量 css 部分仍生效),
-          // 仍能反映主题色, 不应强行 fail — 仅当主题生效且与预期不符时才 fail.
-          if (appliedTheme === mode && appliedAccent !== accent) {
-            throw new Error(`accent mismatch: expected=${accent} applied=${appliedAccent}`)
+          // 主题真切验证 — 必须与预期一致, 不允许 null / 错配.
+          // 硬门禁下 auth 已保证, router 不会再 redirect, 此处必为预期值.
+          if (appliedTheme === null || appliedTheme !== mode) {
+            throw new Error(`mode mismatch: expected=${mode} applied=${appliedTheme ?? 'null'}`)
           }
-          if (appliedTheme !== null && appliedTheme !== mode) {
-            throw new Error(`mode mismatch: expected=${mode} applied=${appliedTheme}`)
+          if (appliedAccent === null || appliedAccent !== accent) {
+            throw new Error(`accent mismatch: expected=${accent} applied=${appliedAccent ?? 'null'}`)
           }
         })
       }
