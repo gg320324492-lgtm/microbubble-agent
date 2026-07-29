@@ -45,9 +45,10 @@ const VIEWS = [
 ]
 
 // 项目 web 根目录 (vitest cwd 已是 web/)
+// W89-P-10: 迁入 tests/unit/components/ (3 层深) 后 WEB_ROOT 解析需 3 个 ../ (web/)
 const __filename = fileURLToPath(import.meta.url)
 const __dirname_web = dirname(__filename)
-const WEB_ROOT = resolve(__dirname_web, '../../')
+const WEB_ROOT = resolve(__dirname_web, '../../../')
 
 function viewRealPath(viewPath) {
   return resolve(WEB_ROOT, 'src', viewPath.replace('@/', ''))
