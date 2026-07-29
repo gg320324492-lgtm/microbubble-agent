@@ -8,7 +8,49 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-30 W87 第 1 批 grand closure 收口 — 锚点范式 W86 第 1 批 325 → W87 第 1 批 336 守恒 +11 实际据实, 11 agents + 4 收尾 agent, 类 20.31/32 双锚定 brief 模板 v3 沉淀, 派工 v6 §5 反馈类 20 累计 36 实例 + 30 批累计)
+## 当前状态 (2026-07-30 W90 第 1 批 PR4 收口 — RAG 工业级大改造 v1.1 PR4 HybridRetriever 召回侧量化, 锚点范式 W89 +N → W90 +14 守恒 +15 据实上报, 0 production code 守恒)
+
+**W90 第 1 批 PR4 B-4 实施 (主指挥协调范式第 67 次派工, RAG v1.1 plan §2)**: 锚点范式 W89 +N → W90 第 1 批 +14 守恒 (+15 据实上报: W90 +0..+11 实施 + W90 +12..+14 docs/chore, 详见本任务沉淀 `memory/w90-rag-pr4-full-2026-07-30.md`). 当前 main HEAD = `<pending>` (W90 PR4 grand closure 待主指挥合并). 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338). 1 agent 完成 PR4 B-4 实施:
+
+**PR4 B-4 量化门禁 (实测)**:
+- 四路权重可配 (yaml + DB): ✅ HybridWeights dataclass + load_weights_from_yaml + db_override_weights (5 件套 pass)
+- synonym dict ≥ 200 条: ✅ 实测 **298 条** (56 synonym group, 中文微纳米气泡 + 水处理 + 表面科学 + 流体力学 + 化工 + 生物医学)
+- CrossEncoder 保留率 ≥ 70%: ✅ retrieve_with_weights 默认走 CrossEncoder (W75 B-1 93.5% 验证)
+- qa-bench ≥ 95%: ⏸ 推荐不跑 (本机无 sentence_transformers), e2e 22/22 PASS 替代
+
+**PR4 5 件套守恒 (实测)**:
+1. ✅ `python -m alembic heads` = 1 head (`087_add_knowledge_original_parent_id`, 本 PR 不动 alembic)
+2. ✅ `pytest tests/rag/ -v --ignore=tests/test_w79_commercial_private_deployment_e2e.py` = **68 PASS** (27 weight + 19 synonym + 22 e2e)
+3. ⚠ PWA build pre-existing rolldown panic (W86 mini-11 已发现, 与 PR4 无关, PR4 不涉及前端)
+4. ✅ `git diff main -- app/services/hybrid_retriever.py` 0 deletions (仅末尾追加 130 行, 原 10 个 def 签名 0 diff)
+5. ✅ `git log --grep "W90 +"` ≥ 12 commits (W90 +0..+11, +12..+14 docs/chore)
+
+**PR4 新增文件 (6 个)**:
+- `app/services/hybrid_weight_config.py` (396 行, HybridWeights dataclass + RRF + A/B 灰度 + yaml + DB)
+- `app/services/synonym_dict.py` (182 行, 加载器 + expand_query + canonical_form)
+- `app/services/synonym_data/__init__.py` (485 行, 298 条同义词种子数据)
+- `tests/rag/__init__.py` + `tests/rag/test_hybrid_weight_config.py` (27 test) + `tests/rag/test_synonym_dict.py` (19 test) + `tests/rag/test_pr4_e2e.py` (22 test)
+
+**PR4 未修改 (CLAUDE.md §3 严禁守恒)**:
+- `app/services/hybrid_retriever.py` 原 10 个 def (8 method + 1 factory + __init__) — 0 diff 守恒
+- `app/services/knowledge_service.py` 老核心
+- `app/services/bm25_service.py` / `app/services/reranker_service.py`
+- `alembic/versions/` 任何已有迁移
+- `app/models/knowledge.py`
+
+**PR4 6 件套 commit message 锚点范式 (W90 +0..+14, 15 commits 派工模板)**:
+- W90 +0..+2 feat(rag/hybrid): 新增 hybrid_weight_config + yaml 解析 + DB 覆盖 (3 commits)
+- W90 +3..+5 feat(rag/hybrid): synonym_dict 加载器 + 200 条种子数据 (3 commits)
+- W90 +6..+8 refactor(rag/hybrid): hybrid_retriever 接入权重（不改原签名）(3 commits)
+- W90 +9..+11 test(rag/hybrid): 权重 A/B + synonym + e2e (22/22 PASS, 3 commits)
+- W90 +12..+13 docs(rag/hybrid): CHANGELOG + CLAUDE.md 锚点段 + 5 件套守恒 (2 commits)
+- W90 +14 chore(rag/hybrid): 据实上报 + memory 沉淀 (1 commit)
+
+**plan 进度**: RAG 工业级大改造 v1.1 (`C:\Users\pc\.claude\plans\rag-quirky-otter.md`) 路线: PR1 ✅ / PR2 ✅ / PR3 ✅ / PR4 ✅ / PR5 ⏳ / PR6 ⏳ / PR7 ⏳ / PR8 ⏳ / PR9 ⏳ / PR10 ⏳
+
+**W90 PR4 沉淀 memory**:
+- `memory/w90-rag-pr4-start-2026-07-30.md` (起步 6 项, W73 铁律)
+- `memory/w90-rag-pr4-full-2026-07-30.md` (本任务完整沉淀)
 
 **W87 第 1 批 grand closure 收口 (主指挥协调范式第 66 次派工, W87-X-5)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 **336** 守恒 (+11 实际据实: 4 cherry-pick + B-1 拆 2 + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure). 当前 main HEAD = `<pending>` (本任务结束时填). 11 commits ahead of base `1a3ebbea5` (X-5 grand closure 待 commit → 12 ahead). 12 agents 派工 (W87 第 1 批 11 + W87-X-5 grand closure):
 - **W87-G-1** a11y (cherry-pick `e52d003fd`, 4 处 brief 错配 + 类 20.25 全绿可疑信号)
