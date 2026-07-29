@@ -49,6 +49,7 @@ console.info(
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import * as Sentry from '@sentry/vue'
 // 全局样式加载顺序：
 // 1. variables.css 设计令牌（必须在最前）
 // 2. element-plus-overrides.css 桌面组件覆盖
@@ -71,6 +72,7 @@ import axios from 'axios'
 
 import App from './App.vue'
 import router from './router'
+import { reportError, reportMessage } from './utils/sentry'
 
 // PR #1 基建：初始化主题 store（避免刷新闪烁；必须在 router 之前）
 import { useThemeStore } from './stores/useThemeStore'
@@ -139,6 +141,39 @@ axios.interceptors.response.use(
 )
 
 const app = createApp(App)
+
+// W87-B-1 / 类 20.27: 默认 off；只有显式 DSN 且非 dev 构建才初始化。
+// @sentry/vue v8 自带 Browser SDK、Vue error handler 与 router tracing。
+if (import.meta.env.VITE_SENTRY_DSN && !import.meta.env.DEV) {
+  Sentry.init({
+    app,
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    integrations: [
+      Sentry.browserTracingIntegration({ router }),
+    ],
+    environment: import.meta.env.MODE,
+    release: `microbubble-agent-web@${__BUILD_ID__}`,
+    tracesSampleRate: 0.1,
+    sendDefaultPii: false,
+    beforeSend(event) {
+      // 双保险：dev/local 构建永不发送，即使误设了 VITE_SENTRY_DSN。
+      if (import.meta.env.DEV) return null
+      return event
+    },
+  })
+  window.__SENTRY_INITIALIZED__ = true
+}
+
+window.reportError = reportError
+window.reportMessage = reportMessage
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SW_INSTALL_FAILED') {
+      reportMessage('SW install failed', 'warning')
+    }
+  })
+}
 
 app.use(createPinia())
 app.use(router)

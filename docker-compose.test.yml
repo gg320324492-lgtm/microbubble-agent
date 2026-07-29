@@ -120,6 +120,30 @@ services:
       - mb-test-net
     mem_limit: 4g
 
+  # 2026-07-29 W87-B-1: GlitchTip all-in-one in the isolated test network.
+  # Host port 8002 avoids production 8000 and dev 8001.
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.2
+    container_name: microbubble-agent-glitchtip-test-1
+    environment:
+      DATABASE_URL: "postgresql://postgres:${TEST_POSTGRES_PASSWORD:-test_password}@pg-test:5432/glitchtip"
+      VALKEY_URL: "redis://redis-test:6379/1"
+      SECRET_KEY: "${TEST_GLITCHTIP_SECRET_KEY:-test-glitchtip-not-for-production}"
+      PORT: "8000"
+      GLITCHTIP_DOMAIN: "${TEST_GLITCHTIP_DOMAIN:-http://localhost:8002}"
+      EMAIL_ENABLED: "False"
+      SERVER_ROLE: "all_in_one"
+    ports:
+      - "8002:8000"
+    depends_on:
+      pg-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    networks:
+      - mb-test-net
+    restart: unless-stopped
+
   # 2026-07-29 W86-F-1: pg_exporter — PostgreSQL Prometheus 暴露 (test stack 端口错开)
   # image 钉死 tag v0.15.0 (latest 不跟, 避免主指挥据实上报不可控)
   # 端口 9199 错开生产 9187, 数据库 microbubble_test, 密码 test_password
