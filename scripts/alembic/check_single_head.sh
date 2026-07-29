@@ -15,6 +15,15 @@
 #     4. 部署文档第 0 节必含 alembic chain 风险
 #     5. 跨 PR 部署 alembic 必须 cp + clear cache
 #
+# W87 第 1 批 X-3 hook 假阳性修复 (派工 v6 §5 反馈 类 20.30):
+#     - 原版: HEADS_OUTPUT=$(python -c "..." 2>&1); HEAD_COUNT=$(echo "$HEADS_OUTPUT" | wc -w)
+#       把 stderr (SyntaxWarning) 数成 head 数量 → 冷缓存报"13 heads"假红,
+#       热缓存或 PYTHONWARNINGS=ignore 报"1 head"假绿 (非确定性).
+#     - 修法: python sys.exit(len(s.get_heads()) != 1) 直接 exit code
+#       分离 stdout/stderr, 避免 wc -w 把 SyntaxWarning 误算.
+#     - e2e tests/alembic/test_pre_commit_hook_passes.py 精确断言 returncode == 0
+#       (原测试 ∈ {0,1,2} 弱断言放过 1/2 → 派工 v6 §5 反馈类 20.30 沉淀)
+#
 # 本 hook 检查项:
 #     - alembic/versions/ 改动时, 重新解析 heads 列表, 验证只 1 个 head
 #     - 多个 head → exit 1, 输出修复路径
@@ -62,45 +71,82 @@ if [ ! -f "alembic.ini" ]; then
     exit 0
 fi
 
-# ---- 2. 解析 alembic heads ----
-HEADS_OUTPUT=$(python -c "
+# ---- 2. 解析 alembic heads (W87-X-3 修正版) ----
+# 分离 stdout / stderr; 屏蔽 SyntaxWarning 污染 stderr;
+# 直接用 python sys.exit(len(heads) != 1) 退出码, 避免 wc -w 误算.
+# 警告信息仍写 stderr 但不参与 head 计数.
+export PYTHONWARNINGS=ignore
+
+STDERR_FILE="$(mktemp)"
+trap 'rm -f "$STDERR_FILE"' EXIT
+
+# stdout: 单 head 时为 head hash, 多 head 时为所有 head 列表
+# exit code: 0 = 单 head, 1 = 0 head 或多 head, 2 = 解析失败
+STDOUT_OUTPUT=$(python - "$STDERR_FILE" <<'PYEOF' 2>"$STDERR_FILE"
+import sys
+from pathlib import Path
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-c = Config()
-c.set_main_option('script_location', 'alembic')
-s = ScriptDirectory.from_config(c)
-heads = s.get_heads()
-print(' '.join(heads))
-" 2>&1)
 
-if [ $? -ne 0 ]; then
+try:
+    c = Config()
+    c.set_main_option("script_location", "alembic")
+    s = ScriptDirectory.from_config(c)
+    heads = s.get_heads()
+except Exception as e:
+    print(f"alembic 脚本解析失败: {e}", file=sys.stderr)
+    sys.exit(2)
+
+if len(heads) == 0:
+    print("INFO: alembic heads 为空 (无 migration)", file=sys.stderr)
+    sys.exit(1)
+
+if len(heads) > 1:
+    print(" ".join(heads))
+    print(f"❌ 检测到 {len(heads)} 个 alembic heads (CLAUDE.md §2.3 永久纪律违反)", file=sys.stderr)
+    sys.exit(1)
+
+# 正常路径: 单 head
+print(heads[0])
+sys.exit(0)
+PYEOF
+)
+PARSE_EXIT=$?
+STDERR_OUTPUT="$(cat "$STDERR_FILE")"
+
+# ---- 3. 解析失败 (exit 2) ----
+if [ "$PARSE_EXIT" -eq 2 ]; then
     echo "❌ [pre-commit] alembic 脚本解析失败 (可能 alembic/versions/ 内有语法错误):"
-    echo "$HEADS_OUTPUT" | sed 's/^/   /'
+    echo "$STDERR_OUTPUT" | sed 's/^/   /'
     echo ""
     echo "🔧 修复: 检查最新 alembic/versions/0XX_*.py 语法, 确认 down_revision 字段合法"
     exit 1
 fi
 
-if [ -z "$HEADS_OUTPUT" ]; then
+# ---- 4. 0 head ----
+if [ "$PARSE_EXIT" -eq 1 ] && [ -z "$STDOUT_OUTPUT" ]; then
     echo "INFO: alembic heads 为空 (无 migration), 跳过"
     exit 0
 fi
 
-# ---- 3. 统计 head 数量 ----
-HEAD_COUNT=$(echo "$HEADS_OUTPUT" | wc -w | tr -d ' ')
-
-if [ "$HEAD_COUNT" -eq 1 ]; then
-    echo "✅ [pre-commit] alembic 单链合规 ($HEADS_OUTPUT)"
+# ---- 5. 单 head (合规) ----
+if [ "$PARSE_EXIT" -eq 0 ]; then
+    echo "✅ [pre-commit] alembic 单链合规 ($STDOUT_OUTPUT)"
+    # 顺路 dump 任何 SyntaxWarning (便于诊断, 不影响 exit code)
+    if [ -n "$STDERR_OUTPUT" ]; then
+        echo "$STDERR_OUTPUT" | grep -iE 'warning' | sed 's/^/   ⚠️  /' || true
+    fi
     exit 0
 fi
 
-# ---- 4. 多 head 违规 ----
+# ---- 6. 多 head 违规 (exit 1 + 有 stdout = heads 列表) ----
+HEAD_COUNT=$(echo "$STDOUT_OUTPUT" | wc -w | tr -d ' ')
 echo "❌ [pre-commit] alembic 检测到 $HEAD_COUNT 个 heads (CLAUDE.md §2.3 永久纪律违反)"
 echo ""
-echo "🚨 当前 heads: [$HEADS_OUTPUT]"
+echo "🚨 当前 heads: [$STDOUT_OUTPUT]"
 echo ""
 echo "📋 修复路径 (按派工 v6 §6 串单链纪律):"
-echo "   1) 定位下游 migration (在 $HEADS_OUTPUT 中选最新一个或字符串排序最大者)"
+echo "   1) 定位下游 migration (在 $STDOUT_OUTPUT 中选最新一个或字符串排序最大者)"
 echo ""
 echo "   2) 改 down_revision:"
 echo "      # 把下游 migration 的 down_revision 改成上游最新的 head"
@@ -117,4 +163,5 @@ echo "   5) 验证 alembic 历史: alembic history --rev-range='<new_head>:<old_
 echo ""
 echo "📖 教训沉淀: memory/w68-alembic-chain-discipline-2026-07-24.md"
 echo "            commit 1852468a6 (W68 第 3 批 E-1 真实施)"
+echo "            memory/w87-1st-grand-closure-full-2026-07-29.md (W87-X-3 hook 假阳性修复)"
 exit 1
