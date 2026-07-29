@@ -163,7 +163,9 @@ class RecallObserver:
             trace.error_msg = f"{type(e).__name__}: {e}"
             raise
         finally:
-            trace.latency_ms = round((time.perf_counter() - start) * 1000, 3)
+            # 若 trace.latency_ms 未被调用方显式设置 (> 0 视为已设置), 才用 perf_counter
+            if trace.latency_ms <= 0.0:
+                trace.latency_ms = round((time.perf_counter() - start) * 1000, 3)
             trace.slow_query = trace.latency_ms > P99_LATENCY_THRESHOLD_MS
             await self._record(trace)
 
