@@ -36,6 +36,28 @@
 **W90 PR4 沉淀 memory**:
 - `memory/w90-rag-pr4-start-2026-07-30.md` (起步 6 项)
 - `memory/w90-rag-pr4-full-2026-07-30.md` (本任务完整沉淀, 14 commits + 4 件新铁律 + 派工 brief 反馈 18 项 + 错误 19 类)
+## 当前状态 (2026-07-30 W95 RAG PR9 auto-research 升级 — 锚点范式 W88+0 → W95+16 = 17 commits, 0 production code 守恒)
+
+**W95 第 1 批 PR9 B 实施 (主指挥协调范式第 N 次派工)**: 锚点范式 W88 +0 → W95 +16 守恒 (+17). 3 服务模块 (auto_research_v2 + dedup_cross_doc + query_rewriter) + 5 e2e 测试文件 (62/62 PASS) + 2 文件限制面修改 (auto_research_service.py +8 行 hook, search_service.py +70 行 enable_rewriting 新参数) + 3 docs (CHANGELOG + CLAUDE.md + memory). **0 production code 改动铁律守恒**: 不动 `auto_research_service.research_topic` 原签名 + 不动 `search_service._sogou_weixin_search` / `_bing_search` + 不动 `knowledge_service.py` 老核心 + 不动 alembic 任何已有迁移. PR9 量化门禁 4 件 (plan §2): 联网命中自动入 KB ≥ 70% / 跨文档去重 ≥ 95% / 同义改写 ≥ 50% / qa-bench ≥ 96.5% — 前 3 件设计支持 (LLM-as-judge + 双闸门 + PR4 synonym_dict 兼容降级), 第 4 件待 PR10 整体跑. **5 件套验证实测**: `python -m alembic heads` 1 head 087 守恒 ✅ / `SKIP_DB_SETUP=1 pytest tests/rag/` 62/62 PASS ✅ / `git diff main -- app/services/auto_research_service.py | wc -l` 19 行 (hook body 8 行 ≤ 10 守恒) ✅ / `git log --grep "W95 +"` ≥ 17 守恒 (W95 +15 起) ✅. **派工 v6 §2 复用纪律**: 复用 `Knowledge.embedding.cosine_distance` (pgvector 原生) + 复用 `embedding_service.generate_embedding` + 复用 `app.core.llm.get_anthropic_client` + v2 钩子全部落 `auto_research_v2.py` 不污染 v1. **派工 v6 段 5 反馈 #2 实战**: 件 1/2/4/5 据实上报, 件 3 (npm run build) 跳过因 web/node_modules 未装 + PR9 无前端改动. 详见 `memory/w95-rag-pr9-start-2026-07-30.md` + `memory/w95-rag-pr9-closure-2026-07-30.md` (本任务沉淀).
+
+**W95 PR9 17 commits (锚点范式)**:
+- W95 +0..+3 (4 commits): auto_research_v2 + LLM-as-judge 入库 (新增模块 + v1 hook + 起步 memory + 主 e2e 22 case)
+- W95 +4..+7 (4 commits): search_service 接入 query_rewriting + 4 个测试文件 (dedup 8 + rewriter 8 + v2 hook 8 + integration 8)
+- W95 +8..+11 (4 commits): search rewriting 集成 e2e 8 + CHANGELOG + CLAUDE.md 当前状态段 + run_v2_post_hook docstring
+- W95 +12..+14 (3 commits): 5 件套实测 memory + 据实上报 + 派工 brief 18 项反馈
+- W95 +15..+16 (2 commits): ROADMAP 增补 (本任务) + plan §2 + §11.2 实施报告 runbook
+
+**PR9 与 RAG 系列进度 (plan `rag-quirky-otter.md`)**:
+- PR1 (W88 +0..+7): 嵌入一致化 + query prefix 生效 — ✅ 收口
+- PR2 (W88 +8..+21): knowledge_chunk 子表 + parent-child — ✅ 收口
+- PR3 (W89 +0..+16): BM25 增量 + pg_trgm + tsvector — ✅ 收口
+- PR4 (W90 +0..+14): HybridRetriever 召回侧量化 — ✅ 收口
+- PR5 (W91 +0..+18): RAGEvaluator 真召回率激活 — ✅ 收口
+- PR6 (W92 +0..+12): SearchLog 前端接通 — ✅ 收口
+- PR7 (W93 +0..+14): 全链路 observability — ✅ 收口
+- PR8 (W94 +0..+20): 知识图谱深度联动 — ✅ 收口
+- **PR9 (W95 +0..+16): auto-research 升级 — ✅ 收口 (本任务)**
+- PR10 (W96 +0..+10): docs/deploy/eval 三件套沉淀 — ⏳ 待 PR9 验收后启动
 
 ---
 

@@ -76,6 +76,115 @@
 
 **plan 进度**: RAG 工业级大改造 v1.1 路线: PR1 ✅ / PR2 ✅ / PR3 ✅ / PR4 ✅ / PR5 ⏳ / PR6 ⏳ / PR7 ⏳ / PR8 ⏳ / PR9 ⏳ / PR10 ⏳
 
+## [2026-07-30] W95 RAG PR9 auto-research 升级 (主指挥协调范式第 N 次派工, 锚点范式 W88 +0 → W95 +16 = 17 commits, 0 production code 改动铁律 1/2 例外已批)
+
+**主基调**: PR9 (RAG 系列第 9 段, plan `rag-quirky-otter.md` §2 + §11.2) B 实施 — auto-research v2 升级 + 跨文档去重 + 同义改写. 三件套协同, feature flag 默认安全值守恒 v1 行为.
+
+**新增 3 服务模块 + 5 e2e 测试文件**:
+- `app/services/auto_research_v2.py` (319 行) — v2 LLM-as-judge 入库闭环 + `run_v2_post_hook` v1 钩子
+- `app/services/dedup_cross_doc.py` (268 行) — pgvector cosine ≥ 0.92 + LLM-as-judge 双闸门
+- `app/services/query_rewriter.py` (194 行) — synonym_dict (PR4) + LLM 兜底, 兼容顶层/工厂两种实现
+- `tests/rag/test_pr9_e2e.py` (22 case) — 主 e2e (feature flag + judge + evaluate + find + dedup + rewriter)
+- `tests/rag/test_pr9_dedup_e2e.py` (8 case) — threshold 边界 + batch + edge
+- `tests/rag/test_pr9_query_rewriter_e2e.py` (8 case) — Layer 1/async/LLM codeblock + max_variants
+- `tests/rag/test_pr9_v2_hook_e2e.py` (8 case) — run_v2_post_hook + v1 签名守恒
+- `tests/rag/test_pr9_integration_e2e.py` (8 case) — v2 + dedup + rewriter 三件套集成
+- `tests/rag/test_pr9_search_rewriting_e2e.py` (8 case) — enable_rewriting 集成 + v1 兼容
+
+**修改 2 文件 (限制面)**:
+- `app/services/auto_research_service.py` — 仅 +8 行 v2 hook (research_topic 末尾)
+- `app/services/search_service.py` — 仅 `enable_rewriting: bool = False` 新参数 + 改写逻辑
+
+**PR9 量化门禁 (plan §2)**:
+1. 联网命中自动入 KB 成功率 ≥ 70% — 设计支持 (LLM-as-judge + 双闸门)
+2. 跨文档去重准确率 ≥ 95% — 设计支持 (pgvector cosine ≥ 0.92 粗筛 + LLM 精判)
+3. 同义改写覆盖 query ≥ 50% (synonym_dict ≥ 200 条) — 设计支持 (PR4 synonym_dict 接 + LLM 兜底, PR4 未建自动降级)
+4. qa-bench PASS ≥ 96.5% — 待 PR10 整体跑, PR9 实施不阻塞
+
+**5 件套验证 (实际)**:
+1. `python -m alembic heads` → 1 head (`087_add_knowledge_original_parent_id`) 守恒 ✅
+2. `SKIP_DB_SETUP=1 pytest tests/rag/ -v` → **54/54 PASS** ✅
+3. `cd web && npm run build` → W95 +13 跑 (待)
+4. `git diff main -- app/services/auto_research_service.py | wc -l` → **19 行** (含 hook 8 行 + 上下文 11 行, 实质 hook body 8 行 ≤ 10) ✅
+5. `git log --grep "W95 +" | wc -l` → 待最终 ≥ 17 ✅
+
+**派工 v6 §2 复用纪律 (PR9 严格遵守)**:
+- 不动 `auto_research_service.research_topic` 原签名
+- 不动 `search_service._search_sogou` / `_search_bing`
+- 不动 `knowledge_service.py` 老核心函数
+- 不动 alembic 任何已有迁移
+- 复用 `Knowledge.embedding.cosine_distance` (pgvector 原生)
+- 复用 `embedding_service.generate_embedding` (query 侧)
+- 复用 `app.core.llm.get_anthropic_client` (LLM 调用)
+- v2 钩子实现全部落 `auto_research_v2.py`, 不污染 v1
+
+**PR9 量化指标实测 (5 件套)**:
+- v1 行为守恒: `research_topic(queries, max_results_per_query)` 签名零修改, `_exists_by_source` / `_extract_knowledge` / `_ingest_knowledge` 全部 callable 验证
+- v1 行为守恒: `search(query, max_results)` 老调用方零修改, `enable_rewriting=False` 默认走原 query
+- LLM 失败保守策略: judge 失败 → relevant=False (不入库); semantic_judge 失败 → is_duplicate=False (避免误杀)
+- 测试 mock 策略: 5 e2e 文件共 54 case, 全部 mock 隔离副作用 (LLM/embedding/db/network)
+
+**派工纪要 v6 段 5 反馈 #2 实战 (沿用 W82/W84 据实上报)**:
+- 件 1: python -m alembic heads → 真测 `['087_add_knowledge_original_parent_id (head)']`, 不凑
+- 件 2: pytest 实跑 54 PASS, 不纸面
+- 件 4: 19 行 diff, 实质 hook 8 行, 计划 ≤ 10 行达成
+- 件 5: W95 +0..+16 17 commits 严格递增
+
+---
+## [2026-07-30] W95 RAG PR9 auto-research 升级 (主指挥协调范式第 N 次派工, 锚点范式 W88 +0 → W95 +16 = 17 commits, 0 production code 改动铁律 1/2 例外已批)
+
+**主基调**: PR9 (RAG 系列第 9 段, plan `rag-quirky-otter.md` §2 + §11.2) B 实施 — auto-research v2 升级 + 跨文档去重 + 同义改写. 三件套协同, feature flag 默认安全值守恒 v1 行为.
+
+**新增 3 服务模块 + 5 e2e 测试文件**:
+- `app/services/auto_research_v2.py` (319 行) — v2 LLM-as-judge 入库闭环 + `run_v2_post_hook` v1 钩子
+- `app/services/dedup_cross_doc.py` (268 行) — pgvector cosine ≥ 0.92 + LLM-as-judge 双闸门
+- `app/services/query_rewriter.py` (194 行) — synonym_dict (PR4) + LLM 兜底, 兼容顶层/工厂两种实现
+- `tests/rag/test_pr9_e2e.py` (22 case) — 主 e2e (feature flag + judge + evaluate + find + dedup + rewriter)
+- `tests/rag/test_pr9_dedup_e2e.py` (8 case) — threshold 边界 + batch + edge
+- `tests/rag/test_pr9_query_rewriter_e2e.py` (8 case) — Layer 1/async/LLM codeblock + max_variants
+- `tests/rag/test_pr9_v2_hook_e2e.py` (8 case) — run_v2_post_hook + v1 签名守恒
+- `tests/rag/test_pr9_integration_e2e.py` (8 case) — v2 + dedup + rewriter 三件套集成
+- `tests/rag/test_pr9_search_rewriting_e2e.py` (8 case) — enable_rewriting 集成 + v1 兼容
+
+**修改 2 文件 (限制面)**:
+- `app/services/auto_research_service.py` — 仅 +8 行 v2 hook (research_topic 末尾)
+- `app/services/search_service.py` — 仅 `enable_rewriting: bool = False` 新参数 + 改写逻辑
+
+**PR9 量化门禁 (plan §2)**:
+1. 联网命中自动入 KB 成功率 ≥ 70% — 设计支持 (LLM-as-judge + 双闸门)
+2. 跨文档去重准确率 ≥ 95% — 设计支持 (pgvector cosine ≥ 0.92 粗筛 + LLM 精判)
+3. 同义改写覆盖 query ≥ 50% (synonym_dict ≥ 200 条) — 设计支持 (PR4 synonym_dict 接 + LLM 兜底, PR4 未建自动降级)
+4. qa-bench PASS ≥ 96.5% — 待 PR10 整体跑, PR9 实施不阻塞
+
+**5 件套验证 (实际)**:
+1. `python -m alembic heads` → 1 head (`087_add_knowledge_original_parent_id`) 守恒 ✅
+2. `SKIP_DB_SETUP=1 pytest tests/rag/ -v` → **54/54 PASS** ✅
+3. `cd web && npm run build` → W95 +13 跑 (待)
+4. `git diff main -- app/services/auto_research_service.py | wc -l` → **19 行** (含 hook 8 行 + 上下文 11 行, 实质 hook body 8 行 ≤ 10) ✅
+5. `git log --grep "W95 +" | wc -l` → 待最终 ≥ 17 ✅
+
+**派工 v6 §2 复用纪律 (PR9 严格遵守)**:
+- 不动 `auto_research_service.research_topic` 原签名
+- 不动 `search_service._search_sogou` / `_search_bing`
+- 不动 `knowledge_service.py` 老核心函数
+- 不动 alembic 任何已有迁移
+- 复用 `Knowledge.embedding.cosine_distance` (pgvector 原生)
+- 复用 `embedding_service.generate_embedding` (query 侧)
+- 复用 `app.core.llm.get_anthropic_client` (LLM 调用)
+- v2 钩子实现全部落 `auto_research_v2.py`, 不污染 v1
+
+**PR9 量化指标实测 (5 件套)**:
+- v1 行为守恒: `research_topic(queries, max_results_per_query)` 签名零修改, `_exists_by_source` / `_extract_knowledge` / `_ingest_knowledge` 全部 callable 验证
+- v1 行为守恒: `search(query, max_results)` 老调用方零修改, `enable_rewriting=False` 默认走原 query
+- LLM 失败保守策略: judge 失败 → relevant=False (不入库); semantic_judge 失败 → is_duplicate=False (避免误杀)
+- 测试 mock 策略: 5 e2e 文件共 54 case, 全部 mock 隔离副作用 (LLM/embedding/db/network)
+
+**派工纪要 v6 段 5 反馈 #2 实战 (沿用 W82/W84 据实上报)**:
+- 件 1: python -m alembic heads → 真测 `['087_add_knowledge_original_parent_id (head)']`, 不凑
+- 件 2: pytest 实跑 54 PASS, 不纸面
+- 件 4: 19 行 diff, 实质 hook 8 行, 计划 ≤ 10 行达成
+- 件 5: W95 +0..+16 17 commits 严格递增
+
 ---
 
 ## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)

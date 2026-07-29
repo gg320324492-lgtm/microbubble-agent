@@ -4,6 +4,12 @@ import logging
 import re
 from typing import Dict, Any, List
 
+# PR9 / W95 — query_rewriter 钩子 (feature flag 默认 False, 不破坏 v1 行为)
+try:
+    from app.services.query_rewriter import QUERY_REWRITER_ENABLED, get_query_rewriter
+except ImportError:
+    QUERY_REWRITER_ENABLED = False
+
 logger = logging.getLogger("microbubble.search")
 
 
@@ -20,9 +26,35 @@ class SearchService:
         self,
         query: str,
         max_results: int = 5,
+        enable_rewriting: bool = False,
     ) -> Dict[str, Any]:
+        """联网搜索
+
+        Args:
+            query: 搜索查询
+            max_results: 每引擎最大结果数
+            enable_rewriting: PR9/W95 新增 — 是否启用同义改写 (默认 False)
+                仅当全局 QUERY_REWRITER_ENABLED=True 时生效, 否则按 query 原值搜
+        """
+        # PR9/W95 — query 改写 (默认关闭, 走原 query)
+        effective_query = query
+        rewriting_used: List[str] = []
+        if enable_rewriting and QUERY_REWRITER_ENABLED:
+            try:
+                rw = get_query_rewriter(max_variants=3)
+                variants = await rw.rewrite(query)
+                if variants:
+                    effective_query = variants[0]  # 第 1 个是原 query, 这里走第 2 个变体
+                    # 实际: variants[0] = 原 query, variants[1] = 第 1 个改写
+                    if len(variants) > 1:
+                        effective_query = variants[1]
+                    rewriting_used = variants
+            except Exception as e:
+                logger.debug(f"query_rewriter 失败, 降级用原 query: {e}")
+                effective_query = query
+
         try:
-            results = await self._multi_search(query, max_results)
+            results = await self._multi_search(effective_query, max_results)
 
             if not results:
                 return {
@@ -31,6 +63,7 @@ class SearchService:
                     "answer": "未找到相关搜索结果",
                     "results": [],
                     "result_count": 0,
+                    "rewriting_used": rewriting_used,
                 }
 
             snippets = []
@@ -47,6 +80,7 @@ class SearchService:
                 "answer": "\n\n".join(snippets),
                 "results": results,
                 "result_count": len(results),
+                "rewriting_used": rewriting_used,
             }
 
         except Exception as e:
