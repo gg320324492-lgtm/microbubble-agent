@@ -1,1 +1,0 @@
-function e(){function e(e){if(!(typeof navigator>`u`||!navigator.vibrate))try{navigator.vibrate(e)}catch{}}return{tap:()=>e(10),success:()=>e([10,50,10]),warning:()=>e([30,50,30]),error:()=>e([50,100,50]),vibrate:e}}export{e as t};
