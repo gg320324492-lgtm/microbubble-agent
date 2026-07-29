@@ -5,6 +5,31 @@
 
 ---
 
+## [2026-07-30] W88 第 1 批 D-1 文档脱节校核 — 类 20.46 实战 (主指挥协调范式第 67 次派工, 锚点范式 W87 第 1 批 337 守恒 0 regression, 0 production code 1/1 守恒, 验证不计 + 实施 +1 实战, 类 20 累计 37 实例)
+
+**主基调**: W87-G-1 / W87-E-1 报告文档与实测脱节 (tests/perf/ 6 → 实测 2 / 5 页面路径 4 错). W88 第 1 批 D-1 据实校核 5 处不一致: **2 处已修复 + 3 处留 W89+**. 类 20.46 "文档校核 4 段: grep / 实际数字 / 不擅自扩 / 留口" 沉淀为派工 v6 §5 反馈第 1 例.
+
+**校核清单 (5 处不一致)**:
+1. `tests/perf/` 6 测试 → 实测 2 文件 7 test 函数 (W82 C-2 archive 后, 4 个老 perf 测试已删) — **CLAUDE.md line 303 已修**
+2. alembic head 085 → 当前 `['087_add_knowledge_original_parent_id']` (W85 C-1 加 086 + W85 hotfix 加 087 单链 `085 → 086 → 087`) — 历史 batch 快照保留为各 batch 当时状态, 当前 head 在 W88-D-1 memory 标注
+3. `app/services/` 表格 25 → 实测 127 文件 (含 Drive v2 系列 20+ + 商业化 billing 4 + 声纹 quality 3 + Drive tasks 2 等) — 留口 W89+
+4. `160+ 测试全过` 快照 (2026-06-13 收官 87+73+21+2+21) — 当前 pytest 集远超 2000 (W87 集 e2e 报告 2620 collected) — 留口 W89+
+5. 商业化 billing/payment 表 (W75 B-2 1 行跨租户修复 + W74 B-2 4 表 085 + W67 067 subscription) — 留口 W89+
+
+**纪律固化 (派工 v6 §5 反馈 类 20.46)**:
+- grep + 实际数字 4 段必含
+- 不擅自扩边界, 只修明确事实错误
+- 历史 batch 快照保留, 仅标注当前状态
+- K 处留 W89+ 不立即处理
+
+**留 W89+ 调研**:
+- `app/services/` 完整 127 文件清单是否需要表格补全
+- `tests/perf/` 是否需要 W88-E-1 重新扩展 (旧测试已 archive)
+- alembic 085→087 中途迁移 (086 backfill / 087 add_knowledge_original_parent_id) 是否需补 CLAUDE.md 历史段
+- 商业化 billing 表 085 + subscription 067 是否在 README 中正确反映
+
+---
+
 ## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
 
 **主基调**: W87 第 1 批 11 收口 commits + W87-X-5 grand closure 完整收口. 类 20.31/32 双锚定 brief 模板 v3 沉淀 (`docs/dispatch-template-v3.md` 新建, W87-X-5 新增 docs/ 写入权). 派工协调范式第 66 次派工.
