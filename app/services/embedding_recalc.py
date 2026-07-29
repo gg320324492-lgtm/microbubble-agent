@@ -141,8 +141,8 @@ def recalc_one_embedding(self, table: str, row_id: int):
                 if not text:
                     logger.warning(f"{table}:{row_id} 文本为空, 跳过")
                     return {"status": "skipped", "table": table, "row_id": row_id, "reason": "empty_text"}
-                # 截断超长文本 (Qwen3 max_length=2048 token, 中文 ~6000 字)
-                text = text[:6000]
+                from app.services.embedding_truncation_policy import truncate_for_embedding
+                text = truncate_for_embedding(text)
                 embedding = await generate_embedding(text)
                 if embedding:
                     row.embedding = embedding
