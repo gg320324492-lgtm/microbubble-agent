@@ -355,3 +355,54 @@ class HybridRetriever:
 def get_hybrid_retriever(db: AsyncSession) -> HybridRetriever:
     """获取混合检索器实例"""
     return HybridRetriever(db)
+
+
+# =====================================================================
+# PR4 (W90 +6..+8) 新增辅助函数 — 仅追加, 不改原 10 个 def 签名
+# 派工 brief 要求: 不动 retrieve / _vector_search / _bm25_search /
+# _graph_search / _refresh_bm25_index / _merge_results / _normalize_scores /
+# evaluate / __init__ / get_hybrid_retriever
+# 这些辅助函数是 HybridRetriever.retrieve 之外的"扩展 API"
+# =====================================================================
+
+
+async def _apply_weights(
+    query: str,
+    results_by_method: dict,
+    weights: Optional["object"] = None,
+    top_k: int = 10,
+) -> List[dict]:
+    """PR4 (W90 +6): 应用权重合并多路结果
+
+    输入格式:
+        results_by_method = {
+            "vector": [{"id": 1, "score": 0.9, ...}, ...],
+            "bm25":   [{"id": 5, "score": 12.3, ...}, ...],
+            "graph":  [{"id": 3, "score": 0.7, ...}, ...],
+            "rerank": [{"id": 1, "rerank_score": 0.95, ...}, ...],
+        }
+
+    合并规则: RRF (Reciprocal Rank Fusion) 归一化 + 权重加权
+        RRF_score(doc) = Σ_m weight_m / (k + rank_m(doc))
+        k = 60 (Cormack 2009 经典常数)
+
+    Args:
+        query: 原始查询 (保留参数供将来埋点, 当前未使用)
+        results_by_method: 各路结果 dict
+        weights: HybridWeights 实例, None 走默认权重
+        top_k: 最终返回条数
+
+    Returns:
+        按 rrf_score 降序排的 top_k 列表
+    """
+    # 延迟 import (避免循环 + 0 production code diff 要求不动 hybrid_retriever 顶部 import)
+    from app.services.hybrid_weight_config import (
+        HybridWeights,
+        apply_weights,
+        DEFAULT_WEIGHTS,
+    )
+
+    if weights is None:
+        weights = HybridWeights(**DEFAULT_WEIGHTS)
+
+    return apply_weights(results_by_method, weights, top_k=top_k)
