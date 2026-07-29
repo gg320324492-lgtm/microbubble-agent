@@ -358,6 +358,8 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 .entity-pagination {
   padding: var(--space-3);
   border-top: 1px solid var(--color-border-light);
+  display: flex;
+  justify-content: center;
 }
 
 .entity-triple-large {
@@ -405,7 +407,32 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
   border-color: var(--color-border-light);
 }
 [data-theme="dark"] .entity-pagination {
-  border-top-color: var(--color-border-light);
+  border-top-color: var(--color-border-base);
+}
+/* W86 mini-8 fix (派工 v6 §1.2 真验证, 3 路搜证):
+   el-pagination 的 .el-pager li 与 .btn-prev/.btn-next 默认色使用
+   --el-text-color-regular, 在暗色主题下变量映射不充分导致页码数字
+   与按钮文字看不清 (用户反馈). 这里显式覆盖 color + background,
+   强制使用项目自有的 --color-text-regular / --color-primary token.
+   注意: 与 variables.css:932 全局 .el-pagination 规则互补, 全局规则
+   只覆盖容器, 这里覆盖子元素. */
+[data-theme="dark"] .entity-pagination .el-pager li,
+[data-theme="dark"] .entity-pagination .btn-prev,
+[data-theme="dark"] .entity-pagination .btn-next {
+  background: transparent !important;
+  color: var(--color-text-regular) !important;
+}
+[data-theme="dark"] .entity-pagination .el-pager li.is-active {
+  background-color: var(--color-primary) !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .entity-pagination .el-pager li:hover,
+[data-theme="dark"] .entity-pagination .btn-prev:hover,
+[data-theme="dark"] .entity-pagination .btn-next:hover {
+  color: var(--color-primary) !important;
+}
+[data-theme="dark"] .entity-pagination .el-pagination__total {
+  color: var(--color-text-regular) !important;
 }
 [data-theme="dark"] .entity-list-scroll::-webkit-scrollbar-thumb {
   background: var(--color-text-placeholder);
