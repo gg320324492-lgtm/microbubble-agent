@@ -274,6 +274,8 @@ async def run_v2_post_hook(
     对 all_results 中 ingested=True 的条目, 用 v2 judge 复核; 拒绝的标 ingested=False
     (不物理删除, 留主指挥人工复核).
 
+    注: flag 守门由调用方 (research_topic) 负责. 本函数假定调用前已 flag=True.
+
     Args:
         auto_research_instance: AutoResearchService 实例 (需有 .db 属性)
         all_results: v1 已构建的结果列表
