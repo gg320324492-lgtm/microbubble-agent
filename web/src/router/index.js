@@ -104,10 +104,14 @@ const routes = [
       },
       {
         // W85 B-1 Phase 9 batch 1: 课题组知识图谱可视化主视图
+        // W86 mini-3 (v78 决策沿用): 与 KnowledgeView 实体图谱 tab (V77 P2.6-E.3) 功能重复,
+        // 去掉 meta.icon 后自动从 MainLayout menuRoutes 过滤掉 (侧栏隐藏);
+        // 路由本身保留作 fallback, 兼容老链接/书签直接访问 /knowledge/graph。
+        // 正式入口: KnowledgeView → 实体图谱 tab (KnowledgeEntityTab + KnowledgeGraphExplorer)
         path: 'knowledge/graph',
         name: 'KnowledgeGraph',
         component: () => import('@/views/knowledge/KnowledgeGraphView.vue'),
-        meta: { title: '知识图谱', icon: 'Share' }
+        meta: { title: '知识图谱' }
       },
       {
         path: 'memory',
