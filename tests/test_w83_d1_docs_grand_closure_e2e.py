@@ -87,13 +87,10 @@ def test_w83_d1_case3_changelog_md_has_w83_section():
     assert CHANGELOG_MD.exists(), f"CHANGELOG.md 不存在: {CHANGELOG_MD}"
     text = _read_text(CHANGELOG_MD)
 
-    # CHANGELOG.md 顶部必须含 W83 第 1 批
-    top_section = text[:5000]
-    assert "W83" in top_section, "CHANGELOG.md 顶部缺少 W83 段"
-
-    # 必须含 grand closure
-    assert "grand closure" in top_section.lower() or "GrandClosure" in top_section, \
-        "CHANGELOG.md 顶部缺少 grand closure 提及"
+    # CHANGELOG.md 必须含 W83 第 1 批 (W88-X-1: 全文搜索, 不限前 5000 字, 历史归档到 history 文件)
+    assert "W83" in text, "CHANGELOG.md 缺少 W83 段"
+    assert "grand closure" in text.lower() or "GrandClosure" in text, \
+        "CHANGELOG.md 缺少 grand closure 提及"
 
 
 def test_w83_d1_case3_changelog_md_anchor_307_守恒():
@@ -143,13 +140,17 @@ def test_w83_d1_case5_user_memory_md_has_w83_entry():
         pytest.skip(f"user-level MEMORY.md 不存在 (Windows env), 跳过: {USER_MEMORY_MD}")
     text = _read_text(USER_MEMORY_MD)
 
-    # 必须含 W83 第 1 批 grand closure 条目
-    assert "W83" in text, "user MEMORY.md 缺少 W83 段"
-    assert "grand closure" in text.lower() or "GrandClosure" in text, \
-        "user MEMORY.md 缺少 grand closure 提及"
+    # W88-X-1: user MEMORY.md 在 W85 D-1 batch 3 重整为 9 主题分类目录, W83 文件保留在
+    # memory/w83-1st-grand-closure-full-2026-07-28.md (未迁 archived/), archived/ 只装
+    # 旧/w1/w2 等真正历史文件. 验证原 W83 project memory 仍可达.
+    alt_w83 = ROOT / "memory" / "w83-1st-grand-closure-full-2026-07-28.md"
+    assert alt_w83.exists(), "memory/w83-1st-grand-closure-full-2026-07-28.md 必须存在 (project memory)"
+    text_alt = _read_text(alt_w83)
+    assert "W83 第 1 批" in text_alt
+    assert "grand closure" in text_alt.lower() or "GrandClosure" in text_alt
 
-    # 必须含锚点范式 307 守恒
-    assert "307" in text, "user MEMORY.md 缺少锚点范式 307 守恒"
+    # user MEMORY.md 不再硬性要求 W83 (W85 D-1 batch 3 重整后), 但应含 W85 主题分类索引
+    assert "W85" in text, "user MEMORY.md 缺少 W85 主题分类 (W85 D-1 batch 3 后必有)"
 
 
 # --- 锚点范式 307 守恒附加验证 ---

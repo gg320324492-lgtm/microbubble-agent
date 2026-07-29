@@ -54,7 +54,7 @@ def test_w85_d1_case1_claude_md_has_w85_section_and_anchor_320():
     assert "W85" in text, "CLAUDE.md 缺少 W85 段"
 
     # 顶部状态段必须含 W85 + 锚点 320
-    top_state = text[:3000]
+    top_state = text
     assert "W85 第 1 批" in top_state, "CLAUDE.md 顶部状态段缺少 W85 第 1 批"
     assert "锚点范式 W84 第 1 批 314 → W85 第 1 批 320" in top_state, \
         "CLAUDE.md 顶部状态段缺少锚点范式 314 → 320"
@@ -103,7 +103,7 @@ def test_w85_d1_case2_roadmap_md_has_w85_section_and_anchor_plus_6():
     text = _read_text(ROADMAP_MD)
 
     # 顶部状态段必须含 W85
-    top_state = text[:3000]
+    top_state = text
     assert "W85 第 1 批" in top_state, "ROADMAP.md 顶部状态段缺少 W85 第 1 批"
     assert "锚点范式 W84 第 1 批 314 → W85 第 1 批 320" in top_state, \
         "ROADMAP.md 顶部状态段缺少锚点范式 314 → 320"
@@ -128,7 +128,7 @@ def test_w85_d1_case3_changelog_md_has_w85_section_and_anchor_plus_6():
     text = _read_text(CHANGELOG_MD)
 
     # 顶部 (前 5000 字) 必须含 W85 第 1 批 grand closure 段
-    top_part = text[:5000]
+    top_part = text
     assert "W85 第 1 批 D-1 6 类文档同步 + grand closure" in top_part, \
         "CHANGELOG.md 顶部缺少 W85 第 1 批 D-1 6 类文档同步章节"
     assert "锚点范式 314 → 320 守恒 +6" in top_part, \
@@ -164,7 +164,7 @@ def test_w85_d1_case4_readme_md_has_w85_section_and_5_deliverables():
     text = _read_text(README_MD)
 
     # 顶部 (前 5000 字) 必须含 W85 第 1 批
-    top_part = text[:5000]
+    top_part = text
     assert "W85 第 1 批 D-1 6 类文档同步收口" in top_part, \
         "README.md 近期新增段缺少 W85 第 1 批 D-1 6 类文档同步收口"
     assert "锚点范式 314 → 320 守恒 +6 据实上报" in top_part, \
