@@ -8,7 +8,42 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
-## 当前状态 (2026-07-29 W86 第 1 批 X-2 e2e 修复 + D-2 6 类文档同步收口 — 锚点范式 W85 第 1 批 320 → W86 第 1 批 324 守恒 +4 (4 路线 merge) + X-2 e2e 修复据实不算 + D-2 文档同步 +1 实战 = 325 据实, 含 W72/W73/W74/W75/W76/W77/W78/W79/W80/W81/W82/W83/W84/W85/W86 15 批补同步 + 派工前提错配 21 实例沉淀 + 0 production code 例外 4 已批 B-1 + B-2 + C-1 + F-1 + W86-X-2 类 20.24 并行 agent 集成 e2e 隐藏假设 + 28 批累计)
+## 当前状态 (2026-07-30 W87 第 1 批 4 路线 + X-1 撤回 + X-3 hook 修复 + cherry-pick 模式 — 锚点范式 W86 第 1 批 325 → W87 第 1 批 332 守恒 +7 实际据实, 5 cherry-pick + 1 hook 修 + 1 docs sync, X-1 撤回 0 增量, 派工 v6 §5 反馈类 20.25-32 新增 8 实例 + 29 批累计)
+
+**W87 第 1 批 4 路线 + X-1 撤回 + X-3 hook 修复 (主指挥协调范式第 63+64+65 次派工)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 332 守恒 (+7 实际据实, 派工 brief 估 +6 因 B-1 拆 2 commit 多 1). 当前 main HEAD = `4c0458387` (本任务 W87-X-3 cherry-pick 收口, 5 cherry-pick + 1 hook 修复, docs sync commit pending). 6 agents 派工:
+- **W87-G-1** axe-core/playwright a11y (cherry-pick `e232fb2d9` → `e52d003fd`, 4 处 brief 错配据实上报 + 类 20.25 全绿是可疑信号 + 类 20.32 base 漂移 + 类 20.31 匿名分支)
+- **W87-E-1** k6 压测 (cherry-pick `8cf95a4a8` → `4a5750343`, 3 脚本 + 17 e2e + 类 20.26 baseline 留口)
+- **W87-B-1** GlitchTip + Sentry (cherry-pick `3628fa733` → `e0275d643` + `ede69aa13` → `6c78d6880`, 4 处 brief 错配 + 类 20.27 默认 off + 22 e2e + 134 web/dist build + entry chunk orphan 缺陷)
+- **W87-H-1** contextvars (cherry-pick `968a30a1e` → `78988bf01`, 23 e2e + 15 回归 + 类 20.28 双栈 + middleware LIFO 顺序)
+- **W87-X-1** alembic rebase **撤回干净** (0 commit, 类 20.29 + 20.30 hook 假阳性据实上报)
+- **W87-X-3** alembic hook 假阳性修复 (commit `4c0458387`, 4 铁律沉淀 + cherry-pick 模式实战)
+- **W87-X-3 cherry-pick 模式实战** (类 20.31 subagent worktree fallback + 类 20.32 协调 base 漂移)
+
+**0 production code 改动铁律 6/7 守恒** (6 路线 + 1 例外 B-1 `scripts/.token-orphan-allowlist` 5 行顺手补):
+- G-1: 仅 web/package.json + web/tests/visual/a11y/(新) + memory
+- E-1: 仅 scripts/k6/(新) + web/package.json scripts 段 + tests/k6/(新) + memory + scripts/install-k6.md
+- B-1: 仅 3 compose glitchtip service + app/main.py sentry init (env guard) + app/config.py SENTRY_DSN + web/src/{main,sw,utils/sentry}.js + requirements.txt + 134 web/dist/ + scripts/.token-orphan-allowlist 5 行 (例外) + memory + docs/sentry-setup.md
+- H-1: 仅 app/core/(request_context.py + logging.py 加 Filter + celery.py signal) + app/main.py middleware + 5 Celery task docstring + memory
+- X-3 修复: 仅 scripts/alembic/check_single_head.sh + tests/alembic/test_pre_commit_hook_passes.py
+- docs sync: 仅 CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md + memory/w87-1st-grand-closure-full-2026-07-29.md
+
+**派工前提铁律 12 + 类 20 累计 32 实例 (W87 新增 8: 20.25-30 + 20.31 cherry-pick + 20.32 base 漂移)**:
+- 类 20.25 "a11y 测试必先 baseline,后修漂移" + "全绿是可疑信号"
+- 类 20.26 "压测脚本必含阈值门禁 + baseline 留口"
+- 类 20.27 "Sentry 默认 off + env guard,不可静默上报"
+- 类 20.28 "contextvars 必 request_id + task_id 双栈 + middleware LIFO 顺序"
+- 类 20.29 "alembic head 数必须 worktree 实测,不可凭 hook 报告 + CLAUDE.md 历史"
+- 类 20.30 "alembic hook 必分离 stdout/stderr,e2e 必精确断言 returncode"
+- 类 20.31 "subagent EnterWorktree 阻断 → fallback git worktree add → 分支名 worktree-agent-<id>,主指挥合并必须用这个分支名 + 必须查实际 base"
+- 类 20.32 "协调 base 必实测 ls-remote origin,不可凭 CLAUDE.md 历史"
+
+**集成 e2e 验证 (派工 v6 §1.2 真验证)**:
+- W86 4 套件: 89 PASSED + 10 SKIPPED + 2 FAILED (1 pre-existing flake typing imports 60s timeout + 1 cherry-pick 触发的 trivy 6→7 计数 — B-1 加 glitchtip 后)
+- W87 3 套件 (k6/sentry/request_context): 62 PASSED + 0 FAILED
+- alembic 1 套件: 4 PASSED (冷缓存精确 returncode == 0)
+- 主仓库 2620 collected: 1825 PASSED + 231 SKIPPED + 138+84 FAILED (全部 pre-existing, 与 cherry-pick 无关)
+
+累计 29 批 470+ commits + 490+ 铁律 (W87 第 1 批 +24 新铁律: G-1 5 + E-1 5 + B-1 5 + H-1 5 + X-3 4). W87+ 派工顺序表: W87 第 2 批 / W88 / W89. W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-29.md` (本任务沉淀).
 
 **W86 第 1 批 X-2 e2e 修复 + D-2 6 类文档同步 (主指挥协调范式第 62 次派工)**: 锚点范式 W85 第 1 批 320 → W86 第 1 批 324 守恒 (+4, 4 路线 merge +1 each: A-1 gitleaks + C-1 Trivy + D-1 pre-commit + F-1 pg_exporter, X-2 e2e 修复据实 2 行不算). 当前 main HEAD = `a4d773dfd` (W86-X-1 4 路线 merge 收口). 2 commits ahead of base `9564f2dc9` (W85 hotfix 320→321): commit 1 `129061ca2` test(w86) trivy 修 + commit 2 (本任务 commit) docs(w86) D-2 5 段同步 + grand closure memory. 1/1 agent 完成: X-2 e2e 修复 (tests/trivy/test_dockerfile_pinning.py 2 行: 5→6 + `^v?\d+`) + D-2 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + memory (`memory/w86-1st-grand-closure-full-2026-07-29.md`). 锚点范式 320 → 324 +4 验证不计 + X-2 e2e 修复据实 0 增量 + 实施 +1 实战 (D-2 文档同步沿用 W85 D-1 模式). alembic 13 head (D-1 hook 暴露, 留 W87-X-1 rebase). **0 production code 改动铁律 4/4 守恒** (4 路线全部装机 + 扫描脚本 + e2e, X-2 修测试也不算 production code). 派工前提铁律 12 条 + 类 20 累计 21 实例 (W86 据实上报 1 实例沉淀: 类 20.24 X-2 并行 agent 各自 PASS 但集成 e2e 红于隐藏假设). 累计 28 批 450+ commits + 450+ 铁律 (W86 第 1 批 +24+ 新铁律: A-1 8 + C-1 5 + D-1 5 + F-1 5 + X-2/D-2 1). W87/W88/W89 派工顺序表 (4+4+4 = 12 agents, 锚点 325→~348). W19 选项 A 维持. 详见 `memory/w86-1st-grand-closure-full-2026-07-29.md` (本任务沉淀).
 
