@@ -125,6 +125,11 @@ celery_app.conf.update(
             "task": "app.services.audit_service.cleanup_old_logs",
             "schedule": 24 * 3600.0,  # 每天 05:00 (beat 用 24h 间隔近似)
         },
+        # W89 DERIVE-04: 恢复 W86 heartbeat；W87 grand-closure merge 曾误删注册。
+        "analytics-heartbeat-every-5-min": {
+            "task": "app.services.analytics_tasks.analytics_heartbeat",
+            "schedule": 300.0,
+        },
     },
 )
 
@@ -156,6 +161,7 @@ celery_app.conf.imports = [
     "app.services.drive_comments_path_backfill_tasks",  # 2026-07-24 W68 第 12 批 B-1 Drive v2 PR14 path 回填
     "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
     "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册 Celery beat
+    "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
     "app.wechat.scheduler",
 ]
 # 保留 autodiscover_tasks 作 fallback（不传 related_name 让它能 import 主模块）
@@ -179,6 +185,7 @@ celery_app.autodiscover_tasks(
         "app.services.drive_comments_path_backfill_tasks",  # 2026-07-24 W68 第 12 批 B-1 Drive v2 PR14 path 回填
         "app.services.qa_bench_tasks",  # 2026-07-27 W71 B-3 qa-bench 7 天 auto_intake_rollback Celery task
         "app.services.audit_service",  # W86 mini-11 D fix P1-5: cleanup_old_logs 注册
+        "app.services.analytics_tasks",  # W89 DERIVE-04: 恢复检索质量数据源心跳注册
         "app.wechat.scheduler",
     ],
     related_name=None,
