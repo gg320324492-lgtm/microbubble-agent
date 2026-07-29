@@ -23,7 +23,8 @@ import { describe, it, expect, beforeAll } from 'vitest'
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const ROOT = resolve(__dirname, '../..')
+// W89-P-10: 迁入 tests/unit/components/ (3 层深) 后 ROOT 解析需 3 个 ../ (web/)
+const ROOT = resolve(__dirname, '../../..')
 const SOURCE = resolve(ROOT, 'src/views/chat/ChatViewSSE.vue')
 
 beforeAll(() => {
