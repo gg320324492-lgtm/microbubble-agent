@@ -114,162 +114,17 @@ W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (�
 
 **W83 第 1 批 grand closure (主指挥协调范式第 58+59 次派工)**: 锚点范式 W82 第 1 批 300 → W83 第 1 批 307 守恒 (+7, 0 regression, 完美守恒达成). 当前 main HEAD = `aad2e8d7e` (W83 第 1 批 D-2 锚点范式收口). 8 commits ahead of base `b99eb52da` (W82 第 1 批 grand closure). 7/7 agents 完成 (A-1 主拍合并 + A-2 + B-1 + B-2 + C-1 + C-2 + D-1 + D-2): A-1 部署收口 (主拍执行, 沿用 W82 A-1 拦截 + W82 merge 流程, 0 commit) / A-2 5 份 Survey 派生 W83 7 agents 详细化 + W84/W85/W86 派工顺序 (commit `37c9e2f32`, +3) / B-1 P1 latent bug 修 batch 2 (commit `752cd3821`, +1, 0 production code 例外 1: rate_limit fail-degrade + license_middleware fail-closed + wechat print → logger + agentic_loop 静默 except 3 处 + 4 e2e) / B-2 P1 冗余重构 batch 1 (commit `79a9000ec`, +1, 0 production code 例外 1: TTS cache 合并 tts_cache.py + ios_tts_cache.py → 单一 + useViewport 兼容层 + 1 e2e) / C-1 P1 dead service 清 (commit `06183a408`, +1, 2 真 0 调用 service: billing/payment+subscription + 2 test 文件删除: bm25 jieba 缺 + low_occupancy dead, 派工 brief 据实上报 5/7 错配) / C-2 P2 docs/scripts 清 (commit `006789f54`, +1, 19 docs 迁 history/dispatch/ + 5 verify scripts 迁 archive + cross-refs 同步, 派工 brief 据实上报 P2-2 transient 偏差 147 docs/*.md 引用 load-bearing 跳过) / D-1 6 类文档同步 (commit `adea403a4`, 验证不计 0 增量 + 实施 +1 实战, 5 case e2e PASS) / D-2 锚点范式收口 (commit `9d607a924`, 0 commit, docs/w83-1st-batch-anchor-closure-2026-07-28.md 103 行, 5 新铁律). 累计 25 批 420+ commits + 410+ 铁律 (W83 第 1 批 +25+ 铁律: B-1 4 + B-2 5 + C-1 5 + C-2 5 + D-1 1 + D-2 5). 派工前提铁律 12 + 类 20 累计 16 实例 (W83 无新增, 沿用 W82 B-2 拦截 #16). W19 选项 A 维持. 详见 `memory/w83-1st-grand-closure-full-2026-07-28.md` + `docs/w83-1st-batch-anchor-closure-2026-07-28.md`.
 
-**W83 第 1 批 D-1 6 类文档同步 + grand closure (主指挥协调范式第 58 次派工)**: 锚点范式 W82 第 1 批 300 → W83 第 1 批 307 守恒 (+7, 0 regression). 当前 main HEAD = `b99eb52da` (W82 第 1 批 grand closure 收口, memory/w82-1st-grand-closure-full-2026-07-28.md 149 行). 0 commits ahead of base `b99eb52da` (本任务为 docs/memory/tests 范畴, 不动 production code). 1/1 agent 完成: D-1 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook (`docs/w83-1st-batch-d1-grand-closure-2026-07-28.md`) + memory (`memory/w83-1st-grand-closure-full-2026-07-28.md`) + e2e 验证 (5 case PASS). 锚点范式 300 → 307 +7 验证不计 + 实施 +1 实战. alembic 1 head `['085_billing_payment_tables']` 守恒 (W83 D-1 文档同步不动 alembic). **0 production code 改动铁律 5/7 守恒 (2 例外已批 W82: B-1 3 production fix + B-2 3 production fix)**. 派工前提铁律 12 条 + 类 20 16 条实战 (W82 B-2 拦截 #16 沉淀 + 类 20.13 实战). 累计 25 批 420+ commits + 410+ 铁律 (W83 第 1 批 +1 实战). W84/W85/W86 派工顺序表 (7+7+7 = 21 agents, 锚点 307→~328). 详见 `memory/w83-1st-grand-closure-full-2026-07-28.md` (本任务沉淀).
+**W68 第 1~14 批 + W71 + W72-W85 各 batch grand closure 历史摘要** (W86 mini-16 减负 — 详见 memory/ + 索引):
 
-**W82 第 1 批 grand closure (主指挥协调范式第 57 次派工)**: 锚点范式 W81 第 1 批 293 → W82 第 1 批 300 守恒 (+7, 0 regression). 当前 main HEAD = `b99eb52da` (W82 第 1 批 grand closure 收口, memory/w82-1st-grand-closure-full-2026-07-28.md 149 行). 6 commits ahead of base `2ce014c8f` (W81 第 1 批 grand closure). 6/7 agents 完成 (A-2 + B-1 + C-1 + C-2 + D-1 + D-2): A-2 23 批深度合计 + 5 份 Survey 文档化 (commit `bee1855ce`, +3, Survey 1 完整版) / B-1 P0 latent bug batch 1 (commit `bd0bc2c9b`, +1, 0 production code 例外 1: tenants.py 鉴权 + billing_webhooks 挂载 + celery 3 防线, 3 e2e 8 case PASS) / C-1 P0 archive 清理 (commit `0756d6fe9`, +1, 84,512 行删 / 6.0 MB, 派工偏差据实上报: tests/qa-bench/results 全删会断 4 live scripts + 1 runbook, 仅删 5 个 0 引用 round ~3.6 MB) / C-2 363 branches + 209 worktree 清理 (commit `9dea8fa63`, +1, 514 → 30 branches, 218 → 9 worktrees, 10.5 GB 释放) / D-1 6 类文档同步 (commit `b0cb5c4cb`, 验证不计 0 增量 + 实施 +1 实战, 13/13 e2e PASS) / D-2 锚点范式收口 (commit `11b008fdc`, 0 commit 拦截报告, W83/W84/W85 派工顺序 + 类 20.13 实战 16 沉淀). B-2 **拦截** (类 20.13 实战 16 派工前提错配, Survey 3 报告 "0 外部 import 4 个 ios_tts_*.py 文件" 与实际 `tests/test_ios_safari_edge_tts_e2e.py:26-53` 模块顶层直接 import 不符, 撤回重派). 累计 24 批 410+ commits + 380+ 铁律 (W82 第 1 批 +20+ 铁律: A-2 调研派生 5 + B-2 拦截 5 + C-1 据实上报 5 + D-2 拦截沉淀 5). 派工前提铁律 12 + 类 20 累计 16 实例 (W82 B-2 拦截 #16 实战新增 1 实例). W19 选项 A 维持. 详见 `memory/w82-1st-grand-closure-full-2026-07-28.md` (本任务沉淀).
+**锚点范式数字守恒链**: W7 12 → W66 27 → W67 28 → W68 30/42/57/72/88/89/102/116/134/144/156/168/175 → W71 176 → W72 220 → W72-2 235 → W73 242 → W74 249 → W75 256 → W76 256 → W77 263 → W78 276 → W79 283 → W80 286 → W81 293 → W82 300 → W83 307 → W84 314 → W85 320 → W86 325 → W87 336 (守恒单调上升预期)
 
-**W81 第 1 批 grand closure (主指挥协调范式第 55 次派工)**: 锚点范式 W80 第 1 批 286 → W81 第 1 批 293 守恒 (+7, 0 regression, 完美守恒达成). 当前 main HEAD = `2ce014c8f` (W81 第 1 批 grand closure 收口, memory/w81-1st-grand-closure-2026-07-28.md 168 行). 10 commits ahead of base `d942b2b28` (W80 第 1 批 grand closure). 6/7 agents 完成: A-1 类 20.13 实战 15 派工前提错配拦截 (commit `d74f1ee0e`, 5/6 收尾 ref 不存在 + 1/6 重置无 commit, 5 新铁律沉淀) / A-2 商业化 24 人月 Q1 落地收官 + Phase 8 收官时间表 (commit `4fb664f38`, +3, 调研 + 实战汇总) / B-1 商业化运营收官 + Phase 8 (commit `504c04370`, +1, 16/16 e2e PASS) / B-2 跨租户监控 + 多租户实战收官 (commit `a97e2f3c9`, +1, 16/16 e2e PASS + 130/130 跨租户 PASS 守恒, 0 production code 例外 1 已批) / C-1 商业化 Phase 8 收官实战 (commit `0807eaa20`, +1, 18/18 e2e PASS, 调研 + 实战汇总) / D-1 C-1/D-1/D-2 重派 (W80 C-1/D-1/D-2 类 20.13 实战 14 卡死撤回重派, commit `2f008a829`, +1, 20/20 e2e PASS, 0 production code 例外 2 已批). 累计 23 批 390+ commits + 380+ 铁律 (W81 新增 6 新铁律沉淀). alembic 1 head `['085_billing_payment_tables']` 守恒. 派工前提铁律 12 条 + 类 20 累计 15 条 (W81 A-1 拦截 #15 实战新增 1 实例). W82/W83/W84 派工顺序表 (7+7+7 = 21 agents, 锚点 293→~314). W19 选项 A 维持. 详见 `memory/w81-1st-grand-closure-2026-07-28.md` (本任务沉淀).
+**主指挥协调范式派工计数**: 第 36 次 (W68 第 8 批) → 第 40 次 (W68 第 10 批) → 第 41-44 次 (W68 第 11-14 批) → 第 46 次 (W72-2) → 第 47 次 (W73) → 第 48 次 (W74) → 第 49 次 (W75+W77) → 第 50 次 (W78) → 第 51 次 (W79) → 第 52 次 (W80) → 第 55 次 (W81) → 第 57 次 (W82) → 第 58+59 次 (W83) → 第 60 次 (W84) → 第 61 次 (W85) → 第 62 次 (W86) → 第 63+64+65 次 (W87 4 路线+X-3) → 第 66 次 (W87-X-5)
 
-**W80 第 1 批 grand closure (主指挥协调范式第 52 次派工)**: 锚点范式 W79 第 1 批 283 → W80 第 1 批 286 守恒 (+3). 当前 main HEAD = `d942b2b28` (W80 第 1 批 grand closure, memory/w80-1st-grand-closure-2026-07-28.md). 5/5 agents 完成: A-1 拦截 (类 20.11 实战, 沿用 W79 A-1 拦截 #10 5 新铁律) / A-2 PWA 资产缺失 hot-fix 派工 (commit `750d1c9ef`, +1, 类 20.15 实战, 9/9 e2e PASS, 0 production code 例外 1) / B-1 7 维评分商业化改造 + 商业化运营 (commit `3805e2722`, +1, 14/14 e2e PASS) / B-2 商业化私有化部署 + 客户支持 (commit `3e4adb4bc`, +1, 12/12 e2e PASS, 0 production code 例外 3). 累计 22 批 380+ commits + 370+ 铁律. W19 选项 A 维持. 详见 `memory/w80-1st-grand-closure-2026-07-28.md` + `memory/w80-1st-route-a2-pwa-asset-hotfix-2026-07-28.md`.
+**W68 第 6+7 批纪律沉淀 (永久锚点) + W68-W85 各 batch 详细派工清单**: 见 `memory/archived/w68-batch-detail-2026-07-24.md` (本任务新建, 包含 W68 第 8-14 批 + W71-W85 各 batch 完整 15 agents 派工清单 + 0 production code 例外清单 + 累计 commits + 锚点数字正确性), `docs/CLAUDE-history.md` (W68 之前历史), `memory/MEMORY.md` (W68-W85 主题索引).
 
-**W79 第 1 批 grand closure (主指挥协调范式第 51 次派工)**: 锚点范式 W78 第 1 批 276 → W79 第 1 批 283 守恒 (+7, 0 regression). 当前 main HEAD = `32b52b66c` (W79 第 1 批 grand closure, memory/w79-1st-grand-closure-2026-07-28.md). 6/6 agents 完成: A-1 类 20.12.1 拦截 #10 (6 收尾 agents 完全未被实际派出, 拦截 commit `d7adbc87e` 沉淀 5 新铁律 + 拦截报告 10 段 + PWA 资产缺失 hot-fix 副发现实战) / A-2 商业化运营主决策落地路线图 (commit `a29afe771`, 调研 + 实战汇总) / B-1 商业化运营主决策落地 (commit `b41b3800a`, +1, 5 阶段 + 8 件套监控实时 + Phase 8 收官时间表) / B-2 商业化私有化部署 (commit `811a05cba`, +1, 0 production code 例外 2, 4 层架构私有化变体 + License 离线 7 天宽限 + billing 降级硬门控) / B-3 跨租户监控 + 多租户实战 (commit `0d30e6315`, +1, 0 production code 例外 3) / C-1 商业化 Phase 8 收官 (commit `f18fa6480`, +1, 24 人月 Q1 落地收官 + W72 C-2 排期 + Q2 排期 + W80/W81 派工建议, 调研 ≠ 生产) / D-1 跨租户收官实战 + 私有化部署手册 (commit `2766bbf99`, 验证型 0 增量 + 实施 +1 实战, 6/6 e2e PASS, 130/130 e2e 跨租户 守恒). 累计 21 批 360+ commits + 360+ 铁律. W19 选项 A 维持. 详见 `memory/w79-1st-grand-closure-2026-07-28.md`.
+**W19 选项 A 维持** (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E 留未来 PR 不发起新排期).
 
-**W78 第 1 批 grand closure (主指挥协调范式第 50 次派工)**: 锚点范式 W77 第 1 批 263 → W78 第 1 批 276 守恒 (+13). 4 路线 (A2 + B1 + B2 + C1 + D1) 收口: A-2 商业化 24 人月 Q1 落地实施路线图 (commit `55672aa43`, 调研 ≠ 生产) / B-1 商业化真支付生产 key 启用 (commit `aa5eadac4`, +1, 类 20.13 实战) / B-2 商业化 SaaS 平台部署 4 层架构 + 6 商业化表 + multi-tenant 隔离 (commit `d22a1ce85`, +1, 0 production code 例外 4, 11/11 e2e PASS) / B-3 D-1 R10 weights_v4 灰度迁移实施 (W77 D-1 撤回重派, commit `c19c6903c`, +1, 0 production code 例外 3, 派工 v4 铁律 3 真验证 4 实战 6 新铁律沉淀) / C-1 7 维评分商业化 R10 weights_v4 灰度迁移 (commit `c6b79fe13`, 验证型 0 增量 + 实施 +1 实战, 22/22 e2e PASS) / D-1 7 维评分商业化 R10 weights_v4 灰度迁移, 验证型 0 增量 + 实施 +1 实战, 22/22 e2e PASS. 累计 20 批 350+ commits + 350+ 铁律. W19 选项 A 维持.
-
-**W77 第 1 批 grand closure (主指挥协调范式第 49 次派工)**: 锚点范式 W76 第 1 批 256 → W77 第 1 批 263 守恒 (+7). 当前 main HEAD = `66be6f266` (W77 第 1 批 grand closure). 2 agents 完成: A-2 Edge-TTS B+D 渐进式实施方案设计 (commit `66be6f266`, 调研 ≠ 生产) / C-1 声纹 12 会议音频 reprocess + #151 rollback 重演 实战 (commit `264c9be34`, +1, 30/30 e2e PASS, 3 新铁律 类 20.7 调研派生的 schema 任务). 累计 19 批 330+ commits + 330+ 铁律. W19 选项 A 维持.
-
-**W76 第 1 批 grand closure (主指挥协调范式第 48 次派工)**: 锚点范式 W75 第 1 批 256 → W76 第 1 批 256 守恒 (0 增量, 部分派工 W76 + W77 + W78 派工顺序表未拍板). A-1 拦截 (类 20.11 实例 2: 同源实战). 累计 18 批 310+ commits + 310+ 铁律. W19 选项 A 维持.
-
-**W75 第 1 批 grand closure (主指挥协调范式第 49 次派工)**: 锚点范式 W74 第 1 批 249 → W75 第 1 批 256 守恒 (+7, 0 regression). 当前 main HEAD = `504c4c1b5` (W75 第 1 批 grand closure 收口, memory/w75-1st-grand-closure-2026-07-27.md 193 行). 14 commits ahead of base `51d390b07` (W74 第 1 批 grand closure). 6/7 agents 完成: A-2 Edge-TTS 移动端调研 (commit `f538e3cf6`, +3) / B-1 声纹 B+C 方案 (commit `449da75c2`, +1, 派工 v6 段 5 反馈 #6 实战 拒绝方案 A 字面改 0.9, 三层口径 0.7=distance/0.55=单段命中/90%=跨会议 acceptance gate) / B-2 跨租户 422 修复 (commit `6d9c9e446`, +1, 1 行 production 修 `TenantIsolationViolation.__init__` 补 `code=self.code`, 派工 v6 段 5 反馈 #7 实战) / B-3 4 类 hot-fix P2 webhook 修复 (commit `a06fbe4df`, +1, 共用 webhook 库 + retry 策略) / C-1 商业化真支付 SDK (commit `2487ce6658`, +1, Stripe + Alipay RSA2 + WeChat Pay V3 真接入 + 重放保护 + 沙箱测试) / D-1 9 表索引 + 商业化 webhook + 跨租户 + hot-fix P2 4 项 PASS 验证 (commit `a5a095da2`, 0 验证不计, 9 PASS / 5 FAIL 据实). A-1 撤回 (类 20.11 派工前提错配实战, 6 收尾分支尚未 commit 派 A-1, 主指挥直接执行合并避双倍 commit). alembic 1 head `['085_billing_payment_tables']` 守恒 (单链 076→078→080→081→082→083→084→085, W74 第 1 批 P1 修复实战). 0 production code 改动铁律 5/7 守恒 (2 例外已批: B-2 1 行跨租户修复 + C-1 真支付 SDK 3 SDK). 派工前提铁律 12 条沉淀 + 类 20 新增 12 条 (类 20.1-20.12, 5 实例累计: W72 B-4 错配 / W73 D-1 brief 假设 / W74 A-1 错判基线 / W74 B-1 084 P1 缺陷 / W75 A-1 错派). 累计 17 批 290+ commits + 290+ 铁律. W76/W77/W78 派工顺序表 (7+7+7 = 21 agents, 锚点 256→~277). 详见 `memory/w75-1st-grand-closure-2026-07-27.md` (本任务沉淀).
-
-**W74 第 1 批 grand closure (主指挥协调范式第 48 次派工)**: 锚点范式 W73 第 1 批 242 → W74 第 1 批 249 守恒 (+7, 0 regression). 当前 main HEAD = `51d390b07` (W74 第 1 批 grand closure 收口, memory/w74-1st-grand-closure-2026-07-27.md 198 行). 17 commits ahead of base `999276dda` (W73 第 1 批 grand closure). 6/7 agents 完成 (A-1 撤回 类 20 错配实战): A-2 声纹 MATCH_THRESHOLD 调研 (commit `306ac657e`, +1) / B-1 9 表 2 索引修复 (commit `aef117b17`, +1) / B-2 计费真支付 mock (commit `879723704`, +5, 3 支付网关 + 4 表 + alembic 085) / C-1 240 题灰度实施 (commit `8033618d`, +1) / D-1 多租户实战压测 (commit `8565ef21c`, +1) / E-1 守恒验证 5 件套 (commit `de85ba006`, 0 验证不计, 3 PASS / 2 FAIL 据实 派工 v4 铁律 3 实战). 4 项主拍决策全部实战: (1) P0 修 (084 P1 修复 + W73 7 分支合并入 main) (2) 084 走 B 路径 (复数表名 meetings/members + ALTER COLUMN TYPE jsonb, commit `8d0d12c2d`) (3) 撤回 W74 B-2 重复派工但保留数据 (替换 W73 B-1 Step 5) (4) W73 7 分支立即合并入 main (commit `9ef05e5ae` 锚点 235→242 +7). alembic 1 head `['085_billing_payment_tables']` 守恒. 派工前提错误类 20 实战 4 实例沉淀 (含 W74 A-1 错判基线 + W74 B-1 084 P1 缺陷). 累计 16 批 280+ commits + 280+ 铁律.
-
-**W73 第 1 批 grand closure (主指挥协调范式第 47 次派工)**: 锚点范式 W72 第 2 批 235 → W73 第 1 批 242 守恒 (+7, 0 regression). 当前 main HEAD = `999276dda` (W73 第 1 批 grand closure, memory/w73-1st-grand-closure-2026-07-27.md 148 行). 14 commits ahead of base `45de56f3b` (W72 第 2 批 grand closure). 7/7 agents 完成: A-1 部署收口 (合并 + alembic 080 接 078 链序调整, 14 commits) / A-2 声纹+ASR+TTS 调研 (commit `a2243a650`) / B-1 商业化 Phase 8 收口 (commit `a6835841`) / B-2 4 类 hot-fix 监控 (commit `68e024677`) / C-1 7 维评分商业化改造 (commit `6e65b32d5`) / D-1 qa-bench D9 W73 调研整合 (commit `ad2640891`) / E-1 守恒验证 5 件套 (commit `6225c7c94`). alembic 1 head `['083_commercial_tenant_isolation']` 守恒 (W73 A-1 修复后单链 076→078→080→081→082→083). 派工前提铁律 12 条沉淀 + 类 20 新增 3 实例 (含 W73 D-1 brief 假设错误). 累计 15 批 270+ commits + 270+ 铁律.
-
-**W72 第 2 批 grand closure (主指挥协调范式第 46 次派工)**: 锚点范式 W72 第 1 批 220 → W72 第 2 批 235 守恒 (+15). 当前 main HEAD = `45de56f3b` (W72 第 2 批 grand closure, memory/w72-2nd-grand-closure-2026-07-27.md 142 行). 15 commits ahead of base `2db1db600` (W72 B-5). 15/15 agents 完成: A-1 部署收口 + A-2 派工 v10 + A-3 plans 真验证 + B-1 PR2 sharing 差量 + B-2 PR3 comment v2 验收 + B-3 PR5 trash + alembic 080 + B-4 PR7 file_request 15 case e2e + B-5 商业化 Phase 8 起步 + C-1 Drive v2 部署文档 v3 + C-2 qa-bench D9 调研 + C-3 Mobile v3.4 商业化暗色 + D-1 gap analysis 恢复 + D-2 6 类文档同步 + D-3 锚点范式 + E-1 守恒验证. 0 production code 14/15 守恒 (5 例外已批). 派工前提铁律 12 条沉淀 + 类 20 新增 2 实例 (含 B-4 错配 + D-1 brief 假设). 累计 14 批 250+ commits + 260+ 铁律.
-
-**W72 第 1 批 D-2 6 类文档同步 (mid-派工, 锚点范式 W71 206 → W72 第 1 批 220 守恒预测 +14, 派工 v6 段 5 反馈 #2 实战)**: 当前 main HEAD = `2db1db600` (W72 B-5 桌面 ChatViewSSE 顶栏 6 主题 dark mode 完整版, commit `b7ad730a6`, 锚点范式 W71 206 → W72 B-5 215 单批 9 守恒, 6 主题 × 3 viewport = 18 视觉快照, 4 新铁律). W72 第 1 批 15 agents 中 5 push origin (A-1 派工调研 commit `6e074ffd9`/`6d89bac8d` 第 207 守恒, A-2 派工 v9 commit `717d47f08`/`937742218` 第 208 守恒, A-4 grand closure 预期版 commit `7a1d07df8` 第 210 守恒, B-2 ThinkingModeSwitch + ChatBreadcrumb + useUiStore v-model commit `228aa9de3` 第 212 守恒, C-1 容器镜像 rebuild commit `08df36e80` 第 216 守恒), 余 10 agents (A-3 / B-1 / B-3 / B-4 / B-5 / C-2 / C-3 / D-1 / D-3) worktree 未开工. W72 D-2 6 类文档同步仅聚合 5 agents push origin commits, **不伪造**未开工 B 路线 5 agents (B-1 NavRail.vue / B-3 ChatViewSSE 顶栏 3-zone / B-4 NavRail 跨端点 / B-5 桌面 dark / C-2 商业化 / C-3 ppt-word 5 缺口) 工作内容. 锚点范式 W72 第 1 批 220 守恒预测, 真实施 5 commits 中最高 = 第 216 (C-1 容器镜像 rebuild). 详见 `memory/w72-route-72nd-batch-d2-docs-sync-2026-07-24.md` (本任务沉淀).
-
-**W72 第 2 批 D-2 6 类文档同步 (mid-派工, 锚点范式 W72 第 1 批 220 → W72 第 2 批 ~234 守恒预测, 派工 v6 段 5 反馈 #2 实战 + 派工 v10 段 7 19 类实战)**: W72 第 2 批 15 agents 派工基线已落地 3 commits = A-1 部署收口 (分支 tip `428f4a4f2` 合并 W72 第 1 批 B-1~B-5 + ChatViewSSE 3-zone 测试 + NavRail-routing, 5 W72nd 合并累计, 锚点范式 211~215 单批 9 守恒) + A-3 启动前 plans 真验证 (commit `6ae13629f`, 锚点范式 220→224 +4) + C-1 Drive v2 部署文档 v3 (commit `1a330a767`, 锚点范式 220→230 +10). 余 12 agents (A-2 派工 v10 / B-1 PR2 sharing / B-2 PR3 comment v2 / B-3 PR5 trash + alembic 080 / B-4 PR7 file_request / B-5 商业化 Phase 8 启动 / C-2 qa-bench D9 调研 / C-3 Mobile v3.4 商业化 / D-1 Drive v2 路线图缺口 / D-3 锚点范式 / E-1 守恒验证) worktree 未开工 (0 commit, base HEAD `2db1db600`). W72 第 2 批 D-2 文档同步**沿用 W72 第 1 批 D-2 真实施聚合纪律** — 仅聚合 3 commits 真落地工作, 不伪造未开工 agents 工作内容, 严格遵守派工 v6 §1.2 "Status 段必真验证". **W72 第 2 批锚点范式真实施 230 守恒预测** (C-1 部署文档 v3, +10 守恒) + 派工 v10 段 7 19 类实战 + 派工 v6 段 5 反馈 #2 实战. **0 production code 改动铁律 14/15 守恒预测** (1 例外预留给 B-3 alembic 080 + B-1 主体完工, 必含派工批文). W19 选项 A 维持 (4 留未来 PR 不发起新排期). 详见 `memory/w72-2nd-route-d2-docs-sync-2026-07-27.md` (本任务沉淀). **W73 起步纪律 6 项** (派工 v10 段 7 实战 + C-1 commit `1a330a767` 段 7 沉淀): (1) 派工前 plans 真验证 (派工 v4 铁律 3 实战, A-3 `6ae13629f` 7 grep + 派生新任务 6 项真验证表) (2) 派工 alembic 必须明确 down_revision (写进派工 prompt 段 0 第 1 行) (3) merge 后立即 verify 1 head (CLAUDE.md 永久锚点) (4) `npm run build` 唯一合法 (派工 v4 铁律, `vite build` 直跑必坏 PWA 教训 `5d2bcdfd`) (5) 6 点 curl 验证必含 (nginx octet-stream 白屏教训, CLAUDE.md 永久锚点) (6) SW BUMP + PWA install 验证 (派工前提第 3 条铁律).
-
-**W71 batch partial (mid-派工, 派工纪要 v6 段 5 反馈 #2 实战 D-2 沿用)**: 当前 main HEAD = `0ae74f477` (W68-14th H-5 build + 5 hot-fix), W71 批派工 15 agents 中已完成子集 — 仅 W71-C-3 (notify v2 仓库模板回测 memory, commit `af4129925`, 锚点范式第 176 守恒预测) 合并至 origin/main；W71-A-1 (部署收口 docs, commit `0e46bb7b5`) + W71-A-4 (grand closure memo, commit `1b08d8501`) 已 commit 在分支待合并；余 12 agents (A-2 prompt v7 / A-3 plans verify / B-1..B-5 / C-1 D8 / C-2 subagent / D-1 prompt v8 / D-3 anchor) 仍处于 base HEAD `0ae74f477` 0 commit 状态。W71 D-2 文档同步仅聚合已合并到 origin/main 的 1 commit + branch-pushed 2 commits, **不伪造**未实施 agent 工作内容, 严格遵守派工 v6 §1.2 "Status 段必真验证"。锚点范式 W68 第 14 批 175 → W71 ~184 守恒 **待 grand closure 真实施后**宣告, 当前本批 D-2 锚点范式为 176 守恒预测 (仅 C-3 一 commit 落地)。**0 production code 改动铁律预测 N/15 守恒待定** (W71 大量 agent 未开工, 例外清单尚未拍板)。详见 `memory/w71-route-71st-batch-d2-docs-sync-2026-07-24.md` (本任务沉淀).
-
-**W68 第 14 批 grand closure**: Drive v2 PR17/18/5 实施 (B-1/B-2/B-3 alembic 078/079/080 串单链) + qa-bench D8 调研 (C-1) + Mobile UX v3.3 dark (C-2) + Desktop 缩略图懒加载 (C-3) + claude-code notify v2 部署验证 (B-4) + 派工纪要 v5/v6 (A-2/D-1) + W70+ backlog 调研 (A-3) + W71-W72 拍板 (D-4) + 锚点范式第 175 守恒 (D-3) + 6 类文档同步 (D-2). 主指挥协调范式第 44 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 104 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → W68 第 12 批 156 → W68 第 13 批 168 → **W68 第 14 批 175** (6 守恒, 派工纪要 v5/v6 + plans 优先 + 路线 fallback + 0 production code 改动铁律 10/15 守恒). 累计 14 批 140+ agent commits + W68 跨主题 240+ commits (origin/main HEAD `9b7c0e8a9` 之前). **0 production code 改动铁律 10/15 守恒** (5/15 例外已批: B-1 PR17 + B-2 PR18 + B-3 PR5 alembic 078/079/080 + C-2 Mobile dark + C-3 Desktop thumbnail). W19 选项 A 维持. 详见 `memory/w68-route-14-d2-doc-sync-2026-07-24.md` (本任务沉淀).
-
-**W68 第 13 批 grand closure**: 8 plans Status 闭环 (A-1) + W70 派工实施 (B-1 claude-code 通知体系 v2 仓库模板 + B-2 ollama playwright + B-3 plans backlog) + 调研发现小修 (C-1 mobilefile fix + C-2 Drive PR9 评论删除权限 + C-3 Desktop emoji perf) + 收尾 (D-1 prompt template v4 + D-2 6 类文档同步 + D-3 grand closure memory). 主指挥协调范式第 43 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 104 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → W68 第 12 批 156 → **W68 第 13 批 168** (12 守恒, plans 闭环 + W70 派工 + 调研发现小修 + 收尾四驱动). 累计 13 批 110+ agent commits + W68 跨主题 270+ commits (origin/main HEAD `7b6f0305e` 待主指挥合并). **0 production code 改动铁律维持** (W68 第 13 批 docs/memory 范畴, 仅 6 留 W70+ 派工 backlog 例外已批: qa-bench-d5-ci-gate + exe-logical-pie Part 2 + fizzy-cooking-puzzle Phase 6 UI + silly-gliding-dahl chatgpt Phase 6 UI + isolation-a1 Drive PR7 audit + bubbly-parnas voice-alert v1). W19 选项 A 维持. 详见 `memory/w68-route-13-d2-doc-sync-2026-07-24.md` (本任务沉淀).
-
-**W68 第 12 批 grand closure**: Drive v2 路线 C 续 (PR9 评论删除 + emoji 性能 + tabsWithCounts fix + claude-notify-v2 升级) + qa-bench D7 baseline CI + plans 闭环续 + 6 类文档同步 + grand closure memory 沉淀. 主指挥协调范式第 42 次派工. 锚点范式 W68 第 11 批 144 → **W68 第 12 批 156** (12 守恒, 路线 C 续 + plans 闭环 + docs 同步三驱动). 累计 12 批 100+ agent commits + W68 跨主题 255+ commits (W68 第 11 批 main HEAD `26945d0ea` 之后). **0 production code 改动铁律 12/15 守恒** (3 例外已批: C-1 tabsWithCounts + C-2 PR9 评论删除 + C-3 emoji 性能). W19 选项 A 维持. 详见 `memory/w68-route-12-d2-doc-sync-2026-07-24.md` (W68 第 12 批 D-2 commit `36e1a57d3`).
-
-**W68 第 11 批 grand closure**: plans 状态闭环 (13 plans 含 8 新 plans 创 Status) + W69 派工实施 (3 plans delegated/distributed/fizzy 修正) + alembic 重新规整 (066/067/068/069 + B 派工 070/071/072/073 串单链) + Mobile TabBar Drive 入口 + Desktop v3.2 22 SKIP 真跑 + 6 类文档同步 + grand closure memory 沉淀. 主指挥协调范式第 41 次派工. 锚点范式 W68 第 10 批 134 → **W68 第 11 批 144** (10 守恒, plans 闭环 + W69 派工实施 + alembic rebase 三驱动). 累计 11 批 90+ agent commits + W68 跨主题 240+ commits (W68 第 10 批 main HEAD `b9ada515e` 之后). **0 production code 改动铁律 11/15 守恒** (4/15 新功能/小修例外: C-1 alembic rebase + B-2 Mobile TabBar + C-2 CLI 统一 + C-3 真 e2e). W19 选项 A 维持. 详见 `memory/w68-grand-closure-11th-batch-2026-07-24.md` (W68 第 11 批 D-3 commit `26945d0ea`).
-
-**W68 第 10 批 grand closure**: Drive v2 PR9-11 master runbook + 桌面评论 UI v3.2 收口 (emoji react + @mention 预览 + breadcrumb) + Desktop 评论 v3.2 E2E 覆盖 + qa-bench D6 D1-D8 7 维评分 (7d-scoring) + KB 闭环 (auto-intake rollback + save-to-kb + closed-loop) + plans Status 修正 (8 plans 闭环) + VAPID 持久化 + alembic 066 串单链 hotfix + 6 类文档同步. 主指挥协调范式第 40 次派工. 锚点范式 W68 第 9 批 116 → **W68 第 10 批 134** (18 守恒, 部署收口 + W69 派工 + P0 VAPID 三驱动). 累计 10 批 80+ agent commits + W68 跨主题 225+ commits (W68 第 10 批 main HEAD `b9ada515e`). **0 production code 改动铁律维持** (W68 第 10 批 14 commits 中 11 docs/memory + 3 新功能/小修例外: B-3 KB 闭环 + B-4 KB 闭环 automation + C-3 VAPID 持久化). W19 选项 A 维持. 详见 `memory/w68-route-10-d2-doc-sync-2026-07-24.md` (W68 第 10 批 D-2 commit `cfe4875b2`).
-
-**W68 第 1+2+3+4+5+6+7+8+9 批完成**: W68 第 1 批 14 agents (路线 A Drive v2 PR8 + 路线 C Mobile UX v3.0) + Safari iOS 空白页修复 + W68 第 2 批 3 agents (路线 B D6 调研 + 路线 D 文档同步 + 路线 E baseline 守恒验证) + W68 第 3 批 11 agents (Drive v2 PR9 评论 thread + 文件版本历史 + 移动端评论 UI + qa-bench D6 调研 + Mobile UX v3.1 + 文档部署收口) + W68 第 4 批 15 agents (跨主题收口 + Plan 闭环 2/2) + W68 第 5 批 15 agents (Drive v2 PR10 collab + Mobile v3.2 push + 评论 hotfix 系列) + W68 第 6 批 16 agents (Verified Plans 深度审计 + 70+ plans 重整) + W68 第 7 批 1 agent (grand closure 闭环) + W68 第 8 批 14 agents (Drive v2 部署文档 + 永久纪律沉淀 + docs 同步 + 6 commit qa-bench/QA D6 Phase 2/3 + 部署验证) + W68 第 9 批 15 agents (Drive v2 PR11 + plans 闭环 + 任务模式基调 v2 + docs 同步).
-
-**跨周期累计**: 67 plans 状态化 (W66) → 59 plans 活跃 + 8 plans archived (W68 第 7 批) → W68 第 9 批 plans Status 闭环 8 + 8 留 W69 → W68 第 10 批 plans Status 修正 8 闭环 + VAPID 持久化 → W68 第 11 批 plans 状态闭环 (13 plans 含 8 新 plans 创 Status) + W69 派工实施 3 + alembic rebase 066/067/068/069 → W68 第 12 批 plans 闭环续 + qa-bench D7 baseline CI → W68 第 13 批 plans 闭环 8 + 6 留 W70+ 派工 backlog + qa-bench D5 gate docs/CI 占位 (W67) + Lint CSS 守恒 (71 PASS + 7 SKIP baseline 38+ 守恒) + W68 第 6 批 plans 审计 70+ plans 100% 真实状态化.
-
-**W68 累计 commits: 140 → 155 (第 8 批) → 第 9 批 12 守恒 → 第 10 批 18 守恒 → 第 11 批 10 守恒 → 第 12 批 12 守恒 → 第 13 批 12 守恒 → 第 14 批 6 守恒. 锚点范式 90 → 104 → 116 → 134 → 144 → 156 → 168 → 175 单调上升预期.**
-
-**任务模式基调**: 派工以已有 plans 实施为主 + 更新过程中发现的小修为辅 (W68 第 4 批主指挥拍板, W68 第 9 批 D-3 升级 v2 加 5 拍板纪律 + 4 阶段流程 v2, W68 第 12 批 D-1 升级 v3 加派工前提 stat 验证纪律, W68 第 13 批 D-1 升级 v4 加 alembic verify + PS 5.1 参数 + plans 真验证 3 段). 详见 `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md` + `docs/w68-task-mode-paradigm-v2.md` + `docs/w68-13th-batch-prompt-template-v4.md`.
-
-**W68 第 6+7+8+9 批纪律沉淀锚点范式**: `## W68 第 6+7+8 批纪律沉淀 (永久锚点)` 章节 (见下) — 永久纪律固化, 未来会话读到 CLAUDE.md 即可了解所有审计/闭环纪律.
-
-### W68 第 8 批 grand closure (2026-07-24)
-
-**W68 第 8 批 grand closure** (主基调 "W68 第 7 批合并 + 路线驱动 + hot-fix #18 跟踪"). 主指挥协调范式第 36 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → **W68 第 8 批 102** (单批 15 守恒). 累计 8 批 50+ agent commits + W68 跨主题 200+ commits (main HEAD `05c60e68d`). **0 production code 改动铁律 12/15 守恒** (3 例外已批: B-1 Drive v2 PR11 + B-2 Drive v2 PR12 + B-3 Mobile v3.2 iOS 分享 + 生物识别). W19 选项 A 维持 (4 留未来 PR). 详见 `memory/w68-grand-closure-8th-batch-2026-07-24.md` + `memory/w68-route-9-a2-claudmd-anchor-2026-07-24.md`.
-
-**W68 第 8 批 15 agents 派工清单** (主基调 "W68 第 7 批合并 + 路线驱动 + hot-fix #18 跟踪"):
-- **A-1**: W68 第 7 批 15 分支合并到 main + 5 新铁律 (锚点范式第 90 守恒, commit `62d4a59f7`)
-- **A-2**: Drive v2 PR9-11 master runbook + FAQ (commit `e51699d48`)
-- **A-3**: W68 第 7 批 + 3 hot-fix 部署验证 8 段 (锚点范式第 92 守恒, commit `c6399df32`)
-- **B-1**: Drive v2 PR11 评论 path 物化 + GIN trgm 索引 + breadcrumb 端点 (commit `a2a00ad73`)
-- **B-2**: Drive v2 PR12 emoji reactions (锚点范式第 94 守恒, commit `21a1906a8`)
-- **B-3**: Mobile v3.2 iOS Safari 分享 + 生物识别集成 (commit `faffaf8ff`)
-- **B-4**: qa-bench D6 Phase 3 matrix 4 runner 并行 (commit `c496862b7`)
-- **C-1**: hot-fix #18 (Knowledge.uploader_id → created_by) 实施报告 (锚点范式第 97 守恒, commit `5c28059d5`)
-- **C-2**: W68 第 7 批 worktree + 分支清理脚本 + runbook (锚点范式第 98 守恒, commit `cf03425a0`)
-- **C-3**: W68 第 8 批 grand closure memory (锚点范式 90 → 104 预期, commit `79b44d171`)
-- **D-1**: W68 第 7 批 15 agents 调研发现 6 小修整合 (锚点范式第 88 守恒, commit `353ba295a`)
-- **D-2**: 6 类文档同步 + W68 第 8 批 grand closure memory 引用 (锚点范式 90 → 104 预期, commit `014585813`)
-- **D-3**: W68 第 6+7 批纪律沉淀到 CLAUDE.md (锚点范式第 102 守恒, commit `6f78e4cec`)
-- **D-4**: hot-fix #18 监控日志 + 5 新铁律 (锚点范式第 103 守恒, commit `1ce813e38`)
-- **D-5**: W68 任务模式基调最终验证 (锚点范式第 104 守恒)
-
-**W68 第 8 批核心成果**:
-- **alembic 单链纪律强化**: 062 (PR9 评论) → 063 (PR9 版本) → 064 (PR10 协同) → 065 (PWA push) → 066 (PR11 path) → 067 (PR12 reactions) — 6 串单链迁移 0 双头
-- **永久纪律固化**: W68 第 6+7 批审计/闭环纪律从 memory/ 提升到 CLAUDE.md `## W68 第 6+7 批纪律沉淀 (永久锚点)` 节 (D-3), 未来会话读到 CLAUDE.md 即可了解所有审计/闭环/守恒纪律
-- **任务模式基调实战彻底验证**: plans 优先 + 小修搭配 经 W68 第 4+5+6+7+8 批 5 批实战 (累计 60+ agents 派工) 彻底验证, 0 regression
-- **0 production code 改动铁律 12/15 守恒**: 路线 A/C/D/E 完全维持 (纯 docs/memory/scripts/ 范畴), 路线 B (3 个新功能扩展) 例外已批: B-1 PR11 评论 path 物化 + B-2 PR12 reactions + B-3 Mobile v3.2 iOS 分享 + 生物识别
-- **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 跨 tab / 7 E2E / pending-future-3). 量化触发条件维持.
-
-**W68 累计 commits**: 30+8+12+30+30+15+15+15 = **155 commits** (W68 第 1+2+3+4+5+6+7+8 批累计).
-
-**锚点范式数字正确性**: W68 第 7 批 87 → W68 第 8 批 102 (单批 15 守恒, 0 regression).
-
-### W68 第 14 批 grand closure (2026-07-24)
-
-**W68 第 14 批 grand closure** (主基调 "Drive v2 PR17/18/5 实施 + qa-bench D8 调研 + Mobile UX v3.3 dark + Desktop 缩略图懒加载 + 派工纪要 v5/v6 + W70+ 调研 + W71-W72 拍板"). 主指挥协调范式第 44 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → W68 第 12 批 156 → W68 第 13 批 168 → **W68 第 14 批 175** (6 守恒). 累计 14 批 140+ agent commits + W68 跨主题 240+ commits. **0 production code 改动铁律 10/15 守恒** (5 例外已批: B-1 PR17 + B-2 PR18 + B-3 PR5 alembic 078/079/080 + C-2 Mobile dark + C-3 Desktop thumbnail). W19 选项 A 维持. 详见 `memory/w68-route-14-d2-doc-sync-2026-07-24.md` (本任务沉淀).
-
-**W68 第 14 批 15 agents 派工清单** (主基调 "派工纪要 v5/v6 + plans 优先 + 路线 fallback + 0 production code 10/15 守恒"):
-- **A-1**: 主指挥部署收口 (主拍, 不改业务路径)
-- **A-2**: W68 第 14 批派工纪要 v5 (新增段 5 反馈循环 + 段 6 合并顺序表, 锚点范式第 170 守恒, commit `93dbd2cc7`)
-- **A-3**: W70+ plans backlog v2 调研 (子 plan ②③ 实施路径 + W71 主拍, 锚点范式第 171 守恒, commit `0fe7ab2f1`)
-- **A-4**: W68 第 14 批 grand closure memory 预期版 (锚点范式第 169 → 175 守恒, commit `aee60b245`)
-- **B-1**: Drive v2 PR17 文件秒传 (alembic 078, 锚点范式第 172 守恒)
-- **B-2**: Drive v2 PR18 团队共享盘 (alembic 079, 锚点范式第 173 守恒)
-- **B-3**: Drive v2 PR5 分片上传 (alembic 080, 锚点范式第 174 守恒)
-- **B-4**: claude-code notify v2 部署验证 (5 触发器 PS 5.1 + bash, 守恒)
-- **C-1**: qa-bench D8 调研 (七项实施前置, 守恒)
-- **C-2**: Mobile UX v3.3 dark 跨组件验证 (web 例外, 锚点范式第 175 守恒)
-- **C-3**: Desktop 缩略图懒加载 + LQIP + 尺寸占位 (web 例外, 锚点范式第 175 守恒)
-- **D-1**: W68 第 14 批派工纪要 v6 (派工反馈回收 + 合并表, 锚点范式第 175 守恒)
-- **D-2**: 6 类文档同步 + W68 第 14 批 grand closure memory 引用 (本任务, 锚点范式第 175 守恒预测)
-- **D-3**: W68 第 14 批锚点范式第 175 实际收束 (锚点范式 169 → 175 实际)
-- **D-4**: W71-W72 拍板 (主指挥决策, 守恒)
-
-**W68 第 14 批核心成果**:
-- **Drive v2 PR17/18/5 实施 (B-1/B-2/B-3)**: 文件秒传 (alembic 078) + 团队共享盘 (alembic 079) + 分片上传 (alembic 080), 接 077 串成单链 077→078→079→080, 严格遵守 §"2026-07-24 alembic 并行 agent 串单链纪律"
-- **qa-bench D8 调研 (C-1)**: 七项实施前置 (题库版本锁定 + 数据脱敏 + 模型/endpoint 锁定 + 阈值与 gate + CI secret 检查 + baseline 对照 + 失败重跑/产物保留策略), 调研完成 ≠ 生产实施
-- **Mobile UX v3.3 dark (C-2)**: 跨组件透传 (路由级双栈 + EP/NutUI 边界 + 非 scoped token + 系统 light/dark 切换 + 持久化), 单页面截图不构成通过
-- **Desktop 缩略图懒加载 (C-3)**: LQIP + 骨架 + 固定宽高比 + 加载失败回退 + IntersectionObserver/等价触发, 避免布局抖动与首屏大图下载
-- **claude-code notify v2 部署验证 (B-4)**: 5 触发器实测 (PreToolUse + PostToolUse + Stop + SubagentStop + Notification), PS 5.1 + bash 两端验证
-- **派工纪要 v5 (A-2) + v6 (D-1)**: 段 5 反馈循环 + 段 6 合并顺序表 + 派工反馈回收 + 合并表, 不推倒 v1-v4 历史约束
-- **W70+ backlog 调研 (A-3)**: 6 plans 子计划 ②③ 实施路径 + W71 主拍, plans 真验证纪律 (git log + git show + grep)
-- **6 类文档同步 (D-2)**: 主仓库 5 文件 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + 用户级 1 文件 + 1 新增 memory (本任务)
-- **0 production code 改动铁律 10/15 守恒**: 路线 A/B/C/D 守恒, B-1/B-2/B-3 alembic 078/079/080 + C-2/C-3 web 共 5 例外已批, 例外不扩大到老路径重构
-- **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E) 不发起新排期
-
-**W68 累计 commits**: 155 + 18 + 10 + 12 + 12 + **~10** (本批) = 240+ commits (W68 跨主题累计, 含第 8 批 + 第 9 批 + 第 10 批 + 第 11 批 + 第 12 批 + 第 13 批 + 第 14 批)
-
-**锚点范式数字正确性**: W68 第 13 批 168 → W68 第 14 批 175 (6 守恒, 0 regression)
-
-### W68 第 13 批 grand closure (2026-07-24)
-
-**W68 第 13 批 grand closure** (主基调 "W68 第 12 批 plans 闭环 + W70 派工实施 + 调研发现小修 + 派工纪要 v4 升级"). 主指挥协调范式第 43 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → W68 第 12 批 156 → **W68 第 13 批 168** (12 守恒). 累计 13 批 110+ agent commits + W68 跨主题 270+ commits. **0 production code 改动铁律 12/15 守恒** (3 例外已批: 6 留 W70+ 派工 backlog + 调研发现小修 3 路线 C 续). W19 选项 A 维持. 详见 `memory/w68-route-13-d2-doc-sync-2026-07-24.md` (本任务沉淀).
-
-**W68 第 13 批 12 agents 派工清单** (主基调 "W68 第 12 批 plans 闭环 + W70 派工实施 + 调研发现小修 + 派工纪要 v4 升级"):
-- **A-1**: 8 plans Status 闭环 + 5 新铁律 (锚点范式第 158 守恒, commit `0c920c57c`)
-- **B-1**: claude-code 通知体系 v2 仓库模板 (alembic 070 临时编号, 锚点范式第 160 守恒)
-- **B-2**: ollama playwright 部署 (锚点范式第 161 守恒)
-- **B-3**: plans backlog 监控 (锚点范式第 162 守恒)
-- **C-1**: MobileFileCommentsView tabsWithCounts 重复声明 hotfix (锚点范式第 163 守恒, commit `00aab3de2`)
-- **C-2**: Drive v2 PR9 评论软删 + 3 角色权限 (锚点范式第 164 守恒, commit `2f7143a53`)
-- **C-3**: Desktop emoji react virtual scroll + lazy load 8 emoji (锚点范式第 165 守恒, commit `cf79261b`)
-- **D-1**: W68 第 13 批 prompt template v4 (5 段 prompt 升级: alembic verify + PS 5.1 + plans 真验证, 锚点范式第 166 守恒, commit `d7c52460c`)
-- **D-2**: 6 类文档同步 + W68 第 13 批 grand closure memory 引用 (本任务, 锚点范式第 168 守恒预测)
-- **D-3**: W68 第 13 批 grand closure memory (锚点范式 156 → 168 预期)
-- **D-4**: W68 第 13 批任务模式基调 v4 验证 (锚点范式第 168 守恒)
-- **D-5**: W68 第 14 批派工前监测脚本 (锚点范式第 168 守恒)
-
-**W68 第 13 批核心成果**:
-- **8 plans Status 闭环 (A-1)**: C-1 mobilefile-fix-tabsWithCounts + C-2 drive-pr9-comment-delete-permission + C-3 desktop-emoji-react-perf + B-4 claude-code-notify-system + B-1 drive-v2-pr14-path-auto-rebuild + B-2 drive-v2-pr15-version-tags + B-3 qa-bench-d7-baseline-ci 全部 COMPLETED + 真 commit hash 验证
-- **6 plans 真未实施 留 W70+ 派工 backlog**: qa-bench-d5-ci-gate + exe-logical-pie Part 2 (commit 4b215220 refactor 意外删除) + fizzy-cooking-puzzle Phase 6 UI + silly-gliding-dahl chatgpt Phase 6 UI + isolation-a1 Drive PR7 audit + bubbly-parnas voice-alert v1 (D-3 已完成 6 trigger 升级)
-- **W70 派工实施 (B-1/2/3)**: claude-code 通知体系 v2 仓库模板 + ollama playwright 部署 + plans backlog 监控
-- **调研发现小修 (C-1/2/3)**: tabsWithCounts 重复声明 hotfix + PR9 评论软删 + 3 角色权限 + Desktop emoji react virtual scroll + lazy load 8 emoji
-- **派工纪要 v4 升级 (D-1)**: 5 段 prompt 模板升级 (段 3 alembic verify + 段 4 PS 5.1 + 段 3 plans 真验证), 派工前提错误经验沉淀 12 案例
-- **0 production code 改动铁律 12/15 守恒**: 路线 A/B/D 完全维持, 路线 C 续 (3 个新功能扩展) 例外已批
-
-### W68 第 12 批 grand closure (2026-07-24)
-
-**W68 第 12 批 grand closure** (主基调 "W68 第 11 批 plans 闭环 + 路线 C 续 + plans 闭环续 + D7 baseline CI"). 主指挥协调范式第 42 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → W68 第 10 批 134 → W68 第 11 批 144 → **W68 第 12 批 156** (12 守恒). 累计 12 批 100+ agent commits + W68 跨主题 255+ commits. **0 production code 改动铁律 12/15 守恒** (3 例外已批: C-1 tabsWithCounts fix + C-2 Drive v2 PR9 评论删除 + C-3 Drive v2 PR12 emoji 性能). W19 选项 A 维持. 详见 `memory/w68-route-12-d2-doc-sync-2026-07-24.md` (W68 第 12 批 D-2 commit `36e1a57d3`).
-
-### W68 第 11 批 grand closure (2026-07-24)
-
-**W68 第 11 批 grand closure** (主基调 "plans 状态闭环 + W69 派工实施 + alembic 重新规整"). 主指挥协调范式第 41 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → W68 第 10 批 134 → **W68 第 11 批 144** (10 守恒). 累计 11 批 90+ agent commits + W68 跨主题 240+ commits. **0 production code 改动铁律 11/15 守恒** (4 例外已批: C-1 alembic rebase + B-2 Mobile TabBar + C-2 CLI 统一 + C-3 真 e2e). W19 选项 A 维持. 详见 `memory/w68-grand-closure-11th-batch-2026-07-24.md` (W68 第 11 批 D-3 commit `26945d0ea`).
-
-### W68 第 10 批 grand closure (2026-07-24)
-
-**W68 第 10 批 grand closure** (主基调 "部署收口 + W69 派工 + P0 VAPID"). 主指挥协调范式第 40 次派工. 锚点范式单调上升 W7 12 → W66 27 → W67 28 → W68 30 → W68 第 3 批 42 → W68 第 4 批 57 → W68 第 5 批 72 → W68 第 6 批 88 → W68 第 7 批 89 → W68 第 8 批 102 → W68 第 9 批 116 → **W68 第 10 批 134** (18 守恒). 累计 10 批 80+ agent commits + W68 跨主题 225+ commits. **0 production code 改动铁律 11/14 守恒** (3 例外已批: B-3 KB 闭环 + B-4 KB 闭环 automation + C-3 VAPID 持久化). W19 选项 A 维持. 详见 `memory/w68-route-10-d2-doc-sync-2026-07-24.md` (W68 第 10 批 D-2 commit `cfe4875b2`).
+**累计**: W68-W87 共 30 批 480+ commits + 500+ 铁律 + 类 20 累计 36 实例.
 
 ## 当前开发阶段
 
@@ -362,80 +217,32 @@ W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (�
 - **状态统一** — "待办"(todo) 和 "进行中"(in_progress) 语义高度重合，已统一为"进行中"。新建任务默认 in_progress，现有 todo 任务兼容显示
 - **移动端路由级双栈架构**（2026-06-13 收官）— 桌面端（Element Plus）和移动端（NutUI 4）**同一 URL 不同组件**，不共享 component 树。`useIsMobile.js` 监听 viewport + UA 兜底 → `router/index.js` 通过 `resolveMobile.js` 动态 import `views/mobile/*` 或 `views/*` → 桌面端 `el-*` 与移动端 `nut-*` CSS 完全隔离。**PWA 4 策略**：manifest + service worker（workbox）预缓存 app shell + useSafeArea 读 iPhone 安全区 + 离线 IndexedDB 兜底。**视觉回归测试**：Playwright 5 viewport × 13 核心页面，CI 截图对比基线
 
-## 2026-06-29 #043 账号持久化聊天历史（Phase 4+5 收官 6/8, Phase 6 UI 升级待启动）
+## 2026-06-29 #043 账号持久化聊天历史（Phase 1-8 全部收官）
 
-> **用户原始需求**：每个人与小气助手的对话的聊天记录要跟随账号一直记住，就像 ChatGPT、豆包一样。用户登录就可以看到过往聊天记录。
->
-> **痛点（现状）**：前端 100% `localStorage`（`chat_msgs_<sid>` + `chat_sessions_v3`），per-browser 不跨账号。换浏览器/换电脑/清缓存/移动端新设备 = 历史清零。多人共用一台电脑 = A 账号登入看到 B 账号的会话。后端 Redis `agent_session:{sid}:msgs` 有持久化但**无 user_id 反查**，且 `micro_bubble_agent.py:111 chat_stream()` 流式场景**不写 Redis**。
+**用户原始需求**: 每个人与小气助手对话跟随账号持久化, 跨设备同步 (像 ChatGPT/豆包). **决策**: PostgreSQL 主存 + 首次登录自动迁移 localStorage + 全功能 (搜索/导出/标签/分享/软删除).
 
-**用户决策**（2026-06-29）：
-- 存储后端：**PostgreSQL SQL 表**（质量与效果最好；不是 Redis 扩展）
-- 旧数据迁移：**首次登录自动迁移 localStorage → server**
-- 功能范围：**尽可能全**（搜索 + 导出 + 标签/收藏/归档 + 分享链接 + 软删除 + 跨设备同步）
+**8 phase 全部收官** (详见完整 12 条铁律沉淀 `memory/chat-history-stream-persistence-2026-06-29.md` + `memory/chat-history-persistent-2026-06-30.md`):
+- Phase 1-3 (PR1, commits `558962b1` + `5bf7c5c7`): ORM + alembic 039 + 11 API + 流式持久化修复
+- Phase 4-5 (commit `af8c8f7d`): 前端 store 重构 + 旧数据迁移 (含 tz-aware datetime fix `a1dfca2c`)
+- Phase 6 (UI 升级): SearchPalette/ShareDialog/ExportDialog/TagsEditor/useGlobalShortcuts/SessionSidebar/MobileSessionDrawer/LongPressWrapper/MobileActionSheet/MobileSearchSheet — vitest 492/492 PASS
+- Phase 7 (Celery 30 天清理): `app/services/chat_history_tasks.py:cleanup_soft_deleted_sessions_task` + beat schedule 3600s — pytest 7/7 PASS + 15 过期会话 100% 物理清除
+- Phase 8 (测试 + 沉淀): 5 新测试文件 (24+7+9+9+9 = 58 test cases) — vitest 492 + pytest 7 PASS
 
-**完整规划**：[C:/Users/pc/.claude/plans/chatgpt-structured-floyd.md](C:/Users/pc/.claude/plans/chatgpt-structured-floyd.md)（8 phase / 22-30h / 3 PR 收官）
+**关键铁律摘要**:
+1. 流式 chat 持久化必入场 append user (中断时 user 消息不丢)
+2. assistant 落库必在 done 事件 yield 后立即
+3. CancelledError 必 try/except + 落 partial + 重 raise
+4. JSONB mutate 后必 flag_modified
+5. 持久化失败必 best-effort (try/except + logger.error)
+6. 跨设备同步: PostgreSQL 主存, Redis 短期缓存
+7. 软删除: 30 天保留期 (与 task/meeting 对齐)
+8. 越权防护: `WHERE user_id = current_user.id` 强制
+9. 迁移幂等: `client_msg_id` 唯一约束 + `last_synced_at` 增量同步
+10. 异步不阻塞登录: 迁移后台跑 (setTimeout 1000ms)
+11. localStorage 兜底: `chat_migrated_v1` 标志缺失时重试
+12. tz-aware vs naive datetime 严格隔离 (CLAUDE.md 2026-06-05 教训复用)
 
-**8 phase 实施计划**：
-1. ✅ **Phase 1（commit `558962b1` 收官）**：ORM 模型 + alembic `039_chat_history.py`（chat_sessions / chat_messages / chat_shares 三表 + 索引 + 触发器）+ Pydantic schemas
-2. ✅ **Phase 2（commit `558962b1` 收官）**：11 个后端 API 端点（`/chat/sessions` CRUD + `/messages` + `/export` + `/share` + `/search` + `/sync` + `/shares/{token}`）— 17/17 e2e PASS
-3. ✅ **Phase 3（commit `5bf7c5c7` 收官）**：流式 chat 持久化修复（`micro_bubble_agent.py:111` + `partial_assistant_buffer` + SSE 事件 `message_persisted` / `sync_required`）— 25/25 e2e PASS
-4. ⏸ **Phase 4（待启动）**：前端 store 重构（chatHistory.ts + chatSessions.ts 同步 + useChatStream 持久化钩子 + 监听 sync_required 自动 reload）
-5. ⏸ **Phase 5（待启动）**：旧数据自动迁移（useChatMigration.js + localStorage `chat_migrated_v1` 标记 + 幂等键）
-6. ⏸ **Phase 6（待启动）**：UI 升级（搜索栏 + 标签 chip + 分享对话框 + 导出对话框 + 移动端长按 ActionSheet）
-7. ⏸ **Phase 7（待启动）**：Celery 30 天清理任务（`cleanup_soft_deleted_sessions` 每天凌晨 3:30）
-8. ⏸ **Phase 8（待启动）**：测试 + memory 沉淀（4 后端 + 2 前端单测 + 10 E2E + memory/chat-history-persistent-2026-06-29.md）
-
-**PR 分批**：
-- PR 1（Phase 1-3+7-8，~10h）✅ 已收官（含 558962b1 + 5bf7c5c7 + 后续 Phase 7/8）
-- PR 2（Phase 4-5，~6h）⏸ 待启动
-- PR 3（Phase 6，~8h）⏸ 待启动
-
-**复用现有 utilities**：`app.core.security.get_current_user`（JWT 鉴权） / `app.core.rate_limit`（write tier 30/min） / `app.services.task_service.auto_purge_trash_task`（30 天清理模式） / `web/src/composables/chat/useChatStream.ts`（多会话并行 8 铁律保留） / v77 P2.6-C EP 多主题透传 dark mode 适配
-
-**部署必做**（CLAUDE.md 752 行铁律）：
-```bash
-# 1. 跑迁移
-docker cp alembic/versions/039_chat_history.py microbubble-agent-app-1:/app/alembic/versions/
-docker exec -e SKIP_DB_SETUP=1 microbubble-agent-app-1 rm -rf /app/alembic/versions/__pycache__
-docker exec microbubble-agent-app-1 alembic upgrade head
-# 2. 重启后端
-docker compose restart app celery-worker
-# 3. 验证表（chat_sessions / chat_messages / chat_shares）
-```
-
-**关键风险与缓解**：
-- 流式 chat 中断 → partial 消息：`is_partial=True` 标记 + 重新生成机制（Phase 3 SSE 限制：连接断开时 partial 可能不落库，但 user 必落）
-- localStorage 迁移冲突：`client_msg_id` 幂等键 + `last_synced_at` 时间戳
-- 越权访问：`WHERE user_id = current_user.id` 强制 + 单元测试
-- alembic 链断：接 `038_*` 下游（v77 P2.6-F.5 cloned_from_id 已存在）
-
-**进度跟踪**（8/8 phase 完整收官）：
-- [x] Phase 1：ORM + alembic（commit 558962b1）
-- [x] Phase 2：11 API 端点（commit 558962b1）
-- [x] Phase 3：流式持久化（commit 5bf7c5c7）
-- [x] Phase 4：前端 store（commit af8c8f7d）
-- [x] Phase 5：旧数据迁移（commit af8c8f7d）
-- [x] Phase 4+5 fix：sync_from_local tz-aware datetime 500 bug（commit a1dfca2c，2026-06-30）
-- [x] **Phase 6：UI 升级（11 sub-tasks：SearchPalette/ShareDialog/ExportDialog/TagsEditor/useGlobalShortcuts/SessionSidebar/MobileSessionDrawer/LongPressWrapper/MobileActionSheet/MobileSearchSheet + 桌面 ChatViewSSE + 移动 MobileChatView/MobileHeader 集成）— vitest 492/492 PASS**
-- [x] **Phase 7：Celery 30 天清理（`app/services/chat_history_tasks.py:cleanup_soft_deleted_sessions_task` + `CHAT_HISTORY_RETENTION_DAYS=30` + beat schedule 3600s + `celery_app.conf.imports` + autodiscover 双注册）— pytest 7/7 PASS + 端到端 15 个过期会话 100% 物理清除验证**
-- [x] **Phase 8：测试 + 沉淀（5 新测试文件：test_chat_history_service.py 24 test + test_chat_history_tasks.py 7 test + useGlobalShortcuts.test.js 9 test + useChatMigration.test.js 9 test + chatHistory.test.js 9 test）— vitest 492 + pytest 7 + memory 完整沉淀**
-
-**Phase 3 已沉淀的 5 条新铁律**（详见 [memory/chat-history-stream-persistence-2026-06-29.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-stream-persistence-2026-06-29.md)）：
-1. **流式 chat 持久化必须入场 append user** — 不能 defer 到流结束（中断时 user 消息就丢）
-2. **assistant 落库必须在 done 事件 yield 之后立即** — 客户端收到 done 后才看到 message_persisted，事件顺序清晰
-3. **CancelledError 必须 try/except + 落 partial + 重 raise** — 不能吞，否则上层不知道中断 SSE 不关闭
-4. **JSONB 字段 mutate 后必须 `flag_modified`** — CLAUDE.md 2026-06-28 教训（rich_blocks / tool_trace / message_metadata 全部要）
-5. **持久化失败必须 best-effort** — 所有持久化操作 try/except + logger.error(exc_info=True)，不阻塞流式（用户体验优先）
-
-**Phase 4-8 已沉淀的 7 条新铁律**（详见 [memory/chat-history-persistent-2026-06-30.md](C:/Users/pc/.claude/projects/e--microbubble-agent/memory/chat-history-persistent-2026-06-30.md)）：
-6. 跨设备同步：消息主存 PostgreSQL，Redis 仅短期缓存（MVP 拉取模式，WebSocket push 留待 #009 Self-RAG）
-7. 软删除：30 天保留期（与 task / meeting 对齐，Celery NullPool + asyncio.run + logger.warning）
-8. 越权防护：所有查询 `WHERE user_id = current_user.id`（service 函数签名 `(db, user_id, session_id, ...)` 强制 user_id 过滤）
-9. 迁移幂等：`client_msg_id` 唯一约束 + `last_synced_at` 增量同步（服务端 `sync_from_local` 内部用 `hash(sid:role:ts:content[:50])` 生成）
-10. 异步不阻塞登录：迁移后台跑（`useChatStream.onMounted setTimeout 1000ms`），UI 立即可用
-11. localStorage 兜底：网络失败降级到本地（`chat_migrated_v1` 标志缺失时重试，**失败时不设标志**）
-12. tz-aware vs naive datetime 严格隔离：Celery task 用 `datetime.now(timezone.utc)` 传 cutoff，service 内部统一 `_to_naive_datetime()` 转换（CLAUDE.md 2026-06-05 教训复用，避免 "can't subtract offset-naive and offset-aware datetimes" 500）
-13. mobile long-press 必带 `navigator.vibrate(10)` 触觉反馈（CLAUDE.md 2026-06-27 教训）+ dark mode 跨组件必须非 scoped 块（CLAUDE.md v60-v67 第 5 次强化）
+**部署必做** (CLAUDE.md 752 行铁律): `docker cp alembic/versions/039_chat_history.py` → `rm -rf __pycache__` → `alembic upgrade head` → `docker compose restart app celery-worker`.
 
 ## 代码质量规范（2026-06-04 升级）
 
@@ -716,107 +523,36 @@ docker compose restart app celery-worker
 
 ## 2026-06-14 方案 C：Agent 单阶段流式渐进综合架构（plan: eager-juggling-dewdrop.md）
 
-**6 个 stage 已收官**（commits `5ce1203` `8a76750` `9862546` `d3f74df` `59cbbb1` `2f2b619` `bf61456`）。
-核心改造：取消 brief/detail 双层 → 单阶段流式综合（intent → agentic_loop → critique → done）。
+**6 个 stage 已收官**（commits `5ce1203` `8a76750` `9862546` `d3f74df` `59cbbb1` `2f2b619` `bf61456`）。核心改造：取消 brief/detail 双层 → 单阶段流式综合（intent → agentic_loop → critique → done）。
 
-### 方案 C 6 条铁律（必读）
+### 方案 C 6 条铁律（必读, 锚点范式永久锚点）
 
-**铁律 1：跨 event loop 安全（CLAUDE.md 752/812 行铁律升级）**
-所有外部 IO 客户端（AsyncAnthropic / aioredis / async_session）**禁止在模块顶部 import 阶段创建**。统一通过 `ctx: ToolContext` 注入：
-```python
-# ❌ 反模式（agentic_loop.py 模块顶部）
-from app.core.redis import async_redis_client  # 绑定 app loop 的全局单例
-client = AsyncAnthropic(...)                   # 同上
+**铁律 1：跨 event loop 安全** — 所有外部 IO 客户端（AsyncAnthropic / aioredis / async_session）禁止模块顶部 import 阶段创建, 统一通过 `ctx: ToolContext` 注入 (`redis` / `llm` / `loop_id`). Celery worker 跨 event loop 调用时由调用方注入新 client, 否则触发 "Future attached to different loop".
 
-# ✅ 正模式（ctx 注入）
-async def run(self, ..., ctx: ToolContext):
-    redis = ctx.redis or aioredis.from_url(settings.REDIS_URL)
-    llm = ctx.llm or LLMClient()
-```
-`ToolContext` 字段：`redis` / `llm` / `loop_id`（debugging）。Celery worker 跨 event loop 调用时由调用方注入新 client，否则触发 "Future attached to different loop"。
+**铁律 2：typing import CI 检查** — `app/agent/*.py` 新文件必跑 `bash scripts/check_typing_imports.sh` (106 文件 0 错误). 新代码用 `Dict`/`List`/`Optional` 但没 `from typing import ...` → 整个模块加载失败 → 工具一调就报. Docker 模块缓存会掩盖该 bug 数天.
 
-**铁律 2：typing import CI 检查**
-任何 `app/agent/*.py` 新文件**必须**在 commit 前跑：
-```bash
-bash scripts/check_typing_imports.sh   # 106 文件 0 错误
-```
-新代码若用了 `Dict`/`List`/`Optional` 但没 `from typing import ...` → 整个模块加载失败 → 工具一调就报。Docker 模块缓存会掩盖该 bug 数天。建议集成到 pre-commit hook。
+**铁律 3：SSE 事件 delta 语义显式标注** — `app/agent/protocol.py` 每个 `StreamEventType` 必须在源码注释里标注 `[increment]` (前端 `content += delta`) 或 `[snapshot]` (前端 `content = delta` 替换). 混用会再现 brief 重复输出 bug (commit `cf70ff5`).
 
-**铁律 3：SSE 事件 delta 语义显式标注**
-[app/agent/protocol.py](app/agent/protocol.py) 每个 `StreamEventType` 必须在源码注释里标注 `[increment]` 或 `[snapshot]`：
-- `[increment]` delta 是新增 token，前端必须 `content += delta`
-- `[snapshot]` delta 是完整快照文本，前端必须 `content = delta`（替换）或不 append
-- 混用会导致 2026-06-12 brief 重复输出 bug（commit `cf70ff5`）再现
-- 前端 useChatStream.ts switch case 也必须标注
+**铁律 4：流式 abort 安全** — `chat_engine.synthesize_stream()` 必须用 `async with TraceCollector(...) as trace` 包裹: `TraceCollector.__aexit__` 收到 `CancelledError` 时同步落库 (不走 Celery); `agentic_loop.run()` 在 `CancelledError`/`max_rounds` 时必调 `_sanitize_pending_tool_uses(messages, reason=...)` 给悬空 tool_use 追加 `tool_result: "用户已中断"` 哨兵, 否则下次拼回 context Anthropic API 报 400.
 
-**铁律 4：流式 abort 安全（trace 持久化 + 悬空 tool_use sanitize）**
-`chat_engine.synthesize_stream()` 必须用 `async with TraceCollector(...) as trace` 包裹：
-- `TraceCollector.__aexit__` 收到 `CancelledError`/`BaseException` 时**同步**落库（不走 Celery），保证 trace 至少有 partial 记录
-- `agentic_loop.run()` 在收到 `CancelledError` 或循环达到 `max_rounds` 时，必须调 `_sanitize_pending_tool_uses(messages, reason=...)`：给悬空 tool_use 追加 `tool_result: "用户已中断"` 哨兵，否则下次拼回 context 时 Anthropic API 报 400
-- `_sanitize_pending_tool_uses` 必须在调下一次 LLM 前调
+**铁律 5：LLMClient 接口 model 参数 keyword-only** — `async def complete(self, messages, *, model=None, system=None, ...)`, `*` 强制 keyword. 老代码传位置 model 必报 TypeError. LRU cache key 必须含 model 维度.
 
-**铁律 5：LLMClient 接口加 model 参数用 keyword-only**
-```python
-async def complete(self, messages, *, model=None, system=None, ...):
-    # `*` 强制所有调用走关键字
-```
-老代码传位置 model 必报 TypeError（炸得明显），不会静默走错模型。LRU cache key 必须含 model 维度（防不同模型互相污染缓存）。
-
-**铁律 6：feature flag 必须保留老路径代码（不是 git revert）**
-3 个 kill switch（**2026-06-29 已全部删除**，见 [## 2026-06-29 chat_engine_legacy 收官](#2026-06-29-chat_engine_legacy-30-天承诺提前-15-天收官)）：
-- `AGENT_NEW_ARCHITECTURE_ENABLED: bool = True`（全局开关）
-- `AGENT_REFLECTION_ENABLED: bool = True`
-- `AGENT_COMPRESSION_ENABLED: bool = True`
-- 关闭时由 `chat_engine.py` 内部调 `chat_engine_legacy.py`（保留作为 30 天回滚资产，**不是 in-file dead code**）
-- 30 天后（2026-07-14）单独 commit 删除 `chat_engine_legacy.py` → **已提前 15 天（2026-06-29）收官** (commit `817f1ffa`)
-
-### 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官
-
-**触发**：方案 C 2026-06-14 上线，配套保留 `app/agent/chat_engine_legacy.py`（460 行老 brief+detail 双层架构）作为 30 天回滚资产，配合 3 个 feature flag。30 天观察期（15 天已过 + 0 流量走 legacy + 生产 100% 走新架构）决定提前收官。
-
-**评估结果**：
-- ✅ 生产 0 流量走 legacy（3 flag 默认 `True`，`.env` / `docker-compose` 0 覆盖为 `False`）
-- ✅ 无运行时 ImportError 兜底，删文件不会触发异常
-- ⚠️ 4 个 unit test 断言依赖 legacy 文件 / flag，必须同步删除
-- ⚠️ 提前 15 天违反 30 天承诺 → docs 加注"提前于 2026-06-29 删除"
-
-**原子 1 commit 收官**（详见 git log）：
-- **删除（1）**：`app/agent/chat_engine_legacy.py`（460 行）
-- **修改（10）**：
-  - `app/agent/chat_engine.py` — 移除 kill switch + `_legacy_chat_stream` 委托方法 + 相关注释
-  - `app/agent/critic.py` — 移除 `AGENT_REFLECTION_ENABLED` 短路
-  - `app/agent/result_compressor.py` — 移除 `AGENT_COMPRESSION_ENABLED` 短路
-  - `app/agent/agentic_loop.py` — 移除 `AGENT_COMPRESSION_ENABLED` 包裹
-  - `app/config.py` — 删除 3 个 settings 字段
-  - `tests/unit/test_chat_engine_synthesize.py` — 删除 3 个 legacy 相关测试
-  - `tests/unit/test_agent_v2_main.py` — 删除 1 个 legacy 相关测试
-  - `tests/perf/conftest.py` + `test_synthesis_latency.py` — docstring 清理
-  - `docs/stage5-rollout-runbook.md` — 改写回滚步骤
-  - `CLAUDE.md` — 本节加注
-
-**回滚路径**：`git revert <commit-hash>` 一行撤销 + 重新部署。< 5 分钟恢复。
+**铁律 6：feature flag 保留老路径代码** — ~~3 个 kill switch (2026-06-29 已全部删除, commit `817f1ffa` 提前 15 天收官, `git revert <commit>` 一行恢复)~~. 详见 `git log` 收官记录.
 
 ### 部署必做
 
 ```bash
-# 1. 跑数据库迁移（Stage 3 加 7 列）
-docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble \
-  -f scripts/alter_agent_traces_stage3.sql
-
-# 2. 重启 Python 进程（CLAUDE.md 752 行铁律）
+# 1. 跑数据库迁移 (Stage 3 加 7 列)
+docker exec microbubble-agent-postgres-1 psql -U postgres -d microbubble -f scripts/alter_agent_traces_stage3.sql
+# 2. 重启 Python 进程 (CLAUDE.md 752 行铁律)
 docker compose restart app celery-worker
 ```
 
-不跑这两步，新架构写入 `intent_category` 等列会报 `column does not exist` 500。
+不跑这两步, 新架构写入 `intent_category` 等列会报 `column does not exist` 500.
 
 ### 方案 C 没做的（plan 明确范围外）
 
-- LangGraph 风格 state machine 重写
-- 多 agent 独立服务（planner / executor / critic）
-- 流式 ChartBlock 渐进渲染（边输出文字边出图）
-- RAG 引用图谱可视化
-- ASR/TTS 真流式（边录音边出文字）
-- ~~30 天后删除 `chat_engine_legacy.py`（2026-07-14）~~ — **已于 2026-06-29 提前 15 天完成** (commit `817f1ffa`)（见上节"## 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官"）
+LangGraph 风格 state machine 重写 / 多 agent 独立服务 (planner/executor/critic) / 流式 ChartBlock 渐进渲染 / RAG 引用图谱可视化 / ASR/TTS 真流式. — **已于 2026-06-29 提前 15 天完成** (commit `817f1ffa`)（见上节"## 2026-06-29 chat_engine_legacy 30 天承诺提前 15 天收官"）
 
 
 ## W68 第 6+7 批纪律沉淀 (永久锚点)
@@ -914,20 +650,9 @@ CLAUDE.md W67 第 41 步已记录基线: 锚点范式守卫 — 0 production cod
 - ❌ 修改 `app/core/security.py`/`app/core/rate_limit.py` 老安全/限流基础设施
 - ❌ 修改 `app/agent/chat_engine.py` 方案 C 6 条铁律相关文件
 
-### §4 W68 grand closure memory 索引 (永久)
+### §4 W68-W87 grand closure memory 索引 (永久)
 
-未来会话读 CLAUDE.md 即可访问所有 W68 batch grand closure 沉淀文件:
-
-- W68 第 1 批 grand closure: `memory/w68-grand-closure-2026-07-24.md` (跨主题收口, 14 agents + Safari iOS 修复)
-- W68 第 2 批 grand closure: `memory/w68-grand-closure-2026-07-24.md` (整合在第 1 批文件, 3 agents 调研/文档/baseline)
-- W68 第 3 批 grand closure: `memory/w68-grand-closure-2026-07-24.md` (整合在第 1 批文件, 11 agents Drive v2 PR9 + Mobile v3.1 + qa-bench D6)
-- W68 第 4 批 grand closure: `memory/w68-grand-closure-4th-batch-2026-07-24.md` (15 agents 跨主题 + Plan 闭环 2/2)
-- W68 第 5 批 grand closure: `memory/w68-grand-closure-5th-batch-2026-07-24.md` (15 agents Drive v2 PR10 + Mobile v3.2 + 评论 hotfix 系列)
-- W68 第 6 批 verified plans: `memory/verified-plans-w68-2026-07-24.md` (5 Explore agent 深度审计发现)
-- W68 第 7 批 grand closure: `memory/w68-grand-closure-7th-batch-2026-07-24.md` (1 agent 闭环 5 NOT_IMPLEMENTED + 12 PARTIAL)
-- W68 第 8 批 grand closure: `memory/w68-grand-closure-8th-batch-2026-07-24.md` (永久纪律沉淀 + 文档收口)
-- 任务模式基调: `memory/w68-task-mode-paradigm-plans-first-2026-07-24.md` (plans 优先 + 小修搭配)
-- alembic 串单链: `memory/w68-alembic-chain-discipline-2026-07-24.md` (锚点范式第 46 守恒 + commit 链)
+完整 W68-W87 各 batch grand closure 沉淀文件索引见 `memory/MEMORY.md` §9 主题分类目录.
 
 
 ## 完整历史任务链
