@@ -68,6 +68,51 @@ export async function injectAuth(page, baseUrl) {
 }
 
 /**
+ * 真启环境走 /api/v1/auth/login 拿一次 token.
+ * W89-P-2 实战: 5 case 各自调 login 触发 5 次/分/IP 限流 (429), 故整 spec 共享一次 token.
+ *
+ * 用法:
+ *   let sharedAuthInfo
+ *   test.beforeAll(async ({ request }) => {
+ *     sharedAuthInfo = await getAuthToken(request, {
+ *       baseUrl: 'http://localhost:8000',
+ *       username: 'xiaoqi_testbot',
+ *       password: 'testbot_pass_2026',
+ *     })
+ *   })
+ *   test.beforeEach(async ({ page }) => {
+ *     await injectAuth(page, 'http://localhost')
+ *     // 注入 sharedAuthInfo.token 到 cookie/localStorage
+ *   })
+ *
+ * @param {import('@playwright/test').APIRequestContext} request - Playwright request fixture
+ * @param {object} opts
+ * @param {string} [opts.baseUrl] - API base (默认 http://localhost:8000)
+ * @param {string} [opts.username] - 默认 xiaoqi_testbot (tests/conftest.py:139-141 既有纪律)
+ * @param {string} [opts.password] - 默认 testbot_pass_2026
+ * @returns {Promise<{ token: string, username: string, baseUrl: string }>}
+ */
+export async function getAuthToken(request, opts = {}) {
+  const baseUrl = opts.baseUrl || 'http://localhost:8000'
+  const username = opts.username || 'xiaoqi_testbot'
+  const password = opts.password || 'testbot_pass_2026'
+
+  const res = await request.post(`${baseUrl}/api/v1/auth/login`, {
+    data: { username, password },
+  })
+  if (res.status() !== 200) {
+    throw new Error(
+      `login 失败: status=${res.status()} body=${(await res.text()).slice(0, 200)}`,
+    )
+  }
+  const body = await res.json()
+  if (!body.access_token) {
+    throw new Error(`login 响应无 access_token: ${JSON.stringify(body).slice(0, 200)}`)
+  }
+  return { token: body.access_token, username, baseUrl }
+}
+
+/**
  * 把 axe violations 压成稳定可 diff 的 baseline 形状.
  * 丢掉 node.html / screenshot 等每次跑都抖的字段, 只留 id + impact + 命中数.
  */
