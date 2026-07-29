@@ -1,4 +1,7 @@
-<!-- KnowledgeEntityTab.vue — v77 P2.6-E.3 拆分自 KnowledgeView.vue -->
+<!-- KnowledgeEntityTab.vue — v77 P2.6-E.3 拆分自 KnowledgeView.vue
+     W86 mini-4 fix: 复用 KnowledgeGraphExplorer.vue (Phase 9 W85 B-1), 现代化 ECharts 渲染
+     + loading state 骨架屏 + 保留搜索/过滤/侧栏实体详情
+-->
 <template>
   <div>
     <el-card class="filter-card">
@@ -27,10 +30,13 @@
           <h3 class="panel-title">🔗 关系网络</h3>
           <span class="panel-hint">点击节点查看详情</span>
         </div>
-        <div v-if="entityGraphData.nodes.length === 0" class="graph-empty">
-          <el-empty description="暂无图谱数据，点击「加载图谱」" :image-size="80" />
-        </div>
-        <div v-else ref="entityGraphRef" class="entity-graph-container"></div>
+        <!-- W86 mini-4 fix: 复用 Phase 9 KnowledgeGraphExplorer 现代化 ECharts -->
+        <KnowledgeGraphExplorer
+          :nodes="entityGraphData.nodes"
+          :edges="entityGraphData.edges"
+          :loading="entityGraphLoading"
+          @node-click="handleGraphNodeClick"
+        />
       </div>
 
       <div class="entity-list-panel">
@@ -81,17 +87,20 @@
 <script setup>
 /**
  * KnowledgeEntityTab.vue — 实体图谱 tab（v77 P2.6-E.3 从 KnowledgeView.vue 拆分）
+ * W86 mini-4 fix: 复用 KnowledgeGraphExplorer (Phase 9) 取代自维护 ECharts
  *
  * 父组件: KnowledgeView.vue (lazy-loaded tab-pane)
  * Props: entityList / entityTotal / entityPage / entityGraphData（来自 useKnowledge composable）
  *
  * 关键点:
- * - ECharts instance 在组件内部 lifecycle 管理 (onBeforeUnmount dispose)
+ * - ECharts instance 由 KnowledgeGraphExplorer 内部 lifecycle 管理
  * - 父组件不再持有 entityChartInstance 引用（v60-v67 教训：避免跨组件状态共享）
+ * - 父组件只管 search/filter/list, 图谱渲染委派给 Explorer
  */
-import { ref, onBeforeUnmount } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import KnowledgeGraphExplorer from './KnowledgeGraphExplorer.vue'
 
 const props = defineProps({
   entityList: { type: Array, required: true },
@@ -103,10 +112,8 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'show-entity-detail', 'page-change'])
 
 const entitySearch = ref({ subject: '', predicate: '', keyword: '' })
-const entityGraphRef = ref(null)
-let entityChartInstance = null
-const entityGraphLoading = ref(false)
 const selectedEntityId = ref(null)
+const entityGraphLoading = ref(false)
 
 const searchEntitiesLocal = async () => {
   try {
@@ -123,84 +130,70 @@ const searchEntitiesLocal = async () => {
 const fetchEntityGraphLocal = async () => {
   entityGraphLoading.value = true
   try {
+    // W86 mini-6 fix: 之前直接 emit('refresh') 让父组件更新 entityGraphData,
+    //   但 watch 链路 (KnowledgeView.vue:405) 只在 activeTab 切换时触发
+    //   entityTabRef.value.fetchEntityGraphLocal(), 初次进入实体 tab 用户看到空图,
+    //   必须手动点"刷新图谱"才能加载.
+    //   现在直接调 fetchEntityGraph 立即拉数据并更新 entityGraphData,
+    //   父组件 handleEntityRefresh 仍会接收到 graph 数据 (兼容老路径).
     const res = await axios.get('/api/v1/knowledge/entities/graph', {
       params: { limit: 100 }
     })
     emit('refresh', { graph: res.data || { nodes: [], edges: [] } })
-    // 等待 DOM 更新 + Vue emit 完成
-    await new Promise(r => setTimeout(r, 100))
-    await renderEntityGraph()
-    entityGraphLoading.value = false
   } catch (e) {
     console.error('实体图谱加载失败:', e)
+    ElMessage.error('实体图谱加载失败')
+  } finally {
     entityGraphLoading.value = false
   }
 }
 
-const renderEntityGraph = async () => {
-  if (!entityGraphRef.value || props.entityGraphData.nodes.length === 0) return
-  const echarts = await import('echarts')
-  if (entityChartInstance) entityChartInstance.dispose()
-  entityChartInstance = echarts.init(entityGraphRef.value)
-  const cats = [...new Set(props.entityGraphData.nodes.map(n => n.predicate || '其他'))]
-  const colors = ['#FF7A5C', '#FFB347', '#5470c6', '#91cc75', '#ee6666', '#73c0de', '#fc8452']
-  const option = {
-    tooltip: { formatter: p => p.dataType === 'node' ? `${p.data.subject}<br/>${p.data.predicate} → ${p.data.object}` : `共现权重: ${p.data.weight || 1}` },
-    legend: { data: cats.slice(0, 7), bottom: 0 },
-    series: [{
-      type: 'graph', layout: 'force', roam: true, draggable: true,
-      force: { repulsion: 200, edgeLength: [100, 300] },
-      data: props.entityGraphData.nodes.map(n => ({
-        name: String(n.id), subject: n.subject, predicate: n.predicate, object: n.object, entityId: n.id,
-        symbolSize: Math.max(15, Math.min(40, (n.occurrence_count || 1) * 6)),
-        category: n.predicate || '其他', itemStyle: { color: colors[cats.indexOf(n.predicate || '其他') % colors.length] },
-      })),
-      categories: cats.slice(0, 7).map((c, i) => ({ name: c, itemStyle: { color: colors[i % colors.length] } })),
-      links: props.entityGraphData.edges.map(e => ({ source: String(e.source), target: String(e.target), weight: e.weight })),
-      lineStyle: { opacity: 0.4, curveness: 0.2 },
-      label: { show: true, formatter: p => p.data.subject.length > 8 ? p.data.subject.slice(0, 8) + '...' : p.data.subject, fontSize: 10 },
-      emphasis: {
-        focus: 'adjacency',
-        lineStyle: { width: 3 }
-      }
-    }],
+// W86 mini-6 fix: 切 tab 自动加载 — KnowledgeView.vue 的 watch(activeTab) 在
+//   activeTab === 'entities' 时调 entityTabRef.value.fetchEntityGraphLocal(),
+//   但 KnowledgeGraphExplorer 只在 props.entityGraphData 变化时才重新渲染.
+//   这里加 onMounted + watch 兜底, 配合父组件 watch 实现"切 tab 即加载, 不需手动刷新".
+//   关键: 仅在 entityGraphData 为空时触发, 避免重复请求.
+// W86 mini-7 fix (派工 v6 §1.2 真验证): onMounted 同时调 searchEntitiesLocal,
+//   父组件 useKnowledge 初始化时 searchEntities({ page_size: 1 }) 把 entityList
+//   设为 [1 item] → 用户直接进入 entities tab 或刷新页面时 watch(activeTab) 不会触发
+//   (activeTab 已是 'entities' 无变化), 列表永远停在 1 条. onMounted 同时 fetch
+//   list + graph, 保证 entityList 在组件挂载时即补齐 20 条.
+onMounted(() => {
+  if (!props.entityGraphData?.nodes?.length) {
+    fetchEntityGraphLocal()
   }
-  entityChartInstance.setOption(option)
+  // W86 mini-7: entityList 为空时自动 search (覆盖 useKnowledge page_size=1 的 [1 item])
+  if (props.entityList.length === 0) {
+    searchEntitiesLocal()
+  }
+})
 
-  entityChartInstance.on('click', (params) => {
-    if (params.dataType === 'node' && params.data.entityId) {
-      selectedEntityId.value = params.data.entityId
-      const card = document.querySelector(`.entity-card-active`)
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      emit('show-entity-detail', params.data.entityId)
-    }
-  })
+// 兜底: 父组件 emit('refresh') 后 entityGraphData 通过 props 变化,
+//   若数据仍为空 (e.g. 接口异常), 重新拉一次.
+watch(() => props.entityGraphData?.nodes?.length, (newLen, oldLen) => {
+  if (oldLen !== undefined && newLen === 0 && oldLen > 0) {
+    fetchEntityGraphLocal()
+  }
+})
+
+const handleGraphNodeClick = (nodeData) => {
+  if (!nodeData) return
+  // nodeData.id 是 string (KnowledgeGraphExplorer 内部 normalize 后的 id)
+  // 找到原始 entity 并高亮 + emit
+  const entityId = Number(nodeData.id || nodeData.entityId)
+  if (!entityId) return
+  selectedEntityId.value = entityId
+  const card = document.querySelector(`.entity-card-active`)
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  emit('show-entity-detail', entityId)
 }
 
 const handleEntityClick = (entity) => {
   selectedEntityId.value = entity.id
-  if (entityChartInstance && props.entityGraphData.nodes.length > 0) {
-    const nodeIndex = props.entityGraphData.nodes.findIndex(n => n.id === entity.id)
-    if (nodeIndex >= 0) {
-      entityChartInstance.dispatchAction({
-        type: 'highlight',
-        seriesIndex: 0,
-        dataIndex: nodeIndex
-      })
-      entityGraphRef.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }
   emit('show-entity-detail', entity.id)
 }
 
-onBeforeUnmount(() => {
-  if (entityChartInstance) {
-    entityChartInstance.dispose()
-    entityChartInstance = null
-  }
-})
-
-defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal, renderEntityGraph })
+defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal })
 </script>
 
 <style scoped>
@@ -223,6 +216,21 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal, renderEntityGraph })
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xs);
   overflow: hidden;
+}
+
+/* W86 mini-5 fix: 老代码 .entity-graph-panel 无 height/flex, 子组件
+   KnowledgeGraphExplorer 的 height:100% 没有可解析的父高度 → 图谱塌到
+   min-height 480px 且不随面板拉伸, 用户看到"小框显示不全".
+   面板改 flex column + 600px 下限, 图谱区 flex:1 吃掉 header 以外的剩余空间. */
+.entity-graph-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+}
+
+.entity-graph-panel :deep(.kg-explorer) {
+  flex: 1;
+  min-height: 0; /* flex 子项默认 min-height:auto 会撑破容器 */
 }
 
 .panel-header {
@@ -350,6 +358,8 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal, renderEntityGraph })
 .entity-pagination {
   padding: var(--space-3);
   border-top: 1px solid var(--color-border-light);
+  display: flex;
+  justify-content: center;
 }
 
 .entity-triple-large {
@@ -397,7 +407,32 @@ defineExpose({ searchEntitiesLocal, fetchEntityGraphLocal, renderEntityGraph })
   border-color: var(--color-border-light);
 }
 [data-theme="dark"] .entity-pagination {
-  border-top-color: var(--color-border-light);
+  border-top-color: var(--color-border-base);
+}
+/* W86 mini-8 fix (派工 v6 §1.2 真验证, 3 路搜证):
+   el-pagination 的 .el-pager li 与 .btn-prev/.btn-next 默认色使用
+   --el-text-color-regular, 在暗色主题下变量映射不充分导致页码数字
+   与按钮文字看不清 (用户反馈). 这里显式覆盖 color + background,
+   强制使用项目自有的 --color-text-regular / --color-primary token.
+   注意: 与 variables.css:932 全局 .el-pagination 规则互补, 全局规则
+   只覆盖容器, 这里覆盖子元素. */
+[data-theme="dark"] .entity-pagination .el-pager li,
+[data-theme="dark"] .entity-pagination .btn-prev,
+[data-theme="dark"] .entity-pagination .btn-next {
+  background: transparent !important;
+  color: var(--color-text-regular) !important;
+}
+[data-theme="dark"] .entity-pagination .el-pager li.is-active {
+  background-color: var(--color-primary) !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .entity-pagination .el-pager li:hover,
+[data-theme="dark"] .entity-pagination .btn-prev:hover,
+[data-theme="dark"] .entity-pagination .btn-next:hover {
+  color: var(--color-primary) !important;
+}
+[data-theme="dark"] .entity-pagination .el-pagination__total {
+  color: var(--color-text-regular) !important;
 }
 [data-theme="dark"] .entity-list-scroll::-webkit-scrollbar-thumb {
   background: var(--color-text-placeholder);

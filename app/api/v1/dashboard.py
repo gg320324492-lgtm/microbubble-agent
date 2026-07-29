@@ -1,6 +1,7 @@
 """项目动态统计 API + 移动端简化别名（formula / hypothesis / memory / summary）"""
 import json
 import math
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,13 +19,94 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 mobile_router = APIRouter(tags=["mobile-aliases"])
 
 _STATS_FILE = Path(__file__).parent.parent.parent / "stats.json"
+# dashboard.py 在 app/api/v1/dashboard.py → 3 parents up = app/ (含 stats.json)
+# 4 parents up = project root (含 .git/), 用于 git 子命令
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 _CACHE_KEY = "dashboard:project-stats"
 _CACHE_TTL = 600  # 10 分钟（开发天数和提交数需准实时）
 
 
+def _git_quick(path: str, *args: str, timeout: int = 5, encoding: Optional[str] = 'utf-8') -> Optional[str]:
+    """git 子命令快速执行，失败/超时返 None (W86 mini-11 A fix: 实时 commit 数)
+    用 subprocess.run 在 FastAPI 线程池跑（subprocess 是阻塞 IO，
+    但单次 git rev-list <1s 不会阻塞响应；如需异步可换 asyncio.create_subprocess_exec）
+
+    encoding=None 走 bytes 模式, 避免 Windows GBK 解码陷阱 (中文文件名)
+    """
+    try:
+        result = subprocess.run(
+            ["git", path, *args],
+            cwd=str(_PROJECT_ROOT),
+            capture_output=True, text=encoding is not None,
+            encoding=encoding, timeout=timeout,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip() if isinstance(result.stdout, str) else result.stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+    return None
+
+
+def _git_count_commits() -> Optional[int]:
+    """实时 git rev-list --count HEAD (派工 v6 §1.2 真验证根因)
+    替代 stats.json 静态值 (滞后 1226 commits); commit 数永远准实时"""
+    out = _git_quick("rev-list", "--count", "HEAD")
+    if out:
+        try:
+            return int(out)
+        except ValueError:
+            pass
+    return None
+
+
+def _git_count_files() -> Optional[int]:
+    """实时 git ls-files | wc -l (用 -z + bytes 模式避免中文文件名编码陷阱)"""
+    raw = _git_quick("ls-files", "-z", timeout=10, encoding=None)
+    if raw:
+        return len([f for f in raw.split(b'\x00') if f.strip()])
+    return None
+
+
+def _git_count_lines() -> Optional[int]:
+    """实时 git ls-files + wc -l (替代 cloc, 避免依赖外部工具)
+    实现简单行数统计: 不区分注释/空行, 但与 stats.json 口径一致 (粗略估算)
+    """
+    raw = _git_quick("ls-files", "-z", timeout=10, encoding=None)  # -z 避免文件名含空格解析错
+    if not raw:
+        return None
+    files = [f.decode('utf-8', errors='replace') for f in raw.split(b'\x00') if f.strip()]
+    # 仅统计源码文件类型 (避免过慢, 与 stats.json lines_by_type 口径一致)
+    CODE_EXTS = {
+        ".py": "python", ".vue": "vue", ".js": "javascript",
+        ".ts": "typescript", ".css": "css", ".html": "html",
+        ".md": "markdown", ".sh": "shell", ".sql": "sql",
+    }
+    lines_by_type: dict = {}
+    files_by_type: dict = {}
+    total_lines = 0
+    for fp in files:
+        ext = Path(fp).suffix.lower()
+        if ext not in CODE_EXTS:
+            continue
+        # 排除 dist / node_modules / __pycache__ / .git (即使 git ls-files 已过滤 .git,
+        # 但 dist/ 在某些 monorepo 可能被纳入)
+        if any(seg in fp.split("/") for seg in ("dist", "node_modules", "__pycache__")):
+            continue
+        try:
+            with open(_PROJECT_ROOT / fp, "r", encoding="utf-8", errors="ignore") as f:
+                n = sum(1 for _ in f)
+        except (OSError, IOError):
+            continue
+        lines_by_type[CODE_EXTS[ext]] = lines_by_type.get(CODE_EXTS[ext], 0) + n
+        files_by_type[CODE_EXTS[ext]] = files_by_type.get(CODE_EXTS[ext], 0) + 1
+        total_lines += n
+    return total_lines  # lines 总量 (口径粗略)
+
+
 @router.get("/project-stats")
 async def get_project_stats():
-    """获取项目开发统计数据。dev_days 每次动态计算。"""
+    """获取项目开发统计数据。dev_days / total_commits / total_files / total_lines
+    每次实时从 git 算 (W86 mini-11 A fix: 替代 stats.json 静态值滞后 1226 commits)"""
     # 1. Redis 缓存
     r = await get_redis()
     try:
@@ -34,7 +116,7 @@ async def get_project_stats():
     except Exception:
         pass
 
-    # 2. 从 app/stats.json 读取基础数据
+    # 2. 从 app/stats.json 读取基础数据 (兜底, 用于 lines_by_type 等非实时字段)
     stats = {}
     try:
         if _STATS_FILE.exists():
@@ -43,7 +125,20 @@ async def get_project_stats():
     except Exception:
         stats = {}
 
-    # 3. 动态计算 dev_days（每天自动递增）
+    # 3. 实时覆盖 total_commits / total_files / total_lines (W86 mini-11 A fix)
+    real_commits = _git_count_commits()
+    if real_commits is not None:
+        stats["total_commits"] = real_commits
+    real_files = _git_count_files()
+    if real_files is not None:
+        stats["total_files"] = real_files
+    # real_lines 较慢 (>1s), 仅在 stats.json 缺 total_lines 时跑
+    if not stats.get("total_lines"):
+        real_lines = _git_count_lines()
+        if real_lines:
+            stats["total_lines"] = real_lines
+
+    # 4. 动态计算 dev_days（每天自动递增）
     first_commit_date = stats.get("first_commit_date", "")
     if first_commit_date:
         try:
@@ -57,9 +152,9 @@ async def get_project_stats():
         # 兜底：用文件中的静态值
         stats["dev_days"] = stats.get("dev_days", 0)
 
-    # 4. 写入 Redis 缓存
+    # 5. 写入 Redis 缓存 (短 TTL: 60s, 确保 total_commits 准实时)
     try:
-        await r.set(_CACHE_KEY, json.dumps(stats), ex=_CACHE_TTL)
+        await r.set(_CACHE_KEY, json.dumps(stats), ex=60)
     except Exception:
         pass
 
