@@ -1,23 +1,26 @@
-# MicroBubble Agent - W68-W87 batch 记忆索引 (W87 X-6 sync main 主题压缩, 锚点 337, 30 批)
+# MicroBubble Agent - 记忆索引 (W86 mini-16 减负, 锚点 337 → 338 +1, 67 active + 96 archived = 163)
 
-> **主基调**: 锚点范式 W7 12 → W87 337 单调上升 (累计 325 增量, 30 批). **W87 +12 实际据实** (4 cherry-pick + B-1 拆 2 commit + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure + W87-X-6 sync main merge 跳过不计).
-> **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E).
-> **派工前提铁律 12 + 类 20 实战 39 实例** (W84 据实上报 3 + W85 据实上报 2 + W86 据实上报 1 + W87 据实上报 15 + 历史 18).
-> **8 类主题分类目录** (W85 C-2 batch 3 派生, 190 active memory 重整 + MEMORY.md 索引同步). 总计 active 196 + archived 38 = 234 文件 (W87 +7 X-5 补强版: 1 grand closure + 5 收尾 memory + 1 补强版 grand closure).
+> **W86 mini-16 减负收口**: 主指挥协调范式第 67 次派工. 锚点范式 W87 337 → W87-X-5 338 (+1, docs/memory 同步实施, 0 production code 例外 1 沿用 W86 mini-12). 历史 batch closure memory 大幅归档, active 文件 178 → 67 (-62%), 总文件 234 → 163 (-30%). MEMORY.md 主题索引同步重整, 9 类主题分类保留.
 
-**8 类主题统计** (W85 C-2 batch 3, 派工 brief 175 → 实测 175 守恒):
+**W86 mini-16 减负实战**:
+- `memory/archived/w68-batch-detail/` 46 文件 (W68 第 5/8/9/11/12/13/14 批 route-* + hotfix h2-h5 + plan-1/2 + drive-pr9 deploy/version + b/b2/b3/qc + h2 mobile v3.1 docs + 5 route-qa-bench-cache-rollout)
+- `memory/archived/w72-w85-batch-closure/` 32 文件 (W72 第 1/2 批 + W73-W85 grand closure + routes)
+- `memory/archived/w2-w71-baselines/` 18 文件 (W2-W62 baseline closures + W71 batch + W72-2nd)
+- `memory/archived/w73-w85-batch-detail/` 26 文件 (W73-W85 per-batch 派工 detail)
+- 总计 archive 122 文件从 root 迁入 (active 178 → 67, archived 38 → 158)
 
-- **1. Drive v2 PR 系列**: 8 文件
-- **2. 声纹 + ASR + TTS 链**: 3 文件
-- **3. qa-bench 系列**: 5 文件
-- **4. 商业化系列**: 14 文件
-- **5. PWA + nginx + Service Worker**: 1 文件
-- **6. claude-code 通知体系 + 派工协调范式**: 4 文件
-- **7. 部署 + 配置 + 基础设施**: 6 文件
-- **8. 前端 + UI + 视觉 + 数据库 + Chat**: 17 文件
-- **9. W 批 grand closure + 派工纪要 + 锚点范式**: 120 文件
-- **memory/archived/ 历史归档**: 38 文件
-- **总计 active**: 178 文件 (+ archived 38 = 217 文件)
+**主基调不变**: 锚点范式 W7 12 → W87 338 单调上升 (累计 326 增量, 31 批). **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E). **派工前提铁律 12 + 类 20 实战 36 实例**.
+
+**9 类主题统计 (减负后 active 67 + archived 158 = 225 总文件)**:
+- **1. Drive v2 PR 系列**: 1 active + W68 archived
+- **2. 声纹 + ASR + TTS 链**: 3 active
+- **3. qa-bench 系列**: 0 active + 全部 archived
+- **4. 商业化系列**: 0 active + 全部 archived
+- **5. PWA + nginx + Service Worker**: 1 active
+- **6. claude-code 通知体系 + 派工协调范式**: 4 active
+- **7. 部署 + 配置 + 基础设施**: 5 active
+- **8. 前端 + UI + 视觉 + 数据库 + Chat**: 15 active
+- **9. W 批 grand closure + 派工纪要 + 锚点范式**: 38 active (W68-W87 grand closures 浓缩)
 
 ---
 
@@ -43,12 +46,6 @@
 
 - [drive-v2-pr8-grand-closure-2026-07-24](drive-v2-pr8-grand-closure-2026-07-24.md) — [drive-v2-pr8-grand-closure]
 - [drive-view-beaute-2026-07-09](drive-view-beaute-2026-07-09.md) — 1089 行 + 5 子组件 + 10 dialog.
-- [w68-route-11-c1-alembic-rebase-2026-07-24](w68-route-11-c1-alembic-rebase-2026-07-24.md) — W68 第 11 批 C-1 alembic rebase.
-- [w68-route-12-b1-pr14-path-2026-07-24](w68-route-12-b1-pr14-path-2026-07-24.md) — W68 第 12 批 B-1 PR14 path.
-- [w68-route-5-drive-pr10-collab-2026-07-24](w68-route-5-drive-pr10-collab-2026-07-24.md) — W68 第 5 批 drive PR10 collab.
-- [w68-route-9-b2-pr11-fallback-2026-07-24](w68-route-9-b2-pr11-fallback-2026-07-24.md) — W68 第 9 批 B-2 PR11 fallback.
-- [w68-route-9-b4-chatgpt-w69-plan-2026-07-24](w68-route-9-b4-chatgpt-w69-plan-2026-07-24.md) — W68 第 9 批 B-4 chatgpt W69 plan.
-- [w72nd-batch-c1-drive-deploy-doc-v3-2026-07-27](w72nd-batch-c1-drive-deploy-doc-v3-2026-07-27.md) — Drive v2 唯一权威 runbook + 7 张迁移串单链 + W73 起步纪律 6 项.
 
 # 2. 声纹 + ASR + TTS 链 (2026-06-18 起)
 
@@ -63,29 +60,11 @@
 > 5 文件
 
 - [llm-benchmark-2026-07-02](llm-benchmark-2026-07-02.md) — LLM 3-Way.
-- [w68-route-7-a4-qa-bench-d5-kb-monitor-2026-07-24](w68-route-7-a4-qa-bench-d5-kb-monitor-2026-07-24.md) — [w68-route-7-a4-qa-bench-d5-kb-monitor]
-- [w68-route-7-a5-silly-gliding-impl-2026-07-24](w68-route-7-a5-silly-gliding-impl-2026-07-24.md) — W68 第 7 批 A-5 silly gliding impl.
-- [w68-route-b2-ghcr-cache-design-2026-07-24](w68-route-b2-ghcr-cache-design-2026-07-24.md) — [w68-route-b2-ghcr-cache-design]
-- [w68-route-b3-d6-roadmap-2026-07-24](w68-route-b3-d6-roadmap-2026-07-24.md) — [w68-route-b3-d6-roadmap]
 
 # 4. 商业化系列 (24 人月 Q1, W72-W81)
 
 > 14 文件
 
-- [w72-route-72nd-batch-c2-commercialization-2026-07-24](w72-route-72nd-batch-c2-commercialization-2026-07-24.md) — 商业化启动派工 brief.
-- [w75-1st-batch-b2-tenant-422-fix-2026-07-27](w75-1st-batch-b2-tenant-422-fix-2026-07-27.md) — TenantIsolationViolation.code= 修复 (1 行 production).
-- [w78-1st-batch-b2-billing-real-key-enable-2026-07-28](w78-1st-batch-b2-billing-real-key-enable-2026-07-28.md) — 计费真支付 key 启用 (Stripe + Alipay + WeChat).
-- [w78-1st-batch-c1-saas-deploy-2026-07-28](w78-1st-batch-c1-saas-deploy-2026-07-28.md) — SaaS 私有化部署.
-- [w78-route-1st-batch-a2-commercialization-plan-2026-07-28](w78-route-1st-batch-a2-commercialization-plan-2026-07-28.md) — 商业化 plan 启动.
-- [w79-1st-batch-b1-commercial-operation-2026-07-28](w79-1st-batch-b1-commercial-operation-2026-07-28.md) — 商业化运营.
-- [w79-1st-batch-b3-tenant-monitoring-2026-07-28](w79-1st-batch-b3-tenant-monitoring-2026-07-28.md) — 跨租户监控.
-- [w79-1st-batch-c1-commercial-phase8-closure-2026-07-28](w79-1st-batch-c1-commercial-phase8-closure-2026-07-28.md) — Phase 8 收口.
-- [w79-1st-route-d1-tenant-closure-2026-07-28](w79-1st-route-d1-tenant-closure-2026-07-28.md) — 租户隔离收口.
-- [w79-route-1st-batch-a2-commercialization-operation-2026-07-28](w79-route-1st-batch-a2-commercialization-operation-2026-07-28.md) — 商业化运营派工 v2.
-- [w80-route-1st-batch-b1-7-dim-commercial-operation-2026-07-28](w80-route-1st-batch-b1-7-dim-commercial-operation-2026-07-28.md) — 7 维商业化运营.
-- [w81-1st-batch-b2-tenant-monitoring-closure-2026-07-28](w81-1st-batch-b2-tenant-monitoring-closure-2026-07-28.md) — 租户监控收口.
-- [w81-route-1st-batch-a2-commercialization-q1-closure-2026-07-28](w81-route-1st-batch-a2-commercialization-q1-closure-2026-07-28.md) — Q1 商业化收口.
-- [w81-route-1st-batch-c1-commercial-phase8-closure-2026-07-28](w81-route-1st-batch-c1-commercial-phase8-closure-2026-07-28.md) — Phase 8 商业化收口.
 
 # 5. PWA + nginx + Service Worker (2026-06-13 + 2026-07-08~11 回归)
 
@@ -111,7 +90,6 @@
 - [llm-backend-ollama-residual-connection-error-2026-07-12](llm-backend-ollama-residual-connection-error-2026-07-12.md) — P0-#1 Ollama 残留.
 - [ollama-ssh-key-gitignore-fix-2026-07-02](ollama-ssh-key-gitignore-fix-2026-07-02.md) — ollama ssh key .gitignore fix.
 - [phase-8-cloud-mirror-2026-07-21](phase-8-cloud-mirror-2026-07-21.md) — Phase 8 cloud mirror 部署.
-- [w62-coordination-grand-closure-2026-07-22](w62-coordination-grand-closure-2026-07-22.md) — W62 跨主题收口 24 baseline.
 
 # 8. 前端 + UI + 视觉 + 数据库 + Chat (2026-06-25~2026-07-22)
 
@@ -144,21 +122,6 @@
 - [2026-07-22-50-commit-w51-w100-roadmap](2026-07-22-50-commit-w51-w100-roadmap.md) — W51-W100 50 commit roadmap.
 - [2026-07-23-six-batches-v2-21-paradigm](2026-07-23-six-batches-v2-21-paradigm.md) — 6 批 v2.21 范式总结.
 - [anchor-paradigm-21-day-validation-2026-07-22](anchor-paradigm-21-day-validation-2026-07-22.md) — 锚点范式 21 天验证.
-- [verified-plans-w68-2026-07-24](verified-plans-w68-2026-07-24.md) — Verified Plans W68.
-- [w11-13-baseline-closure-2026-07-22](w11-13-baseline-closure-2026-07-22.md) — W11/13 baseline closure.
-- [w14-16-baseline-closure-2026-07-22](w14-16-baseline-closure-2026-07-22.md) — W14/16 baseline closure.
-- [w15-17-baseline-closure-2026-07-22](w15-17-baseline-closure-2026-07-22.md) — W15/17 baseline closure.
-- [w16-18-baseline-closure-2026-07-22](w16-18-baseline-closure-2026-07-22.md) — W16/18 baseline closure.
-- [w17-19-baseline-closure-2026-07-22](w17-19-baseline-closure-2026-07-22.md) — W17/19 baseline closure.
-- [w18-20-baseline-closure-2026-07-22](w18-20-baseline-closure-2026-07-22.md) — W18/20 baseline closure.
-- [w19-22-baseline-closure-2026-07-22](w19-22-baseline-closure-2026-07-22.md) — W19/22 baseline closure.
-- [w2-10-baseline-closure-2026-07-21](w2-10-baseline-closure-2026-07-21.md) — W2/W10 baseline 12.
-- [w20-24-baseline-closure-2026-07-22](w20-24-baseline-closure-2026-07-22.md) — W20/24 baseline closure.
-- [w25-todo-audit-2026-07-21](w25-todo-audit-2026-07-21.md) — W25 TODO audit.
-- [w5-11-baseline-closure-2026-07-21](w5-11-baseline-closure-2026-07-21.md) — W5 baseline 11.
-- [w5-plus-one-followup-ultimate-closure-2026-07-20](w5-plus-one-followup-ultimate-closure-2026-07-20.md) — W5 +1 followup 终极收口.
-- [w62-future-pr-q4-evaluation-final3](w62-future-pr-q4-evaluation-final3.md) — W62 4 留未来 PR Q4 评估 final3.
-- [w62-w61-w70-roadmap-update](w62-w61-w70-roadmap-update.md) — W62/W61/W70 roadmap 更新.
 - [w68-alembic-chain-discipline-2026-07-24](w68-alembic-chain-discipline-2026-07-24.md) — alembic 串单链纪律 (锚点 46 守恒).
 - [w68-anchor-paradigm-175-2026-07-24](w68-anchor-paradigm-175-2026-07-24.md) — W68 锚点范式 175 实际收束.
 - [w68-dispatch-candidates-2026-07-23](w68-dispatch-candidates-2026-07-23.md) — W68 dispatch candidates.
@@ -170,96 +133,7 @@
 - [w68-grand-closure-5th-batch-2026-07-24](w68-grand-closure-5th-batch-2026-07-24.md) — W68 第 5 批 grand closure (15 agents).
 - [w68-grand-closure-7th-batch-2026-07-24](w68-grand-closure-7th-batch-2026-07-24.md) — W68 第 7 批 grand closure (1 agent 闭环).
 - [w68-grand-closure-9th-batch-2026-07-24](w68-grand-closure-9th-batch-2026-07-24.md) — W68 第 9 批 grand closure (15 agents).
-- [w68-route-12-b3-d7-baseline-ci-2026-07-24](w68-route-12-b3-d7-baseline-ci-2026-07-24.md) — W68 第 12 批 B-3 D7 baseline CI.
-- [w68-route-12-b4-claude-notify-v2-2026-07-24](w68-route-12-b4-claude-notify-v2-2026-07-24.md) — W68 第 12 批 B-4 claude-notify v2.
-- [w68-route-12-c3-emoji-perf-2026-07-24](w68-route-12-c3-emoji-perf-2026-07-24.md) — W68 第 12 批 C-3 emoji 性能.
-- [w68-route-12-d1-prompt-template-v3-2026-07-24](w68-route-12-d1-prompt-template-v3-2026-07-24.md) — W68 第 12 批 D-1 prompt v3.
-- [w68-route-12-d2-doc-sync-2026-07-24](w68-route-12-d2-doc-sync-2026-07-24.md) — W68 第 12 批 D-2 文档同步.
-- [w68-route-13-b1-claude-notify-repo-2026-07-24](w68-route-13-b1-claude-notify-repo-2026-07-24.md) — W68 第 13 批 B-1 claude-notify repo.
-- [w68-route-13-b2-ollama-playwright-2026-07-24](w68-route-13-b2-ollama-playwright-2026-07-24.md) — W68 第 13 批 B-2 ollama playwright.
-- [w68-route-13-b3-plans-backlog-2026-07-24](w68-route-13-b3-plans-backlog-2026-07-24.md) — W68 第 13 批 B-3 plans backlog.
-- [w68-route-13-d2-doc-sync-2026-07-24](w68-route-13-d2-doc-sync-2026-07-24.md) — W68 第 13 批 D-2 文档同步.
-- [w68-route-14-b4-notify-verify-2026-07-24](w68-route-14-b4-notify-verify-2026-07-24.md) — W68 第 14 批 B-4 notify 部署验证.
-- [w68-route-14-d2-doc-sync-2026-07-24](w68-route-14-d2-doc-sync-2026-07-24.md) — W68 第 14 批 D-2 文档同步.
-- [w68-route-14-d4-w71-decision-2026-07-24](w68-route-14-d4-w71-decision-2026-07-24.md) — W68 第 14 批 D-4 W71-W72 拍板.
-- [w68-route-14-hotfix-h2-clear-sw-2026-07-24](w68-route-14-hotfix-h2-clear-sw-2026-07-24.md) — W68 第 14 批 hotfix H-2 SW clear.
-- [w68-route-14-hotfix-h3-kill-old-sw-2026-07-24](w68-route-14-hotfix-h3-kill-old-sw-2026-07-24.md) — W68 第 14 批 hotfix H-3 kill old SW.
-- [w68-route-14-hotfix-h4-disable-sw-checkloop-2026-07-24](w68-route-14-hotfix-h4-disable-sw-checkloop-2026-07-24.md) — W68 第 14 批 hotfix H-4 disable SW checkloop.
-- [w68-route-14-hotfix-h5-silent-heartbeat-2026-07-24](w68-route-14-hotfix-h5-silent-heartbeat-2026-07-24.md) — W68 第 14 批 hotfix H-5 silent heartbeat.
-- [w68-route-5-batch-repair-meetings-2026-07-24](w68-route-5-batch-repair-meetings-2026-07-24.md) — W68 第 5 批 batch repair meetings.
-- [w68-route-5-qa-bench-d6-phase1-2026-07-24](w68-route-5-qa-bench-d6-phase1-2026-07-24.md) — [w68-route-5-qa-bench-d6-phase1]
-- [w68-route-7-a2-cheerful-questing-anchor-2026-07-24](w68-route-7-a2-cheerful-questing-anchor-2026-07-24.md) — [w68-route-7-a2-cheerful-questing-anchor]
-- [w68-route-7-b1-drive-pr10-collab-ws-2026-07-24](w68-route-7-b1-drive-pr10-collab-ws-2026-07-24.md) — [w68-route-7-b1-drive-pr10-collab-ws]
-- [w68-route-7-b2-qa-bench-phase2-2026-07-24](w68-route-7-b2-qa-bench-phase2-2026-07-24.md) — [w68-route-7-b2-qa-bench-phase2]
-- [w68-route-7-d1-5th-batch-deploy-2026-07-24](w68-route-7-d1-5th-batch-deploy-2026-07-24.md) — [w68-route-7-d1-5th-batch-deploy]
-- [w68-route-8-a1-merge-2026-07-24](w68-route-8-a1-merge-2026-07-24.md) — W68 第 8 批 A-1 merge.
-- [w68-route-8-b1-drive-pr11-path-2026-07-24](w68-route-8-b1-drive-pr11-path-2026-07-24.md) — drive_comments path + GIN trgm + 2 API (alembic 066).
-- [w68-route-8-b2-drive-pr12-reactions-2026-07-24](w68-route-8-b2-drive-pr12-reactions-2026-07-24.md) — [w68-route-8-b2-drive-pr12-reactions]
-- [w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24](w68-route-8-b4-qa-bench-phase3-matrix-2026-07-24.md) — [w68-route-8-b4-qa-bench-phase3-matrix]
-- [w68-route-9-a2-claudmd-anchor-2026-07-24](w68-route-9-a2-claudmd-anchor-2026-07-24.md) — [w68-route-9-a2-claudmd-anchor]
-- [w68-route-9-d1-8-smallfixes-2026-07-24](w68-route-9-d1-8-smallfixes-2026-07-24.md) — W68 第 9 批 D-1 8 smallfixes.
-- [w68-route-9-d2-doc-sync-2026-07-24](w68-route-9-d2-doc-sync-2026-07-24.md) — [w68-route-9-d2-doc-sync]
-- [w68-route-9-d3-task-mode-v2-2026-07-24](w68-route-9-d3-task-mode-v2-2026-07-24.md) — [w68-route-9-d3-task-mode-v2]
-- [w68-route-b-qa-bench-d6-future-roots-2026-07-24](w68-route-b-qa-bench-d6-future-roots-2026-07-24.md) — [w68-route-b-qa-bench-d6-future-roots]
-- [w68-route-drive-pr9-deploy-verify-2026-07-24](w68-route-drive-pr9-deploy-verify-2026-07-24.md) — [w68-route-drive-pr9-deploy-verify]
-- [w68-route-drive-pr9-version-diff-2026-07-24](w68-route-drive-pr9-version-diff-2026-07-24.md) — [w68-route-drive-pr9-version-diff]
-- [w68-route-h2-mobile-v3.1-docs-2026-07-24](w68-route-h2-mobile-v3.1-docs-2026-07-24.md) — [w68-route-h2-mobile-v3.1-docs]
-- [w68-route-plan1-low-occupancy-speaker-filter-2026-07-24](w68-route-plan1-low-occupancy-speaker-filter-2026-07-24.md) — [w68-route-plan1-low-occupancy-speaker-filter]
-- [w68-route-plan2-meeting-64-repair-2026-07-24](w68-route-plan2-meeting-64-repair-2026-07-24.md) — [w68-route-plan2-meeting-64-repair]
-- [w68-route-qa-bench-cache-rollout-2026-07-24](w68-route-qa-bench-cache-rollout-2026-07-24.md) — [w68-route-qa-bench-cache-rollout]
 - [w68-task-mode-paradigm-plans-first-2026-07-24](w68-task-mode-paradigm-plans-first-2026-07-24.md) — W68 任务模式基调 (plans 优先 + 小修搭配).
-- [w7-12-baseline-closure-2026-07-21](w7-12-baseline-closure-2026-07-21.md) — W7 baseline 12.
-- [w71-anchor-paradigm-71st-batch-2026-07-24](w71-anchor-paradigm-71st-batch-2026-07-24.md) — [w71-anchor-paradigm-71st-batch]
-- [w71-grand-closure-71st-batch-2026-07-24](w71-grand-closure-71st-batch-2026-07-24.md) — [w71-grand-closure-71st-batch]
-- [w71-route-71st-batch-a1-deploy-2026-07-24](w71-route-71st-batch-a1-deploy-2026-07-24.md) — [w71-route-71st-batch-a1-deploy]
-- [w71-route-71st-batch-actual-merge-2026-07-24](w71-route-71st-batch-actual-merge-2026-07-24.md) — W71 派工 actual merge.
-- [w71-route-71st-batch-c1-d8-survey-2026-07-24](w71-route-71st-batch-c1-d8-survey-2026-07-24.md) — [w71-route-71st-batch-c1-d8-survey]
-- [w71-route-71st-batch-d2-docs-sync-2026-07-24](w71-route-71st-batch-d2-docs-sync-2026-07-24.md) — [w71-route-71st-batch-d2-docs-sync]
-- [w72-2nd-anchor-paradigm-235-2026-07-27](w72-2nd-anchor-paradigm-235-2026-07-27.md) — [w72-2nd-anchor-paradigm-235]
-- [w72-2nd-batch-e1-conservation-verification-2026-07-27](w72-2nd-batch-e1-conservation-verification-2026-07-27.md) — [w72-2nd-batch-e1-conservation-verification]
-- [w72-2nd-grand-closure-2026-07-27](w72-2nd-grand-closure-2026-07-27.md) — W72 第 2 批 grand closure.
-- [w72-2nd-route-a2-prompt-v10-2026-07-27](w72-2nd-route-a2-prompt-v10-2026-07-27.md) — W72 第 2 批 A-2 prompt v10.
-- [w72-2nd-route-a3-plans-verify-2026-07-27](w72-2nd-route-a3-plans-verify-2026-07-27.md) — W72 第 2 批 A-3 plans verify.
-- [w72-2nd-route-d2-docs-sync-2026-07-27](w72-2nd-route-d2-docs-sync-2026-07-27.md) — W72 第 2 批 D-2 docs sync.
-- [w72-anchor-paradigm-72nd-batch-2026-07-24](w72-anchor-paradigm-72nd-batch-2026-07-24.md) — [w72-anchor-paradigm-72nd-batch]
-- [w72-grand-closure-72nd-batch-2026-07-24](w72-grand-closure-72nd-batch-2026-07-24.md) — [w72-grand-closure-72nd-batch]
-- [w72-grand-closure-72nd-batch-actual-2026-07-24](w72-grand-closure-72nd-batch-actual-2026-07-24.md) — [w72-grand-closure-72nd-batch-actual]
-- [w72-route-72nd-batch-a1-dispatch-2026-07-24](w72-route-72nd-batch-a1-dispatch-2026-07-24.md) — [w72-route-72nd-batch-a1-dispatch]
-- [w72-route-72nd-batch-c1-container-rebuild-2026-07-24](w72-route-72nd-batch-c1-container-rebuild-2026-07-24.md) — [w72-route-72nd-batch-c1-container-rebuild]
-- [w72-route-72nd-batch-c2-d9-survey-2026-07-27](w72-route-72nd-batch-c2-d9-survey-2026-07-27.md) — [w72-route-72nd-batch-c2-d9-survey]
-- [w72-route-72nd-batch-c3-pptword-gap-2026-07-24](w72-route-72nd-batch-c3-pptword-gap-2026-07-24.md) — [w72-route-72nd-batch-c3-pptword-gap]
-- [w72-route-72nd-batch-d2-docs-sync-2026-07-24](w72-route-72nd-batch-d2-docs-sync-2026-07-24.md) — [w72-route-72nd-batch-d2-docs-sync]
-- [w73-1st-batch-e1-conservation-verification-2026-07-27](w73-1st-batch-e1-conservation-verification-2026-07-27.md) — [w73-1st-batch-e1-conservation-verification]
-- [w73-1st-grand-closure-2026-07-27](w73-1st-grand-closure-2026-07-27.md) — W73 grand closure.
-- [w73-route-1st-batch-a2-voice-asr-tts-survey-2026-07-27](w73-route-1st-batch-a2-voice-asr-tts-survey-2026-07-27.md) — [w73-route-1st-batch-a2-voice-asr-tts-survey]
-- [w74-1st-batch-a2-voice-threshold-survey-2026-07-27](w74-1st-batch-a2-voice-threshold-survey-2026-07-27.md) — [w74-1st-batch-a2-voice-threshold-survey]
-- [w74-1st-batch-e1-conservation-2026-07-27](w74-1st-batch-e1-conservation-2026-07-27.md) — [w74-1st-batch-e1-conservation]
-- [w74-1st-grand-closure-2026-07-27](w74-1st-grand-closure-2026-07-27.md) — W74 grand closure.
-- [w75-1st-batch-b1-voice-bc-plan-2026-07-27](w75-1st-batch-b1-voice-bc-plan-2026-07-27.md) — [w75-1st-batch-b1-voice-bc-plan]
-- [w75-1st-batch-d1-9table-pass-verify-2026-07-27](w75-1st-batch-d1-9table-pass-verify-2026-07-27.md) — [w75-1st-batch-d1-9table-pass-verify]
-- [w75-1st-grand-closure-2026-07-27](w75-1st-grand-closure-2026-07-27.md) — W75 grand closure.
-- [w75-route-1st-batch-a2-edge-tts-survey-2026-07-27](w75-route-1st-batch-a2-edge-tts-survey-2026-07-27.md) — [w75-route-1st-batch-a2-edge-tts-survey]
-- [w76-1st-grand-closure-2026-07-28](w76-1st-grand-closure-2026-07-28.md) — W76 grand closure.
-- [w77-1st-grand-closure-2026-07-28](w77-1st-grand-closure-2026-07-28.md) — W77 grand closure.
-- [w77-1st-route-a2-edge-tts-bd-plan-2026-07-28](w77-1st-route-a2-edge-tts-bd-plan-2026-07-28.md) — W77 A-2 edge-tts bd plan.
-- [w77-1st-route-b2-edge-tts-android-mainplay-2026-07-28](w77-1st-route-b2-edge-tts-android-mainplay-2026-07-28.md) — W77 B-2 edge-tts android mainplay.
-- [w78-1st-grand-closure-2026-07-28](w78-1st-grand-closure-2026-07-28.md) — W78 grand closure.
-- [w78-1st-route-b3-r10-gray-replay-2026-07-28](w78-1st-route-b3-r10-gray-replay-2026-07-28.md) — [w78-1st-route-b3-r10-gray-replay]
-- [w78-route-1st-batch-d1-r10-gray-implement-2026-07-28](w78-route-1st-batch-d1-r10-gray-implement-2026-07-28.md) — [w78-route-1st-batch-d1-r10-gray-implement]
-- [w79-1st-grand-closure-2026-07-28](w79-1st-grand-closure-2026-07-28.md) — W79 grand closure.
-- [w80-1st-grand-closure-2026-07-28](w80-1st-grand-closure-2026-07-28.md) — W80 grand closure.
-- [w80-1st-route-a2-pwa-asset-hotfix-2026-07-28](w80-1st-route-a2-pwa-asset-hotfix-2026-07-28.md) — W80 A-2 PWA 资产缺失 hotfix.
-- [w81-1st-batch-d1-c1-d1-d2-replay-2026-07-28](w81-1st-batch-d1-c1-d1-d2-replay-2026-07-28.md) — W81 收尾 4 agents 合并.
-- [w81-1st-grand-closure-2026-07-28](w81-1st-grand-closure-2026-07-28.md) — W81 grand closure.
-- [w82-1st-batch-a2-content-survey-2026-07-28](w82-1st-batch-a2-content-survey-2026-07-28.md) — W82 A-2 content survey.
-- [w82-1st-grand-closure-2026-07-28](w82-1st-grand-closure-2026-07-28.md) — W82 grand closure.
-- [w82-1st-grand-closure-full-2026-07-28](w82-1st-grand-closure-full-2026-07-28.md) — W82 grand closure full.
-- [w83-1st-batch-a2-survey-derivative-2026-07-28](w83-1st-batch-a2-survey-derivative-2026-07-28.md) — W83 A-2 survey derivative.
-- [w83-1st-grand-closure-full-2026-07-28](w83-1st-grand-closure-full-2026-07-28.md) — W83 grand closure full.
-- [w84-1st-batch-a2-survey-derivative-2026-07-28](w84-1st-batch-a2-survey-derivative-2026-07-28.md) — W84 A-2 survey derivative.
-- [w84-1st-batch-c2-p2-docs-cleanup-2026-07-28](w84-1st-batch-c2-p2-docs-cleanup-2026-07-28.md) — W84 C-2 P2 docs/scripts 清 batch 2 (本批前一).
-- [w84-1st-grand-closure-full-2026-07-28](w84-1st-grand-closure-full-2026-07-28.md) — W84 grand closure full.
-- [w85-1st-grand-closure-full-2026-07-29](w85-1st-grand-closure-full-2026-07-29.md) — W85 grand closure full (锚点 314 → 320 +6 据实上报, B-2 useTask 0 hit 不实施).
 - [w86-1st-grand-closure-full-2026-07-29](w86-1st-grand-closure-full-2026-07-29.md) — W86 grand closure full (锚点 320 → 324 +4 + D-2 实战 +1 = 325, P0/P1 4 路线: gitleaks + Trivy + pre-commit + pg_exporter, X-2 e2e 修复 + D-2 6 类文档同步).
 - [w86-1st-batch-a1-gitleaks-2026-07-29](w86-1st-batch-a1-gitleaks-2026-07-29.md) — W86 A-1 gitleaks 装机 (5 自定义规则 + workflow + scan-history.sh + install-gitleaks.md + 10 case e2e).
 - [w86-1st-batch-a1-gitleaks-scan-2026-07-29](w86-1st-batch-a1-gitleaks-scan-2026-07-29.md) — W86 A-1 gitleaks 扫描报告 (0 真凭据泄漏 + 1 历史残留 + 6 MinIO 默认凭据 + 1 真生产 key 占位符模板).
