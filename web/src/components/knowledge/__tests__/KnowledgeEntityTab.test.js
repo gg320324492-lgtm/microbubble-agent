@@ -93,6 +93,10 @@ describe('W86 mini-4 KnowledgeEntityTab', () => {
 
   it('fetchEntityGraphLocal 触发 API 调用, 写 entityGraphData', async () => {
     const axios = (await import('axios')).default
+    // W86 mini-6: onMounted 先调一次 (默认 mock 返回空), fetchEntityGraphLocal 排第 2 个 mock
+    axios.get.mockResolvedValueOnce({
+      data: { nodes: [], edges: [] },
+    })
     axios.get.mockResolvedValueOnce({
       data: {
         nodes: [{ id: 99, subject: '测试', predicate: 't', object: 't' }],
@@ -109,18 +113,28 @@ describe('W86 mini-4 KnowledgeEntityTab', () => {
       },
     })
 
+    // W86 mini-6: 等 onMounted 完成
+    await flushPromises()
+
     await wrapper.vm.fetchEntityGraphLocal()
     await flushPromises()
 
-    // 验证 emit('refresh', { graph: ... })
+    // 验证 emit('refresh', { graph: ... }) — 至少有一次含 graph
     expect(wrapper.emitted('refresh')).toBeTruthy()
-    const refreshArg = wrapper.emitted('refresh')[0][0]
-    expect(refreshArg.graph.nodes).toHaveLength(1)
-    expect(refreshArg.graph.edges).toHaveLength(1)
+    const refreshEmits = wrapper.emitted('refresh')
+    const graphEmit = refreshEmits.find(e => e[0]?.graph?.nodes?.length === 1)
+    expect(graphEmit).toBeTruthy()
+    expect(graphEmit[0].graph.nodes).toHaveLength(1)
+    expect(graphEmit[0].graph.edges).toHaveLength(1)
   })
 
   it('searchEntitiesLocal 处理搜索参数 + 触发 emit', async () => {
     const axios = (await import('axios')).default
+    // W86 mini-6: onMounted 会先调一次 fetchEntityGraphLocal (auto-fetch),
+    //   searchEntitiesLocal 排第 2 个 mockResolvedValueOnce
+    axios.get.mockResolvedValueOnce({
+      data: { nodes: [], edges: [] },
+    })
     axios.get.mockResolvedValueOnce({
       data: { items: [{ id: 5, subject: '搜索结果' }], total: 1 },
     })
@@ -134,12 +148,18 @@ describe('W86 mini-4 KnowledgeEntityTab', () => {
       },
     })
 
+    // W86 mini-6: 等 onMounted 触发的 fetchEntityGraphLocal 完成
+    await flushPromises()
+
     await wrapper.vm.searchEntitiesLocal()
     await flushPromises()
 
     expect(wrapper.emitted('refresh')).toBeTruthy()
-    const refreshArg = wrapper.emitted('refresh')[0][0]
-    expect(refreshArg.list).toHaveLength(1)
-    expect(refreshArg.total).toBe(1)
+    // 找到 list emit (可能是第二个, 因为 onMounted 先 emit graph)
+    const refreshEmits = wrapper.emitted('refresh')
+    const searchEmit = refreshEmits.find(e => e[0]?.list !== undefined)
+    expect(searchEmit).toBeTruthy()
+    expect(searchEmit[0].list).toHaveLength(1)
+    expect(searchEmit[0].total).toBe(1)
   })
 })
