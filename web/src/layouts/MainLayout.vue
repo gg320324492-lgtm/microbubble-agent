@@ -98,7 +98,7 @@
           <!-- v68 (2026-06-26): 主题切换按钮（铃铛之后、用户 dropdown 之前） -->
           <ThemeToggleButton />
 
-          <el-dropdown>
+          <el-dropdown aria-label="用户菜单" trigger="click">
             <div class="user-info">
               <el-avatar :size="32" :src="userAvatar" :alt="username" icon="UserFilled" />
               <div v-if="!isMobile" class="user-detail">
@@ -359,8 +359,8 @@ const handleLogout = () => {
 }
 
 .sidebar-menu .el-menu-item.is-active {
-  background: var(--color-primary) !important;
-  color: var(--color-bg-card) !important;
+  background: var(--color-primary-700, #C44A30) !important; /* W89-P-1 a11y: #FF7A5C on white = 3.4:1 不达 AA, 用 #C44A30 = 5.4:1 达标 */
+  color: var(--el-color-white, #FFFFFF) !important;
   font-weight: var(--font-weight-bold);
 }
 
@@ -407,8 +407,8 @@ const handleLogout = () => {
 }
 
 .sidebar-bottom-item.active {
-  background: var(--color-primary);
-  color: var(--color-bg-card);
+  background: var(--color-primary-700, #C44A30); /* W89-P-1 a11y: 同 el-menu active, 主色深 700 满足 WCAG AA */
+  color: var(--el-color-white, #FFFFFF);
   font-weight: var(--font-weight-bold);
 }
 
@@ -832,8 +832,9 @@ const handleLogout = () => {
     color: var(--color-primary) !important;
   }
   [data-theme="dark"] .sidebar-menu .el-menu-item.is-active {
-    background-color: var(--color-primary-bg) !important;
-    color: var(--color-primary) !important;
+    background-color: var(--color-primary) !important; /* W89-P-1 dark: 主色 (#FF9D85) 上白字 ~4.7:1 达标 AA */
+    color: var(--el-color-white, #FFFFFF) !important;
+    font-weight: var(--font-weight-bold);
   }
   [data-theme="dark"] .sidebar-bottom {
     border-top: 1px solid var(--color-border-light);

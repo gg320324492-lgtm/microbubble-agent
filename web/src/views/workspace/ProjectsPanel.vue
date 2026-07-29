@@ -32,7 +32,7 @@
           <el-tag :type="getStatusType(project.status)" size="small">
             {{ getStatusLabel(project.status) }}
           </el-tag>
-          <el-dropdown @command="(cmd) => handleCommand(cmd, project)">
+          <el-dropdown aria-label="项目操作菜单" @command="(cmd) => handleCommand(cmd, project)">
             <el-icon aria-label="更多操作"><MoreFilled /></el-icon>
             <template #dropdown>
               <el-dropdown-menu>

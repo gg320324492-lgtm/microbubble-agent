@@ -48,7 +48,7 @@
           <el-button class="drive-batch-toolbar-btn" :icon="Folder" @click="$emit('batch-move')">
             移动
           </el-button>
-          <el-dropdown @command="handleVisibilityCmd" trigger="click">
+          <el-dropdown aria-label="批量修改可见性菜单" @command="handleVisibilityCmd" trigger="click">
             <el-button class="drive-batch-toolbar-btn" :icon="View">
               可见性
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
