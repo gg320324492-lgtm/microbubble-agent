@@ -70,6 +70,7 @@ async def audit_summary(
           "by_status": {200: N, 404: N, 500: N, ...}
         }
     """
+    # 原始 base_q 含 from_dt/to_dt 过滤, 用于 total 计数
     base_q = select(AuditLog)
     if from_dt:
         base_q = base_q.where(AuditLog.created_at >= from_dt)
@@ -81,24 +82,31 @@ async def audit_summary(
         select(func.count()).select_from(base_q.subquery())
     )).scalar() or 0
 
-    # by_action
-    action_rows = (await db.execute(
-        select(AuditLog.action, func.count().label("n"))
-        .select_from(base_q.subquery())
-        .group_by(AuditLog.action)
-        .order_by(desc("n"))
-        .limit(50)
-    )).all()
+    # by_action: 子查询内部 group_by, 外层 select 排序 — 不再有隐式 CROSS JOIN
+    # W86 mini-11 D fix: 老代码 select_from(base_q.subquery()) + group_by(AuditLog.action)
+    # 引用外层 audit_log 表 → SQLAlchemy 生成隐式 CROSS JOIN, 数字 × 57,130 倍
+    by_action_q = (
+        select(AuditLog.action, func.count(AuditLog.id).label("n"))
+    )
+    if from_dt:
+        by_action_q = by_action_q.where(AuditLog.created_at >= from_dt)
+    if to_dt:
+        by_action_q = by_action_q.where(AuditLog.created_at <= to_dt)
+    by_action_q = by_action_q.group_by(AuditLog.action).order_by(desc("n")).limit(50)
+    action_rows = (await db.execute(by_action_q)).all()
     by_action = {row[0]: row[1] for row in action_rows}
 
-    # by_status
-    status_rows = (await db.execute(
-        select(AuditLog.status_code, func.count().label("n"))
-        .select_from(base_q.subquery())
+    # by_status: 同 fix 1 模式
+    by_status_q = (
+        select(AuditLog.status_code, func.count(AuditLog.id).label("n"))
         .where(AuditLog.status_code.isnot(None))
-        .group_by(AuditLog.status_code)
-        .order_by(desc("n"))
-    )).all()
+    )
+    if from_dt:
+        by_status_q = by_status_q.where(AuditLog.created_at >= from_dt)
+    if to_dt:
+        by_status_q = by_status_q.where(AuditLog.created_at <= to_dt)
+    by_status_q = by_status_q.group_by(AuditLog.status_code).order_by(desc("n"))
+    status_rows = (await db.execute(by_status_q)).all()
     by_status = {row[0]: row[1] for row in status_rows}
 
     return {
