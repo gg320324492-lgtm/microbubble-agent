@@ -34,7 +34,7 @@
         </el-form-item>
         <el-form-item label="动作">
           <el-select v-model="filters.action" placeholder="全部" clearable style="width: 140px">
-            <el-option v-for="a in COMMON_ACTIONS" :key="a" :label="a" :value="a" />
+            <el-option v-for="a in availableActions" :key="a" :label="a" :value="a" />
           </el-select>
         </el-form-item>
         <el-form-item label="起始时间">
@@ -106,16 +106,15 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
-const COMMON_ACTIONS = [
-  'read', 'write', 'delete',
-  'login', 'logout',
-  'upload', 'download', 'share', 'unshare',
-  'share_token_create', 'share_token_revoke',
-  'visibility_change',
-  'file_request_create', 'file_request_submit', 'file_request_deactivate',
-  'ws_connect', 'ws_disconnect',
-  'admin_action',
-]
+// W86 mini-11 D fix P3: 从 summary.by_action 动态派生可用 actions, 避免 18 个写死中 12 个死选项
+// 老代码 18 个写死, 实际只有 6 种, 12 个是死选项 → 用户选了无结果误以为系统坏了
+const availableActions = computed(() => {
+  if (!summary.value?.by_action) return []
+  // 按 count 降序排列, 仅展示真实有数据的 action
+  return Object.keys(summary.value.by_action).sort((a, b) =>
+    summary.value.by_action[b] - summary.value.by_action[a]
+  )
+})
 
 const entries = ref([])
 const summary = ref(null)
