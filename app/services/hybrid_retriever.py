@@ -406,3 +406,21 @@ async def _apply_weights(
         weights = HybridWeights(**DEFAULT_WEIGHTS)
 
     return apply_weights(results_by_method, weights, top_k=top_k)
+
+
+async def _apply_synonyms(query: str) -> str:
+    """PR4 (W90 +4): 查询改写 — 用同义词字典展开
+
+    例:
+        "微气泡的 zeta 电位" → "microbubble的 zeta_potential"
+        "Microbubble in water treatment" → "Microbubble in water_treatment"
+
+    Args:
+        query: 原始查询
+
+    Returns:
+        改写后查询 (canonical form)
+    """
+    # 延迟 import 同上
+    from app.services.synonym_dict import expand_query
+    return expand_query(query)
