@@ -1,9 +1,9 @@
-# MicroBubble Agent - W68-W85 batch 记忆索引 (W85 C-2 batch 3 主题重整)
+# MicroBubble Agent - W68-W86 batch 记忆索引 (W86 第 1 批 X-2 + D-2 主题补完, 锚点 325, 28 批)
 
-> **主基调**: 锚点范式 W7 12 → W85 321 单调上升 (累计 309 增量, 27 批)
-> **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E)
-> **派工前提铁律 12 + 类 20 实战 19 实例 + W84 C-2 据实上报铁律**
-> **8 类主题分类目录** (W85 C-2 batch 3 派生, 175 永久保留 memory 主题重整 + MEMORY.md 索引同步)
+> **主基调**: 锚点范式 W7 12 → W86 325 单调上升 (累计 313 增量, 28 批). **W86 +5 据实上报** (4 路线 merge +4 + D-2 文档同步 +1 实战, X-2 e2e 修复据实不算, 类 20 累计 21 实例 W86 新增 1).
+> **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E).
+> **派工前提铁律 12 + 类 20 实战 21 实例 + W86 X-2 类 20.24 并行 agent 隐藏假设**.
+> **8 类主题分类目录** (W85 C-2 batch 3 派生, 178 active memory 重整 + MEMORY.md 索引同步). 总计 active 183 + archived 38 = 221 文件 (W86 +5: 1 grand closure + 4 路线 memory).
 
 **8 类主题统计** (W85 C-2 batch 3, 派工 brief 175 → 实测 175 守恒):
 
@@ -259,6 +259,13 @@
 - [w84-1st-batch-a2-survey-derivative-2026-07-28](w84-1st-batch-a2-survey-derivative-2026-07-28.md) — W84 A-2 survey derivative.
 - [w84-1st-batch-c2-p2-docs-cleanup-2026-07-28](w84-1st-batch-c2-p2-docs-cleanup-2026-07-28.md) — W84 C-2 P2 docs/scripts 清 batch 2 (本批前一).
 - [w84-1st-grand-closure-full-2026-07-28](w84-1st-grand-closure-full-2026-07-28.md) — W84 grand closure full.
+- [w85-1st-grand-closure-full-2026-07-29](w85-1st-grand-closure-full-2026-07-29.md) — W85 grand closure full (锚点 314 → 320 +6 据实上报, B-2 useTask 0 hit 不实施).
+- [w86-1st-grand-closure-full-2026-07-29](w86-1st-grand-closure-full-2026-07-29.md) — W86 grand closure full (锚点 320 → 324 +4 + D-2 实战 +1 = 325, P0/P1 4 路线: gitleaks + Trivy + pre-commit + pg_exporter, X-2 e2e 修复 + D-2 6 类文档同步).
+- [w86-1st-batch-a1-gitleaks-2026-07-29](w86-1st-batch-a1-gitleaks-2026-07-29.md) — W86 A-1 gitleaks 装机 (5 自定义规则 + workflow + scan-history.sh + install-gitleaks.md + 10 case e2e).
+- [w86-1st-batch-a1-gitleaks-scan-2026-07-29](w86-1st-batch-a1-gitleaks-scan-2026-07-29.md) — W86 A-1 gitleaks 扫描报告 (0 真凭据泄漏 + 1 历史残留 + 6 MinIO 默认凭据 + 1 真生产 key 占位符模板).
+- [w86-1st-batch-c1-trivy-2026-07-29](w86-1st-batch-c1-trivy-2026-07-29.md) — W86 C-1 Trivy 镜像扫描 (9 Dockerfile base image 钉死 + workflow + scan-images.sh + install-trivy.md + 47→48 e2e).
+- [w86-1st-batch-d1-pre-commit-2026-07-29](w86-1st-batch-d1-pre-commit-2026-07-29.md) — W86 D-1 pre-commit 框架接入 (5 hook 整合 CLAUDE.md 纪律 + 兼容 setup-hooks.sh + 14 e2e).
+- [w86-1st-batch-f1-pg-exporter-2026-07-29](w86-1st-batch-f1-pg-exporter-2026-07-29.md) — W86 F-1 pg_exporter 安装 (3 compose service + slow_query.sh + 23 e2e).
 
 ## 历史归档 (memory/archived/ — 38 文件)
 

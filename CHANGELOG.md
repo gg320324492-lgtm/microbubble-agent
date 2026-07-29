@@ -5,6 +5,30 @@
 
 ---
 
+## [2026-07-29] W86 第 1 批 P0/P1 4 路线完成 — gitleaks + Trivy + pre-commit + pg_exporter (X-2 e2e 修复 + D-2 6 类文档同步收口, 主指挥协调范式第 62 次派工, 锚点范式 320 → 324 +4 守恒 + D-2 实战 +1 = 325 据实, 0 production code 4/4 守恒, 派工 v6 §5 反馈类 20.24 沉淀)
+
+**主基调**: P0 安全/合规 4 路线并行启动 + X-2 e2e 修复 (W86-X-1 报告 2 FAIL 据实修) + D-2 6 类文档同步 + grand closure memory 沉淀. 1/1 agent 完成 X-2 + D-2 合并任务.
+
+**W86 第 1 批 5 路线 + X-1 主拍 + X-2/D-2 收口 (本任务 X-2/D-2)**:
+
+- **A-1 gitleaks** (merge `c32f50701`, 锚点 +1): gitleaks 装机 + .gitleaks.toml (5 自定义规则) + secret-scan workflow (PR + push + 周一 6 点 cron) + scan-history.sh + install-gitleaks.md + tests/gitleaks/test_scan_clean_repo.py (10 case: 4 fixture PASS + 6 binary SKIP) + 2 memory. 8 允许文件, 0 production code
+- **C-1 Trivy** (merge `5cdd89a0e`, 锚点 +1): trivy 镜像扫描 + 9 Dockerfile base image 钉死 + workflow (PR + push + 周日 3 点 cron, advisory-only) + scan-images.sh + install-trivy.md + tests/trivy/test_dockerfile_pinning.py (47→48 PASS, X-2 修后 48/48) + tests/trivy/test_workflow_exists.py (7 PASS) + Dockerfile pin comment. X-1 报告 2 FAIL (5→6 + `^v?\d+`), X-2 修
+- **D-1 pre-commit** (merge `7723095fc`, 锚点 +1): pre-commit 框架接入 + 5 hook (trivy/check_pinned_images.py + alembic/check_single_head.sh + web/check_dist_manifest.sh + check_typing_imports.sh + 兼容 setup-hooks.sh) + tests/precommit/test_config_valid.py (6 PASS) + tests/precommit/test_hooks_executable.py (4 PASS + 4 SKIP binary + 4 集成 PASS) + memory
+- **F-1 pg_exporter** (merge `a4d773dfd`, 锚点 +1): pg_exporter 安装 + 3 compose service (production/dev/test, 端口 9187/9199) + slow_query.sh (5 列 markdown) + tests/pg_exporter/test_compose_service_defined.py (16 case PASS) + tests/pg_exporter/test_slow_query_script.py (7 case PASS) + memory
+- **X-2 e2e 修复** (本任务 commit 1 `129061ca2`, 锚点 +0 修测试不算): options A 最小改动 2 行 — `len(image_refs) == 5 → 6` (F-1 加 pg-exporter 第 6 image) + `_is_pinned` 正则 `^\d+\.\d+\.\d+ → ^v?\d+\.\d+\.\d+` (prometheus 官方 semver v0.15.0). 集成 4 套件 90 PASS + 10 SKIP + 0 FAIL
+- **D-2 6 类文档同步 + grand closure memory** (本任务 commit 2, 锚点 +1 实战): 5 段同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + `memory/w86-1st-grand-closure-full-2026-07-29.md` 完整沉淀
+
+**W86 第 1 批 X-2/D-2 grand closure 收口**: 2 commits ahead of base `9564f2dc9` (W85 hotfix 320→321). alembic 13 head (D-1 hook 暴露, 留 W87-X-1 rebase). 累计 28 批 450+ commits + 450+ 铁律 (W86 +24+ 新铁律: A-1 8 + C-1 5 + D-1 5 + F-1 5 + X-2/D-2 1). W19 选项 A 维持.
+
+**派工前提错配类 20 W86 新增 1 实例 (W86-X-2 沉淀)**:
+
+19-20. 沿用 W72-W85 类 20 累计 20 实例 (含 W85 据实上报 2 实例: B-2 useTask 0 hit + D-2 锚点 +6 不凑 +7)
+21. **W86 类 20.24 (X-1 + X-2 沉淀, 并行 agent 隐藏假设)**: "并行 agent 各自 PASS, 集成 e2e 红于隐藏假设". 4 路线 (gitleaks / Trivy / pre-commit / pg_exporter) 各自 e2e 都 PASS, 但集成 e2e (4 套件一起跑) 时 trivy 套件的 test_refs_discovered (5→6) + test_no_floating_tag (`^v?\d+`) 同时 FAIL. 根因: 各 agent 独立设计 + 独立测试, 派工 brief 没说"集成 e2e 一致性" 段. **铁律**: 并行派多 agent 时, 派工 brief 必含"集成 e2e 一致性" 段, 各 agent 的 e2e 必须独立跑 + 集成跑 + 至少 1 个 cross-suite 集成验证
+
+**W86 第 1 批 P0/P1 4 路线完成收口累计**: 锚点范式 320 → 324 +4 守恒 (4 路线 merge 各 +1) + D-2 实战 +1 = 325, 0 production code 改动铁律 4/4 守恒 (4 路线全部装机 + 扫描脚本 + e2e, X-2 修测试也不算 production code). 累计 28 批 450+ commits + 450+ 铁律 (W86 第 1 批 +24+ 新铁律). 集成 e2e 4 套件 90 PASS + 10 SKIP (binary 待装) + 0 FAIL. 详见 `memory/w86-1st-grand-closure-full-2026-07-29.md` (本任务沉淀).
+
+---
+
 ## W85 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-29 — 1/1 agent 完成 + 锚点范式 314 → 320 守恒 +6 据实上报, 0 production code 5/7 守恒 例外 2 已批 W85 B-1 + C-1, 派工 v6 段 7 19 类 + 类 20 18 实例 + W84 据实上报 4 实例沉淀回写 + W85 B-2 useTask 0 hit 据实上报)
 
 **主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 5 case PASS + 锚点范式 314 → 320 +6 守恒 (验证不计 0 增量 + 实施 +1 实战, 本任务 commit).
