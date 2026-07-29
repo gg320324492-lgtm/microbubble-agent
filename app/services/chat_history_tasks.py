@@ -7,6 +7,11 @@
 - engine.dispose() finally：清理连接
 - 始终 logger.warning（即便删除 0 个）→ 健康监控可见
 
+# W87-H-1 增量 (派工 v6 §5 反馈类 20.28):
+- task_id 透传依赖 Celery signal task_prerun/task_postrun (在 app/core/celery.py 注册)
+- 本任务函数无需手动 set_task_id — signal 在 worker 进程内已自动设
+- log.Filter 自动从 contextvars 取 task_id, log JSON 输出含 task_id 字段
+
 CASCADE 自动清除：
 - chat_messages（session_id FK ON DELETE CASCADE）
 - chat_shares（session_id FK ON DELETE CASCADE）
@@ -42,6 +47,10 @@ def cleanup_soft_deleted_sessions_task(retention_days: Optional[int] = None):
     2. deleted_count = 0 也要 logger.info 输出（健康监控 + 审计追溯）
     3. NullPool 避免连接池跨事件循环（CLAUDE.md 2026-06-03 垃圾桶清理铁律复用）
     4. cutoff 用 timezone.utc（CLAUDE.md 2026-06-05 tz-aware 教训）
+
+    # W87-H-1 (派工 v6 §5 反馈类 20.28):
+    5. task_id 必 request_id 解耦. Celery signal 已自动设 task_id (worker 进程
+       task_prerun), 此处不重复设 (避免 unbind task 在测试场景拿不到 self.request.id)
     """
     days = retention_days if retention_days is not None else getattr(
         settings, "CHAT_HISTORY_RETENTION_DAYS", 30

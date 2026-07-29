@@ -8,6 +8,10 @@
 - engine.dispose() finally：清理连接
 - 始终 logger.warning (即便删除 0 个) → 健康监控可见
 
+# W87-H-1 增量 (派工 v6 §5 反馈类 20.28):
+- task_id 由 Celery signal 自动设 (app/core/celery.py)
+- log.Filter 自动从 contextvars 取 task_id
+
 **2026-07-02 PR6-P12+ 增量 — service 函数拆出**:
 原版所有 SQL + 物理删除 + MinIO 清理逻辑都在 task 顶层 (235 行),
 现拆成:
