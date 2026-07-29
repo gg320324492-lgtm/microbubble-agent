@@ -238,7 +238,7 @@ def test_typing_imports_exit_zero():
         cwd=str(REPO_ROOT).replace("\\", "/"),
         capture_output=True,
         env=_SUBPROC_ENV,
-        timeout=60,  # 扫描 210 文件需要 30-60s
+        timeout=180,  # 实测约 63s，按类 20.33 留 ≥2x 余量
     )
 
     # 退出码 0 = 全部 OK; 1 = 有缺失
