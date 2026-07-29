@@ -97,7 +97,7 @@
  * - 父组件不再持有 entityChartInstance 引用（v60-v67 教训：避免跨组件状态共享）
  * - 父组件只管 search/filter/list, 图谱渲染委派给 Explorer
  */
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import KnowledgeGraphExplorer from './KnowledgeGraphExplorer.vue'
@@ -130,6 +130,12 @@ const searchEntitiesLocal = async () => {
 const fetchEntityGraphLocal = async () => {
   entityGraphLoading.value = true
   try {
+    // W86 mini-6 fix: 之前直接 emit('refresh') 让父组件更新 entityGraphData,
+    //   但 watch 链路 (KnowledgeView.vue:405) 只在 activeTab 切换时触发
+    //   entityTabRef.value.fetchEntityGraphLocal(), 初次进入实体 tab 用户看到空图,
+    //   必须手动点"刷新图谱"才能加载.
+    //   现在直接调 fetchEntityGraph 立即拉数据并更新 entityGraphData,
+    //   父组件 handleEntityRefresh 仍会接收到 graph 数据 (兼容老路径).
     const res = await axios.get('/api/v1/knowledge/entities/graph', {
       params: { limit: 100 }
     })
@@ -141,6 +147,25 @@ const fetchEntityGraphLocal = async () => {
     entityGraphLoading.value = false
   }
 }
+
+// W86 mini-6 fix: 切 tab 自动加载 — KnowledgeView.vue 的 watch(activeTab) 在
+//   activeTab === 'entities' 时调 entityTabRef.value.fetchEntityGraphLocal(),
+//   但 KnowledgeGraphExplorer 只在 props.entityGraphData 变化时才重新渲染.
+//   这里加 onMounted + watch 兜底, 配合父组件 watch 实现"切 tab 即加载, 不需手动刷新".
+//   关键: 仅在 entityGraphData 为空时触发, 避免重复请求.
+onMounted(() => {
+  if (!props.entityGraphData?.nodes?.length) {
+    fetchEntityGraphLocal()
+  }
+})
+
+// 兜底: 父组件 emit('refresh') 后 entityGraphData 通过 props 变化,
+//   若数据仍为空 (e.g. 接口异常), 重新拉一次.
+watch(() => props.entityGraphData?.nodes?.length, (newLen, oldLen) => {
+  if (oldLen !== undefined && newLen === 0 && oldLen > 0) {
+    fetchEntityGraphLocal()
+  }
+})
 
 const handleGraphNodeClick = (nodeData) => {
   if (!nodeData) return
