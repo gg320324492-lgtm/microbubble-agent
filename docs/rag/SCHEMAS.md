@@ -134,6 +134,62 @@ def dedup_cross_doc(candidates: List[ResearchCandidate]) -> List[ResearchCandida
 
 ---
 
+## 8. bm25_incremental（PR3）
+
+- **路径**: `app/services/bm25_incremental.py`
+- **定位**: 增量 BM25L 倒排索引, 替代 `BM25L` 全量重建 (rank_bm25 库限制不可增量)。缺口 3 (BM25 N 次重建) 修复。
+
+```python
+class BM25IncrementalIndex:
+    """BM25L 增量倒排索引 (PR3 W89 +1)"""
+
+    def add(self, doc: dict, *, doc_id: Optional[int] = None) -> None:
+        """增量添加文档 (O(M), M = 词项数 ≈ 100-500)"""
+
+    def remove(self, doc_id: int) -> bool:
+        """增量移除文档 (O(M))"""
+
+    def search(self, query: str, top_k: int = 5) -> List[dict]:
+        """BM25L 搜索, 严格等价 rank_bm25 0.2.2 (b=0.75, eps=0.5)"""
+
+    def build_from_docs(self, documents: List[dict]) -> None:
+        """全量构建 (首次初始化场景)"""
+
+def get_bm25_incremental_index() -> BM25IncrementalIndex:
+    """全局单例 (惰性初始化)"""
+```
+
+- **约束**: 性能门禁 1000 条入库 P95 ≤ 30s + 1000 docs 单 query ≤ 500ms; 与 text_splitter 共享切词路径; jieba/rank_bm25 未装时 importorskip 守护 + 字符级退化 (`_fallback_tokenize`); knowledge_service 钩子 `_incremental_add_document` 在 `_run_analyze_and_embed` 中调 (派工 v10 §13 铁律 6)
+
+## 9. fulltext_index（PR3）
+
+- **路径**: `app/services/text_splitter.py` + `alembic/versions/089_gin_trgm_tsvector.py` + `app/models/knowledge.py`
+- **定位**: PG 全文索引 (tsvector) + trigram 兜底, 缺口 4 (PG 全文缺失) 修复
+
+```python
+# text_splitter.py 公共 API
+def tokenize_chinese(text: str, *, lowercase: bool = True) -> List[str]:
+    """中文分词入口, 复用 bm25_service.STOP_WORDS 单源"""
+
+def tokens_to_tsvector_input(tokens: List[str]) -> str:
+    """tokens → PG to_tsvector('simple', $1) 接受字符串"""
+
+def split_for_tsvector(text: str, *, max_chars: Optional[int] = 6000, lowercase: bool = True) -> str:
+    """PR3 tsvector 入库一站式入口 (截断 + 切词 + 拼字符串)"""
+
+# alembic 089 schema 字段
+# knowledge.search_text TEXT (入 token 化缓存, knowledge_service 钩子写入)
+# knowledge.content_tsvector TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', coalesce(search_text, ''))) STORED
+# knowledge.ck_knowledge_search_text_len CHECK (search_text IS NULL OR length(search_text) <= 6000)
+# ix_knowledge_search_text_trgm GIN (search_text gin_trgm_ops) WHERE search_text IS NOT NULL
+# ix_knowledge_content_tsvector GIN (content_tsvector)
+# pg_trgm 扩展 (CREATE EXTENSION IF NOT EXISTS, 兜底 OOV 召回)
+```
+
+- **约束**: 大表 GIN 创建必须 `CREATE INDEX CONCURRENTLY` 防阻塞 (RISKS §R4, 离线窗口 ≤ 120s); 089 用 `DO $$ BEGIN IF NOT EXISTS (pg_indexes) ... EXECUTE 'CREATE INDEX CONCURRENTLY' ...` 探测 + 创建二段式 (CONCURRENTLY 不能套 IF NOT EXISTS, 不能在事务中); search_text 列长度 ≤ 6000 与 PR1 `MAX_EMBED_INPUT_CHARS` 对齐
+
+---
+
 ## 跨件约束总表
 
 | 约束 | 适用件 | 来源 |
