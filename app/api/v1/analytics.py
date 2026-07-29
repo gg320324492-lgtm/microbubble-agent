@@ -177,7 +177,7 @@ async def get_stats(
                 AVG(click_position) FILTER (WHERE clicked_id IS NOT NULL) AS avg_click_pos,
                 COUNT(*) FILTER (WHERE clicked_id IS NULL) AS zero_click_count
             FROM search_logs
-            WHERE created_at >= :cutoff
+            WHERE created_at >= :cutoff AND source IS DISTINCT FROM 'system_metrics'
         """),
         {"cutoff": cutoff},
     )
@@ -195,7 +195,7 @@ async def get_stats(
                 COUNT(*) AS total,
                 COUNT(clicked_id) AS clicks
             FROM search_logs
-            WHERE created_at >= :cutoff AND embedding_model IS NOT NULL
+            WHERE created_at >= :cutoff AND source IS DISTINCT FROM 'system_metrics' AND embedding_model IS NOT NULL
             GROUP BY embedding_model
             ORDER BY total DESC
         """),
@@ -218,7 +218,7 @@ async def get_stats(
                 COUNT(*) AS total,
                 COUNT(clicked_id) AS clicks
             FROM search_logs
-            WHERE created_at >= :cutoff AND source IS NOT NULL
+            WHERE created_at >= :cutoff AND source IS DISTINCT FROM 'system_metrics' AND source IS NOT NULL
             GROUP BY source
             ORDER BY total DESC
         """),
@@ -250,7 +250,7 @@ async def get_stats(
                 AVG(sl.click_position) FILTER (WHERE sl.clicked_id IS NOT NULL) AS avg_pos
             FROM search_logs sl
             LEFT JOIN members m ON sl.user_id = m.id
-            WHERE sl.created_at >= :cutoff
+            WHERE sl.created_at >= :cutoff AND sl.source IS DISTINCT FROM 'system_metrics'
             GROUP BY COALESCE(m.id::text, 'anonymous'), COALESCE(m.name, '匿名用户'),
                      COALESCE(m.username, ''), m.avatar
             HAVING COUNT(*) > 0
@@ -295,7 +295,7 @@ async def get_stats(
                 COUNT(*) AS searches,
                 COUNT(clicked_id) AS clicks
             FROM search_logs
-            WHERE created_at >= :cutoff
+            WHERE created_at >= :cutoff AND source IS DISTINCT FROM 'system_metrics'
             GROUP BY DATE(created_at)
             ORDER BY day
         """),
