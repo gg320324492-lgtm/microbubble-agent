@@ -55,6 +55,7 @@ def _import_application_routers():
         admin_audit,
         admin_kb_monitor,  # qa-bench v3.1 D5: KB 自动入库监控
         analytics,
+        search_logs_admin,  # RAG PR6 (W92): SearchLog 前端接通 7 维日志
         auth,
         billing,  # W72 第 2 批 B-5 商业化计费
         billing_webhooks,  # W82 B-1 P0: 商业化支付 webhook 路由
@@ -118,6 +119,8 @@ team_folders,  # v2 PR18 团队共享盘 + 4 维审计 (W68 第 14 批 B-2)
         (meeting_progress.router, {"prefix": "/api/v1", "tags": ["会议进度"]}),
         (dashboard.router, {"prefix": "/api/v1", "tags": ["项目动态"]}),
         (analytics.router, {"prefix": "/api/v1", "tags": ["检索质量"]}),
+        # RAG PR6 (W92): /admin/search-logs 7 维日志 (admin 鉴权, 不动 analytics 老路由)
+        (search_logs_admin.router, {"prefix": "/api/v1", "tags": ["检索日志管理"]}),
         (chat_history.router, {"prefix": "/api/v1", "tags": ["聊天历史"]}),
         (admin.router, {"prefix": "/api/v1", "tags": ["管理"]}),
         (admin_kb_monitor.router, {"prefix": "/api/v1", "tags": ["KB 监控"]}),  # qa-bench v3.1 D5
