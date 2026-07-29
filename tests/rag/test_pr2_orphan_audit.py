@@ -106,7 +106,7 @@ def test_orphan_task_31_script_exists_or_skipped():
     """scripts/orphan_chunk_audit.sql 存在性检查 (或 SKIP)"""
     sql_path = Path("scripts/orphan_chunk_audit.sql")
     if sql_path.exists():
-        content = sql_path.read_text()
+        content = sql_path.read_text(encoding="utf-8")
         assert "LEFT JOIN knowledge" in content or "knowledge_chunks" in content
     else:
         pytest.skip("scripts/orphan_chunk_audit.sql not yet written (PR2 W88 +18 docs 阶段)")
