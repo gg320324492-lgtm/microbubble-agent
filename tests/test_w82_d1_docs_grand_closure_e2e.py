@@ -138,18 +138,28 @@ def test_w82_d1_case5_project_memory_has_w82_grand_closure():
 
 
 def test_w82_d1_case5_user_memory_md_has_w82_entry():
-    """验证 user-level MEMORY.md 含 W82 第 1 批 grand closure 条目."""
+    """验证 user-level MEMORY.md 含 W82 第 1 批 grand closure 条目.
+
+    W88-X-1: user MEMORY.md 在 W85 D-1 batch 3 重整为 9 主题分类目录,
+    W82 文件保留在 memory/w82-1st-grand-closure-full-2026-07-28.md.
+    """
     if not USER_MEMORY_MD.exists():
         pytest.skip(f"user-level MEMORY.md 不存在 (Windows env), 跳过: {USER_MEMORY_MD}")
     text = _read_text(USER_MEMORY_MD)
 
-    # 必须含 W82 第 1 批 grand closure 条目
-    assert "W82" in text, "user MEMORY.md 缺少 W82 段"
-    assert "grand closure" in text.lower() or "GrandClosure" in text, \
-        "user MEMORY.md 缺少 grand closure 提及"
+    # W88-X-1: 验证 project memory w82 文件仍可达 (W85 D-1 batch 3 重整后保留)
+    alt_w82 = ROOT / "memory" / "w82-1st-grand-closure-full-2026-07-28.md"
+    assert alt_w82.exists(), "memory/w82-1st-grand-closure-full-2026-07-28.md 必须存在 (project memory)"
+    text_alt = _read_text(alt_w82)
+    assert "W82 第 1 批" in text_alt
+    assert "grand closure" in text_alt.lower() or "GrandClosure" in text_alt
 
-    # 必须含锚点范式 293 守恒
-    assert "293" in text, "user MEMORY.md 缺少锚点范式 293 守恒"
+    # user MEMORY.md 不再硬性要求 W82 (W85 D-1 batch 3 重整后), 但应含 W85 主题分类索引
+    assert "W85" in text, "user MEMORY.md 缺少 W85 主题分类 (W85 D-1 batch 3 后必有)"
+
+    # 锚点范式 293 应在 CLAUDE.md (顶部状态段) 而非 user MEMORY.md (W88-X-1)
+    claude_text = _read_text(ROOT / "CLAUDE.md")
+    assert "293" in claude_text, "CLAUDE.md 缺少锚点范式 293 (W82 累计基准)"
 
 
 # --- Case 6 (新增): 累计 commits + 铁律守恒验证 ---

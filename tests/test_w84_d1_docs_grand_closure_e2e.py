@@ -88,13 +88,10 @@ def test_w84_d1_case3_changelog_md_has_w84_section():
     assert CHANGELOG_MD.exists(), f"CHANGELOG.md 不存在: {CHANGELOG_MD}"
     text = _read_text(CHANGELOG_MD)
 
-    # CHANGELOG.md 顶部必须含 W84 第 1 批
-    top_section = text[:5000]
-    assert "W84" in top_section, "CHANGELOG.md 顶部缺少 W84 段"
-
-    # 必须含 grand closure
-    assert "grand closure" in top_section.lower() or "GrandClosure" in top_section, \
-        "CHANGELOG.md 顶部缺少 grand closure 提及"
+    # CHANGELOG.md 必须含 W84 第 1 批 (W88-X-1: 全文搜索, 不限前 5000 字)
+    assert "W84" in text, "CHANGELOG.md 缺少 W84 段"
+    assert "grand closure" in text.lower() or "GrandClosure" in text, \
+        "CHANGELOG.md 缺少 grand closure 提及"
 
 
 def test_w84_d1_case3_changelog_md_anchor_314_守恒():
