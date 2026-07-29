@@ -266,47 +266,71 @@ class EntityService:
         nodes = {entity_id: self._entity_to_dict(center)}
         edges = []
 
-        stmt = select(EntityCoOccurrence).where(or_(
-            EntityCoOccurrence.entity_a_id == entity_id,
-            EntityCoOccurrence.entity_b_id == entity_id,
-        )).limit(limit * 2)
-        co_rows = (await self.db.execute(stmt)).scalars().all()
+        # W86 mini-4 fix: 单次 JOIN 拉所有相关 entity, 避免 N+1 (派工 v4 铁律 3 真验证)
+        # 老实现: 循环 co_rows 每条边触发 1-2 个 entity 查询 (50-100 个 query)
+        # 新实现: 1 个 JOIN 拉所有 (co + entity) 对
+        co_stmt = (
+            select(EntityCoOccurrence, KnowledgeEntity)
+            .join(
+                KnowledgeEntity,
+                or_(
+                    EntityCoOccurrence.entity_a_id == KnowledgeEntity.id,
+                    EntityCoOccurrence.entity_b_id == KnowledgeEntity.id,
+                ),
+            )
+            .where(or_(
+                EntityCoOccurrence.entity_a_id == entity_id,
+                EntityCoOccurrence.entity_b_id == entity_id,
+            ))
+            .order_by(desc(EntityCoOccurrence.weight))
+            .limit(limit * 2)  # 边 × 2 端点
+        )
+        rows = (await self.db.execute(co_stmt)).all()
 
-        for co in co_rows:
-            other_id = co.entity_b_id if co.entity_a_id == entity_id else co.entity_a_id
-            if other_id not in nodes and len(nodes) < limit:
-                r2 = await self.db.execute(
-                    select(KnowledgeEntity).where(KnowledgeEntity.id == other_id)
-                )
-                other = r2.scalar_one_or_none()
-                if other:
-                    nodes[other_id] = self._entity_to_dict(other)
-            edges.append({
-                "source": co.entity_a_id, "target": co.entity_b_id,
-                "knowledge_id": co.knowledge_id, "weight": co.weight,
-            })
+        seen_co = set()
+        for co, ent in rows:
+            if co.id not in seen_co:
+                seen_co.add(co.id)
+                if len(edges) < limit:
+                    edges.append({
+                        "source": co.entity_a_id, "target": co.entity_b_id,
+                        "knowledge_id": co.knowledge_id, "weight": co.weight,
+                    })
+            if ent.id not in nodes and len(nodes) < limit + 1:  # +1 for center
+                nodes[ent.id] = self._entity_to_dict(ent)
         return {"nodes": list(nodes.values()), "edges": edges}
 
     async def _global_graph(self, limit: int) -> dict:
-        stmt = select(EntityCoOccurrence).order_by(
-            desc(EntityCoOccurrence.weight)
-        ).limit(limit)
-        co_rows = (await self.db.execute(stmt)).scalars().all()
+        # W86 mini-4 fix: 单次 JOIN 替代 N+1 (派工 v4 铁律 3 真验证)
+        # 老实现: 每条 co 边触发 2 个 entity 查询 (limit=50 → 100 个 query)
+        # 新实现: 1 个 JOIN 拉所有 (co + entity) 对, 服务端再 dedupe
+        stmt = (
+            select(EntityCoOccurrence, KnowledgeEntity)
+            .join(
+                KnowledgeEntity,
+                or_(
+                    EntityCoOccurrence.entity_a_id == KnowledgeEntity.id,
+                    EntityCoOccurrence.entity_b_id == KnowledgeEntity.id,
+                ),
+            )
+            .order_by(desc(EntityCoOccurrence.weight))
+            .limit(limit * 2)  # 边 × 2 端点
+        )
+        rows = (await self.db.execute(stmt)).all()
+
         nodes = {}
         edges = []
-        for co in co_rows:
-            for eid in (co.entity_a_id, co.entity_b_id):
-                if eid not in nodes:
-                    r = await self.db.execute(
-                        select(KnowledgeEntity).where(KnowledgeEntity.id == eid)
-                    )
-                    ent = r.scalar_one_or_none()
-                    if ent:
-                        nodes[eid] = self._entity_to_dict(ent)
-            edges.append({
-                "source": co.entity_a_id, "target": co.entity_b_id,
-                "knowledge_id": co.knowledge_id, "weight": co.weight,
-            })
+        seen_co = set()
+        for co, ent in rows:
+            if co.id not in seen_co:
+                seen_co.add(co.id)
+                if len(edges) < limit:
+                    edges.append({
+                        "source": co.entity_a_id, "target": co.entity_b_id,
+                        "knowledge_id": co.knowledge_id, "weight": co.weight,
+                    })
+            if ent.id not in nodes:
+                nodes[ent.id] = self._entity_to_dict(ent)
         return {"nodes": list(nodes.values()), "edges": edges}
 
     async def _llm_judge_merge(self, a: KnowledgeEntity, b: KnowledgeEntity) -> bool:

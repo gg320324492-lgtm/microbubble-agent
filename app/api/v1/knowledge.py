@@ -414,10 +414,36 @@ async def get_entity_graph(
     v69 P1b fix: 必须放在 /knowledge/{knowledge_id}/graph 之前注册——
     FastAPI 按注册顺序匹配路径，否则 /knowledge/entities/graph 会被
     /knowledge/{knowledge_id}/graph 拦截（knowledge_id="entities" 解析失败 → 422）
+
+    W86 mini-4 fix: 60s Redis 缓存 (派工 v6 段 5 实战, entity_graph 变化频率低, 60s TTL 足够)
+    - key: `entity_graph:{entity_id or 'global'}:{limit}` (per-user 无关, 共享缓存)
+    - 缓存失败 fallback: 降级到不缓存, 避免 Redis 挂掉影响服务
     """
+    import json
+    from app.core.redis import get_redis
+
+    cache_key = f"entity_graph:{entity_id or 'global'}:{limit}"
+    try:
+        redis = await get_redis()
+        cached = await redis.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        # 缓存失败降级, 不阻塞主流程
+        cached = None
+
     from app.services.entity_service import EntityService
     svc = EntityService(db)
-    return await svc.get_entity_graph(entity_id=entity_id, limit=limit)
+    result = await svc.get_entity_graph(entity_id=entity_id, limit=limit)
+
+    try:
+        redis = await get_redis()
+        await redis.set(cache_key, json.dumps(result), ex=60)
+    except Exception:
+        # 写缓存失败不影响返回
+        pass
+
+    return result
 
 
 @router.get("/knowledge/{knowledge_id}/graph", response_model=KnowledgeGraph)
