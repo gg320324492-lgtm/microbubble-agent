@@ -320,12 +320,13 @@ const activeTab = ref(
 
 // 铁律 30: EP 图标 named import + 通过 props 传入
 // audit tab 仅 admin 可见, computed 过滤
+// W86 mini batch 1: kb_monitor tab 仅 admin/leader 可见 (侧栏入口已移除, 沿用 audit 同模式)
 const tabItems = computed(() => {
   const items = [
     { key: 'overview',   label: '项目历程',     icon: DataLine },
     { key: 'analytics',  label: '检索质量',     icon: Histogram },
-    { key: 'kb_monitor', label: 'KB 入库监控',  icon: Folder },
   ]
+  if (isAdmin.value) items.push({ key: 'kb_monitor', label: 'KB 入库监控', icon: Folder })
   if (isAdmin.value) items.push({ key: 'audit', label: '审计日志', icon: Document })
   return items
 })
