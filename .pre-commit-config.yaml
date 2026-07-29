@@ -1,0 +1,113 @@
+# .pre-commit-config.yaml
+# W86 第 1 批 D-1 pre-commit 框架接入 (锚点范式 320 → 321 预期)
+#
+# 目的: 把 CLAUDE.md 散落的 5 条纪律机械化, 在 pre-commit 自动跑。
+# 与 scripts/setup-hooks.sh 并存: setup-hooks.sh 装纯 bash 的 secrets/dist hooks,
+# 本框架接 5 条新纪律 (gitleaks/dockerfile pinning/alembic chain/typing imports/dist manifest).
+#
+# 安装 (开发者本机):
+#   pip install pre-commit
+#   pre-commit install                          # 装 .git/hooks/pre-commit 框架钩子
+#   pre-commit run --all-files                  # 全量检查 (第一次跑)
+#
+# 验证: bash scripts/setup-hooks.sh --check    # 旧 hook 仍工作
+# 验证: pytest tests/precommit/ -v             # 框架配置合法 (本任务硬门禁)
+
+# ---- minimal config: 仅文档化本地 hook, 不引入外部 repo (避免网络依赖) ----
+# 设计原则: 所有 hook 都是 local (entry 直接调本地脚本),
+#          退出码 0 通过 / 非 0 阻止 commit.
+# 顺序很重要: 慢在前 → 快在后, fail-fast.
+repos:
+  # ============================================================
+  # Repo 1: Local hooks (W86-D-1 主交付)
+  # ============================================================
+  - repo: local
+    hooks:
+      # --------------------------------------------------------
+      # Hook 1: Secret scan (继承 W86-A-1 gitleaks 配置预期)
+      # CLAUDE.md 纪律: 任何 commit 前必扫 .env + 凭据文件
+      # 兼容说明: setup-hooks.sh 已装同款 (check-secrets-before-commit.sh),
+      #           本 hook 用 gitleaks 二级扫描 (兼容 W86-A-1 plan)
+      # --------------------------------------------------------
+      - id: gitleaks-scan
+        name: Secret scan (gitleaks, W86-A-1)
+        # entry: W86-A-1 实际交付后会落到 scripts/gitleaks/scan-history.sh,
+        #        缺失时 fallback 到现有 check-secrets-before-commit.sh
+        entry: bash -c 'if [ -x scripts/gitleaks/scan-history.sh ]; then bash scripts/gitleaks/scan-history.sh; else bash scripts/check-secrets-before-commit.sh; fi'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        # 任何文本文件均扫 (gitleaks 内部 filter)
+        types: [text]
+
+      # --------------------------------------------------------
+      # Hook 2: Dockerfile base image 钉死 (继承 W86-C-1)
+      # CLAUDE.md 纪律: FROM 必须有具体版本号 (无 :latest 浮动)
+      # 失败模式: image: xxx:latest → CI 随机挂 / 部署后漂移
+      # --------------------------------------------------------
+      - id: dockerfile-pinning
+        name: Dockerfile base image must be pinned (no :latest)
+        entry: python scripts/trivy/check_pinned_images.py
+        language: system
+        files: '^(Dockerfile.*|docker/Dockerfile.*|docker-compose.*\.yml|docker-compose.*\.yaml)$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # --------------------------------------------------------
+      # Hook 3: alembic chain verify (CLAUDE.md §2.3 永久纪律)
+      # W68 第 3 批事故 (1852468a6): 并行 agent 写双头 alembic
+      # 修复: 派工 prompt 必须明确 down_revision 接续 + merge 后立即 verify 1 head
+      # --------------------------------------------------------
+      - id: alembic-chain
+        name: Alembic single chain discipline (CLAUDE.md §2.3)
+        entry: bash scripts/alembic/check_single_head.sh
+        language: system
+        files: '^alembic/versions/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # --------------------------------------------------------
+      # Hook 4: typing import check (CLAUDE.md 641 行纪律)
+      # 背景: 缺 typing import 会让模块加载失败 → 工具一调就报
+      # 复用: scripts/check_typing_imports.sh (已存在, 不重写)
+      # --------------------------------------------------------
+      - id: typing-imports
+        name: Python typing import check (CLAUDE.md 641 行纪律)
+        entry: bash scripts/check_typing_imports.sh
+        language: system
+        files: '^app/.*\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # --------------------------------------------------------
+      # Hook 5: web/dist 健全性 (CLAUDE.md 永久纪律 `npm run build` 唯一合法)
+      # 背景: 59187ce8 事故 — vite build 直跑绕开 postbuild → manifest unhashed → 服务器 410
+      # 检查: web/dist 里不能有未 hash 化的 manifest 引用
+      # --------------------------------------------------------
+      - id: dist-manifest-hash
+        name: web/dist must use hashed manifest (CLAUDE.md 永久纪律)
+        entry: bash scripts/web/check_dist_manifest.sh
+        language: system
+        files: '^web/dist/'
+        pass_filenames: false
+        stages: [pre-commit]
+
+# ============================================================
+# 全局配置
+# ============================================================
+# 提交遇到 hook 失败时, 不阻止后续 hook 跑完 (默认 fail-fast, 改 false 让所有 hook 都跑)
+fail_fast: false
+
+# 不自动跑 hooks (需要显式 `pre-commit run`, 避免刚 commit 时 hook 大量失败干扰)
+# 默认 false → commit 时自动跑. 我们保留自动跑, 因为 5 hook 都很快.
+# skip: [gitleaks-scan]  # 如需临时跳过某个 hook
+
+# 文档化:
+#   - 现有 setup-hooks.sh 装的 secrets/dist hooks 与本框架并存:
+#     pre-commit 框架装的 .git/hooks/pre-commit 是 Python wrapper,
+#     setup-hooks.sh 装的 .git/hooks/pre-commit 是纯 bash.
+#     双方互斥 (后装的覆盖先装的).
+#     设计: pre-commit 框架装在 wrapper 之外的独立 hook 链.
+#     .git/hooks/pre-commit 会调用本框架的 hook + setup-hooks.sh 的 hook.
+#   - W86 主指挥: 选择 (a) 只用 setup-hooks.sh 或 (b) 同时启用本框架.
+#     本任务交付两者并存的设计文档, 不擅自切换.

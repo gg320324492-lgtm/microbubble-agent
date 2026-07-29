@@ -13,6 +13,16 @@
 #   1. pre-commit  → scripts/check-secrets-before-commit.sh + check-dist-before-commit.sh
 #                    (串联, secrets 优先 hard block, dist 后 soft auto-add)
 #   2. post-commit → 自动 git push origin main (CLAUDE.md 2026-06-26 教训)
+#
+# W86-D-1 (pre-commit 框架) 兼容说明 (2026-07-29):
+#   - 本脚本仍装纯 bash 的 secrets + dist hooks (轻量, 无外部依赖)
+#   - 若开发者同时需要 5 条 CLAUDE.md 纪律机械化 (gitleaks-scan / dockerfile-pinning /
+#     alembic-chain / typing-imports / dist-manifest-hash), 启用 pre-commit 框架:
+#       pip install pre-commit
+#       pre-commit install                  # 装 .git/hooks/pre-commit 框架钩子
+#     框架与本脚本可并存: 开发者可选择 (a) 只用本脚本 或 (b) 同时启用 pre-commit 框架.
+#     配置文件: .pre-commit-config.yaml (本任务 W86-D-1 交付)
+#     详: scripts/install-pre-commit.md
 
 set -e
 
@@ -144,3 +154,8 @@ echo "⚠️  提醒:"
 echo "   - .env 里的 SECRET_KEY 必须不是默认占位符 (change-this-to-a-...)"
 echo "   - admin 密码不能用 123456 这种弱密码 (bot 攻击秒破)"
 echo "   - 任何 e2e 脚本必须用测试账号 xiaoqi_testbot, 不能用 wangtianzhi"
+echo ""
+echo "🔧 [可选] 同时启用 pre-commit 框架 (W86-D-1 交付, 整合 5 条 CLAUDE.md 纪律):"
+echo "     pip install pre-commit"
+echo "     pre-commit install"
+echo "     详: scripts/install-pre-commit.md"
