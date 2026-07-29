@@ -50,7 +50,8 @@ test.describe('W68 G-2: 移动端左右滑切换页面', () => {
 
   test('[Drive] 向左滑 → 切到下一个 tab (files → starred)', async ({ page }) => {
     await page.goto('/m/drive')
-    await page.waitForLoadState('networkidle')
+    // 类 20.67: 禁 waitForLoadState('networkidle') (WS 长连接永不达成), 改等 .drive-tab-btn 可见
+    await page.locator('.drive-tab-btn').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
     // 初始 active tab
     const initialActive = await page.locator('.drive-tab-btn.active').textContent()
@@ -72,7 +73,7 @@ test.describe('W68 G-2: 移动端左右滑切换页面', () => {
 
   test('[Drive] 向右滑 → 切到上一个 tab (files → team 循环)', async ({ page }) => {
     await page.goto('/m/drive')
-    await page.waitForLoadState('networkidle')
+    await page.locator('.drive-tab-btn').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
     const initialActive = await page.locator('.drive-tab-btn.active').textContent()
 
@@ -90,7 +91,8 @@ test.describe('W68 G-2: 移动端左右滑切换页面', () => {
 
   test('[Chat] 向左滑 → 切到下一个会话 (若 ≥ 2 个会话)', async ({ page }) => {
     await page.goto('/m/chat')
-    await page.waitForLoadState('networkidle')
+    // 类 20.67: 禁 networkidle, 改等 chat 容器
+    await page.locator('.mobile-chat-view, .chat-session-item').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
     // 检查会话数
     const sessionCount = await page.locator('[data-testid="session-item"]').count().catch(() => 0)
@@ -116,7 +118,8 @@ test.describe('W68 G-2: 移动端下拉刷新', () => {
 
   test('[Knowledge] 下拉超过 80px 触发刷新', async ({ page }) => {
     await page.goto('/m/knowledge')
-    await page.waitForLoadState('networkidle')
+    // 类 20.67: 禁 networkidle, 改等 knowledge 主区域
+    await page.locator('.knowledge-main, .knowledge-list, .knowledge-empty').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
     // 初始 indicator 不应可见
     const initialIndicator = await page.locator('.knowledge-pull-indicator').isVisible().catch(() => false)
@@ -139,7 +142,8 @@ test.describe('W68 G-2: 移动端下拉刷新', () => {
 
   test('[Knowledge] 短距离下拉 (< 80px) 不触发刷新', async ({ page }) => {
     await page.goto('/m/knowledge')
-    await page.waitForLoadState('networkidle')
+    // 类 20.67: 禁 networkidle, 改等 knowledge 主区域
+    await page.locator('.knowledge-main, .knowledge-list, .knowledge-empty').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
     // 模拟短下拉 (50px, 低于阈值)
     await simulateSwipe(page, {
@@ -178,7 +182,8 @@ test.describe('W68 G-2: 触觉反馈', () => {
     })
 
     await page.goto('/m/drive')
-    await page.waitForLoadState('networkidle')
+    // 类 20.67: 禁 networkidle, 改等 .drive-tab-btn 可见
+    await page.locator('.drive-tab-btn').first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => null)
 
     // 触发向左滑
     await simulateSwipe(page, {

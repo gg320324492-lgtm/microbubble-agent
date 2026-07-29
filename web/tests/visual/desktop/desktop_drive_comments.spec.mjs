@@ -73,16 +73,21 @@ async function injectAuth(page) {
 /**
  * 等待桌面端评论 UI 完全渲染 (loading 消失 + 列表渲染 + sticky 输入栏可见)
  * 复用 F-4 组件约定: .desktop-file-comments-view / .dfcv-list / .dfcv-compose 至少一个出现
+ *
+ * W89-P-7 / 类 20.67: 禁 waitForLoadState('networkidle')
+ *   页面有 NotificationBell WS + 通知轮询 + 健康探测, networkidle 永不达成.
+ *   改等确定 UI locator (.desktop-file-comments-view visible + .dfcv-loading hidden).
  */
 async function waitForDesktopCommentsUI(page) {
-  await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(800)
+  // 1. 评论 View 容器可见
+  await page.locator('.desktop-file-comments-view, .dfcv-list, .dfcv-empty').first()
+    .waitFor({ state: 'visible', timeout: 15000 })
+    .catch(() => null)
 
-  // 等待 dfcv-list 或 dfcv-empty 出现 (loading 已结束)
-  await page.waitForSelector(
-    '.dfcv-list, .dfcv-empty, .dfcv-loading',
-    { timeout: 5000 }
-  ).catch(() => null)
+  // 2. loading 状态消失 (有则等, 没有则跳过)
+  await page.locator('.dfcv-loading')
+    .waitFor({ state: 'hidden', timeout: 5000 })
+    .catch(() => null)
 
   // 给动画 500ms 完成
   await page.waitForTimeout(500)
