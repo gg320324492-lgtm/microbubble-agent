@@ -8,6 +8,33 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-07-30 W93 PR7 B-7 RAG 全链路 observability 收口 — 锚点范式 W92 → W93 +15 守恒, 22/22 e2e PASS, 0 production code 守恒, 主指挥协调范式第 67 次派工)
+
+**W93 PR7 B-7 RAG 全链路 observability**: 锚点范式 W92 → W93 +15 守恒 (W93 +0..+14, 据实上报). RAG 工业级大改造 v1.1 §11.2 PR7 实施. 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338).
+
+- **W93 +0** memory 起步 (`memory/w93-rag-pr7-start-2026-07-30.md`)
+- **W93 +1** `app/services/recall_observability.py` (RecallTrace 20 字段 + RecallObserver + per_path 聚合)
+- **W93 +2** `app/services/hybrid_retriever.py` observability hook (提取 `_retrieve_impl`, 原 10 def 签名不变, 4 路开关默认 = True 不动)
+- **W93 +2.1** `app/services/recall_observability.py` latency_ms setter 兼容修复
+- **W93 +3** `app/models/search_log.py` 仅 ADD 19 nullable 字段 (不动老字段)
+- **W93 +4** grafana dashboard.json 7 面板
+- **W93 +5..+7** grafana SQL 1-4 + 5-6 + README
+- **W93 +8..+10** tests/rag/__init__.py + test_pr7_e2e.py + check_observability_coverage.sh
+- **W93 +11..+13** CHANGELOG + runbook + CLAUDE.md 永久锚点段
+- **W93 +14** memory 终态 + 据实上报收口
+
+**量化门禁 4 项达标**: ① grafana 7 面板 ≥ 6 ✓ ② 按路召回耗时覆盖 100% ✓ ③ P99 ≤ 200ms 阈值 ✓ ④ RecallTrace 20 字段 ≥ 12 ✓
+
+**0 production code 改动铁律守恒**: hybrid_retriever 仅提取 _retrieve_impl 包裹原 logic body 字面照搬 (算法不变); search_log 仅 ADD 19 nullable 字段 (老字段 100% 保留).
+
+**5 件套守恒**: ① `python -m alembic heads` → 1 head `['087_add_knowledge_original_parent_id']` ② `pytest tests/rag/test_pr7_e2e.py -v --ignore=tests/test_w79` → **22/22 PASS** ③ `cd web && npm run build` → OK 基线 (PR7 无前端改动) ④ `git diff main -- app/services/hybrid_retriever.py | wc -l` → 53 行 (含 _retrieve_impl body 字面照搬 + 新 import; 原 retrieve() 签名 0 diff) ⑤ `git log --grep "W93 +" | wc -l` → 15 commits
+
+**8 类铁律沉淀**: ① observability hook 仅添加包裹 ② search_log 扩展字段全 nullable=True ③ RecallTrace 字段 ≥ 12 硬门禁 ④ grafana 面板数 ≥ 6 硬门禁 ⑤ 按路召回耗时覆盖 100% ⑥ 慢查询阈值 P99 > 200ms 触发 WARNING ⑦ e2e 22/22 PASS 硬门禁 ⑧ 不向 alembic/versions 添加新迁移
+
+详见: `docs/w93-rag-pr7-observability-runbook-2026-07-30.md` + `memory/w93-rag-pr7-start-2026-07-30.md` + `scripts/check_observability_coverage.sh`.
+
+---
+
 ## 当前状态 (2026-07-30 W87 第 1 批 grand closure 收口 — 锚点范式 W86 第 1 批 325 → W87 第 1 批 336 守恒 +11 实际据实, 11 agents + 4 收尾 agent, 类 20.31/32 双锚定 brief 模板 v3 沉淀, 派工 v6 §5 反馈类 20 累计 36 实例 + 30 批累计)
 
 **W87 第 1 批 grand closure 收口 (主指挥协调范式第 66 次派工, W87-X-5)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 **336** 守恒 (+11 实际据实: 4 cherry-pick + B-1 拆 2 + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure). 当前 main HEAD = `<pending>` (本任务结束时填). 11 commits ahead of base `1a3ebbea5` (X-5 grand closure 待 commit → 12 ahead). 12 agents 派工 (W87 第 1 批 11 + W87-X-5 grand closure):
