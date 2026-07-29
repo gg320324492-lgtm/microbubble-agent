@@ -119,6 +119,9 @@
 
 - [2026-07-21-50-commit-roadmap](2026-07-21-50-commit-roadmap.md) — W51-W60 50 commit roadmap.
 - [2026-07-21-final-summary](2026-07-21-final-summary.md) — W51-W58 final summary.
+- **W90 PR4 (RAG v1.1 PR4 HybridRetriever 召回侧量化)**:
+  - [w90-rag-pr4-start-2026-07-30](w90-rag-pr4-start-2026-07-30.md) — W90 PR4 起步 6 项 + base 状态实测 + 量化门禁 + 5 件套守恒 (W73 铁律).
+  - [w90-rag-pr4-full-2026-07-30](w90-rag-pr4-full-2026-07-30.md) — W90 PR4 grand closure 完整沉淀 (15 commits + 5 件套 + 4 件新铁律 + 派工 brief 反馈 18 项 + 错误 19 类, anchor 339 守恒).
 - [2026-07-22-50-commit-w51-w100-roadmap](2026-07-22-50-commit-w51-w100-roadmap.md) — W51-W100 50 commit roadmap.
 - [2026-07-23-six-batches-v2-21-paradigm](2026-07-23-six-batches-v2-21-paradigm.md) — 6 批 v2.21 范式总结.
 - [anchor-paradigm-21-day-validation-2026-07-22](anchor-paradigm-21-day-validation-2026-07-22.md) — 锚点范式 21 天验证.

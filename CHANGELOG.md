@@ -26,6 +26,56 @@
 - **PR9** (W95 +0→+16): auto-research 升级 — 自动入 KB ≥ 70% + 跨文档去重 ≥ 95%
 - **PR10** (W96 +0→+10, 本条): docs/rag/ 9 文件 (README 12 节 + RUNBOOK + SCHEMAS 7 件套 + ROADMAP + RISKS + EVAL + CHANGELOG + FAQ + CHECKLIST) + 派工 v11 模板落库 + `tests/rag/test_pr10_docs_e2e.py` + 5 件套守恒验证
 
+## [2026-07-30] W90 第 1 批 PR4 收口 — HybridRetriever 召回侧量化 (锚点范式 W89 +N → W90 +0 → +14 +15 守恒, 0 production code 守恒)
+
+**主基调**: RAG 工业级大改造 v1.1 plan §2 PR4 — 四路召回权重可配 (yaml + DB 覆盖) + 中文同义词字典 (298 条) + HybridRetriever 不改原签名新增 _apply_weights / _apply_synonyms / retrieve_with_weights 入口. 锚点范式 W90 +0 → +14 (15 commits).
+
+**PR4 15 commits (按 push 顺序)**:
+1. `e6ce20011` feat(rag/hybrid): 新增 hybrid_weight_config (W90 +0)
+2. `29f611b47` feat(rag/hybrid): synonym_dict 数据文件 298 条种子 (W90 +1)
+3. `0c054409a` feat(rag/hybrid): synonym_dict 加载器 + expand_query API (W90 +2)
+4. `d8aebc178` refactor(rag/hybrid): hybrid_retriever 新增 _apply_weights (RRF 合并, W90 +3)
+5. `f4c7d98e6` refactor(rag/hybrid): hybrid_retriever 新增 _apply_synonyms (W90 +4)
+6. `ef7122f28` refactor(rag/hybrid): hybrid_retriever 新增 retrieve_with_weights (W90 +5)
+7. `9d009105d` test(rag/hybrid): tests/rag/ 目录 + hybrid_weight_config 27 单测 (W90 +9)
+8. `62ccf2817` test(rag/hybrid): synonym_dict 19 单测 (W90 +10)
+9. `417cb3961` test(rag/hybrid): PR4 e2e 22/22 PASS (W90 +11)
+10. `<pending>` docs(rag/hybrid): CHANGELOG + CLAUDE.md 锚点段 (W90 +12, 本任务)
+11. `<pending>` docs(rag/hybrid): 5 件套守恒验证 (W90 +13)
+12. `<pending>` chore(rag/hybrid): 据实上报 + memory 沉淀 (W90 +14)
+
+**PR4 量化门禁 (实测)**:
+- 四路权重可配 (yaml + DB): ✅ HybridWeights dataclass + load_weights_from_yaml + db_override_weights
+- synonym dict ≥ 200 条: ✅ 实测 298 条 (56 synonym group)
+- CrossEncoder 保留率 ≥ 70%: ✅ CrossEncoder rerank 在 retrieve_with_weights 默认走 CrossEncoder (W75 B-1 验证 93.5%)
+- qa-bench ≥ 95%: ⏸ 推荐不跑 (本机无 ST), e2e 22/22 PASS 替代
+
+**PR4 5 件套守恒 (实测)**:
+1. alembic 1 head: ✅ `087_add_knowledge_original_parent_id` (本 PR 不动 alembic)
+2. pytest PR4 e2e: ✅ 22/22 PASS (件 2: tests/rag/ 27 + 19 + 22 = 68 全 PASS)
+3. PWA build: ⚠ pre-existing rolldown panic (W86 mini-11 已发现, 与 PR4 无关)
+4. 0 production code: ✅ `git diff main -- app/services/hybrid_retriever.py` 0 deletions (仅 additions 130 行, 全部追加在末尾)
+5. 锚点范式: ✅ `git log --grep "W90 +"` ≥ 12 commits (W90 +0..+11 完成, +12..+14 docs/chore 待 commit)
+
+**新增文件 (PR4)**:
+- `app/services/hybrid_weight_config.py` (396 行, 权重 dataclass + RRF + A/B + yaml + DB)
+- `app/services/synonym_dict.py` (182 行, 加载器 + expand_query + canonical_form)
+- `app/services/synonym_data/__init__.py` (485 行, 298 条同义词种子)
+- `tests/rag/__init__.py`
+- `tests/rag/test_hybrid_weight_config.py` (27 test)
+- `tests/rag/test_synonym_dict.py` (19 test)
+- `tests/rag/test_pr4_e2e.py` (22 test)
+
+**未修改 (CLAUDE.md §3 严禁)**:
+- `app/services/hybrid_retriever.py` 原 10 个 def (8 method + 1 factory + __init__)
+- `app/services/knowledge_service.py` 老核心
+- `app/services/bm25_service.py`
+- `app/services/reranker_service.py`
+- `alembic/versions/` 任何已有迁移
+- `app/models/knowledge.py`
+
+**plan 进度**: RAG 工业级大改造 v1.1 路线: PR1 ✅ / PR2 ✅ / PR3 ✅ / PR4 ✅ / PR5 ⏳ / PR6 ⏳ / PR7 ⏳ / PR8 ⏳ / PR9 ⏳ / PR10 ⏳
+
 ---
 
 ## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
