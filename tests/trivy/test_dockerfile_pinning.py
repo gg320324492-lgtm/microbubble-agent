@@ -77,7 +77,7 @@ def _is_pinned(ref: str) -> bool:
     if tag.startswith("RELEASE."):
         return True
     # 3 段数字开头 = 真 patch 级钉死
-    if re.match(r"^\d+\.\d+\.\d+", tag):
+    if re.match(r"^v?\d+\.\d+\.\d+", tag):
         return True
     # postgres:16.14-alpine — 上游 major.minor 就是完整版本
     if _name_of(ref) in TWO_SEGMENT_COMPLETE and re.match(r"^\d+\.\d+(?:\D|$)", tag):
@@ -128,7 +128,7 @@ def test_refs_discovered():
     from_refs = [r for r in refs if r[0] != COMPOSE_FILE]
     image_refs = [r for r in refs if r[0] == COMPOSE_FILE]
     assert len(from_refs) == 10, f"期望 10 个 FROM, 实际 {len(from_refs)}: {from_refs}"
-    assert len(image_refs) == 5, f"期望 5 个 compose image, 实际 {len(image_refs)}: {image_refs}"
+    assert len(image_refs) == 6, f"期望 6 个 compose image, 实际 {len(image_refs)}: {image_refs}"
 
 
 @pytest.mark.parametrize("rel,lineno,ref", _collect_refs(), ids=lambda v: str(v))
