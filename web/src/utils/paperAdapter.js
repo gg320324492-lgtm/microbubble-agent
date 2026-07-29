@@ -3564,8 +3564,13 @@ export function normalizeGraphData(rawGraphData) {
   // 3. 限制最大节点数
   const MAX_NODES = 80
   const nodes = rawNodes.slice(0, MAX_NODES).map(n => {
-    const id = String(n.id || n.node_id || n.name || n.label || n.title || n.text || `node-${Math.random()}`)
-    const name = n.name || n.label || n.title || n.text || id
+    const id = String(n.id || n.node_id || n.name || n.label || n.title || n.text || n.subject || `node-${Math.random()}`)
+    // W86 mini-5 fix: entity 图谱节点 (entity_service._entity_to_dict) 只有
+    // subject / predicate / object 三元组字段, 没有 name / label / title / text,
+    // 老代码 fallback 到 id → 用户看到节点标数字 (entity_id 1-65) 而非主体名称.
+    // 通用展示字段优先 (兼容 paper / topic 图谱), 再落 entity 三元组, 最后才 id.
+    const name = n.name || n.label || n.title || n.text ||
+                 n.subject || n.object || n.predicate || id
     const value = Number(n.value ?? n.weight ?? n.score ?? n.count ?? 1)
     const category = n.category || n.type || n.group || 'default'
     return {
