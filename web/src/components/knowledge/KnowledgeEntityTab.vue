@@ -153,9 +153,18 @@ const fetchEntityGraphLocal = async () => {
 //   但 KnowledgeGraphExplorer 只在 props.entityGraphData 变化时才重新渲染.
 //   这里加 onMounted + watch 兜底, 配合父组件 watch 实现"切 tab 即加载, 不需手动刷新".
 //   关键: 仅在 entityGraphData 为空时触发, 避免重复请求.
+// W86 mini-7 fix (派工 v6 §1.2 真验证): onMounted 同时调 searchEntitiesLocal,
+//   父组件 useKnowledge 初始化时 searchEntities({ page_size: 1 }) 把 entityList
+//   设为 [1 item] → 用户直接进入 entities tab 或刷新页面时 watch(activeTab) 不会触发
+//   (activeTab 已是 'entities' 无变化), 列表永远停在 1 条. onMounted 同时 fetch
+//   list + graph, 保证 entityList 在组件挂载时即补齐 20 条.
 onMounted(() => {
   if (!props.entityGraphData?.nodes?.length) {
     fetchEntityGraphLocal()
+  }
+  // W86 mini-7: entityList 为空时自动 search (覆盖 useKnowledge page_size=1 的 [1 item])
+  if (props.entityList.length === 0) {
+    searchEntitiesLocal()
   }
 })
 

@@ -93,7 +93,9 @@ describe('W86 mini-4 KnowledgeEntityTab', () => {
 
   it('fetchEntityGraphLocal 触发 API 调用, 写 entityGraphData', async () => {
     const axios = (await import('axios')).default
-    // W86 mini-6: onMounted 先调一次 (默认 mock 返回空), fetchEntityGraphLocal 排第 2 个 mock
+    // W86 mini-6: onMounted 先调 fetchEntityGraphLocal (mock 1, 空 graph).
+    // W86 mini-7: entityList 非空跳过 search onMounted.
+    // 测试手动调 fetchEntityGraphLocal (mock 2, 含 nodes/edges).
     axios.get.mockResolvedValueOnce({
       data: { nodes: [], edges: [] },
     })
@@ -106,20 +108,20 @@ describe('W86 mini-4 KnowledgeEntityTab', () => {
 
     const wrapper = mount(KnowledgeEntityTab, {
       props: {
-        entityList: [],
-        entityTotal: 0,
+        entityList: [{ id: 1, subject: '预填充' }],  // W86 mini-7: 非空跳过 search onMounted
+        entityTotal: 1,
         entityPage: 1,
         entityGraphData: { nodes: [], edges: [] },
       },
     })
 
-    // W86 mini-6: 等 onMounted 完成
+    // W86 mini-6 + mini-7: 等 onMounted 触发的 fetchEntityGraphLocal 完成
     await flushPromises()
 
     await wrapper.vm.fetchEntityGraphLocal()
     await flushPromises()
 
-    // 验证 emit('refresh', { graph: ... }) — 至少有一次含 graph
+    // 验证 emit('refresh', { graph: ... }) — 至少有一次含 graph 且 nodes.length === 1
     expect(wrapper.emitted('refresh')).toBeTruthy()
     const refreshEmits = wrapper.emitted('refresh')
     const graphEmit = refreshEmits.find(e => e[0]?.graph?.nodes?.length === 1)
@@ -130,32 +132,29 @@ describe('W86 mini-4 KnowledgeEntityTab', () => {
 
   it('searchEntitiesLocal 处理搜索参数 + 触发 emit', async () => {
     const axios = (await import('axios')).default
-    // W86 mini-6: onMounted 会先调一次 fetchEntityGraphLocal (auto-fetch),
-    //   searchEntitiesLocal 排第 2 个 mockResolvedValueOnce
-    axios.get.mockResolvedValueOnce({
-      data: { nodes: [], edges: [] },
-    })
+    // W86 mini-6 + mini-7: entityList 非空 + entityGraphData.nodes 非空 → onMounted 都不调,
+    //   手动 searchEntitiesLocal 直接消耗唯一 mock (含 1 item)
     axios.get.mockResolvedValueOnce({
       data: { items: [{ id: 5, subject: '搜索结果' }], total: 1 },
     })
 
     const wrapper = mount(KnowledgeEntityTab, {
       props: {
-        entityList: [],
-        entityTotal: 0,
+        entityList: [{ id: 99, subject: '预填充' }],  // W86 mini-7: 非空跳过 search onMounted
+        entityTotal: 1,
         entityPage: 1,
-        entityGraphData: { nodes: [], edges: [] },
+        entityGraphData: { nodes: [{ id: 99 }], edges: [] },  // W86 mini-7: 非空跳过 graph onMounted
       },
     })
 
-    // W86 mini-6: 等 onMounted 触发的 fetchEntityGraphLocal 完成
+    // W86 mini-6: 等 onMounted 触发 (此 case 应跳过, 但仍等 microtask 完成)
     await flushPromises()
 
     await wrapper.vm.searchEntitiesLocal()
     await flushPromises()
 
     expect(wrapper.emitted('refresh')).toBeTruthy()
-    // 找到 list emit (可能是第二个, 因为 onMounted 先 emit graph)
+    // 找到 list emit
     const refreshEmits = wrapper.emitted('refresh')
     const searchEmit = refreshEmits.find(e => e[0]?.list !== undefined)
     expect(searchEmit).toBeTruthy()
