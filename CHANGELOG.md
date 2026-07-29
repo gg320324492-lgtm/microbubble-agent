@@ -5,6 +5,109 @@
 
 ---
 
+## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
+
+**主基调**: W87 第 1 批 11 收口 commits + W87-X-5 grand closure 完整收口. 类 20.31/32 双锚定 brief 模板 v3 沉淀 (`docs/dispatch-template-v3.md` 新建, W87-X-5 新增 docs/ 写入权). 派工协调范式第 66 次派工.
+
+**W87 第 1 批 11 收口 commits (按 push 顺序)**:
+1. `78988bf01` cherry-pick H-1 contextvars (类 20.28)
+2. `e0275d643` cherry-pick B-1 GlitchTip+Sentry main (类 20.27)
+3. `6c78d6880` cherry-pick B-1 Sentry lockfile
+4. `4a5750343` cherry-pick E-1 k6 (类 20.26)
+5. `e52d003fd` cherry-pick G-1 a11y (类 20.25)
+6. `4c0458387` W87-X-3 alembic hook 假阳性修复 (类 20.30)
+7. `ca0b45365` W87-X-3 D-2 6 类文档同步 + grand closure memory
+8. `faf393190` W87-X-4b trivy 6 → 7 image 计数 (类 20.34)
+9. `946c6b598` W87-X-4a typing imports test timeout 60s → 180s flake fix (类 20.33)
+10. `223ae469b` W87-X-2 npm run build 重跑修 B-1 dist chunk orphan (类 20.36)
+11. `8ba490cea` W87-X-4c npm audit high+critical 24 vulns 修复 (类 20.35)
+12. **`<pending>`** **W87-X-5 grand closure** (本任务, 类 20.31/32 双锚定)
+
+**派工 brief v3 模板 (W87-X-5 新增 docs/ 写入权)**:
+- 新建 `docs/dispatch-template-v3.md` 192 行
+- 5 段新增: 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查
+- 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支
+- 类 20.31 "subagent EnterWorktree 阻断 → 嵌套 worktree-agent-<id> 分支名" + 类 20.32 "协调 base 必实测 ls-remote origin" 双锚定
+
+**集成 e2e 全验证 (W87-X-5 全跑, 派工 v6 §1.2 真验证)**:
+- W86 4 套件: 91 PASSED + 10 SKIPPED + 0 FAILED (96.29s)
+- W87 6 套件 (k6/sentry/request_context/dist_health/npm_audit/alembic): 74 PASSED + 0 FAILED (13.79s)
+- **总计**: 165 PASSED + 42 SKIPPED + 0 FAILED ✅
+
+**W87-X-5 边界复检 (派工 v6 §1.2 真验证)**:
+- 允许清单 (W86 + W87 综合): `.gitleaks.toml` / `.pre-commit-config.yaml` / `.github/workflows/{secret-scan,image-scan}.yml` / `Dockerfile*` / `docker-compose*.yml` / `scripts/{gitleaks,trivy,alembic,web,pg-exporter,install-*,k6/*}` / `scripts/.token-orphan-allowlist` / `tests/{gitleaks,trivy,precommit,pg_exporter,k6,sentry,request_context,alembic,dist_health,npm_audit}/` / `web/tests/visual/a11y/` / `web/package*.json` / `web/dist/*` / `web/src/{main,sw,utils/sentry}.js` / `app/core/{request_context.py,logging.py,celery.py}` / `app/main.py` / `app/config.py` / `requirements.txt` / 5 Celery task docstring / `pytest.ini` / `memory/{w86,w87}-*` / `.gitignore`
+- 禁止清单 (实测): `app/api/` / `app/agent/` / `app/models/` / `web/src/views/` / `web/src/components/` / `web/src/composables/` / `alembic/versions/` / `nginx/` / `commercial/` (0 命中)
+
+**派工前提错配类 20 累计 36 实例 (W87 第 1 批 +12: 20.21-24 + 20.25-32 + 20.33-36)**:
+- 类 20.21-24: W86 第 1 批 (4 实例) - hook 测合规 / 不照抄版本 / 负向对照 / 集成 e2e
+- 类 20.25-32: W87 第 1 批 4 路线 + X-3 (8 实例) - a11y 全绿可疑 / 压测 baseline / Sentry off / contextvars 双栈 / alembic head 实测 / hook 分离 stdout / subagent fallback / 协调 base 漂移
+- 类 20.33-36: W87 第 1 批收尾 (4 实例) - pytest timeout / trivy 计数 / npm audit 门禁 / cherry-pick 重跑 build
+
+**W87 第 1 批 grand closure 收口**: 11 commits ahead of base `1a3ebbea5` (W86 D-2) → W87-X-5 grand closure commit → 12 commits ahead (锚点 336). alembic 1 head `['087_add_knowledge_original_parent_id']` 守恒. 累计 30 批 480+ commits + 500+ 铁律 (W87 +36 新铁律 + 类 20 沉淀 4 实例). W87+ 派工顺序表: W87 第 2 批 (G-2 a11y 真登录态补刀 / H-2 老 logger 接 contextvars 全面化 / A-1 真 binary 装机 / npm audit moderate 75 调研) + W88 (4 agents 候选留口) + W89. W19 选项 A 维持.
+
+详见:
+- `memory/w87-1st-grand-closure-full-2026-07-30.md` (本任务沉淀, W87-X-5 补强版)
+- `docs/dispatch-template-v3.md` (本任务新建, W87-X-5 新增 docs/ 写入权)
+- `memory/w87-1st-grand-closure-full-2026-07-29.md` (W87-X-3 已写版, 不动)
+
+---
+
+## [2026-07-30] W87 第 1 批 4 路线 + X-3 hook 修复 + cherry-pick 模式完成 — a11y + k6 + GlitchTip/Sentry + contextvars + alembic hook (主指挥协调范式第 63+64+65 次派工, 锚点范式 325 → 332 +7 实际据实, 派工 v6 §5 反馈类 20.25-32 新增 8 实例, 0 production code 6/7 守恒)
+
+**主基调**: cherry-pick 而非 merge 模式实战 (主指挥拍板基于 3 件大事: 嵌套 worktree 分支名错位 + base 漂移 + 21 个 W86 mini-N commit 未拍板) + 4 路线 cherry-pick (H-1 / B-1 / E-1 / G-1) + X-1 alembic rebase 撤回干净 + X-3 alembic hook 假阳性修复 (4 e2e PASS) + D-2 6 类文档同步.
+
+**W87 第 1 批 6 agents (本任务 X-3 cherry-pick + 6 类文档同步)**:
+
+- **H-1 contextvars** (cherry-pick `78988bf01`, 锚点 +1): app/core/request_context.py (新, 85 行) + app/core/logging.py (RequestContextFilter 34 行) + app/core/celery.py (signal 24 行) + app/main.py (middleware 27 行) + 5 Celery task docstring (agent_trace / chat_history / chat_share / drive_cleanup / file_mention) + tests/request_context/ 4 文件 (157+95+130+70 行) + memory. 14 文件 804+/3-
+- **B-1 GlitchTip + Sentry main** (cherry-pick `e0275d643`, 锚点 +1): docker-compose.{yml,dev,test} 3 glitchtip service + app/main.py Sentry init (env guard `if settings.SENTRY_DSN`) + app/config.py SENTRY_DSN + web/src/main.js Sentry init (35 行) + web/src/sw.js install failure postMessage (11 行) + web/src/utils/sentry.js (14 行新) + requirements.txt sentry-sdk[fastapi] + 134 web/dist/ build 文件 (含 orphan entry chunk 缺陷, Sentry 在 index-d2ea53b1.js 但 index.html 引用 index-c70e8703.js) + scripts/.token-orphan-allowlist 5 行 + tests/sentry/ 3 文件 + docs/sentry-setup.md + memory. 150 文件 981+/1-
+- **B-1 lockfile** (cherry-pick `6c78d6880`, 锚点 +1): web/package-lock.json 99 行 (@sentry/browser + @sentry/vue 同步). 1 文件 99+
+- **E-1 k6 压测** (cherry-pick `4a5750343`, 锚点 +1): scripts/k6/{chat_stream, ws_notifications, drive_collab}.js 70+90+101 行 + scripts/k6/README.md + scripts/k6/baselines/README.md + scripts/install-k6.md + tests/k6/{__init__, test_scripts_exist}.py 1+154 行 + web/package.json 5 npm scripts (load:chat/ws/drive) + memory. 10 文件 746+/1-
+- **G-1 a11y** (cherry-pick `e52d003fd`, 锚点 +1): web/tests/visual/a11y/{playwright.a11y.config.mjs, axe-config.mjs, axe-chats.spec.mjs, a11y-baseline.spec.mjs} 82+78+49+43 行 + 25 snapshot 文件 (5 页面 × 5 viewport) + web/package.json + web/package-lock.json (axe-core/playwright) + memory. 32 文件 527+/1-
+- **W87-X-1 alembic rebase 撤回干净** (0 commit, 类 20.29 + 20.30 据实上报): 13 head 是 hook 假阳性 (冷缓存 `wc -w` 数错), 实测 1 head `087_add_knowledge_original_parent_id`. 留 W87-X-3 修 hook
+- **W87-X-3 alembic hook 假阳性修复** (commit `4c0458387`, 锚点 +1): scripts/alembic/check_single_head.sh 修法 (python sys.exit 直接 exit code + 分离 stdout/stderr + mktemp trap cleanup) + tests/alembic/test_pre_commit_hook_passes.py 4 test (冷缓存 exit 0 + 3 次连跑稳定 + 忽略 SyntaxWarning + 实际 1 head 基线) + tests/alembic/__init__.py. 3 文件 212+/20-
+- **W87-X-3 cherry-pick 模式实战** (派工 v6 §5 反馈类 20.31 + 20.32 沉淀): subagent EnterWorktree 阻断 → fallback `git worktree add` → 分支名 `worktree-agent-<id>` (G-1 a429a6749fe6f0075 + E-1 aeb766f2a0d4ade04), 主指挥合并必须用这个分支名 + 必须查实际 base (实测 4 agent 全基于 5c87904b7, 不是 1a3ebbea5). cherry-pick 而非 merge (避免带入 21 个 W86 mini-N 未拍板 commit). H-1 → B-1 main → B-1 lockfile → E-1 → G-1 顺序, 0 冲突
+- **D-2 6 类文档同步 + grand closure memory** (本任务 commit, 锚点 +1 实战): 6 文件 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + `memory/w87-1st-grand-closure-full-2026-07-29.md` 完整沉淀 (16 段: 派工清单 / cherry-pick 模式 / 集成 e2e / 边界复检 / W87+ 派工顺序表 / 真装机清单 / 待主指挥拍板 / 锚点守恒计算 / 关键 commit 链 / memory 索引更新 / 真实施 vs brief 偏差汇总 / 0 production code 守恒 / W19 选项 A 维持 / 累计 29 批 / 第一次报告暂停 → 主指挥拍板 → 第二次 cherry-pick / agent commits 真实施清单)
+
+**W87 第 1 批 X-3 收口**: 6 commits ahead of base `1a3ebbea5` (W86 D-2). alembic 1 head `['087_add_knowledge_original_parent_id']` 守恒 (W87-X-3 hook 修后冷缓存精确 returncode == 0). 累计 29 批 470+ commits + 490+ 铁律 (W87 +24 新铁律: G-1 5 + E-1 5 + B-1 5 + H-1 5 + X-3 4). W87+ 派工顺序表: W87 第 2 批 (G-2 a11y 真登录态 + H-2 老 logger 接 contextvars + A-1 npm audit + X-2 dist entry chunk orphan + X-3 trivy 6→7 计数) + W88 + W89. W19 选项 A 维持.
+
+**派工前提错配类 20 W87 新增 8 实例 (W87-X-3 沉淀)**:
+
+20.25-30 + 20.31-32 详见 `memory/w87-1st-grand-closure-full-2026-07-29.md` 第 1 段表格. 累计类 20.1-20.32 = 32 实例.
+
+**集成 e2e 验证 (派工 v6 §1.2 真验证)**:
+- W86 4 套件 (gitleaks + trivy + precommit + pg_exporter): 89 PASSED + 10 SKIPPED + 2 FAILED
+  - FAILED 1: `tests/precommit/test_hooks_executable.py::test_typing_imports_exit_zero` 60s timeout — W86 pre-existing flake (check_typing_imports.sh 实际 63s, 测试 timeout 紧贴)
+  - FAILED 2: `tests/trivy/test_dockerfile_pinning.py::test_refs_discovered` 期望 6 实际 7 — B-1 cherry-pick 加 glitchtip 触发, 1 行 e2e 修, 留 W87-X-3
+- W87 3 套件 (k6 + sentry + request_context): 62 PASSED + 0 FAILED
+- W87-X-3 alembic 1 套件: 4 PASSED (冷缓存精确 returncode == 0)
+- 主仓库 2620 collected: 1825 PASSED + 231 SKIPPED + 138+84 FAILED (全部 pre-existing 与 cherry-pick 无关: test_w79 syntax / test_w82 mount / test_folder_service / test_list_files_include_subfolders_v2_21 / test_perf / test_mobile_v34_commercial_e2e)
+
+---
+
+## [2026-07-29] W86 第 1 批 P0/P1 4 路线完成 — gitleaks + Trivy + pre-commit + pg_exporter (X-2 e2e 修复 + D-2 6 类文档同步收口, 主指挥协调范式第 62 次派工, 锚点范式 320 → 324 +4 守恒 + D-2 实战 +1 = 325 据实, 0 production code 4/4 守恒, 派工 v6 §5 反馈类 20.24 沉淀)
+
+**主基调**: P0 安全/合规 4 路线并行启动 + X-2 e2e 修复 (W86-X-1 报告 2 FAIL 据实修) + D-2 6 类文档同步 + grand closure memory 沉淀. 1/1 agent 完成 X-2 + D-2 合并任务.
+
+**W86 第 1 批 5 路线 + X-1 主拍 + X-2/D-2 收口 (本任务 X-2/D-2)**:
+
+- **A-1 gitleaks** (merge `c32f50701`, 锚点 +1): gitleaks 装机 + .gitleaks.toml (5 自定义规则) + secret-scan workflow (PR + push + 周一 6 点 cron) + scan-history.sh + install-gitleaks.md + tests/gitleaks/test_scan_clean_repo.py (10 case: 4 fixture PASS + 6 binary SKIP) + 2 memory. 8 允许文件, 0 production code
+- **C-1 Trivy** (merge `5cdd89a0e`, 锚点 +1): trivy 镜像扫描 + 9 Dockerfile base image 钉死 + workflow (PR + push + 周日 3 点 cron, advisory-only) + scan-images.sh + install-trivy.md + tests/trivy/test_dockerfile_pinning.py (47→48 PASS, X-2 修后 48/48) + tests/trivy/test_workflow_exists.py (7 PASS) + Dockerfile pin comment. X-1 报告 2 FAIL (5→6 + `^v?\d+`), X-2 修
+- **D-1 pre-commit** (merge `7723095fc`, 锚点 +1): pre-commit 框架接入 + 5 hook (trivy/check_pinned_images.py + alembic/check_single_head.sh + web/check_dist_manifest.sh + check_typing_imports.sh + 兼容 setup-hooks.sh) + tests/precommit/test_config_valid.py (6 PASS) + tests/precommit/test_hooks_executable.py (4 PASS + 4 SKIP binary + 4 集成 PASS) + memory
+- **F-1 pg_exporter** (merge `a4d773dfd`, 锚点 +1): pg_exporter 安装 + 3 compose service (production/dev/test, 端口 9187/9199) + slow_query.sh (5 列 markdown) + tests/pg_exporter/test_compose_service_defined.py (16 case PASS) + tests/pg_exporter/test_slow_query_script.py (7 case PASS) + memory
+- **X-2 e2e 修复** (本任务 commit 1 `129061ca2`, 锚点 +0 修测试不算): options A 最小改动 2 行 — `len(image_refs) == 5 → 6` (F-1 加 pg-exporter 第 6 image) + `_is_pinned` 正则 `^\d+\.\d+\.\d+ → ^v?\d+\.\d+\.\d+` (prometheus 官方 semver v0.15.0). 集成 4 套件 90 PASS + 10 SKIP + 0 FAIL
+- **D-2 6 类文档同步 + grand closure memory** (本任务 commit 2, 锚点 +1 实战): 5 段同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + `memory/w86-1st-grand-closure-full-2026-07-29.md` 完整沉淀
+
+**W86 第 1 批 X-2/D-2 grand closure 收口**: 2 commits ahead of base `9564f2dc9` (W85 hotfix 320→321). alembic 13 head (D-1 hook 暴露, 留 W87-X-1 rebase). 累计 28 批 450+ commits + 450+ 铁律 (W86 +24+ 新铁律: A-1 8 + C-1 5 + D-1 5 + F-1 5 + X-2/D-2 1). W19 选项 A 维持.
+
+**派工前提错配类 20 W86 新增 1 实例 (W86-X-2 沉淀)**:
+
+19-20. 沿用 W72-W85 类 20 累计 20 实例 (含 W85 据实上报 2 实例: B-2 useTask 0 hit + D-2 锚点 +6 不凑 +7)
+21. **W86 类 20.24 (X-1 + X-2 沉淀, 并行 agent 隐藏假设)**: "并行 agent 各自 PASS, 集成 e2e 红于隐藏假设". 4 路线 (gitleaks / Trivy / pre-commit / pg_exporter) 各自 e2e 都 PASS, 但集成 e2e (4 套件一起跑) 时 trivy 套件的 test_refs_discovered (5→6) + test_no_floating_tag (`^v?\d+`) 同时 FAIL. 根因: 各 agent 独立设计 + 独立测试, 派工 brief 没说"集成 e2e 一致性" 段. **铁律**: 并行派多 agent 时, 派工 brief 必含"集成 e2e 一致性" 段, 各 agent 的 e2e 必须独立跑 + 集成跑 + 至少 1 个 cross-suite 集成验证
+
+**W86 第 1 批 P0/P1 4 路线完成收口累计**: 锚点范式 320 → 324 +4 守恒 (4 路线 merge 各 +1) + D-2 实战 +1 = 325, 0 production code 改动铁律 4/4 守恒 (4 路线全部装机 + 扫描脚本 + e2e, X-2 修测试也不算 production code). 累计 28 批 450+ commits + 450+ 铁律 (W86 第 1 批 +24+ 新铁律). 集成 e2e 4 套件 90 PASS + 10 SKIP (binary 待装) + 0 FAIL. 详见 `memory/w86-1st-grand-closure-full-2026-07-29.md` (本任务沉淀).
+
+---
+
 ## W85 第 1 批 D-1 6 类文档同步 + grand closure (2026-07-29 — 1/1 agent 完成 + 锚点范式 314 → 320 守恒 +6 据实上报, 0 production code 5/7 守恒 例外 2 已批 W85 B-1 + C-1, 派工 v6 段 7 19 类 + 类 20 18 实例 + W84 据实上报 4 实例沉淀回写 + W85 B-2 useTask 0 hit 据实上报)
 
 **主基调**: 6 类文档同步 (CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md) + docs runbook + memory + e2e 5 case PASS + 锚点范式 314 → 320 +6 守恒 (验证不计 0 增量 + 实施 +1 实战, 本任务 commit).

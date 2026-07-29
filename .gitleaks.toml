@@ -1,0 +1,174 @@
+# gitleaks 配置 (W86 第 1 批 A-1)
+# 沉淀日期: 2026-07-29
+# 任务: gitleaks 安装 (配置 + workflow + scripts + e2e + 扫描报告)
+#
+# 用法:
+#   gitleaks detect --source . --config .gitleaks.toml --report-path logs/gitleaks-report.json --no-banner
+#   gitleaks detect --source . --config .gitleaks.toml --redact --no-banner
+#
+# 触发:
+#   1. 本地: scripts/gitleaks/scan-history.sh
+#   2. CI:   .github/workflows/secret-scan.yml (PR + push + 周一 6 点 cron)
+#   3. pre-commit: scripts/check-secrets-before-commit.sh (JWT) + gitleaks pre-commit (全规则) 双层
+
+title = "MicroBubble Agent gitleaks config"
+
+# 扫描模式: commits (扫历史) + files (扫工作树文件内容)
+# commits 模式会逐 commit diff, 命中 commit hash + author + date
+# 适合发现"凭据入库后某次 commit 误提交"
+[extend]
+useDefault = true   # 启用 gitleaks 内置 100+ 默认规则
+
+# 全局 allowlists — 已知凭据 / 测试 fixture / 文档解释段
+[allowlists]
+description = "全局 allowlist — 已知凭据 (已轮换待清理) + 测试 fixture + 文档"
+
+# 1. 已知历史泄漏 (凭据已轮换, 等 W86-X-1 主指挥拍板 git filter-repo 清理)
+# 暂用 commit-level regex 兜底, 等首次扫描报告生成后再细化到具体 commit
+regexes = [
+    '''REDACTED_SECURITY_PLACEHOLDER''',
+    '''<REDACTED>''',
+    '''<ANTHROPIC_API_KEY>''',
+    '''<OPENAI_API_KEY>''',
+    '''<JWT_TOKEN>''',
+    '''<PRIVATE_KEY>''',
+    '''minioadmin:minioadmin''',   # MinIO 默认密码兜底, 仅文档解释段
+    '''sk-ant-test-fixture''',
+    '''sk-test-fixture''',
+]
+
+# 2. 路径 allowlist — 测试 fixture + 文档示例 + 锁文件
+paths = [
+    '''tests/fixtures/.*\.json$''',
+    '''tests/fixtures/.*\.py$''',
+    '''tests/gitleaks/test_.*\.py$''',
+    '''docs/.*\.md$''',                      # 文档示例凭据字面量
+    '''README\.md$''',
+    '''CHANGELOG\.md$''',
+    '''HISTORY\.md$''',
+    '''CLAUDE\.md$''',
+    '''scripts/install-gitleaks\.md$''',     # 本任务安装说明
+    '''\.gitleaks\.toml$''',
+    '''package-lock\.json$''',
+    '''yarn\.lock$''',
+    '''poetry\.lock$''',
+    '''Pipfile\.lock$''',
+]
+
+# 3. 注释 / 文档字面量兜底 — 含"example" / "TODO" / "FIXME" 的行
+regexTarget = "line"
+stopwords = [
+    "example",
+    "Example",
+    "EXAMPLE",
+    "todo",
+    "TODO",
+    "Todo",
+    "fixme",
+    "FIXME",
+    "Fixme",
+    "placeholder",
+    "Placeholder",
+    "PLACEHOLDER",
+    "redacted",
+    "REDACTED",
+    "Redacted",
+    "fixture",
+    "Fixture",
+    "FIXTURE",
+]
+
+
+# ============================================================
+# 项目自定义规则 (5 条)
+# ============================================================
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key (sk-ant-...)"
+regex = '''sk-ant-[A-Za-z0-9_-]{20,}'''
+keywords = ["sk-ant-"]
+tags = ["api-key", "anthropic", "llm"]
+entropy = 3.5
+
+[[rules]]
+id = "openai-api-key"
+description = "OpenAI API key (sk-...)"
+# 必须 48+ 字符避免误伤短串
+regex = '''sk-[A-Za-z0-9]{48,}'''
+keywords = ["sk-"]
+tags = ["api-key", "openai", "llm"]
+entropy = 3.5
+
+[[rules]]
+id = "private-key"
+description = "RSA / SSH 私钥头部"
+regex = '''-----BEGIN (RSA |OPENSSH |EC |DSA |PGP )?PRIVATE KEY( BLOCK)?-----'''
+keywords = ["PRIVATE KEY"]
+tags = ["private-key", "ssh", "rsa"]
+entropy = 0
+
+[[rules]]
+id = "jwt-bearer"
+description = "JWT Bearer token (eyJ... 开头)"
+# 至少 3 段 (header.payload.signature), 段间用 . 分隔
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}'''
+keywords = ["eyJ"]
+tags = ["jwt", "bearer", "token"]
+entropy = 3.0
+
+[[rules]]
+id = "minio-admin-default"
+description = "MinIO 默认管理员凭据 (minioadmin:minioadmin)"
+# 仅匹配 user:pass 格式的明文凭据, 不匹配文档里提"minioadmin 是默认用户名"
+regex = '''minioadmin:minioadmin[A-Za-z0-9]{0,32}'''
+keywords = ["minioadmin:minioadmin"]
+tags = ["minio", "default-credentials", "s3"]
+entropy = 1.0
+
+[[rules]]
+id = "github-token"
+description = "GitHub Personal Access Token (ghp_, gho_, ghu_, ghs_, ghr_)"
+regex = '''(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36,}'''
+keywords = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_"]
+tags = ["github", "token", "vcs"]
+entropy = 3.5
+
+[[rules]]
+id = "anthropic-claude-api-key"
+description = "Anthropic Claude API key (alternative formats)"
+# 一些团队可能用 ANTHROPIC_API_KEY=... 形式存储
+regex = '''ANTHROPIC_API_KEY[=:][[:space:]]*["']?[A-Za-z0-9_-]{32,}["']?'''
+keywords = ["ANTHROPIC_API_KEY"]
+tags = ["api-key", "anthropic", "env-var"]
+entropy = 3.0
+
+
+# ============================================================
+# 项目特定 allowlist (按规则细分)
+# ============================================================
+
+# JWT 规则: docs/ + 顶级 md 文件 (含 JWT 字面量解释, 已知非真凭据)
+[[rules.Allowlists]]
+target = "match"
+description = "JWT in docs / 顶级 md / 安装说明"
+regexes = [
+    '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{20,}''',
+]
+paths = [
+    '''docs/.*''',
+    '''README\.md$''',
+    '''CHANGELOG\.md$''',
+    '''HISTORY\.md$''',
+    '''CLAUDE\.md$''',
+    '''scripts/install-gitleaks\.md$''',
+]
+
+# 测试 fixture allowlist (gitleaks pre-commit + CI 扫描都跳)
+[[rules.Allowlists]]
+target = "match"
+description = "测试 fixture 文件"
+paths = [
+    '''tests/fixtures/.*''',
+    '''tests/gitleaks/test_.*\.py$''',
+]

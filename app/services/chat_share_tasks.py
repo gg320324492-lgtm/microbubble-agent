@@ -6,6 +6,10 @@
 - 始终 logger.warning（即便清理 0 个）→ 健康监控可见
 - execute_backup_then_delete：先备份后 DELETE，PR6-P10 事故防复发 (误删可 JSON 恢复)
 
+# W87-H-1 增量 (派工 v6 §5 反馈类 20.28):
+- task_id 由 Celery signal 自动设 (app/core/celery.py)
+- 本任务函数无需手动 set_task_id
+
 chat_share 业务语义：
 - expires_at = NULL → 永不过期 (用户创建时可选)
 - expires_at < NOW() → 过期即失效，必须清理

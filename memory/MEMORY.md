@@ -1,9 +1,9 @@
-# MicroBubble Agent - W68-W85 batch 记忆索引 (W85 C-2 batch 3 主题重整)
+# MicroBubble Agent - W68-W87 batch 记忆索引 (W87 X-6 sync main 主题压缩, 锚点 337, 30 批)
 
-> **主基调**: 锚点范式 W7 12 → W85 321 单调上升 (累计 309 增量, 27 批)
-> **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E)
-> **派工前提铁律 12 + 类 20 实战 19 实例 + W84 C-2 据实上报铁律**
-> **8 类主题分类目录** (W85 C-2 batch 3 派生, 175 永久保留 memory 主题重整 + MEMORY.md 索引同步)
+> **主基调**: 锚点范式 W7 12 → W87 337 单调上升 (累计 325 增量, 30 批). **W87 +12 实际据实** (4 cherry-pick + B-1 拆 2 commit + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure + W87-X-6 sync main merge 跳过不计).
+> **W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E).
+> **派工前提铁律 12 + 类 20 实战 39 实例** (W84 据实上报 3 + W85 据实上报 2 + W86 据实上报 1 + W87 据实上报 15 + 历史 18).
+> **8 类主题分类目录** (W85 C-2 batch 3 派生, 190 active memory 重整 + MEMORY.md 索引同步). 总计 active 196 + archived 38 = 234 文件 (W87 +7 X-5 补强版: 1 grand closure + 5 收尾 memory + 1 补强版 grand closure).
 
 **8 类主题统计** (W85 C-2 batch 3, 派工 brief 175 → 实测 175 守恒):
 
@@ -259,6 +259,25 @@
 - [w84-1st-batch-a2-survey-derivative-2026-07-28](w84-1st-batch-a2-survey-derivative-2026-07-28.md) — W84 A-2 survey derivative.
 - [w84-1st-batch-c2-p2-docs-cleanup-2026-07-28](w84-1st-batch-c2-p2-docs-cleanup-2026-07-28.md) — W84 C-2 P2 docs/scripts 清 batch 2 (本批前一).
 - [w84-1st-grand-closure-full-2026-07-28](w84-1st-grand-closure-full-2026-07-28.md) — W84 grand closure full.
+- [w85-1st-grand-closure-full-2026-07-29](w85-1st-grand-closure-full-2026-07-29.md) — W85 grand closure full (锚点 314 → 320 +6 据实上报, B-2 useTask 0 hit 不实施).
+- [w86-1st-grand-closure-full-2026-07-29](w86-1st-grand-closure-full-2026-07-29.md) — W86 grand closure full (锚点 320 → 324 +4 + D-2 实战 +1 = 325, P0/P1 4 路线: gitleaks + Trivy + pre-commit + pg_exporter, X-2 e2e 修复 + D-2 6 类文档同步).
+- [w86-1st-batch-a1-gitleaks-2026-07-29](w86-1st-batch-a1-gitleaks-2026-07-29.md) — W86 A-1 gitleaks 装机 (5 自定义规则 + workflow + scan-history.sh + install-gitleaks.md + 10 case e2e).
+- [w86-1st-batch-a1-gitleaks-scan-2026-07-29](w86-1st-batch-a1-gitleaks-scan-2026-07-29.md) — W86 A-1 gitleaks 扫描报告 (0 真凭据泄漏 + 1 历史残留 + 6 MinIO 默认凭据 + 1 真生产 key 占位符模板).
+- [w86-1st-batch-c1-trivy-2026-07-29](w86-1st-batch-c1-trivy-2026-07-29.md) — W86 C-1 Trivy 镜像扫描 (9 Dockerfile base image 钉死 + workflow + scan-images.sh + install-trivy.md + 47→48 e2e).
+- [w86-1st-batch-d1-pre-commit-2026-07-29](w86-1st-batch-d1-pre-commit-2026-07-29.md) — W86 D-1 pre-commit 框架接入 (5 hook 整合 CLAUDE.md 纪律 + 兼容 setup-hooks.sh + 14 e2e).
+- [w86-1st-batch-f1-pg-exporter-2026-07-29](w86-1st-batch-f1-pg-exporter-2026-07-29.md) — W86 F-1 pg_exporter 安装 (3 compose service + slow_query.sh + 23 e2e).
+- [w87-1st-batch-h1-contextvars-2026-07-29](w87-1st-batch-h1-contextvars-2026-07-29.md) — W87 H-1 contextvars 透传 request_id + task_id (app/core/request_context.py + logging Filter + celery signal + 5 task docstring + 23 e2e).
+- [w87-1st-batch-e1-k6-2026-07-29](w87-1st-batch-e1-k6-2026-07-29.md) — W87 E-1 k6 压测脚本接入 (chat_stream / ws_notifications / drive_collab + baselines/README + 17 e2e + npm 5 load: 脚本).
+- [w87-1st-batch-b1-glitch-tip-2026-07-29](w87-1st-batch-b1-glitch-tip-2026-07-29.md) — W87 B-1 GlitchTip + Sentry 接入 (3 compose service + app/main.py Sentry init env guard + web/src/{main,sw,utils/sentry}.js + requirements.txt + 134 web/dist build + 22 e2e).
+- [w87-1st-batch-g1-a11y-2026-07-29](w87-1st-batch-g1-a11y-2026-07-29.md) — W87 G-1 axe-core/playwright a11y 接入 (5 页面 × 5 viewport snapshot + axe-config + axe-chats.spec + a11y-baseline + 50 PASS, 类 20.25 全绿可疑信号).
+- [w87-a-pr-description-2026-07-29](w87-a-pr-description-2026-07-29.md) — W87-A PR 描述 (W87 第 1 批 PR 收口描述).
+- [w87-1st-grand-closure-full-2026-07-29](w87-1st-grand-closure-full-2026-07-29.md) — W87 grand closure full (锚点 325 → 332 +7 实际据实, 4 路线 cherry-pick + X-3 alembic hook 假阳性修复 + cherry-pick 而非 merge 模式实战, 派工 v6 §5 反馈类 20.25-32 新增 8 实例, 0 production code 6/7 守恒).
+- [w87-x2-dist-rebuild-2026-07-30](w87-x2-dist-rebuild-2026-07-30.md) — W87-X-2 dist rebuild 修 B-1 entry chunk orphan (cherry-pick 改 deps 必重跑 npm run build, 类 20.36, CLAUDE.md 永久纪律实战).
+- [w87-x4a-typing-timeout-2026-07-30](w87-x4a-typing-timeout-2026-07-30.md) — W87-X-4a typing imports test timeout 60s → 180s flake fix (pytest timeout 必 ≥ 实测 × 2, 类 20.33).
+- [w87-x4b-trivy-count-2026-07-30](w87-x4b-trivy-count-2026-07-30.md) — W87-X-4b trivy Dockerfile pin 6 → 7 image 计数 (B-1 cherry-pick 加 glitchtip 触发, 并行 cherry-pick 引入新 image 测试计数必随之, 类 20.34).
+- [w87-x4c-npm-audit-2026-07-30](w87-x4c-npm-audit-2026-07-30.md) — W87-X-4c npm audit high+critical 24 vulns 修复 (moderate 75 留 W87 第 2 批调研, 类 20.35 + 5 铁律延伸).
+- [w87-1st-grand-closure-full-2026-07-30](w87-1st-grand-closure-full-2026-07-30.md) — **W87 grand closure full 补强版** (锚点 325 → 336 +11 实际据实, W87-X-5 补强, 11 收口 commits + W87-X-5 grand closure + 派工 brief v3 模板, 派工 v6 §5 反馈类 20 累计 36 实例 + 4 实例新增, 0 production code 10/11 守恒).
+- [w87-x6-sync-main-2026-07-30](w87-x6-sync-main-2026-07-30.md) — **W87-X-6 sync main 收口** (锚点 守恒 337, W86 mini-N 37 commits 大漂移, merge --no-ff 实战, dist/ 92 + 89 清理 0 FAILED, 派工 v6 §5 反馈类 20.37-39 新增 3 实例, 累计 39 实例, e2e 215 PASS + 10 SKIP + 0 FAIL).
 
 ## 历史归档 (memory/archived/ — 38 文件)
 

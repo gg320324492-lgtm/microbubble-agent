@@ -1,7 +1,8 @@
 services:
   # Nginx 反向代理 + 前端静态文件
   nginx:
-    image: nginx:alpine
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: nginx:1.31.2-alpine
     ports:
       - "80:80"
       - "443:443"
@@ -88,7 +89,8 @@ services:
 
   # Redis缓存
   redis:
-    image: redis:7-alpine
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: redis:7.4.9-alpine
     volumes:
       - ./data/redis:/data
     healthcheck:
@@ -101,7 +103,8 @@ services:
 
   # Neo4j 图数据库（知识图谱）
   neo4j:
-    image: neo4j:5-community
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: neo4j:5.26.27-community
     ports:
       - "7474:7474"   # Web UI
       - "7687:7687"   # Bolt 协议
@@ -122,7 +125,8 @@ services:
 
   # MinIO对象存储
   minio:
-    image: minio/minio
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -177,7 +181,8 @@ services:
   # - GPU: deploy.resources.reservations.devices 走 NVIDIA driver (与 app 共享同一 GPU)
   # - OLLAMA_KEEP_ALIVE=10m: 模型空闲 10 分钟后自动 unload 释放显存
   ollama:
-    image: ollama/ollama:latest
+    # base image pinned on 2026-07-29 for CVE tracking (W86-C-1 Trivy)
+    image: ollama/ollama:0.31.1
     ports:
       - "127.0.0.1:11434:11434"     # host 仅本地访问 (避免暴露公网)
     volumes:
@@ -313,4 +318,49 @@ services:
     env_file:
       - .env
     mem_limit: 512m
+    restart: unless-stopped
+
+  # 2026-07-29 W87-B-1: GlitchTip all-in-one error tracking (default SDK reporting remains off)
+  # Docker Hub current stable semantic tag verified and pinned; never follow latest/major-only.
+  # The dedicated "glitchtip" database must exist before first start; see docs/sentry-setup.md.
+  glitchtip:
+    image: glitchtip/glitchtip:6.2.2
+    container_name: microbubble-agent-glitchtip-1
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/glitchtip"
+      VALKEY_URL: "redis://redis:6379/1"
+      SECRET_KEY: "${GLITCHTIP_SECRET_KEY:-please-change-me-in-prod}"
+      PORT: "8000"
+      GLITCHTIP_DOMAIN: "${GLITCHTIP_DOMAIN:-https://glitchtip.example.com}"
+      EMAIL_ENABLED: "False"
+      SERVER_ROLE: "all_in_one"
+    ports:
+      # app 已占 127.0.0.1:8000；保持 GlitchTip host port 8000 但用独立 loopback IP。
+      - "127.0.0.2:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - default
+    restart: unless-stopped
+
+  # 2026-07-29 W86-F-1: pg_exporter — PostgreSQL Prometheus 暴露
+  # 多租户慢查询监控入口 (pg_stat_database / pg_stat_user_tables / pg_stat_statements)
+  # image 钉死 tag v0.15.0 (latest 不跟, 避免主指挥据实上报不可控)
+  # DATA_SOURCE_NAME 走环境变量, 不在 compose 明文写密码
+  # 仅加 service 段, 其它 service 的 image / volume / port 不动
+  pg-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: microbubble-agent-pg-exporter-1
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:${POSTGRES_PASSWORD:-microbubble2026}@db:5432/postgres?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
     restart: unless-stopped

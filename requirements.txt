@@ -13,6 +13,8 @@ psycopg2-binary==2.9.9
 # Redis
 redis==5.0.1
 celery==5.3.6
+# W87-B-1: FastAPI + Celery integrations are built into sentry-sdk; default off via SENTRY_DSN
+sentry-sdk[fastapi]==2.13.0
 
 # 对象存储
 minio==7.2.0

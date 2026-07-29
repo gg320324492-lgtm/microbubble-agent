@@ -6,9 +6,13 @@ class Settings(BaseSettings):
 
     # 基础配置
     APP_NAME: str = "MicroBubble Agent"
+    APP_VERSION: str = "1.0.0"
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
     SECRET_KEY: str = ""
+
+    # W87-B-1: GlitchTip / Sentry 错误监控，默认关闭；仅显式注入 DSN 才上报
+    SENTRY_DSN: str | None = None
 
     # 数据库
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/microbubble"
