@@ -41,7 +41,7 @@ def test_analytics_heartbeat_writes_system_metrics_row():
     assert log.source == "system_metrics"
     assert log.top_ids == []
     assert log.user_id == 1
-    assert log.created_at.tzinfo == timezone.utc
+    assert log.created_at.tzinfo is None
     db.commit.assert_awaited_once()
     engine.dispose.assert_awaited_once()
 

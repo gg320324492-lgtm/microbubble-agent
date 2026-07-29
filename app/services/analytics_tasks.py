@@ -31,7 +31,9 @@ def analytics_heartbeat():
                     click_position=None,
                     embedding_model="Qwen/Qwen3-Embedding-0.6B",
                     source="system_metrics",
-                    created_at=datetime.now(timezone.utc),
+                    # search_logs.created_at is TIMESTAMP WITHOUT TIME ZONE;
+                    # persist UTC as a naive datetime (project datetime discipline).
+                    created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 )
                 db.add(log)
                 await db.commit()
