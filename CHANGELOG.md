@@ -5,7 +5,13 @@
 
 ---
 
-## [2026-07-30] W87 第 1 批 grand closure 收口 — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
+## [2026-07-30] W88 PR1 嵌入一致化 + query prefix 生效
+
+- 新增统一 `MAX_EMBED_INPUT_CHARS=6000` 截断 policy，并让 embedding recalc 复用该 policy。
+- 修复 `has_query_prompt` 异步及批量透传，Knowledge/Memory 语义搜索显式启用 query prefix。
+- 新增 query caller 白名单与一致性检查；测试在无 `sentence_transformers` 环境下安全跳过重量级模型用例。
+
+ — 11 agents + 4 收尾 agent + 双锚定 brief 模板 v3 (主指挥协调范式第 66 次派工, 锚点范式 325 → 336 +11 守恒, 派工 v6 §5 反馈类 20 累计 36 实例, 0 production code 10/11 守恒)
 
 **主基调**: W87 第 1 批 11 收口 commits + W87-X-5 grand closure 完整收口. 类 20.31/32 双锚定 brief 模板 v3 沉淀 (`docs/dispatch-template-v3.md` 新建, W87-X-5 新增 docs/ 写入权). 派工协调范式第 66 次派工.
 
