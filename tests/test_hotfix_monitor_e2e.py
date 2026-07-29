@@ -10,6 +10,7 @@ W73 第 1 批 B-2 4 类 hot-fix 监控 E2E test
 - Case 4: SW 缓存污染监控
 """
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,14 +20,20 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent
 SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
+# W88-X-1: 在 Windows 下, PATH 上 `bash` 可能命中 WindowsApps stub → returncode 127
+# 必须用 shutil.which 拿真实 bash.exe (C:\Program Files\Git\usr\bin\bash.exe)
+BASH_BIN = shutil.which("bash") or shutil.which("bash.exe")
+
 
 def run_monitor(script_name: str, env: dict, workdir: str) -> tuple[int, str, str]:
     """Run a monitor script and return (exit_code, stdout, stderr)."""
     script = SCRIPTS_DIR / script_name
     assert script.exists(), f"script not found: {script}"
     full_env = {**os.environ, **env}
+    if BASH_BIN is None:
+        pytest.skip("bash not on PATH; cannot run monitor script")
     proc = subprocess.run(
-        ["bash", str(script)],
+        [BASH_BIN, str(script)],
         capture_output=True,
         text=True,
         env=full_env,
@@ -68,8 +75,10 @@ down_revision = "077_previous"
 
         # Case 1: 真实 alembic 解析 (无 env.py 完整, 我们仅验证脚本结构)
         # 由于 env.py 复杂, 这里只验证脚本本身能被 bash 解析
+        if BASH_BIN is None:
+            pytest.skip("bash not on PATH")
         result = subprocess.run(
-            ["bash", "-n", str(SCRIPTS_DIR / "monitor-alembic-heads.sh")],
+            [BASH_BIN, "-n", str(SCRIPTS_DIR / "monitor-alembic-heads.sh")],
             capture_output=True,
             text=True,
         )
@@ -104,8 +113,10 @@ class TestPWAManifest410Monitor:
 
     def test_pwa_manifest_script_valid(self):
         """验证脚本语法 + 关键检查点"""
+        if BASH_BIN is None:
+            pytest.skip("bash not on PATH")
         result = subprocess.run(
-            ["bash", "-n", str(SCRIPTS_DIR / "monitor-pwa-manifest.sh")],
+            [BASH_BIN, "-n", str(SCRIPTS_DIR / "monitor-pwa-manifest.sh")],
             capture_output=True,
             text=True,
         )
@@ -149,8 +160,10 @@ class TestNginxMimeOctetStreamMonitor:
     """Case 3: 整站 octet-stream 监控实战"""
 
     def test_nginx_mime_script_valid(self):
+        if BASH_BIN is None:
+            pytest.skip("bash not on PATH")
         result = subprocess.run(
-            ["bash", "-n", str(SCRIPTS_DIR / "monitor-nginx-mime.sh")],
+            [BASH_BIN, "-n", str(SCRIPTS_DIR / "monitor-nginx-mime.sh")],
             capture_output=True,
             text=True,
         )
@@ -200,8 +213,10 @@ class TestSWCachePoisoningMonitor:
     """Case 4: SW 缓存污染监控实战"""
 
     def test_sw_cache_script_valid(self):
+        if BASH_BIN is None:
+            pytest.skip("bash not on PATH")
         result = subprocess.run(
-            ["bash", "-n", str(SCRIPTS_DIR / "monitor-sw-cache.sh")],
+            [BASH_BIN, "-n", str(SCRIPTS_DIR / "monitor-sw-cache.sh")],
             capture_output=True,
             text=True,
         )
