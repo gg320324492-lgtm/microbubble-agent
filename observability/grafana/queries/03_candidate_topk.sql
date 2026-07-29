@@ -1,0 +1,2 @@
+-- 召回候选数对比 (grafana panel 3)
+SELECT date_trunc('minute', created_at) AS time, AVG(candidate_k) AS avg_candidate_k, AVG(top_k_actual) AS avg_top_k, MAX(candidate_k) AS max_candidate_k, MIN(candidate_k) AS min_candidate_k FROM search_logs WHERE created_at >= NOW() - INTERVAL '1 hour' AND source IS DISTINCT FROM 'system_metrics' AND candidate_k IS NOT NULL GROUP BY 1 ORDER BY 1;

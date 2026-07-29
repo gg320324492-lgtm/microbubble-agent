@@ -1,0 +1,2 @@
+-- 按路召回耗时分解 (grafana panel 2)
+SELECT date_trunc('minute', created_at) AS time, AVG((per_path_latency_ms->>'vector')::float) AS vector_avg_ms, AVG((per_path_latency_ms->>'bm25')::float) AS bm25_avg_ms, AVG((per_path_latency_ms->>'graph')::float) AS graph_avg_ms, AVG((per_path_latency_ms->>'rerank')::float) AS rerank_avg_ms FROM search_logs WHERE created_at >= NOW() - INTERVAL '1 hour' AND source IS DISTINCT FROM 'system_metrics' AND per_path_latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1;
