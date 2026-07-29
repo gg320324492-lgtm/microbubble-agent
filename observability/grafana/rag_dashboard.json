@@ -1,0 +1,77 @@
+{
+  "annotations": {"list": []},
+  "description": "RAG 召回可观测性面板 (W93 PR7 B-7) — 7 面板",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "召回延迟 P50/P95/P99 (ms)",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "targets": [{"refId": "A", "rawSql": "SELECT date_trunc('minute', created_at) AS time, percentile_cont(0.50) WITHIN GROUP (ORDER BY latency_ms) AS p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95, percentile_cont(0.99) WITHIN GROUP (ORDER BY latency_ms) AS p99 FROM search_logs WHERE created_at >= $__timeFrom() AND created_at < $__timeTo() AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1", "format": "time_series"}],
+      "fieldConfig": {"defaults": {"unit": "ms"}}
+    },
+    {
+      "id": 2,
+      "title": "按路召回耗时 (vector/bm25/graph/rerank)",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "targets": [{"refId": "A", "rawSql": "SELECT date_trunc('minute', created_at) AS time, AVG((per_path_latency_ms->>'vector')::float) AS vector_ms, AVG((per_path_latency_ms->>'bm25')::float) AS bm25_ms, AVG((per_path_latency_ms->>'graph')::float) AS graph_ms, AVG((per_path_latency_ms->>'rerank')::float) AS rerank_ms FROM search_logs WHERE created_at >= $__timeFrom() AND created_at < $__timeTo() AND source IS DISTINCT FROM 'system_metrics' AND per_path_latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1", "format": "time_series"}],
+      "fieldConfig": {"defaults": {"unit": "ms"}}
+    },
+    {
+      "id": 3,
+      "title": "召回候选数 (candidate_k vs top_k)",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [{"refId": "A", "rawSql": "SELECT date_trunc('minute', created_at) AS time, AVG(candidate_k) AS avg_candidate_k, AVG(top_k_actual) AS avg_top_k FROM search_logs WHERE created_at >= $__timeFrom() AND created_at < $__timeTo() AND source IS DISTINCT FROM 'system_metrics' AND candidate_k IS NOT NULL GROUP BY 1 ORDER BY 1", "format": "time_series"}]
+    },
+    {
+      "id": 4,
+      "title": "召回 CTR (24h 滚动)",
+      "type": "stat",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [{"refId": "A", "rawSql": "SELECT ROUND(COUNT(clicked_id)::numeric / NULLIF(COUNT(*), 0), 4) AS ctr FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics'", "format": "table"}]
+    },
+    {
+      "id": 5,
+      "title": "召回错误率 (24h)",
+      "type": "stat",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [{"refId": "A", "rawSql": "SELECT ROUND(AVG(CASE WHEN error_count > 0 THEN 1.0 ELSE 0.0 END), 4) AS error_rate FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL", "format": "table"}]
+    },
+    {
+      "id": 6,
+      "title": "慢查询分布 (P99 > 200ms, 24h)",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [{"refId": "A", "rawSql": "SELECT date_trunc('minute', created_at) AS time, COUNT(*) FILTER (WHERE slow_query = 1) AS slow_count, COUNT(*) AS total_count FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1", "format": "time_series"}]
+    },
+    {
+      "id": 7,
+      "title": "召回总量 + 错误 (24h 趋势)",
+      "type": "timeseries",
+      "datasource": {"type": "postgres", "uid": "pg-microbubble"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "targets": [{"refId": "A", "rawSql": "SELECT date_trunc('minute', created_at) AS time, COUNT(*) AS total, COUNT(*) FILTER (WHERE error_count > 0) AS errors FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL GROUP BY 1 ORDER BY 1", "format": "time_series"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["rag", "observability", "w93-pr7"],
+  "time": {"from": "now-1h", "to": "now"},
+  "title": "RAG 召回可观测性 (W93 PR7 B-7)",
+  "uid": "rag-recall-observability",
+  "version": 1
+}

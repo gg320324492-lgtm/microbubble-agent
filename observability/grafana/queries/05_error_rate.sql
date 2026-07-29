@@ -1,0 +1,2 @@
+-- 召回错误率 (grafana panel 5)
+SELECT ROUND(AVG(CASE WHEN error_count > 0 THEN 1.0 ELSE 0.0 END), 4) AS error_rate_24h, COUNT(*) FILTER (WHERE error_count > 0) AS error_searches_24h, COUNT(*) AS total_searches_24h FROM search_logs WHERE created_at >= NOW() - INTERVAL '24 hours' AND source IS DISTINCT FROM 'system_metrics' AND latency_ms IS NOT NULL;

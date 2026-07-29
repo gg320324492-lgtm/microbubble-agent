@@ -34,6 +34,7 @@ from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -41,7 +42,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 
 from app.core.database import Base
 from app.models.base import TimestampMixin
@@ -83,6 +84,32 @@ class SearchLog(Base, TimestampMixin):
         String(50), nullable=True, index=True
     )  # 'knowledge_search' / 'agent_chat' / 'mobile'
 
+    # ==================== W93 PR7 B-7 observability 扩展字段 ====================
+    # 12+ 结构化字段, 全部 nullable=True (老数据兼容, 不破坏已有 schema)
+    # 注: 不动已有字段 (id / query / embedding_model / top_ids / user_id / clicked_id
+    #                     / click_position / session_id / source / created_at / updated_at)
+    # PR7 不写 alembic (遵循 §11.2), 这些列先定义在 model, 等 PR10 阶段落库
+    latency_ms = Column(Float, nullable=True)  # 单次召回总耗时 (毫秒)
+    retrieval_method = Column(String(50), nullable=True)  # 'hybrid' / 'vector_only' / ...
+    candidate_k = Column(Integer, nullable=True)  # 重排序前候选数
+    top_k_actual = Column(Integer, nullable=True)  # 实际返回条数
+    caller_path = Column(String(100), nullable=True)  # 调用方路径 (hybrid_retriever / kb_qa / ...)
+    for_query = Column(Integer, nullable=True)  # 0/1, 是否 query 侧 (for_query=True)
+    has_query_prompt = Column(Integer, nullable=True)  # 0/1, 是否启用 query prefix prompt
+    original_len = Column(Integer, nullable=True)  # 原始 query 长度
+    truncated_len = Column(Integer, nullable=True)  # 截断后 query 长度
+    vector_score = Column(Float, nullable=True)  # 向量路 top-1 score
+    bm25_score = Column(Float, nullable=True)  # BM25 路 top-1 score
+    graph_score = Column(Float, nullable=True)  # 图谱路 top-1 score
+    rerank_score = Column(Float, nullable=True)  # rerank 路 top-1 score
+    per_path_latency_ms = Column(JSONB, nullable=True)  # {"vector": 12.3, "bm25": 8.1, "graph": 25.0, "rerank": 5.2}
+    per_path_count = Column(JSONB, nullable=True)  # {"vector": 25, "bm25": 20, "graph": 5}
+    per_path_error = Column(JSONB, nullable=True)  # {"vector": 0, "bm25": 1}
+    slow_query = Column(Integer, nullable=True)  # 0/1, 是否触发慢查询告警 (P99 > 200ms)
+    error_count = Column(Integer, nullable=True)  # 本次召回累计错误数
+    error_msg = Column(Text, nullable=True)  # 首个错误信息 (截断 500 字)
+    # ==================== W93 PR7 B-7 扩展字段结束 ====================
+
     # 时间戳 (TimestampMixin 提供 created_at/updated_at)
     # 单独加 raw 字段方便查询时直接 SELECT
     # 注: TimestampMixin.created_at 已是 DateTime, 这里不重复定义
@@ -95,6 +122,8 @@ class SearchLog(Base, TimestampMixin):
         Index("idx_search_logs_user_created", "user_id", "created_at"),
         # gin trigram 索引: 模糊匹配重复 query
         # 注: pg_trgm 扩展可能未启用, alembic 迁移用 SQL 'CREATE EXTENSION IF NOT EXISTS pg_trgm'
+        # W93 PR7 B-7: 慢查询索引 (grafana 慢查询面板主查询路径)
+        Index("idx_search_logs_slow_query", "slow_query", "created_at"),
     )
 
     def __repr__(self) -> str:
