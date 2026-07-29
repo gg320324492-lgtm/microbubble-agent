@@ -120,6 +120,24 @@ services:
       - mb-test-net
     mem_limit: 4g
 
+  # 2026-07-29 W86-F-1: pg_exporter — PostgreSQL Prometheus 暴露 (test stack 端口错开)
+  # image 钉死 tag v0.15.0 (latest 不跟, 避免主指挥据实上报不可控)
+  # 端口 9199 错开生产 9187, 数据库 microbubble_test, 密码 test_password
+  # 仅加 service 段, 其它 service 的 image / volume / port 不动
+  pg-exporter-test:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: microbubble-agent-pg-exporter-test-1
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:${TEST_POSTGRES_PASSWORD:-test_password}@pg-test:5432/microbubble_test?sslmode=disable"
+    ports:
+      - "9199:9187"
+    depends_on:
+      pg-test:
+        condition: service_healthy
+    networks:
+      - mb-test-net
+    restart: unless-stopped
+
 # 独立数据卷 (down -v 时一起销毁, 0 残留)
 volumes:
   test_pg_data:
