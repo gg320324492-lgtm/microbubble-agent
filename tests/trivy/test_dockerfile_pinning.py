@@ -128,7 +128,7 @@ def test_refs_discovered():
     from_refs = [r for r in refs if r[0] != COMPOSE_FILE]
     image_refs = [r for r in refs if r[0] == COMPOSE_FILE]
     assert len(from_refs) == 10, f"期望 10 个 FROM, 实际 {len(from_refs)}: {from_refs}"
-    assert len(image_refs) == 6, f"期望 6 个 compose image, 实际 {len(image_refs)}: {image_refs}"
+    assert len(image_refs) == 7, f"期望 7 个 compose image, 实际 {len(image_refs)}: {image_refs}"
 
 
 @pytest.mark.parametrize("rel,lineno,ref", _collect_refs(), ids=lambda v: str(v))
