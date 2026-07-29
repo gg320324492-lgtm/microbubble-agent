@@ -27,7 +27,8 @@ export default defineConfig({
   testDir: './tests/visual',
   // v76.2f: 限定 testMatch 到 tests/visual 下, 避免扫到 vitest 测试文件
   // (playwright 默认 testMatch 是 **/*.@(spec|test).?(c|m)[jt]s?(x), 会扫全项目所有 .test.js)
-  testMatch: /tests\/visual\/.*\.spec\.mjs/,
+  // W89-P-10: 扩展到 .spec.js (W68 路线 G 移动端 e2e 三件套 mobile_push_notification / mobile_voice_input / mobile_swipe_gesture 从 tests/e2e/ 迁入 tests/visual/e2e/, 是 .spec.js 而非 .mjs)
+  testMatch: /tests\/visual\/.*\.spec\.m?js/,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -70,7 +71,7 @@ export default defineConfig({
         userAgent:
           'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
       },
-      testMatch: /mobile\/.*\.spec\.mjs/,
+      testMatch: /(mobile\/|e2e\/mobile_).*\.spec\.m?js/,
     },
     // v77 废弃: desktop-chrome project (workflow bug 长期未修, desktop baseline 永远 fail)
     // W6 D6 templates-tab-integration 端到端验证 (单次临时启用)
