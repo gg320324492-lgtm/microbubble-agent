@@ -34,6 +34,7 @@ from app.models.chat_history import (
     VALID_ROLES, SHARE_PERMISSION_READ, VALID_SHARE_PERMISSIONS,
 )
 from app.core.exceptions import NotFoundException, ValidationException, ForbiddenException
+from app.core.request_context import get_request_id, get_task_id
 from app.services.cleanup_backup import execute_backup_then_delete
 
 logger = logging.getLogger("microbubble.service.chat_history")
@@ -197,7 +198,7 @@ async def create_session(
 
     await db.commit()
     await db.refresh(session)
-    logger.info(f"创建会话: sid={session_id} user={user_id} msg_count={session.message_count}")
+    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 创建会话: sid={session_id} user={user_id} msg_count={session.message_count}")
     return session
 
 
@@ -257,7 +258,7 @@ async def delete_session(
         session.is_archived = True
 
     await db.commit()
-    logger.info(f"删除会话: sid={session_id} hard={hard} user={user_id}")
+    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 删除会话: sid={session_id} hard={hard} user={user_id}")
     return True
 
 
@@ -326,7 +327,7 @@ async def append_message(
     if role not in VALID_ROLES:
         raise ValidationException(f"role 必须是 {VALID_ROLES} 之一")
     if len(content) > 1_048_576:  # 1MB
-        logger.warning(f"消息超过 1MB: len={len(content)} sid={session_id}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 消息超过 1MB: len={len(content)} sid={session_id}")
     if not content:
         raise ValidationException("content 不能为空")
 
@@ -856,7 +857,7 @@ async def ensure_session_for_stream(
     cross_user_row = cross_user.first()
     if cross_user_row is not None and cross_user_row[0] != user_id:
         logger.warning(
-            f"[chat_stream] CROSS-USER session_id detected: "
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [chat_stream] CROSS-USER session_id detected: "
             f"session={session_id} belongs to user_id={cross_user_row[0]} "
             f"but request user_id={user_id}. Frontend should drop the "
             f"stale local session id on login (see chatSessions.ts pickInitialSessionId)."
@@ -879,7 +880,7 @@ async def ensure_session_for_stream(
     )
     db.add(session)
     await db.flush()
-    logger.info(f"ensure_session_for_stream: 新建 sid={session_id} user={user_id}")
+    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] ensure_session_for_stream: 新建 sid={session_id} user={user_id}")
     return session
 
 

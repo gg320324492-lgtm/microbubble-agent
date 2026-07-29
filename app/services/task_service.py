@@ -113,7 +113,12 @@ class TaskService:
                     await reminder_scheduler.add_reminder(rem.id, ts)
         except Exception as e:
             import logging
-            logging.getLogger("microbubble.task").warning(f"提醒同步到Redis失败: {e}")
+            from app.core.request_context import get_request_id, get_task_id
+            logging.getLogger("microbubble.task").warning(
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
+                f"提醒同步到Redis失败: {e}",
+                exc_info=True,
+            )
 
     async def get_task(self, task_id: int) -> Optional[Task]:
         """获取任务（排除已删除）"""
@@ -269,6 +274,7 @@ def auto_purge_trash_task(retention_days: Optional[int] = None):
     """
     import asyncio
     import logging
+    from app.core.request_context import get_request_id, get_task_id
     logger = logging.getLogger("microbubble.trash")
     days = retention_days if retention_days is not None else settings.TRASH_RETENTION_DAYS
     try:
@@ -280,12 +286,14 @@ def auto_purge_trash_task(retention_days: Optional[int] = None):
                     # 始终输出日志（即使删除 0 个）便于健康监控 + 审计追溯
                     if result["deleted_count"] > 0:
                         logger.warning(
+                            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
                             f"🗑️ 自动清理垃圾桶: 永久删除 {result['deleted_count']} 个超过 {days} 天的任务 "
                             f"cutoff={result['cutoff'].isoformat()} ids={result['deleted_ids'][:20]}"
                             f"{'...' if len(result['deleted_ids']) > 20 else ''}"
                         )
                     else:
                         logger.info(
+                            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
                             f"✅ 垃圾桶健康: 当前无超过 {days} 天的过期任务 "
                             f"(cutoff={result['cutoff'].isoformat()})"
                         )
@@ -296,5 +304,9 @@ def auto_purge_trash_task(retention_days: Optional[int] = None):
         result = asyncio.run(_run())
         return {"status": "ok", "deleted_count": result["deleted_count"]}
     except Exception as e:
-        logger.error(f"❌ 自动清理垃圾桶失败: {e}", exc_info=True)
+        logger.error(
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
+            f"❌ 自动清理垃圾桶失败: {e}",
+            exc_info=True,
+        )
         return {"status": "error", "error": str(e)}

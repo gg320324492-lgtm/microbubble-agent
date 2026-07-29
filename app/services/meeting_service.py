@@ -13,6 +13,7 @@ from app.models.task import Task, TaskStatus, TaskPriority
 from app.wechat.analyzer import analyzer
 from app.wechat.identity import identity_resolver
 from app.core.llm import get_anthropic_client, get_default_model, extract_text_from_response
+from app.core.request_context import get_request_id, get_task_id
 from app.services.meeting_analysis_service import meeting_analysis
 from app.services.reminder_scheduler import reminder_scheduler
 
@@ -167,12 +168,16 @@ class MeetingService:
                     tasks_created.append(result)
         else:
             logger.info(
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
                 f"会议 {meeting_id} 分析完成: 跳过自动建任务"
                 f"（{len(analysis.get('action_items', []))} 个 action_items 未创建任务；"
                 f"ENABLE_AUTO_TASK_FROM_MEETING=False）"
             )
 
-        logger.info(f"会议 {meeting_id} 分析完成: {len(tasks_created)} 个任务已创建")
+        logger.info(
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
+            f"会议 {meeting_id} 分析完成: {len(tasks_created)} 个任务已创建"
+        )
         return {
             "summary": meeting.summary,
             "key_points": meeting.key_points or [],
@@ -416,7 +421,11 @@ class MeetingService:
             )
             return extract_text_from_response(response)
         except Exception as e:
-            logger.error(f"生成会议摘要失败: {e}")
+            logger.error(
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
+                f"生成会议摘要失败: {e}",
+                exc_info=True,
+            )
             return ""
 
     async def _auto_create_task_from_meeting(self, meeting: Meeting, task_info: Dict) -> Optional[Dict]:
@@ -461,7 +470,10 @@ class MeetingService:
         await self.db.commit()
         await self.db.refresh(task)
 
-        logger.info(f"会议自动创建任务: {title} (会议ID={meeting.id}, 负责人={assignee_name})")
+        logger.info(
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
+            f"会议自动创建任务: {title} (会议ID={meeting.id}, 负责人={assignee_name})"
+        )
 
         result = {"title": title, "assignee": assignee_name or "未指定"}
         return result

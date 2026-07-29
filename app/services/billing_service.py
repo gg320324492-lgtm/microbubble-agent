@@ -15,6 +15,7 @@ from typing import Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_context import get_request_id, get_task_id
 from app.models.billing import (
     Plan, CommercialTenant, Subscription, Invoice, UsageRecord,
 )
@@ -85,7 +86,7 @@ async def create_tenant(db: AsyncSession, req: TenantCreate) -> TenantCreated:
     await db.commit()
     await db.refresh(tenant)
 
-    logger.info(f"created tenant {tenant_id} ({req.plan_code})")
+    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] created tenant {tenant_id} ({req.plan_code})")
     return TenantCreated(
         tenant_id=tenant.tenant_id,
         name=tenant.name,

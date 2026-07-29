@@ -7,6 +7,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
+from app.core.request_context import get_request_id, get_task_id
 from app.models.knowledge import Knowledge, KnowledgeGap
 from app.core.llm import get_anthropic_client, get_default_model, parse_llm_json, extract_text_from_response
 
@@ -119,7 +120,7 @@ class KnowledgeQAService:
                 self.db.add(gap)
                 await self.db.commit()
                 await self.db.refresh(gap)
-                logger.info(f"知识空白已记录(gap_id={gap.id}): {question[:50]}")
+                logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 知识空白已记录(gap_id={gap.id}): {question[:50]}")
 
                 # 异步触发自主研究
                 import asyncio
@@ -132,7 +133,7 @@ class KnowledgeQAService:
                 )
                 research_queries = research_queries or [question]
             except Exception as e:
-                logger.warning(f"知识空白处理失败: {e}")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 知识空白处理失败: {e}")
 
         # Step 6: 组装结果
         return {
@@ -164,7 +165,7 @@ class KnowledgeQAService:
             if results:
                 return results
         except Exception as e:
-            logger.warning(f"混合检索失败，降级到纯向量: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 混合检索失败，降级到纯向量: {e}")
 
         # 降级：纯向量检索
         try:
@@ -227,14 +228,14 @@ class KnowledgeQAService:
 
             return result
         except json.JSONDecodeError as e:
-            logger.warning(f"LLM 合成答案返回非 JSON: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] LLM 合成答案返回非 JSON: {e}")
             return {
                 "answer": "抱歉，答案合成时出现格式错误，请稍后重试。",
                 "sources": [],
                 "confidence": "low",
             }
         except Exception as e:
-            logger.error(f"LLM 合成答案失败: {e}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] LLM 合成答案失败: {e}")
             return {
                 "answer": "抱歉，答案合成服务暂时不可用，请稍后重试。",
                 "sources": [],
@@ -259,7 +260,7 @@ class KnowledgeQAService:
                 return queries[:5]
             return []
         except Exception as e:
-            logger.warning(f"生成研究查询失败: {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 生成研究查询失败: {e}")
             return []
 
     async def get_related_knowledge_ids(self, question: str, limit: int = 5) -> List[int]:
@@ -401,7 +402,7 @@ class KnowledgeQAService:
                 "nodes_used": len(chain_nodes),
             }
         except Exception as e:
-            logger.error(f"多跳推理失败: {e}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 多跳推理失败: {e}")
             return {
                 "answer": "推理引擎暂时不可用，请稍后重试。",
                 "reasoning_chain": [],

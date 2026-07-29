@@ -14,6 +14,7 @@ from app.core.llm import (
     get_default_model,
     parse_llm_json,
 )
+from app.core.request_context import get_request_id, get_task_id
 from app.services.name_aliases import clean_text as clean_person_names
 
 logger = logging.getLogger("microbubble.meeting_analysis")
@@ -277,7 +278,7 @@ class MeetingAnalysisService:
             text = extract_text_from_response(response)
             return parse_llm_json(text)
         except Exception as e:
-            logger.error(f"发言者检测失败: {e}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 发言者检测失败: {e}")
             return {
                 "detected_speakers": [
                     {"original_label": "未区分发言者", "suggested_name": None,
@@ -403,7 +404,7 @@ class MeetingAnalysisService:
         if current_chunk:
             chunks.append('\n'.join(current_chunk))
 
-        logger.info(f"长会议分块分析: {len(chunks)} 块（总长 {len(transcript_text)} 字）")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 长会议分块分析: {len(chunks)} 块（总长 {len(transcript_text)} 字）")
 
         # 分析每一块
         all_key_points = []
@@ -420,7 +421,7 @@ class MeetingAnalysisService:
                 if result.get("summary"):
                     chunk_summaries.append(result["summary"])
             except Exception as e:
-                logger.error(f"分块 {i+1}/{len(chunks)} 分析失败: {e}")
+                logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 分块 {i+1}/{len(chunks)} 分析失败: {e}")
 
         # 汇总摘要
         summary = await self._merge_summaries(chunk_summaries) if chunk_summaries else ""
@@ -432,7 +433,7 @@ class MeetingAnalysisService:
         trimmed_key_points = all_key_points[:MAX_KEY_POINTS]
         if len(all_key_points) > MAX_KEY_POINTS:
             logger.info(
-                f"key_points 硬截断: {len(all_key_points)} 条 → {MAX_KEY_POINTS} 条 "
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] key_points 硬截断: {len(all_key_points)} 条 → {MAX_KEY_POINTS} 条 "
                 f"(CLAUDE.md 2026-06-06 标准格式硬规则, 5-8 条上限)"
             )
         return {
@@ -471,9 +472,9 @@ class MeetingAnalysisService:
                 if attempt == 0:
                     await asyncio.sleep(1)
                     continue
-                logger.warning(f"分块 {chunk_index + 1} 分析 JSON 解析失败（重试后仍失败）")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 分块 {chunk_index + 1} 分析 JSON 解析失败（重试后仍失败）")
             except Exception as e:
-                logger.error(f"分块 {chunk_index + 1} 分析失败: {e}")
+                logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 分块 {chunk_index + 1} 分析失败: {e}")
                 break
 
         return {"summary": "", "key_points": [], "decisions": [], "action_items": []}
@@ -498,7 +499,7 @@ class MeetingAnalysisService:
             )
             return extract_text_from_response(response).strip()
         except Exception as e:
-            logger.error(f"摘要合并失败: {e}")
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 摘要合并失败: {e}")
             return summaries[0] if summaries else ""
 
     # === 标题自动生成 ===
@@ -542,7 +543,7 @@ class MeetingAnalysisService:
                         raw = m.group(1).strip()
                 if not raw:
                     block_types = [type(b).__name__ for b in (response.content or [])]
-                    logger.warning(f"标题生成第{attempt+1}次: 无法提取文本, block_types={block_types}, stop_reason={response.stop_reason}")
+                    logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 标题生成第{attempt+1}次: 无法提取文本, block_types={block_types}, stop_reason={response.stop_reason}")
                     continue
 
                 # 清洗：去掉 markdown 和常见前缀，只取第一行
@@ -553,11 +554,11 @@ class MeetingAnalysisService:
                 title = title.split('\n')[0].strip()
                 title = title.strip('"').strip("'").strip("《》").strip()
                 if 2 <= len(title) <= 30:
-                    logger.info(f"标题生成成功（第{attempt+1}次）: {title}")
+                    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 标题生成成功（第{attempt+1}次）: {title}")
                     return title
-                logger.warning(f"标题生成第{attempt+1}次无效: '{title}' ({len(title)}字)")
+                logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 标题生成第{attempt+1}次无效: '{title}' ({len(title)}字)")
             except Exception as e:
-                logger.error(f"标题生成第{attempt+1}次失败: {e}")
+                logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 标题生成第{attempt+1}次失败: {e}")
             if attempt < 2:
                 await asyncio.sleep(1)
 

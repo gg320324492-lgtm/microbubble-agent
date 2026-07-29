@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import select, and_, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.request_context import get_request_id, get_task_id
 from app.models.knowledge import AuditLog
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ class AuditService:
         失败不抛 (audit 不能阻塞主流程, 但要 log.warning 暴露问题)
         """
         if action not in VALID_ACTIONS:
-            logger.warning(f"[Audit] 非法 action={action!r}, fall back to 'read'")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [Audit] 非法 action={action!r}, fall back to 'read'")
             action = "read"
 
         # 路径截断 (URL > 500 char 直接截)
@@ -146,7 +147,11 @@ class AuditService:
             await db.commit()
             await db.refresh(entry)
         except Exception as e:
-            logger.warning(f"[Audit] commit 失败: {e}", exc_info=True)
+            logger.warning(
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] "
+                f"[Audit] commit 失败: {e}",
+                exc_info=True,
+            )
             try:
                 await db.rollback()
             except Exception:

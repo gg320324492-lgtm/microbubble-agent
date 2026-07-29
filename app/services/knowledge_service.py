@@ -7,6 +7,7 @@ import re
 
 from app.core.celery_db import create_celery_engine_and_session
 from app.core.celery import celery_app
+from app.core.request_context import get_request_id, get_task_id
 from app.models.knowledge import Knowledge
 from app.services.name_aliases import clean_text as clean_person_names
 
@@ -53,7 +54,7 @@ async def _resolve_figure_placeholders(knowledge_id: int, text: str) -> str:
                 text = text.replace(placeholder, "")
                 logger.debug(f"图片占位符无匹配文件: {placeholder} (knowledge_id={knowledge_id})")
     except Exception as e:
-        logger.warning(f"图片占位符解析失败(knowledge_id={knowledge_id}): {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 图片占位符解析失败(knowledge_id={knowledge_id}): {e}")
         # 移除所有未解析的占位符
         text = re.sub(r'\[FIGURE:[\d.]+\]', '', text)
 
@@ -87,7 +88,7 @@ async def _run_analyze_and_embed(
             knowledge.analysis_status = "analyzing"
             await db.commit()
     except Exception as e:
-        logger.error(f"分析状态更新失败(knowledge_id={knowledge_id}): {e}")
+        logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 分析状态更新失败(knowledge_id={knowledge_id}): {e}")
         return
 
     embedding_ok = False
@@ -108,7 +109,7 @@ async def _run_analyze_and_embed(
                     await db.commit()
                     embedding_ok = True
     except Exception as e:
-        logger.warning(f"Embedding 生成失败(knowledge_id={knowledge_id}): {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] Embedding 生成失败(knowledge_id={knowledge_id}): {e}")
 
     # Step 2: LLM 分析（独立容错）
     try:
@@ -150,7 +151,7 @@ async def _run_analyze_and_embed(
                             knowledge_id, analysis["formulas"]
                         )
                 except Exception as e:
-                    logger.warning(f"公式保存失败(knowledge_id={knowledge_id}): {e}")
+                    logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 公式保存失败(knowledge_id={knowledge_id}): {e}")
 
             # Step 2.6: 自动生成假设（独立容错，异步执行）
             if analysis.get("entities") and len(analysis["entities"]) >= 2:
@@ -161,12 +162,12 @@ async def _run_analyze_and_embed(
                         topic = analysis.get("topic") or analysis.get("category")
                         hypotheses = await hypothesis_svc.generate_hypotheses(topic=topic, count=2)
                         if hypotheses:
-                            logger.info(f"自动生成 {len(hypotheses)} 条假设(knowledge_id={knowledge_id}, topic={topic})")
+                            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 自动生成 {len(hypotheses)} 条假设(knowledge_id={knowledge_id}, topic={topic})")
                 except Exception as e:
-                    logger.warning(f"假设自动生成失败(knowledge_id={knowledge_id}): {e}")
+                    logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 假设自动生成失败(knowledge_id={knowledge_id}): {e}")
 
     except Exception as e:
-        logger.warning(f"LLM 分析失败(knowledge_id={knowledge_id}): {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] LLM 分析失败(knowledge_id={knowledge_id}): {e}")
 
     # Step 2.6: AI 内容排版（独立容错，仅对 PDF 文件执行）
     try:
@@ -182,9 +183,9 @@ async def _run_analyze_and_embed(
                     formatted = await _resolve_figure_placeholders(knowledge_id, formatted)
                     knowledge.formatted_content = formatted
                     await db.commit()
-                    logger.info(f"内容排版已保存(knowledge_id={knowledge_id})")
+                    logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 内容排版已保存(knowledge_id={knowledge_id})")
     except Exception as e:
-        logger.warning(f"内容排版失败(knowledge_id={knowledge_id}): {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 内容排版失败(knowledge_id={knowledge_id}): {e}")
 
     # Step 3: 确定最终状态（防御：任何异常都不能让 status 卡 'analyzing'）
     # v28 step 32 修复: 之前 final_status = "done" if (embedding_ok or analysis_ok) else "failed"
@@ -200,7 +201,7 @@ async def _run_analyze_and_embed(
     else:
         final_status = "failed"
     logger.info(
-        f"[_run_analyze_and_embed] knowledge_id={knowledge_id} final_status={final_status} "
+        f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [_run_analyze_and_embed] knowledge_id={knowledge_id} final_status={final_status} "
         f"embedding_ok={embedding_ok} analysis_ok={analysis_ok}"
     )
     try:
@@ -215,7 +216,7 @@ async def _run_analyze_and_embed(
     except Exception as e:
         # 兜底：哪怕这段也炸了，也要把 status 置为 failed
         logger.error(
-            f"[Step3] final_status 写入失败(knowledge_id={knowledge_id}): {e}",
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [Step3] final_status 写入失败(knowledge_id={knowledge_id}): {e}",
             exc_info=True,
         )
         try:
@@ -228,9 +229,7 @@ async def _run_analyze_and_embed(
                     knowledge.analysis_status = "failed"
                     await db.commit()
         except Exception as e2:
-            logger.error(
-                f"[Step3] 兜底 failed 写入也失败(knowledge_id={knowledge_id}): {e2}"
-            )
+            logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [Step3] 兜底 failed 写入也失败(knowledge_id={knowledge_id}): {e2}")
         # 抛回让 Celery 顶层 try 处理 retry
         raise
 
@@ -242,7 +241,7 @@ async def _run_analyze_and_embed(
                 graph_svc = KnowledgeGraphService(db)
                 await graph_svc.build_relations_for(knowledge_id)
         except Exception as e:
-            logger.warning(f"知识关联建立失败(knowledge_id={knowledge_id}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 知识关联建立失败(knowledge_id={knowledge_id}): {e}")
 
     # Step 5: 实体融合（独立容错）
     try:
@@ -251,7 +250,7 @@ async def _run_analyze_and_embed(
             entity_svc = EntityService(db)
             await entity_svc.merge_entities_from_document(knowledge_id)
     except Exception as e:
-        logger.warning(f"实体融合失败(knowledge_id={knowledge_id}): {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 实体融合失败(knowledge_id={knowledge_id}): {e}")
 
     # Step 6: Neo4j 知识图谱构建（独立容错）
     try:
@@ -260,11 +259,11 @@ async def _run_analyze_and_embed(
         result = await kg_builder.build_graph_for_knowledge(knowledge_id, title, content)
         if result["entities_created"] > 0:
             logger.info(
-                f"Neo4j 图谱构建完成(knowledge_id={knowledge_id}): "
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] Neo4j 图谱构建完成(knowledge_id={knowledge_id}): "
                 f"{result['entities_created']} 实体, {result['relations_created']} 关系"
             )
     except Exception as e:
-        logger.warning(f"Neo4j 图谱构建失败(knowledge_id={knowledge_id}): {e}")
+        logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] Neo4j 图谱构建失败(knowledge_id={knowledge_id}): {e}")
 
     # Step 7: 多模态提取（图片 OCR / 公式 / 表格） — Phase 7
     # 仅当文件是 PDF/PPTX 且有 file_path 时触发
@@ -276,7 +275,7 @@ async def _run_analyze_and_embed(
         )
         if extraction_result.get("ok") and not extraction_result.get("skipped"):
             logger.info(
-                f"多模态提取完成(knowledge_id={knowledge_id}): "
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 多模态提取完成(knowledge_id={knowledge_id}): "
                 f"images={extraction_result.get('images_total', 0)}, "
                 f"extractions={extraction_result.get('extractions', {})}"
             )
@@ -290,7 +289,7 @@ async def _run_analyze_and_embed(
         inline_result = await multimodal_extraction_service.inline_extractions_to_content(knowledge_id)
         if inline_result.get("ok") and not inline_result.get("skipped"):
             logger.info(
-                f"多模态 inline 嵌入完成(knowledge_id={knowledge_id}): "
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] 多模态 inline 嵌入完成(knowledge_id={knowledge_id}): "
                 f"matches={inline_result.get('matches_total', 0)}, "
                 f"unmatched={inline_result.get('unmatched_total', 0)}"
             )
@@ -309,14 +308,14 @@ async def _run_analyze_and_embed(
             k = result.scalar_one_or_none()
             if k and k.analysis_status != final_status:
                 logger.warning(
-                    f"[_run_analyze_and_embed] Step 7/7b 覆盖了 status, "
+                    f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [_run_analyze_and_embed] Step 7/7b 覆盖了 status, "
                     f"恢复 final_status={final_status} (was={k.analysis_status})"
                 )
                 k.analysis_status = final_status
                 await db.commit()
     except Exception as e:
         logger.error(
-            f"[_run_analyze_and_embed] Step 8 最终终态写入失败: {e}",
+            f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [_run_analyze_and_embed] Step 8 最终终态写入失败: {e}",
             exc_info=True,
         )
 
@@ -344,7 +343,7 @@ def analyze_knowledge_task(self, knowledge_id: int, title: str, content: str):
                 await _run_analyze_and_embed(knowledge_id, title, content, session_factory)
             except Exception as e:
                 logger.error(
-                    f"[analyze_knowledge_task] 未捕获异常 knowledge_id={knowledge_id}: {e}",
+                    f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [analyze_knowledge_task] 未捕获异常 knowledge_id={knowledge_id}: {e}",
                     exc_info=True,
                 )
                 # 防御性兜底：哪怕 _run_analyze_and_embed 抛了，status 也要落到 'failed'
@@ -358,9 +357,7 @@ def analyze_knowledge_task(self, knowledge_id: int, title: str, content: str):
                             k.analysis_status = "failed"
                             await db.commit()
                 except Exception as e2:
-                    logger.error(
-                        f"[analyze_knowledge_task] 兜底 failed 写入也失败(knowledge_id={knowledge_id}): {e2}"
-                    )
+                    logger.error(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [analyze_knowledge_task] 兜底 failed 写入也失败(knowledge_id={knowledge_id}): {e2}")
                 raise
         finally:
             await engine.dispose()
@@ -446,7 +443,7 @@ class KnowledgeService:
         try:
             analyze_knowledge_task.delay(knowledge.id, title, content)
         except Exception as e:
-            logger.warning(f"[knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
         # 刷新 BM25 索引
         try:
             from app.services.bm25_service import get_bm25_service
@@ -517,9 +514,7 @@ class KnowledgeService:
         )
         existing = result.scalar_one_or_none()
         if existing:
-            logger.info(
-                f"[#043] 自动拓展已存在 (qa_id={qa_id}, knowledge_id={existing.id}), 跳过"
-            )
+            logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [#043] 自动拓展已存在 (qa_id={qa_id}, knowledge_id={existing.id}), 跳过")
             return existing
 
         # 1b. 兜底查重: 按 content_hash (qa_id 重复/为空/source 脏时仍能防重复入库)
@@ -535,7 +530,7 @@ class KnowledgeService:
         existing_hash = result_hash.scalar_one_or_none()
         if existing_hash:
             logger.info(
-                f"[#043] 自动拓展 content_hash 兜底命中 (qa_id={qa_id}, "
+                f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [#043] 自动拓展 content_hash 兜底命中 (qa_id={qa_id}, "
                 f"knowledge_id={existing_hash.id}), 跳过"
             )
             return existing_hash
@@ -671,9 +666,7 @@ class KnowledgeService:
                     k.embedding = embedding
                     await self.db.commit()
         except Exception as e:
-            logger.warning(
-                f"[#043] 自动拓展 embedding 失败 (knowledge_id={knowledge_id}): {e}"
-            )
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [#043] 自动拓展 embedding 失败 (knowledge_id={knowledge_id}): {e}")
 
     async def _generate_embedding(self, knowledge: Knowledge, content: str):
         """尝试生成向量嵌入，失败不阻塞"""
@@ -755,7 +748,7 @@ class KnowledgeService:
         try:
             analyze_knowledge_task.delay(knowledge.id, title, content)
         except Exception as e:
-            logger.warning(f"[knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
         return knowledge
 
     async def _analyze_and_embed(self, knowledge_id: int, title: str, content: str):
@@ -796,7 +789,7 @@ class KnowledgeService:
         try:
             analyze_knowledge_task.delay(knowledge.id, title, content)
         except Exception as e:
-            logger.warning(f"[knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [knowledge_service] Celery 任务入队失败(knowledge_id={knowledge.id}): {e}")
         return knowledge
 
     async def search_semantic(self, query: str, top_k: int = 5, category: Optional[str] = None) -> List[dict]:
@@ -945,7 +938,7 @@ class KnowledgeService:
         try:
             analyze_knowledge_task.delay(knowledge_id, knowledge.title, knowledge.content)
         except Exception as e:
-            logger.warning(f"[knowledge_service] Celery 任务入队失败(knowledge_id={knowledge_id}): {e}")
+            logger.warning(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] [knowledge_service] Celery 任务入队失败(knowledge_id={knowledge_id}): {e}")
         return knowledge
 
     async def reformat_content(self, knowledge_id: int):
@@ -962,7 +955,7 @@ class KnowledgeService:
         # 触发 Celery 任务（不等结果，立即返回）
         from app.services.content_formatter_service import reformat_knowledge_task
         reformat_knowledge_task.delay(knowledge_id)
-        logger.info(f"reformat_content: knowledge_id={knowledge_id} Celery 任务已派发")
+        logger.info(f"[req={get_request_id() or '-'} task={get_task_id() or '-'}] reformat_content: knowledge_id={knowledge_id} Celery 任务已派发")
         return knowledge
 
     async def _reformat_task(self, knowledge_id: int, title: str, content: str):

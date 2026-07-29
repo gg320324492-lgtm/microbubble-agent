@@ -4,6 +4,15 @@
 > **派工**: 主指挥协调范式第 67 次派工 (W88-A-1)
 > **锚点**: base (337) → tip (338) = +1 守恒
 > **环境**: Windows 11 Pro (10.0.26200) + Git Bash + Docker 29.6.2
+> **commit**: `5a23e67bc` (1 file, 412 insertions, 仅 memory)
+> **push**: origin/claude/w88-h2-logger-contextvars-2026-07-30 (与 H-2 共用 worktree, 主指挥 rebase 拆分支)
+
+### ⚠️ Worktree 多 agent 冲突说明
+
+本任务开始时, worktree 已被另一 agent 切换到 `claude/w88-h2-logger-contextvars-2026-07-30` 分支 (H-2 在并行工作), 不是任务指定的 main。我的 commit `5a23e67bc` 落在 H-2 分支上, 是与 H-2 共享 worktree 的临时状态。主指挥后续 rebase 时应:
+1. cherry-pick 我的 commit 到 main (或独立分支 `claude/w88-a1-binary-install-2026-07-30`)
+2. 验证 commit `5a23e67bc` 只含 `memory/w88-a1-binary-install-2026-07-30.md` 1 个文件
+3. H-2 后续 commit (`c5221b3ca`) 走 H-2 自己的 PR, 不应混入 A-1
 
 ---
 
