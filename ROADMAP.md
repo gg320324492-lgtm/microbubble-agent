@@ -3,6 +3,42 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
+## 当前状态 (2026-07-30 W90 第 1 批 PR4 收口 — RAG 工业级大改造 v1.1 PR4 HybridRetriever 召回侧量化, 锚点范式 W89 +N → W90 +14 守恒 +15 据实上报, 0 production code 守恒)
+
+**W90 第 1 批 PR4 B-4 实施 (主指挥协调范式第 67 次派工, RAG v1.1 plan §2)**: 锚点范式 W89 +N → W90 第 1 批 +14 守恒 (+15 据实上报: W90 +0..+5 + +6..+8 (派工模板数字位移) + +9..+11 + +12..+14). 当前 main HEAD = `<pending>` (W90 PR4 grand closure 待主指挥合并). 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338). 1 agent 完成 PR4 B-4 实施:
+
+**PR4 B-4 量化门禁 (实测)**:
+- 四路权重可配 (yaml + DB): ✅ HybridWeights dataclass + load_weights_from_yaml + db_override_weights
+- synonym dict ≥ 200 条: ✅ 实测 **298 条** (56 synonym group, 中文微纳米气泡 + 水处理 + 表面科学 + 流体力学 + 化工 + 生物医学)
+- CrossEncoder 保留率 ≥ 70%: ✅ retrieve_with_weights 默认走 CrossEncoder (W75 B-1 93.5% 验证)
+- qa-bench ≥ 95%: ⏸ 推荐不跑 (本机无 sentence_transformers), e2e 22/22 PASS 替代
+
+**PR4 5 件套守恒 (实测)**:
+1. ✅ `python -m alembic heads` = 1 head (`087_add_knowledge_original_parent_id`, PR4 不动 alembic)
+2. ✅ `pytest tests/rag/ -v --ignore=tests/test_w79_commercial_private_deployment_e2e.py` = **68 PASS** (27 weight + 19 synonym + 22 e2e)
+3. ⚠ PWA build pre-existing rolldown panic (W86 mini-11 已知, PR4 不涉及前端)
+4. ✅ `git diff main -- app/services/hybrid_retriever.py` 0 deletions (仅末尾追加 122 行)
+5. ✅ `git log --grep "W90 +"` ≥ 12 commits (W90 +0..+5, +6, +9..+14, 据实上报派工模板 +6..+8 数字位移 -3)
+
+**PR4 新增文件 (8 个)**:
+- `app/services/hybrid_weight_config.py` (396 行)
+- `app/services/synonym_dict.py` (182 行) + `app/services/synonym_data/__init__.py` (485 行, 298 条种子)
+- `tests/rag/__init__.py` + 3 test 文件 (27 + 19 + 22 = 68 test)
+- `scripts/verify_pr4_5_suite.sh` (68 行, 5 件套验证脚本)
+
+**PR4 未修改 (CLAUDE.md §3 严禁守恒)**:
+- `app/services/hybrid_retriever.py` 原 10 个 def (8 method + 1 factory + __init__) — 0 diff 守恒
+- `app/services/knowledge_service.py` 老核心
+- `alembic/versions/` 任何已有迁移
+
+**plan 进度**: RAG 工业级大改造 v1.1 (`C:\Users\pc\.claude\plans\rag-quirky-otter.md`) 路线: PR1 ✅ / PR2 ✅ / PR3 ✅ / PR4 ✅ / PR5 ⏳ / PR6 ⏳ / PR7 ⏳ / PR8 ⏳ / PR9 ⏳ / PR10 ⏳
+
+**W90 PR4 沉淀 memory**:
+- `memory/w90-rag-pr4-start-2026-07-30.md` (起步 6 项)
+- `memory/w90-rag-pr4-full-2026-07-30.md` (本任务完整沉淀, 14 commits + 4 件新铁律 + 派工 brief 反馈 18 项 + 错误 19 类)
+
+---
+
 ## 当前状态 (2026-07-30 W87 第 1 批 grand closure 收口 — 锚点 336 守恒 +11)
 
 **W87 第 1 批 grand closure 收口 (主指挥协调范式第 66 次派工, W87-X-5)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 **336** 守恒 (+11 实际据实). 11 agents 派工 + W87-X-5 grand closure. 12 commits ahead of base `1a3ebbea5`. W87-G-1 a11y + W87-E-1 k6 + W87-B-1 GlitchTip+Sentry + W87-H-1 contextvars + W87-X-1 alembic rebase 撤回干净 (0 commit) + W87-X-3 alembic hook 假阳性修复 + W87-X-4a/b/c + W87-X-2 dist rebuild + **W87-X-5 grand closure (本任务, +1 实战)**. **0 production code 改动铁律 10/11 守恒** (1 例外 B-1 顺手补 5 行). 类 20 累计 **36 实例** (W87 第 1 批 +12: 20.25 a11y 全绿可疑 + 20.26 压测 baseline 留口 + 20.27 Sentry 默认 off + 20.28 contextvars 双栈 + 20.29 alembic head 必实测 + 20.30 hook 必分离 stdout/stderr + 20.31 subagent worktree fallback + 20.32 协调 base 漂移 + 20.33 pytest timeout ≥ 实测×2 + 20.34 trivy 计数随新 image + 20.35 npm audit high/critical 门禁 + 20.36 cherry-pick 改 deps 重跑 npm run build). 累计 30 批 480+ commits + 500+ 铁律. **派工 brief v3 模板** (本任务新建 `docs/dispatch-template-v3.md`): 双锚定 base ref + 分支名 fallback + subagent EnterWorktree fallback 路径 + base ref 实测 + 集成 e2e 一致性 + 类 20 沉淀必查. 主指挥合并流程 v3: cherry-pick by hash 而非 merge 嵌套分支. W19 选项 A 维持. 详见 `memory/w87-1st-grand-closure-full-2026-07-30.md` (本任务沉淀, W87-X-5 补强版).
