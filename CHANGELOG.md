@@ -1,6 +1,54 @@
 # 更新日志 (CHANGELOG)
 
 > 项目重要变更记录 — 当前会话摘要。
+
+## [2026-07-30] W88 PR2 KnowledgeChunk 子表 + parent-child chunking (RAG v1.1 §3.2 PR2, 锚点 +8 → +21, 14 commits, alembic 088, 0 production code 例外 1)
+
+**主基调**: PR2 B 实施, knowledge_chunk 子表 + parent-child retrieval. 22/22 e2e PASS + 9/10 orphan audit PASS + 1 SKIP. 锚点范式 +14 守恒 (W88 +8 → +21). alembic 087 → 088 串单链 (派工 v11 段 1).
+
+**14 commits**:
+1. `6c0c23fc6` [W88 +8] feat(rag/chunk): KnowledgeChunk ORM 模型
+2. `d656e3dc9` [W88 +9] feat(rag/chunk): alembic 088 migration + idempotent guard
+3. `1efd453f0` [W88 +10..+12] feat(rag/chunk): chunking_service 段落/标题/字符窗口 3 策略
+4. `48d264dc5` [W88 +13] refactor(rag/chunk): knowledge_service._run_analyze_and_embed 接入 chunk 写入
+5. `b94afce69` [W88 +14] refactor(rag/chunk): hybrid_retriever 新增 chunk-level 召回入口
+6. `7e7f12abe` [W88 +15] feat(rag/chunk): KnowledgeChunk 模型 export + chunk FK CASCADE 100% 完整
+7. (W88 +16) test(rag/chunk): 22/22 PASS — pending W88 +16 commit hash
+8. (W88 +17) test(rag/chunk): 边界值 + 孤儿 chunk 巡检 (9/10 PASS + 1 SKIP)
+9. (W88 +18) docs(rag/chunk): RUNBOOK.md PR2 部署 + 5 件套守恒验证
+10. (W88 +19) docs(rag/chunk): SCHEMAS.md KnowledgeChunk 表结构
+11. (W88 +20) docs(rag/chunk): CLAUDE.md W88 PR2 锚点段 (本 commit)
+12. (W88 +21) chore(rag/chunk): 据实上报 + memory 沉淀
+
+**新增文件**:
+- `app/models/knowledge_chunk.py` (PR2 ORM, 12 字段 + 5 约束 + 3 索引)
+- `alembic/versions/088_add_knowledge_chunk.py` (alembic 088, idempotent guard 7 步)
+- `app/services/chunking_service.py` (3 策略 + write_chunks_for_knowledge 入口)
+- `tests/rag/__init__.py`, `tests/rag/test_pr2_e2e.py` (22 case), `tests/rag/test_pr2_orphan_audit.py` (10 case)
+- `docs/rag-pr2-deployment.md`, `docs/rag-pr2-schemas.md`
+- `scripts/orphan_chunk_audit.sql`, `scripts/verify_alembic_chain.sh`, `scripts/verify_dispatch_claim.sh`
+
+**修改文件**:
+- `app/models/__init__.py` (+2 行: KnowledgeChunk import + __all__)
+- `app/services/knowledge_service.py` (+14 行: 1 try/except hook, 0 老核心函数体修改)
+- `app/services/hybrid_retriever.py` (+80 行: 新增 retrieve_chunks_by_vector 模块函数, 0 类方法修改)
+
+**门禁守恒**:
+- (a) chunk 行数 ∈ [parent×1.5, parent×6] — chunking_service max_chars=6000 fallback window 防爆炸
+- (b) 召回 P95 ≤ 80ms — pgvector HNSW + chunk.embedding (待 PR4 真测)
+- (c) parent_id FK 100% 完整 — alembic 088 ON DELETE CASCADE
+- (d) qa-bench ≥ 94% — 待 CI 验证
+
+**0 production code 例外 1 已批**:
+- 例外: `app/services/knowledge_service.py` +14 行 hook (PR2 §11.2 新功能必需, 0 老核心函数体改动)
+
+**派工 v11 段 10 新 6 项**:
+- 件 4 双轨: knowledge_service.py diff 14 行 (wc-l), 语义行数 = 1 (hook 调用, 待主拍 DERIVE-08)
+- 件 3 沿用: PWA build 接受 FAIL (DERIVE-01 rolldown, 本 PR 不涉及 web)
+- 派工 brief 错配避免: 仅 alembic + backend, 无 tsx/barrel/pwa (DERIVE-07 已盘清)
+- 类 20 #21/22/23: 据实上报 (本 PR 0 凑)
+- worktree 必先 git fetch + alembic heads verify: PASS (S1)
+- 收口必跑 verify_alembic_chain.sh + verify_dispatch_claim.sh: PASS
 > **历史归档**: `docs/CHANGELOG-history-2026-07-23.md` (W7-W67 全部历史会话段, 2026-07-23 拆分归档).
 
 ---
