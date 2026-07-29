@@ -210,6 +210,16 @@ const routes = [
         component: () => import('@/views/admin/KbMonitorView.vue'),
         meta: { title: 'KB 入库监控' }
       },
+      {
+        // RAG PR6 (W92): 检索日志 7 维管理页 (admin/leader only,
+        // 后端 Depends(get_current_admin_user) 兜底)
+        // 桌面 dashboard, 无移动端变体 → 直接 import (与 admin/kb-monitor 同一模式)
+        // 不加 meta.icon: 与 AnalyticsView 同属 admin 深链, 不占侧栏
+        path: 'admin/search-logs',
+        name: 'SearchLogs',
+        component: () => import('@/views/admin/SearchLogs.vue'),
+        meta: { title: '检索日志' }
+      },
       // v78 合并审计日志到项目动态: admin/audit 路由删除, 改用 /project-stats?tab=audit 访问
       // 旧路由保留作 fallback 兼容老链接 (去掉 meta.icon 自动从 sidebar 隐藏)
       // v2 PR7 审计日志视图 (admin only, 后端 Depends(get_current_admin) 兜底) 改嵌在 ProjectStatsView 第 2 个 tab
