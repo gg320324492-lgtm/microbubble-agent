@@ -160,6 +160,17 @@ def test_18_summary_reports_latency_semantics_honestly():
     assert "NOT retrieval latency" in src
 
 
+def test_18b_slow_gate_declared_not_evaluable_on_proxy_latency():
+    """Gate (c) is defined on retrieval latency; we only have a dwell proxy.
+
+    Returning `slow_query_gate_pass=True` off the proxy would be dressing a
+    different measurement up as a passing gate, so the endpoint hard-codes
+    `slow_query_gate_evaluable=False` until PR7 lands a real latency column.
+    """
+    assert "slow_query_gate_evaluable" in mod.SearchLogSummary.model_fields
+    assert "slow_query_gate_evaluable=False" in _src(mod.search_logs_summary)
+
+
 # ---------------------------------------------------------------- gate math
 
 

@@ -99,6 +99,7 @@ class SearchLogSummary(BaseModel):
     slow_query_count: int
     slow_query_rate: float      # gate (c): slow / total <= 0.05
     slow_query_gate_pass: bool
+    slow_query_gate_evaluable: bool  # False while latency is a dwell-time proxy
     slow_query_threshold_ms: int
     avg_latency_ms: Optional[float] = None
     p95_latency_ms: Optional[int] = None
@@ -256,6 +257,12 @@ async def search_logs_summary(
     Both are reported as measured. A failing gate is a DATA finding
     (users are not clicking / the proxy latency is high), not a code defect --
     the caller must report the real number rather than tune the threshold.
+
+    `slow_query_gate_evaluable` is False by construction: gate (c) is defined
+    over *retrieval* latency, and this endpoint can only expose the dwell-time
+    proxy (see module docstring). The rate is still computed and returned so
+    the number is visible, but it must not be read as gate (c) passing.
+    PR7 owns the real latency column and can flip this to True.
     """
     row = (
         await db.execute(
@@ -311,6 +318,7 @@ async def search_logs_summary(
         slow_query_count=slow_count,
         slow_query_rate=slow_rate,
         slow_query_gate_pass=slow_rate <= 0.05,
+        slow_query_gate_evaluable=False,
         slow_query_threshold_ms=SLOW_QUERY_THRESHOLD_MS,
         avg_latency_ms=round(float(row[3]), 2) if row[3] is not None else None,
         p95_latency_ms=int(row[4]) if row[4] is not None else None,

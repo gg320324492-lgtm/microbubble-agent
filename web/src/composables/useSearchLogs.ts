@@ -72,6 +72,8 @@ export interface SearchLogSummary {
   slow_query_count: number
   slow_query_rate: number
   slow_query_gate_pass: boolean
+  /** 后端为 false: 慢查询门禁定义在检索耗时上, 当前只有决策耗时代理值, 不可判定 */
+  slow_query_gate_evaluable: boolean
   slow_query_threshold_ms: number
   avg_latency_ms: number | null
   p95_latency_ms: number | null
@@ -126,6 +128,15 @@ export function useSearchLogs() {
 
   /** 门禁 (c) 慢查询占比是否达标 */
   const slowGatePass = computed(() => summary.value?.slow_query_gate_pass ?? false)
+
+  /**
+   * 门禁 (c) 是否可判定。后端恒 false: 该门禁定义在**检索耗时**上,
+   * 而 search_logs 只有决策耗时代理值 (PR6 非 alembic 例外 PR 不得加列)。
+   * UI 必须显示"不可判定"而非绿色 PASS —— 否则是拿代理值冒充门禁通过。
+   */
+  const slowGateEvaluable = computed(
+    () => summary.value?.slow_query_gate_evaluable ?? false
+  )
 
   function buildParams() {
     const f = filters.value
@@ -223,6 +234,7 @@ export function useSearchLogs() {
     hasAllDimensions,
     recallGatePass,
     slowGatePass,
+    slowGateEvaluable,
     // actions
     refresh,
     applyFilters,

@@ -154,6 +154,17 @@ describe('useSearchLogs (RAG PR6 W92 检索日志 7 维)', () => {
     expect(slowGatePass.value).toBe(false)
   })
 
+  it('9b. slowGateEvaluable=false 时 UI 须显示不可判定 (代理耗时不冒充门禁通过)', async () => {
+    mockOk({
+      summary: { ...SUMMARY, slow_query_rate: 0.0449, slow_query_gate_pass: true, slow_query_gate_evaluable: false },
+    })
+    const { refresh, slowGateEvaluable, slowGatePass } = useSearchLogs()
+    await refresh()
+    // 后端算出 rate 达标, 但门禁不可判定 —— 前端必须能区分这两件事
+    expect(slowGatePass.value).toBe(true)
+    expect(slowGateEvaluable.value).toBe(false)
+  })
+
   it('10. 请求失败保留上次数据 (只置 error, 表格不闪烁)', async () => {
     mockOk()
     const { refresh, rows, error } = useSearchLogs()
