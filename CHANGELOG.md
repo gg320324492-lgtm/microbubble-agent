@@ -2,11 +2,11 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
-## [2026-07-30] W89 PR3 BM25 增量 + GIN/tsvector (RAG v1.1 §3.3 PR3, 锚点 +0 → +15 据实, 16 commits, alembic 089, 0 production code 例外 1 已批)
+## [2026-07-30] W89 PR3 BM25 增量 + GIN/tsvector (RAG v1.1 §3.3 PR3, 锚点 +0 → +15 据实, 13 commits, alembic 089, 0 production code 例外 1 已批)
 
-**主基调**: PR3 B 实施, 缺口 3 (BM25 N 次重建) + 缺口 4 (PG 全文缺失) 修复. 22/22 e2e PASS. 锚点范式 +16 守恒 (W89 +0 → +15). alembic 088 → 089 串单链 (派工 v11 段 1). 件 4a 双门控 PASS (knowledge_service 0 def + hybrid_retriever 0 diff).
+**主基调**: PR3 B 实施, 缺口 3 (BM25 N 次重建) + 缺口 4 (PG 全文缺失) 修复. 22/22 e2e PASS. 锚点范式 +13 守恒 (W89 +0 → +15 据实, **派工 brief 预测 16 实测 13, 类 20 #28 据实上报**, +12..+15 4 锚点合并为 1 commit). alembic 088 → 089 串单链 (派工 v11 段 1). 件 4a 双门控 PASS (knowledge_service 0 def + hybrid_retriever 0 diff).
 
-**16 commits** (W89 +0..+9 实施 + W89 +10..+15 docs/chore):
+**13 commits** (W89 +0..+11 完整 + W89 +12..+15 合并 1 commit):
 1. `7252520bd` [W89 +0] feat(rag/fulltext): text_splitter 中文分词入口 (jieba 选型)
 2. `1cc9f1970` [W89 +1] feat(rag/bm25): bm25_incremental 增量 BM25L 倒排索引
 3. `d848ba615` [W89 +2] refactor(rag/bm25): bm25_service 新增增量钩子入口
@@ -17,7 +17,11 @@
 8. `f798e5330` [W89 +7] docs(rag/fulltext): RUNBOOK.md PR3 部署细节
 9. `228474c0c` [W89 +8] docs(rag/fulltext): SCHEMAS.md PR3 §8 bm25_incremental + §9 fulltext_index
 10. `eb57818b2` [W89 +9] docs(rag/fulltext): W89-PR3-ANCHOR.md CLAUDE.md 镜像锚点段
-11. `[W89 +10..+15]` docs/chore (本批次后续 commit, 据实上报)
+11. `91dc82121` [W89 +10] docs(rag/fulltext): CHANGELOG.md PR3 13 commits 据实上报
+12. `f39944122` [W89 +11] docs(rag/fulltext): README.md 近期新增 PR3
+13. `cf011c734` [W89 +12..+15] docs(rag/fulltext): CHECKLIST §I + memory 收口 (4 锚点合并为 1 commit)
+
+**类 20 实战 #28** (新增): 派工 brief 预测 16 commits, 实际 13 commits (合并 4 docs/memory commit). 派工 v11 段 3 接受 "锚点 +N 按真 commit 数报", 不擅自扩也不擅自缩.
 
 **新增文件**:
 - `app/services/bm25_incremental.py` (PR3 增量 BM25L, ~270 行, 严格等价 rank_bm25 0.2.2)
@@ -39,10 +43,11 @@
 - (c) 件 4a 双门控: knowledge_service 0 def + hybrid_retriever 0 diff + bm25_service +3 def (派工 brief 显式允许)
 - (d) 22/22 e2e PASS (test_pr3_e2e)
 
-**类 20 实战 #25/26/27** (派工 v11 据实上报):
+**类 20 实战 #25/26/27/28** (派工 v11 据实上报):
 - #25: knowledge_service.py `^[+-]def` = 0, 验证 PASS
 - #26: hybrid_retriever.py 0 diff, 派工 brief 锁 PASS
 - #27: bm25_service.py +3 def, 派工 brief 显式允许, 不算违规
+- #28: 派工 brief 预测 16 commits, 实测 13 commits (+12..+15 合并), 派工 v11 段 3 接受据实, 不擅自扩不擅自缩
 
 **派工 v11 段 7 错误 19 类据实**:
 - E01 alembic 多 head: PASS (089 串单链 088)
