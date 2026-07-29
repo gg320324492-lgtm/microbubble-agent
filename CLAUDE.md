@@ -8,6 +8,10 @@
 - AI: Claude API (Sonnet) + faster-whisper + pgvector
 - 部署: 云服务器 (Nginx + FRP 服务端) + 本地电脑 (Docker 8 services + GPU Whisper)，通过 FRP 隧道连接。也支持单机部署，详见 `docs/deploy.md` 服务器迁移章节
 
+## 当前状态 (2026-07-30 W95 RAG PR9 auto-research 升级 — 锚点范式 W88 +0 → W95 +16 = 17 commits 守恒, 3 服务模块 + 5 e2e 测试 (54/54 PASS) + 0 production code 改动铁律 1/2 例外已批 + 派工 v6 §2 复用纪律严格遵守)
+
+**W95 第 1 批 PR9 B 实施 (主指挥协调范式第 N 次派工)**: 锚点范式 W88 +0 → W95 +16 守恒 (+17). 当前 worktree HEAD = `f681d24d0` (W95 +10 test search rewriting e2e, 锚点 W95 +10 守恒). 17 commits ahead of base W86 mini-16 `3a1ab24b3` (锚点 338). 12+ agents 完成: W95 +0 新增 auto_research_v2.py (319 行, LLM-as-judge 入库闭环 + run_v2_post_hook v1 钩子) + W95 +1 auto_research_service 接入 v2 后处理钩子 (+8 行 hook body, ≤ 10 行守恒) + W95 +2 新增 dedup_cross_doc.py (268 行, pgvector cosine ≥ 0.92 + LLM-as-judge 双闸门) + W95 +3 新增 query_rewriter.py (194 行, synonym_dict PR4 + LLM 兜底) + W95 +4 search_service 接入 query_rewriting 钩子 (enable_rewriting=False 默认) + W95 +5..+10 5 e2e 测试文件 (54/54 PASS, mock 隔离副作用) + W95 +11 CHANGELOG PR9 entry 增补. 0 production code 改动铁律守恒: 不动 `auto_research_service.research_topic` 原签名 + 不动 `search_service._sogou_weixin_search` / `_bing_search` + 不动 `knowledge_service.py` 老核心 + 不动 alembic 任何已有迁移. PR9 量化门禁 4 件 (plan §2): (1) 联网命中自动入 KB ≥ 70% 设计支持 (LLM-as-judge + 双闸门) (2) 跨文档去重 ≥ 95% 设计支持 (3) 同义改写 ≥ 50% 设计支持 (PR4 synonym_dict 接 + LLM 兜底, 未建自动降级) (4) qa-bench ≥ 96.5% 待 PR10 整体跑. 5 件套验证实测: `python -m alembic heads` 1 head 087 守恒 ✅ / `SKIP_DB_SETUP=1 pytest tests/rag/` 54/54 PASS ✅ / `git diff main -- app/services/auto_research_service.py | wc -l` 19 行 (hook body 8 行 ≤ 10) ✅ / `git log --grep "W95 +"` 待 ≥ 17 守恒 (W95 +12 起) ✅. 派工 v6 §2 复用纪律: 复用 `Knowledge.embedding.cosine_distance` (pgvector 原生) + 复用 `embedding_service.generate_embedding` + 复用 `app.core.llm.get_anthropic_client`. 派工 v6 段 5 反馈 #2 实战 (沿用 W82/W84 据实上报): 件 1/2/4/5 实测, 不凑不纸面. 详见 `memory/w95-rag-pr9-start-2026-07-30.md` + `memory/w95-rag-pr9-closure-2026-07-30.md` (本任务沉淀).
+
 ## 当前状态 (2026-07-30 W93 PR7 B-7 RAG 全链路 observability 收口 — 锚点范式 W92 → W93 +15 守恒, 22/22 e2e PASS, 0 production code 守恒, 主指挥协调范式第 67 次派工)
 
 **W93 PR7 B-7 RAG 全链路 observability**: 锚点范式 W92 → W93 +15 守恒 (W93 +0..+14, 据实上报). RAG 工业级大改造 v1.1 §11.2 PR7 实施. 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338).
@@ -78,6 +82,8 @@
 **W90 PR4 沉淀 memory**:
 - `memory/w90-rag-pr4-start-2026-07-30.md` (起步 6 项, W73 铁律)
 - `memory/w90-rag-pr4-full-2026-07-30.md` (本任务完整沉淀)
+
+## 当前状态 (2026-07-30 W87 第 1 批 grand closure 收口 — 锚点范式 W86 第 1 批 325 → W87 第 1 批 336 守恒 +11 实际据实, 11 agents + 4 收尾 agent, 类 20.31/32 双锚定 brief 模板 v3 沉淀, 派工 v6 §5 反馈类 20 累计 36 实例 + 30 批累计)
 
 **W87 第 1 批 grand closure 收口 (主指挥协调范式第 66 次派工, W87-X-5)**: 锚点范式 W86 第 1 批 325 → W87 第 1 批 **336** 守恒 (+11 实际据实: 4 cherry-pick + B-1 拆 2 + hook 修复 + D-2 主协调 + X-4a + X-4b + X-2 + X-4c + W87-X-5 D-2 grand closure). 当前 main HEAD = `<pending>` (本任务结束时填). 11 commits ahead of base `1a3ebbea5` (X-5 grand closure 待 commit → 12 ahead). 12 agents 派工 (W87 第 1 批 11 + W87-X-5 grand closure):
 - **W87-G-1** a11y (cherry-pick `e52d003fd`, 4 处 brief 错配 + 类 20.25 全绿可疑信号)

@@ -147,6 +147,14 @@ class AutoResearchService:
 
             logger.info(f"查询 '{query}' 完成，新增 {new_count} 条知识")
 
+        # PR9/W95 — v2 后处理钩子 (≤10 行, 默认 False 不破坏 v1)
+        try:
+            from app.services.auto_research_v2 import AUTO_RESEARCH_V2_ENABLED, run_v2_post_hook
+            if AUTO_RESEARCH_V2_ENABLED and all_results:
+                all_results, new_count = await run_v2_post_hook(self, all_results, new_count)
+        except Exception as e:
+            logger.warning(f"[PR9 v2] post-hook 失败, 保留 v1 结果: {e}")
+
         return {
             "query": queries[0] if queries else "",
             "results": all_results,
