@@ -10,6 +10,10 @@ export const useUserStore = defineStore('user', () => {
     const roleMap = { admin: '管理员', leader: '组长', member: '成员' }
     return roleMap[userInfo.value?.role] || '成员'
   })
+  // W86 mini-9: isAdmin getter 缺失 → ProjectStatsView admin 专属 tab (kb_monitor / audit) 不可见
+  // 派工 v6 §1.2 真验证: userStore 没暴露 isAdmin, ProjectStatsView:311 取 undefined → items.push 永不执行
+  // 对齐 MainLayout.vue:209 写法, admin/leader 都算 admin
+  const isAdmin = computed(() => ['admin', 'leader'].includes(userInfo.value?.role))
 
   function loadFromStorage() {
     const info = localStorage.getItem('user_info')
@@ -65,5 +69,5 @@ export const useUserStore = defineStore('user', () => {
     })
   }
 
-  return { userInfo, username, userRole, loadFromStorage, logout }
+  return { userInfo, username, userRole, isAdmin, loadFromStorage, logout }
 })
