@@ -351,6 +351,86 @@ class HybridRetriever:
         return results
 
 
+async def retrieve_chunks_by_vector(
+    db: AsyncSession,
+    query_embedding: List[float],
+    top_k: int = 10,
+    knowledge_id: Optional[int] = None,
+    strategy: Optional[str] = None,
+):
+    """W88 +14: hybrid_retriever 新增 chunk-level 召回入口
+
+    parent-child retrieval (PR2 §11.2):
+    - 输入: query embedding (调用方已有, PR1 一致化后)
+    - 输出: chunk-level 命中 (含 knowledge_id + char_start + char_end)
+    - 调用方拼 parent 上下文 window: text[char_start-WIN_BACK:char_end+WIN_FWD]
+
+    Args:
+        db: async session
+        query_embedding: 已生成的 query 向量 (1024 维)
+        top_k: 返回 chunk 数
+        knowledge_id: 可选过滤 (None = 全库)
+        strategy: 可选策略过滤 ('paragraph'/'heading'/'window')
+
+    Returns:
+        List[dict] 每条 {knowledge_id, chunk_id, chunk_index, content, char_start, char_end,
+                        char_count, strategy, similarity, retrieval_method='chunk_vector'}
+
+    Constraints (RAG v1.1 PR2 门禁):
+    - chunk-level 召回 P95 ≤ 80ms (10w chunk) — pgvector HNSW 保证
+    - chunk FK 100% 完整 (alembic 088 ON DELETE CASCADE)
+    """
+    from sqlalchemy import select
+
+    from app.models.knowledge_chunk import KnowledgeChunk
+
+    stmt = select(
+        KnowledgeChunk.id,
+        KnowledgeChunk.knowledge_id,
+        KnowledgeChunk.chunk_index,
+        KnowledgeChunk.content,
+        KnowledgeChunk.char_start,
+        KnowledgeChunk.char_end,
+        KnowledgeChunk.char_count,
+        KnowledgeChunk.strategy,
+        KnowledgeChunk.embedding.cosine_distance(query_embedding).label("distance"),
+    )
+
+    # chunk 必须有 embedding (召回前)
+    stmt = stmt.where(KnowledgeChunk.embedding.is_not(None))
+
+    if knowledge_id is not None:
+        stmt = stmt.where(KnowledgeChunk.knowledge_id == knowledge_id)
+    if strategy is not None:
+        stmt = stmt.where(KnowledgeChunk.strategy == strategy)
+
+    # cosine 距离越小越相似, 取 top_k
+    stmt = stmt.order_by("distance").limit(top_k)
+
+    try:
+        result = await db.execute(stmt)
+        rows = result.fetchall()
+    except Exception as e:
+        logger.warning(f"chunk 向量检索失败: {e}")
+        return []
+
+    out = []
+    for row in rows:
+        out.append({
+            "knowledge_id": row.knowledge_id,
+            "chunk_id": row.id,
+            "chunk_index": row.chunk_index,
+            "content": row.content,
+            "char_start": row.char_start,
+            "char_end": row.char_end,
+            "char_count": row.char_count,
+            "strategy": row.strategy,
+            "similarity": float(1.0 - row.distance),  # 距离 → 相似度
+            "retrieval_method": "chunk_vector",
+        })
+    return out
+
+
 # 全局工厂
 def get_hybrid_retriever(db: AsyncSession) -> HybridRetriever:
     """获取混合检索器实例"""
