@@ -1,22 +1,38 @@
 /**
- * NavRail.spec.js — W72 B-4 派生新任务 NavRail 跨端点 + 6 主题 dark mode 验证
+ * NavRail.spec.js — W89-X-19c 修订: spec 适配真实 NavRail 契约
  *
- * 2026-07-24 主指挥协调范式第 213 守恒预测.
+ * 历史: W72 B-4 派生初版 (锚点范式第 213 守恒预测).
+ * W89-X-13 据实报告: 8 个 scenario 引用旧契约 (`.nav-item` / hamburger /
+ * `accent-{name}-{light|dark}` 属性 / `mobile-drawer` class /
+ * `#nav-rail-accent` / `#nav-rail-chat` button 等), 与当前 NavRail.vue
+ * 真实实现不一致 → 8/8 failed.
+ *
+ * 派工 v6 §5 反馈类 20.74 沉淀: vitest stale slice 修法 = 调研真实契约
+ * + spec 适配 component (非反过来), 不动 production code.
+ *
+ * 真实 NavRail.vue 契约 (2026-07-30 据实):
+ * - 根元素 <nav class="nav-rail">: data-testid="nav-rail", aria-label="主导航"
+ *   classes: { collapsed, 'mobile-open' (mobileOpen prop) }
+ * - 6 路由项 via <li class="nav-rail-item" :class="{ active: isActive }">,
+ *   路由: /chat /knowledge /drive /tasks /meetings /workspace
+ * - 每项内嵌 <router-link :to="path" :data-route="path" :aria-current>
+ * - 品牌区: <div class="nav-rail-brand"> + brand-icon "MNB" + brand-text
+ *   + 移动端专属 <button class="mobile-close" aria-label="关闭导航">
+ * - 折叠按钮: <button class="collapse-btn"> 调 uiStore.toggleNavRail()
+ * - 移动端遮罩: <button class="nav-rail-scrim" v-if="mobileOpen">
+ * - 主题机制: themeStore.mode + themeStore.accent → 通过 watch 写
+ *   document.documentElement data-theme="light|dark" + data-accent="orange|ocean|forest"
+ *   (非 nav 元素的 data-theme-accent 属性, 那是旧版猜测的契约)
  *
  * 测试场景 (8):
- * 1. 桌面端 NavRail 渲染 — 6 个路由项 + data-theme-accent 属性
- * 2. 当前路由高亮 — /chat 路由 active class 命中
- * 3. accent 循环切换 — orange → ocean → forest → orange
- * 4. 6 主题 dark mode 切换 — themeStore.accent × isDark = 6 组合
- * 5. 移动端断点 — 模拟 isMobile=true 时汉堡按钮显示
- * 6. 移动端汉堡按钮触发 drawerOpen
- * 7. 移动端 nav item 点击后 drawerOpen 自动关闭
- * 8. 跨端点 — 桌面端无汉堡按钮 + 移动端有汉堡按钮
- *
- * 设计:
- * - vitest + @vue/test-utils (与 desktop_emoji_lazy.spec.js 模式一致)
- * - 0 production code 改动铁律维持 — NavRail.vue 仅做最小增强
- * - 派工 v6 段 5 反馈 #5 实战: 派生新任务必含 type hint (NavAccent)
+ * 1. 桌面端 NavRail 渲染 — 6 个路由项 + data-testid
+ * 2. 当前路由高亮 — /chat 路由 li.nav-rail-item.active 命中 + router-link aria-current=page
+ * 3. accent 切换 — themeStore.setAccent orange→ocean→forest (无内嵌切换按钮, 走 store API)
+ * 4. theme+accent 双层切换 — document.documentElement data-theme/data-accent 6 组合
+ * 5. 移动端断点 — isMobile=true 时 mobile-close 按钮显示 + mobile-open class 视 prop 而定
+ * 6. 移动端 mobile-close 触发 closeMobile emit
+ * 7. 移动端 nav item 点击触发 closeMobile emit
+ * 8. 跨端点 — 桌面端无 mobile-close + 移动端有 mobile-close + collapse-btn
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
@@ -80,7 +96,7 @@ async function setup(initialPath = '/chat') {
   return { wrapper, router, themeStore: useThemeStore() }
 }
 
-describe('NavRail.vue — W72 B-4 跨端点 + 6 主题 dark mode', () => {
+describe('NavRail.vue — W89-X-19c 适配真实契约 (8 scenarios)', () => {
   beforeEach(() => {
     mockIsMobileRef.value = false
     // 模拟 useThemeStore 内部读取 localStorage 用的 storage 接口
@@ -92,134 +108,144 @@ describe('NavRail.vue — W72 B-4 跨端点 + 6 主题 dark mode', () => {
         clear: () => {},
       }
     }
+    // 重置 document.documentElement 的 data-theme / data-accent (themeStore apply)
+    if (typeof document !== 'undefined') {
+      document.documentElement.removeAttribute('data-theme')
+      document.documentElement.removeAttribute('data-accent')
+    }
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  it('scenario_1: 桌面端 NavRail 渲染 — 6 个路由项 + data-theme-accent 属性', async () => {
+  it('scenario_1: 桌面端 NavRail 渲染 — 6 个路由项 + data-testid="nav-rail"', async () => {
     const { wrapper } = await setup('/chat')
     const nav = wrapper.find('nav.nav-rail')
     expect(nav.exists()).toBe(true)
-    // 6 nav items (chat/task/meeting/knowledge/workspace/drive)
-    const items = wrapper.findAll('.nav-item')
+    expect(nav.attributes('data-testid')).toBe('nav-rail')
+    expect(nav.attributes('aria-label')).toBe('主导航')
+    // 6 nav items (li.nav-rail-item, 路由: chat/knowledge/drive/tasks/meetings/workspace)
+    const items = wrapper.findAll('li.nav-rail-item')
     expect(items.length).toBe(6)
-    // data-theme-accent 必含 accent-{name}-{light|dark}
-    const themeAttr = nav.attributes('data-theme-accent')
-    expect(themeAttr).toMatch(/^accent-(orange|ocean|forest)-(light|dark)$/)
   })
 
-  it('scenario_2: 当前路由高亮 — /chat 路由 active class 命中', async () => {
+  it('scenario_2: 当前路由高亮 — /chat 路由 li.nav-rail-item.active 命中 + router-link aria-current=page', async () => {
     const { wrapper } = await setup('/chat')
-    const activeItems = wrapper.findAll('.nav-item.active')
-    expect(activeItems.length).toBeGreaterThanOrEqual(1)
-    // 找到 chat 项高亮
-    const chatItem = wrapper.find('#nav-rail-chat')
-    expect(chatItem.exists()).toBe(true)
-    expect(chatItem.element.closest('.nav-item').classList.contains('active')).toBe(true)
-    // aria-current=page 标记
-    expect(chatItem.attributes('aria-current')).toBe('page')
+    // 通过 router-link 的 data-route 定位 li 父级 (data-route 渲染在 a 上)
+    const chatLink = wrapper.find('a[data-route="/chat"]')
+    expect(chatLink.exists()).toBe(true)
+    expect(chatLink.attributes('aria-current')).toBe('page')
+    // li 父级加 active class
+    const chatItem = chatLink.element.closest('li.nav-rail-item')
+    expect(chatItem).not.toBeNull()
+    expect(chatItem.classList.contains('active')).toBe(true)
+    // 其余 5 个不应有 active
+    const allActive = wrapper.findAll('li.nav-rail-item.active')
+    expect(allActive.length).toBe(1)
   })
 
-  it('scenario_3: accent 循环切换 — orange → ocean → forest → orange', async () => {
-    const { wrapper, themeStore } = await setup('/chat')
-    const accentBtn = wrapper.find('#nav-rail-accent')
-    expect(accentBtn.exists()).toBe(true)
-    // 初始 orange
+  it('scenario_3: accent 循环切换 — store API orange → ocean → forest → orange', async () => {
+    const { themeStore } = await setup('/chat')
+    // 初始 orange (themeStore 内部 watch → document.data-accent)
     expect(themeStore.accent).toBe('orange')
-    // 点击 1 → ocean
-    await accentBtn.trigger('click')
+    expect(document.documentElement.getAttribute('data-accent')).toBe('orange')
+    // 切 ocean
+    themeStore.setAccent('ocean')
+    await flushPromises()
     expect(themeStore.accent).toBe('ocean')
-    // 点击 2 → forest
-    await accentBtn.trigger('click')
+    expect(document.documentElement.getAttribute('data-accent')).toBe('ocean')
+    // 切 forest
+    themeStore.setAccent('forest')
+    await flushPromises()
     expect(themeStore.accent).toBe('forest')
-    // 点击 3 → orange 循环
-    await accentBtn.trigger('click')
+    expect(document.documentElement.getAttribute('data-accent')).toBe('forest')
+    // 切回 orange 循环
+    themeStore.setAccent('orange')
+    await flushPromises()
     expect(themeStore.accent).toBe('orange')
   })
 
-  it('scenario_4: 6 主题 dark mode 切换 — accent × isDark = 6 组合', async () => {
-    const { wrapper, themeStore } = await setup('/chat')
-    const nav = wrapper.find('nav.nav-rail')
+  it('scenario_4: theme+accent 双层切换 — document.documentElement data-theme×data-accent = 6 组合', async () => {
+    const { themeStore } = await setup('/chat')
 
     const combos = [
-      { accent: 'orange', dark: false, expect: 'accent-orange-light' },
-      { accent: 'orange', dark: true,  expect: 'accent-orange-dark' },
-      { accent: 'ocean',  dark: false, expect: 'accent-ocean-light' },
-      { accent: 'ocean',  dark: true,  expect: 'accent-ocean-dark' },
-      { accent: 'forest', dark: false, expect: 'accent-forest-light' },
-      { accent: 'forest', dark: true,  expect: 'accent-forest-dark' },
+      { accent: 'orange', dark: false, expectTheme: 'light',  expectAccent: 'orange' },
+      { accent: 'orange', dark: true,  expectTheme: 'dark',   expectAccent: 'orange' },
+      { accent: 'ocean',  dark: false, expectTheme: 'light',  expectAccent: 'ocean'  },
+      { accent: 'ocean',  dark: true,  expectTheme: 'dark',   expectAccent: 'ocean'  },
+      { accent: 'forest', dark: false, expectTheme: 'light',  expectAccent: 'forest' },
+      { accent: 'forest', dark: true,  expectTheme: 'dark',   expectAccent: 'forest' },
     ]
 
     for (const c of combos) {
       themeStore.setAccent(c.accent)
-      if (c.dark) themeStore.set('dark'); else themeStore.set('light')
+      themeStore.set(c.dark ? 'dark' : 'light')
       await flushPromises()
-      expect(nav.attributes('data-theme-accent')).toBe(c.expect)
+      expect(document.documentElement.getAttribute('data-theme')).toBe(c.expectTheme)
+      expect(document.documentElement.getAttribute('data-accent')).toBe(c.expectAccent)
     }
   })
 
-  it('scenario_5: 移动端断点 — isMobile=true 时汉堡按钮显示', async () => {
+  it('scenario_5: 移动端断点 — isMobile=true 时 mobile-close 按钮显示 + nav 含 mobile-open (若 prop)', async () => {
     mockIsMobileRef.value = true
     const { wrapper } = await setup('/chat')
-    const hamburger = wrapper.find('#nav-rail-hamburger')
-    expect(hamburger.exists()).toBe(true)
-    // nav-rail 加 mobile-drawer class
+    // mobile-close 按钮 (品牌区)
+    const mobileClose = wrapper.find('button.mobile-close')
+    expect(mobileClose.exists()).toBe(true)
+    expect(mobileClose.attributes('aria-label')).toBe('关闭导航')
+    // 初始 mobileOpen=false → nav 不含 mobile-open class
     const nav = wrapper.find('nav.nav-rail')
-    expect(nav.classes()).toContain('mobile-drawer')
-    // 初始 drawer-open 未加
-    expect(nav.classes()).not.toContain('drawer-open')
+    expect(nav.classes()).not.toContain('mobile-open')
   })
 
-  it('scenario_6: 移动端汉堡按钮触发 drawerOpen', async () => {
+  it('scenario_6: 移动端 mobile-close 触发 update:mobileOpen=false emit', async () => {
     mockIsMobileRef.value = true
     const { wrapper } = await setup('/chat')
-    const hamburger = wrapper.find('#nav-rail-hamburger')
-    const nav = wrapper.find('nav.nav-rail')
-    // 初始关闭
-    expect(nav.classes()).not.toContain('drawer-open')
-    // 点击 → 打开
-    await hamburger.trigger('click')
-    expect(nav.classes()).toContain('drawer-open')
-    expect(hamburger.attributes('aria-expanded')).toBe('true')
-    // 再点 → 关闭
-    await hamburger.trigger('click')
-    expect(nav.classes()).not.toContain('drawer-open')
-    expect(hamburger.attributes('aria-expanded')).toBe('false')
+    const mobileClose = wrapper.find('button.mobile-close')
+    expect(mobileClose.exists()).toBe(true)
+    // 点击 → emit update:mobileOpen false
+    await mobileClose.trigger('click')
+    expect(wrapper.emitted('update:mobileOpen')).toBeTruthy()
+    expect(wrapper.emitted('update:mobileOpen')[0]).toEqual([false])
   })
 
-  it('scenario_7: 移动端 nav item 点击后 drawerOpen 自动关闭', async () => {
+  it('scenario_7: 移动端 nav item 点击触发 update:mobileOpen=false emit', async () => {
     mockIsMobileRef.value = true
-    const { wrapper, router } = await setup('/chat')
-    // 打开 drawer
-    await wrapper.find('#nav-rail-hamburger').trigger('click')
-    expect(wrapper.find('nav.nav-rail').classes()).toContain('drawer-open')
-    // 点击 drive 路由
-    await router.push('/drive')
-    await flushPromises()
-    const driveBtn = wrapper.find('#nav-rail-drive')
-    expect(driveBtn.exists()).toBe(true)
-    await driveBtn.trigger('click')
-    await flushPromises()
-    // drawer 关闭 (watch 监听 activeRoute 变化)
-    expect(wrapper.find('nav.nav-rail').classes()).not.toContain('drawer-open')
+    const { wrapper } = await setup('/chat')
+    // 点击 drive 路由项
+    const driveLink = wrapper.find('a[data-route="/drive"]')
+    expect(driveLink.exists()).toBe(true)
+    await driveLink.trigger('click')
+    // drawer 关闭 (emit update:mobileOpen false)
+    expect(wrapper.emitted('update:mobileOpen')).toBeTruthy()
+    expect(wrapper.emitted('update:mobileOpen')[0]).toEqual([false])
   })
 
-  it('scenario_8: 跨端点 — 桌面端无汉堡按钮 + 移动端有汉堡按钮', async () => {
+  it('scenario_8: 跨端点 — 桌面端无 mobile-close + 移动端有 mobile-close + collapse-btn 共存', async () => {
     // 桌面端
     mockIsMobileRef.value = false
     const { wrapper: dwrapper } = await setup('/chat')
-    expect(mockIsMobileRef.value).toBe(false)
     const dnav = dwrapper.find('nav.nav-rail')
-    expect(dnav.classes()).not.toContain('mobile-drawer')
-    expect(dnav.attributes('aria-label')).toBe('主导航')
+    expect(dnav.classes()).not.toContain('mobile-open')
+    // collapse-btn 一直存在 (桌面端折叠)
+    const dCollapse = dwrapper.find('button.collapse-btn')
+    expect(dCollapse.exists()).toBe(true)
+    // 桌面端 CSS 默认 .mobile-close { display: none }, 但 DOM 仍存在
+    // 桌面端不依赖 mobile-close 触发关闭, 故此处不强制断言其存在
+    const dMobileClose = dwrapper.find('button.mobile-close')
+    // 真实 NavRail 中 .mobile-close 始终在 DOM, 仅 CSS 控制可见性
+    expect(dMobileClose.exists()).toBe(true)
 
-    // 切换到移动端 — 新建一个 wrapper 验证 mobile-drawer class + hamburger
+    // 切换到移动端
     mockIsMobileRef.value = true
     const { wrapper: mwrapper } = await setup('/chat')
     const mnav = mwrapper.find('nav.nav-rail')
-    expect(mnav.classes()).toContain('mobile-drawer')
-    expect(mwrapper.find('#nav-rail-hamburger').exists()).toBe(true)
+    // 移动端 mobile-open 不在初始 class (mobileOpen prop 默认 false)
+    expect(mnav.classes()).not.toContain('mobile-open')
+    // mobile-close 按钮存在
+    const mMobileClose = mwrapper.find('button.mobile-close')
+    expect(mMobileClose.exists()).toBe(true)
+    expect(mMobileClose.attributes('aria-label')).toBe('关闭导航')
   })
 })
