@@ -9,7 +9,7 @@
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3100'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const USERNAME = 'xiaoqi_testbot'
 const PASSWORD = 'testbot_pass_2026'
 

@@ -24,11 +24,13 @@
  *     -H 'Content-Type: application/json' \
  *     -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])") \
  *   npx playwright test tests/visual/desktop/drive-team-shared-isolation-pr6p19.spec.mjs
+ *
+ * W89-X-25 (2026-07-30): 兜底 URL 改 3000 (vite dev 实际端口). 类 20.80 沉淀。
  */
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3004'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TEST_TOKEN = process.env.TEST_TOKEN || ''
 
 // === Helpers ===

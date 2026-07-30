@@ -22,11 +22,13 @@
  *   BASE_URL=https://agent.mnb-lab.cn \
  *   TEST_TOKEN=$(curl ... -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' ...) \
  *   npx playwright test tests/visual/desktop/drive-folder-delete-404-2026-07-10.spec.mjs
+ *
+ * W89-X-25 (2026-07-30): 兜底 URL 改 3000 (vite dev 实际端口). 类 20.80 沉淀。
  */
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3004'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TEST_TOKEN = process.env.TEST_TOKEN || ''
 
 test.describe('drive-folder-delete-404-2026-07-10: AppException 格式 + 错误消息提取', () => {

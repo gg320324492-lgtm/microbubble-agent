@@ -1,15 +1,18 @@
 /**
  * tests/visual/desktop/chat-login-vite-dev-2026-07-13.spec.mjs
  *
- * Playwright 完整 UI 登录测试 (走 vite dev :3100, 验证代码本身, 不走外网云 nginx 500)
+ * Playwright 完整 UI 登录测试 (走 vite dev :3000, 验证代码本身, 不走外网云 nginx 500)
  * - 用户当前实际访问的 https://agent.mnb-lab.cn/chat 500 (外网云 nginx 缺 SPA fallback 配错)
- * - vite dev :3100 完整 SPA + try_files + login page 都 OK
+ * - vite dev :3000 完整 SPA + try_files + login page 都 OK
  * - 这个 spec 验证如果绕过外网云 nginx, 我的代码能完整工作
+ *
+ * W89-X-25 (2026-07-30): 兜底 URL 从 3100 改为 3000, 与 package.json
+ *   "dev": "npx vite --port 3000" 一致, 类 20.80 沉淀。
  */
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3100'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const USERNAME = 'xiaoqi_testbot'
 const PASSWORD = 'testbot_pass_2026'
 

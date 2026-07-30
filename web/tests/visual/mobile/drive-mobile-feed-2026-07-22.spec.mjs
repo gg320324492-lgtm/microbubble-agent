@@ -38,8 +38,9 @@ import { test, expect } from '@playwright/test'
 
 // BASE_URL 默认指向 nginx (:80) — SPA + API 都在 nginx 反代下, spec 单 URL 即可。
 // nginx 反代 /api/v1/* → backend:8000, /drive → 静态 SPA HTML (SPA 路由由 Vue Router 处理)。
-// 可被环境变量覆盖, 例如 BASE_URL=http://localhost:3004 (vite dev) 或 http://localhost:8000 (直接 backend, 不支持 SPA)。
+// 可被环境变量覆盖, 例如 BASE_URL=http://localhost:3000 (vite dev) 或 http://localhost:8000 (直接 backend, 不支持 SPA)。
 // 注意: nginx 路径下 /api/v1/auth/login + /api/v1/drive/mobile-feed 都可用, token 5 min TTL。
+// W89-X-25 (2026-07-30): 注释中 3004 改为 3000, 与 package.json "dev" 端口对齐. 类 20.80 沉淀。
 const BASE_URL = process.env.BASE_URL || 'http://localhost'
 const USERNAME = 'xiaoqi_testbot'
 const PASSWORD = 'testbot_pass_2026'

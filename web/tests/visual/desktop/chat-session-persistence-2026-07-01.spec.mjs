@@ -14,7 +14,7 @@
  *   - 测试账号 xiaoqi_testbot / testbot_pass_2026 (跑一次 ensure_test_user.py)
  *
  * 运行:
- *   BASE_URL=http://localhost:3004 \
+ *   BASE_URL=http://localhost:3000 \
  *   TEST_TOKEN=$(curl ... -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' ...) \
  *   npx playwright test tests/visual/desktop/chat-session-persistence-2026-07-01.spec.mjs
  *
@@ -23,11 +23,14 @@
  *   - 关键断言在 .session-item 数量 + .active class 切换
  *   - 侧边栏 scrollTop 验证用 page.evaluate 直接读 .session-list.scrollTop
  *   - 真实 JWT (后端会按 token 解析 user_id)
+ *
+ * W89-X-25 (2026-07-30): 兜底 URL 改 3000 (vite dev 实际端口), 修复 nginx 部署
+ *   下 0% 通过 + 历史 vite 端口漂移问题。类 20.80 沉淀。
  */
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3004'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TEST_TOKEN = process.env.TEST_TOKEN || ''
 
 async function clearAllStorage(page) {

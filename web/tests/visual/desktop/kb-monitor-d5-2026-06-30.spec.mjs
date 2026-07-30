@@ -18,7 +18,7 @@
  *     (跑一次 `python scripts/ensure_test_user.py`)
  *
  * 运行:
- *   BASE_URL=http://localhost:3004 \
+ *   BASE_URL=http://localhost:3000 \
  *   TEST_TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
  *     -H "Content-Type: application/json" \
  *     -d '{"username":"xiaoqi_testbot","password":"testbot_pass_2026"}' \
@@ -30,11 +30,13 @@
  *   - 验证 6 个核心断言 (3 tab + 4 metric + 7 trend bar)
  *   - 截图保存到 test-results/kb-monitor-d5/
  *   - 2026-07-01 起从 wangtianzhi 物理隔离到测试账号, 避免 e2e reset 影响真实使用
+ *
+ * W89-X-25 (2026-07-30): 兜底 URL 改 3000 (vite dev 实际端口). 类 20.80 沉淀。
  */
 
 import { test, expect } from '@playwright/test'
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3004'
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
 const TEST_TOKEN = process.env.TEST_TOKEN || ''
 
 async function setupPage(page, { theme = 'light', accent = 'orange' } = {}) {
