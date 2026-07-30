@@ -3,6 +3,8 @@
 > **本文件是项目未来规划 + 近期完成的高层摘要。**
 > 详细 commit 流水账在 [HISTORY.md](HISTORY.md)（已存档 5730 行），权威变更日志在 [CHANGELOG.md](CHANGELELOG.md)。
 
+**W89 第 2 批 grand closure v2 (主指挥协调范式第 69 次派工, X-17 实战)**: 锚点范式 W89 第 1 批 444 → W89 第 2 批 460 (+16 守恒: 15 cherry-pick + 1 docs). 16 commits ahead of base `a000d0bf2` (W89 PR3 merge, 锚点 444). 派工 brief 预测 base 338 据实上报为 444, 类 20.46 实战. X-9 暂停 (P-6 冲突无明确决策) → X-14 拦截 (base ref 漂移) → X-17 决策重派. P-6 唯一冲突 `web/tests/visual/a11y/auth-shared-token.spec.mjs` → `--theirs` (P-6 较新, 硬断言 + 真 token). 集成 e2e: W89 新加 8 套件 47 PASSED + 1 SKIPPED + 0 FAILED; 老 10 套件 163 PASSED + 10 SKIPPED + 2 FAILED (2 FAILED pre-existing 据实上报, 留 W89 第 2 批老 pytest 修复). 派工前提铁律 12 + 类 20 累计 68 实例 (W89 第 2 批 +1: 类 20.46 base ref 必实测; 类 20.63 dark 软断言改硬门禁; 类 20.67 WS/SSE 禁 networkidle). **0 production code 改动铁律 13/15 守恒** (2 例外已批 P-1 + P-6 真修 a11y). alembic 1 head `['089_gin_trgm_tsvector']` 守恒. W19 选项 A 维持. 详见 `memory/w89-2nd-grand-closure-full-2026-07-30.md` (本任务沉淀).
+
 ## 当前状态 (2026-07-30 W90 第 1 批 PR4 收口 — RAG 工业级大改造 v1.1 PR4 HybridRetriever 召回侧量化, 锚点范式 W89 +N → W90 +14 守恒 +15 据实上报, 0 production code 守恒)
 
 **W90 第 1 批 PR4 B-4 实施 (主指挥协调范式第 67 次派工, RAG v1.1 plan §2)**: 锚点范式 W89 +N → W90 第 1 批 +14 守恒 (+15 据实上报: W90 +0..+5 + +6..+8 (派工模板数字位移) + +9..+11 + +12..+14). 当前 main HEAD = `<pending>` (W90 PR4 grand closure 待主指挥合并). 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338). 1 agent 完成 PR4 B-4 实施:

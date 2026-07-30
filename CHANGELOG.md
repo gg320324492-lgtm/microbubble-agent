@@ -2,6 +2,29 @@
 
 > 项目重要变更记录 — 当前会话摘要。
 
+## [2026-07-30] W89 第 2 批 grand closure v2 (X-17 实战, 锚点 444 → 460 +16 守恒, 15 cherry-pick + 1 docs, 0 production code 例外 2 已批 P-1 + P-6)
+
+**主基调**: X-9 拦截 (P-6 冲突无明确决策) → X-14 拦截 (派工 brief base 338 与实测 444 不符, 类 20.46 实战) → X-17 决策重派. P-6 唯一冲突 `web/tests/visual/a11y/auth-shared-token.spec.mjs` (deleted in HEAD, modified in P-6) → `--theirs` (P-6 较新, 硬断言 + 真 token). P-5 `web/package.json` scripts 冲突保留所有. 集成 e2e W89 新加 8 套件 47 PASSED + 1 SKIPPED + 0 FAILED in 0.14s; 老 10 套件 163 PASSED + 10 SKIPPED + 2 FAILED in 116.68s (2 FAILED pre-existing 据实上报: dist_health orphan `be8f90c0` W87 B-1 cherry-pick 类 20.36 实战 + alembic test anchor drift 087→089 PR1/PR2/PR3 推进未同步 test, 留 W89 第 2 批老 pytest 修复). 派工前提铁律 12 + 类 20 累计 68 实例 (W89 第 2 批 +1: 类 20.46 base ref 必实测; 类 20.63 dark 软断言改硬门禁 X-11 实战; 类 20.67 WS/SSE 禁 networkidle X-15 实战). alembic 1 head `['089_gin_trgm_tsvector']` 守恒. W19 选项 A 维持. 详见 `memory/w89-2nd-grand-closure-full-2026-07-30.md`.
+
+**16 commits (15 cherry-pick + 1 docs)**:
+1. `2c5628185` [W89 X-17 +0] P-6 a11y baseline 重 sync + violation 真硬断言 (含 P-1+P-2+rolldown hotfix)
+2. `319697a89` [W89 X-17 +1] P-3 Playwright CI 接入 (a11y + visual 2 job)
+3. `72032b641` [W89 X-17 +2] P-4 Playwright 真环境全套验证
+4. `21704835d` [W89 X-17 +3] P-5 Playwright build 后 a11y 健康检查 (build:a11y + prebuild + health-check.spec)
+5. `299bf971e` [W89 X-17 +4] P-7 visual snapshot 漂移真因查清
+6. `7920a0173` [W89 X-17 +5] P-8 visual 全 sweep 35 spec + FAIL 清单
+7. `6396929ac` [W89 X-17 +6] P-9 真 CI 触发文档化 + PLAYWRIGHT_TEST_TOKEN 部署留口
+8. `ea5d20764` [W89 X-17 +7] P-10 tests/e2e/ 重构 (15 vitest → tests/unit/components/, 3 playwright → tests/visual/e2e/)
+9. `afda133b1` [W89 X-17 +8] P-11 dark mode 3 accent + el-menu hover a11y 扫描 spec
+10. `ba4117fb9` [W89 X-17 +9] P-12 axe-rules.md 修复 SOP + 3 PASS e2e 门禁
+11. `1f0b72aba` [W89 X-17 +10] P-13 Playwright 集成真验证
+12. `2db2de0ee` [W89 X-17 +11] X-10 visual 113 baseline 缺 case 重 sync 拍板
+13. `60dbcf185` [W89 X-17 +12] X-11 dark-accent + el-menu-hover 软断言改硬门禁
+14. `05d91578c` [W89 X-17 +13] X-12 真 CI 触发模拟 + TEST_TOKEN 部署文档化
+15. `bd2b8834e` [W89 X-17 +14] X-15 WS/SSE/long-polling 页面删 networkidle, 等明确 UI locator
+16. `484e0f4a3` [W89 X-17 +15] X-16 Playwright 真环境全套验证 v2 (W88-X-3 替代)
+17. `<pending>` [W89 X-17 +16] docs(w89) D-2 6 类文档同步 + grand closure memory
+
 ## [2026-07-30] W89 PR3 BM25 增量 + GIN/tsvector (RAG v1.1 §3.3 PR3, 锚点 +0 → +15 据实, 13 commits, alembic 089, 0 production code 例外 1 已批)
 
 **主基调**: PR3 B 实施, 缺口 3 (BM25 N 次重建) + 缺口 4 (PG 全文缺失) 修复. 22/22 e2e PASS. 锚点范式 +13 守恒 (W89 +0 → +15 据实, **派工 brief 预测 16 实测 13, 类 20 #28 据实上报**, +12..+15 4 锚点合并为 1 commit). alembic 088 → 089 串单链 (派工 v11 段 1). 件 4a 双门控 PASS (knowledge_service 0 def + hybrid_retriever 0 diff).
