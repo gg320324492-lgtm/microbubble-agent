@@ -39,6 +39,20 @@
 
 ---
 
+**W89 第 2 批 grand closure v2 (主指挥协调范式第 69 次派工, X-17 实战)**: 锚点范式 W89 第 1 批 444 → W89 第 2 批 460 (+16 守恒: 15 cherry-pick + 1 docs, 派工 brief 预测 base 338 据实上报为 444). 16 commits ahead of base `a000d0bf2` (W89 PR3 merge, 锚点 444). 1/1 agent 完成 cherry-pick 序列 + D-2 文档同步:
+- **X-17 cherry-pick 序列 (15 commits, 1 冲突)**: P-6 (`7e9d2698b`) 含 P-1+P-2+rolldown hotfix + P-3 (`a765adf2f`) + P-4 (`ed2ac6e4c`) + P-5 (`356740c44`, package.json scripts 冲突保留所有) + P-7 (`83eb3ec59`) + P-8 (`9e4dade76`) + P-9 (`34560ac09`) + P-10 (`9d34ae752`, e2e 重构) + P-11 (`d049d7d10`) + P-12 (`7c47344cd`) + P-13 (`9147899e8`) + X-10 (`075655736`, baseline 重 sync) + X-11 (`114198343`, dark 硬门禁) + X-12 (`d4512b956`) + X-15 (`373a56006`, networkidle 删) + X-16 (`38bce8732`, 真环境 v2). **P-6 唯一冲突**: `web/tests/visual/a11y/auth-shared-token.spec.mjs` (deleted in HEAD, modified in P-6) → `--theirs` (P-6 较新, 硬断言 + 真 token)
+- **0 production code 改动铁律 13/15 守恒** (2 例外已批: P-1 真修 26 a11y violations + P-6 a11y baseline 重 sync + violation 真硬断言, 类 20.4 实战)
+- **集成 e2e (派工 v6 §1.2 真验证)**: W89 新加 8 套件 **47 PASSED + 1 SKIPPED + 0 FAILED in 0.14s**; 老 10 套件 **163 PASSED + 10 SKIPPED + 2 FAILED in 116.68s** — **2 FAILED pre-existing** (据实上报: dist_health orphan `be8f90c0` W87 B-1 cherry-pick 类 20.36 实战 + alembic test anchor drift 087→089 PR1/PR2/PR3 推进未同步 test, 留 W89 第 2 批老 pytest 修复路线)
+- **派工前提铁律 12 + 类 20 累计 68 实例** (W89 第 2 批 +1: 类 20.46 base ref 必实测 `git log --oneline -1 main`, 不可凭 CLAUDE.md 历史或派工 brief; 类 20.63 dark 软断言改硬门禁; 类 20.67 WS/SSE 禁 networkidle)
+- **X-9 拦截 → X-17 决策重派**: X-9 暂停因 P-6 冲突无明确决策; X-17 据实上报: base ref 派工 brief 预测 338, 实测 444, 类 20.46 实战
+- **D-2 6 类文档同步**: CLAUDE.md + ROADMAP.md + CHANGELOG.md + README.md + memory/MEMORY.md + `memory/w89-2nd-grand-closure-full-2026-07-30.md` (本任务新建)
+- **alembic 1 head `['089_gin_trgm_tsvector']` 守恒** (W89 第 2 批 cherry-pick 不动 alembic)
+- **W19 选项 A 维持**
+
+详见 `memory/w89-2nd-grand-closure-full-2026-07-30.md` (本任务沉淀).
+
+---
+
 ## 当前状态 (2026-07-30 W90 第 1 批 PR4 收口 — RAG 工业级大改造 v1.1 PR4 HybridRetriever 召回侧量化, 锚点范式 W89 +N → W90 +14 守恒 +15 据实上报, 0 production code 守恒)
 
 **W90 第 1 批 PR4 B-4 实施 (主指挥协调范式第 67 次派工, RAG v1.1 plan §2)**: 锚点范式 W89 +N → W90 第 1 批 +14 守恒 (+15 据实上报: W90 +0..+11 实施 + W90 +12..+14 docs/chore, 详见本任务沉淀 `memory/w90-rag-pr4-full-2026-07-30.md`). 15 commits ahead of base `3a1ab24b3` (W86 mini-16 doc update, 锚点 338). 1 agent 完成 PR4 B-4 实施:

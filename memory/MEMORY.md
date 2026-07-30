@@ -122,6 +122,16 @@
 - **W90 PR4 (RAG v1.1 PR4 HybridRetriever 召回侧量化)**:
   - [w90-rag-pr4-start-2026-07-30](w90-rag-pr4-start-2026-07-30.md) — W90 PR4 起步 6 项 + base 状态实测 + 量化门禁 + 5 件套守恒 (W73 铁律).
   - [w90-rag-pr4-full-2026-07-30](w90-rag-pr4-full-2026-07-30.md) — W90 PR4 grand closure 完整沉淀 (15 commits + 5 件套 + 4 件新铁律 + 派工 brief 反馈 18 项 + 错误 19 类, anchor 339 守恒).
+- **W89 第 1+2 批 (Playwright a11y + visual + RAG PR3 merge + grand closure v2)**:
+  - [w89-2nd-grand-closure-full-2026-07-30](w89-2nd-grand-closure-full-2026-07-30.md) — W89 第 2 批 grand closure v2 (X-17 实战, 15 cherry-pick + 1 docs = 16 commits, anchor 444 → 460 +16 守恒, 类 20.46 base ref 实测 实战).
+  - [w89-rag-pr3-full-2026-07-30](w89-rag-pr3-full-2026-07-30.md) — W89 PR3 BM25 增量 + pg_trgm + tsvector (alembic 088→089, 14 commits, anchor 430→444).
+  - [w89-p3-playwright-ci-2026-07-30](w89-p3-playwright-ci-2026-07-30.md) — W89-P-3 Playwright CI 接入 (a11y + visual 2 job, .github/workflows/playwright.yml).
+  - [w89-p5-playwright-build-gate-2026-07-30](w89-p5-playwright-build-gate-2026-07-30.md) — W89-P-5 Playwright build 后 a11y 健康检查 (build:a11y + prebuild + health-check.spec).
+  - [w89-p6-a11y-baseline-resync-2026-07-30](w89-p6-a11y-baseline-resync-2026-07-30.md) — W89-P-6 a11y baseline 重 sync + violation 真硬断言 (P-1 + P-2 + rolldown hotfix 包含).
+  - [w89-p10-e2e-restructure-2026-07-30](w89-p10-e2e-restructure-2026-07-30.md) — W89-P-10 tests/e2e/ 重构 (15 vitest → tests/unit/components/, 3 playwright → tests/visual/e2e/).
+  - [w89-p11-dark-accent-hover-2026-07-30](w89-p11-dark-accent-hover-2026-07-30.md) — W89-P-11 dark mode 3 accent + el-menu hover a11y 扫描 spec.
+  - [w89-x11-dark-harden-2026-07-30](w89-x11-dark-harden-2026-07-30.md) — W89-X-11 dark-accent + el-menu-hover 软断言改硬门禁 (类 20.63 实战).
+  - [w89-x15-networkidle-2026-07-30](w89-x15-networkidle-2026-07-30.md) — W89-X-15 WS/SSE/long-polling 页面删 networkidle, 等明确 UI locator (类 20.67 实战).
 - [2026-07-22-50-commit-w51-w100-roadmap](2026-07-22-50-commit-w51-w100-roadmap.md) — W51-W100 50 commit roadmap.
 - [2026-07-23-six-batches-v2-21-paradigm](2026-07-23-six-batches-v2-21-paradigm.md) — 6 批 v2.21 范式总结.
 - [anchor-paradigm-21-day-validation-2026-07-22](anchor-paradigm-21-day-validation-2026-07-22.md) — 锚点范式 21 天验证.
