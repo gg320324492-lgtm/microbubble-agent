@@ -66,6 +66,36 @@ PR3 BM25 增量 + GIN/tsvector 实施沉淀（CLAUDE.md 严禁改铁律, 故单�
 - [ ] 派工 v11 段 7 错误 19 类据实 (E01/E03/E05/E06/E07/E08/E11/E14/E15/E16/E18/E19/E21/E23/E24/E25 PASS)
 - [ ] 派工 v11 段 10 新 6 项据实 (python -m alembic 形态 + pytest 白名单 + brief 据实 + docs-only 断言化 N/A + worktree 依赖基线 + 5 件套回报)
 
+## J. W94 PR8 据实上报锚点 (派生 §I 之后)
+
+PR8 知识图谱深度联动实施沉淀（CLAUDE.md 严禁改铁律，故单独章节）。
+**PR8 是 10 PR 中最后 1 个 alembic PR** —— 091 之后 alembic 链正式收口。
+
+- [ ] PR8 锚点文档: `docs/rag/W94-PR8-ANCHOR.md` (CLAUDE.md 镜像, 11 节)
+- [ ] alembic 091 串单链: `python -m alembic heads` → 恰 1 head `091_add_kg_entity`, down_revision=`090_add_rag_eval_report`; 全景 `087 → 088 → 089 → 090 → 091` **10 PR 收口**
+- [ ] alembic 091 HNSW: `CREATE INDEX CONCURRENTLY` + 089 二段式 `DO $$ 探测 pg_indexes` (E11 大表阻塞); `vector_cosine_ops` 与召回距离度量一致
+- [ ] knowledge_service 钩子: `_run_analyze_and_embed` body 内 **Step 5b** (必排 Step 5 实体融合**之后**, 依赖其 SPO 产物, 倒置即静默失效), 件 4a `^[+-]def` = 0, **0 删除行** (+14 insertions 纯追加)
+- [ ] hybrid_retriever 钩子: **仅文件底部**新增模块级 `retrieve_with_entity_link` + `count_kg_entities` + `ENTITY_LINK_DEFAULT_WEIGHT` (沿用 PR4 `retrieve_with_weights` 已批模式), `^[+-]def` = 0, 缩进 def = 0, **0 删除行** (+127 insertions)
+- [ ] knowledge_graph_service 钩子: **仅文件底部**新增模块级 `_add_entity_links` / `_extract_flat_entities` / `_infer_entity_type` (**0 类方法改**, 不动 `build_relations_for` 类体)
+- [ ] 已有 KG 资产 0 改: 5 服务 (`entity_service` 402 / `graph_retriever` 188 / `kg_query_service` 266 / `knowledge_graph_builder` 289 / `knowledge_graph_service` 500 = 1645 行) + 2 老表 (`knowledge_entities` SPO 三元组 / `entity_co_occurrence` 共现网络, 走 lifespan create_all 无 alembic)
+- [ ] 22/22 e2e PASS (`tests/rag/test_pr8_e2e.py`): ORM 1-5 / 召回纯逻辑 6-10 / kg_embedding 11-15 / alembic 16-18 / 集成+性能+实体数+漂移 19-22
+- [ ] 门禁 a 实体链 hit ≥ 25%: case 10 真算 (3/10=30% PASS, 反例 1/10=10% 判失败), E37
+- [ ] 门禁 b 图谱召回 P95 ≤ 100ms: case 20 真计时 20 samples, E38
+- [ ] 门禁 c 实体数 ≥ 5000: case 21 `count_entities()` 真调用 + `assert_awaited()`; **真库计数需生产 DB, 按 RUNBOOK §0.7.1 第 3 步跑真 SQL, 不脑补数字**, E39
+- [ ] 门禁 d qa-bench ≥ 96%: **按推荐不跑** (沿用 PR1/PR5 处置); 第 5 路默认可关, 对既有 4 路 0 regression (case 22 验证 `enable_entity_link=False` 行为等价原 retrieve)
+- [ ] 必复用 PR1 `truncate_for_embedding`: case 11 断言 + **禁止硬编码 `[:6000]`** (plan §1.1 缺口 1 根因)
+- [ ] 实体漂移防护: **抽取侧与召回侧必调同一 `normalize_entity_name`** (case 22 断言); 否则 `" 气泡 "` 写入 `"气泡"` 但查 `" 气泡 "` 查不到
+- [ ] 0 新增 LLM 调用: 复用 Step 5 三元组产物 + `_infer_entity_type` 确定性 predicate 关键词映射 (召回延迟预算)
+- [ ] 缺口消化: 缺口 9 (图谱深度联动) —— 第 5 路 PG 内置, 补齐 `_graph_search` Neo4j 单点依赖短板
+- [ ] commit message 锚点范式: 全 commit 带 `[PR8 W94 +N]` 前缀 + Co-Authored-By: Claude Fable 5
+- [ ] **类 20 #33/#35 派工 brief 错配 3 处据实上报** (§12.3.4 拦截不擅自改): kg_entity ORM 已有 (互补非替代) + 实体抽取钩子已存在 (改走 Step 5b) + `_graph_search` 已存在 (改走第 5 路)
+- [ ] **锚点合并据实**: 模板 21 commits (+0..+20), 实测 17 —— +8/+9/+10/+11 四项全落在 +7 的 22 case 内, **不为凑模板拆无意义 commit** (v11 新增 3: 验证型 0 增量不凑 +1)
+- [ ] **e2e 真失败修根因不弱化断言**: case 15 (ST 未装 → `sys.modules` stub, 断言**加强**) + case 19 (gbk codec → `encoding="utf-8"`, 断言不变); **禁止**改阈值/删断言/加 xfail 凑 PASS
+- [ ] **件 3 PWA build pre-existing FAIL 据实**: `RAGEvalPanel.vue:24` `"Play"` 未导出, PR5 `cb5c98498` 引入非 PR8 (frontend=否, web/ 0 dirty); v11 新增 5 → 不算本 PR FAIL 也**不顺手修**; 建议主拍 hotfix `Play` → `VideoPlay`
+- [ ] **`scripts/check_typing_imports.sh` 超时 fallback** (§F 精神): 2min 内未完成 → 改 5 模块 `importlib.import_module` 实测全 OK (等价验证铁律 2)
+- [ ] 派工 v11 段 7 错误 19 类据实 (E01/E03/E05/E06/E07/E08/E11/E19/E21/E37/E38/E39 PASS)
+- [ ] 派工 v11 段 10 新 6 项据实 (`python -m alembic` 形态 + pytest 白名单 3208 collected 0 偏差 + brief 据实 3 处 + docs 断言化 + worktree 依赖基线 (node_modules 缺 → 主仓等价) + 5 件套回报表)
+
 ## E. 5 件套守恒命令（速查）
 
 详见 §C 表。
