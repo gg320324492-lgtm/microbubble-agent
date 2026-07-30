@@ -99,7 +99,7 @@
           <ThemeToggleButton />
 
           <el-dropdown>
-            <div class="user-info">
+            <div class="user-info" role="button" tabindex="0" aria-label="用户菜单" :aria-expanded="false" aria-haspopup="menu">
               <el-avatar :size="32" :src="userAvatar" :alt="username" icon="UserFilled" />
               <div v-if="!isMobile" class="user-detail">
                 <span class="username">{{ username }}</span>
