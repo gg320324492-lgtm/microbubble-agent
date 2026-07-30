@@ -220,6 +220,17 @@ const routes = [
         component: () => import('@/views/admin/SearchLogs.vue'),
         meta: { title: '检索日志' }
       },
+      {
+        // RAG PR5 (W91): 离线评估报告 Admin Dashboard (admin only,
+        // 后端 Depends(get_current_admin) 兜底)
+        // 派工 brief 路径 pwa/src/pages/admin/RAGEvalPanel.tsx → 实际
+        // web/src/views/admin/RAGEvalPanel.vue (PR6 模式对齐, v1.2 §11.2 修正, 类 20 #24)
+        // 桌面 dashboard, 无移动端变体 → 直接 import (与 admin/kb-monitor 同一模式)
+        path: 'admin/rag-eval',
+        name: 'RAGEval',
+        component: () => import('@/views/admin/RAGEvalPanel.vue'),
+        meta: { title: 'RAG 离线评估' }
+      },
       // v78 合并审计日志到项目动态: admin/audit 路由删除, 改用 /project-stats?tab=audit 访问
       // 旧路由保留作 fallback 兼容老链接 (去掉 meta.icon 自动从 sidebar 隐藏)
       // v2 PR7 审计日志视图 (admin only, 后端 Depends(get_current_admin) 兜底) 改嵌在 ProjectStatsView 第 2 个 tab
