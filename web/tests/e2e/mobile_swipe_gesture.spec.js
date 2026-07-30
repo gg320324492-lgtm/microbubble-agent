@@ -8,10 +8,20 @@
 //
 // 浏览器要求: Chromium (Playwright 内置), iOS Safari 由另外 visual test 覆盖
 
-const { test, expect, devices } = require('@playwright/test')
+const { test, expect } = require('@playwright/test')
 
 // 移动端 viewport (iPhone 13 Pro 复刻)
 const MOBILE_VIEWPORT = { width: 390, height: 844 }
+
+// W90-X-7 fix: Playwright 1.61+ forbids `test.use()` inside a `test.describe()` block
+// (and a top-level call outside a `projects` config). W89-X-14 reported the
+// "Cannot use({ defaultBrowserType }) in a describe group" error for this spec, and
+// W89-X-21 confirmed the cause was a pre-existing bug. The fix is:
+//   1. Remove every `test.use(...)` from this spec.
+//   2. Inject the iPhone 13 device profile via `playwright.config.js` projects instead
+//      (a dedicated `mobile-swipe` project that uses this spec's testMatch).
+// All three describe groups below share the same mobile profile, so the project-level
+// use config is sufficient.
 
 // 工具: 模拟 swipe 手势 (pointer 事件 + 物理坐标)
 async function simulateSwipe(page, opts) {
@@ -46,8 +56,6 @@ async function simulateSwipe(page, opts) {
 // 1. 左右滑切换页面 (MobileSwipeNavigation wrapper)
 // ============================================================================
 test.describe('W68 G-2: 移动端左右滑切换页面', () => {
-  test.use({ ...devices['iPhone 13'], hasTouch: true, isMobile: true })
-
   test('[Drive] 向左滑 → 切到下一个 tab (files → starred)', async ({ page }) => {
     await page.goto('/m/drive')
     await page.waitForLoadState('networkidle')
@@ -112,8 +120,6 @@ test.describe('W68 G-2: 移动端左右滑切换页面', () => {
 // 2. 下拉刷新 (MobileKnowledgeView)
 // ============================================================================
 test.describe('W68 G-2: 移动端下拉刷新', () => {
-  test.use({ ...devices['iPhone 13'], hasTouch: true, isMobile: true })
-
   test('[Knowledge] 下拉超过 80px 触发刷新', async ({ page }) => {
     await page.goto('/m/knowledge')
     await page.waitForLoadState('networkidle')
@@ -160,8 +166,6 @@ test.describe('W68 G-2: 移动端下拉刷新', () => {
 // 3. 触觉反馈 navigator.vibrate
 // ============================================================================
 test.describe('W68 G-2: 触觉反馈', () => {
-  test.use({ ...devices['iPhone 13'], hasTouch: true, isMobile: true })
-
   test('[Drive] 触发 swipe 时 navigator.vibrate 被调用', async ({ page }) => {
     // 注入 spy 监听 vibrate 调用
     await page.addInitScript(() => {
