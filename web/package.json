@@ -27,7 +27,7 @@
     "axios": "^1.6.2",
     "dayjs": "^1.11.10",
     "dompurify": "^3.4.7",
-    "echarts": "^5.6.0",
+    "echarts": "^6.1.0",
     "element-plus": "^2.4.4",
     "highlight.js": "^11.11.1",
     "katex": "^0.17.0",
