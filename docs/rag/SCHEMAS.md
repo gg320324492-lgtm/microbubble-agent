@@ -190,6 +190,74 @@ def split_for_tsvector(text: str, *, max_chars: Optional[int] = 6000, lowercase:
 
 ---
 
+## 10. kg_entity（PR8）
+
+- **路径**: `app/models/kg_entity.py` + `alembic/versions/091_add_kg_entity.py` + `app/services/entity_link_recall.py` + `app/services/kg_embedding.py`
+- **定位**: 知识图谱扁平实体 + 实体链召回第 5 路, 缺口 9 (无 observability 之外的图谱深度联动) 修复
+- **PR8 是 10 PR 最后 1 个 alembic PR**: 091 之后链收口 (PR9/PR10 无迁移)
+
+```python
+# app/models/kg_entity.py 公共 API
+KG_ENTITY_VECTOR_DIM: int = 1024          # 与 KnowledgeEntity / PR1 embedding 基线一致
+KG_ENTITY_NAME_MAX_LEN: int = 500         # 与 KnowledgeEntity.subject String(500) 对齐
+KG_ENTITY_TYPES: tuple[str, ...]          # 8 类白名单 (PERSON/ORG/CONCEPT/METHOD/
+                                          #   MATERIAL/EQUIPMENT/METRIC/OTHER)
+
+def normalize_entity_name(name: Optional[str]) -> str:
+    """实体名归一化 — 抽取侧与召回侧必走同一函数 (防召回漂移)
+    strip + 空白折叠 + 截断; **不做大小写归一** (pH / DLS / Zeta 有语义)"""
+
+def coerce_entity_type(entity_type: Optional[str]) -> str:
+    """类型白名单映射, 未知归 OTHER (不丢弃不抛异常, kg_query_service 范式复用)"""
+
+# app/services/kg_embedding.py 公共 API
+def build_entity_embedding_text(entity_name, entity_type=None, *, context=None) -> str:
+    """实体 embedding 输入构造, **内部必调 PR1 truncate_for_embedding** (plan §3.12)"""
+
+def dedup_entity_texts(entities) -> Tuple[List[str], Dict[str, List[int]]]:
+    """批量去重, 同文本只算 1 次 embedding"""
+
+async def generate_kg_entity_embedding(text_or_name, entity_type=None, *, for_query=False)
+    """单实体向量, **lazy import** embedding_service (ST 未装时不崩, 失败返 None)"""
+
+async def backfill_kg_entity_embeddings(db, *, batch_size=50, max_batches=20) -> Dict[str, int]
+    """幂等批量回填 (仅 embedding IS NULL), 返 {scanned, updated, skipped}"""
+
+# app/services/entity_link_recall.py 门禁常量 (plan §2 PR8 + §9)
+ENTITY_LINK_HIT_TARGET: float = 0.25      # 门禁 a: 实体链 hit ≥ 25% (E37)
+ENTITY_LINK_P95_BUDGET_MS: float = 100.0  # 门禁 b: 图谱召回 P95 ≤ 100ms (E38)
+ENTITY_COUNT_TARGET: int = 5000           # 门禁 c: 实体数 ≥ 5000 (E39)
+ENTITY_MATCH_MAX_DISTANCE: float = 0.65   # cosine 距离上限 (独立语义, 非声纹三层口径)
+
+# alembic 091 schema 字段
+# kg_entities.id SERIAL PRIMARY KEY
+# kg_entities.entity_name VARCHAR(500) NOT NULL
+# kg_entities.entity_type VARCHAR(32) NOT NULL DEFAULT 'OTHER'
+# kg_entities.knowledge_id INTEGER NOT NULL REFERENCES knowledge(id) ON DELETE CASCADE
+# kg_entities.embedding vector(1024)
+# kg_entities.first_seen_at / last_seen_at TIMESTAMP NOT NULL DEFAULT now()
+# kg_entities.mention_count INTEGER NOT NULL DEFAULT 1
+# uq_kg_entities_name_type_kid UNIQUE (entity_name, entity_type, knowledge_id)  ← 幂等
+# ck_kg_entities_mention_count CHECK (mention_count >= 1)
+# ck_kg_entities_name_nonempty CHECK (length(entity_name) >= 1)
+# ix_kg_entities_name / ix_kg_entities_type / ix_kg_entities_knowledge_id  (B-tree)
+# ix_kg_entities_embedding_hnsw  HNSW (embedding vector_cosine_ops)  ← 门禁 b
+```
+
+- **与已有 KG 资产的关系 (互补非替代, 类 20 #33/#35 据实上报)**:
+
+| 资产 | 表 / 后端 | 语义 | alembic | PR8 是否改 |
+|------|----------|------|---------|-----------|
+| `KnowledgeEntity` | `knowledge_entities` | **SPO 三元组** (关系断言) | 无 (lifespan create_all) | **0 改** |
+| `EntityCoOccurrence` | `entity_co_occurrence` | 共现网络 | 无 (lifespan create_all) | **0 改** |
+| `KGEntity` (PR8) | `kg_entities` | **扁平命名实体** | **091** | 新增 |
+| `HybridRetriever._graph_search` | Neo4j | 图谱路 (driver None 时返空) | — | **0 改** |
+| `retrieve_with_entity_link` (PR8) | PostgreSQL kg_entities | **第 5 路** (无外部依赖) | — | 模块级新增 |
+
+- **约束**: HNSW 创建必须 `CREATE INDEX CONCURRENTLY` 防阻塞 (RISKS §R4, 离线窗口 ≤ 120s); 091 沿用 089 `DO $$ BEGIN IF NOT EXISTS (pg_indexes) ... EXECUTE 'CREATE INDEX CONCURRENTLY' ...` 探测二段式; `embedding` 维度 1024 与 `KnowledgeEntity.embedding` / PR1 baseline 强制一致; 实体文本必过 PR1 `truncate_for_embedding` (禁止另起硬截, 缺口 1 根因); **抽取侧与召回侧必调同一 `normalize_entity_name`** (否则 `" 气泡 "` 写入 `"气泡"` 但查 `" 气泡 "` 查不到 → 召回漂移); Step 5b 钩子必排在 Step 5 之后 (依赖其 SPO 产物); `_infer_entity_type` 确定性映射 **0 LLM 调用** (召回延迟预算)
+
+---
+
 ## 跨件约束总表
 
 | 约束 | 适用件 | 来源 |
@@ -200,5 +268,7 @@ def split_for_tsvector(text: str, *, max_chars: Optional[int] = 6000, lowercase:
 | keyword-only + Optional 默认 None | 全部 | 派工 v10 §2 |
 | 埋点/持久化 best-effort | 6 | CLAUDE.md chat 铁律 5 |
 | 常量固化（截断 6000 / QUERY_PROMPT_ZH） | 1/2 | `embedding_prompts.py` 铁律 |
+| 抽取侧与召回侧同一归一化函数（防召回漂移） | 10 | PR8 实战 |
+| 已有资产互补非替代（0 改老表/老类方法） | 10 | 类 20 #33/#35 |
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>

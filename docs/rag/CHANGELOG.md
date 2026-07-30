@@ -47,11 +47,37 @@
 - 新增 `app/services/recall_observability.py` + `observability/grafana/rag_dashboard.json`（≥ 6 面板）
 - 门禁: 按路耗时覆盖 100% + P99 ≤ 200ms + 结构化日志字段 ≥ 12
 
-## PR8 — 知识图谱深度联动（W94 +0 → +20, 规划）
+## PR8 — 知识图谱深度联动（W94 +0 → +20 模板 / **实测 17 commits**, 据实上报）
 
-- 新增 `app/models/kg_entity.py` + `alembic/versions/091_add_kg_entity.py` + `app/services/entity_link_recall.py`
-- input validation 复用 `kg_query_service.py` 白名单范式
-- 门禁: 实体链 hit ≥ 25% + 图谱召回 P95 ≤ 100ms + 实体数 ≥ 5000 + qa-bench ≥ 96%
+> **PR8 是 10 PR 中最后 1 个 alembic PR** — 091 之后 alembic 链正式收口（PR9/PR10 无迁移）。
+> 串单链全景: `087 → 088 (PR2) → 089 (PR3) → 090 (PR5) → 091 (PR8)`
+
+- `[PR8 W94 +0]` feat(rag/kg): kg_entity ORM 模型（`KGEntity` 扁平实体 + 8 类白名单 + 归一化/类型映射）
+- `[PR8 W94 +1]` feat(rag/kg): alembic 091 + idempotent guard（CONCURRENTLY HNSW，089 二段式）
+- `[PR8 W94 +2]` feat(rag/kg): entity_link_recall 实体链召回（第 5 路，PG 内置无 Neo4j 依赖）
+- `[PR8 W94 +3]` feat(rag/kg): kg_embedding 实体向量（**复用 PR1 truncate_for_embedding**）
+- `[PR8 W94 +4]` refactor(rag/kg): knowledge_graph_service 接入实体链（模块级，0 类方法改）
+- `[PR8 W94 +5]` refactor(rag/kg): knowledge_service 接入 Step 5b 钩子（14 insertions，0 删除）
+- `[PR8 W94 +6]` refactor(rag/kg): hybrid_retriever 新增 KG retrieval path（127 insertions，0 删除）
+- `[PR8 W94 +7]` test(rag/kg): **22/22 PASS** + 实体链 hit ≥ 25% + P95 ≤ 100ms + 实体数 + 集成 + 漂移
+  - **锚点合并据实**：模板 +8/+9/+10/+11（P95 / 实体数 / PR3+PR5 集成 / 边界漂移）4 项**全部落在本 commit 的 22 case 内**，不为凑模板拆无意义 commit（派工 v11 新增 3：验证型 0 增量不凑 +1）
+- `[PR8 W94 +12]` docs(rag/kg): RUNBOOK.md §0.7 + §0.7.1 验证 + §0.7.2 回滚
+- `[PR8 W94 +13]` docs(rag/kg): SCHEMAS.md §10 kg_entity（7 件套 → 10 件补完）
+- `[PR8 W94 +14]` docs(rag/kg): W94-PR8-ANCHOR.md CLAUDE.md 镜像（11 节，**0 改 CLAUDE.md**）
+- `[PR8 W94 +15]` docs(rag/kg): CHANGELOG.md PR8（本条目 + 主仓 CHANGELOG）
+- `[PR8 W94 +16]` docs(rag/kg): README.md 近期新增段追加 PR8
+- `[PR8 W94 +17]` docs(rag/kg): CHECKLIST §J PR8 据实上报
+- `[PR8 W94 +18]` chore(rag/kg): memory 收口（据实上报 + 锚点范式守恒）
+- `[PR8 W94 +19]` docs(rag/kg): 类 20 #33/#35 沉淀（PR8 实战派生）
+- `[PR8 W94 +20]` chore(rag/kg): GRAND-CLOSURE 前置（10 PR 串单链收口）
+
+**门禁实测**: 实体链 hit ≥ 25%（case 10 真算 3/10=30% PASS）+ P95 ≤ 100ms（case 20 真计时 20 samples）+ 实体数 ≥ 5000（case 21 `count_entities()` 真调用路径，**真库计数待生产**）+ qa-bench ≥ 96%（**按推荐不跑**，沿用 PR1/PR5 处置）
+
+**件 4a 双门控**: 6 锁定老核心 `^[+-]def` = **0**；两锁定文件（knowledge_service / hybrid_retriever）**0 删除行纯追加**；5 个已有 KG 服务（1645 行）**0 改**；`knowledge_entities` / `entity_co_occurrence` 两老表 **0 改**
+
+**派工 brief 错配 3 处据实**（类 20 #33/#35）: kg_entity ORM 已有 `knowledge_entity.py`（SPO 三元组，互补非替代）+ 实体抽取钩子已存在（Step 5，改走 Step 5b）+ `_graph_search` 已存在（Neo4j 路，改走模块级第 5 路）。详见 `docs/rag/W94-PR8-ANCHOR.md` §7
+
+**件 3 PWA build**: **pre-existing FAIL** — `RAGEvalPanel.vue:24` `"Play" is not exported by @element-plus/icons-vue`，PR5 commit `cb5c98498` 引入，**非 PR8**（`git status --porcelain -- web/` = 0 dirty）。据实上报不算本 PR FAIL，也不顺手修（0 production code）。建议主拍派 hotfix: `Play` → `VideoPlay`
 
 ## PR9 — auto-research 升级（W95 +0 → +16, 规划）
 
