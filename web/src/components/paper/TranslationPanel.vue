@@ -12,7 +12,7 @@
       </el-select>
       <el-button size="small" text @click="doTranslate" :loading="loading">重新翻译</el-button>
       <span class="panel-status" v-if="loading">翻译中...</span>
-      <el-button text size="small" @click="$emit('close')" :icon="Close" />
+      <el-button text size="small" aria-label="关闭翻译面板" @click="$emit('close')" :icon="Close" />
     </div>
     <div class="panel-body" v-loading="loading">
       <el-empty v-if="!loading && !translations.length" description="打开面板自动开始翻译" />
