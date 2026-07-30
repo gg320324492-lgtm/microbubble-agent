@@ -747,3 +747,59 @@
 ## 项目动态更新 (W66 plans status 100% 状态化 截至 2026-07-23)
 
 **W66 → W67 锚点范式第 28 次守恒** — 67 plans 全项目调研 100% 状态化: **47 completed + 16 agent-stub + 2 deleted** (`claude-pet` + `self-rag`) **+ 1 partial** (`15-17-18-cozy-bengio` Part 2 低占比发言人过滤 1.5s/3s/5% 在 commit `4b215220` refactor 中意外删除, 已由后续 memory 记录) **+ 1 not_started** (`2026-06-05-19-10-melodic-donut`)。锚点范式单调上升 W7 12 → W62 24 → W65 26 → **W66 27 → W67 28**，26+ baseline 守恒 (71 PASS + 7 SKIP, 跨 60+ commit 0 regression)。累计 5 批 35+ agent commits + 1 cleanup commit (main HEAD `34a3ce6a6` chore(cleanup): W66 stale worktree 清理 + memory anchor LF 标准化, 上一 commit `5ee6fccab`)。全程沿用 **0 production code 改动铁律** + W19 选项 A 维持 (4 留未来 PR 不发起新排期)。详见 `memory/plans-status-67-closure-w66-2026-07-23.md`。
+
+## 项目动态更新 (W97 RAG 大改造 GRAND-CLOSURE 收口 截至 2026-07-30)
+
+**W97 RAG 工业级大改造 10 PR + 4 MERGE + HOTFIX-01 + GRAND-CLOSURE 完整收口** — RAG 大改造 W88-W96 共 10 PR 全部合并到 main + 4 主拍 MERGE 合并 (MERGE-01..04) + HOTFIX-01 P0 PWA 修复 (Play→VideoPlay 已 commit 未 merge) + W97 GRAND-CLOSURE 5 件产出收口.
+
+**锚点范式**: W86 mini-16 338 → W97 GRAND-CLOSURE 477, **+139 据实** (138 PR 内容 commits + 4 merge commits 主拍 +0 + 4 DERIVE merge + 11 MERGE-01 lines + 1 grand-closure 实战). 累计 33 批 1490+ commits + 580+ 铁律 (W97 +60+ 新铁律: PR1-10 × 6 + DERIVE-01..19 × 5 + W97 GRAND-CLOSURE × 6 + W97 MEMORY/CLAUDE append × 2).
+
+**alembic 087→091 串单链完整收口**:
+```
+085_billing_payment_tables (RAG 系列前商业化基线)
+  └─ 086_backfill_drive_file_versions
+       └─ 087_add_knowledge_original_parent_id (MERGE-01 前 hotfix)
+            └─ 088_add_knowledge_chunk (PR2)
+                 └─ 089_gin_trgm_tsvector (PR3)
+                      └─ 090_add_rag_eval_report (PR5)
+                           └─ 091_add_kg_entity (PR8) ← 10 PR alembic 链终点
+```
+
+**10 PR 时间线**:
+- **W88 PR1 嵌入一致化** (8 commits, W88 +0..+7): `embedding_service` 增 `truncate_for_embedding` + `_check_consistency` + `has_query_prompt` 前置
+- **W88 PR2 knowledge_chunk** (14 commits, W88 +8..+21, alembic 088): `KnowledgeChunk` ORM + `chunking_service` 3 策略 + hybrid_retriever chunk 入口
+- **W89 PR3 BM25 + GIN/tsvector** (14 commits, W89 +0..+12, alembic 089): `text_splitter` + `bm25_incremental` O(M) 增量 + 22/22 e2e
+- **W90 PR4 HybridRetriever 权重** (15 commits, W90 +0..+14): `hybrid_weight_config` dataclass + `synonym_dict` 298 条 + `retrieve_with_weights` 新 API + CrossEncoder 保留率 ≥ 70%
+- **W91 PR5 RAGEvaluator 激活** (14 commits, W91 +0..+13, alembic 090): `rag_eval_runner` NDCG@10 + MRR + 4 RAGAS 真跑 + celery nightly + RAGEvalPanel.vue
+- **W92 PR6 SearchLog 前端** (5 commits, W92 +0..+12, 据实): `SearchLogs.vue` + `useSearchLogs` composable + 11/13 endpoint 接通
+- **W93 PR7 Observability** (15 commits, W93 +0..+14): `recall_observability` 20 字段 + per_path 聚合 + grafana 7 面板 + 按路耗时分解
+- **W94 PR8 KG 深度联动** (17 commits, W94 +0..+20, alembic 091): `kg_entity` ORM + `entity_link_recall` 第 5 路 + kg_embedding 复用 PR1
+- **W95 PR9 auto-research v2** (17 commits, W95 +0..+16): `auto_research_v2` + `dedup_cross_doc` (pgvector ≥ 0.92 + LLM-as-judge) + `query_rewriter`
+- **W96 PR10 docs 三件套** (11 commits, W96 +0..+10): `docs/rag/{README,RUNBOOK,SCHEMAS,ROADMAP,RISKS,EVAL,CHANGELOG,FAQ,CHECKLIST}` + v11 + 23/23 e2e
+
+**4 MERGE 主拍合并流**: MERGE-01 (W89, 338→430, +92, 11 分支) + MERGE-02 (W89, PR3, +14, 0 冲突) + MERGE-03 (W91, PR5, +14, 0 冲突) + MERGE-04 (W94, PR8, +17, 0 冲突).
+
+**9 大缺口全部消化** (plan §1.2): 1 嵌入不一致 (PR1) / 2 无 chunking (PR2) / 3 BM25 N 次重建 (PR3) / 4 PG 全文缺失 (PR3) / 5 query prefix 失效 (PR1) / 6 RAGEvaluator 零调用 (PR5) / 7 SearchLog 前端未通 (PR6) / 8 无独立 RAG 评测 (PR5) / 9 无 observability (PR7).
+
+**关键技术指标**:
+- pytest: `3230 tests collected in 3.86s` (base +140 增量, PR1-10 累计 e2e 25+ case × 4)
+- PWA build: ⚠ pre-existing FAIL (Play import, HOTFIX-01 merge 后 PASS)
+- 件 4a 双门控: 6 老核心服务 grep 全 0
+- 类 20 累计 36 实例 (实测 29 + 候选 5 + W97 2)
+- 派工 v10/v11 实战化 (候选 v10.1/v11.1 沉淀)
+
+**0 production code 例外 5 已批**: PR3 (text_splitter + bm25_service +3 def) + PR4 (hybrid_retriever +14 def) + PR5 (rag_evaluator +1 def run_evaluation) + PR8 (hybrid_retriever +127 ins / entity_link_recall) + PR9 (auto_research_v2 + query_rewriter + dedup_cross_doc).
+
+**待主拍决策** (GRAND-CLOSURE §9): HOTFIX-01 merge / 10 untracked `agent-*` 清理 / 同 basename collection error (类 20 #A) / rolldown panic 上游 bug / MEMORY.md 主题索引 W97 同步 (W98 派工).
+
+**W19 选项 A 维持**: 4 留未来 PR (Phase 8.5 / P3 dedup / P3 跨 tab / 7 E2E) 不发起新排期.
+
+**关键文档索引**:
+- `docs/rag/W97-RAG-GRAND-CLOSURE.md`（208 行 CLAUDE.md 镜像, E43 守恒）
+- `docs/rag/W97-CHANGELOG-SUMMARY.md`（CHANGELOG.md 镜像, E44 守恒）
+- `docs/w72-prompt-paradigm-v11-2027-04.md`（168 行 派工 v11 模板）
+- `docs/rag/CHECKLIST.md`（213 行 §F/§G/§H verify fallback）
+- `C:\Users\pc\.claude\plans\rag-quirky-otter.md` v1.1（10 PR 路线 + 5 件套）
+- `memory/w97-rag-grand-closure-2026-07-30.md`（总收口, ≥ 200 行）
+- `memory/w97-rag-v10-v11-promotion-candidates.md`（v10.1/v11.1 候选）
+- `memory/w97-docs-full-update-2026-07-30.md`（本任务起步 memory）
