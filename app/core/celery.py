@@ -55,6 +55,14 @@ celery_app.conf.update(
             "task": "app.services.knowledge_evolution_tasks.fuse_entities_task",
             "schedule": 24 * 3600.0,  # 每日实体融合
         },
+        # PR5 W91 +6: 离线 RAG 评估 nightly schedule (派工 brief §2 +6)
+        # 跑 200 题 ground-truth 走 HybridRetriever.retrieve → NDCG@10/MRR/hit_rate 写 rag_eval_reports 表
+        # 凌晨 2:00 跑避开业务高峰, 性能门禁 P95 ≤ 10min (派工 brief +10)
+        # 派工 v11 件 4a 双门控: 仅新增 1 行, 不动已有 schedule
+        "rag-eval-nightly-2am": {
+            "task": "app.services.rag_eval_runner.run_nightly_evaluation",
+            "schedule": 24 * 3600.0,  # 每日 1 次
+        },
         "auto-purge-trash": {
             "task": "app.services.task_service.auto_purge_trash_task",
             # 2026-06-03 教训 v2：4h 调度意味着任务最坏要等 4h 才被清理，
